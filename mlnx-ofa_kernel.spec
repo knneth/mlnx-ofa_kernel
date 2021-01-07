@@ -183,6 +183,7 @@ Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
 Requires: coreutils
 Requires: pciutils
+Requires(post): %{_sbindir}/weak-modules
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun): %{_sbindir}/update-alternatives
 Summary: Infiniband Driver and ULPs kernel modules sources
@@ -311,6 +312,7 @@ for flavor in %flavors_to_build; do
 	fi
 	# Cleanup unnecessary kernel-generated module dependency files.
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
+	#find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec mv {} $INSTALL_MOD_PATH/lib/modules/%{KVERSION}/extra/mlnx-ofa_kernel/ \;
 	cd -
 done
 
@@ -440,11 +442,40 @@ rm -rf %{buildroot}
 
 %if "%{KMP}" != "1"
 %post -n %{non_kmp_pname}
-/sbin/depmod %{KVERSION}
-# W/A for OEL6.7/7.x inbox modules get locked in memory
-# in dmesg we get: Module mlx4_core locked in memory until next boot
-if (grep -qiE "Oracle.*(6.([7-9]|10)| 7)" /etc/issue /etc/*release* 2>/dev/null); then
-	/sbin/dracut --force
+# Delete udev rule from old mlnx-ofa_kernel package, if it exists, before we
+# create new initramfs
+if [ -e /etc/udev/rules.d/82-net-setup-link.rules ]; then
+    rule_md5=`md5sum /etc/udev/rules.d/82-net-setup-link.rules|cut -c 1-8`
+    if [ "$rule_md5" == "4637e5de" ]; then
+        rm -f /etc/udev/rules.d/82-net-setup-link.rules
+    fi
+fi
+# Delete potentially broken symlinks to avoid infinite loop in weak-modules
+find /lib/modules/*/{extra,weak-updates}/mlnx-ofa_kernel/ -type l -delete 2> /dev/null
+#
+# Save modules for initramfs rebuild in %posttrans
+# Code adapted from https://github.com/dm-vdo/kvdo/blob/6.1.3/kvdo.spec
+#
+# Several modules depend on auxiliary, so needs to be processed first.
+# For now, we can use a simple sorting to achieve this:
+# $ find /lib/modules/3.10.0-1160.el7.x86_64/extra/mlnx-ofa_kernel/ -name *.ko -type f|sort
+# - /lib/modules/3.10.0-1160.el7.x86_64/extra/mlnx-ofa_kernel/compat/mlx_compat.ko (Dependencies: none)
+# - /lib/modules/3.10.0-1160.el7.x86_64/extra/mlnx-ofa_kernel/drivers/base/auxiliary.ko (Dependencies: mlx_compat)
+modules=( $(find /lib/modules/%{KVERSION}/extra/mlnx-ofa_kernel/ -name *.ko -type f | sort) )
+printf '%s\n' "${modules[@]}" >> /var/lib/rpm-kmod-posttrans-weak-modules-add
+
+%pretrans -p <lua> -n %{non_kmp_pname}
+posix.unlink("/var/lib/rpm-kmod-posttrans-weak-modules-add")
+
+%posttrans -n %{non_kmp_pname}
+# Run depmod with kernel version we built the modules for
+/sbin/depmod %{KVERSION} 2> /dev/null
+# Create weak-update links for later kernels and rebuild initramfs
+# Same code as https://github.com/dm-vdo/kvdo/blob/6.1.3/kvdo.spec
+if [ -f "/var/lib/rpm-kmod-posttrans-weak-modules-add" ]; then
+    modules=( $(cat /var/lib/rpm-kmod-posttrans-weak-modules-add) )
+    rm -rf /var/lib/rpm-kmod-posttrans-weak-modules-add
+    printf '%s\n' "${modules[@]}" | %{_sbindir}/weak-modules --add-modules
 fi
 
 %postun -n %{non_kmp_pname}
