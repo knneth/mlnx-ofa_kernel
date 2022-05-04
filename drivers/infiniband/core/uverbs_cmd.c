@@ -1278,6 +1278,12 @@ static int ib_uverbs_destroy_cq(struct uverbs_attr_bundle *attrs)
 	return uverbs_response(attrs, &resp, sizeof(resp));
 }
 
+static int disable_raw_qp_enforcement = 1;
+module_param_named(disable_raw_qp_enforcement, disable_raw_qp_enforcement, int,
+		   0444);
+MODULE_PARM_DESC(disable_raw_qp_enforcement, "Disable RAW QP enforcement for "
+		 "being opened by root");
+
 static int create_qp(struct uverbs_attr_bundle *attrs,
 		     struct ib_uverbs_ex_create_qp *cmd)
 {
@@ -1298,7 +1304,7 @@ static int create_qp(struct uverbs_attr_bundle *attrs,
 
 	switch (cmd->qp_type) {
 	case IB_QPT_RAW_PACKET:
-		if (!capable(CAP_NET_RAW))
+		if (!disable_raw_qp_enforcement && !capable(CAP_NET_RAW))
 			return -EPERM;
 		break;
 	case IB_QPT_RC:
