@@ -575,6 +575,9 @@ static int ib_uverbs_open_xrcd(struct uverbs_attr_bundle *attrs)
 	struct fd f = {};
 	int ret;
 
+	// Kernel 3.10.0-1160.61.el7 removed fget_light() used by fdget()
+	return -EOPNOTSUPP;
+
 	ret = uverbs_request(attrs, &cmd, sizeof(cmd));
 	if (ret)
 		return ret;
