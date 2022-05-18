@@ -1620,6 +1620,9 @@ static ssize_t ucma_migrate_id(struct ucma_file *new_file,
 	struct ucma_file *cur_file;
 	int ret = 0;
 
+	// Kernel 3.10.0-1160.61.el7 removed fget_light() used by fdget()
+	return -EOPNOTSUPP;
+
 	if (copy_from_user(&cmd, inbuf, sizeof(cmd)))
 		return -EFAULT;
 
