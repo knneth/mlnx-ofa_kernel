@@ -35,8 +35,8 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"iw_nes"
-#define DRV_VERSION	"4.9-3.1.5"
-#define DRV_RELDATE	"27 Apr 2021"
+#define DRV_VERSION	"4.9-4.0.8"
+#define DRV_RELDATE	"22 Sep 2021"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("iw_nes dummy kernel module");

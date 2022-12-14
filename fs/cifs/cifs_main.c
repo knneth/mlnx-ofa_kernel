@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -34,26 +34,25 @@
 #include <linux/init.h>
 #include <linux/errno.h>
 
-#define DRV_NAME	"iw_c2"
-#define DRV_VERSION	"4.9-4.0.8"
-#define DRV_RELDATE	"22 Sep 2021"
+#define DRV_NAME	"cifs"
+#define DRV_VERSION	"2.31"
 
-MODULE_AUTHOR("Vladimir Sokolovsky");
-MODULE_DESCRIPTION("iw_c2 dummy kernel module");
+MODULE_AUTHOR("Mohammad Kabat");
+MODULE_DESCRIPTION("cifs dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
 #ifdef RETPOLINE_MLNX
 MODULE_INFO(retpoline, "Y");
 #endif
 MODULE_VERSION(DRV_VERSION);
 
-static int __init iw_c2_init(void)
+static int __init cifs_init(void)
 {
 	return 0;
 }
 
-static void __exit iw_c2_cleanup(void)
+static void __exit cifs_cleanup(void)
 {
 }
 
-module_init(iw_c2_init);
-module_exit(iw_c2_cleanup);
+module_init(cifs_init);
+module_exit(cifs_cleanup);

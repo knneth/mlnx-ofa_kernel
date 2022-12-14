@@ -51,7 +51,7 @@ Change-Id: I83aa2d7625557ff6a98465da1eabc26685f13814
  		MLX4_PUT(outbox->buf, field, QUERY_FUNC_CAP_FLAGS0_OFFSET);
  
  	} else if (vhcr->op_modifier == 0) {
-@@ -983,9 +991,11 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *
+@@ -986,9 +994,11 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *
  	MLX4_GET(field, outbox, QUERY_DEV_CAP_USER_MAC_EN_OFFSET);
  	if (field & (1 << 2))
  		dev_cap->flags2 |= MLX4_DEV_CAP_FLAG2_USER_MAC_EN;
@@ -63,7 +63,7 @@ Change-Id: I83aa2d7625557ff6a98465da1eabc26685f13814
  	MLX4_GET(field, outbox, QUERY_DEV_CAP_MAX_QP_MCG_OFFSET);
  	dev_cap->max_qp_per_mcg = 1 << field;
  	MLX4_GET(field, outbox, QUERY_DEV_CAP_RSVD_MCG_OFFSET);
-@@ -3215,6 +3225,7 @@ int set_phv_bit(struct mlx4_dev *dev, u8
+@@ -3218,6 +3228,7 @@ int set_phv_bit(struct mlx4_dev *dev, u8
  }
  EXPORT_SYMBOL(set_phv_bit);
  
@@ -71,7 +71,7 @@ Change-Id: I83aa2d7625557ff6a98465da1eabc26685f13814
  int mlx4_get_is_vlan_offload_disabled(struct mlx4_dev *dev, u8 port,
  				      bool *vlan_offload_disabled)
  {
-@@ -3230,6 +3241,7 @@ int mlx4_get_is_vlan_offload_disabled(st
+@@ -3233,6 +3244,7 @@ int mlx4_get_is_vlan_offload_disabled(st
  	return err;
  }
  EXPORT_SYMBOL(mlx4_get_is_vlan_offload_disabled);

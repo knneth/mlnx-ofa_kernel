@@ -27,7 +27,7 @@ Change-Id: If1cf5aa8ca3f37c05b83dd549b884da13701fd9e
  
  #define DEFAULT_UAR_PAGE_SHIFT  12
  
-@@ -1270,7 +1276,11 @@ static inline int mlx4_is_eth(struct mlx
+@@ -1271,7 +1277,11 @@ static inline int mlx4_is_eth(struct mlx
  }
  
  int mlx4_buf_alloc(struct mlx4_dev *dev, int size, int max_direct,
@@ -39,7 +39,7 @@ Change-Id: If1cf5aa8ca3f37c05b83dd549b884da13701fd9e
  void mlx4_buf_free(struct mlx4_dev *dev, int size, struct mlx4_buf *buf);
  static inline void *mlx4_buf_offset(struct mlx4_buf *buf, int offset)
  {
-@@ -1307,9 +1317,17 @@ int mlx4_mw_enable(struct mlx4_dev *dev,
+@@ -1308,9 +1318,17 @@ int mlx4_mw_enable(struct mlx4_dev *dev,
  int mlx4_write_mtt(struct mlx4_dev *dev, struct mlx4_mtt *mtt,
  		   int start_index, int npages, u64 *page_list);
  int mlx4_buf_write_mtt(struct mlx4_dev *dev, struct mlx4_mtt *mtt,
@@ -57,7 +57,7 @@ Change-Id: If1cf5aa8ca3f37c05b83dd549b884da13701fd9e
  void mlx4_db_free(struct mlx4_dev *dev, struct mlx4_db *db);
  
  int mlx4_alloc_hwq_res(struct mlx4_dev *dev, struct mlx4_hwq_resources *wqres,
-@@ -1326,7 +1344,11 @@ int mlx4_qp_reserve_range(struct mlx4_de
+@@ -1327,7 +1345,11 @@ int mlx4_qp_reserve_range(struct mlx4_de
  			  int *base, u8 flags, u8 usage);
  void mlx4_qp_release_range(struct mlx4_dev *dev, int base_qpn, int cnt);
  
@@ -69,7 +69,7 @@ Change-Id: If1cf5aa8ca3f37c05b83dd549b884da13701fd9e
  void mlx4_qp_free(struct mlx4_dev *dev, struct mlx4_qp *qp);
  
  int mlx4_srq_alloc(struct mlx4_dev *dev, u32 pdn, u32 cqn, u16 xrcdn,
-@@ -1598,8 +1620,10 @@ int mlx4_SET_PORT_disable_mc_loopback(st
+@@ -1599,8 +1621,10 @@ int mlx4_SET_PORT_disable_mc_loopback(st
  				      bool disable_mc_loopback);
  int set_phv_bit(struct mlx4_dev *dev, u8 port, int new_val);
  int get_phv_bit(struct mlx4_dev *dev, u8 port, int *phv);

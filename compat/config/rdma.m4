@@ -4956,8 +4956,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
 	],[
-		struct pci_dev pdev;
-		pci_vfs_assigned(&pdev);
+		pci_vfs_assigned(NULL);
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
@@ -7387,8 +7386,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
 	],[
-		struct pci_dev x;
-		pci_physfn(&x);
+		pci_physfn(NULL);
 
 		return 0;
 	],[
@@ -7846,8 +7844,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
 	],[
-		struct pci_dev x;
-		pci_num_vf(&x);
+		pci_num_vf(NULL);
 
 		return 0;
 	],[
@@ -9791,8 +9788,8 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		#include <linux/mutex.h>
 		#include <scsi/scsi_device.h>
 	],[
-		struct scsi_device sdev;
-		mutex_init(&sdev.state_mutex);
+		struct scsi_device *sdev;
+		mutex_init(&sdev->state_mutex);
 
 		return 0;
 	],[
@@ -13128,8 +13125,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
 	],[
-		const struct net_device x;
-		netdev_reg_state(&x);
+		netdev_reg_state(NULL);
 
 		return 0;
 	],[
@@ -14920,9 +14916,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		#include <uapi/linux/if.h>
 		#include <net/geneve.h>
 	],[
-		struct net_device dev = {};
-
-		netif_is_geneve(&dev);
+		netif_is_geneve(NULL);
 
 		return 0;
 	],[
