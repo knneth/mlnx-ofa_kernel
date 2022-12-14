@@ -41,6 +41,7 @@
 #include <net/net_namespace.h>
 #include <net/sock.h>
 #include <rdma/rdma_netlink.h>
+#include <linux/module.h>
 #include "core_priv.h"
 
 #include "core_priv.h"
@@ -86,6 +87,15 @@ static bool is_nl_valid(unsigned int type, unsigned int op)
 		return false;
 
 	cb_table = rdma_nl_types[type].cb_table;
+#ifdef CONFIG_MODULES
+	if (!cb_table) {
+		mutex_unlock(&rdma_nl_mutex);
+		request_module("rdma-netlink-subsys-%d", type);
+		mutex_lock(&rdma_nl_mutex);
+		cb_table = rdma_nl_types[type].cb_table;
+	}
+#endif
+
 	if (!cb_table || (!cb_table[op].dump && !cb_table[op].doit))
 		return false;
 	return true;
@@ -134,10 +144,8 @@ void *ibnl_put_msg(struct sk_buff *skb, struct nlmsghdr **nlh, int seq,
 		   int len, int client, int op, int flags)
 {
 	*nlh = nlmsg_put(skb, 0, seq, RDMA_NL_GET_TYPE(client, op), len, flags);
-	if (!*nlh) {
-		nlmsg_cancel(skb, *nlh);
+	if (!*nlh)
 		return NULL;
-	}
 	return nlmsg_data(*nlh);
 }
 EXPORT_SYMBOL(ibnl_put_msg);
@@ -170,13 +178,24 @@ static int rdma_nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh,
 	    !netlink_capable(skb, CAP_NET_ADMIN))
 		return -EPERM;
 
+	/*
+	 * LS responses overload the 0x100 (NLM_F_ROOT) flag.  Don't
+	 * mistakenly call the .dump() function.
+	 */
+	if (index == RDMA_NL_LS) {
+		if (cb_table[op].doit)
+			return cb_table[op].doit(skb, nlh, extack);
+		return -EINVAL;
+	}
 	/* FIXME: Convert IWCM to properly handle doit callbacks */
 	if ((nlh->nlmsg_flags & NLM_F_DUMP) || index == RDMA_NL_RDMA_CM ||
 	    index == RDMA_NL_IWCM) {
 		struct netlink_dump_control c = {
 			.dump = cb_table[op].dump,
 		};
-		return netlink_dump_start(nls, skb, nlh, &c);
+		if (c.dump)
+			return netlink_dump_start(nls, skb, nlh, &c);
+		return -EINVAL;
 	}
 
 	if (cb_table[op].doit)
@@ -250,9 +269,21 @@ static void rdma_nl_rcv(struct sk_buff *skb)
 
 int rdma_nl_unicast(struct sk_buff *skb, u32 pid)
 {
-	return nlmsg_unicast(nls, skb, pid);
+	int err;
+
+	err = netlink_unicast(nls, skb, pid, MSG_DONTWAIT);
+	return (err < 0) ? err : 0;
 }
 EXPORT_SYMBOL(rdma_nl_unicast);
+
+int rdma_nl_unicast_wait(struct sk_buff *skb, __u32 pid)
+{
+	int err;
+
+	err = netlink_unicast(nls, skb, pid, 0);
+	return (err < 0) ? err : 0;
+}
+EXPORT_SYMBOL(rdma_nl_unicast_wait);
 
 int rdma_nl_multicast(struct sk_buff *skb, unsigned int group, gfp_t flags)
 {
@@ -270,6 +301,7 @@ int __init rdma_nl_init(void)
 	if (!nls)
 		return -ENOMEM;
 
+	nls->sk_sndtimeo = 10 * HZ;
 	return 0;
 }
 
@@ -282,3 +314,5 @@ void rdma_nl_exit(void)
 
 	netlink_kernel_release(nls);
 }
+
+MODULE_ALIAS_NET_PF_PROTO(PF_NETLINK, NETLINK_RDMA);

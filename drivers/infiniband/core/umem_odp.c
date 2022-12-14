@@ -39,13 +39,47 @@
 #include <linux/export.h>
 #include <linux/vmalloc.h>
 #include <linux/hugetlb.h>
+#include <linux/interval_tree_generic.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
 #include <rdma/ib_umem_odp.h>
+#include <rdma/ib_sync_mem.h>
 
 #include "uverbs.h"
 #include "umem_odp_exp.h"
+
+/*
+ * The ib_umem list keeps track of memory regions for which the HW
+ * device request to receive notification when the related memory
+ * mapping is changed.
+ *
+ * ib_umem_lock protects the list.
+ */
+
+static u64 node_start(struct umem_odp_node *n)
+{
+	struct ib_umem_odp *umem_odp =
+			container_of(n, struct ib_umem_odp, interval_tree);
+
+	return ib_umem_start(umem_odp->umem);
+}
+
+/* Note that the representation of the intervals in the interval tree
+ * considers the ending point as contained in the interval, while the
+ * function ib_umem_end returns the first address which is not contained
+ * in the umem.
+ */
+static u64 node_last(struct umem_odp_node *n)
+{
+	struct ib_umem_odp *umem_odp =
+			container_of(n, struct ib_umem_odp, interval_tree);
+
+	return ib_umem_end(umem_odp->umem) - 1;
+}
+
+INTERVAL_TREE_DEFINE(struct umem_odp_node, rb, u64, __subtree_last,
+		     node_start, node_last, static, rbt_ib_umem)
 
 static void ib_umem_notifier_start_account(struct ib_umem *item)
 {
@@ -160,6 +194,7 @@ static void ib_umem_notifier_release(struct mmu_notifier *mn,
 				      ULLONG_MAX,
 				      ib_umem_notifier_release_trampoline,
 				      NULL);
+	ib_invoke_sync_clients(mm, 0, 0);
 	up_read(&context->umem_rwsem);
 }
 
@@ -168,6 +203,7 @@ static int invalidate_range_start_trampoline(struct ib_umem *item, u64 start,
 {
 	ib_umem_notifier_start_account(item);
 	item->context->invalidate_range(item, start, end);
+	*(bool *)cookie = true;
 	return 0;
 }
 
@@ -177,6 +213,7 @@ static void ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
 						    unsigned long end)
 {
 	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
+	bool call_rsync;
 
 	if (!context->invalidate_range)
 		return;
@@ -185,7 +222,10 @@ static void ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
 	down_read(&context->umem_rwsem);
 	rbt_ib_umem_for_each_in_range(&context->umem_tree, start,
 				      end,
-				      invalidate_range_start_trampoline, NULL);
+				      invalidate_range_start_trampoline,
+				      &call_rsync);
+	if (call_rsync)
+		ib_invoke_sync_clients(mm, start, end - start);
 	up_read(&context->umem_rwsem);
 }
 
@@ -214,10 +254,28 @@ static void ib_umem_notifier_invalidate_range_end(struct mmu_notifier *mn,
 	ib_ucontext_notifier_end_account(context);
 }
 
+#ifdef CONFIG_CXL_LIB
+static void ib_umem_notifier_invalidate_range(struct mmu_notifier *mn,
+					      struct mm_struct *mm,
+					      unsigned long start,
+					      unsigned long end)
+{
+	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
+
+	if (!context->invalidate_range)
+		return;
+
+	ib_exp_invalidate_range(context->device, NULL, start, end, 0);
+}
+#endif
+
 static const struct mmu_notifier_ops ib_umem_notifiers = {
 	.release                    = ib_umem_notifier_release,
 	.invalidate_range_start     = ib_umem_notifier_invalidate_range_start,
 	.invalidate_range_end       = ib_umem_notifier_invalidate_range_end,
+#ifdef CONFIG_CXL_LIB
+	.invalidate_range	    = ib_umem_notifier_invalidate_range,
+#endif
 };
 
 struct ib_umem *ib_alloc_odp_umem(struct ib_ucontext *context,
@@ -245,6 +303,7 @@ struct ib_umem *ib_alloc_odp_umem(struct ib_ucontext *context,
 		goto out_umem;
 	}
 	odp_data->umem = umem;
+	umem->odp_data = odp_data;
 
 	mutex_init(&odp_data->umem_mutex);
 	init_completion(&odp_data->notifier_completion);
@@ -270,8 +329,6 @@ struct ib_umem *ib_alloc_odp_umem(struct ib_ucontext *context,
 		list_add(&odp_data->no_private_counters,
 			 &context->no_private_counters);
 	up_write(&context->umem_rwsem);
-
-	umem->odp_data = odp_data;
 
 	return umem;
 
@@ -775,3 +832,42 @@ void ib_umem_odp_unmap_dma_pages(struct ib_umem *umem, u64 virt,
 	mutex_unlock(&umem->odp_data->umem_mutex);
 }
 EXPORT_SYMBOL(ib_umem_odp_unmap_dma_pages);
+
+/* @last is not a part of the interval. See comment for function
+ * node_last.
+ */
+int rbt_ib_umem_for_each_in_range(struct rb_root_cached *root,
+				  u64 start, u64 last,
+				  umem_call_back cb,
+				  void *cookie)
+{
+	int ret_val = 0;
+	struct umem_odp_node *node, *next;
+	struct ib_umem_odp *umem;
+
+	if (unlikely(start == last))
+		return ret_val;
+
+	for (node = rbt_ib_umem_iter_first(root, start, last - 1);
+			node; node = next) {
+		next = rbt_ib_umem_iter_next(node, start, last - 1);
+		umem = container_of(node, struct ib_umem_odp, interval_tree);
+		ret_val = cb(umem->umem, start, last, cookie) || ret_val;
+	}
+
+	return ret_val;
+}
+EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);
+
+struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root_cached *root,
+				       u64 addr, u64 length)
+{
+	struct umem_odp_node *node;
+
+	node = rbt_ib_umem_iter_first(root, addr, addr + length - 1);
+	if (node)
+		return container_of(node, struct ib_umem_odp, interval_tree);
+	return NULL;
+
+}
+EXPORT_SYMBOL(rbt_ib_umem_lookup);

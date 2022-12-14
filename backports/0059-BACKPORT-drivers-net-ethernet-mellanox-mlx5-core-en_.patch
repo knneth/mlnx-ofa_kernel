@@ -1,0 +1,19 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.h
+
+Change-Id: If265456e1d69c61bcf90f16a60081aebd93fa13e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.h
+@@ -32,6 +32,7 @@
+ #ifndef __MLX5_EN_BUFFER_H__
+ #define __MLX5_EN_BUFFER_H__
+ 
++#include <linux/dcbnl.h>
+ #include "en.h"
+ 
+ #define MLX5E_MAX_BUFFER 8

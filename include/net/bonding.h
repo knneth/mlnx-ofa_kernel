@@ -19,6 +19,152 @@ static inline struct net_device *bond_option_active_slave_get_rcu(struct bonding
 
 	return MLX_USES_PRIMARY(bond->params.mode) && slave ? slave->dev : NULL;
 }
+
+#if defined(MLX_USE_LAG_COMPAT) && defined(MLX_IMPL_LAG_EVENTS)
+static struct socket *mlx_lag_compat_rtnl_sock;
+static void (*mlx_lag_compat_netdev_event_cb)(unsigned long, void *);
+
+static void mlx_lag_compat_changelowerstate_event(struct slave *slave)
+{
+	struct netdev_notifier_changelowerstate_info info = {};
+	struct netdev_lag_lower_state_info lag_lower_info = {};
+
+	info.info.dev         = slave->dev;
+	info.lower_state_info = &lag_lower_info;
+
+	lag_lower_info.link_up    = (slave->link == BOND_LINK_UP);
+	lag_lower_info.tx_enabled = !!bond_slave_can_tx(slave);
+
+	mlx_lag_compat_netdev_event_cb(NETDEV_CHANGELOWERSTATE, &info);
+}
+
+static void mlx_lag_compat_changeupper_event(struct bonding *bond,
+					     struct slave *slave)
+{
+	struct netdev_notifier_changeupper_info info = {};
+	struct netdev_lag_upper_info lag_upper_info = {};
+
+	info.info.dev   = slave->dev;
+	info.linking    = !!(slave->dev->flags & IFF_SLAVE);
+	info.upper_dev  = bond->dev;
+	info.master     = true;
+
+	if (info.linking) {
+		info.upper_info = &lag_upper_info;
+
+		if (bond_mode_uses_xmit_hash(bond))
+			lag_upper_info.tx_type = NETDEV_LAG_TX_TYPE_HASH;
+		else if (BOND_MODE(bond) == BOND_MODE_ACTIVEBACKUP)
+			lag_upper_info.tx_type = NETDEV_LAG_TX_TYPE_ACTIVEBACKUP;
+	}
+
+	if (info.linking)
+		mlx_lag_compat_changelowerstate_event(slave);
+
+	mlx_lag_compat_netdev_event_cb(NETDEV_CHANGEUPPER, &info);
+}
+
+static void mlx_lag_compat_rtnl_data_ready(struct sock *sk, int bytes)
+{
+	struct net_device *ndev;
+	struct ifinfomsg *ifm;
+	struct nlmsghdr *nlh;
+	struct sk_buff *skb;
+	struct bonding *bond;
+	struct slave *slave;
+	int rc = 0;
+
+	skb = skb_recv_datagram(sk, 0, 0, &rc);
+	if (rc)
+		return;
+
+	nlh = (struct nlmsghdr *)skb->data;
+	if (!nlh || !NLMSG_OK(nlh, skb->len) || nlh->nlmsg_type != RTM_NEWLINK)
+		goto free_skb;
+
+	ASSERT_RTNL();
+
+	ifm  = nlmsg_data(nlh);
+	ndev = dev_get_by_index(&init_net, ifm->ifi_index);
+	if (!ndev)
+		goto free_skb;
+
+	if (ifm->ifi_change == IFF_SLAVE) {
+		rcu_read_lock();
+		slave = bond_slave_get_rcu(ndev);
+		rcu_read_unlock();
+		bond = bond_get_bond_by_slave(slave);
+		mlx_lag_compat_changeupper_event(bond, slave);
+	} else if (netif_is_bond_master(ndev)) {
+		struct net_device *ndev_tmp;
+
+		rcu_read_lock();
+#ifdef for_each_netdev_in_bond_rcu
+		for_each_netdev_in_bond_rcu(ndev, ndev_tmp) {
+#else
+		for_each_netdev_in_bond(ndev, ndev_tmp) {
+#endif
+			slave = bond_slave_get_rcu(ndev_tmp);
+			mlx_lag_compat_changelowerstate_event(slave);
+		}
+		rcu_read_unlock();
+	} else if (netif_is_bond_slave(ndev)) {
+		rcu_read_lock();
+		slave = bond_slave_get_rcu(ndev);
+		rcu_read_unlock();
+
+		if (!slave)
+			goto put_dev;
+
+		mlx_lag_compat_changelowerstate_event(slave);
+	}
+
+put_dev:
+	dev_put(ndev);
+
+free_skb:
+	kfree_skb(skb);
+}
+
+static int mlx_lag_compat_events_open(void (*cb)(unsigned long, void *))
+{
+	struct sockaddr_nl addr = {
+		.nl_family = AF_NETLINK,
+		.nl_groups = RTNLGRP_LINK,
+	};
+	int err;
+
+	err = sock_create_kern(PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE,
+			       &mlx_lag_compat_rtnl_sock);
+	if (err) {
+		pr_err("mlx: ERROR: Couldn't create netlink socket. LAG events will not be dispatched.\n");
+		mlx_lag_compat_rtnl_sock = NULL;
+		return err;
+	}
+
+	mlx_lag_compat_netdev_event_cb = cb;
+	mlx_lag_compat_rtnl_sock->sk->sk_data_ready = mlx_lag_compat_rtnl_data_ready;
+	mlx_lag_compat_rtnl_sock->sk->sk_allocation = GFP_KERNEL;
+
+	err = kernel_bind(mlx_lag_compat_rtnl_sock, (struct sockaddr *)&addr,
+			  sizeof(addr));
+	if (err) {
+		pr_err("mlx: ERROR: Couldn't bind netlink socket. LAG events will not be dispatched.\n");
+		sock_release(mlx_lag_compat_rtnl_sock);
+		mlx_lag_compat_rtnl_sock = NULL;
+		return err;
+	}
+
+	return 0;
+}
+
+static void mlx_lag_compat_events_close(void)
+{
+	if (mlx_lag_compat_rtnl_sock)
+		sock_release(mlx_lag_compat_rtnl_sock);
+}
+#endif
+
 #endif /* HAVE_BONDING_H */
 
 #endif /* LINUX_BONDING_H */

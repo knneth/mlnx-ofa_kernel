@@ -116,6 +116,7 @@ enum {
 struct mlx5_ib_vma_private_data {
 	struct list_head list;
 	struct vm_area_struct *vma;
+	/* protect vma_private_list add/del */
 	struct mutex *vma_private_list_mutex;
 };
 
@@ -124,6 +125,11 @@ struct mlx5_ib_peer_id;
 enum {
 	MLX5_IB_MAX_CTX_DYNAMIC_UARS = 256,
 	MLX5_IB_INVALID_UAR_INDEX = -1,
+};
+
+struct mlx5_capi_context {
+	u32			pasid;
+	struct mm_struct       *mm;
 };
 
 struct mlx5_ib_ucontext {
@@ -139,12 +145,14 @@ struct mlx5_ib_ucontext {
 	/* Transport Domain number */
 	u32			tdn;
 	struct list_head	vma_private_list;
+	/* protect vma_private_list add/del */
 	struct mutex		vma_private_list_mutex;
 
 	unsigned long		upd_xlt_page;
 	/* protect ODP/KSM */
 	struct mutex		upd_xlt_page_mutex;
 	u64			lib_caps;
+	struct mlx5_capi_context cctx;
 };
 
 static inline struct mlx5_ib_ucontext *to_mucontext(struct ib_ucontext *ibucontext)
@@ -219,6 +227,7 @@ struct mlx5_ib_flow_db {
 #define MLX5_IB_UPD_XLT_PD	      BIT(4)
 #define MLX5_IB_UPD_XLT_ACCESS	      BIT(5)
 #define MLX5_IB_UPD_XLT_INDIRECT      BIT(6)
+#define MLX5_IB_UPD_XLT_ODP_LOCKED    BIT(7)
 
 /* Private QP creation flags to be passed in ib_qp_init_attr.create_flags.
  *
@@ -239,7 +248,7 @@ struct wr_list {
 
 enum mlx5_ib_rq_flags {
 	MLX5_IB_RQ_CVLAN_STRIPPING	= 1 << 0,
-	MLX5_IB_RQ_SCATTER_END_PADDING	= 1 << 1,
+	MLX5_IB_RQ_PCI_WRITE_END_PADDING	= 1 << 1,
 };
 
 struct mlx5_ib_wq {
@@ -266,7 +275,13 @@ struct mlx5_ib_wq {
 
 enum mlx5_ib_wq_flags {
 	MLX5_IB_WQ_FLAGS_DELAY_DROP = 0x1,
+	MLX5_IB_WQ_FLAGS_STRIDING_RQ = 0x2,
 };
+
+#define MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES 9
+#define MLX5_MAX_SINGLE_WQE_LOG_NUM_STRIDES 16
+#define MLX5_MIN_SINGLE_STRIDE_LOG_NUM_BYTES 6
+#define MLX5_MAX_SINGLE_STRIDE_LOG_NUM_BYTES 13
 
 struct mlx5_ib_mp_rq {
 	u8			use_mp_rq;
@@ -283,6 +298,9 @@ struct mlx5_ib_rwq {
 	u32			log_rq_size;
 	u32			rq_page_offset;
 	u32			log_page_size;
+	u32			log_num_strides;
+	u32			two_byte_shift_en;
+	u32			single_stride_log_num_of_bytes;
 	struct ib_umem		*umem;
 	size_t			buf_size;
 	unsigned int		page_shift;
@@ -356,6 +374,7 @@ struct mlx5_ib_sq {
 	struct mlx5_flow_handle	*flow_rule;
 	u32			tisn;
 	u8			state;
+	int			allow_mp_wqe;
 };
 
 struct mlx5_ib_raw_packet_qp {
@@ -410,8 +429,9 @@ struct mlx5_ib_qp {
 	struct list_head	qps_list;
 	struct list_head	cq_recv_list;
 	struct list_head	cq_send_list;
-	u32			rate_limit;
+	struct mlx5_rate_limit	rl;
 	u32                     underlay_qpn;
+	bool			tunnel_offload_en;
 };
 
 struct mlx5_ib_cq_buf {
@@ -434,8 +454,8 @@ enum mlx5_ib_qp_flags {
 	MLX5_IB_QP_RSS				= 1 << 8,
 	MLX5_IB_QP_CVLAN_STRIPPING		= 1 << 9,
 	MLX5_IB_QP_UNDERLAY			= 1 << 10,
-	MLX5_IB_QP_SCATTER_END_PADDING		= 1 << 11,
-	MLX5_IB_QP_TUNNEL_OFFLOADS		= 1 << 12,
+	MLX5_IB_QP_PCI_WRITE_END_PADDING	= 1 << 11,
+	MLX5_IB_QP_TUNNEL_OFFLOAD		= 1 << 12,
 };
 
 struct mlx5_umr_wr {
@@ -460,8 +480,8 @@ struct mlx5_shared_mr_info {
 	struct ib_umem		*umem;
 };
 
-enum mlx5_ib_cq_flags {
-	MLX5_IB_CQ_FLAGS_CQE_128_PAD	= 1 << 0,
+enum mlx5_ib_cq_pr_flags {
+	MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD	= 1 << 0,
 };
 
 struct mlx5_ib_cq {
@@ -486,7 +506,7 @@ struct mlx5_ib_cq {
 	struct list_head	wc_list;
 	enum ib_cq_notify_flags notify_flags;
 	struct work_struct	notify_work;
-	u16			flags; /* Use mlx5_ib_cq_flags */
+	u16			private_flags; /* Use mlx5_ib_cq_pr_flags */
 };
 
 struct mlx5_ib_wc {
@@ -623,6 +643,7 @@ struct mlx5_cache_ent {
 	int			pending;
 	struct completion	compl;
 	struct cache_order	co;
+	atomic_t		do_complete;
 };
 
 struct mlx5_mr_cache {
@@ -759,10 +780,6 @@ struct mlx5_ib_counter_sets {
 	u16 max_counter_sets;
 };
 
-enum {
-	MAX_DEV_DESC = 64
-};
-
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
@@ -811,19 +828,18 @@ struct mlx5_ib_dev {
 	struct kobject		*tc_kobj;
 	/* Array with num_ports elements */
 	struct mlx5_ib_port	*port;
-	struct mlx5_sq_bfreg     bfreg;
-	struct mlx5_sq_bfreg     fp_bfreg;
+	struct mlx5_sq_bfreg	bfreg;
+	struct mlx5_sq_bfreg	fp_bfreg;
 	struct mlx5_eswitch_rep	*rep;
-	u8                       umr_fence;
-	struct kobject		mr_cache;
+	struct mlx5_ib_delay_drop	delay_drop;
+	struct mlx5_ib_dbg_cc_params	*dbg_cc_params;
+	struct mlx5_ib_counter_sets counter_sets;
 
 	/* protect the user_td */
-	struct mutex             lb_mutex;
-	u32                      user_td;
-	struct mlx5_ib_dbg_cc_params *dbg_cc_params;
-	struct mlx5_ib_delay_drop delay_drop;
-	struct mlx5_ib_counter_sets counter_sets;
-	char description[MAX_DEV_DESC];
+	struct mutex		lb_mutex;
+	u32			user_td;
+	u8			umr_fence;
+	struct kobject          mr_cache;
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)
@@ -961,7 +977,7 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq, int entries, struct ib_udata *udata);
 struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc);
 struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd,
 				  struct ib_mr_init_attr *attr,
-				  struct ib_udata *udata, int mr_id);
+				  struct ib_udata *udata);
 struct ib_mw *mlx5_ib_alloc_mw(struct ib_pd *pd, enum ib_mw_type type,
 			       struct ib_udata *udata);
 int mlx5_ib_dealloc_mw(struct ib_mw *mw);
@@ -1205,6 +1221,11 @@ static inline int get_num_uars(struct mlx5_ib_dev *dev,
 			       struct mlx5_bfreg_info *bfregi)
 {
 	return get_uars_per_sys_page(dev, bfregi->lib_uar_4k) * bfregi->num_sys_pages;
+}
+
+static inline bool mlx5_ib_capi_enabled(struct mlx5_ib_dev *dev)
+{
+	return dev->mdev->capi.enabled;
 }
 
 #endif /* MLX5_IB_H */

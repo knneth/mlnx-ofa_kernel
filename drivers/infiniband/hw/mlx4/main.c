@@ -62,7 +62,7 @@
 #include <rdma/mlx4-abi.h>
 
 #define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"4.2-1.5.1"
+#define DRV_VERSION	"4.3-1.0.1"
 
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF
@@ -553,6 +553,9 @@ int mlx4_ib_query_device(struct ib_device *ibdev,
 		props->rss_caps.supported_qpts = 1 << IB_QPT_RAW_PACKET;
 		props->max_wq_type_rq = props->max_qp;
 	}
+
+	props->cq_caps.max_cq_moderation_count = MLX4_MAX_CQ_COUNT;
+	props->cq_caps.max_cq_moderation_period = MLX4_MAX_CQ_PERIOD;
 
 	if (!mlx4_is_slave(dev->dev))
 		err = mlx4_get_internal_clock_params(dev->dev, &clock_params);
@@ -2057,7 +2060,8 @@ static int mlx4_ib_mcg_attach(struct ib_qp *ibqp, union ib_gid *gid, u16 lid)
 	int is_over_ip = mlx4_roce_is_over_ip(mdev->dev->caps.ud_gid_type);
 	enum mlx4_protocol prot =
 		(ibqp->qp_type == IB_QPT_RAW_PACKET) ? MLX4_PROT_ETH :
-		(gid->raw[1] == 0x0e && is_over_ip) ? MLX4_PROT_IB_IPV4 : MLX4_PROT_IB_IPV6;
+		(!be64_to_cpu(gid->global.subnet_prefix) && is_over_ip) ?
+		MLX4_PROT_IB_IPV4 : MLX4_PROT_IB_IPV6;
 	DECLARE_BITMAP(ports, MLX4_MAX_PORTS);
 	int i = 0;
 
@@ -2994,9 +2998,8 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	ibdev->ib_dev.poll_cq		= mlx4_ib_poll_cq;
 	ibdev->ib_dev.req_notify_cq	= mlx4_ib_arm_cq;
 	ibdev->ib_dev.get_dma_mr	= mlx4_ib_get_dma_mr;
-	ibdev->ib_dev.reg_user_mr	= mlx4_ib_reg_user_mr_wrp;
+	ibdev->ib_dev.reg_user_mr	= mlx4_ib_reg_user_mr;
 	/* Add EXP verbs here to minimize conflicts via rebase */
-	ibdev->ib_dev.exp_reg_user_mr	= mlx4_ib_exp_reg_user_mr;
 	ibdev->ib_dev.exp_modify_cq	= mlx4_ib_exp_modify_cq;
 	ibdev->ib_dev.exp_create_qp	= mlx4_ib_exp_create_qp;
 	ibdev->ib_dev.exp_query_device	= mlx4_ib_exp_query_device;
@@ -3011,6 +3014,9 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	ibdev->ib_dev.get_port_immutable = mlx4_port_immutable;
 	ibdev->ib_dev.get_dev_fw_str    = get_fw_ver_str;
 	ibdev->ib_dev.disassociate_ucontext = mlx4_ib_disassociate_ucontext;
+
+	ibdev->ib_dev.uverbs_ex_cmd_mask |=
+		(1ull << IB_USER_VERBS_EX_CMD_MODIFY_CQ);
 
 	if ((dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_RSS) &&
 	    ((mlx4_ib_port_link_layer(&ibdev->ib_dev, 1) ==
@@ -3726,13 +3732,9 @@ static int __init mlx4_ib_init(void)
 	mlx4_ib_register_debugfs();
 #endif
 
-	err = mlx4_ib_proc_init();
-	if (err)
-		goto clean_wq;
-
 	err = mlx4_ib_mcg_init();
 	if (err)
-		goto clean_proc;
+		goto clean_wq;
 
 	init_dev_assign();
 
@@ -3744,9 +3746,6 @@ static int __init mlx4_ib_init(void)
 
 clean_mcg:
 	mlx4_ib_mcg_destroy();
-
-clean_proc:
-	mlx4_ib_proc_clean();
 
 clean_wq:
 	destroy_workqueue(wq);
@@ -3760,7 +3759,6 @@ static void __exit mlx4_ib_cleanup(void)
 	mlx4_ib_unregister_debugfs();
 #endif
 	mlx4_ib_mcg_destroy();
-	mlx4_ib_proc_clean();
 	destroy_workqueue(wq);
 	kfree(dev_num_str_bitmap);
 }

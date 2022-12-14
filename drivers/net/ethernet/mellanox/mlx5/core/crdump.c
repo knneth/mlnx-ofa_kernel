@@ -238,7 +238,7 @@ int mlx5_fill_cr_dump(struct mlx5_core_dev *dev)
 	dev->priv.health.crdump->vsec_addr = pci_find_capability(dev->pdev, CAP_ID);
 	if (!dev->priv.health.crdump->vsec_addr) {
 		pr_warn("failed reading	vsec_addr\n");
-		ret = -1;
+		ret = -EIO;
 		goto unlock;
 	}
 

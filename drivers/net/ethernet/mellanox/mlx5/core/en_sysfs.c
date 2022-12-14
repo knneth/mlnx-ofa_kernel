@@ -63,6 +63,7 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	struct net_device *netdev = priv->netdev;
+	struct tc_mqprio_qopt mqprio = { 0 };
 	int tc_num;
 	int err = 0;
 
@@ -72,7 +73,8 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
 		return -EINVAL;
 
 	rtnl_lock();
-	mlx5e_setup_tc(netdev, tc_num);
+	mqprio.num_tc = tc_num;
+	mlx5e_setup_tc_mqprio(netdev, &mqprio);
 	rtnl_unlock();
 	return count;
 }
@@ -940,6 +942,37 @@ static struct attribute_group debug_group = {
 	.attrs = mlx5e_debug_group_attrs,
 };
 
+#define PHY_STAT_ENTRY(name, cnt)					\
+static ssize_t name##_show(struct device *d,				\
+			   struct device_attribute *attr, char *buf)	\
+{									\
+	struct net_device *dev = to_net_dev(d);				\
+	struct mlx5e_priv *priv = netdev_priv(dev);			\
+	struct mlx5e_pport_stats *pstats = &priv->stats.pport;		\
+									\
+	return sprintf(buf, "%llu\n",					\
+			PPORT_802_3_GET(pstats, cnt));			\
+}									\
+static DEVICE_ATTR(name, S_IRUGO, name##_show, NULL)
+
+PHY_STAT_ENTRY(rx_packets, a_frames_received_ok);
+PHY_STAT_ENTRY(tx_packets, a_frames_transmitted_ok);
+PHY_STAT_ENTRY(rx_bytes, a_octets_received_ok);
+PHY_STAT_ENTRY(tx_bytes, a_octets_transmitted_ok);
+
+static struct attribute *mlx5e_phy_stat_attrs[] = {
+	&dev_attr_rx_packets.attr,
+	&dev_attr_tx_packets.attr,
+	&dev_attr_rx_bytes.attr,
+	&dev_attr_tx_bytes.attr,
+	NULL,
+};
+
+static struct attribute_group phy_stat_group = {
+	.name = "phy_stats",
+	.attrs = mlx5e_phy_stat_attrs,
+};
+
 static int update_qos_sysfs(struct net_device *dev,
 			    struct mlx5_core_dev *mdev)
 {
@@ -1012,8 +1045,15 @@ int mlx5e_sysfs_create(struct net_device *dev)
 	if (err)
 		goto remove_qos_group;
 
+	err = sysfs_create_group(&dev->dev.kobj, &phy_stat_group);
+
+	if (err)
+		goto remove_debug_group;
+
 	return 0;
 
+remove_debug_group:
+	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
 remove_qos_group:
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 remove_settings_group:
@@ -1037,6 +1077,7 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
+	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
 
 	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
 		mlx5e_remove_attributes(priv, i);

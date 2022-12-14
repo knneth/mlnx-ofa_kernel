@@ -32,6 +32,8 @@ import subprocess
 
 if os.path.exists('/usr/share/pyshared'):
 	sys.path.append('/usr/share/pyshared')
+if os.path.exists('/usr/lib/python2.7/site-packages'):
+	sys.path.append('/usr/lib/python2.7/site-packages')
 from optparse import OptionParser
 from dcbnetlink import DcbController
 from collections import defaultdict
@@ -76,8 +78,8 @@ parser.add_option("-s", "--tsa", dest="tsa",
 parser.add_option("-t", "--tcbw", dest="tc_bw",
 		  help="Set minimal guaranteed %BW for ETS TCs. LIST is comma " +
 			"separated percents for each TC. Values set to TCs that are " +
-			"not configured to ETS algorithm are ignored, but must be " +
-			"present. Example: if TC0,TC2 are set to ETS, then 10,0,90,0,0,0,0,0" +
+			"not configured to ETS algorithm must be zero. " +
+			"Example: if TC0,TC2 are set to ETS, then 10,0,90,0,0,0,0,0 " +
 			"will set TC0 to 10% and TC2 to 90%. Percents must sum to " +
 			"100.",
 		  metavar="LIST")
@@ -198,7 +200,6 @@ class Trust:
 def print_dscp2prio_sysfs():
 	f = open(dscp2prio_path, "r")
 	s = ["","","","","","","",""]
-	pad = "\t            "
 
 	next(f)
 	for line in f:
@@ -209,12 +210,14 @@ def print_dscp2prio_sysfs():
 
 	for i in range(8):
 		temp = ""
+		pad = "\tprio:%d dscp:" % i
 		while (len(s[i]) > 24):
-			temp = temp + s[i][:24] + "\n" + pad
+			temp += pad + s[i][:24] + "\n"
 			s[i] = s[i][24:]
-		temp += s[i]
 		if s[i] != "":
-			print "\tprio:%d dscp:" % i + temp
+			temp += pad + s[i]
+		if temp != "":
+			print(temp)
 	f.close()
 
 def pretty_print(prio_tc, tsa, tcbw, ratelimit, pfc_en, trust, pfc_delay):

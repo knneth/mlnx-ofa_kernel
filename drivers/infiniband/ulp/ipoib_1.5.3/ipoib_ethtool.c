@@ -123,7 +123,7 @@ static int ipoib_set_coalesce(struct net_device *dev,
 	attr.moderation.cq_period = coal->rx_coalesce_usecs;
 
         ret = ib_modify_cq(priv->recv_cq, &attr,
-                           IB_CQ_MODERATION);
+                           IB_CQ_MODERATE);
         if (ret && ret != -ENOSYS) {
                 ipoib_warn(priv, "failed modifying CQ (%d)\n", ret);
                 return ret;
@@ -159,7 +159,7 @@ static int ipoib_set_coalesce(struct net_device *dev,
                 /* move to initial values */
                 ret = ib_modify_cq(priv->recv_cq,
 					&attr,
-					IB_CQ_MODERATION);
+					IB_CQ_MODERATE);
                 if (ret && ret != -ENOSYS) {
                         ipoib_warn(priv, "failed modifying CQ (%d)"
                                          "(when moving to auto-moderation)\n",

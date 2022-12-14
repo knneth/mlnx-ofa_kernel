@@ -155,12 +155,6 @@ struct ib_mr *ib_get_dma_mr(struct ib_pd *pd, int mr_access_flags)
 EXPORT_SYMBOL(ib_get_dma_mr);
 
 /* NVMEoF target offload */
-int ib_query_nvmf_ns(struct ib_nvmf_ns *ns, struct ib_nvmf_ns_attr *ns_attr)
-{
-	return ns->ctrl->srq->device->query_nvmf_ns ?
-		ns->ctrl->srq->device->query_nvmf_ns(ns, ns_attr) : -ENOSYS;
-}
-EXPORT_SYMBOL(ib_query_nvmf_ns);
 
 struct ib_nvmf_ctrl *ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
 			struct ib_nvmf_backend_ctrl_init_attr *init_attr)
@@ -304,3 +298,13 @@ struct ib_mr *ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *attr)
 	return mr;
 }
 EXPORT_SYMBOL_GPL(ib_exp_alloc_mr);
+
+int ib_exp_invalidate_range(struct ib_device  *device, struct ib_mr *ibmr,
+			    u64 start, u64 length, u32 flags)
+{
+	if (!device->exp_invalidate_range)
+		return -EOPNOTSUPP;
+
+	return device->exp_invalidate_range(device, NULL, start, length, flags);
+}
+EXPORT_SYMBOL(ib_exp_invalidate_range);

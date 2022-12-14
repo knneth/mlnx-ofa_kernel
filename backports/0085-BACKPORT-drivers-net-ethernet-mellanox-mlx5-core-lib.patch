@@ -1,0 +1,26 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+
+Change-Id: Ie91ee8a1b531337ee04f1b153e83cf99a654bcf0
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+@@ -40,11 +40,13 @@ static inline ktime_t mlx5_timecounter_c
+ 						u64 timestamp)
+ {
+ 	u64 nsec;
+-
++#if defined (HAVE_PTP_CLOCK_INFO) && (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	read_lock(&clock->lock);
+ 	nsec = timecounter_cyc2time(&clock->tc, timestamp);
+ 	read_unlock(&clock->lock);
+-
++#else
++	nsec = 0 ;
++#endif
+ 	return ns_to_ktime(nsec);
+ }
+ 

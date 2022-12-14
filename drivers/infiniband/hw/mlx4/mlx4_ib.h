@@ -47,6 +47,7 @@
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>
 #include <linux/mlx4/qp.h>
+#include <linux/mlx4/cq.h>
 #include "mlx4_ib_exp.h"
 
 #define MLX4_IB_DRV_NAME	"mlx4_ib"
@@ -151,7 +152,6 @@ struct mlx4_ib_mr {
 	struct mlx4_mr		mmr;
 	struct ib_umem	       *umem;
 	size_t			page_map_size;
-	struct mlx4_shared_mr_info      *smr_info;
 	atomic_t      invalidated;
 	struct completion invalidation_comp;
 	/* lock protects the live indication */
@@ -796,9 +796,9 @@ void mlx4_ib_db_unmap_user(struct mlx4_ib_ucontext *context, struct mlx4_db *db)
 struct ib_mr *mlx4_ib_get_dma_mr(struct ib_pd *pd, int acc);
 int mlx4_ib_umem_write_mtt(struct mlx4_ib_dev *dev, struct mlx4_mtt *mtt,
 			   struct ib_umem *umem);
-struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
-				  u64 virt_addr, int access_flags,
-				  struct ib_udata *udata, int mr_id);
+struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd,
+				  struct ib_mr_init_attr *attr,
+				  struct ib_udata *udata);
 int mlx4_ib_dereg_mr(struct ib_mr *mr);
 struct ib_mw *mlx4_ib_alloc_mw(struct ib_pd *pd, enum ib_mw_type type,
 			       struct ib_udata *udata);
@@ -986,6 +986,8 @@ struct ib_rwq_ind_table
 			      struct ib_rwq_ind_table_init_attr *init_attr,
 			      struct ib_udata *udata);
 int mlx4_ib_destroy_rwq_ind_table(struct ib_rwq_ind_table *wq_ind_table);
+int mlx4_ib_umem_calc_optimal_mtt_size(struct ib_umem *umem, u64 start_va,
+				       int *num_of_mtts);
 
 #ifdef CONFIG_MLX4_IB_DEBUG_FS
 void mlx4_ib_create_debug_files(struct mlx4_ib_dev *dev);

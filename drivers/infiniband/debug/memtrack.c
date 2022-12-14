@@ -30,6 +30,9 @@
 #ifdef kmemdup
 	#undef kmemdup
 #endif
+#ifdef kstrdup
+	#undef kstrdup
+#endif
 #ifdef kfree
 	#undef kfree
 #endif
@@ -53,6 +56,9 @@
 #endif
 #ifdef memdup_user
 	#undef memdup_user
+#endif
+#ifdef memdup_user_nul
+	#undef memdup_user_nul
 #endif
 #ifdef kmem_cache_alloc
 	#undef kmem_cache_alloc
@@ -990,14 +996,14 @@ static void memtrack_report(void)
 				memtrack_spin_lock(&obj_desc_p->hash_lock, flags);      /* protect per bucket/list */
 				cur_mem_info_p = obj_desc_p->mem_hash[cur_bucket];
 				while (cur_mem_info_p != NULL) {        /* scan bucket */
-					printk(KERN_INFO "%s::%lu: %s(%lu)==%lX dev=%lX %s\n",
-					       cur_mem_info_p->filename,
-					       cur_mem_info_p->line_num,
-					       memtype_alloc_str(memtype),
-					       cur_mem_info_p->size,
-					       cur_mem_info_p->addr,
-					       cur_mem_info_p->dev,
-					       cur_mem_info_p->ext_info);
+					printk_ratelimited(KERN_INFO "%s::%lu: %s(%lu)==%lX dev=%lX %s\n",
+							   cur_mem_info_p->filename,
+							   cur_mem_info_p->line_num,
+							   memtype_alloc_str(memtype),
+							   cur_mem_info_p->size,
+							   cur_mem_info_p->addr,
+							   cur_mem_info_p->dev,
+							   cur_mem_info_p->ext_info);
 					cur_mem_info_p = cur_mem_info_p->next;
 					++ detected_leaks;
 				}       /* while cur_mem_info_p */

@@ -47,19 +47,11 @@ mlx5_ib_nic_rep_unload(struct mlx5_eswitch_rep *rep)
 static int
 mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 {
-	struct mlx5_eswitch_rep_if *rep_if = &rep->rep_if[REP_IB];
 	struct mlx5_ib_dev *ibdev;
-
-	/* check if representor is already loaded, and if so, do not load again */
-	if (rep_if->ptr) {
-		mlx5_ib_warn((struct mlx5_ib_dev *)rep_if->ptr, "IB rep for port %d is already already loaded, not loading again\n", rep->vport);
-		return 0;
-	}
 
 	ibdev = (struct mlx5_ib_dev *)ib_alloc_device(sizeof(*ibdev));
 	if (!ibdev)
 		return -ENOMEM;
-
 
 	ibdev->rep = rep;
 	if (!__mlx5_ib_add(dev, ibdev, true))

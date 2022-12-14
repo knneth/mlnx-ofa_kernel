@@ -1,0 +1,51 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_main.c
+
+Change-Id: Iff7696e6f160e1ad7d3cb55058f47ad77bb4a77d
+---
+ drivers/net/ethernet/mellanox/mlx4/en_main.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx4/en_main.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_main.c
+@@ -78,6 +78,7 @@ MLX4_EN_PARM_INT(inline_thold, MAX_INLIN
+ #define MAX_PFC_TX     0xff
+ #define MAX_PFC_RX     0xff
+ 
++#if defined(HAVE_VA_FORMAT) && !defined(CONFIG_X86_XEN)
+ void en_print(const char *level, const struct mlx4_en_priv *priv,
+ 	      const char *format, ...)
+ {
+@@ -97,6 +98,7 @@ void en_print(const char *level, const s
+ 		       priv->port, &vaf);
+ 	va_end(args);
+ }
++#endif
+ 
+ void mlx4_en_update_loopback_state(struct net_device *dev,
+ 				   netdev_features_t features)
+@@ -257,12 +259,14 @@ static void mlx4_en_activate(struct mlx4
+ 			mdev->pndev[i] = NULL;
+ 	}
+ 
++#ifdef HAVE_NETDEV_BONDING_INFO
+ 	/* register notifier */
+ 	mdev->nb.notifier_call = mlx4_en_netdev_event;
+ 	if (register_netdevice_notifier(&mdev->nb)) {
+ 		mdev->nb.notifier_call = NULL;
+ 		mlx4_err(mdev, "Failed to create notifier\n");
+ 	}
++#endif
+ }
+ 
+ static void *mlx4_en_add(struct mlx4_dev *dev)
+@@ -381,7 +385,9 @@ static void mlx4_en_verify_params(void)
+ static int __init mlx4_en_init(void)
+ {
+ 	mlx4_en_verify_params();
++#ifdef HAVE_ETHTOOL_xLINKSETTINGS
+ 	mlx4_en_init_ptys2ethtool_map();
++#endif
+ 
+ 	return mlx4_register_interface(&mlx4_en_interface);
+ }

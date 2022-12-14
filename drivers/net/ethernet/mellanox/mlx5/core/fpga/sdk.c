@@ -124,6 +124,9 @@ static int mlx5_fpga_mem_read_i2c(struct mlx5_fpga_device *fdev, size_t size,
 	u8 actual_size;
 	int err = 0;
 
+	if (!size)
+		return -EINVAL;
+
 	if (!fdev->mdev)
 		return -ENOTCONN;
 
@@ -152,6 +155,9 @@ static int mlx5_fpga_mem_write_i2c(struct mlx5_fpga_device *fdev, size_t size,
 	size_t bytes_done = 0;
 	u8 actual_size;
 	int err = 0;
+
+	if (!size)
+		return -EINVAL;
 
 	if (!fdev->mdev)
 		return -ENOTCONN;

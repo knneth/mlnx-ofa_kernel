@@ -1,0 +1,26 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.c
+
+Change-Id: Iee30f2edcff82e1738f3a3fd7d529aba19eb1059
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_port_buffer.c
+@@ -33,6 +33,8 @@
+ 
+ #define MLX5E_MAX_PORT_MTU  9216
+ 
++#ifdef HAVE_IEEE_DCBNL_ETS
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ int mlx5_query_buffer_configuration(struct net_device *dev,
+ 				    struct mlx5e_port_buffer *port_buffer)
+ {
+@@ -498,3 +500,5 @@ int mlx5e_manual_buffer_configuration(st
+ 
+ 	return 0;
+ }
++#endif
++#endif

@@ -418,7 +418,7 @@ void ipoib_cm_send_rss(struct net_device *dev, struct sk_buff *skb, struct ipoib
 		send_ring->tx_wr.wr.send_flags &= ~IB_SEND_INLINE;
 	}
 
-	if ((send_ring->tx_head - send_ring->tx_tail) == ipoib_sendq_size - 1) {
+	if ((send_ring->tx_head - send_ring->tx_tail) == priv->sendq_size - 1) {
 		ipoib_dbg(priv, "TX ring 0x%x full, stopping kernel net queue\n",
 			  tx->qp->qp_num);
 		netif_stop_subqueue(dev, queue_index);

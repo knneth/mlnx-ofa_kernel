@@ -133,6 +133,22 @@ if [[ ! -z ${SLES_12_1_KERNEL} ]]; then
 	set_config CONFIG_COMPAT_SLES_12_1 y
 fi
 
+SLES_12_2_KERNEL=$(echo ${KVERSION} | sed -n 's/^\(4\.4\.21\)\-\([0-9]*\)\-\(.*\)/\1-\2-\3/p')
+if [[ ! -z ${SLES_12_2_KERNEL} ]]; then
+	SLES_MAJOR="12"
+	SLES_MINOR="2"
+	set_config CONFIG_COMPAT_SLES_12 y
+	set_config CONFIG_COMPAT_SLES_12_2 y
+fi
+
+SLES_12_3_KERNEL=$(echo ${KVERSION} | sed -n 's/^\(4\.4\.73\)\-\([0-9]*\)\-\(.*\)/\1-\2-\3/p')
+if [[ ! -z ${SLES_12_3_KERNEL} ]]; then
+	SLES_MAJOR="12"
+	SLES_MINOR="3"
+	set_config CONFIG_COMPAT_SLES_12 y
+	set_config CONFIG_COMPAT_SLES_12_3 y
+fi
+
 FC14_KERNEL=$(echo ${KVERSION} | grep fc14)
 if [[ ! -z ${FC14_KERNEL} ]]; then
  # CONFIG_COMPAT_DISABLE_DCB should be set to 'y' as it used in drivers/net/ethernet/mellanox/mlx4/Makefile

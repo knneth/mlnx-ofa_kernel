@@ -194,6 +194,11 @@ int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
 int mlx5_query_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *out);
 int mlx5_set_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *in);
 
+int mlx5_set_trust_state(struct mlx5_core_dev *mdev, u8 trust_state);
+int mlx5_query_trust_state(struct mlx5_core_dev *mdev, u8 *trust_state);
+int mlx5_set_dscp2prio(struct mlx5_core_dev *mdev, u8 dscp, u8 prio);
+int mlx5_query_dscp2prio(struct mlx5_core_dev *mdev, u8 *dscp2prio);
+
 int mlx5_core_query_gids(struct mlx5_core_dev *dev, u8 other_vport,
 			 u8 port_num, u16  vf_num, u16 gid_index,
 			 union ib_gid *gid);
@@ -205,13 +210,9 @@ int mlx5_core_query_hca_vport_context(struct mlx5_core_dev *dev,
 				      u16 vf_num,
 				      struct mlx5_hca_vport_context *rep);
 
-int mlx5_set_trust_state(struct mlx5_core_dev *mdev, u8 trust_state);
-int mlx5_query_trust_state(struct mlx5_core_dev *mdev, u8 *trust_state);
-int mlx5_set_dscp2prio(struct mlx5_core_dev *mdev, u8 dscp, u8 prio);
-int mlx5_query_dscp2prio(struct mlx5_core_dev *mdev, u8 *dscp2prio);
-
 int mlx5_query_port_pbmc(struct mlx5_core_dev *mdev, void *out);
 int mlx5_set_port_pbmc(struct mlx5_core_dev *mdev, void *in);
 int mlx5_query_port_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer);
 int mlx5_set_port_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer);
+
 #endif /* __MLX5_PORT_H__ */

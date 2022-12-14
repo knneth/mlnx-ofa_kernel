@@ -80,6 +80,7 @@ endif
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -163,6 +164,7 @@ endif
 	install -m 0755 source/ofed_scripts/ib2ib/ib2ib*		debian/$(putils)/usr/sbin
 	install -m 0644 source/ofed_scripts/ib2ib/README		debian/$(putils)/usr/share/doc/ib2ib
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
+	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
 
 	cd ofed_scripts/utils;	python ./setup.py install --prefix=/usr --root=../../debian/$(putils)
 

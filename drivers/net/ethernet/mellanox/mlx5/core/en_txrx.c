@@ -30,17 +30,27 @@
  * SOFTWARE.
  */
 
+#include <linux/irq.h>
 #include "en.h"
+
+static inline bool mlx5e_channel_no_affinity_change(struct mlx5e_channel *c)
+{
+	int current_cpu = smp_processor_id();
+	const struct cpumask *aff;
+	struct irq_data *idata;
+
+	idata = irq_desc_get_irq_data(c->irq_desc);
+	aff = irq_data_get_affinity_mask(idata);
+	return cpumask_test_cpu(current_cpu, aff);
+}
 
 int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 {
 	struct mlx5e_channel *c = container_of(napi, struct mlx5e_channel,
 					       napi);
 	bool busy = false;
-	int work_done;
+	int work_done = 0;
 	int i;
-
-	clear_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags);
 
 	for (i = 0; i < c->num_tc; i++)
 		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
@@ -53,21 +63,22 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 	if (c->xdp)
 		busy |= mlx5e_poll_xdpsq_cq(&c->rq.xdpsq.cq);
 
-	work_done = mlx5e_poll_rx_cq(&c->rq.cq, budget);
-	busy |= work_done == budget;
+	if (likely(budget)) { /* budget=0 means: don't poll rx rings */
+		work_done = mlx5e_poll_rx_cq(&c->rq.cq, budget);
+		busy |= work_done == budget;
+	}
 
 	busy |= c->rq.post_wqes(&c->rq);
 
-	if (busy)
-		return budget;
-
-	napi_complete_done(napi, work_done);
-
-	/* avoid losing completion event during/after polling cqs */
-	if (test_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags)) {
-		napi_schedule(napi);
-		return work_done;
+	if (busy) {
+		if (likely(mlx5e_channel_no_affinity_change(c)))
+			return budget;
+		if (budget && work_done == budget)
+			work_done--;
 	}
+
+	if (unlikely(!napi_complete_done(napi, work_done)))
+		return work_done;
 
 	for (i = 0; i < c->num_tc; i++)
 		mlx5e_cq_arm(&c->sq[i].cq);
@@ -91,7 +102,6 @@ void mlx5e_completion_event(struct mlx5_core_cq *mcq)
 	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);
 
 	cq->event_ctr++;
-	set_bit(MLX5E_CHANNEL_NAPI_SCHED, &cq->channel->flags);
 	napi_schedule(cq->napi);
 }
 

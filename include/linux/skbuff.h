@@ -13,6 +13,12 @@ static inline struct page *dev_alloc_pages(unsigned int order)
 	return alloc_pages_node(NUMA_NO_NODE, gfp_mask, order);
 }
 #endif
+#ifndef HAVE_DEV_ALLOC_PAGE
+static inline struct page *dev_alloc_page(void)
+{
+	return dev_alloc_pages(0);
+}
+#endif
 #ifndef HAVE_SKB_PULL_INLINE
 static inline unsigned char *skb_pull_inline(struct sk_buff *skb, unsigned int len)
 {

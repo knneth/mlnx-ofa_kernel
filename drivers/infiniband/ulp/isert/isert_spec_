@@ -69,7 +69,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %(mkdir -p %{buildroot})
 %(echo '%defattr (-,root,root)' > %{buildroot}/file_list)
 %(echo '/lib/modules/%2-%1' >> %{buildroot}/file_list)
-%(echo '%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-%1.conf' >> %{buildroot}/file_list)
+%(echo '%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-*-%1.conf' >> %{buildroot}/file_list)
 %{kernel_module_package -f %{buildroot}/file_list -x xen -r %{_kmp_rel} }
 %else
 %global kernel_source() %{K_SRC}
@@ -174,23 +174,19 @@ mod_name=${ko_name/.ko*/}
 mod_path=${module/*\/%{name}}
 mod_path=${mod_path/\/${ko_name}}
 %if "%{_vendor}" == "suse"
-    %if "%{KMP}" == "1"
-        for flavor in %{flavors_to_build}; do
-            if [[ $module =~ $flavor ]];then
-                echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-$flavor.conf
-            fi
-        done
-    %else
-        echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}.conf
-    %endif
+    for flavor in %{flavors_to_build}; do
+        if [[ $module =~ $flavor ]] || [ "X%{KMP}" != "X1" ];then
+            echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}-$flavor.conf
+        fi
+    done
 %else
     %if 0%{?fedora}
-        echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}.conf
+        echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf
     %else
-        echo "override ${mod_name} * extra/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}.conf
-        %if "%{KMP}" == "1"
-            echo "override ${mod_name} * weak-updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}.conf
+        %if "%{_vendor}" == "redhat"
+            echo "override ${mod_name} * weak-updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf
         %endif
+        echo "override ${mod_name} * extra/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf
     %endif
 %endif
 done
@@ -212,7 +208,7 @@ fi # 1 : closed
 %files
 %defattr(-,root,root,-)
 /lib/modules/%{KVERSION}/%{install_mod_dir}/
-%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}.conf
+%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-*.conf
 %endif
 
 %changelog

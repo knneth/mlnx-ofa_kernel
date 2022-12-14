@@ -1,0 +1,272 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/lightnvm.c
+
+Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
+---
+ drivers/nvme/host/lightnvm.c | 112 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 112 insertions(+)
+
+--- a/drivers/nvme/host/lightnvm.c
++++ b/drivers/nvme/host/lightnvm.c
+@@ -20,14 +20,18 @@
+  *
+  */
+ 
++#ifdef HAVE_LIGHTNVM_NVM_DEV
++
+ #include "nvme.h"
+ 
+ #include <linux/nvme.h>
+ #include <linux/bitops.h>
+ #include <linux/lightnvm.h>
+ #include <linux/vmalloc.h>
++#ifdef HAVE_NVM_USER_VIO
+ #include <linux/sched/sysctl.h>
+ #include <uapi/linux/lightnvm.h>
++#endif
+ 
+ enum nvme_nvm_admin_opcode {
+ 	nvme_nvm_admin_identity		= 0xe2,
+@@ -251,6 +255,7 @@ static int init_grps(struct nvm_id *nvm_
+ 	struct nvme_nvm_id_group *src;
+ 	struct nvm_id_group *dst;
+ 
++#ifdef HAVE_LIGHTNVM_NVM_ID_GRP
+ 	if (nvme_nvm_id->cgrps != 1)
+ 		return -EINVAL;
+ 
+@@ -293,6 +298,52 @@ static int init_grps(struct nvm_id *nvm_
+ 		memcpy(dst->lptbl.mlc.pairs, src->lptbl.mlc.pairs,
+ 					dst->lptbl.mlc.num_pairs);
+ 	}
++#else /* HAVE_LIGHTNVM_NVM_ID_GRP */
++	int i, end;
++
++	end = min_t(u32, 4, nvm_id->cgrps);
++	for (i = 0; i < end; i++) {
++		src = &nvme_nvm_id->groups[i];
++		dst = &nvm_id->groups[i];
++
++		dst->mtype = src->mtype;
++		dst->fmtype = src->fmtype;
++		dst->num_ch = src->num_ch;
++		dst->num_lun = src->num_lun;
++		dst->num_pln = src->num_pln;
++
++		dst->num_pg = le16_to_cpu(src->num_pg);
++		dst->num_blk = le16_to_cpu(src->num_blk);
++		dst->fpg_sz = le16_to_cpu(src->fpg_sz);
++		dst->csecs = le16_to_cpu(src->csecs);
++		dst->sos = le16_to_cpu(src->sos);
++
++		dst->trdt = le32_to_cpu(src->trdt);
++		dst->trdm = le32_to_cpu(src->trdm);
++		dst->tprt = le32_to_cpu(src->tprt);
++		dst->tprm = le32_to_cpu(src->tprm);
++		dst->tbet = le32_to_cpu(src->tbet);
++		dst->tbem = le32_to_cpu(src->tbem);
++		dst->mpos = le32_to_cpu(src->mpos);
++		dst->mccap = le32_to_cpu(src->mccap);
++
++		dst->cpar = le16_to_cpu(src->cpar);
++
++		if (dst->fmtype == NVM_ID_FMTYPE_MLC) {
++			memcpy(dst->lptbl.id, src->lptbl.id, 8);
++			dst->lptbl.mlc.num_pairs =
++				le16_to_cpu(src->lptbl.mlc.num_pairs);
++
++			if(dst->lptbl.mlc.num_pairs > NVME_NVM_LP_MLC_PAIRS) {
++				pr_err("nvm: number of MLC pairs not supported\n");
++				return -EINVAL;
++			}
++
++			memcpy(dst->lptbl.mlc.pairs, src->lptbl.mlc.pairs,
++			       dst->lptbl.mlc.num_pairs);
++		}
++	}
++#endif /* HAVE_LIGHTNVM_NVM_ID_GRP */
+ 
+ 	return 0;
+ }
+@@ -321,6 +372,9 @@ static int nvme_nvm_identity(struct nvm_
+ 
+ 	nvm_id->ver_id = nvme_nvm_id->ver_id;
+ 	nvm_id->vmnt = nvme_nvm_id->vmnt;
++#ifndef HAVE_LIGHTNVM_NVM_ID_GRP
++	nvm_id->cgrps = nvme_nvm_id->cgrps;
++#endif
+ 	nvm_id->cap = le32_to_cpu(nvme_nvm_id->cap);
+ 	nvm_id->dom = le32_to_cpu(nvme_nvm_id->dom);
+ 	memcpy(&nvm_id->ppaf, &nvme_nvm_id->ppaf,
+@@ -371,8 +425,10 @@ static int nvme_nvm_get_l2p_tbl(struct n
+ 			goto out;
+ 		}
+ 
++#ifdef HAVE_NVMM_TYPE_HAS_PART_TO_TGT
+ 		/* Transform physical address to target address space */
+ 		nvm_part_to_tgt(nvmdev, entries, cmd_nlb);
++#endif
+ 
+ 		if (update_l2p(cmd_slba, cmd_nlb, entries, priv)) {
+ 			ret = -EINTR;
+@@ -392,12 +448,18 @@ static int nvme_nvm_get_bb_tbl(struct nv
+ 								u8 *blks)
+ {
+ 	struct request_queue *q = nvmdev->q;
++#ifdef HAVE_NVM_GEO
+ 	struct nvm_geo *geo = &nvmdev->geo;
++#endif
+ 	struct nvme_ns *ns = q->queuedata;
+ 	struct nvme_ctrl *ctrl = ns->ctrl;
+ 	struct nvme_nvm_command c = {};
+ 	struct nvme_nvm_bb_tbl *bb_tbl;
++#ifdef HAVE_NVM_GEO
+ 	int nr_blks = geo->blks_per_lun * geo->plane_mode;
++#else
++	int nr_blks = nvmdev->blks_per_lun * nvmdev->plane_mode;
++#endif
+ 	int tblsz = sizeof(struct nvme_nvm_bb_tbl) + nr_blks;
+ 	int ret = 0;
+ 
+@@ -438,7 +500,11 @@ static int nvme_nvm_get_bb_tbl(struct nv
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_NVM_GEO
+ 	memcpy(blks, bb_tbl->blk, geo->blks_per_lun * geo->plane_mode);
++#else
++	memcpy(blks, bb_tbl->blk, nvmdev->blks_per_lun * nvmdev->plane_mode);
++#endif
+ out:
+ 	kfree(bb_tbl);
+ 	return ret;
+@@ -485,8 +551,12 @@ static void nvme_nvm_end_io(struct reque
+ 	struct nvm_rq *rqd = rq->end_io_data;
+ 
+ 	rqd->ppa_status = le64_to_cpu(nvme_req(rq)->result.u64);
++#ifdef HAVE_NVM_END_IO_1_PARAM
+ 	rqd->error = nvme_req(rq)->status;
+ 	nvm_end_io(rqd);
++#else
++	nvm_end_io(rqd, nvme_req(rq)->status);
++#endif
+ 
+ 	kfree(nvme_req(rq)->cmd);
+ 	blk_mq_free_request(rq);
+@@ -508,7 +578,15 @@ static struct request *nvme_nvm_alloc_re
+ 	rq->cmd_flags &= ~REQ_FAILFAST_DRIVER;
+ 
+ 	if (rqd->bio) {
++#ifdef HAVE_BLK_INIT_REQUEST_FROM_BIO
+ 		blk_init_request_from_bio(rq, rqd->bio);
++#else
++		rq->ioprio = bio_prio(rqd->bio);
++		rq->__data_len = rqd->bio->bi_iter.bi_size;
++		rq->bio = rq->biotail = rqd->bio;
++		if (bio_has_data(rqd->bio))
++			rq->nr_phys_segments = bio_phys_segments(q, rqd->bio);
++#endif
+ 	} else {
+ 		rq->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_NORM);
+ 		rq->__data_len = 0;
+@@ -540,6 +618,7 @@ static int nvme_nvm_submit_io(struct nvm
+ 	return 0;
+ }
+ 
++#ifdef HAVE_NVM_DEV_OPS_SUBMIT_IO_SYNC
+ static int nvme_nvm_submit_io_sync(struct nvm_dev *dev, struct nvm_rq *rqd)
+ {
+ 	struct request_queue *q = dev->q;
+@@ -567,6 +646,7 @@ static int nvme_nvm_submit_io_sync(struc
+ 
+ 	return ret;
+ }
++#endif
+ 
+ static void *nvme_nvm_create_dma_pool(struct nvm_dev *nvmdev, char *name)
+ {
+@@ -603,7 +683,9 @@ static struct nvm_dev_ops nvme_nvm_dev_o
+ 	.set_bb_tbl		= nvme_nvm_set_bb_tbl,
+ 
+ 	.submit_io		= nvme_nvm_submit_io,
++#ifdef HAVE_NVM_DEV_OPS_SUBMIT_IO_SYNC
+ 	.submit_io_sync		= nvme_nvm_submit_io_sync,
++#endif
+ 
+ 	.create_dma_pool	= nvme_nvm_create_dma_pool,
+ 	.destroy_dma_pool	= nvme_nvm_destroy_dma_pool,
+@@ -613,6 +695,7 @@ static struct nvm_dev_ops nvme_nvm_dev_o
+ 	.max_phys_sect		= 64,
+ };
+ 
++#ifdef HAVE_NVM_USER_VIO
+ static int nvme_nvm_submit_user_cmd(struct request_queue *q,
+ 				struct nvme_ns *ns,
+ 				struct nvme_nvm_command *vcmd,
+@@ -683,9 +766,23 @@ static int nvme_nvm_submit_user_cmd(stru
+ 			vcmd->ph_rw.metadata = cpu_to_le64(metadata_dma);
+ 		}
+ 
++#ifdef HAVE_BIO_BI_DISK
+ 		bio->bi_disk = disk;
++#else
++		if (!disk)
++			goto submit;
++
++		bio->bi_bdev = bdget_disk(disk, 0);
++		if (!bio->bi_bdev) {
++			ret = -ENODEV;
++			goto err_meta;
++		}
++#endif
+ 	}
+ 
++#ifndef HAVE_BIO_BI_DISK
++submit:
++#endif
+ 	blk_execute_rq(q, NULL, rq, 0);
+ 
+ 	if (nvme_req(rq)->flags & NVME_REQ_CANCELLED)
+@@ -705,8 +802,16 @@ err_meta:
+ 	if (meta_buf && meta_len)
+ 		dma_pool_free(dev->dma_pool, metadata, metadata_dma);
+ err_map:
++#ifdef HAVE_BIO_BI_DISK
+ 	if (bio)
+ 		blk_rq_unmap_user(bio);
++#else
++	if (bio) {
++		if (disk && bio->bi_bdev)
++			bdput(bio->bi_bdev);
++		blk_rq_unmap_user(bio);
++	}
++#endif
+ err_ppa:
+ 	if (ppa_buf && ppa_len)
+ 		dma_pool_free(dev->dma_pool, ppa_list, ppa_dma);
+@@ -810,6 +915,7 @@ int nvme_nvm_ioctl(struct nvme_ns *ns, u
+ 		return -ENOTTY;
+ 	}
+ }
++#endif /* HAVE_NVM_USER_VIO */
+ 
+ int nvme_nvm_register(struct nvme_ns *ns, char *disk_name, int node)
+ {
+@@ -849,7 +955,11 @@ static ssize_t nvm_dev_attr_show(struct
+ 		return 0;
+ 
+ 	id = &ndev->identity;
++#ifdef HAVE_LIGHTNVM_NVM_ID_GRP
+ 	grp = &id->grp;
++#else
++	grp = &id->groups[0];
++#endif
+ 	attr = &dattr->attr;
+ 
+ 	if (strcmp(attr->name, "version") == 0) {
+@@ -995,3 +1105,5 @@ void nvme_nvm_unregister_sysfs(struct nv
+ 	sysfs_remove_group(&disk_to_dev(ns->disk)->kobj,
+ 					&nvm_dev_attr_group);
+ }
++
++#endif /* HAVE_LIGHTNVM_NVM_DEV */

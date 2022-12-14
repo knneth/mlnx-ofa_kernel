@@ -44,6 +44,8 @@
 
 static struct workqueue_struct *gid_cache_wq;
 
+static struct workqueue_struct *gid_cache_wq;
+
 bool roce_v1_noncompat_gid = true;
 EXPORT_SYMBOL_GPL(roce_v1_noncompat_gid);
 module_param_named(roce_v1_noncompat_gid, roce_v1_noncompat_gid, bool, 0444);

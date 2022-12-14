@@ -1385,7 +1385,7 @@ static void ipoib_auto_moderation(struct ipoib_dev_priv *priv)
 		priv->ethtool.last_moder_time = moder_time;
 		ret = ib_modify_cq(priv->recv_cq,
 				   &attr,
-				   IB_CQ_MODERATION);
+				   IB_CQ_MODERATE);
 		if (ret && ret != -ENOSYS)
 			ipoib_warn(priv, "%s: failed modifying CQ (%d)\n",
 				   __func__, ret);

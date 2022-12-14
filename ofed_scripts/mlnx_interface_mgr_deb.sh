@@ -58,6 +58,10 @@ fi
 
 OS_IS_BOOTING=0
 last_bootID=$(cat /var/run/mlx_ifc-${i}.bootid 2>/dev/null)
+if [ "X$last_bootID" == "X" ] && [ -e /sys/class/net/${i}/parent ]; then
+    parent=$(cat /sys/class/net/${i}/parent)
+    last_bootID=$(cat /var/run/mlx_ifc-${parent}.bootid 2>/dev/null)
+fi
 bootID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | sed -e 's/-//g')
 echo $bootID > /var/run/mlx_ifc-${i}.bootid
 if [[ "X$last_bootID" == "X" || "X$last_bootID" != "X$bootID" ]]; then
@@ -419,11 +423,9 @@ do
                 done
                 } > /dev/null 2>&1
             fi
-
-            bring_up $ifname
-            if [ $? -eq 1 ]; then
-                log_msg "Couldn't fully configure ${ifname}, review system logs and restart network service after fixing the issues."
-            fi
+            # Note: no need to call 'bring_up $ifname' anymore.
+            # There is a new udev rule that calls this script to configure pkeys.
+            # This is needed so that the script can configure also manually created pkeys by users.
         fi
     done < "$file"
 done

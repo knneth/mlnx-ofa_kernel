@@ -180,11 +180,13 @@ if [ -z "$KSRC_OBJ" ]; then
 	linux_obj_KSRC=$(echo "$KSRC" | grep -w "linux-obj")
 
 	if [[ -e "/etc/SuSE-release" && -n "$build_KSRC" && -d ${KSRC/build/source} ]] ||
+	   [[ -e "/etc/SUSE-brand"   && -n "$build_KSRC" && -d ${KSRC/build/source} ]] ||
 	   [[ -n "$build_KSRC" && -d ${KSRC/build/source} &&
 	       "X$(readlink -f $KSRC)" != "X$(readlink -f ${KSRC/build/source})" ]]; then
 		KSRC_OBJ=$KSRC
 		KSRC=${KSRC_OBJ/build/source}
-	elif [[ -e "/etc/SuSE-release" && -n "$linux_obj_KSRC" ]]; then
+	elif [[ -e "/etc/SuSE-release" && -n "$linux_obj_KSRC" ]] ||
+	     [[ -e "/etc/SUSE-brand" && -n "$linux_obj_KSRC" ]]; then
 		sources_dir=$(readlink -f $KSRC 2>/dev/null | sed -e 's/-obj.*//g')
 		KSRC_OBJ=$KSRC
 		KSRC=${sources_dir}

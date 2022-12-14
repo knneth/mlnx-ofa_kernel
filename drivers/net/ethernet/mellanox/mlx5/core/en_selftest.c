@@ -64,18 +64,17 @@ static int mlx5e_test_health_info(struct mlx5e_priv *priv)
 {
 	struct mlx5_core_health *health = &priv->mdev->priv.health;
 
-	return health->sick ? 1 : 0;
+	return health->fatal_error ? 1 : 0;
 }
 
 static int mlx5e_test_link_state(struct mlx5e_priv *priv)
 {
-	u16 vport_num = get_my_own_vport_number(priv->mdev);
 	u8 port_state;
 
 	if (!netif_carrier_ok(priv->netdev))
 		return 1;
 
-	port_state = mlx5_query_vport_state(priv->mdev, MLX5_QUERY_VPORT_STATE_IN_OP_MOD_VNIC_VPORT, vport_num);
+	port_state = mlx5_query_vport_state(priv->mdev, MLX5_QUERY_VPORT_STATE_IN_OP_MOD_VNIC_VPORT, 0);
 	return port_state == VPORT_STATE_UP ? 0 : 1;
 }
 
@@ -239,15 +238,19 @@ static int mlx5e_test_loopback_setup(struct mlx5e_priv *priv,
 	int err = 0;
 
 	/* Temporarily enable local_lb */
-	if (MLX5_CAP_GEN(priv->mdev, disable_local_lb)) {
-		mlx5_nic_vport_query_local_lb(priv->mdev, &lbtp->local_lb);
-		if (!lbtp->local_lb)
-			mlx5_nic_vport_update_local_lb(priv->mdev, true);
+	err = mlx5_nic_vport_query_local_lb(priv->mdev, &lbtp->local_lb);
+	if (err)
+		return err;
+
+	if (!lbtp->local_lb) {
+		err = mlx5_nic_vport_update_local_lb(priv->mdev, true);
+		if (err)
+			return err;
 	}
 
 	err = mlx5e_refresh_tirs(priv, true);
 	if (err)
-		return err;
+		goto out;
 
 	lbtp->loopback_ok = false;
 	init_completion(&lbtp->comp);
@@ -257,16 +260,21 @@ static int mlx5e_test_loopback_setup(struct mlx5e_priv *priv,
 	lbtp->pt.dev = priv->netdev;
 	lbtp->pt.af_packet_priv = lbtp;
 	dev_add_pack(&lbtp->pt);
+
+	return 0;
+
+out:
+	if (!lbtp->local_lb)
+		mlx5_nic_vport_update_local_lb(priv->mdev, false);
+
 	return err;
 }
 
 static void mlx5e_test_loopback_cleanup(struct mlx5e_priv *priv,
 					struct mlx5e_lbt_priv *lbtp)
 {
-	if (MLX5_CAP_GEN(priv->mdev, disable_local_lb)) {
-		if (!lbtp->local_lb)
-			mlx5_nic_vport_update_local_lb(priv->mdev, false);
-	}
+	if (!lbtp->local_lb)
+		mlx5_nic_vport_update_local_lb(priv->mdev, false);
 
 	dev_remove_pack(&lbtp->pt);
 	mlx5e_refresh_tirs(priv, false);

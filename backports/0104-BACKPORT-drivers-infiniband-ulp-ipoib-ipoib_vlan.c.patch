@@ -1,0 +1,21 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+
+Change-Id: I6980d5c29bb0bcac157648755e5d37781ac34aff
+---
+ drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+@@ -75,7 +75,9 @@ int __ipoib_vlan_add(struct ipoib_dev_pr
+ 	set_bit(IPOIB_FLAG_DEV_ADDR_SET, &priv->flags);
+ 	priv->dev->broadcast[8] = pkey >> 8;
+ 	priv->dev->broadcast[9] = pkey & 0xff;
+-
++#ifndef HAVE_NDO_GET_IFLINK
++	priv->dev->iflink = ppriv->dev->ifindex;
++#endif
+ 	result = ipoib_dev_init(priv->dev, ppriv->ca, ppriv->port);
+ 	if (result < 0) {
+ 		ipoib_warn(ppriv, "failed to initialize subinterface: "

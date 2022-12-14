@@ -82,6 +82,7 @@ enum nvmet_rdma_queue_state {
 	NVMET_RDMA_Q_CONNECTING,
 	NVMET_RDMA_Q_LIVE,
 	NVMET_RDMA_Q_DISCONNECTING,
+	NVMET_RDMA_IN_DEVICE_REMOVAL,
 };
 
 struct nvmet_rdma_queue {
@@ -127,15 +128,6 @@ struct nvmet_rdma_device {
 	struct list_head	entry;
 };
 
-struct nvmet_rdma_port {
-	struct nvmet_port	*nport;
-	struct sockaddr_storage addr;
-	struct rdma_cm_id	*cm_id;
-	__be64			node_guid;
-	struct list_head	entry;
-	struct delayed_work	enable_work;
-};
-
 static bool nvmet_rdma_use_srq;
 module_param_named(use_srq, nvmet_rdma_use_srq, bool, 0444);
 MODULE_PARM_DESC(use_srq, "Use shared receive queue.");
@@ -171,9 +163,6 @@ static DEFINE_MUTEX(nvmet_rdma_queue_mutex);
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_mutex);
 
-static LIST_HEAD(port_list);
-static DEFINE_MUTEX(port_list_mutex);
-
 static LIST_HEAD(nvmet_rdma_xrq_list);
 static DEFINE_MUTEX(nvmet_rdma_xrq_mutex);
 static struct nvmet_rdma_staging_buf_pool nvmet_rdma_st_pool;
@@ -186,14 +175,14 @@ static void nvmet_rdma_qp_event(struct ib_event *event, void *priv);
 static void nvmet_rdma_queue_disconnect(struct nvmet_rdma_queue *queue);
 static void nvmet_rdma_free_dev(struct kref *ref);
 
-static const struct nvmet_fabrics_ops nvmet_rdma_ops;
+static struct nvmet_fabrics_ops nvmet_rdma_ops;
 
 static int offload_buffer_size_set(const char *val,
 				   const struct kernel_param *kp)
 {
 	int n = 0, ret;
 
-	ret = kstrtoint(val, 0, &n);
+	ret = kstrtoint(val, 10, &n);
 	if (ret != 0 || n < 16)
 		return -EINVAL;
 
@@ -602,11 +591,7 @@ static void nvmet_rdma_queue_response(struct nvmet_req *req)
 	else
 		first_wr = &rsp->send_wr;
 
-	if (unlikely(nvmet_rdma_post_recv(rsp->queue->dev, rsp->cmd))) {
-		pr_err("post_recv cmd failed\n");
-		nvmet_rdma_release_rsp(rsp);
-		return;
-	}
+	nvmet_rdma_post_recv(rsp->queue->dev, rsp->cmd);
 
 	ib_dma_sync_single_for_device(rsp->queue->dev->device,
 		rsp->send_sge.addr, rsp->send_sge.length,
@@ -888,17 +873,11 @@ static int nvmet_rdma_init_srq(struct nvmet_rdma_device *ndev)
 
 	for (i = 0; i < srq_size; i++) {
 		ndev->srq_cmds[i].srq = srq;
-		ret = nvmet_rdma_post_recv(ndev, &ndev->srq_cmds[i]);
-		if (ret) {
-			pr_err("initial post_recv failed on SRQ 0x%p\n", srq);
-			goto out_free_cmds;
-		}
+		nvmet_rdma_post_recv(ndev, &ndev->srq_cmds[i]);
 	}
 
 	return 0;
 
-out_free_cmds:
-	nvmet_rdma_free_cmds(ndev, ndev->srq_cmds, ndev->srq_size, false);
 out_destroy_srq:
 	ib_destroy_srq(srq);
 	return ret;
@@ -1040,19 +1019,13 @@ static int nvmet_rdma_create_queue_ib(struct nvmet_rdma_queue *queue)
 	if (!ndev->srq && !queue->offload) {
 		for (i = 0; i < queue->recv_queue_size; i++) {
 			queue->cmds[i].queue = queue;
-			ret = nvmet_rdma_post_recv(ndev, &queue->cmds[i]);
-			if (ret) {
-				pr_err("initial post_recv failed\n");
-				goto err_destroy_qp;
-			}
+			nvmet_rdma_post_recv(ndev, &queue->cmds[i]);
 		}
 	}
 
 out:
 	return ret;
 
-err_destroy_qp:
-	rdma_destroy_qp(queue->cm_id);
 err_destroy_cq:
 	ib_free_cq(queue->cq);
 err_destroy_xrq:
@@ -1063,11 +1036,8 @@ err_destroy_xrq:
 
 static void nvmet_rdma_destroy_queue_ib(struct nvmet_rdma_queue *queue)
 {
-	struct ib_qp *qp = queue->cm_id->qp;
-
-	ib_drain_qp(qp);
-	rdma_destroy_id(queue->cm_id);
-	ib_destroy_qp(qp);
+	ib_drain_qp(queue->cm_id->qp);
+	rdma_destroy_qp(queue->cm_id);
 	ib_free_cq(queue->cq);
 	if (queue->offload && queue->xrq)
 		kref_put(&queue->xrq->ref, nvmet_rdma_destroy_xrq);
@@ -1094,9 +1064,14 @@ static void nvmet_rdma_release_queue_work(struct work_struct *w)
 {
 	struct nvmet_rdma_queue *queue =
 		container_of(w, struct nvmet_rdma_queue, release_work);
+	struct rdma_cm_id *cm_id = queue->cm_id;
 	struct nvmet_rdma_device *dev = queue->dev;
+	enum nvmet_rdma_queue_state state = queue->state;
 
 	nvmet_rdma_free_queue(queue);
+
+	if (state != NVMET_RDMA_IN_DEVICE_REMOVAL)
+		rdma_destroy_id(cm_id);
 
 	kref_put(&dev->ref, nvmet_rdma_free_dev);
 }
@@ -1159,7 +1134,6 @@ nvmet_rdma_alloc_queue(struct nvmet_rdma_device *ndev,
 		struct rdma_cm_id *cm_id,
 		struct rdma_cm_event *event)
 {
-	struct nvmet_rdma_port *port = cm_id->context;
 	struct nvmet_rdma_queue *queue;
 	int ret;
 
@@ -1187,7 +1161,7 @@ nvmet_rdma_alloc_queue(struct nvmet_rdma_device *ndev,
 	INIT_WORK(&queue->disconnect_work, nvmet_rdma_disconnect_queue_work);
 	queue->dev = ndev;
 	queue->cm_id = cm_id;
-	queue->port = port->nport;
+	queue->port = cm_id->context;
 	queue->offload = queue->port->offload && queue->host_qid;
 
 	spin_lock_init(&queue->state_lock);
@@ -1322,11 +1296,8 @@ static int nvmet_rdma_queue_connect(struct rdma_cm_id *cm_id,
 	}
 
 	ret = nvmet_rdma_cm_accept(cm_id, queue, &event->param.conn);
-	if (ret) {
-		schedule_work(&queue->release_work);
-		/* Destroying rdma_cm id is not needed here */
-		return 0;
-	}
+	if (ret)
+		goto release_queue;
 
 	mutex_lock(&nvmet_rdma_queue_mutex);
 	list_add_tail(&queue->queue_list, &nvmet_rdma_queue_list);
@@ -1334,6 +1305,8 @@ static int nvmet_rdma_queue_connect(struct rdma_cm_id *cm_id,
 
 	return 0;
 
+release_queue:
+	nvmet_rdma_free_queue(queue);
 put_device:
 	kref_put(&ndev->ref, nvmet_rdma_free_dev);
 
@@ -1379,6 +1352,7 @@ static void __nvmet_rdma_queue_disconnect(struct nvmet_rdma_queue *queue)
 	case NVMET_RDMA_Q_CONNECTING:
 	case NVMET_RDMA_Q_LIVE:
 		queue->state = NVMET_RDMA_Q_DISCONNECTING;
+	case NVMET_RDMA_IN_DEVICE_REMOVAL:
 		disconnect = true;
 		break;
 	case NVMET_RDMA_Q_DISCONNECTING:
@@ -1421,23 +1395,51 @@ static void nvmet_rdma_queue_connect_fail(struct rdma_cm_id *cm_id,
 	schedule_work(&queue->release_work);
 }
 
-static void nvmet_rdma_destroy_xrqs(struct nvmet_port *nport)
+/**
+ * nvme_rdma_device_removal() - Handle RDMA device removal
+ * @cm_id:	rdma_cm id, used for nvmet port
+ * @queue:      nvmet rdma queue (cm id qp_context)
+ *
+ * DEVICE_REMOVAL event notifies us that the RDMA device is about
+ * to unplug. Note that this event can be generated on a normal
+ * queue cm_id and/or a device bound listener cm_id (where in this
+ * case queue will be null).
+ *
+ * We registered an ib_client to handle device removal for queues,
+ * so we only need to handle the listening port cm_ids. In this case
+ * we nullify the priv to prevent double cm_id destruction and destroying
+ * the cm_id implicitely by returning a non-zero rc to the callout.
+ */
+static int nvmet_rdma_device_removal(struct rdma_cm_id *cm_id,
+		struct nvmet_rdma_queue *queue)
 {
-	struct nvmet_rdma_xrq *xrq, *next;
+	struct nvmet_port *port;
 
-	mutex_lock(&nvmet_rdma_xrq_mutex);
-	list_for_each_entry_safe(xrq, next, &nvmet_rdma_xrq_list, entry) {
-		if (xrq->port == nport) {
-			/*
-			 * nvmet_rdma_destroy_xrq lock nvmet_rdma_xrq_mutex too,
-			 * so we need to unlock it to avoid a deadlock.
-			 */
-			mutex_unlock(&nvmet_rdma_xrq_mutex);
-			kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
-			mutex_lock(&nvmet_rdma_xrq_mutex);
-		}
+	if (queue) {
+		/*
+		 * This is a queue cm_id. we have registered
+		 * an ib_client to handle queues removal
+		 * so don't interfear and just return.
+		 */
+		return 0;
 	}
-	mutex_unlock(&nvmet_rdma_xrq_mutex);
+
+	port = cm_id->context;
+
+	/*
+	 * This is a listener cm_id. Make sure that
+	 * future remove_port won't invoke a double
+	 * cm_id destroy. use atomic xchg to make sure
+	 * we don't compete with remove_port.
+	 */
+	if (xchg(&port->priv, NULL) != cm_id)
+		return 0;
+
+	/*
+	 * We need to return 1 so that the core will destroy
+	 * it's own ID.  What a great API design..
+	 */
+	return 1;
 }
 
 static int nvmet_rdma_cm_handler(struct rdma_cm_id *cm_id,
@@ -1463,10 +1465,17 @@ static int nvmet_rdma_cm_handler(struct rdma_cm_id *cm_id,
 	case RDMA_CM_EVENT_ADDR_CHANGE:
 	case RDMA_CM_EVENT_DISCONNECTED:
 	case RDMA_CM_EVENT_TIMEWAIT_EXIT:
-		nvmet_rdma_queue_disconnect(queue);
+		/*
+		 * We might end up here when we already freed the qp
+		 * which means queue release sequence is in progress,
+		 * so don't get in the way...
+		 */
+		if (queue)
+			nvmet_rdma_queue_disconnect(queue);
 		break;
 	case RDMA_CM_EVENT_DEVICE_REMOVAL:
-		break; /* handled by nvmet_rdma_remove_one */
+		ret = nvmet_rdma_device_removal(cm_id, queue);
+		break;
 	case RDMA_CM_EVENT_REJECTED:
 		pr_debug("Connection rejected: %s\n",
 			 rdma_reject_msg(cm_id, event->status));
@@ -1502,11 +1511,33 @@ restart:
 	mutex_unlock(&nvmet_rdma_queue_mutex);
 }
 
-static int nvmet_rdma_enable_port(struct nvmet_rdma_port *port)
+static int nvmet_rdma_add_port(struct nvmet_port *port)
 {
-	struct sockaddr *addr = (struct sockaddr *)&port->addr;
 	struct rdma_cm_id *cm_id;
+	struct sockaddr_storage addr = { };
+	__kernel_sa_family_t af;
 	int ret;
+
+	switch (port->disc_addr.adrfam) {
+	case NVMF_ADDR_FAMILY_IP4:
+		af = AF_INET;
+		break;
+	case NVMF_ADDR_FAMILY_IP6:
+		af = AF_INET6;
+		break;
+	default:
+		pr_err("address family %d not supported\n",
+				port->disc_addr.adrfam);
+		return -EINVAL;
+	}
+
+	ret = inet_pton_with_scope(&init_net, af, port->disc_addr.traddr,
+			port->disc_addr.trsvcid, &addr);
+	if (ret) {
+		pr_err("malformed ip/port passed: %s:%s\n",
+			port->disc_addr.traddr, port->disc_addr.trsvcid);
+		return ret;
+	}
 
 	cm_id = rdma_create_id(&init_net, nvmet_rdma_cm_handler, port,
 			RDMA_PS_TCP, IB_QPT_RC);
@@ -1525,25 +1556,23 @@ static int nvmet_rdma_enable_port(struct nvmet_rdma_port *port)
 		goto out_destroy_id;
 	}
 
-	ret = rdma_bind_addr(cm_id, addr);
+	ret = rdma_bind_addr(cm_id, (struct sockaddr *)&addr);
 	if (ret) {
-		pr_err("binding CM ID to %pISpcs failed (%d)\n", addr, ret);
+		pr_err("binding CM ID to %pISpcs failed (%d)\n",
+			(struct sockaddr *)&addr, ret);
 		goto out_destroy_id;
 	}
 
 	ret = rdma_listen(cm_id, 128);
 	if (ret) {
-		pr_err("listening to %pISpcs failed (%d)\n", addr, ret);
+		pr_err("listening to %pISpcs failed (%d)\n",
+			(struct sockaddr *)&addr, ret);
 		goto out_destroy_id;
 	}
 
-	port->cm_id = cm_id;
-	if (cm_id->device)
-		port->node_guid = cm_id->device->node_guid;
-
 	pr_info("enabling port %d (%pISpcs)\n",
-		le16_to_cpu(port->nport->disc_addr.portid), addr);
-
+		le16_to_cpu(port->disc_addr.portid), (struct sockaddr *)&addr);
+	port->priv = cm_id;
 	return 0;
 
 out_destroy_id:
@@ -1551,146 +1580,40 @@ out_destroy_id:
 	return ret;
 }
 
-static void nvmet_rdma_enable_port_work(struct work_struct *w)
+static void nvmet_rdma_remove_port(struct nvmet_port *port)
 {
-	struct nvmet_rdma_port *port = container_of(to_delayed_work(w),
-			struct nvmet_rdma_port, enable_work);
-	int ret;
+	struct rdma_cm_id *cm_id = xchg(&port->priv, NULL);
+	struct nvmet_rdma_xrq *xrq, *next;
 
-	ret = nvmet_rdma_enable_port(port);
-	if (ret)
-		schedule_delayed_work(&port->enable_work, 5 * HZ);
-}
-
-static int nvmet_rdma_add_port(struct nvmet_port *nport)
-{
-	struct nvmet_rdma_port *port;
-	__kernel_sa_family_t af;
-	int ret;
-
-	port = kzalloc(sizeof(*port), GFP_KERNEL);
-	if (!port)
-		return -ENOMEM;
-
-	switch (nport->disc_addr.adrfam) {
-	case NVMF_ADDR_FAMILY_IP4:
-		af = AF_INET;
-		break;
-	case NVMF_ADDR_FAMILY_IP6:
-		af = AF_INET6;
-		break;
-	default:
-		pr_err("address family %d not supported\n",
-			nport->disc_addr.adrfam);
-		ret = -EINVAL;
-		goto out_free_port;
+	if (port->offload) {
+		mutex_lock(&nvmet_rdma_xrq_mutex);
+		list_for_each_entry_safe(xrq, next, &nvmet_rdma_xrq_list, entry) {
+			if (xrq->port == port) {
+				/*
+				 * nvmet_rdma_destroy_xrq lock nvmet_rdma_xrq_mutex too,
+				 * so we need to unlock it to avoid a deadlock.
+				 */
+				mutex_unlock(&nvmet_rdma_xrq_mutex);
+				kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
+				mutex_lock(&nvmet_rdma_xrq_mutex);
+			}
+		}
+		mutex_unlock(&nvmet_rdma_xrq_mutex);
 	}
-
-	ret = inet_pton_with_scope(&init_net, af, nport->disc_addr.traddr,
-			nport->disc_addr.trsvcid, &port->addr);
-	if (ret) {
-		pr_err("malformed ip/port passed: %s:%s\n",
-			nport->disc_addr.traddr, nport->disc_addr.trsvcid);
-		goto out_free_port;
-	}
-
-	port->nport = nport;
-	ret = nvmet_rdma_enable_port(port);
-	if (ret)
-		goto out_free_port;
-
-	nport->priv = port;
-	INIT_DELAYED_WORK(&port->enable_work, nvmet_rdma_enable_port_work);
-
-	mutex_lock(&port_list_mutex);
-	list_add_tail(&port->entry, &port_list);
-	mutex_unlock(&port_list_mutex);
-
-	return 0;
-
-out_free_port:
-	kfree(port);
-	return ret;
-}
-
-static void nvmet_rdma_disable_port(struct nvmet_rdma_port *port)
-{
-	struct rdma_cm_id *cm_id = port->cm_id;
-	struct nvmet_port *nport = port->nport;
-
-	if (nport->offload && cm_id)
-		nvmet_rdma_destroy_xrqs(nport);
-
-	port->cm_id = NULL;
 	if (cm_id)
 		rdma_destroy_id(cm_id);
 }
 
-static void nvmet_rdma_remove_port(struct nvmet_port *nport)
-{
-	struct nvmet_rdma_port *port = nport->priv;
-
-	mutex_lock(&port_list_mutex);
-	list_del(&port->entry);
-	mutex_unlock(&port_list_mutex);
-
-	cancel_delayed_work_sync(&port->enable_work);
-
-	nvmet_rdma_disable_port(port);
-	kfree(port);
-}
-
-static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
-		struct nvmet_port *nport, char *traddr)
-{
-	struct nvmet_rdma_port *port = nport->priv;
-	struct rdma_cm_id *cm_id = port->cm_id;
-
-	if (inet_addr_is_any((struct sockaddr *)&cm_id->route.addr.src_addr)) {
-		struct nvmet_rdma_rsp *rsp =
-			container_of(req, struct nvmet_rdma_rsp, req);
-		struct rdma_cm_id *req_cm_id = rsp->queue->cm_id;
-		struct sockaddr *addr = (void *)&req_cm_id->route.addr.src_addr;
-
-		sprintf(traddr, "%pISc", addr);
-	} else {
-		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
-	}
-}
-
-static void nvmet_rdma_add_one(struct ib_device *ib_device)
-{
-	struct nvmet_rdma_port *port, *n;
-
-	mutex_lock(&port_list_mutex);
-	list_for_each_entry_safe(port, n, &port_list, entry) {
-		if (port->node_guid != ib_device->node_guid)
-			continue;
-
-		schedule_delayed_work(&port->enable_work, HZ);
-	}
-	mutex_unlock(&port_list_mutex);
-}
-
-static bool nvmet_rdma_is_port_active(struct nvmet_port *nport)
-{
-	struct nvmet_rdma_port *port = nport->priv;
-
-	return port->cm_id ? true : false;
-}
-
-static const struct nvmet_fabrics_ops nvmet_rdma_ops = {
+static struct nvmet_fabrics_ops nvmet_rdma_ops = {
 	.owner			= THIS_MODULE,
 	.type			= NVMF_TRTYPE_RDMA,
 	.sqe_inline_size	= NVMET_RDMA_INLINE_DATA_SIZE,
 	.msdbd			= 1,
 	.has_keyed_sgls		= 1,
 	.add_port		= nvmet_rdma_add_port,
-	.is_port_active		= nvmet_rdma_is_port_active,
 	.remove_port		= nvmet_rdma_remove_port,
 	.queue_response		= nvmet_rdma_queue_response,
 	.delete_ctrl		= nvmet_rdma_delete_ctrl,
-	.disc_traddr		= nvmet_rdma_disc_port_addr,
 	.peer_to_peer_capable	= nvmet_rdma_peer_to_peer_capable,
 	.install_offload_queue	= nvmet_rdma_install_offload_queue,
 	.create_offload_ctrl	= nvmet_rdma_create_offload_ctrl,
@@ -1699,21 +1622,11 @@ static const struct nvmet_fabrics_ops nvmet_rdma_ops = {
 	.disable_offload_ns	= nvmet_rdma_disable_offload_ns,
 	.peer_to_peer_sqe_inline_size = nvmet_rdma_peer_to_peer_sqe_inline_size,
 	.peer_to_peer_mdts	= nvmet_rdma_peer_to_peer_mdts,
-	.offload_subsys_unknown_ns_cmds	= nvmet_rdma_offload_subsys_unknown_ns_cmds,
-	.offload_ns_read_cmds	= nvmet_rdma_offload_ns_read_cmds,
-	.offload_ns_read_blocks	= nvmet_rdma_offload_ns_read_blocks,
-	.offload_ns_write_cmds	= nvmet_rdma_offload_ns_write_cmds,
-	.offload_ns_write_blocks = nvmet_rdma_offload_ns_write_blocks,
-	.offload_ns_write_inline_cmds = nvmet_rdma_offload_ns_write_inline_cmds,
-	.offload_ns_flush_cmds	= nvmet_rdma_offload_ns_flush_cmds,
-	.offload_ns_error_cmds	= nvmet_rdma_offload_ns_error_cmds,
-	.offload_ns_backend_error_cmds	= nvmet_rdma_offload_ns_backend_error_cmds,
 };
 
 static void nvmet_rdma_remove_one(struct ib_device *ib_device, void *client_data)
 {
 	struct nvmet_rdma_queue *queue, *tmp;
-	struct nvmet_rdma_port *port, *n;
 	struct nvmet_rdma_device *ndev;
 	bool found = false;
 
@@ -1725,6 +1638,11 @@ static void nvmet_rdma_remove_one(struct ib_device *ib_device, void *client_data
 		}
 	}
 	mutex_unlock(&device_list_mutex);
+
+	if (!found) {
+		WARN_ON_ONCE(!list_empty(&nvmet_rdma_queue_list));
+		return;
+	}
 
 	/*
 	 * IB Device that is used by nvmet controllers is being removed,
@@ -1742,22 +1660,11 @@ static void nvmet_rdma_remove_one(struct ib_device *ib_device, void *client_data
 	}
 	mutex_unlock(&nvmet_rdma_queue_mutex);
 
-	mutex_lock(&port_list_mutex);
-	list_for_each_entry_safe(port, n, &port_list, entry) {
-		if (port->node_guid != ib_device->node_guid)
-			continue;
-
-		nvmet_rdma_disable_port(port);
-	}
-	mutex_unlock(&port_list_mutex);
-
-	if (found)
-		flush_scheduled_work();
+	flush_scheduled_work();
 }
 
 static struct ib_client nvmet_rdma_ib_client = {
 	.name   = "nvmet_rdma",
-	.add	= nvmet_rdma_add_one,
 	.remove = nvmet_rdma_remove_one
 };
 

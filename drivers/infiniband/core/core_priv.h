@@ -38,8 +38,12 @@
 #include <linux/cgroup_rdma.h>
 
 #include <rdma/ib_verbs.h>
+#include <rdma/opa_addr.h>
 #include <rdma/ib_mad.h>
 #include "mad_priv.h"
+
+/* Total number of ports combined across all struct ib_devices's */
+#define RDMA_MAX_PORTS 1024
 
 struct pkey_index_qp_list {
 	struct list_head    pkey_index_list;
@@ -313,7 +317,7 @@ static inline int ib_mad_enforce_security(struct ib_mad_agent_private *map,
 }
 #endif
 
-struct ib_device *__ib_device_get_by_index(u32 ifindex);
+struct ib_device *ib_device_get_by_index(u32 ifindex);
 /* RDMA device netlink */
 void nldev_init(void);
 void nldev_exit(void);

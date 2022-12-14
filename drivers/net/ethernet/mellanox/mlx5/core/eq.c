@@ -37,6 +37,7 @@
 #include "mlx5_core.h"
 #include "fpga/core.h"
 #include "eswitch.h"
+#include "diag/tracer.h"
 
 enum {
 	MLX5_EQE_SIZE		= sizeof(struct mlx5_eqe),
@@ -151,8 +152,6 @@ static const char *eqe_type_str(u8 type)
 		return "MLX5_EVENT_TYPE_STALL_EVENT";
 	case MLX5_EVENT_TYPE_CMD:
 		return "MLX5_EVENT_TYPE_CMD";
-	case MLX5_EVENT_EC_PARAMS_CHANGE:
-		return "MLX5_EVENT_EC_PARAMS_CHANGE";
 	case MLX5_EVENT_TYPE_PAGE_REQUEST:
 		return "MLX5_EVENT_TYPE_PAGE_REQUEST";
 	case MLX5_EVENT_TYPE_PAGE_FAULT:
@@ -173,6 +172,8 @@ static const char *eqe_type_str(u8 type)
 		return "MLX5_EVENT_TYPE_DCT_KEY_VIOLATION";
 	case MLX5_EVENT_TYPE_XRQ_ERROR:
 		return "MLX5_EVENT_TYPE_XRQ_ERROR";
+	case MLX5_EVENT_TYPE_DEVICE_TRACER:
+		return "MLX5_EVENT_TYPE_DEVICE_TRACER";
 	default:
 		return "Unrecognized event";
 	}
@@ -202,8 +203,8 @@ static enum mlx5_dev_event port_subtype_event(u8 subtype)
 static void eq_update_ci(struct mlx5_eq *eq, int arm)
 {
 	__be32 __iomem *addr = eq->doorbell + (arm ? 0 : 2);
-
 	u32 val = (eq->cons_index & 0xffffff) | (eq->eqn << 24);
+
 	__raw_writel((__force u32)cpu_to_be32(val), addr);
 	/* We still want ordering, just not swabbing, so add a barrier */
 	mb();
@@ -274,7 +275,7 @@ static void eq_pf_process(struct mlx5_eq *eq)
 		case MLX5_PFAULT_SUBTYPE_WQE:
 			/* WQE based event */
 			pfault->type =
-				be32_to_cpu(pf_eqe->wqe.pftype_wq) >> 24;
+				(be32_to_cpu(pf_eqe->wqe.pftype_wq) >> 24) & 0xf;
 			pfault->token =
 				be32_to_cpu(pf_eqe->wqe.token);
 			pfault->wqe.wq_num =
@@ -544,7 +545,7 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 			break;
 		case MLX5_EVENT_TYPE_CQ_ERROR:
 			cqn = be32_to_cpu(eqe->data.cq_err.cqn) & 0xffffff;
-			mlx5_core_warn(dev, "CQ error on CQN 0x%x, syndrom 0x%x\n",
+			mlx5_core_warn(dev, "CQ error on CQN 0x%x, syndrome 0x%x\n",
 				       cqn, eqe->data.cq_err.syndrome);
 			mlx5_cq_event(dev, cqn, eqe->type);
 			break;
@@ -553,11 +554,10 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 			{
 				u16 func_id = be16_to_cpu(eqe->data.req_pages.func_id);
 				s32 npages = be32_to_cpu(eqe->data.req_pages.num_pages);
-				bool ec_function = be16_to_cpu(eqe->data.req_pages.ec_function_rsvd) & 0x8000;
 
-				mlx5_core_dbg(dev, "page request for func 0x%x, npages %d, ec_function %d\n",
-					      func_id, npages, ec_function);
-				mlx5_core_req_pages_handler(dev, func_id, npages, ec_function);
+				mlx5_core_dbg(dev, "page request for func 0x%x, npages %d\n",
+					      func_id, npages);
+				mlx5_core_req_pages_handler(dev, func_id, npages);
 			}
 			break;
 
@@ -586,8 +586,8 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 			general_event_handler(dev, eqe);
 			break;
 
-		case MLX5_EVENT_EC_PARAMS_CHANGE:
-			mlx5_ec_params_update(dev);
+		case MLX5_EVENT_TYPE_DEVICE_TRACER:
+			mlx5_tracer_event(dev, eqe);
 			break;
 
 		default:
@@ -617,6 +617,24 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 		tasklet_schedule(&eq->tasklet_ctx.task);
 
 	return IRQ_HANDLED;
+}
+
+/* Some architectures don't latch interrupts when they are disabled, so using
+ * mlx5_eq_poll_irq_disabled could end up losing interrupts while trying to
+ * avoid losing them.  It is not recommended to use it, unless this is the last
+ * resort.
+ */
+u32 mlx5_eq_poll_irq_disabled(struct mlx5_eq *eq)
+{
+	u32 count_eqe;
+
+	disable_irq(eq->irqn);
+	count_eqe = eq->cons_index;
+	mlx5_eq_int(eq->irqn, eq);
+	count_eqe = eq->cons_index - count_eqe;
+	enable_irq(eq->irqn);
+
+	return count_eqe;
 }
 
 static void init_eq_buf(struct mlx5_eq *eq)
@@ -695,7 +713,7 @@ int mlx5_create_map_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq, u8 vecidx,
 	mlx5_add_pci_to_irq_name(dev, name, priv->irq_info[vecidx].name);
 
 	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
-	eq->irqn = priv->msix_arr[vecidx].vector;
+	eq->irqn = pci_irq_vector(dev->pdev, vecidx);
 	eq->dev = dev;
 	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
 	err = request_irq(eq->irqn, handler, 0,
@@ -730,7 +748,7 @@ int mlx5_create_map_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq, u8 vecidx,
 	return 0;
 
 err_irq:
-	free_irq(priv->msix_arr[vecidx].vector, eq);
+	free_irq(eq->irqn, eq);
 
 err_eq:
 	mlx5_cmd_destroy_eq(dev, eq->eqn);
@@ -770,11 +788,6 @@ int mlx5_destroy_unmap_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq)
 	return err;
 }
 EXPORT_SYMBOL_GPL(mlx5_destroy_unmap_eq);
-
-u32 mlx5_get_msix_vec(struct mlx5_core_dev *dev, int vecidx)
-{
-	return dev->priv.msix_arr[MLX5_EQ_VEC_ASYNC].vector;
-}
 
 int mlx5_eq_init(struct mlx5_core_dev *dev)
 {
@@ -825,8 +838,8 @@ int mlx5_start_eqs(struct mlx5_core_dev *dev)
 	else
 		mlx5_core_dbg(dev, "temp_warn_event is not set\n");
 
-	if (mlx5_core_is_ecpf(dev))
-		async_event_mask |= (1ull << MLX5_EVENT_EC_PARAMS_CHANGE);
+	if (MLX5_CAP_MCAM_REG(dev, tracer_registers))
+		async_event_mask |= (1ull << MLX5_EVENT_TYPE_DEVICE_TRACER);
 
 	err = mlx5_create_map_eq(dev, &table->cmd_eq, MLX5_EQ_VEC_CMD,
 				 MLX5_NUM_CMD_EQE, 1ull << MLX5_EVENT_TYPE_CMD,
@@ -888,7 +901,7 @@ err1:
 	return err;
 }
 
-int mlx5_stop_eqs(struct mlx5_core_dev *dev)
+void mlx5_stop_eqs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *table = &dev->priv.eq_table;
 	int err;
@@ -897,22 +910,26 @@ int mlx5_stop_eqs(struct mlx5_core_dev *dev)
 	if (MLX5_CAP_GEN(dev, pg)) {
 		err = mlx5_destroy_unmap_eq(dev, &table->pfault_eq);
 		if (err)
-			return err;
+			mlx5_core_err(dev, "failed to destroy page fault eq, err(%d)\n",
+				      err);
 	}
 #endif
 
 	err = mlx5_destroy_unmap_eq(dev, &table->pages_eq);
 	if (err)
-		return err;
+		mlx5_core_err(dev, "failed to destroy pages eq, err(%d)\n",
+			      err);
 
-	mlx5_destroy_unmap_eq(dev, &table->async_eq);
+	err = mlx5_destroy_unmap_eq(dev, &table->async_eq);
+	if (err)
+		mlx5_core_err(dev, "failed to destroy async eq, err(%d)\n",
+			      err);
 	mlx5_cmd_use_polling(dev);
 
 	err = mlx5_destroy_unmap_eq(dev, &table->cmd_eq);
 	if (err)
-		mlx5_cmd_use_events(dev);
-
-	return err;
+		mlx5_core_err(dev, "failed to destroy command eq, err(%d)\n",
+			      err);
 }
 
 int mlx5_core_eq_query(struct mlx5_core_dev *dev, struct mlx5_eq *eq,

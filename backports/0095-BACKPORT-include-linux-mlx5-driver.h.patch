@@ -1,0 +1,117 @@
+From: Feras Daoud <ferasda@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
+
+Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
+---
+ include/linux/mlx5/driver.h | 41 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 1 deletion(-)
+
+--- a/include/linux/mlx5/driver.h
++++ b/include/linux/mlx5/driver.h
+@@ -51,8 +51,15 @@
+ #include <linux/mlx5/device.h>
+ #include <linux/mlx5/doorbell.h>
+ #include <linux/mlx5/srq.h>
++#include <linux/net_tstamp.h>
++#ifdef HAVE_TIMECOUNTER_H
+ #include <linux/timecounter.h>
++#else
++#include <linux/clocksource.h>
++#endif
++#if defined (HAVE_PTP_CLOCK_INFO) && (defined(CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ #include <linux/ptp_clock_kernel.h>
++#endif
+ #ifdef CONFIG_CXL_LIB
+ #include <misc/cxllib.h>
+ #endif
+@@ -697,6 +704,9 @@ struct mlx5_port_module_event_stats {
+ struct mlx5_priv {
+ 	char			name[MLX5_MAX_NAME_LEN];
+ 	struct mlx5_eq_table	eq_table;
++#ifndef HAVE_PCI_IRQ_API
++	struct msix_entry       *msix_arr;
++#endif
+ 	struct mlx5_irq_info	*irq_info;
+ 
+ 	/* pages stuff */
+@@ -726,6 +736,10 @@ struct mlx5_priv {
+ 	struct dentry	       *dct_debugfs;
+ 	/* end: dct stuff */
+ 
++#ifndef HAVE_DEVLINK_H
++	struct dentry	       *compat_debugfs;
++#endif
++
+ 	/* start: cq staff */
+ 	struct mlx5_cq_table	cq_table;
+ 	/* end: cq staff */
+@@ -876,9 +890,13 @@ struct mlx5_clock {
+ 	unsigned long              overflow_period;
+ 	struct delayed_work        overflow_work;
+ 	struct mlx5_core_dev      *mdev;
++#if defined (HAVE_PTP_CLOCK_INFO) && (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	struct ptp_clock          *ptp;
+ 	struct ptp_clock_info      ptp_info;
++#ifdef HAVE_PTP_CLOCK_INFO_N_PINS
+ 	struct mlx5_pps            pps_info;
++#endif
++#endif
+ };
+ 
+ /* need to move the tracer stuff to tracer.h*/
+@@ -1065,8 +1083,13 @@ struct mlx5_cmd_work_ent {
+ 	int			page_queue;
+ 	u8			status;
+ 	u8			token;
++#ifdef HAVE_KTIME_GET_NS
+ 	u64			ts1;
+ 	u64			ts2;
++#else
++	struct timespec		ts1;
++	struct timespec		ts2;
++#endif
+ 	u16			op;
+ 	bool			polling;
+ };
+@@ -1423,7 +1446,12 @@ static inline int mlx5_core_is_pf(struct
+ 	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
+ }
+ 
+-#define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev))
++/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL
++ * return in that case 1
++ */
++#define MLX5_TOTAL_VPORTS(mdev) \
++	(1 + ((pci_sriov_get_totalvfs(mdev->pdev)) < 0 ? \
++	      0 : pci_sriov_get_totalvfs(mdev->pdev)))
+ #define MLX5_VPORT_MANAGER(mdev) \
+ 	(MLX5_CAP_GEN(mdev, vport_group_manager) && \
+ 	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) && \
+@@ -1451,6 +1479,10 @@ enum {
+ static inline const struct cpumask *
+ mlx5_get_vector_affinity(struct mlx5_core_dev *dev, int vector)
+ {
++#if ( defined(HAVE_IRQ_TO_DESC_EXPORTED) ) && \
++    ( defined(CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK) || \
++      defined(HAVE_IRQ_DESC_IRQ_COMMON_DATA_AFFINITY) || \
++      defined(HAVE_IRQ_DESC_IRQ_DATA_AFFINITY))
+ 	const struct cpumask *mask;
+ 	struct irq_desc *desc;
+ 	unsigned int irq;
+@@ -1465,9 +1497,16 @@ mlx5_get_vector_affinity(struct mlx5_cor
+ #ifdef CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK
+ 	mask = irq_data_get_effective_affinity_mask(&desc->irq_data);
+ #else
++#if defined(HAVE_IRQ_DESC_IRQ_COMMON_DATA_AFFINITY)
+ 	mask = desc->irq_common_data.affinity;
++#elif defined(HAVE_IRQ_DESC_IRQ_DATA_AFFINITY)
++	mask = desc->irq_data.affinity;
++#endif
+ #endif
+ 	return mask;
++#else
++	return cpu_possible_mask;
++#endif
+ }
+ 
+ /* MLX5 Diagnostics */

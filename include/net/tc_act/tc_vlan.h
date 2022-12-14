@@ -61,17 +61,6 @@ static inline __be16 tcf_vlan_push_proto(const struct tc_action *a)
 }
 #endif
 
-#ifndef HAVE_TCF_VLAN_PUSH_PRIO
-static inline __be16 tcf_vlan_push_prio(const struct tc_action *a)
-{
-#ifdef HAVE_TCF_VLAN_TCFV_PUSH_PRIO
-	return to_vlan(a)->tcfv_push_prio;
-#else
-	return 0;
-#endif
-}
-#endif
-
 #endif /* HAVE_TC_VLAN_H */
 
 #endif	/* _COMPAT_NET_TC_ACT_TC_VLAN_H */

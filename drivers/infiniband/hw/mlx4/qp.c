@@ -36,7 +36,6 @@
 #include <net/ip.h>
 #include <linux/slab.h>
 #include <linux/netdevice.h>
-#include <linux/vmalloc.h>
 #include <net/inet_ecn.h>
 
 #include <rdma/ib_cache.h>
@@ -167,8 +166,8 @@ static int is_sqp(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp)
 	/* VF or PF -- proxy SQP */
 	if (mlx4_is_mfunc(dev->dev)) {
 		for (i = 0; i < dev->dev->caps.num_ports; i++) {
-			if (qp->mqp.qpn == dev->dev->caps.qp0_proxy[i] ||
-			    qp->mqp.qpn == dev->dev->caps.qp1_proxy[i]) {
+			if (qp->mqp.qpn == dev->dev->caps.spec_qps[i].qp0_proxy ||
+			    qp->mqp.qpn == dev->dev->caps.spec_qps[i].qp1_proxy) {
 				proxy_sqp = 1;
 				break;
 			}
@@ -195,7 +194,7 @@ static int is_qp0(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp)
 	/* VF or PF -- proxy QP0 */
 	if (mlx4_is_mfunc(dev->dev)) {
 		for (i = 0; i < dev->dev->caps.num_ports; i++) {
-			if (qp->mqp.qpn == dev->dev->caps.qp0_proxy[i]) {
+			if (qp->mqp.qpn == dev->dev->caps.spec_qps[i].qp0_proxy) {
 				proxy_qp0 = 1;
 				break;
 			}
@@ -648,8 +647,8 @@ static int qp0_enabled_vf(struct mlx4_dev *dev, int qpn)
 {
 	int i;
 	for (i = 0; i < dev->caps.num_ports; i++) {
-		if (qpn == dev->caps.qp0_proxy[i])
-			return !!dev->caps.qp0_qkey[i];
+		if (qpn == dev->caps.spec_qps[i].qp0_proxy)
+			return !!dev->caps.spec_qps[i].qp0_qkey;
 	}
 	return 0;
 }
@@ -682,6 +681,19 @@ static int set_qp_rss(struct mlx4_ib_dev *dev, struct mlx4_ib_rss *rss_ctx,
 		return (-EOPNOTSUPP);
 	}
 
+	if (ucmd->rx_hash_fields_mask & ~(MLX4_IB_RX_HASH_SRC_IPV4	|
+					  MLX4_IB_RX_HASH_DST_IPV4	|
+					  MLX4_IB_RX_HASH_SRC_IPV6	|
+					  MLX4_IB_RX_HASH_DST_IPV6	|
+					  MLX4_IB_RX_HASH_SRC_PORT_TCP	|
+					  MLX4_IB_RX_HASH_DST_PORT_TCP	|
+					  MLX4_IB_RX_HASH_SRC_PORT_UDP	|
+					  MLX4_IB_RX_HASH_DST_PORT_UDP)) {
+		pr_debug("RX Hash fields_mask has unsupported mask (0x%llx)\n",
+			 ucmd->rx_hash_fields_mask);
+		return (-EOPNOTSUPP);
+	}
+
 	if ((ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_SRC_IPV4) &&
 	    (ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_DST_IPV4)) {
 		rss_ctx->flags = MLX4_RSS_IPV4;
@@ -707,11 +719,11 @@ static int set_qp_rss(struct mlx4_ib_dev *dev, struct mlx4_ib_rss *rss_ctx,
 			return (-EOPNOTSUPP);
 		}
 
-		if (rss_ctx->flags & MLX4_RSS_IPV4) {
+		if (rss_ctx->flags & MLX4_RSS_IPV4)
 			rss_ctx->flags |= MLX4_RSS_UDP_IPV4;
-		} else if (rss_ctx->flags & MLX4_RSS_IPV6) {
+		if (rss_ctx->flags & MLX4_RSS_IPV6)
 			rss_ctx->flags |= MLX4_RSS_UDP_IPV6;
-		} else {
+		if (!(rss_ctx->flags & (MLX4_RSS_IPV6 | MLX4_RSS_IPV4))) {
 			pr_debug("RX Hash fields_mask is not supported - UDP must be set with IPv4 or IPv6\n");
 			return (-EOPNOTSUPP);
 		}
@@ -723,15 +735,14 @@ static int set_qp_rss(struct mlx4_ib_dev *dev, struct mlx4_ib_rss *rss_ctx,
 
 	if ((ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_SRC_PORT_TCP) &&
 	    (ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_DST_PORT_TCP)) {
-		if (rss_ctx->flags & MLX4_RSS_IPV4) {
+		if (rss_ctx->flags & MLX4_RSS_IPV4)
 			rss_ctx->flags |= MLX4_RSS_TCP_IPV4;
-		} else if (rss_ctx->flags & MLX4_RSS_IPV6) {
+		if (rss_ctx->flags & MLX4_RSS_IPV6)
 			rss_ctx->flags |= MLX4_RSS_TCP_IPV6;
-		} else {
+		if (!(rss_ctx->flags & (MLX4_RSS_IPV6 | MLX4_RSS_IPV4))) {
 			pr_debug("RX Hash fields_mask is not supported - TCP must be set with IPv4 or IPv6\n");
 			return (-EOPNOTSUPP);
 		}
-
 	} else if ((ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_SRC_PORT_TCP) ||
 		   (ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_DST_PORT_TCP)) {
 		pr_debug("RX Hash fields_mask is not supported - both TCP SRC and DST must be set\n");
@@ -1217,16 +1228,10 @@ static int create_qp_common(struct mlx4_ib_dev *dev, struct ib_pd *pd,
 		if (err)
 			goto err_mtt;
 
-		qp->sq.wrid = kmalloc_array(qp->sq.wqe_cnt, sizeof(u64),
-					GFP_KERNEL | __GFP_NOWARN);
-		if (!qp->sq.wrid)
-			qp->sq.wrid = __vmalloc(qp->sq.wqe_cnt * sizeof(u64),
-						GFP_KERNEL, PAGE_KERNEL);
-		qp->rq.wrid = kmalloc_array(qp->rq.wqe_cnt, sizeof(u64),
-					GFP_KERNEL | __GFP_NOWARN);
-		if (!qp->rq.wrid)
-			qp->rq.wrid = __vmalloc(qp->rq.wqe_cnt * sizeof(u64),
-						GFP_KERNEL, PAGE_KERNEL);
+		qp->sq.wrid = kvmalloc_array(qp->sq.wqe_cnt,
+					     sizeof(u64), GFP_KERNEL);
+		qp->rq.wrid = kvmalloc_array(qp->rq.wqe_cnt,
+					     sizeof(u64), GFP_KERNEL);
 		if (!qp->sq.wrid || !qp->rq.wrid) {
 			err = -ENOMEM;
 			goto err_wrid;
@@ -1552,9 +1557,9 @@ static u32 get_sqp_num(struct mlx4_ib_dev *dev, struct ib_qp_init_attr *attr)
 	}
 	/* PF or VF -- creating proxies */
 	if (attr->qp_type == IB_QPT_SMI)
-		return dev->dev->caps.qp0_proxy[attr->port_num - 1];
+		return dev->dev->caps.spec_qps[attr->port_num - 1].qp0_proxy;
 	else
-		return dev->dev->caps.qp1_proxy[attr->port_num - 1];
+		return dev->dev->caps.spec_qps[attr->port_num - 1].qp1_proxy;
 }
 
 static struct ib_qp *_mlx4_ib_create_qp(struct ib_pd *pd,
@@ -2105,8 +2110,8 @@ static u8 gid_type_to_qpc(enum ib_gid_type gid_type)
  */
 static int bringup_rss_rwqs(struct ib_rwq_ind_table *ind_tbl, u8 port_num)
 {
+	int err = 0;
 	int i;
-	int err;
 
 	for (i = 0; i < (1 << ind_tbl->log_ind_tbl_size); i++) {
 		struct ib_wq *ibwq = ind_tbl->ind_tbl[i];
@@ -2258,11 +2263,6 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 	context->flags = cpu_to_be32((to_mlx4_state(new_state) << 28) |
 				     (to_mlx4_st(dev, qp->mlx4_ib_qp_type) << 16));
 
-	if (rwq_ind_tbl) {
-		fill_qp_rss_context(context, qp);
-		context->flags |= cpu_to_be32(1 << MLX4_RSS_QPC_FLAG_OFFSET);
-	}
-
 	if (!(attr_mask & IB_QP_PATH_MIG_STATE))
 		context->flags |= cpu_to_be32(MLX4_QP_PM_MIGRATED << 11);
 	else {
@@ -2292,7 +2292,7 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 			context->mtu_msgmax = (IB_MTU_4096 << 5) |
 					      ilog2(dev->dev->caps.max_gso_sz);
 		else
-			context->mtu_msgmax = (IB_MTU_4096 << 5) | 12;
+			context->mtu_msgmax = (IB_MTU_4096 << 5) | 13;
 	} else if (attr_mask & IB_QP_PATH_MTU) {
 		if (attr->path_mtu < IB_MTU_256 || attr->path_mtu > IB_MTU_4096) {
 			pr_err("path MTU (%u) is invalid\n",
@@ -2469,7 +2469,7 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 	context->pd = cpu_to_be32(pd->pdn);
 
 	if (!rwq_ind_tbl) {
-		context->params1  = cpu_to_be32(MLX4_IB_ACK_REQ_FREQ << 28);
+		context->params1 = cpu_to_be32(MLX4_IB_ACK_REQ_FREQ << 28);
 		get_cqs(qp, src_type, &send_cq, &recv_cq);
 	} else { /* Set dummy CQs to be compatible with HV and PRM */
 		send_cq = to_mcq(rwq_ind_tbl->ind_tbl[0]->cq);
@@ -2604,7 +2604,7 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 					MLX4_IB_LINK_TYPE_ETH;
 		if (dev->dev->caps.tunnel_offload_mode ==  MLX4_TUNNEL_OFFLOAD_MODE_VXLAN) {
 			/* set QP to receive both tunneled & non-tunneled packets */
-			if (!(context->flags & cpu_to_be32(1 << MLX4_RSS_QPC_FLAG_OFFSET)))
+			if (!rwq_ind_tbl)
 				context->srqn = cpu_to_be32(7 << 28);
 		}
 	}
@@ -2654,6 +2654,13 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 
 			stamp_send_wqe(qp, i, 1 << qp->sq.wqe_shift);
 		}
+	}
+
+	if (rwq_ind_tbl	&&
+	    cur_state == IB_QPS_RESET &&
+	    new_state == IB_QPS_INIT) {
+		fill_qp_rss_context(context, qp);
+		context->flags |= cpu_to_be32(1 << MLX4_RSS_QPC_FLAG_OFFSET);
 	}
 
 	err = mlx4_qp_modify(dev->dev, &qp->mtt, to_mlx4_state(cur_state),
@@ -2819,19 +2826,17 @@ enum {
 static int _mlx4_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 			      int attr_mask, struct ib_udata *udata)
 {
+	enum rdma_link_layer ll = IB_LINK_LAYER_UNSPECIFIED;
 	struct mlx4_ib_dev *dev = to_mdev(ibqp->device);
 	struct mlx4_ib_qp *qp = to_mqp(ibqp);
 	enum ib_qp_state cur_state, new_state;
 	int err = -EINVAL;
-	int ll;
 	mutex_lock(&qp->mutex);
 
 	cur_state = attr_mask & IB_QP_CUR_STATE ? attr->cur_qp_state : qp->state;
 	new_state = attr_mask & IB_QP_STATE ? attr->qp_state : cur_state;
 
-	if (cur_state == new_state && cur_state == IB_QPS_RESET) {
-		ll = IB_LINK_LAYER_UNSPECIFIED;
-	} else {
+	if (cur_state != new_state || cur_state != IB_QPS_RESET) {
 		int port = attr_mask & IB_QP_PORT ? attr->port_num : qp->port;
 		ll = rdma_port_get_link_layer(&dev->ib_dev, port);
 	}
@@ -2979,9 +2984,9 @@ static int vf_get_qp0_qkey(struct mlx4_dev *dev, int qpn, u32 *qkey)
 {
 	int i;
 	for (i = 0; i < dev->caps.num_ports; i++) {
-		if (qpn == dev->caps.qp0_proxy[i] ||
-		    qpn == dev->caps.qp0_tunnel[i]) {
-			*qkey = dev->caps.qp0_qkey[i];
+		if (qpn == dev->caps.spec_qps[i].qp0_proxy ||
+		    qpn == dev->caps.spec_qps[i].qp0_tunnel) {
+			*qkey = dev->caps.spec_qps[i].qp0_qkey;
 			return 0;
 		}
 	}
@@ -3042,7 +3047,7 @@ static int build_sriov_qp0_header(struct mlx4_ib_sqp *sqp,
 		sqp->ud_header.bth.destination_qpn = cpu_to_be32(wr->remote_qpn);
 	else
 		sqp->ud_header.bth.destination_qpn =
-			cpu_to_be32(mdev->dev->caps.qp0_tunnel[sqp->qp.port - 1]);
+			cpu_to_be32(mdev->dev->caps.spec_qps[sqp->qp.port - 1].qp0_tunnel);
 
 	sqp->ud_header.bth.psn = cpu_to_be32((sqp->send_psn++) & ((1 << 24) - 1));
 	if (mlx4_is_master(mdev->dev)) {
@@ -3518,9 +3523,9 @@ static void set_tunnel_datagram_seg(struct mlx4_ib_dev *dev,
 
 	memcpy(dseg->av, &sqp_av, sizeof (struct mlx4_av));
 	if (qpt == MLX4_IB_QPT_PROXY_GSI)
-		dseg->dqpn = cpu_to_be32(dev->dev->caps.qp1_tunnel[port - 1]);
+		dseg->dqpn = cpu_to_be32(dev->dev->caps.spec_qps[port - 1].qp1_tunnel);
 	else
-		dseg->dqpn = cpu_to_be32(dev->dev->caps.qp0_tunnel[port - 1]);
+		dseg->dqpn = cpu_to_be32(dev->dev->caps.spec_qps[port - 1].qp0_tunnel);
 	/* Use QKEY from the QP context, which is set by master */
 	dseg->qkey = cpu_to_be32(IB_QP_SET_QKEY);
 }

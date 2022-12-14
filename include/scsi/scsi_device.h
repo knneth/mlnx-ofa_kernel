@@ -13,4 +13,8 @@ enum scsi_scan_mode {
 };
 #endif
 
+#ifndef HAVE_BLIST_FLAGS_T
+	typedef unsigned int __bitwise blist_flags_t;
+#endif
+
 #endif	/* COMPAT_SCSI_SCSI_DEVICE_H */

@@ -182,6 +182,8 @@ int mlx5_ib_exp_modify_cq(struct ib_cq *cq, struct ib_cq_attr *cq_attr,
 int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			     struct ib_exp_device_attr *props,
 			     struct ib_udata *uhw);
+int mlx5_ib_exp_invalidate_range(struct ib_device *device, struct ib_mr *ibmr,
+				 u64 start, u64 length, u32 flags);
 
 int mlx5_ib_exp_is_scat_cqe_dci(struct mlx5_ib_dev *dev,
 				enum ib_sig_type sig_type,
@@ -207,6 +209,7 @@ enum {
 	MLX5_MIN_SINGLE_STRIDE_LOG_NUM_BYTES	= 6,
 	MLX5_MAX_SINGLE_WQE_LOG_NUM_STRIDES	= 16,
 	MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES	= 9,
+	MLX5_EXT_MIN_SINGLE_WQE_LOG_NUM_STRIDES	= 3,
 };
 
 enum mlx5_ib_exp_mmap_cmd {
@@ -218,12 +221,6 @@ enum mlx5_ib_exp_mmap_cmd {
 	MLX5_IB_EXP_MMAP_CLOCK_INFO			= 0xFF,
 };
 
-struct ib_mr *mlx5_ib_exp_reg_user_mr(struct ib_pd *pd,
-				      struct ib_mr_init_attr *attr,
-				      struct ib_udata *udata, int mr_id);
-struct ib_mr *mlx5_ib_reg_user_mr_wrp(struct ib_pd *pd, u64 start, u64 length,
-				      u64 virt_addr, int access_flags,
-				      struct ib_udata *udata);
 int get_pg_order(unsigned long offset);
 
 static inline int is_exp_contig_command(unsigned long command)
@@ -336,8 +333,6 @@ int mlx5_ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
 struct ib_nvmf_ns *mlx5_ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
 		struct ib_nvmf_ns_init_attr *init_attr);
 int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
-int mlx5_ib_query_nvmf_ns(struct ib_nvmf_ns *ns,
-			  struct ib_nvmf_ns_attr *ns_attr);
 
 struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
 			    struct ib_mr_init_attr *attr);

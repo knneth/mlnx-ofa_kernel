@@ -282,7 +282,7 @@ static int fs_debugfs_read_refcount(void *attr, u64 *data)
 {
 	struct fs_node *node = attr;
 
-	*data = atomic_read(&node->refcount);
+	*data = refcount_read(&node->refcount);
 	return 0;
 }
 

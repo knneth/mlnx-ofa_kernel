@@ -1,0 +1,22 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_pack.h
+
+Change-Id: Ice6dbaf9f323bf9ee0c182c5bb07f5b4736a6ba8
+---
+ include/rdma/ib_pack.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/rdma/ib_pack.h
++++ b/include/rdma/ib_pack.h
+@@ -34,7 +34,11 @@
+ #define IB_PACK_H
+ 
+ #include <rdma/ib_verbs.h>
++#ifdef HAVE_UAPI_LINUX_IF_ETHER_H
+ #include <uapi/linux/if_ether.h>
++#else
++#include <linux/if_ether.h>
++#endif
+ 
+ enum {
+ 	IB_LRH_BYTES		= 8,

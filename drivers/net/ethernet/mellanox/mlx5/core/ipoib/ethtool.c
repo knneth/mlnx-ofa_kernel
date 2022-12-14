@@ -33,8 +33,8 @@
 #include "en.h"
 #include "ipoib.h"
 
-void mlx5i_get_drvinfo(struct net_device *dev,
-		       struct ethtool_drvinfo *drvinfo)
+static void mlx5i_get_drvinfo(struct net_device *dev,
+			      struct ethtool_drvinfo *drvinfo)
 {
 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
 
@@ -114,8 +114,8 @@ static int mlx5i_get_coalesce(struct net_device *netdev,
 	return mlx5e_ethtool_get_coalesce(priv, coal);
 }
 
-int mlx5i_get_ts_info(struct net_device *netdev,
-		      struct ethtool_ts_info *info)
+static int mlx5i_get_ts_info(struct net_device *netdev,
+			     struct ethtool_ts_info *info)
 {
 	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
 
@@ -130,23 +130,47 @@ static int mlx5i_flash_device(struct net_device *netdev,
 	return mlx5e_ethtool_flash_device(priv, flash);
 }
 
-enum ib_ptys_width {
-	IB_PTYS_WIDTH_1X	= 1 << 0,
-	IB_PTYS_WIDTH_2X	= 1 << 1,
-	IB_PTYS_WIDTH_4X	= 1 << 2,
-	IB_PTYS_WIDTH_8X	= 1 << 3,
-	IB_PTYS_WIDTH_12X	= 1 << 4,
+enum mlx5_ptys_width {
+	MLX5_PTYS_WIDTH_1X	= 1 << 0,
+	MLX5_PTYS_WIDTH_2X	= 1 << 1,
+	MLX5_PTYS_WIDTH_4X	= 1 << 2,
+	MLX5_PTYS_WIDTH_8X	= 1 << 3,
+	MLX5_PTYS_WIDTH_12X	= 1 << 4,
 };
 
-static inline int ib_ptys_width_enum_to_int(enum ib_ptys_width width)
+static inline int mlx5_ptys_width_enum_to_int(enum mlx5_ptys_width width)
 {
 	switch (width) {
-	case IB_PTYS_WIDTH_1X:  return  1;
-	case IB_PTYS_WIDTH_2X:  return  2;
-	case IB_PTYS_WIDTH_4X:  return  4;
-	case IB_PTYS_WIDTH_8X:  return  8;
-	case IB_PTYS_WIDTH_12X: return 12;
-	default:		return -1;
+	case MLX5_PTYS_WIDTH_1X:  return  1;
+	case MLX5_PTYS_WIDTH_2X:  return  2;
+	case MLX5_PTYS_WIDTH_4X:  return  4;
+	case MLX5_PTYS_WIDTH_8X:  return  8;
+	case MLX5_PTYS_WIDTH_12X: return 12;
+	default:		  return -1;
+	}
+}
+
+enum mlx5_ptys_rate {
+	MLX5_PTYS_RATE_SDR	= 1 << 0,
+	MLX5_PTYS_RATE_DDR	= 1 << 1,
+	MLX5_PTYS_RATE_QDR	= 1 << 2,
+	MLX5_PTYS_RATE_FDR10	= 1 << 3,
+	MLX5_PTYS_RATE_FDR	= 1 << 4,
+	MLX5_PTYS_RATE_EDR	= 1 << 5,
+	MLX5_PTYS_RATE_HDR	= 1 << 6,
+};
+
+static inline int mlx5_ptys_rate_enum_to_int(enum mlx5_ptys_rate rate)
+{
+	switch (rate) {
+	case MLX5_PTYS_RATE_SDR:   return 2500;
+	case MLX5_PTYS_RATE_DDR:   return 5000;
+	case MLX5_PTYS_RATE_QDR:
+	case MLX5_PTYS_RATE_FDR10: return 10000;
+	case MLX5_PTYS_RATE_FDR:   return 14000;
+	case MLX5_PTYS_RATE_EDR:   return 25000;
+	case MLX5_PTYS_RATE_HDR:   return 50000;
+	default:		   return -1;
 	}
 }
 
@@ -159,11 +183,8 @@ static int mlx5i_get_port_settings(struct net_device *netdev,
 	int ret;
 
 	ret = mlx5_query_port_ptys(mdev, out, sizeof(out), MLX5_PTYS_IB, 1);
-	if (ret) {
-		netdev_err(netdev, "%s: query port ptys failed: %d\n",
-			   __func__, ret);
+	if (ret)
 		return ret;
-	}
 
 	*ib_link_width_oper = MLX5_GET(ptys_reg, out, ib_link_width_oper);
 	*ib_proto_oper      = MLX5_GET(ptys_reg, out, ib_proto_oper);
@@ -171,94 +192,97 @@ static int mlx5i_get_port_settings(struct net_device *netdev,
 	return 0;
 }
 
-static int mlx5i_get_speed_settings(u16 ib_link_width_oper, u16 ib_proto_oper,
-				    __u8 *duplex, __u8 *port,
-				    __u8 *phy_address, __u8 *autoneg)
+static int mlx5i_get_speed_settings(u16 ib_link_width_oper, u16 ib_proto_oper)
 {
-	char *speed = "";
-	int rate;/* in deci-Gb/sec */
+	int rate, width;
 
-	*duplex = DUPLEX_FULL;
-	*port = PORT_OTHER;/* till define IB port type */
-	*phy_address = 255;
-	*autoneg = AUTONEG_DISABLE;
-
-	ib_active_speed_enum_to_rate(ib_proto_oper,
-				     &rate,
-				     &speed);
-
-	rate *= ib_ptys_width_enum_to_int(ib_link_width_oper);
+	rate = mlx5_ptys_rate_enum_to_int(ib_proto_oper);
 	if (rate < 0)
-		rate = -1;
+		return -EINVAL;
+	width = mlx5_ptys_width_enum_to_int(ib_link_width_oper);
+	if (width < 0)
+		return -EINVAL;
 
-	return rate * 100;
+	return rate * width;
 }
 
-int mlx5i_get_settings(struct net_device *netdev,
-		       struct ethtool_cmd *ecmd)
+static int mlx5i_get_link_ksettings(struct net_device *netdev,
+				    struct ethtool_link_ksettings *link_ksettings)
 {
 	u16 ib_link_width_oper;
 	u16 ib_proto_oper;
-	int ret;
-	int rate;/* in deci-Gb/sec */
+	int speed, ret;
 
-	ret = mlx5i_get_port_settings(netdev,
-				      &ib_link_width_oper,
-				      &ib_proto_oper);
-	if (ret)
-		return ret;
-
-	rate = mlx5i_get_speed_settings(ib_link_width_oper, ib_proto_oper,
-					&ecmd->duplex, &ecmd->port,
-					&ecmd->phy_address, &ecmd->autoneg);
-
-	ethtool_cmd_speed_set(ecmd, rate);
-
-	return 0;
-}
-
-int mlx5i_get_link_ksettings(struct net_device *netdev,
-			     struct ethtool_link_ksettings *link_ksettings)
-{
-	u16 ib_link_width_oper;
-	u16 ib_proto_oper;
-	int ret;
-	int rate;/* in deci-Gb/sec */
-
-	ret = mlx5i_get_port_settings(netdev,
-				      &ib_link_width_oper,
-				      &ib_proto_oper);
+	ret = mlx5i_get_port_settings(netdev, &ib_link_width_oper, &ib_proto_oper);
 	if (ret)
 		return ret;
 
 	ethtool_link_ksettings_zero_link_mode(link_ksettings, supported);
 	ethtool_link_ksettings_zero_link_mode(link_ksettings, advertising);
 
-	rate = mlx5i_get_speed_settings(ib_link_width_oper, ib_proto_oper,
-					&link_ksettings->base.duplex,
-					&link_ksettings->base.port,
-					&link_ksettings->base.phy_address,
-					&link_ksettings->base.autoneg);
+	speed = mlx5i_get_speed_settings(ib_link_width_oper, ib_proto_oper);
+	if (speed < 0)
+		return -EINVAL;
 
-	link_ksettings->base.speed = rate;
+	link_ksettings->base.duplex = DUPLEX_FULL;
+	link_ksettings->base.port = PORT_OTHER;
+
+	link_ksettings->base.autoneg = AUTONEG_DISABLE;
+
+	link_ksettings->base.speed = speed;
+
+	return 0;
+}
+
+static int mlx5i_get_settings(struct net_device *netdev,
+			      struct ethtool_cmd *ecmd)
+{
+	u16 ib_link_width_oper;
+	u16 ib_proto_oper;
+	int speed, ret;
+
+	ret = mlx5i_get_port_settings(netdev,
+				      &ib_link_width_oper,
+				      &ib_proto_oper);
+	if (ret)
+		return ret;
+
+	speed = mlx5i_get_speed_settings(ib_link_width_oper, ib_proto_oper);
+	if (speed < 0)
+		return -EINVAL;
+
+	ecmd->duplex = DUPLEX_FULL;
+	ecmd->port = PORT_OTHER;/* till define IB port type */
+	ecmd->phy_address = 255;
+	ecmd->autoneg = AUTONEG_DISABLE;
+
+	ethtool_cmd_speed_set(ecmd, speed);
 
 	return 0;
 }
 
 const struct ethtool_ops mlx5i_ethtool_ops = {
-	.get_drvinfo       = mlx5i_get_drvinfo,
-	.get_strings       = mlx5i_get_strings,
-	.get_sset_count    = mlx5i_get_sset_count,
-	.get_ethtool_stats = mlx5i_get_ethtool_stats,
-	.get_ringparam     = mlx5i_get_ringparam,
-	.set_ringparam     = mlx5i_set_ringparam,
-	.flash_device      = mlx5i_flash_device,
-	.get_channels      = mlx5i_get_channels,
-	.set_channels      = mlx5i_set_channels,
-	.get_coalesce      = mlx5i_get_coalesce,
-	.set_coalesce      = mlx5i_set_coalesce,
-	.get_ts_info       = mlx5i_get_ts_info,
-	.get_settings      = mlx5i_get_settings,
-	.get_link          = ethtool_op_get_link,
+	.get_drvinfo        = mlx5i_get_drvinfo,
+	.get_strings        = mlx5i_get_strings,
+	.get_sset_count     = mlx5i_get_sset_count,
+	.get_ethtool_stats  = mlx5i_get_ethtool_stats,
+	.get_ringparam      = mlx5i_get_ringparam,
+	.set_ringparam      = mlx5i_set_ringparam,
+	.flash_device       = mlx5i_flash_device,
+	.get_channels       = mlx5i_get_channels,
+	.set_channels       = mlx5i_set_channels,
+	.get_coalesce       = mlx5i_get_coalesce,
+	.set_coalesce       = mlx5i_set_coalesce,
+	.get_ts_info        = mlx5i_get_ts_info,
+	.get_link_ksettings = mlx5i_get_link_ksettings,
+	.get_link           = ethtool_op_get_link,
+	.get_settings       = mlx5i_get_settings,
+};
+
+const struct ethtool_ops mlx5i_pkey_ethtool_ops = {
+	.get_drvinfo        = mlx5i_get_drvinfo,
+	.get_link           = ethtool_op_get_link,
+	.get_ts_info        = mlx5i_get_ts_info,
+	.get_settings	    = mlx5i_get_settings,
 	.get_link_ksettings = mlx5i_get_link_ksettings,
 };

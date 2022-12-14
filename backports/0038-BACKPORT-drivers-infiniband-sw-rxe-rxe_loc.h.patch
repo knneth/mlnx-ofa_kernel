@@ -1,0 +1,35 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/sw/rxe/rxe_loc.h
+
+Change-Id: I1c343684dae9bfda51c76beea015c1a7fa29182c
+---
+ drivers/infiniband/sw/rxe/rxe_loc.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/infiniband/sw/rxe/rxe_loc.h
++++ b/drivers/infiniband/sw/rxe/rxe_loc.h
+@@ -216,8 +216,13 @@ static inline void rxe_advance_resp_reso
+ 		qp->resp.res_head = 0;
+ }
+ 
++#ifdef HAVE_TIMER_SETUP
+ void retransmit_timer(struct timer_list *t);
+ void rnr_nak_timer(struct timer_list *t);
++#else
++void retransmit_timer(unsigned long data);
++void rnr_nak_timer(unsigned long data);
++#endif
+ 
+ /* rxe_srq.c */
+ #define IB_SRQ_INIT_MASK (~IB_SRQ_LIMIT)
+@@ -233,6 +238,10 @@ int rxe_srq_from_attr(struct rxe_dev *rx
+ 		      struct ib_srq_attr *attr, enum ib_srq_attr_mask mask,
+ 		      struct ib_udata *udata);
+ 
++#ifndef HAVE_DEVICE_DMA_OPS
++extern struct ib_dma_mapping_ops rxe_dma_mapping_ops;
++#endif
++
+ void rxe_release(struct kref *kref);
+ 
+ int rxe_completer(void *arg);

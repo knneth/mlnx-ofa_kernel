@@ -163,7 +163,7 @@ mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 		    struct mlx5_flow_spec *spec,
 		    struct mlx5_flow_act *flow_act,
 		    struct mlx5_flow_destination *dest,
-		    int num_dest);
+		    int dest_num);
 void mlx5_del_flow_rules(struct mlx5_flow_handle *fr);
 
 int mlx5_modify_rule_destination(struct mlx5_flow_handle *handler,

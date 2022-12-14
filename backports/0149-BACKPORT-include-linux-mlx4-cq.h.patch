@@ -1,0 +1,22 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx4/cq.h
+
+Change-Id: I7f4074103f5e413ddb50907c240835a310245d56
+---
+ include/linux/mlx4/cq.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/linux/mlx4/cq.h
++++ b/include/linux/mlx4/cq.h
+@@ -34,7 +34,11 @@
+ #define MLX4_CQ_H
+ 
+ #include <linux/types.h>
++#ifdef HAVE_UAPI_LINUX_IF_ETHER_H
+ #include <uapi/linux/if_ether.h>
++#else
++#include <linux/if_ether.h>
++#endif
+ 
+ #include <linux/mlx4/device.h>
+ #include <linux/mlx4/doorbell.h>

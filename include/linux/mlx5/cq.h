@@ -35,7 +35,7 @@
 
 #include <rdma/ib_verbs.h>
 #include <linux/mlx5/driver.h>
-
+#include <linux/refcount.h>
 
 struct mlx5_core_cq {
 	u32			cqn;
@@ -43,7 +43,7 @@ struct mlx5_core_cq {
 	__be32		       *set_ci_db;
 	__be32		       *arm_db;
 	struct mlx5_uars_page  *uar;
-	atomic_t		refcount;
+	refcount_t		refcount;
 	struct completion	free;
 	unsigned		vector;
 	unsigned int		irqn;
@@ -128,6 +128,9 @@ enum {
 	CQE_SIZE_128_PAD = 2,
 };
 
+#define MLX5_MAX_CQ_PERIOD (BIT(__mlx5_bit_sz(cqc, cq_period)) - 1)
+#define MLX5_MAX_CQ_COUNT (BIT(__mlx5_bit_sz(cqc, cq_max_count)) - 1)
+
 static inline int cqe_sz_to_mlx_sz(u8 size, int padding_128_en)
 {
 	return padding_128_en ? CQE_SIZE_128_PAD :
@@ -180,6 +183,12 @@ int mlx5_core_modify_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 int mlx5_core_modify_cq_moderation(struct mlx5_core_dev *dev,
 				   struct mlx5_core_cq *cq, u16 cq_period,
 				   u16 cq_max_count);
+static inline void mlx5_dump_err_cqe(struct mlx5_core_dev *dev,
+				     struct mlx5_err_cqe *err_cqe)
+{
+	print_hex_dump(KERN_WARNING, "", DUMP_PREFIX_OFFSET, 16, 1, err_cqe,
+		       sizeof(*err_cqe), false);
+}
 int mlx5_debug_cq_add(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq);
 void mlx5_debug_cq_remove(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq);
 

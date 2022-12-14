@@ -1,0 +1,26 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mlx5_ib.h
+
+Change-Id: If1e8e7bc6c4c52eafe9d7a4ca1f47d4060a6c3c7
+---
+ drivers/infiniband/hw/mlx5/mlx5_ib.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/mlx5_ib.h
++++ b/drivers/infiniband/hw/mlx5/mlx5_ib.h
+@@ -1086,6 +1086,7 @@ static inline void mlx5_odp_init_mr_cach
+ 
+ #endif /* CONFIG_INFINIBAND_ON_DEMAND_PAGING */
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ int mlx5_ib_get_vf_config(struct ib_device *device, int vf,
+ 			  u8 port, struct ifla_vf_info *info);
+ int mlx5_ib_set_vf_link_state(struct ib_device *device, int vf,
+@@ -1094,6 +1095,7 @@ int mlx5_ib_get_vf_stats(struct ib_devic
+ 			 u8 port, struct ifla_vf_stats *stats);
+ int mlx5_ib_set_vf_guid(struct ib_device *device, int vf, u8 port,
+ 			u64 guid, int type);
++#endif
+ 
+ void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
+ 		    struct mlx5_ib_dev *__dev,

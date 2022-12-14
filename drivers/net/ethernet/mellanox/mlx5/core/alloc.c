@@ -60,6 +60,14 @@ static void *mlx5_dma_zalloc_coherent_node(struct mlx5_core_dev *dev,
 	int original_node;
 	void *cpu_handle;
 
+	/* WA for kernels that don't use numa_mem_id in alloc_pages_node */
+	if (node == NUMA_NO_NODE)
+#ifdef HAVE_NUMA_MEM_ID
+		node = numa_mem_id();
+#else
+		node = first_memory_node;
+#endif
+
 	mutex_lock(&priv->alloc_mutex);
 	original_node = dev_to_node(&dev->pdev->dev);
 	set_dev_node(&dev->pdev->dev, node);
@@ -309,25 +317,31 @@ int mlx5_core_alloc_memic(struct mlx5_core_dev *dev, phys_addr_t *addr,
 	u32 in[MLX5_ST_SZ_DW(alloc_memic_in)] = {0};
 	struct mlx5_priv *priv = &dev->priv;
 	u64 page_idx = 0;
-	int err = 0;
+	int ret = 0;
 
 	if (!length || (length & MEMIC_ALLOC_MASK))
 		return -EINVAL;
 
 	mlx5_core_dbg(dev, "alloc_memic req: length=0x%llx hw_pages=0x%llx hw_start=0x%llx num_page=%d\n",
 		      length, num_memic_hw_pages, hw_start_addr, num_pages);
-	spin_lock_irq(&dev->priv.memic_lock);
 
 	do {
+		spin_lock(&dev->priv.memic_lock);
 		page_idx = bitmap_find_next_zero_area(priv->memic_alloc_pages,
 						      num_memic_hw_pages,
 						      page_idx,
 						      num_pages, 0);
-		if (page_idx >= num_memic_hw_pages) {
-			mlx5_core_dbg(dev, "Couldn't find a free memic page\n");
-			err = -ENOMEM;
-			break;
-		}
+
+		if (page_idx < num_memic_hw_pages)
+			bitmap_set(dev->priv.memic_alloc_pages,
+				   page_idx, num_pages);
+		else
+			ret = -ENOMEM;
+
+		spin_unlock(&dev->priv.memic_lock);
+
+		if (ret)
+			return ret;
 
 		MLX5_SET(alloc_memic_in, in, opcode, MLX5_CMD_OP_ALLOC_MEMIC);
 		MLX5_SET64(alloc_memic_in, in, range_start_addr,
@@ -335,26 +349,32 @@ int mlx5_core_alloc_memic(struct mlx5_core_dev *dev, phys_addr_t *addr,
 		MLX5_SET(alloc_memic_in, in, range_size, num_pages * PAGE_SIZE);
 		MLX5_SET(alloc_memic_in, in, memic_size, length);
 
-		err = mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
-		if (!err) {
-			bitmap_set(dev->priv.memic_alloc_pages,
-				   page_idx, num_pages);
-			*addr = pci_resource_start(dev->pdev, 0) +
-			   MLX5_GET64(alloc_memic_out, out, memic_start_addr);
-			mlx5_core_dbg(dev, "alloc_memic address 0x%llx\n",
-				      *addr);
-			break;
-		} else if (err != -EAGAIN) {
-			mlx5_core_dbg(dev, "alloc_memic cmd returned error %d\n",
-				      err);
-			break;
+		ret = mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+		if (ret) {
+			spin_lock(&dev->priv.memic_lock);
+			bitmap_clear(dev->priv.memic_alloc_pages,
+				     page_idx, num_pages);
+			spin_unlock(&dev->priv.memic_lock);
+
+			if (ret == -EAGAIN) {
+				page_idx++;
+				continue;
+			}
+
+			mlx5_core_dbg(dev, "alloc_memic error %d\n",
+				      ret);
+
+			return ret;
 		}
-		page_idx++;
+
+		*addr = pci_resource_start(dev->pdev, 0) +
+			MLX5_GET64(alloc_memic_out, out, memic_start_addr);
+		mlx5_core_dbg(dev, "alloc_memic address 0x%llx\n",
+				*addr);
+		return ret;
 	} while (page_idx < num_memic_hw_pages);
 
-	spin_unlock_irq(&dev->priv.memic_lock);
-
-	return err;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(mlx5_core_alloc_memic);
 
@@ -365,7 +385,7 @@ int mlx5_core_dealloc_memic(struct mlx5_core_dev *dev, u64 addr, u64 length)
 	u32 out[MLX5_ST_SZ_DW(dealloc_memic_out)] = {0};
 	u32 in[MLX5_ST_SZ_DW(dealloc_memic_in)] = {0};
 	u64 start_page_idx;
-	int err;
+	int ret;
 
 	addr -= pci_resource_start(dev->pdev, 0);
 	start_page_idx = (addr - hw_start_addr) >> PAGE_SHIFT;
@@ -377,15 +397,15 @@ int mlx5_core_dealloc_memic(struct mlx5_core_dev *dev, u64 addr, u64 length)
 	MLX5_SET64(dealloc_memic_in, in, memic_start_addr, addr);
 	MLX5_SET(dealloc_memic_in, in, memic_size, length);
 
-	err =  mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+	ret =  mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 
-	if (!err) {
-		spin_lock_irq(&dev->priv.memic_lock);
+	if (!ret) {
+		spin_lock(&dev->priv.memic_lock);
 		bitmap_clear(dev->priv.memic_alloc_pages,
 			     start_page_idx, num_pages);
-		spin_unlock_irq(&dev->priv.memic_lock);
+		spin_unlock(&dev->priv.memic_lock);
 	}
 
-	return err;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(mlx5_core_dealloc_memic);

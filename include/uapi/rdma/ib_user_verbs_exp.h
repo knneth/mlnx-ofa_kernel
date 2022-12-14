@@ -41,7 +41,8 @@ enum {
 
 enum ib_uverbs_exp_modify_qp_comp_mask {
 	IB_UVERBS_EXP_QP_ATTR_FLOW_ENTROPY	= 1UL << 0,
-	IB_UVERBS_EXP_QP_ATTR_RESERVED	= 1UL << 1,
+	IB_UVERBS_EXP_QP_ATTR_BURST_INFO	= 1UL << 1,
+	IB_UVERBS_EXP_QP_ATTR_RESERVED		= 1UL << 2,
 };
 
 /*
@@ -90,6 +91,11 @@ struct ib_uverbs_exp_modify_qp {
 	__u32 exp_attr_mask;
 	__u32 flow_entropy;
 	__u32 rate_limit;
+	struct {
+		__u32	max_burst_sz;
+		__u16	typical_pkt_sz;
+		__u16	reserved;
+	} burst_info;
 	__u32 reserved1;
 	__u64 driver_data[0];
 };
@@ -277,7 +283,8 @@ struct ib_uverbs_exp_packet_pacing_caps {
 	 * supported_qpts |= 1 << IB_QPT_RAW_PACKET
 	 */
 	__u32 supported_qpts;
-	__u32 reserved;
+	__u8  cap_flags;
+	__u8  reserved[3];
 };
 
 struct ib_uverbs_exp_ooo_caps {
@@ -341,7 +348,7 @@ struct ib_uverbs_exp_query_device_resp {
 	__u64					odp_mr_max_size;
 	struct ib_uverbs_exp_tm_caps		tm_caps;
 	__u32					tunnel_offloads_caps;
-	__u8					reserved3[4];
+	__u32					tunneled_atomic_caps;
 	__u64 					max_dm_size;
 };
 
@@ -399,6 +406,7 @@ struct ib_uverbs_exp_query_mkey_resp {
 enum ib_uverbs_exp_access_flags {
 	IB_UVERBS_EXP_ACCESS_ON_DEMAND     = (IBV_EXP_START_FLAG << 14),
 	IB_UVERBS_EXP_ACCESS_PHYSICAL_ADDR = (IBV_EXP_START_FLAG << 16),
+	IB_UVERBS_EXP_ACCESS_TUNNELED_ATOMIC = (IBV_EXP_START_FLAG << 17),
 };
 
 enum ib_uverbs_exp_reg_mr_ex_comp_mask {

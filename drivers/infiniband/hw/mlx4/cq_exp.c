@@ -56,7 +56,7 @@ int mlx4_ib_exp_modify_cq(struct ib_cq *cq, struct ib_cq_attr *cq_attr, int cq_a
 	}
 
 	if (!err)
-		if (cq_attr_mask & IB_CQ_MODERATION)
+		if (cq_attr_mask & IB_CQ_MODERATE)
 			err = mlx4_cq_modify(dev->dev, &mcq->mcq,
 					     cq_attr->moderation.cq_count,
 					     cq_attr->moderation.cq_period);

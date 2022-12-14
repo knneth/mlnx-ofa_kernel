@@ -23,11 +23,6 @@ struct ib_exp_odp_caps {
 	} per_transport_caps;
 };
 
-enum ib_cq_attr_mask {
-	IB_CQ_MODERATION               = (1 << 0),
-	IB_CQ_CAP_FLAGS                = (1 << 1)
-};
-
 enum ib_cq_cap_flags {
 	IB_CQ_IGNORE_OVERRUN           = (1 << 0)
 };
@@ -113,8 +108,17 @@ struct ib_exp_qp_init_attr {
 	struct ib_rx_hash_conf	*rx_hash_conf;
 };
 
+enum ib_exp_mp_rq_sup_types {
+	IB_EXP_MP_RQ_SUP_TYPE_SRQ_TM	= 1 << 0,
+	/*
+	 * For backport compatibility we use IB_EXP_QPT_RAW_PACKET value for the
+	 * IB_EXP_MP_SUP_TYPE_WQ_RQ.
+	 */
+	IB_EXP_MP_RQ_SUP_TYPE_WQ_RQ	= 1 << 5,
+};
+
 struct ib_exp_mp_rq_caps {
-	uint32_t supported_qps; /* use ib_exp_supported_qp_types */
+	uint32_t supported_qps; /* use ib_exp_mp_rq_sup_types */
 	uint32_t allowed_shifts; /* use ib_mp_rq_shifts */
 	uint8_t min_single_wqe_log_num_of_strides;
 	uint8_t max_single_wqe_log_num_of_strides;
@@ -158,6 +162,7 @@ enum ib_exp_device_attr_comp_mask {
 	IB_EXP_DEVICE_ATTR_TM_CAPS		= 1ULL << 27,
 	IB_EXP_DEVICE_ATTR_TUNNEL_OFFLOADS_CAPS	= 1ULL << 28,
 	IB_EXP_DEVICE_ATTR_MAX_DM_SIZE		= 1ULL << 29,
+	IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC	= 1ULL << 30,
 };
 
 enum ib_exp_device_cap_flags2 {
@@ -178,6 +183,7 @@ enum ib_exp_device_cap_flags2 {
 	IB_EXP_DEVICE_SCATTER_FCS               = 1 << 16,
 	IB_EXP_DEVICE_DELAY_DROP                = 1 << 18,
 	IB_EXP_DEVICE_PHYSICAL_RANGE_MR		= 1 << 19,
+	IB_EXP_DEVICE_CAPI			= 1 << 20,
 	IB_EXP_DEVICE_CROSS_CHANNEL	= 1 << 28, /* Comapt with user exp area */
 	IB_EXP_DEVICE_MASK =	IB_DEVICE_CROSS_CHANNEL |
 				IB_EXP_DEVICE_EC_OFFLOAD,
@@ -205,6 +211,10 @@ struct ib_exp_tso_caps {
 	__u32 supported_qpts;
 };
 
+enum ib_exp_packet_pacing_cap_flags {
+	IB_EXP_QP_SUPPORT_BURST               = 1 << 0,
+};
+
 struct ib_exp_packet_pacing_caps {
 	__u32 qp_rate_limit_min;
 	__u32 qp_rate_limit_max; /* In kpbs */
@@ -214,7 +224,8 @@ struct ib_exp_packet_pacing_caps {
 	 * supported_qpts |= 1 << IB_QPT_RAW_PACKET
 	 */
 	__u32 supported_qpts;
-	__u32 reserved;
+	__u8  cap_flags; /* ib_exp_packet_pacing_cap_flags */
+	__u8  reserved[3];
 };
 
 struct ib_exp_ec_caps {
@@ -242,6 +253,10 @@ enum ib_exp_tunnel_offloads_caps {
 	IBV_EXP_RAW_PACKET_CAP_TUNNELED_OFFLOAD_VXLAN  = 1 << 0,
 	IBV_EXP_RAW_PACKET_CAP_TUNNELED_OFFLOAD_GRE    = 1 << 1,
 	IBV_EXP_RAW_PACKET_CAP_TUNNELED_OFFLOAD_GENEVE = 1 << 2
+};
+
+enum ib_exp_tunneled_atomic_caps {
+	IB_EXP_TUNNELED_ATOMIC_SUPPORTED	= 1 << 0,
 };
 
 enum ib_exp_sw_parsing_offloads {
@@ -329,6 +344,7 @@ struct ib_exp_device_attr {
 	struct ib_exp_tm_caps		tm_caps;
 	u32				tunnel_offloads_caps; /* ib_exp_tunnel_offloads_caps */
 	u64			max_dm_size;
+	u32				tunneled_atomic_caps; /* ib_exp_tunneled_atomic_caps */
 };
 
 struct ib_dm {
@@ -452,7 +468,6 @@ struct ib_nvmf_backend_ctrl_init_attr {
 	u8		sq_log_page_size;
 	u16		initial_cqh_db_value;
 	u16		initial_sqt_db_value;
-	u32		cmd_timeout_us;
 	u64		cqh_dbr_addr;
 	u64		sqt_dbr_addr;
 	u64		cq_pas;
@@ -471,18 +486,6 @@ struct ib_nvmf_ns_init_attr {
 	u16		backend_ctrl_id;
 };
 
-struct ib_nvmf_ns_attr {
-	u64	num_read_cmd;
-	u64	num_read_blocks;
-	u64	num_write_cmd;
-	u64	num_write_blocks;
-	u64	num_write_inline_cmd;
-	u64	num_flush_cmd;
-	u64	num_error_cmd;
-	u64	num_backend_error_cmd;
-};
-
-int ib_query_nvmf_ns(struct ib_nvmf_ns *ns, struct ib_nvmf_ns_attr *ns_attr);
 struct ib_nvmf_ctrl *ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
 		struct ib_nvmf_backend_ctrl_init_attr *init_attr);
 int ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
@@ -493,4 +496,6 @@ struct ib_dm *ib_exp_alloc_dm(struct ib_device *device, u64 length);
 int ib_exp_free_dm(struct ib_dm *dm);
 int ib_exp_memcpy_dm(struct ib_dm *dm, struct ib_exp_memcpy_dm_attr *attr);
 struct ib_mr *ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *attr);
+int ib_exp_invalidate_range(struct ib_device  *device, struct ib_mr *ibmr,
+			    u64 start, u64 length, u32 flags);
 #endif

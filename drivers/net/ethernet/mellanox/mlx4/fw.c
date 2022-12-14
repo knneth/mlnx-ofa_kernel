@@ -36,6 +36,7 @@
 #include <linux/mlx4/cmd.h>
 #include <linux/module.h>
 #include <linux/cache.h>
+#include <linux/kernel.h>
 #include <net/ipv6.h>
 
 #include "fw.h"
@@ -61,12 +62,12 @@ MODULE_PARM_DESC(enable_vfs_qos, "Enable Virtual VFs QoS (default: off)");
 #define MLX4_GET(dest, source, offset)				      \
 	do {							      \
 		void *__p = (char *) (source) + (offset);	      \
-		u64 val;                                              \
-		switch (sizeof (dest)) {			      \
+		__be64 val;                                           \
+		switch (sizeof(dest)) {				      \
 		case 1: (dest) = *(u8 *) __p;	    break;	      \
 		case 2: (dest) = be16_to_cpup(__p); break;	      \
 		case 4: (dest) = be32_to_cpup(__p); break;	      \
-		case 8: val = get_unaligned((u64 *)__p);              \
+		case 8: val = get_unaligned((__be64 *)__p);           \
 			(dest) = be64_to_cpu(val);  break;            \
 		default: __buggy_use_of_MLX4_GET();		      \
 		}						      \
@@ -169,16 +170,16 @@ static void dump_dev_cap_flags2(struct mlx4_dev *dev, u64 flags)
 		[35] = "Diag counters per port",
 		[36] = "QinQ VST mode support",
 		[37] = "sl to vl mapping table change event support",
-		[38] = "Report driver version to FW support",
-		[39] = "Disable E-Switch loopback support",
-		[40] = "QinQ Service VLAN TPID configuration support",
-		[41] = "Set ingress parser mode support",
-		[42] = "NCSI in DMFS mode support",
-		[43] = "Optimized steering table for non source IP rules",
-		[44] = "SW CQ initialization support",
-		[45] = "RoCEv2 support",
-		[46] = "Device managed flow steering VLAN tag mode support",
-		[47] = "user MAC support",
+		[38] = "user MAC support",
+		[39] = "Report driver version to FW support",
+		[40] = "Disable E-Switch loopback support",
+		[41] = "QinQ Service VLAN TPID configuration support",
+		[42] = "Set ingress parser mode support",
+		[43] = "NCSI in DMFS mode support",
+		[44] = "Optimized steering table for non source IP rules",
+		[45] = "SW CQ initialization support",
+		[46] = "RoCEv2 support",
+		[47] = "Device managed flow steering VLAN tag mode support",
 	};
 	int i;
 
@@ -701,22 +702,22 @@ int mlx4_QUERY_FUNC_CAP(struct mlx4_dev *dev, u8 gen_or_port,
 
 	if (func_cap->flags1 & QUERY_FUNC_CAP_VF_ENABLE_QP0) {
 		MLX4_GET(qkey, outbox, QUERY_FUNC_CAP_PRIV_VF_QKEY_OFFSET);
-		func_cap->qp0_qkey = qkey;
+		func_cap->spec_qps.qp0_qkey = qkey;
 	} else {
-		func_cap->qp0_qkey = 0;
+		func_cap->spec_qps.qp0_qkey = 0;
 	}
 
 	MLX4_GET(size, outbox, QUERY_FUNC_CAP_QP0_TUNNEL);
-	func_cap->qp0_tunnel_qpn = size & 0xFFFFFF;
+	func_cap->spec_qps.qp0_tunnel = size & 0xFFFFFF;
 
 	MLX4_GET(size, outbox, QUERY_FUNC_CAP_QP0_PROXY);
-	func_cap->qp0_proxy_qpn = size & 0xFFFFFF;
+	func_cap->spec_qps.qp0_proxy = size & 0xFFFFFF;
 
 	MLX4_GET(size, outbox, QUERY_FUNC_CAP_QP1_TUNNEL);
-	func_cap->qp1_tunnel_qpn = size & 0xFFFFFF;
+	func_cap->spec_qps.qp1_tunnel = size & 0xFFFFFF;
 
 	MLX4_GET(size, outbox, QUERY_FUNC_CAP_QP1_PROXY);
-	func_cap->qp1_proxy_qpn = size & 0xFFFFFF;
+	func_cap->spec_qps.qp1_proxy = size & 0xFFFFFF;
 
 	if (func_cap->flags1 & QUERY_FUNC_CAP_FLAGS1_NIC_INFO)
 		MLX4_GET(func_cap->phys_port_id, outbox,
@@ -2597,14 +2598,14 @@ int mlx4_config_dev_retrieval(struct mlx4_dev *dev,
 	csum_mask = (config_dev.rx_checksum_val >> CONFIG_DEV_RX_CSUM_MODE_PORT1_BIT_OFFSET) &
 			CONFIG_DEV_RX_CSUM_MODE_MASK;
 
-	if (csum_mask >= sizeof(config_dev_csum_flags)/sizeof(config_dev_csum_flags[0]))
+	if (csum_mask >= ARRAY_SIZE(config_dev_csum_flags))
 		return -EINVAL;
 	params->rx_csum_flags_port_1 = config_dev_csum_flags[csum_mask];
 
 	csum_mask = (config_dev.rx_checksum_val >> CONFIG_DEV_RX_CSUM_MODE_PORT2_BIT_OFFSET) &
 			CONFIG_DEV_RX_CSUM_MODE_MASK;
 
-	if (csum_mask >= sizeof(config_dev_csum_flags)/sizeof(config_dev_csum_flags[0]))
+	if (csum_mask >= ARRAY_SIZE(config_dev_csum_flags))
 		return -EINVAL;
 	params->rx_csum_flags_port_2 = config_dev_csum_flags[csum_mask];
 

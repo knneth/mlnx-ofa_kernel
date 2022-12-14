@@ -649,58 +649,6 @@ static ssize_t trunk_store(struct mlx5_sriov_vf *g,
 	return err ? err : count;
 }
 
-static ssize_t mac_list_show(struct mlx5_sriov_vf *g,
-			     struct vf_attributes *oa,
-			     char *buf)
-{
-	struct mlx5_core_dev *dev = g->dev;
-	struct mlx5_eswitch *esw = dev->priv.eswitch;
-	struct mlx5_vport *vport = &esw->vports[g->vf + 1];
-	char *ret = buf;
-	struct mlx5_vmac *tmp;
-
-	mutex_lock(&esw->state_lock);
-	if (!list_empty(&vport->info.vmac_list)) {
-		ret += _sprintf(ret, buf, "Virtual MACs:");
-		list_for_each_entry(tmp, &vport->info.vmac_list, list) {
-			ret += _sprintf(ret, buf, " %pM", tmp->mac);
-		}
-		ret += _sprintf(ret, buf, "\n");
-	}
-	mutex_unlock(&esw->state_lock);
-
-	return (ssize_t)(ret - buf);
-}
-
-static ssize_t mac_list_store(struct mlx5_sriov_vf *g,
-			      struct vf_attributes *oa,
-			      const char *buf,
-			      size_t count)
-{
-	struct mlx5_core_dev *dev = g->dev;
-	u8 mac[ETH_ALEN];
-	char op[4];
-	int err;
-
-	err = sscanf(buf, "%3s %hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-		     op, &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
-	if (err != 7)
-		return -EINVAL;
-
-	if (!strcmp(op, "add"))
-		err = mlx5_eswitch_add_vport_vmac(dev->priv.eswitch,
-						  g->vf + 1,
-						  mac);
-	else if (!strcmp(op, "rem"))
-		err = mlx5_eswitch_del_vport_vmac(dev->priv.eswitch,
-						  g->vf + 1,
-						  mac);
-	else
-		return -EINVAL;
-
-	return err ? err : count;
-}
-
 static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 			   char *buf)
 {
@@ -710,7 +658,7 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	int vport = g->vf + 1;
 	char *p = buf;
 
-	if (!esw && MLX5_CAP_GEN(dev, vport_group_manager) && mlx5_core_is_pf(dev))
+	if (!esw && MLX5_CAP_GEN(esw->dev, vport_group_manager) && mlx5_core_is_pf(esw->dev))
 		return -EPERM;
 	if (!(vport >= 0 && vport < esw->total_vports))
 		return -EINVAL;
@@ -731,8 +679,6 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "VGT+       : %s\n",
 		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap, VLAN_N_VID) ?
 		      "ON" : "OFF");
-	p += _sprintf(p, buf, "VMAC       : %s\n",
-		      !list_empty(&ivi->vmac_list) ? "ON" : "OFF");
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -833,7 +779,6 @@ VF_ATTR(max_tx_rate);
 VF_ATTR(min_tx_rate);
 VF_ATTR(config);
 VF_ATTR(trunk);
-VF_ATTR(mac_list);
 VF_ATTR(stats);
 
 static struct attribute *vf_eth_attrs[] = {
@@ -847,7 +792,6 @@ static struct attribute *vf_eth_attrs[] = {
 	&vf_attr_min_tx_rate.attr,
 	&vf_attr_config.attr,
 	&vf_attr_trunk.attr,
-	&vf_attr_mac_list.attr,
 	&vf_attr_stats.attr,
 	NULL
 };

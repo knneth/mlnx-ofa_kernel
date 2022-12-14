@@ -31,7 +31,7 @@
  */
 
 static int ipoib_set_coalesce_rss(struct net_device *dev,
-			 	  struct ethtool_coalesce *coal)
+				  struct ethtool_coalesce *coal)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int ret, i;
@@ -45,9 +45,9 @@ static int ipoib_set_coalesce_rss(struct net_device *dev,
 		return -EINVAL;
 
 	for (i = 0; i < priv->num_rx_queues; i++) {
-		ret = ib_modify_cq(priv->recv_ring[i].recv_cq,
-				   coal->rx_max_coalesced_frames,
-				   coal->rx_coalesce_usecs);
+		ret = rdma_set_cq_moderation(priv->recv_ring[i].recv_cq,
+					     coal->rx_max_coalesced_frames,
+					     coal->rx_coalesce_usecs);
 		if (ret && ret != -ENOSYS) {
 			ipoib_warn(priv, "failed modifying CQ (%d)\n", ret);
 			return ret;
@@ -221,17 +221,7 @@ static const struct ethtool_ops ipoib_ethtool_ops_rss = {
 	.get_ringparam		= ipoib_get_ring_param,
 };
 
-static const struct ethtool_ops *ipoib_ethtool_ops_select;
-
-void ipoib_select_ethtool_ops(struct ipoib_dev_priv *priv)
+void ipoib_set_ethtool_ops_rss(struct net_device *dev)
 {
-	if (priv->max_tx_queues > 1)
-		ipoib_ethtool_ops_select = &ipoib_ethtool_ops_rss;
-	else
-		ipoib_ethtool_ops_select = &ipoib_ethtool_ops;
-}
-
-const struct ethtool_ops *ipoib_get_ethtool_ops(void)
-{
-	return ipoib_ethtool_ops_select;
+	dev->ethtool_ops = &ipoib_ethtool_ops_rss;
 }

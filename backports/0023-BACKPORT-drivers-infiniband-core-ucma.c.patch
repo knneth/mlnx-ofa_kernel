@@ -1,0 +1,191 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
+
+Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
+---
+ drivers/infiniband/core/ucma.c | 79 +++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 78 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/ucma.c
++++ b/drivers/infiniband/core/ucma.c
+@@ -57,6 +57,7 @@ MODULE_LICENSE("Dual BSD/GPL");
+ 
+ static unsigned int max_backlog = 1024;
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ static struct ctl_table_header *ucma_ctl_table_hdr;
+ static struct ctl_table ucma_ctl_table[] = {
+ 	{
+@@ -68,6 +69,14 @@ static struct ctl_table ucma_ctl_table[]
+ 	},
+ 	{ }
+ };
++#ifndef HAVE_REGISTER_NET_SYSCTL
++static struct ctl_path ucma_ctl_path[] = {
++	{ .procname = "net" },
++	{ .procname = "rdma_ucm" },
++	{ }
++};
++#endif
++#endif
+ 
+ struct ucma_file {
+ 	struct mutex		mut;
+@@ -184,6 +193,9 @@ static void ucma_close_id(struct work_st
+ static struct ucma_context *ucma_alloc_ctx(struct ucma_file *file)
+ {
+ 	struct ucma_context *ctx;
++#ifndef HAVE_IDR_ALLOC
++	int ret;
++#endif
+ 
+ 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+ 	if (!ctx)
+@@ -195,11 +207,26 @@ static struct ucma_context *ucma_alloc_c
+ 	INIT_LIST_HEAD(&ctx->mc_list);
+ 	ctx->file = file;
+ 
++#ifndef HAVE_IDR_ALLOC
++	do {
++		ret = idr_pre_get(&ctx_idr, GFP_KERNEL);
++		if (!ret)
++			goto error;
++
++		mutex_lock(&mut);
++		ret = idr_get_new(&ctx_idr, ctx, &ctx->id);
++		mutex_unlock(&mut);
++	} while (ret == -EAGAIN);
++
++	if (ret)
++		goto error;
++#else
+ 	mutex_lock(&mut);
+ 	ctx->id = idr_alloc(&ctx_idr, ctx, 0, 0, GFP_KERNEL);
+ 	mutex_unlock(&mut);
+ 	if (ctx->id < 0)
+ 		goto error;
++#endif
+ 
+ 	list_add_tail(&ctx->list, &file->ctx_list);
+ 	return ctx;
+@@ -212,16 +239,33 @@ error:
+ static struct ucma_multicast* ucma_alloc_multicast(struct ucma_context *ctx)
+ {
+ 	struct ucma_multicast *mc;
+-
++#ifndef HAVE_IDR_ALLOC
++	int ret;
++#endif
+ 	mc = kzalloc(sizeof(*mc), GFP_KERNEL);
+ 	if (!mc)
+ 		return NULL;
+ 
++#ifndef HAVE_IDR_ALLOC
++	do {
++		ret = idr_pre_get(&multicast_idr, GFP_KERNEL);
++		if (!ret)
++			goto error;
++
++		mutex_lock(&mut);
++		ret = idr_get_new(&multicast_idr, mc, &mc->id);
++		mutex_unlock(&mut);
++	} while (ret == -EAGAIN);
++
++	if (ret)
++		goto error;
++#else
+ 	mutex_lock(&mut);
+ 	mc->id = idr_alloc(&multicast_idr, mc, 0, 0, GFP_KERNEL);
+ 	mutex_unlock(&mut);
+ 	if (mc->id < 0)
+ 		goto error;
++#endif
+ 
+ 	mc->ctx = ctx;
+ 	list_add_tail(&mc->list, &ctx->mc_list);
+@@ -1516,7 +1560,11 @@ static ssize_t ucma_migrate_id(struct uc
+ 	struct rdma_ucm_migrate_id cmd;
+ 	struct rdma_ucm_migrate_resp resp;
+ 	struct ucma_context *ctx;
++#ifdef HAVE_FDGET
+ 	struct fd f;
++#else
++	struct file *filp;
++#endif
+ 	struct ucma_file *cur_file;
+ 	int ret = 0;
+ 
+@@ -1524,12 +1572,22 @@ static ssize_t ucma_migrate_id(struct uc
+ 		return -EFAULT;
+ 
+ 	/* Get current fd to protect against it being closed */
++#ifdef HAVE_FDGET
+ 	f = fdget(cmd.fd);
+ 	if (!f.file)
++#else
++	filp = fget(cmd.fd);
++	if (!filp)
++#endif
+ 		return -ENOENT;
+ 
+ 	/* Validate current fd and prevent destruction of id. */
++#ifdef HAVE_FDGET
+ 	ctx = ucma_get_ctx(f.file->private_data, cmd.id);
++#else
++	ctx = ucma_get_ctx(filp->private_data, cmd.id);
++#endif
++
+ 	if (IS_ERR(ctx)) {
+ 		ret = PTR_ERR(ctx);
+ 		goto file_put;
+@@ -1563,7 +1621,11 @@ response:
+ 
+ 	ucma_put_ctx(ctx);
+ file_put:
++#ifdef HAVE_FDGET
+ 	fdput(f);
++#else
++	fput(filp);
++#endif
+ 	return ret;
+ }
+ 
+@@ -1755,15 +1817,24 @@ static int __init ucma_init(void)
+ 		goto err1;
+ 	}
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
++#ifdef HAVE_REGISTER_NET_SYSCTL
+ 	ucma_ctl_table_hdr = register_net_sysctl(&init_net, "net/rdma_ucm", ucma_ctl_table);
++#else
++	ucma_ctl_table_hdr = register_sysctl_paths(ucma_ctl_path,
++						   ucma_ctl_table);
++#endif
+ 	if (!ucma_ctl_table_hdr) {
+ 		pr_err("rdma_ucm: couldn't register sysctl paths\n");
+ 		ret = -ENOMEM;
+ 		goto err2;
+ 	}
++#endif
+ 	return 0;
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ err2:
+ 	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
++#endif
+ err1:
+ 	misc_deregister(&ucma_misc);
+ 	return ret;
+@@ -1771,7 +1842,13 @@ err1:
+ 
+ static void __exit ucma_cleanup(void)
+ {
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
++#ifdef HAVE_REGISTER_NET_SYSCTL
+ 	unregister_net_sysctl_table(ucma_ctl_table_hdr);
++#else
++	unregister_sysctl_table(ucma_ctl_table_hdr);
++#endif
++#endif
+ 	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
+ 	misc_deregister(&ucma_misc);
+ 	idr_destroy(&ctx_idr);

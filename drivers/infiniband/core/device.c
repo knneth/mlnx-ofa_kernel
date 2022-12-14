@@ -134,7 +134,7 @@ static int ib_device_check_mandatory(struct ib_device *device)
 	return 0;
 }
 
-struct ib_device *__ib_device_get_by_index(u32 index)
+static struct ib_device *__ib_device_get_by_index(u32 index)
 {
 	struct ib_device *device;
 
@@ -143,6 +143,22 @@ struct ib_device *__ib_device_get_by_index(u32 index)
 			return device;
 
 	return NULL;
+}
+
+/*
+ * Caller is responsible to return refrerence count by calling put_device()
+ */
+struct ib_device *ib_device_get_by_index(u32 index)
+{
+	struct ib_device *device;
+
+	down_read(&lists_rwsem);
+	device = __ib_device_get_by_index(index);
+	if (device)
+		get_device(&device->dev);
+
+	up_read(&lists_rwsem);
+	return device;
 }
 
 static struct ib_device *__ib_device_get_by_name(const char *name)
@@ -523,7 +539,7 @@ int ib_register_device(struct ib_device *device,
 	device->reg_state = IB_DEV_REGISTERED;
 
 	list_for_each_entry(client, &client_list, list)
-		if (client->add && !add_client_context(device, client))
+		if (!add_client_context(device, client) && client->add)
 			client->add(device);
 
 	device->index = __dev_new_index();
@@ -613,7 +629,7 @@ int ib_register_client(struct ib_client *client)
 	mutex_lock(&device_mutex);
 
 	list_for_each_entry(device, &device_list, core_list)
-		if (client->add && !add_client_context(device, client))
+		if (!add_client_context(device, client) && client->add)
 			client->add(device);
 
 	down_write(&lists_rwsem);
@@ -1001,14 +1017,17 @@ int ib_modify_port(struct ib_device *device,
 		   u8 port_num, int port_modify_mask,
 		   struct ib_port_modify *port_modify)
 {
-	if (!device->modify_port)
-		return -ENOSYS;
+	int rc;
 
 	if (!rdma_is_port_valid(device, port_num))
 		return -EINVAL;
 
-	return device->modify_port(device, port_num, port_modify_mask,
-				   port_modify);
+	if (device->modify_port)
+		rc = device->modify_port(device, port_num, port_modify_mask,
+					   port_modify);
+	else
+		rc = rdma_protocol_roce(device, port_num) ? 0 : -ENOSYS;
+	return rc;
 }
 EXPORT_SYMBOL(ib_modify_port);
 
@@ -1143,7 +1162,7 @@ struct net_device *ib_get_net_dev_by_params(struct ib_device *dev,
 }
 EXPORT_SYMBOL(ib_get_net_dev_by_params);
 
-static const struct rdma_nl_cbs ibnl_ls_cb_table[] = {
+static const struct rdma_nl_cbs ibnl_ls_cb_table[RDMA_NL_LS_NUM_OPS] = {
 	[RDMA_NL_LS_OP_RESOLVE] = {
 		.doit = ib_nl_handle_resolve_resp,
 		.flags = RDMA_NL_ADMIN_PERM,
@@ -1181,7 +1200,7 @@ static int __init ib_core_init(void)
 
 	ret = rdma_nl_init();
 	if (ret) {
-		pr_warn("Couldn't init IB netlink interface %d\n", ret);
+		pr_warn("Couldn't init IB netlink interface: err %d\n", ret);
 		goto err_sysfs;
 	}
 
@@ -1248,5 +1267,7 @@ static void __exit ib_core_cleanup(void)
 	destroy_workqueue(ib_wq);
 }
 
-module_init(ib_core_init);
+MODULE_ALIAS_RDMA_NETLINK(RDMA_NL_LS, 4);
+
+subsys_initcall(ib_core_init);
 module_exit(ib_core_cleanup);

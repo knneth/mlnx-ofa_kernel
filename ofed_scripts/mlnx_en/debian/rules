@@ -99,6 +99,7 @@ endif
 	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	with_mlx4=$(MLX4) with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/generate_mlnx_en_dkms_conf.sh > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/patches		debian/$(pdkms)/usr/src/$(pname)-$(pversion)

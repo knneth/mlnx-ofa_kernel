@@ -49,6 +49,7 @@
 #include <linux/uaccess.h>
 
 #include <rdma/ib.h>
+#include <rdma/uverbs_std_types.h>
 
 #include <rdma/ib_umem_odp.h>
 
@@ -64,14 +65,16 @@ MODULE_LICENSE("Dual BSD/GPL");
 enum {
 	IB_UVERBS_MAJOR       = 231,
 	IB_UVERBS_BASE_MINOR  = 192,
-	IB_UVERBS_MAX_DEVICES = 32
+	IB_UVERBS_MAX_DEVICES = RDMA_MAX_PORTS,
+	IB_UVERBS_NUM_FIXED_MINOR = 32,
+	IB_UVERBS_NUM_DYNAMIC_MINOR = IB_UVERBS_MAX_DEVICES - IB_UVERBS_NUM_FIXED_MINOR,
 };
 
 #define IB_UVERBS_BASE_DEV	MKDEV(IB_UVERBS_MAJOR, IB_UVERBS_BASE_MINOR)
 
+static dev_t dynamic_uverbs_dev;
 static struct class *uverbs_class;
 
-static DEFINE_SPINLOCK(map_lock);
 static DECLARE_BITMAP(dev_map, IB_UVERBS_MAX_DEVICES);
 
 static ssize_t (*uverbs_cmd_table[])(struct ib_uverbs_file *file,
@@ -130,6 +133,7 @@ static int (*uverbs_ex_cmd_table[])(struct ib_uverbs_file *file,
 	[IB_USER_VERBS_EX_CMD_CREATE_RWQ_IND_TBL] = ib_uverbs_ex_create_rwq_ind_table,
 	[IB_USER_VERBS_EX_CMD_DESTROY_RWQ_IND_TBL] = ib_uverbs_ex_destroy_rwq_ind_table,
 	[IB_USER_VERBS_EX_CMD_MODIFY_QP]        = ib_uverbs_ex_modify_qp,
+	[IB_USER_VERBS_EX_CMD_MODIFY_CQ]        = ib_uverbs_ex_modify_cq,
 	[IB_USER_VERBS_EX_CMD_DESCRIBE_COUNTER_SET]	= ib_uverbs_ex_describe_counter_set,
 	[IB_USER_VERBS_EX_CMD_CREATE_COUNTER_SET]	= ib_uverbs_ex_create_counter_set,
 	[IB_USER_VERBS_EX_CMD_DESTROY_COUNTER_SET]	= ib_uverbs_ex_destroy_counter_set,
@@ -819,7 +823,7 @@ static ssize_t ib_uverbs_write(struct file *filp, const char __user *buf,
 			}
 
 			if (!access_ok(VERIFY_WRITE,
-				       (void __user *) (unsigned long) ex_hdr.response,
+				       u64_to_user_ptr(ex_hdr.response),
 				       (hdr.out_words + ex_hdr.provider_out_words) * 8)) {
 				ret = -EFAULT;
 				goto out;
@@ -831,14 +835,15 @@ static ssize_t ib_uverbs_write(struct file *filp, const char __user *buf,
 			}
 		}
 
-		INIT_UDATA_BUF_OR_NULL(&ucore, buf, (unsigned long) ex_hdr.response,
-				       hdr.in_words * 8, hdr.out_words * 8);
+		ib_uverbs_init_udata_buf_or_null(&ucore, buf,
+					u64_to_user_ptr(ex_hdr.response),
+					hdr.in_words * 8, hdr.out_words * 8);
 
-		INIT_UDATA_BUF_OR_NULL(&uhw,
-				       buf + ucore.inlen,
-				       (unsigned long) ex_hdr.response + ucore.outlen,
-				       ex_hdr.provider_in_words * 8,
-				       ex_hdr.provider_out_words * 8);
+		ib_uverbs_init_udata_buf_or_null(&uhw,
+					buf + ucore.inlen,
+					u64_to_user_ptr(ex_hdr.response) + ucore.outlen,
+					ex_hdr.provider_in_words * 8,
+					ex_hdr.provider_out_words * 8);
 
 		if (exp_cmd) {
 			ucore.src = IB_UDATA_EXP_CMD;
@@ -997,6 +1002,9 @@ static const struct file_operations uverbs_fops = {
 	.open	 = ib_uverbs_open,
 	.release = ib_uverbs_close,
 	.llseek	 = no_llseek,
+#if IS_ENABLED(CONFIG_INFINIBAND_EXP_USER_ACCESS)
+	.unlocked_ioctl = ib_uverbs_ioctl,
+#endif
 	.unlocked_ioctl = ib_uverbs_exp_ioctl,
 };
 
@@ -1007,6 +1015,9 @@ static const struct file_operations uverbs_mmap_fops = {
 	.open	 = ib_uverbs_open,
 	.release = ib_uverbs_close,
 	.llseek	 = no_llseek,
+#if IS_ENABLED(CONFIG_INFINIBAND_EXP_USER_ACCESS)
+	.unlocked_ioctl = ib_uverbs_ioctl,
+#endif
 	.get_unmapped_area = ib_uverbs_exp_get_unmapped_area,
 	.unlocked_ioctl = ib_uverbs_exp_ioctl,
 };
@@ -1061,34 +1072,6 @@ static DEVICE_ATTR(abi_version, S_IRUGO, show_dev_abi_version, NULL);
 static CLASS_ATTR_STRING(abi_version, S_IRUGO,
 			 __stringify(IB_USER_VERBS_ABI_VERSION));
 
-static dev_t overflow_maj;
-static DECLARE_BITMAP(overflow_map, IB_UVERBS_MAX_DEVICES);
-
-/*
- * If we have more than IB_UVERBS_MAX_DEVICES, dynamically overflow by
- * requesting a new major number and doubling the number of max devices we
- * support. It's stupid, but simple.
- */
-static int find_overflow_devnum(void)
-{
-	int ret;
-
-	if (!overflow_maj) {
-		ret = alloc_chrdev_region(&overflow_maj, 0, IB_UVERBS_MAX_DEVICES,
-					  "infiniband_verbs");
-		if (ret) {
-			pr_err("user_verbs: couldn't register dynamic device number\n");
-			return ret;
-		}
-	}
-
-	ret = find_first_zero_bit(overflow_map, IB_UVERBS_MAX_DEVICES);
-	if (ret >= IB_UVERBS_MAX_DEVICES)
-		return -1;
-
-	return ret;
-}
-
 static void ib_uverbs_add_one(struct ib_device *device)
 {
 	int devnum;
@@ -1118,24 +1101,15 @@ static void ib_uverbs_add_one(struct ib_device *device)
 	INIT_LIST_HEAD(&uverbs_dev->uverbs_file_list);
 	INIT_LIST_HEAD(&uverbs_dev->uverbs_events_file_list);
 
-	spin_lock(&map_lock);
 	devnum = find_first_zero_bit(dev_map, IB_UVERBS_MAX_DEVICES);
-	if (devnum >= IB_UVERBS_MAX_DEVICES) {
-		spin_unlock(&map_lock);
-		devnum = find_overflow_devnum();
-		if (devnum < 0)
-			goto err;
-
-		spin_lock(&map_lock);
-		uverbs_dev->devnum = devnum + IB_UVERBS_MAX_DEVICES;
-		base = devnum + overflow_maj;
-		set_bit(devnum, overflow_map);
-	} else {
-		uverbs_dev->devnum = devnum;
-		base = devnum + IB_UVERBS_BASE_DEV;
-		set_bit(devnum, dev_map);
-	}
-	spin_unlock(&map_lock);
+	if (devnum >= IB_UVERBS_MAX_DEVICES)
+		goto err;
+	uverbs_dev->devnum = devnum;
+	set_bit(devnum, dev_map);
+	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
+		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
+	else
+		base = IB_UVERBS_BASE_DEV + devnum;
 
 	rcu_assign_pointer(uverbs_dev->ib_dev, device);
 	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
@@ -1159,6 +1133,18 @@ static void ib_uverbs_add_one(struct ib_device *device)
 	if (device_create_file(uverbs_dev->dev, &dev_attr_abi_version))
 		goto err_class;
 
+	if (!device->specs_root) {
+		const struct uverbs_object_tree_def *default_root[] = {
+			uverbs_default_get_objects()};
+
+		uverbs_dev->specs_root = uverbs_alloc_spec_tree(1,
+								default_root);
+		if (IS_ERR(uverbs_dev->specs_root))
+			goto err_class;
+
+		device->specs_root = uverbs_dev->specs_root;
+	}
+
 	if (ib_umem_odp_add_statistic_nodes(uverbs_dev->dev))
 		goto err_class;
 
@@ -1171,10 +1157,7 @@ err_class:
 
 err_cdev:
 	cdev_del(&uverbs_dev->cdev);
-	if (uverbs_dev->devnum < IB_UVERBS_MAX_DEVICES)
-		clear_bit(devnum, dev_map);
-	else
-		clear_bit(devnum, overflow_map);
+	clear_bit(devnum, dev_map);
 
 err:
 	if (atomic_dec_and_test(&uverbs_dev->refcount))
@@ -1266,11 +1249,7 @@ static void ib_uverbs_remove_one(struct ib_device *device, void *client_data)
 	dev_set_drvdata(uverbs_dev->dev, NULL);
 	device_destroy(uverbs_class, uverbs_dev->cdev.dev);
 	cdev_del(&uverbs_dev->cdev);
-
-	if (uverbs_dev->devnum < IB_UVERBS_MAX_DEVICES)
-		clear_bit(uverbs_dev->devnum, dev_map);
-	else
-		clear_bit(uverbs_dev->devnum - IB_UVERBS_MAX_DEVICES, overflow_map);
+	clear_bit(uverbs_dev->devnum, dev_map);
 
 	if (device->disassociate_ucontext) {
 		/* We disassociate HW resources and immediately return.
@@ -1293,6 +1272,11 @@ static void ib_uverbs_remove_one(struct ib_device *device, void *client_data)
 		ib_uverbs_comp_dev(uverbs_dev);
 	if (wait_clients)
 		wait_for_completion(&uverbs_dev->comp);
+	if (uverbs_dev->specs_root) {
+		uverbs_free_spec_tree(uverbs_dev->specs_root);
+		device->specs_root = NULL;
+	}
+
 	kobject_put(&uverbs_dev->kobj);
 }
 
@@ -1307,11 +1291,18 @@ static int __init ib_uverbs_init(void)
 {
 	int ret;
 
-	ret = register_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_MAX_DEVICES,
+	ret = register_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_NUM_FIXED_MINOR,
 				     "infiniband_verbs");
 	if (ret) {
 		pr_err("user_verbs: couldn't register device number\n");
 		goto out;
+	}
+
+	ret = alloc_chrdev_region(&dynamic_uverbs_dev, 0, IB_UVERBS_NUM_DYNAMIC_MINOR,
+				  "infiniband_verbs");
+	if (ret) {
+		pr_err("couldn't register dynamic device number\n");
+		goto out_alloc;
 	}
 
 	uverbs_class = class_create(THIS_MODULE, "infiniband_verbs");
@@ -1341,7 +1332,10 @@ out_class:
 	class_destroy(uverbs_class);
 
 out_chrdev:
-	unregister_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_MAX_DEVICES);
+	unregister_chrdev_region(dynamic_uverbs_dev, IB_UVERBS_NUM_DYNAMIC_MINOR);
+
+out_alloc:
+	unregister_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_NUM_FIXED_MINOR);
 
 out:
 	return ret;
@@ -1351,9 +1345,8 @@ static void __exit ib_uverbs_cleanup(void)
 {
 	ib_unregister_client(&uverbs_client);
 	class_destroy(uverbs_class);
-	unregister_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_MAX_DEVICES);
-	if (overflow_maj)
-		unregister_chrdev_region(overflow_maj, IB_UVERBS_MAX_DEVICES);
+	unregister_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_NUM_FIXED_MINOR);
+	unregister_chrdev_region(dynamic_uverbs_dev, IB_UVERBS_NUM_DYNAMIC_MINOR);
 }
 
 module_init(ib_uverbs_init);

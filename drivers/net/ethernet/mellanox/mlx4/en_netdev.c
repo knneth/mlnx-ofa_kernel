@@ -147,19 +147,20 @@ out:
 	return err;
 }
 
-static int __mlx4_en_setup_tc(struct net_device *dev, u32 handle,
-			      u32 chain_index, __be16 proto,
-			      struct tc_to_netdev *tc)
+static int __mlx4_en_setup_tc(struct net_device *dev, enum tc_setup_type type,
+			      void *type_data)
 {
-	if (tc->type != TC_SETUP_MQPRIO)
+	struct tc_mqprio_qopt *mqprio = type_data;
+
+	if (type != TC_SETUP_QDISC_MQPRIO)
+		return -EOPNOTSUPP;
+
+	if (mqprio->num_tc && mqprio->num_tc != MLX4_EN_NUM_UP_HIGH)
 		return -EINVAL;
 
-	if (tc->mqprio->num_tc && tc->mqprio->num_tc != MLX4_EN_NUM_UP_HIGH)
-		return -EINVAL;
+	mqprio->hw = TC_MQPRIO_HW_OFFLOAD_TCS;
 
-	tc->mqprio->hw = TC_MQPRIO_HW_OFFLOAD_TCS;
-
-	return mlx4_en_alloc_tx_queue_per_tc(dev, tc->mqprio->num_tc);
+	return mlx4_en_alloc_tx_queue_per_tc(dev, mqprio->num_tc);
 }
 
 #ifdef CONFIG_RFS_ACCEL
@@ -2081,6 +2082,7 @@ int mlx4_en_start_port(struct net_device *dev)
 				mlx4_en_arm_cq(priv, cq);
 
 			} else {
+				mlx4_en_init_tx_xdp_ring_descs(priv, tx_ring);
 				mlx4_en_init_recycle_ring(priv, i);
 				/* XDP TX CQ should never be armed */
 			}
@@ -3699,6 +3701,8 @@ int mlx4_en_netdev_event(struct notifier_block *this,
 		struct netdev_bonding_info *bonding_info =
 			&notifier_info->bonding_info;
 
+		dev->lag_port_link_state[port] = bonding_info->slave.link;
+
 		/* required mode 1, 2 or 4 */
 		if ((bonding_info->master.bond_mode != BOND_MODE_ACTIVEBACKUP) &&
 		    (bonding_info->master.bond_mode != BOND_MODE_XOR) &&
@@ -3738,23 +3742,20 @@ int mlx4_en_netdev_event(struct notifier_block *this,
 				/* in active-active mode a virtual port is
 				 * mapped to the native physical port if and only
 				 * if the physical port is up */
-				__s8 link = bonding_info->slave.link;
 
-				if (port == 1)
-					v2p_port2 = 2;
-				else
+				v2p_port1 = (dev->lag_port_link_state[1] == BOND_LINK_UP ||
+					     dev->lag_port_link_state[1] == BOND_LINK_FAIL) ?
+					1 : 2;
+
+				v2p_port2 = (dev->lag_port_link_state[2] == BOND_LINK_UP ||
+					     dev->lag_port_link_state[2] == BOND_LINK_FAIL) ?
+					2 : 1;
+
+				/* when both ports are down the mapping returns to default
+				 * to avoid cross mapping which is illegal */
+				if (v2p_port1 == 2 && v2p_port2 == 1) {
 					v2p_port1 = 1;
-				if ((link == BOND_LINK_UP) ||
-				    (link == BOND_LINK_FAIL)) {
-					if (port == 1)
-						v2p_port1 = 1;
-					else
-						v2p_port2 = 2;
-				} else { /* BOND_LINK_DOWN || BOND_LINK_BACK */
-					if (port == 1)
-						v2p_port1 = 2;
-					else
-						v2p_port2 = 1;
+					v2p_port2 = 2;
 				}
 			}
 		}

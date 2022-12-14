@@ -1,0 +1,416 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_verbs.h
+
+Change-Id: Id0ea2e102b1e250723beb1bd8faafd754e6d4ee3
+---
+ include/rdma/ib_verbs.h | 187 +++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 185 insertions(+), 2 deletions(-)
+
+--- a/include/rdma/ib_verbs.h
++++ b/include/rdma/ib_verbs.h
+@@ -49,8 +49,16 @@
+ #include <linux/scatterlist.h>
+ #include <linux/workqueue.h>
+ #include <linux/socket.h>
++#if defined(HAVE_IRQ_POLL_H)
+ #include <linux/irq_poll.h>
++#else
++#include <linux/blk-iopoll.h>
++#endif
++#ifdef HAVE_UAPI_LINUX_IF_ETHER_H
+ #include <uapi/linux/if_ether.h>
++#else
++#include <linux/if_ether.h>
++#endif
+ #include <net/ipv6.h>
+ #include <net/ip.h>
+ #include <linux/string.h>
+@@ -1152,7 +1160,9 @@ enum ib_qp_create_flags {
+ 	IB_QP_CREATE_MANAGED_RECV               = 1 << 4,
+ 	IB_QP_CREATE_NETIF_QP			= 1 << 5,
+ 	IB_QP_CREATE_SIGNATURE_EN		= 1 << 6,
+-	/* FREE					= 1 << 7, */
++#ifndef HAVE_MEMALLOC_NOIO_SAVE
++	IB_QP_CREATE_USE_GFP_NOIO		= 1 << 7,
++#endif
+ 	IB_QP_CREATE_SCATTER_FCS		= 1 << 8,
+ 	IB_QP_CREATE_CVLAN_STRIPPING		= 1 << 9,
+ 	IB_QP_CREATE_SOURCE_QPN			= 1 << 10,
+@@ -1516,11 +1526,13 @@ enum rdma_remove_reason {
+ 	RDMA_REMOVE_DURING_CLEANUP,
+ };
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ struct ib_rdmacg_object {
+ #ifdef CONFIG_CGROUP_RDMA
+ 	struct rdma_cgroup	*cg;		/* owner rdma cgroup */
+ #endif
+ };
++#endif
+ 
+ struct ib_ucontext {
+ 	struct ib_device       *device;
+@@ -1536,7 +1548,11 @@ struct ib_ucontext {
+ 
+ 	struct pid             *tgid;
+ #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifndef HAVE_INTERVAL_TREE_TAKES_RB_ROOT
+ 	struct rb_root_cached   umem_tree;
++#else
++	struct rb_root          umem_tree;
++#endif
+ 	/*
+ 	 * Protects .umem_rbroot and tree, as well as odp_mrs_count and
+ 	 * mmu notifiers registration.
+@@ -1552,7 +1568,9 @@ struct ib_ucontext {
+ 	int                     odp_mrs_count;
+ #endif
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	struct ib_rdmacg_object	cg_obj;
++#endif
+ 
+ 	void		*peer_mem_private_data;
+ 	char		*peer_mem_name;
+@@ -1564,7 +1582,9 @@ struct ib_uobject {
+ 	struct ib_ucontext     *context;	/* associated user context */
+ 	void		       *object;		/* containing object */
+ 	struct list_head	list;		/* link to context's list */
++#ifdef HAVE_CGROUP_RDMA_H
+ 	struct ib_rdmacg_object	cg_obj;		/* rdmacg object */
++#endif
+ 	int			id;		/* index into kernel idr */
+ 	struct kref		ref;
+ 	atomic_t		usecnt;		/* protects exclusive access */
+@@ -1652,7 +1672,13 @@ struct ib_cq {
+ 	enum ib_poll_context	poll_ctx;
+ 	struct ib_wc		*wc;
+ 	union {
++#if defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL)
+ 		struct irq_poll		iop;
++#endif
++#else
++		struct blk_iopoll	iop;
++#endif
+ 		struct work_struct	work;
+ 	};
+ };
+@@ -2103,6 +2129,63 @@ struct ib_cache {
+ 	struct ib_port_cache   *ports;
+ };
+ 
++#ifndef HAVE_DEVICE_DMA_OPS
++struct ib_dma_mapping_ops {
++	int		(*mapping_error)(struct ib_device *dev,
++					 u64 dma_addr);
++	u64		(*map_single)(struct ib_device *dev,
++				      void *ptr, size_t size,
++				      enum dma_data_direction direction);
++	void		(*unmap_single)(struct ib_device *dev,
++					u64 addr, size_t size,
++					enum dma_data_direction direction);
++	u64		(*map_page)(struct ib_device *dev,
++				    struct page *page, unsigned long offset,
++				    size_t size,
++				    enum dma_data_direction direction);
++	void		(*unmap_page)(struct ib_device *dev,
++				      u64 addr, size_t size,
++				      enum dma_data_direction direction);
++	int		(*map_sg)(struct ib_device *dev,
++				  struct scatterlist *sg, int nents,
++				  enum dma_data_direction direction);
++	void		(*unmap_sg)(struct ib_device *dev,
++				    struct scatterlist *sg, int nents,
++				    enum dma_data_direction direction);
++	int		(*map_sg_attrs)(struct ib_device *dev,
++					struct scatterlist *sg, int nents,
++					enum dma_data_direction direction,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++					struct dma_attrs *attrs);
++#else
++					unsigned long attrs);
++#endif
++	void		(*unmap_sg_attrs)(struct ib_device *dev,
++					  struct scatterlist *sg, int nents,
++					  enum dma_data_direction direction,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++					  struct dma_attrs *attrs);
++#else
++					  unsigned long attrs);
++#endif
++	void		(*sync_single_for_cpu)(struct ib_device *dev,
++					       u64 dma_handle,
++					       size_t size,
++					       enum dma_data_direction dir);
++	void		(*sync_single_for_device)(struct ib_device *dev,
++						  u64 dma_handle,
++						  size_t size,
++						  enum dma_data_direction dir);
++	void		*(*alloc_coherent)(struct ib_device *dev,
++					   size_t size,
++					   u64 *dma_handle,
++					   gfp_t flag);
++	void		(*free_coherent)(struct ib_device *dev,
++					 size_t size, void *cpu_addr,
++					 u64 dma_handle);
++};
++#endif
++
+ struct iw_cm_verbs;
+ 
+ struct ib_port_immutable {
+@@ -2478,6 +2561,7 @@ struct ib_device {
+ 	void			   (*disassociate_ucontext)(struct ib_ucontext *ibcontext);
+ 	void			   (*drain_rq)(struct ib_qp *qp);
+ 	void			   (*drain_sq)(struct ib_qp *qp);
++#ifdef HAVE_NDO_SET_VF_MAC
+ 	int			   (*set_vf_link_state)(struct ib_device *device, int vf, u8 port,
+ 							int state);
+ 	int			   (*get_vf_config)(struct ib_device *device, int vf, u8 port,
+@@ -2486,6 +2570,7 @@ struct ib_device {
+ 						   struct ifla_vf_stats *stats);
+ 	int			   (*set_vf_guid)(struct ib_device *device, int vf, u8 port, u64 guid,
+ 						  int type);
++#endif
+ 	struct ib_wq *		   (*create_wq)(struct ib_pd *pd,
+ 						struct ib_wq_init_attr *init_attr,
+ 						struct ib_udata *udata);
+@@ -2509,7 +2594,9 @@ struct ib_device {
+ 	int	(*query_counter_set)(struct ib_counter_set *cs,
+ 				     struct ib_counter_set_query_attr *cs_query_attr,
+ 				     struct ib_udata *udata);
+-
++#ifndef HAVE_DEVICE_DMA_OPS
++	struct ib_dma_mapping_ops   *dma_ops;
++#endif
+ 	/**
+ 	 * rdma netdev operation
+ 	 *
+@@ -2549,9 +2636,11 @@ struct ib_device {
+ 	struct attribute_group	     *hw_stats_ag;
+ 	struct rdma_hw_stats         *hw_stats;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ #ifdef CONFIG_CGROUP_RDMA
+ 	struct rdmacg_device         cg_device;
+ #endif
++#endif
+ 
+ 	u32                          index;
+ 
+@@ -2568,6 +2657,16 @@ struct ib_device {
+ 						     int comp_vector);
+ 
+ 	struct uverbs_root_spec		*specs_root;
++
++#if !defined(HAVE_VLAN_DEV_GET_EGRESS_QOS_MASK)
++#define NUM_SKPRIO 16
++#define NUM_UP	   8
++#define MAX_PORTS  2
++	struct {
++		u8  map[MAX_PORTS][NUM_SKPRIO];
++		struct mutex lock;
++	} skprio2up;
++#endif
+ };
+ 
+ struct ib_client {
+@@ -3033,6 +3132,7 @@ int ib_query_gid(struct ib_device *devic
+ 		 u8 port_num, int index, union ib_gid *gid,
+ 		 struct ib_gid_attr *attr);
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ int ib_set_vf_link_state(struct ib_device *device, int vf, u8 port,
+ 			 int state);
+ int ib_get_vf_config(struct ib_device *device, int vf, u8 port,
+@@ -3041,6 +3141,7 @@ int ib_get_vf_stats(struct ib_device *de
+ 		    struct ifla_vf_stats *stats);
+ int ib_set_vf_guid(struct ib_device *device, int vf, u8 port, u64 guid,
+ 		   int type);
++#endif
+ 
+ int ib_query_pkey(struct ib_device *device,
+ 		  u8 port_num, u16 index, u16 *pkey);
+@@ -3502,6 +3603,10 @@ struct ib_mr *ib_get_dma_mr(struct ib_pd
+  */
+ static inline int ib_dma_mapping_error(struct ib_device *dev, u64 dma_addr)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		return dev->dma_ops->mapping_error(dev, dma_addr);
++#endif
+ 	return dma_mapping_error(dev->dma_device, dma_addr);
+ }
+ 
+@@ -3516,6 +3621,10 @@ static inline u64 ib_dma_map_single(stru
+ 				    void *cpu_addr, size_t size,
+ 				    enum dma_data_direction direction)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		return dev->dma_ops->map_single(dev, cpu_addr, size, direction);
++#endif
+ 	return dma_map_single(dev->dma_device, cpu_addr, size, direction);
+ }
+ 
+@@ -3530,6 +3639,11 @@ static inline void ib_dma_unmap_single(s
+ 				       u64 addr, size_t size,
+ 				       enum dma_data_direction direction)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		dev->dma_ops->unmap_single(dev, addr, size, direction);
++	else
++#endif
+ 	dma_unmap_single(dev->dma_device, addr, size, direction);
+ }
+ 
+@@ -3547,6 +3661,10 @@ static inline u64 ib_dma_map_page(struct
+ 				  size_t size,
+ 					 enum dma_data_direction direction)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		return dev->dma_ops->map_page(dev, page, offset, size, direction);
++#endif
+ 	return dma_map_page(dev->dma_device, page, offset, size, direction);
+ }
+ 
+@@ -3561,6 +3679,11 @@ static inline void ib_dma_unmap_page(str
+ 				     u64 addr, size_t size,
+ 				     enum dma_data_direction direction)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		dev->dma_ops->unmap_page(dev, addr, size, direction);
++	else
++#endif
+ 	dma_unmap_page(dev->dma_device, addr, size, direction);
+ }
+ 
+@@ -3575,6 +3698,10 @@ static inline int ib_dma_map_sg(struct i
+ 				struct scatterlist *sg, int nents,
+ 				enum dma_data_direction direction)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		return dev->dma_ops->map_sg(dev, sg, nents, direction);
++#endif
+ 	return dma_map_sg(dev->dma_device, sg, nents, direction);
+ }
+ 
+@@ -3589,14 +3716,28 @@ static inline void ib_dma_unmap_sg(struc
+ 				   struct scatterlist *sg, int nents,
+ 				   enum dma_data_direction direction)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		dev->dma_ops->unmap_sg(dev, sg, nents, direction);
++	else
++#endif
+ 	dma_unmap_sg(dev->dma_device, sg, nents, direction);
+ }
+ 
+ static inline int ib_dma_map_sg_attrs(struct ib_device *dev,
+ 				      struct scatterlist *sg, int nents,
+ 				      enum dma_data_direction direction,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++					struct dma_attrs *dma_attrs)
++#else
+ 				      unsigned long dma_attrs)
++#endif
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		return dev->dma_ops->map_sg_attrs(dev, sg, nents, direction,
++						  dma_attrs);
++#endif
+ 	return dma_map_sg_attrs(dev->dma_device, sg, nents, direction,
+ 				dma_attrs);
+ }
+@@ -3604,8 +3745,18 @@ static inline int ib_dma_map_sg_attrs(st
+ static inline void ib_dma_unmap_sg_attrs(struct ib_device *dev,
+ 					 struct scatterlist *sg, int nents,
+ 					 enum dma_data_direction direction,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++					struct dma_attrs *dma_attrs)
++#else
+ 					 unsigned long dma_attrs)
++#endif
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		return dev->dma_ops->unmap_sg_attrs(dev, sg, nents, direction,
++						  dma_attrs);
++	else
++#endif
+ 	dma_unmap_sg_attrs(dev->dma_device, sg, nents, direction, dma_attrs);
+ }
+ /**
+@@ -3648,6 +3799,11 @@ static inline void ib_dma_sync_single_fo
+ 					      size_t size,
+ 					      enum dma_data_direction dir)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		dev->dma_ops->sync_single_for_cpu(dev, addr, size, dir);
++	else
++#endif
+ 	dma_sync_single_for_cpu(dev->dma_device, addr, size, dir);
+ }
+ 
+@@ -3663,6 +3819,11 @@ static inline void ib_dma_sync_single_fo
+ 						 size_t size,
+ 						 enum dma_data_direction dir)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		dev->dma_ops->sync_single_for_device(dev, addr, size, dir);
++	else
++#endif
+ 	dma_sync_single_for_device(dev->dma_device, addr, size, dir);
+ }
+ 
+@@ -3678,6 +3839,16 @@ static inline void *ib_dma_alloc_coheren
+ 					   dma_addr_t *dma_handle,
+ 					   gfp_t flag)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops) {
++		u64 handle;
++		void *ret;
++
++		ret = dev->dma_ops->alloc_coherent(dev, size, &handle, flag);
++		*dma_handle = handle;
++		return ret;
++	}
++#endif
+ 	return dma_alloc_coherent(dev->dma_device, size, dma_handle, flag);
+ }
+ 
+@@ -3692,6 +3863,11 @@ static inline void ib_dma_free_coherent(
+ 					size_t size, void *cpu_addr,
+ 					dma_addr_t dma_handle)
+ {
++#ifndef HAVE_DEVICE_DMA_OPS
++	if (dev->dma_ops)
++		dev->dma_ops->free_coherent(dev, size, cpu_addr, dma_handle);
++	else
++#endif
+ 	dma_free_coherent(dev->dma_device, size, cpu_addr, dma_handle);
+ }
+ 
+@@ -4154,5 +4330,12 @@ ib_get_vector_affinity(struct ib_device
+ 
+ }
+ 
++#if !defined(HAVE_VLAN_DEV_GET_EGRESS_QOS_MASK)
++int ib_set_skprio2up(struct ib_device *device,
++		     u8 port_num, u8 prio, u8 up);
++
++int ib_get_skprio2up(struct ib_device *device,
++		     u8 port_num, u8 prio, u8 *up);
++#endif
+ #include <rdma/ib_verbs_exp.h>
+ #endif /* IB_VERBS_H */

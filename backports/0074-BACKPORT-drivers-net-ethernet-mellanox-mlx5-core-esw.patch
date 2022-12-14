@@ -1,0 +1,42 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
+
+Change-Id: I8fbac5d65fed3a1e653e972e51b7b408f68a1851
+---
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
+@@ -85,8 +85,10 @@ mlx5_eswitch_add_offloaded_rule(struct m
+ 
+ 	spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS |
+ 				      MLX5_MATCH_MISC_PARAMETERS;
++#ifdef HAVE_TCF_TUNNEL_INFO
+ 	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_DECAP)
+ 		spec->match_criteria_enable |= MLX5_MATCH_INNER_HEADERS;
++#endif
+ 
+ 	if (attr->action & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR)
+ 		flow_act.modify_id = attr->mod_hdr_id;
+@@ -496,8 +498,10 @@ static int esw_create_offloads_fast_fdb_
+ 	esw_size = min_t(int, max_flow_counter * ESW_OFFLOADS_NUM_GROUPS,
+ 			 1 << MLX5_CAP_ESW_FLOWTABLE_FDB(dev, log_max_ft_size));
+ 
++#ifdef HAVE_TCF_TUNNEL_INFO
+ 	if (esw->offloads.encap != DEVLINK_ESWITCH_ENCAP_MODE_NONE)
+ 		flags |= MLX5_FLOW_TABLE_TUNNEL_EN;
++#endif
+ 
+ 	fdb = mlx5_create_auto_grouped_flow_table(root_ns, FDB_FAST_PATH,
+ 						  esw_size,
+@@ -1155,7 +1159,7 @@ int mlx5_devlink_eswitch_inline_mode_get
+ 
+ int mlx5_eswitch_inline_mode_get(struct mlx5_eswitch *esw, int nvfs, u8 *mode)
+ {
+-	u8 prev_mlx5_mode, mlx5_mode = MLX5_INLINE_MODE_L2;
++	u8 prev_mlx5_mode = 0, mlx5_mode = MLX5_INLINE_MODE_L2;
+ 	struct mlx5_core_dev *dev = esw->dev;
+ 	int vport;
+ 

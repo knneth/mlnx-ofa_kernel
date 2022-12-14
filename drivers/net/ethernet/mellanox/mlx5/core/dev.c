@@ -461,33 +461,3 @@ int mlx5_dev_list_trylock(void)
 {
 	return mutex_trylock(&mlx5_intf_mutex);
 }
-
-void mlx5_configure_interfaces(void)
-{
-	struct mlx5_interface *intf;
-	struct mlx5_priv *priv;
-	struct mlx5_core_dev *dev;
-
-	list_for_each_entry(intf, &intf_list, list) {
-		list_for_each_entry(priv, &mlx5_dev_list, dev_list) {
-			dev = container_of(priv, struct mlx5_core_dev, priv);
-			if (intf->configure)
-				intf->configure(dev);
-		}
-	}
-}
-
-void mlx5_unconfigure_interfaces(void)
-{
-	struct mlx5_interface *intf;
-	struct mlx5_priv *priv;
-	struct mlx5_core_dev *dev;
-
-	list_for_each_entry(intf, &intf_list, list) {
-		list_for_each_entry(priv, &mlx5_dev_list, dev_list) {
-			dev = container_of(priv, struct mlx5_core_dev, priv);
-			if (intf->unconfigure)
-				intf->unconfigure(dev);
-		}
-	}
-}

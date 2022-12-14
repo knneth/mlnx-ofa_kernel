@@ -299,7 +299,7 @@ static int mlx5_ib_set_cc_params(struct mlx5_ib_dev *dev, int offset, u32 var)
 	MLX5_SET(field_select_r_roce_rp, field, field_select_r_roce_rp,
 		 attr_mask);
 
-	err = mlx5_cmd_modify_cong_params(dev->mdev, in, inlen);
+	err = mlx5_lag_modify_cong_params(dev->mdev, in, inlen);
 	kvfree(in);
 	return err;
 }

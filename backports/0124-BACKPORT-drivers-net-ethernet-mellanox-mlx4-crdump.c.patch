@@ -1,0 +1,32 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/crdump.c
+
+Change-Id: Ia90b3c9712eb78056bc6cca2c076d9d00086e79a
+---
+ drivers/net/ethernet/mellanox/mlx4/crdump.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx4/crdump.c
++++ b/drivers/net/ethernet/mellanox/mlx4/crdump.c
+@@ -208,13 +208,21 @@ static int crdump_proc_open(struct inode
+ {
+ 	struct seq_file *seq;
+ 	int ret;
++#ifndef HAVE_PDE_DATA
++	struct proc_dir_entry *pde;
++#endif
+ 
+ 	ret = seq_open(file, &crdump_seq_ops);
+ 	if (ret)
+ 		return ret;
+ 
+ 	seq = file->private_data;
++#ifdef HAVE_PDE_DATA
+ 	seq->private = PDE_DATA(inode);
++#else
++	pde = PDE(inode);
++	seq->private = pde->data;
++#endif
+ 	return 0;
+ }
+ 

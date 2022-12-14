@@ -606,6 +606,8 @@ int ib_uverbs_exp_query_device(struct ib_uverbs_file *file,
 			exp_attr->packet_pacing_caps.qp_rate_limit_max;
 		resp->packet_pacing_caps.supported_qpts =
 			exp_attr->packet_pacing_caps.supported_qpts;
+		resp->packet_pacing_caps.cap_flags =
+			exp_attr->packet_pacing_caps.cap_flags;
 		resp->comp_mask |= IB_EXP_DEVICE_ATTR_PACKET_PACING_CAPS;
 	}
 
@@ -647,6 +649,11 @@ int ib_uverbs_exp_query_device(struct ib_uverbs_file *file,
 	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_MAX_DM_SIZE) {
 		resp->max_dm_size = exp_attr->max_dm_size;
 		resp->comp_mask |= IB_EXP_DEVICE_ATTR_MAX_DM_SIZE;
+	}
+
+	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC) {
+		resp->tunneled_atomic_caps  = exp_attr->tunneled_atomic_caps;
+		resp->comp_mask |= IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC;
 	}
 
 	ret = ib_copy_to_udata(ucore, resp, min_t(size_t, sizeof(*resp), ucore->outlen));
@@ -786,6 +793,8 @@ static int translate_exp_access_flags(u64 exp_access_flags)
 		access_flags |= IB_ACCESS_ON_DEMAND;
 	if (exp_access_flags & IB_UVERBS_EXP_ACCESS_PHYSICAL_ADDR)
 		access_flags |= IB_EXP_ACCESS_PHYSICAL_ADDR;
+	if (exp_access_flags & IB_UVERBS_EXP_ACCESS_TUNNELED_ATOMIC)
+		access_flags |= IB_EXP_ACCESS_TUNNELED_ATOMIC;
 
 	return access_flags;
 }
@@ -878,18 +887,13 @@ int ib_uverbs_exp_reg_mr(struct ib_uverbs_file *file, struct ib_device *ib_dev,
 #endif
 	}
 
-	if (!pd->device->exp_reg_user_mr) {
-		ret = -ENOSYS;
-		goto err_put;
-	}
-
 	attr.start = cmd.start;
 	attr.length = cmd.length;
 	attr.hca_va = cmd.hca_va;
 	attr.access_flags = access_flags;
 	attr.dm = dm;
 
-	mr = pd->device->exp_reg_user_mr(pd, &attr, uhw, uobj->id);
+	mr = pd->device->reg_user_mr(pd, &attr, uhw);
 	if (IS_ERR(mr)) {
 		ret = PTR_ERR(mr);
 		goto err_put;
@@ -1082,11 +1086,31 @@ int ib_uverbs_exp_modify_qp(struct ib_uverbs_file *file, struct ib_device *ib_de
 	attr->alt_timeout         = cmd.alt_timeout;
 	attr->dct_key             = cmd.dct_key;
 	attr->rate_limit	  = cmd.rate_limit;
+	if (cmd.comp_mask & IB_UVERBS_EXP_QP_ATTR_BURST_INFO) {
+		if (!attr->rate_limit){
+			ret = -EINVAL;
+			goto out;
+		}
+
+		if (offsetof(typeof(cmd), burst_info) + sizeof(cmd.burst_info) <=
+		    ucore->inlen) {
+			attr->burst_info.max_burst_sz = cmd.burst_info.max_burst_sz;
+			attr->burst_info.typical_pkt_sz = cmd.burst_info.typical_pkt_sz;
+			if (cmd.burst_info.reserved){
+				ret = -EINVAL;
+				goto out;
+			}
+		} else {
+			ret = -EINVAL;
+			goto out;
+		}
+	}
 
 	if (cmd.attr_mask & IB_QP_AV)
 		copy_ah_attr_from_uverbs(qp, &attr->ah_attr, &cmd.dest);
 	if (cmd.attr_mask & IB_QP_ALT_PATH)
-		copy_ah_attr_from_uverbs(qp, &attr->alt_ah_attr, &cmd.alt_dest);
+		copy_ah_attr_from_uverbs(qp, &attr->alt_ah_attr,
+					 &cmd.alt_dest);
 
 	if (cmd.comp_mask & IB_UVERBS_EXP_QP_ATTR_FLOW_ENTROPY) {
 		if (offsetof(typeof(cmd), flow_entropy) + sizeof(cmd.flow_entropy) <= ucore->inlen) {
@@ -1103,16 +1127,12 @@ int ib_uverbs_exp_modify_qp(struct ib_uverbs_file *file, struct ib_device *ib_de
 
 	exp_mask = (cmd.exp_attr_mask << IBV_EXP_ATTR_MASK_SHIFT) & IBV_EXP_QP_ATTR_MASK;
 	if (qp->real_qp == qp) {
-		if ((qp->qp_type != IB_EXP_QPT_DC_INI) && (cmd.attr_mask & IB_QP_AV)) {
-			ret = ib_resolve_eth_dmac(qp->device, &attr->ah_attr);
-			if (ret)
-				goto out;
-		}
-		ret = ib_security_modify_qp(qp, attr,
-					    modify_qp_mask(qp->qp_type,
-							   cmd.attr_mask |
-							   exp_mask),
-					    uhw);
+		/* ib_modify_qp_with_udata will call both of ib_resolve_eth_dmac
+		 * and ib_security_modify_qp
+		 */
+		ret = ib_modify_qp_with_udata(qp, attr,
+					      modify_qp_mask(qp->qp_type, cmd.attr_mask | exp_mask),
+					      uhw);
 	} else {
 		ret = ib_security_modify_qp(qp, attr,
 					    modify_qp_mask(qp->qp_type,

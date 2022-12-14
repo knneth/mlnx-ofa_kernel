@@ -42,6 +42,7 @@
 #include <linux/if_vlan.h>
 #include <linux/vmalloc.h>
 #include <linux/irq.h>
+#include <linux/prefetch.h>
 
 #include <net/ip.h>
 #if IS_ENABLED(CONFIG_IPV6)
@@ -257,7 +258,7 @@ void mlx4_en_set_num_rx_rings(struct mlx4_en_dev *mdev)
 					 DEF_RX_RINGS));
 
 		num_rx_rings = mlx4_low_memory_profile() ? MIN_RX_RINGS :
-			       min_t(int, num_of_eqs, num_online_cpus());
+			min_t(int, num_of_eqs, num_online_cpus());
 		mdev->profile.prof[i].rx_ring_num =
 			rounddown_pow_of_two(num_rx_rings);
 	}
@@ -822,6 +823,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 
 			xdp.data_hard_start = va - frags[0].page_offset;
 			xdp.data = va;
+			xdp_set_data_meta_invalid(&xdp);
 			xdp.data_end = xdp.data + length;
 			orig_data = xdp.data;
 
@@ -849,7 +851,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 						goto next;
 					}
 				}
-				if (likely(!mlx4_en_xmit_frame(ring, frags, dev,
+				if (likely(!mlx4_en_xmit_frame(ring, frags, priv,
 							length, cq_ring,
 							&doorbell_pending))) {
 					if (ring->page_cache.index) {
@@ -1138,7 +1140,7 @@ static int mlx4_en_config_rss_qp(struct mlx4_en_priv *priv, int qpn,
 	}
 	qp->event = mlx4_en_sqp_event;
 
-	memset(context, 0, sizeof *context);
+	memset(context, 0, sizeof(*context));
 	mlx4_en_fill_qp_context(priv, ring->actual_size, ring->stride, 0, 0,
 				qpn, ring->cqn, -1, context, MLX4_EN_NO_VLAN);
 	context->db_rec_addr = cpu_to_be64(ring->wqres.db.dma);

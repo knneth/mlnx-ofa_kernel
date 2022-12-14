@@ -40,7 +40,7 @@
 #include <linux/cpu_rmap.h>
 #include <linux/crash_dump.h>
 
-#include <linux/atomic.h>
+#include <linux/refcount.h>
 
 #include <linux/timecounter.h>
 
@@ -268,16 +268,16 @@ enum {
 	MLX4_DEV_CAP_FLAG2_DIAG_PER_PORT	= 1ULL <<  35,
 	MLX4_DEV_CAP_FLAG2_SVLAN_BY_QP          = 1ULL <<  36,
 	MLX4_DEV_CAP_FLAG2_SL_TO_VL_CHANGE_EVENT = 1ULL << 37,
-	MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW = 1ULL << 38,
-	MLX4_DEV_CAP_FLAG2_ESW_LOOPBACK_DISABLED = 1ULL << 39,
-	MLX4_DEV_CAP_FLAG2_SVLAN_TPID		= 1ULL << 40,
-	MLX4_DEV_CAP_FLAG2_MODIFY_PARSER	= 1ULL << 41,
-	MLX4_DEV_CAP_FLAG2_FS_EN_NCSI		= 1ULL << 42,
-	MLX4_DEV_CAP_FLAG2_DISABLE_SIP_CHECK	= 1ULL << 43,
-	MLX4_DEV_CAP_FLAG2_SW_CQ_INIT           = 1ULL << 44,
-	MLX4_DEV_CAP_FLAG2_ROCEV2		= 1ULL << 45,
-	MLX4_DEV_CAP_FLAG2_DMFS_TAG_MODE	= 1ULL << 46,
-	MLX4_DEV_CAP_FLAG2_USER_MAC_EN		= 1ULL << 47,
+	MLX4_DEV_CAP_FLAG2_USER_MAC_EN		= 1ULL << 38,
+	MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW = 1ULL << 39,
+	MLX4_DEV_CAP_FLAG2_ESW_LOOPBACK_DISABLED = 1ULL << 40,
+	MLX4_DEV_CAP_FLAG2_SVLAN_TPID		= 1ULL << 41,
+	MLX4_DEV_CAP_FLAG2_MODIFY_PARSER	= 1ULL << 42,
+	MLX4_DEV_CAP_FLAG2_FS_EN_NCSI		= 1ULL << 43,
+	MLX4_DEV_CAP_FLAG2_DISABLE_SIP_CHECK	= 1ULL << 44,
+	MLX4_DEV_CAP_FLAG2_SW_CQ_INIT           = 1ULL << 45,
+	MLX4_DEV_CAP_FLAG2_ROCEV2		= 1ULL << 46,
+	MLX4_DEV_CAP_FLAG2_DMFS_TAG_MODE	= 1ULL << 47,
 };
 
 enum {
@@ -637,6 +637,14 @@ static inline const char *mlx4_roce_gid_type_to_str(enum mlx4_roce_gid_type t)
 	}
 }
 
+struct mlx4_spec_qps {
+	u32 qp0_qkey;
+	u32 qp0_proxy;
+	u32 qp0_tunnel;
+	u32 qp1_proxy;
+	u32 qp1_tunnel;
+};
+
 struct mlx4_caps {
 	u64			fw_ver;
 	u32			function;
@@ -666,11 +674,7 @@ struct mlx4_caps {
 	int			max_qp_init_rdma;
 	int			max_qp_dest_rdma;
 	int			max_tc_eth;
-	u32			*qp0_qkey;
-	u32			*qp0_proxy;
-	u32			*qp1_proxy;
-	u32			*qp0_tunnel;
-	u32			*qp1_tunnel;
+	struct mlx4_spec_qps   *spec_qps;
 	int			num_srqs;
 	int			max_srq_wqes;
 	int			max_srq_sge;
@@ -870,7 +874,7 @@ struct mlx4_cq {
 	int			cqn;
 	unsigned		vector;
 
-	atomic_t		refcount;
+	refcount_t		refcount;
 	struct completion	free;
 	struct {
 		struct list_head list;
@@ -887,7 +891,7 @@ struct mlx4_qp {
 
 	int			qpn;
 
-	atomic_t		refcount;
+	refcount_t		refcount;
 	struct completion	free;
 	u8			usage;
 };
@@ -900,7 +904,7 @@ struct mlx4_srq {
 	int			max_gs;
 	int			wqe_shift;
 
-	atomic_t		refcount;
+	refcount_t		refcount;
 	struct completion	free;
 };
 
@@ -1072,6 +1076,7 @@ struct mlx4_dev {
 	struct mlx4_vf_dev     *dev_vfs;
 	spinlock_t		eq_accounting_lock;
 	u8  uar_page_shift;
+	u8			lag_port_link_state[MLX4_MAX_PORTS + 1];
 };
 
 struct mlx4_clock_params {

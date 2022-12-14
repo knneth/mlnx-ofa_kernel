@@ -48,7 +48,8 @@ struct mlx5_ib_prefetch_work {
 int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
 				  u32 key, u64 io_virt, size_t bcnt,
 				  u32 *bytes_committed,
-				  u32 *bytes_mapped);
+				  u32 *bytes_mapped,
+				  enum ib_odp_dma_map_flags dma_flags);
 
 static void prefetch_work(struct work_struct *work)
 {
@@ -58,7 +59,7 @@ static void prefetch_work(struct work_struct *work)
 	pwork = container_of(work, struct mlx5_ib_prefetch_work, work);
 	pagefault_single_data_segment(pwork->dev, pwork->key, pwork->start,
 				      pwork->length, &bytes_committed,
-				      NULL);
+				      NULL, IB_ODP_DMA_MAP_FOR_PREFETCH);
 
 	if (atomic_dec_and_test(&pwork->dev->num_prefetch))
 		complete(&pwork->dev->comp_prefetch);
@@ -85,6 +86,18 @@ int mlx5_ib_prefetch_mr(struct ib_mr *ibmr, u64 start, u64 length, u32 flags)
 	schedule_work(&pwork->work);
 
 	return 0;
+}
+
+int mlx5_ib_exp_invalidate_range(struct ib_device *device, struct ib_mr *ibmr,
+				 u64 start, u64 length, u32 flags)
+{
+#ifdef CONFIG_CXL_LIB
+	struct mlx5_ib_dev *dev = to_mdev(device);
+
+	return mlx5_core_invalidate_range(dev->mdev);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 int mlx5_ib_exp_odp_init_one(struct mlx5_ib_dev *ibdev)

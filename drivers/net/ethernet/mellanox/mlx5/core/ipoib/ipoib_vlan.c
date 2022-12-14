@@ -30,9 +30,8 @@
  * SOFTWARE.
  */
 
-#include "en.h"
-#include "ipoib.h"
 #include <linux/hash.h>
+#include "ipoib.h"
 
 #define MLX5I_MAX_LOG_PKEY_SUP 7
 
@@ -42,66 +41,53 @@ struct qpn_to_netdev {
 	u32 underlay_qpn;
 };
 
-struct qpn_hash_table {
-	struct hlist_head *buckets;
-	spinlock_t ht_lock;
+struct mlx5i_pkey_qpn_ht {
+	struct hlist_head buckets[1 << MLX5I_MAX_LOG_PKEY_SUP];
+	spinlock_t ht_lock; /* Synchronise with NAPI */
 };
 
-int mlx5i_alloc_qpn_to_netdev_ht(struct net_device *netdev)
+int mlx5i_pkey_qpn_ht_init(struct net_device *netdev)
 {
 	struct mlx5i_priv *ipriv = netdev_priv(netdev);
-	struct qpn_hash_table *qpn_htbl;
-	struct hlist_head *buckets;
-	int err;
+	struct mlx5i_pkey_qpn_ht *qpn_htbl;
 
 	qpn_htbl = kzalloc(sizeof(*qpn_htbl), GFP_KERNEL);
 	if (!qpn_htbl)
 		return -ENOMEM;
 
-	buckets = kzalloc(sizeof(*buckets) * (1 << MLX5I_MAX_LOG_PKEY_SUP), GFP_KERNEL);
-	if (!buckets) {
-		err = -ENOMEM;
-		goto free_htbl;
-	}
-
-	qpn_htbl->buckets = buckets;
 	ipriv->qpn_htbl = qpn_htbl;
 	spin_lock_init(&qpn_htbl->ht_lock);
 
 	return 0;
-
-free_htbl:
-	kfree(qpn_htbl);
-	return err;
 }
 
-void mlx5i_free_qpn_to_netdev_ht(struct net_device *netdev)
+void mlx5i_pkey_qpn_ht_cleanup(struct net_device *netdev)
 {
 	struct mlx5i_priv *ipriv = netdev_priv(netdev);
 
-	kfree(ipriv->qpn_htbl->buckets);
 	kfree(ipriv->qpn_htbl);
 }
 
 static struct qpn_to_netdev *mlx5i_find_qpn_to_netdev_node(struct hlist_head *buckets,
 							   u32 qpn)
 {
-	struct qpn_to_netdev *node;
 	struct hlist_head *h = &buckets[hash_32(qpn, MLX5I_MAX_LOG_PKEY_SUP)];
+	struct qpn_to_netdev *node;
 
 	hlist_for_each_entry(node, h, hlist) {
 		if (node->underlay_qpn == qpn)
 			return node;
 	}
+
 	return NULL;
 }
 
-int mlx5i_map_qpn_to_netdev(struct net_device *netdev, u32 qpn)
+int mlx5i_pkey_add_qpn(struct net_device *netdev, u32 qpn)
 {
 	struct mlx5i_priv *ipriv = netdev_priv(netdev);
-	struct qpn_hash_table *ht = ipriv->qpn_htbl;
-	struct qpn_to_netdev *new_node;
+	struct mlx5i_pkey_qpn_ht *ht = ipriv->qpn_htbl;
 	u8 key = hash_32(qpn, MLX5I_MAX_LOG_PKEY_SUP);
+	struct qpn_to_netdev *new_node;
 
 	new_node = kzalloc(sizeof(*new_node), GFP_KERNEL);
 	if (!new_node)
@@ -116,24 +102,28 @@ int mlx5i_map_qpn_to_netdev(struct net_device *netdev, u32 qpn)
 	return 0;
 }
 
-int mlx5i_unmap_qpn_to_netdev(struct net_device *netdev, u32 qpn)
+int mlx5i_pkey_del_qpn(struct net_device *netdev, u32 qpn)
 {
-	struct mlx5i_priv *ipriv = netdev_priv(netdev);
-	struct qpn_hash_table *ht = ipriv->qpn_htbl;
+	struct mlx5e_priv *epriv = mlx5i_epriv(netdev);
+	struct mlx5i_priv *ipriv = epriv->ppriv;
+	struct mlx5i_pkey_qpn_ht *ht = ipriv->qpn_htbl;
 	struct qpn_to_netdev *node;
 
 	node = mlx5i_find_qpn_to_netdev_node(ht->buckets, qpn);
-	if (!node)
+	if (!node) {
+		mlx5_core_warn(epriv->mdev, "QPN to netdev delete from HT failed\n");
 		return -EINVAL;
+	}
 
 	spin_lock_bh(&ht->ht_lock);
 	hlist_del_init(&node->hlist);
 	spin_unlock_bh(&ht->ht_lock);
 	kfree(node);
+
 	return 0;
 }
 
-struct net_device *mlx5i_get_qpn_netdev(struct net_device *netdev, u32 qpn)
+struct net_device *mlx5i_pkey_get_netdev(struct net_device *netdev, u32 qpn)
 {
 	struct mlx5i_priv *ipriv = netdev_priv(netdev);
 	struct qpn_to_netdev *node;
@@ -145,24 +135,24 @@ struct net_device *mlx5i_get_qpn_netdev(struct net_device *netdev, u32 qpn)
 	return node->netdev;
 }
 
-static int mlx5i_child_open(struct net_device *netdev);
-static int mlx5i_child_close(struct net_device *netdev);
-static int mlx5i_child_dev_init(struct net_device *dev);
-static void mlx5i_child_dev_cleanup(struct net_device *netdev);
-static int mlx5i_child_change_mtu(struct net_device *netdev, int new_mtu);
+static int mlx5i_pkey_open(struct net_device *netdev);
+static int mlx5i_pkey_close(struct net_device *netdev);
+static int mlx5i_pkey_dev_init(struct net_device *dev);
+static void mlx5i_pkey_dev_cleanup(struct net_device *netdev);
+static int mlx5i_pkey_change_mtu(struct net_device *netdev, int new_mtu);
 
-static const struct net_device_ops mlx5i_child_netdev_ops = {
-	.ndo_open                = mlx5i_child_open,
-	.ndo_stop                = mlx5i_child_close,
-	.ndo_init                = mlx5i_child_dev_init,
-	.ndo_uninit              = mlx5i_child_dev_cleanup,
-	.ndo_change_mtu          = mlx5i_child_change_mtu,
+static const struct net_device_ops mlx5i_pkey_netdev_ops = {
+	.ndo_open                = mlx5i_pkey_open,
+	.ndo_stop                = mlx5i_pkey_close,
+	.ndo_init                = mlx5i_pkey_dev_init,
+	.ndo_uninit              = mlx5i_pkey_dev_cleanup,
+	.ndo_change_mtu          = mlx5i_pkey_change_mtu,
 	.ndo_do_ioctl            = mlx5i_ioctl,
 	.ndo_tx_timeout          = mlx5i_tx_timeout,
 };
 
 /* Child NDOs */
-static int mlx5i_child_dev_init(struct net_device *dev)
+static int mlx5i_pkey_dev_init(struct net_device *dev)
 {
 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
 	struct mlx5i_priv *ipriv, *parent_ipriv;
@@ -186,12 +176,12 @@ static int mlx5i_child_dev_init(struct net_device *dev)
 	return mlx5i_dev_init(dev);
 }
 
-static void mlx5i_child_dev_cleanup(struct net_device *netdev)
+static void mlx5i_pkey_dev_cleanup(struct net_device *netdev)
 {
 	return mlx5i_dev_cleanup(netdev);
 }
 
-static int mlx5i_child_open(struct net_device *netdev)
+static int mlx5i_pkey_open(struct net_device *netdev)
 {
 	struct mlx5e_priv *epriv = mlx5i_epriv(netdev);
 	struct mlx5i_priv *ipriv = epriv->ppriv;
@@ -205,19 +195,19 @@ static int mlx5i_child_open(struct net_device *netdev)
 	err = mlx5i_init_underlay_qp(epriv);
 	if (err) {
 		mlx5_core_warn(mdev, "prepare child underlay qp state failed, %d\n", err);
-		goto init_underlay_qp_failed;
+		goto err_release_lock;
 	}
 
 	err = mlx5_fs_add_rx_underlay_qpn(mdev, ipriv->qp.qpn);
 	if (err) {
 		mlx5_core_warn(mdev, "attach child underlay qp to ft failed, %d\n", err);
-		goto reset_qp;
+		goto err_unint_underlay_qp;
 	}
 
 	err = mlx5e_create_tis(mdev, 0 /* tc */, ipriv->qp.qpn, &epriv->tisn[0]);
 	if (err) {
 		mlx5_core_warn(mdev, "create child tis failed, %d\n", err);
-		goto attach_qp_failed;
+		goto err_remove_rx_uderlay_qp;
 	}
 
 	err = mlx5e_open_channels(epriv, &epriv->channels);
@@ -233,17 +223,17 @@ static int mlx5i_child_open(struct net_device *netdev)
 
 err_clear_state_opened_flag:
 	mlx5e_destroy_tis(mdev, epriv->tisn[0]);
-attach_qp_failed:
+err_remove_rx_uderlay_qp:
 	mlx5_fs_remove_rx_underlay_qpn(mdev, ipriv->qp.qpn);
-reset_qp:
+err_unint_underlay_qp:
 	mlx5i_uninit_underlay_qp(epriv);
-init_underlay_qp_failed:
+err_release_lock:
 	clear_bit(MLX5E_STATE_OPENED, &epriv->state);
 	mutex_unlock(&epriv->state_lock);
 	return err;
 }
 
-static int mlx5i_child_close(struct net_device *netdev)
+static int mlx5i_pkey_close(struct net_device *netdev)
 {
 	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
 	struct mlx5i_priv *ipriv = priv->ppriv;
@@ -267,41 +257,7 @@ unlock:
 	return 0;
 }
 
-const struct ethtool_ops mlx5i_child_ethtool_ops = {
-	.get_ts_info	   = mlx5i_get_ts_info,
-	.get_drvinfo	   = mlx5i_get_drvinfo,
-	.get_settings	   = mlx5i_get_settings,
-	.get_link	   = ethtool_op_get_link,
-	.get_link_ksettings = mlx5i_get_link_ksettings,
-};
-
-/* Called directly after IPoIB netdevice was created to initialize SW structs */
-static void mlx5i_child_init(struct mlx5_core_dev *mdev,
-		       struct net_device *netdev,
-		       const struct mlx5e_profile *profile,
-		       void *ppriv)
-{
-	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
-
-	mlx5i_init(mdev, netdev, profile, ppriv);
-
-	/* Overrun parent ndo */
-	netdev->netdev_ops = &mlx5i_child_netdev_ops;
-
-	/* No ethtool support */
-	netdev->ethtool_ops = &mlx5i_child_ethtool_ops;
-
-	/* Use dummy RQs */
-	priv->channels.params.log_rq_size = MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE;
-}
-
-/* Called directly before IPoIB netdevice is destroyed to cleanup SW structs */
-static void mlx5i_child_cleanup(struct mlx5e_priv *priv)
-{
-	/* Do nothing .. */
-}
-
-static int mlx5i_child_change_mtu(struct net_device *netdev, int new_mtu)
+static int mlx5i_pkey_change_mtu(struct net_device *netdev, int new_mtu)
 {
 	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
 
@@ -312,7 +268,33 @@ static int mlx5i_child_change_mtu(struct net_device *netdev, int new_mtu)
 	return 0;
 }
 
-static int mlx5i_child_init_tx(struct mlx5e_priv *priv)
+/* Called directly after IPoIB netdevice was created to initialize SW structs */
+static void mlx5i_pkey_init(struct mlx5_core_dev *mdev,
+			     struct net_device *netdev,
+			     const struct mlx5e_profile *profile,
+			     void *ppriv)
+{
+	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
+
+	mlx5i_init(mdev, netdev, profile, ppriv);
+
+	/* Override parent ndo */
+	netdev->netdev_ops = &mlx5i_pkey_netdev_ops;
+
+	/* Set child limited ethtool support */
+	netdev->ethtool_ops = &mlx5i_pkey_ethtool_ops;
+
+	/* Use dummy rqs */
+	priv->channels.params.log_rq_size = MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE;
+}
+
+/* Called directly before IPoIB netdevice is destroyed to cleanup SW structs */
+static void mlx5i_pkey_cleanup(struct mlx5e_priv *priv)
+{
+	/* Do nothing .. */
+}
+
+static int mlx5i_pkey_init_tx(struct mlx5e_priv *priv)
 {
 	struct mlx5i_priv *ipriv = priv->ppriv;
 	int err;
@@ -326,40 +308,45 @@ static int mlx5i_child_init_tx(struct mlx5e_priv *priv)
 	return 0;
 }
 
-static void mlx5i_child_cleanup_tx(struct mlx5e_priv *priv)
+static void mlx5i_pkey_cleanup_tx(struct mlx5e_priv *priv)
 {
 	struct mlx5i_priv *ipriv = priv->ppriv;
 
 	mlx5i_destroy_underlay_qp(priv->mdev, &ipriv->qp);
 }
 
-static int mlx5i_child_init_rx(struct mlx5e_priv *priv)
+static int mlx5i_pkey_init_rx(struct mlx5e_priv *priv)
 {
+	/* Since the rx resources are shared between child and parent, the
+	 * parent interface is taking care of rx resource allocation and init
+	 */
 	return 0;
 }
 
-static void mlx5i_child_cleanup_rx(struct mlx5e_priv *priv)
+static void mlx5i_pkey_cleanup_rx(struct mlx5e_priv *priv)
 {
-	/* Do nothing */
+	/* Since the rx resources are shared between child and parent, the
+	 * parent interface is taking care of rx resource free and de-init
+	 */
 }
 
-static const struct mlx5e_profile mlx5i_child_nic_profile = {
-	.init		   = mlx5i_child_init,
-	.cleanup	   = mlx5i_child_cleanup,
-	.init_tx	   = mlx5i_child_init_tx,
-	.cleanup_tx	   = mlx5i_child_cleanup_tx,
-	.init_rx	   = mlx5i_child_init_rx,
-	.cleanup_rx	   = mlx5i_child_cleanup_rx,
-	.enable		   = NULL, /* mlx5i_enable */
-	.disable	   = NULL, /* mlx5i_disable */
-	.update_stats	   = NULL, /* mlx5i_update_stats */
+static const struct mlx5e_profile mlx5i_pkey_nic_profile = {
+	.init		   = mlx5i_pkey_init,
+	.cleanup	   = mlx5i_pkey_cleanup,
+	.init_tx	   = mlx5i_pkey_init_tx,
+	.cleanup_tx	   = mlx5i_pkey_cleanup_tx,
+	.init_rx	   = mlx5i_pkey_init_rx,
+	.cleanup_rx	   = mlx5i_pkey_cleanup_rx,
+	.enable		   = NULL,
+	.disable	   = NULL,
+	.update_stats	   = NULL,
 	.max_nch	   = mlx5e_get_max_num_channels,
 	.rx_handlers.handle_rx_cqe       = mlx5i_handle_rx_cqe,
 	.rx_handlers.handle_rx_cqe_mpwqe = NULL, /* Not supported */
 	.max_tc		   = MLX5I_MAX_NUM_TC,
 };
 
-const struct mlx5e_profile *mlx5i_child_get_profile(void)
+const struct mlx5e_profile *mlx5i_pkey_get_profile(void)
 {
-	return &mlx5i_child_nic_profile;
+	return &mlx5i_pkey_nic_profile;
 }

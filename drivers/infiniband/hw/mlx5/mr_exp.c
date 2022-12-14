@@ -43,30 +43,6 @@ struct ib_mr *mlx5_ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *att
 		return mlx5_ib_alloc_mr(pd, attr->mr_type, attr->max_num_sg);
 }
 
-struct ib_mr *mlx5_ib_exp_reg_user_mr(struct ib_pd *pd,
-				      struct ib_mr_init_attr *attr,
-				      struct ib_udata *udata,
-				      int mr_id)
-{
-	return mlx5_ib_reg_user_mr(pd, attr,
-				   udata,
-				   mr_id);
-}
-
-struct ib_mr *mlx5_ib_reg_user_mr_wrp(struct ib_pd *pd, u64 start, u64 length,
-				      u64 virt_addr, int access_flags,
-				      struct ib_udata *udata)
-{
-	struct ib_mr_init_attr attr = {0};
-
-	attr.start = start;
-	attr.length = length;
-	attr.hca_va = virt_addr;
-	attr.access_flags = access_flags;
-
-	return mlx5_ib_reg_user_mr(pd, &attr, udata, -1);
-}
-
 static int get_arg(unsigned long offset)
 {
 	return offset & ((1 << MLX5_IB_MMAP_CMD_SHIFT) - 1);

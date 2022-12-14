@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _MLX4_STATS_
 #define _MLX4_STATS_
 
@@ -29,6 +30,13 @@ struct mlx4_en_counter_stats {
 	unsigned long tx_packets;
 	unsigned long tx_bytes;
 #define NUM_PF_STATS      4
+};
+
+struct mlx4_en_phy_stats {
+	unsigned long rx_packets;
+	unsigned long rx_bytes;
+	unsigned long tx_packets;
+	unsigned long tx_bytes;
 };
 
 struct mlx4_en_vf_stats {

@@ -9,21 +9,10 @@
 #include <linux/mlx4/qp.h>
 #include "user_exp.h"
 
-struct mlx4_ib_dev;
-struct mlx4_ib_mr;
 struct mlx4_ib_qp;
 struct ib_qp_init_attr;
 struct mlx4_qp_context;
-
-extern struct proc_dir_entry *mlx4_mrs_dir_entry;
 int qp_has_rq(struct ib_qp_init_attr *attr);
-
-struct mlx4_shared_mr_info {
-	int mr_id;
-	struct ib_umem *umem;
-	long long counter;
-	int counter_used;
-};
 
 /****************************************/
 /* ioctl codes */
@@ -82,33 +71,6 @@ static inline int is_exp_contig_command(unsigned long  command)
 	return 0;
 }
 
-int mlx4_ib_umem_write_mtt_block(struct mlx4_ib_dev *dev,
-						struct mlx4_mtt *mtt,
-						u64 mtt_size,
-						u64 mtt_shift,
-						u64 len,
-						u64 cur_start_addr,
-						u64 *pages,
-						int *start_index,
-						int *npages);
-
-int mlx4_ib_umem_calc_optimal_mtt_size(struct ib_umem *umem,
-						u64 start_va,
-						int *num_of_mtts);
-
-struct ib_mr *mlx4_ib_exp_reg_user_mr(struct ib_pd *pd,
-				      struct ib_mr_init_attr *attr,
-				      struct ib_udata *udata, int mr_id);
-
-struct ib_mr *mlx4_ib_reg_user_mr_wrp(struct ib_pd *pd, u64 start, u64 length,
-				      u64 virt_addr, int access_flags,
-				      struct ib_udata *udata);
-
-int mlx4_ib_proc_init(void);
-void mlx4_ib_proc_clean(void);
-void free_smr_info(struct mlx4_ib_mr *mr);
-int is_shared_mr(int access_flags);
-int prepare_shared_mr(struct mlx4_ib_mr *mr, int access_flags, int mr_id);
 int mlx4_ib_exp_modify_cq(struct ib_cq *cq, struct ib_cq_attr *cq_attr, int cq_attr_mask);
 struct ib_qp *mlx4_ib_exp_create_qp(struct ib_pd *pd,
 				    struct ib_exp_qp_init_attr *init_attr,

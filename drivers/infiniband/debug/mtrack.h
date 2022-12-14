@@ -268,6 +268,22 @@
 })
 #endif
 
+#ifndef kstrdup
+#define kstrdup(src, flgs) ({						\
+	void *__memtrack_addr = NULL;						\
+	size_t sz = strlen(src) + 1;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kstrdup", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kstrdup");\
+	else									\
+		__memtrack_addr = kstrdup(src, flgs);			\
+	if (__memtrack_addr) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+	}									\
+	__memtrack_addr;							\
+})
+#endif
+
 #ifdef ZERO_OR_NULL_PTR
 #define kfree(addr) ({								\
 	void *__memtrack_addr = (void *)addr;					\
@@ -447,6 +463,23 @@
 })
 #endif
 
+#ifndef memdup_user_nul
+#define memdup_user_nul(user_addr, size) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "memdup_user_nul", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "memdup_user_nul"); \
+	else									\
+		__memtrack_addr = memdup_user_nul(user_addr, size);			\
+										\
+	if (__memtrack_addr) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
+	}									\
+	__memtrack_addr;							\
+})
+#endif
+
+
 #define kmem_cache_alloc(cache, flags) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -492,6 +525,9 @@
 #endif
 
 /* All IO-MAP handling */
+#ifdef ioremap
+	#undef ioremap
+#endif
 #define ioremap(phys_addr, size) ({						\
 	void __iomem *__memtrack_addr = NULL;					\
 										\
@@ -505,6 +541,9 @@
 	__memtrack_addr;							\
 })
 
+#ifdef ioremap_wc
+	#undef ioremap_wc
+#endif
 #ifdef ARCH_HAS_IOREMAP_WC
 #define ioremap_wc(phys_addr, size) ({						\
 	void __iomem *__memtrack_addr = NULL;					\
@@ -555,10 +594,10 @@
 	io_mapping_free(__memtrack_addr);					\
 })
 
-#ifdef CONFIG_PPC
 #ifdef ioremap_nocache
 	#undef ioremap_nocache
 #endif
+#ifdef CONFIG_PPC
 #define ioremap_nocache(phys_addr, size) ({					\
 	void __iomem *__memtrack_addr = NULL;					\
 										\
@@ -573,9 +612,6 @@
 })
 #else
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18) /* 2.6.16 - 2.6.17 */
-#ifdef ioremap_nocache
-	#undef ioremap_nocache
-#endif
 #define ioremap_nocache(phys_addr, size) ({					\
 	void __iomem *__memtrack_addr = NULL;					\
 										\
@@ -604,6 +640,9 @@
 #endif /* Kernel version is under 2.6.18 */
 #endif	/* PPC */
 
+#ifdef iounmap
+	#undef iounmap
+#endif
 #define iounmap(addr) ({							\
 	void *__memtrack_addr = (void *)addr;					\
 										\
@@ -987,7 +1026,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
 	else									\
 		wq_addr = __alloc_workqueue_key((name), (flags), (max_active),	\
-						&__key, __lock_name, ##args));	\
+						&__key, __lock_name, ##args);	\
 	if (wq_addr) {								\
 		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\

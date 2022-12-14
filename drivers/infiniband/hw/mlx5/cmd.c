@@ -59,10 +59,3 @@ int mlx5_cmd_query_cong_params(struct mlx5_core_dev *dev, int cong_point,
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, out_size);
 }
 
-int mlx5_cmd_modify_cong_params(struct mlx5_core_dev *dev,
-				void *in, int in_size)
-{
-	u32 out[MLX5_ST_SZ_DW(modify_cong_params_out)] = { };
-
-	return mlx5_cmd_exec(dev, in, in_size, out, sizeof(out));
-}

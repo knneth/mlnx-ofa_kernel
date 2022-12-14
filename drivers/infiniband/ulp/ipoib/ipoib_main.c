@@ -51,11 +51,10 @@
 #include <net/addrconf.h>
 #include <linux/inetdevice.h>
 #include <rdma/ib_cache.h>
-#include <linux/pci.h>
 #include <linux/inet.h>
 #include <linux/sched/signal.h>
 
-#define DRV_VERSION	"4.2-1.5.1"
+#define DRV_VERSION	"4.3-1.0.1"
 
 const char ipoib_driver_version[] = DRV_VERSION;
 
@@ -108,10 +107,10 @@ static struct net_device *ipoib_get_net_dev_by_params(
 		const union ib_gid *gid, const struct sockaddr *addr,
 		void *client_data);
 static int ipoib_set_mac(struct net_device *dev, void *addr);
-static int ipoib_get_hca_features(struct ipoib_dev_priv *priv,
-				  struct ib_device *hca);
 static int ipoib_ioctl(struct net_device *dev, struct ifreq *ifr,
 		       int cmd);
+static int ipoib_get_hca_features(struct ipoib_dev_priv *priv,
+				  struct ib_device *hca);
 
 static struct ib_client ipoib_client = {
 	.name   = "ipoib",
@@ -557,6 +556,7 @@ int ipoib_set_mode(struct net_device *dev, const char *buf)
 			dev_set_mtu(dev, ipoib_cm_max_mtu(dev));
 			rtnl_unlock();
 			priv->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
+			priv->tx_wr.wr.opcode = IB_WR_SEND;
 
 			ipoib_flush_paths(dev);
 			return (!rtnl_trylock()) ? -EBUSY : 0;
@@ -1256,7 +1256,8 @@ static void ipoib_timeout(struct net_device *dev)
 	ipoib_warn(priv, "transmit timeout: latency %d msecs\n",
 		   jiffies_to_msecs(jiffies - dev_trans_start(dev)));
 	ipoib_warn(priv, "queue stopped %d, tx_head %u, tx_tail %u\n",
-		   netif_queue_stopped(dev), priv->tx_head, priv->tx_tail);
+		   netif_queue_stopped(dev),
+		   priv->tx_head, priv->tx_tail);
 	/* XXX reset QP, etc. */
 }
 
@@ -1774,20 +1775,21 @@ static int ipoib_dev_init_default(struct net_device *dev)
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	ipoib_napi_add(dev);
+
 	/* Allocate RX/TX "rings" to hold queued skbs */
-	priv->rx_ring =	kzalloc(priv->recvq_size * sizeof(*priv->rx_ring),
+	priv->rx_ring =	kzalloc(priv->recvq_size * sizeof *priv->rx_ring,
 				GFP_KERNEL);
 	if (!priv->rx_ring)
 		goto out;
 
-	priv->tx_ring = vzalloc(priv->sendq_size * sizeof(*priv->tx_ring));
+	priv->tx_ring = vzalloc(priv->sendq_size * sizeof *priv->tx_ring);
 	if (!priv->tx_ring) {
 		printk(KERN_WARNING "%s: failed to allocate TX ring (%d entries)\n",
 		       priv->ca->name, priv->sendq_size);
 		goto out_rx_ring_cleanup;
 	}
 
-	/* priv->tx_head, tx_tail are already 0 */
+	/* priv->tx_head, tx_tail & tx_outstanding are already 0 */
 
 	if (ipoib_transport_dev_init(dev, priv->ca)) {
 		pr_warn("%s: ipoib_transport_dev_init failed\n",
@@ -2002,7 +2004,7 @@ void ipoib_setup_common(struct net_device *dev)
 
 	ipoib_set_ethtool_ops(dev);
 
-	dev->watchdog_timeo	 = 15 * HZ;
+	dev->watchdog_timeo	 = 10 * HZ;
 
 	dev->flags		|= IFF_BROADCAST | IFF_MULTICAST;
 
@@ -2026,6 +2028,7 @@ static void ipoib_build_priv(struct net_device *dev)
 	init_rwsem(&priv->vlan_rwsem);
 	init_rwsem(&priv->rings_rwsem);
 	mutex_init(&priv->mcast_mutex);
+	mutex_init(&priv->sysfs_mutex);
 
 	INIT_LIST_HEAD(&priv->path_list);
 	INIT_LIST_HEAD(&priv->child_intfs);
@@ -2130,7 +2133,7 @@ struct ipoib_dev_priv *ipoib_intf_alloc(struct ib_device *hca, u8 port,
 
 	priv->rn_ops = dev->netdev_ops;
 
-	dev->netdev_ops = ipoib_get_netdev_ops();
+	dev->netdev_ops = ipoib_get_netdev_ops(priv);
 
 	rn = netdev_priv(dev);
 	rn->clnt_priv = priv;
@@ -2344,10 +2347,10 @@ static struct net_device *ipoib_add_port(const char *format,
 	int result = -ENOMEM;
 
 	priv = ipoib_intf_alloc(hca, port, format);
-	if (!priv)
+	if (!priv) {
+		pr_warn("%s, %d: ipoib_intf_alloc failed\n", hca->name, port);
 		goto alloc_mem_failed;
-
-	rn = netdev_priv(priv->dev);
+	}
 
 	SET_NETDEV_DEV(priv->dev, hca->dev.parent);
 	priv->dev->dev_id = port - 1;
@@ -2453,6 +2456,7 @@ register_failed:
 	priv->fp.ipoib_dev_cleanup(priv->dev);
 
 device_init_failed:
+	rn = netdev_priv(priv->dev);
 	rn->free_rdma_netdev(priv->dev);
 	kfree(priv);
 
@@ -2519,11 +2523,16 @@ static void ipoib_remove_one(struct ib_device *device, void *client_data)
 		cancel_delayed_work(&priv->neigh_reap_task);
 		flush_workqueue(priv->wq);
 
+		/* Wrap rtnl_lock/unlock with mutex to protect sysfs calls */
+		mutex_lock(&priv->sysfs_mutex);
 		unregister_netdev(priv->dev);
+		mutex_unlock(&priv->sysfs_mutex);
+
 		parent_rn->free_rdma_netdev(priv->dev);
 
 		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs, list) {
 			struct rdma_netdev *child_rn;
+
 			child_rn = netdev_priv(cpriv->dev);
 			child_rn->free_rdma_netdev(cpriv->dev);
 			kfree(cpriv);

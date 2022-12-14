@@ -54,8 +54,6 @@ static inline int pci_sriov_get_totalvfs(struct pci_dev *pdev)
 #endif
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || \
-    (defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 2)
 #ifndef HAVE_PCI_IRQ_GET_AFFINITY
 static inline const struct cpumask *pci_irq_get_affinity(struct pci_dev *pdev,
 							 int vec)
@@ -64,6 +62,8 @@ static inline const struct cpumask *pci_irq_get_affinity(struct pci_dev *pdev,
 }
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || \
+    (defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 2)
 #ifndef HAVE_PCI_IRQ_GET_NODE
 static inline int pci_irq_get_node(struct pci_dev *pdev, int vec)
 {

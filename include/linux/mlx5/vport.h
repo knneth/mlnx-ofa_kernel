@@ -63,7 +63,7 @@ int mlx5_query_nic_vport_system_image_guid(struct mlx5_core_dev *mdev,
 int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev, u32 vport,
 				   u64 *node_guid);
 int mlx5_modify_nic_vport_node_guid(struct mlx5_core_dev *mdev,
-				    u16 vport, u64 node_guid);
+				    u32 vport, u64 node_guid);
 int mlx5_query_nic_vport_qkey_viol_cntr(struct mlx5_core_dev *mdev,
 					u16 *qkey_viol_cntr);
 int mlx5_query_hca_vport_gid(struct mlx5_core_dev *dev, u8 other_vport,
@@ -81,7 +81,7 @@ int mlx5_query_hca_vport_system_image_guid(struct mlx5_core_dev *dev,
 int mlx5_query_hca_vport_node_guid(struct mlx5_core_dev *dev,
 				   u64 *node_guid);
 int mlx5_query_nic_vport_mac_list(struct mlx5_core_dev *dev,
-				  u16 vport,
+				  u32 vport,
 				  enum mlx5_list_type list_type,
 				  u8 addr_list[][ETH_ALEN],
 				  int *list_size);
@@ -98,7 +98,7 @@ int mlx5_modify_nic_vport_promisc(struct mlx5_core_dev *mdev,
 				  int promisc_uc,
 				  int promisc_mc,
 				  int promisc_all);
-int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u16 vport,
+int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u32 vport,
 			       unsigned long *vlans);
 int mlx5_modify_nic_vport_vlans(struct mlx5_core_dev *dev,
 				u16 vlans[],

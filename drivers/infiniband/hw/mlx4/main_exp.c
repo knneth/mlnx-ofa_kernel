@@ -4,17 +4,10 @@
 #include <linux/errno.h>
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
-#include <linux/proc_fs.h>
 #include <linux/mlx4/qp.h>
 #include <linux/mlx4/cmd.h>
 
 #include "mlx4_ib.h"
-
-#define MLX4_IB_DRIVER_PROC_DIR_NAME "driver/mlx4_ib"
-#define MLX4_IB_MRS_PROC_DIR_NAME "mrs"
-
-struct proc_dir_entry *mlx4_mrs_dir_entry;
-static struct proc_dir_entry *mlx4_ib_driver_dir_entry;
 
 int mlx4_ib_exp_contig_mmap(struct ib_ucontext *context, struct vm_area_struct *vma,
 			    unsigned long  command)
@@ -49,46 +42,6 @@ int mlx4_ib_exp_contig_mmap(struct ib_ucontext *context, struct vm_area_struct *
 		return err;
 	}
 	return 0;
-}
-
-int mlx4_ib_proc_init(void)
-{
-	/* Creating procfs directories /proc/drivers/mlx4_ib/ &&
-	  * /proc/drivers/mlx4_ib/mrs for further use by the driver.
-	  */
-	int err;
-
-	mlx4_ib_driver_dir_entry = proc_mkdir(MLX4_IB_DRIVER_PROC_DIR_NAME, NULL);
-
-	if (!mlx4_ib_driver_dir_entry) {
-		pr_err("mlx4_ib_proc_init has failed for %s\n",
-		       MLX4_IB_DRIVER_PROC_DIR_NAME);
-		err = -ENODEV;
-		goto error;
-	}
-
-	mlx4_mrs_dir_entry = proc_mkdir(MLX4_IB_MRS_PROC_DIR_NAME,
-					mlx4_ib_driver_dir_entry);
-	if (!mlx4_mrs_dir_entry) {
-		pr_err("mlx4_ib_proc_init has failed for %s\n",
-		       MLX4_IB_MRS_PROC_DIR_NAME);
-		err = -ENODEV;
-		goto remove_entry;
-	}
-
-	return 0;
-
-remove_entry:
-	remove_proc_entry(MLX4_IB_DRIVER_PROC_DIR_NAME, NULL);
-error:
-	return err;
-}
-
-void mlx4_ib_proc_clean(void)
-{
-	remove_proc_entry(MLX4_IB_MRS_PROC_DIR_NAME,
-			  mlx4_ib_driver_dir_entry);
-	remove_proc_entry(MLX4_IB_DRIVER_PROC_DIR_NAME, NULL);
 }
 
 int mlx4_ib_exp_query_device(struct ib_device *ibdev,

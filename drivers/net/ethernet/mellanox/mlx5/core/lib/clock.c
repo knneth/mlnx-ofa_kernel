@@ -123,7 +123,7 @@ static void mlx5_timestamp_overflow(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct mlx5_clock *clock = container_of(dwork, struct mlx5_clock,
-						   overflow_work);
+						overflow_work);
 	unsigned long flags;
 
 	write_lock_irqsave(&clock->lock, flags);
@@ -137,7 +137,7 @@ static int mlx5_ptp_settime(struct ptp_clock_info *ptp,
 			    const struct timespec64 *ts)
 {
 	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock,
-						ptp_info);
+						 ptp_info);
 	u64 ns = timespec64_to_ns(ts);
 	unsigned long flags;
 
@@ -149,8 +149,7 @@ static int mlx5_ptp_settime(struct ptp_clock_info *ptp,
 	return 0;
 }
 
-static int mlx5_ptp_gettime(struct ptp_clock_info *ptp,
-			    struct timespec64 *ts)
+static int mlx5_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock,
 						ptp_info);
@@ -389,8 +388,8 @@ static int mlx5_init_pin_config(struct mlx5_clock *clock)
 	int i;
 
 	clock->ptp_info.pin_config =
-		kzalloc(sizeof(*clock->ptp_info.pin_config) *
-			       clock->ptp_info.n_pins, GFP_KERNEL);
+			kzalloc(sizeof(*clock->ptp_info.pin_config) *
+				clock->ptp_info.n_pins, GFP_KERNEL);
 	if (!clock->ptp_info.pin_config)
 		return -ENOMEM;
 	clock->ptp_info.enable = mlx5_ptp_enable;
@@ -447,9 +446,13 @@ void mlx5_pps_event(struct mlx5_core_dev *mdev,
 
 	switch (clock->ptp_info.pin_config[pin].func) {
 	case PTP_PF_EXTTS:
+		ptp_event.index = pin;
+		ptp_event.timestamp = timecounter_cyc2time(&clock->tc,
+					be64_to_cpu(eqe->data.pps.time_stamp));
 		if (clock->pps_info.enabled) {
 			ptp_event.type = PTP_CLOCK_PPSUSR;
-			ptp_event.pps_times.ts_real = ns_to_timespec64(eqe->data.pps.time_stamp);
+			ptp_event.pps_times.ts_real =
+					ns_to_timespec64(ptp_event.timestamp);
 		} else {
 			ptp_event.type = PTP_CLOCK_EXTTS;
 		}

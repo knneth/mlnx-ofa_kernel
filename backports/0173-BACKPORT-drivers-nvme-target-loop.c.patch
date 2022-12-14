@@ -1,0 +1,121 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
+
+Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
+---
+ drivers/nvme/target/loop.c | 49 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
+
+--- a/drivers/nvme/target/loop.c
++++ b/drivers/nvme/target/loop.c
+@@ -189,9 +189,16 @@ static blk_status_t nvme_loop_queue_rq(s
+ 
+ 	if (blk_rq_bytes(req)) {
+ 		iod->sg_table.sgl = iod->first_sgl;
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_4_PARAMS
+ 		if (sg_alloc_table_chained(&iod->sg_table,
+ 				blk_rq_nr_phys_segments(req),
++				GFP_ATOMIC,
+ 				iod->sg_table.sgl))
++#else
++		if (sg_alloc_table_chained(&iod->sg_table,
++				blk_rq_nr_phys_segments(req),
++				iod->sg_table.sgl))
++#endif
+ 			return BLK_STS_RESOURCE;
+ 
+ 		iod->req.sg = iod->sg_table.sgl;
+@@ -235,6 +242,7 @@ static int nvme_loop_init_iod(struct nvm
+ 	return 0;
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ static int nvme_loop_init_request(struct blk_mq_tag_set *set,
+ 		struct request *req, unsigned int hctx_idx,
+ 		unsigned int numa_node)
+@@ -244,6 +252,21 @@ static int nvme_loop_init_request(struct
+ 	return nvme_loop_init_iod(ctrl, blk_mq_rq_to_pdu(req),
+ 			(set == &ctrl->tag_set) ? hctx_idx + 1 : 0);
+ }
++#else
++static int nvme_loop_init_request(void *data, struct request *req,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	return nvme_loop_init_iod(data, blk_mq_rq_to_pdu(req), hctx_idx + 1);
++}
++
++static int nvme_loop_init_admin_request(void *data, struct request *req,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	return nvme_loop_init_iod(data, blk_mq_rq_to_pdu(req), 0);
++}
++#endif
+ 
+ static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
+ 		unsigned int hctx_idx)
+@@ -269,18 +292,36 @@ static int nvme_loop_init_admin_hctx(str
+ 	return 0;
+ }
+ 
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_CONST_POS
+ static const struct blk_mq_ops nvme_loop_mq_ops = {
++#else
++static struct blk_mq_ops nvme_loop_mq_ops = {
++#endif
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue      = blk_mq_map_queue,
++#endif
+ 	.init_request	= nvme_loop_init_request,
+ 	.init_hctx	= nvme_loop_init_hctx,
+ 	.timeout	= nvme_loop_timeout,
+ };
+ 
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_CONST_POS
+ static const struct blk_mq_ops nvme_loop_admin_mq_ops = {
++#else
++static struct blk_mq_ops nvme_loop_admin_mq_ops = {
++#endif
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue      = blk_mq_map_queue,
++#endif
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ 	.init_request	= nvme_loop_init_request,
++#else
++	.init_request	= nvme_loop_init_admin_request,
++#endif
+ 	.init_hctx	= nvme_loop_init_admin_hctx,
+ 	.timeout	= nvme_loop_timeout,
+ };
+@@ -381,7 +422,9 @@ static int nvme_loop_configure_admin_que
+ 	ctrl->admin_tag_set.driver_data = ctrl;
+ 	ctrl->admin_tag_set.nr_hw_queues = 1;
+ 	ctrl->admin_tag_set.timeout = ADMIN_TIMEOUT;
++#ifdef HAVE_BLK_MQ_F_NO_SCHED
+ 	ctrl->admin_tag_set.flags = BLK_MQ_F_NO_SCHED;
++#endif
+ 
+ 	ctrl->queues[0].ctrl = ctrl;
+ 	error = nvmet_sq_init(&ctrl->queues[0].nvme_sq);
+@@ -450,10 +493,16 @@ static void nvme_loop_shutdown_ctrl(stru
+ 	if (ctrl->ctrl.state == NVME_CTRL_LIVE)
+ 		nvme_shutdown_ctrl(&ctrl->ctrl);
+ 
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 	blk_mq_quiesce_queue(ctrl->ctrl.admin_q);
++#else
++	blk_mq_stop_hw_queues(ctrl->ctrl.admin_q);
++#endif
+ 	blk_mq_tagset_busy_iter(&ctrl->admin_tag_set,
+ 				nvme_cancel_request, &ctrl->ctrl);
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 	blk_mq_unquiesce_queue(ctrl->ctrl.admin_q);
++#endif
+ 	nvme_loop_destroy_admin_queue(ctrl);
+ }
+ 

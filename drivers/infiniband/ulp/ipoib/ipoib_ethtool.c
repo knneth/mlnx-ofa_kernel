@@ -196,8 +196,9 @@ static int ipoib_set_coalesce(struct net_device *dev,
 	    coal->rx_max_coalesced_frames > 0xffff)
 		return -EINVAL;
 
-	ret = ib_modify_cq(priv->recv_cq, coal->rx_max_coalesced_frames,
-			   coal->rx_coalesce_usecs);
+	ret = rdma_set_cq_moderation(priv->recv_cq,
+				     coal->rx_max_coalesced_frames,
+				     coal->rx_coalesce_usecs);
 	if (ret && ret != -ENOSYS) {
 		ipoib_warn(priv, "failed modifying CQ (%d)\n", ret);
 		return ret;
@@ -356,7 +357,7 @@ static const struct ethtool_ops ipoib_ethtool_ops = {
 
 void ipoib_set_ethtool_ops(struct net_device *dev)
 {
-	dev->ethtool_ops = ipoib_get_ethtool_ops();
+	dev->ethtool_ops = &ipoib_ethtool_ops;
 }
 
 #include "rss_tss/ipoib_ethtool_rss.c"

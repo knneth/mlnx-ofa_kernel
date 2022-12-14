@@ -1,0 +1,89 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+
+Change-Id: Ica10b280a192828a726e2e1126137cc542aed2fc
+---
+ drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 31 +++++++++++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+@@ -64,9 +64,14 @@ nla_put_failure:
+ 	return -EMSGSIZE;
+ }
+ 
++#if defined(HAVE_RTNL_LINK_OPS_NEWLINK_5_PARAMS)
+ static int ipoib_changelink(struct net_device *dev, struct nlattr *tb[],
+ 			    struct nlattr *data[],
+ 			    struct netlink_ext_ack *extack)
++#else
++static int ipoib_changelink(struct net_device *dev, struct nlattr *tb[],
++			    struct nlattr *data[])
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	u16 mode, umcast;
+@@ -94,9 +99,17 @@ out_err:
+ 	return ret;
+ }
+ 
++#if defined(HAVE_RTNL_LINK_OPS_NEWLINK_5_PARAMS)
+ static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
+ 				struct nlattr *tb[], struct nlattr *data[],
+ 				struct netlink_ext_ack *extack)
++#elif defined(HAVE_RTNL_LINK_OPS_NEWLINK_4_PARAMS)
++static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
++				struct nlattr *tb[], struct nlattr *data[])
++#else
++static int ipoib_new_child_link(struct net_device *dev,
++				struct nlattr *tb[], struct nlattr *data[])
++#endif
+ {
+ 	struct net_device *pdev;
+ 	struct ipoib_dev_priv *ppriv;
+@@ -108,8 +121,12 @@ static int ipoib_new_child_link(struct n
+ 
+ 	if (!tb[IFLA_LINK])
+ 		return -EINVAL;
+-
++#ifdef HAVE_RTNL_LINK_OPS_NEWLINK_4_PARAMS
+ 	pdev = __dev_get_by_index(src_net, nla_get_u32(tb[IFLA_LINK]));
++#else
++	pdev = __dev_get_by_index(dev_net(dev), nla_get_u32(tb[IFLA_LINK]));
++#endif
++
+ 	if (!pdev || pdev->type != ARPHRD_INFINIBAND)
+ 		return -ENODEV;
+ 
+@@ -139,11 +156,19 @@ static int ipoib_new_child_link(struct n
+ 			       child_pkey, IPOIB_RTNL_CHILD);
+ 
+ 	if (!err && data)
++#if defined(HAVE_RTNL_LINK_OPS_NEWLINK_5_PARAMS)
+ 		err = ipoib_changelink(dev, tb, data, extack);
++#else
++		err = ipoib_changelink(dev, tb, data);
++#endif
+ 	return err;
+ }
+ 
++#ifdef HAVE_RTNL_LINK_OPS_DELLINK_2_PARAMS
+ static void ipoib_unregister_child_dev(struct net_device *dev, struct list_head *head)
++#else
++static void ipoib_unregister_child_dev(struct net_device *dev)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv, *ppriv;
+ 
+@@ -151,7 +176,11 @@ static void ipoib_unregister_child_dev(s
+ 	ppriv = ipoib_priv(priv->parent);
+ 
+ 	down_write(&ppriv->vlan_rwsem);
++#ifdef HAVE_RTNL_LINK_OPS_DELLINK_2_PARAMS
+ 	unregister_netdevice_queue(dev, head);
++#else
++	unregister_netdevice(dev);
++#endif
+ 	list_del(&priv->list);
+ 	up_write(&ppriv->vlan_rwsem);
+ }

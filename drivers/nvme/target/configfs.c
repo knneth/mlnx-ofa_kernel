@@ -27,15 +27,6 @@
 static const struct config_item_type nvmet_host_type;
 static const struct config_item_type nvmet_subsys_type;
 
-static const struct nvmet_transport_name {
-	u8		type;
-	const char	*name;
-} nvmet_transport_names[] = {
-	{ NVMF_TRTYPE_RDMA,	"rdma" },
-	{ NVMF_TRTYPE_FC,	"fc" },
-	{ NVMF_TRTYPE_LOOP,	"loop" },
-};
-
 /*
  * nvmet_port Generic ConfigFS definitions.
  * Used in any place in the ConfigFS tree that refers to an address.
@@ -221,30 +212,43 @@ CONFIGFS_ATTR(nvmet_, addr_trsvcid);
 static ssize_t nvmet_addr_trtype_show(struct config_item *item,
 		char *page)
 {
-	struct nvmet_port *port = to_nvmet_port(item);
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(nvmet_transport_names); i++) {
-		if (port->disc_addr.trtype != nvmet_transport_names[i].type)
-			continue;
-		return sprintf(page, "%s\n", nvmet_transport_names[i].name);
+	switch (to_nvmet_port(item)->disc_addr.trtype) {
+	case NVMF_TRTYPE_RDMA:
+		return sprintf(page, "rdma\n");
+	case NVMF_TRTYPE_LOOP:
+		return sprintf(page, "loop\n");
+	case NVMF_TRTYPE_FC:
+		return sprintf(page, "fc\n");
+	default:
+		return sprintf(page, "\n");
 	}
-
-	return sprintf(page, "\n");
 }
 
 static void nvmet_port_init_tsas_rdma(struct nvmet_port *port)
 {
+	port->disc_addr.trtype = NVMF_TRTYPE_RDMA;
+	memset(&port->disc_addr.tsas.rdma, 0, NVMF_TSAS_SIZE);
 	port->disc_addr.tsas.rdma.qptype = NVMF_RDMA_QPTYPE_CONNECTED;
 	port->disc_addr.tsas.rdma.prtype = NVMF_RDMA_PRTYPE_NOT_SPECIFIED;
 	port->disc_addr.tsas.rdma.cms = NVMF_RDMA_CMS_RDMA_CM;
+}
+
+static void nvmet_port_init_tsas_loop(struct nvmet_port *port)
+{
+	port->disc_addr.trtype = NVMF_TRTYPE_LOOP;
+	memset(&port->disc_addr.tsas, 0, NVMF_TSAS_SIZE);
+}
+
+static void nvmet_port_init_tsas_fc(struct nvmet_port *port)
+{
+	port->disc_addr.trtype = NVMF_TRTYPE_FC;
+	memset(&port->disc_addr.tsas, 0, NVMF_TSAS_SIZE);
 }
 
 static ssize_t nvmet_addr_trtype_store(struct config_item *item,
 		const char *page, size_t count)
 {
 	struct nvmet_port *port = to_nvmet_port(item);
-	int i;
 
 	if (port->enabled) {
 		pr_err("Cannot modify address while enabled\n");
@@ -252,31 +256,21 @@ static ssize_t nvmet_addr_trtype_store(struct config_item *item,
 		return -EACCES;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(nvmet_transport_names); i++) {
-		if (sysfs_streq(page, nvmet_transport_names[i].name))
-			goto found;
+	if (sysfs_streq(page, "rdma")) {
+		nvmet_port_init_tsas_rdma(port);
+	} else if (sysfs_streq(page, "loop")) {
+		nvmet_port_init_tsas_loop(port);
+	} else if (sysfs_streq(page, "fc")) {
+		nvmet_port_init_tsas_fc(port);
+	} else {
+		pr_err("Invalid value '%s' for trtype\n", page);
+		return -EINVAL;
 	}
 
-	pr_err("Invalid value '%s' for trtype\n", page);
-	return -EINVAL;
-found:
-	memset(&port->disc_addr.tsas, 0, NVMF_TSAS_SIZE);
-	port->disc_addr.trtype = nvmet_transport_names[i].type;
-	if (port->disc_addr.trtype == NVMF_TRTYPE_RDMA)
-		nvmet_port_init_tsas_rdma(port);
 	return count;
 }
 
 CONFIGFS_ATTR(nvmet_, addr_trtype);
-
-static ssize_t nvmet_addr_tractive_show(struct config_item *item, char *page)
-{
-	struct nvmet_port *port = to_nvmet_port(item);
-
-	return sprintf(page, "%d\n", nvmet_is_port_active(port));
-}
-
-CONFIGFS_ATTR_RO(nvmet_, addr_tractive);
 
 /*
  * Namespace structures & file operation functions below
@@ -416,123 +410,11 @@ static ssize_t nvmet_ns_enable_store(struct config_item *item,
 
 CONFIGFS_ATTR(nvmet_ns_, enable);
 
-/*
- * Offload Namespace attributes and functions below
- */
-static ssize_t
-nvmet_ns_offload_cmds(struct nvmet_ns *ns, char *page,
-		      u64 (*offload_cmds)(struct nvmet_ns *ns))
-{
-	struct nvmet_subsys *subsys = ns->subsys;
-	bool valid = false;
-	u64 cmds;
-
-	mutex_lock(&subsys->lock);
-	if (subsys->offloadble && offload_cmds) {
-		cmds = offload_cmds(ns);
-		valid = true;
-	}
-	mutex_unlock(&subsys->lock);
-
-	if (valid)
-		return sprintf(page, "%llu\n", cmds);
-	else
-		return sprintf(page, "%d\n", -1);
-}
-
-static ssize_t
-nvmet_ns_offload_read_cmds_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_read_cmds);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_read_cmds);
-
-static ssize_t
-nvmet_ns_offload_read_blocks_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_read_blocks);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_read_blocks);
-
-static ssize_t
-nvmet_ns_offload_write_cmds_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_write_cmds);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_write_cmds);
-
-static ssize_t
-nvmet_ns_offload_write_blocks_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_write_blocks);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_write_blocks);
-
-static ssize_t
-nvmet_ns_offload_write_inline_cmds_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_write_inline_cmds);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_write_inline_cmds);
-
-static ssize_t
-nvmet_ns_offload_flush_cmds_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_flush_cmds);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_flush_cmds);
-
-static ssize_t
-nvmet_ns_offload_error_cmds_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_error_cmds);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_error_cmds);
-
-static ssize_t
-nvmet_ns_offload_backend_error_cmds_show(struct config_item *item, char *page)
-{
-	struct nvmet_ns *ns = to_nvmet_ns(item);
-
-	return nvmet_ns_offload_cmds(ns, page,
-				     ns->subsys->offload_ns_backend_error_cmds);
-}
-CONFIGFS_ATTR_RO(nvmet_ns_, offload_backend_error_cmds);
-
 static struct configfs_attribute *nvmet_ns_attrs[] = {
 	&nvmet_ns_attr_device_path,
 	&nvmet_ns_attr_device_nguid,
 	&nvmet_ns_attr_device_uuid,
 	&nvmet_ns_attr_enable,
-	&nvmet_ns_attr_offload_read_cmds,
-	&nvmet_ns_attr_offload_read_blocks,
-	&nvmet_ns_attr_offload_write_cmds,
-	&nvmet_ns_attr_offload_write_blocks,
-	&nvmet_ns_attr_offload_write_inline_cmds,
-	&nvmet_ns_attr_offload_flush_cmds,
-	&nvmet_ns_attr_offload_error_cmds,
-	&nvmet_ns_attr_offload_backend_error_cmds,
 	NULL,
 };
 
@@ -635,9 +517,6 @@ static int nvmet_port_subsys_allow_link(struct config_item *parent,
 	}
 
 	list_add_tail(&link->entry, &port->subsystems);
-	/* We initialize offload subsystem attrs in the first port */
-	if (!subsys->num_ports && subsys->offloadble)
-		nvmet_init_offload_subsystem_port_attrs(port, subsys);
 	subsys->num_ports++;
 	nvmet_genctr++;
 	up_write(&nvmet_config_sem);
@@ -670,9 +549,6 @@ found:
 	if (list_empty(&port->subsystems))
 		nvmet_disable_port(port);
 	p->subsys->num_ports--;
-	/* We un-initialize offload subsystem attrs in the last port */
-	if (!subsys->num_ports && subsys->offloadble)
-		nvmet_uninit_offload_subsystem_port_attrs(subsys);
 	up_write(&nvmet_config_sem);
 	kfree(p);
 }
@@ -849,30 +725,6 @@ static ssize_t nvmet_subsys_attr_serial_store(struct config_item *item,
 }
 CONFIGFS_ATTR(nvmet_subsys_, attr_serial);
 
-static ssize_t
-nvmet_subsys_attr_offload_subsys_unknown_ns_cmds_show(struct config_item *item,
-						      char *page)
-{
-	struct nvmet_subsys *subsys = to_subsys(item);
-	bool valid = false;
-	u64 unknown_cmds;
-
-	down_write(&nvmet_config_sem);
-	mutex_lock(&subsys->lock);
-	if (subsys->offloadble && subsys->offload_subsys_unknown_ns_cmds) {
-		unknown_cmds = subsys->offload_subsys_unknown_ns_cmds(subsys);
-		valid = true;
-	}
-	mutex_unlock(&subsys->lock);
-	up_write(&nvmet_config_sem);
-
-	if (valid)
-		return snprintf(page, PAGE_SIZE, "%llu\n", unknown_cmds);
-	else
-		return snprintf(page, PAGE_SIZE, "%d\n", -1);
-}
-CONFIGFS_ATTR_RO(nvmet_subsys_, attr_offload_subsys_unknown_ns_cmds);
-
 static ssize_t nvmet_subsys_attr_offload_show(struct config_item *item,
 		char *page)
 {
@@ -949,7 +801,6 @@ static struct configfs_attribute *nvmet_subsys_attrs[] = {
 	&nvmet_subsys_attr_attr_version,
 	&nvmet_subsys_attr_attr_serial,
 	&nvmet_subsys_attr_attr_offload,
-	&nvmet_subsys_attr_attr_offload_subsys_unknown_ns_cmds,
 	NULL,
 };
 
@@ -1112,7 +963,6 @@ static struct configfs_attribute *nvmet_port_attrs[] = {
 	&nvmet_attr_addr_traddr,
 	&nvmet_attr_addr_trsvcid,
 	&nvmet_attr_addr_trtype,
-	&nvmet_attr_addr_tractive,
 	NULL,
 };
 

@@ -36,6 +36,7 @@
 #include "en.h"
 
 struct mlx5e_vxlan {
+	atomic_t refcount;
 	u16 udp_port;
 #ifdef CONFIG_MLX5_INNER_RSS
 	struct mlx5_flow_handle	*flow_rule;
@@ -53,13 +54,6 @@ struct mlx5e_vxlan_work {
 static inline bool mlx5e_vxlan_allowed(struct mlx5_core_dev *mdev)
 {
 	return (MLX5_CAP_ETH(mdev, tunnel_stateless_vxlan) &&
-		mlx5_core_is_pf(mdev));
-}
-
-static inline bool mlx5e_vxlan_udp_port_allowed(struct mlx5_core_dev *mdev)
-{
-	return (mdev->priv.eswitch &&
-		(mdev->priv.eswitch->offloads.encap != DEVLINK_ESWITCH_ENCAP_MODE_NONE) &&
 		mlx5_core_is_pf(mdev));
 }
 

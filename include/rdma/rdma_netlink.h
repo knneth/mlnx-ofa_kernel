@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _RDMA_NETLINK_H
 #define _RDMA_NETLINK_H
 
@@ -16,6 +17,18 @@ enum rdma_nl_flags {
 	/* Require CAP_NET_ADMIN */
 	RDMA_NL_ADMIN_PERM	= 1 << 0,
 };
+
+/* Define this module as providing netlink services for NETLINK_RDMA, with
+ * index _index.  Since the client indexes were setup in a uapi header as an
+ * enum and we do no want to change that, the user must supply the expanded
+ * constant as well and the compiler checks they are the same.
+ */
+#define MODULE_ALIAS_RDMA_NETLINK(_index, _val)                                \
+	static inline void __chk_##_index(void)                                \
+	{                                                                      \
+		BUILD_BUG_ON(_index != _val);                                  \
+	}                                                                      \
+	MODULE_ALIAS("rdma-netlink-subsys-" __stringify(_val))
 
 /**
  * Register client in RDMA netlink.
@@ -62,6 +75,14 @@ int ibnl_put_attr(struct sk_buff *skb, struct nlmsghdr *nlh,
  * Returns 0 on success or a negative error code.
  */
 int rdma_nl_unicast(struct sk_buff *skb, u32 pid);
+
+/**
+ * Send, with wait/1 retry, the supplied skb to a specific userspace PID.
+ * @skb: The netlink skb
+ * @pid: Userspace netlink process ID
+ * Returns 0 on success or a negative error code.
+ */
+int rdma_nl_unicast_wait(struct sk_buff *skb, __u32 pid);
 
 /**
  * Send the supplied skb to a netlink group.

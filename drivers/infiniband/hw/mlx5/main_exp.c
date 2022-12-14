@@ -73,6 +73,12 @@ enum {
 	MLX5_STANDARD_ATOMIC_SIZE = 0x8,
 };
 
+static bool host_support_p9_atomic(void)
+{
+	/* We don't have a way to check it yet. */
+	return true;
+}
+
 void mlx5_ib_config_atomic_responder(struct mlx5_ib_dev *dev,
 				     struct ib_exp_device_attr *props)
 {
@@ -262,6 +268,7 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			     struct ib_udata *uhw)
 {
 	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+	u32 def_tot_bfregs;
 	u32 uar_sz_shift;
 	u32 max_tso;
 	int ret;
@@ -340,15 +347,25 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 		props->max_wq_type_rq = 0;
 	}
 	props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_MP_RQ;
-	if (MLX5_CAP_GEN(dev->mdev, striding_rq)) {
+	props->mp_rq_caps.supported_qps = 0;
+	if (MLX5_CAP_GEN(dev->mdev, striding_rq) ||
+	    MLX5_CAP_GEN(dev->mdev, ib_striding_wq)) {
 		props->mp_rq_caps.allowed_shifts =  IB_MP_RQ_2BYTES_SHIFT;
-		props->mp_rq_caps.supported_qps = IB_EXP_QPT_RAW_PACKET;
+		if (MLX5_CAP_GEN(dev->mdev, striding_rq))
+			props->mp_rq_caps.supported_qps =
+				IB_EXP_MP_RQ_SUP_TYPE_WQ_RQ;
+		if (MLX5_CAP_GEN(dev->mdev, ib_striding_wq))
+			props->mp_rq_caps.supported_qps |=
+				IB_EXP_MP_RQ_SUP_TYPE_SRQ_TM;
 		props->mp_rq_caps.max_single_stride_log_num_of_bytes =  MLX5_MAX_SINGLE_STRIDE_LOG_NUM_BYTES;
 		props->mp_rq_caps.min_single_stride_log_num_of_bytes =  MLX5_MIN_SINGLE_STRIDE_LOG_NUM_BYTES;
 		props->mp_rq_caps.max_single_wqe_log_num_of_strides =  MLX5_MAX_SINGLE_WQE_LOG_NUM_STRIDES;
-		props->mp_rq_caps.min_single_wqe_log_num_of_strides =  MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES;
-	} else {
-		props->mp_rq_caps.supported_qps = 0;
+		if (MLX5_CAP_GEN(dev->mdev, ext_stride_num_range))
+			props->mp_rq_caps.min_single_wqe_log_num_of_strides =
+				MLX5_EXT_MIN_SINGLE_WQE_LOG_NUM_STRIDES;
+		else
+			props->mp_rq_caps.min_single_wqe_log_num_of_strides =
+				MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES;
 	}
 
 	props->vlan_offloads = 0;
@@ -449,6 +466,10 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			MLX5_CAP_QOS(dev->mdev, packet_pacing_min_rate);
 		props->packet_pacing_caps.supported_qpts |=
 			1 << IB_QPT_RAW_PACKET;
+		if (MLX5_CAP_QOS(dev->mdev, packet_pacing_burst_bound) &&
+		    MLX5_CAP_QOS(dev->mdev, packet_pacing_typical_size))
+			props->packet_pacing_caps.cap_flags |=
+				IB_EXP_QP_SUPPORT_BURST;
 		props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_PACKET_PACING_CAPS;
 	}
 
@@ -456,18 +477,21 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 
 	props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_MAX_DEVICE_CTX;
 
-	if (MLX5_CAP_GEN(dev->mdev, uar_4k))
+	if (MLX5_CAP_GEN(dev->mdev, uar_4k)) {
 		uar_sz_shift = MLX5_ADAPTER_PAGE_SHIFT;
-	else
+		def_tot_bfregs = 16 * MLX5_NUM_BFREGS_PER_UAR;
+	} else {
 		uar_sz_shift = PAGE_SHIFT;
+		def_tot_bfregs = 8 * MLX5_NUM_BFREGS_PER_UAR;
+	}
 
-	/* mlx5_core uses MLX5_NUM_DRIVER_UARS uar pages. Each ucontext uses
-	 * 8 uars (see MLX5_DEF_TOT_UUARS and MLX5_NUM_NON_FP_BFREGS_PER_UAR
-	 * in libmlx5). Note that the CAP's uar_sz is in MB unit.
+	/* mlx5_core uses MLX5_NUM_DRIVER_UARS uar pages. In x86 each ucontext uses
+	 * 8 uars, and in PPC with 4k UAR each context uses 16 uars.
+	 * Note that the CAP's uar_sz is in MB unit.
 	 */
 	props->max_device_ctx =
 		(1 << (MLX5_CAP_GEN(dev->mdev, uar_sz) + 20 - uar_sz_shift))
-		/ (MLX5_DEF_TOT_BFREGS / MLX5_NON_FP_BFREGS_PER_UAR)
+		/ (def_tot_bfregs / MLX5_NON_FP_BFREGS_PER_UAR)
 		- MLX5_NUM_DRIVER_UARS;
 
 	if (MLX5_CAP_GEN(dev->mdev, rq_delay_drop) &&
@@ -477,6 +501,8 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 	mlx5_update_ooo_cap(dev, props);
 	mlx5_update_tm_cap(dev, props);
 	mlx5_update_tunnel_offloads_caps(dev, props);
+	if (MLX5_CAP_GEN(dev->mdev, capi))
+		props->device_cap_flags2 |= IB_EXP_DEVICE_CAPI;
 
 	props->device_cap_flags2 |= IB_EXP_DEVICE_PHYSICAL_RANGE_MR;
 
@@ -484,6 +510,12 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 		props->max_dm_size =
 			MLX5_CAP_DEVICE_MEM(dev->mdev, max_memic_size);
 		props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_MAX_DM_SIZE;
+	}
+
+	if (MLX5_CAP_GEN(dev->mdev, tunneled_atomic) &&
+	    host_support_p9_atomic()) {
+		props->tunneled_atomic_caps |= IB_EXP_TUNNELED_ATOMIC_SUPPORTED;
+		props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC;
 	}
 
 	return 0;
@@ -1392,12 +1424,13 @@ int mlx5_ib_init_dc_improvements(struct mlx5_ib_dev *dev)
 
 	max_dc_cnak_qps = min_t(int, 1 << MLX5_CAP_GEN(mdev, log_max_dc_cnak_qps),
 			      dev->ib_dev.num_comp_vectors / MLX5_CAP_GEN(mdev, num_ports));
-	err = init_dc_sysfs(dev);
-	if (err)
-		return err;
 
 	if (!MLX5_CAP_GEN(dev->mdev, dc_connect_qp))
 		return 0;
+
+	err = init_dc_sysfs(dev);
+	if (err)
+		return err;
 
 	/* start with 25% of maximum CNAK QPs */
 	ini_dc_cnak_qps = DIV_ROUND_UP(max_dc_cnak_qps, 4);
@@ -1450,14 +1483,16 @@ void mlx5_ib_cleanup_dc_improvements(struct mlx5_ib_dev *dev)
 	int port;
 	int i;
 
-	for (port = 1; port <= MLX5_CAP_GEN(dev->mdev, num_ports); port++) {
-		for (i = 0; i < dev->num_dc_cnak_qps; i++)
-			cleanup_driver_cnak(dev, port, i);
-		cleanup_dc_port_sysfs(&dev->dc_stats[port - 1]);
-		kfree(dev->dc_stats[port - 1].rx_scatter);
-		kfree(dev->dcd[port - 1]);
+	if (dev->num_dc_cnak_qps) {
+		for (port = 1; port <= MLX5_CAP_GEN(dev->mdev, num_ports); port++) {
+			for (i = 0; i < dev->num_dc_cnak_qps; i++)
+				cleanup_driver_cnak(dev, port, i);
+			cleanup_dc_port_sysfs(&dev->dc_stats[port - 1]);
+			kfree(dev->dc_stats[port - 1].rx_scatter);
+			kfree(dev->dcd[port - 1]);
+		}
+		cleanup_dc_sysfs(dev);
 	}
-	cleanup_dc_sysfs(dev);
 
 	mlx5_ib_disable_dc_tracer(dev);
 }

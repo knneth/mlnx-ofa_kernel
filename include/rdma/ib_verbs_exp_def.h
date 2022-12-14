@@ -13,13 +13,8 @@ enum ib_exp_start_values {
 };
 
 enum ib_exp_access_flags {
+	IB_EXP_ACCESS_TUNNELED_ATOMIC	    = (1 << (15 + IB_EXP_ACCESS_FLAGS_SHIFT)),
 	/* Initial values are non-exp defined as part of  ib_access_flags */
-	IB_EXP_ACCESS_SHARED_MR_USER_READ   = (1 << (6 + IB_EXP_ACCESS_FLAGS_SHIFT)),
-	IB_EXP_ACCESS_SHARED_MR_USER_WRITE  = (1 << (7 + IB_EXP_ACCESS_FLAGS_SHIFT)),
-	IB_EXP_ACCESS_SHARED_MR_GROUP_READ  = (1 << (8 + IB_EXP_ACCESS_FLAGS_SHIFT)),
-	IB_EXP_ACCESS_SHARED_MR_GROUP_WRITE = (1 << (9 + IB_EXP_ACCESS_FLAGS_SHIFT)),
-	IB_EXP_ACCESS_SHARED_MR_OTHER_READ  = (1 << (10 + IB_EXP_ACCESS_FLAGS_SHIFT)),
-	IB_EXP_ACCESS_SHARED_MR_OTHER_WRITE = (1 << (11 + IB_EXP_ACCESS_FLAGS_SHIFT)),
 	IB_EXP_ACCESS_PHYSICAL_ADDR	    = (1 << (16 + IB_EXP_ACCESS_FLAGS_SHIFT)),
 };
 
@@ -30,13 +25,10 @@ enum ib_nvmf_offload_type {
 	IB_NVMF_READ_WRITE_FLUSH_OFFLOAD = (1ULL << 3),
 };
 
-struct ib_nvmf_srq_attr {
-	u64 cmd_unknown_namespace_cnt;
-};
-
 struct ib_nvmf_init_data {
 	enum ib_nvmf_offload_type	type;
 	u8				log_max_namespace;
+	u32				offloaded_capsules_count;
 	u32				cmd_size;
 	u8				data_offset;
 	u8				log_max_io_size;
@@ -61,8 +53,6 @@ struct ib_nvmf_caps {
 	u32 min_cmd_size;
 	u32 max_cmd_size;
 	u8  max_data_offset;
-	u32 min_cmd_timeout_us; /* 0 means use HCA default value */
-	u32 max_cmd_timeout_us; /* 0 means use HCA default value */
 };
 
 enum ib_qp_offload_type {
@@ -99,6 +89,11 @@ struct ib_exp_memcpy_dm_attr {
 	uint64_t dm_offset;
 	size_t length;
 	uint32_t comp_mask;
+};
+
+struct ib_exp_burst_info {
+	u32			max_burst_sz;
+	u16			typical_pkt_sz;
 };
 
 #endif

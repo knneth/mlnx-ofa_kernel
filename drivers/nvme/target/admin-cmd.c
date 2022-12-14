@@ -164,20 +164,6 @@ out:
 	nvmet_req_complete(req, status);
 }
 
-static bool nvmet_is_write_zeroes(struct nvmet_ctrl *ctrl)
-{
-	struct nvmet_ns *ns;
-
-	rcu_read_lock();
-	list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link)
-		if (bdev_write_zeroes_sectors(ns->bdev)) {
-			rcu_read_unlock();
-			return false;
-		}
-	rcu_read_unlock();
-	return true;
-}
-
 static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 {
 	struct nvmet_ctrl *ctrl = req->sq->ctrl;
@@ -253,11 +239,8 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 	id->maxcmd = cpu_to_le16(NVMET_MAX_CMD);
 
 	id->nn = cpu_to_le32(ctrl->subsys->max_nsid);
-	if (!req->port->offload || nvmet_is_write_zeroes(ctrl))
-		id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM |
-				NVME_CTRL_ONCS_WRITE_ZEROES);
-	else
-		id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM);
+	id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM |
+			NVME_CTRL_ONCS_WRITE_ZEROES);
 
 	/* XXX: don't report vwc if the underlying device is write through */
 	id->vwc = NVME_CTRL_VWC_PRESENT;

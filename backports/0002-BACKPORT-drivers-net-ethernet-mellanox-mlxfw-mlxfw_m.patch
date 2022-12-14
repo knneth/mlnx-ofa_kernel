@@ -1,0 +1,23 @@
+From: Daniel Pressler <danielpr@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c
+
+Change-Id: Ibc84666d6b5c94f227c65adc6d44569132dbc4ed
+---
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c
++++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c
+@@ -38,7 +38,11 @@
+ #define pr_fmt(fmt) "MFA2: " fmt
+ 
+ #include "mlxfw_mfa2_tlv_multi.h"
++#ifdef HAVE_UAPI_LINUX_NETLINK_H
+ #include <uapi/linux/netlink.h>
++#else
++#include <linux/netlink.h>
++#endif
+ 
+ #define MLXFW_MFA2_TLV_TOTAL_SIZE(tlv) \
+ 	NLA_ALIGN(sizeof(*(tlv)) + be16_to_cpu((tlv)->len))

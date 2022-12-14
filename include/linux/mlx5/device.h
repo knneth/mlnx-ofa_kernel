@@ -252,12 +252,15 @@ enum {
 
 enum {
 	MLX5_NUM_BFREGS_PER_UAR         = MLX5_NON_FP_BFREGS_PER_UAR,
-	MLX5_DEF_TOT_BFREGS             = 8 * MLX5_NUM_BFREGS_PER_UAR,
 };
 
 enum {
 	MLX5_NUM_DRIVER_UARS	= 4,
 	MLX5_NUM_LOW_LAT_BFREGS	= 4,
+};
+
+enum {
+	MLX5_MKEY_TUNNELED_ATOMIC = 1 << 6,
 };
 
 enum {
@@ -275,8 +278,10 @@ enum {
 	MLX5_MKEY_MASK_RR		= 1ull << 19,
 	MLX5_MKEY_MASK_RW		= 1ull << 20,
 	MLX5_MKEY_MASK_A		= 1ull << 21,
+	MLX5_MKEY_MASK_UMR_EN		= 1ull << 22,
 	MLX5_MKEY_MASK_SMALL_FENCE	= 1ull << 23,
 	MLX5_MKEY_MASK_FREE		= 1ull << 29,
+	MLX5_MKEY_MASK_TUNNELED_ATOMIC	= 1ull << 41,
 };
 
 enum {
@@ -344,14 +349,19 @@ enum mlx5_event {
 
 	MLX5_EVENT_TYPE_XRQ_ERROR	   = 0x18,
 
-	MLX5_EVENT_EC_PARAMS_CHANGE	   = 0xe,
-
 	MLX5_EVENT_TYPE_FPGA_ERROR         = 0x20,
 	MLX5_EVENT_TYPE_FPGA_QP_ERROR      = 0x21,
+
+	MLX5_EVENT_TYPE_DEVICE_TRACER      = 0x26,
 };
 
 enum {
 	MLX5_GENERAL_SUBTYPE_DELAY_DROP_TIMEOUT = 0x1,
+};
+
+enum {
+	MLX5_TRACER_SUBTYPE_OWNERSHIP_CHANGE = 0x0,
+	MLX5_TRACER_SUBTYPE_TRACES_AVAILABLE = 0x1,
 };
 
 enum {
@@ -515,6 +525,10 @@ struct mlx5_cmd_layout {
 	u8		status_own;
 };
 
+enum mlx5_fatal_assert_bit_offsets {
+	MLX5_RFR_OFFSET = 31,
+};
+
 struct health_buffer {
 	__be32		assert_var[5];
 	__be32		rsvd0[3];
@@ -523,10 +537,18 @@ struct health_buffer {
 	__be32		rsvd1[2];
 	__be32		fw_ver;
 	__be32		hw_id;
-	__be32		rsvd2;
+	__be32		rfr;
 	u8		irisc_index;
 	u8		synd;
 	__be16		ext_synd;
+};
+
+enum mlx5_initializing_bit_offsets {
+	MLX5_FW_RESET_SUPPORTED_OFFSET = 30,
+};
+
+enum mlx5_cmd_addr_l_sz_offset {
+	MLX5_NIC_IFC_OFFSET = 8,
 };
 
 struct mlx5_init_seg {
@@ -539,12 +561,14 @@ struct mlx5_init_seg {
 	__be32			rsvd1[120];
 	__be32			initializing;
 	struct health_buffer	health;
-	__be32			rsvd2[880];
+	__be32			rsvd2[2];
+	__be32			capi_invalidate;
+	__be32			rsvd3[877];
 	__be32			internal_timer_h;
 	__be32			internal_timer_l;
-	__be32			rsvd3[2];
+	__be32			rsvd4[2];
 	__be32			health_counter;
-	__be32			rsvd4[1019];
+	__be32			rsvd5[1019];
 	__be64			ieee1588_clk;
 	__be32			ieee1588_clk_type;
 	__be32			clr_intx;
@@ -601,7 +625,7 @@ struct mlx5_eqe_cmd {
 };
 
 struct mlx5_eqe_page_req {
-	__be16		ec_function_rsvd;
+	u8		rsvd0[2];
 	__be16		func_id;
 	__be32		num_pages;
 	__be32		rsvd1[5];
@@ -794,7 +818,7 @@ static inline int mlx5_get_cqe_format(struct mlx5_cqe64 *cqe)
 	return (cqe->op_own >> 2) & 0x3;
 }
 
-static inline int get_cqe_lro_tcppsh(struct mlx5_cqe64 *cqe)
+static inline u8 get_cqe_lro_tcppsh(struct mlx5_cqe64 *cqe)
 {
 	return (cqe->lro_tcppsh_abort_dupack >> 6) & 1;
 }
@@ -954,7 +978,7 @@ struct mlx5_mkey_seg {
 	u8		status;
 	u8		pcie_control;
 	u8		flags;
-	u8		version;
+	u8		tunneled_atomic;
 	__be32		qpn_mkey7_0;
 	u8		rsvd1[4];
 	__be32		flags_pd;
@@ -1281,8 +1305,8 @@ static inline u16 mlx5_to_sw_pkey_sz(int pkey_sz)
 	return MLX5_MIN_PKEY_TABLE_SIZE << pkey_sz;
 }
 
-#define MLX5_BY_PASS_NUM_REGULAR_PRIOS 8
-#define MLX5_BY_PASS_NUM_DONT_TRAP_PRIOS 8
+#define MLX5_BY_PASS_NUM_REGULAR_PRIOS 16
+#define MLX5_BY_PASS_NUM_DONT_TRAP_PRIOS 16
 #define MLX5_BY_PASS_NUM_MULTICAST_PRIOS 1
 #define MLX5_BY_PASS_NUM_PRIOS (MLX5_BY_PASS_NUM_REGULAR_PRIOS +\
 				MLX5_BY_PASS_NUM_DONT_TRAP_PRIOS +\

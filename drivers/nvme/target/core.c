@@ -21,7 +21,7 @@
 
 #include "nvmet.h"
 
-static const struct nvmet_fabrics_ops *nvmet_transports[NVMF_TRTYPE_MAX];
+static struct nvmet_fabrics_ops *nvmet_transports[NVMF_TRTYPE_MAX];
 static DEFINE_IDA(cntlid_ida);
 
 /*
@@ -140,7 +140,7 @@ static void nvmet_add_async_event(struct nvmet_ctrl *ctrl, u8 event_type,
 	schedule_work(&ctrl->async_event_work);
 }
 
-int nvmet_register_transport(const struct nvmet_fabrics_ops *ops)
+int nvmet_register_transport(struct nvmet_fabrics_ops *ops)
 {
 	int ret = 0;
 
@@ -155,7 +155,7 @@ int nvmet_register_transport(const struct nvmet_fabrics_ops *ops)
 }
 EXPORT_SYMBOL_GPL(nvmet_register_transport);
 
-void nvmet_unregister_transport(const struct nvmet_fabrics_ops *ops)
+void nvmet_unregister_transport(struct nvmet_fabrics_ops *ops)
 {
 	down_write(&nvmet_config_sem);
 	nvmet_transports[ops->type] = NULL;
@@ -165,7 +165,7 @@ EXPORT_SYMBOL_GPL(nvmet_unregister_transport);
 
 static bool nvmet_peer_to_peer_capable(struct nvmet_port *port)
 {
-	const struct nvmet_fabrics_ops *ops;
+	struct nvmet_fabrics_ops *ops;
 
 	lockdep_assert_held(&nvmet_config_sem);
 
@@ -177,78 +177,15 @@ static bool nvmet_peer_to_peer_capable(struct nvmet_port *port)
 	    ops->enable_offload_ns &&
 	    ops->disable_offload_ns &&
 	    ops->peer_to_peer_sqe_inline_size &&
-	    ops->peer_to_peer_mdts &&
-	    ops->offload_subsys_unknown_ns_cmds &&
-	    ops->offload_ns_read_cmds &&
-	    ops->offload_ns_read_blocks &&
-	    ops->offload_ns_write_cmds &&
-	    ops->offload_ns_write_blocks &&
-	    ops->offload_ns_write_inline_cmds &&
-	    ops->offload_ns_flush_cmds &&
-	    ops->offload_ns_error_cmds &&
-	    ops->offload_ns_backend_error_cmds)
+	    ops->peer_to_peer_mdts)
 		return ops->peer_to_peer_capable(port);
 
 	return false;
 }
 
-void nvmet_init_offload_subsystem_port_attrs(struct nvmet_port *port,
-					     struct nvmet_subsys *subsys)
-{
-	const struct nvmet_fabrics_ops *ops = port->ops;
-
-	lockdep_assert_held(&nvmet_config_sem);
-	WARN_ON_ONCE(subsys->num_ports || !subsys->offloadble);
-
-	if (!subsys->offload_subsys_unknown_ns_cmds)
-		subsys->offload_subsys_unknown_ns_cmds =
-			ops->offload_subsys_unknown_ns_cmds;
-	if (!subsys->offload_ns_read_cmds)
-		subsys->offload_ns_read_cmds =
-			ops->offload_ns_read_cmds;
-	if (!subsys->offload_ns_read_blocks)
-		subsys->offload_ns_read_blocks =
-			ops->offload_ns_read_blocks;
-	if (!subsys->offload_ns_write_cmds)
-		subsys->offload_ns_write_cmds =
-			ops->offload_ns_write_cmds;
-	if (!subsys->offload_ns_write_blocks)
-		subsys->offload_ns_write_blocks =
-			ops->offload_ns_write_blocks;
-	if (!subsys->offload_ns_write_inline_cmds)
-		subsys->offload_ns_write_inline_cmds =
-			ops->offload_ns_write_inline_cmds;
-	if (!subsys->offload_ns_flush_cmds)
-		subsys->offload_ns_flush_cmds =
-			ops->offload_ns_flush_cmds;
-	if (!subsys->offload_ns_error_cmds)
-		subsys->offload_ns_error_cmds =
-			ops->offload_ns_error_cmds;
-	if (!subsys->offload_ns_backend_error_cmds)
-		subsys->offload_ns_backend_error_cmds =
-			ops->offload_ns_backend_error_cmds;
-
-}
-
-void nvmet_uninit_offload_subsystem_port_attrs(struct nvmet_subsys *subsys)
-{
-	lockdep_assert_held(&nvmet_config_sem);
-	WARN_ON_ONCE(subsys->num_ports || !subsys->offloadble);
-
-	subsys->offload_ns_backend_error_cmds = NULL;
-	subsys->offload_ns_error_cmds = NULL;
-	subsys->offload_ns_flush_cmds = NULL;
-	subsys->offload_ns_write_inline_cmds = NULL;
-	subsys->offload_ns_write_blocks = NULL;
-	subsys->offload_ns_write_cmds = NULL;
-	subsys->offload_ns_read_blocks = NULL;
-	subsys->offload_ns_read_cmds = NULL;
-	subsys->offload_subsys_unknown_ns_cmds = NULL;
-}
-
 int nvmet_enable_port(struct nvmet_port *port, bool offloadble)
 {
-	const struct nvmet_fabrics_ops *ops;
+	struct nvmet_fabrics_ops *ops;
 	int ret;
 
 	lockdep_assert_held(&nvmet_config_sem);
@@ -278,7 +215,6 @@ int nvmet_enable_port(struct nvmet_port *port, bool offloadble)
 		goto out_remove_port;
 	}
 
-	port->ops = ops;
 	port->enabled = true;
 	port->offload = offloadble;
 	return 0;
@@ -293,23 +229,17 @@ out_module_put:
 
 void nvmet_disable_port(struct nvmet_port *port)
 {
+	struct nvmet_fabrics_ops *ops;
+
 	lockdep_assert_held(&nvmet_config_sem);
 
 	port->enabled = false;
 
-	port->ops->remove_port(port);
-	module_put(port->ops->owner);
-	port->ops = NULL;
+	ops = nvmet_transports[port->disc_addr.trtype];
+	ops->remove_port(port);
+	module_put(ops->owner);
 
 	port->offload = false;
-}
-
-bool nvmet_is_port_active(struct nvmet_port *port)
-{
-	if (port->ops && port->ops->is_port_active)
-		return port->ops->is_port_active(port);
-
-	return port->enabled;
 }
 
 static void nvmet_keep_alive_timer(struct work_struct *work)
@@ -651,7 +581,7 @@ int nvmet_sq_init(struct nvmet_sq *sq)
 EXPORT_SYMBOL_GPL(nvmet_sq_init);
 
 bool nvmet_req_init(struct nvmet_req *req, struct nvmet_cq *cq,
-		struct nvmet_sq *sq, const struct nvmet_fabrics_ops *ops)
+		struct nvmet_sq *sq, struct nvmet_fabrics_ops *ops)
 {
 	u8 flags = req->cmd->common.flags;
 	u16 status;
@@ -772,7 +702,6 @@ static void nvmet_start_ctrl(struct nvmet_ctrl *ctrl)
 	}
 
 	ctrl->csts = NVME_CSTS_RDY;
-	mod_delayed_work(system_wq, &ctrl->ka_work, ctrl->kato * HZ);
 }
 
 static void nvmet_clear_ctrl(struct nvmet_ctrl *ctrl)

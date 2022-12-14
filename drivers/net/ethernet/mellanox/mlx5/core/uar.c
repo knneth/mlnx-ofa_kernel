@@ -168,18 +168,16 @@ struct mlx5_uars_page *mlx5_get_uars_page(struct mlx5_core_dev *mdev)
 	struct mlx5_uars_page *ret;
 
 	mutex_lock(&mdev->priv.bfregs.reg_head.lock);
-	if (list_empty(&mdev->priv.bfregs.reg_head.list)) {
-		ret = alloc_uars_page(mdev, false);
-		if (IS_ERR(ret)) {
-			ret = NULL;
-			goto out;
-		}
-		list_add(&ret->list, &mdev->priv.bfregs.reg_head.list);
-	} else {
+	if (!list_empty(&mdev->priv.bfregs.reg_head.list)) {
 		ret = list_first_entry(&mdev->priv.bfregs.reg_head.list,
 				       struct mlx5_uars_page, list);
 		kref_get(&ret->ref_count);
+		goto out;
 	}
+	ret = alloc_uars_page(mdev, false);
+	if (IS_ERR(ret))
+		goto out;
+	list_add(&ret->list, &mdev->priv.bfregs.reg_head.list);
 out:
 	mutex_unlock(&mdev->priv.bfregs.reg_head.lock);
 
@@ -329,3 +327,92 @@ void mlx5_free_bfreg(struct mlx5_core_dev *mdev, struct mlx5_sq_bfreg *bfreg)
 	mutex_unlock(lock);
 }
 EXPORT_SYMBOL(mlx5_free_bfreg);
+
+static int mlx5_get_pcie_dev_link_caps(struct pci_dev *pdev,
+				       enum pci_bus_speed *speed,
+				       enum pcie_link_width *width)
+{
+	u32 lnkcap1, lnkcap2;
+	int err1, err2;
+
+#define  PCI_EXP_LNKCAP_MLW_SHIFT 4 /* start of MLW mask in link capabilities */
+
+	*speed = PCI_SPEED_UNKNOWN;
+	*width = PCIE_LNK_WIDTH_UNKNOWN;
+
+	err1 = pcie_capability_read_dword(pdev, PCI_EXP_LNKCAP,
+					  &lnkcap1);
+	err2 = pcie_capability_read_dword(pdev, PCI_EXP_LNKCAP2,
+					  &lnkcap2);
+
+	if (err1 && err2)
+		return err1 ? err1 : err2;
+
+	if (!err2 && lnkcap2) { /* PCIe r3.0-compliant */
+		if (lnkcap2 & PCI_EXP_LNKCAP2_SLS_8_0GB)
+			*speed = PCIE_SPEED_8_0GT;
+		else if (lnkcap2 & PCI_EXP_LNKCAP2_SLS_5_0GB)
+			*speed = PCIE_SPEED_5_0GT;
+		else if (lnkcap2 & PCI_EXP_LNKCAP2_SLS_2_5GB)
+			*speed = PCIE_SPEED_2_5GT;
+	}
+	if (!err1 && lnkcap1) {
+		*width = (lnkcap1 & PCI_EXP_LNKCAP_MLW) >>
+			PCI_EXP_LNKCAP_MLW_SHIFT;
+		if (*speed == PCI_SPEED_UNKNOWN) { /* pre-r3.0 */
+			if (lnkcap1 & PCI_EXP_LNKCAP_SLS_8_0GB)
+				*speed = PCIE_SPEED_8_0GT;
+			else if (lnkcap1 & PCI_EXP_LNKCAP_SLS_5_0GB)
+				*speed = PCIE_SPEED_5_0GT;
+			else if (lnkcap1 & PCI_EXP_LNKCAP_SLS_2_5GB)
+				*speed = PCIE_SPEED_2_5GT;
+		}
+	}
+
+	return 0;
+}
+
+void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev)
+{
+	enum pcie_link_width width, width_cap;
+	enum pci_bus_speed speed, speed_cap;
+	int err;
+
+#define PCIE_SPEED_STR(speed) \
+	(speed == PCIE_SPEED_8_0GT ? "8.0GT/s" : \
+	 speed == PCIE_SPEED_5_0GT ? "5.0GT/s" : \
+	 speed == PCIE_SPEED_2_5GT ? "2.5GT/s" : \
+	 "Unknown")
+
+	err = mlx5_get_pcie_dev_link_caps(dev->pdev, &speed_cap, &width_cap);
+	if (err) {
+		mlx5_core_warn(
+			dev,
+			"Unable to determine PCIe device BW capabilities\n");
+		return;
+	}
+
+	err = pcie_get_minimum_link(dev->pdev, &speed, &width);
+	if (err || speed == PCI_SPEED_UNKNOWN ||
+	    width == PCIE_LNK_WIDTH_UNKNOWN) {
+		mlx5_core_warn(
+			dev,
+			"Unable to determine PCI device chain minimum BW\n");
+		return;
+	}
+
+	if (width != width_cap)
+		mlx5_core_warn(
+			dev,
+			"PCIe width is lower than device's capability\n");
+	if (speed != speed_cap)
+		mlx5_core_warn(
+			dev,
+			"PCIe speed is slower than device's capability\n");
+
+	mlx5_core_info(dev, "PCIe link speed is %s, device supports %s\n",
+		       PCIE_SPEED_STR(speed), PCIE_SPEED_STR(speed_cap));
+	mlx5_core_info(dev, "PCIe link width is x%d, device supports x%d\n",
+		       width, width_cap);
+}
+EXPORT_SYMBOL(mlx5_pcie_print_link_status);

@@ -129,7 +129,6 @@ int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey)
 	struct ipoib_dev_priv *ppriv, *priv;
 	char intf_name[IFNAMSIZ];
 	struct ipoib_dev_priv *tpriv;
-	struct rdma_netdev *rn;
 	int result;
 
 	if (!capable(CAP_NET_ADMIN))
@@ -143,22 +142,25 @@ int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey)
 	snprintf(intf_name, sizeof intf_name, "%s.%04x",
 		 ppriv->dev->name, pkey);
 
-	if (!rtnl_trylock())
+	if (!mutex_trylock(&ppriv->sysfs_mutex))
 		return restart_syscall();
+
+	if (!rtnl_trylock()) {
+		mutex_unlock(&ppriv->sysfs_mutex);
+		return restart_syscall();
+	}
 
 	if (!down_write_trylock(&ppriv->vlan_rwsem)) {
 		rtnl_unlock();
+		mutex_unlock(&ppriv->sysfs_mutex);
 		return restart_syscall();
 	}
 
 	priv = ipoib_intf_alloc(ppriv->ca, ppriv->port, intf_name);
 	if (!priv) {
-		up_write(&ppriv->vlan_rwsem);
-		rtnl_unlock();
-		return -ENOMEM;
+		result = -ENOMEM;
+		goto out;
 	}
-
-	rn = netdev_priv(priv->dev);
 
 	/*
 	 * First ensure this isn't a duplicate. We check the parent device and
@@ -182,10 +184,13 @@ int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey)
 
 out:
 	up_write(&ppriv->vlan_rwsem);
-
 	rtnl_unlock();
+	mutex_unlock(&ppriv->sysfs_mutex);
 
-	if (result) {
+	if (result && priv) {
+		struct rdma_netdev *rn;
+
+		rn = netdev_priv(priv->dev);
 		rn->free_rdma_netdev(priv->dev);
 		kfree(priv);
 	}
@@ -206,11 +211,17 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey)
 	if (test_bit(IPOIB_FLAG_GOING_DOWN, &ppriv->flags))
 		return -EPERM;
 
-	if (!rtnl_trylock())
+	if (!mutex_trylock(&ppriv->sysfs_mutex))
 		return restart_syscall();
+
+	if (!rtnl_trylock()) {
+		mutex_unlock(&ppriv->sysfs_mutex);
+		return restart_syscall();
+	}
 
 	if (!down_write_trylock(&ppriv->vlan_rwsem)) {
 		rtnl_unlock();
+		mutex_unlock(&ppriv->sysfs_mutex);
 		return restart_syscall();
 	}
 
@@ -232,9 +243,11 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey)
 	}
 
 	rtnl_unlock();
+	mutex_unlock(&ppriv->sysfs_mutex);
 
 	if (dev) {
 		struct rdma_netdev *rn;
+
 		rn = netdev_priv(dev);
 		rn->free_rdma_netdev(priv->dev);
 		kfree(priv);

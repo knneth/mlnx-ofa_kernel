@@ -30,6 +30,8 @@ import sys
 import os
 if os.path.exists('/usr/share/pyshared'):
 	sys.path.append('/usr/share/pyshared')
+if os.path.exists('/usr/lib/python2.7/site-packages'):
+	sys.path.append('/usr/lib/python2.7/site-packages')
 import socket
 import struct
 
@@ -453,7 +455,6 @@ class DcbAppTable:
 
 	def printAppSelector(self, selector):
 		s = ["","","","","","","",""]
-		pad = "\t            "
 
 		for i in range(len(self.apps)):
 			if self.apps[i].selector == selector:
@@ -461,13 +462,15 @@ class DcbAppTable:
 
 		for i in range(8):
 			temp = ""
+			pad  = "\tprio:%d dscp:" %i
 			while (len(s[i]) > 24):
-				temp = temp + s[i][:24] + "\n" + pad
+				temp += pad + s[i][:24] + "\n"
 				s[i] = s[i][24:]
-			temp += s[i]
-
 			if s[i] != "":
-				print "\tprio:%d dscp:" % i + temp
+				temp += pad + s[i]
+
+			if temp != "":
+				print(temp)
 
 	def delAppEntry(self, ctrl, selector):
 		for i in range(len(self.apps)):

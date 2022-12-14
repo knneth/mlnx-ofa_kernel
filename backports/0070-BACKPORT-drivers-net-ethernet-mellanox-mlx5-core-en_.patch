@@ -1,0 +1,101 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+
+Change-Id: I5fa7a01c2f0825ecbec1b565df557b1efa38f3fe
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c | 32 +++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+@@ -30,19 +30,27 @@
+  * SOFTWARE.
+  */
+ 
++#if defined(HAVE_IRQ_DESC_GET_IRQ_DATA) && defined(HAVE_IRQ_TO_DESC_EXPORTED)
+ #include <linux/irq.h>
++#endif
+ #include "en.h"
+ 
++#if defined(HAVE_IRQ_DESC_GET_IRQ_DATA) && defined(HAVE_IRQ_TO_DESC_EXPORTED)
+ static inline bool mlx5e_channel_no_affinity_change(struct mlx5e_channel *c)
+ {
+ 	int current_cpu = smp_processor_id();
+ 	const struct cpumask *aff;
++#ifndef HAVE_IRQ_DATA_AFFINITY
+ 	struct irq_data *idata;
+ 
+ 	idata = irq_desc_get_irq_data(c->irq_desc);
+ 	aff = irq_data_get_affinity_mask(idata);
++#else
++	aff = irq_desc_get_irq_data(c->irq_desc)->affinity;
++#endif
+ 	return cpumask_test_cpu(current_cpu, aff);
+ }
++#endif
+ 
+ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
+ {
+@@ -52,6 +60,10 @@ int mlx5e_napi_poll(struct napi_struct *
+ 	int work_done = 0;
+ 	int i;
+ 
++#ifndef HAVE_NAPI_COMPLETE_DONE_RET_VALUE
++	clear_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags);
++#endif
++
+ 	for (i = 0; i < c->num_tc; i++)
+ 		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
+ 
+@@ -60,8 +72,10 @@ int mlx5e_napi_poll(struct napi_struct *
+ 		busy |= mlx5e_poll_tx_cq(&c->special_sq[i].cq, budget);
+ #endif
+ 
++#ifdef HAVE_NETDEV_BPF
+ 	if (c->xdp)
+ 		busy |= mlx5e_poll_xdpsq_cq(&c->rq.xdpsq.cq);
++#endif
+ 
+ 	if (likely(budget)) { /* budget=0 means: don't poll rx rings */
+ 		work_done = mlx5e_poll_rx_cq(&c->rq.cq, budget);
+@@ -70,15 +84,30 @@ int mlx5e_napi_poll(struct napi_struct *
+ 
+ 	busy |= c->rq.post_wqes(&c->rq);
+ 
++#if defined(HAVE_IRQ_DESC_GET_IRQ_DATA) && defined(HAVE_IRQ_TO_DESC_EXPORTED)
+ 	if (busy) {
+ 		if (likely(mlx5e_channel_no_affinity_change(c)))
+ 			return budget;
+ 		if (budget && work_done == budget)
+ 			work_done--;
+ 	}
++#else
++	if (busy)
++		return budget;
++#endif
+ 
++#ifdef HAVE_NAPI_COMPLETE_DONE_RET_VALUE
+ 	if (unlikely(!napi_complete_done(napi, work_done)))
+ 		return work_done;
++#else
++	napi_complete_done(napi, work_done);
++
++	/* avoid losing completion event during/after polling cqs */
++	if (test_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags)) {
++		 napi_schedule(napi);
++		 return work_done;
++	}
++#endif
+ 
+ 	for (i = 0; i < c->num_tc; i++)
+ 		mlx5e_cq_arm(&c->sq[i].cq);
+@@ -102,6 +131,9 @@ void mlx5e_completion_event(struct mlx5_
+ 	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);
+ 
+ 	cq->event_ctr++;
++#ifndef HAVE_NAPI_COMPLETE_DONE_RET_VALUE
++	set_bit(MLX5E_CHANNEL_NAPI_SCHED, &cq->channel->flags);
++#endif
+ 	napi_schedule(cq->napi);
+ }
+ 

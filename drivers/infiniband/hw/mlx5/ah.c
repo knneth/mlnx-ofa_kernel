@@ -72,6 +72,9 @@ static struct ib_ah *create_ib_ah(struct mlx5_ib_dev *dev,
 					rdma_ah_get_port_num(ah_attr),
 					rdma_ah_read_grh(ah_attr)->sgid_index);
 		ah->av.stat_rate_sl |= (rdma_ah_get_sl(ah_attr) & 0x7) << 1;
+		if (gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP)
+#define MLX5_ECN_ENABLED BIT(1)
+			ah->av.tclass |= MLX5_ECN_ENABLED;
 	} else {
 		ah->av.rlid = cpu_to_be16(rdma_ah_get_dlid(ah_attr));
 		ah->av.fl_mlid = rdma_ah_get_path_bits(ah_attr) & 0x7f;
@@ -103,10 +106,6 @@ struct ib_ah *mlx5_ib_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
 			return ERR_PTR(-EINVAL);
 
 		resp.response_length = min_resp_len;
-
-		err = ib_resolve_eth_dmac(pd->device, ah_attr);
-		if (err)
-			return ERR_PTR(err);
 
 		memcpy(resp.dmac, ah_attr->roce.dmac, ETH_ALEN);
 		err = ib_copy_to_udata(udata, &resp, resp.response_length);

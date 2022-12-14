@@ -1,0 +1,22 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: block/blk-mq-rdma.c
+
+Change-Id: I84e571387322674ac4eeef26009810c21426248f
+---
+ block/blk-mq-rdma.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/block/blk-mq-rdma.c
++++ b/block/blk-mq-rdma.c
+@@ -1,3 +1,5 @@
++#ifdef HAVE_BLK_MQ_MAP_QUEUES
++
+ /*
+  * Copyright (c) 2017 Sagi Grimberg.
+  *
+@@ -50,3 +52,5 @@ fallback:
+ 	return blk_mq_map_queues(set);
+ }
+ EXPORT_SYMBOL_GPL(blk_mq_rdma_map_queues);
++
++#endif /* HAVE_BLK_MQ_MAP_QUEUES */

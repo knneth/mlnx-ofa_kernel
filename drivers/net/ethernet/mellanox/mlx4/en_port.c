@@ -189,7 +189,7 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 	struct net_device *dev = mdev->pndev[port];
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct net_device_stats *stats = &dev->stats;
-	struct mlx4_cmd_mailbox *mailbox;
+	struct mlx4_cmd_mailbox *mailbox, *mailbox_priority;
 	struct mlx4_en_vport_stats *vport_stats = &priv->vport_stats;
 	u64 in_mod = reset << 8 | port;
 	int err;
@@ -200,6 +200,13 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 	mailbox = mlx4_alloc_cmd_mailbox(mdev->dev);
 	if (IS_ERR(mailbox))
 		return PTR_ERR(mailbox);
+
+	mailbox_priority = mlx4_alloc_cmd_mailbox(mdev->dev);
+	if (IS_ERR(mailbox_priority)) {
+		mlx4_free_cmd_mailbox(mdev->dev, mailbox);
+		return PTR_ERR(mailbox_priority);
+	}
+
 	err = mlx4_cmd_box(mdev->dev, 0, mailbox->dma, in_mod, 0,
 			   MLX4_CMD_DUMP_ETH_STATS, MLX4_CMD_TIME_CLASS_B,
 			   MLX4_CMD_NATIVE);
@@ -207,6 +214,28 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 		goto out;
 
 	mlx4_en_stats = mailbox->buf;
+
+	memset(&tmp_counter_stats, 0, sizeof(tmp_counter_stats));
+	counter_index = mlx4_get_default_counter_index(mdev->dev, port);
+	err = mlx4_get_counter_stats(mdev->dev, counter_index,
+				     &tmp_counter_stats, reset);
+
+	/* 0xffs indicates invalid value */
+	memset(mailbox_priority->buf, 0xff,
+	       sizeof(*flowstats) * MLX4_NUM_PRIORITIES);
+
+	if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_FLOWSTATS_EN) {
+		memset(mailbox_priority->buf, 0,
+		       sizeof(*flowstats) * MLX4_NUM_PRIORITIES);
+		err = mlx4_cmd_box(mdev->dev, 0, mailbox_priority->dma,
+				   in_mod | MLX4_DUMP_ETH_STATS_FLOW_CONTROL,
+				   0, MLX4_CMD_DUMP_ETH_STATS,
+				   MLX4_CMD_TIME_CLASS_B, MLX4_CMD_NATIVE);
+		if (err)
+			goto out;
+	}
+
+	flowstats = mailbox_priority->buf;
 
 	spin_lock_bh(&priv->stats_lock);
 
@@ -250,19 +279,24 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 		priv->port_stats.xmit_more         += READ_ONCE(ring->xmit_more);
 	}
 
+	priv->phy_stats.rx_packets = en_stats_adder(&mlx4_en_stats->RTOT_prio_0,
+						    &mlx4_en_stats->RTOT_prio_1,
+						    NUM_PRIORITIES);
+	priv->phy_stats.tx_packets = en_stats_adder(&mlx4_en_stats->TTOT_prio_0,
+						    &mlx4_en_stats->TTOT_prio_1,
+						    NUM_PRIORITIES);
+	priv->phy_stats.rx_bytes = en_stats_adder(&mlx4_en_stats->ROCT_prio_0,
+						  &mlx4_en_stats->ROCT_prio_1,
+						  NUM_PRIORITIES);
+	priv->phy_stats.tx_bytes = en_stats_adder(&mlx4_en_stats->TOCT_prio_0,
+						  &mlx4_en_stats->TOCT_prio_1,
+						  NUM_PRIORITIES);
+
 	if (mlx4_is_master(mdev->dev)) {
-		stats->rx_packets = en_stats_adder(&mlx4_en_stats->RTOT_prio_0,
-						   &mlx4_en_stats->RTOT_prio_1,
-						   NUM_PRIORITIES);
-		stats->tx_packets = en_stats_adder(&mlx4_en_stats->TTOT_prio_0,
-						   &mlx4_en_stats->TTOT_prio_1,
-						   NUM_PRIORITIES);
-		stats->rx_bytes = en_stats_adder(&mlx4_en_stats->ROCT_prio_0,
-						 &mlx4_en_stats->ROCT_prio_1,
-						 NUM_PRIORITIES);
-		stats->tx_bytes = en_stats_adder(&mlx4_en_stats->TOCT_prio_0,
-						 &mlx4_en_stats->TOCT_prio_1,
-						 NUM_PRIORITIES);
+		stats->rx_packets = priv->phy_stats.rx_packets;
+		stats->tx_packets = priv->phy_stats.tx_packets;
+		stats->rx_bytes = priv->phy_stats.rx_bytes;
+		stats->tx_bytes = priv->phy_stats.tx_bytes;
 	}
 
 	/* net device stats */
@@ -400,27 +434,6 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 		spin_unlock_bh(&priv->stats_lock);
 	}
 
-	memset(&tmp_counter_stats, 0, sizeof(tmp_counter_stats));
-	counter_index = mlx4_get_default_counter_index(mdev->dev, port);
-	err = mlx4_get_counter_stats(mdev->dev, counter_index,
-				     &tmp_counter_stats, reset);
-
-	/* 0xffs indicates invalid value */
-	memset(mailbox->buf, 0xff, sizeof(*flowstats) * MLX4_NUM_PRIORITIES);
-
-	if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_FLOWSTATS_EN) {
-		memset(mailbox->buf, 0,
-		       sizeof(*flowstats) * MLX4_NUM_PRIORITIES);
-		err = mlx4_cmd_box(mdev->dev, 0, mailbox->dma,
-				   in_mod | MLX4_DUMP_ETH_STATS_FLOW_CONTROL,
-				   0, MLX4_CMD_DUMP_ETH_STATS,
-				   MLX4_CMD_TIME_CLASS_B, MLX4_CMD_NATIVE);
-		if (err)
-			goto out;
-	}
-
-	flowstats = mailbox->buf;
-
 	spin_lock_bh(&priv->stats_lock);
 
 	if (tmp_counter_stats.counter_mode == MLX4_IF_CNT_MODE_BASIC) {
@@ -484,6 +497,7 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 
 out:
 	mlx4_free_cmd_mailbox(mdev->dev, mailbox);
+	mlx4_free_cmd_mailbox(mdev->dev, mailbox_priority);
 	return err;
 }
 

@@ -38,7 +38,7 @@
 #define IB_DEFAULT_Q_KEY   0xb1b
 #define MLX5I_PARAMS_DEFAULT_LOG_RQ_SIZE 9
 
-#define MLX5I_MAX_NUM_CHANNELS         16
+#define MLX5I_MAX_NUM_CHANNELS           16
 
 static int mlx5i_open(struct net_device *netdev);
 static int mlx5i_close(struct net_device *netdev);
@@ -111,6 +111,8 @@ void mlx5i_init(struct mlx5_core_dev *mdev,
 	mlx5e_build_nic_params(priv, &priv->channels.params, profile->max_nch(mdev));
 	mlx5i_build_nic_params(priv, &priv->channels.params);
 
+	mlx5e_timestamp_init(priv);
+
 	/* netdev init */
 	netdev->hw_features    |= NETIF_F_SG;
 	netdev->hw_features    |= NETIF_F_IP_CSUM;
@@ -150,8 +152,8 @@ int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5i_priv *ipriv = priv->ppriv;
 	struct mlx5_core_qp *qp = &ipriv->qp;
-	struct mlx5_qp_context *context = NULL;
-	int ret = 0;
+	struct mlx5_qp_context *context;
+	int ret;
 
 	/* QP states */
 	context = kzalloc(sizeof(*context), GFP_KERNEL);
@@ -166,22 +168,27 @@ int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
 	ret = mlx5_core_qp_modify(mdev, MLX5_CMD_OP_RST2INIT_QP, 0, context, qp);
 	if (ret) {
 		mlx5_core_err(mdev, "Failed to modify qp RST2INIT, err: %d\n", ret);
-		goto out;
+		goto err_qp_modify_to_err;
 	}
 	memset(context, 0, sizeof(*context));
 
 	ret = mlx5_core_qp_modify(mdev, MLX5_CMD_OP_INIT2RTR_QP, 0, context, qp);
 	if (ret) {
 		mlx5_core_err(mdev, "Failed to modify qp INIT2RTR, err: %d\n", ret);
-		goto out;
+		goto err_qp_modify_to_err;
 	}
 
 	ret = mlx5_core_qp_modify(mdev, MLX5_CMD_OP_RTR2RTS_QP, 0, context, qp);
 	if (ret) {
 		mlx5_core_err(mdev, "Failed to modify qp RTR2RTS, err: %d\n", ret);
-		goto out;
+		goto err_qp_modify_to_err;
 	}
-out:
+
+	kfree(context);
+	return 0;
+
+err_qp_modify_to_err:
+	mlx5_core_qp_modify(mdev, MLX5_CMD_OP_2ERR_QP, 0, &context, qp);
 	kfree(context);
 	return ret;
 }
@@ -254,10 +261,14 @@ static int mlx5i_init_tx(struct mlx5e_priv *priv)
 	err = mlx5e_create_tis(priv->mdev, 0 /* tc */, ipriv->qp.qpn, &priv->tisn[0]);
 	if (err) {
 		mlx5_core_warn(priv->mdev, "create tis failed, %d\n", err);
-		return err;
+		goto err_destroy_underlay_qp;
 	}
 
 	return 0;
+
+err_destroy_underlay_qp:
+	mlx5i_destroy_underlay_qp(priv->mdev, &ipriv->qp);
+	return err;
 }
 
 static void mlx5i_cleanup_tx(struct mlx5e_priv *priv)
@@ -429,14 +440,16 @@ void mlx5i_tx_timeout(struct net_device *netdev)
 
 int mlx5i_dev_init(struct net_device *dev)
 {
-	struct mlx5i_priv *ipriv = netdev_priv(dev);
+	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
+	struct mlx5i_priv    *ipriv  = priv->ppriv;
 
 	/* Set dev address using underlay QP */
 	dev->dev_addr[1] = (ipriv->qp.qpn >> 16) & 0xff;
 	dev->dev_addr[2] = (ipriv->qp.qpn >>  8) & 0xff;
 	dev->dev_addr[3] = (ipriv->qp.qpn) & 0xff;
 
-	mlx5i_map_qpn_to_netdev(dev ,ipriv->qp.qpn);
+	/* Add QPN to net-device mapping to HT */
+	mlx5i_pkey_add_qpn(dev ,ipriv->qp.qpn);
 
 	return 0;
 }
@@ -458,11 +471,12 @@ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 void mlx5i_dev_cleanup(struct net_device *dev)
 {
 	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
-	struct mlx5i_priv *ipriv = priv->ppriv;
+	struct mlx5i_priv    *ipriv = priv->ppriv;
 
 	mlx5i_uninit_underlay_qp(priv);
 
-	mlx5i_unmap_qpn_to_netdev(dev, ipriv->qp.qpn);
+	/* Delete QPN to net-device mapping from HT */
+	mlx5i_pkey_del_qpn(dev, ipriv->qp.qpn);
 }
 
 static int mlx5i_open(struct net_device *netdev)
@@ -494,7 +508,6 @@ static int mlx5i_open(struct net_device *netdev)
 
 	mlx5e_refresh_tirs(epriv, false);
 	mlx5e_activate_priv_channels(epriv);
-	mlx5e_timestamp_set(epriv);
 
 	if (epriv->profile->update_stats)
 		queue_delayed_work(epriv->wq, &epriv->update_stats_work, 0);
@@ -635,7 +648,7 @@ struct net_device *mlx5_rdma_netdev_alloc(struct mlx5_core_dev *mdev,
 	sub_interface = (mdev->mlx5e_res.pdn != 0);
 
 	if (sub_interface)
-		profile = mlx5i_child_get_profile();
+		profile = mlx5i_pkey_get_profile();
 	else
 		profile = &mlx5i_nic_profile;
 
@@ -660,7 +673,7 @@ struct net_device *mlx5_rdma_netdev_alloc(struct mlx5_core_dev *mdev,
 
 	ipriv->sub_interface = sub_interface;
 	if (!ipriv->sub_interface) {
-		err = mlx5i_alloc_qpn_to_netdev_ht(netdev);
+		err = mlx5i_pkey_qpn_ht_init(netdev);
 		if (err) {
 			mlx5_core_warn(mdev, "allocate qpn_to_netdev ht failed\n");
 			goto destroy_wq;
@@ -688,7 +701,7 @@ struct net_device *mlx5_rdma_netdev_alloc(struct mlx5_core_dev *mdev,
 	return netdev;
 
 destroy_ht:
-	mlx5i_free_qpn_to_netdev_ht(netdev);
+	mlx5i_pkey_qpn_ht_cleanup(netdev);
 destroy_wq:
 	destroy_workqueue(epriv->wq);
 err_free_netdev:
@@ -709,7 +722,7 @@ void mlx5_rdma_netdev_free(struct net_device *netdev)
 	destroy_workqueue(priv->wq);
 
 	if (!ipriv->sub_interface) {
-		mlx5i_free_qpn_to_netdev_ht(netdev);
+		mlx5i_pkey_qpn_ht_cleanup(netdev);
 		mlx5e_destroy_mdev_resources(priv->mdev);
 	}
 	free_netdev(netdev);

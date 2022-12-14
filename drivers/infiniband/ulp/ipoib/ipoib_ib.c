@@ -225,8 +225,8 @@ static void ipoib_ib_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 
 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
 		if (wc->status != IB_WC_WR_FLUSH_ERR)
-			ipoib_warn(priv, "failed recv event "
-				   "(status=%d, wrid=%d vend_err %x)\n",
+			ipoib_warn(priv,
+				   "failed recv event (status=%d, wrid=%d vend_err %#x)\n",
 				   wc->status, wr_id, wc->vendor_err);
 		ipoib_ud_dma_unmap_rx(priv, priv->rx_ring[wr_id].mapping);
 		dev_kfree_skb_any(skb);
@@ -445,15 +445,15 @@ static void ipoib_ib_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	++priv->tx_tail;
 
 	if (unlikely(netif_queue_stopped(dev) &&
-		     ((priv->tx_head - priv->tx_tail) <= ipoib_sendq_size >> 1) &&
+		     ((priv->tx_head - priv->tx_tail) <= priv->sendq_size >> 1) &&
 		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
 		netif_wake_queue(dev);
 
 	if (wc->status != IB_WC_SUCCESS &&
 	    wc->status != IB_WC_WR_FLUSH_ERR) {
 		struct ipoib_qp_state_validate *qp_work;
-		ipoib_warn(priv, "failed send event "
-			   "(status=%d, wrid=%d vend_err %x)\n",
+		ipoib_warn(priv,
+			   "failed send event (status=%d, wrid=%d vend_err %#x)\n",
 			   wc->status, wr_id, wc->vendor_err);
 		qp_work = kzalloc(sizeof(*qp_work), GFP_ATOMIC);
 		if (!qp_work)
@@ -474,11 +474,10 @@ static int poll_tx(struct ipoib_dev_priv *priv)
 	for (i = 0; i < n; ++i) {
 		wc = priv->send_wc + i;
 		if (wc->wr_id & IPOIB_OP_CM)
-			ipoib_cm_handle_tx_wc(priv->dev, wc);
+			ipoib_cm_handle_tx_wc(priv->dev, priv->send_wc + i);
 		else
-			ipoib_ib_handle_tx_wc(priv->dev, wc);
+			ipoib_ib_handle_tx_wc(priv->dev, priv->send_wc + i);
 	}
-
 	return n == MAX_SEND_CQE;
 }
 
@@ -486,7 +485,6 @@ int ipoib_rx_poll(struct napi_struct *napi, int budget)
 {
 	struct ipoib_dev_priv *priv =
 		container_of(napi, struct ipoib_dev_priv, recv_napi);
-
 	struct net_device *dev = priv->dev;
 	int done;
 	int t;
@@ -687,9 +685,8 @@ int ipoib_send(struct net_device *dev, struct sk_buff *skb,
 		priv->tx_wr.wr.send_flags |= IB_SEND_IP_CSUM;
 	else
 		priv->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
-
 	/* increase the tx_head after send success, but use it for queue state */
-	if (priv->tx_head - priv->tx_tail == ipoib_sendq_size - 1) {
+	if (priv->tx_head - priv->tx_tail == priv->sendq_size - 1) {
 		ipoib_dbg(priv, "TX ring full, stopping kernel net queue\n");
 		netif_stop_queue(dev);
 	}
@@ -707,7 +704,6 @@ int ipoib_send(struct net_device *dev, struct sk_buff *skb,
 	if (unlikely(rc)) {
 		ipoib_warn(priv, "post_send failed, error %d\n", rc);
 		++dev->stats.tx_errors;
-
 		if (!tx_req->is_inline)
 			ipoib_dma_unmap_tx(priv, tx_req);
 		dev_kfree_skb_any(skb);
@@ -1067,7 +1063,7 @@ void ipoib_drain_cq(struct net_device *dev)
 				else
 					ipoib_ib_handle_rx_wc(dev, priv->ibwc + i);
 			} else {
-				 pr_warn("%s: Got unexpected wqe id\n", __func__);
+				pr_warn("%s: Got unexpected wqe id\n", __func__);
 			}
 		}
 	} while (n == IPOIB_NUM_WC);
@@ -1106,7 +1102,6 @@ static inline int update_parent_pkey(struct ipoib_dev_priv *priv)
 		 */
 		priv->dev->broadcast[8] = priv->pkey >> 8;
 		priv->dev->broadcast[9] = priv->pkey & 0xff;
-
 		return 0;
 	}
 
@@ -1316,10 +1311,7 @@ static void __ipoib_ib_dev_flush(struct ipoib_dev_priv *priv,
 		if (test_bit(IPOIB_FLAG_INITIALIZED, &priv->flags))
 			ipoib_ib_dev_stop(dev);
 
-		rtnl_lock();
-		result = ipoib_ib_dev_open(dev);
-		rtnl_unlock();
-		if (result)
+		if (ipoib_ib_dev_open(dev))
 			return;
 
 		if (netif_queue_stopped(dev))
@@ -1359,7 +1351,9 @@ void ipoib_ib_dev_flush_heavy(struct work_struct *work)
 	struct ipoib_dev_priv *priv =
 		container_of(work, struct ipoib_dev_priv, flush_heavy);
 
+	rtnl_lock();
 	__ipoib_ib_dev_flush(priv, IPOIB_FLUSH_HEAVY, 0);
+	rtnl_unlock();
 }
 
 void ipoib_ib_dev_cleanup(struct net_device *dev)

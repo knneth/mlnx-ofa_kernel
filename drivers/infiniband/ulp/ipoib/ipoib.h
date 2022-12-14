@@ -72,8 +72,8 @@ enum {
 	IPOIB_CM_BUF_SIZE	  = IPOIB_CM_MTU  + IPOIB_ENCAP_LEN,
 	IPOIB_CM_HEAD_SIZE	  = IPOIB_CM_BUF_SIZE % PAGE_SIZE,
 	IPOIB_CM_RX_SG		  = ALIGN(IPOIB_CM_BUF_SIZE, PAGE_SIZE) / PAGE_SIZE,
-	IPOIB_RX_RING_SIZE	  = 512,
-	IPOIB_TX_RING_SIZE	  = 512,
+	IPOIB_RX_RING_SIZE	  = 256,
+	IPOIB_TX_RING_SIZE	  = 128,
 	IPOIB_MAX_QUEUE_SIZE	  = 8192,
 	IPOIB_MIN_QUEUE_SIZE	  = 2,
 	IPOIB_CM_MAX_CONN_QP	  = 4096,
@@ -354,6 +354,7 @@ struct ipoib_dev_priv {
 
 	struct rw_semaphore vlan_rwsem;
 	struct mutex mcast_mutex;
+	struct mutex sysfs_mutex;
 
 	struct rb_root  path_tree;
 	struct list_head path_list;
@@ -384,7 +385,7 @@ struct ipoib_dev_priv {
 	u32		  qkey;
 
 	union ib_gid local_gid;
-	u16	     local_lid;
+	u32	     local_lid;
 
 	unsigned int admin_mtu;
 	unsigned int mcast_mtu;
@@ -425,7 +426,6 @@ struct ipoib_dev_priv {
 	u64	hca_caps;
 	u64	hca_caps_exp;
 	struct ipoib_ethtool_st ethtool;
-	struct timer_list poll_timer;
 	struct ipoib_recv_ring *recv_ring;
 	struct ipoib_send_ring *send_ring;
 	unsigned int rss_qp_num; /* No RSS HW support 0 */
@@ -535,7 +535,7 @@ void ipoib_mark_paths_invalid(struct net_device *dev);
 void ipoib_flush_paths(struct net_device *dev);
 struct ipoib_dev_priv *ipoib_intf_alloc(struct ib_device *hca, u8 port,
 					const char *format);
-void ipoib_ib_tx_timer_func(unsigned long ctx);
+void ipoib_ib_tx_timer_func(struct timer_list *t);
 void ipoib_ib_dev_flush_light(struct work_struct *work);
 void ipoib_ib_dev_flush_normal(struct work_struct *work);
 void ipoib_ib_dev_flush_heavy(struct work_struct *work);

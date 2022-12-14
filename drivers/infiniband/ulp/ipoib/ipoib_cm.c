@@ -598,9 +598,9 @@ void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 	skb = rx_ring[wr_id].skb;
 
 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
-		ipoib_dbg(priv, "cm recv error "
-			   "(status=%d, wrid=%d vend_err %x)\n",
-			   wc->status, wr_id, wc->vendor_err);
+		ipoib_dbg(priv,
+			  "cm recv error (status=%d, wrid=%d vend_err %#x)\n",
+			  wc->status, wr_id, wc->vendor_err);
 		++dev->stats.rx_dropped;
 		if (has_srq)
 			goto repost;
@@ -769,7 +769,7 @@ void ipoib_cm_send(struct net_device *dev, struct sk_buff *skb, struct ipoib_cm_
 		priv->tx_wr.wr.send_flags &= ~IB_SEND_INLINE;
 	}
 
-	if ((priv->tx_head - priv->tx_tail) == ipoib_sendq_size - 1) {
+	if ((priv->tx_head - priv->tx_tail) == priv->sendq_size - 1) {
 		ipoib_dbg(priv, "TX ring 0x%x full, stopping kernel net queue\n",
 			  tx->qp->qp_num);
 		netif_stop_queue(dev);
@@ -837,7 +837,7 @@ void ipoib_cm_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	++priv->tx_tail;
 
 	if (unlikely(netif_queue_stopped(dev) &&
-		     (priv->tx_head - priv->tx_tail) <= ipoib_sendq_size >> 1 &&
+		     (priv->tx_head - priv->tx_tail) <= priv->sendq_size >> 1 &&
 		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
 		netif_wake_queue(dev);
 
@@ -845,12 +845,18 @@ void ipoib_cm_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	    wc->status != IB_WC_WR_FLUSH_ERR) {
 		struct ipoib_neigh *neigh;
 
-		if (wc->status != IB_WC_RNR_RETRY_EXC_ERR)
-			ipoib_warn(priv, "failed cm send event (status=%d, wrid=%d vend_err %x)\n",
-				   wc->status, wr_id, wc->vendor_err);
+		/* IB_WC[_RNR]_RETRY_EXC_ERR error is part of the life cycle,
+		 * so don't make waves.
+		 */
+		if (wc->status == IB_WC_RNR_RETRY_EXC_ERR ||
+		    wc->status == IB_WC_RETRY_EXC_ERR)
+			ipoib_dbg(priv,
+				  "%s: failed cm send event (status=%d, wrid=%d vend_err %#x)\n",
+				   __func__, wc->status, wr_id, wc->vendor_err);
 		else
-			ipoib_dbg(priv, "failed cm send event (status=%d, wrid=%d vend_err %x)\n",
-				  wc->status, wr_id, wc->vendor_err);
+			ipoib_warn(priv,
+				    "%s: failed cm send event (status=%d, wrid=%d vend_err %#x)\n",
+				   __func__, wc->status, wr_id, wc->vendor_err);
 
 		spin_lock_irqsave(&priv->lock, flags);
 		neigh = tx->neigh;
@@ -1155,6 +1161,7 @@ static int ipoib_cm_tx_init(struct ipoib_cm_tx *p, u32 qpn,
 	noio_flag = memalloc_noio_save();
 	p->tx_ring = vzalloc(priv->sendq_size * sizeof(*p->tx_ring));
 	if (!p->tx_ring) {
+		memalloc_noio_restore(noio_flag);
 		ret = -ENOMEM;
 		goto err_tx;
 	}
@@ -1273,7 +1280,7 @@ timeout:
 		netif_tx_lock_bh(p->dev);
 		++p->tx_tail;
 		++priv->tx_tail;
-		if (unlikely(priv->tx_head - priv->tx_tail == ipoib_sendq_size >> 1) &&
+		if (unlikely(priv->tx_head - priv->tx_tail == priv->sendq_size >> 1) &&
 		    netif_queue_stopped(p->dev) &&
 		    test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
 			netif_wake_queue(p->dev);
@@ -1499,8 +1506,7 @@ void ipoib_cm_skb_too_long(struct net_device *dev, struct sk_buff *skb,
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int e = skb_queue_empty(&priv->cm.skb_queue);
 
-	if (skb_dst(skb))
-		skb_dst(skb)->ops->update_pmtu(skb_dst(skb), NULL, skb, mtu);
+	skb_dst_update_pmtu(skb, mtu);
 
 	skb_queue_tail(&priv->cm.skb_queue, skb);
 	if (e)
@@ -1564,8 +1570,13 @@ static ssize_t set_mode(struct device *d, struct device_attribute *attr,
 	if (test_bit(IPOIB_FLAG_GOING_DOWN, &priv->flags))
 		return -EPERM;
 
-	if (!rtnl_trylock())
+	if (!mutex_trylock(&priv->sysfs_mutex))
 		return restart_syscall();
+
+	if (!rtnl_trylock()) {
+		mutex_unlock(&priv->sysfs_mutex);
+		return restart_syscall();
+	}
 
 	ret = priv->fp.ipoib_set_mode(dev, buf);
 
@@ -1575,6 +1586,7 @@ static ssize_t set_mode(struct device *d, struct device_attribute *attr,
 	 */
 	if (ret != -EBUSY)
 		rtnl_unlock();
+	mutex_unlock(&priv->sysfs_mutex);
 
 	return (!ret || ret == -EBUSY) ? count : ret;
 }

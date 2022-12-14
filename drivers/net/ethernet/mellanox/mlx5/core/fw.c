@@ -32,7 +32,6 @@
 
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/cmd.h>
-#include <linux/mlx5/eswitch.h>
 #include <linux/module.h>
 #include "mlx5_core.h"
 #include "../../mlxfw/mlxfw.h"
@@ -160,13 +159,13 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 	}
 
 	if (MLX5_CAP_GEN(dev, vport_group_manager) &&
-	    MLX5_ESWITCH_MANAGER(dev)) {
+	    MLX5_CAP_GEN(dev, eswitch_flow_table)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_ESWITCH_FLOW_TABLE);
 		if (err)
 			return err;
 	}
 
-	if (MLX5_ESWITCH_MANAGER(dev)) {
+	if (MLX5_CAP_GEN(dev, eswitch_flow_table)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_ESWITCH);
 		if (err)
 			return err;
@@ -251,7 +250,7 @@ int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev)
 
 	force_state = MLX5_GET(teardown_hca_out, out, force_state);
 	if (force_state == MLX5_TEARDOWN_HCA_OUT_FORCE_STATE_FAIL) {
-		mlx5_core_err(dev, "teardown with force mode failed\n");
+		mlx5_core_warn(dev, "teardown with force mode failed, doing normal teardown\n");
 		return -EIO;
 	}
 
@@ -525,26 +524,69 @@ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
 	return mlxfw_firmware_flash(&mlx5_mlxfw_dev.mlxfw_dev, firmware);
 }
 
-int mlx5_get_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				int function_id, bool *value)
+static int query_other_hca_cap(struct mlx5_core_dev *mdev,
+			       int function_id, void *out)
 {
-	int out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
+	int out_sz = MLX5_ST_SZ_BYTES(query_other_hca_cap_out);
+	int in_sz = MLX5_ST_SZ_BYTES(query_other_hca_cap_in);
+	void *in;
+	int err;
+
+	in = kzalloc(in_sz, GFP_KERNEL);
+	if (!in)
+		return -ENOMEM;
+
+	MLX5_SET(query_other_hca_cap_in, in, opcode,
+		 MLX5_CMD_OP_QUERY_OTHER_HCA_CAP);
+	MLX5_SET(query_other_hca_cap_in, in, function_id, function_id);
+
+	err = mlx5_cmd_exec(mdev, in, in_sz, out, out_sz);
+
+	kfree(in);
+	return err;
+}
+
+static int modify_other_hca_cap(struct mlx5_core_dev *mdev,
+				int function_id, void *in)
+{
+	int out_sz = MLX5_ST_SZ_BYTES(modify_other_hca_cap_out);
+	int in_sz = MLX5_ST_SZ_BYTES(modify_other_hca_cap_in);
 	void *out;
-	void *hca_cap;
 	int err;
 
 	out = kzalloc(out_sz, GFP_KERNEL);
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_hca_cap(mdev, MLX5_CAP_GENERAL, HCA_CAP_OPMOD_GET_CUR,
-				 function_id, out);
+	MLX5_SET(modify_other_hca_cap_in, in, opcode,
+		 MLX5_CMD_OP_MODIFY_OTHER_HCA_CAP);
+	MLX5_SET(modify_other_hca_cap_in, in, function_id, function_id);
+
+	err = mlx5_cmd_exec(mdev, in, in_sz, out, out_sz);
+
+	kfree(out);
+	return err;
+}
+
+int mlx5_get_other_hca_cap_roce(struct mlx5_core_dev *mdev,
+				int function_id, bool *value)
+{
+	int out_sz = MLX5_ST_SZ_BYTES(query_other_hca_cap_out);
+	void *out;
+	void *other_capability;
+	int err;
+
+	out = kzalloc(out_sz, GFP_KERNEL);
+	if (!out)
+		return -ENOMEM;
+
+	err = query_other_hca_cap(mdev, function_id, out);
 	if (err)
 		goto out;
 
-	hca_cap = MLX5_ADDR_OF(query_hca_cap_out,
-			       out, capability);
-	*value = MLX5_GET(cmd_hca_cap, hca_cap, roce);
+	other_capability = MLX5_ADDR_OF(query_other_hca_cap_out,
+					out, other_capability);
+	*value = MLX5_GET(other_hca_cap, other_capability, roce);
 
 out:
 	kfree(out);
@@ -554,48 +596,23 @@ out:
 int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
 				   int function_id, bool value)
 {
-	u32 set_cap_out[MLX5_ST_SZ_DW(set_hca_cap_out)] = {0};
-	int out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
-	int set_sz = MLX5_ST_SZ_BYTES(set_hca_cap_in);
-	void *set_ctx = NULL;
-	void *set_hca_cap;
-	void *hca_cap;
-	void *out;
+	int in_sz = MLX5_ST_SZ_BYTES(modify_other_hca_cap_in);
+	struct mlx5_ifc_other_hca_cap_bits *other_capability;
+	void *in;
 	int err;
 
-	out = kzalloc(out_sz, GFP_KERNEL);
-	if (!out)
+	in = kzalloc(in_sz, GFP_KERNEL);
+	if (!in)
 		return -ENOMEM;
 
-	err = mlx5_query_hca_cap(mdev, MLX5_CAP_GENERAL, HCA_CAP_OPMOD_GET_CUR,
-				 function_id, out);
-	if (err)
-		goto out;
+	MLX5_SET(modify_other_hca_cap_in, in, field_select, ROCE_SELECT);
+	other_capability = (struct mlx5_ifc_other_hca_cap_bits *)
+				MLX5_ADDR_OF(modify_other_hca_cap_in,
+					     in, other_capability);
+	MLX5_SET(other_hca_cap, other_capability, roce, value);
 
-	hca_cap = MLX5_ADDR_OF(query_hca_cap_out,
-			       out, capability);
+	err = modify_other_hca_cap(mdev, function_id, in);
 
-	set_ctx = kzalloc(set_sz, GFP_KERNEL);
-	if (!set_ctx)
-		goto out;
-
-	set_hca_cap = MLX5_ADDR_OF(set_hca_cap_in, set_ctx,
-				   capability);
-	memcpy(set_hca_cap, hca_cap,
-	       MLX5_ST_SZ_BYTES(cmd_hca_cap));
-
-	MLX5_SET(cmd_hca_cap, set_hca_cap, roce, value);
-	
-	MLX5_SET(set_hca_cap_in, set_ctx, opcode, MLX5_CMD_OP_SET_HCA_CAP);
-	MLX5_SET(set_hca_cap_in, set_ctx, op_mod, MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE << 1);
-	if (function_id) {
-		MLX5_SET(set_hca_cap_in, set_ctx, other_function, 1);
-		MLX5_SET(set_hca_cap_in, set_ctx, function_id, function_id);
-	}
-
-	err = mlx5_cmd_exec(mdev, set_ctx, set_sz, set_cap_out, sizeof(out));
-out:
-	kfree(set_ctx);
-	kfree(out);
+	kfree(in);
 	return err;
 }

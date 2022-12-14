@@ -284,7 +284,8 @@ struct mlx5_ib_exp_create_wq {
 
 enum mlx5_exp_create_srq_mask {
 	MLX5_EXP_CREATE_SRQ_MASK_DC_OP	  = 1 << 0,
-	MLX5_EXP_CREATE_SRQ_MASK_RESERVED = 1 << 1,
+	MLX5_EXP_CREATE_SRQ_MASK_MP_WR	  = 1 << 1,
+	MLX5_EXP_CREATE_SRQ_MASK_RESERVED = 1 << 2,
 };
 
 struct mlx5_ib_set_xrq_dc_offload_params {
@@ -307,7 +308,9 @@ struct mlx5_ib_exp_create_srq {
 	__u32	flags;
 	__u32	reserved0;
 	__u32	uidx;
-	__u32	reserved1;
+	__u8	mp_wr_log_num_of_strides;
+	__u8	mp_wr_log_stride_size;
+	__u16	reserved1;
 	__u32	max_num_tags;
 	__u32	comp_mask;
 	struct mlx5_ib_set_xrq_dc_offload_params dc_op;

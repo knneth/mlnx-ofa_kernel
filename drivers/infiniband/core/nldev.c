@@ -30,6 +30,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/module.h>
 #include <net/netlink.h>
 #include <rdma/rdma_netlink.h>
 
@@ -51,9 +52,6 @@ static const struct nla_policy nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
 	[RDMA_NLDEV_ATTR_PORT_STATE]	= { .type = NLA_U8 },
 	[RDMA_NLDEV_ATTR_PORT_PHYS_STATE] = { .type = NLA_U8 },
 	[RDMA_NLDEV_ATTR_DEV_NODE_TYPE] = { .type = NLA_U8 },
-	[RDMA_NLDEV_ATTR_NDEV_INDEX]		= { .type = NLA_U32 },
-	[RDMA_NLDEV_ATTR_NDEV_NAME]		= { .type = NLA_NUL_STRING,
-						    .len = IFNAMSIZ },
 };
 
 static int fill_dev_info(struct sk_buff *msg, struct ib_device *device)
@@ -73,7 +71,7 @@ static int fill_dev_info(struct sk_buff *msg, struct ib_device *device)
 		return -EMSGSIZE;
 
 	ib_get_device_fw_str(device, fw);
-	/* Device without FW has strlen(fw) = 0 */
+	/* Device without FW has strlen(fw) */
 	if (strlen(fw) && nla_put_string(msg, RDMA_NLDEV_ATTR_FW_VERSION, fw))
 		return -EMSGSIZE;
 
@@ -89,10 +87,8 @@ static int fill_dev_info(struct sk_buff *msg, struct ib_device *device)
 }
 
 static int fill_port_info(struct sk_buff *msg,
-			  struct ib_device *device, u32 port,
-			  const struct net *net)
+			  struct ib_device *device, u32 port)
 {
-	struct net_device *netdev = NULL;
 	struct ib_port_attr attr;
 	int ret;
 
@@ -127,23 +123,7 @@ static int fill_port_info(struct sk_buff *msg,
 		return -EMSGSIZE;
 	if (nla_put_u8(msg, RDMA_NLDEV_ATTR_PORT_PHYS_STATE, attr.phys_state))
 		return -EMSGSIZE;
-
-	if (device->get_netdev)
-		netdev = device->get_netdev(device, port);
-
-	if (netdev && net_eq(dev_net(netdev), net)) {
-		ret = nla_put_u32(msg,
-				  RDMA_NLDEV_ATTR_NDEV_INDEX, netdev->ifindex);
-		if (ret)
-			goto out;
-		ret = nla_put_string(msg,
-				     RDMA_NLDEV_ATTR_NDEV_NAME, netdev->name);
-	}
-
-out:
-	if (netdev)
-		dev_put(netdev);
-	return ret;
+	return 0;
 }
 
 static int nldev_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
@@ -162,27 +142,34 @@ static int nldev_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 
 	index = nla_get_u32(tb[RDMA_NLDEV_ATTR_DEV_INDEX]);
 
-	device = __ib_device_get_by_index(index);
+	device = ib_device_get_by_index(index);
 	if (!device)
 		return -EINVAL;
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
-	if (!msg)
-		return -ENOMEM;
+	if (!msg) {
+		err = -ENOMEM;
+		goto err;
+	}
 
 	nlh = nlmsg_put(msg, NETLINK_CB(skb).portid, nlh->nlmsg_seq,
 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
 			0, 0);
 
 	err = fill_dev_info(msg, device);
-	if (err) {
-		nlmsg_free(msg);
-		return err;
-	}
+	if (err)
+		goto err_free;
 
 	nlmsg_end(msg, nlh);
 
+	put_device(&device->dev);
 	return rdma_nl_unicast(msg, NETLINK_CB(skb).portid);
+
+err_free:
+	nlmsg_free(msg);
+err:
+	put_device(&device->dev);
+	return err;
 }
 
 static int _nldev_get_dumpit(struct ib_device *device,
@@ -234,35 +221,46 @@ static int nldev_port_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 
 	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
 			  nldev_policy, extack);
-	if (err || !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
+	if (err ||
+	    !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
+	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
 		return -EINVAL;
 
 	index = nla_get_u32(tb[RDMA_NLDEV_ATTR_DEV_INDEX]);
-	device = __ib_device_get_by_index(index);
+	device = ib_device_get_by_index(index);
 	if (!device)
 		return -EINVAL;
 
 	port = nla_get_u32(tb[RDMA_NLDEV_ATTR_PORT_INDEX]);
-	if (!rdma_is_port_valid(device, port))
-		return -EINVAL;
+	if (!rdma_is_port_valid(device, port)) {
+		err = -EINVAL;
+		goto err;
+	}
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
-	if (!msg)
-		return -ENOMEM;
+	if (!msg) {
+		err = -ENOMEM;
+		goto err;
+	}
 
 	nlh = nlmsg_put(msg, NETLINK_CB(skb).portid, nlh->nlmsg_seq,
 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
 			0, 0);
 
-	err = fill_port_info(msg, device, port, sock_net(skb->sk));
-	if (err) {
-		nlmsg_free(msg);
-		return err;
-	}
+	err = fill_port_info(msg, device, port);
+	if (err)
+		goto err_free;
 
 	nlmsg_end(msg, nlh);
+	put_device(&device->dev);
 
 	return rdma_nl_unicast(msg, NETLINK_CB(skb).portid);
+
+err_free:
+	nlmsg_free(msg);
+err:
+	put_device(&device->dev);
+	return err;
 }
 
 static int nldev_port_get_dumpit(struct sk_buff *skb,
@@ -283,11 +281,21 @@ static int nldev_port_get_dumpit(struct sk_buff *skb,
 		return -EINVAL;
 
 	ifindex = nla_get_u32(tb[RDMA_NLDEV_ATTR_DEV_INDEX]);
-	device = __ib_device_get_by_index(ifindex);
+	device = ib_device_get_by_index(ifindex);
 	if (!device)
 		return -EINVAL;
 
 	for (p = rdma_start_port(device); p <= rdma_end_port(device); ++p) {
+		/*
+		 * The dumpit function returns all information from specific
+		 * index. This specific index is taken from the netlink
+		 * messages request sent by user and it is available
+		 * in cb->args[0].
+		 *
+		 * Usually, the user doesn't fill this field and it causes
+		 * to return everything.
+		 *
+		 */
 		if (idx < start) {
 			idx++;
 			continue;
@@ -299,7 +307,7 @@ static int nldev_port_get_dumpit(struct sk_buff *skb,
 						 RDMA_NLDEV_CMD_PORT_GET),
 				0, NLM_F_MULTI);
 
-		if (fill_port_info(skb, device, p, sock_net(skb->sk))) {
+		if (fill_port_info(skb, device, p)) {
 			nlmsg_cancel(skb, nlh);
 			goto out;
 		}
@@ -307,11 +315,13 @@ static int nldev_port_get_dumpit(struct sk_buff *skb,
 		nlmsg_end(skb, nlh);
 	}
 
-out:	cb->args[0] = idx;
+out:
+	put_device(&device->dev);
+	cb->args[0] = idx;
 	return skb->len;
 }
 
-static const struct rdma_nl_cbs nldev_cb_table[] = {
+static const struct rdma_nl_cbs nldev_cb_table[RDMA_NLDEV_NUM_OPS] = {
 	[RDMA_NLDEV_CMD_GET] = {
 		.doit = nldev_get_doit,
 		.dump = nldev_get_dumpit,
@@ -331,3 +341,5 @@ void __exit nldev_exit(void)
 {
 	rdma_nl_unregister(RDMA_NL_NLDEV);
 }
+
+MODULE_ALIAS_RDMA_NETLINK(RDMA_NL_NLDEV, 5);

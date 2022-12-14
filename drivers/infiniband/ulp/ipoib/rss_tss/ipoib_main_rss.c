@@ -58,6 +58,7 @@ int ipoib_set_mode_rss(struct net_device *dev, const char *buf)
 		send_ring = priv->send_ring;
 		for (i = 0; i < priv->num_tx_queues; i++) {
 			send_ring->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
+			send_ring->tx_wr.wr.opcode = IB_WR_SEND;
 			send_ring++;
 		}
 
@@ -368,9 +369,6 @@ int ipoib_set_fp_rss(struct ipoib_dev_priv *priv, struct ib_device *hca)
 	ret = ipoib_get_hca_features(priv, hca);
 	if (ret)
 		return ret;
-
-	ipoib_select_netdev_ops(priv);
-	ipoib_select_ethtool_ops(priv);
 
 	/* Initialize function pointers for RSS and non-RSS devices */
 	ipoib_main_rss_init_fp(priv);
@@ -725,24 +723,20 @@ struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
 
 	dev->netdev_ops = &ipoib_netdev_default_pf_rss;
 
+	/* Override ethtool_ops to ethtool_ops_rss */
+	ipoib_set_ethtool_ops_rss(dev);
+
 	return dev;
 }
 
-static const struct net_device_ops *ipoib_netdev_ops_select;
-
-void ipoib_select_netdev_ops(struct ipoib_dev_priv *priv)
+const struct net_device_ops *ipoib_get_netdev_ops(struct ipoib_dev_priv *priv)
 {
 	if (priv->hca_caps & IB_DEVICE_VIRTUAL_FUNCTION)
-		ipoib_netdev_ops_select = priv->max_tx_queues > 1 ?
+		return priv->max_tx_queues > 1 ?
 			&ipoib_netdev_ops_vf_sw_tss : &ipoib_netdev_ops_vf;
 	else
-		ipoib_netdev_ops_select = priv->max_tx_queues > 1 ?
+		return priv->max_tx_queues > 1 ?
 			&ipoib_netdev_ops_pf_sw_tss : &ipoib_netdev_ops_pf;
-}
-
-const struct net_device_ops *ipoib_get_netdev_ops(void)
-{
-	return ipoib_netdev_ops_select;
 }
 
 void ipoib_main_rss_init_fp(struct ipoib_dev_priv *priv)

@@ -1,0 +1,34 @@
+From: Erez Shitrit <erezsh@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/tracer.c
+
+Change-Id: Ib9b0e7585ab05c97bb2ed4bc712a77b387b67413
+---
+ drivers/net/ethernet/mellanox/mlx5/core/diag/tracer.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/tracer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/tracer.c
+@@ -496,8 +496,9 @@ static struct tracer_string_format *mlx5
+ static struct tracer_string_format *mlx5_tracer_message_find(struct hlist_head *head, u8 event_id, u32 tmsn)
+ {
+ 	struct tracer_string_format *message;
++	COMPAT_HL_NODE
+ 
+-	hlist_for_each_entry(message, head, hlist)
++	compat_hlist_for_each_entry(message, head, hlist)
+ 		if (message->event_id == event_id && message->tmsn == tmsn)
+ 			return message;
+ 
+@@ -575,9 +576,10 @@ static void mlx5_tracer_clean_print_hash
+ 	struct tracer_string_format *str_frmt;
+ 	struct hlist_node *n;
+ 	int i;
++	COMPAT_HL_NODE
+ 
+ 	for (i = 0; i < MESSAGE_HASH_SIZE; i++) {
+-		hlist_for_each_entry_safe(str_frmt, n, &tracer->hash[i], hlist)
++		compat_hlist_for_each_entry_safe(str_frmt, n, &tracer->hash[i], hlist)
+ 			mlx5_tracer_clean_message(str_frmt);
+ 	}
+ }

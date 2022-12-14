@@ -52,6 +52,10 @@ fi
 
 OS_IS_BOOTING=0
 last_bootID=$(cat /var/run/mlx_ifc-${i}.bootid 2>/dev/null)
+if [ "X$last_bootID" == "X" ] && [ -e /sys/class/net/${i}/parent ]; then
+    parent=$(cat /sys/class/net/${i}/parent)
+    last_bootID=$(cat /var/run/mlx_ifc-${parent}.bootid 2>/dev/null)
+fi
 bootID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | sed -e 's/-//g')
 echo $bootID > /var/run/mlx_ifc-${i}.bootid
 if [[ "X$last_bootID" == "X" || "X$last_bootID" != "X$bootID" ]]; then
@@ -77,7 +81,7 @@ if [ -f /etc/redhat-release ]; then
     NETWORK_CONF_DIR="/etc/sysconfig/network-scripts"
 elif [ -f /etc/rocks-release ]; then
     NETWORK_CONF_DIR="/etc/sysconfig/network-scripts"
-elif [ -f /etc/SuSE-release ]; then
+elif [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
     NETWORK_CONF_DIR="/etc/sysconfig/network"
 else
     if [ -d /etc/sysconfig/network-scripts ]; then
@@ -411,11 +415,9 @@ case "$(echo ${i} | tr '[:upper:]' '[:lower:]')" in
             done
             } > /dev/null 2>&1
         fi
-
-        bring_up $ch_i
-        if [ $? -eq 1 ]; then
-            log_msg "Couldn't fully configure ${ch_i}, review system logs and restart network service after fixing the issues."
-        fi
+        # Note: no need to call 'bring_up $ch_i' anymore.
+        # There is a new udev rule that calls this script to configure pkeys.
+        # This is needed so that the script can configure also manually created pkeys by users.
     done
     ############################ End of IPoIB (Pkeys) ####################################
     ;;

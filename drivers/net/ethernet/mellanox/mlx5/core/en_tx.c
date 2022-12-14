@@ -87,6 +87,20 @@ static void mlx5e_dma_unmap_wqe_err(struct mlx5e_txqsq *sq, u8 num_dma)
 	}
 }
 
+#ifdef CONFIG_MLX5_CORE_EN_DCB
+static inline int mlx5e_get_dscp_up(struct mlx5e_priv *priv, struct sk_buff *skb)
+{
+	int dscp_cp = 0;
+
+	if (skb->protocol == htons(ETH_P_IP))
+		dscp_cp = ipv4_get_dsfield(ip_hdr(skb)) >> 2;
+	else if (skb->protocol == htons(ETH_P_IPV6))
+		dscp_cp = ipv6_get_dsfield(ipv6_hdr(skb)) >> 2;
+
+	return priv->dcbx_dp.dscp2prio[dscp_cp];
+}
+#endif
+
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 static u16 mlx5e_select_queue_assigned(struct mlx5e_priv *priv,
 				       struct sk_buff *skb)
@@ -131,20 +145,6 @@ static u16 mlx5e_select_queue_assigned(struct mlx5e_priv *priv,
 
 fallback:
 	return 0;
-}
-#endif
-
-#ifdef CONFIG_MLX5_CORE_EN_DCB
-static inline int mlx5e_get_dscp_up(struct mlx5e_priv *priv, struct sk_buff *skb)
-{
-	int dscp_cp = 0;
-
-	if (skb->protocol == htons(ETH_P_IP))
-		dscp_cp = ipv4_get_dsfield(ip_hdr(skb)) >> 2;
-	else if (skb->protocol == htons(ETH_P_IPV6))
-		dscp_cp = ipv6_get_dsfield(ipv6_hdr(skb)) >> 2;
-
-	return priv->dcbx_dp.dscp2prio[dscp_cp];
 }
 #endif
 
@@ -193,9 +193,7 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 
 static inline int mlx5e_skb_l2_header_offset(struct sk_buff *skb)
 {
-#define MLX5E_MIN_INLINE (ETH_HLEN + VLAN_HLEN)
-
-	return max(skb_network_offset(skb), MLX5E_MIN_INLINE);
+	return skb_network_offset(skb);
 }
 
 static inline int mlx5e_skb_l3_header_offset(struct sk_buff *skb)
@@ -210,9 +208,9 @@ static inline int mlx5e_skb_l3_header_offset(struct sk_buff *skb)
 		return mlx5e_skb_l2_header_offset(skb);
 }
 
-static inline u16
-mlx5e_calc_min_inline(enum mlx5_inline_modes mode, struct sk_buff *skb,
-		      bool vlan_present)
+static inline u16 mlx5e_calc_min_inline(enum mlx5_inline_modes mode,
+					struct sk_buff *skb,
+					bool vlan_present)
 {
 	u16 hlen;
 
@@ -238,7 +236,10 @@ mlx5e_calc_min_inline(enum mlx5_inline_modes mode, struct sk_buff *skb,
 	default:
 		hlen = mlx5e_skb_l2_header_offset(skb);
 	}
-	return min_t(u16, hlen, skb->len);
+#define MLX5E_MIN_INLINE (u16)(ETH_HLEN + VLAN_HLEN)
+	hlen = max(hlen, MLX5E_MIN_INLINE);
+
+	return min_t(u16, hlen, skb_headlen(skb));
 }
 
 static inline void mlx5e_tx_skb_pull_inline(unsigned char **skb_data,
@@ -276,6 +277,7 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb, struct 
 			sq->stats.csum_partial_inner++;
 		} else {
 			eseg->cs_flags |= MLX5_ETH_WQE_L4_CSUM;
+			sq->stats.csum_partial++;
 		}
 	} else
 		sq->stats.csum_none++;
@@ -424,6 +426,7 @@ static netdev_tx_t mlx5e_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		if (vlan_present) {
 			mlx5e_insert_vlan(eseg->inline_hdr.start, skb, ihs, &skb_data, &skb_len);
 			ihs += VLAN_HLEN;
+			sq->stats.added_vlan_packets++;
 		} else {
 			memcpy(eseg->inline_hdr.start, skb_data, ihs);
 			mlx5e_tx_skb_pull_inline(&skb_data, &skb_len, ihs);
@@ -432,7 +435,10 @@ static netdev_tx_t mlx5e_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		ds_cnt += DIV_ROUND_UP(ihs - sizeof(eseg->inline_hdr.start), MLX5_SEND_WQE_DS);
 	} else if (vlan_present) {
 		eseg->insert.type = cpu_to_be16(MLX5_ETH_WQE_INSERT_VLAN);
+		if (skb->vlan_proto == cpu_to_be16(ETH_P_8021AD))
+			eseg->insert.type |= cpu_to_be16(MLX5_ETH_WQE_SVLAN);
 		eseg->insert.vlan_tci = cpu_to_be16(skb_vlan_tag_get(skb));
+		sq->stats.added_vlan_packets++;
 	}
 
 	headlen = skb_len - skb->data_len;
@@ -476,6 +482,18 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
 	return mlx5e_sq_xmit(sq, skb, wqe, pi);
 }
 
+static void mlx5e_dump_error_cqe(struct mlx5e_txqsq *sq,
+				 struct mlx5_err_cqe *err_cqe)
+{
+	u32 ci = mlx5_cqwq_get_ci(&sq->cq.wq);
+
+	netdev_err(sq->channel->netdev,
+		   "Error cqe on cqn 0x%x, ci 0x%x, sqn 0x%x, syndrome 0x%x, vendor syndrome 0x%x\n",
+		   sq->cq.mcq.cqn, ci, sq->sqn, err_cqe->syndrome,
+		   err_cqe->vendor_err_synd);
+	mlx5_dump_err_cqe(sq->cq.mdev, err_cqe);
+}
+
 bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 {
 	struct mlx5e_txqsq *sq;
@@ -514,6 +532,17 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 		mlx5_cqwq_pop(&cq->wq);
 
 		wqe_counter = be16_to_cpu(cqe->wqe_counter);
+
+		if (unlikely(cqe->op_own >> 4 == MLX5_CQE_REQ_ERR)) {
+			if (!test_and_set_bit(MLX5E_SQ_STATE_RECOVERING,
+					      &sq->state)) {
+				mlx5e_dump_error_cqe(sq, (struct mlx5_err_cqe *)
+							 cqe);
+				queue_work(cq->channel->priv->wq,
+					   &sq->recover.recover_work);
+			}
+			sq->stats.cqe_err++;
+		}
 
 		do {
 			struct mlx5e_tx_wqe_info *wi;
@@ -554,6 +583,7 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 			sqcc += wi->num_wqebbs;
 			napi_consume_skb(skb, napi_budget);
 		} while (!last_wqe);
+
 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
 
 	mlx5_cqwq_update_db_record(&cq->wq);
@@ -567,7 +597,9 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 	netdev_tx_completed_queue(sq->txq, npkts, nbytes);
 
 	if (netif_tx_queue_stopped(sq->txq) &&
-	    mlx5e_wqc_has_room_for(&sq->wq, sq->cc, sq->pc, MLX5E_SQ_STOP_ROOM)) {
+	    mlx5e_wqc_has_room_for(&sq->wq, sq->cc, sq->pc,
+				   MLX5E_SQ_STOP_ROOM) &&
+	    !test_bit(MLX5E_SQ_STATE_RECOVERING, &sq->state)) {
 		netif_tx_wake_queue(sq->txq);
 		sq->stats.wake++;
 	}

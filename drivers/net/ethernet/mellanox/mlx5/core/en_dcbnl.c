@@ -42,8 +42,6 @@
 #define MLX5E_CEE_STATE_UP    1
 #define MLX5E_CEE_STATE_DOWN  0
 
-#define IEEE_8021QAZ_APP_SEL_DSCP 5
-
 enum {
 	MLX5E_VENDOR_TC_GROUP_NUM = 7,
 	MLX5E_LOWEST_PRIO_GROUP   = 0,
@@ -53,10 +51,10 @@ enum {
 				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
 				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
 
-#ifdef CONFIG_MLX5_CORE_EN_DCB
 static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
 static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
 
+#ifdef CONFIG_MLX5_CORE_EN_DCB
 /* If dcbx mode is non-host set the dcbx mode to host.
  */
 static int mlx5e_dcbnl_set_dcbx_mode(struct mlx5e_priv *priv,
@@ -951,8 +949,9 @@ static void mlx5e_dcbnl_query_dcbx_mode(struct mlx5e_priv *priv,
 
 static void mlx5e_ets_init(struct mlx5e_priv *priv)
 {
-	int i;
 	struct ieee_ets ets;
+	int err;
+	int i;
 
 	if (!MLX5_CAP_GEN(priv->mdev, ets))
 		return;
@@ -971,7 +970,10 @@ static void mlx5e_ets_init(struct mlx5e_priv *priv)
 		ets.prio_tc[1] = 0;
 	}
 
-	mlx5e_dcbnl_ieee_setets_core(priv, &ets);
+	err = mlx5e_dcbnl_ieee_setets_core(priv, &ets);
+	if (err)
+		netdev_err(priv->netdev,
+			   "%s, Failed to init ETS: %d\n", __func__, err);
 }
 
 enum {
@@ -1032,8 +1034,10 @@ static void mlx5e_trust_update_sq_inline_mode(struct mlx5e_priv *priv)
 
 	mutex_lock(&priv->state_lock);
 
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state))
+	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
+		mlx5e_trust_update_tx_min_inline_mode(priv, &priv->channels.params);
 		goto out;
+	}
 
 	new_channels.params = priv->channels.params;
 	mlx5e_trust_update_tx_min_inline_mode(priv, &new_channels.params);
@@ -1043,8 +1047,6 @@ static void mlx5e_trust_update_sq_inline_mode(struct mlx5e_priv *priv)
 	    priv->channels.params.tx_min_inline_mode)
 		goto out;
 
-	if (mlx5e_open_channels(priv, &new_channels))
-		goto out;
 	mlx5e_switch_priv_channels(priv, &new_channels, NULL);
 
 out:
@@ -1053,6 +1055,7 @@ out:
 
 static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 {
+	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
 	int err;
 
 	err =  mlx5_set_trust_state(priv->mdev, trust_state);
@@ -1063,7 +1066,7 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 
 	/* In DSCP trust state, we need 8 send queues per channel */
 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
-		mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);
+		mlx5e_setup_tc_mqprio(priv->netdev, &mqprio);
 
 	return err;
 }

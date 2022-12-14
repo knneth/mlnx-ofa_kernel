@@ -1,0 +1,208 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
+
+Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
+---
+ drivers/infiniband/core/umem.c | 79 ++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 77 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/umem.c
++++ b/drivers/infiniband/core/umem.c
+@@ -196,13 +196,23 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 	unsigned long npages;
+ 	int ret;
+ 	int i;
++#ifdef HAVE_STRUCT_DMA_ATTRS
++	DEFINE_DMA_ATTRS(attrs);
++#else
+ 	unsigned long dma_attrs = 0;
++#endif
+ 	struct scatterlist *sg, *sg_list_start;
+ 	int need_release = 0;
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	unsigned int gup_flags = FOLL_WRITE;
++#endif
+ 
+ 	if (dmasync)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++		dma_set_attr(DMA_ATTR_WRITE_BARRIER, &attrs);
++#else
+ 		dma_attrs |= DMA_ATTR_WRITE_BARRIER;
++#endif
+ 
+ 	/*
+ 	 * If the combination of the addr and size requested for this memory
+@@ -227,7 +237,9 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 	umem->length     = size;
+ 	umem->address    = addr;
+ 	umem->page_shift = PAGE_SHIFT;
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 	umem->pid	 = get_task_pid(current, PIDTYPE_PID);
++#endif
+ 	/*
+ 	 * We ask for writable memory if any of the following
+ 	 * access flags are set.  "Local write" and "remote write"
+@@ -250,7 +262,9 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 	}
+ 
+ 	if (access & IB_ACCESS_ON_DEMAND) {
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 		put_pid(umem->pid);
++#endif
+ 		ret = ib_umem_odp_get(context, umem, access);
+ 		if (ret) {
+ 			kfree(umem);
+@@ -282,8 +296,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 	npages = ib_umem_num_pages(umem);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-
++#ifdef HAVE_PINNED_VM
+ 	locked     = npages + current->mm->pinned_vm;
++#else
++	locked     = npages + current->mm->locked_vm;
++#endif
+ 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+ 
+ 	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK)) {
+@@ -309,23 +326,46 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	if (!umem->writable)
+ 		gup_flags |= FOLL_FORCE;
++#endif
+ 
+ 	need_release = 1;
+ 	sg_list_start = umem->sg_head.sgl;
+ 
+ 	while (npages) {
++#ifdef HAVE_GET_USER_PAGES_8_PARAMS
++		ret = get_user_pages(current, current->mm, cur_base,
++				     min_t(unsigned long, npages,
++					   PAGE_SIZE / sizeof (struct page *)),
++				     1, !umem->writable, page_list, vma_list);
++#else
++#ifdef HAVE_GET_USER_PAGES_LONGTERM
+ 		ret = get_user_pages_longterm(cur_base,
++#else
++		ret = get_user_pages(cur_base,
++#endif
+ 				     min_t(unsigned long, npages,
+ 					   PAGE_SIZE / sizeof (struct page *)),
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 				     gup_flags, page_list, vma_list);
++#else
++				     1, !umem->writable, page_list, vma_list);
++#endif
++#endif
+ 
+ 		if (ret < 0) {
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 			pr_err("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
+ 			       min_t(unsigned long, npages,
+ 				     PAGE_SIZE / sizeof(struct page *)),
+ 			       gup_flags);
++#else
++			pr_err("%s: failed to get user pages, nr_pages=%lu\n", __func__,
++			       min_t(unsigned long, npages,
++				     PAGE_SIZE / sizeof(struct page *)));
++#endif
+ 			goto out;
+ 		}
+ 
+@@ -348,7 +388,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 				  umem->sg_head.sgl,
+ 				  umem->npages,
+ 				  DMA_BIDIRECTIONAL,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++				  &attrs);
++#else
+ 				  dma_attrs);
++#endif
+ 
+ 	if (umem->nmap <= 0) {
+ 		pr_err("%s: failed to map scatterlist, npages=%d\n", __func__,
+@@ -366,7 +410,11 @@ out:
+ 		put_pid(umem->pid);
+ 		kfree(umem);
+ 	} else
++#ifdef HAVE_PINNED_VM
+ 		current->mm->pinned_vm = locked;
++#else
++		current->mm->locked_vm = locked;
++#endif
+ 
+ 	up_write(&current->mm->mmap_sem);
+ 	if (vma_list)
+@@ -382,7 +430,11 @@ static void ib_umem_account(struct work_
+ 	struct ib_umem *umem = container_of(work, struct ib_umem, work);
+ 
+ 	down_write(&umem->mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
+ 	umem->mm->pinned_vm -= umem->diff;
++#else
++	umem->mm->locked_vm -= umem->diff;
++#endif
+ 	up_write(&umem->mm->mmap_sem);
+ 	mmput(umem->mm);
+ 	kfree(umem);
+@@ -396,7 +448,9 @@ void ib_umem_release(struct ib_umem *ume
+ {
+ 	struct ib_ucontext *context = umem->context;
+ 	struct mm_struct *mm;
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 	struct task_struct *task;
++#endif
+ 	unsigned long diff;
+ 	if (umem->ib_peer_mem) {
+ 		peer_umem_release(umem);
+@@ -410,6 +464,7 @@ void ib_umem_release(struct ib_umem *ume
+ 
+ 	__ib_umem_release(umem->context->device, umem, 1);
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 	task = get_pid_task(umem->pid, PIDTYPE_PID);
+ 	put_pid(umem->pid);
+ 	if (!task)
+@@ -418,6 +473,13 @@ void ib_umem_release(struct ib_umem *ume
+ 	put_task_struct(task);
+ 	if (!mm)
+ 		goto out;
++#else
++	mm = get_task_mm(current);
++	if (!mm) {
++		kfree(umem);
++		return;
++	}
++#endif
+ 
+ 	diff = ib_umem_num_pages(umem);
+ 
+@@ -440,11 +502,24 @@ void ib_umem_release(struct ib_umem *ume
+ 		}
+ 	} else
+ 		down_write(&mm->mmap_sem);
+-
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
++#ifdef HAVE_PINNED_VM
+ 	mm->pinned_vm -= diff;
++#else
++	mm->locked_vm -= diff;
++#endif
++#else
++#ifdef HAVE_PINNED_VM
++	current->mm->pinned_vm -= diff;
++#else
++	current->mm->locked_vm -= diff;
++#endif
++#endif
+ 	up_write(&mm->mmap_sem);
+ 	mmput(mm);
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ out:
++#endif
+ 	kfree(umem);
+ }
+ EXPORT_SYMBOL(ib_umem_release);

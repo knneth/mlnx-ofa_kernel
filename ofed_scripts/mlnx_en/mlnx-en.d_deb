@@ -309,6 +309,7 @@ get_debug_info()
         touch $DEBUG_INFO
         echo "Hostname: `hostname -s`" >> $DEBUG_INFO
         test -e /etc/issue && echo "OS: `cat /etc/issue`" >> $DEBUG_INFO
+        test -e /etc/os-release && echo "OS: `cat /etc/os-release`" >> $DEBUG_INFO
         echo "Current kernel: `uname -r`" >> $DEBUG_INFO
         echo "Architecture: `uname -m`" >> $DEBUG_INFO
         which gcc &>/dev/null && echo "GCC version: `gcc --version`"  >> $DEBUG_INFO

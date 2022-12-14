@@ -125,11 +125,13 @@ static void handle_good_req(struct ib_wc *wc, struct mlx5_cqe64 *cqe,
 	switch (be32_to_cpu(cqe->sop_drop_qpn) >> 24) {
 	case MLX5_OPCODE_RDMA_WRITE_IMM:
 		wc->wc_flags |= IB_WC_WITH_IMM;
+		/* fall through */
 	case MLX5_OPCODE_RDMA_WRITE:
 		wc->opcode    = IB_WC_RDMA_WRITE;
 		break;
 	case MLX5_OPCODE_SEND_IMM:
 		wc->wc_flags |= IB_WC_WITH_IMM;
+		/* fall through */
 	case MLX5_OPCODE_SEND:
 	case MLX5_OPCODE_SEND_INVAL:
 		wc->opcode    = IB_WC_SEND;
@@ -225,7 +227,6 @@ static void handle_responder(struct ib_wc *wc, struct mlx5_cqe64 *cqe,
 		wc->ex.invalidate_rkey = be32_to_cpu(cqe->imm_inval_pkey);
 		break;
 	}
-	wc->slid	   = be16_to_cpu(cqe->slid);
 	wc->src_qp	   = be32_to_cpu(cqe->flags_rqpn) & 0xffffff;
 	wc->dlid_path_bits = cqe->ml_path;
 	g = (be32_to_cpu(cqe->flags_rqpn) >> 28) & 3;
@@ -240,10 +241,12 @@ static void handle_responder(struct ib_wc *wc, struct mlx5_cqe64 *cqe,
 	}
 
 	if (ll != IB_LINK_LAYER_ETHERNET) {
+		wc->slid = be16_to_cpu(cqe->slid);
 		wc->sl = (be32_to_cpu(cqe->flags_rqpn) >> 24) & 0xf;
 		return;
 	}
 
+	wc->slid = 0;
 	vlan_present = cqe->l4_l3_hdr_type & 0x1;
 	roce_packet_type   = (be32_to_cpu(cqe->flags_rqpn) >> 24) & 0x3;
 	if (vlan_present) {
@@ -270,14 +273,8 @@ static void handle_responder(struct ib_wc *wc, struct mlx5_cqe64 *cqe,
 
 static void dump_cqe(struct mlx5_ib_dev *dev, struct mlx5_err_cqe *cqe)
 {
-	__be32 *p = (__be32 *)cqe;
-	int i;
-
 	mlx5_ib_warn(dev, "dump error cqe\n");
-	for (i = 0; i < sizeof(*cqe) / 16; i++, p += 4)
-		pr_info("%08x %08x %08x %08x\n", be32_to_cpu(p[0]),
-			be32_to_cpu(p[1]), be32_to_cpu(p[2]),
-			be32_to_cpu(p[3]));
+	mlx5_dump_err_cqe(dev->mdev, cqe);
 }
 
 static void mlx5_handle_error_cqe(struct mlx5_ib_dev *dev,
@@ -778,17 +775,15 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 	if (udata->src == IB_UDATA_EXP_CMD)
 		ucmdlen = min(sizeof(ucmd), udata->inlen);
 	else
-		ucmdlen =
-			(udata->inlen - sizeof(struct ib_uverbs_cmd_hdr) <
-			 sizeof(struct mlx5_ib_create_cq)) ?
+		ucmdlen = udata->inlen < sizeof(struct mlx5_ib_create_cq) ?
 			(sizeof(struct mlx5_ib_create_cq) - sizeof(ucmd.flags)) :
-			sizeof(struct mlx5_ib_create_cq);
+			sizeof(ucmd);
 
 	if (ib_copy_from_udata(&ucmd, udata, ucmdlen))
 		return -EFAULT;
 
 	if (ucmdlen == sizeof(ucmd) &&
-	    (ucmd.flags & ~(MLX5_IB_CREATE_CQ_FLAGS_RESERVED - 1)))
+	    (ucmd.flags & ~(MLX5_IB_CREATE_CQ_FLAGS_CQE_128B_PAD)))
 		return -EINVAL;
 
 	if (ucmd.cqe_size != 64 && ucmd.cqe_size != 128)
@@ -865,12 +860,13 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 		if (*cqe_size != 128 ||
 		    !MLX5_CAP_GEN(dev->mdev, cqe_128_always)) {
 			err = -EOPNOTSUPP;
-			mlx5_ib_warn(dev, "CQE padding is not supported for CQE size of %dB!\n",
+			mlx5_ib_warn(dev,
+				     "CQE padding is not supported for CQE size of %dB!\n",
 				     *cqe_size);
 			goto err_cqb;
 		}
 
-		cq->flags |= MLX5_IB_CQ_FLAGS_CQE_128_PAD;
+		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD;
 	}
 
 	return 0;
@@ -1034,7 +1030,8 @@ struct ib_cq *mlx5_ib_create_cq(struct ib_device *ibdev,
 	cqc = MLX5_ADDR_OF(create_cq_in, cqb, cq_context);
 	MLX5_SET(cqc, cqc, cqe_sz,
 		 cqe_sz_to_mlx_sz(cqe_size,
-				  cq->flags & MLX5_IB_CQ_FLAGS_CQE_128_PAD));
+				  cq->private_flags &
+				  MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD));
 	MLX5_SET(cqc, cqc, log_cq_size, ilog2(entries));
 	MLX5_SET(cqc, cqc, uar_page, index);
 	MLX5_SET(cqc, cqc, c_eqn, eqn);
@@ -1177,6 +1174,9 @@ int mlx5_ib_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period)
 
 	if (!MLX5_CAP_GEN(dev->mdev, cq_moderation))
 		return -ENOSYS;
+
+	if (cq_period > MLX5_MAX_CQ_PERIOD)
+		return -EINVAL;
 
 	err = mlx5_core_modify_cq_moderation(dev->mdev, &mcq->mcq,
 					     cq_period, cq_count);
@@ -1386,7 +1386,8 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq, int entries, struct ib_udata *udata)
 		 page_shift - MLX5_ADAPTER_PAGE_SHIFT);
 	MLX5_SET(cqc, cqc, cqe_sz,
 		 cqe_sz_to_mlx_sz(cqe_size,
-				  cq->flags & MLX5_IB_CQ_FLAGS_CQE_128_PAD));
+				  cq->private_flags &
+				  MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD));
 	MLX5_SET(cqc, cqc, log_cq_size, ilog2(entries));
 
 	MLX5_SET(modify_cq_in, in, op_mod, MLX5_CQ_OPMOD_RESIZE);

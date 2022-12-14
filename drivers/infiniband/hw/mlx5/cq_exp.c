@@ -50,7 +50,7 @@ int mlx5_ib_exp_modify_cq(struct ib_cq *cq, struct ib_cq_attr *cq_attr,
 
 	cqc = MLX5_ADDR_OF(modify_cq_in, in, cq_context);
 	MLX5_SET(modify_cq_in, in, cqn, mcq->mcq.cqn);
-	if (cq_attr_mask & IB_CQ_MODERATION) {
+	if (cq_attr_mask & IB_CQ_MODERATE) {
 		if (MLX5_CAP_GEN(dev->mdev, cq_moderation)) {
 			fsel |= (MLX5_CQ_MODIFY_PERIOD | MLX5_CQ_MODIFY_COUNT);
 			if (cq_attr->moderation.cq_period & 0xf000) {

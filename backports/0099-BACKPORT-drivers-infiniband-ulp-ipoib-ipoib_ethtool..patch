@@ -1,0 +1,101 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+
+Change-Id: Ibd48b578775a9bcd300aba75da76299c9e0fa2c7
+---
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 57 ++++++++++++++++++++++++++++
+ 1 file changed, 57 insertions(+)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+@@ -41,9 +41,15 @@ struct ipoib_stats {
+ 	int stat_offset;
+ };
+ 
++#ifdef HAVE_RTNL_LINK_STATS64
+ #define IPOIB_NETDEV_STAT(m) { \
+ 		.stat_string = #m, \
+ 		.stat_offset = offsetof(struct rtnl_link_stats64, m) }
++#else
++#define IPOIB_NETDEV_STAT(m) { \
++		.stat_string = #m, \
++		.stat_offset = offsetof(struct rtnl_link_stats, m) }
++#endif
+ 
+ static const struct ipoib_stats ipoib_gstrings_stats[] = {
+ 	IPOIB_NETDEV_STAT(rx_packets),
+@@ -303,6 +309,7 @@ static inline int ib_speed_enum_to_int(i
+ 	return SPEED_UNKNOWN;
+ }
+ 
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ static int ipoib_get_link_ksettings(struct net_device *netdev,
+ 				    struct ethtool_link_ksettings *cmd)
+ {
+@@ -340,9 +347,40 @@ static int ipoib_get_link_ksettings(stru
+ 
+ 	return 0;
+ }
++#endif
++
++#ifndef HAVE_NETDEV_HW_FEATURES
++#if defined(HAVE_GET_SET_FLAGS) && defined(CONFIG_COMPAT_LRO_ENABLED_IPOIB)
++int ipoib_set_flags(struct net_device *dev, u32 data)
++{
++	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++	int hw_support_lro = 0;
++
++#ifdef HAVE_NETDEV_HW_FEATURES
++	hw_support_lro = priv->dev->hw_features & NETIF_F_RXCSUM;
++#else
++	hw_support_lro = priv->dev->features & NETIF_F_RXCSUM;
++#endif
++
++	if ((data & ETH_FLAG_LRO) && hw_support_lro)
++		dev->features |= NETIF_F_LRO;
++	else
++		dev->features &= ~NETIF_F_LRO;
++	return 0;
++}
++#endif
++#ifdef HAVE_GET_SET_RX_CSUM
++static u32 ipoib_get_rx_csum(struct net_device *dev)
++{
++	return dev->features & NETIF_F_RXCSUM;
++}
++#endif
++#endif
+ 
+ static const struct ethtool_ops ipoib_ethtool_ops = {
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ 	.get_link_ksettings	= ipoib_get_link_ksettings,
++#endif
+ 	.get_drvinfo		= ipoib_get_drvinfo,
+ 	.get_coalesce		= ipoib_get_coalesce,
+ 	.set_coalesce		= ipoib_set_coalesce,
+@@ -353,6 +391,25 @@ static const struct ethtool_ops ipoib_et
+ 	.get_sset_count		= ipoib_get_sset_count,
+ 	.set_ringparam		= ipoib_set_ring_param,
+ 	.get_ringparam		= ipoib_get_ring_param,
++/* IPoIB current code supports HW_FEATURES and doesn't
++ * support EXTENDED_HW_FEATURES. If support for EXTENDED_HW_FEATURES
++ * is added then this code and the set function should be masked
++ *  with LEGACY_ETHTOOL_OPS.
++ */
++#ifndef HAVE_NETDEV_HW_FEATURES
++#ifdef HAVE_GET_SET_FLAGS
++#if defined (CONFIG_COMPAT_LRO_ENABLED_IPOIB)
++	.set_flags              = ipoib_set_flags,
++#endif
++	.get_flags              = ethtool_op_get_flags,
++#endif
++#ifdef HAVE_GET_SET_TSO
++	.set_tso                = ethtool_op_set_tso,
++#endif
++#ifdef HAVE_GET_SET_RX_CSUM
++	.get_rx_csum 		= ipoib_get_rx_csum,
++#endif
++#endif
+ };
+ 
+ void ipoib_set_ethtool_ops(struct net_device *dev)

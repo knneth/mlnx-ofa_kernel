@@ -104,7 +104,6 @@ struct nvme_request {
 
 enum {
 	NVME_REQ_CANCELLED		= (1 << 0),
-	NVME_REQ_USERCMD		= (1 << 1),
 };
 
 static inline struct nvme_request *nvme_req(struct request *req)
@@ -299,7 +298,6 @@ struct nvme_ctrl_ops {
 	void (*delete_ctrl)(struct nvme_ctrl *ctrl);
 	int (*get_address)(struct nvme_ctrl *ctrl, char *buf, int size);
 	int (*reinit_request)(void *data, struct request *rq);
-	void (*stop_ctrl)(struct nvme_ctrl *ctrl);
 };
 
 static inline bool nvme_ctrl_ready(struct nvme_ctrl *ctrl)
@@ -412,7 +410,9 @@ bool nvme_req_needs_failover(struct request *req, blk_status_t error);
 void nvme_kick_requeue_lists(struct nvme_ctrl *ctrl);
 int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl,struct nvme_ns_head *head);
 void nvme_mpath_add_disk(struct nvme_ns_head *head);
+void nvme_mpath_add_disk_links(struct nvme_ns *ns);
 void nvme_mpath_remove_disk(struct nvme_ns_head *head);
+void nvme_mpath_remove_disk_links(struct nvme_ns *ns);
 
 static inline void nvme_mpath_clear_current_path(struct nvme_ns *ns)
 {
@@ -452,6 +452,12 @@ static inline void nvme_mpath_add_disk(struct nvme_ns_head *head)
 {
 }
 static inline void nvme_mpath_remove_disk(struct nvme_ns_head *head)
+{
+}
+static inline void nvme_mpath_add_disk_links(struct nvme_ns *ns)
+{
+}
+static inline void nvme_mpath_remove_disk_links(struct nvme_ns *ns)
 {
 }
 static inline void nvme_mpath_clear_current_path(struct nvme_ns *ns)

@@ -2551,11 +2551,12 @@ class PciDeviceInfo:
 			interfaces_ordered[1].set_affinity(numa_cores[len(numa_cores)/2:])
 
 	def set_wanted_affinity_2interfaces_to_oposites_cores_on_numa_node(self, node_info):
-		""" Sets wanted affinity for 2 interfaces. Each interface gets a core in each side of the NUMA, crossed from each other.
-		    E.g. for the following core list [0,1,2,3,4,5,6,7], 2 rings per interface:
-		    First interface set irq affinity: rx-0:0, rx-1:7
-		    Second interface set irq affinity: rx-0:6, rx-1:1
-		    This will work properly only for devices with at least 4 cores.
+		""" Sets wanted affinity for 2 interfaces. Each interface gets a core in each side of the NUMA in symmetric way
+		    The Idea is to put rx0 of each interface on the first and last core
+		    tx1 will be set to second and second from last
+		    using RSS indirection all rx packets will be directed to rx0
+		    tx1 will handle the completion of the forwarded packets
+		    This will work properly only for devices with at least 4 cores
 		"""
 		if self.numa == -1:
 			numa_cores = self.closest_core_list
@@ -2568,10 +2569,10 @@ class PciDeviceInfo:
 			return
 
 		interfaces_ordered = self.get_interfaces_ordered()
-		affinity_core_list = [numa_cores[0], numa_cores[-1]]
+		affinity_core_list = [numa_cores[0], numa_cores[-2]]
 		interfaces_ordered[0].set_affinity(affinity_core_list)
 		logging.debug("interface: %s got list %s"%(interfaces_ordered[0].name, affinity_core_list))
-		affinity_core_list = [numa_cores[-2], numa_cores[1]]
+		affinity_core_list = [numa_cores[-1], numa_cores[1]]
 		interfaces_ordered[1].set_affinity(affinity_core_list)
 		logging.debug("interface: %s got list %s"%(interfaces_ordered[1].name, affinity_core_list))
 
@@ -2697,20 +2698,25 @@ class PciDeviceInfo:
 			interface.set_rps(rps_core_list, False)
 
 	def get_rps_xps_cores_list(self, numa_cores, interface_port_number):
-		"""
+		""" Configure RPS of interface 1 rx0 to XPS of interface 2 tx1
+		    Configure RPS of interface 2 rx0 to XPS of interface 1 tx1
+		    This will force forwarding of all packets from rx0 to tx1
+		    In order to support any number of cores in CPUs we choose
+		    the 3rd CPU from the edges to be the rps_xps cpu
 		"""
 		core_list = []
 		number_of_cores = len(numa_cores)
-		if number_of_cores == 6:
+		logging.debug("number_of_cores when setting rps_xps: %s"%(number_of_cores))
+		if number_of_cores < 6:
+			logging.warning("Can't assign RPS XPS for devices with less than 6 cores.")
+			return core_list
+		if interface_port_number in (1,2):
 			if interface_port_number == 1:
-				core_list = [numa_cores[2], numa_cores[3]]
+				core_list = [numa_cores[2], numa_cores[-3]]
 			else:
-				core_list = [numa_cores[3], numa_cores[2]]
-
+				core_list = [numa_cores[-3], numa_cores[2]]
 		else:
-			core_list = numa_cores[3::(number_of_cores / 2)]
-			if interface_port_number == 2:
-				core_list.reverse()
+			logging.warning("interface port number is not valid: %s"%(interface_port_number))
 		return core_list
 
 	def set_wanted_rps_2interfaces_to_numa_node(self, node_info):
@@ -3194,6 +3200,7 @@ def set_ip_forwarding_profile_single_stream(node_info, force_single = False, zer
 						interface.optimize_qdisc_tx_len()
 					interface.apply_network_parameter_value('A', 'off', ['rx', 'tx'])
 					interface.apply_network_parameter_value('L', wanted_number_of_rings, 'combined', appearance_index = 2)
+					interface.apply_network_parameter_value('X', 1, 'equal')
 
 				interface.apply_network_parameter_value('C', 'off', 'adaptive-rx', 'adaptive rx')
 				interface.apply_network_parameter_value('K', 'off', 'gro', 'generic-receive-offload')

@@ -126,11 +126,73 @@ static inline bool netif_is_bond_master(struct net_device *dev)
 #endif
 
 #ifndef HAVE_NETDEV_NOTIFIER_INFO_TO_DEV
+struct netdev_notifier_info {
+	struct net_device *dev;
+};
+
 #define netdev_notifier_info_to_dev LINUX_BACKPORT(netdev_notifier_info_to_dev)
 static inline struct net_device *
 netdev_notifier_info_to_dev(void *ptr)
 {
 	return (struct net_device *)ptr;
+}
+
+static inline struct net_device *
+netdev_notifier_info_to_dev_v2(void *ptr)
+{
+	return (((struct netdev_notifier_info *)ptr)->dev);
+}
+#endif
+
+/* This is geared toward RHL kernels 3.10.0-327, 2.6.32-696,
+ * and those that conform to them.
+ */
+#if defined(HAVE_BONDING_H) && !defined(HAVE_LAG_TX_TYPE) && \
+   !defined(HAVE_NETDEV_NOTIFIER_INFO)
+#define MLX_USE_LAG_COMPAT
+
+#define NETDEV_CHANGEUPPER			0x1015
+#define NETDEV_CHANGELOWERSTATE			0x101B
+
+enum netdev_lag_tx_type {
+	NETDEV_LAG_TX_TYPE_UNKNOWN,
+	NETDEV_LAG_TX_TYPE_RANDOM,
+	NETDEV_LAG_TX_TYPE_BROADCAST,
+	NETDEV_LAG_TX_TYPE_ROUNDROBIN,
+	NETDEV_LAG_TX_TYPE_ACTIVEBACKUP,
+	NETDEV_LAG_TX_TYPE_HASH,
+};
+
+struct netdev_notifier_changelowerstate_info {
+	struct netdev_notifier_info info; /* must be first */
+	void *lower_state_info; /* is lower dev state */
+};
+
+struct netdev_lag_lower_state_info {
+	u8 link_up : 1,
+	   tx_enabled : 1;
+};
+
+struct netdev_notifier_changeupper_info {
+	struct netdev_notifier_info info; /* must be first */
+	struct net_device *upper_dev; /* new upper dev */
+	bool master; /* is upper dev master */
+	bool linking; /* is the notification for link or unlink */
+	void *upper_info; /* upper dev info */
+};
+
+struct netdev_lag_upper_info {
+	enum netdev_lag_tx_type tx_type;
+};
+
+static inline bool netif_is_lag_master(struct net_device *dev)
+{
+	return netif_is_bond_master(dev);
+}
+
+static inline bool netif_is_lag_port(struct net_device *dev)
+{
+	return netif_is_bond_slave(dev);
 }
 #endif
 
@@ -171,6 +233,57 @@ static inline void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
 
 #ifndef HAVE_TC_SETUP_QDISC_MQPRIO
 #define TC_SETUP_QDISC_MQPRIO TC_SETUP_MQPRIO
+#endif
+
+#ifndef netdev_WARN_ONCE
+
+#define netdev_level_once(level, dev, fmt, ...)			\
+do {								\
+	static bool __print_once __read_mostly;			\
+								\
+	if (!__print_once) {					\
+		__print_once = true;				\
+		netdev_printk(level, dev, fmt, ##__VA_ARGS__);	\
+	}							\
+} while (0)
+
+#define netdev_emerg_once(dev, fmt, ...) \
+	netdev_level_once(KERN_EMERG, dev, fmt, ##__VA_ARGS__)
+#define netdev_alert_once(dev, fmt, ...) \
+	netdev_level_once(KERN_ALERT, dev, fmt, ##__VA_ARGS__)
+#define netdev_crit_once(dev, fmt, ...) \
+	netdev_level_once(KERN_CRIT, dev, fmt, ##__VA_ARGS__)
+#define netdev_err_once(dev, fmt, ...) \
+	netdev_level_once(KERN_ERR, dev, fmt, ##__VA_ARGS__)
+#define netdev_warn_once(dev, fmt, ...) \
+	netdev_level_once(KERN_WARNING, dev, fmt, ##__VA_ARGS__)
+#define netdev_notice_once(dev, fmt, ...) \
+	netdev_level_once(KERN_NOTICE, dev, fmt, ##__VA_ARGS__)
+#define netdev_info_once(dev, fmt, ...) \
+	netdev_level_once(KERN_INFO, dev, fmt, ##__VA_ARGS__)
+
+
+#define netdev_WARN_ONCE(dev, condition, format, arg...)		\
+	WARN_ONCE(1, "netdevice: %s%s\n" format, netdev_name(dev)	\
+		  netdev_reg_state(dev), ##args)
+#endif /* netdev_WARN_ONCE */
+
+#ifndef HAVE_NAPI_COMPLETE_DONE
+#define napi_complete_done(p1, p2) napi_complete(p1)
+#endif
+
+
+#ifndef HAVE_NETDEV_PHYS_ITEM_ID
+#ifndef MAX_PHYS_ITEM_ID_LEN
+#define MAX_PHYS_ITEM_ID_LEN 32
+#endif
+/* This structure holds a unique identifier to identify some
+ * physical item (port for example) used by a netdevice.
+ */
+struct netdev_phys_item_id {
+    unsigned char id[MAX_PHYS_ITEM_ID_LEN];
+    unsigned char id_len;
+};
 #endif
 
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

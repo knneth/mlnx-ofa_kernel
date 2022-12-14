@@ -181,11 +181,8 @@ void ipoib_ib_rss_init_fp(struct ipoib_dev_priv *priv);
 
 int ipoib_set_fp_rss(struct ipoib_dev_priv *priv, struct ib_device *hca);
 
-void ipoib_select_netdev_ops(struct ipoib_dev_priv *priv);
-const struct net_device_ops *ipoib_get_netdev_ops(void);
-
-void ipoib_select_ethtool_ops(struct ipoib_dev_priv *priv);
-const struct ethtool_ops *ipoib_get_ethtool_ops(void);
+const struct net_device_ops *ipoib_get_netdev_ops(struct ipoib_dev_priv *priv);
+void ipoib_set_ethtool_ops_rss(struct net_device *dev);
 
 struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
 						   const char *name,
