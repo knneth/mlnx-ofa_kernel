@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2015-2016 HGST, a Western Digital Company.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
  */
 
 #ifndef _NVMET_H
@@ -32,12 +24,15 @@
 
 #define NVMET_ASYNC_EVENTS		4
 #define NVMET_ERROR_LOG_SLOTS		128
+#define NVMET_NO_ERROR_LOC		((u16)-1)
 
 /*
  * Supported optional AENs:
  */
 #define NVMET_AEN_CFG_OPTIONAL \
 	(NVME_AEN_CFG_NS_ATTR | NVME_AEN_CFG_ANA_CHANGE)
+#define NVMET_DISC_AEN_CFG_OPTIONAL \
+	(NVME_AEN_CFG_DISC_CHANGE)
 
 /*
  * Plus mandatory SMART AENs (we'll never send them, but allow enabling them):
@@ -107,6 +102,7 @@ struct nvmet_sq {
 	u16			qid;
 	u16			size;
 	u32			sqhd;
+	bool			sqhd_disabled;
 	struct completion	free_done;
 	struct completion	confirm_done;
 };
@@ -140,6 +136,7 @@ struct nvmet_port {
 	struct list_head		subsystems;
 	struct config_group		referrals_group;
 	struct list_head		referrals;
+	struct list_head		global_entry;
 	struct config_group		ana_groups_group;
 	struct nvmet_ana_group		ana_default_group;
 	enum nvme_ana_state		*ana_state;
@@ -149,6 +146,7 @@ struct nvmet_port {
 	bool				offload;
 	int				inline_data_size;
 	u32				offload_queues;
+	size_t				offload_srq_size;
 };
 
 static inline struct nvmet_port *to_nvmet_port(struct config_item *item)
@@ -168,6 +166,8 @@ struct nvmet_ctrl {
 	struct nvmet_subsys	*subsys;
 	struct nvmet_cq		**cqs;
 	struct nvmet_sq		**sqs;
+
+	bool			cmd_seen;
 
 	struct mutex		lock;
 	u64			cap;
@@ -201,10 +201,12 @@ struct nvmet_ctrl {
 	char			hostnqn[NVMF_NQN_FIELD_LEN];
 
 	unsigned int		sqe_inline_size;
+	struct device		*p2p_client;
+	struct radix_tree_root	p2p_ns_map;
 
-	struct device *p2p_client;
-	struct radix_tree_root p2p_ns_map;
-
+	spinlock_t		error_lock;
+	u64			err_counter;
+	struct nvme_error_slot	slots[NVMET_ERROR_LOG_SLOTS];
 	void			*offload_ctrl;
 };
 
@@ -295,6 +297,7 @@ struct nvmet_fabrics_ops {
 	void (*delete_ctrl)(struct nvmet_ctrl *ctrl);
 	void (*disc_traddr)(struct nvmet_req *req,
 			struct nvmet_port *port, char *traddr);
+	u16 (*install_queue)(struct nvmet_sq *nvme_sq);
 	bool (*is_port_active)(struct nvmet_port *port);
 	bool (*peer_to_peer_capable)(struct nvmet_port *port);
 	int (*install_offload_queue)(struct nvmet_ctrl *ctrl,
@@ -321,7 +324,7 @@ struct nvmet_fabrics_ops {
 
 struct nvmet_req {
 	struct nvme_command	*cmd;
-	struct nvme_completion	*rsp;
+	struct nvme_completion	*cqe;
 	struct nvmet_sq		*sq;
 	struct nvmet_cq		*cq;
 	struct nvmet_ns		*ns;
@@ -349,20 +352,17 @@ struct nvmet_req {
 	void (*execute)(struct nvmet_req *req);
 	const struct nvmet_fabrics_ops *ops;
 
-	struct pci_dev *p2p_dev;
-	struct device *p2p_client;
+	struct pci_dev		*p2p_dev;
+	struct device		*p2p_client;
+	u16			error_loc;
+	u64			error_slba;
 };
 
 extern struct workqueue_struct *buffered_io_wq;
 
-static inline void nvmet_set_status(struct nvmet_req *req, u16 status)
-{
-	req->rsp->status = cpu_to_le16(status << 1);
-}
-
 static inline void nvmet_set_result(struct nvmet_req *req, u32 result)
 {
-	req->rsp->result.u32 = cpu_to_le32(result);
+	req->cqe->result.u32 = cpu_to_le32(result);
 }
 
 /*
@@ -381,6 +381,27 @@ struct nvmet_async_event {
 	u8			log_page;
 };
 
+static inline void nvmet_clear_aen_bit(struct nvmet_req *req, u32 bn)
+{
+	int rae = le32_to_cpu(req->cmd->common.cdw10) & 1 << 15;
+
+	if (!rae)
+		clear_bit(bn, &req->sq->ctrl->aen_masked);
+}
+
+static inline bool nvmet_aen_bit_disabled(struct nvmet_ctrl *ctrl, u32 bn)
+{
+	if (!(READ_ONCE(ctrl->aen_enabled) & (1 << bn)))
+		return true;
+	return test_and_set_bit(bn, &ctrl->aen_masked);
+}
+
+void nvmet_get_feat_kato(struct nvmet_req *req);
+void nvmet_get_feat_async_event(struct nvmet_req *req);
+u16 nvmet_set_feat_kato(struct nvmet_req *req);
+u16 nvmet_set_feat_async_event(struct nvmet_req *req, u32 mask);
+void nvmet_execute_async_event(struct nvmet_req *req);
+
 u16 nvmet_parse_connect_cmd(struct nvmet_req *req);
 u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
 u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
@@ -395,6 +416,8 @@ void nvmet_req_execute(struct nvmet_req *req);
 void nvmet_req_complete(struct nvmet_req *req, u16 status);
 int nvmet_req_alloc_sgl(struct nvmet_req *req);
 void nvmet_req_free_sgl(struct nvmet_req *req);
+
+void nvmet_execute_keep_alive(struct nvmet_req *req);
 
 void nvmet_cq_setup(struct nvmet_ctrl *ctrl, struct nvmet_cq *cq, u16 qid,
 		u16 size);
@@ -432,6 +455,9 @@ void nvmet_port_send_ana_event(struct nvmet_port *port);
 int nvmet_register_transport(const struct nvmet_fabrics_ops *ops);
 void nvmet_unregister_transport(const struct nvmet_fabrics_ops *ops);
 
+void nvmet_port_del_ctrls(struct nvmet_port *port,
+			  struct nvmet_subsys *subsys);
+
 int nvmet_enable_port(struct nvmet_port *port, bool offloadble);
 void nvmet_disable_port(struct nvmet_port *port);
 bool nvmet_is_port_active(struct nvmet_port *port);
@@ -441,7 +467,7 @@ void nvmet_init_offload_subsystem_port_attrs(struct nvmet_port *port,
 void nvmet_uninit_offload_subsystem_port_attrs(struct nvmet_subsys *subsys);
 
 void nvmet_referral_enable(struct nvmet_port *parent, struct nvmet_port *port);
-void nvmet_referral_disable(struct nvmet_port *port);
+void nvmet_referral_disable(struct nvmet_port *parent, struct nvmet_port *port);
 
 u16 nvmet_copy_to_sgl(struct nvmet_req *req, off_t off, const void *buf,
 		size_t len);
@@ -451,6 +477,14 @@ u16 nvmet_zero_sgl(struct nvmet_req *req, off_t off, size_t len);
 
 u32 nvmet_get_log_page_len(struct nvme_command *cmd);
 u64 nvmet_get_log_page_offset(struct nvme_command *cmd);
+
+extern struct list_head *nvmet_ports;
+void nvmet_port_disc_changed(struct nvmet_port *port,
+		struct nvmet_subsys *subsys);
+void nvmet_subsys_disc_changed(struct nvmet_subsys *subsys,
+		struct nvmet_host *host);
+void nvmet_add_async_event(struct nvmet_ctrl *ctrl, u8 event_type,
+		u8 event_info, u8 log_page);
 
 #define NVMET_QUEUE_SIZE	1024
 #define NVMET_NR_QUEUES		128
@@ -472,7 +506,7 @@ u64 nvmet_get_log_page_offset(struct nvme_command *cmd);
 #define NVMET_DEFAULT_ANA_GRPID	1
 
 #define NVMET_KAS		10
-#define NVMET_DISC_KATO		120
+#define NVMET_DISC_KATO_MS		120000
 
 int __init nvmet_init_configfs(void);
 void __exit nvmet_exit_configfs(void);
@@ -481,7 +515,6 @@ int __init nvmet_init_discovery(void);
 void nvmet_exit_discovery(void);
 
 extern struct nvmet_subsys *nvmet_disc_subsys;
-extern u64 nvmet_genctr;
 extern struct rw_semaphore nvmet_config_sem;
 
 extern u32 nvmet_ana_group_enabled[NVMET_MAX_ANAGRPS + 1];
@@ -503,4 +536,6 @@ static inline u32 nvmet_rw_len(struct nvmet_req *req)
 	return ((u32)le16_to_cpu(req->cmd->rw.length) + 1) <<
 			req->ns->blksize_shift;
 }
+
+u16 errno_to_nvme_status(struct nvmet_req *req, int errno);
 #endif /* _NVMET_H */

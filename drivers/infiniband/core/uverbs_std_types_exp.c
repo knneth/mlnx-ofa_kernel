@@ -40,15 +40,17 @@
 #include "uverbs.h"
 #include "uverbs_exp.h"
 
+
 static int uverbs_exp_free_dct(struct ib_uobject *uobject,
-			       enum rdma_remove_reason why)
+			       enum rdma_remove_reason why, 
+			       struct uverbs_attr_bundle *attrs)
 {
 	struct ib_dct  *dct = uobject->object;
 	struct ib_udct_object *udct =
 		container_of(uobject, struct ib_udct_object, uevent.uobject);
 	int ret;
 
-	ret = ib_exp_destroy_dct(dct);
+	ret = ib_exp_destroy_dct(dct, &attrs->driver_udata);
 	if (ret && why == RDMA_REMOVE_DESTROY)
 		return ret;
 
@@ -59,4 +61,10 @@ static int uverbs_exp_free_dct(struct ib_uobject *uobject,
 DECLARE_UVERBS_NAMED_OBJECT(UVERBS_OBJECT_DCT,
 			    UVERBS_TYPE_ALLOC_IDR_SZ(sizeof(struct ib_udct_object),
                             uverbs_exp_free_dct));
+
+const struct uapi_definition uverbs_def_obj_dct[] = {
+	UAPI_DEF_CHAIN_OBJ_TREE_NAMED(UVERBS_OBJECT_DCT,
+				      UAPI_DEF_OBJ_NEEDS_FN(exp_destroy_dct)),
+	{}
+};
 

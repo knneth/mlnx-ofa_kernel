@@ -3,11 +3,14 @@
 
 #include <linux/atomic.h>
 
+#include "lib/devcom.h"
 #include "miniflow.h"
 #include "eswitch.h"
 #include "en_rep.h"
 #include "en_tc.h"
 #include "en.h"
+
+#ifdef HAVE_MINIFLOW
 
 static atomic64_t global_version = ATOMIC64_INIT(0);
 
@@ -85,35 +88,35 @@ ssize_t mlx5_show_counters_ct(char *buf)
 	char *p = buf;
 
 #if CT_DEBUG_COUNTERS
-	p += _sprintf(p, buf, "nr_of_total_mf_work_requests            : %ld\n", atomic64_read(&nr_of_total_mf_work_requests));
-	p += _sprintf(p, buf, "nr_of_total_merge_mf_work_requests      : %ld\n", atomic64_read(&nr_of_total_merge_mf_work_requests));
-	p += _sprintf(p, buf, "nr_of_total_del_mf_work_requests        : %ld\n", atomic64_read(&nr_of_total_del_mf_work_requests));
+	p += _sprintf(p, buf, "nr_of_total_mf_work_requests            : %lld\n", atomic64_read(&nr_of_total_mf_work_requests));
+	p += _sprintf(p, buf, "nr_of_total_merge_mf_work_requests      : %lld\n", atomic64_read(&nr_of_total_merge_mf_work_requests));
+	p += _sprintf(p, buf, "nr_of_total_del_mf_work_requests        : %lld\n", atomic64_read(&nr_of_total_del_mf_work_requests));
 	p += _sprintf(p, buf, "\n");
 	p += _sprintf(p, buf, "nr_of_mfe_in_queue                      : %d\n", atomic_read(&nr_of_mfe_in_queue));
-	p += _sprintf(p, buf, "nr_of_merge_mfe_in_queue                : %ld\n", atomic64_read(&nr_of_merge_mfe_in_queue));
-	p += _sprintf(p, buf, "nr_of_del_mfe_in_queue                  : %ld\n", atomic64_read(&nr_of_del_mfe_in_queue));
+	p += _sprintf(p, buf, "nr_of_merge_mfe_in_queue                : %lld\n", atomic64_read(&nr_of_merge_mfe_in_queue));
+	p += _sprintf(p, buf, "nr_of_del_mfe_in_queue                  : %lld\n", atomic64_read(&nr_of_del_mfe_in_queue));
 	p += _sprintf(p, buf, "\n");
-	p += _sprintf(p, buf, "nr_of_inflight_mfe                      : %ld\n", atomic64_read(&nr_of_inflight_mfe));
-	p += _sprintf(p, buf, "nr_of_inflight_merge_mfe                : %ld\n", atomic64_read(&nr_of_inflight_merge_mfe));
-	p += _sprintf(p, buf, "nr_of_inflight_del_mfe                  : %ld\n", atomic64_read(&nr_of_inflight_del_mfe));
+	p += _sprintf(p, buf, "nr_of_inflight_mfe                      : %lld\n", atomic64_read(&nr_of_inflight_mfe));
+	p += _sprintf(p, buf, "nr_of_inflight_merge_mfe                : %lld\n", atomic64_read(&nr_of_inflight_merge_mfe));
+	p += _sprintf(p, buf, "nr_of_inflight_del_mfe                  : %lld\n", atomic64_read(&nr_of_inflight_del_mfe));
 	p += _sprintf(p, buf, "\n");
-	p += _sprintf(p, buf, "nr_of_total_mf_succ                     : %ld\n", atomic64_read(&nr_of_total_mf_succ));
-	p += _sprintf(p, buf, "nr_of_total_merge_mf_succ               : %ld\n", atomic64_read(&nr_of_total_merge_mf_succ));
-	p += _sprintf(p, buf, "nr_of_total_del_mf_succ                 : %ld\n", atomic64_read(&nr_of_total_del_mf_succ));
+	p += _sprintf(p, buf, "nr_of_total_mf_succ                     : %lld\n", atomic64_read(&nr_of_total_mf_succ));
+	p += _sprintf(p, buf, "nr_of_total_merge_mf_succ               : %lld\n", atomic64_read(&nr_of_total_merge_mf_succ));
+	p += _sprintf(p, buf, "nr_of_total_del_mf_succ                 : %lld\n", atomic64_read(&nr_of_total_del_mf_succ));
 	p += _sprintf(p, buf, "\n");
 	p += _sprintf(p, buf, "currently_in_hw                         : %d\n", atomic_read(&currently_in_hw));
 	p += _sprintf(p, buf, "offloaded_flow_cnt                      : %d\n", mlx5_ct_flow_offloaded_count());
 	p += _sprintf(p, buf, "\n");
-	p += _sprintf(p, buf, "nr_of_total_mf_err                      : %ld\n", atomic64_read(&nr_of_total_mf_err));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_alloc_flow           : %ld\n", atomic64_read(&nr_of_total_mf_err_alloc_flow));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_resolve_path_flows   : %ld\n", atomic64_read(&nr_of_total_mf_err_resolve_path_flows));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_merge_mirred         : %ld\n", atomic64_read(&nr_of_total_mf_err_merge_mirred));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_merge_hdr            : %ld\n", atomic64_read(&nr_of_total_mf_err_merge_hdr));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_attach_dummy_counter : %ld\n", atomic64_read(&nr_of_total_mf_err_attach_dummy_counter));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_fdb_add              : %ld\n", atomic64_read(&nr_of_total_mf_err_fdb_add));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_verify_path          : %ld\n", atomic64_read(&nr_of_total_mf_err_verify_path));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_register             : %ld\n", atomic64_read(&nr_of_total_mf_err_register));
-	p += _sprintf(p, buf, "nr_of_total_mf_err_version              : %ld\n", atomic64_read(&nr_of_total_mf_err_version));
+	p += _sprintf(p, buf, "nr_of_total_mf_err                      : %lld\n", atomic64_read(&nr_of_total_mf_err));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_alloc_flow           : %lld\n", atomic64_read(&nr_of_total_mf_err_alloc_flow));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_resolve_path_flows   : %lld\n", atomic64_read(&nr_of_total_mf_err_resolve_path_flows));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_merge_mirred         : %lld\n", atomic64_read(&nr_of_total_mf_err_merge_mirred));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_merge_hdr            : %lld\n", atomic64_read(&nr_of_total_mf_err_merge_hdr));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_attach_dummy_counter : %lld\n", atomic64_read(&nr_of_total_mf_err_attach_dummy_counter));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_fdb_add              : %lld\n", atomic64_read(&nr_of_total_mf_err_fdb_add));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_verify_path          : %lld\n", atomic64_read(&nr_of_total_mf_err_verify_path));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_register             : %lld\n", atomic64_read(&nr_of_total_mf_err_register));
+	p += _sprintf(p, buf, "nr_of_total_mf_err_version              : %lld\n", atomic64_read(&nr_of_total_mf_err_version));
 	p += _sprintf(p, buf, "\n");
 	p += _sprintf(p, buf, "enable_ct_ageing                        : %d\n", enable_ct_ageing);
 	p += _sprintf(p, buf, "max_nr_mf                               : %d\n", max_nr_mf);
@@ -151,14 +154,13 @@ u64 miniflow_version_inc(void)
 	return atomic64_inc_return(&global_version);
 }
 
-/* TODO: have a second look */
 static struct rhashtable *get_mf_ht(struct mlx5e_priv *priv)
 {
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct mlx5e_rep_priv *uplink_rpriv;
 
 	uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
-	return &uplink_rpriv->mf_ht;
+	return &uplink_rpriv->uplink_priv.mf_ht;
 }
 
 static void miniflow_path_append_cookie(struct mlx5e_miniflow *miniflow,
@@ -173,15 +175,19 @@ static u8 miniflow_cookie_flags(u64 cookie)
 	return (cookie & MFC_INFOMASK);
 }
 
+#define MINIFLOW_ABORT -1
 static void miniflow_abort(struct mlx5e_miniflow *miniflow)
 {
-	miniflow->nr_flows = -1;
+	miniflow->nr_flows = MINIFLOW_ABORT;
 }
 
 static void miniflow_cleanup(struct mlx5e_miniflow *miniflow)
 {
 	struct mlx5e_tc_flow *flow;
 	int j;
+
+	if (miniflow->aged)
+		return;
 
 	for (j = 0; j < MINIFLOW_MAX_CT_TUPLES; j++) {
 		flow = miniflow->ct_tuples[j].flow;
@@ -214,11 +220,13 @@ static void miniflow_write(struct mlx5e_miniflow *miniflow)
 }
 
 static void miniflow_init(struct mlx5e_miniflow *miniflow,
-			  struct mlx5e_priv *priv)
+			  struct mlx5e_priv *priv,
+			  struct rhashtable *mf_ht)
 {
 	memset(miniflow, 0, sizeof(*miniflow));
 
 	miniflow->priv = priv;
+	miniflow->mf_ht = mf_ht;
 }
 
 static void miniflow_free_current_miniflow(void)
@@ -275,12 +283,13 @@ static void miniflow_merge_match(struct mlx5e_tc_flow *mflow,
 	for (i = 0; i < sizeof(struct mlx5_flow_spec) / sizeof(u32); i++)
 		*dst++ |= (*src++ & (~*mask++));
 
-	mflow->esw_attr->match_level = max(flow->esw_attr->match_level,
-					   mflow->esw_attr->match_level);
+	mflow->esw_attr->inner_match_level =
+		max(flow->esw_attr->inner_match_level,
+		    mflow->esw_attr->inner_match_level);
 
-	mflow->esw_attr->tunnel_match_level =
-		max(flow->esw_attr->tunnel_match_level,
-		    mflow->esw_attr->tunnel_match_level);
+	mflow->esw_attr->outer_match_level =
+		max(flow->esw_attr->outer_match_level,
+		    mflow->esw_attr->outer_match_level);
 }
 
 static void miniflow_merge_action(struct mlx5e_tc_flow *mflow,
@@ -304,13 +313,11 @@ static int miniflow_merge_mirred(struct mlx5e_tc_flow *mflow,
 	if (out_count > MLX5_MAX_FLOW_FWD_VPORTS)
 		return -1;
 
-	for (i = 0, j = dst_attr->out_count; j < out_count; i++, j++) {
-		dst_attr->out_rep[j] = src_attr->out_rep[i];
-		dst_attr->out_mdev[j] = src_attr->out_mdev[i];
-	}
+	for (i = 0, j = dst_attr->out_count; j < out_count; i++, j++)
+		dst_attr->dests[j] = src_attr->dests[i];
 
 	dst_attr->out_count = out_count;
-	dst_attr->mirror_count += src_attr->mirror_count;
+	dst_attr->split_count += src_attr->split_count;
 
 	return 0;
 }
@@ -451,11 +458,13 @@ static int miniflow_merge_hdr(struct mlx5e_priv *priv,
 static void miniflow_merge_vxlan(struct mlx5e_tc_flow *mflow,
 				 struct mlx5e_tc_flow *flow)
 {
-	if (!(flow->esw_attr->action & MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT))
-		return;
+	memcpy(mflow->esw_attr->parse_attr->mirred_ifindex,
+	       flow->esw_attr->parse_attr->mirred_ifindex,
+	       sizeof(flow->esw_attr->parse_attr->mirred_ifindex));
 
-	mflow->esw_attr->parse_attr->mirred_ifindex = flow->esw_attr->parse_attr->mirred_ifindex;
-	mflow->esw_attr->parse_attr->tun_info = flow->esw_attr->parse_attr->tun_info;
+	memcpy(mflow->esw_attr->parse_attr->tun_info,
+	       flow->esw_attr->parse_attr->tun_info,
+	       sizeof(flow->esw_attr->parse_attr->tun_info));
 }
 
 static u8 mlx5e_etype_to_ipv(u16 ethertype)
@@ -567,6 +576,7 @@ static int miniflow_register_ct_flow(struct mlx5e_miniflow *miniflow)
 
 	for (i = 0; i < miniflow->nr_ct_tuples; i++) {
 		ct_tuple = &miniflow->ct_tuples[i];
+		ct_tuple->flow->miniflow = miniflow;
 
 		err = miniflow_register_ct_tuple(ct_tuple);
 		if (err)
@@ -580,8 +590,9 @@ static struct mlx5e_ct_tuple *
 miniflow_ct_tuple_alloc(struct mlx5e_miniflow *miniflow)
 {
 	if (miniflow->nr_ct_tuples >= MINIFLOW_MAX_CT_TUPLES) {
-		pr_err("Failed to allocate ct_tuple, maximum (%d)",
-		       MINIFLOW_MAX_CT_TUPLES);
+		mlx5_core_err(miniflow->priv->mdev,
+			      "Failed to allocate ct_tuple, maximum (%d)",
+			      MINIFLOW_MAX_CT_TUPLES);
 		return NULL;
 	}
 
@@ -594,18 +605,17 @@ miniflow_ct_flow_alloc(struct mlx5e_priv *priv,
 {
 	struct mlx5e_tc_flow_parse_attr *parse_attr;
 	struct mlx5e_tc_flow *flow;
-	int flow_flag;
+	int flow_flags;
 	int attr_size;
 	int err;
 
-	flow_flag = MLX5E_TC_FLOW_ESWITCH | MLX5E_TC_FLOW_CT;
+	flow_flags = BIT(MLX5E_TC_FLOW_FLAG_ESWITCH) | BIT(MLX5E_TC_FLOW_FLAG_CT);
 
 	if (ct_tuple->tuple.dst.dir == IP_CT_DIR_ORIGINAL)
-		flow_flag |= MLX5E_TC_FLOW_CT_ORIG;
+		flow_flags |= BIT(MLX5E_TC_FLOW_FLAG_CT_ORIG);
 
 	attr_size = sizeof(struct mlx5_esw_flow_attr);
-	err = mlx5e_alloc_flow(priv, attr_size, 0 /* cookie */,
-			       flow_flag,
+	err = mlx5e_alloc_flow(priv, attr_size, 0 /* cookie */, flow_flags,
 			       GFP_ATOMIC, &parse_attr, &flow);
 	if (err)
 		return NULL;
@@ -631,7 +641,7 @@ static int miniflow_resolve_path_flows(struct mlx5e_miniflow *miniflow)
 		if (miniflow_cookie_flags(cookie) & MFC_CT_FLOW)
 			flow = miniflow_ct_flow_alloc(priv, &miniflow->ct_tuples[j++]);
 		else
-			flow = mlx5e_lookup_tc_ht(priv, &cookie, MLX5E_TC_ESW_OFFLOAD);
+			flow = mlx5e_lookup_tc_ht(priv, &cookie, MLX5_TC_FLAG(ESW_OFFLOAD));
 
 		if (!flow)
 			return -1;
@@ -659,7 +669,7 @@ static int miniflow_verify_path_flows(struct mlx5e_miniflow *miniflow)
 		if (miniflow_cookie_flags(cookie) & MFC_CT_FLOW)
 			continue;
 
-		flow = mlx5e_lookup_tc_ht(priv, &cookie, MLX5E_TC_ESW_OFFLOAD);
+		flow = mlx5e_lookup_tc_ht(priv, &cookie, MLX5_TC_FLAG(ESW_OFFLOAD));
 		if (!flow)
 			return -1;
 
@@ -684,7 +694,6 @@ static void miniflow_link_dummy_counters(struct mlx5e_tc_flow *flow,
 	if (!counter)
 		return;
 
-	WARN_ON(counter->dummy);
 	mlx5_fc_link_dummies(counter, dummies, nr_dummies);
 }
 
@@ -699,27 +708,6 @@ static void miniflow_unlink_dummy_counters(struct mlx5e_tc_flow *flow)
 	mlx5_fc_unlink_dummies(counter);
 }
 
-static struct mlx5_fc *miniflow_alloc_dummy_counter(struct mlx5_core_dev *dev)
-{
-	struct mlx5_fc *counter;
-
-	counter = mlx5_fc_alloc(dev, GFP_ATOMIC);
-	if (!counter)
-		return NULL;
-
-	counter->dummy = true;
-	counter->cache.lastuse = jiffies;
-	counter->aging = true;
-
-	return counter;
-}
-
-static void  miniflow_free_dummy_counter(struct mlx5_core_dev *dev,
-					 struct mlx5_fc *counter)
-{
-	mlx5_fc_dealloc(dev, counter);
-}
-
 static int miniflow_attach_dummy_counter(struct mlx5e_tc_flow *flow)
 {
 	struct mlx5_fc *counter;
@@ -728,13 +716,13 @@ static int miniflow_attach_dummy_counter(struct mlx5e_tc_flow *flow)
 		return 0;
 
 	if (flow->esw_attr->action & MLX5_FLOW_CONTEXT_ACTION_COUNT) {
-		counter = miniflow_alloc_dummy_counter(flow->priv->mdev);
+		counter = mlx5_fc_alloc_dummy_counter();
 		if (!counter)
 			return -ENOMEM;
 
 		rcu_read_lock();
 		if (flow->dummy_counter)
-			miniflow_free_dummy_counter(flow->priv->mdev, counter);
+			mlx5_fc_free_dummy_counter(counter);
 		else
 			flow->dummy_counter = counter;
 		rcu_read_unlock();
@@ -743,21 +731,41 @@ static int miniflow_attach_dummy_counter(struct mlx5e_tc_flow *flow)
 	return 0;
 }
 
-static int __miniflow_merge(struct mlx5e_miniflow *miniflow)
+static int miniflow_add_fdb_flow(struct mlx5e_priv *priv,
+				 struct mlx5e_tc_flow *mflow)
 {
-	struct mlx5_fc *dummy_counters[MINIFLOW_MAX_FLOWS];
+	int err;
+
+	err = mlx5e_tc_add_fdb_flow(priv, mflow, NULL);
+	complete_all(&mflow->init_done);
+	if (err) {
+		inc_debug_counter(&nr_of_total_mf_err_fdb_add);
+		return err;
+	}
+
+	return 0;
+}
+
+static int miniflow_alloc_flow(struct mlx5e_miniflow *miniflow,
+			       struct mlx5e_priv *priv,
+			       struct mlx5_eswitch_rep *in_rep,
+			       struct mlx5_core_dev *in_mdev,
+			       struct mlx5e_tc_flow **out_flow,
+			       struct mlx5_fc **dummy_counters)
+{
+	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct mlx5e_tc_flow_parse_attr *mparse_attr;
-	struct mlx5e_priv *priv = miniflow->priv;
-	struct rhashtable *mf_ht = get_mf_ht(priv);
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-	struct mlx5e_tc_flow *mflow, *flow;
-	u32 flags = MLX5E_TC_FLOW_SIMPLE | MLX5E_TC_FLOW_ESWITCH;
 	u32 tmp_mask[MLX5_ST_SZ_DW(fte_match_param)];
+	struct net_device *filter_dev = NULL;
+	unsigned long flow_flags;
+	struct mlx5e_tc_flow *mflow;
 	int attr_size, i;
 	int err;
 
+	flow_flags = BIT(MLX5E_TC_FLOW_FLAG_ESWITCH) | BIT(MLX5E_TC_FLOW_FLAG_SIMPLE);
 	attr_size = sizeof(struct mlx5_esw_flow_attr);
-	err = mlx5e_alloc_flow(priv, attr_size, 0 /* cookie */, flags,
+	err = mlx5e_alloc_flow(priv, attr_size, 0 /* cookie */, flow_flags,
 			       GFP_KERNEL, &mparse_attr, &mflow);
 	if (err) {
 		inc_debug_counter(&nr_of_total_mf_err_alloc_flow);
@@ -767,25 +775,37 @@ static int __miniflow_merge(struct mlx5e_miniflow *miniflow)
 	mflow->esw_attr->parse_attr = mparse_attr;
 
 	rcu_read_lock();
-	err = miniflow_resolve_path_flows(miniflow);
-	if (err) {
-		inc_debug_counter(&nr_of_total_mf_err_resolve_path_flows);
-		goto err_rcu;
+	if (dummy_counters) {
+		err = miniflow_resolve_path_flows(miniflow);
+		if (err) {
+			inc_debug_counter(&nr_of_total_mf_err_resolve_path_flows);
+			goto err_rcu;
+		}
+
+		miniflow->flow = mflow;
+		miniflow->aged = false;
+		mflow->miniflow = miniflow;
 	}
 
-	miniflow->flow = mflow;
-	mflow->miniflow = miniflow;
 	mflow->esw_attr->in_rep = rpriv->rep;
 	mflow->esw_attr->in_mdev = priv->mdev;
-	mflow->esw_attr->counter_dev = priv->mdev;
+
+	if (MLX5_CAP_ESW(esw->dev, counter_eswitch_affinity) ==
+	    MLX5_COUNTER_SOURCE_ESWITCH)
+		mflow->esw_attr->counter_dev = in_mdev;
+	else
+		mflow->esw_attr->counter_dev = priv->mdev;
 
 	/* Main merge loop */
 	memset(tmp_mask, 0, sizeof(tmp_mask));
 
 	for (i=0; i < miniflow->nr_flows; i++) {
-		flow = miniflow->path.flows[i];
+		struct mlx5e_tc_flow *flow = miniflow->path.flows[i];
 
-		flags |= atomic_read(&flow->flags);
+		flow_flags |= flow->flags;
+
+		if (!filter_dev)
+			filter_dev = flow->esw_attr->parse_attr->filter_dev;
 
 		miniflow_merge_match(mflow, flow, tmp_mask);
 		miniflow_merge_action(mflow, flow);
@@ -802,44 +822,130 @@ static int __miniflow_merge(struct mlx5e_miniflow *miniflow)
 		miniflow_merge_vxlan(mflow, flow);
 		/* TODO: vlan is not supported yet */
 
-		err = miniflow_attach_dummy_counter(flow);
-		if (err) {
-			inc_debug_counter(&nr_of_total_mf_err_attach_dummy_counter);
-			goto err_rcu;
+		if (dummy_counters) {
+			err = miniflow_attach_dummy_counter(flow);
+			if (err) {
+				inc_debug_counter(&nr_of_total_mf_err_attach_dummy_counter);
+				goto err_rcu;
+			}
+			dummy_counters[i] = flow->dummy_counter;
 		}
-		dummy_counters[i] = flow->dummy_counter;
 	}
 	rcu_read_unlock();
 
-	flags &= ~MLX5E_TC_FLOW_INIT_DONE;
-	atomic_set(&mflow->flags, flags);
+	mflow->esw_attr->parse_attr->filter_dev = filter_dev;
+	mflow->flags = flow_flags;
 	miniflow_merge_tuple(mflow, &miniflow->tuple);
 	/* TODO: Workaround: crashes otherwise, should fix */
 	mflow->esw_attr->action &= ~(MLX5_FLOW_CONTEXT_ACTION_CT |
 				     MLX5_FLOW_CONTEXT_ACTION_GOTO);
 
-	err = mlx5e_tc_add_fdb_flow(priv, mparse_attr, mflow, NULL);
-	if (err) {
-		inc_debug_counter(&nr_of_total_mf_err_fdb_add);
-		goto err;
-	}
+	*out_flow = mflow;
+	return 0;
 
-	err = mlx5e_tc_update_and_init_done_fdb_flow(priv, mflow);
+err_rcu:
+	rcu_read_unlock();
+	mlx5e_flow_put(priv, mflow);
+	return err;
+}
+
+static bool miniflow_is_peer_flow_needed(struct mlx5e_tc_flow *flow)
+{
+	struct mlx5_esw_flow_attr *attr = flow->esw_attr;
+
+	return mlx5_lag_is_sriov(attr->in_mdev);
+}
+
+static int miniflow_add_peer_flow(struct mlx5e_miniflow *miniflow,
+				  struct mlx5e_tc_flow *flow)
+{
+	struct mlx5e_priv *priv = flow->priv, *peer_priv;
+	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+	struct mlx5_devcom *devcom = priv->mdev->priv.devcom;
+	struct mlx5e_rep_priv *peer_urpriv;
+	struct mlx5e_tc_flow *peer_flow;
+	struct mlx5_core_dev *in_mdev;
+	struct mlx5_eswitch *peer_esw;
+	int err;
+
+	peer_esw = mlx5_devcom_get_peer_data(devcom, MLX5_DEVCOM_ESW_OFFLOADS);
+	if (!peer_esw)
+		return -ENODEV;
+
+	peer_urpriv = mlx5_eswitch_get_uplink_priv(peer_esw, REP_ETH);
+	peer_priv = netdev_priv(peer_urpriv->netdev);
+
+	if (flow->esw_attr->in_rep->vport == MLX5_VPORT_UPLINK)
+		in_mdev = peer_priv->mdev;
+	else
+		in_mdev = priv->mdev;
+
+	err = miniflow_alloc_flow(miniflow, peer_priv, flow->esw_attr->in_rep,
+				  in_mdev, &peer_flow, NULL);
+	if (err)
+		goto out;
+
+	err = miniflow_add_fdb_flow(peer_priv, peer_flow);
+	if (err)
+		goto err_add;
+
+	flow->peer_flow = peer_flow;
+	flow->flags |= BIT(MLX5E_TC_FLOW_FLAG_DUP);
+	mutex_lock(&esw->offloads.peer_mutex);
+	list_add_tail(&flow->peer, &esw->offloads.peer_flows);
+	mutex_unlock(&esw->offloads.peer_mutex);
+	goto out;
+
+err_add:
+	mlx5e_flow_put(peer_priv, peer_flow);
+out:
+	mlx5_devcom_release_peer_data(devcom, MLX5_DEVCOM_ESW_OFFLOADS);
+	return err;
+}
+
+static int __miniflow_merge(struct mlx5e_miniflow *miniflow)
+{
+	struct mlx5_fc *dummy_counters[MINIFLOW_MAX_FLOWS];
+	struct mlx5e_priv *priv = miniflow->priv;
+	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+	struct mlx5_eswitch_rep *in_rep = rpriv->rep;
+	struct mlx5_core_dev *in_mdev = priv->mdev;
+	struct rhashtable *mf_ht = get_mf_ht(priv);
+	struct mlx5e_tc_flow *mflow;
+	int err;
+
+	err = miniflow_alloc_flow(miniflow, priv, in_rep, in_mdev,
+				  &mflow, dummy_counters);
+	if (err)
+		goto err_alloc;
+
+	err = miniflow_add_fdb_flow(priv, mflow);
 	if (err)
 		goto err_verify;
+
+	if (miniflow_is_peer_flow_needed(mflow)) {
+		err = miniflow_add_peer_flow(miniflow, mflow);
+		if (err)
+			goto err_verify;
+	}
 
 	rcu_read_lock();
 	err = miniflow_verify_path_flows(miniflow);
 	if (err) {
-		/* TODO: refactor this function and the error handling */
 		rcu_read_unlock();
 		inc_debug_counter(&nr_of_total_mf_err_verify_path);
 		goto err_verify;
 	}
 
-	miniflow_link_dummy_counters(miniflow->flow,
+	miniflow_link_dummy_counters(mflow,
 				     dummy_counters,
 				     miniflow->nr_flows);
+
+	if (mflow->flags & BIT(MLX5E_TC_FLOW_FLAG_DUP))
+		miniflow_link_dummy_counters(mflow->peer_flow,
+					     dummy_counters,
+					     miniflow->nr_flows);
+
 	miniflow_attach(miniflow);
 
 	atomic_inc((atomic_t *)&currently_in_hw);
@@ -858,11 +964,9 @@ static int __miniflow_merge(struct mlx5e_miniflow *miniflow)
 	inc_debug_counter(&nr_of_total_merge_mf_succ);
 	return 0;
 
-err_rcu:
-	rcu_read_unlock();
-err:
 err_verify:
 	mlx5e_flow_put(priv, mflow);
+err_alloc:
 	rhashtable_remove_fast(mf_ht, &miniflow->node, mf_ht_params);
 	miniflow_cleanup(miniflow);
 	miniflow_free(miniflow);
@@ -879,9 +983,7 @@ static void miniflow_merge_work(struct work_struct *work)
 {
 	struct mlx5e_miniflow *miniflow = container_of(work, struct mlx5e_miniflow, work);
 
-	atomic_dec(&nr_of_mfe_in_queue);
 	inc_debug_counter(&nr_of_inflight_mfe);
-	atomic_dec(&miniflow_wq_size);
 	dec_debug_counter(&nr_of_merge_mfe_in_queue);
 	inc_debug_counter(&nr_of_inflight_merge_mfe);
 
@@ -889,6 +991,8 @@ static void miniflow_merge_work(struct work_struct *work)
 
 	dec_debug_counter(&nr_of_inflight_mfe);
 	dec_debug_counter(&nr_of_inflight_merge_mfe);
+	atomic_dec(&nr_of_mfe_in_queue);
+	atomic_dec(&miniflow_wq_size);
 }
 
 static int miniflow_merge(struct mlx5e_miniflow *miniflow)
@@ -911,12 +1015,11 @@ static void mlx5e_del_miniflow(struct mlx5e_miniflow *miniflow)
 {
 	struct rhashtable *mf_ht = get_mf_ht(miniflow->priv);
 
-	atomic_dec(&currently_in_hw);
-
 	mlx5e_flow_put(miniflow->priv, miniflow->flow);
 	rhashtable_remove_fast(mf_ht, &miniflow->node, mf_ht_params);
 	miniflow_free(miniflow);
 
+	atomic_dec(&currently_in_hw);
 	inc_debug_counter(&nr_of_total_del_mf_succ);
 	inc_debug_counter(&nr_of_total_mf_succ);
 }
@@ -932,6 +1035,7 @@ static void mlx5e_del_miniflow_work(struct work_struct *work)
 	dec_debug_counter(&nr_of_del_mfe_in_queue);
 	inc_debug_counter(&nr_of_inflight_del_mfe);
 
+	miniflow_cleanup(miniflow);
 	mlx5e_del_miniflow(miniflow);
 
 	dec_debug_counter(&nr_of_inflight_del_mfe);
@@ -945,6 +1049,9 @@ void mlx5e_del_miniflow_list(struct mlx5e_tc_flow *flow)
 	spin_lock_bh(&miniflow_lock);
 	list_for_each_entry_safe(mnode, n, &flow->miniflow_list, node) {
 		struct mlx5e_miniflow *miniflow = mnode->miniflow;
+
+		if (miniflow->flow->flags & BIT(MLX5E_TC_FLOW_FLAG_DUP))
+			miniflow_unlink_dummy_counters(miniflow->flow->peer_flow);
 
 		miniflow_unlink_dummy_counters(miniflow->flow);
 		miniflow_detach(miniflow);
@@ -1046,6 +1153,7 @@ static int miniflow_extract_tuple(struct mlx5e_miniflow *miniflow,
 				  struct sk_buff *skb)
 {
 	struct nf_conntrack_tuple *nf_tuple = &miniflow->tuple;
+	struct mlx5_core_dev *mdev = miniflow->priv->mdev;
 	struct iphdr *iph, _iph;
 	struct udphdr *udph, _udph;
 	struct tcphdr *tcph, _tcph;
@@ -1056,7 +1164,7 @@ static int miniflow_extract_tuple(struct mlx5e_miniflow *miniflow,
 		goto err;
 
 	if (skb->protocol == htons(ETH_P_IPV6)) {
-		pr_warn_once("IPv6 is not supported\n");
+		mlx5_core_warn_once(mdev, "IPv6 is not supported\n");
 		goto err;
 	}
 
@@ -1066,12 +1174,12 @@ static int miniflow_extract_tuple(struct mlx5e_miniflow *miniflow,
 
 	ihl = ip_hdrlen(skb);
 	if (ihl > sizeof(struct iphdr)) {
-		pr_warn_once("Offload with IPv4 options is not supported\n");
+		mlx5_core_warn_once(mdev, "IPv4 options are not supported\n");
 		goto err;
 	}
 
 	if (iph->frag_off & htons(IP_MF | IP_OFFSET)) {
-		pr_warn_once("IP fragments are not supported\n");
+		mlx5_core_warn_once(mdev, "IP fragments are not supported\n");
 		goto err;
 	}
 
@@ -1102,10 +1210,11 @@ static int miniflow_extract_tuple(struct mlx5e_miniflow *miniflow,
 		nf_tuple->dst.u.all = udph->dest;
 	break;
 	case IPPROTO_ICMP:
-		pr_warn_once("ICMP is not supported\n");
+		mlx5_core_warn_once(mdev, "ICMP is not supported\n");
 		goto err;
 	default:
-		pr_warn("Proto %d is not supported\n", nf_tuple->dst.protonum);
+		mlx5_core_warn_once(mdev, "Proto %d is not supported\n",
+				    nf_tuple->dst.protonum);
 		goto err;
 	}
 
@@ -1131,13 +1240,12 @@ int miniflow_configure_ct(struct mlx5e_priv *priv,
 	if (!miniflow)
 		return -1;
 
-	if (miniflow->nr_flows == -1)
-		goto err;
+	if (miniflow->mf_ht != get_mf_ht(priv))
+		return -1;
 
-	if (unlikely(miniflow->nr_flows == MINIFLOW_MAX_FLOWS))
-		goto err;
-
-	if (!cookie)
+	if (miniflow->nr_flows == MINIFLOW_ABORT ||
+	    unlikely(miniflow->nr_flows >= MINIFLOW_MAX_FLOWS) ||
+	    !cookie)
 		goto err;
 
 	ct_tuple = miniflow_ct_tuple_alloc(miniflow);
@@ -1173,15 +1281,26 @@ int miniflow_configure(struct mlx5e_priv *priv,
 	if (!miniflow) {
 		miniflow = miniflow_alloc();
 		if (!miniflow)
-			return -1;
+			return -ENOMEM;
+		miniflow_init(miniflow, priv, mf_ht);
 		miniflow_write(miniflow);
 	}
 
 	if (mf->chain_index == 0)
-		miniflow_init(miniflow, priv);
+		miniflow_init(miniflow, priv, mf_ht);
 
-	if (miniflow->nr_flows == -1)
+	if (miniflow->nr_flows == MINIFLOW_ABORT)
 		goto err;
+
+	/* Last tunnel unset flow gives the correct priv so reset it */
+	if (mf->last_flow && miniflow->priv != priv) {
+		mf_ht = get_mf_ht(priv);
+		miniflow->priv = priv;
+		miniflow->mf_ht = mf_ht;
+	}
+
+	if (miniflow->mf_ht != mf_ht)
+		return -1;
 
 	/**
 	 * In some conditions merged rule could have another action with drop.
@@ -1196,7 +1315,7 @@ int miniflow_configure(struct mlx5e_priv *priv,
 	if (miniflow->nr_flows == 0 && mf->last_flow)
 		goto err;
 
-	if (unlikely(miniflow->nr_flows == MINIFLOW_MAX_FLOWS))
+	if (unlikely(miniflow->nr_flows >= MINIFLOW_MAX_FLOWS))
 		goto err;
 
 	if (!mf->cookie)
@@ -1219,7 +1338,7 @@ int miniflow_configure(struct mlx5e_priv *priv,
 	/* If rules in HW + rules in queue exceed the max value, then igore new one.
 	 * Note the rules in queue could be the to_be_deleted rules. */
 	if ((atomic_read(&currently_in_hw) +
-	     atomic_read(&nr_of_mfe_in_queue)) >
+	     atomic_read(&nr_of_mfe_in_queue)) >=
 	    atomic_read((atomic_t *)&max_nr_mf))
 		goto err;
 
@@ -1269,7 +1388,9 @@ void ct_flow_offload_get_stats(struct list_head *head, u64 *lastuse)
 
 static void ct_flow_offload_del(struct mlx5e_tc_flow *flow)
 {
-	mlx5e_flow_put(flow->priv, flow);
+	flow->miniflow->aged = true;
+	/* We already hold dep_lock, set flag to flase */
+	mlx5e_flow_put_lock(flow->priv, flow, false);
 }
 
 int ct_flow_offload_destroy(struct list_head *head)
@@ -1283,3 +1404,5 @@ int ct_flow_offload_destroy(struct list_head *head)
 
 	return 0;
 }
+
+#endif /* HAVE_MINIFLOW */

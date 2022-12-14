@@ -131,10 +131,10 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 {
 	struct ib_srq_init_attr srq_attr = { NULL, };
 	struct ib_srq *srq;
-	size_t srq_size;
 	int ret, i, j;
 	struct nvmet_rdma_xrq *xrq;
 	struct nvmet_port *port = queue->port;
+	size_t srq_size = port->offload_srq_size;
 
 
 	xrq = kzalloc(sizeof(*xrq), GFP_KERNEL);
@@ -177,7 +177,6 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 		goto free_xrq_st;
 	}
 
-	srq_size = 4095;
 	srq_attr.attr.max_wr = srq_size;
 	srq_attr.attr.max_sge = 2;
 	srq_attr.srq_type = IB_EXP_SRQT_NVMF;
@@ -188,7 +187,7 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 
 	for (i = 0 ; i < xrq->st->num_pages ; i++) {
 		if (xrq->st->dynamic) {
-			xrq->st->staging_pages[i] = dma_zalloc_coherent(ndev->device->dma_device,
+			xrq->st->staging_pages[i] = dma_alloc_coherent(ndev->device->dma_device,
 									xrq->st->page_size,
 									&xrq->st->staging_dma_addrs[i],
 									GFP_KERNEL);

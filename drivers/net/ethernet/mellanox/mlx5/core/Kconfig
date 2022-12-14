@@ -1,13 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Mellanox driver configuration
 #
 
 config MLX5_CORE
 	tristate "Mellanox 5th generation network adapters (ConnectX series) core driver"
-	depends on MAY_USE_DEVLINK
 	depends on PCI
+	select NET_DEVLINK
 	imply PTP_1588_CLOCK
 	imply VXLAN
+	imply MLXFW
 	default n
 	---help---
 	  Core driver for low level functionality of the ConnectX-4 and
@@ -127,7 +129,8 @@ config MLX5_MDEV
 	depends on MLX5_CORE
 	depends on VFIO_MDEV
 	depends on MLX5_ESWITCH
-	default y
+	default n
 	help
 	  Build support for mediated devices. Mediated devices allow creating
-	  multiple netdev and/or rdma device(s) on single PCI function.
+	  multiple virtual ports, netdev and/or rdma device(s) on
+	  single PCI function.

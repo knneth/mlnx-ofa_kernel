@@ -1,6 +1,7 @@
 #ifndef _COMPAT_UAPI_PKT_CLS_H
 #define _COMPAT_UAPI_PKT_CLS_H 1
 
+#if !defined(CONFIG_COMPAT_KERNEL_4_14)
 #include "../../../../compat/config.h"
 
 /*
@@ -88,21 +89,34 @@ enum {
 	TCA_FLOWER_KEY_ARP_SHA_MASK,	/* ETH_ALEN */
 	TCA_FLOWER_KEY_ARP_THA,		/* ETH_ALEN */
 	TCA_FLOWER_KEY_ARP_THA_MASK,	/* ETH_ALEN */
+};
 
-	TCA_FLOWER_KEY_MPLS_TTL,	/* u8 - 8 bits */
-	TCA_FLOWER_KEY_MPLS_BOS,	/* u8 - 1 bit */
-	TCA_FLOWER_KEY_MPLS_TC,		/* u8 - 3 bits */
-	TCA_FLOWER_KEY_MPLS_LABEL,	/* be32 - 20 bits */
+#undef TCA_FLOWER_MAX
+#define TCA_FLOWER_MAX TCA_FLOWER_KEY_ARP_THA_MASK
 
-	TCA_FLOWER_KEY_TCP_FLAGS,	/* be16 */
-	TCA_FLOWER_KEY_TCP_FLAGS_MASK,	/* be16 */
+#ifndef HAVE_TCA_FLOWER_KEY_MPLS_TTL
+enum {
+	TCA_FLOWER_KEY_MPLS_TTL = TCA_FLOWER_MAX + 1,     /* u8 - 8 bits */
+	TCA_FLOWER_KEY_MPLS_BOS,        /* u8 - 1 bit */
+	TCA_FLOWER_KEY_MPLS_TC,         /* u8 - 3 bits */
+	TCA_FLOWER_KEY_MPLS_LABEL,      /* be32 - 20 bits */
 
-	TCA_FLOWER_KEY_IP_TOS,		/* u8 */
-	TCA_FLOWER_KEY_IP_TOS_MASK,	/* u8 */
-	TCA_FLOWER_KEY_IP_TTL,		/* u8 */
-	TCA_FLOWER_KEY_IP_TTL_MASK,	/* u8 */
+	TCA_FLOWER_KEY_TCP_FLAGS,       /* be16 */
+	TCA_FLOWER_KEY_TCP_FLAGS_MASK,  /* be16 */
 
-	TCA_FLOWER_KEY_CVLAN_ID,	/* be16 */
+	TCA_FLOWER_KEY_IP_TOS,          /* u8 */
+	TCA_FLOWER_KEY_IP_TOS_MASK,     /* u8 */
+	TCA_FLOWER_KEY_IP_TTL,          /* u8 */
+	TCA_FLOWER_KEY_IP_TTL_MASK,     /* u8 */
+};
+
+#undef TCA_FLOWER_MAX
+#define TCA_FLOWER_MAX TCA_FLOWER_KEY_IP_TTL_MASK
+#endif /* HAVE_TCA_FLOWER_KEY_MPLS_TTL */
+
+#ifndef HAVE_TCA_FLOWER_KEY_CVLAN_ID
+enum {
+	TCA_FLOWER_KEY_CVLAN_ID = TCA_FLOWER_MAX + 1,	/* be16 */
 	TCA_FLOWER_KEY_CVLAN_PRIO,	/* u8   */
 	TCA_FLOWER_KEY_CVLAN_ETH_TYPE,	/* be16 */
 
@@ -110,11 +124,11 @@ enum {
 	TCA_FLOWER_KEY_ENC_IP_TOS_MASK,	/* u8 */
 	TCA_FLOWER_KEY_ENC_IP_TTL,	/* u8 */
 	TCA_FLOWER_KEY_ENC_IP_TTL_MASK,	/* u8 */
-
-	__TCA_FLOWER_MAX,
 };
 
-#define TCA_FLOWER_MAX (__TCA_FLOWER_MAX - 1)
+#undef TCA_FLOWER_MAX
+#define TCA_FLOWER_MAX TCA_FLOWER_KEY_ENC_IP_TTL_MASK
+#endif /* HAVE_TCA_FLOWER_KEY_CVLAN_ID */
 
 /* tca flags definitions */
 #define TCA_CLS_FLAGS_SKIP_HW	(1 << 0) /* don't offload filter to HW */
@@ -223,5 +237,5 @@ enum {
 #endif
 
 #endif /* CONFIG_COMPAT_CLS_FLOWER_MOD */
-
+#endif /* CONFIG_COMPAT_KERNEL_4_14 */
 #endif /* _COMPAT_UAPI_PKT_CLS_H */

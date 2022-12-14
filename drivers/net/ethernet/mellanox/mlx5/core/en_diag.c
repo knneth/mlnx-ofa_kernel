@@ -31,6 +31,7 @@
  */
 
 #include "en.h"
+#include "lib/eq.h"
 
 #define MLX5_DRV_VER_SZ 64
 #define MLX5_DEV_NAME_SZ 64
@@ -115,19 +116,17 @@ static int dump_cq_info(struct mlx5e_cq *cq, void *buffer)
 	return sizeof(*cqd);
 }
 
-static int dump_eq_info(struct mlx5_eq *eq, void *buffer)
+static int dump_eq_info(struct mlx5_eq_comp *eq, void *buffer)
 {
 	struct mlx5_diag_eq *eqd = (struct mlx5_diag_eq *)buffer;
 
 	eqd->type = MLX5_DIAG_EQ;
-	eqd->ci = eq->cons_index;
-	eqd->size = eq->size;
-	eqd->irqn = eq->irqn;
-	eqd->eqn = eq->eqn;
-	eqd->nent = eq->nent;
+	eqd->ci = eq->core.cons_index;
+	eqd->size = eq->core.size;
+	eqd->irqn = eq->core.irqn;
+	eqd->eqn = eq->core.eqn;
+	eqd->nent = eq->core.nent;
 	eqd->mask = 0;
-	eqd->index = eq->index;
-	eqd->group_id = eq->index;
 
 	return sizeof(*eqd);
 }
@@ -136,7 +135,7 @@ static void dump_channel_info(struct mlx5e_channel *c,
 			      struct mlx5_diag_dump *dump_hdr)
 {
 	struct mlx5_diag_blk *dump_blk;
-	struct mlx5_eq eqc;
+	struct mlx5_eq_comp eqc;
 	int i;
 
 	for (i = 0; i < c->num_tc; i++) {

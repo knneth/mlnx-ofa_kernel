@@ -16,6 +16,7 @@ drivers/net/ethernet/mellanox/mlx4
 drivers/net/ethernet/mellanox/mlx5
 drivers/net/ethernet/mellanox/mlxfw
 drivers/net/ethernet/mellanox/Kconfig
+drivers/vfio/mdev/
 drivers/nvme/
 drivers/scsi/scsi_priv.h
 drivers/scsi/scsi_transport_srp.c
@@ -31,7 +32,10 @@ include/linux/nvme.h
 include/linux/nvme-rdma.h
 include/linux/nvme-fc-driver.h
 include/linux/nvme-fc.h
-include/linux/blk-mq-rdma.h
-block/blk-mq-rdma.c
 include/linux/net_dim.h
 include/linux/lightnvm.h
+include/linux/mdev.h
+include/linux/sunrpc/svc_rdma.h
+include/linux/sunrpc/xprtrdma.h
+include/trace/events/ib_umad.h
+include/trace/events/ib_mad.h

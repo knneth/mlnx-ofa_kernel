@@ -312,7 +312,7 @@ static void mlx5_ib_dct_event(struct mlx5_core_qp *qp, int type)
 
 static struct mlx5_ib_qp *dct_create_qp(struct ib_pd *pd,
                                    struct ib_dct_init_attr *attr,
-                                   u32 uidx)
+                                   u32 uidx, struct ib_udata *udata)
 {
        struct ib_qp_init_attr qp_attr;
        struct ib_qp *qp;
@@ -336,7 +336,7 @@ static struct mlx5_ib_qp *dct_create_qp(struct ib_pd *pd,
        qp_attr.srq = attr->srq;
        qp_attr.recv_cq = attr->cq;
 
-       qp = mlx5_ib_create_dct(pd, &qp_attr, NULL);
+       qp = mlx5_ib_create_dct(pd, &qp_attr, NULL, udata);
 
        if (IS_ERR(qp))
               return ERR_PTR(PTR_ERR(qp));
@@ -425,7 +425,7 @@ struct ib_dct *mlx5_ib_create_dc_target(struct ib_pd *pd,
 	if (!rdma_is_port_valid(&dev->ib_dev, attr->port))
 		return ERR_PTR(-EINVAL);
 
-	if (dev->lag_active && !MLX5_CAP_GEN(dev->mdev, lag_dct))
+	if (mlx5_lag_is_active(dev->mdev) && !MLX5_CAP_GEN(dev->mdev, lag_dct))
 		return ERR_PTR(-EOPNOTSUPP);
 
 	if (pd && pd->uobject) {
@@ -445,7 +445,7 @@ struct ib_dct *mlx5_ib_create_dc_target(struct ib_pd *pd,
 	dct = kzalloc(sizeof(*dct), GFP_KERNEL);
 	if (!dct)
 		return ERR_PTR(-ENOMEM);
-	dct->qp = dct_create_qp(pd, attr, uidx);
+	dct->qp = dct_create_qp(pd, attr, uidx, udata);
 	if (IS_ERR(dct->qp)) {
 		err = PTR_ERR(dct->qp);
 		goto err_free;
@@ -472,12 +472,12 @@ err_free:
         return ERR_PTR(err);
 }
 
-int mlx5_ib_destroy_dc_target(struct ib_dct *dct)
+int mlx5_ib_destroy_dc_target(struct ib_dct *dct, struct ib_udata *udata)
 {
 	struct mlx5_ib_dc_target *mdct = to_mdct(dct);
 	int err;
 
-	err = mlx5_ib_destroy_qp(&mdct->qp->ibqp);
+	err = mlx5_ib_destroy_qp(&mdct->qp->ibqp, udata);
 	kfree(mdct);
 	
 	return err;

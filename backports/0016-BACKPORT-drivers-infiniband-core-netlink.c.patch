@@ -1,14 +1,39 @@
 From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
 
-Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
+Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
 ---
- drivers/infiniband/core/netlink.c | 46 +++++++++++++++++++++++++++++++
- 1 file changed, 46 insertions(+)
+ drivers/infiniband/core/netlink.c | 128 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 122 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/netlink.c
 +++ b/drivers/infiniband/core/netlink.c
-@@ -94,6 +94,7 @@ static bool is_nl_valid(unsigned int typ
+@@ -46,16 +46,24 @@
+ #include "core_priv.h"
+ 
+ static DEFINE_MUTEX(rdma_nl_mutex);
++static struct sock *nls;
+ static struct {
+ 	const struct rdma_nl_cbs   *cb_table;
+ } rdma_nl_types[RDMA_NL_NUM_CLIENTS];
+ 
++#if defined(HAVE_STRUCT_CLASS_NS_TYPE) && defined(HAVE_PERENT_OPERATIONS_ID)
+ bool rdma_nl_chk_listeners(unsigned int group)
+ {
+ 	struct rdma_dev_net *rnet = rdma_net_to_dev_net(&init_net);
+ 
+ 	return netlink_has_listeners(rnet->nl_sock, group);
+ }
++#else
++bool rdma_nl_chk_listeners(unsigned int group)
++{
++	return netlink_has_listeners(nls, group);
++}
++#endif
+ EXPORT_SYMBOL(rdma_nl_chk_listeners);
+ 
+ static bool is_nl_msg_valid(unsigned int type, unsigned int op)
+@@ -103,6 +111,7 @@ is_nl_valid(const struct sk_buff *skb, u
  
  	if (!cb_table || (!cb_table[op].dump && !cb_table[op].doit))
  		return false;
@@ -16,7 +41,7 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  	return true;
  }
  
-@@ -157,8 +158,12 @@ int ibnl_put_attr(struct sk_buff *skb, s
+@@ -166,8 +175,12 @@ int ibnl_put_attr(struct sk_buff *skb, s
  }
  EXPORT_SYMBOL(ibnl_put_attr);
  
@@ -29,7 +54,7 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  {
  	int type = nlh->nlmsg_type;
  	unsigned int index = RDMA_NL_GET_CLIENT(type);
-@@ -171,7 +176,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
+@@ -180,7 +193,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
  	cb_table = rdma_nl_types[index].cb_table;
  
  	if ((cb_table[op].flags & RDMA_NL_ADMIN_PERM) &&
@@ -41,26 +66,26 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  		return -EPERM;
  
  	/*
-@@ -180,22 +189,36 @@ static int rdma_nl_rcv_msg(struct sk_buf
+@@ -189,21 +206,35 @@ static int rdma_nl_rcv_msg(struct sk_buf
  	 */
  	if (index == RDMA_NL_LS) {
  		if (cb_table[op].doit)
+-			return cb_table[op].doit(skb, nlh, extack);
 +#ifdef HAVE_NETLINK_EXT_ACK
- 			return cb_table[op].doit(skb, nlh, extack);
++	     		return cb_table[op].doit(skb, nlh, extack);
 +#else
 +			return cb_table[op].doit(skb, nlh);
 +#endif
  		return -EINVAL;
  	}
  	/* FIXME: Convert IWCM to properly handle doit callbacks */
- 	if ((nlh->nlmsg_flags & NLM_F_DUMP) || index == RDMA_NL_RDMA_CM ||
- 	    index == RDMA_NL_IWCM) {
+ 	if ((nlh->nlmsg_flags & NLM_F_DUMP) || index == RDMA_NL_IWCM) {
 +#ifdef HAVE_NETLINK_DUMP_CONTROL_DUMP
  		struct netlink_dump_control c = {
  			.dump = cb_table[op].dump,
  		};
  		if (c.dump)
- 			return netlink_dump_start(nls, skb, nlh, &c);
+ 			return netlink_dump_start(skb->sk, skb, nlh, &c);
 +#else
 +		return netlink_dump_start(nls, skb, nlh,
 +					  cb_table[op].dump,
@@ -78,7 +103,7 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  
  	return 0;
  }
-@@ -207,10 +230,16 @@ static int rdma_nl_rcv_msg(struct sk_buf
+@@ -215,10 +246,16 @@ static int rdma_nl_rcv_msg(struct sk_buf
   * for that consumer only.
   */
  static int rdma_nl_rcv_skb(struct sk_buff *skb, int (*cb)(struct sk_buff *,
@@ -95,7 +120,7 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  	struct nlmsghdr *nlh;
  	int err;
  
-@@ -238,13 +267,21 @@ static int rdma_nl_rcv_skb(struct sk_buf
+@@ -246,13 +283,21 @@ static int rdma_nl_rcv_skb(struct sk_buf
  		if (nlh->nlmsg_type < NLMSG_MIN_TYPE)
  			goto ack;
  
@@ -117,17 +142,84 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  
  skip:
  		msglen = NLMSG_ALIGN(nlh->nlmsg_len);
-@@ -289,11 +326,20 @@ EXPORT_SYMBOL(rdma_nl_multicast);
+@@ -271,6 +316,7 @@ static void rdma_nl_rcv(struct sk_buff *
+ 	mutex_unlock(&rdma_nl_mutex);
+ }
  
- int __init rdma_nl_init(void)
++#if defined(HAVE_STRUCT_CLASS_NS_TYPE) && defined(HAVE_PERENT_OPERATIONS_ID)
+ int rdma_nl_unicast(struct net *net, struct sk_buff *skb, u32 pid)
  {
+ 	struct rdma_dev_net *rnet = rdma_net_to_dev_net(net);
+@@ -313,23 +359,93 @@ void rdma_nl_exit(void)
+ int rdma_nl_net_init(struct rdma_dev_net *rnet)
+ {
+ 	struct net *net = read_pnet(&rnet->net);
++#ifdef HAVE_NETLINK_KERNEL_CFG_INPUT
++       struct netlink_kernel_cfg cfg = {
++       	.input	= rdma_nl_rcv,
++       };
++       struct sock *nls;
++
++#ifdef HAVE_NETLINK_KERNEL_CREATE_3_PARAMS
++       nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
++#else
++	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, THIS_MODULE, &cfg);
++#endif
++#else /* HAVE_NETLINK_KERNEL_CFG_INPUT */
++	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, 0, rdma_nl_rcv,
++				    NULL, THIS_MODULE);
++#endif /* HAVE_NETLINK_KERNEL_CFG_INPUT */
++	if (!nls)
++		return -ENOMEM;
++
++	nls->sk_sndtimeo = 10 * HZ;
++	rnet->nl_sock = nls;
++	return 0;
++}
++
++void rdma_nl_net_exit(struct rdma_dev_net *rnet)
++{
++	netlink_kernel_release(rnet->nl_sock);
++}
++
++#else
++
++int rdma_nl_unicast(struct net *net, struct sk_buff *skb, u32 pid)
++{
++	int err;
++
++	err = netlink_unicast(nls, skb, pid, MSG_DONTWAIT);
++	return (err < 0) ? err : 0;
++}
++EXPORT_SYMBOL(rdma_nl_unicast);
++
++int rdma_nl_unicast_wait(struct net *net, struct sk_buff *skb, __u32 pid)
++{
++	int err;
++
++	err = netlink_unicast(nls, skb, pid, 0);
++	return (err < 0) ? err : 0;
++}
++EXPORT_SYMBOL(rdma_nl_unicast_wait);
++
++int rdma_nl_multicast(struct net *net, struct sk_buff *skb,
++		      unsigned int group, gfp_t flags)
++{
++	return nlmsg_multicast(nls, skb, 0, group, flags);
++}
++EXPORT_SYMBOL(rdma_nl_multicast);
++
++int __init rdma_nl_init(void)
++{
 +#ifdef HAVE_NETLINK_KERNEL_CFG_INPUT
  	struct netlink_kernel_cfg cfg = {
  		.input	= rdma_nl_rcv,
  	};
+-	struct sock *nls;
  
+-	nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
 +#ifdef HAVE_NETLINK_KERNEL_CREATE_3_PARAMS
- 	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, &cfg);
++       nls = netlink_kernel_create(&init_net, NETLINK_RDMA, &cfg);
 +#else
 +	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, THIS_MODULE, &cfg);
 +#endif
@@ -138,3 +230,22 @@ Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
  	if (!nls)
  		return -ENOMEM;
  
+ 	nls->sk_sndtimeo = 10 * HZ;
+-	rnet->nl_sock = nls;
+ 	return 0;
+ }
+ 
+-void rdma_nl_net_exit(struct rdma_dev_net *rnet)
++void rdma_nl_exit(void)
+ {
+-	netlink_kernel_release(rnet->nl_sock);
++	int idx;
++
++	for (idx = 0; idx < RDMA_NL_NUM_CLIENTS; idx++)
++		rdma_nl_unregister(idx);
++
++	netlink_kernel_release(nls);
+ }
++#endif
+ 
+ MODULE_ALIAS_NET_PF_PROTO(PF_NETLINK, NETLINK_RDMA);

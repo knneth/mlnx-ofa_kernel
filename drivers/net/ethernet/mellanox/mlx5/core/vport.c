@@ -36,6 +36,7 @@
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/eswitch.h>
 #include "mlx5_core.h"
+#include "eswitch.h"
 
 /* Mutex to hold while enabling or disabling RoCE */
 static DEFINE_MUTEX(mlx5_roce_en_lock);
@@ -100,38 +101,6 @@ static int mlx5_query_nic_vport_context(struct mlx5_core_dev *mdev, u16 vport,
 {
 	return __mlx5_query_nic_vport_context(mdev, vport, out, outlen, 0);
 }
-
-#ifdef CONFIG_BF_DEVICE_EMULATION
-/*
- * use this function to correctly encode the 'vport' and 'other_vport' fields
- * in commands that utilzie these fields
- */
-static int get_other_vport(struct mlx5_core_dev *mdev, u16 *vport)
-{
-	if (mlx5_core_is_ecpf(mdev)) {
-		if (*vport == MLX5_VPORT_ECPF) {
-			*vport = 0;
-			return 0;
-		}
-		return 1;
-	}
-	return !!*vport;
-}
-
-static int mlx5_query_nic_vport_context_emulation(struct mlx5_core_dev *mdev, u16 vport,
-						  u32 *out, int outlen)
-{
-	u32 in[MLX5_ST_SZ_DW(query_nic_vport_context_in)] = {0};
-
-	MLX5_SET(query_nic_vport_context_in, in, opcode,
-		 MLX5_CMD_OP_QUERY_NIC_VPORT_CONTEXT);
-	MLX5_SET(query_nic_vport_context_in, in, other_vport,
-		 get_other_vport(mdev, &vport));
-	MLX5_SET(query_nic_vport_context_in, in, vport_number, vport);
-
-	return mlx5_cmd_exec(mdev, in, sizeof(in), out, outlen);
-}
-#endif
 
 static int mlx5_modify_nic_vport_context(struct mlx5_core_dev *mdev, void *in,
 					 int inlen)
@@ -232,32 +201,6 @@ int mlx5_query_nic_vport_mac_address(struct mlx5_core_dev *mdev,
 	return __mlx5_query_nic_vport_mac_address(mdev, vport, addr, 0);
 }
 EXPORT_SYMBOL_GPL(mlx5_query_nic_vport_mac_address);
-
-#ifdef CONFIG_BF_DEVICE_EMULATION
-int mlx5_query_nic_vport_mac_address_emulation(struct mlx5_core_dev *mdev,
-					       u16 vport, u8 *addr)
-{
-	u32 *out;
-	int outlen = MLX5_ST_SZ_BYTES(query_nic_vport_context_out);
-	u8 *out_addr;
-	int err;
-
-	out = kvzalloc(outlen, GFP_KERNEL);
-	if (!out)
-		return -ENOMEM;
-
-	out_addr = MLX5_ADDR_OF(query_nic_vport_context_out, out,
-				nic_vport_context.permanent_address);
-
-	err = mlx5_query_nic_vport_context_emulation(mdev, vport, out, outlen);
-	if (!err)
-		ether_addr_copy(addr, &out_addr[2]);
-
-	kvfree(out);
-	return err;
-}
-EXPORT_SYMBOL_GPL(mlx5_query_nic_vport_mac_address_emulation);
-#endif
 
 static int __mlx5_modify_nic_vport_mac_address(struct mlx5_core_dev *mdev,
 					       u16 vport, u8 *addr,
@@ -463,7 +406,7 @@ int mlx5_modify_nic_vport_mac_list(struct mlx5_core_dev *dev,
 }
 EXPORT_SYMBOL_GPL(mlx5_modify_nic_vport_mac_list);
 
-int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u16 vport,
+int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u32 vport,
 			       unsigned long *vlans)
 {
 	u32 in[MLX5_ST_SZ_DW(query_nic_vport_context_in)];
@@ -476,7 +419,7 @@ int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u16 vport,
 
 	req_list_size = 1 << MLX5_CAP_GEN(dev, log_max_vlan_list);
 	out_sz = MLX5_ST_SZ_BYTES(modify_nic_vport_context_in) +
-			req_list_size * MLX5_ST_SZ_BYTES(vlan_layout);
+		req_list_size * MLX5_ST_SZ_BYTES(vlan_layout);
 
 	memset(in, 0, sizeof(in));
 	out = kzalloc(out_sz, GFP_KERNEL);
@@ -484,9 +427,9 @@ int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u16 vport,
 		return -ENOMEM;
 
 	MLX5_SET(query_nic_vport_context_in, in, opcode,
-		 MLX5_CMD_OP_QUERY_NIC_VPORT_CONTEXT);
+			MLX5_CMD_OP_QUERY_NIC_VPORT_CONTEXT);
 	MLX5_SET(query_nic_vport_context_in, in, allowed_list_type,
-		 MLX5_NVPRT_LIST_TYPE_VLAN);
+			MLX5_NVPRT_LIST_TYPE_VLAN);
 	MLX5_SET(query_nic_vport_context_in, in, vport_number, vport);
 
 	if (vport)
@@ -497,14 +440,14 @@ int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u16 vport,
 		goto out;
 
 	nic_vport_ctx = MLX5_ADDR_OF(query_nic_vport_context_out, out,
-				     nic_vport_context);
+			nic_vport_context);
 	req_list_size = MLX5_GET(nic_vport_context, nic_vport_ctx,
-				 allowed_list_size);
+			allowed_list_size);
 
 	for (i = 0; i < req_list_size; i++) {
 		void *vlan_addr = MLX5_ADDR_OF(nic_vport_context,
-					       nic_vport_ctx,
-					       current_uc_mac_address[i]);
+				nic_vport_ctx,
+				current_uc_mac_address[i]);
 		bitmap_set(vlans, MLX5_GET(vlan_layout, vlan_addr, vlan), 1);
 	}
 out:
@@ -585,7 +528,7 @@ int mlx5_query_nic_vport_system_image_guid(struct mlx5_core_dev *mdev,
 }
 EXPORT_SYMBOL_GPL(mlx5_query_nic_vport_system_image_guid);
 
-int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev, u16 vport,
+int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev, u32 vport,
 				   u64 *node_guid)
 {
 	u32 *out;

@@ -64,7 +64,6 @@ static void mlx5i_build_nic_params(struct mlx5_core_dev *mdev,
 	mlx5e_set_rq_type(mdev, params);
 	mlx5e_init_rq_type_params(mdev, params);
 
-	params->tunneled_stateless_offload = false;
 	/* RQ size in ipoib by default is 512 */
 	params->log_rq_mtu_frames = is_kdump_kernel() ?
 		MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE :
@@ -72,6 +71,7 @@ static void mlx5i_build_nic_params(struct mlx5_core_dev *mdev,
 
 	params->lro_en = false;
 	params->hard_mtu = MLX5_IB_GRH_BYTES + MLX5_IPOIB_HARD_LEN;
+	params->tunneled_offload_en = false;
 }
 
 static void mlx5i_tx_timeout_work(struct work_struct *work)
@@ -99,7 +99,6 @@ int mlx5i_init(struct mlx5_core_dev *mdev,
 	       void *ppriv)
 {
 	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
-	u16 max_mtu;
 	int err;
 
 	err = mlx5e_netdev_init(netdev, priv, mdev, profile, ppriv);
@@ -107,10 +106,10 @@ int mlx5i_init(struct mlx5_core_dev *mdev,
 		return err;
 
 	INIT_WORK(&priv->tx_timeout_work, mlx5i_tx_timeout_work);
-	mlx5_query_port_max_mtu(mdev, &max_mtu, 1);
-	netdev->mtu = max_mtu;
+	mlx5e_set_netdev_mtu_boundaries(priv);
+	netdev->mtu = netdev->max_mtu;
 
-	mlx5e_build_nic_params(mdev, &priv->channels.params,
+	mlx5e_build_nic_params(mdev, &priv->rss_params, &priv->channels.params,
 			       mlx5e_get_netdev_max_channels(priv),
 			       netdev->mtu);
 	mlx5i_build_nic_params(mdev, &priv->channels.params);
@@ -441,8 +440,7 @@ static inline int mlx5i_get_max_num_channels(struct mlx5_core_dev *mdev)
 {
 	return is_kdump_kernel() ?
 		MLX5E_MIN_NUM_CHANNELS :
-		min_t(int, mdev->priv.eq_table.num_comp_vectors,
-		      MLX5I_MAX_NUM_CHANNELS);
+		min_t(int, mlx5_comp_vectors_count(mdev), MLX5E_MAX_NUM_CHANNELS);
 }
 
 static const struct mlx5e_profile mlx5i_nic_profile = {
@@ -482,9 +480,11 @@ static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu)
 
 	new_channels.params = *params;
 	new_channels.params.sw_mtu = new_mtu;
-	err = mlx5e_switch_priv_channels(priv, &new_channels, NULL);
-	if (err) 
+
+	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL);
+	if (err)
 		goto out;
+
 	netdev->mtu = new_channels.params.sw_mtu;
 
 out:
@@ -661,7 +661,7 @@ static int mlx5i_xmit(struct net_device *dev, struct sk_buff *skb,
 	struct mlx5_ib_ah *mah   = to_mah(address);
 	struct mlx5i_priv *ipriv = epriv->ppriv;
 
-	return mlx5i_sq_xmit(sq, skb, &mah->av, dqpn, ipriv->qkey);
+	return mlx5i_sq_xmit(sq, skb, &mah->av, dqpn, ipriv->qkey, netdev_xmit_more());
 }
 
 static void mlx5i_set_pkey_index(struct net_device *netdev, int id)

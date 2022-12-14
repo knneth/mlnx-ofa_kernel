@@ -211,6 +211,15 @@ if [[ ! -z ${RHEL7_4ALT_AARCH64} ]]; then
 	set_config CONFIG_COMPAT_KERNEL_4_11_ARM y
 fi
 
+KERNEL4_14=$(echo ${KVERSION} | grep ^4\.14)
+if [[ ! -z ${KERNEL4_14} ]]; then
+	set_config CONFIG_COMPAT_KERNEL_4_14 y
+fi
+
+if [[ ${CONFIG_COMPAT_KERNEL_4_14} = "y" ]]; then
+	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
+fi
+
 KERNEL4_9=$(echo ${KVERSION} | grep ^4\.9)
 if [[ ! -z ${KERNEL4_9} ]]; then
 	set_config CONFIG_COMPAT_KERNEL_4_9 y

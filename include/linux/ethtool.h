@@ -8,6 +8,11 @@
 #define ETH_MODULE_SFF_8079		0x1
 #define ETH_MODULE_SFF_8079_LEN		256
 #endif
+#ifndef ETH_MODULE_SFF_8436_MAX_LEN
+#define ETH_MODULE_SFF_8636_MAX_LEN     640
+#define ETH_MODULE_SFF_8436_MAX_LEN     640 
+#endif
+
 #ifndef ETHTOOL_FEC_NONE
 enum ethtool_fec_config_bits {
 	ETHTOOL_FEC_NONE_BIT,

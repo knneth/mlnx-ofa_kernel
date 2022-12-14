@@ -35,6 +35,7 @@
 
 #include <linux/mlx5/nvmf.h>
 #include <rdma/ib_verbs.h>
+#include "srq.h"
 
 struct mlx5_ib_dev;
 struct mlx5_ib_rwq;
@@ -229,7 +230,7 @@ void cleanup_ttl_sysfs(struct mlx5_ib_dev *dev);
 struct ib_dct *mlx5_ib_create_dc_target(struct ib_pd *pd,
 				  struct ib_dct_init_attr *attr,
 				  struct ib_udata *udata);
-int mlx5_ib_destroy_dc_target(struct ib_dct *dct);
+int mlx5_ib_destroy_dc_target(struct ib_dct *dct, struct ib_udata *udata);
 int mlx5_ib_query_dc_target(struct ib_dct *dct, struct ib_dct_attr *attr);
 int mlx5_ib_arm_dc_target(struct ib_dct *dct, struct ib_udata *udata);
 
@@ -374,10 +375,8 @@ struct ib_dm *mlx5_ib_exp_alloc_dm(struct ib_device *ibdev,
 				   u64 length, u64 uaddr,
 				   struct ib_udata *uhw);
 
-int mlx5_ib_exp_free_dm(struct ib_dm *dm);
-
-int mlx5_ib_exp_memcpy_dm(struct ib_dm *dm,
-			  struct ib_exp_memcpy_dm_attr *attr);
+int mlx5_ib_exp_free_dm(struct ib_dm *dm,
+			struct uverbs_attr_bundle *attrs);
 
 struct ib_nvmf_ctrl *mlx5_ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
 		struct ib_nvmf_backend_ctrl_init_attr *init_attr);

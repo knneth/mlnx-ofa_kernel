@@ -216,6 +216,13 @@ enum {
 	MLX5_PFAULT_SUBTYPE_RDMA = 1,
 };
 
+enum wqe_page_fault_type {
+	MLX5_WQE_PF_TYPE_RMP = 0,
+	MLX5_WQE_PF_TYPE_REQ_SEND_OR_WRITE = 1,
+	MLX5_WQE_PF_TYPE_RESP = 2,
+	MLX5_WQE_PF_TYPE_REQ_READ_OR_ATOMIC = 3,
+};
+
 enum {
 	MLX5_PERM_LOCAL_READ	= 1 << 2,
 	MLX5_PERM_LOCAL_WRITE	= 1 << 3,
@@ -314,13 +321,19 @@ enum {
 };
 
 enum mlx5_xrq_error_type {
-	MLX5_XRQ_ERROR_TYPE_QP_ERROR			= 0x0,
-	MLX5_XRQ_ERROR_TYPE_BACKEND_CONTROLLER_ERROR	= 0x1,
+	MLX5_XRQ_ERROR_TYPE_QP_ERROR                    = 0x0,
+	MLX5_XRQ_ERROR_TYPE_BACKEND_CONTROLLER_ERROR    = 0x1,
 };
 
+/* mlx5 components can subscribe to any one of these events via
+ * mlx5_eq_notifier_register API.
+ */
 enum mlx5_event {
+	/* Special value to subscribe to any event */
+	MLX5_EVENT_TYPE_NOTIFY_ANY	   = 0x0,
+	/* HW events enum start: comp events are not subscribable */
 	MLX5_EVENT_TYPE_COMP		   = 0x0,
-
+	/* HW Async events enum start: subscribable events */
 	MLX5_EVENT_TYPE_PATH_MIG	   = 0x01,
 	MLX5_EVENT_TYPE_COMM_EST	   = 0x02,
 	MLX5_EVENT_TYPE_SQ_DRAINED	   = 0x03,
@@ -339,8 +352,10 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_GPIO_EVENT	   = 0x15,
 	MLX5_EVENT_TYPE_PORT_MODULE_EVENT  = 0x16,
 	MLX5_EVENT_TYPE_TEMP_WARN_EVENT    = 0x17,
+	MLX5_EVENT_TYPE_XRQ_ERROR          = 0x18,
 	MLX5_EVENT_TYPE_REMOTE_CONFIG	   = 0x19,
 	MLX5_EVENT_TYPE_GENERAL_EVENT	   = 0x22,
+	MLX5_EVENT_TYPE_MONITOR_COUNTER    = 0x24,
 	MLX5_EVENT_TYPE_PPS_EVENT          = 0x25,
 
 	MLX5_EVENT_TYPE_DB_BF_CONGESTION   = 0x1a,
@@ -357,12 +372,14 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_DCT_DRAINED        = 0x1c,
 	MLX5_EVENT_TYPE_DCT_KEY_VIOLATION  = 0x1d,
 
-	MLX5_EVENT_TYPE_XRQ_ERROR	   = 0x18,
+	MLX5_EVENT_TYPE_XRQ_ERRO	   = 0x18,
 
 	MLX5_EVENT_TYPE_FPGA_ERROR         = 0x20,
 	MLX5_EVENT_TYPE_FPGA_QP_ERROR      = 0x21,
 
 	MLX5_EVENT_TYPE_DEVICE_TRACER      = 0x26,
+
+	MLX5_EVENT_TYPE_MAX                = 0x100,
 };
 
 enum {
@@ -372,10 +389,7 @@ enum {
 
 enum {
 	MLX5_GENERAL_SUBTYPE_DELAY_DROP_TIMEOUT = 0x1,
-	MLX5_GENERAL_SUBTYPE_PCIE_POWER_CHANGE_EVENT = 0x5,
-#ifdef CONFIG_BF_POWER_FAILURE_EVENT
-	MLX5_GENERAL_SUBTYPE_POWER_FAILURE_EVENT = 0x4,
-#endif
+	MLX5_GENERAL_SUBTYPE_PCI_POWER_CHANGE_EVENT = 0x5,
 };
 
 enum {
@@ -442,6 +456,7 @@ enum {
 	MLX5_OPCODE_ATOMIC_MASKED_FA	= 0x15,
 	MLX5_OPCODE_BIND_MW		= 0x18,
 	MLX5_OPCODE_CONFIG_CMD		= 0x1f,
+	MLX5_OPCODE_ENHANCED_MPSW	= 0x29,
 
 	MLX5_RECV_OPCODE_RDMA_WRITE_IMM	= 0x00,
 	MLX5_RECV_OPCODE_SEND		= 0x01,
@@ -594,9 +609,9 @@ struct mlx5_eqe_comp {
 };
 
 struct mlx5_eqe_xrq {
-	__be32	reserved1[5];
-	__be32	type_xrqn;
-	__be32	qpn_id_handle;
+	__be32  reserved1[5];
+	__be32  type_xrqn;
+	__be32  qpn_id_handle;
 };
 
 struct mlx5_eqe_qp_srq {
@@ -830,6 +845,11 @@ enum {
 static inline u8 mlx5_get_cqe_format(struct mlx5_cqe64 *cqe)
 {
 	return (cqe->op_own >> 2) & 0x3;
+}
+
+static inline u8 get_cqe_opcode(struct mlx5_cqe64 *cqe)
+{
+	return cqe->op_own >> 4;
 }
 
 static inline u8 get_cqe_lro_tcppsh(struct mlx5_cqe64 *cqe)
@@ -1066,6 +1086,7 @@ enum {
 	MLX5_MATCH_MISC_PARAMETERS	= 1 << 1,
 	MLX5_MATCH_INNER_HEADERS	= 1 << 2,
 	MLX5_MATCH_MISC_PARAMETERS_2	= 1 << 3,
+	MLX5_MATCH_MISC_PARAMETERS_3	= 1 << 4,
 };
 
 enum {
@@ -1109,6 +1130,7 @@ enum mlx5_mpls_supported_fields {
 };
 
 enum mlx5_flex_parser_protos {
+	MLX5_FLEX_PROTO_GENEVE	      = 1 << 3,
 	MLX5_FLEX_PROTO_CW_MPLS_GRE   = 1 << 4,
 	MLX5_FLEX_PROTO_CW_MPLS_UDP   = 1 << 5,
 };
@@ -1138,6 +1160,7 @@ enum mlx5_cap_type {
 	MLX5_CAP_DEBUG,
 	MLX5_CAP_NVMF,
 	MLX5_CAP_DEV_MEM,
+	MLX5_CAP_DEV_EVENT = 0x14,
 	/* NUM OF CAP Types */
 	MLX5_CAP_NUM
 };
@@ -1236,15 +1259,13 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_FLOWTABLE_RDMA_RX_MAX(mdev, cap) \
 	MLX5_CAP_FLOWTABLE_MAX(mdev, flow_table_properties_nic_receive_rdma.cap)
 
-#define MLX5_CAP_FLOWTABLE_RDMA_TX(mdev, cap) \
-	MLX5_CAP_FLOWTABLE(mdev, flow_table_properties_nic_transmit_rdma.cap)
-
-#define MLX5_CAP_FLOWTABLE_RDMA_TX_MAX(mdev, cap) \
-	MLX5_CAP_FLOWTABLE_MAX(mdev, flow_table_properties_nic_transmit_rdma.cap)
-
 #define MLX5_CAP_ESW_FLOWTABLE(mdev, cap) \
 	MLX5_GET(flow_table_eswitch_cap, \
 		 mdev->caps.hca_cur[MLX5_CAP_ESWITCH_FLOW_TABLE], cap)
+
+#define MLX5_CAP_ESW_FLOWTABLE_64(mdev, cap) \
+       MLX5_GET64(flow_table_eswitch_cap, \
+                  mdev->caps.hca_cur[MLX5_CAP_ESWITCH_FLOW_TABLE], cap)
 
 #define MLX5_CAP_ESW_FLOWTABLE_MAX(mdev, cap) \
 	MLX5_GET(flow_table_eswitch_cap, \
@@ -1278,6 +1299,9 @@ enum mlx5_qcam_feature_groups {
 
 #define MLX5_CAP_ODP(mdev, cap)\
 	MLX5_GET(odp_cap, mdev->caps.hca_cur[MLX5_CAP_ODP], cap)
+
+#define MLX5_CAP_ODP_MAX(mdev, cap)\
+	MLX5_GET(odp_cap, mdev->caps.hca_max[MLX5_CAP_ODP], cap)
 
 #define MLX5_CAP_VECTOR_CALC(mdev, cap) \
 	MLX5_GET(vector_calc_cap, \
@@ -1330,6 +1354,9 @@ enum mlx5_qcam_feature_groups {
 
 #define MLX5_CAP64_DEV_MEM(mdev, cap)\
 	MLX5_GET64(device_mem_cap, mdev->caps.hca_cur[MLX5_CAP_DEV_MEM], cap)
+
+#define MLX5_CAP_DEV_EVENT(mdev, cap)\
+	MLX5_ADDR_OF(device_event_cap, (mdev)->caps.hca_cur[MLX5_CAP_DEV_EVENT], cap)
 
 enum {
 	MLX5_CMD_STAT_OK			= 0x0,

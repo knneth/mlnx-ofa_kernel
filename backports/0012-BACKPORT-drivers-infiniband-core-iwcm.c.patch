@@ -1,7 +1,7 @@
 From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
 
-Change-Id: I91a0c4b669bec0a1b0b3be20bea007f9c61ea44d
+Change-Id: Ibc7c0999bac6f7f0d89ae5cb330193f0157bfc43
 ---
  drivers/infiniband/core/iwcm.c | 27 +++++++++++++++++++++++++++
  1 file changed, 27 insertions(+)
@@ -18,7 +18,7 @@ Change-Id: I91a0c4b669bec0a1b0b3be20bea007f9c61ea44d
  
  static const char * const iwcm_rej_reason_strs[] = {
  	[ECONNRESET]			= "reset by remote host",
-@@ -101,6 +104,7 @@ struct iwcm_work {
+@@ -102,6 +105,7 @@ struct iwcm_work {
  
  static unsigned int default_backlog = 256;
  
@@ -26,7 +26,7 @@ Change-Id: I91a0c4b669bec0a1b0b3be20bea007f9c61ea44d
  static struct ctl_table_header *iwcm_ctl_table_hdr;
  static struct ctl_table iwcm_ctl_table[] = {
  	{
-@@ -112,6 +116,14 @@ static struct ctl_table iwcm_ctl_table[]
+@@ -113,6 +117,14 @@ static struct ctl_table iwcm_ctl_table[]
  	},
  	{ }
  };
@@ -41,7 +41,7 @@ Change-Id: I91a0c4b669bec0a1b0b3be20bea007f9c61ea44d
  
  /*
   * The following services provide a mechanism for pre-allocating iwcm_work
-@@ -476,6 +488,7 @@ static void iw_cm_check_wildcard(struct
+@@ -477,6 +489,7 @@ static void iw_cm_check_wildcard(struct
  			cm4_outaddr->sin_addr = cm4_addr->sin_addr;
  		}
  	} else {
@@ -49,7 +49,7 @@ Change-Id: I91a0c4b669bec0a1b0b3be20bea007f9c61ea44d
  		struct sockaddr_in6 *pm6_addr = (struct sockaddr_in6 *)pm_addr;
  
  		if (ipv6_addr_type(&pm6_addr->sin6_addr) == IPV6_ADDR_ANY) {
-@@ -486,6 +499,7 @@ static void iw_cm_check_wildcard(struct
+@@ -487,6 +500,7 @@ static void iw_cm_check_wildcard(struct
  
  			cm6_outaddr->sin6_addr = cm6_addr->sin6_addr;
  		}
@@ -57,7 +57,7 @@ Change-Id: I91a0c4b669bec0a1b0b3be20bea007f9c61ea44d
  	}
  }
  
-@@ -1182,20 +1196,33 @@ static int __init iw_cm_init(void)
+@@ -1186,20 +1200,33 @@ static int __init iw_cm_init(void)
  	if (!iwcm_wq)
  		return -ENOMEM;
  

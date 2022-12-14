@@ -1,14 +1,14 @@
 From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
 
-Change-Id: Iaac66c3d7723f9459c4ca0b944b9cd4bb7d587eb
+Change-Id: I8bec3cb8a6df4aa561802b0d90115032524e0d21
 ---
- drivers/infiniband/core/cm.c | 30 ++++++++++++++++++++++++++++++
- 1 file changed, 30 insertions(+)
+ drivers/infiniband/core/cm.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
 
 --- a/drivers/infiniband/core/cm.c
 +++ b/drivers/infiniband/core/cm.c
-@@ -56,6 +56,9 @@
+@@ -57,6 +57,9 @@
  MODULE_AUTHOR("Sean Hefty");
  MODULE_DESCRIPTION("InfiniBand CM");
  MODULE_LICENSE("Dual BSD/GPL");
@@ -18,40 +18,7 @@ Change-Id: Iaac66c3d7723f9459c4ca0b944b9cd4bb7d587eb
  
  static const char * const ibcm_rej_reason_strs[] = {
  	[IB_CM_REJ_NO_QP]			= "no QP",
-@@ -631,6 +634,7 @@ static int cm_init_av_by_path(struct sa_
- 
- static int cm_alloc_id(struct cm_id_private *cm_id_priv)
- {
-+#ifdef HAVE_IDR_ALLOC_CYCLIC
- 	unsigned long flags;
- 	int id;
- 
-@@ -644,6 +648,24 @@ static int cm_alloc_id(struct cm_id_priv
- 
- 	cm_id_priv->id.local_id = (__force __be32)id ^ cm.random_id_operand;
- 	return id < 0 ? id : 0;
-+#else
-+	unsigned long flags;
-+	int ret, id;
-+	static int next_id;
-+
-+	do {
-+		spin_lock_irqsave(&cm.lock, flags);
-+		ret = idr_get_new_above(&cm.local_id_table, cm_id_priv,
-+					next_id, &id);
-+		if (!ret)
-+			next_id = max(id + 1, 0);
-+
-+		spin_unlock_irqrestore(&cm.lock, flags);
-+	} while( (ret == -EAGAIN) && idr_pre_get(&cm.local_id_table, GFP_KERNEL) );
-+
-+	cm_id_priv->id.local_id = (__force __be32)id ^ cm.random_id_operand;
-+	return ret;
-+#endif
- }
- 
- static void cm_free_id(__be32 local_id)
-@@ -4309,7 +4331,11 @@ static ssize_t cm_show_counter(struct ko
+@@ -4304,7 +4307,11 @@ static ssize_t cm_show_counter(struct ko
  		       atomic_long_read(&group->counter[cm_attr->index]));
  }
  
@@ -63,8 +30,8 @@ Change-Id: Iaac66c3d7723f9459c4ca0b944b9cd4bb7d587eb
  	.show = cm_show_counter
  };
  
-@@ -4330,7 +4356,11 @@ static struct kobj_type cm_port_obj_type
- 	.release = cm_release_port_obj
+@@ -4313,7 +4320,11 @@ static struct kobj_type cm_counter_obj_t
+ 	.default_attrs = cm_counter_default_attrs
  };
  
 +#ifdef HAVE_CLASS_DEVNODE_UMODE_T

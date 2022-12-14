@@ -25,6 +25,53 @@
 #include <net/ip6_route.h>
 #endif
 
+#define TUNNEL_CSUM	__cpu_to_be16(0x01)
+#define TUNNEL_ROUTING	__cpu_to_be16(0x02)
+#define TUNNEL_KEY	__cpu_to_be16(0x04)
+#define TUNNEL_SEQ	__cpu_to_be16(0x08)
+#define TUNNEL_STRICT	__cpu_to_be16(0x10)
+#define TUNNEL_REC	__cpu_to_be16(0x20)
+#define TUNNEL_VERSION	__cpu_to_be16(0x40)
+#define TUNNEL_NO_KEY	__cpu_to_be16(0x80)
+
+struct sk_buff *iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum,
+					 int gso_type_mask);
+
+static inline __be16 gre_tnl_flags_to_gre_flags(__be16 tflags)
+{
+	__be16 flags = 0;
+
+	if (tflags & TUNNEL_CSUM)
+		flags |= GRE_CSUM;
+	if (tflags & TUNNEL_ROUTING)
+		flags |= GRE_ROUTING;
+	if (tflags & TUNNEL_KEY)
+		flags |= GRE_KEY;
+	if (tflags & TUNNEL_SEQ)
+		flags |= GRE_SEQ;
+	if (tflags & TUNNEL_STRICT)
+		flags |= GRE_STRICT;
+	if (tflags & TUNNEL_REC)
+		flags |= GRE_REC;
+	if (tflags & TUNNEL_VERSION)
+		flags |= GRE_VERSION;
+
+	return flags;
+}
+
+static inline int gre_calc_hlen(__be16 o_flags)
+{
+	int addend = 4;
+
+	if (o_flags & TUNNEL_CSUM)
+		addend += 4;
+	if (o_flags & TUNNEL_KEY)
+		addend += 4;
+	if (o_flags & TUNNEL_SEQ)
+		addend += 4;
+	return addend;
+}
+
 /* Keep error state on tunnel for 30 sec */
 #define IPTUNNEL_ERR_TIMEO	(30*HZ)
 

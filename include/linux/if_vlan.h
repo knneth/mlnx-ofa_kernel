@@ -11,6 +11,10 @@
 #define skb_vlan_tag_get_id vlan_tx_tag_get_id
 #endif
 
+#ifndef skb_vlan_tag_get_prio
+#define skb_vlan_tag_get_prio(__skb)   ((__skb)->vlan_tci & VLAN_PRIO_MASK)
+#endif/*skb_vlan_tag_get_prio*/
+
 #ifndef HAVE_IS_VLAN_DEV
 static inline int is_vlan_dev(struct net_device *dev)
 {
@@ -67,6 +71,14 @@ static inline __be16 __vlan_get_protocol(struct sk_buff *skb, __be16 type,
 		*depth = vlan_depth;
 
 	return type;
+}
+#endif
+
+#ifndef HAVE_VLAN_GET_ENCAP_LEVEL
+static inline int vlan_get_encap_level(struct net_device *dev)
+{
+	BUG_ON(!is_vlan_dev(dev));
+	return 0;
 }
 #endif
 

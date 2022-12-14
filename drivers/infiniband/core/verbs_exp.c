@@ -47,10 +47,10 @@ struct ib_dct *ib_exp_create_dct(struct ib_pd *pd, struct ib_dct_init_attr *attr
 {
 	struct ib_dct *dct;
 
-	if (!pd->device->exp_create_dct)
+	if (!pd->device->ops.exp_create_dct)
 		return ERR_PTR(-ENOSYS);
 
-	dct = pd->device->exp_create_dct(pd, attr, udata);
+	dct = pd->device->ops.exp_create_dct(pd, attr, udata);
 	if (!IS_ERR(dct)) {
 		dct->pd = pd;
 		dct->srq = attr->srq;
@@ -64,20 +64,20 @@ struct ib_dct *ib_exp_create_dct(struct ib_pd *pd, struct ib_dct_init_attr *attr
 }
 EXPORT_SYMBOL(ib_exp_create_dct);
 
-int ib_exp_destroy_dct(struct ib_dct *dct)
+int ib_exp_destroy_dct(struct ib_dct *dct,  struct ib_udata *udata)
 {
 	struct ib_srq *srq;
 	struct ib_cq *cq;
 	struct ib_pd *pd;
 	int err;
 
-	if (!dct->device->exp_destroy_dct)
+	if (!dct->device->ops.exp_destroy_dct)
 		return -ENOSYS;
 
 	srq = dct->srq;
 	cq = dct->cq;
 	pd = dct->pd;
-	err = dct->device->exp_destroy_dct(dct);
+	err = dct->device->ops.exp_destroy_dct(dct, udata);
 	if (!err) {
 		atomic_dec(&srq->usecnt);
 		atomic_dec(&cq->usecnt);
@@ -90,19 +90,19 @@ EXPORT_SYMBOL(ib_exp_destroy_dct);
 
 int ib_exp_query_dct(struct ib_dct *dct, struct ib_dct_attr *attr)
 {
-	if (!dct->device->exp_query_dct)
+	if (!dct->device->ops.exp_query_dct)
 		return -ENOSYS;
 
-	return dct->device->exp_query_dct(dct, attr);
+	return dct->device->ops.exp_query_dct(dct, attr);
 }
 EXPORT_SYMBOL(ib_exp_query_dct);
 
 int ib_exp_arm_dct(struct ib_dct *dct)
 {
-	if (!dct->device->exp_arm_dct)
+	if (!dct->device->ops.exp_arm_dct)
 		return -ENOSYS;
 
-	return dct->device->exp_arm_dct(dct, NULL);
+	return dct->device->ops.exp_arm_dct(dct, NULL);
 }
 EXPORT_SYMBOL(ib_exp_arm_dct);
 
@@ -110,8 +110,8 @@ int ib_exp_modify_cq(struct ib_cq *cq,
 		 struct ib_cq_attr *cq_attr,
 		 int cq_attr_mask)
 {
-	return cq->device->exp_modify_cq ?
-		cq->device->exp_modify_cq(cq, cq_attr, cq_attr_mask) : -ENOSYS;
+	return cq->device->ops.exp_modify_cq ?
+		cq->device->ops.exp_modify_cq(cq, cq_attr, cq_attr_mask) : -ENOSYS;
 }
 EXPORT_SYMBOL(ib_exp_modify_cq);
 
@@ -119,15 +119,15 @@ int ib_exp_query_device(struct ib_device *device,
 			struct ib_exp_device_attr *device_attr,
 			struct ib_udata *uhw)
 {
-	return device->exp_query_device(device, device_attr, uhw);
+	return device->ops.exp_query_device(device, device_attr, uhw);
 }
 EXPORT_SYMBOL(ib_exp_query_device);
 
 int ib_exp_query_mkey(struct ib_mr *mr, u64 mkey_attr_mask,
 		  struct ib_mkey_attr *mkey_attr)
 {
-	return mr->device->exp_query_mkey ?
-		mr->device->exp_query_mkey(mr, mkey_attr_mask, mkey_attr) : -ENOSYS;
+	return mr->device->ops.exp_query_mkey ?
+		mr->device->ops.exp_query_mkey(mr, mkey_attr_mask, mkey_attr) : -ENOSYS;
 }
 EXPORT_SYMBOL(ib_exp_query_mkey);
 
@@ -140,7 +140,7 @@ struct ib_mr *ib_get_dma_mr(struct ib_pd *pd, int mr_access_flags)
 	if (err)
 		return ERR_PTR(err);
 
-	mr = pd->device->get_dma_mr(pd, mr_access_flags);
+	mr = pd->device->ops.get_dma_mr(pd, mr_access_flags);
 
 	if (!IS_ERR(mr)) {
 		mr->device  = pd->device;
@@ -157,8 +157,8 @@ EXPORT_SYMBOL(ib_get_dma_mr);
 /* NVMEoF target offload */
 int ib_query_nvmf_ns(struct ib_nvmf_ns *ns, struct ib_nvmf_ns_attr *ns_attr)
 {
-	return ns->ctrl->srq->device->query_nvmf_ns ?
-		ns->ctrl->srq->device->query_nvmf_ns(ns, ns_attr) : -ENOSYS;
+	return ns->ctrl->srq->device->ops.query_nvmf_ns ?
+		ns->ctrl->srq->device->ops.query_nvmf_ns(ns, ns_attr) : -ENOSYS;
 }
 EXPORT_SYMBOL(ib_query_nvmf_ns);
 
@@ -167,12 +167,12 @@ struct ib_nvmf_ctrl *ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
 {
 	struct ib_nvmf_ctrl *ctrl;
 
-	if (!srq->device->create_nvmf_backend_ctrl)
+	if (!srq->device->ops.create_nvmf_backend_ctrl)
 		return ERR_PTR(-ENOSYS);
 	if (srq->srq_type != IB_EXP_SRQT_NVMF)
 		return ERR_PTR(-EINVAL);
 
-	ctrl = srq->device->create_nvmf_backend_ctrl(srq, init_attr);
+	ctrl = srq->device->ops.create_nvmf_backend_ctrl(srq, init_attr);
 	if (!IS_ERR(ctrl)) {
 		atomic_set(&ctrl->usecnt, 0);
 		ctrl->srq = srq;
@@ -193,7 +193,7 @@ int ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl)
 	if (atomic_read(&ctrl->usecnt))
 		return -EBUSY;
 
-	ret = srq->device->destroy_nvmf_backend_ctrl(ctrl);
+	ret = srq->device->ops.destroy_nvmf_backend_ctrl(ctrl);
 	if (!ret)
 		atomic_dec(&srq->usecnt);
 
@@ -207,12 +207,12 @@ struct ib_nvmf_ns *ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
 	struct ib_srq *srq = ctrl->srq;
 	struct ib_nvmf_ns *ns;
 
-	if (!srq->device->attach_nvmf_ns)
+	if (!srq->device->ops.attach_nvmf_ns)
 		return ERR_PTR(-ENOSYS);
 	if (srq->srq_type != IB_EXP_SRQT_NVMF)
 		return ERR_PTR(-EINVAL);
 
-	ns = srq->device->attach_nvmf_ns(ctrl, init_attr);
+	ns = srq->device->ops.attach_nvmf_ns(ctrl, init_attr);
 	if (!IS_ERR(ns)) {
 		ns->ctrl   = ctrl;
 		atomic_inc(&ctrl->usecnt);
@@ -228,7 +228,7 @@ int ib_detach_nvmf_ns(struct ib_nvmf_ns *ns)
 	struct ib_srq *srq = ctrl->srq;
 	int ret;
 
-	ret = srq->device->detach_nvmf_ns(ns);
+	ret = srq->device->ops.detach_nvmf_ns(ns);
 	if (!ret)
 		atomic_dec(&ctrl->usecnt);
 
@@ -240,10 +240,10 @@ struct ib_dm *ib_exp_alloc_dm(struct ib_device *device, u64 length)
 {
 	struct ib_dm *dm;
 
-	if (!device->exp_alloc_dm)
+	if (!device->ops.exp_alloc_dm)
 		return ERR_PTR(-ENOSYS);
 
-	dm = device->exp_alloc_dm(device, NULL, length, 0, NULL);
+	dm = device->ops.exp_alloc_dm(device, NULL, length, 0, NULL);
 	if (!IS_ERR(dm)) {
 		dm->device = device;
 		dm->length = length;
@@ -254,45 +254,32 @@ struct ib_dm *ib_exp_alloc_dm(struct ib_device *device, u64 length)
 }
 EXPORT_SYMBOL_GPL(ib_exp_alloc_dm);
 
-int ib_exp_free_dm(struct ib_dm *dm)
+int ib_exp_free_dm(struct ib_dm *dm, struct uverbs_attr_bundle *attrs)
 {
 	int err;
 
-	if (!dm->device->exp_free_dm)
+	if (!dm->device->ops.exp_free_dm)
 		return -ENOSYS;
 
 	WARN_ON(atomic_read(&dm->usecnt));
 
-	err = dm->device->exp_free_dm(dm);
+	err = dm->device->ops.exp_free_dm(dm, attrs);
 
 	return err;
 }
 EXPORT_SYMBOL_GPL(ib_exp_free_dm);
 
-int ib_exp_memcpy_dm(struct ib_dm *dm, struct ib_exp_memcpy_dm_attr *attr)
-{
-	int err;
-
-	if (!dm->device->exp_memcpy_dm)
-		return -ENOSYS;
-
-	err = dm->device->exp_memcpy_dm(dm, attr);
-
-	return err;
-}
-EXPORT_SYMBOL_GPL(ib_exp_memcpy_dm);
-
 struct ib_mr *ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *attr)
 {
 	struct ib_mr *mr;
 
-	if (!pd->device->exp_alloc_mr)
+	if (!pd->device->ops.exp_alloc_mr)
 		return ERR_PTR(-ENOSYS);
 
 	if ((attr->mr_type == IB_MR_TYPE_DM) && !attr->dm)
 		return ERR_PTR(-EINVAL);
 
-	mr = pd->device->exp_alloc_mr(pd, attr);
+	mr = pd->device->ops.exp_alloc_mr(pd, attr);
 	if (!IS_ERR(mr)) {
 		mr->device  = pd->device;
 		mr->pd      = pd;
@@ -308,9 +295,9 @@ EXPORT_SYMBOL_GPL(ib_exp_alloc_mr);
 int ib_exp_invalidate_range(struct ib_device  *device, struct ib_mr *ibmr,
 			    u64 start, u64 length, u32 flags)
 {
-	if (!device->exp_invalidate_range)
+	if (!device->ops.exp_invalidate_range)
 		return -EOPNOTSUPP;
 
-	return device->exp_invalidate_range(device, NULL, start, length, flags);
+	return device->ops.exp_invalidate_range(device, NULL, start, length, flags);
 }
 EXPORT_SYMBOL(ib_exp_invalidate_range);

@@ -54,7 +54,7 @@
 #include <linux/inet.h>
 #include <linux/sched/signal.h>
 
-#define DRV_VERSION	"4.6-3.5.8"
+#define DRV_VERSION	"4.7-1.0.0"
 
 const char ipoib_driver_version[] = DRV_VERSION;
 
@@ -177,7 +177,7 @@ int ipoib_open(struct net_device *dev)
 			if (flags & IFF_UP)
 				continue;
 
-			dev_change_flags(cpriv->dev, flags | IFF_UP);
+			dev_change_flags(cpriv->dev, flags | IFF_UP, NULL);
 		}
 		up_read(&priv->vlan_rwsem);
 	}
@@ -217,7 +217,7 @@ static int ipoib_stop(struct net_device *dev)
 			if (!(flags & IFF_UP))
 				continue;
 
-			dev_change_flags(cpriv->dev, flags & ~IFF_UP);
+			dev_change_flags(cpriv->dev, flags & ~IFF_UP, NULL);
 		}
 		up_read(&priv->vlan_rwsem);
 	}
@@ -634,7 +634,7 @@ static void path_free(struct net_device *dev, struct ipoib_path *path)
 	while ((skb = __skb_dequeue(&path->queue)))
 		dev_kfree_skb_irq(skb);
 
-	ipoib_dbg(ipoib_priv(dev), "path_free\n");
+	ipoib_dbg(ipoib_priv(dev), "%s\n", __func__);
 
 	/* remove all neigh connected to this path */
 	ipoib_del_neighs_by_gid(dev, path->pathrec.dgid.raw);
@@ -1281,9 +1281,39 @@ static void ipoib_timeout(struct net_device *dev)
 	ipoib_warn(priv, "queue stopped %d, tx_head %u, tx_tail %u\n",
 		   netif_queue_stopped(dev),
 		   priv->tx_head, priv->tx_tail);
-	/* XXX reset QP, etc. */
+
+	schedule_work(&priv->tx_timeout_work);
 }
 
+static int timeout_counter;
+void ipoib_ib_tx_timeout_work(struct work_struct *work)
+{
+	struct ipoib_dev_priv *priv = container_of(work,
+						   struct ipoib_dev_priv,
+						   tx_timeout_work);
+	int err;
+
+	timeout_counter++;
+	ipoib_warn(priv, "transmit timeout: recovery will be performed, timeout_counter(%d).\n", timeout_counter);
+
+	rtnl_lock();
+
+	if (!test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
+		goto unlock;
+
+	ipoib_stop(priv->dev);
+	err = ipoib_open(priv->dev);
+	if (err) {
+		ipoib_warn(priv, "ipoib_open failed recovering from a tx_timeout, err(%d).\n",
+				err);
+		goto unlock;
+	}
+
+	netif_tx_wake_all_queues(priv->dev);
+unlock:
+	rtnl_unlock();
+
+}
 static int ipoib_hard_header(struct sk_buff *skb,
 			     struct net_device *dev,
 			     unsigned short type,
@@ -1738,7 +1768,7 @@ static void ipoib_neigh_hash_uninit(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
-	ipoib_dbg(priv, "ipoib_neigh_hash_uninit\n");
+	ipoib_dbg(priv, "%s\n", __func__);
 	init_completion(&priv->ntbl.deleted);
 
 	cancel_delayed_work_sync(&priv->neigh_reap_task);
@@ -1920,7 +1950,7 @@ static void ipoib_parent_unregister_pre(struct net_device *ndev)
 	 * running ensures the it will not add more work.
 	 */
 	rtnl_lock();
-	dev_change_flags(priv->dev, priv->dev->flags & ~IFF_UP);
+	dev_change_flags(priv->dev, priv->dev->flags & ~IFF_UP, NULL);
 	rtnl_unlock();
 
 	/* ipoib_event() cannot be running once this returns */
@@ -2228,10 +2258,12 @@ static void ipoib_build_priv(struct net_device *dev)
 
 	INIT_DELAYED_WORK(&priv->mcast_task,   ipoib_mcast_join_task);
 	INIT_WORK(&priv->carrier_on_task, ipoib_mcast_carrier_on_task);
+	INIT_WORK(&priv->reschedule_napi_work, ipoib_napi_schedule_work);
 	INIT_WORK(&priv->flush_light,   ipoib_ib_dev_flush_light);
 	INIT_WORK(&priv->flush_normal,   ipoib_ib_dev_flush_normal);
 	INIT_WORK(&priv->flush_heavy,   ipoib_ib_dev_flush_heavy);
 	INIT_WORK(&priv->restart_task, ipoib_mcast_restart_task);
+	INIT_WORK(&priv->tx_timeout_work, ipoib_ib_tx_timeout_work);
 	INIT_DELAYED_WORK(&priv->ah_reap_task, ipoib_reap_ah);
 	INIT_DELAYED_WORK(&priv->neigh_reap_task, ipoib_reap_neigh);
 }
@@ -2506,49 +2538,20 @@ static ssize_t ipoib_set_mac_using_sysfs(struct device *dev,
 }
 static DEVICE_ATTR(set_mac, S_IWUSR, NULL, ipoib_set_mac_using_sysfs);
 
-int parse_child(struct device *dev, const char *buf, int *pkey,
-		int *child_index)
-{
-	int ret;
-	struct ipoib_dev_priv *priv = ipoib_priv(to_net_dev(dev));
-
-	*pkey = *child_index = -1;
-
-	/* 'pkey' or 'pkey.child_index' or '.child_index' are allowed */
-	ret = sscanf(buf, "%i.%i", pkey, child_index);
-	if (ret == 1)  /* just pkey, implicit child index is 0 */
-		*child_index = 0;
-	else  if (ret != 2) { /* pkey same as parent, specified child index */
-		*pkey = priv->pkey;
-		ret  = sscanf(buf, ".%i", child_index);
-		if (ret != 1 || *child_index == 0)
-			return -EINVAL;
-		if (priv->ca->alloc_rdma_netdev && ipoib_enhanced_enabled)
-			return -EOPNOTSUPP;
-	}
-
-	if (*child_index < 0 || *child_index > 0xff)
-		return -EINVAL;
-
-	if (*pkey <= 0 || *pkey > 0xffff || *pkey == 0x8000)
-		return -EINVAL;
-
-	ipoib_dbg(priv, "parse_child inp %s out pkey %04x index %d\n",
-		buf, *pkey, *child_index);
-	return 0;
-}
-
 static ssize_t create_child(struct device *dev,
 			    struct device_attribute *attr,
 			    const char *buf, size_t count)
 {
-	int pkey, child_index;
+	int pkey;
 	int ret;
 
-	if (parse_child(dev, buf, &pkey, &child_index))
+	if (sscanf(buf, "%i", &pkey) != 1)
 		return -EINVAL;
 
-	ret = ipoib_vlan_add(to_net_dev(dev), pkey, child_index);
+	if (pkey <= 0 || pkey > 0xffff || pkey == 0x8000)
+		return -EINVAL;
+
+	ret = ipoib_vlan_add(to_net_dev(dev), pkey);
 
 	return ret ? ret : count;
 }
@@ -2558,13 +2561,16 @@ static ssize_t delete_child(struct device *dev,
 			    struct device_attribute *attr,
 			    const char *buf, size_t count)
 {
-	int pkey, child_index;
+	int pkey;
 	int ret;
 
-	if (parse_child(dev, buf, &pkey, &child_index))
+	if (sscanf(buf, "%i", &pkey) != 1)
 		return -EINVAL;
 
-	ret = ipoib_vlan_delete(to_net_dev(dev), pkey, child_index);
+	if (pkey < 0 || pkey > 0xffff)
+		return -EINVAL;
+
+	ret = ipoib_vlan_delete(to_net_dev(dev), pkey);
 
 	return ret ? ret : count;
 
@@ -2590,7 +2596,18 @@ static ssize_t dev_id_show(struct device *dev,
 {
 	struct net_device *ndev = to_net_dev(dev);
 
-	if (ndev->dev_id == ndev->dev_port)
+	/*
+	 * ndev->dev_port will be equal to 0 in old kernel prior to commit
+	 * 9b8b2a323008 ("IB/ipoib: Use dev_port to expose network interface
+	 * port numbers") Zero was chosen as special case for user space
+	 * applications to fallback and query dev_id to check if it has
+	 * different value or not.
+	 *
+	 * Don't print warning in such scenario.
+	 *
+	 * https://github.com/systemd/systemd/blob/master/src/udev/udev-builtin-net_id.c#L358
+	 */
+	if (ndev->dev_port && ndev->dev_id == ndev->dev_port)
 		netdev_info_once(ndev,
 			"\"%s\" wants to know my dev_id. Should it look at dev_port instead? See Documentation/ABI/testing/sysfs-class-net for more info.\n",
 			current->comm);
@@ -2599,7 +2616,7 @@ static ssize_t dev_id_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(dev_id);
 
-int ipoib_intercept_dev_id_attr(struct net_device *dev)
+static int ipoib_intercept_dev_id_attr(struct net_device *dev)
 {
 	device_remove_file(&dev->dev, &dev_attr_dev_id);
 	return device_create_file(&dev->dev, &dev_attr_dev_id);
@@ -2641,8 +2658,8 @@ static struct net_device *ipoib_add_port(const char *format,
 		return ERR_PTR(result);
 	}
 
-	if (hca->rdma_netdev_get_params) {
-		int rc = hca->rdma_netdev_get_params(hca, port,
+	if (hca->ops.rdma_netdev_get_params) {
+		int rc = hca->ops.rdma_netdev_get_params(hca, port,
 						     RDMA_NETDEV_IPOIB,
 						     &params);
 
@@ -2690,7 +2707,7 @@ static void ipoib_add_one(struct ib_device *device)
 	struct list_head *dev_list;
 	struct net_device *dev;
 	struct ipoib_dev_priv *priv;
-	int p;
+	unsigned int p;
 	int count = 0;
 
 	dev_list = kmalloc(sizeof(*dev_list), GFP_KERNEL);
@@ -2699,7 +2716,7 @@ static void ipoib_add_one(struct ib_device *device)
 
 	INIT_LIST_HEAD(dev_list);
 
-	for (p = rdma_start_port(device); p <= rdma_end_port(device); ++p) {
+	rdma_for_each_port (device, p) {
 		if (!rdma_protocol_ib(device, p))
 			continue;
 		dev = ipoib_add_port("ib%d", device, p);
@@ -2790,9 +2807,7 @@ static int __init ipoib_init_module(void)
 	 */
 	BUILD_BUG_ON(IPOIB_CM_COPYBREAK > IPOIB_CM_HEAD_SIZE);
 
-	ret = ipoib_register_debugfs();
-	if (ret)
-		return ret;
+	ipoib_register_debugfs();
 
 	/*
 	 * We create a global workqueue here that is used for all flush

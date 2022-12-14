@@ -294,15 +294,36 @@ int mlx5_query_module_num(struct mlx5_core_dev *dev, int *module_num)
 }
 EXPORT_SYMBOL_GPL(mlx5_query_module_num);
 
+static int mlx5_eeprom_page(int offset)
+{
+	if (offset < MLX5_EEPROM_PAGE_LENGTH)
+		/* Addresses between 0-255 - page 00 */
+		return 0;
+
+	/* Addresses between 256 - 639 belongs to pages 01, 02 and 03
+	 * For example, offset = 400 belongs to page 02:
+	 * 1 + ((400 - 256)/128) = 2
+	 */
+	return 1 + ((offset - MLX5_EEPROM_PAGE_LENGTH) /
+		    MLX5_EEPROM_HIGH_PAGE_LENGTH);
+}
+
+static int mlx5_eeprom_high_page_offset(int page_num)
+{
+	if (!page_num) /* Page 0 always start from low page */
+		return 0;
+
+	/* High page */
+	return page_num * MLX5_EEPROM_HIGH_PAGE_LENGTH;
+}
+
 int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
 			     u16 offset, u16 size, u8 *data)
 {
+	int module_num, page_num, status, err;
 	u32 out[MLX5_ST_SZ_DW(mcia_reg)];
 	u32 in[MLX5_ST_SZ_DW(mcia_reg)];
-	int module_num;
 	u16 i2c_addr;
-	int status;
-	int err;
 	void *ptr = MLX5_ADDR_OF(mcia_reg, out, dword_0);
 
 	err = mlx5_query_module_num(dev, &module_num);
@@ -312,21 +333,24 @@ int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
 	memset(in, 0, sizeof(in));
 	size = min_t(int, size, MLX5_EEPROM_MAX_BYTES);
 
-	if (offset < MLX5_EEPROM_PAGE_LENGTH &&
-	    offset + size > MLX5_EEPROM_PAGE_LENGTH)
+	/* Get the page number related to the given offset */
+	page_num = mlx5_eeprom_page(offset);
+
+	/* Set the right offset according to the page number,
+	 * For page_num > 0, relative offset is always >= 128 (high page).
+	 */
+	offset -= mlx5_eeprom_high_page_offset(page_num);
+
+	if (offset + size > MLX5_EEPROM_PAGE_LENGTH)
 		/* Cross pages read, read until offset 256 in low page */
 		size -= offset + size - MLX5_EEPROM_PAGE_LENGTH;
 
 	i2c_addr = MLX5_I2C_ADDR_LOW;
-	if (offset >= MLX5_EEPROM_PAGE_LENGTH) {
-		i2c_addr = MLX5_I2C_ADDR_HIGH;
-		offset -= MLX5_EEPROM_PAGE_LENGTH;
-	}
 
 	MLX5_SET(mcia_reg, in, l, 0);
 	MLX5_SET(mcia_reg, in, module, module_num);
 	MLX5_SET(mcia_reg, in, i2c_device_address, i2c_addr);
-	MLX5_SET(mcia_reg, in, page_number, 0);
+	MLX5_SET(mcia_reg, in, page_number, page_num);
 	MLX5_SET(mcia_reg, in, device_address, offset);
 	MLX5_SET(mcia_reg, in, size, size);
 
@@ -903,8 +927,8 @@ int mlx5_modify_port_cong_params(struct mlx5_core_dev *mdev,
 	return mlx5_cmd_exec(mdev, in, in_size, out, sizeof(out));
 }
 
-static int mlx5_query_ports_check(struct mlx5_core_dev *mdev, u32 *out,
-				  int outlen)
+
+int mlx5_query_ports_check(struct mlx5_core_dev *mdev, u32 *out, int outlen)
 {
 	u32 in[MLX5_ST_SZ_DW(pcmr_reg)] = {0};
 
@@ -913,7 +937,7 @@ static int mlx5_query_ports_check(struct mlx5_core_dev *mdev, u32 *out,
 				    outlen, MLX5_REG_PCMR, 0, 0);
 }
 
-static int mlx5_set_ports_check(struct mlx5_core_dev *mdev, u32 *in, int inlen)
+int mlx5_set_ports_check(struct mlx5_core_dev *mdev, u32 *in, int inlen)
 {
 	u32 out[MLX5_ST_SZ_DW(pcmr_reg)];
 
@@ -924,7 +948,11 @@ static int mlx5_set_ports_check(struct mlx5_core_dev *mdev, u32 *in, int inlen)
 int mlx5_set_port_fcs(struct mlx5_core_dev *mdev, u8 enable)
 {
 	u32 in[MLX5_ST_SZ_DW(pcmr_reg)] = {0};
+	int err;
 
+	err = mlx5_query_ports_check(mdev, in, sizeof(in));
+	if (err)
+		return err;
 	MLX5_SET(pcmr_reg, in, local_port, 1);
 	MLX5_SET(pcmr_reg, in, fcs_chk, enable);
 	return mlx5_set_ports_check(mdev, in, sizeof(in));
@@ -946,87 +974,6 @@ void mlx5_query_port_fcs(struct mlx5_core_dev *mdev, bool *supported,
 
 	*supported = !!(MLX5_GET(pcmr_reg, out, fcs_cap));
 	*enabled = !!(MLX5_GET(pcmr_reg, out, fcs_chk));
-}
-
-const char *mlx5_pme_status_to_string(enum port_module_event_status_type status)
-{
-	switch (status) {
-	case MLX5_MODULE_STATUS_PLUGGED:
-		return "Cable plugged";
-	case MLX5_MODULE_STATUS_UNPLUGGED:
-		return "Cable unplugged";
-	case MLX5_MODULE_STATUS_ERROR:
-		return "Cable error";
-	case MLX5_MODULE_STATUS_DISABLED:
-		return "Cable disabled";
-	default:
-		return "Unknown status";
-	}
-}
-
-const char *mlx5_pme_error_to_string(enum port_module_event_error_type error)
-{
-	switch (error) {
-	case MLX5_MODULE_EVENT_ERROR_POWER_BUDGET_EXCEEDED:
-		return "Power budget exceeded";
-	case MLX5_MODULE_EVENT_ERROR_LONG_RANGE_FOR_NON_MLNX_CABLE_MODULE:
-		return "Long Range for non MLNX cable";
-	case MLX5_MODULE_EVENT_ERROR_BUS_STUCK:
-		return "Bus stuck (I2C or data shorted)";
-	case MLX5_MODULE_EVENT_ERROR_NO_EEPROM_RETRY_TIMEOUT:
-		return "No EEPROM/retry timeout";
-	case MLX5_MODULE_EVENT_ERROR_ENFORCE_PART_NUMBER_LIST:
-		return "Enforce part number list";
-	case MLX5_MODULE_EVENT_ERROR_UNKNOWN_IDENTIFIER:
-		return "Unknown identifier";
-	case MLX5_MODULE_EVENT_ERROR_HIGH_TEMPERATURE:
-		return "High Temperature";
-	case MLX5_MODULE_EVENT_ERROR_BAD_CABLE:
-		return "Bad or shorted cable/module";
-	case MLX5_MODULE_EVENT_ERROR_PCIE_POWER_SLOT_EXCEEDED:
-		return "One or more network ports have been powered down due to insufficient/unadvertised power on the PCIe slot. Please refer to the card's user manual for power specifications or contact Mellanox support";
-	default:
-		return "Unknown error";
-	}
-}
-
-void mlx5_port_module_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe)
-{
-	enum port_module_event_status_type module_status;
-	enum port_module_event_error_type error_type;
-	struct mlx5_eqe_port_module *module_event_eqe;
-	struct mlx5_priv *priv = &dev->priv;
-	const char *status_str, *error_str;
-	u8 module_num;
-
-	module_event_eqe = &eqe->data.port_module;
-	module_num = module_event_eqe->module;
-	module_status = module_event_eqe->module_status &
-			PORT_MODULE_EVENT_MODULE_STATUS_MASK;
-	error_type = module_event_eqe->error_type &
-		     PORT_MODULE_EVENT_ERROR_TYPE_MASK;
-
-	if (module_status < MLX5_MODULE_STATUS_NUM)
-		priv->pme_stats.status_counters[module_status]++;
-	status_str = mlx5_pme_status_to_string(module_status);
-
-	if (module_status == MLX5_MODULE_STATUS_ERROR) {
-		if (error_type < MLX5_MODULE_EVENT_ERROR_NUM)
-			priv->pme_stats.error_counters[error_type]++;
-		error_str = mlx5_pme_error_to_string(error_type);
-	}
-
-	if (!printk_ratelimit())
-		return;
-
-	if (module_status == MLX5_MODULE_STATUS_ERROR)
-		mlx5_core_err(dev,
-			      "Port module event[error]: module %u, %s, %s\n",
-			      module_num, status_str, error_str);
-	else
-		mlx5_core_info(dev,
-			       "Port module event: module %u, %s\n",
-			       module_num, status_str);
 }
 
 int mlx5_query_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size)

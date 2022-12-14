@@ -288,12 +288,13 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
 				char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	struct mlx5e_rss_params *rss = &priv->rss_params;
 	int len = 0;
 
 	rtnl_lock();
 
 	len += sprintf(buf + len, "Operational hfunc: %s\n",
-		       priv->channels.params.rss_hfunc == MLX5E_HFUNC_XOR ?
+		       rss->hfunc == MLX5E_HFUNC_XOR ?
 		       "xor" : "toeplitz");
 
 	len += sprintf(buf + len, "Supported hfuncs: xor toeplitz\n");
@@ -308,6 +309,7 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 				 const char *buf, size_t count)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	struct mlx5e_rss_params *rss = &priv->rss_params;
 	u32 in[MLX5_ST_SZ_DW(modify_tir_in)] = {0};
 	struct net_device *netdev = priv->netdev;
 	char hfunc[ETH_GSTRING_LEN];
@@ -329,10 +331,10 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
 
-	if (priv->channels.params.rss_hfunc == ethtool_hfunc)
+	if (rss->hfunc == ethtool_hfunc)
 		goto unlock;
 
-	priv->channels.params.rss_hfunc = ethtool_hfunc;
+	rss->hfunc = ethtool_hfunc;
 	mlx5e_sysfs_modify_tirs_hash(priv, in, sizeof(in));
 
 unlock:

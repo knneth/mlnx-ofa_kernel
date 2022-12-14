@@ -78,7 +78,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kzalloc_node"); \
 	else									\
 		__memtrack_addr = kzalloc_node(size, flags, node);		\
-	if (__memtrack_addr && (size) &&					\
+	if (__memtrack_addr && (size) > 0 &&					\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
@@ -105,7 +105,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc_array"); \
 	else									\
 		__memtrack_addr = kvmalloc_array(n, size, flags);		\
-	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__) && (n)*(size)) {	\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__) && (n) * (size) > 0) {	\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -129,7 +129,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc_node"); \
 	else									\
 		__memtrack_addr = kcalloc_node(n, size, flags, node);		\
-	if (__memtrack_addr && (size) &&					\
+	if (__memtrack_addr && (size) > 0 &&					\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n) * (size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
@@ -146,7 +146,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
 	else									\
 		__memtrack_addr = kcalloc(n, size, flags);			\
-	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && (n)*(size)) {			\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && (n) * (size) > 0) {		\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -159,7 +159,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
 	else									\
 		__memtrack_addr = kcalloc(n, size, flags);			\
-	if (__memtrack_addr && (n)*(size)) {					\
+	if (__memtrack_addr && (n) * (size) > 0) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -270,7 +270,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc_array"); \
 	else									\
 		__memtrack_addr = kmalloc_array(n, size, flags);		\
-	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && (n)*(size)) {			\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && (n) * (size) > 0) {		\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -283,7 +283,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc_array"); \
 	else									\
 		__memtrack_addr = kmalloc_array(n, size, flags);			\
-	if (__memtrack_addr && (n)*(size)) {					\
+	if (__memtrack_addr && (n) * (size) > 0) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -499,6 +499,21 @@
 #endif
 
 #ifndef memdup_user
+#ifdef ZERO_OR_NULL_PTR
+#define memdup_user(user_addr, size) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "memdup_user", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "memdup_user"); \
+	else									\
+		__memtrack_addr = memdup_user(user_addr, size);			\
+										\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
+	}									\
+	__memtrack_addr;							\
+})
+#else
 #define memdup_user(user_addr, size) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -513,8 +528,24 @@
 	__memtrack_addr;							\
 })
 #endif
+#endif
 
 #ifndef memdup_user_nul
+#ifdef ZERO_OR_NULL_PTR
+#define memdup_user_nul(user_addr, size) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "memdup_user_nul", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "memdup_user_nul"); \
+	else									\
+		__memtrack_addr = memdup_user_nul(user_addr, size);			\
+										\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
+	}									\
+	__memtrack_addr;							\
+})
+#else
 #define memdup_user_nul(user_addr, size) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -528,6 +559,7 @@
 	}									\
 	__memtrack_addr;							\
 })
+#endif
 #endif
 
 
@@ -1058,9 +1090,10 @@
 	wq_addr;								\
 })
 #else /* 2.6.36 */
+
 #ifdef alloc_workqueue
-	#undef alloc_workqueue
-#endif
+/* In kernels < 5.1, alloc_workqueue was a macro */
+#undef alloc_workqueue
 #ifdef CONFIG_LOCKDEP
 #define alloc_workqueue(name, flags, max_active, args...)			\
 ({										\
@@ -1092,6 +1125,21 @@
 	else									\
 		wq_addr = __alloc_workqueue_key((name), (flags), (max_active),	\
 						NULL, NULL, ##args);		\
+	if (wq_addr) {								\
+		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
+	}									\
+	wq_addr;								\
+})
+#endif
+#else
+/* In kernels >= 5.1, alloc_workqueue is a function */
+#define alloc_workqueue(name, flags, max_active, args...) ({			\
+	struct workqueue_struct *wq_addr = NULL;				\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_workqueue", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
+	else									\
+		wq_addr = alloc_workqueue(name, flags, max_active, ##args);	\
 	if (wq_addr) {								\
 		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\

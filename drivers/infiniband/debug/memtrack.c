@@ -151,6 +151,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/ratelimit.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/vmalloc.h>
@@ -774,6 +775,8 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"mlx4_en_complete_rx_desc",
 		"mlx4_alloc_pages",
 		"mlx4_alloc_page",
+		"mlx4_crdump_collect_crspace",
+		"mlx4_crdump_collect_fw_health",
 		"mlx5e_page_alloc_mapped",
 		"mlx5e_put_page",
 		/* vnic skb functions */

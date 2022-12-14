@@ -1,16 +1,16 @@
 From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
 
-Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
+Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
 ---
  drivers/infiniband/core/cma_configfs.c | 138 ++++++++++++++++++++++++++++++++-
  1 file changed, 136 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/cma_configfs.c
 +++ b/drivers/infiniband/core/cma_configfs.c
-@@ -35,6 +35,10 @@
- #include <rdma/ib_verbs.h>
+@@ -38,6 +38,10 @@
  #include "core_priv.h"
+ #include "cma_priv.h"
  
 +#ifndef CONFIGFS_ATTR
 +#define HAVE_OLD_CONFIGFS_API
@@ -19,7 +19,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  struct cma_device;
  
  struct cma_dev_group;
-@@ -52,6 +56,23 @@ struct cma_dev_group {
+@@ -55,6 +59,23 @@ struct cma_dev_group {
  	struct cma_dev_port_group	*ports;
  };
  
@@ -43,7 +43,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  static struct cma_dev_port_group *to_dev_port_group(struct config_item *item)
  {
  	struct config_group *group;
-@@ -68,6 +89,34 @@ static bool filter_by_name(struct ib_dev
+@@ -71,6 +92,34 @@ static bool filter_by_name(struct ib_dev
  	return !strcmp(dev_name(&ib_dev->dev), cookie);
  }
  
@@ -78,7 +78,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  static int cma_configfs_params_get(struct config_item *item,
  				   struct cma_device **pcma_dev,
  				   struct cma_dev_port_group **pgroup)
-@@ -181,12 +230,27 @@ static ssize_t default_roce_tos_store(st
+@@ -184,12 +233,27 @@ static ssize_t default_roce_tos_store(st
  CONFIGFS_ATTR(, default_roce_tos);
  
  static struct configfs_attribute *cma_configfs_attributes[] = {
@@ -108,7 +108,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  	.ct_attrs	= cma_configfs_attributes,
  	.ct_owner	= THIS_MODULE
  };
-@@ -214,6 +278,14 @@ static int make_cma_ports(struct cma_dev
+@@ -217,6 +281,14 @@ static int make_cma_ports(struct cma_dev
  		goto free;
  	}
  
@@ -123,7 +123,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  	for (i = 0; i < ports_num; i++) {
  		char port_str[10];
  
-@@ -223,10 +295,17 @@ static int make_cma_ports(struct cma_dev
+@@ -226,10 +298,17 @@ static int make_cma_ports(struct cma_dev
  		config_group_init_type_name(&ports[i].group,
  					    port_str,
  					    &cma_port_group_type);
@@ -141,7 +141,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  	cma_dev_group->ports = ports;
  
  	return 0;
-@@ -263,7 +342,11 @@ static struct configfs_item_operations c
+@@ -266,7 +345,11 @@ static struct configfs_item_operations c
  	.release = release_cma_ports_group
  };
  
@@ -153,7 +153,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  	.ct_item_ops	= &cma_ports_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -272,7 +355,11 @@ static struct configfs_item_operations c
+@@ -275,7 +358,11 @@ static struct configfs_item_operations c
  	.release = release_cma_dev
  };
  
@@ -165,7 +165,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -295,6 +382,15 @@ static struct config_group *make_cma_dev
+@@ -298,6 +385,15 @@ static struct config_group *make_cma_dev
  		goto fail;
  	}
  
@@ -181,7 +181,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
  
  	config_group_init_type_name(&cma_dev_group->ports_group, "ports",
-@@ -302,16 +398,29 @@ static struct config_group *make_cma_dev
+@@ -305,16 +401,29 @@ static struct config_group *make_cma_dev
  
  	err = make_cma_ports(cma_dev_group, cma_dev);
  	if (err)
@@ -211,7 +211,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
  fail:
  	if (cma_dev)
  		cma_deref_dev(cma_dev);
-@@ -327,8 +436,29 @@ static void drop_cma_dev(struct config_g
+@@ -330,8 +439,29 @@ static void drop_cma_dev(struct config_g
          struct cma_dev_group *cma_dev_group = container_of(group,
                                                             struct cma_dev_group,
                                                             device_group);
@@ -241,7 +241,7 @@ Change-Id: Ib536e15f2aa4d7fa6ffdb8495d63c7f32cec702f
          config_item_put(item);
  }
  
-@@ -337,7 +467,11 @@ static struct configfs_group_operations
+@@ -340,7 +470,11 @@ static struct configfs_group_operations
  	.drop_item	= drop_cma_dev,
  };
  

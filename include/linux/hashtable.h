@@ -90,18 +90,38 @@ static inline void hash_del(struct hlist_node *node)
 	hlist_del_init(node);
 }
 
+static inline void hash_del_rcu(struct hlist_node *node)
+{
+	        hlist_del_init_rcu(node);
+}
+
+
+static inline bool hash_hashed(struct hlist_node *node)
+{
+	        return !hlist_unhashed(node);
+}
+
+#define hash_add_rcu(hashtable, node, key)                                      \
+        hlist_add_head_rcu(node, &hashtable[hash_min(key, HASH_BITS(hashtable))])
+
 #define compat_hash_for_each(name, bkt, obj, member)				\
 	for ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\
 			(bkt)++)\
 		compat_hlist_for_each_entry(obj, &name[bkt], member)
+
+#define compat_hash_for_each_possible_rcu(name, obj, member, key)		\
+ 	compat_hlist_for_each_entry_rcu(obj, &name[hash_min(key, HASH_BITS(name))], member)
 
 #else /* hash_init */
 
 #ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
 #define compat_hash_for_each(hash, bkt, e, node) \
 	hash_for_each(hash, bkt, hlnode, e, node)
+#define compat_hash_for_each_possible_rcu(hash, bkt, e, node) \
+	hash_for_each_possible_rcu(hash, bkt, hlnode, e, node)
 #else
 #define compat_hash_for_each hash_for_each
+#define compat_hash_for_each_possible_rcu hash_for_each_possible_rcu
 #endif
 
 #endif /* hash_init */

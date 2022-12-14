@@ -5,12 +5,13 @@
 
 #ifndef CONFIG_COMPAT_FLOW_DISSECTOR
 #include_next <net/flow_dissector.h>
-#else
+#else/*CONFIG_COMPAT_FLOW_DISSECTOR*/
 #define HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS 1
 #define HAVE_FLOW_DISSECTOR_KEY_VLAN 1
 #define HAVE_FLOW_DISSECTOR_KEY_IP 1
 #define HAVE_FLOW_DISSECTOR_KEY_TCP 1
 #define HAVE_FLOW_DISSECTOR_KEY_ENC_IP 1
+#define HAVE_FLOW_DISSECTOR_KEY_ENC_KEYID 1
 
 #include <linux/types.h>
 #include <linux/in6.h>
@@ -311,8 +312,10 @@ enum flow_dissector_key_id {
 	FLOW_DISSECTOR_KEY_ENC_PORTS, /* struct flow_dissector_key_ports */
 	FLOW_DISSECTOR_KEY_MPLS, /* struct flow_dissector_key_mpls */
 	FLOW_DISSECTOR_KEY_TCP, /* struct flow_dissector_key_tcp */
+	FLOW_DISSECTOR_KEY_CVLAN, /* struct flow_dissector_key_vlan */
 	FLOW_DISSECTOR_KEY_IP, /* struct flow_dissector_key_ip */
 	FLOW_DISSECTOR_KEY_ENC_IP, /* struct flow_dissector_key_ip */
+	FLOW_DISSECTOR_KEY_ENC_OPTS, /* struct flow_dissector_key_enc_opts */
 
 	FLOW_DISSECTOR_KEY_MAX,
 };
@@ -413,6 +416,11 @@ void skb_flow_dissector_init(struct flow_dissector *flow_dissector,
 
 #endif
 int init_default_flow_dissectors(void);
+
+#ifdef HAVE_NET_FLOW_KEYS_H
+#undef flow_keys
+#undef flow_hash_from_keys
+#endif
 
 #endif
 

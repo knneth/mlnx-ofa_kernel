@@ -318,11 +318,6 @@ copied:
 	skb->dev = dev;
 	/* XXX get correct PACKET_ type here */
 	skb->pkt_type = PACKET_HOST;
-
-	/* if handler is registered on top of ipoib, set skb oob data. */
-	if (unlikely(dev->priv_flags & IFF_EIPOIB_VIF))
-		set_skb_oob_cb_data(skb, wc, NULL);
-
 	netif_receive_skb(skb);
 
 repost:

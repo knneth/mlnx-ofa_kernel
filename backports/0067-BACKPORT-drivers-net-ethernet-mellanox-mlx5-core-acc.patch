@@ -1,0 +1,25 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/accel/tls.c
+
+Change-Id: Ibc5ddc162b1958865b7d3c05ad9bdc6fa27f044c
+---
+ drivers/net/ethernet/mellanox/mlx5/core/accel/tls.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/accel/tls.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/accel/tls.c
+@@ -31,6 +31,8 @@
+  *
+  */
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
++
+ #include <linux/mlx5/device.h>
+ 
+ #include "accel/tls.h"
+@@ -78,3 +80,5 @@ void mlx5_accel_tls_cleanup(struct mlx5_
+ {
+ 	mlx5_fpga_tls_cleanup(mdev);
+ }
++
++#endif

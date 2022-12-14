@@ -75,6 +75,7 @@ enum mlx5_flow_namespace_type {
 	MLX5_FLOW_NAMESPACE_SNIFFER_TX,
 	MLX5_FLOW_NAMESPACE_EGRESS,
 	MLX5_FLOW_NAMESPACE_RDMA_RX,
+	MLX5_FLOW_NAMESPACE_RDMA_RX_KERNEL,
 };
 
 enum {
@@ -110,6 +111,11 @@ struct mlx5_flow_spec {
 	struct mlx5_flow_context flow_context;
 };
 
+enum {
+	MLX5_FLOW_DEST_VPORT_VHCA_ID      = BIT(0),
+	MLX5_FLOW_DEST_VPORT_REFORMAT_ID  = BIT(1),
+};
+
 struct mlx5_flow_destination {
 	enum mlx5_flow_destination_type	type;
 	union {
@@ -120,9 +126,15 @@ struct mlx5_flow_destination {
 		struct {
 			u16		num;
 			u16		vhca_id;
-			bool		vhca_id_valid;
+			u32		reformat_id;
+			u8		flags;
 		} vport;
 	};
+};
+
+struct mod_hdr_tbl {
+	struct mutex lock; /* protects hlist */
+	DECLARE_HASHTABLE(hlist, 8);
 };
 
 struct mlx5_flow_namespace *
@@ -217,11 +229,11 @@ int mlx5_modify_rule_destination(struct mlx5_flow_handle *handler,
 				 struct mlx5_flow_destination *new_dest,
 				 struct mlx5_flow_destination *old_dest);
 
-struct mlx5_fc *mlx5_fc_alloc(struct mlx5_core_dev *dev, gfp_t flags);
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging);
-void mlx5_fc_dealloc(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
 void mlx5_fc_link_dummies(struct mlx5_fc *counter, struct mlx5_fc **dummies, int nr_dummies);
 void mlx5_fc_unlink_dummies(struct mlx5_fc *counter);
+struct mlx5_fc *mlx5_fc_alloc_dummy_counter(void);
+void mlx5_fc_free_dummy_counter(struct mlx5_fc *counter);
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
 			  u64 *bytes, u64 *packets, u64 *lastuse);

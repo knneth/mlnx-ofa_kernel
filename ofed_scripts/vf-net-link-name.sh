@@ -16,12 +16,12 @@ fi
 
 # for pf and uplink rep fall to slot or path.
 if [ -n "$ID_NET_NAME_SLOT" ]; then
-    echo "NAME=$ID_NET_NAME_SLOT"
+    echo NAME="${ID_NET_NAME_SLOT%%np[[:digit:]]}"
     exit
 fi
 
 if [ -n "$ID_NET_NAME_PATH" ]; then
-    echo "NAME=$ID_NET_NAME_PATH"
+    echo NAME="${ID_NET_NAME_PATH%%np[[:digit:]]}"
     exit
 fi
 
@@ -69,7 +69,8 @@ done
 
 # for VFs
 function get_pci_name() {
-    udevadm info -q property -p /sys/bus/pci/devices/$1/net/* | grep $2 | cut -d= -f2
+    local a=`udevadm info -q property -p /sys/bus/pci/devices/$1/net/* | grep $2 | cut -d= -f2`
+    echo ${a%%np[[:digit:]]}
 }
 
 # get phys_switch_id by pci

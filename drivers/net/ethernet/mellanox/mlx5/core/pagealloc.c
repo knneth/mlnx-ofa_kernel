@@ -37,6 +37,7 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/cmd.h>
 #include "mlx5_core.h"
+#include "lib/eq.h"
 
 enum {
 	MLX5_PAGES_CANT_GIVE	= 0,
@@ -361,7 +362,7 @@ static void free_pages_list(struct mlx5_core_dev *dev)
 
 		list_del(&fp->list);
 		rb_erase(&fp->rb_node, &dev->priv.page_root);
-		dma_unmap_page(dev->device, fp->addr & MLX5_U64_4K_PAGE_MASK,
+		dma_unmap_page(&dev->pdev->dev, fp->addr & MLX5_U64_4K_PAGE_MASK,
 			       PAGE_SIZE, DMA_BIDIRECTIONAL);
 		__free_page(fp->page);
 		kfree(fp);
@@ -477,6 +478,7 @@ static void gc_work_handler(struct work_struct *work)
 
 	free_pages_list(dev);
 }
+
 static void pages_work_handler(struct work_struct *work)
 {
 	struct mlx5_pages_req *req = container_of(work, struct mlx5_pages_req, work);
@@ -496,11 +498,30 @@ static void pages_work_handler(struct work_struct *work)
 	kfree(req);
 }
 
-void mlx5_core_req_pages_handler(struct mlx5_core_dev *dev, u16 func_id,
-				 s32 npages, bool ec_function)
+enum {
+	EC_FUNCTION_MASK = 0x8000,
+};
+
+static int req_pages_handler(struct notifier_block *nb,
+			     unsigned long type, void *data)
 {
 	struct mlx5_pages_req *req;
-	struct mlx5_priv *priv = &dev->priv;
+	struct mlx5_core_dev *dev;
+	struct mlx5_priv *priv;
+	struct mlx5_eqe *eqe;
+	bool ec_function;
+	u16 func_id;
+	s32 npages;
+
+	priv = mlx5_nb_cof(nb, struct mlx5_priv, pg_nb);
+	dev  = container_of(priv, struct mlx5_core_dev, priv);
+	eqe  = data;
+
+	func_id = be16_to_cpu(eqe->data.req_pages.func_id);
+	npages  = be32_to_cpu(eqe->data.req_pages.num_pages);
+	ec_function = be16_to_cpu(eqe->data.req_pages.ec_function) & EC_FUNCTION_MASK;
+	mlx5_core_dbg(dev, "page request for func 0x%x, npages %d\n",
+		      func_id, npages);
 
 	priv->gc_allowed = false;
 	cancel_delayed_work(&priv->gc_dwork);
@@ -508,7 +529,7 @@ void mlx5_core_req_pages_handler(struct mlx5_core_dev *dev, u16 func_id,
 	req = kzalloc(sizeof(*req), GFP_ATOMIC);
 	if (!req) {
 		mlx5_core_warn(dev, "failed to allocate pages request\n");
-		return;
+		return NOTIFY_DONE;
 	}
 
 	req->dev = dev;
@@ -523,6 +544,8 @@ void mlx5_core_req_pages_handler(struct mlx5_core_dev *dev, u16 func_id,
 		queue_delayed_work(priv->pg_wq, &priv->gc_dwork,
 				   msecs_to_jiffies(GARBAGE_COLLECTOR_DELAY_MSECS));
 	}
+
+	return NOTIFY_OK;
 }
 
 int mlx5_satisfy_startup_pages(struct mlx5_core_dev *dev, int boot)
@@ -608,7 +631,7 @@ int mlx5_reclaim_startup_pages(struct mlx5_core_dev *dev)
 	return 0;
 }
 
-void mlx5_pagealloc_init(struct mlx5_core_dev *dev)
+int mlx5_pagealloc_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_priv *priv = &dev->priv;
 
@@ -616,6 +639,11 @@ void mlx5_pagealloc_init(struct mlx5_core_dev *dev)
 	INIT_LIST_HEAD(&priv->free_list);
 	INIT_DELAYED_WORK(&priv->gc_dwork, gc_work_handler);
 	priv->gc_allowed = true;
+	dev->priv.pg_wq = create_singlethread_workqueue("mlx5_page_allocator");
+	if (!dev->priv.pg_wq)
+		return -ENOMEM;
+
+	return 0;
 }
 
 void mlx5_pagealloc_cleanup(struct mlx5_core_dev *dev)
@@ -629,7 +657,7 @@ void mlx5_pagealloc_cleanup(struct mlx5_core_dev *dev)
 	list_for_each_entry_safe(fwp, tmp, &dev->priv.free_list, list) {
 		list_del(&fwp->list);
 		rb_erase(&fwp->rb_node, &priv->page_root);
-		dma_unmap_page(dev->device, fwp->addr & MLX5_U64_4K_PAGE_MASK,
+		dma_unmap_page(&dev->pdev->dev, fwp->addr & MLX5_U64_4K_PAGE_MASK,
 			       PAGE_SIZE, DMA_BIDIRECTIONAL);
 		__free_page(fwp->page);
 		kfree(fwp);
@@ -641,21 +669,19 @@ void mlx5_pagealloc_cleanup(struct mlx5_core_dev *dev)
 		if (p) {
 			fwp = rb_entry(p, struct fw_page, rb_node);
 			rb_erase(&fwp->rb_node, &priv->page_root);
-			dma_unmap_page(dev->device, fwp->addr & MLX5_U64_4K_PAGE_MASK,
+			dma_unmap_page(&dev->pdev->dev, fwp->addr & MLX5_U64_4K_PAGE_MASK,
 				       PAGE_SIZE, DMA_BIDIRECTIONAL);
 			__free_page(fwp->page);
 			kfree(fwp);
 		}
 	} while (p);
+	destroy_workqueue(dev->priv.pg_wq);
 }
 
-int mlx5_pagealloc_start(struct mlx5_core_dev *dev)
+void mlx5_pagealloc_start(struct mlx5_core_dev *dev)
 {
-	dev->priv.pg_wq = create_singlethread_workqueue("mlx5_page_allocator");
-	if (!dev->priv.pg_wq)
-		return -ENOMEM;
-
-	return 0;
+	MLX5_NB_INIT(&dev->priv.pg_nb, req_pages_handler, PAGE_REQUEST);
+	mlx5_eq_notifier_register(dev, &dev->priv.pg_nb);
 }
 
 void mlx5_pagealloc_stop(struct mlx5_core_dev *dev)
@@ -663,7 +689,8 @@ void mlx5_pagealloc_stop(struct mlx5_core_dev *dev)
 	cancel_delayed_work(&dev->priv.gc_dwork);
 	dev->priv.gc_allowed = true;
 	queue_delayed_work(dev->priv.pg_wq, &dev->priv.gc_dwork, 0);
-	destroy_workqueue(dev->priv.pg_wq);
+	mlx5_eq_notifier_unregister(dev, &dev->priv.pg_nb);
+	flush_workqueue(dev->priv.pg_wq);
 }
 
 int mlx5_wait_for_pages(struct mlx5_core_dev *dev, int *pages)

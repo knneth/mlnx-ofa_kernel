@@ -72,6 +72,7 @@ struct ipoib_send_ring {
 	unsigned		tx_head;
 	unsigned		tx_tail;
 	struct napi_struct	napi;
+	struct work_struct	reschedule_napi_work;
 	struct ib_sge		tx_sge[MAX_SKB_FRAGS + 1];
 	struct ib_ud_wr		tx_wr;
 	struct ib_wc		tx_wc[MAX_SEND_CQE];
@@ -79,6 +80,8 @@ struct ipoib_send_ring {
 	struct ipoib_tx_ring_stats stats;
 	unsigned		index;
 };
+
+void ipoib_napi_schedule_work_tss(struct work_struct *work);
 
 struct ipoib_rx_cm_info {
 	struct ib_sge		rx_sge[IPOIB_CM_RX_SG];

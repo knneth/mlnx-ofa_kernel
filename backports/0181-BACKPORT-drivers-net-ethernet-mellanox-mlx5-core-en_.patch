@@ -1,0 +1,71 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
+
+Change-Id: I7d0a4eaa7073e88ce589ebab07b032febb836714
+---
+ .../net/ethernet/mellanox/mlx5/core/en_accel/tls.h | 30 ++++++++++++++++++++--
+ 1 file changed, 28 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
+@@ -54,7 +54,11 @@ struct mlx5e_tls {
+ };
+ 
+ struct mlx5e_tls_offload_context_tx {
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
+ 	struct tls_offload_context_tx base;
++#else
++	struct tls_offload_context base;
++#endif
+ 	u32 expected_seq;
+ 	__be32 swid;
+ };
+@@ -63,14 +67,27 @@ static inline struct mlx5e_tls_offload_c
+ mlx5e_get_tls_tx_context(struct tls_context *tls_ctx)
+ {
+ 	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_tx) >
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
+ 		     TLS_OFFLOAD_CONTEXT_SIZE_TX);
+-	return container_of(tls_offload_ctx_tx(tls_ctx),
++#else
++		     TLS_OFFLOAD_CONTEXT_SIZE);
++#endif
++	return container_of(
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
++			    tls_offload_ctx_tx(tls_ctx),
++#else
++			    tls_offload_ctx(tls_ctx),
++#endif
+ 			    struct mlx5e_tls_offload_context_tx,
+ 			    base);
+ }
+ 
+ struct mlx5e_tls_offload_context_rx {
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
+ 	struct tls_offload_context_rx base;
++#else
++	struct tls_offload_context base;
++#endif
+ 	__be32 handle;
+ };
+ 
+@@ -78,8 +95,17 @@ static inline struct mlx5e_tls_offload_c
+ mlx5e_get_tls_rx_context(struct tls_context *tls_ctx)
+ {
+ 	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_rx) >
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
+ 		     TLS_OFFLOAD_CONTEXT_SIZE_RX);
+-	return container_of(tls_offload_ctx_rx(tls_ctx),
++#else
++		     TLS_OFFLOAD_CONTEXT_SIZE);
++#endif
++	return container_of(
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
++			    tls_offload_ctx_rx(tls_ctx),
++#else
++			    tls_offload_ctx(tls_ctx),
++#endif
+ 			    struct mlx5e_tls_offload_context_rx,
+ 			    base);
+ }

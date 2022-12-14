@@ -84,8 +84,7 @@ int ipoib_set_mode_rss(struct net_device *dev, const char *buf)
 }
 
 static u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb,
-				     struct net_device *sb_dev,
-				     select_queue_fallback_t fallback)
+				     struct net_device *sb_dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	struct ipoib_pseudo_header *phdr;
@@ -121,7 +120,7 @@ static u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb
 	header->tss_qpn_mask_sz |= priv->tss_qpn_mask_sz;
 
 	/* don't use special ring in TX */
-	return fallback(dev, skb, NULL) % priv->tss_qp_num;
+	return netdev_pick_tx(dev, skb, NULL) % priv->tss_qp_num;
 }
 
 static void ipoib_timeout_rss(struct net_device *dev)
@@ -141,7 +140,8 @@ static void ipoib_timeout_rss(struct net_device *dev)
 				   send_ring->tx_tail);
 		}
 	}
-	/* XXX reset QP, etc. */
+
+	schedule_work(&priv->tx_timeout_work);
 }
 
 static struct net_device_stats *ipoib_get_stats_rss(struct net_device *dev)

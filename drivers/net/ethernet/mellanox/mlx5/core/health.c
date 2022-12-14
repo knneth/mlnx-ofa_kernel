@@ -38,6 +38,8 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/cmd.h>
 #include "mlx5_core.h"
+#include "lib/eq.h"
+#include "lib/mlx5.h"
 
 enum {
 	MLX5_HEALTH_POLL_INTERVAL	= HZ/2,
@@ -205,24 +207,18 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 		goto unlock;
 	}
 
-	if (pci_channel_offline(dev->pdev))
-		mlx5_core_eq_disable_irqs(dev);
-
+	fatal_error = mlx5_check_fatal_sensors(dev);
 	if (force)
 		mlx5_core_dbg(dev, "start\n");
 	else
 		mlx5_core_err(dev, "start\n");
 
-	fatal_error = mlx5_check_fatal_sensors(dev);
-
 	if (fatal_error || force) {
 		dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
-		mlx5_lock_and_flush_cmdif(dev);
-		mlx5_unlock_cmdif(dev);
+		mlx5_cmd_flush(dev);
 	}
 
-	mlx5_core_event(dev, MLX5_DEV_EVENT_SYS_ERROR, 1);
-
+	mlx5_notifier_call_chain(dev->priv.events, MLX5_DEV_EVENT_SYS_ERROR, (void *)1);
 	if (force)
 		goto err_state_done;
 
@@ -252,7 +248,7 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 	} while (!time_after(jiffies, end));
 
 	if (!mlx5_sensor_nic_disabled(dev)) {
-		mlx5_core_err(dev, "NIC IFC still %d after %lums.\n",
+		dev_err(&dev->pdev->dev, "NIC IFC still %d after %lums.\n",
 			mlx5_get_nic_mode(dev), delay_ms);
 	}
 
@@ -261,6 +257,7 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 		lock_sem_sw_reset(dev, UNLOCK);
 
 err_state_done:
+
 	if (force)
 		mlx5_core_dbg(dev, "end\n");
 	else
@@ -306,6 +303,7 @@ static void mlx5_handle_bad_state(struct mlx5_core_dev *dev)
 	mlx5_disable_device(dev);
 }
 
+
 static void health_recover(struct work_struct *work)
 {
 	struct mlx5_core_health *health;
@@ -319,7 +317,7 @@ static void health_recover(struct work_struct *work)
 	dev = container_of(priv, struct mlx5_core_dev, priv);
 
 	if (mlx5_sensor_pci_not_working(dev)) {
-		mlx5_core_err(dev, "health recovery flow aborted since the nic state is invalid\n");
+		dev_err(&dev->pdev->dev, "health recovery flow aborted, PCI reads still not working\n");
 		return;
 	}
 
@@ -440,8 +438,7 @@ void mlx5_trigger_health_work(struct mlx5_core_dev *dev)
 	if (!test_bit(MLX5_DROP_NEW_HEALTH_WORK, &health->flags))
 		queue_work(health->wq, &health->work);
 	else
-		mlx5_core_err(dev,
-			      "new health works are not permitted at this stage\n");
+		mlx5_core_err(dev, "new health works are not permitted at this stage\n");
 	spin_unlock_irqrestore(&health->wq_lock, flags);
 }
 

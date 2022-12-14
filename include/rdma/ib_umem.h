@@ -36,6 +36,7 @@
 #include <linux/list.h>
 #include <linux/scatterlist.h>
 #include <linux/workqueue.h>
+#include <rdma/ib_verbs.h>
 #include <rdma/ib_peer_mem.h>
 
 struct ib_ucontext;
@@ -69,7 +70,7 @@ struct ib_umem {
 	struct work_struct	work;
 	struct sg_table sg_head;
 	int             nmap;
-	int             npages;
+	unsigned int    sg_nents;
 	/* peer memory that manages this umem */
 	struct ib_peer_memory_client *ib_peer_mem;
 	struct invalidation_ctx *invalidation_ctx;
@@ -102,13 +103,16 @@ static inline size_t ib_umem_num_pages(struct ib_umem *umem)
 
 #ifdef CONFIG_INFINIBAND_USER_MEM
 
-struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
+struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 			    size_t size, int access, int dmasync,
 			    unsigned long peer_mem_flags);
 void ib_umem_release(struct ib_umem *umem);
 int ib_umem_page_count(struct ib_umem *umem);
 int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
 		      size_t length);
+unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+				     unsigned long pgsz_bitmap,
+				     unsigned long virt);
 int  ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
 						   umem_invalidate_func_t func,
 						   void *cookie);
@@ -117,10 +121,11 @@ int  ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
 
 #include <linux/err.h>
 
-static inline struct ib_umem *ib_umem_get(struct ib_ucontext *context,
+static inline struct ib_umem *ib_umem_get(struct ib_udata *udata,
 					     unsigned long addr, size_t size,
 					     int access, int dmasync,
 					     unsigned long peer_mem_flags) {
+{
 	return ERR_PTR(-EINVAL);
 }
 static inline void ib_umem_release(struct ib_umem *umem) { }
@@ -132,6 +137,12 @@ static inline int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offs
 		      		    size_t length) {
 	return -EINVAL;
 }
+static inline int ib_umem_find_best_pgsz(struct ib_umem *umem,
+					 unsigned long pgsz_bitmap,
+					 unsigned long virt) {
+	return -EINVAL;
+}
+
 #endif /* CONFIG_INFINIBAND_USER_MEM */
 
 #endif /* IB_UMEM_H */

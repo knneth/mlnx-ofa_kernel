@@ -33,13 +33,12 @@
 #ifndef MLX5_QP_H
 #define MLX5_QP_H
 
-#include "../../../compat/config.h"
-
 #include <linux/mlx5/device.h>
 #include <linux/mlx5/driver.h>
 
 #define MLX5_INVALID_LKEY	0x100
-#define MLX5_SIG_WQE_SIZE	(MLX5_SEND_WQE_BB * 5)
+/* UMR (3 WQE_BB's) + SIG (3 WQE_BB's) + PSV (mem) + PSV (wire) */
+#define MLX5_SIG_WQE_SIZE	(MLX5_SEND_WQE_BB * 8)
 #define MLX5_DIF_SIZE		8
 #define MLX5_STRIDE_BLOCK_OP	0x400
 #define MLX5_CPY_GRD_MASK	0xc0
@@ -74,6 +73,7 @@ enum mlx5_qp_optpar {
 	MLX5_QP_OPTPAR_DC_HS			= 1 << 20,
 	MLX5_QP_OPTPAR_DC_KEY			= 1 << 21,
 	MLX5_QP_OPTPAR_OFFLOAD_TYPE		= 1 << 24,
+	MLX5_QP_OPTPAR_COUNTER_SET_ID		= 1 << 25,
 };
 
 enum mlx5_qp_state {
@@ -244,9 +244,7 @@ enum {
 };
 
 enum {
-#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
 	MLX5_ETH_WQE_SVLAN              = 1 << 0,
-#endif
 	MLX5_ETH_WQE_INSERT_VLAN        = 1 << 15,
 };
 
@@ -420,6 +418,7 @@ struct mlx5_wqe_signature_seg {
 
 struct mlx5_wqe_inline_seg {
 	__be32	byte_count;
+	__be32	data[0];
 };
 
 enum mlx5_sig_type {
@@ -516,8 +515,6 @@ struct mlx5_core_qp {
 	struct mlx5_rsc_debug	*dbg;
 	int			pid;
 	u16			uid;
-	struct mlx5_pagefault *pfault_req;
-	struct mlx5_pagefault *pfault_res;
 };
 
 struct mlx5_core_dct {
@@ -642,6 +639,11 @@ int mlx5_core_alloc_q_counter(struct mlx5_core_dev *dev, u16 *counter_id);
 int mlx5_core_dealloc_q_counter(struct mlx5_core_dev *dev, u16 counter_id);
 int mlx5_core_query_q_counter(struct mlx5_core_dev *dev, u16 counter_id,
 			      int reset, void *out, int out_size);
+
+struct mlx5_core_rsc_common *mlx5_core_res_hold(struct mlx5_core_dev *dev,
+						int res_num,
+						enum mlx5_res_type res_type);
+void mlx5_core_res_put(struct mlx5_core_rsc_common *res);
 
 static inline const char *mlx5_qp_type_str(int type)
 {

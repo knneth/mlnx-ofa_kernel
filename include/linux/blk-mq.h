@@ -49,6 +49,18 @@ static inline void blk_mq_tagset_busy_iter(struct blk_mq_tag_set *tagset,
 }
 #endif
 
+#if !defined(HAVE_REQUEST_TO_QC_T) && defined(HAVE_BLK_TYPES_REQ_HIPRI)
+static inline blk_qc_t request_to_qc_t(struct blk_mq_hw_ctx *hctx,
+		struct request *rq)
+{
+	if (rq->tag != -1)
+		return rq->tag | (hctx->queue_num << BLK_QC_T_SHIFT);
+
+	return rq->internal_tag | (hctx->queue_num << BLK_QC_T_SHIFT) |
+			BLK_QC_T_INTERNAL;
+}
+#endif
+
 #ifndef HAVE_BLK_STATUS_T
 
 typedef int blk_status_t;

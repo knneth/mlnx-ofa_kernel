@@ -36,16 +36,17 @@
 #include <linux/mlx5/qp.h>
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/transobj.h>
+
 #include <linux/mlx5/qp_exp.h>
 #include "mlx5_core.h"
+#include "lib/eq.h"
 
 static int mlx5_core_drain_dct(struct mlx5_core_dev *dev,
 			       struct mlx5_core_dct *dct);
 
-struct mlx5_core_rsc_common *mlx5_core_get_rsc(struct mlx5_core_dev *dev,
-					       u32 rsn)
+static struct mlx5_core_rsc_common *
+mlx5_get_rsc(struct mlx5_qp_table *table, u32 rsn)
 {
-	struct mlx5_qp_table *table = &dev->priv.qp_table;
 	struct mlx5_core_rsc_common *common;
 	unsigned long flags;
 
@@ -57,12 +58,6 @@ struct mlx5_core_rsc_common *mlx5_core_get_rsc(struct mlx5_core_dev *dev,
 
 	spin_unlock_irqrestore(&table->lock, flags);
 
-
-	if (!common) {
-		mlx5_core_warn(dev, "Async event for bogus resource 0x%x\n",
-			       rsn);
-		return NULL;
-	}
 	return common;
 }
 
@@ -135,21 +130,71 @@ static bool is_event_type_allowed(int rsc_type, int event_type)
 	}
 }
 
-int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_info)
+static int rsc_event_notifier(struct notifier_block *nb,
+			      unsigned long type, void *data)
 {
-	struct mlx5_core_rsc_common *common = mlx5_core_get_rsc(dev, rsn);
+	struct mlx5_core_rsc_common *common;
+	struct mlx5_qp_table *table;
+	struct mlx5_core_dev *dev;
 	struct mlx5_core_dct *dct;
+	u8 event_type = (u8)type;
 	struct mlx5_core_qp *qp;
-	int event_type = event_info & 0xff;
+	struct mlx5_priv *priv;
+	struct mlx5_eqe *eqe;
+	u32 rsn;
 
-	if (!common)
-		return -1;
+	switch (event_type) {
+	case MLX5_EVENT_TYPE_DCT_DRAINED:
+	case MLX5_EVENT_TYPE_DCT_KEY_VIOLATION:
+		eqe = data;
+		rsn = be32_to_cpu(eqe->data.dct.dctn) & 0xffffff;
+		rsn |= (MLX5_RES_DCT << MLX5_USER_INDEX_LEN);
+		break;
+	case MLX5_EVENT_TYPE_PATH_MIG:
+	case MLX5_EVENT_TYPE_COMM_EST:
+	case MLX5_EVENT_TYPE_SQ_DRAINED:
+	case MLX5_EVENT_TYPE_SRQ_LAST_WQE:
+	case MLX5_EVENT_TYPE_WQ_CATAS_ERROR:
+	case MLX5_EVENT_TYPE_PATH_MIG_FAILED:
+	case MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR:
+	case MLX5_EVENT_TYPE_WQ_ACCESS_ERROR:
+		eqe = data;
+		rsn = be32_to_cpu(eqe->data.qp_srq.qp_srq_n) & 0xffffff;
+		rsn |= (eqe->data.qp_srq.type << MLX5_USER_INDEX_LEN);
+		break;
+	case MLX5_EVENT_TYPE_XRQ_ERROR:
+		{
+			u8 error_type;
+
+			eqe = data;
+			error_type = be32_to_cpu(eqe->data.xrq.type_xrqn) >> 24;
+			if (error_type != MLX5_XRQ_ERROR_TYPE_QP_ERROR)
+				return NOTIFY_DONE;
+			rsn = be32_to_cpu(eqe->data.xrq.qpn_id_handle) &
+				MLX5_24BIT_MASK;
+			rsn |= (MLX5_EVENT_QUEUE_TYPE_QP << MLX5_USER_INDEX_LEN);
+		}
+		break;
+	default:
+		return NOTIFY_DONE;
+	}
+
+	table = container_of(nb, struct mlx5_qp_table, nb);
+	priv  = container_of(table, struct mlx5_priv, qp_table);
+	dev   = container_of(priv, struct mlx5_core_dev, priv);
+
+	mlx5_core_dbg(dev, "event (%d) arrived on resource 0x%x\n", eqe->type, rsn);
+
+	common = mlx5_get_rsc(table, rsn);
+	if (!common) {
+		mlx5_core_warn(dev, "Async event for bogus resource 0x%x\n", rsn);
+		return NOTIFY_OK;
+	}
 
 	if (!is_event_type_allowed((rsn >> MLX5_USER_INDEX_LEN), event_type)) {
 		mlx5_core_warn(dev, "event 0x%.2x is not allowed on resource 0x%.8x\n",
 			       event_type, rsn);
-		mlx5_core_put_rsc(common);
-		return -1;
+		goto out;
 	}
 
 	switch (common->res) {
@@ -157,7 +202,7 @@ int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_info)
 	case MLX5_RES_RQ:
 	case MLX5_RES_SQ:
 		qp = (struct mlx5_core_qp *)common;
-		qp->event(qp, event_info);
+		qp->event(qp, event_type);
 		break;
 	case MLX5_RES_DCT:
 		dct = (struct mlx5_core_dct *)common;
@@ -169,9 +214,10 @@ int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_info)
 	default:
 		mlx5_core_warn(dev, "invalid resource type for 0x%x\n", rsn);
 	}
-
+out:
 	mlx5_core_put_rsc(common);
-	return 0;
+
+	return NOTIFY_OK;
 }
 
 static int create_resource_common(struct mlx5_core_dev *dev,
@@ -192,7 +238,6 @@ static int create_resource_common(struct mlx5_core_dev *dev,
 
 	atomic_set(&qp->common.refcount, 1);
 	init_completion(&qp->common.free);
-	spin_lock_init(&qp->common.lock);
 	qp->pid = current->pid;
 
 	return 0;
@@ -225,17 +270,17 @@ static int _mlx5_core_destroy_dct(struct mlx5_core_dev *dev,
 		if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
 			goto destroy;
 		} else {
-			mlx5_core_warn(dev, "failed drain DCT 0x%x with error 0x%x\n", qp->qpn, err);
+			mlx5_core_warn(
+				dev, "failed drain DCT 0x%x with error 0x%x\n",
+				qp->qpn, err);
 			return err;
 		}
 	}
 	wait_for_completion(&dct->drained);
 destroy:
-	if (need_cleanup) {
-		mlx5_debug_dct_remove(dev, dct);
+	mlx5_debug_dct_remove(dev, dct);
+	if (need_cleanup)
 		destroy_resource_common(dev, &dct->mqp);
-	}
-
 	MLX5_SET(destroy_dct_in, in, opcode, MLX5_CMD_OP_DESTROY_DCT);
 	MLX5_SET(destroy_dct_in, in, dctn, qp->qpn);
 	MLX5_SET(destroy_dct_in, in, uid, qp->uid);
@@ -306,8 +351,6 @@ int mlx5_core_create_qp(struct mlx5_core_dev *dev,
 		mlx5_core_dbg(dev, "failed adding QP 0x%x to debug file system\n",
 			      qp->qpn);
 
-	qp->pfault_req = NULL;
-	qp->pfault_res = NULL;
 	atomic_inc(&dev->num_qps);
 
 	return 0;
@@ -524,10 +567,16 @@ void mlx5_init_qp_table(struct mlx5_core_dev *dev)
 	spin_lock_init(&table->lock);
 	INIT_RADIX_TREE(&table->tree, GFP_ATOMIC);
 	mlx5_qp_debugfs_init(dev);
+
+	table->nb.notifier_call = rsc_event_notifier;
+	mlx5_notifier_register(dev, &table->nb);
 }
 
 void mlx5_cleanup_qp_table(struct mlx5_core_dev *dev)
 {
+	struct mlx5_qp_table *table = &dev->priv.qp_table;
+
+	mlx5_notifier_unregister(dev, &table->nb);
 	mlx5_qp_debugfs_cleanup(dev);
 }
 
@@ -707,3 +756,20 @@ int mlx5_core_query_q_counter(struct mlx5_core_dev *dev, u16 counter_id,
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, out_size);
 }
 EXPORT_SYMBOL_GPL(mlx5_core_query_q_counter);
+
+struct mlx5_core_rsc_common *mlx5_core_res_hold(struct mlx5_core_dev *dev,
+						int res_num,
+						enum mlx5_res_type res_type)
+{
+	u32 rsn = res_num | (res_type << MLX5_USER_INDEX_LEN);
+	struct mlx5_qp_table *table = &dev->priv.qp_table;
+
+	return mlx5_get_rsc(table, rsn);
+}
+EXPORT_SYMBOL_GPL(mlx5_core_res_hold);
+
+void mlx5_core_res_put(struct mlx5_core_rsc_common *res)
+{
+	mlx5_core_put_rsc(res);
+}
+EXPORT_SYMBOL_GPL(mlx5_core_res_put);

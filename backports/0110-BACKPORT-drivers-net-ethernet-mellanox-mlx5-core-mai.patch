@@ -1,0 +1,134 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
+
+Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/main.c | 38 +++++++++++++++++++++++++-
+ 1 file changed, 37 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
+@@ -82,6 +82,9 @@
+ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
+ MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) core driver");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_VERSION(DRIVER_VERSION);
+ 
+ unsigned int mlx5_core_debug_mask;
+@@ -883,6 +886,7 @@ int mlx5_core_disable_sf_hca(struct mlx5
+ 	return disable_hca(dev, sf_func_id, 0);
+ }
+ 
++#ifdef HAVE_GETTIMEX64
+ u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev,
+ 			     struct ptp_system_timestamp *sts)
+ {
+@@ -902,6 +906,20 @@ u64 mlx5_read_internal_timer(struct mlx5
+ 
+ 	return (u64)timer_l | (u64)timer_h1 << 32;
+ }
++#else
++u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev)
++{
++	u32 timer_h, timer_h1, timer_l;
++
++	timer_h = ioread32be(&dev->iseg->internal_timer_h);
++	timer_l = ioread32be(&dev->iseg->internal_timer_l);
++	timer_h1 = ioread32be(&dev->iseg->internal_timer_h);
++	if (timer_h != timer_h1) /* wrap around */
++		timer_l = ioread32be(&dev->iseg->internal_timer_l);
++
++	return (u64)timer_l | (u64)timer_h1 << 32;
++}
++#endif
+ 
+ static int mlx5_core_set_issi(struct mlx5_core_dev *dev)
+ {
+@@ -1388,11 +1406,13 @@ static int mlx5_load(struct mlx5_core_de
+ 		goto err_ipsec_start;
+ 	}
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	err = mlx5_accel_tls_init(dev);
+ 	if (err) {
+ 		mlx5_core_err(dev, "TLS device start failed %d\n", err);
+ 		goto err_tls_start;
+ 	}
++#endif
+ 
+ 	err = mlx5_init_fs(dev);
+ 	if (err) {
+@@ -1425,8 +1445,10 @@ err_ec:
+ err_sriov:
+ 	mlx5_cleanup_fs(dev);
+ err_fs:
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
+ err_tls_start:
++#endif
+ 	mlx5_accel_ipsec_cleanup(dev);
+ err_ipsec_start:
+ 	mlx5_fpga_device_stop(dev);
+@@ -1453,7 +1475,9 @@ static void mlx5_unload(struct mlx5_core
+ 	mlx5_sriov_detach(dev);
+ 	mlx5_cleanup_fs(dev);
+ 	mlx5_accel_ipsec_cleanup(dev);
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
++#endif
+ 	mlx5_fpga_device_stop(dev);
+ 	mlx5_fw_tracer_cleanup(dev->tracer);
+ 	mlx5_eq_table_destroy(dev);
+@@ -1611,12 +1635,18 @@ out:
+ 
+ static const struct devlink_ops mlx5_devlink_ops = {
+ #ifdef CONFIG_MLX5_ESWITCH
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET
+ 	.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
+ 	.eswitch_mode_get = mlx5_devlink_eswitch_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET */
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET
+ 	.eswitch_inline_mode_set = mlx5_devlink_eswitch_inline_mode_set,
+ 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET */
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET
+ 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
+ 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET */
+ #endif
+ };
+ 
+@@ -1922,7 +1952,7 @@ static void capi_cleanup(struct mlx5_cor
+ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
+ {
+ 	struct mlx5_priv *priv = &dev->priv;
+-	int err;
++	int err = 0;
+ 
+ 	dev->profile = &profile[profile_idx];
+ 
+@@ -2331,7 +2361,11 @@ static void mlx5_pci_resume(struct pci_d
+ 		mlx5_core_info(dev, "%s: device recovered\n", __func__);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_PCI_ERROR_HANDLERS
+ static const struct pci_error_handlers mlx5_err_handler = {
++#else
++static struct pci_error_handlers mlx5_err_handler = {
++#endif
+ 	.error_detected = mlx5_pci_err_detected,
+ 	.slot_reset	= mlx5_pci_slot_reset,
+ 	.resume		= mlx5_pci_resume
+@@ -2404,7 +2438,9 @@ static struct pci_driver mlx5_core_drive
+ 	.remove         = remove_one,
+ 	.shutdown	= shutdown,
+ 	.err_handler	= &mlx5_err_handler,
++#ifdef HAVE_PCI_DRIVER_SRIOV_CONFIGURE
+ 	.sriov_configure   = mlx5_core_sriov_configure,
++#endif
+ };
+ 
+ static void mlx5_core_verify_params(void)

@@ -2,28 +2,17 @@
 #include <linux/radix-tree.h>
 #include <linux/kmemleak.h>
 
-#ifdef __KERNEL__
-#define RADIX_TREE_MAP_SHIFT   (CONFIG_BASE_SMALL ? 4 : 6)
-	#else
-	#define RADIX_TREE_MAP_SHIFT   3       
-	#endif
-	
-#define RADIX_TREE_MAP_SIZE    (1UL << RADIX_TREE_MAP_SHIFT)
-#define RADIX_TREE_MAP_MASK    (RADIX_TREE_MAP_SIZE-1)
-	
-#define RADIX_TREE_TAG_LONGS   \
-		       ((RADIX_TREE_MAP_SIZE + BITS_PER_LONG - 1) / BITS_PER_LONG)
-		
-		struct radix_tree_node {
-			       unsigned int    height;         /* Height from the bottom */
-			       unsigned int    count;
-			       union {
-				               struct radix_tree_node *parent; /* Used when ascending tree */
-				               struct rcu_head rcu_head;       /* Used when freeing node */
-				       };
-			       void __rcu      *slots[RADIX_TREE_MAP_SIZE];
-			       unsigned long   tags[RADIX_TREE_MAX_TAGS][RADIX_TREE_TAG_LONGS];
-			};
+
+struct radix_tree_node {
+	unsigned int    height;         /* Height from the bottom */
+	unsigned int    count;
+	union {
+		struct radix_tree_node *parent; /* Used when ascending tree */
+		struct rcu_head rcu_head;       /* Used when freeing node */
+	};
+	void __rcu      *slots[RADIX_TREE_MAP_SIZE];
+	unsigned long   tags[RADIX_TREE_MAX_TAGS][RADIX_TREE_TAG_LONGS];
+};
 
 #define RADIX_TREE_INDEX_BITS  (8 /* CHAR_BIT */ * sizeof(unsigned long))
 #define RADIX_TREE_MAX_PATH (DIV_ROUND_UP(RADIX_TREE_INDEX_BITS, \

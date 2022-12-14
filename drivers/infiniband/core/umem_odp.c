@@ -40,6 +40,7 @@
 #include <linux/vmalloc.h>
 #include <linux/hugetlb.h>
 #include <linux/interval_tree_generic.h>
+#include <linux/pagemap.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
@@ -155,17 +156,14 @@ static int invalidate_range_start_trampoline(struct ib_umem_odp *item,
 }
 
 static int ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
-						    struct mm_struct *mm,
-						    unsigned long start,
-						    unsigned long end,
-						    bool blockable)
+				const struct mmu_notifier_range *range)
 {
 	struct ib_ucontext_per_mm *per_mm =
 		container_of(mn, struct ib_ucontext_per_mm, mn);
 	bool call_rsync = false;
 	int ret;
 
-	if (blockable)
+	if (mmu_notifier_range_blockable(range))
 		down_read(&per_mm->umem_rwsem);
 	else if (!down_read_trylock(&per_mm->umem_rwsem))
 		return -EAGAIN;
@@ -180,11 +178,13 @@ static int ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
 		return 0;
 	}
 
-	ret = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, start, end,
+	ret = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, range->start,
+					     range->end,
 					     invalidate_range_start_trampoline,
-					     blockable, &call_rsync);
+					     mmu_notifier_range_blockable(range),
+					     &call_rsync);
 	if (call_rsync)
-		ib_invoke_sync_clients(mm, start, end - start);
+		ib_invoke_sync_clients(range->mm, range->start, range->end - range->start);
 
 	return ret;
 }
@@ -197,9 +197,7 @@ static int invalidate_range_end_trampoline(struct ib_umem_odp *item, u64 start,
 }
 
 static void ib_umem_notifier_invalidate_range_end(struct mmu_notifier *mn,
-						  struct mm_struct *mm,
-						  unsigned long start,
-						  unsigned long end)
+				const struct mmu_notifier_range *range)
 {
 	struct ib_ucontext_per_mm *per_mm =
 		container_of(mn, struct ib_ucontext_per_mm, mn);
@@ -207,8 +205,8 @@ static void ib_umem_notifier_invalidate_range_end(struct mmu_notifier *mn,
 	if (unlikely(!per_mm->active))
 		return;
 
-	rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, start,
-				      end,
+	rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, range->start,
+				      range->end,
 				      invalidate_range_end_trampoline, true, NULL);
 	up_read(&per_mm->umem_rwsem);
 }
@@ -281,7 +279,7 @@ static struct ib_ucontext_per_mm *alloc_per_mm(struct ib_ucontext *ctx,
 	per_mm->mm = mm;
 	per_mm->umem_tree = RB_ROOT_CACHED;
 	init_rwsem(&per_mm->umem_rwsem);
-	per_mm->active = ctx->invalidate_range;
+	per_mm->active = true;
 
 	rcu_read_lock();
 	per_mm->tgid = get_task_pid(current->group_leader, PIDTYPE_PID);
@@ -340,7 +338,7 @@ static void free_per_mm(struct rcu_head *rcu)
 	kfree(container_of(rcu, struct ib_ucontext_per_mm, rcu));
 }
 
-void put_per_mm(struct ib_umem_odp *umem_odp)
+static void put_per_mm(struct ib_umem_odp *umem_odp)
 {
 	struct ib_ucontext_per_mm *per_mm = umem_odp->per_mm;
 	struct ib_ucontext *ctx = umem_odp->umem.context;
@@ -373,9 +371,10 @@ void put_per_mm(struct ib_umem_odp *umem_odp)
 	mmu_notifier_call_srcu(&per_mm->rcu, free_per_mm);
 }
 
-struct ib_umem_odp *ib_alloc_odp_umem(struct ib_ucontext_per_mm *per_mm,
+struct ib_umem_odp *ib_alloc_odp_umem(struct ib_umem_odp *root,
 				      unsigned long addr, size_t size)
 {
+	struct ib_ucontext_per_mm *per_mm = root->per_mm;
 	struct ib_ucontext *ctx = per_mm->context;
 	struct ib_umem_odp *odp_data;
 	struct ib_umem *umem;
@@ -390,7 +389,7 @@ struct ib_umem_odp *ib_alloc_odp_umem(struct ib_ucontext_per_mm *per_mm,
 	umem->length     = size;
 	umem->address    = addr;
 	umem->page_shift = PAGE_SHIFT;
-	umem->writable   = 1;
+	umem->writable   = root->umem.writable;
 	umem->is_odp = 1;
 	odp_data->per_mm = per_mm;
 	umem->owning_mm  = per_mm->mm;
@@ -456,9 +455,6 @@ int ib_umem_odp_get(struct ib_umem_odp *umem_odp, int access)
 		h = hstate_vma(vma);
 		umem->page_shift = huge_page_shift(h);
 		up_read(&mm->mmap_sem);
-		umem->hugetlb = 1;
-	} else {
-		umem->hugetlb = 0;
 	}
 
 	mutex_init(&umem_odp->umem_mutex);
@@ -566,7 +562,7 @@ static int ib_umem_odp_map_dma_single_page(
 		}
 		umem_odp->dma_list[page_index] = dma_addr | access_mask;
 		umem_odp->page_list[page_index] = page;
-		umem->npages++;
+		umem_odp->npages++;
 		if (flags & IB_ODP_DMA_MAP_FOR_PREFETCH)
 			atomic_inc(&dev->odp_statistics.num_prefetch_pages);
 		else
@@ -589,16 +585,15 @@ out:
 	if (ret < 0)
 		mutex_unlock(&umem_odp->umem_mutex);
 
-	/* On Demand Paging - avoid pinning the page */
-	if (umem->context->invalidate_range || ret != 1)
+	if(ret != 1)
 		put_page(page);
 
-	if (remove_existing_mapping && umem->context->invalidate_range) {
+	if (remove_existing_mapping) {
 		umem->context->invalidate_range(
 			umem_odp,
 			ib_umem_start(umem) + (page_index << umem->page_shift),
-			ib_umem_start(umem) + ((page_index + 1) <<
-					       umem->page_shift));
+			ib_umem_start(umem) +
+				((page_index + 1) << umem->page_shift));
 	}
 
 	return ret;
@@ -673,7 +668,7 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 	 * mmget_not_zero will fail in this case.
 	 */
 	owning_process = get_pid_task(umem_odp->per_mm->tgid, PIDTYPE_PID);
-	if (WARN_ON(!mmget_not_zero(umem_odp->umem.owning_mm))) {
+	if (!owning_process || !mmget_not_zero(owning_mm)) {
 		ret = -EINVAL;
 		goto out_put_task;
 	}
@@ -704,11 +699,9 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 
 		if (npages < 0) {
 			if (npages != -EAGAIN)
-				pr_warn("fail to get %zu user pages with error %d\n",
-					gup_num_pages, npages);
+				pr_warn("fail to get %zu user pages with error %d\n", gup_num_pages, npages);
 			else
-				pr_warn("fail to get %zu user pages with error %d\n",
-					gup_num_pages, npages);
+				pr_debug("fail to get %zu user pages with error %d\n", gup_num_pages, npages);
 			break;
 		}
 
@@ -737,7 +730,6 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 				break;
 			}
 
-			num += ret;
 			p = page_to_phys(local_page_list[j]);
 			k++;
 		}
@@ -746,9 +738,14 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 			mutex_unlock(&umem_odp->umem_mutex);
 
 		if (ret < 0) {
-			/* Release left over pages when handling errors. */
-			for (++j; j < npages; ++j)
-				put_page(local_page_list[j]);
+			/*
+			 * Release pages, remembering that the first page
+			 * to hit an error was already released by
+			 * ib_umem_odp_map_dma_single_page().
+			 */
+			if (npages - (j + 1) > 0)
+				release_pages(&local_page_list[j+1],
+					      npages - (j + 1));
 			break;
 		}
 	}
@@ -812,13 +809,10 @@ void ib_umem_odp_unmap_dma_pages(struct ib_umem_odp *umem_odp, u64 virt,
 				 */
 				set_page_dirty(head_page);
 			}
-			/* on demand pinning support */
-			if (!umem->context->invalidate_range)
-				put_page(page);
 			umem_odp->page_list[idx] = NULL;
 			umem_odp->dma_list[idx] = 0;
 			atomic_inc(&dev->odp_statistics.num_invalidation_pages);
-			umem->npages--;
+			umem_odp->npages--;
 			num++;
 		}
 	}

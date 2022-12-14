@@ -173,7 +173,6 @@ int ipoib_transport_dev_init(struct net_device *dev, struct ib_device *ca)
 			return ret;
 
 	req_vec = (priv->port - 1) * 2;
-	req_vec += priv->child_index;
 
 	cq_attr.cqe = size;
 	cq_attr.comp_vector = req_vec % priv->ca->num_comp_vectors;
@@ -284,8 +283,7 @@ void ipoib_event(struct ib_event_handler *handler,
 	ipoib_dbg(priv, "Event %d on device %s port %d\n", record->event,
 		  dev_name(&record->device->dev), record->element.port_num);
 
-	if (record->event == IB_EVENT_SM_CHANGE ||
-	    record->event == IB_EVENT_CLIENT_REREGISTER) {
+	if (record->event == IB_EVENT_CLIENT_REREGISTER) {
 		queue_work(ipoib_workqueue, &priv->flush_light);
 	} else if (record->event == IB_EVENT_PORT_ERR ||
 		   record->event == IB_EVENT_PORT_ACTIVE ||

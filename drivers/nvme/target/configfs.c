@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Configfs interface for the NVMe target.
  * Copyright (c) 2015-2016 HGST, a Western Digital Company.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
  */
 #ifdef pr_fmt
 #undef pr_fmt
@@ -29,12 +21,16 @@
 static const struct config_item_type nvmet_host_type;
 static const struct config_item_type nvmet_subsys_type;
 
+static LIST_HEAD(nvmet_ports_list);
+struct list_head *nvmet_ports = &nvmet_ports_list;
+
 static const struct nvmet_transport_name {
 	u8		type;
 	const char	*name;
 } nvmet_transport_names[] = {
 	{ NVMF_TRTYPE_RDMA,	"rdma" },
 	{ NVMF_TRTYPE_FC,	"fc" },
+	{ NVMF_TRTYPE_TCP,	"tcp" },
 	{ NVMF_TRTYPE_LOOP,	"loop" },
 };
 
@@ -154,7 +150,8 @@ CONFIGFS_ATTR(nvmet_, addr_traddr);
 static ssize_t nvmet_addr_treq_show(struct config_item *item,
 		char *page)
 {
-	switch (to_nvmet_port(item)->disc_addr.treq) {
+	switch (to_nvmet_port(item)->disc_addr.treq &
+		NVME_TREQ_SECURE_CHANNEL_MASK) {
 	case NVMF_TREQ_NOT_SPECIFIED:
 		return sprintf(page, "not specified\n");
 	case NVMF_TREQ_REQUIRED:
@@ -170,6 +167,7 @@ static ssize_t nvmet_addr_treq_store(struct config_item *item,
 		const char *page, size_t count)
 {
 	struct nvmet_port *port = to_nvmet_port(item);
+	u8 treq = port->disc_addr.treq & ~NVME_TREQ_SECURE_CHANNEL_MASK;
 
 	if (port->enabled) {
 		pr_err("Cannot modify address while enabled\n");
@@ -178,15 +176,16 @@ static ssize_t nvmet_addr_treq_store(struct config_item *item,
 	}
 
 	if (sysfs_streq(page, "not specified")) {
-		port->disc_addr.treq = NVMF_TREQ_NOT_SPECIFIED;
+		treq |= NVMF_TREQ_NOT_SPECIFIED;
 	} else if (sysfs_streq(page, "required")) {
-		port->disc_addr.treq = NVMF_TREQ_REQUIRED;
+		treq |= NVMF_TREQ_REQUIRED;
 	} else if (sysfs_streq(page, "not required")) {
-		port->disc_addr.treq = NVMF_TREQ_NOT_REQUIRED;
+		treq |= NVMF_TREQ_NOT_REQUIRED;
 	} else {
 		pr_err("Invalid value '%s' for treq\n", page);
 		return -EINVAL;
 	}
+	port->disc_addr.treq = treq;
 
 	return count;
 }
@@ -345,6 +344,39 @@ static ssize_t nvmet_param_offload_queues_store(struct config_item *item,
 }
 
 CONFIGFS_ATTR(nvmet_, param_offload_queues);
+
+static ssize_t nvmet_param_offload_srq_size_show(struct config_item *item,
+		char *page)
+{
+	struct nvmet_port *port = to_nvmet_port(item);
+
+	return snprintf(page, PAGE_SIZE, "%zu\n", port->offload_srq_size);
+}
+
+static ssize_t nvmet_param_offload_srq_size_store(struct config_item *item,
+		const char *page, size_t count)
+{
+	struct nvmet_port *port = to_nvmet_port(item);
+	u32 offload_srq_size;
+	int ret;
+
+	if (port->enabled) {
+		pr_err("Cannot modify offload_srq_size while enabled\n");
+		pr_err("Disable the port before modifying\n");
+		return -EACCES;
+	}
+
+	ret = kstrtou32(page, 0, &offload_srq_size);
+	if (ret || offload_srq_size < 256) {
+		pr_err("Invalid value '%s' for offload_srq_size, should >= 256\n", page);
+		return -EINVAL;
+	}
+	port->offload_srq_size = offload_srq_size;
+
+	return count;
+}
+
+CONFIGFS_ATTR(nvmet_, param_offload_srq_size);
 
 /*
  * Namespace structures & file operation functions below
@@ -820,7 +852,8 @@ static int nvmet_port_subsys_allow_link(struct config_item *parent,
 	if (!subsys->num_ports && subsys->offloadble)
 		nvmet_init_offload_subsystem_port_attrs(port, subsys);
 	subsys->num_ports++;
-	nvmet_genctr++;
+	nvmet_port_disc_changed(port, subsys);
+
 	up_write(&nvmet_config_sem);
 	return 0;
 
@@ -847,7 +880,9 @@ static void nvmet_port_subsys_drop_link(struct config_item *parent,
 
 found:
 	list_del(&p->entry);
-	nvmet_genctr++;
+	nvmet_port_del_ctrls(port, subsys);
+	nvmet_port_disc_changed(port, subsys);
+
 	if (list_empty(&port->subsystems))
 		nvmet_disable_port(port);
 	p->subsys->num_ports--;
@@ -900,7 +935,8 @@ static int nvmet_allowed_hosts_allow_link(struct config_item *parent,
 			goto out_free_link;
 	}
 	list_add_tail(&link->entry, &subsys->hosts);
-	nvmet_genctr++;
+	nvmet_subsys_disc_changed(subsys, host);
+
 	up_write(&nvmet_config_sem);
 	return 0;
 out_free_link:
@@ -926,7 +962,8 @@ static void nvmet_allowed_hosts_drop_link(struct config_item *parent,
 
 found:
 	list_del(&p->entry);
-	nvmet_genctr++;
+	nvmet_subsys_disc_changed(subsys, host);
+
 	up_write(&nvmet_config_sem);
 	kfree(p);
 }
@@ -965,7 +1002,11 @@ static ssize_t nvmet_subsys_attr_allow_any_host_store(struct config_item *item,
 		goto out_unlock;
 	}
 
-	subsys->allow_any_host = allow_any_host;
+	if (subsys->allow_any_host != allow_any_host) {
+		subsys->allow_any_host = allow_any_host;
+		nvmet_subsys_disc_changed(subsys, NULL);
+	}
+
 out_unlock:
 	up_write(&nvmet_config_sem);
 	return ret ? ret : count;
@@ -1166,8 +1207,8 @@ static struct config_group *nvmet_subsys_make(struct config_group *group,
 	}
 
 	subsys = nvmet_subsys_alloc(name, NVME_NQN_NVME);
-	if (!subsys)
-		return ERR_PTR(-ENOMEM);
+	if (IS_ERR(subsys))
+		return ERR_CAST(subsys);
 
 	config_group_init_type_name(&subsys->group, name, &nvmet_subsys_type);
 
@@ -1211,7 +1252,7 @@ static ssize_t nvmet_referral_enable_store(struct config_item *item,
 	if (enable)
 		nvmet_referral_enable(parent, port);
 	else
-		nvmet_referral_disable(port);
+		nvmet_referral_disable(parent, port);
 
 	return count;
 inval:
@@ -1237,9 +1278,10 @@ static struct configfs_attribute *nvmet_referral_attrs[] = {
 
 static void nvmet_referral_release(struct config_item *item)
 {
+	struct nvmet_port *parent = to_nvmet_port(item->ci_parent->ci_parent);
 	struct nvmet_port *port = to_nvmet_port(item);
 
-	nvmet_referral_disable(port);
+	nvmet_referral_disable(parent, port);
 	kfree(port);
 }
 
@@ -1412,6 +1454,8 @@ static void nvmet_port_release(struct config_item *item)
 {
 	struct nvmet_port *port = to_nvmet_port(item);
 
+	list_del(&port->global_entry);
+
 	kfree(port->ana_state);
 	kfree(port);
 }
@@ -1425,6 +1469,7 @@ static struct configfs_attribute *nvmet_port_attrs[] = {
 	&nvmet_attr_addr_tractive,
 	&nvmet_attr_param_inline_data_size,
 	&nvmet_attr_param_offload_queues,
+	&nvmet_attr_param_offload_srq_size,
 	NULL,
 };
 
@@ -1466,13 +1511,17 @@ static struct config_group *nvmet_ports_make(struct config_group *group,
 			port->ana_state[i] = NVME_ANA_INACCESSIBLE;
 	}
 
+	list_add(&port->global_entry, &nvmet_ports_list);
+
 	INIT_LIST_HEAD(&port->entry);
 	INIT_LIST_HEAD(&port->subsystems);
 	INIT_LIST_HEAD(&port->referrals);
 	port->inline_data_size = -1;	/* < 0 == let the transport choose */
 	port->offload_queues = 1;
+	port->offload_srq_size = 1024;
 
 	port->disc_addr.portid = cpu_to_le16(portid);
+	port->disc_addr.treq = NVMF_TREQ_DISABLE_SQFLOW;
 	config_group_init_type_name(&port->group, name, &nvmet_port_type);
 
 	config_group_init_type_name(&port->subsys_group,

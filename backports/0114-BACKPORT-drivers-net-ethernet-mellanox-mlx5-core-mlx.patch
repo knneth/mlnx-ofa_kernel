@@ -1,0 +1,33 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
+
+Change-Id: If189509e77ed56ac8ad2a8e42de2406fa25b0503
+---
+ drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
+@@ -38,7 +38,9 @@
+ #include <linux/sched.h>
+ #include <linux/if_link.h>
+ #include <linux/firmware.h>
++#if defined (HAVE_PTP_CLOCK_INFO) && (defined(CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ #include <linux/ptp_clock_kernel.h>
++#endif
+ #include <linux/mlx5/cq.h>
+ #include <linux/mlx5/fs.h>
+ #include <linux/mlx5/driver.h>
+@@ -242,8 +244,12 @@ int mlx5_modify_scheduling_element_cmd(s
+ int mlx5_destroy_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
+ 					u32 element_id);
+ int mlx5_wait_for_pages(struct mlx5_core_dev *dev, int *pages);
++#ifdef HAVE_GETTIMEX64
+ u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev,
+ 			     struct ptp_system_timestamp *sts);
++#else
++u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev);
++#endif
+ 
+ void mlx5_cmd_trigger_completions(struct mlx5_core_dev *dev);
+ void mlx5_cmd_flush(struct mlx5_core_dev *dev);

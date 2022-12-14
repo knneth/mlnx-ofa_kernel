@@ -367,7 +367,7 @@ end:
 	return block_shift;
 }
 
-static struct ib_umem *mlx4_get_umem_mr(struct ib_ucontext *context, u64 start,
+static struct ib_umem *mlx4_get_umem_mr(struct ib_udata *udata, u64 start,
 					u64 length, u64 virt_addr,
 					int access_flags, unsigned long peer_mem_flags)
 {
@@ -398,7 +398,7 @@ static struct ib_umem *mlx4_get_umem_mr(struct ib_ucontext *context, u64 start,
 		up_read(&current->mm->mmap_sem);
 	}
 
-	return ib_umem_get(context, start, length, access_flags, 0, peer_mem_flags);
+	return ib_umem_get(udata, start, length, access_flags, 0, peer_mem_flags);
 }
 
 static void mlx4_invalidate_umem(void *invalidation_cookie,
@@ -449,9 +449,8 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd,
 		return ERR_PTR(-ENOMEM);
 
 	mutex_init(&mr->lock);
-	mr->umem = mlx4_get_umem_mr(pd->uobject->context, start, length,
-				    virt_addr, access_flags,
-				    IB_PEER_MEM_ALLOW | IB_PEER_MEM_INVAL_SUPP);
+	mr->umem =
+		mlx4_get_umem_mr(udata, start, length, virt_addr, access_flags, IB_PEER_MEM_ALLOW | IB_PEER_MEM_INVAL_SUPP);
 	if (IS_ERR(mr->umem)) {
 		err = PTR_ERR(mr->umem);
 		goto err_free;
@@ -572,9 +571,8 @@ int mlx4_ib_rereg_user_mr(struct ib_mr *mr, int flags,
 
 		mlx4_mr_rereg_mem_cleanup(dev->dev, &mmr->mmr);
 		ib_umem_release(mmr->umem);
-		mmr->umem =
-			mlx4_get_umem_mr(mr->uobject->context, start, length,
-					 virt_addr, mr_access_flags, 0);
+		mmr->umem = mlx4_get_umem_mr(udata, start, length, virt_addr,
+					     mr_access_flags, 0);
 		if (IS_ERR(mmr->umem)) {
 			err = PTR_ERR(mmr->umem);
 			/* Prevent mlx4_ib_dereg_mr from free'ing invalid pointer */
@@ -663,7 +661,7 @@ mlx4_free_priv_pages(struct mlx4_ib_mr *mr)
 	}
 }
 
-int mlx4_ib_dereg_mr(struct ib_mr *ibmr)
+int mlx4_ib_dereg_mr(struct ib_mr *ibmr, struct ib_udata *udata)
 {
 	struct mlx4_ib_mr *mr = to_mmr(ibmr);
 	int ret;
@@ -735,8 +733,7 @@ int mlx4_ib_dealloc_mw(struct ib_mw *ibmw)
 	return 0;
 }
 
-struct ib_mr *mlx4_ib_alloc_mr(struct ib_pd *pd,
-			       enum ib_mr_type mr_type,
+struct ib_mr *mlx4_ib_alloc_mr(struct ib_pd *pd, enum ib_mr_type mr_type,
 			       u32 max_num_sg)
 {
 	struct mlx4_ib_dev *dev = to_mdev(pd->device);

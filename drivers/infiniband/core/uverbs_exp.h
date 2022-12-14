@@ -10,20 +10,13 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
 #include <rdma/ib_user_verbs.h>
-#include <rdma/ib_user_verbs_exp.h>
 
 struct ib_udct_object {
 	struct ib_uevent_object	uevent;
 };
 
-typedef int (*uverbs_ex_cmd)(struct ib_uverbs_file *file,
-					struct ib_udata *ucore,
-					struct ib_udata *uhw);
-
 #define IB_UVERBS_DECLARE_EXP_CMD(name)				\
-	int ib_uverbs_exp_##name(struct ib_uverbs_file *file,	\
-				 struct ib_udata *ucore,	\
-				 struct ib_udata *uhw)
+	int ib_uverbs_exp_##name(struct uverbs_attr_bundle *attrs)
 
 IB_UVERBS_DECLARE_EXP_CMD(create_qp);
 IB_UVERBS_DECLARE_EXP_CMD(modify_cq);
@@ -62,11 +55,7 @@ void ib_uverbs_async_handler(struct ib_uverbs_file *file,
 			     u32 *counter);
 void ib_uverbs_dct_event_handler(struct ib_event *event, void *context_ptr);
 
-int ib_uverbs_create_flow_common(struct ib_uverbs_file *file,
-				 struct ib_device *ib_dev,
-				 struct ib_udata *ucore,
-				 struct ib_udata *uhw,
-				 bool is_exp);
+int ib_uverbs_create_flow_common(struct uverbs_attr_bundle *attrs, bool is_exp);
 
 int ib_uverbs_exp_create_srq_resp(struct ib_uverbs_create_srq_resp *resp,
 				  u64 response);

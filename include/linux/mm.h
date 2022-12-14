@@ -46,6 +46,10 @@ static inline void *kvmalloc_node(size_t size, gfp_t flags, int node) {
 	rtn = kmalloc_node(size, GFP_KERNEL | __GFP_NOWARN, node);
 	if (!rtn)
 		rtn = vmalloc(size);
+
+	if (rtn && flags & __GFP_ZERO)
+		memset(rtn, 0, size);
+
 	return rtn;
 }
 #endif
@@ -88,6 +92,17 @@ static inline bool is_pci_p2pdma_page(const struct page *page)
 {
         return false;
 }
+
+#ifndef HAVE_PAGE_IS_PFMEMALLOC
+static inline bool page_is_pfmemalloc(struct page *page)
+{
+#ifdef HAVE_PAGE_PFMEMALLOC
+	return page->pfmemalloc;
+#else
+	return false;
+#endif
+}
 #endif
 
+#endif
 #endif /* _COMPAT_LINUX_MM_H */

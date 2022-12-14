@@ -1,15 +1,15 @@
 From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cgroup.c
 
-Change-Id: I8f2158f7f09c055e88adfa9de7c6fd83b2d666fb
+Change-Id: I1ad0c79cd32278bce3ae506396dbf3d7e2f586f6
 ---
  drivers/infiniband/core/cgroup.c | 4 ++++
  1 file changed, 4 insertions(+)
 
 --- a/drivers/infiniband/core/cgroup.c
 +++ b/drivers/infiniband/core/cgroup.c
-@@ -11,6 +11,8 @@
-  * more details.
+@@ -3,6 +3,8 @@
+  * Copyright (C) 2016 Parav Pandit <pandit.parav@gmail.com>
   */
  
 +#ifdef HAVE_CGROUP_RDMA_H
@@ -17,7 +17,7 @@ Change-Id: I8f2158f7f09c055e88adfa9de7c6fd83b2d666fb
  #include "core_priv.h"
  
  /**
-@@ -60,3 +62,5 @@ void ib_rdmacg_uncharge(struct ib_rdmacg
+@@ -51,3 +53,5 @@ void ib_rdmacg_uncharge(struct ib_rdmacg
  			resource_index);
  }
  EXPORT_SYMBOL(ib_rdmacg_uncharge);

@@ -72,7 +72,8 @@ static void *mlx5_dma_zalloc_coherent_node(struct mlx5_core_dev *dev,
 	mutex_lock(&priv->alloc_mutex);
 	original_node = dev_to_node(device);
 	set_dev_node(device, node);
-	cpu_handle = dma_zalloc_coherent(device, size, dma_handle, GFP_KERNEL);
+	cpu_handle = dma_alloc_coherent(device, size, dma_handle,
+					GFP_KERNEL);
 	set_dev_node(device, original_node);
 	mutex_unlock(&priv->alloc_mutex);
 	return cpu_handle;
@@ -194,10 +195,7 @@ static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
 	if (!pgdir)
 		return NULL;
 
-	pgdir->bitmap = kcalloc(BITS_TO_LONGS(db_per_page),
-				sizeof(unsigned long),
-				GFP_KERNEL);
-
+	pgdir->bitmap = bitmap_zalloc(db_per_page, GFP_KERNEL);
 	if (!pgdir->bitmap) {
 		kfree(pgdir);
 		return NULL;
@@ -208,7 +206,7 @@ static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
 	pgdir->db_page = mlx5_dma_zalloc_coherent_node(dev, PAGE_SIZE,
 						       &pgdir->db_dma, node);
 	if (!pgdir->db_page) {
-		kfree(pgdir->bitmap);
+		bitmap_free(pgdir->bitmap);
 		kfree(pgdir);
 		return NULL;
 	}
@@ -288,7 +286,7 @@ void mlx5_db_free(struct mlx5_core_dev *dev, struct mlx5_db *db)
 		dma_free_coherent(dev->device, PAGE_SIZE,
 				  db->u.pgdir->db_page, db->u.pgdir->db_dma);
 		list_del(&db->u.pgdir->list);
-		kfree(db->u.pgdir->bitmap);
+		bitmap_free(db->u.pgdir->bitmap);
 		kfree(db->u.pgdir);
 	}
 

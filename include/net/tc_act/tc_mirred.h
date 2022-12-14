@@ -31,7 +31,11 @@ static const struct nla_policy mirred_policy_compat[TCA_MIRRED_MAX + 1] = {
 static inline bool is_tcf_mirred_compat(const struct tc_action *a)
 {
 #ifdef CONFIG_NET_CLS_ACT
+#ifdef HAVE_TC_ACTION_OPS_HAS_ID
+	if (a->ops && a->ops->id == TCA_ACT_MIRRED)
+#else
 	if (a->ops && a->ops->type == TCA_ACT_MIRRED)
+#endif
 		return true;
 #endif
 	return false;
@@ -89,6 +93,14 @@ static inline bool is_tcf_mirred_egress_mirror(const struct tc_action *a)
 static inline int tcf_mirred_ifindex(const struct tc_action *a)
 {
 	return to_mirred_compat(a).ifindex;
+}
+#endif
+
+#ifndef HAVE_TCF_MIRRED_DEV
+static inline struct net_device *tcf_mirred_dev(const struct tc_action *a)
+{
+	return __dev_get_by_index(current->nsproxy->net_ns,
+				  tcf_mirred_ifindex(a));
 }
 #endif
 

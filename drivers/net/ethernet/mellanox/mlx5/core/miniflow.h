@@ -34,6 +34,7 @@ struct mlx5e_miniflow {
 	struct work_struct work;
 	struct mlx5e_priv *priv;
 	struct mlx5e_tc_flow *flow;
+	struct rhashtable *mf_ht;
 
 	struct nf_conntrack_tuple tuple;
 
@@ -45,6 +46,7 @@ struct mlx5e_miniflow {
 	} path;
 
 	int nr_ct_tuples;
+	bool aged;
 	struct mlx5e_ct_tuple ct_tuples[MINIFLOW_MAX_CT_TUPLES];
 
 	struct mlx5e_miniflow_node mnodes[MINIFLOW_MAX_FLOWS];

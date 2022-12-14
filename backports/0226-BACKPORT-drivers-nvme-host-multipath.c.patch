@@ -8,8 +8,8 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
 
 --- a/drivers/nvme/host/multipath.c
 +++ b/drivers/nvme/host/multipath.c
-@@ -11,6 +11,8 @@
-  * more details.
+@@ -3,6 +3,8 @@
+  * Copyright (c) 2017-2018 Christoph Hellwig.
   */
  
 +#ifdef HAVE_BLK_TYPES_REQ_DRV
@@ -17,19 +17,19 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  #include <linux/moduleparam.h>
  #include <trace/events/block.h>
  #include "nvme.h"
-@@ -261,7 +263,11 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+@@ -366,7 +368,11 @@ int nvme_mpath_alloc_disk(struct nvme_ct
  	if (!(ctrl->subsys->cmic & (1 << 1)) || !multipath)
  		return 0;
  
 +#ifdef HAVE_BLK_ALLOC_QUEUE_NODE_3_ARGS
 +	q = blk_alloc_queue_node(GFP_KERNEL, NUMA_NO_NODE, NULL);
 +#else
- 	q = blk_alloc_queue_node(GFP_KERNEL, NUMA_NO_NODE);
+ 	q = blk_alloc_queue_node(GFP_KERNEL, ctrl->numa_node);
 +#endif
  	if (!q)
  		goto out;
  	q->queuedata = head;
-@@ -302,9 +308,19 @@ static void nvme_mpath_set_live(struct n
+@@ -407,9 +413,19 @@ static void nvme_mpath_set_live(struct n
  	if (!head->disk)
  		return;
  
@@ -49,7 +49,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  
  	if (nvme_path_is_optimized(ns)) {
  		int node, srcu_idx;
-@@ -455,9 +471,15 @@ static void nvme_ana_work(struct work_st
+@@ -558,9 +574,15 @@ static void nvme_ana_work(struct work_st
  	nvme_read_ana_log(ctrl, false);
  }
  
@@ -65,7 +65,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  
  	dev_info(ctrl->device, "ANATT timeout, resetting controller.\n");
  	nvme_reset_ctrl(ctrl);
-@@ -519,8 +541,16 @@ void nvme_mpath_remove_disk(struct nvme_
+@@ -660,8 +682,16 @@ void nvme_mpath_remove_disk(struct nvme_
  {
  	if (!head->disk)
  		return;
@@ -82,7 +82,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	blk_set_queue_dying(head->disk->queue);
  	/* make sure all pending bios are cleaned up */
  	kblockd_schedule_work(&head->requeue_work);
-@@ -542,7 +572,11 @@ int nvme_mpath_init(struct nvme_ctrl *ct
+@@ -684,7 +714,11 @@ int nvme_mpath_init(struct nvme_ctrl *ct
  	ctrl->anagrpmax = le32_to_cpu(id->anagrpmax);
  
  	mutex_init(&ctrl->ana_lock);
@@ -93,8 +93,8 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
 +#endif
  	ctrl->ana_log_size = sizeof(struct nvme_ana_rsp_hdr) +
  		ctrl->nanagrpid * sizeof(struct nvme_ana_group_desc);
- 	if (!(ctrl->anacap & (1 << 6)))
-@@ -558,6 +592,10 @@ int nvme_mpath_init(struct nvme_ctrl *ct
+ 	ctrl->ana_log_size += ctrl->max_namespaces * sizeof(__le32);
+@@ -699,6 +733,10 @@ int nvme_mpath_init(struct nvme_ctrl *ct
  	}
  
  	INIT_WORK(&ctrl->ana_work, nvme_ana_work);
@@ -105,9 +105,9 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	ctrl->ana_log_buf = kmalloc(ctrl->ana_log_size, GFP_KERNEL);
  	if (!ctrl->ana_log_buf) {
  		error = -ENOMEM;
-@@ -578,4 +616,5 @@ void nvme_mpath_uninit(struct nvme_ctrl
- {
+@@ -721,4 +759,5 @@ void nvme_mpath_uninit(struct nvme_ctrl
  	kfree(ctrl->ana_log_buf);
+ 	ctrl->ana_log_buf = NULL;
  }
 +#endif /* HAVE_BLK_TYPES_REQ_DRV */
  

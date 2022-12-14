@@ -992,6 +992,34 @@ start()
         RC=$[ $RC + $my_rc ]
     fi
 
+    # Set MAC address of PF via ECPF
+    # SMARTNIC_PF_MAC_CONF="[<bdf1>-<MAC1>] [<bdf2>-<MAC2>] ..."
+    if [ "X${SMARTNIC_PF_MAC_CONF}" != "X" ]; then
+        for mac_conf in ${SMARTNIC_PF_MAC_CONF}
+        do
+            bdf=${mac_conf%%-*}
+            mac=${mac_conf##*-}
+            if [ ! -d /sys/bus/pci/devices/${bdf}/ ]; then
+                log_msg "No such device: ${bdf}."
+                log_msg "Check SMARTNIC_PF_MAC_CONF value in the $CONFIG"
+                continue
+            fi
+            for i in `/bin/ls -1 /sys/bus/pci/devices/${bdf}/net 2> /dev/null`
+            do
+                if [ -e /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac ]; then
+                    echo $mac > /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac
+                    my_rc=$?
+                    if [ $my_rc -eq 0 ]; then
+                        log_msg "PF MAC is set to $mac via ECPF $i"
+                    else
+                        log_msg "ERROR: Failed to set MAC $mac via ECPF $i"
+                    fi
+                    RC=$[ $RC + $my_rc ]
+                fi
+            done
+        done
+    fi
+
     if [ -x /sbin/mlnx_eswitch_set  ]; then
         /sbin/mlnx_eswitch_set
     fi
@@ -1113,18 +1141,6 @@ start()
                                         echo ${srp_daemon_pid} > ${srp_daemon_pidfile}
                                     fi
                                 fi
-                        ;;
-                        eth_ipoib)
-                                load_module $mod
-                                # Workaround for fixing udev naming bug #682750
-                                if (which udevadm &> /dev/null); then
-                                    for i in $(cat /sys/class/net/eth_ipoib_interfaces 2>/dev/null | awk '{print $1}' 2>/dev/null)
-                                    do
-                                        udevadm test /sys/class/net/$i &> /dev/null
-                                    done
-                                fi
-                                #load the deamon ipoibd
-                                /sbin/eipoib_daemon start
                         ;;
                         *)
                                 load_module $mod
@@ -1418,31 +1434,22 @@ stop()
                 done
             fi
 
-            if is_module ib_isert; then
-                cannot_continue=1
-                blocking_modules="${blocking_modules} ib_isert"
-                echo "Please close all isert sessions and unload 'ib_isert' module."
-            fi
-
-            if is_module nvme_rdma; then
-                cannot_continue=1
-                blocking_modules="${blocking_modules} nvme_rdma"
-                echo "Please close all nvme sessions and unload 'nvme_rdma' module."
-            fi
-
-            if is_module nvmet_rdma; then
-                cannot_continue=1
-                blocking_modules="${blocking_modules} nvmet_rdma"
-                echo "Please close all nvmet sessions and unload 'nvmet_rdma' module."
-            fi
-
-            # check other storage modules
-            for storage_mod in rpcrdma xprtrdma ib_srpt
-            do
-                if is_module ${storage_mod}; then
+            for mod in ib_isert nvme_rdma nvmet_rdma rpcrdma xprtrdma ib_srpt; do
+                if is_module $mod; then
+                    if is_ref $mod; then
+                        # A misleading name. If we got here: refcnt=0
+                        continue
+                    fi
                     cannot_continue=1
-                    blocking_modules="${blocking_modules} ${storage_mod}"
-                    echo "Please make sure module '${storage_mod}' is not in use and unload it."
+                    blocking_modules="${blocking_modules} $mod"
+                    case "$mod" in
+                    ib_isert) echo "Please close all isert sessions and unload 'ib_isert' module.";;
+                    nvme_rdma) echo "Please close all nvme sessions and unload 'nvme_rdma' module.";;
+                    nvmet_rdma) echo "Please close all nvmet sessions and unload 'nvmet_rdma' module.";;
+                    rpcrdma | xprtrdma | ib_srpt)
+                        echo "Please make sure module '$mod' is not in use and unload it."
+                        ;;
+                    esac
                 fi
             done
 
@@ -1517,14 +1524,6 @@ stop()
             mcastpid=$(pidof -x mcasthandle)
             if [ -n "${mcastpid:-}" ]; then
                 kill -9 ${mcastpid} > /dev/null 2>&1
-            fi
-        fi
-
-        # Stop ipoibd (for ipoib-pv module)
-        ipoibdpid=$(pidof -x ipoibd)
-        if [ -n "${ipoibdpid:-}" ]; then
-            if [ -e "/sbin/eipoib_daemon" ]; then
-                /sbin/eipoib_daemon stop
             fi
         fi
 		if [ -d /sys/class/infiniband_qlgc_vnic/ ]; then
@@ -1707,7 +1706,6 @@ case $ACTION in
                 ;;
         stop)
                 if [ $FORCE -eq 0 ]; then
-                        echo "WARNING: Option 'stop' is deprecated and will be replaced by 'force-stop' in next release."
                         if [ "X${ALLOW_STOP}" != "Xyes" ]; then
                                 echo "ERROR: Option 'stop' is disabled!"
                                 log_msg "ERROR: Option 'stop' is disabled!"

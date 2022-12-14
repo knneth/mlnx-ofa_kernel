@@ -84,7 +84,7 @@ ib_uverbs_init_udata(struct ib_udata *udata,
 	udata->outbuf = obuf;
 	udata->inlen  = ilen;
 	udata->outlen = olen;
-	udata->src = IB_UDATA_LEGACY_CMD;
+	udata->is_exp = 0;
 }
 
 static inline void
@@ -96,7 +96,6 @@ ib_uverbs_init_udata_buf_or_null(struct ib_udata *udata,
 	ib_uverbs_init_udata(udata,
 			     ilen ? ibuf : NULL, olen ? obuf : NULL,
 			     ilen, olen);
-	udata->src = IB_UDATA_EX_CMD;
 }
 
 /*
@@ -183,16 +182,12 @@ struct ib_uverbs_file {
 	spinlock_t		uobjects_lock;
 	struct list_head	uobjects;
 
+	u64 uverbs_exp_cmd_mask;
 	struct mutex umap_lock;
 	struct list_head umaps;
+	struct page *disassociate_page;
 
-	u64 uverbs_cmd_mask;
-	u64 uverbs_ex_cmd_mask;
-	u64 uverbs_exp_cmd_mask;
-
-	struct idr		idr;
-	/* spinlock protects write access to idr */
-	spinlock_t		idr_lock;
+	struct xarray		idr;
 };
 
 struct ib_uverbs_event {
@@ -269,13 +264,13 @@ void ib_uverbs_srq_event_handler(struct ib_event *event, void *context_ptr);
 void ib_uverbs_event_handler(struct ib_event_handler *handler,
 			     struct ib_event *event);
 int ib_uverbs_dealloc_xrcd(struct ib_uobject *uobject, struct ib_xrcd *xrcd,
-			   enum rdma_remove_reason why);
+			   enum rdma_remove_reason why,
+			   struct uverbs_attr_bundle *attrs);
 
 int uverbs_dealloc_mw(struct ib_mw *mw);
 void ib_uverbs_detach_umcast(struct ib_qp *qp,
 			     struct ib_uqp_object *uobj);
 
-void create_udata(struct uverbs_attr_bundle *ctx, struct ib_udata *udata);
 long ib_uverbs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 
 struct ib_uverbs_flow_spec {
@@ -323,65 +318,6 @@ extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_FLOW_ACTION);
 extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DM);
 extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_COUNTERS);
 extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DCT);
-
-#define IB_UVERBS_DECLARE_CMD(name)					\
-	ssize_t ib_uverbs_##name(struct ib_uverbs_file *file,		\
-				 const char __user *buf, int in_len,	\
-				 int out_len)
-
-IB_UVERBS_DECLARE_CMD(get_context);
-IB_UVERBS_DECLARE_CMD(query_device);
-IB_UVERBS_DECLARE_CMD(query_port);
-IB_UVERBS_DECLARE_CMD(alloc_pd);
-IB_UVERBS_DECLARE_CMD(dealloc_pd);
-IB_UVERBS_DECLARE_CMD(reg_mr);
-IB_UVERBS_DECLARE_CMD(rereg_mr);
-IB_UVERBS_DECLARE_CMD(dereg_mr);
-IB_UVERBS_DECLARE_CMD(alloc_mw);
-IB_UVERBS_DECLARE_CMD(dealloc_mw);
-IB_UVERBS_DECLARE_CMD(create_comp_channel);
-IB_UVERBS_DECLARE_CMD(create_cq);
-IB_UVERBS_DECLARE_CMD(resize_cq);
-IB_UVERBS_DECLARE_CMD(poll_cq);
-IB_UVERBS_DECLARE_CMD(req_notify_cq);
-IB_UVERBS_DECLARE_CMD(destroy_cq);
-IB_UVERBS_DECLARE_CMD(create_qp);
-IB_UVERBS_DECLARE_CMD(open_qp);
-IB_UVERBS_DECLARE_CMD(query_qp);
-IB_UVERBS_DECLARE_CMD(modify_qp);
-IB_UVERBS_DECLARE_CMD(destroy_qp);
-IB_UVERBS_DECLARE_CMD(post_send);
-IB_UVERBS_DECLARE_CMD(post_recv);
-IB_UVERBS_DECLARE_CMD(post_srq_recv);
-IB_UVERBS_DECLARE_CMD(create_ah);
-IB_UVERBS_DECLARE_CMD(destroy_ah);
-IB_UVERBS_DECLARE_CMD(attach_mcast);
-IB_UVERBS_DECLARE_CMD(detach_mcast);
-IB_UVERBS_DECLARE_CMD(create_srq);
-IB_UVERBS_DECLARE_CMD(modify_srq);
-IB_UVERBS_DECLARE_CMD(query_srq);
-IB_UVERBS_DECLARE_CMD(destroy_srq);
-IB_UVERBS_DECLARE_CMD(create_xsrq);
-IB_UVERBS_DECLARE_CMD(open_xrcd);
-IB_UVERBS_DECLARE_CMD(close_xrcd);
-
-#define IB_UVERBS_DECLARE_EX_CMD(name)				\
-	int ib_uverbs_ex_##name(struct ib_uverbs_file *file,	\
-				struct ib_udata *ucore,		\
-				struct ib_udata *uhw)
-
-IB_UVERBS_DECLARE_EX_CMD(create_flow);
-IB_UVERBS_DECLARE_EX_CMD(destroy_flow);
-IB_UVERBS_DECLARE_EX_CMD(query_device);
-IB_UVERBS_DECLARE_EX_CMD(create_cq);
-IB_UVERBS_DECLARE_EX_CMD(create_qp);
-IB_UVERBS_DECLARE_EX_CMD(create_wq);
-IB_UVERBS_DECLARE_EX_CMD(modify_wq);
-IB_UVERBS_DECLARE_EX_CMD(destroy_wq);
-IB_UVERBS_DECLARE_EX_CMD(create_rwq_ind_table);
-IB_UVERBS_DECLARE_EX_CMD(destroy_rwq_ind_table);
-IB_UVERBS_DECLARE_EX_CMD(modify_qp);
-IB_UVERBS_DECLARE_EX_CMD(modify_cq);
 
 /*
  * ib_uverbs_query_port_resp.port_cap_flags started out as just a copy of the

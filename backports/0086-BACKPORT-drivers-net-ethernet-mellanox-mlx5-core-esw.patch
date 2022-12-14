@@ -1,0 +1,61 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
+
+Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
+---
+ .../mellanox/mlx5/core/eswitch_devlink_compat.c    | 22 +++++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
+@@ -29,8 +29,13 @@ static char *encap_to_str[] = {
+ };
+ 
+ struct devlink_compat_op {
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
+ 	int (*write_u8)(struct devlink *devlink, u8 set, struct netlink_ext_ack *extack);
+ 	int (*write_u16)(struct devlink *devlink, u16 set, struct netlink_ext_ack *extack);
++#else
++	int (*write_u8)(struct devlink *devlink, u8 set);
++	int (*write_u16)(struct devlink *devlink, u16 set);
++#endif
+ 	int (*read_u8)(struct devlink *devlink, u8 *read);
+ 	int (*read_u16)(struct devlink *devlink, u16 *read);
+ 	char **map;
+@@ -117,7 +122,9 @@ static ssize_t esw_compat_write(struct k
+ 						       devlink_kobj);
+ 	struct mlx5_core_dev *dev = cdevlink->mdev;
+ 	struct devlink *devlink = priv_to_devlink(dev);
++#ifdef HAVE_NETLINK_EXT_ACK
+ 	static struct netlink_ext_ack ack = { ._msg = NULL };
++#endif
+ 	const char *entname = attr->attr.name;
+ 	struct devlink_compat_op *op = 0;
+ 	u16 set = 0;
+@@ -147,13 +154,22 @@ static ssize_t esw_compat_write(struct k
+ 	}
+ 
+ 	if (op->write_u16)
+-		ret = op->write_u16(devlink, set, &ack);
++		ret = op->write_u16(devlink, set
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++				    , &ack
++#endif
++				    );
+ 	else
+-		ret = op->write_u8(devlink, set, &ack);
++		ret = op->write_u8(devlink, set
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++				   , &ack
++#endif
++				   );
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ 	if (ack._msg)
+ 		mlx5_core_warn(dev, "%s\n", ack._msg);
+-
++#endif
+ 	if (ret < 0)
+ 		return ret;
+ 

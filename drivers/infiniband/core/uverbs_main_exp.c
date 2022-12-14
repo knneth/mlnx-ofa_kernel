@@ -39,13 +39,13 @@ unsigned long ib_uverbs_exp_get_unmapped_area(struct file *filp,
 	if (!file->ucontext) {
 		ret = -ENODEV;
 	} else {
-		if (!file->device->ib_dev->exp_get_unmapped_area) {
+		if (!file->device->ib_dev->ops.exp_get_unmapped_area) {
 			ret = current->mm->get_unmapped_area(filp, addr, len,
 								pgoff, flags);
 			goto out;
 		}
 
-		ret = file->device->ib_dev->exp_get_unmapped_area(filp, addr, len,
+		ret = file->device->ib_dev->ops.exp_get_unmapped_area(filp, addr, len,
 								pgoff, flags);
 	}
 out:

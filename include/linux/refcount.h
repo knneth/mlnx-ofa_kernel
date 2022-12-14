@@ -19,6 +19,18 @@
 #define refcount_inc_not_zero	atomic_inc_not_zero
 #define refcount_dec_and_test	atomic_dec_and_test
 
+static inline bool
+refcount_dec_and_mutex_lock(refcount_t *r, struct mutex *lock)
+{
+	mutex_lock(lock);
+	if (!refcount_dec_and_test(r)) {
+		mutex_unlock(lock);
+		return false;
+	}
+
+	return true;
+}
+
 #endif /* HAVE_REFCOUNT */
 
 

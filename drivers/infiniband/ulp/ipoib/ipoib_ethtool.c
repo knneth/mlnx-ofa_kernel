@@ -100,7 +100,7 @@ static int ipoib_set_ring_param(struct net_device *dev,
 		priv_current_flags = priv->flags;
 		dev_current_flags = dev->flags;
 
-		dev_change_flags(dev, dev->flags & ~IFF_UP);
+		dev_change_flags(dev, dev->flags & ~IFF_UP, NULL);
 		priv->rn_ops->ndo_uninit(dev);
 
 		do {
@@ -136,7 +136,7 @@ static int ipoib_set_ring_param(struct net_device *dev,
 				dev->name, new_recvq_size, new_sendq_size);
 
 		if (dev_current_flags & IFF_UP)
-			dev_change_flags(dev, dev_current_flags);
+			dev_change_flags(dev, dev_current_flags, NULL);
 	}
 
 	return 0;
@@ -211,6 +211,7 @@ static int ipoib_set_coalesce(struct net_device *dev,
 
 	return 0;
 }
+
 static void ipoib_get_ethtool_stats(struct net_device *dev,
 				    struct ethtool_stats __always_unused *stats,
 				    u64 *data)

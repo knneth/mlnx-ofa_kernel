@@ -4,6 +4,7 @@
 #ifndef __MLX5_LAG_MP_H__
 #define __MLX5_LAG_MP_H__
 
+#include <net/ip_fib.h>
 #include "lag.h"
 #include "mlx5_core.h"
 

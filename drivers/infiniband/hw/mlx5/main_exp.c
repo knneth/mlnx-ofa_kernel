@@ -1241,7 +1241,7 @@ static int init_driver_cnak(struct mlx5_ib_dev *dev, int port, int index)
 	dcd->dev = dev;
 	dcd->port = port;
 	dcd->index = index;
-	dcd->mr = pd->device->get_dma_mr(pd,  IB_ACCESS_LOCAL_WRITE);
+	dcd->mr = pd->device->ops.get_dma_mr(pd,  IB_ACCESS_LOCAL_WRITE);
 	if (IS_ERR(dcd->mr)) {
 		mlx5_ib_warn(dev, "failed to create dc DMA MR\n");
 		err = PTR_ERR(dcd->mr);
@@ -2432,6 +2432,7 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 	u32 uar_index;
 	size_t map_size = vma->vm_end - vma->vm_start;
 	struct rdma_umap_priv *vma_prv;
+	pgprot_t vm_page_prot;
 	int err;
 
 	if (indx % uars_per_page) {
@@ -2480,11 +2481,10 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 	}
 	pfn = idx2pfn(dev, uar_index);
 
+	vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+	vm_page_prot = mlx5_ib_pgprot_writecombine(vm_page_prot);
 
-	vma->vm_page_prot = mlx5_ib_pgprot_writecombine(vma->vm_page_prot);
-
-	if (rdma_user_mmap_io(&context->ibucontext, vma, pfn, map_size,
-		pgprot_writecombine(vma->vm_page_prot), vma_prv)) {
+	if (rdma_user_mmap_io(&context->ibucontext, vma, pfn, map_size, vm_page_prot, vma_prv)) {
 
 		mlx5_ib_err(dev, "io remap failed\n");
 		mlx5_cmd_free_uar(dev->mdev, uar_index);
@@ -2562,35 +2562,16 @@ err_vma:
 
 err_map:
 	mlx5_cmd_dealloc_memic(dm_db, memic_addr, act_size);
-
 err_free:
 	kfree(dm);
 
 	return ERR_PTR(ret);
 }
 
-int mlx5_ib_exp_free_dm(struct ib_dm *ibdm)
+int mlx5_ib_exp_free_dm(struct ib_dm *ibdm,
+		        struct uverbs_attr_bundle *attrs)
 {
-	return mlx5_ib_dealloc_dm(ibdm);
-}
-
-int mlx5_ib_exp_memcpy_dm(struct ib_dm *ibdm,
-			  struct ib_exp_memcpy_dm_attr *attr)
-{
-	struct mlx5_ib_dm *dm = to_mdm(ibdm);
-	uint64_t dm_addr = (uint64_t)dm->dm_base_addr + attr->dm_offset;
-
-	if ((attr->dm_offset + attr->length > ibdm->length) || (dm_addr & 0x3))
-		return -EINVAL;
-
-	if (attr->memcpy_dir == IBV_EXP_DM_CPY_TO_DEVICE)
-		memcpy_toio((void *)dm_addr, attr->host_addr, attr->length);
-	else
-		memcpy_fromio(attr->host_addr, (void *)dm_addr, attr->length);
-
-	mb();
-
-	return 0;
+	return mlx5_ib_dealloc_dm(ibdm, attrs);
 }
 
 int mlx5_ib_exp_set_context_attr(struct ib_device *device,

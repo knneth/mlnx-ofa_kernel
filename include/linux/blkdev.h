@@ -12,6 +12,16 @@
 #define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
 
+#ifndef rq_dma_dir
+#ifdef HAVE_OP_IS_WRITE
+#define rq_dma_dir(rq) \
+	(op_is_write(req_op(rq)) ? DMA_TO_DEVICE : DMA_FROM_DEVICE)
+#else
+#define rq_dma_dir(rq) \
+	(rq_data_dir(rq) ? DMA_TO_DEVICE : DMA_FROM_DEVICE)
+#endif
+#endif
+
 #ifndef HAVE_BLK_RQ_IS_PASSTHROUGH
 static inline bool blk_rq_is_passthrough(struct request *rq)
 {

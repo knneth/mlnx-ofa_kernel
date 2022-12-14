@@ -1,0 +1,81 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
+
+Change-Id: I825c15ccd1e0004ffc7d727cfdd43903902c6fca
+---
+ .../ethernet/mellanox/mlx5/core/en/reporter_tx.c   | 25 ++++++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
+@@ -114,16 +114,30 @@ static int mlx5e_tx_reporter_err_cqe_rec
+ 	return 0;
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT
+ static int mlx5_tx_health_report(struct devlink_health_reporter *tx_reporter,
+ 				 char *err_str,
+ 				 struct mlx5e_tx_err_ctx *err_ctx)
++#else
++static int mlx5_tx_health_report(void *tx_reporter,
++				 char *err_str,
++				 struct mlx5e_tx_err_ctx *err_ctx)
++#endif
+ {
+ 	if (IS_ERR_OR_NULL(tx_reporter)) {
++#ifdef HAVE_DEVLINK_HEALTH_REPORT
+ 		netdev_err(err_ctx->sq->channel->netdev, err_str);
++#else
++		netdev_err(err_ctx->sq->channel->netdev, "%s: ", err_str);
++#endif
+ 		return err_ctx->recover(err_ctx->sq);
+ 	}
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT
+ 	return devlink_health_report(tx_reporter, err_str, err_ctx);
++#else
++	return 0;
++#endif
+ }
+ 
+ void mlx5e_tx_reporter_err_cqe(struct mlx5e_txqsq *sq)
+@@ -177,6 +191,7 @@ int mlx5e_tx_reporter_timeout(struct mlx
+ 				     &err_ctx);
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT
+ /* state lock cannot be grabbed within this function.
+  * It can cause a dead lock or a read-after-free.
+  */
+@@ -292,9 +307,13 @@ static const struct devlink_health_repor
+ };
+ 
+ #define MLX5_REPORTER_TX_GRACEFUL_PERIOD 500
+-
++#endif
+ int mlx5e_tx_reporter_create(struct mlx5e_priv *priv)
+ {
++#ifndef HAVE_DEVLINK_HEALTH_REPORT
++	priv->tx_reporter = NULL;
++	return 0;
++#else
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+ 	struct devlink *devlink = mlx5_core_to_devlink(mdev);
+ 
+@@ -307,12 +326,14 @@ int mlx5e_tx_reporter_create(struct mlx5
+ 			    "Failed to create tx reporter, err = %ld\n",
+ 			    PTR_ERR(priv->tx_reporter));
+ 	return IS_ERR_OR_NULL(priv->tx_reporter);
++#endif
+ }
+ 
+ void mlx5e_tx_reporter_destroy(struct mlx5e_priv *priv)
+ {
+ 	if (IS_ERR_OR_NULL(priv->tx_reporter))
+ 		return;
+-
++#ifdef HAVE_DEVLINK_HEALTH_REPORT
+ 	devlink_health_reporter_destroy(priv->tx_reporter);
++#endif
+ }

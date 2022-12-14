@@ -641,7 +641,6 @@ case $ACTION in
         RC=$?
         ;;
     stop)
-        echo "WARNING: Option 'stop' is deprecated and will be replaced by 'force-stop' in next release."
         if [ "X${ALLOW_STOP}" != "Xyes" ]; then
             echo "ERROR: Option 'stop' is disabled!"
             log_msg "ERROR: Option 'stop' is disabled!"

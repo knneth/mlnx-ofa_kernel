@@ -60,6 +60,7 @@ enum mlx5_an_status {
 #define MLX5_I2C_ADDR_LOW		0x50
 #define MLX5_I2C_ADDR_HIGH		0x51
 #define MLX5_EEPROM_PAGE_LENGTH		256
+#define MLX5_EEPROM_HIGH_PAGE_LENGTH	128
 
 enum mlx5e_link_mode {
 	MLX5E_1000BASE_CX_SGMII	 = 0,
@@ -125,9 +126,6 @@ enum mlx5e_connector_type {
 #define MLX5_GET_ETH_PROTO(reg, out, ext, field)	\
 	(ext ? MLX5_GET(reg, out, ext_##field) :	\
 	MLX5_GET(reg, out, field))
- 
-#define PORT_MODULE_EVENT_MODULE_STATUS_MASK 0xF
-#define PORT_MODULE_EVENT_ERROR_TYPE_MASK         0xF
 
 int mlx5_set_port_caps(struct mlx5_core_dev *dev, u8 port_num, u32 caps);
 int mlx5_query_port_ptys(struct mlx5_core_dev *dev, u32 *ptys,
@@ -189,6 +187,7 @@ int mlx5_query_port_ets_rate_limit(struct mlx5_core_dev *mdev,
 				   u8 *max_bw_unit);
 int mlx5_set_port_wol(struct mlx5_core_dev *mdev, u8 wol_mode);
 int mlx5_query_port_wol(struct mlx5_core_dev *mdev, u8 *wol_mode);
+
 int mlx5_query_port_cong_status(struct mlx5_core_dev *mdev, int protocol,
 				int priority, int *is_enable);
 int mlx5_modify_port_cong_status(struct mlx5_core_dev *mdev, int protocol,
@@ -197,6 +196,8 @@ int mlx5_query_port_cong_params(struct mlx5_core_dev *mdev, int protocol,
 				void *out, int out_size);
 int mlx5_modify_port_cong_params(struct mlx5_core_dev *mdev,
 				 void *in, int in_size);
+int mlx5_query_ports_check(struct mlx5_core_dev *mdev, u32 *out, int outlen);
+int mlx5_set_ports_check(struct mlx5_core_dev *mdev, u32 *in, int inlen);
 int mlx5_set_port_fcs(struct mlx5_core_dev *mdev, u8 enable);
 void mlx5_query_port_fcs(struct mlx5_core_dev *mdev, bool *supported,
 			 bool *enabled);

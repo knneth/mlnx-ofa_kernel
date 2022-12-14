@@ -844,6 +844,7 @@ static ssize_t stats_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	struct ifla_vf_stats_backport ifi_backport;
 #endif
 	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_vport *vport = mlx5_eswitch_get_vport(dev->priv.eswitch, g->vf + 1);
 	struct ifla_vf_stats ifi;
 	struct mlx5_vport_drop_stats stats = {};
 	int err;
@@ -852,12 +853,13 @@ static ssize_t stats_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	err = mlx5_eswitch_get_vport_stats(dev->priv.eswitch, g->vf + 1, &ifi);
 	if (err)
 		return -EINVAL;
+
 #ifndef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
 	err = mlx5_eswitch_get_vport_stats_backport(dev->priv.eswitch, g->vf + 1, &ifi_backport);
 	if (err)
 		return -EINVAL;
 #endif
-	err = mlx5_eswitch_query_vport_drop_stats(dev, g->vf + 1, &stats);
+	err = mlx5_eswitch_query_vport_drop_stats(dev, vport, &stats);
 	if (err)
 		return -EINVAL;
 

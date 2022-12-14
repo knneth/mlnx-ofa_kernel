@@ -9,6 +9,8 @@
 
 #include "miniflow.h"
 
+#ifdef HAVE_MINIFLOW
+
 static unsigned int offloaded_ct_timeout = 30;
 module_param(offloaded_ct_timeout, int, 0644);
 
@@ -16,7 +18,7 @@ static atomic_t offloaded_flow_cnt = ATOMIC_INIT(0);
 
 struct flow_offload_table {
 	struct rhashtable        rhashtable;
-	spinlock_t               lock;
+	spinlock_t               ht_lock;
 	struct delayed_work      gc_work;
 	struct workqueue_struct *flow_wq;
 };
@@ -197,6 +199,8 @@ flow_offload_add(struct flow_offload_table *flow_table,
 {
 	int ret;
 
+	assert_spin_locked(&flow_table->ht_lock);
+
 	ret = rhashtable_insert_fast(&flow_table->rhashtable,
 				     &flow->tuplehash[FLOW_OFFLOAD_DIR_ORIGINAL].node,
 				     rhash_params);
@@ -220,18 +224,26 @@ flow_offload_del(struct flow_offload_table *flow_table,
 {
 	struct flow_offload_entry *e;
 
+	flow->flags |= FLOW_OFFLOAD_TEARDOWN;
+
+	spin_lock(&flow_table->ht_lock);
 	rhashtable_remove_fast(&flow_table->rhashtable,
 			       &flow->tuplehash[FLOW_OFFLOAD_DIR_ORIGINAL].node,
 			       rhash_params);
 	rhashtable_remove_fast(&flow_table->rhashtable,
 			       &flow->tuplehash[FLOW_OFFLOAD_DIR_REPLY].node,
 			       rhash_params);
+	spin_unlock(&flow_table->ht_lock);
 
 	e = container_of(flow, struct flow_offload_entry, flow);
 	clear_bit(IPS_OFFLOAD_BIT, &e->ct->status);
 	atomic_dec(&offloaded_flow_cnt);
 	flow_offload_fixup_ct_state(e->ct);
+
+	spin_lock(&e->dep_lock);
 	ct_flow_offload_destroy(&e->deps);
+	spin_unlock(&e->dep_lock);
+
 	flow_offload_free(flow);
 }
 
@@ -243,6 +255,8 @@ flow_offload_lookup(struct flow_offload_table *flow_table,
 	struct flow_offload_tuple_rhash key, *res;
 	struct flow_offload *flow;
 	int dir;
+
+	assert_spin_locked(&flow_table->ht_lock);
 
 	key.tuple = *tuple;
 	key.zone  = *zone;
@@ -308,9 +322,7 @@ flow_offload_teardown(struct flow_offload_table *flowtable,
 	if (flow->flags & FLOW_OFFLOAD_TEARDOWN)
 		return;
 
-	spin_lock(&flowtable->lock);
 	flow->flags |= FLOW_OFFLOAD_TEARDOWN;
-	spin_unlock(&flowtable->lock);
 }
 
 static void nf_flow_offload_gc_step(struct flow_offload *flow, void *data)
@@ -321,7 +333,11 @@ static void nf_flow_offload_gc_step(struct flow_offload *flow, void *data)
 	u64 lastuse;
 
 	e = container_of(flow, struct flow_offload_entry, flow);
+
+	spin_lock(&e->dep_lock);
 	ct_flow_offload_get_stats(&e->deps, &lastuse);
+	spin_unlock(&e->dep_lock);
+
 	if (flow->timeout < (lastuse + timeout))
 		flow->timeout = lastuse + timeout;
 
@@ -345,7 +361,7 @@ static int flow_offload_table_init(struct flow_offload_table *flowtable)
 {
 	int err;
 
-	spin_lock_init(&flowtable->lock);
+	spin_lock_init(&flowtable->ht_lock);
 	INIT_DELAYED_WORK(&flowtable->gc_work, flow_offload_work_gc);
 
 	flowtable->flow_wq = alloc_workqueue("mlx5_ct_flow_offload",
@@ -449,6 +465,7 @@ int mlx5_ct_flow_offload_add(const struct net *net,
 			     struct mlx5e_tc_flow *tc_flow)
 {
 	struct flow_offload_tuple_rhash *fhash;
+	struct flow_offload_table *flowtable;
 	struct flow_offload_entry *entry;
 	enum flow_offload_tuple_dir dir;
 	unsigned int timeout = offloaded_ct_timeout * HZ;
@@ -457,6 +474,11 @@ int mlx5_ct_flow_offload_add(const struct net *net,
 	if (!rcu_access_pointer(_flowtable))
 		return -ENOENT;
 
+	rcu_read_lock();
+	flowtable = rcu_dereference(_flowtable);
+
+	/* _flowtable_lookup and _flowtable_add_entry should be locked together */
+	spin_lock(&flowtable->ht_lock);
 	fhash = _flowtable_lookup(zone, tuple);
 	if (fhash) {
 		dir = fhash->tuple.dst.dir;
@@ -485,37 +507,28 @@ int mlx5_ct_flow_offload_add(const struct net *net,
 
 		entry = container_of(flow, struct flow_offload_entry, flow);
 	}
+	spin_unlock(&flowtable->ht_lock);
+	rcu_read_unlock();
 
 	spin_lock(&entry->dep_lock);
+	if (entry->flow.flags & (FLOW_OFFLOAD_DYING | FLOW_OFFLOAD_TEARDOWN)) {
+		spin_unlock(&entry->dep_lock);
+		err = -EAGAIN;
+		goto out;
+	}
+	tc_flow->dep_lock = &entry->dep_lock;
 	ct_flow_offload_add(tc_flow, &entry->deps);
 	spin_unlock(&entry->dep_lock);
+
 	entry->flow.timeout = jiffies + timeout;
 
-out:
-	return err;
-}
-
-int mlx5_ct_flow_offload_remove(const struct net *net,
-				const struct nf_conntrack_zone *zone,
-				const struct nf_conntrack_tuple *tuple)
-{
-	struct flow_offload_tuple_rhash *fhash;
-	struct flow_offload_entry *entry;
-	enum flow_offload_tuple_dir dir;
-
-	if (!rcu_access_pointer(_flowtable))
-		return -ENOENT;
-
-	fhash = _flowtable_lookup(zone, tuple);
-	if (!fhash)
-		return -ENOENT;
-
-	dir = fhash->tuple.dst.dir;
-	entry = container_of(fhash, struct flow_offload_entry,
-			     flow.tuplehash[dir]);
-
-	// TODO is this function needed? remove flow from deps?
 	return 0;
+
+out:
+	spin_unlock(&flowtable->ht_lock);
+	rcu_read_unlock();
+
+	return err;
 }
 
 int mlx5_ct_flow_offload_table_init(void)
@@ -556,3 +569,5 @@ int mlx5_ct_flow_offloaded_count(void)
 {
 	return atomic_read(&offloaded_flow_cnt);
 }
+
+#endif /* HAVE_MINIFLOW */

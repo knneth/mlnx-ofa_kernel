@@ -1,0 +1,95 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
+
+Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c | 29 ++++++++++++++++++++++--
+ 1 file changed, 27 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
+@@ -3,12 +3,18 @@
+ 
+ #include <linux/netdevice.h>
+ #include <net/ip_fib.h>
+-#include "lag.h"
+-#include "lag_mp.h"
+ #include "mlx5_core.h"
+ #include "eswitch.h"
+ #include "lib/mlx5.h"
+ 
++#if defined(MLX_USE_LAG_COMPAT) || defined(HAVE_LAG_TX_TYPE)
++#define MLX_LAG_SUPPORTED
++#endif
++
++#ifdef MLX_LAG_SUPPORTED
++#include "lag.h"
++
++#ifdef HAVE_FIB_NH_NOTIFIER_INFO
+ static bool mlx5_lag_multipath_check_prereq(struct mlx5_lag *ldev)
+ {
+ 	if (!ldev->pf[0].dev || !ldev->pf[1].dev)
+@@ -16,6 +22,7 @@ static bool mlx5_lag_multipath_check_pre
+ 
+ 	return mlx5_esw_multipath_prereq(ldev->pf[0].dev, ldev->pf[1].dev);
+ }
++#endif
+ 
+ static bool __mlx5_lag_is_multipath(struct mlx5_lag *ldev)
+ {
+@@ -43,6 +50,7 @@ bool mlx5_lag_is_multipath(struct mlx5_c
+  *     2 - set affinity to port 2.
+  *
+  **/
++#ifdef HAVE_FIB_NH_NOTIFIER_INFO
+ static void mlx5_lag_set_port_affinity(struct mlx5_lag *ldev, int port)
+ {
+ 	struct lag_tracker tracker;
+@@ -123,7 +131,11 @@ static void mlx5_lag_fib_route_event(str
+ 	/* Handle add/replace event */
+ 	if (fi->fib_nhs == 1) {
+ 		if (__mlx5_lag_is_active(ldev)) {
++#ifdef HAVE_FIB_NH_DEV
+ 			struct net_device *nh_dev = fi->fib_nh[0].fib_nh_dev;
++#else
++			struct net_device *nh_dev = fi->fib_nh[0].nh_dev;
++#endif
+ 			int i = mlx5_lag_dev_get_netdev_idx(ldev, nh_dev);
+ 
+ 			mlx5_lag_set_port_affinity(ldev, ++i);
+@@ -135,10 +147,17 @@ static void mlx5_lag_fib_route_event(str
+ 		return;
+ 
+ 	/* Verify next hops are ports of the same hca */
++#ifdef HAVE_FIB_NH_DEV
+ 	if (!(fi->fib_nh[0].fib_nh_dev == ldev->pf[0].netdev &&
+ 	      fi->fib_nh[1].fib_nh_dev == ldev->pf[1].netdev) &&
+ 	    !(fi->fib_nh[0].fib_nh_dev == ldev->pf[1].netdev &&
+ 	      fi->fib_nh[1].fib_nh_dev == ldev->pf[0].netdev)) {
++#else
++	if (!(fi->fib_nh[0].nh_dev == ldev->pf[0].netdev &&
++	      fi->fib_nh[1].nh_dev == ldev->pf[1].netdev) &&
++	    !(fi->fib_nh[0].nh_dev == ldev->pf[1].netdev &&
++	      fi->fib_nh[1].nh_dev == ldev->pf[0].netdev)) {
++#endif
+ 		mlx5_core_warn(ldev->pf[0].dev, "Multipath offload require two ports of the same HCA\n");
+ 		return;
+ 	}
+@@ -168,7 +187,11 @@ static void mlx5_lag_fib_nexthop_event(s
+ 
+ 	/* nh added/removed */
+ 	if (event == FIB_EVENT_NH_DEL) {
++#ifdef HAVE_FIB_NH_DEV
+ 		int i = mlx5_lag_dev_get_netdev_idx(ldev, fib_nh->fib_nh_dev);
++#else
++		int i = mlx5_lag_dev_get_netdev_idx(ldev, fib_nh->nh_dev);
++#endif
+ 
+ 		if (i >= 0) {
+ 			i = (i + 1) % 2 + 1; /* peer port */
+@@ -314,3 +337,5 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
+ 	unregister_fib_notifier(&mp->fib_nb);
+ 	mp->fib_nb.notifier_call = NULL;
+ }
++#endif /* HAVE_FIB_NH_NOTIFIER_INFO */
++#endif /* MLX_LAG_SUPPORTED */

@@ -33,10 +33,6 @@
 #include <scsi/fc/fc_fcoe.h>
 #include <net/dst_metadata.h>
 
-#ifndef skb_vlan_tag_get_prio
-#define skb_vlan_tag_get_prio(__skb)   ((__skb)->vlan_tci & VLAN_PRIO_MASK)
-#endif
-
 #ifndef IP6_OFFSET
 #define IP6_OFFSET  0xFFF8
 #endif
@@ -47,6 +43,11 @@
 
 #ifndef IPPROTO_MPLS
 #define IPPROTO_MPLS 137
+#endif
+
+#ifdef HAVE_NET_FLOW_KEYS_H
+#define flow_keys LINUX_BACKPORT(flow_keys)
+#define flow_hash_from_keys LINUX_BACKPORT(flow_hash_from_keys)
 #endif
 
 static inline bool eth_type_vlan_bp(__be16 ethertype)

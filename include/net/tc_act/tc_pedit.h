@@ -5,6 +5,7 @@
 
 #ifdef CONFIG_COMPAT_TCF_PEDIT_MOD
 #include <net/act_api.h>
+#include "uapi/linux/tc_act/tc_pedit.h"
 
 struct tcf_pedit_key_ex {
 	enum pedit_header_type htype;

@@ -34,7 +34,7 @@
 
 #ifndef _IPOIB_H
 #define _IPOIB_H
-#include <rdma/e_ipoib.h>
+
 #include <linux/list.h>
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
@@ -132,7 +132,7 @@ enum {
 
 struct ipoib_header {
 	__be16	proto;
-	__be16 tss_qpn_mask_sz;
+	u16	tss_qpn_mask_sz;
 };
 
 struct ipoib_pseudo_header {
@@ -194,16 +194,6 @@ struct ipoib_tx_buf {
 	u32		is_inline;
 };
  
-/* Talat & Tzafrir: Alex Vesker: re-added struct removed in upstream.
- * Used only in drivers/infiniband/ulp/ipoib_1.5.3/ipoib_cm.c .
- */
-struct ipoib_cm_tx_buf {
-	struct sk_buff *skb;
-	u64		mapping;
-	u32		is_inline;
-};
- 
-
 struct ib_cm_id;
 
 struct ipoib_cm_data {
@@ -263,7 +253,6 @@ struct ipoib_cm_tx {
 	struct list_head     list;
 	struct net_device   *dev;
 	struct ipoib_neigh  *neigh;
-	struct ipoib_path   *path;
 	struct ipoib_tx_buf *tx_ring;
 	unsigned int	     tx_head;
 	unsigned int	     tx_tail;
@@ -378,10 +367,12 @@ struct ipoib_dev_priv {
 	struct workqueue_struct *wq;
 	struct delayed_work mcast_task;
 	struct work_struct carrier_on_task;
+	struct work_struct reschedule_napi_work;
 	struct work_struct flush_light;
 	struct work_struct flush_normal;
 	struct work_struct flush_heavy;
 	struct work_struct restart_task;
+	struct work_struct tx_timeout_work;
 	struct delayed_work ah_reap_task;
 	struct delayed_work neigh_reap_task;
 	struct ib_device *ca;
@@ -422,7 +413,6 @@ struct ipoib_dev_priv {
 	struct net_device *parent;
 	struct list_head child_intfs;
 	struct list_head list;
-	int child_index;
 	int    child_type;
 
 #ifdef CONFIG_INFINIBAND_IPOIB_CM
@@ -541,7 +531,7 @@ int ipoib_send(struct net_device *dev, struct sk_buff *skb,
 	       struct ib_ah *address, u32 dqpn);
 void ipoib_reap_ah(struct work_struct *work);
 void ipoib_repath_ah(struct work_struct *work);
-
+void ipoib_napi_schedule_work(struct work_struct *work);
 struct ipoib_path *__path_find(struct net_device *dev, void *gid);
 void ipoib_mark_paths_invalid(struct net_device *dev);
 void ipoib_flush_paths(struct net_device *dev);
@@ -553,6 +543,7 @@ void ipoib_ib_tx_timer_func(struct timer_list *t);
 void ipoib_ib_dev_flush_light(struct work_struct *work);
 void ipoib_ib_dev_flush_normal(struct work_struct *work);
 void ipoib_ib_dev_flush_heavy(struct work_struct *work);
+void ipoib_ib_tx_timeout_work(struct work_struct *work);
 void ipoib_pkey_event(struct work_struct *work);
 void ipoib_ib_dev_cleanup(struct net_device *dev);
 
@@ -635,10 +626,8 @@ void ipoib_transport_dev_cleanup(struct net_device *dev);
 void ipoib_event(struct ib_event_handler *handler,
 		 struct ib_event *record);
 
-int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey,
-						unsigned char clone_index);
-int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey,
-						unsigned char clone_index);
+int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey);
+int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey);
 
 int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
 		     u16 pkey, int child_type);
@@ -829,12 +818,12 @@ static inline void ipoib_cm_handle_tx_wc(struct net_device *dev, struct ib_wc *w
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
 void ipoib_create_debug_files(struct net_device *dev);
 void ipoib_delete_debug_files(struct net_device *dev);
-int ipoib_register_debugfs(void);
+void ipoib_register_debugfs(void);
 void ipoib_unregister_debugfs(void);
 #else
 static inline void ipoib_create_debug_files(struct net_device *dev) { }
 static inline void ipoib_delete_debug_files(struct net_device *dev) { }
-static inline int ipoib_register_debugfs(void) { return 0; }
+static inline void ipoib_register_debugfs(void) { }
 static inline void ipoib_unregister_debugfs(void) { }
 #endif
 
@@ -854,34 +843,6 @@ extern int ipoib_recvq_size;
 extern u32 ipoib_inline_thold;
 
 extern struct ib_sa_client ipoib_sa_client;
-
-static inline void set_skb_oob_cb_data(struct sk_buff *skb, struct ib_wc *wc,
-				struct napi_struct *napi)
-{
-	struct ipoib_cm_rx *p_cm_ctx = NULL;
-	struct eipoib_cb_data *data = NULL;
-	struct ipoib_header *header;
-	unsigned int tss_mask, tss_qpn_mask_sz;
-
-	p_cm_ctx = wc->qp->qp_context;
-	data = IPOIB_HANDLER_CB(skb);
-
-	data->rx.slid = wc->slid;
-	header = (struct ipoib_header *)(skb->data - IPOIB_ENCAP_LEN);
-	if (header->tss_qpn_mask_sz & cpu_to_be16(0xF000)) {
-		tss_qpn_mask_sz = be16_to_cpu(header->tss_qpn_mask_sz) >> 12;
-		tss_mask = 0xffff >> (16 - tss_qpn_mask_sz);
-		data->rx.sqpn = wc->src_qp & tss_mask;
-	} else {
-		data->rx.sqpn = wc->src_qp;
-	}
-
-	data->rx.napi = napi;
-
-	/* in CM mode, use the "base" qpn as sqpn */
-	if (p_cm_ctx)
-		data->rx.sqpn = p_cm_ctx->qpn;
-}
 
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
 extern int ipoib_debug_level;
@@ -917,6 +878,5 @@ extern int ipoib_debug_level;
 #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
 
 extern const char ipoib_driver_version[];
-extern int ipoib_enhanced_enabled;
 
 #endif /* _IPOIB_H */

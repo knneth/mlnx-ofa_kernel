@@ -25,7 +25,6 @@ static inline bool
 mlx5_read_embedded_cpu(struct mlx5_core_dev *dev) { return false; }
 static inline int mlx5_ec_init(struct mlx5_core_dev *dev) { return 0; }
 static inline void mlx5_ec_cleanup(struct mlx5_core_dev *dev) {}
-static inline int
 
 #endif /* CONFIG_MLX5_ESWITCH */
 

@@ -3,6 +3,7 @@
 
 #include "../../../compat/config.h"
 
+#ifdef HAVE_IS_TCF_VLAN
 #ifndef CONFIG_COMPAT_TCF_VLAN_MOD
 #include_next <net/tc_act/tc_vlan.h>
 #endif
@@ -60,4 +61,5 @@ static inline __be16 tcf_vlan_push_prio(const struct tc_action *a)
 }
 #endif
 
+#endif /* HAVE_IS_TCF_VLAN */
 #endif	/* _COMPAT_NET_TC_ACT_TC_VLAN_H */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*******************************************************************************
  * This file contains iSCSI extentions for RDMA (iSER) Verbs
  *
@@ -5,15 +6,6 @@
  *
  * Nicholas A. Bellinger <nab@linux-iscsi.org>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  ****************************************************************************/
 
 #include <linux/string.h>
@@ -141,7 +133,7 @@ isert_create_qp(struct isert_conn *isert_conn,
 	attr.sq_sig_type = IB_SIGNAL_REQ_WR;
 	attr.qp_type = IB_QPT_RC;
 	if (device->pi_capable)
-		attr.create_flags |= IB_QP_CREATE_SIGNATURE_EN;
+		attr.create_flags |= IB_QP_CREATE_INTEGRITY_EN;
 
 	if (device->sig_pipeline)
 		attr.create_flags |= IB_QP_CREATE_SIGNATURE_PIPELINE;
@@ -320,7 +312,7 @@ isert_create_device_ib_res(struct isert_device *device)
 
 	/* Check signature cap */
 	device->pi_capable = ib_dev->attrs.device_cap_flags &
-			     IB_DEVICE_SIGNATURE_HANDOVER ? true : false;
+			     IB_DEVICE_INTEGRITY_HANDOVER ? true : false;
 
 	device->sig_pipeline = ib_dev->attrs.device_cap_flags &
 			       IB_DEVICE_SIGNATURE_PIPELINE ? true : false;
@@ -1202,7 +1194,7 @@ sequence_cmd:
 	rc = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
 
 	if (!rc && dump_payload == false && unsol_data)
-		iscsit_set_unsoliticed_dataout(cmd);
+		iscsit_set_unsolicited_dataout(cmd);
 	else if (dump_payload && imm_data)
 		target_put_sess_cmd(&cmd->se_cmd);
 
@@ -1693,7 +1685,7 @@ isert_rdma_write_done(struct ib_cq *cq, struct ib_wc *wc)
 
 	isert_dbg("Cmd %p\n", isert_cmd);
 
-	ret = isert_check_pi_status(cmd, isert_cmd->rw.sig->sig_mr);
+	ret = isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
 	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
 
 	if (ret) {
@@ -1739,7 +1731,7 @@ isert_rdma_read_done(struct ib_cq *cq, struct ib_wc *wc)
 	iscsit_stop_dataout_timer(cmd);
 
 	if (isert_prot_cmd(isert_conn, se_cmd))
-		ret = isert_check_pi_status(se_cmd, isert_cmd->rw.sig->sig_mr);
+		ret = isert_check_pi_status(se_cmd, isert_cmd->rw.reg->mr);
 	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
 	cmd->write_data_done = 0;
 
@@ -1819,7 +1811,7 @@ isert_send_done(struct ib_cq *cq, struct ib_wc *wc)
 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
 		isert_print_wc(wc, "send");
 		if (wc->status == IB_WC_SIG_PIPELINE_CANCELED) {
-			isert_check_pi_status(cmd, isert_cmd->rw.sig->sig_mr);
+			isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
 			isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
 			/*
 			 * transport_generic_request_failure() expects to have
@@ -1842,7 +1834,7 @@ isert_send_done(struct ib_cq *cq, struct ib_wc *wc)
 
 	/* To reuse the signature MR later, we need to mark it as checked. */
 	if (isert_cmd->send_sig_pipelined)
-		isert_check_pi_status(cmd, isert_cmd->rw.sig->sig_mr);
+		isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
 
 	switch (isert_cmd->iscsi_cmd->i_state) {
 	case ISTATE_SEND_TASKMGTRSP:
@@ -2255,7 +2247,7 @@ isert_put_datain(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 		rc = isert_post_recv(isert_conn, isert_cmd->rx_desc);
 		if (rc) {
 			isert_err("ib_post_recv failed with %d\n", rc);
-			return rc;
+			goto err;
 		}
 
 		chain_wr = &isert_cmd->tx_desc.send_wr;
@@ -2264,6 +2256,12 @@ isert_put_datain(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 	rc = isert_rdma_rw_ctx_post(isert_cmd, isert_conn, cqe, chain_wr);
 	isert_dbg("Cmd: %p posted RDMA_WRITE for iSER Data READ rc: %d\n",
 		  isert_cmd, rc);
+	if (rc)
+		goto err;
+
+	return 0;
+err:
+	isert_cmd->send_sig_pipelined = false;
 	return rc;
 }
 

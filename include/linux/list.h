@@ -19,7 +19,7 @@
 	hlist_for_each_entry_safe(pos, hlnode, n, head, member)
 
 #define compat_hlist_for_each_entry(pos, head, member)		\
-	hlist_for_each_entry(pos, hlnode, head, member)		\
+	hlist_for_each_entry(pos, hlnode, head, member)	
 
 #define COMPAT_HL_NODE struct hlist_node *hlnode;
 #endif

@@ -1,7 +1,7 @@
 From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/fmr_pool.c
 
-Change-Id: I58a2535f1f06831d3a873a6b929b7b418f8c6ed7
+Change-Id: I6e20f521d76e290f9e7e6c4fa55f932effc87268
 ---
  drivers/infiniband/core/fmr_pool.c | 58 +++++++++++++++++++++++++++++++++++++-
  1 file changed, 57 insertions(+), 1 deletion(-)
@@ -128,7 +128,7 @@ Change-Id: I58a2535f1f06831d3a873a6b929b7b418f8c6ed7
  
  	if (wait_event_interruptible(pool->force_wait,
  				     atomic_read(&pool->flush_ser) - serial >= 0))
-@@ -491,7 +543,11 @@ int ib_fmr_pool_unmap(struct ib_pool_fmr
+@@ -491,7 +543,11 @@ void ib_fmr_pool_unmap(struct ib_pool_fm
  			list_add_tail(&fmr->list, &pool->dirty_list);
  			if (++pool->dirty_len >= pool->dirty_watermark) {
  				atomic_inc(&pool->req_ser);

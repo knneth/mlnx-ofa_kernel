@@ -48,12 +48,10 @@ struct mlx5_ib_prefetch_work {
 
 static void prefetch_work(struct work_struct *work)
 {
-
 	struct mlx5_ib_prefetch_work *pwork;
 	struct ib_sge sg;
 
 	pwork = container_of(work, struct mlx5_ib_prefetch_work, work);
-
 	sg.addr = pwork->start;
 	sg.length = pwork->length;
 	sg.lkey = pwork->key;
@@ -65,6 +63,7 @@ static void prefetch_work(struct work_struct *work)
 		complete(&pwork->dev->comp_prefetch);
 	kfree(pwork);
 }
+
 
 int mlx5_ib_prefetch_mr(struct ib_mr *ibmr, u64 start, u64 length, u32 flags)
 {

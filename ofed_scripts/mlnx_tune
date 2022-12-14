@@ -48,7 +48,7 @@ from threading import Timer
 
 VERSION_MAJOR					= "4"
 VERSION_MINOR					= "6"
-VERSION_BUILD					= "5"
+VERSION_BUILD					= "7"
 
 INDENT						= 1
 NA						= "N/A"
@@ -1823,6 +1823,7 @@ class InterfaceInfo( object ):
 		self.mtu		= NA
 		self.speed_value	= None
 		self.speed_name		= NA
+		self.supports_xps	= True
 
 	def __str__ (self):
 		global INDENT
@@ -1906,7 +1907,8 @@ class InterfaceInfo( object ):
 			if ("rx-" in line ):
 				rx_ring = RingInfo(line.split('rx-')[1])
 				rx_ring.set_rps_mask(self.name)
-				rx_ring.set_xps_mask(self.name)
+				if self.supports_xps:
+					rx_ring.set_xps_mask(self.name)
 				rx_ring.irqs = rx_ring.get_irqs(self.name, rx_ring.number)
 				rings.append(rx_ring)
 		rings.sort(key = lambda ring: int(ring.number))
@@ -1950,6 +1952,11 @@ class InterfaceInfo( object ):
 	def reset_xps(self):
 		""" Resets XPS for all tx queues.
 		"""
+		if not self.supports_xps:
+			logging.warning("interface '{name} doesn't support XPS.".format(
+					name=self.name))
+			return
+
 		cmd = RINGS_CMD%(self.name)
 		( rc, output ) = getstatusoutput(cmd)
 		assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
@@ -1994,6 +2001,11 @@ class InterfaceInfo( object ):
 	def apply_and_set_xps_affinity_wanted_mask(self):
 		""" set XPS affinity wanted mask
 		"""
+		if not self.supports_xps:
+			logging.warning("interface '{name} doesn't support XPS.".format(
+					name=self.name))
+			return
+
 		active_rings = [ring for ring in self.rings if ring.active]
 		for ring in active_rings:
 			ring.apply_and_set_xps_affinity_mask(self.name)
@@ -2470,7 +2482,8 @@ class PciDeviceInfo:
 			interface.set_speed()
 			if interface.link_type == 'eth':
 				interface.set_parameters()
-
+			if self.type == Devices.ConnectIB:
+				interface.supports_xps = False
 			interface.rings = interface.get_rings()
 			interfaces.append(interface)
 
@@ -3012,16 +3025,17 @@ def force_sw_dependencies(profile):
 	""" Force all needed software are installed on the server.
 	"""
 	# Check general purpose tools
-	output = run_command_warn_when_fail(MST_START, "Please install Mellanox Firmware tools ( mft )")
+	(rc, output) = run_command_warn_when_fail(MST_START, "Please install Mellanox Firmware tools ( mft )")
 	output = run_command_exit_when_fail("%s --version"%(ETHTOOL), "Please install ethtool tool.")
 	output = run_command_exit_when_fail(LSPCI, "Please install lspci tool.")
-	output = run_command_warn_when_fail("%s -V"%DMIDECODE, "It is recommended to install dmidecode tool.")
+	(rc, output) = run_command_warn_when_fail("%s -V"%DMIDECODE, "It is recommended to install dmidecode tool.")
 	output = run_command_exit_when_fail(LSMOD, "Please install lsmod tool.")
+	if "mlx" not in output:
+		logging.error( "Driver don't exist/not loaded. Please load Mellanox driver.")
+
 	# Check profile specific tools
 	if profile in Profile.NEED_IFCONFIG:
 		output = run_command_exit_when_fail(IFCONFIG, "Please install %s tool."%IFCONFIG)
-	if "mlx" not in output:
-		logging.error( "Driver don't exist/not loaded. Please load mellanox driver")
 
 def set_logger(options):
 	""" Force dependencies between input arguments

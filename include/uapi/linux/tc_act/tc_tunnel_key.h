@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016, Amir Vadai <amir@vadai.me>
  * Copyright (c) 2016, Mellanox Technologies. All rights reserved.
@@ -8,11 +9,10 @@
  * (at your option) any later version.
  */
 
-#ifndef __UAPI_TUNNEL_KEY_H
-#define __UAPI_TUNNEL_KEY_H 1
+#ifndef __LINUX_TC_TUNNEL_KEY_H
+#define __LINUX_TC_TUNNEL_KEY_H
 
 #include <linux/pkt_cls.h>
-#include <linux/types.h>
 
 #define TCA_ACT_TUNNEL_KEY 17
 
@@ -45,5 +45,28 @@ enum {
 };
 
 #define TCA_TUNNEL_KEY_MAX (__TCA_TUNNEL_KEY_MAX - 1)
+
+enum {
+	TCA_TUNNEL_KEY_ENC_OPTS_UNSPEC,
+	TCA_TUNNEL_KEY_ENC_OPTS_GENEVE,		/* Nested
+						 * TCA_TUNNEL_KEY_ENC_OPTS_
+						 * attributes
+						 */
+	__TCA_TUNNEL_KEY_ENC_OPTS_MAX,
+};
+
+#define TCA_TUNNEL_KEY_ENC_OPTS_MAX (__TCA_TUNNEL_KEY_ENC_OPTS_MAX - 1)
+
+enum {
+	TCA_TUNNEL_KEY_ENC_OPT_GENEVE_UNSPEC,
+	TCA_TUNNEL_KEY_ENC_OPT_GENEVE_CLASS,		/* be16 */
+	TCA_TUNNEL_KEY_ENC_OPT_GENEVE_TYPE,		/* u8 */
+	TCA_TUNNEL_KEY_ENC_OPT_GENEVE_DATA,		/* 4 to 128 bytes */
+
+	__TCA_TUNNEL_KEY_ENC_OPT_GENEVE_MAX,
+};
+
+#define TCA_TUNNEL_KEY_ENC_OPT_GENEVE_MAX \
+	(__TCA_TUNNEL_KEY_ENC_OPT_GENEVE_MAX - 1)
 
 #endif

@@ -34,6 +34,7 @@
 #include <rdma/ib_umem.h>
 #include <rdma/ib_umem_odp.h>
 #include "mlx5_ib.h"
+#include <linux/jiffies.h>
 
 /* @umem: umem object to scan
  * @addr: ib virtual address requested by the user
@@ -110,6 +111,7 @@ void mlx5_ib_cont_pages(struct ib_umem *umem, u64 addr,
 	*shift = page_shift + m;
 	*count = i;
 }
+
 
 /*
  * Populate the given array with bus addresses from the umem.
@@ -202,4 +204,151 @@ int mlx5_ib_get_buf_offset(u64 addr, int page_shift, u32 *offset)
 
 	*offset = buf_off >> ilog2(off_size);
 	return 0;
+}
+
+#define WR_ID_BF 0xBF
+#define WR_ID_FINAL 0xBAD
+#define TEST_WC_NUM_WQES 256
+#define TEST_WC_POLLING_MAX_TIME 100
+#define TEST_WC_POLLING_MAX_TIME_JIFFIES                                       \
+	msecs_to_jiffies(TEST_WC_POLLING_MAX_TIME)
+
+static int test_wc_poll_cq(struct mlx5_ib_dev *dev, struct ib_cq *cq)
+{
+	int ret;
+	struct ib_wc wc = {};
+	unsigned long end = jiffies + TEST_WC_POLLING_MAX_TIME_JIFFIES;
+
+	while (!time_after(jiffies, end)) {
+		ret = ib_poll_cq(cq, 1, &wc);
+		if (ret < 0 || wc.status)
+			return ret ? ret : -EINVAL;
+		if (ret)
+			break;
+	}
+	if (!ret)
+		return -ETIMEDOUT;
+
+	if (wc.wr_id == WR_ID_FINAL)
+		dev->wc_support = MLX5_IB_WC_NOT_SUPPORTED;
+	else if (wc.wr_id == WR_ID_BF)
+		dev->wc_support = MLX5_IB_WC_SUPPORTED;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
+static int test_wc_do_send(struct mlx5_ib_dev *dev, struct ib_qp *qp)
+{
+	struct ib_send_wr wr = { .opcode = MLX5_IB_WR_NOP, .wr_id = WR_ID_BF };
+	int err, i;
+
+	for (i = 0; i < TEST_WC_NUM_WQES; i++) {
+		if (i == TEST_WC_NUM_WQES - 1) {
+			wr.send_flags = IB_SEND_SIGNALED;
+			wr.wr_id = WR_ID_FINAL;
+		}
+		err = ib_post_send(qp, &wr, NULL);
+		if (err)
+			return err;
+	}
+	return 0;
+}
+
+int mlx5_ib_test_wc(struct mlx5_ib_dev *dev)
+{
+	struct ib_cq_init_attr cq_attr = { .cqe = TEST_WC_NUM_WQES };
+	struct ib_qp_init_attr qp_init_attr = {
+		.cap = { .max_send_wr = TEST_WC_NUM_WQES },
+		.qp_type = IB_QPT_UD,
+		.sq_sig_type = IB_SIGNAL_REQ_WR,
+		.create_flags = MLX5_IB_QP_CREATE_WC_TEST,
+	};
+	struct ib_qp_attr qp_attr = { .port_num = 1 };
+	struct ib_device *ibdev = &dev->ib_dev;
+	struct ib_qp *qp;
+	struct ib_cq *cq;
+	struct ib_pd *pd;
+	int ret;
+
+	if (!MLX5_CAP_GEN(dev->mdev, bf)) {
+		dev->wc_support = MLX5_IB_WC_NOT_SUPPORTED;
+		return 0;
+	}
+
+	if (MLX5_CAP_GEN(dev->mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH &&
+	    !dev->mdev->roce.roce_en) {
+		if (mlx5_core_is_pf(dev->mdev))
+			dev->wc_support = MLX5_IB_WC_SUPPORTED;
+		else
+			/*
+			 * Blueflame may still be applicable but write
+			 * combining test cannot run when RoCE is disabled so
+			 * for now as some WA we maintain the legacy behaviour.
+			 */
+			dev->wc_support = MLX5_IB_WC_NOT_SUPPORTED;
+		return 0;
+	}
+
+	ret = mlx5_alloc_bfreg(dev->mdev, &dev->wc_bfreg, true, false);
+	if (ret)
+		return ret;
+
+	if (!dev->wc_bfreg.wc) {
+		dev->wc_support = MLX5_IB_WC_NOT_SUPPORTED;
+		goto out1;
+	}
+
+	pd = ib_alloc_pd(ibdev, 0);
+	if (IS_ERR(pd)) {
+		ret = PTR_ERR(pd);
+		goto out1;
+	}
+
+	cq = ib_create_cq(ibdev, NULL, NULL, NULL, &cq_attr);
+	if (IS_ERR(cq)) {
+		ret = PTR_ERR(cq);
+		goto out2;
+	}
+
+	qp_init_attr.recv_cq = cq;
+	qp_init_attr.send_cq = cq;
+	qp = ib_create_qp(pd, &qp_init_attr);
+	if (IS_ERR(qp)) {
+		ret = PTR_ERR(qp);
+		goto out3;
+	}
+	qp_attr.qp_state = IB_QPS_INIT;
+	ret = ib_modify_qp(qp, &qp_attr,
+			   IB_QP_STATE | IB_QP_PORT | IB_QP_PKEY_INDEX |
+				   IB_QP_QKEY);
+	if (ret)
+		goto out4;
+
+	qp_attr.qp_state = IB_QPS_RTR;
+	ret = ib_modify_qp(qp, &qp_attr, IB_QP_STATE);
+	if (ret)
+		goto out4;
+
+	qp_attr.qp_state = IB_QPS_RTS;
+	ret = ib_modify_qp(qp, &qp_attr, IB_QP_STATE | IB_QP_SQ_PSN);
+	if (ret)
+		goto out4;
+
+	ret = test_wc_do_send(dev, qp);
+	if (ret < 0)
+		goto out4;
+
+	ret = test_wc_poll_cq(dev, cq);
+
+out4:
+	ib_destroy_qp(qp);
+out3:
+	ib_destroy_cq(cq);
+out2:
+	ib_dealloc_pd(pd);
+out1:
+	mlx5_free_bfreg(dev->mdev, &dev->wc_bfreg);
+	return ret;
 }

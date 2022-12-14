@@ -80,7 +80,6 @@ endif
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -151,6 +150,7 @@ endif
 	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_eswitch_set		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_net_rules		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin

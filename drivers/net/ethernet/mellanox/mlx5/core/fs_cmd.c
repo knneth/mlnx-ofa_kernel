@@ -107,6 +107,39 @@ static int mlx5_cmd_stub_delete_fte(struct mlx5_flow_root_namespace *ns,
 	return 0;
 }
 
+static int mlx5_cmd_set_slave_root_fdb(struct mlx5_core_dev *master,
+				       struct mlx5_core_dev *slave,
+				       bool ft_id_valid,
+				       u32 ft_id)
+{
+	u32 in[MLX5_ST_SZ_DW(set_flow_table_root_in)]   = {0};
+	u32 out[MLX5_ST_SZ_DW(set_flow_table_root_out)] = {0};
+	struct mlx5_flow_root_namespace *root;
+	struct mlx5_flow_namespace *ns;
+
+	MLX5_SET(set_flow_table_root_in, in, opcode,
+		 MLX5_CMD_OP_SET_FLOW_TABLE_ROOT);
+	MLX5_SET(set_flow_table_root_in, in, table_type,
+		 FS_FT_FDB);
+	if (ft_id_valid) {
+		MLX5_SET(set_flow_table_root_in, in,
+			 table_eswitch_owner_vhca_id_valid, 1);
+		MLX5_SET(set_flow_table_root_in, in,
+			 table_eswitch_owner_vhca_id,
+			 MLX5_CAP_GEN(master, vhca_id));
+		MLX5_SET(set_flow_table_root_in, in, table_id,
+			 ft_id);
+	} else {
+		ns = mlx5_get_flow_namespace(slave,
+					     MLX5_FLOW_NAMESPACE_FDB);
+		root = find_root(&ns->node);
+		MLX5_SET(set_flow_table_root_in, in, table_id,
+			 root->root_ft->id);
+	}
+
+	return mlx5_cmd_exec(slave, in, sizeof(in), out, sizeof(out));
+}
+
 static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 				   struct mlx5_flow_table *ft, u32 underlay_qpn,
 				   bool disconnect)
@@ -114,9 +147,15 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 	u32 in[MLX5_ST_SZ_DW(set_flow_table_root_in)]   = {0};
 	u32 out[MLX5_ST_SZ_DW(set_flow_table_root_out)] = {0};
 	struct mlx5_core_dev *dev = ns->dev;
+	int err;
 
 	if ((MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) &&
 	    underlay_qpn == 0)
+		return 0;
+
+	if (ft->type == FS_FT_FDB &&
+	    mlx5_lag_is_shared_fdb(dev) &&
+	    !mlx5_lag_is_master(dev))
 		return 0;
 
 	MLX5_SET(set_flow_table_root_in, in, opcode,
@@ -132,12 +171,33 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 	}
 
 	MLX5_SET(set_flow_table_root_in, in, underlay_qpn, underlay_qpn);
-	if (ft->vport) {
+	if (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	    ft->type == FS_FT_ESW_INGRESS_ACL || ft->vport) {
+		/* FIXME: Honor HCA_CAP.esw_fdb flow_table_root_per_port
+		 * for FDB table type.
+		 */
 		MLX5_SET(set_flow_table_root_in, in, vport_number, ft->vport);
 		MLX5_SET(set_flow_table_root_in, in, other_vport, 1);
 	}
 
-	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+	err = mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+
+	if (!err &&
+	    ft->type == FS_FT_FDB &&
+	    mlx5_lag_is_shared_fdb(dev) &&
+	    mlx5_lag_is_master(dev)) {
+		err = mlx5_cmd_set_slave_root_fdb(dev,
+						  mlx5_lag_get_peer_mdev(dev),
+						  !disconnect, (!disconnect) ?
+						  ft->id : 0);
+		if (err && !disconnect) {
+			MLX5_SET(set_flow_table_root_in, in, table_id,
+				 ns->root_ft->id);
+			mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+		}
+	}
+
+	return err;
 }
 
 static int mlx5_cmd_create_flow_table(struct mlx5_flow_root_namespace *ns,
@@ -158,7 +218,9 @@ static int mlx5_cmd_create_flow_table(struct mlx5_flow_root_namespace *ns,
 	MLX5_SET(create_flow_table_in, in, table_type, ft->type);
 	MLX5_SET(create_flow_table_in, in, flow_table_context.level, ft->level);
 	MLX5_SET(create_flow_table_in, in, flow_table_context.log_size, log_size);
-	if (ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		MLX5_SET(create_flow_table_in, in, vport_number, ft->vport);
 		MLX5_SET(create_flow_table_in, in, other_vport, 1);
 	}
@@ -179,7 +241,7 @@ static int mlx5_cmd_create_flow_table(struct mlx5_flow_root_namespace *ns,
 		} else {
 			MLX5_SET(create_flow_table_in, in,
 				 flow_table_context.table_miss_action,
-				 ns->def_miss_action);
+				 ft->def_miss_action);
 		}
 		break;
 
@@ -210,7 +272,9 @@ static int mlx5_cmd_destroy_flow_table(struct mlx5_flow_root_namespace *ns,
 		 MLX5_CMD_OP_DESTROY_FLOW_TABLE);
 	MLX5_SET(destroy_flow_table_in, in, table_type, ft->type);
 	MLX5_SET(destroy_flow_table_in, in, table_id, ft->id);
-	if (ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		MLX5_SET(destroy_flow_table_in, in, vport_number, ft->vport);
 		MLX5_SET(destroy_flow_table_in, in, other_vport, 1);
 	}
@@ -242,7 +306,9 @@ static int mlx5_cmd_modify_flow_table(struct mlx5_flow_root_namespace *ns,
 				 flow_table_context.lag_master_next_table_id, 0);
 		}
 	} else {
-		if (ft->vport) {
+		if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+		    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+		     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 			MLX5_SET(modify_flow_table_in, in, vport_number,
 				 ft->vport);
 			MLX5_SET(modify_flow_table_in, in, other_vport, 1);
@@ -257,9 +323,9 @@ static int mlx5_cmd_modify_flow_table(struct mlx5_flow_root_namespace *ns,
 				 flow_table_context.table_miss_id,
 				 next_ft->id);
 		} else {
-			MLX5_SET(create_flow_table_in, in,
+			MLX5_SET(modify_flow_table_in, in,
 				 flow_table_context.table_miss_action,
-				 ns->def_miss_action);
+				 ft->def_miss_action);
 		}
 	}
 
@@ -280,7 +346,9 @@ static int mlx5_cmd_create_flow_group(struct mlx5_flow_root_namespace *ns,
 		 MLX5_CMD_OP_CREATE_FLOW_GROUP);
 	MLX5_SET(create_flow_group_in, in, table_type, ft->type);
 	MLX5_SET(create_flow_group_in, in, table_id, ft->id);
-	if (ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		MLX5_SET(create_flow_group_in, in, vport_number, ft->vport);
 		MLX5_SET(create_flow_group_in, in, other_vport, 1);
 	}
@@ -305,7 +373,9 @@ static int mlx5_cmd_destroy_flow_group(struct mlx5_flow_root_namespace *ns,
 	MLX5_SET(destroy_flow_group_in, in, table_type, ft->type);
 	MLX5_SET(destroy_flow_group_in, in, table_id, ft->id);
 	MLX5_SET(destroy_flow_group_in, in, group_id, fg->id);
-	if (ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		MLX5_SET(destroy_flow_group_in, in, vport_number, ft->vport);
 		MLX5_SET(destroy_flow_group_in, in, other_vport, 1);
 	}
@@ -313,22 +383,68 @@ static int mlx5_cmd_destroy_flow_group(struct mlx5_flow_root_namespace *ns,
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 }
 
+static int mlx5_set_extended_dest(struct mlx5_core_dev *dev,
+				  struct fs_fte *fte, bool *extended_dest)
+{
+	int fw_log_max_fdb_encap_uplink =
+		MLX5_CAP_ESW(dev, log_max_fdb_encap_uplink);
+	int num_fwd_destinations = 0;
+	struct mlx5_flow_rule *dst;
+	int num_encap = 0;
+
+	*extended_dest = false;
+	if (!(fte->action.action & MLX5_FLOW_CONTEXT_ACTION_FWD_DEST))
+		return 0;
+
+	list_for_each_entry(dst, &fte->node.children, node.list) {
+		if (dst->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_COUNTER)
+			continue;
+		if (dst->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_VPORT &&
+		    dst->dest_attr.vport.flags & MLX5_FLOW_DEST_VPORT_REFORMAT_ID)
+			num_encap++;
+		num_fwd_destinations++;
+	}
+	if (num_fwd_destinations > 1 && num_encap > 0)
+		*extended_dest = true;
+
+	if (*extended_dest && !fw_log_max_fdb_encap_uplink) {
+		mlx5_core_warn(dev, "FW does not support extended destination");
+		return -EOPNOTSUPP;
+	}
+	if (num_encap > (1 << fw_log_max_fdb_encap_uplink)) {
+		mlx5_core_warn(dev, "FW does not support more than %d encaps",
+			       1 << fw_log_max_fdb_encap_uplink);
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
 static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 			    int opmod, int modify_mask,
 			    struct mlx5_flow_table *ft,
 			    unsigned group_id,
 			    struct fs_fte *fte)
 {
-	unsigned int inlen = MLX5_ST_SZ_BYTES(set_fte_in) +
-		fte->dests_size * MLX5_ST_SZ_BYTES(dest_format_struct);
 	u32 out[MLX5_ST_SZ_DW(set_fte_out)] = {0};
+	bool extended_dest = false;
 	struct mlx5_flow_rule *dst;
 	void *in_flow_context, *vlan;
 	void *in_match_value;
+	unsigned int inlen;
+	int dst_cnt_size;
 	void *in_dests;
 	u32 *in;
 	int err;
 
+	if (mlx5_set_extended_dest(dev, fte, &extended_dest))
+		return -EOPNOTSUPP;
+
+	if (!extended_dest)
+		dst_cnt_size = MLX5_ST_SZ_BYTES(dest_format_struct);
+	else
+		dst_cnt_size = MLX5_ST_SZ_BYTES(extended_dest_format);
+
+	inlen = MLX5_ST_SZ_BYTES(set_fte_in) + fte->dests_size * dst_cnt_size;
 	in = kvzalloc(inlen, GFP_KERNEL);
 	if (!in)
 		return -ENOMEM;
@@ -339,7 +455,8 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 	MLX5_SET(set_fte_in, in, table_type, ft->type);
 	MLX5_SET(set_fte_in, in, table_id,   ft->id);
 	MLX5_SET(set_fte_in, in, flow_index, fte->index);
-	if (ft->vport) {
+	if (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	    ft->type == FS_FT_ESW_INGRESS_ACL || ft->vport) {
 		MLX5_SET(set_fte_in, in, vport_number, ft->vport);
 		MLX5_SET(set_fte_in, in, other_vport, 1);
 	}
@@ -352,9 +469,20 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 	MLX5_SET(flow_context, in_flow_context, flow_source,
 		 fte->flow_context.flow_source);
 
-	MLX5_SET(flow_context, in_flow_context, action, fte->action.action);
-	MLX5_SET(flow_context, in_flow_context, packet_reformat_id,
-		 fte->action.reformat_id);
+	MLX5_SET(flow_context, in_flow_context, extended_destination,
+		 extended_dest);
+	if (extended_dest) {
+		u32 action;
+
+		action = fte->action.action &
+			~MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
+		MLX5_SET(flow_context, in_flow_context, action, action);
+	} else {
+		MLX5_SET(flow_context, in_flow_context, action,
+			 fte->action.action);
+		MLX5_SET(flow_context, in_flow_context, packet_reformat_id,
+			 fte->action.reformat_id);
+	}
 	MLX5_SET(flow_context, in_flow_context, modify_header_id,
 		 fte->action.modify_id);
 
@@ -396,10 +524,20 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 				id = dst->dest_attr.vport.num;
 				MLX5_SET(dest_format_struct, in_dests,
 					 destination_eswitch_owner_vhca_id_valid,
-					 dst->dest_attr.vport.vhca_id_valid);
+					 !!(dst->dest_attr.vport.flags &
+					    MLX5_FLOW_DEST_VPORT_VHCA_ID));
 				MLX5_SET(dest_format_struct, in_dests,
 					 destination_eswitch_owner_vhca_id,
 					 dst->dest_attr.vport.vhca_id);
+				if (extended_dest) {
+					MLX5_SET(dest_format_struct, in_dests,
+						 packet_reformat,
+						 !!(dst->dest_attr.vport.flags &
+						    MLX5_FLOW_DEST_VPORT_REFORMAT_ID));
+					MLX5_SET(extended_dest_format, in_dests,
+						 packet_reformat_id,
+						 dst->dest_attr.vport.reformat_id);
+				}
 				break;
 			default:
 				id = dst->dest_attr.tir_num;
@@ -408,7 +546,7 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 			MLX5_SET(dest_format_struct, in_dests, destination_type,
 				 type);
 			MLX5_SET(dest_format_struct, in_dests, destination_id, id);
-			in_dests += MLX5_ST_SZ_BYTES(dest_format_struct);
+			in_dests += dst_cnt_size;
 			list_size++;
 		}
 
@@ -429,7 +567,7 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 
 			MLX5_SET(flow_counter_list, in_dests, flow_counter_id,
 				 dst->dest_attr.counter_id);
-			in_dests += MLX5_ST_SZ_BYTES(dest_format_struct);
+			in_dests += dst_cnt_size;
 			list_size++;
 		}
 		if (list_size > max_list_size) {
@@ -489,7 +627,9 @@ static int mlx5_cmd_delete_fte(struct mlx5_flow_root_namespace *ns,
 	MLX5_SET(delete_fte_in, in, table_type, ft->type);
 	MLX5_SET(delete_fte_in, in, table_id, ft->id);
 	MLX5_SET(delete_fte_in, in, flow_index, fte->index);
-	if (ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		MLX5_SET(delete_fte_in, in, vport_number, ft->vport);
 		MLX5_SET(delete_fte_in, in, other_vport, 1);
 	}
@@ -497,7 +637,9 @@ static int mlx5_cmd_delete_fte(struct mlx5_flow_root_namespace *ns,
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 }
 
-int mlx5_cmd_fc_alloc(struct mlx5_core_dev *dev, u32 *id)
+int mlx5_cmd_fc_bulk_alloc(struct mlx5_core_dev *dev,
+			   enum mlx5_fc_bulk_alloc_bitmask alloc_bitmask,
+			   u32 *id)
 {
 	u32 in[MLX5_ST_SZ_DW(alloc_flow_counter_in)]   = {0};
 	u32 out[MLX5_ST_SZ_DW(alloc_flow_counter_out)] = {0};
@@ -505,11 +647,17 @@ int mlx5_cmd_fc_alloc(struct mlx5_core_dev *dev, u32 *id)
 
 	MLX5_SET(alloc_flow_counter_in, in, opcode,
 		 MLX5_CMD_OP_ALLOC_FLOW_COUNTER);
+	MLX5_SET(alloc_flow_counter_in, in, flow_counter_bulk, alloc_bitmask);
 
 	err = mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 	if (!err)
 		*id = MLX5_GET(alloc_flow_counter_out, out, flow_counter_id);
 	return err;
+}
+
+int mlx5_cmd_fc_alloc(struct mlx5_core_dev *dev, u32 *id)
+{
+	return mlx5_cmd_fc_bulk_alloc(dev, 0, id);
 }
 
 int mlx5_cmd_fc_free(struct mlx5_core_dev *dev, u32 id)
@@ -546,68 +694,24 @@ int mlx5_cmd_fc_query(struct mlx5_core_dev *dev, u32 id,
 	return 0;
 }
 
-struct mlx5_cmd_fc_bulk {
-	u32 id;
-	int num;
-	int outlen;
-	u32 out[0];
-};
-
-struct mlx5_cmd_fc_bulk *
-mlx5_cmd_fc_bulk_alloc(struct mlx5_core_dev *dev, u32 id, int num)
+int mlx5_cmd_fc_get_bulk_query_out_len(int bulk_len)
 {
-	struct mlx5_cmd_fc_bulk *b;
-	int outlen =
-		MLX5_ST_SZ_BYTES(query_flow_counter_out) +
-		MLX5_ST_SZ_BYTES(traffic_counter) * num;
-
-	b = kzalloc(sizeof(*b) + outlen, GFP_KERNEL);
-	if (!b)
-		return NULL;
-
-	b->id = id;
-	b->num = num;
-	b->outlen = outlen;
-
-	return b;
+	return MLX5_ST_SZ_BYTES(query_flow_counter_out) +
+		MLX5_ST_SZ_BYTES(traffic_counter) * bulk_len;
 }
 
-void mlx5_cmd_fc_bulk_free(struct mlx5_cmd_fc_bulk *b)
+int mlx5_cmd_fc_bulk_query(struct mlx5_core_dev *dev, u32 base_id, int bulk_len,
+			   u32 *out)
 {
-	kfree(b);
-}
-
-int
-mlx5_cmd_fc_bulk_query(struct mlx5_core_dev *dev, struct mlx5_cmd_fc_bulk *b)
-{
+	int outlen = mlx5_cmd_fc_get_bulk_query_out_len(bulk_len);
 	u32 in[MLX5_ST_SZ_DW(query_flow_counter_in)] = {0};
-	unsigned int num = b->num <= 1 ? 0 : b->num;
 
 	MLX5_SET(query_flow_counter_in, in, opcode,
 		 MLX5_CMD_OP_QUERY_FLOW_COUNTER);
 	MLX5_SET(query_flow_counter_in, in, op_mod, 0);
-	MLX5_SET(query_flow_counter_in, in, flow_counter_id, b->id);
-	MLX5_SET(query_flow_counter_in, in, num_of_counters, num);
-	return mlx5_cmd_exec(dev, in, sizeof(in), b->out, b->outlen);
-}
-
-void mlx5_cmd_fc_bulk_get(struct mlx5_core_dev *dev,
-			  struct mlx5_cmd_fc_bulk *b, u32 id,
-			  u64 *packets, u64 *bytes)
-{
-	int index = id - b->id;
-	void *stats;
-
-	if (index < 0 || index >= b->num) {
-		mlx5_core_warn(dev, "Flow counter id (0x%x) out of range (0x%x..0x%x). Counter ignored.\n",
-			       id, b->id, b->id + b->num - 1);
-		return;
-	}
-
-	stats = MLX5_ADDR_OF(query_flow_counter_out, b->out,
-			     flow_statistics[index]);
-	*packets = MLX5_GET64(traffic_counter, stats, packets);
-	*bytes = MLX5_GET64(traffic_counter, stats, octets);
+	MLX5_SET(query_flow_counter_in, in, flow_counter_id, base_id);
+	MLX5_SET(query_flow_counter_in, in, num_of_counters, bulk_len);
+	return mlx5_cmd_exec(dev, in, sizeof(in), out, outlen);
 }
 
 int mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,

@@ -1329,40 +1329,6 @@ start()
                                     fi
                                 fi
                         ;;
-                        eth_ipoib)
-                                if [ -f /etc/udev/scripts/net-rename-sideways.sh ]; then
-                                    # Avoid renaming eIPoIB interfaces as XenServer scripts can't handle them
-                                    sed -i -e "s/echo \$name/echo \$1/g" /etc/udev/scripts/net-rename-sideways.sh
-                                fi
-                                load_module $mod
-				#load the daemon ipoibd
-				if [ -e "/usr/sbin/eipoib_daemon" ]; then
-					/usr/sbin/eipoib_daemon start
-				fi
-                                if [ -x $XE ]; then
-                                    get_mlx4_en_interfaces
-                                    if [ -n "$mlx4_en_interfaces" ]; then
-                                        for i in $mlx4_en_interfaces
-                                        do
-                                            for i_uuid in `xe_get_uuid $i`
-                                            do
-                                                xe_replug_pif $i_uuid
-                                            done
-                                            if [ -x $INTERFACE_RECONFIGURE ]; then
-                                                $INTERFACE_RECONFIGURE rewrite 2> /dev/null
-                                                for n_uuid in `xe_get_net_uuid_by_device $i`
-                                                do
-                                                    $INTERFACE_RECONFIGURE --force `xe_get_bridge $n_uuid` up
-                                                done
-                                            fi
-                                        done
-                                    fi
-                                    xe_bond_recover
-                                fi
-                                if [ -f /etc/udev/scripts/net-rename-sideways.sh ]; then
-                                    sed -i -e "s/echo \$1/echo \$name/g" /etc/udev/scripts/net-rename-sideways.sh
-                                fi
-                        ;;
                         *)
                                 load_module $mod
                         ;;
@@ -1655,31 +1621,22 @@ stop()
                 done
             fi
 
-            if is_module ib_isert; then
-                cannot_continue=1
-                blocking_modules="${blocking_modules} ib_isert"
-                echo "Please close all isert sessions and unload 'ib_isert' module."
-            fi
-
-            if is_module nvme_rdma; then
-                cannot_continue=1
-                blocking_modules="${blocking_modules} nvme_rdma"
-                echo "Please close all nvme sessions and unload 'nvme_rdma' module."
-            fi
-
-            if is_module nvmet_rdma; then
-                cannot_continue=1
-                blocking_modules="${blocking_modules} nvmet_rdma"
-                echo "Please close all nvmet sessions and unload 'nvmet_rdma' module."
-            fi
-
-            # check other storage modules
-            for storage_mod in rpcrdma xprtrdma ib_srpt
-            do
-                if is_module ${storage_mod}; then
+            for mod in ib_isert nvme_rdma nvmet_rdma rpcrdma xprtrdma ib_srpt; do
+                if is_module $mod; then
+                    if is_ref $mod; then
+                        # A misleading name. If we got here: refcnt=0
+                        continue
+                    fi
                     cannot_continue=1
-                    blocking_modules="${blocking_modules} ${storage_mod}"
-                    echo "Please make sure module '${storage_mod}' is not in use and unload it."
+                    blocking_modules="${blocking_modules} $mod"
+                    case "$mod" in
+                    ib_isert) echo "Please close all isert sessions and unload 'ib_isert' module.";;
+                    nvme_rdma) echo "Please close all nvme sessions and unload 'nvme_rdma' module.";;
+                    nvmet_rdma) echo "Please close all nvmet sessions and unload 'nvmet_rdma' module.";;
+                    rpcrdma | xprtrdma | ib_srpt)
+                        echo "Please make sure module '$mod' is not in use and unload it."
+                        ;;
+                    esac
                 fi
             done
 
@@ -1739,13 +1696,6 @@ stop()
             fi
         fi
 
-        # Stop ipoibd (for ipoib-pv module)
-        ipoibdpid=$(pidof -x ipoibd)
-        if [ -n "${ipoibdpid:-}" ]; then
-            if [ -e "/usr/sbin/eipoib_daemon" ]; then
-                /usr/sbin/eipoib_daemon stop
-            fi
-        fi
         # Stop SRP daemon if needed
         srp_daemon_pids=$(pgrep srp_daemon)
         if [ -n "${srp_daemon_pids:-}" ]; then
@@ -1952,7 +1902,6 @@ case $ACTION in
                 ;;
         stop)
                 if [ $FORCE -eq 0 ]; then
-                        echo "WARNING: Option 'stop' is deprecated and will be replaced by 'force-stop' in next release."
                         if [ "X${ALLOW_STOP}" != "Xyes" ]; then
                                 echo "ERROR: Option 'stop' is disabled!"
                                 log_msg "ERROR: Option 'stop' is disabled!"
