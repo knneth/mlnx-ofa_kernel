@@ -144,7 +144,9 @@ int mlx5dr_action_destroy(struct mlx5dr_action *action);
 static inline bool
 mlx5dr_is_supported(struct mlx5_core_dev *dev)
 {
-	return MLX5_CAP_GEN(dev, roce) &&
+	return (MLX5_CAP_GEN(dev, steering_format_version) <=
+		MLX5_HW_CONNECTX_6DX) &&
+	       MLX5_CAP_GEN(dev, roce) &&
 		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) ||
 		 MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner));
 }

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/configfs.c
 
 Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
 ---
- drivers/nvme/target/configfs.c | 99 +++++++++++++++++++++++++++++++++---------
+ drivers/nvme/target/configfs.c | 99 ++++++++++++++++++++++++++--------
  1 file changed, 78 insertions(+), 21 deletions(-)
 
 --- a/drivers/nvme/target/configfs.c

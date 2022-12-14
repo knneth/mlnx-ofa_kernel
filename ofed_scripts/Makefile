@@ -24,6 +24,7 @@ obj-$(CONFIG_INFINIBAND_EHCA)   += drivers/infiniband/hw/ehca/
 obj-$(CONFIG_INFINIBAND_AMSO1100)   += drivers/infiniband/hw/amso1100/
 obj-$(CONFIG_MLX5_CORE)         += drivers/net/ethernet/mellanox/mlx5/core/
 obj-$(CONFIG_MLXFW)             += drivers/net/ethernet/mellanox/mlxfw/
+obj-$(CONFIG_MLXSW_CORE)	+= drivers/net/ethernet/mellanox/mlxsw/
 obj-$(CONFIG_RDS)               += net/rds/
 obj-$(CONFIG_MLXDEVM)          += net/mlxdevm/
 obj-$(CONFIG_MEMTRACK)          += drivers/infiniband/debug/

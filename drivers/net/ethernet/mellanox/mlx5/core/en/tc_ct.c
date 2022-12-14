@@ -1065,7 +1065,8 @@ mlx5_tc_ct_entry_add_rules(struct mlx5_tc_ct_priv *ct_priv,
 	return 0;
 
 err_nat:
-	mlx5_tc_ct_entry_del_rule(ct_priv, entry, false);
+	if (mlx5_tc_ct_entry_in_ct_table(entry))
+		mlx5_tc_ct_entry_del_rule(ct_priv, entry, false);
 err_orig:
 	mlx5_tc_ct_counter_put(ct_priv, entry);
 	return err;

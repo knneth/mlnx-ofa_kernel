@@ -127,7 +127,7 @@ Change-Id: Ie6a0d6adb0ef9d14831be1f571479b6edacb9ecc
  	fw_reset->timer.expires = round_jiffies(jiffies + MLX5_RESET_POLL_INTERVAL);
  	add_timer(&fw_reset->timer);
  }
-@@ -318,7 +376,12 @@ static void mlx5_sync_reset_now_event(st
+@@ -335,7 +393,12 @@ static void mlx5_sync_reset_now_event(st
  	mlx5_enter_error_state(dev, true);
  	mlx5_unload_one(dev, false);
  done:
@@ -140,7 +140,7 @@ Change-Id: Ie6a0d6adb0ef9d14831be1f571479b6edacb9ecc
  }
  
  static void mlx5_sync_reset_abort_event(struct work_struct *work)
-@@ -373,6 +436,27 @@ static int fw_reset_event_notifier(struc
+@@ -390,6 +453,27 @@ static int fw_reset_event_notifier(struc
  	return NOTIFY_OK;
  }
  
@@ -168,7 +168,7 @@ Change-Id: Ie6a0d6adb0ef9d14831be1f571479b6edacb9ecc
  void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev)
  {
  	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
-@@ -407,6 +491,9 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -424,6 +508,9 @@ int mlx5_fw_reset_init(struct mlx5_core_
  	INIT_WORK(&fw_reset->reset_now_work, mlx5_sync_reset_now_event);
  	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);
  

@@ -6835,6 +6835,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_CHECKING([if mm.h has kvzalloc])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
+		#include <linux/slab.h>
 	],[
 		kvzalloc(0, 0);
 
@@ -6922,6 +6923,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_CHECKING([if mm.h has kvmalloc_array])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
+		#include <linux/slab.h>
 	],[
 		kvmalloc_array(0, 0, 0);
 
@@ -6937,6 +6939,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_CHECKING([if mm.h has kvmalloc_node])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
+		#include <linux/slab.h>
 	],[
 		kvmalloc_node(0, 0, 0);
 
@@ -6952,6 +6955,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_CHECKING([if mm.h has kvmalloc])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
+		#include <linux/slab.h>
 	],[
 		kvmalloc(0, 0);
 
@@ -6967,6 +6971,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_CHECKING([if mm.h has kvzalloc_node])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
+		#include <linux/slab.h>
 	],[
 		kvzalloc_node(0, 0, 0);
 
@@ -6982,6 +6987,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_CHECKING([if mm.h has kvcalloc])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
+		#include <linux/slab.h>
 	],[
 		kvcalloc(0, 0, 0);
 

@@ -1183,8 +1183,12 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 	mutex_unlock(&priv->state_lock);
 
 	/* In DSCP trust state, we need 8 send queues per channel */
-	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
 		mlx5e_setup_tc_mqprio(priv, &mqprio);
+	} else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP) {
+		mqprio.num_tc = priv->pcp_tc_num;
+		mlx5e_setup_tc_mqprio(priv, &mqprio);
+	}
 
 	return err;
 }

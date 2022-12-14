@@ -1692,6 +1692,8 @@ static int esw_create_miss_meter_fdb_tables(struct mlx5_eswitch *esw)
 	if (mlx5_core_is_ecpf(dev))
 		table_size++;
 
+	table_size += mlx5_sf_max_functions(esw->dev);
+
 	ft_attr.max_fte = table_size;
 	ft_attr.prio = FDB_MISS_METER;
 

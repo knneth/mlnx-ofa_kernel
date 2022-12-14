@@ -899,6 +899,7 @@ struct mlx5e_priv {
 #ifdef CONFIG_MLX5_CORE_EN_DCB
 	struct mlx5e_dcbx_dp       dcbx_dp;
 #endif
+	int			   pcp_tc_num;
 	/* priv data path fields - end */
 
 	u32                        msglevel;

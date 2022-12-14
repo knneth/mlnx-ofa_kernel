@@ -4137,13 +4137,16 @@ int mlx5e_setup_tc_mqprio(struct mlx5e_priv *priv,
 
 	mqprio->hw = TC_MQPRIO_HW_OFFLOAD_TCS;
 
-	if (tc && tc != MLX5E_MAX_NUM_TC)
+	if (tc && tc != MLX5E_MAX_NUM_TC && priv->dcbx_dp.trust_state != MLX5_QPTS_TRUST_PCP)
 		return -EINVAL;
 
 	mutex_lock(&priv->state_lock);
 
 	new_channels.params = priv->channels.params;
 	new_channels.params.num_tc = tc ? tc : 1;
+
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP)
+		priv->pcp_tc_num = tc;
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		struct mlx5e_params old_params;
@@ -6071,6 +6074,7 @@ int mlx5e_netdev_init(struct net_device *netdev,
 	priv->netdev      = netdev;
 	priv->msglevel    = MLX5E_MSG_LEVEL;
 	priv->max_opened_tc = 1;
+	priv->pcp_tc_num = 1;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	priv->channels.params.num_rl_txqs = 0;
 	priv->max_opened_special_sq = 0;
