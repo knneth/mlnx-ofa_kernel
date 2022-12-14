@@ -207,10 +207,10 @@ static int ipoib_set_channels(struct net_device *dev,
 }
 
 static const struct ethtool_ops ipoib_ethtool_ops_rss = {
+	.get_link_ksettings	= ipoib_get_link_ksettings,
 	.get_drvinfo		= ipoib_get_drvinfo,
 	.get_coalesce		= ipoib_get_coalesce,
 	.set_coalesce		= ipoib_set_coalesce_rss,
-	.get_settings		= ipoib_get_settings,
 	.get_link		= ethtool_op_get_link,
 	.get_strings		= ipoib_get_strings_rss,
 	.get_ethtool_stats	= ipoib_get_ethtool_stats_rss,

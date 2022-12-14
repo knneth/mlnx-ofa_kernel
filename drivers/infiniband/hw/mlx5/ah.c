@@ -54,7 +54,6 @@ static struct ib_ah *create_ib_ah(struct mlx5_ib_dev *dev,
 	if (ah_attr->type == RDMA_AH_ATTR_TYPE_ROCE) {
 		u8 tmp_hop_limit = 0;
 		u16 sport = rdma_ah_get_udp_sport(ah_attr);
-
 		gid_type = ah_attr->grh.sgid_attr->gid_type;
 
 		if ((gid_type != IB_GID_TYPE_IB) &&

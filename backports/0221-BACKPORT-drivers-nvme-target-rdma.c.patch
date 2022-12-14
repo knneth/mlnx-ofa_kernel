@@ -1,0 +1,42 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
+
+Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
+---
+ drivers/nvme/target/rdma.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/nvme/target/rdma.c
++++ b/drivers/nvme/target/rdma.c
+@@ -145,8 +145,13 @@ static bool nvmet_rdma_use_srq;
+ module_param_named(use_srq, nvmet_rdma_use_srq, bool, 0444);
+ MODULE_PARM_DESC(use_srq, "Use shared receive queue.");
+ 
++#ifdef HAVE_PARAM_OPS_ULLONG
+ static unsigned long long nvmet_rdma_offload_mem_start = 0;
+ module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ullong, 0444);
++#else
++static unsigned long nvmet_rdma_offload_mem_start = 0;
++module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ulong, 0444);
++#endif
+ MODULE_PARM_DESC(offload_mem_start,
+ 		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
+ 		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");
+@@ -1724,6 +1729,7 @@ static void nvmet_rdma_remove_port(struc
+ static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
+ 		struct nvmet_port *nport, char *traddr)
+ {
++#ifdef HAVE_INET_ADDR_IS_ANY
+ 	struct nvmet_rdma_port *port = nport->priv;
+ 	struct rdma_cm_id *cm_id = port->cm_id;
+ 
+@@ -1737,6 +1743,9 @@ static void nvmet_rdma_disc_port_addr(st
+ 	} else {
+ 		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
+ 	}
++#else
++	memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
++#endif
+ }
+ 
+ static void nvmet_rdma_add_one(struct ib_device *ib_device)

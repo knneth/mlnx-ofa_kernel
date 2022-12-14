@@ -1,0 +1,28 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/sw/rxe/rxe_net.c
+
+Change-Id: Ic31616c8a00b97688ba10583629927b87ad5daf2
+---
+ drivers/infiniband/sw/rxe/rxe_net.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/infiniband/sw/rxe/rxe_net.c
++++ b/drivers/infiniband/sw/rxe/rxe_net.c
+@@ -467,9 +467,17 @@ int rxe_send(struct rxe_pkt_info *pkt, s
+ 	atomic_inc(&pkt->qp->skb_out);
+ 
+ 	if (av->network_type == RDMA_NETWORK_IPV4) {
++#ifdef HAVE_IP_LOCAL_OUT_3_PARAMS
+ 		err = ip_local_out(dev_net(skb_dst(skb)->dev), skb->sk, skb);
++#else
++		err = ip_local_out(skb);
++#endif
+ 	} else if (av->network_type == RDMA_NETWORK_IPV6) {
++#ifdef HAVE_IP_LOCAL_OUT_3_PARAMS
+ 		err = ip6_local_out(dev_net(skb_dst(skb)->dev), skb->sk, skb);
++#else
++		err = ip6_local_out(skb);
++#endif
+ 	} else {
+ 		pr_err("Unknown layer 3 protocol: %d\n", av->network_type);
+ 		atomic_dec(&pkt->qp->skb_out);

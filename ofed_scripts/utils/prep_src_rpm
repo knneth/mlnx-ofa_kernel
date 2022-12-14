@@ -26,11 +26,20 @@
 # and/or other materials provided with the distribution.
 #
 
+for python in python python3 python2 false; do
+	if which $python >/dev/null 2>&1; then
+		break
+	fi
+case "$python" in *false)
+	echo "No python on the system. Aborting"
+	;;
+esac
+
 # prepare source tgz
-python setup.py sdist
+$python setup.py sdist
 
 # prepare spec file
-python setup.py bdist_rpm  --spec-only
+$python setup.py bdist_rpm  --spec-only
 sed -i "s/BuildArch/#BuildArch/" dist/ofed-le-utils.spec
 
 # prepare src rpm

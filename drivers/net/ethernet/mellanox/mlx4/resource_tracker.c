@@ -1055,7 +1055,7 @@ static int handle_unexisting_counter(struct mlx4_dev *dev,
 			 __func__, slave, err);
 	} else {
 		qpc->pri_path.counter_index = counter_idx;
-		mlx4_dbg(dev, "%s: alloc new counter for slave %d index %d\n",
+		mlx4_dbg(dev, "%s: new counter for slave %d index %d\n",
 			 __func__, slave, qpc->pri_path.counter_index);
 		err = 0;
 	}
@@ -2317,11 +2317,20 @@ static int counter_alloc_res(struct mlx4_dev *dev, int slave, int op, int cmd,
 		return -EINVAL;
 
 	err = mlx4_grant_resource(dev, slave, RES_COUNTER, 1, 0);
-	if (err)
+	if (err) {
+		/* If we have no quota left, mark it as sink counter alloc success */
+		if (err == -EDQUOT) {
+			set_param_l(out_param, MLX4_SINK_COUNTER_INDEX(dev));
+			err = 0;
+		}
 		return err;
+	}
 
 	err = __mlx4_counter_alloc(dev, &index);
 	if (err || index == MLX4_SINK_COUNTER_INDEX(dev)) {
+		/* This shall never happen (mlx4_grant_resource policy),
+		 * but to be on the safe side
+		 */
 		if (!err)
 			set_param_l(out_param, index);
 		mlx4_release_resource(dev, slave, RES_COUNTER, 1, 0);

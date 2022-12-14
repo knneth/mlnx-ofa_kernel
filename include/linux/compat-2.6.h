@@ -16,6 +16,7 @@
 #include <linux/autoconf.h>
 #endif
 #include <linux/compat_autoconf.h>
+#include <linux/compat_fix.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
@@ -95,7 +96,5 @@ void backport_dependency_symbol(void);
 #ifndef HAVE_ELFCOREHDR_ADDR_EXPORTED
 #define elfcorehdr_addr LINUX_BACKPORT(elfcorehdr_addr)
 #endif
-
-#include <linux/compat_fix.h>
 
 #endif /* LINUX_26_COMPAT_H */

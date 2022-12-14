@@ -37,7 +37,6 @@
 #include <linux/mlx5/cq.h>
 #include <linux/mlx5/driver.h>
 #include "mlx5_core.h"
-#include "vxlan.h"
 
 enum {
 	QP_PID,
@@ -180,49 +179,6 @@ void mlx5_eq_debugfs_cleanup(struct mlx5_core_dev *dev)
 	debugfs_remove_recursive(dev->priv.eq_debugfs);
 }
 
-int mlx5_vxlan_debugfs_init(struct mlx5_core_dev *dev)
-{
-	if (!mlx5_debugfs_root)
-		return 0;
-
-	dev->priv.vxlan_debugfs = debugfs_create_dir("VXLAN",
-						     dev->priv.dbg_root);
-
-	return dev->priv.vxlan_debugfs ? 0 : -ENOMEM;
-}
-
-void mlx5_vxlan_debugfs_cleanup(struct mlx5_core_dev *dev)
-{
-	if (!mlx5_debugfs_root)
-		return;
-
-	debugfs_remove_recursive(dev->priv.vxlan_debugfs);
-}
-
-int mlx5_vxlan_debugfs_add(struct mlx5_core_dev *dev,
-			   struct mlx5e_vxlan *vxlan)
-{
-	char resn[32];
-
-	if (!mlx5_debugfs_root)
-		return 0;
-
-	sprintf(resn, "%d", vxlan->udp_port);
-	vxlan->dbg = debugfs_create_u16(resn, 0400, dev->priv.vxlan_debugfs,
-					&vxlan->udp_port);
-
-	return vxlan->dbg ? 0 : -ENOMEM;
-}
-
-void mlx5_vxlan_debugfs_remove(struct mlx5_core_dev *dev,
-			       struct mlx5e_vxlan *vxlan)
-{
-	if (!mlx5_debugfs_root)
-		return;
-
-	debugfs_remove(vxlan->dbg);
-}
-
 static ssize_t average_read(struct file *filp, char __user *buf, size_t count,
 			    loff_t *pos)
 {
@@ -231,22 +187,13 @@ static ssize_t average_read(struct file *filp, char __user *buf, size_t count,
 	int ret;
 	char tbuf[22];
 
-	if (*pos)
-		return 0;
-
 	stats = filp->private_data;
 	spin_lock_irq(&stats->lock);
 	if (stats->n)
 		field = div64_u64(stats->sum, stats->n);
 	spin_unlock_irq(&stats->lock);
 	ret = snprintf(tbuf, sizeof(tbuf), "%llu\n", field);
-	if (ret > 0) {
-		if (copy_to_user(buf, tbuf, ret))
-			return -EFAULT;
-	}
-
-	*pos += ret;
-	return ret;
+	return simple_read_from_buffer(buf, count, pos, tbuf, ret);
 }
 
 static ssize_t average_write(struct file *filp, const char __user *buf,
@@ -569,9 +516,6 @@ static ssize_t dbg_read(struct file *filp, char __user *buf, size_t count,
 	u64 field;
 	int ret;
 
-	if (*pos)
-		return 0;
-
 	desc = filp->private_data;
 	d = (void *)(desc - desc->i) - sizeof(*d);
 	switch (d->type) {
@@ -601,13 +545,7 @@ static ssize_t dbg_read(struct file *filp, char __user *buf, size_t count,
 	else
 		ret = snprintf(tbuf, sizeof(tbuf), "0x%llx\n", field);
 
-	if (ret > 0) {
-		if (copy_to_user(buf, tbuf, ret))
-			return -EFAULT;
-	}
-
-	*pos += ret;
-	return ret;
+	return simple_read_from_buffer(buf, count, pos, tbuf, ret);
 }
 
 static const struct file_operations fops = {

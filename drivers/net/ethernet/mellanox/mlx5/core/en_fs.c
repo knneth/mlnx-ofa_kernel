@@ -854,18 +854,11 @@ del_rules:
 	return err;
 }
 
-#ifdef CONFIG_MLX5_INNER_RSS
-#define MLX5E_TTC_NUM_GROUPS	4
-#define MLX5E_TTC_GROUP0_SIZE	BIT(4)
-#else
 #define MLX5E_TTC_NUM_GROUPS	3
-#define MLX5E_TTC_GROUP0_SIZE	0
-#endif
 #define MLX5E_TTC_GROUP1_SIZE	(BIT(3) + MLX5E_NUM_TUNNEL_TT)
 #define MLX5E_TTC_GROUP2_SIZE	 BIT(1)
 #define MLX5E_TTC_GROUP3_SIZE	 BIT(0)
-#define MLX5E_TTC_TABLE_SIZE	(MLX5E_TTC_GROUP0_SIZE +\
-				 MLX5E_TTC_GROUP1_SIZE +\
+#define MLX5E_TTC_TABLE_SIZE	(MLX5E_TTC_GROUP1_SIZE +\
 				 MLX5E_TTC_GROUP2_SIZE +\
 				 MLX5E_TTC_GROUP3_SIZE)
 
@@ -897,6 +890,7 @@ static int mlx5e_create_ttc_table_groups(struct mlx5e_ttc_table *ttc,
 		return -ENOMEM;
 	}
 
+	/* L4 Group */
 	mc = MLX5_ADDR_OF(create_flow_group_in, in, match_criteria);
 	MLX5_SET_TO_ONES(fte_match_param, mc, outer_headers.ip_protocol);
 	if (use_ipv)
@@ -904,20 +898,6 @@ static int mlx5e_create_ttc_table_groups(struct mlx5e_ttc_table *ttc,
 	else
 		MLX5_SET_TO_ONES(fte_match_param, mc, outer_headers.ethertype);
 	MLX5_SET_CFG(in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
-#ifdef CONFIG_MLX5_INNER_RSS
-	/* Tunneled L4 Group */
-	MLX5_SET_TO_ONES(fte_match_param, mc, outer_headers.udp_dport);
-	MLX5_SET_CFG(in, start_flow_index, ix);
-	ix += MLX5E_TTC_GROUP0_SIZE;
-	MLX5_SET_CFG(in, end_flow_index, ix - 1);
-	ft->g[ft->num_groups] = mlx5_create_flow_group(ft->t, in);
-	if (IS_ERR(ft->g[ft->num_groups]))
-		goto err;
-	ft->num_groups++;
-
-	MLX5_SET(fte_match_param, mc, outer_headers.udp_dport, 0);
-#endif
-	/* L4 Group */
 	MLX5_SET_CFG(in, start_flow_index, ix);
 	ix += MLX5E_TTC_GROUP1_SIZE;
 	MLX5_SET_CFG(in, end_flow_index, ix - 1);
@@ -956,70 +936,6 @@ err:
 
 	return err;
 }
-
-#ifdef CONFIG_MLX5_INNER_RSS
-static struct mlx5_flow_handle *
-mlx5e_generate_tunneled_ttc_rule(struct mlx5e_priv *priv,
-				 struct mlx5_flow_table *ft,
-				 struct mlx5_flow_destination *dest,
-				 u16 etype, u8 proto, u16 port)
-{
-	int match_ipv_outer = MLX5_CAP_FLOWTABLE_NIC_RX(priv->mdev, ft_field_support.outer_ip_version);
-	MLX5_DECLARE_FLOW_ACT(flow_act);
-	struct mlx5_flow_handle *rule;
-	struct mlx5_flow_spec *spec;
-	int err = 0;
-	u8 ipv;
-
-	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
-	if (!spec)
-		return ERR_PTR(-ENOMEM);
-
-	ipv = mlx5e_etype_to_ipv(etype);
-	if (match_ipv_outer && ipv) {
-		spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
-		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_version);
-		MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_version, ipv);
-	} else if (etype) {
-		spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
-		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ethertype);
-		MLX5_SET(fte_match_param, spec->match_value, outer_headers.ethertype, etype);
-	}
-
-	if (proto) {
-		spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
-		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_protocol);
-		MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_protocol, proto);
-	}
-
-	if (port) {
-		spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
-		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.udp_dport);
-		MLX5_SET(fte_match_param, spec->match_value, outer_headers.udp_dport, port);
-	}
-
-	rule = mlx5_add_flow_rules(ft, spec, &flow_act, dest, 1);
-	if (IS_ERR(rule)) {
-		err = PTR_ERR(rule);
-		netdev_err(priv->netdev, "%s: add rule failed\n", __func__);
-	}
-
-	kvfree(spec);
-	return err ? ERR_PTR(err) : rule;
-}
-
-struct mlx5_flow_handle *mlx5e_add_udp_tunnel_flow_rule(struct mlx5e_priv *priv,
-							u16 etype, u16 port)
-{
-	struct mlx5_flow_table *ft = priv->fs.ttc.ft.t;
-	struct mlx5_flow_destination dest;
-
-	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
-	dest.ft = priv->fs.inner_ttc.ft.t;
-
-	return mlx5e_generate_tunneled_ttc_rule(priv, ft, &dest, etype, IPPROTO_UDP, port);
-}
-#endif
 
 static struct mlx5_flow_handle *
 mlx5e_generate_inner_ttc_rule(struct mlx5e_priv *priv,

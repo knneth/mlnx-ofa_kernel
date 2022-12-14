@@ -4,6 +4,8 @@
 #include "../../compat/config.h"
 
 #include_next <linux/mm.h>
+#include <linux/page_ref.h>
+
 #include <linux/overflow.h>
 
 #ifndef HAVE_KVZALLOC
@@ -78,6 +80,13 @@ static inline void *kvzalloc_node(size_t size, gfp_t flags, int node)
 static inline void *kvcalloc(size_t n, size_t size, gfp_t flags)
 {
 	return kvmalloc_array(n, size, flags | __GFP_ZERO);
+}
+#endif
+
+#ifndef HAVE_IS_PCI_P2PDMA_PAGE
+static inline bool is_pci_p2pdma_page(const struct page *page)
+{
+        return false;
 }
 #endif
 

@@ -1,0 +1,19 @@
+From: Roi Dayan <roid@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag_mp.h
+
+Change-Id: Ib9a496683d49922dea2378ce6adb61a74f02211d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag_mp.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.h
+@@ -12,7 +12,7 @@ struct lag_mp {
+ 	struct fib_info           *mfi; /* used in tracking fib events */
+ };
+ 
+-#ifdef CONFIG_MLX5_ESWITCH
++#if defined(CONFIG_MLX5_ESWITCH) && defined(HAVE_FIB_NH_NOTIFIER_INFO)
+ 
+ int mlx5_lag_mp_init(struct mlx5_lag *ldev);
+ void mlx5_lag_mp_cleanup(struct mlx5_lag *ldev);

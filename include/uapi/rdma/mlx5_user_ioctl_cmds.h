@@ -85,6 +85,14 @@ enum mlx5_ib_devx_obj_query_attrs {
 	MLX5_IB_ATTR_DEVX_OBJ_QUERY_CMD_OUT,
 };
 
+enum mlx5_ib_devx_obj_query_async_attrs {
+	MLX5_IB_ATTR_DEVX_OBJ_QUERY_ASYNC_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+	MLX5_IB_ATTR_DEVX_OBJ_QUERY_ASYNC_CMD_IN,
+	MLX5_IB_ATTR_DEVX_OBJ_QUERY_ASYNC_FD,
+	MLX5_IB_ATTR_DEVX_OBJ_QUERY_ASYNC_WR_ID,
+	MLX5_IB_ATTR_DEVX_OBJ_QUERY_ASYNC_OUT_LEN,
+};
+
 enum  mlx5_ib_devx_query_eqn_attrs {
 	MLX5_IB_ATTR_DEVX_QUERY_EQN_USER_VEC = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_ATTR_DEVX_QUERY_EQN_DEV_EQN,
@@ -95,6 +103,7 @@ enum mlx5_ib_devx_obj_methods {
 	MLX5_IB_METHOD_DEVX_OBJ_DESTROY,
 	MLX5_IB_METHOD_DEVX_OBJ_MODIFY,
 	MLX5_IB_METHOD_DEVX_OBJ_QUERY,
+	MLX5_IB_METHOD_DEVX_OBJ_ASYNC_QUERY,
 };
 
 enum mlx5_ib_devx_umem_reg_attrs {
@@ -114,11 +123,20 @@ enum mlx5_ib_devx_umem_methods {
 	MLX5_IB_METHOD_DEVX_UMEM_DEREG,
 };
 
+enum mlx5_ib_devx_async_cmd_fd_alloc_attrs {
+	MLX5_IB_ATTR_DEVX_ASYNC_CMD_FD_ALLOC_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+};
+
+enum mlx5_ib_devx_async_cmd_fd_methods {
+	MLX5_IB_METHOD_DEVX_ASYNC_CMD_FD_ALLOC = (1U << UVERBS_ID_NS_SHIFT),
+};
+
 enum mlx5_ib_objects {
 	MLX5_IB_OBJECT_DEVX = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_OBJECT_DEVX_OBJ,
 	MLX5_IB_OBJECT_DEVX_UMEM,
 	MLX5_IB_OBJECT_FLOW_MATCHER,
+	MLX5_IB_OBJECT_DEVX_ASYNC_CMD_FD,
 };
 
 enum mlx5_ib_flow_matcher_create_attrs {
@@ -127,6 +145,7 @@ enum mlx5_ib_flow_matcher_create_attrs {
 	MLX5_IB_ATTR_FLOW_MATCHER_FLOW_TYPE,
 	MLX5_IB_ATTR_FLOW_MATCHER_MATCH_CRITERIA,
 	MLX5_IB_ATTR_FLOW_MATCHER_FLOW_FLAGS,
+	MLX5_IB_ATTR_FLOW_MATCHER_FT_TYPE,
 };
 
 enum mlx5_ib_flow_matcher_destroy_attrs {
@@ -160,6 +179,9 @@ enum mlx5_ib_create_flow_attrs {
 	MLX5_IB_ATTR_CREATE_FLOW_ARR_FLOW_ACTIONS,
 	MLX5_IB_ATTR_CREATE_FLOW_TAG,
 	MLX5_IB_ATTR_CREATE_FLOW_ARR_COUNTERS_DEVX,
+#ifdef CONFIG_BF_DEVICE_EMULATION
+	MLX5_IB_ATTR_CREATE_FLOW_DEST_VPORT,
+#endif
 };
 
 enum mlx5_ib_destoy_flow_attrs {

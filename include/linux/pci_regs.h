@@ -46,4 +46,8 @@
 #define PCI_EXP_DEVCTL2_ATOMIC_EGRESS_BLOCK 0x0080 /* Block atomic egress */
 #endif
 
+#ifndef PCI_EXP_LNKSTA_CLS_16_0GB
+#define PCI_EXP_LNKSTA_CLS_16_0GB 0x0004 /* Current Link Speed 16.0GT/s */
+#endif
+
 #endif /* _COMPAT_LINUX_PCI_REGS_H */

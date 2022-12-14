@@ -32,6 +32,7 @@
 #															    #
 #################################################################
 
+from __future__ import print_function
 from pprint import pprint
 from optparse import OptionParser
 from subprocess import Popen, PIPE
@@ -57,7 +58,7 @@ def read_subnets(s):
 			raise Exception("Please provide mask as /24")
 		mask=subnet.split('/')[1]
 		subnet=subnet.split('/')[0]
-		#print mask,subnet
+		#print(mask,subnet)
 		if (mask=='24'):
 			subnet_list.append(subnet)
 		else :
@@ -149,7 +150,7 @@ class ib2ib(object):
 			if  guid in self.guid2gid:
 				gid=self.guid2gid[guid]
 				ip=self.guid2ip[guid]
-				#print "-I-",ip, gid
+				#print("-I-",ip, gid)
 				self.ip2gid[ip]=gid
 		return self.ip2gid
 	def get_dev_path(self,hca,port):
@@ -164,7 +165,7 @@ class ib2ib(object):
 			raise Exception("Please make sure you are using the right interface")
 		self.HCA=hca
 		self.PORT=port
-		print  "-I- Using " ,hca," Port",port
+		print("-I- Using " , hca, " Port", port)
 		return [hca,port]
 	def get_lid_from_guid1(self,hw_addr):
 		if ":" in hw_addr :
@@ -181,12 +182,12 @@ class ib2ib(object):
 			guid=self.lid2guid[lid]
 			
 		else: 
-			print "Can't convert gid0 to guid due to New lid. please restart driver on hosts"
+			print("Can't convert gid0 to guid due to New lid. please restart driver on hosts")
 		
 		return guid
 		
 	def get_guid2host(self):
-		#print "-I-Collecting guids from network"
+		#print("-I-Collecting guids from network")
 		host_dict={}
 		host_dict[self.local_guid]=self.local_hostname
 		p = Popen(['ibnetdiscover','-H','--Ca',self.HCA], stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -228,7 +229,7 @@ class ib2ib(object):
 		return self.guid2lid
 	def get_guid2lid(self):
 		"""function returns dictionary of guid:lid"""
-		#print "-I-Discovering lids on subnet"
+		#print("-I-Discovering lids on subnet")
 		guid_lid={}
 		guid_lid[self.local_guid]=str (self.local_lid)
 		cmd='ibnetdiscover -p --Ca '+self.HCA
@@ -243,7 +244,7 @@ class ib2ib(object):
 			guid_lid[guid]=lid
 			self.guid2lid[guid]=lid
 			self.lid2guid[lid]=guid
-			#print "CA :",guid, lid 	
+			#print("CA :", guid, lid)
 		return self.guid2lid	
 	def calculate_gid_by_lid(self,str_lid):
 		"""take lid and returns GID"""
@@ -257,7 +258,7 @@ class ib2ib(object):
 	def get_guid2gid(self):
 		for guid in self.guid2lid:
 			gid=self.calculate_gid_by_lid(self.guid2lid[guid])
-			#print guid,gid
+			#print(guid, gid)
 			self.guid2gid[guid]=gid
 		return self.guid2gid
 		
@@ -275,7 +276,7 @@ class ib2ib(object):
 		return
 	def collect_IPs2GUID_per_Subnet(self):
 		"""function get list of IPS(subnets), and device name(ib0) and return dictionary of GUID:IP"""
-		print "-I- Discovering IPs on Subnet"
+		print("-I- Discovering IPs on Subnet")
 		ips=self.networks
 		dev=self.device
 		processes=[]
@@ -305,9 +306,9 @@ class ib2ib(object):
 							real_guid=self.guid1_2_guid(guid1)
 							self.guid2ip[real_guid]=found_ip
 		if (len(self.guid2ip)<=1 ):
-			print "-W- Please Check Your Network, only ",len(guid_ip_dict), "IP found"
+			print("-W- Please Check Your Network, only ", len(guid_ip_dict), "IP found")
 		else:
-			print "-I- Total ",len(self.guid2ip) ," IPs found on subnet"
+			print("-I- Total ", len(self.guid2ip), " IPs found on subnet")
 		return self.guid2ip	
 	
 ####### Main #######
@@ -355,10 +356,10 @@ def main():
 	ibr_setup.get_local_hostname()
 		
 	if (filename!=None ):
-		print "-I- Reading ips from ",filename
+		print("-I- Reading ips from ", filename)
 		ibr_setup.generate_ips_from_file(filename)
 	else :
-		print "-I- Generating IPs from given subnets"
+		print("-I- Generating IPs from given subnets")
 		ibr_setup.generate_ips()
 	
 	if (ibr_setup.get_guid2host()!=0 ): 
@@ -378,9 +379,8 @@ if __name__ == '__main__':
 	try:
 		main()
 	except Exception as  e : 
-		print "-E- ",e
+		print("-E- ", e)
 	else :
-		
-		print "-I- files created :ip2gid.db, guid2lid, hosts"
-		print "Completed successfully"
+		print("-I- files created :ip2gid.db, guid2lid, hosts")
+		print("Completed successfully")
 		

@@ -10,6 +10,7 @@
 #define HAVE_FLOW_DISSECTOR_KEY_VLAN 1
 #define HAVE_FLOW_DISSECTOR_KEY_IP 1
 #define HAVE_FLOW_DISSECTOR_KEY_TCP 1
+#define HAVE_FLOW_DISSECTOR_KEY_ENC_IP 1
 
 #include <linux/types.h>
 #include <linux/in6.h>
@@ -54,6 +55,7 @@
 #define FLOW_DISSECTOR_KEY_MPLS LINUX_BACKPORT(FLOW_DISSECTOR_KEY_MPLS)
 #define FLOW_DISSECTOR_KEY_TCP LINUX_BACKPORT(FLOW_DISSECTOR_KEY_TCP)
 #define FLOW_DISSECTOR_KEY_IP LINUX_BACKPORT(FLOW_DISSECTOR_KEY_IP)
+#define FLOW_DISSECTOR_KEY_ENC_IP LINUX_BACKPORT(FLOW_DISSECTOR_KEY_ENC_IP)
 #define FLOW_DISSECTOR_KEY_MAX LINUX_BACKPORT(FLOW_DISSECTOR_KEY_MAX)
 
 #define flow_dissector_key_control LINUX_BACKPORT(flow_dissector_key_control)
@@ -86,22 +88,26 @@
 #define flow_keys_have_l4 LINUX_BACKPORT(flow_keys_have_l4)
 #define flow_hash_from_keys LINUX_BACKPORT(flow_hash_from_keys)
 #define dissector_uses_key LINUX_BACKPORT(dissector_uses_key)
+#define init_default_flow_dissectors LINUX_BACKPORT(init_default_flow_dissectors)
+
+#ifndef HAVE_SKB_FLOW_DISSECT
 #define skb_flow_dissector_target LINUX_BACKPORT(skb_flow_dissector_target)
 #define skb_flow_dissect_flow_keys LINUX_BACKPORT(skb_flow_dissect_flow_keys)
 #define __skb_flow_dissect LINUX_BACKPORT(__skb_flow_dissect)
 #define skb_flow_dissect LINUX_BACKPORT(skb_flow_dissect)
-#define init_default_flow_dissectors LINUX_BACKPORT(init_default_flow_dissectors)
 #define skb_flow_dissector_init LINUX_BACKPORT(skb_flow_dissector_init)
 #define skb_get_poff LINUX_BACKPORT(skb_get_poff)
 #define __skb_get_poff LINUX_BACKPORT(__skb_get_poff)
 #define __skb_flow_get_ports LINUX_BACKPORT(__skb_flow_get_ports)
-#define __skb_flow_dissect LINUX_BACKPORT(__skb_flow_dissect)
+
+#ifndef CONFIG_NET_SCHED_NEW
 #define __skb_get_hash_symmetric LINUX_BACKPORT(__skb_get_hash_symmetric)
 #define __skb_get_hash LINUX_BACKPORT(__skb_get_hash)
 #define __get_hash_from_flowi6 LINUX_BACKPORT(__get_hash_from_flowi6)
 #define __get_hash_from_flowi4 LINUX_BACKPORT(__get_hash_from_flowi4)
 #define skb_get_hash_perturb LINUX_BACKPORT(skb_get_hash_perturb)
-
+#endif /* CONFIG_NET_SCHED_NEW */
+#endif /* HAVE_SKB_FLOW_DISSECT */
 /**
  * struct flow_dissector_key_control:
  * @thoff: Transport header offset
@@ -306,6 +312,7 @@ enum flow_dissector_key_id {
 	FLOW_DISSECTOR_KEY_MPLS, /* struct flow_dissector_key_mpls */
 	FLOW_DISSECTOR_KEY_TCP, /* struct flow_dissector_key_tcp */
 	FLOW_DISSECTOR_KEY_IP, /* struct flow_dissector_key_ip */
+	FLOW_DISSECTOR_KEY_ENC_IP, /* struct flow_dissector_key_ip */
 
 	FLOW_DISSECTOR_KEY_MAX,
 };
@@ -373,7 +380,6 @@ static inline bool dissector_uses_key(const struct flow_dissector *flow_dissecto
 {
 	return flow_dissector->used_keys & (1 << key_id);
 }
-
 static inline void *skb_flow_dissector_target(struct flow_dissector *flow_dissector,
 					      enum flow_dissector_key_id key_id,
 					      void *target_container)
@@ -381,6 +387,7 @@ static inline void *skb_flow_dissector_target(struct flow_dissector *flow_dissec
 	return ((char *)target_container) + flow_dissector->offset[key_id];
 }
 
+#ifndef HAVE_SKB_FLOW_DISSECT
 bool skb_flow_dissect_flow_keys(const struct sk_buff *skb,
 				struct flow_keys *flow,
 				unsigned int flags);
@@ -404,6 +411,7 @@ void skb_flow_dissector_init(struct flow_dissector *flow_dissector,
 			     const struct flow_dissector_key *key,
 			     unsigned int key_count);
 
+#endif
 int init_default_flow_dissectors(void);
 
 #endif

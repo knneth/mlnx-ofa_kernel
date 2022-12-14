@@ -39,7 +39,6 @@
 #include <linux/slab.h>
 #include <linux/hash.h>
 #include <net/ip.h>
-#include <net/busy_poll.h>
 #include <net/vxlan.h>
 #include <net/devlink.h>
 
@@ -1610,20 +1609,6 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 out:
 	mutex_unlock(&mdev->state_lock);
 }
-
-#ifdef CONFIG_NET_POLL_CONTROLLER
-static void mlx4_en_netpoll(struct net_device *dev)
-{
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	struct mlx4_en_cq *cq;
-	int i;
-
-	for (i = 0; i < priv->tx_ring_num[TX]; i++) {
-		cq = priv->tx_cq[TX][i];
-		napi_schedule(&cq->napi);
-	}
-}
-#endif
 
 static int mlx4_en_set_rss_steer_rules(struct mlx4_en_priv *priv)
 {
@@ -3559,7 +3544,6 @@ static int mlx4_xdp(struct net_device *dev, struct netdev_bpf *xdp)
 		return mlx4_xdp_set(dev, xdp->prog);
 	case XDP_QUERY_PROG:
 		xdp->prog_id = mlx4_xdp_query(dev);
-		xdp->prog_attached = !!xdp->prog_id;
 		return 0;
 	default:
 		return -EINVAL;
@@ -3580,9 +3564,6 @@ static struct net_device_ops mlx4_netdev_base_ops = {
 	.ndo_tx_timeout		= mlx4_en_tx_timeout,
 	.ndo_vlan_rx_add_vid	= mlx4_en_vlan_rx_add_vid,
 	.ndo_vlan_rx_kill_vid	= mlx4_en_vlan_rx_kill_vid,
-#ifdef CONFIG_NET_POLL_CONTROLLER
-	.ndo_poll_controller	= mlx4_en_netpoll,
-#endif
 	.ndo_set_features	= mlx4_en_set_features,
 	.ndo_fix_features	= mlx4_en_fix_features,
 	.ndo_setup_tc		= __mlx4_en_setup_tc,

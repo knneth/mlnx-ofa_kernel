@@ -2294,9 +2294,9 @@ static void parent_set_dev_addr(struct net_device *ibd,
 }
 
 static u16 parent_select_q(struct net_device *dev, struct sk_buff *skb,
-			   void *accel_priv, select_queue_fallback_t fallback)
+			   struct net_device *sb_dev, select_queue_fallback_t fallback)
 {
-	return fallback(dev, skb) % dev->real_num_tx_queues;
+	return fallback(dev, skb, NULL) % dev->real_num_tx_queues;
 }
 
 int parent_add_vif_param(struct net_device *parent_dev,

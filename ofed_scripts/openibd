@@ -358,6 +358,11 @@ if (modinfo scsi_transport_srp 2>/dev/null | grep depends: | grep -q compat 2>/d
     STATUS_MODULES="$STATUS_MODULES scsi_transport_srp"
 fi
 
+if (modinfo cls_flower 2>/dev/null | grep depends: | grep -q compat 2>/dev/null) ||
+    (lsmod 2>/dev/null | grep cls_flower | grep -q compat); then
+    UNLOAD_MODULES="$UNLOAD_MODULES cls_flower"
+fi
+
 ipoib_ha_pidfile=/var/run/ipoib_ha.pid
 srp_daemon_pidfile=/var/run/srp_daemon.pid
 _truescale=/etc/infiniband/truescale.cmds
@@ -1211,8 +1216,8 @@ start()
         else
             # enable FW tracing
             if [ "X${ENABLE_FW_TRACER}" == "Xyes" ]; then
-                if [ -f /sys/kernel/debug/tracing/events/mlx5/fw_tracer/enable ]; then
-                    echo 1 > /sys/kernel/debug/tracing/events/mlx5/fw_tracer/enable 2>/dev/null
+                if [ -f /sys/kernel/debug/tracing/events/mlx5/mlx5_fw/enable ]; then
+                    echo 1 > /sys/kernel/debug/tracing/events/mlx5/mlx5_fw/enable 2>/dev/null
                 fi
             fi
             if [ -x $XE ]; then
@@ -1233,6 +1238,38 @@ start()
                 echo_failure $"Loading Mellanox MLX5_IB HCA driver: "
         fi
         RC=$[ $RC + $my_rc ]
+    fi
+
+    # Set MAC address of PF via ECPF
+    # SMARTNIC_PF_MAC_CONF="[<bdf1>-<MAC1>] [<bdf2>-<MAC2>] ..."
+    if [ "X${SMARTNIC_PF_MAC_CONF}" != "X" ]; then
+        for mac_conf in ${SMARTNIC_PF_MAC_CONF}
+        do
+            bdf=${mac_conf%%-*}
+            mac=${mac_conf##*-}
+            if [ ! -d /sys/bus/pci/devices/${bdf}/ ]; then
+                log_msg "No such device: ${bdf}."
+                log_msg "Check SMARTNIC_PF_MAC_CONF value in the $CONFIG"
+                continue
+            fi
+            for i in `/bin/ls -1 /sys/bus/pci/devices/${bdf}/net 2> /dev/null`
+            do
+                if [ -e /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac ]; then
+                    echo $mac > /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac
+                    my_rc=$?
+                    if [ $my_rc -eq 0 ]; then
+                        log_msg "PF MAC is set to $mac via ECPF $i"
+                    else
+                        log_msg "ERROR: Failed to set MAC $mac via ECPF $i"
+                    fi
+                    RC=$[ $RC + $my_rc ]
+                fi
+            done
+        done
+    fi
+
+    if [ -x /sbin/mlnx_eswitch_set ]; then
+        /sbin/mlnx_eswitch_set
     fi
 
     if [ "X${MLX5_FPGA_LOAD}" == "Xyes" ]; then

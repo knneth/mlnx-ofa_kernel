@@ -126,53 +126,147 @@ struct uverbs_attr_spec {
 	} u2;
 };
 
-struct uverbs_attr_spec_hash {
-	size_t				num_attrs;
-	unsigned long			*mandatory_attrs_bitmask;
-	struct uverbs_attr_spec		attrs[0];
+/*
+ * Information about the API is loaded into a radix tree. For IOCTL we start
+ * with a tuple of:
+ *  object_id, attr_id, method_id
+ *
+ * Which is a 48 bit value, with most of the bits guaranteed to be zero. Based
+ * on the current kernel support this is compressed into 16 bit key for the
+ * radix tree. Since this compression is entirely internal to the kernel the
+ * below limits can be revised if the kernel gains additional data.
+ *
+ * With 64 leafs per node this is a 3 level radix tree.
+ *
+ * The tree encodes multiple types, and uses a scheme where OBJ_ID,0,0 returns
+ * the object slot, and OBJ_ID,METH_ID,0 and returns the method slot.
+ */
+enum uapi_radix_data {
+	UVERBS_API_NS_FLAG = 1U << UVERBS_ID_NS_SHIFT,
+
+	UVERBS_API_ATTR_KEY_BITS = 6,
+	UVERBS_API_ATTR_KEY_MASK = GENMASK(UVERBS_API_ATTR_KEY_BITS - 1, 0),
+	UVERBS_API_ATTR_BKEY_LEN = (1 << UVERBS_API_ATTR_KEY_BITS) - 1,
+
+	UVERBS_API_METHOD_KEY_BITS = 5,
+	UVERBS_API_METHOD_KEY_SHIFT = UVERBS_API_ATTR_KEY_BITS,
+	UVERBS_API_METHOD_KEY_NUM_CORE = 24,
+	UVERBS_API_METHOD_KEY_NUM_DRIVER = (1 << UVERBS_API_METHOD_KEY_BITS) -
+					   UVERBS_API_METHOD_KEY_NUM_CORE,
+	UVERBS_API_METHOD_KEY_MASK = GENMASK(
+		UVERBS_API_METHOD_KEY_BITS + UVERBS_API_METHOD_KEY_SHIFT - 1,
+		UVERBS_API_METHOD_KEY_SHIFT),
+
+	UVERBS_API_OBJ_KEY_BITS = 5,
+	UVERBS_API_OBJ_KEY_SHIFT =
+		UVERBS_API_METHOD_KEY_BITS + UVERBS_API_METHOD_KEY_SHIFT,
+	UVERBS_API_OBJ_KEY_NUM_CORE = 24,
+	UVERBS_API_OBJ_KEY_NUM_DRIVER =
+		(1 << UVERBS_API_OBJ_KEY_BITS) - UVERBS_API_OBJ_KEY_NUM_CORE,
+	UVERBS_API_OBJ_KEY_MASK = GENMASK(31, UVERBS_API_OBJ_KEY_SHIFT),
+
+	/* This id guaranteed to not exist in the radix tree */
+	UVERBS_API_KEY_ERR = 0xFFFFFFFF,
 };
 
-struct uverbs_attr_bundle;
-struct ib_uverbs_file;
+static inline __attribute_const__ u32 uapi_key_obj(u32 id)
+{
+	if (id & UVERBS_API_NS_FLAG) {
+		id &= ~UVERBS_API_NS_FLAG;
+		if (id >= UVERBS_API_OBJ_KEY_NUM_DRIVER)
+			return UVERBS_API_KEY_ERR;
+		id = id + UVERBS_API_OBJ_KEY_NUM_CORE;
+	} else {
+		if (id >= UVERBS_API_OBJ_KEY_NUM_CORE)
+			return UVERBS_API_KEY_ERR;
+	}
 
-enum {
+	return id << UVERBS_API_OBJ_KEY_SHIFT;
+}
+
+static inline __attribute_const__ bool uapi_key_is_object(u32 key)
+{
+	return (key & ~UVERBS_API_OBJ_KEY_MASK) == 0;
+}
+
+static inline __attribute_const__ u32 uapi_key_ioctl_method(u32 id)
+{
+	if (id & UVERBS_API_NS_FLAG) {
+		id &= ~UVERBS_API_NS_FLAG;
+		if (id >= UVERBS_API_METHOD_KEY_NUM_DRIVER)
+			return UVERBS_API_KEY_ERR;
+		id = id + UVERBS_API_METHOD_KEY_NUM_CORE;
+	} else {
+		id++;
+		if (id >= UVERBS_API_METHOD_KEY_NUM_CORE)
+			return UVERBS_API_KEY_ERR;
+	}
+
+	return id << UVERBS_API_METHOD_KEY_SHIFT;
+}
+
+static inline __attribute_const__ u32 uapi_key_attr_to_method(u32 attr_key)
+{
+	return attr_key &
+	       (UVERBS_API_OBJ_KEY_MASK | UVERBS_API_METHOD_KEY_MASK);
+}
+
+static inline __attribute_const__ bool uapi_key_is_ioctl_method(u32 key)
+{
+	return (key & UVERBS_API_METHOD_KEY_MASK) != 0 &&
+	       (key & UVERBS_API_ATTR_KEY_MASK) == 0;
+}
+
+static inline __attribute_const__ u32 uapi_key_attrs_start(u32 ioctl_method_key)
+{
+	/* 0 is the method slot itself */
+	return ioctl_method_key + 1;
+}
+
+static inline __attribute_const__ u32 uapi_key_attr(u32 id)
+{
 	/*
-	 * Action marked with this flag creates a context (or root for all
-	 * objects).
+	 * The attr is designed to fit in the typical single radix tree node
+	 * of 64 entries. Since allmost all methods have driver attributes we
+	 * organize things so that the driver and core attributes interleave to
+	 * reduce the length of the attributes array in typical cases.
 	 */
-	UVERBS_ACTION_FLAG_CREATE_ROOT = 1U << 0,
-};
+	if (id & UVERBS_API_NS_FLAG) {
+		id &= ~UVERBS_API_NS_FLAG;
+		id++;
+		if (id >= 1 << (UVERBS_API_ATTR_KEY_BITS - 1))
+			return UVERBS_API_KEY_ERR;
+		id = (id << 1) | 0;
+	} else {
+		if (id >= 1 << (UVERBS_API_ATTR_KEY_BITS - 1))
+			return UVERBS_API_KEY_ERR;
+		id = (id << 1) | 1;
+	}
 
-struct uverbs_method_spec {
-	/* Combination of bits from enum UVERBS_ACTION_FLAG_XXXX */
-	u32						flags;
-	size_t						num_buckets;
-	size_t						num_child_attrs;
-	int (*handler)(struct ib_device *ib_dev, struct ib_uverbs_file *ufile,
-		       struct uverbs_attr_bundle *ctx);
-	struct uverbs_attr_spec_hash		*attr_buckets[0];
-};
+	return id;
+}
 
-struct uverbs_method_spec_hash {
-	size_t					num_methods;
-	struct uverbs_method_spec		*methods[0];
-};
+static inline __attribute_const__ bool uapi_key_is_attr(u32 key)
+{
+	return (key & UVERBS_API_METHOD_KEY_MASK) != 0 &&
+	       (key & UVERBS_API_ATTR_KEY_MASK) != 0;
+}
 
-struct uverbs_object_spec {
-	const struct uverbs_obj_type		*type_attrs;
-	size_t					num_buckets;
-	struct uverbs_method_spec_hash		*method_buckets[0];
-};
+/*
+ * This returns a value in the range [0 to UVERBS_API_ATTR_BKEY_LEN),
+ * basically it undoes the reservation of 0 in the ID numbering. attr_key
+ * must already be masked with UVERBS_API_ATTR_KEY_MASK, or be the output of
+ * uapi_key_attr().
+ */
+static inline __attribute_const__ u32 uapi_bkey_attr(u32 attr_key)
+{
+	return attr_key - 1;
+}
 
-struct uverbs_object_spec_hash {
-	size_t					num_objects;
-	struct uverbs_object_spec		*objects[0];
-};
-
-struct uverbs_root_spec {
-	size_t					num_buckets;
-	struct uverbs_object_spec_hash		*object_buckets[0];
-};
+static inline __attribute_const__ u32 uapi_bkey_to_key_attr(u32 attr_bkey)
+{
+	return attr_bkey + 1;
+}
 
 /*
  * =======================================
@@ -191,7 +285,7 @@ struct uverbs_method_def {
 	u32				     flags;
 	size_t				     num_attrs;
 	const struct uverbs_attr_def * const (*attrs)[];
-	int (*handler)(struct ib_device *ib_dev, struct ib_uverbs_file *ufile,
+	int (*handler)(struct ib_uverbs_file *ufile,
 		       struct uverbs_attr_bundle *ctx);
 };
 
@@ -246,26 +340,32 @@ struct uverbs_object_tree_def {
 #define UA_MANDATORY .mandatory = 1
 #define UA_OPTIONAL .mandatory = 0
 
-/* min_len must be bigger than 0 and _max_len must be smaller than 4095.
- * Only READ\WRITE accesses are supported.
+/*
+ * min_len must be bigger than 0 and _max_len must be smaller than 4095.  Only
+ * READ\WRITE accesses are supported.
  */
 #define UVERBS_ATTR_IDRS_ARR(_attr_id, _idr_type, _access, _min_len, _max_len, \
 			     ...)                                              \
 	(&(const struct uverbs_attr_def){                                      \
 		.id = (_attr_id) +                                             \
 		      BUILD_BUG_ON_ZERO((_min_len) == 0 ||                     \
-					(_max_len) > 4095 ||                   \
+					(_max_len) >                           \
+						PAGE_SIZE / sizeof(void *) ||  \
 					(_min_len) > (_max_len) ||             \
 					(_access) == UVERBS_ACCESS_NEW ||      \
 					(_access) == UVERBS_ACCESS_DESTROY),   \
-		.attr = {                                                      \
-			.type = UVERBS_ATTR_TYPE_IDRS_ARRAY,                   \
-			.u2.objs_arr.obj_type = _idr_type,                     \
-			.u2.objs_arr.access = _access,                         \
-			.u2.objs_arr.min_len = _min_len,                       \
-			.u2.objs_arr.max_len = _max_len,                       \
-			__VA_ARGS__                                            \
-		} })
+		.attr = { .type = UVERBS_ATTR_TYPE_IDRS_ARRAY,                 \
+			  .u2.objs_arr.obj_type = _idr_type,                   \
+			  .u2.objs_arr.access = _access,                       \
+			  .u2.objs_arr.min_len = _min_len,                     \
+			  .u2.objs_arr.max_len = _max_len,                     \
+			  __VA_ARGS__ } })
+
+/*
+ * Only for use with UVERBS_ATTR_IDR, allows any uobject type to be accepted,
+ * the user must validate the type of the uobject instead.
+ */
+#define UVERBS_IDR_ANY_OBJECT 0xFFFF
 
 #define UVERBS_ATTR_IDR(_attr_id, _idr_type, _access, ...)                     \
 	(&(const struct uverbs_attr_def){                                      \
@@ -313,9 +413,9 @@ struct uverbs_object_tree_def {
 #define UVERBS_ATTR_CONST_IN(_attr_id, _enum_type, ...)                        \
 	UVERBS_ATTR_PTR_IN(                                                    \
 		_attr_id,                                                      \
-		UVERBS_ATTR_SIZE(sizeof(u64) + BUILD_BUG_ON_ZERO(              \
-						!sizeof(_enum_type)),          \
-				 sizeof(u64)),                                 \
+		UVERBS_ATTR_SIZE(                                              \
+			sizeof(u64) + BUILD_BUG_ON_ZERO(!sizeof(_enum_type)),  \
+			sizeof(u64)),                                          \
 		__VA_ARGS__)
 
 /*
@@ -364,6 +464,7 @@ struct uverbs_object_tree_def {
  * =================================================
  */
 
+
 struct uverbs_ptr_attr {
 	/*
 	 * If UVERBS_ATTR_SPEC_F_ALLOC_AND_COPY is set then the 'ptr' is
@@ -374,65 +475,39 @@ struct uverbs_ptr_attr {
 		u64 data;
 	};
 	u16		len;
-	/* Combination of bits from enum UVERBS_ATTR_F_XXXX */
-	u16		flags;
+	u16		uattr_idx;
 	u8		enum_id;
 };
 
 struct uverbs_obj_attr {
 	struct ib_uobject		*uobject;
+	const struct uverbs_api_attr	*attr_elm;
 };
 
 struct uverbs_objs_arr_attr {
-	struct ib_uobject	**uobjects;
-	u16			len;
+	struct ib_uobject **uobjects;
+	u16 len;
 };
 
 struct uverbs_attr {
-	/*
-	 * pointer to the user-space given attribute, in order to write the
-	 * new uobject's id or update flags.
-	 */
-	struct ib_uverbs_attr __user	*uattr;
 	union {
 		struct uverbs_ptr_attr	ptr_attr;
 		struct uverbs_obj_attr	obj_attr;
-		struct uverbs_objs_arr_attr	objs_arr_attr;
+		struct uverbs_objs_arr_attr objs_arr_attr;
 	};
 };
 
-struct uverbs_attr_bundle_hash {
-	/* if bit i is set, it means attrs[i] contains valid information */
-	unsigned long *valid_bitmap;
-	size_t num_attrs;
-	/*
-	 * arrays of attributes, each element corresponds to the specification
-	 * of the attribute in the same index.
-	 */
-	struct uverbs_attr *attrs;
-};
-
 struct uverbs_attr_bundle {
-	size_t				num_buckets;
-	struct uverbs_attr_bundle_hash  hash[];
+	struct ib_uverbs_file *ufile;
+	DECLARE_BITMAP(attr_present, UVERBS_API_ATTR_BKEY_LEN);
+	struct uverbs_attr attrs[];
 };
-
-static inline bool uverbs_attr_is_valid_in_hash(const struct uverbs_attr_bundle_hash *attrs_hash,
-						unsigned int idx)
-{
-	return test_bit(idx, attrs_hash->valid_bitmap);
-}
 
 static inline bool uverbs_attr_is_valid(const struct uverbs_attr_bundle *attrs_bundle,
 					unsigned int idx)
 {
-	u16 idx_bucket = idx >>	UVERBS_ID_NS_SHIFT;
-
-	if (attrs_bundle->num_buckets <= idx_bucket)
-		return false;
-
-	return uverbs_attr_is_valid_in_hash(&attrs_bundle->hash[idx_bucket],
-					    idx & ~UVERBS_ID_NS_MASK);
+	return test_bit(uapi_bkey_attr(uapi_key_attr(idx)),
+			attrs_bundle->attr_present);
 }
 
 #define IS_UVERBS_COPY_ERR(_ret)		((_ret) && (_ret) != -ENOENT)
@@ -440,12 +515,10 @@ static inline bool uverbs_attr_is_valid(const struct uverbs_attr_bundle *attrs_b
 static inline const struct uverbs_attr *uverbs_attr_get(const struct uverbs_attr_bundle *attrs_bundle,
 							u16 idx)
 {
-	u16 idx_bucket = idx >>	UVERBS_ID_NS_SHIFT;
-
 	if (!uverbs_attr_is_valid(attrs_bundle, idx))
 		return ERR_PTR(-ENOENT);
 
-	return &attrs_bundle->hash[idx_bucket].attrs[idx & ~UVERBS_ID_NS_MASK];
+	return &attrs_bundle->attrs[uapi_bkey_attr(uapi_key_attr(idx))];
 }
 
 static inline int uverbs_attr_get_enum_id(const struct uverbs_attr_bundle *attrs_bundle,
@@ -494,14 +567,34 @@ uverbs_attr_get_len(const struct uverbs_attr_bundle *attrs_bundle, u16 idx)
 }
 
 /*
- * uverbs_attr_get_uobjs_arr - Provides array's properties for attribute for
+ * uverbs_attr_ptr_get_array_size() - Get array size pointer by a ptr
+ * attribute.
+ * @attrs: The attribute bundle
+ * @idx: The ID of the attribute
+ * @elem_size: The size of the element in the array
+ */
+static inline int
+uverbs_attr_ptr_get_array_size(struct uverbs_attr_bundle *attrs, u16 idx,
+			       size_t elem_size)
+{
+	int size = uverbs_attr_get_len(attrs, idx);
+
+	if (size < 0)
+		return size;
+
+	if (size % elem_size)
+		return -EINVAL;
+
+	return size / elem_size;
+}
+
+/**
+ * uverbs_attr_get_uobjs_arr() - Provides array's properties for attribute for
  * UVERBS_ATTR_TYPE_IDRS_ARRAY.
- * @***arr: Returned pointer to array of pointers for uobjects or NULL if
- * attribute isn't provided.
+ * @arr: Returned pointer to array of pointers for uobjects or NULL if
+ *       the attribute isn't provided.
  *
- * Returns:
- * If attribute isn't provided - return 0. Otherwise, return the array
- * length.
+ * Return: The array length or 0 if no attribute was provided.
  */
 static inline int uverbs_attr_get_uobjs_arr(
 	const struct uverbs_attr_bundle *attrs_bundle, u16 attr_idx,
@@ -518,27 +611,6 @@ static inline int uverbs_attr_get_uobjs_arr(
 	*arr = attr->objs_arr_attr.uobjects;
 
 	return attr->objs_arr_attr.len;
-}
-
-static inline int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle,
-				 size_t idx, const void *from, size_t size)
-{
-	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
-	u16 flags;
-	size_t min_size;
-
-	if (IS_ERR(attr))
-		return PTR_ERR(attr);
-
-	min_size = min_t(size_t, attr->ptr_attr.len, size);
-	if (copy_to_user(u64_to_user_ptr(attr->ptr_attr.data), from, min_size))
-		return -EFAULT;
-
-	flags = attr->ptr_attr.flags | UVERBS_ATTR_F_VALID_OUTPUT;
-	if (put_user(flags, &attr->uattr->flags))
-		return -EFAULT;
-
-	return 0;
 }
 
 static inline bool uverbs_attr_ptr_is_inline(const struct uverbs_attr *attr)
@@ -621,9 +693,27 @@ int uverbs_get_flags64(u64 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		       size_t idx, u64 allowed_bits);
 int uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		       size_t idx, u64 allowed_bits);
+int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle, size_t idx,
+		   const void *from, size_t size);
+__malloc void *_uverbs_alloc(struct uverbs_attr_bundle *bundle, size_t size,
+			     gfp_t flags);
+
+static inline __malloc void *uverbs_alloc(struct uverbs_attr_bundle *bundle,
+					  size_t size)
+{
+	return _uverbs_alloc(bundle, size, GFP_KERNEL);
+}
+
+static inline __malloc void *uverbs_zalloc(struct uverbs_attr_bundle *bundle,
+					   size_t size)
+{
+	return _uverbs_alloc(bundle, size, GFP_KERNEL | __GFP_ZERO);
+}
 int _uverbs_get_const(s64 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		      size_t idx, s64 lower_bound, u64 upper_bound,
 		      s64 *def_val);
+int uverbs_copy_to_struct_or_zero(const struct uverbs_attr_bundle *bundle,
+				  size_t idx, const void *from, size_t size);
 #else
 static inline int
 uverbs_get_flags64(u64 *to, const struct uverbs_attr_bundle *attrs_bundle,
@@ -637,10 +727,31 @@ uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
 {
 	return -EINVAL;
 }
+static inline int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle,
+				 size_t idx, const void *from, size_t size)
+{
+	return -EINVAL;
+}
+static inline __malloc void *uverbs_alloc(struct uverbs_attr_bundle *bundle,
+					  size_t size)
+{
+	return ERR_PTR(-EINVAL);
+}
+static inline __malloc void *uverbs_zalloc(struct uverbs_attr_bundle *bundle,
+					   size_t size)
+{
+	return ERR_PTR(-EINVAL);
+}
 static inline int
 _uverbs_get_const(s64 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		  size_t idx, s64 lower_bound, u64 upper_bound,
 		  s64 *def_val)
+{
+	return -EINVAL;
+}
+static inline int
+uverbs_copy_to_struct_or_zero(const struct uverbs_attr_bundle *bundle,
+			      size_t idx, const void *from, size_t size)
 {
 	return -EINVAL;
 }
@@ -667,56 +778,4 @@ _uverbs_get_const(s64 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		(*_to) = _val;                                                 \
 		_ret;                                                          \
 	})
-
-/* =================================================
- *	 Definitions -> Specs infrastructure
- * =================================================
- */
-
-/*
- * uverbs_alloc_spec_tree - Merges different common and driver specific feature
- *	into one parsing tree that every uverbs command will be parsed upon.
- *
- * @num_trees: Number of trees in the array @trees.
- * @trees: Array of pointers to tree root definitions to merge. Each such tree
- *	   possibly contains objects, methods and attributes definitions.
- *
- * Returns:
- *	uverbs_root_spec *: The root of the merged parsing tree.
- *	On error, we return an error code. Error is checked via IS_ERR.
- *
- * The following merges could take place:
- * a. Two trees representing the same method with different handler
- *	-> We take the handler of the tree that its handler != NULL
- *	   and its index in the trees array is greater. The incentive for that
- *	   is that developers are expected to first merge common trees and then
- *	   merge trees that gives specialized the behaviour.
- * b. Two trees representing the same object with different
- *    type_attrs (struct uverbs_obj_type):
- *	-> We take the type_attrs of the tree that its type_attr != NULL
- *	   and its index in the trees array is greater. This could be used
- *	   in order to override the free function, allocation size, etc.
- * c. Two trees representing the same method attribute (same id but possibly
- *    different attributes):
- *	-> ERROR (-ENOENT), we believe that's not the programmer's intent.
- *
- * An object without any methods is considered invalid and will abort the
- * function with -ENOENT error.
- */
-#if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
-struct uverbs_root_spec *uverbs_alloc_spec_tree(unsigned int num_trees,
-						const struct uverbs_object_tree_def **trees);
-void uverbs_free_spec_tree(struct uverbs_root_spec *root);
-#else
-static inline struct uverbs_root_spec *uverbs_alloc_spec_tree(unsigned int num_trees,
-							      const struct uverbs_object_tree_def **trees)
-{
-	return NULL;
-}
-
-static inline void uverbs_free_spec_tree(struct uverbs_root_spec *root)
-{
-}
-#endif
-
 #endif

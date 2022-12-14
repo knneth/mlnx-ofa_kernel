@@ -1,0 +1,22 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_uapi.c
+
+Change-Id: I463f01af8191994583b3df8b76567a88b753192c
+---
+ drivers/infiniband/core/uverbs_uapi.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/core/uverbs_uapi.c
++++ b/drivers/infiniband/core/uverbs_uapi.c
+@@ -263,7 +263,11 @@ void uverbs_destroy_api(struct uverbs_ap
+ 
+ 	radix_tree_for_each_slot (slot, &uapi->radix, &iter, 0) {
+ 		kfree(rcu_dereference_protected(*slot, true));
++#if defined(HAVE_RADIX_TREE_ITER_DELETE) && defined (HAVE_RADIX_TREE_ITER_DELETE_EXPORTED)
+ 		radix_tree_iter_delete(&uapi->radix, &iter, slot);
++#else
++		radix_tree_delete(&uapi->radix, iter.index);
++#endif
+ 	}
+ 	kfree(uapi);
+ }

@@ -355,7 +355,7 @@ static int ipoib_create_parent_qp(struct net_device *dev,
 		.qp_type     = IB_EXP_UD_RSS_TSS,
 		.cap.max_inline_data    = IPOIB_MAX_INLINE_SIZE,
 		.cap.max_send_wr	= priv->sendq_size,
-		.cap.max_send_sge 	= min_t(u32, priv->ca->attrs.max_sge,
+		.cap.max_send_sge 	= min_t(u32, priv->ca->attrs.max_send_sge,
 						MAX_SKB_FRAGS + 1),
 	};
 	struct ib_qp *qp;
@@ -440,7 +440,7 @@ static struct ib_qp *ipoib_create_tss_qp(struct net_device *dev,
 		.cap = {
 			.max_send_wr  = priv->sendq_size,
 			.max_recv_wr  = priv->recvq_size,
-			.max_send_sge = min_t(u32, priv->ca->attrs.max_sge,
+			.max_send_sge = min_t(u32, priv->ca->attrs.max_send_sge,
 					      MAX_SKB_FRAGS + 1),
 			.max_inline_data = IPOIB_MAX_INLINE_SIZE,
 		},
@@ -560,10 +560,10 @@ int ipoib_transport_dev_init_rss(struct net_device *dev, struct ib_device *ca)
 	int ret, size;
 	int i, j;
 
-	if (min_t(u32, priv->ca->attrs.max_sge, MAX_SKB_FRAGS + 1) > 1)
+	if (min_t(u32, priv->ca->attrs.max_send_sge, MAX_SKB_FRAGS + 1) > 1)
 		dev->features |= NETIF_F_SG;
 
-	priv->max_send_sge = min_t(u32, priv->ca->attrs.max_sge,
+	priv->max_send_sge = min_t(u32, priv->ca->attrs.max_send_sge,
 				   MAX_SKB_FRAGS + 1);
 
 	size = priv->recvq_size + 1;

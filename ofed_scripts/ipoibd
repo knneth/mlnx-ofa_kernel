@@ -27,10 +27,10 @@ import commands
 import string
 from logging.handlers import RotatingFileHandler
 from optparse import OptionParser
-import libxml2
 import signal
+import xml.etree.ElementTree as ElementTree
 
-VERSION = "4.5-1.0.1"
+VERSION = "4.6-1.0.1"
 
 # Global parameters
 logger = None
@@ -65,8 +65,8 @@ class initialize_once(object):
 def init_logger (log_level=logging.DEBUG, log_file="/var/log/eipoib_daemon.log"):
 	logHandler = RotatingFileHandler(log_file, 'a', 24537209, 10)
 	logFormatter = logging.Formatter(FORMAT)
-        logHandler.setLevel(logging.DEBUG)
-        logHandler.setFormatter(logFormatter)
+	logHandler.setLevel(logging.DEBUG)
+	logHandler.setFormatter(logFormatter)
 	logger = logging.getLogger()
 	logger.addHandler(logHandler)
 
@@ -111,7 +111,7 @@ def parse_args (name, desc, args):
 	parser.add_option("-L", "--log_level", help='Log level {error|info|debug} (default: debug)', default=logging.DEBUG)
 	try:
 		args = parser.parse_args()
-	except Exception, e:
+	except Exception as e:
 		logger.error("exception: %s" % str(e))
 		sys.exit(1)
 
@@ -131,7 +131,7 @@ def get_mac_by_name(name, namespace = None):
 	sub_cmd = ""
 	if namespace:
 		sub_cmd = "/sbin/ip netns exec %s" %namespace
-        logger.debug("checking namespace %s" % namespace)
+	logger.debug("checking namespace %s" % namespace)
 
 	cmd = "%s /sbin/ip link show %s 2> /dev/null | grep -o -E '([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2} | /usr/bin/head -1'" % (sub_cmd, name)
 	(rc, out) = commands.getstatusoutput(cmd)
@@ -156,6 +156,20 @@ def get_mac_by_name(name, namespace = None):
 			logger.warning("Failed to run cmd: %s" % (cmd))
 		return None
 	return out.strip().lower()
+
+
+def is_ucast_eth_mac(mac):
+	""" check if the mac address is valid """
+	mac_len = 6
+	mac_hex_len = 2 * mac_len
+	if len(mac.replace(':', '')) != mac_hex_len:
+		return False
+	if not mac[1] in string.hexdigits:
+		return False
+	if mac.replace(':', '') == ("0" * mac_hex_len):
+		return False
+	return True
+
 
 ################################################################################
 #Abstract metaclass
@@ -200,7 +214,7 @@ class XENDomain(IDomain):
 			# non-vif slaves are ok to fail here
 			return None
 		mac = out.strip().lower()
-		if self.is_ucast_eth_mac(mac):
+		if is_ucast_eth_mac(mac):
 			return mac
 		return None
 
@@ -231,25 +245,27 @@ class KVMDomain(IDomain):
 			## <mac address="02:00:05:3e:aa:6a"/>
 			## <target dev="vnet0"/>
 			## ..
-			try: doc = libxml2.parseDoc(out)
-			except: continue
-			mac = None
-			dev = None
-			for node in doc.xpathEval('//interface/target|//interface/mac'):
-				node = str(node)
-				attr = node.split('=')[-1].strip()
-				attr = attr.replace('"', '')
-				attr = attr.replace("/>", '')
-				if node.count("target dev"):
-					dev = attr
-				if node.count("mac address"):
-					mac = attr
-				if mac != None and dev == vif:
+			(rc, out) = commands.getstatusoutput(cmd)
+			try:
+				doc = ElementTree.fromstring(out)
+			except ElementTree.ParseError:
+				continue
+
+			#for node in doc.xpathEval('//interface/target|//interface/mac'):
+			for iface in doc.findall('*/interface'):
+				mac_node = iface.find('mac')
+				target_node = iface.find('target')
+				if (mac_node is None) or (target_node is None):
+					continue
+				try:
+					mac = mac_node.attrib['address']
+					dev = target_node.attrib['dev']
+				except KeyError:
+					continue
+				if dev == vif:
 					mac = mac.lower()
-					if self.is_ucast_eth_mac(mac):
-						doc.freeDoc()
+					if is_ucast_eth_mac(mac):
 						return mac
-			doc.freeDoc()
 		self.logger.debug("No domain object here, returns the original mac for %s" % vif)
 		return get_mac_by_name(vif)
 
@@ -498,17 +514,6 @@ class NicObserver(Observer):
 			self.logger.error("the interface %s is not in the right format ibx.y" % interface)
 		return None
 
-	def is_ucast_eth_mac(self, mac): #check if the mac address is valid
-		mac_len = 6
-		mac_hex_len = 2 * mac_len
-		if len(mac.replace(':', '')) != mac_hex_len:
-			return False
-		if not mac[1] in string.hexdigits:
-			return False
-		if mac.replace(':', '') == ("0" * mac_hex_len):
-			return False
-		return True
-
 	def create_child (self, new_child):
 		cmd = "/bin/echo %s > %s" % (new_child, "/sys/class/net/" + self.parent.physical_port + os.sep + "create_child")
 		self.logger.debug("Running cmd:%s\n" % cmd)
@@ -673,7 +678,7 @@ class VirtualNicObserver(NicObserver):
 			self.logger.debug("cmd:%s. No peer for nic: %s" % (cmd, nic))
 			return []
 		peer_if_idx = out.strip()
-                self.logger.debug("cmd:%s. found peer for nic: %s!! peer: peer_if_idx" % (cmd, nic))
+		self.logger.debug("cmd:%s. found peer for nic: %s!! peer: peer_if_idx" % (cmd, nic))
 
 		#get the peer name
 		(peer, ns) = self.find_peer_by_idx(peer_if_idx, nic)
@@ -695,12 +700,12 @@ class VirtualNicObserver(NicObserver):
 	# forced_vlan in case of patch-port etc.
 	def get_nic_vif_macs(self, nic, forced_vlan = None):
 		# Get handlers of LB / OVS
-                ovs_br = KVMOvsNicObserver()
+		ovs_br = KVMOvsNicObserver()
 		lb_br = KVMVirtualNicObserver()
 		vlan_ob = VirtualVlanObserver()
 		vlan_ob.parent = self.parent
-                ovs_br.parent = self.parent
-                lb_br.parent = self.parent
+		ovs_br.parent = self.parent
+		lb_br.parent = self.parent
 
 		macs = []
 		br = self.get_br_by_nic(nic)
@@ -756,16 +761,16 @@ class VirtualNicObserver(NicObserver):
 			# Check if interface is connected to OVS too
 			# br = br-prv / br-int ..
 			# ovs_br = KVMOvsNicObserver object
-                        br = ovs_br.get_br_by_nic(n)
+			br = ovs_br.get_br_by_nic(n)
 			lbr = lb_br.get_br_by_nic(n)
 			if br and lbr:
 				if self.first_ovs_br is None:
 					self.first_ovs_br = br
 					ovs_br.first_ovs_br = self.first_ovs_br
 					self.logger.debug("Found OVS br %s for port %s." % (br, n))
-                                ovs_br.scanned_port = self.scanned_port
+				ovs_br.scanned_port = self.scanned_port
 				macs_ovsbr = list(set(ovs_br.get_nic_vif_macs(n, None)))
-                                if macs_ovsbr:
+				if macs_ovsbr:
 					self.logger.debug("Found macs in OVS over LB port %s: %s" % (n, macs_ovsbr))
 					macs = macs + macs_ovsbr
 
@@ -774,9 +779,9 @@ class VirtualNicObserver(NicObserver):
 					self.logger.debug("ovs_mapped_mac_2_vlan is %s" % ovs_br.map_mac_2_vlan)
 					self.map_mac_2_vlan.update(ovs_br.map_mac_2_vlan)
 					self.logger.debug("updated_mapped_mac_2_vlan is %s" % self.map_mac_2_vlan)
-                                        vlan_rules = ovs_br.get_vlan_vifs([self.first_ovs_br])
-                                        self.logger.debug("vlan rules %s for bridge %s" % (vlan_rules, self.first_ovs_br))
-                                        for vlan, macs_for_vlan in vlan_rules.items():
+					vlan_rules = ovs_br.get_vlan_vifs([self.first_ovs_br])
+					self.logger.debug("vlan rules %s for bridge %s" % (vlan_rules, self.first_ovs_br))
+					for vlan, macs_for_vlan in vlan_rules.items():
 						for m in macs_for_vlan:
 							self.map_mac_2_vlan[m] = vlan
 							ovs_br.map_mac_2_vlan[m] = vlan
@@ -794,20 +799,20 @@ class VirtualNicObserver(NicObserver):
 							vlan_ob.add_loop(vlan_if, [], new_vlan_macs, [vlan_if])
 							self.known_vlan_macs[vlan_id] = self.known_vlan_macs[vlan_id] + new_vlan_macs
 
-                                        # Remove loop
-                                        for vlan_id, vlan_macs in self.known_vlan_macs.items():
-                                                if vlan_id not in vlan_rules:
-                                                        vlan_macs_to_remove = self.known_vlan_macs[vlan_id]
-                                                else:
-                                                        vlan_macs_to_remove = list(set(self.known_vlan_macs[vlan_id]) - set(vlan_rules[vlan_id]))
-                                                vlan_if = self.parent.name + "." + vlan_id
-                                                for mac_to_remove in vlan_macs_to_remove:
-                                                        current_slave = self.get_slave_by_mac(mac_to_remove, self.parent.name, vlan_id = vlan_id)
-                                                        if not current_slave:
-                                                                continue
-                                                        self.logger.debug("Need to remove slave: %s of vlan id %s" % (current_slave, vlan_id))
-                                                        self.destroy_nic(mac_to_remove, self.parent.name, current_slave)
-                                                        self.known_vlan_macs[vlan_id] = list(set(self.known_vlan_macs[vlan_id]) - set([mac_to_remove]))
+					# Remove loop
+					for vlan_id, vlan_macs in self.known_vlan_macs.items():
+						if vlan_id not in vlan_rules:
+							vlan_macs_to_remove = self.known_vlan_macs[vlan_id]
+						else:
+							vlan_macs_to_remove = list(set(self.known_vlan_macs[vlan_id]) - set(vlan_rules[vlan_id]))
+						vlan_if = self.parent.name + "." + vlan_id
+						for mac_to_remove in vlan_macs_to_remove:
+							current_slave = self.get_slave_by_mac(mac_to_remove, self.parent.name, vlan_id = vlan_id)
+							if not current_slave:
+								continue
+							self.logger.debug("Need to remove slave: %s of vlan id %s" % (current_slave, vlan_id))
+							self.destroy_nic(mac_to_remove, self.parent.name, current_slave)
+							self.known_vlan_macs[vlan_id] = list(set(self.known_vlan_macs[vlan_id]) - set([mac_to_remove]))
 					self.logger.debug("Connected interface %s to ovs-br %s macs2vlan: %s." % (n, br, str(self.map_mac_2_vlan)))
 
 			self.add_to_scanned_list(n)
@@ -1332,8 +1337,8 @@ class KVMOvsNicObserver(VirtualNicObserver, KVMDomain):
 
 	#returns dict
 	def get_vlan_vifs(self, all_bridges = None):
-                if not all_bridges:
-                        all_bridges = self.all_bridges
+		if not all_bridges:
+			all_bridges = self.all_bridges
 		out = {} # vlan -> [list of macs]
 		for key in self.map_mac_2_vlan:
 			vlan = self.map_mac_2_vlan[key]
@@ -1677,24 +1682,24 @@ class DaemonRunner:
 		if os.path.exists(XEN_MANAGEMENT):
 			self.supported_observers = ["bond","vlan","nic"]
 			logger.debug("Running on XEN environment")
-                        self.env_type = XEN_ENV
+			self.env_type = XEN_ENV
 			return XenEnvironment()
 		# if not (e.g. KVM) then we require virsh (via libvirt)
 		if os.path.exists(VIRSH_MANAGEMENT) or os.path.exists(OVS_MANAGEMENT) or os.path.exists(OVS_MANAGEMENT_UBUNTU):
 			#self.supported_observers = ["bond","vlan","nic","ovs-nic","ovs-vlan","ovs-bond"]
 			self.supported_observers = ["bond","vlan","nic","ovs-nic"]
 			self.logger.debug("Running on KVM environment")
-                        if os.path.exists(VIRSH_MANAGEMENT):
-                                self.env_type = KVM_ENV
-                        # overwrite kvm with ovs
-                        else:
-                                self.logger.debug("Running on OVS environment")
-                                self.env_type = OVS_ENV
+			if os.path.exists(VIRSH_MANAGEMENT):
+				self.env_type = KVM_ENV
+			# overwrite kvm with ovs
+			else:
+				self.logger.debug("Running on OVS environment")
+				self.env_type = OVS_ENV
 			return KVMEnvironment()
 		self.logger.debug("NO MANAGEMENT: this is a native server")
 		self.supported_observers = ["bond","vlan","nic"]
 		self.logger.debug("Running on Native environment")
-                self.env_type = NONE_ENV
+		self.env_type = NONE_ENV
 		return NativeEnvironment()
 
 	def get_parent_scanners (self, driver_name):
@@ -1719,16 +1724,16 @@ class DaemonRunner:
 	def run (self, run_mode, interval):
 		self.attach_observers()
 		while(True):
-                        #check if the env changed:
-                        curent_env_type = self.env_type
-                        self.get_environment()
-                        if curent_env_type != self.env_type:
-                                #reinit
-                                self.logger.info("+++++ ENV was changed from %d to %d\n" %(curent_env_type, self.env_type))
-                                self.__init__(self.driver_name)
-                                self.attach_observers()
+			#check if the env changed:
+			curent_env_type = self.env_type
+			self.get_environment()
+			if curent_env_type != self.env_type:
+				#reinit
+				self.logger.info("+++++ ENV was changed from %d to %d\n" %(curent_env_type, self.env_type))
+				self.__init__(self.driver_name)
+				self.attach_observers()
 
-                        """
+			"""
 			try:
 				for parent in self.parents:
 					if parent.mac == "00:00:00:00:00:00":
@@ -1736,7 +1741,7 @@ class DaemonRunner:
 						continue
 					parent.update_parent()
 					parent.notify_observers()
-			except Exception ,e:
+			except Exception as e:
 				logger.error("exception: %s" % str(e))
 			time.sleep(interval)
 			"""
@@ -1770,14 +1775,14 @@ def main (args):
 	return rc
 
 if __name__ == '__main__':
-	print "ipoibd: eth over ipoib daemon (%s)" % VERSION
+	print("ipoibd: eth over ipoib daemon (%s)" % VERSION)
 	# let the udev to change the name of the interface.
 	# it is a w/a, the full solution is much more complicated, and need to rebuild the whole topology view, not for now.
 	time.sleep(1)
 	try:
 		rc = main(args = sys.argv[1:])
-	except KeyboardInterrupt, e:
-		print "" # start new line after ^C
+	except KeyboardInterrupt as e:
+		print("") # start new line after ^C
 		print("%s daemon (pid %d) interrupted!" % (SCRIPT, os.getpid()))
 		rc = 2
 	sys.exit(rc)

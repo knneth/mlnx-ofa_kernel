@@ -8,7 +8,8 @@
 #endif
 
 #if defined(HAVE_BLK_MQ_OPS_MAP_QUEUES) && \
-	!defined(HAVE_BLK_MQ_PCI_MAP_QUEUES_3_ARGS)
+	!defined(HAVE_BLK_MQ_PCI_MAP_QUEUES_3_ARGS) && \
+	defined(HAVE_PCI_IRQ_GET_AFFINITY)
 
 #include <linux/blk-mq.h>
 #include <linux/pci.h>

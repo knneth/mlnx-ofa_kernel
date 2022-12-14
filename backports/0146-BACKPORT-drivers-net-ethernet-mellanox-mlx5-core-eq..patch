@@ -1,0 +1,103 @@
+From: Aya Levin <ayal@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
+
+Change-Id: I6f47e4f82e0b9acc9b1ec0ed2269ad0c0d942306
+---
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 29 +++++++++++++++++++++++++++-
+ 1 file changed, 28 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
+@@ -249,7 +249,11 @@ static void eq_pf_process(struct mlx5_eq
+ 			break;
+ 		}
+ 
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 		pf_eqe = &eqe->data.page_fault;
+ 		pfault->event_subtype = eqe->sub_type;
+ 		pfault->bytes_committed = be32_to_cpu(pf_eqe->bytes_committed);
+@@ -471,7 +475,7 @@ int mlx5_core_page_fault_resume(struct m
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(mlx5_core_page_fault_resume);
+-#endif
++#endif /* CONFIG_INFINIBAND_ON_DEMAND_PAGING */
+ 
+ void mlx5_pcie_event_work(struct work_struct *work)
+ {
+@@ -624,7 +628,11 @@ static irqreturn_t mlx5_eq_int(int irq,
+ 		 * Make sure we read EQ entry contents after we've
+ 		 * checked the ownership bit.
+ 		 */
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 
+ 		mlx5_core_dbg(eq->dev, "eqn %d, eqe type %s\n",
+ 			      eq->eqn, eqe_type_str(eqe->type));
+@@ -732,9 +740,11 @@ static irqreturn_t mlx5_eq_int(int irq,
+ 			mlx5_port_module_event(dev, eqe);
+ 			break;
+ 
++#if defined (HAVE_PTP_CLOCK_INFO_N_PINS) && defined (HAVE_PTP_CLOCK_INFO) && (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 		case MLX5_EVENT_TYPE_PPS_EVENT:
+ 			mlx5_pps_event(dev, eqe);
+ 			break;
++#endif
+ 
+ 		case MLX5_EVENT_TYPE_FPGA_ERROR:
+ 		case MLX5_EVENT_TYPE_FPGA_QP_ERROR:
+@@ -919,7 +929,11 @@ int mlx5_create_map_eq(struct mlx5_core_
+ 		goto err_in;
+ 
+ 	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
++#ifdef HAVE_PCI_IRQ_API
+ 	eq->irqn = pci_irq_vector(dev->pdev, vecidx);
++#else
++	eq->irqn = priv->msix_arr[vecidx].vector;
++#endif
+ 	eq->dev = dev;
+ 	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
+ 
+@@ -969,7 +983,11 @@ err_irq:
+ 		clear_bit(idx, priv->irq_info[vecidx].active_eqs);
+ 	if (!is_shared ||
+ 	    bitmap_empty(priv->irq_info[vecidx].active_eqs, MLX5_EQ_MAX_ASYNC_EQS))
++		#ifdef HAVE_PCI_IRQ_API
+ 		free_irq(eq->irqn, eq);
++		#else
++		free_irq(priv->msix_arr[vecidx].vector, eq);
++		#endif
+ 
+ err_eq:
+ 	mlx5_cmd_destroy_eq(dev, eq->eqn);
+@@ -1051,6 +1069,13 @@ int mlx5_eq_del_cq(struct mlx5_eq *eq, s
+ 	return 0;
+ }
+ 
++#ifndef HAVE_PCI_IRQ_API
++u32 mlx5_get_msix_vec(struct mlx5_core_dev *dev, int vecidx)
++{
++	return dev->priv.msix_arr[MLX5_EQ_VEC_ASYNC].vector;
++}
++#endif
++
+ int mlx5_eq_init(struct mlx5_core_dev *dev)
+ {
+ 	int err;
+@@ -1240,7 +1265,9 @@ void mlx5_core_eq_free_irqs(struct mlx5_
+ 		free_irq(table->ctrl_eqs[MLX5_EQ_VEC_PFAULT].irqn, &table->ctrl_eqs[MLX5_EQ_VEC_PFAULT]);
+ #endif
+ 
++#ifdef HAVE_PCI_IRQ_API
+ 	pci_free_irq_vectors(dev->pdev);
++#endif
+ }
+ 
+ void mlx5_core_eq_disable_irqs(struct mlx5_core_dev *dev)

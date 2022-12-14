@@ -1,0 +1,82 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
+
+Change-Id: I5bab3807fa745c412a1d5684c8ebbe9cc28574cf
+---
+ .../mellanox/mlx5/core/en_accel/tls_rxtx.c    | 21 ++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
+@@ -31,6 +31,8 @@
+  *
+  */
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
++
+ #include "en_accel/tls.h"
+ #include "en_accel/tls_rxtx.h"
+ #include "accel/accel.h"
+@@ -301,7 +303,7 @@ struct sk_buff *mlx5e_tls_handle_tx_skb(
+ out:
+ 	return skb;
+ }
+-
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_REQUEST
+ static int tls_update_resync_sn(struct net_device *netdev,
+ 				struct sk_buff *skb,
+ 				struct mlx5e_tls_metadata *mdata)
+@@ -325,11 +327,17 @@ static int tls_update_resync_sn(struct n
+ #if IS_ENABLED(CONFIG_IPV6)
+ 	} else {
+ 		struct ipv6hdr *ipv6h = (struct ipv6hdr *)iph;
+-
++#ifdef HAVE___INET6_LOOKUP_ESTABLISHED_HAS_7_PARAMS
+ 		sk = __inet6_lookup_established(dev_net(netdev), &tcp_hashinfo,
+ 						&ipv6h->saddr, th->source,
+ 						&ipv6h->daddr, ntohs(th->dest),
+-						netdev->ifindex, 0);
++						netdev->ifindex);
++#else
++		sk = __inet6_lookup_established(dev_net(netdev), &tcp_hashinfo,
++				&ipv6h->saddr, th->source,
++				&ipv6h->daddr, ntohs(th->dest),
++				netdev->ifindex, 0);
++#endif
+ #endif
+ 	}
+ 	if (!sk || sk->sk_state == TCP_TIME_WAIT) {
+@@ -347,6 +355,7 @@ static int tls_update_resync_sn(struct n
+ out:
+ 	return 0;
+ }
++#endif
+ 
+ void mlx5e_tls_handle_rx_skb(struct net_device *netdev, struct sk_buff *skb,
+ 			     u32 *cqe_bcnt)
+@@ -360,14 +369,18 @@ void mlx5e_tls_handle_rx_skb(struct net_
+ 	/* Use the metadata */
+ 	mdata = (struct mlx5e_tls_metadata *)(skb->data + ETH_HLEN);
+ 	switch (mdata->content.recv.syndrome) {
++#ifdef HAVE_SK_BUFF_DECRYPTED
+ 	case SYNDROM_DECRYPTED:
+ 		skb->decrypted = 1;
+ 		break;
++#endif
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_REQUEST
+ 	case SYNDROM_RESYNC_REQUEST:
+ 		tls_update_resync_sn(netdev, skb, mdata);
+ 		priv = netdev_priv(netdev);
+ 		atomic64_inc(&priv->tls->sw_stats.rx_tls_resync_request);
+ 		break;
++#endif
+ 	case SYNDROM_AUTH_FAILED:
+ 		/* Authentication failure will be observed and verified by kTLS */
+ 		priv = netdev_priv(netdev);
+@@ -381,3 +394,5 @@ void mlx5e_tls_handle_rx_skb(struct net_
+ 	remove_metadata_hdr(skb);
+ 	*cqe_bcnt -= MLX5E_METADATA_ETHER_LEN;
+ }
++
++#endif

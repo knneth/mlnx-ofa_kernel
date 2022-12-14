@@ -1,0 +1,104 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+
+Change-Id: I347dc13a67f9de0899ef9cc6cc98e0780a83e4d0
+---
+ .../ethernet/mellanox/mlx5/core/en_stats.h    | 25 +++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+@@ -74,12 +74,16 @@ struct mlx5e_sw_stats {
+ 	u64 rx_csum_complete_tail;
+ 	u64 rx_csum_complete_tail_slow;
+ 	u64 rx_csum_unnecessary_inner;
++#ifdef HAVE_XDP_BUFF
+ 	u64 rx_xdp_drop;
++#ifdef HAVE_XDP_REDIRECT
+ 	u64 rx_xdp_redirect;
++#endif
+ 	u64 rx_xdp_tx_xmit;
+ 	u64 rx_xdp_tx_full;
+ 	u64 rx_xdp_tx_err;
+ 	u64 rx_xdp_tx_cqe;
++#endif
+ 	u64 tx_csum_none;
+ 	u64 tx_csum_partial;
+ 	u64 tx_csum_partial_inner;
+@@ -90,10 +94,17 @@ struct mlx5e_sw_stats {
+ 	u64 tx_cqes;
+ 	u64 tx_queue_wake;
+ 	u64 tx_cqe_err;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	u64 rx_sw_lro_aggregated;
++	u64 rx_sw_lro_flushed;
++	u64 rx_sw_lro_no_desc;
++#endif
++#ifdef HAVE_XDP_REDIRECT
+ 	u64 tx_xdp_xmit;
+ 	u64 tx_xdp_full;
+ 	u64 tx_xdp_err;
+ 	u64 tx_xdp_cqes;
++#endif
+ 	u64 rx_wqe_err;
+ 	u64 rx_mpwqe_filler_cqes;
+ 	u64 rx_mpwqe_filler_strides;
+@@ -116,7 +127,7 @@ struct mlx5e_sw_stats {
+ 	u64 ch_aff_change;
+ 	u64 ch_eq_rearm;
+ 
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
+ 	u64 tx_tls_ooo;
+ 	u64 tx_tls_resync_bytes;
+ #endif
+@@ -193,8 +204,12 @@ struct mlx5e_rq_stats {
+ 	u64 lro_bytes;
+ 	u64 ecn_mark;
+ 	u64 removed_vlan_packets;
++#ifdef HAVE_XDP_BUFF
+ 	u64 xdp_drop;
++#ifdef HAVE_XDP_REDIRECT
+ 	u64 xdp_redirect;
++#endif
++#endif
+ 	u64 wqe_err;
+ 	u64 mpwqe_filler_cqes;
+ 	u64 mpwqe_filler_strides;
+@@ -226,7 +241,7 @@ struct mlx5e_sq_stats {
+ 	u64 csum_partial_inner;
+ 	u64 added_vlan_packets;
+ 	u64 nop;
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
+ 	u64 tls_ooo;
+ 	u64 tls_resync_bytes;
+ #endif
+@@ -241,6 +256,7 @@ struct mlx5e_sq_stats {
+ 	u64 cqe_err;
+ };
+ 
++#ifdef HAVE_XDP_BUFF
+ struct mlx5e_xdpsq_stats {
+ 	u64 xmit;
+ 	u64 full;
+@@ -248,6 +264,7 @@ struct mlx5e_xdpsq_stats {
+ 	/* dirtied @completion */
+ 	u64 cqes ____cacheline_aligned_in_smp;
+ };
++#endif
+ 
+ struct mlx5e_ch_stats {
+ 	u64 events;
+@@ -263,7 +280,11 @@ struct mlx5e_stats {
+ 	struct mlx5e_vnic_env_stats vnic;
+ 	struct mlx5e_vport_stats vport;
+ 	struct mlx5e_pport_stats pport;
++#ifdef HAVE_RTNL_LINK_STATS64
+ 	struct rtnl_link_stats64 vf_vport;
++#else
++	struct rtnl_link_stats vf_vport;
++#endif
+ 	struct mlx5e_pcie_stats pcie;
+ };
+ 

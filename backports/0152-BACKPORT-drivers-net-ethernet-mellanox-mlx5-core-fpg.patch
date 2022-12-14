@@ -1,0 +1,25 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.c
+
+Change-Id: Id7536c6093c93c43f612b1d70b91ed5ba6f1fe31
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.c
+@@ -31,6 +31,8 @@
+  *
+  */
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
++
+ #include <linux/mlx5/device.h>
+ #include "fpga/tls.h"
+ #include "fpga/cmd.h"
+@@ -625,3 +627,5 @@ free_swid:
+ 
+ 	return ret;
+ }
++
++#endif

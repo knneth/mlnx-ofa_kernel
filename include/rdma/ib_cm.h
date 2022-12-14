@@ -311,7 +311,7 @@ struct ib_cm_event {
  * destroy the @cm_id after the callback completes.
  */
 typedef int (*ib_cm_handler)(struct ib_cm_id *cm_id,
-			     struct ib_cm_event *event);
+			     const struct ib_cm_event *event);
 
 struct ib_cm_id {
 	ib_cm_handler		cm_handler;
@@ -583,7 +583,7 @@ struct ib_cm_sidr_req_param {
 	struct sa_path_rec	*path;
 	const struct ib_gid_attr *sgid_attr;
 	__be64			service_id;
-	int			timeout_ms;
+	unsigned long		timeout_ms;
 	const void		*private_data;
 	u8			private_data_len;
 	u8			max_cm_retries;

@@ -56,7 +56,7 @@
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/netdevice.h>
-
+#include <linux/refcount.h>
 #include <linux/if_link.h>
 #include <linux/atomic.h>
 #include <linux/mmu_notifier.h>
@@ -67,8 +67,11 @@
 #include <rdma/restrack.h>
 #include <uapi/rdma/rdma_user_ioctl.h>
 #include <uapi/rdma/ib_user_ioctl_verbs.h>
+#include "../../compat/config.h"
 
 #define IB_FW_VERSION_NAME_MAX	ETHTOOL_FWVERS_LEN
+
+struct ib_umem_odp;
 
 extern struct workqueue_struct *ib_wq;
 extern struct workqueue_struct *ib_comp_wq;
@@ -107,7 +110,7 @@ enum ib_gid_type {
 
 #define ROCE_V2_UDP_DPORT      4791
 struct ib_gid_attr {
-	struct net_device	*ndev;
+	struct net_device __rcu	*ndev;
 	struct ib_device	*device;
 	union ib_gid		gid;
 	enum ib_gid_type	gid_type;
@@ -370,7 +373,8 @@ struct ib_device_attr {
 	int			max_qp;
 	int			max_qp_wr;
 	u64			device_cap_flags;
-	int			max_sge;
+	int			max_send_sge;
+	int			max_recv_sge;
 	int			max_sge_rd;
 	int			max_cq;
 	int			max_cqe;
@@ -677,6 +681,9 @@ enum ib_event_type {
 	IB_EXP_EVENT_DCT_REQ_ERR,
 	IB_EXP_EVENT_XRQ_QP_ERR,
 	IB_EXP_EVENT_XRQ_NVMF_BACKEND_CTRL_ERR,
+#ifdef CONFIG_BF_POWER_FAILURE_EVENT
+	IB_EXP_EVENT_POWER_FAILURE = 63,
+#endif
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event);
@@ -1203,7 +1210,9 @@ enum ib_qp_create_flags {
  */
 
 struct ib_qp_init_attr {
+	/* Consumer's event_handler callback must not block */
 	void                  (*event_handler)(struct ib_event *, void *);
+
 	void		       *qp_context;
 	struct ib_cq	       *send_cq;
 	struct ib_cq	       *recv_cq;
@@ -1212,7 +1221,7 @@ struct ib_qp_init_attr {
 	struct ib_qp_cap	cap;
 	enum ib_sig_type	sq_sig_type;
 	enum ib_qp_type		qp_type;
-	enum ib_qp_create_flags	create_flags;
+	u32			create_flags;
 
 	/*
 	 * Only needed for special QP types, or when using the RW API.
@@ -1356,21 +1365,27 @@ struct ib_qp_attr {
 };
 
 enum ib_wr_opcode {
-	IB_WR_RDMA_WRITE,
-	IB_WR_RDMA_WRITE_WITH_IMM,
-	IB_WR_SEND,
-	IB_WR_SEND_WITH_IMM,
-	IB_WR_RDMA_READ,
-	IB_WR_ATOMIC_CMP_AND_SWP,
-	IB_WR_ATOMIC_FETCH_AND_ADD,
-	IB_WR_LSO,
-	IB_WR_SEND_WITH_INV,
-	IB_WR_RDMA_READ_WITH_INV,
-	IB_WR_LOCAL_INV,
-	IB_WR_REG_MR,
-	IB_WR_MASKED_ATOMIC_CMP_AND_SWP,
-	IB_WR_MASKED_ATOMIC_FETCH_AND_ADD,
+	/* These are shared with userspace */
+	IB_WR_RDMA_WRITE = IB_UVERBS_WR_RDMA_WRITE,
+	IB_WR_RDMA_WRITE_WITH_IMM = IB_UVERBS_WR_RDMA_WRITE_WITH_IMM,
+	IB_WR_SEND = IB_UVERBS_WR_SEND,
+	IB_WR_SEND_WITH_IMM = IB_UVERBS_WR_SEND_WITH_IMM,
+	IB_WR_RDMA_READ = IB_UVERBS_WR_RDMA_READ,
+	IB_WR_ATOMIC_CMP_AND_SWP = IB_UVERBS_WR_ATOMIC_CMP_AND_SWP,
+	IB_WR_ATOMIC_FETCH_AND_ADD = IB_UVERBS_WR_ATOMIC_FETCH_AND_ADD,
+	IB_WR_LSO = IB_UVERBS_WR_TSO,
+	IB_WR_SEND_WITH_INV = IB_UVERBS_WR_SEND_WITH_INV,
+	IB_WR_RDMA_READ_WITH_INV = IB_UVERBS_WR_RDMA_READ_WITH_INV,
+	IB_WR_LOCAL_INV = IB_UVERBS_WR_LOCAL_INV,
+	IB_WR_MASKED_ATOMIC_CMP_AND_SWP =
+		IB_UVERBS_WR_MASKED_ATOMIC_CMP_AND_SWP,
+	IB_WR_MASKED_ATOMIC_FETCH_AND_ADD =
+		IB_UVERBS_WR_MASKED_ATOMIC_FETCH_AND_ADD,
+
+	/* These are kernel only and can not be issued by userspace */
+	IB_WR_REG_MR = 0x20,
 	IB_WR_REG_SIG_MR,
+
 	/* reserve values for low level drivers' internal use.
 	 * These values will not be used at all in the ib core layer.
 	 */
@@ -1431,7 +1446,7 @@ struct ib_rdma_wr {
 	u32			rkey;
 };
 
-static inline struct ib_rdma_wr *rdma_wr(struct ib_send_wr *wr)
+static inline const struct ib_rdma_wr *rdma_wr(const struct ib_send_wr *wr)
 {
 	return container_of(wr, struct ib_rdma_wr, wr);
 }
@@ -1446,7 +1461,7 @@ struct ib_atomic_wr {
 	u32			rkey;
 };
 
-static inline struct ib_atomic_wr *atomic_wr(struct ib_send_wr *wr)
+static inline const struct ib_atomic_wr *atomic_wr(const struct ib_send_wr *wr)
 {
 	return container_of(wr, struct ib_atomic_wr, wr);
 }
@@ -1463,7 +1478,7 @@ struct ib_ud_wr {
 	u8			port_num;   /* valid for DR SMPs on switch only */
 };
 
-static inline struct ib_ud_wr *ud_wr(struct ib_send_wr *wr)
+static inline const struct ib_ud_wr *ud_wr(const struct ib_send_wr *wr)
 {
 	return container_of(wr, struct ib_ud_wr, wr);
 }
@@ -1475,7 +1490,7 @@ struct ib_reg_wr {
 	int			access;
 };
 
-static inline struct ib_reg_wr *reg_wr(struct ib_send_wr *wr)
+static inline const struct ib_reg_wr *reg_wr(const struct ib_send_wr *wr)
 {
 	return container_of(wr, struct ib_reg_wr, wr);
 }
@@ -1488,7 +1503,8 @@ struct ib_sig_handover_wr {
 	struct ib_sge	       *prot;
 };
 
-static inline struct ib_sig_handover_wr *sig_handover_wr(struct ib_send_wr *wr)
+static inline const struct ib_sig_handover_wr *
+sig_handover_wr(const struct ib_send_wr *wr)
 {
 	return container_of(wr, struct ib_sig_handover_wr, wr);
 }
@@ -1549,8 +1565,8 @@ enum rdma_remove_reason {
 	RDMA_REMOVE_CLOSE,
 	/* Driver is being hot-unplugged. This call should delete the actual object itself */
 	RDMA_REMOVE_DRIVER_REMOVE,
-	/* Context is being cleaned-up, but commit was just completed */
-	RDMA_REMOVE_DURING_CLEANUP,
+	/* uobj is being cleaned-up before being committed */
+	RDMA_REMOVE_ABORT,
 };
 
 struct ib_rdmacg_object {
@@ -1562,32 +1578,20 @@ struct ib_rdmacg_object {
 struct ib_ucontext {
 	struct ib_device       *device;
 	struct ib_uverbs_file  *ufile;
-	int			closing;
+	/*
+	 * 'closing' can be read by the driver only during a destroy callback,
+	 * it is set when we are closing the file descriptor and indicates
+	 * that mm_sem may be locked.
+	 */
+	bool closing;
 
-	/* locking the uobjects_list */
-	struct mutex		uobjects_lock;
-	struct list_head	uobjects;
-	/* protects cleanup process from other actions */
-	struct rw_semaphore	cleanup_rwsem;
-	enum rdma_remove_reason cleanup_reason;
 	bool cleanup_retryable;
 
-	struct pid             *tgid;
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
-	struct rb_root_cached   umem_tree;
-	/*
-	 * Protects .umem_rbroot and tree, as well as odp_mrs_count and
-	 * mmu notifiers registration.
-	 */
-	struct rw_semaphore	umem_rwsem;
-	void (*invalidate_range)(struct ib_umem *umem,
+	void (*invalidate_range)(struct ib_umem_odp *umem_odp,
 				 unsigned long start, unsigned long end);
-
-	struct mmu_notifier	mn;
-	atomic_t		notifier_count;
-	/* A list of umems that don't have private mmu notifier counters yet. */
-	struct list_head	no_private_counters;
-	int                     odp_mrs_count;
+	struct mutex per_mm_list_lock;
+	struct list_head per_mm_list;
 #endif
 
 	struct ib_rdmacg_object	cg_obj;
@@ -1599,6 +1603,9 @@ struct ib_ucontext {
 
 struct ib_uobject {
 	u64			user_handle;	/* handle given to us by userspace */
+	/* ufile & ucontext owning this object */
+	struct ib_uverbs_file  *ufile;
+	/* FIXME, save memory: ufile->context == context */
 	struct ib_ucontext     *context;	/* associated user context */
 	void		       *object;		/* containing object */
 	struct list_head	list;		/* link to context's list */
@@ -1608,13 +1615,7 @@ struct ib_uobject {
 	atomic_t		usecnt;		/* protects exclusive access */
 	struct rcu_head		rcu;		/* kfree_rcu() overhead */
 
-	const struct uverbs_obj_type *type;
-};
-
-struct ib_uobject_file {
-	struct ib_uobject	uobj;
-	/* ufile contains the lock between context release and file close */
-	struct ib_uverbs_file	*ufile;
+	const struct uverbs_api_object *uapi_object;
 };
 
 enum ib_udate_src {
@@ -2313,7 +2314,11 @@ struct rdma_netdev {
 	struct ib_device  *hca;
 	u8                 port_num;
 
-	/* cleanup function must be specified */
+	/*
+	 * cleanup function must be specified.
+	 * FIXME: This is only used for OPA_VNIC and that usage should be
+	 * removed too.
+	 */
 	void (*free_rdma_netdev)(struct net_device *netdev);
 
 	/* control functions */
@@ -2327,6 +2332,19 @@ struct rdma_netdev {
 			    int set_qkey, u32 qkey);
 	int (*detach_mcast)(struct net_device *dev, struct ib_device *hca,
 			    union ib_gid *gid, u16 mlid);
+};
+
+struct rdma_netdev_alloc_params {
+	size_t sizeof_priv;
+	unsigned int txqs;
+	unsigned int rxqs;
+	void *param;
+
+	int (*initialize_rdma_netdev)(struct ib_device *device, u8 port_num,
+				      struct net_device *netdev, void *param);
+#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+	void (*uninitialize_rdma_netdev)(struct net_device *netdev);
+#endif
 };
 
 struct ib_port_pkey_list {
@@ -2350,6 +2368,13 @@ struct ib_counters_read_attr {
 
 struct uverbs_attr_bundle;
 
+struct ib_device_immutable {
+	/*
+	 * Provider driver indicates if this is rdma bond device or not.
+	 */
+	bool bond_device;
+};
+
 struct ib_device {
 	/* Do not access @dma_device directly from ULP nor from HW drivers. */
 	struct device                *dma_device;
@@ -2359,10 +2384,11 @@ struct ib_device {
 	struct list_head              event_handler_list;
 	spinlock_t                    event_handler_lock;
 
-	spinlock_t                    client_data_lock;
+	rwlock_t			client_data_lock;
 	struct list_head              core_list;
 	/* Access to the client_data_list is protected by the client_data_lock
-	 * spinlock and the lists_rwsem read-write semaphore */
+	 * rwlock and the lists_rwsem read-write semaphore
+	 */
 	struct list_head              client_data_list;
 
 	struct ib_cache               cache;
@@ -2405,9 +2431,8 @@ struct ib_device {
 	int			(*exp_query_dct)(struct ib_dct *dct, struct ib_dct_attr *attr);
 	int			(*exp_arm_dct)(struct ib_dct *dct, struct ib_udata *udata);
 	int			(*exp_query_mkey)(struct ib_mr *mr,
-						  u64 mkey_attr_mask,
-						  struct ib_mkey_attr *mkey_attr);
-	u64			uverbs_exp_cmd_mask;
+					  u64 mkey_attr_mask,
+					  struct ib_mkey_attr *mkey_attr);
 	struct ib_odp_statistics     odp_statistics;
 	unsigned long		   (*exp_get_unmapped_area)(struct file *file,
 							    unsigned long addr,
@@ -2538,8 +2563,8 @@ struct ib_device {
 						struct ib_srq_attr *srq_attr);
 	int                        (*destroy_srq)(struct ib_srq *srq);
 	int                        (*post_srq_recv)(struct ib_srq *srq,
-						    struct ib_recv_wr *recv_wr,
-						    struct ib_recv_wr **bad_recv_wr);
+						    const struct ib_recv_wr *recv_wr,
+						    const struct ib_recv_wr **bad_recv_wr);
 	struct ib_qp *             (*create_qp)(struct ib_pd *pd,
 						struct ib_qp_init_attr *qp_init_attr,
 						struct ib_udata *udata);
@@ -2553,11 +2578,11 @@ struct ib_device {
 					       struct ib_qp_init_attr *qp_init_attr);
 	int                        (*destroy_qp)(struct ib_qp *qp);
 	int                        (*post_send)(struct ib_qp *qp,
-						struct ib_send_wr *send_wr,
-						struct ib_send_wr **bad_send_wr);
+						const struct ib_send_wr *send_wr,
+						const struct ib_send_wr **bad_send_wr);
 	int                        (*post_recv)(struct ib_qp *qp,
-						struct ib_recv_wr *recv_wr,
-						struct ib_recv_wr **bad_recv_wr);
+						const struct ib_recv_wr *recv_wr,
+						const struct ib_recv_wr **bad_recv_wr);
 	struct ib_cq *             (*create_cq)(struct ib_device *device,
 						const struct ib_cq_init_attr *attr,
 						struct ib_ucontext *context,
@@ -2590,6 +2615,10 @@ struct ib_device {
 	struct ib_mr *		   (*alloc_mr)(struct ib_pd *pd,
 					       enum ib_mr_type mr_type,
 					       u32 max_num_sg);
+	int (*advise_mr)(struct ib_pd *pd,
+			 enum ib_uverbs_advise_mr_advice advice, u32 flags,
+			 struct ib_sge *sg_list, u32 num_sge,
+			 struct uverbs_attr_bundle *attrs);
 	int                        (*map_mr_sg)(struct ib_mr *mr,
 						struct scatterlist *sg,
 						int sg_nents,
@@ -2682,8 +2711,8 @@ struct ib_device {
 	/**
 	 * rdma netdev operation
 	 *
-	 * Driver implementing alloc_rdma_netdev must return -EOPNOTSUPP if it
-	 * doesn't support the specified rdma netdev type.
+	 * Driver implementing alloc_rdma_netdev or rdma_netdev_get_params
+	 * must return -EOPNOTSUPP if it doesn't support the specified type.
 	 */
 	struct net_device *(*alloc_rdma_netdev)(
 					struct ib_device *device,
@@ -2693,9 +2722,19 @@ struct ib_device {
 					unsigned char name_assign_type,
 					void (*setup)(struct net_device *));
 
+	int (*rdma_netdev_get_params)(struct ib_device *device, u8 port_num,
+				      enum rdma_netdev_t type,
+				      struct rdma_netdev_alloc_params *params);
+
 	struct module               *owner;
 	struct device                dev;
-	struct kobject               *ports_parent;
+	/* First group for device attributes,
+	 * Second group for driver provided attributes (optional).
+	 * It is NULL terminated array.
+	 */
+	const struct attribute_group	*groups[3];
+
+	struct kobject			*ports_kobj;
 	struct list_head             port_list;
 
 	enum {
@@ -2707,6 +2746,7 @@ struct ib_device {
 	int			     uverbs_abi_ver;
 	u64			     uverbs_cmd_mask;
 	u64			     uverbs_ex_cmd_mask;
+	u64			     uverbs_exp_cmd_mask;
 
 	char			     node_desc[IB_DEVICE_NODE_DESC_MAX];
 	__be64			     node_guid;
@@ -2740,8 +2780,16 @@ struct ib_device {
 	const struct cpumask *(*get_vector_affinity)(struct ib_device *ibdev,
 						     int comp_vector);
 
-	struct uverbs_root_spec		*driver_specs_root;
+	const struct uverbs_object_tree_def *const *driver_specs;
 	enum rdma_driver_id		driver_id;
+	/*
+	 * Positive refcount indicates that the device is currently
+	 * registered and cannot be unregistered.
+	 */
+	refcount_t refcount;
+	struct completion unreg_completion;
+
+	struct ib_device_immutable dev_immutable;
 };
 
 struct ib_client {
@@ -2779,9 +2827,9 @@ void ib_dealloc_device(struct ib_device *device);
 
 void ib_get_device_fw_str(struct ib_device *device, char *str);
 
-int ib_register_device(struct ib_device *device,
-		       int (*port_callback)(struct ib_device *,
-					    u8, struct kobject *));
+int ib_register_device(struct ib_device *device, const char *name,
+		       int (*port_callback)(struct ib_device *, u8,
+					    struct kobject *));
 void ib_unregister_device(struct ib_device *device);
 
 int ib_register_client   (struct ib_client *client);
@@ -2790,6 +2838,32 @@ void ib_unregister_client(struct ib_client *client);
 void *ib_get_client_data(struct ib_device *device, struct ib_client *client);
 void  ib_set_client_data(struct ib_device *device, struct ib_client *client,
 			 void *data);
+
+struct rdma_umap_priv {
+	struct vm_area_struct *vma;
+	struct list_head list;
+};
+#if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
+int rdma_user_mmap_io(struct ib_ucontext *ucontext, struct vm_area_struct *vma,
+		      unsigned long pfn, unsigned long size, pgprot_t prot, struct rdma_umap_priv *priv);
+int rdma_user_mmap_page(struct ib_ucontext *ucontext,
+			struct vm_area_struct *vma, struct page *page,
+			unsigned long size);
+#else
+static inline int rdma_user_mmap_io(struct ib_ucontext *ucontext,
+				    struct vm_area_struct *vma,
+				    unsigned long pfn, unsigned long size,
+				    pgprot_t prot, struct rdma_umap_priv *priv)
+{
+	return -EINVAL;
+}
+static inline int rdma_user_mmap_page(struct ib_ucontext *ucontext,
+				struct vm_area_struct *vma, struct page *page,
+				unsigned long size)
+{
+	return -EINVAL;
+}
+#endif
 
 static inline int ib_copy_from_udata(void *dest, struct ib_udata *udata, size_t len)
 {
@@ -2874,7 +2948,6 @@ static inline int ib_destroy_usecnt(atomic_t *usecnt,
  * @next_state: Next QP state
  * @type: QP type
  * @mask: Mask of supplied QP attributes
- * @ll : link layer of port
  *
  * This function is a helper function that a low-level driver's
  * modify_qp method can use to validate the consumer's input.  It
@@ -2883,8 +2956,7 @@ static inline int ib_destroy_usecnt(atomic_t *usecnt,
  * and that the attribute mask supplied is allowed for the transition.
  */
 bool ib_modify_qp_is_ok(enum ib_qp_state cur_state, enum ib_qp_state next_state,
-			enum ib_qp_type type, enum ib_qp_attr_mask mask,
-			enum rdma_link_layer ll);
+			enum ib_qp_type type, enum ib_qp_attr_mask mask);
 
 void ib_register_event_handler(struct ib_event_handler *event_handler);
 void ib_unregister_event_handler(struct ib_event_handler *event_handler);
@@ -3466,10 +3538,10 @@ int ib_destroy_srq(struct ib_srq *srq);
  *   the work request that failed to be posted on the QP.
  */
 static inline int ib_post_srq_recv(struct ib_srq *srq,
-				   struct ib_recv_wr *recv_wr,
-				   struct ib_recv_wr **bad_recv_wr)
+				   const struct ib_recv_wr *recv_wr,
+				   const struct ib_recv_wr **bad_recv_wr)
 {
-	struct ib_recv_wr *dummy;
+	const struct ib_recv_wr *dummy;
 
 	return srq->device->post_srq_recv(srq, recv_wr, bad_recv_wr ? : &dummy);
 }
@@ -3569,10 +3641,10 @@ int ib_close_qp(struct ib_qp *qp);
  * earlier work requests in the list.
  */
 static inline int ib_post_send(struct ib_qp *qp,
-			       struct ib_send_wr *send_wr,
-			       struct ib_send_wr **bad_send_wr)
+			       const struct ib_send_wr *send_wr,
+			       const struct ib_send_wr **bad_send_wr)
 {
-	struct ib_send_wr *dummy;
+	const struct ib_send_wr *dummy;
 
 	return qp->device->post_send(qp, send_wr, bad_send_wr ? : &dummy);
 }
@@ -3586,10 +3658,10 @@ static inline int ib_post_send(struct ib_qp *qp,
  *   the work request that failed to be posted on the QP.
  */
 static inline int ib_post_recv(struct ib_qp *qp,
-			       struct ib_recv_wr *recv_wr,
-			       struct ib_recv_wr **bad_recv_wr)
+			       const struct ib_recv_wr *recv_wr,
+			       const struct ib_recv_wr **bad_recv_wr)
 {
-	struct ib_recv_wr *dummy;
+	const struct ib_recv_wr *dummy;
 
 	return qp->device->post_recv(qp, recv_wr, bad_recv_wr ? : &dummy);
 }
@@ -4150,6 +4222,25 @@ static inline bool ib_access_writable(int access_flags)
 int ib_check_mr_status(struct ib_mr *mr, u32 check_mask,
 		       struct ib_mr_status *mr_status);
 
+/**
+ * ib_device_try_get: Hold a registration lock
+ * device: The device to lock
+ *
+ * A device under an active registration lock cannot become unregistered. It
+ * is only possible to obtain a registration lock on a device that is fully
+ * registered, otherwise this function returns false.
+ *
+ * The registration lock is only necessary for actions which require the
+ * device to still be registered. Uses that only require the device pointer to
+ * be valid should use get_device(&ibdev->dev) to hold the memory.
+ *
+ */
+static inline bool ib_device_try_get(struct ib_device *dev)
+{
+	return refcount_inc_not_zero(&dev->refcount);
+}
+
+void ib_device_put(struct ib_device *device);
 struct net_device *ib_get_net_dev_by_params(struct ib_device *dev, u8 port,
 					    u16 pkey, const union ib_gid *gid,
 					    const struct sockaddr *addr);
@@ -4354,12 +4445,12 @@ void rdma_destroy_ah_attr(struct rdma_ah_attr *ah_attr);
 void rdma_move_grh_sgid_attr(struct rdma_ah_attr *attr, union ib_gid *dgid,
 			     u32 flow_label, u8 hop_limit, u8 traffic_class,
 			     const struct ib_gid_attr *sgid_attr);
-
 void rdma_copy_ah_attr(struct rdma_ah_attr *dest,
 		       const struct rdma_ah_attr *src);
 void rdma_replace_ah_attr(struct rdma_ah_attr *old,
 			  const struct rdma_ah_attr *new);
 void rdma_move_ah_attr(struct rdma_ah_attr *dest, struct rdma_ah_attr *src);
+
 /**
  * rdma_ah_find_type - Return address handle type.
  *
@@ -4437,9 +4528,48 @@ void rdma_roce_rescan_device(struct ib_device *ibdev);
 
 struct ib_ucontext *ib_uverbs_get_ucontext(struct ib_uverbs_file *ufile);
 
-int uverbs_destroy_def_handler(struct ib_device *ib_dev,
-			       struct ib_uverbs_file *file,
+int uverbs_destroy_def_handler(struct ib_uverbs_file *file,
 			       struct uverbs_attr_bundle *attrs);
+
+struct net_device *rdma_alloc_netdev(struct ib_device *device, u8 port_num,
+				     enum rdma_netdev_t type, const char *name,
+				     unsigned char name_assign_type,
+				     void (*setup)(struct net_device *),
+				     int force_fail);
+
+int rdma_init_netdev(struct ib_device *device, u8 port_num,
+		     enum rdma_netdev_t type, const char *name,
+		     unsigned char name_assign_type,
+		     void (*setup)(struct net_device *),
+		     struct net_device *netdev,
+		     int force_fail);
+
+#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+int rdma_uninit_netdev(struct ib_device *device, struct net_device *netdev,
+		       u8 port_num, enum rdma_netdev_t type, int force_fail);
+#endif
+
+/**
+ * rdma_set_device_sysfs_group - Set device attributes group to have
+ *				 driver specific sysfs entries at
+ *				 for infiniband class.
+ *
+ * @device:	device pointer for which attributes to be created
+ * @group:	Pointer to group which should be added when device
+ *		is registered with sysfs.
+ * rdma_set_device_sysfs_group() allows existing drivers to expose one
+ * group per device to have sysfs attributes.
+ *
+ * NOTE: New drivers should not make use of this API; instead new device
+ * parameter should be exposed via netlink command. This API and mechanism
+ * exist only for existing drivers.
+ */
+static inline void
+rdma_set_device_sysfs_group(struct ib_device *dev,
+			    const struct attribute_group *group)
+{
+	dev->groups[1] = group;
+}
 
 #include <rdma/ib_verbs_exp.h>
 #endif /* IB_VERBS_H */

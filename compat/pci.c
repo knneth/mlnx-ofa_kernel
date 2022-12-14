@@ -303,3 +303,91 @@ int pci_enable_atomic_ops_to_root(struct pci_dev *dev, u32 cap_mask)
 }
 EXPORT_SYMBOL(pci_enable_atomic_ops_to_root);
 #endif
+
+#ifdef HAVE_NO_LINKSTA_SYSFS
+/* based on upstream drivers/pci/pci-sysfs.c*/
+static ssize_t current_link_speed_show(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct pci_dev *pci_dev = to_pci_dev(dev);
+	u16 linkstat;
+	int err;
+	const char *speed;
+
+	err = pcie_capability_read_word(pci_dev, PCI_EXP_LNKSTA, &linkstat);
+	if (err)
+		return -EINVAL;
+
+	switch (linkstat & PCI_EXP_LNKSTA_CLS) {
+	case PCI_EXP_LNKSTA_CLS_16_0GB:
+		speed = "16 GT/s";
+		break;
+	case PCI_EXP_LNKSTA_CLS_8_0GB:
+		speed = "8 GT/s";
+		break;
+	case PCI_EXP_LNKSTA_CLS_5_0GB:
+		speed = "5 GT/s";
+		break;
+	case PCI_EXP_LNKSTA_CLS_2_5GB:
+		speed = "2.5 GT/s";
+		break;
+	default:
+		speed = "Unknown speed";
+	}
+
+	return sprintf(buf, "%s\n", speed);
+}
+static DEVICE_ATTR_RO(current_link_speed);
+
+static ssize_t current_link_width_show(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct pci_dev *pci_dev = to_pci_dev(dev);
+	u16 linkstat;
+	int err;
+
+	err = pcie_capability_read_word(pci_dev, PCI_EXP_LNKSTA, &linkstat);
+	if (err)
+		return -EINVAL;
+
+	return sprintf(buf, "%u\n",
+		(linkstat & PCI_EXP_LNKSTA_NLW) >> PCI_EXP_LNKSTA_NLW_SHIFT);
+}
+static DEVICE_ATTR_RO(current_link_width);
+
+static struct attribute *pcie_dev_attrs[] = {
+	&dev_attr_current_link_speed.attr,
+	&dev_attr_current_link_width.attr,
+	NULL,
+};
+
+static umode_t pcie_dev_attrs_are_visible(struct kobject *kobj,
+					  struct attribute *a, int n)
+{
+	struct device *dev = kobj_to_dev(kobj);
+	struct pci_dev *pdev = to_pci_dev(dev);
+
+	if (pci_is_pcie(pdev))
+		return a->mode;
+
+	return 0;
+}
+
+static const struct attribute_group pcie_dev_attr_group = {
+	.attrs = pcie_dev_attrs,
+	.is_visible = pcie_dev_attrs_are_visible,
+};
+
+void register_pcie_dev_attr_group(struct pci_dev *pdev)
+{
+	if (sysfs_create_group(&pdev->dev.kobj, &pcie_dev_attr_group))
+		pci_info(pdev, "failed to register sysfs PCIe device group");
+}
+EXPORT_SYMBOL(register_pcie_dev_attr_group);
+
+void unregister_pcie_dev_attr_group(struct pci_dev *pdev)
+{
+	sysfs_remove_group(&pdev->dev.kobj, &pcie_dev_attr_group);
+}
+EXPORT_SYMBOL(unregister_pcie_dev_attr_group);
+#endif

@@ -1,0 +1,32 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/uverbs_ioctl.h
+
+Change-Id: I06fad3ad1596e9a48d102ccbf88fe911284b9acd
+---
+ include/rdma/uverbs_ioctl.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/include/rdma/uverbs_ioctl.h
++++ b/include/rdma/uverbs_ioctl.h
+@@ -141,6 +141,10 @@ struct uverbs_attr_spec {
+  * The tree encodes multiple types, and uses a scheme where OBJ_ID,0,0 returns
+  * the object slot, and OBJ_ID,METH_ID,0 and returns the method slot.
+  */
++#ifndef GENMASK
++#define GENMASK(h, l) \
++	(((~0UL) - (1UL << (l)) + 1) & (~0UL >> (BITS_PER_LONG - 1 - (h))))
++#endif
+ enum uapi_radix_data {
+ 	UVERBS_API_NS_FLAG = 1U << UVERBS_ID_NS_SHIFT,
+ 
+@@ -695,6 +699,10 @@ int uverbs_get_flags32(u32 *to, const st
+ 		       size_t idx, u64 allowed_bits);
+ int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle, size_t idx,
+ 		   const void *from, size_t size);
++#ifndef __malloc
++#define __malloc
++#endif
++
+ __malloc void *_uverbs_alloc(struct uverbs_attr_bundle *bundle, size_t size,
+ 			     gfp_t flags);
+ 

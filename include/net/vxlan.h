@@ -1,4 +1,4 @@
-#ifndef COMPAT_NET_VLXAN_H
+#ifndef COMPAT_NET_VXLAN_H
 #define COMPAT_NET_VXLAN_H
 
 #include "../../compat/config.h"

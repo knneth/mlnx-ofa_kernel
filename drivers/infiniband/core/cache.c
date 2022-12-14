@@ -80,11 +80,22 @@ enum gid_table_entry_state {
 	GID_TABLE_ENTRY_PENDING_DEL	= 3,
 };
 
+struct roce_gid_ndev_storage {
+	struct rcu_head rcu_head;
+	struct net_device __rcu *ndev;
+};
+
 struct ib_gid_table_entry {
 	struct kref			kref;
 	struct work_struct		del_work;
 	struct ib_gid_attr		attr;
 	void				*context;
+	/* Store the ndev pointer to release reference later on in
+	 * call_rcu context because by that time gid_table_entry
+	 * and attr might be already freed. So keep a copy of it.
+	 * ndev_storage is freed by rcu callback.
+	 */
+	struct roce_gid_ndev_storage	*ndev_storage;
 	enum gid_table_entry_state	state;
 };
 
@@ -208,19 +219,28 @@ static void schedule_free_gid(struct kref *kref)
 	queue_work(ib_wq, &entry->del_work);
 }
 
+static void put_gid_ndev(struct rcu_head *head)
+{
+	struct roce_gid_ndev_storage *storage =
+		container_of(head, struct roce_gid_ndev_storage, rcu_head);
+
+	WARN_ON(!storage->ndev);
+	/* At this point its safe to release netdev reference,
+	 * as all callers working on gid_attr->ndev are done
+	 * using this netdev.
+	 */
+	dev_put(storage->ndev);
+	kfree(storage);
+}
+
 static void free_gid_entry_locked(struct ib_gid_table_entry *entry)
 {
 	struct ib_device *device = entry->attr.device;
 	u8 port_num = entry->attr.port_num;
 	struct ib_gid_table *table = rdma_gid_table(device, port_num);
 
-	pr_debug("%s device=%s port=%d index=%d gid %pI6\n", __func__,
-		 device->name, port_num, entry->attr.index,
-		 entry->attr.gid.raw);
-
-	if (rdma_cap_roce_gid_table(device, port_num) &&
-	    entry->state != GID_TABLE_ENTRY_INVALID)
-		device->del_gid(&entry->attr, &entry->context);
+	dev_dbg(&device->dev, "%s port=%d index=%d gid %pI6\n", __func__,
+		port_num, entry->attr.index, entry->attr.gid.raw);
 
 	write_lock_irq(&table->rwlock);
 
@@ -235,8 +255,8 @@ static void free_gid_entry_locked(struct ib_gid_table_entry *entry)
 	/* Now this index is ready to be allocated */
 	write_unlock_irq(&table->rwlock);
 
-	if (entry->attr.ndev)
-		dev_put(entry->attr.ndev);
+	if (entry->ndev_storage)
+		call_rcu(&entry->ndev_storage->rcu_head, put_gid_ndev);
 	kfree(entry);
 }
 
@@ -277,10 +297,18 @@ alloc_gid_entry(const struct ib_gid_attr *attr)
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
 		return NULL;
+	if (attr->ndev) {
+		entry->ndev_storage = kzalloc(sizeof(*entry->ndev_storage),
+					      GFP_KERNEL);
+		if (!entry->ndev_storage) {
+			kfree(entry);
+			return NULL;
+		}
+		dev_hold(attr->ndev);
+		entry->ndev_storage->ndev = attr->ndev;
+	}
 	kref_init(&entry->kref);
 	memcpy(&entry->attr, attr, sizeof(*attr));
-	if (entry->attr.ndev)
-		dev_hold(entry->attr.ndev);
 	INIT_WORK(&entry->del_work, free_gid_work);
 	entry->state = GID_TABLE_ENTRY_INVALID;
 	return entry;
@@ -291,9 +319,9 @@ static void store_gid_entry(struct ib_gid_table *table,
 {
 	entry->state = GID_TABLE_ENTRY_VALID;
 
-	pr_debug("%s device=%s port=%d index=%d gid %pI6\n", __func__,
-		 entry->attr.device->name, entry->attr.port_num,
-		 entry->attr.index, entry->attr.gid.raw);
+	dev_dbg(&entry->attr.device->dev, "%s port=%d index=%d gid %pI6\n",
+		__func__, entry->attr.port_num, entry->attr.index,
+		entry->attr.gid.raw);
 
 	lockdep_assert_held(&table->lock);
 	write_lock_irq(&table->rwlock);
@@ -322,17 +350,16 @@ static int add_roce_gid(struct ib_gid_table_entry *entry)
 	int ret;
 
 	if (!attr->ndev) {
-		pr_err("%s NULL netdev device=%s port=%d index=%d\n",
-		       __func__, attr->device->name, attr->port_num,
-		       attr->index);
+		dev_err(&attr->device->dev, "%s NULL netdev port=%d index=%d\n",
+			__func__, attr->port_num, attr->index);
 		return -EINVAL;
 	}
 	if (rdma_cap_roce_gid_table(attr->device, attr->port_num)) {
 		ret = attr->device->add_gid(attr, &entry->context);
 		if (ret) {
-			pr_err("%s GID add failed device=%s port=%d index=%d\n",
-			       __func__, attr->device->name, attr->port_num,
-			       attr->index);
+			dev_err(&attr->device->dev,
+				"%s GID add failed port=%d index=%d\n",
+				__func__, attr->port_num, attr->index);
 			return ret;
 		}
 	}
@@ -351,23 +378,34 @@ static int add_roce_gid(struct ib_gid_table_entry *entry)
 static void del_gid(struct ib_device *ib_dev, u8 port,
 		    struct ib_gid_table *table, int ix)
 {
+	struct roce_gid_ndev_storage *ndev_storage;
 	struct ib_gid_table_entry *entry;
 
 	lockdep_assert_held(&table->lock);
 
-	pr_debug("%s device=%s port=%d index=%d gid %pI6\n", __func__,
-		 ib_dev->name, port, ix,
-		 table->data_vec[ix]->attr.gid.raw);
+	dev_dbg(&ib_dev->dev, "%s port=%d index=%d gid %pI6\n", __func__, port,
+		ix, table->data_vec[ix]->attr.gid.raw);
 
 	write_lock_irq(&table->rwlock);
 	entry = table->data_vec[ix];
 	entry->state = GID_TABLE_ENTRY_PENDING_DEL;
+
 	/*
 	 * For non RoCE protocol, GID entry slot is ready to use.
 	 */
 	if (!rdma_protocol_roce(ib_dev, port))
 		table->data_vec[ix] = NULL;
 	write_unlock_irq(&table->rwlock);
+
+	ndev_storage = entry->ndev_storage;
+	if (ndev_storage) {
+		entry->ndev_storage = NULL;
+		rcu_assign_pointer(entry->attr.ndev, NULL);
+		call_rcu(&ndev_storage->rcu_head, put_gid_ndev);
+	}
+
+	if (rdma_cap_roce_gid_table(ib_dev, port))
+		ib_dev->del_gid(&entry->attr, &entry->context);
 
 	put_gid_entry_locked(entry);
 }
@@ -645,30 +683,6 @@ int ib_cache_gid_del_all_netdev_gids(struct ib_device *ib_dev, u8 port,
 	return 0;
 }
 
-static int __ib_cache_gid_get(struct ib_device *ib_dev, u8 port, int index,
-			      union ib_gid *gid, struct ib_gid_attr *attr)
-{
-	struct ib_gid_table *table;
-
-	table = rdma_gid_table(ib_dev, port);
-
-	if (index < 0 || index >= table->sz)
-		return -EINVAL;
-
-	if (!is_gid_entry_valid(table->data_vec[index]))
-		return -EINVAL;
-
-	memcpy(gid, &table->data_vec[index]->attr.gid, sizeof(*gid));
-	if (attr) {
-		memcpy(attr, &table->data_vec[index]->attr,
-		       sizeof(*attr));
-		if (attr->ndev)
-			dev_hold(attr->ndev);
-	}
-
-	return 0;
-}
-
 /**
  * rdma_find_gid_by_port - Returns the GID entry attributes when it finds
  * a valid GID entry for given search parameters. It searches for the specified
@@ -773,26 +787,6 @@ const struct ib_gid_attr *rdma_find_gid_by_filter(
 	return res;
 }
 
-int ib_find_cached_gid_by_port(struct ib_device *ib_dev,
-			       const union ib_gid *gid,
-			       enum ib_gid_type gid_type,
-			       u8 port, struct net_device *ndev,
-			       u16 *index)
-{
-	const struct ib_gid_attr *res;
-
-	res = rdma_find_gid_by_port(ib_dev, gid, gid_type, port, ndev);
-	if (IS_ERR(res))
-		return PTR_ERR(res);
-
-	if (index)
-		*index = res->index;
-	rdma_put_gid_attr(res);
-	return 0;
-
-}
-EXPORT_SYMBOL(ib_find_cached_gid_by_port);
-
 static struct ib_gid_table *alloc_gid_table(int sz)
 {
 	struct ib_gid_table *table = kzalloc(sizeof(*table), GFP_KERNEL);
@@ -828,9 +822,9 @@ static void release_gid_table(struct ib_device *device, u8 port,
 		if (is_gid_entry_free(table->data_vec[i]))
 			continue;
 		if (kref_read(&table->data_vec[i]->kref) > 1) {
-			pr_err("GID entry ref leak for %s (index %d) ref=%d\n",
-			       device->name, i,
-			       kref_read(&table->data_vec[i]->kref));
+			dev_err(&device->dev,
+				"GID entry ref leak for index %d ref=%d\n", i,
+				kref_read(&table->data_vec[i]->kref));
 			leak = true;
 		}
 	}
@@ -870,11 +864,8 @@ void ib_cache_gid_set_default_gid(struct ib_device *ib_dev, u8 port,
 {
 	union ib_gid gid = { };
 	struct ib_gid_attr gid_attr;
-	struct ib_gid_table *table;
 	unsigned int gid_type;
 	unsigned long mask;
-
-	table = rdma_gid_table(ib_dev, port);
 
 	mask = GID_ATTR_FIND_MASK_GID_TYPE |
 	       GID_ATTR_FIND_MASK_DEFAULT |
@@ -982,28 +973,6 @@ static int gid_table_setup_one(struct ib_device *ib_dev)
 	return err;
 }
 
-int ib_get_cached_gid(struct ib_device *device,
-		      u8                port_num,
-		      int               index,
-		      union ib_gid     *gid,
-		      struct ib_gid_attr *gid_attr)
-{
-	int res;
-	unsigned long flags;
-	struct ib_gid_table *table;
-
-	if (!rdma_is_port_valid(device, port_num))
-		return -EINVAL;
-
-	table = rdma_gid_table(device, port_num);
-	read_lock_irqsave(&table->rwlock, flags);
-	res = __ib_cache_gid_get(device, port_num, index, gid, gid_attr);
-	read_unlock_irqrestore(&table->rwlock, flags);
-
-	return res;
-}
-EXPORT_SYMBOL(ib_get_cached_gid);
-
 /**
  * rdma_query_gid - Read the GID content from the GID software cache
  * @device:		Device to query the GID
@@ -1092,46 +1061,6 @@ const struct ib_gid_attr *rdma_find_gid(struct ib_device *device,
 	return ERR_PTR(-ENOENT);
 }
 EXPORT_SYMBOL(rdma_find_gid);
-
-int ib_find_cached_gid(struct ib_device *device, const union ib_gid *gid,
-		       enum ib_gid_type gid_type, struct net_device *ndev,
-		       u8 *port_num, u16 *index)
-{
-	const struct ib_gid_attr *res;
-
-	res = rdma_find_gid(device, gid, gid_type, ndev);
-	if (IS_ERR(res))
-		return PTR_ERR(res);
-	if (port_num)
-		*port_num = res->port_num;
-	if (index)
-		*index = res->index;
-	rdma_put_gid_attr(res);
-	return 0;
-}
-EXPORT_SYMBOL(ib_find_cached_gid);
-
-int ib_find_gid_by_filter(struct ib_device *device,
-			  const union ib_gid *gid,
-			  u8 port_num,
-			  bool (*filter)(const union ib_gid *gid,
-					 const struct ib_gid_attr *,
-					 void *),
-			  void *context, u16 *index)
-{
-	const struct ib_gid_attr *res;
-
-	res = rdma_find_gid_by_filter(device, gid, port_num, filter,
-				      context);
-	if (IS_ERR(res))
-		return PTR_ERR(res);
-
-	if (index)
-		*index = res->index;
-
-	rdma_put_gid_attr(res);
-	return 0;
-}
 
 int ib_get_cached_pkey(struct ib_device *device,
 		       u8                port_num,
@@ -1396,6 +1325,100 @@ bool rdma_is_gid_attr_valid(const struct ib_gid_attr *attr)
 	return valid;
 }
 
+/**
+ * rdma_read_gid_attr_ndev_rcu - Read GID attribute netdevice
+ * which must be in UP state.
+ *
+ * @attr:Pointer to the GID attribute
+ *
+ * Returns pointer to netdevice if the netdevice was attached to GID and
+ * netdevice is in UP state. Caller must hold RCU lock as this API
+ * reads the netdev flags which can change while netdevice migrates to
+ * different net namespace. Returns ERR_PTR with error code otherwise.
+ *
+ */
+struct net_device *rdma_read_gid_attr_ndev_rcu(const struct ib_gid_attr *attr)
+{
+	struct ib_gid_table_entry *entry =
+			container_of(attr, struct ib_gid_table_entry, attr);
+	struct ib_device *device = entry->attr.device;
+	struct net_device __rcu *ndev = ERR_PTR(-ENODEV);
+	u8 port_num = entry->attr.port_num;
+	struct ib_gid_table *table;
+	unsigned long flags;
+	bool valid;
+
+	table = rdma_gid_table(device, port_num);
+
+	read_lock_irqsave(&table->rwlock, flags);
+	valid = is_gid_entry_valid(table->data_vec[attr->index]);
+	if (valid) {
+		ndev = rcu_dereference(attr->ndev);
+		if (!ndev ||
+		    (ndev && ((READ_ONCE(ndev->flags) & IFF_UP) == 0)))
+			ndev = ERR_PTR(-ENODEV);
+	}
+	read_unlock_irqrestore(&table->rwlock, flags);
+	return ndev;
+}
+EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
+
+static int get_lower_dev_vlan(struct net_device *lower_dev, void *data)
+{
+	u16 *vlan_id = data;
+
+	if (is_vlan_dev(lower_dev))
+		*vlan_id = vlan_dev_vlan_id(lower_dev);
+
+	/* We are interested only in first level vlan device, so
+	 * always return 1 to stop iterating over next level devices.
+	 */
+	return 1;
+}
+
+/**
+ * rdma_read_gid_l2_fields - Read the vlan ID and source MAC address
+ *			     of a GID entry.
+ *
+ * @attr:	GID attribute pointer whose L2 fields to be read
+ * @vlan_id:	Pointer to vlan id to fill up if the GID entry has
+ *		vlan id. It is optional.
+ * @smac:	Pointer to smac to fill up for a GID entry. It is optional.
+ *
+ * rdma_read_gid_l2_fields() returns 0 on success and returns vlan id
+ * (if gid entry has vlan) and source MAC, or returns error.
+ */
+int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
+			    u16 *vlan_id, u8 *smac)
+{
+	struct net_device *ndev;
+
+	rcu_read_lock();
+	ndev = rcu_dereference(attr->ndev);
+	if (!ndev) {
+		rcu_read_unlock();
+		return -ENODEV;
+	}
+	if (smac)
+		ether_addr_copy(smac, ndev->dev_addr);
+	if (vlan_id) {
+		*vlan_id = 0xffff;
+		if (is_vlan_dev(ndev)) {
+			*vlan_id = vlan_dev_vlan_id(ndev);
+		} else {
+			/* If the netdev is upper device and if it's lower
+			 * device is vlan device, consider vlan id of the
+			 * the lower vlan device for this gid entry.
+			 */
+			netdev_walk_all_lower_dev_rcu(attr->ndev,
+					get_lower_dev_vlan, vlan_id);
+		}
+	}
+	rcu_read_unlock();
+	return 0;
+}
+EXPORT_SYMBOL(rdma_read_gid_l2_fields);
+
 static int config_non_roce_gid_cache(struct ib_device *device,
 				     u8 port, int gid_tbl_len)
 {
@@ -1414,8 +1437,9 @@ static int config_non_roce_gid_cache(struct ib_device *device,
 			continue;
 		ret = device->query_gid(device, port, i, &gid_attr.gid);
 		if (ret) {
-			pr_warn("query_gid failed (%d) for %s (index %d)\n",
-				ret, device->name, i);
+			dev_warn(&device->dev,
+				 "query_gid failed (%d) for index %d\n", ret,
+				 i);
 			goto err;
 		}
 		gid_attr.index = i;
@@ -1434,12 +1458,9 @@ static void ib_cache_update(struct ib_device *device,
 	struct ib_pkey_cache      *pkey_cache = NULL, *old_pkey_cache;
 	int                        i;
 	int                        ret;
-	struct ib_gid_table	  *table;
 
 	if (!rdma_is_port_valid(device, port))
 		return;
-
-	table = rdma_gid_table(device, port);
 
 	tprops = kmalloc(sizeof *tprops, GFP_KERNEL);
 	if (!tprops)
@@ -1447,8 +1468,7 @@ static void ib_cache_update(struct ib_device *device,
 
 	ret = ib_query_port(device, port, tprops);
 	if (ret) {
-		pr_warn("ib_query_port failed (%d) for %s\n",
-			ret, device->name);
+		dev_warn(&device->dev, "ib_query_port failed (%d)\n", ret);
 		goto err;
 	}
 
@@ -1470,8 +1490,9 @@ static void ib_cache_update(struct ib_device *device,
 	for (i = 0; i < pkey_cache->table_len; ++i) {
 		ret = ib_query_pkey(device, port, i, pkey_cache->table + i);
 		if (ret) {
-			pr_warn("ib_query_pkey failed (%d) for %s (index %d)\n",
-				ret, device->name, i);
+			dev_warn(&device->dev,
+				 "ib_query_pkey failed (%d) for index %d\n",
+				 ret, i);
 			goto err;
 		}
 	}

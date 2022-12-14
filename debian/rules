@@ -150,6 +150,7 @@ endif
 
 	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_eswitch_set		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin
@@ -162,6 +163,7 @@ endif
 	install -m 0644 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.upstart	debian/$(putils)/etc/init/openibd.conf
 	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
+	install -m 0644 source/ofed_scripts/mlnx-eswitch.conf	debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d
 	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
 	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
@@ -187,6 +189,7 @@ override_dh_installdeb:
 	echo "/etc/infiniband/openib.conf"    >   debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/infiniband/mlx5.conf"      >>   debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
+	echo "/etc/modprobe.d/mlnx-eswitch.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles
 
 ifneq ($(MLNX_KO_NO_STRIP),1)

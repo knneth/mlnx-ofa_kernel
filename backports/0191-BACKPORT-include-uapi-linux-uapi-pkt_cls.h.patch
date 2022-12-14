@@ -1,0 +1,18 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: include/uapi/linux/uapi/pkt_cls.h
+
+Change-Id: I3b049bb3d7deafc8e69c972d41694207736f5ebc
+---
+ include/uapi/linux/uapi/pkt_cls.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/include/uapi/linux/uapi/pkt_cls.h
++++ b/include/uapi/linux/uapi/pkt_cls.h
+@@ -202,6 +202,7 @@ enum {
+ 
+ #endif /* CONFIG_NET_SCHED_NEW */
+ 
++
+ #ifndef TCA_CLS_FLAGS_IN_HW
+ #define TCA_CLS_FLAGS_IN_HW	(1 << 2) /* filter is offloaded to HW */
+ #endif

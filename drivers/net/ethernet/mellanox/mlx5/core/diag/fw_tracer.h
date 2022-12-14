@@ -36,18 +36,19 @@
 #include <linux/mlx5/driver.h>
 #include "mlx5_core.h"
 
+#define STRINGS_DB_SECTIONS_NUM 8
 #define STRINGS_DB_READ_SIZE_BYTES 256
 #define STRINGS_DB_LEFTOVER_SIZE_BYTES 64
-#define TRACER_BUFFER_PAGE_NUM 16
+#define TRACER_BUFFER_PAGE_NUM 64
 #define TRACER_BUFFER_CHUNK 4096
 #define TRACE_BUFFER_SIZE_BYTE (TRACER_BUFFER_PAGE_NUM * TRACER_BUFFER_CHUNK)
 
 #define TRACER_BLOCK_SIZE_BYTE 256
 #define TRACES_PER_BLOCK 32
 
-#define TRACER_MAX_PARAMS 11
+#define TRACER_MAX_PARAMS 7
 #define MESSAGE_HASH_BITS 6
-#define MESSAGE_HASH_SIZE (1 << MESSAGE_HASH_BITS)
+#define MESSAGE_HASH_SIZE BIT(MESSAGE_HASH_BITS)
 
 #define MASK_52_7 (0x1FFFFFFFFFFF80)
 #define MASK_6_0  (0x7F)
@@ -55,8 +56,8 @@
 struct mlx5_fw_tracer {
 	struct mlx5_core_dev *dev;
 	bool owner;
-	u8 trc_ver;
-	u8 trace_to_memory;
+	u8   trc_ver;
+	struct workqueue_struct *work_queue;
 	struct work_struct ownership_change_work;
 	struct work_struct read_fw_strings_work;
 
@@ -65,9 +66,9 @@ struct mlx5_fw_tracer {
 		u8 first_string_trace;
 		u8 num_string_trace;
 		u32 num_string_db;
-		u32 base_address_out[8];
-		u32 size_out[8];
-		void *buffer[8];
+		u32 base_address_out[STRINGS_DB_SECTIONS_NUM];
+		u32 size_out[STRINGS_DB_SECTIONS_NUM];
+		void *buffer[STRINGS_DB_SECTIONS_NUM];
 		bool loaded;
 	} str_db;
 
@@ -120,10 +121,6 @@ enum tracing_mode {
 	TRACE_TO_MEMORY = 1 << 0,
 };
 
-int mlx5_fw_tracer_init(struct mlx5_core_dev *dev);
-void mlx5_fw_tracer_cleanup(struct mlx5_core_dev *dev);
-void mlx5_fw_tracer_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe);
-
 struct tracer_timestamp_event {
 	u64        timestamp;
 	u8         unreliable;
@@ -169,5 +166,11 @@ struct mlx5_ifc_tracer_timestamp_event_bits {
 	u8         timestamp52_40[0xd];
 	u8         timestamp39_8[0x20];
 };
+
+struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev);
+int mlx5_fw_tracer_init(struct mlx5_fw_tracer *tracer);
+void mlx5_fw_tracer_cleanup(struct mlx5_fw_tracer *tracer);
+void mlx5_fw_tracer_destroy(struct mlx5_fw_tracer *tracer);
+void mlx5_fw_tracer_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe);
 
 #endif

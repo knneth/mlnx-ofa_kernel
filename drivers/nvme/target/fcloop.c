@@ -314,7 +314,7 @@ fcloop_tgt_lsrqst_done_work(struct work_struct *work)
 	struct fcloop_tport *tport = tls_req->tport;
 	struct nvmefc_ls_req *lsreq = tls_req->lsreq;
 
-	if (tport->remoteport)
+	if (!tport || tport->remoteport)
 		lsreq->done(lsreq, tls_req->status);
 }
 
@@ -332,6 +332,7 @@ fcloop_ls_req(struct nvme_fc_local_port *localport,
 
 	if (!rport->targetport) {
 		tls_req->status = -ECONNREFUSED;
+		tls_req->tport = NULL;
 		schedule_work(&tls_req->work);
 		return ret;
 	}
@@ -650,6 +651,7 @@ fcloop_fcp_op(struct nvmet_fc_target_port *tgtport,
 			break;
 
 		/* Fall-Thru to RSP handling */
+		/* FALLTHRU */
 
 	case NVMET_FCOP_RSP:
 		if (fcpreq) {

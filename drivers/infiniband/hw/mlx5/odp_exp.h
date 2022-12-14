@@ -39,10 +39,4 @@ int mlx5_ib_exp_odp_init_one(struct mlx5_ib_dev *ibdev);
 
 int mlx5_ib_prefetch_mr(struct ib_mr *ibmr, u64 start, u64 length, u32 flags);
 
-int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
-				  u32 key, u64 io_virt, size_t bcnt,
-				  u32 *bytes_committed,
-				  u32 *bytes_mapped,
-				  enum ib_odp_dma_map_flags dma_flags,
-				  struct mlx5_pagefault *pfault);
 #endif

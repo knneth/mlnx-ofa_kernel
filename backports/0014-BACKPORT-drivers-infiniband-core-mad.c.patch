@@ -1,0 +1,452 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
+
+Change-Id: Ieed314ea98482e4afb82226c97b0f9f010253726
+---
+ drivers/infiniband/core/mad.c | 160 ++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 154 insertions(+), 6 deletions(-)
+
+--- a/drivers/infiniband/core/mad.c
++++ b/drivers/infiniband/core/mad.c
+@@ -41,7 +41,9 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/dma-mapping.h>
++#ifdef HAVE_IDR_LOCK
+ #include <linux/idr.h>
++#endif
+ #include <linux/slab.h>
+ #include <linux/module.h>
+ #include <linux/security.h>
+@@ -63,12 +65,16 @@ MODULE_PARM_DESC(send_queue_size, "Size
+ module_param_named(recv_queue_size, mad_recvq_size, int, 0444);
+ MODULE_PARM_DESC(recv_queue_size, "Size of receive queue in number of work requests");
+ 
++#ifdef HAVE_IDR_LOCK
+ /*
+  * The mlx4 driver uses the top byte to distinguish which virtual function
+  * generated the MAD, so we must avoid using it.
+  */
+ #define AGENT_ID_LIMIT		(1 << 24)
+ static DEFINE_IDR(ib_mad_clients);
++#else
++static atomic_t ib_mad_client_id = ATOMIC_INIT(0);
++#endif //HAVE_IDR_LOCK
+ static struct list_head ib_mad_port_list;
+ 
+ /*
+@@ -127,11 +133,19 @@ static int send_sa_cc_mad(struct ib_mad_
+  * Timeout FIFO functions - implements FIFO with timeout mechanism
+  */
+ 
++#ifdef HAVE_TIMER_SETUP
+ static void activate_timeout_handler_task(struct timer_list *t)
++#else
++static void activate_timeout_handler_task(unsigned long data)
++#endif
+ {
+ 	struct to_fifo *tf;
+ 
++#ifdef HAVE_TIMER_SETUP
+ 	tf = from_timer(tf, t, timer);
++#else
++	tf = (struct to_fifo *)data;
++#endif
+ 	del_timer(&tf->timer);
+ 	queue_work(tf->workq, &tf->work);
+ }
+@@ -239,8 +253,16 @@ static struct to_fifo *tf_create(void)
+ 		spin_lock_init(&tf->lists_lock);
+ 		INIT_LIST_HEAD(&tf->to_head);
+ 		INIT_LIST_HEAD(&tf->fifo_head);
++#ifdef HAVE_TIMER_SETUP
+ 		timer_setup(&tf->timer, activate_timeout_handler_task, 0);
++#else
++		init_timer(&tf->timer);
++#endif
+ 		INIT_WORK(&tf->work, timeout_handler_task);
++#ifndef HAVE_TIMER_SETUP
++		tf->timer.data = (unsigned long)tf;
++		tf->timer.function = activate_timeout_handler_task;
++#endif
+ 		tf->timer.expires = jiffies;
+ 		tf->stop_enqueue = 0;
+ 		tf->num_items = 0;
+@@ -788,30 +810,46 @@ struct ib_mad_agent *ib_register_mad_age
+ 	/* Validate parameters */
+ 	qpn = get_spl_qp_index(qp_type);
+ 	if (qpn == -1) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 		dev_dbg_ratelimited(&device->dev, "%s: invalid QP Type %d\n",
+ 				    __func__, qp_type);
++#else
++		dev_notice(&device->dev,"%s: invalid QP Type %d\n",__func__, qp_type);
++#endif
+ 		goto error1;
+ 	}
+ 
+ 	if (rmpp_version && rmpp_version != IB_MGMT_RMPP_VERSION) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 		dev_dbg_ratelimited(&device->dev,
+ 				    "%s: invalid RMPP Version %u\n",
+ 				    __func__, rmpp_version);
++#else
++		dev_notice(&device->dev,"%s: invalid RMPP Version%u\n",__func__, rmpp_version);
++#endif
+ 		goto error1;
+ 	}
+ 
+ 	/* Validate MAD registration request if supplied */
+ 	if (mad_reg_req) {
+ 		if (mad_reg_req->mgmt_class_version >= MAX_MGMT_VERSION) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 			dev_dbg_ratelimited(&device->dev,
+ 					    "%s: invalid Class Version %u\n",
+ 					    __func__,
+ 					    mad_reg_req->mgmt_class_version);
++#else
++		dev_notice(&device->dev,"%s: invalid Class Version %u\n",__func__, mad_reg_req->mgmt_class_version);
++#endif
+ 			goto error1;
+ 		}
+ 		if (!recv_handler) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 			dev_dbg_ratelimited(&device->dev,
+ 					    "%s: no recv_handler\n", __func__);
++#else
++		dev_notice(&device->dev,"%s:  no recv_handler\n",__func__);
++#endif
+ 			goto error1;
+ 		}
+ 		if (mad_reg_req->mgmt_class >= MAX_MGMT_CLASS) {
+@@ -821,9 +859,13 @@ struct ib_mad_agent *ib_register_mad_age
+ 			 */
+ 			if (mad_reg_req->mgmt_class !=
+ 			    IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 				dev_dbg_ratelimited(&device->dev,
+ 					"%s: Invalid Mgmt Class 0x%x\n",
+ 					__func__, mad_reg_req->mgmt_class);
++#else
++		dev_notice(&device->dev,"%s: Invalid Mgmt Class 0x%x\n",__func__, mad_reg_req->mgmt_class);
++#endif
+ 				goto error1;
+ 			}
+ 		} else if (mad_reg_req->mgmt_class == 0) {
+@@ -831,9 +873,13 @@ struct ib_mad_agent *ib_register_mad_age
+ 			 * Class 0 is reserved in IBA and is used for
+ 			 * aliasing of IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE
+ 			 */
++#ifdef RATELIMIT_STATE_INIT 		
+ 			dev_dbg_ratelimited(&device->dev,
+ 					    "%s: Invalid Mgmt Class 0\n",
+ 					    __func__);
++#else
++		dev_notice(&device->dev,"%s: Invalid Mgmt Class 0\n",__func__);
++#endif
+ 			goto error1;
+ 		} else if (is_vendor_class(mad_reg_req->mgmt_class)) {
+ 			/*
+@@ -841,19 +887,27 @@ struct ib_mad_agent *ib_register_mad_age
+ 			 * ensure supplied OUI is not zero
+ 			 */
+ 			if (!is_vendor_oui(mad_reg_req->oui)) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 				dev_dbg_ratelimited(&device->dev,
+ 					"%s: No OUI specified for class 0x%x\n",
+ 					__func__,
+ 					mad_reg_req->mgmt_class);
++#else
++		dev_notice(&device->dev,"%s: No OUI specified for class 0x%x\n",__func__, mad_reg_req->mgmt_class);
++#endif
+ 				goto error1;
+ 			}
+ 		}
+ 		/* Make sure class supplied is consistent with RMPP */
+ 		if (!ib_is_mad_class_rmpp(mad_reg_req->mgmt_class)) {
+ 			if (rmpp_version) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 				dev_dbg_ratelimited(&device->dev,
+ 					"%s: RMPP version for non-RMPP class 0x%x\n",
+ 					__func__, mad_reg_req->mgmt_class);
++#else
++		dev_notice(&device->dev,"%s: RMPP version for non-RMPP class 0x%x\n",__func__, mad_reg_req->mgmt_class);
++#endif
+ 				goto error1;
+ 			}
+ 		}
+@@ -864,9 +918,13 @@ struct ib_mad_agent *ib_register_mad_age
+ 					IB_MGMT_CLASS_SUBN_LID_ROUTED) &&
+ 			    (mad_reg_req->mgmt_class !=
+ 					IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE)) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 				dev_dbg_ratelimited(&device->dev,
+ 					"%s: Invalid SM QP type: class 0x%x\n",
+ 					__func__, mad_reg_req->mgmt_class);
++#else
++		dev_notice(&device->dev,"%s: Invalid SM QP type: class 0x%x\n",__func__, mad_reg_req->mgmt_class);
++#endif
+ 				goto error1;
+ 			}
+ 		} else {
+@@ -874,9 +932,13 @@ struct ib_mad_agent *ib_register_mad_age
+ 					IB_MGMT_CLASS_SUBN_LID_ROUTED) ||
+ 			    (mad_reg_req->mgmt_class ==
+ 					IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE)) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 				dev_dbg_ratelimited(&device->dev,
+ 					"%s: Invalid GS QP type: class 0x%x\n",
+ 					__func__, mad_reg_req->mgmt_class);
++#else
++		dev_notice(&device->dev,"%s: Invalid GS QP type: class 0x%x\n",__func__, mad_reg_req->mgmt_class);
++#endif
+ 				goto error1;
+ 			}
+ 		}
+@@ -891,8 +953,12 @@ struct ib_mad_agent *ib_register_mad_age
+ 	/* Validate device and port */
+ 	port_priv = ib_get_mad_port(device, port_num);
+ 	if (!port_priv) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 		dev_dbg_ratelimited(&device->dev, "%s: Invalid port %d\n",
+ 				    __func__, port_num);
++#else
++		dev_notice(&device->dev,"%s: Invalid port %d\n",__func__, port_num);
++#endif
+ 		ret = ERR_PTR(-ENODEV);
+ 		goto error1;
+ 	}
+@@ -901,8 +967,12 @@ struct ib_mad_agent *ib_register_mad_age
+ 	 * will not have QP0.
+ 	 */
+ 	if (!port_priv->qp_info[qpn].qp) {
++#ifdef RATELIMIT_STATE_INIT 		
+ 		dev_dbg_ratelimited(&device->dev, "%s: QP %d not supported\n",
+ 				    __func__, qpn);
++#else
++		dev_notice(&device->dev,"%s: QP %d not supported\n",__func__, qpn);
++#endif
+ 		ret = ERR_PTR(-EPROTONOSUPPORT);
+ 		goto error1;
+ 	}
+@@ -950,6 +1020,10 @@ struct ib_mad_agent *ib_register_mad_age
+ 		goto error4;
+ 	}
+ 
++#ifndef HAVE_IDR_LOCK
++	spin_lock_irq(&port_priv->reg_lock);
++	mad_agent_priv->agent.hi_tid = atomic_inc_return(&ib_mad_client_id);
++#else
+ 	idr_preload(GFP_KERNEL);
+ 	idr_lock(&ib_mad_clients);
+ 	ret2 = idr_alloc_cyclic(&ib_mad_clients, mad_agent_priv, 0,
+@@ -962,12 +1036,14 @@ struct ib_mad_agent *ib_register_mad_age
+ 		goto error5;
+ 	}
+ 	mad_agent_priv->agent.hi_tid = ret2;
+-
++#endif
+ 	/*
+ 	 * Make sure MAD registration (if supplied)
+ 	 * is non overlapping with any existing ones
+ 	 */
++#ifdef HAVE_IDR_LOCK
+ 	spin_lock_irq(&port_priv->reg_lock);
++#endif
+ 	if (mad_reg_req) {
+ 		mgmt_class = convert_mgmt_class(mad_reg_req->mgmt_class);
+ 		if (!is_vendor_class(mgmt_class)) {
+@@ -978,7 +1054,11 @@ struct ib_mad_agent *ib_register_mad_age
+ 				if (method) {
+ 					if (method_in_use(&method,
+ 							   mad_reg_req))
++#ifdef HAVE_IDR_LOCK
+ 						goto error6;
++#else
++						goto error5;
++#endif
+ 				}
+ 			}
+ 			ret2 = add_nonoui_reg_req(mad_reg_req, mad_agent_priv,
+@@ -994,25 +1074,42 @@ struct ib_mad_agent *ib_register_mad_age
+ 					if (is_vendor_method_in_use(
+ 							vendor_class,
+ 							mad_reg_req))
++#ifdef HAVE_IDR_LOCK
+ 						goto error6;
++#else
++						goto error5;
++#endif
+ 				}
+ 			}
+ 			ret2 = add_oui_reg_req(mad_reg_req, mad_agent_priv);
+ 		}
+ 		if (ret2) {
+ 			ret = ERR_PTR(ret2);
+-			goto error6;
++#ifdef HAVE_IDR_LOCK
++				goto error6;
++#else
++				goto error5;
++#endif
+ 		}
+ 	}
++#ifndef HAVE_IDR_LOCK
++	/* Add mad agent into port's agent list */
++	list_add_tail(&mad_agent_priv->agent_list, &port_priv->agent_list);
++#endif
+ 	spin_unlock_irq(&port_priv->reg_lock);
+ 
+ 	return &mad_agent_priv->agent;
++#ifndef HAVE_IDR_LOCK
++error5:
++	spin_unlock_irq(&port_priv->reg_lock);
++#else
+ error6:
+ 	spin_unlock_irq(&port_priv->reg_lock);
+ 	idr_lock(&ib_mad_clients);
+ 	idr_remove(&ib_mad_clients, mad_agent_priv->agent.hi_tid);
+ 	idr_unlock(&ib_mad_clients);
+ error5:
++#endif
+ 	ib_mad_agent_security_cleanup(&mad_agent_priv->agent);
+ error4:
+ 	kfree(reg_req);
+@@ -1174,11 +1271,15 @@ static void unregister_mad_agent(struct
+ 
+ 	spin_lock_irq(&port_priv->reg_lock);
+ 	remove_mad_reg_req(mad_agent_priv);
++#ifndef HAVE_IDR_LOCK
++	list_del(&mad_agent_priv->agent_list);
++	spin_unlock_irq(&port_priv->reg_lock);
++#else
+ 	spin_unlock_irq(&port_priv->reg_lock);
+ 	idr_lock(&ib_mad_clients);
+ 	idr_remove(&ib_mad_clients, mad_agent_priv->agent.hi_tid);
+ 	idr_unlock(&ib_mad_clients);
+-
++#endif
+ 	flush_workqueue(port_priv->wq);
+ 	ib_cancel_rmpp_recvs(mad_agent_priv);
+ 
+@@ -1188,7 +1289,11 @@ static void unregister_mad_agent(struct
+ 	ib_mad_agent_security_cleanup(&mad_agent_priv->agent);
+ 
+ 	kfree(mad_agent_priv->reg_req);
++#ifndef HAVE_IDR_LOCK
++	kfree(mad_agent_priv);
++#else
+ 	kfree_rcu(mad_agent_priv, rcu);
++#endif
+ }
+ 
+ static void unregister_mad_snoop(struct ib_mad_snoop_private *mad_snoop_priv)
+@@ -2356,6 +2461,24 @@ find_mad_agent(struct ib_mad_port_privat
+ 	struct ib_mad_agent_private *mad_agent = NULL;
+ 	unsigned long flags;
+ 
++#ifndef HAVE_IDR_LOCK
++	spin_lock_irqsave(&port_priv->reg_lock, flags);
++	if (ib_response_mad(mad_hdr)) {
++		u32 hi_tid;
++		struct ib_mad_agent_private *entry;
++
++		/*
++		 * Routing is based on high 32 bits of transaction ID
++		 * of MAD.
++		*/
++		hi_tid = be64_to_cpu(mad_hdr->tid) >> 32;
++		list_for_each_entry(entry, &port_priv->agent_list, agent_list) {
++			if (entry->agent.hi_tid == hi_tid) {
++				mad_agent = entry;
++				break;
++			}
++		}
++#else
+ 	if (ib_response_mad(mad_hdr)) {
+ 		u32 hi_tid;
+ 
+@@ -2369,6 +2492,7 @@ find_mad_agent(struct ib_mad_port_privat
+ 		if (mad_agent && !atomic_inc_not_zero(&mad_agent->refcount))
+ 			mad_agent = NULL;
+ 		rcu_read_unlock();
++#endif
+ 	} else {
+ 		struct ib_mad_mgmt_class_table *class;
+ 		struct ib_mad_mgmt_method_table *method;
+@@ -2377,7 +2501,9 @@ find_mad_agent(struct ib_mad_port_privat
+ 		const struct ib_vendor_mad *vendor_mad;
+ 		int index;
+ 
++#ifdef HAVE_IDR_LOCK
+ 		spin_lock_irqsave(&port_priv->reg_lock, flags);
++#endif
+ 		/*
+ 		 * Routing is based on version, class, and method
+ 		 * For "newer" vendor MADs, also based on OUI
+@@ -2417,6 +2543,7 @@ find_mad_agent(struct ib_mad_port_privat
+ 							  ~IB_MGMT_METHOD_RESP];
+ 			}
+ 		}
++#ifdef HAVE_IDR_LOCK
+ 		if (mad_agent)
+ 			atomic_inc(&mad_agent->refcount);
+ out:
+@@ -2430,7 +2557,21 @@ out:
+ 		deref_mad_agent(mad_agent);
+ 		mad_agent = NULL;
+ 	}
+-
++#else
++	}
++	if (mad_agent) { 
++		if (mad_agent->agent.recv_handler)
++			atomic_inc(&mad_agent->refcount);
++		else {
++			dev_notice(&port_priv->device->dev,
++				   "No receive handler for client %p on port %d\n",
++			           &mad_agent->agent, port_priv->port_num);
++				mad_agent = NULL;
++		}
++	}
++out:
++	spin_unlock_irqrestore(&port_priv->reg_lock, flags);
++#endif
+ 	return mad_agent;
+ }
+ 
+@@ -3804,6 +3945,9 @@ static int ib_mad_port_open(struct ib_de
+ 	port_priv->device = device;
+ 	port_priv->port_num = port_num;
+ 	spin_lock_init(&port_priv->reg_lock);
++#ifndef HAVE_IDR_LOCK
++	INIT_LIST_HEAD(&port_priv->agent_list);
++#endif
+ 	init_mad_qp(port_priv, &port_priv->qp_info[0]);
+ 	init_mad_qp(port_priv, &port_priv->qp_info[1]);
+ 
+@@ -4103,7 +4247,11 @@ static ssize_t sa_cc_attr_show(struct ko
+ 	return sa->show(cc_obj, buf);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops sa_cc_sysfs_ops = {
++#else
++static struct sysfs_ops sa_cc_sysfs_ops = {
++#endif
+ 	.show = sa_cc_attr_show,
+ 	.store = sa_cc_attr_store,
+ };
+@@ -4189,10 +4337,10 @@ int ib_mad_init(void)
+ 	mad_sendq_size = max(mad_sendq_size, IB_MAD_QP_MIN_SIZE);
+ 
+ 	INIT_LIST_HEAD(&ib_mad_port_list);
+-
++#ifdef HAVE_IDR_LOCK
+ 	/* Client ID 0 is used for snoop-only clients */
+ 	idr_alloc(&ib_mad_clients, NULL, 0, 0, GFP_KERNEL);
+-
++#endif
+ 	if (ib_register_client(&mad_client)) {
+ 		pr_err("Couldn't register ib_mad client\n");
+ 		return -EINVAL;

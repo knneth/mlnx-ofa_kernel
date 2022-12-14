@@ -47,12 +47,13 @@ static int uverbs_free_counters(struct ib_uobject *uobject,
 	return counters->device->destroy_counters(counters);
 }
 
-static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_CREATE)(struct ib_device *ib_dev,
-							 struct ib_uverbs_file *file,
-							 struct uverbs_attr_bundle *attrs)
+static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_CREATE)(
+	struct ib_uverbs_file *file, struct uverbs_attr_bundle *attrs)
 {
+	struct ib_uobject *uobj = uverbs_attr_get_uobject(
+		attrs, UVERBS_ATTR_CREATE_COUNTERS_HANDLE);
+	struct ib_device *ib_dev = uobj->context->device;
 	struct ib_counters *counters;
-	struct ib_uobject *uobj;
 	int ret;
 
 	/*
@@ -63,7 +64,6 @@ static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_CREATE)(struct ib_device *ib_de
 	if (!ib_dev->create_counters)
 		return -EOPNOTSUPP;
 
-	uobj = uverbs_attr_get_uobject(attrs, UVERBS_ATTR_CREATE_COUNTERS_HANDLE);
 	counters = ib_dev->create_counters(ib_dev, attrs);
 	if (IS_ERR(counters)) {
 		ret = PTR_ERR(counters);
@@ -81,9 +81,8 @@ err_create_counters:
 	return ret;
 }
 
-static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_READ)(struct ib_device *ib_dev,
-						       struct ib_uverbs_file *file,
-						       struct uverbs_attr_bundle *attrs)
+static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_READ)(
+	struct ib_uverbs_file *file, struct uverbs_attr_bundle *attrs)
 {
 	struct ib_counters_read_attr read_attr = {};
 	const struct uverbs_attr *uattr;
@@ -91,7 +90,7 @@ static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_READ)(struct ib_device *ib_dev,
 		uverbs_attr_get_obj(attrs, UVERBS_ATTR_READ_COUNTERS_HANDLE);
 	int ret;
 
-	if (!ib_dev->read_counters)
+	if (!counters->device->read_counters)
 		return -EOPNOTSUPP;
 
 	if (!atomic_read(&counters->usecnt))
@@ -105,24 +104,18 @@ static int UVERBS_HANDLER(UVERBS_METHOD_COUNTERS_READ)(struct ib_device *ib_dev,
 
 	uattr = uverbs_attr_get(attrs, UVERBS_ATTR_READ_COUNTERS_BUFF);
 	read_attr.ncounters = uattr->ptr_attr.len / sizeof(u64);
-	read_attr.counters_buff = kcalloc(read_attr.ncounters,
-					  sizeof(u64), GFP_KERNEL);
-	if (!read_attr.counters_buff)
-		return -ENOMEM;
+	read_attr.counters_buff = uverbs_zalloc(
+		attrs, array_size(read_attr.ncounters, sizeof(u64)));
+	if (IS_ERR(read_attr.counters_buff))
+		return PTR_ERR(read_attr.counters_buff);
 
-	ret = ib_dev->read_counters(counters,
-				    &read_attr,
-				    attrs);
+	ret = counters->device->read_counters(counters, &read_attr, attrs);
 	if (ret)
-		goto err_read;
+		return ret;
 
-	ret = uverbs_copy_to(attrs, UVERBS_ATTR_READ_COUNTERS_BUFF,
-			     read_attr.counters_buff,
-			     read_attr.ncounters * sizeof(u64));
-
-err_read:
-	kfree(read_attr.counters_buff);
-	return ret;
+	return uverbs_copy_to(attrs, UVERBS_ATTR_READ_COUNTERS_BUFF,
+			      read_attr.counters_buff,
+			      read_attr.ncounters * sizeof(u64));
 }
 
 DECLARE_UVERBS_NAMED_METHOD(

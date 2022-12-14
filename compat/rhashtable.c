@@ -16,6 +16,10 @@
 
 #include <linux/rhashtable.h>
 
+#ifdef CONFIG_COMPAT_RHLTABLE
+#undef HAVE_RHLTABLE
+#endif
+
 #ifndef HAVE_RHLTABLE
 
 #include <linux/atomic.h>

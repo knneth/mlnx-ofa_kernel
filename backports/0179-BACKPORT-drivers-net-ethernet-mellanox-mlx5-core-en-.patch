@@ -1,0 +1,39 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+
+Change-Id: Ia9bc140c27362c6a74c02e83542116d9f0edff70
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+@@ -32,6 +32,7 @@
+ #ifndef __MLX5_EN_XDP_H__
+ #define __MLX5_EN_XDP_H__
+ 
++#ifdef HAVE_XDP_BUFF
+ #include "en.h"
+ 
+ #define MLX5E_XDP_MAX_MTU ((int)(PAGE_SIZE - \
+@@ -46,8 +47,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
+ 
+ bool mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xdp_info *xdpi);
++#ifdef HAVE_NDO_XDP_XMIT
++#ifndef HAVE_NDO_XDP_FLUSH
+ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
+ 		   u32 flags);
++#else
++int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp);
++void mlx5e_xdp_flush(struct net_device *dev);
++#endif
++#endif
+ 
+ static inline void mlx5e_xdp_tx_enable(struct mlx5e_priv *priv)
+ {
+@@ -78,3 +86,4 @@ static inline void mlx5e_xmit_xdp_doorbe
+ }
+ 
+ #endif
++#endif

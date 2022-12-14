@@ -64,6 +64,15 @@ enum {
 	UVERBS_ATTR_UHW_OUT,
 };
 
+enum uverbs_methods_device {
+	UVERBS_METHOD_QUERY_PORT = 2,
+};
+
+enum uverbs_attrs_query_port_cmd_attr_ids {
+	UVERBS_ATTR_QUERY_PORT_PORT_NUM,
+	UVERBS_ATTR_QUERY_PORT_RESP,
+};
+
 enum uverbs_attrs_create_cq_cmd_attr_ids {
 	UVERBS_ATTR_CREATE_CQ_HANDLE,
 	UVERBS_ATTR_CREATE_CQ_CQE,
@@ -136,6 +145,15 @@ enum uverbs_attrs_reg_dm_mr_cmd_attr_ids {
 
 enum uverbs_methods_mr {
 	UVERBS_METHOD_DM_MR_REG,
+	/*FIXME: add UVERBS_METHOD_MR_DESTROY here */
+	UVERBS_METHOD_ADVISE_MR = 2,
+};
+
+enum uverbs_attrs_advise_mr_cmd_attr_ids {
+	UVERBS_ATTR_ADVISE_MR_PD_HANDLE,
+	UVERBS_ATTR_ADVISE_MR_ADVICE,
+	UVERBS_ATTR_ADVISE_MR_FLAGS,
+	UVERBS_ATTR_ADVISE_MR_SGE_LIST,
 };
 
 enum uverbs_attrs_create_counters_cmd_attr_ids {

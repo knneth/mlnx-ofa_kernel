@@ -221,10 +221,11 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 
 	if (req->port->offload) {
 		/*
-		 * create offloaded ctrl for P2P I/O when receiving first I/O connect
-		 * and destroy it when freeing the controller
+		 * create offloaded ctrl for P2P I/O when receiving first
+		 * successful I/O connect and destroy it when freeing the
+		 * controller
 		 */
-		if (qid == 1) {
+		if (!ctrl->offload_ctrl) {
 			status = ctrl->ops->create_offload_ctrl(ctrl);
 			if (status) {
 				status = NVME_SC_INTERNAL | NVME_SC_DNR;

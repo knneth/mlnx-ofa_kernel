@@ -31,6 +31,7 @@
 #include <net/dsfield.h>
 #include <net/flow_dissector.h>
 #include <scsi/fc/fc_fcoe.h>
+#include <net/dst_metadata.h>
 
 #ifndef skb_vlan_tag_get_prio
 #define skb_vlan_tag_get_prio(__skb)   ((__skb)->vlan_tci & VLAN_PRIO_MASK)
@@ -58,7 +59,7 @@ static inline bool eth_type_vlan_bp(__be16 ethertype)
 		return false;
 	}
 }
-
+#ifndef CONFIG_NET_SCHED_NEW
 bool skb_flow_dissect_flow_keys(const struct sk_buff *skb,
 				struct flow_keys *flow,
 				unsigned int flags)
@@ -68,7 +69,9 @@ bool skb_flow_dissect_flow_keys(const struct sk_buff *skb,
 				 NULL, 0, 0, 0, flags);
 }
 EXPORT_SYMBOL(skb_flow_dissect_flow_keys);
+#endif
 
+#ifndef HAVE_SKB_FLOW_DISSECT
 static void dissector_set_key(struct flow_dissector *flow_dissector,
 			      enum flow_dissector_key_id key_id)
 {
@@ -177,7 +180,6 @@ skb_flow_dissect_set_enc_addr_type(enum flow_dissector_key_id type,
 					 target_container);
 	ctrl->addr_type = type;
 }
-
 static void
 __skb_flow_dissect_tunnel_info(const struct sk_buff *skb,
 			       struct flow_dissector *flow_dissector,
@@ -196,10 +198,12 @@ __skb_flow_dissect_tunnel_info(const struct sk_buff *skb,
 	    !dissector_uses_key(flow_dissector,
 				FLOW_DISSECTOR_KEY_ENC_CONTROL) &&
 	    !dissector_uses_key(flow_dissector,
-				FLOW_DISSECTOR_KEY_ENC_PORTS))
+				FLOW_DISSECTOR_KEY_ENC_PORTS) && 
+	    !dissector_uses_key(flow_dissector,
+				FLOW_DISSECTOR_KEY_ENC_IP))
 		return;
 
-	info = skb_tunnel_info(skb);
+	info = skb_tunnel_info((struct sk_buff *)skb);
 	if (!info)
 		return;
 
@@ -256,8 +260,19 @@ __skb_flow_dissect_tunnel_info(const struct sk_buff *skb,
 		tp->src = key->tp_src;
 		tp->dst = key->tp_dst;
 	}
+
+	if (dissector_uses_key(flow_dissector, FLOW_DISSECTOR_KEY_ENC_IP)) {
+		struct flow_dissector_key_ip *ip;
+
+		ip = skb_flow_dissector_target(flow_dissector,
+				FLOW_DISSECTOR_KEY_ENC_IP,
+				target_container);
+		ip->tos = key->tos;
+		ip->ttl = key->ttl;
+	}
+
 }
-#endif
+#endif /* HAVE_IP_TUNNEL_INFO */
 
 static enum flow_dissect_ret
 __skb_flow_dissect_mpls(const struct sk_buff *skb,
@@ -1040,6 +1055,7 @@ out_bad:
 	goto out;
 }
 EXPORT_SYMBOL(__skb_flow_dissect);
+#endif /* HAVE_SKB_FLOW_DISSECT */
 
 static u32 hashrnd __read_mostly;
 static __always_inline void __flow_hash_secret_init(void)
@@ -1208,6 +1224,7 @@ EXPORT_SYMBOL(make_flow_keys_digest);
 
 static struct flow_dissector flow_keys_dissector_symmetric __read_mostly;
 
+#ifndef CONFIG_NET_SCHED_NEW
 u32 __skb_get_hash_symmetric(const struct sk_buff *skb)
 {
 	struct flow_keys keys;
@@ -1250,6 +1267,41 @@ void __skb_get_hash(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(__skb_get_hash);
 
+__u32 __get_hash_from_flowi6(const struct flowi6 *fl6, struct flow_keys *keys)
+{
+	memset(keys, 0, sizeof(*keys));
+
+	memcpy(&keys->addrs.v6addrs.src, &fl6->saddr,
+	    sizeof(keys->addrs.v6addrs.src));
+	memcpy(&keys->addrs.v6addrs.dst, &fl6->daddr,
+	    sizeof(keys->addrs.v6addrs.dst));
+	keys->control.addr_type = FLOW_DISSECTOR_KEY_IPV6_ADDRS;
+	keys->ports.src = fl6->fl6_sport;
+	keys->ports.dst = fl6->fl6_dport;
+	keys->keyid.keyid = fl6->fl6_gre_key;
+	keys->tags.flow_label = (__force u32)fl6->flowlabel;
+	keys->basic.ip_proto = fl6->flowi6_proto;
+
+	return flow_hash_from_keys(keys);
+}
+EXPORT_SYMBOL(__get_hash_from_flowi6);
+
+__u32 __get_hash_from_flowi4(const struct flowi4 *fl4, struct flow_keys *keys)
+{
+	memset(keys, 0, sizeof(*keys));
+
+	keys->addrs.v4addrs.src = fl4->saddr;
+	keys->addrs.v4addrs.dst = fl4->daddr;
+	keys->control.addr_type = FLOW_DISSECTOR_KEY_IPV4_ADDRS;
+	keys->ports.src = fl4->fl4_sport;
+	keys->ports.dst = fl4->fl4_dport;
+	keys->keyid.keyid = fl4->fl4_gre_key;
+	keys->basic.ip_proto = fl4->flowi4_proto;
+
+	return flow_hash_from_keys(keys);
+}
+EXPORT_SYMBOL(__get_hash_from_flowi4);
+
 __u32 skb_get_hash_perturb(const struct sk_buff *skb, u32 perturb)
 {
 	struct flow_keys keys;
@@ -1257,7 +1309,9 @@ __u32 skb_get_hash_perturb(const struct sk_buff *skb, u32 perturb)
 	return ___skb_get_hash(skb, &keys, perturb);
 }
 EXPORT_SYMBOL(skb_get_hash_perturb);
+#endif
 
+#ifndef HAVE_SKB_FLOW_DISSECT
 u32 __skb_get_poff(const struct sk_buff *skb, void *data,
 		   const struct flow_keys *keys, int hlen)
 {
@@ -1327,41 +1381,7 @@ u32 skb_get_poff(const struct sk_buff *skb)
 
 	return __skb_get_poff(skb, skb->data, &keys, skb_headlen(skb));
 }
-
-__u32 __get_hash_from_flowi6(const struct flowi6 *fl6, struct flow_keys *keys)
-{
-	memset(keys, 0, sizeof(*keys));
-
-	memcpy(&keys->addrs.v6addrs.src, &fl6->saddr,
-	    sizeof(keys->addrs.v6addrs.src));
-	memcpy(&keys->addrs.v6addrs.dst, &fl6->daddr,
-	    sizeof(keys->addrs.v6addrs.dst));
-	keys->control.addr_type = FLOW_DISSECTOR_KEY_IPV6_ADDRS;
-	keys->ports.src = fl6->fl6_sport;
-	keys->ports.dst = fl6->fl6_dport;
-	keys->keyid.keyid = fl6->fl6_gre_key;
-	keys->tags.flow_label = (__force u32)fl6->flowlabel;
-	keys->basic.ip_proto = fl6->flowi6_proto;
-
-	return flow_hash_from_keys(keys);
-}
-EXPORT_SYMBOL(__get_hash_from_flowi6);
-
-__u32 __get_hash_from_flowi4(const struct flowi4 *fl4, struct flow_keys *keys)
-{
-	memset(keys, 0, sizeof(*keys));
-
-	keys->addrs.v4addrs.src = fl4->saddr;
-	keys->addrs.v4addrs.dst = fl4->daddr;
-	keys->control.addr_type = FLOW_DISSECTOR_KEY_IPV4_ADDRS;
-	keys->ports.src = fl4->fl4_sport;
-	keys->ports.dst = fl4->fl4_dport;
-	keys->keyid.keyid = fl4->fl4_gre_key;
-	keys->basic.ip_proto = fl4->flowi4_proto;
-
-	return flow_hash_from_keys(keys);
-}
-EXPORT_SYMBOL(__get_hash_from_flowi4);
+#endif
 
 static const struct flow_dissector_key flow_keys_dissector_keys[] = {
 	{

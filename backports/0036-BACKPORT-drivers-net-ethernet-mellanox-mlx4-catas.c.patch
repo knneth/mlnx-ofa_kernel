@@ -1,0 +1,65 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/catas.c
+
+Change-Id: Ie46562448c8cbb629948c6a77a43fc5b38d5279c
+---
+ drivers/net/ethernet/mellanox/mlx4/catas.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx4/catas.c
++++ b/drivers/net/ethernet/mellanox/mlx4/catas.c
+@@ -214,7 +214,11 @@ static void mlx4_handle_error_state(stru
+ 	mutex_lock(&persist->interface_state_mutex);
+ 	if (persist->interface_state & MLX4_INTERFACE_STATE_UP &&
+ 	    !(persist->interface_state & MLX4_INTERFACE_STATE_DELETION)) {
++#ifdef HAVE_DEVLINK_DRIVERINIT_VAL
+ 		err = mlx4_restart_one(persist->pdev, false, NULL);
++#else
++		err = mlx4_restart_one(persist->pdev);
++#endif
+ 		mlx4_info(persist->dev, "mlx4_restart_one was ended, ret=%d\n",
+ 			  err);
+ 	}
+@@ -233,10 +237,19 @@ static void dump_err_buf(struct mlx4_dev
+ 			 i, swab32(readl(priv->catas_err.map + i)));
+ }
+ 
++#ifdef HAVE_TIMER_SETUP
+ static void poll_catas(struct timer_list *t)
++#else
++static void poll_catas(unsigned long dev_ptr)
++#endif
+ {
++#ifdef HAVE_TIMER_SETUP
+ 	struct mlx4_priv *priv = from_timer(priv, t, catas_err.timer);
+ 	struct mlx4_dev *dev = &priv->dev;
++#else
++	struct mlx4_dev *dev = (struct mlx4_dev *) dev_ptr;
++	struct mlx4_priv *priv = mlx4_priv(dev);
++#endif
+ 	u32 slave_read;
+ 
+ 	if (mlx4_is_slave(dev)) {
+@@ -279,7 +292,11 @@ void mlx4_start_catas_poll(struct mlx4_d
+ 	phys_addr_t addr;
+ 
+ 	INIT_LIST_HEAD(&priv->catas_err.list);
++#ifdef HAVE_TIMER_SETUP
+ 	timer_setup(&priv->catas_err.timer, poll_catas, 0);
++#else
++	init_timer(&priv->catas_err.timer);
++#endif
+ 	priv->catas_err.map = NULL;
+ 
+ 	if (!mlx4_is_slave(dev)) {
+@@ -295,6 +312,10 @@ void mlx4_start_catas_poll(struct mlx4_d
+ 		}
+ 	}
+ 
++#ifndef HAVE_TIMER_SETUP
++	priv->catas_err.timer.data     = (unsigned long) dev;
++	priv->catas_err.timer.function = poll_catas;
++#endif
+ 	priv->catas_err.timer.expires  =
+ 		round_jiffies(jiffies + MLX4_CATAS_POLL_INTERVAL);
+ 	add_timer(&priv->catas_err.timer);

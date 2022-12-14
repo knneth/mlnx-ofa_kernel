@@ -40,7 +40,7 @@
 #define TRACE_SYSTEM mlx5
 
 /* Tracepoint for FWTracer messages: */
-TRACE_EVENT(fw_tracer,
+TRACE_EVENT(mlx5_fw,
 	TP_PROTO(const struct mlx5_fw_tracer *tracer, u64 trace_timestamp,
 		 bool lost, u8 event_id, const char *msg),
 

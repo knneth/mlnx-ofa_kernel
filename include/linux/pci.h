@@ -210,4 +210,12 @@ static inline struct pci_dev *pci_upstream_bridge(struct pci_dev *dev)
 int pci_enable_atomic_ops_to_root(struct pci_dev *dev, u32 comp_caps);
 #endif
 
+#ifdef HAVE_NO_LINKSTA_SYSFS
+void register_pcie_dev_attr_group(struct pci_dev *pdev);
+void unregister_pcie_dev_attr_group(struct pci_dev *pdev);
+#else
+static inline void register_pcie_dev_attr_group(struct pci_dev *pdev) { }
+static inline void unregister_pcie_dev_attr_group(struct pci_dev *pdev) { }
+#endif
+
 #endif /* _LINUX_PCI_H */

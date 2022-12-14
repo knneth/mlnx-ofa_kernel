@@ -40,6 +40,7 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
+%global RHEL8 %(if test `grep -E '^(ID="rhel"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -64,13 +65,19 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.5}
-%{!?_release: %global _release OFED.4.5.1.0.1.1.gb4fdfac}
+%{!?_version: %global _version 4.6}
+%{!?_release: %global _release OFED.4.6.1.0.1.1.ga2cfe08}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
 %global devel_pname %{_name}-devel
 %global non_kmp_pname %{_name}-modules
+
+%if %{RHEL8}
+%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=python3
+%else
+%global mlnx_python_env    :
+%endif
 
 Summary: Infiniband HCA Driver
 Name: %{_name}
@@ -114,7 +121,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.5-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-1.0.1.tgz
 
 
 # build KMP rpms?
@@ -168,7 +175,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.5-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-1.0.1.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -201,7 +208,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.5-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-1.0.1.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -266,12 +273,16 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 set -- *
 mkdir source
 mv "$@" source/
+%if %{RHEL8}
+sed -s -i -e '1s|python\>|python3|' `grep -rl '^#!.*python' source/ofed_scripts`
+%endif
 mkdir obj
 
 %build
 export EXTRA_CFLAGS='-DVERSION=\"%version\"'
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export CONF_OPTIONS="%{configure_options}"
+%{mlnx_python_env}
 for flavor in %flavors_to_build; do
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
@@ -294,6 +305,7 @@ export INSTALL_MOD_DIR=%{install_mod_dir}
 export NAME=%{name}
 export VERSION=%{version}
 export PREFIX=%{_prefix}
+%{mlnx_python_env}
 for flavor in %flavors_to_build; do 
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
@@ -648,6 +660,7 @@ fi
 /etc/systemd/system/mlnx_interface_mgr@.service
 %endif
 /sbin/sysctl_perf_tuning
+/sbin/mlnx_eswitch_set
 /usr/sbin/mlnx_tune
 /usr/sbin/show_gids
 /usr/sbin/compat_gid_gen
@@ -659,6 +672,7 @@ fi
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
 %config(noreplace) /etc/modprobe.d/mlnx.conf
+%config(noreplace) /etc/modprobe.d/mlnx-eswitch.conf
 %{_sbindir}/*
 %config(noreplace) /etc/udev/rules.d/90-ib.rules
 %config(noreplace) /etc/udev/rules.d/82-net-setup-link.rules

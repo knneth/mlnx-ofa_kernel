@@ -39,6 +39,7 @@
 #include "mlx5_ib.h"
 #include "cmd.h"
 #include "odp_exp.h"
+#include "ib_rep.h"
 
 #define MAX_PREFETCH_LEN (4*1024*1024U)
 
@@ -62,7 +63,15 @@ static int check_parent(struct ib_umem_odp *odp,
 {
 	struct mlx5_ib_mr *mr = odp->private;
 
-	return mr && mr->parent == parent && !odp->dying;
+	return mr && mr->parent == parent && !odp->invalidating;
+}
+
+struct ib_ucontext_per_mm *mr_to_per_mm(struct mlx5_ib_mr *mr)
+{
+	if (WARN_ON(!mr || !mr->umem || !mr->umem->is_odp))
+		return NULL;
+
+	return to_ib_umem_odp(mr->umem)->per_mm;
 }
 
 static struct ib_umem_odp *odp_next(struct ib_umem_odp *odp)
@@ -84,14 +93,14 @@ end:
 	return odp;
 }
 
-static struct ib_umem_odp *odp_lookup(struct ib_ucontext *ctx,
-				      u64 start, u64 length,
+static struct ib_umem_odp *odp_lookup(u64 start, u64 length,
 				      struct mlx5_ib_mr *parent)
 {
+	struct ib_ucontext_per_mm *per_mm = mr_to_per_mm(parent);
 	struct ib_umem_odp *odp;
 	struct rb_node *rb;
 
-	odp = rbt_ib_umem_lookup(&ctx->umem_tree, start, length);
+	odp = rbt_ib_umem_lookup(&per_mm->umem_tree, start, length);
 	if (!odp)
 		goto end;
 
@@ -102,7 +111,7 @@ static struct ib_umem_odp *odp_lookup(struct ib_ucontext *ctx,
 		if (!rb)
 			goto not_found;
 		odp = rb_entry(rb, struct ib_umem_odp, interval_tree.rb);
-		if (ib_umem_start(odp->umem) > start + length)
+		if (ib_umem_start(&odp->umem) > start + length)
 			goto not_found;
 	}
 not_found:
@@ -127,10 +136,10 @@ int mlx5_odp_populate_xlt(void *xlt, size_t offset, size_t nentries,
 			  struct mlx5_ib_mr *mr, int flags)
 {
 	struct ib_pd *pd = mr->ibmr.pd;
-	struct ib_ucontext *ctx = pd->uobject->context;
 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
 	struct mlx5_klm *pklm = xlt;
 	struct ib_umem_odp *odp;
+	struct ib_ucontext_per_mm *per_mm = to_ib_umem_odp(mr->umem)->per_mm ;
 	unsigned long va;
 	int i;
 
@@ -139,7 +148,7 @@ int mlx5_odp_populate_xlt(void *xlt, size_t offset, size_t nentries,
 
 		nentries = min(nentries, ib_umem_num_pages(mr->umem) - offset);
 		if (!(flags & MLX5_IB_UPD_XLT_ZAP)) {
-			odp = mr->umem->odp_data;
+			odp = to_ib_umem_odp(mr->umem);
 			for (i = 0; i < nentries; i++) {
 				dma_addr_t pa = odp->dma_list[offset + i];
 
@@ -159,14 +168,14 @@ int mlx5_odp_populate_xlt(void *xlt, size_t offset, size_t nentries,
 	}
 
 	if (!(flags & MLX5_IB_UPD_XLT_ODP_LOCKED))
-		down_read(&ctx->umem_rwsem);
-	odp = odp_lookup(ctx, offset * MLX5_IMR_MTT_SIZE,
-			     nentries * MLX5_IMR_MTT_SIZE, mr);
+		down_read(&per_mm->umem_rwsem);
+	odp = odp_lookup(offset * MLX5_IMR_MTT_SIZE,
+			 nentries * MLX5_IMR_MTT_SIZE, mr);
 
 	for (i = 0; i < nentries; i++, pklm++) {
 		pklm->bcount = cpu_to_be32(MLX5_IMR_MTT_SIZE);
 		va = (offset + i) * MLX5_IMR_MTT_SIZE;
-		if (odp && odp->umem->address == va) {
+		if (odp && odp->umem.address == va) {
 			struct mlx5_ib_mr *mtt = odp->private;
 
 			pklm->key = cpu_to_be32(mtt->ibmr.lkey);
@@ -178,7 +187,7 @@ int mlx5_odp_populate_xlt(void *xlt, size_t offset, size_t nentries,
 			    i, va, be32_to_cpu(pklm->key));
 	}
 	if (!(flags & MLX5_IB_UPD_XLT_ODP_LOCKED))
-		up_read(&ctx->umem_rwsem);
+		up_read(&per_mm->umem_rwsem);
 	return nentries;
 }
 
@@ -190,33 +199,37 @@ static void mr_leaf_free_action(struct work_struct *work)
 	mr->parent = NULL;
 	synchronize_srcu(&mr->dev->mr_srcu);
 
-	ib_umem_release(odp->umem);
+	ib_umem_release(&odp->umem);
 	mlx5_mr_cache_free(mr->dev, mr);
 
 	if (atomic_dec_and_test(&imr->num_leaf_free))
 		wake_up(&imr->q_leaf_free);
 }
 
-void mlx5_ib_invalidate_range(struct ib_umem *umem, unsigned long start,
+void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp, unsigned long start,
 			      unsigned long end)
 {
 	struct mlx5_ib_mr *mr;
 	const u64 umr_block_mask = (MLX5_UMR_MTT_ALIGNMENT /
 				    sizeof(struct mlx5_mtt)) - 1;
 	u64 idx = 0, blk_start_idx = 0;
+	struct ib_umem *umem;
+	struct ib_umem_odp *odp_mr;
 	int in_block = 0, np_stat;
 	u64 addr;
 
-	if (!umem || !umem->odp_data) {
+	if (!umem_odp) {
 		pr_err("invalidation called on NULL umem or non-ODP umem\n");
 		return;
 	}
+	umem = &umem_odp->umem;
 
-	mr = umem->odp_data->private;
+	mr = umem_odp->private;
 
 	if (!mr || !mr->ibmr.pd)
 		return;
 
+	odp_mr	= to_ib_umem_odp(mr->umem);
 	start = max_t(u64, ib_umem_start(umem), start);
 	end = min_t(u64, ib_umem_end(umem), end);
 
@@ -235,7 +248,7 @@ void mlx5_ib_invalidate_range(struct ib_umem *umem, unsigned long start,
 		 * estimate the cost of another UMR vs. the cost of bigger
 		 * UMR.
 		 */
-		if (umem->odp_data->dma_list[idx] &
+		if (umem_odp->dma_list[idx] &
 		    (ODP_READ_ALLOWED_BIT | ODP_WRITE_ALLOWED_BIT)) {
 			if (!in_block) {
 				blk_start_idx = idx;
@@ -264,20 +277,20 @@ void mlx5_ib_invalidate_range(struct ib_umem *umem, unsigned long start,
 	 * needed.
 	 */
 
-	ib_umem_odp_unmap_dma_pages(umem, start, end, &np_stat);
+	ib_umem_odp_unmap_dma_pages(umem_odp, start, end, &np_stat);
 	/* Skip stats count for CAPI MR */
 	if (mr->dev)
 		atomic_sub(np_stat, &mr->dev->odp_stats.num_odp_mr_pages);
-
 	if (unlikely(!umem->npages && mr->parent &&
-		     !cmpxchg(&umem->odp_data->dying, 0, 1))) {
+		     !cmpxchg(&odp_mr->invalidating, 0, 1))) {
 		idx = ib_umem_start(umem) >> MLX5_IMR_MTT_SHIFT;
+
 		mlx5_ib_update_xlt(mr->parent, idx, 0, 1, 0,
 				   MLX5_IB_UPD_XLT_INDIRECT |
 				   MLX5_IB_UPD_XLT_ODP_LOCKED);
 
 		atomic_inc(&mr->parent->num_leaf_free);
-		schedule_work(&umem->odp_data->work);
+		schedule_work(&umem_odp->work);
 	}
 }
 
@@ -453,18 +466,18 @@ fail:
 static struct ib_umem_odp *implicit_mr_get_data(struct mlx5_ib_mr *mr,
 						u64 io_virt, size_t bcnt)
 {
-	struct ib_ucontext *ctx = mr->ibmr.pd->uobject->context;
 	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.pd->device);
 	struct ib_umem_odp *odp, *result = NULL;
+	struct ib_umem_odp *odp_mr = to_ib_umem_odp(mr->umem);
+	struct ib_ucontext_per_mm *per_mm = to_ib_umem_odp(mr->umem)->per_mm ;
 	u64 addr = io_virt & MLX5_IMR_MTT_MASK;
 	int nentries = 0, start_idx = 0, ret;
 	struct mlx5_ib_mr *mtt;
-	struct ib_umem *umem;
 
 next_mr:
-	down_read(&ctx->umem_rwsem);
-	odp = odp_lookup(ctx, addr, 1, mr);
-	up_read(&ctx->umem_rwsem);
+	down_read(&per_mm->umem_rwsem);
+	odp = odp_lookup(addr, 1, mr);
+	up_read(&per_mm->umem_rwsem);
 
 	mlx5_ib_dbg(dev, "io_virt:%llx bcnt:%zx addr:%llx odp:%p\n",
 		    io_virt, bcnt, addr, odp);
@@ -473,20 +486,21 @@ next_mr:
 		if (nentries)
 			nentries++;
 	} else {
-		umem = ib_alloc_odp_umem(ctx, addr, MLX5_IMR_MTT_SIZE);
-		if (IS_ERR(umem)) {
-			return ERR_CAST(umem);
+		odp = ib_alloc_odp_umem(odp_mr->per_mm, addr,
+					MLX5_IMR_MTT_SIZE);
+		if (IS_ERR(odp)) {
+			return ERR_CAST(odp);
 		}
 
-		mtt = implicit_mr_alloc(mr->ibmr.pd, umem, 0, mr->access_flags);
+		mtt = implicit_mr_alloc(mr->ibmr.pd, &odp->umem, 0,
+					mr->access_flags);
 		if (IS_ERR(mtt)) {
-			ib_umem_release(umem);
+			ib_umem_release(&odp->umem);
 			return ERR_CAST(mtt);
 		}
 
-		odp = umem->odp_data;
 		odp->private = mtt;
-		mtt->umem = umem;
+		mtt->umem = &odp->umem;
 		mtt->mmkey.iova = addr;
 		mtt->parent = mr;
 		INIT_WORK(&odp->work, mr_leaf_free_action);
@@ -503,6 +517,7 @@ next_mr:
 	addr += MLX5_IMR_MTT_SIZE;
 	if (unlikely(addr < io_virt + bcnt))
 		goto next_mr;
+	
 
 	if (unlikely(nentries)) {
 		ret = mlx5_ib_update_xlt(mr, start_idx, 0, nentries, 0,
@@ -537,50 +552,59 @@ struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
 	imr->umem = umem;
 	init_waitqueue_head(&imr->q_leaf_free);
 	atomic_set(&imr->num_leaf_free, 0);
+	atomic_set(&imr->num_pending_prefetch, 0);
 
 	return imr;
 }
 
-static int mr_leaf_free(struct ib_umem *umem, u64 start,
-			u64 end, void *cookie)
+static int mr_leaf_free(struct ib_umem_odp *umem_odp, u64 start, u64 end,
+			void *cookie)
 {
-	struct mlx5_ib_mr *mr = umem->odp_data->private, *imr = cookie;
+	struct mlx5_ib_mr *mr = umem_odp->private, *imr = cookie;
+	struct ib_umem *umem = &umem_odp->umem;
+	struct ib_umem_odp *odp_mr = to_ib_umem_odp(mr->umem);
 	int np_stat;
 
 	if (mr->parent != imr)
 		return 0;
 
-	ib_umem_odp_unmap_dma_pages(umem,
-				    ib_umem_start(umem),
+	ib_umem_odp_unmap_dma_pages(umem_odp, ib_umem_start(umem),
 				    ib_umem_end(umem),
 				    &np_stat);
 	atomic_sub(np_stat, &mr->dev->odp_stats.num_odp_mr_pages);
 
-	if (cmpxchg(&umem->odp_data->dying, 0, 1))
+	if (cmpxchg(&odp_mr->invalidating, 0, 1))
 		return 0;
 
 	atomic_inc(&imr->num_leaf_free);
-	schedule_work(&umem->odp_data->work);
+	schedule_work(&umem_odp->work);
 
 	return 0;
 }
 
 void mlx5_ib_free_implicit_mr(struct mlx5_ib_mr *imr)
 {
-	struct ib_ucontext *ctx = imr->ibmr.pd->uobject->context;
+	struct ib_ucontext_per_mm *per_mm = mr_to_per_mm(imr);
 
-	down_read(&ctx->umem_rwsem);
-	rbt_ib_umem_for_each_in_range(&ctx->umem_tree, 0, ULLONG_MAX,
-				      mr_leaf_free, imr);
-	up_read(&ctx->umem_rwsem);
+	down_read(&per_mm->umem_rwsem);
+	rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, 0, ULLONG_MAX,
+				      mr_leaf_free, true, imr);
+	up_read(&per_mm->umem_rwsem);
 
 	wait_event(imr->q_leaf_free, !atomic_read(&imr->num_leaf_free));
 }
 
+#define MLX5_PF_FLAGS_PREFETCH  BIT(0)
+#define MLX5_PF_FLAGS_DOWNGRADE BIT(1)
+
 static int pagefault_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr,
 			u64 io_virt, size_t bcnt, u32 *bytes_mapped,
-			enum ib_odp_dma_map_flags dma_flags)
+			enum ib_odp_dma_map_flags dma_flags,
+			u32 flags)
 {
+	struct ib_umem_odp *odp_mr = to_ib_umem_odp(mr->umem);
+	bool downgrade = flags & MLX5_PF_FLAGS_DOWNGRADE;
+	bool prefetch = flags & MLX5_PF_FLAGS_PREFETCH;
 	int npages = 0, current_seq, page_shift, ret, np, np_stat;
 	u64 access_mask = ODP_READ_ALLOWED_BIT;
 	u64 start_idx, page_mask;
@@ -588,7 +612,7 @@ static int pagefault_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr,
 	struct mlx5_ib_mr *imr;
 	size_t size;
 
-	if (!mr->umem->odp_data->page_list) {
+	if (!odp_mr->page_list) {
 		odp = implicit_mr_get_data(mr, io_virt, bcnt);
 
 		if (IS_ERR(odp))
@@ -596,18 +620,26 @@ static int pagefault_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr,
 		imr = mr;
 		mr = odp->private;
 	} else {
-		odp = mr->umem->odp_data;
+		odp = odp_mr;
 		imr = NULL;
 	}
 
 next_mr:
-	size = min_t(size_t, bcnt, ib_umem_end(odp->umem) - io_virt);
+	size = min_t(size_t, bcnt, ib_umem_end(&odp->umem) - io_virt);
 
 	page_shift = mr->umem->page_shift;
 	page_mask = ~(BIT(page_shift) - 1);
 	start_idx = (io_virt - (mr->mmkey.iova & page_mask)) >> page_shift;
 
-	if (mr->umem->writable)
+	if (prefetch && !downgrade && !mr->umem->writable) {
+		/* prefetch with write-access must
+		 * be supported by the MR
+		 */
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (mr->umem->writable && !downgrade)
 		access_mask |= ODP_WRITE_ALLOWED_BIT;
 
 	current_seq = READ_ONCE(odp->notifiers_seq);
@@ -617,7 +649,7 @@ next_mr:
 	 */
 	smp_rmb();
 
-	ret = ib_umem_odp_map_dma_pages(mr->umem, io_virt, size,
+	ret = ib_umem_odp_map_dma_pages(to_ib_umem_odp(mr->umem), io_virt, size,
 					access_mask, current_seq,
 					dma_flags, &np_stat);
 
@@ -629,7 +661,8 @@ next_mr:
 	np = ret;
 
 	mutex_lock(&odp->umem_mutex);
-	if (!ib_umem_mmu_notifier_retry(mr->umem, current_seq)) {
+	if (!ib_umem_mmu_notifier_retry(to_ib_umem_odp(mr->umem),
+					current_seq)) {
 		/*
 		 * No need to check whether the MTTs really belong to
 		 * this MR, since ib_umem_odp_map_dma_pages already
@@ -674,7 +707,7 @@ next_mr:
 
 out:
 	if (ret == -EAGAIN) {
-		if (imr || !odp->dying) {
+		if (!odp->dying) {
 			unsigned long timeout =
 				msecs_to_jiffies(MMU_NOTIFIER_TIMEOUT);
 
@@ -753,14 +786,16 @@ static int pagefault_stride_block(void *pklm, size_t *offset, size_t *bcnt,
  * -EFAULT when there's an error mapping the requested pages. The caller will
  *  abort the page fault handling.
  */
-int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
-				  u32 key, u64 io_virt, size_t bcnt,
+static int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
+					 struct ib_pd *pd, u32 key,
+					 u64 io_virt, size_t bcnt,
 				  u32 *bytes_committed,
 				  u32 *bytes_mapped,
 				  enum ib_odp_dma_map_flags dma_flags,
-				  struct mlx5_pagefault *pfault)
+				  struct mlx5_pagefault *pfault, u32 flags)
 {
 	int npages = 0, srcu_key, ret, i, outlen, cur_outlen = 0, depth = 0;
+	bool prefetch = flags & MLX5_PF_FLAGS_PREFETCH;
 	struct pf_frame *head = NULL, *frame;
 	struct mlx5_core_mkey *mmkey;
 	struct mlx5_ib_mw *mw;
@@ -792,7 +827,20 @@ next_mr:
 			ret = -EFAULT;
 			goto srcu_unlock;
 		}
-
+		if (prefetch) {
+			if (!mr->umem->is_odp ||
+					mr->ibmr.pd != pd) {
+				mlx5_ib_dbg(dev, "Invalid prefetch request: %s\n",
+						mr->umem->is_odp ?  "MR is not ODP" :
+						"PD is not of the MR");
+				ret = -EINVAL;
+				goto srcu_unlock;
+			}
+			if (mlx5_ib_capi_enabled(dev)) {
+				ret = 0;
+				goto srcu_unlock;
+			}
+		}
 		if (mlx5_ib_capi_enabled(dev)) {
 			if (!pfault) {
 				mlx5_ib_dbg(dev, "CAPI: pfault is NULL\n");
@@ -800,7 +848,7 @@ next_mr:
 				goto srcu_unlock;
 			}
 
-			if (!mr->umem->mm) {
+			if (!mr->umem->owning_mm) {
 				mlx5_ib_dbg(dev, "CAPI: skipping non ODP MR (lkey=0x%06x) in page fault handler.\n",
 					    key);
 				if (bytes_mapped)
@@ -808,7 +856,7 @@ next_mr:
 				goto srcu_unlock;
 			}
 
-			ret = handle_capi_pg_fault(dev, mr->umem->mm,
+			ret = handle_capi_pg_fault(dev, mr->umem->owning_mm,
 						   io_virt, bcnt, pfault);
 			if (!ret) {
 				if (bytes_mapped)
@@ -818,16 +866,18 @@ next_mr:
 			goto srcu_unlock;
 		}
 
-		if (!mr->umem->odp_data) {
+
+		if (!mr->umem->is_odp) {
 			mlx5_ib_dbg(dev, "skipping non ODP MR (lkey=0x%06x) in page fault handler.\n",
 				    key);
 			if (bytes_mapped)
 				*bytes_mapped += bcnt;
+			ret = 0;
 			goto srcu_unlock;
 		}
 
 		ret = pagefault_mr(dev, mr, io_virt, bcnt, bytes_mapped,
-				   dma_flags);
+				   dma_flags, flags);
 		if (ret < 0)
 			goto srcu_unlock;
 
@@ -840,6 +890,8 @@ next_mr:
 		} else if (mmkey->type == MLX5_MKEY_MR_USER) {
 			mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
 			ndescs = mr->max_descs;
+		} else if (mmkey->type == MLX5_MKEY_INDIRECT_DEVX) {
+			ndescs = container_of(mmkey, struct mlx5_ib_devx_mr, mmkey)->ndescs;
 		} else {
 			mlx5_ib_warn(dev, "wrong mkey type %d\n", mmkey->type);
 			ret = -EFAULT;
@@ -1023,9 +1075,10 @@ static int pagefault_data_segments(struct mlx5_ib_dev *dev,
 			continue;
 		}
 
-		ret = pagefault_single_data_segment(dev, key, io_virt, bcnt,
+		ret = pagefault_single_data_segment(dev, NULL, key,
+						    io_virt, bcnt,
 						    &pfault->bytes_committed,
-						    bytes_mapped, 0, pfault);
+						    bytes_mapped, 0, pfault, 0);
 		if (ret < 0)
 			break;
 		npages += ret;
@@ -1374,9 +1427,9 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 		prefetch_len = min(MAX_PREFETCH_LEN, prefetch_len);
 	}
 
-	ret = pagefault_single_data_segment(dev, rkey, address, length,
+	ret = pagefault_single_data_segment(dev, NULL, rkey, address, length,
 					    &pfault->bytes_committed, NULL, 0,
-					    pfault);
+					    pfault, 0);
 	if (ret == -EAGAIN) {
 		/* We're racing with an invalidation, don't prefetch */
 		prefetch_activated = 0;
@@ -1401,10 +1454,10 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 	if (prefetch_activated) {
 		u32 bytes_committed = 0;
 
-		ret = pagefault_single_data_segment(dev, rkey, address,
+		ret = pagefault_single_data_segment(dev, NULL, rkey, address,
 						    prefetch_len,
 						    &bytes_committed, NULL, 0,
-						    pfault);
+						    pfault, 0);
 		if (ret < 0 && ret != -EAGAIN) {
 			mlx5_ib_dbg(dev, "Prefetch failed. ret: %d, QP 0x%x, address: 0x%.16llx, length = 0x%.16x\n",
 				    ret, pfault->token, address, prefetch_len);
@@ -1430,6 +1483,10 @@ void mlx5_ib_pfault(struct mlx5_core_dev *mdev, void *context,
 	u8 event_subtype = pfault->event_subtype;
 	unsigned int duration;
 	int index;
+
+	if (MLX5_ESWITCH_MANAGER(mdev) &&
+	    mlx5_eswitch_mode(mdev->priv.eswitch) == SRIOV_OFFLOADS)
+		dev = mlx5_ib_get_uplink_ibdev(mdev->priv.eswitch);
 
 	duration = jiffies_to_msecs(jiffies - pfault->start);
 	index =	convert_duration_to_hist(duration);
@@ -1507,3 +1564,161 @@ int mlx5_ib_odp_init(void)
 	return 0;
 }
 
+
+struct prefetch_mr_work {
+	struct work_struct work;
+	struct ib_pd *pd;
+	u32 pf_flags;
+	u32 num_sge;
+	struct ib_sge sg_list[0];
+};
+
+static void num_pending_prefetch_dec(struct mlx5_ib_dev *dev,
+				     struct ib_sge *sg_list, u32 num_sge,
+				     u32 from)
+{
+	u32 i;
+	int srcu_key;
+
+	srcu_key = srcu_read_lock(&dev->mr_srcu);
+
+	for (i = from; i < num_sge; ++i) {
+		struct mlx5_core_mkey *mmkey;
+		struct mlx5_ib_mr *mr;
+
+		mmkey = __mlx5_mr_lookup(dev->mdev,
+					 mlx5_mkey_to_idx(sg_list[i].lkey));
+		mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
+		atomic_dec(&mr->num_pending_prefetch);
+	}
+
+	srcu_read_unlock(&dev->mr_srcu, srcu_key);
+}
+
+static bool num_pending_prefetch_inc(struct ib_pd *pd,
+				     struct ib_sge *sg_list, u32 num_sge)
+{
+	struct mlx5_ib_dev *dev = to_mdev(pd->device);
+	bool ret = true;
+	u32 i;
+
+	for (i = 0; i < num_sge; ++i) {
+		struct mlx5_core_mkey *mmkey;
+		struct mlx5_ib_mr *mr;
+
+		mmkey = __mlx5_mr_lookup(dev->mdev,
+					 mlx5_mkey_to_idx(sg_list[i].lkey));
+		if (!mmkey || mmkey->key != sg_list[i].lkey) {
+			ret = false;
+			break;
+		}
+
+		if (mmkey->type != MLX5_MKEY_MR) {
+			ret = false;
+			break;
+		}
+
+		mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
+
+		if (mr->ibmr.pd != pd) {
+			ret = false;
+			break;
+		}
+
+		if (!mr->live) {
+			ret = false;
+			break;
+		}
+
+		atomic_inc(&mr->num_pending_prefetch);
+	}
+
+	if (!ret)
+		num_pending_prefetch_dec(dev, sg_list, i, 0);
+
+	return ret;
+}
+
+static int mlx5_ib_prefetch_sg_list(struct ib_pd *pd, u32 pf_flags,
+				    struct ib_sge *sg_list, u32 num_sge)
+{
+	u32 i;
+	int ret = 0;
+	struct mlx5_ib_dev *dev = to_mdev(pd->device);
+
+	for (i = 0; i < num_sge; ++i) {
+		struct ib_sge *sg = &sg_list[i];
+		int bytes_committed = 0;
+
+		ret = pagefault_single_data_segment(dev, pd, sg->lkey, sg->addr,
+						    sg->length,
+						    &bytes_committed, NULL, IB_ODP_DMA_MAP_FOR_PREFETCH,
+						    NULL, pf_flags);
+		if (ret < 0)
+			break;
+	}
+
+	return ret < 0 ? ret : 0;
+}
+
+static void mlx5_ib_prefetch_mr_work(struct work_struct *work)
+{
+	struct prefetch_mr_work *w =
+		container_of(work, struct prefetch_mr_work, work);
+
+	if (ib_device_try_get(w->pd->device)) {
+		mlx5_ib_prefetch_sg_list(w->pd, w->pf_flags, w->sg_list,
+				w->num_sge);
+		ib_device_put(w->pd->device);
+	}
+
+	num_pending_prefetch_dec(to_mdev(w->pd->device), w->sg_list,
+				 w->num_sge, 0);
+	kfree(w);
+}
+
+int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
+			       enum ib_uverbs_advise_mr_advice advice,
+			       u32 flags, struct ib_sge *sg_list, u32 num_sge)
+{
+	struct mlx5_ib_dev *dev = to_mdev(pd->device);
+	u32 pf_flags = MLX5_PF_FLAGS_PREFETCH;
+	struct prefetch_mr_work *work;
+	bool valid_req;
+	int srcu_key;
+
+	if (advice == IB_UVERBS_ADVISE_MR_ADVICE_PREFETCH)
+		pf_flags |= MLX5_PF_FLAGS_DOWNGRADE;
+
+	if (flags & IB_UVERBS_ADVISE_MR_FLAG_FLUSH)
+		return mlx5_ib_prefetch_sg_list(pd, pf_flags, sg_list,
+						num_sge);
+
+	work = kvzalloc(struct_size(work, sg_list, num_sge), GFP_KERNEL);
+	if (!work)
+		return -ENOMEM;
+
+	memcpy(work->sg_list, sg_list, num_sge * sizeof(struct ib_sge));
+
+	/* It is guaranteed that the pd when work is executed is the pd when
+	 * work was queued since pd can't be destroyed while it holds MRs and
+	 * destroying a MR leads to flushing the workquque
+	 */
+	work->pd = pd;
+	work->pf_flags = pf_flags;
+	work->num_sge = num_sge;
+
+	INIT_WORK(&work->work, mlx5_ib_prefetch_mr_work);
+
+	srcu_key = srcu_read_lock(&dev->mr_srcu);
+
+	valid_req = num_pending_prefetch_inc(pd, sg_list, num_sge);
+	if (valid_req)
+		queue_work(system_unbound_wq, &work->work);
+	else
+		kfree(work);
+
+	srcu_read_unlock(&dev->mr_srcu, srcu_key);
+
+	return valid_req ? 0 : -EINVAL;
+}

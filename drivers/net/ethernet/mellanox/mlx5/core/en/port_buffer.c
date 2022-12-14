@@ -132,8 +132,10 @@ static u32 calculate_xoff(struct mlx5e_priv *priv, unsigned int mtu)
 	int err;
 
 	err = mlx5e_port_linkspeed(priv->mdev, &speed);
-	if (err)
+	if (err) {
+		mlx5_core_warn(priv->mdev, "cannot get port speed\n");
 		speed = SPEED_40000;
+	}
 	speed = max_t(u32, speed, SPEED_40000);
 	xoff = (301 + 216 * priv->dcbx.cable_len / 100) * speed / 1000 + 272 * mtu / 100;
 

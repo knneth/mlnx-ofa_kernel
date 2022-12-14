@@ -93,6 +93,12 @@ static void delayed_event_release(struct mlx5_device_context *dev_ctx,
 	list_splice_init(&priv->waiting_events_list, &temp);
 	if (!dev_ctx->context)
 		goto out;
+
+	if (!dev_ctx->intf->event ||
+	    (!test_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state) &&
+	     !test_bit(MLX5_INTERFACE_ATTACHED, &dev_ctx->state)))
+		goto out;
+
 	list_for_each_entry_safe(de, n, &temp, list)
 		dev_ctx->intf->event(dev, dev_ctx->context, de->event, de->param);
 
@@ -213,17 +219,20 @@ static void mlx5_attach_interface(struct mlx5_interface *intf, struct mlx5_priv 
 			goto out;
 		if (intf->attach(dev, dev_ctx->context))
 			goto out;
-
-		set_bit(MLX5_INTERFACE_ATTACHED, &dev_ctx->state);
 	} else {
 		if (test_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state))
 			goto out;
 		dev_ctx->context = intf->add(dev);
 		if (!dev_ctx->context)
 			goto out;
-
-		set_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state);
 	}
+
+	spin_lock_irq(&priv->ctx_lock);
+	if (intf->attach)
+		set_bit(MLX5_INTERFACE_ATTACHED, &dev_ctx->state);
+	else
+		set_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state);
+	spin_unlock_irq(&priv->ctx_lock);
 
 out:
 	delayed_event_release(dev_ctx, priv);
@@ -252,14 +261,22 @@ static void mlx5_detach_interface(struct mlx5_interface *intf, struct mlx5_priv 
 	if (intf->detach) {
 		if (!test_bit(MLX5_INTERFACE_ATTACHED, &dev_ctx->state))
 			return;
-		intf->detach(dev, dev_ctx->context);
-		clear_bit(MLX5_INTERFACE_ATTACHED, &dev_ctx->state);
 	} else {
 		if (!test_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state))
 			return;
-		intf->remove(dev, dev_ctx->context);
-		clear_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state);
 	}
+
+	spin_lock_irq(&priv->ctx_lock);
+	if (intf->detach)
+		clear_bit(MLX5_INTERFACE_ATTACHED, &dev_ctx->state);
+	else
+		clear_bit(MLX5_INTERFACE_ADDED, &dev_ctx->state);
+	spin_unlock_irq(&priv->ctx_lock);
+
+	if (intf->detach)
+		intf->detach(dev, dev_ctx->context);
+	else
+		intf->remove(dev, dev_ctx->context);
 }
 
 void mlx5_detach_device(struct mlx5_core_dev *dev)
@@ -349,28 +366,6 @@ void mlx5_reload_interface(struct mlx5_core_dev *mdev, int protocol)
 	mlx5_add_dev_by_protocol(mdev, protocol);
 	mutex_unlock(&mlx5_intf_mutex);
 }
-
-void *mlx5_get_protocol_dev(struct mlx5_core_dev *mdev, int protocol)
-{
-	struct mlx5_priv *priv = &mdev->priv;
-	struct mlx5_device_context *dev_ctx;
-	unsigned long flags;
-	void *result = NULL;
-
-	spin_lock_irqsave(&priv->ctx_lock, flags);
-
-	list_for_each_entry(dev_ctx, &mdev->priv.ctx_list, list)
-		if ((dev_ctx->intf->protocol == protocol) &&
-		    dev_ctx->intf->get_dev) {
-			result = dev_ctx->intf->get_dev(dev_ctx->context);
-			break;
-		}
-
-	spin_unlock_irqrestore(&priv->ctx_lock, flags);
-
-	return result;
-}
-EXPORT_SYMBOL(mlx5_get_protocol_dev);
 
 /* Must be called with intf_mutex held */
 void mlx5_add_dev_by_protocol(struct mlx5_core_dev *dev, int protocol)

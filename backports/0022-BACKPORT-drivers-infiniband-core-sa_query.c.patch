@@ -1,0 +1,131 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
+
+Change-Id: I5feb67cc247e535a6b8e9baf9f537d391f4c7097
+---
+ drivers/infiniband/core/sa_query.c | 53 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 51 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/sa_query.c
++++ b/drivers/infiniband/core/sa_query.c
+@@ -42,7 +42,11 @@
+ #include <linux/kref.h>
+ #include <linux/idr.h>
+ #include <linux/workqueue.h>
++#ifdef HAVE_UAPI_LINUX_IF_ETHER_H
+ #include <uapi/linux/if_ether.h>
++#else
++#include <linux/if_ether.h>
++#endif
+ #include <rdma/ib_pack.h>
+ #include <rdma/ib_cache.h>
+ #include <rdma/rdma_netlink.h>
+@@ -760,7 +764,8 @@ static void ib_nl_set_path_rec_attrs(str
+ 	query->mad_buf->context[1] = NULL;
+ 
+ 	/* Construct the family header first */
+-	header = skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
++	header = (struct rdma_ls_resolve_header *)
++		skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
+ 	memcpy(header->device_name, dev_name(&query->port->agent->device->dev),
+ 	       LS_DEVICE_NAME_MAX);
+ 	header->port_num = query->port->port_num;
+@@ -1013,9 +1018,15 @@ static void ib_nl_request_timeout(struct
+ }
+ 
+ int ib_nl_handle_set_timeout(struct sk_buff *skb,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			     struct nlmsghdr *nlh,
+ 			     struct netlink_ext_ack *extack)
+ {
++#else
++			     struct netlink_callback *cb)
++{
++	const struct nlmsghdr *nlh = (struct nlmsghdr *)cb->nlh;
++#endif
+ 	int timeout, delta, abs_delta;
+ 	const struct nlattr *attr;
+ 	unsigned long flags;
+@@ -1025,7 +1036,15 @@ int ib_nl_handle_set_timeout(struct sk_b
+ 	int ret;
+ 
+ 	if (!(nlh->nlmsg_flags & NLM_F_REQUEST) ||
++#ifdef HAVE_NETLINK_CAPABLE
++#ifdef HAVE_NETLINK_SKB_PARMS_SK
+ 	    !(NETLINK_CB(skb).sk))
++#else
++	    !(NETLINK_CB(skb).ssk))
++#endif
++#else
++	    sock_net(skb->sk) != &init_net)
++#endif
+ 		return -EPERM;
+ 
+ 	ret = nla_parse(tb, LS_NLA_TYPE_MAX - 1, nlmsg_data(nlh),
+@@ -1089,8 +1108,12 @@ static inline int ib_nl_is_good_resolve_
+ }
+ 
+ int ib_nl_handle_resolve_resp(struct sk_buff *skb,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			      struct nlmsghdr *nlh,
+ 			      struct netlink_ext_ack *extack)
++#else
++			      struct nlmsghdr *nlh)
++#endif
+ {
+ 	unsigned long flags;
+ 	struct ib_sa_query *query;
+@@ -1100,7 +1123,15 @@ int ib_nl_handle_resolve_resp(struct sk_
+ 	int ret;
+ 
+ 	if ((nlh->nlmsg_flags & NLM_F_REQUEST) ||
++#ifdef HAVE_NETLINK_CAPABLE
++#ifdef HAVE_NETLINK_SKB_PARMS_SK
+ 	    !(NETLINK_CB(skb).sk))
++#else
++	    !(NETLINK_CB(skb).ssk))
++#endif
++#else
++	    sock_net(skb->sk) != &init_net)
++#endif
+ 		return -EPERM;
+ 
+ 	spin_lock_irqsave(&ib_nl_request_lock, flags);
+@@ -1368,10 +1399,17 @@ static void init_mad(struct ib_sa_query
+ static int send_mad(struct ib_sa_query *query, unsigned long timeout_ms, 
+ 		    int retries, gfp_t gfp_mask)
+ {
++#ifdef HAVE_IDR_ALLOC
++#ifdef __GFP_WAIT
++	bool preload = !!(gfp_mask & __GFP_WAIT);
++#else
+ 	bool preload = gfpflags_allow_blocking(gfp_mask);
++#endif
++#endif
+ 	unsigned long flags;
+ 	int ret, id;
+ 
++#ifdef HAVE_IDR_ALLOC
+ 	if (preload)
+ 		idr_preload(gfp_mask);
+ 	spin_lock_irqsave(&idr_lock, flags);
+@@ -1383,7 +1421,18 @@ static int send_mad(struct ib_sa_query *
+ 		idr_preload_end();
+ 	if (id < 0)
+ 		return id;
+-
++#else
++retry:
++	if (!idr_pre_get(&query_idr, gfp_mask))
++		return -ENOMEM;
++	spin_lock_irqsave(&idr_lock, flags);
++	ret = idr_get_new(&query_idr, query, &id);
++	spin_unlock_irqrestore(&idr_lock, flags);
++	if (ret == -EAGAIN)
++		goto retry;
++	if (ret)
++		return ret;
++#endif
+ 	query->mad_buf->timeout_ms  = timeout_ms;
+ 	query->mad_buf->retries = retries;
+ 	query->mad_buf->context[0] = query;

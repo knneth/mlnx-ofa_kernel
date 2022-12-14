@@ -29,8 +29,8 @@ static char *encap_to_str[] = {
 };
 
 struct devlink_compat_op {
-	int (*write_u8)(struct devlink *devlink, u8 set);
-	int (*write_u16)(struct devlink *devlink, u16 set);
+	int (*write_u8)(struct devlink *devlink, u8 set, struct netlink_ext_ack *extack);
+	int (*write_u16)(struct devlink *devlink, u16 set, struct netlink_ext_ack *extack);
 	int (*read_u8)(struct devlink *devlink, u8 *read);
 	int (*read_u16)(struct devlink *devlink, u16 *read);
 	char **map;
@@ -117,6 +117,7 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
 	struct devlink *devlink = priv_to_devlink(dev);
+	struct netlink_ext_ack ack = { ._msg = NULL };
 	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
 	u16 set = 0;
@@ -146,9 +147,12 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 	}
 
 	if (op->write_u16)
-		ret = op->write_u16(devlink, set);
+		ret = op->write_u16(devlink, set, &ack);
 	else
-		ret = op->write_u8(devlink, set);
+		ret = op->write_u8(devlink, set, &ack);
+
+	if (ack._msg)
+		mlx5_core_warn(dev, "%s\n", ack._msg);
 
 	if (ret < 0)
 		return ret;

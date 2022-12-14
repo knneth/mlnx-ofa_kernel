@@ -60,13 +60,10 @@
 
 #define DRV_NAME	"ib_srp"
 #define PFX		DRV_NAME ": "
-#define DRV_VERSION	"2.0"
-#define DRV_RELDATE	"28 Nov 2018"
 
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("InfiniBand SCSI RDMA Protocol initiator");
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_INFO(release_date, DRV_RELDATE);
 
 #if !defined(CONFIG_DYNAMIC_DEBUG)
 #define DEFINE_DYNAMIC_DEBUG_METADATA(name, fmt)
@@ -148,7 +145,8 @@ static void srp_remove_one(struct ib_device *device, void *client_data);
 static void srp_recv_done(struct ib_cq *cq, struct ib_wc *wc);
 static void srp_handle_qp_err(struct ib_cq *cq, struct ib_wc *wc,
 		const char *opname);
-static int srp_ib_cm_handler(struct ib_cm_id *cm_id, struct ib_cm_event *event);
+static int srp_ib_cm_handler(struct ib_cm_id *cm_id,
+			     const struct ib_cm_event *event);
 static int srp_rdma_cm_handler(struct rdma_cm_id *cm_id,
 			       struct rdma_cm_event *event);
 
@@ -1214,7 +1212,6 @@ static void srp_inv_rkey_err_done(struct ib_cq *cq, struct ib_wc *wc)
 static int srp_inv_rkey(struct srp_request *req, struct srp_rdma_ch *ch,
 		u32 rkey)
 {
-	struct ib_send_wr *bad_wr;
 	struct ib_send_wr wr = {
 		.opcode		    = IB_WR_LOCAL_INV,
 		.next		    = NULL,
@@ -1225,7 +1222,7 @@ static int srp_inv_rkey(struct srp_request *req, struct srp_rdma_ch *ch,
 
 	wr.wr_cqe = &req->reg_cqe;
 	req->reg_cqe.done = srp_inv_rkey_err_done;
-	return ib_post_send(ch->qp, &wr, &bad_wr);
+	return ib_post_send(ch->qp, &wr, NULL);
 }
 
 static void srp_unmap_data(struct scsi_cmnd *scmnd,
@@ -1336,16 +1333,7 @@ static void srp_terminate_io(struct srp_rport *rport)
 {
 	struct srp_target_port *target = rport->lld_data;
 	struct srp_rdma_ch *ch;
-	struct Scsi_Host *shost = target->scsi_host;
-	struct scsi_device *sdev;
 	int i, j;
-
-	/*
-	 * Invoking srp_terminate_io() while srp_queuecommand() is running
-	 * is not safe. Hence the warning statement below.
-	 */
-	shost_for_each_device(sdev, shost)
-		WARN_ON_ONCE(sdev->request_queue->request_fn_active);
 
 	for (i = 0; i < target->ch_count; i++) {
 		ch = &target->ch[i];
@@ -1506,7 +1494,6 @@ static int srp_map_finish_fr(struct srp_map_state *state,
 {
 	struct srp_target_port *target = ch->target;
 	struct srp_device *dev = target->srp_host->srp_dev;
-	struct ib_send_wr *bad_wr;
 	struct ib_reg_wr wr;
 	struct srp_fr_desc *desc;
 	u32 rkey;
@@ -1570,7 +1557,7 @@ static int srp_map_finish_fr(struct srp_map_state *state,
 	srp_map_desc(state, desc->mr->iova,
 		     desc->mr->length, desc->mr->rkey);
 
-	err = ib_post_send(ch->qp, &wr.wr, &bad_wr);
+	err = ib_post_send(ch->qp, &wr.wr, NULL);
 	if (unlikely(err)) {
 		WARN_ON_ONCE(err == -ENOMEM);
 		return err;
@@ -2021,7 +2008,7 @@ static int srp_post_send(struct srp_rdma_ch *ch, struct srp_iu *iu, int len)
 {
 	struct srp_target_port *target = ch->target;
 	struct ib_sge list;
-	struct ib_send_wr wr, *bad_wr;
+	struct ib_send_wr wr;
 
 	list.addr   = iu->dma;
 	list.length = len;
@@ -2036,13 +2023,13 @@ static int srp_post_send(struct srp_rdma_ch *ch, struct srp_iu *iu, int len)
 	wr.opcode     = IB_WR_SEND;
 	wr.send_flags = IB_SEND_SIGNALED;
 
-	return ib_post_send(ch->qp, &wr, &bad_wr);
+	return ib_post_send(ch->qp, &wr, NULL);
 }
 
 static int srp_post_recv(struct srp_rdma_ch *ch, struct srp_iu *iu)
 {
 	struct srp_target_port *target = ch->target;
-	struct ib_recv_wr wr, *bad_wr;
+	struct ib_recv_wr wr;
 	struct ib_sge list;
 
 	list.addr   = iu->dma;
@@ -2056,7 +2043,7 @@ static int srp_post_recv(struct srp_rdma_ch *ch, struct srp_iu *iu)
 	wr.sg_list  = &list;
 	wr.num_sge  = 1;
 
-	return ib_post_recv(ch->qp, &wr, &bad_wr);
+	return ib_post_recv(ch->qp, &wr, NULL);
 }
 
 static void srp_process_rsp(struct srp_rdma_ch *ch, struct srp_rsp *rsp)
@@ -2561,7 +2548,7 @@ error:
 }
 
 static void srp_ib_cm_rej_handler(struct ib_cm_id *cm_id,
-				  struct ib_cm_event *event,
+				  const struct ib_cm_event *event,
 				  struct srp_rdma_ch *ch)
 {
 	struct srp_target_port *target = ch->target;
@@ -2646,7 +2633,8 @@ static void srp_ib_cm_rej_handler(struct ib_cm_id *cm_id,
 	}
 }
 
-static int srp_ib_cm_handler(struct ib_cm_id *cm_id, struct ib_cm_event *event)
+static int srp_ib_cm_handler(struct ib_cm_id *cm_id,
+			     const struct ib_cm_event *event)
 {
 	struct srp_rdma_ch *ch = cm_id->context;
 	struct srp_target_port *target = ch->target;
@@ -2957,7 +2945,6 @@ static int srp_reset_device(struct scsi_cmnd *scmnd)
 {
 	struct srp_target_port *target = host_to_target(scmnd->device->host);
 	struct srp_rdma_ch *ch;
-	int i;
 	u8 status;
 
 	shost_printk(KERN_ERR, target->scsi_host, "SRP reset_device called\n");
@@ -2968,15 +2955,6 @@ static int srp_reset_device(struct scsi_cmnd *scmnd)
 		return FAILED;
 	if (status)
 		return FAILED;
-
-	for (i = 0; i < target->ch_count; i++) {
-		ch = &target->ch[i];
-		for (i = 0; i < target->req_ring_size; ++i) {
-			struct srp_request *req = &ch->req_ring[i];
-
-			srp_finish_req(ch, req, scmnd->device, DID_RESET << 16);
-		}
-	}
 
 	return SUCCESS;
 }
@@ -3130,7 +3108,8 @@ static ssize_t show_local_ib_device(struct device *dev,
 {
 	struct srp_target_port *target = host_to_target(class_to_shost(dev));
 
-	return sprintf(buf, "%s\n", target->srp_host->srp_dev->dev->name);
+	return sprintf(buf, "%s\n",
+		       dev_name(&target->srp_host->srp_dev->dev->dev));
 }
 
 static ssize_t show_ch_count(struct device *dev, struct device_attribute *attr,
@@ -3993,7 +3972,7 @@ static ssize_t show_ibdev(struct device *dev, struct device_attribute *attr,
 {
 	struct srp_host *host = container_of(dev, struct srp_host, dev);
 
-	return sprintf(buf, "%s\n", host->srp_dev->dev->name);
+	return sprintf(buf, "%s\n", dev_name(&host->srp_dev->dev->dev));
 }
 
 static DEVICE_ATTR(ibdev, S_IRUGO, show_ibdev, NULL);
@@ -4025,7 +4004,8 @@ static struct srp_host *srp_add_port(struct srp_device *device, u8 port)
 
 	host->dev.class = &srp_class;
 	host->dev.parent = device->dev->dev.parent;
-	dev_set_name(&host->dev, "srp-%s-%d", device->dev->name, port);
+	dev_set_name(&host->dev, "srp-%s-%d", dev_name(&device->dev->dev),
+		     port);
 
 	if (device_register(&host->dev))
 		goto free_host;
@@ -4101,7 +4081,7 @@ static void srp_add_one(struct ib_device *device)
 	srp_dev->mr_max_size	= srp_dev->mr_page_size *
 				   srp_dev->max_pages_per_mr;
 	pr_debug("%s: mr_page_shift = %d, device->max_mr_size = %#llx, device->max_fast_reg_page_list_len = %u, max_pages_per_mr = %d, mr_max_size = %#x\n",
-		 device->name, mr_page_shift, attr->max_mr_size,
+		 dev_name(&device->dev), mr_page_shift, attr->max_mr_size,
 		 attr->max_fast_reg_page_list_len,
 		 srp_dev->max_pages_per_mr, srp_dev->mr_max_size);
 

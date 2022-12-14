@@ -39,10 +39,8 @@ static ssize_t show_num_page_fault_pages(struct device *device,
 					 struct device_attribute *attr,
 					 char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.num_page_fault_pages));
@@ -54,10 +52,8 @@ static ssize_t show_num_invalidation_pages(struct device *device,
 					   struct device_attribute *attr,
 					   char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.num_invalidation_pages));
@@ -69,10 +65,8 @@ static ssize_t show_num_invalidations(struct device *device,
 				      struct device_attribute *attr,
 				      char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.num_invalidations));
@@ -83,10 +77,8 @@ static ssize_t show_invalidations_faults_contentions(struct device *device,
 						     struct device_attribute *attr,
 						     char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.invalidations_faults_contentions));
@@ -98,10 +90,8 @@ static ssize_t show_num_page_faults(struct device *device,
 				    struct device_attribute *attr,
 				    char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.num_page_faults));
@@ -112,10 +102,8 @@ static ssize_t show_num_prefetches_handled(struct device *device,
 					   struct device_attribute *attr,
 					   char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.num_prefetches_handled));
@@ -127,10 +115,8 @@ static ssize_t show_num_prefetch_pages(struct device *device,
 				       struct device_attribute *attr,
 				       char *buf)
 {
-	struct ib_uverbs_device *dev = dev_get_drvdata(device);
-
-	if (!dev)
-		return -ENODEV;
+	struct ib_uverbs_device *dev =
+			container_of(device, struct ib_uverbs_device, dev);
 
 	return sprintf(buf, "%d\n",
 		       atomic_read(&dev->ib_dev->odp_statistics.num_prefetch_pages));

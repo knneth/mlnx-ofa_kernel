@@ -1,0 +1,37 @@
+From: Nitzan Carmi <nitzanc@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-file.c
+
+Change-Id: Ia0735339e09b80725da0125d7f8aeb775727d380
+---
+ drivers/nvme/target/io-cmd-file.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/target/io-cmd-file.c
++++ b/drivers/nvme/target/io-cmd-file.c
+@@ -4,6 +4,7 @@
+  * Copyright (c) 2017-2018 Western Digital Corporation or its
+  * affiliates.
+  */
++#ifdef HAVE_FS_HAS_KIOCB
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -45,9 +46,12 @@ int nvmet_file_ns_enable(struct nvmet_ns
+ 				ns->device_path, PTR_ERR(ns->file));
+ 		return PTR_ERR(ns->file);
+ 	}
+-
++#ifdef VFS_GETATTR_HAS_4_PARAMS
+ 	ret = vfs_getattr(&ns->file->f_path,
+ 			&stat, STATX_SIZE, AT_STATX_FORCE_SYNC);
++#else
++	ret = vfs_getattr(&ns->file->f_path, &stat);
++#endif
+ 	if (ret)
+ 		goto err;
+ 
+@@ -348,3 +352,4 @@ u16 nvmet_file_parse_io_cmd(struct nvmet
+ 		return NVME_SC_INVALID_OPCODE | NVME_SC_DNR;
+ 	}
+ }
++#endif /* HAVE_FS_HAS_KIOCB */

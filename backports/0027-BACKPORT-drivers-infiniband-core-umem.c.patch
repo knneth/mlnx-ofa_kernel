@@ -1,0 +1,165 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
+
+Change-Id: I21e5866ce3102df0e005fccb882bf55844072c36
+---
+ drivers/infiniband/core/umem.c | 65 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 65 insertions(+)
+
+--- a/drivers/infiniband/core/umem.c
++++ b/drivers/infiniband/core/umem.c
+@@ -207,18 +207,30 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 	struct page **page_list;
+ 	struct vm_area_struct **vma_list;
+ 	unsigned long lock_limit;
++#ifdef HAVE_PINNED_VM
+ 	unsigned long new_pinned;
++#endif
+ 	unsigned long cur_base;
+ 	struct mm_struct *mm;
+ 	unsigned long npages;
+ 	int ret;
+ 	int i;
++#ifdef HAVE_STRUCT_DMA_ATTRS
++	DEFINE_DMA_ATTRS(attrs);
++#else
+ 	unsigned long dma_attrs = 0;
++#endif
+ 	struct scatterlist *sg, *sg_list_start;
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	unsigned int gup_flags = FOLL_WRITE;
++#endif
+ 
+ 	if (dmasync)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++		dma_set_attr(DMA_ATTR_WRITE_BARRIER, &attrs);
++#else
+ 		dma_attrs |= DMA_ATTR_WRITE_BARRIER;
++#endif
+ 
+ 	/*
+ 	 * If the combination of the addr and size requested for this memory
+@@ -298,15 +310,24 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+ 
+ 	down_write(&mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
+ 	if (check_add_overflow(mm->pinned_vm, npages, &new_pinned) ||
+ 	    (new_pinned > lock_limit && !capable(CAP_IPC_LOCK))) {
++#else
++	current->mm->locked_vm += npages;
++	if ((current->mm->locked_vm > lock_limit) && !capable(CAP_IPC_LOCK)) {
++#endif
+ 		up_write(&mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
+ 		pr_debug("%s: requested to lock(%lu) while limit is(%lu)\n",
+ 		       __func__, new_pinned, lock_limit);
++#endif
+ 		ret = -ENOMEM;
+ 		goto out;
+ 	}
++#ifdef HAVE_PINNED_VM
+ 	mm->pinned_vm = new_pinned;
++#endif
+ 	up_write(&mm->mmap_sem);
+ 
+ 	cur_base = addr & PAGE_MASK;
+@@ -318,22 +339,50 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 		goto vma;
+ 	}
+ 
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	if (!umem->writable)
+ 		gup_flags |= FOLL_FORCE;
++#endif
+ 
+ 	sg_list_start = umem->sg_head.sgl;
+ 
+ 	while (npages) {
+ 		down_read(&mm->mmap_sem);
++#ifdef HAVE_GET_USER_PAGES_8_PARAMS
++		ret = get_user_pages(current, current->mm, cur_base,
++				     min_t(unsigned long, npages,
++					   PAGE_SIZE / sizeof (struct page *)),
++				     1, !umem->writable, page_list, vma_list);
++#else
++#ifdef HAVE_GET_USER_PAGES_LONGTERM
+ 		ret = get_user_pages_longterm(cur_base,
++#else
++#ifdef HAVE_GET_USER_PAGES_7_PARAMS
++		ret = get_user_pages(current, current->mm, cur_base,
++#else
++		ret = get_user_pages(cur_base,
++#endif
++#endif
+ 				     min_t(unsigned long, npages,
+ 					   PAGE_SIZE / sizeof (struct page *)),
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 				     gup_flags, page_list, vma_list);
++#else
++				     1, !umem->writable, page_list, vma_list);
++#endif
++#endif
+ 		if (ret < 0) {
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 			pr_debug("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
+ 			       min_t(unsigned long, npages,
+ 				     PAGE_SIZE / sizeof(struct page *)),
+ 			       gup_flags);
++#else
++			pr_err("%s: failed to get user pages, nr_pages=%lu\n", __func__,
++			       min_t(unsigned long, npages,
++				     PAGE_SIZE / sizeof(struct page *)));
++#endif
++
+ 			up_read(&mm->mmap_sem);
+ 			goto umem_release;
+ 		}
+@@ -361,7 +410,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
+ 				  umem->sg_head.sgl,
+ 				  umem->npages,
+ 				  DMA_BIDIRECTIONAL,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++				  &attrs);
++#else
+ 				  dma_attrs);
++#endif
+ 
+ 	if (!umem->nmap) {
+ 		pr_err("%s: failed to map scatterlist, npages=%d\n", __func__,
+@@ -377,7 +430,11 @@ umem_release:
+ 	__ib_umem_release(context->device, umem, 0);
+ vma:
+ 	down_write(&mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
+ 	mm->pinned_vm -= ib_umem_num_pages(umem);
++#else
++	mm->locked_vm -= ib_umem_num_pages(umem);
++#endif
+ 	up_write(&mm->mmap_sem);
+ out:
+ 	if (vma_list)
+@@ -420,7 +477,11 @@ static void ib_umem_release_defer(struct
+ 	struct ib_umem *umem = container_of(work, struct ib_umem, work);
+ 
+ 	down_write(&umem->owning_mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
+ 	umem->owning_mm->pinned_vm -= ib_umem_num_pages(umem);
++#else
++	umem->owning_mm->locked_vm -= ib_umem_num_pages(umem);
++#endif
+ 	up_write(&umem->owning_mm->mmap_sem);
+ 
+ 	__ib_umem_release_tail(umem);
+@@ -464,7 +525,11 @@ void ib_umem_release(struct ib_umem *ume
+ 	} else {
+ 		down_write(&umem->owning_mm->mmap_sem);
+ 	}
++#ifdef HAVE_PINNED_VM
+ 	umem->owning_mm->pinned_vm -= ib_umem_num_pages(umem);
++#else
++	umem->owning_mm->locked_vm -= ib_umem_num_pages(umem);
++#endif
+ 	up_write(&umem->owning_mm->mmap_sem);
+ 
+ 	__ib_umem_release_tail(umem);

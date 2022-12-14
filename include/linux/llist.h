@@ -3,9 +3,21 @@
 
 #include <linux/version.h>
 
+#ifndef member_address_is_nonnull
+#define member_address_is_nonnull(ptr, member)  \
+	((uintptr_t)(ptr) + offsetof(typeof(*(ptr)), member) != 0)
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
 #include_next <linux/llist.h>
 
+#ifndef llist_for_each_entry_safe
+#define llist_for_each_entry_safe(pos, n, node, member)				\
+	for (pos = llist_entry((node), typeof(*pos), member);			\
+		member_address_is_nonnull(pos, member) &&			\
+		(n = llist_entry(pos->member.next, typeof(*n), member), true);	\
+		 pos = n)
+#endif
 #else
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(3,1,0)) || (defined(CONFIG_SUSE_KERNEL) && defined(CONFIG_COMPAT_SLES_11_2))
@@ -17,8 +29,14 @@ extern bool llist_add_batch(struct llist_node *new_first,
 #define llist_del_first LINUX_BACKPORT(llist_del_first)
 extern struct llist_node *llist_del_first(struct llist_head *head);
 
+#ifndef llist_for_each_entry_safe
+#define llist_for_each_entry_safe(pos, n, node, member)				\
+	for (pos = llist_entry((node), typeof(*pos), member);			\
+		member_address_is_nonnull(pos, member) &&			\
+		(n = llist_entry(pos->member.next, typeof(*n), member), true);	\
+		 pos = n)
+#endif
 #else
-
 #ifndef LLIST_H
 #define LLIST_H
 /*
@@ -157,6 +175,13 @@ static inline void init_llist_head(struct llist_head *list)
 	     (pos) = llist_entry((pos)->member.next, typeof(*(pos)), member))
 #endif
 
+#ifndef llist_for_each_entry_safe
+#define llist_for_each_entry_safe(pos, n, node, member)				\
+	for (pos = llist_entry((node), typeof(*pos), member);			\
+		member_address_is_nonnull(pos, member) &&			\
+		(n = llist_entry(pos->member.next, typeof(*n), member), true);	\
+		 pos = n)
+#endif
 /**
  * llist_empty - tests whether a lock-less list is empty
  * @head:	the list to test

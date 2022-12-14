@@ -53,9 +53,14 @@ struct nvmet_rdma_backend_ctrl {
 	bool			  restart;
 };
 
-struct nvmet_rdma_offload_ctrl {
+struct nvmet_rdma_offload_ctx {
 	struct nvmet_rdma_xrq	*xrq;
 	struct list_head	entry;
+};
+
+struct nvmet_rdma_offload_ctrl {
+	struct list_head	ctx_list;
+	struct mutex		ctx_mutex;
 };
 
 struct nvmet_rdma_staging_buf_pool {
@@ -77,7 +82,7 @@ struct nvmet_rdma_xrq {
 	struct nvmet_rdma_device	*ndev;
 	struct nvmet_port		*port;
 	struct nvmet_subsys		*subsys;
-	struct list_head		offload_ctrls_list;
+	int				offload_ctrls_cnt;
 	struct mutex			offload_ctrl_mutex;
 	struct list_head		be_ctrls_list;
 	struct mutex			be_mutex;

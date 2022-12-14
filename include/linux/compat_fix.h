@@ -30,4 +30,7 @@
 #define CONFIG_COMPAT_RHLTABLE
 #endif
 
+#ifdef CONFIG_COMPAT_TCF_PEDIT_MOD
+#define HAVE_TCF_PEDIT_TCFP_KEYS_EX 1
+#endif
 #endif /* COMPAT_FIX_H */

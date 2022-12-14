@@ -340,7 +340,7 @@ struct netdev_phys_item_id {
 };
 #endif
 
-#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
+#if defined(CONFIG_COMPAT_CLS_FLOWER_MOD) && !defined(CONFIG_NET_SCHED_NEW)
 enum {
 	TC_SETUP_MQPRIO,
 	TC_SETUP_CLSU32,

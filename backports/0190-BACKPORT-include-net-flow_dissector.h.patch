@@ -1,0 +1,24 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: include/net/flow_dissector.h
+
+Change-Id: I8dec325cfcc43428ef314074f05d6e14501cfaf4
+---
+ include/net/flow_dissector.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/include/net/flow_dissector.h
++++ b/include/net/flow_dissector.h
+@@ -108,6 +108,7 @@
+ #define skb_get_hash_perturb LINUX_BACKPORT(skb_get_hash_perturb)
+ #endif /* CONFIG_NET_SCHED_NEW */
+ #endif /* HAVE_SKB_FLOW_DISSECT */
++
+ /**
+  * struct flow_dissector_key_control:
+  * @thoff: Transport header offset
+@@ -415,5 +416,4 @@ void skb_flow_dissector_init(struct flow
+ int init_default_flow_dissectors(void);
+ 
+ #endif
+-
+ #endif

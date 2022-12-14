@@ -74,7 +74,7 @@ static int get_pas_size(struct mlx5_srq_attr *in)
 	u32 rq_sz	  = 1 << (log_srq_size + 4 + log_rq_stride);
 	u32 page_size	  = 1 << log_page_size;
 	u32 rq_sz_po      = rq_sz + (page_offset * po_quanta);
-	u32 rq_num_pas	  = (rq_sz_po + page_size - 1) / page_size;
+	u32 rq_num_pas    = DIV_ROUND_UP(rq_sz_po, page_size);
 
 	return rq_num_pas * sizeof(u64);
 }
@@ -483,7 +483,6 @@ static int destroy_xrq_cmd(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq)
 
 	MLX5_SET(destroy_xrq_in, in, opcode, MLX5_CMD_OP_DESTROY_XRQ);
 	MLX5_SET(destroy_xrq_in, in, xrqn,   srq->srqn);
-	MLX5_SET(destroy_xrq_in, in, uid, srq->uid);
 
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 }
@@ -545,11 +544,11 @@ static int create_xrq_cmd(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 	err = mlx5_cmd_exec(dev, create_in, inlen, create_out,
 			    sizeof(create_out));
 	kvfree(create_in);
+
 	if (err)
 		return err;
 
 	srq->srqn = MLX5_GET(create_xrq_out, create_out, xrqn);
-	srq->uid = in->uid;
 
 	if (in->type == IB_EXP_SRQT_NVMF) {
 		spin_lock_init(&srq->lock);

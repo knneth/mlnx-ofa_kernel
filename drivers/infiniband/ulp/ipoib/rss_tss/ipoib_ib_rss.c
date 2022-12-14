@@ -37,14 +37,13 @@ static int ipoib_ib_post_receive_rss(struct net_device *dev,
 				     struct ipoib_recv_ring *recv_ring, int id)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-	struct ib_recv_wr *bad_wr;
 	int ret;
 
 	recv_ring->rx_wr.wr_id   = id | IPOIB_OP_RECV;
 	recv_ring->rx_sge[0].addr = recv_ring->rx_ring[id].mapping[0];
 	recv_ring->rx_sge[1].addr = recv_ring->rx_ring[id].mapping[1];
 
-	ret = ib_post_recv(recv_ring->recv_qp, &recv_ring->rx_wr, &bad_wr);
+	ret = ib_post_recv(recv_ring->recv_qp, &recv_ring->rx_wr, NULL);
 	if (unlikely(ret)) {
 		ipoib_warn(priv, "receive failed for buf %d (%d)\n", id, ret);
 		ipoib_ud_dma_unmap_rx(priv, recv_ring->rx_ring[id].mapping);
@@ -273,6 +272,7 @@ static void ipoib_ib_handle_tx_wc_rss(struct ipoib_send_ring *send_ring,
 	send_ring->stats.tx_bytes += tx_req->skb->len;
 
 	dev_kfree_skb_any(tx_req->skb);
+	tx_req->skb = NULL;
 
 	++send_ring->tx_tail;
 	if (unlikely(__netif_subqueue_stopped(dev, send_ring->index) &&
@@ -410,7 +410,6 @@ static inline int post_send_rss(struct ipoib_send_ring *send_ring,
 				struct ipoib_tx_buf *tx_req,
 				void *head, int hlen)
 {
-	struct ib_send_wr *bad_wr;
 	struct sk_buff *skb = tx_req->skb;
 
 	if (tx_req->is_inline) {
@@ -433,7 +432,7 @@ static inline int post_send_rss(struct ipoib_send_ring *send_ring,
 	} else
 		send_ring->tx_wr.wr.opcode = IB_WR_SEND;
 
-	return ib_post_send(send_ring->send_qp, &send_ring->tx_wr.wr, &bad_wr);
+	return ib_post_send(send_ring->send_qp, &send_ring->tx_wr.wr, NULL);
 }
 
 int ipoib_send_rss(struct net_device *dev, struct sk_buff *skb,
@@ -760,9 +759,16 @@ static void ipoib_ib_send_ring_stop(struct ipoib_dev_priv *priv)
 		while ((int) tx_ring->tx_tail - (int) tx_ring->tx_head < 0) {
 			tx_req = &tx_ring->tx_ring[tx_ring->tx_tail &
 				  (priv->sendq_size - 1)];
+			if (!tx_req->skb) {
+				ipoib_dbg(priv,
+					  "timing out; tx skb already empty - continue\n");
+				++tx_ring->tx_tail;
+				continue;
+			}
 			if (!tx_req->is_inline)
 				ipoib_dma_unmap_tx(priv, tx_req);
 			dev_kfree_skb_any(tx_req->skb);
+			tx_req->skb = NULL;
 			++tx_ring->tx_tail;
 		}
 		tx_ring++;

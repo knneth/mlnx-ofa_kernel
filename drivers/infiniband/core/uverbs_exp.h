@@ -17,13 +17,11 @@ struct ib_udct_object {
 };
 
 typedef int (*uverbs_ex_cmd)(struct ib_uverbs_file *file,
-			     struct ib_device *ib_dev,
-			     struct ib_udata *ucore,
-			     struct ib_udata *uhw);
+					struct ib_udata *ucore,
+					struct ib_udata *uhw);
 
 #define IB_UVERBS_DECLARE_EXP_CMD(name)				\
 	int ib_uverbs_exp_##name(struct ib_uverbs_file *file,	\
-				struct ib_device *ib_dev,	\
 				 struct ib_udata *ucore,	\
 				 struct ib_udata *uhw)
 

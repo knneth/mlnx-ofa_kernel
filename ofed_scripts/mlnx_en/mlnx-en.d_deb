@@ -489,6 +489,10 @@ start()
         exit 1
     fi
 
+    if [ -x /sbin/mlnx_eswitch_set  ]; then
+        /sbin/mlnx_eswitch_set
+    fi
+
     if [ $my_rc -eq 0 -a "$HAS_IFUP" = "1" ]; then
         # Bring up network interfaces
         sleep 1

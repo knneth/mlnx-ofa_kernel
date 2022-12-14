@@ -1,0 +1,67 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ib.c
+
+Change-Id: I2f1d54414fd787c2cdc506f85e5233af0ac2430a
+---
+ drivers/infiniband/ulp/ipoib/ipoib_ib.c | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_ib.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_ib.c
+@@ -202,7 +202,10 @@ static inline void ipoib_create_repath_e
+ 	else
+ 		kfree(arp_repath);
+ }
+-
++#ifndef HAVE_NETDEV_RX_HANDLER_REGISTER
++int (*eth_ipoib_handle_frame_hook)(struct sk_buff **skb) = NULL;
++EXPORT_SYMBOL_GPL(eth_ipoib_handle_frame_hook);
++#endif
+ static void ipoib_ib_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+@@ -283,7 +286,10 @@ static void ipoib_ib_handle_rx_wc(struct
+ 	}
+ 
+ 	skb_pull(skb, IB_GRH_BYTES);
+-
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)) && ! defined(HAVE_SK_BUFF_CSUM_LEVEL)
++	/* indicate size for reasmb, only for old kernels */
++	skb->truesize = SKB_TRUESIZE(skb->len);
++#endif
+ 	skb->protocol = ((struct ipoib_header *) skb->data)->proto;
+ 	skb_add_pseudo_hdr(skb);
+ 
+@@ -304,9 +310,21 @@ static void ipoib_ib_handle_rx_wc(struct
+ 	if (unlikely(dev->priv_flags & IFF_EIPOIB_VIF)) {
+ 		set_skb_oob_cb_data(skb, wc, &priv->recv_napi);
+ 		/* the registered handler will take care of the skb.*/
++#ifndef HAVE_NETDEV_RX_HANDLER_REGISTER
++		if (eth_ipoib_handle_frame_hook)
++			eth_ipoib_handle_frame_hook(&skb);
++		else
++#endif
+ 		netif_receive_skb(skb);
+ 	} else {
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++		if (dev->features & NETIF_F_LRO)
++			lro_receive_skb(&priv->lro.lro_mgr, skb, NULL);
++		else
++			netif_receive_skb(skb);
++#else
+ 		napi_gro_receive(&priv->recv_napi, skb);
++#endif
+ 	}
+ 
+ repost:
+@@ -526,6 +544,10 @@ poll_more:
+ 	}
+ 
+ 	if (done < budget) {
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++		if (dev->features & NETIF_F_LRO)
++			lro_flush_all(&priv->lro.lro_mgr);
++#endif
+ 		napi_complete(napi);
+ 		if (unlikely(ib_req_notify_cq(priv->recv_cq,
+ 					      IB_CQ_NEXT_COMP |

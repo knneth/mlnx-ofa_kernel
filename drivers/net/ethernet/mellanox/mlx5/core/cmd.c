@@ -318,13 +318,16 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_DEALLOC_MODIFY_HEADER_CONTEXT:
 	case MLX5_CMD_OP_FPGA_DESTROY_QP:
 	case MLX5_CMD_OP_SET_DC_CNAK_TRACE:
+	case MLX5_CMD_OP_DESTROY_GENERAL_OBJECT:
+	case MLX5_CMD_OP_DEALLOC_MEMIC:
 	case MLX5_CMD_OP_PAGE_FAULT_RESUME:
 	case MLX5_CMD_OP_DESTROY_CAPI_PEC:
 	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_PARAMS:
 	case MLX5_CMD_OP_SET_DIAGNOSTIC_PARAMS:
 	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_COUNTERS:
-	case MLX5_CMD_OP_DESTROY_GENERAL_OBJECT:
-	case MLX5_CMD_OP_DEALLOC_MEMIC:
+	case MLX5_CMD_OP_QUERY_HOST_PARAMS:
+	case MLX5_CMD_OP_QUERY_HCA_VPORT_PKEY:
+	case MLX5_CMD_OP_ACCESS_REG:
 		return MLX5_CMD_STAT_OK;
 
 	case MLX5_CMD_OP_QUERY_HCA_CAP:
@@ -379,7 +382,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_CONTEXT:
 	case MLX5_CMD_OP_MODIFY_HCA_VPORT_CONTEXT:
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_GID:
-	case MLX5_CMD_OP_QUERY_HCA_VPORT_PKEY:
 	case MLX5_CMD_OP_QUERY_VNIC_ENV:
 	case MLX5_CMD_OP_QUERY_VPORT_COUNTER:
 	case MLX5_CMD_OP_ALLOC_Q_COUNTER:
@@ -393,7 +395,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_ALLOC_PD:
 	case MLX5_CMD_OP_ALLOC_UAR:
 	case MLX5_CMD_OP_CONFIG_INT_MODERATION:
-	case MLX5_CMD_OP_ACCESS_REG:
 	case MLX5_CMD_OP_ATTACH_TO_MCG:
 	case MLX5_CMD_OP_GET_DROPPED_PACKET_LOG:
 	case MLX5_CMD_OP_MAD_IFC:
@@ -480,6 +481,7 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(SET_HCA_CAP);
 	MLX5_COMMAND_STR_CASE(QUERY_ISSI);
 	MLX5_COMMAND_STR_CASE(SET_ISSI);
+	MLX5_COMMAND_STR_CASE(SET_DRIVER_VERSION);
 	MLX5_COMMAND_STR_CASE(CREATE_MKEY);
 	MLX5_COMMAND_STR_CASE(QUERY_MKEY);
 	MLX5_COMMAND_STR_CASE(DESTROY_MKEY);
@@ -640,9 +642,6 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(QUERY_NVMF_NAMESPACE_CONTEXT);
 	MLX5_COMMAND_STR_CASE(CREATE_CAPI_PEC);
 	MLX5_COMMAND_STR_CASE(DESTROY_CAPI_PEC);
-	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_PARAMS);
-	MLX5_COMMAND_STR_CASE(SET_DIAGNOSTIC_PARAMS);
-	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_COUNTERS);
 	MLX5_COMMAND_STR_CASE(CREATE_GENERAL_OBJECT);
 	MLX5_COMMAND_STR_CASE(DESTROY_GENERAL_OBJECT);
 	MLX5_COMMAND_STR_CASE(MODIFY_GENERAL_OBJECT);
@@ -650,7 +649,11 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(QUERY_MODIFY_HEADER_CONTEXT);
 	MLX5_COMMAND_STR_CASE(ALLOC_MEMIC);
 	MLX5_COMMAND_STR_CASE(DEALLOC_MEMIC);
+	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_PARAMS);
+	MLX5_COMMAND_STR_CASE(SET_DIAGNOSTIC_PARAMS);
+	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_COUNTERS);
 	MLX5_COMMAND_STR_CASE(SYNC_STEERING);
+	MLX5_COMMAND_STR_CASE(QUERY_HOST_PARAMS);
 	default: return "unknown command opcode";
 	}
 }
@@ -762,14 +765,40 @@ static int mlx5_cmd_check(struct mlx5_core_dev *dev, void *in, void *out)
 	if (!uid &&
 	    opcode != MLX5_CMD_OP_DESTROY_MKEY &&
 	    !(opcode == MLX5_CMD_OP_ALLOC_MEMIC && status == MLX5_CMD_STAT_NO_RES_ERR))
-		mlx5_core_err(dev,
-		      "%s(0x%x) op_mod(0x%x) failed, status %s(0x%x), syndrome (0x%x)\n",
-		      mlx5_command_str(opcode),
-		      opcode, op_mod,
-		      cmd_status_str(status),
-		      status,
-		      syndrome);
+		mlx5_core_err_rl(dev,
+			"%s(0x%x) op_mod(0x%x) failed, status %s(0x%x), syndrome (0x%x)\n",
+			mlx5_command_str(opcode), opcode, op_mod,
+			cmd_status_str(status), status, syndrome);
 	else
+#ifdef CONFIG_BF_DEVICE_EMULATION
+	if (mlx5_core_is_dev_emulation_manager(dev)) {
+		/*
+		 * Temporary: until nvme emulation matures we always want to
+		 * see command failures
+		 */
+		if (status == MLX5_CMD_STAT_BAD_SYS_STATE_ERR &&
+		    syndrome == 0x408b33)
+			/*
+			 * During FLR we can get a lot of failures because FW
+			 * already cleaned host resources (syndrome 0x408b33).
+			 */
+			mlx5_core_dbg(dev,
+				"%s(0x%x) op_mod(0x%x) failed, status %s(0x%x), syndrome (0x%x)\n",
+				mlx5_command_str(opcode),
+				opcode, op_mod,
+				cmd_status_str(status),
+				status,
+				syndrome);
+		else
+			mlx5_core_warn(dev,
+				"%s(0x%x) op_mod(0x%x) failed, status %s(0x%x), syndrome (0x%x)\n",
+				mlx5_command_str(opcode),
+				opcode, op_mod,
+				cmd_status_str(status),
+				status,
+				syndrome);
+	} else
+#endif
 		mlx5_core_dbg(dev,
 		      "%s(0x%x) op_mod(0x%x) failed, status %s(0x%x), syndrome (0x%x)\n",
 		      mlx5_command_str(opcode),
@@ -1087,7 +1116,10 @@ static ssize_t dbg_write(struct file *filp, const char __user *buf,
 	if (!dbg->in_msg || !dbg->out_msg)
 		return -ENOMEM;
 
-	if (copy_from_user(lbuf, buf, sizeof(lbuf)))
+	if (count < sizeof(lbuf) - 1)
+		return -EINVAL;
+
+	if (copy_from_user(lbuf, buf, sizeof(lbuf) - 1))
 		return -EFAULT;
 
 	lbuf[sizeof(lbuf) - 1] = 0;
@@ -1291,21 +1323,12 @@ static ssize_t data_read(struct file *filp, char __user *buf, size_t count,
 {
 	struct mlx5_core_dev *dev = filp->private_data;
 	struct mlx5_cmd_debug *dbg = &dev->cmd.dbg;
-	int copy;
-
-	if (*pos)
-		return 0;
 
 	if (!dbg->out_msg)
 		return -ENOMEM;
 
-	copy = min_t(int, count, dbg->outlen);
-	if (copy_to_user(buf, dbg->out_msg, copy))
-		return -EFAULT;
-
-	*pos += copy;
-
-	return copy;
+	return simple_read_from_buffer(buf, count, pos, dbg->out_msg,
+				       dbg->outlen);
 }
 
 static const struct file_operations dfops = {
@@ -1323,19 +1346,11 @@ static ssize_t outlen_read(struct file *filp, char __user *buf, size_t count,
 	char outlen[8];
 	int err;
 
-	if (*pos)
-		return 0;
-
 	err = snprintf(outlen, sizeof(outlen), "%d", dbg->outlen);
 	if (err < 0)
 		return err;
 
-	if (copy_to_user(buf, &outlen, err))
-		return -EFAULT;
-
-	*pos += err;
-
-	return err;
+	return simple_read_from_buffer(buf, count, pos, outlen, err);
 }
 
 static ssize_t outlen_write(struct file *filp, const char __user *buf,
@@ -1762,6 +1777,10 @@ out_in:
 	return err;
 }
 
+int mlx5_cmd_exec_cb_legacy(struct mlx5_core_dev *dev, void *in, int in_size,
+		void *out, int out_size, mlx5_cmd_cbk_t callback,
+		void *context);
+
 int mlx5_cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 		  int out_size)
 {
@@ -1772,12 +1791,66 @@ int mlx5_cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 }
 EXPORT_SYMBOL(mlx5_cmd_exec);
 
-int mlx5_cmd_exec_cb(struct mlx5_core_dev *dev, void *in, int in_size,
-		     void *out, int out_size, mlx5_cmd_cbk_t callback,
-		     void *context)
+void mlx5_cmd_init_async_ctx(struct mlx5_core_dev *dev,
+			     struct mlx5_async_ctx *ctx)
+{
+	ctx->dev = dev;
+	/* Starts at 1 to avoid doing wake_up if we are not cleaning up */
+	atomic_set(&ctx->num_inflight, 1);
+	init_waitqueue_head(&ctx->wait);
+}
+EXPORT_SYMBOL(mlx5_cmd_init_async_ctx);
+
+/**
+ * mlx5_cmd_cleanup_async_ctx - Clean up an async_ctx
+ * @ctx: The ctx to clean
+ *
+ * Upon return all callbacks given to mlx5_cmd_exec_cb() have been called. The
+ * caller must ensure that mlx5_cmd_exec_cb() is not called during or after
+ * the call mlx5_cleanup_async_ctx().
+ */
+void mlx5_cmd_cleanup_async_ctx(struct mlx5_async_ctx *ctx)
+{
+	atomic_dec(&ctx->num_inflight);
+	wait_event(ctx->wait, atomic_read(&ctx->num_inflight) == 0);
+}
+EXPORT_SYMBOL(mlx5_cmd_cleanup_async_ctx);
+
+static void mlx5_cmd_exec_cb_handler(int status, void *_work)
+{
+	struct mlx5_async_work *work = _work;
+	struct mlx5_async_ctx *ctx = work->ctx;
+
+	work->user_callback(status, work);
+	if (atomic_dec_and_test(&ctx->num_inflight))
+		wake_up(&ctx->wait);
+}
+
+int mlx5_cmd_exec_cb_legacy(struct mlx5_core_dev *dev, void *in, int in_size,
+		void *out, int out_size, mlx5_cmd_cbk_t callback,
+		void *context)
 {
 	return cmd_exec(dev, in, in_size, out, out_size, callback, context,
 			false);
+}
+EXPORT_SYMBOL(mlx5_cmd_exec_cb_legacy);
+
+int mlx5_cmd_exec_cb(struct mlx5_async_ctx *ctx, void *in, int in_size,
+		     void *out, int out_size, mlx5_async_cbk_t callback,
+		     struct mlx5_async_work *work)
+{
+	int ret;
+
+	work->ctx = ctx;
+	work->user_callback = callback;
+	if (WARN_ON(!atomic_inc_not_zero(&ctx->num_inflight)))
+		return -EIO;
+	ret = cmd_exec(ctx->dev, in, in_size, out, out_size,
+		       mlx5_cmd_exec_cb_handler, work, false);
+	if (ret && atomic_dec_and_test(&ctx->num_inflight))
+		wake_up(&ctx->wait);
+
+	return ret;
 }
 EXPORT_SYMBOL(mlx5_cmd_exec_cb);
 

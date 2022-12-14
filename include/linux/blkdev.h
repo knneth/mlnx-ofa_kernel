@@ -75,4 +75,11 @@ static inline bool blk_queue_flag_test_and_set(unsigned int flag, struct request
 }
 #endif
 
+#ifndef HAVE_QUEUE_FLAG_PCI_P2PDMA
+static inline unsigned int blk_queue_pci_p2pdma(struct request_queue *q)
+{
+	return 0;
+}
+#endif
+
 #endif /* _COMPAT_LINUX_BLKDEV_H */

@@ -103,10 +103,10 @@ struct mlx5_srq_attr {
 	u32 tm_next_tag;
 	u32 tm_hw_phase_cnt;
 	u32 tm_sw_phase_cnt;
+	u16 uid;
 	struct mlx5_nvmf_attr nvmf;
 	struct mlx5_dc_offload_params dc_op;
 	struct mlx5_striding_recv_wq	striding_recv_wq;
-	u16 uid;
 };
 
 struct mlx5_core_dev;

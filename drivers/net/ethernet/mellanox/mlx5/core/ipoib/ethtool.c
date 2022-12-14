@@ -234,6 +234,8 @@ static int mlx5i_get_link_ksettings(struct net_device *netdev,
 	return 0;
 }
 
+/*
+ * Talat TODO Add it to Backports
 static int mlx5i_get_settings(struct net_device *netdev,
 			      struct ethtool_cmd *ecmd)
 {
@@ -252,7 +254,7 @@ static int mlx5i_get_settings(struct net_device *netdev,
 		return -EINVAL;
 
 	ecmd->duplex = DUPLEX_FULL;
-	ecmd->port = PORT_OTHER;/* till define IB port type */
+	ecmd->port = PORT_OTHER;// till define IB port type 
 	ecmd->phy_address = 255;
 	ecmd->autoneg = AUTONEG_DISABLE;
 
@@ -260,7 +262,7 @@ static int mlx5i_get_settings(struct net_device *netdev,
 
 	return 0;
 }
-
+*/
 const struct ethtool_ops mlx5i_ethtool_ops = {
 	.get_drvinfo        = mlx5i_get_drvinfo,
 	.get_strings        = mlx5i_get_strings,
@@ -276,7 +278,7 @@ const struct ethtool_ops mlx5i_ethtool_ops = {
 	.get_ts_info        = mlx5i_get_ts_info,
 	.get_link_ksettings = mlx5i_get_link_ksettings,
 	.get_link           = ethtool_op_get_link,
-	.get_settings       = mlx5i_get_settings,
+//	.get_settings       = mlx5i_get_settings,
 	.get_ts_info        = mlx5i_get_ts_info,
 };
 
@@ -284,6 +286,6 @@ const struct ethtool_ops mlx5i_pkey_ethtool_ops = {
 	.get_drvinfo        = mlx5i_get_drvinfo,
 	.get_link           = ethtool_op_get_link,
 	.get_ts_info        = mlx5i_get_ts_info,
-	.get_settings	    = mlx5i_get_settings,
+//	.get_settings	    = mlx5i_get_settings,
 	.get_link_ksettings = mlx5i_get_link_ksettings,
 };

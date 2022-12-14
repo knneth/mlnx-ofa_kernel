@@ -48,6 +48,11 @@ u32 nvmet_get_log_page_len(struct nvme_command *cmd)
 	return len;
 }
 
+u64 nvmet_get_log_page_offset(struct nvme_command *cmd)
+{
+	return le64_to_cpu(cmd->get_log_page.lpo);
+}
+
 static void nvmet_execute_get_log_page_noop(struct nvmet_req *req)
 {
 	nvmet_req_complete(req, nvmet_zero_sgl(req, 0, req->data_len));
@@ -61,7 +66,7 @@ static u16 nvmet_get_smart_log_nsid(struct nvmet_req *req,
 
 	ns = nvmet_find_namespace(req->sq->ctrl, req->cmd->get_log_page.nsid);
 	if (!ns) {
-		pr_err("nvmet : Could not find namespace id : %d\n",
+		pr_err("Could not find namespace id : %d\n",
 				le32_to_cpu(req->cmd->get_log_page.nsid));
 		return NVME_SC_INVALID_NS;
 	}
@@ -198,20 +203,6 @@ out:
 	nvmet_req_complete(req, status);
 }
 
-static bool nvmet_is_write_zeroes(struct nvmet_ctrl *ctrl)
-{
-	struct nvmet_ns *ns;
-
-	rcu_read_lock();
-	list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link)
-		if (bdev_write_zeroes_sectors(ns->bdev)) {
-			rcu_read_unlock();
-			return false;
-		}
-	rcu_read_unlock();
-	return true;
-}
-
 static u32 nvmet_format_ana_group(struct nvmet_req *req, u32 grpid,
 		struct nvme_ana_group_desc *desc)
 {
@@ -278,6 +269,20 @@ static void nvmet_execute_get_log_page_ana(struct nvmet_req *req)
 	status = nvmet_copy_to_sgl(req, 0, &hdr, sizeof(hdr));
 out:
 	nvmet_req_complete(req, status);
+}
+
+static bool nvmet_is_write_zeroes(struct nvmet_ctrl *ctrl)
+{
+	struct nvmet_ns *ns;
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link)
+		if (bdev_write_zeroes_sectors(ns->bdev)) {
+			rcu_read_unlock();
+			return false;
+		}
+	rcu_read_unlock();
+	return true;
 }
 
 static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
@@ -379,7 +384,7 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 	if (ctrl->sqe_inline_size)
 		id->sgls |= cpu_to_le32(1 << 20);
 
-	strcpy(id->subnqn, ctrl->subsys->subsysnqn);
+	strlcpy(id->subnqn, ctrl->subsys->subsysnqn, sizeof(id->subnqn));
 
 	/* Max command capsule size is sqe + single page of in-capsule data */
 	id->ioccsz = cpu_to_le32((sizeof(struct nvme_command) +

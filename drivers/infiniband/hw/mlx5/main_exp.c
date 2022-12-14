@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2015, Mellanox Technologies. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -115,7 +115,7 @@ void mlx5_ib_get_atomic_caps(struct mlx5_ib_dev *dev,
 		props->atomic_cap = IB_ATOMIC_NONE;
 	}
 
-	tmp = MLX5_ATOMIC_OPS_MASKED_CMP_SWAP | MLX5_ATOMIC_OPS_MASKED_FETCH_ADD;
+	tmp = MLX5_ATOMIC_OPS_EXTENDED_CMP_SWAP | MLX5_ATOMIC_OPS_EXTENDED_FETCH_ADD;
 	if (((atomic_operations & tmp) == tmp) &&
 	    (atomic_size_qp & MLX5_ATOMIC_SIZE_QP_8BYTES)) {
 		if (atomic_req_8B_endianness_mode) {
@@ -151,8 +151,8 @@ static void ext_atomic_caps(struct mlx5_ib_dev *dev,
 
 	tmp = MLX5_ATOMIC_OPS_CMP_SWAP		|
 	      MLX5_ATOMIC_OPS_FETCH_ADD		|
-	      MLX5_ATOMIC_OPS_MASKED_CMP_SWAP	|
-	      MLX5_ATOMIC_OPS_MASKED_FETCH_ADD;
+	      MLX5_ATOMIC_OPS_EXTENDED_CMP_SWAP |
+	      MLX5_ATOMIC_OPS_EXTENDED_FETCH_ADD;
 
 	if ((MLX5_CAP_ATOMIC(dev->mdev, atomic_operations) & tmp) != tmp)
 		return;
@@ -456,6 +456,10 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			MLX5_CAP_QOS(dev->mdev, packet_pacing_min_rate);
 		props->packet_pacing_caps.supported_qpts |=
 			1 << IB_QPT_RAW_PACKET;
+		if (MLX5_CAP_QOS(dev->mdev, packet_pacing_burst_bound) &&
+		    MLX5_CAP_QOS(dev->mdev, packet_pacing_typical_size))
+			props->packet_pacing_caps.cap_flags |=
+				IB_EXP_QP_SUPPORT_BURST;
 		props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_PACKET_PACING_CAPS;
 	}
 
@@ -785,7 +789,7 @@ static int send_cnak(struct mlx5_dc_data *dcd, struct mlx5_send_wr *mlx_wr,
 {
 	struct ib_send_wr *wr = &mlx_wr->wr;
 	struct mlx5_ib_dev *dev = dcd->dev;
-	struct ib_send_wr *bad_wr;
+	const struct ib_send_wr *bad_wr;
 	struct mlx5_dc_desc *rxd;
 	struct mlx5_dc_desc *txd;
 	unsigned int offset;
@@ -841,7 +845,7 @@ static int send_cnak(struct mlx5_dc_data *dcd, struct mlx5_send_wr *mlx_wr,
 
 static int mlx5_post_one_rxdc(struct mlx5_dc_data *dcd, int index)
 {
-	struct ib_recv_wr *bad_wr;
+	const struct ib_recv_wr *bad_wr;
 	struct ib_recv_wr wr;
 	struct ib_sge sge;
 	u64 addr;
@@ -1776,9 +1780,10 @@ void tclass_get_tclass_locked(struct mlx5_ib_dev *dev,
 		*tclass = tcd->val;
 	} else if (ah && ah->type == RDMA_AH_ATTR_TYPE_ROCE) {
 		err = rdma_query_gid(&dev->ib_dev, port, ah->grh.sgid_index,
-				     &gid);
+				   &gid);
 		if (err)
 			goto out;
+
 		gid_type = ah->grh.sgid_attr->gid_type;
 		if (gid_type != IB_GID_TYPE_ROCE_UDP_ENCAP)
 			goto out;
@@ -2425,7 +2430,8 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 	u32 sys_page_idx = indx / uars_per_page;
 	phys_addr_t pfn;
 	u32 uar_index;
-	struct mlx5_ib_vma_private_data *vma_prv;
+	size_t map_size = vma->vm_end - vma->vm_start;
+	struct rdma_umap_priv *vma_prv;
 	int err;
 
 	if (indx % uars_per_page) {
@@ -2467,27 +2473,26 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 		return err;
 	}
 
-	vma_prv = kzalloc(sizeof(struct mlx5_ib_vma_private_data), GFP_KERNEL);
+	vma_prv = kzalloc(sizeof(struct rdma_umap_priv), GFP_KERNEL);
 	if (!vma_prv) {
 		mlx5_cmd_free_uar(dev->mdev, uar_index);
 		return -ENOMEM;
 	}
-
-	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
-	vma->vm_page_prot = mlx5_ib_pgprot_writecombine(vma->vm_page_prot);
 	pfn = idx2pfn(dev, uar_index);
 
-	if (io_remap_pfn_range(vma, vma->vm_start, pfn,
-			       PAGE_SIZE, vma->vm_page_prot)) {
+
+	vma->vm_page_prot = mlx5_ib_pgprot_writecombine(vma->vm_page_prot);
+
+	if (rdma_user_mmap_io(&context->ibucontext, vma, pfn, map_size,
+		pgprot_writecombine(vma->vm_page_prot), vma_prv)) {
+
 		mlx5_ib_err(dev, "io remap failed\n");
 		mlx5_cmd_free_uar(dev->mdev, uar_index);
 		kfree(vma_prv);
 		return -EAGAIN;
 	}
+
 	context->dynamic_wc_uar_index[sys_page_idx] = uar_index;
-
-	mlx5_ib_set_vma_data(vma, context, vma_prv);
-
 	return 0;
 }
 
@@ -2496,7 +2501,7 @@ struct ib_dm *mlx5_ib_exp_alloc_dm(struct ib_device *ibdev,
 				   u64 length, u64 uaddr,
 				   struct ib_udata *uhw)
 {
-	struct mlx5_dm_mgr *dm_mgr = &to_mdev(ibdev)->dm_mgr;
+	struct mlx5_dm *dm_db = &to_mdev(ibdev)->dm;
 	u64 act_size = roundup(length, MLX5_MEMIC_BASE_SIZE);
 	u64 map_size = roundup(act_size, PAGE_SIZE);
 	phys_addr_t memic_addr, memic_pfn;
@@ -2509,7 +2514,7 @@ struct ib_dm *mlx5_ib_exp_alloc_dm(struct ib_device *ibdev,
 	if (!dm)
 		return ERR_PTR(-ENOMEM);
 
-	if (mlx5_cmd_alloc_memic(dm_mgr, &memic_addr, act_size, 0)) {
+	if (mlx5_cmd_alloc_memic(dm_db, &memic_addr, act_size, 0)) {
 		ret = -EFAULT;
 		goto err_free;
 	}
@@ -2556,7 +2561,7 @@ err_vma:
 	up_read(&current->mm->mmap_sem);
 
 err_map:
-	mlx5_cmd_dealloc_memic(dm_mgr, memic_addr, act_size);
+	mlx5_cmd_dealloc_memic(dm_db, memic_addr, act_size);
 
 err_free:
 	kfree(dm);

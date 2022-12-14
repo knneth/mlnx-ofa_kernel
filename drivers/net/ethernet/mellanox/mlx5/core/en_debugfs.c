@@ -95,13 +95,6 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		snprintf(name, MLX5_MAX_NAME_LEN, "indir-tirn-%d", i);
 		debugfs_create_u32(name, S_IRUSR, priv->dfs_root,
 				   &priv->indir_tir[i].tirn);
-
-		if (!mlx5e_tunnel_inner_ft_supported(priv->mdev))
-			continue;
-
-		snprintf(name, MLX5_MAX_NAME_LEN, "inner_indir-tirn-%d", i);
-		debugfs_create_u32(name, S_IRUSR, priv->dfs_root,
-				   &priv->inner_indir_tir[i].tirn);
 	}
 
 	for (i = 0; i < MLX5E_MAX_NUM_CHANNELS; i++) {

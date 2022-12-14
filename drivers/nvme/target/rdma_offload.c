@@ -142,7 +142,6 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 		return -ENOMEM;
 
 	kref_init(&xrq->ref);
-	INIT_LIST_HEAD(&xrq->offload_ctrls_list);
 	mutex_init(&xrq->offload_ctrl_mutex);
 	INIT_LIST_HEAD(&xrq->be_ctrls_list);
 	mutex_init(&xrq->be_mutex);
@@ -268,11 +267,24 @@ static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_device *ndev,
 				   struct nvmet_rdma_queue *queue)
 {
 	struct nvmet_rdma_xrq *xrq;
+	int active_xrq = 0;
+	uint min = UINT_MAX;
 	int ret = 0;
 
 	mutex_lock(&nvmet_rdma_xrq_mutex);
 	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
-		if (xrq->port == queue->port && kref_get_unless_zero(&xrq->ref)) {
+		if (xrq->port == queue->port) {
+			active_xrq++;
+			if (kref_read(&xrq->ref) && kref_read(&xrq->ref) < min)
+				min = kref_read(&xrq->ref);
+		}
+	}
+
+	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
+		if (xrq->port == queue->port &&
+		    active_xrq == queue->port->offload_queues &&
+		    kref_read(&xrq->ref) == min &&
+		    kref_get_unless_zero(&xrq->ref)) {
 			queue->xrq = xrq;
 			goto out_unlock;
 		}
@@ -505,50 +517,9 @@ out_err:
 	return ERR_PTR(err);
 }
 
-static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl)
-{
-	struct nvmet_rdma_xrq *xrq;
-	struct nvmet_ns *ns;
-	struct nvmet_rdma_backend_ctrl *be_ctrl, *next;
-	int err = 0;
-
-	mutex_lock(&nvmet_rdma_xrq_mutex);
-	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
-		if (xrq->port == ctrl->port) {
-			if (xrq->subsys != ctrl->subsys) {
-				rcu_read_lock();
-				list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link) {
-					be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
-					if (IS_ERR(be_ctrl)) {
-						err = PTR_ERR(be_ctrl);
-						goto out_free;
-					}
-				}
-				rcu_read_unlock();
-				xrq->subsys = ctrl->subsys;
-			}
-		}
-	}
-	mutex_unlock(&nvmet_rdma_xrq_mutex);
-
-	return 0;
-
-out_free:
-	mutex_lock(&xrq->be_mutex);
-	list_for_each_entry_safe(be_ctrl, next, &xrq->be_ctrls_list, entry)
-		nvmet_rdma_free_be_ctrl(be_ctrl);
-	mutex_unlock(&xrq->be_mutex);
-	rcu_read_unlock();
-	mutex_unlock(&nvmet_rdma_xrq_mutex);
-
-	return err;
-}
-
-static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl)
+static void nvmet_rdma_free_be_ctrls(struct nvmet_rdma_xrq *xrq)
 {
 	struct nvmet_rdma_backend_ctrl *be_ctrl, *next;
-	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
-	struct nvmet_rdma_xrq *xrq = offload_ctrl->xrq;
 
 	xrq->subsys = NULL;
 	mutex_lock(&xrq->be_mutex);
@@ -557,23 +528,111 @@ static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl)
 	mutex_unlock(&xrq->be_mutex);
 }
 
+static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl)
+{
+	struct nvmet_rdma_xrq *xrq;
+	struct nvmet_ns *ns;
+	struct nvmet_rdma_backend_ctrl *be_ctrl;
+	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
+	struct nvmet_rdma_offload_ctx *offload_ctx;
+	int err = 0;
+
+	mutex_lock(&offload_ctrl->ctx_mutex);
+	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry) {
+		xrq = offload_ctx->xrq;
+		if (xrq->subsys != ctrl->subsys) {
+			rcu_read_lock();
+			list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link) {
+				be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
+				if (IS_ERR(be_ctrl)) {
+					err = PTR_ERR(be_ctrl);
+					goto out_free;
+				}
+			}
+			rcu_read_unlock();
+			xrq->subsys = ctrl->subsys;
+		}
+	}
+	mutex_unlock(&offload_ctrl->ctx_mutex);
+
+	return 0;
+
+out_free:
+	rcu_read_unlock();
+	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry)
+		nvmet_rdma_free_be_ctrls(offload_ctx->xrq);
+	mutex_unlock(&offload_ctrl->ctx_mutex);
+
+	return err;
+}
+
+static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl)
+{
+	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
+	struct nvmet_rdma_offload_ctx *offload_ctx;
+
+	mutex_lock(&offload_ctrl->ctx_mutex);
+	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry)
+		nvmet_rdma_free_be_ctrls(offload_ctx->xrq);
+	mutex_unlock(&offload_ctrl->ctx_mutex);
+}
+
+/**
+ * Called with offload_ctrl ctx_mutex held
+ **/
+static void nvmet_rdma_free_offload_ctx(struct nvmet_rdma_offload_ctx *offload_ctx)
+{
+	struct nvmet_rdma_xrq *xrq = offload_ctx->xrq;
+
+	mutex_lock(&xrq->offload_ctrl_mutex);
+	xrq->offload_ctrls_cnt--;
+	if (!xrq->offload_ctrls_cnt)
+		nvmet_rdma_free_be_ctrls(xrq);
+	list_del_init(&offload_ctx->entry);
+	mutex_unlock(&xrq->offload_ctrl_mutex);
+	kfree(offload_ctx);
+}
+
+static void nvmet_rdma_free_offload_ctxs(struct nvmet_rdma_offload_ctrl *offload_ctrl)
+{
+	struct nvmet_rdma_offload_ctx *offload_ctx, *next;
+
+	mutex_lock(&offload_ctrl->ctx_mutex);
+	list_for_each_entry_safe(offload_ctx, next, &offload_ctrl->ctx_list, entry)
+		nvmet_rdma_free_offload_ctx(offload_ctx);
+	mutex_unlock(&offload_ctrl->ctx_mutex);
+}
+
 static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)
 {
 	struct nvmet_rdma_xrq *xrq;
 	struct nvmet_ns *ns;
-	struct nvmet_rdma_backend_ctrl *be_ctrl, *next;
+	struct nvmet_rdma_backend_ctrl *be_ctrl;
 	struct nvmet_rdma_offload_ctrl *offload_ctrl = NULL;
 	int err = 0;
 	bool be_ctrl_created;
+	struct nvmet_rdma_offload_ctx *offload_ctx;
 
 	mutex_lock(&nvmet_rdma_xrq_mutex);
 	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
 		if (xrq->port == ctrl->port) {
-			offload_ctrl = kzalloc(sizeof(*offload_ctrl), GFP_KERNEL);
 			if (!offload_ctrl) {
-				err = -ENOMEM;
-				goto out_unlock;
+				offload_ctrl = kzalloc(sizeof(*offload_ctrl), GFP_KERNEL);
+				if (!offload_ctrl) {
+					err = -ENOMEM;
+					goto out_unlock;
+				}
+				INIT_LIST_HEAD(&offload_ctrl->ctx_list);
+				mutex_init(&offload_ctrl->ctx_mutex);
 			}
+
+			offload_ctx = kzalloc(sizeof(*offload_ctx), GFP_KERNEL);
+			if (!offload_ctx) {
+				err = -ENOMEM;
+				goto out_free;
+			}
+			offload_ctx->xrq = xrq;
+
 			if (xrq->subsys != ctrl->subsys) {
 				be_ctrl_created = false;
 				rcu_read_lock();
@@ -581,7 +640,7 @@ static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)
 					be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
 					if (IS_ERR(be_ctrl)) {
 						err = PTR_ERR(be_ctrl);
-						goto out_free;
+						goto out_free_offload_ctx;
 					}
 					be_ctrl_created = true;
 				}
@@ -590,9 +649,11 @@ static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)
 					xrq->subsys = ctrl->subsys;
 			}
 			mutex_lock(&xrq->offload_ctrl_mutex);
-			list_add_tail(&offload_ctrl->entry, &xrq->offload_ctrls_list);
-			offload_ctrl->xrq = xrq;
+			xrq->offload_ctrls_cnt++;
 			mutex_unlock(&xrq->offload_ctrl_mutex);
+			mutex_lock(&offload_ctrl->ctx_mutex);
+			list_add_tail(&offload_ctx->entry, &offload_ctrl->ctx_list);
+			mutex_unlock(&offload_ctrl->ctx_mutex);
 		}
 	}
 
@@ -602,13 +663,12 @@ static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)
 
 	return offload_ctrl ? 0 : -ENODEV;
 
-out_free:
-	kfree(offload_ctrl);
-	mutex_lock(&xrq->be_mutex);
-	list_for_each_entry_safe(be_ctrl, next, &xrq->be_ctrls_list, entry)
-		nvmet_rdma_free_be_ctrl(be_ctrl);
-	mutex_unlock(&xrq->be_mutex);
+out_free_offload_ctx:
 	rcu_read_unlock();
+	kfree(offload_ctx);
+out_free:
+	nvmet_rdma_free_offload_ctxs(offload_ctrl);
+	kfree(offload_ctrl);
 out_unlock:
 	mutex_unlock(&nvmet_rdma_xrq_mutex);
 
@@ -617,22 +677,11 @@ out_unlock:
 
 static void nvmet_rdma_destroy_offload_ctrl(struct nvmet_ctrl *ctrl)
 {
-	struct nvmet_rdma_backend_ctrl *be_ctrl, *next;
 	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
-	struct nvmet_rdma_xrq *xrq = offload_ctrl->xrq;
 
-	mutex_lock(&xrq->offload_ctrl_mutex);
-	list_del_init(&offload_ctrl->entry);
+	ctrl->offload_ctrl = NULL;
+	nvmet_rdma_free_offload_ctxs(offload_ctrl);
 	kfree(offload_ctrl);
-
-	if (list_empty(&xrq->offload_ctrls_list)) {
-		xrq->subsys = NULL;
-		mutex_lock(&xrq->be_mutex);
-		list_for_each_entry_safe(be_ctrl, next, &xrq->be_ctrls_list, entry)
-			nvmet_rdma_free_be_ctrl(be_ctrl);
-		mutex_unlock(&xrq->be_mutex);
-	}
-	mutex_unlock(&xrq->offload_ctrl_mutex);
 }
 
 static u64

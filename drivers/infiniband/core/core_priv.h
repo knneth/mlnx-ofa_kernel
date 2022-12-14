@@ -44,7 +44,7 @@
 #include "mad_priv.h"
 
 /* Total number of ports combined across all struct ib_devices's */
-#define RDMA_MAX_PORTS 1024
+#define RDMA_MAX_PORTS 8192
 
 struct pkey_index_qp_list {
 	struct list_head    pkey_index_list;
@@ -87,6 +87,7 @@ int  ib_device_register_sysfs(struct ib_device *device,
 			      int (*port_callback)(struct ib_device *,
 						   u8, struct kobject *));
 void ib_device_unregister_sysfs(struct ib_device *device);
+int ib_device_rename(struct ib_device *ibdev, const char *name);
 
 typedef void (*roce_netdev_callback)(struct ib_device *device, u8 port,
 	      struct net_device *idev, void *cookie);
@@ -98,11 +99,11 @@ void ib_enum_roce_netdev(struct ib_device *ib_dev,
 			 roce_netdev_filter filter,
 			 void *filter_cookie,
 			 roce_netdev_callback cb,
-			 void *cookie);
+			 void *cookie, unsigned long ndev_event);
 void ib_enum_all_roce_netdevs(roce_netdev_filter filter,
 			      void *filter_cookie,
 			      roce_netdev_callback cb,
-			      void *cookie);
+			      void *cookie, unsigned long ndev_event);
 
 typedef int (*nldev_callback)(struct ib_device *device,
 			      struct sk_buff *skb,
@@ -340,6 +341,12 @@ int rdma_addr_find_l2_eth_by_grh(const union ib_gid *sgid,
 				 const union ib_gid *dgid,
 				 u8 *dmac, const struct ib_gid_attr *sgid_attr,
 				 int *hoplimit);
+void rdma_copy_src_l2_addr(struct rdma_dev_addr *dev_addr,
+			   const struct net_device *dev);
+
+struct sa_path_rec;
+int roce_resolve_route_from_path(struct sa_path_rec *rec,
+				 const struct ib_gid_attr *attr);
 
 bool rdma_check_gid_user_access(const struct ib_gid_attr *attr);
 

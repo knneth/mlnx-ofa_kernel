@@ -35,7 +35,6 @@
 #include <linux/mlx5/driver.h>
 #include "mlx5_core.h"
 
-
 void mlx5_init_dct_table(struct mlx5_core_dev *dev)
 {
 	mlx5_dct_debugfs_init(dev);

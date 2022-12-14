@@ -42,4 +42,8 @@ static inline void memcpy_and_pad(void *dest, size_t dest_len,
 }
 #endif
 
+#ifndef HAVE_KSTRTOBOOL
+int kstrtobool(const char *s, bool *res);
+#endif
+
 #endif /* _COMPAT_LINUX_STRING_H */

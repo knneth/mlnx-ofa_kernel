@@ -1,0 +1,148 @@
+From: Chris Mi <chrism@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+
+Change-Id: I4e8ca0f9703f13cbd8fb7a67fce2ad6425755039
+---
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 32 +++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+@@ -534,6 +534,7 @@ static void update_allmulti_vports(struc
+ 	u8 *mac = vaddr->node.addr;
+ 	struct mlx5_vport *vport;
+ 	u16 i, vport_num;
++	COMPAT_HL_NODE
+ 
+ 	mlx5_esw_for_all_vports(esw, i, vport) {
+ 		struct hlist_head *vport_hash = vport->mc_list;
+@@ -581,6 +582,7 @@ static int esw_add_mc_addr(struct mlx5_e
+ 	struct esw_mc_addr *esw_mc;
+ 	u8 *mac = vaddr->node.addr;
+ 	u16 vport = vaddr->vport;
++	COMPAT_HL_NODE
+ 
+ 	if (!esw->fdb_table.legacy.fdb)
+ 		return 0;
+@@ -621,6 +623,7 @@ static int esw_del_mc_addr(struct mlx5_e
+ 	struct esw_mc_addr *esw_mc;
+ 	u8 *mac = vaddr->node.addr;
+ 	u16 vport = vaddr->vport;
++	COMPAT_HL_NODE
+ 
+ 	if (!esw->fdb_table.legacy.fdb)
+ 		return 0;
+@@ -672,6 +675,7 @@ static void esw_apply_vport_addr_list(st
+ 	struct hlist_head *hash;
+ 	struct hlist_node *tmp;
+ 	int hi;
++	COMPAT_HL_NODE
+ 
+ 	vport_addr_add = is_uc ? esw_add_uc_addr :
+ 				 esw_add_mc_addr;
+@@ -709,6 +713,7 @@ static void esw_update_vport_addr_list(s
+ 	int err;
+ 	int hi;
+ 	int i;
++	COMPAT_HL_NODE
+ 
+ 	size = is_uc ? MLX5_MAX_UC_PER_VPORT(esw->dev) :
+ 		       MLX5_MAX_MC_PER_VPORT(esw->dev);
+@@ -830,6 +835,7 @@ static void esw_update_vport_mc_promisc(
+ 	struct hlist_head *hash;
+ 	struct hlist_node *tmp;
+ 	int hi;
++	COMPAT_HL_NODE
+ 
+ 	hash = vport->mc_list;
+ 
+@@ -2116,7 +2122,11 @@ static void esw_disable_vport(struct mlx
+ 	/* Mark this vport as disabled to discard new events */
+ 	vport->enabled = false;
+ 
++#ifdef HAVE_PCI_IRQ_API
+ 	synchronize_irq(pci_irq_vector(esw->dev->pdev, MLX5_EQ_VEC_ASYNC));
++#else
++	synchronize_irq(mlx5_get_msix_vec(esw->dev, MLX5_EQ_VEC_ASYNC));
++#endif
+ 	/* Wait for current already scheduled events to complete */
+ 	flush_workqueue(esw->work_queue);
+ 	/* Disable events from this vport */
+@@ -2359,9 +2369,13 @@ int mlx5_eswitch_init(struct mlx5_core_d
+ 		goto abort;
+ 
+ 	spin_lock_init(&esw->offloads.encap_tbl_lock);
++#ifdef HAVE_TCF_TUNNEL_INFO
+ 	hash_init(esw->offloads.encap_tbl);
++#endif
+ 	spin_lock_init(&esw->offloads.mod_hdr_tbl_lock);
++#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
+ 	hash_init(esw->offloads.mod_hdr_tbl);
++#endif
+ 	mutex_init(&esw->state_lock);
+ 
+ 	access_other_hca_roce = MLX5_CAP_GEN(dev, vhca_group_manager) &&
+@@ -2644,6 +2658,7 @@ unlock:
+ 	return 0;
+ }
+ 
++#ifdef HAVE_IFLA_VF_INFO
+ int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
+ 				  int vport, struct ifla_vf_info *ivi)
+ {
+@@ -2661,18 +2676,31 @@ int mlx5_eswitch_get_vport_config(struct
+ 
+ 	mutex_lock(&esw->state_lock);
+ 	ether_addr_copy(ivi->mac, evport->info.mac);
++#ifdef HAVE_LINKSTATE
+ 	ivi->linkstate = evport->info.link_state;
++#endif
+ 	ivi->vlan = evport->info.vlan;
+ 	ivi->qos = evport->info.qos;
++#ifdef HAVE_VF_VLAN_PROTO
+ 	ivi->vlan_proto = evport->info.vlan_proto;
++#endif
++#ifdef HAVE_VF_INFO_SPOOFCHK
+ 	ivi->spoofchk = evport->info.spoofchk;
++#endif
++#ifdef HAVE_VF_INFO_TRUST
+ 	ivi->trusted = evport->info.trusted;
++#endif
++#ifdef HAVE_VF_TX_RATE_LIMITS
+ 	ivi->min_tx_rate = evport->info.min_rate;
+ 	ivi->max_tx_rate = evport->info.max_rate;
++#else
++	ivi->tx_rate = evport->info.max_rate;
++#endif
+ 	mutex_unlock(&esw->state_lock);
+ 
+ 	return 0;
+ }
++#endif
+ 
+ int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
+ 				  u8 qos, __be16 proto, u8 set_flags)
+@@ -3209,7 +3237,9 @@ int mlx5_eswitch_get_vport_stats(struct
+ {
+ 	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
+ 	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {0};
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	struct mlx5_vport_drop_stats stats = {0};
++#endif
+ 	int err = 0;
+ 	u32 *out;
+ 
+@@ -3272,11 +3302,13 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	vf_stats->broadcast =
+ 		MLX5_GET_CTR(out, received_eth_broadcast.packets);
+ 
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	err = mlx5_eswitch_query_vport_drop_stats(esw->dev, vport, &stats);
+ 	if (err)
+ 		goto free_out;
+ 	vf_stats->rx_dropped = stats.rx_dropped;
+ 	vf_stats->tx_dropped = stats.tx_dropped;
++#endif
+ #ifdef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
+ 	vf_stats->tx_multicast =
+ 		MLX5_GET_CTR(out, transmitted_eth_multicast.packets) +

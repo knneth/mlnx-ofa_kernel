@@ -52,7 +52,7 @@ int ipoib_mcast_attach(struct net_device *dev, struct ib_device *hca,
 
 	if (set_qkey) {
 		ret = -ENOMEM;
-		qp_attr = kmalloc(sizeof *qp_attr, GFP_KERNEL);
+		qp_attr = kmalloc(sizeof(*qp_attr), GFP_KERNEL);
 		if (!qp_attr)
 			goto out;
 
@@ -147,7 +147,7 @@ int ipoib_transport_dev_init(struct net_device *dev, struct ib_device *ca)
 		.cap = {
 			.max_send_wr	 = priv->sendq_size,
 			.max_recv_wr	 = priv->recvq_size,
-			.max_send_sge	 = min_t(u32, priv->ca->attrs.max_sge,
+			.max_send_sge	 = min_t(u32, priv->ca->attrs.max_send_sge,
 						 MAX_SKB_FRAGS + 1),
 			.max_recv_sge	 = IPOIB_UD_RX_SG,
 			.max_inline_data = IPOIB_MAX_INLINE_SIZE,
@@ -169,8 +169,8 @@ int ipoib_transport_dev_init(struct net_device *dev, struct ib_device *ca)
 		else
 			size += priv->recvq_size * ipoib_max_conn_qp;
 	} else
-		if (ret != -ENOSYS)
-			return -ENODEV;
+		if (ret != -EOPNOTSUPP)
+			return ret;
 
 	req_vec = (priv->port - 1) * 2;
 	req_vec += priv->child_index;
@@ -282,7 +282,7 @@ void ipoib_event(struct ib_event_handler *handler,
 		return;
 
 	ipoib_dbg(priv, "Event %d on device %s port %d\n", record->event,
-		  record->device->name, record->element.port_num);
+		  dev_name(&record->device->dev), record->element.port_num);
 
 	if (record->event == IB_EVENT_SM_CHANGE ||
 	    record->event == IB_EVENT_CLIENT_REREGISTER) {

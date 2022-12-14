@@ -39,6 +39,7 @@
 
 struct mlx5_ib_prefetch_work {
 	struct mlx5_ib_dev *dev;
+	struct ib_pd       *pd;
 	u32		   key;
 	u64		   start;
 	u64		   length;
@@ -47,13 +48,18 @@ struct mlx5_ib_prefetch_work {
 
 static void prefetch_work(struct work_struct *work)
 {
+
 	struct mlx5_ib_prefetch_work *pwork;
-	u32 bytes_committed = 0;
+	struct ib_sge sg;
 
 	pwork = container_of(work, struct mlx5_ib_prefetch_work, work);
-	pagefault_single_data_segment(pwork->dev, pwork->key, pwork->start,
-				      pwork->length, &bytes_committed,
-				      NULL, IB_ODP_DMA_MAP_FOR_PREFETCH, NULL);
+
+	sg.addr = pwork->start;
+	sg.length = pwork->length;
+	sg.lkey = pwork->key;
+
+	mlx5_ib_advise_mr(pwork->pd, IB_UVERBS_ADVISE_MR_ADVICE_PREFETCH_WRITE,
+			IB_UVERBS_ADVISE_MR_FLAG_FLUSH, &sg, 1, NULL);
 
 	if (atomic_dec_and_test(&pwork->dev->num_prefetch))
 		complete(&pwork->dev->comp_prefetch);
@@ -76,6 +82,7 @@ int mlx5_ib_prefetch_mr(struct ib_mr *ibmr, u64 start, u64 length, u32 flags)
 		return -ENOMEM;
 
 	pwork->dev = dev;
+	pwork->pd = ibmr->pd;
 	pwork->key = ibmr->lkey;
 	pwork->start = start;
 	pwork->length = length;
@@ -86,6 +93,7 @@ int mlx5_ib_prefetch_mr(struct ib_mr *ibmr, u64 start, u64 length, u32 flags)
 	schedule_work(&pwork->work);
 
 	return 0;
+
 }
 
 #define ODP_HIST_PRINT_SZ 1000
@@ -151,7 +159,7 @@ int mlx5_ib_exp_odp_init_one(struct mlx5_ib_dev *ibdev)
 {
 	struct dentry *dbgfs_entry;
 
-	if (ibdev->rep)
+	if (ibdev->is_rep)
 		return 0;
 
 	ibdev->odp_stats.odp_debugfs = debugfs_create_dir("odp_stats",

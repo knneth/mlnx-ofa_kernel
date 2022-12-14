@@ -182,12 +182,9 @@ void ipoib_ib_rss_init_fp(struct ipoib_dev_priv *priv);
 int ipoib_set_fp_rss(struct ipoib_dev_priv *priv, struct ib_device *hca);
 
 const struct net_device_ops *ipoib_get_netdev_ops(struct ipoib_dev_priv *priv);
-void ipoib_set_ethtool_ops_rss(struct net_device *dev);
+const struct net_device_ops *ipoib_get_rn_ops(struct ipoib_dev_priv *priv);
 
-struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
-						   const char *name,
-						   void (*setup)(struct net_device *),
-						   struct ipoib_dev_priv *temp_priv);
+void ipoib_set_ethtool_ops_rss(struct net_device *dev);
 
 int ipoib_ib_dev_open_default_rss(struct net_device *dev);
 int ipoib_ib_dev_stop_default_rss(struct net_device *dev);

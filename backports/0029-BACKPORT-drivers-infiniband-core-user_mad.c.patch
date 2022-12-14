@@ -1,0 +1,109 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/user_mad.c
+
+Change-Id: I07f8dd824593c5a54172e60cecaa2f94f19b73fb
+---
+ drivers/infiniband/core/user_mad.c | 39 +++++++++++++++++++++++++++++++++++---
+ 1 file changed, 36 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/user_mad.c
++++ b/drivers/infiniband/core/user_mad.c
+@@ -140,9 +140,11 @@ static const dev_t base_issm_dev = MKDEV
+ 				   IB_UMAD_NUM_FIXED_MINOR;
+ static dev_t dynamic_umad_dev;
+ static dev_t dynamic_issm_dev;
+-
++#ifdef HAVE_IDA_ALLOC
+ static DEFINE_IDA(umad_ida);
+-
++#else
++static DECLARE_BITMAP(dev_map, IB_UMAD_MAX_PORTS);
++#endif
+ static void ib_umad_add_one(struct ib_device *device);
+ static void ib_umad_remove_one(struct ib_device *device, void *client_data);
+ 
+@@ -1151,8 +1153,16 @@ static ssize_t show_port(struct device *
+ }
+ static DEVICE_ATTR(port, S_IRUGO, show_port, NULL);
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ static CLASS_ATTR_STRING(abi_version, S_IRUGO,
+ 			 __stringify(IB_USER_MAD_ABI_VERSION));
++#else
++static ssize_t show_abi_version(struct class *class, char *buf)
++{
++	return sprintf(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
++}
++static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
++#endif
+ 
+ static int ib_umad_init_port(struct ib_device *device, int port_num,
+ 			     struct ib_umad_device *umad_dev,
+@@ -1162,10 +1172,18 @@ static int ib_umad_init_port(struct ib_d
+ 	dev_t base_umad;
+ 	dev_t base_issm;
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	devnum = ida_alloc_max(&umad_ida, IB_UMAD_MAX_PORTS - 1, GFP_KERNEL);
+ 	if (devnum < 0)
++#else
++	devnum = find_first_zero_bit(dev_map, IB_UMAD_MAX_PORTS);
++	if (devnum >= IB_UMAD_MAX_PORTS)
++#endif
+ 		return -1;
+ 	port->dev_num = devnum;
++#ifndef HAVE_IDA_ALLOC
++	set_bit(devnum, dev_map);
++#endif
+ 	if (devnum >= IB_UMAD_NUM_FIXED_MINOR) {
+ 		base_umad = dynamic_umad_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
+ 		base_issm = dynamic_issm_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
+@@ -1229,8 +1247,11 @@ err_dev:
+ 
+ err_cdev:
+ 	cdev_del(&port->cdev);
++#ifndef HAVE_IDA_ALLOC
++	clear_bit(devnum, dev_map);
++#else
+ 	ida_free(&umad_ida, devnum);
+-
++#endif
+ 	return -1;
+ }
+ 
+@@ -1263,7 +1284,11 @@ static void ib_umad_kill_port(struct ib_
+ 	}
+ 
+ 	mutex_unlock(&port->file_mutex);
++#ifndef HAVE_IDA_ALLOC
++	clear_bit(port->dev_num, dev_map);
++#else
+ 	ida_free(&umad_ida, port->dev_num);
++#endif
+ }
+ 
+ static void ib_umad_add_one(struct ib_device *device)
+@@ -1330,7 +1355,11 @@ static void ib_umad_remove_one(struct ib
+ 	kobject_put(&umad_dev->kobj);
+ }
+ 
++#ifdef HAVE_CLASS_DEVNODE_UMODE_T
+ static char *umad_devnode(struct device *dev, umode_t *mode)
++#else
++static char *umad_devnode(struct device *dev, mode_t *mode)
++#endif
+ {
+ 	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
+ }
+@@ -1365,7 +1394,11 @@ static int __init ib_umad_init(void)
+ 
+ 	umad_class->devnode = umad_devnode;
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ 	ret = class_create_file(umad_class, &class_attr_abi_version.attr);
++#else
++	ret = class_create_file(umad_class, &class_attr_abi_version);
++#endif
+ 	if (ret) {
+ 		pr_err("couldn't create abi_version attribute\n");
+ 		goto out_class;

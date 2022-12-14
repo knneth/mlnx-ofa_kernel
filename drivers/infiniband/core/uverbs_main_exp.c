@@ -53,41 +53,6 @@ out:
 	return ret;
 }
 
-long ib_uverbs_exp_ioctl(struct file *filp,
-			 unsigned int cmd, unsigned long arg)
-{
-	struct ib_uverbs_file *file = filp->private_data;
-	long ret = 0;
-	int srcu_key;
-	struct ib_device *ib_dev;
-
-	srcu_key = srcu_read_lock(&file->device->disassociate_srcu);
-	ib_dev = srcu_dereference(file->device->ib_dev,
-				  &file->device->disassociate_srcu);
-
-	if (!ib_dev) {
-		ret = -EIO;
-		goto out;
-	}
-
-	if (!ib_dev->exp_ioctl) {
-		ret = -ENOTSUPP;
-		goto out;
-	}
-
-	if (!file->ucontext) {
-		ret = -ENODEV;
-		goto out;
-	} else {
-		/* provider should provide it's own locking mechanism */
-		ret = ib_dev->exp_ioctl(file->ucontext, cmd, arg);
-	}
-
-out:
-	srcu_read_unlock(&file->device->disassociate_srcu, srcu_key);
-	return ret;
-}
-
 void ib_uverbs_dct_event_handler(struct ib_event *event, void *context_ptr)
 {
 	struct ib_uevent_object *uobj;

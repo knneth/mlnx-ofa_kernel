@@ -1,0 +1,118 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
+
+Change-Id: Ic7704644eb9c79041a3dfe47e2eb141031f070c9
+---
+ drivers/infiniband/core/rdma_core.c | 35 ++++++++++++++++++++++++++++++++---
+ 1 file changed, 32 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/rdma_core.c
++++ b/drivers/infiniband/core/rdma_core.c
+@@ -79,7 +79,13 @@ static int uverbs_try_lock_object(struct
+ 	 */
+ 	switch (mode) {
+ 	case UVERBS_LOOKUP_READ:
++#ifdef HAVE_ATOMIC_FETCH_ADD_UNLESS
+ 		return atomic_fetch_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#elif defined(HAVE___ATOMIC_ADD_UNLESS)
++		return __atomic_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#else
++		return atomic_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#endif
+ 			-EBUSY : 0;
+ 	case UVERBS_LOOKUP_WRITE:
+ 		/* lock is exclusive */
+@@ -297,6 +303,7 @@ static int idr_add_uobj(struct ib_uobjec
+ {
+ 	int ret;
+ 
++#ifdef HAVE_IDR_ALLOC
+ 	idr_preload(GFP_KERNEL);
+ 	spin_lock(&uobj->ufile->idr_lock);
+ 
+@@ -314,6 +321,20 @@ static int idr_add_uobj(struct ib_uobjec
+ 	idr_preload_end();
+ 
+ 	return ret < 0 ? ret : 0;
++#else
++retry:
++	if (!idr_pre_get(&uobj->ufile->idr, GFP_KERNEL))
++		return -ENOMEM;
++
++	spin_lock(&uobj->ufile->idr_lock);
++	ret = idr_get_new(&uobj->ufile->idr, NULL, &uobj->id);
++	spin_unlock(&uobj->ufile->idr_lock);
++
++	if (ret == -EAGAIN)
++		goto retry;
++
++	return ret;
++#endif
+ }
+ 
+ /* Returns the ib_uobject or an error. The caller should check for IS_ERR. */
+@@ -453,17 +474,20 @@ alloc_begin_idr_uobject(const struct uve
+ 	if (ret)
+ 		goto uobj_put;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ret = ib_rdmacg_try_charge(&uobj->cg_obj, uobj->context->device,
+ 				   RDMACG_RESOURCE_HCA_OBJECT);
+ 	if (ret)
+ 		goto idr_remove;
+-
++#endif
+ 	return uobj;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ idr_remove:
+ 	spin_lock(&ufile->idr_lock);
+ 	idr_remove(&ufile->idr, uobj->id);
+ 	spin_unlock(&ufile->idr_lock);
++#endif
+ uobj_put:
+ 	uverbs_uobject_put(uobj);
+ 	return ERR_PTR(ret);
+@@ -518,8 +542,10 @@ struct ib_uobject *rdma_alloc_begin_uobj
+ 
+ static void alloc_abort_idr_uobject(struct ib_uobject *uobj)
+ {
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
+ 			   RDMACG_RESOURCE_HCA_OBJECT);
++#endif
+ 
+ 	spin_lock(&uobj->ufile->idr_lock);
+ 	idr_remove(&uobj->ufile->idr, uobj->id);
+@@ -545,9 +571,10 @@ static int __must_check destroy_hw_idr_u
+ 	if (why == RDMA_REMOVE_ABORT)
+ 		return 0;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
+ 			   RDMACG_RESOURCE_HCA_OBJECT);
+-
++#endif
+ 	return 0;
+ }
+ 
+@@ -744,7 +771,7 @@ void release_ufile_idr_uobject(struct ib
+ 	 *
+ 	 * This is an optimized equivalent to remove_handle_idr_uobject
+ 	 */
+-	idr_for_each_entry(&ufile->idr, entry, id) {
++	compat_idr_for_each_entry(&ufile->idr, entry, id) {
+ 		WARN_ON(entry->object);
+ 		uverbs_uobject_put(entry);
+ 	}
+@@ -824,8 +851,10 @@ static void ufile_destroy_ucontext(struc
+ 			ib_dev->disassociate_ucontext(ucontext);
+ 	}
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&ucontext->cg_obj, ib_dev,
+ 			   RDMACG_RESOURCE_HCA_HANDLE);
++#endif
+ 
+ 	/*
+ 	 * FIXME: Drivers are not permitted to fail dealloc_ucontext, remove

@@ -160,8 +160,6 @@ void mlx5_ib_exp_set_rqc(void *rqc, struct mlx5_ib_rwq *rwq)
 
 	if (rwq->flags & MLX5_EXP_WQ_FLAG_RX_END_PADDING)
 		MLX5_SET(wq, wq, end_padding_mode, MLX5_WQ_END_PAD_MODE_ALIGN);
-	else
-		MLX5_SET(wq, wq, end_padding_mode, MLX5_WQ_END_PAD_MODE_NONE);
 
 	if (rwq->flags & MLX5_EXP_WQ_FLAG_SCATTER_FCS)
 		MLX5_SET(rqc, rqc, scatter_fcs, 1);
@@ -248,7 +246,7 @@ struct ib_qp *mlx5_ib_exp_create_qp(struct ib_pd *pd,
 			return ERR_PTR(-EINVAL);
 		}
 
-		scqe_sz = mlx5_ib_get_cqe_size(dev, init_attr->send_cq);
+		scqe_sz = mlx5_ib_get_cqe_size(init_attr->send_cq);
 
 		use_inlr_dci = (init_attr->qp_type == IB_EXP_QPT_DC_INI)    &&
 			       init_attr->max_inl_recv			    &&
@@ -267,18 +265,16 @@ struct ib_qp *mlx5_ib_exp_create_qp(struct ib_pd *pd,
 			*  max_inl_recv is reported according to SCQE.
 			*/
 			cqe_sz = use_inlr_dci ? scqe_sz :
-				mlx5_ib_get_cqe_size(dev, init_attr->recv_cq);
+				mlx5_ib_get_cqe_size(init_attr->recv_cq);
 
 			if (cqe_sz == 128)
 				init_attr->max_inl_recv = 64;
 			else
 				init_attr->max_inl_recv = 32;
-
 		} else {
 			init_attr->max_inl_recv = 0;
-		}
-
-	}
+		} 
+ 	}
 
 	return _mlx5_ib_create_qp(pd, (struct ib_qp_init_attr *)init_attr,
 				  udata, 1);
@@ -351,7 +347,7 @@ static struct mlx5_ib_qp *dct_create_qp(struct ib_pd *pd,
        MLX5_SET(dctc, dctc, counter_set_id, dev->port[attr->port - 1].cnts.set_id);
        MLX5_SET(dctc, dctc, user_index, uidx);
        if (attr->inline_size) {
-	       int cqe_sz = mlx5_ib_get_cqe_size(dev, attr->cq);
+	       int cqe_sz = mlx5_ib_get_cqe_size(attr->cq);
 
 	       if (cqe_sz == 128) {
 		       MLX5_SET(dctc, dctc, cs_res, MLX5_DCT_CS_RES_64);
@@ -410,6 +406,7 @@ static int dct_modify_qp_RTR(struct mlx5_ib_qp *mqp, struct ib_dct_init_attr *at
 	qp_attr.ah_attr.grh.sgid_index = attr->gid_index;
 	qp_attr.ah_attr.grh.hop_limit = attr->hop_limit;
 	qp_attr.ah_attr.grh.traffic_class = attr->tclass;
+	qp_attr.min_rnr_timer = attr->min_rnr_timer;
 
 	err = mlx5_ib_modify_dct(qp, &qp_attr, attr_mask, NULL);
 	return err;
@@ -428,7 +425,7 @@ struct ib_dct *mlx5_ib_create_dc_target(struct ib_pd *pd,
 	if (!rdma_is_port_valid(&dev->ib_dev, attr->port))
 		return ERR_PTR(-EINVAL);
 
-	if (mlx5_lag_is_active(dev->mdev) && !MLX5_CAP_GEN(dev->mdev, lag_dct))
+	if (dev->lag_active && !MLX5_CAP_GEN(dev->mdev, lag_dct))
 		return ERR_PTR(-EOPNOTSUPP);
 
 	if (pd && pd->uobject) {

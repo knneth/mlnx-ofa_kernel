@@ -47,7 +47,8 @@ enum {
 	MLX5_QP_FLAG_TYPE_DCI		= 1 << 5,
 	MLX5_QP_FLAG_TIR_ALLOW_SELF_LB_UC = 1 << 6,
 	MLX5_QP_FLAG_TIR_ALLOW_SELF_LB_MC = 1 << 7,
-	MLX5_QP_FLAG_PACKET_BASED_CREDIT_MODE = 1 << 8,
+	MLX5_QP_FLAG_ALLOW_SCATTER_CQE	= 1 << 8,
+	MLX5_QP_FLAG_PACKET_BASED_CREDIT_MODE = 1 << 9,
 };
 
 enum {
@@ -100,6 +101,7 @@ struct mlx5_ib_alloc_ucontext_req_v2 {
 
 enum mlx5_ib_alloc_ucontext_resp_mask {
 	MLX5_IB_ALLOC_UCONTEXT_RESP_MASK_CORE_CLOCK_OFFSET = 1UL << 0,
+	MLX5_IB_ALLOC_UCONTEXT_RESP_MASK_DUMP_FILL_MKEY    = 1UL << 1,
 };
 
 enum mlx5_user_cmds_supp_uhw {
@@ -148,7 +150,7 @@ struct mlx5_ib_alloc_ucontext_resp {
 	__u32	log_uar_size;
 	__u32	num_uars_per_page;
 	__u32	num_dyn_bfregs;
-	__u32	reserved3;
+	__u32	dump_fill_mkey;
 };
 
 struct mlx5_ib_alloc_pd_resp {
@@ -239,6 +241,7 @@ enum mlx5_ib_query_dev_resp_flags {
 	/* Support 128B CQE compression */
 	MLX5_IB_QUERY_DEV_RESP_FLAGS_CQE_128B_COMP = 1 << 0,
 	MLX5_IB_QUERY_DEV_RESP_FLAGS_CQE_128B_PAD  = 1 << 1,
+	MLX5_IB_QUERY_DEV_RESP_FLAGS_SCAT2CQE_DCT = 1 << 3,
 };
 
 enum mlx5_ib_tunnel_offloads {

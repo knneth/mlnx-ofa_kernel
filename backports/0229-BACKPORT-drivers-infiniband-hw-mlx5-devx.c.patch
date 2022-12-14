@@ -1,0 +1,51 @@
+From: Yishai Hadas <yishaih@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
+
+Change-Id: Iebd52ee74d044198ee084a530d9d626773a607fd
+---
+ drivers/infiniband/hw/mlx5/devx.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/hw/mlx5/devx.c
++++ b/drivers/infiniband/hw/mlx5/devx.c
+@@ -13,6 +13,9 @@
+ #include <rdma/uverbs_std_types.h>
+ #include <linux/mlx5/driver.h>
+ #include <linux/mlx5/fs.h>
++#include <linux/eventpoll.h>
++#include <linux/file.h>
++#include <linux/srcu.h>
+ #include "mlx5_ib.h"
+ 
+ #define UVERBS_MODULE_NAME mlx5_ib
+@@ -1239,13 +1242,21 @@ static int devx_obj_cleanup(struct ib_uo
+ 	if (ib_is_destroy_retryable(ret, why, uobject))
+ 		return ret;
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (obj->flags & DEVX_OBJ_FLAGS_INDIRECT_MKEY) {
+ 		struct mlx5_ib_dev *dev = to_mdev(uobject->context->device);
+ 
++#ifdef HAVE_CALL_SRCU
+ 		call_srcu(&dev->mr_srcu, &obj->devx_mr.rcu,
+ 			  devx_free_indirect_mkey);
++#else
++		synchronize_srcu(&dev->mr_srcu);
++		kfree(obj);
++#endif
++
+ 		return ret;
+ 	}
++#endif
+ 
+ 	kfree(obj);
+ 	return ret;
+@@ -1546,7 +1557,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+ 	async_data->mdev = mdev;
+ 	async_data->fd_uobj = fd_uobj;
+ 
+-	get_file(fd_uobj->object);
++	get_file((struct file *)fd_uobj->object);
+ 	MLX5_SET(general_obj_in_cmd_hdr, cmd_in, uid, uid);
+ 	err = mlx5_cmd_exec_cb(&ev_file->async_ctx, cmd_in,
+ 		    uverbs_attr_get_len(attrs,

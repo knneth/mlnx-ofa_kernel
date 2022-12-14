@@ -1,0 +1,638 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/eipoib/eth_ipoib_main.c
+
+Change-Id: I484b040349ebf6af607dd3b6c2db4b987083dc11
+---
+ drivers/net/eipoib/eth_ipoib_main.c | 299 +++++++++++++++++++++++++++++++++---
+ 1 file changed, 279 insertions(+), 20 deletions(-)
+
+--- a/drivers/net/eipoib/eth_ipoib_main.c
++++ b/drivers/net/eipoib/eth_ipoib_main.c
+@@ -57,6 +57,14 @@
+ #define PARENT_MAC_MASK 0xe7
+ 
+ /* forward declaration */
++#if !defined(HAVE_NETDEV_RX_HANDLER_REGISTER) || !defined(CONFIG_IS_RX_HANDLER_RESULT)
++#ifndef CONFIG_IS_RX_HANDLER_RESULT
++typedef int rx_handler_result_t;
++#define RX_HANDLER_CONSUMED 0
++#endif
++extern rx_handler_result_t (*eth_ipoib_handle_frame_hook)(struct sk_buff **skb);
++#endif
++
+ static rx_handler_result_t eipoib_handle_frame(struct sk_buff **pskb);
+ static int eipoib_device_event(struct notifier_block *unused,
+ 			       unsigned long event, struct net_device *dev);
+@@ -71,6 +79,46 @@ static const char * const version =
+ 
+ LIST_HEAD(parent_dev_list);
+ 
++#ifdef HAVE_VLAN_GRO_RECEIVE
++static void eth_ipoib_vlan_rx_register(struct net_device *dev,
++				       struct vlan_group *grp)
++{
++	struct parent *parent = netdev_priv(dev);
++	write_lock_bh(&parent->lock);
++	parent->vlgrp = grp;
++	write_unlock_bh(&parent->lock);
++}
++
++static void eth_ipoib_vlan_rx_add_vid(struct net_device *dev,
++				      unsigned short vid)
++{
++}
++
++static void eth_ipoib_vlan_rx_kill_vid(struct net_device *dev,
++				       unsigned short vid)
++{
++}
++
++static void parent_del_vlans_from_slave(struct parent *parent,
++					struct net_device *slave_dev)
++{
++	const struct net_device_ops *slave_ops = slave_dev->netdev_ops;
++
++	write_lock_bh(&parent->lock);
++
++	if (!(slave_dev->features & NETIF_F_HW_VLAN_FILTER) ||
++	    !(slave_ops->ndo_vlan_rx_kill_vid))
++		goto unreg;
++unreg:
++	if ((slave_dev->features & NETIF_F_HW_VLAN_RX) &&
++	    slave_ops->ndo_vlan_rx_register)
++		slave_ops->ndo_vlan_rx_register(slave_dev, NULL);
++
++	write_unlock_bh(&parent->lock);
++}
++#endif
++
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ /* name space sys/fs functions */
+ int eipoib_net_id __read_mostly;
+ 
+@@ -98,6 +146,7 @@ static struct pernet_operations eipoib_n
+ 	.id   = &eipoib_net_id,
+ 	.size = sizeof(struct eipoib_net),
+ };
++#endif
+ 
+ /* set mac fields emac=<qpn><lid> */
+ static inline
+@@ -377,6 +426,7 @@ static void parent_detach_slave(struct p
+ 	slave_put(slave, parent);
+ }
+ 
++#ifdef HAVE_NDO_FIX_FEATURES
+ static netdev_features_t parent_fix_features(struct net_device *dev,
+ 					     netdev_features_t features)
+ {
+@@ -391,8 +441,9 @@ static netdev_features_t parent_fix_feat
+ 
+ 	mask = features;
+ 	features &= ~NETIF_F_ONE_FOR_ALL;
++#ifdef NETIF_F_ALL_FOR_ALL
+ 	features |= NETIF_F_ALL_FOR_ALL;
+-
++#endif
+ 	parent_for_each_slave_rcu(parent, slave)
+ 		features = netdev_increment_features(features,
+ 						     slave->dev->features,
+@@ -406,6 +457,7 @@ static netdev_features_t parent_fix_feat
+ 	rcu_read_unlock_bh();
+ 	return features;
+ }
++#endif
+ 
+ static int parent_compute_features(struct parent *parent)
+ {
+@@ -426,7 +478,9 @@ static int parent_compute_features(struc
+ 	/* gets the common features from all slaves */
+ 	parent_for_each_slave_rcu(parent, slave) {
+ 		features &= slave->dev->features;
++#ifdef HAVE_NETDEV_HW_FEATURES
+ 		hw_features &= slave->dev->hw_features;
++#endif
+ 	}
+ 
+ 	features = features | PARENT_VLAN_FEATURES;
+@@ -436,12 +490,19 @@ static int parent_compute_features(struc
+ 
+ 	features &= hw_features;
+ 	features |= take;
+-
++#ifdef HAVE_NETDEV_HW_FEATURES
+ 	parent_dev->hw_features = hw_features;
++#endif
+ 	parent_dev->features = features;
+ 	parent_dev->vlan_features = parent_dev->features & ~PARENT_VLAN_FEATURES;
+ done:
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0))
+ 	pr_info("%s: %s: Features: 0x%llx\n",
++#elif (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,38))
++	pr_info("%s: %s: Features: 0x%dx\n",
++#else
++	pr_info("%s: %s: Features: 0x%lx\n",
++#endif
+ 		__func__, parent_dev->name, parent_dev->features);
+ 
+ 	rcu_read_unlock_bh();
+@@ -522,8 +583,12 @@ static void eipoib_reap_neigh(struct wor
+ 
+ /* enslave device <slave> to parent device <master> */
+ int parent_enslave(struct net_device *parent_dev,
++#ifndef NDO_ADD_SLAVE_3_PARAMS
++		   struct net_device *slave_dev)
++#else
+ 		   struct net_device *slave_dev,
+ 		   struct netlink_ext_ack *extack)
++#endif
+ {
+ 	struct parent *parent = netdev_priv(parent_dev);
+ 	struct slave *new_slave = NULL;
+@@ -604,8 +669,11 @@ int parent_enslave(struct net_device *pa
+ 		       slave_dev->name, res);
+ 		goto err_free;
+ 	}
+-
++#ifdef DEV_OPEN_HAS_2_PARAMS
++	res = dev_open(slave_dev, NULL);
++#else
+ 	res = dev_open(slave_dev);
++#endif
+ 	if (res) {
+ 		pr_info("open failed %s\n",
+ 			slave_dev->name);
+@@ -629,6 +697,7 @@ int parent_enslave(struct net_device *pa
+ 	if (res)
+ 		goto err_close;
+ 
++#ifdef HAVE_NETDEV_RX_HANDLER_REGISTER
+ 	/* register handler */
+ 	res = netdev_rx_handler_register(slave_dev, eipoib_handle_frame,
+ 					 new_slave);
+@@ -637,6 +706,9 @@ int parent_enslave(struct net_device *pa
+ 			parent_dev->name, res);
+ 		goto err_close;
+ 	}
++#else
++	slave_dev->ax25_ptr = new_slave;
++#endif
+ 
+ 	pr_info("%s: enslaving %s\n", parent_dev->name, slave_dev->name);
+ 
+@@ -729,10 +801,16 @@ int parent_release_slave(struct net_devi
+ 	write_unlock_bh(&parent->lock);
+ 
+ 	/* must do this from outside any spinlocks */
+-	netdev_rx_handler_unregister(slave->dev);
++#ifdef HAVE_NETDEV_RX_HANDLER_REGISTER
++	netdev_rx_handler_unregister(slave_dev);
++#endif
+ 
+ 	destroy_slave_symlinks(parent_dev, slave_dev);
+ 
++#ifdef HAVE_VLAN_GRO_RECEIVE
++	parent_del_vlans_from_slave(parent, slave_dev);
++#endif
++
+ 	netdev_set_parent_master(slave_dev, NULL);
+ 
+ 	dev_close(slave_dev);
+@@ -769,17 +847,32 @@ out:
+ }
+ 
+ /* -------------------------- Device entry points --------------------------- */
++static
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
+ void parent_get_stats(struct net_device *parent_dev,
+ 		      struct rtnl_link_stats64 *stats)
++#elif defined(HAVE_NDO_GET_STATS64)
++struct rtnl_link_stats64 *parent_get_stats(struct net_device *parent_dev,
++					   struct rtnl_link_stats64 *stats)
++#else
++struct net_device_stats *parent_get_stats(struct net_device *parent_dev)
++#endif
+ {
+ 	struct parent *parent = netdev_priv(parent_dev);
+ 	struct slave *slave;
++#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
+ 	struct rtnl_link_stats64 temp;
+ 
+ 	memset(stats, 0, sizeof(*stats));
++#else
++	struct net_device_stats *stats = &parent->stats;
++	struct net_device_stats local_stats;
++	memset(&local_stats, 0, sizeof(struct net_device_stats));
++#endif
+ 
+ 	rcu_read_lock_bh();
+ 	parent_for_each_slave_rcu(parent, slave) {
++#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
+ 		const struct rtnl_link_stats64 *sstats =
+ 			dev_get_stats(slave->dev, &temp);
+ 
+@@ -808,9 +901,44 @@ void parent_get_stats(struct net_device
+ 		stats->tx_fifo_errors += sstats->tx_fifo_errors;
+ 		stats->tx_heartbeat_errors += sstats->tx_heartbeat_errors;
+ 		stats->tx_window_errors += sstats->tx_window_errors;
+-	}
++#else
++		const struct net_device_stats *sstats = dev_get_stats(slave->dev);
++		local_stats.rx_packets += sstats->rx_packets;
++		local_stats.rx_bytes += sstats->rx_bytes;
++		local_stats.rx_errors += sstats->rx_errors;
++		local_stats.rx_dropped += sstats->rx_dropped;
++
++		local_stats.tx_packets += sstats->tx_packets;
++		local_stats.tx_bytes += sstats->tx_bytes;
++		local_stats.tx_errors += sstats->tx_errors;
++		local_stats.tx_dropped += sstats->tx_dropped;
++
++		local_stats.multicast += sstats->multicast;
++		local_stats.collisions += sstats->collisions;
++		local_stats.rx_length_errors += sstats->rx_length_errors;
++		local_stats.rx_over_errors += sstats->rx_over_errors;
++		local_stats.rx_crc_errors += sstats->rx_crc_errors;
++		local_stats.rx_frame_errors += sstats->rx_frame_errors;
++		local_stats.rx_fifo_errors += sstats->rx_fifo_errors;
++		local_stats.rx_missed_errors += sstats->rx_missed_errors;
++
++		local_stats.tx_aborted_errors += sstats->tx_aborted_errors;
++		local_stats.tx_carrier_errors += sstats->tx_carrier_errors;
++		local_stats.tx_fifo_errors += sstats->tx_fifo_errors;
++		local_stats.tx_heartbeat_errors += sstats->tx_heartbeat_errors;
++		local_stats.tx_window_errors += sstats->tx_window_errors;
++#endif
++
++	}
++#if !defined(HAVE_NDO_GET_STATS64) && !defined(HAVE_NDO_GET_STATS64_RET_VOID)
++	memcpy(stats, &local_stats, sizeof(struct net_device_stats));
++#endif
+ 
+ 	rcu_read_unlock_bh();
++
++#ifndef HAVE_NDO_GET_STATS64_RET_VOID
++        return stats;
++#endif
+ }
+ 
+ /* ---------------------------- Main funcs ---------------------------------- */
+@@ -827,8 +955,11 @@ static struct neigh *neigh_find(struct h
+ 				const u8 *addr)
+ {
+ 	struct neigh *neigh;
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++	struct hlist_node *hlnode;
++#endif
+ 
+-	hlist_for_each_entry(neigh, head, hlist) {
++	compat_hlist_for_each_entry(neigh, head, hlist) {
+ 		if (ether_addr_equal(neigh->emac, addr))
+ 			return neigh;
+ 	}
+@@ -839,8 +970,11 @@ static struct neigh *neigh_find_rcu(stru
+ 				const u8 *addr)
+ {
+ 	struct neigh *neigh;
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++	struct hlist_node *hlnode;
++#endif
+ 
+-	hlist_for_each_entry_rcu(neigh, head, hlist) {
++	compat_hlist_for_each_entry_rcu(neigh, head, hlist) {
+ 		if (ether_addr_equal(neigh->emac, addr))
+ 			return neigh;
+ 	}
+@@ -970,7 +1104,10 @@ static void slave_neigh_flush(struct sla
+ 	for (i = 0; i < NEIGH_HASH_SIZE; i++) {
+ 		struct neigh *neigh;
+ 		struct hlist_node *n;
+-		hlist_for_each_entry_safe(neigh, n, &slave->hash[i], hlist) {
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++		struct hlist_node *hlnode;
++#endif
++		compat_hlist_for_each_entry_safe(neigh, n, &slave->hash[i], hlist) {
+ 			/* perhasps use neigh_delete instead of eipoib_neigh_put? */
+ 			eipoib_neigh_put(neigh);
+ 		}
+@@ -1001,7 +1138,10 @@ static void slave_neigh_reap(struct pare
+ 	for (i = 0; i < NEIGH_HASH_SIZE; i++) {
+ 		struct neigh *neigh;
+ 		struct hlist_node *n;
+-		hlist_for_each_entry_safe(neigh, n, &slave->hash[i], hlist) {
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++		struct hlist_node *hlnode;
++#endif
++		compat_hlist_for_each_entry_safe(neigh, n, &slave->hash[i], hlist) {
+ 			int is_mc_neigh = 0;
+ 			/* check if the time is bigger than allowed */
+ 			/* was the neigh idle for two GC periods */
+@@ -1019,7 +1159,11 @@ static void slave_neigh_reap(struct pare
+ 
+ 				/* decrease ref count for kernel mc entry */
+ 				if (unlikely(is_mc_neigh))
++#ifdef HAVE_DEV_MC_DEL
+ 					dev_mc_del(slave->dev, neigh->imac);
++#else
++					dev_mc_delete(slave->dev, neigh->imac, INFINIBAND_ALEN, 1);
++#endif
+ 			}
+ 		}
+ 	}
+@@ -1120,8 +1264,11 @@ static inline struct slave *slave_find(s
+ 				const u8 *addr, u16 vlan)
+ {
+ 	struct slave *slave;
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++	struct hlist_node *hlnode;
++#endif
+ 
+-	hlist_for_each_entry(slave, head, hlist) {
++	compat_hlist_for_each_entry(slave, head, hlist) {
+ 		if (ether_addr_equal(slave->emac, addr) && slave->vlan == vlan)
+ 			return slave;
+ 	}
+@@ -1132,8 +1279,11 @@ static inline struct slave *slave_find_r
+ 				const u8 *addr, u16 vlan)
+ {
+ 	struct slave *slave;
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++	struct hlist_node *hlnode;
++#endif
+ 
+-	hlist_for_each_entry_rcu(slave, head, hlist) {
++	compat_hlist_for_each_entry_rcu(slave, head, hlist) {
+ 		if (ether_addr_equal(slave->emac, addr) && slave->vlan == vlan)
+ 			return slave;
+ 	}
+@@ -1689,7 +1839,11 @@ int add_mc_neigh(struct slave *slave, __
+ 	}
+ 
+ 	/* cause ipoib_set_mcast_list -> ipoib: mcast_restart_task */
++#ifdef HAVE_DEV_MC_ADD_2_PARAMS
+ 	ret = dev_mc_add(slave->dev, dst_mc_ib_mac_addr);
++#else
++	ret = dev_mc_add(slave->dev, dst_mc_ib_mac_addr, INFINIBAND_ALEN, 1);
++#endif
+ 	if (ret)
+ 		pr_err("%s: Failed to add mc (dev:%s, mc: %pI6). ret:%d\n",
+ 		       __func__, slave->dev->name, dst_mc_ib_mac_addr + 4, ret);
+@@ -1816,8 +1970,8 @@ static struct sk_buff *get_slave_skb(str
+ 
+ 	if ((neigh && nskb == skb) ||
+ 	    (is_broadcast_ether_addr(ethh->h_dest) && nskb == skb)) {
+-		/* ucast & bc, arp done already, currently support only IPv4 */
+-		if (dev_hard_header(nskb, dev, ETH_P_IP, rimac,
++		/* ucast & bc for arp done already.*/
++		if (dev_hard_header(nskb, dev, ntohs(skb->protocol), rimac,
+ 				    dev->dev_addr, nskb->len) < 0) {
+ 			pr_warn("%s: dev_hard_header failed\n",
+ 				dev->name);
+@@ -1976,14 +2130,34 @@ int add_vlan_and_send(struct parent *par
+ 	int rc;
+ 
+ 	if (vlan_tag) {
++#ifndef HAVE_3_PARAMS_FOR_VLAN_HWACCEL_PUT_TAG
++		__vlan_hwaccel_put_tag(skb, vlan_tag);
++#else
+ 		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan_tag);
++#endif
+ 		++parent->port_stats.rx_vlan;
+ 	}
+ 
++#ifndef HAVE_VLAN_GRO_RECEIVE
+ 	if (napi)
+ 		rc = napi_gro_receive(napi, skb);
+ 	else
+ 		rc = netif_receive_skb(skb);
++#else
++	if (vlan_tag && parent->vlgrp) {
++		if (napi)
++			rc = vlan_gro_receive(napi, parent->vlgrp,
++					      vlan_tag, skb);
++		else
++			rc = vlan_hwaccel_rx(skb, parent->vlgrp,
++					     vlan_tag);
++	} else {
++		if (napi)
++			rc = napi_gro_receive(napi, skb);
++		else /* Called from CM no GRO also on mainline */
++			rc = netif_receive_skb(skb);
++		}
++#endif
+ 
+ 	return rc;
+ }
+@@ -2050,8 +2224,11 @@ static rx_handler_result_t eipoib_handle
+ 	struct slave *slave;
+ 	rcu_read_lock_bh();
+ 
++#ifdef HAVE_NETDEV_RX_HANDLER_REGISTER
+ 	slave = eipoib_slave_get_rcu(skb->dev);
+-
++#else
++	slave = (struct slave *)skb->dev->ax25_ptr;
++#endif
+ 	parent_rx(skb, slave);
+ 
+ 	rcu_read_unlock_bh();
+@@ -2078,7 +2255,13 @@ static void prepare_802_1Q_skb(struct sk
+ 	memmove(skb->data + VLAN_HLEN, ethh, ETH_ALEN * 2);
+ 	skb_pull(skb, VLAN_HLEN);
+ 	ethh = (struct ethhdr *)skb->data;
++
++#ifndef HAVE_3_PARAMS_FOR_VLAN_HWACCEL_PUT_TAG
++	__vlan_hwaccel_put_tag(skb, vlan);
++#else
+ 	__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan);
++#endif
++
+ 	ethh->h_proto = proto;
+ 	skb->protocol = proto;
+ }
+@@ -2293,10 +2476,27 @@ static void parent_set_dev_addr(struct n
+ 	memcpy(parent->gid.raw, gid.raw, GID_LEN);
+ }
+ 
++#if defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
+ static u16 parent_select_q(struct net_device *dev, struct sk_buff *skb,
+-			   struct net_device *sb_dev, select_queue_fallback_t fallback)
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		    struct net_device *sb_dev,
++#else
++		    void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		    select_queue_fallback_t fallback)
++#else
++		    void *accel_priv)
++#endif
++#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++static u16 parent_select_q(struct net_device *dev, struct sk_buff *skb)
++#endif
+ {
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS
+ 	return fallback(dev, skb, NULL) % dev->real_num_tx_queues;
++#else
++	return fallback(dev, skb) % dev->real_num_tx_queues;
++#endif
+ }
+ 
+ int parent_add_vif_param(struct net_device *parent_dev,
+@@ -2370,22 +2570,45 @@ static const struct net_device_ops paren
+ 	.ndo_start_xmit		= parent_tx,
+ 	.ndo_select_queue	= parent_select_q,
+ 	/* parnt mtu is min(slaves_mtus) */
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = NULL,
++#else
+ 	.ndo_change_mtu		= NULL,
++#endif
++#ifdef HAVE_NDO_FIX_FEATURES
+ 	.ndo_fix_features	= parent_fix_features,
++#endif
+ 	/*
+ 	 * initial mac address is randomized, can be changed
+ 	 * thru this func later
+ 	 */
+ 	.ndo_set_mac_address = eth_mac_addr,
++
++#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
+ 	.ndo_get_stats64 = parent_get_stats,
++#else
++	.ndo_get_stats = parent_get_stats,
++#endif
++
++#ifdef HAVE_NDO_ADD_SLAVE
+ 	.ndo_add_slave = parent_enslave,
+ 	.ndo_del_slave = parent_release_slave,
++#endif
++
++#ifdef HAVE_VLAN_GRO_RECEIVE
++	.ndo_vlan_rx_register   = eth_ipoib_vlan_rx_register,
++	.ndo_vlan_rx_add_vid = eth_ipoib_vlan_rx_add_vid,
++	.ndo_vlan_rx_kill_vid = eth_ipoib_vlan_rx_kill_vid,
++#endif
+ };
+ 
+ static void parent_setup(struct net_device *parent_dev)
+ {
+ 	struct parent *parent = netdev_priv(parent_dev);
+ 
++#ifndef HAVE_NDO_GET_STATS64
++	memset(&parent->stats, 0, sizeof(struct net_device_stats));
++#endif
+ 	/* initialize rwlocks */
+ 	rwlock_init(&parent->lock);
+ 	rwlock_init(&parent->emac_info_lock);
+@@ -2404,13 +2627,17 @@ static void parent_setup(struct net_devi
+ 
+ 	/* Initialize the device options */
+ 	parent_dev->tx_queue_len = 0;
+-
++#ifdef HAVE_NETDEV_HW_FEATURES
+ 	parent_dev->hw_features = NETIF_F_SG | NETIF_F_IP_CSUM |
+ 		NETIF_F_RXCSUM | NETIF_F_GRO | NETIF_F_TSO;
+ 
+ 	parent_dev->features = parent_dev->hw_features;
+ 	parent_dev->vlan_features = parent_dev->hw_features;
+-
++#else
++	parent_dev->features = NETIF_F_SG | NETIF_F_IP_CSUM |
++			       NETIF_F_GRO | NETIF_F_TSO;
++	parent_dev->vlan_features = parent_dev->features;
++#endif
+ 	parent_dev->features |= PARENT_VLAN_FEATURES;
+ }
+ 
+@@ -2429,9 +2656,9 @@ static struct parent *parent_create(stru
+ 	num_queues = num_online_cpus();
+ 	num_queues = roundup_pow_of_two(num_queues);
+ 
+-	parent_dev = alloc_netdev_mq(sizeof(struct parent), "",
++	parent_dev = alloc_netdev_mqs(sizeof(struct parent), "",
+ 				     NET_NAME_UNKNOWN,
+-				     parent_setup, num_queues);
++				     parent_setup, num_queues, num_queues);
+ 	if (!parent_dev) {
+ 		pr_err("%s failed to alloc netdev!\n", ibd->name);
+ 		rc = -ENOMEM;
+@@ -2462,6 +2689,9 @@ static struct parent *parent_create(stru
+ 	strncpy(parent->ipoib_main_interface, ibd->name, IFNAMSIZ);
+ 	parent_dev->dev_id = ibd->dev_id;
+ 
++#ifdef HAVE_VLAN_GRO_RECEIVE
++	parent->vlgrp = NULL;
++#endif
+ 	return parent;
+ 
+ out_unreg:
+@@ -2504,12 +2734,20 @@ static void parent_free_all(void)
+ /* netdev events handlers */
+ static inline int is_ipoib_pif_intf(struct net_device *dev)
+ {
++#if !defined(HAVE_SYSFS_GET_DIRENT_2_PARAMS) || defined(HAVE_SYSFS_GET_DIRENT_2_PARAMS_AND_RETURN_SYSFS_DIRENT)
++	struct sysfs_dirent *child_sd;
++#else
+ 	struct kernfs_node *child_sd;
++#endif
+ 	if (ARPHRD_INFINIBAND != dev->type || !dev->dev.kobj.sd)
+ 		return 0;
+ 
+ 	/* if there is the "create_child directory", indicates parent */
++#ifndef HAVE_SYSFS_GET_DIRENT_2_PARAMS
++	child_sd = sysfs_get_dirent(dev->dev.kobj.sd, NULL, "create_child");
++#else
+ 	child_sd = sysfs_get_dirent(dev->dev.kobj.sd, "create_child");
++#endif
+ 	if (child_sd)
+ 		return 1;
+ 
+@@ -2652,7 +2890,11 @@ static int __init mod_init(void)
+ 
+ 	pr_info(DRV_NAME": %s", version);
+ 
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ 	rc = register_pernet_subsys(&eipoib_net_ops);
++#else
++	rc = mod_create_sysfs();
++#endif
+ 	if (rc)
+ 		goto out;
+ 
+@@ -2663,10 +2905,19 @@ static int __init mod_init(void)
+ 		goto unreg_subsys;
+ 	}
+ 
++#ifndef HAVE_NETDEV_RX_HANDLER_REGISTER
++	eth_ipoib_handle_frame_hook = eipoib_handle_frame;
++#endif
++
+ 	goto out;
+ 
+ unreg_subsys:
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ 	unregister_pernet_subsys(&eipoib_net_ops);
++#else
++	mod_destroy_sysfs();
++#endif
++
+ out:
+ 	return rc;
+ 
+@@ -2676,7 +2927,15 @@ static void __exit mod_exit(void)
+ {
+ 	unregister_netdevice_notifier(&parent_netdev_notifier);
+ 
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ 	unregister_pernet_subsys(&eipoib_net_ops);
++#else
++	mod_destroy_sysfs();
++#endif
++
++#ifndef HAVE_NETDEV_RX_HANDLER_REGISTER
++	eth_ipoib_handle_frame_hook = NULL;
++#endif
+ 
+ 	rtnl_lock();
+ 	parent_free_all();

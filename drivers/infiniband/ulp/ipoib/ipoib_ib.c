@@ -59,7 +59,7 @@ struct ipoib_ah *ipoib_create_ah(struct net_device *dev,
 	struct ipoib_ah *ah;
 	struct ib_ah *vah;
 
-	ah = kmalloc(sizeof *ah, GFP_KERNEL);
+	ah = kmalloc(sizeof(*ah), GFP_KERNEL);
 	if (!ah)
 		return ERR_PTR(-ENOMEM);
 
@@ -102,7 +102,6 @@ static void ipoib_ud_dma_unmap_rx(struct ipoib_dev_priv *priv,
 static int ipoib_ib_post_receive(struct net_device *dev, int id)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-	struct ib_recv_wr *bad_wr;
 	int ret;
 
 	priv->rx_wr.wr_id   = id | IPOIB_OP_RECV;
@@ -110,7 +109,7 @@ static int ipoib_ib_post_receive(struct net_device *dev, int id)
 	priv->rx_sge[1].addr = priv->rx_ring[id].mapping[1];
 
 
-	ret = ib_post_recv(priv->qp, &priv->rx_wr, &bad_wr);
+	ret = ib_post_recv(priv->qp, &priv->rx_wr, NULL);
 	if (unlikely(ret)) {
 		ipoib_warn(priv, "receive failed for buf %d (%d)\n", id, ret);
 		ipoib_ud_dma_unmap_rx(priv, priv->rx_ring[id].mapping);
@@ -236,7 +235,7 @@ static void ipoib_ib_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 	}
 
 	memcpy(mapping, priv->rx_ring[wr_id].mapping,
-	       IPOIB_UD_RX_SG * sizeof *mapping);
+	       IPOIB_UD_RX_SG * sizeof(*mapping));
 
 	/*
 	 * If we can't allocate a new RX buffer, dump
@@ -449,6 +448,7 @@ static void ipoib_ib_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	dev->stats.tx_bytes += tx_req->skb->len;
 
 	dev_kfree_skb_any(tx_req->skb);
+	tx_req->skb = NULL;
 
 	++priv->tx_tail;
 
@@ -586,7 +586,6 @@ static inline int post_send(struct ipoib_dev_priv *priv,
 			    struct ipoib_tx_buf *tx_req,
 			    void *head, int hlen)
 {
-	struct ib_send_wr *bad_wr;
 	struct sk_buff *skb = tx_req->skb;
 
 	if (tx_req->is_inline) {
@@ -609,7 +608,7 @@ static inline int post_send(struct ipoib_dev_priv *priv,
 	} else
 		priv->tx_wr.wr.opcode	= IB_WR_SEND;
 
-	return ib_post_send(priv->qp, &priv->tx_wr.wr, &bad_wr);
+	return ib_post_send(priv->qp, &priv->tx_wr.wr, NULL);
 }
 
 int ipoib_send(struct net_device *dev, struct sk_buff *skb,
@@ -619,7 +618,7 @@ int ipoib_send(struct net_device *dev, struct sk_buff *skb,
 	struct ipoib_tx_buf *tx_req;
 	int hlen, rc;
 	void *phead;
-	unsigned usable_sge = priv->max_send_sge - !!skb_headlen(skb);
+	unsigned int usable_sge = priv->max_send_sge - !!skb_headlen(skb);
 
 	if (skb_is_gso(skb)) {
 		hlen = skb_transport_offset(skb) + tcp_hdrlen(skb);
@@ -756,8 +755,7 @@ void ipoib_reap_ah(struct work_struct *work)
 
 	priv->fp.__ipoib_reap_ah(dev);
 
-	if (!test_bit(IPOIB_STOP_REAPER, &priv->flags) &&
-	    !test_bit(IPOIB_FLAG_GOING_DOWN, &priv->flags))
+	if (!test_bit(IPOIB_STOP_REAPER, &priv->flags))
 		queue_delayed_work(priv->wq, &priv->ah_reap_task,
 				   round_jiffies_relative(HZ));
 }
@@ -867,9 +865,16 @@ int ipoib_ib_dev_stop_default(struct net_device *dev)
 			while ((int)priv->tx_tail - (int)priv->tx_head < 0) {
 				tx_req = &priv->tx_ring[priv->tx_tail &
 							(priv->sendq_size - 1)];
+				if (!tx_req->skb) {
+					ipoib_dbg(priv,
+						  "timing out; tx skb already empty - continue\n");
+					++priv->tx_tail;
+					continue;
+				}
 				if (!tx_req->is_inline)
 					ipoib_dma_unmap_tx(priv, tx_req);
 				dev_kfree_skb_any(tx_req->skb);
+				tx_req->skb = NULL;
 				++priv->tx_tail;
 			}
 
@@ -958,12 +963,6 @@ int ipoib_ib_dev_open(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
-	if (test_bit(IPOIB_FLAG_GOING_DOWN, &priv->flags)) {
-		ipoib_warn(priv, "%s was called for device: %s which is going to be deleted\n",
-			   __func__, dev->name);
-		return -1;
-	}
-
 	ipoib_pkey_dev_check_presence(dev);
 
 	if (!test_bit(IPOIB_PKEY_ASSIGNED, &priv->flags)) {
@@ -972,11 +971,9 @@ int ipoib_ib_dev_open(struct net_device *dev)
 		return -1;
 	}
 
-	if (!test_bit(IPOIB_FLAG_GOING_DOWN, &priv->flags)) {
-		clear_bit(IPOIB_STOP_REAPER, &priv->flags);
-		queue_delayed_work(priv->wq, &priv->ah_reap_task,
-				   round_jiffies_relative(HZ));
-	}
+	clear_bit(IPOIB_STOP_REAPER, &priv->flags);
+	queue_delayed_work(priv->wq, &priv->ah_reap_task,
+			   round_jiffies_relative(HZ));
 
 	if (priv->rn_ops->ndo_open(dev)) {
 		pr_warn("%s: Failed to open dev\n", dev->name);
@@ -1244,11 +1241,8 @@ static void __ipoib_ib_dev_flush(struct ipoib_dev_priv *priv,
 	 * Flush any child interfaces too -- they might be up even if
 	 * the parent is down.
 	 */
-	list_for_each_entry(cpriv, &priv->child_intfs, list) {
-		/* trigger event only on child that is not going to be deleted */
-		if (!test_bit(IPOIB_FLAG_GOING_DOWN, &cpriv->flags))
-			__ipoib_ib_dev_flush(cpriv, level, nesting + 1);
-	}
+	list_for_each_entry(cpriv, &priv->child_intfs, list)
+		__ipoib_ib_dev_flush(cpriv, level, nesting + 1);
 
 	up_read(&priv->vlan_rwsem);
 

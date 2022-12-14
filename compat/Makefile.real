@@ -83,5 +83,7 @@ mlx_compat-y += exec.o
 mlx_compat-y += pci.o
 mlx_compat-y += rbtree.o
 mlx_compat-y += syscall.o
+mlx_compat-y += mmu_notifier.o
+mlx_compat-y += radix-tree.o
 
 mlx_compat-y += ../block/blk-mq-rdma.o

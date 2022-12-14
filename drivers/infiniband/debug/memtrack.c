@@ -772,9 +772,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"mlx4_alloc_pages",
 		"mlx4_alloc_page",
 		"mlx5e_page_alloc_mapped",
-		"mlx5e_page_release",
-		"mlx5e_rx_free_page_cache",
-		"mlx5e_rx_cache_reduce_clean_pending",
+		"mlx5e_put_page",
 		/* vnic skb functions */
 		"free_single_frag",
 		"vnic_alloc_rx_skb",

@@ -1,0 +1,140 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
+
+Change-Id: Icb56e4b83696ad166a987c404c5a84b8292e1bb1
+---
+ drivers/infiniband/core/netlink.c | 46 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+--- a/drivers/infiniband/core/netlink.c
++++ b/drivers/infiniband/core/netlink.c
+@@ -94,6 +94,7 @@ static bool is_nl_valid(unsigned int typ
+ 
+ 	if (!cb_table || (!cb_table[op].dump && !cb_table[op].doit))
+ 		return false;
++
+ 	return true;
+ }
+ 
+@@ -157,8 +158,12 @@ int ibnl_put_attr(struct sk_buff *skb, s
+ }
+ EXPORT_SYMBOL(ibnl_put_attr);
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ static int rdma_nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 			   struct netlink_ext_ack *extack)
++#else
++static int rdma_nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
++#endif
+ {
+ 	int type = nlh->nlmsg_type;
+ 	unsigned int index = RDMA_NL_GET_CLIENT(type);
+@@ -171,7 +176,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 	cb_table = rdma_nl_types[index].cb_table;
+ 
+ 	if ((cb_table[op].flags & RDMA_NL_ADMIN_PERM) &&
++#ifdef HAVE_NETLINK_CAPABLE
+ 	    !netlink_capable(skb, CAP_NET_ADMIN))
++#else
++	    sock_net(skb->sk) != &init_net)
++#endif
+ 		return -EPERM;
+ 
+ 	/*
+@@ -180,22 +189,36 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 	 */
+ 	if (index == RDMA_NL_LS) {
+ 		if (cb_table[op].doit)
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			return cb_table[op].doit(skb, nlh, extack);
++#else
++			return cb_table[op].doit(skb, nlh);
++#endif
+ 		return -EINVAL;
+ 	}
+ 	/* FIXME: Convert IWCM to properly handle doit callbacks */
+ 	if ((nlh->nlmsg_flags & NLM_F_DUMP) || index == RDMA_NL_RDMA_CM ||
+ 	    index == RDMA_NL_IWCM) {
++#ifdef HAVE_NETLINK_DUMP_CONTROL_DUMP
+ 		struct netlink_dump_control c = {
+ 			.dump = cb_table[op].dump,
+ 		};
+ 		if (c.dump)
+ 			return netlink_dump_start(nls, skb, nlh, &c);
++#else
++		return netlink_dump_start(nls, skb, nlh,
++					  cb_table[op].dump,
++					  NULL, 0);
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+ 	if (cb_table[op].doit)
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		return cb_table[op].doit(skb, nlh, extack);
++#else
++		return cb_table[op].doit(skb, nlh);
++#endif
+ 
+ 	return 0;
+ }
+@@ -207,10 +230,16 @@ static int rdma_nl_rcv_msg(struct sk_buf
+  * for that consumer only.
+  */
+ static int rdma_nl_rcv_skb(struct sk_buff *skb, int (*cb)(struct sk_buff *,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 						   struct nlmsghdr *,
+ 						   struct netlink_ext_ack *))
++#else
++						   struct nlmsghdr *))
++#endif
+ {
++#ifdef HAVE_NETLINK_EXT_ACK
+ 	struct netlink_ext_ack extack = {};
++#endif
+ 	struct nlmsghdr *nlh;
+ 	int err;
+ 
+@@ -238,13 +267,21 @@ static int rdma_nl_rcv_skb(struct sk_buf
+ 		if (nlh->nlmsg_type < NLMSG_MIN_TYPE)
+ 			goto ack;
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		err = cb(skb, nlh, &extack);
++#else
++		err = cb(skb, nlh);
++#endif
+ 		if (err == -EINTR)
+ 			goto skip;
+ 
+ ack:
+ 		if (nlh->nlmsg_flags & NLM_F_ACK || err)
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			netlink_ack(skb, nlh, err, &extack);
++#else
++			netlink_ack(skb, nlh, err);
++#endif
+ 
+ skip:
+ 		msglen = NLMSG_ALIGN(nlh->nlmsg_len);
+@@ -289,11 +326,20 @@ EXPORT_SYMBOL(rdma_nl_multicast);
+ 
+ int __init rdma_nl_init(void)
+ {
++#ifdef HAVE_NETLINK_KERNEL_CFG_INPUT
+ 	struct netlink_kernel_cfg cfg = {
+ 		.input	= rdma_nl_rcv,
+ 	};
+ 
++#ifdef HAVE_NETLINK_KERNEL_CREATE_3_PARAMS
+ 	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, &cfg);
++#else
++	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, THIS_MODULE, &cfg);
++#endif
++#else /* HAVE_NETLINK_KERNEL_CFG_INPUT */
++	nls = netlink_kernel_create(&init_net, NETLINK_RDMA, 0, rdma_nl_rcv,
++				    NULL, THIS_MODULE);
++#endif /* HAVE_NETLINK_KERNEL_CFG_INPUT */
+ 	if (!nls)
+ 		return -ENOMEM;
+ 

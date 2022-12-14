@@ -3,12 +3,45 @@
 
 #include "../../../compat/config.h"
 
+#ifdef CONFIG_COMPAT_TCF_PEDIT_MOD
+#include <net/act_api.h>
+
+struct tcf_pedit_key_ex {
+	enum pedit_header_type htype;
+	enum pedit_cmd cmd;
+};
+
+struct tcf_pedit {
+#ifdef HAVE_TCF_COMMON
+	struct tcf_common	common;
+#else
+	struct tc_action	common;
+#endif
+	unsigned char		tcfp_nkeys;
+	unsigned char		tcfp_flags;
+	struct tc_pedit_key	*tcfp_keys;
+	struct tcf_pedit_key_ex	*tcfp_keys_ex;
+};
+
+#ifdef HAVE_TCF_COMMON
+#define to_pedit(a) ((struct tcf_pedit *) a->priv)
+
+#define pc_to_pedit(pc) \
+	container_of(pc, struct tcf_pedit, common)
+#else
+#define to_pedit(a) ((struct tcf_pedit *)a)
+#endif
+
+#else /* CONFIG_COMPAT_TCF_PEDIT_MOD */
 #ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
 #include_next <net/tc_act/tc_pedit.h>
+#endif
+#endif
+
+#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
 
 #ifndef HAVE_TCF_PEDIT_NKEYS
 #include <linux/tc_act/tc_pedit.h>
-
 
 static inline bool is_tcf_pedit(const struct tc_action *a)
 {

@@ -149,7 +149,7 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
 
 	in->log_page_size = page_shift - MLX5_ADAPTER_PAGE_SHIFT;
 	in->page_offset = offset;
-	in->uid = to_mpd(pd)->uid;
+	in->uid = (in->type != IB_SRQT_XRC) ?  to_mpd(pd)->uid : 0;
 	if (MLX5_CAP_GEN(dev->mdev, cqe_version) == MLX5_CQE_VERSION_V1 &&
 	    in->type != IB_SRQT_BASIC)
 		in->user_index = uidx;
@@ -185,12 +185,8 @@ static int create_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq,
 		goto err_db;
 	}
 
-	mlx5_fill_fbc(srq->msrq.wqe_shift, ilog2(srq->msrq.max), &srq->fbc);
-	/* TODO: Any frag_buf initialization should be part of
-	 * mlx5_core API (such mlx5_fill_fbc). Additionally, It should be
-	 * taken out from mlx5_frag_buf_ctrl since it is not really used.
-	 */
-	srq->fbc.frag_buf.frags = srq->buf.frags;
+	mlx5_init_fbc(srq->buf.frags, srq->msrq.wqe_shift, ilog2(srq->msrq.max),
+		      &srq->fbc);
 
 	srq->head    = 0;
 	srq->tail    = srq->msrq.max - 1;
@@ -471,8 +467,8 @@ void mlx5_ib_free_srq_wqe(struct mlx5_ib_srq *srq, int wqe_index)
 	spin_unlock(&srq->lock);
 }
 
-int mlx5_ib_post_srq_recv(struct ib_srq *ibsrq, struct ib_recv_wr *wr,
-			  struct ib_recv_wr **bad_wr)
+int mlx5_ib_post_srq_recv(struct ib_srq *ibsrq, const struct ib_recv_wr *wr,
+			  const struct ib_recv_wr **bad_wr)
 {
 	struct mlx5_ib_srq *srq = to_msrq(ibsrq);
 	struct mlx5_wqe_srq_next_seg *next;

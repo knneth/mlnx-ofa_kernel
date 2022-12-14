@@ -1,0 +1,52 @@
+From: Yevgeny Kliteynik <kliteyn@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
+@@ -2,12 +2,17 @@
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
+ #include <linux/netdevice.h>
+-#include <net/ip_fib.h>
+-#include "lag.h"
+-#include "lag_mp.h"
+ #include "mlx5_core.h"
+ #include "eswitch.h"
+ 
++#if defined(MLX_USE_LAG_COMPAT) || defined(HAVE_LAG_TX_TYPE)
++#define MLX_LAG_SUPPORTED
++#endif
++
++#ifdef MLX_LAG_SUPPORTED
++#include "lag.h"
++
++#ifdef HAVE_FIB_NH_NOTIFIER_INFO
+ static bool mlx5_lag_multipath_check_prereq(struct mlx5_lag *ldev)
+ {
+ 	if (!ldev->pf[0].dev || !ldev->pf[1].dev)
+@@ -15,6 +20,7 @@ static bool mlx5_lag_multipath_check_pre
+ 
+ 	return mlx5_esw_multipath_prereq(ldev->pf[0].dev, ldev->pf[1].dev);
+ }
++#endif
+ 
+ static bool __mlx5_lag_is_multipath(struct mlx5_lag *ldev)
+ {
+@@ -32,6 +38,7 @@ bool mlx5_lag_is_multipath(struct mlx5_c
+ 	return res;
+ }
+ 
++#ifdef HAVE_FIB_NH_NOTIFIER_INFO
+ void mlx5e_tc_reoffload_flows_work(struct mlx5_core_dev *mdev);
+ 
+ /**
+@@ -311,3 +318,5 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
+ 	unregister_fib_notifier(&mp->fib_nb);
+ 	mp->fib_nb.notifier_call = NULL;
+ }
++#endif /* HAVE_FIB_NH_NOTIFIER_INFO */
++#endif /* MLX_LAG_SUPPORTED */

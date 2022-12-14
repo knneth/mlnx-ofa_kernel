@@ -45,6 +45,10 @@ static inline void __hash_init(struct hlist_head *ht, unsigned int sz)
 #define hash_min(val, bits)							\
 	(sizeof(val) <= 4 ? hash_32(val, bits) : hash_long(val, bits))
 
+#define hash_for_each_safe(name, bkt, node, tmp, obj, member)                   \
+	for ((bkt) = 0, node = NULL; node == NULL && (bkt) < HASH_SIZE(name); (bkt)++)\
+		hlist_for_each_entry_safe(obj, node, tmp, &name[bkt], member)
+
 #define hash_for_each_possible(name, obj, node, member, key)                   \
 	hlist_for_each_entry(obj, node, &name[hash_min(key, HASH_BITS(name))], member)
 

@@ -6,6 +6,10 @@
 
 #include_next <linux/blk-mq.h>
 
+#ifndef HAVE_BLK_MQ_MAP_QUEUES
+int blk_mq_map_queues(struct blk_mq_tag_set *set);
+#endif
+
 #ifndef HAVE_BLK_MQ_FREEZE_QUEUE_WAIT_TIMEOUT
 static inline int blk_mq_freeze_queue_wait_timeout(struct request_queue *q,
 						   unsigned long timeout)

@@ -363,7 +363,9 @@ static inline void net_dim_sample(u16 event_ctr,
 }
 
 #define NET_DIM_NEVENTS 64
+#ifndef BITS_PER_TYPE
 #define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
+#endif
 #define BIT_GAP(bits, end, start) ((((end) - (start)) + BIT_ULL(bits)) & (BIT_ULL(bits) - 1))
 
 static inline void net_dim_calc_stats(struct net_dim_sample *start,

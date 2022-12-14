@@ -1,4 +1,4 @@
-#ifndef CONFIG_COMPAT_KERNEL_4_9
+#ifndef CONFIG_NET_SCHED_NEW
 
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -37,6 +37,8 @@ struct tcf_tunnel_key {
 	__be32 ipv4_dst;
 	__be16 dstport;
 	u32 id;
+	u8 tos;
+	u8 ttl;
 };
 
 static int tcf_tunnel_key_release(struct tcf_tunnel_key *t, int bind)
@@ -61,6 +63,8 @@ static const struct nla_policy tunnel_key_policy[TCA_TUNNEL_KEY_MAX + 1] = {
 	[TCA_TUNNEL_KEY_ENC_IPV6_DST] = { .len = sizeof(struct in6_addr) },
 	[TCA_TUNNEL_KEY_ENC_KEY_ID]   = { .type = NLA_U32 },
 	[TCA_TUNNEL_KEY_ENC_DST_PORT] = { .type = NLA_U16 },
+	[TCA_TUNNEL_KEY_ENC_TOS]      = { .type = NLA_U8 },
+	[TCA_TUNNEL_KEY_ENC_TTL]      = { .type = NLA_U8 },
 };
 
 #define to_tunnel_key(pc) \
@@ -112,6 +116,10 @@ static int tcf_tunnel_key_init(struct net *net, struct nlattr *nla,
 		t->dstport = nla_get_u16(tb[TCA_TUNNEL_KEY_ENC_DST_PORT]);
 	if (tb[TCA_TUNNEL_KEY_ENC_KEY_ID])
 		t->id = nla_get_u32(tb[TCA_TUNNEL_KEY_ENC_KEY_ID]);
+	if (tb[TCA_TUNNEL_KEY_ENC_TOS])
+		t->tos = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TOS]);
+	if (tb[TCA_TUNNEL_KEY_ENC_TTL])
+		t->ttl = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TTL]);
 	spin_unlock_bh(&t->tcf_lock);
 
 	if (ret == ACT_P_CREATED) {
@@ -176,6 +184,10 @@ static int tcf_tunnel_key_dump(struct sk_buff *skb, struct tc_action *a, int bin
 	if (t->id &&
 	    nla_put_u32(skb, TCA_TUNNEL_KEY_ENC_KEY_ID, t->id))
 		goto nla_put_failure;
+	if (t->tos && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TOS, t->tos))
+		goto nla_put_failure;
+	if (t->ttl && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TTL, t->ttl))
+		goto nla_put_failure;
 	return skb->len;
 
 nla_put_failure:
@@ -214,7 +226,7 @@ MODULE_AUTHOR("Based on original module by Amir Vadai <amir@vadai.me>");
 MODULE_DESCRIPTION("ip tunnel manipulation actions - backport");
 MODULE_LICENSE("GPL v2");
 
-#else /* CONFIG_COMPAT_KERNEL_4_9 */
+#else /* CONFIG_NET_SCHED_NEW */
 
 /*
  * Copyright (c) 2016, Amir Vadai <amir@vadai.me>
@@ -285,6 +297,8 @@ static const struct nla_policy tunnel_key_policy[TCA_TUNNEL_KEY_MAX + 1] = {
 	[TCA_TUNNEL_KEY_ENC_IPV6_DST] = { .len = sizeof(struct in6_addr) },
 	[TCA_TUNNEL_KEY_ENC_KEY_ID]   = { .type = NLA_U32 },
 	[TCA_TUNNEL_KEY_ENC_DST_PORT] = {.type = NLA_U16},
+	[TCA_TUNNEL_KEY_ENC_TOS]      = { .type = NLA_U8 },
+	[TCA_TUNNEL_KEY_ENC_TTL]      = { .type = NLA_U8 },
 };
 
 static int tunnel_key_init(struct net *net, struct nlattr *nla,
@@ -301,6 +315,7 @@ static int tunnel_key_init(struct net *net, struct nlattr *nla,
 	bool exists = false;
 	__be16 dst_port = 0;
 	__be64 key_id;
+	u8 tos, ttl;
 	int ret = 0;
 	int err;
 
@@ -333,6 +348,13 @@ static int tunnel_key_init(struct net *net, struct nlattr *nla,
 		if (tb[TCA_TUNNEL_KEY_ENC_DST_PORT])
 			dst_port = nla_get_be16(tb[TCA_TUNNEL_KEY_ENC_DST_PORT]);
 
+		tos = 0;
+		if (tb[TCA_TUNNEL_KEY_ENC_TOS])
+			tos = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TOS]);
+		ttl = 0;
+		if (tb[TCA_TUNNEL_KEY_ENC_TTL])
+			ttl = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TTL]);
+
 		if (tb[TCA_TUNNEL_KEY_ENC_IPV4_SRC] &&
 		    tb[TCA_TUNNEL_KEY_ENC_IPV4_DST]) {
 			__be32 saddr;
@@ -341,7 +363,7 @@ static int tunnel_key_init(struct net *net, struct nlattr *nla,
 			saddr = nla_get_in_addr(tb[TCA_TUNNEL_KEY_ENC_IPV4_SRC]);
 			daddr = nla_get_in_addr(tb[TCA_TUNNEL_KEY_ENC_IPV4_DST]);
 
-			metadata = __ip_tun_set_dst(saddr, daddr, 0, 0,
+			metadata = backport__ip_tun_set_dst(saddr, daddr, tos, ttl,
 						    dst_port, TUNNEL_KEY,
 						    key_id, 0);
 		} else if (tb[TCA_TUNNEL_KEY_ENC_IPV6_SRC] &&
@@ -352,7 +374,7 @@ static int tunnel_key_init(struct net *net, struct nlattr *nla,
 			saddr = nla_get_in6_addr(tb[TCA_TUNNEL_KEY_ENC_IPV6_SRC]);
 			daddr = nla_get_in6_addr(tb[TCA_TUNNEL_KEY_ENC_IPV6_DST]);
 
-			metadata = __ipv6_tun_set_dst(&saddr, &daddr, 0, 0, dst_port,
+			metadata = backport__ipv6_tun_set_dst(&saddr, &daddr, tos, ttl, dst_port,
 						      0, TUNNEL_KEY,
 						      key_id, 0);
 		}
@@ -485,6 +507,12 @@ static int tunnel_key_dump(struct sk_buff *skb, struct tc_action *a,
 					      &params->tcft_enc_metadata->u.tun_info) ||
 		    nla_put_be16(skb, TCA_TUNNEL_KEY_ENC_DST_PORT, key->tp_dst))
 			goto nla_put_failure;
+
+		if (key->tos && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TOS, key->tos))
+			goto nla_put_failure;
+
+		if (key->ttl && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TTL, key->ttl))
+			goto nla_put_failure;
 	}
 
 	tcf_tm_dump(&tm, &t->tcf_tm);
@@ -566,4 +594,4 @@ MODULE_AUTHOR("Amir Vadai <amir@vadai.me>");
 MODULE_DESCRIPTION("ip tunnel manipulation actions");
 MODULE_LICENSE("GPL v2");
 
-#endif /* CONFIG_COMPAT_KERNEL_4_9 */
+#endif /* CONFIG_NET_SCHED_NEW */

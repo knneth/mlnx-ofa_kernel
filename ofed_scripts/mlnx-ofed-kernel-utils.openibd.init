@@ -366,6 +366,11 @@ if (modinfo scsi_transport_srp 2>/dev/null | grep depends: | grep -q compat 2>/d
     STATUS_MODULES="$STATUS_MODULES scsi_transport_srp"
 fi
 
+if (modinfo cls_flower 2>/dev/null | grep depends: | grep -q compat 2>/dev/null) ||
+    (lsmod 2>/dev/null | grep cls_flower | grep -q compat); then
+    UNLOAD_MODULES="$UNLOAD_MODULES cls_flower"
+fi
+
 ipoib_ha_pidfile=/var/run/ipoib_ha.pid
 srp_daemon_pidfile=/var/run/srp_daemon.pid
 _truescale=/etc/infiniband/truescale.cmds
@@ -1039,6 +1044,10 @@ start()
                 echo_failure $"Loading Mellanox MLX5_IB HCA driver: "
         fi
         RC=$[ $RC + $my_rc ]
+    fi
+
+    if [ -x /sbin/mlnx_eswitch_set  ]; then
+        /sbin/mlnx_eswitch_set
     fi
 
     if [ "X${MLX5_FPGA_LOAD}" == "Xyes" ]; then

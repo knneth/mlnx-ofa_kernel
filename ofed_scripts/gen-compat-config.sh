@@ -16,7 +16,7 @@ fi
 
 KERNEL_VERSION=$(${MAKE} -C ${KLIB_BUILD} kernelversion | sed -n 's/^\([0-9]\)\..*/\1/p')
 
-# 4.0/3.0 kernel stuff
+# 5.0/4.0/3.0 kernel stuff
 COMPAT_LATEST_3_VERSION="19"
 COMPAT_LATEST_4_VERSION="1"
 KERNEL_SUBLEVEL3="-1"
@@ -57,7 +57,7 @@ if [[ ${KERNEL_VERSION} -eq "3" ]]; then
 	KERNEL_SUBLEVEL3=$(${MAKE} -C ${KLIB_BUILD} kernelversion | sed -n 's/^3\.\([0-9]\+\).*/\1/p')
 elif [[ ${KERNEL_VERSION} -eq "4" ]]; then
 	KERNEL_SUBLEVEL4=$(${MAKE} -C ${KLIB_BUILD} kernelversion | sed -n 's/^4\.\([0-9]\+\).*/\1/p')
-else
+elif [[ ${KERNEL_VERSION} -eq "2" ]]; then
 	COMPAT_26LATEST_VERSION="39"
 	KERNEL_26SUBLEVEL=$(${MAKE} -C ${KLIB_BUILD} kernelversion | sed -n 's/^2\.6\.\([0-9]\+\).*/\1/p')
 	let KERNEL_26SUBLEVEL=${KERNEL_26SUBLEVEL}+1
@@ -69,15 +69,15 @@ fi
 
 let KERNEL_SUBLEVEL3=${KERNEL_SUBLEVEL3}+1
 let KERNEL_SUBLEVEL4=${KERNEL_SUBLEVEL4}+1
-if [[ ${KERNEL_VERSION} -ne "4" ]]; then
+if [[ ${KERNEL_VERSION} -eq "2" ]] || [[ ${KERNEL_VERSION} -eq "3" ]]; then
 	for i in $(seq ${KERNEL_SUBLEVEL3} ${COMPAT_LATEST_3_VERSION}); do
 		set_config CONFIG_COMPAT_KERNEL_3_${i} y
 	done
-fi
-for i in $(seq ${KERNEL_SUBLEVEL4} ${COMPAT_LATEST_4_VERSION}); do
-	set_config CONFIG_COMPAT_KERNEL_4_${i} y
-done
 
+        for i in $(seq ${KERNEL_SUBLEVEL4} ${COMPAT_LATEST_4_VERSION}); do
+	        set_config CONFIG_COMPAT_KERNEL_4_${i} y
+        done
+fi
 # The purpose of these seem to be the inverse of the above other varibales.
 # The RHEL checks seem to annotate the existance of RHEL minor versions.
 RHEL_MAJOR=$(grep ^RHEL_MAJOR ${KLIB_BUILD}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
@@ -195,15 +195,31 @@ if [[ ! -z ${RHEL7_2} ]]; then
 	set_config CONFIG_COMPAT_TCF_VLAN_MOD m
 fi
 
+RHEL7_4_JD=$(echo ${KVERSION} | grep 3.10.0-693.21.3)
+
+if [[ ${RHEL_MAJOR} -eq "7" && ${RHEL_MINOR} -le "4" && ! $RHEL7_4_JD ]]; then
+	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
+fi
+
+RHEL7_4ALT_AARCH64=$(echo ${KVERSION} | grep 4.11.0-.*el7a.aarch64)
+if [[ ! -z ${RHEL7_4ALT_AARCH64} ]]; then
+	set_config CONFIG_COMPAT_KERNEL_4_11_ARM y
+fi
+
 KERNEL4_9=$(echo ${KVERSION} | grep ^4\.9)
 if [[ ! -z ${KERNEL4_9} ]]; then
 	set_config CONFIG_COMPAT_KERNEL_4_9 y
 fi
 
-if [[ ! -z ${KERNEL4_9} ]]; then
+if [[ ${CONFIG_COMPAT_KERNEL_4_9} = "y" || ${CONFIG_COMPAT_KERNEL_4_11_ARM} = "y" ]]; then
+	set_config CONFIG_NET_SCHED_NEW y
 	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
 	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
 	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
+fi
+
+if [[ ${CONFIG_COMPAT_KERNEL_4_9} = "y" ]]; then
+	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
 fi
 
 if [ -e /etc/debian_version ]; then

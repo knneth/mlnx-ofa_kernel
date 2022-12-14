@@ -156,10 +156,10 @@ static void mlx5_device_disable_sriov(struct mlx5_core_dev *dev)
 out:
 	if (MLX5_ESWITCH_MANAGER(dev))
 		mlx5_eswitch_disable_sriov(dev->priv.eswitch);
-
+		
 	mlx5_destroy_vfs_sysfs(dev);
 
-	if (mlx5_wait_for_vf_pages(dev))
+	if (mlx5_wait_for_pages(dev, &dev->priv.vfs_pages))
 		mlx5_core_warn(dev, "timeout reclaiming VFs pages\n");
 }
 
@@ -298,12 +298,14 @@ bool mlx5_sriov_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev
 	    !mlx5_sriov_is_enabled(dev1))
 		return true;
 
+#ifdef CONFIG_MLX5_ESWITCH
 	if (MLX5_CAP_ESW(dev0, merged_eswitch) &&
 	    MLX5_VPORT_MANAGER(dev0) &&
 	    dev0->priv.eswitch->mode == SRIOV_OFFLOADS &&
 	    MLX5_VPORT_MANAGER(dev1) &&
 	    dev1->priv.eswitch->mode == SRIOV_OFFLOADS)
 		return true;
+#endif /* CONFIG_MLX5_ESWITCH */
 
 	return false;
 }

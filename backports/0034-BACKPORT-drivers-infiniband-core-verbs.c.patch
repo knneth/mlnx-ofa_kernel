@@ -1,0 +1,85 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/verbs.c
+
+Change-Id: Idbd37595ce0a58d4a17ab38c9140ef96d2a9b68e
+---
+ drivers/infiniband/core/verbs.c | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+--- a/drivers/infiniband/core/verbs.c
++++ b/drivers/infiniband/core/verbs.c
+@@ -1770,7 +1770,11 @@ int ib_get_eth_speed(struct ib_device *d
+ 	int rc;
+ 	u32 netdev_speed;
+ 	struct net_device *netdev;
++#ifdef HAVE___ETHTOOL_GET_LINK_KSETTINGS
+ 	struct ethtool_link_ksettings lksettings;
++#else
++	struct ethtool_cmd lksettings;
++#endif
+ 
+ 	if (rdma_port_get_link_layer(dev, port_num) != IB_LINK_LAYER_ETHERNET)
+ 		return -EINVAL;
+@@ -1783,13 +1787,21 @@ int ib_get_eth_speed(struct ib_device *d
+ 		return -ENODEV;
+ 
+ 	rtnl_lock();
++#ifdef HAVE___ETHTOOL_GET_LINK_KSETTINGS
+ 	rc = __ethtool_get_link_ksettings(netdev, &lksettings);
++#else
++	rc = __ethtool_get_settings(netdev, &lksettings);
++#endif
+ 	rtnl_unlock();
+ 
+ 	dev_put(netdev);
+ 
+ 	if (!rc) {
++#ifdef HAVE___ETHTOOL_GET_LINK_KSETTINGS
+ 		netdev_speed = lksettings.base.speed;
++#else
++		netdev_speed = ethtool_cmd_speed(&lksettings);
++#endif
+ 	} else {
+ 		netdev_speed = SPEED_1000;
+ 		pr_warn("%s speed is unknown, defaulting to %d\n", netdev->name,
+@@ -2384,6 +2396,7 @@ int ib_check_mr_status(struct ib_mr *mr,
+ }
+ EXPORT_SYMBOL(ib_check_mr_status);
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ int ib_set_vf_link_state(struct ib_device *device, int vf, u8 port,
+ 			 int state)
+ {
+@@ -2423,6 +2436,7 @@ int ib_set_vf_guid(struct ib_device *dev
+ 	return device->set_vf_guid(device, vf, port, guid, type);
+ }
+ EXPORT_SYMBOL(ib_set_vf_guid);
++#endif /* HAVE_NDO_SET_VF_MAC */
+ 
+ /**
+  * ib_map_mr_sg() - Map the largest prefix of a dma mapped SG list
+@@ -2761,3 +2775,24 @@ int rdma_init_netdev(struct ib_device *d
+ 					     netdev, params.param);
+ }
+ EXPORT_SYMBOL(rdma_init_netdev);
++
++#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
++int rdma_uninit_netdev(struct ib_device *device, struct net_device *netdev,
++		       u8 port_num, enum rdma_netdev_t type, int force_fail)
++{
++	struct rdma_netdev_alloc_params params;
++	int rc;
++
++	if (!device->rdma_netdev_get_params || force_fail)
++		return -EOPNOTSUPP;
++
++	rc = device->rdma_netdev_get_params(device, port_num, type, &params);
++	if (rc)
++		return rc;
++
++	params.uninitialize_rdma_netdev(netdev);
++
++	return rc;
++}
++EXPORT_SYMBOL(rdma_uninit_netdev);
++#endif

@@ -676,6 +676,56 @@ static void mlx5e_fill_attributes(struct mlx5e_priv *priv,
 }
 
 #ifdef CONFIG_MLX5_ESWITCH
+static ssize_t mlx5e_show_vepa(struct device *device,
+			       struct device_attribute *attr,
+			       char *buf)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	int len = 0;
+	u8 setting;
+	int err;
+
+	err = mlx5_eswitch_get_vepa(mdev->priv.eswitch, &setting);
+	if (err)
+		return err;
+
+	len += sprintf(buf, "%d\n", setting);
+
+	return len;
+}
+
+static ssize_t mlx5e_store_vepa(struct device *device,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	int udata, err;
+	u8 setting;
+
+	err = sscanf(buf, "%d", &udata);
+	if (err != 1)
+		return -EINVAL;
+
+	if (udata > 1 || udata < 0)
+		return -EINVAL;
+
+	setting = (u8)udata;
+
+	err = mlx5_eswitch_set_vepa(mdev->priv.eswitch, setting);
+	if (err)
+		return err;
+
+	return count;
+}
+
+static DEVICE_ATTR(vepa, S_IRUGO | S_IWUSR,
+		   mlx5e_show_vepa,
+		   mlx5e_store_vepa);
+
 static ssize_t mlx5e_show_vf_roce(struct device *device,
 				  struct device_attribute *attr,
 				  char *buf)
@@ -1047,6 +1097,10 @@ static int update_settings_sysfs(struct net_device *dev,
 		err = sysfs_add_file_to_group(&dev->dev.kobj,
 					      &dev_attr_vf_roce.attr,
 					      "settings");
+
+		err = sysfs_add_file_to_group(&dev->dev.kobj,
+					      &dev_attr_vepa.attr,
+					      "settings");
 	}
 #endif
 
@@ -1137,3 +1191,164 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 
 	kobject_put(priv->ecn_root_kobj);
 }
+
+#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
+enum {
+	ATTR_DST_IP,
+	ATTR_DST_PORT,
+};
+
+static ssize_t mlx5e_flow_param_show(struct kobject *kobj, char *buf, int type)
+{
+	struct netdev_queue *queue = (struct netdev_queue *)kobj;
+	struct net_device *netdev = queue->dev;
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5e_txqsq *sq = priv->txq2sq[queue - netdev->_tx];
+	int len;
+
+	switch (type) {
+	case ATTR_DST_IP:
+		len = sprintf(buf, "0x%8x\n", ntohl(sq->flow_map.dst_ip));
+		break;
+	case ATTR_DST_PORT:
+		len = sprintf(buf, "%d\n", ntohs(sq->flow_map.dst_port));
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return len;
+}
+
+static ssize_t mlx5e_flow_param_store(struct kobject *kobj, const char *buf,
+				      size_t len, int type)
+{
+	struct netdev_queue *queue = (struct netdev_queue *)kobj;
+	struct net_device *netdev = queue->dev;
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	unsigned int queue_index = queue - netdev->_tx;
+	struct mlx5e_txqsq *sq = priv->txq2sq[queue_index];
+	int err = 0;
+	u32 key;
+
+	switch (type) {
+	case ATTR_DST_IP:
+		err  = kstrtou32(buf, 16, &sq->flow_map.dst_ip);
+		if (err < 0)
+			return err;
+		sq->flow_map.dst_ip = htonl(sq->flow_map.dst_ip);
+		break;
+	case ATTR_DST_PORT:
+		err  = kstrtou16(buf, 0, &sq->flow_map.dst_port);
+		if (err < 0)
+			return err;
+		sq->flow_map.dst_port = htons(sq->flow_map.dst_port);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* Each queue can only apear once in the hash table */
+	hash_del_rcu(&sq->flow_map.hlist);
+	sq->flow_map.queue_index = queue_index;
+
+	if (sq->flow_map.dst_ip != 0 || sq->flow_map.dst_port != 0) {
+		/* hash and add to hash table */
+		key = sq->flow_map.dst_ip ^ sq->flow_map.dst_port;
+		hash_add_rcu(priv->flow_map_hash, &sq->flow_map.hlist, key);
+	}
+
+	return len;
+}
+
+static ssize_t mlx5e_dst_port_store(struct kobject *kobj,
+				    struct kobj_attribute *attr,
+				    const char *buf, size_t len)
+{
+	return mlx5e_flow_param_store(kobj, buf, len, ATTR_DST_PORT);
+}
+
+static ssize_t mlx5e_dst_port_show(struct kobject *kobj,
+				   struct kobj_attribute *attr,
+				   char *buf)
+{
+	return mlx5e_flow_param_show(kobj, buf, ATTR_DST_PORT);
+}
+
+static ssize_t mlx5e_dst_ip_store(struct kobject *kobj,
+				  struct kobj_attribute *attr,
+				  const char *buf, size_t len)
+{
+	return mlx5e_flow_param_store(kobj, buf, len, ATTR_DST_IP);
+}
+
+static ssize_t mlx5e_dst_ip_show(struct kobject *kobj,
+				 struct kobj_attribute *attr,
+				 char *buf)
+{
+	return mlx5e_flow_param_show(kobj, buf, ATTR_DST_IP);
+}
+
+static struct kobj_attribute dst_port = {
+	.attr  = {.name = "dst_port",
+		  .mode = (S_IWUSR | S_IRUGO) },
+	.show  = mlx5e_dst_port_show,
+	.store = mlx5e_dst_port_store,
+};
+
+static struct kobj_attribute dst_ip = {
+	.attr  = {.name = "dst_ip",
+		  .mode = (S_IWUSR | S_IRUGO) },
+	.show  = mlx5e_dst_ip_show,
+	.store = mlx5e_dst_ip_store,
+};
+
+static struct attribute *mlx5e_txmap_attrs[] = {
+	&dst_port.attr,
+	&dst_ip.attr,
+	NULL
+};
+
+static struct attribute_group mlx5e_txmap_attr = {
+	.name = "flow_map",
+	.attrs = mlx5e_txmap_attrs
+};
+
+int mlx5e_rl_init_sysfs(struct net_device *netdev, struct mlx5e_params params)
+{
+	struct netdev_queue *txq;
+	int q_ix;
+	int err;
+	int i;
+
+	for (i = 0; i < params.num_rl_txqs; i++) {
+		q_ix = i + params.num_channels * params.num_tc;
+		txq = netdev_get_tx_queue(netdev, q_ix);
+		err = sysfs_create_group(&txq->kobj, &mlx5e_txmap_attr);
+		if (err)
+			goto err;
+	}
+	return 0;
+err:
+	for (--i; i >= 0; i--) {
+		q_ix = i + params.num_channels * params.num_tc;
+		txq = netdev_get_tx_queue(netdev, q_ix);
+		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
+	}
+	return err;
+}
+
+void mlx5e_rl_remove_sysfs(struct mlx5e_priv *priv)
+{
+	struct netdev_queue *txq;
+	int q_ix;
+	int i;
+
+	for (i = 0; i < priv->channels.params.num_rl_txqs; i++) {
+		q_ix = i + priv->channels.params.num_channels *
+					priv->channels.params.num_tc;
+		txq = netdev_get_tx_queue(priv->netdev, q_ix);
+		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
+	}
+}
+#endif /*CONFIG_MLX5_EN_SPECIAL_SQ*/

@@ -199,12 +199,6 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 			return err;
 	}
 
-	if (MLX5_CAP_GEN(dev, device_memory)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_DEV_MEM);
-		if (err)
-			return err;
-	}
-
 	if (MLX5_CAP_GEN(dev, pcam_reg))
 		mlx5_get_pcam_reg(dev);
 
@@ -274,7 +268,7 @@ int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev)
 
 	force_state = MLX5_GET(teardown_hca_out, out, state);
 	if (force_state == MLX5_TEARDOWN_HCA_OUT_FORCE_STATE_FAIL) {
-		mlx5_core_warn(dev, "teardown with force mode failed, doing normal teardown\n");
+		mlx5_core_dbg(dev, "teardown with force mode failed, doing normal teardown\n");
 		return -EIO;
 	}
 
@@ -305,11 +299,11 @@ int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev)
 
 	state = MLX5_GET(teardown_hca_out, out, state);
 	if (state == MLX5_TEARDOWN_HCA_OUT_FORCE_STATE_FAIL) {
-		mlx5_core_warn(dev, "teardown with fast mode failed\n");
+		mlx5_core_dbg(dev, "teardown with fast mode failed\n");
 		return -EIO;
 	}
 
-	mlx5_set_nic_mode(dev, MLX5_NIC_IFC_DISABLED);
+	mlx5_set_nic_state(dev, MLX5_NIC_IFC_DISABLED);
 
 	/* Loop until device state turns to disable */
 	end = jiffies + msecs_to_jiffies(delay_ms);

@@ -66,10 +66,12 @@ static int ipoib_set_ring_param(struct net_device *dev,
 	unsigned long priv_current_flags;
 	unsigned int dev_current_flags;
 	bool init = false, init_fail = false;
+	bool is_changed_rx = false, is_changed_tx = false;
 
 	if (ringparam->rx_pending <= IPOIB_MAX_QUEUE_SIZE &&
 	    ringparam->rx_pending >= IPOIB_MIN_QUEUE_SIZE) {
 		new_recvq_size = roundup_pow_of_two(ringparam->rx_pending);
+		is_changed_rx = (new_recvq_size != priv->recvq_size);
 		if (ringparam->rx_pending != new_recvq_size)
 			pr_warn("%s: %s: rx_pending should be power of two. rx_pending is %d\n",
 				dev->name, __func__, new_recvq_size);
@@ -83,6 +85,7 @@ static int ipoib_set_ring_param(struct net_device *dev,
 	if (ringparam->tx_pending <= IPOIB_MAX_QUEUE_SIZE &&
 	    ringparam->tx_pending >= IPOIB_MIN_QUEUE_SIZE) {
 		new_sendq_size = roundup_pow_of_two(ringparam->tx_pending);
+		is_changed_tx = (new_sendq_size != priv->sendq_size);
 		if (ringparam->tx_pending != new_sendq_size)
 			pr_warn("%s: %s: tx_pending should be power of two. tx_pending is %d\n",
 				dev->name, __func__, new_sendq_size);
@@ -93,8 +96,7 @@ static int ipoib_set_ring_param(struct net_device *dev,
 		return -EINVAL;
 	}
 
-	if ((new_recvq_size != priv->recvq_size) ||
-	    (new_sendq_size != priv->sendq_size)) {
+	if (is_changed_rx || is_changed_tx) {
 		priv_current_flags = priv->flags;
 		dev_current_flags = dev->flags;
 
@@ -105,8 +107,8 @@ static int ipoib_set_ring_param(struct net_device *dev,
 			priv->recvq_size = new_recvq_size;
 			priv->sendq_size = new_sendq_size;
 			if (priv->rn_ops->ndo_init(dev)) {
-				new_recvq_size >>= 1;
-				new_sendq_size >>= 1;
+				new_recvq_size >>= is_changed_rx;
+				new_sendq_size >>= is_changed_tx;
 				/* keep the values always legal */
 				new_recvq_size = max_t(unsigned int,
 						       new_recvq_size,
@@ -199,43 +201,13 @@ static int ipoib_set_coalesce(struct net_device *dev,
 	ret = rdma_set_cq_moderation(priv->recv_cq,
 				     coal->rx_max_coalesced_frames,
 				     coal->rx_coalesce_usecs);
-	if (ret && ret != -ENOSYS) {
+	if (ret && ret != -EOPNOTSUPP) {
 		ipoib_warn(priv, "failed modifying CQ (%d)\n", ret);
 		return ret;
 	}
 
 	priv->ethtool.coalesce_usecs       = coal->rx_coalesce_usecs;
 	priv->ethtool.max_coalesced_frames = coal->rx_max_coalesced_frames;
-
-	return 0;
-}
-
-static int ipoib_get_settings(struct net_device *dev, struct ethtool_cmd *ecmd)
-{
-	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-	struct ib_port_attr attr;
-	char *speed = "";
-	int rate;/* in deci-Gb/sec */
-	int ret;
-
-	ret = ib_query_port(priv->ca, priv->port, &attr);
-	if (ret)
-		return ret;
-
-	ecmd->duplex = DUPLEX_FULL;
-	ecmd->autoneg = AUTONEG_DISABLE;
-	ecmd->phy_address = 255;
-	ecmd->port = PORT_OTHER;/* till define IB port type */
-
-	ib_active_speed_enum_to_rate(attr.active_speed,
-				     &rate,
-				     &speed);
-
-	rate *= ib_width_enum_to_int(attr.active_width);
-	if (rate < 0)
-		rate = -1;
-
-	ethtool_cmd_speed_set(ecmd, rate * 100);
 
 	return 0;
 }
@@ -346,7 +318,6 @@ static const struct ethtool_ops ipoib_ethtool_ops = {
 	.get_drvinfo		= ipoib_get_drvinfo,
 	.get_coalesce		= ipoib_get_coalesce,
 	.set_coalesce		= ipoib_set_coalesce,
-	.get_settings		= ipoib_get_settings,
 	.get_link		= ethtool_op_get_link,
 	.get_strings		= ipoib_get_strings,
 	.get_ethtool_stats	= ipoib_get_ethtool_stats,

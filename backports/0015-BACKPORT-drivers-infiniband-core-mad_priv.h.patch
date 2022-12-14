@@ -1,0 +1,45 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad_priv.h
+
+Change-Id: Ia00c21cb88fce7cd90b82458c3c9a8316f07ee40
+---
+ drivers/infiniband/core/mad_priv.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/infiniband/core/mad_priv.h
++++ b/drivers/infiniband/core/mad_priv.h
+@@ -89,6 +89,9 @@ struct ib_rmpp_segment {
+ };
+ 
+ struct ib_mad_agent_private {
++#ifndef HAVE_IDR_LOCK
++	struct list_head agent_list;
++#endif
+ 	struct ib_mad_agent agent;
+ 	struct ib_mad_reg_req *reg_req;
+ 	struct ib_mad_qp_info *qp_info;
+@@ -105,10 +108,14 @@ struct ib_mad_agent_private {
+ 
+ 	atomic_t refcount;
+ 	int send_list_closed;
++#ifndef HAVE_IDR_LOCK
++	struct completion comp;
++#else
+ 	union {
+ 		struct completion comp;
+ 		struct rcu_head rcu;
+ 	};
++#endif
+ };
+ 
+ struct ib_mad_snoop_private {
+@@ -241,6 +248,9 @@ struct ib_mad_port_private {
+ 
+ 	spinlock_t reg_lock;
+ 	struct ib_mad_mgmt_version_table version[MAX_MGMT_VERSION];
++#ifndef HAVE_IDR_LOCK
++	struct list_head agent_list;
++#endif
+ 	struct workqueue_struct *wq;
+ 	struct ib_mad_qp_info qp_info[IB_MAD_QPS_CORE];
+ 	struct sa_cc_data sa_cc;

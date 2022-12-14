@@ -173,18 +173,12 @@ int mlx4_ib_exp_uar_mmap(struct ib_ucontext *context, struct vm_area_struct *vma
 		return -ENOMEM;
 	}
 
-	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-
-	if (io_remap_pfn_range(vma, vma->vm_start,
-			       uar->uar.pfn,
-			       PAGE_SIZE, vma->vm_page_prot)) {
-		mlx4_uar_free(dev->dev, &uar->uar);
-		kfree(uar);
-
-		return -EAGAIN;
-	}
-
-	mlx4_ib_set_vma_data(vma, &uar->hw_bar_info[HW_BAR_DB]);
+	rdma_user_mmap_io(context, vma,
+				uar->uar.pfn, PAGE_SIZE,
+				pgprot_noncached(vma->vm_page_prot), NULL);
+        //We need it as in use in find_user_uar func
+	(&uar->hw_bar_info[HW_BAR_DB])->vma = vma;
+	
 	mutex_lock(&mucontext->user_uar_mutex);
 	list_add(&uar->list, &mucontext->user_uar_list);
 	mutex_unlock(&mucontext->user_uar_mutex);
@@ -217,18 +211,15 @@ int mlx4_ib_exp_bf_mmap(struct ib_ucontext *context, struct vm_area_struct *vma,
 			break;
 	if (!uar || uar->user_idx != parm)
 		return -EINVAL;
-
+	
 	/* We prevent double mmaping on same context */
 	if (uar->hw_bar_info[HW_BAR_BF].vma)
 		return -EINVAL;
 
-	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+	rdma_user_mmap_io(context, vma, 
+				uar->uar.pfn + dev->dev->caps.num_uars, PAGE_SIZE, 
+				pgprot_noncached(vma->vm_page_prot), NULL);
+	(&uar->hw_bar_info[HW_BAR_BF])->vma = vma;
 
-	if (io_remap_pfn_range(vma, vma->vm_start,
-			       uar->uar.pfn + dev->dev->caps.num_uars,
-			       PAGE_SIZE, vma->vm_page_prot))
-		return -EAGAIN;
-
-	mlx4_ib_set_vma_data(vma, &uar->hw_bar_info[HW_BAR_BF]);
 	return 0;
 }

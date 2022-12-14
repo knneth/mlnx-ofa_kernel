@@ -139,6 +139,11 @@ static ssize_t type_read(struct file *filp, char __user *buf, size_t count,
 			 loff_t *pos)
 {
 	struct fs_node *node = filp->private_data;
+/* 
+ * Talat - PaulK should manage all the FS_TYPE_PRIO_CHAINS type and 
+ * handle all the debugfs side, for now we handle it as FS_TYPE_PRIO type.
+ * 
+ * */
 
 	switch (node->type) {
 	case FS_TYPE_FLOW_ENTRY:
@@ -154,6 +159,7 @@ static ssize_t type_read(struct file *filp, char __user *buf, size_t count,
 		return simple_read_from_buffer(buf, count, pos, "flow table\n",
 					       sizeof("flow table\n") - 1);
 	case FS_TYPE_PRIO:
+	case FS_TYPE_PRIO_CHAINS: 
 		return simple_read_from_buffer(buf, count, pos, "priority\n",
 					       sizeof("priority\n") - 1);
 	case FS_TYPE_FLOW_GROUP:
@@ -183,6 +189,7 @@ static int add_obj_debugfs(struct fs_node *node)
 		err = fs_debugfs_add_fg(node);
 		break;
 	case FS_TYPE_PRIO:
+	case FS_TYPE_PRIO_CHAINS:
 		err = fs_debugfs_add_prio(node);
 		break;
 	case FS_TYPE_FLOW_ENTRY:
@@ -238,7 +245,8 @@ static struct dentry *get_debugfs_parent(struct fs_node *node)
 		fs_get_obj(fte, node->parent);
 		return fte->debugfs.dests;
 	}
-	case FS_TYPE_PRIO: {
+	case FS_TYPE_PRIO:
+	case FS_TYPE_PRIO_CHAINS: {
 		struct mlx5_flow_namespace *ns;
 
 		fs_get_obj(ns, node->parent);

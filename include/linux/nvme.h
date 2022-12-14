@@ -787,6 +787,11 @@ enum {
 	NVME_FEAT_HOST_MEM_BUF	= 0x0d,
 	NVME_FEAT_TIMESTAMP	= 0x0e,
 	NVME_FEAT_KATO		= 0x0f,
+	NVME_FEAT_HCTM		= 0x10,
+	NVME_FEAT_NOPSC		= 0x11,
+	NVME_FEAT_RRL		= 0x12,
+	NVME_FEAT_PLM_CONFIG	= 0x13,
+	NVME_FEAT_PLM_WINDOW	= 0x14,
 	NVME_FEAT_SW_PROGRESS	= 0x80,
 	NVME_FEAT_HOST_ID	= 0x81,
 	NVME_FEAT_RESV_MASK	= 0x82,
@@ -932,8 +937,13 @@ struct nvme_get_log_page_command {
 	__le16			numdl;
 	__le16			numdu;
 	__u16			rsvd11;
-	__le32			lpol;
-	__le32			lpou;
+	union {
+		struct {
+			__le32 lpol;
+			__le32 lpou;
+		};
+		__le64 lpo;
+	};
 	__u32			rsvd14[2];
 };
 
@@ -1236,6 +1246,7 @@ enum {
 	NVME_SC_ANA_PERSISTENT_LOSS	= 0x301,
 	NVME_SC_ANA_INACCESSIBLE	= 0x302,
 	NVME_SC_ANA_TRANSITION		= 0x303,
+	NVME_SC_HOST_PATH_ERROR		= 0x370,
 
 	NVME_SC_DNR			= 0x4000,
 };

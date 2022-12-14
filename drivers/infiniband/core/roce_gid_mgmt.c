@@ -59,6 +59,7 @@ struct update_gid_event_work {
 	union ib_gid       gid;
 	struct ib_gid_attr gid_attr;
 	enum gid_op_type gid_op;
+	unsigned long ndev_event;
 };
 
 #define ROCE_NETDEV_CALLBACK_SZ		3
@@ -72,6 +73,8 @@ struct netdev_event_work_cmd {
 struct netdev_event_work {
 	struct work_struct		work;
 	struct netdev_event_work_cmd	cmds[ROCE_NETDEV_CALLBACK_SZ];
+	/* Indicates which netdev event occurred in notifier chain. */
+	unsigned long			ndev_event;
 };
 
 static const struct {
@@ -513,8 +516,11 @@ static void enum_all_gids_of_dev_cb(struct ib_device *ib_dev,
  */
 void rdma_roce_rescan_device(struct ib_device *ib_dev)
 {
+	/* While rescanning the device, send NETDEV_UP event as intent is
+	 * to add new GID entries for the netdev.
+	 */
 	ib_enum_roce_netdev(ib_dev, pass_all_filter, NULL,
-			    enum_all_gids_of_dev_cb, NULL);
+			    enum_all_gids_of_dev_cb, NULL, NETDEV_UP);
 }
 EXPORT_SYMBOL(rdma_roce_rescan_device);
 
@@ -627,7 +633,7 @@ static void netdevice_event_work_handler(struct work_struct *_work)
 		ib_enum_all_roce_netdevs(work->cmds[i].filter,
 					 work->cmds[i].filter_ndev,
 					 work->cmds[i].cb,
-					 work->cmds[i].ndev);
+					 work->cmds[i].ndev, work->ndev_event);
 		dev_put(work->cmds[i].ndev);
 		dev_put(work->cmds[i].filter_ndev);
 	}
@@ -636,7 +642,7 @@ static void netdevice_event_work_handler(struct work_struct *_work)
 }
 
 static int netdevice_queue_work(struct netdev_event_work_cmd *cmds,
-				struct net_device *ndev)
+				struct net_device *ndev, unsigned long event)
 {
 	unsigned int i;
 	struct netdev_event_work *ndev_work =
@@ -654,6 +660,7 @@ static int netdevice_queue_work(struct netdev_event_work_cmd *cmds,
 		dev_hold(ndev_work->cmds[i].ndev);
 		dev_hold(ndev_work->cmds[i].filter_ndev);
 	}
+	ndev_work->ndev_event = event;
 	INIT_WORK(&ndev_work->work, netdevice_event_work_handler);
 
 	queue_work(gid_cache_wq, &ndev_work->work);
@@ -671,11 +678,6 @@ static const struct netdev_event_work_cmd add_cmd_upper_ips = {
 	.filter = is_eth_port_of_netdev_filter
 };
 
-static const struct netdev_event_work_cmd bonding_default_add_cmd = {
-	.cb	= add_default_gids,
-	.filter	= is_upper_ndev_bond_master_filter
-};
-
 static void
 ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
 		  struct netdev_event_work_cmd *cmds)
@@ -690,6 +692,11 @@ ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
 	cmds[0].ndev = changeupper_info->upper_dev;
 	cmds[1] = add_cmd;
 }
+
+static const struct netdev_event_work_cmd bonding_default_add_cmd = {
+	.cb	= add_default_gids,
+	.filter	= is_upper_ndev_bond_master_filter
+};
 
 static void
 ndev_event_link(struct net_device *event_ndev,
@@ -799,7 +806,7 @@ static int netdevice_event(struct notifier_block *this, unsigned long event,
 		return NOTIFY_DONE;
 	}
 
-	return netdevice_queue_work(cmds, ndev);
+	return netdevice_queue_work(cmds, ndev, event);
 }
 
 static void update_gid_event_work_handler(struct work_struct *_work)
@@ -809,7 +816,8 @@ static void update_gid_event_work_handler(struct work_struct *_work)
 
 	ib_enum_all_roce_netdevs(is_eth_port_of_netdev_filter,
 				 work->gid_attr.ndev,
-				 callback_for_addr_gid_device_scan, work);
+				 callback_for_addr_gid_device_scan,
+				 work, work->ndev_event);
 
 	dev_put(work->gid_attr.ndev);
 	kfree(work);
@@ -845,6 +853,7 @@ static int addr_event(struct notifier_block *this, unsigned long event,
 
 	rdma_ip2gid(sa, &work->gid);
 	work->gid_op = gid_op;
+	work->ndev_event = event;
 
 	memset(&work->gid_attr, 0, sizeof(work->gid_attr));
 	dev_hold(ndev);

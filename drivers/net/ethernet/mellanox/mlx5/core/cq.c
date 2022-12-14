@@ -124,7 +124,8 @@ int mlx5_core_create_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 		goto err_cmd;
 
 	/* Add to async EQ CQ tree to recv async events */
-	err = mlx5_eq_add_cq(&dev->priv.eq_table.async_eq, cq);
+	err = mlx5_eq_add_cq(&dev->priv.eq_table.ctrl_eqs[MLX5_EQ_VEC_ASYNC],
+			     cq);
 	if (err)
 		goto err_cq_add;
 
@@ -157,7 +158,8 @@ int mlx5_core_destroy_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq)
 	u32 in[MLX5_ST_SZ_DW(destroy_cq_in)] = {0};
 	int err;
 
-	err = mlx5_eq_del_cq(&dev->priv.eq_table.async_eq, cq);
+	err = mlx5_eq_del_cq(&dev->priv.eq_table.ctrl_eqs[MLX5_EQ_VEC_ASYNC],
+			     cq);
 	if (err)
 		return err;
 

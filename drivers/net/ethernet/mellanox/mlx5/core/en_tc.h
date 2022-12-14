@@ -42,7 +42,9 @@
 enum {
 	MLX5E_TC_INGRESS = BIT(0),
 	MLX5E_TC_EGRESS  = BIT(1),
-	MLX5E_TC_LAST_EXPORTED_BIT = 1,
+	MLX5E_TC_NIC_OFFLOAD = BIT(2),
+	MLX5E_TC_ESW_OFFLOAD = BIT(3),
+	MLX5E_TC_LAST_EXPORTED_BIT = 3,
 };
 
 int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
@@ -61,19 +63,24 @@ int mlx5e_stats_flower(struct mlx5e_priv *priv,
 
 struct mlx5e_encap_entry;
 void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
-			      struct mlx5e_encap_entry *e);
+			      struct mlx5e_encap_entry *e,
+			      unsigned long n_updated);
 void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,
-			      struct mlx5e_encap_entry *e);
+			      struct mlx5e_encap_entry *e,
+			      unsigned long n_updated);
+bool mlx5e_encap_take(struct mlx5e_encap_entry *e);
+void mlx5e_encap_put(struct mlx5e_priv *priv, struct mlx5e_encap_entry *e);
 
 struct mlx5e_neigh_hash_entry;
 void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe);
 
-int mlx5e_tc_num_filters(struct mlx5e_priv *priv);
+int mlx5e_tc_num_filters(struct mlx5e_priv *priv, int flags);
+void mlx5e_tc_reoffload_flows_work(struct mlx5_core_dev *mdev);
 
 #else /* CONFIG_MLX5_ESWITCH */
 static inline int  mlx5e_tc_nic_init(struct mlx5e_priv *priv) { return 0; }
 static inline void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv) {}
-static inline int  mlx5e_tc_num_filters(struct mlx5e_priv *priv) { return 0; }
+static inline int  mlx5e_tc_num_filters(struct mlx5e_priv *priv, int flags) { return 0; }
 #endif
 
 #endif /* __MLX5_EN_TC_H__ */

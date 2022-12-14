@@ -5,6 +5,11 @@
 
 #include_next <net/tc_act/tc_gact.h>
 
+#ifndef TC_ACT_GOTO_CHAIN
+#define __TC_ACT_EXT(local) ((local) << __TC_ACT_EXT_SHIFT)
+#define TC_ACT_GOTO_CHAIN __TC_ACT_EXT(2)
+#endif
+
 #ifdef CONFIG_COMPAT_TCF_GACT
 #include <net/pkt_cls.h>
 #include <net/netlink.h>

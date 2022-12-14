@@ -1,0 +1,32 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+
+Change-Id: I1cfee98458d8f70d4cc6f0c9a46eec7d0ad701c7
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+@@ -889,12 +889,20 @@ static ssize_t num_vf_show(struct device
+ 
+ static DEVICE_ATTR(mlx5_num_vfs, 0600, num_vf_show, num_vf_store);
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops vf_sysfs_ops = {
++#else
++static struct sysfs_ops vf_sysfs_ops = {
++#endif
+ 	.show = vf_attr_show,
+ 	.store = vf_attr_store,
+ };
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops vf_group_sysfs_ops = {
++#else
++static struct sysfs_ops vf_group_sysfs_ops = {
++#endif
+ 	.show = vf_group_attr_show,
+ 	.store = vf_group_attr_store,
+ };

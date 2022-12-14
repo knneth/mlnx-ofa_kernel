@@ -504,6 +504,9 @@ static struct ib_ah *_rdma_create_ah(struct ib_pd *pd,
 {
 	struct ib_ah *ah;
 
+	if (!pd->device->create_ah)
+		return ERR_PTR(-EOPNOTSUPP);
+
 	ah = pd->device->create_ah(pd, ah_attr, udata);
 
 	if (!IS_ERR(ah)) {
@@ -813,18 +816,14 @@ int ib_init_ah_attr_from_wc(struct ib_device *device, u8 port_num,
 						sgid_attr);
 			return 0;
 		} else {
+
 			rdma_move_grh_sgid_attr(ah_attr,
 						&sgid,
 						flow_class & 0xFFFFF,
 						hoplimit,
 						(flow_class >> 20) & 0xFF,
 						sgid_attr);
-
-			ret = ib_resolve_unicast_gid_dmac(device, ah_attr);
-			if (ret)
-				rdma_destroy_ah_attr(ah_attr);
-
-			return ret;
+			return ib_resolve_unicast_gid_dmac(device, ah_attr);
 		}
 	} else {
 		rdma_ah_set_dlid(ah_attr, wc->slid);
@@ -832,6 +831,7 @@ int ib_init_ah_attr_from_wc(struct ib_device *device, u8 port_num,
 
 		if ((wc->wc_flags & IB_WC_GRH) == 0)
 			return 0;
+
 		if (dgid.global.interface_id !=
 					cpu_to_be64(IB_SA_WELL_KNOWN_GUID)) {
 			sgid_attr = rdma_find_gid_by_port(
@@ -841,14 +841,14 @@ int ib_init_ah_attr_from_wc(struct ib_device *device, u8 port_num,
 
 		if (IS_ERR(sgid_attr))
 			return PTR_ERR(sgid_attr);
-
 		flow_class = be32_to_cpu(grh->version_tclass_flow);
 		rdma_move_grh_sgid_attr(ah_attr,
 					&sgid,
-       				flow_class & 0xFFFFF,
+					flow_class & 0xFFFFF,
 					hoplimit,
 					(flow_class >> 20) & 0xFF,
 					sgid_attr);
+
 		return 0;
 	}
 }
@@ -1589,8 +1589,7 @@ static const struct {
 };
 
 bool ib_modify_qp_is_ok(enum ib_qp_state cur_state, enum ib_qp_state next_state,
-			enum ib_qp_type type, enum ib_qp_attr_mask mask,
-			enum rdma_link_layer ll)
+			enum ib_qp_type type, enum ib_qp_attr_mask mask)
 {
 	enum ib_qp_attr_mask req_param, opt_param;
 
@@ -1667,14 +1666,6 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 	const struct ib_gid_attr *old_sgid_attr_alt_av;
 	int ret;
 
-	/*
-	 * Today the core code can only handle alternate paths and APM for IB
-	 * ban them in roce mode.
-	 */
-	if (attr_mask & IB_QP_ALT_PATH &&
-	    !rdma_protocol_ib(qp->device, attr->alt_ah_attr.port_num))
-		return -EINVAL;
-
 	if (attr_mask & IB_QP_AV) {
 		ret = rdma_fill_sgid_attr(qp->device, &attr->ah_attr,
 					  &old_sgid_attr_av);
@@ -1693,16 +1684,26 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 					  &old_sgid_attr_alt_av);
 		if (ret)
 			goto out_av;
+
+		/*
+		 * Today the core code can only handle alternate paths and APM
+		 * for IB. Ban them in roce mode.
+		 */
+		if (!(rdma_protocol_ib(qp->device,
+				       attr->alt_ah_attr.port_num) &&
+		      rdma_protocol_ib(qp->device, port))) {
+			ret = EINVAL;
+			goto out;
+		}
 	}
 
 	/*
 	 * If the user provided the qp_attr then we have to resolve it. Kernel
 	 * users have to provide already resolved rdma_ah_attr's
 	 */
-	if (udata && (attr_mask & IB_QP_AV) &&
+	if ((qp->qp_type != IB_EXP_QPT_DC_INI) && udata && (attr_mask & IB_QP_AV) &&
 	    attr->ah_attr.type == RDMA_AH_ATTR_TYPE_ROCE &&
-	    is_qp_type_connected(qp) &&
-	    (qp->qp_type != IB_EXP_QPT_DC_INI)) {
+	    is_qp_type_connected(qp)) {
 		ret = ib_resolve_eth_dmac(qp->device, &attr->ah_attr);
 		if (ret)
 			goto out;
@@ -1710,14 +1711,16 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 
 	if (rdma_ib_or_roce(qp->device, port)) {
 		if (attr_mask & IB_QP_RQ_PSN && attr->rq_psn & ~0xffffff) {
-			pr_warn("%s: %s rq_psn overflow, masking to 24 bits\n",
-				__func__, qp->device->name);
+			dev_warn(&qp->device->dev,
+				 "%s rq_psn overflow, masking to 24 bits\n",
+				 __func__);
 			attr->rq_psn &= 0xffffff;
 		}
 
 		if (attr_mask & IB_QP_SQ_PSN && attr->sq_psn & ~0xffffff) {
-			pr_warn("%s: %s sq_psn overflow, masking to 24 bits\n",
-				__func__, qp->device->name);
+			dev_warn(&qp->device->dev,
+				 " %s sq_psn overflow, masking to 24 bits\n",
+				 __func__);
 			attr->sq_psn &= 0xffffff;
 		}
 	}
@@ -1743,7 +1746,6 @@ out_av:
 		rdma_unfill_sgid_attr(&attr->ah_attr, old_sgid_attr_av);
 	return ret;
 }
-
 
 /**
  * ib_modify_qp_with_udata - Modifies the attributes for the specified QP.
@@ -2568,7 +2570,6 @@ static void __ib_drain_sq(struct ib_qp *qp)
 	struct ib_cq *cq = qp->send_cq;
 	struct ib_qp_attr attr = { .qp_state = IB_QPS_ERR };
 	struct ib_drain_cqe sdrain;
-	struct ib_send_wr *bad_swr;
 	struct ib_rdma_wr swr = {
 		.wr = {
 			.next = NULL,
@@ -2587,7 +2588,7 @@ static void __ib_drain_sq(struct ib_qp *qp)
 	sdrain.cqe.done = ib_drain_qp_done;
 	init_completion(&sdrain.done);
 
-	ret = ib_post_send(qp, &swr.wr, &bad_swr);
+	ret = ib_post_send(qp, &swr.wr, NULL);
 	if (ret) {
 		WARN_ONCE(ret, "failed to drain send queue: %d\n", ret);
 		return;
@@ -2608,7 +2609,7 @@ static void __ib_drain_rq(struct ib_qp *qp)
 	struct ib_cq *cq = qp->recv_cq;
 	struct ib_qp_attr attr = { .qp_state = IB_QPS_ERR };
 	struct ib_drain_cqe rdrain;
-	struct ib_recv_wr rwr = {}, *bad_rwr;
+	struct ib_recv_wr rwr = {};
 	int ret;
 
 	ret = ib_modify_qp(qp, &attr, IB_QP_STATE);
@@ -2621,7 +2622,7 @@ static void __ib_drain_rq(struct ib_qp *qp)
 	rdrain.cqe.done = ib_drain_qp_done;
 	init_completion(&rdrain.done);
 
-	ret = ib_post_recv(qp, &rwr, &bad_rwr);
+	ret = ib_post_recv(qp, &rwr, NULL);
 	if (ret) {
 		WARN_ONCE(ret, "failed to drain recv queue: %d\n", ret);
 		return;
@@ -2712,3 +2713,51 @@ void ib_drain_qp(struct ib_qp *qp)
 		ib_drain_rq(qp);
 }
 EXPORT_SYMBOL(ib_drain_qp);
+
+struct net_device *rdma_alloc_netdev(struct ib_device *device, u8 port_num,
+				     enum rdma_netdev_t type, const char *name,
+				     unsigned char name_assign_type,
+				     void (*setup)(struct net_device *),
+				     int force_fail)
+{
+	struct rdma_netdev_alloc_params params;
+	struct net_device *netdev;
+	int rc;
+
+	if (!device->rdma_netdev_get_params || force_fail)
+		return ERR_PTR(-EOPNOTSUPP);
+
+	rc = device->rdma_netdev_get_params(device, port_num, type, &params);
+	if (rc)
+		return ERR_PTR(rc);
+
+	netdev = alloc_netdev_mqs(params.sizeof_priv, name, name_assign_type,
+				  setup, params.txqs, params.rxqs);
+	if (!netdev)
+		return ERR_PTR(-ENOMEM);
+
+	return netdev;
+}
+EXPORT_SYMBOL(rdma_alloc_netdev);
+
+int rdma_init_netdev(struct ib_device *device, u8 port_num,
+		     enum rdma_netdev_t type, const char *name,
+		     unsigned char name_assign_type,
+		     void (*setup)(struct net_device *),
+		     struct net_device *netdev,
+		     int force_fail)
+{
+	struct rdma_netdev_alloc_params params;
+	int rc;
+
+	if (!device->rdma_netdev_get_params || force_fail)
+		return -EOPNOTSUPP;
+
+	rc = device->rdma_netdev_get_params(device, port_num, type, &params);
+	if (rc)
+		return rc;
+
+	return params.initialize_rdma_netdev(device, port_num,
+					     netdev, params.param);
+}
+EXPORT_SYMBOL(rdma_init_netdev);

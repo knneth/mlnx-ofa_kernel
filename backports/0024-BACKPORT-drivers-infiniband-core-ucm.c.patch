@@ -1,0 +1,123 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucm.c
+
+Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
+---
+ drivers/infiniband/core/ucm.c | 45 ++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 42 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/ucm.c
++++ b/drivers/infiniband/core/ucm.c
+@@ -45,9 +45,9 @@
+ #include <linux/idr.h>
+ #include <linux/mutex.h>
+ #include <linux/slab.h>
+-
++#ifdef HAVE_ARRAY_INDEX_NOSPEC
+ #include <linux/nospec.h>
+-
++#endif
+ #include <linux/uaccess.h>
+ 
+ #include <rdma/ib.h>
+@@ -184,6 +184,9 @@ static void ib_ucm_cleanup_events(struct
+ static struct ib_ucm_context *ib_ucm_ctx_alloc(struct ib_ucm_file *file)
+ {
+ 	struct ib_ucm_context *ctx;
++#ifndef HAVE_IDR_ALLOC
++	int result;
++#endif
+ 
+ 	ctx = kzalloc(sizeof *ctx, GFP_KERNEL);
+ 	if (!ctx)
+@@ -194,11 +197,26 @@ static struct ib_ucm_context *ib_ucm_ctx
+ 	ctx->file = file;
+ 	INIT_LIST_HEAD(&ctx->events);
+ 
++#ifdef HAVE_IDR_ALLOC
+ 	mutex_lock(&ctx_id_mutex);
+ 	ctx->id = idr_alloc(&ctx_id_table, ctx, 0, 0, GFP_KERNEL);
+ 	mutex_unlock(&ctx_id_mutex);
+ 	if (ctx->id < 0)
+ 		goto error;
++#else
++	do {
++		result = idr_pre_get(&ctx_id_table, GFP_KERNEL);
++		if (!result)
++			goto error;
++
++		mutex_lock(&ctx_id_mutex);
++		result = idr_get_new(&ctx_id_table, ctx, &ctx->id);
++		mutex_unlock(&ctx_id_mutex);
++	} while (result == -EAGAIN);
++
++	if (result)
++		goto error;
++#endif
+ 
+ 	list_add_tail(&ctx->file_list, &file->ctxs);
+ 	return ctx;
+@@ -1118,8 +1136,9 @@ static ssize_t ib_ucm_write(struct file
+ 
+ 	if (hdr.cmd >= ARRAY_SIZE(ucm_cmd_table))
+ 		return -EINVAL;
++#ifdef HAVE_ARRAY_INDEX_NOSPEC
+ 	hdr.cmd = array_index_nospec(hdr.cmd, ARRAY_SIZE(ucm_cmd_table));
+-
++#endif
+ 	if (hdr.in + sizeof(hdr) > len)
+ 		return -EINVAL;
+ 
+@@ -1298,8 +1317,16 @@ static void ib_ucm_remove_one(struct ib_
+ 	put_device(&ucm_dev->dev);
+ }
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ static CLASS_ATTR_STRING(abi_version, S_IRUGO,
+ 			 __stringify(IB_USER_CM_ABI_VERSION));
++#else
++static ssize_t show_abi_version(struct class *class, char *buf)
++{
++	return sprintf(buf, "%d\n", IB_USER_CM_ABI_VERSION);
++}
++static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
++#endif
+ 
+ static int __init ib_ucm_init(void)
+ {
+@@ -1319,7 +1346,11 @@ static int __init ib_ucm_init(void)
+ 		goto err_alloc;
+ 	}
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ 	ret = class_create_file(&cm_class, &class_attr_abi_version.attr);
++#else
++	ret = class_create_file(&cm_class, &class_attr_abi_version);
++#endif
+ 	if (ret) {
+ 		pr_err("ucm: couldn't create abi_version attribute\n");
+ 		goto error2;
+@@ -1333,7 +1364,11 @@ static int __init ib_ucm_init(void)
+ 	return 0;
+ 
+ error3:
++#ifdef HAVE_CLASS_ATTR_STRING
+ 	class_remove_file(&cm_class, &class_attr_abi_version.attr);
++#else
++	class_remove_file(&cm_class, &class_attr_abi_version);
++#endif
+ error2:
+ 	unregister_chrdev_region(dynamic_ucm_dev, IB_UCM_NUM_DYNAMIC_MINOR);
+ err_alloc:
+@@ -1345,7 +1380,11 @@ error1:
+ static void __exit ib_ucm_cleanup(void)
+ {
+ 	ib_unregister_client(&ucm_client);
++#ifdef HAVE_CLASS_ATTR_STRING
+ 	class_remove_file(&cm_class, &class_attr_abi_version.attr);
++#else
++	class_remove_file(&cm_class, &class_attr_abi_version);
++#endif
+ 	unregister_chrdev_region(IB_UCM_BASE_DEV, IB_UCM_NUM_FIXED_MINOR);
+ 	unregister_chrdev_region(dynamic_ucm_dev, IB_UCM_NUM_DYNAMIC_MINOR);
+ 	idr_destroy(&ctx_id_table);

@@ -1,0 +1,19 @@
+From: Yishai Hadas <yishaih@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
+
+Change-Id: Ifc936c4607f7222d6c530166c0b22d35ff593444
+---
+ include/linux/mlx5/driver.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/include/linux/mlx5/driver.h
++++ b/include/linux/mlx5/driver.h
+@@ -1260,7 +1260,7 @@ void mlx5_unlock_cmdif(struct mlx5_core_
+ struct mlx5_async_ctx {
+ 	struct mlx5_core_dev *dev;
+ 	atomic_t num_inflight;
+-	struct wait_queue_head wait;
++	wait_queue_head_t wait;
+ };
+ 
+ struct mlx5_async_work;

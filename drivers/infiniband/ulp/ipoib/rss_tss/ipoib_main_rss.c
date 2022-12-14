@@ -42,30 +42,33 @@ int ipoib_set_mode_rss(struct net_device *dev, const char *buf)
 	     !strcmp(buf, "connected\n")) ||
 	     (!test_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags) &&
 	     !strcmp(buf, "datagram\n"))) {
-		ipoib_dbg(priv, "already in that mode, goes out.\n");
 		return 0;
 	}
 
 	/* flush paths if we switch modes so that connections are restarted */
-	if (IPOIB_CM_SUPPORTED(dev->dev_addr) && !strcmp(buf, "connected\n")) {
-		set_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
-		ipoib_warn(priv, "enabling connected mode "
-			   "will cause multicast packet drops\n");
-		netdev_update_features(dev);
-		dev_set_mtu(dev, ipoib_cm_max_mtu(dev));
-		rtnl_unlock();
+	if (!strcmp(buf, "connected\n")) {
+		if (IPOIB_CM_SUPPORTED(dev->dev_addr)) {
+			set_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
+			ipoib_warn(priv, "enabling connected mode "
+				   "will cause multicast packet drops\n");
+			netdev_update_features(dev);
+			dev_set_mtu(dev, ipoib_cm_max_mtu(dev));
+			rtnl_unlock();
 
-		send_ring = priv->send_ring;
-		for (i = 0; i < priv->num_tx_queues; i++) {
-			send_ring->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
-			send_ring->tx_wr.wr.opcode = IB_WR_SEND;
-			send_ring++;
+			send_ring = priv->send_ring;
+			for (i = 0; i < priv->num_tx_queues; i++) {
+				send_ring->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
+				send_ring->tx_wr.wr.opcode = IB_WR_SEND;
+				send_ring++;
+			}
+
+			ipoib_flush_paths(dev);
+			return (!rtnl_trylock()) ? -EBUSY : 0;
+		} else {
+			ipoib_warn(priv, "Setting Connected Mode failed, "
+				   "not supported by this device");
+			return -EINVAL;
 		}
-
-		ipoib_flush_paths(dev);
-		if (!rtnl_trylock())
-			return -EBUSY;
-		return 0;
 	}
 
 	if (!strcmp(buf, "datagram\n")) {
@@ -74,16 +77,14 @@ int ipoib_set_mode_rss(struct net_device *dev, const char *buf)
 		dev_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
 		rtnl_unlock();
 		ipoib_flush_paths(dev);
-		if (!rtnl_trylock())
-			return -EBUSY;
-		return 0;
+		return (!rtnl_trylock()) ? -EBUSY : 0;
 	}
 
 	return -EINVAL;
 }
 
 static u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb,
-				     void *accel_priv,
+				     struct net_device *sb_dev,
 				     select_queue_fallback_t fallback)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
@@ -120,7 +121,7 @@ static u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb
 	header->tss_qpn_mask_sz |= priv->tss_qpn_mask_sz;
 
 	/* don't use special ring in TX */
-	return fallback(dev, skb) % priv->tss_qp_num;
+	return fallback(dev, skb, NULL) % priv->tss_qp_num;
 }
 
 static void ipoib_timeout_rss(struct net_device *dev)
@@ -198,7 +199,7 @@ static void ipoib_napi_add_rss(struct net_device *dev)
 
 	for (i = 0; i < priv->num_rx_queues; i++)
 		netif_napi_add(dev, &priv->recv_ring[i].napi,
-			       ipoib_rx_poll_rss, NAPI_POLL_WEIGHT);
+			       ipoib_rx_poll_rss, IPOIB_NUM_WC);
 
 	for (i = 0; i < priv->num_tx_queues; i++)
 		netif_napi_add(dev, &priv->send_ring[i].napi,
@@ -354,13 +355,10 @@ out:
 	return -ENOMEM;
 }
 
-void ipoib_dev_uninit_rss(struct net_device *dev)
+static void ipoib_dev_uninit_rss(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-	/*
-	 * Must be before ipoib_ib_dev_cleanup or we delete an in use
-	 * work queue
-	 */
+
 	if (dev->reg_state != NETREG_UNINITIALIZED)
 		ipoib_neigh_hash_uninit(dev);
 
@@ -374,23 +372,29 @@ void ipoib_dev_uninit_rss(struct net_device *dev)
 	}
 }
 
-void ipoib_dev_cleanup_rss(struct net_device *dev)
+static void ipoib_ndo_uninit_rss(struct net_device *dev)
 {
-	struct ipoib_dev_priv *priv = ipoib_priv(dev), *cpriv, *tcpriv;
-	LIST_HEAD(head);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	ASSERT_RTNL();
 
-	/* Delete any child interfaces first */
-	list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs, list) {
-		/* Stop GC on child */
-		set_bit(IPOIB_STOP_NEIGH_GC, &cpriv->flags);
-		cancel_delayed_work(&cpriv->neigh_reap_task);
-		unregister_netdevice_queue(cpriv->dev, &head);
-	}
-	unregister_netdevice_many(&head);
+	/*
+	 * ipoib_remove_one guarantees the children are removed before the
+	 * parent, and that is the only place where a parent can be removed.
+	 */
+	WARN_ON(!list_empty(&priv->child_intfs));
 
 	ipoib_dev_uninit_rss(dev);
+
+	if (priv->parent) {
+		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
+
+		down_write(&ppriv->vlan_rwsem);
+		list_del(&priv->list);
+		up_write(&ppriv->vlan_rwsem);
+
+		dev_put(priv->parent);
+	}
 }
 
 int ipoib_set_fp_rss(struct ipoib_dev_priv *priv, struct ib_device *hca)
@@ -409,8 +413,7 @@ int ipoib_set_fp_rss(struct ipoib_dev_priv *priv, struct ib_device *hca)
 	return 0;
 }
 
-static int ipoib_get_hca_features(struct ipoib_dev_priv *priv,
-				  struct ib_device *hca)
+static int ipoib_get_hca_features(struct ipoib_dev_priv *priv, struct ib_device *hca)
 {
 	int num_cores, result;
 	struct ib_exp_device_attr exp_device_attr;
@@ -517,7 +520,7 @@ int ipoib_reinit_rss(struct net_device *dev, int num_rx, int num_tx)
 	 */
 	dev->flags &= ~IFF_UP;
 
-	ret = ipoib_dev_init(dev, priv->ca, priv->port);
+	ret = ipoib_dev_init(dev);
 	if (ret) {
 		pr_warn("%s: failed to reinitialize port %d (ret = %d)\n",
 			priv->ca->name, priv->port, ret);
@@ -695,7 +698,8 @@ static const struct net_device_ops ipoib_netdev_default_pf_rss = {
 };
 
 static const struct net_device_ops ipoib_netdev_ops_pf_sw_tss = {
-	.ndo_uninit		 = ipoib_uninit,
+	.ndo_init		 = ipoib_ndo_init,
+	.ndo_uninit		 = ipoib_ndo_uninit_rss,
 	.ndo_open		 = ipoib_open,
 	.ndo_stop		 = ipoib_stop,
 	.ndo_change_mtu		 = ipoib_change_mtu,
@@ -714,7 +718,8 @@ static const struct net_device_ops ipoib_netdev_ops_pf_sw_tss = {
 };
 
 static const struct net_device_ops ipoib_netdev_ops_vf_sw_tss = {
-	.ndo_uninit		 = ipoib_uninit,
+	.ndo_init		 = ipoib_ndo_init,
+	.ndo_uninit		 = ipoib_ndo_uninit_rss,
 	.ndo_open		 = ipoib_open,
 	.ndo_stop		 = ipoib_stop,
 	.ndo_change_mtu		 = ipoib_change_mtu,
@@ -727,41 +732,6 @@ static const struct net_device_ops ipoib_netdev_ops_vf_sw_tss = {
 	.ndo_get_iflink		 = ipoib_get_iflink,
 };
 
-struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
-						   const char *name,
-						   void (*setup)(struct net_device *),
-						   struct ipoib_dev_priv *temp_priv)
-{
-	struct net_device *dev;
-	struct rdma_netdev *rn;
-
-	dev = alloc_netdev_mqs((int)sizeof(struct rdma_netdev), name,
-			       NET_NAME_UNKNOWN, setup,
-			       temp_priv->max_tx_queues,
-			       temp_priv->max_rx_queues);
-
-	if (!dev)
-		return NULL;
-
-	netif_set_real_num_tx_queues(dev, temp_priv->num_tx_queues);
-	netif_set_real_num_rx_queues(dev, temp_priv->num_rx_queues);
-
-	rn = netdev_priv(dev);
-
-	rn->send = ipoib_send_rss;
-	rn->attach_mcast = ipoib_mcast_attach_rss;
-	rn->detach_mcast = ipoib_mcast_detach;
-	rn->free_rdma_netdev = free_netdev;
-	rn->hca = hca;
-
-	dev->netdev_ops = &ipoib_netdev_default_pf_rss;
-
-	/* Override ethtool_ops to ethtool_ops_rss */
-	ipoib_set_ethtool_ops_rss(dev);
-
-	return dev;
-}
-
 const struct net_device_ops *ipoib_get_netdev_ops(struct ipoib_dev_priv *priv)
 {
 	if (priv->hca_caps & IB_DEVICE_VIRTUAL_FUNCTION)
@@ -772,15 +742,19 @@ const struct net_device_ops *ipoib_get_netdev_ops(struct ipoib_dev_priv *priv)
 			&ipoib_netdev_ops_pf_sw_tss : &ipoib_netdev_ops_pf;
 }
 
+const struct net_device_ops *ipoib_get_rn_ops(struct ipoib_dev_priv *priv)
+{
+	return priv->max_tx_queues > 1 ?
+		&ipoib_netdev_default_pf_rss : &ipoib_netdev_default_pf;
+}
+
 void ipoib_main_rss_init_fp(struct ipoib_dev_priv *priv)
 {
 	if (priv->max_tx_queues > 1) {
 		priv->fp.ipoib_set_mode = ipoib_set_mode_rss;
 		priv->fp.ipoib_neigh_ctor = ipoib_neigh_ctor_rss;
-		priv->fp.ipoib_dev_cleanup = ipoib_dev_cleanup_rss;
 	} else {
 		priv->fp.ipoib_set_mode = ipoib_set_mode;
 		priv->fp.ipoib_neigh_ctor = ipoib_neigh_ctor;
-		priv->fp.ipoib_dev_cleanup = ipoib_dev_cleanup;
 	}
 }

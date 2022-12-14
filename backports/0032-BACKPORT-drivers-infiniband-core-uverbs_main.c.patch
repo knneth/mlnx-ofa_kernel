@@ -1,0 +1,149 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
+
+Change-Id: Ia43a6cc4eea88142f4bffc2403aa7c2646c5267f
+---
+ drivers/infiniband/core/uverbs_main.c | 53 +++++++++++++++++++++++++++++++----
+ 1 file changed, 47 insertions(+), 6 deletions(-)
+
+--- a/drivers/infiniband/core/uverbs_main.c
++++ b/drivers/infiniband/core/uverbs_main.c
+@@ -75,9 +75,11 @@ enum {
+ 
+ static dev_t dynamic_uverbs_dev;
+ static struct class *uverbs_class;
+-
++#ifndef HAVE_IDA_ALLOC
++static DECLARE_BITMAP(dev_map, IB_UVERBS_MAX_DEVICES);
++#else
+ static DEFINE_IDA(uverbs_ida);
+-
++#endif
+ static ssize_t (*uverbs_cmd_table[])(struct ib_uverbs_file *file,
+ 				     const char __user *buf, int in_len,
+ 				     int out_len) = {
+@@ -179,8 +181,12 @@ struct ib_ucontext *ib_uverbs_get_uconte
+ 	 * srcu is used. It does not matter if someone races this with
+ 	 * get_context, we get NULL or valid ucontext.
+ 	 */
++#ifdef HAVE_SMP_LOAD_ACQUIRE
+ 	struct ib_ucontext *ucontext = smp_load_acquire(&ufile->ucontext);
+-
++#else
++	struct ib_ucontext *ucontext = ufile->ucontext;
++	smp_wmb();
++#endif
+ 	if (!srcu_dereference(ufile->device->ib_dev,
+ 			      &ufile->device->disassociate_srcu))
+ 		return ERR_PTR(-EIO);
+@@ -748,10 +754,14 @@ static ssize_t verify_hdr(struct ib_uver
+ 		if (ex_hdr->response) {
+ 			if (!hdr->out_words && !ex_hdr->provider_out_words)
+ 				return -EINVAL;
+-
++#ifdef HAVE_ACCESS_OK_HAS_3_PARAMS 
+ 			if (!access_ok(VERIFY_WRITE,
+ 				       u64_to_user_ptr(ex_hdr->response),
+ 				       (hdr->out_words + ex_hdr->provider_out_words) * 8))
++#else
++			if (!access_ok(u64_to_user_ptr(ex_hdr->response),
++				       (hdr->out_words + ex_hdr->provider_out_words) * 8))
++#endif
+ 				return -EFAULT;
+ 		} else {
+ 			if (hdr->out_words || ex_hdr->provider_out_words)
+@@ -1284,8 +1294,16 @@ static const struct attribute_group dev_
+ 	.attrs = ib_dev_attrs,
+ };
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ static CLASS_ATTR_STRING(abi_version, S_IRUGO,
+ 			 __stringify(IB_USER_VERBS_ABI_VERSION));
++#else
++static ssize_t show_abi_version(struct class *class, char *buf)
++{
++	return sprintf(buf, "%d\n", IB_USER_VERBS_ABI_VERSION);
++}
++static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
++#endif
+ 
+ static int ib_uverbs_create_uapi(struct ib_device *device,
+ 				 struct ib_uverbs_device *uverbs_dev)
+@@ -1336,11 +1354,19 @@ static void ib_uverbs_add_one(struct ib_
+ 	rcu_assign_pointer(uverbs_dev->ib_dev, device);
+ 	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	devnum = ida_alloc_max(&uverbs_ida, IB_UVERBS_MAX_DEVICES - 1,
+ 			       GFP_KERNEL);
+ 	if (devnum < 0)
++#else
++	devnum = find_first_zero_bit(dev_map, IB_UVERBS_MAX_DEVICES);
++	if (devnum >= IB_UVERBS_MAX_DEVICES)
++#endif
+ 		goto err;
+ 	uverbs_dev->devnum = devnum;
++#ifndef HAVE_IDA_ALLOC
++	set_bit(devnum, dev_map);
++#endif
+ 	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
+ 		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
+ 	else
+@@ -1367,7 +1393,11 @@ static void ib_uverbs_add_one(struct ib_
+ 	return;
+ 
+ err_uapi:
++#ifndef HAVE_IDA_ALLOC
++	clear_bit(devnum, dev_map);
++#else
+ 	ida_free(&uverbs_ida, devnum);
++#endif
+ err:
+ 	if (atomic_dec_and_test(&uverbs_dev->refcount))
+ 		ib_uverbs_comp_dev(uverbs_dev);
+@@ -1406,7 +1436,6 @@ static void ib_uverbs_free_hw_resources(
+ 		ib_uverbs_event_handler(&file->event_handler, &event);
+ 		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
+ 		kref_put(&file->ref, ib_uverbs_release_file);
+-
+ 		mutex_lock(&uverbs_dev->lists_mutex);
+ 	}
+ 
+@@ -1442,8 +1471,11 @@ static void ib_uverbs_remove_one(struct
+ 		return;
+ 
+ 	cdev_device_del(&uverbs_dev->cdev, &uverbs_dev->dev);
++#ifndef HAVE_IDA_ALLOC
++	clear_bit(uverbs_dev->devnum, dev_map);
++#else
+ 	ida_free(&uverbs_ida, uverbs_dev->devnum);
+-
++#endif
+ 	if (device->disassociate_ucontext) {
+ 		/* We disassociate HW resources and immediately return.
+ 		 * Userspace will see a EIO errno for all future access.
+@@ -1468,7 +1500,11 @@ static void ib_uverbs_remove_one(struct
+ 	put_device(&uverbs_dev->dev);
+ }
+ 
++#ifdef HAVE_CLASS_DEVNODE_UMODE_T
+ static char *uverbs_devnode(struct device *dev, umode_t *mode)
++#else
++static char *uverbs_devnode(struct device *dev, mode_t *mode)
++#endif
+ {
+ 	if (mode)
+ 		*mode = 0666;
+@@ -1504,7 +1540,12 @@ static int __init ib_uverbs_init(void)
+ 
+ 	uverbs_class->devnode = uverbs_devnode;
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ 	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
++#else
++	ret = class_create_file(uverbs_class, &class_attr_abi_version);
++#endif
++
+ 	if (ret) {
+ 		pr_err("user_verbs: couldn't create abi_version attribute\n");
+ 		goto out_class;
