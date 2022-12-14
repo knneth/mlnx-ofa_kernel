@@ -36,6 +36,7 @@
 #include <net/pkt_cls.h>
 #include "en.h"
 #include "en/tc_tun.h"
+#include "en/flow_meter.h"
 #include "en_rep.h"
 
 #define MLX5E_TC_FLOW_ID_MASK 0x0000ffff
@@ -64,6 +65,10 @@ struct mlx5e_tc_flow_parse_attr {
 	struct mlx5e_tc_mod_hdr_acts mod_hdr_acts;
 	int mirred_ifindex[MLX5_MAX_FLOW_FWD_VPORTS];
 	struct ethhdr eth;
+	struct {
+		int count;
+		struct mlx5_flow_meter_params params[MLX5E_MAX_METERS_PER_RULE];
+	} meters;
 };
 
 #define MLX5E_TC_TABLE_CHAIN_TAG_BITS 16
@@ -100,10 +105,6 @@ struct tunnel_match_enc_opts {
 #define TUNNEL_ID_BITS (TUNNEL_INFO_BITS + ENC_OPTS_BITS)
 #define TUNNEL_ID_MASK GENMASK(TUNNEL_ID_BITS - 1, 0)
 
-#define MLX5_FTE_ID_BITS (mlx5e_tc_attr_to_reg_mappings[FTEID_TO_REG].mlen * 8)
-#define MLX5_FTE_ID_MAX GENMASK(MLX5_FTE_ID_BITS - 1, 0)
-#define MLX5_FTE_ID_MASK MLX5_FTE_ID_MAX
-
 enum {
 	MLX5E_TC_FLAG_INGRESS_BIT,
 	MLX5E_TC_FLAG_EGRESS_BIT,
@@ -135,6 +136,7 @@ enum {
 	MLX5E_TC_FLOW_FLAG_L3_TO_L2_DECAP = MLX5E_TC_FLOW_BASE + 8,
 	MLX5E_TC_FLOW_FLAG_SAMPLE	= MLX5E_TC_FLOW_BASE + 9,
 	MLX5E_TC_FLOW_FLAG_TUN_RX	= MLX5E_TC_FLOW_BASE + 10,
+	MLX5E_TC_FLOW_FLAG_METER	= MLX5E_TC_FLOW_BASE + 11,
 };
 
 #define MLX5E_TC_MAX_SPLITS 1
@@ -210,6 +212,9 @@ void mlx5e_take_all_encap_flows(struct mlx5e_encap_entry *e, struct list_head *f
 void mlx5e_put_flow_list(struct mlx5e_priv *priv, struct list_head *flow_list);
 
 struct mlx5e_neigh_hash_entry;
+struct mlx5e_encap_entry *
+mlx5e_get_next_init_encap(struct mlx5e_neigh_hash_entry *nhe,
+			  struct mlx5e_encap_entry *e);
 void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe);
 
 void mlx5e_tc_reoffload_flows_work(struct work_struct *work);
@@ -227,6 +232,7 @@ enum mlx5e_tc_attr_to_reg {
 	NIC_CHAIN_TO_REG,
 	NIC_ZONE_RESTORE_TO_REG,
 	USER_PRIO_TO_REG,
+	PACKET_COLOR_TO_REG,
 };
 
 struct mlx5e_tc_attr_to_reg_mapping {

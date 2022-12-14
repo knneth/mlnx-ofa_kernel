@@ -45,9 +45,14 @@ static char *vport_match_to_str[] = {
 	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_LEGACY] = "legacy",
 };
 
-static char *ct_action_on_nat_conns_to_str[] = {
-	[DEVLINK_CT_ACTION_ON_NAT_CONNS_DISABLE] = "disable",
-	[DEVLINK_CT_ACTION_ON_NAT_CONNS_ENABLE] = "enable",
+static char *lag_port_select_mode_to_str[] = {
+	[DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_QUEUE_AFFINITY] =
+		"queue_affinity",
+	[DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH] = "hash",
+};
+static char *devlink_param_bool_to_str[] = {
+	[0] = "disable",
+	[1] = "enable",
 };
 
 struct devlink_compat_op {
@@ -73,10 +78,15 @@ struct devlink_compat_op {
 	int (*read_vport_match_mode)(struct devlink *devlink, enum devlink_eswitch_vport_match_mode *read);
 	int (*write_vport_match_mode)(struct devlink *devlink, enum devlink_eswitch_vport_match_mode set);
 
-	int (*read_ct_action_on_nat_conns)(struct devlink *devlink, u32 id,
-					   struct devlink_param_gset_ctx *ctx);
-	int (*write_ct_action_on_nat_conns)(struct devlink *devlink, u32 id,
-					   struct devlink_param_gset_ctx *ctx);
+	int (*read_lag_port_select_mode)(struct devlink *devlink,
+					 enum devlink_eswitch_lag_port_select_mode *read);
+	int (*write_lag_port_select_mode)(struct devlink *devlink,
+					  enum devlink_eswitch_lag_port_select_mode set);
+
+	int (*read_param_bool)(struct devlink *devlink, u32 id,
+			       struct devlink_param_gset_ctx *ctx);
+	int (*write_param_bool)(struct devlink *devlink, u32 id,
+				struct devlink_param_gset_ctx *ctx);
 
 	char **map;
 	int map_size;
@@ -132,11 +142,23 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.compat_name = "vport_match_mode",
 	},
 	{
-		.read_ct_action_on_nat_conns = mlx5_devlink_ct_action_on_nat_conns_get,
-		.write_ct_action_on_nat_conns = mlx5_devlink_ct_action_on_nat_conns_set,
-		.map = ct_action_on_nat_conns_to_str,
-		.map_size = ARRAY_SIZE(ct_action_on_nat_conns_to_str),
+		.read_param_bool = mlx5_devlink_ct_action_on_nat_conns_get,
+		.write_param_bool = mlx5_devlink_ct_action_on_nat_conns_set,
 		.compat_name = "ct_action_on_nat_conns",
+	},
+	{
+		.read_lag_port_select_mode =
+			mlx5_devlink_eswitch_lag_port_select_mode_get,
+		.write_lag_port_select_mode =
+			mlx5_devlink_eswitch_lag_port_select_mode_set,
+		.map = lag_port_select_mode_to_str,
+		.map_size = ARRAY_SIZE(lag_port_select_mode_to_str),
+		.compat_name = "lag_port_select_mode",
+	},
+	{
+		.read_param_bool = mlx5_devlink_ct_labels_mapping_get,
+		.write_param_bool = mlx5_devlink_ct_labels_mapping_set,
+		.compat_name = "ct_labels_mapping",
 	},
 };
 
@@ -153,14 +175,11 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
-	struct devlink *devlink = priv_to_devlink(dev);
 	const char *entname = attr->attr.name;
+	int i = 0, ret, len = 0, map_size;
 	struct devlink_compat_op *op = 0;
-	int i = 0, ret, len = 0;
-	enum devlink_eswitch_encap_mode read_enum;
-	enum devlink_eswitch_ipsec_mode read_enum_ipsec;
-	enum devlink_eswitch_steering_mode read_steering_mode;
-	enum devlink_eswitch_vport_match_mode read_vport_match_mode;
+	struct devlink *devlink;
+	char **map;
 	u8 read8;
 	u16 read;
 
@@ -172,36 +191,56 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 	if (!op)
 		return -ENOENT;
 
+	devlink = priv_to_devlink(dev);
+	map_size = op->map_size;
+	map = op->map;
+
 	if (op->read_u16) {
 		ret = op->read_u16(devlink, &read);
 	} else if (op->read_u8) {
 		ret = op->read_u8(devlink, &read8);
 		read = read8;
 	} else if (op->read_enum) {
+		enum devlink_eswitch_encap_mode read_enum;
+
 		ret = op->read_enum(devlink, &read_enum);
 		read = read_enum;
 	} else if (op->read_steering_mode) {
+		enum devlink_eswitch_steering_mode read_steering_mode;
+
 		ret = op->read_steering_mode(devlink, &read_steering_mode);
 		read = read_steering_mode;
+	} else if (op->read_lag_port_select_mode) {
+		enum devlink_eswitch_lag_port_select_mode lag_port_select_mode;
+
+		ret = op->read_lag_port_select_mode(devlink,
+						    &lag_port_select_mode);
+		read = lag_port_select_mode;
 	} else if (op->read_enum_ipsec) {
+		enum devlink_eswitch_ipsec_mode read_enum_ipsec;
+
 		ret = op->read_enum_ipsec(devlink, &read_enum_ipsec);
 		read = read_enum_ipsec;
 	} else if (op->read_vport_match_mode) {
+		enum devlink_eswitch_vport_match_mode read_vport_match_mode;
+
 		ret = op->read_vport_match_mode(devlink, &read_vport_match_mode);
 		read = read_vport_match_mode;
-	} else if (op->read_ct_action_on_nat_conns) {
+	} else if (op->read_param_bool) {
 		struct devlink_param_gset_ctx ctx;
 
-		ret = op->read_ct_action_on_nat_conns(devlink, 0, &ctx);
+		ret = op->read_param_bool(devlink, 0, &ctx);
 		read = ctx.val.vbool;
+		map = devlink_param_bool_to_str;
+		map_size = ARRAY_SIZE(devlink_param_bool_to_str);
 	} else
 		ret = -ENOENT;
 
 	if (ret < 0)
 		return ret;
 
-	if (read < op->map_size && op->map[read])
-		len = sprintf(buf, "%s\n", op->map[read]);
+	if (read < map_size && map[read])
+		len = sprintf(buf, "%s\n", map[read]);
 	else
 		len = sprintf(buf, "return: %d\n", read);
 
@@ -216,14 +255,15 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
-	struct devlink *devlink = priv_to_devlink(dev);
 #ifdef HAVE_NETLINK_EXT_ACK
 	static struct netlink_ext_ack ack = { ._msg = NULL };
 #endif
 	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
+	int ret = 0, i = 0, map_size;
+	struct devlink *devlink;
 	u16 set = 0;
-	int ret = 0, i = 0;
+	char **map;
 
 	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
 		if (!strcmp(devlink_compat_ops[i].compat_name, entname)) {
@@ -235,14 +275,23 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 	if (!op)
 		return -ENOENT;
 
-	for (i = 0; i < op->map_size; i++) {
-		if (op->map[i] && sysfs_streq(op->map[i], buf)) {
+	devlink = priv_to_devlink(dev);
+	map = op->map;
+	map_size = op->map_size;
+
+	if (op->write_param_bool) {
+		map = devlink_param_bool_to_str;
+		map_size = ARRAY_SIZE(devlink_param_bool_to_str);
+	}
+
+	for (i = 0; i < map_size; i++) {
+		if (map[i] && sysfs_streq(map[i], buf)) {
 			set = i;
 			break;
 		}
 	}
 
-	if (i >= op->map_size) {
+	if (i >= map_size) {
 		mlx5_core_warn(dev, "devlink op %s doesn't support %s argument\n",
 			       op->compat_name, buf);
 		return -EINVAL;
@@ -268,11 +317,13 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 				   );
 	else if (op->write_steering_mode)
 		ret = op->write_steering_mode(devlink, set);
-	else if (op->write_ct_action_on_nat_conns) {
+	else if (op->write_lag_port_select_mode)
+		ret = op->write_lag_port_select_mode(devlink, set);
+	else if (op->write_param_bool) {
 		struct devlink_param_gset_ctx ctx;
 
 		ctx.val.vbool = set;
-		ret = op->write_ct_action_on_nat_conns(devlink, 0, &ctx);
+		ret = op->write_param_bool(devlink, 0, &ctx);
 	} else if (op->write_vport_match_mode)
 		ret = op->write_vport_match_mode(devlink, set);
 	else if (op->write_enum_ipsec)

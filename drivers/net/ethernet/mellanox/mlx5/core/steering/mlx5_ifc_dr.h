@@ -248,6 +248,34 @@ struct mlx5_ifc_ste_double_action_accelerated_modify_action_list_bits {
 	u8         modify_actions_argument_pointer[0x18];
 };
 
+enum {
+	MLX5DR_ASO_FIRST_HIT_NUM_PER_OBJ = 512,
+	MLX5DR_ASO_FLOW_METER_NUM_PER_OBJ = 2,
+	MLX5DR_ASO_CT_NUM_PER_OBJ = 1,
+};
+
+struct mlx5_ifc_ste_aso_flow_meter_action_bits {
+	u8         reserved_at_0[0xc];
+	u8         action[0x1];
+	u8         initial_color[0x2];
+	u8         line_id[0x1];
+};
+
+struct mlx5_ifc_ste_double_action_aso_v1_bits {
+	u8         action_id[0x8];
+	u8         aso_context_number[0x18];
+
+	u8         dest_reg_id[0x2];
+	u8         change_ordering_tag[0x1];
+	u8         aso_check_ordering[0x1];
+	u8         aso_context_type[0x4];
+	u8         reserved_at_28[0x8];
+	union {
+		u8 aso_fields[0x10];
+		struct mlx5_ifc_ste_aso_flow_meter_action_bits flow_meter;
+	};
+};
+
 struct mlx5_ifc_ste_match_bwc_bits {
 	u8         entry_format[0x8];
 	u8         counter_id[0x18];

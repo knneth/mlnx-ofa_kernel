@@ -884,6 +884,71 @@ static const struct config_item_type nvmet_ns_type = {
 	.ct_owner		= THIS_MODULE,
 };
 
+static ssize_t nvmet_offload_ctx_traddr_show(struct config_item *item, char *page)
+{
+	struct nvmet_offload_ctx *ctx = to_nvmet_offload_ctx(item);
+
+	return snprintf(page, PAGE_SIZE, "%s\n", ctx->port->disc_addr.traddr);
+}
+CONFIGFS_ATTR_RO(nvmet_offload_ctx_, traddr);
+
+static ssize_t nvmet_offload_ctx_trsvcid_show(struct config_item *item, char *page)
+{
+	struct nvmet_offload_ctx *ctx = to_nvmet_offload_ctx(item);
+
+	return snprintf(page, PAGE_SIZE, "%s\n", ctx->port->disc_addr.trsvcid);
+}
+CONFIGFS_ATTR_RO(nvmet_offload_ctx_, trsvcid);
+
+static ssize_t
+nvmet_offload_ctx_stat_show(struct config_item *item, char *page)
+{
+	struct nvmet_offload_ctx *ctx = to_nvmet_offload_ctx(item);
+	struct nvmet_subsys *subsys = ctx->ns->subsys;
+	bool valid = false;
+	struct nvmet_ns_counters counters;
+
+	mutex_lock(&subsys->lock);
+	if (subsys->offloadble && subsys->offload_query_counters) {
+		subsys->offload_query_counters(ctx->ctx, &counters);
+		valid = true;
+	}
+	mutex_unlock(&subsys->lock);
+
+	if (!valid)
+		return sprintf(page, "%d\n", -1);
+
+	return sprintf(page, "read_cmd | read_blocks | write_cmd"
+		" | write_blocks | write_inline_cmd | flush_cmd | error_cmd"
+		" | backend_error_cmd | last_read_latency_0.1_usec"
+		" | last_write_latency_0.1_usec | queue_depth\n"
+		"%llu\t%llu\t%llu\t%llu\t%llu\t%llu\t%llu\t%llu\t%llu\t%llu\t"
+		"%llu\n",
+		counters.num_read_cmd, counters.num_read_blocks,
+		counters.num_write_cmd, counters.num_write_blocks,
+		counters.num_write_inline_cmd, counters.num_flush_cmd,
+		counters.num_error_cmd, counters.num_backend_error_cmd,
+		counters.last_read_latency, counters.last_write_latency,
+		counters.queue_depth);
+}
+CONFIGFS_ATTR_RO(nvmet_offload_ctx_, stat);
+
+static struct configfs_attribute *nvmet_offload_ctx_attrs[] = {
+	&nvmet_offload_ctx_attr_traddr,
+	&nvmet_offload_ctx_attr_trsvcid,
+	&nvmet_offload_ctx_attr_stat,
+	NULL,
+};
+
+static const struct config_item_type nvmet_offload_ctx_type = {
+	.ct_attrs		= nvmet_offload_ctx_attrs,
+	.ct_owner		= THIS_MODULE,
+};
+
+static const struct config_item_type nvmet_offload_ctxs_type = {
+	.ct_owner		= THIS_MODULE,
+};
+
 static struct config_group *nvmet_ns_make(struct config_group *group,
 		const char *name)
 {
@@ -907,6 +972,11 @@ static struct config_group *nvmet_ns_make(struct config_group *group,
 	if (!ns)
 		goto out;
 	config_group_init_type_name(&ns->group, name, &nvmet_ns_type);
+
+	config_group_init_type_name(&ns->offload_ctxs_group,
+			"offload_ctxs", &nvmet_offload_ctxs_type);
+	configfs_add_default_group(&ns->offload_ctxs_group,
+			&ns->group);
 
 	pr_info("adding nsid %d to subsystem %s\n", nsid, subsys->subsysnqn);
 
@@ -1996,6 +2066,33 @@ static struct configfs_subsystem nvmet_configfs_subsystem = {
 		},
 	},
 };
+
+void nvmet_offload_ctx_configfs_del(struct nvmet_offload_ctx *ctx)
+{
+	if (d_inode(ctx->group.cg_item.ci_dentry))
+		configfs_unregister_group(&ctx->group);
+}
+EXPORT_SYMBOL_GPL(nvmet_offload_ctx_configfs_del);
+
+int nvmet_offload_ctx_configfs_create(struct nvmet_offload_ctx *ctx)
+{
+	int res = 0;
+	char name[CONFIGFS_ITEM_NAME_LEN];
+
+	sprintf(name, "%d", ctx->id);
+	pr_info("Adding offload ctx %s to configfs\n", name);
+
+	config_group_init_type_name(&ctx->group, name, &nvmet_offload_ctx_type);
+
+	res = configfs_register_group(&ctx->ns->offload_ctxs_group,
+				      &ctx->group);
+	if (res)
+		pr_err("failed to register configfs group for offload ctx %s\n",
+		       name);
+
+	return res;
+}
+EXPORT_SYMBOL_GPL(nvmet_offload_ctx_configfs_create);
 
 int __init nvmet_init_configfs(void)
 {

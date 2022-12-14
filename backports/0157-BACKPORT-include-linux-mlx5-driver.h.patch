@@ -34,7 +34,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  
  #define MLX5_ADEV_NAME "mlx5_core"
  
-@@ -464,9 +473,11 @@ struct mlx5_core_health {
+@@ -477,9 +486,11 @@ struct mlx5_core_health {
  	struct workqueue_struct	       *wq;
  	unsigned long			flags;
  	struct work_struct		fatal_report_work;
@@ -46,7 +46,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  	struct mlx5_fw_crdump		*crdump;
  	struct mlx5_health_recoveries	recoveries;
  };
-@@ -566,6 +577,9 @@ struct mlx5_fc_stats {
+@@ -574,6 +585,9 @@ struct mlx5_fc_stats {
  	unsigned long sampling_interval; /* jiffies */
  	u32 *bulk_query_out;
  	struct mlx5_fc_pool fc_pool;
@@ -56,7 +56,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  };
  
  struct mlx5_events;
-@@ -648,6 +662,9 @@ struct mlx5_priv {
+@@ -656,6 +670,9 @@ struct mlx5_priv {
  	/* IRQ table valid only for real pci devices PF or VF */
  	struct mlx5_irq_table   *irq_table;
  	struct mlx5_eq_table	*eq_table;
@@ -66,7 +66,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  
  	/* pages stuff */
  	struct mlx5_nb          pg_nb;
-@@ -861,9 +878,13 @@ struct mlx5_clock {
+@@ -871,9 +888,13 @@ struct mlx5_clock {
  	struct mlx5_nb             pps_nb;
  	seqlock_t                  lock;
  	struct hwtstamp_config     hwtstamp_config;
@@ -80,7 +80,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  	struct mlx5_timer          timer;
  };
  
-@@ -1037,8 +1058,13 @@ struct mlx5_cmd_work_ent {
+@@ -1047,8 +1068,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -94,7 +94,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  	u16			op;
  	bool			polling;
  	/* Track the max comp handlers */
-@@ -1172,7 +1198,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
+@@ -1182,7 +1208,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
  struct mlx5_async_ctx {
  	struct mlx5_core_dev *dev;
  	atomic_t num_inflight;

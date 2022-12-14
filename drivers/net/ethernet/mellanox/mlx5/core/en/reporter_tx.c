@@ -514,7 +514,12 @@ static int mlx5e_tx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
 					   struct mlx5e_err_ctx *err_ctx,
 					   struct devlink_fmsg *fmsg)
 {
-	return err_ctx->dump(priv, fmsg, err_ctx->ctx);
+	struct mlx5e_txqsq *sq;
+
+	sq = err_ctx->recover == mlx5e_tx_reporter_err_cqe_recover ?
+	     err_ctx->ctx : ((struct mlx5e_tx_timeout_ctx *)(err_ctx->ctx))->sq;
+
+	return err_ctx->dump(priv, fmsg, sq);
 }
 
 static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,

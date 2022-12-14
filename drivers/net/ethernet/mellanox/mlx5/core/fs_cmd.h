@@ -104,6 +104,10 @@ struct mlx5_flow_cmds {
 
 	int (*vport_enable)(struct mlx5_flow_root_namespace *ns, int vport);
 	void (*vport_disable)(struct mlx5_flow_root_namespace *ns, int vport);
+	int (*create_match_definer)(struct mlx5_flow_root_namespace *ns,
+				    u16 format_id, u32 *match_mask);
+	int (*destroy_match_definer)(struct mlx5_flow_root_namespace *ns,
+				     int definer_id);
 };
 
 int mlx5_cmd_fc_alloc(struct mlx5_core_dev *dev, u32 *id);

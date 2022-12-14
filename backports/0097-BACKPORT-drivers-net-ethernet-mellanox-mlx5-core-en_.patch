@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
 ---
- .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 674 +++++++++++++++++-
- 1 file changed, 664 insertions(+), 10 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 722 +++++++++++++++++-
+ 1 file changed, 712 insertions(+), 10 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
@@ -838,7 +838,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  static int mlx5e_get_fecparam(struct net_device *netdev,
  			      struct ethtool_fecparam *fecparam)
  {
-@@ -1698,7 +2275,7 @@ static int mlx5e_set_fecparam(struct net
+@@ -1699,7 +2276,7 @@ static int mlx5e_set_fecparam(struct net
  
  	return 0;
  }
@@ -847,7 +847,59 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  static u32 mlx5e_get_msglevel(struct net_device *dev)
  {
  	return ((struct mlx5e_priv *)netdev_priv(dev))->msglevel;
-@@ -1829,7 +2406,11 @@ int mlx5e_ethtool_flash_device(struct ml
+@@ -1812,6 +2389,51 @@ static int mlx5e_get_module_eeprom(struc
+ 	return 0;
+ }
+ 
++#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
++static int mlx5e_get_module_eeprom_by_page(struct net_device *netdev,
++					   const struct ethtool_module_eeprom *page_data,
++					   struct netlink_ext_ack *extack)
++{
++	struct mlx5e_priv *priv = netdev_priv(netdev);
++	struct mlx5_module_eeprom_query_params query;
++	struct mlx5_core_dev *mdev = priv->mdev;
++	u8 *data = page_data->data;
++	int size_read;
++	int i = 0;
++
++	if (!page_data->length)
++		return -EINVAL;
++
++	memset(data, 0, page_data->length);
++
++	query.offset = page_data->offset;
++	query.i2c_address = page_data->i2c_address;
++	query.bank = page_data->bank;
++	query.page = page_data->page;
++	while (i < page_data->length) {
++		query.size = page_data->length - i;
++		size_read = mlx5_query_module_eeprom_by_page(mdev, &query, data + i);
++
++		/* Done reading, return how many bytes was read */
++		if (!size_read)
++			return i;
++
++		if (size_read == -EINVAL)
++			return -EINVAL;
++		if (size_read < 0) {
++			netdev_err(priv->netdev, "%s: mlx5_query_module_eeprom_by_page failed:0x%x\n",
++				   __func__, size_read);
++			return i;
++		}
++
++		i += size_read;
++		query.offset += size_read;
++	}
++
++	return i;
++}
++#endif
++
+ int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
+ 			       struct ethtool_flash *flash)
+ {
+@@ -1830,7 +2452,11 @@ int mlx5e_ethtool_flash_device(struct ml
  	dev_hold(dev);
  	rtnl_unlock();
  
@@ -860,7 +912,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	release_firmware(fw);
  
  	rtnl_lock();
-@@ -2003,7 +2584,11 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2004,7 +2630,11 @@ static int set_pflag_rx_striding_rq(stru
  			return -EOPNOTSUPP;
  		if (!mlx5e_striding_rq_possible(mdev, &priv->channels.params))
  			return -EINVAL;
@@ -872,7 +924,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  		netdev_warn(netdev, "Can't set legacy RQ with LRO, disable LRO first\n");
  		return -EINVAL;
  	}
-@@ -2021,6 +2606,39 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2022,6 +2652,39 @@ static int set_pflag_rx_striding_rq(stru
  	return mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
  }
  
@@ -912,7 +964,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  static int set_pflag_rx_no_csum_complete(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -2029,7 +2647,11 @@ static int set_pflag_rx_no_csum_complete
+@@ -2030,7 +2693,11 @@ static int set_pflag_rx_no_csum_complete
  	int i;
  
  	if (!test_bit(MLX5E_STATE_OPENED, &priv->state) ||
@@ -924,7 +976,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  		return 0;
  
  	for (i = 0; i < channels->num; i++) {
-@@ -2073,10 +2695,12 @@ static int set_pflag_tx_mpwqe_common(str
+@@ -2074,10 +2741,12 @@ static int set_pflag_tx_mpwqe_common(str
  	return err;
  }
  
@@ -937,7 +989,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  
  static int set_pflag_skb_tx_mpwqe(struct net_device *netdev, bool enable)
  {
-@@ -2207,10 +2831,15 @@ static const struct pflag_desc mlx5e_pri
+@@ -2208,10 +2877,15 @@ static const struct pflag_desc mlx5e_pri
  	{ "tx_cqe_compress",     set_pflag_tx_cqe_compress },
  	{ "rx_striding_rq",      set_pflag_rx_striding_rq },
  	{ "rx_no_csum_complete", set_pflag_rx_no_csum_complete },
@@ -953,7 +1005,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	{ "tx_xdp_hw_checksum",  set_pflag_tx_xdp_hw_checksum},
  	{ "skb_xmit_more",       set_pflag_skb_xmit_more},
  	{ "tx_port_ts",          set_pflag_tx_port_ts },
-@@ -2255,7 +2884,6 @@ static int mlx5e_set_priv_flags(struct n
+@@ -2256,7 +2930,6 @@ static int mlx5e_set_priv_flags(struct n
  
  	mutex_unlock(&priv->state_lock);
  
@@ -961,7 +1013,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	netdev_update_features(netdev);
  
  	return err;
-@@ -2291,6 +2919,7 @@ int mlx5e_set_rxnfc(struct net_device *d
+@@ -2292,6 +2965,7 @@ int mlx5e_set_rxnfc(struct net_device *d
  	return mlx5e_ethtool_set_rxnfc(dev, cmd);
  }
  
@@ -969,7 +1021,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opcode)
  {
  	struct mlx5_ifc_pddr_troubleshooting_page_bits *pddr_troubleshooting_page;
-@@ -2460,14 +3089,19 @@ mlx5e_get_link_ext_state(struct net_devi
+@@ -2461,14 +3135,19 @@ mlx5e_get_link_ext_state(struct net_devi
  
  	return -ENODATA;
  }
@@ -989,7 +1041,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	.get_strings       = mlx5e_get_strings,
  	.get_sset_count    = mlx5e_get_sset_count,
  	.get_ethtool_stats = mlx5e_get_ethtool_stats,
-@@ -2477,16 +3111,31 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2478,16 +3157,31 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_channels      = mlx5e_set_channels,
  	.get_coalesce      = mlx5e_get_coalesce,
  	.set_coalesce      = mlx5e_set_coalesce,
@@ -1021,7 +1073,13 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	.get_pauseparam    = mlx5e_get_pauseparam,
  	.set_pauseparam    = mlx5e_set_pauseparam,
  	.get_ts_info       = mlx5e_get_ts_info,
-@@ -2498,6 +3147,8 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2496,9 +3190,14 @@ const struct ethtool_ops mlx5e_ethtool_o
+ 	.set_wol	   = mlx5e_set_wol,
+ 	.get_module_info   = mlx5e_get_module_info,
+ 	.get_module_eeprom = mlx5e_get_module_eeprom,
++#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
++	.get_module_eeprom_by_page = mlx5e_get_module_eeprom_by_page,
++#endif
  	.flash_device      = mlx5e_flash_device,
  	.get_priv_flags    = mlx5e_get_priv_flags,
  	.set_priv_flags    = mlx5e_set_priv_flags,
@@ -1030,7 +1088,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	.self_test         = mlx5e_self_test,
  	.get_msglevel      = mlx5e_get_msglevel,
  	.set_msglevel      = mlx5e_set_msglevel,
-@@ -2505,6 +3156,9 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2506,6 +3205,9 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.get_dump_flag     = mlx5e_get_dump_flag,
  	.get_dump_data     = mlx5e_get_dump_data,
  	.set_dump          = mlx5e_set_dump,

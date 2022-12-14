@@ -1,3 +1,5 @@
+subdir-ccflags-y += -I$(src)/../../drivers/net/ethernet/mellanox/mlx5/core
+
 obj-$(CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD) += act_tunnel_key.o
 obj-$(CONFIG_COMPAT_TCF_VLAN_MOD)       += act_vlan.o
 obj-$(CONFIG_COMPAT_TCF_PEDIT_MOD)      += act_pedit.o

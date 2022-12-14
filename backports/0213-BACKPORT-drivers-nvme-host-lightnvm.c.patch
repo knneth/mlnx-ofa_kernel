@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/lightnvm.c
 
 Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
 ---
- drivers/nvme/host/lightnvm.c | 59 ++++++++++++++++++++++++++++++++----
- 1 file changed, 53 insertions(+), 6 deletions(-)
+ drivers/nvme/host/lightnvm.c | 63 ++++++++++++++++++++++++++++++++----
+ 1 file changed, 57 insertions(+), 6 deletions(-)
 
 --- a/drivers/nvme/host/lightnvm.c
 +++ b/drivers/nvme/host/lightnvm.c
@@ -19,12 +19,15 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  
  enum nvme_nvm_admin_opcode {
  	nvme_nvm_admin_identity		= 0xe2,
-@@ -659,8 +661,21 @@ static struct request *nvme_nvm_alloc_re
+@@ -659,8 +661,25 @@ static struct request *nvme_nvm_alloc_re
  
  	rq->cmd_flags &= ~REQ_FAILFAST_DRIVER;
  
 -	if (rqd->bio)
 +	if (rqd->bio) {
++#ifdef HAVE_BLK_RQ_APPEND_BIO_POINTER
++		blk_rq_append_bio(rq, rqd->bio);
++#else
 +#ifdef HAVE_BLK_RQ_APPEND_BIO
  		blk_rq_append_bio(rq, &rqd->bio);
 +#else
@@ -38,11 +41,12 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
 +			rq->nr_phys_segments = bio_phys_segments(q, rqd->bio);
 +#endif /* HAVE_BLK_INIT_REQUEST_FROM_BIO */
 +#endif /* HAVE_BLK_RQ_APPEND_BIO */
++#endif /* HAVE_BLK_RQ_APPEND_BIO_POINTER */
 +	}
  	else
  		rq->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_NORM);
  
-@@ -692,13 +707,13 @@ static int nvme_nvm_submit_io(struct nvm
+@@ -692,13 +711,13 @@ static int nvme_nvm_submit_io(struct nvm
  		if (ret)
  			goto err_free_cmd;
  	}
@@ -60,7 +64,7 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  err_free_cmd:
  	kfree(cmd);
  	return ret;
-@@ -747,6 +762,7 @@ static struct nvm_dev_ops nvme_nvm_dev_o
+@@ -747,6 +766,7 @@ static struct nvm_dev_ops nvme_nvm_dev_o
  	.dev_dma_free		= nvme_nvm_dev_dma_free,
  };
  
@@ -68,7 +72,7 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  static int nvme_nvm_submit_user_cmd(struct request_queue *q,
  				struct nvme_ns *ns,
  				struct nvme_nvm_command *vcmd,
-@@ -757,7 +773,9 @@ static int nvme_nvm_submit_user_cmd(stru
+@@ -757,7 +777,9 @@ static int nvme_nvm_submit_user_cmd(stru
  {
  	bool write = nvme_is_write((struct nvme_command *)vcmd);
  	struct nvm_dev *dev = ns->ndev;
@@ -78,7 +82,7 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  	struct request *rq;
  	struct bio *bio = NULL;
  	__le64 *ppa_list = NULL;
-@@ -817,11 +835,30 @@ static int nvme_nvm_submit_user_cmd(stru
+@@ -817,11 +839,30 @@ static int nvme_nvm_submit_user_cmd(stru
  			vcmd->ph_rw.metadata = cpu_to_le64(metadata_dma);
  		}
  
@@ -110,7 +114,7 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  	if (nvme_req(rq)->flags & NVME_REQ_CANCELLED)
  		ret = -EINTR;
  	else if (nvme_req(rq)->status & 0x7ff)
-@@ -839,8 +876,16 @@ err_meta:
+@@ -839,8 +880,16 @@ err_meta:
  	if (meta_buf && meta_len)
  		dma_pool_free(dev->dma_pool, metadata, metadata_dma);
  err_map:
@@ -127,7 +131,7 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  err_ppa:
  	if (ppa_buf && ppa_len)
  		dma_pool_free(dev->dma_pool, ppa_list, ppa_dma);
-@@ -944,6 +989,7 @@ int nvme_nvm_ioctl(struct nvme_ns *ns, u
+@@ -944,6 +993,7 @@ int nvme_nvm_ioctl(struct nvme_ns *ns, u
  		return -ENOTTY;
  	}
  }
@@ -135,7 +139,7 @@ Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
  
  int nvme_nvm_register(struct nvme_ns *ns, char *disk_name, int node)
  {
-@@ -1273,3 +1319,4 @@ const struct attribute_group nvme_nvm_at
+@@ -1273,3 +1323,4 @@ const struct attribute_group nvme_nvm_at
  	.attrs		= nvm_dev_attrs,
  	.is_visible	= nvm_dev_attrs_visible,
  };

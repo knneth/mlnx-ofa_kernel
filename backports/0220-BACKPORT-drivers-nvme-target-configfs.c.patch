@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/configfs.c
 
 Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
 ---
- drivers/nvme/target/configfs.c | 91 +++++++++++++++++++++++++++++++++---------
- 1 file changed, 72 insertions(+), 19 deletions(-)
+ drivers/nvme/target/configfs.c | 103 ++++++++++++++++++++++++++++++++---------
+ 1 file changed, 82 insertions(+), 21 deletions(-)
 
 --- a/drivers/nvme/target/configfs.c
 +++ b/drivers/nvme/target/configfs.c
@@ -57,7 +57,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	if (!ns->device_path)
  		goto out_unlock;
  
-@@ -878,7 +894,7 @@ static struct configfs_item_operations n
+@@ -878,12 +894,13 @@ static struct configfs_item_operations n
  	.release		= nvmet_ns_release,
  };
  
@@ -66,7 +66,44 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_ns_item_ops,
  	.ct_attrs		= nvmet_ns_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -919,7 +935,7 @@ static struct configfs_group_operations
+ };
+ 
++#ifdef HAVE_CONFIGFS_REGISTER_GROUP
+ static ssize_t nvmet_offload_ctx_traddr_show(struct config_item *item, char *page)
+ {
+ 	struct nvmet_offload_ctx *ctx = to_nvmet_offload_ctx(item);
+@@ -940,14 +957,15 @@ static struct configfs_attribute *nvmet_
+ 	NULL,
+ };
+ 
+-static const struct config_item_type nvmet_offload_ctx_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_offload_ctx_type = {
+ 	.ct_attrs		= nvmet_offload_ctx_attrs,
+ 	.ct_owner		= THIS_MODULE,
+ };
+ 
+-static const struct config_item_type nvmet_offload_ctxs_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_offload_ctxs_type = {
+ 	.ct_owner		= THIS_MODULE,
+ };
++#endif
+ 
+ static struct config_group *nvmet_ns_make(struct config_group *group,
+ 		const char *name)
+@@ -973,10 +991,12 @@ static struct config_group *nvmet_ns_mak
+ 		goto out;
+ 	config_group_init_type_name(&ns->group, name, &nvmet_ns_type);
+ 
++#ifdef HAVE_CONFIGFS_REGISTER_GROUP
+ 	config_group_init_type_name(&ns->offload_ctxs_group,
+ 			"offload_ctxs", &nvmet_offload_ctxs_type);
+ 	configfs_add_default_group(&ns->offload_ctxs_group,
+ 			&ns->group);
++#endif
+ 
+ 	pr_info("adding nsid %d to subsystem %s\n", nsid, subsys->subsysnqn);
+ 
+@@ -989,7 +1009,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ns_make,
  };
  
@@ -75,7 +112,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_namespaces_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1000,7 +1016,7 @@ static struct configfs_attribute *nvmet_
+@@ -1070,7 +1090,7 @@ static struct configfs_attribute *nvmet_
  	NULL,
  };
  
@@ -84,7 +121,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_attrs		= nvmet_passthru_attrs,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1080,8 +1096,13 @@ out_free_link:
+@@ -1150,8 +1170,13 @@ out_free_link:
  	return ret;
  }
  
@@ -98,7 +135,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  {
  	struct nvmet_port *port = to_nvmet_port(parent->ci_parent);
  	struct nvmet_subsys *subsys = to_subsys(target);
-@@ -1093,7 +1114,11 @@ static void nvmet_port_subsys_drop_link(
+@@ -1163,7 +1188,11 @@ static void nvmet_port_subsys_drop_link(
  			goto found;
  	}
  	up_write(&nvmet_config_sem);
@@ -110,7 +147,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  
  found:
  	list_del(&p->entry);
-@@ -1108,6 +1133,9 @@ found:
+@@ -1178,6 +1207,9 @@ found:
  		nvmet_uninit_offload_subsystem_port_attrs(subsys);
  	up_write(&nvmet_config_sem);
  	kfree(p);
@@ -120,7 +157,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  }
  
  static struct configfs_item_operations nvmet_port_subsys_item_ops = {
-@@ -1115,7 +1143,7 @@ static struct configfs_item_operations n
+@@ -1185,7 +1217,7 @@ static struct configfs_item_operations n
  	.drop_link		= nvmet_port_subsys_drop_link,
  };
  
@@ -129,7 +166,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_port_subsys_item_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1162,8 +1190,14 @@ out_free_link:
+@@ -1232,8 +1264,14 @@ out_free_link:
  	return ret;
  }
  
@@ -144,7 +181,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  {
  	struct nvmet_subsys *subsys = to_subsys(parent->ci_parent);
  	struct nvmet_host *host = to_host(target);
-@@ -1175,7 +1209,11 @@ static void nvmet_allowed_hosts_drop_lin
+@@ -1245,7 +1283,11 @@ static void nvmet_allowed_hosts_drop_lin
  			goto found;
  	}
  	up_write(&nvmet_config_sem);
@@ -156,7 +193,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  
  found:
  	list_del(&p->entry);
-@@ -1183,6 +1221,9 @@ found:
+@@ -1253,6 +1295,9 @@ found:
  
  	up_write(&nvmet_config_sem);
  	kfree(p);
@@ -166,7 +203,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  }
  
  static struct configfs_item_operations nvmet_allowed_hosts_item_ops = {
-@@ -1190,7 +1231,7 @@ static struct configfs_item_operations n
+@@ -1260,7 +1305,7 @@ static struct configfs_item_operations n
  	.drop_link		= nvmet_allowed_hosts_drop_link,
  };
  
@@ -175,7 +212,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_allowed_hosts_item_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1395,7 +1436,11 @@ static ssize_t nvmet_subsys_attr_model_s
+@@ -1465,7 +1510,11 @@ static ssize_t nvmet_subsys_attr_model_s
  			return -EINVAL;
  	}
  
@@ -187,7 +224,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	if (!new_model_number)
  		return -ENOMEM;
  
-@@ -1413,7 +1458,9 @@ static ssize_t nvmet_subsys_attr_model_s
+@@ -1483,7 +1532,9 @@ static ssize_t nvmet_subsys_attr_model_s
  	mutex_unlock(&subsys->lock);
  	up_write(&nvmet_config_sem);
  
@@ -198,7 +235,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	kfree(new_model_number);
  
  	return count;
-@@ -1421,6 +1468,7 @@ static ssize_t nvmet_subsys_attr_model_s
+@@ -1491,6 +1542,7 @@ static ssize_t nvmet_subsys_attr_model_s
  CONFIGFS_ATTR(nvmet_subsys_, attr_model);
  
  #ifdef CONFIG_BLK_DEV_INTEGRITY
@@ -206,7 +243,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  static ssize_t nvmet_subsys_attr_pi_enable_show(struct config_item *item,
  						char *page)
  {
-@@ -1441,6 +1489,7 @@ static ssize_t nvmet_subsys_attr_pi_enab
+@@ -1511,6 +1563,7 @@ static ssize_t nvmet_subsys_attr_pi_enab
  }
  CONFIGFS_ATTR(nvmet_subsys_, attr_pi_enable);
  #endif
@@ -214,7 +251,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
   
  static ssize_t
  nvmet_subsys_attr_offload_subsys_unknown_ns_cmds_show(struct config_item *item,
-@@ -1539,9 +1588,11 @@ static struct configfs_attribute *nvmet_
+@@ -1609,9 +1662,11 @@ static struct configfs_attribute *nvmet_
  	&nvmet_subsys_attr_attr_cntlid_min,
  	&nvmet_subsys_attr_attr_cntlid_max,
  	&nvmet_subsys_attr_attr_model,
@@ -226,7 +263,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	&nvmet_subsys_attr_attr_offload,
  	&nvmet_subsys_attr_attr_offload_subsys_unknown_ns_cmds,
  	NULL,
-@@ -1562,7 +1613,7 @@ static struct configfs_item_operations n
+@@ -1632,7 +1687,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_subsys_release,
  };
  
@@ -235,7 +272,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_subsys_item_ops,
  	.ct_attrs		= nvmet_subsys_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -1602,7 +1653,7 @@ static struct configfs_group_operations
+@@ -1672,7 +1727,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_subsys_make,
  };
  
@@ -244,7 +281,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_subsystems_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1670,7 +1721,7 @@ static struct configfs_item_operations n
+@@ -1740,7 +1795,7 @@ static struct configfs_item_operations n
  	.release	= nvmet_referral_release,
  };
  
@@ -253,7 +290,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner	= THIS_MODULE,
  	.ct_attrs	= nvmet_referral_attrs,
  	.ct_item_ops	= &nvmet_referral_item_ops,
-@@ -1696,7 +1747,7 @@ static struct configfs_group_operations
+@@ -1766,7 +1821,7 @@ static struct configfs_group_operations
  	.disconnect_notify	= nvmet_referral_notify,
  };
  
@@ -262,7 +299,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner	= THIS_MODULE,
  	.ct_group_ops	= &nvmet_referral_group_ops,
  };
-@@ -1775,7 +1826,7 @@ static struct configfs_item_operations n
+@@ -1845,7 +1900,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_ana_group_release,
  };
  
@@ -271,7 +308,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_ana_group_item_ops,
  	.ct_attrs		= nvmet_ana_group_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -1820,7 +1871,7 @@ static struct configfs_group_operations
+@@ -1890,7 +1945,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ana_groups_make_group,
  };
  
@@ -280,7 +317,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_ana_groups_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1850,8 +1901,10 @@ static struct configfs_attribute *nvmet_
+@@ -1920,8 +1975,10 @@ static struct configfs_attribute *nvmet_
  	&nvmet_attr_param_offload_srq_size,
  	&nvmet_attr_param_offload_queue_size,
  #ifdef CONFIG_BLK_DEV_INTEGRITY
@@ -291,7 +328,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	NULL,
  };
  
-@@ -1859,7 +1912,7 @@ static struct configfs_item_operations n
+@@ -1929,7 +1986,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_port_release,
  };
  
@@ -300,7 +337,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_attrs		= nvmet_port_attrs,
  	.ct_item_ops		= &nvmet_port_item_ops,
  	.ct_owner		= THIS_MODULE,
-@@ -1935,7 +1988,7 @@ static struct configfs_group_operations
+@@ -2005,7 +2062,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ports_make,
  };
  
@@ -309,7 +346,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_ports_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1954,7 +2007,7 @@ static struct configfs_item_operations n
+@@ -2024,7 +2081,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_host_release,
  };
  
@@ -318,7 +355,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_host_item_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1977,14 +2030,14 @@ static struct configfs_group_operations
+@@ -2047,14 +2104,14 @@ static struct configfs_group_operations
  	.make_group		= nvmet_hosts_make_group,
  };
  
@@ -335,3 +372,29 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner		= THIS_MODULE,
  };
  
+@@ -2069,14 +2126,17 @@ static struct configfs_subsystem nvmet_c
+ 
+ void nvmet_offload_ctx_configfs_del(struct nvmet_offload_ctx *ctx)
+ {
++#ifdef HAVE_CONFIGFS_REGISTER_GROUP
+ 	if (d_inode(ctx->group.cg_item.ci_dentry))
+ 		configfs_unregister_group(&ctx->group);
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nvmet_offload_ctx_configfs_del);
+ 
+ int nvmet_offload_ctx_configfs_create(struct nvmet_offload_ctx *ctx)
+ {
+ 	int res = 0;
++#ifdef HAVE_CONFIGFS_REGISTER_GROUP
+ 	char name[CONFIGFS_ITEM_NAME_LEN];
+ 
+ 	sprintf(name, "%d", ctx->id);
+@@ -2089,6 +2149,7 @@ int nvmet_offload_ctx_configfs_create(st
+ 	if (res)
+ 		pr_err("failed to register configfs group for offload ctx %s\n",
+ 		       name);
++#endif
+ 
+ 	return res;
+ }

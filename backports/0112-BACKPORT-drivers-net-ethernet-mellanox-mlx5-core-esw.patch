@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 
 Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 49 ++++++++++++++++++++---
- 1 file changed, 44 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 48 +++++++++++++++++++++--
+ 1 file changed, 44 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
@@ -108,14 +108,15 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  	ret = mlx5_esw_vport_vhca_id_mapping_get(esw, vport, &vhca_id);
  	if (ret) {
  		esw_debug(esw->dev, "Failed to get VHCA_ID mapping to VPORT %d\n", vport_num);
-@@ -1423,12 +1439,13 @@ int mlx5_eswitch_enable_vport(struct mlx
+@@ -1423,6 +1439,7 @@ int mlx5_eswitch_enable_vport(struct mlx
  		if (ret)
  			goto err_insert;
  	}
--
 +#endif
- 	esw_vport_change_handle_locked(vport);
  
+ 	/* External controller host PF has factory programmed MAC.
+ 	 * Read it from the device.
+@@ -1435,6 +1452,7 @@ int mlx5_eswitch_enable_vport(struct mlx
  	esw->enabled_vports++;
  	esw_debug(esw->dev, "Enabled VPORT(%d)\n", vport_num);
  
@@ -123,7 +124,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  	goto done;
  
  err_insert:
-@@ -1437,11 +1454,13 @@ err_out:
+@@ -1443,11 +1461,13 @@ err_out:
  	vport->enabled = false;
  	vport->enabled_events = 0;
  	esw_vport_cleanup(esw, vport);
@@ -137,7 +138,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  static void mlx5_eswitch_free_vhca_id_mapping(struct mlx5_eswitch *esw, u16 vport_num)
  {
  	struct mlx5_esw_vhca_mapping *m;
-@@ -1466,6 +1485,7 @@ static void mlx5_eswitch_free_vhca_id_ma
+@@ -1472,6 +1492,7 @@ static void mlx5_eswitch_free_vhca_id_ma
  		kfree(m);
  	}
  }
@@ -145,7 +146,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  
  void mlx5_eswitch_disable_vport(struct mlx5_eswitch *esw, u16 vport_num)
  {
-@@ -1484,7 +1504,9 @@ void mlx5_eswitch_disable_vport(struct m
+@@ -1490,7 +1511,9 @@ void mlx5_eswitch_disable_vport(struct m
  	/* Disable events from this vport */
  	arm_vport_context_events_cmd(esw->dev, vport->vport, 0);
  
@@ -155,7 +156,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  
  	/* We don't assume VFs will cleanup after themselves.
  	 * Calling vport change handler while vport is disabled will cleanup
-@@ -1959,8 +1981,11 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+@@ -1965,8 +1988,11 @@ int mlx5_eswitch_enable(struct mlx5_eswi
  void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw, bool clear_vf)
  {
  	int old_mode;
@@ -168,7 +169,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  
  	if (esw->mode == MLX5_ESWITCH_NONE)
  		return;
-@@ -2305,7 +2330,9 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2311,7 +2337,9 @@ int mlx5_eswitch_init(struct mlx5_core_d
  	hash_init(esw->offloads.route_tbl);
  	ida_init(&esw->offloads.vport_metadata_ida);
  	spin_lock_init(&esw->offloads.int_vports_lock);
@@ -178,7 +179,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  	mutex_init(&esw->state_lock);
  	mutex_init(&esw->mode_lock);
  
-@@ -2386,7 +2413,9 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -2392,7 +2420,9 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  	destroy_workqueue(esw->work_queue);
  	mutex_destroy(&esw->mode_lock);
  	mutex_destroy(&esw->state_lock);
@@ -188,7 +189,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  	ida_destroy(&esw->offloads.vport_metadata_ida);
  	mlx5e_mod_hdr_tbl_destroy(&esw->offloads.mod_hdr);
  	mutex_destroy(&esw->offloads.encap_tbl_lock);
-@@ -2452,6 +2481,7 @@ int mlx5_eswitch_set_vport_mac(struct ml
+@@ -2458,6 +2488,7 @@ int mlx5_eswitch_set_vport_mac(struct ml
  	return err;
  }
  
@@ -196,7 +197,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  int mlx5_eswitch_get_vport_from_vhca_id(struct mlx5_eswitch *esw, u16 vhca_id,
  					u16 *vport)
  {
-@@ -2464,6 +2494,7 @@ int mlx5_eswitch_get_vport_from_vhca_id(
+@@ -2470,6 +2501,7 @@ int mlx5_eswitch_get_vport_from_vhca_id(
  	*vport = m->vport;
  	return 0;
  }
@@ -204,7 +205,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  
  static bool mlx5_esw_check_port_type(struct mlx5_eswitch *esw, u16 vport_num, xa_mark_t mark)
  {
-@@ -2719,9 +2750,13 @@ int mlx5_eswitch_get_vport_config(struct
+@@ -2725,9 +2757,13 @@ int mlx5_eswitch_get_vport_config(struct
  	ivi->linkstate = evport->info.link_state;
  	ivi->vlan = evport->info.vlan;
  	ivi->qos = evport->info.qos;
@@ -218,7 +219,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  	ivi->min_tx_rate = evport->qos.min_rate;
  	ivi->max_tx_rate = evport->qos.max_rate;
  	mutex_unlock(&esw->state_lock);
-@@ -3165,7 +3200,9 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -3171,7 +3207,9 @@ int mlx5_eswitch_get_vport_stats(struct
  	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
  	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
  	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
@@ -228,7 +229,7 @@ Change-Id: I93fc4da02cf0f65bb66f9bcacde71ef397e1905a
  	int err = 0;
  	u32 *out;
  
-@@ -3225,11 +3262,13 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -3231,11 +3269,13 @@ int mlx5_eswitch_get_vport_stats(struct
  	vf_stats->broadcast =
  		MLX5_GET_CTR(out, received_eth_broadcast.packets);
  

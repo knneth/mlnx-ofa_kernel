@@ -51,6 +51,7 @@ struct nvmet_rdma_backend_ctrl {
 	struct work_struct	  release_work;
 	/* Restart the nvme queue for future usage */
 	bool			  restart;
+	struct nvmet_offload_ctx  offload_ctx;
 };
 
 struct nvmet_rdma_offload_ctx {
@@ -121,6 +122,8 @@ static u64 nvmet_rdma_offload_ns_write_inline_cmds(struct nvmet_ns *ns);
 static u64 nvmet_rdma_offload_ns_flush_cmds(struct nvmet_ns *ns);
 static u64 nvmet_rdma_offload_ns_error_cmds(struct nvmet_ns *ns);
 static u64 nvmet_rdma_offload_ns_backend_error_cmds(struct nvmet_ns *ns);
+static void nvmet_rdma_offload_query_counters(void *ctx,
+					struct nvmet_ns_counters *counters);
 static int nvmet_rdma_init_st_pool(struct nvmet_rdma_staging_buf_pool *pool,
 				   unsigned long long mem_start,
 				   unsigned int mem_size,

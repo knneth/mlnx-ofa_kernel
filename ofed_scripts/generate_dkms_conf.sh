@@ -40,7 +40,7 @@ echo kernel_source_dir=\${kernel_source_dir:-"/lib/modules/\$kernelver/build"}
 
 modules=`./dkms_ofed $kernelver $kernel_source_dir get-modules`
 
-i=0
+echo 'i=0'
 
 for module in $modules
 do
@@ -48,15 +48,18 @@ do
 	if [ "$name" = 'auxiliary' ]; then
 		echo "if [[ \$(VER \$kernelver) < \$(VER '5.11.0') ]]; then"
 	fi
-	echo BUILT_MODULE_NAME[$i]=$name
-	echo BUILT_MODULE_LOCATION[$i]=${module%*/*}
-	echo DEST_MODULE_NAME[$i]=$name
-	echo DEST_MODULE_LOCATION[$i]=/kernel/${module%*/*}
-	echo STRIP[$i]="\$STRIP_MODS"
-	if [ "$name" = 'auxiliary' ]; then
-		echo "fi"
+	if [ "$name" = 'mlxdevm' ]; then
+		echo "if [[ ! \$(VER \$kernelver) < \$(VER '4.15.0') ]]; then"
 	fi
-	let i++
+	echo 'BUILT_MODULE_NAME[$i]='$name
+	echo 'BUILT_MODULE_LOCATION[$i]='${module%*/*}
+	echo 'DEST_MODULE_NAME[$i]='$name
+	echo 'DEST_MODULE_LOCATION[$i]='/kernel/${module%*/*}
+	echo 'STRIP[$i]="$STRIP_MODS"'
+	echo 'let i++'
+	case "$name" in auxiliary | mlxdevm)
+		echo "fi";;
+	esac
 done
 
 EXTRA_OPTIONS="--with-mlx5-ipsec --with-gds --without-gds --with-sf-cfg-drv"

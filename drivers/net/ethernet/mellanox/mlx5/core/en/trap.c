@@ -55,6 +55,9 @@ static int mlx5e_alloc_trap_rq(struct mlx5e_priv *priv, struct mlx5e_rq_param *r
 	rq->clock    = &mdev->clock;
 	rq->tstamp   = &priv->tstamp;
 	rq->hw_mtu   = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+	rq->ptp_cyc2time = mlx5_is_real_time_rq(mdev) ?
+			   mlx5_real_time_cyc2time :
+			   mlx5_timecounter_cyc2time;
 
 	xdp_rxq_info_unused(&rq->xdp_rxq);
 

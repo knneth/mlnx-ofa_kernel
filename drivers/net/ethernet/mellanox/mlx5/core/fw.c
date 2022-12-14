@@ -274,6 +274,12 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 			return err;
 	}
 
+	if (MLX5_CAP_GEN(dev, port_selection_cap)) {
+		err = mlx5_core_get_caps(dev, MLX5_CAP_PORT_SELECTION);
+		if (err)
+			return err;
+	}
+
 	err = mlx5_core_query_special_contexts(dev);
 	if (err)
 		return err;

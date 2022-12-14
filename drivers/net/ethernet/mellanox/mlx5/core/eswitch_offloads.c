@@ -54,7 +54,8 @@
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 #include "en/mapping.h"
 #endif
-#include "lag.h"
+#include "lag/lag.h"
+#include "devlink.h"
 
 #define mlx5_esw_for_each_rep(esw, i, rep) \
 	xa_for_each(&((esw)->offloads.vport_reps), i, rep)
@@ -175,7 +176,7 @@ static u32 mlx5_eswitch_get_int_vport_metadata_for_match(struct mlx5_esw_int_vpo
 	return int_vport->match_metadata << (32 - ESW_SOURCE_PORT_METADATA_BITS);
 }
 
-static void
+void
 mlx5_eswitch_set_rule_source_port(struct mlx5_eswitch *esw,
 				  struct mlx5_flow_spec *spec,
 				  struct mlx5_eswitch *from_esw,
@@ -458,7 +459,8 @@ static bool
 esw_src_port_rewrite_supported(struct mlx5_eswitch *esw)
 {
 	return MLX5_CAP_GEN(esw->dev, reg_c_preserve) &&
-	       mlx5_eswitch_vport_match_metadata_enabled(esw);
+	       mlx5_eswitch_vport_match_metadata_enabled(esw) &&
+	       MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ignore_flow_level);
 }
 
 struct mlx5_flow_handle *
@@ -566,10 +568,19 @@ mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR)
 		flow_act.modify_hdr = attr->modify_hdr;
 
-	/* esw_attr->sample is allocated only when there is a sample action */
-	if (esw_attr->sample && esw_attr->sample->sample_default_tbl) {
-		fdb = esw_attr->sample->sample_default_tbl;
-	} else if (split) {
+	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_EXECUTE_ASO) {
+		struct mlx5_meter_handle *meter;
+
+		meter = attr->meter_attr.meters[0].handle;
+		flow_act.exe_aso.type = MLX5_EXE_ASO_FLOW_METER;
+		flow_act.exe_aso.object_id = meter->obj_id;
+		flow_act.exe_aso.flow_meter.meter_idx = meter->idx;
+		flow_act.exe_aso.flow_meter.init_color = MLX5_FLOW_METER_COLOR_GREEN;
+		/* use metadata reg 5 for packet color */
+		flow_act.exe_aso.return_reg_id = 5;
+	}
+
+	if (split) {
 		fwd_attr.chain = attr->chain;
 		fwd_attr.prio = attr->prio;
 		fwd_attr.vport = esw_attr->in_rep->vport;
@@ -1656,6 +1667,117 @@ esw_chains_destroy(struct mlx5_eswitch *esw, struct mlx5_fs_chains *chains)
 
 #endif
 
+static int esw_create_miss_meter_fdb_tables(struct mlx5_eswitch *esw)
+{
+	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
+	struct mlx5_flow_table_attr ft_attr = {};
+	int num_vfs, table_size, err = 0;
+	struct mlx5_core_dev *dev = esw->dev;
+	struct mlx5_flow_namespace *root_ns;
+	struct mlx5_flow_table *fdb = NULL;
+	struct mlx5_flow_group *g;
+	void *match_criteria;
+	void *misc2;
+	u32 *flow_group_in;
+
+	flow_group_in = kvzalloc(inlen, GFP_KERNEL);
+	if (!flow_group_in)
+		return -ENOMEM;
+
+	num_vfs = esw->esw_funcs.num_vfs;
+	root_ns = esw->fdb_table.offloads.ns;
+
+	/* Create miss meter table and group */
+	table_size = num_vfs + 1;
+	if (mlx5_core_is_ecpf(dev))
+		table_size++;
+
+	ft_attr.max_fte = table_size;
+	ft_attr.prio = FDB_MISS_METER;
+
+	fdb = mlx5_create_flow_table(root_ns, &ft_attr);
+	if (IS_ERR(fdb)) {
+		err = PTR_ERR(fdb);
+		esw_warn(dev, "Failed to create miss meter FDB Table err %d\n", err);
+		goto meter_fdb_err;
+	}
+
+	esw->fdb_table.offloads.miss_meter_fdb = fdb;
+
+	match_criteria = MLX5_ADDR_OF(create_flow_group_in, flow_group_in, match_criteria);
+	esw_set_flow_group_source_port(esw, flow_group_in);
+	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, 0);
+	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, table_size - 1);
+
+	g = mlx5_create_flow_group(fdb, flow_group_in);
+	if (IS_ERR(g)) {
+		err = PTR_ERR(g);
+		esw_warn(dev, "Failed to create miss meter flow group err(%d)\n", err);
+		goto meter_g_err;
+	}
+	esw->fdb_table.offloads.miss_meter_grp = g;
+
+	/* Create post meter table and group - we only
+	 * need 1 rule per rep to match on red color since
+	 * green will continue to slow_fdb via miss on this
+	 * table.
+	 */
+
+	ft_attr.level = 1;
+
+	fdb = mlx5_create_flow_table(root_ns, &ft_attr);
+	if (IS_ERR(fdb)) {
+		err = PTR_ERR(fdb);
+		esw_warn(dev, "Failed to create post miss meter FDB Table err %d\n", err);
+		goto post_meter_fdb_err;
+	}
+	esw->fdb_table.offloads.post_miss_meter_fdb = fdb;
+
+	MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable,
+		 MLX5_GET(create_flow_group_in, flow_group_in,
+			  match_criteria_enable) |
+		 MLX5_MATCH_MISC_PARAMETERS_2);
+	misc2 = MLX5_ADDR_OF(fte_match_param, match_criteria, misc_parameters_2);
+	MLX5_SET(fte_match_set_misc2, misc2, metadata_reg_c_5, 0x3);
+
+	/* Use the already masked source vport and add the
+	 * meter color to the match criteria.
+	 */
+	g = mlx5_create_flow_group(fdb, flow_group_in);
+	if (IS_ERR(g)) {
+		err = PTR_ERR(g);
+		esw_warn(dev, "Failed to create post miss meter flow group err(%d)\n", err);
+		goto post_meter_g_err;
+	}
+	esw->fdb_table.offloads.post_miss_meter_grp = g;
+
+	kvfree(flow_group_in);
+	return 0;
+
+post_meter_g_err:
+	mlx5_destroy_flow_table(esw->fdb_table.offloads.post_miss_meter_fdb);
+
+post_meter_fdb_err:
+	mlx5_destroy_flow_group(esw->fdb_table.offloads.miss_meter_grp);
+
+meter_g_err:
+	mlx5_destroy_flow_table(esw->fdb_table.offloads.miss_meter_fdb);
+
+meter_fdb_err:
+	kvfree(flow_group_in);
+
+	return err;
+}
+
+static void esw_destroy_miss_meter_fdb_tables(struct mlx5_eswitch *esw)
+{
+	mlx5_destroy_flow_group(esw->fdb_table.offloads.post_miss_meter_grp);
+	mlx5_destroy_flow_table(esw->fdb_table.offloads.post_miss_meter_fdb);
+
+	mlx5_destroy_flow_group(esw->fdb_table.offloads.miss_meter_grp);
+	mlx5_destroy_flow_table(esw->fdb_table.offloads.miss_meter_fdb);
+}
+
 static int esw_create_offloads_fdb_tables(struct mlx5_eswitch *esw)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
@@ -1664,8 +1786,10 @@ static int esw_create_offloads_fdb_tables(struct mlx5_eswitch *esw)
 	struct mlx5_core_dev *dev = esw->dev;
 	struct mlx5_flow_namespace *root_ns;
 	struct mlx5_flow_table *fdb = NULL;
+	struct mlx5_flow_table *miss_fdb;
 	u32 flags = 0, *flow_group_in;
 	struct mlx5_flow_group *g;
+	bool miss_meter_supp;
 	void *match_criteria;
 	u8 *dmac;
 
@@ -1711,8 +1835,21 @@ static int esw_create_offloads_fdb_tables(struct mlx5_eswitch *esw)
 		goto slow_fdb_err;
 	}
 	esw->fdb_table.offloads.slow_fdb = fdb;
+	miss_fdb = esw->fdb_table.offloads.slow_fdb;
 
-	err = esw_chains_create(esw, fdb);
+	miss_meter_supp = !!(MLX5_CAP_GEN_64(esw->dev, general_obj_types) &
+				MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO);
+	if (miss_meter_supp) {
+		err = esw_create_miss_meter_fdb_tables(esw);
+		if (err) {
+			esw_warn(dev, "Failed to open miss meter fdb err(%d)\n", err);
+			goto miss_meter_fdb_err;
+		}
+
+		miss_fdb = esw->fdb_table.offloads.miss_meter_fdb;
+	}
+
+	err = esw_chains_create(esw, miss_fdb);
 	if (err) {
 		esw_warn(dev, "Failed to open fdb chains err(%d)\n", err);
 		goto fdb_chains_err;
@@ -1848,6 +1985,9 @@ send_vport_err:
 fdb_ipsec_rx_err:
 	esw_chains_destroy(esw, esw_chains(esw));
 fdb_chains_err:
+	if (miss_meter_supp)
+		esw_destroy_miss_meter_fdb_tables(esw);
+miss_meter_fdb_err:
 	mlx5_destroy_flow_table(esw->fdb_table.offloads.slow_fdb);
 slow_fdb_err:
 	/* Holds true only as long as DMFS is the default */
@@ -1875,6 +2015,11 @@ static void esw_destroy_offloads_fdb_tables(struct mlx5_eswitch *esw)
 
 	mlx5_esw_ipsec_destroy(esw);
 	esw_chains_destroy(esw, esw_chains(esw));
+
+	if (MLX5_CAP_GEN_64(esw->dev, general_obj_types) &
+			MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO)
+		esw_destroy_miss_meter_fdb_tables(esw);
+
 	mlx5_destroy_flow_table(esw->fdb_table.offloads.slow_fdb);
 	/* Holds true only as long as DMFS is the default */
 	mlx5_flow_namespace_set_mode(esw->fdb_table.offloads.ns,
@@ -3795,6 +3940,11 @@ int esw_offloads_enable(struct mlx5_eswitch *esw)
 	if (err)
 		goto err_steering_init;
 
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+	esw->offloads.post_action = mlx5_post_action_init(esw_chains(esw), esw->dev,
+							  MLX5_FLOW_NAMESPACE_FDB);
+#endif
+
 	/* Representor will control the vport link state */
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs)
 		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_DOWN;
@@ -3817,6 +3967,9 @@ int esw_offloads_enable(struct mlx5_eswitch *esw)
 err_vports:
 	esw_offloads_unload_rep(esw, MLX5_VPORT_UPLINK);
 err_uplink:
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+	mlx5_post_action_destroy(esw->offloads.post_action);
+#endif
 	esw_offloads_steering_cleanup(esw);
 err_steering_init:
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
@@ -3860,6 +4013,9 @@ void esw_offloads_disable(struct mlx5_eswitch *esw)
 	mlx5_eswitch_disable_pf_vf_vports(esw);
 	esw_offloads_unload_rep(esw, MLX5_VPORT_UPLINK);
 	esw_set_passing_vport_metadata(esw, false);
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+	mlx5_post_action_destroy(esw->offloads.post_action);
+#endif
 	esw_offloads_steering_cleanup(esw);
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 	mapping_destroy(esw->offloads.reg_c0_obj_pool);
@@ -3992,10 +4148,19 @@ int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 
 	ldev = mlx5_lag_disable(esw->dev);
 
-	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV)
+	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV) {
+		if (mlx5_devlink_trap_get_num_active(esw->dev)) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Can't change mode while devlink traps are active");
+			err = -EOPNOTSUPP;
+			goto unlock;
+		}
 		err = esw_offloads_start(esw, extack, ldev);
-	else if (mode == DEVLINK_ESWITCH_MODE_LEGACY)
+	} else if (mode == DEVLINK_ESWITCH_MODE_LEGACY) {
 		err = esw_offloads_stop(esw, extack, ldev);
+	} else {
+ 		err = -EINVAL;
+	}
 
 	atomic_set(&esw->tc_refcnt, 0);
 	mlx5_esw_ipsec_release(esw);
@@ -4342,6 +4507,52 @@ int mlx5_devlink_eswitch_steering_mode_get(struct devlink *devlink,
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	*mode = dev->priv.steering->mode;
+	return 0;
+}
+
+int
+mlx5_devlink_eswitch_lag_port_select_mode_set(struct devlink *devlink,
+					      enum devlink_eswitch_lag_port_select_mode mode)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+	u8 eswitch_mode = mlx5_eswitch_mode(dev);
+
+	if (mode == DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH &&
+	    !MLX5_CAP_PORT_SELECTION(dev, port_select_flow_table)) {
+		mlx5_core_err(dev,
+			      "hash based LAG is not supported by current device");
+		return -EOPNOTSUPP;
+	}
+
+	if (eswitch_mode == MLX5_ESWITCH_OFFLOADS) {
+		mlx5_core_err(dev,
+			      "Configure lag port selection mode is not supported when eswitch offloads enabled.");
+		return -EOPNOTSUPP;
+	}
+
+	if (mode == DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH)
+		mlx5_lag_set_user_mode(dev, MLX5_LAG_USER_PREF_MODE_HASH);
+	else
+		mlx5_lag_set_user_mode(dev,
+				       MLX5_LAG_USER_PREF_MODE_QUEUE_AFFINITY);
+
+	return 0;
+}
+
+int
+mlx5_devlink_eswitch_lag_port_select_mode_get(struct devlink *devlink,
+					      enum devlink_eswitch_lag_port_select_mode *mode)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	if (!mlx5_lag_is_supported(dev))
+		return -EOPNOTSUPP;
+
+	if (mlx5_lag_get_user_mode(dev) == MLX5_LAG_USER_PREF_MODE_HASH)
+		*mode = DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH;
+	else
+		*mode = DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_QUEUE_AFFINITY;
+
 	return 0;
 }
 

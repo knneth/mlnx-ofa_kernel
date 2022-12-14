@@ -31,6 +31,7 @@ struct mlx5e_sq_param {
 	struct mlx5_wq_param       wq;
 	bool                       is_mpw;
 	u16                        stop_room;
+	u32                        pdn;
 };
 
 struct mlx5e_channel_param {
@@ -133,6 +134,10 @@ void mlx5e_build_icosq_param(struct mlx5e_priv *priv,
 void mlx5e_build_xdpsq_param(struct mlx5e_priv *priv,
 			     struct mlx5e_params *params,
 			     struct mlx5e_sq_param *param);
+void mlx5e_build_asosq_param(struct mlx5e_priv *priv,
+			     struct mlx5e_sq_param *param);
+void mlx5e_build_aso_cq_param(struct mlx5e_priv *priv,
+			      struct mlx5e_cq_param *param);
 
 u16 mlx5e_calc_sq_stop_room(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
 int mlx5e_validate_params(struct mlx5e_priv *priv, struct mlx5e_params *params);

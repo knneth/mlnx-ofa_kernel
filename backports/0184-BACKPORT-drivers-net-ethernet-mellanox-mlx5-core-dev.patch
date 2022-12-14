@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 
 Change-Id: I6e985e4a13ec98460311f8995927232f7d1171f4
 ---
- drivers/net/ethernet/mellanox/mlx5/core/devlink.c | 351 +++++++++++++++++++---
- 1 file changed, 311 insertions(+), 40 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/devlink.c | 353 ++++++++++++++++--
+ 1 file changed, 312 insertions(+), 41 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
@@ -43,12 +43,13 @@ Change-Id: I6e985e4a13ec98460311f8995927232f7d1171f4
  				     struct netlink_ext_ack *extack)
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
- 	const struct firmware *fw;
- 	int err;
- 
++
 +#ifdef HAVE_DEVLINK_FLASH_UPDATE_PARAMS_HAS_STRUCT_FW
 +	return mlx5_firmware_flash(dev, params->fw, extack);
 +#else
+ 	const struct firmware *fw;
+ 	int err;
+-
 +#ifdef HAVE_FLASH_UPDATE_GET_3_PARAMS
 +	if (params->component)
 +#else
@@ -134,8 +135,8 @@ Change-Id: I6e985e4a13ec98460311f8995927232f7d1171f4
 +	if (err == -EUSERS)
 +		NL_SET_ERR_MSG_MOD(extack, "IRQs for requested CPU affinity are not available");
 +	return err;
-+}
-+
+ }
+ 
 +#endif
 +
 +#ifdef HAVE_DEVLINK_HAS_RELOAD
@@ -199,8 +200,8 @@ Change-Id: I6e985e4a13ec98460311f8995927232f7d1171f4
 +	mlx5_unload_one(dev, false);
 +	return 0;
 +#endif /* HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION */
- }
- 
++}
++
 +static int mlx5_devlink_reload_up(struct devlink *devlink,
 +#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
 +		enum devlink_reload_action action,
@@ -343,7 +344,7 @@ Change-Id: I6e985e4a13ec98460311f8995927232f7d1171f4
  #endif
 +#endif /* CONFIG_MLX5_ESWITCH */
  
- /* HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET condition should be moved to backports in next rebase
+ /* HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET condition should be moved to backports in next rebase
     as a result of CONFIG_MLX5_SF_MANAGER is set  we need to block it
 @@ -244,15 +416,32 @@ static const struct devlink_ops mlx5_dev
  	.port_fn_state_set = mlx5_devlink_sf_port_fn_state_set,

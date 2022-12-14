@@ -44,7 +44,7 @@
 
 #include "fs_core.h"
 
-#define DRIVER_VERSION	"5.4-1.0.3"
+#define DRIVER_VERSION	"5.4-2.4.1"
 
 /* Number of EQs reserved for non-completion purposes */
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
@@ -362,8 +362,13 @@ int mlx5_icmd_access_register(struct mlx5_core_dev *dev,
 			      void *io_buff,
 			      u32 io_buff_dw_sz);
 
+#ifdef CONFIG_MLX5_CORE_EN
 int mlx5e_init(void);
 void mlx5e_cleanup(void);
+#else
+static inline int mlx5e_init(void){ return 0; }
+static inline void mlx5e_cleanup(void){}
+#endif
 
 int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
 				   u16 function_id, bool value);

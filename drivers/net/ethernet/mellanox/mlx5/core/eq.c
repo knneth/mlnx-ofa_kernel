@@ -772,7 +772,7 @@ mlx5_eq_create_generic(struct mlx5_core_dev *dev,
 	struct mlx5_eq *eq = kvzalloc(sizeof(*eq), GFP_KERNEL);
 	int err;
 
-	if (!param->affinity)
+	if (!cpumask_available(param->affinity))
 		return ERR_PTR(-EINVAL);
 
 	if (!eq)
@@ -886,7 +886,7 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 		nent = dev->cmpl_eq_depth;
 
 	for (i = 0; i < ncomp_eqs; i++) {
-		int vecidx = i + MLX5_IRQ_VEC_COMP_BASE;
+		int vecidx = i + mlx5_irq_table_comp_base_get(table->irq_table);
 		struct mlx5_eq_param param = {};
 
 		eq = kzalloc(sizeof(*eq), GFP_KERNEL);
@@ -1025,6 +1025,7 @@ static int set_rmap(struct mlx5_core_dev *mdev)
 	int err = 0;
 #ifdef CONFIG_RFS_ACCEL
 	struct mlx5_eq_table *eq_table = mdev->priv.eq_table;
+	u8 comp_base;
 	int vecidx;
 
 	eq_table->rmap = alloc_irq_cpu_rmap(eq_table->num_comp_eqs);
@@ -1034,9 +1035,9 @@ static int set_rmap(struct mlx5_core_dev *mdev)
 		goto err_out;
 	}
 
-	vecidx = MLX5_IRQ_VEC_COMP_BASE;
-	for (; vecidx < eq_table->num_comp_eqs + MLX5_IRQ_VEC_COMP_BASE;
-	     vecidx++) {
+	comp_base = mlx5_irq_table_comp_base_get(eq_table->irq_table);
+	vecidx = comp_base;
+	for (; vecidx < eq_table->num_comp_eqs + comp_base; vecidx++) {
 		err = irq_cpu_rmap_add(eq_table->rmap,
 				       pci_irq_vector(mdev->pdev, vecidx));
 		if (err) {

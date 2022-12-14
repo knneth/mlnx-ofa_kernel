@@ -17,6 +17,7 @@
 
 /* max irq_index is 2048. three chars */
 #define MLX5_MAX_IRQ_IDX_CHARS (4)
+#define MLX5_PF_IRQ_CTRL_NUM (1)
 
 #define MLX5_SFS_PER_CTRL_IRQ 64
 #define MLX5_IRQ_CTRL_SF_MAX 8
@@ -47,6 +48,7 @@ struct mlx5_irq_pool {
 	u32 max_threshold;
 	u32 min_threshold;
 	struct mlx5_core_dev *dev;
+	u8 comp_base:1;
 };
 
 struct mlx5_irq_table {
@@ -199,16 +201,27 @@ static void irq_sf_set_name(struct mlx5_irq_pool *pool, char *name, int vecidx)
 	snprintf(name, MLX5_MAX_IRQ_NAME, "%s%d", pool->name, vecidx);
 }
 
-static void irq_set_name(char *name, int vecidx)
+static void irq_set_name(struct mlx5_irq_pool *pool, char *name, int vecidx)
 {
+	if (!pool->comp_base) {
+		/* in case we only have a single irq for the device */
+		snprintf(name, MLX5_MAX_IRQ_NAME, "mlx5_combined%d", vecidx);
+		return;
+	}
+
 	if (vecidx == 0) {
 		snprintf(name, MLX5_MAX_IRQ_NAME, "mlx5_async%d", vecidx);
 		return;
 	}
 
 	snprintf(name, MLX5_MAX_IRQ_NAME, "mlx5_comp%d",
-		 vecidx - MLX5_IRQ_VEC_COMP_BASE);
+		 vecidx - MLX5_PF_IRQ_CTRL_NUM);
 	return;
+}
+
+static bool irq_pool_is_sf_pool(struct mlx5_irq_pool *pool)
+{
+	return !strncmp("mlx5_sf", pool->name, strlen("mlx5_sf"));
 }
 
 static void affinity_copy(struct mlx5_irq *irq, struct cpumask *affinity,
@@ -218,6 +231,10 @@ static void affinity_copy(struct mlx5_irq *irq, struct cpumask *affinity,
 		cpumask_copy(irq->mask, affinity);
 	else
 		cpumask_set_cpu(mlx5_irq_table_cpu_pick_default(irq_table), irq->mask);
+
+	if (!irq_pool_is_sf_pool(irq->pool) && !irq->pool->comp_base &&
+	    cpumask_empty(irq->mask))
+		cpumask_set_cpu(0, irq->mask);
 }
 
 static struct mlx5_irq *irq_request(struct mlx5_irq_pool *pool, int i,
@@ -233,7 +250,7 @@ static struct mlx5_irq *irq_request(struct mlx5_irq_pool *pool, int i,
 		return ERR_PTR(-ENOMEM);
 	irq->irqn = pci_irq_vector(dev->pdev, i);
 	if (!pool->name[0])
-		irq_set_name(name, i);
+		irq_set_name(pool, name, i);
 	else
 		irq_sf_set_name(pool, name, i);
 	ATOMIC_INIT_NOTIFIER_HEAD(&irq->nh);
@@ -310,8 +327,11 @@ int mlx5_irq_attach_nb(struct mlx5_irq *irq, struct notifier_block *nb)
 
 int mlx5_irq_detach_nb(struct mlx5_irq *irq, struct notifier_block *nb)
 {
+	int err = 0;
+
+	err = atomic_notifier_chain_unregister(&irq->nh, nb);
 	irq_put(irq);
-	return atomic_notifier_chain_unregister(&irq->nh, nb);
+	return err;
 }
 
 struct cpumask *mlx5_irq_get_affinity_mask(struct mlx5_irq *irq)
@@ -470,12 +490,12 @@ void mlx5_irq_rename(struct mlx5_core_dev *dev, struct mlx5_irq *irq,
 	if (!name) {
 		char default_name[MLX5_MAX_IRQ_NAME];
 
-		irq_set_name(default_name, irq->index);
+		irq_set_name(irq->pool, default_name, irq->index);
 		snprintf(dst_name, MLX5_MAX_IRQ_NAME,
 			 "%s@pci:%s", default_name, pci_name(dev->pdev));
 	} else {
 		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
-			 irq->index - MLX5_IRQ_VEC_COMP_BASE);
+			 irq->index - MLX5_PF_IRQ_CTRL_NUM);
 	}
 }
 
@@ -488,6 +508,7 @@ irq_pool_alloc(struct mlx5_core_dev *dev, int start, int size, char *name,
 	if (!pool)
 		return ERR_PTR(-ENOMEM);
 	pool->dev = dev;
+	mutex_init(&pool->lock);
 	xa_init_flags(&pool->irqs, XA_FLAGS_ALLOC);
 	pool->xa_num_irqs.min = start;
 	pool->xa_num_irqs.max = start + size - 1;
@@ -496,7 +517,6 @@ irq_pool_alloc(struct mlx5_core_dev *dev, int start, int size, char *name,
 			 name);
 	pool->min_threshold = min_threshold * MLX5_EQ_REFS_PER_IRQ;
 	pool->max_threshold = max_threshold * MLX5_EQ_REFS_PER_IRQ;
-	mutex_init(&pool->lock);
 	return pool;
 }
 
@@ -508,6 +528,7 @@ static void irq_pool_free(struct mlx5_irq_pool *pool)
 	xa_for_each(&pool->irqs, index, irq)
 		irq_release(&irq->kref);
 	xa_destroy(&pool->irqs);
+	mutex_destroy(&pool->lock);
 	kvfree(pool);
 }
 
@@ -525,10 +546,11 @@ static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pf_vec)
 					MLX5_EQ_SHARE_IRQ_MAX_COMP);
 	if (IS_ERR(table->pf_pool))
 		return PTR_ERR(table->pf_pool);
+	table->pf_pool->comp_base = (pf_vec == 1) ? 0 : 1;
 	if (!mlx5_sf_max_functions(dev))
 		return 0;
 	if (sf_vec < MLX5_IRQ_VEC_COMP_BASE_SF) {
-		mlx5_core_warn(dev, "Not enough IRQs for SFs, SFs may run at lower performance\n");
+		mlx5_core_dbg(dev, "Not enough IRQs for SFs, SFs may run at lower performance\n");
 		return 0;
 	}
 
@@ -599,7 +621,9 @@ void mlx5_irq_table_cleanup(struct mlx5_core_dev *dev)
 
 int mlx5_irq_table_get_num_comp(struct mlx5_irq_table *table)
 {
-	return irq_pool_size_get(table->pf_pool) - MLX5_IRQ_VEC_COMP_BASE;
+	if (!table->pf_pool->comp_base)
+		return 1;
+	return irq_pool_size_get(table->pf_pool) - MLX5_PF_IRQ_CTRL_NUM;
 }
 
 int mlx5_irq_table_create(struct mlx5_core_dev *dev)
@@ -626,9 +650,9 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 
 	max_comp_eqs = num_eqs - MLX5_MAX_ASYNC_EQS;
 	pf_vec = MLX5_CAP_GEN(dev, num_ports) * num_online_cpus() +
-		 MLX5_IRQ_VEC_COMP_BASE;
+		 MLX5_PF_IRQ_CTRL_NUM;
 	pf_vec = min_t(int, pf_vec, num_eqs);
-	if (pf_vec <= MLX5_IRQ_VEC_COMP_BASE)
+	if (pf_vec < MLX5_PF_IRQ_CTRL_NUM)
 		return -ENOMEM;
 
 	table->cpus = kvcalloc(nr_cpu_ids, sizeof(atomic_t), GFP_KERNEL);
@@ -639,7 +663,7 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 		total_vec += MLX5_IRQ_CTRL_SF_MAX +
 			MLX5_COMP_EQS_PER_SF * mlx5_sf_max_functions(dev);
 
-	total_vec = pci_alloc_irq_vectors(dev->pdev, MLX5_IRQ_VEC_COMP_BASE + 1,
+	total_vec = pci_alloc_irq_vectors(dev->pdev, MLX5_PF_IRQ_CTRL_NUM,
 					  total_vec, PCI_IRQ_MSIX);
 	if (total_vec < 0) {
 		err = total_vec;
@@ -710,6 +734,11 @@ int mlx5_irq_table_get_sfs_comp_vec(struct mlx5_irq_table *table)
 		return irq_pool_size_get(table->sf_comp_pool);
 	else
 		return mlx5_irq_table_get_num_comp(table);
+}
+
+u8 mlx5_irq_table_comp_base_get(struct mlx5_irq_table *table)
+{
+	return table->pf_pool->comp_base;
 }
 
 struct mlx5_irq_table *mlx5_irq_table_get(struct mlx5_core_dev *dev)

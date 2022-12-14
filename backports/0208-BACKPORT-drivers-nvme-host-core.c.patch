@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/core.c
 
 Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
 ---
- drivers/nvme/host/core.c | 628 ++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 614 insertions(+), 14 deletions(-)
+ drivers/nvme/host/core.c | 634 ++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 619 insertions(+), 15 deletions(-)
 
 --- a/drivers/nvme/host/core.c
 +++ b/drivers/nvme/host/core.c
@@ -1125,7 +1125,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	.open		= nvme_open,
  	.release	= nvme_release,
  	.getgeo		= nvme_getgeo,
-+#ifndef HAVE_REVALIDATE_DISK_SIZE
++#if !defined(HAVE_REVALIDATE_DISK_SIZE) && !defined(HAVE_BDEV_NR_SECTORS)
  	.revalidate_disk= nvme_revalidate_disk,
 +#endif
 +#ifdef HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES
@@ -1370,7 +1370,19 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  static DEVICE_ATTR(delete_controller, S_IWUSR, NULL, nvme_sysfs_delete);
  
  static ssize_t nvme_sysfs_show_transport(struct device *dev,
-@@ -3986,13 +4507,21 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3942,7 +4463,11 @@ out_unlock:
+ 	return ret;
+ }
+ 
++#ifdef HAVE_LIST_CMP_FUNC_T
++static int ns_cmp(void *priv, const struct list_head *a, const struct list_head *b)
++#else
+ static int ns_cmp(void *priv, struct list_head *a, struct list_head *b)
++#endif
+ {
+ 	struct nvme_ns *nsa = container_of(a, struct nvme_ns, list);
+ 	struct nvme_ns *nsb = container_of(b, struct nvme_ns, list);
+@@ -3986,13 +4511,21 @@ static void nvme_alloc_ns(struct nvme_ct
  	if (IS_ERR(ns->queue))
  		goto out_free_ns;
  
@@ -1392,7 +1404,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  
  	ns->queue->queuedata = ns;
  	ns->ctrl = ctrl;
-@@ -4022,6 +4551,9 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -4022,6 +4555,9 @@ static void nvme_alloc_ns(struct nvme_ct
  	disk->fops = &nvme_fops;
  	disk->private_data = ns;
  	disk->queue = ns->queue;
@@ -1402,7 +1414,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	disk->flags = flags;
  	memcpy(disk->disk_name, disk_name, DISK_NAME_LEN);
  	ns->disk = disk;
-@@ -4043,7 +4575,19 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -4043,7 +4579,19 @@ static void nvme_alloc_ns(struct nvme_ct
  
  	nvme_get_ctrl(ctrl);
  
@@ -1422,7 +1434,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  
  	nvme_mpath_add_disk(ns, id);
  	nvme_fault_inject_init(&ns->fault_inject, ns->disk->disk_name);
-@@ -4087,6 +4631,10 @@ static void nvme_ns_remove(struct nvme_n
+@@ -4087,6 +4635,10 @@ static void nvme_ns_remove(struct nvme_n
  	synchronize_srcu(&ns->head->srcu); /* wait for concurrent submissions */
  
  	if (ns->disk->flags & GENHD_FL_UP) {
@@ -1433,7 +1445,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  		del_gendisk(ns->disk);
  		blk_cleanup_queue(ns->queue);
  		if (blk_get_integrity(ns->disk))
-@@ -4122,7 +4670,15 @@ static void nvme_validate_ns(struct nvme
+@@ -4122,7 +4674,15 @@ static void nvme_validate_ns(struct nvme
  		return;
  	}
  
@@ -1449,7 +1461,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	if (ret)
  		nvme_ns_remove(ns);
  	nvme_put_ns(ns);
-@@ -4484,7 +5040,9 @@ EXPORT_SYMBOL_GPL(nvme_start_ctrl);
+@@ -4484,7 +5044,9 @@ EXPORT_SYMBOL_GPL(nvme_start_ctrl);
  void nvme_uninit_ctrl(struct nvme_ctrl *ctrl)
  {
  	nvme_fault_inject_fini(&ctrl->fault_inject);
@@ -1459,7 +1471,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	cdev_device_del(&ctrl->cdev, ctrl->device);
  	nvme_put_ctrl(ctrl);
  }
-@@ -4587,10 +5145,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
+@@ -4587,10 +5149,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
  	 * Initialize latency tolerance controls.  The sysfs files won't
  	 * be visible to userspace unless the device actually supports APST.
  	 */
@@ -1472,7 +1484,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	nvme_fault_inject_init(&ctrl->fault_inject, dev_name(ctrl->device));
  
  	return 0;
-@@ -4621,7 +5180,11 @@ void nvme_kill_queues(struct nvme_ctrl *
+@@ -4621,7 +5184,11 @@ void nvme_kill_queues(struct nvme_ctrl *
  
  	/* Forcibly unquiesce queues to avoid blocking dispatch */
  	if (ctrl->admin_q && !blk_queue_dying(ctrl->admin_q))
@@ -1484,7 +1496,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  
  	list_for_each_entry(ns, &ctrl->namespaces, list)
  		nvme_set_queue_dying(ns);
-@@ -4673,7 +5236,11 @@ void nvme_start_freeze(struct nvme_ctrl
+@@ -4673,7 +5240,11 @@ void nvme_start_freeze(struct nvme_ctrl
  
  	down_read(&ctrl->namespaces_rwsem);
  	list_for_each_entry(ns, &ctrl->namespaces, list)
@@ -1496,7 +1508,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	up_read(&ctrl->namespaces_rwsem);
  }
  EXPORT_SYMBOL_GPL(nvme_start_freeze);
-@@ -4683,8 +5250,24 @@ void nvme_stop_queues(struct nvme_ctrl *
+@@ -4683,8 +5254,24 @@ void nvme_stop_queues(struct nvme_ctrl *
  	struct nvme_ns *ns;
  
  	down_read(&ctrl->namespaces_rwsem);
@@ -1521,7 +1533,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	up_read(&ctrl->namespaces_rwsem);
  }
  EXPORT_SYMBOL_GPL(nvme_stop_queues);
-@@ -4694,8 +5277,21 @@ void nvme_start_queues(struct nvme_ctrl
+@@ -4694,8 +5281,21 @@ void nvme_start_queues(struct nvme_ctrl
  	struct nvme_ns *ns;
  
  	down_read(&ctrl->namespaces_rwsem);
@@ -1543,7 +1555,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	up_read(&ctrl->namespaces_rwsem);
  }
  EXPORT_SYMBOL_GPL(nvme_start_queues);
-@@ -4861,6 +5457,10 @@ static void __exit nvme_core_exit(void)
+@@ -4861,6 +5461,10 @@ static void __exit nvme_core_exit(void)
  }
  
  MODULE_LICENSE("GPL");

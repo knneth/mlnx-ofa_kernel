@@ -1,14 +1,14 @@
 From: Shay Drory <shayd@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 
-Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
+Change-Id: I474bb06dbd83d53cb5751f30cbe327d1f0636452
 ---
  .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 77 +++++++++++++++++--
  1 file changed, 70 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
-@@ -223,6 +223,10 @@ static void affinity_copy(struct mlx5_ir
+@@ -240,6 +240,10 @@ static void affinity_copy(struct mlx5_ir
  static struct mlx5_irq *irq_request(struct mlx5_irq_pool *pool, int i,
  				    struct cpumask *affinity)
  {
@@ -19,7 +19,7 @@ Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
  	struct mlx5_core_dev *dev = pool->dev;
  	char name[MLX5_MAX_IRQ_NAME];
  	struct mlx5_irq *irq;
-@@ -231,7 +235,12 @@ static struct mlx5_irq *irq_request(stru
+@@ -248,7 +252,12 @@ static struct mlx5_irq *irq_request(stru
  	irq = kzalloc(sizeof(*irq), GFP_KERNEL);
  	if (!irq)
  		return ERR_PTR(-ENOMEM);
@@ -30,9 +30,9 @@ Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
 +	irq->irqn = msix[i].vector;
 +#endif
  	if (!pool->name[0])
- 		irq_set_name(name, i);
+ 		irq_set_name(pool, name, i);
  	else
-@@ -611,6 +620,10 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -635,6 +644,10 @@ int mlx5_irq_table_create(struct mlx5_co
  	int total_vec;
  	int pf_vec;
  	int err;
@@ -43,8 +43,8 @@ Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
  
  	if (mlx5_core_is_sf(dev))
  		return 0;
-@@ -631,31 +644,76 @@ int mlx5_irq_table_create(struct mlx5_co
- 	if (pf_vec <= MLX5_IRQ_VEC_COMP_BASE)
+@@ -655,31 +668,76 @@ int mlx5_irq_table_create(struct mlx5_co
+ 	if (pf_vec < MLX5_PF_IRQ_CTRL_NUM)
  		return -ENOMEM;
  
 -	table->cpus = kvcalloc(nr_cpu_ids, sizeof(atomic_t), GFP_KERNEL);
@@ -65,7 +65,7 @@ Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
 +#endif
 +
 +#ifdef HAVE_PCI_IRQ_API
- 	total_vec = pci_alloc_irq_vectors(dev->pdev, MLX5_IRQ_VEC_COMP_BASE + 1,
+ 	total_vec = pci_alloc_irq_vectors(dev->pdev, MLX5_PF_IRQ_CTRL_NUM,
  					  total_vec, PCI_IRQ_MSIX);
  	if (total_vec < 0) {
  		err = total_vec;
@@ -74,7 +74,7 @@ Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
 +#else /* HAVE_PCI_IRQ_API */
 +#ifdef HAVE_PCI_ENABLE_MSIX_RANGE
 +	total_vec = pci_enable_msix_range(dev->pdev, priv->msix_arr,
-+			MLX5_IRQ_VEC_COMP_BASE + 1, total_vec);
++			MLX5_PF_IRQ_CTRL_NUM, total_vec);
 +	if (total_vec < 0) {
 +		err = total_vec;
 +		goto err_free_irq;
@@ -127,7 +127,7 @@ Change-Id: Ic8258b4e6792ce41d3663fcb29fe4753f38af679
  	return err;
  }
  
-@@ -671,7 +729,12 @@ void mlx5_irq_table_destroy(struct mlx5_
+@@ -695,7 +753,12 @@ void mlx5_irq_table_destroy(struct mlx5_
  	 * to here. Hence, making sure all the irqs are realeased.
  	 */
  	irq_pools_destroy(table);

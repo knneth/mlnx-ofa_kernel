@@ -30,9 +30,9 @@
 #include <net/tc_act/tc_mirred.h>
 
 #include <net/flow_dissector.h>
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/en.h"
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/en_tc.h"
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/eswitch.h"
+#include "en.h"
+#include "en_tc.h"
+#include "eswitch.h"
 
 #ifndef VLAN_VID_MASK
 #define VLAN_VID_MASK 0x0fff /* VLAN Identifier */
@@ -1582,9 +1582,9 @@ MODULE_LICENSE("GPL v2");
 #include <net/dst_metadata.h>
 
 #include <net/tc_act/tc_mirred.h>
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/en.h"
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/en_tc.h"
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/eswitch.h"
+#include "en.h"
+#include "en_tc.h"
+#include "eswitch.h"
 
 #ifndef HAVE_TCF_QUEUE_WORK
 static struct workqueue_struct *tc_filter_wq;
@@ -3139,9 +3139,9 @@ static void fl_hw_update_stats(struct tcf_proto *tp, struct cls_fl_filter *f)
 
 #include <net/dst.h>
 #include <net/dst_metadata.h>
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/en.h"
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/en_tc.h"
-#include "../../drivers/net/ethernet/mellanox/mlx5/core/eswitch.h"
+#include "en.h"
+#include "en_tc.h"
+#include "eswitch.h"
 
 struct fl_flow_key {
 	int	indev_ifindex;

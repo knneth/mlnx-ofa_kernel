@@ -50,4 +50,11 @@ int
 mlx5_devlink_ct_action_on_nat_conns_get(struct devlink *devlink, u32 id,
 					struct devlink_param_gset_ctx *ctx);
 
+int
+mlx5_devlink_ct_labels_mapping_set(struct devlink *devlink, u32 id,
+				   struct devlink_param_gset_ctx *ctx);
+int
+mlx5_devlink_ct_labels_mapping_get(struct devlink *devlink, u32 id,
+				   struct devlink_param_gset_ctx *ctx);
+
 #endif /* __MLX5_DEVLINK_H__ */

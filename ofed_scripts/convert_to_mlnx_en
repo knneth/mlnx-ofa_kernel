@@ -32,7 +32,11 @@ mv ofed_scripts/mlnx_en/ ./scripts
 rm -rf drivers/infiniband
 rm -rf lib
 rm -rf fs
-rm -rf net
+rm -rf net/9p
+rm -rf net/rds
+rm -rf net/sched
+rm -rf net/smc
+rm -rf net/sunrpc
 rm -rf kernel
 rm -rf include-nfs
 rm -rf include/scsi

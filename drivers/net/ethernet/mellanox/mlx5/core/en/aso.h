@@ -1,13 +1,11 @@
-// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
-// // Copyright (c) 2020 Mellanox Technologies.
-
-#include "en.h"
-#include "linux/dma-mapping.h"
-#include "en/txrx.h"
-#include "en/params.h"
+/* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+/* Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
 
 #ifndef __MLX5_EN_ASO_H__
 #define __MLX5_EN_ASO_H__
+
+#include "txrx.h"
+#include "params.h"
 
 #define MLX5E_ASO_WQEBBS \
 	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe), MLX5_SEND_WQE_BB))
@@ -62,15 +60,18 @@ struct mlx5e_asosq {
 } ____cacheline_aligned_in_smp;
 
 struct mlx5e_aso {
-	struct mlx5_core_mkey mkey;
-	dma_addr_t dma_addr;
-	void *ctx;
-	size_t size;
 	u32 pdn;
-	struct mlx5e_cq_param cq_param;
+	int refcnt;
 	int cpu;
+	struct mlx5e_priv *priv;
+	struct mlx5e_cq_param cq_param;
 	struct mlx5e_asosq sq;
 	struct mlx5e_sq_param sq_param;
+};
+
+enum {
+	LOGICAL_AND,
+	LOGICAL_OR,
 };
 
 enum {
@@ -84,11 +85,6 @@ enum {
 	GREATER,
 	CYCLIC_GREATER,
 	CYCLIC_LESSER,
-};
-
-enum {
-	LOGICAL_AND,
-	LOGICAL_OR,
 };
 
 enum {
@@ -134,6 +130,7 @@ void mlx5e_build_aso_wqe(struct mlx5e_aso *aso, struct mlx5e_asosq *sq,
 int mlx5e_poll_aso_cq(struct mlx5e_cq *cq);
 void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
 				u16 pi, u16 nnops);
-struct mlx5e_aso *mlx5e_aso_setup(struct mlx5e_priv *priv, int size);
-void mlx5e_aso_cleanup(struct mlx5e_priv *priv, struct mlx5e_aso *aso);
+
+struct mlx5e_aso *mlx5e_aso_get(struct mlx5e_priv *priv);
+void mlx5e_aso_put(struct mlx5e_priv *priv);
 #endif

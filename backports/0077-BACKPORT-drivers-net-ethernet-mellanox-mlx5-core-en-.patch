@@ -3,11 +3,20 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
 Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
 ---
- .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 32 +++++++++++++++++--
- 1 file changed, 30 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 34 +++++++++++++++++--
+ 1 file changed, 31 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -4,7 +4,7 @@
+ #ifndef __MLX5_EN_TXRX_H___
+ #define __MLX5_EN_TXRX_H___
+ 
+-#include "en.h"
++#include "../en.h"
+ #include <linux/indirect_call_wrapper.h>
+ 
+ #define MLX5E_TX_WQE_EMPTY_DS_COUNT (sizeof(struct mlx5e_tx_wqe) / MLX5_SEND_WQE_DS)
 @@ -36,7 +36,7 @@ ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns
  enum mlx5e_icosq_wqe_type {
  	MLX5E_ICOSQ_WQE_NOP,

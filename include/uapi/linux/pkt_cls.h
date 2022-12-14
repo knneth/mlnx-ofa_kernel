@@ -228,11 +228,13 @@ enum {
 #endif /* CONFIG_COMPAT_CLS_FLOWER_MOD */
 #endif /* CONFIG_COMPAT_KERNEL_4_14 */
 
+#ifdef CONFIG_MLX5_TC_CT
 #ifndef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
 enum {
 	TCA_FLOWER_KEY_CT_FLAGS_INVALID = 1 << 4, /* Conntrack is invalid. */
 	TCA_FLOWER_KEY_CT_FLAGS_REPLY = 1 << 5, /* Packet is in the reply direction. */
 };
+#endif
 #endif
 
 #ifndef HAVE_TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT

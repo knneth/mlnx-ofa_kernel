@@ -364,6 +364,8 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 	lockdep_assert_held(&be_ctrl->xrq->be_mutex);
 	list_del_init(&be_ctrl->entry);
 	be_ctrl->xrq->nr_be_ctrls--;
+	ida_simple_remove(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
+	nvmet_offload_ctx_configfs_del(&be_ctrl->offload_ctx);
 
 	if (be_ctrl->ibns)
 		ib_detach_nvmf_ns(be_ctrl->ibns);
@@ -584,6 +586,20 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 		goto out_destroy_be_ctrl;
 	}
 
+	be_ctrl->offload_ctx.ctx = be_ctrl;
+	be_ctrl->offload_ctx.port = xrq->port;
+	be_ctrl->offload_ctx.ns = ns;
+	be_ctrl->offload_ctx.id = ida_simple_get(&nvmet_rdma_bectrl_ida, 0, 0,
+						 GFP_KERNEL);
+	if (be_ctrl->offload_ctx.id < 0) {
+		err = -ENOMEM;
+		goto out_detach_ns;
+	}
+
+	err = nvmet_offload_ctx_configfs_create(&be_ctrl->offload_ctx);
+	if (err)
+		goto out_ida_remove;
+
 	mutex_lock(&xrq->be_mutex);
 	list_add_tail(&be_ctrl->entry, &xrq->be_ctrls_list);
 	xrq->nr_be_ctrls++;
@@ -591,6 +607,10 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 
 	return be_ctrl;
 
+out_ida_remove:
+	ida_simple_remove(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
+out_detach_ns:
+	ib_detach_nvmf_ns(be_ctrl->ibns);
 out_destroy_be_ctrl:
 	ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
 out_put_resource:
@@ -813,6 +833,40 @@ nvmet_rdma_offload_subsys_unknown_ns_cmds(struct nvmet_subsys *subsys)
 	mutex_unlock(&nvmet_rdma_xrq_mutex);
 
 	return unknown_cmds;
+}
+
+static void
+nvmet_rdma_update_counters(struct ib_nvmf_ns_attr *attr,
+			   struct nvmet_ns_counters *counters)
+{
+	counters->num_read_cmd = attr->num_read_cmd;
+	counters->num_read_blocks = attr->num_read_blocks;
+	counters->num_write_cmd = attr->num_write_cmd;
+	counters->num_write_blocks = attr->num_write_blocks;
+	counters->num_write_inline_cmd = attr->num_write_inline_cmd;
+	counters->num_flush_cmd = attr->num_flush_cmd;
+	counters->num_error_cmd = attr->num_error_cmd;
+	counters->num_backend_error_cmd = attr->num_backend_error_cmd;
+	counters->last_read_latency = attr->last_read_latency;
+	counters->last_write_latency = attr->last_write_latency;
+	counters->queue_depth = attr->queue_depth;
+}
+
+static void
+nvmet_rdma_offload_query_counters(void *ctx, struct nvmet_ns_counters *counters)
+{
+	struct nvmet_rdma_backend_ctrl *be_ctrl = ctx;
+	struct ib_nvmf_ns_attr attr;
+	int ret;
+
+	memset(counters, 0, sizeof(*counters));
+	memset(&attr, 0, sizeof(attr));
+	ret = ib_query_nvmf_ns(be_ctrl->ibns, &attr);
+	if (ret) {
+		pr_err("Failed to query counters");
+		return;
+	}
+	nvmet_rdma_update_counters(&attr, counters);
 }
 
 static u64

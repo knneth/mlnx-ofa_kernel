@@ -49,6 +49,7 @@ int mlx5e_port_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 void mlx5e_port_ptp_close(struct mlx5e_port_ptp *c);
 void mlx5e_ptp_activate_channel(struct mlx5e_port_ptp *c);
 void mlx5e_ptp_deactivate_channel(struct mlx5e_port_ptp *c);
+void mlx5e_ptp_finalize_channel(struct mlx5e_port_ptp *c);
 
 enum {
 	MLX5E_SKB_CB_CQE_HWTSTAMP  = BIT(0),

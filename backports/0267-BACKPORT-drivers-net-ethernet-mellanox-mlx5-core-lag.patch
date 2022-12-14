@@ -1,0 +1,26 @@
+From: Maor Gottlieb <maorg@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.c
+
+Change-Id: I562fd09773eef5d3933a9a426f3fc71c7f3549af
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.c
+@@ -1,6 +1,8 @@
+ /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+ /* Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES. */
+ 
++#ifdef HAVE_INFO_HASH_TYPE
++
+ #include <linux/netdevice.h>
+ #include "lag.h"
+ 
+@@ -570,3 +572,5 @@ void mlx5_lag_destroy_port_selection(str
+ 	mlx5_lag_destroy_definers(ldev);
+ 	memset(steering, 0, sizeof(*steering));
+ }
++
++#endif

@@ -24,7 +24,7 @@ Change-Id: Ibefa21edfb41ddf2d04e27e5ed3c1308d12ff817
 -		hlist_for_each_entry_safe(hn, tmp, &hash[j], hlist)
 +		compat_hlist_for_each_entry_safe(hn, tmp, &hash[j], hlist)
  
- static enum mlx5e_traffic_types arfs_get_tt(enum arfs_type type)
+ static enum mlx5_traffic_types arfs_get_tt(enum arfs_type type)
  {
 @@ -371,6 +373,8 @@ static void arfs_may_expire_flow(struct
  	int j;

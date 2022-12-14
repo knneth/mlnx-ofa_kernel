@@ -44,9 +44,11 @@
 #include "lib/mpfs.h"
 #include "mlx5_core.h"
 #include "lib/fs_chains.h"
+#include "en/post_action.h"
 #include "sf/sf.h"
 #include "en/tc_ct.h"
 #include "en/tc_sample.h"
+#include "en/flow_meter.h"
 #include "net/mlxdevm.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
@@ -88,9 +90,7 @@ enum {
 struct vport_meter {
 	u64 rate;
 	u64 burst;
-	int meter_obj_id;
-	int meter_idx;
-	struct mlx5e_flow_meter_aso_obj *meter_obj;
+	struct mlx5_meter_handle *meter_hndl;
 	struct mlx5_flow_table *meter_tbl;
 	struct mlx5_flow_group *meter_grp;
 	struct mlx5_flow_handle *meter_rule;
@@ -241,6 +241,10 @@ struct mlx5_eswitch_fdb {
 			struct mlx5_flow_handle **send_to_vport_meta_rules;
 			struct mlx5_flow_handle *miss_rule_uni;
 			struct mlx5_flow_handle *miss_rule_multi;
+			struct mlx5_flow_table *miss_meter_fdb;
+			struct mlx5_flow_group *miss_meter_grp;
+			struct mlx5_flow_table *post_miss_meter_fdb;
+			struct mlx5_flow_group *post_miss_meter_grp;
 			int vlan_push_pop_refcount;
 
 			struct mlx5_fs_chains *esw_chains_priv;
@@ -294,6 +298,7 @@ struct mlx5_esw_offload {
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 	struct mapping_ctx *reg_c0_obj_pool;
 #endif
+	struct mlx5_post_action *post_action;
 
 	struct mlx5_flow_table *ft_offloads;
 	struct mlx5_flow_group *vport_rx_group;
@@ -435,6 +440,7 @@ struct mlx5_mapped_obj {
 			u32 group_id;
 			u32 rate;
 			u32 trunc_size;
+			u32 tunnel_id;
 		} sample;
 		u32 int_vport_metadata;
 	};
@@ -565,6 +571,13 @@ mlx5_eswitch_termtbl_put(struct mlx5_eswitch *esw,
 			 struct mlx5_termtbl_handle *tt);
 
 void
+mlx5_eswitch_set_rule_source_port(struct mlx5_eswitch *esw,
+				  struct mlx5_flow_spec *spec,
+				  struct mlx5_eswitch *from_esw,
+				  struct mlx5_flow_attr *attr,
+				  u16 vport);
+
+void
 mlx5_eswitch_clear_rule_source_port(struct mlx5_eswitch *esw,
 				    struct mlx5_flow_spec *spec,
 				    struct mlx5_esw_flow_attr *attr);
@@ -672,6 +685,7 @@ struct mlx5_flow_attr {
 	struct mlx5_fc *counter;
 	struct mlx5_modify_hdr *modify_hdr;
 	struct mlx5_ct_attr ct_attr;
+	struct mlx5_meter_attr meter_attr;
 	struct mlx5_pkt_reformat *decap_pkt_reformat;
 	struct mlx5e_tc_flow_parse_attr *parse_attr;
 	u32 chain;
@@ -955,6 +969,11 @@ int mlx5_devlink_eswitch_vport_match_mode_set(struct devlink *devlink,
 					      enum devlink_eswitch_vport_match_mode mode);
 int mlx5_devlink_eswitch_vport_match_mode_get(struct devlink *devlink,
 					      enum devlink_eswitch_vport_match_mode *mode);
+int mlx5_devlink_eswitch_lag_port_select_mode_get(struct devlink *devlink,
+						  enum devlink_eswitch_lag_port_select_mode *mode);
+int
+mlx5_devlink_eswitch_lag_port_select_mode_set(struct devlink *devlink,
+					      enum devlink_eswitch_lag_port_select_mode mode);
 struct mlx5_esw_int_vport *
 mlx5_esw_get_int_vport_from_metadata(struct mlx5_eswitch *esw,
 				     u32 metadata);

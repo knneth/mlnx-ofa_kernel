@@ -41,9 +41,9 @@ enum devlink_eswitch_vport_match_mode {
 	DEVLINK_ESWITCH_VPORT_MATCH_MODE_LEGACY,
 };
 
-enum devlink_ct_action_on_nat_conns {
-	DEVLINK_CT_ACTION_ON_NAT_CONNS_DISABLE,
-	DEVLINK_CT_ACTION_ON_NAT_CONNS_ENABLE,
+enum devlink_eswitch_lag_port_select_mode {
+	DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_QUEUE_AFFINITY,
+	DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH,
 };
 
 #ifndef HAVE_DEVLINK_PORT_FLAVOUR

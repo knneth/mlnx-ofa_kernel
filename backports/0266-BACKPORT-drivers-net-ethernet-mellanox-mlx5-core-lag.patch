@@ -1,0 +1,22 @@
+From: Maor Gottlieb <maorg@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+
+Change-Id: I08ea1b044170107574c19499e85f151d1400951d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+@@ -37,7 +37,11 @@ struct lag_func {
+ 
+ /* Used for collection of netdev event info. */
+ struct lag_tracker {
++#ifdef HAVE_INFO_HASH_TYPE
+ 	enum   netdev_lag_hash			hash_type;
++#else
++	int    hash_type;
++#endif
+ 	enum   netdev_lag_tx_type           tx_type;
+ 	struct netdev_lag_lower_state_info  netdev_state[MLX5_MAX_PORTS];
+ 	struct net_device *ndev[MLX5_MAX_PORTS];

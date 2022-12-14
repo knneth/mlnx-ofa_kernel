@@ -750,6 +750,15 @@ if (look_exists "flow_rule_match_ct" include/net/flow_offload.h); then
     fi
 fi
 
+# try to detect supported kernel 4.19 ST CT kernel
+# and disable TC CT as it is not supported by advanced OFED
+KERNEL4_19_ST_CT=$(echo ${KVERSION} | grep ^4\.19)
+if [ -n "$KERNEL4_19_ST_CT" ]; then
+    if (look_exists "tc_setup_cb_egdev_all_call_fast" net/sched/act_api.c); then
+            tc_ct=0
+    fi
+fi
+
 if [ "$tc_ct" != 1 ]; then
     set_config CONFIG_MLX5_TC_CT n
 fi

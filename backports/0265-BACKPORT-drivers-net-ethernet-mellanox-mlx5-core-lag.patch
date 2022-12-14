@@ -1,0 +1,21 @@
+From: Maor Gottlieb <maorg@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.h
+
+Change-Id: Ie16b599e4f5b8414cd625316607a3e9d5f93f833
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_fs.h
+@@ -28,8 +28,7 @@ struct mlx5_lag_steering {
+ 	struct mlx5_lag_ttc inner;
+ };
+ 
+-#ifdef CONFIG_MLX5_ESWITCH
+-
++#if defined(CONFIG_MLX5_ESWITCH) && defined(HAVE_INFO_HASH_TYPE)
+ int mlx5_lag_modify_port_selection(struct mlx5_lag *ldev, u8 port1, u8 port2);
+ void mlx5_lag_destroy_port_selection(struct mlx5_lag *ldev);
+ int mlx5_lag_create_port_selection(struct mlx5_lag *ldev,

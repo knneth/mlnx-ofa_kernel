@@ -71,6 +71,9 @@ fi
 ACTION=$1
 shift
 
+XE="/opt/xensource/bin/xe"
+INTERFACE_RENAME="/etc/sysconfig/network-scripts/interface-rename.py"
+
 #########################################################################
 is_serial()
 {
@@ -318,13 +321,122 @@ get_debug_info()
 
 get_mlx_en_interfaces()
 {
-    mlx_en_interfaces=""
-    for ethpath in /sys/class/net/*
-    do
-        if (grep 0x15b3 ${ethpath}/device/vendor > /dev/null 2>&1); then
-            mlx_en_interfaces="$mlx_en_interfaces ${ethpath##*/}"
+    if [ "$1" = '' ]; then
+        # cut -d/ -f5: <ifname> from /sys/class/net/<ifname>/
+        mlx_en_interfaces=`
+	    grep -l 0x15b3 /sys/class/net/*/device/vendor | cut -d/ -f5
+	`
+    else
+        # No need to filter by vendor: our driver only handles
+        # our cards
+        mlx_en_interfaces=`
+	    ls -l  /sys/class/net/*/device/driver/module | \
+	    awk '/'"$1"'$/ {print $9}' | cut -d/ -f5
+	`
+    fi
+}
+
+xe_get_uuid()
+{
+    $XE pif-list device=$1 2> /dev/null | grep "^uuid" | awk '{print $NF}'
+}
+
+xe_pif_forget()
+{
+    $XE pif-forget uuid=$1 > /dev/null 2>&1
+}
+
+xe_get_network_uuid()
+{
+    $XE network-list bridge=$1 2> /dev/null | grep "^uuid" | awk '{print $NF}'
+}
+
+xe_network_destroy()
+{
+    $XE network-destroy uuid=$1 > /dev/null 2>&1
+}
+
+
+xe_remove_side_interfaces()
+{
+    sleep 2
+
+    get_mlx_en_interfaces
+    # Rename side interfaces
+    if echo $mlx_en_interfaces | grep -wq side; then
+        if [ -x "$INTERFACE_RENAME" ]; then
+            $INTERFACE_RENAME --rename > /dev/null 2>&1
         fi
+    fi
+
+    sleep 1
+
+    # Re-read mlx4_en interfaces
+    get_mlx_en_interfaces
+    for i in $mlx_en_interfaces
+    do
+        for side_i in `$XE pif-list 2> /dev/null | grep -w side | grep -w $i | awk '{print $NF}'`
+        do
+            xe_pif_forget `xe_get_uuid $side_i`
+        done
+        for side_i in `$XE network-list 2> /dev/null | grep -w brside | grep -w $i | awk '{print $NF}'`
+        do
+            xe_network_destroy `xe_get_network_uuid $side_i`
+        done
     done
+
+    sleep 1
+}
+
+xe_replug_pif()
+{
+    $XE pif-unplug uuid=$1 > /dev/null 2>&1
+    $XE pif-plug uuid=$1 > /dev/null 2>&1
+}
+
+xe_rebuild_bond()
+{
+    bond_master_uuid=`$XE bond-param-list uuid=$1 2> /dev/null | grep -w master | awk '{print $NF}'`
+    bond_mode=`$XE bond-param-list uuid=$1 2> /dev/null | grep -w mode | awk '{print $NF}'`
+    bond_pif_uuids=`$XE bond-param-list uuid=$1 2> /dev/null | grep slaves | cut -d : -f 2- | sed -e "s/;//" -e "s/^\ //" -e "s/\ /,/"`
+    bond_mac=`$XE pif-param-list uuid=$bond_master_uuid 2> /dev/null | grep MAC | awk '{print $NF}'`
+    bond_network_uuid=`$XE pif-param-list uuid=$bond_master_uuid 2> /dev/null | grep network-uuid | awk '{print $NF}'`
+
+    $XE bond-destroy uuid=$1 2> /dev/null
+    $XE bond-create  mac=$bond_mac mode=$bond_mode network-uuid=$bond_network_uuid pif-uuids=$bond_pif_uuids > /dev/null 2>&1
+}
+
+xe_bond_recover()
+{
+    get_mlx_en_interfaces $1
+    for bond_uuid in `$XE bond-list 2> /dev/null | grep "^uuid" | awk '{print $NF}'`
+    do
+        for i in $mlx_en_interfaces
+        do
+            for uuid_i in `xe_get_uuid $i`
+            do
+                if ($XE bond-list uuid=$bond_uuid 2> /dev/null | grep -w slaves | grep -wq $uuid_i); then
+                    xe_rebuild_bond $bond_uuid
+                    break
+                fi
+            done
+        done
+    done
+}
+
+xe_refresh_interfaces() {
+    if [ ! -x $XE ]; then
+        return
+    fi
+    xe_remove_side_interfaces
+    get_mlx_en_interfaces mlx5_core
+    if [ -n "$mlx_en_interfaces" ]; then
+        for i in $mlx_en_interfaces
+        do
+            xe_replug_pif `xe_get_uuid $i`
+        done
+    fi
+    xe_bond_recover mlx5_core
 }
 
 # Module paramter values printed by the kernel can be different
@@ -414,7 +526,9 @@ start()
     if [ "X${MLX5_LOAD}" == "Xyes" ]; then
         load_module mlx5_core
         my_rc=$?
-        if [ $my_rc -ne 0 ]; then
+        if [ $my_rc -eq 0 ]; then
+            xe_refresh_interfaces
+	else
             echo_failure $"Loading Mellanox MLX5 NIC driver: "
         fi
         RC=$[ $RC + $my_rc ]

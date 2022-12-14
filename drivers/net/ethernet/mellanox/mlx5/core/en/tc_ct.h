@@ -29,6 +29,8 @@ struct mlx5_ct_attr {
 	u16 ct_action;
 	struct mlx5_ct_flow *ct_flow;
 	struct nf_flowtable *nf_ft;
+	u32 ct_labels_id;
+	bool clear_mod_acts_set;
 };
 
 #define zone_to_reg_ct {\
@@ -65,8 +67,8 @@ struct mlx5_ct_attr {
 
 #define fteid_to_reg_ct {\
 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5,\
-	.moffset = 0,\
-	.mlen = 4,\
+	.moffset = 1,\
+	.mlen = 3,\
 	.soffset = MLX5_BYTE_OFF(fte_match_param,\
 				 misc_parameters_2.metadata_reg_c_5),\
 }
@@ -96,14 +98,18 @@ struct mlx5_tc_ct_priv *
 mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 		struct mod_hdr_tbl *mod_hdr,
 		enum mlx5_flow_namespace_type ns_type,
-		struct idr *fte_ids);
+		struct mlx5_post_action *post_action);
 void
 mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv);
+
+void
+mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr);
 
 int
 mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		       struct mlx5_flow_spec *spec,
 		       struct flow_cls_offload *f,
+		       struct mlx5_ct_attr *ct_attr,
 		       struct netlink_ext_ack *extack);
 int
 mlx5_tc_ct_add_no_trk_match(struct mlx5e_priv *priv,
@@ -134,13 +140,18 @@ mlx5_tc_ct_max_offloaded_conns_get(struct mlx5_core_dev *dev);
 void
 mlx5_tc_ct_max_offloaded_conns_set(struct mlx5_core_dev *dev, u32 max);
 
+bool
+mlx5_tc_ct_labels_mapping_get(struct mlx5_core_dev *dev);
+void
+mlx5_tc_ct_lables_mapping_set(struct mlx5_core_dev *dev, bool enable);
+
 #else /* CONFIG_MLX5_TC_CT */
 
 static inline struct mlx5_tc_ct_priv *
 mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 		struct mod_hdr_tbl *mod_hdr,
 		enum mlx5_flow_namespace_type ns_type,
-		struct idr *fte_ids)
+		struct mlx5_post_action *post_action)
 {
 	return NULL;
 }
@@ -150,10 +161,14 @@ mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv)
 {
 }
 
+static inline void
+mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr) {}
+
 static inline int
 mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		       struct mlx5_flow_spec *spec,
 		       struct flow_cls_offload *f,
+		       struct mlx5_ct_attr *ct_attr,
 		       struct netlink_ext_ack *extack)
 {
 	NL_SET_ERR_MSG_MOD(extack, "mlx5 tc ct offload isn't enabled.");
@@ -212,6 +227,17 @@ mlx5_tc_ct_max_offloaded_conns_get(struct mlx5_core_dev *dev)
 
 static inline void
 mlx5_tc_ct_max_offloaded_conns_set(struct mlx5_core_dev *dev, u32 max)
+{
+}
+
+static inline bool
+mlx5_tc_ct_labels_mapping_get(struct mlx5_core_dev *dev)
+{
+	return false;
+}
+
+static inline void
+mlx5_tc_ct_lables_mapping_set(struct mlx5_core_dev *dev, bool enable)
 {
 }
 

@@ -72,17 +72,17 @@ struct arfs_rule {
 	for (j = 0; j < ARFS_HASH_SIZE; j++) \
 		hlist_for_each_entry_safe(hn, tmp, &hash[j], hlist)
 
-static enum mlx5e_traffic_types arfs_get_tt(enum arfs_type type)
+static enum mlx5_traffic_types arfs_get_tt(enum arfs_type type)
 {
 	switch (type) {
 	case ARFS_IPV4_TCP:
-		return MLX5E_TT_IPV4_TCP;
+		return MLX5_TT_IPV4_TCP;
 	case ARFS_IPV4_UDP:
-		return MLX5E_TT_IPV4_UDP;
+		return MLX5_TT_IPV4_UDP;
 	case ARFS_IPV6_TCP:
-		return MLX5E_TT_IPV6_TCP;
+		return MLX5_TT_IPV6_TCP;
 	case ARFS_IPV6_UDP:
-		return MLX5E_TT_IPV6_UDP;
+		return MLX5_TT_IPV6_UDP;
 	default:
 		return -EINVAL;
 	}
@@ -94,7 +94,7 @@ static int arfs_disable(struct mlx5e_priv *priv)
 
 	for (i = 0; i < ARFS_NUM_TYPES; i++) {
 		/* Modify ttc rules destination back to their default */
-		err = mlx5e_ttc_fwd_default_dest(priv, arfs_get_tt(i));
+		err = mlx5_ttc_fwd_default_dest(priv->fs.ttc, arfs_get_tt(i));
 		if (err) {
 			netdev_err(priv->netdev,
 				   "%s: modify ttc[%d] default destination failed, err(%d)\n",
@@ -123,7 +123,7 @@ int mlx5e_arfs_enable(struct mlx5e_priv *priv)
 	for (i = 0; i < ARFS_NUM_TYPES; i++) {
 		dest.ft = priv->fs.arfs->arfs_tables[i].ft.t;
 		/* Modify ttc rules destination to point on the aRFS FTs */
-		err = mlx5e_ttc_fwd_dest(priv, arfs_get_tt(i), &dest);
+		err = mlx5_ttc_fwd_dest(priv->fs.ttc, arfs_get_tt(i), &dest);
 		if (err) {
 			netdev_err(priv->netdev,
 				   "%s: modify ttc[%d] dest to arfs, failed err(%d)\n",
@@ -169,7 +169,7 @@ static int arfs_add_default_rule(struct mlx5e_priv *priv,
 	struct mlx5e_tir *tir = priv->indir_tir;
 	struct mlx5_flow_destination dest = {};
 	MLX5_DECLARE_FLOW_ACT(flow_act);
-	enum mlx5e_traffic_types tt;
+	enum mlx5_traffic_types tt;
 	int err = 0;
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
@@ -330,7 +330,7 @@ err:
 
 int mlx5e_arfs_create_tables(struct mlx5e_priv *priv)
 {
-	int err = 0;
+	int err = -ENOMEM;
 	int i;
 
 	if (!(priv->netdev->hw_features & NETIF_F_NTUPLE))

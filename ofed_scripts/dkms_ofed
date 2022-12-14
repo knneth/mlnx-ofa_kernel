@@ -59,7 +59,7 @@ if [ -f $WDIR/../dkms.conf ];then
 	options=
 	while read line; do
 		if [[ $line =~ BUILT_MODULE_NAME ]];then
-			name=$(echo $line | sed -e 's/BUILT_MODULE_NAME\[[0-9]*\]=//g')
+			name=$(echo $line | sed -e 's/BUILT_MODULE_NAME\[[0-9$i]*\]=//g')
 			flag=`module_to_flag $name`
 			dashFlag=$(echo $flag | sed -e 's/-/\\\-/g')
 			if ! (echo $options 2> /dev/null | grep "$dashFlag" >/dev/null 2>&1); then

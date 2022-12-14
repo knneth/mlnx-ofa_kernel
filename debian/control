@@ -10,6 +10,7 @@ Package: mlnx-ofed-kernel-utils
 Architecture: any
 Depends: ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof,
  mlnx-tools (>= 5.2.0),
+Conflicts: mlnx-en-utils
 Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 
 Package: mlnx-ofed-kernel-dkms

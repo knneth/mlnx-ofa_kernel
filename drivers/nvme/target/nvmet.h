@@ -75,6 +75,7 @@ struct nvmet_ns {
 
 	struct config_group	device_group;
 	struct config_group	group;
+	struct config_group	offload_ctxs_group;
 
 	struct completion	disable_done;
 	mempool_t		*bvec_pool;
@@ -225,6 +226,28 @@ struct nvmet_subsys_model {
 	char			number[];
 };
 
+struct nvmet_ns_counters {
+	u64			num_read_cmd;
+	u64			num_read_blocks;
+	u64			num_write_cmd;
+	u64			num_write_blocks;
+	u64			num_write_inline_cmd;
+	u64			num_flush_cmd;
+	u64			num_error_cmd;
+	u64			num_backend_error_cmd;
+	u64			last_read_latency;
+	u64			last_write_latency;
+	u64			queue_depth;
+};
+
+struct nvmet_offload_ctx {
+	void			*ctx;
+	struct nvmet_port	*port;
+	struct nvmet_ns		*ns;
+	int			id;
+	struct config_group	group;
+};
+
 struct nvmet_subsys {
 	enum nvme_subsys_type	type;
 
@@ -265,6 +288,8 @@ struct nvmet_subsys {
 	u64 (*offload_ns_flush_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_error_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_backend_error_cmds)(struct nvmet_ns *ns);
+	void (*offload_query_counters)(void *ctx,
+				       struct nvmet_ns_counters *counters);
 
 	struct nvmet_subsys_model	__rcu *model;
 
@@ -274,6 +299,12 @@ struct nvmet_subsys {
 	struct config_group	passthru_group;
 #endif /* CONFIG_NVME_TARGET_PASSTHRU */
 };
+
+static inline struct nvmet_offload_ctx *to_nvmet_offload_ctx(struct config_item *item)
+{
+	return container_of(to_config_group(item), struct nvmet_offload_ctx,
+			group);
+}
 
 static inline struct nvmet_subsys *to_subsys(struct config_item *item)
 {
@@ -345,6 +376,8 @@ struct nvmet_fabrics_ops {
 	u64 (*offload_ns_flush_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_error_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_backend_error_cmds)(struct nvmet_ns *ns);
+	void (*offload_query_counters)(void *ctx,
+				       struct nvmet_ns_counters *counters);
 	u8 (*get_mdts)(const struct nvmet_ctrl *ctrl);
 	bool (*check_subsys_match_offload_port)(struct nvmet_port *port,
 						struct nvmet_subsys *subsys);
@@ -506,6 +539,9 @@ bool nvmet_is_port_active(struct nvmet_port *port);
 void nvmet_init_offload_subsystem_port_attrs(struct nvmet_port *port,
 					     struct nvmet_subsys *subsys);
 void nvmet_uninit_offload_subsystem_port_attrs(struct nvmet_subsys *subsys);
+
+int nvmet_offload_ctx_configfs_create(struct nvmet_offload_ctx *ctx);
+void nvmet_offload_ctx_configfs_del(struct nvmet_offload_ctx *ctx);
 
 void nvmet_referral_enable(struct nvmet_port *parent, struct nvmet_port *port);
 void nvmet_referral_disable(struct nvmet_port *parent, struct nvmet_port *port);

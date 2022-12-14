@@ -531,7 +531,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if devlink.h has devlink_port_attrs_pci_sf_set])
+	AC_MSG_CHECKING([if devlink.h has devlink_port_attrs_pci_sf_set get 4 params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/devlink.h>
 	],[
@@ -540,8 +540,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET, 1,
-			[devlink.h has devlink_port_attrs_pci_sf_set])
+		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS, 1,
+			[devlink.h has devlink_port_attrs_pci_sf_set get 4 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if devlink.h has devlink_port_attrs_pci_sf_set get 5 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/devlink.h>
+	],[
+		devlink_port_attrs_pci_sf_set(NULL, 0, 0, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS, 1,
+			[devlink.h has devlink_port_attrs_pci_sf_set get 5 params])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -1637,6 +1652,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_GET_SET_TUNABLE, 1,
 			  [get/set_tunable is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct ethtool_ops has get_module_eeprom_by_page])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.get_module_eeprom_by_page = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GET_MODULE_EEPROM_BY_PAGE, 1,
+			[ethtool_ops has get_module_eeprom_by_page])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -4306,6 +4338,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_NETDEV_FOR_EACH_LOWER_DEV, 1,
 			  [netdev_for_each_lower_dev is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if cpumask.h has cpumask_available])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/cpumask.h>
+	],[
+		cpumask_available(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CPUMASK_AVAILABLE, 1,
+			  [cpumask.h has cpumask_available])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -7751,8 +7798,8 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		#include <linux/mutex.h>
 		#include <scsi/scsi_device.h>
 	],[
-		struct scsi_device sdev;
-		mutex_init(&sdev.state_mutex);
+		struct scsi_device *sdev;
+		mutex_init(&sdev->state_mutex);
 
 		return 0;
 	],[
@@ -8404,6 +8451,38 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct flow_action_entry has police.index])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/flow_offload.h>
+	],[
+		struct flow_action_entry x = {
+			.police.index = 1,
+		};
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FLOW_ACTION_POLICE_INDEX, 1,
+			  [struct flow_action_entry has police.index])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct flow_action_entry has police.rate_pkt_ps])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/flow_offload.h>
+	],[
+		struct flow_action_entry x = {
+			.police.rate_pkt_ps = 1000,
+		};
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FLOW_ACTION_POLICE_RATE_PKT_PS, 1,
+			  [struct flow_action_entry has police.rate_pkt_ps])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if flow_rule_match_meta exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/flow_offload.h>
@@ -8597,6 +8676,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TC_TO_NETDEV_TC, 1,
 			  [struct tc_to_netdev has tc])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if netdev_lag_upper_info has hash_type])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct netdev_lag_upper_info info;
+		info.hash_type = 0;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_INFO_HASH_TYPE, 1,
+			  [netdev_lag_upper_info has hash_type])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -11045,8 +11140,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
 	],[
-		const struct net_device x;
-		netdev_reg_state(&x);
+		netdev_reg_state(NULL);
 
 		return 0;
 	],[
@@ -13068,9 +13162,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		#include <uapi/linux/if.h>
 		#include <net/geneve.h>
 	],[
-		struct net_device dev = {};
-
-		netif_is_geneve(&dev);
+		netif_is_geneve(NULL);
 
 		return 0;
 	],[
@@ -13108,13 +13200,28 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if net/psample.h has struct psample_metadata])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/skbuff.h>
+		#include <net/psample.h>
+	],[
+		struct psample_metadata *x;
+		x->trunc_size = 0;
+
+		return 0
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_PSAMPLE_METADATA, 1,
+			      [et/psample.h has struct psample_metadata])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if netif_is_bareudp exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/bareudp.h>
 	],[
-		struct net_device dev = {};
-
-		netif_is_bareudp(&dev);
+		netif_is_bareudp(NULL);
 
 		return 0;
 	],[
@@ -13897,6 +14004,100 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if blkdev.h has blk_rq_append_bio])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		struct bio *bio;
+
+		blk_rq_append_bio(NULL, bio);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_APPEND_BIO_POINTER, 1,
+			[blk_rq_append_bio is defined with struct *bio])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if genhd.h has bdev_nr_sectors])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/genhd.h>
+	],[
+		bdev_nr_sectors(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BDEV_NR_SECTORS, 1,
+			  [genhd.h has revalidate_disk_size])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if list_sort gets cmp without const args])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/list_sort.h>
+	],[
+		list_cmp_func_t x;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LIST_CMP_FUNC_T, 1,
+			  [list_sort gets cmp without const args])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct pci_driver has member sriov_get_vf_total_msix/sriov_set_msix_vec_count])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		struct pci_driver core_driver = {
+			.sriov_get_vf_total_msix = NULL,
+			.sriov_set_msix_vec_count = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT, 1,
+			[struct pci_driver has member sriov_get_vf_total_msix/sriov_set_msix_vec_count])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if kernel has pci_iov_virtfn_devfn])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_iov_virtfn_devfn(NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_IOV_VIRTFN_DEVFN, 1,
+			[kernel has pci_iov_virtfn_devfn])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if configfs.h has configfs_register_group])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/configfs.h>
+	],[
+		configfs_register_group(NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CONFIGFS_REGISTER_GROUP, 1,
+			  [configfs.h has configfs_register_group])
+	],[
+		AC_MSG_RESULT(no)
+	])
 ])
 #
 # COMPAT_CONFIG_HEADERS

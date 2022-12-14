@@ -337,6 +337,7 @@ static bool nvmet_peer_to_peer_capable(struct nvmet_port *port)
 	    ops->offload_ns_flush_cmds &&
 	    ops->offload_ns_error_cmds &&
 	    ops->offload_ns_backend_error_cmds &&
+	    ops->offload_query_counters &&
 	    ops->check_subsys_match_offload_port)
 		return ops->peer_to_peer_capable(port);
 
@@ -378,7 +379,9 @@ void nvmet_init_offload_subsystem_port_attrs(struct nvmet_port *port,
 	if (!subsys->offload_ns_backend_error_cmds)
 		subsys->offload_ns_backend_error_cmds =
 			ops->offload_ns_backend_error_cmds;
-
+	if (!subsys->offload_query_counters)
+		subsys->offload_query_counters =
+			ops->offload_query_counters;
 }
 
 void nvmet_uninit_offload_subsystem_port_attrs(struct nvmet_subsys *subsys)
@@ -395,6 +398,7 @@ void nvmet_uninit_offload_subsystem_port_attrs(struct nvmet_subsys *subsys)
 	subsys->offload_ns_read_blocks = NULL;
 	subsys->offload_ns_read_cmds = NULL;
 	subsys->offload_subsys_unknown_ns_cmds = NULL;
+	subsys->offload_query_counters = NULL;
 }
 
 int nvmet_enable_port(struct nvmet_port *port, struct nvmet_subsys *subsys)

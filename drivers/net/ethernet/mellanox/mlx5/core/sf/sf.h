@@ -42,7 +42,7 @@ static inline u16 mlx5_sf_max_functions(const struct mlx5_core_dev *dev)
 
 #endif
 
-/*HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET condition should be moved to backports in next rebase
+/*HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET condition should be moved to backports in next rebase
   as a result of CONFIG_MLX5_SF_MANAGER is set  we need to block it
   to allow compilation without backports on base kernel 5.9
   */

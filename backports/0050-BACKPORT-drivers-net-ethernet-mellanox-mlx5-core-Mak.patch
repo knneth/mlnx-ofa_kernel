@@ -8,7 +8,7 @@ Change-Id: I7670bd542ef7e272ab925429eac8f1bb6d00c5a0
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
-@@ -62,8 +62,12 @@ mlx5_core-$(CONFIG_MLX5_ESWITCH)   += es
+@@ -64,8 +64,12 @@ mlx5_core-$(CONFIG_MLX5_ESWITCH)   += es
  				      esw/qos.o
  
  mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o

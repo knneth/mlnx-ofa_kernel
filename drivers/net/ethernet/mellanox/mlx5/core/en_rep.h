@@ -59,6 +59,8 @@ struct mlx5e_neigh_update_table {
 
 struct mlx5_tc_ct_priv;
 struct mlx5e_rep_bond;
+struct mlx5e_flow_meters;
+
 struct mlx5_rep_uplink_priv {
 	/* Filters DB - instantiated by the uplink representor and shared by
 	 * the uplink's VFs
@@ -88,12 +90,32 @@ struct mlx5_rep_uplink_priv {
 	/* maps tun_enc_opts to a unique id*/
 	struct mapping_ctx *tunnel_enc_opts_mapping;
 
-	struct idr fte_ids;
 	struct mlx5_tc_ct_priv *ct_priv;
 	struct mlx5_tc_psample *tc_psample;
 
 	/* support eswitch vports bonding */
 	struct mlx5e_rep_bond *bond;
+
+	struct mlx5e_flow_meters *flow_meters;
+};
+
+struct mlx5_meter_handle;
+
+struct rep_meter {
+	u64 rate;
+	u64 burst;
+	struct mlx5_meter_handle *meter_hndl;
+	struct mlx5_flow_handle *meter_rule;
+	struct mlx5_flow_handle *drop_red_rule;
+	struct mlx5_fc *drop_counter;
+	u64 packets_dropped;
+	u64 bytes_dropped;
+};
+
+struct mlx5_rep_sysfs {
+	struct mlx5_eswitch    *esw;
+	struct kobject          kobj;
+	int                     vport;
 };
 
 struct mlx5e_rep_priv {
@@ -106,6 +128,8 @@ struct mlx5e_rep_priv {
 	struct mlx5_rep_uplink_priv uplink_priv; /* valid for uplink rep */
 	struct rtnl_link_stats64 prev_vf_vport_stats;
 	struct xarray vport_rep_map;
+	struct rep_meter rep_meter;
+	struct mlx5_rep_sysfs rep_sysfs;
 };
 
 static inline

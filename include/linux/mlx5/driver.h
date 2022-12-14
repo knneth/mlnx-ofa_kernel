@@ -211,6 +211,19 @@ struct mlx5_rsc_debug {
 	struct mlx5_field_desc	fields[];
 };
 
+enum mlx5_flow_meter_mode {
+	MLX5_RATE_LIMIT_BPS,
+	MLX5_RATE_LIMIT_PPS,
+};
+
+struct mlx5_flow_meter_params {
+	enum mlx5_flow_meter_mode mode;
+	/* police action index */
+	u32 index;
+	u64 rate;
+	u64 burst;
+};
+
 enum mlx5_dev_event {
 	MLX5_DEV_EVENT_SYS_ERROR = 128, /* 0 - 127 are FW events */
 	MLX5_DEV_EVENT_PORT_AFFINITY = 129,
@@ -495,11 +508,6 @@ struct mlx5_vf_context {
 enum {
 	MLX5_RATE_LIMIT_RX,
 	MLX5_RATE_LIMIT_TX,
-};
-
-enum {
-	MLX5_RATE_LIMIT_BPS,
-	MLX5_RATE_LIMIT_PPS,
 };
 
 enum {
@@ -812,6 +820,7 @@ struct mlx5e_resources {
 
 	struct {
 		bool ct_action_on_nat_conns;
+		bool ct_labels_mapping;
 		u32 max_offloaded_conns;
 	} ct;
 
@@ -831,6 +840,7 @@ enum mlx5_sw_icm_type {
 	MLX5_SW_ICM_TYPE_STEERING,
 	MLX5_SW_ICM_TYPE_HEADER_MODIFY,
 	MLX5_SW_ICM_TYPE_HEADER_MODIFY_PATTERN,
+	MLX5_SW_ICM_TYPE_SW_ENCAP,
 };
 
 #define MLX5_MAX_RESERVED_GIDS 8
@@ -1519,7 +1529,7 @@ struct mlx5_diag_dump {
 	char	dump[0];
 } __packed;
 
-bool mlx5_is_roce_enabled(struct mlx5_core_dev *dev);
+bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev);
 
 /**
  * mlx5_core_net - Provide net namespace of the mlx5_core_dev

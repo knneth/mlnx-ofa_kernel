@@ -287,6 +287,9 @@ int mlx5_ib_query_nvmf_ns(struct ib_nvmf_ns *ns,
 		ns_attr->num_flush_cmd = mns->mns.counters.num_flush_cmd;
 		ns_attr->num_error_cmd = mns->mns.counters.num_error_cmd;
 		ns_attr->num_backend_error_cmd = mns->mns.counters.num_backend_error_cmd;
+		ns_attr->last_read_latency = mns->mns.counters.last_read_latency;
+		ns_attr->last_write_latency = mns->mns.counters.last_write_latency;
+		ns_attr->queue_depth = mns->mns.counters.queue_depth;
 	}
 
 	return ret;
@@ -526,6 +529,20 @@ int mlx5_core_query_nvmf_ns(struct mlx5_core_dev *dev,
 					      ns_ctx.num_error_cmd_low);
 	ns->counters.num_backend_error_cmd = MLX5_GET(query_nvmf_namespace_out, out,
 						      ns_ctx.num_backend_error_cmd_low);
+	if (MLX5_CAP_NVMF(dev, last_req_latency)) {
+		ns->counters.last_read_latency = MLX5_GET(query_nvmf_namespace_out, out,
+							  ns_ctx.last_read_req_latency);
+		ns->counters.last_write_latency = MLX5_GET(query_nvmf_namespace_out, out,
+							   ns_ctx.last_write_req_latency);
+	} else {
+		ns->counters.last_read_latency = 0;
+		ns->counters.last_write_latency = 0;
+	}
+	if (MLX5_CAP_NVMF(dev, current_q_depth))
+		ns->counters.queue_depth = MLX5_GET(query_nvmf_namespace_out, out,
+						    ns_ctx.current_q_depth);
+	else
+		ns->counters.queue_depth = 0;
 
 	return 0;
 }

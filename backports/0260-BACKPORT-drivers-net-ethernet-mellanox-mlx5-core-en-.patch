@@ -1,0 +1,113 @@
+From: Jianbo Liu <jianbol@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/flow_meter_aso.c
+
+Change-Id: Iff8f037664991299fa7ade66569dc54cd44cf36a
+---
+ .../mellanox/mlx5/core/en/flow_meter_aso.c    | 22 ++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/flow_meter_aso.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/flow_meter_aso.c
+@@ -13,6 +13,14 @@
+ #define CBS_MAN_SHIFT 16
+ #define CIR_EXP_SHIFT 8
+ 
++#ifndef S64_MAX
++#define S64_MAX ((s64)(((u64)~0ULL) >> 1))
++#endif
++
++#ifndef BITS_TO_BYTES
++#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
++#endif
++
+ /* cir = 8*(10^9)*cir_mantissa/(2^cir_exponent)) bits/s */
+ #define CONST_CIR 8000000000ULL
+ #define CALC_CIR(m, e)  ((CONST_CIR * (m)) >> (e))
+@@ -101,6 +109,7 @@ found:
+ static struct mlx5e_flow_meters *
+ mlx5e_get_flow_meters(struct mlx5_core_dev *dev)
+ {
++#ifdef CONFIG_MLX5_ESWITCH
+ 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+ 	struct mlx5_rep_uplink_priv *uplink_priv;
+ 	struct mlx5e_rep_priv *uplink_rpriv;
+@@ -110,6 +119,7 @@ mlx5e_get_flow_meters(struct mlx5_core_d
+ 		uplink_priv = &uplink_rpriv->uplink_priv;
+ 		return uplink_priv->flow_meters;
+ 	}
++#endif
+ 
+ 	return NULL;
+ }
+@@ -367,6 +377,7 @@ mlx5e_free_flow_meter(struct mlx5_core_d
+ 	mutex_unlock(&flow_meters->sync_lock);
+ }
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ struct mlx5_meter_handle *
+ mlx5e_get_flow_meter(struct mlx5_core_dev *mdev, struct mlx5_flow_meter_params *params)
+ {
+@@ -489,7 +500,7 @@ __mlx5e_fill_flow_meter_post_action(stru
+ 				    struct mlx5_post_action_handle *last)
+ {
+ 	struct mlx5e_tc_mod_hdr_acts mod_acts = {};
+-	struct mlx5_post_action_handle *handle;
++	struct mlx5_post_action_handle *handle = NULL;
+ 	struct mlx5_meter_handle *meter;
+ 	struct mlx5_modify_hdr *mod_hdr;
+ 	struct mlx5_flow_attr *mattr;
+@@ -864,13 +875,16 @@ mlx5e_post_meter_cleanup(struct mlx5e_fl
+ 	mlx5e_post_meter_fg_destroy(flow_meters);
+ 	mlx5e_post_meter_table_destroy(flow_meters);
+ }
++#endif /* CONFIG_MLX5_CLS_ACT */
+ 
+ struct mlx5e_flow_meters *
+ mlx5e_flow_meters_init(struct mlx5e_priv *priv, enum mlx5_flow_namespace_type ns_type)
+ {
+ 	struct mlx5e_flow_meters *flow_meters;
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_post_action *post_action;
+ 	int err;
++#endif
+ 
+ 	if (!(MLX5_CAP_GEN_64(priv->mdev, general_obj_types) &
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+@@ -886,6 +900,7 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 		goto err_aso;
+ 	}
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	post_action = priv->mdev->priv.eswitch->offloads.post_action;
+ 	if (IS_ERR_OR_NULL(post_action)) {
+ 		mlx5_core_warn(priv->mdev,
+@@ -899,6 +914,7 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 	err = mlx5e_post_meter_init(priv, flow_meters);
+ 	if (err)
+ 		goto err_post_meter;
++#endif
+ 
+ 	flow_meters->log_granularity = min_t(int, 6,
+ 					     MLX5_CAP_QOS(priv->mdev, log_meter_aso_granularity));
+@@ -908,8 +924,10 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 
+ 	return flow_meters;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ err_post_meter:
+ 	mlx5e_aso_put(priv);
++#endif
+ err_aso:
+ 	kfree(flow_meters);
+ 	return NULL;
+@@ -921,7 +939,9 @@ mlx5e_flow_meters_cleanup(struct mlx5e_f
+ 	if (!flow_meters)
+ 		return;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	mlx5e_post_meter_cleanup(flow_meters);
++#endif
+ 	mlx5e_aso_put(flow_meters->aso->priv);
+ 
+ 	kfree(flow_meters);

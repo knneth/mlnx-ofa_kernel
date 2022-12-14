@@ -92,7 +92,7 @@ Change-Id: I7f6b6aaa70d15d37d9e3dd399b70f405f6f3fb33
  
  /* Create software resources (Buffers, etc ..) */
  struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
-@@ -1141,4 +1157,6 @@ static int fw_tracer_event(struct notifi
+@@ -1148,4 +1164,6 @@ static int fw_tracer_event(struct notifi
  	return NOTIFY_OK;
  }
  

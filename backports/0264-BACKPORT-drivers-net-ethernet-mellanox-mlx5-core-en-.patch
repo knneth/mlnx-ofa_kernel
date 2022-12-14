@@ -1,0 +1,84 @@
+From: Maor Dickman <maord@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_common.c
+
+Change-Id: I14cae38554f6b4fdcf46cef84d6d12b3b6631c16
+---
+ .../mellanox/mlx5/core/en/tc_tun_common.c     | 21 +++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_common.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_common.c
+@@ -407,14 +407,17 @@ void mlx5e_tc_update_neigh_used_value(st
+ 	struct neighbour *n;
+ 	u64 lastuse;
+ 
+-	if (m_neigh->family == AF_INET)
++	if (m_neigh->family == AF_INET) {
+ 		tbl = &arp_tbl;
+-#if IS_ENABLED(CONFIG_IPV6)
+-	else if (m_neigh->family == AF_INET6)
++#if defined(HAVE_IPV6_STUBS_H) && IS_ENABLED(CONFIG_IPV6)
++	} else if (m_neigh->family == AF_INET6) {
++		if (!ipv6_stub || !ipv6_stub->nd_tbl)
++			return;
+ 		tbl = ipv6_stub->nd_tbl;
+ #endif
+-	else
++	} else {
+ 		return;
++	}
+ 
+ 	/* mlx5e_get_next_valid_encap() releases previous encap before returning
+ 	 * next one.
+@@ -453,7 +456,9 @@ void mlx5e_tc_update_neigh_used_value(st
+ 		}
+ 	}
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_tc_update_neigh_used_value(nhe, neigh_used);
++#endif
+ 
+ 	if (neigh_used) {
+ 		nhe->reported_lastuse = jiffies;
+@@ -666,7 +671,9 @@ static bool is_duplicated_encap_entry(st
+ 	for (i = 0; i < out_index; i++) {
+ 		if (flow->encaps[i].e != e)
+ 			continue;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "can't duplicate encap action");
++#endif
+ 		netdev_err(priv->netdev, "can't duplicate encap action\n");
+ 		return true;
+ 	}
+@@ -717,7 +724,9 @@ int mlx5e_attach_encap(struct mlx5e_priv
+ 	key.ip_tun_key = &tun_info->key;
+ 	key.tc_tunnel = mlx5e_get_tc_tun(mirred_dev);
+ 	if (!key.tc_tunnel) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Unsupported tunnel");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -846,8 +855,10 @@ int mlx5e_attach_decap(struct mlx5e_priv
+ 	esw_attr = attr->esw_attr;
+ 
+ 	if (sizeof(parse_attr->eth) > MLX5_CAP_ESW(priv->mdev, max_encap_header_size)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "encap header larger than max supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -1636,7 +1647,9 @@ int mlx5e_tc_fib_event(struct notifier_b
+ 		if (!IS_ERR_OR_NULL(fib_work)) {
+ 			queue_work(priv->wq, &fib_work->work);
+ 		} else if (IS_ERR(fib_work)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(info->extack, "Failed to init fib work");
++#endif
+ 			mlx5_core_warn(priv->mdev, "Failed to init fib work, %ld\n",
+ 				       PTR_ERR(fib_work));
+ 		}

@@ -96,13 +96,9 @@ void mlx5e_rep_update_flows(struct mlx5e_priv *priv,
 
 	ASSERT_RTNL();
 
-	/* wait for encap to be fully initialized */
-	wait_for_completion(&e->res_ready);
-
 	mutex_lock(&esw->offloads.encap_tbl_lock);
 	encap_connected = !!(e->flags & MLX5_ENCAP_ENTRY_VALID);
-	if (e->compl_result < 0 || (encap_connected == neigh_connected &&
-				    ether_addr_equal(e->h_dest, ha)))
+	if (encap_connected == neigh_connected && ether_addr_equal(e->h_dest, ha))
 		goto unlock;
 
 	mlx5e_take_all_encap_flows(e, &flow_list);
@@ -564,7 +560,6 @@ void mlx5e_rep_tc_netdevice_event_unregister(struct mlx5e_rep_priv *rpriv)
 				 mlx5e_rep_indr_block_unbind);
 }
 
-#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT) || IS_ENABLED(CONFIG_MLX5_TC_SAMPLE)
 static bool mlx5e_restore_tunnel(struct mlx5e_priv *priv, struct sk_buff *skb,
 				 struct mlx5e_tc_update_priv *tc_priv,
 				 u32 tunnel_id)
@@ -661,7 +656,47 @@ static bool mlx5e_restore_tunnel(struct mlx5e_priv *priv, struct sk_buff *skb,
 
 	return true;
 }
-#endif /* CONFIG_NET_TC_SKB_EXT || CONFIG_MLX5_TC_SAMPLE */
+
+static bool mlx5e_restore_skb(struct sk_buff *skb, u32 chain, u32 reg_c1,
+			      struct mlx5e_tc_update_priv *tc_priv)
+{
+	struct mlx5e_priv *priv = netdev_priv(skb->dev);
+	u32 tunnel_id = reg_c1 >> ESW_TUN_OFFSET;
+#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+#endif
+
+	if (chain) {
+#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+		struct mlx5_rep_uplink_priv *uplink_priv;
+		struct mlx5e_rep_priv *uplink_rpriv;
+		struct tc_skb_ext *tc_skb_ext;
+		u32 zone_restore_id;
+
+		tc_skb_ext = skb_ext_add(skb, TC_SKB_EXT);
+		if (!tc_skb_ext) {
+			WARN_ON(1);
+			goto out_incr_rx_counter;
+		}
+		tc_skb_ext->chain = chain;
+		zone_restore_id = reg_c1 & ESW_ZONE_ID_MASK;
+		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
+		uplink_priv = &uplink_rpriv->uplink_priv;
+		if (!mlx5e_tc_ct_restore_flow(uplink_priv->ct_priv, skb,
+					      zone_restore_id))
+			goto out_incr_rx_counter;
+#else
+		return true;
+#endif
+	}
+	return mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id);
+
+#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+out_incr_rx_counter:
+	atomic_inc(&esw->dev->priv.ct_debugfs->stats.rx_dropped);
+#endif
+	return false;
+}
 
 static bool mlx5e_handle_int_port(struct mlx5_cqe64 *cqe,
 				  struct sk_buff *skb,
@@ -726,7 +761,7 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 			     bool *free_skb)
 {
 	struct mlx5_mapped_obj mapped_obj;
-	u32 chain = 0, reg_c0, reg_c1;
+	u32 reg_c0, reg_c1;
 	struct mlx5_eswitch *esw;
 	struct mlx5e_priv *priv;
 	u32 tunnel_id;
@@ -755,7 +790,8 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 	}
 
 	if (mapped_obj.type == MLX5_MAPPED_OBJ_CHAIN) {
-		chain = mapped_obj.chain;
+		if (mlx5e_restore_skb(skb, mapped_obj.chain, reg_c1, tc_priv))
+			return true;
 #if IS_ENABLED(CONFIG_MLX5_TC_SAMPLE)
 	} else if (mapped_obj.type == MLX5_MAPPED_OBJ_SAMPLE) {
 		struct psample_group psample_group = {};
@@ -769,7 +805,7 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 		skb_push(skb, skb->mac_len);
 		size = sample->trunc_size ? min(sample->trunc_size, skb->len) : skb->len;
 
-		mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id);
+		mlx5e_restore_tunnel(priv, skb, tc_priv, mapped_obj.sample.tunnel_id);
 		psample_sample_packet(&psample_group, skb, size, iif, 0, sample->rate);
 		mlx5_rep_tc_post_napi_receive(tc_priv);
 		consume_skb(skb);
@@ -782,45 +818,13 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 				return false;
 			else
 				goto out_free_skb;
+		} else {
+			return mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id);
 		}
 	} else {
 		netdev_dbg(priv->netdev, "Invalid mapped object type: %d\n", mapped_obj.type);
 		goto out_free_skb;
 	}
-
-
-#if !IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
-	return true;
-#else
-	if (chain) {
-		struct mlx5_rep_uplink_priv *uplink_priv;
-		struct mlx5e_rep_priv *uplink_rpriv;
-		struct tc_skb_ext *tc_skb_ext;
-		u32 zone_restore_id;
-
-		tc_skb_ext = skb_ext_add(skb, TC_SKB_EXT);
-		if (!tc_skb_ext) {
-			WARN_ON(1);
-			goto out_incr_rx_counter;
-		}
-
-		tc_skb_ext->chain = chain;
-
-		zone_restore_id = reg_c1 & ESW_ZONE_ID_MASK;
-
-		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
-		uplink_priv = &uplink_rpriv->uplink_priv;
-		if (!mlx5e_tc_ct_restore_flow(uplink_priv->ct_priv, skb,
-					      zone_restore_id))
-			goto out_incr_rx_counter;
-	}
-
-	if (mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id))
-		return true;
-
-out_incr_rx_counter:
-	atomic_inc(&esw->dev->priv.ct_debugfs->stats.rx_dropped);
-#endif /* CONFIG_NET_TC_SKB_EXT */
 
 out_free_skb:
 	*free_skb = true;

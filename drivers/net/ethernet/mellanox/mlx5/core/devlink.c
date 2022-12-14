@@ -232,12 +232,12 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.port_function_hw_addr_set = mlx5_devlink_port_function_hw_addr_set,
 #endif
 
-/* HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET condition should be moved to backports in next rebase
+/* HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET condition should be moved to backports in next rebase
    as a result of CONFIG_MLX5_SF_MANAGER is set  we need to block it
    to allow compilation without backports on base kernel 5.9
 */
 #if !IS_ENABLED(CONFIG_MLXDEVM)
-#if defined(CONFIG_MLX5_SF_MANAGER) && defined(HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET)
+#if defined(CONFIG_MLX5_SF_MANAGER) && (defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS))
 	.port_new = mlx5_devlink_sf_port_new,
 	.port_del = mlx5_devlink_sf_port_del,
 	.port_fn_state_get = mlx5_devlink_sf_port_fn_state_get,
@@ -729,5 +729,25 @@ mlx5_devlink_ct_action_on_nat_conns_get(struct devlink *devlink, u32 id,
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
 	ctx->val.vbool = dev->mlx5e_res.ct.ct_action_on_nat_conns;
+	return 0;
+}
+
+int
+mlx5_devlink_ct_labels_mapping_set(struct devlink *devlink, u32 id,
+				   struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	dev->mlx5e_res.ct.ct_labels_mapping = ctx->val.vbool;
+	return 0;
+}
+
+int
+mlx5_devlink_ct_labels_mapping_get(struct devlink *devlink, u32 id,
+				   struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	ctx->val.vbool = dev->mlx5e_res.ct.ct_labels_mapping;
 	return 0;
 }

@@ -17,7 +17,7 @@ Change-Id: I93b2c1e0877c7ec2f084443d22f4706895e96ac1
  
  #define FDB_TC_MAX_CHAIN 3
  #define FDB_FT_CHAIN (FDB_TC_MAX_CHAIN + 1)
-@@ -188,7 +188,11 @@ struct mlx5_flow_table {
+@@ -195,7 +195,11 @@ struct mlx5_flow_table {
  	/* FWD rules that point on this flow table */
  	struct list_head		fwd_rules;
  	u32				flags;
@@ -29,7 +29,7 @@ Change-Id: I93b2c1e0877c7ec2f084443d22f4706895e96ac1
  	enum mlx5_flow_table_miss_action def_miss_action;
  	struct mlx5_flow_namespace	*ns;
  };
-@@ -256,7 +260,11 @@ struct mlx5_flow_group {
+@@ -263,7 +267,11 @@ struct mlx5_flow_group {
  	struct ida			fte_allocator;
  	u32				id;
  	struct rhashtable		ftes_hash;
@@ -41,7 +41,7 @@ Change-Id: I93b2c1e0877c7ec2f084443d22f4706895e96ac1
  };
  
  struct mlx5_flow_root_namespace {
-@@ -274,11 +282,13 @@ struct mlx5_flow_root_namespace {
+@@ -281,11 +289,13 @@ struct mlx5_flow_root_namespace {
  
  int mlx5_init_fc_stats(struct mlx5_core_dev *dev);
  void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev);

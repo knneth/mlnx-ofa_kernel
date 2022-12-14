@@ -43,7 +43,7 @@ Change-Id: I329bb5e5f2a01700dcc9468eaf719465f9765896
  	rtnl_unlock();
  	return count;
  }
-@@ -958,10 +965,22 @@ static ssize_t mlx5e_store_force_local_l
+@@ -965,10 +972,22 @@ static ssize_t mlx5e_store_force_local_l
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -66,7 +66,7 @@ Change-Id: I329bb5e5f2a01700dcc9468eaf719465f9765896
  
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
-@@ -1532,7 +1551,7 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1539,7 +1558,7 @@ void mlx5e_sysfs_remove(struct net_devic
  	res->compat.ecn_root_kobj = NULL;
  }
  

@@ -1,10 +1,10 @@
 From: Shay Drory <shayd@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
 
-Change-Id: Ib397043647c4c87ccd7462d99bc4b715f373393f
+Change-Id: If6b763374504c19f5d28aeeba8e960092709a68a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eq.c | 34 ++++++++++++++++++--
- 1 file changed, 32 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 38 ++++++++++++++++++--
+ 1 file changed, 36 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
@@ -64,7 +64,19 @@ Change-Id: Ib397043647c4c87ccd7462d99bc4b715f373393f
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -816,7 +830,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -772,7 +786,11 @@ mlx5_eq_create_generic(struct mlx5_core_
+ 	struct mlx5_eq *eq = kvzalloc(sizeof(*eq), GFP_KERNEL);
+ 	int err;
+ 
++#ifdef HAVE_CPUMASK_AVAILABLE
+ 	if (!cpumask_available(param->affinity))
++#else
++	if (!param->affinity)
++#endif
+ 		return ERR_PTR(-EINVAL);
+ 
+ 	if (!eq)
+@@ -816,7 +834,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -76,10 +88,10 @@ Change-Id: Ib397043647c4c87ccd7462d99bc4b715f373393f
  
  	return eqe;
  }
-@@ -1037,8 +1055,13 @@ static int set_rmap(struct mlx5_core_dev
- 	vecidx = MLX5_IRQ_VEC_COMP_BASE;
- 	for (; vecidx < eq_table->num_comp_eqs + MLX5_IRQ_VEC_COMP_BASE;
- 	     vecidx++) {
+@@ -1038,8 +1060,13 @@ static int set_rmap(struct mlx5_core_dev
+ 	comp_base = mlx5_irq_table_comp_base_get(eq_table->irq_table);
+ 	vecidx = comp_base;
+ 	for (; vecidx < eq_table->num_comp_eqs + comp_base; vecidx++) {
 +#ifdef HAVE_PCI_IRQ_API
  		err = irq_cpu_rmap_add(eq_table->rmap,
  				       pci_irq_vector(mdev->pdev, vecidx));
@@ -90,7 +102,7 @@ Change-Id: Ib397043647c4c87ccd7462d99bc4b715f373393f
  		if (err) {
  			mlx5_core_err(mdev, "irq_cpu_rmap_add failed. err %d",
  				      err);
-@@ -1054,6 +1077,13 @@ err_out:
+@@ -1055,6 +1082,13 @@ err_out:
  	return err;
  }
  

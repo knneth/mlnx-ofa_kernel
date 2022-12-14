@@ -701,11 +701,18 @@ static ssize_t mlx5e_show_vf_roce(struct device *device,
 	struct mlx5_eswitch *esw = mdev->priv.eswitch;
 	struct mlx5_vport *vport;
 	int len = 0;
+	int num_vfs;
 	bool mode;
 	int err = 0;
 	unsigned long i;
 
-	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
+	/* This is a workaround for RM 2769801 */
+	if (mlx5_core_is_ecpf_esw_manager(esw->dev))
+		num_vfs = esw->esw_funcs.num_vfs;
+	else
+		num_vfs = pci_num_vf(mdev->pdev);
+
+	mlx5_esw_for_each_vf_vport(esw, i, vport, num_vfs) {
 		err = mlx5_eswitch_vport_get_other_hca_cap_roce(esw, vport, &mode);
 		if (err)
 			break;

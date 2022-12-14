@@ -150,10 +150,10 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 				       DR_DUMP_REC_TYPE_ACTION_FT, action_id,
 				       rule_id, action->dest_tbl->fw_tbl.id);
 		else
-			ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
+			ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,0x%llx\n",
 				       DR_DUMP_REC_TYPE_ACTION_FT, action_id,
-				       rule_id, action->dest_tbl->tbl->table_id);
-
+				       rule_id, action->dest_tbl->tbl->table_id,
+				       (u64)action->dest_tbl->tbl);
 		break;
 	case DR_ACTION_TYP_CTR:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",

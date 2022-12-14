@@ -8,7 +8,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
-@@ -725,6 +725,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
+@@ -767,6 +767,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
  	}
  
  	ct_state |= MLX5_CT_STATE_ESTABLISHED_BIT | MLX5_CT_STATE_TRK_BIT;
@@ -18,7 +18,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
  					     ct_state,
  					     meta->ct_metadata.mark,
-@@ -1029,9 +1032,9 @@ err_orig:
+@@ -1073,9 +1076,9 @@ err_orig:
  
  static int
  mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
@@ -30,7 +30,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	struct flow_action_entry *meta_action;
  	unsigned long cookie = flow->cookie;
-@@ -1137,7 +1140,7 @@ err_set:
+@@ -1181,7 +1184,7 @@ err_set:
  
  static int
  mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
@@ -39,7 +39,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  {
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	unsigned long cookie = flow->cookie;
-@@ -1170,7 +1173,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+@@ -1214,7 +1217,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
  
  static int
  mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
@@ -48,7 +48,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  {
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	unsigned long cookie = f->cookie;
-@@ -1197,8 +1200,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+@@ -1241,8 +1244,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
  	spin_unlock_bh(&ct_priv->foo_lock);
  
  	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
@@ -64,7 +64,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  
  	mlx5_tc_ct_entry_put(entry);
  	return 0;
-@@ -1208,7 +1218,7 @@ static int
+@@ -1252,7 +1262,7 @@ static int
  mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
  			      void *cb_priv)
  {

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 
 Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
 ---
- .../net/ethernet/mellanox/mlx5/core/main.c    | 27 ++++++++++++++++++-
- 1 file changed, 26 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/main.c | 31 +++++++++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
@@ -82,8 +82,8 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	err = mlx5_init_fs(dev);
  	if (err) {
  		mlx5_core_err(dev, "Failed to init flow steering\n");
-@@ -1483,8 +1494,10 @@ err_vhca:
- 	mlx5_vhca_event_stop(dev);
+@@ -1484,8 +1495,10 @@ err_vhca:
+ err_set_hca:
  	mlx5_cleanup_fs(dev);
  err_fs:
 +#ifdef HAVE_UAPI_LINUX_TLS_H
@@ -93,7 +93,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	mlx5_accel_ipsec_cleanup(dev);
  	mlx5_fpga_device_stop(dev);
  err_fpga_start:
-@@ -1499,8 +1512,10 @@ err_eq_table:
+@@ -1500,8 +1513,10 @@ err_eq_table:
  	mlx5_irq_table_destroy(dev);
  err_irq_table:
  #ifdef CONFIG_PPC
@@ -104,7 +104,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	mlx5_pagealloc_stop(dev);
  	mlx5_events_stop(dev);
  	mlx5_put_uars_page(dev, dev->priv.uar);
-@@ -1518,7 +1533,9 @@ static void mlx5_unload(struct mlx5_core
+@@ -1519,7 +1534,9 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_vhca_event_stop(dev);
  	mlx5_cleanup_fs(dev);
  	mlx5_accel_ipsec_cleanup(dev);
@@ -114,7 +114,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	mlx5_fpga_device_stop(dev);
  	mlx5_rsc_dump_cleanup(dev);
  	mlx5_hv_vhca_cleanup(dev->hv_vhca);
-@@ -1527,8 +1544,10 @@ static void mlx5_unload(struct mlx5_core
+@@ -1528,8 +1545,10 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_eq_table_destroy(dev);
  	mlx5_irq_table_destroy(dev);
  #ifdef CONFIG_PPC
@@ -125,7 +125,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	mlx5_pagealloc_stop(dev);
  	mlx5_events_stop(dev);
  	mlx5_put_uars_page(dev, dev->priv.uar);
-@@ -1778,6 +1797,7 @@ void mlx5_mdev_uninit(struct mlx5_core_d
+@@ -1779,6 +1798,7 @@ void mlx5_mdev_uninit(struct mlx5_core_d
  }
  
  #ifdef CONFIG_PPC
@@ -133,7 +133,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
  {
  	struct pci_dev *pdev = dev->pdev;
-@@ -1818,6 +1838,7 @@ static void mlx5_as_notify_init(struct m
+@@ -1819,6 +1839,7 @@ static void mlx5_as_notify_init(struct m
  
  static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
  #endif
@@ -141,7 +141,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  
  static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
  {
-@@ -1889,8 +1910,10 @@ static int init_one(struct pci_dev *pdev
+@@ -1890,8 +1911,10 @@ static int init_one(struct pci_dev *pdev
  		dev_err(&pdev->dev, "mlx5_crdump_enable failed with error code %d\n", err);
  
  	pci_save_state(pdev);
@@ -152,7 +152,7 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	return 0;
  
  err_load_one:
-@@ -1926,7 +1949,9 @@ static void remove_one(struct pci_dev *p
+@@ -1927,7 +1950,9 @@ static void remove_one(struct pci_dev *p
  	if (mlx5_try_fast_unload(dev))
  		dev_dbg(&dev->pdev->dev, "mlx5_try_fast_unload failed\n");
  
@@ -162,3 +162,14 @@ Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
  	mlx5_crdump_disable(dev);
  	mlx5_drain_health_wq(dev);
  	mlx5_unload_one(dev, true);
+@@ -2217,6 +2242,10 @@ static struct pci_driver mlx5_core_drive
+ 	.shutdown	= shutdown,
+ 	.err_handler	= &mlx5_err_handler,
+ 	.sriov_configure   = mlx5_core_sriov_configure,
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
++	.sriov_get_vf_total_msix = mlx5_sriov_get_vf_total_msix,
++	.sriov_set_msix_vec_count = mlx5_core_sriov_set_msix_vec_count,
++#endif
+ };
+ 
+ static void mlx5_core_verify_params(void)

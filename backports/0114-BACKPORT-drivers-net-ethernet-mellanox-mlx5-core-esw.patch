@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I849b9d560a18959199299aca842d60b1d6635000
 ---
- .../mellanox/mlx5/core/eswitch_offloads.c     | 86 +++++++++++++++----
- 1 file changed, 70 insertions(+), 16 deletions(-)
+ .../ethernet/mellanox/mlx5/core/eswitch_offloads.c | 102 +++++++++++++++++----
+ 1 file changed, 83 insertions(+), 19 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
-@@ -2500,6 +2500,7 @@ int esw_offloads_load_rep(struct mlx5_es
+@@ -2645,6 +2645,7 @@ int esw_offloads_load_rep(struct mlx5_es
  
  	rep = mlx5_eswitch_get_rep(esw, vport_num);
  
@@ -17,7 +17,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	if (vport_num != MLX5_VPORT_UPLINK) {
  		if (atomic_read(&rep->rep_data[REP_ETH].state) == REP_REGISTERED) {
  			err = mlx5_esw_offloads_devlink_port_register(esw, vport_num);
-@@ -2507,6 +2508,7 @@ int esw_offloads_load_rep(struct mlx5_es
+@@ -2652,6 +2653,7 @@ int esw_offloads_load_rep(struct mlx5_es
  				return err;
  		}
  	}
@@ -25,7 +25,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  
  	err = mlx5_esw_offloads_rep_load(esw, vport_num);
  	if (err)
-@@ -2514,8 +2516,10 @@ int esw_offloads_load_rep(struct mlx5_es
+@@ -2659,8 +2661,10 @@ int esw_offloads_load_rep(struct mlx5_es
  	return err;
  
  load_err:
@@ -36,7 +36,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	return err;
  }
  
-@@ -2526,8 +2530,10 @@ void esw_offloads_unload_rep(struct mlx5
+@@ -2671,8 +2675,10 @@ void esw_offloads_unload_rep(struct mlx5
  
  	mlx5_esw_offloads_rep_unload(esw, vport_num);
  
@@ -47,7 +47,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  }
  
  static int esw_set_uplink_slave_ingress_root(struct mlx5_core_dev *master,
-@@ -3008,7 +3014,11 @@ u32 mlx5_esw_match_metadata_alloc(struct
+@@ -3153,7 +3159,11 @@ u32 mlx5_esw_match_metadata_alloc(struct
  
  	/* Metadata is 4 bits of PFNUM and 12 bits of unique id */
  	/* Use only non-zero vport_id (2-4095) for all PF's */
@@ -59,7 +59,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  			     MLX5_ESW_METADATA_RSVD_UPLINK + 1,
  			     vport_end_ida, GFP_KERNEL);
  	if (id < 0)
-@@ -3022,7 +3032,11 @@ void mlx5_esw_match_metadata_free(struct
+@@ -3167,7 +3177,11 @@ void mlx5_esw_match_metadata_free(struct
  	u32 vport_bit_mask = (1 << ESW_VPORT_BITS) - 1;
  
  	/* Metadata contains only 12 bits of actual ida id */
@@ -72,7 +72,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  }
  
  static int esw_offloads_vport_metadata_setup(struct mlx5_eswitch *esw,
-@@ -3504,7 +3518,7 @@ static void esw_destroy_default_offloads
+@@ -3649,7 +3663,7 @@ static void esw_destroy_default_offloads
  
  static int load_reps_all_vport(struct mlx5_eswitch *esw, u8 rep_type) 
  {
@@ -81,7 +81,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	struct mlx5_vport *vport;
  	int ret;
  	unsigned long i;
-@@ -3954,14 +3968,23 @@ static int eswitch_devlink_esw_mode_chec
+@@ -4110,14 +4124,23 @@ static int eswitch_devlink_esw_mode_chec
  		!mlx5_core_is_ecpf_esw_manager(esw->dev)) ? -EOPNOTSUPP : 0;
  }
  
@@ -107,7 +107,22 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
-@@ -4016,14 +4039,12 @@ int mlx5_devlink_eswitch_mode_get(struct
+@@ -4149,12 +4172,14 @@ int mlx5_devlink_eswitch_mode_set(struct
+ 	ldev = mlx5_lag_disable(esw->dev);
+ 
+ 	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV) {
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ 		if (mlx5_devlink_trap_get_num_active(esw->dev)) {
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Can't change mode while devlink traps are active");
+ 			err = -EOPNOTSUPP;
+ 			goto unlock;
+ 		}
++#endif
+ 		err = esw_offloads_start(esw, extack, ldev);
+ 	} else if (mode == DEVLINK_ESWITCH_MODE_LEGACY) {
+ 		err = esw_offloads_stop(esw, extack, ldev);
+@@ -4181,14 +4206,12 @@ int mlx5_devlink_eswitch_mode_get(struct
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
  
@@ -122,7 +137,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	return err;
  }
  
-@@ -4058,14 +4079,23 @@ revert_inline_mode:
+@@ -4223,14 +4246,23 @@ revert_inline_mode:
  	return err;
  }
  
@@ -148,7 +163,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
-@@ -4080,6 +4110,7 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -4245,6 +4277,7 @@ int mlx5_devlink_eswitch_inline_mode_set
  		if (mode == DEVLINK_ESWITCH_INLINE_MODE_NONE)
  			goto out;
  		fallthrough;
@@ -156,7 +171,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	case MLX5_CAP_INLINE_MODE_L2:
  		NL_SET_ERR_MSG_MOD(extack, "Inline mode can't be set");
  		err = -EOPNOTSUPP;
-@@ -4123,24 +4154,35 @@ int mlx5_devlink_eswitch_inline_mode_get
+@@ -4288,24 +4321,35 @@ int mlx5_devlink_eswitch_inline_mode_get
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
  
@@ -196,7 +211,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
-@@ -4198,7 +4240,11 @@ unlock:
+@@ -4363,7 +4407,11 @@ unlock:
  }
  
  int mlx5_devlink_eswitch_encap_mode_get(struct devlink *devlink,
@@ -208,7 +223,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  {
  	struct mlx5_eswitch *esw;
  	int err;
-@@ -4208,14 +4254,12 @@ int mlx5_devlink_eswitch_encap_mode_get(
+@@ -4373,14 +4421,12 @@ int mlx5_devlink_eswitch_encap_mode_get(
  		return PTR_ERR(esw);
  
  
@@ -223,7 +238,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	return 0;
  }
  
-@@ -4236,14 +4280,24 @@ mlx5_eswitch_vport_has_rep(const struct
+@@ -4401,14 +4447,24 @@ mlx5_eswitch_vport_has_rep(const struct
  }
  
  int mlx5_devlink_eswitch_ipsec_mode_set(struct devlink *devlink,
@@ -250,3 +265,27 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
+@@ -4517,12 +4573,20 @@ mlx5_devlink_eswitch_lag_port_select_mod
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 	u8 eswitch_mode = mlx5_eswitch_mode(dev);
+ 
+-	if (mode == DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH &&
+-	    !MLX5_CAP_PORT_SELECTION(dev, port_select_flow_table)) {
++	if (mode == DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH) {
++#ifndef HAVE_INFO_HASH_TYPE
+ 		mlx5_core_err(dev,
+-			      "hash based LAG is not supported by current device");
++			      "hash based LAG is not supported by this kernel");
+ 		return -EOPNOTSUPP;
+ 	}
++#else
++		if (!MLX5_CAP_PORT_SELECTION(dev, port_select_flow_table)) {
++			mlx5_core_err(dev,
++				      "hash based LAG is not supported by current device");
++			return -EOPNOTSUPP;
++		}
++	}
++#endif
+ 
+ 	if (eswitch_mode == MLX5_ESWITCH_OFFLOADS) {
+ 		mlx5_core_err(dev,

@@ -132,6 +132,13 @@ mlx5dr_action_create_push_vlan(struct mlx5dr_domain *domain, __be32 vlan_hdr);
 
 u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action);
 
+struct mlx5dr_action *
+mlx5dr_action_create_aso_flow_meter(struct mlx5dr_domain *dmn,
+				    u32 obj_id,
+				    u8 return_reg_id,
+				    u8 init_color,
+				    u8 meter_idx);
+
 int mlx5dr_action_destroy(struct mlx5dr_action *action);
 
 static inline bool

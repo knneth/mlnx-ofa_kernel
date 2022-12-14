@@ -65,8 +65,6 @@ struct page_pool;
 #define MLX5E_METADATA_ETHER_TYPE (0x8CE4)
 #define MLX5E_METADATA_ETHER_LEN 8
 
-#define MLX5_SET_CFG(p, f, v) MLX5_SET(create_flow_group_in, p, f, v)
-
 #define MLX5E_ETH_HARD_MTU (ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN)
 
 #define MLX5E_HW2SW_MTU(params, hwmtu) ((hwmtu) - ((params)->hard_mtu))
@@ -704,6 +702,7 @@ struct mlx5e_rq {
 	unsigned long          state;
 	int                    ix;
 	unsigned int           hw_mtu;
+	unsigned int           pet_hdr_size;
 
 	struct mlx5e_dim       dim_obj; /* Adaptive Moderation */
 
@@ -972,7 +971,8 @@ struct mlx5e_priv {
 
 	struct mlx5e_delay_drop delay_drop;
 
-	struct mlx5e_flow_meters *flow_meters;
+	struct mutex               aso_lock; /* Protects aso data and operations */
+	struct mlx5e_aso          *aso;
 };
 
 struct mlx5e_rx_handlers {
@@ -1061,7 +1061,7 @@ void mlx5e_build_indir_tir_ctx_hash(struct mlx5e_rss_params *rss_params,
 				    void *tirc, bool inner);
 void mlx5e_modify_tirs_hash(struct mlx5e_priv *priv, void *in);
 void mlx5e_sysfs_modify_tirs_hash(struct mlx5e_priv *priv, void *in);
-struct mlx5e_tirc_config mlx5e_tirc_get_default_config(enum mlx5e_traffic_types tt);
+struct mlx5e_tirc_config mlx5e_tirc_get_default_config(enum mlx5_traffic_types tt);
 
 struct mlx5e_xsk_param;
 
@@ -1090,6 +1090,8 @@ void mlx5e_close_icosq(struct mlx5e_icosq *sq);
 int mlx5e_open_xdpsq(struct mlx5e_channel *c, struct mlx5e_params *params,
 		     struct mlx5e_sq_param *param, struct xdp_umem *umem,
 		     struct mlx5e_xdpsq *sq, bool is_redirect);
+void mlx5e_activate_xdpsq(struct mlx5e_xdpsq *sq);
+void mlx5e_deactivate_xdpsq(struct mlx5e_xdpsq *sq);
 void mlx5e_close_xdpsq(struct mlx5e_xdpsq *sq);
 
 struct mlx5e_cq_param;
@@ -1152,6 +1154,7 @@ int mlx5e_modify_sq(struct mlx5_core_dev *mdev, u32 sqn,
 		    struct mlx5e_modify_sq_param *p);
 void mlx5e_activate_txqsq(struct mlx5e_txqsq *sq);
 void mlx5e_deactivate_txqsq(struct mlx5e_txqsq *sq);
+void mlx5e_finalize_txqsq(struct mlx5e_txqsq *sq);
 void mlx5e_free_txqsq(struct mlx5e_txqsq *sq);
 void mlx5e_tx_disable_queue(struct netdev_queue *txq);
 int mlx5e_alloc_txqsq_db(struct mlx5e_txqsq *sq, int numa);

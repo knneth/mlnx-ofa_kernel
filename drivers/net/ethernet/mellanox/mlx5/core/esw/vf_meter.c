@@ -2,7 +2,7 @@
 /* Copyright (c) 2021 Mellanox Technologies. */
 
 #include "eswitch.h"
-#include "en/flow_meter_aso.h"
+#include "en/flow_meter.h"
 #include "esw/acl/helper.h"
 
 enum {
@@ -53,10 +53,9 @@ esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
 		meter->meter_grp = NULL;
 	}
 
-	if (meter->meter_obj) {
-		mlx5e_free_flow_meter(vport->dev, meter->meter_obj,
-				      meter->meter_obj_id, meter->meter_idx);
-		meter->meter_obj = NULL;
+	if (meter->meter_hndl) {
+		mlx5e_free_flow_meter(vport->dev, meter->meter_hndl);
+		meter->meter_hndl = NULL;
 	}
 
 	if (meter->meter_tbl) {
@@ -112,9 +111,11 @@ esw_acl_create_meter(struct mlx5_vport *vport, struct vport_meter *meter,
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO |
 			  MLX5_FLOW_CONTEXT_ACTION_EXECUTE_ASO;
-	flow_act.flow_meter.flow_meter_obj_id = meter->meter_obj_id;
-	flow_act.flow_meter.meter_id = meter->meter_idx;
-	flow_act.flow_meter.return_reg_id = 5; /* use reg c5 */
+	flow_act.exe_aso.type = MLX5_EXE_ASO_FLOW_METER;
+	flow_act.exe_aso.object_id = meter->meter_hndl->obj_id;
+	flow_act.exe_aso.flow_meter.meter_idx = meter->meter_hndl->idx;
+	flow_act.exe_aso.flow_meter.init_color = MLX5_FLOW_METER_COLOR_GREEN;
+	flow_act.exe_aso.return_reg_id = 5; /* use reg c5 */
 	rule = mlx5_add_flow_rules(meter->meter_tbl, NULL, &flow_act, NULL, 0);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
@@ -206,8 +207,8 @@ int
 esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 			    int rx_tx, int xps, u64 rate, u64 burst)
 {
-	struct mlx5e_flow_meter_aso_obj *meter_obj;
-	int obj_id, idx;
+	struct mlx5_meter_handle *meter_hndl;
+	struct mlx5_flow_meter_params params;
 	int ns, prio;
 	int err;
 
@@ -219,17 +220,17 @@ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 		goto update;
 	}
 
-	if (!meter->meter_obj) {
-		meter_obj = mlx5e_alloc_flow_meter(vport->dev, &obj_id, &idx);
-		if (IS_ERR(meter_obj))
-			return PTR_ERR(meter_obj);
-		meter->meter_obj = meter_obj;
-		meter->meter_obj_id = obj_id;
-		meter->meter_idx = idx;
+	if (!meter->meter_hndl) {
+		meter_hndl = mlx5e_alloc_flow_meter(vport->dev);
+		if (IS_ERR(meter_hndl))
+			return PTR_ERR(meter_hndl);
+		meter->meter_hndl = meter_hndl;
 	}
 
-	err = mlx5e_aso_send_flow_meter_aso(vport->dev, meter->meter_obj_id,
-					    meter->meter_idx, xps, rate, burst);
+	params.mode = xps;
+	params.rate = rate;
+	params.burst = burst;
+	err = mlx5e_aso_send_flow_meter_aso(vport->dev, meter->meter_hndl, &params);
 	if (err)
 		goto check_and_free_meter_aso;
 
@@ -257,9 +258,8 @@ update:
 
 check_and_free_meter_aso:
 	if (!meter->meter_tbl) {
-		mlx5e_free_flow_meter(vport->dev, meter->meter_obj,
-				      meter->meter_obj_id, meter->meter_idx);
-		meter->meter_obj = NULL;
+		mlx5e_free_flow_meter(vport->dev, meter->meter_hndl);
+		meter->meter_hndl = NULL;
 	}
 	return err;
 }

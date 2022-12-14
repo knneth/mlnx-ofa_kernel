@@ -47,6 +47,9 @@ struct ib_nvmf_ns_attr {
 	u64     num_flush_cmd;
 	u64     num_error_cmd;
 	u64     num_backend_error_cmd;
+	u64     last_read_latency;
+	u64     last_write_latency;
+	u64     queue_depth;
 };
 
 int ib_query_nvmf_ns(struct ib_nvmf_ns *ns, struct ib_nvmf_ns_attr *ns_attr);

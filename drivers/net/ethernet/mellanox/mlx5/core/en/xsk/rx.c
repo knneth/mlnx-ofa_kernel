@@ -33,7 +33,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
 	u32 cqe_bcnt32 = cqe_bcnt;
 
 	/* Check packet size. Note LRO doesn't use linear SKB */
-	if (unlikely(cqe_bcnt > rq->hw_mtu)) {
+	if (unlikely(cqe_bcnt > rq->hw_mtu + rq->pet_hdr_size)) {
 		rq->stats->oversize_pkts_sw_drop++;
 		return NULL;
 	}

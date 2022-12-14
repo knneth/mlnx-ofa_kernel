@@ -53,9 +53,12 @@ if [ $with_mlxfw -eq 1 ]; then
 else
 	MLNX_EN_PATCH_PARAMS="$MLNX_EN_PATCH_PARAMS --without-mlxfw"
 fi
+if [ $with_mlxdevm -eq 1 ]; then
+	modules="$modules net/mlxdevm/mlxdevm"
+fi
 modules="$modules drivers/base/auxiliary"
 
-i=0
+echo 'i=0'
 
 for module in $modules
 do
@@ -63,15 +66,18 @@ do
 	if [ "$name" = 'auxiliary' ]; then
 		echo "if [[ \$(VER \$kernelver) < \$(VER '5.11.0') ]]; then"
 	fi
-	echo BUILT_MODULE_NAME[$i]=$name
-	echo BUILT_MODULE_LOCATION[$i]=${module%*/*}
-	echo DEST_MODULE_NAME[$i]=$name
-	echo DEST_MODULE_LOCATION[$i]=/kernel/${module%*/*}
-	echo STRIP[$i]="\$STRIP_MODS"
-	if [ "$name" = 'auxiliary' ]; then
-		echo "fi"
+	if [ "$name" = 'mlxdevm' ]; then
+		echo "if [[ ! \$(VER \$kernelver) < \$(VER '4.15.0') ]]; then"
 	fi
-	let i++
+	echo 'BUILT_MODULE_NAME[$i]='$name
+	echo 'BUILT_MODULE_LOCATION[$i]='${module%*/*}
+	echo 'DEST_MODULE_NAME[$i]='$name
+	echo 'DEST_MODULE_LOCATION[$i]='/kernel/${module%*/*}
+	echo 'STRIP[$i]="$STRIP_MODS"'
+	echo 'let i++'
+	case "$name" in auxiliary | mlxdevm)
+		echo "fi";;
+	esac
 done
 
 echo "MAKE=\"./scripts/mlnx_en_patch.sh --kernel \$kernelver --kernel-sources \$kernel_source_dir ${MLNX_EN_PATCH_PARAMS} -j\$(MLXNUMC=\$(grep ^processor /proc/cpuinfo | wc -l) && echo \$((\$MLXNUMC<16?\$MLXNUMC:16))) && make -j\$(MLXNUMC=\$(grep ^processor /proc/cpuinfo | wc -l) && echo \$((\$MLXNUMC<16?\$MLXNUMC:16)))\""

@@ -525,8 +525,19 @@ void mlx5e_ptp_deactivate_channel(struct mlx5e_port_ptp *c)
 {
 	int tc;
 
-	for (tc = 0; tc < c->num_tc; tc++)
+	for (tc = 0; tc < c->num_tc; tc++) {
 		mlx5e_deactivate_txqsq(&c->ptpsq[tc].txqsq);
+		/* Sync with NAPI to prevent netif_tx_wake_queue. */
+		synchronize_net();
+		mlx5e_finalize_txqsq(&c->ptpsq[tc].txqsq);
+	}
+}
 
+void mlx5e_ptp_finalize_channel(struct mlx5e_port_ptp *c)
+{
+	int tc;
+
+	for (tc = 0; tc < c->num_tc; tc++)
+		mlx5e_finalize_txqsq(&c->ptpsq[tc].txqsq);
 	napi_disable(&c->napi);
 }

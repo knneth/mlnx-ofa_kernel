@@ -202,6 +202,7 @@ static DEFINE_MUTEX(port_list_mutex);
 static LIST_HEAD(nvmet_rdma_xrq_list);
 static DEFINE_MUTEX(nvmet_rdma_xrq_mutex);
 static struct nvmet_rdma_staging_buf_pool nvmet_rdma_st_pool;
+static DEFINE_IDA(nvmet_rdma_bectrl_ida);
 
 static bool nvmet_rdma_execute_command(struct nvmet_rdma_rsp *rsp);
 static void nvmet_rdma_send_done(struct ib_cq *cq, struct ib_wc *wc);
@@ -756,7 +757,7 @@ static void nvmet_rdma_send_done(struct ib_cq *cq, struct ib_wc *wc)
 {
 	struct nvmet_rdma_rsp *rsp =
 		container_of(wc->wr_cqe, struct nvmet_rdma_rsp, send_cqe);
-	struct nvmet_rdma_queue *queue = cq->cq_context;
+	struct nvmet_rdma_queue *queue = wc->qp->qp_context;
 
 	nvmet_rdma_release_rsp(rsp);
 
@@ -842,7 +843,7 @@ static void nvmet_rdma_write_data_done(struct ib_cq *cq, struct ib_wc *wc)
 {
 	struct nvmet_rdma_rsp *rsp =
 		container_of(wc->wr_cqe, struct nvmet_rdma_rsp, write_cqe);
-	struct nvmet_rdma_queue *queue = cq->cq_context;
+	struct nvmet_rdma_queue *queue = wc->qp->qp_context;
 	struct rdma_cm_id *cm_id = rsp->queue->cm_id;
 	u16 status;
 
@@ -2106,6 +2107,7 @@ static const struct nvmet_fabrics_ops nvmet_rdma_ops = {
 	.offload_ns_flush_cmds	= nvmet_rdma_offload_ns_flush_cmds,
 	.offload_ns_error_cmds	= nvmet_rdma_offload_ns_error_cmds,
 	.offload_ns_backend_error_cmds	= nvmet_rdma_offload_ns_backend_error_cmds,
+	.offload_query_counters = nvmet_rdma_offload_query_counters,
 	.check_subsys_match_offload_port = nvmet_rdma_check_subsys_match_offload_port,
 };
 
@@ -2227,6 +2229,7 @@ static void __exit nvmet_rdma_exit(void)
 	ib_unregister_client(&nvmet_rdma_ib_client);
 	WARN_ON_ONCE(!list_empty(&nvmet_rdma_queue_list));
 	ida_destroy(&nvmet_rdma_queue_ida);
+	ida_destroy(&nvmet_rdma_bectrl_ida);
 
 	mutex_lock(&nvmet_rdma_xrq_mutex);
 	list_for_each_entry_safe(st, tmp, &nvmet_rdma_st_pool.list, entry) {

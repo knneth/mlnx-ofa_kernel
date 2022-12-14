@@ -509,7 +509,7 @@ static int mlx5_query_port_roce(struct ib_device *device, u32 port_num,
 	translate_eth_proto_oper(eth_prot_oper, &props->active_speed,
 				 &props->active_width, ext);
 
-	if (!dev->is_rep && mlx5_is_roce_enabled(mdev)) {
+	if (!dev->is_rep && dev->mdev->roce.roce_en) {
 		u16 qkey_viol_cntr;
 
 		props->port_cap_flags |= IB_PORT_CM_SUP;
@@ -2417,6 +2417,17 @@ static inline int check_dm_type_support(struct mlx5_ib_dev *dev,
 		      MLX5_CAP_FLOWTABLE_NIC_TX(dev->mdev, sw_owner_v2)))
 			return -EOPNOTSUPP;
 		break;
+	case MLX5_IB_UAPI_DM_TYPE_ENCAP_SW_ICM:
+		if (!capable(CAP_SYS_RAWIO) ||
+		    !capable(CAP_NET_RAW))
+			return -EPERM;
+
+		if (!(MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner) ||
+		      MLX5_CAP_FLOWTABLE_NIC_TX(dev->mdev, sw_owner) ||
+		      MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner_v2) ||
+		      MLX5_CAP_FLOWTABLE_NIC_TX(dev->mdev, sw_owner_v2)))
+			return -EOPNOTSUPP;
+		break;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -2555,6 +2566,11 @@ struct ib_dm *mlx5_ib_alloc_dm(struct ib_device *ibdev,
 					     attr, attrs,
 					     MLX5_SW_ICM_TYPE_HEADER_MODIFY_PATTERN);
 		break;
+	case MLX5_IB_UAPI_DM_TYPE_ENCAP_SW_ICM:
+		err = handle_alloc_dm_sw_icm(context, dm,
+					     attr, attrs,
+					     MLX5_SW_ICM_TYPE_SW_ENCAP);
+		break;
 	default:
 		err = -EOPNOTSUPP;
 	}
@@ -2597,6 +2613,13 @@ int mlx5_ib_dealloc_dm(struct ib_dm *ibdm, struct uverbs_attr_bundle *attrs)
 		break;
 	case MLX5_IB_UAPI_DM_TYPE_HEADER_MODIFY_PATTERN_SW_ICM:
 		ret = mlx5_dm_sw_icm_dealloc(dev, MLX5_SW_ICM_TYPE_HEADER_MODIFY_PATTERN,
+					     dm->size, ctx->devx_uid, dm->dev_addr,
+					     dm->icm_dm.obj_id);
+		if (ret)
+			return ret;
+		break;
+	case MLX5_IB_UAPI_DM_TYPE_ENCAP_SW_ICM:
+		ret = mlx5_dm_sw_icm_dealloc(dev, MLX5_SW_ICM_TYPE_SW_ENCAP,
 					     dm->size, ctx->devx_uid, dm->dev_addr,
 					     dm->icm_dm.obj_id);
 		if (ret)
@@ -4905,6 +4928,7 @@ static int mlx5r_mp_probe(struct auxiliary_device *adev,
 
 		if (bound) {
 			rdma_roce_rescan_device(&dev->ib_dev);
+			mpi->ibdev->ib_active = true;
 			break;
 		}
 	}
@@ -4961,8 +4985,8 @@ static int mlx5r_probe(struct auxiliary_device *adev,
 	dev->mdev = mdev;
 	dev->num_ports = num_ports;
 
-	mdev->roce.enabled = mlx5_is_roce_enabled(mdev);
-	if (ll == IB_LINK_LAYER_ETHERNET && !mlx5_is_roce_enabled(mdev))
+	mdev->roce.enabled = mlx5_is_roce_init_enabled(mdev);
+	if (ll == IB_LINK_LAYER_ETHERNET && !mlx5_is_roce_init_enabled(mdev))
 		profile = &raw_eth_profile;
 	else
 		profile = &pf_profile;

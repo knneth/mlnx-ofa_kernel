@@ -1,0 +1,147 @@
+From: Moshe Tal <moshet@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
+
+Change-Id: Idb4a2d54271866b8f108500715a095fc31b280fc
+---
+ .../net/ethernet/mellanox/mlx5/core/port.c    | 121 ++++++++++++++++++
+ 1 file changed, 121 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/port.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/port.c
+@@ -369,6 +369,7 @@ static void mlx5_sfp_eeprom_params_set(u
+ 	*offset -= MLX5_EEPROM_PAGE_LENGTH;
+ }
+ 
++#ifndef HAVE_GET_MODULE_EEPROM_BY_PAGE
+ int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
+ 			     u16 offset, u16 size, u8 *data)
+ {
+@@ -431,8 +432,128 @@ int mlx5_query_module_eeprom(struct mlx5
+ 
+ 	return size;
+ }
++#else
++static int mlx5_query_mcia(struct mlx5_core_dev *dev,
++			   struct mlx5_module_eeprom_query_params *params, u8 *data)
++{
++	u32 in[MLX5_ST_SZ_DW(mcia_reg)] = {};
++	u32 out[MLX5_ST_SZ_DW(mcia_reg)];
++	int status, err;
++	void *ptr;
++	u16 size;
++
++	size = min_t(int, params->size, MLX5_EEPROM_MAX_BYTES);
++
++	MLX5_SET(mcia_reg, in, l, 0);
++	MLX5_SET(mcia_reg, in, size, size);
++	MLX5_SET(mcia_reg, in, module, params->module_number);
++	MLX5_SET(mcia_reg, in, device_address, params->offset);
++	MLX5_SET(mcia_reg, in, page_number, params->page);
++	MLX5_SET(mcia_reg, in, i2c_device_address, params->i2c_address);
++
++	err = mlx5_core_access_reg(dev, in, sizeof(in), out,
++				   sizeof(out), MLX5_REG_MCIA, 0, 0);
++	if (err)
++		return err;
++
++	status = MLX5_GET(mcia_reg, out, status);
++	if (status) {
++		mlx5_core_err(dev, "query_mcia_reg failed: status: 0x%x\n",
++			      status);
++		return -EIO;
++	}
++
++	ptr = MLX5_ADDR_OF(mcia_reg, out, dword_0);
++	memcpy(data, ptr, size);
++
++	return size;
++}
++
++int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
++			     u16 offset, u16 size, u8 *data)
++{
++	struct mlx5_module_eeprom_query_params query = {0};
++	u8 module_id;
++	int err;
++
++	err = mlx5_query_module_num(dev, &query.module_number);
++	if (err)
++		return err;
++
++	err = mlx5_query_module_id(dev, query.module_number, &module_id);
++	if (err)
++		return err;
++
++	switch (module_id) {
++	case MLX5_MODULE_ID_SFP:
++		mlx5_sfp_eeprom_params_set(&query.i2c_address, &query.page, &query.offset);
++		break;
++	case MLX5_MODULE_ID_QSFP:
++	case MLX5_MODULE_ID_QSFP_PLUS:
++	case MLX5_MODULE_ID_QSFP28:
++		mlx5_qsfp_eeprom_params_set(&query.i2c_address, &query.page, &query.offset);
++		break;
++	default:
++		mlx5_core_err(dev, "Module ID not recognized: 0x%x\n", module_id);
++		return -EINVAL;
++	}
++
++	if (query.offset + size > MLX5_EEPROM_PAGE_LENGTH)
++		/* Cross pages read, read until offset 256 in low page */
++		size -= offset + size - MLX5_EEPROM_PAGE_LENGTH;
++
++	query.size = size;
++
++	return mlx5_query_mcia(dev, &query, data);
++}
++#endif
+ EXPORT_SYMBOL_GPL(mlx5_query_module_eeprom);
+ 
++#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
++int mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
++				     struct mlx5_module_eeprom_query_params *params,
++				     u8 *data)
++{
++	u8 module_id;
++	int err;
++
++	err = mlx5_query_module_num(dev, &params->module_number);
++	if (err)
++		return err;
++
++	err = mlx5_query_module_id(dev, params->module_number, &module_id);
++	if (err)
++		return err;
++
++	switch (module_id) {
++	case MLX5_MODULE_ID_SFP:
++		if (params->page > 0)
++			return -EINVAL;
++		break;
++	case MLX5_MODULE_ID_QSFP:
++	case MLX5_MODULE_ID_QSFP28:
++	case MLX5_MODULE_ID_QSFP_PLUS:
++		if (params->page > 3)
++			return -EINVAL;
++		break;
++	case MLX5_MODULE_ID_DSFP:
++		break;
++	default:
++		mlx5_core_err(dev, "Module ID not recognized: 0x%x\n", module_id);
++		return -EINVAL;
++	}
++
++	if (params->i2c_address != MLX5_I2C_ADDR_HIGH &&
++	    params->i2c_address != MLX5_I2C_ADDR_LOW) {
++		mlx5_core_err(dev, "I2C address not recognized: 0x%x\n", params->i2c_address);
++		return -EINVAL;
++	}
++
++	return mlx5_query_mcia(dev, params, data);
++}
++EXPORT_SYMBOL_GPL(mlx5_query_module_eeprom_by_page);
++#endif
++
+ static int mlx5_query_port_pvlc(struct mlx5_core_dev *dev, u32 *pvlc,
+ 				int pvlc_size,  u8 local_port)
+ {

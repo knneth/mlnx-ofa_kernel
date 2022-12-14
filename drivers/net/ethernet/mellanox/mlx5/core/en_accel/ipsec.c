@@ -574,7 +574,7 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	}
 
 	/* create hw context */
-	pdn = priv->ipsec->aso ? priv->ipsec->aso->pdn : 0;
+	pdn = priv->ipsec->ipsec_aso ? priv->ipsec->ipsec_aso->aso->pdn : 0;
 	sa_entry->hw_context =
 			mlx5_accel_esp_create_hw_context(priv->mdev,
 							 sa_entry->xfrm,
@@ -719,7 +719,7 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 		goto out_fs;
 
 	if (mlx5_is_ipsec_full_offload(priv))
-		priv->ipsec->aso = mlx5e_aso_setup(priv, MLX5_ST_SZ_BYTES(ipsec_aso));
+		mlx5e_ipsec_aso_setup(priv);
 
 	netdev_dbg(priv->netdev, "IPSec attached to netdevice\n");
 	return 0;
@@ -739,10 +739,8 @@ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
 	if (!ipsec)
 		return;
 
-	if (priv->ipsec->aso) {
-		mlx5e_aso_cleanup(priv, priv->ipsec->aso);
-		priv->ipsec->aso = NULL;
-	}
+	mlx5e_ipsec_aso_cleanup(priv);
+	priv->ipsec->ipsec_aso = NULL;
 
 	mlx5e_accel_ipsec_fs_cleanup(priv);
 	destroy_workqueue(ipsec->wq);

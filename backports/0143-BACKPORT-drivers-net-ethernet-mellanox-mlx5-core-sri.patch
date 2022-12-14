@@ -3,12 +3,60 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
 
 Change-Id: Iffde225ada8ee440811664e8f2abde0789b0afd8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/sriov.c | 8 ++++++++
- 1 file changed, 8 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/sriov.c | 49 +++++++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
-@@ -271,6 +271,14 @@ int mlx5_sriov_init(struct mlx5_core_dev
+@@ -219,6 +219,47 @@ int mlx5_core_sriov_configure(struct pci
+ 	return err ? err : num_vfs;
+ }
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
++int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
++{
++	struct pci_dev *pf = pci_physfn(vf);
++	struct mlx5_core_sriov *sriov;
++	struct mlx5_core_dev *dev;
++	int num_vf_msix, id;
++
++	dev = pci_get_drvdata(pf);
++	num_vf_msix = MLX5_CAP_GEN_MAX(dev, num_total_dynamic_vf_msix);
++	if (!num_vf_msix)
++		return -EOPNOTSUPP;
++
++	if (!msix_vec_count)
++		msix_vec_count =
++			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
++
++	sriov = &dev->priv.sriov;
++
++#ifdef HAVE_PCI_IOV_VIRTFN_DEVFN
++	/* Reversed translation of PCI VF function number to the internal
++	 * function_id, which exists in the name of virtfn symlink.
++	 */
++	for (id = 0; id < pci_num_vf(pf); id++) {
++		if (!sriov->vfs_ctx[id].enabled)
++			continue;
++
++		if (vf->devfn == pci_iov_virtfn_devfn(pf, id))
++			break;
++	}
++
++	if (id == pci_num_vf(pf) || !sriov->vfs_ctx[id].enabled)
++		return -EINVAL;
++
++	return mlx5_set_msix_vec_count(dev, id + 1, msix_vec_count);
++#else
++	return -ENOTSUPP;
++#endif
++}
++#endif
++
+ int mlx5_sriov_attach(struct mlx5_core_dev *dev)
+ {
+ 	if (!mlx5_core_is_pf(dev) || !pci_num_vf(dev->pdev))
+@@ -271,6 +312,14 @@ int mlx5_sriov_init(struct mlx5_core_dev
  		return 0;
  
  	total_vfs = pci_sriov_get_totalvfs(pdev);

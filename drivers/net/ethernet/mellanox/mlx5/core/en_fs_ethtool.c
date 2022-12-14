@@ -832,31 +832,31 @@ void mlx5e_ethtool_init_steering(struct mlx5e_priv *priv)
 	INIT_LIST_HEAD(&priv->fs.ethtool.rules);
 }
 
-static enum mlx5e_traffic_types flow_type_to_traffic_type(u32 flow_type)
+static int flow_type_to_traffic_type(u32 flow_type)
 {
 	switch (flow_type) {
 	case TCP_V4_FLOW:
-		return  MLX5E_TT_IPV4_TCP;
+		return  MLX5_TT_IPV4_TCP;
 	case TCP_V6_FLOW:
-		return MLX5E_TT_IPV6_TCP;
+		return MLX5_TT_IPV6_TCP;
 	case UDP_V4_FLOW:
-		return MLX5E_TT_IPV4_UDP;
+		return MLX5_TT_IPV4_UDP;
 	case UDP_V6_FLOW:
-		return MLX5E_TT_IPV6_UDP;
+		return MLX5_TT_IPV6_UDP;
 	case AH_V4_FLOW:
-		return MLX5E_TT_IPV4_IPSEC_AH;
+		return MLX5_TT_IPV4_IPSEC_AH;
 	case AH_V6_FLOW:
-		return MLX5E_TT_IPV6_IPSEC_AH;
+		return MLX5_TT_IPV6_IPSEC_AH;
 	case ESP_V4_FLOW:
-		return MLX5E_TT_IPV4_IPSEC_ESP;
+		return MLX5_TT_IPV4_IPSEC_ESP;
 	case ESP_V6_FLOW:
-		return MLX5E_TT_IPV6_IPSEC_ESP;
+		return MLX5_TT_IPV6_IPSEC_ESP;
 	case IPV4_FLOW:
-		return MLX5E_TT_IPV4;
+		return MLX5_TT_IPV4;
 	case IPV6_FLOW:
-		return MLX5E_TT_IPV6;
+		return MLX5_TT_IPV6;
 	default:
-		return MLX5E_NUM_INDIR_TIRS;
+		return -EINVAL;
 	}
 }
 
@@ -864,12 +864,12 @@ static int mlx5e_set_rss_hash_opt(struct mlx5e_priv *priv,
 				  struct ethtool_rxnfc *nfc)
 {
 	int inlen = MLX5_ST_SZ_BYTES(modify_tir_in);
-	enum mlx5e_traffic_types tt;
 	u8 rx_hash_field = 0;
 	void *in;
+	int tt;
 
 	tt = flow_type_to_traffic_type(nfc->flow_type);
-	if (tt == MLX5E_NUM_INDIR_TIRS)
+	if (tt < 0)
 		return -EINVAL;
 
 	/*  RSS does not support anything other than hashing to queues
@@ -916,11 +916,11 @@ out:
 static int mlx5e_get_rss_hash_opt(struct mlx5e_priv *priv,
 				  struct ethtool_rxnfc *nfc)
 {
-	enum mlx5e_traffic_types tt;
 	u32 hash_field = 0;
+	int tt;
 
 	tt = flow_type_to_traffic_type(nfc->flow_type);
-	if (tt == MLX5E_NUM_INDIR_TIRS)
+	if (tt < 0)
 		return -EINVAL;
 
 	hash_field = priv->rss_params.rx_hash_fields[tt];

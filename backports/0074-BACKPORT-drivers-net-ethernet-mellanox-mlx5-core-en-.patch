@@ -158,7 +158,7 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev,
  			    "Matching on GENEVE options: failed creating TLV opt object (class:type:len = 0x%x:0x%x:%d)\n",
  			    be16_to_cpu(option_key->opt_class),
-@@ -285,12 +313,16 @@ static int mlx5e_tc_tun_parse_geneve_par
+@@ -290,12 +318,16 @@ static int mlx5e_tc_tun_parse_geneve_par
  {
  	void *misc_c = MLX5_ADDR_OF(fte_match_param, spec->match_criteria, misc_parameters);
  	void *misc_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,  misc_parameters);
@@ -175,7 +175,7 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev, "Matching on GENEVE OAM is not supported\n");
  		return -EOPNOTSUPP;
  	}
-@@ -367,3 +399,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
+@@ -372,3 +404,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
  	.parse_tunnel         = mlx5e_tc_tun_parse_geneve,
  	.cmp_encap_info       = mlx5e_tc_tun_cmp_encap_info_geneve,
  };

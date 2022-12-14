@@ -483,6 +483,28 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 		}
 	}
 
+	if (fte->action.action & MLX5_FLOW_CONTEXT_ACTION_EXECUTE_ASO) {
+		struct mlx5_exe_aso *aso;
+
+		if (fte->action.exe_aso.type != MLX5_EXE_ASO_FLOW_METER) {
+			err = -EOPNOTSUPP;
+			goto free_actions;
+		}
+
+		aso = &fte->action.exe_aso;
+		tmp_action = mlx5dr_action_create_aso_flow_meter(domain,
+								 aso->object_id,
+								 aso->return_reg_id,
+								 aso->flow_meter.init_color,
+								 aso->flow_meter.meter_idx);
+		if (!tmp_action) {
+			err = -ENOMEM;
+			goto free_actions;
+		}
+		fs_dr_actions[fs_dr_num_actions++] = tmp_action;
+		actions[num_actions++] = tmp_action;
+	}
+
 	params.match_sz = match_sz;
 	params.match_buf = (u64 *)fte->val;
 	if (num_term_actions == 1) {
@@ -682,6 +704,19 @@ restore_fte:
 	return ret;
 }
 
+static int
+mlx5_cmd_dr_destroy_match_definer(struct mlx5_flow_root_namespace *ns,
+				  int definer_id)
+{
+	return -EOPNOTSUPP;
+}
+
+static int mlx5_cmd_dr_create_match_definer(struct mlx5_flow_root_namespace *ns,
+					    u16 format_id, u32 *match_mask)
+{
+	return -EOPNOTSUPP;
+}
+
 static int mlx5_cmd_dr_set_peer(struct mlx5_flow_root_namespace *ns,
 				struct mlx5_flow_root_namespace *peer_ns)
 {
@@ -742,6 +777,8 @@ static const struct mlx5_flow_cmds mlx5_flow_cmds_dr = {
 	.packet_reformat_dealloc = mlx5_cmd_dr_packet_reformat_dealloc,
 	.modify_header_alloc = mlx5_cmd_dr_modify_header_alloc,
 	.modify_header_dealloc = mlx5_cmd_dr_modify_header_dealloc,
+	.create_match_definer = mlx5_cmd_dr_create_match_definer,
+	.destroy_match_definer = mlx5_cmd_dr_destroy_match_definer,
 	.set_peer = mlx5_cmd_dr_set_peer,
 	.create_ns = mlx5_cmd_dr_create_ns,
 	.destroy_ns = mlx5_cmd_dr_destroy_ns,

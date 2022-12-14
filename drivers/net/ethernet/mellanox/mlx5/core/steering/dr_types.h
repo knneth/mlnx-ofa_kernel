@@ -13,7 +13,7 @@
 #include "mlx5dr.h"
 
 #define DR_RULE_MAX_STES 17
-#define DR_ACTION_MAX_STES 5
+#define DR_ACTION_MAX_STES 6
 #define WIRE_PORT 0xFFFF
 #define ECPF_PORT 0xFFFE
 #define DR_STE_SVLAN 0x1
@@ -123,6 +123,7 @@ enum mlx5dr_action_type {
 	DR_ACTION_TYP_PUSH_VLAN,
 	DR_ACTION_TYP_SAMPLER,
 	DR_ACTION_TYP_INSERT_HDR,
+	DR_ACTION_TYP_ASO_FLOW_METER,
 	DR_ACTION_TYP_MAX,
 };
 
@@ -291,6 +292,14 @@ struct mlx5dr_action_reformat_info {
 	u8	reformat_param_0;
 	u8	reformat_param_1;
 };
+
+struct mlx5dr_action_aso_flow_meter_info {
+	u32 obj_id;
+	u32 offset;
+	u8 dest_reg_id;
+	u8 init_color;
+};
+
 struct mlx5dr_ste_actions_attr {
 	u32	modify_index;
 	u16	modify_actions;
@@ -307,6 +316,7 @@ struct mlx5dr_ste_actions_attr {
 	u16	hit_gvmi;
 	struct	mlx5dr_action_reformat_info reformat;
 	struct	mlx5dr_action_vlan_info vlans;
+	struct	mlx5dr_action_aso_flow_meter_info aso_flow_meter;
 };
 
 void mlx5dr_ste_set_actions_rx(struct mlx5dr_ste_ctx *ste_ctx,
@@ -1121,6 +1131,14 @@ struct mlx5dr_action_sampler {
 	u32 sampler_id;
 };
 
+struct mlx5dr_action_aso_flow_meter {
+	struct mlx5dr_domain *dmn;
+	u32 obj_id;
+	u32 offset;
+	u8 dest_reg_id;
+	u8 init_color;
+};
+
 struct mlx5dr_action {
 	enum mlx5dr_action_type action_type;
 	refcount_t refcount;
@@ -1135,6 +1153,7 @@ struct mlx5dr_action {
 		struct mlx5dr_action_push_vlan *push_vlan;
 		struct mlx5dr_action_flow_tag *flow_tag;
 		struct mlx5dr_action_sampler *sampler;
+		struct mlx5dr_action_aso_flow_meter *aso;
 	};
 };
 

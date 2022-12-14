@@ -1225,6 +1225,25 @@ err_validate:
 }
 EXPORT_SYMBOL(mlx5_create_auto_grouped_flow_table);
 
+static bool is_valid_matcher(u32 *fg_in)
+{
+	u8 fg_type = MLX5_GET(create_flow_group_in, fg_in, group_type);
+	u8 match_criteria_enable = MLX5_GET(create_flow_group_in,
+					    fg_in,
+					    match_criteria_enable);
+	int definer_id = MLX5_GET(create_flow_group_in, fg_in,
+				  match_definer_id);
+
+	if (!definer_id)
+		return fg_type !=
+		       MLX5_CREATE_FLOW_GROUP_IN_GROUP_TYPE_HASH_SPLIT;
+
+	if (match_criteria_enable ||
+	    fg_type != MLX5_CREATE_FLOW_GROUP_IN_GROUP_TYPE_HASH_SPLIT)
+		return false;
+	return true;
+}
+
 struct mlx5_flow_group *mlx5_create_flow_group(struct mlx5_flow_table *ft,
 					       u32 *fg_in)
 {
@@ -1244,6 +1263,11 @@ struct mlx5_flow_group *mlx5_create_flow_group(struct mlx5_flow_table *ft,
 	if (ft->autogroup.active && start_index < ft->autogroup.max_fte)
 		return ERR_PTR(-EPERM);
 
+	if (!is_valid_matcher(fg_in)) {
+		mlx5_core_warn(root->dev, "Not a valid matcher\n");
+		return ERR_PTR(-EINVAL);
+	}
+
 	down_write_ref_node(&ft->node, false);
 	fg = alloc_insert_flow_group(ft, match_criteria_enable, match_criteria,
 				     start_index, end_index,
@@ -1260,6 +1284,30 @@ struct mlx5_flow_group *mlx5_create_flow_group(struct mlx5_flow_table *ft,
 	trace_mlx5_fs_add_fg(fg);
 	fg->node.active = true;
 
+	return fg;
+}
+
+struct mlx5_flow_group *
+mlx5_create_hash_flow_group(struct mlx5_flow_table *ft,
+			    struct mlx5_flow_definer *definer,
+			    int start_flow_index, int num_entries)
+{
+	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
+	struct mlx5_flow_group *fg;
+	u32 *in;
+
+	in = kvzalloc(inlen, GFP_KERNEL);
+	if (!in)
+		return ERR_PTR(-ENOMEM);
+
+	MLX5_SET(create_flow_group_in, in, match_definer_id, definer->id);
+	MLX5_SET(create_flow_group_in, in, start_flow_index, start_flow_index);
+	MLX5_SET(create_flow_group_in, in, end_flow_index, num_entries - 1);
+	MLX5_SET(create_flow_group_in, in, group_type,
+		 MLX5_CREATE_FLOW_GROUP_IN_GROUP_TYPE_HASH_SPLIT);
+
+	fg = mlx5_create_flow_group(ft, in);
+	kvfree(in);
 	return fg;
 }
 
@@ -2209,6 +2257,10 @@ struct mlx5_flow_namespace *mlx5_get_flow_namespace(struct mlx5_core_dev *dev,
 		if (steering->fdb_root_ns)
 			return &steering->fdb_root_ns->ns;
 		return NULL;
+	case MLX5_FLOW_NAMESPACE_PORT_SEL:
+		if (steering->port_sel_root_ns)
+			return &steering->port_sel_root_ns->ns;
+		return NULL;
 	case MLX5_FLOW_NAMESPACE_SNIFFER_RX:
 		if (steering->sniffer_rx_root_ns)
 			return &steering->sniffer_rx_root_ns->ns;
@@ -2616,6 +2668,7 @@ void mlx5_cleanup_fs(struct mlx5_core_dev *dev)
 	steering->fdb_root_ns = NULL;
 	kfree(steering->fdb_sub_ns);
 	steering->fdb_sub_ns = NULL;
+	cleanup_root_ns(steering->port_sel_root_ns);
 	cleanup_root_ns(steering->sniffer_rx_root_ns);
 	cleanup_root_ns(steering->sniffer_tx_root_ns);
 	cleanup_root_ns(steering->rdma_rx_root_ns);
@@ -2651,6 +2704,21 @@ static int init_sniffer_rx_root_ns(struct mlx5_flow_steering *steering)
 
 	/* Create single prio */
 	prio = fs_create_prio(&steering->sniffer_rx_root_ns->ns, 0, 1);
+	return PTR_ERR_OR_ZERO(prio);
+}
+
+#define PORT_SEL_NUM_LEVELS 3
+static int init_port_sel_root_ns(struct mlx5_flow_steering *steering)
+{
+	struct fs_prio *prio;
+
+	steering->port_sel_root_ns = create_root_ns(steering, FS_FT_PORT_SEL);
+	if (!steering->port_sel_root_ns)
+		return -ENOMEM;
+
+	/* Create single prio */
+	prio = fs_create_prio(&steering->port_sel_root_ns->ns, 0,
+			      PORT_SEL_NUM_LEVELS);
 	return PTR_ERR_OR_ZERO(prio);
 }
 
@@ -2815,6 +2883,12 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 	err = create_fdb_fast_path(steering);
 	if (err)
 		goto out_err;
+
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_MISS_METER, 2);
+	if (IS_ERR(maj_prio)) {
+		err = PTR_ERR(maj_prio);
+		goto out_err;
+	}
 
 	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_SLOW_PATH, 1);
 	if (IS_ERR(maj_prio)) {
@@ -3016,8 +3090,10 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 		return err;
 
 	steering = kzalloc(sizeof(*steering), GFP_KERNEL);
-	if (!steering)
+	if (!steering) {
+		err = -ENOMEM;
 		goto err;
+	}
 
 	ftes_cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
 	fgs_cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
@@ -3073,6 +3149,12 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 
 	if (MLX5_CAP_FLOWTABLE_SNIFFER_TX(dev, ft_support)) {
 		err = init_sniffer_tx_root_ns(steering);
+		if (err)
+			goto err;
+	}
+
+	if (MLX5_CAP_FLOWTABLE_PORT_SELECTION(dev, ft_support)) {
+		err = init_port_sel_root_ns(steering);
 		if (err)
 			goto err;
 	}
@@ -3290,6 +3372,47 @@ void mlx5_packet_reformat_dealloc(struct mlx5_core_dev *dev,
 	kfree(pkt_reformat);
 }
 EXPORT_SYMBOL(mlx5_packet_reformat_dealloc);
+
+struct mlx5_flow_definer *
+mlx5_create_match_definer(struct mlx5_core_dev *dev,
+			  enum mlx5_flow_namespace_type ns_type, u16 format_id,
+			  u32 *match_mask)
+{
+	struct mlx5_flow_root_namespace *root;
+	struct mlx5_flow_definer *definer;
+	int id;
+
+	root = get_root_namespace(dev, ns_type);
+	if (!root)
+		return ERR_PTR(-EOPNOTSUPP);
+
+	definer = kzalloc(sizeof(*definer), GFP_KERNEL);
+	if (!definer)
+		return ERR_PTR(-ENOMEM);
+
+	definer->ns_type = ns_type;
+	id = root->cmds->create_match_definer(root, format_id, match_mask);
+	if (id < 0) {
+		mlx5_core_warn(root->dev, "Failed to create match definer (%d)\n", id);
+		kfree(definer);
+		return ERR_PTR(id);
+	}
+	definer->id = id;
+	return definer;
+}
+
+void mlx5_destroy_match_definer(struct mlx5_core_dev *dev,
+				struct mlx5_flow_definer *definer)
+{
+	struct mlx5_flow_root_namespace *root;
+
+	root = get_root_namespace(dev, definer->ns_type);
+	if (WARN_ON(!root))
+		return;
+
+	root->cmds->destroy_match_definer(root, definer->id);
+	kfree(definer);
+}
 
 int mlx5_flow_namespace_set_peer(struct mlx5_flow_root_namespace *ns,
 				 struct mlx5_flow_root_namespace *peer_ns)

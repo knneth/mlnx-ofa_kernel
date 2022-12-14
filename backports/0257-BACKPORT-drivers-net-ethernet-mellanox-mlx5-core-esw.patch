@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
 ---
- .../mellanox/mlx5/core/esw/devlink_port.c     | 104 +++++++++++++++++-
- 1 file changed, 102 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/esw/devlink_port.c     | 108 +++++++++++++++++-
+ 1 file changed, 106 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
@@ -156,12 +156,12 @@ Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
  }
  
  struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u16 vport_num)
-@@ -127,10 +193,35 @@ int mlx5_esw_devlink_sf_port_register(st
+@@ -127,10 +193,39 @@ int mlx5_esw_devlink_sf_port_register(st
  int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
  				      u16 vport_num, u32 controller, u32 sfnum)
  {
 -	/* PARAV MOVE TO BACKPORT*/
-+#ifdef HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET
++#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
 +	struct mlx5_core_dev *dev = esw->dev;
 +	struct netdev_phys_item_id ppid = {};
 +	unsigned int dl_port_index;
@@ -178,7 +178,11 @@ Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
 +	mlx5_esw_get_port_parent_id(dev, &ppid);
 +	memcpy(dl_port->attrs.switch_id.id, &ppid.id[0], ppid.id_len);
 +	dl_port->attrs.switch_id.id_len = ppid.id_len;
++#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
  	devlink_port_attrs_pci_sf_set(dl_port, controller, pfnum, sfnum, !!controller);
++#elif defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS)
++	devlink_port_attrs_pci_sf_set(dl_port, controller, pfnum, sfnum);
++#endif
 +	devlink = priv_to_devlink(dev);
 +	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
 +	err = devlink_port_register(devlink, dl_port, dl_port_index);
@@ -193,11 +197,11 @@ Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
  }
  #endif
  
-@@ -142,5 +233,14 @@ void mlx5_esw_devlink_sf_port_unregister
+@@ -142,5 +237,14 @@ void mlx5_esw_devlink_sf_port_unregister
  #else
  void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
  {
-+#ifdef HAVE_DEVLINK_PORT_ATTRS_PC_SF_SET
++#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
 +	struct mlx5_vport *vport;
 +
 +	vport = mlx5_eswitch_get_vport(esw, vport_num);

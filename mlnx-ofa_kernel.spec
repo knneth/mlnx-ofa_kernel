@@ -64,7 +64,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 5.4}
-%{!?_release: %global _release OFED.5.4.1.0.3.1}
+%{!?_release: %global _release OFED.5.4.2.4.1.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -82,14 +82,6 @@ Source: %{_name}-%{_version}.tgz
 BuildRoot: %{?build_root:%{build_root}}%{!?build_root:/var/tmp/OFED}
 Vendor: Mellanox Technologies
 Obsoletes: kernel-ib
-Obsoletes: compat-rdma
-Obsoletes: rdma
-Provides: rdma
-Obsoletes: rdma-core < 41mlnx1-1
-Provides: rdma-core = 41mlnx1-1
-Obsoletes: rdma-core-devel < 41mlnx1-1
-Provides: rdma-core-devel = 41mlnx1-1
-Provides: rdma-core-devel%{?_isa} = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -114,7 +106,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-1.0.3.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-2.4.1.tgz
 
 
 # build KMP rpms?
@@ -144,14 +136,6 @@ Requires: procps
 Requires: module-init-tools
 Requires: lsof
 Obsoletes: kernel-ib
-Obsoletes: compat-rdma
-Obsoletes: rdma
-Provides: rdma
-Obsoletes: rdma-core < 41mlnx1-1
-Provides: rdma-core = 41mlnx1-1
-Obsoletes: rdma-core-devel < 41mlnx1-1
-Provides: rdma-core-devel = 41mlnx1-1
-Provides: rdma-core-devel%{?_isa} = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -170,7 +154,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-1.0.3.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-2.4.1.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -178,14 +162,7 @@ Version: %{_version}
 # build KMP rpms?
 Release: %{_release}%{?_dist}
 Obsoletes: kernel-ib-devel
-Obsoletes: compat-rdma-devel
 Obsoletes: kernel-ib
-Obsoletes: compat-rdma
-Obsoletes: rdma
-Provides: rdma
-Obsoletes: rdma-core-devel < 41mlnx1-1
-Provides: rdma-core-devel = 41mlnx1-1
-Provides: rdma-core-devel%{?_isa} = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -203,7 +180,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-1.0.3.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-2.4.1.tgz
 
 #
 # setup module sign scripts if paths to the keys are given

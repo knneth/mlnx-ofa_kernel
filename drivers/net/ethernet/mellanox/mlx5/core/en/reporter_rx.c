@@ -80,11 +80,13 @@ static int mlx5e_rx_reporter_err_icosq_cqe_recover(void *ctx)
 		goto out;
 
 	mlx5e_deactivate_rq(rq);
+	synchronize_net(); /* Sync with NAPI. */
 	err = mlx5e_wait_for_icosq_flush(icosq);
 	if (err)
 		goto out;
 
 	mlx5e_deactivate_icosq(icosq);
+	synchronize_net(); /* Sync with NAPI. */
 
 	/* At this point, both the rq and the icosq are disabled */
 
@@ -130,6 +132,7 @@ static int mlx5e_rx_reporter_err_rq_cqe_recover(void *ctx)
 	int err;
 
 	mlx5e_deactivate_rq(rq);
+	synchronize_net(); /* Sync with NAPI. */
 	mlx5e_free_rx_descs(rq);
 
 	err = mlx5e_rq_to_ready(rq, MLX5_RQC_STATE_ERR);

@@ -1,0 +1,19 @@
+From: Jianbo Liu <jianbol@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+
+Change-Id: I79f75683d7ab6fc00d80119499c35b9ab73087d9
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+@@ -4,7 +4,7 @@
+ #ifndef __MLX5_EN_PARAMS_H__
+ #define __MLX5_EN_PARAMS_H__
+ 
+-#include "en.h"
++#include "../en.h"
+ 
+ struct mlx5e_xsk_param {
+ 	u16 headroom;

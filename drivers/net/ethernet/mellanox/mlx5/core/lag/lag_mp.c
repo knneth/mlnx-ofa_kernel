@@ -3,8 +3,8 @@
 
 #include <linux/netdevice.h>
 #include <net/nexthop.h>
-#include "lag.h"
-#include "lag_mp.h"
+#include "lag/lag.h"
+#include "lag/lag_mp.h"
 #include "mlx5_core.h"
 #include "eswitch.h"
 #include "lib/mlx5.h"
@@ -303,6 +303,11 @@ int mlx5_lag_mp_init(struct mlx5_lag *ldev)
 	struct lag_mp *mp = &ldev->lag_mp;
 	int err;
 
+	/* always clear mfi, as it might become stale when a route delete event
+	 * has been missed
+	 */
+	mp->mfi = NULL;
+
 	if (mp->fib_nb.notifier_call)
 		return 0;
 
@@ -331,4 +336,5 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag *ldev)
 	unregister_fib_notifier(&init_net, &mp->fib_nb);
 	destroy_workqueue(mp->wq);
 	mp->fib_nb.notifier_call = NULL;
+	mp->mfi = NULL;
 }

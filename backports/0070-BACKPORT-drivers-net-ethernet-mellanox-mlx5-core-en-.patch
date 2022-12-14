@@ -45,7 +45,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  	struct mlx5e_port_ptp *ptp_ch = priv->channels.port_ptp;
-@@ -518,8 +525,11 @@ static int mlx5e_tx_reporter_dump_from_c
+@@ -523,8 +530,11 @@ static int mlx5e_tx_reporter_dump_from_c
  }
  
  static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,
@@ -59,7 +59,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  	struct mlx5e_err_ctx *err_ctx = context;
-@@ -527,6 +537,7 @@ static int mlx5e_tx_reporter_dump(struct
+@@ -532,6 +542,7 @@ static int mlx5e_tx_reporter_dump(struct
  	return err_ctx ? mlx5e_tx_reporter_dump_from_ctx(priv, err_ctx, fmsg) :
  			 mlx5e_tx_reporter_dump_all_sqs(priv, fmsg);
  }
@@ -67,7 +67,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  
  void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq)
  {
-@@ -536,7 +547,9 @@ void mlx5e_reporter_tx_err_cqe(struct ml
+@@ -541,7 +552,9 @@ void mlx5e_reporter_tx_err_cqe(struct ml
  
  	err_ctx.ctx = sq;
  	err_ctx.recover = mlx5e_tx_reporter_err_cqe_recover;
@@ -78,7 +78,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  	snprintf(err_str, sizeof(err_str), "ERR CQE on SQ: 0x%x", sq->sqn);
  
  	mlx5e_health_report(priv, priv->tx_reporter, err_str, &err_ctx);
-@@ -552,7 +565,9 @@ int mlx5e_reporter_tx_timeout(struct mlx
+@@ -557,7 +570,9 @@ int mlx5e_reporter_tx_timeout(struct mlx
  	to_ctx.sq = sq;
  	err_ctx.ctx = &to_ctx;
  	err_ctx.recover = mlx5e_tx_reporter_timeout_recover;
@@ -88,7 +88,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  	snprintf(err_str, sizeof(err_str),
  		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
  		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,
-@@ -562,22 +577,43 @@ int mlx5e_reporter_tx_timeout(struct mlx
+@@ -567,22 +582,43 @@ int mlx5e_reporter_tx_timeout(struct mlx
  	return to_ctx.status;
  }
  
@@ -132,7 +132,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  	if (IS_ERR(reporter)) {
  		netdev_warn(priv->netdev,
  			    "Failed to create tx reporter, err = %ld\n",
-@@ -585,6 +621,7 @@ void mlx5e_reporter_tx_create(struct mlx
+@@ -590,6 +626,7 @@ void mlx5e_reporter_tx_create(struct mlx
  		return;
  	}
  	priv->tx_reporter = reporter;
@@ -140,7 +140,7 @@ Change-Id: I95d2e3ed3b8c3d74f086c817c5c13429ac51836f
  }
  
  void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
-@@ -592,6 +629,12 @@ void mlx5e_reporter_tx_destroy(struct ml
+@@ -597,6 +634,12 @@ void mlx5e_reporter_tx_destroy(struct ml
  	if (!priv->tx_reporter)
  		return;
  

@@ -17,7 +17,7 @@ Change-Id: I59d30ae1e6d7fc4a0a915832a92fdf6b94d0b8a1
  #include "neigh.h"
  #include "tc.h"
  #include "en_rep.h"
-@@ -151,7 +152,9 @@ static void mlx5e_rep_neigh_update(struc
+@@ -150,7 +151,9 @@ static void mlx5e_rep_neigh_update(struc
  
  	neigh_connected = (nud_state & NUD_VALID) && !dead;
  

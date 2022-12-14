@@ -38,6 +38,14 @@
 
 #define MLX5_FS_DEFAULT_FLOW_TAG 0x0
 
+#define MLX5_SET_CFG(p, f, v) MLX5_SET(create_flow_group_in, p, f, v)
+
+#define MLX5_DEFINER_MASK_SZ (MLX5_FLD_SZ_BYTES(match_definer, ctrl) + \
+			      MLX5_FLD_SZ_BYTES(match_definer,         \
+						match_mask_dw_11_8) +  \
+			      MLX5_FLD_SZ_BYTES(match_definer,         \
+						match_mask_dw_7_0))
+
 enum {
 	MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO	= 1 << 16,
 	MLX5_FLOW_CONTEXT_ACTION_ENCRYPT	= 1 << 17,
@@ -80,6 +88,7 @@ enum mlx5_flow_namespace_type {
 	MLX5_FLOW_NAMESPACE_RDMA_RX,
 	MLX5_FLOW_NAMESPACE_RDMA_RX_KERNEL,
 	MLX5_FLOW_NAMESPACE_RDMA_TX,
+	MLX5_FLOW_NAMESPACE_PORT_SEL,
 };
 
 enum {
@@ -88,6 +97,7 @@ enum {
 	FDB_E2E_CACHE,
 	FDB_TC_OFFLOAD,
 	FDB_FT_OFFLOAD,
+	FDB_MISS_METER,
 	FDB_SLOW_PATH,
 	FDB_CRYPTO_EGRESS,
 	FDB_PER_VPORT,
@@ -95,6 +105,7 @@ enum {
 
 struct mlx5_pkt_reformat;
 struct mlx5_modify_hdr;
+struct mlx5_flow_definer;
 struct mlx5_flow_table;
 struct mlx5_flow_group;
 struct mlx5_flow_namespace;
@@ -185,6 +196,10 @@ struct mlx5_flow_table *mlx5_create_lag_demux_flow_table(
 					       int prio, u32 level);
 int mlx5_destroy_flow_table(struct mlx5_flow_table *ft);
 
+struct mlx5_flow_group *
+mlx5_create_hash_flow_group(struct mlx5_flow_table *ft,
+			    struct mlx5_flow_definer *definer,
+			    int start_flow_index, int num_entries);
 /* inbox should be set with the following values:
  * start_flow_index
  * end_flow_index
@@ -195,10 +210,17 @@ struct mlx5_flow_group *
 mlx5_create_flow_group(struct mlx5_flow_table *ft, u32 *in);
 void mlx5_destroy_flow_group(struct mlx5_flow_group *fg);
 
-struct mlx5_flow_meter {
-	int return_reg_id;
-	int flow_meter_obj_id;
-	int meter_id;
+struct mlx5_exe_aso {
+	u32 object_id;
+	u8 type;
+	u8 return_reg_id;
+	union {
+		u32 ctrl_data;
+		struct {
+			u8 meter_idx;
+			u8 init_color;
+		} flow_meter;
+	};
 };
 
 struct mlx5_fs_vlan {
@@ -225,7 +247,7 @@ struct mlx5_flow_act {
 	u32 flags;
 	struct mlx5_fs_vlan vlan[MLX5_FS_VLAN_DEPTH];
 	struct ib_counters *counters;
-	struct mlx5_flow_meter flow_meter;
+	struct mlx5_exe_aso exe_aso;
 };
 
 #define MLX5_DECLARE_FLOW_ACT(name) \
@@ -274,5 +296,11 @@ struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
 						     enum mlx5_flow_namespace_type ns_type);
 void mlx5_packet_reformat_dealloc(struct mlx5_core_dev *dev,
 				  struct mlx5_pkt_reformat *reformat);
+struct mlx5_flow_definer *
+mlx5_create_match_definer(struct mlx5_core_dev *dev,
+			  enum mlx5_flow_namespace_type ns_type, u16 format_id,
+			  u32 *match_mask);
+void mlx5_destroy_match_definer(struct mlx5_core_dev *dev,
+				struct mlx5_flow_definer *definer);
 
 #endif

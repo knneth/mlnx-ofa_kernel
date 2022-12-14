@@ -20,3 +20,4 @@ obj-$(CONFIG_MLX5_CORE)         += drivers/infiniband/hw/mlx5/
 obj-$(CONFIG_MLXFW)             += drivers/net/ethernet/mellanox/mlxfw/
 obj-$(CONFIG_AUXILIARY_BUS)     += drivers/base/
 obj-$(CONFIG_MEMTRACK)          += drivers/net/ethernet/mellanox/debug/
+obj-$(CONFIG_MLXDEVM)		+= net/mlxdevm/

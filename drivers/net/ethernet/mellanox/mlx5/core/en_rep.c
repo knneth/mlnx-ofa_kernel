@@ -48,10 +48,11 @@
 #include "en/devlink.h"
 #include "en/rep/tc.h"
 #include "en/rep/neigh.h"
+#include "en/rep/sysfs.h"
+#include "en/rep/meter.h"
 #include "fs_core.h"
 #include "ecpf.h"
 #include "lib/mlx5.h"
-#include "en/flow_meter_aso.h"
 #define CREATE_TRACE_POINTS
 #include "diag/en_rep_tracepoint.h"
 #include "en_accel/ipsec.h"
@@ -757,12 +758,6 @@ static int mlx5e_init_rep(struct mlx5_core_dev *mdev,
 				      err);
 	}
 
-	if (rpriv->rep->vport == MLX5_VPORT_UPLINK) {
-		err = mlx5e_flow_meters_init(priv);
-		if (err)
-			mlx5_core_err(mdev, "Fail to init flow meters (%d)\n", err);
-	}
-
 	mlx5e_build_rep_params(netdev);
 	mlx5e_build_txq_maps(priv);
 
@@ -777,6 +772,7 @@ static int mlx5e_init_ul_rep(struct mlx5_core_dev *mdev,
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 
 	mlx5e_vxlan_set_netdev_info(priv);
+	mutex_init(&priv->aso_lock);
 	return mlx5e_init_rep(mdev, netdev);
 }
 
@@ -789,9 +785,6 @@ static void mlx5e_cleanup_rep(struct mlx5e_priv *priv)
 
 	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
 		mlx5e_ipsec_cleanup(priv);
-
-	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
-		mlx5e_flow_meters_cleanup(priv);
 }
 
 static int mlx5e_create_rep_ttc_table(struct mlx5e_priv *priv)
@@ -799,25 +792,23 @@ static int mlx5e_create_rep_ttc_table(struct mlx5e_priv *priv)
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep = rpriv->rep;
 	struct ttc_params ttc_params = {};
-	int tt, err;
+	int err;
 
 	priv->fs.ns = mlx5_get_flow_namespace(priv->mdev,
 					      MLX5_FLOW_NAMESPACE_KERNEL);
 
 	/* The inner_ttc in the ttc params is intentionally not set */
-	ttc_params.any_tt_tirn = priv->direct_tir[0].tirn;
-	mlx5e_set_ttc_ft_params(&ttc_params);
+	mlx5e_set_ttc_params(priv, &ttc_params, false);
 
 	if (rep->vport != MLX5_VPORT_UPLINK)
 		/* To give uplik rep TTC a lower level for chaining from root ft */
 		ttc_params.ft_attr.level = MLX5E_TTC_FT_LEVEL + 1;
 
-	for (tt = 0; tt < MLX5E_NUM_INDIR_TIRS; tt++)
-		ttc_params.indir_tirn[tt] = priv->indir_tir[tt].tirn;
-
-	err = mlx5e_create_ttc_table(priv, &ttc_params, &priv->fs.ttc);
-	if (err) {
-		netdev_err(priv->netdev, "Failed to create rep ttc table, err=%d\n", err);
+	priv->fs.ttc = mlx5_create_ttc_table(priv->mdev, &ttc_params);
+	if (IS_ERR(priv->fs.ttc)) {
+		err = PTR_ERR(priv->fs.ttc);
+		netdev_err(priv->netdev, "Failed to create rep ttc table, err=%d\n",
+			   err);
 		return err;
 	}
 	return 0;
@@ -835,7 +826,7 @@ static int mlx5e_create_rep_root_ft(struct mlx5e_priv *priv)
 		/* non uplik reps will skip any bypass tables and go directly to
 		 * their own ttc
 		 */
-		rpriv->root_ft = priv->fs.ttc.ft.t;
+		rpriv->root_ft = mlx5_get_ttc_flow_table(priv->fs.ttc);
 		return 0;
 	}
 
@@ -963,7 +954,8 @@ static int mlx5e_init_rep_dedicated_rq(struct mlx5e_priv *priv)
 	if (err)
 		goto err_destroy_direct_tirs;
 
-	err = mlx5e_esw_offloads_pet_setup(priv->mdev->priv.eswitch, priv->fs.ttc.ft.t);
+	err = mlx5e_esw_offloads_pet_setup(priv->mdev->priv.eswitch,
+					   mlx5_get_ttc_flow_table(priv->fs.ttc));
 	if (err)
 		goto err_destroy_ttc_table;
 
@@ -984,7 +976,7 @@ err_destroy_root_ft:
 err_cleanup_pet_setup:
 	mlx5e_esw_offloads_pet_cleanup(priv->mdev->priv.eswitch);
 err_destroy_ttc_table:
-	mlx5e_destroy_ttc_table(priv, &priv->fs.ttc);
+	mlx5_destroy_ttc_table(priv->fs.ttc);
 err_destroy_direct_tirs:
 	mlx5e_destroy_direct_tirs(priv, priv->direct_tir);
 err_destroy_indirect_tirs:
@@ -1017,7 +1009,7 @@ static void mlx5e_cleanup_rep_dedicated_rq(struct mlx5e_priv *priv)
 	rep_vport_rx_rule_destroy(priv);
 	mlx5e_destroy_rep_root_ft(priv);
 	mlx5e_esw_offloads_pet_cleanup(priv->mdev->priv.eswitch);
-	mlx5e_destroy_ttc_table(priv, &priv->fs.ttc);
+	mlx5_destroy_ttc_table(priv->fs.ttc);
 	mlx5e_destroy_direct_tirs(priv, priv->direct_tir);
 	mlx5e_destroy_indirect_tirs(priv);
 	mlx5e_destroy_direct_rqts(priv, priv->direct_tir);
@@ -1393,6 +1385,7 @@ mlx5e_vport_uplink_rep_load(struct mlx5_core_dev *dev,
 		devlink_port_type_eth_set(dl_port, netdev);
 
 	mlx5_smartnic_sysfs_init(rpriv->netdev);
+	mlx5_rep_sysfs_init(rpriv);
 
 	mlx5e_ipsec_build_netdev(priv);
 
@@ -1465,6 +1458,8 @@ mlx5e_vport_vf_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 			    rep->vport);
 		goto err_detach_netdev;
 	}
+
+	mlx5_rep_sysfs_init(rpriv);
 
 	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch, rpriv->rep->vport);
 	if (dl_port)
@@ -1549,6 +1544,8 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	struct devlink_port *dl_port;
 	void *ppriv = priv->ppriv;
 
+	mlx5_rep_destroy_miss_meter(dev, rpriv);
+	mlx5_rep_sysfs_cleanup(rpriv);
 	if (rep->vport == MLX5_VPORT_UPLINK) {
 		mlx5e_vport_uplink_rep_unload(rpriv);
 		kfree(ppriv); /* mlx5e_rep_priv */
