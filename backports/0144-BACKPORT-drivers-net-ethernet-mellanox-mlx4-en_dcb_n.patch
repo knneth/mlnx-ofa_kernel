@@ -12,7 +12,7 @@ Change-Id: I752371bc58b7d0cede38eba25de1b1cb6c21658a
  	priv->cee_config.pfc_state = true;
  }
  
-+#ifdef NDO_GETNUMTCS_RETURNS_INT
++#ifdef HAVE_NDO_GETNUMTCS_RETURNS_INT
  static int mlx4_en_dcbnl_getnumtcs(struct net_device *netdev, int tcid, u8 *num)
 +#else
 +static u8 mlx4_en_dcbnl_getnumtcs(struct net_device *netdev, int tcid, u8 *num)
@@ -24,7 +24,7 @@ Change-Id: I752371bc58b7d0cede38eba25de1b1cb6c21658a
   * otherwise returns 0 as the invalid user priority bitmap to
   * indicate an error.
   */
-+#ifdef NDO_GETAPP_RETURNS_INT
++#ifdef HAVE_NDO_GETAPP_RETURNS_INT
  static int mlx4_en_dcbnl_getapp(struct net_device *netdev, u8 idtype, u16 id)
 +#else
 +static u8 mlx4_en_dcbnl_getapp(struct net_device *netdev, u8 idtype, u16 id)
@@ -36,7 +36,7 @@ Change-Id: I752371bc58b7d0cede38eba25de1b1cb6c21658a
  	return dcb_getapp(netdev, &app);
  }
  
-+#ifdef NDO_SETAPP_RETURNS_INT
++#ifdef HAVE_NDO_SETAPP_RETURNS_INT
  static int mlx4_en_dcbnl_setapp(struct net_device *netdev, u8 idtype,
  				u16 id, u8 up)
 +#else

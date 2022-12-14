@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 
 Change-Id: Ic1616d1b7e4f4d5cbd6dc6c14b902f33323f112a
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 100 +++++++++++++++++++++++++++
- 1 file changed, 100 insertions(+)
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 112 +++++++++++++++++++
+ 1 file changed, 112 insertions(+)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
@@ -48,7 +48,35 @@ Change-Id: Ic1616d1b7e4f4d5cbd6dc6c14b902f33323f112a
  	}
  
  	return 0;
-@@ -212,6 +226,38 @@ static int ipoib_set_coalesce(struct net
+@@ -174,7 +188,13 @@ static void ipoib_get_drvinfo(struct net
+ }
+ 
+ static int ipoib_get_coalesce(struct net_device *dev,
++#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS
++			      struct ethtool_coalesce *coal,
++			      struct kernel_ethtool_coalesce *kernel_coal,
++			      struct netlink_ext_ack *extack)
++#else
+ 			      struct ethtool_coalesce *coal)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 
+@@ -185,7 +205,13 @@ static int ipoib_get_coalesce(struct net
+ }
+ 
+ static int ipoib_set_coalesce(struct net_device *dev,
++#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS
++			      struct ethtool_coalesce *coal,
++			      struct kernel_ethtool_coalesce *kernel_coal,
++			      struct netlink_ext_ack *extack)
++#else
+ 			      struct ethtool_coalesce *coal)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	int ret;
+@@ -212,6 +238,38 @@ static int ipoib_set_coalesce(struct net
  	return 0;
  }
  
@@ -87,7 +115,7 @@ Change-Id: Ic1616d1b7e4f4d5cbd6dc6c14b902f33323f112a
  static void ipoib_get_ethtool_stats(struct net_device *dev,
  				    struct ethtool_stats __always_unused *stats,
  				    u64 *data)
-@@ -276,6 +322,7 @@ static inline int ib_speed_enum_to_int(i
+@@ -276,6 +334,7 @@ static inline int ib_speed_enum_to_int(i
  	return SPEED_UNKNOWN;
  }
  
@@ -95,7 +123,7 @@ Change-Id: Ic1616d1b7e4f4d5cbd6dc6c14b902f33323f112a
  static int ipoib_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *cmd)
  {
-@@ -313,18 +360,71 @@ static int ipoib_get_link_ksettings(stru
+@@ -313,18 +372,71 @@ static int ipoib_get_link_ksettings(stru
  
  	return 0;
  }

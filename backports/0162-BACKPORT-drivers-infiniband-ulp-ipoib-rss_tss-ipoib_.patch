@@ -47,11 +47,11 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  
 -static u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb,
 -				     struct net_device *sb_dev)
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
 +u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb,
 +		       struct net_device *sb_dev)
 +
-+#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +
 +u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb,
 +#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
@@ -64,7 +64,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
 +#else
 +		       void *accel_priv)
 +#endif
-+#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
@@ -74,7 +74,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  	header->tss_qpn_mask_sz |= priv->tss_qpn_mask_sz;
  
  	/* don't use special ring in TX */
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  	return netdev_pick_tx(dev, skb, NULL) % priv->tss_qp_num;
 +#elif defined( HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
 +	return fallback(dev, skb, NULL) % priv->tss_qp_num;

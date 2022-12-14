@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
 
 Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
 ---
- drivers/infiniband/core/cma_configfs.c | 138 ++++++++++++++++++++++++++++++++-
+ drivers/infiniband/core/cma_configfs.c | 138 ++++++++++++++++++++++++-
  1 file changed, 136 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/cma_configfs.c
@@ -99,7 +99,7 @@ Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
 +};
 +#endif
 +
-+#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
++#ifdef HAVE_CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
  static const struct config_item_type cma_port_group_type = {
 +#else
 +static struct config_item_type cma_port_group_type = {
@@ -145,7 +145,7 @@ Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
  	.release = release_cma_ports_group
  };
  
-+#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
++#ifdef HAVE_CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
  static const struct config_item_type cma_ports_group_type = {
 +#else
 +static struct config_item_type cma_ports_group_type = {
@@ -157,7 +157,7 @@ Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
  	.release = release_cma_dev
  };
  
-+#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
++#ifdef HAVE_CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
  static const struct config_item_type cma_device_group_type = {
 +#else
 +static struct config_item_type cma_device_group_type = {
@@ -201,7 +201,7 @@ Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
 +	cma_dev_group->device_group.default_groups[1] = NULL;
 +#endif
  
- 	cma_deref_dev(cma_dev);
+ 	cma_dev_put(cma_dev);
  	return &cma_dev_group->device_group;
  
 +#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
@@ -210,7 +210,7 @@ Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
 +#endif
  fail:
  	if (cma_dev)
- 		cma_deref_dev(cma_dev);
+ 		cma_dev_put(cma_dev);
 @@ -330,8 +439,29 @@ static void drop_cma_dev(struct config_g
          struct cma_dev_group *cma_dev_group = container_of(group,
                                                             struct cma_dev_group,
@@ -245,7 +245,7 @@ Change-Id: Ib01654a3f88e388c65aa8b870846fcbcaf1fc7b0
  	.drop_item	= drop_cma_dev,
  };
  
-+#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
++#ifdef HAVE_CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
  static const struct config_item_type cma_subsys_type = {
 +#else
 +static struct config_item_type cma_subsys_type = {

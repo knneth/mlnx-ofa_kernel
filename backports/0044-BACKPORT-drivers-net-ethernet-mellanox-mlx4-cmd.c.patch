@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/cmd.c
 
 Change-Id: I1de3d48f68e17620dead9cc2dc2e419368b1cf0a
 ---
- drivers/net/ethernet/mellanox/mlx4/cmd.c | 79 +++++++++++++++++++++++++++++++-
+ drivers/net/ethernet/mellanox/mlx4/cmd.c | 79 +++++++++++++++++++++++-
  1 file changed, 78 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/cmd.c

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 
 Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/fs_core.c | 77 ++++++++++++++++++++++-
+ .../net/ethernet/mellanox/mlx5/core/fs_core.c | 77 ++++++++++++++++++-
  1 file changed, 74 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c

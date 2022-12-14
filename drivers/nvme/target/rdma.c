@@ -1796,7 +1796,7 @@ static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
 	}
 }
 
-static void nvmet_rdma_add_one(struct ib_device *ib_device)
+static int nvmet_rdma_add_one(struct ib_device *ib_device)
 {
 	struct nvmet_rdma_port *port, *n;
 
@@ -1808,6 +1808,7 @@ static void nvmet_rdma_add_one(struct ib_device *ib_device)
 		schedule_delayed_work(&port->enable_work, HZ);
 	}
 	mutex_unlock(&port_list_mutex);
+	return 0;
 }
 
 static bool nvmet_rdma_is_port_active(struct nvmet_port *nport)

@@ -2821,7 +2821,7 @@ struct ib_device {
 
 struct ib_client {
 	const char *name;
-	void (*add)   (struct ib_device *);
+	int (*add)(struct ib_device *ibdev);
 	void (*remove)(struct ib_device *, void *client_data);
 	void (*rename)(struct ib_device *dev, void *client_data);
 

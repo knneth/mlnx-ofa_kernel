@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/lightnvm.c
 
 Change-Id: I17d9422f71ffadaeda8a3303420acef48dde9851
 ---
- drivers/nvme/host/lightnvm.c | 41 ++++++++++++++++++++++++++++++++++++++++-
+ drivers/nvme/host/lightnvm.c | 41 +++++++++++++++++++++++++++++++++++-
  1 file changed, 40 insertions(+), 1 deletion(-)
 
 --- a/drivers/nvme/host/lightnvm.c

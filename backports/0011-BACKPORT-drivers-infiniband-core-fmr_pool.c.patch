@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/fmr_pool.c
 
 Change-Id: I6e20f521d76e290f9e7e6c4fa55f932effc87268
 ---
- drivers/infiniband/core/fmr_pool.c | 58 +++++++++++++++++++++++++++++++++++++-
+ drivers/infiniband/core/fmr_pool.c | 58 +++++++++++++++++++++++++++++-
  1 file changed, 57 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/fmr_pool.c

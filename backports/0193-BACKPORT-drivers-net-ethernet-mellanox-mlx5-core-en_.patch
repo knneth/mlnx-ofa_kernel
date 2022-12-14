@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_rep.h | 41 ++++++++++++++++++++++--
+ .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 41 ++++++++++++++++++-
  1 file changed, 39 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h

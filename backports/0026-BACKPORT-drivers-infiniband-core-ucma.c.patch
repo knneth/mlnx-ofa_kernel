@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
 
 Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
 ---
- drivers/infiniband/core/ucma.c | 96 ++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 93 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/ucma.c | 60 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 57 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
@@ -20,12 +20,16 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  #include <rdma/rdma_user_cm.h>
  #include <rdma/ib_marshall.h>
  #include <rdma/rdma_cm.h>
-@@ -56,9 +56,13 @@
+@@ -56,9 +56,17 @@
  MODULE_AUTHOR("Sean Hefty");
  MODULE_DESCRIPTION("RDMA Userspace Connection Manager Access");
  MODULE_LICENSE("Dual BSD/GPL");
 +#ifdef RETPOLINE_MLNX
 +MODULE_INFO(retpoline, "Y");
++#endif
++#ifndef offsetofend
++#define offsetofend(TYPE, MEMBER) \
++	(offsetof(TYPE, MEMBER) + sizeof(((TYPE *)0)->MEMBER))
 +#endif
  
  static unsigned int max_backlog = 1024;
@@ -34,7 +38,7 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  static struct ctl_table_header *ucma_ctl_table_hdr;
  static struct ctl_table ucma_ctl_table[] = {
  	{
-@@ -70,6 +74,14 @@ static struct ctl_table ucma_ctl_table[]
+@@ -70,6 +78,14 @@ static struct ctl_table ucma_ctl_table[]
  	},
  	{ }
  };
@@ -49,82 +53,32 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -205,6 +217,9 @@ static void ucma_close_id(struct work_st
- static struct ucma_context *ucma_alloc_ctx(struct ucma_file *file)
- {
- 	struct ucma_context *ctx;
-+#ifndef HAVE_IDR_ALLOC
-+	int ret;
+@@ -77,6 +93,9 @@ struct ucma_file {
+ 	struct list_head	ctx_list;
+ 	struct list_head	event_list;
+ 	wait_queue_head_t	poll_wait;
++#ifndef HAVE_WQ_UNBOUND
++	struct workqueue_struct *close_wq;
 +#endif
+ };
  
- 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
- 	if (!ctx)
-@@ -216,11 +231,26 @@ static struct ucma_context *ucma_alloc_c
- 	INIT_LIST_HEAD(&ctx->mc_list);
- 	ctx->file = file;
- 
-+#ifndef HAVE_IDR_ALLOC
-+	do {
-+		ret = idr_pre_get(&ctx_idr, GFP_KERNEL);
-+		if (!ret)
-+			goto error;
-+
-+		mutex_lock(&mut);
-+		ret = idr_get_new(&ctx_idr, ctx, &ctx->id);
-+		mutex_unlock(&mut);
-+	} while (ret == -EAGAIN);
-+
-+	if (ret)
-+		goto error;
+ struct ucma_context {
+@@ -354,7 +373,11 @@ static int ucma_event_handler(struct rdm
+ 	if (event->event == RDMA_CM_EVENT_DEVICE_REMOVAL) {
+ 		xa_lock(&ctx_table);
+ 		if (xa_load(&ctx_table, ctx->id) == ctx)
++#ifdef HAVE_WQ_UNBOUND
+ 			queue_work(system_unbound_wq, &ctx->close_work);
 +#else
- 	mutex_lock(&mut);
- 	ctx->id = idr_alloc(&ctx_idr, ctx, 0, 0, GFP_KERNEL);
- 	mutex_unlock(&mut);
- 	if (ctx->id < 0)
- 		goto error;
++			queue_work(ctx->file->close_wq, &ctx->close_work);
 +#endif
- 
- 	list_add_tail(&ctx->list, &file->ctx_list);
- 	return ctx;
-@@ -233,16 +263,34 @@ error:
- static struct ucma_multicast* ucma_alloc_multicast(struct ucma_context *ctx)
- {
- 	struct ucma_multicast *mc;
-+#ifndef HAVE_IDR_ALLOC
-+	int ret;
-+#endif
- 
- 	mc = kzalloc(sizeof(*mc), GFP_KERNEL);
- 	if (!mc)
- 		return NULL;
- 
-+#ifndef HAVE_IDR_ALLOC
-+	do {
-+		ret = idr_pre_get(&multicast_idr, GFP_KERNEL);
-+		if (!ret)
-+			goto error;
-+
-+		mutex_lock(&mut);
-+		ret = idr_get_new(&multicast_idr, mc, &mc->id);
-+		mutex_unlock(&mut);
-+	} while (ret == -EAGAIN);
-+
-+	if (ret)
-+		goto error;
-+#else
- 	mutex_lock(&mut);
- 	mc->id = idr_alloc(&multicast_idr, NULL, 0, 0, GFP_KERNEL);
- 	mutex_unlock(&mut);
- 	if (mc->id < 0)
- 		goto error;
-+#endif
- 
- 	mc->ctx = ctx;
- 	list_add_tail(&mc->list, &ctx->mc_list);
-@@ -1581,7 +1629,11 @@ static ssize_t ucma_migrate_id(struct uc
- 	struct rdma_ucm_migrate_id cmd;
- 	struct rdma_ucm_migrate_resp resp;
+ 		xa_unlock(&ctx_table);
+ 	}
+ 	return 0;
+@@ -1585,7 +1608,11 @@ static ssize_t ucma_migrate_id(struct uc
+ 	struct ucma_event *uevent, *tmp;
  	struct ucma_context *ctx;
+ 	LIST_HEAD(event_list);
 +#ifdef HAVE_FDGET
  	struct fd f;
 +#else
@@ -133,7 +87,7 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  	struct ucma_file *cur_file;
  	int ret = 0;
  
-@@ -1589,16 +1641,30 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1593,17 +1620,35 @@ static ssize_t ucma_migrate_id(struct uc
  		return -EFAULT;
  
  	/* Get current fd to protect against it being closed */
@@ -153,10 +107,15 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  		ret = -EINVAL;
  		goto file_put;
  	}
++#ifdef HAVE_FDGET
+ 	cur_file = f.file->private_data;
++#else
++	cur_file = filp->private_data;
++#endif
  
  	/* Validate current fd and prevent destruction of id. */
 +#ifdef HAVE_FDGET
- 	ctx = ucma_get_ctx(f.file->private_data, cmd.id);
+ 	ctx = ucma_get_ctx(cur_file, cmd.id);
 +#else
 +	ctx = ucma_get_ctx(filp->private_data, cmd.id);
 +#endif
@@ -164,8 +123,8 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  	if (IS_ERR(ctx)) {
  		ret = PTR_ERR(ctx);
  		goto file_put;
-@@ -1632,7 +1698,11 @@ response:
- 
+@@ -1649,7 +1694,11 @@ err_unlock:
+ 	rdma_unlock_handler(ctx->cm_id);
  	ucma_put_ctx(ctx);
  file_put:
 +#ifdef HAVE_FDGET
@@ -176,7 +135,7 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  	return ret;
  }
  
-@@ -1685,8 +1755,9 @@ static ssize_t ucma_write(struct file *f
+@@ -1702,8 +1751,9 @@ static ssize_t ucma_write(struct file *f
  
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
@@ -187,7 +146,21 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1744,7 +1815,11 @@ static int ucma_open(struct inode *inode
+@@ -1745,6 +1795,13 @@ static int ucma_open(struct inode *inode
+ 	file = kmalloc(sizeof *file, GFP_KERNEL);
+ 	if (!file)
+ 		return -ENOMEM;
++#ifndef HAVE_WQ_UNBOUND
++	file->close_wq =create_singlethread_workqueue("ucma_close_id");
++	if (!file->close_wq) {
++		kfree(file);
++		return -ENOMEM;
++	}
++#endif
+ 
+ 	INIT_LIST_HEAD(&file->event_list);
+ 	INIT_LIST_HEAD(&file->ctx_list);
+@@ -1754,7 +1811,11 @@ static int ucma_open(struct inode *inode
  	filp->private_data = file;
  	file->filp = filp;
  
@@ -199,7 +172,17 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  }
  
  static int ucma_close(struct inode *inode, struct file *filp)
-@@ -1827,15 +1902,24 @@ static int __init ucma_init(void)
+@@ -1777,6 +1838,9 @@ static int ucma_close(struct inode *inod
+ 				   GFP_KERNEL) != ctx);
+ 		ucma_destroy_private_ctx(ctx);
+ 	}
++#ifndef HAVE_WQ_UNBOUND
++	destroy_workqueue(file->close_wq);
++#endif
+ 	kfree(file);
+ 	return 0;
+ }
+@@ -1820,15 +1884,24 @@ static int __init ucma_init(void)
  		goto err1;
  	}
  
@@ -224,7 +207,7 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
  err1:
  	misc_deregister(&ucma_misc);
  	return ret;
-@@ -1843,7 +1927,13 @@ err1:
+@@ -1836,7 +1909,13 @@ err1:
  
  static void __exit ucma_cleanup(void)
  {
@@ -237,4 +220,4 @@ Change-Id: I7eed2b3e39ee6f10afae0c92c227d169ede9e83f
 +#endif
  	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
  	misc_deregister(&ucma_misc);
- 	idr_destroy(&ctx_idr);
+ }

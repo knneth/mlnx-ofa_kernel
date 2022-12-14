@@ -49,12 +49,12 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct xfrm_offload *xo;
  	struct xfrm_state *xs;
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	struct sec_path *sp;
 +#endif
  	u32 sa_handle;
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	sp = secpath_set(skb);
  	if (unlikely(!sp)) {
 +#else
@@ -68,7 +68,7 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		return NULL;
  	}
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	sp = skb_sec_path(skb);
  	sp->xvec[sp->len++] = xs;
  	sp->olen++;
@@ -83,7 +83,7 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  	struct mlx5e_priv *priv;
  	struct xfrm_offload *xo;
  	struct xfrm_state *xs;
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	struct sec_path *sp;
 +#endif
  	u32  sa_handle;
@@ -95,7 +95,7 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		return;
 -	sp = secpath_set(skb);
 -	if (unlikely(!sp)) {
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
 +        sp = secpath_set(skb);
 +        if (unlikely(!sp)) {
 +#else
@@ -109,7 +109,7 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		return;
  	}
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	sp = skb_sec_path(skb);
  	sp->xvec[sp->len++] = xs;
  	sp->olen++;
@@ -124,12 +124,12 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  bool mlx5e_ipsec_feature_check(struct sk_buff *skb, struct net_device *netdev,
  			       netdev_features_t features)
  {
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	struct sec_path *sp = skb_sec_path(skb);
 +#endif
  	struct xfrm_state *x;
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
  	if (sp && sp->len) {
  		x = sp->xvec[0];
 +#else

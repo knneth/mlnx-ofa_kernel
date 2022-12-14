@@ -101,11 +101,11 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	}
  }
  
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
 +u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb,
 +		       struct net_device *sb_dev)
 +
-+#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +
  u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb,
 -			 struct net_device *sb_dev)
@@ -119,7 +119,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
 +#else
 +		       void *accel_priv)
 +#endif
-+#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
@@ -127,7 +127,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	u16 rings_p_up = priv->num_tx_rings_p_up;
  
  	if (netdev_get_num_tc(dev))
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		return netdev_pick_tx(dev, skb, NULL);
  
  	return netdev_pick_tx(dev, skb, NULL) % rings_p_up;

@@ -245,7 +245,7 @@ Change-Id: I51cba02bf6a6124b54ce4876c099b41db43a7d08
 +		/* Flush GRO to avoid OOO packets, since GSO bypasses the
 +		 * GRO queue. This was fixed in dev_gro_receive() in kernel 4.10
 +		 */
-+#ifdef NAPI_GRO_FLUSH_2_PARAMS
++#ifdef HAVE_NAPI_GRO_FLUSH_2_PARAMS
 +		napi_gro_flush(rq->cq.napi, false);
 +#else
 +		napi_gro_flush(rq->cq.napi);

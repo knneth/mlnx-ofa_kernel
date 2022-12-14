@@ -2111,7 +2111,7 @@ Change-Id: I75f903d3f053553a0ea5cb5437662b1d0ec8c817
 +#ifdef HAVE_NDO_GET_VF_STATS
 + 	.ndo_get_vf_stats        = mlx5e_get_vf_stats,
 +#endif
-+#ifdef NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
++#ifdef HAVE_NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
  	.ndo_has_offload_stats   = mlx5e_rep_has_offload_stats,
  	.ndo_get_offload_stats   = mlx5e_rep_get_offload_stats,
 -	.ndo_get_phys_port_name  = mlx5e_rep_get_phys_port_name,

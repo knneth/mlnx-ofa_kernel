@@ -34,6 +34,7 @@
 #if !defined(CM_MSGS_H)
 #define CM_MSGS_H
 
+#include <rdma/ibta_vol1_c12.h>
 #include <rdma/ib_mad.h>
 #include <rdma/ib_cm.h>
 

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-bdev.c
 
 Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
 ---
- drivers/nvme/target/io-cmd-bdev.c | 107 ++++++++++++++++++++++++++++++
- 1 file changed, 107 insertions(+)
+ drivers/nvme/target/io-cmd-bdev.c | 111 ++++++++++++++++++++++++++++++
+ 1 file changed, 111 insertions(+)
 
 --- a/drivers/nvme/target/io-cmd-bdev.c
 +++ b/drivers/nvme/target/io-cmd-bdev.c
@@ -52,7 +52,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
  			op_flags |= REQ_FUA;
  	} else {
-@@ -136,53 +152,109 @@ static void nvmet_bdev_execute_rw(struct
+@@ -136,53 +152,113 @@ static void nvmet_bdev_execute_rw(struct
  
  	if (req->data_len <= NVMET_MAX_INLINE_DATA_LEN) {
  		bio = &req->b.inline_bio;
@@ -154,15 +154,19 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  u16 nvmet_bdev_flush(struct nvmet_req *req)
  {
++#ifdef HAVE_BLKDEV_ISSUE_FLUSH_1_PARAM
++	if (blkdev_issue_flush(req->ns->bdev))
++#else
 +#ifdef HAVE_BLKDEV_ISSUE_FLUSH_2_PARAM
 +	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL))
 +#else
  	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL, NULL))
 +#endif
++#endif
  		return NVME_SC_INTERNAL | NVME_SC_DNR;
  	return 0;
  }
-@@ -193,10 +265,17 @@ static u16 nvmet_bdev_discard_range(stru
+@@ -193,10 +269,17 @@ static u16 nvmet_bdev_discard_range(stru
  	struct nvmet_ns *ns = req->ns;
  	int ret;
  
@@ -180,7 +184,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  	if (ret && ret != -EOPNOTSUPP) {
  		req->error_slba = le64_to_cpu(range->slba);
  		return errno_to_nvme_status(req, ret);
-@@ -226,10 +305,22 @@ static void nvmet_bdev_execute_discard(s
+@@ -226,10 +309,22 @@ static void nvmet_bdev_execute_discard(s
  		bio->bi_private = req;
  		bio->bi_end_io = nvmet_bio_done;
  		if (status) {
@@ -203,7 +207,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  		}
  	} else {
  		nvmet_req_complete(req, status);
-@@ -251,6 +342,7 @@ static void nvmet_bdev_execute_dsm(struc
+@@ -251,6 +346,7 @@ static void nvmet_bdev_execute_dsm(struc
  	}
  }
  
@@ -211,7 +215,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  static void nvmet_bdev_execute_write_zeroes(struct nvmet_req *req)
  {
  	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
-@@ -264,16 +356,29 @@ static void nvmet_bdev_execute_write_zer
+@@ -264,16 +360,29 @@ static void nvmet_bdev_execute_write_zer
  	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length) + 1) <<
  		(req->ns->blksize_shift - 9));
  
@@ -241,7 +245,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req)
  {
-@@ -294,10 +399,12 @@ u16 nvmet_bdev_parse_io_cmd(struct nvmet
+@@ -294,10 +403,12 @@ u16 nvmet_bdev_parse_io_cmd(struct nvmet
  		req->data_len = (le32_to_cpu(cmd->dsm.nr) + 1) *
  			sizeof(struct nvme_dsm_range);
  		return 0;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 
 Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
 ---
- .../net/ethernet/mellanox/mlx4/en_netdev.c    | 971 +++++++++++++++++-
- 1 file changed, 957 insertions(+), 14 deletions(-)
+ .../net/ethernet/mellanox/mlx4/en_netdev.c    | 970 +++++++++++++++++-
+ 1 file changed, 957 insertions(+), 13 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c

@@ -18,7 +18,7 @@ Change-Id: I8bec3cb8a6df4aa561802b0d90115032524e0d21
  
  static const char * const ibcm_rej_reason_strs[] = {
  	[IB_CM_REJ_NO_QP]			= "no QP",
-@@ -4304,7 +4307,11 @@ static ssize_t cm_show_counter(struct ko
+@@ -4332,7 +4335,11 @@ static ssize_t cm_show_counter(struct ko
  		       atomic_long_read(&group->counter[cm_attr->index]));
  }
  
@@ -30,7 +30,7 @@ Change-Id: I8bec3cb8a6df4aa561802b0d90115032524e0d21
  	.show = cm_show_counter
  };
  
-@@ -4313,7 +4320,11 @@ static struct kobj_type cm_counter_obj_t
+@@ -4341,7 +4348,11 @@ static struct kobj_type cm_counter_obj_t
  	.default_attrs = cm_counter_default_attrs
  };
  

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_memory.c
 
 Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
 ---
- drivers/infiniband/ulp/iser/iser_memory.c | 363 +++++++++++++++++++++++++++++-
+ drivers/infiniband/ulp/iser/iser_memory.c | 363 +++++++++++++++++++++-
  1 file changed, 362 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/ulp/iser/iser_memory.c

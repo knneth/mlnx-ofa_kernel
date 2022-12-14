@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/miniflow.c
 
 Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/miniflow.c | 59 +++++++++++++++++++++-
+ .../ethernet/mellanox/mlx5/core/miniflow.c    | 59 ++++++++++++++++++-
  1 file changed, 57 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/miniflow.c

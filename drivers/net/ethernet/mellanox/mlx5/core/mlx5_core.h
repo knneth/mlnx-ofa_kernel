@@ -46,7 +46,7 @@
 #include "fs_core.h"
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.9-4.1.7"
+#define DRIVER_VERSION	"4.9-5.1.0"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 

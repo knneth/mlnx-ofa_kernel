@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en.h
 
 Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en.h | 276 +++++++++++++++++--
- 1 file changed, 257 insertions(+), 19 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en.h | 287 +++++++++++++++++--
+ 1 file changed, 268 insertions(+), 19 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en.h
@@ -175,15 +175,15 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
  
  struct mlx5e_icosq {
  	/* data path */
-@@ -596,9 +646,25 @@ struct mlx5e_umr_dma_info {
+@@ -596,8 +646,24 @@ struct mlx5e_umr_dma_info {
  struct mlx5e_mpw_info {
  	struct mlx5e_umr_dma_info umr;
  	u16 consumed_strides;
 +#ifdef HAVE_XDP_BUFF
  	DECLARE_BITMAP(xdp_xmit_bitmap, MLX5_MPWRQ_PAGES_PER_WQE);
 +#endif
- };
- 
++};
++
 +#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
 +#define IS_HW_LRO(params) \
 +	((params)->lro_en && MLX5E_GET_PFLAG(params, MLX5E_PFLAG_HWLRO))
@@ -195,12 +195,11 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
 +struct mlx5e_sw_lro {
 +	struct net_lro_mgr	lro_mgr;
 +	struct net_lro_desc	lro_desc[MLX5E_LRO_MAX_DESC];
-+};
+ };
 +#endif
-+
+ 
  #define MLX5E_MAX_RX_FRAGS 4
  
- #define MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT	4
 @@ -712,10 +778,18 @@ struct mlx5e_rq {
  	struct mlx5e_dim       dim_obj; /* Adaptive Moderation */
  
@@ -367,11 +366,11 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
 +#endif
 +
  
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
  		       struct net_device *sb_dev);
 +
-+#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 +#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
@@ -384,7 +383,7 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
 +#else
 +		       void *accel_priv);
 +#endif
-+#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb);
 +#endif
 +
@@ -502,7 +501,7 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
  
  /* common netdev helpers */
  void mlx5e_create_q_counters(struct mlx5e_priv *priv);
-@@ -1223,27 +1406,53 @@ void mlx5e_ethtool_get_ringparam(struct
+@@ -1223,27 +1406,64 @@ void mlx5e_ethtool_get_ringparam(struct
  				 struct ethtool_ringparam *param);
  int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
  				struct ethtool_ringparam *param);
@@ -513,9 +512,20 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
  			       struct ethtool_channels *ch);
 +#endif
  int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
++#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS //forwardport
++			       struct ethtool_coalesce *coal,
++			       struct kernel_ethtool_coalesce *kernel_coal);
++#else
  			       struct ethtool_coalesce *coal);
++#endif
  int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
++#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS //forwardport
++			       struct ethtool_coalesce *coal,
++			       struct kernel_ethtool_coalesce *kernel_coal,
++			       struct netlink_ext_ack *extack);
++#else
  			       struct ethtool_coalesce *coal);
++#endif
 +#ifdef HAVE_GET_SET_LINK_KSETTINGS
  int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
  				     struct ethtool_link_ksettings *link_ksettings);
@@ -558,7 +568,7 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam);
  int mlx5e_ethtool_set_pauseparam(struct mlx5e_priv *priv,
-@@ -1275,10 +1484,12 @@ void mlx5e_build_rq_params(struct mlx5_c
+@@ -1275,10 +1495,12 @@ void mlx5e_build_rq_params(struct mlx5_c
  void mlx5e_build_rss_params(struct mlx5e_rss_params *rss_params,
  			    u16 num_channels);
  
@@ -571,7 +581,7 @@ Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
  
  static inline bool mlx5e_dropless_rq_supported(struct mlx5_core_dev *mdev)
  {
-@@ -1288,21 +1499,48 @@ static inline bool mlx5e_dropless_rq_sup
+@@ -1288,21 +1510,48 @@ static inline bool mlx5e_dropless_rq_sup
  
  void mlx5e_rx_dim_work(struct work_struct *work);
  void mlx5e_tx_dim_work(struct work_struct *work);

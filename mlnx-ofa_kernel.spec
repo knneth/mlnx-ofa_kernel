@@ -79,7 +79,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 4.9}
-%{!?_release: %global _release OFED.4.9.4.1.7.1}
+%{!?_release: %global _release OFED.4.9.5.1.0.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -134,12 +134,12 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-4.1.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-5.1.0.tgz
 
 
 # build KMP rpms?
 %if "%{KMP}" == "1"
-%global kernel_release() $(make -C %{1} kernelrelease | grep -v make | tail -1)
+%global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
 # prep file list for kmp rpm
 %(cat > %{_builddir}/kmp.files << EOF
 %defattr(644,root,root,755)
@@ -190,7 +190,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-4.1.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-5.1.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -223,7 +223,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-4.1.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-5.1.0.tgz
 
 #
 # setup module sign scripts if paths to the keys are given

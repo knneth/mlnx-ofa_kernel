@@ -1,7 +1,7 @@
-From: Israel Rukshin <israelr@mellanox.com>
+From: Feras Daoud <ferasda@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
 
-Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
+Change-Id: I5c7677944bc60de731090ea3ed94479ae93597bf
 ---
  drivers/nvme/target/rdma.c | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
@@ -52,8 +52,8 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
 +#endif
  }
  
- static void nvmet_rdma_add_one(struct ib_device *ib_device)
-@@ -1963,6 +1974,9 @@ module_init(nvmet_rdma_init);
+ static int nvmet_rdma_add_one(struct ib_device *ib_device)
+@@ -1964,6 +1975,9 @@ module_init(nvmet_rdma_init);
  module_exit(nvmet_rdma_exit);
  
  MODULE_LICENSE("GPL v2");
