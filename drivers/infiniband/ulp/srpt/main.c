@@ -36,7 +36,7 @@
 
 #define DRV_NAME	"ib_srpt"
 #define DRV_VERSION	"0.1"
-#define DRV_RELDATE	"02 Nov 2020"
+#define DRV_RELDATE	"04 Apr 2021"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("ib_srpt dummy kernel module");
