@@ -216,7 +216,6 @@ static void irq_set_name(struct mlx5_irq_pool *pool, char *name, int vecidx)
 
 	snprintf(name, MLX5_MAX_IRQ_NAME, "mlx5_comp%d",
 		 vecidx - MLX5_PF_IRQ_CTRL_NUM);
-	return;
 }
 
 static bool irq_pool_is_sf_pool(struct mlx5_irq_pool *pool)
@@ -631,7 +630,6 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 	struct mlx5_irq_table *table = dev->priv.irq_table;
 	int max_num_eq = MLX5_CAP_GEN(dev, max_num_eqs);
 	int num_eqs;
-	int max_comp_eqs;
 	int total_vec;
 	int pf_vec;
 	int err;
@@ -648,7 +646,6 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 			return -ENOMEM;
 	}
 
-	max_comp_eqs = num_eqs - MLX5_MAX_ASYNC_EQS;
 	pf_vec = MLX5_CAP_GEN(dev, num_ports) * num_online_cpus() +
 		 MLX5_PF_IRQ_CTRL_NUM;
 	pf_vec = min_t(int, pf_vec, num_eqs);
@@ -731,7 +728,8 @@ bool mlx5_have_dedicated_irqs(struct mlx5_core_dev *dev)
 int mlx5_irq_table_get_sfs_comp_vec(struct mlx5_irq_table *table)
 {
 	if (table->sf_comp_pool)
-		return irq_pool_size_get(table->sf_comp_pool);
+		return min_t(int, num_online_cpus(),
+			     irq_pool_size_get(table->sf_comp_pool));
 	else
 		return mlx5_irq_table_get_num_comp(table);
 }

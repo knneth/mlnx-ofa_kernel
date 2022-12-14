@@ -21,7 +21,7 @@ obj-$(CONFIG_NVME_HOST_WITHOUT_FC)		+= nvme-fc.o
 ifeq ($(CONFIG_NVME_HOST_DUMMY),m)
 nvme-rdma-y				:= nvme-rdma_dummy.o
 else
-nvme-core-y				:= core.o
+nvme-core-y				:= core.o ioctl.o
 nvme-core-$(CONFIG_TRACING)		+= trace.o
 nvme-core-$(CONFIG_NVME_MULTIPATH)	+= multipath.o
 nvme-core-$(CONFIG_NVM)			+= lightnvm.o

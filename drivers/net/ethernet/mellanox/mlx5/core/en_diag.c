@@ -123,7 +123,7 @@ static int dump_eq_info(struct mlx5_eq_comp *eq, void *buffer)
 	eqd->ci = eq->core.cons_index;
 	eqd->irqn = eq->core.irqn;
 	eqd->eqn = eq->core.eqn;
-	eqd->nent = eq->core.nent;
+	eqd->nent = eq_get_size(&eq->core);
 	eqd->mask = 0;
 
 	return sizeof(*eqd);
@@ -148,7 +148,7 @@ static void dump_channel_info(struct mlx5e_channel *c,
 		dump_blk = DIAG_GET_NEXT_BLK(dump_hdr);
 		dump_blk->type = MLX5_DIAG_CQ;
 		dump_blk->length = dump_cq_info(&c->sq[i].cq, &dump_blk->data,
-						c->sq[i].ch_ix);
+				c->sq[i].ch_ix);
 		dump_hdr->total_length += DIAG_BLK_SZ(dump_blk->length);
 		dump_hdr->num_blocks++;
 	}

@@ -56,7 +56,7 @@ static int mlx5_rep_create_miss_meter_rules(struct mlx5_core_dev *dev,
 
 	tbl = esw->fdb_table.offloads.miss_meter_fdb;
 
-	mlx5_eswitch_set_rule_source_port(esw, spec, esw, NULL, vport);
+	mlx5_eswitch_set_rule_source_port(esw, spec, NULL, esw, vport);
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
 			  MLX5_FLOW_CONTEXT_ACTION_EXECUTE_ASO;

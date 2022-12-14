@@ -262,8 +262,10 @@ xprt_rdma_connect_worker(struct work_struct *work)
  * xprt_rdma_inject_disconnect - inject a connection fault
  * @xprt: transport context
  *
- * If @xprt is connected, disconnect it to simulate spurious connection
- * loss.
+ * If @xprt is connected, disconnect it to simulate spurious
+ * connection loss. Caller must hold @xprt's send lock to
+ * ensure that data structures and hardware resources are
+ * stable during the rdma_disconnect() call.
  */
 static void
 xprt_rdma_inject_disconnect(struct rpc_xprt *xprt)
@@ -413,9 +415,6 @@ xprt_rdma_set_port(struct rpc_xprt *xprt, u16 port)
 	kfree(xprt->address_strings[RPC_DISPLAY_HEX_PORT]);
 	snprintf(buf, sizeof(buf), "%4hx", port);
 	xprt->address_strings[RPC_DISPLAY_HEX_PORT] = kstrdup(buf, GFP_KERNEL);
-
-	trace_xprtrdma_op_setport(container_of(xprt, struct rpcrdma_xprt,
-					       rx_xprt));
 }
 
 /**
@@ -521,9 +520,8 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xprt, struct rpc_task *task)
 	return;
 
 out_sleep:
-	set_bit(XPRT_CONGESTED, &xprt->state);
-	rpc_sleep_on(&xprt->backlog, task, NULL);
 	task->tk_status = -EAGAIN;
+	xprt_add_backlog(xprt, task);
 }
 
 /**
@@ -538,10 +536,11 @@ xprt_rdma_free_slot(struct rpc_xprt *xprt, struct rpc_rqst *rqst)
 	struct rpcrdma_xprt *r_xprt =
 		container_of(xprt, struct rpcrdma_xprt, rx_xprt);
 
-	memset(rqst, 0, sizeof(*rqst));
-	rpcrdma_buffer_put(&r_xprt->rx_buf, rpcr_to_rdmar(rqst));
-	if (unlikely(!rpc_wake_up_next(&xprt->backlog)))
-		clear_bit(XPRT_CONGESTED, &xprt->state);
+	rpcrdma_reply_put(&r_xprt->rx_buf, rpcr_to_rdmar(rqst));
+	if (!xprt_wake_up_backlog(xprt, rqst)) {
+		memset(rqst, 0, sizeof(*rqst));
+		rpcrdma_buffer_put(&r_xprt->rx_buf, rpcr_to_rdmar(rqst));
+	}
 }
 
 static bool rpcrdma_check_regbuf(struct rpcrdma_xprt *r_xprt,
@@ -586,11 +585,9 @@ xprt_rdma_allocate(struct rpc_task *task)
 
 	rqst->rq_buffer = rdmab_data(req->rl_sendbuf);
 	rqst->rq_rbuffer = rdmab_data(req->rl_recvbuf);
-	trace_xprtrdma_op_allocate(task, req);
 	return 0;
 
 out_fail:
-	trace_xprtrdma_op_allocate(task, NULL);
 	return -ENOMEM;
 }
 
@@ -604,13 +601,12 @@ static void
 xprt_rdma_free(struct rpc_task *task)
 {
 	struct rpc_rqst *rqst = task->tk_rqstp;
-	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(rqst->rq_xprt);
 	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
 
-	trace_xprtrdma_op_free(task, req);
-
-	if (!list_empty(&req->rl_registered))
-		frwr_unmap_sync(r_xprt, req);
+	if (unlikely(!list_empty(&req->rl_registered))) {
+		trace_xprtrdma_mrs_zap(task);
+		frwr_unmap_sync(rpcx_to_rdmax(rqst->rq_xprt), req);
+	}
 
 	/* XXX: If the RPC is completing because of a signal and
 	 * not because a reply was received, we ought to ensure
@@ -775,6 +771,7 @@ static struct xprt_class xprt_rdma = {
 	.owner			= THIS_MODULE,
 	.ident			= XPRT_TRANSPORT_RDMA,
 	.setup			= xprt_setup_rdma,
+	.netid			= { "rdma", "rdma6", "" },
 };
 
 void xprt_rdma_cleanup(void)

@@ -48,6 +48,8 @@ struct ttc_params {
 	DECLARE_BITMAP(tunnel_dests_valid, MLX5_NUM_TUNNEL_TT);
 };
 
+u8 mlx5_get_proto_by_tunnel_type(enum mlx5_tunnel_types tt);
+
 bool mlx5_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type);
 
 struct mlx5_flow_table *mlx5_get_ttc_flow_table(struct mlx5_ttc_table *ttc);

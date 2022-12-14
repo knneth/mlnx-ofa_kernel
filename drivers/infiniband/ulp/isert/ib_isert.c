@@ -71,14 +71,12 @@ static int isert_sg_tablesize_set(const char *val, const struct kernel_param *kp
 	return param_set_int(val, kp);
 }
 
-
 static inline bool
 isert_prot_cmd(struct isert_conn *conn, struct se_cmd *cmd)
 {
 	return (conn->pi_support &&
 		cmd->prot_op != TARGET_PROT_NORMAL);
 }
-
 
 static void
 isert_qp_event_callback(struct ib_event *e, void *context)
@@ -235,8 +233,10 @@ isert_create_device_ib_res(struct isert_device *device)
 	}
 
 	/* Check signature cap */
-	device->pi_capable = ib_dev->attrs.device_cap_flags &
-			     IB_DEVICE_INTEGRITY_HANDOVER ? true : false;
+	if (ib_dev->attrs.device_cap_flags & IB_DEVICE_INTEGRITY_HANDOVER)
+		device->pi_capable = true;
+	else
+		device->pi_capable = false;
 
 	device->sig_pipeline = ib_dev->attrs.device_cap_flags &
 			       IB_DEVICE_SIGNATURE_PIPELINE ? true : false;
@@ -445,23 +445,23 @@ isert_connect_request(struct rdma_cm_id *cma_id, struct rdma_cm_event *event)
 	isert_init_conn(isert_conn);
 	isert_conn->cm_id = cma_id;
 
-	ret = isert_alloc_login_buf(isert_conn, cma_id->device);
-	if (ret)
-		goto out;
-
 	device = isert_device_get(cma_id);
 	if (IS_ERR(device)) {
 		ret = PTR_ERR(device);
-		goto out_rsp_dma_map;
+		goto out;
 	}
 	isert_conn->device = device;
+
+	ret = isert_alloc_login_buf(isert_conn, cma_id->device);
+	if (ret)
+		goto out_conn_dev;
 
 	isert_set_nego_params(isert_conn, &event->param.conn);
 
 	isert_conn->qp = isert_create_qp(isert_conn, cma_id);
 	if (IS_ERR(isert_conn->qp)) {
 		ret = PTR_ERR(isert_conn->qp);
-		goto out_conn_dev;
+		goto out_rsp_dma_map;
 	}
 
 	ret = isert_login_post_recv(isert_conn);
@@ -480,10 +480,10 @@ isert_connect_request(struct rdma_cm_id *cma_id, struct rdma_cm_event *event)
 
 out_destroy_qp:
 	isert_destroy_qp(isert_conn);
-out_conn_dev:
-	isert_device_put(device);
 out_rsp_dma_map:
 	isert_free_login_buf(isert_conn);
+out_conn_dev:
+	isert_device_put(device);
 out:
 	kfree(isert_conn);
 	rdma_reject(cma_id, NULL, 0, IB_CM_REJ_CONSUMER_DEFINED);
@@ -1118,7 +1118,7 @@ isert_handle_scsi_cmd(struct isert_conn *isert_conn,
 sequence_cmd:
 	rc = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
 
-	if (!rc && dump_payload == false && unsol_data)
+	if (!rc && !dump_payload && unsol_data)
 		iscsit_set_unsolicited_dataout(cmd);
 	else if (dump_payload && imm_data)
 		target_put_sess_cmd(&cmd->se_cmd);
@@ -1183,12 +1183,7 @@ isert_handle_iscsi_dataout(struct isert_conn *isert_conn,
 	 * multiple data-outs on the same command can arrive -
 	 * so post the buffer before hand
 	 */
-	rc = isert_post_recv(isert_conn, rx_desc);
-	if (rc) {
-		isert_err("ib_post_recv failed with %d\n", rc);
-		return rc;
-	}
-	return 0;
+	return isert_post_recv(isert_conn, rx_desc);
 }
 
 static int
@@ -1575,12 +1570,12 @@ isert_check_pi_status(struct se_cmd *se_cmd, struct ib_mr *sig_mr)
 		}
 		sec_offset_err = mr_status.sig_err.sig_err_offset;
 		do_div(sec_offset_err, block_size);
-		se_cmd->bad_sector = sec_offset_err + se_cmd->t_task_lba;
+		se_cmd->sense_info = sec_offset_err + se_cmd->t_task_lba;
 
 		isert_err("PI error found type %d at sector 0x%llx "
 			  "expected 0x%x vs actual 0x%x\n",
 			  mr_status.sig_err.err_type,
-			  (unsigned long long)se_cmd->bad_sector,
+			  (unsigned long long)se_cmd->sense_info,
 			  mr_status.sig_err.expected,
 			  mr_status.sig_err.actual);
 		ret = 1;
@@ -1784,10 +1779,8 @@ isert_post_response(struct isert_conn *isert_conn, struct isert_cmd *isert_cmd)
 	int ret;
 
 	ret = isert_post_recv(isert_conn, isert_cmd->rx_desc);
-	if (ret) {
-		isert_err("ib_post_recv failed with %d\n", ret);
+	if (ret)
 		return ret;
-	}
 
 	ret = ib_post_send(isert_conn->qp, &isert_cmd->tx_desc.send_wr, NULL);
 	if (ret) {
@@ -2038,7 +2031,7 @@ isert_set_dif_domain(struct se_cmd *se_cmd, struct ib_sig_domain *domain)
 	if (se_cmd->prot_type == TARGET_DIF_TYPE1_PROT ||
 	    se_cmd->prot_type == TARGET_DIF_TYPE2_PROT)
 		domain->sig.dif.ref_remap = true;
-};
+}
 
 static int
 isert_set_sig_attrs(struct se_cmd *se_cmd, struct ib_sig_attrs *sig_attrs)
@@ -2169,10 +2162,8 @@ isert_put_datain(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 					 send_flags);
 
 		rc = isert_post_recv(isert_conn, isert_cmd->rx_desc);
-		if (rc) {
-			isert_err("ib_post_recv failed with %d\n", rc);
+		if (rc)
 			goto err;
-		}
 
 		chain_wr = &isert_cmd->tx_desc.send_wr;
 	}
@@ -2557,7 +2548,7 @@ isert_wait4cmds(struct iscsi_conn *conn)
 	isert_info("iscsi_conn %p\n", conn);
 
 	if (conn->sess) {
-		target_sess_cmd_list_set_waiting(conn->sess->se_sess);
+		target_stop_session(conn->sess->se_sess);
 		target_wait_for_sess_cmds(conn->sess->se_sess);
 	}
 }

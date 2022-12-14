@@ -17,7 +17,7 @@
 #endif
 
 #ifndef HAVE_NETLINK_EXTACK
-#define NETLINK_MAX_COOKIE_LEN	20
+#define NETLINK_MAX_COOKIE_LEN  20
 struct netlink_ext_ack {
 	const char *_msg;
 	const struct nlattr *bad_attr;
@@ -28,9 +28,9 @@ struct netlink_ext_ack {
 #define UNUSED(x) (void)(x)
 #ifndef NL_SET_ERR_MSG
 #define NL_SET_ERR_MSG(extack, msg) { \
-		UNUSED(extack); \
-		pr_err("%s\n", msg); \
-	}
+	UNUSED(extack); \
+	pr_err("%s\n", msg); \
+}
 #define NL_SET_ERR_MSG_MOD(extack, msg) NL_SET_ERR_MSG(extack, KBUILD_MODNAME ": " msg)
 #endif
 #endif/* NL_SET_ERR_MSG */

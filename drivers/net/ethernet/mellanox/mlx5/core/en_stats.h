@@ -54,6 +54,9 @@
 #define MLX5E_DECLARE_PTP_TX_STAT(type, fld) "ptp_tx%d_"#fld, offsetof(type, fld)
 #define MLX5E_DECLARE_PTP_CH_STAT(type, fld) "ptp_ch_"#fld, offsetof(type, fld)
 #define MLX5E_DECLARE_PTP_CQ_STAT(type, fld) "ptp_cq%d_"#fld, offsetof(type, fld)
+#define MLX5E_DECLARE_PTP_RQ_STAT(type, fld) "ptp_rq%d_"#fld, offsetof(type, fld)
+
+#define MLX5E_DECLARE_QOS_TX_STAT(type, fld) "qos_tx%d_"#fld, offsetof(type, fld)
 
 struct counter_desc {
 	char		format[ETH_GSTRING_LEN];
@@ -109,6 +112,21 @@ void mlx5e_stats_fill(struct mlx5e_priv *priv, u64 *data, int idx);
 void mlx5e_stats_fill_strings(struct mlx5e_priv *priv, u8 *data);
 void mlx5e_stats_update_ndo_stats(struct mlx5e_priv *priv);
 
+void mlx5e_stats_pause_get(struct mlx5e_priv *priv,
+			   struct ethtool_pause_stats *pause_stats);
+void mlx5e_stats_fec_get(struct mlx5e_priv *priv,
+			 struct ethtool_fec_stats *fec_stats);
+
+void mlx5e_stats_eth_phy_get(struct mlx5e_priv *priv,
+			     struct ethtool_eth_phy_stats *phy_stats);
+void mlx5e_stats_eth_mac_get(struct mlx5e_priv *priv,
+			     struct ethtool_eth_mac_stats *mac_stats);
+void mlx5e_stats_eth_ctrl_get(struct mlx5e_priv *priv,
+			      struct ethtool_eth_ctrl_stats *ctrl_stats);
+void mlx5e_stats_rmon_get(struct mlx5e_priv *priv,
+			  struct ethtool_rmon_stats *rmon,
+			  const struct ethtool_rmon_hist_range **ranges);
+
 /* Concrete NIC Stats */
 
 struct mlx5e_sw_stats {
@@ -127,7 +145,6 @@ struct mlx5e_sw_stats {
 	u64 rx_lro_packets;
 	u64 rx_lro_bytes;
 	u64 rx_mcast_packets;
-	u64 rx_mcast_bytes;
 	u64 rx_ecn_mark;
 	u64 rx_removed_vlan_packets;
 	u64 rx_csum_unnecessary;
@@ -209,6 +226,7 @@ struct mlx5e_sw_stats {
 	u64 rx_tls_resync_req_end;
 	u64 rx_tls_resync_req_skip;
 	u64 rx_tls_resync_res_ok;
+	u64 rx_tls_resync_res_retry;
 	u64 rx_tls_resync_res_skip;
 	u64 rx_tls_err;
 #endif
@@ -312,7 +330,6 @@ struct mlx5e_rq_stats {
 	u64 lro_packets;
 	u64 lro_bytes;
 	u64 mcast_packets;
-	u64 mcast_bytes;
 	u64 ecn_mark;
 	u64 removed_vlan_packets;
 	u64 xdp_drop;
@@ -345,6 +362,7 @@ struct mlx5e_rq_stats {
 	u64 tls_resync_req_end;
 	u64 tls_resync_req_skip;
 	u64 tls_resync_res_ok;
+	u64 tls_resync_res_retry;
 	u64 tls_resync_res_skip;
 	u64 tls_err;
 #endif

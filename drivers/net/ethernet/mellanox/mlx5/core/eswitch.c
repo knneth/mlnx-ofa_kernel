@@ -35,9 +35,10 @@
 #include <linux/mlx5/mlx5_ifc.h>
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/fs.h>
+#include <linux/mlx5/mpfs.h>
 #include "esw/acl/lgcy.h"
-#include "esw/legacy.h"
 #include "esw/vf_meter.h"
+#include "esw/legacy.h"
 #include "mlx5_core.h"
 #include "lib/eq.h"
 #include "eswitch.h"
@@ -62,19 +63,6 @@ struct vport_addr {
 	bool mpfs; /* UC MAC was added to MPFs */
 	/* A flag indicating that mac was added due to mc promiscuous vport */
 	bool mc_promisc;
-};
-
-struct mlx5_esw_vhca_mapping {
-	struct rhash_head node;
-	u16 vhca_id;
-	u16 vport;
-};
-
-static const struct rhashtable_params vhca_map_params = {
-	.head_offset = offsetof(struct mlx5_esw_vhca_mapping, node),
-	.key_offset = offsetof(struct mlx5_esw_vhca_mapping, vhca_id),
-	.key_len = sizeof(((struct  mlx5_esw_vhca_mapping *)0)->vhca_id),
-	.automatic_shrinking = true,
 };
 
 DEFINE_IDA(mlx5e_vport_match_ida);
@@ -122,7 +110,6 @@ mlx5_eswitch_get_vport(struct mlx5_eswitch *esw, u16 vport_num)
 		esw_debug(esw->dev, "vport out of range: num(0x%x)\n", vport_num);
 		return ERR_PTR(-EINVAL);
 	}
-
 	return vport;
 }
 
@@ -332,7 +319,7 @@ static int esw_add_uc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	/* Skip mlx5_mpfs_add_mac for eswitch_managers,
 	 * it is already done by its netdev in mlx5e_execute_l2_action
 	 */
-	if (mlx5_esw_is_manager_vport(esw->dev, vport))
+	if (mlx5_esw_is_manager_vport(esw, vport))
 		goto fdb_add;
 
 	err = mlx5_mpfs_add_mac(esw->dev, mac);
@@ -364,7 +351,7 @@ static int esw_del_uc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	/* Skip mlx5_mpfs_del_mac for eswitch managers,
 	 * it is already done by its netdev in mlx5e_execute_l2_action
 	 */
-	if (!vaddr->mpfs || mlx5_esw_is_manager_vport(esw->dev, vport))
+	if (!vaddr->mpfs || mlx5_esw_is_manager_vport(esw, vport))
 		goto fdb_del;
 
 	err = mlx5_mpfs_del_mac(esw->dev, mac);
@@ -642,7 +629,7 @@ static void esw_update_acl_trunk_bitmap(struct mlx5_eswitch *esw, u32 vport_num)
 		return;
 
 	bitmap_and(vport->acl_vlan_8021q_bitmap, vport->req_vlan_bitmap,
-		   vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID);
+			vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID);
 }
 
 /* Sync vport vlan list from vport context */
@@ -1077,12 +1064,12 @@ static int esw_vport_create_sched_element(struct mlx5_eswitch *esw,
 	MLX5_SET(scheduling_context, sched_ctx, element_type,
 		 SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT);
 	vport_elem = MLX5_ADDR_OF(scheduling_context, sched_ctx,
-				  element_attributes);
+			element_attributes);
 	MLX5_SET(vport_element, vport_elem, vport_number, vport->vport);
 	MLX5_SET(scheduling_context, sched_ctx, parent_element_id,
-		 parent_tsar_ix);
+			parent_tsar_ix);
 	MLX5_SET(scheduling_context, sched_ctx, max_average_bw,
-		 max_rate);
+			max_rate);
 	MLX5_SET(scheduling_context, sched_ctx, bw_share, bw_share);
 
 	err = mlx5_create_scheduling_element_cmd(dev,
@@ -1103,11 +1090,9 @@ static int esw_vport_create_sched_element(struct mlx5_eswitch *esw,
 
 static int esw_vport_enable_qos(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
-	struct mlx5_core_dev *dev = esw->dev;
 	int err = 0;
 
-	if (!esw->qos.enabled || !MLX5_CAP_GEN(dev, qos) ||
-	    !MLX5_CAP_QOS(dev, esw_scheduling))
+	if (!esw->qos.enabled)
 		return 0;
 
 	if (vport->qos.enabled)
@@ -1116,7 +1101,8 @@ static int esw_vport_enable_qos(struct mlx5_eswitch *esw, struct mlx5_vport *vpo
 	vport->qos.group = esw->qos.group0;
 
 	err = esw_vport_create_sched_element(esw, vport, vport->qos.max_rate,
-					     vport->qos.bw_share);
+			vport->qos.bw_share);
+
 	if (err)
 		return err;
 
@@ -1235,6 +1221,12 @@ int mlx5_esw_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num,
 	struct mlx5_vport *vport;
 
 	vport = mlx5_eswitch_get_vport(esw, vport_num);
+	if (IS_ERR(vport))
+		return PTR_ERR(vport);
+
+	if (!vport->qos.enabled)
+		return -EOPNOTSUPP;
+
 	MLX5_SET(scheduling_context, ctx, max_average_bw, rate_mbps);
 
 	return mlx5_modify_scheduling_element_cmd(esw->dev,
@@ -1274,35 +1266,6 @@ static void esw_vport_cleanup_acl(struct mlx5_eswitch *esw,
 		esw_vport_destroy_offloads_acl_tables(esw, vport);
 }
 
-static int mlx5_esw_vport_vhca_id_mapping_get(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-					      u16 *vhca_id)
-{
-	int query_out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
-	void *query_ctx;
-	void *hca_caps;
-	int err;
-
-	*vhca_id = 0;
-	if (mlx5_esw_is_manager_vport(esw->dev, vport->vport) ||
-	    !MLX5_CAP_GEN(esw->dev, vhca_resource_manager))
-		return 0;
-
-	query_ctx = kzalloc(query_out_sz, GFP_KERNEL);
-	if (!query_ctx)
-		return -ENOMEM;
-
-	err = mlx5_vport_get_other_func_cap(esw->dev, vport->vport, query_ctx);
-	if (err)
-		goto out_free;
-
-	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
-	*vhca_id = MLX5_GET(cmd_hca_cap, hca_caps, vhca_id);
-
-out_free:
-	kfree(query_ctx);
-	return err;
-}
-
 static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
 	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
@@ -1317,7 +1280,7 @@ static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 	/* Attach vport to the eswitch rate limiter */
 	esw_vport_enable_qos(esw, vport);
 
-	if (mlx5_esw_is_manager_vport(esw->dev, vport_num))
+	if (mlx5_esw_is_manager_vport(esw, vport_num))
 		return 0;
 
 	mlx5_modify_vport_admin_state(esw->dev,
@@ -1358,7 +1321,7 @@ static void esw_vport_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport
 {
 	u16 vport_num = vport->vport;
 
-	if (!mlx5_esw_is_manager_vport(esw->dev, vport_num))
+	if (!mlx5_esw_is_manager_vport(esw, vport_num))
 		mlx5_modify_vport_admin_state(esw->dev,
 					      MLX5_VPORT_STATE_OP_MOD_ESW_VPORT,
 					      vport_num, 1,
@@ -1368,21 +1331,40 @@ static void esw_vport_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport
 	esw_vport_cleanup_acl(esw, vport);
 }
 
-int mlx5_eswitch_enable_vport(struct mlx5_eswitch *esw, u16 vport_num,
-			    enum mlx5_eswitch_vport_event enabled_events)
+static int mlx5_esw_query_hca_trusted(struct mlx5_eswitch *esw,
+				      struct mlx5_vport *vport)
 {
-	struct mlx5_esw_vhca_mapping *m;
+	bool trusted;
+	int err;
+
+	err = mlx5_esw_get_hca_trusted(esw, vport->vport, &trusted);
+	if (err == -EOPNOTSUPP)
+		return 0;
+
+	if (err)
+		return err;
+
+	vport->info.offloads_trusted = trusted;
+
+	return 0;
+}
+
+int mlx5_esw_vport_enable(struct mlx5_eswitch *esw, u16 vport_num,
+			  enum mlx5_eswitch_vport_event enabled_events)
+{
 	struct mlx5_vport *vport;
-	u16 vhca_id;
-	int ret = 0;
+	int ret;
 
 	vport = mlx5_eswitch_get_vport(esw, vport_num);
+	if (IS_ERR(vport))
+		return PTR_ERR(vport);
 
 	mutex_lock(&esw->state_lock);
 	if (vport->enabled)
 		goto done;
 
 	esw_debug(esw->dev, "Enabling VPORT(%d)\n", vport_num);
+	spin_lock_init(&vport->pg_counters_lock);
 
 	bitmap_zero(vport->req_vlan_bitmap, VLAN_N_VID);
 	bitmap_zero(vport->acl_vlan_8021q_bitmap, VLAN_N_VID);
@@ -1400,28 +1382,21 @@ int mlx5_eswitch_enable_vport(struct mlx5_eswitch *esw, u16 vport_num,
 	/* Esw manager is trusted by default. Host PF (vport 0) is trusted as well
 	 * in smartNIC as it's a vport group manager.
 	 */
-	if (mlx5_esw_is_manager_vport(esw->dev, vport_num) ||
+	if (mlx5_esw_is_manager_vport(esw, vport_num) ||
 	    (!vport_num && mlx5_core_is_ecpf(esw->dev)))
 		vport->info.trusted = true;
 
-	ret = mlx5_esw_vport_vhca_id_mapping_get(esw, vport, &vhca_id);
-	if (ret) {
-		esw_debug(esw->dev, "Failed to get VHCA_ID mapping to VPORT %d\n", vport_num);
-		goto err_out;
+	if (!mlx5_esw_is_manager_vport(esw, vport->vport) &&
+	    MLX5_CAP_GEN(esw->dev, vhca_resource_manager)) {
+		ret = mlx5_esw_vport_vhca_id_set(esw, vport_num);
+		if (ret)
+			goto err_vhca_mapping;
 	}
 
-	if (vhca_id) {
-		m = kzalloc(sizeof(*m), GFP_KERNEL);
-		if (!m) {
-			ret = -ENOMEM;
-			goto err_out;
-		}
-
-		m->vhca_id = vhca_id;
-		m->vport = vport_num;
-		ret = rhashtable_insert_fast(&esw->vhca_map_ht, &m->node, vhca_map_params);
+	if (!mlx5_esw_is_manager_vport(esw, vport->vport)) {
+		ret = mlx5_esw_query_hca_trusted(esw, vport);
 		if (ret)
-			goto err_insert;
+			goto err_vhca_mapping;
 	}
 
 	/* External controller host PF has factory programmed MAC.
@@ -1434,50 +1409,23 @@ int mlx5_eswitch_enable_vport(struct mlx5_eswitch *esw, u16 vport_num,
 
 	esw->enabled_vports++;
 	esw_debug(esw->dev, "Enabled VPORT(%d)\n", vport_num);
-
-	goto done;
-
-err_insert:
-	kfree(m);
-err_out:
-	vport->enabled = false;
-	vport->enabled_events = 0;
-	esw_vport_cleanup(esw, vport);
 done:
+	mutex_unlock(&esw->state_lock);
+	return ret;
+
+err_vhca_mapping:
+	esw_vport_cleanup(esw, vport);
 	mutex_unlock(&esw->state_lock);
 	return ret;
 }
 
-static void mlx5_eswitch_free_vhca_id_mapping(struct mlx5_eswitch *esw, u16 vport_num)
-{
-	struct mlx5_esw_vhca_mapping *m;
-	struct rhashtable_iter iter;
-	int found = 0;
-
-	rhashtable_walk_enter(&esw->vhca_map_ht, &iter);
-	rhashtable_walk_start(&iter);
-	while ((m = rhashtable_walk_next(&iter)) != NULL) {
-		if (IS_ERR(m))
-			continue;
-		if (m->vport == vport_num) {
-			found = 1;
-			break;
-		}
-	}
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
-
-	if (found) {
-		rhashtable_remove_fast(&esw->vhca_map_ht, &m->node, vhca_map_params);
-		kfree(m);
-	}
-}
-
-void mlx5_eswitch_disable_vport(struct mlx5_eswitch *esw, u16 vport_num)
+void mlx5_esw_vport_disable(struct mlx5_eswitch *esw, u16 vport_num)
 {
 	struct mlx5_vport *vport;
 
 	vport = mlx5_eswitch_get_vport(esw, vport_num);
+	if (IS_ERR(vport))
+		return;
 
 	mutex_lock(&esw->state_lock);
 	if (!vport->enabled)
@@ -1490,7 +1438,9 @@ void mlx5_eswitch_disable_vport(struct mlx5_eswitch *esw, u16 vport_num)
 	/* Disable events from this vport */
 	arm_vport_context_events_cmd(esw->dev, vport->vport, 0);
 
-	mlx5_eswitch_free_vhca_id_mapping(esw, vport_num);
+	if (!mlx5_esw_is_manager_vport(esw, vport->vport) &&
+	    MLX5_CAP_GEN(esw->dev, vhca_resource_manager))
+		mlx5_esw_vport_vhca_id_clear(esw, vport_num);
 
 	/* We don't assume VFs will cleanup after themselves.
 	 * Calling vport change handler while vport is disabled will cleanup
@@ -1608,7 +1558,7 @@ int mlx5_eswitch_load_vport(struct mlx5_eswitch *esw, u16 vport_num,
 {
 	int err;
 
-	err = mlx5_eswitch_enable_vport(esw, vport_num, enabled_events);
+	err = mlx5_esw_vport_enable(esw, vport_num, enabled_events);
 	if (err)
 		return err;
 
@@ -1619,14 +1569,14 @@ int mlx5_eswitch_load_vport(struct mlx5_eswitch *esw, u16 vport_num,
 	return err;
 
 err_rep:
-	mlx5_eswitch_disable_vport(esw, vport_num);
+	mlx5_esw_vport_disable(esw, vport_num);
 	return err;
 }
 
 void mlx5_eswitch_unload_vport(struct mlx5_eswitch *esw, u16 vport_num)
 {
 	esw_offloads_unload_rep(esw, vport_num);
-	mlx5_eswitch_disable_vport(esw, vport_num);
+	mlx5_esw_vport_disable(esw, vport_num);
 }
 
 void mlx5_eswitch_unload_vf_vports(struct mlx5_eswitch *esw, u16 num_vfs)
@@ -1761,20 +1711,6 @@ static void mlx5_eswitch_get_devlink_param(struct mlx5_eswitch *esw)
 			 ESW_OFFLOADS_DEFAULT_NUM_GROUPS);
 		esw->params.large_group_num = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
 	}
-
-#if IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
-	err = devlink_param_driverinit_value_get(devlink,
-						 MLX5_DEVLINK_PARAM_ID_ESW_E2E_CACHE_SIZE,
-						 &val);
-	if (!err) {
-		esw->params.e2e_cache_size = val.vu32;
-	} else {
-		esw_warn(esw->dev,
-			 "Devlink can't get param e2e_cache_size, uses default (%d).\n",
-			 ESW_DEFAULT_E2E_CACHE_SIZE);
-		esw->params.e2e_cache_size = ESW_DEFAULT_E2E_CACHE_SIZE;
-	}
-#endif
 }
 
 static void
@@ -1908,6 +1844,10 @@ int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int mode, int num_vfs)
 	if (err)
 		goto abort;
 
+	err = mlx5_activate_mpesw_lag(esw);
+	if (err)
+		goto esw_disable;
+
 	mlx5_eswitch_event_handlers_register(esw);
 
 	esw_info(esw->dev, "Enable: mode(%s), nvfs(%d), active vports(%d)\n",
@@ -1918,6 +1858,11 @@ int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int mode, int num_vfs)
 
 	return 0;
 
+esw_disable:
+	if (mode == MLX5_ESWITCH_LEGACY)
+		esw_legacy_disable(esw);
+	else
+		esw_offloads_disable(esw);
 abort:
 	esw_destroy_base_tsars(esw);
 	esw->mode = MLX5_ESWITCH_NONE;
@@ -1945,7 +1890,8 @@ int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs)
 	if (!mlx5_esw_allowed(esw))
 		return 0;
 
-	mutex_lock(&esw->mode_lock);
+	mlx5_lag_disable_change(esw->dev);
+	down_write(&esw->mode_lock);
 	if (esw->mode == MLX5_ESWITCH_NONE) {
 		ret = mlx5_eswitch_enable_locked(esw, MLX5_ESWITCH_LEGACY, num_vfs);
 	} else {
@@ -1957,8 +1903,8 @@ int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs)
 		if (!ret)
 			esw->esw_funcs.num_vfs = num_vfs;
 	}
-	atomic_set(&esw->tc_refcnt, 0);
-	mutex_unlock(&esw->mode_lock);
+	up_write(&esw->mode_lock);
+	mlx5_lag_enable_change(esw->dev);
 	return ret;
 }
 
@@ -1981,6 +1927,7 @@ void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw, bool clear_vf)
 	mlx5_esw_mode_change_notify(esw, MLX5_ESWITCH_NONE);
 
 	mlx5_eswitch_event_handlers_unregister(esw);
+	mlx5_deactivate_mpesw_lag(esw);
 
 	if (esw->mode == MLX5_ESWITCH_LEGACY)
 		esw_legacy_disable(esw);
@@ -2005,11 +1952,12 @@ void mlx5_eswitch_disable(struct mlx5_eswitch *esw, bool clear_vf)
 	if (!mlx5_esw_allowed(esw))
 		return;
 
-	mutex_lock(&esw->mode_lock);
-	atomic_set(&esw->tc_refcnt, -1);
+	mlx5_lag_disable_change(esw->dev);
+	down_write(&esw->mode_lock);
 	mlx5_eswitch_disable_locked(esw, clear_vf);
 	esw->esw_funcs.num_vfs = 0;
-	mutex_unlock(&esw->mode_lock);
+	up_write(&esw->mode_lock);
+	mlx5_lag_enable_change(esw->dev);
 }
 
 static int mlx5_query_hca_cap_host_pf(struct mlx5_core_dev *dev, void *out)
@@ -2069,7 +2017,6 @@ static void mlx5_esw_vports_matchid_free(struct mlx5_eswitch *esw)
 	mlx5_esw_for_each_vport(esw, i, vport)
 		mlx5_esw_vport_matchid_free(vport);
 }
-
 static int mlx5_esw_vport_matchid_alloc(struct mlx5_eswitch *esw, struct mlx5_core_dev *dev, struct mlx5_vport *vport)
 {
 	bool access_other_hca_roce;
@@ -2306,13 +2253,11 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	mutex_init(&esw->offloads.decap_tbl_lock);
 	hash_init(esw->offloads.decap_tbl);
 	mlx5e_mod_hdr_tbl_init(&esw->offloads.mod_hdr);
-	atomic_set(&esw->tc_refcnt, 0);
-	spin_lock_init(&esw->offloads.route_lock);
-	hash_init(esw->offloads.route_tbl);
+	atomic64_set(&esw->offloads.num_flows, 0);
 	ida_init(&esw->offloads.vport_metadata_ida);
-	rhashtable_init(&esw->vhca_map_ht, &vhca_map_params);
+	xa_init_flags(&esw->offloads.vhca_map, XA_FLAGS_ALLOC);
 	mutex_init(&esw->state_lock);
-	mutex_init(&esw->mode_lock);
+	init_rwsem(&esw->mode_lock);
 
 	esw->enabled_vports = 0;
 	esw->mode = MLX5_ESWITCH_NONE;
@@ -2326,7 +2271,7 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	BLOCKING_INIT_NOTIFIER_HEAD(&esw->n_head);
 
 	esw_info(dev,
-		 "total vports %d, per vport: max uc(%d) max mc(%d)\n",
+		 "Total vports %d, per vport: max uc(%d) max mc(%d)\n",
 		 esw->total_vports,
 		 MLX5_MAX_UC_PER_VPORT(dev),
 		 MLX5_MAX_MC_PER_VPORT(dev));
@@ -2389,9 +2334,9 @@ void mlx5_eswitch_cleanup(struct mlx5_eswitch *esw)
 
 	esw->dev->priv.eswitch = NULL;
 	destroy_workqueue(esw->work_queue);
-	mutex_destroy(&esw->mode_lock);
 	mutex_destroy(&esw->state_lock);
-	rhashtable_destroy(&esw->vhca_map_ht);
+	WARN_ON(!xa_empty(&esw->offloads.vhca_map));
+	xa_destroy(&esw->offloads.vhca_map);
 	ida_destroy(&esw->offloads.vport_metadata_ida);
 	mlx5e_mod_hdr_tbl_destroy(&esw->offloads.mod_hdr);
 	mutex_destroy(&esw->offloads.encap_tbl_lock);
@@ -2457,19 +2402,6 @@ int mlx5_eswitch_set_vport_mac(struct mlx5_eswitch *esw,
 	return err;
 }
 
-int mlx5_eswitch_get_vport_from_vhca_id(struct mlx5_eswitch *esw, u16 vhca_id,
-					u16 *vport)
-{
-	struct mlx5_esw_vhca_mapping *m = rhashtable_lookup_fast(&esw->vhca_map_ht, &vhca_id,
-								 vhca_map_params);
-
-	if (!m)
-		return -EINVAL;
-
-	*vport = m->vport;
-	return 0;
-}
-
 static bool mlx5_esw_check_port_type(struct mlx5_eswitch *esw, u16 vport_num, xa_mark_t mark)
 {
 	struct mlx5_vport *vport;
@@ -2531,6 +2463,30 @@ int mlx5_devlink_port_function_hw_addr_get(struct devlink *devlink,
 	}
 	mutex_unlock(&esw->state_lock);
 	return err;
+}
+
+static int
+mlx5_esw_set_hca_trusted(struct mlx5_eswitch *esw, u16 vport_num, bool trusted)
+{
+	u32 out[MLX5_ST_SZ_DW(vhca_trust_level)] = {0};
+	u32 in[MLX5_ST_SZ_DW(vhca_trust_level)] = {0};
+	int sz = MLX5_ST_SZ_BYTES(vhca_trust_level);
+	u16 vhca_id;
+	int err;
+
+	if (!MLX5_CAP_GEN(esw->dev, vhca_trust_level_reg))
+		return -EOPNOTSUPP;
+
+	err = mlx5_esw_query_vport_vhca_id(esw, vport_num, &vhca_id);
+	if (err) {
+		esw_warn(esw->dev, "Getting vhca_id for vport failed (vport=%u,err=%d)\n",
+			 vport_num, err);
+		return err;
+	}
+
+	MLX5_SET(vhca_trust_level, in, vhca_id, vhca_id);
+	MLX5_SET(vhca_trust_level, in, trust_level, trusted);
+	return mlx5_core_access_reg(esw->dev, in, sz, out, sz, MLX5_REG_TRUST_LEVEL, 0, 1);
 }
 
 int mlx5_devlink_port_function_hw_addr_set(struct devlink *devlink,
@@ -2620,6 +2576,7 @@ int mlx5_eswitch_add_vport_trunk_range(struct mlx5_eswitch *esw,
 
 	if (!mlx5_esw_allowed(esw))
 		return -EPERM;
+
 	if (IS_ERR(evport))
 		return PTR_ERR(evport);
 
@@ -2657,6 +2614,7 @@ int mlx5_eswitch_del_vport_trunk_range(struct mlx5_eswitch *esw,
 
 	if (!mlx5_esw_allowed(esw))
 		return -EPERM;
+
 	if (IS_ERR(evport))
 		return PTR_ERR(evport);
 
@@ -2672,6 +2630,101 @@ int mlx5_eswitch_del_vport_trunk_range(struct mlx5_eswitch *esw,
 	mutex_unlock(&esw->state_lock);
 
 	return err;
+}
+
+int mlx5_devlink_port_function_trust_set(struct devlink *devlink,
+					 struct devlink_port *port,
+					 bool trust,
+					 struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw;
+	struct mlx5_vport *vport;
+	u16 vport_num;
+	int err;
+
+	esw = mlx5_devlink_eswitch_get(devlink);
+	if (IS_ERR(esw))
+		return PTR_ERR(esw);
+
+	if (!mlx5_core_is_ecpf(esw->dev))
+		return -EOPNOTSUPP;
+
+	vport_num = mlx5_esw_devlink_port_index_to_vport_num(port->index);
+	if (!is_port_function_supported(esw, vport_num))
+		return -EOPNOTSUPP;
+
+	vport = mlx5_eswitch_get_vport(esw, vport_num);
+	if (IS_ERR(vport)) {
+		NL_SET_ERR_MSG_MOD(extack, "Invalid port");
+		return PTR_ERR(vport);
+	}
+
+	err = mlx5_esw_set_hca_trusted(esw, vport_num, trust);
+	if (!err)
+		vport->info.offloads_trusted = trust;
+
+	return err;
+}
+
+int
+mlx5_esw_get_hca_trusted(struct mlx5_eswitch *esw,
+			 u16 vport_num,
+			 bool *trusted)
+{
+	u32 out[MLX5_ST_SZ_DW(vhca_trust_level)] = {0};
+	u32 in[MLX5_ST_SZ_DW(vhca_trust_level)] = {0};
+	int sz = MLX5_ST_SZ_BYTES(vhca_trust_level);
+	int trust_level;
+	u16 vhca_id;
+	int err;
+
+	if (!MLX5_CAP_GEN(esw->dev, vhca_trust_level_reg))
+		return -EOPNOTSUPP;
+
+	err = mlx5_esw_query_vport_vhca_id(esw, vport_num, &vhca_id);
+	if (err) {
+		esw_warn(esw->dev, "Query of vhca_id for vport %d failed, err %d\n",
+			 vport_num, err);
+		return err;
+	}
+
+	MLX5_SET(vhca_trust_level, in, vhca_id, vhca_id);
+	mlx5_core_access_reg(esw->dev, in, sz, out, sz, MLX5_REG_TRUST_LEVEL, 0, 0);
+	trust_level = MLX5_GET(vhca_trust_level, out, trust_level);
+	*trusted = trust_level & 0x1;
+
+	return 0;
+}
+
+int mlx5_devlink_port_function_trust_get(struct devlink *devlink,
+					 struct devlink_port *port,
+					 bool *trusted,
+					 struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw;
+	struct mlx5_vport *vport;
+	u16 vport_num;
+
+	esw = mlx5_devlink_eswitch_get(devlink);
+	if (IS_ERR(esw))
+		return PTR_ERR(esw);
+
+	if (!mlx5_core_is_ecpf(esw->dev))
+		return -EOPNOTSUPP;
+
+	vport_num = mlx5_esw_devlink_port_index_to_vport_num(port->index);
+	if (!is_port_function_supported(esw, vport_num))
+		return -EOPNOTSUPP;
+
+	vport = mlx5_eswitch_get_vport(esw, vport_num);
+	if (IS_ERR(vport)) {
+		NL_SET_ERR_MSG_MOD(extack, "Invalid port");
+		return PTR_ERR(vport);
+	}
+
+	*trusted = vport->info.offloads_trusted;
+
+	return 0;
 }
 
 int mlx5_eswitch_set_vport_state(struct mlx5_eswitch *esw,
@@ -2693,6 +2746,10 @@ int mlx5_eswitch_set_vport_state(struct mlx5_eswitch *esw,
 		vport = 0;
 	}
 	mutex_lock(&esw->state_lock);
+	if (esw->mode != MLX5_ESWITCH_LEGACY) {
+		err = -EOPNOTSUPP;
+		goto unlock;
+	}
 
 	err = mlx5_modify_vport_admin_state(esw->dev, opmod, vport, other_vport, link_state);
 	if (err) {
@@ -2780,8 +2837,8 @@ int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
 }
 
 static u32 calculate_min_rate_divider(struct mlx5_eswitch *esw,
-				      struct mlx5_vgroup *group,
-				      bool group_level)
+		struct mlx5_vgroup *group,
+		bool group_level)
 {
 	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
 	struct mlx5_vgroup *vgroup;
@@ -2798,13 +2855,19 @@ static u32 calculate_min_rate_divider(struct mlx5_eswitch *esw,
 	} else {
 		mlx5_esw_for_each_vport(esw, i, evport) {
 			if (evport->qos.group != group || !evport->enabled ||
-			    evport->qos.min_rate < max_guarantee)
+					evport->qos.min_rate < max_guarantee)
 				continue;
 			max_guarantee = evport->qos.min_rate;
 		}
 	}
 	if (max_guarantee)
 		return max_t(u32, max_guarantee / fw_max_bw_share, 1);
+
+	/* If vports min rate divider is 0 but their group has bw_share configured, then
+	 * need to set bw_share for vports to minimal value.
+	 */
+	if (!group_level && !max_guarantee && group && group->bw_share)
+		return 1;
 	return 0;
 }
 
@@ -2877,6 +2940,8 @@ static int normalize_vgroups_min_rate(struct mlx5_eswitch *esw, u32 divider)
 	return 0;
 }
 
+
+
 int mlx5_eswitch_set_vport_rate(struct mlx5_eswitch *esw, u16 vport,
 				u32 max_rate, u32 min_rate)
 {
@@ -2902,6 +2967,7 @@ int mlx5_eswitch_set_vport_rate(struct mlx5_eswitch *esw, u16 vport,
 		return -EOPNOTSUPP;
 
 	mutex_lock(&esw->state_lock);
+
 	if (min_rate == evport->qos.min_rate)
 		goto set_max_rate;
 
@@ -3039,9 +3105,8 @@ int mlx5_eswitch_vport_update_group(struct mlx5_eswitch *esw, int vport_num,
 	curr_group->num_vports--;
 
 	/* Recalculate bw share weights of old and new groups */
-	if (vport->qos.bw_share) {
+	if (vport->qos.bw_share || new_group->bw_share) {
 		normalize_vports_min_rate(esw, curr_group);
-
 		normalize_vports_min_rate(esw, new_group);
 	}
 
@@ -3116,7 +3181,7 @@ int mlx5_eswitch_set_vgroup_max_rate(struct mlx5_eswitch *esw,
 	int err = 0;
 
 	if (!MLX5_CAP_QOS(esw->dev, esw_rate_limit) ||
-	    !MLX5_CAP_QOS(dev, log_esw_max_sched_depth))
+			!MLX5_CAP_QOS(dev, log_esw_max_sched_depth))
 		return -EOPNOTSUPP;
 
 	if (!MLX5_CAP_GEN(dev, qos) || !MLX5_CAP_QOS(dev, esw_scheduling))
@@ -3304,16 +3369,15 @@ mlx5_eswitch_get_encap_mode(const struct mlx5_core_dev *dev)
 }
 EXPORT_SYMBOL(mlx5_eswitch_get_encap_mode);
 
-bool mlx5_esw_check_modes_match(struct mlx5_core_dev *dev0,
-				struct mlx5_core_dev *dev1,
-				int mode)
+bool mlx5_esw_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev1)
 {
-	if (!mlx5_esw_allowed(dev0->priv.eswitch) ||
-	    !mlx5_esw_allowed(dev1->priv.eswitch))
-		return false;
+	if ((dev0->priv.eswitch->mode == MLX5_ESWITCH_NONE &&
+	     dev1->priv.eswitch->mode == MLX5_ESWITCH_NONE) ||
+	    (dev0->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS &&
+	     dev1->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS))
+		return true;
 
-	return dev0->priv.eswitch->mode == mode &&
-	       dev1->priv.eswitch->mode == mode;
+	return false;
 }
 
 bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num)
@@ -3321,6 +3385,13 @@ bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num
 	return mlx5_esw_allowed(esw) ? is_esw_manager_vport(esw, vport_num) : false;
 }
 EXPORT_SYMBOL_GPL(mlx5_eswitch_is_manager_vport);
+
+bool mlx5_esw_multipath_prereq(struct mlx5_core_dev *dev0,
+			       struct mlx5_core_dev *dev1)
+{
+	return (dev0->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS &&
+		dev1->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS);
+}
 
 int mlx5_esw_event_notifier_register(struct mlx5_eswitch *esw, struct notifier_block *nb)
 {
@@ -3330,6 +3401,110 @@ int mlx5_esw_event_notifier_register(struct mlx5_eswitch *esw, struct notifier_b
 void mlx5_esw_event_notifier_unregister(struct mlx5_eswitch *esw, struct notifier_block *nb)
 {
 	blocking_notifier_chain_unregister(&esw->n_head, nb);
+}
+
+/**
+ * mlx5_esw_hold() - Try to take a read lock on esw mode lock.
+ * @mdev: mlx5 core device.
+ *
+ * Should be called by esw resources callers.
+ *
+ * Return: true on success or false.
+ */
+bool mlx5_esw_hold(struct mlx5_core_dev *mdev)
+{
+	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+
+	/* e.g. VF doesn't have eswitch so nothing to do */
+	if (!mlx5_esw_allowed(esw))
+		return true;
+
+	if (down_read_trylock(&esw->mode_lock) != 0)
+		return true;
+
+	return false;
+}
+
+/**
+ * mlx5_esw_release() - Release a read lock on esw mode lock.
+ * @mdev: mlx5 core device.
+ */
+void mlx5_esw_release(struct mlx5_core_dev *mdev)
+{
+	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+
+	if (mlx5_esw_allowed(esw))
+		up_read(&esw->mode_lock);
+}
+
+/**
+ * mlx5_esw_get() - Increase esw user count.
+ * @mdev: mlx5 core device.
+ */
+void mlx5_esw_get(struct mlx5_core_dev *mdev)
+{
+	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+
+	if (mlx5_esw_allowed(esw))
+		atomic64_inc(&esw->user_count);
+}
+
+/**
+ * mlx5_esw_put() - Decrease esw user count.
+ * @mdev: mlx5 core device.
+ */
+void mlx5_esw_put(struct mlx5_core_dev *mdev)
+{
+	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+
+	if (mlx5_esw_allowed(esw))
+		atomic64_dec_if_positive(&esw->user_count);
+}
+
+/**
+ * mlx5_esw_try_lock() - Take a write lock on esw mode lock.
+ * @esw: eswitch device.
+ *
+ * Should be called by esw mode change routine.
+ *
+ * Return:
+ * * 0       - esw mode if successfully locked and refcount is 0.
+ * * -EBUSY  - refcount is not 0.
+ * * -EINVAL - In the middle of switching mode or lock is already held.
+ */
+int mlx5_esw_try_lock(struct mlx5_eswitch *esw)
+{
+	if (down_write_trylock(&esw->mode_lock) == 0)
+		return -EINVAL;
+
+	if (atomic64_read(&esw->user_count) > 0) {
+		up_write(&esw->mode_lock);
+		return -EBUSY;
+	}
+
+	return esw->mode;
+}
+
+/**
+ * mlx5_esw_unlock() - Release write lock on esw mode lock
+ * @esw: eswitch device.
+ */
+void mlx5_esw_unlock(struct mlx5_eswitch *esw)
+{
+	if (!mlx5_esw_allowed(esw))
+		return;
+	up_write(&esw->mode_lock);
+}
+
+/**
+ * mlx5_esw_lock() - Take write lock on esw mode lock
+ * @esw: eswitch device.
+ */
+void mlx5_esw_lock(struct mlx5_eswitch *esw)
+{
+	if (!mlx5_esw_allowed(esw))
+		return;
+	down_write(&esw->mode_lock);
 }
 
 /**
@@ -3347,3 +3522,15 @@ u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev)
 	return mlx5_esw_allowed(esw) ? esw->total_vports : 0;
 }
 EXPORT_SYMBOL_GPL(mlx5_eswitch_get_total_vports);
+
+/**
+ * mlx5_eswitch_get_core_dev - Get the mdev device
+ * @esw : eswitch device.
+ *
+ * Return the mellanox core device which manages the eswitch.
+ */
+struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw)
+{
+	return mlx5_esw_allowed(esw) ? esw->dev : NULL;
+}
+EXPORT_SYMBOL(mlx5_eswitch_get_core_dev);

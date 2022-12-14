@@ -1,0 +1,36 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
+
+Change-Id: Id7f0bffab15efa53f192631da465765b03547a1e
+---
+ drivers/infiniband/core/umem_dmabuf.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/umem_dmabuf.c
++++ b/drivers/infiniband/core/umem_dmabuf.c
+@@ -2,7 +2,7 @@
+ /*
+  * Copyright (c) 2020 Intel Corporation. All rights reserved.
+  */
+-
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ #include <linux/dma-buf.h>
+ #include <linux/dma-resv.h>
+ #include <linux/dma-mapping.h>
+@@ -66,7 +66,11 @@ wait_fence:
+ 	 * may be not up-to-date. Wait for the exporter to finish
+ 	 * the migration.
+ 	 */
++#ifdef HAVE_DMA_RESV_EXCL_FENCE
++	fence = dma_resv_excl_fence(umem_dmabuf->attach->dmabuf->resv);
++#else
+ 	fence = dma_resv_get_excl(umem_dmabuf->attach->dmabuf->resv);
++#endif
+ 	if (fence)
+ 		return dma_fence_wait(fence, false);
+ 
+@@ -176,3 +180,4 @@ void ib_umem_dmabuf_release(struct ib_um
+ 	dma_buf_put(dmabuf);
+ 	kfree(umem_dmabuf);
+ }
++#endif

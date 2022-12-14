@@ -7,10 +7,11 @@
 
 #ifndef first_memory_node
 #if MAX_NUMNODES > 1
-#define first_memory_node	first_node(node_states[N_MEMORY])
+#define first_memory_node       first_node(node_states[N_MEMORY])
 #else
-#define first_memory_node	0
+#define first_memory_node       0
 #endif
 #endif
 
 #endif /* _COMPAT_LINUX_NODEMASK_H */
+

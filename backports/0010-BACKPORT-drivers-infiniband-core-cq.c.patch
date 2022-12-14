@@ -1,7 +1,7 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cq.c
 
-Change-Id: I4dc15c5a1ab8897868ed153d576be3d3e6dbe551
+Change-Id: Idce568b96512b18b595349fabe9f1c64e4f2a708
 ---
  drivers/infiniband/core/cq.c | 71 ++++++++++++++++++++++++++++++++++++
  1 file changed, 71 insertions(+)
@@ -134,7 +134,7 @@ Change-Id: I4dc15c5a1ab8897868ed153d576be3d3e6dbe551
  	queue_work(cq->comp_wq, &cq->work);
  }
  
-@@ -256,12 +304,21 @@ struct ib_cq *__ib_alloc_cq_user(struct
+@@ -249,12 +297,21 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
  	case IB_POLL_DIRECT:
  		cq->comp_handler = ib_cq_completion_direct;
  		break;
@@ -156,17 +156,17 @@ Change-Id: I4dc15c5a1ab8897868ed153d576be3d3e6dbe551
  	case IB_POLL_WORKQUEUE:
  	case IB_POLL_UNBOUND_WORKQUEUE:
  		cq->comp_handler = ib_cq_completion_workqueue;
-@@ -275,7 +332,9 @@ struct ib_cq *__ib_alloc_cq_user(struct
- 		goto out_destroy_cq;
- 	}
- 
+@@ -272,7 +329,9 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
+ 		rdma_restrack_dontrack(&cq->res);
+ 	else
+ 		rdma_restrack_add(&cq->res);
 +#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
  	trace_cq_alloc(cq, nr_cqe, comp_vector, poll_ctx);
 +#endif
  	return cq;
  
  out_destroy_cq:
-@@ -286,7 +345,9 @@ out_free_wc:
+@@ -283,7 +342,9 @@ out_free_wc:
  	kfree(cq->wc);
  out_free_cq:
  	kfree(cq);
@@ -175,8 +175,8 @@ Change-Id: I4dc15c5a1ab8897868ed153d576be3d3e6dbe551
 +#endif
  	return ERR_PTR(ret);
  }
- EXPORT_SYMBOL(__ib_alloc_cq_user);
-@@ -334,9 +395,17 @@ void ib_free_cq_user(struct ib_cq *cq, s
+ EXPORT_SYMBOL(__ib_alloc_cq);
+@@ -332,9 +393,17 @@ void ib_free_cq(struct ib_cq *cq)
  	switch (cq->poll_ctx) {
  	case IB_POLL_DIRECT:
  		break;
@@ -194,13 +194,13 @@ Change-Id: I4dc15c5a1ab8897868ed153d576be3d3e6dbe551
  	case IB_POLL_WORKQUEUE:
  	case IB_POLL_UNBOUND_WORKQUEUE:
  		cancel_work_sync(&cq->work);
-@@ -346,7 +415,9 @@ void ib_free_cq_user(struct ib_cq *cq, s
+@@ -344,7 +413,9 @@ void ib_free_cq(struct ib_cq *cq)
  	}
  
  	rdma_dim_destroy(cq);
 +#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
  	trace_cq_free(cq);
 +#endif
+ 	ret = cq->device->ops.destroy_cq(cq, NULL);
+ 	WARN_ONCE(ret, "Destroy of kernel CQ shouldn't fail");
  	rdma_restrack_del(&cq->res);
- 	cq->device->ops.destroy_cq(cq, udata);
- 	kfree(cq->wc);

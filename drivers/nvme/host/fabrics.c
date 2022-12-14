@@ -339,6 +339,11 @@ static void nvmf_log_connect_error(struct nvme_ctrl *ctrl,
 			cmd->connect.recfmt);
 		break;
 
+	case NVME_SC_HOST_PATH_ERROR:
+		dev_err(ctrl->device,
+			"Connect command failed: host path error\n");
+		break;
+
 	default:
 		dev_err(ctrl->device,
 			"Connect command failed, error wo/DNR bit: %d\n",
@@ -382,10 +387,8 @@ int nvmf_connect_admin_queue(struct nvme_ctrl *ctrl)
 
 	/*
 	 * Set keep-alive timeout in seconds granularity (ms * 1000)
-	 * and add a grace period for controller kato enforcement
 	 */
-	cmd.connect.kato = ctrl->kato ?
-		cpu_to_le32((ctrl->kato + NVME_KATO_GRACE) * 1000) : 0;
+	cmd.connect.kato = cpu_to_le32(ctrl->kato * 1000);
 
 	if (ctrl->opts->disable_sqflow)
 		cmd.connect.cattr |= NVME_CONNECT_DISABLE_SQFLOW;
@@ -538,63 +541,6 @@ static struct nvmf_transport_ops *nvmf_lookup_transport(
 	return NULL;
 }
 
-/*
- * For something we're not in a state to send to the device the default action
- * is to busy it and retry it after the controller state is recovered.  However,
- * if the controller is deleting or if anything is marked for failfast or
- * nvme multipath it is immediately failed.
- *
- * Note: commands used to initialize the controller will be marked for failfast.
- * Note: nvme cli/ioctl commands are marked for failfast.
- */
-blk_status_t nvmf_fail_nonready_command(struct nvme_ctrl *ctrl,
-		struct request *rq)
-{
-	if (ctrl->state != NVME_CTRL_DELETING_NOIO &&
-	    ctrl->state != NVME_CTRL_DEAD &&
-	    !blk_noretry_request(rq) && !(rq->cmd_flags & REQ_NVME_MPATH))
-		return BLK_STS_RESOURCE;
-
-	return nvme_host_path_error(rq);
-}
-EXPORT_SYMBOL_GPL(nvmf_fail_nonready_command);
-
-bool __nvmf_check_ready(struct nvme_ctrl *ctrl, struct request *rq,
-		bool queue_live)
-{
-	struct nvme_request *req = nvme_req(rq);
-
-	/*
-	 * currently we have a problem sending passthru commands
-	 * on the admin_q if the controller is not LIVE because we can't
-	 * make sure that they are going out after the admin connect,
-	 * controller enable and/or other commands in the initialization
-	 * sequence. until the controller will be LIVE, fail with
-	 * BLK_STS_RESOURCE so that they will be rescheduled.
-	 */
-	if (rq->q == ctrl->admin_q && (req->flags & NVME_REQ_USERCMD))
-		return false;
-
-	/*
-	 * Only allow commands on a live queue, except for the connect command,
-	 * which is require to set the queue live in the appropinquate states.
-	 */
-	switch (ctrl->state) {
-	case NVME_CTRL_CONNECTING:
-		if (blk_rq_is_passthrough(rq) && nvme_is_fabrics(req->cmd) &&
-		    req->cmd->fabrics.fctype == nvme_fabrics_type_connect)
-			return true;
-		break;
-	default:
-		break;
-	case NVME_CTRL_DEAD:
-		return false;
-	}
-
-	return queue_live;
-}
-EXPORT_SYMBOL_GPL(__nvmf_check_ready);
-
 static const match_table_t opt_tokens = {
 	{ NVMF_OPT_TRANSPORT,		"transport=%s"		},
 	{ NVMF_OPT_TRADDR,		"traddr=%s"		},
@@ -615,6 +561,7 @@ static const match_table_t opt_tokens = {
 	{ NVMF_OPT_NR_WRITE_QUEUES,	"nr_write_queues=%d"	},
 	{ NVMF_OPT_NR_POLL_QUEUES,	"nr_poll_queues=%d"	},
 	{ NVMF_OPT_TOS,			"tos=%d"		},
+	{ NVMF_OPT_FAIL_FAST_TMO,	"fast_io_fail_tmo=%d"	},
 	{ NVMF_OPT_ERR,			NULL			}
 };
 
@@ -632,8 +579,9 @@ static int nvmf_parse_options(struct nvmf_ctrl_options *opts,
 	opts->queue_size = NVMF_DEF_QUEUE_SIZE;
 	opts->nr_io_queues = num_online_cpus();
 	opts->reconnect_delay = NVMF_DEF_RECONNECT_DELAY;
-	opts->kato = NVME_DEFAULT_KATO;
+	opts->kato = 0;
 	opts->duplicate_connect = false;
+	opts->fast_io_fail_tmo = NVMF_DEF_FAIL_FAST_TMO;
 	opts->hdr_digest = false;
 	opts->data_digest = false;
 	opts->tos = -1; /* < 0 == use transport default */
@@ -753,6 +701,17 @@ static int nvmf_parse_options(struct nvmf_ctrl_options *opts,
 			if (token < 0)
 				pr_warn("ctrl_loss_tmo < 0 will reconnect forever\n");
 			ctrl_loss_tmo = token;
+			break;
+		case NVMF_OPT_FAIL_FAST_TMO:
+			if (match_int(args, &token)) {
+				ret = -EINVAL;
+				goto out;
+			}
+
+			if (token >= 0)
+				pr_warn("I/O fail on reconnect controller after %d sec\n",
+					token);
+			opts->fast_io_fail_tmo = token;
 			break;
 		case NVMF_OPT_HOSTNQN:
 			if (opts->host) {
@@ -883,12 +842,19 @@ static int nvmf_parse_options(struct nvmf_ctrl_options *opts,
 		opts->nr_write_queues = 0;
 		opts->nr_poll_queues = 0;
 		opts->duplicate_connect = true;
+	} else {
+		if (!opts->kato)
+			opts->kato = NVME_DEFAULT_KATO;
 	}
-	if (ctrl_loss_tmo < 0)
+	if (ctrl_loss_tmo < 0) {
 		opts->max_reconnects = -1;
-	else
+	} else {
 		opts->max_reconnects = DIV_ROUND_UP(ctrl_loss_tmo,
 						opts->reconnect_delay);
+		if (ctrl_loss_tmo < opts->fast_io_fail_tmo)
+			pr_warn("failfast tmo (%d) larger than controller loss tmo (%d)\n",
+				opts->fast_io_fail_tmo, ctrl_loss_tmo);
+	}
 
 	if (!opts->host) {
 		kref_get(&nvmf_default_host->ref);
@@ -988,7 +954,8 @@ EXPORT_SYMBOL_GPL(nvmf_free_options);
 #define NVMF_ALLOWED_OPTS	(NVMF_OPT_QUEUE_SIZE | NVMF_OPT_NR_IO_QUEUES | \
 				 NVMF_OPT_KATO | NVMF_OPT_HOSTNQN | \
 				 NVMF_OPT_HOST_ID | NVMF_OPT_DUP_CONNECT |\
-				 NVMF_OPT_DISABLE_SQFLOW)
+				 NVMF_OPT_DISABLE_SQFLOW |\
+				 NVMF_OPT_FAIL_FAST_TMO)
 
 static struct nvme_ctrl *
 nvmf_create_ctrl(struct device *dev, const char *buf)

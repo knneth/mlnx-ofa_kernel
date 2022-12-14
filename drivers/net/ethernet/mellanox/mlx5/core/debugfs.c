@@ -176,10 +176,6 @@ mlx5_cmdif_debugfs_init_ct(struct mlx5_core_dev *dev)
 				&ct_debugfs->stats.offloaded);
 	debugfs_create_atomic_t("rx_dropped", 0400, ct_debugfs->root,
 				&ct_debugfs->stats.rx_dropped);
-#if IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
-	debugfs_create_atomic_t("e2e_offloaded", 0400, ct_debugfs->root,
-				&ct_debugfs->stats.e2e_offloaded);
-#endif
 
 	dev->priv.ct_debugfs = ct_debugfs;
 #endif
@@ -545,6 +541,8 @@ void mlx5_debug_cq_remove(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq)
 	if (!mlx5_debugfs_root)
 		return;
 
-	if (cq->dbg)
+	if (cq->dbg) {
 		rem_res_tree(cq->dbg);
+		cq->dbg = NULL;
+	}
 }

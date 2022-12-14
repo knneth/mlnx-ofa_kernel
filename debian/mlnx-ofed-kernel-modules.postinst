@@ -1,0 +1,17 @@
+#!/bin/bash
+
+symlink="/usr/src/ofa_kernel/default"
+if [ "$1" = "configure" ]; then
+	if [ -L "$symlink" ] && \
+		! update-alternatives --list ofa_kernel_headers >/dev/null 2>&1;
+	then
+		rm -f "$symlink"
+	fi
+	mkdir -p /usr/src/ofa_kernel
+	update-alternatives --install "$symlink" ofa_kernel_headers \
+	  /usr/src/ofa_kernel/@ARCH@/@KVER@ 30
+fi
+
+#DEBHELPER#
+
+exit 0

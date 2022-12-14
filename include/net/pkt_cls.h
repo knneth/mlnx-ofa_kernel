@@ -10,6 +10,19 @@
 #define FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS_E2E 0xFFFFFFFF
 #endif
 
+#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+#ifndef HAVE_TC_SKB_EXT_ALLOC
+static inline struct tc_skb_ext *tc_skb_ext_alloc(struct sk_buff *skb)
+{
+	struct tc_skb_ext *tc_skb_ext = skb_ext_add(skb, TC_SKB_EXT);
+
+	if (tc_skb_ext)
+		memset(tc_skb_ext, 0, sizeof(*tc_skb_ext));
+	return tc_skb_ext;
+}
+#endif
+#endif
+
 #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
 #define HAVE_FLOWER_MULTI_MASK 1
 #include <uapi/linux/pkt_cls.h>
@@ -71,6 +84,31 @@ static inline bool tc_skip_hw(u32 flags)
 	return (flags & TCA_CLS_FLAGS_SKIP_HW) ? true : false;
 }
 
+#endif
+
+#ifndef HAVE_ENUM_TC_HTB_COMMAND
+enum tc_htb_command {
+	/* Root */
+	TC_HTB_CREATE, /* Initialize HTB offload. */
+	TC_HTB_DESTROY, /* Destroy HTB offload. */
+
+	/* Classes */
+	/* Allocate qid and create leaf. */
+	TC_HTB_LEAF_ALLOC_QUEUE,
+	/* Convert leaf to inner, preserve and return qid, create new leaf. */
+	TC_HTB_LEAF_TO_INNER,
+	/* Delete leaf, while siblings remain. */
+	TC_HTB_LEAF_DEL,
+	/* Delete leaf, convert parent to leaf, preserving qid. */
+	TC_HTB_LEAF_DEL_LAST,
+	/* TC_HTB_LEAF_DEL_LAST, but delete driver data on hardware errors. */
+	TC_HTB_LEAF_DEL_LAST_FORCE,
+	/* Modify parameters of a node. */
+	TC_HTB_NODE_MODIFY,
+
+	/* Class qdisc */
+	TC_HTB_LEAF_QUERY_QUEUE, /* Query qid by classid. */
+};
 #endif
 
 #ifndef HAVE_TC_SETUP_TYPE

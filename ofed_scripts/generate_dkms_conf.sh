@@ -32,7 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"5.4"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"5.5"}
 
 echo STRIP_MODS=\${STRIP_MODS:-"yes"}
 echo kernelver=\${kernelver:-\$\(uname -r\)}

@@ -4,9 +4,9 @@ EXTRA_CFLAGS += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
 		-I$(CWD)/drivers/infiniband/ulp/ipoib$(CONFIG_IPOIB_VERSION) \
 		-I$(CWD)/drivers/infiniband/debug \
 		-I$(CWD)/net/rds \
-		-I$(CWD)/net/mlxdevm \
 		-I$(CWD)/drivers/net/ethernet/mellanox/mlx5/core \
 		-I$(CWD)/drivers/infiniband/hw/mlx5 \
+		-I$(CWD)/net/mlxdevm \
 
 ifneq (,$(CFLAGS_RETPOLINE))
 # This is x86 and kernel has no retpoline support.
@@ -24,7 +24,6 @@ obj-$(CONFIG_INFINIBAND_EHCA)   += drivers/infiniband/hw/ehca/
 obj-$(CONFIG_INFINIBAND_AMSO1100)   += drivers/infiniband/hw/amso1100/
 obj-$(CONFIG_MLX5_CORE)         += drivers/net/ethernet/mellanox/mlx5/core/
 obj-$(CONFIG_MLXFW)             += drivers/net/ethernet/mellanox/mlxfw/
-obj-$(CONFIG_MLXSW_CORE)	+= drivers/net/ethernet/mellanox/mlxsw/
 obj-$(CONFIG_RDS)               += net/rds/
 obj-$(CONFIG_MLXDEVM)          += net/mlxdevm/
 obj-$(CONFIG_MEMTRACK)          += drivers/infiniband/debug/

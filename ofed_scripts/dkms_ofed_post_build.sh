@@ -30,6 +30,7 @@ set -e
 ofa_build_src=${ofa_build_src:-/usr/src/ofa_kernel/default/}
 build_dir=${build_dir:-$PWD/../build}
 running_kernel=$(uname -r)
+symlink="/usr/src/ofa_kernel/default"
 
 if [ "X${ofa_build_src}" == "X" ]; then
 	echo "ofa_build_src is not given!" >&2
@@ -57,13 +58,15 @@ mkdir -p $ofa_build_src
 /bin/cp -ar ofed_scripts		$ofa_build_src
 /bin/cp -ar Module*.symvers		$ofa_build_src
 
-if [ "${ofa_build_src}" != "X/usr/src/ofa_kernel/default/" ] &&
-	[ ! -e "/usr/src/ofa_kernel/default" ]; then
-
-	if (echo "${ofa_build_src}" | grep -wq "${running_kernel}") ||
-		[ "X$(ls -d /lib/modules/* | wc -l)" == "X1" ]; then
-		echo "Creating /usr/src/ofa_kernel/default/ link to ${ofa_build_src} ..."
-		cd /usr/src/ofa_kernel/
-		ln -snf $(basename ${ofa_build_src}) default
+if ! update-alternatives --list 2>/dev/null | grep -q "^$ofa_build_src\$"; then
+	if [ -L "$symlink" ] && \
+		! update-alternatives --list ofa_kernel_headers >/dev/null 2>&1;
+	then
+		rm -f "$symlink"
 	fi
+	mkdir -p /usr/src/ofa_kernel
+	# 17 is a value not to be typically selected by anybody manually
+	# adding their own alternatives. See prerm.
+	update-alternatives --install "$symlink" ofa_kernel_headers \
+		$ofa_build_src 17
 fi

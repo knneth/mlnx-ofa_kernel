@@ -45,14 +45,16 @@ static char *vport_match_to_str[] = {
 	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_LEGACY] = "legacy",
 };
 
+static char *devlink_param_bool_to_str[] = {
+	[0] = "disable",
+	[1] = "enable",
+};
+
 static char *lag_port_select_mode_to_str[] = {
 	[DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_QUEUE_AFFINITY] =
 		"queue_affinity",
 	[DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_HASH] = "hash",
-};
-static char *devlink_param_bool_to_str[] = {
-	[0] = "disable",
-	[1] = "enable",
+	[DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_MULTIPORT_ESW] = "multiport_esw",
 };
 
 struct devlink_compat_op {
@@ -82,6 +84,11 @@ struct devlink_compat_op {
 					 enum devlink_eswitch_lag_port_select_mode *read);
 	int (*write_lag_port_select_mode)(struct devlink *devlink,
 					  enum devlink_eswitch_lag_port_select_mode set);
+
+	int (*read_ct_action_on_nat_conns)(struct devlink *devlink, u32 id,
+					   struct devlink_param_gset_ctx *ctx);
+	int (*write_ct_action_on_nat_conns)(struct devlink *devlink, u32 id,
+					   struct devlink_param_gset_ctx *ctx);
 
 	int (*read_param_bool)(struct devlink *devlink, u32 id,
 			       struct devlink_param_gset_ctx *ctx);
@@ -146,7 +153,7 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.write_param_bool = mlx5_devlink_ct_action_on_nat_conns_set,
 		.compat_name = "ct_action_on_nat_conns",
 	},
-	{
+ 	{
 		.read_lag_port_select_mode =
 			mlx5_devlink_eswitch_lag_port_select_mode_get,
 		.write_lag_port_select_mode =

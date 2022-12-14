@@ -4,6 +4,7 @@ SWID=$2
 # might be pf0vf1 so only get vf number
 PORT=${1##*f}
 PORT_NAME=$1
+IFINDEX=$3
 
 # need the PATH for BF ARM lspci to work
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -12,10 +13,49 @@ if [[ "$ID_NET_DRIVER" != *"mlx5"* ]]; then
     exit 1
 fi
 
+function get_mh_bf_rep_name() {
+        PORT_NM=$1
+        IFIDX=$2
+        for rep_ndev in `ls /sys/class/net/`; do
+                _ifindex=`cat /sys/class/net/$rep_ndev/ifindex | head -1 2>/dev/null`
+                if [ "$_ifindex" = "$IFIDX" ]
+                then
+                        devpath=`udevadm info /sys/class/net/$rep_ndev | grep "DEVPATH="`
+                        pcipath=`echo $devpath | awk -F "/net/$rep_ndev" '{print $1}'`
+                        array=($(echo "$pcipath" | sed 's/\// /g'))
+                        len=${#array[@]}
+                        # last element in array is pci parent device
+                        parent_pdev=${array[$len-1]}
+                        #pdev is : 0000:03:00.0, so extract them by their index
+                        f=${parent_pdev: -1}
+                        if [[ $PORT_NM == p[0-7] ]]; then
+                                echo "p${f}"
+                                return 0
+                        fi
+
+                        if [[ $PORT_NM == pf[0-7] ]]; then
+                                echo "pf${f}hpf"
+                                return 0
+                        fi
+
+                        if [[ $PORT_NM == pf[0-7]vf* ]]; then
+                                echo $PORT_NM | sed -e "s/\(pf\).\{1\}/\1${f}/"
+                                return 0
+                        fi
+                 fi
+        done
+}
+
 is_bf=`lspci -s 00:00.0 2> /dev/null | grep -wq "PCI bridge: Mellanox Technologies" && echo 1 || echo 0`
 if [ $is_bf -eq 1 ]; then
-	echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/"`
-	exit 0
+        num_of_pf=`lspci 2> /dev/null | grep -w "Ethernet controller: Mellanox Technologies MT42822 BlueField-2" | wc -l`
+        if [ $num_of_pf -gt 2 ]; then
+                echo "NAME=`get_mh_bf_rep_name $PORT_NAME $IFINDEX`"
+                exit 0
+        fi
+
+        echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/"`
+        exit 0
 fi
 
 # for pf and uplink rep fall to slot or path.

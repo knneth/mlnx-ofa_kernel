@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 /* Copyright (c) 2019 Mellanox Technologies */
 
+#include <linux/mlx5/vport.h>
+#include "lag/lag.h"
 #include "mlx5_core.h"
 #include "fs_core.h"
 #include "fs_cmd.h"
@@ -194,6 +196,15 @@ static struct mlx5dr_action *create_vport_action(struct mlx5dr_domain *domain,
 					       dest_attr->vport.vhca_id);
 }
 
+static struct mlx5dr_action *create_uplink_action(struct mlx5dr_domain *domain,
+						  struct mlx5_flow_rule *dst)
+{
+	struct mlx5_flow_destination *dest_attr = &dst->dest_attr;
+
+	return mlx5dr_action_create_dest_vport(domain, MLX5_VPORT_UPLINK, 1,
+					       dest_attr->vport.vhca_id);
+}
+
 static struct mlx5dr_action *create_ft_action(struct mlx5dr_domain *domain,
 					      struct mlx5_flow_rule *dst)
 {
@@ -218,11 +229,12 @@ static struct mlx5dr_action *create_action_push_vlan(struct mlx5dr_domain *domai
 
 static bool contain_vport_reformat_action(struct mlx5_flow_rule *dst)
 {
-	return dst->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_VPORT &&
+	return (dst->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_VPORT ||
+		dst->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_UPLINK) &&
 		dst->dest_attr.vport.flags & MLX5_FLOW_DEST_VPORT_REFORMAT_ID;
 }
 
-#define MLX5_FLOW_CONTEXT_ACTION_MAX  20
+#define MLX5_FLOW_CONTEXT_ACTION_MAX  32
 static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 				  struct mlx5_flow_table *ft,
 				  struct mlx5_flow_group *group,
@@ -411,8 +423,17 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 				fs_dr_actions[fs_dr_num_actions++] = tmp_action;
 				term_actions[num_term_actions++].dest = tmp_action;
 				break;
+			case MLX5_FLOW_DESTINATION_TYPE_UPLINK:
+				if (!mlx5_lag_mpesw_is_activated(dev->priv.eswitch)) {
+					mlx5_core_err(dev,
+						      "UPLINK dest type is supported only in multiport eswitch LAG mode\n");
+					err = -EINVAL;
+					goto free_actions;
+				}
 			case MLX5_FLOW_DESTINATION_TYPE_VPORT:
-				tmp_action = create_vport_action(domain, dst);
+				tmp_action = type == MLX5_FLOW_DESTINATION_TYPE_VPORT ?
+					     create_vport_action(domain, dst) :
+					     create_uplink_action(domain, dst);
 				if (!tmp_action) {
 					err = -ENOMEM;
 					goto free_actions;
@@ -440,9 +461,8 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 				break;
 			case MLX5_FLOW_DESTINATION_TYPE_FLOW_SAMPLER:
 				id = dst->dest_attr.sampler_id;
-				tmp_action =
-					mlx5dr_action_create_flow_sampler(domain,
-									  id);
+				tmp_action = mlx5dr_action_create_flow_sampler(domain,
+									       id);
 				if (!tmp_action) {
 					err = -ENOMEM;
 					goto free_actions;
@@ -513,7 +533,8 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 
 		actions[num_actions++] = term_actions->dest;
 	} else if (num_term_actions > 1) {
-		bool ignore_flow_level = !!(fte->action.flags & FLOW_ACT_IGNORE_FLOW_LEVEL);
+		bool ignore_flow_level =
+			!!(fte->action.flags & FLOW_ACT_IGNORE_FLOW_LEVEL);
 
 		tmp_action = mlx5dr_action_create_mult_dest_tbl(domain,
 								term_actions,
@@ -563,11 +584,7 @@ out_err:
 }
 
 static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns,
-					     int reformat_type,
-					     u8 reformat_param_0,
-					     u8 reformat_param_1,
-					     size_t size,
-					     void *reformat_data,
+					     struct mlx5_pkt_reformat_params *params,
 					     enum mlx5_flow_namespace_type namespace,
 					     struct mlx5_pkt_reformat *pkt_reformat)
 {
@@ -575,7 +592,7 @@ static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns
 	struct mlx5dr_action *action;
 	int dr_reformat;
 
-	switch (reformat_type) {
+	switch (params->type) {
 	case MLX5_REFORMAT_TYPE_L2_TO_VXLAN:
 	case MLX5_REFORMAT_TYPE_L2_TO_NVGRE:
 	case MLX5_REFORMAT_TYPE_L2_TO_L2_TUNNEL:
@@ -590,18 +607,21 @@ static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns
 	case MLX5_REFORMAT_TYPE_INSERT_HDR:
 		dr_reformat = DR_ACTION_REFORMAT_TYP_INSERT_HDR;
 		break;
+	case MLX5_REFORMAT_TYPE_REMOVE_HDR:
+		dr_reformat = DR_ACTION_REFORMAT_TYP_REMOVE_HDR;
+		break;
 	default:
 		mlx5_core_err(ns->dev, "Packet-reformat not supported(%d)\n",
-			      reformat_type);
+			      params->type);
 		return -EOPNOTSUPP;
 	}
 
 	action = mlx5dr_action_create_packet_reformat(dr_domain,
 						      dr_reformat,
-						      reformat_param_0,
-						      reformat_param_1,
-						      size,
-						      reformat_data);
+						      params->param_0,
+						      params->param_1,
+						      params->size,
+						      params->data);
 	if (!action) {
 		mlx5_core_err(ns->dev, "Failed allocating packet-reformat action\n");
 		return -EINVAL;

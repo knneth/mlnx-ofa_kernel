@@ -85,20 +85,6 @@ enum mlx5_ib_uapi_uar_alloc_type {
 	MLX5_IB_UAPI_UAR_ALLOC_TYPE_NC = 0x1,
 };
 
-enum mlx5_ib_uapi_devx_query_port_comp_mask {
-	MLX5_IB_UAPI_QUERY_PORT_VPORT_OLD = BIT(0),
-	MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID_OLD = BIT(1),
-	MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID_OLD = BIT(2),
-	MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX_OLD = BIT(3),
-	MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX_OLD = BIT(4),
-	MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0_OLD = BIT(5),
-};
-
-struct mlx5_ib_uapi_devx_reg_32 {
-       __u32 value;
-       __u32 mask;
-};
-
 enum mlx5_ib_uapi_query_port_flags {
 	MLX5_IB_UAPI_QUERY_PORT_VPORT			= 1 << 0,
 	MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID		= 1 << 1,
@@ -124,5 +110,18 @@ struct mlx5_ib_uapi_query_port {
 	struct mlx5_ib_uapi_reg reg_c0;
 };
 
+enum mlx5_ib_uapi_devx_query_port_comp_mask {
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_OLD = BIT(0),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID_OLD = BIT(1),
+	MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID_OLD = BIT(2),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX_OLD = BIT(3),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX_OLD = BIT(4),
+	MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0_OLD = BIT(5),
+};
+
+struct mlx5_ib_uapi_devx_reg_32 {
+	__u32 value;
+	__u32 mask;
+};
 #endif
 

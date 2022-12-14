@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
 /*
  * Copyright (c) 2013-2020, Mellanox Technologies inc. All rights reserved.
+ * Copyright (c) 2020, Intel Corporation. All rights reserved.
  */
 
 #ifndef MLX5_IB_H
@@ -43,7 +44,73 @@
 #define MLX5_IB_DEFAULT_UIDX 0xffffff
 #define MLX5_USER_ASSIGNED_UIDX_MASK __mlx5_mask(qpc, user_index)
 
-#define MLX5_MKEY_PAGE_SHIFT_MASK __mlx5_mask(mkc, log_page_size)
+static __always_inline unsigned long
+__mlx5_log_page_size_to_bitmap(unsigned int log_pgsz_bits,
+			       unsigned int pgsz_shift)
+{
+	unsigned int largest_pg_shift =
+		min_t(unsigned long, (1ULL << log_pgsz_bits) - 1 + pgsz_shift,
+		      BITS_PER_LONG - 1);
+
+	/*
+	 * Despite a command allowing it, the device does not support lower than
+	 * 4k page size.
+	 */
+	pgsz_shift = max_t(unsigned int, MLX5_ADAPTER_PAGE_SHIFT, pgsz_shift);
+	return GENMASK(largest_pg_shift, pgsz_shift);
+}
+
+/*
+ * For mkc users, instead of a page_offset the command has a start_iova which
+ * specifies both the page_offset and the on-the-wire IOVA
+ */
+#define mlx5_umem_find_best_pgsz(umem, typ, log_pgsz_fld, pgsz_shift, iova)    \
+	ib_umem_find_best_pgsz(umem,                                           \
+			       __mlx5_log_page_size_to_bitmap(                 \
+				       __mlx5_bit_sz(typ, log_pgsz_fld),       \
+				       pgsz_shift),                            \
+			       iova)
+
+static __always_inline unsigned long
+__mlx5_page_offset_to_bitmask(unsigned int page_offset_bits,
+			      unsigned int offset_shift)
+{
+	unsigned int largest_offset_shift =
+		min_t(unsigned long, page_offset_bits - 1 + offset_shift,
+		      BITS_PER_LONG - 1);
+
+	return GENMASK(largest_offset_shift, offset_shift);
+}
+
+/*
+ * QP/CQ/WQ/etc type commands take a page offset that satisifies:
+ *   page_offset_quantized * (page_size/scale) = page_offset
+ * Which restricts allowed page sizes to ones that satisify the above.
+ */
+unsigned long __mlx5_umem_find_best_quantized_pgoff(
+	struct ib_umem *umem, unsigned long pgsz_bitmap,
+	unsigned int page_offset_bits, u64 pgoff_bitmask, unsigned int scale,
+	unsigned int *page_offset_quantized);
+#define mlx5_umem_find_best_quantized_pgoff(umem, typ, log_pgsz_fld,           \
+					    pgsz_shift, page_offset_fld,       \
+					    scale, page_offset_quantized)      \
+	__mlx5_umem_find_best_quantized_pgoff(                                 \
+		umem,                                                          \
+		__mlx5_log_page_size_to_bitmap(                                \
+			__mlx5_bit_sz(typ, log_pgsz_fld), pgsz_shift),         \
+		__mlx5_bit_sz(typ, page_offset_fld),                           \
+		GENMASK(31, order_base_2(scale)), scale,                       \
+		page_offset_quantized)
+
+#define mlx5_umem_find_best_cq_quantized_pgoff(umem, typ, log_pgsz_fld,        \
+					       pgsz_shift, page_offset_fld,    \
+					       scale, page_offset_quantized)   \
+	__mlx5_umem_find_best_quantized_pgoff(                                 \
+		umem,                                                          \
+		__mlx5_log_page_size_to_bitmap(                                \
+			__mlx5_bit_sz(typ, log_pgsz_fld), pgsz_shift),         \
+		__mlx5_bit_sz(typ, page_offset_fld), 0, scale,                 \
+		page_offset_quantized)
 
 extern struct workqueue_struct *mlx5_ib_sigerr_sqd_wq;
 
@@ -104,6 +171,7 @@ enum mlx5_ib_mmap_type {
 	MLX5_IB_MMAP_TYPE_VAR = 2,
 	MLX5_IB_MMAP_TYPE_UAR_WC = 3,
 	MLX5_IB_MMAP_TYPE_UAR_NC = 4,
+	MLX5_IB_MMAP_TYPE_MEMIC_OP = 5,
 };
 
 struct mlx5_bfreg_info {
@@ -169,6 +237,7 @@ enum {
 #define MLX5_IB_NUM_FLOW_FT		(MLX5_IB_FLOW_LEFTOVERS_PRIO + 1)
 #define MLX5_IB_NUM_SNIFFER_FTS		2
 #define MLX5_IB_NUM_EGRESS_FTS		1
+#define MLX5_IB_NUM_FDB_FTS		MLX5_BY_PASS_NUM_REGULAR_PRIOS
 struct mlx5_ib_flow_prio {
 	struct mlx5_flow_table		*flow_table;
 	unsigned int			refcount;
@@ -200,14 +269,23 @@ struct mlx5_ib_pp {
 	struct mlx5_core_dev *mdev;
 };
 
+enum mlx5_ib_optional_counter_type {
+	MLX5_IB_OPCOUNTER_CC_RX_CE_PKTS,
+	MLX5_IB_OPCOUNTER_CC_RX_CNP_PKTS,
+	MLX5_IB_OPCOUNTER_CC_TX_CNP_PKTS,
+
+	MLX5_IB_OPCOUNTER_MAX,
+};
+
 struct mlx5_ib_flow_db {
 	struct mlx5_ib_flow_prio	prios[MLX5_IB_NUM_FLOW_FT];
 	struct mlx5_ib_flow_prio	egress_prios[MLX5_IB_NUM_FLOW_FT];
 	struct mlx5_ib_flow_prio	sniffer[MLX5_IB_NUM_SNIFFER_FTS];
 	struct mlx5_ib_flow_prio	egress[MLX5_IB_NUM_EGRESS_FTS];
-	struct mlx5_ib_flow_prio	fdb;
+	struct mlx5_ib_flow_prio	fdb[MLX5_IB_NUM_FDB_FTS];
 	struct mlx5_ib_flow_prio	rdma_rx[MLX5_IB_NUM_FLOW_FT];
 	struct mlx5_ib_flow_prio	rdma_tx[MLX5_IB_NUM_FLOW_FT];
+	struct mlx5_ib_flow_prio	opfcs[MLX5_IB_OPCOUNTER_MAX];
 	struct mlx5_flow_table		*lag_demux_ft;
 	/* Protect flow steering bypass flow tables
 	 * when add/del flow rules.
@@ -391,6 +469,22 @@ struct mlx5_ib_dct {
 	u32                     *in;
 };
 
+struct mlx5_ib_gsi_qp {
+	struct ib_qp *rx_qp;
+	u32 port_num;
+	struct ib_qp_cap cap;
+	struct ib_cq *cq;
+	struct mlx5_ib_gsi_wr *outstanding_wrs;
+	u32 outstanding_pi, outstanding_ci;
+	int num_qps;
+	/* Protects access to the tx_qps. Post send operations synchronize
+	 * with tx_qp creation in setup_qp(). Also protects the
+	 * outstanding_wrs array and indices.
+	 */
+	spinlock_t lock;
+	struct ib_qp **tx_qps;
+};
+
 struct mlx5_ib_qp {
 	struct ib_qp		ibqp;
 	union {
@@ -398,6 +492,7 @@ struct mlx5_ib_qp {
 		struct mlx5_ib_raw_packet_qp raw_packet_qp;
 		struct mlx5_ib_rss_qp rss_qp;
 		struct mlx5_ib_dct dct;
+		struct mlx5_ib_gsi_qp gsi;
 	};
 	struct mlx5_frag_buf	buf;
 
@@ -473,11 +568,6 @@ static inline const struct mlx5_umr_wr *umr_wr(const struct ib_send_wr *wr)
 	return container_of(wr, struct mlx5_umr_wr, wr);
 }
 
-struct mlx5_shared_mr_info {
-	int mr_id;
-	struct ib_umem		*umem;
-};
-
 enum mlx5_ib_cq_pr_flags {
 	MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD	= 1 << 0,
 };
@@ -505,8 +595,6 @@ struct mlx5_ib_cq {
 	enum ib_cq_notify_flags notify_flags;
 	struct work_struct	notify_work;
 	u16			private_flags; /* Use mlx5_ib_cq_pr_flags */
-
-	struct task_struct     *tsk;
 };
 
 struct mlx5_ib_wc {
@@ -552,89 +640,96 @@ struct mlx5_user_mmap_entry {
 	u32 page_idx;
 };
 
-struct mlx5_ib_dm {
-	struct ib_dm		ibdm;
-	phys_addr_t		dev_addr;
-	u32			type;
-	size_t			size;
-	union {
-		struct {
-			u32	obj_id;
-		} icm_dm;
-		/* other dm types specific params should be added here */
-	};
-	struct mlx5_user_mmap_entry mentry;
-};
-
 #define MLX5_IB_MTT_PRESENT (MLX5_IB_MTT_READ | MLX5_IB_MTT_WRITE)
 
 #define MLX5_IB_DM_MEMIC_ALLOWED_ACCESS (IB_ACCESS_LOCAL_WRITE   |\
 					 IB_ACCESS_REMOTE_WRITE  |\
 					 IB_ACCESS_REMOTE_READ   |\
 					 IB_ACCESS_REMOTE_ATOMIC |\
-					 IB_ZERO_BASED		 |\
-					 IB_ACCESS_DISABLE_RELAXED_ORDERING)
+					 IB_ZERO_BASED)
 
 #define MLX5_IB_DM_SW_ICM_ALLOWED_ACCESS (IB_ACCESS_LOCAL_WRITE   |\
 					  IB_ACCESS_REMOTE_WRITE  |\
 					  IB_ACCESS_REMOTE_READ   |\
-					  IB_ZERO_BASED		  |\
-					  IB_ACCESS_DISABLE_RELAXED_ORDERING)
+					  IB_ZERO_BASED)
 
 #define mlx5_update_odp_stats(mr, counter_name, value)		\
 	atomic64_add(value, &((mr)->odp_stats.counter_name))
 
 struct mlx5_ib_mr {
-	struct ib_mr		ibmr;
-	void			*descs;
-	dma_addr_t		desc_map;
-	int			ndescs;
-	int			data_length;
-	int			meta_ndescs;
-	int			meta_length;
-	int			max_descs;
-	int			desc_size;
-	int			access_mode;
-	struct mlx5_core_mkey	mmkey;
-	struct ib_umem	       *umem;
-	struct mlx5_shared_mr_info	*smr_info;
-	struct list_head	list;
-	unsigned int		order;
-	struct mlx5_cache_ent  *cache_ent;
-	int			npages;
-	struct mlx5_ib_dev     *dev;
-	u32 out[MLX5_ST_SZ_DW(create_mkey_out)];
-	struct mlx5_core_sig_ctx    *sig;
-	void			*descs_alloc;
-	int			access_flags; /* Needed for rereg MR */
+	struct ib_mr ibmr;
+	struct mlx5_core_mkey mmkey;
 
-	struct mlx5_ib_mr      *parent;
-	/* Needed for IB_MR_TYPE_INTEGRITY */
-	struct mlx5_ib_mr      *pi_mr;
-	struct mlx5_ib_mr      *klm_mr;
-	struct mlx5_ib_mr      *mtt_mr;
-	u64			data_iova;
-	u64			pi_iova;
+	/* User MR data */
+	struct mlx5_cache_ent *cache_ent;
+	struct ib_umem *umem;
 
-	/* For ODP and implicit */
-	atomic_t		num_deferred_work;
-	wait_queue_head_t       q_deferred_work;
-	struct xarray		implicit_children;
-	union {
-		struct rcu_head rcu;
-		struct list_head elm;
-		struct work_struct work;
-	} odp_destroy;
-	struct ib_odp_counters	odp_stats;
-	bool			is_odp_implicit;
+	/* This is zero'd when the MR is allocated */
+	struct {
+		/* Used only while the MR is in the cache */
+		struct {
+			u32 out[MLX5_ST_SZ_DW(create_mkey_out)];
+			struct mlx5_async_work cb_work;
+			/* Cache list element */
+			struct list_head list;
+		};
 
-	struct mlx5_async_work  cb_work;
+		/* Used only by kernel MRs (umem == NULL) */
+		struct {
+			void *descs;
+			void *descs_alloc;
+			dma_addr_t desc_map;
+			int max_descs;
+			int ndescs;
+			int desc_size;
+			int access_mode;
+
+			/* For Kernel IB_MR_TYPE_INTEGRITY */
+			struct mlx5_core_sig_ctx *sig;
+			struct mlx5_ib_mr *pi_mr;
+			struct mlx5_ib_mr *klm_mr;
+			struct mlx5_ib_mr *mtt_mr;
+			u64 data_iova;
+			u64 pi_iova;
+			int meta_ndescs;
+			int meta_length;
+			int data_length;
+		};
+
+		/* Used only by User MRs (umem != NULL) */
+		struct {
+			unsigned int page_shift;
+			/* Current access_flags */
+			int access_flags;
+
+			/* For User ODP */
+			struct mlx5_ib_mr *parent;
+			struct xarray implicit_children;
+			union {
+				struct work_struct work;
+			} odp_destroy;
+			struct ib_odp_counters odp_stats;
+			bool is_odp_implicit;
+		};
+	};
 };
+
+/* Zero the fields in the mr that are variant depending on usage */
+static inline void mlx5_clear_mr(struct mlx5_ib_mr *mr)
+{
+	memset(mr->out, 0, sizeof(*mr) - offsetof(struct mlx5_ib_mr, out));
+}
 
 static inline bool is_odp_mr(struct mlx5_ib_mr *mr)
 {
 	return IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING) && mr->umem &&
 	       mr->umem->is_odp;
+}
+
+static inline bool is_dmabuf_mr(struct mlx5_ib_mr *mr)
+{
+	return IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING) && mr->umem &&
+	       mr->umem->is_dmabuf;
 }
 
 struct mlx5_ib_mw {
@@ -717,10 +812,7 @@ struct mlx5_mr_cache {
 	int			rel_imm;
 };
 
-struct mlx5_ib_gsi_qp;
-
 struct mlx5_ib_port_resources {
-	struct mlx5_ib_resources *devr;
 	struct mlx5_ib_gsi_qp *gsi;
 	struct work_struct pkey_change_work;
 };
@@ -737,14 +829,31 @@ struct mlx5_ib_resources {
 	struct mutex	mutex;
 };
 
+#define MAX_OPFC_RULES 2
+
+struct mlx5_ib_op_fc {
+	struct mlx5_fc *fc;
+	struct mlx5_flow_handle *rule[MAX_OPFC_RULES];
+};
+
 struct mlx5_ib_counters {
-	const char **names;
+	struct rdma_stat_desc *descs;
 	size_t *offsets;
 	u32 num_q_counters;
 	u32 num_cong_counters;
 	u32 num_ext_ppcnt_counters;
+	u32 num_op_counters;
 	u16 set_id;
+	struct mlx5_ib_op_fc opfcs[MLX5_IB_OPCOUNTER_MAX];
 };
+
+int mlx5_ib_fs_add_op_fc(struct mlx5_ib_dev *dev, u32 port_num,
+			 struct mlx5_ib_op_fc *opfc,
+			 enum mlx5_ib_optional_counter_type type);
+
+void mlx5_ib_fs_remove_op_fc(struct mlx5_ib_dev *dev,
+			     struct mlx5_ib_op_fc *opfc,
+			     enum mlx5_ib_optional_counter_type type);
 
 struct mlx5_ib_multiport_info;
 
@@ -1007,11 +1116,6 @@ struct mlx5_ib_dev {
 	struct mutex		odp_eq_mutex;
 	struct mlx5_ib_pf_eq	odp_pf_eq;
 
-	/*
-	 * Sleepable RCU that prevents destruction of MRs while they are still
-	 * being used by a page fault handler.
-	 */
-	struct srcu_struct      odp_srcu;
 	struct xarray		odp_mkeys;
 
 	u32			null_mkey;
@@ -1071,6 +1175,11 @@ static inline struct mlx5_ib_dev *to_mdev(struct ib_device *ibdev)
 	return container_of(ibdev, struct mlx5_ib_dev, ib_dev);
 }
 
+static inline struct mlx5_ib_dev *mr_to_mdev(struct mlx5_ib_mr *mr)
+{
+	return to_mdev(mr->ibmr.device);
+}
+
 static inline struct mlx5_ib_dev *mlx5_udata_to_mdev(struct ib_udata *udata)
 {
 	struct mlx5_ib_ucontext *context = rdma_udata_to_drv_context(
@@ -1124,11 +1233,6 @@ static inline struct mlx5_ib_srq *to_mibsrq(struct mlx5_core_srq *msrq)
 	return container_of(msrq, struct mlx5_ib_srq, msrq);
 }
 
-static inline struct mlx5_ib_dm *to_mdm(struct ib_dm *ibdm)
-{
-	return container_of(ibdm, struct mlx5_ib_dm, ibdm);
-}
-
 static inline struct mlx5_ib_mr *to_mmr(struct ib_mr *ibmr)
 {
 	return container_of(ibmr, struct mlx5_ib_mr, ibmr);
@@ -1152,8 +1256,7 @@ to_mmmap(struct rdma_user_mmap_entry *rdma_entry)
 		struct mlx5_user_mmap_entry, rdma_entry);
 }
 
-int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context,
-			struct ib_udata *udata, unsigned long virt,
+int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context, unsigned long virt,
 			struct mlx5_db *db);
 void mlx5_ib_db_unmap_user(struct mlx5_ib_ucontext *context, struct mlx5_db *db);
 void __mlx5_ib_cq_clean(struct mlx5_ib_cq *cq, u32 qpn, struct mlx5_ib_srq *srq);
@@ -1162,13 +1265,16 @@ void mlx5_ib_free_srq_wqe(struct mlx5_ib_srq *srq, int wqe_index);
 int mlx5_ib_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr,
 		      struct ib_udata *udata);
 int mlx5_ib_query_ah(struct ib_ah *ibah, struct rdma_ah_attr *ah_attr);
-void mlx5_ib_destroy_ah(struct ib_ah *ah, u32 flags);
+static inline int mlx5_ib_destroy_ah(struct ib_ah *ah, u32 flags)
+{
+	return 0;
+}
 int mlx5_ib_create_srq(struct ib_srq *srq, struct ib_srq_init_attr *init_attr,
 		       struct ib_udata *udata);
 int mlx5_ib_modify_srq(struct ib_srq *ibsrq, struct ib_srq_attr *attr,
 		       enum ib_srq_attr_mask attr_mask, struct ib_udata *udata);
 int mlx5_ib_query_srq(struct ib_srq *ibsrq, struct ib_srq_attr *srq_attr);
-void mlx5_ib_destroy_srq(struct ib_srq *srq, struct ib_udata *udata);
+int mlx5_ib_destroy_srq(struct ib_srq *srq, struct ib_udata *udata);
 int mlx5_ib_post_srq_recv(struct ib_srq *ibsrq, const struct ib_recv_wr *wr,
 			  const struct ib_recv_wr **bad_wr);
 int mlx5_ib_enable_lb(struct mlx5_ib_dev *dev, bool td, bool qp);
@@ -1191,7 +1297,7 @@ int mlx5_ib_read_wqe_srq(struct mlx5_ib_srq *srq, int wqe_index, void *buffer,
 			 size_t buflen, size_t *bc);
 int mlx5_ib_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 		      struct ib_udata *udata);
-void mlx5_ib_destroy_cq(struct ib_cq *cq, struct ib_udata *udata);
+int mlx5_ib_destroy_cq(struct ib_cq *cq, struct ib_udata *udata);
 int mlx5_ib_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc);
 int mlx5_ib_arm_cq(struct ib_cq *ibcq, enum ib_cq_notify_flags flags);
 int mlx5_ib_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period);
@@ -1200,25 +1306,28 @@ struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc);
 struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 				  u64 virt_addr, int access_flags,
 				  struct ib_udata *udata);
+struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 start,
+					 u64 length, u64 virt_addr,
+					 int fd, int access_flags,
+					 struct ib_udata *udata);
 int mlx5_ib_advise_mr(struct ib_pd *pd,
 		      enum ib_uverbs_advise_mr_advice advice,
 		      u32 flags,
 		      struct ib_sge *sg_list,
 		      u32 num_sge,
 		      struct uverbs_attr_bundle *attrs);
-struct ib_mw *mlx5_ib_alloc_mw(struct ib_pd *pd, enum ib_mw_type type,
-			       struct ib_udata *udata);
+int mlx5_ib_alloc_mw(struct ib_mw *mw, struct ib_udata *udata);
 int mlx5_ib_dealloc_mw(struct ib_mw *mw);
 int mlx5_ib_update_xlt(struct mlx5_ib_mr *mr, u64 idx, int npages,
 		       int page_shift, int flags);
+int mlx5_ib_update_mr_pas(struct mlx5_ib_mr *mr, unsigned int flags);
 struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
-					     struct ib_udata *udata,
 					     int access_flags);
 void mlx5_ib_free_implicit_mr(struct mlx5_ib_mr *mr);
-void mlx5_ib_fence_odp_mr(struct mlx5_ib_mr *mr);
-int mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
-			  u64 length, u64 virt_addr, int access_flags,
-			  struct ib_pd *pd, struct ib_udata *udata);
+void mlx5_ib_free_odp_mr(struct mlx5_ib_mr *mr);
+struct ib_mr *mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
+				    u64 length, u64 virt_addr, int access_flags,
+				    struct ib_pd *pd, struct ib_udata *udata);
 int mlx5_ib_dereg_mr(struct ib_mr *ibmr, struct ib_udata *udata);
 struct ib_mr *mlx5_ib_alloc_mr(struct ib_pd *pd, enum ib_mr_type mr_type,
 			       u32 max_num_sg);
@@ -1236,8 +1345,7 @@ int mlx5_ib_process_mad(struct ib_device *ibdev, int mad_flags, u32 port_num,
 			const struct ib_mad *in, struct ib_mad *out,
 			size_t *out_mad_size, u16 *out_mad_pkey_index);
 int mlx5_ib_alloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata);
-void mlx5_ib_dealloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata);
-int mlx5_ib_get_buf_offset(u64 addr, int page_shift, u32 *offset);
+int mlx5_ib_dealloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata);
 int mlx5_query_ext_port_caps(struct mlx5_ib_dev *dev, unsigned int port);
 int mlx5_query_mad_ifc_system_image_guid(struct ib_device *ibdev,
 					 __be64 *sys_image_guid);
@@ -1255,50 +1363,35 @@ int mlx5_query_mad_ifc_port(struct ib_device *ibdev, u32 port,
 			    struct ib_port_attr *props);
 int mlx5_ib_query_port(struct ib_device *ibdev, u32 port,
 		       struct ib_port_attr *props);
-void mlx5_ib_cont_pages(struct ib_umem *umem, u64 addr,
-			unsigned long max_page_shift,
-			int *count, int *shift,
-			int *ncont, int *order);
-void __mlx5_ib_populate_pas(struct mlx5_ib_dev *dev, struct ib_umem *umem,
-			    int page_shift, size_t offset, size_t num_pages,
-			    __be64 *pas, int access_flags);
-void mlx5_ib_populate_pas(struct mlx5_ib_dev *dev, struct ib_umem *umem,
-			  int page_shift, __be64 *pas, int access_flags);
+void mlx5_ib_populate_pas(struct ib_umem *umem, size_t page_size, __be64 *pas,
+			  u64 access_flags);
 void mlx5_ib_copy_pas(u64 *old, u64 *new, int step, int num);
 int mlx5_ib_get_cqe_size(struct ib_cq *ibcq);
 int mlx5_mr_cache_init(struct mlx5_ib_dev *dev);
 int mlx5_mr_cache_cleanup(struct mlx5_ib_dev *dev);
 
 struct mlx5_ib_mr *mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev,
-				       unsigned int entry);
-void mlx5_mr_cache_free(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr);
-int mlx5_mr_cache_invalidate(struct mlx5_ib_mr *mr);
+				       unsigned int entry, int access_flags);
 
 int mlx5_ib_check_mr_status(struct ib_mr *ibmr, u32 check_mask,
 			    struct ib_mr_status *mr_status);
 struct ib_wq *mlx5_ib_create_wq(struct ib_pd *pd,
 				struct ib_wq_init_attr *init_attr,
 				struct ib_udata *udata);
-void mlx5_ib_destroy_wq(struct ib_wq *wq, struct ib_udata *udata);
+int mlx5_ib_destroy_wq(struct ib_wq *wq, struct ib_udata *udata);
 int mlx5_ib_modify_wq(struct ib_wq *wq, struct ib_wq_attr *wq_attr,
 		      u32 wq_attr_mask, struct ib_udata *udata);
-struct ib_rwq_ind_table *mlx5_ib_create_rwq_ind_table(struct ib_device *device,
-						      struct ib_rwq_ind_table_init_attr *init_attr,
-						      struct ib_udata *udata);
+int mlx5_ib_create_rwq_ind_table(struct ib_rwq_ind_table *ib_rwq_ind_table,
+				 struct ib_rwq_ind_table_init_attr *init_attr,
+				 struct ib_udata *udata);
 int mlx5_ib_destroy_rwq_ind_table(struct ib_rwq_ind_table *wq_ind_table);
-struct ib_dm *mlx5_ib_alloc_dm(struct ib_device *ibdev,
-			       struct ib_ucontext *context,
-			       struct ib_dm_alloc_attr *attr,
-			       struct uverbs_attr_bundle *attrs);
-int mlx5_ib_dealloc_dm(struct ib_dm *ibdm, struct uverbs_attr_bundle *attrs);
 struct ib_mr *mlx5_ib_reg_dm_mr(struct ib_pd *pd, struct ib_dm *dm,
 				struct ib_dm_mr_attr *attr,
 				struct uverbs_attr_bundle *attrs);
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
-void mlx5_ib_internal_fill_odp_caps(struct mlx5_ib_dev *dev);
 int mlx5_ib_odp_init_one(struct mlx5_ib_dev *ibdev);
-int mlx5_ib_create_pf_eq(struct mlx5_ib_dev *dev, struct mlx5_ib_pf_eq *eq);
+int mlx5r_odp_create_eq(struct mlx5_ib_dev *dev, struct mlx5_ib_pf_eq *eq);
 void mlx5_ib_odp_cleanup_one(struct mlx5_ib_dev *ibdev);
 int __init mlx5_ib_odp_init(void);
 void mlx5_ib_odp_cleanup(void);
@@ -1309,15 +1402,12 @@ void mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
 int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
 			       enum ib_uverbs_advise_mr_advice advice,
 			       u32 flags, struct ib_sge *sg_list, u32 num_sge);
+int mlx5_ib_init_odp_mr(struct mlx5_ib_mr *mr);
+int mlx5_ib_init_dmabuf_mr(struct mlx5_ib_mr *mr);
 #else /* CONFIG_INFINIBAND_ON_DEMAND_PAGING */
-static inline void mlx5_ib_internal_fill_odp_caps(struct mlx5_ib_dev *dev)
-{
-	return;
-}
-
 static inline int mlx5_ib_odp_init_one(struct mlx5_ib_dev *ibdev) { return 0; }
-static int
-mlx5_ib_create_pf_eq(struct mlx5_ib_dev *dev, struct mlx5_ib_pf_eq *eq)
+static inline int mlx5r_odp_create_eq(struct mlx5_ib_dev *dev,
+				      struct mlx5_ib_pf_eq *eq)
 {
 	return 0;
 }
@@ -1332,6 +1422,14 @@ static inline int
 mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
 			   enum ib_uverbs_advise_mr_advice advice, u32 flags,
 			   struct ib_sge *sg_list, u32 num_sge)
+{
+	return -EOPNOTSUPP;
+}
+static inline int mlx5_ib_init_odp_mr(struct mlx5_ib_mr *mr)
+{
+	return -EOPNOTSUPP;
+}
+static inline int mlx5_ib_init_dmabuf_mr(struct mlx5_ib_mr *mr)
 {
 	return -EOPNOTSUPP;
 }
@@ -1365,9 +1463,9 @@ void mlx5_ib_cleanup_cong_debugfs(struct mlx5_ib_dev *dev, u32 port_num);
 void mlx5_ib_init_cong_debugfs(struct mlx5_ib_dev *dev, u32 port_num);
 
 /* GSI QP helper functions */
-struct ib_qp *mlx5_ib_gsi_create_qp(struct ib_pd *pd,
-				    struct ib_qp_init_attr *init_attr);
-int mlx5_ib_gsi_destroy_qp(struct ib_qp *qp);
+int mlx5_ib_create_gsi(struct ib_pd *pd, struct mlx5_ib_qp *mqp,
+		       struct ib_qp_init_attr *attr);
+int mlx5_ib_destroy_gsi(struct mlx5_ib_qp *mqp);
 int mlx5_ib_gsi_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 			  int attr_mask);
 int mlx5_ib_gsi_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
@@ -1405,7 +1503,7 @@ static inline void init_query_mad(struct ib_smp *mad)
 
 static inline int is_qp1(enum ib_qp_type qp_type)
 {
-	return qp_type == MLX5_IB_QPT_HW_GSI;
+	return qp_type == MLX5_IB_QPT_HW_GSI || qp_type == IB_QPT_GSI;
 }
 
 #define MLX5_MAX_UMR_SHIFT 16
@@ -1482,38 +1580,90 @@ static inline int get_num_static_uars(struct mlx5_ib_dev *dev,
 	return get_uars_per_sys_page(dev, bfregi->lib_uar_4k) * bfregi->num_static_sys_pages;
 }
 
-unsigned long mlx5_ib_get_xlt_emergency_page(void);
-void mlx5_ib_put_xlt_emergency_page(void);
+extern void *xlt_emergency_page;
 
 int bfregn_to_uar_index(struct mlx5_ib_dev *dev,
 			struct mlx5_bfreg_info *bfregi, u32 bfregn,
 			bool dyn_bfreg);
 
-static inline bool mlx5_ib_can_use_umr(struct mlx5_ib_dev *dev,
-				       unsigned int current_access_flags,
-				       unsigned int target_access_flags)
+static inline bool mlx5_ib_can_load_pas_with_umr(struct mlx5_ib_dev *dev,
+						 size_t length)
 {
-	unsigned int diffs = current_access_flags ^ target_access_flags;
-
+	/*
+	 * umr_check_mkey_mask() rejects MLX5_MKEY_MASK_PAGE_SIZE which is
+	 * always set if MLX5_IB_SEND_UMR_UPDATE_TRANSLATION (aka
+	 * MLX5_IB_UPD_XLT_ADDR and MLX5_IB_UPD_XLT_ENABLE) is set. Thus, a mkey
+	 * can never be enabled without this capability. Simplify this weird
+	 * quirky hardware by just saying it can't use PAS lists with UMR at
+	 * all.
+	 */
 	if (MLX5_CAP_GEN(dev->mdev, umr_modify_entity_size_disabled))
 		return false;
+
+	/*
+	 * length is the size of the MR in bytes when mlx5_ib_update_xlt() is
+	 * used.
+	 */
+	if (!MLX5_CAP_GEN(dev->mdev, umr_extended_translation_offset) &&
+	    length >= MLX5_MAX_UMR_PAGES * PAGE_SIZE)
+		return false;
+
+	if (MLX5_CAP_GEN(dev->mdev, ats))
+		return false;
+
+	return true;
+}
+
+/*
+ * true if an existing MR can be reconfigured to new access_flags using UMR.
+ * Older HW cannot use UMR to update certain elements of the MKC. See
+ * umr_check_mkey_mask(), get_umr_update_access_mask() and umr_check_mkey_mask()
+ */
+static inline bool mlx5_ib_can_reconfig_with_umr(struct mlx5_ib_dev *dev,
+						 unsigned int current_access_flags,
+						 unsigned int target_access_flags)
+{
+	unsigned int diffs = current_access_flags ^ target_access_flags;
 
 	if ((diffs & IB_ACCESS_REMOTE_ATOMIC) &&
 	    MLX5_CAP_GEN(dev->mdev, atomic) &&
 	    MLX5_CAP_GEN(dev->mdev, umr_modify_atomic_disabled))
 		return false;
 
-	if ((diffs & IB_ACCESS_DISABLE_RELAXED_ORDERING) &&
+	if ((diffs & IB_ACCESS_RELAXED_ORDERING) &&
 	    MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write) &&
 	    !MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write_umr))
 		return false;
 
-	if ((diffs & IB_ACCESS_DISABLE_RELAXED_ORDERING) &&
-	     MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read) &&
-	     !MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read_umr))
+	if ((diffs & IB_ACCESS_RELAXED_ORDERING) &&
+	    MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read) &&
+	    !MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read_umr))
 		return false;
 
 	return true;
+}
+
+static inline int mlx5r_store_odp_mkey(struct mlx5_ib_dev *dev,
+				       struct mlx5_core_mkey *mmkey)
+{
+	refcount_set(&mmkey->usecount, 1);
+
+	return xa_err(xa_store(&dev->odp_mkeys, mlx5_base_mkey(mmkey->key),
+			       mmkey, GFP_KERNEL));
+}
+
+/* deref an mkey that can participate in ODP flow */
+static inline void mlx5r_deref_odp_mkey(struct mlx5_core_mkey *mmkey)
+{
+	if (refcount_dec_and_test(&mmkey->usecount))
+		wake_up(&mmkey->wait);
+}
+
+/* deref an mkey that can participate in ODP flow and wait for relese */
+static inline void mlx5r_deref_wait_odp_mkey(struct mlx5_core_mkey *mmkey)
+{
+	mlx5r_deref_odp_mkey(mmkey);
+	wait_event(mmkey->wait, refcount_read(&mmkey->usecount) == 0);
 }
 
 int mlx5_ib_test_wc(struct mlx5_ib_dev *dev);

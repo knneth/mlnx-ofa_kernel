@@ -168,8 +168,8 @@ static void ib_umad_dev_put(struct ib_umad_device *dev)
 
 static int hdr_size(struct ib_umad_file *file)
 {
-	return file->use_pkey_index ? sizeof (struct ib_user_mad_hdr) :
-		sizeof (struct ib_user_mad_hdr_old);
+	return file->use_pkey_index ? sizeof(struct ib_user_mad_hdr) :
+				      sizeof(struct ib_user_mad_hdr_old);
 }
 
 /* caller must hold file->mutex */
@@ -398,6 +398,11 @@ static ssize_t ib_umad_read(struct file *filp, char __user *buf,
 			return -ERESTARTSYS;
 
 		mutex_lock(&file->mutex);
+	}
+
+	if (file->agents_dead) {
+		mutex_unlock(&file->mutex);
+		return -EIO;
 	}
 
 	packet = list_entry(file->recv_list.next, struct ib_umad_packet, list);
@@ -661,10 +666,14 @@ static __poll_t ib_umad_poll(struct file *filp, struct poll_table_struct *wait)
 	/* we will always be able to post a MAD send */
 	__poll_t mask = EPOLLOUT | EPOLLWRNORM;
 
+	mutex_lock(&file->mutex);
 	poll_wait(filp, &file->recv_wait, wait);
 
 	if (!list_empty(&file->recv_list))
 		mask |= EPOLLIN | EPOLLRDNORM;
+	if (file->agents_dead)
+		mask = EPOLLERR;
+	mutex_unlock(&file->mutex);
 
 	return mask;
 }
@@ -682,8 +691,7 @@ static int ib_umad_reg_agent(struct ib_umad_file *file, void __user *arg,
 	mutex_lock(&file->mutex);
 
 	if (!file->port->ib_dev) {
-		dev_notice(&file->port->dev,
-			   "ib_umad_reg_agent: invalid device\n");
+		dev_notice(&file->port->dev, "%s: invalid device\n", __func__);
 		ret = -EPIPE;
 		goto out;
 	}
@@ -695,7 +703,7 @@ static int ib_umad_reg_agent(struct ib_umad_file *file, void __user *arg,
 
 	if (ureq.qpn != 0 && ureq.qpn != 1) {
 		dev_notice(&file->port->dev,
-			   "ib_umad_reg_agent: invalid QPN %d specified\n",
+			   "%s: invalid QPN %d specified\n", __func__,
 			   ureq.qpn);
 		ret = -EINVAL;
 		goto out;
@@ -705,9 +713,9 @@ static int ib_umad_reg_agent(struct ib_umad_file *file, void __user *arg,
 		if (!__get_agent(file, agent_id))
 			goto found;
 
-	dev_notice(&file->port->dev,
-		   "ib_umad_reg_agent: Max Agents (%u) reached\n",
+	dev_notice(&file->port->dev, "%s: Max Agents (%u) reached\n", __func__,
 		   IB_UMAD_MAX_AGENTS);
+
 	ret = -ENOMEM;
 	goto out;
 
@@ -784,8 +792,7 @@ static int ib_umad_reg_agent2(struct ib_umad_file *file, void __user *arg)
 	mutex_lock(&file->mutex);
 
 	if (!file->port->ib_dev) {
-		dev_notice(&file->port->dev,
-			   "ib_umad_reg_agent2: invalid device\n");
+		dev_notice(&file->port->dev, "%s: invalid device\n", __func__);
 		ret = -EPIPE;
 		goto out;
 	}
@@ -796,17 +803,16 @@ static int ib_umad_reg_agent2(struct ib_umad_file *file, void __user *arg)
 	}
 
 	if (ureq.qpn != 0 && ureq.qpn != 1) {
-		dev_notice(&file->port->dev,
-			   "ib_umad_reg_agent2: invalid QPN %d specified\n",
-			   ureq.qpn);
+		dev_notice(&file->port->dev, "%s: invalid QPN %d specified\n",
+			   __func__, ureq.qpn);
 		ret = -EINVAL;
 		goto out;
 	}
 
 	if (ureq.flags & ~IB_USER_MAD_REG_FLAGS_CAP) {
 		dev_notice(&file->port->dev,
-			   "ib_umad_reg_agent2 failed: invalid registration flags specified 0x%x; supported 0x%x\n",
-			   ureq.flags, IB_USER_MAD_REG_FLAGS_CAP);
+			   "%s failed: invalid registration flags specified 0x%x; supported 0x%x\n",
+			   __func__, ureq.flags, IB_USER_MAD_REG_FLAGS_CAP);
 		ret = -EINVAL;
 
 		if (put_user((u32)IB_USER_MAD_REG_FLAGS_CAP,
@@ -821,8 +827,7 @@ static int ib_umad_reg_agent2(struct ib_umad_file *file, void __user *arg)
 		if (!__get_agent(file, agent_id))
 			goto found;
 
-	dev_notice(&file->port->dev,
-		   "ib_umad_reg_agent2: Max Agents (%u) reached\n",
+	dev_notice(&file->port->dev, "%s: Max Agents (%u) reached\n", __func__,
 		   IB_UMAD_MAX_AGENTS);
 	ret = -ENOMEM;
 	goto out;
@@ -834,7 +839,7 @@ found:
 		req.mgmt_class_version = ureq.mgmt_class_version;
 		if (ureq.oui & 0xff000000) {
 			dev_notice(&file->port->dev,
-				   "ib_umad_reg_agent2 failed: oui invalid 0x%08x\n",
+				   "%s failed: oui invalid 0x%08x\n", __func__,
 				   ureq.oui);
 			ret = -EINVAL;
 			goto out;
@@ -1199,7 +1204,7 @@ static ssize_t ibdev_show(struct device *dev, struct device_attribute *attr,
 	if (!port)
 		return -ENODEV;
 
-	return sprintf(buf, "%s\n", dev_name(&port->ib_dev->dev));
+	return sysfs_emit(buf, "%s\n", dev_name(&port->ib_dev->dev));
 }
 static DEVICE_ATTR_RO(ibdev);
 
@@ -1211,7 +1216,7 @@ static ssize_t port_show(struct device *dev, struct device_attribute *attr,
 	if (!port)
 		return -ENODEV;
 
-	return sprintf(buf, "%d\n", port->port_num);
+	return sysfs_emit(buf, "%d\n", port->port_num);
 }
 static DEVICE_ATTR_RO(port);
 
@@ -1230,7 +1235,7 @@ static char *umad_devnode(struct device *dev, umode_t *mode)
 static ssize_t abi_version_show(struct class *class,
 				struct class_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
+	return sysfs_emit(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
 }
 static CLASS_ATTR_RO(abi_version);
 
@@ -1342,6 +1347,7 @@ static void ib_umad_kill_port(struct ib_umad_port *port)
 	list_for_each_entry(file, &port->file_list, port_list) {
 		mutex_lock(&file->mutex);
 		file->agents_dead = 1;
+		wake_up_interruptible(&file->recv_wait);
 		mutex_unlock(&file->mutex);
 
 		for (id = 0; id < IB_UMAD_MAX_AGENTS; ++id)

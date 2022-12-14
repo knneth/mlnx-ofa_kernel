@@ -1,10 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
 /* Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
 
-#ifndef __MLX5_EN_FLOW_METERS_H__
-#define __MLX5_EN_FLOW_METERS_H__
-
-#include "aso.h"
+#ifndef __MLX5_EN_FLOW_METER_H__
+#define __MLX5_EN_FLOW_METER_H__
 
 #define MLX5E_MAX_METERS_PER_RULE 3
 
@@ -41,10 +39,10 @@ struct mlx5_flow_attr;
 
 struct mlx5_meter_attr {
 	union {
-		struct mlx5_post_action_handle *post_action;
+		struct mlx5e_post_act_handle *post_action;
 		struct mlx5_meter_handle *handle;
 	} meters[MLX5E_MAX_METERS_PER_RULE];
-	struct mlx5_post_action_handle *last_post_action;
+	struct mlx5e_post_act_handle *last_post_action;
 	struct mlx5_flow_attr *pre_attr;
 };
 
@@ -60,10 +58,10 @@ struct mlx5_meter_handle *
 mlx5e_get_flow_meter(struct mlx5_core_dev *mdev, struct mlx5_flow_meter_params *params);
 void mlx5e_put_flow_meter(struct mlx5_core_dev *mdev, struct mlx5_meter_handle *meter);
 
-struct mlx5_post_action_handle *
+struct mlx5e_post_act_handle *
 mlx5e_fill_flow_meter_post_action(struct mlx5e_priv *priv,
 				  struct mlx5_flow_attr *attr,
-				  struct mlx5_post_action_handle *last);
+				  struct mlx5e_post_act_handle *last);
 void mlx5e_free_flow_meter_post_action(struct mlx5e_priv *priv,
 				       struct mlx5_flow_attr *attr);
 struct mlx5_flow_handle *
@@ -73,7 +71,9 @@ void mlx5e_tc_meter_unoffload(struct mlx5_core_dev *mdev, struct mlx5_flow_handl
 			      struct mlx5_flow_attr *attr);
 
 struct mlx5e_flow_meters *
-mlx5e_flow_meters_init(struct mlx5e_priv *priv, enum mlx5_flow_namespace_type ns_type);
+mlx5e_flow_meters_init(struct mlx5e_priv *priv,
+		       enum mlx5_flow_namespace_type ns_type,
+		       struct mlx5e_post_act *post_action);
 void mlx5e_flow_meters_cleanup(struct mlx5e_flow_meters *flow_meters);
 
-#endif /* __MLX5_EN_FLOW_METERS_H__ */
+#endif /* __MLX5_EN_FLOW_METER_H__ */

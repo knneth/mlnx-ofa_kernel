@@ -48,7 +48,7 @@ struct peer_memory_client {
 	 *                   other APIs
 	 *
 	 * Returns 1 if the peer_memory_client supports the entire virtual
-	 * address range, 0 or -ERRNO otherwise. If 1 is returned then
+	 * address range, 0 or -ERRNO otherwise.  If 1 is returned then
 	 * release() will be called to release the acquire().
 	 */
 	int (*acquire)(unsigned long addr, size_t size,
@@ -123,7 +123,7 @@ struct peer_memory_client {
 	 * sg_head must be freed on return.
 	 */
 	void (*put_pages)(struct sg_table *sg_head, void *client_context);
-	/* Obsolete, not used */
+	/* Client should always return PAGE_SIZE */
 	unsigned long (*get_page_size)(void *client_context);
 	/**
 	 * release - Undo acquire

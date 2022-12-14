@@ -9,7 +9,6 @@
 #include "fs_ft_pool.h"
 #include "en/mapping.h"
 #include "fs_core.h"
-#include "eswitch.h"
 #include "en_tc.h"
 
 #define chains_lock(chains) ((chains)->lock)
@@ -17,7 +16,7 @@
 #define prios_ht(chains) ((chains)->prios_ht)
 #define tc_default_ft(chains) ((chains)->tc_default_ft)
 #define tc_end_ft(chains) ((chains)->tc_end_ft)
-#define ns_to_chains_fs_prio(ns) ((ns) == MLX5_FLOW_NAMESPACE_FDB ? \
+#define ns_to_chains_fs_prio(ns) ((ns) == MLX5_FLOW_NAMESPACE_FDB_KERNEL ? \
 				  FDB_TC_OFFLOAD : MLX5E_TC_PRIO)
 
 #define FT_TBL_SZ (64 * 1024)
@@ -93,7 +92,7 @@ bool mlx5_chains_prios_supported(struct mlx5_fs_chains *chains)
 	return chains->flags & MLX5_CHAINS_AND_PRIOS_SUPPORTED;
 }
 
-static bool mlx5_chains_ignore_flow_level_supported(struct mlx5_fs_chains *chains)
+bool mlx5_chains_ignore_flow_level_supported(struct mlx5_fs_chains *chains)
 {
 	return chains->flags & MLX5_CHAINS_IGNORE_FLOW_LEVEL_SUPPORTED;
 }
@@ -177,7 +176,7 @@ mlx5_chains_create_table(struct mlx5_fs_chains *chains,
 	    (chain == 0 && prio == 1 && level == 0)) {
 		ft_attr.level = level;
 		ft_attr.prio = prio - 1;
-		ns = (chains->ns == MLX5_FLOW_NAMESPACE_FDB) ?
+		ns = (chains->ns == MLX5_FLOW_NAMESPACE_FDB_KERNEL) ?
 			mlx5_get_fdb_sub_ns(chains->dev, chain) :
 			mlx5_get_flow_namespace(chains->dev, chains->ns);
 	} else {
@@ -239,7 +238,7 @@ create_chain_restore(struct fs_chain *chain)
 
 	chain->id = index;
 
-	if (chains->ns == MLX5_FLOW_NAMESPACE_FDB) {
+	if (chains->ns == MLX5_FLOW_NAMESPACE_FDB_KERNEL) {
 		chain_to_reg = CHAIN_TO_REG;
 		chain->restore_rule = esw_add_restore_rule(esw, chain->id);
 		if (IS_ERR(chain->restore_rule)) {
@@ -734,7 +733,7 @@ mlx5_chains_init(struct mlx5_core_dev *dev, struct mlx5_chains_attr *attr)
 	chains_priv->flags = attr->flags;
 	chains_priv->ns = attr->ns;
 	chains_priv->group_num = attr->max_grp_num;
-	chains_priv->chains_mapping = attr->chains_mapping;
+	chains_priv->chains_mapping = attr->mapping;
 	tc_default_ft(chains_priv) = tc_end_ft(chains_priv) = attr->default_ft;
 
 	mlx5_core_info(dev, "Supported tc offload range - chains: %u, prios: %u\n",
@@ -804,18 +803,4 @@ mlx5_chains_put_chain_mapping(struct mlx5_fs_chains *chains, u32 chain_mapping)
 	struct mapping_ctx *ctx = chains->chains_mapping;
 
 	return mapping_remove(ctx, chain_mapping);
-}
-
-int
-mlx5_get_mapped_object(struct mlx5_fs_chains *chains, u32 tag, struct mlx5_mapped_obj *obj)
-{
-	int err;
-
-	err = mapping_find(chains->chains_mapping, tag, obj);
-	if (err) {
-		mlx5_core_warn(chains->dev, "Can't find chain for tag: %d\n", tag);
-		return -ENOENT;
-	}
-
-	return 0;
 }

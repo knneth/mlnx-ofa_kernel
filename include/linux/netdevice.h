@@ -34,9 +34,9 @@ static inline int netdev_set_master(struct net_device *dev,
 	int rc = 0;
 
 	if (master) {
-#if defined(HAVE_NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS)
+#if defined(NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS)
 		rc = netdev_master_upper_dev_link(dev, master, NULL, NULL);
-#elif defined(HAVE_NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS)
+#elif defined(NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS)
 		rc = netdev_master_upper_dev_link(dev, master,
 						  NULL, NULL, NULL);
 #else
@@ -48,25 +48,6 @@ static inline int netdev_set_master(struct net_device *dev,
 	}
 	return rc;
 }
-
-#ifndef HAVE_NETDEV_RSS_KEY_FILL
-static inline void netdev_rss_key_fill(void *addr, size_t len)
-{
-	__be32 *hkey;
-
-	hkey = (__be32 *)addr;
-	hkey[0] = cpu_to_be32(0xD181C62C);
-	hkey[1] = cpu_to_be32(0xF7F4DB5B);
-	hkey[2] = cpu_to_be32(0x1983A2FC);
-	hkey[3] = cpu_to_be32(0x943E1ADB);
-	hkey[4] = cpu_to_be32(0xD9389E6B);
-	hkey[5] = cpu_to_be32(0xD1039C2C);
-	hkey[6] = cpu_to_be32(0xA74499AD);
-	hkey[7] = cpu_to_be32(0x593D56D9);
-	hkey[8] = cpu_to_be32(0xF3253C06);
-	hkey[9] = cpu_to_be32(0x2ADC1FFC);
-}
-#endif
 
 #ifndef HAVE_NETIF_TRANS_UPDATE
 static inline void netif_trans_update(struct net_device *dev)
@@ -101,10 +82,6 @@ static inline void netif_trans_update(struct net_device *dev)
 #define fallback(dev, skb) __netdev_pick_tx(dev, skb)
 #endif
 
-#ifndef HAVE_NAPI_SCHEDULE_IRQOFF
-#define napi_schedule_irqoff(napi) napi_schedule(napi)
-#endif
-
 #ifdef HAVE_REGISTER_NETDEVICE_NOTIFIER_RH
 #define register_netdevice_notifier register_netdevice_notifier_rh
 #define unregister_netdevice_notifier unregister_netdevice_notifier_rh
@@ -123,7 +100,7 @@ netdev_notifier_info_to_dev(void *ptr)
  * It's tested on RHEL 6.9, 7.2 and 7.3 in addition to Ubuntu 16.04.
  */
 
-#if defined(HAVE_BONDING_H) && !defined(HAVE_LAG_TX_TYPE)
+#ifndef HAVE_LAG_TX_TYPE
 #define MLX_USE_LAG_COMPAT
 #define NETDEV_CHANGELOWERSTATE			0x101B
 #undef NETDEV_CHANGEUPPER
@@ -267,11 +244,6 @@ static inline const char *netdev_reg_state(const struct net_device *dev)
 #define netdev_WARN_ONCE(dev, format, args...)				\
 	WARN_ONCE(1, "netdevice: %s%s: " format, netdev_name(dev),	\
 		  netdev_reg_state(dev), ##args)
-
-#ifndef HAVE_NAPI_COMPLETE_DONE
-#define napi_complete_done(p1, p2) napi_complete(p1)
-#endif
-
 
 #ifndef HAVE_NETDEV_PHYS_ITEM_ID
 #ifndef MAX_PHYS_ITEM_ID_LEN

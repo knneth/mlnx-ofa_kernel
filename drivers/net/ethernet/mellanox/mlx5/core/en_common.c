@@ -148,6 +148,8 @@ void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
 {
 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
 
+	if (!res->bfreg.up)
+		return;
 	mlx5_free_bfreg(mdev, &res->bfreg);
 	mlx5_core_destroy_mkey(mdev, &res->mkey);
 	mlx5_core_dealloc_transport_domain(mdev, res->td.tdn);

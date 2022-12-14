@@ -230,10 +230,21 @@ check_kerver()
         return 0
 }
 
+support_only_base()
+{
+	[ "X$OFED_BASE_KVERSION" == "X$1" ]
+}
+
 check_kerver_rh()
 {
 	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 1062 ? 0 : 1)'
 }
+
+check_kerver_rh_bridge()
+{
+	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "4.18.0" && $r >= 147 ? 0 : 1)'
+}
+
 
 #NVMF HOST supports RHEL7.2 and above, all kernels from 4.8 and above
 check_kerver_rh_nvmf_host()
@@ -348,6 +359,7 @@ CONFIG_MLX5_CORE_EN_DCB=${CONFIG_MLX5_CORE_EN_DCB:-''}
 CONFIG_MLX5_MPFS=${CONFIG_MLX5_MPFS:-''}
 CONFIG_MLX5_ESWITCH=${CONFIG_MLX5_ESWITCH:-''}
 CONFIG_MLX5_CLS_ACT=${CONFIG_MLX5_CLS_ACT:-''}
+CONFIG_MLX5_BRIDGE=${CONFIG_MLX5_BRIDGE:-''}
 CONFIG_MLX5_TC_CT=${CONFIG_MLX5_TC_CT:-''}
 CONFIG_MLX5_SF=${CONFIG_MLX5_SF:-''}
 CONFIG_MLX5_SF_MANAGER=${CONFIG_MLX5_SF_MANAGER:-''}
@@ -417,10 +429,16 @@ CONFIG_BF_POWER_FAILURE_EVENT=${CONFIG_BF_POWER_FAILURE_EVENT:-''}
 CONFIG_GPU_DIRECT_STORAGE=${CONFIG_GPU_DIRECT_STORAGE:-''}
 
 CONFIG_ENABLE_MLX5_FS_DEBUGFS=${CONFIG_ENABLE_MLX5_FS_DEBUGFS:-''}
+CONFIG_ENABLE_XDP="y"
+
+# should be unset once backport finished 
+# block RHEL supports
+BACKPORTS_IN_PROGRESS="1"
+OFED_BASE_KVERSION="5.13.0"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.12.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="5.15"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.8.0"
@@ -429,13 +447,14 @@ NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="3.10.0"
 ISERT_SUPPORTED_KVERSION="3.10.0"
-SRP_SUPPORTED_KVERSION="3.10.0"
-GDS_SUPPORTED_KVERSION="4.15.0"
 ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
 
+SRP_SUPPORTED_KVERSION="3.10.0"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
+
+GDS_SUPPORTED_KVERSION="4.15.0"
+
 # eswitch
-SWITCH_SUPPORTED_KVERSION="4.9.0"
-SWITCH_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127 3.10.0-327 4.4.0+2"
 SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
 
 # auxbux
@@ -446,10 +465,13 @@ CLS_ACT_SUPPORTED_KVERSION="4.12.0"
 CLS_ACT_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127"
 CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
 
+# bridge offload
+BRIDGE_SUPPORTED_KVERSION="5.0"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="5.16"
+
 RETPOLINE_MINIMAL_VERSION="4.15.0"
 KVERSION=${KVERSION:-$(uname -r)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
-WITHOUT_XDP=${WITHOUT_XDP:-0}
 
 ignored_autofconf_vars=""
 
@@ -734,6 +756,7 @@ main()
                             CONFIG_MLX5_MPFS="y"
                             CONFIG_MLX5_ESWITCH="y"
                             CONFIG_MLX5_CLS_ACT="y"
+                            CONFIG_MLX5_BRIDGE="y"
                             CONFIG_MLX5_TC_CT="y"
 			    CONFIG_MLX5_SF='y'
 			    CONFIG_MLX5_SF_MANAGER='y'
@@ -759,6 +782,7 @@ main()
                             CONFIG_MLX5_MPFS=
                             CONFIG_MLX5_ESWITCH=
                             CONFIG_MLX5_CLS_ACT=
+                            CONFIG_MLX5_BRIDGE=
                             CONFIG_MLX5_TC_CT=
 			    CONFIG_MLX5_SF=
 			    CONFIG_MLX5_SF_MANAGER=
@@ -780,6 +804,7 @@ main()
                             CONFIG_MLX5_MPFS=
                             CONFIG_MLX5_ESWITCH=
                             CONFIG_MLX5_CLS_ACT=
+                            CONFIG_MLX5_BRIDGE=
                             CONFIG_MLX5_TC_CT=
 			    CONFIG_MLX5_SF=
 			    CONFIG_MLX5_SF_MANAGER=
@@ -800,6 +825,7 @@ main()
                             CONFIG_MLX5_MPFS="y"
                             CONFIG_MLX5_ESWITCH="y"
                             CONFIG_MLX5_CLS_ACT="y"
+                            CONFIG_MLX5_BRIDGE="y"
                             CONFIG_MLX5_TC_CT="y"
 			    CONFIG_MLX5_SF='y'
 			    CONFIG_MLX5_SF_MANAGER='y'
@@ -824,6 +850,7 @@ main()
                             CONFIG_MLX5_MPFS="y"
                             CONFIG_MLX5_ESWITCH="y"
                             CONFIG_MLX5_CLS_ACT="y"
+                            CONFIG_MLX5_BRIDGE="y"
                             CONFIG_MLX5_TC_CT="y"
 			    CONFIG_MLX5_SF='y'
 			    CONFIG_MLX5_SF_MANAGER='y'
@@ -848,6 +875,7 @@ main()
                             CONFIG_MLX5_MPFS=
                             CONFIG_MLX5_ESWITCH=
                             CONFIG_MLX5_CLS_ACT=
+                            CONFIG_MLX5_BRIDGE=
                             CONFIG_MLX5_TC_CT=
 			    CONFIG_MLX5_SF=
 			    CONFIG_MLX5_SF_MANAGER=
@@ -868,6 +896,7 @@ main()
                             CONFIG_MLX5_MPFS="y"
                             CONFIG_MLX5_ESWITCH="y"
                             CONFIG_MLX5_CLS_ACT="y"
+                            CONFIG_MLX5_BRIDGE="y"
                             CONFIG_MLX5_TC_CT="y"
 			    CONFIG_MLX5_SF='y'
 			    CONFIG_MLX5_SF_MANAGER='y'
@@ -888,6 +917,7 @@ main()
                             CONFIG_MLX5_MPFS=
                             CONFIG_MLX5_ESWITCH=
                             CONFIG_MLX5_CLS_ACT=
+                            CONFIG_MLX5_BRIDGE=
                             CONFIG_MLX5_TC_CT=
 			    CONFIG_MLX5_SF=
 			    CONFIG_MLX5_SF_MANAGER=
@@ -907,6 +937,7 @@ main()
                             CONFIG_MLX5_MPFS=
                             CONFIG_MLX5_ESWITCH=
                             CONFIG_MLX5_CLS_ACT=
+                            CONFIG_MLX5_BRIDGE=
                             CONFIG_MLX5_TC_CT=
 			    CONFIG_MLX5_SF=
 			    CONFIG_MLX5_SF_MANAGER=
@@ -928,6 +959,7 @@ main()
                             CONFIG_MLX5_MPFS="y"
                             CONFIG_MLX5_ESWITCH="y"
                             CONFIG_MLX5_CLS_ACT="y"
+                            CONFIG_MLX5_BRIDGE="y"
                             CONFIG_MLX5_TC_CT="y"
 			    CONFIG_MLX5_SF='y'
 			    CONFIG_MLX5_SF_MANAGER='y'
@@ -945,6 +977,7 @@ main()
                             CONFIG_MLX5_MPFS=
                             CONFIG_MLX5_ESWITCH=
                             CONFIG_MLX5_CLS_ACT=
+                            CONFIG_MLX5_BRIDGE=
                             CONFIG_MLX5_TC_CT=
 			    CONFIG_MLX5_SF=
 			    CONFIG_MLX5_SF_MANAGER=
@@ -1118,7 +1151,7 @@ main()
                         ENABLE_CONTAINER_BUILD=0
                         ;;
                         --without-xdp)
-                        WITHOUT_XDP=1
+			CONFIG_ENABLE_XDP=
                         ;;
                         --with-mlxdevm-mod)
                         CONFIG_MLXDEVM="m"
@@ -1200,16 +1233,6 @@ else
 	CONFIG_AUXILIARY_BUS="m"
 fi
 
-if ! check_kerver ${KVERSION} ${SWITCH_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh ${KVERSION}; then
-		if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
-			CONFIG_MLX5_ESWITCH=
-			CONFIG_MLX5_SW_STEERING=
-			echo "warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-		fi
-	fi
-fi
-
 if  check_kerver ${KVERSION} ${SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 	CONFIG_MLX5_ESWITCH=
 	CONFIG_MLX5_SW_STEERING=
@@ -1217,7 +1240,7 @@ if  check_kerver ${KVERSION} ${SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 fi
 
 if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh ${KVERSION}; then
+	if (! check_kerver_rh ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVERSION}; then
 		if ! check_kerver_list $KVERSION $CLS_ACT_SUPPORTED_KVERSION_LIST; then
 			CONFIG_MLX5_CLS_ACT=
 			CONFIG_MLX5_TC_CT=
@@ -1228,8 +1251,21 @@ if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 	fi
 fi
 
+if ! check_kerver ${KVERSION} ${BRIDGE_SUPPORTED_KVERSION}; then
+	if (! check_kerver_rh_bridge ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVEBRIDGE_SUPPORTED_KVERSION}; then
+                        CONFIG_MLX5_BRIDGE=
+			echo "Warning: CONFIG_MLX5_BRIDGE requires kernel version ${BRIDGE_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
+	fi
+fi
+
+if  check_kerver ${KVERSION} ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
+        CONFIG_MLX5_BRIDGE=
+	echo "Warning: CONFIG_MLX5_BRIDGE not support kernel version ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
+fi
+
 if  check_kerver ${KVERSION} ${CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_MLX5_CLS_ACT=
+        CONFIG_MLX5_BRIDGE=
         CONFIG_MLX5_TC_CT=
         CONFIG_MLX5_TC_SAMPLE=
         CONFIG_MLX5_SW_STEERING=
@@ -1237,7 +1273,7 @@ if  check_kerver ${KVERSION} ${CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 fi
 
 if ! check_kerver ${KVERSION} ${NFSRDMA_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh_nfs_rdma ${KVERSION}; then
+	if (! check_kerver_rh_nfs_rdma ${KVERSION}) || support_only_base ${NFSRDMA_SUPPORTED_KVERSION}; then
 		CONFIG_SUNRPC_XPRT_RDMA=
 		echo "Warning: NFS-RMDA requires RHEL7.5 and above or kernel version ${NFSORDMA_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 	fi 
@@ -1249,7 +1285,7 @@ if  check_kerver ${KVERSION} ${NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 fi
 
 if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh_nvmf_host ${KVERSION}; then
+	if (! check_kerver_rh_nvmf_host ${KVERSION}) || support_only_base ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_CORE=
 		CONFIG_BLK_DEV_NVME=
 		CONFIG_NVME_FABRICS=
@@ -1261,7 +1297,7 @@ if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
 		echo "Warning: NVMF HOST requires RHEL7.2 and above or kernel version ${NVMF_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 
 	fi
-	if ! check_kerver_rh_nvmf_target ${KVERSION}; then
+	if (! check_kerver_rh_nvmf_target ${KVERSION}) || support_only_base ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_TARGET=
 		CONFIG_NVME_TARGET_LOOP=
 		CONFIG_NVME_TARGET_RDMA=
@@ -1296,7 +1332,7 @@ if  check_kerver ${KVERSION} ${ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE}; the
 	CONFIG_SCSI_ISCSI_ATTRS=
 	CONFIG_ISCSI_TCP=
 	CONFIG_INFINIBAND_ISERT=
-	echo "Warning: ISER/ISERT requires kernel version ${ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
+	echo "Warning: ISER/ISERT not support kernel version ${ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
 fi
 
 if ! check_kerver ${KVERSION} ${ISER_SUPPORTED_KVERSION}; then
@@ -1309,6 +1345,12 @@ fi
 if ! check_kerver ${KVERSION} ${ISERT_SUPPORTED_KVERSION}; then
 	CONFIG_INFINIBAND_ISERT=
 	echo "Warning: ISERT requires kernel version ${ISERT_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
+fi
+
+if  check_kerver ${KVERSION} ${SRP_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
+	CONFIG_INFINIBAND_SRP=
+	CONFIG_SCSI_SRP_ATTRS=
+	echo "Warning: SRP not support kernel version ${SRP_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
 fi
 
 if ! check_kerver ${KVERSION} $SRP_SUPPORTED_KVERSION}; then
@@ -1345,13 +1387,8 @@ fi
 
 CONFIG="configure.mk.kernel"
 
-if (/bin/ls -1 $KSRC_OBJ/include/*/autoconf.h 2>/dev/null | head -1 | grep -q generated); then
-    AUTOCONF_PREFIX=generated
-else
-    AUTOCONF_PREFIX=linux
-fi
-mkdir -p ${CWD}/include/${AUTOCONF_PREFIX}
-AUTOCONF_H="${CWD}/include/${AUTOCONF_PREFIX}/autoconf.h"
+mkdir -p ${CWD}/include/generated
+AUTOCONF_H="${CWD}/include/generated/autoconf.h"
 
 case $KVERSION in
 	2.6.16*)
@@ -1425,6 +1462,7 @@ fi
 # Enable mlxdevm only for supported kernels
 if ! check_kerver ${KVERSION} ${MLXDEVM_SUPPORTED_KVERSION}; then
 	CONFIG_MLXDEVM=
+	CONFIG_MLX5_SF_CFG=
 fi
 
 # if SF driver is not configured disable its configuration driver as well
@@ -1675,7 +1713,7 @@ EOFCONFIG
 # Create autoconf.h
 cat > ${AUTOCONF_H} << EOFAUTOCONF
 #ifndef __OFED_BUILD__
-#include_next <$AUTOCONF_PREFIX/autoconf.h>
+#include_next <generated/autoconf.h>
 EOFAUTOCONF
     for config_var in $defined_vars; do
         echo "#define $config_var 1"
@@ -1708,16 +1746,6 @@ EOFAUTOCONF
         /bin/cp -f Makefile.real Makefile.in
 
         ex ./configure --with-linux-obj=$KSRC_OBJ --with-linux=$KSRC --with-njobs=$NJOBS
-
-        cd -
-    fi
-
-    if [ $WITHOUT_XDP -eq 1 ]; then
-        cd compat
-
-        echo "Removing XDP flags"
-        sed -i -e '/XDP/d' config.h
-        sed -i -e '/XSK_SUPPORT/d' config.h
 
         cd -
     fi

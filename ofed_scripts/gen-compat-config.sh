@@ -696,10 +696,23 @@ if (test ! -f "$HASH_TYPES" -a ! -f "$HASH_TYPES2"); then
 	fi
 fi
 
+if (grep -q "^int hmm_range_fault" ${KLIB_BUILD}/include/linux/hmm.h > /dev/null 2>&1 || grep -q "^int hmm_range_fault" ${KSRC}/include/linux/hmm.h > /dev/null 2>&1); then
+	set_config CONFIG_COMPAT_HMM_RANGE_FAULT_RETURNS_INT y
+fi
+
 function look_exists() {
     local word="$1"
     local path="$2"
     if (grep -qw "$word" ${KLIB_BUILD}/$path &>/dev/null || grep -qw "$word" ${KSRC}/$path &>/dev/null); then
+        return 0
+    fi
+    return 1
+}
+
+function look_exists_reg() {
+    local word="$1"
+    local path="$2"
+    if (grep -qE "$word" ${KLIB_BUILD}/$path &>/dev/null || grep -qE "$word" ${KSRC}/$path &>/dev/null); then
         return 0
     fi
     return 1
@@ -726,11 +739,6 @@ function kernel_config_enabled() {
 if (look_exists "cls_common->prio = tp->prio >> 16" include/net/pkt_cls.h); then
     set_config CONFIG_COMPAT_TC_PRIO_IS_MAJOR y
 fi
-
-if (look_exists "define offsetofend" include/linux/vfio.h); then
-    set_config CONFIG_COMPAT_OFFSETOFEND_IN_VFIO_H y
-fi
-
 
 # by default MLX5_TC_CT is enabled by configure and here we disable
 # it if kernel doesn't support it.
@@ -766,4 +774,12 @@ fi
 
 if [ "$tc_ct" != 1 ]; then
     set_config CONFIG_MLX5_TC_CT n
+fi
+
+if (look_exists "void auxiliary_bus_init(void)" drivers/base/base.h); then
+	set_config  CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT  y
+fi
+
+if (look_exists_reg "define.*GENMASK\(.*U32" include/linux/bitops.h); then
+	set_config  CONFIG_COMPAT_GENMASK_32_BIT  y
 fi

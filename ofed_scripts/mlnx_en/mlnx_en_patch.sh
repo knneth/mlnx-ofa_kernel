@@ -99,6 +99,11 @@ check_kerver_rh()
 	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 1062 ? 0 : 1)'
 }
 
+check_kerver_rh_bridge()
+{
+	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "4.18.0" && $r >= 147 ? 0 : 1)'
+}
+
 # Check if the kernel we build with has an auxiliary bus module
 check_inbox_auxiliary() {
 	check_autofconf CONFIG_AUXILIARY_BUS
@@ -161,6 +166,8 @@ parseparams() {
 				DEFINE_MLX5_ESWITCH='#undef CONFIG_MLX5_ESWITCH'
 				CONFIG_MLX5_CLS_ACT=""
 				DEFINE_MLX5_CLS_ACT="#undef CONFIG_MLX5_CLS_ACT"
+				CONFIG_MLX5_BRIDGE=""
+				DEFINE_MLX5_BRIDGE="#undef CONFIG_MLX5_BRIDGE"
 				CONFIG_MLX5_SW_STEERING=""
 				DEFINE_MLX5_SW_STEERING='#undef CONFIG_MLX5_SW_STEERING'
 				CONFIG_MLX5_MPFS=""
@@ -208,10 +215,12 @@ function check_autofconf {
 
 main() {
 
-SWITCH_SUPPORTED_KVERSION="4.9.0"
-SWITCH_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127 3.10.0-327 4.4.0+2"
 CLS_ACT_SUPPORTED_KVERSION="4.12.0"
 CLS_ACT_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127"
+
+# bridge offload
+BRIDGE_SUPPORTED_KVERSION="5.0"
+
 RETPOLINE_MINIMAL_VERSION="4.15.0"
 MLXDEVM_SUPPORTED_KVERSION="4.15.0"
 
@@ -228,6 +237,9 @@ CONFIG_MLX5_EN_ARFS="y"
 CONFIG_MLX5_EN_RXNFC="y"
 CONFIG_MLX5_ESWITCH="y"
 CONFIG_MLX5_CLS_ACT="y"
+CONFIG_MLX5_BRIDGE="y"
+CONFIG_MLX5_TC_CT="y"
+CONFIG_MLX5_TC_SAMPLE="y"
 CONFIG_MLX5_SW_STEERING="y"
 CONFIG_MLX5_MPFS="y"
 CONFIG_MLX5_ACCEL="y"
@@ -237,8 +249,13 @@ CONFIG_MLX5_TLS="y"
 CONFIG_MLX5_SF="y"
 CONFIG_MLX5_SF_MANAGER='y'
 CONFIG_MLXDEVM='m'
+CONFIG_MLX5_SF_CFG='y'
 CONFIG_MLXFW="m"
 CONFIG_MLNX_BLOCK_REQUEST_MODULE=''
+CONFIG_MLX5_FPGA=''
+CONFIG_MLX5_FPGA_TLS=''
+CONFIG_MLX5_FPGA_IPSEC=''
+CONFIG_ENABLE_XDP="y"
 DEFINE_MLX5_CORE='#undef CONFIG_MLX5_CORE\n#define CONFIG_MLX5_CORE 1'
 DEFINE_AUXILIARY_BUS='#undef CONFIG_AUXILIARY_BUS\n#define CONFIG_AUXILIARY_BUS 1'
 DEFINE_MLX5_CORE_EN='#undef CONFIG_MLX5_CORE_EN\n#define CONFIG_MLX5_CORE_EN 1'
@@ -247,6 +264,9 @@ DEFINE_MLX5_EN_ARFS='#undef CONFIG_MLX5_EN_ARFS\n#define CONFIG_MLX5_EN_ARFS 1'
 DEFINE_MLX5_EN_RXNFC='#undef CONFIG_MLX5_EN_RXNFC\n#define CONFIG_MLX5_EN_RXNFC 1'
 DEFINE_MLX5_ESWITCH='#undef CONFIG_MLX5_ESWITCH\n#define CONFIG_MLX5_ESWITCH 1'
 DEFINE_MLX5_CLS_ACT='#undef CONFIG_MLX5_CLS_ACT\n#define CONFIG_MLX5_CLS_ACT 1'
+DEFINE_MLX5_BRIDGE='#undef CONFIG_MLX5_BRIDGE\n#define CONFIG_MLX5_BRIDGE 1'
+DEFINE_MLX5_TC_CT='#undef CONFIG_MLX5_TC_CT\n#define CONFIG_MLX5_TC_CT 1'
+DEFINE_MLX5_TC_SAMPLE='#undef CONFIG_MLX5_TC_SAMPLE\n#define CONFIG_MLX5_TC_SAMPLE 1'
 DEFINE_MLX5_SW_STEERING='#undef CONFIG_MLX5_SW_STEERING\n#define CONFIG_MLX5_SW_STEERING 1'
 DEFINE_MLX5_MPFS='#undef CONFIG_MLX5_MPFS\n#define CONFIG_MLX5_MPFS 1'
 DEFINE_MLX5_ACCEL='#undef CONFIG_MLX5_ACCEL\n#define CONFIG_MLX5_ACCEL 1'
@@ -256,8 +276,13 @@ DEFINE_MLX5_TLS='#undef CONFIG_MLX5_TLS\n#define CONFIG_MLX5_TLS 1'
 DEFINE_MLX5_SF='#undef CONFIG_MLX5_SF\n#define CONFIG_MLX5_SF 1'
 DEFINE_MLX5_SF_MANAGER='#undef CONFIG_MLX5_SF_MANAGER\n#define CONFIG_MLX5_SF_MANAGER 1'
 DEFINE_MLXDEVM='#undef CONFIG_MLXDEVM\n#define CONFIG_MLXDEVM 1'
+DEFINE_MLX5_SF_CFG='#undef CONFIG_MLX5_SF_CFG\n#define CONFIG_MLX5_SF_CFG 1'
 DEFINE_MLXFW='#undef CONFIG_MLXFW\n#define CONFIG_MLXFW 1'
+DEFINE_MLX5_FPGA='#undef CONFIG_MLX5_FPGA'
+DEFINE_MLX5_FPGA_TLS='#undef CONFIG_MLX5_FPGA_TLS'
+DEFINE_MLX5_FPGA_IPSEC='#undef CONFIG_MLX5_FPGA_IPSEC'
 DEFINE_CONFIG_MLNX_BLOCK_REQUEST_MODULE='#undef CONFIG_MLNX_BLOCK_REQUEST_MODULE'
+DEFINE_ENABLE_XDP='#undef CONFIG_ENABLE_XDP\n#define CONFIG_ENABLE_XDP 1'
 
 parseparams $@
 
@@ -348,16 +373,6 @@ case "$ARCH" in i386 | x86_64)
 	;;
 esac
 
-if ! check_kerver ${KVERSION} ${SWITCH_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh ${KVERSION}; then
-		if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
-			CONFIG_MLX5_ESWITCH=
-			CONFIG_MLX5_SW_STEERING=
-			echo "Warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION}). Disabling."
-		fi
-	fi
-fi
-
 if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 	if ! check_kerver_rh ${KVERSION}; then
 		if ! check_kerver_list $KVERSION $CLS_ACT_SUPPORTED_KVERSION_LIST; then
@@ -365,13 +380,23 @@ if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 			CONFIG_MLX5_TC_CT=
 			CONFIG_MLX5_TC_SAMPLE=
 			CONFIG_MLX5_SW_STEERING=
+			CONFIG_MLX5_BRIDGE=
 			echo "Warning: CONFIG_MLX5_CLS_ACT requires kernel version ${CLS_ACT_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 		fi
 	fi
 fi
 
+
+if ! check_kerver ${KVERSION} ${BRIDGE_SUPPORTED_KVERSION}; then
+	if ! check_kerver_rh_bridge ${KVERSION}; then
+			CONFIG_MLX5_BRIDGE=
+			echo "Warning: CONFIG_MLX5_BRIDGE requires kernel version ${BRIDGE_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
+	fi
+fi
+
 if ! check_kerver ${KVERSION} ${MLXDEVM_SUPPORTED_KVERSION}; then
     CONFIG_MLXDEVM=
+    CONFIG_MLX5_SF_CFG=
 fi
 
 if check_inbox_auxiliary; then
@@ -422,6 +447,11 @@ if [ "X${CONFIG_MLX5_ESWITCH}" == "X" ] || [ "X${CONFIG_MLX5_SF}" == "X" ]; then
         DEFINE_MLX5_SF_MANAGER='#undef CONFIG_MLX5_SF_MANAGER='
 fi
 
+# if SF driver is not configured disable its configuration driver as well
+if [ "X${CONFIG_MLX5_SF}" == "X" ]; then
+	CONFIG_MLX5_SF_CFG=
+fi
+
         # Create config.mk
         /bin/rm -f ${CWD}/${CONFIG}
         cat >> ${CWD}/${CONFIG} << EOFCONFIG
@@ -447,7 +477,10 @@ CONFIG_MLX5_CORE_EN_DCB:=${CONFIG_MLX5_CORE_EN_DCB}
 CONFIG_MLX5_EN_ARFS:=${CONFIG_MLX5_EN_ARFS}
 CONFIG_MLX5_EN_RXNFC:=${CONFIG_MLX5_EN_RXNFC}
 CONFIG_MLX5_ESWITCH:=${CONFIG_MLX5_ESWITCH}
-CONFIG_MLX5_CLS_ACT=${CONFIG_MLX5_CLS_ACT:-''}
+CONFIG_MLX5_CLS_ACT=${CONFIG_MLX5_CLS_ACT}
+CONFIG_MLX5_BRIDGE=${CONFIG_MLX5_BRIDGE}
+CONFIG_MLX5_TC_CT=${CONFIG_MLX5_TC_CT}
+CONFIG_MLX5_TC_SAMPLE=${CONFIG_MLX5_TC_SAMPLE}
 CONFIG_MLX5_SW_STEERING:=${CONFIG_MLX5_SW_STEERING}
 CONFIG_MLX5_ACCEL:=${CONFIG_MLX5_ACCEL}
 CONFIG_MLX5_EN_ACCEL_FS:=${CONFIG_MLX5_EN_ACCEL_FS}
@@ -457,22 +490,21 @@ CONFIG_MLX5_TLS:=${CONFIG_MLX5_TLS}
 CONFIG_MLX5_SF:=${CONFIG_MLX5_SF}
 CONFIG_MLX5_SF_MANAGER:=${CONFIG_MLX5_SF_MANAGER}
 CONFIG_MLXDEVM:=${CONFIG_MLXDEVM}
+CONFIG_MLX5_SF_CFG:=${CONFIG_MLX5_SF_CFG}
 CONFIG_MLXFW:=${CONFIG_MLXFW}
+CONFIG_MLX5_FPGA_TLS:=${CONFIG_MLX5_FPGA_TLS}
+CONFIG_MLX5_FPGA_IPSEC:=${CONFIG_MLX5_FPGA_IPSEC}
+CONFIG_MLX5_FPGA:=${CONFIG_MLX5_FPGA}
 CONFIG_MLNX_BLOCK_REQUEST_MODULE:=${CONFIG_MLNX_BLOCK_REQUEST_MODULE}
+CONFIG_ENABLE_XDP:=${CONFIG_ENABLE_XDP}
 EOFCONFIG
 
 echo "Created ${CONFIG}:"
 cat ${CWD}/${CONFIG}
 
 # Create autoconf.h
-#/bin/rm -f ${CWD}/include/linux/autoconf.h
-if (/bin/ls -1 ${KSRC_OBJ}/include/*/autoconf.h 2>/dev/null | head -1 | grep -q generated); then
-    AUTOCONF_H="${CWD}/include/generated/autoconf.h"
-    mkdir -p ${CWD}/include/generated
-else
-    AUTOCONF_H="${CWD}/include/linux/autoconf.h"
-    mkdir -p ${CWD}/include/linux
-fi
+AUTOCONF_H="${CWD}/include/generated/autoconf.h"
+mkdir -p ${CWD}/include/generated
 
 if [ ! -z "${CONFIG_COMPAT_VERSION}" ]; then
 	DEFINE_COMPAT_OLD_VERSION="#define CONFIG_COMPAT_VERSION ${CONFIG_COMPAT_VERSION}"
@@ -488,6 +520,18 @@ fi
 
 if [ "${CONFIG_MLX5_CLS_ACT}" == "" ]; then
         DEFINE_MLX5_CLS_ACT="#undef CONFIG_MLX5_CLS_ACT"
+fi
+
+if [ "${CONFIG_MLX5_BRIDGE}" == "" ]; then
+        DEFINE_MLX5_BRIDGE="#undef CONFIG_MLX5_BRIDGE"
+fi
+
+if [ "${CONFIG_MLX5_TC_CT}" == "" ]; then
+        DEFINE_MLX5_TC_CT="#undef CONFIG_MLX5_TC_CT"
+fi
+
+if [ "${CONFIG_MLX5_TC_SAMPLE}" == "" ]; then
+        DEFINE_MLX5_TC_SAMPLE="#undef CONFIG_MLX5_TC_SAMPLE"
 fi
 
 if [ "${CONFIG_MLX5_SW_STEERING}" == "" ]; then
@@ -514,6 +558,10 @@ if [ "${CONFIG_MLXDEVM}" == "" ]; then
         DEFINE_MLXDEVM="#undef CONFIG_MLXDEVM"
 fi
 
+if [ "${CONFIG_MLX5_SF_CFG}" == "" ]; then
+        DEFINE_MLX5_SF_CFG="#undef CONFIG_MLX5_SF_CFG"
+fi
+
 cat >> ${AUTOCONF_H}<< EOFAUTO
 $(echo -e "${DEFINE_MLX5_CORE}")
 $(echo -e "${DEFINE_MLX5_CORE_EN}")
@@ -522,6 +570,9 @@ $(echo -e "${DEFINE_MLX5_EN_ARFS}")
 $(echo -e "${DEFINE_MLX5_EN_RXNFC}")
 $(echo -e "${DEFINE_MLX5_ESWITCH}")
 $(echo -e "${DEFINE_MLX5_CLS_ACT}")
+$(echo -e "${DEFINE_MLX5_BRIDGE}")
+$(echo -e "${DEFINE_MLX5_TC_CT}")
+$(echo -e "${DEFINE_MLX5_TC_SAMPLE}")
 $(echo -e "${DEFINE_MLX5_SW_STEERING}")
 $(echo -e "${DEFINE_MLX5_MPFS}")
 $(echo -e "${DEFINE_MLX5_ACCEL}")
@@ -531,10 +582,15 @@ $(echo -e "${DEFINE_MLX5_TLS}")
 $(echo -e "${DEFINE_MLX5_SF}")
 $(echo -e "${DEFINE_MLX5_SF_MANAGER}")
 $(echo -e "${DEFINE_MLXDEVM}")
+$(echo -e "${DEFINE_MLX5_SF_CFG}")
 $(echo -e "${DEFINE_MLXFW}")
 $(echo -e "${DEFINE_COMPAT_OLD_VERSION}")
 $(echo -e "${DEFINE_COMPAT_KOBJECT_BACKPORT}")
 $(echo -e "${DEFINE_CONFIG_MLNX_BLOCK_REQUEST_MODULE}")
+$(echo -e "${DEFINE_MLX5_FPGA_TLS}")
+$(echo -e "${DEFINE_MLX5_FPGA_IPSEC}")
+$(echo -e "${DEFINE_MLX5_FPGA}")
+$(echo -e "${DEFINE_ENABLE_XDP}")
 EOFAUTO
 
 echo "Running configure..."

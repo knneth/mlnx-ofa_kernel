@@ -57,7 +57,6 @@ struct rdma_id_private {
 	struct hlist_node	node;
 	struct list_head	list; /* listen_any_list or cma_device.list */
 	struct list_head	listen_list; /* per device listens */
-	struct list_head        id_list_entry;
 	struct cma_device	*cma_dev;
 	struct list_head	mc_list;
 
@@ -87,9 +86,12 @@ struct rdma_id_private {
 	u8			tos;
 	u8			tos_set:1;
 	u8                      timeout_set:1;
+	u8			min_rnr_timer_set:1;
 	u8			reuseaddr;
 	u8			afonly;
 	u8			timeout;
+	u8			min_rnr_timer;
+	u8 used_resolve_ip;
 	enum ib_gid_type	gid_type;
 
 	/*

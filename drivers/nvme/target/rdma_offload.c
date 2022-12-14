@@ -576,7 +576,8 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 		goto out_destroy_be_ctrl;
 	}
 
-	nvmet_rdma_init_ns_attr(&ns_init_attr, ns->nsid, be_nsid, 0,
+	nvmet_rdma_init_ns_attr(&ns_init_attr, ns->nsid, be_nsid,
+				max_t(u16, 1 << ns->blksize_shift, 512),
 				be_ctrl->ibctrl->id);
 	be_ctrl->ibns = ib_attach_nvmf_ns(be_ctrl->ibctrl, &ns_init_attr);
 	if (IS_ERR(be_ctrl->ibns)) {

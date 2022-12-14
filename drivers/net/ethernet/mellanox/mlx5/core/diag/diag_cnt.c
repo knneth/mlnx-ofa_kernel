@@ -732,5 +732,6 @@ void mlx5_diag_cnt_cleanup(struct mlx5_core_dev *dev)
 	}
 
 	kfree(diag_cnt->cnt_id);
+	diag_cnt->cnt_id = NULL;
 	reset_params(diag_cnt);
 }

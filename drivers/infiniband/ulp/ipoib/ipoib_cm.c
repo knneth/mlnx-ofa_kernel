@@ -1135,12 +1135,8 @@ static int ipoib_cm_modify_tx_init(struct net_device *dev,
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	struct ib_qp_attr qp_attr;
 	int qp_attr_mask, ret;
-	ret = ib_find_pkey(priv->ca, priv->port, priv->pkey, &qp_attr.pkey_index);
-	if (ret) {
-		ipoib_warn(priv, "pkey 0x%x not found: %d\n", priv->pkey, ret);
-		return ret;
-	}
 
+	qp_attr.pkey_index = priv->pkey_index;
 	qp_attr.qp_state = IB_QPS_INIT;
 	qp_attr.qp_access_flags = IB_ACCESS_LOCAL_WRITE;
 	qp_attr.port_num = priv->port;
@@ -1561,9 +1557,9 @@ static ssize_t show_mode(struct device *d, struct device_attribute *attr,
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	if (test_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags))
-		return sprintf(buf, "connected\n");
+		return sysfs_emit(buf, "connected\n");
 	else
-		return sprintf(buf, "datagram\n");
+		return sysfs_emit(buf, "datagram\n");
 }
 
 static ssize_t set_mode(struct device *d, struct device_attribute *attr,
@@ -1694,17 +1690,13 @@ int ipoib_cm_dev_init(struct net_device *dev)
 void ipoib_cm_dev_cleanup(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-	int ret;
 
 	if (!priv->cm.srq)
 		return;
 
 	ipoib_dbg(priv, "Cleanup ipoib connected mode.\n");
 
-	ret = ib_destroy_srq(priv->cm.srq);
-	if (ret)
-		ipoib_warn(priv, "ib_destroy_srq failed: %d\n", ret);
-
+	ib_destroy_srq(priv->cm.srq);
 	priv->cm.srq = NULL;
 	if (!priv->cm.srq_ring)
 		return;

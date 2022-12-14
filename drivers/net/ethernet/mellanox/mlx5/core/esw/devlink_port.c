@@ -28,6 +28,8 @@ static struct devlink_port *mlx5_esw_dl_port_alloc(struct mlx5_eswitch *esw, u16
 	struct devlink_port_attrs attrs = {};
 	struct netdev_phys_item_id ppid = {};
 	struct devlink_port *dl_port;
+	u32 controller_num = 0;
+	bool external;
 	u16 pfnum;
 
 	dl_port = kzalloc(sizeof(*dl_port), GFP_KERNEL);
@@ -36,6 +38,9 @@ static struct devlink_port *mlx5_esw_dl_port_alloc(struct mlx5_eswitch *esw, u16
 
 	mlx5_esw_get_port_parent_id(dev, &ppid);
 	pfnum = mlx5_get_dev_index(dev);
+	external = mlx5_core_is_ecpf_esw_manager(dev);
+	if (external)
+		controller_num = dev->priv.eswitch->offloads.host_number + 1;
 
 	if (vport_num == MLX5_VPORT_UPLINK) {
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
@@ -46,11 +51,12 @@ static struct devlink_port *mlx5_esw_dl_port_alloc(struct mlx5_eswitch *esw, u16
 	} else if (vport_num == MLX5_VPORT_PF) {
 		memcpy(dl_port->attrs.switch_id.id, ppid.id, ppid.id_len);
 		dl_port->attrs.switch_id.id_len = ppid.id_len;
-		devlink_port_attrs_pci_pf_set(dl_port, pfnum);
+		devlink_port_attrs_pci_pf_set(dl_port, controller_num, pfnum, external);
 	} else if (mlx5_eswitch_is_vf_vport(esw, vport_num)) {
 		memcpy(dl_port->attrs.switch_id.id, ppid.id, ppid.id_len);
 		dl_port->attrs.switch_id.id_len = ppid.id_len;
-		devlink_port_attrs_pci_vf_set(dl_port, pfnum, vport_num - 1);
+		devlink_port_attrs_pci_vf_set(dl_port, controller_num, pfnum,
+					      vport_num - 1, external);
 	}
 	return dl_port;
 }
@@ -114,7 +120,7 @@ struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u1
 	struct mlx5_vport *vport;
 
 	vport = mlx5_eswitch_get_vport(esw, vport_num);
-	return vport->dl_port;
+	return IS_ERR(vport) ? ERR_CAST(vport) : vport->dl_port;
 }
 
 #if IS_ENABLED(CONFIG_MLXDEVM)
@@ -127,7 +133,6 @@ int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_p
 int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
 				      u16 vport_num, u32 controller, u32 sfnum)
 {
-	/* PARAV MOVE TO BACKPORT*/
 	devlink_port_attrs_pci_sf_set(dl_port, controller, pfnum, sfnum, !!controller);
 
 	return -EOPNOTSUPP;

@@ -1,0 +1,41 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/lightnvm.h
+
+Change-Id: Ie57f00fc36e56f27df40693ca2734fcc76f6d1e1
+---
+ include/linux/lightnvm.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/include/linux/lightnvm.h
++++ b/include/linux/lightnvm.h
+@@ -2,6 +2,8 @@
+ #ifndef NVM_H
+ #define NVM_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/blkdev.h>
+ #include <linux/types.h>
+ #include <uapi/linux/lightnvm.h>
+@@ -669,7 +671,21 @@ extern void nvm_unregister_tgt_type(stru
+ extern void *nvm_dev_dma_alloc(struct nvm_dev *, gfp_t, dma_addr_t *);
+ extern void nvm_dev_dma_free(struct nvm_dev *, void *, dma_addr_t);
+ 
++#ifdef HAVE_NVM_ALLOC_DEV_EXPORTED
+ extern struct nvm_dev *nvm_alloc_dev(int);
++#else
++static inline struct nvm_dev *nvm_alloc_dev(int node)
++{
++	struct nvm_dev *dev;
++
++	dev = kzalloc_node(sizeof(struct nvm_dev), GFP_KERNEL, node);
++	if (dev)
++		kref_init(&dev->ref);
++
++	return dev;
++}
++#endif
++
+ extern int nvm_register(struct nvm_dev *);
+ extern void nvm_unregister(struct nvm_dev *);
+ 

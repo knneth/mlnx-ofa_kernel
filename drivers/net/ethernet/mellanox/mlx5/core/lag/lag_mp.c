@@ -3,25 +3,27 @@
 
 #include <linux/netdevice.h>
 #include <net/nexthop.h>
-#include "lag/lag.h"
-#include "lag/lag_mp.h"
+#include "lag.h"
+#include "lag_mp.h"
 #include "mlx5_core.h"
 #include "eswitch.h"
 #include "lib/mlx5.h"
 
-static bool mlx5_lag_multipath_check_prereq(struct mlx5_lag *ldev)
-{
-	if (!ldev->pf[MLX5_LAG_P1].dev || !ldev->pf[MLX5_LAG_P2].dev)
-		return false;
-
-	return mlx5_esw_check_modes_match(ldev->pf[MLX5_LAG_P1].dev,
-					  ldev->pf[MLX5_LAG_P2].dev,
-					  MLX5_ESWITCH_OFFLOADS);
-}
-
 static bool __mlx5_lag_is_multipath(struct mlx5_lag *ldev)
 {
 	return !!(ldev->flags & MLX5_LAG_FLAG_MULTIPATH);
+}
+
+static bool mlx5_lag_multipath_check_prereq(struct mlx5_lag *ldev)
+{
+	if (!mlx5_lag_is_ready(ldev))
+		return false;
+
+	if (__mlx5_lag_is_active(ldev) && !__mlx5_lag_is_multipath(ldev))
+		return false;
+
+	return mlx5_esw_multipath_prereq(ldev->pf[MLX5_LAG_P1].dev,
+					 ldev->pf[MLX5_LAG_P2].dev);
 }
 
 bool mlx5_lag_is_multipath(struct mlx5_core_dev *dev)
@@ -29,14 +31,14 @@ bool mlx5_lag_is_multipath(struct mlx5_core_dev *dev)
 	struct mlx5_lag *ldev;
 	bool res;
 
-	ldev = mlx5_lag_dev_get(dev);
+	ldev = mlx5_lag_dev(dev);
 	res  = ldev && __mlx5_lag_is_multipath(ldev);
 
 	return res;
 }
 
 /**
- * Set lag port affinity
+ * mlx5_lag_set_port_affinity
  *
  * @ldev: lag device
  * @port:
@@ -48,7 +50,7 @@ bool mlx5_lag_is_multipath(struct mlx5_core_dev *dev)
 static void mlx5_lag_set_port_affinity(struct mlx5_lag *ldev,
 				       enum mlx5_lag_port_affinity port)
 {
-	struct lag_tracker tracker = {};
+	struct lag_tracker tracker;
 
 	if (!__mlx5_lag_is_multipath(ldev))
 		return;
@@ -132,7 +134,12 @@ static void mlx5_lag_fib_route_event(struct mlx5_lag *ldev,
 			struct net_device *nh_dev = nh->fib_nh_dev;
 			int i = mlx5_lag_dev_get_netdev_idx(ldev, nh_dev);
 
-			mlx5_lag_set_port_affinity(ldev, ++i);
+			if (i < 0)
+				i = MLX5_LAG_NORMAL_AFFINITY;
+			else
+				++i;
+
+			mlx5_lag_set_port_affinity(ldev, i);
 		}
 		return;
 	}
@@ -151,6 +158,9 @@ static void mlx5_lag_fib_route_event(struct mlx5_lag *ldev,
 			       "Multipath offload require two ports of the same HCA\n");
 		return;
 	}
+
+	if (__mlx5_lag_is_active(ldev) && !__mlx5_lag_is_multipath(ldev))
+		return;
 
 	/* First time we see multipath route */
 	if (!mp->mfi && !__mlx5_lag_is_active(ldev)) {
@@ -249,6 +259,9 @@ static int mlx5_lag_fib_event(struct notifier_block *nb,
 	struct net_device *fib_dev;
 	struct fib_info *fi;
 
+	if (ldev->flags & MLX5_LAG_FLAG_MULTI_PORT_ESW)
+		return NOTIFY_DONE;
+
 	if (info->family != AF_INET)
 		return NOTIFY_DONE;
 
@@ -296,6 +309,14 @@ static int mlx5_lag_fib_event(struct notifier_block *nb,
 	queue_work(mp->wq, &fib_work->work);
 
 	return NOTIFY_DONE;
+}
+
+void mlx5_lag_mp_reset(struct mlx5_lag *ldev)
+{
+	/* Clear mfi, as it might become stale when a route delete event
+	 * has been missed, see mlx5_lag_fib_route_event().
+	 */
+	ldev->lag_mp.mfi = NULL;
 }
 
 int mlx5_lag_mp_init(struct mlx5_lag *ldev)

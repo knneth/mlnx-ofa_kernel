@@ -3,7 +3,6 @@
 
 #include "../../compat/config.h"
 
-#ifdef HAVE_BONDING_H
 #include_next <net/bonding.h>
 
 #define MLX_USES_PRIMARY(mode)				\
@@ -181,7 +180,5 @@ static void mlx_lag_compat_events_close(void)
 		sock_release(mlx_lag_compat_rtnl_sock);
 }
 #endif
-
-#endif /* HAVE_BONDING_H */
 
 #endif /* _COMPAT_NET_BONDING_H */

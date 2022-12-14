@@ -49,7 +49,7 @@ u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw)
 
 static inline
 u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
-				        	 u16 vport)
+						u16 vport)
 {
 	return 0;
 };

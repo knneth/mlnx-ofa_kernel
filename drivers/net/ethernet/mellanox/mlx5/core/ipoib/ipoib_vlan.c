@@ -350,8 +350,9 @@ static const struct mlx5e_profile mlx5i_pkey_nic_profile = {
 	.update_stats	   = NULL,
 	.rx_handlers       = &mlx5i_rx_handlers,
 	.max_tc		   = MLX5I_MAX_NUM_TC,
-	.max_nch	   = mlx5i_max_nch,
 	.rq_groups	   = MLX5E_NUM_RQ_GROUPS(REGULAR),
+	.max_nch	   = mlx5i_max_nch,
+	.rx_ptp_support	   = false,
 };
 
 const struct mlx5e_profile *mlx5i_pkey_get_profile(void)

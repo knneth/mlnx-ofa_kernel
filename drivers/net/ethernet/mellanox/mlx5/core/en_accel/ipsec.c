@@ -42,6 +42,9 @@
 #include "en_accel/ipsec_rxtx.h"
 #include "en_accel/ipsec_fs.h"
 #include "eswitch.h"
+#include "esw/ipsec.h"
+#include <linux/ip.h>
+#include <linux/ipv6.h>
 #include "en/ipsec_aso.h"
 #include "../esw/ipsec.h"
 
@@ -70,6 +73,52 @@ static struct mlx5e_ipsec_sa_entry *to_ipsec_sa_entry(struct xfrm_state *x)
 
 	WARN_ON(sa->x != x);
 	return sa;
+}
+
+#define ipv6_equal(a, b) (memcmp(&(a), &(b), sizeof(a)) == 0)
+struct xfrm_state *mlx5e_ipsec_sadb_rx_lookup_state(struct mlx5e_ipsec *ipsec,
+						    struct sk_buff *skb, u8 ip_ver)
+{
+	struct mlx5e_ipsec_sa_entry *sa_entry, *sa;
+	struct ipv6hdr *v6_hdr;
+	struct iphdr *v4_hdr;
+	unsigned int temp;
+	u16 family;
+
+	sa = NULL;
+	if (ip_ver == 4) {
+		v4_hdr = (struct iphdr *)(skb->data + ETH_HLEN);;
+		family = AF_INET;
+	} else {
+		v6_hdr = (struct ipv6hdr *)(skb->data + ETH_HLEN);
+		family = AF_INET6;
+	}
+
+	hash_for_each_rcu(ipsec->sadb_rx, temp, sa_entry, hlist) {
+		if (sa_entry->x->props.family != family)
+			continue;
+
+		if (ip_ver == 4) {
+			if ((sa_entry->x->props.saddr.a4 == v4_hdr->saddr) &&
+			    (sa_entry->x->id.daddr.a4 == v4_hdr->daddr)) {
+				sa = sa_entry;
+				break;
+			}
+		} else {
+			if (ipv6_equal(sa_entry->x->id.daddr.a6, v6_hdr->daddr.in6_u.u6_addr32) &&
+			    ipv6_equal(sa_entry->x->props.saddr.a6, v6_hdr->saddr.in6_u.u6_addr32)) {
+				sa = sa_entry;
+				break;
+			}
+		}
+	}
+
+	if (sa) {
+		xfrm_state_hold(sa->x);
+		return sa->x;
+	}
+
+	return NULL;
 }
 
 struct xfrm_state *mlx5e_ipsec_sadb_rx_lookup(struct mlx5e_ipsec *ipsec,
@@ -328,6 +377,7 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 				   struct mlx5_accel_esp_xfrm_attrs *attrs)
 {
 	struct aes_gcm_keymat *aes_gcm = &attrs->keymat.aes_gcm;
+	struct xfrm_policy *pol = sa_entry->pol;
 	unsigned int crypto_data_len, key_len;
 	struct xfrm_state *x = sa_entry->x;
 	struct aead_geniv_ctx *geniv_ctx;
@@ -378,6 +428,8 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 			MLX5_ACCEL_ESP_FLAGS_TRANSPORT :
 			MLX5_ACCEL_ESP_FLAGS_TUNNEL;
 
+/* Valid till stack changes accepted */
+#define XFRM_OFFLOAD_FULL 4
 	if (x->xso.flags & XFRM_OFFLOAD_FULL)
 		attrs->flags |= MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD;
 
@@ -397,6 +449,16 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 
 	/* lifetime limit for full offload */
 	initialize_lifetime_limit(sa_entry, attrs);
+
+	if (x->xso.flags & XFRM_OFFLOAD_FULL) {
+		struct mlx5_accel_esp_xfrm_pol *xpol = &attrs->pol;
+		struct xfrm_selector *sel = &pol->selector;
+
+		attrs->flags |= MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD;
+		xpol->family = sel->family;
+		memcpy(&xpol->saddr, sel->saddr.a6, sizeof(xpol->saddr));
+		memcpy(&xpol->daddr, sel->daddr.a6, sizeof(xpol->daddr));
+	}
 }
 
 static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
@@ -540,9 +602,11 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
 	struct net_device *netdev = x->xso.real_dev;
 	struct mlx5_accel_esp_xfrm_attrs attrs;
+	struct xfrm_policy *pol = NULL;
+	struct xfrm_policy _pol;
 	struct mlx5e_priv *priv;
 	unsigned int sa_handle;
-	u32 pdn;
+	int pdn;
 	int err;
 
 	priv = netdev_priv(netdev);
@@ -551,14 +615,43 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	if (err)
 		return err;
 
+	if (x->xso.flags & XFRM_OFFLOAD_FULL) {
+		u16 family = x->props.family;
+		struct flowi fl;
+
+		fl.u.ip4.saddr = x->sel.saddr.a4;
+		fl.u.ip4.daddr = x->sel.saddr.a4;
+		switch (family) {
+		case AF_INET:
+			fl.u.ip4.saddr = x->sel.saddr.a4;
+			fl.u.ip4.daddr = x->sel.daddr.a4;
+			break;
+		case AF_INET6:
+			memcpy(&fl.u.ip6.saddr, &x->sel.saddr.a6, sizeof(x->sel.saddr.a6));
+			memcpy(&fl.u.ip6.daddr, &x->sel.daddr.a6, sizeof(x->sel.daddr.a6));
+			break;
+		}
+
+		if (!pol) {
+			struct xfrm_selector *sel = &_pol.selector;
+
+			sel->family = family;
+			memcpy(sel->daddr.a6, &x->sel.daddr.a6, sizeof(x->sel.daddr.a6));
+			memcpy(sel->saddr.a6, &x->sel.saddr.a6, sizeof(x->sel.saddr.a6));
+			netdev_dbg(netdev, "Note: offload SA without existing matching policy, enforcing policy by SA selectors\n");
+			pol = &_pol;
+		}
+	}
+
 	sa_entry = kzalloc(sizeof(*sa_entry), GFP_KERNEL);
 	if (!sa_entry) {
 		err = -ENOMEM;
-		goto out;
+		goto err_policy;
 	}
 
 	sa_entry->x = x;
 	sa_entry->ipsec = priv->ipsec;
+	sa_entry->pol = pol;
 
 	/* check esn */
 	mlx5e_ipsec_update_esn_state(sa_entry);
@@ -613,7 +706,9 @@ err_xfrm:
 	mlx5_accel_esp_destroy_xfrm(sa_entry->xfrm);
 err_sa_entry:
 	kfree(sa_entry);
-
+err_policy:
+	if (pol)
+		xfrm_pol_put(pol);
 out:
 	return err;
 }
@@ -687,7 +782,6 @@ void mlx5e_ipsec_ul_cleanup(struct mlx5e_priv *priv)
 int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 {
 	struct mlx5e_ipsec *ipsec = NULL;
-	int err;
 
 	if (!MLX5_IPSEC_DEV(priv->mdev)) {
 		netdev_dbg(priv->netdev, "Not an IPSec offload device\n");
@@ -700,9 +794,9 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 
 	hash_init(ipsec->sadb_rx);
 	spin_lock_init(&ipsec->sadb_rx_lock);
+	ida_init(&ipsec->halloc);
 	hash_init(ipsec->sadb_tx);
 	spin_lock_init(&ipsec->sadb_tx_lock);
-	ida_init(&ipsec->halloc);
 	ipsec->en_priv = priv;
 	ipsec->en_priv->ipsec = ipsec;
 	ipsec->no_trailer = !!(mlx5_accel_ipsec_device_caps(priv->mdev) &
@@ -710,26 +804,17 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 	ipsec->wq = alloc_ordered_workqueue("mlx5e_ipsec: %s", 0,
 					    priv->netdev->name);
 	if (!ipsec->wq) {
-		err = -ENOMEM;
-		goto out_wq;
+		kfree(ipsec);
+		return -ENOMEM;
 	}
-
-	err = mlx5e_accel_ipsec_fs_init(priv);
-	if (err)
-		goto out_fs;
 
 	if (mlx5_is_ipsec_full_offload(priv))
 		mlx5e_ipsec_aso_setup(priv);
+	else
+		mlx5e_accel_ipsec_fs_init(priv);
 
 	netdev_dbg(priv->netdev, "IPSec attached to netdevice\n");
 	return 0;
-
-out_fs:
-	destroy_workqueue(ipsec->wq);
-out_wq:
-	ida_destroy(&ipsec->halloc);
-	kfree(ipsec);
-	return err;
 }
 
 void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
@@ -922,9 +1007,8 @@ static void _mlx5e_ipsec_async_event(struct work_struct *work)
 		goto out_xs_state;
 
 	/* Life time event */
-	if (!hard_cnt) { /* Notify hard lifetime to xfrm stack */
+	if (!hard_cnt) /* Notify hard lifetime to xfrm stack */
 		goto out_xs_state;
-	}
 
 	/* 0: no more soft
 	 * 1: notify soft

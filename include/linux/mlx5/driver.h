@@ -64,10 +64,6 @@ enum {
 };
 
 enum {
-	/* one minute for the sake of bringup. Generally, commands must always
-	 * complete and we may need to increase this timeout value
-	 */
-	MLX5_CMD_TIMEOUT_MSEC	= 60 * 1000,
 	MLX5_CMD_WQ_MAX_NAME	= 32,
 };
 
@@ -154,6 +150,8 @@ enum {
 	MLX5_REG_MIRC		 = 0x9162,
 	MLX5_REG_SBCAM		 = 0xB01F,
 	MLX5_REG_RESOURCE_DUMP   = 0xC000,
+	MLX5_REG_TRUST_LEVEL     = 0xC007,
+	MLX5_REG_DTOR            = 0xC00E,
 };
 
 enum mlx5_qpts_trust_state {
@@ -399,6 +397,8 @@ struct mlx5_core_mkey {
 	u32			key;
 	u32			pd;
 	u32			type;
+	struct wait_queue_head wait;
+	refcount_t usecount;
 };
 
 #define MLX5_24BIT_MASK		((1 << 24) - 1)
@@ -525,6 +525,7 @@ struct mlx5_sriov_vf_meter_type {
 struct mlx5_sriov_vf {
 	struct mlx5_core_dev   *dev;
 	struct kobject		kobj;
+	struct kobject		page_kobj;
 	int			vf;
 	union {
 		struct mlx5_sriov_vf_meters *meters;
@@ -638,7 +639,6 @@ struct mlx5_tc_ct_debugfs {
 	struct {
 		atomic_t offloaded;
 		atomic_t rx_dropped;
-		atomic_t e2e_offloaded;
 	} stats;
 
 	struct dentry *root;
@@ -691,10 +691,9 @@ struct mlx5_priv {
 	/* end: alloc staff */
 	struct dentry	       *dbg_root;
 
-	struct list_head        dev_list;
 	struct list_head        ctx_list;
 	spinlock_t              ctx_lock;
-	struct mlx5_adev	**adev;
+	struct mlx5_adev       **adev;
 	int			adev_idx;
 	struct mlx5_events      *events;
 	/* Used to save RoCE LAG state during recovery flow */
@@ -814,9 +813,9 @@ struct mlx5e_resources {
 		struct mlx5_core_mkey      mkey;
 		struct mlx5_sq_bfreg       bfreg;
 	} hw_objs;
-	u32 max_rl_queues;
 	struct devlink_port dl_port;
 	struct net_device *uplink_netdev;
+	u32                        max_rl_queues;
 
 	struct {
 		bool ct_action_on_nat_conns;
@@ -892,9 +891,25 @@ struct mlx5_hv_vhca;
 #define MLX5_LOG_SW_ICM_BLOCK_SIZE(dev) (MLX5_CAP_DEV_MEM(dev, log_sw_icm_alloc_granularity))
 #define MLX5_SW_ICM_BLOCK_SIZE(dev) (1 << MLX5_LOG_SW_ICM_BLOCK_SIZE(dev))
 
-struct mlx5_as_notify {
-	bool                    enabled;
-	u64                     response_bar_address;
+enum {
+	MLX5_PROF_MASK_QP_SIZE		= (u64)1 << 0,
+	MLX5_PROF_MASK_MR_CACHE		= (u64)1 << 1,
+};
+
+enum {
+	MR_CACHE_LAST_STD_ENTRY = 20,
+	MLX5_IMR_MTT_CACHE_ENTRY,
+	MLX5_IMR_KSM_CACHE_ENTRY,
+	MAX_MR_CACHE_ENTRIES
+};
+
+struct mlx5_profile {
+	u64	mask;
+	u8	log_max_qp;
+	struct {
+		int	size;
+		int	limit;
+	} mr_cache[MAX_MR_CACHE_ENTRIES];
 };
 
 struct mlx5_diag_cnt_id {
@@ -918,25 +933,9 @@ struct mlx5_local_lb {
 	bool driver_state;
 };
 
-enum {
-	MLX5_PROF_MASK_QP_SIZE		= (u64)1 << 0,
-	MLX5_PROF_MASK_MR_CACHE		= (u64)1 << 1,
-};
-
-enum {
-	MR_CACHE_LAST_STD_ENTRY = 20,
-	MLX5_IMR_MTT_CACHE_ENTRY,
-	MLX5_IMR_KSM_CACHE_ENTRY,
-	MAX_MR_CACHE_ENTRIES
-};
-
-struct mlx5_profile {
-	u64	mask;
-	u8	log_max_qp;
-	struct {
-		int	size;
-		int	limit;
-	} mr_cache[MAX_MR_CACHE_ENTRIES];
+struct mlx5_hca_cap {
+	u32 cur[MLX5_UN_SZ_DW(hca_cap_union)];
+	u32 max[MLX5_UN_SZ_DW(hca_cap_union)];
 };
 
 struct mlx5_core_dev {
@@ -950,14 +949,14 @@ struct mlx5_core_dev {
 	char			board_id[MLX5_BOARD_ID_LEN];
 	struct mlx5_cmd		cmd;
 	struct {
-		u32 hca_cur[MLX5_CAP_NUM][MLX5_UN_SZ_DW(hca_cap_union)];
-		u32 hca_max[MLX5_CAP_NUM][MLX5_UN_SZ_DW(hca_cap_union)];
+		struct mlx5_hca_cap *hca[MLX5_CAP_NUM];
 		u32 pcam[MLX5_ST_SZ_DW(pcam_reg)];
 		u32 mcam[MLX5_MCAM_REGS_NUM][MLX5_ST_SZ_DW(mcam_reg)];
 		u32 fpga[MLX5_ST_SZ_DW(fpga_cap)];
 		u32 qcam[MLX5_ST_SZ_DW(qcam_reg)];
 		u8  embedded_cpu;
 	} caps;
+	struct mlx5_timeouts	*timeouts;
 	u64			sys_image_guid;
 	phys_addr_t		iseg_base;
 	struct mlx5_init_seg __iomem *iseg;
@@ -991,7 +990,6 @@ struct mlx5_core_dev {
 	struct mlx5_special_contexts special_contexts;
 	struct mlx5_fw_tracer   *tracer;
 	struct mlx5_rsc_dump    *rsc_dump;
-	struct mlx5_as_notify as_notify;
 	struct mlx5_diag_cnt    diag_cnt;
 	u32                      vsc_addr;
 	struct mlx5_hv_vhca	*hv_vhca;
@@ -1127,6 +1125,11 @@ static inline u32 mlx5_base_mkey(const u32 key)
 	return key & 0xffffff00u;
 }
 
+static inline u32 wq_get_byte_sz(u8 log_sz, u8 log_stride)
+{
+	return ((u32)1 << log_sz) << log_stride;
+}
+
 static inline void mlx5_init_fbc_offset(struct mlx5_buf_list *frags,
 					u8 log_stride, u8 log_sz,
 					u16 strides_offset,
@@ -1182,10 +1185,6 @@ enum {
 	CMD_ALLOWED_OPCODE_ALL,
 };
 
-int mlx5_cmd_init(struct mlx5_core_dev *dev);
-void mlx5_cmd_cleanup(struct mlx5_core_dev *dev);
-void mlx5_cmd_set_state(struct mlx5_core_dev *dev,
-			enum mlx5_cmdif_state cmdif_state);
 void mlx5_cmd_use_events(struct mlx5_core_dev *dev);
 void mlx5_cmd_use_polling(struct mlx5_core_dev *dev);
 void mlx5_cmd_allowed_opcode(struct mlx5_core_dev *dev, u16 opcode);
@@ -1282,8 +1281,7 @@ void mlx5_unregister_debugfs(void);
 void mlx5_fill_page_array(struct mlx5_frag_buf *buf, __be64 *pas);
 void mlx5_fill_page_frag_array_perm(struct mlx5_frag_buf *buf, __be64 *pas, u8 perm);
 void mlx5_fill_page_frag_array(struct mlx5_frag_buf *frag_buf, __be64 *pas);
-int mlx5_vector2eqn(struct mlx5_core_dev *dev, int vector, int *eqn,
-		    unsigned int *irqn);
+int mlx5_vector2eqn(struct mlx5_core_dev *dev, int vector, int *eqn);
 int mlx5_core_attach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 int mlx5_core_detach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 
@@ -1374,11 +1372,9 @@ int mlx5_cmd_create_vport_lag(struct mlx5_core_dev *dev);
 int mlx5_cmd_destroy_vport_lag(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_roce(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_sriov(struct mlx5_core_dev *dev);
-bool mlx5_lag_is_multipath(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_active(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_master(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_shared_fdb(struct mlx5_core_dev *dev);
-struct mlx5_core_dev *mlx5_lag_get_peer_mdev(struct mlx5_core_dev *dev);
 struct net_device *mlx5_lag_get_roce_netdev(struct mlx5_core_dev *dev);
 u8 mlx5_lag_get_slave_port(struct mlx5_core_dev *dev,
 			   struct net_device *slave);
@@ -1386,6 +1382,10 @@ int mlx5_lag_query_cong_counters(struct mlx5_core_dev *dev,
 				 u64 *values,
 				 int num_counters,
 				 size_t *offsets);
+struct mlx5_core_dev *mlx5_lag_get_peer_mdev(struct mlx5_core_dev *dev);
+int mlx5_activate_mpesw_lag(struct mlx5_eswitch *esw);
+void mlx5_deactivate_mpesw_lag(struct mlx5_eswitch *esw);
+bool mlx5_lag_mpesw_is_activated(struct mlx5_eswitch *esw);
 struct mlx5_uars_page *mlx5_get_uars_page(struct mlx5_core_dev *mdev);
 void mlx5_put_uars_page(struct mlx5_core_dev *mdev, struct mlx5_uars_page *up);
 int mlx5_dm_sw_icm_alloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
@@ -1485,6 +1485,17 @@ enum {
 	MLX5_TRIGGERED_CMD_COMP = (u64)1 << 32,
 };
 
+static inline bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev)
+{
+	struct devlink *devlink = priv_to_devlink(dev);
+	union devlink_param_value val;
+
+	devlink_param_driverinit_value_get(devlink,
+					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+					   &val);
+	return val.vbool;
+}
+
 /* MLX5 Diagnostics */
 
 #define MLX5_DIAG_DUMP_VERSION  1
@@ -1540,23 +1551,4 @@ struct mlx5_diag_dump {
 	char	dump[0];
 } __packed;
 
-bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev);
-
-/**
- * mlx5_core_net - Provide net namespace of the mlx5_core_dev
- * @dev: mlx5 core device
- *
- * mlx5_core_net() returns the net namespace of mlx5 core device.
- * This can be called only in below described limited context.
- * (a) When a devlink instance for mlx5_core is registered and
- *     when devlink reload operation is disabled.
- *     or
- * (b) during devlink reload reload_down() and reload_up callbacks
- *     where it is ensured that devlink instance's net namespace is
- *     stable.
- */
-static inline struct net *mlx5_core_net(struct mlx5_core_dev *dev)
-{
-	return devlink_net(priv_to_devlink(dev));
-}
 #endif /* MLX5_DRIVER_H */

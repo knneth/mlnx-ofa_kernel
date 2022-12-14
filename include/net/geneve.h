@@ -4,9 +4,7 @@
 
 #include "../../compat/config.h"
 
-#ifdef HAVE_NET_GENEVE_H
 #include_next <net/geneve.h>
-#endif
 
 #ifndef GENEVE_UDP_PORT
 #define GENEVE_UDP_PORT		6081

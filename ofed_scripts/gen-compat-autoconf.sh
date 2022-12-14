@@ -7,7 +7,7 @@
 #
 # Use this to parse a small .config equivalent looking file to generate
 # our own autoconf.h. This file has defines for each config option
-# just like the kernels include/linux/autoconf.h
+# just like the kernels include/generated/autoconf.h
 #
 # XXX: consider using scripts/kconfig/confdata.c instead.
 # On the downside this would require the user to have libc though.
@@ -29,7 +29,7 @@ if [ ! -f $COMPAT_CONFIG ]; then
 fi
 
 # Defines a CONFIG_ option if not defined yet, this helps respect
-# linux/autoconf.h
+# generated/autoconf.h
 function define_config {
 	VAR=$1
 	VALUE=$2

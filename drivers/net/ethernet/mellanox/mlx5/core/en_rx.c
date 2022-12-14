@@ -53,6 +53,7 @@
 #include "en/params.h"
 #include "devlink.h"
 #include "en/devlink.h"
+#include "esw/ipsec.h"
 #include "en/txrx.h"
 
 static inline void mlx5e_set_skb_driver_xmit_more(struct sk_buff *skb,
@@ -62,7 +63,6 @@ static inline void mlx5e_set_skb_driver_xmit_more(struct sk_buff *skb,
 	if (test_bit(MLX5E_RQ_STATE_SKB_XMIT_MORE, &rq->state) && xmit_more)
 		skb->cb[47] = MLX5_XMIT_MORE_SKB_CB;
 }
- 
 
 static struct sk_buff *
 mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
@@ -338,11 +338,6 @@ static inline bool mlx5e_rx_cache_extend(struct mlx5e_rq *rq)
 	return true;
 }
 
-static inline bool mlx5e_page_is_reserved(struct page *page)
-{
-	return page_is_pfmemalloc(page) || page_to_nid(page) != numa_mem_id();
-}
-
 static inline bool mlx5e_rx_cache_put(struct mlx5e_rq *rq,
 				      struct mlx5e_dma_info *dma_info)
 {
@@ -356,7 +351,7 @@ static inline bool mlx5e_rx_cache_put(struct mlx5e_rq *rq,
 		}
 	}
 
-	if (unlikely(mlx5e_page_is_reserved(dma_info->page))) {
+	if (!dev_page_is_reusable(dma_info->page)) {
 		stats->cache_waive++;
 		return false;
 	}
@@ -443,8 +438,8 @@ static inline int mlx5e_page_alloc_pool(struct mlx5e_rq *rq,
 static inline int mlx5e_page_alloc(struct mlx5e_rq *rq,
 				   struct mlx5e_dma_info *dma_info)
 {
-	if (rq->umem)
-		return mlx5e_xsk_page_alloc_umem(rq, dma_info);
+	if (rq->xsk_pool)
+		return mlx5e_xsk_page_alloc_pool(rq, dma_info);
 	else
 		return mlx5e_page_alloc_pool(rq, dma_info);
 }
@@ -476,7 +471,7 @@ static inline void mlx5e_page_release(struct mlx5e_rq *rq,
 				      struct mlx5e_dma_info *dma_info,
 				      bool recycle)
 {
-	if (rq->umem)
+	if (rq->xsk_pool)
 		/* The `recycle` parameter is ignored, and the page is always
 		 * put into the Reuse Ring, because there is no way to return
 		 * the page to the userspace when the interface goes down.
@@ -563,14 +558,14 @@ static int mlx5e_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, u8 wqe_bulk)
 	int err;
 	int i;
 
-	if (rq->umem) {
+	if (rq->xsk_pool) {
 		int pages_desired = wqe_bulk << rq->wqe.info.log_num_frags;
 
 		/* Check in advance that we have enough frames, instead of
 		 * allocating one-by-one, failing and moving frames to the
 		 * Reuse Ring.
 		 */
-		if (unlikely(!xsk_buff_can_alloc(rq->umem, pages_desired)))
+		if (unlikely(!xsk_buff_can_alloc(rq->xsk_pool, pages_desired)))
 			return -ENOMEM;
 	}
 
@@ -683,8 +678,8 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	/* Check in advance that we have enough frames, instead of allocating
 	 * one-by-one, failing and moving frames to the Reuse Ring.
 	 */
-	if (rq->umem &&
-	    unlikely(!xsk_buff_can_alloc(rq->umem, MLX5_MPWRQ_PAGES_PER_WQE))) {
+	if (rq->xsk_pool &&
+	    unlikely(!xsk_buff_can_alloc(rq->xsk_pool, MLX5_MPWRQ_PAGES_PER_WQE))) {
 		err = -ENOMEM;
 		goto err;
 	}
@@ -857,6 +852,7 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq)
 						 get_cqe_opcode(cqe));
 				mlx5e_dump_error_cqe(&sq->cq, sq->sqn,
 						     (struct mlx5_err_cqe *)cqe);
+				mlx5_wq_cyc_wqe_dump(&sq->wq, ci, wi->num_wqebbs);
 				if (!test_and_set_bit(MLX5E_SQ_STATE_RECOVERING, &sq->state))
 					queue_work(cq->priv->wq, &sq->recover_work);
 				break;
@@ -945,7 +941,7 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq)
 	 * the driver when it refills the Fill Ring.
 	 * 2. Otherwise, busy poll by rescheduling the NAPI poll.
 	 */
-	if (unlikely(alloc_err == -ENOMEM && rq->umem))
+	if (unlikely(alloc_err == -ENOMEM && rq->xsk_pool))
 		return true;
 
 	return false;
@@ -1166,8 +1162,7 @@ static inline void mlx5e_handle_csum(struct net_device *netdev,
 	}
 
 	/* True when explicitly set via priv flag, or XDP prog is loaded */
-	if (test_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &rq->state) ||
-	    get_cqe_tls_offload(cqe))
+	if (test_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &rq->state))
 		goto csum_unnecessary;
 
 	/* CQE csum doesn't cover padding octets in short ethernet
@@ -1182,16 +1177,12 @@ static inline void mlx5e_handle_csum(struct net_device *netdev,
 		goto csum_unnecessary;
 
 	if (likely(is_last_ethertype_ip(skb, &network_depth, &proto))) {
-		u8 ipproto = get_ip_proto(skb, network_depth, proto);
-
-		if (unlikely(ipproto == IPPROTO_SCTP))
+		if (unlikely(get_ip_proto(skb, network_depth, proto) == IPPROTO_SCTP))
 			goto csum_unnecessary;
 
 		stats->csum_complete++;
 		skb->ip_summed = CHECKSUM_COMPLETE;
-		skb->csum = unlikely(mlx5_ipsec_is_rx_flow(cqe)) ?
-			    mlx5e_ipsec_offload_handle_rx_csum(skb, cqe) :
-			    csum_unfold((__force __sum16)cqe->check_sum);
+		skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
 
 		if (test_bit(MLX5E_RQ_STATE_CSUM_FULL, &rq->state))
 			return; /* CQE csum covers all received bytes */
@@ -1229,10 +1220,7 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	u8 lro_num_seg = be32_to_cpu(cqe->srqn) >> 24;
 	struct mlx5e_rq_stats *stats = rq->stats;
 	struct net_device *netdev = rq->netdev;
-	struct mlx5_core_dev *mdev = rq->mdev;
-	struct mlx5_eswitch *esw;
 
-	esw = mdev->priv.eswitch;
 	skb->mac_len = ETH_HLEN;
 
 	mlx5e_tls_handle_rx_skb(rq, skb, cqe, &cqe_bcnt);
@@ -1254,7 +1242,6 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp)))
 		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
 								  rq->clock, get_cqe_ts(cqe));
-
 	skb_record_rx_queue(skb, rq->ix);
 
 	if (likely(netdev->features & NETIF_F_RXHASH))
@@ -1266,8 +1253,7 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 		stats->removed_vlan_packets++;
 	}
 
-	if (!is_mdev_switchdev_mode(mdev))
-		skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
+	skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
 
 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
 	/* checking CE bit in cqe - MSB in ml_path field */
@@ -1276,10 +1262,8 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 
 	skb->protocol = eth_type_trans(skb, netdev);
 
-	if (unlikely(mlx5e_skb_is_multicast(skb))) {
+	if (unlikely(mlx5e_skb_is_multicast(skb)))
 		stats->mcast_packets++;
-		stats->mcast_bytes += cqe_bcnt;
-	}
 }
 
 static inline void mlx5e_complete_rx_cqe(struct mlx5e_rq *rq,
@@ -1321,12 +1305,8 @@ struct sk_buff *mlx5e_build_linear_skb(struct mlx5e_rq *rq, void *va,
 static void mlx5e_fill_xdp_buff(struct mlx5e_rq *rq, void *va, u16 headroom,
 				u32 len, struct xdp_buff *xdp)
 {
-	xdp->data_hard_start = va;
-	xdp->data = va + headroom;
-	xdp_set_data_meta_invalid(xdp);
-	xdp->data_end = xdp->data + len;
-	xdp->rxq = &rq->xdp_rxq;
-	xdp->frame_sz = rq->buff.frame0_sz;
+	xdp_init_buff(xdp, rq->buff.frame0_sz, &rq->xdp_rxq);
+	xdp_prepare_buff(xdp, va, headroom, len, false);
 }
 
 static struct sk_buff *
@@ -1597,7 +1577,7 @@ wq_cyc_pop:
 	mlx5_wq_cyc_pop(wq);
 }
 
-static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, 
+static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 					 bool xmit_more)
 {
 	u16 cstrides       = mpwrq_get_cqe_consumed_strides(cqe);
@@ -1856,6 +1836,7 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 			work_done +=
 				mlx5e_decompress_cqes_start(rq, cqwq,
 							    budget - work_done);
+
 			if (work_done == budget)
 				break;
 			cqe = mlx5_cqwq_get_cqe(&cq->wq);
@@ -1863,6 +1844,7 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 		}
 
 		mlx5_cqwq_pop(cqwq);
+
 		next_cqe = mlx5_cqwq_get_cqe(&cq->wq);
 		INDIRECT_CALL_2(rq->handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq,
 				mlx5e_handle_rx_cqe, rq, cqe,
@@ -1958,7 +1940,6 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 	if (unlikely(mlx5e_rx_hw_stamp(tstamp)))
 		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
 								  rq->clock, get_cqe_ts(cqe));
-
 	skb_record_rx_queue(skb, rq->ix);
 
 	if (likely(netdev->features & NETIF_F_RXHASH))
@@ -2089,12 +2070,10 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 		rq->dealloc_wqe = mlx5e_dealloc_rx_mpwqe;
 
 		rq->handle_rx_cqe = priv->profile->rx_handlers->handle_rx_cqe_mpwqe;
-#ifdef CONFIG_MLX5_EN_IPSEC
 		if (mlx5_fpga_is_ipsec_device(mdev)) {
-			netdev_err(netdev, "MPWQE RQ with FPGA IPSec offload not supported\n");
+			netdev_err(netdev, "MPWQE RQ with Innova IPSec offload not supported\n");
 			return -EINVAL;
 		}
-#endif
 		if (!rq->handle_rx_cqe) {
 			netdev_err(netdev, "RX handler of MPWQE RQ is not set\n");
 			return -EINVAL;
@@ -2126,7 +2105,7 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 }
 
 static void mlx5e_trap_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-				     bool xmit_more)
+		bool xmit_more)
 {
 	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;

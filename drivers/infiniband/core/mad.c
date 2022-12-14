@@ -719,8 +719,7 @@ static inline u8 convert_mgmt_class(u8 mgmt_class)
 
 static int get_spl_qp_index(enum ib_qp_type qp_type)
 {
-	switch (qp_type)
-	{
+	switch (qp_type) {
 	case IB_QPT_SMI:
 		return 0;
 	case IB_QPT_GSI:
@@ -1373,8 +1372,7 @@ static int handle_outgoing_dr_smp(struct ib_mad_agent_private *mad_agent_priv,
 				      (const struct ib_mad *)smp,
 				      (struct ib_mad *)mad_priv->mad, &mad_size,
 				      &out_mad_pkey_index);
-	switch (ret)
-	{
+	switch (ret) {
 	case IB_MAD_RESULT_SUCCESS | IB_MAD_RESULT_REPLY:
 		if (ib_response_mad((const struct ib_mad_hdr *)mad_priv->mad) &&
 		    mad_agent_priv->agent.recv_handler) {
@@ -1473,7 +1471,7 @@ static int alloc_send_rmpp_list(struct ib_mad_send_wr_private *send_wr,
 
 	/* Allocate data segments. */
 	for (left = send_buf->data_len + pad; left > 0; left -= seg_size) {
-		seg = kmalloc(sizeof (*seg) + seg_size, gfp_mask);
+		seg = kmalloc(sizeof(*seg) + seg_size, gfp_mask);
 		if (!seg) {
 			free_send_rmpp_list(send_wr);
 			return -ENOMEM;
@@ -1503,12 +1501,11 @@ int ib_mad_kernel_rmpp_agent(const struct ib_mad_agent *agent)
 }
 EXPORT_SYMBOL(ib_mad_kernel_rmpp_agent);
 
-struct ib_mad_send_buf * ib_create_send_mad(struct ib_mad_agent *mad_agent,
-					    u32 remote_qpn, u16 pkey_index,
-					    int rmpp_active,
-					    int hdr_len, int data_len,
-					    gfp_t gfp_mask,
-					    u8 base_version)
+struct ib_mad_send_buf *ib_create_send_mad(struct ib_mad_agent *mad_agent,
+					   u32 remote_qpn, u16 pkey_index,
+					   int rmpp_active, int hdr_len,
+					   int data_len, gfp_t gfp_mask,
+					   u8 base_version)
 {
 	struct ib_mad_agent_private *mad_agent_priv;
 	struct ib_mad_send_wr_private *mad_send_wr;
@@ -2003,11 +2000,9 @@ static void remove_methods_mad_agent(struct ib_mad_mgmt_method_table *method,
 	int i;
 
 	/* Remove any methods for this mad agent */
-	for (i = 0; i < IB_MGMT_MAX_METHODS; i++) {
-		if (method->agent[i] == agent) {
+	for (i = 0; i < IB_MGMT_MAX_METHODS; i++)
+		if (method->agent[i] == agent)
 			method->agent[i] = NULL;
-		}
-	}
 }
 
 static int add_nonoui_reg_req(struct ib_mad_reg_req *mad_reg_req,
@@ -2182,9 +2177,8 @@ static void remove_mad_reg_req(struct ib_mad_agent_private *agent_priv)
 	 * Was MAD registration request supplied
 	 * with original registration ?
 	 */
-	if (!agent_priv->reg_req) {
+	if (!agent_priv->reg_req)
 		goto out;
-	}
 
 	port_priv = agent_priv->qp_info->port_priv;
 	mgmt_class = convert_mgmt_class(agent_priv->reg_req->mgmt_class);
@@ -2405,9 +2399,10 @@ static inline int rcv_has_same_class(const struct ib_mad_send_wr_private *wr,
 		rwc->recv_buf.mad->mad_hdr.mgmt_class;
 }
 
-static inline int rcv_has_same_gid(const struct ib_mad_agent_private *mad_agent_priv,
-				   const struct ib_mad_send_wr_private *wr,
-				   const struct ib_mad_recv_wc *rwc )
+static inline int
+rcv_has_same_gid(const struct ib_mad_agent_private *mad_agent_priv,
+		 const struct ib_mad_send_wr_private *wr,
+		 const struct ib_mad_recv_wc *rwc)
 {
 	struct rdma_ah_attr attr;
 	u8 send_resp, rcv_resp;
@@ -2562,7 +2557,8 @@ static void ib_mad_complete_recv(struct ib_mad_agent_private *mad_agent_priv,
 				deref_mad_agent(mad_agent_priv);
 			} else {
 				/* not user rmpp, revert to normal behavior and
-				 * drop the mad */
+				 * drop the mad
+				 */
 				ib_free_recv_mad(mad_recv_wc);
 				deref_mad_agent(mad_agent_priv);
 				return;
@@ -2588,8 +2584,6 @@ static void ib_mad_complete_recv(struct ib_mad_agent_private *mad_agent_priv,
 						   mad_recv_wc);
 		deref_mad_agent(mad_agent_priv);
 	}
-
-	return;
 }
 
 static enum smi_action handle_ib_smi(const struct ib_mad_port_private *port_priv,
@@ -2930,9 +2924,10 @@ static void wait_for_response(struct ib_mad_send_wr_private *mad_send_wr)
 				       temp_mad_send_wr->timeout))
 				break;
 		}
-	}
-	else
+	} else {
 		list_item = &mad_agent_priv->wait_list;
+	}
+
 	list_add(&mad_send_wr->agent_list, list_item);
 
 	/* Reschedule a work item if we have a shorter timeout */
@@ -2986,7 +2981,7 @@ void ib_mad_complete_send_wr(struct ib_mad_send_wr_private *mad_send_wr,
 	adjust_timeout(mad_agent_priv);
 	spin_unlock_irqrestore(&mad_agent_priv->lock, flags);
 
-	if (mad_send_wr->status != IB_WC_SUCCESS )
+	if (mad_send_wr->status != IB_WC_SUCCESS)
 		mad_send_wc->status = mad_send_wr->status;
 	if (ret == IB_RMPP_RESULT_INTERNAL)
 		ib_rmpp_send_handler(mad_send_wc);
@@ -3219,16 +3214,18 @@ find_send_wr(struct ib_mad_agent_private *mad_agent_priv,
 	return NULL;
 }
 
-int ib_modify_mad(struct ib_mad_agent *mad_agent,
-		  struct ib_mad_send_buf *send_buf, u32 timeout_ms)
+int ib_modify_mad(struct ib_mad_send_buf *send_buf, u32 timeout_ms)
 {
 	struct ib_mad_agent_private *mad_agent_priv;
 	struct ib_mad_send_wr_private *mad_send_wr;
 	unsigned long flags;
 	int active;
 
-	mad_agent_priv = container_of(mad_agent, struct ib_mad_agent_private,
-				      agent);
+	if (!send_buf)
+		return -EINVAL;
+
+	mad_agent_priv = container_of(send_buf->mad_agent,
+				      struct ib_mad_agent_private, agent);
 	spin_lock_irqsave(&mad_agent_priv->lock, flags);
 	mad_send_wr = find_send_wr(mad_agent_priv, send_buf);
 	if (!mad_send_wr) {
@@ -3258,13 +3255,6 @@ int ib_modify_mad(struct ib_mad_agent *mad_agent,
 	return 0;
 }
 EXPORT_SYMBOL(ib_modify_mad);
-
-void ib_cancel_mad(struct ib_mad_agent *mad_agent,
-		   struct ib_mad_send_buf *send_buf)
-{
-	ib_modify_mad(mad_agent, send_buf, 0);
-}
-EXPORT_SYMBOL(ib_cancel_mad);
 
 static void local_completions(struct work_struct *work)
 {

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
-#include "en_tc.h"
+#include "aso.h"
+#include "en/tc_priv.h"
 #include "flow_meter.h"
+#include "en/tc/post_act.h"
 
 #define MLX5_PACKET_COLOR_BITS (mlx5e_tc_attr_to_reg_mappings[PACKET_COLOR_TO_REG].mlen * 8)
 #define MLX5_PACKET_COLOR_MASK GENMASK(MLX5_PACKET_COLOR_BITS - 1, 0)
@@ -21,6 +23,7 @@
 /* cbs = cbs_mantissa*2^cbs_exponent */
 #define CALC_CBS(m, e)  ((m) << (e))
 #define MAX_CBS ((0x100ULL << 0x1F) - 1)
+#define MAX_HW_CBS 0x7FFFFFFF
 
 struct mlx5e_flow_meters {
 	enum mlx5_flow_namespace_type ns_type;
@@ -33,7 +36,7 @@ struct mlx5e_flow_meters {
 	struct list_head partial_list;
 	struct list_head full_list;
 
-	struct mlx5_post_action *post_action;
+	struct mlx5e_post_act *post_action;
 
 	struct mlx5_flow_table *post_meter;
 	struct mlx5_flow_group *post_meter_fg;
@@ -146,6 +149,14 @@ mlx5e_aso_send_flow_meter_aso(struct mlx5_core_dev *mdev,
 
 	if (!rate || rate > MAX_CIR || !burst || burst > MAX_CBS)
 		return -EINVAL;
+
+	/* HW has limitation of total 31 bits for cbs */
+	if (burst > MAX_HW_CBS) {
+		mlx5_core_warn(mdev,
+			       "burst(%lld) is too large, use HW allowed value(%d)\n",
+			       burst, MAX_HW_CBS);
+		burst = MAX_HW_CBS;
+	}
 
 	mlx5_core_dbg(mdev, "meter mode=%d\n", meter_params->mode);
 	mlx5e_flow_meter_cir_calc(rate, &cir_man, &cir_exp);
@@ -346,7 +357,7 @@ mlx5e_alloc_flow_meter(struct mlx5_core_dev *dev)
 	struct mlx5_meter_handle *meter;
 
 	flow_meters = mlx5e_get_flow_meters(dev);
-	if (IS_ERR_OR_NULL(flow_meters))
+	if (!flow_meters)
 		return ERR_PTR(-EOPNOTSUPP);
 
 	mutex_lock(&flow_meters->sync_lock);
@@ -375,7 +386,7 @@ mlx5e_get_flow_meter(struct mlx5_core_dev *mdev, struct mlx5_flow_meter_params *
 	int err;
 
 	flow_meters = mlx5e_get_flow_meters(mdev);
-	if (IS_ERR_OR_NULL(flow_meters))
+	if (!flow_meters)
 		return ERR_PTR(-EOPNOTSUPP);
 
 	mutex_lock(&flow_meters->sync_lock);
@@ -441,8 +452,8 @@ __mlx5e_free_flow_meter_post_action(struct mlx5e_priv *priv,
 	int i;
 
 	for (i = 0; i < attr->parse_attr->meters.count; i++) {
-		mlx5_post_action_del(priv, flow_meters->post_action,
-				     attr->meter_attr.meters[i].post_action);
+		mlx5e_tc_post_act_del(flow_meters->post_action,
+				      attr->meter_attr.meters[i].post_action);
 		attr->meter_attr.meters[i].post_action = NULL;
 	}
 }
@@ -454,7 +465,7 @@ mlx5e_free_flow_meter_post_action(struct mlx5e_priv *priv,
 	struct mlx5e_flow_meters *flow_meters;
 
 	flow_meters = mlx5e_get_flow_meters(priv->mdev);
-	if (IS_ERR_OR_NULL(flow_meters))
+	if (!flow_meters)
 		return;
 
 	__mlx5e_free_flow_meter_post_action(priv, flow_meters, attr);
@@ -469,27 +480,27 @@ mlx5e_tc_meter_unoffload(struct mlx5_core_dev *mdev, struct mlx5_flow_handle *ru
 	struct mlx5e_priv *priv;
 
 	flow_meters = mlx5e_get_flow_meters(mdev);
-	if (IS_ERR_OR_NULL(flow_meters))
+	if (!flow_meters)
 		return;
 
 	priv = flow_meters->aso->priv;
 	__mlx5e_free_flow_meter_post_action(priv, flow_meters, attr);
-	mlx5_post_action_del(priv, flow_meters->post_action,
-			     attr->meter_attr.last_post_action);
+	mlx5e_tc_post_act_del(flow_meters->post_action,
+			      attr->meter_attr.last_post_action);
 	mlx5_tc_rule_delete(priv, rule, pre_attr);
 	mlx5_modify_header_dealloc(mdev, pre_attr->modify_hdr);
 
 	kfree(attr->meter_attr.pre_attr);
 }
 
-static struct mlx5_post_action_handle *
+static struct mlx5e_post_act_handle *
 __mlx5e_fill_flow_meter_post_action(struct mlx5e_priv *priv,
 				    struct mlx5e_flow_meters *flow_meters,
 				    struct mlx5_flow_attr *attr,
-				    struct mlx5_post_action_handle *last)
+				    struct mlx5e_post_act_handle *last)
 {
 	struct mlx5e_tc_mod_hdr_acts mod_acts = {};
-	struct mlx5_post_action_handle *handle;
+	struct mlx5e_post_act_handle *handle;
 	struct mlx5_meter_handle *meter;
 	struct mlx5_modify_hdr *mod_hdr;
 	struct mlx5_flow_attr *mattr;
@@ -503,7 +514,7 @@ __mlx5e_fill_flow_meter_post_action(struct mlx5e_priv *priv,
 		memset(mattr, 0, sizeof(*mattr));
 		mod_acts.num_actions = 0;
 
-		err = mlx5_post_action_set_handle(priv->mdev, last, &mod_acts);
+		err = mlx5e_tc_post_act_set_handle(priv->mdev, last, &mod_acts);
 		if (err) {
 			mlx5_core_err(priv->mdev, "Failed to set fte_id mapping for meter\n");
 			goto err_setid;
@@ -538,7 +549,7 @@ __mlx5e_fill_flow_meter_post_action(struct mlx5e_priv *priv,
 		}
 		mattr->flags = MLX5_ESW_ATTR_FLAG_NO_IN_PORT;
 
-		handle = mlx5_post_action_add(priv, flow_meters->post_action, mattr);
+		handle = mlx5e_tc_post_act_add(flow_meters->post_action, mattr);
 		if (IS_ERR(handle)) {
 			err = PTR_ERR(handle);
 			goto err_post_action;
@@ -561,23 +572,23 @@ err_alloc_mh:
 	dealloc_mod_hdr_actions(&mod_acts);
 err_setid:
 	for (j = i + 1; j < attr->parse_attr->meters.count; j++) {
-		mlx5_post_action_del(priv, flow_meters->post_action,
-				     attr->meter_attr.meters[j].post_action);
+		mlx5e_tc_post_act_del(flow_meters->post_action,
+				      attr->meter_attr.meters[j].post_action);
 		attr->meter_attr.meters[j].post_action = NULL;
 	}
 	kfree(mattr);
 	return ERR_PTR(err);
 }
 
-struct mlx5_post_action_handle *
+struct mlx5e_post_act_handle *
 mlx5e_fill_flow_meter_post_action(struct mlx5e_priv *priv,
 				  struct mlx5_flow_attr *attr,
-				  struct mlx5_post_action_handle *last)
+				  struct mlx5e_post_act_handle *last)
 {
 	struct mlx5e_flow_meters *flow_meters;
 
 	flow_meters = mlx5e_get_flow_meters(priv->mdev);
-	if (IS_ERR_OR_NULL(flow_meters))
+	if (!flow_meters)
 		return ERR_PTR(-EOPNOTSUPP);
 
 	return __mlx5e_fill_flow_meter_post_action(priv, flow_meters, attr, last);
@@ -610,10 +621,10 @@ struct mlx5_flow_handle *
 mlx5e_tc_meter_offload(struct mlx5_core_dev *mdev,
 		       struct mlx5_flow_spec *spec, struct mlx5_flow_attr *attr)
 {
-	struct mlx5_post_action_handle *first, *last;
+	struct mlx5e_post_act_handle *first, *last;
 	struct mlx5e_tc_mod_hdr_acts mod_acts = {};
 	struct mlx5e_flow_meters *flow_meters;
-	struct mlx5_post_action *post_action;
+	struct mlx5e_post_act *post_action;
 	struct mlx5_flow_attr *pre_attr;
 	struct mlx5_modify_hdr *mod_hdr;
 	struct mlx5_flow_handle *rule;
@@ -621,7 +632,7 @@ mlx5e_tc_meter_offload(struct mlx5_core_dev *mdev,
 	int err;
 
 	flow_meters = mlx5e_get_flow_meters(mdev);
-	if (IS_ERR_OR_NULL(flow_meters))
+	if (!flow_meters)
 		return ERR_PTR(-EOPNOTSUPP);
 
 	pre_attr = mlx5_alloc_flow_attr(flow_meters->ns_type);
@@ -636,7 +647,7 @@ mlx5e_tc_meter_offload(struct mlx5_core_dev *mdev,
 	attr->action &= ~MLX5_FLOW_CONTEXT_ACTION_COUNT;
 	attr->flags |= MLX5_ESW_ATTR_FLAG_NO_IN_PORT;
 
-	last = mlx5_post_action_add(priv, post_action, attr);
+	last = mlx5e_tc_post_act_add(post_action, attr);
 	if (IS_ERR(last)) {
 		err = PTR_ERR(last);
 		goto err_alloc_last;
@@ -648,7 +659,7 @@ mlx5e_tc_meter_offload(struct mlx5_core_dev *mdev,
 		goto err_meters;
 	}
 
-	err = mlx5_post_action_set_handle(mdev, first, &mod_acts);
+	err = mlx5e_tc_post_act_set_handle(mdev, first, &mod_acts);
 	if (err) {
 		mlx5_core_err(mdev, "Failed to set fte_id mapping for meter\n");
 		goto err_setid;
@@ -663,7 +674,7 @@ mlx5e_tc_meter_offload(struct mlx5_core_dev *mdev,
 	}
 
 	pre_attr->modify_hdr = mod_hdr;
-	pre_attr->dest_ft = mlx5_post_action_get_ft(post_action);
+	pre_attr->dest_ft = mlx5e_tc_post_act_get_ft(post_action);
 	pre_attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR | MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 
 	rule = mlx5_tc_rule_insert(priv, spec, pre_attr);
@@ -689,7 +700,7 @@ err_alloc_mh:
 err_setid:
 	__mlx5e_free_flow_meter_post_action(priv, flow_meters, attr);
 err_meters:
-	mlx5_post_action_del(priv, post_action, last);
+	mlx5e_tc_post_act_del(post_action, last);
 err_alloc_last:
 	if (attr->counter)
 		attr->action |= MLX5_FLOW_CONTEXT_ACTION_COUNT;
@@ -792,7 +803,7 @@ mlx5e_post_meter_rules_create(struct mlx5e_priv *priv,
 				    MLX5_FLOW_METER_COLOR_GREEN, MLX5_PACKET_COLOR_MASK);
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
-	dest.ft = mlx5_post_action_get_ft(flow_meters->post_action);
+	dest.ft = mlx5e_tc_post_act_get_ft(flow_meters->post_action);
 
 	rule = mlx5_add_flow_rules(flow_meters->post_meter, spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
@@ -866,10 +877,11 @@ mlx5e_post_meter_cleanup(struct mlx5e_flow_meters *flow_meters)
 }
 
 struct mlx5e_flow_meters *
-mlx5e_flow_meters_init(struct mlx5e_priv *priv, enum mlx5_flow_namespace_type ns_type)
+mlx5e_flow_meters_init(struct mlx5e_priv *priv,
+		       enum mlx5_flow_namespace_type ns_type,
+		       struct mlx5e_post_act *post_action)
 {
 	struct mlx5e_flow_meters *flow_meters;
-	struct mlx5_post_action *post_action;
 	int err;
 
 	if (!(MLX5_CAP_GEN_64(priv->mdev, general_obj_types) &
@@ -886,19 +898,20 @@ mlx5e_flow_meters_init(struct mlx5e_priv *priv, enum mlx5_flow_namespace_type ns
 		goto err_aso;
 	}
 
-	post_action = priv->mdev->priv.eswitch->offloads.post_action;
 	if (IS_ERR_OR_NULL(post_action)) {
 		mlx5_core_warn(priv->mdev,
 			       "Failed to init flow meter, post action is missing\n");
-		goto err_post_meter;
+		goto err_post_action;
 	}
 
 	flow_meters->ns_type = ns_type;
 	flow_meters->post_action = post_action;
-
 	err = mlx5e_post_meter_init(priv, flow_meters);
-	if (err)
-		goto err_post_meter;
+	if (err) {
+		mlx5_core_warn(priv->mdev,
+			       "Failed to init flow meter table\n");
+		goto err_post_action;
+	}
 
 	flow_meters->log_granularity = min_t(int, 6,
 					     MLX5_CAP_QOS(priv->mdev, log_meter_aso_granularity));
@@ -908,7 +921,7 @@ mlx5e_flow_meters_init(struct mlx5e_priv *priv, enum mlx5_flow_namespace_type ns
 
 	return flow_meters;
 
-err_post_meter:
+err_post_action:
 	mlx5e_aso_put(priv);
 err_aso:
 	kfree(flow_meters);

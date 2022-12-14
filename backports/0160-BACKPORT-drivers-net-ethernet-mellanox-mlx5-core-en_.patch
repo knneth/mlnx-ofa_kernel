@@ -1,0 +1,140 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
+
+Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
+---
+ .../ethernet/mellanox/mlx5/core/en_accel/ipsec.c   | 41 ++++++++++++++++++++--
+ 1 file changed, 39 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
+@@ -316,6 +316,12 @@ initialize_lifetime_limit(struct mlx5e_i
+ 	if (MLX5_CAP_GEN(priv->mdev, fpga))
+ 		return;
+ 
++#ifndef HAVE_XFRM_STATE_EXPIRE
++	attrs->soft_packet_limit = IPSEC_NO_LIMIT;
++	attrs->hard_packet_limit = IPSEC_NO_LIMIT;
++	return;
++#endif
++
+ 	hard_limit = x->lft.hard_packet_limit;
+ 	soft_limit = (x->lft.soft_packet_limit == IPSEC_NO_LIMIT)
+ 			? 0 : x->lft.soft_packet_limit;
+@@ -463,9 +469,15 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struc
+ 
+ static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
+ {
++#ifdef HAVE_NET_DEVICE_REAL_DEV
+ 	struct net_device *netdev = x->xso.real_dev;
++#else
++	struct net_device *netdev = x->xso.dev;
++#endif
+ 	struct mlx5_core_dev *mdev;
++#ifdef CONFIG_MLX5_ESWITCH
+ 	struct mlx5_eswitch *esw;
++#endif
+ 	struct mlx5e_priv *priv;
+ 
+ 	priv = netdev_priv(netdev);
+@@ -543,6 +555,9 @@ static inline int mlx5e_xfrm_validate_st
+ 			netdev_info(netdev, "IPsec full offload is not supported by this device.\n");
+ 			return -EINVAL;
+ 		}
++#ifndef CONFIG_MLX5_ESWITCH
++			return -EINVAL;
++#else
+ 		esw = mdev->priv.eswitch;
+ 		if (!esw || esw->mode != MLX5_ESWITCH_OFFLOADS) {
+ 			netdev_info(netdev, "IPsec full offload allowed only in switchdev mode.\n");
+@@ -560,6 +575,7 @@ static inline int mlx5e_xfrm_validate_st
+ 				    "IPsec crypto only offload is not allowed when devlink ipsec mode is full.\n");
+ 			return -EINVAL;
+ 		}
++#endif
+ 	}
+ 
+ 	if ((x->xso.flags & XFRM_OFFLOAD_FULL) &&
+@@ -600,7 +616,11 @@ static void mlx5e_xfrm_fs_del_rule(struc
+ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
+ {
+ 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
++#ifdef HAVE_NET_DEVICE_REAL_DEV
+ 	struct net_device *netdev = x->xso.real_dev;
++#else
++	struct net_device *netdev = x->xso.dev;
++#endif
+ 	struct mlx5_accel_esp_xfrm_attrs attrs;
+ 	struct xfrm_policy *pol = NULL;
+ 	struct xfrm_policy _pol;
+@@ -617,6 +637,8 @@ static int mlx5e_xfrm_add_state(struct x
+ 
+ 	if (x->xso.flags & XFRM_OFFLOAD_FULL) {
+ 		u16 family = x->props.family;
++#ifdef HAVE_XFRM_POLICY_LOOKUP_BYTYPE
++		int dir = (x->xso.flags & XFRM_OFFLOAD_INBOUND) ? XFRM_POLICY_IN : XFRM_POLICY_OUT;
+ 		struct flowi fl;
+ 
+ 		fl.u.ip4.saddr = x->sel.saddr.a4;
+@@ -631,7 +653,9 @@ static int mlx5e_xfrm_add_state(struct x
+ 			memcpy(&fl.u.ip6.daddr, &x->sel.daddr.a6, sizeof(x->sel.daddr.a6));
+ 			break;
+ 		}
+-
++		pol = xfrm_policy_lookup_bytype(dev_net(netdev), XFRM_POLICY_TYPE_MAIN, &fl, family,
++						dir, 0);
++#endif
+ 		if (!pol) {
+ 			struct xfrm_selector *sel = &_pol.selector;
+ 
+@@ -855,6 +879,7 @@ struct mlx5e_ipsec_modify_state_work {
+ 	struct mlx5e_ipsec_sa_entry	*sa_entry;
+ };
+ 
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ static void _update_xfrm_state(struct work_struct *work)
+ {
+ 	int ret;
+@@ -894,13 +919,16 @@ static void mlx5e_xfrm_advance_esn_state
+ 	INIT_WORK(&modify_work->work, _update_xfrm_state);
+ 	WARN_ON(!queue_work(sa_entry->ipsec->wq, &modify_work->work));
+ }
++#endif
+ 
+ static const struct xfrmdev_ops mlx5e_ipsec_xfrmdev_ops = {
+ 	.xdo_dev_state_add	= mlx5e_xfrm_add_state,
+ 	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
+ 	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
+ 	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ 	.xdo_dev_state_advance_esn = mlx5e_xfrm_advance_esn_state,
++#endif
+ };
+ 
+ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)
+@@ -1007,14 +1035,23 @@ static void _mlx5e_ipsec_async_event(str
+ 		goto out_xs_state;
+ 
+ 	/* Life time event */
+-	if (!hard_cnt) /* Notify hard lifetime to xfrm stack */
++	if (!hard_cnt) { /* Notify hard lifetime to xfrm stack */
++#ifdef HAVE_XFRM_STATE_EXPIRE
++ 		xfrm_state_expire(xs, 1);
++#endif
+ 		goto out_xs_state;
++	}
+ 
+ 	/* 0: no more soft
+ 	 * 1: notify soft
+ 	 */
+ 	if (lft->round_soft) {
+ 		lft->round_soft--;
++
++#ifdef HAVE_XFRM_STATE_EXPIRE
++ 		if (!lft->round_soft)
++ 			xfrm_state_expire(xs, 0);
++#endif
+ 	}
+ 
+ 	if (!lft->is_simulated) /* hard_limit < IPSEC_HW_LIMIT */

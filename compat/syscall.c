@@ -1,4 +1,4 @@
-#ifdef HAVE_XDP_BUFF
+#ifdef HAVE_XDP_SUPPORT
 
 #ifndef HAVE_BPF_PROG_SUB
 #include <linux/filter.h>
@@ -15,4 +15,4 @@ void bpf_prog_sub(struct bpf_prog *prog, int i)
 EXPORT_SYMBOL_GPL(bpf_prog_sub);
 #endif /* HAVE_BPF_PROG_SUB */
 
-#endif /* HAVE_XDP_BUFF */
+#endif /* HAVE_XDP_SUPPORT */

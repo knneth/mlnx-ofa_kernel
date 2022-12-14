@@ -38,6 +38,10 @@
 #include <linux/xarray.h>
 #include "mlx5_core.h"
 #include "lib/eq.h"
+#ifdef CONFIG_MLX5_ESWITCH
+#include "eswitch.h"
+#endif
+#include "lib/tout.h"
 
 enum {
 	MLX5_PAGES_CANT_GIVE	= 0,
@@ -62,11 +66,6 @@ struct fw_page {
 	unsigned long		bitmask;
 	struct list_head	list;
 	unsigned int free_count;
-};
-
-enum {
-	MAX_RECLAIM_TIME_MSECS	= 5000,
-	MAX_RECLAIM_VFS_PAGES_TIME_MSECS = 2 * 1000 * 60,
 };
 
 enum {
@@ -351,18 +350,81 @@ static void page_notify_fail(struct mlx5_core_dev *dev, u16 func_id,
 			       func_id);
 }
 
+#ifdef CONFIG_MLX5_ESWITCH
+static int vf_obtainable_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
+			       int notify_fail, bool ec_function)
+{
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport;
+
+	if (MLX5_CAP_GEN(dev, port_type) != MLX5_CAP_PORT_TYPE_ETH)
+		return npages;
+
+	evport = mlx5_eswitch_get_vport(esw, func_id);
+	spin_lock(&evport->pg_counters_lock);
+	if (evport->page_limit) {
+		if (evport->fw_pages >= evport->page_limit) {
+			spin_unlock(&evport->pg_counters_lock);
+			mlx5_core_warn(dev,
+				       "Failed giving %d pages to func:%d due to exceeding the limit:%d\n",
+				       npages, func_id, evport->page_limit);
+			if (notify_fail)
+				page_notify_fail(dev, func_id, ec_function);
+			return -EPERM;
+		}
+		if ((evport->fw_pages + npages) > evport->page_limit) {
+			npages = evport->page_limit - evport->fw_pages;
+			mlx5_core_warn(dev,
+				       "Giving only %d pages to func:%d due to reaching the limit:%d\n",
+				       npages, func_id, evport->page_limit);
+		}
+	}
+	spin_unlock(&evport->pg_counters_lock);
+	return npages;
+}
+
+static void update_pg_counters(struct mlx5_core_dev *dev, u16 func_id, int npages, bool add)
+{
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport;
+
+	if (MLX5_CAP_GEN(dev, port_type) != MLX5_CAP_PORT_TYPE_ETH)
+		return;
+
+	evport = mlx5_eswitch_get_vport(esw, func_id);
+
+	if (IS_ERR(evport))
+		return;
+
+	spin_lock(&evport->pg_counters_lock);
+	if (add)
+		evport->fw_pages += npages;
+	else
+		evport->fw_pages -= npages;
+	spin_unlock(&evport->pg_counters_lock);
+}
+#endif
+
 static int give_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
 		      int notify_fail, bool ec_function)
 {
-	unsigned long max_duration = jiffies + msecs_to_jiffies(MLX5_CMD_TIMEOUT_MSEC / 2);
+	unsigned long max_duration = jiffies + msecs_to_jiffies(mlx5_tout_ms(dev, CMD) / 2);
+	u32 function = get_function(func_id, ec_function);
 	u32 out[MLX5_ST_SZ_DW(manage_pages_out)] = {0};
 	int inlen = MLX5_ST_SZ_BYTES(manage_pages_in);
-	u32 function = get_function(func_id, ec_function);
 	u64 addr;
 	int err;
 	u32 *in;
 	int i;
 
+#ifdef CONFIG_MLX5_ESWITCH
+	if (func_id) {
+		npages = vf_obtainable_pages(dev, func_id, npages,
+					     notify_fail, ec_function);
+		if (npages <= 0)
+			return -EPERM;
+	}
+#endif
 	inlen += npages * MLX5_FLD_SZ_BYTES(manage_pages_in, pas[0]);
 	in = kvzalloc(inlen, GFP_KERNEL);
 	if (!in) {
@@ -406,10 +468,14 @@ retry:
 	}
 
 	dev->priv.fw_pages += npages;
-	if (func_id)
+	if (func_id) {
 		dev->priv.vfs_pages += npages;
-	else if (mlx5_core_is_ecpf(dev) && !ec_function)
+#ifdef CONFIG_MLX5_ESWITCH
+		update_pg_counters(dev, func_id, npages, true);
+#endif
+	} else if (mlx5_core_is_ecpf(dev) && !ec_function) {
 		dev->priv.host_pf_pages += npages;
+	}
 
 	mlx5_core_dbg(dev, "npages %d, ec_function %d, func_id 0x%x, err %d\n",
 		      npages, ec_function, func_id, err);
@@ -449,10 +515,14 @@ static void release_all_pages(struct mlx5_core_dev *dev, u16 func_id,
 	}
 
 	dev->priv.fw_pages -= npages;
-	if (func_id)
+	if (func_id) {
 		dev->priv.vfs_pages -= npages;
-	else if (mlx5_core_is_ecpf(dev) && !ec_function)
+#ifdef CONFIG_MLX5_ESWITCH
+		update_pg_counters(dev, func_id, npages, false);
+#endif
+	} else if (mlx5_core_is_ecpf(dev) && !ec_function) {
 		dev->priv.host_pf_pages -= npages;
+	}
 
 	mlx5_core_dbg(dev, "npages %d, ec_function %d, func_id 0x%x\n",
 		      npages, ec_function, func_id);
@@ -561,10 +631,14 @@ static int reclaim_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
 		*nclaimed = claimed;
 
 	dev->priv.fw_pages -= claimed;
-	if (func_id)
+	if (func_id) {
 		dev->priv.vfs_pages -= claimed;
-	else if (mlx5_core_is_ecpf(dev) && !ec_function)
+#ifdef CONFIG_MLX5_ESWITCH
+		update_pg_counters(dev, func_id, npages, false);
+#endif
+	} else if (mlx5_core_is_ecpf(dev) && !ec_function) {
 		dev->priv.host_pf_pages -= claimed;
+	}
 
 out_free:
 	kvfree(out);
@@ -672,7 +746,8 @@ static int optimal_reclaimed_pages(void)
 static int mlx5_reclaim_root_pages(struct mlx5_core_dev *dev,
 				   struct rb_root *root, u32 function)
 {
-	unsigned long end = jiffies + msecs_to_jiffies(MAX_RECLAIM_TIME_MSECS);
+	u64 recl_pages_to_jiffies = msecs_to_jiffies(mlx5_tout_ms(dev, RECLAIM_PAGES));
+	unsigned long end = jiffies + recl_pages_to_jiffies;
 
 	while (!RB_EMPTY_ROOT(root)) {
 		int nclaimed;
@@ -687,7 +762,7 @@ static int mlx5_reclaim_root_pages(struct mlx5_core_dev *dev,
 		}
 
 		if (nclaimed)
-			end = jiffies + msecs_to_jiffies(MAX_RECLAIM_TIME_MSECS);
+			end = jiffies + recl_pages_to_jiffies;
 
 		if (time_after(jiffies, end)) {
 			mlx5_core_warn(dev, "FW did not return all pages. giving up...\n");
@@ -728,7 +803,7 @@ int mlx5_reclaim_startup_pages(struct mlx5_core_dev *dev)
 
 	/* Warning but don't dump stack */
 	if (dev->priv.host_pf_pages)
-		mlx5_core_warn(dev, "Host PF FW pages counter is %d after reclaiming all pages\n",
+		mlx5_core_warn(dev, "External host PF FW pages counter is %d after reclaiming all pages\n",
 			       dev->priv.host_pf_pages);
 
 	return 0;
@@ -766,7 +841,8 @@ void mlx5_pagealloc_stop(struct mlx5_core_dev *dev)
 
 int mlx5_wait_for_pages(struct mlx5_core_dev *dev, int *pages)
 {
-	unsigned long end = jiffies + msecs_to_jiffies(MAX_RECLAIM_VFS_PAGES_TIME_MSECS);
+	u64 recl_vf_pages_to_jiffies = msecs_to_jiffies(mlx5_tout_ms(dev, RECLAIM_VFS_PAGES));
+	unsigned long end = jiffies + recl_vf_pages_to_jiffies;
 	int prev_pages = *pages;
 
 	/* In case of internal error we will free the pages manually later */
@@ -782,7 +858,7 @@ int mlx5_wait_for_pages(struct mlx5_core_dev *dev, int *pages)
 			return -ETIMEDOUT;
 		}
 		if (*pages < prev_pages) {
-			end = jiffies + msecs_to_jiffies(MAX_RECLAIM_VFS_PAGES_TIME_MSECS);
+			end = jiffies + recl_vf_pages_to_jiffies;
 			prev_pages = *pages;
 		}
 		msleep(50);

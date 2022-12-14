@@ -107,7 +107,8 @@ void tclass_get_tclass(struct mlx5_ib_dev *dev,
 		struct mlx5_tc_data *tcd,
 		const struct rdma_ah_attr *ah,
 		u8 port,
-		u8 *tclass);
+		u8 *tclass,
+		bool *global_tc);
 
 /* DC_cnak feature */
 

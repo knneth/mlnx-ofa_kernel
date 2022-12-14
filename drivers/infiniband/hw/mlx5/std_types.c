@@ -123,6 +123,9 @@ static int fill_switchdev_info(struct mlx5_ib_dev *dev, u32 port_num,
 		return -EOPNOTSUPP;
 
 	mdev = mlx5_eswitch_get_core_dev(rep->esw);
+	if (!mdev)
+		return -EINVAL;
+
 	info->vport = rep->vport;
 	info->flags |= MLX5_IB_UAPI_QUERY_PORT_VPORT;
 

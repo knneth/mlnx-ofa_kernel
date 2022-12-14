@@ -1,10 +1,10 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
 
-Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
+Change-Id: I072df8c72781a01a407851e5b52edf0ed061e871
 ---
- drivers/infiniband/core/cma_configfs.c | 134 +++++++++++++++++++++++--
- 1 file changed, 126 insertions(+), 8 deletions(-)
+ drivers/infiniband/core/cma_configfs.c | 143 ++++++++++++++++++++++++-
+ 1 file changed, 138 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/core/cma_configfs.c
 +++ b/drivers/infiniband/core/cma_configfs.c
@@ -78,7 +78,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  static int cma_configfs_params_get(struct config_item *item,
  				   struct cma_device **pcma_dev,
  				   struct cma_dev_port_group **pgroup)
-@@ -187,12 +236,23 @@ static ssize_t default_roce_tos_store(st
+@@ -187,12 +236,27 @@ static ssize_t default_roce_tos_store(st
  CONFIGFS_ATTR(, default_roce_tos);
  
  static struct configfs_attribute *cma_configfs_attributes[] = {
@@ -89,7 +89,6 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	NULL,
  };
  
--static const struct config_item_type cma_port_group_type = {
 +#ifdef HAVE_OLD_CONFIGFS_API
 +static struct configfs_item_operations cma_item_ops = {
 +	.show_attribute		= cma_configfs_attr_show,
@@ -100,63 +99,73 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
 +};
 +#endif
 +
++#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
+ static const struct config_item_type cma_port_group_type = {
++#else
 +static struct config_item_type cma_port_group_type = {
++#endif
 +	.ct_item_ops	= &cma_item_ops,
  	.ct_attrs	= cma_configfs_attributes,
  	.ct_owner	= THIS_MODULE
  };
-@@ -220,6 +280,14 @@ static int make_cma_ports(struct cma_dev
- 		goto free;
- 	}
+@@ -217,6 +281,14 @@ static int make_cma_ports(struct cma_dev
+ 	if (!ports)
+ 		return -ENOMEM;
  
 +#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
 +	cma_dev_group->ports_group.default_groups = kcalloc((ports_num + 1),
 +							    sizeof(struct config_group *),
 +							    GFP_KERNEL);
 +	if (!cma_dev_group->ports_group.default_groups)
-+		goto free;
++		return -ENOMEM;
 +#endif
 +
  	for (i = 0; i < ports_num; i++) {
  		char port_str[10];
  
-@@ -229,10 +297,17 @@ static int make_cma_ports(struct cma_dev
+@@ -226,10 +298,16 @@ static int make_cma_ports(struct cma_dev
  		config_group_init_type_name(&ports[i].group,
  					    port_str,
  					    &cma_port_group_type);
 +#ifdef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
  		configfs_add_default_group(&ports[i].group,
  				&cma_dev_group->ports_group);
+-
 +#else
 +		cma_dev_group->ports_group.default_groups[i] = &ports[i].group;
 +#endif
- 
  	}
 +#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
 +	cma_dev_group->ports_group.default_groups[i] = NULL;
 +#endif
  	cma_dev_group->ports = ports;
- 
  	return 0;
-@@ -269,7 +344,7 @@ static struct configfs_item_operations c
+ }
+@@ -261,7 +339,11 @@ static struct configfs_item_operations c
  	.release = release_cma_ports_group
  };
  
--static const struct config_item_type cma_ports_group_type = {
++#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
+ static const struct config_item_type cma_ports_group_type = {
++#else
 +static struct config_item_type cma_ports_group_type = {
++#endif
  	.ct_item_ops	= &cma_ports_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -278,7 +353,7 @@ static struct configfs_item_operations c
+@@ -270,7 +352,11 @@ static struct configfs_item_operations c
  	.release = release_cma_dev
  };
  
--static const struct config_item_type cma_device_group_type = {
++#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
+ static const struct config_item_type cma_device_group_type = {
++#else
 +static struct config_item_type cma_device_group_type = {
++#endif
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -301,6 +376,15 @@ static struct config_group *make_cma_dev
+@@ -293,6 +379,15 @@ static struct config_group *make_cma_dev
  		goto fail;
  	}
  
@@ -172,7 +181,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
  
  	config_group_init_type_name(&cma_dev_group->ports_group, "ports",
-@@ -308,16 +392,29 @@ static struct config_group *make_cma_dev
+@@ -300,16 +395,29 @@ static struct config_group *make_cma_dev
  
  	err = make_cma_ports(cma_dev_group, cma_dev);
  	if (err)
@@ -204,7 +213,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  fail:
  	if (cma_dev)
  		cma_dev_put(cma_dev);
-@@ -332,8 +429,29 @@ static void drop_cma_dev(struct config_g
+@@ -324,8 +432,29 @@ static void drop_cma_dev(struct config_g
  	struct cma_dev_group *cma_dev_group =
  		container_of(group, struct cma_dev_group, device_group);
  
@@ -234,12 +243,15 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	config_item_put(item);
  }
  
-@@ -342,7 +460,7 @@ static struct configfs_group_operations
+@@ -334,7 +463,11 @@ static struct configfs_group_operations
  	.drop_item	= drop_cma_dev,
  };
  
--static const struct config_item_type cma_subsys_type = {
++#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
+ static const struct config_item_type cma_subsys_type = {
++#else
 +static struct config_item_type cma_subsys_type = {
++#endif
  	.ct_group_ops	= &cma_subsys_group_ops,
  	.ct_owner	= THIS_MODULE,
  };

@@ -1,64 +1,75 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 
-Change-Id: I8472530f3805ca75d05238609290d66a0e02377f
+Change-Id: I05a91dc6289650d0388f9325ec51dcf4e8ec3911
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/rx.h   | 21 +++++++++++++++++++
- 1 file changed, 21 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
-@@ -4,11 +4,27 @@
- #ifndef __MLX5_EN_XSK_RX_H__
- #define __MLX5_EN_XSK_RX_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+@@ -757,7 +757,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
+ 	}
  
-+#ifdef HAVE_XSK_SUPPORT
-+
- #include "en.h"
-+#ifdef HAVE_NDO_XSK_WAKEUP
-+#ifdef HAVE_XDP_SOCK_DRV_H
- #include <net/xdp_sock_drv.h>
+ 	ct_state |= MLX5_CT_STATE_ESTABLISHED_BIT | MLX5_CT_STATE_TRK_BIT;
++#ifdef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
+ 	ct_state |= meta->ct_metadata.orig_dir ? 0 : MLX5_CT_STATE_REPLY_BIT;
++#endif
+ 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
+ 					     ct_state,
+ 					     meta->ct_metadata.mark,
+@@ -1098,9 +1100,9 @@ err_orig:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+-	struct flow_rule *flow_rule = flow_cls_offload_flow_rule(flow);
++	struct flow_rule *flow_rule = flow_cls_offload_flow_rule1(flow);
+ 	struct mlx5_ct_fs_ops *fs_ops = ft->ct_priv->fs_ops;
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	struct flow_action_entry *meta_action;
+@@ -1202,7 +1204,7 @@ err_set:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = flow->cookie;
+@@ -1230,7 +1232,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
+-				    struct flow_cls_offload *f)
++				    struct flow_cls_offload1 *f)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = f->cookie;
+@@ -1252,8 +1254,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+ 	spin_unlock_bh(&ct_priv->ht_lock);
+ 
+ 	mlx5_fc_query_cached(entry->counter->fs_counter->counter, &bytes, &packets, &lastuse);
++#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
+ 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
+ 			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
++	flow_stats_update(&f->stats, bytes, packets, lastuse,
++			  FLOW_ACTION_HW_STATS_DELAYED);
 +#else
-+#include <net/xdp_sock.h>
++	flow_stats_update(&f->stats, bytes, packets, lastuse);
 +#endif
-+#endif
  
- /* RX data path */
- 
-+#ifndef HAVE_XSK_BUFF_ALLOC
-+bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count);
-+int mlx5e_xsk_page_alloc_umem(struct mlx5e_rq *rq,
-+			      struct mlx5e_dma_info *dma_info);
-+void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
-+			    struct mlx5e_dma_info *dma_info);
-+void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle);
-+#endif
- struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
- 						    struct mlx5e_mpw_info *wi,
- 						    u16 cqe_bcnt,
-@@ -19,6 +35,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
- 					      struct mlx5e_wqe_frag_info *wi,
- 					      u32 cqe_bcnt);
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- static inline int mlx5e_xsk_page_alloc_umem(struct mlx5e_rq *rq,
- 					    struct mlx5e_dma_info *dma_info)
- {
-@@ -35,7 +52,9 @@ static inline int mlx5e_xsk_page_alloc_u
- 
+ 	mlx5_tc_ct_entry_put(entry);
  	return 0;
- }
-+#endif
- 
-+#ifdef HAVE_NDO_XSK_WAKEUP
- static inline bool mlx5e_xsk_update_rx_wakeup(struct mlx5e_rq *rq, bool alloc_err)
+@@ -1263,7 +1272,7 @@ static int
+ mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
+ 			      void *cb_priv)
  {
- 	if (!xsk_umem_uses_need_wakeup(rq->umem))
-@@ -48,5 +67,7 @@ static inline bool mlx5e_xsk_update_rx_w
+-	struct flow_cls_offload *f = type_data;
++	struct flow_cls_offload1 *f = type_data;
+ 	struct mlx5_ct_ft *ft = cb_priv;
  
- 	return false;
- }
-+#endif
- 
-+#endif /* HAVE_XSK_SUPPORT */
- #endif /* __MLX5_EN_XSK_RX_H__ */
+ 	if (type != TC_SETUP_CLSFLOWER)

@@ -6,6 +6,11 @@
 
 #include_next <linux/scatterlist.h>
 
+#ifndef for_each_sgtable_dma_sg
+#define for_each_sgtable_dma_sg(sgt, sg, i)     \
+	        for_each_sg((sgt)->sgl, sg, (sgt)->nents, i)
+#endif
+
 #if (KERNEL_VERSION(4, 8, 0) <= LINUX_VERSION_CODE) || \
 	(defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 4)
 #ifndef HAVE_SG_ZERO_BUFFER

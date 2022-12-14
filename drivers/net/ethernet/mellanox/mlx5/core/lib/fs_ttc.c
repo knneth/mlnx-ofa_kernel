@@ -110,7 +110,7 @@ static struct mlx5_etype_proto ttc_rules[] = {
 	},
 };
 
-static struct mlx5_etype_proto ttc_tunnel_rules[] = {
+struct mlx5_etype_proto ttc_tunnel_rules[] = {
 	[MLX5_TT_IPV4_GRE] = {
 		.etype = ETH_P_IP,
 		.proto = IPPROTO_GRE,
@@ -137,6 +137,11 @@ static struct mlx5_etype_proto ttc_tunnel_rules[] = {
 	},
 
 };
+
+u8 mlx5_get_proto_by_tunnel_type(enum mlx5_tunnel_types tt)
+{
+	return ttc_tunnel_rules[tt].proto;
+}
 
 bool mlx5_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type)
 {

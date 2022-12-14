@@ -7,9 +7,7 @@
 #include_next <linux/pm_qos.h>
 
 #if !defined(HAVE_PM_QOS_UPDATE_USER_LATENCY_TOLERANCE_EXPORTED)
-#if defined(HAVE_DEV_PM_QOS_RESUME_LATENCY) && \
-    defined(HAVE_DEV_PM_QOS_LATENCY_TOLERANCE) && \
-    defined(HAVE_PM_QOS_LATENCY_TOLERANCE_NO_CONSTRAINT)
+#ifdef HAVE_DEV_PM_QOS_RESUME_LATENCY
 #define dev_pm_qos_drop_user_request LINUX_BACKPORT(dev_pm_qos_drop_user_request)
 static inline void dev_pm_qos_drop_user_request(struct device *dev,
 						enum dev_pm_qos_req_type type)

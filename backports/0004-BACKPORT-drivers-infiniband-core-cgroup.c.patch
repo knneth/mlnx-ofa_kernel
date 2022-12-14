@@ -1,7 +1,7 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cgroup.c
 
-Change-Id: I8cba7c779f2dedf3c7bcfd2bdf663b0c98a7a4c7
+Change-Id: Idaa870dfd60abdd4c7460adb60b72ef0e8fb02c3
 ---
  drivers/infiniband/core/cgroup.c | 4 ++++
  1 file changed, 4 insertions(+)

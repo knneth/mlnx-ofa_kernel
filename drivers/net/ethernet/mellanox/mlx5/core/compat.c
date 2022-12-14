@@ -8,22 +8,6 @@
 #include "en_rep.h"
 #include "en/rep/tc.h"
 
-bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev)
-{
-#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
-	struct devlink *devlink = priv_to_devlink(dev);
-	union devlink_param_value val;
-
-	devlink_param_driverinit_value_get(devlink,
-			DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
-			&val);
-	return val.vbool;
-#else
-	return dev->roce.enabled && MLX5_CAP_GEN(dev, roce);
-#endif
-}
-EXPORT_SYMBOL(mlx5_is_roce_init_enabled);
-
 #ifdef CONFIG_MLX5_ESWITCH
 #if defined(HAVE_SWITCHDEV_OPS) || defined(HAVE_SWITCHDEV_H_COMPAT)
 int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)

@@ -1,0 +1,126 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
+
+Change-Id: Iac6189ad67cbdcc957785b6227408727f4d3530f
+---
+ include/linux/mlx5/driver.h | 31 ++++++++++++++++++++++++++++---
+ 1 file changed, 28 insertions(+), 3 deletions(-)
+
+--- a/include/linux/mlx5/driver.h
++++ b/include/linux/mlx5/driver.h
+@@ -33,6 +33,8 @@
+ #ifndef MLX5_DRIVER_H
+ #define MLX5_DRIVER_H
+ 
++#include "../../../compat/config.h"
++
+ #include <linux/kernel.h>
+ #include <linux/completion.h>
+ #include <linux/pci.h>
+@@ -56,6 +58,9 @@
+ #include <linux/timecounter.h>
+ #include <linux/ptp_clock_kernel.h>
+ #include <net/devlink.h>
++#include <linux/net_tstamp.h>
++#include <linux/llist.h>
++
+ 
+ #define MLX5_ADEV_NAME "mlx5_core"
+ 
+@@ -397,8 +402,8 @@ struct mlx5_core_mkey {
+ 	u32			key;
+ 	u32			pd;
+ 	u32			type;
+-	struct wait_queue_head wait;
+-	refcount_t usecount;
++	wait_queue_head_t 	wait;
++	refcount_t 		usecount;
+ };
+ 
+ #define MLX5_24BIT_MASK		((1 << 24) - 1)
+@@ -477,9 +482,11 @@ struct mlx5_core_health {
+ 	struct workqueue_struct	       *wq;
+ 	unsigned long			flags;
+ 	struct work_struct		fatal_report_work;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	struct work_struct		report_work;
+ 	struct devlink_health_reporter *fw_reporter;
+ 	struct devlink_health_reporter *fw_fatal_reporter;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	struct mlx5_fw_crdump		*crdump;
+ 	struct mlx5_health_recoveries	recoveries;
+ };
+@@ -575,6 +582,9 @@ struct mlx5_fc_stats {
+ 	unsigned long sampling_interval; /* jiffies */
+ 	u32 *bulk_query_out;
+ 	struct mlx5_fc_pool fc_pool;
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3,6,11))
++	char *fc_cache_name;
++#endif
+ };
+ 
+ struct mlx5_events;
+@@ -656,6 +666,9 @@ struct mlx5_priv {
+ 	/* IRQ table valid only for real pci devices PF or VF */
+ 	struct mlx5_irq_table   *irq_table;
+ 	struct mlx5_eq_table	*eq_table;
++#ifndef HAVE_PCI_IRQ_API
++	struct msix_entry       *msix_arr;
++#endif
+ 
+ 	/* pages stuff */
+ 	struct mlx5_nb          pg_nb;
+@@ -870,9 +883,11 @@ struct mlx5_clock {
+ 	struct mlx5_nb             pps_nb;
+ 	seqlock_t                  lock;
+ 	struct hwtstamp_config     hwtstamp_config;
++#if (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	struct ptp_clock          *ptp;
+ 	struct ptp_clock_info      ptp_info;
+ 	struct mlx5_pps            pps_info;
++#endif
+ 	struct mlx5_timer          timer;
+ };
+ 
+@@ -1045,8 +1060,13 @@ struct mlx5_cmd_work_ent {
+ 	int			page_queue;
+ 	u8			status;
+ 	u8			token;
++#ifdef HAVE_KTIME_GET_NS
+ 	u64			ts1;
+ 	u64			ts2;
++#else
++	struct timespec		ts1;
++	struct timespec		ts2;
++#endif
+ 	u16			op;
+ 	bool			polling;
+ 	/* Track the max comp handlers */
+@@ -1192,7 +1212,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
+ struct mlx5_async_ctx {
+ 	struct mlx5_core_dev *dev;
+ 	atomic_t num_inflight;
+-	struct wait_queue_head wait;
++	wait_queue_head_t wait;
+ };
+ 
+ struct mlx5_async_work;
+@@ -1487,6 +1507,8 @@ enum {
+ 
+ static inline bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev)
+ {
++#if defined(CONFIG_MLX5_ESWITCH) && \
++	defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 	union devlink_param_value val;
+ 
+@@ -1494,6 +1516,9 @@ static inline bool mlx5_is_roce_init_ena
+ 					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+ 					   &val);
+ 	return val.vbool;
++#else
++	return dev->roce.enabled && MLX5_CAP_GEN(dev, roce);
++#endif
+ }
+ 
+ /* MLX5 Diagnostics */

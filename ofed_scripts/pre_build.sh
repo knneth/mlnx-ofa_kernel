@@ -29,6 +29,7 @@ kernelver=$1
 kernel_source_dir=$2
 PACKAGE_NAME=$3
 PACKAGE_VERSION=$4
+arch=$(uname -m)
 
 config_flag=`/var/lib/dkms/${PACKAGE_NAME}/${PACKAGE_VERSION}/source/ofed_scripts/dkms_ofed $kernelver $kernel_source_dir get-config`
 
@@ -46,5 +47,5 @@ make -j${NJOBS:-1}
 ./ofed_scripts/install_helper
 
 # copy the ofa-kernel build headers
-export ofa_build_src=/usr/src/ofa_kernel/${kernelver}
+export ofa_build_src=/usr/src/ofa_kernel/$arch/${kernelver}
 ./ofed_scripts/dkms_ofed_post_build.sh

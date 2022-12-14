@@ -1,0 +1,206 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
+
+Change-Id: I33787b8a30eb6f0b2202a31f653015e4b4e39ce2
+---
+ drivers/infiniband/hw/mlx5/mr.c | 61 ++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 51 insertions(+), 10 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/mr.c
++++ b/drivers/infiniband/hw/mlx5/mr.c
+@@ -40,7 +40,9 @@
+ #include <linux/device.h>
+ #include <linux/sysfs.h>
+ #include <linux/dma-buf.h>
++#ifdef HAVE_DMA_RESV_H
+ #include <linux/dma-resv.h>
++#endif
+ #include <rdma/ib_umem.h>
+ #include <rdma/ib_umem_odp.h>
+ #include <rdma/ib_verbs.h>
+@@ -73,7 +75,12 @@ static void set_mkc_access_pd_addr_field
+ 					  struct ib_pd *pd)
+ {
+ 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
+-	bool ro_pci_enabled = pcie_relaxed_ordering_enabled(dev->mdev->pdev);
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
++       bool ro_pci_enabled = pcie_relaxed_ordering_enabled(dev->mdev->pdev);
++#else
++       bool ro_pci_enabled = true;
++#endif
++
+ 
+ 	MLX5_SET(mkc, mkc, a, !!(acc & IB_ACCESS_REMOTE_ATOMIC));
+ 	MLX5_SET(mkc, mkc, rw, !!(acc & IB_ACCESS_REMOTE_WRITE));
+@@ -572,12 +579,19 @@ static void clean_keys(struct mlx5_ib_de
+ 		kfree(mr);
+ 	}
+ }
+-
++#ifdef HAVE_TIMER_SETUP
+ static void delay_time_func(struct timer_list *t)
+-{
+-	struct mlx5_ib_dev *dev = from_timer(dev, t, delay_timer);
++#else
++static void delay_time_func(unsigned long ctx)
++#endif
++{
++#ifdef HAVE_TIMER_SETUP
++        struct mlx5_ib_dev *dev = from_timer(dev, t, delay_timer);
++#else
++        struct mlx5_ib_dev *dev = (struct mlx5_ib_dev *)ctx;
++#endif
+ 
+-	WRITE_ONCE(dev->fill_delay, 0);
++        WRITE_ONCE(dev->fill_delay, 0);
+ }
+ 
+ int mlx5_mr_cache_init(struct mlx5_ib_dev *dev)
+@@ -595,7 +609,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
+ 	}
+ 
+ 	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
++#ifdef HAVE_TIMER_SETUP
+ 	timer_setup(&dev->delay_timer, delay_time_func, 0);
++#else
++        setup_timer(&dev->delay_timer, delay_time_func, (unsigned long)dev);
++#endif
+ 	for (i = 0; i < MAX_MR_CACHE_ENTRIES; i++) {
+ 		ent = &cache->ent[i];
+ 		INIT_LIST_HEAD(&ent->head);
+@@ -875,8 +893,9 @@ static void *mlx5_ib_alloc_xlt(size_t *n
+ 	size_t size;
+ 	void *res = NULL;
+ 
++#ifdef HAVE_STATIC_ASSERT
+ 	static_assert(PAGE_SIZE % MLX5_UMR_MTT_ALIGNMENT == 0);
+-
++#endif
+ 	/*
+ 	 * MLX5_IB_UPD_XLT_ATOMIC doesn't signal an atomic context just that the
+ 	 * allocation can't trigger any kind of reclaim.
+@@ -1036,13 +1055,14 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+ 		return -ENOMEM;
+ 	pages_iter = sg.length / desc_size;
+ 	orig_sg_length = sg.length;
+-
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (!(flags & MLX5_IB_UPD_XLT_INDIRECT)) {
+ 		struct ib_umem_odp *odp = to_ib_umem_odp(mr->umem);
+ 		size_t max_pages = ib_umem_odp_num_pages(odp) - idx;
+ 
+ 		pages_to_map = min_t(size_t, pages_to_map, max_pages);
+ 	}
++#endif
+ 
+ 	wr.page_shift = page_shift;
+ 
+@@ -1383,6 +1403,7 @@ static struct ib_mr *create_real_mr(stru
+ 	return &mr->ibmr;
+ }
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
+ 					u64 iova, int access_flags,
+ 					struct ib_udata *udata)
+@@ -1404,7 +1425,7 @@ static struct ib_mr *create_user_odp_mr(
+ 		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
+ 			return ERR_PTR(-EINVAL);
+ 
+-		mr = mlx5_ib_alloc_implicit_mr(to_mpd(pd), access_flags);
++		mr = mlx5_ib_alloc_implicit_mr(to_mpd(pd), udata, access_flags);
+ 		if (IS_ERR(mr))
+ 			return ERR_CAST(mr);
+ 		return &mr->ibmr;
+@@ -1414,8 +1435,12 @@ static struct ib_mr *create_user_odp_mr(
+ 	if (!mlx5_ib_can_load_pas_with_umr(dev, length))
+ 		return ERR_PTR(-EINVAL);
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	odp = ib_umem_odp_get(&dev->ib_dev, start, length, access_flags,
+ 			      &mlx5_mn_ops);
++#else
++	odp = ib_umem_odp_get(udata, start, length, access_flags);
++#endif
+ 	if (IS_ERR(odp))
+ 		return ERR_CAST(odp);
+ 
+@@ -1440,6 +1465,7 @@ err_dereg_mr:
+ 	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
+ 	return ERR_PTR(err);
+ }
++#endif
+ 
+ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
+ 				  u64 iova, int access_flags,
+@@ -1453,17 +1479,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+ 
+ 	mlx5_ib_dbg(dev, "start 0x%llx, iova 0x%llx, length 0x%llx, access_flags 0x%x\n",
+ 		    start, iova, length, access_flags);
+-
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if ((access_flags & IB_ACCESS_ON_DEMAND) && (dev->profile != &raw_eth_profile))
+ 		return create_user_odp_mr(pd, start, length, iova, access_flags,
+ 					  udata);
++#endif
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem = ib_umem_get_peer(&dev->ib_dev, start, length, access_flags,
++#else
++	umem = ib_umem_get_peer(udata, start, length, access_flags,
++#endif
++
+ 				IB_PEER_MEM_INVAL_SUPP);
+ 	if (IS_ERR(umem))
+ 		return ERR_CAST(umem);
+ 	return create_real_mr(pd, umem, iova, access_flags);
+ }
+ 
++
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
+ {
+ 	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
+@@ -1479,10 +1513,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
+ }
+ 
+ static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
++#ifdef HAVE_DMA_BUF_ATTACH_OPS_ALLOW_PEER2PEER
+ 	.allow_peer2peer = 1,
++#endif
+ 	.move_notify = mlx5_ib_dmabuf_invalidate_cb,
+ };
+-
+ struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 offset,
+ 					 u64 length, u64 virt_addr,
+ 					 int fd, int access_flags,
+@@ -1538,6 +1573,7 @@ err_dereg_mr:
+ 	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
+ 	return ERR_PTR(err);
+ }
++#endif
+ 
+ /**
+  * revoke_mr - Fence all DMA on the MR
+@@ -1752,8 +1788,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+ 	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
+ 		struct ib_umem *new_umem;
+ 		unsigned long page_size;
+-
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		new_umem = ib_umem_get_peer(&dev->ib_dev, start, length,
++#else
++		new_umem = ib_umem_get_peer(udata, start, length,
++#endif
+ 					    new_access_flags,
+ 					    IB_PEER_MEM_INVAL_SUPP);
+ 		if (IS_ERR(new_umem))
+@@ -1922,7 +1961,9 @@ static void mlx5_set_umr_free_mkey(struc
+ 				   int access_mode, int page_shift)
+ {
+ 	void *mkc;
++#ifdef CONFIG_GPU_DIRECT_STORAGE
+ 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
++#endif
+ 
+ 	mkc = MLX5_ADDR_OF(create_mkey_in, in, memory_key_mkey_entry);
+ 

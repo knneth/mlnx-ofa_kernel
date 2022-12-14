@@ -205,7 +205,7 @@ struct mlx5_ft_underlay_qp {
 	u32 qpn;
 };
 
-#define MLX5_FTE_MATCH_PARAM_RESERVED	reserved_at_c00
+#define MLX5_FTE_MATCH_PARAM_RESERVED	reserved_at_e00
 /* Calculate the fte_match_param length and without the reserved length.
  * Make sure the reserved field is the last.
  */
@@ -305,6 +305,8 @@ int mlx5_fs_egress_acls_init(struct mlx5_core_dev *dev, int total_vports);
 void mlx5_fs_egress_acls_cleanup(struct mlx5_core_dev *dev);
 int mlx5_fs_ingress_acls_init(struct mlx5_core_dev *dev, int total_vports);
 void mlx5_fs_ingress_acls_cleanup(struct mlx5_core_dev *dev);
+
+struct mlx5_flow_root_namespace *find_root(struct fs_node *node);
 
 #define fs_get_obj(v, _node)  {v = container_of((_node), typeof(*v), node); }
 

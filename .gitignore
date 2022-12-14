@@ -106,3 +106,7 @@ compat/build/output.log
 compat/config.h
 compat/config.status
 compat/stamp-h1
+
+compat/Makefile
+compat/configure
+

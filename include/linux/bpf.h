@@ -31,7 +31,7 @@
 #undef HAVE_XDP_ENABLE
 #endif
 
-#ifdef HAVE_XDP_BUFF
+#ifdef HAVE_XDP_SUPPORT
 #ifndef HAVE_BPF_PROG_INC_EXPORTED
 #define bpf_prog_inc LINUX_BACKPORT(bpf_prog_inc)
 static inline struct bpf_prog *bpf_prog_inc(struct bpf_prog *prog)
@@ -39,7 +39,7 @@ static inline struct bpf_prog *bpf_prog_inc(struct bpf_prog *prog)
 	return bpf_prog_add(prog, 1);
 }
 #endif
-#endif/*HAVE_XDP_BUFF*/
+#endif/* HAVE_XDP_SUPPORT */
 
 #ifndef HAVE_BPF_PROG_SUB
 struct bpf_prog;

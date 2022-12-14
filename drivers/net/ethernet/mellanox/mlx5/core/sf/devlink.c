@@ -9,10 +9,6 @@
 #include "vhca_event.h"
 #include "ecpf.h"
 
-/* Follow condition should be moved to backports in next rebase
-   as a result of CONFIG_MLX5_SF_MANAGER is set we need to block it
-   to allow compilation without backports on base kernel 5.9 
-   */
 struct mlx5_sf {
 	struct devlink_port dl_port;
 	unsigned int port_index;
@@ -528,7 +524,7 @@ static int mlx5_sf_esw_event(struct notifier_block *nb, unsigned long event, voi
 		break;
 	default:
 		break;
-	};
+	}
 
 	return 0;
 }

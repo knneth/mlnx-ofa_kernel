@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = remove ]; then
+    update-alternatives --remove ofa_kernel_headers \
+      /usr/src/ofa_kernel/@ARCH@/@KVER@
+fi
+
+#DEBHELPER#

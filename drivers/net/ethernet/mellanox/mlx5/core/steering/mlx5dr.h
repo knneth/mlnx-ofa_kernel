@@ -27,6 +27,7 @@ enum mlx5dr_action_reformat_type {
 	DR_ACTION_REFORMAT_TYP_TNL_L3_TO_L2,
 	DR_ACTION_REFORMAT_TYP_L2_TO_TNL_L3,
 	DR_ACTION_REFORMAT_TYP_INSERT_HDR,
+	DR_ACTION_REFORMAT_TYP_REMOVE_HDR,
 };
 
 struct mlx5dr_match_parameters {
@@ -55,6 +56,9 @@ void mlx5dr_domain_vport_disable(struct mlx5dr_domain *dmn, u32 vport);
 
 struct mlx5dr_table *
 mlx5dr_table_create(struct mlx5dr_domain *domain, u32 level, u32 flags);
+
+struct mlx5dr_table *
+mlx5dr_table_get_from_fs_ft(struct mlx5_flow_table *ft);
 
 int mlx5dr_table_destroy(struct mlx5dr_table *table);
 
@@ -144,15 +148,46 @@ int mlx5dr_action_destroy(struct mlx5dr_action *action);
 static inline bool
 mlx5dr_is_supported(struct mlx5_core_dev *dev)
 {
-	return (MLX5_CAP_GEN(dev, steering_format_version) <=
-		MLX5_HW_CONNECTX_6DX) &&
-	       MLX5_CAP_GEN(dev, roce) &&
-		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) ||
-		 MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner));
+	return  MLX5_CAP_GEN(dev, roce) &&
+		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner) ||
+		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) &&
+		 (MLX5_CAP_GEN(dev, steering_format_version) <=
+		  MLX5_STEERING_FORMAT_CONNECTX_6DX)));
 }
+
+/* buddy functions & structure */
+
+struct mlx5dr_icm_mr;
+
+struct mlx5dr_icm_buddy_mem {
+	unsigned long		**bitmap;
+	unsigned int		*num_free;
+	u32			max_order;
+	struct list_head	list_node;
+	struct mlx5dr_icm_mr	*icm_mr;
+	struct mlx5dr_icm_pool	*pool;
+
+	/* This is the list of used chunks. HW may be accessing this memory */
+	struct list_head	used_list;
+	u64			used_memory;
+
+	/* Hardware may be accessing this memory but at some future,
+	 * undetermined time, it might cease to do so.
+	 * sync_ste command sets them free.
+	 */
+	struct list_head	hot_list;
+};
+
+int mlx5dr_buddy_init(struct mlx5dr_icm_buddy_mem *buddy,
+		      unsigned int max_order);
+void mlx5dr_buddy_cleanup(struct mlx5dr_icm_buddy_mem *buddy);
+int mlx5dr_buddy_alloc_mem(struct mlx5dr_icm_buddy_mem *buddy,
+			   unsigned int order,
+			   unsigned int *segment);
+void mlx5dr_buddy_free_mem(struct mlx5dr_icm_buddy_mem *buddy,
+			   unsigned int seg, unsigned int order);
 
 int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn);
 void mlx5dr_dbg_cleanup_dump(struct mlx5dr_domain *dmn);
-
 
 #endif /* _MLX5DR_H_ */

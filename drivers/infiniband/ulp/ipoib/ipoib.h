@@ -427,7 +427,6 @@ struct ipoib_dev_priv {
 	u32 sendq_size;
 	u32 recvq_size;
 	unsigned int max_send_sge;
-	bool sm_fullmember_sendonly_support;
 	const struct net_device_ops	*rn_ops;
 };
 
@@ -702,8 +701,6 @@ void ipoib_cm_skb_too_long(struct net_device *dev, struct sk_buff *skb,
 void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc);
 void ipoib_cm_handle_tx_wc(struct net_device *dev, struct ib_wc *wc);
 #else
-
-struct ipoib_cm_tx;
 
 #define ipoib_max_conn_qp 0
 

@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/Makefile
+
+Change-Id: I3a2cd9df4b88377368eaea63fc145dcef820deea
+---
+ drivers/net/ethernet/mellanox/mlx5/core/Makefile | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
++++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
+@@ -65,8 +65,12 @@ mlx5_core-$(CONFIG_MLX5_ESWITCH)   += es
+ mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o en/rep/bridge.o
+ 
+ mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o
+-mlx5_core-$(CONFIG_VXLAN)          += lib/vxlan.o
+-mlx5_core-$(CONFIG_PTP_1588_CLOCK) += lib/clock.o
++ifneq ($(CONFIG_VXLAN),)
++	mlx5_core-y		+= lib/vxlan.o
++endif
++ifneq ($(CONFIG_PTP_1588_CLOCK),)
++	mlx5_core-y		+= lib/clock.o
++endif
+ mlx5_core-$(CONFIG_PCI_HYPERV_INTERFACE) += lib/hv.o lib/hv_vhca.o
+ mlx5_core-$(CONFIG_MLXDEVM) += mlx5_devm.o esw/devm_port.o
+ 

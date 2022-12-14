@@ -174,10 +174,25 @@ int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm *devm_dev,
 
 	devlink = mlxdevm_to_devlink(devm_dev);
 	memset(&devport, 0, sizeof(devport));
+	devport.devlink = devlink;
 	devport.index = port->index;
-
 	return mlx5_devlink_port_function_hw_addr_get(devlink, &devport,
 						      hw_addr, hw_addr_len, extack);
+}
+
+int mlx5_devm_sf_port_function_trust_get(struct mlxdevm *devm_dev,
+					 struct mlxdevm_port *port,
+					 bool *trusted,
+					 struct netlink_ext_ack *extack)
+{
+	struct devlink_port devport;
+	struct devlink *devlink;
+
+	devlink = mlxdevm_to_devlink(devm_dev);
+	memset(&devport, 0, sizeof(devport));
+	devport.index = port->index;
+	return mlx5_devlink_port_function_trust_get(devlink, &devport,
+						    trusted, extack);
 }
 
 int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm *devm_dev,
@@ -190,9 +205,27 @@ int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm *devm_dev,
 
 	devlink = mlxdevm_to_devlink(devm_dev);
 	memset(&devport, 0, sizeof(devport));
+	devport.devlink = devlink;
 	devport.index = port->index;
 	return mlx5_devlink_port_function_hw_addr_set(devlink, &devport, hw_addr,
 						      hw_addr_len, extack);
+}
+
+int mlx5_devm_sf_port_function_trust_set(struct mlxdevm *devm_dev,
+					 struct mlxdevm_port *port,
+					 bool trusted,
+					 struct netlink_ext_ack *extack)
+{
+	struct devlink_port devport;
+	struct devlink *devlink;
+
+	devlink = mlxdevm_to_devlink(devm_dev);
+	memset(&devport, 0, sizeof(devport));
+	devport.index = port->index;
+	return mlx5_devlink_port_function_trust_set(devlink,
+						    &devport,
+						    trusted,
+						    extack);
 }
 
 static
@@ -418,6 +451,7 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 {
 	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
 	u16 *arr = val.vu16arr.data;
+	int max_eqs_sf;
 	int i;
 
 	if (!mlx5_have_dedicated_irqs(dev)) {
@@ -427,9 +461,17 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 	for (i = 0; i < val.vu16arr.array_len; i++) {
 		if (arr[i] > nr_cpu_ids)
 			return -ERANGE;
+		if (!cpu_online(arr[i])) {
+			NL_SET_ERR_MSG_MOD(extack, "Some CPUs aren't online");
+			return -EINVAL;
+		}
 	}
-	if (i > MLX5_COMP_EQS_PER_SF)
+	max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
+			   mlx5_irq_table_get_sfs_comp_vec(mlx5_irq_table_get(dev)));
+	if (i > max_eqs_sf) {
+		NL_SET_ERR_MSG_MOD(extack, "SF doesn't have enught IRQs");
 		return -EINVAL;
+	}
 	return 0;
 }
 
@@ -472,6 +514,8 @@ static const struct mlxdevm_ops mlx5_devm_ops = {
 	.rate_node_tx_share_set = mlx5_devm_rate_node_tx_share_set,
 	.rate_node_new = mlx5_devm_rate_node_new,
 	.rate_node_del = mlx5_devm_rate_node_del,
+	.port_fn_trust_set = mlx5_devm_sf_port_function_trust_set,
+	.port_fn_trust_get = mlx5_devm_sf_port_function_trust_get,
 #endif
 };
 

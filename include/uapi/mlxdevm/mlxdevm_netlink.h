@@ -109,6 +109,7 @@ enum mlxdevm_port_fn_attr {
 	MLXDEVM_PORT_FUNCTION_ATTR_HW_ADDR =	1,	/* binary */
 	MLXDEVM_PORT_FN_ATTR_STATE =		2,	/* u8 */
 	MLXDEVM_PORT_FN_ATTR_OPSTATE =		3,	/* u8 */
+	MLXDEVM_PORT_FN_ATTR_TRUST_STATE =	4,	/* u8 */
 
 	/* All upstream devlink port function attributes must be added before
 	 * with the exact value as that of upstream without fail.
@@ -128,6 +129,11 @@ enum mlxdevm_port_fn_attr {
 enum mlxdevm_port_fn_state {
 	MLXDEVM_PORT_FN_STATE_INACTIVE =	0,
 	MLXDEVM_PORT_FN_STATE_ACTIVE =		1,
+};
+
+enum mlxdevm_port_fn_trust_state {
+	MLXDEVM_PORT_FN_UNTRUSTED,
+	MLXDEVM_PORT_FN_TRUSTED,
 };
 
 enum mlxdevm_port_flavour {

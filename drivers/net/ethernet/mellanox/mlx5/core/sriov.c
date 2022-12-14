@@ -72,7 +72,6 @@ static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf)
 static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
-	struct mlx5_lag *ldev;
 	int err, vf, num_msix_count;
 
 	if (!MLX5_ESWITCH_MANAGER(dev))
@@ -96,7 +95,6 @@ enable_vfs_hca:
 		return err;
 	}
 
-	ldev = mlx5_lag_disable(dev);
 	num_msix_count = mlx5_get_default_msix_vec_count(dev, num_vfs);
 	for (vf = 0; vf < num_vfs; vf++) {
 		err = mlx5_core_enable_hca(dev, vf + 1);
@@ -125,7 +123,6 @@ enable_vfs_hca:
 		}
 		mlx5_core_dbg(dev, "successfully enabled VF* %d\n", vf);
 	}
-	mlx5_lag_enable(dev, ldev);
 
 	return 0;
 }
@@ -148,14 +145,8 @@ mlx5_device_disable_sriov(struct mlx5_core_dev *dev, int num_vfs, bool clear_vf)
 		sriov->vfs_ctx[vf].enabled = 0;
 	}
 
-	if (MLX5_ESWITCH_MANAGER(dev)) {
-		struct mlx5_lag *ldev;
-
-		ldev = mlx5_lag_disable(dev);
+	if (MLX5_ESWITCH_MANAGER(dev))
 		mlx5_eswitch_disable(dev->priv.eswitch, clear_vf);
-		mlx5_lag_enable(dev, ldev);
-	}
-
 
 	mlx5_destroy_vfs_sysfs(dev, num_vfs);
 
@@ -217,6 +208,41 @@ int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	if (!err)
 		sriov->num_vfs = num_vfs;
 	return err ? err : num_vfs;
+}
+
+int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
+{
+	struct pci_dev *pf = pci_physfn(vf);
+	struct mlx5_core_sriov *sriov;
+	struct mlx5_core_dev *dev;
+	int num_vf_msix, id;
+
+	dev = pci_get_drvdata(pf);
+	num_vf_msix = MLX5_CAP_GEN_MAX(dev, num_total_dynamic_vf_msix);
+	if (!num_vf_msix)
+		return -EOPNOTSUPP;
+
+	if (!msix_vec_count)
+		msix_vec_count =
+			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
+
+	sriov = &dev->priv.sriov;
+
+	/* Reversed translation of PCI VF function number to the internal
+	 * function_id, which exists in the name of virtfn symlink.
+	 */
+	for (id = 0; id < pci_num_vf(pf); id++) {
+		if (!sriov->vfs_ctx[id].enabled)
+			continue;
+
+		if (vf->devfn == pci_iov_virtfn_devfn(pf, id))
+			break;
+	}
+
+	if (id == pci_num_vf(pf) || !sriov->vfs_ctx[id].enabled)
+		return -EINVAL;
+
+	return mlx5_set_msix_vec_count(dev, id + 1, msix_vec_count);
 }
 
 int mlx5_sriov_attach(struct mlx5_core_dev *dev)

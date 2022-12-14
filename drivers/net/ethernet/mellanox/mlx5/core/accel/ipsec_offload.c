@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIBt
+// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 /* Copyright (c) 2020, Mellanox Technologies inc. All rights reserved. */
 
 #include "mlx5_core.h"
@@ -15,6 +15,7 @@ struct mlx5_ipsec_sa_ctx {
 	u32 ipsec_obj_id;
 	__u64 soft_packet_limit;
 	__u64 hard_packet_limit;
+
 	/* hw ctx */
 	struct mlx5_core_dev *dev;
 	struct mlx5_ipsec_esp_xfrm *mxfrm;
@@ -135,6 +136,7 @@ struct mlx5_ipsec_obj_attrs {
 	u32 accel_flags;
 	u32 esn_msb;
 	u32 enc_key_id;
+	bool is_tx;
 	__u64 soft_packet_limit;
 	__u64 hard_packet_limit;
 	__u32 replay_window;
@@ -142,8 +144,7 @@ struct mlx5_ipsec_obj_attrs {
 
 static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 				 struct mlx5_ipsec_obj_attrs *attrs,
-				 bool tx_flow, u32 pdn,
-				 u32 *ipsec_id)
+				 u32 pdn, u32 *ipsec_id)
 {
 	const struct aes_gcm_keymat *aes_gcm = attrs->aes_gcm;
 	u32 out[MLX5_ST_SZ_DW(general_obj_out_cmd_hdr)];
@@ -187,7 +188,7 @@ static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 		if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD) {
 			MLX5_SET(ipsec_aso, aso_ctx, esn_event_arm, 1);
 
-			if (!tx_flow) {
+			if (!attrs->is_tx) {
 				u8 window_sz;
 
 				switch (attrs->replay_window) {
@@ -221,13 +222,13 @@ static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 	MLX5_SET(general_obj_in_cmd_hdr, in, obj_type,
 		 MLX5_GENERAL_OBJECT_TYPES_IPSEC);
 
-	/* Full offload */
+	/* ASO context */
 	if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD) {
 		MLX5_SET(ipsec_obj, obj, full_offload, 1);
 		MLX5_SET(ipsec_obj, obj, ipsec_aso_access_pd, pdn);
-		MLX5_SET(ipsec_obj, obj, aso_return_reg, MLX5_IPSEC_ASO_REG_C_4_5);
 		MLX5_SET(ipsec_aso, aso_ctx, valid, 1);
-		if (tx_flow)
+		MLX5_SET(ipsec_obj, obj, aso_return_reg, MLX5_IPSEC_ASO_REG_C_4_5);
+		if (attrs->is_tx)
 			MLX5_SET(ipsec_aso, aso_ctx, mode, MLX5_IPSEC_ASO_INC_SN);
 
 		/* hard and soft packet limit */
@@ -303,12 +304,12 @@ static void *mlx5_ipsec_offload_create_sa_ctx(struct mlx5_core_dev *mdev,
 	ipsec_attrs.accel_flags = accel_xfrm->attrs.flags;
 	ipsec_attrs.esn_msb = accel_xfrm->attrs.esn;
 	ipsec_attrs.enc_key_id = sa_ctx->enc_key_id;
+	ipsec_attrs.is_tx = accel_xfrm->attrs.action & MLX5_ACCEL_ESP_ACTION_ENCRYPT;
 	ipsec_attrs.soft_packet_limit = accel_xfrm->attrs.soft_packet_limit;
 	ipsec_attrs.hard_packet_limit = accel_xfrm->attrs.hard_packet_limit;
 	ipsec_attrs.replay_window = accel_xfrm->attrs.replay_window;
 
 	err = mlx5_create_ipsec_obj(mdev, &ipsec_attrs,
-				    accel_xfrm->attrs.action & MLX5_ACCEL_ESP_ACTION_ENCRYPT,
 				    pdn, &sa_ctx->ipsec_obj_id);
 	if (err) {
 		mlx5_core_dbg(mdev, "Failed to create IPsec object (err = %d)\n", err);

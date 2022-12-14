@@ -1,0 +1,61 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/peer_mem.c
+
+Change-Id: Ia51f8e3186bff69a9b579b04f682233e587f1806
+---
+ drivers/infiniband/core/peer_mem.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/peer_mem.c
++++ b/drivers/infiniband/core/peer_mem.c
+@@ -6,6 +6,7 @@
+ #include <rdma/ib_verbs.h>
+ #include <rdma/ib_umem.h>
+ #include <linux/sched/mm.h>
++#include <rdma/uverbs_ioctl.h>
+ #include "ib_peer_mem.h"
+ 
+ static DEFINE_MUTEX(peer_memory_mutex);
+@@ -333,7 +334,11 @@ static void ib_unmap_peer_client(struct
+ 		if (to_state == UMEM_PEER_UNMAPPED) {
+ 			peer_mem->dma_unmap(&umem_p->umem.sg_head,
+ 					    umem_p->peer_client_context,
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 					    umem_p->umem.ibdev->dma_device);
++#else
++					    umem_p->umem.context->device->dma_device);
++#endif
+ 			peer_mem->put_pages(&umem_p->umem.sg_head,
+ 					    umem_p->peer_client_context);
+ 		}
+@@ -607,7 +612,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 
+ 	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sg_head,
+ 						peer_client_context,
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 						umem_p->umem.ibdev->dma_device,
++#else
++						umem_p->umem.context->device->dma_device,
++#endif
+ 						0, &umem_p->umem.nmap);
+ 	if (ret)
+ 		goto err_pages;
+@@ -672,7 +681,17 @@ void ib_peer_umem_release(struct ib_umem
+ 	umem_p->ib_peer_client = NULL;
+ 
+ 	/* Must match ib_umem_release() */
+-	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
++#ifdef HAVE_ATOMIC_PINNED_VM
++ 	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
++#else
++	down_write(&umem->owning_mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
++	umem->owning_mm->pinned_vm -= ib_umem_num_pages(umem);
++#else
++	umem->owning_mm->locked_vm -= ib_umem_num_pages(umem);
++#endif /* HAVE_PINNED_VM */
++	up_write(&umem->owning_mm->mmap_sem);
++#endif /*HAVE_ATOMIC_PINNED_VM*/
+ 	mmdrop(umem->owning_mm);
+ 
+ 	kref_put(&umem_p->kref, ib_peer_umem_kref_release);

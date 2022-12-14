@@ -4,6 +4,11 @@
 #include <linux/mlx5/eswitch.h>
 #include "dr_types.h"
 
+#define DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, dmn_type)	\
+	((dmn)->info.caps.dmn_type##_sw_owner ||	\
+	 ((dmn)->info.caps.dmn_type##_sw_owner_v2 &&	\
+	  (dmn)->info.caps.sw_format_ver <= MLX5_STEERING_FORMAT_CONNECTX_6DX))
+
 static bool dr_domain_is_support_modify_hdr_cache(struct mlx5dr_domain *dmn)
 {
 	return dmn->info.caps.support_modify_argument;
@@ -147,7 +152,7 @@ int mlx5dr_domain_cache_get_recalc_cs_ft_addr(struct mlx5dr_domain *dmn,
 
 static bool dr_domain_check_hw_basic_requirement_caps(struct mlx5dr_domain *dmn)
 {
-	if (dmn->info.caps.sw_format_ver == MLX5_HW_CONNECTX_6DX &&
+	if (dmn->info.caps.sw_format_ver == MLX5_STEERING_FORMAT_CONNECTX_6DX &&
 	    !dr_domain_is_support_modify_hdr_cache(dmn)) {
 		return false;
 	}
@@ -183,7 +188,7 @@ static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 
 	dmn->ste_ctx = mlx5dr_ste_get_ctx(dmn->info.caps.sw_format_ver);
 	if (!dmn->ste_ctx) {
-		mlx5dr_err(dmn, "Couldn't initialize STE context\n");
+		mlx5dr_err(dmn, "SW Steering on this device is unsupported\n");
 		return -EOPNOTSUPP;
 	}
 
@@ -594,7 +599,7 @@ int mlx5dr_domain_sync(struct mlx5dr_domain *dmn, u32 flags)
 
 int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 {
-	if (refcount_read(&dmn->refcount) > 1)
+	if (WARN_ON_ONCE(refcount_read(&dmn->refcount) > 1))
 		return -EBUSY;
 
 	/* make sure resources are not used by the hardware */

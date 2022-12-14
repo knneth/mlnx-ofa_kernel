@@ -1,0 +1,88 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+
+Change-Id: Ida29b88d0c399e9da59400f0eaaade3238f0900d
+---
+ .../net/ethernet/mellanox/mlx5/core/sriov.c   | 21 +++++++++++++++++--
+ 1 file changed, 19 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+@@ -72,7 +72,10 @@ static int sriov_restore_guids(struct ml
+ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
+ {
+ 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+-	int err, vf, num_msix_count;
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
++	int num_msix_count;
++#endif
++	int err, vf;
+ 
+ 	if (!MLX5_ESWITCH_MANAGER(dev))
+ 		goto enable_vfs_hca;
+@@ -94,8 +97,9 @@ enable_vfs_hca:
+ #endif
+ 		return err;
+ 	}
+-
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ 	num_msix_count = mlx5_get_default_msix_vec_count(dev, num_vfs);
++#endif
+ 	for (vf = 0; vf < num_vfs; vf++) {
+ 		err = mlx5_core_enable_hca(dev, vf + 1);
+ 		if (err) {
+@@ -103,6 +107,7 @@ enable_vfs_hca:
+ 			continue;
+ 		}
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ 		err = mlx5_set_msix_vec_count(dev, vf + 1, num_msix_count);
+ 		if (err) {
+ 			mlx5_core_warn(dev,
+@@ -110,6 +115,7 @@ enable_vfs_hca:
+ 				       vf, err);
+ 			continue;
+ 		}
++#endif
+ 
+ 		sriov->vfs_ctx[vf].enabled = 1;
+ 		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) {
+@@ -210,6 +216,7 @@ int mlx5_core_sriov_configure(struct pci
+ 	return err ? err : num_vfs;
+ }
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
+ {
+ 	struct pci_dev *pf = pci_physfn(vf);
+@@ -237,6 +244,7 @@ int mlx5_core_sriov_set_msix_vec_count(s
+ 
+ 		if (vf->devfn == pci_iov_virtfn_devfn(pf, id))
+ 			break;
++
+ 	}
+ 
+ 	if (id == pci_num_vf(pf) || !sriov->vfs_ctx[id].enabled)
+@@ -244,6 +252,7 @@ int mlx5_core_sriov_set_msix_vec_count(s
+ 
+ 	return mlx5_set_msix_vec_count(dev, id + 1, msix_vec_count);
+ }
++#endif
+ 
+ int mlx5_sriov_attach(struct mlx5_core_dev *dev)
+ {
+@@ -297,6 +306,14 @@ int mlx5_sriov_init(struct mlx5_core_dev
+ 		return 0;
+ 
+ 	total_vfs = pci_sriov_get_totalvfs(pdev);
++
++	/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL */
++	total_vfs = total_vfs < 0 ? 0 : total_vfs;
++
++
++	/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL */
++	total_vfs = total_vfs < 0 ? 0 : total_vfs;
++
+ 	sriov->max_vfs = mlx5_get_max_vfs(dev);
+ 	sriov->num_vfs = pci_num_vf(pdev);
+ 	sriov->vfs_ctx = kcalloc(total_vfs, sizeof(*sriov->vfs_ctx), GFP_KERNEL);

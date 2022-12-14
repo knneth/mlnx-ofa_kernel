@@ -99,10 +99,10 @@ static const char * const wc_statuses[] = {
 	[IB_WC_LOC_EEC_OP_ERR]		= "local EE context operation error",
 	[IB_WC_LOC_PROT_ERR]		= "local protection error",
 	[IB_WC_WR_FLUSH_ERR]		= "WR flushed",
-	[IB_WC_MW_BIND_ERR]		= "memory management operation error",
+	[IB_WC_MW_BIND_ERR]		= "memory bind operation error",
 	[IB_WC_BAD_RESP_ERR]		= "bad response error",
 	[IB_WC_LOC_ACCESS_ERR]		= "local access error",
-	[IB_WC_REM_INV_REQ_ERR]		= "invalid request error",
+	[IB_WC_REM_INV_REQ_ERR]		= "remote invalid request error",
 	[IB_WC_REM_ACCESS_ERR]		= "remote access error",
 	[IB_WC_REM_OP_ERR]		= "remote operation error",
 	[IB_WC_RETRY_EXC_ERR]		= "transport retry counter exceeded",
@@ -249,7 +249,7 @@ EXPORT_SYMBOL(rdma_port_get_link_layer);
 /* Protection domains */
 
 /**
- * ib_alloc_pd - Allocates an unused protection domain.
+ * __ib_alloc_pd - Allocates an unused protection domain.
  * @device: The device on which to allocate the protection domain.
  * @flags: protection domain flags
  * @caller: caller's build-time module name
@@ -277,19 +277,20 @@ struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
 	atomic_set(&pd->usecnt, 0);
 	pd->flags = flags;
 
-	pd->res.type = RDMA_RESTRACK_PD;
-	rdma_restrack_set_task(&pd->res, caller);
+	rdma_restrack_new(&pd->res, RDMA_RESTRACK_PD);
+	rdma_restrack_set_name(&pd->res, caller);
 
 	ret = device->ops.alloc_pd(pd, NULL);
 	if (ret) {
+		rdma_restrack_put(&pd->res);
 		kfree(pd);
 		return ERR_PTR(ret);
 	}
-
+	
 	if (skip_tracking)
 		rdma_restrack_dontrack(&pd->res);
 	else
-		rdma_restrack_kadd(&pd->res);
+		rdma_restrack_add(&pd->res);
 
 	if (device->attrs.device_cap_flags & IB_DEVICE_LOCAL_DMA_LKEY)
 		pd->local_dma_lkey = device->local_dma_lkey;
@@ -338,7 +339,7 @@ EXPORT_SYMBOL(__ib_alloc_pd);
  * exist.  The caller is responsible to synchronously destroy them and
  * guarantee no new allocations will happen.
  */
-void ib_dealloc_pd_user(struct ib_pd *pd, struct ib_udata *udata)
+int ib_dealloc_pd_user(struct ib_pd *pd, struct ib_udata *udata)
 {
 	int ret;
 
@@ -349,12 +350,17 @@ void ib_dealloc_pd_user(struct ib_pd *pd, struct ib_udata *udata)
 	}
 
 	/* uverbs manipulates usecnt with proper locking, while the kabi
-	   requires the caller to guarantee we can't race here. */
+	 * requires the caller to guarantee we can't race here.
+	 */
 	WARN_ON(atomic_read(&pd->usecnt));
 
+	ret = pd->device->ops.dealloc_pd(pd, udata);
+	if (ret)
+		return ret;
+
 	rdma_restrack_del(&pd->res);
-	pd->device->ops.dealloc_pd(pd, udata);
 	kfree(pd);
+	return ret;
 }
 EXPORT_SYMBOL(ib_dealloc_pd_user);
 
@@ -520,7 +526,7 @@ static struct ib_ah *_rdma_create_ah(struct ib_pd *pd,
 
 	might_sleep_if(flags & RDMA_CREATE_AH_SLEEPABLE);
 
-	if (!device->ops.create_ah)
+	if (!udata && !device->ops.create_ah)
 		return ERR_PTR(-EOPNOTSUPP);
 
 	ah = rdma_zalloc_drv_obj_gfp(
@@ -537,7 +543,10 @@ static struct ib_ah *_rdma_create_ah(struct ib_pd *pd,
 	init_attr.flags = flags;
 	init_attr.xmit_slave = xmit_slave;
 
-	ret = device->ops.create_ah(ah, &init_attr, udata);
+	if (udata)
+		ret = device->ops.create_user_ah(ah, &init_attr, udata);
+	else
+		ret = device->ops.create_ah(ah, &init_attr, NULL);
 	if (ret) {
 		kfree(ah);
 		return ERR_PTR(ret);
@@ -983,18 +992,22 @@ int rdma_destroy_ah_user(struct ib_ah *ah, u32 flags, struct ib_udata *udata)
 {
 	const struct ib_gid_attr *sgid_attr = ah->sgid_attr;
 	struct ib_pd *pd;
+	int ret;
 
 	might_sleep_if(flags & RDMA_DESTROY_AH_SLEEPABLE);
 
 	pd = ah->pd;
 
-	ah->device->ops.destroy_ah(ah, flags);
+	ret = ah->device->ops.destroy_ah(ah, flags);
+	if (ret)
+		return ret;
+
 	atomic_dec(&pd->usecnt);
 	if (sgid_attr)
 		rdma_put_gid_attr(sgid_attr);
 
 	kfree(ah);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(rdma_destroy_ah_user);
 
@@ -1044,8 +1057,12 @@ struct ib_srq *ib_create_srq_user(struct ib_pd *pd,
 	}
 	atomic_inc(&pd->usecnt);
 
+	rdma_restrack_new(&srq->res, RDMA_RESTRACK_SRQ);
+	rdma_restrack_parent_name(&srq->res, &pd->res);
+
 	ret = pd->device->ops.create_srq(srq, srq_init_attr, udata);
 	if (ret) {
+		rdma_restrack_put(&srq->res);
 		atomic_dec(&srq->pd->usecnt);
 		if (srq->srq_type == IB_SRQT_XRC)
 			atomic_dec(&srq->ext.xrc.xrcd->usecnt);
@@ -1054,6 +1071,8 @@ struct ib_srq *ib_create_srq_user(struct ib_pd *pd,
 		kfree(srq);
 		return ERR_PTR(ret);
 	}
+
+	rdma_restrack_add(&srq->res);
 
 	return srq;
 }
@@ -1079,19 +1098,24 @@ EXPORT_SYMBOL(ib_query_srq);
 
 int ib_destroy_srq_user(struct ib_srq *srq, struct ib_udata *udata)
 {
+	int ret;
+
 	if (atomic_read(&srq->usecnt))
 		return -EBUSY;
 
-	srq->device->ops.destroy_srq(srq, udata);
+	ret = srq->device->ops.destroy_srq(srq, udata);
+	if (ret)
+		return ret;
 
 	atomic_dec(&srq->pd->usecnt);
 	if (srq->srq_type == IB_SRQT_XRC)
 		atomic_dec(&srq->ext.xrc.xrcd->usecnt);
 	if (ib_srq_has_cq(srq->srq_type))
 		atomic_dec(&srq->ext.cq->usecnt);
+	rdma_restrack_del(&srq->res);
 	kfree(srq);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(ib_destroy_srq_user);
 
@@ -1194,17 +1218,19 @@ static struct ib_qp *create_xrc_qp_user(struct ib_qp *qp,
 }
 
 /**
- * ib_create_qp - Creates a kernel QP associated with the specified protection
+ * ib_create_named_qp - Creates a kernel QP associated with the specified protection
  *   domain.
  * @pd: The protection domain associated with the QP.
  * @qp_init_attr: A list of initial attributes required to create the
  *   QP.  If QP creation succeeds, then the attributes are updated to
  *   the actual capabilities of the created QP.
+ * @caller: caller's build-time module name
  *
  * NOTE: for user qp use ib_create_qp_user with valid udata!
  */
-struct ib_qp *ib_create_qp(struct ib_pd *pd,
-			   struct ib_qp_init_attr *qp_init_attr)
+struct ib_qp *ib_create_named_qp(struct ib_pd *pd,
+				 struct ib_qp_init_attr *qp_init_attr,
+				 const char *caller)
 {
 	struct ib_device *device = pd ? pd->device : qp_init_attr->xrcd->device;
 	struct ib_qp *qp;
@@ -1229,7 +1255,7 @@ struct ib_qp *ib_create_qp(struct ib_pd *pd,
 	if (qp_init_attr->cap.max_rdma_ctxs)
 		rdma_rw_init_qp(device, qp_init_attr);
 
-	qp = _ib_create_qp(device, pd, qp_init_attr, NULL, NULL);
+	qp = _ib_create_qp(device, pd, qp_init_attr, NULL, NULL, caller);
 	if (IS_ERR(qp))
 		return qp;
 
@@ -1295,7 +1321,7 @@ err:
 	return ERR_PTR(ret);
 
 }
-EXPORT_SYMBOL(ib_create_qp);
+EXPORT_SYMBOL(ib_create_named_qp);
 
 static const struct {
 	int			valid;
@@ -1674,7 +1700,7 @@ static bool is_qp_type_connected(const struct ib_qp *qp)
 		qp->qp_type == IB_QPT_XRC_TGT);
 }
 
-/**
+/*
  * IB core internal function to perform QP attributes modification.
  */
 static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
@@ -1710,8 +1736,10 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 			slave = rdma_lag_get_ah_roce_slave(qp->device,
 							   &attr->ah_attr,
 							   GFP_KERNEL);
-			if (IS_ERR(slave))
+			if (IS_ERR(slave)) {
+				ret = PTR_ERR(slave);
 				goto out_av;
+			}
 			attr->xmit_slave = slave;
 		}
 	}
@@ -2009,16 +2037,18 @@ struct ib_cq *__ib_create_cq(struct ib_device *device,
 	cq->event_handler = event_handler;
 	cq->cq_context = cq_context;
 	atomic_set(&cq->usecnt, 0);
-	cq->res.type = RDMA_RESTRACK_CQ;
-	rdma_restrack_set_task(&cq->res, caller);
+
+	rdma_restrack_new(&cq->res, RDMA_RESTRACK_CQ);
+	rdma_restrack_set_name(&cq->res, caller);
 
 	ret = device->ops.create_cq(cq, cq_attr, NULL);
 	if (ret) {
+		rdma_restrack_put(&cq->res);
 		kfree(cq);
 		return ERR_PTR(ret);
 	}
 
-	rdma_restrack_kadd(&cq->res);
+	rdma_restrack_add(&cq->res);
 	return cq;
 }
 EXPORT_SYMBOL(__ib_create_cq);
@@ -2036,16 +2066,21 @@ EXPORT_SYMBOL(rdma_set_cq_moderation);
 
 int ib_destroy_cq_user(struct ib_cq *cq, struct ib_udata *udata)
 {
+	int ret;
+
 	if (WARN_ON_ONCE(cq->shared))
 		return -EOPNOTSUPP;
 
 	if (atomic_read(&cq->usecnt))
 		return -EBUSY;
 
+	ret = cq->device->ops.destroy_cq(cq, udata);
+	if (ret)
+		return ret;
+
 	rdma_restrack_del(&cq->res);
-	cq->device->ops.destroy_cq(cq, udata);
 	kfree(cq);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(ib_destroy_cq_user);
 
@@ -2084,8 +2119,10 @@ struct ib_mr *ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	mr->pd = pd;
 	mr->dm = NULL;
 	atomic_inc(&pd->usecnt);
-	mr->res.type = RDMA_RESTRACK_MR;
-	rdma_restrack_kadd(&mr->res);
+
+	rdma_restrack_new(&mr->res, RDMA_RESTRACK_MR);
+	rdma_restrack_parent_name(&mr->res, &pd->res);
+	rdma_restrack_add(&mr->res);
 
 	return mr;
 }
@@ -2164,11 +2201,12 @@ struct ib_mr *ib_alloc_mr(struct ib_pd *pd, enum ib_mr_type mr_type,
 	mr->uobject = NULL;
 	atomic_inc(&pd->usecnt);
 	mr->need_inval = false;
-	mr->res.type = RDMA_RESTRACK_MR;
-	rdma_restrack_kadd(&mr->res);
 	mr->type = mr_type;
 	mr->sig_attrs = NULL;
 
+	rdma_restrack_new(&mr->res, RDMA_RESTRACK_MR);
+	rdma_restrack_parent_name(&mr->res, &pd->res);
+	rdma_restrack_add(&mr->res);
 out:
 	trace_mr_alloc(pd, mr_type, max_num_sg, mr);
 	return mr;
@@ -2224,11 +2262,12 @@ struct ib_mr *ib_alloc_mr_integrity(struct ib_pd *pd,
 	mr->uobject = NULL;
 	atomic_inc(&pd->usecnt);
 	mr->need_inval = false;
-	mr->res.type = RDMA_RESTRACK_MR;
-	rdma_restrack_kadd(&mr->res);
 	mr->type = IB_MR_TYPE_INTEGRITY;
 	mr->sig_attrs = sig_attrs;
 
+	rdma_restrack_new(&mr->res, RDMA_RESTRACK_MR);
+	rdma_restrack_parent_name(&mr->res, &pd->res);
+	rdma_restrack_add(&mr->res);
 out:
 	trace_mr_integ_alloc(pd, max_num_data_sg, max_num_meta_sg, mr);
 	return mr;
@@ -2353,13 +2392,17 @@ EXPORT_SYMBOL(ib_alloc_xrcd_user);
  */
 int ib_dealloc_xrcd_user(struct ib_xrcd *xrcd, struct ib_udata *udata)
 {
+	int ret;
+
 	if (atomic_read(&xrcd->usecnt))
 		return -EBUSY;
 
 	WARN_ON(!xa_empty(&xrcd->tgt_qps));
-	xrcd->device->ops.dealloc_xrcd(xrcd, udata);
+	ret = xrcd->device->ops.dealloc_xrcd(xrcd, udata);
+	if (ret)
+		return ret;
 	kfree(xrcd);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(ib_dealloc_xrcd_user);
 
@@ -2403,25 +2446,28 @@ struct ib_wq *ib_create_wq(struct ib_pd *pd,
 EXPORT_SYMBOL(ib_create_wq);
 
 /**
- * ib_destroy_wq - Destroys the specified user WQ.
+ * ib_destroy_wq_user - Destroys the specified user WQ.
  * @wq: The WQ to destroy.
  * @udata: Valid user data
  */
-int ib_destroy_wq(struct ib_wq *wq, struct ib_udata *udata)
+int ib_destroy_wq_user(struct ib_wq *wq, struct ib_udata *udata)
 {
 	struct ib_cq *cq = wq->cq;
 	struct ib_pd *pd = wq->pd;
+	int ret;
 
 	if (atomic_read(&wq->usecnt))
 		return -EBUSY;
 
-	wq->device->ops.destroy_wq(wq, udata);
+	ret = wq->device->ops.destroy_wq(wq, udata);
+	if (ret)
+		return ret;
+
 	atomic_dec(&pd->usecnt);
 	atomic_dec(&cq->usecnt);
-
-	return 0;
+	return ret;
 }
-EXPORT_SYMBOL(ib_destroy_wq);
+EXPORT_SYMBOL(ib_destroy_wq_user);
 
 /**
  * ib_modify_wq - Modifies the specified WQ.
@@ -2443,29 +2489,6 @@ int ib_modify_wq(struct ib_wq *wq, struct ib_wq_attr *wq_attr,
 	return err;
 }
 EXPORT_SYMBOL(ib_modify_wq);
-
-/*
- * ib_destroy_rwq_ind_table - Destroys the specified Indirection Table.
- * @wq_ind_table: The Indirection Table to destroy.
-*/
-int ib_destroy_rwq_ind_table(struct ib_rwq_ind_table *rwq_ind_table)
-{
-	int err, i;
-	u32 table_size = (1 << rwq_ind_table->log_ind_tbl_size);
-	struct ib_wq **ind_tbl = rwq_ind_table->ind_tbl;
-
-	if (atomic_read(&rwq_ind_table->usecnt))
-		return -EBUSY;
-
-	err = rwq_ind_table->device->ops.destroy_rwq_ind_table(rwq_ind_table);
-	if (!err) {
-		for (i = 0; i < table_size; i++)
-			atomic_dec(&ind_tbl[i]->usecnt);
-	}
-
-	return err;
-}
-EXPORT_SYMBOL(ib_destroy_rwq_ind_table);
 
 int ib_check_mr_status(struct ib_mr *mr, u32 check_mask,
 		       struct ib_mr_status *mr_status)
@@ -2942,3 +2965,52 @@ bool __rdma_block_iter_next(struct ib_block_iter *biter)
 	return true;
 }
 EXPORT_SYMBOL(__rdma_block_iter_next);
+
+/**
+ * rdma_alloc_hw_stats_struct - Helper function to allocate dynamic struct
+ *   for the drivers.
+ * @descs: array of static descriptors
+ * @num_counters: number of elements in array
+ * @lifespan: milliseconds between updates
+ */
+struct rdma_hw_stats *rdma_alloc_hw_stats_struct(
+	const struct rdma_stat_desc *descs, int num_counters,
+	unsigned long lifespan)
+{
+	struct rdma_hw_stats *stats;
+
+	stats = kzalloc(struct_size(stats, value, num_counters), GFP_KERNEL);
+	if (!stats)
+		return NULL;
+
+	stats->is_disabled = kcalloc(BITS_TO_LONGS(num_counters),
+				     sizeof(*stats->is_disabled), GFP_KERNEL);
+	if (!stats->is_disabled)
+		goto err;
+
+	stats->descs = descs;
+	stats->num_counters = num_counters;
+	stats->lifespan = msecs_to_jiffies(lifespan);
+	mutex_init(&stats->lock);
+
+	return stats;
+
+err:
+	kfree(stats);
+	return NULL;
+}
+EXPORT_SYMBOL(rdma_alloc_hw_stats_struct);
+
+/**
+ * rdma_free_hw_stats_struct - Helper function to release rdma_hw_stats
+ * @stats: statistics to release
+ */
+void rdma_free_hw_stats_struct(struct rdma_hw_stats *stats)
+{
+	if (!stats)
+		return;
+
+	kfree(stats->is_disabled);
+	kfree(stats);
+}
+EXPORT_SYMBOL(rdma_free_hw_stats_struct);

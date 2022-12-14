@@ -110,6 +110,7 @@ enum dr_dump_rec_type {
 	DR_DUMP_REC_TYPE_ACTION_POP_VLAN = 3413,
 	DR_DUMP_REC_TYPE_ACTION_SAMPLER = 3415,
 	DR_DUMP_REC_TYPE_ACTION_INSERT_HDR = 3420,
+	DR_DUMP_REC_TYPE_ACTION_REMOVE_HDR = 3421,
 };
 
 static u64 dr_dump_icm_to_idx(u64 icm_addr)
@@ -159,12 +160,12 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_CTR, action_id, rule_id,
 			       action->ctr->ctr_id +
-			       action->ctr->offeset);
+			       action->ctr->offset);
 		break;
 	case DR_ACTION_TYP_TAG:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
-			       DR_DUMP_REC_TYPE_ACTION_TAG, action_id, rule_id,
-			       action->flow_tag->flow_tag);
+				DR_DUMP_REC_TYPE_ACTION_TAG, action_id, rule_id,
+				action->flow_tag->flow_tag);
 		break;
 	case DR_ACTION_TYP_MODIFY_HDR:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,%d\n",
@@ -190,12 +191,12 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 	case DR_ACTION_TYP_L2_TO_TNL_L2:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_ENCAP_L2, action_id,
-			       rule_id, action->reformat->reformat_id);
+			       rule_id, action->reformat->id);
 		break;
 	case DR_ACTION_TYP_L2_TO_TNL_L3:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_ENCAP_L3, action_id,
-			       rule_id, action->reformat->reformat_id);
+			       rule_id, action->reformat->id);
 		break;
 	case DR_ACTION_TYP_SAMPLER:
 		ret = snprintf(tmp_buf, BUF_SIZE,
@@ -219,9 +220,16 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 	case DR_ACTION_TYP_INSERT_HDR:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,0x%x,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_INSERT_HDR, action_id,
-			       rule_id, action->reformat->reformat_id,
-			       action->reformat->reformat_param_0,
-			       action->reformat->reformat_param_1);
+			       rule_id, action->reformat->id,
+			       action->reformat->param_0,
+			       action->reformat->param_1);
+		break;
+	case DR_ACTION_TYP_REMOVE_HDR:
+		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,0x%x,0x%x\n",
+			       DR_DUMP_REC_TYPE_ACTION_REMOVE_HDR, action_id,
+			       rule_id, action->reformat->id,
+			       action->reformat->param_0,
+			       action->reformat->param_1);
 		break;
 	default:
 		return 0;
@@ -247,7 +255,7 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_ste *ste,
 	char tmp_buf[BUF_SIZE] = {};
 	int ret;
 
-	if (format_ver == MLX5_HW_CONNECTX_5) {
+	if (format_ver == MLX5_STEERING_FORMAT_CONNECTX_5) {
 		mem_rec_type = is_rx ? DR_DUMP_REC_TYPE_RULE_RX_ENTRY_V0 :
 				       DR_DUMP_REC_TYPE_RULE_TX_ENTRY_V0;
 	} else {
@@ -256,7 +264,7 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_ste *ste,
 	}
 
 	dr_dump_hex_print(hw_ste_dump, BUF_SIZE, (char *)ste->hw_ste,
-			  ste->size);
+			  DR_STE_SIZE_REDUCED);
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,%s\n",
 		       mem_rec_type,
 		       dr_dump_icm_to_idx(mlx5dr_ste_get_icm_addr(ste)),
@@ -453,17 +461,15 @@ static int
 dr_dump_matcher_builder(struct dr_dump_ctx *ctx, struct mlx5dr_ste_build *builder,
 			u32 index, bool is_rx, const u64 matcher_id)
 {
-	bool is_match = builder->htbl_type == DR_STE_HTBL_TYPE_MATCH;
 	char tmp_buf[BUF_SIZE] = {};
 	int ret;
 
-	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx%d,%d,0x%x,%d\n",
+	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx%d,%d,0x%x\n",
 		       DR_DUMP_REC_TYPE_MATCHER_BUILDER,
 		       matcher_id,
 		       index,
 		       is_rx,
-		       builder->lu_type,
-		       is_match ? builder->format_id : -1);
+		       builder->lu_type);
 	if (ret < 0)
 		return ret;
 
@@ -563,7 +569,7 @@ dr_dump_matcher_all(struct dr_dump_ctx *ctx, struct mlx5dr_matcher *matcher)
 	if (ret < 0)
 		return ret;
 
-	list_for_each_entry(rule, &matcher->rule_list, rule_list) {
+	list_for_each_entry(rule, &matcher->rule_list, list_node) {
 		ret = dr_dump_rule(ctx, rule);
 		if (ret < 0)
 			return ret;
@@ -666,7 +672,7 @@ static int dr_dump_table_all(struct dr_dump_ctx *ctx, struct mlx5dr_table *tbl)
 	if (ret < 0)
 		return ret;
 
-	list_for_each_entry(matcher, &tbl->matcher_list, matcher_list) {
+	list_for_each_entry(matcher, &tbl->matcher_list, list_node) {
 		ret = dr_dump_matcher_all(ctx, matcher);
 		if (ret < 0)
 			return ret;
@@ -854,7 +860,7 @@ static int dr_dump_domain_all(struct dr_dump_ctx *ctx)
 	if (ret < 0)
 		return ret;
 
-	list_for_each_entry(tbl, &dmn->tbl_list, tbl_list) {
+	list_for_each_entry(tbl, &dmn->tbl_list, list_node) {
 		ret = dr_dump_table_all(ctx, tbl);
 		if (ret < 0)
 			return ret;

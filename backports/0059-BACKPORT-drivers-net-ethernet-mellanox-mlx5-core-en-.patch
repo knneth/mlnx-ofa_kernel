@@ -1,0 +1,82 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+
+Change-Id: Ib5a36e58574ba8bf908aa8740b9daea20053a60d
+---
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.h   | 50 +++++++++++++++++--
+ 1 file changed, 47 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+@@ -33,14 +33,39 @@ int mlx5e_rep_encap_entry_attach(struct
+ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
+ 				  struct mlx5e_encap_entry *e);
+ 
++#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		       void *type_data);
++#else
++int mlx5e_rep_setup_tc(struct net_device *dev, u32 handle,
++#ifdef HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX
++		       u32 chain_index, __be16 proto,
++#else
++		       __be16 proto,
++#endif
++		       struct tc_to_netdev *tc);
++#endif
++#endif
++
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
++#endif
+ 
+ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
+ 			     struct sk_buff *skb,
+ 			     struct mlx5e_tc_update_priv *tc_priv,
+ 			     bool *free_skb);
+ void mlx5_rep_tc_post_napi_receive(struct mlx5e_tc_update_priv *tc_priv);
++#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
++#ifdef HAVE_TC_BLOCK_OFFLOAD
++int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
++				void *cb_priv);
++#else
++int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
++			  void *cb_priv);
++#endif
++#endif
+ 
+ #else /* CONFIG_MLX5_CLS_ACT */
+ 
+@@ -63,9 +88,28 @@ mlx5e_rep_tc_disable(struct mlx5e_priv *
+ static inline int
+ mlx5e_rep_tc_event_port_affinity(struct mlx5e_priv *priv) { return NOTIFY_DONE; }
+ 
+-static inline int
+-mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+-		   void *type_data) { return -EOPNOTSUPP; }
++#if defined(HAVE_TC_FLOWER_OFFLOAD)
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++static inline int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
++				     void *type_data)
++#else
++static inline int mlx5e_rep_setup_tc(struct net_device *dev, u32 handle,
++#ifdef HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX
++				     u32 chain_index, __be16 proto,
++#else
++				     __be16 proto,
++#endif
++				     struct tc_to_netdev *tc)
++#endif
++{
++	return -EOPNOTSUPP;
++}
++#endif
++
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
++static inline void
++mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv) {}
++#endif
+ 
+ struct mlx5e_tc_update_priv;
+ static inline bool

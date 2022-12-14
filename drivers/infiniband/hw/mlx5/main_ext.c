@@ -429,7 +429,8 @@ void tclass_get_tclass_locked(struct mlx5_ib_dev *dev,
 			      struct mlx5_tc_data *tcd,
 			      const struct rdma_ah_attr *ah,
 			      u8 port,
-			      u8 *tclass)
+			      u8 *tclass,
+			      bool *global_tc)
 {
 	struct tclass_match *res_match = NULL;
 	struct tclass_match match = {};
@@ -439,8 +440,10 @@ void tclass_get_tclass_locked(struct mlx5_ib_dev *dev,
 	int err;
 
 	if (tcd->val >= 0) {
+		*global_tc = true;
 		*tclass = tcd->val;
 	} else if (ah && ah->type == RDMA_AH_ATTR_TYPE_ROCE) {
+		*global_tc = false;
 		err = rdma_query_gid(&dev->ib_dev, port, ah->grh.sgid_index,
 				   &gid);
 		if (err)
@@ -486,10 +489,11 @@ void tclass_get_tclass(struct mlx5_ib_dev *dev,
 		       struct mlx5_tc_data *tcd,
 		       const struct rdma_ah_attr *ah,
 		       u8 port,
-		       u8 *tclass)
+		       u8 *tclass,
+		       bool *global_tc)
 {
 	mutex_lock(&tcd->lock);
-	tclass_get_tclass_locked(dev, tcd, ah, port, tclass);
+	tclass_get_tclass_locked(dev, tcd, ah, port, tclass, global_tc);
 	mutex_unlock(&tcd->lock);
 }
 struct tc_attribute {
@@ -572,6 +576,7 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 	struct mlx5_ib_qp *mqp;
 	unsigned long id = 0;
 	struct ib_qp *ibqp;
+	bool global_tc;
 	u8 tclass;
 	int ret;
 	void *qpc;
@@ -606,7 +611,7 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 			tclass = mqp->tclass;
 			tclass_get_tclass_locked(ibdev, tcd, &mqp->ah,
 						 mqp->ah.port_num,
-						 &tclass);
+						 &tclass, &global_tc);
 
 			if (tclass != mqp->tclass) {
 				ret = tclass_update_qp(ibdev, mqp, tclass,

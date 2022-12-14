@@ -1,0 +1,107 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+
+Change-Id: I96b84d0dd41e230cb17307c9cecdddb9fb65c821
+---
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 47 ++++++++++++++++++-
+ 1 file changed, 45 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+@@ -4,6 +4,7 @@
+ #include "en/devlink.h"
+ #include "eswitch.h"
+ 
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS) || defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS)
+ static void
+ mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
+ {
+@@ -13,14 +14,17 @@ mlx5e_devlink_get_port_parent_id(struct
+ 	ppid->id_len = sizeof(parent_id);
+ 	memcpy(ppid->id, &parent_id, sizeof(parent_id));
+ }
++#endif
+ 
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
+ int mlx5e_devlink_port_register(struct mlx5e_priv *priv)
+ {
+ 	struct devlink *devlink = priv_to_devlink(priv->mdev);
+-	struct devlink_port_attrs attrs = {};
+-	struct netdev_phys_item_id ppid = {};
+ 	struct devlink_port *dl_port;
+ 	unsigned int dl_port_index;
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
++	struct devlink_port_attrs attrs = {};
++	struct netdev_phys_item_id ppid = {};
+ 
+ 	if (mlx5_core_is_pf(priv->mdev)) {
+ 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+@@ -40,7 +44,37 @@ int mlx5e_devlink_port_register(struct m
+ 	dl_port = mlx5e_devlink_get_dl_port(priv);
+ 	memset(dl_port, 0, sizeof(*dl_port));
+ 	devlink_port_attrs_set(dl_port, &attrs);
++#else
++	dl_port = mlx5e_devlink_get_dl_port(priv);
++	memset(dl_port, 0, sizeof(*dl_port));
++	if (mlx5_core_is_pf(priv->mdev)) {
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++		struct netdev_phys_item_id ppid = {};
+ 
++		if (MLX5_ESWITCH_MANAGER(priv->mdev))
++			mlx5e_devlink_get_port_parent_id(priv->mdev, &ppid);
++#endif
++		dl_port_index = mlx5_esw_vport_to_devlink_port_index(priv->mdev,
++								     MLX5_VPORT_UPLINK);
++		devlink_port_attrs_set(dl_port,
++				DEVLINK_PORT_FLAVOUR_PHYSICAL,
++				mlx5_get_dev_index(priv->mdev),
++				false, 0
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++				,&ppid.id[0], ppid.id_len
++#endif
++		);
++	} else {
++		dl_port_index = mlx5_esw_vport_to_devlink_port_index(priv->mdev, 0);
++		devlink_port_attrs_set(dl_port,
++				DEVLINK_PORT_FLAVOUR_VIRTUAL,
++				0, false , 0
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++				,NULL, 0
++#endif
++		);
++	}
++#endif
+ 	return devlink_port_register(devlink, dl_port, dl_port_index);
+ }
+ 
+@@ -55,20 +89,29 @@ void mlx5e_devlink_port_unregister(struc
+ {
+ 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
+ 
++#ifdef HAVE_DEVLINK_PORT_HAS_REGISTERED
+ 	if (dl_port->registered)
++#endif
+ 		devlink_port_unregister(dl_port);
+ }
+ 
+ struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
++#ifdef HAVE_DEVLINK_PORT_HAS_REGISTERED
+ 	struct devlink_port *port;
++#endif
+ 
+ 	if (!netif_device_present(dev))
+ 		return NULL;
+ 
++#ifdef HAVE_DEVLINK_PORT_HAS_REGISTERED
+ 	port = mlx5e_devlink_get_dl_port(priv);
+ 	if (port->registered)
+ 		return port;
+ 	return NULL;
++#else
++	return mlx5e_devlink_get_dl_port(priv);
++#endif
+ }
++#endif

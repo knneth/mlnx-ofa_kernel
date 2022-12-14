@@ -4,10 +4,6 @@
 #include <linux/mlx5/driver.h>
 #include "priv.h"
 
-/* Follow backport should be moved to backports in next rebase
-   as a result of CONFIG_MLX5_SF_MANAGER is set we need to block it
-   to allow compilation without backports on base kernel 5.9
-   */
 int mlx5_cmd_alloc_sf(struct mlx5_core_dev *dev, u16 function_id)
 {
 	u32 out[MLX5_ST_SZ_DW(alloc_sf_out)] = {};

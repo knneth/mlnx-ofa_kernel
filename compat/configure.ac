@@ -53,6 +53,14 @@ cat << 'END_CONFIG' >> $PWD/config.h
 #define LINUX_BACKPORT(__sym) backport_ ##__sym
 #endif
 
+/* Define HAVE_HMM_RANGE_FAULT_SUPPORT from other flags */
+#if defined(HAVE_HMM_RANGE_FAULT_HAS_ONE_PARAM) && \
+    defined(HAVE_HMM_RANGE_HAS_HMM_PFNS) && \
+    defined(HAVE_HMM_PFN_TO_MAP_ORDER) && \
+    defined(CONFIG_HMM_MIRROR)
+#define HAVE_HMM_RANGE_FAULT_SUPPORT 1
+#endif
+
 /* Define HAVE_DEVLINK_HEALTH_REPORT_SUPPORT from other flags */
 #if defined(HAVE_DEVLINK_HEALTH_REPORT_BASE_SUPPORT) && \
     (defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS) || \
@@ -80,20 +88,18 @@ cat << 'END_CONFIG' >> $PWD/config.h
 #define HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET 1
 #endif
 
-/* Define HAVE_XSK_SUPPORT from other flags */
-#if (defined(HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS) || \
-    defined(HAVE_XSK_BUFF_ALLOC)) && \
-    !defined(HAVE_XSK_BUFF_ALLOC_GET_XSK_BUFF_POOL)
-#define HAVE_XSK_SUPPORT 1
+/* Define HAVE_XDP_SUPPORT from other flags */
+#if defined(CONFIG_ENABLE_XDP) \
+	&& defined(HAVE_XDP_REDIRECT)
+#define HAVE_XDP_SUPPORT 1
 #endif
 
-/* Define HAVE_SVC_FILL_WRITE_VECTOR from other flags */
-#if defined(HAVE_SVC_FILL_WRITE_VECTOR_4_PARAMS) || \
-	defined(HAVE_SVC_FILL_WRITE_VECTOR_3_PARAMS) || \
-	defined(HAVE_SVC_FILL_WRITE_VECTOR_2_PARAMS)
-#define HAVE_SVC_FILL_WRITE_VECTOR 1
-#else
-#undef HAVE_SVC_FILL_WRITE_VECTOR
+/* Define HAVE_XSK_ZERO_COPY_SUPPORT from other flags */
+#if (defined(HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS) || \
+    defined(HAVE_XSK_BUFF_ALLOC)) \
+    && defined(HAVE_XDP_SUPPORT)
+#define HAVE_XSK_ZERO_COPY_SUPPORT 1
 #endif
+
 
 END_CONFIG

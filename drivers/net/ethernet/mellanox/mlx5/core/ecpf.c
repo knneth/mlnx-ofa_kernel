@@ -139,7 +139,7 @@ static int mlx5_regex_enable(struct mlx5_core_dev *dev, int vport, bool en)
 	MLX5_SET(set_hca_cap_in, in_set, other_function, 1);
 	MLX5_SET(set_hca_cap_in, in_set, function_id, vport);
 	MLX5_SET(set_hca_cap_in, in_set,
-		 capability.cmd_hca_cap.regexp_mmo, en);
+		 capability.cmd_hca_cap.regexp_mmo_qp, en);
 	if (en) {
 		MLX5_SET(set_hca_cap_in, in_set,
 			 capability.cmd_hca_cap.regexp_num_of_engines,
@@ -279,7 +279,7 @@ static ssize_t regex_en_store(struct kobject *kobj,
 	struct mlx5_eswitch *esw = tmp->esw;
 	int err;
 
-	if (!MLX5_CAP_GEN_MAX(esw->dev, regexp_mmo))
+	if (!MLX5_CAP_GEN_MAX(esw->dev, regexp_mmo_qp))
 		return -EOPNOTSUPP;
 	if (sysfs_streq(buf, "1"))
 		err = mlx5_regex_enable(esw->dev, tmp->vport, 1);
@@ -364,8 +364,8 @@ static ssize_t config_show(struct kobject *kobj,
 	struct mlx5_smart_nic_vport *tmp =
 		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
 	struct mlx5_eswitch *esw = tmp->esw;
-	struct mlx5_vport_info *ivi;
 	struct mlx5_vport *evport =  mlx5_eswitch_get_vport(esw, tmp->vport);
+	struct mlx5_vport_info *ivi;
 	char *p = buf;
 
 	mutex_lock(&esw->state_lock);

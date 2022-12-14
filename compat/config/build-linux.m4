@@ -196,21 +196,12 @@ AC_ARG_WITH([kernel-source-header],
 LB_CHECK_FILE([$LINUX_CONFIG],[],
 	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
-# ----------- make dep run? ------------------
-# at 2.6.19 # $LINUX/include/linux/config.h is removed
-# and at more old has only one line
-# include <autoconf.h>
-LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated],
-        [LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
-	[AC_MSG_ERROR([Run make config in $LINUX.])])])
-        AC_SUBST(AUTOCONF_HDIR)
-
 # ----------- kconfig.h exists ---------------
 # kernel 3.1, $LINUX/include/linux/kconfig.h is added
 # see kernel commit 2a11c8ea20bf850b3a2c60db8c2e7497d28aba99
 LB_CHECK_FILE([$LINUX/include/linux/kconfig.h],
               [CONFIG_INCLUDE=$LINUX/include/linux/kconfig.h],
-              [CONFIG_INCLUDE=$LINUX/include/$AUTOCONF_HDIR/kconfig.h])
+              [CONFIG_INCLUDE=$LINUX/include/generated/kconfig.h])
 	AC_SUBST(CONFIG_INCLUDE)
 
 if test -e $CONFIG_INCLUDE; then
@@ -346,7 +337,7 @@ AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 MAKE=${MAKE:-make}
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko build/output.log
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include $AUTOCONF_HDIR/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
@@ -388,7 +379,7 @@ AC_DEFUN([LB_LINUX_TRY_COMPILE],
 AC_DEFUN([LB_LINUX_CONFIG],[
 	AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
 	LB_LINUX_TRY_COMPILE([
-		#include <$AUTOCONF_HDIR/autoconf.h>
+		#include <generated/autoconf.h>
 	],[
 		#ifndef CONFIG_$1
 		#error CONFIG_$1 not #defined
@@ -410,7 +401,7 @@ AC_DEFUN([LB_LINUX_CONFIG],[
 AC_DEFUN([LB_LINUX_CONFIG_IM],[
 	AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
 	LB_LINUX_TRY_COMPILE([
-		#include <$AUTOCONF_HDIR/autoconf.h>
+		#include <generated/autoconf.h>
 	],[
 		#if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
 		#error CONFIG_$1 and CONFIG_$1_MODULE not #defined
@@ -733,8 +724,8 @@ AC_MSG_RESULT([ARCH=$ARCH, SRCARCH=$SRCARCH])
 #
 AC_DEFUN([LB_LINUX_CONFIG_VALUE],[
 	AC_MSG_CHECKING([get value of CONFIG_$1])
-	if (grep -q "^#define CONFIG_$1 " $LINUX_OBJ/include/$AUTOCONF_HDIR/autoconf.h 2>/dev/null); then
-		res=$(grep "^#define CONFIG_$1 " $LINUX_OBJ/include/$AUTOCONF_HDIR/autoconf.h 2>/dev/null | cut -d' ' -f'3')
+	if (grep -q "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null); then
+		res=$(grep "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null | cut -d' ' -f'3')
 		AC_MSG_RESULT([$1 value is '$res'])
 		$2
 	else

@@ -3,7 +3,7 @@
 
 #include "../../compat/config.h"
 
-#ifdef HAVE_XDP_BUFF
+#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NET_XDP_H
 #include_next <net/xdp.h>
 #ifndef HAVE_XSK_BUFF_ALLOC
@@ -33,7 +33,6 @@ void xdp_rxq_info_unreg(struct xdp_rxq_info *xdp_rxq)
 {
 	return;
 }
-
 #endif
 
 #endif /* _COMPAT_NET_XDP_H */

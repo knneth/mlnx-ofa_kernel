@@ -5,7 +5,7 @@
 
 #include_next <linux/filter.h>
 
-#ifdef HAVE_XDP_BUFF
+#ifdef HAVE_XDP_SUPPORT
 #ifndef HAVE_XDP_FRAME
 struct xdp_frame {
 	void *data;

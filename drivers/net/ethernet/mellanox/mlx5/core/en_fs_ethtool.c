@@ -34,7 +34,7 @@
 #include "en.h"
 #include "en_accel/ipsec_rxtx.h"
 #include "en/params.h"
-#include "en/xsk/umem.h"
+#include "en/xsk/pool.h"
 
 struct mlx5e_ethtool_rule {
 	struct list_head             list;

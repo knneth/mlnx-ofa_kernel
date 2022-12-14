@@ -475,10 +475,7 @@ bool mlx5e_fec_in_caps(struct mlx5_core_dev *dev, int fec_policy)
 	int err;
 	int i;
 
-	if (!MLX5_CAP_GEN(dev, pcam_reg))
-		return false;
-
-	if (!MLX5_CAP_PCAM_REG(dev, pplm))
+	if (!MLX5_CAP_GEN(dev, pcam_reg) || !MLX5_CAP_PCAM_REG(dev, pplm))
 		return false;
 
 	MLX5_SET(pplm_reg, in, local_port, 1);
@@ -509,7 +506,10 @@ int mlx5e_get_fec_mode(struct mlx5_core_dev *dev, u32 *fec_mode_active,
 	int err;
 	int i;
 
-	if (!MLX5_CAP_GEN(dev, pcam_reg) || !MLX5_CAP_PCAM_REG(dev, pplm))
+	if (!MLX5_CAP_GEN(dev, pcam_reg))
+		return false;
+
+	if (!MLX5_CAP_PCAM_REG(dev, pplm))
 		return false;
 
 	MLX5_SET(pplm_reg, in, local_port, 1);
@@ -554,7 +554,7 @@ int mlx5e_set_fec_mode(struct mlx5_core_dev *dev, u16 fec_policy)
 	if (fec_policy >= (1 << MLX5E_FEC_LLRS_272_257_1) && !fec_50g_per_lane)
 		return -EOPNOTSUPP;
 
-	if (!mlx5e_fec_in_caps(dev, fec_policy) && fec_policy)
+	if (fec_policy && !mlx5e_fec_in_caps(dev, fec_policy))
 		return -EOPNOTSUPP;
 
 	MLX5_SET(pplm_reg, in, local_port, 1);

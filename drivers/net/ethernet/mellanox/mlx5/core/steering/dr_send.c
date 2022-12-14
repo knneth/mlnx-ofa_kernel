@@ -38,7 +38,7 @@ struct dr_qp_rtr_attr {
 	u8 min_rnr_timer;
 	u8 sgid_index;
 	u16 udp_src_port;
-	bool fl;
+	u8 fl:1;
 };
 
 struct dr_qp_rts_attr {
@@ -52,7 +52,7 @@ struct dr_qp_init_attr {
 	u32 pdn;
 	u32 max_send_wr;
 	struct mlx5_uars_page *uar;
-	bool isolate_vl_tc;
+	u8 isolate_vl_tc:1;
 };
 
 static int dr_parse_cqe(struct mlx5dr_cq *dr_cq, struct mlx5_cqe64 *cqe64)
@@ -542,7 +542,7 @@ static int dr_get_tbl_copy_details(struct mlx5dr_domain *dmn,
 		alloc_size = *num_stes * DR_STE_SIZE;
 	}
 
-	*data = kzalloc(alloc_size, GFP_KERNEL);
+	*data = kvzalloc(alloc_size, GFP_KERNEL);
 	if (!*data)
 		return -ENOMEM;
 
@@ -583,9 +583,7 @@ int mlx5dr_send_postsend_htbl(struct mlx5dr_domain *dmn,
 			      struct mlx5dr_ste_htbl *htbl,
 			      u8 *formatted_ste, u8 *mask)
 {
-	bool legacy_htbl = htbl->type == DR_STE_HTBL_TYPE_LEGACY;
 	u32 byte_size = htbl->chunk->byte_size;
-	u8 ste_sz = htbl->ste_arr->size;
 	int num_stes_per_iter;
 	int iterations;
 	u8 *data;
@@ -619,11 +617,10 @@ int mlx5dr_send_postsend_htbl(struct mlx5dr_domain *dmn,
 				/* Copy data */
 				memcpy(data + ste_off,
 				       htbl->ste_arr[ste_index + j].hw_ste,
-				       ste_sz);
-				/* Copy bit_mask on legacy tables */
-				if (legacy_htbl)
-					memcpy(data + ste_off + ste_sz,
-					       mask, DR_STE_SIZE_MASK);
+				       DR_STE_SIZE_REDUCED);
+				/* Copy bit_mask */
+				memcpy(data + ste_off + DR_STE_SIZE_REDUCED,
+				       mask, DR_STE_SIZE_MASK);
 				/* Only when we have mask we need to re-arrange the STE */
 				mlx5dr_ste_prepare_for_postsend(dmn->ste_ctx,
 								data + (j * DR_STE_SIZE),
@@ -644,7 +641,7 @@ int mlx5dr_send_postsend_htbl(struct mlx5dr_domain *dmn,
 	}
 
 out_free:
-	kfree(data);
+	kvfree(data);
 	return ret;
 }
 
@@ -668,10 +665,10 @@ int mlx5dr_send_postsend_formatted_htbl(struct mlx5dr_domain *dmn,
 		return ret;
 
 	if (update_hw_ste) {
-		/* Copy the STE to hash table ste_arr */
+		/* Copy the reduced STE to hash table ste_arr */
 		for (i = 0; i < num_stes; i++) {
-			copy_dst = htbl->hw_ste_arr + i * htbl->ste_arr->size;
-			memcpy(copy_dst, ste_init_data, htbl->ste_arr->size);
+			copy_dst = htbl->hw_ste_arr + i * DR_STE_SIZE_REDUCED;
+			memcpy(copy_dst, ste_init_data, DR_STE_SIZE_REDUCED);
 		}
 	}
 
@@ -701,7 +698,7 @@ int mlx5dr_send_postsend_formatted_htbl(struct mlx5dr_domain *dmn,
 	}
 
 out_free:
-	kfree(data);
+	kvfree(data);
 	return ret;
 }
 
@@ -835,6 +832,11 @@ static int dr_cmd_modify_qp_init2rtr(struct mlx5_core_dev *mdev,
 
 static bool dr_send_allow_fl(struct mlx5dr_cmd_caps *caps)
 {
+	/* Check whether RC RoCE QP creation with force loopback is allowed.
+	 * There are two separate capability bits for this:
+	 *  - force loopback when RoCE is enabled
+	 *  - force loopback when RoCE is disabled
+	 */
 	return ((caps->roce_caps.roce_en &&
 		 caps->roce_caps.fl_rc_qp_when_roce_enabled) ||
 		(!caps->roce_caps.roce_en &&
@@ -865,9 +867,12 @@ static int dr_prepare_qp_to_rts(struct mlx5dr_domain *dmn)
 	rtr_attr.port_num	= port;
 	rtr_attr.udp_src_port	= dmn->info.caps.roce_min_src_udp;
 
-	if (dr_send_allow_fl(&dmn->info.caps)) {
-		rtr_attr.fl = true;
-	} else {
+	/* If QP creation with force loopback is allowed, then there
+	 * is no need for GID index when creating the QP.
+	 * Otherwise we query GID attributes and use GID index.
+	 */
+	rtr_attr.fl = dr_send_allow_fl(&dmn->info.caps);
+	if (!rtr_attr.fl) {
 		ret = mlx5dr_cmd_query_gid(dmn->mdev, port, gid_index,
 					   &rtr_attr.dgid_attr);
 		if (ret)
@@ -912,7 +917,6 @@ static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 	struct mlx5_cqe64 *cqe;
 	struct mlx5dr_cq *cq;
 	int inlen, err, eqn;
-	unsigned int irqn;
 	void *cqc, *in;
 	__be64 *pas;
 	int vector;
@@ -945,7 +949,7 @@ static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 		goto err_cqwq;
 
 	vector = raw_smp_processor_id() % mlx5_comp_vectors_count(mdev);
-	err = mlx5_vector2eqn(mdev, vector, &eqn, &irqn);
+	err = mlx5_vector2eqn(mdev, vector, &eqn);
 	if (err) {
 		kvfree(in);
 		goto err_cqwq;
@@ -953,7 +957,7 @@ static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 
 	cqc = MLX5_ADDR_OF(create_cq_in, in, cq_context);
 	MLX5_SET(cqc, cqc, log_cq_size, ilog2(ncqe));
-	MLX5_SET(cqc, cqc, c_eqn, eqn);
+	MLX5_SET(cqc, cqc, c_eqn_or_apu_element, eqn);
 	MLX5_SET(cqc, cqc, uar_page, uar->index);
 	MLX5_SET(cqc, cqc, log_page_size, cq->wq_ctrl.buf.page_shift -
 		 MLX5_ADAPTER_PAGE_SHIFT);
@@ -981,7 +985,6 @@ static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 	*cq->mcq.arm_db = cpu_to_be32(2 << 28);
 
 	cq->mcq.vector = 0;
-	cq->mcq.irqn = irqn;
 	cq->mcq.uar = uar;
 	cq->mdev = mdev;
 
@@ -1091,7 +1094,7 @@ int mlx5dr_send_ring_alloc(struct mlx5dr_domain *dmn)
 	init_attr.uar = dmn->uar;
 	init_attr.max_send_wr = QUEUE_SIZE;
 
-	/* Isolated VL is applicable only if force LB is supported */
+	/* Isolated VL is applicable only if force loopback is supported */
 	if (dr_send_allow_fl(&dmn->info.caps))
 		init_attr.isolate_vl_tc = dmn->info.caps.isolate_vl_tc;
 

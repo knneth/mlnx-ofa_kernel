@@ -18,6 +18,15 @@ static void esw_acl_egress_ofld_fwd2vport_destroy(struct mlx5_vport *vport)
 	vport->egress.offloads.fwd_rule = NULL;
 }
 
+static void esw_acl_egress_ofld_bounce_rule_destroy(struct mlx5_vport *vport)
+{
+	if (!vport->egress.offloads.bounce_rule)
+		return;
+
+	mlx5_del_flow_rules(vport->egress.offloads.bounce_rule);
+	vport->egress.offloads.bounce_rule = NULL;
+}
+
 static int esw_acl_egress_ofld_fwd2vport_create(struct mlx5_eswitch *esw,
 						struct mlx5_vport *vport,
 						struct mlx5_flow_destination *fwd_dest)
@@ -90,10 +99,7 @@ static void esw_acl_egress_ofld_rules_destroy(struct mlx5_vport *vport)
 {
 	esw_acl_egress_vlan_destroy(vport);
 	esw_acl_egress_ofld_fwd2vport_destroy(vport);
-	if (vport->egress.offloads.bounce_rule) {
-		mlx5_del_flow_rules(vport->egress.offloads.bounce_rule);
-		vport->egress.offloads.bounce_rule = NULL;
-	}
+	esw_acl_egress_ofld_bounce_rule_destroy(vport);
 }
 
 static int esw_acl_egress_ofld_groups_create(struct mlx5_eswitch *esw,
@@ -152,11 +158,13 @@ static void esw_acl_egress_ofld_groups_destroy(struct mlx5_vport *vport)
 		mlx5_destroy_flow_group(vport->egress.offloads.fwd_grp);
 		vport->egress.offloads.fwd_grp = NULL;
 	}
-	esw_acl_egress_vlan_grp_destroy(vport);
+
 	if (!IS_ERR_OR_NULL(vport->egress.offloads.bounce_grp)) {
 		mlx5_destroy_flow_group(vport->egress.offloads.bounce_grp);
 		vport->egress.offloads.bounce_grp = NULL;
 	}
+
+	esw_acl_egress_vlan_grp_destroy(vport);
 }
 
 static bool esw_acl_egress_needed(struct mlx5_eswitch *esw, u16 vport_num)
@@ -187,7 +195,7 @@ int esw_acl_egress_ofld_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport
 						 MLX5_FLOW_NAMESPACE_ESW_EGRESS,
 						 MLX5_ESW_EGRESS_ACL_DEFAULT_PRIO,
 						 table_size);
-	if (IS_ERR_OR_NULL(vport->egress.acl)) {
+	if (IS_ERR(vport->egress.acl)) {
 		err = PTR_ERR(vport->egress.acl);
 		vport->egress.acl = NULL;
 		return err;

@@ -1,7 +1,7 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: block/blk-mq-rdma.c
 
-Change-Id: Id2ad4f1f5b8532c656e4bb32191ac3ba1f93c211
+Change-Id: I2714d1b690db178149389310352a02713b272141
 ---
  block/blk-mq-rdma.c | 26 ++++++++++++++++++++++++++
  1 file changed, 26 insertions(+)

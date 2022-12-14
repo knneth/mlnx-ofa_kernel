@@ -66,13 +66,8 @@ void backport_dependency_symbol(void);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0))
 #include <linux/compat-3.10.h>
-#include <linux/compat-3.11.h>
 #include <linux/compat-3.12.h>
-#include <linux/compat-3.13.h>
-#include <linux/compat-3.14.h>
 #include <linux/compat-3.15.h>
-#include <linux/compat-3.16.h>
-#include <linux/compat-3.17.h>
 #include <linux/compat-4.0.h>
 #include <linux/compat-4.1.h>
 #include <linux/compat-4.10.h>

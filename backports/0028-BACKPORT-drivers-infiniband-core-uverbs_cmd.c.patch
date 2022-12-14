@@ -1,10 +1,10 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
 
-Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
+Change-Id: I0359d3c9fb5bb048112d51d08c83d9c0c5c69668
 ---
- drivers/infiniband/core/uverbs_cmd.c | 19 ++++++++++++++++++-
- 1 file changed, 18 insertions(+), 1 deletion(-)
+ drivers/infiniband/core/uverbs_cmd.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/uverbs_cmd.c
 +++ b/drivers/infiniband/core/uverbs_cmd.c
@@ -17,9 +17,9 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
 +	INIT_LIST_HEAD(&ucontext->per_mm_list);
 +#endif
  
- 	ucontext->res.type = RDMA_RESTRACK_CTX;
  	ucontext->device = ib_dev;
-@@ -240,10 +244,12 @@ int ib_init_ucontext(struct uverbs_attr_
+ 	ucontext->ufile = ufile;
+@@ -242,10 +246,12 @@ int ib_init_ucontext(struct uverbs_attr_
  		goto err;
  	}
  
@@ -32,19 +32,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
  
  	ret = ucontext->device->ops.alloc_ucontext(ucontext,
  						   &attrs->driver_udata);
-@@ -256,15 +262,22 @@ int ib_init_ucontext(struct uverbs_attr_
- 	 * Make sure that ib_uverbs_get_ucontext() sees the pointer update
- 	 * only after all writes to setup the ucontext have completed
- 	 */
-+#ifdef HAVE_SMP_LOAD_ACQUIRE
- 	smp_store_release(&file->ucontext, ucontext);
-+#else
-+	smp_wmb();
-+	file->ucontext = ucontext;
-+#endif
- 
- 	mutex_unlock(&file->ucontext_lock);
- 	up_read(&file->hw_destroy_rwsem);
+@@ -265,8 +271,10 @@ int ib_init_ucontext(struct uverbs_attr_
  	return 0;
  
  err_uncharge:
@@ -55,7 +43,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
  err:
  	mutex_unlock(&file->ucontext_lock);
  	up_read(&file->hw_destroy_rwsem);
-@@ -3347,7 +3360,11 @@ static int __uverbs_create_xsrq(struct u
+@@ -3386,7 +3394,11 @@ static int __uverbs_create_xsrq(struct u
  	struct ib_srq                   *srq;
  	struct ib_srq_init_attr          attr;
  	int ret;

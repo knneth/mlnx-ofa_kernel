@@ -85,6 +85,11 @@ static inline bool mlx5e_ipsec_is_tx_flow(struct mlx5e_accel_tx_ipsec_state *ips
 	return ipsec_st->x;
 }
 
+static inline bool mlx5e_ipsec_eseg_meta(struct mlx5_wqe_eth_seg *eseg)
+{
+	return eseg->flow_table_metadata & cpu_to_be32(MLX5_ETH_WQE_FT_META_IPSEC);
+}
+
 void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
 			       struct mlx5_wqe_eth_seg *eseg);
 
@@ -93,6 +98,7 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
 {
 	struct xfrm_offload *xo = xfrm_offload(skb);
 	struct sec_path *sp = skb_sec_path(skb);
+	u8 inner_ipproto = 0;
 
 	if (sp && sp->len && xo) {
 		struct xfrm_state *x = sp->xvec[0];
@@ -100,7 +106,7 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
 		if (!x || !x->xso.offload_handle)
 			goto out_disable;
 
-		if (xo->inner_ipproto) {
+		if (inner_ipproto) {
 			/* Cannot support tunnel packet over IPsec tunnel mode
 			 * because we cannot offload three IP header csum
 			 */
@@ -108,8 +114,8 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
 				goto out_disable;
 
 			/* Only support UDP or TCP L4 checksum */
-			if (xo->inner_ipproto != IPPROTO_UDP &&
-			    xo->inner_ipproto != IPPROTO_TCP)
+			if (inner_ipproto != IPPROTO_UDP &&
+			    inner_ipproto != IPPROTO_TCP)
 				goto out_disable;
 		}
 
@@ -130,17 +136,22 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 				       struct mlx5_cqe64 *cqe)
 {}
 
+static inline bool mlx5e_ipsec_eseg_meta(struct mlx5_wqe_eth_seg *eseg)
+{
+	return false;
+}
+
 static inline bool mlx5_ipsec_is_rx_flow(struct mlx5_cqe64 *cqe) { return false; }
+static inline netdev_features_t
+mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
+{ return features & ~(NETIF_F_CSUM_MASK | NETIF_F_GSO_MASK); }
 
 static inline __wsum mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb,
 							struct mlx5_cqe64 *cqe)
 { return 0; }
 
-static inline netdev_features_t
-mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
-{ return features & ~(NETIF_F_CSUM_MASK | NETIF_F_GSO_MASK); }
 #endif /* CONFIG_MLX5_EN_IPSEC */
+
 int mlx5e_ipsec_set_flow_attrs(struct mlx5e_priv *priv, u32 *match_c, u32 *match_v,
 			       struct ethtool_rx_flow_spec *fs);
-
 #endif /* __MLX5E_IPSEC_RXTX_H__ */

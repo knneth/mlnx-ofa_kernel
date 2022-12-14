@@ -203,6 +203,32 @@ struct mlxdevm_ops {
 			       struct mlxdevm_port *port,
 			       const struct mlxdevm_port_fn_cap *cap,
 			       struct netlink_ext_ack *extack);
+	/**
+	 * port_fn_trust_get() - Get the trust state of port function
+	 * @devm_dev: mlxdevm instance
+	 * @port: The mlxdevm port
+	 * @trusted: Query privilege state
+	 * @extack: extack for reporting error messages
+	 *
+	 * Return: 0 on success, negative value otherwise.
+	 */
+	int (*port_fn_trust_get)(struct mlxdevm *devm_dev,
+				 struct mlxdevm_port *port,
+				 bool *trusted,
+				 struct netlink_ext_ack *extack);
+	/**
+	 * port_fn_trust_set() - Set the trust state of port function
+	 * @devm_dev: mlxdevm instance
+	 * @port: The mlxdevm port
+	 * @trusted: Set privilege state
+	 * @extack: extack for reporting error messages
+	 *
+	 * Return: 0 on success, negative value otherwise.
+	 */
+	int (*port_fn_trust_set)(struct mlxdevm *devm_dev,
+				 struct mlxdevm_port *port,
+				 bool trusted,
+				 struct netlink_ext_ack *extack);
 
 	/**
 	 * rate_leaf_get() - Get the tx rate settings of the port function

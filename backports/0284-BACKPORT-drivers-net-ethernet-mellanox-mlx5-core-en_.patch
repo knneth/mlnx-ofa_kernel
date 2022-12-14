@@ -1,0 +1,24 @@
+From: Raed Salem <raeds@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+
+Change-Id: I63b69cdc7e536e35192b7d06cffc76cdec3978f5
+Signed-off-by: Raed Salem <raeds@nvidia.com>
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+@@ -98,7 +98,11 @@ mlx5e_ipsec_feature_check(struct sk_buff
+ {
+ 	struct xfrm_offload *xo = xfrm_offload(skb);
+ 	struct sec_path *sp = skb_sec_path(skb);
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	u8 inner_ipproto = xo->inner_ipproto;
++#else
+ 	u8 inner_ipproto = 0;
++#endif
+ 
+ 	if (sp && sp->len && xo) {
+ 		struct xfrm_state *x = sp->xvec[0];

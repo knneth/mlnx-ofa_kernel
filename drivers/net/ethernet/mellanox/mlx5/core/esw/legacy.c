@@ -47,7 +47,7 @@ static int esw_create_legacy_vepa_table(struct mlx5_eswitch *esw)
 }
 
 static void esw_destroy_legacy_fdb_table(struct mlx5_eswitch *esw)
-{ 
+{
 	esw_debug(esw->dev, "Destroy FDB Table\n");
 	if (!esw->fdb_table.legacy.fdb)
 		return;
@@ -64,6 +64,7 @@ static void esw_destroy_legacy_fdb_table(struct mlx5_eswitch *esw)
 	esw->fdb_table.legacy.addr_grp = NULL;
 	esw->fdb_table.legacy.allmulti_grp = NULL;
 	esw->fdb_table.legacy.promisc_grp = NULL;
+	atomic64_set(&esw->user_count, 0);
 }
 
 static int esw_create_legacy_fdb_table(struct mlx5_eswitch *esw)
@@ -176,6 +177,7 @@ static int esw_create_legacy_table(struct mlx5_eswitch *esw)
 	int err;
 
 	memset(&esw->fdb_table.legacy, 0, sizeof(struct legacy_fdb));
+	atomic64_set(&esw->user_count, 0);
 
 	err = esw_create_legacy_vepa_table(esw);
 	if (err)
@@ -349,7 +351,7 @@ int esw_legacy_vport_acl_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vpor
 	int ret;
 
 	/* Only non manager vports need ACL in legacy mode */
-	if (mlx5_esw_is_manager_vport(esw->dev, vport->vport))
+	if (mlx5_esw_is_manager_vport(esw, vport->vport))
 		return 0;
 
 	ret = esw_acl_ingress_lgcy_setup(esw, vport);
@@ -370,7 +372,7 @@ ingress_err:
 
 void esw_legacy_vport_acl_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
-	if (mlx5_esw_is_manager_vport(esw->dev, vport->vport))
+	if (mlx5_esw_is_manager_vport(esw, vport->vport))
 		return;
 
 	esw_acl_egress_lgcy_cleanup(esw, vport);
@@ -421,8 +423,8 @@ unlock:
 	return err;
 }
 
-int mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, u16 vport,
-		u16 vlan, u8 qos, __be16 vlan_proto)
+int mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport,
+				u16 vlan, u8 qos, __be16 vlan_proto)
 {
 	u8 set_flags = 0;
 	int err = 0;

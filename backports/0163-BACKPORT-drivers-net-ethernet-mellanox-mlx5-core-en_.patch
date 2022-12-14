@@ -1,0 +1,42 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+
+Change-Id: Ia26db8cba1f1dab94dee23a23fc5f8aceab25ece
+---
+ .../ethernet/mellanox/mlx5/core/en_accel/ktls.h   | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+@@ -6,9 +6,17 @@
+ 
+ #include "en.h"
+ 
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined CONFIG_MLX5_EN_TLS && defined HAVE_KTLS_STRUCTS
+ 
+ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
++#else
++
++static inline void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
++{
++}
++#endif
++
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_KTLS_RX_SUPPORT)
+ int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
+ int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
+@@ -16,11 +24,6 @@ struct mlx5e_ktls_resync_resp *
+ mlx5e_ktls_rx_resync_create_resp_list(void);
+ void mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list);
+ #else
+-
+-static inline void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
+-{
+-}
+-
+ static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
+ {
+ 	return 0;

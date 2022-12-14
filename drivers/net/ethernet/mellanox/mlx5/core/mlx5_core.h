@@ -42,16 +42,7 @@
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
 
-#include "fs_core.h"
-
-#define DRIVER_VERSION	"5.4-3.6.8"
-
-/* Number of EQs reserved for non-completion purposes */
-#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
-#define MLX5_MAX_ASYNC_EQS 4
-#else
-#define MLX5_MAX_ASYNC_EQS 3
-#endif
+#define DRIVER_VERSION	"5.5-1.0.3"
 
 extern uint mlx5_core_debug_mask;
 
@@ -221,6 +212,10 @@ struct mlx5_mcion_reg {
 
 int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
+int mlx5_cmd_init(struct mlx5_core_dev *dev);
+void mlx5_cmd_cleanup(struct mlx5_core_dev *dev);
+void mlx5_cmd_set_state(struct mlx5_core_dev *dev,
+			enum mlx5_cmdif_state cmdif_state);
 int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, uint32_t *sw_owner_id);
 int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
@@ -231,7 +226,7 @@ void mlx5_error_sw_reset(struct mlx5_core_dev *dev);
 u32 mlx5_health_check_fatal_sensors(struct mlx5_core_dev *dev);
 int mlx5_health_wait_pci_up(struct mlx5_core_dev *dev);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
-void mlx5_recover_device(struct mlx5_core_dev *dev);
+int mlx5_recover_device(struct mlx5_core_dev *dev);
 void mlx5_rename_comp_eq(struct mlx5_core_dev *dev, unsigned int eq_ix,
 			 char *name);
 int mlx5_sriov_init(struct mlx5_core_dev *dev);
@@ -239,6 +234,7 @@ void mlx5_sriov_cleanup(struct mlx5_core_dev *dev);
 int mlx5_sriov_attach(struct mlx5_core_dev *dev);
 void mlx5_sriov_detach(struct mlx5_core_dev *dev);
 int mlx5_core_sriov_configure(struct pci_dev *dev, int num_vfs);
+int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count);
 int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
@@ -276,13 +272,12 @@ int mlx5_query_pddr_troubleshooting_info(struct mlx5_core_dev *mdev,
 					 u16 *monitor_opcode,
 					 u8 *status_message);
 
-void mlx5_lag_remove_mdev(struct mlx5_core_dev *dev);
+void mlx5_lag_add_netdev(struct mlx5_core_dev *dev, struct net_device *netdev);
+void mlx5_lag_remove_netdev(struct mlx5_core_dev *dev, struct net_device *netdev);
 void mlx5_lag_add_mdev(struct mlx5_core_dev *dev);
-void mlx5_lag_add(struct mlx5_core_dev *dev,
-		  struct net_device *netdev,
-		  bool intf_mutex_held);
-void mlx5_lag_remove(struct mlx5_core_dev *dev,
-		     bool intf_mutex_held);
+void mlx5_lag_remove_mdev(struct mlx5_core_dev *dev);
+void mlx5_lag_disable_change(struct mlx5_core_dev *dev);
+void mlx5_lag_enable_change(struct mlx5_core_dev *dev);
 
 int mlx5_events_init(struct mlx5_core_dev *dev);
 void mlx5_events_cleanup(struct mlx5_core_dev *dev);
@@ -294,19 +289,8 @@ void mlx5_adev_idx_free(int idx);
 void mlx5_adev_cleanup(struct mlx5_core_dev *dev);
 int mlx5_adev_init(struct mlx5_core_dev *dev);
 
-void mlx5_lag_enable(struct mlx5_core_dev *dev, struct mlx5_lag *ldev);
-struct mlx5_lag *mlx5_lag_disable(struct mlx5_core_dev *dev);
-
-int esw_offloads_reload_reps(struct mlx5_eswitch *esw);
-int esw_offloads_config_single_fdb(struct mlx5_eswitch *master_esw,
-				   struct mlx5_eswitch *slave_esw);
-void esw_offloads_destroy_single_fdb(struct mlx5_eswitch *master_esw,
-				     struct mlx5_eswitch *slave_esw);
-struct mlx5_vport *mlx5_eswitch_get_vport(struct mlx5_eswitch *esw,
-					  u16 vport_num);
-struct mlx5_flow_root_namespace *find_root(struct fs_node *node);
-
 int mlx5_attach_device(struct mlx5_core_dev *dev);
+void mlx5_attach_device_by_protocol(struct mlx5_core_dev *dev, int protocol);
 void mlx5_detach_device(struct mlx5_core_dev *dev);
 int mlx5_register_device(struct mlx5_core_dev *dev);
 void mlx5_unregister_device(struct mlx5_core_dev *dev);
@@ -315,6 +299,11 @@ void mlx5_dev_list_lock(void);
 void mlx5_dev_list_unlock(void);
 int mlx5_dev_list_trylock(void);
 
+int mlx5_eswitch_offloads_config_single_fdb(struct mlx5_eswitch *master_esw,
+					    struct mlx5_eswitch *slave_esw);
+void mlx5_eswitch_offloads_destroy_single_fdb(struct mlx5_eswitch *master_esw,
+					      struct mlx5_eswitch *slave_esw);
+int mlx5_eswitch_reload_reps(struct mlx5_eswitch *esw);
 
 int mlx5_query_mtpps(struct mlx5_core_dev *dev, u32 *mtpps, u32 mtpps_size);
 int mlx5_set_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size);
@@ -442,9 +431,6 @@ void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state);
 int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
 void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
 
-void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
-int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out);
-
 static inline bool mlx5_core_is_sf(const struct mlx5_core_dev *dev)
 {
 	return dev->coredev_type == MLX5_COREDEV_SF;
@@ -452,12 +438,19 @@ static inline bool mlx5_core_is_sf(const struct mlx5_core_dev *dev)
 
 int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
 void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
-void mlx5_unload_one(struct mlx5_core_dev *dev, bool cleanup);
-int mlx5_load_one(struct mlx5_core_dev *dev, bool boot);
-void mlx5_events_work_enqueue(struct mlx5_core_dev *dev, struct work_struct *work);
-int set_tunneled_operation(struct mlx5_core_dev *mdev,
-			   u16 asn_match_mask, u16 asn_match_value,
-			   u32 *log_response_bar_size,
-			   u64 *response_bar_address);
+int mlx5_init_one(struct mlx5_core_dev *dev);
+void mlx5_uninit_one(struct mlx5_core_dev *dev);
+void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
+void mlx5_unload_one(struct mlx5_core_dev *dev);
+int mlx5_load_one(struct mlx5_core_dev *dev);
 
+int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out);
+
+void mlx5_events_work_enqueue(struct mlx5_core_dev *dev, struct work_struct *work);
+static inline u32 mlx5_sriov_get_vf_total_msix(struct pci_dev *pdev)
+{
+	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
+
+	return MLX5_CAP_GEN_MAX(dev, num_total_dynamic_vf_msix);
+}
 #endif /* __MLX5_CORE_H__ */

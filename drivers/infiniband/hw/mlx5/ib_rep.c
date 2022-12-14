@@ -37,6 +37,7 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	const struct mlx5_ib_profile *profile;
 	struct mlx5_core_dev *peer_dev;
 	struct mlx5_ib_dev *ibdev;
+	u32 peer_num_ports;
 	int vport_index;
 	int ret;
 
@@ -44,12 +45,14 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 
 	if (mlx5_lag_is_shared_fdb(dev)) {
 		peer_dev = mlx5_lag_get_peer_mdev(dev);
+		peer_num_ports = mlx5_eswitch_get_total_vports(peer_dev);
 		if (mlx5_lag_is_master(dev)) {
-			num_ports += mlx5_eswitch_get_total_vports(peer_dev) - 1;
+			/* Only 1 ib port is the representor for both uplinks */
+			num_ports += peer_num_ports - 1;
 		} else {
 			if (rep->vport == MLX5_VPORT_UPLINK)
 				return 0;
-			vport_index += mlx5_eswitch_get_total_vports(peer_dev);
+			vport_index += peer_num_ports;
 			dev = peer_dev;
 		}
 	}
@@ -82,11 +85,11 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 		goto fail_add;
 
 	rep->rep_data[REP_IB].priv = ibdev;
-	/* Only master can reach this point */
 	if (mlx5_lag_is_shared_fdb(dev))
 		mlx5_ib_register_peer_vport_reps(dev);
 
 	return 0;
+
 fail_add:
 	kfree(ibdev->port);
 fail_port:
@@ -106,6 +109,9 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	struct mlx5_ib_dev *dev = mlx5_ib_rep_to_dev(rep);
 	int vport_index = rep->vport_index;
 	struct mlx5_ib_port *port;
+
+	if (WARN_ON(!mdev))
+		return;
 
 	if (mlx5_lag_is_shared_fdb(mdev) &&
 	    !mlx5_lag_is_master(mdev)) {
@@ -130,6 +136,7 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	if (rep->vport == MLX5_VPORT_UPLINK) {
 		struct mlx5_core_dev *peer_mdev;
 		struct mlx5_eswitch *esw;
+
 		if (mlx5_lag_is_shared_fdb(mdev)) {
 			peer_mdev = mlx5_lag_get_peer_mdev(mdev);
 			esw = peer_mdev->priv.eswitch;
@@ -194,8 +201,7 @@ struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 
 	rep = dev->port[port - 1].rep;
 
-	return mlx5_eswitch_add_send_to_vport_rule(esw, esw, rep,
-						   sq->base.mqp.qpn);
+	return mlx5_eswitch_add_send_to_vport_rule(esw, esw, rep, sq->base.mqp.qpn);
 }
 
 static int mlx5r_rep_probe(struct auxiliary_device *adev,
@@ -243,4 +249,3 @@ void mlx5r_rep_cleanup(void)
 {
 	auxiliary_driver_unregister(&mlx5r_rep_driver);
 }
-

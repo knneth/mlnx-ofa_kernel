@@ -126,7 +126,7 @@ int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
 	return err;
 }
 
-void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
+void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq, struct mlx5_wq_cyc *wq,
 				u16 pi, u16 nnops)
 {
 	struct mlx5e_aso_wqe_info *edge_wi, *wi = &sq->db.aso_wqe[pi];
@@ -142,11 +142,11 @@ void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
 
 static void mlx5e_aso_build_param(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	mlx5e_build_aso_cq_param(priv, &aso->cq_param);
+	mlx5e_build_aso_cq_param(priv->mdev, &aso->cq_param);
 
 	aso->cpu = cpumask_first(mlx5_comp_irq_get_affinity_mask(priv->mdev, 0));
 	aso->sq_param.pdn = aso->pdn;
-	mlx5e_build_asosq_param(priv, &aso->sq_param);
+	mlx5e_build_asosq_param(priv->mdev, &aso->sq_param);
 }
 
 static int mlx5e_alloc_asosq_db(struct mlx5e_asosq *sq, int numa)
@@ -212,7 +212,7 @@ static int mlx5e_open_asosq(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 	csp.cqn             = sq->cq.mcq.cqn;
 	csp.wq_ctrl         = &sq->wq_ctrl;
 	csp.min_inline_mode = MLX5_INLINE_MODE_NONE;
-	err = mlx5e_create_sq_rdy(priv->mdev, param, &csp, &sq->sqn);
+	err = mlx5e_create_sq_rdy(priv->mdev, param, &csp, 0, &sq->sqn);
 	if (err) {
 		mlx5_core_err(priv->mdev, "Failed to open aso sq, err=%d\n", err);
 		goto err_free_asosq;

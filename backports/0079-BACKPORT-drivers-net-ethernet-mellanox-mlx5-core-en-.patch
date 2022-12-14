@@ -1,178 +1,155 @@
-From: Mikhael Goikhman <migo@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
 
-Change-Id: I48a330d31aea06223792526c9b071e7e56b00b1c
+Change-Id: I9ef72214af90d86e4320fbc767e503e535020877
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/rx.c   | 115 ++++++++++++++++++
- 1 file changed, 115 insertions(+)
+ .../mellanox/mlx5/core/en/reporter_tx.c       | 57 ++++++++++++++++---
+ 1 file changed, 50 insertions(+), 7 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
-@@ -1,12 +1,92 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2019 Mellanox Technologies. */
- 
-+#ifdef HAVE_XSK_SUPPORT
-+
- #include "rx.h"
- #include "en/xdp.h"
-+#ifdef HAVE_XDP_SOCK_DRV_H
- #include <net/xdp_sock_drv.h>
-+#else
-+#include <net/xdp_sock.h>
-+#endif
- 
- /* RX data path */
- 
-+#ifndef HAVE_XSK_BUFF_ALLOC
-+bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count)
-+{
-+	/* Check in advance that we have enough frames, instead of allocating
-+	 * one-by-one, failing and moving frames to the Reuse Ring.
-+	 */
-+	return xsk_umem_has_addrs_rq(rq->umem, count);
-+}
-+
-+int mlx5e_xsk_page_alloc_umem(struct mlx5e_rq *rq,
-+			      struct mlx5e_dma_info *dma_info)
-+{
-+	struct xdp_umem *umem = rq->umem;
-+	u64 handle;
-+
-+	if (!xsk_umem_peek_addr_rq(umem, &handle))
-+		return -ENOMEM;
-+
-+#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
-+	dma_info->xsk.handle = xsk_umem_adjust_offset(umem, handle,
-+						      rq->buff.umem_headroom);
-+#else
-+	dma_info->xsk.handle = handle + rq->buff.umem_headroom;
-+#endif
-+	dma_info->xsk.data = xdp_umem_get_data(umem, dma_info->xsk.handle);
-+
-+	/* No need to add headroom to the DMA address. In striding RQ case, we
-+	 * just provide pages for UMR, and headroom is counted at the setup
-+	 * stage when creating a WQE. In non-striding RQ case, headroom is
-+	 * accounted in mlx5e_alloc_rx_wqe.
-+	 */
-+	dma_info->addr = xdp_umem_get_dma(umem, handle);
-+
-+#ifdef HAVE_XSK_UMEM_RELEASE_ADDR_RQ
-+	xsk_umem_release_addr_rq(umem);
-+#else
-+	xsk_umem_discard_addr_rq(umem);
-+#endif
-+
-+	dma_sync_single_for_device(rq->pdev, dma_info->addr, PAGE_SIZE,
-+				   DMA_BIDIRECTIONAL);
-+
-+	return 0;
-+}
-+
-+static inline void mlx5e_xsk_recycle_frame(struct mlx5e_rq *rq, u64 handle)
-+{
-+	xsk_umem_fq_reuse(rq->umem, handle & rq->umem->chunk_mask);
-+}
-+
-+/* XSKRQ uses pages from UMEM, they must not be released. They are returned to
-+ * the userspace if possible, and if not, this function is called to reuse them
-+ * in the driver.
-+ */
-+void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
-+			    struct mlx5e_dma_info *dma_info)
-+{
-+	mlx5e_xsk_recycle_frame(rq, dma_info->xsk.handle);
-+}
-+
-+/* Return a frame back to the hardware to fill in again. It is used by XDP when
-+ * the XDP program returns XDP_TX or XDP_REDIRECT not to an XSKMAP.
-+ */
-+void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle)
-+{
-+	struct mlx5e_rq *rq = container_of(zca, struct mlx5e_rq, zca);
-+
-+	mlx5e_xsk_recycle_frame(rq, handle);
-+}
-+
-+void mlx5e_fill_xdp_buff_for_old_xsk(struct mlx5e_rq *rq, void *va, u16 headroom,
-+				u32 len, struct xdp_buff *xdp, struct mlx5e_dma_info *di);
-+#endif /* HAVE_XSK_BUFF_ALLOC */
-+
- static struct sk_buff *mlx5e_xsk_construct_skb(struct mlx5e_rq *rq, void *data,
- 					       u32 cqe_bcnt)
- {
-@@ -29,7 +109,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
- 						    u32 head_offset,
- 						    u32 page_idx)
- {
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 	struct xdp_buff *xdp = wi->umr.dma_info[page_idx].xsk;
-+#else
-+	struct xdp_buff xdp0;
-+	struct xdp_buff *xdp = &xdp0;
-+	struct mlx5e_dma_info *di = &wi->umr.dma_info[page_idx];
-+	u16 rx_headroom = rq->buff.headroom - rq->buff.umem_headroom;
-+	void *va, *data;
-+	u32 frag_size;
-+#endif
- 	u32 cqe_bcnt32 = cqe_bcnt;
- 
- 	/* Check packet size. Note LRO doesn't use linear SKB */
-@@ -45,9 +134,17 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
- 	 */
- 	WARN_ON_ONCE(head_offset);
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 	xdp->data_end = xdp->data + cqe_bcnt32;
- 	xdp_set_data_meta_invalid(xdp);
- 	xsk_buff_dma_sync_for_cpu(xdp);
-+#else
-+	va        = di->xsk.data;
-+	data      = va + rx_headroom;
-+	frag_size = rq->buff.headroom + cqe_bcnt32;
-+	dma_sync_single_for_cpu(rq->pdev, di->addr, frag_size, DMA_BIDIRECTIONAL);
-+	mlx5e_fill_xdp_buff_for_old_xsk(rq, va, rx_headroom, cqe_bcnt, xdp, di);
-+#endif
- 	net_prefetch(xdp->data);
- 
- 	/* Possible flows:
-@@ -82,7 +179,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
- 					      struct mlx5e_wqe_frag_info *wi,
- 					      u32 cqe_bcnt)
- {
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 	struct xdp_buff *xdp = wi->di->xsk;
-+#else
-+	struct xdp_buff xdp0;
-+	struct xdp_buff *xdp = &xdp0;
-+	struct mlx5e_dma_info *di = wi->di;
-+	u16 rx_headroom = rq->buff.headroom - rq->buff.umem_headroom;
-+	void *va, *data;
-+	u32 frag_size;
-+#endif
- 
- 	/* wi->offset is not used in this function, because xdp->data and the
- 	 * DMA address point directly to the necessary place. Furthermore, the
-@@ -91,9 +197,17 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
- 	 */
- 	WARN_ON_ONCE(wi->offset);
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 	xdp->data_end = xdp->data + cqe_bcnt;
- 	xdp_set_data_meta_invalid(xdp);
- 	xsk_buff_dma_sync_for_cpu(xdp);
-+#else
-+	va        = di->xsk.data;
-+	data      = va + rx_headroom;
-+	frag_size = rq->buff.headroom + cqe_bcnt;
-+	dma_sync_single_for_cpu(rq->pdev, di->addr, frag_size, DMA_BIDIRECTIONAL);
-+	mlx5e_fill_xdp_buff_for_old_xsk(rq, va, rx_headroom, cqe_bcnt, xdp, di);
-+#endif
- 	net_prefetch(xdp->data);
- 
- 	if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_RESP_SEND)) {
-@@ -110,3 +224,4 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
- 	 */
- 	return mlx5e_xsk_construct_skb(rq, xdp->data, cqe_bcnt);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
+@@ -127,6 +127,7 @@ static int mlx5e_tx_reporter_timeout_rec
+ 	return err;
  }
-+#endif /*HAVE_XSK_SUPPORT*/
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ /* state lock cannot be grabbed within this function.
+  * It can cause a dead lock or a read-after-free.
+  */
+@@ -136,8 +137,11 @@ static int mlx5e_tx_reporter_recover_fro
+ }
+ 
+ static int mlx5e_tx_reporter_recover(struct devlink_health_reporter *reporter,
+-				     void *context,
+-				     struct netlink_ext_ack *extack)
++		                     void *context
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++                                    , struct netlink_ext_ack *extack
++#endif
++                                    )
+ {
+ 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
+ 	struct mlx5e_err_ctx *err_ctx = context;
+@@ -352,8 +356,11 @@ out:
+ }
+ 
+ static int mlx5e_tx_reporter_diagnose(struct devlink_health_reporter *reporter,
+-				      struct devlink_fmsg *fmsg,
+-				      struct netlink_ext_ack *extack)
++				      struct devlink_fmsg *fmsg
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++                                      , struct netlink_ext_ack *extack
++#endif
++                                     )
+ {
+ 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
+ 	struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
+@@ -533,8 +540,11 @@ static int mlx5e_tx_reporter_dump_from_c
+ }
+ 
+ static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,
+-				  struct devlink_fmsg *fmsg, void *context,
+-				  struct netlink_ext_ack *extack)
++				  struct devlink_fmsg *fmsg, void *context
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++                                  , struct netlink_ext_ack *extack
++#endif
++                                 )
+ {
+ 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
+ 	struct mlx5e_err_ctx *err_ctx = context;
+@@ -542,6 +552,7 @@ static int mlx5e_tx_reporter_dump(struct
+ 	return err_ctx ? mlx5e_tx_reporter_dump_from_ctx(priv, err_ctx, fmsg) :
+ 			 mlx5e_tx_reporter_dump_all_sqs(priv, fmsg);
+ }
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq)
+ {
+@@ -551,7 +562,9 @@ void mlx5e_reporter_tx_err_cqe(struct ml
+ 
+ 	err_ctx.ctx = sq;
+ 	err_ctx.recover = mlx5e_tx_reporter_err_cqe_recover;
+-	err_ctx.dump = mlx5e_tx_reporter_dump_sq;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++       err_ctx.dump = mlx5e_tx_reporter_dump_sq;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	snprintf(err_str, sizeof(err_str), "ERR CQE on SQ: 0x%x", sq->sqn);
+ 
+ 	mlx5e_health_report(priv, priv->tx_reporter, err_str, &err_ctx);
+@@ -567,7 +580,9 @@ int mlx5e_reporter_tx_timeout(struct mlx
+ 	to_ctx.sq = sq;
+ 	err_ctx.ctx = &to_ctx;
+ 	err_ctx.recover = mlx5e_tx_reporter_timeout_recover;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	err_ctx.dump = mlx5e_tx_reporter_dump_sq;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	snprintf(err_str, sizeof(err_str),
+ 		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
+ 		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,
+@@ -577,22 +592,43 @@ int mlx5e_reporter_tx_timeout(struct mlx
+ 	return to_ctx.status;
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static const struct devlink_health_reporter_ops mlx5_tx_reporter_ops = {
+ 		.name = "tx",
+ 		.recover = mlx5e_tx_reporter_recover,
+ 		.diagnose = mlx5e_tx_reporter_diagnose,
+ 		.dump = mlx5e_tx_reporter_dump,
+ };
++#endif
+ 
+ #define MLX5_REPORTER_TX_GRACEFUL_PERIOD 500
+ 
+ void mlx5e_reporter_tx_create(struct mlx5e_priv *priv)
+ {
++#ifndef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++	priv->tx_reporter = NULL;
++#else
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
+ 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
++#endif
+ 	struct devlink_health_reporter *reporter;
+ 
++#ifndef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
++	struct mlx5_core_dev *mdev = priv->mdev;
++	struct devlink *devlink;
++#endif
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
+ 	reporter = devlink_port_health_reporter_create(dl_port, &mlx5_tx_reporter_ops,
+ 						       MLX5_REPORTER_TX_GRACEFUL_PERIOD, priv);
++#else
++	devlink = priv_to_devlink(mdev);
++	reporter =
++		 devlink_health_reporter_create(devlink, &mlx5_tx_reporter_ops,
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
++				MLX5_REPORTER_TX_GRACEFUL_PERIOD,
++#endif
++				true, priv);
++#endif
+ 	if (IS_ERR(reporter)) {
+ 		netdev_warn(priv->netdev,
+ 			    "Failed to create tx reporter, err = %ld\n",
+@@ -600,6 +636,7 @@ void mlx5e_reporter_tx_create(struct mlx
+ 		return;
+ 	}
+ 	priv->tx_reporter = reporter;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ }
+ 
+ void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
+@@ -607,6 +644,12 @@ void mlx5e_reporter_tx_destroy(struct ml
+ 	if (!priv->tx_reporter)
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
+ 	devlink_port_health_reporter_destroy(priv->tx_reporter);
++#else
++	devlink_health_reporter_destroy(priv->tx_reporter);
++#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE  */
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	priv->tx_reporter = NULL;
+ }

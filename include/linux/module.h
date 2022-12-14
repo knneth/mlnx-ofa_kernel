@@ -5,6 +5,7 @@
 
 #include_next <linux/module.h>
 
+/* DONT REMOVE THIS FILE */
 /* This is a workaround to support UEK3 kernels */
 #ifdef CONFIG_DTRACE
 #undef CONFIG_DTRACE

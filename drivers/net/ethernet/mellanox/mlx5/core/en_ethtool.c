@@ -33,7 +33,8 @@
 #include "en.h"
 #include "en/port.h"
 #include "en/params.h"
-#include "en/xsk/umem.h"
+#include "en/xsk/pool.h"
+#include "en/ptp.h"
 #include "lib/clock.h"
 #include "en_rep.h"
 
@@ -245,7 +246,6 @@ int mlx5e_ethtool_get_sset_count(struct mlx5e_priv *priv, int sset)
 		return MLX5E_NUM_PFLAGS;
 	case ETH_SS_TEST:
 		return mlx5e_self_test_num(priv);
-		fallthrough;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -270,9 +270,7 @@ void mlx5e_ethtool_get_strings(struct mlx5e_priv *priv, u32 stringset, u8 *data)
 		break;
 
 	case ETH_SS_TEST:
-		for (i = 0; i < mlx5e_self_test_num(priv); i++)
-			strcpy(data + i * ETH_GSTRING_LEN,
-			       mlx5e_self_tests[i]);
+		mlx5e_self_test_fill_strings(priv, data);
 		break;
 
 	case ETH_SS_STATS:
@@ -334,7 +332,7 @@ static void mlx5e_get_ringparam(struct net_device *dev,
 int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 				struct ethtool_ringparam *param)
 {
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	u8 log_rq_size;
 	u8 log_sq_size;
 	int err = 0;
@@ -374,20 +372,15 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 
 	mutex_lock(&priv->state_lock);
 
-	new_channels.params = priv->channels.params;
-	new_channels.params.log_rq_mtu_frames = log_rq_size;
-	new_channels.params.log_sq_size = log_sq_size;
+	new_params = priv->channels.params;
+	new_params.log_rq_mtu_frames = log_rq_size;
+	new_params.log_sq_size = log_sq_size;
 
-	err = mlx5e_validate_params(priv, &new_channels.params);
+	err = mlx5e_validate_params(priv->mdev, &new_params);
 	if (err)
 		goto unlock;
 
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
-		goto unlock;
-	}
-
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
 
 unlock:
 	mutex_unlock(&priv->state_lock);
@@ -411,8 +404,7 @@ void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
 	ch->max_combined   = priv->max_nch;
 	ch->combined_count = priv->channels.params.num_channels;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	if (!mlx5e_eswitch_vf_rep(priv->netdev))
-		ch->max_other      = priv->mdev->mlx5e_res.max_rl_queues;
+	ch->max_other = mlx5e_profile_num_rl_queues(priv->mdev, priv->profile);
 	ch->other_count    = priv->channels.params.num_rl_txqs;
 #endif
 	if (priv->xsk.refcnt) {
@@ -438,8 +430,9 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 	struct mlx5e_params *cur_params = &priv->channels.params;
 	int ncv = mlx5e_get_max_num_channels(priv->mdev);
 	unsigned int count = ch->combined_count;
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	bool arfs_enabled;
+	bool opened;
 	int err = 0;
 
 	if (!count) {
@@ -461,13 +454,10 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 	}
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	if (ch->other_count && mlx5e_eswitch_vf_rep(priv->netdev))
-		return -EINVAL;
-
-	if (ch->other_count > priv->mdev->mlx5e_res.max_rl_queues) {
+	if (ch->other_count > mlx5e_profile_num_rl_queues(priv->mdev, priv->profile)) {
 		netdev_info(priv->netdev, "%s: other_count (%d) > max (%d)\n",
 			    __func__, ch->other_count,
-			    priv->mdev->mlx5e_res.max_rl_queues);
+			    mlx5e_profile_num_rl_queues(priv->mdev, priv->profile));
 		return -EINVAL;
 	}
 
@@ -491,31 +481,32 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 		goto out;
 	}
 
-	new_channels.params = *cur_params;
-	new_channels.params.num_channels = count;
-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	new_channels.params.num_rl_txqs = ch->other_count;
-#endif
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		struct mlx5e_params old_params;
-
-		old_params = *cur_params;
-		*cur_params = new_channels.params;
-		err = mlx5e_num_channels_changed(priv);
-		if (err)
-			*cur_params = old_params;
-
+	/* Don't allow changing the number of channels if HTB offload is active,
+	 * because the numeration of the QoS SQs will change, while per-queue
+	 * qdiscs are attached.
+	 */
+	if (priv->htb.maj_id) {
+		err = -EINVAL;
+		netdev_err(priv->netdev, "%s: HTB offload is active, cannot change the number of channels\n",
+			   __func__);
 		goto out;
 	}
 
-	arfs_enabled = priv->netdev->features & NETIF_F_NTUPLE;
+	new_params = *cur_params;
+	new_params.num_channels = count;
+#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
+	new_params.num_rl_txqs = ch->other_count;
+#endif
+
+	opened = test_bit(MLX5E_STATE_OPENED, &priv->state);
+
+	arfs_enabled = opened && (priv->netdev->features & NETIF_F_NTUPLE);
 	if (arfs_enabled)
 		mlx5e_arfs_disable(priv);
 
 	/* Switch to new channels, set new parameters and close old ones */
-	err = mlx5e_safe_switch_channels(priv, &new_channels,
-					 mlx5e_num_channels_changed_ctx, NULL);
+	err = mlx5e_safe_switch_params(priv, &new_params,
+				       mlx5e_num_channels_changed_ctx, NULL, true);
 
 	if (arfs_enabled) {
 		int err2 = mlx5e_arfs_enable(priv);
@@ -578,7 +569,7 @@ static int mlx5e_get_coalesce(struct net_device *netdev,
 #define MLX5E_MAX_COAL_FRAMES		MLX5_MAX_CQ_COUNT
 
 static void
-mlx5e_set_priv_channels_coalesce(struct mlx5e_priv *priv, struct ethtool_coalesce *coal)
+mlx5e_set_priv_channels_tx_coalesce(struct mlx5e_priv *priv, struct ethtool_coalesce *coal)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
 	int tc;
@@ -593,6 +584,17 @@ mlx5e_set_priv_channels_coalesce(struct mlx5e_priv *priv, struct ethtool_coalesc
 						coal->tx_coalesce_usecs,
 						coal->tx_max_coalesced_frames);
 		}
+	}
+}
+
+static void
+mlx5e_set_priv_channels_rx_coalesce(struct mlx5e_priv *priv, struct ethtool_coalesce *coal)
+{
+	struct mlx5_core_dev *mdev = priv->mdev;
+	int i;
+
+	for (i = 0; i < priv->channels.num; ++i) {
+		struct mlx5e_channel *c = priv->channels.c[i];
 
 		if (priv->shared_rq)
 			continue;
@@ -608,8 +610,9 @@ int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
 {
 	struct dim_cq_moder *rx_moder, *tx_moder;
 	struct mlx5_core_dev *mdev = priv->mdev;
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	bool reset_rx, reset_tx;
+	bool reset = true;
 	int err = 0;
 
 	if (!MLX5_CAP_GEN(mdev, cq_moderation))
@@ -630,9 +633,9 @@ int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
 	}
 
 	mutex_lock(&priv->state_lock);
-	new_channels.params = priv->channels.params;
+	new_params = priv->channels.params;
 
-	rx_moder          = &new_channels.params.rx_cq_moderation;
+	rx_moder          = &new_params.rx_cq_moderation;
 	if (priv->shared_rq) {
 		if (coal->rx_coalesce_usecs ||
 		    coal->rx_max_coalesced_frames ||
@@ -644,43 +647,41 @@ int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
 
 	rx_moder->usec    = coal->rx_coalesce_usecs;
 	rx_moder->pkts    = coal->rx_max_coalesced_frames;
-	new_channels.params.rx_dim_enabled = !!coal->use_adaptive_rx_coalesce;
+	new_params.rx_dim_enabled = !!coal->use_adaptive_rx_coalesce;
 
-	tx_moder          = &new_channels.params.tx_cq_moderation;
+	tx_moder          = &new_params.tx_cq_moderation;
 	tx_moder->usec    = coal->tx_coalesce_usecs;
 	tx_moder->pkts    = coal->tx_max_coalesced_frames;
-	new_channels.params.tx_dim_enabled = !!coal->use_adaptive_tx_coalesce;
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
-		goto out;
-	}
-	/* we are opened */
+	new_params.tx_dim_enabled = !!coal->use_adaptive_tx_coalesce;
 
 	reset_rx = !!coal->use_adaptive_rx_coalesce != priv->channels.params.rx_dim_enabled;
 	reset_tx = !!coal->use_adaptive_tx_coalesce != priv->channels.params.tx_dim_enabled;
 
-	if (!reset_rx && !reset_tx) {
-		mlx5e_set_priv_channels_coalesce(priv, coal);
-		priv->channels.params = new_channels.params;
-		goto out;
-	}
-
 	if (reset_rx) {
-		u8 mode = MLX5E_GET_PFLAG(&new_channels.params,
+		u8 mode = MLX5E_GET_PFLAG(&new_params,
 					  MLX5E_PFLAG_RX_CQE_BASED_MODER);
 
-		mlx5e_reset_rx_moderation(&new_channels.params, mode);
+		mlx5e_reset_rx_moderation(&new_params, mode);
 	}
 	if (reset_tx) {
-		u8 mode = MLX5E_GET_PFLAG(&new_channels.params,
+		u8 mode = MLX5E_GET_PFLAG(&new_params,
 					  MLX5E_PFLAG_TX_CQE_BASED_MODER);
 
-		mlx5e_reset_tx_moderation(&new_channels.params, mode);
+		mlx5e_reset_tx_moderation(&new_params, mode);
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	/* If DIM state hasn't changed, it's possible to modify interrupt
+	 * moderation parameters on the fly, even if the channels are open.
+	 */
+	if (!reset_rx && !reset_tx && test_bit(MLX5E_STATE_OPENED, &priv->state)) {
+		if (!coal->use_adaptive_rx_coalesce)
+			mlx5e_set_priv_channels_rx_coalesce(priv, coal);
+		if (!coal->use_adaptive_tx_coalesce)
+			mlx5e_set_priv_channels_tx_coalesce(priv, coal);
+		reset = false;
+	}
 
+	err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, reset);
 out:
 	mutex_unlock(&priv->state_lock);
 	return err;
@@ -1435,6 +1436,14 @@ static int mlx5e_set_tunable(struct net_device *dev,
 	return err;
 }
 
+static void mlx5e_get_pause_stats(struct net_device *netdev,
+				  struct ethtool_pause_stats *pause_stats)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+
+	mlx5e_stats_pause_get(priv, pause_stats);
+}
+
 void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
 				  struct ethtool_pauseparam *pauseparam)
 {
@@ -1643,6 +1652,14 @@ static int mlx5e_set_wol(struct net_device *netdev, struct ethtool_wolinfo *wol)
 	return mlx5_set_port_wol(mdev, mlx5_wol_mode);
 }
 
+static void mlx5e_get_fec_stats(struct net_device *netdev,
+				struct ethtool_fec_stats *fec_stats)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+
+	mlx5e_stats_fec_get(priv, fec_stats);
+}
+
 static int mlx5e_get_fecparam(struct net_device *netdev,
 			      struct ethtool_fecparam *fecparam)
 {
@@ -1812,6 +1829,49 @@ static int mlx5e_get_module_eeprom(struct net_device *netdev,
 	return 0;
 }
 
+static int mlx5e_get_module_eeprom_by_page(struct net_device *netdev,
+					   const struct ethtool_module_eeprom *page_data,
+					   struct netlink_ext_ack *extack)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5_module_eeprom_query_params query;
+	struct mlx5_core_dev *mdev = priv->mdev;
+	u8 *data = page_data->data;
+	int size_read;
+	int i = 0;
+
+	if (!page_data->length)
+		return -EINVAL;
+
+	memset(data, 0, page_data->length);
+
+	query.offset = page_data->offset;
+	query.i2c_address = page_data->i2c_address;
+	query.bank = page_data->bank;
+	query.page = page_data->page;
+	while (i < page_data->length) {
+		query.size = page_data->length - i;
+		size_read = mlx5_query_module_eeprom_by_page(mdev, &query, data + i);
+
+		/* Done reading, return how many bytes was read */
+		if (!size_read)
+			return i;
+
+		if (size_read == -EINVAL)
+			return -EINVAL;
+		if (size_read < 0) {
+			netdev_err(priv->netdev, "%s: mlx5_query_module_eeprom_by_page failed:0x%x\n",
+				   __func__, size_read);
+			return i;
+		}
+
+		i += size_read;
+		query.offset += size_read;
+	}
+
+	return i;
+}
+
 int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
 			       struct ethtool_flash *flash)
 {
@@ -1851,7 +1911,7 @@ static int set_pflag_cqe_based_moder(struct net_device *netdev, bool enable,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *mdev = priv->mdev;
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	bool mode_changed;
 	u8 cq_period_mode, current_cq_period_mode;
 
@@ -1870,18 +1930,13 @@ static int set_pflag_cqe_based_moder(struct net_device *netdev, bool enable,
 	if (!mode_changed)
 		return 0;
 
-	new_channels.params = priv->channels.params;
+	new_params = priv->channels.params;
 	if (is_rx_cq)
-		mlx5e_set_rx_cq_mode_params(&new_channels.params, cq_period_mode);
+		mlx5e_set_rx_cq_mode_params(&new_params, cq_period_mode);
 	else
-		mlx5e_set_tx_cq_mode_params(&new_channels.params, cq_period_mode);
+		mlx5e_set_tx_cq_mode_params(&new_params, cq_period_mode);
 
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
-		return 0;
-	}
-
-	return mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	return mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
 }
 
 static int set_pflag_tx_cqe_based_moder(struct net_device *netdev, bool enable)
@@ -1894,10 +1949,10 @@ static int set_pflag_rx_cqe_based_moder(struct net_device *netdev, bool enable)
 	return set_pflag_cqe_based_moder(netdev, enable, true);
 }
 
-int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val)
+int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val, bool rx_filter)
 {
 	bool curr_val = MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_RX_CQE_COMPRESS);
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	int err = 0;
 
 	if (!MLX5_CAP_GEN(priv->mdev, cqe_compression))
@@ -1906,15 +1961,22 @@ int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 	if (curr_val == new_val)
 		return 0;
 
-	new_channels.params = priv->channels.params;
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_RX_CQE_COMPRESS, new_val);
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
-		return 0;
+	if (new_val && !priv->profile->rx_ptp_support && rx_filter) {
+		netdev_err(priv->netdev,
+			   "Profile doesn't support enabling of CQE compression while hardware time-stamping is enabled.\n");
+		return -EINVAL;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	new_params = priv->channels.params;
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_RX_CQE_COMPRESS, new_val);
+	if (rx_filter)
+		new_params.ptp_rx = new_val;
+
+	if (new_params.ptp_rx == priv->channels.params.ptp_rx)
+		err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
+	else
+		err = mlx5e_safe_switch_params(priv, &new_params, mlx5e_ptp_rx_manage_fs_ctx,
+					       &new_params.ptp_rx, true);
 	if (err)
 		return err;
 
@@ -1928,7 +1990,7 @@ int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 int mlx5e_modify_tx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val)
 {
 	bool curr_val = MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_TX_CQE_COMPRESS);
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	int err = 0;
 
 	if (!MLX5_CAP_GEN(priv->mdev, cqe_compression))
@@ -1937,15 +1999,15 @@ int mlx5e_modify_tx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 	if (curr_val == new_val)
 		return 0;
 
-	new_channels.params = priv->channels.params;
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_TX_CQE_COMPRESS, new_val);
+	new_params = priv->channels.params;
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_TX_CQE_COMPRESS, new_val);
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
+		priv->channels.params = new_params;
 		return 0;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL ,NULL);
+	err = mlx5e_safe_switch_params(priv, &new_params, NULL ,NULL, true);
 	if (err)
 		return err;
 
@@ -1961,17 +2023,14 @@ static int set_pflag_rx_cqe_compress(struct net_device *netdev,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *mdev = priv->mdev;
+	bool rx_filter;
 	int err;
 
 	if (!MLX5_CAP_GEN(mdev, cqe_compression))
 		return -EOPNOTSUPP;
 
-	if (enable && priv->tstamp.rx_filter != HWTSTAMP_FILTER_NONE) {
-		netdev_err(netdev, "Can't enable cqe compression while timestamping is enabled.\n");
-		return -EINVAL;
-	}
-
-	err = mlx5e_modify_rx_cqe_compression_locked(priv, enable);
+	rx_filter = priv->tstamp.rx_filter != HWTSTAMP_FILTER_NONE;
+	err = mlx5e_modify_rx_cqe_compression_locked(priv, enable, rx_filter);
 	if (err)
 		return err;
 
@@ -1997,7 +2056,7 @@ static int set_pflag_rx_striding_rq(struct net_device *netdev, bool enable)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *mdev = priv->mdev;
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 
 	if (enable) {
 		if (!mlx5e_check_fragmented_striding_rq_cap(mdev))
@@ -2009,17 +2068,12 @@ static int set_pflag_rx_striding_rq(struct net_device *netdev, bool enable)
 		return -EINVAL;
 	}
 
-	new_channels.params = priv->channels.params;
+	new_params = priv->channels.params;
 
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_RX_STRIDING_RQ, enable);
-	mlx5e_set_rq_type(mdev, &new_channels.params);
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_RX_STRIDING_RQ, enable);
+	mlx5e_set_rq_type(mdev, &new_params);
 
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
-		return 0;
-	}
-
-	return mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	return mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
 }
 
 static int set_pflag_rx_no_csum_complete(struct net_device *netdev, bool enable)
@@ -2044,34 +2098,27 @@ static int set_pflag_rx_no_csum_complete(struct net_device *netdev, bool enable)
 	return 0;
 }
 
+static int set_pflag_tx_mpwqe_common(struct net_device *netdev, u32 flag, bool enable)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	struct mlx5e_params new_params;
+
+	if (enable && !MLX5_CAP_ETH(mdev, enhanced_multi_pkt_send_wqe))
+		return -EOPNOTSUPP;
+
+	new_params = priv->channels.params;
+
+	MLX5E_SET_PFLAG(&new_params, flag, enable);
+
+	return mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
+}
+
 static int set_pflag_per_channel_stats(struct net_device *netdev, bool enable)
 {
 	/* This is empty on purpose. The per_channel_stats feature affects the
 	 * "ethtool -S" output only. Allow to toggle it unconditionally. */
 	return 0;
-}
-
-static int set_pflag_tx_mpwqe_common(struct net_device *netdev, u32 flag, bool enable)
-{
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5_core_dev *mdev = priv->mdev;
-	struct mlx5e_channels new_channels = {};
-	int err;
-
-	if (enable && !MLX5_CAP_ETH(mdev, enhanced_multi_pkt_send_wqe))
-		return -EOPNOTSUPP;
-
-	new_channels.params = priv->channels.params;
-
-	MLX5E_SET_PFLAG(&new_channels.params, flag, enable);
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
-		return 0;
-	}
-
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
-	return err;
 }
 
 static int set_pflag_xdp_tx_mpwqe(struct net_device *netdev, bool enable)
@@ -2084,13 +2131,48 @@ static int set_pflag_skb_tx_mpwqe(struct net_device *netdev, bool enable)
 	return set_pflag_tx_mpwqe_common(netdev, MLX5E_PFLAG_SKB_TX_MPWQE, enable);
 }
 
+static int set_pflag_tx_port_ts(struct net_device *netdev, bool enable)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	struct mlx5e_params new_params;
+	int err;
+
+	if (!MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
+		return -EOPNOTSUPP;
+
+	/* Don't allow changing the PTP state if HTB offload is active, because
+	 * the numeration of the QoS SQs will change, while per-queue qdiscs are
+	 * attached.
+	 */
+	if (priv->htb.maj_id) {
+		netdev_err(priv->netdev, "%s: HTB offload is active, cannot change the PTP state\n",
+			   __func__);
+		return -EINVAL;
+	}
+
+	new_params = priv->channels.params;
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_TX_PORT_TS, enable);
+	/* No need to verify SQ stop room as
+	 * ptpsq.txqsq.stop_room <= generic_sq->stop_room, and both
+	 * has the same log_sq_size.
+	 */
+
+	err = mlx5e_safe_switch_params(priv, &new_params,
+				       mlx5e_num_channels_changed_ctx, NULL, true);
+	if (!err)
+		priv->tx_ptp_opened = true;
+
+	return err;
+}
+
 static int set_pflag_dropless_rq(struct net_device *netdev,
 				 bool new_val)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	bool curr_val = MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_DROPLESS_RQ);
 	struct mlx5_core_dev *mdev = priv->mdev;
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	int err = 0;
 
 	if (!mlx5e_dropless_rq_supported(mdev))
@@ -2099,20 +2181,20 @@ static int set_pflag_dropless_rq(struct net_device *netdev,
 	if (curr_val == new_val)
 		return 0;
 
-	new_channels.params = priv->channels.params;
+	new_params = priv->channels.params;
 
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_DROPLESS_RQ, new_val);
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_DROPLESS_RQ, new_val);
 
-	mlx5e_set_rq_type(priv->mdev, &new_channels.params);
-	mlx5e_init_rq_type_params(priv->mdev, &new_channels.params);
+	mlx5e_set_rq_type(priv->mdev, &new_params);
+	mlx5e_init_rq_type_params(priv->mdev, &new_params);
 
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
+		priv->channels.params = new_params;
 		return 0;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
 
 	return err;
 }
@@ -2122,21 +2204,21 @@ static int set_pflag_tx_xdp_hw_checksum(struct net_device *netdev, bool new_val)
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	bool curr_val = MLX5E_GET_PFLAG(&priv->channels.params,
 					MLX5E_PFLAG_TX_XDP_CSUM);
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	int err = 0;
 
 	if (curr_val == new_val)
 		return 0;
 
-	new_channels.params = priv->channels.params;
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_TX_XDP_CSUM, new_val);
+	new_params = priv->channels.params;
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_TX_XDP_CSUM, new_val);
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
+		priv->channels.params = new_params;
 		return 0;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
 	mlx5e_dbg(DRV, priv, "MLX5E: tx_xdp_hw_checksum was turned %s err=%d\n",
 		  MLX5E_GET_PFLAG(&priv->channels.params,
 				  MLX5E_PFLAG_TX_XDP_CSUM) ? "ON" : "OFF",
@@ -2148,56 +2230,19 @@ static int set_pflag_tx_xdp_hw_checksum(struct net_device *netdev, bool new_val)
 static int set_pflag_skb_xmit_more(struct net_device *netdev, bool enable)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5e_channels new_channels = {};
+	struct mlx5e_params new_params;
 	int err;
 
-	new_channels.params = priv->channels.params;
+	new_params = priv->channels.params;
 
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_SKB_XMIT_MORE, enable);
+	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_SKB_XMIT_MORE, enable);
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_channels.params;
+		priv->channels.params = new_params;
 		return 0;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
-	return err;
-}
-
-static int set_pflag_tx_port_ts(struct net_device *netdev, bool enable)
-{
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5_core_dev *mdev = priv->mdev;
-	struct mlx5e_channels new_channels = {};
-	int err;
-
-	if (!MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
-		return -EOPNOTSUPP;
-
-	new_channels.params = priv->channels.params;
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_TX_PORT_TS, enable);
-	/* No need to verify SQ stop room as
-	 * ptpsq.txqsq.stop_room <= generic_sq->stop_room, and both
-	 * has the same log_sq_size.
-	 */
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		struct mlx5e_params old_params;
-
-		old_params = priv->channels.params;
-		priv->channels.params = new_channels.params;
-		err = mlx5e_num_channels_changed(priv);
-		if (err)
-			priv->channels.params = old_params;
-		goto out;
-	}
-
-	err = mlx5e_safe_switch_channels(priv, &new_channels,
-					 mlx5e_num_channels_changed_ctx, NULL);
-out:
-	if (!err)
-		priv->port_ptp_opened = true;
-
+	err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
 	return err;
 }
 
@@ -2210,11 +2255,11 @@ static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS] = {
 	{ "rx_no_csum_complete", set_pflag_rx_no_csum_complete },
 	{ "xdp_tx_mpwqe",        set_pflag_xdp_tx_mpwqe },
 	{ "skb_tx_mpwqe",        set_pflag_skb_tx_mpwqe },
+	{ "tx_port_ts",          set_pflag_tx_port_ts },
 	{ "dropless_rq",	 set_pflag_dropless_rq},
 	{ "per_channel_stats",	 set_pflag_per_channel_stats},
 	{ "tx_xdp_hw_checksum",  set_pflag_tx_xdp_hw_checksum},
 	{ "skb_xmit_more",       set_pflag_skb_xmit_more},
-	{ "tx_port_ts",          set_pflag_tx_port_ts },
 };
 
 static int mlx5e_handle_pflag(struct net_device *netdev,
@@ -2462,6 +2507,39 @@ mlx5e_get_link_ext_state(struct net_device *dev,
 	return -ENODATA;
 }
 
+static void mlx5e_get_eth_phy_stats(struct net_device *netdev,
+				    struct ethtool_eth_phy_stats *phy_stats)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+
+	mlx5e_stats_eth_phy_get(priv, phy_stats);
+}
+
+static void mlx5e_get_eth_mac_stats(struct net_device *netdev,
+				    struct ethtool_eth_mac_stats *mac_stats)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+
+	mlx5e_stats_eth_mac_get(priv, mac_stats);
+}
+
+static void mlx5e_get_eth_ctrl_stats(struct net_device *netdev,
+				     struct ethtool_eth_ctrl_stats *ctrl_stats)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+
+	mlx5e_stats_eth_ctrl_get(priv, ctrl_stats);
+}
+
+static void mlx5e_get_rmon_stats(struct net_device *netdev,
+				 struct ethtool_rmon_stats *rmon_stats,
+				 const struct ethtool_rmon_hist_range **ranges)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+
+	mlx5e_stats_rmon_get(priv, rmon_stats, ranges);
+}
+
 const struct ethtool_ops mlx5e_ethtool_ops = {
 	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
 				     ETHTOOL_COALESCE_MAX_FRAMES |
@@ -2488,6 +2566,7 @@ const struct ethtool_ops mlx5e_ethtool_ops = {
 	.set_rxnfc         = mlx5e_set_rxnfc,
 	.get_tunable       = mlx5e_get_tunable,
 	.set_tunable       = mlx5e_set_tunable,
+	.get_pause_stats   = mlx5e_get_pause_stats,
 	.get_pauseparam    = mlx5e_get_pauseparam,
 	.set_pauseparam    = mlx5e_set_pauseparam,
 	.get_ts_info       = mlx5e_get_ts_info,
@@ -2496,16 +2575,22 @@ const struct ethtool_ops mlx5e_ethtool_ops = {
 	.set_wol	   = mlx5e_set_wol,
 	.get_module_info   = mlx5e_get_module_info,
 	.get_module_eeprom = mlx5e_get_module_eeprom,
+	.get_module_eeprom_by_page = mlx5e_get_module_eeprom_by_page,
 	.flash_device      = mlx5e_flash_device,
 	.get_priv_flags    = mlx5e_get_priv_flags,
 	.set_priv_flags    = mlx5e_set_priv_flags,
 	.self_test         = mlx5e_self_test,
 	.get_msglevel      = mlx5e_get_msglevel,
 	.set_msglevel      = mlx5e_set_msglevel,
+	.get_fec_stats     = mlx5e_get_fec_stats,
 	.set_priv_flags    = mlx5e_set_priv_flags,
 	.get_dump_flag     = mlx5e_get_dump_flag,
 	.get_dump_data     = mlx5e_get_dump_data,
 	.set_dump          = mlx5e_set_dump,
 	.get_fecparam      = mlx5e_get_fecparam,
 	.set_fecparam      = mlx5e_set_fecparam,
+	.get_eth_phy_stats = mlx5e_get_eth_phy_stats,
+	.get_eth_mac_stats = mlx5e_get_eth_mac_stats,
+	.get_eth_ctrl_stats = mlx5e_get_eth_ctrl_stats,
+	.get_rmon_stats    = mlx5e_get_rmon_stats,
 };

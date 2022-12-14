@@ -145,7 +145,7 @@ static void mlx5e_rep_neigh_update(struct work_struct *work)
 	memcpy(ha, n->ha, ETH_ALEN);
 	nud_state = n->nud_state;
 	dead = n->dead;
-	same_dev = READ_ONCE(nhe->dev) == n->dev;
+	same_dev = READ_ONCE(nhe->neigh_dev) == n->dev;
 	read_unlock_bh(&n->lock);
 
 	neigh_connected = (nud_state & NUD_VALID) && !dead;
@@ -247,7 +247,7 @@ static int mlx5e_rep_netevent_event(struct notifier_block *nb,
 		rcu_read_lock();
 		list_for_each_entry_rcu(nhe, &neigh_update->neigh_list,
 					neigh_list) {
-			if (p->dev == READ_ONCE(nhe->dev)) {
+			if (p->dev == READ_ONCE(nhe->neigh_dev)) {
 				found = true;
 				break;
 			}
@@ -385,7 +385,7 @@ int mlx5e_rep_neigh_entry_create(struct mlx5e_priv *priv,
 	spin_lock_init(&(*nhe)->encap_list_lock);
 	INIT_LIST_HEAD(&(*nhe)->encap_list);
 	refcount_set(&(*nhe)->refcnt, 1);
-	(*nhe)->dev = neigh_dev;
+	WRITE_ONCE((*nhe)->neigh_dev, neigh_dev);
 
 	err = mlx5e_rep_neigh_entry_insert(priv, *nhe);
 	if (err)

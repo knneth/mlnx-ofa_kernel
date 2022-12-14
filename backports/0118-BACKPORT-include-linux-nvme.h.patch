@@ -1,0 +1,27 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/nvme.h
+
+Change-Id: Ie4be3c77d2baef1725ba28fdb8f56a8a6852a133
+---
+ include/linux/nvme.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/include/linux/nvme.h
++++ b/include/linux/nvme.h
+@@ -4,6 +4,11 @@
+  * Copyright (c) 2011-2014, Intel Corporation.
+  */
+ 
++/* build vs. Non-MLNX_OFED .h */
++#if 0
++#include_next <linux/nvme.h>
++#else
++
+ #ifndef _LINUX_NVME_H
+ #define _LINUX_NVME_H
+ 
+@@ -1632,3 +1637,4 @@ struct nvme_completion {
+ #define NVME_TERTIARY(ver)	((ver) & 0xff)
+ 
+ #endif /* _LINUX_NVME_H */
++#endif /* build vs. Non-MLNX_OFED .h */

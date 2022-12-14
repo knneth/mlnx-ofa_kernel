@@ -37,7 +37,7 @@ CC  ?= $(CROSS_COMPILE)gcc
 CPP ?= $(CC) -E
 
 ifneq ($(CC),cc)
-override WITH_MAKE_PARAMS += CC=$(CC)
+override WITH_MAKE_PARAMS += CC="$(CC)"
 endif
 
 # try-run
@@ -80,32 +80,9 @@ MLNX_CFLAGS += $(shell if [ $(CPP_VERS) -ge 4004004 ]; then \
 endif #(,$(filter $(ARCH), i386 x86_64))
 export MLNX_CFLAGS
 
-# GCC earlier than 4.6.0 will build modules which require 'mcount',
-# and this symbol will not be available in the kernel if the kernel was
-# compiled with GCC 4.6.0 and above.
-# therefore, to prevent unknown symbol issues we disable function tracing.
-#
-compile_h=$(shell /bin/ls -1 $(KSRC_OBJ)/include/*/compile.h 2> /dev/null | head -1)
-ifneq ($(compile_h),)
-KERNEL_GCC_MAJOR := $(shell grep LINUX_COMPILER $(compile_h) | sed -r -e 's/.*gcc version ([0-9\.\-]*) .*/\1/g' | cut -d'.' -f1)
-KERNEL_GCC_MINOR := $(shell grep LINUX_COMPILER $(compile_h) | sed -r -e 's/.*gcc version ([0-9\.\-]*) .*/\1/g' | cut -d'.' -f2)
-KERNEL_GCC_PATCH := $(shell grep LINUX_COMPILER $(compile_h) | sed -r -e 's/.*gcc version ([0-9\.\-]*) .*/\1/g' | cut -d'.' -f3)
-KERNEL_GCC_VER  := $(shell expr 0$(KERNEL_GCC_MAJOR) \* 1000000 + 0$(KERNEL_GCC_MINOR) \* 1000 + 0$(KERNEL_GCC_PATCH))
-ifneq ($(shell if [ $(CPP_VERS) -lt 4006000 ] && [ $(KERNEL_GCC_VER) -ge 4006000 ]; then \
-					echo "YES"; else echo ""; fi),)
-$(info Warning: The kernel was compiled with GCC newer than 4.6.0, while the current GCC is older than 4.6.0, Disabling function tracing to prevent unknown symbol issues...)
-override WITH_MAKE_PARAMS += CONFIG_FUNCTION_TRACER= CONFIG_HAVE_FENTRY=
-endif
-ifneq ($(shell if [ $(CPP_VERS) -ge 4006000 ] && [ $(KERNEL_GCC_VER) -lt 4006000 ]; then \
-					echo "YES"; else echo ""; fi),)
-$(info Warning: The kernel was compiled with GCC older than 4.6.0, while the current GCC is newer than 4.6.0, Disabling function tracing to prevent unknown symbol issues...)
-override WITH_MAKE_PARAMS += CONFIG_FUNCTION_TRACER= CONFIG_HAVE_FENTRY=
-endif
-endif
-
 ifneq ($(shell if (echo $(KVERSION) | grep -qE 'uek'); then \
 					echo "YES"; else echo ""; fi),)
-override WITH_MAKE_PARAMS += ctf-dir=$(CWD)/.ctf
+override WITH_MAKE_PARAMS += ctf-dir="$(CWD)/.ctf"
 CFLAGS += -DMLX_DISABLE_TRACEPOINTS
 endif
 
@@ -263,6 +240,7 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_MLX5_MPFS=$(CONFIG_MLX5_MPFS) \
 		CONFIG_MLX5_ESWITCH=$(CONFIG_MLX5_ESWITCH) \
 		CONFIG_MLX5_CLS_ACT=$(CONFIG_MLX5_CLS_ACT) \
+		CONFIG_MLX5_BRIDGE=$(CONFIG_MLX5_BRIDGE) \
 		CONFIG_MLX5_TC_CT=$(CONFIG_MLX5_TC_CT) \
 		CONFIG_MLX5_SF=$(CONFIG_MLX5_SF) \
 		CONFIG_MLX5_SF_MANAGER=$(CONFIG_MLX5_SF_MANAGER) \
@@ -282,6 +260,7 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_ENABLE_MLX5_FS_DEBUGFS=$(CONFIG_ENABLE_MLX5_FS_DEBUGFS) \
 		CONFIG_MLXDEVM=$(CONFIG_MLXDEVM) \
 		CONFIG_MLX5_SF_CFG=$(CONFIG_MLX5_SF_CFG) \
+		CONFIG_MLX5_TC_SAMPLE=$(CONFIG_MLX5_TC_SAMPLE) \
 		LINUXINCLUDE='$(LINUXINCLUDE)' \
 		modules
 

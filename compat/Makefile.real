@@ -51,6 +51,7 @@ mlx_compat-y += xarray.o
 mlx_compat-y += rdma_dim.o
 mlx_compat-y += dim.o
 mlx_compat-y += net_dim.o
+mlx_compat-y += file.o
 ifdef CONFIG_MLX5_CLS_ACT
 mlx_compat-y += flow_offload.o
 mlx_compat-y += cls_api.o

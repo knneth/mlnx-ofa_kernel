@@ -421,7 +421,8 @@ load_module()
         return 0
     fi
 
-    if ! ( echo $filename | grep -q "updates/dkms/${module}.ko" ) && [ $FORCE -eq 0 ]; then
+    if ! (( echo $filename | grep -q "updates/dkms/${module}.ko" ) ||
+	  ( echo `dpkg -S $filename | cut -d: -f1` | grep  -q "mlnx-ofed-kernel")) && [ $FORCE -eq 0 ]; then
         echo_failure "Module $module does not belong to MLNX_OFED, skipping..."
         log_msg "ERROR: Module $module does not belong to MLNX_OFED, skipping..."
         load_module_RC=3

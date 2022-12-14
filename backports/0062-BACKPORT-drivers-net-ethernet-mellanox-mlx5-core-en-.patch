@@ -1,60 +1,74 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
-Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
+Change-Id: Ib5545ac041df4c425258f4410b7a109a542ec7ea
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 8 ++++++++
- 1 file changed, 8 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 32 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-@@ -32,7 +32,9 @@ struct mlx5e_tc_table {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -37,7 +37,7 @@ ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns
+ enum mlx5e_icosq_wqe_type {
+ 	MLX5E_ICOSQ_WQE_NOP,
+ 	MLX5E_ICOSQ_WQE_UMR_RX,
+-#ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_KTLS_RX_SUPPORT
+ 	MLX5E_ICOSQ_WQE_UMR_TLS,
+ 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
+ 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
+@@ -69,8 +69,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
+ void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
  
- 	struct rhashtable               ht;
- 
-+#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
- 	struct mod_hdr_tbl mod_hdr;
+ /* TX */
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
++
++#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
++#else
++		       void *accel_priv);
 +#endif
- 	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
- 	DECLARE_HASHTABLE(hairpin_tbl, 8);
- 	struct kobject *hp_config;
-@@ -164,6 +166,7 @@ static inline int mlx5e_ethtool_get_rxnf
- #endif /* CONFIG_MLX5_EN_RXNFC */
- 
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- #define ARFS_HASH_SHIFT BITS_PER_BYTE
- #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
- 
-@@ -202,6 +205,7 @@ static inline void mlx5e_arfs_destroy_ta
- static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
- static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
- #endif
++#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb);
++#endif
++
+ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev);
+ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget);
+ void mlx5e_free_txqsq_descs(struct mlx5e_txqsq *sq);
+@@ -224,7 +243,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+ {
+ 	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
 +#endif
  
- #ifdef CONFIG_MLX5_EN_TLS
- struct mlx5e_accel_fs_tcp;
-@@ -220,8 +224,10 @@ struct mlx5e_flow_steering {
- 	struct mlx5_ttc_table           *ttc;
- 	struct mlx5_ttc_table           *inner_ttc;
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- 	struct mlx5e_arfs_tables       *arfs;
- #endif
-+#endif
- #ifdef CONFIG_MLX5_EN_TLS
- 	struct mlx5e_accel_fs_tcp      *accel_tcp;
- #endif
-@@ -241,10 +247,12 @@ void mlx5e_disable_cvlan_filter(struct m
- int mlx5e_create_flow_steering(struct mlx5e_priv *priv);
- void mlx5e_destroy_flow_steering(struct mlx5e_priv *priv);
+ 	*wq->db = cpu_to_be32(pc);
  
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- int mlx5e_add_vlan_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
- void mlx5e_remove_vlan_trap(struct mlx5e_priv *priv);
- int mlx5e_add_mac_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
- void mlx5e_remove_mac_trap(struct mlx5e_priv *priv);
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
- 
- #endif /* __MLX5E_FLOW_STEER_H__ */
- 
+@@ -416,8 +439,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+ 	case IPPROTO_UDP:
+ 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 		fallthrough;
++
+ 	case IPPROTO_TCP:
+-		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#ifdef HAVE_SKB_INNER_TRANSPORT_OFFSET
++       	eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#else
++		eseg->swp_inner_l4_offset = (skb_inner_transport_header(skb)  - skb->data) / 2;
++#endif /*HAVE_SKB_INNER_TRANSPORT_OFFSET*/
+ 		break;
+ 	}
+ }

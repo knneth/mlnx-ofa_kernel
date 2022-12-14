@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+
+Change-Id: I4c53b09d570fa0a66cd4823d7836c5a44c291bdd
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+@@ -119,8 +119,10 @@ static inline bool mlx5e_accel_tx_begin(
+ 					struct sk_buff *skb,
+ 					struct mlx5e_accel_tx_state *state)
+ {
++#ifdef HAVE_NETIF_F_GSO_UDP_L4
+ 	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
+ 		mlx5e_udp_gso_handle_tx_skb(skb);
++#endif
+ 
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	/* May send SKBs and WQEs. */

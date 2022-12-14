@@ -760,8 +760,9 @@ static void ib_nl_set_path_rec_attrs(struct sk_buff *skb,
 
 	/* Construct the family header first */
 	header = skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
-	memcpy(header->device_name, dev_name(&query->port->agent->device->dev),
-	       LS_DEVICE_NAME_MAX);
+	strscpy_pad(header->device_name,
+		    dev_name(&query->port->agent->device->dev),
+		    LS_DEVICE_NAME_MAX);
 	header->port_num = query->port->port_num;
 
 	if ((comp_mask & IB_SA_PATH_REC_REVERSIBLE) &&
@@ -1172,7 +1173,6 @@ EXPORT_SYMBOL(ib_sa_unregister_client);
 void ib_sa_cancel_query(int id, struct ib_sa_query *query)
 {
 	unsigned long flags;
-	struct ib_mad_agent *agent;
 	struct ib_mad_send_buf *mad_buf;
 
 	xa_lock_irqsave(&queries, flags);
@@ -1180,7 +1180,6 @@ void ib_sa_cancel_query(int id, struct ib_sa_query *query)
 		xa_unlock_irqrestore(&queries, flags);
 		return;
 	}
-	agent = query->port->agent;
 	mad_buf = query->mad_buf;
 	xa_unlock_irqrestore(&queries, flags);
 
@@ -1190,7 +1189,7 @@ void ib_sa_cancel_query(int id, struct ib_sa_query *query)
 	 * sent to the MAD layer and has to be cancelled from there.
 	 */
 	if (!ib_nl_cancel_request(query))
-		ib_cancel_mad(agent, mad_buf);
+		ib_cancel_mad(mad_buf);
 }
 EXPORT_SYMBOL(ib_sa_cancel_query);
 
@@ -1435,8 +1434,9 @@ enum opa_pr_supported {
 	PR_IB_SUPPORTED
 };
 
-/**
- * Check if current PR query can be an OPA query.
+/*
+ * opa_pr_query_possible - Check if current PR query can be an OPA query.
+ *
  * Retuns PR_NOT_SUPPORTED if a path record query is not
  * possible, PR_OPA_SUPPORTED if an OPA path record query
  * is possible and PR_IB_SUPPORTED if an IB path record
@@ -1952,30 +1952,6 @@ err1:
 	return ret;
 }
 EXPORT_SYMBOL(ib_sa_guid_info_rec_query);
-
-bool ib_sa_sendonly_fullmem_support(struct ib_sa_client *client,
-				    struct ib_device *device,
-				    u32 port_num)
-{
-	struct ib_sa_device *sa_dev = ib_get_client_data(device, &sa_client);
-	struct ib_sa_port *port;
-	bool ret = false;
-	unsigned long flags;
-
-	if (!sa_dev)
-		return ret;
-
-	port  = &sa_dev->port[port_num - sa_dev->start_port];
-
-	spin_lock_irqsave(&port->classport_lock, flags);
-	if ((port->classport_info.valid) &&
-	    (port->classport_info.data.type == RDMA_CLASS_PORT_INFO_IB))
-		ret = ib_get_cpi_capmask2(&port->classport_info.data.ib)
-			& IB_SA_CAP_MASK2_SENDONLY_FULL_MEM_SUPPORT;
-	spin_unlock_irqrestore(&port->classport_lock, flags);
-	return ret;
-}
-EXPORT_SYMBOL(ib_sa_sendonly_fullmem_support);
 
 struct ib_classport_info_context {
 	struct completion	done;

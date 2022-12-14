@@ -1,0 +1,29 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma.c
+
+Change-Id: I71b61d14f7402f680b8a0d989d4ac51dcc12f48e
+---
+ net/sunrpc/xprtrdma/svc_rdma.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/net/sunrpc/xprtrdma/svc_rdma.c
++++ b/net/sunrpc/xprtrdma/svc_rdma.c
+@@ -276,6 +276,9 @@ out_err:
+ void svc_rdma_cleanup(void)
+ {
+ 	dprintk("SVCRDMA Module Removed, deregister RPC RDMA transport\n");
++#if defined(CONFIG_SUNRPC_BACKCHANNEL) && defined(HAVE_RPC_XPRT_OPS_BC_UP)
++	svc_unreg_xprt_class(&svc_rdma_bc_class);
++#endif
+ 	svc_unreg_xprt_class(&svc_rdma_class);
+ 	svc_rdma_proc_cleanup();
+ }
+@@ -296,5 +299,8 @@ int svc_rdma_init(void)
+ 
+ 	/* Register RDMA with the SVC transport switch */
+ 	svc_reg_xprt_class(&svc_rdma_class);
++#if defined(CONFIG_SUNRPC_BACKCHANNEL) && defined(HAVE_RPC_XPRT_OPS_BC_UP)
++	svc_reg_xprt_class(&svc_rdma_bc_class);
++#endif
+ 	return 0;
+ }

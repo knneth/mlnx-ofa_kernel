@@ -140,10 +140,11 @@ int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 {
 	struct mlx5_flow_table *ft = esw->offloads.pet_vport_action.push_pet_hdr.ft;
 	int mlnx_ether = htons(MLX5_CAP_GEN(esw->dev, mlnx_tag_ethertype));
+	struct mlx5_pkt_reformat_params reformat_params;
 	struct mlx5_flow_destination dest = {};
 	struct mlx5_flow_act flow_act = {};
 	struct mlx5_flow_handle *flow_rule;
-	struct mlx5_flow_spec spec = {};
+	struct mlx5_flow_spec *spec;
 	struct mlx5_flow_group *fg;
 	int reformat_type;
 	char *reformat_buf;
@@ -154,6 +155,12 @@ int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 	reformat_buf = kzalloc(buf_size, GFP_KERNEL);
 	if (!reformat_buf)
 		return -ENOMEM;
+
+	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
+	if (!spec) {
+		err = -ENOMEM;
+		goto err_alloc;
+	}
 
 	err = mlx5_pet_create_fg(esw, ft, &fg);
 	if (err) {
@@ -170,9 +177,13 @@ int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 	reformat_type = MLX5_REFORMAT_TYPE_INSERT_HDR;
 
 	memcpy(reformat_buf, &mlnx_ether, 2);
-	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(esw->dev, reformat_type,
-							   MLX5_REFORMAT_CONTEXT_ANCHOR_MAC_START,
-							   buf_offset, buf_size, reformat_buf,
+
+	reformat_params.type = reformat_type;
+	reformat_params.param_0 = MLX5_REFORMAT_CONTEXT_ANCHOR_MAC_START;
+	reformat_params.param_1 = buf_offset;
+	reformat_params.size = buf_size;
+	reformat_params.data = reformat_buf;
+	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(esw->dev, &reformat_params,
 							   MLX5_FLOW_NAMESPACE_KERNEL);
 	if (IS_ERR(flow_act.pkt_reformat)) {
 		err = PTR_ERR(flow_act.pkt_reformat);
@@ -180,7 +191,7 @@ int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 		goto err_pkt_reformat;
 	}
 
-	flow_rule = mlx5_add_flow_rules(ft, &spec, &flow_act, &dest, 1);
+	flow_rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 	if (IS_ERR(flow_rule)) {
 		err = PTR_ERR(flow_rule);
 		mlx5_core_err(esw->dev, "Failed to add flow rule for insert header, err %d\n", err);
@@ -190,6 +201,7 @@ int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 	esw->offloads.pet_vport_action.push_pet_hdr.fg = fg;
 	esw->offloads.pet_vport_action.push_pet_hdr.rule = flow_rule;
 	esw->offloads.pet_vport_action.push_pet_hdr.pkt_reformat = flow_act.pkt_reformat;
+	kvfree(spec);
 	kvfree(reformat_buf);
 	return 0;
 
@@ -198,6 +210,8 @@ err_flow_rule:
 err_pkt_reformat:
 	mlx5_pet_destroy_fg(esw, fg);
 err_create_group:
+	kvfree(spec);
+err_alloc:
 	kvfree(reformat_buf);
 	return err;
 }
@@ -240,9 +254,13 @@ int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw, struct mlx5_flow_table *de
 	struct mlx5_flow_act flow_act = {};
 	struct mlx5_flow_handle *flow_rule;
 	struct mlx5_modify_hdr *modify_hdr;
-	struct mlx5_flow_spec spec = {};
+	struct mlx5_flow_spec *spec;
 	struct mlx5_flow_group *fg;
 	int err;
+
+	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
+	if (!spec)
+		return -ENOMEM;
 
 	err = mlx5_pet_create_fg(esw, ft, &fg);
 	if (err) {
@@ -272,7 +290,7 @@ int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw, struct mlx5_flow_table *de
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_MOD_HDR | MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	flow_act.modify_hdr = modify_hdr;
 
-	flow_rule = mlx5_add_flow_rules(ft, &spec, &flow_act, &dest, 1);
+	flow_rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 	if (IS_ERR(flow_rule)) {
 		err = PTR_ERR(flow_rule);
 		mlx5_core_warn(esw->dev, "add rule failed with err %d\n", err);
@@ -283,7 +301,7 @@ int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw, struct mlx5_flow_table *de
 	esw->offloads.pet_vport_action.copy_data_to_pet_hdr.fg = fg;
 	esw->offloads.pet_vport_action.copy_data_to_pet_hdr.hdr = modify_hdr;
 	esw->offloads.pet_vport_action.copy_data_to_pet_hdr.rule = flow_rule;
-
+	kvfree(spec);
 	return 0;
 
 add_flow_rule_fail:
@@ -291,6 +309,7 @@ add_flow_rule_fail:
 header_alloc_fail:
 	mlx5_pet_destroy_fg(esw, fg);
 err_create_group:
+	kvfree(spec);
 	return err;
 }
 
@@ -365,7 +384,7 @@ int mlx5_esw_offloads_pet_insert_set(struct mlx5_eswitch *esw, bool enable)
 {
 	int err = 0;
 
-	mutex_lock(&esw->mode_lock);
+	down_write(&esw->mode_lock);
 	if (esw->mode >= MLX5_ESWITCH_OFFLOADS) {
 		err = -EOPNOTSUPP;
 		goto done;
@@ -380,7 +399,8 @@ int mlx5_esw_offloads_pet_insert_set(struct mlx5_eswitch *esw, bool enable)
 		esw->flags &= ~MLX5_ESWITCH_PET_INSERT;
 
 done:
-	mutex_unlock(&esw->mode_lock);
+	up_write(&esw->mode_lock);
 	return err;
 }
 #endif /* CONFIG_MLX5_ESWITCH */
+

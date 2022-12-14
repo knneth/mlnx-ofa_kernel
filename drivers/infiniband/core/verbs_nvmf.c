@@ -54,7 +54,7 @@ struct ib_mr *ib_get_dma_mr(struct ib_pd *pd, int mr_access_flags)
 	struct ib_mr *mr;
 	int err;
 
-	err = ib_check_mr_access(mr_access_flags);
+	err = ib_check_mr_access(pd->device, mr_access_flags);
 	if (err)
 		return ERR_PTR(err);
 

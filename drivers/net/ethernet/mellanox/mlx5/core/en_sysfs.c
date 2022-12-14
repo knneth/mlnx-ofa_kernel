@@ -33,9 +33,9 @@
 #include <linux/device.h>
 #include <linux/netdevice.h>
 #include "en.h"
-#include "en_ecn.h"
 #include "en_tc.h"
 #include "eswitch.h"
+#include "en_ecn.h"
 #ifdef CONFIG_MLX5_CORE_EN_DCB
 #include "en/port_buffer.h"
 #endif
@@ -1335,6 +1335,82 @@ static ssize_t prio_hp_num_show(struct device *device, struct device_attribute *
 	return result;
 }
 
+static ssize_t hp_oob_cnt_mode_store(struct device *device, struct device_attribute *attr,
+				     const char *buf, size_t count)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	struct mlx5e_tc_table *tc = &priv->fs.tc;
+	struct net_device *peer_dev;
+	char ifname[IFNAMSIZ];
+	char mode[5];
+	int err;
+
+	err = sscanf(buf, "%s %15s", mode, ifname);
+	if (err != 2)
+		return -EINVAL;
+
+	if (strcmp(mode, "on") && strcmp(mode, "off"))
+		return -EINVAL;
+
+	rtnl_lock();
+	mutex_lock(&priv->state_lock);
+
+	peer_dev = __dev_get_by_name(dev_net(priv->netdev), ifname);
+	if (!peer_dev)
+		return -EINVAL;
+
+	if (!strcmp(mode, "on") && !tc->hp_oob) {
+		err = mlx5e_hairpin_oob_cnt_enable(priv, peer_dev);
+		if (err)
+			goto err_config;
+	} else if (!strcmp(mode, "off") && tc->hp_oob) {
+		err = mlx5e_hairpin_oob_cnt_disable(priv);
+		if (err)
+			goto err_config;
+	} else {
+		err = -EINVAL;
+		goto err_config;
+	}
+
+	mutex_unlock(&priv->state_lock);
+	rtnl_unlock();
+
+	return count;
+
+err_config:
+	mutex_unlock(&priv->state_lock);
+	rtnl_unlock();
+	return err;
+}
+
+static ssize_t hp_oob_cnt_mode_show(struct device *device, struct device_attribute *attr,
+				    char *buf)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	struct mlx5e_tc_table *tc = &priv->fs.tc;
+	ssize_t result;
+
+	mutex_lock(&priv->state_lock);
+	result = sprintf(buf, "%s\n", tc->hp_oob ? "on" : "off");
+	mutex_unlock(&priv->state_lock);
+
+	return result;
+}
+
+static ssize_t hp_oob_cnt_show(struct device *device, struct device_attribute *attr,
+			       char *buf)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	ssize_t result;
+	u64 oob_cnt;
+
+	mutex_lock(&priv->state_lock);
+	mlx5e_hairpin_oob_cnt_get(priv, &oob_cnt);
+	result = sprintf(buf, "%llu\n", oob_cnt);
+	mutex_unlock(&priv->state_lock);
+
+	return result;
+}
 
 /* Limiting max packet pacing burst size configuration using
  * a typical 1514 Byte MTU size.
@@ -1390,10 +1466,15 @@ static DEVICE_ATTR(num_prio_hp, S_IRUGO | S_IWUSR,
 		   prio_hp_num_show, prio_hp_num_store);
 static DEVICE_ATTR(hp_pp_burst_size, S_IRUGO | S_IWUSR,
 		   pp_burst_size_show, pp_burst_size_store);
+static DEVICE_ATTR(hp_oob_cnt_mode, S_IRUGO | S_IWUSR,
+		   hp_oob_cnt_mode_show, hp_oob_cnt_mode_store);
+static DEVICE_ATTR_RO(hp_oob_cnt);
 
 static struct device_attribute *mlx5_class_attributes[] = {
 	&dev_attr_num_prio_hp,
 	&dev_attr_hp_pp_burst_size,
+	&dev_attr_hp_oob_cnt_mode,
+	&dev_attr_hp_oob_cnt,
 };
 
 int hp_sysfs_init(struct mlx5e_priv *priv)

@@ -9,6 +9,7 @@ struct mlx5_flow_table *
 esw_acl_table_create(struct mlx5_eswitch *esw, struct mlx5_vport *vport, int ns,
 		     int prio, int size)
 {
+	struct mlx5_flow_table_attr ft_attr = {};
 	struct mlx5_core_dev *dev = esw->dev;
 	struct mlx5_flow_namespace *root_ns;
 	struct mlx5_flow_table *acl;
@@ -34,7 +35,10 @@ esw_acl_table_create(struct mlx5_eswitch *esw, struct mlx5_vport *vport, int ns,
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
-	acl = mlx5_create_vport_flow_table(root_ns, prio, size, 0, vport_num);
+	ft_attr.max_fte = size;
+	ft_attr.prio = prio;
+	ft_attr.flags = MLX5_FLOW_TABLE_OTHER_VPORT;
+	acl = mlx5_create_vport_flow_table(root_ns, &ft_attr, vport_num);
 	if (IS_ERR(acl)) {
 		err = PTR_ERR(acl);
 		esw_warn(dev, "vport[%d] create %s ACL table, err(%d)\n", vport_num,

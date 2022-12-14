@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 /* Copyright (c) 2020, Mellanox Technologies inc.  All rights reserved. */
 
-#include "en_rep.h"
 #include "en/devlink.h"
 #include "eswitch.h"
 
@@ -14,7 +13,6 @@ mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_i
 	ppid->id_len = sizeof(parent_id);
 	memcpy(ppid->id, &parent_id, sizeof(parent_id));
 }
- 
 
 int mlx5e_devlink_port_register(struct mlx5e_priv *priv)
 {
@@ -57,15 +55,20 @@ void mlx5e_devlink_port_unregister(struct mlx5e_priv *priv)
 {
 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
 
-	devlink_port_unregister(dl_port);
+	if (dl_port->registered)
+		devlink_port_unregister(dl_port);
 }
 
 struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct devlink_port *port;
 
 	if (!netif_device_present(dev))
 		return NULL;
 
-	return mlx5e_devlink_get_dl_port(priv);
+	port = mlx5e_devlink_get_dl_port(priv);
+	if (port->registered)
+		return port;
+	return NULL;
 }

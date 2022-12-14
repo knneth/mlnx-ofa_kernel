@@ -63,8 +63,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.4}
-%{!?_release: %global _release OFED.5.4.3.6.8.1}
+%{!?_version: %global _version 5.5}
+%{!?_release: %global _release OFED.5.5.1.0.3.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -106,12 +106,12 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.6.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.5-1.0.3.tgz
 
 
 # build KMP rpms?
 %if "%{KMP}" == "1"
-%global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
+%global kernel_release() $(make -C %{1} kernelrelease | grep -v make | tail -1)
 # prep file list for kmp rpm
 %(cat > %{_builddir}/kmp.files << EOF
 %defattr(644,root,root,755)
@@ -154,13 +154,17 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.6.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.5-1.0.3.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
 Version: %{_version}
 # build KMP rpms?
+%if "%{KMP}" == "1"
 Release: %{_release}%{?_dist}
+%else
+Release: %{_release}.kver.%{krelver}
+%endif
 Obsoletes: kernel-ib-devel
 Obsoletes: kernel-ib
 Obsoletes: mlnx-en
@@ -176,11 +180,23 @@ Obsoletes: mlnx-en-sources
 Requires: coreutils
 Requires: %{utils_pname}
 Requires: pciutils
+Requires(post): %{_sbindir}/update-alternatives
+Requires(postun): %{_sbindir}/update-alternatives
 Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.6.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.5-1.0.3.tgz
+
+%package source
+Summary: Source of the MLNX_OFED main kernel driver
+Group: System Environment/Libraries
+%description source
+Source of the mlnx-ofa_kernel modules.
+
+You should probably only install this package if you want to view the
+sourecs of driver. Use the -devel package if you want to build other
+drivers against it.
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -314,20 +330,14 @@ done
 %endif
 
 # copy sources
-mkdir -p %{buildroot}/%{_prefix}/src
-cp -ar %{_builddir}/$NAME-$VERSION/source %{buildroot}/%{_prefix}/src/ofa_kernel-$VERSION
-cd %{buildroot}/%{_prefix}/src/
-ln -snf ofa_kernel-$VERSION mlnx-ofa_kernel-$VERSION
-cd -
-cp -ar %{_builddir}/src/$NAME %{buildroot}/%{_prefix}/src/ofa_kernel
+mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}
+mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}
+cp -a %{_builddir}/%{name}-%{version}/source %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}/source
+ln -s ofa_kernel-%{version}/source %{buildroot}/%{_prefix}/src/mlnx-ofa_kernel-%{version}
+cp -a %{_builddir}/src/%{name}/* %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}
 # Fix path of BACKPORT_INCLUDES
-sed -i -e "s@=-I.*backport_includes@=-I/usr/src/ofa_kernel-$VERSION/backport_includes@" %{buildroot}/%{_prefix}/src/ofa_kernel/*/configure.mk.kernel || true
+sed -i -e "s@=-I.*backport_includes@=-I/usr/src/ofa_kernel-$VERSION/backport_includes@" %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}/configure.mk.kernel || true
 rm -rf %{_builddir}/src
-%ifarch ppc64
-if [ ! -d "%{buildroot}/%{_prefix}/src/ofa_kernel/default" ]; then
-    ln -snf /%{_prefix}/src/ofa_kernel/ppc64 %{buildroot}/%{_prefix}/src/ofa_kernel/default
-fi
-%endif
 
 INFO=${RPM_BUILD_ROOT}/etc/infiniband/info
 /bin/rm -f ${INFO}
@@ -389,7 +399,7 @@ perl -i -ne 'if (m@^#!/bin/bash@) {
                  }' %{buildroot}/etc/init.d/openibd
 fi
 
-if [ -f /etc/SuSE-release ] || grep -qwi SLES /etc/os-release 2>/dev/null; then
+if [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
     local_fs='$local_fs'
     openiscsi=''
     %if %{build_oiscsi}
@@ -463,7 +473,7 @@ if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' || "$
 %endif
 fi
 
-if [ -f /etc/SuSE-release ] || grep -qwi SLES /etc/os-release 2>/dev/null; then
+if [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
         /sbin/chkconfig openibd off >/dev/null  2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/insserv -r openibd >/dev/null 2>&1 || true
@@ -546,7 +556,7 @@ if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true
           fi
-          if [ -f /etc/SuSE-release ] || grep -qwi SLES /etc/os-release 2>/dev/null; then
+          if [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
                 /sbin/chkconfig openibd off >/dev/null 2>&1 || true
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/insserv -r openibd >/dev/null 2>&1 || true
@@ -582,6 +592,47 @@ fi
 %endif
 
 #end of post uninstall
+
+%post -n %{devel_pname}
+if [ -d "%{_prefix}/src/ofa_kernel/default" -a $1 -gt 1 ]; then
+	touch %{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}.missing_link
+	# Will run update-alternatives in posttrans
+else
+	update-alternatives --install \
+		%{_prefix}/src/ofa_kernel/default \
+		ofa_kernel_headers \
+		%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION} \
+		20
+fi
+
+%posttrans -n %{devel_pname}
+symlink="%{_prefix}/src/ofa_kernel/default"
+# Should only be used for upgrading from pre-5.5-0.2.6.0 packages:
+# At the time of upgrade there was still a directory, so postpone
+# generating the alternative symlink to that point:
+for flag_file in %{_prefix}/src/ofa_kernel/*/*.missing_link; do
+	dir=${flag_file%.missing_link}
+	if [ ! -d "$dir" ]; then
+		# Directory is no longer there. Nothing left to handle
+		rm -f "$flag_file"
+		continue
+	fi
+	if [ -d "$symlink" ]; then
+		echo "%{devel_pname}-%{version}: $symlink is still a non-empty directory. Deleting in preparation for a symlink."
+		rm -rf "$symlink"
+	fi
+	update-alternatives --install \
+		"$symlink" \
+		ofa_kernel_headers \
+		"$dir" \
+		20
+	rm -f "$flag_file"
+done
+
+%postun -n %{devel_pname}
+update-alternatives --remove \
+	ofa_kernel_headers \
+	%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION} \
 
 %files -n %{utils_pname}
 %defattr(-,root,root,-)
@@ -634,7 +685,12 @@ fi
 
 %files -n %{devel_pname}
 %defattr(-,root,root,-)
-%{_prefix}/src
+%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}
+
+%files source
+%defattr(-,root,root,-)
+%{_prefix}/src/ofa_kernel-%version/source
+%{_prefix}/src/mlnx-ofa_kernel-%version
 
 %changelog
 * Thu Jun 18 2015 Alaa Hleihel <alaa@mellanox.com>

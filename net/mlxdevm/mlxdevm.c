@@ -35,6 +35,7 @@ static const struct nla_policy mlxdevm_function_nl_policy[MLXDEVM_PORT_FUNCTION_
 	[MLXDEVM_PORT_FN_ATTR_STATE] = { .type = NLA_U8 },
 	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_ROCE] = { .type = NLA_U8 },
 	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_UC_LIST] = { .type = NLA_U32 },
+	[MLXDEVM_PORT_FN_ATTR_TRUST_STATE] = { .type = NLA_U8 },
 };
 
 static int mlxdevm_nl_dev_handle_fill(struct sk_buff *msg,
@@ -1180,6 +1181,32 @@ mlxdevm_port_fn_opstate_valid(enum mlxdevm_port_fn_opstate opstate)
 	       opstate == MLXDEVM_PORT_FN_OPSTATE_ATTACHED;
 }
 
+static int mlxdevm_port_fn_trust_fill(struct mlxdevm *dev,
+				      const struct mlxdevm_ops *ops,
+				      struct mlxdevm_port *port,
+				      struct sk_buff *msg,
+				      struct netlink_ext_ack *extack,
+				      bool *msg_updated)
+{
+	bool trust;
+	int err;
+
+	if (!ops->port_fn_trust_get)
+		return 0;
+
+	err = ops->port_fn_trust_get(dev, port, &trust, extack);
+	if (err) {
+		if (err == -EOPNOTSUPP)
+			return 0;
+		return err;
+	}
+
+	if (nla_put_u8(msg, MLXDEVM_PORT_FN_ATTR_TRUST_STATE, trust))
+		return -EMSGSIZE;
+	*msg_updated = true;
+	return 0;
+}
+
 static int
 mlxdevm_port_fn_state_fill(struct mlxdevm *dev,
 			   const struct mlxdevm_ops *ops,
@@ -1292,7 +1319,9 @@ mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg, struct mlxdevm *dev,
 
 	err = mlxdevm_port_fn_cap_fill(dev, ops, port, msg, extack,
 				       &msg_updated);
-
+	if (err)
+		goto out;
+	err = mlxdevm_port_fn_trust_fill(dev, ops, port, msg, extack, &msg_updated);
 out:
 	if (err || !msg_updated)
 		nla_nest_cancel(msg, fn_attr);
@@ -2012,6 +2041,25 @@ mlxdevm_port_fn_hw_addr_set(struct mlxdevm *dev,
 	return ops->port_fn_hw_addr_set(dev, port, hw_addr, hw_addr_len, extack);
 }
 
+static int
+mlxdevm_port_fn_trust_set(struct mlxdevm *dev,
+			  struct mlxdevm_port *port,
+			  const struct nlattr *attr,
+			  struct netlink_ext_ack *extack)
+{
+	const struct mlxdevm_ops *ops;
+	bool trust;
+
+	trust = nla_get_u8(attr);
+	ops = dev->ops;
+	if (!ops->port_fn_trust_set) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Function does not support trust setting");
+		return -EOPNOTSUPP;
+	}
+	return ops->port_fn_trust_set(dev, port, trust, extack);
+}
+
 static int mlxdevm_port_fn_state_set(struct mlxdevm *dev,
 				     struct mlxdevm_port *port,
 				     const struct nlattr *attr,
@@ -2035,22 +2083,33 @@ static int
 mlxdevm_port_fn_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 		    const struct nlattr *attr, struct netlink_ext_ack *extack)
 {
-	struct nlattr *tb[MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1];
+	struct nlattr **tb;
 	int err;
 
 	if (!dev->ops)
 		return -EOPNOTSUPP;
 
+	tb = kcalloc(MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1, sizeof(struct nlattr *), GFP_KERNEL);
+	if (!tb)
+		return -ENOMEM;
+
 	err = nla_parse_nested(tb, MLXDEVM_PORT_FUNCTION_ATTR_MAX, attr,
 			       mlxdevm_function_nl_policy, extack);
 	if (err < 0) {
 		NL_SET_ERR_MSG_MOD(extack, "Fail to parse port function attributes");
-		return err;
+		goto out;
 	}
 
 	attr = tb[MLXDEVM_PORT_FUNCTION_ATTR_HW_ADDR];
 	if (attr) {
 		err = mlxdevm_port_fn_hw_addr_set(dev, port, attr, extack);
+		if (err)
+			goto out;
+	}
+
+	attr = tb[MLXDEVM_PORT_FN_ATTR_TRUST_STATE];
+	if (attr) {
+		err = mlxdevm_port_fn_trust_set(dev, port, attr, extack);
 		if (err)
 			return err;
 	}
@@ -2060,11 +2119,15 @@ mlxdevm_port_fn_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 	 */
 	attr = tb[MLXDEVM_PORT_FN_ATTR_STATE];
 	if (attr) {
-		if (!mlxdevm_port_fn_state_valid(nla_get_u8(attr)))
-			return -EINVAL;
+		if (!mlxdevm_port_fn_state_valid(nla_get_u8(attr))) {
+			err = -EINVAL;
+			goto out;
+		}
 		err = mlxdevm_port_fn_state_set(dev, port, attr, extack);
 	}
 
+out:
+	kfree(tb);
 	return err;
 }
 
@@ -2206,9 +2269,9 @@ mlxdevm_port_fn_cap_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 			const struct nlattr *attr,
 			struct netlink_ext_ack *extack)
 {
-	struct nlattr *tb[MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1];
 	struct mlxdevm_port_fn_cap cap = {};
 	const struct mlxdevm_ops *ops;
+	struct nlattr **tb;
 	int err;
 
 	ops = dev->ops;
@@ -2220,19 +2283,25 @@ mlxdevm_port_fn_cap_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 		return -EOPNOTSUPP;
 	}
 
+	tb = kcalloc(MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1, sizeof(struct nlattr *), GFP_KERNEL);
+	if (!tb)
+		return -ENOMEM;
+
 	err = nla_parse_nested(tb, MLXDEVM_PORT_FUNCTION_ATTR_MAX, attr,
 			       mlxdevm_function_nl_policy, extack);
 	if (err < 0) {
 		NL_SET_ERR_MSG_MOD(extack, "Fail to parse port function cap attributes");
-		return err;
+		goto out;
 	}
 
 	attr = tb[MLXDEVM_PORT_FN_ATTR_EXT_CAP_ROCE];
 	if (attr) {
 		cap.roce = nla_get_u8(attr);
 
-		if (!mlxdevm_port_fn_cap_roce_valid(cap.roce))
-			return -EINVAL;
+		if (!mlxdevm_port_fn_cap_roce_valid(cap.roce)) {
+			err = -EINVAL;
+			goto out;
+		}
 
 		cap.roce_cap_valid = true;
 	}
@@ -2241,7 +2310,11 @@ mlxdevm_port_fn_cap_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 		cap.max_uc_list = nla_get_u32(attr);
 		cap.uc_list_cap_valid = true;
 	}
-	return ops->port_fn_cap_set(dev, port, &cap, extack);
+	err = ops->port_fn_cap_set(dev, port, &cap, extack);
+
+out:
+	kfree(tb);
+	return err;
 }
 
 static int

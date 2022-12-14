@@ -1,0 +1,131 @@
+From: Jianbo Liu <jianbol@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/flow_meter_aso.c
+
+Change-Id: Ia17cf74297e5a1cf225f58d68ab98b43e4be380d
+---
+ .../mellanox/mlx5/core/en/flow_meter_aso.c    | 26 ++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/flow_meter_aso.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/flow_meter_aso.c
+@@ -2,12 +2,20 @@
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ 
+ #include "aso.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ #include "flow_meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #define MLX5_PACKET_COLOR_BITS (mlx5e_tc_attr_to_reg_mappings[PACKET_COLOR_TO_REG].mlen * 8)
+ #define MLX5_PACKET_COLOR_MASK GENMASK(MLX5_PACKET_COLOR_BITS - 1, 0)
++#endif
+ 
+ #define START_COLOR_SHIFT 28
+ #define METER_MODE_SHIFT 24
+@@ -15,6 +23,10 @@
+ #define CBS_MAN_SHIFT 16
+ #define CIR_EXP_SHIFT 8
+ 
++#ifndef BITS_TO_BYTES
++#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
++#endif
++
+ /* cir = 8*(10^9)*cir_mantissa/(2^cir_exponent)) bits/s */
+ #define CONST_CIR 8000000000ULL
+ #define CALC_CIR(m, e)  ((CONST_CIR * (m)) >> (e))
+@@ -104,6 +116,7 @@ found:
+ static struct mlx5e_flow_meters *
+ mlx5e_get_flow_meters(struct mlx5_core_dev *dev)
+ {
++#ifdef CONFIG_MLX5_ESWITCH
+ 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+ 	struct mlx5_rep_uplink_priv *uplink_priv;
+ 	struct mlx5e_rep_priv *uplink_rpriv;
+@@ -113,6 +126,7 @@ mlx5e_get_flow_meters(struct mlx5_core_d
+ 		uplink_priv = &uplink_rpriv->uplink_priv;
+ 		return uplink_priv->flow_meters;
+ 	}
++#endif
+ 
+ 	return NULL;
+ }
+@@ -378,6 +392,7 @@ mlx5e_free_flow_meter(struct mlx5_core_d
+ 	mutex_unlock(&flow_meters->sync_lock);
+ }
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ struct mlx5_meter_handle *
+ mlx5e_get_flow_meter(struct mlx5_core_dev *mdev, struct mlx5_flow_meter_params *params)
+ {
+@@ -500,7 +515,7 @@ __mlx5e_fill_flow_meter_post_action(stru
+ 				    struct mlx5e_post_act_handle *last)
+ {
+ 	struct mlx5e_tc_mod_hdr_acts mod_acts = {};
+-	struct mlx5e_post_act_handle *handle;
++	struct mlx5e_post_act_handle *handle = NULL;
+ 	struct mlx5_meter_handle *meter;
+ 	struct mlx5_modify_hdr *mod_hdr;
+ 	struct mlx5_flow_attr *mattr;
+@@ -875,6 +890,7 @@ mlx5e_post_meter_cleanup(struct mlx5e_fl
+ 	mlx5e_post_meter_fg_destroy(flow_meters);
+ 	mlx5e_post_meter_table_destroy(flow_meters);
+ }
++#endif
+ 
+ struct mlx5e_flow_meters *
+ mlx5e_flow_meters_init(struct mlx5e_priv *priv,
+@@ -882,7 +898,9 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 		       struct mlx5e_post_act *post_action)
+ {
+ 	struct mlx5e_flow_meters *flow_meters;
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	int err;
++#endif
+ 
+ 	if (!(MLX5_CAP_GEN_64(priv->mdev, general_obj_types) &
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+@@ -898,6 +916,7 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 		goto err_aso;
+ 	}
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_action)) {
+ 		mlx5_core_warn(priv->mdev,
+ 			       "Failed to init flow meter, post action is missing\n");
+@@ -912,6 +931,7 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 			       "Failed to init flow meter table\n");
+ 		goto err_post_action;
+ 	}
++#endif
+ 
+ 	flow_meters->log_granularity = min_t(int, 6,
+ 					     MLX5_CAP_QOS(priv->mdev, log_meter_aso_granularity));
+@@ -921,8 +941,10 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 
+ 	return flow_meters;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ err_post_action:
+ 	mlx5e_aso_put(priv);
++#endif
+ err_aso:
+ 	kfree(flow_meters);
+ 	return NULL;
+@@ -934,7 +956,9 @@ mlx5e_flow_meters_cleanup(struct mlx5e_f
+ 	if (!flow_meters)
+ 		return;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	mlx5e_post_meter_cleanup(flow_meters);
++#endif
+ 	mlx5e_aso_put(flow_meters->aso->priv);
+ 
+ 	kfree(flow_meters);

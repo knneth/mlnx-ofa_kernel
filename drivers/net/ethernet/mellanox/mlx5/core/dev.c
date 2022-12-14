@@ -31,8 +31,9 @@
  */
 
 #include <linux/mlx5/driver.h>
-#include <linux/mlx5/eswitch.h>
 #include <linux/mlx5/vport.h>
+#include <linux/mlx5/eswitch.h>
+#include <linux/mlx5/mlx5_ifc_vdpa.h>
 #include "mlx5_core.h"
 
 /* intf dev list mutex */
@@ -101,8 +102,29 @@ static bool is_eth_supported(struct mlx5_core_dev *dev)
 		mlx5_core_warn(dev, "Self loop back prevention is not supported\n");
 	if (!MLX5_CAP_GEN(dev, cq_moderation))
 		mlx5_core_warn(dev, "CQ moderation is not supported\n");
-
 	if (dev->disable_en)
+		return false;
+
+	return true;
+}
+
+static bool is_vnet_supported(struct mlx5_core_dev *dev)
+{
+	if (!IS_ENABLED(CONFIG_MLX5_VDPA_NET))
+		return false;
+
+	if (mlx5_core_is_pf(dev))
+		return false;
+
+	if (!(MLX5_CAP_GEN_64(dev, general_obj_types) &
+	      MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q))
+		return false;
+
+	if (!(MLX5_CAP_DEV_VDPA_EMULATION(dev, event_mode) &
+	      MLX5_VIRTIO_Q_EVENT_MODE_QP_MODE))
+		return false;
+
+	if (!MLX5_CAP_DEV_VDPA_EMULATION(dev, eth_frame_offload_type))
 		return false;
 
 	return true;
@@ -175,12 +197,16 @@ enum {
 	MLX5_INTERFACE_PROTOCOL_IB,
 	MLX5_INTERFACE_PROTOCOL_IB_REP,
 	MLX5_INTERFACE_PROTOCOL_MPIB,
+
+	MLX5_INTERFACE_PROTOCOL_VNET,
 };
 
 static const struct mlx5_adev_device {
 	const char *suffix;
 	bool (*is_supported)(struct mlx5_core_dev *dev);
 } mlx5_adev_devices[] = {
+	[MLX5_INTERFACE_PROTOCOL_VNET] = { .suffix = "vnet",
+					   .is_supported = &is_vnet_supported },
 	[MLX5_INTERFACE_PROTOCOL_IB] = { .suffix = "rdma",
 					 .is_supported = &is_ib_supported },
 	[MLX5_INTERFACE_PROTOCOL_ETH] = { .suffix = "eth",
@@ -320,7 +346,6 @@ int mlx5_attach_device(struct mlx5_core_dev *dev)
 			break;
 		}
 	}
-
 	mutex_unlock(&mlx5_intf_mutex);
 	return ret;
 }
@@ -375,8 +400,7 @@ int mlx5_register_device(struct mlx5_core_dev *dev)
 void mlx5_unregister_device(struct mlx5_core_dev *dev)
 {
 	mutex_lock(&mlx5_intf_mutex);
-
-	dev->priv.flags |= MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
+	dev->priv.flags = MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
 	dev->priv.flags &= ~MLX5_PRIV_FLAGS_DETACH;
 	mlx5_rescan_drivers_locked(dev);
 	mutex_unlock(&mlx5_intf_mutex);
@@ -455,13 +479,6 @@ int mlx5_rescan_drivers_locked(struct mlx5_core_dev *dev)
 	return add_drivers(dev);
 }
 
-static u32 mlx5_gen_pci_id(const struct mlx5_core_dev *dev)
-{
-	return (u32)((pci_domain_nr(dev->pdev->bus) << 16) |
-		     (dev->pdev->bus->number << 8) |
-		     PCI_SLOT(dev->pdev->devfn));
-}
-
 bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev)
 {
 	u64 fsystem_guid, psystem_guid;
@@ -472,24 +489,18 @@ bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev
 	return (fsystem_guid && psystem_guid && fsystem_guid == psystem_guid);
 }
 
-static struct mlx5_core_dev *is_mlx5_core_dev(struct device *dev, struct mlx5_core_dev *curr)
+static u32 mlx5_gen_pci_id(const struct mlx5_core_dev *dev)
 {
-	struct pci_dev *pdev = to_pci_dev(dev);
-
-	if (dev->driver != curr->device->driver)
-		return NULL;
-
-	return (struct mlx5_core_dev *)pci_get_drvdata(pdev);
+	return (u32)((pci_domain_nr(dev->pdev->bus) << 16) |
+		     (dev->pdev->bus->number << 8) |
+		     PCI_SLOT(dev->pdev->devfn));
 }
 
 static int next_phys_dev(struct device *dev, const void *data)
 {
+	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
+	struct mlx5_core_dev *mdev = madev->mdev;
 	const struct mlx5_core_dev *curr = data;
-
-	struct mlx5_core_dev *mdev = is_mlx5_core_dev(dev, (struct mlx5_core_dev *)data);
-
-	if (!mdev)
-		return 0;
 
 	if (!mlx5_core_is_pf(mdev))
 		return 0;
@@ -504,33 +515,28 @@ static int next_phys_dev(struct device *dev, const void *data)
 	return 1;
 }
 
-static struct device *pci_find_dev(void *data,
-				   int (*match)(struct device *dev, const void *data))
-{
-	return bus_find_device(&pci_bus_type, NULL, data, match);
-}
-
 /* Must be called with intf_mutex held */
 struct mlx5_core_dev *mlx5_get_next_phys_dev(struct mlx5_core_dev *dev)
 {
-	struct device *next;
+	struct auxiliary_device *adev;
+	struct mlx5_adev *madev;
 
 	if (!mlx5_core_is_pf(dev))
 		return NULL;
 
-	next = pci_find_dev(dev, &next_phys_dev);
-	if (!next)
+	adev = auxiliary_find_device(NULL, dev, &next_phys_dev);
+	if (!adev)
 		return NULL;
 
-	put_device(next);
-	return (struct mlx5_core_dev *)pci_get_drvdata(to_pci_dev(next));
+	madev = container_of(adev, struct mlx5_adev, adev);
+	put_device(&adev->dev);
+	return madev->mdev;
 }
 
 void mlx5_dev_list_lock(void)
 {
 	mutex_lock(&mlx5_intf_mutex);
 }
-
 void mlx5_dev_list_unlock(void)
 {
 	mutex_unlock(&mlx5_intf_mutex);

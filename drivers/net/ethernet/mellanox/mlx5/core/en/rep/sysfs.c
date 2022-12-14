@@ -115,6 +115,62 @@ static ssize_t miss_rl_dropped_bytes_show(struct kobject *kobj,
 	return miss_rl_dropped_show_common(kobj, MLX5_RATE_LIMIT_DATA_BYTES_DROPPED, buf);
 }
 
+static ssize_t page_limit_show(struct kobject *kobj,
+			       struct kobj_attribute *attr,
+			       char *buf)
+{
+	struct mlx5_rep_sysfs *tmp =
+		container_of(kobj, struct mlx5_rep_sysfs, paging_kobj);
+	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5_vport *evport;
+	u32 page_limit;
+
+	evport = mlx5_eswitch_get_vport(esw, tmp->vport);
+	spin_lock(&evport->pg_counters_lock);
+	page_limit = evport->page_limit;
+	spin_unlock(&evport->pg_counters_lock);
+	return sprintf(buf, "limit: %u\n", page_limit);
+}
+
+static ssize_t page_limit_store(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				const char *buf,
+				size_t count)
+{
+	struct mlx5_rep_sysfs *tmp =
+		container_of(kobj, struct mlx5_rep_sysfs, paging_kobj);
+	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5_vport *evport;
+	u32 limit;
+	int err;
+
+	evport = mlx5_eswitch_get_vport(esw, tmp->vport);
+	err = sscanf(buf, "%u", &limit);
+	if (err != 1)
+		return -EINVAL;
+	spin_lock(&evport->pg_counters_lock);
+	evport->page_limit = limit;
+	spin_unlock(&evport->pg_counters_lock);
+	return count;
+}
+
+static ssize_t num_pages_show(struct kobject *kobj,
+			      struct kobj_attribute *attr,
+			      char *buf)
+{
+	struct mlx5_rep_sysfs *tmp =
+		container_of(kobj, struct mlx5_rep_sysfs, paging_kobj);
+	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5_vport *evport;
+	u32 fw_pages;
+
+	evport = mlx5_eswitch_get_vport(esw, tmp->vport);
+	spin_lock(&evport->pg_counters_lock);
+	fw_pages = evport->fw_pages;
+	spin_unlock(&evport->pg_counters_lock);
+	return sprintf(buf, "fw_pages: %u\n", fw_pages);
+}
+
 static struct kobj_attribute attr_miss_rl_cfg = {
 	.attr = {.name = "miss_rl_cfg",
 		 .mode = 0644 },
@@ -134,6 +190,19 @@ static struct kobj_attribute attr_miss_rl_dropped_bytes = {
 	.show = miss_rl_dropped_bytes_show,
 };
 
+static struct kobj_attribute attr_page_limit = {
+	.attr = {.name = "page_limit",
+		 .mode = 0644 },
+	.show = page_limit_show,
+	.store = page_limit_store,
+};
+
+static struct kobj_attribute attr_num_pages = {
+	.attr = {.name = "num_pages",
+		 .mode = 0644 },
+	.show = num_pages_show,
+};
+
 static struct attribute *rep_attrs[] = {
 	&attr_miss_rl_cfg.attr,
 	&attr_miss_rl_dropped_packets.attr,
@@ -149,6 +218,17 @@ static const struct sysfs_ops rep_sysfs_ops = {
 static struct kobj_type rep_type = {
 	.sysfs_ops     = &rep_sysfs_ops,
 	.default_attrs = rep_attrs
+};
+
+static struct attribute *rep_paging_attrs[] = {
+	&attr_page_limit.attr,
+	&attr_num_pages.attr,
+	NULL,
+};
+
+static struct kobj_type rep_paging = {
+	.sysfs_ops     = &rep_sysfs_ops,
+	.default_attrs = rep_paging_attrs
 };
 
 void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)
@@ -171,8 +251,17 @@ void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)
 	err = kobject_init_and_add(&tmp->kobj, &rep_type,
 				   &rpriv->netdev->dev.kobj, "rep_config");
 
-	if (err)
+	if (err) {
 		tmp->esw = NULL;
+		return;
+	}
+
+	err = kobject_init_and_add(&tmp->paging_kobj, &rep_paging,
+				   &tmp->kobj, "paging_control");
+	if (err) {
+		kobject_put(&tmp->kobj);
+		tmp->esw = NULL;
+	}
 }
 
 void mlx5_rep_sysfs_cleanup(struct mlx5e_rep_priv *rpriv)
@@ -183,5 +272,6 @@ void mlx5_rep_sysfs_cleanup(struct mlx5e_rep_priv *rpriv)
 	if (!tmp->esw)
 		return;
 
+	kobject_put(&tmp->paging_kobj);
 	kobject_put(&tmp->kobj);
 }

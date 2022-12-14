@@ -197,7 +197,9 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 	if (!need_acl_table)
 		return 0;
 
-	if (MLX5_CAP_ESW_INGRESS_ACL(esw->dev, flow_counter)) {
+	if (vport->ingress.legacy.drop_counter) {
+		counter = vport->ingress.legacy.drop_counter;
+	} else if (MLX5_CAP_ESW_INGRESS_ACL(esw->dev, flow_counter)) {
 		counter = mlx5_fc_create(esw->dev, false);
 		if (IS_ERR(counter)) {
 			esw_warn(esw->dev,
@@ -209,8 +211,8 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 	}
 
 	vport->ingress.acl = esw_acl_table_create(esw, vport,
-						  MLX5_FLOW_NAMESPACE_ESW_INGRESS,
-						  0, table_size);
+			MLX5_FLOW_NAMESPACE_ESW_INGRESS, 0, table_size);
+
 	if (IS_ERR_OR_NULL(vport->ingress.acl)) {
 		err = PTR_ERR(vport->ingress.acl);
 		vport->ingress.acl = NULL;

@@ -35,6 +35,7 @@
 #include <linux/module.h>
 #include "mlx5_core.h"
 #include "../../mlxfw/mlxfw.h"
+#include "lib/tout.h"
 #include "accel/tls.h"
 
 enum {
@@ -339,10 +340,9 @@ int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev)
 	return 0;
 }
 
-#define MLX5_FAST_TEARDOWN_WAIT_MS   3000
 int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev)
 {
-	unsigned long end, delay_ms = MLX5_FAST_TEARDOWN_WAIT_MS;
+	unsigned long end, delay_ms = mlx5_tout_ms(dev, TEARDOWN);
 	u32 out[MLX5_ST_SZ_DW(teardown_hca_out)] = {};
 	u32 in[MLX5_ST_SZ_DW(teardown_hca_in)] = {};
 	int state;
@@ -640,16 +640,17 @@ static void mlx5_fsm_release(struct mlxfw_dev *mlxfw_dev, u32 fwhandle)
 			 fwhandle, 0);
 }
 
-#define MLX5_FSM_REACTIVATE_TOUT 5000 /* msecs */
 static int mlx5_fsm_reactivate(struct mlxfw_dev *mlxfw_dev, u8 *status)
 {
-	unsigned long exp_time = jiffies + msecs_to_jiffies(MLX5_FSM_REACTIVATE_TOUT);
 	struct mlx5_mlxfw_dev *mlx5_mlxfw_dev =
 		container_of(mlxfw_dev, struct mlx5_mlxfw_dev, mlxfw_dev);
 	struct mlx5_core_dev *dev = mlx5_mlxfw_dev->mlx5_core_dev;
 	u32 out[MLX5_ST_SZ_DW(mirc_reg)];
 	u32 in[MLX5_ST_SZ_DW(mirc_reg)];
+	unsigned long exp_time;
 	int err;
+
+	exp_time = jiffies + msecs_to_jiffies(mlx5_tout_ms(dev, FSM_REACTIVATE));
 
 	if (!MLX5_CAP_MCAM_REG2(dev, mirc))
 		return -EOPNOTSUPP;
@@ -934,43 +935,5 @@ int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
 	err = modify_other_hca_cap(mdev, function_id, in);
 
 	kfree(in);
-	return err;
-}
-
-int set_tunneled_operation(struct mlx5_core_dev *mdev,
-			   u16 asn_match_mask, u16 asn_match_value,
-			   u32 *log_response_bar_size,
-			   u64 *response_bar_address)
-{
-	int out_sz = MLX5_ST_SZ_BYTES(set_tunnel_operation_out);
-	int in_sz = MLX5_ST_SZ_BYTES(set_tunnel_operation_in);
-	void *out, *in;
-	int err;
-
-	err = -ENOMEM;
-	in = kzalloc(in_sz, GFP_KERNEL);
-	if (!in)
-		goto out;
-
-	out = kzalloc(out_sz, GFP_KERNEL);
-	if (!out)
-		goto free_in;
-
-	MLX5_SET(set_tunnel_operation_in, in, opcode,
-		 MLX5_CMD_OP_SET_TUNNELED_OPERATIONS);
-	MLX5_SET(set_tunnel_operation_in, in,
-		 asn_match_mask, asn_match_mask);
-	MLX5_SET(set_tunnel_operation_in, in,
-		 asn_match_value, asn_match_value);
-
-	err = mlx5_cmd_exec(mdev, in, in_sz, out, out_sz);
-	if (!err) {
-		*log_response_bar_size = MLX5_GET(set_tunnel_operation_out, out, log_response_bar_size);
-		*response_bar_address = MLX5_GET64(set_tunnel_operation_out, out, response_bar_address);
-	}
-	kfree(out);
-free_in:
-	kfree(in);
-out:
 	return err;
 }

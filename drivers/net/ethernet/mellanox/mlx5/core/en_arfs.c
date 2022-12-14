@@ -36,6 +36,32 @@
 #include <linux/ipv6.h>
 #include "en.h"
 
+#define ARFS_HASH_SHIFT BITS_PER_BYTE
+#define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
+
+struct arfs_table {
+	struct mlx5e_flow_table  ft;
+	struct mlx5_flow_handle	 *default_rule;
+	struct hlist_head	 rules_hash[ARFS_HASH_SIZE];
+};
+
+enum arfs_type {
+	ARFS_IPV4_TCP,
+	ARFS_IPV6_TCP,
+	ARFS_IPV4_UDP,
+	ARFS_IPV6_UDP,
+	ARFS_NUM_TYPES,
+};
+
+struct mlx5e_arfs_tables {
+	struct arfs_table arfs_tables[ARFS_NUM_TYPES];
+	/* Protect aRFS rules list */
+	spinlock_t                     arfs_lock;
+	struct list_head               rules;
+	int                            last_filter_id;
+	struct workqueue_struct        *wq;
+};
+
 struct arfs_tuple {
 	__be16 etype;
 	u8     ip_proto;
@@ -159,7 +185,7 @@ void mlx5e_arfs_destroy_tables(struct mlx5e_priv *priv)
 		return;
 
 	_mlx5e_cleanup_tables(priv);
-	kfree(priv->fs.arfs);
+	kvfree(priv->fs.arfs);
 }
 
 static int arfs_add_default_rule(struct mlx5e_priv *priv,
@@ -336,7 +362,7 @@ int mlx5e_arfs_create_tables(struct mlx5e_priv *priv)
 	if (!(priv->netdev->hw_features & NETIF_F_NTUPLE))
 		return 0;
 
-	priv->fs.arfs = kzalloc(sizeof(*priv->fs.arfs), GFP_KERNEL);
+	priv->fs.arfs = kvzalloc(sizeof(*priv->fs.arfs), GFP_KERNEL);
 	if (!priv->fs.arfs)
 		return -ENOMEM;
 
@@ -356,7 +382,7 @@ int mlx5e_arfs_create_tables(struct mlx5e_priv *priv)
 err_des:
 	_mlx5e_cleanup_tables(priv);
 err:
-	kfree(priv->fs.arfs);
+	kvfree(priv->fs.arfs);
 	return err;
 }
 
@@ -366,11 +392,11 @@ static void arfs_may_expire_flow(struct mlx5e_priv *priv)
 {
 	struct arfs_rule *arfs_rule;
 	struct hlist_node *htmp;
+	HLIST_HEAD(del_list);
 	int quota = 0;
 	int i;
 	int j;
 
-	HLIST_HEAD(del_list);
 	spin_lock_bh(&priv->fs.arfs->arfs_lock);
 	mlx5e_for_each_arfs_rule(arfs_rule, htmp, priv->fs.arfs->arfs_tables, i, j) {
 		if (!work_pending(&arfs_rule->arfs_work) &&
@@ -396,10 +422,10 @@ static void arfs_del_rules(struct mlx5e_priv *priv)
 {
 	struct hlist_node *htmp;
 	struct arfs_rule *rule;
+	HLIST_HEAD(del_list);
 	int i;
 	int j;
 
-	HLIST_HEAD(del_list);
 	spin_lock_bh(&priv->fs.arfs->arfs_lock);
 	mlx5e_for_each_arfs_rule(rule, htmp, priv->fs.arfs->arfs_tables, i, j) {
 		hlist_del_init(&rule->hlist);

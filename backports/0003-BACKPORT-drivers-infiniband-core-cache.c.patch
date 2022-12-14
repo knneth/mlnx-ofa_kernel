@@ -1,14 +1,14 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
 
-Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
+Change-Id: I7742e3b1fd0cc8c3696fa72cc6b17ac169c52e40
 ---
  drivers/infiniband/core/cache.c | 23 +++++++++++++++++++++--
  1 file changed, 21 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/cache.c
 +++ b/drivers/infiniband/core/cache.c
-@@ -1402,10 +1402,19 @@ struct net_device *rdma_read_gid_attr_nd
+@@ -1399,10 +1399,19 @@ struct net_device *rdma_read_gid_attr_nd
  }
  EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
  
@@ -29,7 +29,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
  
  	if (is_vlan_dev(lower_dev))
  		*vlan_id = vlan_dev_vlan_id(lower_dev);
-@@ -1415,6 +1424,7 @@ static int get_lower_dev_vlan(struct net
+@@ -1412,6 +1421,7 @@ static int get_lower_dev_vlan(struct net
  	 */
  	return 1;
  }
@@ -37,7 +37,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
  
  /**
   * rdma_read_gid_l2_fields - Read the vlan ID and source MAC address
-@@ -1431,9 +1441,11 @@ static int get_lower_dev_vlan(struct net
+@@ -1428,9 +1438,11 @@ static int get_lower_dev_vlan(struct net
  int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
  			    u16 *vlan_id, u8 *smac)
  {
@@ -49,7 +49,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
  	struct net_device *ndev;
  
  	rcu_read_lock();
-@@ -1449,12 +1461,19 @@ int rdma_read_gid_l2_fields(const struct
+@@ -1446,12 +1458,19 @@ int rdma_read_gid_l2_fields(const struct
  		if (is_vlan_dev(ndev)) {
  			*vlan_id = vlan_dev_vlan_id(ndev);
  		} else {

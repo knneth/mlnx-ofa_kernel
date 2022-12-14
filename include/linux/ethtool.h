@@ -12,7 +12,32 @@
 #endif
 #ifndef ETH_MODULE_SFF_8436_MAX_LEN
 #define ETH_MODULE_SFF_8636_MAX_LEN     640
-#define ETH_MODULE_SFF_8436_MAX_LEN     640 
+#define ETH_MODULE_SFF_8436_MAX_LEN     640
+#endif
+
+#ifndef HAVE_ETHTOOL_PAUSE_STATS
+struct ethtool_pause_stats {
+	u64 tx_pause_frames;
+	u64 rx_pause_frames;
+};
+#endif
+#ifndef HAVE_ETHTOOL_RMON_HIST_RANGE
+struct ethtool_rmon_hist_range {
+	u16 low;
+	u16 high;
+};
+
+#define ETHTOOL_RMON_HIST_MAX   10
+struct ethtool_rmon_stats {
+	u64 undersize_pkts;
+	u64 oversize_pkts;
+	u64 fragments;
+	u64 jabbers;
+
+	u64 hist[ETHTOOL_RMON_HIST_MAX];
+	u64 hist_tx[ETHTOOL_RMON_HIST_MAX];
+};
+
 #endif
 
 #ifndef ETHTOOL_FEC_NONE
@@ -173,11 +198,6 @@ struct ethtool_fecparam {
 #define ETHTOOL_LINK_MODE_400000baseLR4_ER4_FR4_Full_BIT  87
 #define ETHTOOL_LINK_MODE_400000baseDR4_Full_BIT          88
 #define ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT          89
-#endif
-
-#ifndef ETHTOOL_LINK_MODE_100baseFX_Half_BIT
-#define ETHTOOL_LINK_MODE_100baseFX_Half_BIT 90
-#define ETHTOOL_LINK_MODE_100baseFX_Full_BIT 91
 #endif
 
 #define SUPPORTED_100000baseCR4_Full 0

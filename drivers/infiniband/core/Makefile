@@ -24,7 +24,7 @@ ib_core-y :=			packer.o ud_header.o verbs.o cq.o rw.o sysfs.o verbs_nvmf.o \
 ib_core-$(CONFIG_SECURITY_INFINIBAND) += security.o
 ib_core-$(CONFIG_CGROUP_RDMA) += cgroup.o
 
-ib_cm-y :=			cm.o
+ib_cm-y :=                  	cm.o cm_trace.o
 
 iw_cm-y :=			iwcm.o iwpm_util.o iwpm_msg.o
 
@@ -50,7 +50,6 @@ ib_uverbs-y :=			uverbs_main.o uverbs_cmd.o uverbs_marshall.o \
 				uverbs_std_types_wq.o \
 				uverbs_std_types_qp.o
 
-
-ib_core-$(CONFIG_INFINIBAND_USER_MEM) += umem.o peer_mem.o 
+ib_core-$(CONFIG_INFINIBAND_USER_MEM) += umem.o umem_dmabuf.o peer_mem.o
 ib_core-$(CONFIG_INFINIBAND_ON_DEMAND_PAGING) += umem_odp.o
 

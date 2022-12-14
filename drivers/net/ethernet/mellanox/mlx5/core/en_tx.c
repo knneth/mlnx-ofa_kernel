@@ -32,14 +32,13 @@
 
 #include <linux/tcp.h>
 #include <linux/if_vlan.h>
-#include <linux/ptp_classify.h>
 #include <net/geneve.h>
 #include <net/dsfield.h>
 #include "en.h"
 #include "en/txrx.h"
-#include "en/ptp.h"
 #include "ipoib/ipoib.h"
 #include "en_accel/en_accel.h"
+#include "en/ptp.h"
 
 static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
 				       u32 cqcc, void *data)
@@ -127,6 +126,44 @@ static inline int mlx5e_get_dscp_up(struct mlx5e_priv *priv, struct sk_buff *skb
 }
 #endif
 
+static int mlx5e_get_up(struct mlx5e_priv *priv, struct sk_buff *skb)
+{
+#ifdef CONFIG_MLX5_CORE_EN_DCB
+	if (READ_ONCE(priv->dcbx_dp.trust_state) == MLX5_QPTS_TRUST_DSCP)
+		return mlx5e_get_dscp_up(priv, skb);
+#endif
+	if (skb_vlan_tag_present(skb))
+		return skb_vlan_tag_get_prio(skb);
+	return 0;
+}
+
+static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb,
+			      struct mlx5e_select_queue_params *selq)
+{
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	int up;
+
+	up = selq->num_tcs > 1 ? mlx5e_get_up(priv, skb) : 0;
+
+	return selq->num_regular_queues + up;
+}
+
+static int mlx5e_select_htb_queue(struct mlx5e_priv *priv, struct sk_buff *skb)
+{
+	u16 classid;
+
+	/* Order maj_id before defcls - pairs with mlx5e_htb_root_add. */
+	if ((TC_H_MAJ(skb->priority) >> 16) == smp_load_acquire(&priv->htb.maj_id))
+		classid = TC_H_MIN(skb->priority);
+	else
+		classid = READ_ONCE(priv->htb.defcls);
+
+	if (!classid)
+		return 0;
+
+	return mlx5e_get_txq_by_classid(priv, classid);
+}
+
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 static u16 mlx5e_select_queue_assigned(struct mlx5e_priv *priv,
 				       struct sk_buff *skb)
@@ -174,47 +211,6 @@ fallback:
 }
 #endif
 
-static int mlx5e_get_up(struct mlx5e_priv *priv, struct sk_buff *skb)
-{
-#ifdef CONFIG_MLX5_CORE_EN_DCB
-	if (READ_ONCE(priv->dcbx_dp.trust_state) == MLX5_QPTS_TRUST_DSCP)
-		return mlx5e_get_dscp_up(priv, skb);
-#endif
-	if (skb_vlan_tag_present(skb))
-		return skb_vlan_tag_get_prio(skb);
-	return 0;
-}
-
-static bool mlx5e_use_ptpsq(struct sk_buff *skb)
-{
-	struct flow_keys fk;
-
-	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
-		return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
-				ptp_classify_raw(skb) != PTP_CLASS_NONE);
-
-	if (fk.basic.n_proto == htons(ETH_P_1588))
-		return true;
-
-	if (fk.basic.n_proto != htons(ETH_P_IP) &&
-	    fk.basic.n_proto != htons(ETH_P_IPV6))
-		return false;
-
-	return (fk.basic.ip_proto == IPPROTO_UDP &&
-		fk.ports.dst == htons(PTP_EV_PORT));
-}
-
-static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb,
-			      struct mlx5e_select_queue_params *selq)
-{
-	struct mlx5e_priv *priv = netdev_priv(dev);
-	int up;
-
-	up = selq->num_tcs > 1 ? mlx5e_get_up(priv, skb) : 0;
-
-	return selq->num_regular_queues + up;
-}
-
 u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 		       struct net_device *sb_dev)
 {
@@ -231,14 +227,22 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 	if (unlikely(!selq))
 		return 0;
 
-	if (unlikely(selq->is_ptp)) {
-		if (unlikely(mlx5e_use_ptpsq(skb)))
-			return mlx5e_select_ptpsq(dev, skb, selq);
+	if (unlikely(selq->is_ptp || selq->is_htb)) {
+		if (unlikely(selq->is_htb)) {
+			txq_ix = mlx5e_select_htb_queue(priv, skb);
+			if (txq_ix > 0)
+				return txq_ix;
+		}
+
+		if (unlikely(selq->is_ptp))
+			if (unlikely(mlx5e_use_ptpsq(skb)))
+				return mlx5e_select_ptpsq(dev, skb, selq);
 
 		txq_ix = netdev_pick_tx(dev, skb, NULL);
-		/* Fix netdev_pick_tx() not to choose ptp_channel txqs.
+		/* Fix netdev_pick_tx() not to choose ptp_channel and HTB txqs.
 		 * If they are selected, switch to regular queues.
-		 * Driver to select these queues only at mlx5e_select_ptpsq().
+		 * Driver to select these queues only at mlx5e_select_ptpsq()
+		 * and mlx5e_select_htb_queue().
 		 */
 		if (unlikely(txq_ix >= selq->num_regular_queues))
 			txq_ix %= selq->num_regular_queues;
@@ -326,27 +330,39 @@ static inline void mlx5e_insert_vlan(void *start, struct sk_buff *skb, u16 ihs)
 	memcpy(&vhdr->h_vlan_encapsulated_proto, skb->data + cpy1_sz, cpy2_sz);
 }
 
+#ifdef CONFIG_MLX5_EN_IPSEC
 /* If packet is not IP's CHECKSUM_PARTIAL (e.g. icmd packet),
  * need to set L3 checksum flag for IPsec
  */
-static void
-ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
-			    struct mlx5_wqe_eth_seg *eseg)
+static void ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+					struct mlx5_wqe_eth_seg *eseg)
 {
+	u32 inner_ipproto = 0;
+
 	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
-	if (skb->encapsulation) {
-		eseg->cs_flags |= MLX5_ETH_WQE_L3_INNER_CSUM;
+	if (inner_ipproto) {
+		eseg->cs_flags |= MLX5_ETH_WQE_L4_INNER_CSUM | MLX5_ETH_WQE_L3_INNER_CSUM;
+		if (likely(skb->ip_summed == CHECKSUM_PARTIAL))
+			sq->stats->csum_partial_inner++;
+	} else if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
+		eseg->cs_flags |= MLX5_ETH_WQE_L4_CSUM;
 		sq->stats->csum_partial_inner++;
-	} else {
-		sq->stats->csum_partial++;
 	}
 }
+#endif
 
 static inline void
 mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 			    struct mlx5e_accel_tx_state *accel,
 			    struct mlx5_wqe_eth_seg *eseg)
 {
+#ifdef CONFIG_MLX5_EN_IPSEC
+	if (unlikely(mlx5e_ipsec_eseg_meta(eseg))) {
+		ipsec_txwqe_build_eseg_csum(sq, skb, eseg);
+		return;
+	}
+#endif
+
 	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
 		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
 		if (skb->encapsulation) {
@@ -362,9 +378,6 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM | MLX5_ETH_WQE_L4_CSUM;
 		sq->stats->csum_partial++;
 #endif
-	} else if (unlikely(eseg->flow_table_metadata & cpu_to_be32(MLX5_ETH_WQE_FT_META_IPSEC))) {
-		ipsec_txwqe_build_eseg_csum(sq, skb, eseg);
-
 	} else
 		sq->stats->csum_none++;
 }
@@ -558,7 +571,7 @@ static void mlx5e_tx_check_stop(struct mlx5e_txqsq *sq)
 }
 
 static inline bool mlx5e_is_skb_driver_xmit_more(struct sk_buff *skb,
-						 struct mlx5e_txqsq *sq)
+		struct mlx5e_txqsq *sq)
 {
 	if (test_bit(MLX5E_SQ_STATE_SKB_XMIT_MORE, &sq->state))
 		return skb->cb[47] & MLX5_XMIT_MORE_SKB_CB;
@@ -615,7 +628,6 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	struct mlx5_wqe_data_seg *dseg;
 	struct mlx5e_tx_wqe_info *wi;
 
-	bool vlan_present = skb_vlan_tag_present(skb);
 	struct mlx5e_sq_stats *stats = sq->stats;
 	int num_dma;
 
@@ -630,7 +642,7 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	eseg->mss = attr->mss;
 
 	if (attr->ihs) {
-		if (vlan_present) {
+		if (skb_vlan_tag_present(skb)) {
 			eseg->inline_hdr.sz |= cpu_to_be16(attr->ihs + VLAN_HLEN);
 			mlx5e_insert_vlan(eseg->inline_hdr.start, skb, attr->ihs);
 			stats->added_vlan_packets++;
@@ -639,7 +651,7 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 			memcpy(eseg->inline_hdr.start, skb->data, attr->ihs);
 		}
 		dseg += wqe_attr->ds_cnt_inl;
-	} else if (vlan_present) {
+	} else if (skb_vlan_tag_present(skb)) {
 		eseg->insert.type = cpu_to_be16(MLX5_ETH_WQE_INSERT_VLAN);
 		if (skb->vlan_proto == cpu_to_be16(ETH_P_8021AD))
 			eseg->insert.type |= cpu_to_be16(MLX5_ETH_WQE_SVLAN);
@@ -840,6 +852,17 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
 	u16 pi;
 
 	sq = priv->txq2sq[skb_get_queue_mapping(skb)];
+	if (unlikely(!sq)) {
+		/* HTB queues are not guaranteed to be present in txq2sq. First,
+		 * the HTB node is registered, which allows mlx5e_select_queue
+		 * to select the corresponding queue ID. The SQ is created a bit
+		 * later, which leaves a time frame where txq2sq is still NULL.
+		 * Also, the SQ might fail to be created, which leaves txq2sq as
+		 * NULL for indefinite time.
+		 */
+		dev_kfree_skb_any(skb);
+		return NETDEV_TX_OK;
+	}
 
 	/* May send SKBs and WQEs. */
 	if (unlikely(!mlx5e_accel_tx_begin(dev, sq, skb, &accel)))

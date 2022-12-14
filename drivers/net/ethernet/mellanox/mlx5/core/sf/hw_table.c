@@ -5,14 +5,11 @@
 #include "priv.h"
 #include "sf.h"
 #include "mlx5_ifc_vhca_event.h"
+#include "ecpf.h"
 #include "vhca_event.h"
 #include "mlx5_core.h"
 #include "eswitch.h"
 
-/* Follow condition should be moved to backports in next rebase
-   as a result of CONFIG_MLX5_SF_MANAGER is set we need to block it
-   to allow compilation without backports on base kernel 5.9 
-   */
 struct mlx5_sf_hw {
 	u32 usr_sfnum;
 	u8 allocated: 1;

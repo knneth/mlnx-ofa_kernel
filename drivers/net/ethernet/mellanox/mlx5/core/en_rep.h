@@ -59,6 +59,8 @@ struct mlx5e_neigh_update_table {
 
 struct mlx5_tc_ct_priv;
 struct mlx5e_rep_bond;
+struct mlx5e_tc_tun_encap;
+struct mlx5e_post_act;
 struct mlx5e_flow_meters;
 
 struct mlx5_rep_uplink_priv {
@@ -83,18 +85,20 @@ struct mlx5_rep_uplink_priv {
 	struct list_head            unready_flows;
 	struct work_struct          reoffload_flows_work;
 
-	struct notifier_block fib_nb;
-
 	/* maps tun_info to a unique id*/
 	struct mapping_ctx *tunnel_mapping;
 	/* maps tun_enc_opts to a unique id*/
 	struct mapping_ctx *tunnel_enc_opts_mapping;
 
+	struct mlx5e_post_act *post_act;
 	struct mlx5_tc_ct_priv *ct_priv;
-	struct mlx5_tc_psample *tc_psample;
+	struct mlx5e_tc_psample *tc_psample;
 
 	/* support eswitch vports bonding */
 	struct mlx5e_rep_bond *bond;
+
+	/* tc tunneling encapsulation private data */
+	struct mlx5e_tc_tun_encap *encap;
 
 	struct mlx5e_flow_meters *flow_meters;
 };
@@ -115,6 +119,7 @@ struct rep_meter {
 struct mlx5_rep_sysfs {
 	struct mlx5_eswitch    *esw;
 	struct kobject          kobj;
+	struct kobject		paging_kobj;
 	int                     vport;
 };
 
@@ -150,7 +155,7 @@ struct mlx5e_neigh_hash_entry {
 	struct rhash_head rhash_node;
 	struct mlx5e_neigh m_neigh;
 	struct mlx5e_priv *priv;
-	struct net_device *dev;
+	struct net_device *neigh_dev;
 
 	/* Save the neigh hash entry in a list on the representor in
 	 * addition to the hash table. In order to iterate easily over the
@@ -217,7 +222,6 @@ struct mlx5e_encap_entry {
 
 	struct net_device *out_dev;
 	int route_dev_ifindex;
-	struct net_device *route_dev;
 	struct mlx5e_tc_tunnel *tunnel;
 	int reformat_type;
 	u8 flags;
@@ -231,28 +235,9 @@ struct mlx5e_encap_entry {
 
 struct mlx5e_rep_sq {
 	struct mlx5_flow_handle	*send_to_vport_rule;
-	struct mlx5_flow_handle	*send_to_vport_rule_peer;
+	struct mlx5_flow_handle *send_to_vport_rule_peer;
 	u32 sqn;
 	struct list_head	 list;
-};
-
-struct mlx5e_route_key {
-	int ip_version;
-	union {
-		__be32 v4;
-		struct in6_addr v6;
-	} endpoint_ip;
-};
-
-struct mlx5e_route_entry {
-	struct mlx5e_route_key key;
-	struct list_head encap_entries;
-	struct list_head decap_flows;
-	bool valid;
-	struct hlist_node hlist;
-	refcount_t refcnt;
-	int tunnel_dev_index;
-	struct rcu_head rcu;
 };
 
 int mlx5e_rep_init(void);
@@ -266,44 +251,36 @@ void mlx5e_rep_bond_unslave(struct mlx5_eswitch *esw,
 			    const struct net_device *lag_dev);
 int mlx5e_rep_bond_update(struct mlx5e_priv *priv, bool cleanup);
 
-bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv);
-
 bool mlx5e_rep_has_offload_stats(const struct net_device *dev, int attr_id);
 int mlx5e_rep_get_offload_stats(int attr_id, const struct net_device *dev,
 				void *sp);
 
+bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv);
 int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv);
 void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv);
 
 void mlx5e_rep_queue_neigh_stats_work(struct mlx5e_priv *priv);
 
-bool mlx5e_eswitch_vf_rep(struct net_device *netdev);
-bool mlx5e_eswitch_uplink_rep(struct net_device *netdev);
-static inline bool mlx5e_eswitch_rep(struct net_device *netdev)
+bool mlx5e_eswitch_vf_rep(const struct net_device *netdev);
+bool mlx5e_eswitch_uplink_rep(const struct net_device *netdev);
+static inline bool mlx5e_eswitch_rep(const struct net_device *netdev)
 {
 	return mlx5e_eswitch_vf_rep(netdev) ||
 	       mlx5e_eswitch_uplink_rep(netdev);
 }
 
-struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev);
-
 #else /* CONFIG_MLX5_ESWITCH */
 static inline bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv) { return false; }
 static inline int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv) { return 0; }
+static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
+static inline bool mlx5e_eswitch_vf_rep(struct net_device *netdev) { return false; }
+static inline int mlx5e_rep_init(void) { return 0; };
+static inline void mlx5e_rep_cleanup(void) {};
 static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,
 					       int attr_id) { return false; }
 static inline int mlx5e_rep_get_offload_stats(int attr_id,
 					      const struct net_device *dev,
 					      void *sp) { return -EOPNOTSUPP; }
-static inline void mlx5e_rep_register_vport_reps(struct mlx5_core_dev *mdev,
-						 struct mlx5e_priv *priv) {}
-static inline void mlx5e_rep_unregister_vport_reps(struct mlx5_core_dev *mdev) {}
-static inline bool mlx5e_eswitch_vf_rep(struct net_device *netdev) { return false; }
-static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
-static inline struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev)
-{ return NULL; }
-static inline int mlx5e_rep_init(void) { return 0; };
-static inline void mlx5e_rep_cleanup(void) {};
 #endif
 
 static inline bool mlx5e_is_vport_rep(const struct mlx5e_priv *priv)

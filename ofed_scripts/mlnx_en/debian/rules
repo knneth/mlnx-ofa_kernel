@@ -18,6 +18,7 @@
 MLX5 ?= 1
 MLXFW ?= 1
 WITH_DKMS ?= 1
+WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
@@ -84,6 +85,9 @@ override_dh_auto_install:
 ifneq ($(WITH_DKMS),1)
 	make install_modules KSRC=$(kernel_source_dir) KVERSION=$(kernelver) INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) KERNELRELEASE=$(kernelver)
 	find $(INSTALL_MOD_PATH) \( -type f -a -name "modules.*" \) -delete
+ifeq ($(WITH_MOD_SIGN),1)
+	source/ofed_scripts/tools/sign-modules $(INSTALL_MOD_PATH)/lib/modules/ $(kernel_source_dir)
+endif
 endif
 
 	# For dkms
@@ -145,5 +149,8 @@ ifneq ($(WITH_DKMS),1)
 override_dh_strip:
 	dh_strip
 	find debian -name '*.ko' | xargs strip -g
+ifeq ($(WITH_MOD_SIGN),1)
+	source/ofed_scripts/tools/sign-modules $(INSTALL_MOD_PATH)/lib/modules/ $(kernel_source_dir)
+endif
 endif
 endif

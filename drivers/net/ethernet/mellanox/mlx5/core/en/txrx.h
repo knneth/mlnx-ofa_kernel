@@ -21,9 +21,10 @@
 #endif
 
 #define MLX5E_TX_MPW_MAX_NUM_DS (MLX5E_TX_MPW_MAX_WQEBBS * MLX5_SEND_WQEBB_NUM_DS)
+#define MLX5_XMIT_MORE_SKB_CB 0xa
 
 #define INL_HDR_START_SZ (sizeof(((struct mlx5_wqe_eth_seg *)NULL)->inline_hdr.start))
-#define MLX5_XMIT_MORE_SKB_CB 0xa
+
 #define MLX5E_RX_ERR_CQE(cqe) (get_cqe_opcode(cqe) != MLX5_CQE_RESP_SEND)
 
 static inline
@@ -44,6 +45,11 @@ enum mlx5e_icosq_wqe_type {
 };
 
 /* General */
+static inline bool mlx5e_skb_is_multicast(struct sk_buff *skb)
+{
+	return skb->pkt_type == PACKET_MULTICAST || skb->pkt_type == PACKET_BROADCAST;
+}
+
 void mlx5e_trigger_irq(struct mlx5e_icosq *sq);
 void mlx5e_completion_event(struct mlx5_core_cq *mcq, struct mlx5_eqe *eqe);
 void mlx5e_cq_error_event(struct mlx5_core_cq *mcq, enum mlx5_event event);
@@ -68,11 +74,6 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev);
 bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget);
 void mlx5e_free_txqsq_descs(struct mlx5e_txqsq *sq);
-
-static inline bool mlx5e_skb_is_multicast(struct sk_buff *skb)
-{
-	return skb->pkt_type == PACKET_MULTICAST || skb->pkt_type == PACKET_BROADCAST;
-}
 
 static inline bool
 mlx5e_wqc_has_room_for(struct mlx5_wq_cyc *wq, u16 cc, u16 pc, u16 n)

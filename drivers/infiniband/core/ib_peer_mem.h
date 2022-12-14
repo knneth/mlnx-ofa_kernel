@@ -49,6 +49,13 @@ struct ib_umem_peer {
 	struct mutex mapping_lock;
 	enum ib_umem_mapped_state mapped_state;
 	u32 xa_id;
+	struct scatterlist *first_sg;
+	dma_addr_t first_dma_address;
+	unsigned int first_dma_length;
+	unsigned int first_length;
+	struct scatterlist *last_sg;
+	unsigned int last_dma_length;
+	unsigned int last_length;
 };
 
 struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,

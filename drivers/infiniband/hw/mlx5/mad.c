@@ -300,7 +300,7 @@ int mlx5_ib_process_mad(struct ib_device *ibdev, int mad_flags, u32 port_num,
 	return IB_MAD_RESULT_SUCCESS | IB_MAD_RESULT_REPLY;
 }
 
-int mlx5_query_ext_port_caps(struct mlx5_ib_dev *dev, u32 port)
+int mlx5_query_ext_port_caps(struct mlx5_ib_dev *dev, unsigned int port)
 {
 	struct ib_smp *in_mad  = NULL;
 	struct ib_smp *out_mad = NULL;
@@ -604,11 +604,6 @@ int mlx5_query_mad_ifc_port(struct ib_device *ibdev, u32 port,
 			if (props->port_cap_flags & IB_PORT_CAP_MASK2_SUP &&
 			    props->port_cap_flags2 & IB_PORT_LINK_SPEED_HDR_SUP)
 				props->active_speed = IB_SPEED_HDR;
-			break;
-		case 8:
-			if (props->port_cap_flags & IB_PORT_CAP_MASK2_SUP &&
-			    props->port_cap_flags2 & IB_PORT_LINK_SPEED_NDR_SUP)
-				props->active_speed = IB_SPEED_NDR;
 			break;
 		}
 	}

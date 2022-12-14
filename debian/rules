@@ -15,6 +15,8 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+-include /usr/share/dpkg/architecture.mk
+
 WITH_DKMS ?= 1
 WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
@@ -41,6 +43,7 @@ DIST_RELEASE := $(DIST_NAME)/$(shell lsb_release -sc)
 kernelver ?= $(shell uname -r)
 kernelver1 = $(shell echo $(kernelver) | sed -e 's/_/-/g')
 kernel_source_dir ?= "/lib/modules/$(kernelver)/build"
+deb_arch = $(shell uname -m)
 
 %:
 ifeq ($(WITH_DKMS),1)
@@ -62,6 +65,7 @@ ifneq ($(WITH_DKMS),1)
 	$(CURDIR)/configure --kernel-version=$(kernelver) --kernel-sources=$(kernel_source_dir) $(shell $(CURDIR)/ofed_scripts/dkms_ofed $(kernelver) $(kernel_source_dir) get-config) --with-njobs=$(NJOBS)
 endif
 
+mod_dev_dir = /usr/src/ofa_kernel/$(deb_arch)/$(kernelver)
 override_dh_auto_build:
 ifneq ($(WITH_DKMS),1)
 	make distclean || true
@@ -79,6 +83,7 @@ endif
 endif
 
 
+ifeq ($(WITH_DKMS),1)
 	# For dkms
 	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(pversion)
 	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -96,6 +101,7 @@ endif
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/makefile
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/Makefile
 	cd debian/$(pdkms)/usr/src; ln -snf $(pname)-$(pversion) ofa_kernel-$(pversion)
+endif
 	#
 	# Sources for building stuff over MLNX_OFED
 	#
@@ -106,12 +112,12 @@ ifeq ($(WITH_DKMS),1)
 	dh_installdirs -p$(pdkms)  usr/src/ofa_kernel/
 	# copy the ofa-kernel build headers using ofed_scripts/pre_build.sh in the DKMS MAKE step (called from ofed_scripts/pre_build.sh).
 else
-	dh_installdirs -p$(pdkms)  usr/src/ofa_kernel/default
-	cp -ar include/			debian/$(pdkms)/usr/src/ofa_kernel/default/
-	cp -ar config*			debian/$(pdkms)/usr/src/ofa_kernel/default/
-	cp -ar compat*			debian/$(pdkms)/usr/src/ofa_kernel/default/
-	cp -ar ofed_scripts		debian/$(pdkms)/usr/src/ofa_kernel/default/
-	cp -ar Module*.symvers		debian/$(pdkms)/usr/src/ofa_kernel/default/
+	dh_installdirs -p$(pdkms)  $(mod_dev_dir)
+	cp -a include/			debian/$(pdkms)$(mod_dev_dir)
+	cp -a config*			debian/$(pdkms)$(mod_dev_dir)
+	cp -a compat*			debian/$(pdkms)$(mod_dev_dir)
+	cp -a ofed_scripts		debian/$(pdkms)$(mod_dev_dir)
+	cp -a Module*.symvers		debian/$(pdkms)$(mod_dev_dir)
 endif
 
 	# Force DKMS to install our modules.
@@ -191,6 +197,13 @@ override_dh_installdeb:
 	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/mlnx-bf.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles
+ifneq ($(WITH_DKMS),1)
+	sed -i \
+		-e 's/@KVER@/$(kernelver)/' \
+		-e 's/@ARCH@/$(deb_arch)/' \
+		debian/$(pdkms)/DEBIAN/postinst \
+		debian/$(pdkms)/DEBIAN/prerm
+endif
 
 ifneq ($(MLNX_KO_NO_STRIP),1)
 ifneq ($(WITH_DKMS),1)

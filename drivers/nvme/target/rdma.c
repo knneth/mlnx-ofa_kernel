@@ -472,7 +472,8 @@ static int nvmet_rdma_alloc_rsp(struct nvmet_rdma_device *ndev,
 	if (ib_dma_mapping_error(ndev->device, r->send_sge.addr))
 		goto out_free_rsp;
 
-	r->req.p2p_client = &ndev->device->dev;
+	if (!ib_uses_virt_dma(ndev->device))
+		r->req.p2p_client = &ndev->device->dev;
 	r->send_sge.length = sizeof(*r->req.cqe);
 	r->send_sge.lkey = ndev->pd->local_dma_lkey;
 
@@ -859,9 +860,8 @@ static void nvmet_rdma_write_data_done(struct ib_cq *cq, struct ib_wc *wc)
 		nvmet_req_uninit(&rsp->req);
 		nvmet_rdma_release_rsp(rsp);
 		if (wc->status != IB_WC_WR_FLUSH_ERR) {
-			pr_info("RDMA WRITE for CQE 0x%p failed with status %s (%d).\n",
-				wc->wr_cqe, ib_wc_status_msg(wc->status),
-				wc->status);
+			pr_info("RDMA WRITE for CQE failed with status %s (%d).\n",
+				ib_wc_status_msg(wc->status), wc->status);
 			nvmet_rdma_error_comp(queue);
 		}
 		return;
@@ -1277,6 +1277,14 @@ nvmet_rdma_find_get_device(struct rdma_cm_id *cm_id)
 	}
 	ndev->inline_data_size = nport->inline_data_size;
 	ndev->inline_page_count = inline_page_count;
+
+	if (nport->pi_enable && !(cm_id->device->attrs.device_cap_flags &
+				  IB_DEVICE_INTEGRITY_HANDOVER)) {
+		pr_warn("T10-PI is not supported by device %s. Disabling it\n",
+			cm_id->device->name);
+		nport->pi_enable = false;
+	}
+
 	ndev->device = cm_id->device;
 	kref_init(&ndev->ref);
 
@@ -1956,14 +1964,6 @@ static int nvmet_rdma_enable_port(struct nvmet_rdma_port *port)
 	ret = rdma_listen(cm_id, 128);
 	if (ret) {
 		pr_err("listening to %pISpcs failed (%d)\n", addr, ret);
-		goto out_destroy_id;
-	}
-
-	if (port->nport->pi_enable &&
-	    !(cm_id->device->attrs.device_cap_flags &
-	      IB_DEVICE_INTEGRITY_HANDOVER)) {
-		pr_err("T10-PI is not supported for %pISpcs\n", addr);
-		ret = -EINVAL;
 		goto out_destroy_id;
 	}
 

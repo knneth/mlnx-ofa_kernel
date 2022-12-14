@@ -6,9 +6,33 @@
 #include <net/geneve.h>
 #include <net/bareudp.h>
 #include "en/tc_tun.h"
+#include "en/tc_priv.h"
 #include "en_tc.h"
 #include "rep/tc.h"
 #include "rep/neigh.h"
+#include "lag/lag.h"
+#include "lag/lag_mp.h"
+
+struct mlx5e_tc_tun_route_attr {
+	struct net_device *out_dev;
+	struct net_device *route_dev;
+	union {
+		struct flowi4 fl4;
+		struct flowi6 fl6;
+	} fl;
+	struct neighbour *n;
+	u8 ttl;
+};
+
+#define TC_TUN_ROUTE_ATTR_INIT(name) struct mlx5e_tc_tun_route_attr name = {}
+
+static void mlx5e_tc_tun_route_attr_cleanup(struct mlx5e_tc_tun_route_attr *attr)
+{
+	if (attr->n)
+		neigh_release(attr->n);
+	if (attr->route_dev)
+		dev_put(attr->route_dev);
+}
 
 struct mlx5e_tc_tunnel *mlx5e_get_tc_tun(struct net_device *tunnel_dev)
 {
@@ -81,13 +105,11 @@ static int get_route_and_out_devs(struct mlx5e_priv *priv,
 }
 
 static int mlx5e_route_lookup_ipv4_get(struct mlx5e_priv *priv,
-				       struct net_device *mirred_dev,
-				       struct net_device **out_dev,
-				       struct net_device **route_dev,
-				       struct flowi4 *fl4,
-				       struct neighbour **out_n,
-				       u8 *out_ttl)
+				       struct net_device *dev,
+				       struct mlx5e_tc_tun_route_attr *attr)
 {
+	struct net_device *route_dev;
+	struct net_device *out_dev;
 	struct neighbour *n;
 	struct rtable *rt;
 
@@ -100,52 +122,60 @@ static int mlx5e_route_lookup_ipv4_get(struct mlx5e_priv *priv,
 		struct mlx5_eswitch *esw = mdev->priv.eswitch;
 
 		uplink_dev = mlx5_eswitch_uplink_get_proto_dev(esw, REP_ETH);
-		fl4->flowi4_oif = uplink_dev->ifindex;
+		attr->fl.fl4.flowi4_oif = uplink_dev->ifindex;
+	} else {
+		struct mlx5e_tc_tunnel *tunnel = mlx5e_get_tc_tun(dev);
+
+		if (tunnel && tunnel->get_remote_ifindex)
+			attr->fl.fl4.flowi4_oif = tunnel->get_remote_ifindex(dev);
 	}
 
-	rt = ip_route_output_key(dev_net(mirred_dev), fl4);
+	rt = ip_route_output_key(dev_net(dev), &attr->fl.fl4);
 	if (IS_ERR(rt))
 		return PTR_ERR(rt);
 
 	if (rt->rt_type != RTN_UNICAST) {
-		ip_rt_put(rt);
-		return -ENETUNREACH;
+		ret = -ENETUNREACH;
+		goto err_rt_release;
 	}
 
 	if (mlx5_lag_is_multipath(mdev) && rt->rt_gw_family != AF_INET) {
-		ip_rt_put(rt);
-		return -ENETUNREACH;
+		ret = -ENETUNREACH;
+		goto err_rt_release;
 	}
 #else
 	return -EOPNOTSUPP;
 #endif
 
-	ret = get_route_and_out_devs(priv, rt->dst.dev, route_dev, out_dev);
-	/* For decap we do route lookup only and out_n == NULL. Return here */
-	if (ret < 0 || !out_n) {
-		if (!ret)
-			dev_hold(*route_dev);
-		ip_rt_put(rt);
-		return ret;
+	ret = get_route_and_out_devs(priv, rt->dst.dev, &route_dev, &out_dev);
+	if (ret < 0)
+		goto err_rt_release;
+	dev_hold(route_dev);
+
+	if (!attr->ttl)
+		attr->ttl = ip4_dst_hoplimit(&rt->dst);
+	n = dst_neigh_lookup(&rt->dst, &attr->fl.fl4.daddr);
+	if (!n) {
+		ret = -ENOMEM;
+		goto err_dev_release;
 	}
 
-	if (!(*out_ttl))
-		*out_ttl = ip4_dst_hoplimit(&rt->dst);
-	n = dst_neigh_lookup(&rt->dst, &fl4->daddr);
 	ip_rt_put(rt);
-	if (!n)
-		return -ENOMEM;
-
-	*out_n = n;
+	attr->route_dev = route_dev;
+	attr->out_dev = out_dev;
+	attr->n = n;
 	return 0;
+
+err_dev_release:
+	dev_put(route_dev);
+err_rt_release:
+	ip_rt_put(rt);
+	return ret;
 }
 
-static void mlx5e_route_lookup_ipv4_put(struct net_device *route_dev,
-                                        struct neighbour *n)
+static void mlx5e_route_lookup_ipv4_put(struct mlx5e_tc_tun_route_attr *attr)
 {
-	if (n)
-		neigh_release(n);
-	dev_put(route_dev);
+	mlx5e_tc_tun_route_attr_cleanup(attr);
 }
 
 static const char *mlx5e_netdev_kind(struct net_device *dev)
@@ -191,75 +221,33 @@ static char *gen_eth_tnl_hdr(char *buf, struct net_device *dev,
 	return ip;
 }
 
-int mlx5e_tc_tun_query_route_vport(struct net_device *out_dev, struct net_device *route_dev,
-				   u16 *vport)
-{
-	struct mlx5_core_dev *out_mdev, *route_mdev;
-	struct mlx5e_priv *out_priv, *route_priv;
-	u64 uplink_guid, dev_guid;
-	struct mlx5_eswitch *esw;
-	u16 vhca_id;
-	int err;
-
-	out_priv = netdev_priv(out_dev);
-	esw = out_priv->mdev->priv.eswitch;
-	out_mdev = out_priv->mdev;
-	route_priv = netdev_priv(route_dev);
-	route_mdev = route_priv->mdev;
-
-	if (out_mdev->coredev_type != MLX5_COREDEV_PF ||
-	    route_mdev->coredev_type != MLX5_COREDEV_VF)
-		return -EINVAL;
-
-	err = mlx5_query_nic_vport_system_image_guid(out_mdev, &uplink_guid);
-	if (err)
-		return err;
-
-	err = mlx5_query_nic_vport_system_image_guid(route_mdev, &dev_guid);
-	if (err)
-		return err;
-
-	/* Not on same eswitch */
-	if (uplink_guid != dev_guid)
-		return -EINVAL;
-
-	vhca_id = MLX5_CAP_GEN(route_mdev, vhca_id);
-	err = mlx5_eswitch_get_vport_from_vhca_id(esw, vhca_id, vport);
-	if (err)
-		return err;
-
-	return 0;
-}
-
 int mlx5e_tc_tun_create_header_ipv4(struct mlx5e_priv *priv,
 				    struct net_device *mirred_dev,
 				    struct mlx5e_encap_entry *e)
 {
 	int max_encap_size = MLX5_CAP_ESW(priv->mdev, max_encap_header_size);
 	const struct ip_tunnel_key *tun_key = &e->tun_info->key;
-	struct net_device *out_dev, *route_dev;
+	struct mlx5_pkt_reformat_params reformat_params;
 	struct mlx5e_neigh m_neigh = {};
-	struct flowi4 fl4 = {};
-	struct neighbour *n;
+	TC_TUN_ROUTE_ATTR_INIT(attr);
 	int ipv4_encap_size;
 	char *encap_header;
-	u8 nud_state, ttl;
 	struct iphdr *ip;
+	u8 nud_state;
 	int err;
 
 	/* add the IP fields */
-	fl4.flowi4_tos = tun_key->tos;
-	fl4.daddr = tun_key->u.ipv4.dst;
-	fl4.saddr = tun_key->u.ipv4.src;
-	ttl = tun_key->ttl;
+	attr.fl.fl4.flowi4_tos = tun_key->tos;
+	attr.fl.fl4.daddr = tun_key->u.ipv4.dst;
+	attr.fl.fl4.saddr = tun_key->u.ipv4.src;
+	attr.ttl = tun_key->ttl;
 
-	err = mlx5e_route_lookup_ipv4_get(priv, mirred_dev, &out_dev, &route_dev,
-					  &fl4, &n, &ttl);
+	err = mlx5e_route_lookup_ipv4_get(priv, mirred_dev, &attr);
 	if (err)
 		return err;
 
 	ipv4_encap_size =
-		(is_vlan_dev(route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
+		(is_vlan_dev(attr.route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
 		sizeof(struct iphdr) +
 		e->tunnel->calc_hlen(e);
 
@@ -276,37 +264,36 @@ int mlx5e_tc_tun_create_header_ipv4(struct mlx5e_priv *priv,
 		goto release_neigh;
 	}
 
-	m_neigh.family = n->ops->family;
-	memcpy(&m_neigh.dst_ip, n->primary_key, n->tbl->key_len);
-	e->out_dev = out_dev;
-	e->route_dev = route_dev;
-	e->route_dev_ifindex = route_dev->ifindex;
+	m_neigh.family = attr.n->ops->family;
+	memcpy(&m_neigh.dst_ip, attr.n->primary_key, attr.n->tbl->key_len);
+	e->out_dev = attr.out_dev;
+	e->route_dev_ifindex = attr.route_dev->ifindex;
 
 	/* It's important to add the neigh to the hash table before checking
 	 * the neigh validity state. So if we'll get a notification, in case the
 	 * neigh changes it's validity state, we would find the relevant neigh
 	 * in the hash.
 	 */
-	err = mlx5e_rep_encap_entry_attach(netdev_priv(out_dev), e, &m_neigh, n->dev);
+	err = mlx5e_rep_encap_entry_attach(netdev_priv(attr.out_dev), e, &m_neigh, attr.n->dev);
 	if (err)
 		goto free_encap;
 
-	read_lock_bh(&n->lock);
-	nud_state = n->nud_state;
-	ether_addr_copy(e->h_dest, n->ha);
-	read_unlock_bh(&n->lock);
+	read_lock_bh(&attr.n->lock);
+	nud_state = attr.n->nud_state;
+	ether_addr_copy(e->h_dest, attr.n->ha);
+	read_unlock_bh(&attr.n->lock);
 
 	/* add ethernet header */
-	ip = (struct iphdr *)gen_eth_tnl_hdr(encap_header, route_dev, e,
+	ip = (struct iphdr *)gen_eth_tnl_hdr(encap_header, attr.route_dev, e,
 					     ETH_P_IP);
 
 	/* add ip header */
 	ip->tos = tun_key->tos;
 	ip->version = 0x4;
 	ip->ihl = 0x5;
-	ip->ttl = ttl;
-	ip->daddr = fl4.daddr;
-	ip->saddr = fl4.saddr;
+	ip->ttl = attr.ttl;
+	ip->daddr = attr.fl.fl4.daddr;
+	ip->saddr = attr.fl.fl4.saddr;
 
 	/* add tunneling protocol header */
 	err = mlx5e_gen_ip_tunnel_header((char *)ip + sizeof(struct iphdr),
@@ -318,24 +305,27 @@ int mlx5e_tc_tun_create_header_ipv4(struct mlx5e_priv *priv,
 	e->encap_header = encap_header;
 
 	if (!(nud_state & NUD_VALID)) {
-		neigh_event_send(n, NULL);
+		neigh_event_send(attr.n, NULL);
 		/* the encap entry will be made valid on neigh update event
 		 * and not used before that.
 		 */
 		goto release_neigh;
 	}
-	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev,
-						     e->reformat_type, 0, 0,
-						     ipv4_encap_size, encap_header,
-						     MLX5_FLOW_NAMESPACE_FDB);
+
+	memset(&reformat_params, 0, sizeof(reformat_params));
+	reformat_params.type = e->reformat_type;
+	reformat_params.size = ipv4_encap_size;
+	reformat_params.data = encap_header;
+	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev, &reformat_params,
+						     MLX5_FLOW_NAMESPACE_FDB_KERNEL);
 	if (IS_ERR(e->pkt_reformat)) {
 		err = PTR_ERR(e->pkt_reformat);
 		goto destroy_neigh_entry;
 	}
 
 	e->flags |= MLX5_ENCAP_ENTRY_VALID;
-	mlx5e_rep_queue_neigh_stats_work(netdev_priv(out_dev));
-	neigh_release(n);
+	mlx5e_rep_queue_neigh_stats_work(netdev_priv(attr.out_dev));
+	mlx5e_route_lookup_ipv4_put(&attr);
 	return err;
 
 destroy_neigh_entry:
@@ -343,7 +333,7 @@ destroy_neigh_entry:
 free_encap:
 	kfree(encap_header);
 release_neigh:
-	neigh_release(n);
+	mlx5e_route_lookup_ipv4_put(&attr);
 	return err;
 }
 
@@ -353,30 +343,26 @@ int mlx5e_tc_tun_update_header_ipv4(struct mlx5e_priv *priv,
 {
 	int max_encap_size = MLX5_CAP_ESW(priv->mdev, max_encap_header_size);
 	const struct ip_tunnel_key *tun_key = &e->tun_info->key;
-	struct net_device *out_dev, *route_dev = NULL;
-	struct flowi4 fl4 = {};
-	struct neighbour *n;
+	struct mlx5_pkt_reformat_params reformat_params;
+	TC_TUN_ROUTE_ATTR_INIT(attr);
 	int ipv4_encap_size;
 	char *encap_header;
-	u8 nud_state, ttl;
 	struct iphdr *ip;
+	u8 nud_state;
 	int err;
 
 	/* add the IP fields */
-	fl4.flowi4_tos = tun_key->tos;
-	fl4.daddr = tun_key->u.ipv4.dst;
-	fl4.saddr = tun_key->u.ipv4.src;
-	ttl = tun_key->ttl;
+	attr.fl.fl4.flowi4_tos = tun_key->tos;
+	attr.fl.fl4.daddr = tun_key->u.ipv4.dst;
+	attr.fl.fl4.saddr = tun_key->u.ipv4.src;
+	attr.ttl = tun_key->ttl;
 
-	err = mlx5e_route_lookup_ipv4_get(priv, mirred_dev, &out_dev, &route_dev,
-					  &fl4, &n, &ttl);
+	err = mlx5e_route_lookup_ipv4_get(priv, mirred_dev, &attr);
 	if (err)
 		return err;
-	if (route_dev)
-		dev_hold(route_dev);
 
 	ipv4_encap_size =
-		(is_vlan_dev(route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
+		(is_vlan_dev(attr.route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
 		sizeof(struct iphdr) +
 		e->tunnel->calc_hlen(e);
 
@@ -393,25 +379,25 @@ int mlx5e_tc_tun_update_header_ipv4(struct mlx5e_priv *priv,
 		goto release_neigh;
 	}
 
-	e->route_dev_ifindex = route_dev->ifindex;
+	e->route_dev_ifindex = attr.route_dev->ifindex;
 
-	read_lock_bh(&n->lock);
-	nud_state = n->nud_state;
-	ether_addr_copy(e->h_dest, n->ha);
-	WRITE_ONCE(e->nhe->dev, n->dev);
-	read_unlock_bh(&n->lock);
+	read_lock_bh(&attr.n->lock);
+	nud_state = attr.n->nud_state;
+	ether_addr_copy(e->h_dest, attr.n->ha);
+	WRITE_ONCE(e->nhe->neigh_dev, attr.n->dev);
+	read_unlock_bh(&attr.n->lock);
 
 	/* add ethernet header */
-	ip = (struct iphdr *)gen_eth_tnl_hdr(encap_header, route_dev, e,
+	ip = (struct iphdr *)gen_eth_tnl_hdr(encap_header, attr.route_dev, e,
 					     ETH_P_IP);
 
 	/* add ip header */
 	ip->tos = tun_key->tos;
 	ip->version = 0x4;
 	ip->ihl = 0x5;
-	ip->ttl = ttl;
-	ip->daddr = fl4.daddr;
-	ip->saddr = fl4.saddr;
+	ip->ttl = attr.ttl;
+	ip->daddr = attr.fl.fl4.daddr;
+	ip->saddr = attr.fl.fl4.saddr;
 
 	/* add tunneling protocol header */
 	err = mlx5e_gen_ip_tunnel_header((char *)ip + sizeof(struct iphdr),
@@ -424,71 +410,85 @@ int mlx5e_tc_tun_update_header_ipv4(struct mlx5e_priv *priv,
 	e->encap_header = encap_header;
 
 	if (!(nud_state & NUD_VALID)) {
-		neigh_event_send(n, NULL);
+		neigh_event_send(attr.n, NULL);
 		/* the encap entry will be made valid on neigh update event
 		 * and not used before that.
 		 */
 		goto release_neigh;
 	}
-	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev,
-						     e->reformat_type, 0, 0,
-						     ipv4_encap_size, encap_header,
-						     MLX5_FLOW_NAMESPACE_FDB);
+
+	memset(&reformat_params, 0, sizeof(reformat_params));
+	reformat_params.type = e->reformat_type;
+	reformat_params.size = ipv4_encap_size;
+	reformat_params.data = encap_header;
+	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev, &reformat_params,
+						     MLX5_FLOW_NAMESPACE_FDB_KERNEL);
 	if (IS_ERR(e->pkt_reformat)) {
 		err = PTR_ERR(e->pkt_reformat);
 		goto free_encap;
 	}
 
 	e->flags |= MLX5_ENCAP_ENTRY_VALID;
-	mlx5e_rep_queue_neigh_stats_work(netdev_priv(out_dev));
-	mlx5e_route_lookup_ipv4_put(route_dev, n);
+	mlx5e_rep_queue_neigh_stats_work(netdev_priv(attr.out_dev));
+	mlx5e_route_lookup_ipv4_put(&attr);
 	return err;
 
 free_encap:
 	kfree(encap_header);
 release_neigh:
-	mlx5e_route_lookup_ipv4_put(route_dev, n);
+	mlx5e_route_lookup_ipv4_put(&attr);
 	return err;
 }
 
 #if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6)
 static int mlx5e_route_lookup_ipv6_get(struct mlx5e_priv *priv,
-				       struct net_device *mirred_dev,
-				       struct net_device **out_dev,
-				       struct net_device **route_dev,
-				       struct flowi6 *fl6,
-				       struct neighbour **out_n,
-				       u8 *out_ttl)
+				       struct net_device *dev,
+				       struct mlx5e_tc_tun_route_attr *attr)
 {
+	struct mlx5e_tc_tunnel *tunnel = mlx5e_get_tc_tun(dev);
+	struct net_device *route_dev;
+	struct net_device *out_dev;
 	struct dst_entry *dst;
 	struct neighbour *n;
-
 	int ret;
 
-	dst = ipv6_stub->ipv6_dst_lookup_flow(dev_net(mirred_dev), NULL, fl6,
+	if (tunnel && tunnel->get_remote_ifindex)
+		attr->fl.fl6.flowi6_oif = tunnel->get_remote_ifindex(dev);
+	dst = ipv6_stub->ipv6_dst_lookup_flow(dev_net(dev), NULL, &attr->fl.fl6,
 					      NULL);
 	if (IS_ERR(dst))
 		return PTR_ERR(dst);
 
-	if (out_ttl && !(*out_ttl))
-		*out_ttl = ip6_dst_hoplimit(dst);
+	if (!attr->ttl)
+		attr->ttl = ip6_dst_hoplimit(dst);
 
-	ret = get_route_and_out_devs(priv, dst->dev, route_dev, out_dev);
-	/* For decap we only do route lookup and out_n == NULL. Return here */
-	if (ret < 0 || !out_n) {
-		if (!ret)
-			dev_hold(*route_dev);
-		dst_release(dst);
-		return ret;
+	ret = get_route_and_out_devs(priv, dst->dev, &route_dev, &out_dev);
+	if (ret < 0)
+		goto err_dst_release;
+
+	dev_hold(route_dev);
+	n = dst_neigh_lookup(dst, &attr->fl.fl6.daddr);
+	if (!n) {
+		ret = -ENOMEM;
+		goto err_dev_release;
 	}
 
-	n = dst_neigh_lookup(dst, &fl6->daddr);
 	dst_release(dst);
-	if (!n)
-		return -ENOMEM;
-
-	*out_n = n;
+	attr->out_dev = out_dev;
+	attr->route_dev = route_dev;
+	attr->n = n;
 	return 0;
+
+err_dev_release:
+	dev_put(route_dev);
+err_dst_release:
+	dst_release(dst);
+	return ret;
+}
+
+static void mlx5e_route_lookup_ipv6_put(struct mlx5e_tc_tun_route_attr *attr)
+{
+	mlx5e_tc_tun_route_attr_cleanup(attr);
 }
 
 int mlx5e_tc_tun_create_header_ipv6(struct mlx5e_priv *priv,
@@ -497,29 +497,26 @@ int mlx5e_tc_tun_create_header_ipv6(struct mlx5e_priv *priv,
 {
 	int max_encap_size = MLX5_CAP_ESW(priv->mdev, max_encap_header_size);
 	const struct ip_tunnel_key *tun_key = &e->tun_info->key;
-	struct net_device *out_dev, *route_dev;
+	struct mlx5_pkt_reformat_params reformat_params;
 	struct mlx5e_neigh m_neigh = {};
-	struct flowi6 fl6 = {};
+	TC_TUN_ROUTE_ATTR_INIT(attr);
 	struct ipv6hdr *ip6h;
-	struct neighbour *n = NULL;
 	int ipv6_encap_size;
 	char *encap_header;
-	u8 nud_state, ttl;
+	u8 nud_state;
 	int err;
 
-	ttl = tun_key->ttl;
+	attr.ttl = tun_key->ttl;
+	attr.fl.fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tun_key->tos), tun_key->label);
+	attr.fl.fl6.daddr = tun_key->u.ipv6.dst;
+	attr.fl.fl6.saddr = tun_key->u.ipv6.src;
 
-	fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tun_key->tos), tun_key->label);
-	fl6.daddr = tun_key->u.ipv6.dst;
-	fl6.saddr = tun_key->u.ipv6.src;
-
-	err = mlx5e_route_lookup_ipv6_get(priv, mirred_dev, &out_dev, &route_dev,
-					  &fl6, &n, &ttl);
+	err = mlx5e_route_lookup_ipv6_get(priv, mirred_dev, &attr);
 	if (err)
 		return err;
 
 	ipv6_encap_size =
-		(is_vlan_dev(route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
+		(is_vlan_dev(attr.route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
 		sizeof(struct ipv6hdr) +
 		e->tunnel->calc_hlen(e);
 
@@ -536,36 +533,35 @@ int mlx5e_tc_tun_create_header_ipv6(struct mlx5e_priv *priv,
 		goto release_neigh;
 	}
 
-	m_neigh.family = n->ops->family;
-	memcpy(&m_neigh.dst_ip, n->primary_key, n->tbl->key_len);
-	e->out_dev = out_dev;
-	e->route_dev = route_dev;
-	e->route_dev_ifindex = route_dev->ifindex;
+	m_neigh.family = attr.n->ops->family;
+	memcpy(&m_neigh.dst_ip, attr.n->primary_key, attr.n->tbl->key_len);
+	e->out_dev = attr.out_dev;
+	e->route_dev_ifindex = attr.route_dev->ifindex;
 
 	/* It's importent to add the neigh to the hash table before checking
 	 * the neigh validity state. So if we'll get a notification, in case the
 	 * neigh changes it's validity state, we would find the relevant neigh
 	 * in the hash.
 	 */
-	err = mlx5e_rep_encap_entry_attach(netdev_priv(out_dev), e, &m_neigh, n->dev);
+	err = mlx5e_rep_encap_entry_attach(netdev_priv(attr.out_dev), e, &m_neigh, attr.n->dev);
 	if (err)
 		goto free_encap;
 
-	read_lock_bh(&n->lock);
-	nud_state = n->nud_state;
-	ether_addr_copy(e->h_dest, n->ha);
-	read_unlock_bh(&n->lock);
+	read_lock_bh(&attr.n->lock);
+	nud_state = attr.n->nud_state;
+	ether_addr_copy(e->h_dest, attr.n->ha);
+	read_unlock_bh(&attr.n->lock);
 
 	/* add ethernet header */
-	ip6h = (struct ipv6hdr *)gen_eth_tnl_hdr(encap_header, route_dev, e,
+	ip6h = (struct ipv6hdr *)gen_eth_tnl_hdr(encap_header, attr.route_dev, e,
 						 ETH_P_IPV6);
 
 	/* add ip header */
 	ip6_flow_hdr(ip6h, tun_key->tos, 0);
 	/* the HW fills up ipv6 payload len */
-	ip6h->hop_limit   = ttl;
-	ip6h->daddr	  = fl6.daddr;
-	ip6h->saddr	  = fl6.saddr;
+	ip6h->hop_limit   = attr.ttl;
+	ip6h->daddr	  = attr.fl.fl6.daddr;
+	ip6h->saddr	  = attr.fl.fl6.saddr;
 
 	/* add tunneling protocol header */
 	err = mlx5e_gen_ip_tunnel_header((char *)ip6h + sizeof(struct ipv6hdr),
@@ -577,25 +573,27 @@ int mlx5e_tc_tun_create_header_ipv6(struct mlx5e_priv *priv,
 	e->encap_header = encap_header;
 
 	if (!(nud_state & NUD_VALID)) {
-		neigh_event_send(n, NULL);
+		neigh_event_send(attr.n, NULL);
 		/* the encap entry will be made valid on neigh update event
 		 * and not used before that.
 		 */
 		goto release_neigh;
 	}
 
-	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev,
-						     e->reformat_type, 0, 0,
-						     ipv6_encap_size, encap_header,
-						     MLX5_FLOW_NAMESPACE_FDB);
+	memset(&reformat_params, 0, sizeof(reformat_params));
+	reformat_params.type = e->reformat_type;
+	reformat_params.size = ipv6_encap_size;
+	reformat_params.data = encap_header;
+	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev, &reformat_params,
+						     MLX5_FLOW_NAMESPACE_FDB_KERNEL);
 	if (IS_ERR(e->pkt_reformat)) {
 		err = PTR_ERR(e->pkt_reformat);
 		goto destroy_neigh_entry;
 	}
 
 	e->flags |= MLX5_ENCAP_ENTRY_VALID;
-	mlx5e_rep_queue_neigh_stats_work(netdev_priv(out_dev));
-	neigh_release(n);
+	mlx5e_rep_queue_neigh_stats_work(netdev_priv(attr.out_dev));
+	mlx5e_route_lookup_ipv6_put(&attr);
 	return err;
 
 destroy_neigh_entry:
@@ -603,16 +601,8 @@ destroy_neigh_entry:
 free_encap:
 	kfree(encap_header);
 release_neigh:
-	neigh_release(n);
+	mlx5e_route_lookup_ipv6_put(&attr);
 	return err;
-}
-
-static void mlx5e_route_lookup_ipv6_put(struct net_device *route_dev,
-                                        struct neighbour *n)
-{
-	if (n)
-		neigh_release(n);
-	dev_put(route_dev);
 }
 
 int mlx5e_tc_tun_update_header_ipv6(struct mlx5e_priv *priv,
@@ -621,30 +611,26 @@ int mlx5e_tc_tun_update_header_ipv6(struct mlx5e_priv *priv,
 {
 	int max_encap_size = MLX5_CAP_ESW(priv->mdev, max_encap_header_size);
 	const struct ip_tunnel_key *tun_key = &e->tun_info->key;
-	struct net_device *out_dev, *route_dev = NULL;
-	struct flowi6 fl6 = {};
+	struct mlx5_pkt_reformat_params reformat_params;
+	TC_TUN_ROUTE_ATTR_INIT(attr);
 	struct ipv6hdr *ip6h;
-	struct neighbour *n = NULL;
 	int ipv6_encap_size;
 	char *encap_header;
-	u8 nud_state, ttl;
+	u8 nud_state;
 	int err;
 
-	ttl = tun_key->ttl;
+	attr.ttl = tun_key->ttl;
 
-	fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tun_key->tos), tun_key->label);
-	fl6.daddr = tun_key->u.ipv6.dst;
-	fl6.saddr = tun_key->u.ipv6.src;
+	attr.fl.fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tun_key->tos), tun_key->label);
+	attr.fl.fl6.daddr = tun_key->u.ipv6.dst;
+	attr.fl.fl6.saddr = tun_key->u.ipv6.src;
 
-	err = mlx5e_route_lookup_ipv6_get(priv, mirred_dev, &out_dev, &route_dev,
-					  &fl6, &n, &ttl);
+	err = mlx5e_route_lookup_ipv6_get(priv, mirred_dev, &attr);
 	if (err)
 		return err;
-	if (route_dev)
-		dev_hold(route_dev);
 
 	ipv6_encap_size =
-		(is_vlan_dev(route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
+		(is_vlan_dev(attr.route_dev) ? VLAN_ETH_HLEN : ETH_HLEN) +
 		sizeof(struct ipv6hdr) +
 		e->tunnel->calc_hlen(e);
 
@@ -661,24 +647,24 @@ int mlx5e_tc_tun_update_header_ipv6(struct mlx5e_priv *priv,
 		goto release_neigh;
 	}
 
-	e->route_dev_ifindex = route_dev->ifindex;
+	e->route_dev_ifindex = attr.route_dev->ifindex;
 
-	read_lock_bh(&n->lock);
-	nud_state = n->nud_state;
-	ether_addr_copy(e->h_dest, n->ha);
-	WRITE_ONCE(e->nhe->dev, n->dev);
-	read_unlock_bh(&n->lock);
+	read_lock_bh(&attr.n->lock);
+	nud_state = attr.n->nud_state;
+	ether_addr_copy(e->h_dest, attr.n->ha);
+	WRITE_ONCE(e->nhe->neigh_dev, attr.n->dev);
+	read_unlock_bh(&attr.n->lock);
 
 	/* add ethernet header */
-	ip6h = (struct ipv6hdr *)gen_eth_tnl_hdr(encap_header, route_dev, e,
+	ip6h = (struct ipv6hdr *)gen_eth_tnl_hdr(encap_header, attr.route_dev, e,
 						 ETH_P_IPV6);
 
 	/* add ip header */
 	ip6_flow_hdr(ip6h, tun_key->tos, 0);
 	/* the HW fills up ipv6 payload len */
-	ip6h->hop_limit   = ttl;
-	ip6h->daddr	  = fl6.daddr;
-	ip6h->saddr	  = fl6.saddr;
+	ip6h->hop_limit   = attr.ttl;
+	ip6h->daddr	  = attr.fl.fl6.daddr;
+	ip6h->saddr	  = attr.fl.fl6.saddr;
 
 	/* add tunneling protocol header */
 	err = mlx5e_gen_ip_tunnel_header((char *)ip6h + sizeof(struct ipv6hdr),
@@ -691,64 +677,61 @@ int mlx5e_tc_tun_update_header_ipv6(struct mlx5e_priv *priv,
 	e->encap_header = encap_header;
 
 	if (!(nud_state & NUD_VALID)) {
-		neigh_event_send(n, NULL);
+		neigh_event_send(attr.n, NULL);
 		/* the encap entry will be made valid on neigh update event
 		 * and not used before that.
 		 */
 		goto release_neigh;
 	}
 
-	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev,
-						     e->reformat_type, 0, 0,
-						     ipv6_encap_size, encap_header,
-						     MLX5_FLOW_NAMESPACE_FDB);
+	memset(&reformat_params, 0, sizeof(reformat_params));
+	reformat_params.type = e->reformat_type;
+	reformat_params.size = ipv6_encap_size;
+	reformat_params.data = encap_header;
+	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev, &reformat_params,
+						     MLX5_FLOW_NAMESPACE_FDB_KERNEL);
 	if (IS_ERR(e->pkt_reformat)) {
 		err = PTR_ERR(e->pkt_reformat);
 		goto free_encap;
 	}
 
 	e->flags |= MLX5_ENCAP_ENTRY_VALID;
-	mlx5e_rep_queue_neigh_stats_work(netdev_priv(out_dev));
-	mlx5e_route_lookup_ipv6_put(route_dev, n);
+	mlx5e_rep_queue_neigh_stats_work(netdev_priv(attr.out_dev));
+	mlx5e_route_lookup_ipv6_put(&attr);
 	return err;
 
 free_encap:
 	kfree(encap_header);
 release_neigh:
-	mlx5e_route_lookup_ipv6_put(route_dev, n);
+	mlx5e_route_lookup_ipv6_put(&attr);
 	return err;
 }
-
 #endif
 
 int mlx5e_tc_tun_route_lookup(struct mlx5e_priv *priv,
-			      struct mlx5_esw_flow_attr *attr,
-			      struct mlx5_flow_spec *spec)
+			      struct mlx5_flow_spec *spec,
+			      struct mlx5_flow_attr *flow_attr,
+			      struct net_device *filter_dev)
 {
+	struct mlx5_esw_flow_attr *esw_attr = flow_attr->esw_attr;
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
-	struct net_device *out_dev, *route_dev;
-	struct mlx5_esw_int_vport *int_port;
+	TC_TUN_ROUTE_ATTR_INIT(attr);
 	u16 vport_num;
+	struct mlx5_esw_int_vport *int_port;
 	int err = 0;
 
-	if (attr->ip_version == 4) {
-		struct flowi4 fl = {};
-
+	if (flow_attr->tun_ip_version == 4) {
 		/* Addresses are swapped for decap */
-		fl.saddr = attr->dst_ip.v4;
-		fl.daddr = attr->src_ip.v4;
-		err = mlx5e_route_lookup_ipv4_get(priv, priv->netdev, &out_dev,
-						  &route_dev, &fl, NULL, NULL);
+		attr.fl.fl4.saddr = esw_attr->rx_tun_attr->dst_ip.v4;
+		attr.fl.fl4.daddr = esw_attr->rx_tun_attr->src_ip.v4;
+		err = mlx5e_route_lookup_ipv4_get(priv, filter_dev, &attr);
 	}
 #if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6)
-	else if (attr->ip_version == 6) {
-		struct flowi6 fl = {};
-
+	else if (flow_attr->tun_ip_version == 6) {
 		/* Addresses are swapped for decap */
-		fl.saddr = attr->dst_ip.v6;
-		fl.daddr = attr->src_ip.v6;
-		err = mlx5e_route_lookup_ipv6_get(priv, priv->netdev, &out_dev,
-						  &route_dev, &fl, NULL, NULL);
+		attr.fl.fl6.saddr = esw_attr->rx_tun_attr->dst_ip.v6;
+		attr.fl.fl6.daddr = esw_attr->rx_tun_attr->src_ip.v6;
+		err = mlx5e_route_lookup_ipv6_get(priv, filter_dev, &attr);
 	}
 #endif
 	else
@@ -757,20 +740,21 @@ int mlx5e_tc_tun_route_lookup(struct mlx5e_priv *priv,
 	if (err)
 		return err;
 
-	if (route_dev->netdev_ops == &mlx5e_netdev_ops) {
-		err = mlx5e_tc_tun_query_route_vport(out_dev, route_dev, &vport_num);
+	if (attr.route_dev->netdev_ops == &mlx5e_netdev_ops &&
+	    mlx5e_tc_is_vf_tunnel(attr.out_dev, attr.route_dev)) {
+		err = mlx5e_tc_query_route_vport(attr.out_dev, attr.route_dev, &vport_num);
 		if (err) {
 			/* route dev is not a VF of out_dev esw */
 			if (err == -EINVAL)
 				err = 0;
 			goto out;
 		}
-		attr->vni = MLX5_GET(fte_match_param, spec->match_value,
+		esw_attr->rx_tun_attr->vni = MLX5_GET(fte_match_param, spec->match_value,
 				misc_parameters.vxlan_vni);
-		attr->decap_vport = vport_num;
-	} else if (netif_is_ovs_master(route_dev)) {
-		int_port = mlx5_esw_get_int_vport(esw, route_dev,
-						  MLX5_ESW_INT_VPORT_INGRESS);
+		esw_attr->rx_tun_attr->decap_vport = vport_num;
+	} else if (netif_is_ovs_master(attr.route_dev)) {
+		int_port = mlx5_esw_get_int_vport(esw, attr.route_dev,
+				MLX5_ESW_INT_VPORT_INGRESS);
 		if (IS_ERR(int_port)) {
 			err = PTR_ERR(int_port);
 
@@ -778,15 +762,15 @@ int mlx5e_tc_tun_route_lookup(struct mlx5e_priv *priv,
 				err = 0;
 			goto out;
 		}
-		attr->int_port = int_port;
+		esw_attr->int_port = int_port;
 	}
 
 out:
-	if (attr->ip_version == 4)
-		mlx5e_route_lookup_ipv4_put(route_dev, NULL);
+	if (flow_attr->tun_ip_version == 4)
+		mlx5e_route_lookup_ipv4_put(&attr);
 #if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6)
-	else if (attr->ip_version == 6)
-		mlx5e_route_lookup_ipv6_put(route_dev, NULL);
+	else if (flow_attr->tun_ip_version == 6)
+		mlx5e_route_lookup_ipv6_put(&attr);
 #endif
 	return err;
 }

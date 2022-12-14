@@ -35,27 +35,70 @@ bool mlx5e_validate_xsk_param(struct mlx5e_params *params,
 	}
 }
 
-static void mlx5e_build_xsk_cparam(struct mlx5e_priv *priv,
+static void mlx5e_build_xsk_cparam(struct mlx5_core_dev *mdev,
 				   struct mlx5e_params *params,
 				   struct mlx5e_xsk_param *xsk,
+				   u16 q_counter,
 				   struct mlx5e_channel_param *cparam)
 {
-	mlx5e_build_rq_param(priv, params, xsk, &cparam->rq);
-	mlx5e_build_xdpsq_param(priv, params, &cparam->xdp_sq);
+	mlx5e_build_rq_param(mdev, params, xsk, q_counter, &cparam->rq);
+	mlx5e_build_xdpsq_param(mdev, params, &cparam->xdp_sq);
+}
+
+static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
+			     struct mlx5e_params *params,
+			     struct xsk_buff_pool *pool,
+			     struct mlx5e_xsk_param *xsk,
+			     struct mlx5e_rq *rq)
+{
+	struct mlx5_core_dev *mdev = c->mdev;
+	int rq_xdp_ix;
+	int err;
+
+	rq->wq_type      = params->rq_wq_type;
+	rq->pdev         = c->pdev;
+	rq->netdev       = c->netdev;
+	rq->priv         = c->priv;
+	rq->tstamp       = c->tstamp;
+	rq->clock        = &mdev->clock;
+	rq->icosq        = &c->icosq;
+	rq->ix           = c->ix;
+	rq->mdev         = mdev;
+	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+	rq->xdpsq        = &c->rq_xdpsq;
+	rq->xsk_pool     = pool;
+	rq->stats        = &c->priv->channel_stats[c->ix].xskrq;
+	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
+	rq_xdp_ix        = c->ix + params->num_channels * MLX5E_RQ_GROUP_XSK;
+	err = mlx5e_rq_set_handlers(rq, params, xsk);
+	if (err)
+		return err;
+
+	return  xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix, 0);
+}
+
+static int mlx5e_open_xsk_rq(struct mlx5e_channel *c, struct mlx5e_params *params,
+			     struct mlx5e_rq_param *rq_params, struct xsk_buff_pool *pool,
+			     struct mlx5e_create_cq_param *ccp, struct mlx5e_xsk_param *xsk)
+{
+	int err;
+
+	err = mlx5e_init_xsk_rq(c, params, pool, xsk, &c->xskrq);
+	if (err)
+		return err;
+
+	return mlx5e_open_rq(c->priv, params, rq_params, xsk, ccp, params->rx_cq_moderation, cpu_to_node(c->cpu), &c->xskrq);
 }
 
 int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
-		   struct mlx5e_xsk_param *xsk, struct xdp_umem *umem,
+		   struct mlx5e_xsk_param *xsk, struct xsk_buff_pool *pool,
 		   struct mlx5e_channel *c)
 {
-	struct mlx5e_create_cq_param ccp = {};
 	struct mlx5e_channel_param *cparam;
+	struct mlx5e_create_cq_param ccp;
 	int err;
 
-	ccp.napi = &c->napi;
-	ccp.ch_stats = c->stats;
-	ccp.node = cpu_to_node(c->cpu);
-	ccp.ix = c->ix;
+	mlx5e_build_create_cq_param(&ccp, c);
 
 	if (!mlx5e_validate_xsk_param(params, xsk, priv->mdev))
 		return -EINVAL;
@@ -64,9 +107,9 @@ int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	if (!cparam)
 		return -ENOMEM;
 
-	mlx5e_build_xsk_cparam(priv, params, xsk, cparam);
+	mlx5e_build_xsk_cparam(priv->mdev, params, xsk, priv->q_counter, cparam);
 
-	err = mlx5e_open_rq(c, params, &cparam->rq, xsk, umem, &ccp, &c->xskrq);
+	err = mlx5e_open_xsk_rq(c, params, &cparam->rq, pool, &ccp, xsk);
 	if (unlikely(err))
 		goto err_free_cparam;
 
@@ -75,13 +118,13 @@ int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	if (unlikely(err))
 		goto err_close_rq;
 
-	/* Create a separate SQ, so that when the UMEM is disabled, we could
+	/* Create a separate SQ, so that when the buff pool is disabled, we could
 	 * close this SQ safely and stop receiving CQEs. In other case, e.g., if
-	 * the XDPSQ was used instead, we might run into trouble when the UMEM
+	 * the XDPSQ was used instead, we might run into trouble when the buff pool
 	 * is disabled and then reenabled, but the SQ continues receiving CQEs
-	 * from the old UMEM.
+	 * from the old buff pool.
 	 */
-	err = mlx5e_open_xdpsq(c, params, &cparam->xdp_sq, umem, &c->xsksq, true);
+	err = mlx5e_open_xdpsq(c, params, &cparam->xdp_sq, pool, &c->xsksq, true);
 	if (unlikely(err))
 		goto err_close_tx_cq;
 
@@ -95,7 +138,7 @@ err_close_tx_cq:
 	mlx5e_close_cq(&c->xsksq.cq);
 
 err_close_rq:
-	mlx5e_close_rq(c, &c->xskrq);
+	mlx5e_close_rq(c->priv, &c->xskrq);
 
 err_free_cparam:
 	kvfree(cparam);
@@ -108,7 +151,7 @@ void mlx5e_close_xsk(struct mlx5e_channel *c)
 	clear_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
 	synchronize_net(); /* Sync with the XSK wakeup and with NAPI. */
 
-	mlx5e_close_rq(c, &c->xskrq);
+	mlx5e_close_rq(c->priv, &c->xskrq);
 	mlx5e_close_xdpsq(&c->xsksq);
 	mlx5e_close_cq(&c->xsksq.cq);
 
