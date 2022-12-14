@@ -238,8 +238,8 @@ static void *res_tracker_lookup(struct rb_root *root, u64 res_id)
 	struct rb_node *node = root->rb_node;
 
 	while (node) {
-		struct res_common *res = container_of(node, struct res_common,
-						      node);
+		struct res_common *res = rb_entry(node, struct res_common,
+						  node);
 
 		if (res_id < res->res_id)
 			node = node->rb_left;
@@ -257,8 +257,8 @@ static int res_tracker_insert(struct rb_root *root, struct res_common *res)
 
 	/* Figure out where to put new node */
 	while (*new) {
-		struct res_common *this = container_of(*new, struct res_common,
-						       node);
+		struct res_common *this = rb_entry(*new, struct res_common,
+						   node);
 
 		parent = *new;
 		if (res->res_id < this->res_id)
@@ -1457,7 +1457,7 @@ static int remove_ok(struct res_common *res, enum mlx4_resource type, int extra)
 	case RES_MTT:
 		return remove_mtt_ok((struct res_mtt *)res, extra);
 	case RES_MAC:
-		return -ENOSYS;
+		return -EOPNOTSUPP;
 	case RES_EQ:
 		return remove_eq_ok((struct res_eq *)res);
 	case RES_COUNTER:
@@ -3986,14 +3986,6 @@ int mlx4_RTR2RTS_QP_wrapper(struct mlx4_dev *dev, int slave,
 	if (err)
 		return err;
 
-	if ((dev->caps.roce_mode == MLX4_ROCE_MODE_2) ||
-	    (dev->caps.roce_mode == MLX4_ROCE_MODE_1_PLUS_2)) {
-		int qpn = vhcr->in_modifier & 0x7fffff;
-
-		context->roce_entropy = cpu_to_be16(mlx4_qp_roce_entropy(dev,
-									 qpn));
-	}
-
 	update_pkey_index(dev, slave, inbox);
 	update_gid(dev, inbox, (u8)slave);
 	adjust_proxy_tun_qkey(dev, vhcr, context);
@@ -4015,6 +4007,14 @@ int mlx4_RTS2RTS_QP_wrapper(struct mlx4_dev *dev, int slave,
 	err = verify_qp_parameters(dev, vhcr, inbox, QP_TRANS_RTS2RTS, slave);
 	if (err)
 		return err;
+
+	if ((dev->caps.roce_mode == MLX4_ROCE_MODE_2) ||
+	    (dev->caps.roce_mode == MLX4_ROCE_MODE_1_PLUS_2)) {
+		int qpn = vhcr->in_modifier & 0x7fffff;
+
+		context->roce_entropy = cpu_to_be16(mlx4_qp_roce_entropy(dev,
+									 qpn));
+	}
 
 	update_pkey_index(dev, slave, inbox);
 	update_gid(dev, inbox, (u8)slave);
@@ -4464,7 +4464,7 @@ int mlx4_UPDATE_QP_wrapper(struct mlx4_dev *dev, int slave,
 		  MLX4_DEV_CAP_FLAG2_UPDATE_QP_SRC_CHECK_LB)) {
 		mlx4_warn(dev, "Src check LB for slave %d isn't supported\n",
 			  slave);
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 	}
 
 	/* Just change the smac for the QP */
@@ -4519,11 +4519,11 @@ static u32 qp_attach_mbox_size(void *mbox)
 static int mlx4_do_mirror_rule(struct mlx4_dev *dev, struct res_fs_rule *fs_rule);
 static int mlx4_undo_mirror_rule(struct mlx4_dev *dev, struct res_fs_rule *fs_rule);
 
-int validate_flow_steering_vf_spec(struct mlx4_dev *dev, int slave,
-				   struct _rule_hw  *rule_header,
-				   struct mlx4_vhcr *vhcr,
-				   struct mlx4_cmd_mailbox *inbox,
-				   int *chain_rule)
+static int validate_flow_steering_vf_spec(struct mlx4_dev *dev, int slave,
+					  struct _rule_hw  *rule_header,
+					  struct mlx4_vhcr *vhcr,
+					  struct mlx4_cmd_mailbox *inbox,
+					  int *chain_rule)
 {
 	struct mlx4_priv *priv = mlx4_priv(dev);
 	struct mlx4_resource_tracker *tracker = &priv->mfunc.master.res_tracker;
@@ -4538,7 +4538,8 @@ int validate_flow_steering_vf_spec(struct mlx4_dev *dev, int slave,
 		/* VF can't be in promiscuous mode */
 		rule_type = MLX4_FS_MC_DEFAULT;
 		ctrl->type = mlx4_map_sw_to_hw_steering_mode(dev, MLX4_FS_MC_DEFAULT);
-	} else if (rule_type != MLX4_FS_REGULAR && rule_type != MLX4_FS_MC_DEFAULT) {
+	} else if (slave != dev->caps.function &&
+		   rule_type != MLX4_FS_REGULAR && rule_type != MLX4_FS_MC_DEFAULT) {
 		return -EPERM;
 	}
 
@@ -4803,10 +4804,13 @@ int mlx4_QP_FLOW_STEERING_ATTACH_wrapper(struct mlx4_dev *dev, int slave,
 	if (header_id == MLX4_NET_TRANS_RULE_ID_ETH)
 		mlx4_handle_eth_header_mcast_prio(ctrl, rule_header);
 
-	err = validate_flow_steering_vf_spec(dev, slave, rule_header,
-					     vhcr, inbox, &chain_rule);
-	if (err)
-		goto err_put;
+	/* validate VF */
+	if (slave != dev->caps.function) {
+		err = validate_flow_steering_vf_spec(dev, slave, rule_header,
+						     vhcr, inbox, &chain_rule);
+		if (err)
+			goto err_put;
+	}
 
 	err = mlx4_do_attach_rule(dev, slave, vhcr, inbox,
 				  outbox, cmd, rqp, chain_rule);

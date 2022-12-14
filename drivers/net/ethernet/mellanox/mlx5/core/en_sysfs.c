@@ -32,7 +32,6 @@
 
 #include <linux/device.h>
 #include <linux/netdevice.h>
-#include <linux/dcbnl.h>
 #include "en.h"
 #include "en_ecn.h"
 #include "eswitch.h"
@@ -69,11 +68,7 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
 	if (err != 1)
 		return -EINVAL;
 
-	if (tc_num != MLX5E_MAX_NUM_TC && tc_num != MLX5E_MIN_NUM_TC)
-		return -EINVAL;
-
 	rtnl_lock();
-	netdev_set_num_tc(netdev, tc_num);
 	mlx5e_setup_tc(netdev, tc_num);
 	rtnl_unlock();
 	return count;
@@ -197,8 +192,9 @@ static ssize_t mlx5e_show_lro_timeout(struct device *device,
 	int len = 0;
 	int i;
 
+	rtnl_lock();
 	len += sprintf(buf + len, "Actual timeout: %d\n",
-		       priv->params.lro_timeout);
+		       priv->channels.params.lro_timeout);
 
 	len += sprintf(buf + len, "Supported timeout:");
 
@@ -209,6 +205,8 @@ static ssize_t mlx5e_show_lro_timeout(struct device *device,
 
 	len += sprintf(buf + len, "\n");
 
+	rtnl_unlock();
+
 	return len;
 }
 
@@ -218,8 +216,6 @@ static ssize_t mlx5e_store_lro_timeout(struct device *device,
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	struct net_device *netdev = priv->netdev;
-	struct mlx5e_params new_params;
-	bool was_opened;
 	u32 lro_timeout;
 	int err = 0;
 
@@ -229,33 +225,140 @@ static ssize_t mlx5e_store_lro_timeout(struct device *device,
 		goto bad_input;
 
 	rtnl_lock();
+	if (lro_timeout > MLX5_CAP_ETH(priv->mdev,
+				       lro_timer_supported_periods
+				       [MLX5E_LRO_TIMEOUT_ARR_SIZE - 1]))
+		goto bad_input_unlock;
+
+	lro_timeout = mlx5e_choose_lro_timeout(priv->mdev, lro_timeout);
+
 	mutex_lock(&priv->state_lock);
 
-	was_opened = test_bit(MLX5E_STATE_OPENED, &priv->state);
-	if (was_opened)
-		mlx5e_close_locked(priv->netdev);
+	if (priv->channels.params.lro_timeout == lro_timeout) {
+		err = 0;
+		goto unlock;
+	}
 
-	new_params = priv->params;
-	new_params.lro_timeout = mlx5e_choose_lro_timeout(priv->mdev,
-							  lro_timeout);
+	priv->channels.params.lro_timeout = lro_timeout;
+	err = mlx5e_modify_tirs_lro(priv);
 
-	if (was_opened)
-		err = mlx5e_open_locked(priv->netdev);
-
+unlock:
 	mutex_unlock(&priv->state_lock);
 	rtnl_unlock();
 
 	if (err)
-		goto bad_input;
+		return err;
 
 	return count;
+
+bad_input_unlock:
+	rtnl_unlock();
 bad_input:
 	netdev_err(netdev, "Bad Input\n");
 	return -EINVAL;
 }
 
 static DEVICE_ATTR(lro_timeout, S_IRUGO | S_IWUSR,
-		   mlx5e_show_lro_timeout, mlx5e_store_lro_timeout);
+		  mlx5e_show_lro_timeout, mlx5e_store_lro_timeout);
+
+#ifdef ETH_SS_RSS_HASH_FUNCS
+#define MLX5E_HFUNC_TOP ETH_RSS_HASH_TOP
+#define MLX5E_HFUNC_XOR ETH_RSS_HASH_XOR
+#else
+#define MLX5E_HFUNC_TOP 1
+#define MLX5E_HFUNC_XOR 2
+#endif
+
+static ssize_t mlx5e_show_hfunc(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	int len = 0;
+
+	rtnl_lock();
+
+	len += sprintf(buf + len, "Operational hfunc: %s\n",
+		       priv->channels.params.rss_hfunc == MLX5E_HFUNC_TOP ?
+		       "xor" : "toeplitz");
+
+	len += sprintf(buf + len, "Supported hfuncs: xor toeplitz\n");
+
+	rtnl_unlock();
+
+	return len;
+}
+
+static ssize_t mlx5e_store_hfunc(struct device *device,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	u32 in[MLX5_ST_SZ_DW(modify_tir_in)] = {0};
+	struct net_device *netdev = priv->netdev;
+	char hfunc[ETH_GSTRING_LEN];
+	u8 ethtool_hfunc;
+	int err;
+
+	err = sscanf(buf, "%31s", hfunc);
+
+	if (err != 1)
+		goto bad_input;
+
+	if (!strcmp(hfunc, "xor"))
+		ethtool_hfunc = MLX5E_HFUNC_XOR;
+	else if (!strcmp(hfunc, "toeplitz"))
+		ethtool_hfunc = MLX5E_HFUNC_TOP;
+	else
+		goto bad_input;
+
+	rtnl_lock();
+	mutex_lock(&priv->state_lock);
+
+	if (priv->channels.params.rss_hfunc == ethtool_hfunc)
+		goto unlock;
+
+	priv->channels.params.rss_hfunc = ethtool_hfunc;
+	mlx5e_sysfs_modify_tirs_hash(priv, in, sizeof(in));
+
+unlock:
+	mutex_unlock(&priv->state_lock);
+	rtnl_unlock();
+
+	return count;
+
+bad_input:
+	netdev_err(netdev, "Bad Input\n");
+	return -EINVAL;
+}
+
+static DEVICE_ATTR(hfunc, S_IRUGO | S_IWUSR,
+		  mlx5e_show_hfunc, mlx5e_store_hfunc);
+
+static ssize_t mlx5e_show_link_down_reason(struct device *device,
+					    struct device_attribute *attr,
+					    char *buf)
+{
+	u8 status_message[MLX5_FLD_SZ_BYTES(troubleshooting_info_page_layout,
+					    status_message)];
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	u16 monitor_opcode;
+	int len = 0;
+	int err;
+
+	err = mlx5_query_pddr_troubleshooting_info(priv->mdev, &monitor_opcode,
+						   status_message);
+	if (err)
+		return err;
+
+	len += sprintf(buf + len, "monitor_opcode: %#x\n", monitor_opcode);
+	len += sprintf(buf + len, "status_message: %s\n", status_message);
+
+	return len;
+}
+
+static DEVICE_ATTR(link_down_reason, S_IRUGO,
+		   mlx5e_show_link_down_reason, NULL);
 
 static const char *mlx5e_get_cong_protocol(int protocol)
 {
@@ -566,12 +669,76 @@ static void mlx5e_remove_attributes(struct mlx5e_priv *priv,
 	}
 }
 
+static const char TRUST_PORT[] = "port";
+static const char TRUST_PCP[]  = "pcp";
+static const char TRUST_DSCP[] = "dscp";
+
+static ssize_t mlx5e_show_trust(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	const char *string = "none";
+	u8 trust_state;
+	int err;
+
+	err = mlx5_query_port_trust_state(priv->mdev, &trust_state);
+	if (err)
+		goto out;
+
+	if (trust_state == MLX5_QPTS_TRUST_PORT)
+		string = TRUST_PORT;
+	else if (trust_state == MLX5_QPTS_TRUST_PCP)
+		string = TRUST_PCP;
+	else if (trust_state == MLX5_QPTS_TRUST_DSCP)
+		string = TRUST_DSCP;
+
+out:
+	return sprintf(buf, "%s\n", string);
+}
+
+static ssize_t mlx5e_store_trust(struct device *device,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	char str[5];
+	u8 trust_state;
+	int err;
+
+	if (count > sizeof(str))
+		return -EINVAL;
+
+	err = sscanf(buf, "%4s", str);
+	if (err != 1)
+		return -EINVAL;
+
+	if (!strcmp(str, TRUST_PCP))
+		trust_state = MLX5_QPTS_TRUST_PCP;
+	else if (!strcmp(str, TRUST_DSCP))
+		trust_state = MLX5_QPTS_TRUST_DSCP;
+	else
+		return -EOPNOTSUPP;
+
+	err = mlx5_set_port_trust_state(priv->mdev, trust_state);
+	if (err)
+		return err;
+
+	return count;
+}
+
+static DEVICE_ATTR(trust, S_IRUGO | S_IWUSR,
+		   mlx5e_show_trust,
+		   mlx5e_store_trust);
+
 static DEVICE_ATTR(vf_roce, S_IRUGO | S_IWUSR,
 		   mlx5e_show_vf_roce,
 		   mlx5e_store_vf_roce);
 
 static struct attribute *mlx5e_settings_attrs[] = {
-	&dev_attr_vf_roce.attr,
+	&dev_attr_hfunc.attr,
 	NULL,
 };
 
@@ -582,6 +749,7 @@ static struct attribute_group settings_group = {
 
 static struct attribute *mlx5e_debug_group_attrs[] = {
 	&dev_attr_lro_timeout.attr,
+	&dev_attr_link_down_reason.attr,
 	NULL,
 };
 
@@ -601,6 +769,36 @@ static struct attribute_group debug_group = {
 	.attrs = mlx5e_debug_group_attrs,
 };
 
+static int update_qos_sysfs(struct net_device *dev,
+			    struct mlx5_core_dev *mdev)
+{
+	int err = 0;
+
+	if (MLX5_CAP_GEN(mdev, qcam_reg) &&
+	    MLX5_CAP_QCAM_REG(mdev, qpts)) {
+		err = sysfs_add_file_to_group(&dev->dev.kobj,
+					      &dev_attr_trust.attr,
+					      "qos");
+	}
+
+	return err;
+}
+
+static int update_settings_sysfs(struct net_device *dev,
+				 struct mlx5_core_dev *mdev)
+{
+	int err = 0;
+
+	if (MLX5_CAP_GEN(mdev, vport_group_manager) &&
+	    MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) {
+		err = sysfs_add_file_to_group(&dev->dev.kobj,
+					      &dev_attr_vf_roce.attr,
+					      "settings");
+	}
+
+	return err;
+}
+
 int mlx5e_sysfs_create(struct net_device *dev)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
@@ -618,13 +816,39 @@ int mlx5e_sysfs_create(struct net_device *dev)
 
 	err = sysfs_create_group(&dev->dev.kobj, &settings_group);
 	if (err)
-		return err;
+		goto remove_attributes;
+
+	err = update_settings_sysfs(dev, priv->mdev);
+	if (err)
+		goto remove_settings_group;
 
 	err = sysfs_create_group(&dev->dev.kobj, &qos_group);
 	if (err)
-		return err;
+		goto remove_settings_group;
+
+	err = update_qos_sysfs(dev, priv->mdev);
+	if (err)
+		goto remove_qos_group;
 
 	err = sysfs_create_group(&dev->dev.kobj, &debug_group);
+
+	if (err)
+		goto remove_qos_group;
+
+	return 0;
+
+remove_qos_group:
+	sysfs_remove_group(&dev->dev.kobj, &qos_group);
+remove_settings_group:
+	sysfs_remove_group(&dev->dev.kobj, &settings_group);
+remove_attributes:
+	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
+		mlx5e_remove_attributes(priv, i);
+		kobject_put(priv->ecn_ctx[i].ecn_proto_kobj);
+	}
+
+	kobject_put(priv->ecn_root_kobj);
+
 	return err;
 }
 
@@ -645,6 +869,7 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 	kobject_put(priv->ecn_root_kobj);
 }
 
+#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 enum {
 	ATTR_DST_IP,
 	ATTR_DST_PORT,
@@ -655,7 +880,7 @@ static ssize_t mlx5e_flow_param_show(struct kobject *kobj, char *buf, int type)
 	struct netdev_queue *queue = (struct netdev_queue *)kobj;
 	struct net_device *netdev = queue->dev;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5e_sq *sq = priv->txq_to_sq_map[queue - netdev->_tx];
+	struct mlx5e_txqsq *sq = priv->txq2sq[queue - netdev->_tx];
 	int len;
 
 	switch (type) {
@@ -679,7 +904,7 @@ static ssize_t mlx5e_flow_param_store(struct kobject *kobj, const char *buf,
 	struct net_device *netdev = queue->dev;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	unsigned int queue_index = queue - netdev->_tx;
-	struct mlx5e_sq *sq = priv->txq_to_sq_map[queue_index];
+	struct mlx5e_txqsq *sq = priv->txq2sq[queue_index];
 	int err = 0;
 	u32 key;
 
@@ -766,16 +991,15 @@ static struct attribute_group mlx5e_txmap_attr = {
 	.attrs = mlx5e_txmap_attrs
 };
 
-int mlx5e_rl_init_sysfs(struct net_device *netdev)
+int mlx5e_rl_init_sysfs(struct net_device *netdev, struct mlx5e_params params)
 {
-	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct netdev_queue *txq;
 	int q_ix;
 	int err;
 	int i;
 
-	for (i = 0; i < priv->params.num_rl_txqs; i++) {
-		q_ix = i + priv->params.num_channels * priv->params.num_tc;
+	for (i = 0; i < params.num_rl_txqs; i++) {
+		q_ix = i + params.num_channels * params.num_tc;
 		txq = netdev_get_tx_queue(netdev, q_ix);
 		err = sysfs_create_group(&txq->kobj, &mlx5e_txmap_attr);
 		if (err)
@@ -784,23 +1008,23 @@ int mlx5e_rl_init_sysfs(struct net_device *netdev)
 	return 0;
 err:
 	for (--i; i >= 0; i--) {
-		q_ix = i + priv->params.num_channels * priv->params.num_tc;
+		q_ix = i + params.num_channels * params.num_tc;
 		txq = netdev_get_tx_queue(netdev, q_ix);
 		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
 	}
 	return err;
 }
 
-void mlx5e_rl_remove_sysfs(struct net_device *netdev)
+void mlx5e_rl_remove_sysfs(struct mlx5e_priv *priv)
 {
-	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct netdev_queue *txq;
 	int q_ix;
 	int i;
 
-	for (i = 0; i < priv->params.num_rl_txqs; i++) {
-		q_ix = i + priv->params.num_channels * priv->params.num_tc;
-		txq = netdev_get_tx_queue(netdev, q_ix);
+	for (i = 0; i < priv->channels.params.num_rl_txqs; i++) {
+		q_ix = i + priv->channels.params.num_channels * priv->channels.params.num_tc;
+		txq = netdev_get_tx_queue(priv->netdev, q_ix);
 		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
 	}
 }
+#endif /*CONFIG_MLX5_EN_SPECIAL_SQ*/

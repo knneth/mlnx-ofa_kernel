@@ -98,7 +98,6 @@ struct mlx5_flow_rule {
 	 */
 	struct list_head			next_ft;
 	u32					sw_action;
-	atomic_t				refcount;
 	/* Increased when user (sniffer) calls to mlx5_get_flow_rule */
 	atomic_t				users_refcount;
 	/* Completed when users_refcount is decremented to zero */
@@ -127,6 +126,8 @@ struct mlx5_flow_table {
 	struct mutex			lock;
 	/* FWD rules that point on this flow table */
 	struct list_head		fwd_rules;
+	u32				flags;
+	u32				underlay_qpn;
 	struct fs_debugfs_ft		debugfs;
 };
 
@@ -153,6 +154,11 @@ struct mlx5_fc {
 	struct mlx5_fc_cache cache ____cacheline_aligned_in_smp;
 };
 
+struct mlx5_ft_underlay_qp {
+	struct list_head list;
+	u32 qpn;
+};
+
 /* Type of children is mlx5_flow_rule */
 struct fs_fte {
 	struct fs_node			node;
@@ -161,6 +167,7 @@ struct fs_fte {
 	u32				flow_tag;
 	u32				index;
 	u32				action;
+	u32				encap_id;
 	enum fs_fte_status		status;
 	struct mlx5_fc			*counter;
 	struct fs_debugfs_fte			debugfs;
@@ -212,6 +219,8 @@ struct mlx5_flow_root_namespace {
 	struct mlx5_flow_table		*root_ft;
 	/* Should be held when chaining flow tables */
 	struct mutex			chain_lock;
+	struct list_head		underlay_qpns;
+
 };
 
 int mlx5_init_fc_stats(struct mlx5_core_dev *dev);

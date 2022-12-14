@@ -32,6 +32,7 @@
 
 #include <linux/pci.h>
 #include <linux/mlx5/driver.h>
+#include <linux/mlx5/vport.h>
 #include "mlx5_core.h"
 #ifdef CONFIG_MLX5_CORE_EN
 #include "eswitch.h"
@@ -42,6 +43,38 @@ bool mlx5_sriov_is_enabled(struct mlx5_core_dev *dev)
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
 
 	return !!sriov->num_vfs;
+}
+
+static void sriov_restore_guids(struct mlx5_core_dev *dev, int vf)
+{
+	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+	struct mlx5_hca_vport_context *in;
+	int err;
+
+	/* Restore sriov guid and policy settings */
+	if (sriov->vfs_ctx[vf].node_guid ||
+	    sriov->vfs_ctx[vf].port_guid ||
+	    sriov->vfs_ctx[vf].policy != MLX5_POLICY_INVALID) {
+		in = kzalloc(sizeof(*in), GFP_KERNEL);
+		if (!in) {
+			mlx5_core_warn(dev, "failed to restore VF %d settings\n", vf);
+			return;
+		}
+
+		in->node_guid = sriov->vfs_ctx[vf].node_guid;
+		in->port_guid = sriov->vfs_ctx[vf].port_guid;
+		in->policy = sriov->vfs_ctx[vf].policy;
+		in->field_select =
+			!!(in->port_guid) * MLX5_HCA_VPORT_SEL_PORT_GUID |
+			!!(in->node_guid) * MLX5_HCA_VPORT_SEL_NODE_GUID |
+			!!(in->policy) * MLX5_HCA_VPORT_SEL_STATE_POLICY;
+
+		err = mlx5_core_modify_hca_vport_context(dev, 1, 1, vf + 1, in);
+		if (err)
+			mlx5_core_warn(dev, "modify vport context failed, unable to restore VF %d settings\n", vf);
+
+		kfree(in);
+	}
 }
 
 static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
@@ -83,6 +116,8 @@ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
 		}
 		sriov->vfs_ctx[vf].enabled = 1;
 		sriov->enabled_vfs++;
+		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB)
+			sriov_restore_guids(dev, vf);
 		mlx5_core_dbg(dev, "successfully enabled VF* %d\n", vf);
 
 	}
@@ -97,7 +132,7 @@ static void mlx5_device_disable_sriov(struct mlx5_core_dev *dev)
 	int vf;
 
 	if (!sriov->enabled_vfs)
-		return;
+		goto disable_sriov_resources;
 
 	for (vf = 0; vf < sriov->num_vfs; vf++) {
 		if (!sriov->vfs_ctx[vf].enabled)
@@ -111,6 +146,7 @@ static void mlx5_device_disable_sriov(struct mlx5_core_dev *dev)
 		sriov->enabled_vfs--;
 	}
 
+disable_sriov_resources:
 	mlx5_destroy_vfs_sysfs(dev);
 
 #ifdef CONFIG_MLX5_CORE_EN
@@ -186,15 +222,20 @@ int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	if (!mlx5_core_is_pf(dev))
 		return -EPERM;
 
-	if (num_vfs && mlx5_lag_is_active(dev)) {
-		mlx5_core_warn(dev, "can't turn sriov on while LAG is active");
-		return -EINVAL;
+	if (num_vfs) {
+		int ret;
+
+		ret = mlx5_lag_forbid(dev);
+		if (ret && (ret != -ENODEV))
+			return ret;
 	}
 
-	if (num_vfs)
+	if (num_vfs) {
 		err = mlx5_sriov_enable(pdev, num_vfs);
-	else
+	} else {
 		mlx5_sriov_disable(pdev);
+		mlx5_lag_allow(dev);
+	}
 
 	return err ? err : num_vfs;
 }

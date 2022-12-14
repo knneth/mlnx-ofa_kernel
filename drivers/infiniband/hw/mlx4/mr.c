@@ -335,7 +335,7 @@ int mlx4_ib_rereg_user_mr(struct ib_mr *mr, int flags,
 			goto release_mpt_entry;
 		}
 		n = ib_umem_page_count(mmr->umem);
-		shift = ilog2(mmr->umem->page_size);
+		shift = mmr->umem->page_shift;
 
 		err = mlx4_mr_rereg_mem_write(dev->dev, &mmr->mmr,
 					      virt_addr, length, n, shift,
@@ -388,10 +388,10 @@ mlx4_alloc_priv_pages(struct ib_device *device,
 	if (!mr->pages)
 		return -ENOMEM;
 
-	mr->page_map = dma_map_single(device->dma_device, mr->pages,
+	mr->page_map = dma_map_single(device->dev.parent, mr->pages,
 				      mr->page_map_size, DMA_TO_DEVICE);
 
-	if (dma_mapping_error(device->dma_device, mr->page_map)) {
+	if (dma_mapping_error(device->dev.parent, mr->page_map)) {
 		ret = -ENOMEM;
 		goto err;
 	}
@@ -409,7 +409,7 @@ mlx4_free_priv_pages(struct mlx4_ib_mr *mr)
 	if (mr->pages) {
 		struct ib_device *device = mr->ibmr.device;
 
-		dma_unmap_single(device->dma_device, mr->page_map,
+		dma_unmap_single(device->dev.parent, mr->page_map,
 				 mr->page_map_size, DMA_TO_DEVICE);
 		free_page((unsigned long)mr->pages);
 		mr->pages = NULL;

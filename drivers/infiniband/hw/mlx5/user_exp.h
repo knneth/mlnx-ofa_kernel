@@ -57,7 +57,9 @@ struct mlx5_exp_ib_create_cq {
 	__u64					buf_addr;
 	__u64					db_addr;
 	__u32					cqe_size;
-	__u32					reserved; /* explicit padding (optional on i386) */
+	__u8					cqe_comp_en;
+	__u8					cqe_comp_res_format;
+	__u16					reserved; /* explicit padding (optional on i386) */
 
 	/* Some more reserved fields for future growth of mlx5_ib_create_cq */
 	__u64					prefix_reserved[8];
@@ -76,13 +78,14 @@ enum mlx5_exp_ib_alloc_ucontext_data_resp_mask {
 	MLX5_EXP_ALLOC_CTX_RESP_MASK_MAX_DESC_SZ_SQ_DC		= 1 << 5,
 	MLX5_EXP_ALLOC_CTX_RESP_MASK_ATOMIC_ARG_SIZES_DC	= 1 << 6,
 	MLX5_EXP_ALLOC_CTX_RESP_MASK_FLAGS			= 1 << 7,
+	MLX5_EXP_ALLOC_CTX_RESP_MASK_CLOCK_INFO			= 1 << 8,
 };
 
 struct mlx5_exp_ib_alloc_ucontext_data_resp {
 	__u32   comp_mask; /* use mlx5_ib_exp_alloc_ucontext_data_resp_mask */
 	__u16	cqe_comp_max_num;
 	__u8	cqe_version;
-	__u8	reserved1;
+	__u8	clock_info_version_mask;
 	__u16	rroce_udp_sport_min;
 	__u16	rroce_udp_sport_max;
 	__u32	hca_core_clock_offset;
@@ -94,7 +97,7 @@ struct mlx5_exp_ib_alloc_ucontext_data_resp {
 struct mlx5_exp_ib_alloc_ucontext_resp {
 	__u32						qp_tab_size;
 	__u32						bf_reg_size;
-	__u32						tot_uuars;
+	__u32						tot_bfregs;
 	__u32						cache_line_size;
 	__u16						max_sq_desc_sz;
 	__u16						max_rq_desc_sz;
@@ -107,9 +110,12 @@ struct mlx5_exp_ib_alloc_ucontext_resp {
 	__u32						response_length;
 	__u8						cqe_version;
 	__u8						cmds_supp_uhw;
-	__u16						reserved2;
+	__u8						eth_min_inline;
+	__u8						reserved2;
 	__u64						hca_core_clock_offset;
-	__u32						reserved3[4];
+	__u32						log_uar_size;
+	__u32						num_uars_per_page;
+	__u32						reserved3[2];
 	/* Some more reserved fields for future growth of mlx5_ib_alloc_ucontext_resp */
 	__u64						prefix_reserved[8];
 	struct mlx5_exp_ib_alloc_ucontext_data_resp	exp_data;
@@ -120,7 +126,8 @@ enum mlx5_exp_ib_create_qp_mask {
 	MLX5_EXP_CREATE_QP_MASK_SQ_BUFF_ADD	= 1 << 1,
 	MLX5_EXP_CREATE_QP_MASK_WC_UAR_IDX	= 1 << 2,
 	MLX5_EXP_CREATE_QP_MASK_FLAGS_IDX	= 1 << 3,
-	MLX5_EXP_CREATE_QP_MASK_RESERVED	= 1 << 4,
+	MLX5_EXP_CREATE_QP_MASK_ASSOC_QPN	= 1 << 4,
+	MLX5_EXP_CREATE_QP_MASK_RESERVED	= 1 << 5,
 };
 
 enum mlx5_exp_create_qp_flags {
@@ -133,6 +140,8 @@ struct mlx5_exp_ib_create_qp_data {
 	__u64	sq_buf_addr;
 	__u32   wc_uar_index;
 	__u32   flags; /* use mlx5_exp_create_qp_flags */
+	__u32  associated_qpn;
+	__u32  reserved;
 };
 
 enum mlx5_exp_ib_create_qp_resp_mask {
@@ -171,11 +180,11 @@ struct mlx5_exp_ib_create_qp {
 };
 
 enum {
-	MLX5_EXP_INVALID_UUAR = -1,
+	MLX5_EXP_INVALID_BFREG = -1,
 };
 
 enum mlx5_exp_drv_create_qp_uar_idx {
-	MLX5_EXP_CREATE_QP_DB_ONLY_UUAR = -1
+	MLX5_EXP_CREATE_QP_DB_ONLY_BFREG = -1
 };
 
 
@@ -185,7 +194,7 @@ struct mlx5_exp_ib_create_qp_resp_data {
 };
 
 struct mlx5_exp_ib_create_qp_resp {
-	__u32   uuar_index;
+	__u32   bfreg_index;
 	__u32   rsvd;
 
 	/* Some more reserved fields for future growth of
@@ -271,6 +280,17 @@ struct mlx5_ib_exp_create_wq {
 	__u16	vlan_offloads;
 	__u16   reserved;
 	struct mlx5_ib_create_wq_mp_rq mp_rq;
+};
+
+struct mlx5_ib_exp_create_srq {
+	__u64	buf_addr;
+	__u64	db_addr;
+	__u32	flags;
+	__u32	reserved0;
+	__u32	uidx;
+	__u32	reserved1;
+	__u32	max_num_tags;
+	__u32	comp_mask;
 };
 
 static inline int get_qp_exp_user_index(struct mlx5_ib_ucontext *ucontext,

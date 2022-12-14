@@ -165,7 +165,8 @@ static int alloc_4k(struct mlx5_core_dev *dev, u64 *addr)
 	fp = list_entry(dev->priv.free_list.next, struct fw_page, list);
 	n = find_first_bit(&fp->bitmask, 8 * sizeof(fp->bitmask));
 	if (n >= MLX5_NUM_4K_IN_PAGE) {
-		mlx5_core_warn(dev, "alloc 4k bug\n");
+		mlx5_core_warn(dev, "alloc 4k bug: fw page = %p, n = %u, bitmask: %lu, max num of 4K pages: %d\n",
+				fp, n, fp->bitmask,  MLX5_NUM_4K_IN_PAGE);
 		return -ENOENT;
 	}
 	clear_bit(n, &fp->bitmask);
@@ -562,10 +563,15 @@ int mlx5_reclaim_startup_pages(struct mlx5_core_dev *dev)
 		}
 	}
 
+	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+		dev->priv.vfs_pages = 0;
+		dev->priv.fw_pages = 0;
+	}
+
 	WARN(dev->priv.fw_pages,
 	     "FW pages counter is %d after reclaiming all pages\n",
 	     dev->priv.fw_pages);
-	WARN(dev->priv.vfs_pages && (dev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR),
+	WARN(dev->priv.vfs_pages,
 	     "VFs FW pages counter is %d after reclaiming all pages\n",
 	     dev->priv.vfs_pages);
 
@@ -624,8 +630,8 @@ int mlx5_pagealloc_start(struct mlx5_core_dev *dev)
 
 void mlx5_pagealloc_stop(struct mlx5_core_dev *dev)
 {
-	dev->priv.gc_allowed = false;
 	cancel_delayed_work(&dev->priv.gc_dwork);
+	queue_delayed_work(dev->priv.pg_wq, &dev->priv.gc_dwork, 0);
 	destroy_workqueue(dev->priv.pg_wq);
 }
 

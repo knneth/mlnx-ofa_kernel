@@ -86,22 +86,27 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
 	u32 offset;
 	u32 uidx = MLX5_IB_DEFAULT_UIDX;
 
-	ucmdlen = min(udata->inlen, sizeof(ucmd));
+	if (udata->src == IB_UDATA_EXP_CMD) {
+		err = mlx5_ib_exp_create_srq_user(dev, in, udata, &ucmd);
+		if (err)
+			return err;
+	} else {
+		ucmdlen = min(udata->inlen, sizeof(ucmd));
+		if (ib_copy_from_udata(&ucmd, udata, ucmdlen)) {
+			mlx5_ib_dbg(dev, "failed copy udata\n");
+			return -EFAULT;
+		}
 
-	if (ib_copy_from_udata(&ucmd, udata, ucmdlen)) {
-		mlx5_ib_dbg(dev, "failed copy udata\n");
-		return -EFAULT;
+		if (ucmd.reserved0 || ucmd.reserved1)
+			return -EINVAL;
+
+		if (udata->inlen > sizeof(ucmd) &&
+		    !ib_is_udata_cleared(udata, sizeof(ucmd),
+					 udata->inlen - sizeof(ucmd)))
+			return -EINVAL;
 	}
 
-	if (ucmd.reserved0 || ucmd.reserved1)
-		return -EINVAL;
-
-	if (udata->inlen > sizeof(ucmd) &&
-	    !ib_is_udata_cleared(udata, sizeof(ucmd),
-				 udata->inlen - sizeof(ucmd)))
-		return -EINVAL;
-
-	if (in->type == IB_SRQT_XRC) {
+	if (in->type != IB_SRQT_BASIC) {
 		err = get_srq_user_index(to_mucontext(pd->uobject->context),
 					 &ucmd, udata->inlen, &uidx);
 		if (err)
@@ -145,7 +150,7 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
 	in->log_page_size = page_shift - MLX5_ADAPTER_PAGE_SHIFT;
 	in->page_offset = offset;
 	if (MLX5_CAP_GEN(dev->mdev, cqe_version) == MLX5_CQE_VERSION_V1 &&
-	    in->type == IB_SRQT_XRC)
+	    in->type != IB_SRQT_BASIC)
 		in->user_index = uidx;
 
 	return 0;
@@ -165,8 +170,6 @@ static int create_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq,
 	int err;
 	int i;
 	struct mlx5_wqe_srq_next_seg *next;
-	int page_shift;
-	int npages;
 
 	err = mlx5_db_alloc(dev->mdev, &srq->db);
 	if (err) {
@@ -179,7 +182,6 @@ static int create_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq,
 		err = -ENOMEM;
 		goto err_db;
 	}
-	page_shift = srq->buf.page_shift;
 
 	srq->head    = 0;
 	srq->tail    = srq->msrq.max - 1;
@@ -191,10 +193,8 @@ static int create_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq,
 			cpu_to_be16((i + 1) & (srq->msrq.max - 1));
 	}
 
-	npages = DIV_ROUND_UP(srq->buf.npages, 1 << (page_shift - PAGE_SHIFT));
-	mlx5_ib_dbg(dev, "buf_size %d, page_shift %d, npages %d, calc npages %d\n",
-		    buf_size, page_shift, srq->buf.npages, npages);
-	in->pas = mlx5_vzalloc(sizeof(*in->pas) * npages);
+	mlx5_ib_dbg(dev, "srq->buf.page_shift = %d\n", srq->buf.page_shift);
+	in->pas = mlx5_vzalloc(sizeof(*in->pas) * srq->buf.npages);
 	if (!in->pas) {
 		err = -ENOMEM;
 		goto err_buf;
@@ -203,16 +203,14 @@ static int create_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq,
 
 	srq->wrid = kmalloc(srq->msrq.max * sizeof(u64), GFP_KERNEL);
 	if (!srq->wrid) {
-		mlx5_ib_dbg(dev, "kmalloc failed %lu\n",
-			    (unsigned long)(srq->msrq.max * sizeof(u64)));
 		err = -ENOMEM;
 		goto err_in;
 	}
 	srq->wq_sig = !!srq_signature;
 
-	in->log_page_size = page_shift - MLX5_ADAPTER_PAGE_SHIFT;
+	in->log_page_size = srq->buf.page_shift - MLX5_ADAPTER_PAGE_SHIFT;
 	if (MLX5_CAP_GEN(dev->mdev, cqe_version) == MLX5_CQE_VERSION_V1 &&
-	    in->type == IB_SRQT_XRC)
+	    in->type != IB_SRQT_BASIC)
 		in->user_index = MLX5_IB_DEFAULT_UIDX;
 
 	return 0;
@@ -299,13 +297,24 @@ struct ib_srq *mlx5_ib_create_srq(struct ib_pd *pd,
 	in.wqe_shift = srq->msrq.wqe_shift - 4;
 	if (srq->wq_sig)
 		in.flags |= MLX5_SRQ_FLAG_WQ_SIG;
-	if (init_attr->srq_type == IB_SRQT_XRC) {
+
+	if (init_attr->srq_type == IB_SRQT_XRC)
 		in.xrcd = to_mxrcd(init_attr->ext.xrc.xrcd)->xrcdn;
-		in.cqn = to_mcq(init_attr->ext.xrc.cq)->mcq.cqn;
-	} else if (init_attr->srq_type == IB_SRQT_BASIC) {
+	else
 		in.xrcd = to_mxrcd(dev->devr.x0)->xrcdn;
-		in.cqn = to_mcq(dev->devr.c0)->mcq.cqn;
+
+	if (init_attr->srq_type == IB_EXP_SRQT_NVMF) {
+		err = mlx5_ib_exp_set_nvmf_srq_attrs(&in.nvmf, init_attr);
+		if (err) {
+			mlx5_ib_warn(dev, "setting nvmf srq attrs failed, err %d\n", err);
+			goto err_usr_kern_srq;
+		}
 	}
+
+	if (ib_srq_has_cq(init_attr->srq_type))
+		in.cqn = to_mcq(init_attr->ext.cq)->mcq.cqn;
+	else
+		in.cqn = to_mcq(dev->devr.c0)->mcq.cqn;
 
 	in.pd = to_mpd(pd)->pdn;
 	in.db_record = srq->db.dma;

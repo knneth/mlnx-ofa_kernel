@@ -931,7 +931,7 @@
 	#undef alloc_workqueue
 #endif
 #ifdef CONFIG_LOCKDEP
-#define alloc_workqueue(name, flags, max_active)				\
+#define alloc_workqueue(name, flags, max_active, args...)			\
 ({										\
 	static struct lock_class_key __key;					\
 	const char *__lock_name;						\
@@ -946,20 +946,21 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
 	else									\
 		wq_addr = __alloc_workqueue_key((name), (flags), (max_active),	\
-						&__key, __lock_name);		\
+						&__key, __lock_name, ##args));	\
 	if (wq_addr) {								\
 		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	wq_addr;								\
 })
 #else
-#define alloc_workqueue(name, flags, max_active) ({				\
+#define alloc_workqueue(name, flags, max_active, args...) ({			\
 	struct workqueue_struct *wq_addr = NULL;				\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_workqueue", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
 	else									\
-		wq_addr = __alloc_workqueue_key((name), (flags), (max_active), NULL, NULL); \
+		wq_addr = __alloc_workqueue_key((name), (flags), (max_active),	\
+						NULL, NULL, ##args);		\
 	if (wq_addr) {								\
 		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\

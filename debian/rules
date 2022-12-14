@@ -80,8 +80,8 @@ endif
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/fs		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	$(CURDIR)/ofed_scripts/generate_dkms_conf.sh > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
@@ -107,6 +107,14 @@ else
 	cp -ar compat*			debian/$(pdkms)/usr/src/ofa_kernel/default/
 	cp -ar ofed_scripts		debian/$(pdkms)/usr/src/ofa_kernel/default/
 	cp -ar Module*.symvers		debian/$(pdkms)/usr/src/ofa_kernel/default/
+endif
+
+	# Force DKMS to install our modules.
+	# This is mostly needed for modules that do not have a version number info, as DKMS
+	# will compare their srcversion field, which does not really say which module is newer.
+ifeq ($(WITH_DKMS),1)
+	dh_installdirs -p$(pdkms)  usr/share/dkms/modules_to_force_install/
+	echo "$(pname)" > debian/$(pdkms)/usr/share/dkms/modules_to_force_install/$(pname).force
 endif
 
 	# For utils
@@ -146,8 +154,6 @@ endif
 	install -m 0755 source/ofed_scripts/cma_roce_mode			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/cma_roce_tos			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/connectx_port_config	debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/ipoibd			debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/eipoib_daemon		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/*affinity*			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/bin
@@ -158,6 +164,7 @@ endif
 	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
 	install -m 0755 source/ofed_scripts/ib2ib/ib2ib*		debian/$(putils)/usr/sbin
 	install -m 0644 source/ofed_scripts/ib2ib/README		debian/$(putils)/usr/share/doc/ib2ib
+	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
 
 	cd ofed_scripts/utils;	python ./setup.py install --prefix=/usr --root=../../debian/$(putils)
 
@@ -168,3 +175,10 @@ ifneq ($(WITH_DKMS),1)
 override_dh_gencontrol:
 	dh_gencontrol -- -v$(pversion)-$(prel).kver.$(kernelver1)
 endif
+
+override_dh_installdeb:
+	dh_installdeb
+	# override conf files list
+	echo "/etc/infiniband/openib.conf"    >   debian/$(putils)/DEBIAN/conffiles
+	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
+	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles

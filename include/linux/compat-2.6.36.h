@@ -5,7 +5,6 @@
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
 
-#include <linux/pm_qos_params.h>
 #include <linux/smp_lock.h>
 #include <linux/skbuff.h>
 
@@ -17,24 +16,6 @@
 #endif
 
 #define device_rename(dev, new_name) device_rename(dev, (char *)new_name)
-
-#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,6,35))
-struct pm_qos_request_list {
-	u32 qos;
-	void *request;
-};
-
-#define pm_qos_add_request(_req, _class, _value) do {			\
-	(_req)->request = pm_qos_add_request((_class), (_value));	\
-    } while (0)
-
-#define pm_qos_update_request(_req, _value)				\
-	pm_qos_update_request((_req)->request, (_value))
-
-#define pm_qos_remove_request(_req)					\
-	pm_qos_remove_request((_req)->request)
-
-#endif
 
 #ifdef CONFIG_COMPAT_NO_PRINTK_NEEDED
 /*

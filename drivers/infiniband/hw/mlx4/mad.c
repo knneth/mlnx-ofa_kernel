@@ -737,7 +737,7 @@ static int mlx4_ib_demux_mad(struct ib_device *ibdev, u8 port,
 	if (wc->wc_flags & IB_WC_GRH) {
 		if (grh->dgid.global.interface_id ==
 			cpu_to_be64(IB_SA_WELL_KNOWN_GUID) &&
-		grh->dgid.global.subnet_prefix == cpu_to_be64(
+		    grh->dgid.global.subnet_prefix == cpu_to_be64(
 			atomic64_read(&dev->sriov.demux[port - 1].subnet_prefix))) {
 			slave = 0;
 		} else {
@@ -1238,10 +1238,8 @@ static void handle_slaves_guid_change(struct mlx4_ib_dev *dev, u8 port_num,
 
 	in_mad  = kmalloc(sizeof *in_mad, GFP_KERNEL);
 	out_mad = kmalloc(sizeof *out_mad, GFP_KERNEL);
-	if (!in_mad || !out_mad) {
-		mlx4_ib_warn(&dev->ib_dev, "failed to allocate memory for guid info mads\n");
+	if (!in_mad || !out_mad)
 		goto out;
-	}
 
 	guid_tbl_blk_num  *= 4;
 
@@ -2057,11 +2055,8 @@ static int alloc_pv_object(struct mlx4_ib_dev *dev, int slave, int port,
 
 	*ret_ctx = NULL;
 	ctx = kzalloc(sizeof (struct mlx4_ib_demux_pv_ctx), GFP_KERNEL);
-	if (!ctx) {
-		pr_err("failed allocating pv resource context "
-		       "for port %d, slave %d\n", port, slave);
+	if (!ctx)
 		return -ENOMEM;
-	}
 
 	ctx->ib_dev = &dev->ib_dev;
 	ctx->port = port;

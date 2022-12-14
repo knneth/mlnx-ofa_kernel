@@ -56,7 +56,7 @@
 #define pr_fmt(fmt)	"<" MLX4_IB_DRV_NAME "> %s: " fmt, __func__
 
 #define mlx4_ib_warn(ibdev, format, arg...) \
-	dev_warn((ibdev)->dma_device, MLX4_IB_DRV_NAME ": " format, ## arg)
+	dev_warn((ibdev)->dev.parent, MLX4_IB_DRV_NAME ": " format, ## arg)
 
 enum {
 	MLX4_IB_SQ_MIN_WQE_SHIFT = 6,
@@ -70,7 +70,7 @@ enum {
 extern int mlx4_ib_sm_guid_assign;
 
 #define MLX4_IB_UC_STEER_QPN_ALIGN 1
-#define MLX4_IB_UC_MAX_NUM_QPS     256
+#define MLX4_IB_UC_MAX_NUM_QPS     (256 * 1024)
 
 #ifdef CONFIG_MLX4_IB_DEBUG_FS
 #include "ecn.h"

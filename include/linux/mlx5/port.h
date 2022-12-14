@@ -140,6 +140,9 @@ int mlx5_query_port_pfc(struct mlx5_core_dev *dev, u8 *pfc_en_tx,
 
 int mlx5_max_tc(struct mlx5_core_dev *mdev);
 
+int mlx5_set_port_trust_state(struct mlx5_core_dev *mdev, u8 trust_state);
+int mlx5_query_port_trust_state(struct mlx5_core_dev *mdev, u8 *trust_state);
+
 int mlx5_set_port_prio_tc(struct mlx5_core_dev *mdev, u8 *prio_tc);
 int mlx5_query_port_prio_tc(struct mlx5_core_dev *mdev,
 			    u8 prio, u8 *tc);
@@ -168,6 +171,10 @@ void mlx5_query_port_fcs(struct mlx5_core_dev *mdev, bool *supported,
 			 bool *enabled);
 int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
 			     u16 offset, u16 size, u8 *data);
+
+int mlx5_query_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *out);
+int mlx5_set_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *in);
+
 int mlx5_core_query_gids(struct mlx5_core_dev *dev, u8 other_vport,
 			 u8 port_num, u16  vf_num, u16 gid_index,
 			 union ib_gid *gid);
@@ -178,7 +185,5 @@ int mlx5_core_query_hca_vport_context(struct mlx5_core_dev *dev,
 				      u8 other_vport, u8 port_num,
 				      u16 vf_num,
 				      struct mlx5_hca_vport_context *rep);
-int mlx5_query_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *out);
-int mlx5_set_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *in);
 
 #endif /* __MLX5_PORT_H__ */

@@ -7,11 +7,9 @@
 #include "../../compat/config.h"
 
 #include <linux/version.h>
+#include <linux/kconfig.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
-#include <linux/kconfig.h>
 #include <linux/if.h>
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
-#include <linux/kconfig.h>
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
 #include <generated/autoconf.h>
 #else
@@ -82,6 +80,7 @@ void backport_dependency_symbol(void);
 #include <linux/compat-3.17.h>
 #include <linux/compat-4.0.h>
 #include <linux/compat-4.1.h>
+#include <linux/compat-4.10.h>
 #endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2,6,29) */
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18))

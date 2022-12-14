@@ -33,6 +33,7 @@
 #ifndef MLX5_IB_EXP_H
 #define MLX5_IB_EXP_H
 
+#include <linux/mlx5/nvmf.h>
 #include <rdma/ib_verbs.h>
 
 struct mlx5_ib_dev;
@@ -44,7 +45,8 @@ struct mlx5_ib_qp;
 #define MLX5_IB_QPT_SW_CNAK	IB_QPT_RESERVED3
 
 enum mlx5_cap_flags {
-	MLX5_CAP_COMPACT_AV = 1 << 0,
+	MLX5_CAP_COMPACT_AV   = 1 << 0,
+	MLX5_CAP_ODP_IMPLICIT = 1 << 1,
 };
 
 enum {
@@ -59,6 +61,11 @@ struct mlx5_dc_desc {
 
 enum mlx5_op {
 	MLX5_WR_OP_MLX	= 1,
+};
+
+enum {
+	MLX5_TM_MAX_RNDV_MSG_SIZE	= 64,
+	MLX5_TM_MAX_SGE			= 1,
 };
 
 struct mlx5_mlx_wr {
@@ -164,6 +171,10 @@ void mlx5_ib_exp_get_hash_parameters(struct ib_qp_init_attr *init_attr,
 				     u8 *rx_key_len);
 bool mlx5_ib_exp_is_rss(struct ib_qp_init_attr *init_attr);
 
+int mlx5_ib_exp_set_context_attr(struct ib_device *device,
+				 struct ib_ucontext *context,
+				 struct ib_exp_context_attr *attr);
+
 enum {
 	MLX5_MAX_SINGLE_STRIDE_LOG_NUM_BYTES	= 13,
 	MLX5_MIN_SINGLE_STRIDE_LOG_NUM_BYTES	= 6,
@@ -177,6 +188,7 @@ enum mlx5_ib_exp_mmap_cmd {
 	MLX5_IB_EXP_MMAP_GET_CONTIGUOUS_PAGES_CPU_NUMA  = 0xFC,
 	MLX5_IB_EXP_MMAP_GET_CONTIGUOUS_PAGES_DEV_NUMA  = 0xFD,
 	MLX5_IB_EXP_ALLOC_N_MMAP_WC                     = 0xFE,
+	MLX5_IB_EXP_MMAP_CLOCK_INFO			= 0xFF,
 };
 
 struct ib_mr *mlx5_ib_exp_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
@@ -207,6 +219,9 @@ int mlx5_ib_mmap_dc_info_page(struct mlx5_ib_dev *dev,
 int mlx5_ib_init_dc_improvements(struct mlx5_ib_dev *dev);
 void mlx5_ib_cleanup_dc_improvements(struct mlx5_ib_dev *dev);
 
+int mlx5_ib_mmap_clock_info_page(struct mlx5_ib_dev *dev,
+			 struct vm_area_struct *vma);
+
 void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr);
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
@@ -228,19 +243,6 @@ u32 mlx5_ib_atomic_mode_qp(struct mlx5_ib_qp *qp);
 int mlx5_ib_exp_query_mkey(struct ib_mr *mr, u64 mkey_attr_mask,
 			   struct ib_mkey_attr *mkey_attr);
 
-struct mlx5_ib_ucontext;
-struct mlx5_ib_vma_private_data;
-
-int alloc_and_map_wc(struct mlx5_ib_dev *dev,
-		     struct mlx5_ib_ucontext *context, u32 indx,
-		     struct vm_area_struct *vma);
-
-phys_addr_t uar_index2pfn(struct mlx5_ib_dev *dev, int index);
-
-void mlx5_ib_set_vma_data(struct vm_area_struct *vma,
-			  struct mlx5_ib_ucontext *ctx,
-			  struct mlx5_ib_vma_private_data *vma_prv);
-
 void mlx5_ib_exp_set_rqc(void *rqc, struct mlx5_ib_rwq *rwq);
 
 void mlx5_ib_exp_set_rq_attr(struct mlx5_ib_create_wq_data *data,
@@ -250,8 +252,58 @@ int mlx5_ib_exp_get_cmd_data(struct mlx5_ib_dev *dev,
 			     struct ib_udata *udata,
 			     struct mlx5_ib_create_wq_data *data);
 
-int mlx5_get_roce_gid_type(struct mlx5_ib_dev *dev, u8 port,
-			   int index, int *gid_type);
+int mlx5_ib_exp_create_srq_user(struct mlx5_ib_dev *dev,
+				struct mlx5_srq_attr *in,
+				struct ib_udata *udata,
+				struct mlx5_ib_create_srq *ucmd);
 
+/* NVMEoF target offload */
+void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev);
+int mlx5_ib_exp_set_nvmf_srq_attrs(struct mlx5_nvmf_attr *nvmf,
+				   struct ib_srq_init_attr *init_attr);
+
+struct mlx5_ib_nvmf_be_ctrl {
+	struct ib_nvmf_ctrl		ibctrl;
+	struct mlx5_core_nvmf_be_ctrl	mctrl;
+};
+
+struct mlx5_ib_nvmf_ns {
+	struct ib_nvmf_ns		ibns;
+	struct mlx5_core_nvmf_ns	mns;
+};
+
+static inline struct mlx5_ib_nvmf_be_ctrl *to_mctrl(struct ib_nvmf_ctrl *ibctrl)
+{
+	return container_of(ibctrl, struct mlx5_ib_nvmf_be_ctrl, ibctrl);
+}
+
+static inline struct mlx5_ib_nvmf_ns *to_mns(struct ib_nvmf_ns *ibns)
+{
+	return container_of(ibns, struct mlx5_ib_nvmf_ns, ibns);
+}
+
+struct ib_nvmf_ctrl *mlx5_ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
+		struct ib_nvmf_backend_ctrl_init_attr *init_attr);
+int mlx5_ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
+struct ib_nvmf_ns *mlx5_ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
+		struct ib_nvmf_ns_init_attr *init_attr);
+int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
+
+struct mlx5_ib_ucontext;
+struct mlx5_ib_vma_private_data;
+
+int alloc_and_map_wc(struct mlx5_ib_dev *dev,
+		     struct mlx5_ib_ucontext *context, u32 indx,
+		     struct vm_area_struct *vma);
+
+phys_addr_t uar_index2pfn(struct mlx5_ib_dev *dev,
+			  struct mlx5_bfreg_info *bfregi, int idx);
+
+int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *qp,
+				enum ib_qp_offload_type offload_type);
+
+void mlx5_ib_set_vma_data(struct vm_area_struct *vma,
+			  struct mlx5_ib_ucontext *ctx,
+			  struct mlx5_ib_vma_private_data *vma_prv);
 
 #endif

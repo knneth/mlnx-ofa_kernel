@@ -33,6 +33,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mlx5/driver.h>
+#include <linux/mlx5/fs.h>
 #include "mlx5_core.h"
 #include "vxlan.h"
 
@@ -136,7 +137,7 @@ static void mlx5e_vxlan_add_port(struct work_struct *work)
 
 #ifdef CONFIG_MLX5_INNER_RSS
 err_del_flow_rule:
-	mlx5_del_flow_rule(vxlan->flow_rule);
+	mlx5_del_flow_rules(vxlan->flow_rule);
 #endif
 err_free:
 	kfree(vxlan);
@@ -160,7 +161,7 @@ static void __mlx5e_vxlan_core_del_port(struct mlx5e_priv *priv, u16 port)
 
 	mlx5_vxlan_debugfs_remove(priv->mdev, vxlan);
 #ifdef CONFIG_MLX5_INNER_RSS
-	mlx5_del_flow_rule(vxlan->flow_rule);
+	mlx5_del_flow_rules(vxlan->flow_rule);
 #endif
 	mlx5e_vxlan_core_del_port_cmd(priv->mdev, vxlan->udp_port);
 

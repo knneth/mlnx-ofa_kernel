@@ -11,6 +11,9 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  */
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/blkdev.h>
 #include "nvmet.h"
@@ -69,7 +72,7 @@ static void nvmet_execute_prop_get(struct nvmet_req *req)
 		}
 	}
 
-	req->rsp->result64 = cpu_to_le64(val);
+	req->rsp->result.u64 = cpu_to_le64(val);
 	nvmet_req_complete(req, status);
 }
 
@@ -125,7 +128,7 @@ static void nvmet_execute_admin_connect(struct nvmet_req *req)
 	d = kmap(sg_page(req->sg)) + req->sg->offset;
 
 	/* zero out initial completion result, assign values as needed */
-	req->rsp->result = 0;
+	req->rsp->result.u32 = 0;
 
 	if (c->recfmt != 0) {
 		pr_warn("invalid connect version (%d).\n",
@@ -138,7 +141,7 @@ static void nvmet_execute_admin_connect(struct nvmet_req *req)
 		pr_warn("connect attempt for invalid controller ID %#x\n",
 			d->cntlid);
 		status = NVME_SC_CONNECT_INVALID_PARAM | NVME_SC_DNR;
-		req->rsp->result = IPO_IATTR_CONNECT_DATA(cntlid);
+		req->rsp->result.u32 = IPO_IATTR_CONNECT_DATA(cntlid);
 		goto out;
 	}
 
@@ -153,9 +156,9 @@ static void nvmet_execute_admin_connect(struct nvmet_req *req)
 		goto out;
 	}
 
-	pr_info("creating controller %d for NQN %s.\n",
-			ctrl->cntlid, ctrl->hostnqn);
-	req->rsp->result16 = cpu_to_le16(ctrl->cntlid);
+	pr_info("creating controller %d for subsystem %s for NQN %s.\n",
+		ctrl->cntlid, ctrl->subsys->subsysnqn, ctrl->hostnqn);
+	req->rsp->result.u16 = cpu_to_le16(ctrl->cntlid);
 
 out:
 	kunmap(sg_page(req->sg));
@@ -173,7 +176,7 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 	d = kmap(sg_page(req->sg)) + req->sg->offset;
 
 	/* zero out initial completion result, assign values as needed */
-	req->rsp->result = 0;
+	req->rsp->result.u32 = 0;
 
 	if (c->recfmt != 0) {
 		pr_warn("invalid connect version (%d).\n",
@@ -191,15 +194,31 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 	if (unlikely(qid > ctrl->subsys->max_qid)) {
 		pr_warn("invalid queue id (%d)\n", qid);
 		status = NVME_SC_CONNECT_INVALID_PARAM | NVME_SC_DNR;
-		req->rsp->result = IPO_IATTR_CONNECT_SQE(qid);
+		req->rsp->result.u32 = IPO_IATTR_CONNECT_SQE(qid);
 		goto out_ctrl_put;
+	}
+
+	if (req->port->offload) {
+		/* create offloaded ctrl for P2P I/O when receiving first I/O connect */
+		if (qid == 1) {
+			status = ctrl->ops->create_offload_ctrl(ctrl);
+			if (status) {
+				status = NVME_SC_INTERNAL | NVME_SC_DNR;
+				goto out_ctrl_put;
+			}
+		}
+		status = ctrl->ops->install_offload_queue(ctrl, qid);
+		if (status) {
+			status = NVME_SC_INTERNAL | NVME_SC_DNR;
+			goto out_offload_destroy;
+		}
 	}
 
 	status = nvmet_install_queue(ctrl, req);
 	if (status) {
 		/* pass back cntlid that had the issue of installing queue */
-		req->rsp->result16 = cpu_to_le16(ctrl->cntlid);
-		goto out_ctrl_put;
+		req->rsp->result.u16 = cpu_to_le16(ctrl->cntlid);
+		goto out_offload_destroy;
 	}
 
 	pr_info("adding queue %d to ctrl %d.\n", qid, ctrl->cntlid);
@@ -209,6 +228,9 @@ out:
 	nvmet_req_complete(req, status);
 	return;
 
+out_offload_destroy:
+	if (qid == 1 && req->port->offload)
+		ctrl->ops->destroy_offload_ctrl(ctrl);
 out_ctrl_put:
 	nvmet_ctrl_put(ctrl);
 	goto out;
@@ -220,7 +242,7 @@ int nvmet_parse_connect_cmd(struct nvmet_req *req)
 
 	req->ns = NULL;
 
-	if (req->cmd->common.opcode != nvme_fabrics_command) {
+	if (cmd->common.opcode != nvme_fabrics_command) {
 		pr_err("invalid command 0x%x on unconnected queue.\n",
 			cmd->fabrics.opcode);
 		return NVME_SC_INVALID_OPCODE | NVME_SC_DNR;

@@ -12,6 +12,7 @@ struct ib_exp_umr_caps {
 
 struct ib_exp_odp_caps {
 	uint64_t	general_odp_caps;
+	uint64_t	max_size;
 	struct {
 		uint32_t	rc_odp_caps;
 		uint32_t	uc_odp_caps;
@@ -150,6 +151,10 @@ enum ib_exp_device_attr_comp_mask {
 	IB_EXP_DEVICE_ATTR_RX_PAD_END_ALIGN	= 1ULL << 20,
 	IB_EXP_DEVICE_ATTR_TSO_CAPS		= 1ULL << 21,
 	IB_EXP_DEVICE_ATTR_PACKET_PACING_CAPS	= 1ULL << 22,
+	IB_EXP_DEVICE_ATTR_OOO_CAPS		= 1ULL << 24,
+	IB_EXP_DEVICE_ATTR_SW_PARSING_CAPS	= 1ULL << 25,
+	IB_EXP_DEVICE_ATTR_ODP_MAX_SIZE		= 1ULL << 26,
+	IB_EXP_DEVICE_ATTR_TM_CAPS		= 1ULL << 27,
 };
 
 enum ib_exp_device_cap_flags2 {
@@ -168,6 +173,7 @@ enum ib_exp_device_cap_flags2 {
 	IB_EXP_DEVICE_EXT_MASKED_ATOMICS	= 1 << 14,
 	IB_EXP_DEVICE_RX_TCP_UDP_PKT_TYPE       = 1 << 15,
 	IB_EXP_DEVICE_SCATTER_FCS               = 1 << 16,
+	IB_EXP_DEVICE_DELAY_DROP                = 1 << 18,
 	IB_EXP_DEVICE_CROSS_CHANNEL	= 1 << 28, /* Comapt with user exp area */
 	IB_EXP_DEVICE_MASK =	IB_DEVICE_CROSS_CHANNEL |
 				IB_EXP_DEVICE_EC_OFFLOAD,
@@ -210,6 +216,57 @@ struct ib_exp_packet_pacing_caps {
 struct ib_exp_ec_caps {
 	uint32_t	max_ec_data_vector_count;
 	uint32_t	max_ec_calc_inflight_calcs;
+};
+
+enum ib_exp_ooo_flags {
+	/*
+	 * Device should set IB_EXP_DEVICE_OOO_RW_DATA_PLACEMENT
+	 * capability, when it supports handling RDMA reads and writes
+	 * received out of order.
+	 */
+	IB_EXP_DEVICE_OOO_RW_DATA_PLACEMENT	= (1 << 0),
+};
+
+struct ib_exp_ooo_caps {
+	u32 rc_caps;
+	u32 xrc_caps;
+	u32 dc_caps;
+	u32 ud_caps;
+};
+
+enum ib_exp_sw_parsing_offloads {
+	IB_RAW_PACKET_QP_SW_PARSING	 = (1 << 0),
+	IB_RAW_PACKET_QP_SW_PARSING_CSUM = (1 << 1),
+	IB_RAW_PACKET_QP_SW_PARSING_LSO	 = (1 << 2),
+};
+
+struct ib_exp_sw_parsing_caps {
+	u32 sw_parsing_offloads;
+	u32 supported_qpts;
+};
+
+struct ib_exp_context_attr {
+	u64	peer_id;
+	u8     *peer_name;
+	u32	comp_mask;
+};
+
+enum ib_tm_cap_flags {
+	/*  Support tag matching on RC transport */
+	IB_TM_CAP_RC		    = 1 << 0,
+};
+
+struct ib_exp_tm_caps {
+	/* Max size of RNDV header */
+	u32 max_rndv_hdr_size;
+	/* Max number of entries in a tag matching list */
+	u32 max_num_tags;
+	/* TM capabilities mask - from enum ib_tm_cap_flags */
+	u32 capability_flags;
+	/* Max number of outstanding list operations */
+	u32 max_ops;
+	/* Max number of SGQ in a tag matching entry */
+	u32 max_sge;
 };
 
 struct ib_exp_device_attr {
@@ -255,10 +312,15 @@ struct ib_exp_device_attr {
 	u16				rx_pad_end_addr_align;
 	struct ib_exp_tso_caps		tso_caps;
 	struct ib_exp_packet_pacing_caps packet_pacing_caps;
+	struct ib_exp_ooo_caps		ooo_caps;
+	struct ib_exp_sw_parsing_caps	sw_parsing_caps;
+	struct ib_exp_tm_caps		tm_caps;
 };
 
-enum {
-	IB_DCT_CREATE_FLAGS_MASK		= 0,
+enum ib_dct_create_flags {
+	IB_EXP_DCT_OOO_RW_DATA_PLACEMENT	= 1 << 0,
+	IB_DCT_CREATE_FLAGS_MASK		=
+				IB_EXP_DCT_OOO_RW_DATA_PLACEMENT,
 };
 
 struct ib_dct_init_attr {
@@ -339,4 +401,12 @@ int ib_exp_query_dct(struct ib_dct *dct, struct ib_dct_attr *attr);
 
 int ib_exp_query_mkey(struct ib_mr *mr, u64 mkey_attr_mask,
 		  struct ib_mkey_attr *mkey_attr);
+/* NVMEoF target offload EXP API */
+struct ib_nvmf_ctrl *ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
+		struct ib_nvmf_backend_ctrl_init_attr *init_attr);
+int ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
+struct ib_nvmf_ns *ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
+			struct ib_nvmf_ns_init_attr *init_attr);
+int ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
+
 #endif

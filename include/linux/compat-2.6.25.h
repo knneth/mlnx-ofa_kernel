@@ -14,7 +14,6 @@
 #include <linux/netdevice.h>
 #include <linux/pm.h>
 #include <asm-generic/bug.h>
-#include <linux/pm_qos_params.h>
 #include <linux/pci.h>
 #include <linux/in.h>
 #include <linux/errno.h>
@@ -128,33 +127,6 @@ typedef u32 phys_addr_t;
 #define DEFINE_PCI_DEVICE_TABLE(_table) \
 	const struct pci_device_id _table[] __devinitdata
 
-#ifndef CONFIG_COMPAT_PM_QOS
-/*
- * Backport work for QoS dependencies (kernel/pm_qos_params.c)
- * pm-qos stuff written by mark gross mgross@linux.intel.com.
- *
- * ipw2100 now makes use of:
- *
- * pm_qos_add_requirement(),
- * pm_qos_update_requirement() and
- * pm_qos_remove_requirement() from it
- *
- * mac80211 uses the network latency to determine if to enable or not
- * dynamic PS. mac80211 also and registers a notifier for when
- * the latency changes. Since older kernels do no thave pm-qos stuff
- * we just implement it completley here and register it upon cfg80211
- * init. I haven't tested ipw2100 on 2.6.24 though.
- *
- * This pm-qos implementation is copied verbatim from the kernel
- * written by mark gross mgross@linux.intel.com. You don't have
- * to do anythinig to use pm-qos except use the same exported
- * routines as used in newer kernels. The backport_pm_qos_power_init()
- * defned below is used by the compat module to initialize pm-qos.
- */
-int backport_pm_qos_power_init(void);
-int backport_pm_qos_power_deinit(void);
-#endif /* CONFIG_COMPAT_PM_QOS */
-
 /*
  * 2.6.25 adds PM_EVENT_HIBERNATE as well here but
  * we don't have this on <= 2.6.23)
@@ -165,11 +137,6 @@ int backport_pm_qos_power_deinit(void);
 
 /* Although we don't care about wimax this is needed for rfkill input stuff */
 #define KEY_WIMAX		246
-
-#ifndef CONFIG_COMPAT_PM_QOS
-/* Although pm_qos stuff is not implemented on <= 2.6.24 lets keep the define */
-#define PM_QOS_DEFAULT_VALUE -1
-#endif /* CONFIG_COMPAT_PM_QOS */
 
 #define __WARN(foo) dump_stack()
 
@@ -267,20 +234,6 @@ extern int strict_strtoul(const char *, unsigned int, unsigned long *);
 #define strict_strtol LINUX_BACKPORT(strict_strtol)
 extern int strict_strtol(const char *, unsigned int, long *);
 
-#else
-/*
- * Kernels >= 2.6.25 have pm-qos and its initialized as part of
- * the bootup process
- */
-static inline int backport_pm_qos_power_init(void)
-{
-	return 0;
-}
-
-static inline int backport_pm_qos_power_deinit(void)
-{
-	return 0;
-}
 #endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)) */
 
 #endif /* LINUX_26_25_COMPAT_H */

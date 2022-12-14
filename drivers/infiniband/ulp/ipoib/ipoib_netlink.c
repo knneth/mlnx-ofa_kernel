@@ -44,7 +44,7 @@ static const struct nla_policy ipoib_policy[IFLA_IPOIB_MAX + 1] = {
 
 static int ipoib_fill_info(struct sk_buff *skb, const struct net_device *dev)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	u16 val;
 
 	if (nla_put_u16(skb, IFLA_IPOIB_PKEY, priv->pkey))
@@ -67,15 +67,16 @@ nla_put_failure:
 static int ipoib_changelink(struct net_device *dev,
 			    struct nlattr *tb[], struct nlattr *data[])
 {
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	u16 mode, umcast;
 	int ret = 0;
 
 	if (data[IFLA_IPOIB_MODE]) {
 		mode  = nla_get_u16(data[IFLA_IPOIB_MODE]);
 		if (mode == IPOIB_MODE_DATAGRAM)
-			ret = ipoib_set_mode(dev, "datagram\n");
+			ret = priv->fp.ipoib_set_mode(dev, "datagram\n");
 		else if (mode == IPOIB_MODE_CONNECTED)
-			ret = ipoib_set_mode(dev, "connected\n");
+			ret = priv->fp.ipoib_set_mode(dev, "connected\n");
 		else
 			ret = -EINVAL;
 
@@ -100,6 +101,9 @@ static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
 	u16 child_pkey;
 	int err;
 
+	/* TODO This change should be removed after adding netlink support */
+	return -EOPNOTSUPP;
+
 	if (!tb[IFLA_LINK])
 		return -EINVAL;
 
@@ -107,7 +111,7 @@ static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
 	if (!pdev || pdev->type != ARPHRD_INFINIBAND)
 		return -ENODEV;
 
-	ppriv = netdev_priv(pdev);
+	ppriv = ipoib_priv(pdev);
 
 	if (test_bit(IPOIB_FLAG_SUBINTERFACE, &ppriv->flags)) {
 		ipoib_warn(ppriv, "child creation disallowed for child devices\n");
@@ -129,7 +133,7 @@ static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
 	 */
 	child_pkey |= 0x8000;
 
-	err = __ipoib_vlan_add(ppriv, netdev_priv(dev), child_pkey, IPOIB_RTNL_CHILD);
+	err = __ipoib_vlan_add(ppriv, ipoib_priv(dev), child_pkey, IPOIB_RTNL_CHILD);
 
 	if (!err && data)
 		err = ipoib_changelink(dev, tb, data);
@@ -140,8 +144,8 @@ static void ipoib_unregister_child_dev(struct net_device *dev, struct list_head 
 {
 	struct ipoib_dev_priv *priv, *ppriv;
 
-	priv = netdev_priv(dev);
-	ppriv = netdev_priv(priv->parent);
+	priv = ipoib_priv(dev);
+	ppriv = ipoib_priv(priv->parent);
 
 	down_write(&ppriv->vlan_rwsem);
 	unregister_netdevice_queue(dev, head);
@@ -161,7 +165,7 @@ static struct rtnl_link_ops ipoib_link_ops __read_mostly = {
 	.maxtype	= IFLA_IPOIB_MAX,
 	.policy		= ipoib_policy,
 	.priv_size	= sizeof(struct ipoib_dev_priv),
-	.setup		= ipoib_setup,
+	.setup		= ipoib_setup_common,
 	.newlink	= ipoib_new_child_link,
 	.changelink	= ipoib_changelink,
 	.dellink	= ipoib_unregister_child_dev,

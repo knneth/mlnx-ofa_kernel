@@ -126,7 +126,7 @@ int mlx4_ib_umem_calc_optimal_mtt_size(struct ib_umem *umem,
 	u64 last_block_end = 0;
 	u64 total_len = 0;
 	u64 last_block_aligned_end = 0;
-	u64 min_shift = ilog2(umem->page_size);
+	u64 min_shift = umem->page_shift;
 	struct scatterlist *sg;
 	int i;
 	u64 next_block_start;
@@ -156,7 +156,7 @@ int mlx4_ib_umem_calc_optimal_mtt_size(struct ib_umem *umem,
 			   number, resulting in access to the wrong
 			   data. */
 			misalignment_bits =
-			(start_va & (~(((u64)(umem->page_size))-1ULL)))
+			(start_va & (~(((u64)(BIT(umem->page_shift)))-1ULL)))
 						^ current_block_start;
 			block_shift = min(alignment_of(misalignment_bits)
 				, block_shift);

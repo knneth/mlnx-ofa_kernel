@@ -11,6 +11,8 @@ include ./config.mk
 
 export COMPAT_CONFIG=$(CWD)/compat.config
 export COMPAT_AUTOCONF=$(CWD)/include/linux/compat_autoconf.h
+export KSRC
+export KSRC_OBJ
 export KLIB_BUILD
 export KVERSION
 export MAKE
@@ -72,7 +74,7 @@ CPP_MINOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f2)
 CPP_PATCH := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f3)
 # Assumes that major, minor, and patch cannot exceed 999
 CPP_VERS  := $(shell expr 0$(CPP_MAJOR) \* 1000000 + 0$(CPP_MINOR) \* 1000 + 0$(CPP_PATCH))
-compile_h=$(shell /bin/ls -1 $(KSRC)/include/*/compile.h 2> /dev/null | head -1)
+compile_h=$(shell /bin/ls -1 $(KSRC_OBJ)/include/*/compile.h 2> /dev/null | head -1)
 ifneq ($(compile_h),)
 KERNEL_GCC_MAJOR := $(shell grep LINUX_COMPILER $(compile_h) | sed -r -e 's/.*gcc version ([0-9\.\-]*) .*/\1/g' | cut -d'.' -f1)
 KERNEL_GCC_MINOR := $(shell grep LINUX_COMPILER $(compile_h) | sed -r -e 's/.*gcc version ([0-9\.\-]*) .*/\1/g' | cut -d'.' -f2)
@@ -106,8 +108,8 @@ all: kernel
 install: install_kernel
 install_kernel: install_modules
 
-autoconf_h=$(shell /bin/ls -1 $(KSRC)/include/*/autoconf.h 2> /dev/null | head -1)
-kconfig_h=$(shell /bin/ls -1 $(KSRC)/include/*/kconfig.h 2> /dev/null | head -1)
+autoconf_h=$(shell /bin/ls -1 $(KSRC_OBJ)/include/*/autoconf.h 2> /dev/null | head -1)
+kconfig_h=$(shell /bin/ls -1 $(KSRC_OBJ)/include/*/kconfig.h 2> /dev/null | head -1)
 
 ifneq ($(kconfig_h),)
 KCONFIG_H = -include $(kconfig_h)
@@ -125,9 +127,10 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 	@echo "Building kernel modules"
 	@echo "Kernel version: $(KVERSION)"
 	@echo "Modules directory: $(INSTALL_MOD_PATH)/lib/modules/$(KVERSION)/$(INSTALL_MOD_DIR)"
+	@echo "Kernel build: $(KSRC_OBJ)"
 	@echo "Kernel sources: $(KSRC)"
 	env CWD=$(CWD) BACKPORT_INCLUDES=$(BACKPORT_INCLUDES) \
-		$(MAKE) -C $(KSRC) SUBDIRS="$(CWD)" \
+		$(MAKE) -C $(KSRC_OBJ) SUBDIRS="$(CWD)" \
 		V=$(V) KBUILD_NOCMDDEP=1 $(WITH_MAKE_PARAMS) \
 		CONFIG_COMPAT_VERSION=$(CONFIG_COMPAT_VERSION) \
 		CONFIG_COMPAT_KOBJECT_BACKPORT=$(CONFIG_COMPAT_KOBJECT_BACKPORT) \
@@ -151,6 +154,7 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 		$(SYSTUNE_INCLUDE) \
 		$(MLNX_EN_EXTRA_CFLAGS) \
 		-I$(CWD)/include \
+		-I$(CWD)/include/uapi \
 		$$(if $$(CONFIG_XEN),-D__XEN_INTERFACE_VERSION__=$$(CONFIG_XEN_INTERFACE_VERSION)) \
 		$$(if $$(CONFIG_XEN),-I$$(srctree)/arch/x86/include/mach-xen) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
@@ -175,7 +179,7 @@ install_modules:
 	@echo "Installing kernel modules"
 
 ifeq ($(shell /usr/bin/lsb_release -s -i 2>/dev/null | grep -qiE "debian|ubuntu" 2>/dev/null && echo YES || echo ''),)
-	$(MAKE) -C $(KSRC) SUBDIRS="$(CWD)" \
+	$(MAKE) -C $(KSRC_OBJ) SUBDIRS="$(CWD)" \
 		INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) \
 		INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) \
 		$(WITH_MAKE_PARAMS) modules_install;
@@ -189,7 +193,7 @@ endif
 clean: clean_kernel
 
 clean_kernel:
-	$(MAKE) -C $(KSRC) SUBDIRS="$(CWD)" $(WITH_MAKE_PARAMS) clean
+	$(MAKE) -C $(KSRC_OBJ) SUBDIRS="$(CWD)" $(WITH_MAKE_PARAMS) clean
 	@/bin/rm -f $(clean-files)
 
 clean-files := Module.symvers modules.order Module.markers compat/modules.order

@@ -56,11 +56,11 @@
 
 #define DRV_NAME	"mlx4_core"
 #define PFX		DRV_NAME ": "
-#define DRV_VERSION	"4.0-2.0.0"
-#define DRV_RELDATE	"28 Mar 2017"
+#define DRV_VERSION	"4.1-1.0.2"
+#define DRV_RELDATE	"27 Jun 2017"
 
 #define DRV_STACK_NAME		"Linux-MLNX_OFED"
-#define DRV_STACK_VERSION	"4.0-2.0.0"
+#define DRV_STACK_VERSION	"4.1-1.0.2"
 #define DRV_NAME_FOR_FW		DRV_STACK_NAME "," DRV_STACK_VERSION
 
 #define MLX4_FS_NUM_OF_L2_ADDR		8
@@ -1245,6 +1245,7 @@ void mlx4_qp_event(struct mlx4_dev *dev, u32 qpn, int event_type);
 void mlx4_srq_event(struct mlx4_dev *dev, u32 srqn, int event_type);
 
 void mlx4_enter_error_state(struct mlx4_dev_persistent *persist);
+int mlx4_comm_internal_err(u32 slave_read);
 
 int mlx4_SENSE_PORT(struct mlx4_dev *dev, int port,
 		    enum mlx4_port_type *type);

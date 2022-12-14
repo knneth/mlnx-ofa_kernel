@@ -1,0 +1,10 @@
+#ifndef _COMPAT_LINUX_BPF_TRACE_H
+#define _COMPAT_LINUX_BPF_TRACE_H
+
+#include "../../compat/config.h"
+
+#ifdef HAVE_LINUX_BPF_TRACE_H
+#include_next <linux/bpf_trace.h>
+#endif
+
+#endif /* _COMPAT_LINUX_BPF_TRACE_H */

@@ -1305,45 +1305,6 @@ start()
                                     fi
                                 fi
                         ;;
-                        eth_ipoib)
-                                if [ -f /etc/udev/scripts/net-rename-sideways.sh ]; then
-                                    # Avoid renaming eIPoIB interfaces as XenServer scripts can't handle them
-                                    sed -i -e "s/echo \$name/echo \$1/g" /etc/udev/scripts/net-rename-sideways.sh
-                                fi
-                                load_module $mod
-                                # Workaround for fixing udev naming bug #682750
-                                if (which udevadm &> /dev/null); then
-                                    for i in $(cat /sys/class/net/eth_ipoib_interfaces 2>/dev/null | awk '{print $1}' 2>/dev/null)
-                                    do
-                                        udevadm test /sys/class/net/$i &> /dev/null
-                                    done
-                                fi
-				#load the deamon ipoibd
-				/sbin/eipoib_daemon start
-                                if [ -x $XE ]; then
-                                    get_mlx_en_interfaces
-                                    if [ -n "$mlx_en_interfaces" ]; then
-                                        for i in $mlx_en_interfaces
-                                        do
-                                            for i_uuid in `xe_get_uuid $i`
-                                            do
-                                                xe_replug_pif $i_uuid
-                                            done
-                                            if [ -x $INTERFACE_RECONFIGURE ]; then
-                                                $INTERFACE_RECONFIGURE rewrite 2> /dev/null
-                                                for n_uuid in `xe_get_net_uuid_by_device $i`
-                                                do
-                                                    $INTERFACE_RECONFIGURE --force `xe_get_bridge $n_uuid` up
-                                                done
-                                            fi
-                                        done
-                                    fi
-                                    xe_bond_recover
-                                fi
-                                if [ -f /etc/udev/scripts/net-rename-sideways.sh ]; then
-                                    sed -i -e "s/echo \$1/echo \$name/g" /etc/udev/scripts/net-rename-sideways.sh
-                                fi
-                        ;;
                         *)
                                 load_module $mod
                         ;;
@@ -1719,10 +1680,12 @@ stop()
             fi
         fi
 
-	# Stop ipoibd (for ipoib-pv module)
+        # Stop ipoibd (for ipoib-pv module)
         ipoibdpid=$(pidof -x ipoibd)
         if [ -n "${ipoibdpid:-}" ]; then
-            /sbin/eipoib_daemon stop
+            if [ -e "/sbin/eipoib_daemon" ]; then
+                /sbin/eipoib_daemon stop
+            fi
         fi
         # Stop SRP daemon if needed
         srp_daemon_pids=$(pgrep srp_daemon)

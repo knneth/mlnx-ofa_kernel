@@ -27,3 +27,5 @@ include/scsi/srp.h
 include/scsi/iser.h
 include/linux/nvme.h
 include/linux/nvme-rdma.h
+include/linux/nvme-fc-driver.h
+include/linux/nvme-fc.h

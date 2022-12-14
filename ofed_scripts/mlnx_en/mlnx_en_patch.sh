@@ -48,6 +48,8 @@ Usage: `basename $0` [--help]: Prints this message
 		[--with-memtrack]: Compile with memtrack kernel module to debug memory leaks
 		[-k|--kernel <kernel version>]: Build package for this kernel version. Default: $KER_UNAME_R
 		[-s|--kernel-sources  <path to the kernel sources>]: Use these kernel sources for the build. Default: $KER_PATH
+		--with-linux=DIR  kernel sources directory [/lib/modules/$(uname -r)/source]
+		--with-linux-obj=DIR  kernel obj directory [/lib/modules/$(uname -r)/build]
 		[-j[N]|--with-njobs=[N]] : Allow N configure jobs at once; jobs as number of CPUs with no arg.
 EOF
 }
@@ -68,6 +70,20 @@ parseparams() {
 				shift
 				KSRC=$1
 			;;
+                        --with-linux)
+                                shift
+                                LINUX_SRC=$1
+                        ;;
+                        --with-linux=*)
+                                LINUX_SRC=`expr "x$1" : 'x[^=]*=\(.*\)'`
+                        ;;
+                        --with-linux-obj)
+                                shift
+                                LINUX_OBJ=$1
+                        ;;
+                        --with-linux-obj=*)
+                                LINUX_OBJ=`expr "x$1" : 'x[^=]*=\(.*\)'`
+                        ;;
                         -j[0-9]*)
 	                        NJOBS=`expr "x$1" : 'x\-j\(.*\)'`
                         ;;
@@ -105,7 +121,7 @@ parseparams() {
 
 function check_autofconf {
 	VAR=$1
-	VALUE=$(tac ${KSRC}/include/*/autoconf.h | grep -m1 ${VAR} | sed -ne 's/.*\([01]\)$/\1/gp')
+	VALUE=$(tac ${KSRC_OBJ}/include/*/autoconf.h | grep -m1 ${VAR} | sed -ne 's/.*\([01]\)$/\1/gp')
 
 	eval "export $VAR=$VALUE"
 }
@@ -133,7 +149,37 @@ DEFINE_MLX5_CORE_EN_DCB='#undef CONFIG_MLX5_CORE_EN_DCB\n#define CONFIG_MLX5_COR
 parseparams $@
 
 KVERSION=${KVERSION:-$KER_UNAME_R}
+if [ ! -z "$LINUX_SRC" ]; then
+	KSRC=$LINUX_SRC
+fi
+
+if [ ! -z "$LINUX_OBJ" ]; then
+	KSRC_OBJ=$LINUX_OBJ
+fi
+
 KSRC=${KSRC:-"/lib/modules/${KVERSION}/build"}
+
+if [ -z "$KSRC_OBJ" ]; then
+	build_KSRC=$(echo "$KSRC" | grep -w "build")
+	linux_obj_KSRC=$(echo "$KSRC" | grep -w "linux-obj")
+
+	if [[ -e "/etc/SuSE-release" && -n "$build_KSRC" && -d ${KSRC/build/source} ]] ||
+	   [[ -n "$build_KSRC" && -d ${KSRC/build/source} &&
+	       "X$(readlink -f $KSRC)" != "X$(readlink -f ${KSRC/build/source})" ]]; then
+		KSRC_OBJ=$KSRC
+		KSRC=${KSRC_OBJ/build/source}
+	elif [[ -e "/etc/SuSE-release" && -n "$linux_obj_KSRC" ]]; then
+		sources_dir=$(readlink -f $KSRC 2>/dev/null | sed -e 's/-obj.*//g')
+		KSRC_OBJ=$KSRC
+		KSRC=${sources_dir}
+	fi
+fi
+
+KSRC_OBJ=${KSRC_OBJ:-"$KSRC"}
+
+if [[ ! -d "${KSRC}/" && -d "${KSRC_OBJ}/" ]]; then
+	KSRC=$KSRC_OBJ
+fi
 
 QUILT=${QUILT:-$(/usr/bin/which quilt  2> /dev/null)}
 CWD=$(pwd)
@@ -171,8 +217,9 @@ CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT}
 BACKPORT_INCLUDES=${BACKPORT_INCLUDES}
 ARCH=`uname -m`
 MODULES_DIR:=/lib/modules/${KVERSION}/updates
-KSRC:=${KSRC}
-KLIB_BUILD=${KSRC}
+KSRC=${KSRC}
+KSRC_OBJ=${KSRC_OBJ}
+KLIB_BUILD=${KSRC_OBJ}
 CWD=${CWD}
 MLNX_EN_EXTRA_CFLAGS:=${EXTRA_FLAGS}
 CONFIG_MEMTRACK:=${CONFIG_MEMTRACK}
@@ -189,7 +236,7 @@ cat ${CWD}/${CONFIG}
 
 # Create autoconf.h
 #/bin/rm -f ${CWD}/include/linux/autoconf.h
-if (/bin/ls -1 $KSRC/include/*/autoconf.h 2>/dev/null | head -1 | grep -q generated); then
+if (/bin/ls -1 ${KSRC_OBJ}/include/*/autoconf.h 2>/dev/null | head -1 | grep -q generated); then
     AUTOCONF_H="${CWD}/include/generated/autoconf.h"
     mkdir -p ${CWD}/include/generated
 else
@@ -225,19 +272,7 @@ fi
 /bin/cp -f Makefile.real Makefile
 /bin/cp -f Makefile.real Makefile.in
 
-build_KSRC=$(echo "$KSRC" | grep -w "build")
-linux_obj_KSRC=$(echo "$KSRC" | grep -w "linux-obj")
-
-if [[ -e "/etc/SuSE-release" && -n "$build_KSRC" ]] ||
-   [[ -n "$build_KSRC" && -d ${KSRC/build/source} &&
-       "X$(readlink -f $KSRC)" != "X$(readlink -f ${KSRC/build/source})" ]]; then
-    ex ./configure --with-linux-obj=$KSRC --with-linux=${KSRC/build/source} --with-njobs=$NJOBS
-elif [[ -e "/etc/SuSE-release" && -n "$linux_obj_KSRC" ]]; then
-    sources_dir=$(readlink -f $KSRC 2>/dev/null | sed -e 's/-obj.*//g')
-    ex ./configure --with-linux-obj=$KSRC --with-linux=${sources_dir} --with-njobs=$NJOBS
-else
-    ex ./configure --with-linux-obj=$KSRC --with-linux=$KSRC --with-njobs=$NJOBS
-fi
+ex ./configure --with-linux-obj=$KSRC_OBJ --with-linux=$KSRC --with-njobs=$NJOBS
 
 }
 

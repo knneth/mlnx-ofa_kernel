@@ -494,8 +494,10 @@ struct ib_peer_memory_client *ib_get_peer_client(struct ib_ucontext *context, un
 		/* In case peer requires invalidation it can't own
 		 * memory which doesn't support it
 		 */
-		if (ib_peer_client->invalidation_required &&
-		    (!(peer_mem_flags & IB_PEER_MEM_INVAL_SUPP)))
+		if ((ib_peer_client->invalidation_required &&
+		     (!(peer_mem_flags & IB_PEER_MEM_INVAL_SUPP))) ||
+		    (!context->peer_mem_private_data &&
+		     ib_peer_client->peer_mem->get_context_private_data))
 			continue;
 		ret = ib_peer_client->peer_mem->acquire(addr, size,
 						   context->peer_mem_private_data,
@@ -525,3 +527,62 @@ void ib_put_peer_client(struct ib_peer_memory_client *ib_peer_client,
 	kref_put(&ib_peer_client->ref, complete_peer);
 }
 EXPORT_SYMBOL(ib_put_peer_client);
+
+int ib_get_peer_private_data(struct ib_ucontext *context, u64 peer_id,
+			     char *peer_name)
+{
+	struct ib_peer_memory_client *ib_peer_client;
+	void *peer_mem_private_data = NULL;
+	int ret = 0;
+
+	mutex_lock(&peer_memory_mutex);
+	list_for_each_entry(ib_peer_client, &peer_memory_list, core_peer_list) {
+		if ((!ib_peer_client->peer_mem->get_context_private_data) ||
+		    (!ib_peer_client->peer_mem->put_context_private_data) ||
+		    (strcmp(peer_name, ib_peer_client->peer_mem->name) != 0))
+			continue;
+
+		peer_mem_private_data = ib_peer_client->peer_mem->get_context_private_data(peer_id);
+		if (peer_mem_private_data)
+			break;
+	}
+	mutex_unlock(&peer_memory_mutex);
+
+	if (peer_mem_private_data) {
+		int peer_name_size = sizeof(ib_peer_client->peer_mem->name);
+
+		context->peer_mem_name = kzalloc(peer_name_size, GFP_KERNEL);
+		if (!context->peer_mem_name)
+			return -ENOMEM;
+		memcpy(context->peer_mem_name, peer_name, peer_name_size - 1);
+		context->peer_mem_private_data = peer_mem_private_data;
+		context->flags |= IB_UCONTEXT_LOCAL_PEER_ALLOC;
+	} else {
+		ret = -ENODEV;
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(ib_get_peer_private_data);
+
+void ib_put_peer_private_data(struct ib_ucontext *context)
+{
+	struct ib_peer_memory_client *ib_peer_client;
+
+	if (!(context->flags & IB_UCONTEXT_LOCAL_PEER_ALLOC))
+		return;
+
+	mutex_lock(&peer_memory_mutex);
+	list_for_each_entry(ib_peer_client, &peer_memory_list, core_peer_list) {
+		if (strcmp(ib_peer_client->peer_mem->name,
+			   context->peer_mem_name) == 0) {
+			ib_peer_client->peer_mem->put_context_private_data(context->peer_mem_private_data);
+			break;
+		}
+	}
+
+	mutex_unlock(&peer_memory_mutex);
+	context->peer_mem_private_data = NULL;
+	kfree(context->peer_mem_name);
+}
+EXPORT_SYMBOL(ib_put_peer_private_data);

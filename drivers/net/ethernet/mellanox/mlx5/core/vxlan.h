@@ -38,7 +38,7 @@
 struct mlx5e_vxlan {
 	u16 udp_port;
 #ifdef CONFIG_MLX5_INNER_RSS
-	struct mlx5_flow_rule	*flow_rule;
+	struct mlx5_flow_handle	*flow_rule;
 #endif
 	struct dentry		*dbg;
 };

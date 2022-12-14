@@ -1,4 +1,30 @@
 #!/usr/bin/env python
+#
+# Copyright (c) 2017 Mellanox Technologies. All rights reserved.
+#
+# This Software is licensed under one of the following licenses:
+#
+# 1) under the terms of the "Common Public License 1.0" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/cpl.php.
+#
+# 2) under the terms of the "The BSD License" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/bsd-license.php.
+#
+# 3) under the terms of the "GNU General Public License (GPL) Version 2" a
+#    copy of which is available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/gpl-license.php.
+#
+# Licensee has the right to choose one of the above licenses.
+#
+# Redistributions of source code must retain the above copyright
+# notice and one of the license notices.
+#
+# Redistributions in binary form must reproduce both the above copyright
+# notice, one of the license notices in the documentation
+# and/or other materials provided with the distribution.
+#
 
 #################################################################################
 #SCRIPT:mlnx_tune								#
@@ -616,14 +642,21 @@ class Cpu:
 		"""
 		print "CPU Status"
 		print "%s %s %s"%(self.vendor, self.model, self.architecture)
-		if self.max_freq:
+		status_error = False
+		freq_ok = False
+		# Don't crash if actual cpu frequency cannot be found
+		try:
 			freq_ok = (int(self.actual_freq) >= int(self.max_freq.split(" ")[0]) - 100)
-			freq_status = (status_ok_string(), status_ok_string())[freq_ok]
-		else:
-			freq_ok = True
-			freq_status = status_ok_string()
+			freq_status = (status_ok_string(), status_warning_string())[freq_ok]
+		except:
+			status_error = True
+			freq_status = status_warning_string()
+
 		freq_suggestion = (" >>> CPU frequency is below maximum. Install cpupowerutils and run x86_energy_perf_policy performance.", "")[freq_ok]
-		print "%s: Frequency %sMHz"%(freq_status, self.actual_freq) + freq_suggestion
+		if status_error:
+			print "%s: CPU frequency status cannot be determined" % (freq_status)
+		else:
+			print "%s: Frequency %sMHz"%(freq_status, self.actual_freq) + freq_suggestion
 
 	def collect_info(self, node_info):
 		""" Collects CPU information from the system and updates the class fields

@@ -62,7 +62,7 @@ ATTR_L4_PROTOCOL,\
 ATTR_L4_SRC_PORT,\
 ATTR_L4_DST_PORT, \
 ATTR_MCG_NX_IDX,\
- = range(24)
+ = list(range(24))
 
 prot_map = ["IB_IPv6", "ETH", "IB_IPv4", "FCOE"]
 l4_prot_map = {0:"None", 3:"Other", 5:"UDP", 6:"TCP" }
@@ -189,12 +189,12 @@ class Rule:
 
     def dump(self, rule, last_bucket = None):
         if self.index < HASH_TABLE_SIZE:
-            print ">%-7d  %s" % (self.bucket, rule)
+            print((">%-7d  %s" % (self.bucket, rule)))
         else:
             if last_bucket != None and self.bucket != bucket:
-                print ">%-7d  " % self.bucket
+                print((">%-7d  " % self.bucket))
 
-            print " %-7d  %s" % (self.index, rule)
+            print((" %-7d  %s" % (self.index, rule)))
 
 rules = defaultdict(Rule)
 while not done:
@@ -208,7 +208,7 @@ while not done:
                 extended_fields.append(add_field(ATTR_L4_PROTOCOL))
                 extended_fields.append(add_field(ATTR_L4_SRC_PORT))
                 extended_fields.append(add_field(ATTR_L4_DST_PORT))
-            print title
+            print(title)
             first = False
         if len(entry.attrs) == 0 :
             done = True
@@ -233,7 +233,7 @@ while not done:
         if options.verbose:
             Rule(bucket, index).dump(line)
         else:
-            if not rules.has_key(line):
+            if line not in rules:
                 r = rules[line] = Rule(bucket, index)
                 lines += [line]
 
@@ -253,5 +253,5 @@ if not options.verbose:
             dups += " %-7d* %s\n" % (r.count, rule)
 
     if len(dups):
-        print "Duplicated MCGS:"
-        print dups
+        print("Duplicated MCGS:")
+        print(dups)

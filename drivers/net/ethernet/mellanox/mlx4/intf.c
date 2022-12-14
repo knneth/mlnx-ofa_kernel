@@ -136,7 +136,7 @@ int mlx4_do_bond(struct mlx4_dev *dev, bool enable)
 	LIST_HEAD(bond_list);
 
 	if (!(dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_PORT_REMAP))
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	ret = mlx4_disable_rx_port_check(dev, enable);
 	if (ret) {
@@ -228,8 +228,7 @@ void mlx4_unregister_device(struct mlx4_dev *dev)
 		u32 slave_read =
 			swab32(readl(&mlx4_priv(dev)->mfunc.comm->slave_read));
 
-		if ((slave_read & (u32)COMM_CHAN_EVENT_INTERNAL_ERR) ==
-			(u32)COMM_CHAN_EVENT_INTERNAL_ERR) {
+		if (mlx4_comm_internal_err(slave_read)) {
 			mlx4_dbg(dev, "%s: comm channel is down, entering error state.\n",
 				 __func__);
 			mlx4_enter_error_state(dev->persist);

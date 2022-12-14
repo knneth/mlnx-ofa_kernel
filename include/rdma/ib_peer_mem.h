@@ -56,4 +56,8 @@ int ib_peer_create_invalidation_ctx(struct ib_peer_memory_client *ib_peer_mem, s
 void ib_peer_destroy_invalidation_ctx(struct ib_peer_memory_client *ib_peer_mem,
 				      struct invalidation_ctx *invalidation_ctx);
 
+int ib_get_peer_private_data(struct ib_ucontext *context, __u64 peer_id,
+			     char *peer_name);
+void ib_put_peer_private_data(struct ib_ucontext *context);
+
 #endif

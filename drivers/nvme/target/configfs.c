@@ -11,11 +11,15 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  */
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
+#include <linux/string.h>
 #include <linux/ctype.h>
 
 #include "nvmet.h"
@@ -37,6 +41,8 @@ static ssize_t nvmet_addr_adrfam_show(struct config_item *item,
 		return sprintf(page, "ipv6\n");
 	case NVMF_ADDR_FAMILY_IB:
 		return sprintf(page, "ib\n");
+	case NVMF_ADDR_FAMILY_FC:
+		return sprintf(page, "fc\n");
 	default:
 		return sprintf(page, "\n");
 	}
@@ -59,6 +65,8 @@ static ssize_t nvmet_addr_adrfam_store(struct config_item *item,
 		port->disc_addr.adrfam = NVMF_ADDR_FAMILY_IP6;
 	} else if (sysfs_streq(page, "ib")) {
 		port->disc_addr.adrfam = NVMF_ADDR_FAMILY_IB;
+	} else if (sysfs_streq(page, "fc")) {
+		port->disc_addr.adrfam = NVMF_ADDR_FAMILY_FC;
 	} else {
 		pr_err("Invalid value '%s' for adrfam\n", page);
 		return -EINVAL;
@@ -209,6 +217,8 @@ static ssize_t nvmet_addr_trtype_show(struct config_item *item,
 		return sprintf(page, "rdma\n");
 	case NVMF_TRTYPE_LOOP:
 		return sprintf(page, "loop\n");
+	case NVMF_TRTYPE_FC:
+		return sprintf(page, "fc\n");
 	default:
 		return sprintf(page, "\n");
 	}
@@ -229,6 +239,12 @@ static void nvmet_port_init_tsas_loop(struct nvmet_port *port)
 	memset(&port->disc_addr.tsas, 0, NVMF_TSAS_SIZE);
 }
 
+static void nvmet_port_init_tsas_fc(struct nvmet_port *port)
+{
+	port->disc_addr.trtype = NVMF_TRTYPE_FC;
+	memset(&port->disc_addr.tsas, 0, NVMF_TSAS_SIZE);
+}
+
 static ssize_t nvmet_addr_trtype_store(struct config_item *item,
 		const char *page, size_t count)
 {
@@ -244,6 +260,8 @@ static ssize_t nvmet_addr_trtype_store(struct config_item *item,
 		nvmet_port_init_tsas_rdma(port);
 	} else if (sysfs_streq(page, "loop")) {
 		nvmet_port_init_tsas_loop(port);
+	} else if (sysfs_streq(page, "fc")) {
+		nvmet_port_init_tsas_fc(port);
 	} else {
 		pr_err("Invalid value '%s' for trtype\n", page);
 		return -EINVAL;
@@ -271,7 +289,7 @@ static ssize_t nvmet_ns_device_path_store(struct config_item *item,
 
 	mutex_lock(&subsys->lock);
 	ret = -EBUSY;
-	if (nvmet_ns_enabled(ns))
+	if (ns->enabled)
 		goto out_unlock;
 
 	kfree(ns->device_path);
@@ -307,7 +325,7 @@ static ssize_t nvmet_ns_device_nguid_store(struct config_item *item,
 	int ret = 0;
 
 	mutex_lock(&subsys->lock);
-	if (nvmet_ns_enabled(ns)) {
+	if (ns->enabled) {
 		ret = -EBUSY;
 		goto out_unlock;
 	}
@@ -339,7 +357,7 @@ CONFIGFS_ATTR(nvmet_ns_, device_nguid);
 
 static ssize_t nvmet_ns_enable_show(struct config_item *item, char *page)
 {
-	return sprintf(page, "%d\n", nvmet_ns_enabled(to_nvmet_ns(item)));
+	return sprintf(page, "%d\n", to_nvmet_ns(item)->enabled);
 }
 
 static ssize_t nvmet_ns_enable_store(struct config_item *item,
@@ -362,10 +380,99 @@ static ssize_t nvmet_ns_enable_store(struct config_item *item,
 
 CONFIGFS_ATTR(nvmet_ns_, enable);
 
+static ssize_t nvmet_ns_pci_device_path_show(struct config_item *item, char *page)
+{
+	struct pci_dev *pdev = to_nvmet_ns(item)->pdev;
+
+	return sprintf(page, "%s\n", pdev ? dev_name(&pdev->dev) : "N/A");
+}
+
+static ssize_t nvmet_ns_pci_device_path_store(struct config_item *item,
+		const char *page, size_t count)
+{
+	struct nvmet_ns *ns = to_nvmet_ns(item);
+	struct nvmet_subsys *subsys = ns->subsys;
+	struct pci_dev *pdev;
+	char *token, *buf, *orig_buf;
+	int domain, slot, function;
+	unsigned int bus;
+	int ret = 0;
+
+	mutex_lock(&subsys->lock);
+	if (ns->enabled) {
+		ret = -EBUSY;
+		goto out_unlock;
+	}
+
+	if (ns->pdev) {
+		pci_dev_put(ns->pdev);
+		ns->pdev = NULL;
+	}
+
+	if (!strcmp(page, "clear"))
+		goto out;
+
+	buf = kstrndup(page, count, GFP_KERNEL);
+	if (!buf) {
+		ret = -ENOMEM;
+		goto out_unlock;
+	}
+
+	orig_buf = buf;
+	if ((token = strsep(&buf, ":")) != NULL) {
+		ret = kstrtoint(token, 16, &domain);
+		if (ret) {
+			pr_err("please supply domain ID for PCI p2p establishment\n");
+			goto free_buf;
+		}
+	}
+	if ((token = strsep(&buf, ":")) != NULL) {
+		ret = kstrtouint(token, 16, &bus);
+		if (ret) {
+			pr_err("please supply bus ID for PCI p2p establishment\n");
+			goto free_buf;
+		}
+	}
+	if ((token = strsep(&buf, ".")) != NULL) {
+		ret = kstrtoint(token, 16, &slot);
+		if (ret) {
+			pr_err("please supply slot ID for PCI p2p establishment\n");
+			goto free_buf;
+		}
+	}
+	ret = kstrtoint(buf, 16, &function);
+	if (ret) {
+		pr_err("please supply function ID for PCI p2p establishment\n");
+		goto free_buf;
+	}
+	kfree(orig_buf);
+
+	pdev = pci_get_domain_bus_and_slot(domain, bus,
+					   PCI_DEVFN(slot, function));
+	if (pdev)
+		ns->pdev = pdev;
+	else
+		ret = -EAGAIN;
+
+out:
+	mutex_unlock(&subsys->lock);
+	return ret ? ret : count;
+
+free_buf:
+	kfree(orig_buf);
+out_unlock:
+	mutex_unlock(&subsys->lock);
+	return ret;
+}
+
+CONFIGFS_ATTR(nvmet_ns_, pci_device_path);
+
+
 static struct configfs_attribute *nvmet_ns_attrs[] = {
 	&nvmet_ns_attr_device_path,
 	&nvmet_ns_attr_device_nguid,
 	&nvmet_ns_attr_enable,
+	&nvmet_ns_attr_pci_device_path,
 	NULL,
 };
 
@@ -450,9 +557,21 @@ static int nvmet_port_subsys_allow_link(struct config_item *parent,
 	}
 
 	if (list_empty(&port->subsystems)) {
-		ret = nvmet_enable_port(port);
+		ret = nvmet_enable_port(port, subsys->offloadble);
 		if (ret)
 			goto out_free_link;
+	} else if (port->offload) {
+		/*
+		 * This limitation exists only in 1.0 spec.
+		 * Spec 1.1 solved it by passing CNTLID in private data format.
+		 */
+		pr_err("Offloaded port restricted to have one subsytem enabled\n");
+		ret = -EINVAL;
+		goto out_free_link;
+	} else if (port->offload != subsys->offloadble) {
+		pr_err("can only link subsystems to ports with the same offloadble polarity\n");
+		ret = -EINVAL;
+		goto out_free_link;
 	}
 
 	list_add_tail(&link->entry, &port->subsystems);
@@ -466,7 +585,7 @@ out_free_link:
 	return ret;
 }
 
-static int nvmet_port_subsys_drop_link(struct config_item *parent,
+static void nvmet_port_subsys_drop_link(struct config_item *parent,
 		struct config_item *target)
 {
 	struct nvmet_port *port = to_nvmet_port(parent->ci_parent);
@@ -479,7 +598,7 @@ static int nvmet_port_subsys_drop_link(struct config_item *parent,
 			goto found;
 	}
 	up_write(&nvmet_config_sem);
-	return -EINVAL;
+	return;
 
 found:
 	list_del(&p->entry);
@@ -488,7 +607,6 @@ found:
 		nvmet_disable_port(port);
 	up_write(&nvmet_config_sem);
 	kfree(p);
-	return 0;
 }
 
 static struct configfs_item_operations nvmet_port_subsys_item_ops = {
@@ -542,7 +660,7 @@ out_free_link:
 	return ret;
 }
 
-static int nvmet_allowed_hosts_drop_link(struct config_item *parent,
+static void nvmet_allowed_hosts_drop_link(struct config_item *parent,
 		struct config_item *target)
 {
 	struct nvmet_subsys *subsys = to_subsys(parent->ci_parent);
@@ -555,14 +673,13 @@ static int nvmet_allowed_hosts_drop_link(struct config_item *parent,
 			goto found;
 	}
 	up_write(&nvmet_config_sem);
-	return -EINVAL;
+	return;
 
 found:
 	list_del(&p->entry);
 	nvmet_genctr++;
 	up_write(&nvmet_config_sem);
 	kfree(p);
-	return 0;
 }
 
 static struct configfs_item_operations nvmet_allowed_hosts_item_ops = {
@@ -619,6 +736,7 @@ static void nvmet_subsys_release(struct config_item *item)
 {
 	struct nvmet_subsys *subsys = to_subsys(item);
 
+	nvmet_subsys_del_ctrls(subsys);
 	nvmet_subsys_put(subsys);
 }
 

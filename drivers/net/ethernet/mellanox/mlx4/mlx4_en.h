@@ -58,8 +58,8 @@
 #include "mlx4_stats.h"
 
 #define DRV_NAME	"mlx4_en"
-#define DRV_VERSION	"4.0-2.0.0"
-#define DRV_RELDATE	"28 Mar 2017"
+#define DRV_VERSION	"4.1-1.0.2"
+#define DRV_RELDATE	"27 Jun 2017"
 
 #define MLX4_EN_MSG_LEVEL	(NETIF_MSG_LINK | NETIF_MSG_IFDOWN)
 
@@ -115,7 +115,8 @@
 /* Use the maximum between 16384 and a single page */
 #define MLX4_EN_ALLOC_SIZE	PAGE_ALIGN(16384)
 
-#define MLX4_EN_ALLOC_PREFER_ORDER	PAGE_ALLOC_COSTLY_ORDER
+#define MLX4_EN_ALLOC_PREFER_ORDER min_t(int, get_order(32768),		\
+					 PAGE_ALLOC_COSTLY_ORDER)
 
 /* Receive fragment sizes; we use at most 3 fragments (for 9600 byte MTU
  * and 4K allocations) */
@@ -178,6 +179,8 @@ enum {
 #define SMALL_PACKET_SIZE      (256 - NET_IP_ALIGN)
 #define HEADER_COPY_SIZE       (128 - NET_IP_ALIGN)
 #define MLX4_LOOPBACK_TEST_PAYLOAD (HEADER_COPY_SIZE - ETH_HLEN)
+#define PREAMBLE_LEN           8
+#define MLX4_SELFTEST_LB_MIN_MTU (MLX4_LOOPBACK_TEST_PAYLOAD + NET_IP_ALIGN + ETH_HLEN + PREAMBLE_LEN)
 
 #define MLX4_EN_MIN_MTU		46
 /* VLAN_HLEN is added twice,to support skb vlan tagged with multiple
@@ -228,8 +231,11 @@ enum {
  */
 
 enum cq_type {
-	RX = 0,
-	TX = 1,
+	/* keep tx types first */
+	TX,
+	TX_XDP,
+#define MLX4_EN_NUM_TX_TYPES (TX_XDP + 1)
+	RX,
 };
 
 
@@ -299,46 +305,50 @@ struct mlx4_en_tx_ring {
 	u32			last_nr_txbb;
 	u32			cons;
 	unsigned long		wake_queue;
+	struct netdev_queue	*tx_queue;
+	u32			(*free_tx_desc)(struct mlx4_en_priv *priv,
+						struct mlx4_en_tx_ring *ring,
+						int index, u8 owner,
+						u64 timestamp, int napi_mode);
+	struct mlx4_en_rx_ring	*recycle_ring;
 
 	/* cache line used and dirtied in mlx4_en_xmit() */
 	u32			prod ____cacheline_aligned_in_smp;
+	unsigned int		tx_dropped;
 	unsigned long		bytes;
 	unsigned long		packets;
 	unsigned long		tx_csum;
 	unsigned long		tso_packets;
 	unsigned long		xmit_more;
-	unsigned int		tx_dropped;
 	struct mlx4_bf		bf;
-	unsigned long		queue_stopped;
 
 	/* Following part should be mostly read */
-	cpumask_t		affinity_mask;
-	struct mlx4_qp		qp;
-	struct mlx4_hwq_resources wqres;
-	u32			size; /* number of TXBBs */
-	u32			size_mask;
-	u16			stride;
-	u32			full_size;
-	u16			cqn;	/* index of port CQ associated with this ring */
-	u32			buf_size;
 	__be32			doorbell_qpn;
 	__be32			mr_key;
+	u32			size; /* number of TXBBs */
+	u32			size_mask;
+	u32			full_size;
+	u32			buf_size;
 	void			*buf;
 	struct mlx4_en_tx_info	*tx_info;
-	struct mlx4_en_rx_ring	*recycle_ring;
-	u32			(*free_tx_desc)(struct mlx4_en_priv *priv,
-						struct mlx4_en_tx_ring *ring,
-						int index, u8 owner,
-						u64 timestamp, int napi_mode);
-	u8			*bounce_buf;
-	struct mlx4_qp_context	context;
 	int			qpn;
-	enum mlx4_qp_state	qp_state;
 	u8			queue_index;
 	bool			bf_enabled;
 	bool			bf_alloced;
-	struct netdev_queue	*tx_queue;
-	int			hwtstamp_tx_type;
+	u8			hwtstamp_tx_type;
+	u8			*bounce_buf;
+
+	/* Not used in fast path
+	 * Only queue_stopped might be used if BQL is not properly working.
+	 */
+	unsigned long		queue_stopped;
+	struct mlx4_hwq_resources sp_wqres;
+	struct mlx4_qp		sp_qp;
+	struct mlx4_qp_context	sp_context;
+	cpumask_t		sp_affinity_mask;
+	enum mlx4_qp_state	sp_qp_state;
+	u16			sp_stride;
+	u16			sp_cqn;	/* index of port CQ associated with this ring */
 } ____cacheline_aligned_in_smp;
 
 struct mlx4_en_rx_desc {
@@ -368,6 +378,9 @@ struct mlx4_en_rx_ring {
 	unsigned long csum_ok;
 	unsigned long csum_none;
 	unsigned long csum_complete;
+	unsigned long xdp_drop;
+	unsigned long xdp_tx;
+	unsigned long xdp_tx_full;
 	unsigned long dropped;
 	int hwtstamp_rx_filter;
 	cpumask_var_t affinity_mask;
@@ -382,7 +395,7 @@ struct mlx4_en_cq {
 	int size;
 	int buf_size;
 	int vector;
-	enum cq_type is_tx;
+	enum cq_type type;
 	u16 moder_time;
 	u16 moder_cnt;
 	struct mlx4_cqe *buf;
@@ -393,7 +406,7 @@ struct mlx4_en_cq {
 
 struct mlx4_en_port_profile {
 	u32 flags;
-	u32 tx_ring_num;
+	u32 tx_ring_num[MLX4_EN_NUM_TX_TYPES];
 	u32 rx_ring_num;
 	u32 tx_ring_size;
 	u32 rx_ring_size;
@@ -437,12 +450,11 @@ struct mlx4_en_dev {
 	u32                     priv_pdn;
 	spinlock_t              uar_lock;
 	u8			mac_removed[MLX4_MAX_PORTS + 1];
-	rwlock_t		clock_lock;
 	u32			nominal_c_mult;
 	struct cyclecounter	cycles;
+	seqlock_t		clock_lock;
 	struct timecounter	clock;
 	unsigned long		last_overflow_check;
-	unsigned long		overflow_period;
 	struct ptp_clock	*ptp_clock;
 	struct ptp_clock_info	ptp_clock_info;
 	struct notifier_block	nb;
@@ -488,7 +500,8 @@ struct mlx4_en_frag_info {
 	u16 frag_prefix_size;
 	u32 frag_stride;
 	enum dma_data_direction dma_dir;
-	int order;
+	u16 order;
+	u16 rx_headroom;
 };
 
 #ifdef CONFIG_MLX4_EN_DCB
@@ -616,17 +629,16 @@ struct mlx4_en_priv {
 	u32 flags;
 	u8 num_tx_rings_p_up;
 	u32 tx_work_limit;
-	u32 tx_ring_num;
+	u32 tx_ring_num[MLX4_EN_NUM_TX_TYPES];
 	u32 rx_ring_num;
 	u32 rx_skb_size;
 	struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
 	u16 num_frags;
 	u16 log_rx_info;
-	int xdp_ring_num;
 
-	struct mlx4_en_tx_ring **tx_ring;
+	struct mlx4_en_tx_ring **tx_ring[MLX4_EN_NUM_TX_TYPES];
 	struct mlx4_en_rx_ring *rx_ring[MAX_RX_RINGS];
-	struct mlx4_en_cq **tx_cq;
+	struct mlx4_en_cq **tx_cq[MLX4_EN_NUM_TX_TYPES];
 	struct mlx4_en_cq *rx_cq[MAX_RX_RINGS];
 	struct mlx4_qp drop_qp;
 	struct work_struct rx_mode_task;
@@ -644,6 +656,7 @@ struct mlx4_en_priv {
 	struct mlx4_en_flow_stats_rx rx_flowstats;
 	struct mlx4_en_flow_stats_tx tx_flowstats;
 	struct mlx4_en_port_stats port_stats;
+	struct mlx4_en_xdp_stats xdp_stats;
 	struct mlx4_en_vport_stats vport_stats;
 	struct mlx4_en_vf_stats vf_stats;
 	struct mlx4_en_stats_bitmap stats_bitmap;
@@ -726,7 +739,8 @@ void mlx4_en_set_stats_bitmap(struct mlx4_dev *dev,
 
 int mlx4_en_try_alloc_resources(struct mlx4_en_priv *priv,
 				struct mlx4_en_priv *tmp,
-				struct mlx4_en_port_profile *prof);
+				struct mlx4_en_port_profile *prof,
+				bool carry_xdp_prog);
 void mlx4_en_safe_replace_resources(struct mlx4_en_priv *priv,
 				    struct mlx4_en_priv *tmp);
 
@@ -744,7 +758,8 @@ u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb,
 			 void *accel_priv, select_queue_fallback_t fallback);
 netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev);
 netdev_tx_t mlx4_en_vgtp_xmit(struct sk_buff *skb, struct net_device *dev);
-netdev_tx_t mlx4_en_xmit_frame(struct mlx4_en_rx_alloc *frame,
+netdev_tx_t mlx4_en_xmit_frame(struct mlx4_en_rx_ring *rx_ring,
+			       struct mlx4_en_rx_alloc *frame,
 			       struct net_device *dev, unsigned int length,
 			       int tx_ind, int *doorbell_pending);
 void mlx4_en_xmit_doorbell(struct mlx4_en_tx_ring *ring);
@@ -808,6 +823,7 @@ int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv);
 int mlx4_get_vport_ethtool_stats(struct mlx4_dev *dev, int port,
 				 struct mlx4_en_vport_stats *vport_stats,
 				 int reset);
+void mlx4_en_fold_software_stats(struct net_device *dev);
 int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset);
 int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port);
 

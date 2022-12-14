@@ -189,6 +189,7 @@ struct mlx5e_lbt_priv {
 	struct packet_type pt;
 	struct completion comp;
 	bool loopback_ok;
+	bool local_lb;
 };
 
 static int
@@ -236,12 +237,16 @@ static int mlx5e_test_loopback_setup(struct mlx5e_priv *priv,
 {
 	int err = 0;
 
-	err = mlx5e_refresh_tirs_self_loopback(priv->mdev, true);
-	if (err) {
-		netdev_err(priv->netdev,
-			   "\tFailed to enable UC loopback err(%d)\n", err);
-		return err;
+	/* Temporarily enable local_lb */
+	if (MLX5_CAP_GEN(priv->mdev, disable_local_lb)) {
+		mlx5_nic_vport_query_local_lb(priv->mdev, &lbtp->local_lb);
+		if (!lbtp->local_lb)
+			mlx5_nic_vport_update_local_lb(priv->mdev, true);
 	}
+
+	err = mlx5e_refresh_tirs(priv, true);
+	if (err)
+		return err;
 
 	lbtp->loopback_ok = false;
 	init_completion(&lbtp->comp);
@@ -257,8 +262,13 @@ static int mlx5e_test_loopback_setup(struct mlx5e_priv *priv,
 static void mlx5e_test_loopback_cleanup(struct mlx5e_priv *priv,
 					struct mlx5e_lbt_priv *lbtp)
 {
+	if (MLX5_CAP_GEN(priv->mdev, disable_local_lb)) {
+		if (!lbtp->local_lb)
+			mlx5_nic_vport_update_local_lb(priv->mdev, false);
+	}
+
 	dev_remove_pack(&lbtp->pt);
-	mlx5e_refresh_tirs_self_loopback(priv->mdev, false);
+	mlx5e_refresh_tirs(priv, false);
 }
 
 #define MLX5E_LB_VERIFY_TIMEOUT (msecs_to_jiffies(200))

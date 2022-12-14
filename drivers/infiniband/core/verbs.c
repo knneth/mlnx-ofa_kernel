@@ -523,11 +523,6 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 				return ret;
 			}
 			resolved_dev = dev_get_by_index(&init_net, if_index);
-			if (resolved_dev->flags & IFF_LOOPBACK) {
-				dev_put(resolved_dev);
-				resolved_dev = idev;
-				dev_hold(resolved_dev);
-			}
 			rcu_read_lock();
 			if (resolved_dev != idev && !rdma_is_upper_dev_rcu(idev,
 						resolved_dev))
@@ -640,11 +635,13 @@ struct ib_srq *ib_create_srq(struct ib_pd *pd,
 		srq->event_handler = srq_init_attr->event_handler;
 		srq->srq_context   = srq_init_attr->srq_context;
 		srq->srq_type      = srq_init_attr->srq_type;
+		if (ib_srq_has_cq(srq->srq_type)) {
+			srq->ext.cq   = srq_init_attr->ext.cq;
+			atomic_inc(&srq->ext.cq->usecnt);
+		}
 		if (srq->srq_type == IB_SRQT_XRC) {
 			srq->ext.xrc.xrcd = srq_init_attr->ext.xrc.xrcd;
-			srq->ext.xrc.cq   = srq_init_attr->ext.xrc.cq;
 			atomic_inc(&srq->ext.xrc.xrcd->usecnt);
-			atomic_inc(&srq->ext.xrc.cq->usecnt);
 		}
 		atomic_inc(&pd->usecnt);
 		atomic_set(&srq->usecnt, 0);
@@ -685,18 +682,18 @@ int ib_destroy_srq(struct ib_srq *srq)
 
 	pd = srq->pd;
 	srq_type = srq->srq_type;
-	if (srq_type == IB_SRQT_XRC) {
+	if (ib_srq_has_cq(srq_type))
+		cq = srq->ext.cq;
+	if (srq_type == IB_SRQT_XRC)
 		xrcd = srq->ext.xrc.xrcd;
-		cq = srq->ext.xrc.cq;
-	}
 
 	ret = srq->device->destroy_srq(srq);
 	if (!ret) {
 		atomic_dec(&pd->usecnt);
-		if (srq_type == IB_SRQT_XRC) {
+		if (srq_type == IB_SRQT_XRC)
 			atomic_dec(&xrcd->usecnt);
+		if (ib_srq_has_cq(srq_type))
 			atomic_dec(&cq->usecnt);
-		}
 	}
 
 	return ret;
@@ -989,17 +986,25 @@ static const struct {
 				 [IB_QPT_UC]  = (IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
 						 IB_QP_PKEY_INDEX),
-				 [IB_QPT_RC]  = (IB_QP_ALT_PATH			|
-						 IB_QP_ACCESS_FLAGS		|
-						 IB_QP_PKEY_INDEX),
-				 [IB_EXP_QPT_DC_INI]  = (IB_QP_PKEY_INDEX	|
-							 IB_QP_DC_KEY),
-				 [IB_QPT_XRC_INI] = (IB_QP_ALT_PATH		|
-						 IB_QP_ACCESS_FLAGS		|
-						 IB_QP_PKEY_INDEX),
-				 [IB_QPT_XRC_TGT] = (IB_QP_ALT_PATH		|
-						 IB_QP_ACCESS_FLAGS		|
-						 IB_QP_PKEY_INDEX),
+				 [IB_QPT_RC]  =
+					(IB_QP_ALT_PATH		|
+					 IB_QP_ACCESS_FLAGS	|
+					 IB_QP_PKEY_INDEX	|
+					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
+				 [IB_EXP_QPT_DC_INI]  =
+					(IB_QP_PKEY_INDEX	|
+					 IB_QP_DC_KEY		|
+					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
+				 [IB_QPT_XRC_INI] =
+					(IB_QP_ALT_PATH		|
+					 IB_QP_ACCESS_FLAGS	|
+					 IB_QP_PKEY_INDEX	|
+					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
+				 [IB_QPT_XRC_TGT] =
+					(IB_QP_ALT_PATH		|
+					 IB_QP_ACCESS_FLAGS	|
+					 IB_QP_PKEY_INDEX	|
+					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
 				 [IB_QPT_SMI] = (IB_QP_PKEY_INDEX		|
 						 IB_QP_QKEY),
 				 [IB_QPT_GSI] = (IB_QP_PKEY_INDEX		|
@@ -1045,7 +1050,8 @@ static const struct {
 						 IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
 						 IB_QP_MIN_RNR_TIMER		|
-						 IB_QP_PATH_MIG_STATE),
+						 IB_QP_PATH_MIG_STATE		|
+						 IB_QP_OFFLOAD_TYPE),
 				 [IB_EXP_QPT_DC_INI] = (IB_QP_CUR_STATE		|
 							IB_QP_ALT_PATH		|
 							IB_QP_MIN_RNR_TIMER	|
@@ -1083,7 +1089,8 @@ static const struct {
 						IB_QP_ACCESS_FLAGS		|
 						IB_QP_ALT_PATH			|
 						IB_QP_PATH_MIG_STATE		|
-						IB_QP_MIN_RNR_TIMER),
+						IB_QP_MIN_RNR_TIMER		|
+						IB_QP_OFFLOAD_TYPE),
 				[IB_EXP_QPT_DC_INI]  = (IB_QP_CUR_STATE		|
 							IB_QP_ALT_PATH		|
 							IB_QP_PATH_MIG_STATE	|
@@ -1256,8 +1263,7 @@ int ib_resolve_eth_dmac(struct ib_device *device,
 {
 	int           ret = 0;
 
-	if (ah_attr->port_num < rdma_start_port(device) ||
-	    ah_attr->port_num > rdma_end_port(device))
+	if (!rdma_is_port_valid(device, ah_attr->port_num))
 		return -EINVAL;
 
 	if (!rdma_cap_eth_ah(device, ah_attr->port_num))
@@ -2008,16 +2014,11 @@ static void ib_drain_qp_done(struct ib_cq *cq, struct ib_wc *wc)
  */
 static void __ib_drain_sq(struct ib_qp *qp)
 {
+	struct ib_cq *cq = qp->send_cq;
 	struct ib_qp_attr attr = { .qp_state = IB_QPS_ERR };
 	struct ib_drain_cqe sdrain;
 	struct ib_send_wr swr = {}, *bad_swr;
 	int ret;
-
-	if (qp->send_cq->poll_ctx == IB_POLL_DIRECT) {
-		WARN_ONCE(qp->send_cq->poll_ctx == IB_POLL_DIRECT,
-			  "IB_POLL_DIRECT poll_ctx not supported for drain\n");
-		return;
-	}
 
 	swr.wr_cqe = &sdrain.cqe;
 	sdrain.cqe.done = ib_drain_qp_done;
@@ -2035,7 +2036,11 @@ static void __ib_drain_sq(struct ib_qp *qp)
 		return;
 	}
 
-	wait_for_completion(&sdrain.done);
+	if (cq->poll_ctx == IB_POLL_DIRECT)
+		while (wait_for_completion_timeout(&sdrain.done, HZ / 10) <= 0)
+			ib_process_cq_direct(cq, -1);
+	else
+		wait_for_completion(&sdrain.done);
 }
 
 /*
@@ -2043,16 +2048,11 @@ static void __ib_drain_sq(struct ib_qp *qp)
  */
 static void __ib_drain_rq(struct ib_qp *qp)
 {
+	struct ib_cq *cq = qp->recv_cq;
 	struct ib_qp_attr attr = { .qp_state = IB_QPS_ERR };
 	struct ib_drain_cqe rdrain;
 	struct ib_recv_wr rwr = {}, *bad_rwr;
 	int ret;
-
-	if (qp->recv_cq->poll_ctx == IB_POLL_DIRECT) {
-		WARN_ONCE(qp->recv_cq->poll_ctx == IB_POLL_DIRECT,
-			  "IB_POLL_DIRECT poll_ctx not supported for drain\n");
-		return;
-	}
 
 	rwr.wr_cqe = &rdrain.cqe;
 	rdrain.cqe.done = ib_drain_qp_done;
@@ -2070,7 +2070,11 @@ static void __ib_drain_rq(struct ib_qp *qp)
 		return;
 	}
 
-	wait_for_completion(&rdrain.done);
+	if (cq->poll_ctx == IB_POLL_DIRECT)
+		while (wait_for_completion_timeout(&rdrain.done, HZ / 10) <= 0)
+			ib_process_cq_direct(cq, -1);
+	else
+		wait_for_completion(&rdrain.done);
 }
 
 /**
@@ -2087,8 +2091,7 @@ static void __ib_drain_rq(struct ib_qp *qp)
  * ensure there is room in the CQ and SQ for the drain work request and
  * completion.
  *
- * allocate the CQ using ib_alloc_cq() and the CQ poll context cannot be
- * IB_POLL_DIRECT.
+ * allocate the CQ using ib_alloc_cq().
  *
  * ensure that there are no other contexts that are posting WRs concurrently.
  * Otherwise the drain is not guaranteed.
@@ -2116,8 +2119,7 @@ EXPORT_SYMBOL(ib_drain_sq);
  * ensure there is room in the CQ and RQ for the drain work request and
  * completion.
  *
- * allocate the CQ using ib_alloc_cq() and the CQ poll context cannot be
- * IB_POLL_DIRECT.
+ * allocate the CQ using ib_alloc_cq().
  *
  * ensure that there are no other contexts that are posting WRs concurrently.
  * Otherwise the drain is not guaranteed.
@@ -2141,8 +2143,7 @@ EXPORT_SYMBOL(ib_drain_rq);
  * ensure there is room in the CQ(s), SQ, and RQ for drain work requests
  * and completions.
  *
- * allocate the CQs using ib_alloc_cq() and the CQ poll context cannot be
- * IB_POLL_DIRECT.
+ * allocate the CQs using ib_alloc_cq().
  *
  * ensure that there are no other contexts that are posting WRs concurrently.
  * Otherwise the drain is not guaranteed.

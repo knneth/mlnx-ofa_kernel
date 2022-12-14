@@ -1,0 +1,261 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: nvme target
+
+Add only nvme target backports to this patch.
+That is:
+- drivers/nvme/target/*
+
+Change-Id: Ie24680217605474c99ba57a06b0d285454fa6249
+Signed-off-by: Alaa Hleihel <alaa@mellanox.com>
+---
+ drivers/nvme/target/admin-cmd.c |  4 ++++
+ drivers/nvme/target/configfs.c  | 25 +++++++++++++++++++++++++
+ drivers/nvme/target/fc.c        |  4 ++++
+ drivers/nvme/target/fcloop.c    |  4 ++++
+ drivers/nvme/target/io-cmd.c    | 18 ++++++++++++++++++
+ drivers/nvme/target/loop.c      | 22 ++++++++++++++++++++++
+ 6 files changed, 77 insertions(+)
+
+--- a/drivers/nvme/target/admin-cmd.c
++++ b/drivers/nvme/target/admin-cmd.c
+@@ -245,8 +245,12 @@ static void nvmet_execute_identify_ctrl(
+ 	id->maxcmd = cpu_to_le16(NVMET_MAX_CMD);
+ 
+ 	id->nn = cpu_to_le32(ctrl->subsys->max_nsid);
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ 	id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM |
+ 			NVME_CTRL_ONCS_WRITE_ZEROES);
++#else
++	id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM);
++#endif
+ 
+ 	/* XXX: don't report vwc if the underlying device is write through */
+ 	id->vwc = NVME_CTRL_VWC_PRESENT;
+--- a/drivers/nvme/target/configfs.c
++++ b/drivers/nvme/target/configfs.c
+@@ -585,8 +585,13 @@ out_free_link:
+ 	return ret;
+ }
+ 
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ static void nvmet_port_subsys_drop_link(struct config_item *parent,
+ 		struct config_item *target)
++#else
++static int nvmet_port_subsys_drop_link(struct config_item *parent,
++		struct config_item *target)
++#endif
+ {
+ 	struct nvmet_port *port = to_nvmet_port(parent->ci_parent);
+ 	struct nvmet_subsys *subsys = to_subsys(target);
+@@ -598,7 +603,11 @@ static void nvmet_port_subsys_drop_link(
+ 			goto found;
+ 	}
+ 	up_write(&nvmet_config_sem);
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ 	return;
++#else
++	return -EINVAL;
++#endif
+ 
+ found:
+ 	list_del(&p->entry);
+@@ -607,6 +616,9 @@ found:
+ 		nvmet_disable_port(port);
+ 	up_write(&nvmet_config_sem);
+ 	kfree(p);
++#ifdef CONFIGFS_DROP_LINK_RETURNS_INT
++	return 0;
++#endif
+ }
+ 
+ static struct configfs_item_operations nvmet_port_subsys_item_ops = {
+@@ -660,8 +672,14 @@ out_free_link:
+ 	return ret;
+ }
+ 
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ static void nvmet_allowed_hosts_drop_link(struct config_item *parent,
+ 		struct config_item *target)
++#else
++static int nvmet_allowed_hosts_drop_link(struct config_item *parent,
++		struct config_item *target)
++
++#endif
+ {
+ 	struct nvmet_subsys *subsys = to_subsys(parent->ci_parent);
+ 	struct nvmet_host *host = to_host(target);
+@@ -673,13 +691,20 @@ static void nvmet_allowed_hosts_drop_lin
+ 			goto found;
+ 	}
+ 	up_write(&nvmet_config_sem);
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ 	return;
++#else
++	return -EINVAL;
++#endif
+ 
+ found:
+ 	list_del(&p->entry);
+ 	nvmet_genctr++;
+ 	up_write(&nvmet_config_sem);
+ 	kfree(p);
++#ifdef CONFIGFS_DROP_LINK_RETURNS_INT
++	return 0;
++#endif
+ }
+ 
+ static struct configfs_item_operations nvmet_allowed_hosts_item_ops = {
+--- a/drivers/nvme/target/fc.c
++++ b/drivers/nvme/target/fc.c
+@@ -14,6 +14,8 @@
+  * can be found in the file COPYING included with this package
+  *
+  */
++#ifdef HAVE_LINUX_NVME_FC_DRIVER_H
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -2295,3 +2297,5 @@ module_init(nvmet_fc_init_module);
+ module_exit(nvmet_fc_exit_module);
+ 
+ MODULE_LICENSE("GPL v2");
++
++#endif /* HAVE_LINUX_NVME_FC_DRIVER_H */
+--- a/drivers/nvme/target/fcloop.c
++++ b/drivers/nvme/target/fcloop.c
+@@ -13,6 +13,8 @@
+  * See the GNU General Public License for more details, a copy of which
+  * can be found in the file COPYING included with this package
+  */
++#ifdef HAVE_LINUX_NVME_FC_DRIVER_H
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -1149,3 +1151,5 @@ module_init(fcloop_init);
+ module_exit(fcloop_exit);
+ 
+ MODULE_LICENSE("GPL v2");
++
++#endif /* HAVE_LINUX_NVME_FC_DRIVER_H */
+--- a/drivers/nvme/target/io-cmd.c
++++ b/drivers/nvme/target/io-cmd.c
+@@ -40,7 +40,13 @@ static void nvmet_inline_bio_init(struct
+ {
+ 	struct bio *bio = &req->inline_bio;
+ 
++#ifdef HAVE_BIO_INIT_3_PARAMS
+ 	bio_init(bio, req->inline_bvec, NVMET_MAX_INLINE_BIOVEC);
++#else
++	bio_init(bio);
++	bio->bi_max_vecs = NVMET_MAX_INLINE_BIOVEC;
++	bio->bi_io_vec = req->inline_bvec;
++#endif
+ }
+ 
+ static void nvmet_execute_rw(struct nvmet_req *req)
+@@ -59,7 +65,11 @@ static void nvmet_execute_rw(struct nvme
+ 
+ 	if (req->cmd->rw.opcode == nvme_cmd_write) {
+ 		op = REQ_OP_WRITE;
++#ifdef HAVE_REQ_IDLE
+ 		op_flags = REQ_SYNC | REQ_IDLE;
++#else
++		op_flags = WRITE_ODIRECT;
++#endif
+ 		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
+ 			op_flags |= REQ_FUA;
+ 	} else {
+@@ -97,7 +107,11 @@ static void nvmet_execute_rw(struct nvme
+ 
+ 	cookie = submit_bio(bio);
+ 
++#ifdef HAVE_BLK_MQ_POLL
+ 	blk_mq_poll(bdev_get_queue(req->ns->bdev), cookie);
++#else
++	blk_poll(bdev_get_queue(req->ns->bdev), cookie);
++#endif
+ }
+ 
+ static void nvmet_execute_flush(struct nvmet_req *req)
+@@ -173,6 +187,7 @@ static void nvmet_execute_dsm(struct nvm
+ 	}
+ }
+ 
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ static void nvmet_execute_write_zeroes(struct nvmet_req *req)
+ {
+ 	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
+@@ -198,6 +213,7 @@ static void nvmet_execute_write_zeroes(s
+ 		nvmet_req_complete(req, status);
+ 	}
+ }
++#endif
+ 
+ int nvmet_parse_io_cmd(struct nvmet_req *req)
+ {
+@@ -236,9 +252,11 @@ int nvmet_parse_io_cmd(struct nvmet_req
+ 		req->data_len = (le32_to_cpu(cmd->dsm.nr) + 1) *
+ 			sizeof(struct nvme_dsm_range);
+ 		return 0;
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ 	case nvme_cmd_write_zeroes:
+ 		req->execute = nvmet_execute_write_zeroes;
+ 		return 0;
++#endif
+ 	default:
+ 		pr_err("nvmet: unhandled cmd %d\n", cmd->common.opcode);
+ 		return NVME_SC_INVALID_OPCODE | NVME_SC_DNR;
+--- a/drivers/nvme/target/loop.c
++++ b/drivers/nvme/target/loop.c
+@@ -235,6 +235,7 @@ static int nvme_loop_init_iod(struct nvm
+ 	return 0;
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ static int nvme_loop_init_request(struct blk_mq_tag_set *set,
+ 		struct request *req, unsigned int hctx_idx,
+ 		unsigned int numa_node)
+@@ -249,6 +250,21 @@ static int nvme_loop_init_admin_request(
+ {
+ 	return nvme_loop_init_iod(set->driver_data, blk_mq_rq_to_pdu(req), 0);
+ }
++#else
++static int nvme_loop_init_request(void *data, struct request *req,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	return nvme_loop_init_iod(data, blk_mq_rq_to_pdu(req), hctx_idx + 1);
++}
++
++static int nvme_loop_init_admin_request(void *data, struct request *req,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	return nvme_loop_init_iod(data, blk_mq_rq_to_pdu(req), 0);
++}
++#endif
+ 
+ static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
+ 		unsigned int hctx_idx)
+@@ -277,6 +293,9 @@ static int nvme_loop_init_admin_hctx(str
+ static const struct blk_mq_ops nvme_loop_mq_ops = {
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue      = blk_mq_map_queue,
++#endif
+ 	.init_request	= nvme_loop_init_request,
+ 	.init_hctx	= nvme_loop_init_hctx,
+ 	.timeout	= nvme_loop_timeout,
+@@ -285,6 +304,9 @@ static const struct blk_mq_ops nvme_loop
+ static const struct blk_mq_ops nvme_loop_admin_mq_ops = {
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue      = blk_mq_map_queue,
++#endif
+ 	.init_request	= nvme_loop_init_admin_request,
+ 	.init_hctx	= nvme_loop_init_admin_hctx,
+ 	.timeout	= nvme_loop_timeout,

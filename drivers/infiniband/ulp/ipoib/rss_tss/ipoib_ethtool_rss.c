@@ -33,7 +33,7 @@
 static int ipoib_set_coalesce_rss(struct net_device *dev,
 			 	  struct ethtool_coalesce *coal)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int ret, i;
 
 	/*
@@ -64,7 +64,7 @@ static void ipoib_get_ethtool_stats_rss(struct net_device *dev,
 					struct ethtool_stats __always_unused *stats,
 					u64 *data)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	struct ipoib_recv_ring *recv_ring;
 	struct ipoib_send_ring *send_ring;
 	int index = 0;
@@ -97,7 +97,7 @@ static void ipoib_get_ethtool_stats_rss(struct net_device *dev,
 static void ipoib_get_strings_rss(struct net_device __always_unused *dev,
 				  u32 stringset, u8 *data)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int i, index = 0;
 
 	switch (stringset) {
@@ -132,7 +132,7 @@ static void ipoib_get_strings_rss(struct net_device __always_unused *dev,
 static int ipoib_get_sset_count_rss(struct net_device __always_unused *dev,
 				    int sset)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	switch (sset) {
 	case ETH_SS_STATS:
@@ -147,7 +147,7 @@ static int ipoib_get_sset_count_rss(struct net_device __always_unused *dev,
 static void ipoib_get_channels(struct net_device *dev,
 			       struct ethtool_channels *channel)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	channel->max_rx = priv->max_rx_queues;
 	channel->max_tx = priv->max_tx_queues;
@@ -164,7 +164,7 @@ static void ipoib_get_channels(struct net_device *dev,
 static int ipoib_set_channels(struct net_device *dev,
 			struct ethtool_channels *channel)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	if (channel->other_count)
 		return -EINVAL;

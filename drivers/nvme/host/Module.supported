@@ -1,4 +1,0 @@
-nvme-core.ko external
-nvme.ko external
-nvme-fabrics.ko external
-nvme-rdma.ko external

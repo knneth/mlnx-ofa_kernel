@@ -34,8 +34,6 @@
 #define MLX5_IB_ODP_EXP_H
 
 #define PREFETCH_MR_MAX_RETRIES (3)
-struct mlx5_ib_mr *mlx5_ib_odp_find_mr_lkey(struct mlx5_ib_dev *dev,
-					    u32 key);
 
 int mlx5_ib_exp_odp_init_one(struct mlx5_ib_dev *ibdev);
 

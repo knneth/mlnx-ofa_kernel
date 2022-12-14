@@ -2,6 +2,7 @@
 #define _COMPAT_LINUX_NETDEVICE_H 1
 
 #include "../../compat/config.h"
+#include <linux/kconfig.h>
 
 #include_next <linux/netdevice.h>
 
@@ -87,20 +88,8 @@ static inline void netif_trans_update(struct net_device *dev)
 #define netdev_master_upper_dev_link(a,b,c,d) netdev_master_upper_dev_link(a,b)
 #endif
 
-#ifdef HAVE_ALLOC_NETDEV_MQS_6_PARAMS
-#define alloc_netdev_mqs(a, b, c, d, e) alloc_netdev_mqs(a, b, NET_NAME_UNKNOWN, c, d, e)
-#endif
-
-#ifdef alloc_netdev_mq
-#undef alloc_netdev_mq
-#define alloc_netdev_mq(sizeof_priv, name, setup, count) \
-    alloc_netdev_mqs(sizeof_priv, name, setup, count, count)
-#endif
-
-#ifdef alloc_netdev
-#undef alloc_netdev
-#define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
-	alloc_netdev_mqs(sizeof_priv, name, setup, 1, 1)
+#ifdef HAVE_ALLOC_NETDEV_MQS_5_PARAMS
+#define alloc_netdev_mqs(p1, p2, p3, p4, p5, p6) alloc_netdev_mqs(p1, p2, p4, p5, p6)
 #endif
 
 #ifndef HAVE_NETIF_IS_BOND_MASTER
@@ -139,5 +128,35 @@ netdev_notifier_info_to_dev(void *ptr)
 	return (struct net_device *)ptr;
 }
 #endif
+
+#ifndef NET_NAME_UNKNOWN
+#define NET_NAME_UNKNOWN        0       /*  unknown origin (not exposed to userspace) */
+#endif
+
+
+#if IS_ENABLED(CONFIG_VXLAN) && (defined(HAVE_NDO_ADD_VXLAN_PORT) || defined(HAVE_NDO_UDP_TUNNEL_ADD))
+#define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
+#endif
+
+#if (defined(HAVE_NDO_GET_STATS64) && !defined(HAVE_NETDEV_STATS_TO_STATS64))
+static inline void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
+					   const struct net_device_stats *netdev_stats)
+{
+#if BITS_PER_LONG == 64
+	BUILD_BUG_ON(sizeof(*stats64) != sizeof(*netdev_stats));
+	memcpy(stats64, netdev_stats, sizeof(*stats64));
+#else
+	size_t i, n = sizeof(*stats64) / sizeof(u64);
+	const unsigned long *src = (const unsigned long *)netdev_stats;
+	u64 *dst = (u64 *)stats64;
+
+	BUILD_BUG_ON(sizeof(*netdev_stats) / sizeof(unsigned long) !=
+		     sizeof(*stats64) / sizeof(u64));
+	for (i = 0; i < n; i++)
+		dst[i] = src[i];
+#endif
+}
+#endif
+
 
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

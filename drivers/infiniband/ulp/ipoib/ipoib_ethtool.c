@@ -57,27 +57,10 @@ static const struct ipoib_stats ipoib_gstrings_stats[] = {
 
 #define IPOIB_GLOBAL_STATS_LEN	ARRAY_SIZE(ipoib_gstrings_stats)
 
-static int ipoib_ethtool_dev_init(struct net_device *dev)
-{
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
-	int result = -ENOMEM;
-
-	ipoib_dbg(priv, "ethtool: initializing interface %s\n", dev->name);
-
-	result = priv->fp.ipoib_dev_init(priv->dev, priv->ca, priv->port);
-	if (result < 0) {
-		pr_warn("%s: failed to initialize port %d (ret = %d)\n",
-			dev->name, priv->port, result);
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
 static int ipoib_set_ring_param(struct net_device *dev,
 				struct ethtool_ringparam *ringparam)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	unsigned int new_recvq_size, new_sendq_size;
 	unsigned long priv_current_flags;
 	unsigned int dev_current_flags;
@@ -115,12 +98,12 @@ static int ipoib_set_ring_param(struct net_device *dev,
 		dev_current_flags = dev->flags;
 
 		dev_change_flags(dev, dev->flags & ~IFF_UP);
-		priv->fp.ipoib_dev_uninit(dev);
+		priv->rn_ops->ndo_uninit(dev);
 
 		do {
 			priv->recvq_size = new_recvq_size;
 			priv->sendq_size = new_sendq_size;
-			if (ipoib_ethtool_dev_init(dev)) {
+			if (priv->rn_ops->ndo_init(dev)) {
 				new_recvq_size >>= 1;
 				new_sendq_size >>= 1;
 				/* keep the values always legal */
@@ -135,8 +118,8 @@ static int ipoib_set_ring_param(struct net_device *dev,
 				init = true;
 			}
 		} while (!init &&
-			 !(new_recvq_size == IPOIB_MIN_QUEUE_SIZE &&
-			   new_sendq_size == IPOIB_MIN_QUEUE_SIZE));
+			 !(priv->recvq_size == IPOIB_MIN_QUEUE_SIZE &&
+			   priv->sendq_size == IPOIB_MIN_QUEUE_SIZE));
 
 		if (!init) {
 			pr_err("%s: Failed to init interface %s, removing it\n",
@@ -159,7 +142,7 @@ static int ipoib_set_ring_param(struct net_device *dev,
 static void ipoib_get_ring_param(struct net_device *dev,
 				 struct ethtool_ringparam *ringparam)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	ringparam->rx_max_pending = IPOIB_MAX_QUEUE_SIZE;
 	ringparam->tx_max_pending = IPOIB_MAX_QUEUE_SIZE;
@@ -174,12 +157,12 @@ static void ipoib_get_ring_param(struct net_device *dev,
 static void ipoib_get_drvinfo(struct net_device *netdev,
 			      struct ethtool_drvinfo *drvinfo)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(netdev);
+	struct ipoib_dev_priv *priv = ipoib_priv(netdev);
 
 	ib_get_device_fw_str(priv->ca, drvinfo->fw_version,
 			     sizeof(drvinfo->fw_version));
 
-	strlcpy(drvinfo->bus_info, dev_name(priv->ca->dma_device),
+	strlcpy(drvinfo->bus_info, dev_name(priv->ca->dev.parent),
 		sizeof(drvinfo->bus_info));
 
 	strlcpy(drvinfo->version, ipoib_driver_version,
@@ -191,7 +174,7 @@ static void ipoib_get_drvinfo(struct net_device *netdev,
 static int ipoib_get_coalesce(struct net_device *dev,
 			      struct ethtool_coalesce *coal)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
 	coal->rx_coalesce_usecs = priv->ethtool.coalesce_usecs;
 	coal->rx_max_coalesced_frames = priv->ethtool.max_coalesced_frames;
@@ -202,7 +185,7 @@ static int ipoib_get_coalesce(struct net_device *dev,
 static int ipoib_set_coalesce(struct net_device *dev,
 			      struct ethtool_coalesce *coal)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int ret;
 
 	/*
@@ -228,7 +211,7 @@ static int ipoib_set_coalesce(struct net_device *dev,
 
 static int ipoib_get_settings(struct net_device *dev, struct ethtool_cmd *ecmd)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	struct ib_port_attr attr;
 	char *speed = "";
 	int rate;/* in deci-Gb/sec */
@@ -314,7 +297,7 @@ static const struct ethtool_ops ipoib_ethtool_ops = {
 
 void ipoib_set_ethtool_ops(struct net_device *dev)
 {
-	dev->ethtool_ops = &ipoib_ethtool_ops;
+	dev->ethtool_ops = ipoib_get_ethtool_ops();
 }
 
 #include "rss_tss/ipoib_ethtool_rss.c"

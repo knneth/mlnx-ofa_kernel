@@ -159,9 +159,14 @@ static int __mlx5e_add_vlan_rule(struct mlx5e_priv *priv,
 				 enum mlx5e_vlan_rule_type rule_type,
 				 u16 vid, struct mlx5_flow_spec *spec)
 {
+	struct mlx5_flow_act flow_act = {
+		.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
+		.flow_tag = MLX5_FS_DEFAULT_FLOW_TAG,
+		.encap_id = 0,
+	};
 	struct mlx5_flow_table *ft = priv->fs.vlan.ft.t;
 	struct mlx5_flow_destination dest;
-	struct mlx5_flow_rule **rule_p;
+	struct mlx5_flow_handle **rule_p;
 	int err = 0;
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
@@ -200,10 +205,7 @@ static int __mlx5e_add_vlan_rule(struct mlx5e_priv *priv,
 		break;
 	}
 
-	*rule_p = mlx5_add_flow_rule(ft, spec,
-				     MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				     MLX5_FS_DEFAULT_FLOW_TAG,
-				     &dest);
+	*rule_p = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 
 	if (IS_ERR(*rule_p)) {
 		err = PTR_ERR(*rule_p);
@@ -242,26 +244,26 @@ static void mlx5e_del_vlan_rule(struct mlx5e_priv *priv,
 	switch (rule_type) {
 	case MLX5E_VLAN_RULE_TYPE_UNTAGGED:
 		if (priv->fs.vlan.untagged_rule) {
-			mlx5_del_flow_rule(priv->fs.vlan.untagged_rule);
+			mlx5_del_flow_rules(priv->fs.vlan.untagged_rule);
 			priv->fs.vlan.untagged_rule = NULL;
 		}
 		break;
 	case MLX5E_VLAN_RULE_TYPE_ANY_CTAG_VID:
 		if (priv->fs.vlan.any_cvlan_rule) {
-			mlx5_del_flow_rule(priv->fs.vlan.any_cvlan_rule);
+			mlx5_del_flow_rules(priv->fs.vlan.any_cvlan_rule);
 			priv->fs.vlan.any_cvlan_rule = NULL;
 		}
 		break;
 	case MLX5E_VLAN_RULE_TYPE_ANY_STAG_VID:
 		if (priv->fs.vlan.any_svlan_rule) {
-			mlx5_del_flow_rule(priv->fs.vlan.any_svlan_rule);
+			mlx5_del_flow_rules(priv->fs.vlan.any_svlan_rule);
 			priv->fs.vlan.any_svlan_rule = NULL;
 		}
 		break;
 	case MLX5E_VLAN_RULE_TYPE_MATCH_VID:
 		mlx5e_vport_context_update_vlans(priv);
 		if (priv->fs.vlan.active_vlans_rule[vid]) {
-			mlx5_del_flow_rule(priv->fs.vlan.active_vlans_rule[vid]);
+			mlx5_del_flow_rules(priv->fs.vlan.active_vlans_rule[vid]);
 			priv->fs.vlan.active_vlans_rule[vid] = NULL;
 		}
 		mlx5e_vport_context_update_vlans(priv);
@@ -594,7 +596,7 @@ static void mlx5e_cleanup_ttc_rules(struct mlx5e_ttc_table *ttc)
 
 	for (i = 0; i < MLX5E_NUM_TT; i++) {
 		if (!IS_ERR_OR_NULL(ttc->rules[i])) {
-			mlx5_del_flow_rule(ttc->rules[i]);
+			mlx5_del_flow_rules(ttc->rules[i]);
 			ttc->rules[i] = NULL;
 		}
 	}
@@ -650,13 +652,19 @@ static struct {
 	},
 };
 
-static struct mlx5_flow_rule *mlx5e_generate_ttc_rule(struct mlx5e_priv *priv,
-						      struct mlx5_flow_table *ft,
-						      struct mlx5_flow_destination *dest,
-						      u16 etype,
-						      u8 proto)
+static struct mlx5_flow_handle *
+mlx5e_generate_ttc_rule(struct mlx5e_priv *priv,
+			struct mlx5_flow_table *ft,
+			struct mlx5_flow_destination *dest,
+			u16 etype,
+			u8 proto)
 {
-	struct mlx5_flow_rule *rule;
+	struct mlx5_flow_act flow_act = {
+		.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
+		.flow_tag = MLX5_FS_DEFAULT_FLOW_TAG,
+		.encap_id = 0,
+	};
+	struct mlx5_flow_handle *rule;
 	struct mlx5_flow_spec *spec;
 	int err = 0;
 
@@ -677,10 +685,7 @@ static struct mlx5_flow_rule *mlx5e_generate_ttc_rule(struct mlx5e_priv *priv,
 		MLX5_SET(fte_match_param, spec->match_value, outer_headers.ethertype, etype);
 	}
 
-	rule = mlx5_add_flow_rule(ft, spec,
-				  MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				  MLX5_FS_DEFAULT_FLOW_TAG,
-				  dest);
+	rule = mlx5_add_flow_rules(ft, spec, &flow_act, dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
 		netdev_err(priv->netdev, "%s: add rule failed\n", __func__);
@@ -694,7 +699,7 @@ static int mlx5e_generate_ttc_table_rules(struct mlx5e_priv *priv)
 {
 	struct mlx5_flow_destination dest;
 	struct mlx5e_ttc_table *ttc;
-	struct mlx5_flow_rule **rules;
+	struct mlx5_flow_handle **rules;
 	struct mlx5_flow_table *ft;
 	int tt;
 	int err;
@@ -821,15 +826,20 @@ err:
 }
 
 #ifdef CONFIG_MLX5_INNER_RSS
-static struct mlx5_flow_rule *mlx5e_generate_tunneled_ttc_rule(struct mlx5e_priv *priv,
+static struct mlx5_flow_handle *mlx5e_generate_tunneled_ttc_rule(struct mlx5e_priv *priv,
 							       struct mlx5_flow_table *ft,
 							       struct mlx5_flow_destination *dest,
 							       u16 etype,
 							       u8 proto,
 							       u16 port)
 {
-	struct mlx5_flow_rule *rule;
+	struct mlx5_flow_handle *rule;
 	struct mlx5_flow_spec *spec;
+	struct mlx5_flow_act flow_act = {
+		.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
+		.flow_tag = MLX5_FS_DEFAULT_FLOW_TAG,
+		.encap_id = 0,
+	};
 	int err = 0;
 
 	spec = mlx5_vzalloc(sizeof(*spec));
@@ -854,10 +864,9 @@ static struct mlx5_flow_rule *mlx5e_generate_tunneled_ttc_rule(struct mlx5e_priv
 		MLX5_SET(fte_match_param, spec->match_value, outer_headers.udp_dport, port);
 	}
 
-	rule = mlx5_add_flow_rule(ft, spec,
-				  MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				  MLX5_FS_DEFAULT_FLOW_TAG,
-				  dest);
+	rule = mlx5_add_flow_rules(ft, spec,
+				   &flow_act,
+				   dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
 		netdev_err(priv->netdev, "%s: add rule failed\n", __func__);
@@ -867,14 +876,19 @@ static struct mlx5_flow_rule *mlx5e_generate_tunneled_ttc_rule(struct mlx5e_priv
 	return err ? ERR_PTR(err) : rule;
 }
 
-static struct mlx5_flow_rule *mlx5e_generate_inner_ttc_rule(struct mlx5e_priv *priv,
+static struct mlx5_flow_handle *mlx5e_generate_inner_ttc_rule(struct mlx5e_priv *priv,
 							    struct mlx5_flow_table *ft,
 							    struct mlx5_flow_destination *dest,
 							    u16 etype,
 							    u8 proto)
 {
-	struct mlx5_flow_rule *rule;
+	struct mlx5_flow_handle *rule;
 	struct mlx5_flow_spec *spec;
+	struct mlx5_flow_act flow_act = {
+		.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
+		.flow_tag = MLX5_FS_DEFAULT_FLOW_TAG,
+		.encap_id = 0,
+	};
 	int err = 0;
 
 	spec = mlx5_vzalloc(sizeof(*spec));
@@ -894,10 +908,9 @@ static struct mlx5_flow_rule *mlx5e_generate_inner_ttc_rule(struct mlx5e_priv *p
 		MLX5_SET(fte_match_param, spec->match_value, inner_headers.ethertype, etype);
 	}
 
-	rule = mlx5_add_flow_rule(ft, spec,
-				  MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				  MLX5_FS_DEFAULT_FLOW_TAG,
-				  dest);
+	rule = mlx5_add_flow_rules(ft, spec,
+				   &flow_act,
+				   dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
 		netdev_err(priv->netdev, "%s: add rule failed\n", __func__);
@@ -911,7 +924,7 @@ static int mlx5e_generate_inner_ttc_table_rules(struct mlx5e_priv *priv)
 {
 	struct mlx5_flow_destination dest;
 	struct mlx5e_ttc_table *ttc;
-	struct mlx5_flow_rule **rules;
+	struct mlx5_flow_handle **rules;
 	struct mlx5_flow_table *ft;
 	int tt;
 	int err;
@@ -943,7 +956,7 @@ del_rules:
 	return err;
 }
 
-struct mlx5_flow_rule *mlx5e_add_udp_tunnel_flow_rule(struct mlx5e_priv *priv,
+struct mlx5_flow_handle *mlx5e_add_udp_tunnel_flow_rule(struct mlx5e_priv *priv,
 						      u16 etype, u16 port)
 {
 	struct mlx5_flow_table *ft = priv->fs.ttc.ft.t;
@@ -1022,13 +1035,17 @@ static int mlx5e_create_inner_ttc_table(struct mlx5e_priv *priv)
 {
 	struct mlx5e_ttc_table *ttc = &priv->fs.inner_ttc;
 	struct mlx5e_flow_table *ft = &ttc->ft;
+	struct mlx5_flow_table_attr ft_attr = {};
 	int err;
 
 	if (!mlx5e_tunnel_stateless_supported(priv->mdev))
 		return 0;
 
-	ft->t = mlx5_create_flow_table(priv->fs.ns, MLX5E_NIC_PRIO,
-				       MLX5E_TTC_TABLE_SIZE, MLX5E_INNER_TTC_FT_LEVEL);
+	ft_attr.max_fte = MLX5E_TTC_TABLE_SIZE;
+	ft_attr.level = MLX5E_INNER_TTC_FT_LEVEL;
+	ft_attr.prio = MLX5E_NIC_PRIO;
+
+	ft->t = mlx5_create_flow_table(priv->fs.ns, &ft_attr);
 	if (IS_ERR(ft->t)) {
 		err = PTR_ERR(ft->t);
 		ft->t = NULL;
@@ -1061,7 +1078,7 @@ static void mlx5e_destroy_inner_ttc_table(struct mlx5e_priv *priv)
 }
 #endif
 
-static void mlx5e_destroy_ttc_table(struct mlx5e_priv *priv)
+void mlx5e_destroy_ttc_table(struct mlx5e_priv *priv)
 {
 	struct mlx5e_ttc_table *ttc = &priv->fs.ttc;
 
@@ -1069,14 +1086,19 @@ static void mlx5e_destroy_ttc_table(struct mlx5e_priv *priv)
 	mlx5e_destroy_flow_table(&ttc->ft);
 }
 
-static int mlx5e_create_ttc_table(struct mlx5e_priv *priv)
+int mlx5e_create_ttc_table(struct mlx5e_priv *priv, u32 underlay_qpn)
 {
 	struct mlx5e_ttc_table *ttc = &priv->fs.ttc;
+	struct mlx5_flow_table_attr ft_attr = {};
 	struct mlx5e_flow_table *ft = &ttc->ft;
 	int err;
 
-	ft->t = mlx5_create_flow_table(priv->fs.ns, MLX5E_NIC_PRIO,
-				       MLX5E_TTC_TABLE_SIZE, MLX5E_TTC_FT_LEVEL);
+	ft_attr.max_fte = MLX5E_TTC_TABLE_SIZE;
+	ft_attr.level = MLX5E_TTC_FT_LEVEL;
+	ft_attr.prio = MLX5E_NIC_PRIO;
+	ft_attr.underlay_qpn = underlay_qpn;
+
+	ft->t = mlx5_create_flow_table(priv->fs.ns, &ft_attr);
 	if (IS_ERR(ft->t)) {
 		err = PTR_ERR(ft->t);
 		ft->t = NULL;
@@ -1101,7 +1123,7 @@ static void mlx5e_del_l2_flow_rule(struct mlx5e_priv *priv,
 				   struct mlx5e_l2_rule *ai)
 {
 	if (!IS_ERR_OR_NULL(ai->rule)) {
-		mlx5_del_flow_rule(ai->rule);
+		mlx5_del_flow_rules(ai->rule);
 		ai->rule = NULL;
 	}
 }
@@ -1109,6 +1131,11 @@ static void mlx5e_del_l2_flow_rule(struct mlx5e_priv *priv,
 static int mlx5e_add_l2_flow_rule(struct mlx5e_priv *priv,
 				  struct mlx5e_l2_rule *ai, int type)
 {
+	struct mlx5_flow_act flow_act = {
+		.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
+		.flow_tag = MLX5_FS_DEFAULT_FLOW_TAG,
+		.encap_id = 0,
+	};
 	struct mlx5_flow_table *ft = priv->fs.l2.ft.t;
 	struct mlx5_flow_destination dest;
 	struct mlx5_flow_spec *spec;
@@ -1147,9 +1174,7 @@ static int mlx5e_add_l2_flow_rule(struct mlx5e_priv *priv,
 		break;
 	}
 
-	ai->rule = mlx5_add_flow_rule(ft, spec,
-				      MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				      MLX5_FS_DEFAULT_FLOW_TAG, &dest);
+	ai->rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 	if (IS_ERR(ai->rule)) {
 		netdev_err(priv->netdev, "%s: add l2 rule(mac:%pM) failed\n",
 			   __func__, mv_dmac);
@@ -1243,12 +1268,16 @@ static int mlx5e_create_l2_table(struct mlx5e_priv *priv)
 {
 	struct mlx5e_l2_table *l2_table = &priv->fs.l2;
 	struct mlx5e_flow_table *ft = &l2_table->ft;
+	struct mlx5_flow_table_attr ft_attr = {};
 	int err;
 
 	ft->num_groups = 0;
-	ft->t = mlx5_create_flow_table(priv->fs.ns, MLX5E_NIC_PRIO,
-				       MLX5E_L2_TABLE_SIZE, MLX5E_L2_FT_LEVEL);
 
+	ft_attr.max_fte = MLX5E_L2_TABLE_SIZE;
+	ft_attr.level = MLX5E_L2_FT_LEVEL;
+	ft_attr.prio = MLX5E_NIC_PRIO;
+
+	ft->t = mlx5_create_flow_table(priv->fs.ns, &ft_attr);
 	if (IS_ERR(ft->t)) {
 		err = PTR_ERR(ft->t);
 		ft->t = NULL;
@@ -1346,11 +1375,16 @@ static int mlx5e_create_vlan_table_groups(struct mlx5e_flow_table *ft)
 static int mlx5e_create_vlan_table(struct mlx5e_priv *priv)
 {
 	struct mlx5e_flow_table *ft = &priv->fs.vlan.ft;
+	struct mlx5_flow_table_attr ft_attr = {};
 	int err;
 
 	ft->num_groups = 0;
-	ft->t = mlx5_create_flow_table(priv->fs.ns, MLX5E_NIC_PRIO,
-				       MLX5E_VLAN_TABLE_SIZE, MLX5E_VLAN_FT_LEVEL);
+
+	ft_attr.max_fte = MLX5E_VLAN_TABLE_SIZE;
+	ft_attr.level = MLX5E_VLAN_FT_LEVEL;
+	ft_attr.prio = MLX5E_NIC_PRIO;
+
+	ft->t = mlx5_create_flow_table(priv->fs.ns, &ft_attr);
 
 	if (IS_ERR(ft->t)) {
 		err = PTR_ERR(ft->t);
@@ -1394,7 +1428,7 @@ int mlx5e_create_flow_steering(struct mlx5e_priv *priv)
 					       MLX5_FLOW_NAMESPACE_KERNEL);
 
 	if (!priv->fs.ns)
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	err = mlx5e_arfs_create_tables(priv);
 	if (err) {
@@ -1403,7 +1437,7 @@ int mlx5e_create_flow_steering(struct mlx5e_priv *priv)
 		priv->netdev->hw_features &= ~NETIF_F_NTUPLE;
 	}
 
-	err = mlx5e_create_ttc_table(priv);
+	err = mlx5e_create_ttc_table(priv, 0);
 	if (err) {
 		netdev_err(priv->netdev, "Failed to create ttc table, err=%d\n",
 			   err);

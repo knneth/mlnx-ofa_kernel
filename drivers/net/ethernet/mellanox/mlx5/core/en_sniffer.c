@@ -41,7 +41,7 @@ enum sniffer_types {
 };
 
 struct mlx5_sniffer_rule_info {
-	struct mlx5_flow_rule   *rule;
+	struct mlx5_flow_rule	*rule;
 	struct mlx5_flow_table  *ft;
 	enum sniffer_types      type;
 };
@@ -59,7 +59,7 @@ struct sniffer_evt_ctx {
 };
 
 struct sniffer_rule {
-	struct mlx5_flow_rule   *rule;
+	struct mlx5_flow_handle   *handle;
 	struct list_head        list;
 };
 
@@ -81,7 +81,7 @@ struct mlx5e_sniffer {
 	struct list_head        rules;
 	struct list_head        leftover_rules;
 	struct mlx5e_tir        tir[SNIFFER_NUM_TYPES];
-	struct mlx5_flow_rule	*roce_rules[SNIFFER_ROCE_NUM_RULES];
+	struct mlx5_flow_handle	*roce_rules[SNIFFER_ROCE_NUM_RULES];
 };
 
 static bool sniffer_rule_in_leftovers(struct mlx5e_sniffer *sniffer,
@@ -90,7 +90,7 @@ static bool sniffer_rule_in_leftovers(struct mlx5e_sniffer *sniffer,
 	struct sniffer_rule *sniffer_flow;
 
 	list_for_each_entry(sniffer_flow, &sniffer->leftover_rules, list) {
-		if (sniffer_flow->rule == rule)
+		if (sniffer_flow->handle->rule[0] == rule)
 			return true;
 	}
 	return false;
@@ -100,6 +100,7 @@ static int mlx5e_sniffer_create_tx_rule(struct mlx5e_sniffer *sniffer)
 {
 	struct mlx5e_priv *priv = sniffer->priv;
 	struct sniffer_rule *sniffer_flow;
+	struct mlx5_flow_act flow_act = {0};
 	struct mlx5_flow_destination dest;
 	struct mlx5_flow_spec *spec;
 	int err = 0;
@@ -118,12 +119,12 @@ static int mlx5e_sniffer_create_tx_rule(struct mlx5e_sniffer *sniffer)
 
 	dest.tir_num = sniffer->tir[SNIFFER_TX].tirn;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	sniffer_flow->rule = mlx5_add_flow_rule(sniffer->tx_ft, spec,
-						MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-						MLX5_FS_OFFLOAD_FLOW_TAG,
-						&dest);
-	if (IS_ERR(sniffer_flow->rule)) {
-		err = PTR_ERR(sniffer_flow->rule);
+	flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
+	sniffer_flow->handle = mlx5_add_flow_rules(sniffer->tx_ft, spec, &flow_act,
+						 &dest, 1);
+	if (IS_ERR(sniffer_flow->handle)) {
+		err = PTR_ERR(sniffer_flow->handle);
 		kfree(sniffer_flow);
 		goto out;
 	}
@@ -139,7 +140,7 @@ static void sniffer_del_roce_rules(struct mlx5e_sniffer *sniffer)
 
 	for (i = 0; i < SNIFFER_ROCE_NUM_RULES; i++) {
 		if (!IS_ERR_OR_NULL(sniffer->roce_rules[i])) {
-			mlx5_del_flow_rule(sniffer->roce_rules[i]);
+			mlx5_del_flow_rules(sniffer->roce_rules[i]);
 			sniffer->roce_rules[i] = NULL;
 		}
 	}
@@ -149,6 +150,7 @@ static void sniffer_del_roce_rules(struct mlx5e_sniffer *sniffer)
 static int sniffer_create_roce_rules(struct mlx5e_sniffer *sniffer)
 {
 	struct mlx5_flow_destination dest;
+	struct mlx5_flow_act flow_act = {0};
 	struct mlx5_flow_spec *spec;
 	u32 *mc;
 	u32 *mv;
@@ -167,11 +169,11 @@ static int sniffer_create_roce_rules(struct mlx5e_sniffer *sniffer)
 
 	MLX5_SET_TO_ONES(fte_match_param, mc, outer_headers.ethertype);
 	MLX5_SET(fte_match_param, mv, outer_headers.ethertype, ROCEV1_ETHERTYPE);
+	flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	sniffer->roce_rules[SNIFFER_ROCE_V1_RULE]
-		= mlx5_add_flow_rule(sniffer->rx_ft, spec,
-				     MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				     MLX5_FS_OFFLOAD_FLOW_TAG,
-				     &dest);
+		= mlx5_add_flow_rules(sniffer->rx_ft, spec, &flow_act,
+				      &dest, 1);
 	if (IS_ERR(sniffer->roce_rules[SNIFFER_ROCE_V1_RULE])) {
 		err = PTR_ERR(sniffer->roce_rules[SNIFFER_ROCE_V1_RULE]);
 		sniffer->roce_rules[SNIFFER_ROCE_V1_RULE] = NULL;
@@ -185,10 +187,8 @@ static int sniffer_create_roce_rules(struct mlx5e_sniffer *sniffer)
 	MLX5_SET(fte_match_param, mv, outer_headers.udp_dport,
 		 ROCE_V2_UDP_DPORT);
 	sniffer->roce_rules[SNIFFER_ROCE_V2_IPV4_RULE]
-		= mlx5_add_flow_rule(sniffer->rx_ft, spec,
-				     MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				     MLX5_FS_OFFLOAD_FLOW_TAG,
-				     &dest);
+		= mlx5_add_flow_rules(sniffer->rx_ft, spec, &flow_act,
+				      &dest, 1);
 	if (IS_ERR(sniffer->roce_rules[SNIFFER_ROCE_V2_IPV4_RULE])) {
 		err = PTR_ERR(sniffer->roce_rules[SNIFFER_ROCE_V2_IPV4_RULE]);
 		sniffer->roce_rules[SNIFFER_ROCE_V2_IPV4_RULE] = NULL;
@@ -197,10 +197,8 @@ static int sniffer_create_roce_rules(struct mlx5e_sniffer *sniffer)
 
 	MLX5_SET(fte_match_param, mv, outer_headers.ethertype, ETH_P_IPV6);
 	sniffer->roce_rules[SNIFFER_ROCE_V2_IPV6_RULE]
-		= mlx5_add_flow_rule(sniffer->rx_ft, spec,
-				     MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-				     MLX5_FS_OFFLOAD_FLOW_TAG,
-				     &dest);
+		= mlx5_add_flow_rules(sniffer->rx_ft, spec, &flow_act,
+				      &dest, 1);
 	if (IS_ERR(sniffer->roce_rules[SNIFFER_ROCE_V2_IPV6_RULE])) {
 		err = PTR_ERR(sniffer->roce_rules[SNIFFER_ROCE_V2_IPV6_RULE]);
 		sniffer->roce_rules[SNIFFER_ROCE_V2_IPV6_RULE] = NULL;
@@ -228,7 +226,7 @@ static void sniffer_del_rule_handler(struct work_struct *_work)
 	if (!sniffer_rule)
 		goto out;
 
-	mlx5_del_flow_rule(sniffer_rule->rule);
+	mlx5_del_flow_rules(sniffer_rule->handle);
 	list_del(&sniffer_rule->list);
 	kfree(sniffer_rule);
 
@@ -243,6 +241,7 @@ static int sniffer_add_flow_rule(struct mlx5e_sniffer *sniffer,
 				 struct mlx5_sniffer_rule_info *rule_info)
 {
 	struct mlx5_flow_destination  dest;
+	struct mlx5_flow_act flow_act = {0};
 	struct mlx5_flow_spec *spec;
 	struct mlx5_flow_table *ft;
 	int err = 0;
@@ -256,16 +255,16 @@ static int sniffer_add_flow_rule(struct mlx5e_sniffer *sniffer,
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 	ft = (rule_info->type == SNIFFER_LEFTOVERS) ? rule_info->ft :
 		sniffer->rx_ft;
-	sniffer_flow->rule = mlx5_add_flow_rule(ft, spec,
-						MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,
-						MLX5_FS_OFFLOAD_FLOW_TAG,
-						&dest);
-	if (IS_ERR(sniffer_flow->rule)) {
-		err = PTR_ERR(sniffer_flow->rule);
-		sniffer_flow->rule = NULL;
+	flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
+	sniffer_flow->handle = mlx5_add_flow_rules(ft, spec, &flow_act,
+						 &dest, 1);
+	if (IS_ERR(sniffer_flow->handle)) {
+		err = PTR_ERR(sniffer_flow->handle);
+		sniffer_flow->handle = NULL;
 	}
 
-	kvfree(spec);
+	kfree(spec);
 	return err;
 }
 
@@ -305,7 +304,7 @@ static void sniffer_add_rule_handler(struct work_struct *work)
 	if (err) {
 		netdev_err(priv->netdev, "%s: mlx5_set_rule_private_data failed\n",
 			   __func__);
-		mlx5_del_flow_rule(sniffer_flow->rule);
+		mlx5_del_flow_rules(sniffer_flow->handle);
 	}
 	if (rule_info->type == SNIFFER_LEFTOVERS)
 		list_add(&sniffer_flow->list, &sniffer->leftover_rules);
@@ -391,13 +390,13 @@ static void sniffer_cleanup_resources(struct mlx5e_sniffer *sniffer)
 		destroy_workqueue(sniffer->sniffer_wq);
 
 	list_for_each_entry_safe(sniffer_flow, tmp, &sniffer->rules, list) {
-		mlx5_del_flow_rule(sniffer_flow->rule);
+		mlx5_del_flow_rules(sniffer_flow->handle);
 		list_del(&sniffer_flow->list);
 		kfree(sniffer_flow);
 	}
 
 	list_for_each_entry_safe(sniffer_flow, tmp, &sniffer->leftover_rules, list) {
-		mlx5_del_flow_rule(sniffer_flow->rule);
+		mlx5_del_flow_rules(sniffer_flow->handle);
 		list_del(&sniffer_flow->list);
 		kfree(sniffer_flow);
 	}
@@ -519,8 +518,8 @@ static int sniffer_create_tirs(struct mlx5e_sniffer *sniffer)
 		memset(in, 0, inlen);
 		tir = &sniffer->tir[tt];
 		tirc = MLX5_ADDR_OF(create_tir_in, in, ctx);
-		rqtn = priv->direct_tir[tt % priv->params.num_channels].rqt.rqtn;
-		mlx5e_build_direct_tir_ctx(priv, tirc, rqtn);
+		rqtn = priv->direct_tir[tt % priv->channels.params.num_channels].rqt.rqtn;
+		mlx5e_build_direct_tir_ctx(priv, rqtn, tirc);
 		err = mlx5e_create_tir(priv->mdev, tir, in, inlen);
 		if (err)
 			goto err_destroy_ch_tirs;
@@ -591,7 +590,7 @@ static int sniffer_init_resources(struct mlx5e_sniffer *sniffer)
 		mlx5_create_auto_grouped_flow_table(p_sniffer_rx_ns, 0,
 						    table_size,
 						    SNIFFER_RX_MAX_NUM_GROUPS,
-						    0);
+						    0, 0);
 	if (IS_ERR(sniffer->rx_ft)) {
 		err = PTR_ERR(sniffer->rx_ft);
 		sniffer->rx_ft = NULL;
@@ -602,7 +601,7 @@ static int sniffer_init_resources(struct mlx5e_sniffer *sniffer)
 		mlx5_create_auto_grouped_flow_table(p_sniffer_tx_ns, 0,
 						    SNIFFER_TX_MAX_FTES,
 						    SNIFFER_TX_MAX_NUM_GROUPS,
-						    0);
+						    0, 0);
 	if (IS_ERR(sniffer->tx_ft)) {
 		err = PTR_ERR(sniffer->tx_ft);
 		sniffer->tx_ft = NULL;

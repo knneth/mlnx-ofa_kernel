@@ -55,9 +55,6 @@ static int __init backport_init(void)
 {
 	int err;
 
-#ifndef CONFIG_COMPAT_PM_QOS
-	backport_pm_qos_power_init();
-#endif /* CONFIG_COMPAT_PM_QOS */
 	err = backport_system_workqueue_create();
 	if (err) {
 		pr_warn("backport_system_workqueue_create() failed\n");
@@ -80,9 +77,6 @@ module_init(backport_init);
 
 static void __exit backport_exit(void)
 {
-#ifndef CONFIG_COMPAT_PM_QOS
-	backport_pm_qos_power_deinit();
-#endif /* CONFIG_COMPAT_PM_QOS */
 	backport_system_workqueue_destroy();
 
         return;

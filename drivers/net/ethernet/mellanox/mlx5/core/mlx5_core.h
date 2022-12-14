@@ -37,11 +37,10 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/if_link.h>
-#include <linux/clocksource.h>
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.0-2.0.0"
-#define DRIVER_RELDATE	"28 Mar 2017"
+#define DRIVER_VERSION	"4.1-1.0.2"
+#define DRIVER_RELDATE	"27 Jun 2017"
 
 #define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev))
 
@@ -73,6 +72,8 @@ do {									\
 #define mlx5_core_info(__dev, format, ...)				\
 	dev_info(&(__dev)->pdev->dev, format, ##__VA_ARGS__)
 
+#define MLX5_PAS_ALIGN 64
+
 enum {
 	MLX5_CMD_DATA, /* print command payload only */
 	MLX5_CMD_TIME, /* print command execution time */
@@ -81,6 +82,35 @@ enum {
 enum {
 	MLX5_DRIVER_STATUS_ABORTED = 0xfe,
 	MLX5_DRIVER_SYND = 0xbadd00de,
+};
+
+enum mlx5_pddr_page_select {
+	MLX5_PDDR_OPERATIONAL_INFO_PAGE            = 0x0,
+	MLX5_PDDR_TROUBLESHOOTING_INFO_PAGE        = 0x1,
+	MLX5_PDDR_MODULE_INFO_PAGE                 = 0x3,
+};
+
+enum mlx5_pddr_monitor_opcodes {
+	MLX5_LINK_NO_ISSUE_OBSERVED                = 0x0,
+	MLX5_LINK_PORT_CLOSED                      = 0x1,
+	MLX5_LINK_AN_FAILURE                       = 0x2,
+	MLX5_LINK_TRAINING_FAILURE                 = 0x5,
+	MLX5_LINK_LOGICAL_MISMATCH                 = 0x9,
+	MLX5_LINK_REMOTE_FAULT_INDICATION          = 0xe,
+	MLX5_LINK_BAD_SIGNAL_INTEGRITY             = 0xf,
+	MLX5_LINK_CABLE_COMPLIANCE_CODE_MISMATCH   = 0x10,
+	MLX5_LINK_INTERNAL_ERR                     = 0x17,
+	MLX5_LINK_INFO_NOT_AVAIL                   = 0x3ff,
+	MLX5_LINK_CABLE_UNPLUGGED                  = 0x400,
+	MLX5_LINK_LONG_RANGE_FOR_NON_MLX_CABLE     = 0x401,
+	MLX5_LINK_BUS_STUCK                        = 0x402,
+	MLX5_LINK_UNSUPP_EEPROM                    = 0x403,
+	MLX5_LINK_PART_NUM_LIST                    = 0x404,
+	MLX5_LINK_UNSUPP_CABLE                     = 0x405,
+	MLX5_LINK_MODULE_TEMP_SHUTDOWN             = 0x406,
+	MLX5_LINK_SHORTED_CABLE                    = 0x407,
+	MLX5_LINK_POWER_BUDGET_EXCEEDED            = 0x408,
+	MLX5_LINK_MNG_FORCED_DOWN                  = 0x409,
 };
 
 enum mlx5_icmd_conf_address {
@@ -105,6 +135,13 @@ enum mlx5_icmd_access_reg_method {
 
 enum {
 	MLX5_ICMD_ACCESS_REG_DATA_DW_SZ = 0x2,
+};
+
+struct mlx5_delayed_event {
+	struct list_head	list;
+	struct mlx5_core_dev	*dev;
+	enum mlx5_dev_event	event;
+	unsigned long		param;
 };
 
 struct mlx5_icmd_ctrl_bits {
@@ -147,10 +184,13 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
 int mlx5_cmd_init_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
+int mlx5_cmd_panic_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_core_event(struct mlx5_core_dev *dev, enum mlx5_dev_event event,
 		     unsigned long param);
+void mlx5_core_page_fault(struct mlx5_core_dev *dev,
+			  struct mlx5_pagefault *pfault);
 void mlx5_port_module_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe);
-void mlx5_enter_error_state(struct mlx5_core_dev *dev);
+void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
 void mlx5_recover_device(struct mlx5_core_dev *dev);
 void mlx5_add_pci_to_irq_name(struct mlx5_core_dev *dev, const char *src_name,
@@ -177,7 +217,7 @@ int mlx5_modify_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 int mlx5_destroy_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 					u32 element_id);
 int mlx5_wait_for_vf_pages(struct mlx5_core_dev *dev);
-cycle_t mlx5_read_internal_timer(struct mlx5_core_dev *dev);
+u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev);
 u32 mlx5_get_msix_vec(struct mlx5_core_dev *dev, int vecidx);
 struct mlx5_eq *mlx5_eqn2eq(struct mlx5_core_dev *dev, int eqn);
 int mlx5_vector2eq(struct mlx5_core_dev *dev, int vector, struct mlx5_eq *eqc);
@@ -187,6 +227,12 @@ int mlx5_query_pcam_reg(struct mlx5_core_dev *dev, u32 *pcam, u8 feature_group,
 			u8 access_reg_group);
 int mlx5_query_mcam_reg(struct mlx5_core_dev *dev, u32 *mcap, u8 feature_group,
 			u8 access_reg_group);
+int mlx5_query_qcam_reg(struct mlx5_core_dev *mdev, u32 *qcam,
+			u8 feature_group, u8 access_reg_group);
+
+int mlx5_query_pddr_troubleshooting_info(struct mlx5_core_dev *mdev,
+					 u16 *monitor_opcode,
+					 u8 *status_message);
 
 void mlx5_lag_add(struct mlx5_core_dev *dev, struct net_device *netdev);
 void mlx5_lag_remove(struct mlx5_core_dev *dev);
@@ -204,8 +250,19 @@ struct mlx5_core_dev *mlx5_get_next_phys_dev(struct mlx5_core_dev *dev);
 void mlx5_dev_list_lock(void);
 void mlx5_dev_list_unlock(void);
 int mlx5_dev_list_trylock(void);
+int mlx5_encap_alloc(struct mlx5_core_dev *dev,
+		     int header_type,
+		     size_t size,
+		     void *encap_header,
+		     u32 *encap_id);
+void mlx5_encap_dealloc(struct mlx5_core_dev *dev, u32 encap_id);
 
 bool mlx5_lag_intf_add(struct mlx5_interface *intf, struct mlx5_priv *priv);
+
+int mlx5_query_mtpps(struct mlx5_core_dev *dev, u32 *mtpps, u32 mtpps_size);
+int mlx5_set_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size);
+int mlx5_query_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 *arm, u8 *mode);
+int mlx5_set_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 arm, u8 mode);
 
 int mlx5_mst_dump_init(struct mlx5_core_dev *dev);
 int mlx5_mst_capture(struct mlx5_core_dev *dev);
@@ -218,6 +275,14 @@ int mlx5_icmd_access_register(struct mlx5_core_dev *dev,
 			      int method,
 			      void *io_buff,
 			      u32 io_buff_dw_sz);
+
+static inline bool mlx5_pps_is_supported(struct mlx5_core_dev *dev)
+{
+	return MLX5_CAP_GEN(dev, pps) &&
+	       MLX5_CAP_GEN(dev, pps_modify) &&
+	       MLX5_CAP_MCAM_FEATURE(dev, mtpps_fs) &&
+	       MLX5_CAP_MCAM_FEATURE(dev, mtpps_enh_out_per_adj);
+}
 
 void mlx5e_init(void);
 void mlx5e_cleanup(void);
@@ -238,5 +303,8 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 		   (MLX5_CAP_GEN(dev, num_lag_ports) > 1) &&
 		    MLX5_CAP_GEN(dev, lag_master);
 }
+
+int mlx5_lag_allow(struct mlx5_core_dev *dev);
+int mlx5_lag_forbid(struct mlx5_core_dev *dev);
 
 #endif /* __MLX5_CORE_H__ */

@@ -33,6 +33,8 @@ enum {
 	IB_USER_VERBS_EXP_CMD_CREATE_RWQ_IND_TBL,
 	IB_USER_VERBS_EXP_CMD_DESTROY_RWQ_IND_TBL,
 	IB_USER_VERBS_EXP_CMD_CREATE_FLOW = 19,
+	IB_USER_VERBS_EXP_CMD_SET_CTX_ATTR,
+	IB_USER_VERBS_EXP_CMD_CREATE_SRQ,
 };
 
 enum ib_uverbs_exp_modify_qp_comp_mask {
@@ -48,7 +50,8 @@ enum ibv_exp_qp_attr_mask {
 	IBV_EXP_QP_DC_KEY	= IB_QP_DC_KEY,
 	IBV_EXP_QP_FLOW_ENTROPY = IB_QP_FLOW_ENTROPY,
 	IBV_EXP_QP_ATTR_MASK	= IB_QP_GROUP_RSS | IB_QP_FLOW_ENTROPY |
-	                          IB_QP_DC_KEY,
+				  IB_QP_DC_KEY |
+				  IB_EXP_QP_OOO_RW_DATA_PLACEMENT,
 	IBV_EXP_QP_ATTR_FIRST = IB_QP_GROUP_RSS,
 	IBV_EXP_ATTR_MASK_SHIFT = 0x06,
 };
@@ -273,6 +276,32 @@ struct ib_uverbs_exp_packet_pacing_caps {
 	__u32 reserved;
 };
 
+struct ib_uverbs_exp_ooo_caps {
+	__u32 rc_caps;
+	__u32 xrc_caps;
+	__u32 dc_caps;
+	__u32 ud_caps;
+};
+
+struct ib_uverbs_exp_sw_parsing_caps {
+	__u32 sw_parsing_offloads;
+	__u32 supported_qpts;
+};
+
+struct ib_uverbs_exp_tm_caps {
+	/* Max size of RNDV header */
+	__u32 max_rndv_hdr_size;
+	/* Max number of entries in a tag matching list */
+	__u32 max_num_tags;
+	/* TM capabilities mask */
+	__u32 capability_flags;
+	/* Max number of outstanding list operations */
+	__u32 max_ops;
+	/* Max number of SGE in a tag matching entry */
+	__u32 max_sge;
+	__u32 reserved;
+};
+
 struct ib_uverbs_exp_query_device_resp {
 	__u64					comp_mask;
 	struct ib_uverbs_query_device_resp	base;
@@ -303,6 +332,10 @@ struct ib_uverbs_exp_query_device_resp {
 	__u8					reserved2[6];
 	struct ib_uverbs_exp_tso_caps		tso_caps;
 	struct ib_uverbs_exp_packet_pacing_caps packet_pacing_caps;
+	struct ib_uverbs_exp_ooo_caps		ooo_caps;
+	struct ib_uverbs_exp_sw_parsing_caps	sw_parsing_caps;
+	__u64					odp_mr_max_size;
+	struct ib_uverbs_exp_tm_caps		tm_caps;
 };
 
 enum ib_uverbs_exp_create_cq_comp_mask {
@@ -467,6 +500,26 @@ struct ib_uverbs_arm_dct_resp {
 	__u64	driver_data[0];
 };
 
+struct ib_uverbs_exp_create_srq {
+	__u64 comp_mask;
+	__u64 user_handle;
+	__u32 srq_type;
+	__u32 pd_handle;
+	__u32 max_wr;
+	__u32 max_sge;
+	__u32 srq_limit;
+	__u32 cq_handle;
+	__u32 xrcd_handle;
+	__u32 reserved;
+	__u64 driver_data[0];
+};
+
+struct ib_uverbs_exp_create_srq_resp {
+	struct ib_uverbs_create_srq_resp base;
+	__u32  comp_mask;
+	__u32  response_length;
+};
+
 struct ib_uverbs_exp_flow_tunnel_filter {
 	__be32 tunnel_id;
 };
@@ -533,6 +586,18 @@ struct ib_uverbs_exp_flow_spec {
 		struct ib_uverbs_exp_flow_spec_tunnel	tunnel;
 		struct ib_uverbs_exp_flow_spec_action_tag  flow_tag;
 	};
+};
+
+enum ib_uverbs_exp_set_context_attr_comp_mask {
+	IB_UVERBS_EXP_SET_CONTEXT_PEER_INFO	= (1UL << 0),
+	IB_UVERBS_EXP_SET_CONTEXT_ATTR_RESERVED	= (1UL << 1),
+};
+
+struct ib_uverbs_exp_set_context_attr {
+	__u64	peer_id;
+	__u8	peer_name[64];
+	__u32	comp_mask;
+	__u32	reserved;
 };
 
 #endif

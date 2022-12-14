@@ -274,9 +274,9 @@ enum {
 	MLX4_DEV_CAP_FLAG2_MODIFY_PARSER	= 1ULL << 41,
 	MLX4_DEV_CAP_FLAG2_FS_EN_NCSI		= 1ULL << 42,
 	MLX4_DEV_CAP_FLAG2_DISABLE_SIP_CHECK	= 1ULL << 43,
-	MLX4_DEV_CAP_FLAG2_DMFS_TAG_MODE	= 1ULL << 44,
-	MLX4_DEV_CAP_FLAG2_SW_CQ_INIT           = 1ULL << 45,
-	MLX4_DEV_CAP_FLAG2_ROCEV2		= 1ULL << 46,
+	MLX4_DEV_CAP_FLAG2_SW_CQ_INIT           = 1ULL << 44,
+	MLX4_DEV_CAP_FLAG2_ROCEV2		= 1ULL << 45,
+	MLX4_DEV_CAP_FLAG2_DMFS_TAG_MODE	= 1ULL << 46,
 };
 
 enum {
@@ -743,6 +743,8 @@ struct mlx4_caps {
 	struct mlx4_rate_limit_caps rl_caps;
 	u8			force_vlan[MLX4_MAX_PORTS + 1];
 	u8			roce_addr_support;
+	int			wol_port1;
+	int                     wol_port2;
 };
 
 struct mlx4_buf_list {
@@ -1188,10 +1190,9 @@ struct mlx4_mad_ifc {
 			((dev)->caps.flags2 & MLX4_DEV_CAP_FLAG2_ROCEV2))
 
 #define mlx4_foreach_ib_transport_port(port, dev)                         \
-	for ((port) = 1; (port) <= (dev)->caps.num_ports; (port)++)	  \
+	for ((port) = 1; (port) <= (dev)->caps.num_ports; (port)++)       \
 		if (((dev)->caps.port_mask[port] == MLX4_PORT_TYPE_IB) || \
 		    ((dev)->caps.port_mask[port] == MLX4_PORT_TYPE_ETH))
-
 
 #define MLX4_INVALID_SLAVE_ID	0xFF
 #define MLX4_SINK_COUNTER_INDEX(dev)	(dev->caps.max_counters - 1)
@@ -1540,8 +1541,6 @@ enum {
 	MLX4_OP_MOD_QUERY_TRANSPORT_CI_ERRORS = 0x2,
 };
 
-#define MLX4_NET_TRANS_PROMISC_MODE_OFFSET MLX4_FS_REGULAR
-
 enum {
 	MLX4_EQ_ID_EN,
 	MLX4_EQ_ID_IB,
@@ -1549,6 +1548,8 @@ enum {
 
 #define MLX4_EQ_ID_TO_UUID(id, port, n) (((unsigned int)id) << 31 | (port) << 24 | (n))
 #define MLX4_EQ_UUID_TO_ID(uuid)        ((uuid) >> 31)
+
+#define MLX4_NET_TRANS_PROMISC_MODE_OFFSET MLX4_FS_REGULAR
 
 int mlx4_flow_steer_promisc_add(struct mlx4_dev *dev, u8 port, u32 qpn,
 				enum mlx4_net_trans_promisc_mode mode);
@@ -1662,7 +1663,7 @@ int mlx4_get_roce_gid_from_slave(struct mlx4_dev *dev, int port, int slave_id,
 int mlx4_FLOW_STEERING_IB_UC_QP_RANGE(struct mlx4_dev *dev, u32 min_range_qpn,
 				      u32 max_range_qpn);
 
-cycle_t mlx4_read_clock(struct mlx4_dev *dev);
+u64 mlx4_read_clock(struct mlx4_dev *dev);
 
 struct mlx4_active_ports {
 	DECLARE_BITMAP(ports, MLX4_MAX_PORTS);
@@ -1744,8 +1745,13 @@ enum mlx4_ptys_proto {
 	MLX4_PTYS_EN = 1<<2,
 };
 
+enum mlx4_ptys_flags {
+	MLX4_PTYS_AN_DISABLE_CAP   = 1 << 5,
+	MLX4_PTYS_AN_DISABLE_ADMIN = 1 << 6,
+};
+
 struct mlx4_ptys_reg {
-	u8 resrvd1;
+	u8 flags;
 	u8 local_port;
 	u8 resrvd2;
 	u8 proto_mask;

@@ -237,6 +237,8 @@ struct peer_memory_client {
 	void (*put_pages)(struct sg_table *sg_head, void *client_context);
 	unsigned long (*get_page_size)(void *client_context);
 	void (*release)(void *client_context);
+	void* (*get_context_private_data)(u64 peer_id);
+	void (*put_context_private_data)(void *context);
 };
 
 typedef int (*invalidate_peer_memory)(void *reg_handle, u64 core_context);

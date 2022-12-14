@@ -31,7 +31,7 @@
 
 %global WITH_SYSTEMD %(if ( test -d "%{_unitdir}" > /dev/null); then echo -n '1'; else echo -n '0'; fi)
 
-%{!?configure_options: %global configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx5-mod}
+%{!?configure_options: %global configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx5-mod --with-ipoib-mod}
 
 %global MEMTRACK %(if ( echo %{configure_options} | grep "with-memtrack" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global MADEYE %(if ( echo %{configure_options} | grep "with-madeye-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
@@ -63,8 +63,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.0}
-%{!?_release: %global _release OFED.4.0.2.0.0.1.g595cb61}
+%{!?_version: %global _version 4.1}
+%{!?_release: %global _release OFED.4.1.1.0.2.1.gc22af88}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -85,6 +85,10 @@ Obsoletes: kernel-ib
 Obsoletes: compat-rdma
 Obsoletes: rdma
 Provides: rdma
+Obsoletes: rdma-core < 41mlnx1-1
+Provides: rdma-core = 41mlnx1-1
+Obsoletes: rdma-core-devel < 41mlnx1-1
+Provides: rdma-core-devel = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -108,7 +112,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.0-2.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.1-1.0.2.tgz
 
 
 # build KMP rpms?
@@ -141,6 +145,10 @@ Obsoletes: kernel-ib
 Obsoletes: compat-rdma
 Obsoletes: rdma
 Provides: rdma
+Obsoletes: rdma-core < 41mlnx1-1
+Provides: rdma-core = 41mlnx1-1
+Obsoletes: rdma-core-devel < 41mlnx1-1
+Provides: rdma-core-devel = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -158,7 +166,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.0-2.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.1-1.0.2.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -171,6 +179,8 @@ Obsoletes: kernel-ib
 Obsoletes: compat-rdma
 Obsoletes: rdma
 Provides: rdma
+Obsoletes: rdma-core-devel < 41mlnx1-1
+Provides: rdma-core-devel = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -188,7 +198,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.0-2.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.1-1.0.2.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -622,6 +632,7 @@ fi
 /usr/sbin/compat_gid_gen
 /usr/sbin/cma_roce_mode
 /usr/sbin/cma_roce_tos
+/usr/sbin/setup_mr_cache.sh
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
 %config(noreplace) /etc/modprobe.d/mlnx.conf

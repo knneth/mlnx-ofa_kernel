@@ -142,7 +142,7 @@ set_ipoib_cm()
         if [ $? -eq 0 ]; then
             log_msg "set_ipoib_cm: ${i} connection mode set to connected"
         else
-            log_msg "set_ipoib_cm: Failed to change connection mode for ${i} to connected"
+            log_msg "set_ipoib_cm: Failed to change connection mode for ${i} to connected; this mode might not be supported by this device, please refer to the User Manual."
             RC=1
         fi
     else
@@ -205,21 +205,49 @@ set_RPS_cpu()
     return 0
 }
 
+is_connected_mode_supported()
+{
+    local i=$1
+    shift
+    # Devices that support connected mode:
+    #  "4113", "Connect-IB"
+    #  "4114", "Connect-IBVF"
+    if (grep -qE "4113|4114" /sys/class/net/${i}/device/infiniband/*/hca_type 2>/dev/null); then
+        return 0
+    fi
+
+    # For other devices check the ipoib_enhanced module parameter value
+    if (grep -q "^0" /sys/module/ib_ipoib/parameters/ipoib_enhanced 2>/dev/null); then
+        # IPoIB enhanced is disabled, so we can use connected mode
+        return 0
+    fi
+
+    log_msg "INFO: ${i} does not support connected mode"
+    return 1
+}
+
 bring_up()
 {
     local i=$1
     shift
     local RC=0
 
-    # get current interface status
-    local is_up=""
-    is_up=`/sbin/ip link show $i | grep -w UP`
-
     MTU=`/usr/sbin/net-interfaces get-mtu ${i}`
 
     # relevant for IPoIB interfaces only
-    if (/sbin/ethtool -i ${i} 2>/dev/null | grep -q ib_ipoib); then
+    local is_ipoib_if=0
+    case "$(echo "${i}" | tr '[:upper:]' '[:lower:]')" in
+        *ib* | *infiniband*)
+        is_ipoib_if=1
+        ;;
+    esac
+    if (/sbin/ethtool -i ${i} 2>/dev/null | grep -q "ib_ipoib"); then
+        is_ipoib_if=1
+    fi
+    if [ $is_ipoib_if -eq 1 ]; then
         if [ "X${SET_IPOIB_CM}" == "Xyes" ]; then
+            # Ignore RC, just print a warning if we think CM is not supported by the current device.
+            is_connected_mode_supported ${i}
             set_ipoib_cm ${i} ${MTU}
             if [ $? -ne 0 ]; then
                 RC=1
@@ -227,9 +255,11 @@ bring_up()
         elif [ "X${SET_IPOIB_CM}" == "Xauto" ]; then
             # handle mlx5 interfaces, assumption: mlx5 interface will be with CM mode.
             if [ "X$(basename `readlink -f /sys/class/net/${i}/device/driver/module 2>/dev/null` 2>/dev/null)" == "Xmlx5_core" ]; then
-                set_ipoib_cm ${i} ${MTU}
-                if [ $? -ne 0 ]; then
-                    RC=1
+                if is_connected_mode_supported ${i} ; then
+                    set_ipoib_cm ${i} ${MTU}
+                    if [ $? -ne 0 ]; then
+                        RC=1
+                    fi
                 fi
             fi
         fi
@@ -253,7 +283,8 @@ bring_up()
         return 6
     fi
 
-    if [ -z "$is_up" ]; then
+    local bond=`/usr/sbin/net-interfaces get-bond-master ${i}`
+    if [ -z "$bond" ]; then
         if [[ $WINDRIVER -eq 0 && $BLUENIX -eq 0 ]]; then
             /sbin/ifup --force ${i}
         else
@@ -267,16 +298,49 @@ bring_up()
         fi
     fi
 
-    bond=`/usr/sbin/net-interfaces get-bond-master ${i}`
+    local bond_lock="/var/lock/mlnx_bond_${bond}.lock"
+    local my_lock=""
     if [ ! -z "$bond" ]; then
-        /sbin/ifenslave -f $bond ${i}
-        if [ $? -eq 0 ]; then
-            log_msg "$i - briging up bond master $MASTER: PASSED"
+        # get an exclusive lock, so taht we will run ifup on the interface just one time
+        exec 9>"$bond_lock"
+        if (flock -x -n 9 &>/dev/null); then
+            my_lock=$bond_lock
+            bond_missing=`/sbin/ip link show $bond 2>&1 | grep -i "does not exist"`
+            is_up_bond=`/sbin/ip link show $bond 2>/dev/null | grep -w UP`
+            if [[ ! -z "$bond_missing" || -z "$is_up_bond" ]]; then
+                if [ ! -z "$bond_missing" ]; then
+                    /bin/sleep 1
+                    /sbin/ifup --force $bond
+                elif [ -z "$is_up_bond" ]; then
+                    /sbin/ifup $bond
+                fi
+                if [ $? -eq 0 ]; then
+                    log_msg "$i - briging up bond master $bond: PASSED"
+                else
+                    log_msg "$i - briging up bond master $bond: FAILED"
+                    RC=1
+                fi
+            elif [ -e "/.dockerenv" ] || (grep -q docker /proc/self/cgroup &>/dev/null); then
+                /sbin/ifup --force $bond
+            fi
         else
-            log_msg "$i - briging up bond master $MASTER: FAILED"
-            RC=1
+            /bin/sleep 1
+        fi
+
+        /bin/sleep 2
+        bond_missing=`/sbin/ip link show $bond 2>&1 | grep -i "does not exist"`
+        if [ -z "$bond_missing" ] && !(grep -Eiw "Slave.*${i}$" /proc/net/bonding/${bond} 2>/dev/null); then
+            /sbin/ifenslave -f $bond ${i}
+            if [ $? -eq 0 ]; then
+                log_msg "$i - enslaving $i to $bond: PASSED"
+            else
+                log_msg "$i - enslaving $i to $bond: FAILED"
+                RC=1
+            fi
         fi
     fi
+
+    [ ! -z "$my_lock" ] && /bin/rm -f "$my_lock"
 
     return $RC
 }

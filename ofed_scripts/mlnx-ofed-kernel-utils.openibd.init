@@ -986,20 +986,6 @@ start()
                 echo_failure $"Loading Mellanox MLX4_EN HCA driver: "
         fi
         RC=$[ $RC + $my_rc ]
-
-        if [ $my_rc -eq 0 ]; then
-            # Bring up network interfaces
-            sleep 1
-            get_mlx_en_interfaces
-            for en_i in $mlx_en_interfaces
-            do
-                /sbin/ifup $en_i 2> /dev/null
-                bond=`/usr/sbin/net-interfaces get-bond-master $en_i`
-                if [ ! -z "$bond" ]; then
-                    /sbin/ifenslave $bond $en_i > /dev/null 2>&1
-                fi
-            done
-        fi
     fi
 
     if [ "X${MLX4_FC_LOAD}" == "Xyes" ]; then
@@ -1167,18 +1153,6 @@ start()
                                         echo ${srp_daemon_pid} > ${srp_daemon_pidfile}
                                     fi
                                 fi
-                        ;;
-                        eth_ipoib)
-                                load_module $mod
-                                # Workaround for fixing udev naming bug #682750
-                                if (which udevadm &> /dev/null); then
-                                    for i in $(cat /sys/class/net/eth_ipoib_interfaces 2>/dev/null | awk '{print $1}' 2>/dev/null)
-                                    do
-                                        udevadm test /sys/class/net/$i &> /dev/null
-                                    done
-                                fi
-				#load the deamon ipoibd
-				/sbin/eipoib_daemon start
                         ;;
                         *)
                                 load_module $mod
@@ -1557,10 +1531,12 @@ stop()
             fi
         fi
 
-	# Stop ipoibd (for ipoib-pv module)
+        # Stop ipoibd (for ipoib-pv module)
         ipoibdpid=$(pidof -x ipoibd)
         if [ -n "${ipoibdpid:-}" ]; then
-            /sbin/eipoib_daemon stop
+            if [ -e "/sbin/eipoib_daemon" ]; then
+                /sbin/eipoib_daemon stop
+            fi
         fi
 		if [ -d /sys/class/infiniband_qlgc_vnic/ ]; then
                     if [ -x /etc/init.d/qlgc_vnic ]; then

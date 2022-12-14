@@ -38,7 +38,7 @@ static struct ib_ah *create_ib_ah(struct mlx5_ib_dev *dev,
 				  enum rdma_link_layer ll)
 {
 	int err;
-	int gid_type;
+	enum ib_gid_type gid_type;
 
 	if (ah_attr->ah_flags & IB_AH_GRH) {
 		memcpy(ah->av.rgid, &ah_attr->grh.dgid, 16);

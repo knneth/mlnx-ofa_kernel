@@ -1,9 +1,35 @@
 #!/usr/bin/python
+#
+# Copyright (c) 2017 Mellanox Technologies. All rights reserved.
+#
+# This Software is licensed under one of the following licenses:
+#
+# 1) under the terms of the "Common Public License 1.0" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/cpl.php.
+#
+# 2) under the terms of the "The BSD License" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/bsd-license.php.
+#
+# 3) under the terms of the "GNU General Public License (GPL) Version 2" a
+#    copy of which is available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/gpl-license.php.
+#
+# Licensee has the right to choose one of the above licenses.
+#
+# Redistributions of source code must retain the above copyright
+# notice and one of the license notices.
+#
+# Redistributions in binary form must reproduce both the above copyright
+# notice, one of the license notices in the documentation
+# and/or other materials provided with the distribution.
+#
 
 import sys
 import os
 if os.path.exists('/usr/share/pyshared'):
-    sys.path.append('/usr/share/pyshared')
+	sys.path.append('/usr/share/pyshared')
 import socket
 import struct
 
@@ -74,33 +100,34 @@ DCB_ATTR_IEEE_PEER_APP = 6
 DCB_ATTR_IEEE_MAXRATE = 7
 DCB_ATTR_IEEE_QCN = 8
 DCB_ATTR_IEEE_QCN_STATS = 9
+DCB_ATTR_IEEE_TRUST = 10
 
 class DcbnlHdr:
-    def __init__(self, len, type):
-        self.len = len
-        self.type = type
-    def _dump(self):
-        return struct.pack("BBxx", self.len, self.type)
+	def __init__(self, len, type):
+		self.len = len
+		self.type = type
+	def _dump(self):
+		return struct.pack("BBxx", self.len, self.type)
 
 class DcbNlMessage(Message):
-    def __init__(self, type, cmd, attrs=[], flags=0):
-        self.type = type
-        self.cmd = cmd
-        self.attrs = attrs
-        Message.__init__(self, type, flags=flags,
-                         payload=[DcbnlHdr(len=0, type=self.cmd)]+attrs)
+	def __init__(self, type, cmd, attrs=[], flags=0):
+		self.type = type
+		self.cmd = cmd
+		self.attrs = attrs
+		Message.__init__(self, type, flags=flags,
+				 payload=[DcbnlHdr(len=0, type=self.cmd)]+attrs)
 
-    @staticmethod
-    def recv(conn):
-        msgs = conn.recv()
-        packet = msgs[0].payload
+	@staticmethod
+	def recv(conn):
+		msgs = conn.recv()
+		packet = msgs[0].payload
 
-	dcb_family, cmd = struct.unpack("BBxx", packet[:4])
+		dcb_family, cmd = struct.unpack("BBxx", packet[:4])
 
-        dcbnlmsg = DcbNlMessage(dcb_family, cmd)
-        dcbnlmsg.attrs = parse_attributes(packet[4:])
+		dcbnlmsg = DcbNlMessage(dcb_family, cmd)
+		dcbnlmsg.attrs = parse_attributes(packet[4:])
 
-        return dcbnlmsg
+		return dcbnlmsg
 
 class DcbController:
 	def __init__(self, intf):
@@ -110,7 +137,7 @@ class DcbController:
 	def check_err(self, m, attr_type):
 		if m.attrs[attr_type].u8():
 			err = OSError("Netlink error: Bad value. see dmesg.")
-                    	raise err
+			raise err
 
 	def __parse_array(self,arr, n):
 		lst = []
@@ -240,6 +267,33 @@ class DcbController:
 		m = DcbNlMessage.recv(self.conn)
 		self.check_err(m, DCB_ATTR_IEEE)
 
+	def get_ieee_trust(self):
+		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
+				flags=NLM_F_REQUEST, attrs=[a])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+
+		ieee_nested = m.attrs[DCB_ATTR_IEEE]
+
+		ieee = m.attrs[DCB_ATTR_IEEE].nested()
+
+		dcb_trust = struct.unpack_from("B", ieee[DCB_ATTR_IEEE_TRUST].str(), 0);
+
+		return dcb_trust[0]
+
+	def set_ieee_trust(self, trust):
+		dcb_trust = struct.pack("B", trust)
+		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		ieee_maxrate = StrAttr(DCB_ATTR_IEEE_TRUST, dcb_trust)
+		ieee = Nested(DCB_ATTR_IEEE, [ieee_maxrate]);
+
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_SET,
+				flags=NLM_F_REQUEST, attrs=[intf, ieee])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+		self.check_err(m, DCB_ATTR_IEEE)
+
 	def get_ieee_maxrate(self):
 		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
 		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
@@ -251,21 +305,21 @@ class DcbController:
 
 		ieee = m.attrs[DCB_ATTR_IEEE].nested()
 
-                tc_maxrate = struct.unpack_from("QQQQQQQQ",ieee[DCB_ATTR_IEEE_MAXRATE].str(), 0);
+		tc_maxrate = struct.unpack_from("QQQQQQQQ",ieee[DCB_ATTR_IEEE_MAXRATE].str(), 0);
 
 		return tc_maxrate
 
 	def set_ieee_maxrate(self, _tc_maxrate):
-                tc_maxrate = struct.pack("QQQQQQQQ",
-                        _tc_maxrate[0],
-                        _tc_maxrate[1],
-                        _tc_maxrate[2],
-                        _tc_maxrate[3],
-                        _tc_maxrate[4],
-                        _tc_maxrate[5],
-                        _tc_maxrate[6],
-                        _tc_maxrate[7],
-                        )
+		tc_maxrate = struct.pack("QQQQQQQQ",
+					 _tc_maxrate[0],
+					 _tc_maxrate[1],
+					 _tc_maxrate[2],
+					 _tc_maxrate[3],
+					 _tc_maxrate[4],
+					 _tc_maxrate[5],
+					 _tc_maxrate[6],
+					 _tc_maxrate[7],
+		)
 
 		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
 		ieee_maxrate = StrAttr(DCB_ATTR_IEEE_MAXRATE, tc_maxrate)

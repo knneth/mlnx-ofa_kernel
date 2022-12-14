@@ -36,6 +36,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_link.h>
 #include <net/devlink.h>
+#include <net/ip_tunnels.h>
 #include <linux/mlx5/device.h>
 
 #define MLX5_MAX_UC_PER_VPORT(dev) \
@@ -52,7 +53,7 @@
 #define MLX5_MIN_BW_SHARE 1
 
 #define MLX5_RATE_TO_BW_SHARE(rate, divider, limit) \
-	min_t(u32, max_t(u32, rate / divider, MLX5_MIN_BW_SHARE), limit)
+	min_t(u32, max_t(u32, (rate) / (divider), MLX5_MIN_BW_SHARE), limit)
 
 /* L2 -mac address based- hash helpers */
 struct l2addr_node {
@@ -102,16 +103,16 @@ struct vport_ingress {
 	struct mlx5_flow_group *allow_spoofchk_only_grp;
 	struct mlx5_flow_group *allow_untagged_only_grp;
 	struct mlx5_flow_group *drop_grp;
-	struct mlx5_flow_rule  *allow_rule;
-	struct mlx5_flow_rule  *drop_rule;
+	struct mlx5_flow_handle  *allow_rule;
+	struct mlx5_flow_handle  *drop_rule;
 };
 
 struct vport_egress {
 	struct mlx5_flow_table *acl;
 	struct mlx5_flow_group *allowed_vlans_grp;
 	struct mlx5_flow_group *drop_grp;
-	struct mlx5_flow_rule  *allowed_vlan;
-	struct mlx5_flow_rule  *drop_rule;
+	struct mlx5_flow_handle  *allowed_vlan;
+	struct mlx5_flow_handle  *drop_rule;
 };
 
 struct mlx5_vport_info {
@@ -132,8 +133,8 @@ struct mlx5_vport {
 	int                     vport;
 	struct hlist_head       uc_list[MLX5_L2_ADDR_HASH_SIZE];
 	struct hlist_head       mc_list[MLX5_L2_ADDR_HASH_SIZE];
-	struct mlx5_flow_rule   *promisc_rule;
-	struct mlx5_flow_rule   *allmulti_rule;
+	struct mlx5_flow_handle *promisc_rule;
+	struct mlx5_flow_handle *allmulti_rule;
 	struct work_struct      vport_change_handler;
 
 	struct vport_ingress    ingress;
@@ -170,7 +171,7 @@ struct mlx5_eswitch_fdb {
 			struct mlx5_flow_table *fdb;
 			struct mlx5_flow_group *send_to_vport_grp;
 			struct mlx5_flow_group *miss_grp;
-			struct mlx5_flow_rule  *miss_rule;
+			struct mlx5_flow_handle *miss_rule;
 			int vlan_push_pop_refcount;
 		} offloads;
 	};
@@ -183,7 +184,7 @@ enum {
 };
 
 struct mlx5_esw_sq {
-	struct mlx5_flow_rule	*send_to_vport_rule;
+	struct mlx5_flow_handle	*send_to_vport_rule;
 	struct list_head	 list;
 };
 
@@ -194,9 +195,9 @@ struct mlx5_eswitch_rep {
 					 struct mlx5_eswitch_rep *rep);
 	u16		       vport;
 	u8		       hw_id[ETH_ALEN];
-	void		      *priv_data;
+	struct net_device      *netdev;
 
-	struct mlx5_flow_rule *vport_rx_rule;
+	struct mlx5_flow_handle *vport_rx_rule;
 	struct list_head       vport_sqs_list;
 	u16		       vlan;
 	u32		       vlan_refcount;
@@ -207,6 +208,9 @@ struct mlx5_esw_offload {
 	struct mlx5_flow_table *ft_offloads;
 	struct mlx5_flow_group *vport_rx_group;
 	struct mlx5_eswitch_rep *vport_reps;
+	DECLARE_HASHTABLE(encap_tbl, 8);
+	u8 inline_mode;
+	u64 num_flows;
 };
 
 struct mlx5_eswitch {
@@ -265,11 +269,16 @@ int mlx5_eswitch_get_vport_stats(struct mlx5_eswitch *esw,
 struct mlx5_flow_spec;
 struct mlx5_esw_flow_attr;
 
-struct mlx5_flow_rule *
+struct mlx5_flow_handle *
 mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 				struct mlx5_flow_spec *spec,
 				struct mlx5_esw_flow_attr *attr);
-struct mlx5_flow_rule *
+void
+mlx5_eswitch_del_offloaded_rule(struct mlx5_eswitch *esw,
+				struct mlx5_flow_handle *rule,
+				struct mlx5_esw_flow_attr *attr);
+
+struct mlx5_flow_handle *
 mlx5_eswitch_create_vport_rx_rule(struct mlx5_eswitch *esw, int vport, u32 tirn);
 
 enum {
@@ -280,6 +289,18 @@ enum {
 #define MLX5_FLOW_CONTEXT_ACTION_VLAN_POP  0x40
 #define MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH 0x80
 
+struct mlx5_encap_entry {
+	struct hlist_node encap_hlist;
+	struct list_head flows;
+	u32 encap_id;
+	struct neighbour *n;
+	struct ip_tunnel_info tun_info;
+	unsigned char h_dest[ETH_ALEN];	/* destination eth addr	*/
+
+	struct net_device *out_dev;
+	int tunnel_type;
+};
+
 struct mlx5_esw_flow_attr {
 	struct mlx5_eswitch_rep *in_rep;
 	struct mlx5_eswitch_rep *out_rep;
@@ -287,6 +308,7 @@ struct mlx5_esw_flow_attr {
 	int	action;
 	u16	vlan;
 	bool	vlan_handled;
+	struct mlx5_encap_entry *encap;
 };
 
 int mlx5_eswitch_sqs2vport_start(struct mlx5_eswitch *esw,
@@ -297,6 +319,9 @@ void mlx5_eswitch_sqs2vport_stop(struct mlx5_eswitch *esw,
 
 int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode);
 int mlx5_devlink_eswitch_mode_get(struct devlink *devlink, u16 *mode);
+int mlx5_devlink_eswitch_inline_mode_set(struct devlink *devlink, u8 mode);
+int mlx5_devlink_eswitch_inline_mode_get(struct devlink *devlink, u8 *mode);
+int mlx5_eswitch_inline_mode_get(struct mlx5_eswitch *esw, int nvfs, u8 *mode);
 
 int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
 						 int vport_num, bool value);
@@ -308,6 +333,7 @@ void mlx5_eswitch_register_vport_rep(struct mlx5_eswitch *esw,
 				     struct mlx5_eswitch_rep *rep);
 void mlx5_eswitch_unregister_vport_rep(struct mlx5_eswitch *esw,
 				       int vport_index);
+struct net_device *mlx5_eswitch_get_uplink_netdev(struct mlx5_eswitch *esw);
 
 int mlx5_eswitch_add_vlan_action(struct mlx5_eswitch *esw,
 				 struct mlx5_esw_flow_attr *attr);

@@ -33,6 +33,9 @@
  * SOFTWARE.
  */
 
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
 #define pr_fmt(fmt) "user_mad: " fmt
 
 #include <linux/module.h>
@@ -50,7 +53,7 @@
 #include <linux/semaphore.h>
 #include <linux/slab.h>
 
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #include <rdma/ib_mad.h>
 #include <rdma/ib_user_mad.h>
@@ -1188,7 +1191,7 @@ static int ib_umad_init_port(struct ib_device *device, int port_num,
 	if (cdev_add(&port->cdev, base, 1))
 		goto err_cdev;
 
-	port->dev = device_create(umad_class, device->dma_device,
+	port->dev = device_create(umad_class, device->dev.parent,
 				  port->cdev.dev, port,
 				  "umad%d", port->dev_num);
 	if (IS_ERR(port->dev))
@@ -1207,7 +1210,7 @@ static int ib_umad_init_port(struct ib_device *device, int port_num,
 	if (cdev_add(&port->sm_cdev, base, 1))
 		goto err_sm_cdev;
 
-	port->sm_dev = device_create(umad_class, device->dma_device,
+	port->sm_dev = device_create(umad_class, device->dev.parent,
 				     port->sm_cdev.dev, port,
 				     "issm%d", port->dev_num);
 	if (IS_ERR(port->sm_dev))

@@ -91,6 +91,11 @@ int mlx5_ib_exp_get_cmd_data(struct mlx5_ib_dev *dev,
 	     !MLX5_CAP_ETH(dev->mdev, scatter_fcs)))
 		return -EOPNOTSUPP;
 
+	if ((ucmd.flags & MLX5_EXP_WQ_FLAG_DELAY_DROP) &&
+	    !(MLX5_CAP_GEN(dev->mdev, rq_delay_drop) &&
+	      MLX5_CAP_GEN(dev->mdev, general_notification_event)))
+		return -EOPNOTSUPP;
+
 	return 0;
 }
 
@@ -137,6 +142,9 @@ void mlx5_ib_exp_set_rqc(void *rqc, struct mlx5_ib_rwq *rwq)
 
 	if (rwq->flags & MLX5_EXP_WQ_FLAG_SCATTER_FCS)
 		MLX5_SET(rqc, rqc, scatter_fcs, 1);
+
+	if (rwq->flags & MLX5_EXP_WQ_FLAG_DELAY_DROP)
+		MLX5_SET(rqc, rqc, delay_drop_en, 1);
 }
 
 void mlx5_ib_exp_get_hash_parameters(struct ib_qp_init_attr *init_attr,
@@ -324,12 +332,16 @@ struct ib_dct *mlx5_ib_create_dct(struct ib_pd *pd,
 	struct mlx5_ib_create_dct ucmd;
 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
 	struct mlx5_ib_dct *dct;
+	struct mlx5_ib_port *mibport;
 	void *dctc;
 	int cqe_sz;
 	int err;
 	u32 flags = 0;
 	u32 uidx = 0;
 	u32 cqn;
+
+	if (!rdma_is_port_valid(&dev->ib_dev, attr->port))
+		return ERR_PTR(-EINVAL);
 
 	if (pd && pd->uobject) {
 		if (ib_copy_from_udata(&ucmd, udata, sizeof(ucmd))) {
@@ -398,9 +410,21 @@ struct ib_dct *mlx5_ib_create_dct(struct ib_pd *pd,
 	MLX5_SET(dctc, dctc, my_addr_index , attr->gid_index);
 	MLX5_SET(dctc, dctc, hop_limit , attr->hop_limit);
 
+	mibport = &dev->port[attr->port - 1];
+	MLX5_SET(dctc, dctc, counter_set_id, mibport->cnts.set_id);
+
 	if (MLX5_CAP_GEN(dev->mdev, cqe_version)) {
 		/* 0xffffff means we ask to work with cqe version 0 */
 		MLX5_SET(dctc, dctc, user_index, uidx);
+	}
+
+	if (attr->create_flags & IB_EXP_DCT_OOO_RW_DATA_PLACEMENT) {
+		if (MLX5_CAP_GEN(dev->mdev, multipath_dc_qp)) {
+			MLX5_SET(dctc, dctc, multipath, 1);
+		} else {
+			err = -EINVAL;
+			goto err_alloc;
+		}
 	}
 
 	err = mlx5_core_create_dct(dev->mdev, &dct->mdct, in);
@@ -527,4 +551,22 @@ void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr)
 	seg->stat_rate_sl = wr->sl & 0xf;
 	seg->dlid = cpu_to_be16(wr->dlid);
 	seg->flags = wr->icrc ? 8 : 0;
+}
+
+int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *qp,
+				enum ib_qp_offload_type offload_type)
+{
+	switch (offload_type) {
+	case IB_QP_OFFLOAD_NVMF:
+		if (qp->srq &&
+		    qp->srq->srq_type == IB_EXP_SRQT_NVMF) {
+			context->flags |= cpu_to_be32(MLX5_QPC_OFFLOAD_TYPE_NVMF << 4);
+			break;
+		}
+	/* Fall through */
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
 }

@@ -130,3 +130,100 @@ int ib_exp_query_mkey(struct ib_mr *mr, u64 mkey_attr_mask,
 		mr->device->exp_query_mkey(mr, mkey_attr_mask, mkey_attr) : -ENOSYS;
 }
 EXPORT_SYMBOL(ib_exp_query_mkey);
+
+struct ib_mr *ib_get_dma_mr(struct ib_pd *pd, int mr_access_flags)
+{
+	struct ib_mr *mr;
+	int err;
+
+	err = ib_check_mr_access(mr_access_flags);
+	if (err)
+		return ERR_PTR(err);
+
+	mr = pd->device->get_dma_mr(pd, mr_access_flags);
+
+	if (!IS_ERR(mr)) {
+		mr->device  = pd->device;
+		mr->pd      = pd;
+		mr->uobject = NULL;
+		atomic_inc(&pd->usecnt);
+		mr->need_inval = false;
+	}
+
+	return mr;
+}
+EXPORT_SYMBOL(ib_get_dma_mr);
+
+/* NVMEoF target offload */
+
+struct ib_nvmf_ctrl *ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
+			struct ib_nvmf_backend_ctrl_init_attr *init_attr)
+{
+	struct ib_nvmf_ctrl *ctrl;
+
+	if (!srq->device->create_nvmf_backend_ctrl)
+		return ERR_PTR(-ENOSYS);
+	if (srq->srq_type != IB_EXP_SRQT_NVMF)
+		return ERR_PTR(-EINVAL);
+
+	ctrl = srq->device->create_nvmf_backend_ctrl(srq, init_attr);
+	if (!IS_ERR(ctrl)) {
+		atomic_set(&ctrl->usecnt, 0);
+		ctrl->srq   = srq;
+		atomic_inc(&srq->usecnt);
+	}
+
+	return ctrl;
+}
+EXPORT_SYMBOL_GPL(ib_create_nvmf_backend_ctrl);
+
+int ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl)
+{
+	struct ib_srq *srq = ctrl->srq;
+	int ret;
+
+	if (atomic_read(&ctrl->usecnt))
+		return -EBUSY;
+
+	ret = srq->device->destroy_nvmf_backend_ctrl(ctrl);
+	if (!ret)
+		atomic_dec(&srq->usecnt);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ib_destroy_nvmf_backend_ctrl);
+
+struct ib_nvmf_ns *ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
+			struct ib_nvmf_ns_init_attr *init_attr)
+{
+	struct ib_srq *srq = ctrl->srq;
+	struct ib_nvmf_ns *ns;
+
+	if (!srq->device->attach_nvmf_ns)
+		return ERR_PTR(-ENOSYS);
+	if (srq->srq_type != IB_EXP_SRQT_NVMF)
+		return ERR_PTR(-EINVAL);
+
+	ns = srq->device->attach_nvmf_ns(ctrl, init_attr);
+	if (!IS_ERR(ns)) {
+		ns->ctrl   = ctrl;
+		atomic_inc(&ctrl->usecnt);
+	}
+
+	return ns;
+}
+EXPORT_SYMBOL_GPL(ib_attach_nvmf_ns);
+
+int ib_detach_nvmf_ns(struct ib_nvmf_ns *ns)
+{
+	struct ib_nvmf_ctrl *ctrl = ns->ctrl;
+	struct ib_srq *srq = ctrl->srq;
+	int ret;
+
+	ret = srq->device->detach_nvmf_ns(ns);
+	if (!ret)
+		atomic_dec(&ctrl->usecnt);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ib_detach_nvmf_ns);

@@ -56,6 +56,8 @@
 #define IB_SA_LOCAL_SVC_TIMEOUT_MIN		100
 #define IB_SA_LOCAL_SVC_TIMEOUT_DEFAULT		2000
 #define IB_SA_LOCAL_SVC_TIMEOUT_MAX		200000
+#define IB_SA_UPDATE_SM_RETRY_TIME 		(6 * HZ)
+#define IB_SA_UPDATE_SM_MAX_RETRIES 		5
 static int sa_local_svc_timeout_ms = IB_SA_LOCAL_SVC_TIMEOUT_DEFAULT;
 
 struct ib_sa_sm_ah {
@@ -73,7 +75,8 @@ struct ib_sa_classport_cache {
 struct ib_sa_port {
 	struct ib_mad_agent *agent;
 	struct ib_sa_sm_ah  *sm_ah;
-	struct work_struct   update_task;
+	struct delayed_work  update_task;
+	u8 num_of_retries;
 	struct ib_sa_classport_cache classport_info;
 	spinlock_t                   classport_lock; /* protects class port info set */
 	spinlock_t           ah_lock;
@@ -934,13 +937,22 @@ static void free_sm_ah(struct kref *kref)
 static void update_sm_ah(struct work_struct *work)
 {
 	struct ib_sa_port *port =
-		container_of(work, struct ib_sa_port, update_task);
+		container_of(work, struct ib_sa_port, update_task.work);
 	struct ib_sa_sm_ah *new_ah;
 	struct ib_port_attr port_attr;
 	struct ib_ah_attr   ah_attr;
 
 	if (ib_query_port(port->agent->device, port->port_num, &port_attr)) {
 		pr_warn("Couldn't query port\n");
+		return;
+	}
+
+	if (port_attr.sm_lid == 0) {
+		port->num_of_retries++;
+		/* Restart the task in case lower driver misses event */
+		if (port->num_of_retries < IB_SA_UPDATE_SM_MAX_RETRIES)
+			queue_delayed_work(ib_wq, &port->update_task,
+					   IB_SA_UPDATE_SM_RETRY_TIME);
 		return;
 	}
 
@@ -1012,8 +1024,8 @@ static void ib_sa_event(struct ib_event_handler *handler, struct ib_event *event
 			port->classport_info.valid = false;
 			spin_unlock_irqrestore(&port->classport_lock, flags);
 		}
-		queue_work(ib_wq, &sa_dev->port[event->element.port_num -
-					    sa_dev->start_port].update_task);
+		queue_delayed_work(ib_wq, &sa_dev->port[event->element.port_num -
+					sa_dev->start_port].update_task, 0);
 	}
 }
 
@@ -1937,7 +1949,7 @@ static void ib_sa_add_one(struct ib_device *device)
 		if (IS_ERR(sa_dev->port[i].agent))
 			goto err;
 
-		INIT_WORK(&sa_dev->port[i].update_task, update_sm_ah);
+		INIT_DELAYED_WORK(&sa_dev->port[i].update_task, update_sm_ah);
 
 		count++;
 	}
@@ -1960,7 +1972,7 @@ static void ib_sa_add_one(struct ib_device *device)
 
 	for (i = 0; i <= e - s; ++i) {
 		if (rdma_cap_ib_sa(device, i + 1))
-			update_sm_ah(&sa_dev->port[i].update_task);
+			queue_delayed_work(ib_wq, &sa_dev->port[i].update_task, 0);
 	}
 
 	return;
@@ -1990,6 +2002,7 @@ static void ib_sa_remove_one(struct ib_device *device, void *client_data)
 	for (i = 0; i <= sa_dev->end_port - sa_dev->start_port; ++i) {
 		if (rdma_cap_ib_sa(device, i + 1)) {
 			ib_unregister_mad_agent(sa_dev->port[i].agent);
+			cancel_delayed_work_sync(&sa_dev->port[i].update_task);
 			if (sa_dev->port[i].sm_ah)
 				kref_put(&sa_dev->port[i].sm_ah->ref, free_sm_ah);
 		}

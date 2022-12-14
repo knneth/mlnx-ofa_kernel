@@ -313,6 +313,7 @@ void sg_miter_stop(struct sg_mapping_iter *miter)
  * Returns the number of copied bytes.
  *
  **/
+#define sg_copy_buffer LINUX_BACKPORT(sg_copy_buffer)
 static size_t sg_copy_buffer(struct scatterlist *sgl, unsigned int nents,
 			     void *buf, size_t buflen, off_t skip,
 			     bool to_buffer)

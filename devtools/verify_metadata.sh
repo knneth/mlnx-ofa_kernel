@@ -178,7 +178,7 @@ do
 	if [ -z "$feature" ]; then
 		cerrs="$cerrs\n-E- missing feature field!"
 		RC=$(( $RC + 1))
-	elif ! (grep -wq -- "$feature" $WDIR/$FEATURES_DB); then
+	elif ! (grep -Ewq -- "name=\s*$feature" $WDIR/$FEATURES_DB); then
 		cerrs="$cerrs\n-E- feature '$feature' does not exist in '$FEATURES_DB' !"
 		RC=$(( $RC + 1))
 	fi

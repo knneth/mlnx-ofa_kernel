@@ -1,4 +1,31 @@
 #!/usr/bin/python
+#
+# Copyright (c) 2017 Mellanox Technologies. All rights reserved.
+#
+# This Software is licensed under one of the following licenses:
+#
+# 1) under the terms of the "Common Public License 1.0" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/cpl.php.
+#
+# 2) under the terms of the "The BSD License" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/bsd-license.php.
+#
+# 3) under the terms of the "GNU General Public License (GPL) Version 2" a
+#    copy of which is available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/gpl-license.php.
+#
+# Licensee has the right to choose one of the above licenses.
+#
+# Redistributions of source code must retain the above copyright
+# notice and one of the license notices.
+#
+# Redistributions in binary form must reproduce both the above copyright
+# notice, one of the license notices in the documentation
+# and/or other materials provided with the distribution.
+#
+
 """
 This is a tool to parse the flow steering information.
 
@@ -293,6 +320,7 @@ class fancy_dump():
 			'-'*65,
 			formatter_class=RawTextHelpFormatter)
 		# Add arguments
+		parser.add_argument('-d', help='Device name from #mst status, currently supports ConnectX-4 (/dev/mst/mt4115_pciconf) and ConnectX-4 LX (/dev/mst/mt4117_pciconf)', dest='device', required=True, default=None)
 		parser.add_argument('-g', type=int, help='Gvmi number', dest='gvmi', required=False, default=0)
 		parser.add_argument('-c', type=int, help='Print with color', dest='color', required=False, default=1)
 		parser.add_argument('-f', help='Parse a file from mlxdump', dest='in_file', required=False, default=None)
@@ -300,12 +328,13 @@ class fancy_dump():
 		arg = parser.parse_args()
 		self.gvmi = arg.gvmi
 		color = arg.color
+		self.device = arg.device
 		self.in_file = arg.in_file
 
 	def run(self):
 		if self.in_file is None:
 			#run fsdump command
-			self.cmd = "sudo mlxdump -d /dev/mst/mt4115_pciconf0 fsdump --type FT --no_zero=true" + " --gvmi " + str(self.gvmi)
+			self.cmd = "sudo mlxdump -d " + str(self.device) + " fsdump --type FT --no_zero=true" + " --gvmi " + str(self.gvmi)
 
 			p = subprocess.Popen(self.cmd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 			out, err = p.communicate()

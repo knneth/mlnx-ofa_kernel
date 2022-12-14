@@ -127,7 +127,7 @@ int ib_uverbs_exp_create_qp(struct ib_uverbs_file *file, struct ib_device *ib_de
 		} else {
 			if (cmd_exp->is_srq) {
 				srq = idr_read_srq(cmd_exp->srq_handle, file->ucontext);
-				if (!srq || srq->srq_type != IB_SRQT_BASIC) {
+				if (!srq || srq->srq_type == IB_SRQT_XRC) {
 					ret = -EINVAL;
 					goto err_put;
 				}
@@ -600,6 +600,36 @@ int ib_uverbs_exp_query_device(struct ib_uverbs_file *file,
 		resp->packet_pacing_caps.supported_qpts =
 			exp_attr->packet_pacing_caps.supported_qpts;
 		resp->comp_mask |= IB_EXP_DEVICE_ATTR_PACKET_PACING_CAPS;
+	}
+
+	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_OOO_CAPS) {
+		resp->ooo_caps.rc_caps = exp_attr->ooo_caps.rc_caps;
+		resp->ooo_caps.xrc_caps = exp_attr->ooo_caps.xrc_caps;
+		resp->ooo_caps.dc_caps = exp_attr->ooo_caps.dc_caps;
+		resp->comp_mask |= IB_EXP_DEVICE_ATTR_OOO_CAPS;
+	}
+
+	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_SW_PARSING_CAPS) {
+		resp->sw_parsing_caps.sw_parsing_offloads =
+			exp_attr->sw_parsing_caps.sw_parsing_offloads;
+		resp->sw_parsing_caps.supported_qpts =
+			exp_attr->sw_parsing_caps.supported_qpts;
+		resp->comp_mask |= IB_EXP_DEVICE_ATTR_SW_PARSING_CAPS;
+	}
+
+	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_ODP_MAX_SIZE) {
+		resp->odp_mr_max_size = exp_attr->odp_caps.max_size;
+		resp->comp_mask |= IB_EXP_DEVICE_ATTR_ODP_MAX_SIZE;
+	}
+
+	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_TM_CAPS) {
+		resp->tm_caps.max_rndv_hdr_size = exp_attr->tm_caps.max_rndv_hdr_size;
+		resp->tm_caps.max_num_tags = exp_attr->tm_caps.max_num_tags;
+		resp->tm_caps.capability_flags = exp_attr->tm_caps.capability_flags;
+		resp->tm_caps.max_ops = exp_attr->tm_caps.max_ops;
+		resp->tm_caps.max_sge = exp_attr->tm_caps.max_sge;
+		resp->comp_mask |= IB_EXP_DEVICE_ATTR_TM_CAPS;
+
 	}
 
 	ret = ib_copy_to_udata(ucore, resp, min_t(size_t, sizeof(*resp), ucore->outlen));
@@ -1440,3 +1470,103 @@ int ib_uverbs_exp_destroy_rwq_ind_table(struct ib_uverbs_file *file,
 {
 	return ib_uverbs_ex_destroy_rwq_ind_table(file, ib_dev, ucore, uhw);
 }
+
+int ib_uverbs_exp_set_context_attr(struct ib_uverbs_file *file,
+				  struct ib_device *ib_dev,
+				  struct ib_udata *ucore, struct ib_udata *uhw)
+{
+	struct ib_uverbs_exp_set_context_attr cmd = {};
+	struct ib_device *device;
+	struct ib_exp_context_attr attr = {};
+	size_t required_cmd_sz;
+	int ret;
+
+	device = file->device->ib_dev;
+	required_cmd_sz = offsetof(typeof(cmd), peer_name) + sizeof(cmd.peer_name);
+
+	if (ucore->inlen < required_cmd_sz)
+		return -EINVAL;
+
+	if (ucore->inlen > sizeof(cmd) &&
+	    !ib_is_udata_cleared(ucore, sizeof(cmd),
+				 ucore->inlen - sizeof(cmd)))
+		return -EOPNOTSUPP;
+
+	ret = ib_copy_from_udata(&cmd, ucore, min(sizeof(cmd), ucore->inlen));
+	if (ret)
+		return ret;
+
+	if (!cmd.comp_mask)
+		return -EINVAL;
+
+	if (cmd.comp_mask >= IB_UVERBS_EXP_SET_CONTEXT_ATTR_RESERVED)
+		return -ENOSYS;
+
+	attr.comp_mask = cmd.comp_mask;
+	if (attr.comp_mask & IB_UVERBS_EXP_SET_CONTEXT_PEER_INFO) {
+		attr.peer_id = cmd.peer_id;
+		attr.peer_name = cmd.peer_name;
+	}
+
+	ret = device->exp_set_context_attr(device, file->ucontext, &attr);
+
+	return ret;
+}
+
+int ib_uverbs_exp_create_srq(struct ib_uverbs_file *file,
+			     struct ib_device *ib_dev,
+			     struct ib_udata *ucore,
+			     struct ib_udata *uhw)
+{
+	struct ib_uverbs_create_xsrq xcmd = {};
+	struct ib_uverbs_exp_create_srq cmd;
+	size_t required_cmd_sz;
+	int err;
+
+	required_cmd_sz = offsetof(typeof(cmd), reserved) +
+			  sizeof(cmd.reserved);
+
+	if (ucore->inlen < required_cmd_sz)
+		return -EINVAL;
+
+	if (ucore->inlen > sizeof(cmd) &&
+	    !ib_is_udata_cleared(ucore, sizeof(cmd),
+				 ucore->inlen - sizeof(cmd)))
+		return -EOPNOTSUPP;
+
+	if (ucore->outlen < sizeof(struct ib_uverbs_create_srq_resp))
+		return -ENOSPC;
+
+	err = ib_copy_from_udata(&cmd, ucore, min(sizeof(cmd), ucore->inlen));
+	if (err)
+		return err;
+
+	if (cmd.comp_mask || cmd.reserved)
+		return -EINVAL;
+
+	xcmd.response    = (u64)ucore;
+	xcmd.user_handle = cmd.user_handle;
+	xcmd.srq_type	 = cmd.srq_type;
+	xcmd.pd_handle	 = cmd.pd_handle;
+	xcmd.max_wr	 = cmd.max_wr;
+	xcmd.max_sge	 = cmd.max_sge;
+	xcmd.srq_limit	 = cmd.srq_limit;
+	xcmd.cq_handle   = cmd.cq_handle;
+	xcmd.xrcd_handle = cmd.xrcd_handle;
+
+	return __uverbs_create_xsrq(file, ib_dev, &xcmd, uhw);
+}
+
+int ib_uverbs_exp_create_srq_resp(struct ib_uverbs_create_srq_resp *resp,
+				  u64 response)
+{
+	struct ib_udata *ucore = (struct ib_udata *)response;
+	struct ib_uverbs_exp_create_srq_resp resp_exp;
+
+	resp_exp.base = *resp;
+	resp_exp.comp_mask = 0;
+	resp_exp.response_length = min(ucore->outlen, sizeof(resp_exp));
+
+	return ib_copy_to_udata(ucore, &resp_exp, resp_exp.response_length);
+}
+

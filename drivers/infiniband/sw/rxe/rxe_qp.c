@@ -273,15 +273,11 @@ static int rxe_qp_init_req(struct rxe_dev *rxe, struct rxe_qp *qp,
 	rxe_init_task(rxe, &qp->comp.task, qp,
 		      rxe_completer, "comp");
 
-	init_timer(&qp->rnr_nak_timer);
-	qp->rnr_nak_timer.function = rnr_nak_timer;
-	qp->rnr_nak_timer.data = (unsigned long)qp;
-
-	init_timer(&qp->retrans_timer);
-	qp->retrans_timer.function = retransmit_timer;
-	qp->retrans_timer.data = (unsigned long)qp;
 	qp->qp_timeout_jiffies = 0; /* Can't be set for UD/UC in modify_qp */
-
+	if (init->qp_type == IB_QPT_RC) {
+		setup_timer(&qp->rnr_nak_timer, rnr_nak_timer, (unsigned long)qp);
+		setup_timer(&qp->retrans_timer, retransmit_timer, (unsigned long)qp);
+	}
 	return 0;
 }
 
@@ -809,8 +805,10 @@ void rxe_qp_destroy(struct rxe_qp *qp)
 	qp->qp_timeout_jiffies = 0;
 	rxe_cleanup_task(&qp->resp.task);
 
-	del_timer_sync(&qp->retrans_timer);
-	del_timer_sync(&qp->rnr_nak_timer);
+	if (qp_type(qp) == IB_QPT_RC) {
+		del_timer_sync(&qp->retrans_timer);
+		del_timer_sync(&qp->rnr_nak_timer);
+	}
 
 	rxe_cleanup_task(&qp->req.task);
 	rxe_cleanup_task(&qp->comp.task);
@@ -824,9 +822,9 @@ void rxe_qp_destroy(struct rxe_qp *qp)
 }
 
 /* called when the last reference to the qp is dropped */
-void rxe_qp_cleanup(void *arg)
+void rxe_qp_cleanup(struct rxe_pool_entry *arg)
 {
-	struct rxe_qp *qp = arg;
+	struct rxe_qp *qp = container_of(arg, typeof(*qp), pelem);
 
 	rxe_drop_all_mcast_groups(qp);
 
@@ -854,4 +852,5 @@ void rxe_qp_cleanup(void *arg)
 	free_rd_atomic_resources(qp);
 
 	kernel_sock_shutdown(qp->sk, SHUT_RDWR);
+	sock_release(qp->sk);
 }

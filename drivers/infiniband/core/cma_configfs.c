@@ -153,9 +153,6 @@ static ssize_t default_roce_tos_show(struct config_item *item, char *buf)
 	tos = cma_get_default_roce_tos(cma_dev, group->port_num);
 	cma_configfs_params_put(cma_dev);
 
-	if (tos < 0)
-		return tos;
-
 	return sprintf(buf, "%u\n", tos);
 }
 
@@ -176,10 +173,9 @@ static ssize_t default_roce_tos_store(struct config_item *item,
 		return ret;
 
 	ret = cma_set_default_roce_tos(cma_dev, group->port_num, tos);
-
 	cma_configfs_params_put(cma_dev);
 
-	return !ret ? strnlen(buf, count) : ret;
+	return ret ? ret : strnlen(buf, count);
 }
 
 CONFIGFS_ATTR(, default_roce_tos);

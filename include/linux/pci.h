@@ -54,4 +54,30 @@ static inline int pci_sriov_get_totalvfs(struct pci_dev *pdev)
 #endif
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+#ifndef HAVE_PCI_IRQ_GET_AFFINITY
+static inline const struct cpumask *pci_irq_get_affinity(struct pci_dev *pdev,
+							 int vec)
+{
+	return cpu_possible_mask;
+}
+#endif
+
+#ifndef HAVE_PCI_IRQ_GET_NODE
+static inline int pci_irq_get_node(struct pci_dev *pdev, int vec)
+{
+#ifdef CONFIG_PCI_MSI
+	const struct cpumask *mask;
+
+	mask = pci_irq_get_affinity(pdev, vec);
+	if (mask)
+		return local_memory_node(cpu_to_node(cpumask_first(mask)));
+	return dev_to_node(&pdev->dev);
+#else /* CONFIG_PCI_MSI */
+	return first_online_node;
+#endif /* CONFIG_PCI_MSI */
+}
+#endif /* pci_irq_get_node */
+#endif
+
 #endif /* _LINUX_PCI_H */
