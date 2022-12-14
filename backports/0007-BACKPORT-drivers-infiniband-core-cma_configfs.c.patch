@@ -78,7 +78,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  static int cma_configfs_params_get(struct config_item *item,
  				   struct cma_device **pcma_dev,
  				   struct cma_dev_port_group **pgroup)
-@@ -185,12 +234,27 @@ static ssize_t default_roce_tos_store(st
+@@ -187,12 +236,27 @@ static ssize_t default_roce_tos_store(st
  CONFIGFS_ATTR(, default_roce_tos);
  
  static struct configfs_attribute *cma_configfs_attributes[] = {
@@ -108,7 +108,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	.ct_attrs	= cma_configfs_attributes,
  	.ct_owner	= THIS_MODULE
  };
-@@ -218,6 +282,14 @@ static int make_cma_ports(struct cma_dev
+@@ -220,6 +284,14 @@ static int make_cma_ports(struct cma_dev
  		goto free;
  	}
  
@@ -123,7 +123,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	for (i = 0; i < ports_num; i++) {
  		char port_str[10];
  
-@@ -227,10 +299,17 @@ static int make_cma_ports(struct cma_dev
+@@ -229,10 +301,17 @@ static int make_cma_ports(struct cma_dev
  		config_group_init_type_name(&ports[i].group,
  					    port_str,
  					    &cma_port_group_type);
@@ -141,7 +141,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	cma_dev_group->ports = ports;
  
  	return 0;
-@@ -267,7 +346,11 @@ static struct configfs_item_operations c
+@@ -269,7 +348,11 @@ static struct configfs_item_operations c
  	.release = release_cma_ports_group
  };
  
@@ -153,7 +153,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	.ct_item_ops	= &cma_ports_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -276,7 +359,11 @@ static struct configfs_item_operations c
+@@ -278,7 +361,11 @@ static struct configfs_item_operations c
  	.release = release_cma_dev
  };
  
@@ -165,7 +165,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -299,6 +386,15 @@ static struct config_group *make_cma_dev
+@@ -301,6 +388,15 @@ static struct config_group *make_cma_dev
  		goto fail;
  	}
  
@@ -181,7 +181,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
  
  	config_group_init_type_name(&cma_dev_group->ports_group, "ports",
-@@ -306,16 +402,29 @@ static struct config_group *make_cma_dev
+@@ -308,16 +404,29 @@ static struct config_group *make_cma_dev
  
  	err = make_cma_ports(cma_dev_group, cma_dev);
  	if (err)
@@ -213,7 +213,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  fail:
  	if (cma_dev)
  		cma_dev_put(cma_dev);
-@@ -330,8 +439,29 @@ static void drop_cma_dev(struct config_g
+@@ -332,8 +441,29 @@ static void drop_cma_dev(struct config_g
  	struct cma_dev_group *cma_dev_group =
  		container_of(group, struct cma_dev_group, device_group);
  
@@ -243,7 +243,7 @@ Change-Id: I58008896749fa5abb8630c4cccaf09fc006ed7e5
  	config_item_put(item);
  }
  
-@@ -340,7 +470,11 @@ static struct configfs_group_operations
+@@ -342,7 +472,11 @@ static struct configfs_group_operations
  	.drop_item	= drop_cma_dev,
  };
  

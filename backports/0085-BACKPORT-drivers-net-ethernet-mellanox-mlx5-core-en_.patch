@@ -9,7 +9,7 @@ Change-Id: I91dde743b43695b60debf2ce492ded6f420bed71
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-@@ -117,8 +117,10 @@ static inline bool mlx5e_accel_tx_begin(
+@@ -119,8 +119,10 @@ static inline bool mlx5e_accel_tx_begin(
  					struct sk_buff *skb,
  					struct mlx5e_accel_tx_state *state)
  {

@@ -3385,12 +3385,6 @@ static void mlx5_eth_lag_cleanup(struct mlx5_ib_dev *dev)
 	}
 }
 
-static bool is_ecpf(const struct mlx5_core_dev *dev)
-{
-	/* Check bit-23 to qualify as ECPF taken from ecpf.h */
-	return (ioread32be(&dev->iseg->initializing) >> 23) & 1;
-}
-
 static bool is_per_net_notifier_dev(const struct mlx5_ib_dev *dev)
 {
 	/* VF, SF, are not created using devlink, so for backward
@@ -3400,7 +3394,7 @@ static bool is_per_net_notifier_dev(const struct mlx5_ib_dev *dev)
 		return false;
 
 	/* Let non ECPF to run in backward compatible mode. */
-	if (!is_ecpf(dev->mdev))
+	if (!mlx5_core_is_ecpf(dev->mdev))
 		return false;
 
 	/* If it is non eswitch manager device, let it be in backward

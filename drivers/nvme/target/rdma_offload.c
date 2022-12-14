@@ -35,7 +35,10 @@ static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 	srq_attr->ext.nvmf.data_offset = 0;
 	srq_attr->ext.nvmf.log_max_io_size = ilog2(nvmf_caps->max_io_sz);
 	srq_attr->ext.nvmf.nvme_memory_log_page_size = 0;
-	srq_attr->ext.nvmf.nvme_queue_size = min_t(u32, NVMET_QUEUE_SIZE, nvmf_caps->max_queue_sz);
+	srq_attr->ext.nvmf.nvme_queue_size = clamp_t(u32,
+						     xrq->port->offload_queue_size,
+						     nvmf_caps->min_queue_sz,
+						     nvmf_caps->max_queue_sz);
 	srq_attr->ext.nvmf.staging_buffer_number_of_pages = xrq->st->num_pages;
 	srq_attr->ext.nvmf.staging_buffer_log_page_size = ilog2(xrq->st->page_size >> 12); //4k granularity in PRM
 	srq_attr->ext.nvmf.staging_buffer_pas = kzalloc(sizeof(dma_addr_t) * xrq->st->num_pages, GFP_KERNEL);
@@ -422,13 +425,14 @@ static int nvmet_rdma_init_be_ctrl_attr(struct ib_nvmf_backend_ctrl_init_attr *a
 	nvme_sq_depth = ofl->nvme_sq_size / sizeof(struct nvme_command);
 	nvme_cq_depth = ofl->nvme_cq_size / sizeof(struct nvme_completion);
 
-	if (nvme_sq_depth < be_ctrl->xrq->nvme_queue_depth) {
-		pr_err("Minimal nvme SQ depth for offload is %u, actual is %u\n",
+	if (nvme_sq_depth != be_ctrl->xrq->nvme_queue_depth) {
+		pr_err("nvme SQ depth for offload is %u, actual is %u\n",
 		       be_ctrl->xrq->nvme_queue_depth, nvme_sq_depth);
 		return -EINVAL;
 	}
-	if (nvme_cq_depth < be_ctrl->xrq->nvme_queue_depth) {
-		pr_err("Minimal nvme CQ depth for offload is %u, actual is %u\n",
+
+	if (nvme_cq_depth != be_ctrl->xrq->nvme_queue_depth) {
+		pr_err("nvme CQ depth for offload is %u, actual is %u\n",
 		       be_ctrl->xrq->nvme_queue_depth, nvme_cq_depth);
 		return -EINVAL;
 	}
@@ -439,8 +443,8 @@ static int nvmet_rdma_init_be_ctrl_attr(struct ib_nvmf_backend_ctrl_init_attr *a
 	attr->event_handler = nvmet_rdma_backend_ctrl_event;
 	attr->cq_page_offset = 0;
 	attr->sq_page_offset = 0;
-	attr->cq_log_page_size = ilog2(ofl->nvme_cq_size >> 12);
-	attr->sq_log_page_size = ilog2(ofl->nvme_sq_size >> 12);
+	attr->cq_log_page_size = ilog2(max_t(u32, ofl->nvme_cq_size >> 12, 1));
+	attr->sq_log_page_size = ilog2(max_t(u32, ofl->nvme_sq_size >> 12, 1));
 	attr->initial_cqh_db_value = 0;
 	attr->initial_sqt_db_value = 0;
 	if (nvmf_caps->min_cmd_timeout_us && nvmf_caps->max_cmd_timeout_us)

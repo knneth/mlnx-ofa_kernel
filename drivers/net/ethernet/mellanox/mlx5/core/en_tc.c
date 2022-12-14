@@ -1500,6 +1500,9 @@ mlx5e_tc_offload_fdb_rules(struct mlx5_eswitch *esw,
 	struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts;
 	struct mlx5_flow_handle *rule;
 
+	if (attr->flags & MLX5_ESW_ATTR_FLAG_SLOW_PATH)
+		return mlx5_eswitch_add_offloaded_rule(esw, spec, attr);
+
 	if (flow_flag_test(flow, CT)) {
 		mod_hdr_acts = &attr->parse_attr->mod_hdr_acts;
 
@@ -1536,17 +1539,19 @@ void mlx5e_tc_unoffload_fdb_rules(struct mlx5_eswitch *esw,
 {
 	flow_flag_clear(flow, OFFLOADED);
 
-	if (attr->esw_attr->split_count)
-		mlx5_eswitch_del_fwd_rule(esw, flow->rule[1], attr);
+	if (!(attr->flags & MLX5_ESW_ATTR_FLAG_SLOW_PATH)) {
+		if (attr->esw_attr->split_count)
+			mlx5_eswitch_del_fwd_rule(esw, flow->rule[1], attr);
 
-	if (flow_flag_test(flow, CT)) {
-		mlx5_tc_ct_delete_flow(get_ct_priv(flow->priv), flow, attr);
-		return;
-	}
+		if (flow_flag_test(flow, CT)) {
+			mlx5_tc_ct_delete_flow(get_ct_priv(flow->priv), flow, attr);
+			return;
+		}
 
-	if (flow_flag_test(flow, SAMPLE)) {
-		mlx5_tc_sample_unoffload(get_sample_priv(flow->priv), flow->rule[0], attr);
-		return;
+		if (flow_flag_test(flow, SAMPLE)) {
+			mlx5_tc_sample_unoffload(get_sample_priv(flow->priv), flow->rule[0], attr);
+			return;
+		}
 	}
 
 	mlx5_eswitch_del_offloaded_rule(esw, flow->rule[0], attr);
@@ -1720,7 +1725,7 @@ mlx5e_tc_add_fdb_flow(struct mlx5e_priv *priv,
 		 * the internal port in the ft_offloads table in case
 		 * a miss happens after this rule.
 		 */
-		if (esw_attr->int_port) {
+		if (!attr->chain && esw_attr->int_port) {
 			u32 metadata = mlx5_eswitch_get_vport_metadata_for_set(esw,
 									esw_attr->in_rep->vport);
 
@@ -1745,6 +1750,12 @@ mlx5e_tc_add_fdb_flow(struct mlx5e_priv *priv,
 		if (attr->chain) {
 			NL_SET_ERR_MSG_MOD(extack,
 					   "Offloading internal port rule is only supported on chain 0");
+			return -EOPNOTSUPP;
+		}
+
+		if (attr->dest_chain) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Internal port rule offload doesn't support goto action");
 			return -EOPNOTSUPP;
 		}
 
@@ -3399,11 +3410,11 @@ static bool actions_match_supported(struct mlx5e_priv *priv,
 				    struct mlx5e_tc_flow *flow,
 				    struct netlink_ext_ack *extack)
 {
-	bool ct_flow = false, ct_clear = false, ct_new = false;
+	bool ct_flow = false, ct_clear = false;
 	u32 actions;
 
-	ct_clear = flow->attr->ct_attr.ct_action & TCA_CT_ACT_CLEAR;
-	ct_new = flow->attr->ct_attr.ct_state & MLX5_CT_STATE_NEW_BIT;
+	ct_clear = flow->attr->ct_attr.ct_action &
+		TCA_CT_ACT_CLEAR;
 	ct_flow = flow_flag_test(flow, CT) && !ct_clear;
 	actions = flow->attr->action;
 
@@ -3417,16 +3428,6 @@ static bool actions_match_supported(struct mlx5e_priv *priv,
 					   "Can't offload mirroring with action ct");
 			return false;
 		}
-	}
-
-	if (ct_new && ct_flow) {
-		NL_SET_ERR_MSG_MOD(extack, "Can't offload ct_state new with action ct");
-		return false;
-	}
-
-	if (ct_new && flow->attr->dest_chain) {
-		NL_SET_ERR_MSG_MOD(extack, "Can't offload ct_state new with action goto");
-		return false;
 	}
 
 	if (actions & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR)

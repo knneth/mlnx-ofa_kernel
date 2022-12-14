@@ -129,8 +129,9 @@ struct mlx5dr_ste_ctx {
 	mlx5dr_ste_builder_void_init build_eth_ipv6_l3_l4_init;
 	mlx5dr_ste_builder_void_init build_mpls_init;
 	mlx5dr_ste_builder_void_init build_tnl_gre_init;
-	mlx5dr_ste_builder_void_init build_tnl_mpls_init;
-	mlx5dr_ste_builder_int_init  build_icmp_init;
+	mlx5dr_ste_builder_void_init build_tnl_mpls_over_gre_init;
+	mlx5dr_ste_builder_void_init build_tnl_mpls_over_udp_init;
+	mlx5dr_ste_builder_void_init build_icmp_init;
 	mlx5dr_ste_builder_void_init build_general_purpose_init;
 	mlx5dr_ste_builder_void_init build_eth_l4_misc_init;
 	mlx5dr_ste_builder_void_init build_tnl_vxlan_gpe_init;

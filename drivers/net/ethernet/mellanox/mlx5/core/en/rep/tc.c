@@ -729,7 +729,8 @@ static bool mlx5e_handle_int_port(struct mlx5_cqe64 *cqe,
 
 bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 			     struct sk_buff *skb,
-			     struct mlx5e_tc_update_priv *tc_priv)
+			     struct mlx5e_tc_update_priv *tc_priv,
+			     bool *free_skb)
 {
 	struct mlx5_mapped_obj mapped_obj;
 	u32 chain = 0, reg_c0, reg_c1;
@@ -737,6 +738,8 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 	struct mlx5e_priv *priv;
 	u32 tunnel_id;
 	int err;
+
+	*free_skb = false;
 
 	reg_c0 = (be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK);
 	if (reg_c0 == MLX5_FS_DEFAULT_FLOW_TAG)
@@ -755,7 +758,7 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 		netdev_dbg(priv->netdev,
 			   "Couldn't find chain for chain tag: %d, err: %d\n",
 			   reg_c0, err);
-		return false;
+		goto out_free_skb;
 	}
 
 	if (mapped_obj.type == MLX5_MAPPED_OBJ_CHAIN) {
@@ -781,14 +784,17 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 		return false;
 #endif /* CONFIG_MLX5_TC_SAMPLE */
 	} else if (mapped_obj.type == MLX5_MAPPED_OBJ_INT_VPORT_METADATA) {
-		if (mlx5e_handle_int_port(cqe, skb))
+		if (!tunnel_id && mlx5e_handle_int_port(cqe, skb))
 			return false;
 	} else {
 		netdev_dbg(priv->netdev, "Invalid mapped object type: %d\n", mapped_obj.type);
-		return false;
+		goto out_free_skb;
 	}
 
-#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+
+#if !IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+	return true;
+#else
 	if (chain) {
 		struct mlx5_rep_uplink_priv *uplink_priv;
 		struct mlx5e_rep_priv *uplink_rpriv;
@@ -812,14 +818,16 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 			goto out_incr_rx_counter;
 	}
 
-	return mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id);
+	if (mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id))
+		return true;
 
 out_incr_rx_counter:
 	atomic_inc(&esw->dev->priv.ct_debugfs->stats.rx_dropped);
-	return false;
 #endif /* CONFIG_NET_TC_SKB_EXT */
 
-	return true;
+out_free_skb:
+	*free_skb = true;
+	return false;
 }
 
 void mlx5_rep_tc_post_napi_receive(struct mlx5e_tc_update_priv *tc_priv)

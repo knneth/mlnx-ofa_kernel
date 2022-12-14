@@ -1113,8 +1113,9 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 
 	mlx5e_rep_tc_enable(priv);
 
-	mlx5_modify_vport_admin_state(mdev, MLX5_VPORT_STATE_OP_MOD_UPLINK,
-				      0, 0, MLX5_VPORT_ADMIN_STATE_AUTO);
+	if (MLX5_CAP_GEN(mdev, uplink_follow))
+		mlx5_modify_vport_admin_state(mdev, MLX5_VPORT_STATE_OP_MOD_UPLINK,
+					      0, 0, MLX5_VPORT_ADMIN_STATE_AUTO);
 	mlx5_lag_add(mdev, netdev , false);
 	priv->events_nb.notifier_call = uplink_rep_async_event;
 	mlx5_notifier_register(mdev, &priv->events_nb);
@@ -1292,6 +1293,8 @@ mlx5e_vport_uplink_rep_load(struct mlx5_core_dev *dev,
 
 	rpriv->netdev = priv->netdev;
 
+	mlx5e_ipsec_ul_cleanup(priv);
+
 	err = mlx5e_netdev_change_profile(priv, &mlx5e_uplink_rep_profile,
 					  rpriv);
 	if (err)
@@ -1425,6 +1428,8 @@ mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
 	priv = netdev_priv(netdev);
 	ppriv = priv->ppriv;
 	dev = priv->mdev;
+
+	mlx5e_ipsec_ul_cleanup(priv);
 
 	if (is_devlink_port_supported(dev, rpriv))
 		devlink_port_type_clear(&rpriv->dl_port);

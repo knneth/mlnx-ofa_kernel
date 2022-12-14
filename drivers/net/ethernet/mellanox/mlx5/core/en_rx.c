@@ -1444,8 +1444,10 @@ void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
 
 	if (mlx5e_cqe_regb_chain(cqe))
-		if (!mlx5e_tc_update_skb(cqe, skb))
+		if (!mlx5e_tc_update_skb(cqe, skb)) {
+			dev_kfree_skb_any(skb);
 			goto free_wqe;
+		}
 
 	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
 	napi_gro_receive(rq->cq.napi, skb);
@@ -1468,6 +1470,7 @@ void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	struct mlx5e_wqe_frag_info *wi;
 	struct sk_buff *skb;
+	bool free_skb;
 	u32 cqe_bcnt;
 	u16 ci;
 
@@ -1502,8 +1505,11 @@ void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 
 	/* skip rep_tc_update_skb if packet is IPsec */
 	if (!mlx5_ipsec_is_rx_flow(cqe) &&
-	    !mlx5e_rep_tc_update_skb(cqe, skb, &tc_priv))
+	    !mlx5e_rep_tc_update_skb(cqe, skb, &tc_priv, &free_skb)) {
+		if (free_skb)
+			dev_kfree_skb_any(skb);
 		goto free_wqe;
+	}
 
 	napi_gro_receive(rq->cq.napi, skb);
 
@@ -1529,6 +1535,7 @@ static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64
 	struct mlx5e_rx_wqe_ll *wqe;
 	struct mlx5_wq_ll *wq;
 	struct sk_buff *skb;
+	bool free_skb;
 	u16 cqe_bcnt;
 
 	wi->consumed_strides += cstrides;
@@ -1560,8 +1567,11 @@ static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64
 
 	/* skip rep_tc_update_skb if packet is IPsec */
 	if (!mlx5_ipsec_is_rx_flow(cqe) &&
-	    !mlx5e_rep_tc_update_skb(cqe, skb, &tc_priv))
+	    !mlx5e_rep_tc_update_skb(cqe, skb, &tc_priv, &free_skb)) {
+		if (free_skb)
+			dev_kfree_skb_any(skb);
 		goto mpwrq_cqe_out;
+	}
 
 	napi_gro_receive(rq->cq.napi, skb);
 
@@ -1718,8 +1728,10 @@ void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
 
 	if (mlx5e_cqe_regb_chain(cqe))
-		if (!mlx5e_tc_update_skb(cqe, skb))
+		if (!mlx5e_tc_update_skb(cqe, skb)) {
+			dev_kfree_skb_any(skb);
 			goto mpwrq_cqe_out;
+		}
 
 	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
 	napi_gro_receive(rq->cq.napi, skb);
@@ -1994,8 +2006,8 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 
 		rq->handle_rx_cqe = priv->profile->rx_handlers->handle_rx_cqe_mpwqe;
 #ifdef CONFIG_MLX5_EN_IPSEC
-		if (MLX5_IPSEC_DEV(mdev)) {
-			netdev_err(netdev, "MPWQE RQ with IPSec offload not supported\n");
+		if (mlx5_fpga_is_ipsec_device(mdev)) {
+			netdev_err(netdev, "MPWQE RQ with FPGA IPSec offload not supported\n");
 			return -EINVAL;
 		}
 #endif

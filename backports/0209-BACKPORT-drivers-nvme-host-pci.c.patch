@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pci.c
 
 Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 ---
- drivers/nvme/host/pci.c | 606 +++++++++++++++++++++++++++++++++++++++-
+ drivers/nvme/host/pci.c | 606 +++++++++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 601 insertions(+), 5 deletions(-)
 
 --- a/drivers/nvme/host/pci.c
@@ -984,8 +984,8 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 +	int i, vecs;
 +#endif
  
- 	nr_io_queues = nvme_max_io_queues(dev) + dev->num_p2p_queues;
  	/*
+ 	 * Sample the module parameters once at reset time so that we have
 @@ -2354,21 +2787,60 @@ static int nvme_setup_io_queues(struct n
  
   retry:

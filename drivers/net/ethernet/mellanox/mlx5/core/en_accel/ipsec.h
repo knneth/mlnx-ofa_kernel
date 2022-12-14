@@ -143,6 +143,7 @@ struct mlx5e_ipsec_sa_entry {
 	u32 ipsec_obj_id;
 	struct mlx5e_ipsec_rule ipsec_rule;
 	struct mlx5e_ipsec_state_lft lft;
+	bool is_removed;
 };
 
 void mlx5e_ipsec_build_inverse_table(void);
@@ -155,6 +156,7 @@ struct xfrm_state *mlx5e_ipsec_sadb_rx_lookup(struct mlx5e_ipsec *dev,
 int mlx5e_ipsec_sadb_rx_lookup_rev(struct mlx5e_ipsec *ipsec,
 				   struct ethtool_rx_flow_spec *fs, u32 *handle);
 int mlx5e_ipsec_async_event(struct mlx5e_priv *priv, u32 obj_id);
+void mlx5e_ipsec_ul_cleanup(struct mlx5e_priv *priv);
 #else
 
 static inline void mlx5e_ipsec_build_inverse_table(void)
@@ -178,6 +180,8 @@ static inline int mlx5e_ipsec_async_event(struct mlx5e_priv *priv, u32 obj_id)
 {
 	return NOTIFY_DONE;
 }
+
+static inline void mlx5e_ipsec_ul_cleanup(struct mlx5e_priv *priv) {}
 #endif
 
 #endif	/* __MLX5E_IPSEC_H__ */

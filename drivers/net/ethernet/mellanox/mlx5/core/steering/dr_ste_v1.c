@@ -1297,49 +1297,86 @@ static void dr_ste_v1_build_tnl_gre_init(struct mlx5dr_ste_build *sb,
 	sb->ste_build_tag_func = &dr_ste_v1_build_tnl_gre_tag;
 }
 
-static int dr_ste_v1_build_tnl_mpls_tag(struct mlx5dr_match_param *value,
-					struct mlx5dr_ste_build *sb,
-					u8 *tag)
+static int dr_ste_v1_build_tnl_mpls_over_udp_tag(struct mlx5dr_match_param *value,
+						 struct mlx5dr_ste_build *sb,
+						 u8 *tag)
 {
 	struct mlx5dr_match_misc2 *misc2 = &value->misc2;
+	u8 *parser_ptr;
+	u8 parser_id;
+	u32 mpls_hdr;
 
-	if (DR_STE_IS_OUTER_MPLS_OVER_GRE_SET(misc2)) {
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_label,
-			       misc2, outer_first_mpls_over_gre_label);
+	mpls_hdr = misc2->outer_first_mpls_over_udp_label << HDR_MPLS_OFFSET_LABEL;
+	misc2->outer_first_mpls_over_udp_label = 0;
+	mpls_hdr |= misc2->outer_first_mpls_over_udp_exp << HDR_MPLS_OFFSET_EXP;
+	misc2->outer_first_mpls_over_udp_exp = 0;
+	mpls_hdr |= misc2->outer_first_mpls_over_udp_s_bos << HDR_MPLS_OFFSET_S_BOS;
+	misc2->outer_first_mpls_over_udp_s_bos = 0;
+	mpls_hdr |= misc2->outer_first_mpls_over_udp_ttl << HDR_MPLS_OFFSET_TTL;
+	misc2->outer_first_mpls_over_udp_ttl = 0;
 
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_exp,
-			       misc2, outer_first_mpls_over_gre_exp);
-
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_s_bos,
-			       misc2, outer_first_mpls_over_gre_s_bos);
-
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_ttl,
-			       misc2, outer_first_mpls_over_gre_ttl);
-	} else {
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_label,
-			       misc2, outer_first_mpls_over_udp_label);
-
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_exp,
-			       misc2, outer_first_mpls_over_udp_exp);
-
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_s_bos,
-			       misc2, outer_first_mpls_over_udp_s_bos);
-
-		DR_STE_SET_TAG(mpls_v1, tag, mpls0_ttl,
-			       misc2, outer_first_mpls_over_udp_ttl);
-	}
+	parser_id = sb->caps->flex_parser_id_mpls_over_udp;
+	parser_ptr = dr_ste_calc_flex_parser_offset(tag, parser_id);
+	*(__be32 *)parser_ptr = cpu_to_be32(mpls_hdr);
 
 	return 0;
 }
 
-static void dr_ste_v1_build_tnl_mpls_init(struct mlx5dr_ste_build *sb,
-					  struct mlx5dr_match_param *mask)
+static void dr_ste_v1_build_tnl_mpls_over_udp_init(struct mlx5dr_ste_build *sb,
+						   struct mlx5dr_match_param *mask)
 {
-	dr_ste_v1_build_tnl_mpls_tag(mask, sb, sb->bit_mask);
+	dr_ste_v1_build_tnl_mpls_over_udp_tag(mask, sb, sb->bit_mask);
 
-	sb->lu_type = DR_STE_V1_LU_TYPE_MPLS_I;
+	/* STEs with lookup type FLEX_PARSER_{0/1} includes
+	 * flex parsers_{0-3}/{4-7} respectively.
+	 */
+	sb->lu_type = sb->caps->flex_parser_id_mpls_over_udp > DR_STE_MAX_FLEX_0_ID ?
+		      DR_STE_V1_LU_TYPE_FLEX_PARSER_1 :
+		      DR_STE_V1_LU_TYPE_FLEX_PARSER_0;
+
 	sb->byte_mask = mlx5dr_ste_conv_bit_to_byte_mask(sb->bit_mask);
-	sb->ste_build_tag_func = &dr_ste_v1_build_tnl_mpls_tag;
+	sb->ste_build_tag_func = &dr_ste_v1_build_tnl_mpls_over_udp_tag;
+}
+
+static int dr_ste_v1_build_tnl_mpls_over_gre_tag(struct mlx5dr_match_param *value,
+						 struct mlx5dr_ste_build *sb,
+						 u8 *tag)
+{
+	struct mlx5dr_match_misc2 *misc2 = &value->misc2;
+	u8 *parser_ptr;
+	u8 parser_id;
+	u32 mpls_hdr;
+
+	mpls_hdr = misc2->outer_first_mpls_over_gre_label << HDR_MPLS_OFFSET_LABEL;
+	misc2->outer_first_mpls_over_gre_label = 0;
+	mpls_hdr |= misc2->outer_first_mpls_over_gre_exp << HDR_MPLS_OFFSET_EXP;
+	misc2->outer_first_mpls_over_gre_exp = 0;
+	mpls_hdr |= misc2->outer_first_mpls_over_gre_s_bos << HDR_MPLS_OFFSET_S_BOS;
+	misc2->outer_first_mpls_over_gre_s_bos = 0;
+	mpls_hdr |= misc2->outer_first_mpls_over_gre_ttl << HDR_MPLS_OFFSET_TTL;
+	misc2->outer_first_mpls_over_gre_ttl = 0;
+
+	parser_id = sb->caps->flex_parser_id_mpls_over_gre;
+	parser_ptr = dr_ste_calc_flex_parser_offset(tag, parser_id);
+	*(__be32 *)parser_ptr = cpu_to_be32(mpls_hdr);
+
+	return 0;
+}
+
+static void dr_ste_v1_build_tnl_mpls_over_gre_init(struct mlx5dr_ste_build *sb,
+						   struct mlx5dr_match_param *mask)
+{
+	dr_ste_v1_build_tnl_mpls_over_gre_tag(mask, sb, sb->bit_mask);
+
+	/* STEs with lookup type FLEX_PARSER_{0/1} includes
+	 * flex parsers_{0-3}/{4-7} respectively.
+	 */
+	sb->lu_type = sb->caps->flex_parser_id_mpls_over_gre > DR_STE_MAX_FLEX_0_ID ?
+		      DR_STE_V1_LU_TYPE_FLEX_PARSER_1 :
+		      DR_STE_V1_LU_TYPE_FLEX_PARSER_0;
+
+	sb->byte_mask = mlx5dr_ste_conv_bit_to_byte_mask(sb->bit_mask);
+	sb->ste_build_tag_func = &dr_ste_v1_build_tnl_mpls_over_gre_tag;
 }
 
 static int dr_ste_v1_build_icmp_tag(struct mlx5dr_match_param *value,
@@ -1373,16 +1410,14 @@ static int dr_ste_v1_build_icmp_tag(struct mlx5dr_match_param *value,
 	return 0;
 }
 
-static int dr_ste_v1_build_icmp_init(struct mlx5dr_ste_build *sb,
-				     struct mlx5dr_match_param *mask)
+static void dr_ste_v1_build_icmp_init(struct mlx5dr_ste_build *sb,
+				      struct mlx5dr_match_param *mask)
 {
 	dr_ste_v1_build_icmp_tag(mask, sb, sb->bit_mask);
 
 	sb->lu_type = DR_STE_V1_LU_TYPE_ETHL4_MISC_O;
 	sb->byte_mask = mlx5dr_ste_conv_bit_to_byte_mask(sb->bit_mask);
 	sb->ste_build_tag_func = &dr_ste_v1_build_icmp_tag;
-
-	return 0;
 }
 
 static int dr_ste_v1_build_general_purpose_tag(struct mlx5dr_match_param *value,
@@ -1899,10 +1934,9 @@ static void dr_ste_v1_dealloc_modify_hdr_chunk(struct mlx5dr_action *action)
 
 static void dr_ste_set_flex_parser(u32 *misc4_field_id,
 				   u32 *misc4_field_value,
-				   bool parser_is_used[NUM_OF_PARSERS],
-				   u8 *tag, struct mlx5dr_ste_build *sb)
+				   bool *parser_is_used,
+				   u8 *tag)
 {
-	u32 value = *misc4_field_value;
 	u32 id = *misc4_field_id;
 	u8 *parser_ptr;
 
@@ -1910,18 +1944,11 @@ static void dr_ste_set_flex_parser(u32 *misc4_field_id,
 		return;
 
 	parser_is_used[id] = true;
+	parser_ptr = dr_ste_calc_flex_parser_offset(tag, id);
 
-	parser_ptr = tag + 4 * (4 - (id + 1) % 4);
-
-	if (sb->lu_type == DR_STE_V1_LU_TYPE_FLEX_PARSER_0 && id < 4) {
-		MLX5_SET(ste_flex_parser_0, parser_ptr, flex_parser_3, value);
-		*misc4_field_id = 0;
-		*misc4_field_value = 0;
-	} else if (sb->lu_type == DR_STE_V1_LU_TYPE_FLEX_PARSER_1 && id >= 4) {
-		MLX5_SET(ste_flex_parser_1, parser_ptr, flex_parser_7, value);
-		*misc4_field_id = 0;
-		*misc4_field_value = 0;
-	}
+	*(__be32 *)parser_ptr = cpu_to_be32(*misc4_field_value);
+	*misc4_field_id = 0;
+	*misc4_field_value = 0;
 }
 
 static int dr_ste_v1_build_felx_parser_tag(struct mlx5dr_match_param *value,
@@ -1933,19 +1960,19 @@ static int dr_ste_v1_build_felx_parser_tag(struct mlx5dr_match_param *value,
 
 	dr_ste_set_flex_parser(&misc_4_mask->prog_sample_field_id_0,
 			       &misc_4_mask->prog_sample_field_value_0,
-			       parser_is_used, tag, sb);
+			       parser_is_used, tag);
 
 	dr_ste_set_flex_parser(&misc_4_mask->prog_sample_field_id_1,
 			       &misc_4_mask->prog_sample_field_value_1,
-			       parser_is_used, tag, sb);
+			       parser_is_used, tag);
 
 	dr_ste_set_flex_parser(&misc_4_mask->prog_sample_field_id_2,
 			       &misc_4_mask->prog_sample_field_value_2,
-			       parser_is_used, tag, sb);
+			       parser_is_used, tag);
 
 	dr_ste_set_flex_parser(&misc_4_mask->prog_sample_field_id_3,
 			       &misc_4_mask->prog_sample_field_value_3,
-			       parser_is_used, tag, sb);
+			       parser_is_used, tag);
 	return 0;
 }
 
@@ -1992,7 +2019,7 @@ dr_ste_v1_build_flex_parser_tnl_geneve_tlv_option_init(struct mlx5dr_ste_build *
 	/* STEs with lookup type FLEX_PARSER_{0/1} includes
 	 * flex parsers_{0-3}/{4-7} respectively.
 	 */
-	sb->lu_type = sb->caps->flex_parser_id_geneve_tlv_option_0 > 3 ?
+	sb->lu_type = sb->caps->flex_parser_id_geneve_tlv_option_0 > DR_STE_MAX_FLEX_0_ID ?
 		      DR_STE_V1_LU_TYPE_FLEX_PARSER_1 :
 		      DR_STE_V1_LU_TYPE_FLEX_PARSER_0;
 
@@ -2013,7 +2040,8 @@ static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	.build_eth_ipv6_l3_l4_init		= &dr_ste_v1_build_eth_ipv6_l3_l4_init,
 	.build_mpls_init			= &dr_ste_v1_build_mpls_init,
 	.build_tnl_gre_init			= &dr_ste_v1_build_tnl_gre_init,
-	.build_tnl_mpls_init			= &dr_ste_v1_build_tnl_mpls_init,
+	.build_tnl_mpls_over_udp_init		= &dr_ste_v1_build_tnl_mpls_over_udp_init,
+	.build_tnl_mpls_over_gre_init		= &dr_ste_v1_build_tnl_mpls_over_gre_init,
 	.build_icmp_init			= &dr_ste_v1_build_icmp_init,
 	.build_general_purpose_init		= &dr_ste_v1_build_general_purpose_init,
 	.build_eth_l4_misc_init			= &dr_ste_v1_build_eth_l4_misc_init,

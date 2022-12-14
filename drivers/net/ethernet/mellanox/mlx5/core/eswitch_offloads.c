@@ -53,6 +53,7 @@
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 #include "en/mapping.h"
 #endif
+#include "lag.h"
 
 /* There are two match-all miss flows, one for unicast dst mac and
  * one for multicast.
@@ -170,26 +171,29 @@ static void
 mlx5_eswitch_set_rule_source_port(struct mlx5_eswitch *esw,
 				  struct mlx5_flow_spec *spec,
 				  struct mlx5_eswitch *from_esw,
-				  struct mlx5_esw_flow_attr *attr,
+				  struct mlx5_flow_attr *attr,
 				  u16 vport)
 {
+	struct mlx5_esw_flow_attr *esw_attr;
 	u32 metadata;
 	void *misc2;
 	void *misc;
 
-	if (attr)
-		vport = attr->in_rep->vport;
+	if (attr) {
+		esw_attr = attr->esw_attr;
+		vport = esw_attr->in_rep->vport;
+	}
 
 	/* Use metadata matching because vport is not represented by single
 	 * VHCA in dual-port RoCE mode, and matching on source vport may fail.
 	 */
 	if (mlx5_eswitch_vport_match_metadata_enabled(esw)) {
-		if (attr && attr->decap_vport)
-			vport = attr->decap_vport;
+		if (attr && esw_attr->decap_vport)
+			vport = esw_attr->decap_vport;
 
-		if (attr && attr->int_port)
+		if (attr && !attr->chain && esw_attr->int_port)
 			metadata =
-			    mlx5_eswitch_get_int_vport_metadata_for_match(attr->int_port);
+			    mlx5_eswitch_get_int_vport_metadata_for_match(esw_attr->int_port);
 		else
 			metadata =
 			    mlx5_eswitch_get_vport_metadata_for_match(from_esw, vport);
@@ -242,7 +246,7 @@ mlx5_eswitch_e2e_cache_get_table(struct mlx5_eswitch *esw)
 	mutex_lock(&esw->fdb_table.offloads.e2e_cache_lock);
 	/* A pending get() already created the table */
 	if (refcount_inc_not_zero(&esw->fdb_table.offloads.e2e_cache_ref))
-		goto out_ref;
+		goto out_unlock;
 
 	/* A pending put() didn't yet free the table, re-use it */
 	if (esw->fdb_table.offloads.e2e_cache_fdb)
@@ -263,9 +267,9 @@ mlx5_eswitch_e2e_cache_get_table(struct mlx5_eswitch *esw)
 	esw->fdb_table.offloads.e2e_cache_fdb = fdb;
 
 out_ref:
-	refcount_inc(&esw->fdb_table.offloads.e2e_cache_ref);
+	refcount_set(&esw->fdb_table.offloads.e2e_cache_ref, 1);
+out_unlock:
 	mutex_unlock(&esw->fdb_table.offloads.e2e_cache_lock);
-
 out_fdb:
 	atomic_inc(&esw->dev->priv.ct_debugfs->stats.e2e_offloaded);
 	return esw->fdb_table.offloads.e2e_cache_fdb;
@@ -574,7 +578,7 @@ mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 		if (!(attr->flags & MLX5_ESW_ATTR_FLAG_NO_IN_PORT))
 			mlx5_eswitch_set_rule_source_port(esw, spec,
 					esw_attr->in_mdev->priv.eswitch,
-					esw_attr, 0);
+					attr, 0);
 	}
 	if (IS_ERR(fdb)) {
 		rule = ERR_CAST(fdb);
@@ -688,7 +692,7 @@ mlx5_eswitch_add_fwd_rule(struct mlx5_eswitch *esw,
 
 	mlx5_eswitch_set_rule_source_port(esw, spec,
 			esw_attr->in_mdev->priv.eswitch,
-			esw_attr, 0);
+			attr, 0);
 	mlx5_eswitch_set_rule_flow_source(esw, spec, esw_attr);
 
 	if (attr->outer_match_level != MLX5_MATCH_NONE)
@@ -3175,6 +3179,7 @@ mlx5_esw_put_int_vport(struct mlx5_eswitch *esw,
 		       struct mlx5_esw_int_vport *int_vport)
 {
 	spinlock_t *lock = &esw->offloads.int_vports_lock;
+	struct mlx5_flow_handle *temp;
 
 	if (!refcount_dec_and_lock(&int_vport->refcnt, lock))
 		return;
@@ -3185,10 +3190,12 @@ mlx5_esw_put_int_vport(struct mlx5_eswitch *esw,
 	 * existing rx rule.
 	 */
 	int_vport->removing = true;
+	temp = int_vport->rx_rule;
+	int_vport->rx_rule = NULL;
 	spin_unlock(lock);
 
-	if (int_vport->compl_result > 0)
-		mlx5_del_flow_rules(int_vport->rx_rule);
+	if (int_vport->compl_result > 0 && !IS_ERR_OR_NULL(temp))
+		mlx5_del_flow_rules(temp);
 
 	/* RX rule was removed, not we can remove
 	 * the int port mappings.
@@ -3394,7 +3401,13 @@ int esw_offloads_reload_reps(struct mlx5_eswitch *esw)
 
 static int esw_offloads_steering_init(struct mlx5_eswitch *esw)
 {
+	struct mlx5_core_dev    *dev = esw->dev;
+	struct mlx5_flow_steering *steering = dev->priv.steering;
+
 	int err;
+
+	if ((steering->mode == MLX5_FLOW_STEERING_MODE_SMFS) && mlx5_lag_is_active(dev))
+		mlx5_destroy_lag(mlx5_lag_dev_get(dev));
 
 	memset(&esw->fdb_table.offloads, 0, sizeof(struct offloads_fdb));
 	mutex_init(&esw->fdb_table.offloads.vports.lock);

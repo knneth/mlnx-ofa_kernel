@@ -166,7 +166,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	/* fill wqe */
  	wi   = &sq->db.wqe_info[pi];
-@@ -775,7 +833,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+@@ -773,7 +831,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
  		mlx5e_tx_mpwqe_session_start(sq, eseg);
  	}
  
@@ -176,8 +176,8 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	txd.data = skb->data;
  	txd.len = skb->len;
-@@ -858,7 +918,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
- 			if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg)))
+@@ -857,7 +917,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+ 							     attr.ihs)))
  				return NETDEV_TX_OK;
  
 +#ifdef HAVE_NETDEV_XMIT_MORE
@@ -190,8 +190,8 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  			return NETDEV_TX_OK;
  		}
  
-@@ -875,7 +941,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
- 	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth)))
+@@ -874,7 +940,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+ 	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs)))
  		return NETDEV_TX_OK;
  
 +#ifdef HAVE_NETDEV_XMIT_MORE
@@ -204,7 +204,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	return NETDEV_TX_OK;
  }
-@@ -922,7 +994,11 @@ static void mlx5e_consume_skb(struct mlx
+@@ -921,7 +993,11 @@ static void mlx5e_consume_skb(struct mlx
  			skb_tstamp_tx(skb, &hwts);
  	}
  
@@ -216,7 +216,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  }
  
  static void mlx5e_tx_wi_consume_fifo_skbs(struct mlx5e_txqsq *sq, struct mlx5e_tx_wqe_info *wi,
-@@ -1133,7 +1209,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -1132,7 +1208,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -228,7 +228,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -1155,7 +1235,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1154,7 +1234,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -238,7 +238,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1181,7 +1263,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1180,7 +1262,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	if (unlikely(num_dma < 0))
  		goto err_drop;
  

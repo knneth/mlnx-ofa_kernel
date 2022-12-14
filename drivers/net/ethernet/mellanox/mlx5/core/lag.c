@@ -201,6 +201,9 @@ static int mlx5_create_lag(struct mlx5_lag *ldev,
 					"Failed to deactivate RoCE LAG; driver restart required\n");
 	}
 
+	if (!err)
+		ldev->create_lag = 1;
+
 	return err;
 }
 
@@ -232,20 +235,15 @@ int mlx5_activate_lag(struct mlx5_lag *ldev,
 	return 0;
 }
 
-static int mlx5_deactivate_lag(struct mlx5_lag *ldev)
+int mlx5_destroy_lag(struct mlx5_lag *ldev)
 {
 	struct mlx5_core_dev *dev0 = ldev->pf[MLX5_LAG_P1].dev;
 	u32 in[MLX5_ST_SZ_DW(destroy_lag_in)] = {};
 	bool roce_lag = __mlx5_lag_is_roce(ldev);
 	int err;
 
-	ldev->flags &= ~MLX5_LAG_MODE_FLAGS;
-	ldev->lag_mp.mfi = NULL;
-	if (ldev->shared_fdb) {
-		esw_offloads_destroy_single_fdb(ldev->pf[MLX5_LAG_P1].dev->priv.eswitch,
-						ldev->pf[MLX5_LAG_P2].dev->priv.eswitch);
-		ldev->shared_fdb = false;
-	}
+	if (!ldev->create_lag)
+		return 0;
 
 	MLX5_SET(destroy_lag_in, in, opcode, MLX5_CMD_OP_DESTROY_LAG);
 	err = mlx5_cmd_exec_in(dev0, destroy_lag, in);
@@ -260,6 +258,25 @@ static int mlx5_deactivate_lag(struct mlx5_lag *ldev)
 		}
 	}
 
+	if (!err)
+		ldev->create_lag = 0;
+
+	return err;
+}
+
+static int mlx5_deactivate_lag(struct mlx5_lag *ldev)
+{
+	int err;
+
+	ldev->flags &= ~MLX5_LAG_MODE_FLAGS;
+	ldev->lag_mp.mfi = NULL;
+	if (ldev->shared_fdb) {
+		esw_offloads_destroy_single_fdb(ldev->pf[MLX5_LAG_P1].dev->priv.eswitch,
+						ldev->pf[MLX5_LAG_P2].dev->priv.eswitch);
+		ldev->shared_fdb = false;
+	}
+
+	err = mlx5_destroy_lag(ldev);
 	return err;
 }
 

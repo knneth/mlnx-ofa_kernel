@@ -36,6 +36,7 @@
 #include <net/vxlan.h>
 #include <net/geneve.h>
 #include <linux/bpf.h>
+#include <linux/irq.h>
 #include <linux/if_bridge.h>
 #include <net/page_pool.h>
 #include <net/xdp_sock_drv.h>
@@ -65,6 +66,7 @@
 #include "en/devlink.h"
 #include "lib/mlx5.h"
 #include "en/ptp.h"
+#include "fpga/ipsec.h"
 
 bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev)
 {
@@ -106,7 +108,7 @@ bool mlx5e_striding_rq_possible(struct mlx5_core_dev *mdev,
 	if (!mlx5e_check_fragmented_striding_rq_cap(mdev))
 		return false;
 
-	if (MLX5_IPSEC_DEV(mdev))
+	if (mlx5_fpga_is_ipsec_device(mdev))
 		return false;
 
 	if (params->xdp_prog) {
@@ -2175,17 +2177,21 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 			      struct xdp_umem *umem,
 			      struct mlx5e_channel **cp)
 {
-	int cpu = cpumask_first(mlx5_comp_irq_get_affinity_mask(priv->mdev, ix));
 	struct net_device *netdev = priv->netdev;
 	struct mlx5e_xsk_param xsk;
+	const struct cpumask *aff;
 	struct mlx5e_channel *c;
 	unsigned int irq;
 	int err;
 	int eqn;
+	int cpu;
 
 	err = mlx5_vector2eqn(priv->mdev, ix, &eqn, &irq);
 	if (err)
 		return err;
+
+	aff = irq_get_affinity_mask(irq);
+	cpu = cpumask_first(aff);
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, cpu_to_node(cpu));
 	if (!c)

@@ -49,6 +49,7 @@ struct mlx5_lag {
 	struct delayed_work       bond_work;
 	struct notifier_block     nb;
 	struct lag_mp             lag_mp;
+	bool create_lag;
 };
 
 static inline struct mlx5_lag *
@@ -71,5 +72,5 @@ int mlx5_activate_lag(struct mlx5_lag *ldev,
 		      bool shared_fdb);
 int mlx5_lag_dev_get_netdev_idx(struct mlx5_lag *ldev,
 				struct net_device *ndev);
-
+int mlx5_destroy_lag(struct mlx5_lag *ldev);
 #endif /* __MLX5_LAG_H__ */

@@ -8,7 +8,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
 
 --- a/drivers/infiniband/core/uverbs_cmd.c
 +++ b/drivers/infiniband/core/uverbs_cmd.c
-@@ -223,6 +223,10 @@ int ib_alloc_ucontext(struct uverbs_attr
+@@ -217,6 +217,10 @@ int ib_alloc_ucontext(struct uverbs_attr
  	ucontext = rdma_zalloc_drv_obj(ib_dev, ib_ucontext);
  	if (!ucontext)
  		return -ENOMEM;
@@ -19,7 +19,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
  
  	ucontext->res.type = RDMA_RESTRACK_CTX;
  	ucontext->device = ib_dev;
-@@ -246,10 +250,12 @@ int ib_init_ucontext(struct uverbs_attr_
+@@ -240,10 +244,12 @@ int ib_init_ucontext(struct uverbs_attr_
  		goto err;
  	}
  
@@ -32,7 +32,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
  
  	ret = ucontext->device->ops.alloc_ucontext(ucontext,
  						   &attrs->driver_udata);
-@@ -262,15 +268,22 @@ int ib_init_ucontext(struct uverbs_attr_
+@@ -256,15 +262,22 @@ int ib_init_ucontext(struct uverbs_attr_
  	 * Make sure that ib_uverbs_get_ucontext() sees the pointer update
  	 * only after all writes to setup the ucontext have completed
  	 */
@@ -55,7 +55,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
  err:
  	mutex_unlock(&file->ucontext_lock);
  	up_read(&file->hw_destroy_rwsem);
-@@ -3302,7 +3315,11 @@ static int __uverbs_create_xsrq(struct u
+@@ -3293,7 +3306,11 @@ static int __uverbs_create_xsrq(struct u
  	struct ib_srq                   *srq;
  	struct ib_srq_init_attr          attr;
  	int ret;

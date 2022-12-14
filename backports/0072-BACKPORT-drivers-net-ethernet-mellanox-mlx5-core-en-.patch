@@ -42,7 +42,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  	else
  		return NULL;
  }
-@@ -58,7 +69,11 @@ static int get_route_and_out_devs(struct
+@@ -60,7 +71,11 @@ static int get_route_and_out_devs(struct
  	 * it's a LAG device, use the uplink
  	 */
  	*route_dev = dev;
@@ -54,7 +54,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  	    dst_is_lag_dev || is_vlan_dev(*route_dev) ||
  	    netif_is_ovs_master(*route_dev))
  		*out_dev = uplink_dev;
-@@ -105,7 +120,11 @@ static int mlx5e_route_lookup_ipv4_get(s
+@@ -107,7 +122,11 @@ static int mlx5e_route_lookup_ipv4_get(s
  	if (IS_ERR(rt))
  		return PTR_ERR(rt);
  
@@ -66,7 +66,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  		ip_rt_put(rt);
  		return -ENETUNREACH;
  	}
-@@ -348,7 +367,7 @@ int mlx5e_tc_tun_update_header_ipv4(stru
+@@ -350,7 +369,7 @@ int mlx5e_tc_tun_update_header_ipv4(stru
  	const struct ip_tunnel_key *tun_key = &e->tun_info->key;
  	struct net_device *out_dev, *route_dev = NULL;
  	struct flowi4 fl4 = {};
@@ -75,7 +75,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  	int ipv4_encap_size;
  	char *encap_header;
  	u8 nud_state, ttl;
-@@ -444,7 +463,6 @@ release_neigh:
+@@ -446,7 +465,6 @@ release_neigh:
  	return err;
  }
  
@@ -83,7 +83,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  static int mlx5e_route_lookup_ipv6_get(struct mlx5e_priv *priv,
  				       struct net_device *mirred_dev,
  				       struct net_device **out_dev,
-@@ -456,13 +474,22 @@ static int mlx5e_route_lookup_ipv6_get(s
+@@ -458,13 +476,22 @@ static int mlx5e_route_lookup_ipv6_get(s
  	struct dst_entry *dst;
  	struct neighbour *n;
  
@@ -106,7 +106,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  	if (out_ttl && !(*out_ttl))
  		*out_ttl = ip6_dst_hoplimit(dst);
  
-@@ -474,6 +501,9 @@ static int mlx5e_route_lookup_ipv6_get(s
+@@ -476,6 +503,9 @@ static int mlx5e_route_lookup_ipv6_get(s
  		dst_release(dst);
  		return ret;
  	}
@@ -116,7 +116,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  
  	n = dst_neigh_lookup(dst, &fl6->daddr);
  	dst_release(dst);
-@@ -712,8 +742,6 @@ release_neigh:
+@@ -714,8 +744,6 @@ release_neigh:
  	return err;
  }
  
@@ -125,7 +125,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  int mlx5e_tc_tun_route_lookup(struct mlx5e_priv *priv,
  			      struct mlx5_esw_flow_attr *attr,
  			      struct mlx5_flow_spec *spec)
-@@ -819,9 +847,15 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -821,9 +849,15 @@ int mlx5e_tc_tun_parse(struct net_device
  				       outer_headers);
  	void *headers_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,
  				       outer_headers);
@@ -142,7 +142,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  	if (!tunnel) {
  		netdev_warn(priv->netdev,
  			    "decapsulation offload is not supported for %s net device\n",
-@@ -835,6 +869,7 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -837,6 +871,7 @@ int mlx5e_tc_tun_parse(struct net_device
  	if (tunnel->parse_udp_ports) {
  		err = tunnel->parse_udp_ports(priv, spec, f,
  					      headers_c, headers_v);
@@ -150,7 +150,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  		if (err)
  			goto out;
  	}
-@@ -842,6 +877,7 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -844,6 +879,7 @@ int mlx5e_tc_tun_parse(struct net_device
  	if (tunnel->parse_tunnel) {
  		err = tunnel->parse_tunnel(priv, spec, f,
  					   headers_c, headers_v);
@@ -158,7 +158,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  		if (err)
  			goto out;
  	}
-@@ -955,16 +991,21 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -957,16 +993,21 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  				 struct flow_cls_offload *f,
  				 void *headers_c,
  				 void *headers_v)
@@ -180,7 +180,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  		netdev_warn(priv->netdev,
  			    "UDP tunnel decap filter must include enc_dst_port condition\n");
  		return -EOPNOTSUPP;
-@@ -974,8 +1015,10 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -976,8 +1017,10 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  
  	if (memchr_inv(&enc_ports.mask->dst, 0xff,
  		       sizeof(enc_ports.mask->dst))) {
@@ -191,7 +191,7 @@ Change-Id: Ia49393680444ecf3aed2dd990da792bb8adc1355
  		netdev_warn(priv->netdev,
  			    "UDP tunnel decap filter must match enc_dst_port fully\n");
  		return -EOPNOTSUPP;
-@@ -1003,3 +1046,5 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -1005,3 +1048,5 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  
  	return 0;
  }

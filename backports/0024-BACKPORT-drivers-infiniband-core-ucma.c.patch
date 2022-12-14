@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
 
 Change-Id: I28b8be499788b03b85b5229e08e079e1629b6586
 ---
- drivers/infiniband/core/ucma.c | 24 +++++++++++++++++++++---
- 1 file changed, 21 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/ucma.c | 23 ++++++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
@@ -43,15 +43,7 @@ Change-Id: I28b8be499788b03b85b5229e08e079e1629b6586
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -1671,6 +1677,7 @@ static ssize_t ucma_migrate_id(struct uc
- 
- 	/* Validate current fd and prevent destruction of id. */
- 	ctx = ucma_get_ctx(f.file->private_data, cmd.id);
-+
- 	if (IS_ERR(ctx)) {
- 		ret = PTR_ERR(ctx);
- 		goto file_put;
-@@ -1757,8 +1764,9 @@ static ssize_t ucma_write(struct file *f
+@@ -1722,8 +1728,9 @@ static ssize_t ucma_write(struct file *f
  
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
@@ -62,7 +54,7 @@ Change-Id: I28b8be499788b03b85b5229e08e079e1629b6586
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1816,7 +1824,11 @@ static int ucma_open(struct inode *inode
+@@ -1774,7 +1781,11 @@ static int ucma_open(struct inode *inode
  	filp->private_data = file;
  	file->filp = filp;
  
@@ -74,7 +66,7 @@ Change-Id: I28b8be499788b03b85b5229e08e079e1629b6586
  }
  
  static int ucma_close(struct inode *inode, struct file *filp)
-@@ -1909,12 +1921,14 @@ static int __init ucma_init(void)
+@@ -1853,12 +1864,14 @@ static int __init ucma_init(void)
  		goto err1;
  	}
  
@@ -89,7 +81,7 @@ Change-Id: I28b8be499788b03b85b5229e08e079e1629b6586
  
  	ret = ib_register_client(&rdma_cma_client);
  	if (ret)
-@@ -1923,8 +1937,10 @@ static int __init ucma_init(void)
+@@ -1867,8 +1880,10 @@ static int __init ucma_init(void)
  	return 0;
  err3:
  	unregister_net_sysctl_table(ucma_ctl_table_hdr);
@@ -100,7 +92,7 @@ Change-Id: I28b8be499788b03b85b5229e08e079e1629b6586
  err1:
  	misc_deregister(&ucma_misc);
  	return ret;
-@@ -1933,7 +1949,9 @@ err1:
+@@ -1877,7 +1892,9 @@ err1:
  static void __exit ucma_cleanup(void)
  {
  	ib_unregister_client(&rdma_cma_client);

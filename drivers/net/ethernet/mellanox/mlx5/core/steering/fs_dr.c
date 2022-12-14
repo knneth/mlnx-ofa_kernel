@@ -570,6 +570,7 @@ static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns
 		return -EINVAL;
 	}
 
+	pkt_reformat->sw_owned = true;
 	pkt_reformat->action.dr_action = action;
 
 	return 0;
@@ -600,6 +601,7 @@ static int mlx5_cmd_dr_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 		return -EINVAL;
 	}
 
+	modify_hdr->sw_owned = true;
 	modify_hdr->action.dr_action = action;
 
 	return 0;
@@ -714,4 +716,9 @@ static const struct mlx5_flow_cmds mlx5_flow_cmds_dr = {
 const struct mlx5_flow_cmds *mlx5_fs_cmd_get_dr_cmds(void)
 {
 		return &mlx5_flow_cmds_dr;
+}
+
+u32 mlx5_fs_dr_action_get_pkt_reformat_id(struct mlx5_pkt_reformat *pkt_reformat)
+{
+	return mlx5dr_action_get_pkt_reformat_id(pkt_reformat->action.dr_action);
 }

@@ -523,15 +523,37 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 			~MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
 		MLX5_SET(flow_context, in_flow_context, action, action);
 	} else {
+		u32 id;
 		MLX5_SET(flow_context, in_flow_context, action,
 			 fte->action.action);
-		if (fte->action.pkt_reformat)
-			MLX5_SET(flow_context, in_flow_context, packet_reformat_id,
-				 fte->action.pkt_reformat->id);
+		if (fte->action.pkt_reformat) {
+			if (fte->action.pkt_reformat->sw_owned) {
+				switch (fte->action.pkt_reformat->reformat_type) {
+				case MLX5_REFORMAT_TYPE_L2_TO_VXLAN:
+				case MLX5_REFORMAT_TYPE_L2_TO_NVGRE:
+				case MLX5_REFORMAT_TYPE_L2_TO_L2_TUNNEL:
+				case MLX5_REFORMAT_TYPE_L2_TO_L3_TUNNEL:
+					id = mlx5_fs_dr_action_get_pkt_reformat_id(fte->action.pkt_reformat);
+					break;
+				default:
+					err = -ENOTSUPP;
+					goto err_out;
+				}
+			} else {
+				id = fte->action.pkt_reformat->id;
+			}
+			MLX5_SET(flow_context, in_flow_context,
+				 packet_reformat_id, id);
+		}
 	}
-	if (fte->action.modify_hdr)
+	if (fte->action.modify_hdr) {
+		if (fte->action.modify_hdr->sw_owned) {
+			err = -ENOTSUPP;
+			goto err_out;
+		}
 		MLX5_SET(flow_context, in_flow_context, modify_header_id,
 			 fte->action.modify_hdr->id);
+	}
 
 	MLX5_SET(flow_context, in_flow_context, ipsec_obj_id, fte->action.ipsec_obj_id);
 

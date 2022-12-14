@@ -44,6 +44,8 @@ bool mlx5_fs_dr_is_supported(struct mlx5_core_dev *dev);
 
 const struct mlx5_flow_cmds *mlx5_fs_cmd_get_dr_cmds(void);
 
+u32 mlx5_fs_dr_action_get_pkt_reformat_id(struct mlx5_pkt_reformat *pkt_reformat);
+
 #else
 
 static inline const struct mlx5_flow_cmds *mlx5_fs_cmd_get_dr_cmds(void)
@@ -54,6 +56,13 @@ static inline const struct mlx5_flow_cmds *mlx5_fs_cmd_get_dr_cmds(void)
 static inline bool mlx5_fs_dr_is_supported(struct mlx5_core_dev *dev)
 {
 	return false;
+}
+
+static inline u32 mlx5_fs_dr_action_get_pkt_reformat_id(struct mlx5_pkt_reformat *pkt_reformat)
+{
+	WARN_ON(true);
+
+	return 0;
 }
 
 #endif /* CONFIG_MLX5_SW_STEERING */

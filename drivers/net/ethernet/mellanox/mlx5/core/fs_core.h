@@ -51,6 +51,7 @@
 
 struct mlx5_modify_hdr {
 	enum mlx5_flow_namespace_type ns_type;
+	bool sw_owned;
 	union {
 		struct mlx5_fs_dr_action action;
 		u32 id;
@@ -60,6 +61,7 @@ struct mlx5_modify_hdr {
 struct mlx5_pkt_reformat {
 	enum mlx5_flow_namespace_type ns_type;
 	int reformat_type; /* from mlx5_ifc */
+	bool sw_owned;
 	union {
 		struct mlx5_fs_dr_action action;
 		u32 id;

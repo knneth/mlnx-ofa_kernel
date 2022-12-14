@@ -438,13 +438,6 @@ mlx5_tc_sample_offload(struct mlx5_tc_psample *tc_psample,
 	if (IS_ERR_OR_NULL(tc_psample))
 		return ERR_PTR(-EOPNOTSUPP);
 
-	/* If slow path flag is set, eg. when the neigh is invalid for encap,
-	 * don't offload sample action.
-	 */
-	esw = tc_psample->priv->mdev->priv.eswitch;
-	if (attr->flags & MLX5_ESW_ATTR_FLAG_SLOW_PATH)
-		return mlx5_eswitch_add_offloaded_rule(esw, spec, attr);
-
 	sample_flow = kzalloc(sizeof(*sample_flow), GFP_KERNEL);
 	if (!sample_flow)
 		return ERR_PTR(-ENOMEM);
@@ -468,6 +461,7 @@ mlx5_tc_sample_offload(struct mlx5_tc_psample *tc_psample,
 	per_vport_tbl_attr.prio = attr->prio;
 	per_vport_tbl_attr.vport = esw_attr->in_rep->vport;
 	per_vport_tbl_attr.vport_ns = &mlx5_esw_vport_tbl_sample_ns;
+	esw = tc_psample->priv->mdev->priv.eswitch;
 	default_tbl = esw_vport_tbl_get(esw, &per_vport_tbl_attr);
 	if (IS_ERR(default_tbl)) {
 		err = PTR_ERR(default_tbl);
@@ -619,15 +613,7 @@ mlx5_tc_sample_unoffload(struct mlx5_tc_psample *tc_psample,
 	if (IS_ERR_OR_NULL(tc_psample))
 		return;
 
-	/* If slow path flag is set, sample action is not offloaded.
-	 * No need to delete sample rule.
-	 */
 	esw = tc_psample->priv->mdev->priv.eswitch;
-	if (attr->flags & MLX5_ESW_ATTR_FLAG_SLOW_PATH) {
-		mlx5_eswitch_del_offloaded_rule(esw, rule, attr);
-		return;
-	}
-
 	sample_flow = esw_attr->sample->sample_flow;
 	pre_attr = sample_flow->pre_attr;
 	memset(pre_attr, 0, sizeof(*pre_attr));

@@ -16,7 +16,7 @@ Change-Id: I681c1a51b1dd017c2eeb852d0a817652be212283
  
  #undef TRACE_SYSTEM
  #define TRACE_SYSTEM rdma_cma
-@@ -399,3 +400,5 @@ DEFINE_CMA_CLIENT_EVENT(remove_one);
+@@ -359,3 +360,5 @@ DEFINE_CMA_CLIENT_EVENT(remove_one);
  #define TRACE_INCLUDE_FILE cma_trace
  
  #include <trace/define_trace.h>

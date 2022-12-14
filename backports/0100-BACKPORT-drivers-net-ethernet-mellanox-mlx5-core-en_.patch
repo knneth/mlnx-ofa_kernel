@@ -402,7 +402,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  	mlx5e_set_dev_port_mtu(priv);
  
  	mlx5e_rep_tc_enable(priv);
-@@ -1231,6 +1417,9 @@ static const struct mlx5e_profile mlx5e_
+@@ -1232,6 +1418,9 @@ static const struct mlx5e_profile mlx5e_
  	.stats_grps_num		= mlx5e_ul_rep_stats_grps_num,
  };
  
@@ -412,7 +412,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  static bool
  is_devlink_port_supported(const struct mlx5_core_dev *dev,
  			  const struct mlx5e_rep_priv *rpriv)
-@@ -1239,10 +1428,12 @@ is_devlink_port_supported(const struct m
+@@ -1240,10 +1429,12 @@ is_devlink_port_supported(const struct m
  	       rpriv->rep->vport == MLX5_VPORT_PF ||
  	       mlx5_eswitch_is_vf_vport(dev->priv.eswitch, rpriv->rep->vport);
  }
@@ -425,7 +425,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  	struct devlink *devlink = priv_to_devlink(dev);
  	struct mlx5_eswitch_rep *rep = rpriv->rep;
  	struct devlink_port_attrs attrs = {};
-@@ -1261,25 +1452,49 @@ static int register_devlink_port(struct
+@@ -1262,25 +1453,49 @@ static int register_devlink_port(struct
  		attrs.phys.port_number = pfnum;
  		memcpy(attrs.switch_id.id, &ppid.id[0], ppid.id_len);
  		attrs.switch_id.id_len = ppid.id_len;
@@ -476,7 +476,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  }
  
  static int
-@@ -1304,8 +1519,10 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1307,8 +1522,10 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
  		goto err_devlink_port;
  	}
  
@@ -487,7 +487,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  
  	mlx5_smartnic_sysfs_init(rpriv->netdev);
  
-@@ -1386,6 +1603,10 @@ mlx5e_vport_rep_load(struct mlx5_core_de
+@@ -1389,6 +1606,10 @@ mlx5e_vport_rep_load(struct mlx5_core_de
  		goto err_detach_netdev;
  	}
  
@@ -498,7 +498,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  	err = register_netdev(netdev);
  	if (err) {
  		netdev_warn(netdev,
-@@ -1394,11 +1615,16 @@ mlx5e_vport_rep_load(struct mlx5_core_de
+@@ -1397,11 +1618,16 @@ mlx5e_vport_rep_load(struct mlx5_core_de
  		goto err_devlink_cleanup;
  	}
  
@@ -515,9 +515,9 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  err_devlink_cleanup:
  	unregister_devlink_port(dev, rpriv);
  
-@@ -1426,8 +1652,10 @@ mlx5e_vport_uplink_rep_unload(struct mlx
- 	ppriv = priv->ppriv;
- 	dev = priv->mdev;
+@@ -1431,8 +1657,10 @@ mlx5e_vport_uplink_rep_unload(struct mlx
+ 
+ 	mlx5e_ipsec_ul_cleanup(priv);
  
 +#ifdef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
  	if (is_devlink_port_supported(dev, rpriv))
@@ -526,7 +526,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  
  	mlx5_smartnic_sysfs_cleanup(netdev);
  	unregister_devlink_port(dev, rpriv);
-@@ -1449,11 +1677,14 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1454,11 +1682,14 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  		return;
  	}
  

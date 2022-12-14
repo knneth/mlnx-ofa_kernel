@@ -50,7 +50,7 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
  	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
  	if (control & NVME_RW_PRINFO_PRCHK_REF)
  		domain->sig.dif.ref_remap = true;
-@@ -2038,6 +2056,7 @@ static void nvmet_rdma_remove_port(struc
+@@ -2048,6 +2066,7 @@ static void nvmet_rdma_remove_port(struc
  static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
  		struct nvmet_port *nport, char *traddr)
  {
@@ -58,7 +58,7 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
  	struct nvmet_rdma_port *port = nport->priv;
  	struct rdma_cm_id *cm_id = port->cm_id;
  
-@@ -2051,6 +2070,9 @@ static void nvmet_rdma_disc_port_addr(st
+@@ -2061,6 +2080,9 @@ static void nvmet_rdma_disc_port_addr(st
  	} else {
  		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
  	}
@@ -68,7 +68,7 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
  }
  
  static u8 nvmet_rdma_get_mdts(const struct nvmet_ctrl *ctrl)
-@@ -2230,6 +2252,9 @@ module_init(nvmet_rdma_init);
+@@ -2240,6 +2262,9 @@ module_init(nvmet_rdma_init);
  module_exit(nvmet_rdma_exit);
  
  MODULE_LICENSE("GPL v2");

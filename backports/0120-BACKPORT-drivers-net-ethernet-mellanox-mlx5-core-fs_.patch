@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 
 Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
 ---
- .../net/ethernet/mellanox/mlx5/core/fs_core.c | 66 +++++++++++++++++--
- 1 file changed, 61 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/fs_core.c | 70 +++++++++++++++++++++--
+ 1 file changed, 65 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
@@ -126,7 +126,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	if (ret) {
  		kfree(ft);
  		return ERR_PTR(ret);
-@@ -1142,7 +1178,9 @@ static struct mlx5_flow_table *__mlx5_cr
+@@ -1142,12 +1178,18 @@ static struct mlx5_flow_table *__mlx5_cr
  	fs_prio->num_ft++;
  	up_write_ref_node(&fs_prio->node, false);
  	mutex_unlock(&root->chain_lock);
@@ -136,7 +136,16 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	return ft;
  destroy_ft:
  	root->cmds->destroy_flow_table(root, ft);
-@@ -1244,7 +1282,9 @@ struct mlx5_flow_group *mlx5_create_flow
+ free_ft:
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	bp_rhltable_destroy(&ft->fgs_hash);
++#else
+ 	rhltable_destroy(&ft->fgs_hash);
++#endif
+ 	kfree(ft);
+ unlock_root:
+ 	mutex_unlock(&root->chain_lock);
+@@ -1245,7 +1287,9 @@ struct mlx5_flow_group *mlx5_create_flow
  		tree_put_node(&fg->node, false);
  		return ERR_PTR(err);
  	}
@@ -147,7 +156,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	fg->node.active = true;
  
  	return fg;
-@@ -1480,7 +1520,9 @@ static int create_auto_flow_group(struct
+@@ -1481,7 +1525,9 @@ static int create_auto_flow_group(struct
  	err = root->cmds->create_flow_group(root, ft, in, fg);
  	if (!err) {
  		fg->node.active = true;
@@ -157,7 +166,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	}
  
  	kvfree(in);
-@@ -1593,12 +1635,16 @@ static struct mlx5_flow_handle *add_rule
+@@ -1594,12 +1640,16 @@ static struct mlx5_flow_handle *add_rule
  		fte->action.action = old_action;
  		return handle;
  	}
@@ -174,7 +183,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  		}
  	}
  	return handle;
-@@ -1663,16 +1709,26 @@ static int build_match_list(struct match
+@@ -1664,16 +1714,26 @@ static int build_match_list(struct match
  			    const struct mlx5_flow_spec *spec,
  			    bool ft_locked)
  {

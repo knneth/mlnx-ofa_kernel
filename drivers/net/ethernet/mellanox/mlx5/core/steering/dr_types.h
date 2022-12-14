@@ -18,6 +18,9 @@
 #define ECPF_PORT 0xFFFE
 #define DR_STE_SVLAN 0x1
 #define DR_STE_CVLAN 0x2
+#define DR_NUM_OF_FLEX_PARSERS 8
+#define DR_STE_MAX_FLEX_0_ID 3
+#define DR_STE_MAX_FLEX_1_ID 7
 
 #define mlx5dr_err(dmn, arg...) mlx5_core_err((dmn)->mdev, ##arg)
 #define mlx5dr_info(dmn, arg...) mlx5_core_info((dmn)->mdev, ##arg)
@@ -422,15 +425,21 @@ void mlx5dr_ste_build_mpls(struct mlx5dr_ste_ctx *ste_ctx,
 			   struct mlx5dr_ste_build *sb,
 			   struct mlx5dr_match_param *mask,
 			   bool inner, bool rx);
-void mlx5dr_ste_build_tnl_mpls(struct mlx5dr_ste_ctx *ste_ctx,
-			       struct mlx5dr_ste_build *sb,
-			       struct mlx5dr_match_param *mask,
-			       bool inner, bool rx);
-int mlx5dr_ste_build_icmp(struct mlx5dr_ste_ctx *ste_ctx,
-			  struct mlx5dr_ste_build *sb,
-			  struct mlx5dr_match_param *mask,
-			  struct mlx5dr_cmd_caps *caps,
-			  bool inner, bool rx);
+void mlx5dr_ste_build_tnl_mpls_over_gre(struct mlx5dr_ste_ctx *ste_ctx,
+					struct mlx5dr_ste_build *sb,
+					struct mlx5dr_match_param *mask,
+					struct mlx5dr_cmd_caps *caps,
+					bool inner, bool rx);
+void mlx5dr_ste_build_tnl_mpls_over_udp(struct mlx5dr_ste_ctx *ste_ctx,
+					struct mlx5dr_ste_build *sb,
+					struct mlx5dr_match_param *mask,
+					struct mlx5dr_cmd_caps *caps,
+					bool inner, bool rx);
+void mlx5dr_ste_build_icmp(struct mlx5dr_ste_ctx *ste_ctx,
+			   struct mlx5dr_ste_build *sb,
+			   struct mlx5dr_match_param *mask,
+			   struct mlx5dr_cmd_caps *caps,
+			   bool inner, bool rx);
 void mlx5dr_ste_build_tnl_vxlan_gpe(struct mlx5dr_ste_ctx *ste_ctx,
 				    struct mlx5dr_ste_build *sb,
 				    struct mlx5dr_match_param *mask,
@@ -767,6 +776,8 @@ struct mlx5dr_cmd_caps {
 	u8 flex_parser_id_icmp_dw1;
 	u8 flex_parser_id_icmpv6_dw0;
 	u8 flex_parser_id_icmpv6_dw1;
+	u8 flex_parser_id_mpls_over_gre;
+	u8 flex_parser_id_mpls_over_udp;
 	u8 max_ft_level;
 	u16 roce_min_src_udp;
 	u8 num_esw_ports;

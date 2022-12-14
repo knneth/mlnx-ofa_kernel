@@ -114,15 +114,32 @@ set_eswitch_mode()
 	return $rc
 }
 
+is_SecureBoot=0
+if (mokutil --sb-state 2>&1 | grep -q "SecureBoot enabled"); then
+	is_SecureBoot=1
+fi
+
+if [ $is_SecureBoot -eq 1 ]; then
+	mst_dev=`/bin/ls -1 /dev/mst/mt*_pciconf0 2> /dev/null`
+	if [ ! -n "${mst_dev}" ]; then
+		mst start > /dev/null 2>&1
+	fi
+fi
+
+mftconfig=mstconfig
+if [ -x /usr/bin/mlxconfig ]; then
+	mftconfig=mlxconfig
+fi
+
 num_of_devs=0
 for dev in `lspci -nD -d 15b3: | grep 'a2d[26]' | cut -d ' ' -f 1`
 do
-	if (mstconfig -e -d ${dev} q 2> /dev/null | grep LINK_TYPE_P | awk '{print $4}' | grep -q "IB(1)"); then
+	if ($mftconfig -e -d ${dev} q 2> /dev/null | grep LINK_TYPE_P | awk '{print $4}' | grep -q "IB(1)"); then
 		info "Link type is IB for ${dev}. Skipping mode confiugration."
 		continue
 	fi
 
-	if (mstconfig -d ${dev} q 2> /dev/null | grep -q "ECPF_ESWITCH_MANAGER.*ECPF(1)"); then
+	if ($mftconfig -d ${dev} q 2> /dev/null | grep -q "ECPF_ESWITCH_MANAGER.*ECPF(1)"); then
 		steering_mode=`get_steering_mode ${dev}`
 		if [ "${steering_mode}" == "dmfs" ]; then
 			eswitch_mode=`get_eswitch_mode ${dev}`

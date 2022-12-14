@@ -126,6 +126,8 @@ struct mlx5dr_action *mlx5dr_action_create_pop_vlan(void);
 struct mlx5dr_action *
 mlx5dr_action_create_push_vlan(struct mlx5dr_domain *domain, __be32 vlan_hdr);
 
+u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action);
+
 int mlx5dr_action_destroy(struct mlx5dr_action *action);
 
 static inline bool

@@ -622,13 +622,24 @@ static void mlx5e_xfrm_del_state(struct xfrm_state *x)
 {
 	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
 
-	if (!sa_entry)
+	if (!sa_entry || sa_entry->is_removed)
 		return;
 
 	if (x->xso.flags & XFRM_OFFLOAD_INBOUND)
 		mlx5e_ipsec_sadb_rx_del(sa_entry);
 	else
 		mlx5e_ipsec_sadb_tx_del(sa_entry);
+}
+
+static void clean_up_steering(struct mlx5e_ipsec_sa_entry *sa_entry, struct mlx5e_priv *priv)
+{
+	if (!sa_entry->hw_context)
+		return;
+
+	flush_workqueue(sa_entry->ipsec->wq);
+	mlx5e_xfrm_fs_del_rule(priv, sa_entry);
+	mlx5_accel_esp_free_hw_context(sa_entry->xfrm->mdev, sa_entry->hw_context);
+	mlx5_accel_esp_destroy_xfrm(sa_entry->xfrm);
 }
 
 static void mlx5e_xfrm_free_state(struct xfrm_state *x)
@@ -639,14 +650,38 @@ static void mlx5e_xfrm_free_state(struct xfrm_state *x)
 	if (!sa_entry)
 		return;
 
-	if (sa_entry->hw_context) {
-		flush_workqueue(sa_entry->ipsec->wq);
-		mlx5e_xfrm_fs_del_rule(priv, sa_entry);
-		mlx5_accel_esp_free_hw_context(sa_entry->xfrm->mdev, sa_entry->hw_context);
-		mlx5_accel_esp_destroy_xfrm(sa_entry->xfrm);
-	}
+	if (!sa_entry->is_removed)
+		clean_up_steering(sa_entry, priv);
 
 	kfree(sa_entry);
+}
+
+void mlx5e_ipsec_ul_cleanup(struct mlx5e_priv *priv)
+{
+	struct mlx5e_ipsec_sa_entry *sa_entry;
+	struct mlx5e_ipsec *ipsec = priv->ipsec;
+	unsigned int bucket;
+
+	if (!ipsec)
+		return;
+
+	/* Take rtnl lock to block XFRM Netlink command.
+	 * Cannot take rcu. Therefore, cannot handle race situation
+	 * with internal net/xfrm call back.
+	 */
+	rtnl_lock();
+	hash_for_each_rcu(ipsec->sadb_rx, bucket, sa_entry, hlist) {
+		sa_entry->is_removed = true;
+		mlx5e_ipsec_sadb_rx_del(sa_entry);
+		clean_up_steering(sa_entry, priv);
+	}
+
+	hash_for_each_rcu(ipsec->sadb_tx, bucket, sa_entry, hlist) {
+		sa_entry->is_removed = true;
+		mlx5e_ipsec_sadb_tx_del(sa_entry);
+		clean_up_steering(sa_entry, priv);
+	}
+	rtnl_unlock();
 }
 
 int mlx5e_ipsec_init(struct mlx5e_priv *priv)

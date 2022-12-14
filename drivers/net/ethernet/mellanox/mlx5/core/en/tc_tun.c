@@ -36,6 +36,8 @@ static int get_route_and_out_devs(struct mlx5e_priv *priv,
 
 	real_dev = is_vlan_dev(dev) ? vlan_dev_real_dev(dev) : dev;
 	uplink_dev = mlx5_eswitch_uplink_get_proto_dev(esw, REP_ETH);
+	if (!uplink_dev)
+		return -ENODEV;
 
 	rcu_read_lock();
 	uplink_upper = netdev_master_upper_dev_get_rcu(uplink_dev);

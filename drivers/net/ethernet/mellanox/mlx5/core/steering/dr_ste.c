@@ -1099,14 +1099,28 @@ void mlx5dr_ste_build_tnl_gre(struct mlx5dr_ste_ctx *ste_ctx,
 	ste_ctx->build_tnl_gre_init(sb, mask);
 }
 
-void mlx5dr_ste_build_tnl_mpls(struct mlx5dr_ste_ctx *ste_ctx,
-			       struct mlx5dr_ste_build *sb,
-			       struct mlx5dr_match_param *mask,
-			       bool inner, bool rx)
+void mlx5dr_ste_build_tnl_mpls_over_gre(struct mlx5dr_ste_ctx *ste_ctx,
+					struct mlx5dr_ste_build *sb,
+					struct mlx5dr_match_param *mask,
+					struct mlx5dr_cmd_caps *caps,
+					bool inner, bool rx)
 {
 	sb->rx = rx;
 	sb->inner = inner;
-	ste_ctx->build_tnl_mpls_init(sb, mask);
+	sb->caps = caps;
+	ste_ctx->build_tnl_mpls_over_gre_init(sb, mask);
+}
+
+void mlx5dr_ste_build_tnl_mpls_over_udp(struct mlx5dr_ste_ctx *ste_ctx,
+					struct mlx5dr_ste_build *sb,
+					struct mlx5dr_match_param *mask,
+					struct mlx5dr_cmd_caps *caps,
+					bool inner, bool rx)
+{
+	sb->rx = rx;
+	sb->inner = inner;
+	sb->caps = caps;
+	ste_ctx->build_tnl_mpls_over_udp_init(sb, mask);
 }
 
 void mlx5dr_ste_build_flex_parser_0(struct mlx5dr_ste_ctx *ste_ctx,
@@ -1129,11 +1143,11 @@ void mlx5dr_ste_build_flex_parser_1(struct mlx5dr_ste_ctx *ste_ctx,
 	ste_ctx->build_flex_parser_1_init(sb, mask);
 }
 
-int mlx5dr_ste_build_icmp(struct mlx5dr_ste_ctx *ste_ctx,
-			  struct mlx5dr_ste_build *sb,
-			  struct mlx5dr_match_param *mask,
-			  struct mlx5dr_cmd_caps *caps,
-			  bool inner, bool rx)
+void mlx5dr_ste_build_icmp(struct mlx5dr_ste_ctx *ste_ctx,
+			   struct mlx5dr_ste_build *sb,
+			   struct mlx5dr_match_param *mask,
+			   struct mlx5dr_cmd_caps *caps,
+			   bool inner, bool rx)
 {
 	sb->rx = rx;
 	sb->inner = inner;

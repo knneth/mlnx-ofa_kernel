@@ -10,11 +10,6 @@
 
 #include "en.h"
 
-#define MLX5_CT_STATE_ESTABLISHED_BIT BIT(1)
-#define MLX5_CT_STATE_TRK_BIT BIT(2)
-#define MLX5_CT_STATE_NAT_BIT BIT(3)
-#define MLX5_CT_STATE_NEW_BIT BIT(4)
-
 struct mlx5_flow_attr;
 struct mlx5e_tc_mod_hdr_acts;
 struct mlx5_rep_uplink_priv;
@@ -33,7 +28,6 @@ struct mlx5_ct_attr {
 	struct mlx5_ct_flow *ct_flow;
 	struct nf_flowtable *nf_ft;
 	u32 ct_labels_id;
-	u32 ct_state;
 };
 
 #define zone_to_reg_ct {\

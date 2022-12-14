@@ -57,7 +57,7 @@ Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
  
  	*wq->db = cpu_to_be32(pc);
  
-@@ -411,8 +434,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -407,8 +430,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
  	case IPPROTO_UDP:
  		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  		fallthrough;

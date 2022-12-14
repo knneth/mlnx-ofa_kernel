@@ -4081,6 +4081,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if irq.h has irq_get_affinity_mask])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/irq.h>
+		#include <linux/cpumask.h>
+	],[
+		irq_get_affinity_mask(0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_IRQ_GET_AFFINITY_MASK, 1,
+			  [irq_get_affinity_mask is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if ifla_vf_info has trust])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/if_link.h>

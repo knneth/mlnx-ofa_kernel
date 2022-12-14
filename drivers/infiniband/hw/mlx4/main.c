@@ -35,8 +35,8 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	mlx4_ib
-#define DRV_VERSION	"5.2-1.0.4"
-#define DRV_RELDATE	"31 Dec 2020"
+#define DRV_VERSION	"5.2-2.2.0"
+#define DRV_RELDATE	"02 Feb 2021"
 
 MODULE_AUTHOR("Tzafrir Cohen");
 MODULE_LICENSE("Dual BSD/GPL");

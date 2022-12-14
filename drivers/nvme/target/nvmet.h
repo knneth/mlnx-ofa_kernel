@@ -153,6 +153,7 @@ struct nvmet_port {
 	const struct nvmet_fabrics_ops	*tr_ops;
 	bool				pi_enable;
 	u32				offload_queues;
+	u32				offload_queue_size;
 	size_t				offload_srq_size;
 	bool				many_offload_subsys_support;
 };

@@ -38,7 +38,8 @@ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
 
 bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 			     struct sk_buff *skb,
-			     struct mlx5e_tc_update_priv *tc_priv);
+			     struct mlx5e_tc_update_priv *tc_priv,
+			     bool *free_skb);
 void mlx5_rep_tc_post_napi_receive(struct mlx5e_tc_update_priv *tc_priv);
 
 #else /* CONFIG_MLX5_CLS_ACT */
@@ -70,7 +71,8 @@ struct mlx5e_tc_update_priv;
 static inline bool
 mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 			struct sk_buff *skb,
-			struct mlx5e_tc_update_priv *tc_priv) { return true; }
+			struct mlx5e_tc_update_priv *tc_priv,
+			bool *free_skb) { return true; }
 static inline void
 mlx5_rep_tc_post_napi_receive(struct mlx5e_tc_update_priv *tc_priv) {}
 

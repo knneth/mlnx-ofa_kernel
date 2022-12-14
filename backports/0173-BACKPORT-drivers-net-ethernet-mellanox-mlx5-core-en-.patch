@@ -16,5 +16,5 @@ Change-Id: I96fdac0596f44cff9bf81a023a7a0fc82c481167
  #include "en.h"
 +#endif
  
- #define MLX5_CT_STATE_ESTABLISHED_BIT BIT(1)
- #define MLX5_CT_STATE_TRK_BIT BIT(2)
+ struct mlx5_flow_attr;
+ struct mlx5e_tc_mod_hdr_acts;

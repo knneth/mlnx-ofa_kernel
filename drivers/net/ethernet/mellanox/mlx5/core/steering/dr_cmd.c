@@ -125,7 +125,7 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 			MLX5_CAP_ROCE(mdev, fl_rc_qp_when_roce_enabled);
 	}
 
-	caps->isolate_vl_tc = MLX5_CAP_GEN(mdev, isolate_vl_tc);
+	caps->isolate_vl_tc = MLX5_CAP_GEN(mdev, isolate_vl_tc_new);
 
 	caps->support_modify_argument = MLX5_CAP_GEN_64(mdev, general_obj_types) &
 					MLX5_GENERAL_OBJ_TYPES_CAP_HEADER_MODIFY_ARGUMENT;
@@ -149,6 +149,14 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 	if (caps->flex_protocols & MLX5_FLEX_PARSER_GENEVE_TLV_OPTION_0_ENABLED)
 		caps->flex_parser_id_geneve_tlv_option_0 =
 			MLX5_CAP_GEN(mdev, flex_parser_id_geneve_tlv_option_0);
+
+	if (caps->flex_protocols & MLX5_FLEX_PARSER_MPLS_OVER_GRE_ENABLED)
+		caps->flex_parser_id_mpls_over_gre =
+			MLX5_CAP_GEN(mdev, flex_parser_id_outer_first_mpls_over_gre);
+
+	if (caps->flex_protocols & MLX5_FLEX_PARSER_MPLS_OVER_UDP_ENABLED)
+		caps->flex_parser_id_mpls_over_udp =
+			MLX5_CAP_GEN(mdev, flex_parser_id_outer_first_mpls_over_udp_label);
 
 	caps->nic_rx_drop_address =
 		MLX5_CAP64_FLOWTABLE(mdev, sw_steering_nic_rx_action_drop_icm_address);

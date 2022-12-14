@@ -9,7 +9,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
-@@ -2922,14 +2922,22 @@ u32 mlx5_esw_match_metadata_alloc(struct
+@@ -2926,14 +2926,22 @@ u32 mlx5_esw_match_metadata_alloc(struct
  	end = start + num_vports;
  	if (!vhca_id)
  		start += 1; /* zero is reserved/invalid metadata */
@@ -32,7 +32,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  }
  
  static int esw_offloads_vport_metadata_setup(struct mlx5_eswitch *esw,
-@@ -3328,7 +3336,7 @@ static void esw_destroy_default_offloads
+@@ -3335,7 +3343,7 @@ static void esw_destroy_default_offloads
  
  static int load_reps_all_vport(struct mlx5_eswitch *esw, u8 rep_type) 
  {
@@ -41,7 +41,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	int ret;
  	int i;
  
-@@ -3761,14 +3769,23 @@ static int eswitch_devlink_esw_mode_chec
+@@ -3774,14 +3782,23 @@ static int eswitch_devlink_esw_mode_chec
  		!mlx5_core_is_ecpf_esw_manager(esw->dev)) ? -EOPNOTSUPP : 0;
  }
  
@@ -67,7 +67,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
-@@ -3827,25 +3844,32 @@ int mlx5_devlink_eswitch_mode_get(struct
+@@ -3840,25 +3857,32 @@ int mlx5_devlink_eswitch_mode_get(struct
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
  
@@ -104,7 +104,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
-@@ -3860,6 +3884,7 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -3873,6 +3897,7 @@ int mlx5_devlink_eswitch_inline_mode_set
  		if (mode == DEVLINK_ESWITCH_INLINE_MODE_NONE)
  			goto out;
  		fallthrough;
@@ -112,7 +112,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	case MLX5_CAP_INLINE_MODE_L2:
  		NL_SET_ERR_MSG_MOD(extack, "Inline mode can't be set");
  		err = -EOPNOTSUPP;
-@@ -3914,24 +3939,35 @@ int mlx5_devlink_eswitch_inline_mode_get
+@@ -3927,24 +3952,35 @@ int mlx5_devlink_eswitch_inline_mode_get
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
  
@@ -152,7 +152,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  
  	esw = mlx5_devlink_eswitch_get(devlink);
  	if (IS_ERR(esw))
-@@ -3989,7 +4025,11 @@ unlock:
+@@ -4002,7 +4038,11 @@ unlock:
  }
  
  int mlx5_devlink_eswitch_encap_mode_get(struct devlink *devlink,
@@ -164,7 +164,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  {
  	struct mlx5_eswitch *esw;
  	int err;
-@@ -3999,14 +4039,12 @@ int mlx5_devlink_eswitch_encap_mode_get(
+@@ -4012,14 +4052,12 @@ int mlx5_devlink_eswitch_encap_mode_get(
  		return PTR_ERR(esw);
  
  
@@ -179,7 +179,7 @@ Change-Id: I849b9d560a18959199299aca842d60b1d6635000
  	return 0;
  }
  
-@@ -4026,14 +4064,24 @@ mlx5_eswitch_vport_has_rep(const struct
+@@ -4039,14 +4077,24 @@ mlx5_eswitch_vport_has_rep(const struct
  }
  
  int mlx5_devlink_eswitch_ipsec_mode_set(struct devlink *devlink,

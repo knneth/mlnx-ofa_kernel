@@ -16,7 +16,7 @@ Change-Id: I7442bb6a5d42ea1c80ac1f229848a98efceada2a
  #include <linux/xarray.h>
  
  #define UVERBS_MODULE_NAME mlx5_ib
-@@ -2274,7 +2275,11 @@ static int devx_umem_get(struct mlx5_ib_
+@@ -2276,7 +2277,11 @@ static int devx_umem_get(struct mlx5_ib_
  	if (err)
  		return err;
  
@@ -28,7 +28,7 @@ Change-Id: I7442bb6a5d42ea1c80ac1f229848a98efceada2a
  	if (IS_ERR(obj->umem))
  		return PTR_ERR(obj->umem);
  
-@@ -2689,7 +2694,11 @@ static ssize_t devx_async_event_read(str
+@@ -2691,7 +2696,11 @@ static ssize_t devx_async_event_read(str
  {
  	struct devx_async_event_file *ev_file = filp->private_data;
  	struct devx_event_subscription *event_sub;
