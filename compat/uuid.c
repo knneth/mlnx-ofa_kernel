@@ -1,8 +1,4 @@
-#if (defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 2) || \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
-
 #ifndef HAVE_UUID_GEN
-#ifndef HAVE_UUID_BE_TO_BIN
 
 #include <linux/kernel.h>
 #include <linux/ctype.h>
@@ -11,6 +7,7 @@
 #include <linux/uuid.h>
 #include <linux/random.h>
 
+#ifndef HAVE_UUID_BE_TO_BIN
 const u8 uuid_le_index[16] = {3,2,1,0,5,4,7,6,8,9,10,11,12,13,14,15};
 EXPORT_SYMBOL(uuid_le_index);
 const u8 uuid_be_index[16] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
@@ -44,6 +41,7 @@ bool uuid_is_valid(const char *uuid)
 	return true;
 }
 EXPORT_SYMBOL(uuid_is_valid);
+#endif
 
 static int __uuid_to_bin(const char *uuid, __u8 b[16], const u8 ei[16])
 {
@@ -54,8 +52,8 @@ static int __uuid_to_bin(const char *uuid, __u8 b[16], const u8 ei[16])
 		return -EINVAL;
 
 	for (i = 0; i < 16; i++) {
-		int hi = hex_to_bin(uuid[si[i]] + 0);
-		int lo = hex_to_bin(uuid[si[i]] + 1);
+		int hi = hex_to_bin(uuid[si[i] + 0]);
+		int lo = hex_to_bin(uuid[si[i] + 1]);
 
 		b[ei[i]] = (hi << 4) | lo;
 	}
@@ -63,20 +61,29 @@ static int __uuid_to_bin(const char *uuid, __u8 b[16], const u8 ei[16])
 	return 0;
 }
 
+#ifndef HAVE_UUID_BE_TO_BIN
+#define uuid_le_to_bin LINUX_BACKPORT(uuid_le_to_bin)
 int uuid_le_to_bin(const char *uuid, uuid_le *u)
 {
 	return __uuid_to_bin(uuid, u->b, uuid_le_index);
 }
 EXPORT_SYMBOL(uuid_le_to_bin);
 
+#define uuid_be_to_bin LINUX_BACKPORT(uuid_be_to_bin)
 int uuid_be_to_bin(const char *uuid, uuid_be *u)
 {
 	return __uuid_to_bin(uuid, u->b, uuid_be_index);
 }
 EXPORT_SYMBOL(uuid_be_to_bin);
-
-
-#endif
 #endif
 
+#ifndef HAVE_GUID_PARSE
+const u8 guid_index[16] = {3,2,1,0,5,4,7,6,8,9,10,11,12,13,14,15};
+
+int guid_parse(const char *uuid, guid_t *u)
+{
+	return __uuid_to_bin(uuid, u->b, guid_index);
+}
+EXPORT_SYMBOL(guid_parse);
+#endif
 #endif

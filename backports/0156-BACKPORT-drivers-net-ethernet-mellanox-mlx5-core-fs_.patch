@@ -4,25 +4,59 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I713a465472173a19af6e61105ba8e57f5505590a
 ---
- .../net/ethernet/mellanox/mlx5/core/fs_counters.c  | 40 ++++++++++++++++++----
- 1 file changed, 34 insertions(+), 6 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/fs_counters.c  | 76 +++++++++++++++++++++-
+ 1 file changed, 73 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
-@@ -77,9 +77,12 @@ static struct list_head *mlx5_fc_counter
+@@ -73,13 +73,46 @@
+  *   elapsed, the thread will actually query the hardware.
+  */
+ 
++#if defined(HAVE_IDR_RT)
++#define USE_IDR 1
++#elif defined(HAVE_IDR_GET_NEXT_EXPORTED) && defined(HAVE_IDR_ALLOC)
++/* for now, we want to use this if it's original kernel function and
++ * we don't define idr_* funcs ourselves, so it will be fast. */
++void *idr_get_next_ul(struct idr *idr, unsigned long *nextid)
++{
++	int next = (int) *nextid;
++	void *ret;
++
++	ret = idr_get_next(idr, &next);
++	*nextid = (unsigned long) next;
++
++	return ret;
++}
++int idr_alloc_u32(struct idr *idr, void *ptr, u32 *nextid,
++		  unsigned long max, gfp_t gfp)
++{
++	int err = idr_alloc(idr, ptr, *nextid, max + 1, gfp);
++
++	if (err < 0)
++		return err;
++
++	*nextid = err;
++
++	return 0;
++}
++#define USE_IDR 1
++#endif
++
+ static struct list_head *mlx5_fc_counters_lookup_next(struct mlx5_core_dev *dev,
  						      u32 id)
  {
  	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  	unsigned long next_id = (unsigned long)id + 1;
 +#endif
  	struct mlx5_fc *counter;
  
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  	rcu_read_lock();
  	/* skip counters that are in idr, but not yet in counters list */
  	while ((counter = idr_get_next_ul(&fc_stats->counters_idr,
-@@ -87,8 +90,16 @@ static struct list_head *mlx5_fc_counter
+@@ -87,8 +120,16 @@ static struct list_head *mlx5_fc_counter
  	       list_empty(&counter->list))
  		next_id++;
  	rcu_read_unlock();
@@ -32,7 +66,7 @@ Change-Id: I713a465472173a19af6e61105ba8e57f5505590a
 +		if (counter->id > id)
 +			return &counter->list;
 +#endif
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  	return counter ? &counter->list : &fc_stats->counters;
 +#else
 +	return &fc_stats->counters;
@@ -40,17 +74,17 @@ Change-Id: I713a465472173a19af6e61105ba8e57f5505590a
  }
  
  static void mlx5_fc_stats_insert(struct mlx5_core_dev *dev,
-@@ -102,13 +113,21 @@ static void mlx5_fc_stats_insert(struct
+@@ -102,13 +143,21 @@ static void mlx5_fc_stats_insert(struct
  static void mlx5_fc_stats_remove(struct mlx5_core_dev *dev,
  				 struct mlx5_fc *counter)
  {
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
 +#endif
  
  	list_del(&counter->list);
  
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  	spin_lock(&fc_stats->counters_idr_lock);
 +#ifdef HAVE_IDR_REMOVE_RETURN_VALUE 
  	WARN_ON(!idr_remove(&fc_stats->counters_idr, counter->id));
@@ -58,35 +92,36 @@ Change-Id: I713a465472173a19af6e61105ba8e57f5505590a
 +	idr_remove(&fc_stats->counters_idr, counter->id);
 +#endif
  	spin_unlock(&fc_stats->counters_idr_lock);
-+#endif/*HAVE_IDR_RT*/
++#endif/*USE_IDR*/
  }
  
- /* The function returns the last counter that was queried so the caller
-@@ -240,18 +259,21 @@ struct mlx5_fc *mlx5_fc_create(struct ml
- 	counter = kzalloc(sizeof(*counter), GFP_KERNEL);
+ static void fc_dummies_update(struct mlx5_fc *counter,
+@@ -276,7 +325,9 @@ struct mlx5_fc *mlx5_fc_alloc(struct mlx
+ 	counter = kmem_cache_zalloc(dev->priv.fc_stats.fc_cache, flags);
  	if (!counter)
- 		return ERR_PTR(-ENOMEM);
-+#ifdef HAVE_IDR_RT
+ 		return NULL;
++#ifdef USE_IDR
  	INIT_LIST_HEAD(&counter->list);
--
 +#endif
- 	err = mlx5_cmd_fc_alloc(dev, &counter->id);
- 	if (err)
+ 
+ 	return counter;
+ }
+@@ -296,11 +347,14 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  		goto err_out;
  
  	if (aging) {
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  		u32 id = counter->id;
 +#endif
  
  		counter->cache.lastuse = jiffies;
  		counter->aging = true;
--
-+#ifdef HAVE_IDR_RT
+ 
++#ifdef USE_IDR
  		idr_preload(GFP_KERNEL);
  		spin_lock(&fc_stats->counters_idr_lock);
  
-@@ -262,7 +284,7 @@ struct mlx5_fc *mlx5_fc_create(struct ml
+@@ -311,7 +365,7 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  		idr_preload_end();
  		if (err)
  			goto err_out_alloc;
@@ -95,41 +130,71 @@ Change-Id: I713a465472173a19af6e61105ba8e57f5505590a
  		llist_add(&counter->addlist, &fc_stats->addlist);
  
  		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
-@@ -270,8 +292,10 @@ struct mlx5_fc *mlx5_fc_create(struct ml
+@@ -319,8 +373,10 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  
  	return counter;
  
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  err_out_alloc:
  	mlx5_cmd_fc_free(dev, counter->id);
 +#endif
  err_out:
- 	kfree(counter);
+ 	kmem_cache_free(dev->priv.fc_stats.fc_cache, counter);
  
-@@ -305,9 +329,10 @@ EXPORT_SYMBOL(mlx5_fc_destroy);
- int mlx5_init_fc_stats(struct mlx5_core_dev *dev)
- {
+@@ -370,8 +426,10 @@ int mlx5_init_fc_stats(struct mlx5_core_
  	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
--
-+#ifdef HAVE_IDR_RT
+ 	char *cache_name;
+ 
++#ifdef USE_IDR
  	spin_lock_init(&fc_stats->counters_idr_lock);
  	idr_init(&fc_stats->counters_idr);
 +#endif
  	INIT_LIST_HEAD(&fc_stats->counters);
  	init_llist_head(&fc_stats->addlist);
  	init_llist_head(&fc_stats->dellist);
-@@ -333,8 +358,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
+@@ -383,6 +441,10 @@ int mlx5_init_fc_stats(struct mlx5_core_
+ 	snprintf(cache_name, CACHE_SIZE_NAME, "mlx5_fc_cache_%s",
+ 		 dev_name(dev->device));
+ 
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3,6,11))
++	fc_stats->fc_cache_name = cache_name;
++#endif
++
+ 	fc_stats->fc_cache = kmem_cache_create(cache_name,
+ 					       sizeof(struct mlx5_fc),
+ 					       0, SLAB_HWCACHE_ALIGN, NULL);
+@@ -396,7 +458,9 @@ int mlx5_init_fc_stats(struct mlx5_core_
+ 	fc_stats->sampling_interval = MLX5_FC_STATS_PERIOD;
+ 	INIT_DELAYED_WORK(&fc_stats->work, mlx5_fc_stats_work);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,6,11))
+ 	kfree(cache_name);
++#endif
+ 
+ 	return 0;
+ 
+@@ -419,8 +483,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
  	destroy_workqueue(dev->priv.fc_stats.wq);
  	dev->priv.fc_stats.wq = NULL;
  
-+#ifdef HAVE_IDR_RT
++#ifdef USE_IDR
  	idr_destroy(&fc_stats->counters_idr);
 -
 +#endif
  	tmplist = llist_del_all(&fc_stats->addlist);
  	llist_for_each_entry_safe(counter, tmp, tmplist, addlist)
  		mlx5_free_fc(dev, counter);
-@@ -365,6 +391,7 @@ void mlx5_fc_query_cached(struct mlx5_fc
+@@ -429,6 +494,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
+ 		mlx5_free_fc(dev, counter);
+ 
+ 	kmem_cache_destroy(dev->priv.fc_stats.fc_cache);
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3,6,11))
++	kfree(fc_stats->fc_cache_name);
++#endif
+ }
+ 
+ int mlx5_fc_query(struct mlx5_core_dev *dev, struct mlx5_fc *counter,
+@@ -453,6 +521,7 @@ void mlx5_fc_query_cached(struct mlx5_fc
  	counter->lastpackets = c.packets;
  }
  
@@ -137,7 +202,7 @@ Change-Id: I713a465472173a19af6e61105ba8e57f5505590a
  void mlx5_fc_queue_stats_work(struct mlx5_core_dev *dev,
  			      struct delayed_work *dwork,
  			      unsigned long delay)
-@@ -382,3 +409,4 @@ void mlx5_fc_update_sampling_interval(st
+@@ -470,3 +539,4 @@ void mlx5_fc_update_sampling_interval(st
  	fc_stats->sampling_interval = min_t(unsigned long, interval,
  					    fc_stats->sampling_interval);
  }

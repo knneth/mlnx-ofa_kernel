@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 Change-Id: I4a33c0cfacc2eb8525b72bca8224e82b6b0daa73
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_rep.h | 43 ++++++++++++++++++++++++
+ .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 43 +++++++++++++++++++
  1 file changed, 43 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
@@ -38,7 +38,7 @@ Change-Id: I4a33c0cfacc2eb8525b72bca8224e82b6b0daa73
  };
  
  struct mlx5e_rep_priv {
-@@ -77,7 +86,9 @@ struct mlx5e_neigh {
+@@ -79,7 +88,9 @@ struct mlx5e_neigh {
  		__be32	v4;
  		struct in6_addr v6;
  	} dst_ip;
@@ -48,7 +48,7 @@ Change-Id: I4a33c0cfacc2eb8525b72bca8224e82b6b0daa73
  };
  
  struct mlx5e_neigh_hash_entry {
-@@ -93,6 +104,7 @@ struct mlx5e_neigh_hash_entry {
+@@ -96,6 +107,7 @@ struct mlx5e_neigh_hash_entry {
  	/* protects encap list */
  	spinlock_t encap_list_lock;
  	/* encap list sharing the same neigh */
@@ -56,7 +56,7 @@ Change-Id: I4a33c0cfacc2eb8525b72bca8224e82b6b0daa73
  	struct list_head encap_list;
  
  	/* valid only when the neigh reference is taken during
-@@ -105,21 +117,39 @@ struct mlx5e_neigh_hash_entry {
+@@ -108,21 +120,39 @@ struct mlx5e_neigh_hash_entry {
  	 * refcount is needed to avoid neigh hash entry removal by TC, while
  	 * it's used by the neigh notification call.
  	 */
@@ -96,7 +96,7 @@ Change-Id: I4a33c0cfacc2eb8525b72bca8224e82b6b0daa73
  
  struct mlx5e_encap_entry {
  	/* protects encap entry state */
-@@ -129,28 +159,39 @@ struct mlx5e_encap_entry {
+@@ -132,28 +162,39 @@ struct mlx5e_encap_entry {
  	struct mlx5e_neigh_hash_entry *nhe;
  
  	/* neigh hash entry list of encaps sharing the same neigh */
@@ -136,7 +136,7 @@ Change-Id: I4a33c0cfacc2eb8525b72bca8224e82b6b0daa73
  
  struct mlx5e_rep_sq {
  	struct mlx5_flow_handle	*send_to_vport_rule;
-@@ -166,10 +207,12 @@ void mlx5e_remove_sqs_fwd_rules(struct m
+@@ -169,10 +210,12 @@ void mlx5e_remove_sqs_fwd_rules(struct m
  
  void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
  

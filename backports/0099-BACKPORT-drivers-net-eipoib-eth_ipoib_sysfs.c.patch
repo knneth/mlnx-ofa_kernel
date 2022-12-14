@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/eipoib/eth_ipoib_sysfs.c
 
 Change-Id: I02832ad006a663907255ac85c848b946d839e642
 ---
- drivers/net/eipoib/eth_ipoib_sysfs.c | 65 ++++++++++++++++++++++++++++++++++--
+ drivers/net/eipoib/eth_ipoib_sysfs.c | 65 ++++++++++++++++++++++++++--
  1 file changed, 62 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/eipoib/eth_ipoib_sysfs.c

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
 
 Change-Id: I5e7cfaeaeeb01a6f4c5cce6fe2ff99928a220267
 ---
- drivers/infiniband/ulp/ipoib/ipoib_cm.c | 27 +++++++++++++++++++++++++++
+ drivers/infiniband/ulp/ipoib/ipoib_cm.c | 27 +++++++++++++++++++++++++
  1 file changed, 27 insertions(+)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_cm.c

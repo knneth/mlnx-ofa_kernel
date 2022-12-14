@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
 
 Change-Id: I6637e9970a9ef7277586bbf2512021f81aeb4e8c
 ---
- drivers/infiniband/core/nldev.c | 90 +++++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/nldev.c | 90 +++++++++++++++++++++++++++++++++
  1 file changed, 90 insertions(+)
 
 --- a/drivers/infiniband/core/nldev.c

@@ -76,7 +76,7 @@
 #include <rdma/uverbs_named_ioctl.h>
 
 #define DRIVER_NAME "mlx5_ib"
-#define DRIVER_VERSION	"4.6-1.0.1"
+#define DRIVER_VERSION	"4.6-3.5.8"
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB HCA IB driver");
@@ -205,7 +205,7 @@ static int mlx5_netdev_event(struct notifier_block *this,
 		if (ibdev->is_rep)
 			break;
 		write_lock(&roce->netdev_lock);
-		if (ndev->dev.parent == &mdev->pdev->dev)
+		if (ndev->dev.parent == mdev->device)
 			roce->netdev = ndev;
 		write_unlock(&roce->netdev_lock);
 		break;
@@ -2047,7 +2047,8 @@ static struct ib_ucontext *mlx5_ib_alloc_ucontext(struct ib_device *ibdev,
 	context->lib_caps = req.lib_caps;
 	print_lib_caps(dev, context->lib_caps);
 
-	if (dev->lag_active) {
+	if (dev->lag_active ||
+	    mlx5_lag_tx_port_affinity_support(dev->mdev)) {
 		u8 port = mlx5_core_native_port_num(dev->mdev) - 1;
 
 		atomic_set(&context->tx_port_affinity,
@@ -2112,7 +2113,7 @@ static phys_addr_t uar_index2pfn(struct mlx5_ib_dev *dev,
 
 	fw_uars_per_page = MLX5_CAP_GEN(dev->mdev, uar_4k) ? MLX5_UARS_IN_PAGE : 1;
 
-	return (pci_resource_start(dev->mdev->pdev, 0) >> PAGE_SHIFT) + uar_idx / fw_uars_per_page;
+	return (dev->mdev->bar_addr >> PAGE_SHIFT) + uar_idx / fw_uars_per_page;
 }
 
 static int get_command(unsigned long offset)
@@ -2309,7 +2310,7 @@ static int dm_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 	    page_idx + npages)
 		return -EINVAL;
 
-	pfn = ((pci_resource_start(dev->mdev->pdev, 0) +
+	pfn = ((dev->mdev->bar_addr +
 	      MLX5_CAP64_DEV_MEM(dev->mdev, memic_bar_start_addr)) >>
 	      PAGE_SHIFT) +
 	      page_idx;
@@ -2414,7 +2415,7 @@ static int handle_alloc_dm_memic(struct ib_ucontext *ctx,
 	if (err)
 		return err;
 
-	page_idx = (dm->dev_addr - pci_resource_start(dm_db->dev->pdev, 0) -
+	page_idx = (dm->dev_addr - dm_db->dev->bar_addr -
 		    MLX5_CAP64_DEV_MEM(dm_db->dev, memic_bar_start_addr)) >>
 		    PAGE_SHIFT;
 
@@ -2545,7 +2546,7 @@ int mlx5_ib_dealloc_dm(struct ib_dm *ibdm)
 		if (ret)
 			return ret;
 
-		page_idx = (dm->dev_addr - pci_resource_start(dm_db->dev->pdev, 0) -
+		page_idx = (dm->dev_addr - dm_db->dev->bar_addr -
 			    MLX5_CAP64_DEV_MEM(dm_db->dev, memic_bar_start_addr)) >>
 			    PAGE_SHIFT;
 		bitmap_clear(ctx->dm_pages,
@@ -2786,11 +2787,15 @@ int parse_flow_flow_action(struct mlx5_ib_flow_action *maction,
 	}
 }
 
-static int parse_flow_attr(struct mlx5_core_dev *mdev, u32 *match_c,
-			   u32 *match_v, const union ib_flow_spec *ib_spec,
+static int parse_flow_attr(struct mlx5_core_dev *mdev,
+			   struct mlx5_flow_spec *spec,
+			   const union ib_flow_spec *ib_spec,
 			   const struct ib_flow_attr *flow_attr,
 			   struct mlx5_flow_act *action, u32 prev_type)
 {
+	struct mlx5_flow_context *flow_context = &spec->flow_context;
+	u32 *match_c = spec->match_criteria;
+	u32 *match_v = spec->match_value;
 	void *misc_params_c = MLX5_ADDR_OF(fte_match_param, match_c,
 					   misc_parameters);
 	void *misc_params_v = MLX5_ADDR_OF(fte_match_param, match_v,
@@ -3110,8 +3115,8 @@ static int parse_flow_attr(struct mlx5_core_dev *mdev, u32 *match_c,
 		if (ib_spec->flow_tag.tag_id >= BIT(24))
 			return -EINVAL;
 
-		action->flow_tag = ib_spec->flow_tag.tag_id;
-		action->flags |= FLOW_ACT_HAS_TAG;
+		flow_context->flow_tag = ib_spec->flow_tag.tag_id;
+		flow_context->flags |= FLOW_CONTEXT_HAS_TAG;
 		break;
 	case IB_FLOW_SPEC_ACTION_DROP:
 		if (FIELDS_NOT_SUPPORTED(ib_spec->drop,
@@ -3205,7 +3210,8 @@ is_valid_esp_aes_gcm(struct mlx5_core_dev *mdev,
 		return VALID_SPEC_NA;
 
 	return is_crypto && is_ipsec &&
-		(!egress || (!is_drop && !(flow_act->flags & FLOW_ACT_HAS_TAG))) ?
+		(!egress || (!is_drop &&
+			     !(spec->flow_context.flags & FLOW_CONTEXT_HAS_TAG))) ?
 		VALID_SPEC_VALID : VALID_SPEC_INVALID;
 }
 
@@ -3593,6 +3599,37 @@ free:
 	return ret;
 }
 
+static void mlx5_ib_set_rule_source_port(struct mlx5_ib_dev *dev,
+					 struct mlx5_flow_spec *spec,
+					 struct mlx5_eswitch_rep *rep)
+{
+	struct mlx5_eswitch *esw = dev->mdev->priv.eswitch;
+	void *misc;
+
+	if (mlx5_ib_eswitch_vport_match_metadata_enabled(esw)) {
+		misc = MLX5_ADDR_OF(fte_match_param, spec->match_value,
+				    misc_parameters_2);
+
+		MLX5_SET(fte_match_set_misc2, misc, metadata_reg_c_0,
+			 mlx5_ib_eswitch_get_vport_metadata_for_match(esw,
+								      rep->vport));
+		misc = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
+				    misc_parameters_2);
+
+		MLX5_SET_TO_ONES(fte_match_set_misc2, misc, metadata_reg_c_0);
+	} else {
+		misc = MLX5_ADDR_OF(fte_match_param, spec->match_value,
+				    misc_parameters);
+
+		MLX5_SET(fte_match_set_misc, misc, source_port, rep->vport);
+
+		misc = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
+				    misc_parameters);
+
+		MLX5_SET_TO_ONES(fte_match_set_misc, misc, source_port);
+	}
+}
+
 static struct mlx5_ib_flow_handler *_create_flow_rule(struct mlx5_ib_dev *dev,
 						      struct mlx5_ib_flow_prio *ft_prio,
 						      const struct ib_flow_attr *flow_attr,
@@ -3602,7 +3639,7 @@ static struct mlx5_ib_flow_handler *_create_flow_rule(struct mlx5_ib_dev *dev,
 {
 	struct mlx5_flow_table	*ft = ft_prio->flow_table;
 	struct mlx5_ib_flow_handler *handler;
-	struct mlx5_flow_act flow_act = {.flow_tag = MLX5_FS_DEFAULT_FLOW_TAG};
+	struct mlx5_flow_act flow_act = {};
 	struct mlx5_flow_spec *spec;
 	struct mlx5_flow_destination dest_arr[2] = {};
 	struct mlx5_flow_destination *rule_dst = dest_arr;
@@ -3633,8 +3670,7 @@ static struct mlx5_ib_flow_handler *_create_flow_rule(struct mlx5_ib_dev *dev,
 	}
 
 	for (spec_index = 0; spec_index < flow_attr->num_of_specs; spec_index++) {
-		err = parse_flow_attr(dev->mdev, spec->match_criteria,
-				      spec->match_value,
+		err = parse_flow_attr(dev->mdev, spec,
 				      ib_flow, flow_attr, &flow_act,
 				      prev_type);
 		if (err < 0)
@@ -3648,19 +3684,15 @@ static struct mlx5_ib_flow_handler *_create_flow_rule(struct mlx5_ib_dev *dev,
 		set_underlay_qp(dev, spec, underlay_qpn);
 
 	if (dev->is_rep) {
-		void *misc;
+		struct mlx5_eswitch_rep *rep;
 
-		if (!dev->port[flow_attr->port - 1].rep) {
+		rep = dev->port[flow_attr->port - 1].rep;
+		if (!rep) {
 			err = -EINVAL;
 			goto free;
 		}
-		misc = MLX5_ADDR_OF(fte_match_param, spec->match_value,
-				    misc_parameters);
-		MLX5_SET(fte_match_set_misc, misc, source_port,
-			 dev->port[flow_attr->port - 1].rep->vport);
-		misc = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
-				    misc_parameters);
-		MLX5_SET_TO_ONES(fte_match_set_misc, misc, source_port);
+
+		mlx5_ib_set_rule_source_port(dev, spec, rep);
 	}
 
 	spec->match_criteria_enable = get_match_criteria_enable(spec->match_criteria);
@@ -3703,13 +3735,13 @@ static struct mlx5_ib_flow_handler *_create_flow_rule(struct mlx5_ib_dev *dev,
 
 	if (flow_attr->type == IB_FLOW_ATTR_ALL_DEFAULT ||
 	    flow_attr->type == IB_FLOW_ATTR_MC_DEFAULT) {
-		if (flow_act.flags & FLOW_ACT_HAS_TAG) {
+		if (spec->flow_context.flags & FLOW_CONTEXT_HAS_TAG) {
 			mlx5_ib_warn(dev, "Flow tag %u and attribute type %x isn't allowed in leftovers\n",
-				     flow_act.flow_tag, flow_attr->type);
+				     spec->flow_context.flow_tag, flow_attr->type);
 			err = -EINVAL;
 			goto free;
 		} else {
-			flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+			spec->flow_context.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
 		}
 	}
 	handler->rule = mlx5_add_flow_rules(ft, spec,
@@ -4112,6 +4144,7 @@ _create_raw_flow_rule(struct mlx5_ib_dev *dev,
 		      struct mlx5_ib_flow_prio *ft_prio,
 		      struct mlx5_flow_destination *dst,
 		      struct mlx5_ib_flow_matcher  *fs_matcher,
+		      struct mlx5_flow_context *flow_context,
 		      struct mlx5_flow_act *flow_act,
 		      void *cmd_in, int inlen,
 		      int dst_num)
@@ -4134,6 +4167,7 @@ _create_raw_flow_rule(struct mlx5_ib_dev *dev,
 	memcpy(spec->match_criteria, fs_matcher->matcher_mask.match_params,
 	       fs_matcher->mask_len);
 	spec->match_criteria_enable = fs_matcher->match_criteria_enable;
+	spec->flow_context = *flow_context;
 
 	handler->rule = mlx5_add_flow_rules(ft, spec,
 					    flow_act, dst, dst_num);
@@ -4198,6 +4232,7 @@ static bool raw_fs_is_multicast(struct mlx5_ib_flow_matcher *fs_matcher,
 struct mlx5_ib_flow_handler *
 mlx5_ib_raw_fs_rule_add(struct mlx5_ib_dev *dev,
 			struct mlx5_ib_flow_matcher *fs_matcher,
+			struct mlx5_flow_context *flow_context,
 			struct mlx5_flow_act *flow_act,
 			u32 counter_id,
 			void *cmd_in, int inlen, int dest_id,
@@ -4256,7 +4291,8 @@ mlx5_ib_raw_fs_rule_add(struct mlx5_ib_dev *dev,
 		dst_num++;
 	}
 
-	handler = _create_raw_flow_rule(dev, ft_prio, dst, fs_matcher, flow_act,
+	handler = _create_raw_flow_rule(dev, ft_prio, dst, fs_matcher,
+					flow_context, flow_act,
 					cmd_in, inlen, dst_num);
 
 	if (IS_ERR(handler)) {
@@ -5933,7 +5969,8 @@ static int mlx5_ib_init_multiport_master(struct mlx5_ib_dev *dev)
 			}
 
 			if (bound) {
-				dev_dbg(&mpi->mdev->pdev->dev, "removing port from unaffiliated list.\n");
+				dev_dbg(mpi->mdev->device,
+					"removing port from unaffiliated list.\n");
 				mlx5_ib_dbg(dev, "port %d bound\n", i + 1);
 				list_del(&mpi->list);
 				break;
@@ -6169,7 +6206,7 @@ static int mlx5_ib_stage_init_init(struct mlx5_ib_dev *dev)
 	dev->ib_dev.phys_port_cnt	= dev->num_ports;
 	dev->ib_dev.num_comp_vectors    =
 		dev->mdev->priv.eq_table.num_comp_vectors;
-	dev->ib_dev.dev.parent		= &mdev->pdev->dev;
+	dev->ib_dev.dev.parent		= mdev->device;
 	if (mlx5_lag_is_roce(dev->mdev))
 		dev->ib_dev.dev_immutable.bond_device = true;
 
@@ -7064,7 +7101,8 @@ static void *mlx5_ib_add_slave_port(struct mlx5_core_dev *mdev)
 
 	if (!bound) {
 		list_add_tail(&mpi->list, &mlx5_ib_unaffiliated_port_list);
-		dev_dbg(&mdev->pdev->dev, "no suitable IB device found to bind to, added to unaffiliated list.\n");
+		dev_dbg(mdev->device,
+			"no suitable IB device found to bind to, added to unaffiliated list.\n");
 	}
 	mutex_unlock(&mlx5_ib_multiport_mutex);
 

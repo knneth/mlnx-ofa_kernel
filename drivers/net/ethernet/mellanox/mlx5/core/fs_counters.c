@@ -111,6 +111,25 @@ static void mlx5_fc_stats_remove(struct mlx5_core_dev *dev,
 	spin_unlock(&fc_stats->counters_idr_lock);
 }
 
+static void fc_dummies_update(struct mlx5_fc *counter,
+			      u64 dfpackets, u64 dfbytes, u64 jiffies)
+{
+	int nr_dummies = atomic_read(&counter->nr_dummies);
+	struct mlx5_fc_cache *c;
+	int i;
+
+	for (i = 0; i < nr_dummies; i++) {
+		struct mlx5_fc *dummy = counter->dummies[i];
+		if (!dummy)
+			continue;
+
+		c = &dummy->cache;
+		c->packets += dfpackets;
+		c->bytes += dfbytes;
+		c->lastuse = jiffies;
+	}
+}
+
 /* The function returns the last counter that was queried so the caller
  * function can continue calling it till all counters are queried.
  */
@@ -160,8 +179,8 @@ static struct mlx5_fc *mlx5_fc_stats_query(struct mlx5_core_dev *dev,
 	counter = first;
 	list_for_each_entry_from(counter, &fc_stats->counters, list) {
 		struct mlx5_fc_cache *c = &counter->cache;
-		u64 packets;
-		u64 bytes;
+		u64 packets, dfpackets;
+		u64 bytes, dfbytes;
 
 		if (counter->id > last_id) {
 			more = true;
@@ -174,9 +193,14 @@ static struct mlx5_fc *mlx5_fc_stats_query(struct mlx5_core_dev *dev,
 		if (c->packets == packets)
 			continue;
 
+		dfpackets = packets - c->packets;
+		dfbytes = bytes - c->bytes;
+
 		c->packets = packets;
 		c->bytes = bytes;
 		c->lastuse = jiffies;
+
+		fc_dummies_update(counter, dfpackets, dfbytes, jiffies);
 	}
 
 out:
@@ -189,7 +213,7 @@ static void mlx5_free_fc(struct mlx5_core_dev *dev,
 			 struct mlx5_fc *counter)
 {
 	mlx5_cmd_fc_free(dev, counter->id);
-	kfree(counter);
+	mlx5_fc_dealloc(dev, counter);
 }
 
 static void mlx5_fc_stats_work(struct work_struct *work)
@@ -213,8 +237,13 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 		mlx5_fc_stats_insert(dev, counter);
 
 	llist_for_each_entry_safe(counter, tmp, dellist, dellist) {
-		mlx5_fc_stats_remove(dev, counter);
+		/* TODO: merge change */
+		if (counter->dummy) {
+			mlx5_fc_dealloc(dev, counter);
+			continue;
+		}
 
+		mlx5_fc_stats_remove(dev, counter);
 		mlx5_free_fc(dev, counter);
 	}
 
@@ -231,16 +260,36 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 	fc_stats->next_query = now + fc_stats->sampling_interval;
 }
 
+void mlx5_fc_dealloc(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
+{
+	if (dev->priv.fc_stats.fc_cache)
+		kmem_cache_free(dev->priv.fc_stats.fc_cache, counter);
+}
+
+struct mlx5_fc *mlx5_fc_alloc(struct mlx5_core_dev *dev, gfp_t flags)
+{
+	struct mlx5_fc *counter;
+
+	if (!dev->priv.fc_stats.fc_cache)
+		return NULL;
+
+	counter = kmem_cache_zalloc(dev->priv.fc_stats.fc_cache, flags);
+	if (!counter)
+		return NULL;
+	INIT_LIST_HEAD(&counter->list);
+
+	return counter;
+}
+
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 {
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
 	struct mlx5_fc *counter;
 	int err;
 
-	counter = kzalloc(sizeof(*counter), GFP_KERNEL);
+	counter = mlx5_fc_alloc(dev, GFP_KERNEL);
 	if (!counter)
 		return ERR_PTR(-ENOMEM);
-	INIT_LIST_HEAD(&counter->list);
 
 	err = mlx5_cmd_fc_alloc(dev, &counter->id);
 	if (err)
@@ -273,7 +322,7 @@ struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 err_out_alloc:
 	mlx5_cmd_fc_free(dev, counter->id);
 err_out:
-	kfree(counter);
+	kmem_cache_free(dev->priv.fc_stats.fc_cache, counter);
 
 	return ERR_PTR(err);
 }
@@ -284,6 +333,19 @@ u32 mlx5_fc_id(struct mlx5_fc *counter)
 	return counter->id;
 }
 EXPORT_SYMBOL(mlx5_fc_id);
+
+void mlx5_fc_link_dummies(struct mlx5_fc *counter, struct mlx5_fc **dummies, int nr_dummies)
+{
+	/* TODO: fix this */
+	BUG_ON(nr_dummies > MINIFLOW_MAX_FLOWS);
+	memcpy(counter->dummies, dummies, sizeof(*dummies) * nr_dummies);
+	atomic_set(&counter->nr_dummies, nr_dummies);
+}
+
+void mlx5_fc_unlink_dummies(struct mlx5_fc *counter)
+{
+	atomic_set(&counter->nr_dummies, 0);
+}
 
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 {
@@ -302,9 +364,11 @@ void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 }
 EXPORT_SYMBOL(mlx5_fc_destroy);
 
+#define CACHE_SIZE_NAME 30
 int mlx5_init_fc_stats(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
+	char *cache_name;
 
 	spin_lock_init(&fc_stats->counters_idr_lock);
 	idr_init(&fc_stats->counters_idr);
@@ -312,14 +376,36 @@ int mlx5_init_fc_stats(struct mlx5_core_dev *dev)
 	init_llist_head(&fc_stats->addlist);
 	init_llist_head(&fc_stats->dellist);
 
+	cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
+	if (!cache_name)
+		return -ENOMEM;
+
+	snprintf(cache_name, CACHE_SIZE_NAME, "mlx5_fc_cache_%s",
+		 dev_name(dev->device));
+
+	fc_stats->fc_cache = kmem_cache_create(cache_name,
+					       sizeof(struct mlx5_fc),
+					       0, SLAB_HWCACHE_ALIGN, NULL);
+	if (!fc_stats->fc_cache)
+		goto err_free_cache_name;
+
 	fc_stats->wq = create_singlethread_workqueue("mlx5_fc");
 	if (!fc_stats->wq)
-		return -ENOMEM;
+		goto err_free;
 
 	fc_stats->sampling_interval = MLX5_FC_STATS_PERIOD;
 	INIT_DELAYED_WORK(&fc_stats->work, mlx5_fc_stats_work);
 
+	kfree(cache_name);
+
 	return 0;
+
+err_free:
+	kmem_cache_destroy(fc_stats->fc_cache);
+	fc_stats->fc_cache = NULL;
+err_free_cache_name:
+	kfree(cache_name);
+	return -ENOMEM;
 }
 
 void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
@@ -341,6 +427,8 @@ void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
 
 	list_for_each_entry_safe(counter, tmp, &fc_stats->counters, list)
 		mlx5_free_fc(dev, counter);
+
+	kmem_cache_destroy(dev->priv.fc_stats.fc_cache);
 }
 
 int mlx5_fc_query(struct mlx5_core_dev *dev, struct mlx5_fc *counter,

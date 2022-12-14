@@ -33,11 +33,6 @@ CONFIG=${CONFIG:-"/etc/mlnx-en.conf"}
 export LANG="C"
 PATH=$PATH:/sbin:/usr/bin:/lib/udev
 
-IS_IN_CONTAINER=0
-if [ -e /.dockerenv ]; then
-    IS_IN_CONTAINER=1
-fi
-
 if [ ! -f $CONFIG ]; then
     echo No mlnx-en configuration found
     exit 0
@@ -177,46 +172,6 @@ log_msg()
     logger -i "mlnx-en.d: $@"
 }
 
-# W/A for containers; load modules using insmod instead of modprobe
-load_module_insmod()
-{
-    local module=$1
-
-    case "$module" in
-        mlx4_core | mlx5_core)
-            if ! is_module ib_core && ! (modinfo mlx4_ib 2>/dev/null | grep -qwi dummy) && ! (modinfo mlx5_ib 2>/dev/null | grep -qwi dummy); then
-                load_module_insmod ib_core
-                if [ $? -ne 0 ]; then
-                    return 1
-                fi
-            fi
-        ;;
-    esac
-
-    local deplist=$(/sbin/modprobe --show-depends $module 2>/dev/null)
-
-    OIFS="${IFS}"
-    NIFS=$'\n'
-    IFS="${NIFS}"
-    for ismodFileLine in $deplist
-    do
-        IFS="${OIFS}"
-        local curr_mod=$(echo $ismodFileLine | awk '{print $2}' 2>/dev/null)
-        curr_mod=$(basename $curr_mod 2>/dev/null | sed -e 's/\.ko.gz$//g' -e 's/\.ko$//g' 2>/dev/null)
-        if is_module $curr_mod; then
-            IFS="${NIFS}"
-            continue
-        fi
-        $ismodFileLine >/dev/null
-        if [ $? -ne 0 ]; then
-            IFS="${OIFS}"
-            return 1
-        fi
-        IFS="${NIFS}"
-    done
-    IFS="${OIFS}"
-}
-
 load_module()
 {
     local module=$1
@@ -228,12 +183,7 @@ load_module()
         return 1
     fi
 
-    if [ $IS_IN_CONTAINER -eq 0 ]; then
-        ${modprobe} $module > /dev/null 2>&1
-    else
-        load_module_insmod $module
-        return $?
-    fi
+    ${modprobe} $module > /dev/null 2>&1
 }
 
 get_sw_fw_info()

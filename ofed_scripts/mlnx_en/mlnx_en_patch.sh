@@ -267,6 +267,7 @@ if [ "X${CONFIG_MLX5_EN_ARFS=}" == "Xy" ]; then
     if ! [ "X${CONFIG_RFS_ACCEL=}" == "X1" ]; then
         echo "Warning: CONFIG_RFS_ACCEL is not enabled in the kernel, cannot enable CONFIG_MLX5_EN_ARFS."
         CONFIG_MLX5_EN_ARFS=
+        DEFINE_MLX5_EN_ARFS='#undef CONFIG_MLX5_EN_ARFS'
     fi
 fi
         # Create config.mk

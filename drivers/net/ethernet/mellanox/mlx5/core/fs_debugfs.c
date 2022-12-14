@@ -390,7 +390,7 @@ static int fs_debugfs_read_fte_flow_tag(void *attr, u64 *data)
 {
 	struct fs_fte *fte = attr;
 
-	*data = fte->action.flow_tag;
+	*data = fte->flow_context.flow_tag;
 	return 0;
 }
 

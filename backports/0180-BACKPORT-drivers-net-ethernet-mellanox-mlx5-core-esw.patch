@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ibccaa36de60cae30088b90266147508311a06df7
 ---
- .../mellanox/mlx5/core/eswitch_devlink_compat.c    | 22 +++++++++++++++++++---
+ .../mlx5/core/eswitch_devlink_compat.c        | 22 ++++++++++++++++---
  1 file changed, 19 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c

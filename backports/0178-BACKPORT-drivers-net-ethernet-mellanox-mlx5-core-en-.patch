@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
 Change-Id: I2b2d6b9f70609955b215ccd167e9a5cd09a1db53
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c | 116 +++++++++++++++++++++++
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 116 ++++++++++++++++++
  1 file changed, 116 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c

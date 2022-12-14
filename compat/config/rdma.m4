@@ -1,4 +1,87 @@
 dnl Examine kernel functionality
+
+AC_DEFUN([BP_CHECK_RHTABLE],
+[
+	AC_MSG_CHECKING([if file include/linux/rhashtable-types.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/rhashtable-types.h>
+	],[
+		struct rhltable x;
+		x = x;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RHASHTABLE_TYPES, 1,
+			[file rhashtable-types exists])
+	],[
+		AC_MSG_RESULT(no)
+		AC_MSG_CHECKING([if rhltable defined])
+		MLNX_BG_LB_LINUX_TRY_COMPILE([
+			#include <linux/rhashtable.h>
+		],[
+			struct rhltable x;
+			x = x;
+
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			MLNX_AC_DEFINE(HAVE_RHLTABLE, 1,
+				[struct rhltable is defined])
+			AC_MSG_CHECKING([if struct rhashtable_params contains insecure_elasticity])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/rhashtable.h>
+			],[
+				struct rhashtable_params x;
+				unsigned int y;
+				y = (unsigned int)x.insecure_elasticity;
+
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_RHASHTABLE_INSECURE_ELASTICITY, 1,
+					[struct rhashtable_params has insecure_elasticity])
+			],[
+				AC_MSG_RESULT(no)
+			])
+			AC_MSG_CHECKING([if struct rhashtable_params contains insecure_max_entries])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/rhashtable.h>
+			],[
+				struct rhashtable_params x;
+				unsigned int y;
+				y = (unsigned int)x.insecure_max_entries;
+
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES, 1,
+					[struct rhashtable_params has insecure_max_entries])
+			],[
+				AC_MSG_RESULT(no)
+			])
+			AC_MSG_CHECKING([if struct rhashtable contains max_elems])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/rhashtable.h>
+			],[
+				struct rhashtable x;
+				unsigned int y;
+				y = (unsigned int)x.max_elems;
+
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_RHASHTABLE_MAX_ELEMS, 1,
+					[struct rhashtable has max_elems])
+			],[
+				AC_MSG_RESULT(no)
+			])
+		],[
+			AC_MSG_RESULT(no)
+		])
+	])
+])
+
 AC_DEFUN([LINUX_CONFIG_COMPAT],
 [
 	AC_MSG_CHECKING([if has netdev_notifier_info_to_dev])
@@ -570,24 +653,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if struct ethtool_ops has get/set_channels])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/ethtool.h>
-	],[
-		const struct ethtool_ops en_ethtool_ops = {
-			.get_channels      = NULL,
-			.set_channels      = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_ETHTOOL_OPS_GET_SET_CHANNELS, 1,
-			  [get/set_channels is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if struct ethtool_ops has get/set_rxfh])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -1012,6 +1077,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if miniflow exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+                int flags = TC_SETUP_MINIFLOW & TC_SETUP_CT;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_MINIFLOW, 1,
+			  [miniflow exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct tc_block_offload exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/pkt_cls.h>
@@ -1060,21 +1140,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if  struct rhltable exists])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/rhashtable.h>
-	],[
-		struct rhltable x;
-		x = x;
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_RHLTABLE, 1,
-			  [struct rhltable is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
+	BP_CHECK_RHTABLE
 
 	AC_MSG_CHECKING([if struct ptp_clock_info exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -1740,6 +1806,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct sk_buff has struct sock sk])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/skbuff.h>
+	],[
+		struct sk_buff *skb;
+		skb->sk = NULL;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SK_BUFF_STRUCT_SOCK_SK, 1,
+			  [struct sock sk is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if etherdevice.h has eth_get_headlen])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/etherdevice.h>
@@ -2091,6 +2173,24 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_IS_TCF_VLAN, 1,
 			  [is_tcf_vlan is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if tc_vlan.h has tcf_vlan_params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/tc_act/tc_vlan.h>
+	],[
+		struct tcf_vlan_params p = {
+			.tcfv_push_vid = 0,
+			.tcfv_push_prio = 0,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TCF_VLAN_PARAMS, 1,
+			  [tcf_vlan_params is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8554,6 +8654,12 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	LB_CHECK_SYMBOL_EXPORT([netpoll_poll_dev],
+		[net/core/netpoll.c],
+		[AC_DEFINE(HAVE_NETPOLL_POLL_DEV_EXPORTED, 1,
+			[netpoll_poll_dev is exported by the kernel])],
+	[])
+
 	LB_CHECK_SYMBOL_EXPORT([bpf_prog_inc],
 		[kernel/bpf/syscall.c],
 		[AC_DEFINE(HAVE_BPF_PROG_INC_EXPORTED, 1,
@@ -12041,6 +12147,227 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if uuid.h has guid_parse])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/uuid.h>
+	],[
+		char *str;
+        guid_t uuid;
+        int ret;
+
+		ret = guid_parse(str, &uuid);
+
+		return ret;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GUID_PARSE, 1,
+		[guid_parse is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if bitmap.h has bitmap_kzalloc])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/bitmap.h>
+	],[
+		unsigned long *bmap;
+
+		bmap = bitmap_zalloc(1, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BITMAP_KZALLOC, 1,
+		[bitmap_kzalloc is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if bitmap.h has bitmap_free])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bitmap.h>
+		#include <linux/slab.h>
+	],[
+		unsigned long *bmap;
+
+		bmap = kcalloc(BITS_TO_LONGS(1), sizeof(unsigned long), 0);
+		bitmap_free(bmap);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BITMAP_FREE, 1,
+		[bitmap_free is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if bitmap.h has bitmap_from_arr32])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bitmap.h>
+		#include <linux/slab.h>
+	],[
+		unsigned long *bmap;
+		u32 *word;
+
+		bmap = kcalloc(BITS_TO_LONGS(1), sizeof(unsigned long), 0);
+		bitmap_from_arr32(bmap, word, 1);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BITMAP_FROM_ARR32, 1,
+		[bitmap_from_arr32 is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if dma-mapping.h struct dma_map_ops has cache_sync])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/dma-mapping.h>
+	],[
+		struct dma_map_ops ops = {
+			.cache_sync = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DMA_MAP_OPS_CACHE_SYNC, 1,
+			[struct dma_map_ops has cache_sync])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if dma-mapping.h struct dma_map_ops has map_resource])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/dma-mapping.h>
+	],[
+		struct dma_map_ops ops = {
+			.map_resource = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DMA_MAP_OPS_MAP_RESOURCE, 1,
+			[struct dma_map_ops has map_resource])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if dma-mapping.h has dma_map_page_attrs])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/dma-mapping.h>
+	],[
+		struct device *dev;
+                struct page *page;
+		size_t offset, size;
+                enum dma_data_direction dir;
+		unsigned long attrs;
+
+		dma_map_page_attrs(dev, page, offset, size, dir, attrs);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DMA_MAP_PAGE_ATTRS, 1,
+			[dma_map_page_attrs is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if dma-mapping.h has set_dma_ops])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/dma-mapping.h>
+	],[
+		struct device *dev;
+		struct dma_map_ops *dma_ops;
+
+		set_dma_ops(dev, dma_ops);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SET_DMA_OPS, 1,
+			[set_dma_ops is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if rx_queue_attribute is defined in netdevice.h])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	        #include <linux/netdevice.h>
+	],[
+		struct rx_queue_attribute attr;
+
+		attr.show = 0;
+
+	        return 0;
+	],[
+	        AC_MSG_RESULT(yes)
+	        MLNX_AC_DEFINE(HAVE_NETDEV_QUEUE_SYSFS, 1,
+	                        [rx_queue_attribute is defined in netdevice.h])
+	],[
+	        AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if rx_queue_attribute->show/store changed])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	        #include <linux/netdevice.h>
+		static int dummy_show(void *queue, void *attr, void *buf)
+		{
+			return 0;
+		}
+
+	],[
+		struct rx_queue_attribute attr;
+
+		attr.show = dummy_show;
+		attr.show(NULL, NULL, NULL);
+
+	        return 0;
+	],[
+	        AC_MSG_RESULT(yes)
+	        MLNX_AC_DEFINE(HAVE_NETDEV_QUEUE_SYSFS_ATTRIBUTE, 1,
+	                        [netdev queue sysfs has attribute])
+	],[
+	        AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if tc_cls_common_offload has handle])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/pkt_cls.h>
+	],[
+		struct tc_cls_common_offload x;
+		x.handle = 0;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TC_CLS_OFFLOAD_HANDLE, 1,
+			  [struct tc_cls_common_offload has handle])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if built in flower supports  multi mask per prio])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/pkt_cls.h>
+	],[
+		struct rcu_work *rwork;
+		work_func_t func;
+
+		tcf_queue_work(rwork, func);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FLOWER_MULTI_MASK, 1,
+			  [tcf_queue_work has 2 params per prio])
+	],[
+		AC_MSG_RESULT(no)
+	])
 ])
 #
 # COMPAT_CONFIG_HEADERS

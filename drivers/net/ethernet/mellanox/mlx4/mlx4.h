@@ -40,6 +40,7 @@
 #include <linux/mutex.h>
 #include <linux/radix-tree.h>
 #include <linux/rbtree.h>
+#include <linux/proc_fs.h>
 #include <linux/timer.h>
 #include <linux/semaphore.h>
 #include <linux/workqueue.h>
@@ -55,7 +56,7 @@
 #include "fw_qos.h"
 
 #define DRV_NAME	"mlx4_core"
-#define DRV_VERSION	"4.6-1.0.1"
+#define DRV_VERSION	"4.6-3.5.8"
 #define DRV_NAME_FOR_FW	"Linux-MLNX_OFED," DRV_VERSION
 
 #define MLX4_FS_NUM_OF_L2_ADDR		8

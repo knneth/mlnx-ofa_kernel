@@ -752,20 +752,20 @@ Change-Id: Iaf37cac14bb5cb6a9a9134a9b045c8e7361ce327
  
 +#if defined(HAVE_GET_SET_RXFH) && !defined(HAVE_GET_SET_RXFH_INDIR_EXT)
 +#ifdef HAVE_ETH_SS_RSS_HASH_FUNCS
- static int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
- 			  u8 *hfunc)
+ int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
+ 		   u8 *hfunc)
 +#else
-+static int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
++int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 +#endif
 +#elif defined(HAVE_GET_SET_RXFH_INDIR) || defined (HAVE_GET_SET_RXFH_INDIR_EXT)
-+static int mlx5e_get_rxfh_indir(struct net_device *netdev, u32 *indir)
++int mlx5e_get_rxfh_indir(struct net_device *netdev, u32 *indir)
 +#endif
 +#if defined(HAVE_GET_SET_RXFH) || defined(HAVE_GET_SET_RXFH_INDIR) || \
 +				  defined(HAVE_GET_SET_RXFH_INDIR_EXT)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  
-@@ -1134,15 +1698,20 @@ static int mlx5e_get_rxfh(struct net_dev
+@@ -1134,15 +1698,20 @@ int mlx5e_get_rxfh(struct net_device *ne
  		memcpy(indir, priv->channels.params.indirection_rqt,
  		       sizeof(priv->channels.params.indirection_rqt));
  
@@ -791,14 +791,14 @@ Change-Id: Iaf37cac14bb5cb6a9a9134a9b045c8e7361ce327
  }
  
 +#if defined(HAVE_GET_SET_RXFH) && !defined(HAVE_GET_SET_RXFH_INDIR_EXT)
- static int mlx5e_set_rxfh(struct net_device *dev, const u32 *indir,
+ int mlx5e_set_rxfh(struct net_device *dev, const u32 *indir,
 +#ifdef HAVE_ETH_SS_RSS_HASH_FUNCS
- 			  const u8 *key, const u8 hfunc)
+ 		   const u8 *key, const u8 hfunc)
 +#else
-+			  const u8 *key)
++		   const u8 *key)
 +#endif
 +#elif defined(HAVE_GET_SET_RXFH_INDIR) || defined (HAVE_GET_SET_RXFH_INDIR_EXT)
-+static int mlx5e_set_rxfh_indir(struct net_device *dev, const u32 *indir)
++int mlx5e_set_rxfh_indir(struct net_device *dev, const u32 *indir)
 +#endif
 +#if defined(HAVE_GET_SET_RXFH) || defined(HAVE_GET_SET_RXFH_INDIR) || \
 +                                  defined(HAVE_GET_SET_RXFH_INDIR_EXT)
@@ -819,7 +819,7 @@ Change-Id: Iaf37cac14bb5cb6a9a9134a9b045c8e7361ce327
  
  	in = kvzalloc(inlen, GFP_KERNEL);
  	if (!in)
-@@ -1193,11 +1776,13 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1193,11 +1776,13 @@ int mlx5e_set_rxfh(struct net_device *de
  
  	mutex_lock(&priv->state_lock);
  
@@ -833,7 +833,7 @@ Change-Id: Iaf37cac14bb5cb6a9a9134a9b045c8e7361ce327
  
  	if (indir) {
  		memcpy(priv->channels.params.indirection_rqt, indir,
-@@ -1219,15 +1804,21 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1219,15 +1804,21 @@ int mlx5e_set_rxfh(struct net_device *de
  		}
  	}
  
@@ -855,7 +855,7 @@ Change-Id: Iaf37cac14bb5cb6a9a9134a9b045c8e7361ce327
  
  	mutex_unlock(&priv->state_lock);
  
-@@ -1235,6 +1826,7 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1235,6 +1826,7 @@ int mlx5e_set_rxfh(struct net_device *de
  
  	return 0;
  }
@@ -863,7 +863,7 @@ Change-Id: Iaf37cac14bb5cb6a9a9134a9b045c8e7361ce327
  
  #define MLX5E_PFC_PREVEN_AUTO_TOUT_MSEC		100
  #define MLX5E_PFC_PREVEN_TOUT_MAX_MSEC		8000
-@@ -1244,6 +1836,7 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1244,6 +1836,7 @@ int mlx5e_set_rxfh(struct net_device *de
  	max_t(u16, MLX5E_PFC_PREVEN_TOUT_MIN_MSEC, \
  	      (critical_tout * MLX5E_PFC_PREVEN_MINOR_PRECENT) / 100)
  

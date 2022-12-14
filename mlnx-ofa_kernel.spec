@@ -66,7 +66,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 4.6}
-%{!?_release: %global _release OFED.4.6.1.0.1.1.ga2cfe08}
+%{!?_release: %global _release OFED.4.6.3.5.8.1.gaf1d902}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -121,7 +121,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-3.5.8.tgz
 
 
 # build KMP rpms?
@@ -175,7 +175,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-3.5.8.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -208,7 +208,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.6-3.5.8.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -494,7 +494,7 @@ rm -rf %{buildroot}
 /sbin/depmod %{KVERSION}
 # W/A for OEL6.7/7.x inbox modules get locked in memory
 # in dmesg we get: Module mlx4_core locked in memory until next boot
-if (grep -qiE "Oracle.*(6.[7-9]| 7)" /etc/issue /etc/*release* 2>/dev/null); then
+if (grep -qiE "Oracle.*(6.([7-9]|10)| 7)" /etc/issue /etc/*release* 2>/dev/null); then
 	/sbin/dracut --force
 fi
 
@@ -503,7 +503,7 @@ if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
 	/sbin/depmod %{KVERSION}
 	# W/A for OEL6.7/7.x inbox modules get locked in memory
 	# in dmesg we get: Module mlx4_core locked in memory until next boot
-	if (grep -qiE "Oracle.*(6.[7-9]| 7)" /etc/issue /etc/*release* 2>/dev/null); then
+	if (grep -qiE "Oracle.*(6.([7-9]|10)| 7)" /etc/issue /etc/*release* 2>/dev/null); then
 		/sbin/dracut --force
 	fi
 fi

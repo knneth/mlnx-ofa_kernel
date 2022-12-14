@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
 
 Change-Id: Iebd52ee74d044198ee084a530d9d626773a607fd
 ---
- drivers/infiniband/hw/mlx5/devx.c | 13 ++++++++++++-
- 1 file changed, 12 insertions(+), 1 deletion(-)
+ drivers/infiniband/hw/mlx5/devx.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/hw/mlx5/devx.c
 +++ b/drivers/infiniband/hw/mlx5/devx.c
@@ -18,7 +18,20 @@ Change-Id: Iebd52ee74d044198ee084a530d9d626773a607fd
  #include "mlx5_ib.h"
  
  #define UVERBS_MODULE_NAME mlx5_ib
-@@ -1239,13 +1242,21 @@ static int devx_obj_cleanup(struct ib_uo
+@@ -1195,10 +1198,12 @@ static int devx_handle_mkey_create(struc
+ 	return 0;
+ }
+ 
++#if defined(CONFIG_INFINIBAND_ON_DEMAND_PAGING) && defined(HAVE_CALL_SRCU)
+ static void devx_free_indirect_mkey(struct rcu_head *rcu)
+ {
+ 	kfree(container_of(rcu, struct devx_obj, devx_mr.rcu));
+ }
++#endif
+ 
+ /* This function to delete from the radix tree needs to be called before
+  * destroying the underlying mkey. Otherwise a race might occur in case that
+@@ -1241,13 +1246,21 @@ static int devx_obj_cleanup(struct ib_uo
  	if (ib_is_destroy_retryable(ret, why, uobject))
  		return ret;
  
@@ -40,7 +53,7 @@ Change-Id: Iebd52ee74d044198ee084a530d9d626773a607fd
  
  	kfree(obj);
  	return ret;
-@@ -1546,7 +1557,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+@@ -1548,7 +1561,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
  	async_data->mdev = mdev;
  	async_data->fd_uobj = fd_uobj;
  

@@ -28,7 +28,7 @@ mlx5_ib_set_vport_rep(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 static int
 mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 {
-	int num_ports = MLX5_TOTAL_VPORTS(dev);
+	int num_ports = mlx5_eswitch_get_total_vports(dev);
 	const struct mlx5_ib_profile *profile;
 	struct mlx5_ib_dev *ibdev;
 	int vport_index;
@@ -119,15 +119,15 @@ u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw)
 }
 
 struct mlx5_ib_dev *mlx5_ib_get_rep_ibdev(struct mlx5_eswitch *esw,
-					  int vport_index)
+					  u16 vport_num)
 {
-	return mlx5_eswitch_get_proto_dev(esw, vport_index, REP_IB);
+	return mlx5_eswitch_get_proto_dev(esw, vport_num, REP_IB);
 }
 
 struct net_device *mlx5_ib_get_rep_netdev(struct mlx5_eswitch *esw,
-					  int vport_index)
+					  u16 vport_num)
 {
-	return mlx5_eswitch_get_proto_dev(esw, vport_index, REP_ETH);
+	return mlx5_eswitch_get_proto_dev(esw, vport_num, REP_ETH);
 }
 
 struct mlx5_ib_dev *mlx5_ib_get_uplink_ibdev(struct mlx5_eswitch *esw)
@@ -135,9 +135,21 @@ struct mlx5_ib_dev *mlx5_ib_get_uplink_ibdev(struct mlx5_eswitch *esw)
 	return mlx5_eswitch_uplink_get_proto_dev(esw, REP_IB);
 }
 
-struct mlx5_eswitch_rep *mlx5_ib_vport_rep(struct mlx5_eswitch *esw, int vport)
+struct mlx5_eswitch_rep *mlx5_ib_vport_rep(struct mlx5_eswitch *esw,
+					   u16 vport_num)
 {
-	return mlx5_eswitch_vport_rep(esw, vport);
+	return mlx5_eswitch_vport_rep(esw, vport_num);
+}
+
+u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw)
+{
+	return mlx5_eswitch_vport_match_metadata_enabled(esw);
+}
+
+u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
+						 u16 vport)
+{
+	return mlx5_eswitch_get_vport_metadata_for_match(esw, vport);
 }
 
 struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,

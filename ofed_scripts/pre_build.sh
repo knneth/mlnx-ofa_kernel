@@ -32,7 +32,9 @@ PACKAGE_VERSION=$4
 
 config_flag=`/var/lib/dkms/${PACKAGE_NAME}/${PACKAGE_VERSION}/source/ofed_scripts/dkms_ofed $kernelver $kernel_source_dir get-config`
 
-make distclean
+if [ -e ./configure.mk.kernel ]; then
+    make distclean
+fi
 
 NJOBS=`MLXNUMC=$(grep ^processor /proc/cpuinfo | wc -l) && echo $(($MLXNUMC<16?$MLXNUMC:16))`
 

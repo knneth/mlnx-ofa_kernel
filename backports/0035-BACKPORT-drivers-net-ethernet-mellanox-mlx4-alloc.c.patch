@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/alloc.c
 
 Change-Id: I577537b1ea7f28acce24ae5267414efc2e045b23
 ---
- drivers/net/ethernet/mellanox/mlx4/alloc.c | 70 ++++++++++++++++++++++++++++++
+ drivers/net/ethernet/mellanox/mlx4/alloc.c | 70 ++++++++++++++++++++++
  1 file changed, 70 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/alloc.c

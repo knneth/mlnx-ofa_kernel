@@ -323,7 +323,7 @@ isert_create_device_ib_res(struct isert_device *device)
 			     IB_DEVICE_SIGNATURE_HANDOVER ? true : false;
 
 	device->sig_pipeline = ib_dev->attrs.device_cap_flags &
-			       IB_DEVICE_SIGNATURE_HANDOVER ? true : false;
+			       IB_DEVICE_SIGNATURE_PIPELINE ? true : false;
 
 	return 0;
 

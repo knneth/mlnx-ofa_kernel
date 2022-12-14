@@ -249,6 +249,17 @@ void mlx5_attach_device(struct mlx5_core_dev *dev)
 	mutex_unlock(&mlx5_intf_mutex);
 }
 
+void mlx5_attach_device_by_protocol(struct mlx5_core_dev *dev, int protocol)
+{
+	struct mlx5_priv *priv = &dev->priv;
+	struct mlx5_interface *intf;
+
+	mutex_lock(&mlx5_intf_mutex);
+	list_for_each_entry(intf, &intf_list, list)
+		if (intf->protocol == protocol)
+			mlx5_attach_interface(intf, priv);
+	mutex_unlock(&mlx5_intf_mutex);
+}
 static void mlx5_detach_interface(struct mlx5_interface *intf, struct mlx5_priv *priv)
 {
 	struct mlx5_device_context *dev_ctx;
@@ -401,13 +412,20 @@ static u32 mlx5_gen_pci_id(struct mlx5_core_dev *dev)
 /* Must be called with intf_mutex held */
 struct mlx5_core_dev *mlx5_get_next_phys_dev(struct mlx5_core_dev *dev)
 {
-	u32 pci_id = mlx5_gen_pci_id(dev);
 	struct mlx5_core_dev *res = NULL;
 	struct mlx5_core_dev *tmp_dev;
 	struct mlx5_priv *priv;
+	u32 pci_id;
 
+	if (!mlx5_core_is_pf(dev))
+		return NULL;
+
+	pci_id = mlx5_gen_pci_id(dev);
 	list_for_each_entry(priv, &mlx5_dev_list, dev_list) {
 		tmp_dev = container_of(priv, struct mlx5_core_dev, priv);
+		if (!mlx5_core_is_pf(tmp_dev))
+			continue;
+
 		if ((dev != tmp_dev) && (mlx5_gen_pci_id(tmp_dev) == pci_id)) {
 			res = tmp_dev;
 			break;
@@ -415,6 +433,24 @@ struct mlx5_core_dev *mlx5_get_next_phys_dev(struct mlx5_core_dev *dev)
 	}
 
 	return res;
+}
+
+struct mlx5_core_dev *mlx5_get_core_dev(const struct device *dev)
+{
+	struct mlx5_core_dev *found = NULL;
+	struct mlx5_core_dev *tmp_dev;
+	struct mlx5_priv *priv;
+
+	mutex_lock(&mlx5_intf_mutex);
+	list_for_each_entry(priv, &mlx5_dev_list, dev_list) {
+		tmp_dev = container_of(priv, struct mlx5_core_dev, priv);
+		if (tmp_dev->device == dev) {
+			found = tmp_dev;
+			break;
+		}
+	}
+	mutex_unlock(&mlx5_intf_mutex);
+	return found;
 }
 
 void mlx5_core_event(struct mlx5_core_dev *dev, enum mlx5_dev_event event,

@@ -75,6 +75,10 @@ config MLX5_ESWITCH
                 Legacy SRIOV mode (L2 mac vlan steering based).
                 Switchdev mode (eswitch offloads).
 
+config MLX5_MINIFLOW
+	bool "E-Switch Single Table Conntrack support"
+	depends on MLX5_ESWITCH
+
 config MLX5_CORE_EN_DCB
 	bool "Data Center Bridging (DCB) Support"
 	default y
@@ -117,3 +121,13 @@ config MLX5_EN_TLS
 	  Build support for TLS cryptography-offload accelaration in the NIC.
 	  Note: Support for hardware with this capability needs to be selected
 	  for this option to become available.
+
+config MLX5_MDEV
+	bool "Mellanox Technologies Mediated device support"
+	depends on MLX5_CORE
+	depends on VFIO_MDEV
+	depends on MLX5_ESWITCH
+	default y
+	help
+	  Build support for mediated devices. Mediated devices allow creating
+	  multiple netdev and/or rdma device(s) on single PCI function.

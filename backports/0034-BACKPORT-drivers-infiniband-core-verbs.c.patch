@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/verbs.c
 
 Change-Id: Idbd37595ce0a58d4a17ab38c9140ef96d2a9b68e
 ---
- drivers/infiniband/core/verbs.c | 35 +++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/verbs.c | 35 +++++++++++++++++++++++++++++++++
  1 file changed, 35 insertions(+)
 
 --- a/drivers/infiniband/core/verbs.c

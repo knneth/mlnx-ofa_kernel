@@ -132,6 +132,9 @@ module_to_flag()
 		mlx5_fpga_tools)
 		flag=--with-innova-flex
 		;;
+		mdev)
+		flag=--with-mdev-mod
+		;;
 		*)
 		;;
 	esac
@@ -213,6 +216,10 @@ get-modules()
 			--with-innova-flex | --with-innova-ipsec )
 			modules="$modules \
 				drivers/net/ethernet/mellanox/mlx5/fpga/mlx5_fpga_tools"
+			;;
+			--with-mdev-mod )
+			modules="$modules \
+				drivers/vfio/mdev/mdev"
 			;;
 			*)
 			;;

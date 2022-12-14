@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I015948548f12923e4e3d40743dfdf972b944d5aa
 ---
- .../infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c  | 127 +++++++++++++++++----
- 1 file changed, 103 insertions(+), 24 deletions(-)
+ .../ulp/ipoib/rss_tss/ipoib_main_rss.c        | 122 +++++++++++++++---
+ 1 file changed, 101 insertions(+), 21 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
@@ -106,29 +106,23 @@ Change-Id: I015948548f12923e4e3d40743dfdf972b944d5aa
  		recv_ring++;
  		rx_allocated++;
  	}
-@@ -382,17 +431,18 @@ static void ipoib_ndo_uninit_rss(struct
+@@ -382,6 +431,7 @@ static void ipoib_ndo_uninit_rss(struct
  	 * ipoib_remove_one guarantees the children are removed before the
  	 * parent, and that is the only place where a parent can be removed.
  	 */
 +#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
  	WARN_ON(!list_empty(&priv->child_intfs));
--
-+#endif
- 	ipoib_dev_uninit_rss(dev);
  
  	if (priv->parent) {
-+#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
- 		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
--
- 		down_write(&ppriv->vlan_rwsem);
+@@ -391,6 +441,7 @@ static void ipoib_ndo_uninit_rss(struct
  		list_del(&priv->list);
  		up_write(&ppriv->vlan_rwsem);
--
-+#endif
- 		dev_put(priv->parent);
  	}
- }
-@@ -702,19 +752,40 @@ static const struct net_device_ops ipoib
++#endif
+ 
+ 	ipoib_dev_uninit_rss(dev);
+ 
+@@ -703,19 +754,40 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_ndo_uninit_rss,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
@@ -182,7 +176,7 @@ Change-Id: I015948548f12923e4e3d40743dfdf972b944d5aa
  };
  
  static const struct net_device_ops ipoib_netdev_ops_vf_sw_tss = {
-@@ -722,14 +793,22 @@ static const struct net_device_ops ipoib
+@@ -723,14 +795,22 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_ndo_uninit_rss,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,

@@ -136,7 +136,6 @@ static int get_record(const char *p, u64 *node_guid, u64 *port1_guid,
 
 int mlx5_update_guids(struct mlx5_core_dev *dev)
 {
-	struct pci_dev *pdev = dev->pdev;
 	const char *devp;
 	char *p = guids;
 	u64 port1_guid = 0;
@@ -150,7 +149,7 @@ int mlx5_update_guids(struct mlx5_core_dev *dev)
 	if (!p)
 		return 0;
 
-	devp = dev_name(&pdev->dev);
+	devp = dev_name(dev->device);
 	dlen = strlen(devp);
 	while (1) {
 		if (dlen >= strlen(p))

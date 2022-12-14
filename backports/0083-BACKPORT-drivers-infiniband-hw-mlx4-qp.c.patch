@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx4/qp.c
 
 Change-Id: Icb8ddbdbf2752cf89af8512051df3d3900cc8b09
 ---
- drivers/infiniband/hw/mlx4/qp.c | 90 +++++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/hw/mlx4/qp.c | 90 +++++++++++++++++++++++++++++++++
  1 file changed, 90 insertions(+)
 
 --- a/drivers/infiniband/hw/mlx4/qp.c

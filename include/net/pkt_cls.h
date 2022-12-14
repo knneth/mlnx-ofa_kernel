@@ -4,6 +4,8 @@
 #include_next <net/pkt_cls.h>
 
 #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
+#include "../../compat/config.h"
+#define HAVE_FLOWER_MULTI_MASK 1
 #include <uapi/linux/uapi/pkt_cls.h>
 
 #ifndef CONFIG_NET_SCHED_NEW

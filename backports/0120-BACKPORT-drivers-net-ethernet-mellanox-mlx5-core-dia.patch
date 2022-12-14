@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I52d4f983871d6d17e1dbda6fe30b9ac122642437
 ---
- .../mellanox/mlx5/core/diag/fs_tracepoint.h        | 38 ++++++++++++++++------
+ .../mellanox/mlx5/core/diag/fs_tracepoint.h   | 38 ++++++++++++++-----
  1 file changed, 28 insertions(+), 10 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h

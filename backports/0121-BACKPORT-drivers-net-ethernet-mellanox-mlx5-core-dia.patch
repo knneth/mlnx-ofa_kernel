@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ib1fc58210d433012f202bec2336a1d1202fd7b14
 ---
- .../net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c   | 18 +++++++++++++++---
+ .../mellanox/mlx5/core/diag/fw_tracer.c        | 18 +++++++++++++++---
  1 file changed, 15 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c

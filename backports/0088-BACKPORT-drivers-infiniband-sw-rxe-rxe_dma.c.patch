@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/sw/rxe/rxe_dma.c
 
 Change-Id: If650ecdd98bc3862d4dcd3eb7c98f9964c538e0b
 ---
- drivers/infiniband/sw/rxe/rxe_dma.c | 187 ++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/sw/rxe/rxe_dma.c | 187 ++++++++++++++++++++++++++++
  1 file changed, 187 insertions(+)
  create mode 100644 drivers/infiniband/sw/rxe/rxe_dma.c
 

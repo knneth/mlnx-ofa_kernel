@@ -58,11 +58,13 @@ struct mlx5e_rep_priv {
 	struct mlx5_eswitch_rep *rep;
 	struct mlx5e_neigh_update_table neigh_update;
 	struct net_device      *netdev;
+	struct mlx5_flow_table *root_ft;
 	struct mlx5_flow_handle *vport_rx_rule;
 	struct list_head       vport_sqs_list;
 	spinlock_t	       tc_ht_lock; /* protects tc_ht */
 	struct rhashtable      tc_ht; /* valid for uplink rep */
 	struct list_head       unready_flows;
+	struct rhashtable      mf_ht;
 };
 
 static inline
@@ -83,6 +85,7 @@ struct mlx5e_neigh {
 struct mlx5e_neigh_hash_entry {
 	struct rhash_head rhash_node;
 	struct mlx5e_neigh m_neigh;
+	struct mlx5e_priv *priv;
 
 	/* Save the neigh hash entry in a list on the representor in
 	 * addition to the hash table. In order to iterate easily over the

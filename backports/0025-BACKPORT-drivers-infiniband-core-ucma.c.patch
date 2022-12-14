@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
 
 Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
 ---
- drivers/infiniband/core/ucma.c | 89 ++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 86 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/ucma.c | 92 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 89 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
@@ -20,7 +20,13 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  #include <rdma/rdma_user_cm.h>
  #include <rdma/ib_marshall.h>
  #include <rdma/rdma_cm.h>
-@@ -59,6 +59,7 @@ MODULE_LICENSE("Dual BSD/GPL");
+@@ -56,9 +56,13 @@
+ MODULE_AUTHOR("Sean Hefty");
+ MODULE_DESCRIPTION("RDMA Userspace Connection Manager Access");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
  
  static unsigned int max_backlog = 1024;
  
@@ -28,7 +34,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  static struct ctl_table_header *ucma_ctl_table_hdr;
  static struct ctl_table ucma_ctl_table[] = {
  	{
-@@ -70,6 +71,14 @@ static struct ctl_table ucma_ctl_table[]
+@@ -70,6 +74,14 @@ static struct ctl_table ucma_ctl_table[]
  	},
  	{ }
  };
@@ -43,7 +49,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -205,6 +214,9 @@ static void ucma_close_id(struct work_st
+@@ -205,6 +217,9 @@ static void ucma_close_id(struct work_st
  static struct ucma_context *ucma_alloc_ctx(struct ucma_file *file)
  {
  	struct ucma_context *ctx;
@@ -53,7 +59,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  
  	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
  	if (!ctx)
-@@ -216,11 +228,26 @@ static struct ucma_context *ucma_alloc_c
+@@ -216,11 +231,26 @@ static struct ucma_context *ucma_alloc_c
  	INIT_LIST_HEAD(&ctx->mc_list);
  	ctx->file = file;
  
@@ -80,7 +86,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  
  	list_add_tail(&ctx->list, &file->ctx_list);
  	return ctx;
-@@ -233,16 +260,34 @@ error:
+@@ -233,16 +263,34 @@ error:
  static struct ucma_multicast* ucma_alloc_multicast(struct ucma_context *ctx)
  {
  	struct ucma_multicast *mc;
@@ -115,7 +121,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  
  	mc->ctx = ctx;
  	list_add_tail(&mc->list, &ctx->mc_list);
-@@ -1581,7 +1626,11 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1581,7 +1629,11 @@ static ssize_t ucma_migrate_id(struct uc
  	struct rdma_ucm_migrate_id cmd;
  	struct rdma_ucm_migrate_resp resp;
  	struct ucma_context *ctx;
@@ -127,7 +133,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  	struct ucma_file *cur_file;
  	int ret = 0;
  
-@@ -1589,16 +1638,30 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1589,16 +1641,30 @@ static ssize_t ucma_migrate_id(struct uc
  		return -EFAULT;
  
  	/* Get current fd to protect against it being closed */
@@ -158,7 +164,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  	if (IS_ERR(ctx)) {
  		ret = PTR_ERR(ctx);
  		goto file_put;
-@@ -1632,7 +1695,11 @@ response:
+@@ -1632,7 +1698,11 @@ response:
  
  	ucma_put_ctx(ctx);
  file_put:
@@ -170,7 +176,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  	return ret;
  }
  
-@@ -1685,8 +1752,9 @@ static ssize_t ucma_write(struct file *f
+@@ -1685,8 +1755,9 @@ static ssize_t ucma_write(struct file *f
  
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
@@ -181,7 +187,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1827,15 +1895,24 @@ static int __init ucma_init(void)
+@@ -1827,15 +1898,24 @@ static int __init ucma_init(void)
  		goto err1;
  	}
  
@@ -206,7 +212,7 @@ Change-Id: I1528624a128bc6027f95bb50307224c7f1893489
  err1:
  	misc_deregister(&ucma_misc);
  	return ret;
-@@ -1843,7 +1920,13 @@ err1:
+@@ -1843,7 +1923,13 @@ err1:
  
  static void __exit ucma_cleanup(void)
  {

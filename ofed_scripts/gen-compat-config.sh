@@ -197,6 +197,11 @@ fi
 
 RHEL7_4_JD=$(echo ${KVERSION} | grep 3.10.0-693.21.3)
 
+if [[ ! -z ${RHEL7_4_JD} ]]; then
+	set_config CONFIG_COMPAT_RHEL_JD y
+	set_config CONFIG_COMPAT_NFT_GEN_FLOW_OFFLOAD y
+fi
+
 if [[ ${RHEL_MAJOR} -eq "7" && ${RHEL_MINOR} -le "4" && ! $RHEL7_4_JD ]]; then
 	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
 fi
@@ -823,5 +828,22 @@ fi
 if (grep -qw "static.* fib_lookup" ${KLIB_BUILD}/include/net/ip_fib.h > /dev/null 2>&1 || grep -qw "static.* fib_lookup" ${KSRC}/include/net/ip_fib.h > /dev/null 2>&1) &&
    (grep -qw "extern.* fib_lookup" ${KLIB_BUILD}/include/net/ip_fib.h > /dev/null 2>&1 || grep -qw "extern.* fib_lookup" ${KSRC}/include/net/ip_fib.h > /dev/null 2>&1); then
 	set_config CONFIG_COMPAT_IS_FIB_LOOKUP_STATIC_AND_EXTERN y
+fi
+
+HASH_TYPES=${KLIB_BUILD}/include/linux/rhashtable-types.h
+HASH_TYPES2=${KSRC}/include/linux/rhashtable-types.h
+
+if (test ! -f "$HASH_TYPES" -a ! -f "$HASH_TYPES2"); then
+	if (grep -E -A10 "struct rhashtable \{" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw rhlist || grep -A5 "struct rhashtable \{" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw rhlist); then
+		if (grep -E -A5 "if \(\!key \|\|" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw pprev || grep -A5 "if \(\!key \|\|" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw pprev); then
+			set_config CONFIG_COMPAT_RHASHTABLE_FIXED y
+		fi
+		if (grep -E -A5 "struct rhashtable \{" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw nelems || grep -A5 "struct rhashtable \{" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw nelems); then
+			set_config CONFIG_COMPAT_RHASHTABLE_NOT_REORG y
+		fi
+		if (grep -E -A2 "struct rhashtable_params \{" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw u16 || grep -A2 "struct rhashtable_params \{" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw u16); then
+			set_config CONFIG_COMPAT_RHASHTABLE_PARAM_COMPACT y
+		fi
+	fi
 fi
 

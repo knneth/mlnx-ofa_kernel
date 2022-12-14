@@ -62,7 +62,7 @@
 #include <rdma/mlx4-abi.h>
 
 #define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"4.6-1.0.1"
+#define DRV_VERSION	"4.6-3.5.8"
 
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF
@@ -3053,7 +3053,7 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 
 	rdma_set_device_sysfs_group(&ibdev->ib_dev, &mlx4_attr_group);
 	ibdev->ib_dev.driver_id = RDMA_DRIVER_MLX4;
-	if (ib_register_device(&ibdev->ib_dev, "mlx4_%d", NULL))
+	if (ib_register_device(&ibdev->ib_dev, ibdev->ib_dev.name, NULL))
 		goto err_diag_counters;
 
 	for (j = 0; j < ibdev->ib_dev.num_comp_vectors; j++)

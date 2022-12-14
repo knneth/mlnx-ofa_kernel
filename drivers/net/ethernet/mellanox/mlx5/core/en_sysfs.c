@@ -44,6 +44,15 @@
 #define MLX5E_100MBPS_TO_KBPS 100000
 #define set_kobj_mode(mdev) mlx5_core_is_pf(mdev) ? S_IWUSR | S_IRUGO : S_IRUGO
 
+#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
+struct netdev_queue_attribute {
+        struct attribute attr;
+        ssize_t (*show)(struct netdev_queue *queue, char *buf);
+        ssize_t (*store)(struct netdev_queue *queue,
+                         const char *buf, size_t len);
+};
+#endif
+
 static ssize_t mlx5e_show_tc_num(struct device *device,
 				 struct device_attribute *attr,
 				 char *buf)
@@ -1198,9 +1207,9 @@ enum {
 	ATTR_DST_PORT,
 };
 
-static ssize_t mlx5e_flow_param_show(struct kobject *kobj, char *buf, int type)
+static ssize_t mlx5e_flow_param_show(struct netdev_queue *queue,
+				     char *buf, int type)
 {
-	struct netdev_queue *queue = (struct netdev_queue *)kobj;
 	struct net_device *netdev = queue->dev;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5e_txqsq *sq = priv->txq2sq[queue - netdev->_tx];
@@ -1220,10 +1229,9 @@ static ssize_t mlx5e_flow_param_show(struct kobject *kobj, char *buf, int type)
 	return len;
 }
 
-static ssize_t mlx5e_flow_param_store(struct kobject *kobj, const char *buf,
-				      size_t len, int type)
+static ssize_t mlx5e_flow_param_store(struct netdev_queue *queue,
+				      const char *buf, size_t len, int type)
 {
-	struct netdev_queue *queue = (struct netdev_queue *)kobj;
 	struct net_device *netdev = queue->dev;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	unsigned int queue_index = queue - netdev->_tx;
@@ -1261,42 +1269,38 @@ static ssize_t mlx5e_flow_param_store(struct kobject *kobj, const char *buf,
 	return len;
 }
 
-static ssize_t mlx5e_dst_port_store(struct kobject *kobj,
-				    struct kobj_attribute *attr,
+static ssize_t mlx5e_dst_port_store(struct netdev_queue *queue,
 				    const char *buf, size_t len)
 {
-	return mlx5e_flow_param_store(kobj, buf, len, ATTR_DST_PORT);
+	return mlx5e_flow_param_store(queue, buf, len, ATTR_DST_PORT);
 }
 
-static ssize_t mlx5e_dst_port_show(struct kobject *kobj,
-				   struct kobj_attribute *attr,
+static ssize_t mlx5e_dst_port_show(struct netdev_queue *queue,
 				   char *buf)
 {
-	return mlx5e_flow_param_show(kobj, buf, ATTR_DST_PORT);
+	return mlx5e_flow_param_show(queue, buf, ATTR_DST_PORT);
 }
 
-static ssize_t mlx5e_dst_ip_store(struct kobject *kobj,
-				  struct kobj_attribute *attr,
+static ssize_t mlx5e_dst_ip_store(struct netdev_queue *queue,
 				  const char *buf, size_t len)
 {
-	return mlx5e_flow_param_store(kobj, buf, len, ATTR_DST_IP);
+	return mlx5e_flow_param_store(queue, buf, len, ATTR_DST_IP);
 }
 
-static ssize_t mlx5e_dst_ip_show(struct kobject *kobj,
-				 struct kobj_attribute *attr,
+static ssize_t mlx5e_dst_ip_show(struct netdev_queue *queue,
 				 char *buf)
 {
-	return mlx5e_flow_param_show(kobj, buf, ATTR_DST_IP);
+	return mlx5e_flow_param_show(queue, buf, ATTR_DST_IP);
 }
 
-static struct kobj_attribute dst_port = {
+static struct netdev_queue_attribute dst_port = {
 	.attr  = {.name = "dst_port",
 		  .mode = (S_IWUSR | S_IRUGO) },
 	.show  = mlx5e_dst_port_show,
 	.store = mlx5e_dst_port_store,
 };
 
-static struct kobj_attribute dst_ip = {
+static struct netdev_queue_attribute dst_ip = {
 	.attr  = {.name = "dst_ip",
 		  .mode = (S_IWUSR | S_IRUGO) },
 	.show  = mlx5e_dst_ip_show,

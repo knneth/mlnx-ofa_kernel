@@ -19,16 +19,11 @@
 
 #include "../../compat/config.h"
 
-#ifdef CONFIG_COMPAT_RHLTABLE
-#undef HAVE_RHLTABLE
-#endif
-
-#ifdef HAVE_RHLTABLE
+#if defined(HAVE_RHASHTABLE_TYPES) || (defined(HAVE_RHLTABLE) && defined(CONFIG_COMPAT_RHASHTABLE_FIXED))
 #include_next <linux/rhashtable.h>
-#else /* HAVE_RHLTABLE */
-/* use our own implementaiton when the rhltable struct is not avaialbe in the
- * kerenl
-*/
+#else /* have rhltable (but not fixed) or do not have rhltable */
+
+/* use our own implementation */
 
 #include <linux/atomic.h>
 #include <linux/compiler.h>
@@ -65,6 +60,10 @@
 
 /* Base bits plus 1 bit for nulls marker */
 #define RHT_HASH_RESERVED_SPACE	(RHT_BASE_BITS + 1)
+
+#if !defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) && defined(HAVE_RHLTABLE)
+#define RHT_ELASTICITY 16u
+#endif
 
 struct rhash_head {
 	struct rhash_head __rcu		*next;
@@ -135,22 +134,42 @@ struct rhashtable;
  * @obj_hashfn: Function to hash object
  * @obj_cmpfn: Function to compare key with object
  */
+#if defined(CONFIG_COMPAT_RHASHTABLE_PARAM_COMPACTED)
+struct rhashtable_params {
+	u16			nelem_hint;
+	u16			key_len;
+	u16			key_offset;
+	u16			head_offset;
+	unsigned int		max_size;
+	u16			min_size;
+	bool			automatic_shrinking;
+	u8			locks_mul;
+	rht_hashfn_t		hashfn;
+	rht_obj_hashfn_t	obj_hashfn;
+	rht_obj_cmpfn_t		obj_cmpfn;
+};
+#else
 struct rhashtable_params {
 	size_t			nelem_hint;
 	size_t			key_len;
 	size_t			key_offset;
 	size_t			head_offset;
+#if defined(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES) || !defined(HAVE_RHLTABLE)
 	unsigned int		insecure_max_entries;
+#endif
 	unsigned int		max_size;
 	unsigned int		min_size;
 	u32			nulls_base;
+#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
 	bool			insecure_elasticity;
+#endif
 	bool			automatic_shrinking;
 	size_t			locks_mul;
 	rht_hashfn_t		hashfn;
 	rht_obj_hashfn_t	obj_hashfn;
 	rht_obj_cmpfn_t		obj_cmpfn;
 };
+#endif
 
 /**
  * struct rhashtable - Hash table handle
@@ -164,17 +183,40 @@ struct rhashtable_params {
  * @mutex: Mutex to protect current/future table swapping
  * @lock: Spin lock to protect walker list
  */
+#if !defined(CONFIG_COMPAT_RHASHTABLE_NOT_REORG) && defined(HAVE_RHLTABLE)
 struct rhashtable {
 	struct bucket_table __rcu	*tbl;
-	atomic_t			nelems;
 	unsigned int			key_len;
+#if defined(HAVE_RHASHTABLE_MAX_ELEMS)
+	unsigned int                    max_elems;
+#else
 	unsigned int			elasticity;
+#endif
 	struct rhashtable_params	p;
 	bool				rhlist;
 	struct work_struct		run_work;
 	struct mutex                    mutex;
 	spinlock_t			lock;
+	atomic_t			nelems;
 };
+#else
+struct rhashtable {
+	struct bucket_table __rcu	*tbl;
+	atomic_t			nelems;
+	unsigned int			key_len;
+#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
+	unsigned int			elasticity;
+#endif
+	struct rhashtable_params	p;
+#if defined(HAVE_RHASHTABLE_MAX_ELEMS)
+	unsigned int                    max_elems;
+#endif
+	bool				rhlist;
+	struct work_struct		run_work;
+	struct mutex                    mutex;
+	spinlock_t			lock;
+};
+#endif
 
 /**
  * struct rhltable - Hash table with duplicate objects in a list
@@ -332,8 +374,15 @@ static inline bool rht_grow_above_100(const struct rhashtable *ht,
 static inline bool rht_grow_above_max(const struct rhashtable *ht,
 				      const struct bucket_table *tbl)
 {
+#if defined(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES) || !defined(HAVE_RHLTABLE)
 	return ht->p.insecure_max_entries &&
 	       atomic_read(&ht->nelems) >= ht->p.insecure_max_entries;
+#elif defined(HAVE_RHASHTABLE_MAX_ELEMS)
+	return atomic_read(&ht->nelems) >= ht->max_elems;
+#else
+	return ht->p.max_size &&
+		(atomic_read(&ht->nelems) / 2u) >= ht->p.max_size;
+#endif
 }
 
 /* The bucket lock is selected based on the hash and protects mutations
@@ -725,7 +774,11 @@ slow_path:
 		return rhashtable_insert_slow(ht, key, obj);
 	}
 
+#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
 	elasticity = ht->elasticity;
+#else
+	elasticity = RHT_ELASTICITY;
+#endif
 	pprev = &tbl->buckets[hash];
 	rht_for_each(head, tbl, hash) {
 		struct rhlist_head *plist;

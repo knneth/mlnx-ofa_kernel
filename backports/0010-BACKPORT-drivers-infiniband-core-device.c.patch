@@ -3,12 +3,22 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
 
 Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
 ---
- drivers/infiniband/core/device.c | 128 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 124 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/device.c | 133 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 129 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/core/device.c
 +++ b/drivers/infiniband/core/device.c
-@@ -85,6 +85,7 @@ static LIST_HEAD(client_list);
+@@ -50,6 +50,9 @@
+ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("core kernel InfiniBand API");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ struct ib_client_data {
+ 	struct list_head  list;
+@@ -85,6 +88,7 @@ static LIST_HEAD(client_list);
  static DEFINE_MUTEX(device_mutex);
  static DECLARE_RWSEM(lists_rwsem);
  
@@ -16,7 +26,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  static int ib_security_change(struct notifier_block *nb, unsigned long event,
  			      void *lsm_data);
  static void ib_policy_change_task(struct work_struct *work);
-@@ -93,6 +94,7 @@ static DECLARE_WORK(ib_policy_change_wor
+@@ -93,6 +97,7 @@ static DECLARE_WORK(ib_policy_change_wor
  static struct notifier_block ibdev_lsm_nb = {
  	.notifier_call = ib_security_change,
  };
@@ -24,7 +34,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  
  static int ib_device_check_mandatory(struct ib_device *device)
  {
-@@ -423,6 +425,7 @@ static int setup_port_pkey_list(struct i
+@@ -423,6 +428,7 @@ static int setup_port_pkey_list(struct i
  	return 0;
  }
  
@@ -32,7 +42,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  static void ib_policy_change_task(struct work_struct *work)
  {
  	struct ib_device *dev;
-@@ -457,6 +460,7 @@ static int ib_security_change(struct not
+@@ -457,6 +463,7 @@ static int ib_security_change(struct not
  
  	return NOTIFY_OK;
  }
@@ -40,7 +50,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  
  /**
   *	__dev_new_index	-	allocate an device index
-@@ -484,6 +488,7 @@ static u32 __dev_new_index(void)
+@@ -484,6 +491,7 @@ static u32 __dev_new_index(void)
  
  static void setup_dma_device(struct ib_device *device)
  {
@@ -48,7 +58,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  	struct device *parent = device->dev.parent;
  
  	WARN_ON_ONCE(device->dma_device);
-@@ -515,6 +520,15 @@ static void setup_dma_device(struct ib_d
+@@ -515,6 +523,15 @@ static void setup_dma_device(struct ib_d
  		WARN_ON_ONCE(!parent);
  		device->dma_device = parent;
  	}
@@ -64,7 +74,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  }
  
  static void cleanup_device(struct ib_device *device)
-@@ -605,19 +619,24 @@ int ib_register_device(struct ib_device
+@@ -605,19 +622,24 @@ int ib_register_device(struct ib_device
  	}
  	strlcpy(device->name, dev_name(&device->dev), IB_DEVICE_NAME_MAX);
  
@@ -90,7 +100,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  	ret = ib_device_register_sysfs(device, port_callback);
  	if (ret) {
  		dev_warn(&device->dev,
-@@ -651,8 +670,10 @@ int ib_register_device(struct ib_device
+@@ -651,8 +673,10 @@ int ib_register_device(struct ib_device
  	return 0;
  
  cg_cleanup:
@@ -101,7 +111,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  	cleanup_device(device);
  out:
  	mutex_unlock(&device_mutex);
-@@ -695,7 +716,9 @@ void ib_unregister_device(struct ib_devi
+@@ -695,7 +719,9 @@ void ib_unregister_device(struct ib_devi
  	up_read(&lists_rwsem);
  
  	ib_device_unregister_sysfs(device);
@@ -111,7 +121,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  
  	mutex_unlock(&device_mutex);
  
-@@ -1162,6 +1185,46 @@ int ib_find_gid(struct ib_device *device
+@@ -1162,6 +1188,46 @@ int ib_find_gid(struct ib_device *device
  }
  EXPORT_SYMBOL(ib_find_gid);
  
@@ -158,7 +168,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  /**
   * ib_find_pkey - Returns the PKey table index where a specified
   *   PKey value occurs.
-@@ -1252,11 +1315,19 @@ static const struct rdma_nl_cbs ibnl_ls_
+@@ -1252,11 +1318,19 @@ static const struct rdma_nl_cbs ibnl_ls_
  		.flags = RDMA_NL_ADMIN_PERM,
  	},
  	[RDMA_NL_LS_OP_SET_TIMEOUT] = {
@@ -178,7 +188,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  		.flags = RDMA_NL_ADMIN_PERM,
  	},
  };
-@@ -1269,17 +1340,60 @@ static int __init ib_core_init(void)
+@@ -1269,17 +1343,62 @@ static int __init ib_core_init(void)
  	if (!ib_wq)
  		return -ENOMEM;
  
@@ -216,9 +226,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
 -				WQ_UNBOUND | WQ_HIGHPRI | WQ_MEM_RECLAIM |
 -				WQ_SYSFS, WQ_UNBOUND_MAX_ACTIVE);
 +			0
-+#if defined(HAVE_WQ_UNBOUND_MAX_ACTIVE)
-+			| WQ_UNBOUND | WQ_UNBOUND_MAX_ACTIVE
-+#elif defined(HAVE_WQ_UNBOUND)
++#if defined(HAVE_WQ_UNBOUND)
 +			| WQ_UNBOUND
 +#endif
 +#if defined(HAVE_WQ_HIGHPRI)
@@ -233,7 +241,11 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
 +#if defined(HAVE_WQ_NON_REENTRANT)
 +			| WQ_NON_REENTRANT
 +#endif
++#if defined(HAVE_WQ_UNBOUND) && defined(HAVE_WQ_UNBOUND_MAX_ACTIVE)
++			, WQ_UNBOUND_MAX_ACTIVE);
++#else
 +			, 0);
++#endif
 +#else /* HAVE_ALLOC_WORKQUEUE */
 +	/* For older kernels that do not have alloc_workqueue
 +	 */
@@ -242,7 +254,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  	if (!ib_comp_unbound_wq) {
  		ret = -ENOMEM;
  		goto err_comp;
-@@ -1315,11 +1429,13 @@ static int __init ib_core_init(void)
+@@ -1315,11 +1434,13 @@ static int __init ib_core_init(void)
  		goto err_mad;
  	}
  
@@ -256,7 +268,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  
  	nldev_init();
  	rdma_nl_register(RDMA_NL_LS, ibnl_ls_cb_table);
-@@ -1327,8 +1443,10 @@ static int __init ib_core_init(void)
+@@ -1327,8 +1448,10 @@ static int __init ib_core_init(void)
  
  	return 0;
  
@@ -267,7 +279,7 @@ Change-Id: Icb8161aa9884a27fcbb038a7d7d5b19fec12aa29
  err_mad:
  	ib_mad_cleanup();
  err_addr:
-@@ -1351,7 +1469,9 @@ static void __exit ib_core_cleanup(void)
+@@ -1351,7 +1474,9 @@ static void __exit ib_core_cleanup(void)
  	roce_gid_mgmt_cleanup();
  	nldev_exit();
  	rdma_nl_unregister(RDMA_NL_LS);

@@ -8,7 +8,7 @@ Change-Id: I42aaad9b97aeeb55dd108cfd756f7c567fe2cfa5
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
-@@ -72,7 +72,9 @@ struct mlx5_fpga_device {
+@@ -73,7 +73,9 @@ struct mlx5_fpga_device {
  	} conn_res;
  
  	struct mlx5_fpga_ipsec *ipsec;

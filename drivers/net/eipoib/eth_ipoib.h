@@ -47,8 +47,8 @@
 #include <rdma/e_ipoib.h>
 
 /* macros and definitions */
-#define DRV_VERSION	"4.6-1.0.1"
-#define DRV_RELDATE	"29 Apr 2019"
+#define DRV_VERSION	"4.6-3.5.8"
+#define DRV_RELDATE	"24 Jul 2019"
 #define DRV_NAME		"eth_ipoib"
 #define SDRV_NAME		"ipoib"
 #define DRV_DESCRIPTION		"IP-over-InfiniBand Para Virtualized Driver"

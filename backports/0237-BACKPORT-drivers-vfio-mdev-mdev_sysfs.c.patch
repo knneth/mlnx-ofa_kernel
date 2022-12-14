@@ -1,0 +1,50 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/vfio/mdev/mdev_sysfs.c
+
+Change-Id: Id8c5b1e6308987fb9e9874f1e7f713cdf0791e73
+---
+ drivers/vfio/mdev/mdev_sysfs.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+--- a/drivers/vfio/mdev/mdev_sysfs.c
++++ b/drivers/vfio/mdev/mdev_sysfs.c
+@@ -225,14 +225,25 @@ create_err:
+ 	return ret;
+ }
+ 
++#ifndef HAVE_DEVICE_REMOVE_FILE_SELF
++static void remove_callback(struct device *dev)
++{
++    mdev_device_remove(dev);
++}
++#endif
++
+ static ssize_t remove_store(struct device *dev, struct device_attribute *attr,
+ 			    const char *buf, size_t count)
+ {
+ 	unsigned long val;
++#ifndef HAVE_DEVICE_REMOVE_FILE_SELF
++	int ret = 0;
++#endif
+ 
+ 	if (kstrtoul(buf, 0, &val) < 0)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_DEVICE_REMOVE_FILE_SELF
+ 	if (val && device_remove_file_self(dev, attr)) {
+ 		int ret;
+ 
+@@ -240,6 +251,13 @@ static ssize_t remove_store(struct devic
+ 		if (ret)
+ 			return ret;
+ 	}
++#else
++	if (val)
++		ret = device_schedule_callback(dev, remove_callback);
++
++	if (ret)
++		count = ret;
++#endif
+ 
+ 	return count;
+ }

@@ -1118,7 +1118,7 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		set_exp_qp_resp_data(ucmd, &resp, dev, qp, attr);
 		err = ib_copy_to_udata(udata, &resp, min(udata->outlen, sizeof(resp)));
 	} else {
-		err = ib_copy_to_udata(udata, &resp, sizeof(struct mlx5_ib_create_qp_resp));
+		err = ib_copy_to_udata(udata, &resp, min(udata->outlen, sizeof(struct mlx5_ib_create_qp_resp)));
 	}
 	if (err) {
 		mlx5_ib_dbg(dev, "copy failed\n");
@@ -3178,38 +3178,31 @@ static int modify_raw_packet_tx_affinity(struct mlx5_core_dev *dev,
 	return err;
 }
 
-static inline uint16_t folded_qp(u32 q)
+static inline uint16_t mlx5_calc_udp_sport(u32 lqpn, u32 rqpn)
 {
-	u16 res;
+	unsigned char *p;
+	u8 ports[2];
+	u16 sport;
+	u64 tqpn;
 
-	res = ((q & 0xff) ^ ((q & 0xff0000) >> 16)) | (q & 0xff00);
-	return res;
+	tqpn = ((u64)(lqpn & 0xffffff)) * ((u64)(rqpn & 0xffffff));
+	p = (unsigned char *)&tqpn;
+	ports[0] = p[0] ^ p[2] ^ p[4];
+	ports[1] = p[1] ^ p[3] ^ p[5];
+	sport = *((u16 *)ports) | 0xC000;
+
+	return sport;
 }
 
-static inline uint16_t calc_roce_udp_sport(const struct mlx5_ib_qp *qp,
+static inline void mlx5_path_set_udp_sport(struct mlx5_qp_path *path,
 					   const struct rdma_ah_attr *ah,
-					   const struct ib_qp_attr *attr)
+					   u32 lqpn, u32 rqpn)
 {
-	u16 fqpn, frqpn;
-
-	fqpn = folded_qp(qp->ibqp.qp_num & 0xffffff);
-	frqpn = folded_qp(attr->dest_qp_num & 0xffffff);
-	return (fqpn ^ frqpn) | 0xC000;
-}
-
-static inline void mlx5_set_path_udp_sport(struct mlx5_qp_path *path,
-					   const struct rdma_ah_attr *ah,
-					   const struct mlx5_ib_qp *qp,
-					   const struct ib_qp_attr *attr)
-{
-	if (ah->grh.sgid_attr->gid_type != IB_GID_TYPE_ROCE_UDP_ENCAP)
-		return;
-
 	if (mlx5_valid_roce_udp_sport(ah->roce.udp_sport))
 		path->udp_sport = cpu_to_be16(ah->roce.udp_sport);
 	else
 		path->udp_sport =
-			cpu_to_be16(calc_roce_udp_sport(qp, ah, attr));
+			cpu_to_be16(mlx5_calc_udp_sport(lqpn, rqpn));
 }
 
 static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
@@ -3268,11 +3261,15 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			return -EINVAL;
 
 		memcpy(path->rmac, ah->roce.dmac, sizeof(ah->roce.dmac));
-		if (qp->ibqp.qp_type == IB_QPT_RC ||
-		    qp->ibqp.qp_type == IB_QPT_UC ||
-		    qp->ibqp.qp_type == IB_QPT_XRC_INI ||
-		    qp->ibqp.qp_type == IB_QPT_XRC_TGT)
-			mlx5_set_path_udp_sport(path, ah, qp, attr);
+		if ((qp->ibqp.qp_type == IB_QPT_RC ||
+		     qp->ibqp.qp_type == IB_QPT_UC ||
+		     qp->ibqp.qp_type == IB_QPT_XRC_INI ||
+		     qp->ibqp.qp_type == IB_QPT_XRC_TGT) &&
+		    (ah->grh.sgid_attr->gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP) &&
+		    (attr_mask & IB_QP_DEST_QPN))
+			mlx5_path_set_udp_sport(path, ah,
+						qp->ibqp.qp_num,
+						attr->dest_qp_num);
 
 		path->dci_cfi_prio_sl = (sl & 0x7) << 4;
 	} else {
@@ -3833,7 +3830,8 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 		    (ibqp->qp_type == IB_QPT_XRC_INI) ||
 		    (ibqp->qp_type == IB_QPT_XRC_TGT) ||
 		    (ibqp->qp_type == IB_EXP_QPT_DC_INI)) {
-			if (dev->lag_active) {
+			if (dev->lag_active ||
+			    mlx5_lag_tx_port_affinity_support(dev->mdev)) {
 				u8 p = mlx5_core_native_port_num(dev->mdev) - 1;
 				tx_affinity = get_tx_affinity(dev, pd, base, p);
 				context->flags |= cpu_to_be32(tx_affinity << 24);

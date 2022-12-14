@@ -119,7 +119,7 @@ static int mlx5e_sniffer_create_tx_rule(struct mlx5e_sniffer *sniffer)
 
 	dest.tir_num = sniffer->tir[SNIFFER_TX].tirn;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+	spec->flow_context.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	sniffer_flow->handle = mlx5_add_flow_rules(sniffer->tx_ft, spec, &flow_act,
 						 &dest, 1);
@@ -169,7 +169,7 @@ static int sniffer_create_roce_rules(struct mlx5e_sniffer *sniffer)
 
 	MLX5_SET_TO_ONES(fte_match_param, mc, outer_headers.ethertype);
 	MLX5_SET(fte_match_param, mv, outer_headers.ethertype, ROCEV1_ETHERTYPE);
-	flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+	spec->flow_context.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	sniffer->roce_rules[SNIFFER_ROCE_V1_RULE]
 		= mlx5_add_flow_rules(sniffer->rx_ft, spec, &flow_act,
@@ -255,7 +255,7 @@ static int sniffer_add_flow_rule(struct mlx5e_sniffer *sniffer,
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 	ft = (rule_info->type == SNIFFER_LEFTOVERS) ? rule_info->ft :
 		sniffer->rx_ft;
-	flow_act.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
+	spec->flow_context.flow_tag = MLX5_FS_OFFLOAD_FLOW_TAG;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	sniffer_flow->handle = mlx5_add_flow_rules(ft, spec, &flow_act,
 						 &dest, 1);

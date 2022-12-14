@@ -1259,7 +1259,7 @@ struct ib_mr *mlx5_ib_reg_dm_mr(struct ib_pd *pd, struct ib_dm *dm,
 			return ERR_PTR(-EINVAL);
 
 		mode = MLX5_MKC_ACCESS_MODE_MEMIC;
-		start_addr -= pci_resource_start(dev->pdev, 0);
+		start_addr -= dev->bar_addr;
 		break;
 	case MLX5_IB_UAPI_DM_TYPE_STEERING_SW_ICM:
 	case MLX5_IB_UAPI_DM_TYPE_HEADER_MODIFY_SW_ICM:

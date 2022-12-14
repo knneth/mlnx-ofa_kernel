@@ -16,11 +16,8 @@
 
 #include <linux/rhashtable.h>
 
-#ifdef CONFIG_COMPAT_RHLTABLE
-#undef HAVE_RHLTABLE
-#endif
 
-#ifndef HAVE_RHLTABLE
+#if !(defined(HAVE_RHASHTABLE_TYPES) || (defined(HAVE_RHLTABLE) && defined(CONFIG_COMPAT_RHASHTABLE_FIXED)))
 
 #include <linux/atomic.h>
 #include <linux/kernel.h>
@@ -445,7 +442,11 @@ static void *rhashtable_lookup_one(struct rhashtable *ht,
 	struct rhash_head *head;
 	int elasticity;
 
+#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
 	elasticity = ht->elasticity;
+#else
+	elasticity = RHT_ELASTICITY;
+#endif
 	pprev = &tbl->buckets[hash];
 	rht_for_each(head, tbl, hash) {
 		struct rhlist_head *list;
@@ -868,13 +869,28 @@ int rhashtable_init(struct rhashtable *ht,
 	if (params->max_size)
 		ht->p.max_size = rounddown_pow_of_two(params->max_size);
 
+#if defined(HAVE_RHASHTABLE_MAX_ELEMS)
+	/* Cap total entries at 2^31 to avoid nelems overflow. */
+	ht->max_elems = 1u << 31;
+	if (ht->p.max_size) {
+		if (ht->p.max_size < ht->max_elems / 2)
+			ht->max_elems = ht->p.max_size * 2;
+	}
+#endif
+
+#if defined(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES) || !defined(HAVE_RHLTABLE)
 	if (params->insecure_max_entries)
 		ht->p.insecure_max_entries =
 			rounddown_pow_of_two(params->insecure_max_entries);
 	else
 		ht->p.insecure_max_entries = ht->p.max_size * 2;
+#endif
 
+#if defined(CONFIG_COMPAT_RHASHTABLE_PARAM_COMPACTED)
+	ht->p.min_size = max_t(u16, ht->p.min_size, HASH_MIN_SIZE);
+#else
 	ht->p.min_size = max(ht->p.min_size, HASH_MIN_SIZE);
+#endif
 
 	if (params->nelem_hint)
 		size = rounded_hashtable_size(&ht->p);
@@ -891,8 +907,10 @@ int rhashtable_init(struct rhashtable *ht,
 	 * length to vastly exceed 16 to have any real effect
 	 * on the system.
 	 */
+#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
 	if (!params->insecure_elasticity)
 		ht->elasticity = 16;
+#endif
 
 	if (params->locks_mul)
 		ht->p.locks_mul = roundup_pow_of_two(params->locks_mul);

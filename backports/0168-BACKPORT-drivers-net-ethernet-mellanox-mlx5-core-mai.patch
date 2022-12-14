@@ -3,12 +3,22 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 
 Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
 ---
- drivers/net/ethernet/mellanox/mlx5/core/main.c | 111 +++++++++++++++++++++++--
- 1 file changed, 104 insertions(+), 7 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/main.c | 113 ++++++++++++++++++++++++-
+ 1 file changed, 109 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
-@@ -262,8 +262,10 @@ static struct mlx5_profile profile[] = {
+@@ -81,6 +81,9 @@
+ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
+ MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) core driver");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_VERSION(DRIVER_VERSION);
+ 
+ unsigned int mlx5_core_debug_mask;
+@@ -264,8 +267,10 @@ static struct mlx5_profile profile[] = {
  #define FW_PRE_INIT_TIMEOUT_MILI	120000
  #define FW_INIT_WARN_MESSAGE_INTERVAL	20000
  
@@ -19,7 +29,7 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  
  static int wait_fw_init(struct mlx5_core_dev *dev, u32 max_wait_mili,
  			u32 warn_time_mili)
-@@ -429,6 +431,9 @@ static int mlx5_alloc_irq_vectors(struct
+@@ -431,6 +436,9 @@ static int mlx5_alloc_irq_vectors(struct
  	int num_eqs;
  	int nvec;
  	int err;
@@ -29,58 +39,58 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  
  	if (max_num_eq) {
  		num_eqs = max_num_eq;
-@@ -446,9 +451,21 @@ static int mlx5_alloc_irq_vectors(struct
- 		return -ENOMEM;
- 
- 	priv->irq_info = kcalloc(nvec, sizeof(*priv->irq_info), GFP_KERNEL);
--	if (!priv->irq_info)
+@@ -456,9 +464,21 @@ static int mlx5_alloc_irq_vectors(struct
+ 	} else {
+ 		priv->irq_info = kcalloc(nvec, sizeof(*priv->irq_info),
+ 					 GFP_KERNEL);
 +#ifdef HAVE_PCI_IRQ_API
-+       if (!priv->irq_info)
- 		return -ENOMEM;
+ 		if (!priv->irq_info)
+ 			return -ENOMEM;
 +#else
-+	priv->msix_arr = kcalloc(nvec, sizeof(*priv->msix_arr), GFP_KERNEL);
-+	if (!priv->msix_arr || !priv->irq_info) {
-+		err = -ENOMEM;
-+		goto err_free_irq_info;
-+	}
++		priv->msix_arr = kcalloc(nvec, sizeof(*priv->msix_arr), GFP_KERNEL);
++		if (!priv->msix_arr || !priv->irq_info) {
++			err = -ENOMEM;
++			goto err_free_irq_info;
++		}
 +
-+	for (i = 0; i < nvec; i++)
-+		 priv->msix_arr[i].entry = i;
++		for (i = 0; i < nvec; i++)
++			 priv->msix_arr[i].entry = i;
 +#endif
  
 +#ifdef HAVE_PCI_IRQ_API
- 	nvec = pci_alloc_irq_vectors(dev->pdev,
- 			comp_base_vec + 1, nvec,
- 			PCI_IRQ_MSIX);
-@@ -458,11 +475,39 @@ static int mlx5_alloc_irq_vectors(struct
- 	}
- 
- 	table->num_comp_vectors = nvec - comp_base_vec;
+ 		nvec = pci_alloc_irq_vectors(dev->pdev,
+ 					     comp_base_vec + 1, nvec,
+ 					     PCI_IRQ_MSIX);
+@@ -467,12 +487,40 @@ static int mlx5_alloc_irq_vectors(struct
+ 			goto err_free_irq_info;
+ 		}
+ 		table->num_comp_vectors = nvec - comp_base_vec;
 +#else /* HAVE_PCI_IRQ_API */
 +#ifdef HAVE_PCI_ENABLE_MSIX_RANGE
-+	nvec = pci_enable_msix_range(dev->pdev, priv->msix_arr,
-+				     comp_base_vec + 1, nvec);
-+	if (nvec < 0) {
-+		err = nvec;
-+		goto err_free_irq_info;
-+	}
++		nvec = pci_enable_msix_range(dev->pdev, priv->msix_arr,
++					     comp_base_vec + 1, nvec);
++		if (nvec < 0) {
++			err = nvec;
++			goto err_free_irq_info;
++		}
 +
-+	table->num_comp_vectors = nvec - comp_base_vec;
++		table->num_comp_vectors = nvec - comp_base_vec;
 +#else /* HAVE_PCI_ENABLE_MSIX_RANGE */
 +retry:
-+	table->num_comp_vectors = nvec - comp_base_vec;
-+	err = pci_enable_msix(dev->pdev, priv->msix_arr, nvec);
-+	if (err == 0) {
-+		return 0;
-+	} else if (err < 0) {
-+		goto err_free_irq_info;
-+	} else if (err > 2) {
-+		nvec = err;
-+		goto retry;
-+	}
-+	mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
++		table->num_comp_vectors = nvec - comp_base_vec;
++		err = pci_enable_msix(dev->pdev, priv->msix_arr, nvec);
++		if (err == 0) {
++			return 0;
++		} else if (err < 0) {
++			goto err_free_irq_info;
++		} else if (err > 2) {
++			nvec = err;
++			goto retry;
++		}
++		mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
 +#endif /* HAVE_PCI_ENABLE_MSIX_RANGE */
 +#endif /* HAVE_PCI_IRQ_API */
+ 	}
  
  	return 0;
  
@@ -92,10 +102,11 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  	return err;
  }
  
-@@ -470,7 +515,12 @@ static void mlx5_free_irq_vectors(struct
- {
- 	struct mlx5_priv *priv = &dev->priv;
+@@ -482,7 +530,13 @@ static void mlx5_free_irq_vectors(struct
  
+ 	if (mlx5_core_is_sf(dev))
+ 		return;
++
 +#ifdef HAVE_PCI_IRQ_API
  	pci_free_irq_vectors(dev->pdev);
 +#else
@@ -105,10 +116,10 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  	kfree(priv->irq_info);
  }
  
-@@ -879,7 +929,14 @@ static int mlx5_irq_set_affinity_hint(st
+@@ -896,7 +950,14 @@ static int mlx5_irq_set_affinity_hint(st
  {
  	struct mlx5_priv *priv  = &mdev->priv;
- 	int vecidx = MLX5_EQ_VEC_COMP_BASE(mdev) + i;
+ 	int vecidx = MLX5_EQ_VEC_COMP_BASE + i;
 +#ifdef HAVE_IRQ_SET_AFFINITY_HINT
 +#ifdef HAVE_PCI_IRQ_API
  	int irq = pci_irq_vector(mdev->pdev, vecidx);
@@ -120,7 +131,7 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  
  	if (!zalloc_cpumask_var(&priv->irq_info[vecidx].mask, GFP_KERNEL)) {
  		mlx5_core_warn(mdev, "zalloc_cpumask_var failed");
-@@ -889,9 +946,11 @@ static int mlx5_irq_set_affinity_hint(st
+@@ -906,9 +967,11 @@ static int mlx5_irq_set_affinity_hint(st
  	cpumask_set_cpu(cpumask_local_spread(i, priv->numa_node),
  			priv->irq_info[vecidx].mask);
  
@@ -135,9 +146,9 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  
  	return 0;
  }
-@@ -900,9 +959,18 @@ static void mlx5_irq_clear_affinity_hint
+@@ -917,9 +980,18 @@ static void mlx5_irq_clear_affinity_hint
  {
- 	int vecidx = MLX5_EQ_VEC_COMP_BASE(mdev) + i;
+ 	int vecidx = MLX5_EQ_VEC_COMP_BASE + i;
  	struct mlx5_priv *priv  = &mdev->priv;
 +#ifdef HAVE_IRQ_SET_AFFINITY_HINT
 +#ifdef HAVE_PCI_IRQ_API
@@ -154,23 +165,22 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  	free_cpumask_var(priv->irq_info[vecidx].mask);
  }
  
-@@ -1072,9 +1140,15 @@ static int alloc_comp_eqs(struct mlx5_co
- 		}
+@@ -1098,9 +1170,14 @@ static int alloc_comp_eqs(struct mlx5_co
  
  #ifdef CONFIG_RFS_ACCEL
+ 		if (!mlx5_core_is_sf(dev))
 +#ifdef HAVE_PCI_IRQ_API
- 		irq_cpu_rmap_add(dev->rmap, pci_irq_vector(dev->pdev,
- 				 comp_base_vec + i));
+ 			irq_cpu_rmap_add(dev->rmap,
+ 					 pci_irq_vector(dev->pdev,
+ 							comp_base_vec + i));
 +#else
-+		irq_cpu_rmap_add(dev->rmap,
-+				 dev->priv.msix_arr[i + comp_base_vec].vector);
++			irq_cpu_rmap_add(dev->rmap,
++					 dev->priv.msix_arr[i + comp_base_vec].vector);
 +#endif
  #endif
-+
  		snprintf(name, MLX5_MAX_IRQ_NAME,
  			 MLX5_DEFAULT_COMP_IRQ_NAME, i);
- 		err = mlx5_create_map_eq(dev, eq,
-@@ -1497,8 +1571,10 @@ static int mlx5_load_one(struct mlx5_cor
+@@ -1547,8 +1624,10 @@ static int mlx5_function_setup(struct ml
  		goto reclaim_boot_pages;
  	}
  
@@ -181,21 +191,41 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  
  	err = mlx5_pagealloc_start(dev);
  	if (err) {
-@@ -1581,11 +1657,13 @@ static int mlx5_load_one(struct mlx5_cor
+@@ -1579,7 +1658,9 @@ static int mlx5_function_setup(struct ml
+ stop_health:
+ 	mlx5_stop_health_poll(dev, boot);
+ err_pagealloc_stop:
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	mlx5_as_notify_cleanup(dev);
++#endif
+ 	mlx5_pagealloc_stop(dev);
+ reclaim_boot_pages:
+ 	mlx5_reclaim_startup_pages(dev);
+@@ -1601,7 +1682,9 @@ static int mlx5_function_teardown(struct
+ 		mlx5_core_err(dev, "tear_down_hca failed, skip cleanup\n");
+ 		return err;
+ 	}
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	mlx5_as_notify_cleanup(dev);
++#endif
+ 	mlx5_pagealloc_stop(dev);
+ 	mlx5_reclaim_startup_pages(dev);
+ 	mlx5_core_disable_hca(dev, 0);
+@@ -1663,11 +1746,13 @@ static int mlx5_load(struct mlx5_core_de
  		goto err_ipsec_start;
  	}
  
 +#ifdef HAVE_UAPI_LINUX_TLS_H
  	err = mlx5_accel_tls_init(dev);
  	if (err) {
- 		dev_err(&pdev->dev, "TLS device start failed %d\n", err);
+ 		mlx5_core_err(dev, "TLS device start failed %d\n", err);
  		goto err_tls_start;
  	}
 +#endif
  
  	err = mlx5_init_fs(dev);
  	if (err) {
-@@ -1642,9 +1720,11 @@ err_sriov:
+@@ -1713,9 +1798,11 @@ err_sriov:
  	mlx5_cleanup_fs(dev);
  
  err_fs:
@@ -207,17 +237,17 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  	mlx5_accel_ipsec_cleanup(dev);
  
  err_ipsec_start:
-@@ -1680,7 +1760,9 @@ err_stop_poll:
- 	}
- 
- err_pagealloc_stop:
-+#ifdef HAVE_PNV_PCI_AS_NOTIFY
- 	mlx5_as_notify_cleanup(dev);
+@@ -1749,7 +1836,9 @@ static void mlx5_unload(struct mlx5_core
+ 	mlx5_diag_cnt_cleanup(dev);
+ 	mlx5_sriov_detach(dev);
+ 	mlx5_cleanup_fs(dev);
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
 +#endif
- 	mlx5_pagealloc_stop(dev);
- 
- reclaim_boot_pages:
-@@ -1726,7 +1808,9 @@ static int mlx5_unload_one(struct mlx5_c
+ 	mlx5_accel_ipsec_cleanup(dev);
+ 	mlx5_fpga_device_stop(dev);
+ 	mlx5_irq_clear_affinity_hints(dev);
+@@ -1903,7 +1992,9 @@ int mlx5_unload_one(struct mlx5_core_dev
  	mlx5_sriov_detach(dev);
  	mlx5_cleanup_fs(dev);
  	mlx5_accel_ipsec_cleanup(dev);
@@ -227,17 +257,7 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  	mlx5_fpga_device_stop(dev);
  	mlx5_irq_clear_affinity_hints(dev);
  	free_comp_eqs(dev);
-@@ -1742,7 +1826,9 @@ static int mlx5_unload_one(struct mlx5_c
- 		dev_err(&dev->pdev->dev, "tear_down_hca failed, skip cleanup\n");
- 		goto out;
- 	}
-+#ifdef HAVE_PNV_PCI_AS_NOTIFY
- 	mlx5_as_notify_cleanup(dev);
-+#endif
- 	mlx5_pagealloc_stop(dev);
- 	mlx5_reclaim_startup_pages(dev);
- 	mlx5_core_disable_hca(dev, 0);
-@@ -1762,12 +1848,18 @@ struct mlx5_core_event_handler {
+@@ -1930,12 +2021,18 @@ struct mlx5_core_event_handler {
  
  static const struct devlink_ops mlx5_devlink_ops = {
  #ifdef CONFIG_MLX5_ESWITCH
@@ -256,7 +276,7 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  #endif
  };
  
-@@ -2070,6 +2162,7 @@ static void capi_cleanup(struct mlx5_cor
+@@ -2238,6 +2335,7 @@ static void capi_cleanup(struct mlx5_cor
  }
  #endif
  
@@ -264,32 +284,22 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
  {
  #ifdef HAVE_PNV_PCI_AS_NOTIFY
-@@ -2112,6 +2205,7 @@ static void mlx5_as_notify_init(struct m
+@@ -2280,11 +2378,12 @@ static void mlx5_as_notify_init(struct m
  }
  
  static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
 +#endif
  
- static ssize_t mlx5_roce_enable_show_enabled(struct device *device,
- 					     struct device_attribute *attr,
-@@ -2251,15 +2345,12 @@ static int init_one(struct pci_dev *pdev
- 	}
+ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
+ {
+ 	struct mlx5_priv *priv = &dev->priv;
+-	int err;
++	int err = 0;
  
- 	request_module_nowait(MLX5_IB_MOD);
--
- 	err = devlink_register(devlink, &pdev->dev);
- 	if (err)
- 		goto clean_load;
--
- 	pci_save_state(pdev);
- 
- 	return 0;
--
- clean_load:
- 	mlx5_unload_one(dev, priv, true);
- clean_crdump:
-@@ -2505,7 +2596,11 @@ static void mlx5_pci_resume(struct pci_d
- 		dev_info(&pdev->dev, "%s: device recovered\n", __func__);
+ 	dev->event = mlx5_core_event;
+ 	dev->profile = &profile[profile_idx];
+@@ -2666,7 +2765,11 @@ static void mlx5_pci_resume(struct pci_d
+ 		mlx5_core_info(dev, "%s: device recovered\n", __func__);
  }
  
 +#ifdef CONFIG_COMPAT_IS_CONST_PCI_ERROR_HANDLERS
@@ -300,7 +310,7 @@ Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2623,7 +2718,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2746,7 +2849,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

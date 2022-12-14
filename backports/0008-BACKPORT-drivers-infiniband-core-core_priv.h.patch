@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
 
 Change-Id: Ic8f8b5408b25eb1393e043909fb4b49e466d2b8a
 ---
- drivers/infiniband/core/core_priv.h | 42 +++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/core_priv.h | 42 +++++++++++++++++++++++++++++
  1 file changed, 42 insertions(+)
 
 --- a/drivers/infiniband/core/core_priv.h

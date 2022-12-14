@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx4/main_exp.c
 
 Change-Id: I11ee17526ccfd5d9281299cabad3dd6d1417d858
 ---
- drivers/infiniband/hw/mlx4/main_exp.c | 54 +++++++++++++++++++++++++++++++++++
+ drivers/infiniband/hw/mlx4/main_exp.c | 54 +++++++++++++++++++++++++++
  1 file changed, 54 insertions(+)
 
 --- a/drivers/infiniband/hw/mlx4/main_exp.c

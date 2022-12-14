@@ -3,12 +3,31 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
 
 Change-Id: Ifc936c4607f7222d6c530166c0b22d35ff593444
 ---
- include/linux/mlx5/driver.h | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ include/linux/mlx5/driver.h | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
 
 --- a/include/linux/mlx5/driver.h
 +++ b/include/linux/mlx5/driver.h
-@@ -1260,7 +1260,7 @@ void mlx5_unlock_cmdif(struct mlx5_core_
+@@ -661,7 +661,7 @@ struct mlx5_irq_info {
+ };
+ 
+ struct mlx5_fc_stats {
+-#ifdef HAVE_IDR_RT
++#if defined(HAVE_IDR_RT) || defined(HAVE_IDR_GET_NEXT_EXPORTED)
+ 	spinlock_t counters_idr_lock; /* protects counters_idr */
+ 	struct idr counters_idr;
+ #endif
+@@ -674,6 +674,9 @@ struct mlx5_fc_stats {
+ 	unsigned long next_query;
+ 	unsigned long sampling_interval; /* jiffies */
+ 	struct kmem_cache *fc_cache;
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3,6,11))
++	char *fc_cache_name;
++#endif
+ };
+ 
+ struct mlx5_mpfs;
+@@ -1269,7 +1272,7 @@ void mlx5_unlock_cmdif(struct mlx5_core_
  struct mlx5_async_ctx {
  	struct mlx5_core_dev *dev;
  	atomic_t num_inflight;

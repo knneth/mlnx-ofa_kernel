@@ -384,17 +384,18 @@ static void ipoib_ndo_uninit_rss(struct net_device *dev)
 	 */
 	WARN_ON(!list_empty(&priv->child_intfs));
 
-	ipoib_dev_uninit_rss(dev);
-
 	if (priv->parent) {
 		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
 
 		down_write(&ppriv->vlan_rwsem);
 		list_del(&priv->list);
 		up_write(&ppriv->vlan_rwsem);
-
-		dev_put(priv->parent);
 	}
+
+	ipoib_dev_uninit_rss(dev);
+
+	if (priv->parent)
+		dev_put(priv->parent);
 }
 
 int ipoib_set_fp_rss(struct ipoib_dev_priv *priv, struct ib_device *hca)

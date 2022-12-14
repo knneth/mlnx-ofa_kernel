@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucm.c
 
 Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
 ---
- drivers/infiniband/core/ucm.c | 45 ++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 42 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/ucm.c | 48 ++++++++++++++++++++++++++++++++---
+ 1 file changed, 45 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/ucm.c
 +++ b/drivers/infiniband/core/ucm.c
@@ -20,7 +20,17 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  #include <linux/uaccess.h>
  
  #include <rdma/ib.h>
-@@ -184,6 +184,9 @@ static void ib_ucm_cleanup_events(struct
+@@ -60,6 +60,9 @@
+ MODULE_AUTHOR("Libor Michalek");
+ MODULE_DESCRIPTION("InfiniBand userspace Connection Manager access");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ struct ib_ucm_device {
+ 	int			devnum;
+@@ -184,6 +187,9 @@ static void ib_ucm_cleanup_events(struct
  static struct ib_ucm_context *ib_ucm_ctx_alloc(struct ib_ucm_file *file)
  {
  	struct ib_ucm_context *ctx;
@@ -30,7 +40,7 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  
  	ctx = kzalloc(sizeof *ctx, GFP_KERNEL);
  	if (!ctx)
-@@ -194,11 +197,26 @@ static struct ib_ucm_context *ib_ucm_ctx
+@@ -194,11 +200,26 @@ static struct ib_ucm_context *ib_ucm_ctx
  	ctx->file = file;
  	INIT_LIST_HEAD(&ctx->events);
  
@@ -57,7 +67,7 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  
  	list_add_tail(&ctx->file_list, &file->ctxs);
  	return ctx;
-@@ -1118,8 +1136,9 @@ static ssize_t ib_ucm_write(struct file
+@@ -1118,8 +1139,9 @@ static ssize_t ib_ucm_write(struct file
  
  	if (hdr.cmd >= ARRAY_SIZE(ucm_cmd_table))
  		return -EINVAL;
@@ -68,7 +78,7 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1298,8 +1317,16 @@ static void ib_ucm_remove_one(struct ib_
+@@ -1298,8 +1320,16 @@ static void ib_ucm_remove_one(struct ib_
  	put_device(&ucm_dev->dev);
  }
  
@@ -85,7 +95,7 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  
  static int __init ib_ucm_init(void)
  {
-@@ -1319,7 +1346,11 @@ static int __init ib_ucm_init(void)
+@@ -1319,7 +1349,11 @@ static int __init ib_ucm_init(void)
  		goto err_alloc;
  	}
  
@@ -97,7 +107,7 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  	if (ret) {
  		pr_err("ucm: couldn't create abi_version attribute\n");
  		goto error2;
-@@ -1333,7 +1364,11 @@ static int __init ib_ucm_init(void)
+@@ -1333,7 +1367,11 @@ static int __init ib_ucm_init(void)
  	return 0;
  
  error3:
@@ -109,7 +119,7 @@ Change-Id: Icf8f333701d9b6d460307c464eb701e52d63b9d2
  error2:
  	unregister_chrdev_region(dynamic_ucm_dev, IB_UCM_NUM_DYNAMIC_MINOR);
  err_alloc:
-@@ -1345,7 +1380,11 @@ error1:
+@@ -1345,7 +1383,11 @@ error1:
  static void __exit ib_ucm_cleanup(void)
  {
  	ib_unregister_client(&ucm_client);

@@ -87,3 +87,5 @@ mlx_compat-y += mmu_notifier.o
 mlx_compat-y += radix-tree.o
 
 mlx_compat-y += ../block/blk-mq-rdma.o
+
+mlx_compat-y += bitmap.o

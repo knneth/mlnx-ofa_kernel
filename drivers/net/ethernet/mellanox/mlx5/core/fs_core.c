@@ -110,7 +110,7 @@
 #define ANCHOR_NUM_PRIOS 1
 #define ANCHOR_MIN_LEVEL (BY_PASS_MIN_LEVEL + 1)
 
-#define OFFLOADS_MAX_FT 1
+#define OFFLOADS_NUM_LEVELS 2
 #define OFFLOADS_NUM_PRIOS 1
 #define OFFLOADS_MIN_LEVEL (ANCHOR_MIN_LEVEL + 1)
 
@@ -146,8 +146,8 @@ static struct init_tree_node {
 			 FS_CHAINING_CAPS,
 			 ADD_NS("lag_ns", ADD_MULTIPLE_PRIO(LAG_NUM_PRIOS,
 							    LAG_PRIO_NUM_LEVELS))),
-		ADD_PRIO("offloads", 0, OFFLOADS_MIN_LEVEL, 0, {},
-			 ADD_NS("offloads_ns", ADD_MULTIPLE_PRIO(OFFLOADS_NUM_PRIOS, OFFLOADS_MAX_FT))),
+		ADD_PRIO("offloads", 0, OFFLOADS_MIN_LEVEL, 0, FS_CHAINING_CAPS,
+			 ADD_NS("offloads_ns", ADD_MULTIPLE_PRIO(OFFLOADS_NUM_PRIOS, OFFLOADS_NUM_LEVELS))),
 		ADD_PRIO("ethtool", 0, ETHTOOL_MIN_LEVEL, 0,
 			 FS_CHAINING_CAPS,
 			 ADD_NS("ethtool_ns", ADD_MULTIPLE_PRIO(ETHTOOL_NUM_PRIOS,
@@ -625,7 +625,7 @@ err_ida_remove:
 }
 
 static struct fs_fte *alloc_fte(struct mlx5_flow_table *ft,
-				u32 *match_value,
+				struct mlx5_flow_spec *spec,
 				struct mlx5_flow_act *flow_act)
 {
 	struct mlx5_flow_steering *steering = get_steering(&ft->node);
@@ -635,9 +635,10 @@ static struct fs_fte *alloc_fte(struct mlx5_flow_table *ft,
 	if (!fte)
 		return ERR_PTR(-ENOMEM);
 
-	memcpy(fte->val, match_value, sizeof(fte->val));
+	memcpy(fte->val, &spec->match_value, sizeof(fte->val));
 	fte->node.type =  FS_TYPE_FLOW_ENTRY;
 	fte->action = *flow_act;
+	fte->flow_context = spec->flow_context;
 
 	tree_init_node(&fte->node, del_hw_fte, del_sw_fte);
 
@@ -1425,7 +1426,8 @@ static bool mlx5_flow_dests_cmp(struct mlx5_flow_destination *d1,
 {
 	if (d1->type == d2->type) {
 		if ((d1->type == MLX5_FLOW_DESTINATION_TYPE_VPORT &&
-		     d1->vport.num == d2->vport.num) ||
+		     d1->vport.num == d2->vport.num &&
+		     d1->vport.vhca_id == d2->vport.vhca_id) ||
 		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE &&
 		     d1->ft == d2->ft) ||
 		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_TIR &&
@@ -1472,7 +1474,9 @@ static bool check_conflicting_actions(u32 action1, u32 action2)
 	return false;
 }
 
-static int check_conflicting_ftes(struct fs_fte *fte, const struct mlx5_flow_act *flow_act)
+static int check_conflicting_ftes(struct fs_fte *fte,
+				  const struct mlx5_flow_context *flow_context,
+				  const struct mlx5_flow_act *flow_act)
 {
 	if (check_conflicting_actions(flow_act->action, fte->action.action)) {
 		mlx5_core_warn(get_dev(&fte->node),
@@ -1480,12 +1484,12 @@ static int check_conflicting_ftes(struct fs_fte *fte, const struct mlx5_flow_act
 		return -EEXIST;
 	}
 
-	if ((flow_act->flags & FLOW_ACT_HAS_TAG) &&
-	    fte->action.flow_tag != flow_act->flow_tag) {
+	if ((flow_context->flags & FLOW_CONTEXT_HAS_TAG) &&
+	    fte->flow_context.flow_tag != flow_context->flow_tag) {
 		mlx5_core_warn(get_dev(&fte->node),
 			       "FTE flow tag %u already exists with different flow tag %u\n",
-			       fte->action.flow_tag,
-			       flow_act->flow_tag);
+			       fte->flow_context.flow_tag,
+			       flow_context->flow_tag);
 		return -EEXIST;
 	}
 
@@ -1576,7 +1580,7 @@ static char *get_dest_name(struct mlx5_flow_destination *dest)
 }
 
 static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
-					    u32 *match_value,
+					    struct mlx5_flow_spec *spec,
 					    struct mlx5_flow_act *flow_act,
 					    struct mlx5_flow_destination *dest,
 					    int dest_num,
@@ -1588,7 +1592,7 @@ static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
 	int i;
 	int ret;
 
-	ret = check_conflicting_ftes(fte, flow_act);
+	ret = check_conflicting_ftes(fte, &spec->flow_context, flow_act);
 	if (ret)
 		return ERR_PTR(ret);
 
@@ -1761,14 +1765,32 @@ try_add_to_existing_fg(struct mlx5_flow_table *ft,
 	u64  version;
 	int err;
 
-	fte = alloc_fte(ft, spec->match_value, flow_act);
+	fte = alloc_fte(ft, spec, flow_act);
 	if (IS_ERR(fte))
 		return  ERR_PTR(-ENOMEM);
+	fte->handle = spec->handle;
 
 search_again_locked:
 	version = matched_fgs_get_version(match_head);
 	if (flow_act->flags & FLOW_ACT_NO_APPEND)
-		goto skip_search;
+		list_for_each_entry(iter, match_head, list) {
+			struct fs_fte *fte_tmp;
+
+			g = iter->g;
+			fte_tmp = lookup_fte_locked(g, spec->match_value, take_write);
+			if (!fte_tmp)
+				continue;
+			if (fte_tmp->handle != spec->handle) {
+				up_write_ref_node(&fte_tmp->node);
+				tree_put_node(&fte_tmp->node);
+				kmem_cache_free(steering->ftes_cache, fte);
+				return ERR_PTR(-EEXIST);
+			}
+			up_write_ref_node(&fte_tmp->node);
+			tree_put_node(&fte_tmp->node);
+			goto skip_search;
+		}
+
 	/* Try to find a fg that already contains a matching fte */
 	list_for_each_entry(iter, match_head, list) {
 		struct fs_fte *fte_tmp;
@@ -1777,8 +1799,7 @@ search_again_locked:
 		fte_tmp = lookup_fte_locked(g, spec->match_value, take_write);
 		if (!fte_tmp)
 			continue;
-		rule = add_rule_fg(g, spec->match_value,
-				   flow_act, dest, dest_num, fte_tmp);
+		rule = add_rule_fg(g, spec, flow_act, dest, dest_num, fte_tmp);
 		up_write_ref_node(&fte_tmp->node);
 		tree_put_node(&fte_tmp->node);
 		kmem_cache_free(steering->ftes_cache, fte);
@@ -1825,8 +1846,7 @@ skip_search:
 
 		nested_down_write_ref_node(&fte->node, FS_LOCK_CHILD);
 		up_write_ref_node(&g->node);
-		rule = add_rule_fg(g, spec->match_value,
-				   flow_act, dest, dest_num, fte);
+		rule = add_rule_fg(g, spec, flow_act, dest, dest_num, fte);
 		up_write_ref_node(&fte->node);
 		tree_put_node(&fte->node);
 		return rule;
@@ -1868,16 +1888,15 @@ search_again_locked:
 
 	/* Collect all fgs which has a matching match_criteria */
 	err = build_match_list(&match_head, ft, spec);
-	if (err) {
-		if (take_write)
-			up_write_ref_node(&ft->node);
-		else
-			up_read_ref_node(&ft->node);
-		return ERR_PTR(err);
+	if (!take_write) {
+		up_read_ref_node(&ft->node);
+	} else {
+		up_write_ref_node(&ft->node);
+		take_write = false;
 	}
 
-	if (!take_write)
-		up_read_ref_node(&ft->node);
+	if (err)
+		return ERR_PTR(err);
 
 	rule = try_add_to_existing_fg(ft, &match_head.list, spec, flow_act, dest,
 				      dest_num, version);
@@ -1912,11 +1931,12 @@ search_again_locked:
 	if (err)
 		goto err_release_fg;
 
-	fte = alloc_fte(ft, spec->match_value, flow_act);
+	fte = alloc_fte(ft, spec, flow_act);
 	if (IS_ERR(fte)) {
 		err = PTR_ERR(fte);
 		goto err_release_fg;
 	}
+	fte->handle = spec->handle;
 
 	err = insert_fte(g, fte);
 	if (err) {
@@ -1926,8 +1946,7 @@ search_again_locked:
 
 	nested_down_write_ref_node(&fte->node, FS_LOCK_CHILD);
 	up_write_ref_node(&g->node);
-	rule = add_rule_fg(g, spec->match_value, flow_act, dest,
-			   dest_num, fte);
+	rule = add_rule_fg(g, spec, flow_act, dest, dest_num, fte);
 	up_write_ref_node(&fte->node);
 	tree_put_node(&fte->node);
 	tree_put_node(&g->node);
@@ -2230,7 +2249,7 @@ struct mlx5_flow_namespace *mlx5_get_flow_vport_acl_namespace(struct mlx5_core_d
 {
 	struct mlx5_flow_steering *steering = dev->priv.steering;
 
-	if (!steering || vport >= MLX5_TOTAL_VPORTS(dev))
+	if (!steering || vport >= mlx5_eswitch_get_total_vports(dev))
 		return NULL;
 
 	switch (type) {
@@ -2571,7 +2590,7 @@ static void cleanup_egress_acls_root_ns(struct mlx5_core_dev *dev)
 	if (!steering->esw_egress_root_ns)
 		return;
 
-	for (i = 0; i < MLX5_TOTAL_VPORTS(dev); i++)
+	for (i = 0; i < mlx5_eswitch_get_total_vports(dev); i++)
 		cleanup_root_ns(steering->esw_egress_root_ns[i]);
 
 	kfree(steering->esw_egress_root_ns);
@@ -2585,7 +2604,7 @@ static void cleanup_ingress_acls_root_ns(struct mlx5_core_dev *dev)
 	if (!steering->esw_ingress_root_ns)
 		return;
 
-	for (i = 0; i < MLX5_TOTAL_VPORTS(dev); i++)
+	for (i = 0; i < mlx5_eswitch_get_total_vports(dev); i++)
 		cleanup_root_ns(steering->esw_ingress_root_ns[i]);
 
 	kfree(steering->esw_ingress_root_ns);
@@ -2785,16 +2804,18 @@ static int init_ingress_acl_root_ns(struct mlx5_flow_steering *steering, int vpo
 static int init_egress_acls_root_ns(struct mlx5_core_dev *dev)
 {
 	struct mlx5_flow_steering *steering = dev->priv.steering;
+	int total_vports = mlx5_eswitch_get_total_vports(dev);
 	int err;
 	int i;
 
-	steering->esw_egress_root_ns = kcalloc(MLX5_TOTAL_VPORTS(dev),
-					       sizeof(*steering->esw_egress_root_ns),
-					       GFP_KERNEL);
+	steering->esw_egress_root_ns =
+			kcalloc(total_vports,
+				sizeof(*steering->esw_egress_root_ns),
+				GFP_KERNEL);
 	if (!steering->esw_egress_root_ns)
 		return -ENOMEM;
 
-	for (i = 0; i < MLX5_TOTAL_VPORTS(dev); i++) {
+	for (i = 0; i < total_vports; i++) {
 		err = init_egress_acl_root_ns(steering, i);
 		if (err)
 			goto cleanup_root_ns;
@@ -2812,16 +2833,18 @@ cleanup_root_ns:
 static int init_ingress_acls_root_ns(struct mlx5_core_dev *dev)
 {
 	struct mlx5_flow_steering *steering = dev->priv.steering;
+	int total_vports = mlx5_eswitch_get_total_vports(dev);
 	int err;
 	int i;
 
-	steering->esw_ingress_root_ns = kcalloc(MLX5_TOTAL_VPORTS(dev),
-						sizeof(*steering->esw_ingress_root_ns),
-						GFP_KERNEL);
+	steering->esw_ingress_root_ns =
+			kcalloc(total_vports,
+				sizeof(*steering->esw_ingress_root_ns),
+				GFP_KERNEL);
 	if (!steering->esw_ingress_root_ns)
 		return -ENOMEM;
 
-	for (i = 0; i < MLX5_TOTAL_VPORTS(dev); i++) {
+	for (i = 0; i < total_vports; i++) {
 		err = init_ingress_acl_root_ns(steering, i);
 		if (err)
 			goto cleanup_root_ns;
@@ -2884,8 +2907,8 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 	steering->dev = dev;
 	dev->priv.steering = steering;
 
-	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev->priv.name);
-	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev->priv.name);
+	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev_name(dev->device));
+	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev_name(dev->device));
 	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
 						sizeof(struct mlx5_flow_group), 0,
 						0, NULL);

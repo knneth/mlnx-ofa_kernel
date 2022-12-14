@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
 
 Change-Id: Ic7704644eb9c79041a3dfe47e2eb141031f070c9
 ---
- drivers/infiniband/core/rdma_core.c | 35 ++++++++++++++++++++++++++++++++---
+ drivers/infiniband/core/rdma_core.c | 35 ++++++++++++++++++++++++++---
  1 file changed, 32 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/rdma_core.c

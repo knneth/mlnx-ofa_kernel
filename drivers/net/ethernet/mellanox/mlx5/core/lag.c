@@ -375,7 +375,7 @@ static void mlx5_do_bond_work(struct work_struct *work)
 	status = mlx5_dev_list_trylock();
 	if (!status) {
 		/* 1 sec delay. */
-		mlx5_queue_bond_work(ldev, HZ);
+		mlx5_queue_bond_work(ldev, HZ/2);
 		return;
 	}
 
@@ -383,29 +383,15 @@ static void mlx5_do_bond_work(struct work_struct *work)
 	mlx5_dev_list_unlock();
 }
 
-static int mlx5_handle_changeupper_event(struct mlx5_lag *ldev,
-					 struct lag_tracker *tracker,
-					 struct net_device *ndev,
-					 struct netdev_notifier_changeupper_info *info)
+static bool mlx5_lag_eval_bonding_conds(struct mlx5_lag *ldev,
+					struct lag_tracker *tracker,
+					struct net_device *upper,
+					enum netdev_lag_tx_type tx_type)
 {
-	struct net_device *upper = info->upper_dev, *ndev_tmp;
-	struct netdev_lag_upper_info *lag_upper_info = NULL;
+	int bond_status = 0, num_slaves = 0, idx;
+	struct net_device *ndev_tmp;
 	bool is_bonded;
-	int bond_status = 0;
-	int num_slaves = 0;
-	int idx;
 
-	if (!netif_is_lag_master(upper))
-		return 0;
-
-	if (info->linking)
-		lag_upper_info = info->upper_info;
-
-	/* The event may still be of interest if the slave does not belong to
-	 * us, but is enslaved to a master which has one or more of our netdevs
-	 * as slaves (e.g., if a new slave is added to a master that bonds two
-	 * of our netdevs, we should unbond).
-	 */
 	rcu_read_lock();
 	for_each_netdev_in_bond_rcu(upper, ndev_tmp) {
 		idx = mlx5_lag_dev_get_netdev_idx(ldev, ndev_tmp);
@@ -418,10 +404,9 @@ static int mlx5_handle_changeupper_event(struct mlx5_lag *ldev,
 
 	/* None of this lagdev's netdevs are slaves of this master. */
 	if (!(bond_status & 0x3))
-		return 0;
+		return false;
 
-	if (lag_upper_info)
-		tracker->tx_type = lag_upper_info->tx_type;
+	tracker->tx_type = tx_type;
 
 	/* Determine bonding status:
 	 * A device is considered bonded if both its physical ports are slaves
@@ -435,16 +420,38 @@ static int mlx5_handle_changeupper_event(struct mlx5_lag *ldev,
 
 	if (tracker->is_bonded != is_bonded) {
 		tracker->is_bonded = is_bonded;
-		return 1;
+		return true;
 	}
 
-	return 0;
+	return false;
 }
 
-static int mlx5_handle_changelowerstate_event(struct mlx5_lag *ldev,
-					      struct lag_tracker *tracker,
-					      struct net_device *ndev,
-					      struct netdev_notifier_changelowerstate_info *info)
+static bool mlx5_handle_changeupper_event(struct mlx5_lag *ldev,
+					  struct lag_tracker *tracker,
+					  struct net_device *ndev,
+					  struct netdev_notifier_changeupper_info *info)
+{
+	enum netdev_lag_tx_type tx_type = NETDEV_LAG_TX_TYPE_UNKNOWN;
+	struct netdev_lag_upper_info *lag_upper_info;
+	struct net_device *upper = info->upper_dev;
+
+	if (!netif_is_lag_master(upper))
+		return false;
+
+	if (info->linking) {
+		lag_upper_info = info->upper_info;
+
+		if (lag_upper_info)
+			tx_type = lag_upper_info->tx_type;
+	}
+
+	return mlx5_lag_eval_bonding_conds(ldev, tracker, upper, tx_type);
+}
+
+static bool mlx5_handle_changelowerstate_event(struct mlx5_lag *ldev,
+					       struct lag_tracker *tracker,
+					       struct net_device *ndev,
+					       struct netdev_notifier_changelowerstate_info *info)
 {
 	struct netdev_lag_lower_state_info *lag_lower_info;
 	int idx;
@@ -474,7 +481,7 @@ static int mlx5_lag_netdev_event(struct notifier_block *this,
 	struct net_device *ndev = netdev_notifier_info_to_dev(ptr);
 	struct lag_tracker tracker;
 	struct mlx5_lag *ldev;
-	int changed = 0;
+	bool changed = 0;
 
 	if (!net_eq(dev_net(ndev), &init_net))
 		return NOTIFY_DONE;
@@ -607,6 +614,55 @@ static ssize_t mlx5_lag_set_enabled(struct device *device,
 static DEVICE_ATTR(roce_lag_enable, 0644, mlx5_lag_show_enabled, mlx5_lag_set_enabled);
 static struct device_attribute *mlx5_lag_dev_attrs = &dev_attr_roce_lag_enable;
 
+static void mlx5_lag_update_trackers(struct mlx5_lag *ldev)
+{
+	enum netdev_lag_tx_type tx_type = NETDEV_LAG_TX_TYPE_UNKNOWN;
+	struct net_device *upper = NULL, *ndev;
+	struct lag_tracker *tracker;
+	struct bonding *bond;
+	struct slave *slave;
+	int i;
+
+	rtnl_lock();
+	tracker = &ldev->tracker;
+
+	for (i = 0; i < MLX5_MAX_PORTS; i++) {
+		ndev = ldev->pf[i].netdev;
+		if (!ndev)
+			continue;
+
+		if (ndev->reg_state != NETREG_REGISTERED)
+			continue;
+
+		if (!netif_is_bond_slave(ndev))
+			continue;
+
+		rcu_read_lock();
+		slave = bond_slave_get_rcu(ndev);
+		rcu_read_unlock();
+		bond = bond_get_bond_by_slave(slave);
+
+		tracker->netdev_state[i].link_up = bond_slave_is_up(slave);
+		tracker->netdev_state[i].tx_enabled = bond_slave_can_tx(slave);
+
+		if (bond_mode_uses_xmit_hash(bond))
+			tx_type = NETDEV_LAG_TX_TYPE_HASH;
+		else if (BOND_MODE(bond) == BOND_MODE_ACTIVEBACKUP)
+			tx_type = NETDEV_LAG_TX_TYPE_ACTIVEBACKUP;
+
+		upper = bond->dev;
+	}
+
+	if (!upper)
+		goto out;
+
+	if (mlx5_lag_eval_bonding_conds(ldev, tracker, upper, tx_type))
+		mlx5_queue_bond_work(ldev, 0);
+
+out:
+	rtnl_unlock();
+}
+
 /* Must be called with intf_mutex held */
 void mlx5_lag_add(struct mlx5_core_dev *dev, struct net_device *netdev)
 {
@@ -645,6 +701,8 @@ void mlx5_lag_add(struct mlx5_core_dev *dev, struct net_device *netdev)
 			mlx5_core_err(dev, "Failed to register LAG netdev notifier\n");
 		}
 	}
+
+	mlx5_lag_update_trackers(ldev);
 
 	err = mlx5_lag_mp_init(ldev);
 	if (err)

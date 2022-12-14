@@ -92,10 +92,22 @@ struct mlx5_flow_handle {
 };
 struct mlx5_flow_rule;
 
+enum {
+	FLOW_CONTEXT_HAS_TAG = BIT(0),
+};
+
+struct mlx5_flow_context {
+	u32 flags;
+	u32 flow_tag;
+	u32 flow_source;
+};
+
 struct mlx5_flow_spec {
 	u8   match_criteria_enable;
 	u32  match_criteria[MLX5_ST_SZ_DW(fte_match_param)];
 	u32  match_value[MLX5_ST_SZ_DW(fte_match_param)];
+	u32  handle;
+	struct mlx5_flow_context flow_context;
 };
 
 struct mlx5_flow_destination {
@@ -171,13 +183,11 @@ struct mlx5_fs_vlan {
 #define MLX5_FS_VLAN_DEPTH	2
 
 enum {
-	FLOW_ACT_HAS_TAG   = BIT(0),
-	FLOW_ACT_NO_APPEND = BIT(1),
+	FLOW_ACT_NO_APPEND = BIT(0),
 };
 
 struct mlx5_flow_act {
 	u32 action;
-	u32 flow_tag;
 	u32 reformat_id;
 	u32 modify_id;
 	uintptr_t esp_id;
@@ -188,7 +198,6 @@ struct mlx5_flow_act {
 
 #define MLX5_DECLARE_FLOW_ACT(name) \
 	struct mlx5_flow_act name = { .action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,\
-				      .flow_tag = MLX5_FS_DEFAULT_FLOW_TAG, \
 				      .reformat_id = 0, \
 				      .modify_id = 0, \
 				      .flags =  0, }
@@ -208,7 +217,11 @@ int mlx5_modify_rule_destination(struct mlx5_flow_handle *handler,
 				 struct mlx5_flow_destination *new_dest,
 				 struct mlx5_flow_destination *old_dest);
 
+struct mlx5_fc *mlx5_fc_alloc(struct mlx5_core_dev *dev, gfp_t flags);
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging);
+void mlx5_fc_dealloc(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
+void mlx5_fc_link_dummies(struct mlx5_fc *counter, struct mlx5_fc **dummies, int nr_dummies);
+void mlx5_fc_unlink_dummies(struct mlx5_fc *counter);
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
 			  u64 *bytes, u64 *packets, u64 *lastuse);

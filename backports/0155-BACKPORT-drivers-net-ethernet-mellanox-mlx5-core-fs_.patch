@@ -19,7 +19,7 @@ Change-Id: I8b54c9a36f98e3cb2573886a80550cfbb96cf2ce
  };
  
  struct fs_node {
-@@ -264,11 +268,13 @@ struct mlx5_flow_root_namespace {
+@@ -272,11 +276,13 @@ struct mlx5_flow_root_namespace {
  
  int mlx5_init_fc_stats(struct mlx5_core_dev *dev);
  void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev);

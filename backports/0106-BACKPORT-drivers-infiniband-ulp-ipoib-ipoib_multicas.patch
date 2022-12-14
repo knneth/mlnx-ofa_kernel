@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_multicast.c
 
 Change-Id: I1660ce5db43be9cef471e2bfde22d5e35b4d5870
 ---
- drivers/infiniband/ulp/ipoib/ipoib_multicast.c | 24 ++++++++++++++++++++----
+ .../infiniband/ulp/ipoib/ipoib_multicast.c    | 24 +++++++++++++++----
  1 file changed, 20 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_multicast.c

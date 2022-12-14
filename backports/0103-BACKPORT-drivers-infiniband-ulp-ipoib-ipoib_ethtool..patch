@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 
 Change-Id: I1169d1d6dc2bd40b4befa59e0469dd8992c152dc
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 99 ++++++++++++++++++++++++++++
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 99 ++++++++++++++++++++
  1 file changed, 99 insertions(+)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c

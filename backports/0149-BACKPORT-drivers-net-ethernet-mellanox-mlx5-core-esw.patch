@@ -8,7 +8,7 @@ Subject: [PATCH] BACKPORT:
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
-@@ -114,7 +114,11 @@ u16 mlx5_eswitch_get_prio_range(struct m
+@@ -92,7 +92,11 @@ u16 mlx5_eswitch_get_prio_range(struct m
  	if (esw->fdb_table.flags & ESW_FDB_CHAINS_AND_PRIOS_SUPPORTED)
  		return FDB_MAX_PRIO;
  
@@ -19,11 +19,11 @@ Subject: [PATCH] BACKPORT:
 +#endif
  }
  
- struct mlx5_flow_handle *
-@@ -195,12 +199,15 @@ mlx5_eswitch_add_offloaded_rule(struct m
- 				 source_eswitch_owner_vhca_id);
+ static void
+@@ -206,12 +210,15 @@ mlx5_eswitch_add_offloaded_rule(struct m
  
- 	spec->match_criteria_enable = MLX5_MATCH_MISC_PARAMETERS;
+ 	mlx5_eswitch_set_rule_source_port(esw, spec, attr);
+ 
 +#ifdef HAVE_TCF_TUNNEL_INFO
  	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_DECAP) {
  		if (attr->tunnel_match_level != MLX5_MATCH_NONE)
@@ -37,7 +37,7 @@ Subject: [PATCH] BACKPORT:
  		spec->match_criteria_enable |= MLX5_MATCH_OUTER_HEADERS;
  	}
  
-@@ -1570,15 +1577,23 @@ disable_roce:
+@@ -1688,15 +1695,23 @@ disable_roce:
  	return err;
  }
  
@@ -63,7 +63,7 @@ Subject: [PATCH] BACKPORT:
  		atomic_set(&esw->handler.in_progress, 0);
  		return -EINVAL;
  	}
-@@ -1586,20 +1601,34 @@ static int esw_offloads_start_imp(struct
+@@ -1704,20 +1719,34 @@ static int esw_offloads_start_imp(struct
  	mlx5_eswitch_disable_sriov(esw);
  	err = mlx5_eswitch_enable_sriov(esw, num_vfs, SRIOV_OFFLOADS);
  	if (err) {
@@ -98,7 +98,7 @@ Subject: [PATCH] BACKPORT:
  		}
  	}
  	atomic_set(&esw->handler.in_progress, 0);
-@@ -1612,19 +1641,34 @@ void esw_offloads_start_handler(struct w
+@@ -1730,19 +1759,34 @@ void esw_offloads_start_handler(struct w
  		container_of(work, struct mlx5_esw_handler, start_handler);
  	struct mlx5_eswitch *esw =
  		container_of(handler, struct mlx5_eswitch, handler);
@@ -137,7 +137,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  void esw_offloads_cleanup_reps(struct mlx5_eswitch *esw)
-@@ -2120,19 +2164,30 @@ err_reps:
+@@ -2689,19 +2733,30 @@ err_vport_metadata:
  	return err;
  }
  
@@ -170,7 +170,7 @@ Subject: [PATCH] BACKPORT:
  	}
  
  	atomic_set(&esw->handler.in_progress, 0);
-@@ -2145,20 +2200,36 @@ void esw_offloads_stop_handler(struct wo
+@@ -2714,20 +2769,36 @@ void esw_offloads_stop_handler(struct wo
  		container_of(work, struct mlx5_esw_handler, stop_handler);
  	struct mlx5_eswitch *esw =
  		container_of(handler, struct mlx5_eswitch, handler);
@@ -207,7 +207,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  void esw_offloads_cleanup(struct mlx5_eswitch *esw)
-@@ -2273,8 +2344,34 @@ static int mlx5_devlink_eswitch_check(st
+@@ -2844,8 +2915,34 @@ static int mlx5_devlink_eswitch_check(st
  	return 0;
  }
  
@@ -244,8 +244,8 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2297,15 +2394,23 @@ int mlx5_devlink_eswitch_mode_set(struct
- 		return -EBUSY;
+@@ -2873,15 +2970,23 @@ int mlx5_devlink_eswitch_mode_set(struct
+ 	}
  
  	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV)
 -		return esw_offloads_start(esw, extack);
@@ -271,7 +271,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	int err;
-@@ -2317,8 +2422,11 @@ int mlx5_devlink_eswitch_mode_get(struct
+@@ -2893,8 +2998,11 @@ int mlx5_devlink_eswitch_mode_get(struct
  	return esw_mode_to_devlink(dev->priv.eswitch->mode, mode);
  }
  
@@ -285,7 +285,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2335,15 +2443,23 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -2911,15 +3019,23 @@ int mlx5_devlink_eswitch_inline_mode_set
  			return 0;
  		/* fall through */
  	case MLX5_CAP_INLINE_MODE_L2:
@@ -309,8 +309,8 @@ Subject: [PATCH] BACKPORT:
  		return -EOPNOTSUPP;
  	}
  
-@@ -2354,8 +2470,12 @@ int mlx5_devlink_eswitch_inline_mode_set
- 	mlx5_esw_for_each_vf_vport(esw, vport, esw->enabled_vports) {
+@@ -2930,8 +3046,12 @@ int mlx5_devlink_eswitch_inline_mode_set
+ 	for (vport = 1; vport < esw->enabled_vports; vport++) {
  		err = mlx5_modify_nic_vport_min_inline(dev, vport, mlx5_mode);
  		if (err) {
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
@@ -322,7 +322,7 @@ Subject: [PATCH] BACKPORT:
  			goto revert_inline_mode;
  		}
  	}
-@@ -2372,7 +2492,7 @@ out:
+@@ -2948,7 +3068,7 @@ out:
  	return err;
  }
  
@@ -331,7 +331,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2387,7 +2507,7 @@ int mlx5_devlink_eswitch_inline_mode_get
+@@ -2963,7 +3083,7 @@ int mlx5_devlink_eswitch_inline_mode_get
  
  int mlx5_eswitch_inline_mode_get(struct mlx5_eswitch *esw, int nvfs, u8 *mode)
  {
@@ -340,7 +340,7 @@ Subject: [PATCH] BACKPORT:
  	struct mlx5_core_dev *dev = esw->dev;
  	int vport;
  
-@@ -2421,8 +2541,11 @@ out:
+@@ -2997,8 +3117,11 @@ out:
  	return 0;
  }
  
@@ -354,7 +354,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2449,8 +2572,13 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3025,8 +3148,13 @@ int mlx5_devlink_eswitch_encap_mode_set(
  		return 0;
  
  	if (atomic64_read(&esw->offloads.num_flows) > 0) {
@@ -368,7 +368,7 @@ Subject: [PATCH] BACKPORT:
  		return -EOPNOTSUPP;
  	}
  
-@@ -2461,8 +2589,12 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3037,8 +3165,12 @@ int mlx5_devlink_eswitch_encap_mode_set(
  	err = esw_create_offloads_fdb_tables(esw, esw->nvports);
  
  	if (err) {
@@ -381,7 +381,7 @@ Subject: [PATCH] BACKPORT:
  		esw->offloads.encap = !encap;
  		(void)esw_create_offloads_fdb_tables(esw, esw->nvports);
  	}
-@@ -2470,7 +2602,7 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3046,7 +3178,7 @@ int mlx5_devlink_eswitch_encap_mode_set(
  	return err;
  }
  

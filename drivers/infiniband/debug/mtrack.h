@@ -93,7 +93,7 @@
 	else									\
 		__memtrack_addr = kvzalloc(size, flags);			\
 	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {	\
-		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
@@ -106,7 +106,7 @@
 	else									\
 		__memtrack_addr = kvmalloc_array(n, size, flags);		\
 	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__) && (n)*(size)) {	\
-		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*size, 0UL, 0, __FILE__, __LINE__, flags); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
@@ -118,7 +118,7 @@
 	else									\
 		__memtrack_addr = kvcalloc(n, size, flags);			\
 	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {	\
-		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
@@ -225,7 +225,7 @@
 	else									\
 		__memtrack_addr = kvmalloc(sz, flgs);			\
 	if (__memtrack_addr) {							\
-		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
 			memset(__memtrack_addr, 0x5A, sz);			\
 	}									\
@@ -239,7 +239,7 @@
 	else									\
 		__memtrack_addr = kvmalloc_node(sz, flgs, node);			\
 	if (__memtrack_addr) {							\
-		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
 			memset(__memtrack_addr, 0x5A, sz);			\
 	}									\
@@ -254,7 +254,7 @@
 	else									\
 		__memtrack_addr = kvzalloc_node(sz, flgs, node);			\
 	if (__memtrack_addr) {							\
-		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
 	__memtrack_addr;							\
 })

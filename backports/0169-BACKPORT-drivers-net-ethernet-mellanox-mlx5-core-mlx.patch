@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 
 Change-Id: I104fcd5676b497f019036d3aa8acf5555e0e8cc1
 ---
- drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
-@@ -244,6 +244,9 @@ int mlx5_core_eq_query(struct mlx5_core_
+@@ -245,6 +245,9 @@ int mlx5_core_eq_query(struct mlx5_core_
  int mlx5_start_eqs(struct mlx5_core_dev *dev);
  void mlx5_stop_eqs(struct mlx5_core_dev *dev);
  void mlx5_pcie_event_work(struct work_struct *work);
@@ -18,3 +18,13 @@ Change-Id: I104fcd5676b497f019036d3aa8acf5555e0e8cc1
  
  /* This function should only be called after mlx5_cmd_force_teardown_hca */
  void mlx5_core_eq_free_irqs(struct mlx5_core_dev *dev);
+@@ -302,7 +305,9 @@ int mlx5_set_mtppse(struct mlx5_core_dev
+ 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
+ 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
+ 
++#ifdef HAVE_MINIFLOW
+ ssize_t mlx5_show_counters_ct(char *buf);
++#endif
+ 
+ int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw);
+ 

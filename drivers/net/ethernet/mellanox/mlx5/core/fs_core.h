@@ -162,6 +162,8 @@ struct mlx5_fc_cache {
 	u64 lastuse;
 };
 
+#define MINIFLOW_MAX_FLOWS 12
+
 struct mlx5_fc {
 	struct list_head list;
 	struct llist_node addlist;
@@ -175,6 +177,10 @@ struct mlx5_fc {
 
 	u32 id;
 	bool aging;
+	bool dummy;
+
+	atomic_t nr_dummies;
+	struct mlx5_fc *dummies[MINIFLOW_MAX_FLOWS];
 
 	struct mlx5_fc_cache cache ____cacheline_aligned_in_smp;
 };
@@ -202,11 +208,13 @@ struct fs_fte {
 	u32				val[MLX5_ST_SZ_DW_MATCH_PARAM];
 	u32				dests_size;
 	u32				index;
+	struct mlx5_flow_context	flow_context;
 	struct mlx5_flow_act		action;
 	enum fs_fte_status		status;
 	struct mlx5_fc			*counter;
 	struct rhash_head		hash;
 	struct fs_debugfs_fte		debugfs;
+	u32				handle;
 };
 
 /* Type of children is mlx5_flow_table/namespace */

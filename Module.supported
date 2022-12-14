@@ -71,4 +71,6 @@ mlx5_fpga_tools.ko external
 act_vlan.ko external
 act_tunnel_key.ko external
 cls_flower.ko external
-eth_ipoib.ko
+eth_ipoib.ko external
+mdev.ko external
+vfio_mdev.ko external

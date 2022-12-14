@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
 Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
 ---
- drivers/infiniband/core/umem_odp.c | 146 +++++++++++++++++++++++++++++++++++--
+ drivers/infiniband/core/umem_odp.c | 146 +++++++++++++++++++++++++++--
  1 file changed, 140 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/umem_odp.c
@@ -207,7 +207,7 @@ Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
  	mmu_notifier_unregister_no_release(&per_mm->mn, per_mm->mm);
  	put_pid(per_mm->tgid);
  	mmu_notifier_call_srcu(&per_mm->rcu, free_per_mm);
-@@ -645,7 +742,9 @@ int ib_umem_odp_map_dma_pages(struct ib_
+@@ -647,7 +744,9 @@ int ib_umem_odp_map_dma_pages(struct ib_
  	struct page       **local_page_list = NULL;
  	u64 page_mask, off;
  	int j, k, ret = 0, start_idx, npages = 0, page_shift;
@@ -217,7 +217,7 @@ Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
  	phys_addr_t p = 0;
  
  	if (access_mask == 0)
-@@ -676,8 +775,10 @@ int ib_umem_odp_map_dma_pages(struct ib_
+@@ -678,8 +777,10 @@ int ib_umem_odp_map_dma_pages(struct ib_
  		goto out_put_task;
  	}
  
@@ -228,7 +228,7 @@ Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
  
  	start_idx = (user_virt - ib_umem_start(umem)) >> page_shift;
  	k = start_idx;
-@@ -695,9 +796,29 @@ int ib_umem_odp_map_dma_pages(struct ib_
+@@ -697,9 +798,29 @@ int ib_umem_odp_map_dma_pages(struct ib_
  		 * complex (and doesn't gain us much performance in most use
  		 * cases).
  		 */
@@ -258,7 +258,7 @@ Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
  		up_read(&owning_mm->mmap_sem);
  
  		if (npages < 0) {
-@@ -828,10 +949,16 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
+@@ -833,10 +954,16 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
  /* @last is not a part of the interval. See comment for function
   * node_last.
   */
@@ -275,7 +275,7 @@ Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
  				  void *cookie)
  {
  	int ret_val = 0;
-@@ -844,8 +971,10 @@ int rbt_ib_umem_for_each_in_range(struct
+@@ -849,8 +976,10 @@ int rbt_ib_umem_for_each_in_range(struct
  	for (node = rbt_ib_umem_iter_first(root, start, last - 1);
  			node; node = next) {
  		/* TODO move the blockable decision up to the callback */
@@ -286,7 +286,7 @@ Change-Id: I7521ac463c4930da1679b7cb2e1f3451e5602c1e
  		next = rbt_ib_umem_iter_next(node, start, last - 1);
  		umem = container_of(node, struct ib_umem_odp, interval_tree);
  		ret_val = cb(umem, start, last, cookie) || ret_val;
-@@ -854,8 +983,13 @@ int rbt_ib_umem_for_each_in_range(struct
+@@ -859,8 +988,13 @@ int rbt_ib_umem_for_each_in_range(struct
  	return ret_val;
  }
  EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);

@@ -1368,10 +1368,11 @@ static inline int mlx5_ib_odp_init(void) { return 0; }
 static inline void mlx5_ib_odp_cleanup(void)				    {}
 static inline void mlx5_odp_init_mr_cache_entry(struct mlx5_cache_ent *ent) {}
 
-static int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
-				      enum ib_uverbs_advise_mr_advice advice,
-				      u32 flags, struct ib_sge *sg_list,
-				      u32 num_sge)
+static inline int
+mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
+			   enum ib_uverbs_advise_mr_advice advice,
+			   u32 flags, struct ib_sge *sg_list,
+			   u32 num_sge)
 {
 	return -EOPNOTSUPP;
 }
@@ -1436,6 +1437,7 @@ void mlx5_ib_devx_destroy(struct mlx5_ib_dev *dev, u16 uid);
 const struct uverbs_object_tree_def *mlx5_ib_get_devx_tree(void);
 struct mlx5_ib_flow_handler *mlx5_ib_raw_fs_rule_add(
 	struct mlx5_ib_dev *dev, struct mlx5_ib_flow_matcher *fs_matcher,
+	struct mlx5_flow_context *flow_context,
 	struct mlx5_flow_act *flow_act, u32 counter_id,
 	void *cmd_in, int inlen, int dest_id, int dest_type);
 bool mlx5_ib_devx_is_flow_dest(void *obj, int *dest_id, int *dest_type);

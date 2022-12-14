@@ -35,6 +35,7 @@
 
 #ifdef CONFIG_MLX5_FPGA
 
+#include "mlx5_core.h"
 #include "fpga/cmd.h"
 #include "fpga/sdk.h"
 
@@ -83,26 +84,26 @@ struct mlx5_fpga_device {
 };
 
 #define mlx5_fpga_dbg(__adev, format, ...) \
-	dev_dbg(&(__adev)->mdev->pdev->dev, "FPGA: %s:%d:(pid %d): " format, \
-		 __func__, __LINE__, current->pid, ##__VA_ARGS__)
+	mlx5_core_dbg((__adev)->mdev, "FPGA: %s:%d:(pid %d): " format, \
+		       __func__, __LINE__, current->pid, ##__VA_ARGS__)
 
 #define mlx5_fpga_err(__adev, format, ...) \
-	dev_err(&(__adev)->mdev->pdev->dev, "FPGA: %s:%d:(pid %d): " format, \
-		__func__, __LINE__, current->pid, ##__VA_ARGS__)
+	mlx5_core_err((__adev)->mdev, "FPGA: %s:%d:(pid %d): " format, \
+		      __func__, __LINE__, current->pid, ##__VA_ARGS__)
 
 #define mlx5_fpga_warn(__adev, format, ...) \
-	dev_warn(&(__adev)->mdev->pdev->dev, "FPGA: %s:%d:(pid %d): " format, \
-		__func__, __LINE__, current->pid, ##__VA_ARGS__)
+	mlx5_core_warn((__adev)->mdev, "FPGA: %s:%d:(pid %d): " format, \
+		       __func__, __LINE__, current->pid, ##__VA_ARGS__)
 
 #define mlx5_fpga_warn_ratelimited(__adev, format, ...) \
-	dev_warn_ratelimited(&(__adev)->mdev->pdev->dev, "FPGA: %s:%d: " \
-		format, __func__, __LINE__, ##__VA_ARGS__)
+	mlx5_core_err_rl((__adev)->mdev, "FPGA: %s:%d: " \
+			 format, __func__, __LINE__, ##__VA_ARGS__)
 
 #define mlx5_fpga_notice(__adev, format, ...) \
-	dev_notice(&(__adev)->mdev->pdev->dev, "FPGA: " format, ##__VA_ARGS__)
+	mlx5_core_info((__adev)->mdev, "FPGA: " format, ##__VA_ARGS__)
 
 #define mlx5_fpga_info(__adev, format, ...) \
-	dev_info(&(__adev)->mdev->pdev->dev, "FPGA: " format, ##__VA_ARGS__)
+	mlx5_core_info((__adev)->mdev, "FPGA: " format, ##__VA_ARGS__)
 
 int mlx5_fpga_init(struct mlx5_core_dev *mdev);
 void mlx5_fpga_cleanup(struct mlx5_core_dev *mdev);

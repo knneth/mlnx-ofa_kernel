@@ -306,7 +306,7 @@ static inline bool mlx5e_rx_cache_put(struct mlx5e_rq *rq,
  * Don't get too close to U32_MAX, keep room for other components
  * to do further increments (SKB clones, forwarding, etc...)
  */
-#define PAGE_REF_ELEV  (U32_MAX >> 1)
+#define PAGE_REF_ELEV  (U16_MAX)
 
 /* Upper bound on number of packets that share a single page */
 #define PAGE_REF_THRSD (PAGE_SIZE / 64)

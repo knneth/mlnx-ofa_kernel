@@ -72,10 +72,6 @@ if [ -e /etc/profile.d/ofed.sh ]; then
         . /etc/profile.d/ofed.sh
 fi
 
-IS_IN_CONTAINER=0
-if [ -e /.dockerenv ]; then
-    IS_IN_CONTAINER=1
-fi
 # Only use ONBOOT option if called by a runlevel directory.
 systemd_auto=0
 bootID=${2##*=}
@@ -356,7 +352,7 @@ UNLOAD_MODULES="$UNLOAD_MODULES ib_qib"
 UNLOAD_MODULES="$UNLOAD_MODULES eth_ipoib ib_ipoib mlx4_vnic ib_madeye ib_rds hns_roce"
 UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target scsi_target ib_srp ib_iser ib_sdp"
 UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
-UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw"
+UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw vfio_mdev"
 
 STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib mlx4_core mlx4_ib mlx4_en mlx5_core mlx5_ib ib_uverbs ib_umad ib_ucm ib_cm ib_core eth_ipoib mlxfw mlx5_fpga_tools"
 
@@ -402,46 +398,6 @@ is_module()
     return $RC
 }
 
-# W/A for containers; load modules using insmod instead of modprobe
-load_module_insmod()
-{
-    local module=$1
-
-    case "$module" in
-        mlx4_core | mlx5_core)
-            if ! is_module ib_core && ! (modinfo mlx4_ib 2>/dev/null | grep -qwi dummy) && ! (modinfo mlx5_ib 2>/dev/null | grep -qwi dummy); then
-                load_module_insmod ib_core
-                if [ $? -ne 0 ]; then
-                    return 1
-                fi
-            fi
-        ;;
-    esac
-
-    local deplist=$(/sbin/modprobe --show-depends $module 2>/dev/null)
-
-    OIFS="${IFS}"
-    NIFS=$'\n'
-    IFS="${NIFS}"
-    for ismodFileLine in $deplist
-    do
-        IFS="${OIFS}"
-        local curr_mod=$(echo $ismodFileLine | awk '{print $2}' 2>/dev/null)
-        curr_mod=$(basename $curr_mod 2>/dev/null | sed -e 's/\.ko.gz$//g' -e 's/\.ko$//g' 2>/dev/null)
-        if is_module $curr_mod; then
-            IFS="${NIFS}"
-            continue
-        fi
-        $ismodFileLine >/dev/null
-        if [ $? -ne 0 ]; then
-            IFS="${OIFS}"
-            return 1
-        fi
-        IFS="${NIFS}"
-    done
-    IFS="${OIFS}"
-}
-
 load_module()
 {
     local module=$1
@@ -459,12 +415,7 @@ load_module()
         log_msg "ERROR: Module $module does not belong to MLNX_OFED, skipping..."
         load_module_RC=3
     else
-        if [ $IS_IN_CONTAINER -eq 0 ]; then
-            ${modprobe} $module > /dev/null 2>&1
-        else
-            load_module_insmod $module
-            return $?
-        fi
+        ${modprobe} $module > /dev/null 2>&1
     fi
 }
 
@@ -481,12 +432,7 @@ load_module_external()
         return 0
     fi
 
-    if [ $IS_IN_CONTAINER -eq 0 ]; then
-        ${modprobe} $module > /dev/null 2>&1
-    else
-        load_module_insmod $module
-        return $?
-    fi
+    ${modprobe} $module > /dev/null 2>&1
 }
 
 # Return module's refcnt

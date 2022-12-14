@@ -32,7 +32,10 @@ enum memtrack_memtype_t {
 	MEMTRACK_DMA_MAP_SINGLE,/* Handle ib_dma_single map and unmap */
 	MEMTRACK_DMA_MAP_PAGE,	/* Handle ib_dma_page map and unmap */
 	MEMTRACK_DMA_MAP_SG,	/* Handle ib_dma_sg map and unmap with and without attributes */
-	MEMTRACK_NUM_OF_MEMTYPES
+	MEMTRACK_NUM_OF_MEMTYPES,
+
+	/* Pseudo memtypes that are converted to actual memtypes above. */
+	MEMTRACK_KVMALLOC,      /* Auto determine MEMTRACK_KMALLOC or MEMTRACK_VMALLOC */
 };
 
 /* Invoke on memory allocation */

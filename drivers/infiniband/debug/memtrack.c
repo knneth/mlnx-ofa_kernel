@@ -599,6 +599,9 @@ void memtrack_alloc(enum memtrack_memtype_t memtype, unsigned long dev,
 	struct tracked_obj_desc_t *obj_desc_p;
 	unsigned long flags;
 
+	if (memtype == MEMTRACK_KVMALLOC)
+		memtype = is_vmalloc_addr((const void *)addr) ? MEMTRACK_VMALLOC : MEMTRACK_KMALLOC;
+
 	if (memtype >= MEMTRACK_NUM_OF_MEMTYPES) {
 		printk(KERN_ERR "%s: Invalid memory type (%d)\n", __func__, memtype);
 		return;

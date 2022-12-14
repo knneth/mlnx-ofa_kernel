@@ -130,7 +130,33 @@ static ssize_t max_tx_rate_group_store(struct mlx5_vgroup *g,
 	if (err != 1)
 		return -EINVAL;
 
-	err = mlx5_eswitch_set_vgroup_rate(esw, g->group_id, max_rate);
+	err = mlx5_eswitch_set_vgroup_max_rate(esw, g->group_id, max_rate);
+
+	return err ? err : count;
+}
+
+static ssize_t min_tx_rate_group_show(struct mlx5_vgroup *g,
+				      struct vf_group_attributes *oa,
+				      char *buf)
+{
+	return sprintf(buf,
+		       "usage: write <Rate (Mbit/s)> to set VF group min rate\n");
+}
+
+static ssize_t min_tx_rate_group_store(struct mlx5_vgroup *g,
+				       struct vf_group_attributes *oa,
+				       const char *buf, size_t count)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	u32 min_rate;
+	int err;
+
+	err = sscanf(buf, "%u", &min_rate);
+	if (err != 1)
+		return -EINVAL;
+
+	err = mlx5_eswitch_set_vgroup_min_rate(esw, g->group_id, min_rate);
 
 	return err ? err : count;
 }
@@ -797,6 +823,8 @@ static ssize_t config_group_show(struct mlx5_vgroup *g,
 	mutex_lock(&esw->state_lock);
 	p += _sprintf(p, buf, "Num VFs    : %d\n", g->num_vports);
 	p += _sprintf(p, buf, "MaxRate    : %d\n", g->max_rate);
+	p += _sprintf(p, buf, "MinRate    : %d\n", g->min_rate);
+	p += _sprintf(p, buf, "BWShare(Indirect cfg)    : %d\n", g->bw_share);
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -921,6 +949,7 @@ VF_ATTR(trunk);
 VF_ATTR(stats);
 VF_ATTR(group);
 VF_RATE_GROUP_ATTR(max_tx_rate);
+VF_RATE_GROUP_ATTR(min_tx_rate);
 VF_RATE_GROUP_ATTR(config);
 
 static struct attribute *vf_eth_attrs[] = {
@@ -941,6 +970,7 @@ static struct attribute *vf_eth_attrs[] = {
 
 static struct attribute *vf_group_attrs[] = {
 	&vf_group_attr_max_tx_rate.attr,
+	&vf_group_attr_min_tx_rate.attr,
 	&vf_group_attr_config.attr,
 	NULL
 };

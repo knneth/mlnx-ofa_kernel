@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/eipoib/eth_ipoib_main.c
 
 Change-Id: I484b040349ebf6af607dd3b6c2db4b987083dc11
 ---
- drivers/net/eipoib/eth_ipoib_main.c | 299 +++++++++++++++++++++++++++++++++---
- 1 file changed, 279 insertions(+), 20 deletions(-)
+ drivers/net/eipoib/eth_ipoib_main.c | 302 ++++++++++++++++++++++++++--
+ 1 file changed, 282 insertions(+), 20 deletions(-)
 
 --- a/drivers/net/eipoib/eth_ipoib_main.c
 +++ b/drivers/net/eipoib/eth_ipoib_main.c
@@ -636,3 +636,13 @@ Change-Id: I484b040349ebf6af607dd3b6c2db4b987083dc11
  
  	rtnl_lock();
  	parent_free_all();
+@@ -2686,6 +2945,9 @@ static void __exit mod_exit(void)
+ module_init(mod_init);
+ module_exit(mod_exit);
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_VERSION(DRV_VERSION);
+ MODULE_DESCRIPTION(DRV_DESCRIPTION ", v" DRV_VERSION);
+ MODULE_AUTHOR("Ali Ayoub && Erez Shitrit");

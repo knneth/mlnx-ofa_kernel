@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
 
 Change-Id: Ied6ed6839dd73c3ee2e805acb26bb53940254169
 ---
- drivers/infiniband/core/uverbs_cmd.c | 41 ++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/uverbs_cmd.c | 41 ++++++++++++++++++++++++++++
  1 file changed, 41 insertions(+)
 
 --- a/drivers/infiniband/core/uverbs_cmd.c

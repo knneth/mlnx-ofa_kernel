@@ -16,7 +16,7 @@ Change-Id: I25cdfbf403df0e18278e4e5487fcb42af1c118a6
  #include <net/devlink.h>
  #include <linux/mlx5/device.h>
  #include <linux/mlx5/eswitch.h>
-@@ -196,9 +197,13 @@ struct mlx5_esw_offload {
+@@ -201,9 +202,13 @@ struct mlx5_esw_offload {
  	spinlock_t encap_tbl_lock; /* protects encap_tbl */
  	struct list_head peer_flows;
  	struct mutex peer_mutex;
@@ -30,7 +30,7 @@ Change-Id: I25cdfbf403df0e18278e4e5487fcb42af1c118a6
  	u8 inline_mode;
  	atomic64_t num_flows;
  	u8 encap;
-@@ -225,7 +230,9 @@ struct mlx5_esw_handler {
+@@ -231,7 +236,9 @@ struct mlx5_esw_handler {
  	atomic_t		in_progress;
  	struct work_struct      start_handler;
  	struct work_struct      stop_handler;
@@ -40,34 +40,34 @@ Change-Id: I25cdfbf403df0e18278e4e5487fcb42af1c118a6
  };
  
  struct mlx5_vgroup {
-@@ -322,8 +329,10 @@ int mlx5_eswitch_set_vport_rate(struct m
+@@ -354,8 +361,10 @@ int mlx5_eswitch_set_vport_rate(struct m
  				u32 max_rate, u32 min_rate);
  int mlx5_eswitch_set_vepa(struct mlx5_eswitch *esw, u8 setting);
  int mlx5_eswitch_get_vepa(struct mlx5_eswitch *esw, u8 *setting);
 +#ifdef HAVE_IFLA_VF_INFO
  int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
- 				  int vport, struct ifla_vf_info *ivi);
+ 				  u16 vport, struct ifla_vf_info *ivi);
 +#endif
  int mlx5_eswitch_get_vport_stats(struct mlx5_eswitch *esw,
- 				 int vport,
+ 				 u16 vport,
  				 struct ifla_vf_stats *vf_stats);
-@@ -331,6 +340,7 @@ int mlx5_eswitch_vport_update_group(stru
- 				    u32 group_id);
- int mlx5_eswitch_set_vgroup_rate(struct mlx5_eswitch *esw, int group_id,
- 				 u32 max_rate);
+@@ -369,6 +378,7 @@ int mlx5_eswitch_set_vgroup_max_rate(str
+ 				     u32 max_rate);
+ int mlx5_eswitch_set_vgroup_min_rate(struct mlx5_eswitch *esw, int group_id,
+ 				     u32 min_rate);
 +#ifndef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
  struct ifla_vf_stats_backport {
  	__u64 tx_broadcast;
  	__u64 tx_multicast;
-@@ -339,6 +349,7 @@ struct ifla_vf_stats_backport {
+@@ -377,6 +387,7 @@ struct ifla_vf_stats_backport {
  int mlx5_eswitch_get_vport_stats_backport(struct mlx5_eswitch *esw,
- 					  int vport,
+ 					  u16 vport,
  					  struct ifla_vf_stats_backport *vf_stats_backport);
 +#endif
  void mlx5_eswitch_del_send_to_vport_rule(struct mlx5_flow_handle *rule);
  int mlx5_eswitch_query_vport_drop_stats(struct mlx5_core_dev *dev,
- 					int vport_idx,
-@@ -420,24 +431,37 @@ struct mlx5_esw_flow_attr {
+ 					u16 vport_num,
+@@ -462,24 +473,37 @@ struct mlx5_esw_flow_attr {
  	u32	chain;
  	u16	prio;
  	u32	dest_chain;
@@ -97,9 +97,9 @@ Change-Id: I25cdfbf403df0e18278e4e5487fcb42af1c118a6
 +void mlx5_eswitch_compat_sysfs_cleanup(struct net_device *netdev);
  
  int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
- 						 int vport_num, bool value);
+ 						 u16 vport_num, bool value);
  int mlx5_eswitch_vport_get_other_hca_cap_roce(struct mlx5_eswitch *esw,
- 					      int vport_num, bool *value);
+ 					      u16 vport_num, bool *value);
  
 -int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink, u8 encap,
 -					struct netlink_ext_ack *extack);

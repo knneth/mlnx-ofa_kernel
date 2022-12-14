@@ -101,9 +101,16 @@ struct fs_debugfs_ns {
 };
 
 /* debugfs API */
+#ifdef CONFIG_ENABLE_MLX5_FS_DEBUGFS
 void fs_debugfs_remove(struct fs_node *node);
 int fs_debugfs_add(struct fs_node *node);
 void fs_debugfs_cleanup(struct mlx5_core_dev *dev);
 int fs_debugfs_init(struct mlx5_core_dev *dev);
-
+#else /* CONFIG_ENABLE_MLX5_FS_DEBUGFS */
+struct mlx5_core_dev;
+static inline void fs_debugfs_remove(struct fs_node *node) {}
+static inline int fs_debugfs_add(struct fs_node *node) {return 0; }
+static inline void fs_debugfs_cleanup(struct mlx5_core_dev *dev) {}
+static inline int fs_debugfs_init(struct mlx5_core_dev *dev) {return 0; }
+#endif /* CONFIG_ENABLE_MLX5_FS_DEBUGFS */
 #endif

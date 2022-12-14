@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
 
 Change-Id: I7e608d19b0f4145f3b8903221e0eb6c07a5c4222
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c | 23 +++++++++++++++++++----
+ .../net/ethernet/mellanox/mlx5/core/en_arfs.c | 23 +++++++++++++++----
  1 file changed, 19 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c

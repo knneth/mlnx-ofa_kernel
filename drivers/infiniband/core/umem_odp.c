@@ -581,22 +581,24 @@ static int ib_umem_odp_map_dma_single_page(
 		/* Better remove the mapping now, to prevent any further
 		 * damage. */
 		remove_existing_mapping = 1;
+		if (umem->context->invalidate_range)
+			ret = -EAGAIN;
 	}
 
 out:
+	if (ret < 0)
+		mutex_unlock(&umem_odp->umem_mutex);
+
 	/* On Demand Paging - avoid pinning the page */
 	if (umem->context->invalidate_range || ret != 1)
 		put_page(page);
 
 	if (remove_existing_mapping && umem->context->invalidate_range) {
-		ib_umem_notifier_start_account(to_ib_umem_odp(umem));
 		umem->context->invalidate_range(
 			umem_odp,
 			ib_umem_start(umem) + (page_index << umem->page_shift),
 			ib_umem_start(umem) + ((page_index + 1) <<
 					       umem->page_shift));
-		ib_umem_notifier_end_account(to_ib_umem_odp(umem));
-		ret = -EAGAIN;
 	}
 
 	return ret;
@@ -717,6 +719,7 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 				p += PAGE_SIZE;
 				if (page_to_phys(local_page_list[j]) != p) {
 					ret = -EFAULT;
+					mutex_unlock(&umem_odp->umem_mutex);
 					break;
 				}
 				put_page(local_page_list[j]);
@@ -738,7 +741,9 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 			p = page_to_phys(local_page_list[j]);
 			k++;
 		}
-		mutex_unlock(&umem_odp->umem_mutex);
+		/* exit from for-loop with error also unlock mutex */
+		if (ret >= 0)
+			mutex_unlock(&umem_odp->umem_mutex);
 
 		if (ret < 0) {
 			/* Release left over pages when handling errors. */

@@ -284,8 +284,11 @@ extern const struct mlx5e_stats_grp mlx5e_stats_grps[];
 extern const int mlx5e_num_stats_grps;
 extern const struct mlx5e_stats_grp mlx5e_rep_stats_grps[];
 extern const int mlx5e_rep_num_stats_grps;
+extern const struct mlx5e_stats_grp mlx5e_ul_rep_stats_grps[];
+extern const int mlx5e_ul_rep_num_stats_grps;
 
 void mlx5e_grp_sw_update_stats(struct mlx5e_priv *priv);
 void mlx5e_grp_802_3_update_stats(struct mlx5e_priv *priv);
+void mlx5e_grp_rep_sw_update_stats(struct mlx5e_priv *priv);
 
 #endif /* __MLX5_EN_STATS_H__ */

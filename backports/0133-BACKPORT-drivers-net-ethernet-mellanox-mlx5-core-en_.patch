@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I46ccd1f6a813fdc5c56fde114749b99c3ecc1b1f
 ---
- .../ethernet/mellanox/mlx5/core/en_fs_ethtool.c    | 31 +++++++++++++++++++---
+ .../mellanox/mlx5/core/en_fs_ethtool.c        | 31 +++++++++++++++++--
  1 file changed, 28 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
