@@ -15,6 +15,7 @@
 #include "../../../compat/config.h"
 
 #include_next <uapi/linux/const.h>
+#include_next <linux/const.h>
 
 #ifdef __ASSEMBLY__
 #ifndef _AC

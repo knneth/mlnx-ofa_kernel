@@ -5822,13 +5822,88 @@ static const struct mlx5e_profile mlx5e_nic_profile = {
 	.update_carrier	   = mlx5e_update_carrier,
 	.rx_handlers       = &mlx5e_rx_handlers_nic,
 	.max_tc		   = MLX5E_MAX_NUM_TC,
+	.max_nch	   = mlx5e_get_max_num_channels,
 	.rq_groups	   = MLX5E_NUM_RQ_GROUPS(XSK),
 	.stats_grps	   = mlx5e_nic_stats_grps,
 	.stats_grps_num	   = mlx5e_nic_stats_grps_num,
 };
 
+static void mlx5e_priv_free_arrays(struct mlx5e_priv *priv)
+{
+	int nch;
+	int i;
+
+	if (!priv->profile->max_nch)
+		return;
+
+	nch = priv->profile->max_nch(priv->mdev);
+	kfree(priv->txq2sq);
+	kfree(priv->direct_tir);
+	kfree(priv->xsk_tir);
+	kfree(priv->tx_rates);
+	kfree(priv->channel_stats);
+	if (priv->channel_tc2realtxq) {
+		for (i = 0; i < nch; i++)
+			kfree(priv->channel_tc2realtxq[i]);
+		kfree(priv->channel_tc2realtxq);
+	}
+}
+
+static int mlx5e_priv_alloc_arrays(struct mlx5e_priv *priv,
+				   const struct mlx5e_profile *profile)
+{
+	int node, max_tc, nch, i;
+
+	if (!profile->max_nch) {
+		mlx5_core_err(priv->mdev, "mlx5e_profile must have max_nch getter\n");
+		return -EINVAL;
+	}
+
+	node = dev_to_node(mlx5_core_dma_dev(priv->mdev));
+	max_tc = profile->max_tc;
+	nch = profile->max_nch(priv->mdev);
+
+	/* +1 for port ptp ts */
+	priv->txq2sq = kcalloc_node((nch + 1) * max_tc + MLX5E_MAX_RL_QUEUES,
+				    sizeof(*priv->txq2sq), GFP_KERNEL, node);
+	priv->direct_tir =
+		kcalloc_node(nch, sizeof(*priv->direct_tir), GFP_KERNEL, node);
+	priv->xsk_tir =
+		kcalloc_node(nch, sizeof(*priv->xsk_tir), GFP_KERNEL, node);
+	priv->tx_rates =
+		kcalloc_node((nch * max_tc) + MLX5E_MAX_RL_QUEUES,
+			     sizeof(*priv->tx_rates), GFP_KERNEL, node);
+	priv->channel_stats =
+		kcalloc_node(nch, sizeof(*priv->channel_stats), GFP_KERNEL, node);
+	priv->channel_tc2realtxq =
+		kcalloc_node(nch, sizeof(*priv->channel_tc2realtxq), GFP_KERNEL, node);
+
+	if (!priv->txq2sq || !priv->direct_tir || !priv->xsk_tir || !priv->tx_rates ||
+	    !priv->channel_stats || !priv->channel_tc2realtxq)
+		goto err_free;
+
+	for (i = 0; i < nch; i++) {
+		priv->channel_tc2realtxq[i] =
+			kcalloc_node(max_tc, sizeof(**priv->channel_tc2realtxq), GFP_KERNEL, node);
+		if (!priv->channel_tc2realtxq[i])
+			goto err_channel_tc2realtxq;
+	}
+
+	return 0;
+
+err_channel_tc2realtxq:
+	while (i--)
+		kfree(priv->channel_tc2realtxq[i]);
+	kfree(priv->channel_tc2realtxq);
+	priv->channel_tc2realtxq = NULL;
+err_free:
+	mlx5e_priv_free_arrays(priv);
+	return -ENOMEM;
+}
+
 /* mlx5e generic netdev management API (move to en_common.c) */
 int mlx5e_netdev_init(struct net_device *netdev,
+		      const struct mlx5e_profile *profile,
 		      struct mlx5e_priv *priv,
 		      struct mlx5_core_dev *mdev)
 {
@@ -5842,8 +5917,13 @@ int mlx5e_netdev_init(struct net_device *netdev,
 	priv->max_opened_special_sq = 0;
 #endif
 
+	if (mlx5e_priv_alloc_arrays(priv, profile)) {
+		mlx5_core_err(mdev, "failed to alloc mlx5e priv\n");
+		goto err_out;
+	}
+
 	if (!alloc_cpumask_var(&priv->scratchpad.cpumask, GFP_KERNEL))
-		return -ENOMEM;
+		goto err_free_priv;
 
 	mutex_init(&priv->state_lock);
 	INIT_WORK(&priv->update_carrier_work, mlx5e_update_carrier_work);
@@ -5863,6 +5943,10 @@ int mlx5e_netdev_init(struct net_device *netdev,
 err_free_cpumask:
 	free_cpumask_var(priv->scratchpad.cpumask);
 
+err_free_priv:
+	mlx5e_priv_free_arrays(priv);
+
+err_out:
 	return -ENOMEM;
 }
 
@@ -5870,13 +5954,42 @@ void mlx5e_netdev_cleanup(struct net_device *netdev, struct mlx5e_priv *priv)
 {
 	destroy_workqueue(priv->wq);
 	free_cpumask_var(priv->scratchpad.cpumask);
+	mlx5e_priv_free_arrays(priv);
+}
+
+static unsigned int mlx5e_get_max_num_txqs(struct mlx5_core_dev *mdev,
+					   const struct mlx5e_profile *profile)
+{
+	unsigned int ptp_txqs = 0;
+	unsigned int nch;
+
+	nch = mlx5e_get_max_num_channels(mdev);
+
+	if (MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
+		ptp_txqs = profile->max_tc;
+
+	return nch * profile->max_tc + ptp_txqs + mdev->mlx5e_res.max_rl_queues;
+}
+
+static unsigned int mlx5e_get_max_num_rxqs(struct mlx5_core_dev *mdev,
+					   const struct mlx5e_profile *profile)
+{
+	unsigned int nch;
+
+	nch = mlx5e_get_max_num_channels(mdev);
+
+	return nch * profile->rq_groups;
 }
 
 struct net_device *
-mlx5e_create_netdev(struct mlx5_core_dev *mdev, unsigned int txqs, unsigned int rxqs)
+mlx5e_create_netdev(struct mlx5_core_dev *mdev, const struct mlx5e_profile *profile)
 {
 	struct net_device *netdev;
+	unsigned int txqs, rxqs;
 	int err;
+
+	txqs = mlx5e_get_max_num_txqs(mdev, profile);
+	rxqs = mlx5e_get_max_num_rxqs(mdev, profile);
 
 	netdev = alloc_etherdev_mqs(sizeof(struct mlx5e_priv), txqs, rxqs);
 	if (!netdev) {
@@ -5884,7 +5997,7 @@ mlx5e_create_netdev(struct mlx5_core_dev *mdev, unsigned int txqs, unsigned int 
 		return NULL;
 	}
 
-	err = mlx5e_netdev_init(netdev, netdev_priv(netdev), mdev);
+	err = mlx5e_netdev_init(netdev, profile, netdev_priv(netdev), mdev);
 	if (err) {
 		mlx5_core_err(mdev, "mlx5e_netdev_init failed, err=%d\n", err);
 		goto err_free_netdev;
@@ -5992,7 +6105,7 @@ mlx5e_netdev_attach_profile(struct mlx5e_priv *priv,
 	int err;
 
 	memset(priv, 0, sizeof(*priv));
-	err = mlx5e_netdev_init(netdev, priv, mdev);
+	err = mlx5e_netdev_init(netdev, new_profile, priv, mdev);
 	if (err) {
 		mlx5_core_err(mdev, "mlx5e_netdev_init failed, err=%d\n", err);
 		return err;
@@ -6117,11 +6230,8 @@ static void *mlx5e_add(struct mlx5_core_dev *mdev)
 {
 	const struct mlx5e_profile *profile = &mlx5e_nic_profile;
 	struct net_device *netdev;
-	unsigned int ptp_txqs = 0;
-	unsigned int txqs, rxqs;
 	struct mlx5e_priv *priv;
 	int err;
-	int nch;
 
 	if (mdev->disable_en)
 		return NULL;
@@ -6130,17 +6240,11 @@ static void *mlx5e_add(struct mlx5_core_dev *mdev)
 	if (err)
 		return NULL;
 
-	if (MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
-		ptp_txqs = profile->max_tc;
-
 	if (MLX5_CAP_GEN(mdev, qos) &&
 	    MLX5_CAP_QOS(mdev, packet_pacing))
 		mdev->mlx5e_res.max_rl_queues = MLX5E_MAX_RL_QUEUES;
 
-	nch = mlx5e_get_max_num_channels(mdev);
-	txqs = nch * profile->max_tc + ptp_txqs + mdev->mlx5e_res.max_rl_queues;
-	rxqs = nch * profile->rq_groups;
-	netdev = mlx5e_create_netdev(mdev, txqs, rxqs);
+	netdev = mlx5e_create_netdev(mdev, profile);
 	if (!netdev) {
 		mlx5_core_err(mdev, "mlx5e_create_netdev failed\n");
 		return NULL;

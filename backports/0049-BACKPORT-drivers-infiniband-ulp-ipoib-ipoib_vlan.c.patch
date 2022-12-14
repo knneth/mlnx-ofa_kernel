@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
 
 Change-Id: If5294362fa0fef8ec37eeaf67bf57c38e56742ec
 ---
- drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 20 +++++++++++++++++---
- 1 file changed, 17 insertions(+), 3 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 24 ++++++++++++++++++++---
+ 1 file changed, 21 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
@@ -30,18 +30,22 @@ Change-Id: If5294362fa0fef8ec37eeaf67bf57c38e56742ec
  	if (!is_child_unique(ppriv, priv)) {
  		result = -ENOTUNIQ;
  		goto out_early;
-@@ -160,8 +165,10 @@ sysfs_failed:
+@@ -160,8 +165,14 @@ sysfs_failed:
  	return -ENOMEM;
  
  out_early:
 +#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
  	if (ndev->priv_destructor)
  		ndev->priv_destructor(ndev);
++#else
++	rdma_uninit_netdev(priv->ca, priv->dev, priv->port,
++		RDMA_NETDEV_IPOIB, !ipoib_enhanced_enabled);
++	ipoib_intf_free(ndev);
 +#endif
  	return result;
  }
  
-@@ -226,13 +233,15 @@ static void ipoib_vlan_delete_task(struc
+@@ -226,13 +237,15 @@ static void ipoib_vlan_delete_task(struc
  	struct ipoib_vlan_delete_work *pwork =
  		container_of(work, struct ipoib_vlan_delete_work, work);
  	struct net_device *dev = pwork->dev;
@@ -59,7 +63,7 @@ Change-Id: If5294362fa0fef8ec37eeaf67bf57c38e56742ec
  
  		ipoib_dbg(ppriv, "delete child vlan %s\n", dev->name);
  		unregister_netdevice(dev);
-@@ -240,6 +249,11 @@ static void ipoib_vlan_delete_task(struc
+@@ -240,6 +253,11 @@ static void ipoib_vlan_delete_task(struc
  
  	rtnl_unlock();
  

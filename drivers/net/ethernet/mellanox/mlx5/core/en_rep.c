@@ -55,7 +55,7 @@
 #include "diag/en_rep_tracepoint.h"
 #include "en_accel/ipsec.h"
 
-#define MLX5E_REP_PARAMS_DEF_NUM_CHANNELS 1
+#define MLX5E_REP_PARAMS_MAX_NUM_CHANNELS 4
 
 static const char mlx5e_rep_driver_name[] = "mlx5e_rep";
 
@@ -639,6 +639,17 @@ bool mlx5e_eswitch_vf_rep(struct net_device *netdev)
 		netdev->netdev_ops == &mlx5e_netdev_ops_rep_sf;
 }
 
+static int mlx5e_ul_rep_max_nch(struct mlx5_core_dev *mdev)
+{
+	return mlx5e_get_max_num_channels(mdev);
+}
+
+static int mlx5e_rep_max_nch(struct mlx5_core_dev *mdev)
+{
+	return min_t(int, mlx5e_get_max_num_channels(mdev),
+		     MLX5E_REP_PARAMS_MAX_NUM_CHANNELS);
+}
+
 static void mlx5e_build_rep_params(struct net_device *netdev)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
@@ -652,11 +663,11 @@ static void mlx5e_build_rep_params(struct net_device *netdev)
 
 	priv->max_nch = mlx5e_calc_max_nch(priv, priv->profile);
 	params = &priv->channels.params;
+	params->num_channels = priv->profile->max_nch(mdev);
 
-	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
-		priv->channels.params.num_channels = mlx5e_get_max_num_channels(mdev);
-	else
-		priv->channels.params.num_channels = MLX5E_REP_PARAMS_DEF_NUM_CHANNELS;
+	if (rpriv->rep->vport != MLX5_VPORT_UPLINK)
+		priv->max_nch = min_t(int, params->num_channels, priv->max_nch);
+
 	params->hard_mtu    = MLX5E_ETH_HARD_MTU;
 	params->sw_mtu      = netdev->mtu;
 
@@ -732,11 +743,6 @@ static int mlx5e_init_rep(struct mlx5_core_dev *mdev,
 		if (err)
 			mlx5_core_err(mdev, "Fail to init flow meters (%d)\n", err);
 	}
-
-	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
-		priv->channels.params.num_channels = mlx5e_get_max_num_channels(mdev);
-	else
-		priv->channels.params.num_channels = MLX5E_REP_PARAMS_DEF_NUM_CHANNELS;
 
 	mlx5e_build_rep_params(netdev);
 	mlx5e_build_txq_maps(priv);
@@ -1268,6 +1274,7 @@ static const struct mlx5e_profile mlx5e_rep_profile = {
 	.update_stats           = mlx5e_stats_update_ndo_stats,
 	.rx_handlers            = &mlx5e_rx_handlers_rep,
 	.max_tc			= 1,
+	.max_nch		= mlx5e_rep_max_nch,
 	.rq_groups		= MLX5E_NUM_RQ_GROUPS(REGULAR),
 	.stats_grps		= mlx5e_rep_stats_grps,
 	.stats_grps_num		= mlx5e_rep_stats_grps_num,
@@ -1287,6 +1294,7 @@ static const struct mlx5e_profile mlx5e_uplink_rep_profile = {
 	.update_carrier	        = mlx5e_update_carrier,
 	.rx_handlers            = &mlx5e_rx_handlers_rep,
 	.max_tc			= MLX5E_MAX_NUM_TC,
+	.max_nch		= mlx5e_ul_rep_max_nch,
 	/* XSK is needed so we can replace profile with NIC netdev */
 	.rq_groups		= MLX5E_NUM_RQ_GROUPS(XSK),
 	.stats_grps		= mlx5e_ul_rep_stats_grps,
@@ -1436,8 +1444,7 @@ mlx5e_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	struct mlx5e_rep_priv *rpriv;
 	struct net_device *netdev;
 	struct mlx5e_priv *priv;
-	unsigned int txqs, rxqs;
-	int nch, err;
+	int err;
 
 	rpriv = kzalloc(sizeof(*rpriv), GFP_KERNEL);
 	if (!rpriv)
@@ -1457,10 +1464,7 @@ mlx5e_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 
 	profile = &mlx5e_rep_profile;
 
-	nch = mlx5e_get_max_num_channels(dev);
-	txqs = nch * profile->max_tc;
-	rxqs = nch * profile->rq_groups;
-	netdev = mlx5e_create_netdev(dev, txqs, rxqs);
+	netdev = mlx5e_create_netdev(dev, profile);
 	if (!netdev) {
 		mlx5_core_warn(dev,
 			       "Failed to create representor netdev for vport %d\n",

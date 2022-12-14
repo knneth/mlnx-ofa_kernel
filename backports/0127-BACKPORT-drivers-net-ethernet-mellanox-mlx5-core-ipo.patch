@@ -9,7 +9,7 @@ Change-Id: Ie1295025ecc28d1dc02dd48255bee2d87a19f280
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
-@@ -114,8 +114,20 @@ struct mlx5i_tx_wqe {
+@@ -115,8 +115,20 @@ struct mlx5i_tx_wqe {
  	((struct mlx5i_tx_wqe *)mlx5e_fetch_wqe(&(sq)->wq, pi, sizeof(struct mlx5i_tx_wqe)))
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,

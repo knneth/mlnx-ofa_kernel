@@ -332,3 +332,13 @@ Change-Id: Iae4b8eebab145d98b71b7b359f1bc50c1aca0ff1
  	.bc_free_rqst		= xprt_rdma_bc_free_rqst,
  	.bc_destroy		= xprt_rdma_bc_destroy,
  #endif
+@@ -775,6 +887,9 @@ static struct xprt_class xprt_rdma = {
+ 	.owner			= THIS_MODULE,
+ 	.ident			= XPRT_TRANSPORT_RDMA,
+ 	.setup			= xprt_setup_rdma,
++#ifdef HAVE_XPRT_CLASS_NETID
++	.netid          = { "rdma", "rdma6", "" },
++#endif
+ };
+ 
+ void xprt_rdma_cleanup(void)

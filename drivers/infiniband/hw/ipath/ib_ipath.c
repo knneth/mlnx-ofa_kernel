@@ -35,8 +35,8 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"ib_ipath"
-#define DRV_VERSION	"5.3-1.0.0"
-#define DRV_RELDATE	"29 Mar 2021"
+#define DRV_VERSION	"5.3-1.0.5"
+#define DRV_RELDATE	"07 Jun 2021"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("ib_ipath dummy kernel module");

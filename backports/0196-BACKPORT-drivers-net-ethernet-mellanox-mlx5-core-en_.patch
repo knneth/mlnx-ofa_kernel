@@ -2541,16 +2541,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  int mlx5e_update_nic_rx(struct mlx5e_priv *priv)
-@@ -5878,7 +6936,7 @@ mlx5e_create_netdev(struct mlx5_core_dev
- 	struct net_device *netdev;
- 	int err;
- 
--	netdev = alloc_etherdev_mqs(sizeof(struct mlx5e_priv), txqs, rxqs);
-+       netdev = alloc_etherdev_mqs(sizeof(struct mlx5e_priv), txqs, rxqs);
- 	if (!netdev) {
- 		mlx5_core_err(mdev, "alloc_etherdev_mqs() failed\n");
- 		return NULL;
-@@ -5925,7 +6983,9 @@ int mlx5e_attach_netdev(struct mlx5e_pri
+@@ -6038,7 +7096,9 @@ int mlx5e_attach_netdev(struct mlx5e_pri
  		/* Reducing the number of channels - RXFH has to be reset, and
  		 * mlx5e_num_channels_changed below will build the RQT.
  		 */
@@ -2560,7 +2551,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		priv->channels.params.num_channels = max_nch;
  	}
  	/* 1. Set the real number of queues in the kernel the first time.
-@@ -6059,8 +7119,10 @@ void mlx5e_netdev_attach_nic_profile(str
+@@ -6172,8 +7232,10 @@ void mlx5e_netdev_attach_nic_profile(str
  	int err;
  
  	err = mlx5e_netdev_change_profile(priv, &mlx5e_nic_profile, NULL);
@@ -2571,7 +2562,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  void mlx5e_destroy_netdev(struct mlx5e_priv *priv)
-@@ -6162,13 +7224,17 @@ static void *mlx5e_add(struct mlx5_core_
+@@ -6266,13 +7328,17 @@ static void *mlx5e_add(struct mlx5_core_
  		goto err_profile_cleanup;
  	}
  
@@ -2589,7 +2580,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	err = mlx5e_sysfs_create(netdev);
  	if (err)
-@@ -6219,7 +7285,9 @@ static struct mlx5_interface mlx5e_inter
+@@ -6323,7 +7389,9 @@ static struct mlx5_interface mlx5e_inter
  void mlx5e_init(void)
  {
  	mlx5e_ipsec_build_inverse_table();

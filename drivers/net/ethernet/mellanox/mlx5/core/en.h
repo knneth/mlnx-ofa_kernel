@@ -148,7 +148,6 @@ struct page_pool;
 #define MLX5E_INDIR_RQT_SIZE           BIT(MLX5E_LOG_INDIR_RQT_SIZE)
 #define MLX5E_MIN_NUM_CHANNELS         0x1
 #define MLX5E_MAX_NUM_CHANNELS         MLX5E_INDIR_RQT_SIZE
-#define MLX5E_MAX_NUM_SQS              (MLX5E_MAX_NUM_CHANNELS * MLX5E_MAX_NUM_TC)
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 #define MLX5E_MAX_RL_QUEUES            512
@@ -936,10 +935,8 @@ struct mlx5e_delay_drop {
 
 struct mlx5e_priv {
 	/* priv data path fields - start */
-	/* +1 for port ptp ts */
-	struct mlx5e_txqsq *txq2sq[(MLX5E_MAX_NUM_CHANNELS + 1) * MLX5E_MAX_NUM_TC +
-				   MLX5E_MAX_RL_QUEUES];
-	int channel_tc2realtxq[MLX5E_MAX_NUM_CHANNELS][MLX5E_MAX_NUM_TC];
+	struct mlx5e_txqsq **txq2sq;
+	int **channel_tc2realtxq;
 	int port_ptp_tc2realtxq[MLX5E_MAX_NUM_TC];
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	DECLARE_HASHTABLE(flow_map_hash, ilog2(MLX5E_MAX_RL_QUEUES));
@@ -959,11 +956,10 @@ struct mlx5e_priv {
 	struct mlx5e_rqt           indir_rqt;
 	struct mlx5e_tir           indir_tir[MLX5E_NUM_INDIR_TIRS];
 	struct mlx5e_tir           inner_indir_tir[MLX5E_NUM_INDIR_TIRS];
-	struct mlx5e_tir           direct_tir[MLX5E_MAX_NUM_CHANNELS];
-	struct mlx5e_tir           xsk_tir[MLX5E_MAX_NUM_CHANNELS];
+	struct mlx5e_tir          *direct_tir;
+	struct mlx5e_tir          *xsk_tir;
 	struct mlx5e_rss_params    rss_params;
-	u32                        tx_rates[MLX5E_MAX_NUM_SQS +
-					    MLX5E_MAX_RL_QUEUES];
+	u32                       *tx_rates;
 
 	struct mlx5e_flow_steering fs;
 
@@ -978,7 +974,7 @@ struct mlx5e_priv {
 	struct mlx5_core_dev      *mdev;
 	struct net_device         *netdev;
 	struct mlx5e_stats         stats;
-	struct mlx5e_channel_stats channel_stats[MLX5E_MAX_NUM_CHANNELS];
+	struct mlx5e_channel_stats *channel_stats;
 	struct mlx5e_port_ptp_stats port_ptp_stats;
 	u16                        max_nch;
 	u8                         max_opened_tc;
@@ -1052,6 +1048,7 @@ struct mlx5e_profile {
 	void	(*update_stats)(struct mlx5e_priv *priv);
 	void	(*update_carrier)(struct mlx5e_priv *priv);
 	unsigned int (*stats_grps_num)(struct mlx5e_priv *priv);
+	int	(*max_nch)(struct mlx5_core_dev *mdev);
 	mlx5e_stats_grp_t *stats_grps;
 	const struct mlx5e_rx_handlers *rx_handlers;
 	int	max_tc;
@@ -1322,11 +1319,12 @@ mlx5e_calc_max_nch(struct mlx5e_priv *priv, const struct mlx5e_profile *profile)
 }
 
 int mlx5e_netdev_init(struct net_device *netdev,
+		      const struct mlx5e_profile *profile,
 		      struct mlx5e_priv *priv,
 		      struct mlx5_core_dev *mdev);
 void mlx5e_netdev_cleanup(struct net_device *netdev, struct mlx5e_priv *priv);
 struct net_device *
-mlx5e_create_netdev(struct mlx5_core_dev *mdev, unsigned int txqs, unsigned int rxqs);
+mlx5e_create_netdev(struct mlx5_core_dev *mdev, const struct mlx5e_profile *profile);
 int mlx5e_attach_netdev(struct mlx5e_priv *priv);
 void mlx5e_detach_netdev(struct mlx5e_priv *priv);
 void mlx5e_destroy_netdev(struct mlx5e_priv *priv);

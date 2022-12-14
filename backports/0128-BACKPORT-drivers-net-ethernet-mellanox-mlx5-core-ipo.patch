@@ -77,7 +77,7 @@ Change-Id: I2704992d9b6becf9d5ae726bed267717cfda5d80
  	if (!parent_dev) {
  		mlx5_core_warn(priv->mdev, "failed to get parent device\n");
  		return -EINVAL;
-@@ -285,6 +314,12 @@ static int mlx5i_pkey_init(struct mlx5_c
+@@ -286,6 +315,12 @@ static int mlx5i_pkey_init(struct mlx5_c
  	if (err)
  		return err;
  

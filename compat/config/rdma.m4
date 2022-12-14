@@ -12468,6 +12468,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([for "netid" inside "struct xprt_class"])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sunrpc/xprt.h>
+	],[
+		struct xprt_class xc;
+
+		xc.netid;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XPRT_CLASS_NETID, 1,
+			[struct xprt_class has 'netid' field])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/sysctl.h has SYSCTL_ZERO])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/sysctl.h>

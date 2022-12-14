@@ -41,6 +41,7 @@
 static int mlx5i_open(struct net_device *netdev);
 static int mlx5i_close(struct net_device *netdev);
 static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu);
+static const struct mlx5e_profile *mlx5_get_profile(struct mlx5_core_dev *mdev);
 
 static const struct net_device_ops mlx5i_netdev_ops = {
 	.ndo_open                = mlx5i_open,
@@ -77,7 +78,7 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
 	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
 	int err;
 
-	err = mlx5e_netdev_init(netdev, priv, mdev);
+	err = mlx5e_netdev_init(netdev, priv->profile, priv, mdev);
 	if (err)
 		return err;
 
@@ -456,6 +457,11 @@ static unsigned int mlx5i_stats_grps_num(struct mlx5e_priv *priv)
 	return ARRAY_SIZE(mlx5i_stats_grps);
 }
 
+int mlx5i_max_nch(struct mlx5_core_dev *mdev)
+{
+	return mlx5e_get_max_num_channels(mdev);
+}
+
 static const struct mlx5e_profile mlx5i_nic_profile = {
 	.init		   = mlx5i_init,
 	.cleanup	   = mlx5i_cleanup,
@@ -470,6 +476,7 @@ static const struct mlx5e_profile mlx5i_nic_profile = {
 	.update_carrier    = NULL, /* no HW update in IB link */
 	.rx_handlers       = &mlx5i_rx_handlers,
 	.max_tc		   = MLX5I_MAX_NUM_TC,
+	.max_nch	   = mlx5i_max_nch,
 	.rq_groups	   = MLX5E_NUM_RQ_GROUPS(REGULAR),
 	.stats_grps        = mlx5i_stats_grps,
 	.stats_grps_num    = mlx5i_stats_grps_num,
