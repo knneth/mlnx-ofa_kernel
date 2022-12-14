@@ -3,6 +3,7 @@
 
 #include "../../../compat/config.h"
 
+#include_next <uapi/linux/pkt_cls.h>
 #include_next <net/tc_act/tc_gact.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,2,0)) && (LINUX_VERSION_CODE <= KERNEL_VERSION(4,5,7))
 #include <linux/tc_act/tc_gact.h>
@@ -79,6 +80,10 @@ static inline bool is_tcf_gact_shot(const struct tc_action *a)
 #endif /* HAVE_IS_TCF_GACT_SHOT */
 
 #endif /* CONFIG_COMPAT_TCF_GACT */
+
+#ifndef TCA_ACT_GACT
+#define TCA_ACT_GACT 5
+#endif
 
 #if (!defined(HAVE_IS_TCF_GACT_ACT) && !defined(HAVE_IS_TCF_GACT_ACT_OLD))
 static inline bool __is_tcf_gact_act(const struct tc_action *a, int act)

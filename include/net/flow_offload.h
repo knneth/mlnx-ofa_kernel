@@ -68,6 +68,10 @@ struct flow_match_enc_opts {
 	struct flow_dissector_key_enc_opts *key, *mask;
 };
 
+struct flow_match_ct {
+	struct flow_dissector_key_ct *key, *mask;
+};
+
 struct flow_rule;
 
 #define  flow_rule_match_basic LINUX_BACKPORT(flow_rule_match_basic)
@@ -127,6 +131,9 @@ void flow_rule_match_enc_keyid(const struct flow_rule *rule,
 #define flow_rule_match_enc_opts LINUX_BACKPORT(flow_rule_match_enc_opts)
 void flow_rule_match_enc_opts(const struct flow_rule *rule,
 			      struct flow_match_enc_opts *out);
+#define flow_rule_match_ct LINUX_BACKPORT(flow_rule_match_ct)
+void flow_rule_match_ct(const struct flow_rule *rule,
+			struct flow_match_ct *out);
 #define flow_rule_match_cvlan LINUX_BACKPORT(flow_rule_match_cvlan)
 void flow_rule_match_cvlan(const struct flow_rule *rule,
                            struct flow_match_vlan *out);
@@ -151,10 +158,10 @@ enum flow_action_id {
 	FLOW_ACTION_QUEUE,
 	FLOW_ACTION_SAMPLE,
 	FLOW_ACTION_POLICE,
-#ifdef HAVE_MINIFLOW
 	FLOW_ACTION_CT,
-#endif
+	FLOW_ACTION_CT_METADATA,
 };
+#define HAVE_FLOW_ACTION_CT 1
 
 /* This is mirroring enum pedit_header_type definition for easy mapping between
  * tc pedit action. Legacy TCA_PEDIT_KEY_EX_HDR_TYPE_NETWORK is mapped to
@@ -203,6 +210,17 @@ struct flow_action_entry {
 			s64			burst;
 			u64			rate_bytes_ps;
 		} police;
+		struct {                                /* FLOW_ACTION_CT */
+			int action;
+			u16 zone;
+			struct nf_flowtable *flow_table;
+		} ct;
+		struct {
+			unsigned long cookie;
+			u32 mark;
+			u32 labels[4];
+			u16 zone;
+		} ct_metadata;
 	};
 };
 
@@ -231,11 +249,13 @@ static inline bool flow_offload_has_one_action(const struct flow_action *action)
         for (__i = 0, __act = &(__actions)->entries[0]; __i < (__actions)->num_entries; __act = &(__actions)->entries[++__i])
 
 struct flow_rule {
+	void *priv;	/* original offload struct */
+	int priv_size;
+	void *buff;	/* allocated buffer */
+
 	struct flow_match	match;
 	struct flow_action	action;
 };
-
-struct flow_rule *flow_rule_alloc(unsigned int num_actions);
 
 #if !defined(HAVE_FLOW_DISSECTOR_USES_KEY) && !defined(CONFIG_COMPAT_FLOW_DISSECTOR)
 static bool dissector_uses_key(const struct flow_dissector *flow_dissector,
@@ -244,12 +264,14 @@ static bool dissector_uses_key(const struct flow_dissector *flow_dissector,
 	return flow_dissector->used_keys & (1 << key_id);
 }
 
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 static void *skb_flow_dissector_target(struct flow_dissector *flow_dissector,
 				       enum flow_dissector_key_id key_id,
 				       void *target_container)
 {
 	return ((char *) target_container) + flow_dissector->offset[key_id];
 }
+#endif
 #endif
 
 static inline bool flow_rule_match_key(const struct flow_rule *rule,
@@ -272,4 +294,75 @@ static inline void flow_stats_update(struct flow_stats *flow_stats,
 	flow_stats->lastused	= max_t(u64, flow_stats->lastused, lastused);
 }
 #endif /* HAVE_FLOW_RULE_MATCH_CVLAN */
+
+#ifndef HAVE_FLOW_RULE_MATCH_META
+struct flow_match_meta {
+	struct flow_dissector_key_meta *key, *mask;
+};
+
+void flow_rule_match_meta(const struct flow_rule *rule,
+			  struct flow_match_meta *out);
+#endif /* HAVE_FLOW_RULE_MATCH_META */
+
+#ifndef HAVE_NUM_FLOW_ACTIONS
+#ifndef HAVE_FLOW_ACTION_CT
+#ifndef HAVE_FLOW_ACTION_POLICE
+#define FLOW_ACTION_SAMPLE 17
+#define FLOW_ACTION_POLICE 18
+#endif /* HAVE_FLOW_ACTION_POLICE */
+#define FLOW_ACTION_CT (FLOW_ACTION_POLICE + 1)
+#endif /* HAVE_FLOW_ACTION_CT */
+#define NUM_FLOW_ACTIONS (FLOW_ACTION_CT + 1)
+#endif /* HAVE_NUM_FLOW_ACTIONS */
+
+#ifndef HAVE_TC_SETUP_FLOW_ACTION
+#include <net/pkt_cls.h>
+
+struct flow_rule *__alloc_flow_rule(struct tcf_exts *exts,
+				    void *priv, int size);
+struct flow_rule *alloc_flow_rule(struct tc_cls_flower_offload **f);
+void free_flow_rule(struct flow_rule *rule);
+
+static inline struct flow_rule *
+tc_cls_flower_offload_flow_rule(struct tc_cls_flower_offload *flow_cmd)
+{
+	return (struct flow_rule *)(flow_cmd + 1);
+}
+#endif /* HAVE_TC_SETUP_FLOW_ACTION */
+
+#ifndef HAVE_FLOW_SETUP_CB_T
+enum tc_setup_type;
+typedef int flow_setup_cb_t(enum tc_setup_type type, void *type_data,
+					    void *cb_priv);
+#endif
+
+#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
+struct flow_cls_common_offload {
+	u32 chain_index;
+	__be16 protocol;
+	u32 prio;
+	struct netlink_ext_ack *extack;
+};
+
+#define flow_cls_command tc_fl_command
+struct flow_cls_offload1 {
+	struct flow_cls_common_offload common;
+	enum flow_cls_command command;
+	unsigned long cookie;
+	struct flow_rule *rule;
+	struct flow_stats stats;
+	u32 classid;
+};
+
+
+static inline struct flow_rule *
+flow_cls_offload_flow_rule1(struct flow_cls_offload1 *flow_cmd)
+{
+	return flow_cmd->rule;
+}
+#else
+#define flow_cls_offload1 flow_cls_offload
+#define flow_cls_offload_flow_rule1 flow_cls_offload_flow_rule
+#endif /* CONFIG_COMPAT_CLS_FLOWER_4_18_MOD */
+
 #endif /* _NET_FLOW_OFFLOAD_H */

@@ -4,6 +4,43 @@
 #include <linux/mlx5/eswitch.h>
 #include "dr_types.h"
 
+static bool dr_domain_is_support_modify_hdr_cache(struct mlx5dr_domain *dmn)
+{
+	return dmn->info.caps.support_modify_argument;
+}
+
+static int dr_domain_init_modify_header_resources(struct mlx5dr_domain *dmn)
+{
+	if (!dr_domain_is_support_modify_hdr_cache(dmn))
+		return 0;
+
+	dmn->modify_header_ptrn_icm_pool =
+		mlx5dr_icm_pool_create(dmn, DR_ICM_TYPE_MODIFY_HDR_PTRN);
+	if (!dmn->modify_header_ptrn_icm_pool) {
+		mlx5dr_err(dmn, "Couldn't get modify-header-pattern memory\n");
+		return -ENOMEM;
+	}
+	/* create argument pool */
+	dmn->modify_header_arg_pool_mngr = mlx5dr_arg_pool_mngr_create(dmn);
+	if (!dmn->modify_header_arg_pool_mngr)
+		goto free_modify_header_pattern;
+
+	return 0;
+
+free_modify_header_pattern:
+	mlx5dr_icm_pool_destroy(dmn->modify_header_ptrn_icm_pool);
+	return -ENOMEM;
+}
+
+static void dr_domain_destroy_modify_header_resources(struct mlx5dr_domain *dmn)
+{
+	if (!dr_domain_is_support_modify_hdr_cache(dmn))
+		return;
+
+	mlx5dr_icm_pool_destroy(dmn->modify_header_ptrn_icm_pool);
+	mlx5dr_arg_pool_mngr_destroy(dmn->modify_header_arg_pool_mngr);
+}
+
 static int dr_domain_init_cache(struct mlx5dr_domain *dmn)
 {
 	/* Per vport cached FW FT for checksum recalculation, this
@@ -53,9 +90,47 @@ int mlx5dr_domain_cache_get_recalc_cs_ft_addr(struct mlx5dr_domain *dmn,
 	return 0;
 }
 
+static bool dr_domain_check_hw_basic_requirement_caps(struct mlx5dr_domain *dmn)
+{
+	if (dmn->info.caps.sw_format_ver == MLX5_HW_CONNECTX_6DX &&
+	    !dr_domain_is_support_modify_hdr_cache(dmn)) {
+		return false;
+	}
+
+	return true;
+}
+
+static bool dr_domain_is_supp_sw_steering(struct mlx5dr_domain *dmn)
+{
+	if (!dr_domain_check_hw_basic_requirement_caps(dmn))
+		return false;
+
+	switch (dmn->type) {
+	case MLX5DR_DOMAIN_TYPE_NIC_RX:
+		if (!dmn->info.caps.rx_sw_owner && !dmn->info.caps.rx_sw_owner_v2)
+			return false;
+		break;
+	case MLX5DR_DOMAIN_TYPE_NIC_TX:
+		if (!dmn->info.caps.tx_sw_owner && !dmn->info.caps.tx_sw_owner_v2)
+			return false;
+		break;
+	case MLX5DR_DOMAIN_TYPE_FDB:
+		if (!dmn->info.caps.fdb_sw_owner && !dmn->info.caps.fdb_sw_owner_v2)
+			return false;
+		break;
+	}
+	return true;
+}
+
 static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 {
 	int ret;
+
+	dmn->ste_ctx = mlx5dr_ste_get_ctx(dmn->info.caps.sw_format_ver);
+	if (!dmn->ste_ctx) {
+		mlx5dr_err(dmn, "Couldn't initialize STE context\n");
+		return -EOPNOTSUPP;
+	}
 
 	ret = mlx5_core_alloc_pd(dmn->mdev, &dmn->pdn);
 	if (ret) {
@@ -90,8 +165,16 @@ static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 		goto free_action_icm_pool;
 	}
 
+	ret = dr_domain_init_modify_header_resources(dmn);
+	if (ret) {
+		mlx5dr_err(dmn, "Couldn't create modify-header-resources\n");
+		goto free_send_ring;
+	}
+
 	return 0;
 
+free_send_ring:
+	mlx5dr_send_ring_free(dmn, dmn->send_ring);
 free_action_icm_pool:
 	mlx5dr_icm_pool_destroy(dmn->action_icm_pool);
 free_ste_icm_pool:
@@ -107,6 +190,7 @@ clean_pd:
 static void dr_domain_uninit_resources(struct mlx5dr_domain *dmn)
 {
 	mlx5dr_send_ring_free(dmn, dmn->send_ring);
+	dr_domain_destroy_modify_header_resources(dmn);
 	mlx5dr_icm_pool_destroy(dmn->action_icm_pool);
 	mlx5dr_icm_pool_destroy(dmn->ste_icm_pool);
 	mlx5_put_uars_page(dmn->mdev, dmn->uar);
@@ -237,6 +321,7 @@ static int dr_domain_query_fdb_caps(struct mlx5_core_dev *mdev,
 		return ret;
 
 	dmn->info.caps.fdb_sw_owner = dmn->info.caps.esw_caps.sw_owner;
+	dmn->info.caps.fdb_sw_owner_v2 = dmn->info.caps.esw_caps.sw_owner_v2;
 	dmn->info.caps.esw_rx_drop_address = dmn->info.caps.esw_caps.drop_icm_address_rx;
 	dmn->info.caps.esw_tx_drop_address = dmn->info.caps.esw_caps.drop_icm_address_tx;
 
@@ -293,37 +378,25 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 	if (ret)
 		return ret;
 
+	if (!dr_domain_is_supp_sw_steering(dmn))
+		return -ENOTSUPP;
+
 	switch (dmn->type) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
-		if (!dmn->info.caps.rx_sw_owner)
-			return -ENOTSUPP;
-
-		dmn->info.supp_sw_steering = true;
 		dmn->info.rx.ste_type = MLX5DR_STE_TYPE_RX;
 		dmn->info.rx.default_icm_addr = dmn->info.caps.nic_rx_drop_address;
 		dmn->info.rx.drop_icm_addr = dmn->info.caps.nic_rx_drop_address;
 		break;
 	case MLX5DR_DOMAIN_TYPE_NIC_TX:
-		if (!dmn->info.caps.tx_sw_owner)
-			return -ENOTSUPP;
-
-		dmn->info.supp_sw_steering = true;
 		dmn->info.tx.ste_type = MLX5DR_STE_TYPE_TX;
 		dmn->info.tx.default_icm_addr = dmn->info.caps.nic_tx_allow_address;
 		dmn->info.tx.drop_icm_addr = dmn->info.caps.nic_tx_drop_address;
 		break;
 	case MLX5DR_DOMAIN_TYPE_FDB:
-		if (!dmn->info.caps.eswitch_manager)
-			return -ENOTSUPP;
-
-		if (!dmn->info.caps.fdb_sw_owner)
-			return -ENOTSUPP;
-
 		dmn->info.rx.ste_type = MLX5DR_STE_TYPE_RX;
 		dmn->info.tx.ste_type = MLX5DR_STE_TYPE_TX;
 		vport_cap = &dmn->info.caps.esw_manager_vport_caps;
 
-		dmn->info.supp_sw_steering = true;
 		dmn->info.tx.default_icm_addr = vport_cap->icm_address_tx;
 		dmn->info.rx.default_icm_addr = vport_cap->icm_address_rx;
 		dmn->info.rx.drop_icm_addr = dmn->info.caps.esw_rx_drop_address;
@@ -335,12 +408,14 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 		break;
 	}
 
+	dmn->info.supp_sw_steering = true;
 	return ret;
 }
 
 static void dr_domain_caps_uninit(struct mlx5dr_domain *dmn)
 {
 	kfree(dmn->info.caps.pf_vf_vports_caps);
+	dmn->info.caps.pf_vf_vports_caps = NULL;
 	if (dmn->info.caps.num_sf_vports > 0)
 		kfree(dmn->info.caps.sf_vports_caps);
 }
@@ -364,6 +439,7 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 	mutex_init(&dmn->info.rx.mutex);
 	mutex_init(&dmn->info.tx.mutex);
 	mutex_init(&dmn->dbg_mutex);
+	mutex_init(&dmn->modify_hdr_mutex);
 
 	if (dr_domain_caps_init(mdev, dmn)) {
 		mlx5dr_err(dmn, "Failed init domain, no caps\n");
@@ -373,6 +449,9 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 	dmn->info.max_log_action_icm_sz = DR_CHUNK_SIZE_4K;
 	dmn->info.max_log_sw_icm_sz = min_t(u32, DR_CHUNK_SIZE_1024K,
 					    dmn->info.caps.log_icm_size);
+	dmn->info.max_log_modify_hdr_pattern_icm_sz =
+		min_t(u32, DR_CHUNK_SIZE_4K,
+		      dmn->info.caps.log_modify_pattern_icm_size);
 
 	if (!dmn->info.supp_sw_steering) {
 		mlx5dr_err(dmn, "SW steering is not supported\n");
@@ -399,6 +478,7 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 	}
 
 	INIT_LIST_HEAD(&dmn->tbl_list);
+	INIT_LIST_HEAD(&dmn->modify_hdr_list);
 
 	return dmn;
 
@@ -451,6 +531,7 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 	mutex_destroy(&dmn->info.tx.mutex);
 	mutex_destroy(&dmn->info.rx.mutex);
 	mutex_destroy(&dmn->dbg_mutex);
+	mutex_destroy(&dmn->modify_hdr_mutex);
 	kfree(dmn);
 	return 0;
 }

@@ -4,6 +4,8 @@
 #ifndef __MLX5E_FLOW_STEER_H__
 #define __MLX5E_FLOW_STEER_H__
 
+#include "mod_hdr.h"
+
 enum {
 	MLX5E_TC_FT_LEVEL = 0,
 	MLX5E_TC_TTC_FT_LEVEL,
@@ -21,6 +23,7 @@ struct mlx5e_tc_table {
 	DECLARE_HASHTABLE(hairpin_tbl, 8);
 
 	struct notifier_block     netdevice_nb;
+	struct netdev_net_notifier	netdevice_nn;
 };
 
 struct mlx5e_flow_table {
@@ -104,11 +107,16 @@ enum mlx5e_tunnel_types {
 
 bool mlx5e_tunnel_inner_ft_supported(struct mlx5_core_dev *mdev);
 
+struct mlx5e_ttc_rule {
+	struct mlx5_flow_handle *rule;
+	struct mlx5_flow_destination default_dest;
+};
+
 /* L3/L4 traffic type classifier */
 struct mlx5e_ttc_table {
-	struct mlx5e_flow_table  ft;
-	struct mlx5_flow_handle	 *rules[MLX5E_NUM_TT];
-	struct mlx5_flow_handle  *tunnel_rules[MLX5E_NUM_TUNNEL_TT];
+	struct mlx5e_flow_table ft;
+	struct mlx5e_ttc_rule rules[MLX5E_NUM_TT];
+	struct mlx5_flow_handle *tunnel_rules[MLX5E_NUM_TUNNEL_TT];
 };
 
 /* NIC prio FTS */
@@ -117,12 +125,15 @@ enum {
 	MLX5E_L2_FT_LEVEL,
 	MLX5E_TTC_FT_LEVEL,
 	MLX5E_INNER_TTC_FT_LEVEL,
-#ifdef CONFIG_MLX5_EN_ACCEL_FS
-	MLX5E_ACCEL_FS_FT_LEVEL,
-	MLX5E_ACCEL_FS_ERR_FT_LEVEL,
+#ifdef CONFIG_MLX5_EN_TLS
+	MLX5E_ACCEL_FS_TCP_FT_LEVEL,
 #endif
 #ifdef CONFIG_MLX5_EN_ARFS
-	MLX5E_ARFS_FT_LEVEL
+	MLX5E_ARFS_FT_LEVEL,
+#endif
+#ifdef CONFIG_MLX5_EN_IPSEC
+	MLX5E_ACCEL_FS_ESP_FT_LEVEL = MLX5E_INNER_TTC_FT_LEVEL + 1,
+	MLX5E_ACCEL_FS_ESP_FT_ERR_LEVEL,
 #endif
 };
 
@@ -161,12 +172,17 @@ struct mlx5e_ethtool_steering {
 
 void mlx5e_ethtool_init_steering(struct mlx5e_priv *priv);
 void mlx5e_ethtool_cleanup_steering(struct mlx5e_priv *priv);
-int mlx5e_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd);
-int mlx5e_get_rxnfc(struct net_device *dev,
-		    struct ethtool_rxnfc *info, u32 *rule_locs);
+int mlx5e_ethtool_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd);
+int mlx5e_ethtool_get_rxnfc(struct net_device *dev,
+			    struct ethtool_rxnfc *info, u32 *rule_locs);
 #else
 static inline void mlx5e_ethtool_init_steering(struct mlx5e_priv *priv)    { }
 static inline void mlx5e_ethtool_cleanup_steering(struct mlx5e_priv *priv) { }
+static inline int mlx5e_ethtool_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
+{ return -EOPNOTSUPP; }
+static inline int mlx5e_ethtool_get_rxnfc(struct net_device *dev,
+					  struct ethtool_rxnfc *info, u32 *rule_locs)
+{ return -EOPNOTSUPP; }
 #endif /* CONFIG_MLX5_EN_RXNFC */
 
 #ifdef CONFIG_MLX5_EN_ARFS
@@ -196,38 +212,6 @@ struct mlx5e_arfs_tables {
 	struct workqueue_struct        *wq;
 };
 
-enum  accel_fs_type {
-	ACCEL_FS_IPV4_TCP,
-	ACCEL_FS_IPV6_TCP,
-#ifdef CONFIG_MLX5_IPSEC
-	ACCEL_FS_IPV4_ESP,
-	ACCEL_FS_IPV6_ESP,
-#endif
-	ACCEL_FS_NUM_TYPES,
-};
-
-#ifdef CONFIG_MLX5_IPSEC
-enum accel_fs_ipsec_default_type {
-	IPV4_ESP,
-	IPV6_ESP,
-	IPSEC_DEFAULT_TYPES,
-};
-
-struct mlx5e_ipsec_default {
-	struct mlx5e_flow_table  ft_rx_err;
-	struct mlx5_flow_handle *copy_fte;
-	struct mlx5_modify_hdr  *copy_modify_hdr;
-};
-#endif
-
-struct mlx5e_accel_fs {
-	struct mlx5e_flow_table  accel_tables[ACCEL_FS_NUM_TYPES];
-	struct mlx5_flow_handle *default_rules[ACCEL_FS_NUM_TYPES];
-#ifdef CONFIG_MLX5_IPSEC
-	struct mlx5e_ipsec_default ipsec_default[IPSEC_DEFAULT_TYPES];
-#endif
-};
-
 int mlx5e_arfs_create_tables(struct mlx5e_priv *priv);
 void mlx5e_arfs_destroy_tables(struct mlx5e_priv *priv);
 int mlx5e_arfs_enable(struct mlx5e_priv *priv);
@@ -241,13 +225,13 @@ static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUP
 static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
 #endif
 
-struct mlx5e_sniffer;
+#ifdef CONFIG_MLX5_EN_TLS
+struct mlx5e_accel_fs_tcp;
+#endif
 
 struct mlx5e_flow_steering {
 	struct mlx5_flow_namespace      *ns;
-#ifdef CONFIG_MLX5_IPSEC
 	struct mlx5_flow_namespace      *egress_ns;
-#endif
 #ifdef CONFIG_MLX5_EN_RXNFC
 	struct mlx5e_ethtool_steering   ethtool;
 #endif
@@ -259,10 +243,9 @@ struct mlx5e_flow_steering {
 #ifdef CONFIG_MLX5_EN_ARFS
 	struct mlx5e_arfs_tables        arfs;
 #endif
-#ifdef CONFIG_MLX5_EN_ACCEL_FS
-	struct mlx5e_accel_fs           accel;
+#ifdef CONFIG_MLX5_EN_TLS
+	struct mlx5e_accel_fs_tcp      *accel_tcp;
 #endif
-	struct mlx5e_sniffer            *sniffer;
 };
 
 struct ttc_params {
@@ -287,14 +270,20 @@ void mlx5e_destroy_inner_ttc_table(struct mlx5e_priv *priv,
 				   struct mlx5e_ttc_table *ttc);
 
 void mlx5e_destroy_flow_table(struct mlx5e_flow_table *ft);
+int mlx5e_ttc_fwd_dest(struct mlx5e_priv *priv, enum mlx5e_traffic_types type,
+		       struct mlx5_flow_destination *new_dest);
+struct mlx5_flow_destination
+mlx5e_ttc_get_default_dest(struct mlx5e_priv *priv, enum mlx5e_traffic_types type);
+int mlx5e_ttc_fwd_default_dest(struct mlx5e_priv *priv, enum mlx5e_traffic_types type);
 
 void mlx5e_enable_cvlan_filter(struct mlx5e_priv *priv);
 void mlx5e_disable_cvlan_filter(struct mlx5e_priv *priv);
 
-int mlx5e_sniffer_start(struct mlx5e_priv *priv);
-int mlx5e_sniffer_stop(struct mlx5e_priv *priv);
 int mlx5e_create_flow_steering(struct mlx5e_priv *priv);
 void mlx5e_destroy_flow_steering(struct mlx5e_priv *priv);
+
+bool mlx5e_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type);
+bool mlx5e_any_tunnel_proto_supported(struct mlx5_core_dev *mdev);
 
 #endif /* __MLX5E_FLOW_STEER_H__ */
 

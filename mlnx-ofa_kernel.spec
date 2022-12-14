@@ -31,7 +31,7 @@
 
 %global WITH_SYSTEMD %(if ( test -d "%{_unitdir}" > /dev/null); then echo -n '1'; else echo -n '0'; fi)
 
-%{!?configure_options: %global configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx5-mod --with-mlxfw-mod --with-ipoib-mod}
+%{!?configure_options: %global configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mlx5-mod --with-mlxfw-mod --with-ipoib-mod}
 
 %global MEMTRACK %(if ( echo %{configure_options} | grep "with-memtrack" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global MADEYE %(if ( echo %{configure_options} | grep "with-madeye-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
@@ -66,9 +66,7 @@
 # Kernel module packages to be included into kernel-ib
 %global build_ipoib %(if ( echo %{configure_options} | grep "with-ipoib-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global build_oiscsi %(if ( echo %{configure_options} | grep "with-iscsi-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
-%global build_mlx4 %(if ( echo %{configure_options} | grep "with-mlx4-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global build_mlx5 %(if ( echo %{configure_options} | grep "with-mlx5-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
-%global build_mlx4_en %(if ( echo %{configure_options} | grep "with-mlx4_en-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 
 %{!?LIB_MOD_DIR: %global LIB_MOD_DIR /lib/modules/%{KVERSION}/updates}
 
@@ -77,8 +75,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.0}
-%{!?_release: %global _release OFED.5.0.2.1.8.1.g5f67178}
+%{!?_version: %global _version 5.1}
+%{!?_release: %global _release OFED.5.1.0.6.6.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -133,7 +131,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-2.1.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-0.6.6.tgz
 
 
 # build KMP rpms?
@@ -148,6 +146,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %endif
 EOF)
 %(echo "Requires: %{utils_pname}" > %{_builddir}/preamble)
+%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp" >> %{_builddir}/preamble)
 %kernel_module_package -f %{_builddir}/kmp.files -p %{_builddir}/preamble -r %{_kmp_rel}
 %else # not KMP
 %global kernel_source() %{K_SRC}
@@ -180,6 +179,7 @@ Obsoletes: mlnx-en-kmp-trace
 Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
+Obsoletes: mlnx-rdma-rxe
 Version: %{_version}
 Release: %{_release}.kver.%{krelver}
 Summary: Infiniband Driver and ULPs kernel modules
@@ -187,7 +187,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-2.1.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-0.6.6.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -220,7 +220,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-2.1.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-0.6.6.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -489,14 +489,6 @@ case $(uname -m) in
 esac
 %endif
 
-%if "%{XENSERVER65}" == "1"
-	# mlx4_core fails to load on xenserver 6.5 with the following error:
-	# mlx4_core 0000:01:00.0: Failed to map MCG context memory, aborting
-	# mlx4_core: probe of 0000:01:00.0 failed with error -12
-	# This happens only when DMFS is used (module parameter log_num_mgm_entry < 0).
-	echo "options mlx4_core log_num_mgm_entry_size=10" >> %{buildroot}/etc/modprobe.d/mlnx.conf
-%endif
-
 %clean
 rm -rf %{buildroot}
 
@@ -696,12 +688,8 @@ fi
 %if %{build_ipoib}
 %config(noreplace) /etc/modprobe.d/ib_ipoib.conf
 %endif
-%if %{build_mlx4} || %{build_mlx5}
-%{_bindir}/ibdev2netdev
-%endif
-%if %{build_mlx4_en}
-/sbin/connectx_port_config
-%config(noreplace) /etc/infiniband/connectx.conf
+%if %{build_mlx5}
+%{_sbindir}/ibdev2netdev
 %endif
 
 %if "%{KMP}" != "1"

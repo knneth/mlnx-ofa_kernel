@@ -281,7 +281,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_DESTROY_EQ:
 	case MLX5_CMD_OP_DESTROY_CQ:
 	case MLX5_CMD_OP_DESTROY_QP:
-	case MLX5_CMD_OP_SET_DC_CNAK_TRACE:
 	case MLX5_CMD_OP_DESTROY_PSV:
 	case MLX5_CMD_OP_DESTROY_SRQ:
 	case MLX5_CMD_OP_DESTROY_XRC_SRQ:
@@ -323,12 +322,8 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_DESTROY_GENERAL_OBJECT:
 	case MLX5_CMD_OP_DEALLOC_MEMIC:
 	case MLX5_CMD_OP_PAGE_FAULT_RESUME:
-	case MLX5_CMD_OP_DESTROY_CAPI_PEC:
 	case MLX5_CMD_OP_QUERY_ESW_FUNCTIONS:
 	case MLX5_CMD_OP_DEALLOC_SF:
-	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_PARAMS:
-	case MLX5_CMD_OP_SET_DIAGNOSTIC_PARAMS:
-	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_COUNTERS:
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_PKEY:
 	case MLX5_CMD_OP_ACCESS_REG:
 		return MLX5_CMD_STAT_OK;
@@ -400,6 +395,9 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_ALLOC_PD:
 	case MLX5_CMD_OP_ALLOC_UAR:
 	case MLX5_CMD_OP_CONFIG_INT_MODERATION:
+	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_PARAMS:
+	case MLX5_CMD_OP_SET_DIAGNOSTIC_PARAMS:
+	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_COUNTERS:
 	case MLX5_CMD_OP_ATTACH_TO_MCG:
 	case MLX5_CMD_OP_GET_DROPPED_PACKET_LOG:
 	case MLX5_CMD_OP_MAD_IFC:
@@ -467,6 +465,8 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_QUERY_SF_PARTITION:
 	case MLX5_CMD_OP_ALLOC_SF:
 	case MLX5_CMD_OP_SYNC_STEERING:
+	case MLX5_CMD_OP_MODIFY_XRQ:
+	case MLX5_CMD_OP_RELEASE_XRQ_ERROR:
 		*status = MLX5_DRIVER_STATUS_ABORTED;
 		*synd = MLX5_DRIVER_SYND;
 		return -EIO;
@@ -535,7 +535,6 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(DESTROY_DCT);
 	MLX5_COMMAND_STR_CASE(DRAIN_DCT);
 	MLX5_COMMAND_STR_CASE(QUERY_DCT);
-	MLX5_COMMAND_STR_CASE(SET_DC_CNAK_TRACE);
 	MLX5_COMMAND_STR_CASE(ARM_DCT_FOR_KEY_VIOLATION);
 	MLX5_COMMAND_STR_CASE(QUERY_VPORT_STATE);
 	MLX5_COMMAND_STR_CASE(MODIFY_VPORT_STATE);
@@ -656,8 +655,6 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(ATTACH_NVMF_NAMESPACE);
 	MLX5_COMMAND_STR_CASE(DETACH_NVMF_NAMESPACE);
 	MLX5_COMMAND_STR_CASE(QUERY_NVMF_NAMESPACE_CONTEXT);
-	MLX5_COMMAND_STR_CASE(CREATE_CAPI_PEC);
-	MLX5_COMMAND_STR_CASE(DESTROY_CAPI_PEC);
 	MLX5_COMMAND_STR_CASE(CREATE_GENERAL_OBJECT);
 	MLX5_COMMAND_STR_CASE(DESTROY_GENERAL_OBJECT);
 	MLX5_COMMAND_STR_CASE(MODIFY_GENERAL_OBJECT);
@@ -670,6 +667,8 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(DESTROY_UCTX);
 	MLX5_COMMAND_STR_CASE(CREATE_UMEM);
 	MLX5_COMMAND_STR_CASE(DESTROY_UMEM);
+	MLX5_COMMAND_STR_CASE(RELEASE_XRQ_ERROR);
+	MLX5_COMMAND_STR_CASE(MODIFY_XRQ);
 	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_PARAMS);
 	MLX5_COMMAND_STR_CASE(SET_DIAGNOSTIC_PARAMS);
 	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_COUNTERS);
@@ -860,7 +859,7 @@ static u16 msg_to_opcode(struct mlx5_cmd_msg *in)
 	return MLX5_GET(mbox_in, in->first.data, opcode);
 }
 
-static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool forced);
+static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_comp_t comp_type);
 
 static void cb_timeout_handler(struct work_struct *work)
 {
@@ -876,7 +875,7 @@ static void cb_timeout_handler(struct work_struct *work)
 	mlx5_core_warn(dev, "%s(0x%x) timeout. Will cause a leak of a command resource\n",
 		       mlx5_command_str(msg_to_opcode(ent->in)),
 		       msg_to_opcode(ent->in));
-	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
+	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
 }
 
 static void free_msg(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *msg);
@@ -885,13 +884,10 @@ static void mlx5_free_cmd_msg(struct mlx5_core_dev *dev,
 
 static bool opcode_allowed(struct mlx5_cmd *cmd, u16 opcode)
 {
-	if (!cmd->allowed_opcode)
+	if (cmd->allowed_opcode == CMD_ALLOWED_OPCODE_ALL)
 		return true;
 
-	if (cmd->allowed_opcode != opcode)
-		return false;
-
-	return true;
+	return cmd->allowed_opcode == opcode;
 }
 
 static void cmd_work_handler(struct work_struct *work)
@@ -914,7 +910,7 @@ static void cmd_work_handler(struct work_struct *work)
 	if (!ent->page_queue) {
 		alloc_ret = alloc_ent(cmd);
 		if (alloc_ret < 0) {
-			mlx5_core_err(dev, "failed to allocate command entry\n");
+			mlx5_core_err_rl(dev, "failed to allocate command entry\n");
 			if (ent->callback) {
 				ent->callback(-EAGAIN, ent->context);
 				mlx5_free_cmd_msg(dev, ent->out);
@@ -971,7 +967,7 @@ static void cmd_work_handler(struct work_struct *work)
 		MLX5_SET(mbox_out, ent->out, status, status);
 		MLX5_SET(mbox_out, ent->out, syndrome, drv_synd);
 
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
+		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
 		/* no doorbell, no need to keep the entry */
 		free_ent(cmd, ent->idx);
 		if (ent->callback)
@@ -988,7 +984,8 @@ static void cmd_work_handler(struct work_struct *work)
 		poll_timeout(ent);
 		/* make sure we read the descriptor after ownership is SW */
 		rmb();
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, (ent->ret == -ETIMEDOUT));
+		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, ent->ret == -ETIMEDOUT ?
+				      MLX5_CMD_COMP_TYPE_FORCED : MLX5_CMD_COMP_TYPE_POLLING);
 	}
 }
 
@@ -1037,7 +1034,7 @@ static int wait_func(struct mlx5_core_dev *dev, struct mlx5_cmd_work_ent *ent)
 		wait_for_completion(&ent->done);
 	} else if (!wait_for_completion_timeout(&ent->done, timeout)) {
 		ent->ret = -ETIMEDOUT;
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
+		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
 	}
 
 out_err:
@@ -1440,49 +1437,19 @@ static void clean_debug_files(struct mlx5_core_dev *dev)
 	debugfs_remove_recursive(dbg->dbg_root);
 }
 
-static int create_debugfs_files(struct mlx5_core_dev *dev)
+static void create_debugfs_files(struct mlx5_core_dev *dev)
 {
 	struct mlx5_cmd_debug *dbg = &dev->cmd.dbg;
-	int err = -ENOMEM;
-
-	if (!mlx5_debugfs_root)
-		return 0;
 
 	dbg->dbg_root = debugfs_create_dir("cmd", dev->priv.dbg_root);
-	if (!dbg->dbg_root)
-		return err;
 
-	dbg->dbg_in = debugfs_create_file("in", 0400, dbg->dbg_root,
-					  dev, &dfops);
-	if (!dbg->dbg_in)
-		goto err_dbg;
-
-	dbg->dbg_out = debugfs_create_file("out", 0200, dbg->dbg_root,
-					   dev, &dfops);
-	if (!dbg->dbg_out)
-		goto err_dbg;
-
-	dbg->dbg_outlen = debugfs_create_file("out_len", 0600, dbg->dbg_root,
-					      dev, &olfops);
-	if (!dbg->dbg_outlen)
-		goto err_dbg;
-
-	dbg->dbg_status = debugfs_create_u8("status", 0600, dbg->dbg_root,
-					    &dbg->status);
-	if (!dbg->dbg_status)
-		goto err_dbg;
-
-	dbg->dbg_run = debugfs_create_file("run", 0200, dbg->dbg_root, dev, &fops);
-	if (!dbg->dbg_run)
-		goto err_dbg;
+	debugfs_create_file("in", 0400, dbg->dbg_root, dev, &dfops);
+	debugfs_create_file("out", 0200, dbg->dbg_root, dev, &dfops);
+	debugfs_create_file("out_len", 0600, dbg->dbg_root, dev, &olfops);
+	debugfs_create_u8("status", 0600, dbg->dbg_root, &dbg->status);
+	debugfs_create_file("run", 0200, dbg->dbg_root, dev, &fops);
 
 	mlx5_cmdif_debugfs_init(dev);
-
-	return 0;
-
-err_dbg:
-	clean_debug_files(dev);
-	return err;
 }
 
 void mlx5_cmd_allowed_opcode(struct mlx5_core_dev *dev, u16 opcode)
@@ -1528,7 +1495,8 @@ static int cmd_comp_notifier(struct notifier_block *nb,
 	dev = container_of(cmd, struct mlx5_core_dev, cmd);
 	eqe = data;
 
-	mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector), false);
+	mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector),
+			      MLX5_CMD_COMP_TYPE_EVENT);
 
 	return NOTIFY_OK;
 }
@@ -1559,7 +1527,7 @@ static void free_msg(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *msg)
 	}
 }
 
-static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool forced)
+static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_comp_t comp_type)
 {
 	struct mlx5_cmd *cmd = &dev->cmd;
 	struct mlx5_cmd_work_ent *ent;
@@ -1584,12 +1552,20 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool force
 			if (!test_and_clear_bit(MLX5_CMD_ENT_STATE_PENDING_COMP,
 						&ent->state)) {
 				/* only real completion can free the cmd slot */
-				if (!forced) {
+				if (comp_type == MLX5_CMD_COMP_TYPE_EVENT && !ent->polling) {
 					mlx5_core_err(dev, "Command completion arrived after timeout (entry idx = %d).\n",
 						      ent->idx);
 					free_ent(cmd, ent->idx);
 					free_cmd(ent);
 				}
+				if (comp_type != MLX5_CMD_COMP_TYPE_POLLING)
+					continue;
+			} else if (ent->polling && comp_type == MLX5_CMD_COMP_TYPE_EVENT) {
+				u16 opcode;
+
+				opcode = msg_to_opcode(ent->in);
+				mlx5_core_err(dev, "Command polling got Event as first completion (entry idx = %d) %s.\n",
+					      ent->idx, mlx5_command_str(opcode));
 				continue;
 			}
 
@@ -1620,7 +1596,7 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool force
 			}
 
 			/* only real completion will free the entry slot */
-			if (!forced)
+			if (comp_type != MLX5_CMD_COMP_TYPE_FORCED)
 				free_ent(cmd, ent->idx);
 
 			if (ent->callback) {
@@ -1650,7 +1626,7 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool force
 				free_msg(dev, ent->in);
 
 				err = err ? err : ent->status;
-				if (!forced)
+				if (comp_type != MLX5_CMD_COMP_TYPE_FORCED)
 					free_cmd(ent);
 				callback(err, context);
 			} else {
@@ -1681,7 +1657,7 @@ void mlx5_cmd_trigger_completions(struct mlx5_core_dev *dev)
 	spin_unlock_irqrestore(&dev->cmd.alloc_lock, flags);
 
 	mlx5_core_dbg(dev, "vector 0x%llx\n", vector);
-	mlx5_cmd_comp_handler(dev, vector, true);
+	mlx5_cmd_comp_handler(dev, vector, MLX5_CMD_COMP_TYPE_FORCED);
 	return;
 
 no_trig:
@@ -1931,6 +1907,9 @@ static void destroy_msg_cache(struct mlx5_core_dev *dev)
 	struct mlx5_cmd_msg *n;
 	int i;
 
+	if (mlx5_core_is_sf(dev))
+		return;
+
 	for (i = 0; i < MLX5_NUM_COMMAND_CACHES; i++) {
 		ch = &dev->cmd.cache[i];
 		list_for_each_entry_safe(msg, n, &ch->head, list) {
@@ -1962,6 +1941,9 @@ static void create_msg_cache(struct mlx5_core_dev *dev)
 	struct mlx5_cmd_msg *msg;
 	int i;
 	int k;
+
+	if (mlx5_core_is_sf(dev))
+		return;
 
 	/* Initialize and fill the caches with initial entries */
 	for (k = 0; k < MLX5_NUM_COMMAND_CACHES; k++) {
@@ -2106,7 +2088,7 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 	mlx5_core_dbg(dev, "descriptor at dma 0x%llx\n", (unsigned long long)(cmd->dma));
 
 	cmd->mode = CMD_MODE_POLLING;
-	cmd->allowed_opcode = 0;
+	cmd->allowed_opcode = CMD_ALLOWED_OPCODE_ALL;
 
 	create_msg_cache(dev);
 
@@ -2118,16 +2100,9 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 		goto err_cache;
 	}
 
-	err = create_debugfs_files(dev);
-	if (err) {
-		err = -ENOMEM;
-		goto err_wq;
-	}
+	create_debugfs_files(dev);
 
 	return 0;
-
-err_wq:
-	destroy_workqueue(cmd->wq);
 
 err_cache:
 	destroy_msg_cache(dev);

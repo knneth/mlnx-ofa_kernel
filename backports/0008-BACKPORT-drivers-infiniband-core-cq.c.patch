@@ -1,0 +1,206 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cq.c
+
+Change-Id: I1a4b76c4282bc8341060cfe9349435fa54082b9c
+---
+ drivers/infiniband/core/cq.c | 71 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 71 insertions(+)
+
+--- a/drivers/infiniband/core/cq.c
++++ b/drivers/infiniband/core/cq.c
+@@ -7,7 +7,10 @@
+ #include <linux/slab.h>
+ #include <rdma/ib_verbs.h>
+ 
++#include <linux/dim.h>
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ #include <trace/events/rdma_core.h>
++#endif
+ 
+ /* # of WCs to poll for with a single call to ib_poll_cq */
+ #define IB_POLL_BATCH			16
+@@ -43,7 +46,9 @@ static void ib_cq_rdma_dim_work(struct w
+ 
+ 	dim->state = DIM_START_MEASURE;
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_modify(cq, comps, usec);
++#endif
+ 	cq->device->ops.modify_cq(cq, comps, usec);
+ }
+ 
+@@ -68,6 +73,7 @@ static void rdma_dim_init(struct ib_cq *
+ 	INIT_WORK(&dim->work, ib_cq_rdma_dim_work);
+ }
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ static int __poll_cq(struct ib_cq *cq, int num_entries, struct ib_wc *wc)
+ {
+ 	int rc;
+@@ -76,21 +82,30 @@ static int __poll_cq(struct ib_cq *cq, i
+ 	trace_cq_poll(cq, num_entries, rc);
+ 	return rc;
+ }
++#endif
+ 
+ static int __ib_process_cq(struct ib_cq *cq, int budget, struct ib_wc *wcs,
+ 			   int batch)
+ {
+ 	int i, n, completed = 0;
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_process(cq);
++#endif
+ 
+ 	/*
+ 	 * budget might be (-1) if the caller does not
+ 	 * want to bound this call, thus we need unsigned
+ 	 * minimum here.
+ 	 */
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
++	trace_cq_process(cq);
+ 	while ((n = __poll_cq(cq, min_t(u32, batch,
+ 					budget - completed), wcs)) > 0) {
++#else
++	while ((n = ib_poll_cq(cq, min_t(u32, batch,
++					budget - completed), wcs)) > 0) {
++#endif
+ 		for (i = 0; i < n; i++) {
+ 			struct ib_wc *wc = &wcs[i];
+ 
+@@ -136,6 +151,8 @@ static void ib_cq_completion_direct(stru
+ 	WARN_ONCE(1, "got unsolicited completion for CQ 0x%p\n", cq);
+ }
+ 
++#if defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL)
+ static int ib_poll_handler(struct irq_poll *iop, int budget)
+ {
+ 	struct ib_cq *cq = container_of(iop, struct ib_cq, iop);
+@@ -146,7 +163,9 @@ static int ib_poll_handler(struct irq_po
+ 	if (completed < budget) {
+ 		irq_poll_complete(&cq->iop);
+ 		if (ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0) {
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 			trace_cq_reschedule(cq);
++#endif
+ 			irq_poll_sched(&cq->iop);
+ 		}
+ 	}
+@@ -159,9 +178,36 @@ static int ib_poll_handler(struct irq_po
+ 
+ static void ib_cq_completion_softirq(struct ib_cq *cq, void *private)
+ {
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_schedule(cq);
++#endif
+ 	irq_poll_sched(&cq->iop);
+ }
++#endif /*CONFIG_IRQ_POLL*/
++#else /*HAVE_IRQ_POLL_H*/
++static int ib_poll_handler(struct blk_iopoll *iop, int budget)
++{
++	struct ib_cq *cq = container_of(iop, struct ib_cq, iop);
++	int completed;
++
++	completed = __ib_process_cq(cq, budget, cq->wc, IB_POLL_BATCH);
++	if (completed < budget) {
++		blk_iopoll_complete(&cq->iop);
++		if (ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0) {
++			if (!blk_iopoll_sched_prep(&cq->iop))
++				blk_iopoll_sched(&cq->iop);
++		}
++	}
++
++	return completed;
++}
++
++static void ib_cq_completion_softirq(struct ib_cq *cq, void *private)
++{
++	if (!blk_iopoll_sched_prep(&cq->iop))
++		blk_iopoll_sched(&cq->iop);
++}
++#endif /*HAVE_IRQ_POLL_H*/
+ 
+ static void ib_cq_poll_work(struct work_struct *work)
+ {
+@@ -179,7 +225,9 @@ static void ib_cq_poll_work(struct work_
+ 
+ static void ib_cq_completion_workqueue(struct ib_cq *cq, void *private)
+ {
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_schedule(cq);
++#endif
+ 	queue_work(cq->comp_wq, &cq->work);
+ }
+ 
+@@ -242,12 +290,21 @@ struct ib_cq *__ib_alloc_cq_user(struct
+ 	case IB_POLL_DIRECT:
+ 		cq->comp_handler = ib_cq_completion_direct;
+ 		break;
++#if IS_ENABLED(CONFIG_IRQ_POLL) || !defined(HAVE_IRQ_POLL_H)
+ 	case IB_POLL_SOFTIRQ:
+ 		cq->comp_handler = ib_cq_completion_softirq;
+ 
++#if defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL)
+ 		irq_poll_init(&cq->iop, IB_POLL_BUDGET_IRQ, ib_poll_handler);
++#endif
++#else
++		blk_iopoll_init(&cq->iop, IB_POLL_BUDGET_IRQ, ib_poll_handler);
++		blk_iopoll_enable(&cq->iop);
++#endif
+ 		ib_req_notify_cq(cq, IB_CQ_NEXT_COMP);
+ 		break;
++#endif
+ 	case IB_POLL_WORKQUEUE:
+ 	case IB_POLL_UNBOUND_WORKQUEUE:
+ 		cq->comp_handler = ib_cq_completion_workqueue;
+@@ -261,7 +318,9 @@ struct ib_cq *__ib_alloc_cq_user(struct
+ 		goto out_destroy_cq;
+ 	}
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_alloc(cq, nr_cqe, comp_vector, poll_ctx);
++#endif
+ 	return cq;
+ 
+ out_destroy_cq:
+@@ -271,7 +330,9 @@ out_free_wc:
+ 	kfree(cq->wc);
+ out_free_cq:
+ 	kfree(cq);
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_alloc_error(nr_cqe, comp_vector, poll_ctx, ret);
++#endif
+ 	return ERR_PTR(ret);
+ }
+ EXPORT_SYMBOL(__ib_alloc_cq_user);
+@@ -317,9 +378,17 @@ void ib_free_cq_user(struct ib_cq *cq, s
+ 	switch (cq->poll_ctx) {
+ 	case IB_POLL_DIRECT:
+ 		break;
++#if IS_ENABLED(CONFIG_IRQ_POLL) || !defined(HAVE_IRQ_POLL_H)
+ 	case IB_POLL_SOFTIRQ:
++#if defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL)
+ 		irq_poll_disable(&cq->iop);
++#endif
++#else
++		blk_iopoll_disable(&cq->iop);
++#endif
+ 		break;
++#endif
+ 	case IB_POLL_WORKQUEUE:
+ 	case IB_POLL_UNBOUND_WORKQUEUE:
+ 		cancel_work_sync(&cq->work);
+@@ -328,7 +397,9 @@ void ib_free_cq_user(struct ib_cq *cq, s
+ 		WARN_ON_ONCE(1);
+ 	}
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_free(cq);
++#endif
+ 	rdma_restrack_del(&cq->res);
+ 	cq->device->ops.destroy_cq(cq, udata);
+ 	if (cq->dim)

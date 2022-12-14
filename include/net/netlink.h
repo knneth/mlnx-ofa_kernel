@@ -4,6 +4,7 @@
 #include "../../compat/config.h"
 
 #include_next <net/netlink.h>
+#include <net/genetlink.h>
 
 #ifndef HAVE_NLA_PARSE_6_PARAMS
 #define nla_parse(p1, p2, p3, p4, p5, p6) nla_parse(p1, p2, p3, p4, p5)

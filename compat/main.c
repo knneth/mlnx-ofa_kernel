@@ -1,8 +1,6 @@
 #include <linux/module.h>
 
-#ifdef CONFIG_COMPAT_TEST
-#include "config_test.h"
-#endif
+#include "config.h"
 
 #ifdef CONFIG_COMPAT_FLOW_DISSECTOR
 #include <net/flow_dissector.h>
@@ -12,6 +10,9 @@
 #include <linux/xarray.h>
 #endif
 
+#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
+#include <net/netfilter/nf_flow_table.h>
+#endif
 MODULE_AUTHOR("Luis R. Rodriguez");
 MODULE_DESCRIPTION("Kernel backport module");
 MODULE_LICENSE("GPL");
@@ -64,14 +65,6 @@ EXPORT_SYMBOL_GPL(backport_dependency_symbol);
 
 static int __init backport_init(void)
 {
-	int err;
-
-	err = backport_system_workqueue_create();
-	if (err) {
-		pr_warn("backport_system_workqueue_create() failed\n");
-		return err;
-	}
-
 #ifdef CONFIG_COMPAT_FLOW_DISSECTOR
 	init_default_flow_dissectors();
 #endif
@@ -89,15 +82,20 @@ static int __init backport_init(void)
 #ifndef HAVE_XARRAY
 	compat_radix_tree_init();
 #endif
+#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
+	nf_flow_table_offload_init();
+#endif
         return 0;
 }
 module_init(backport_init);
 
 static void __exit backport_exit(void)
 {
-	backport_system_workqueue_destroy();
 #ifndef HAVE_XARRAY
 	compat_radix_tree_clean();
+#endif	
+#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
+	nf_flow_table_offload_exit();
 #endif
 
         return;

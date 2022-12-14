@@ -242,6 +242,7 @@ static void mlx5e_ipsec_set_ft_metadata(struct mlx5e_tx_wqe *wqe)
 }
 
 /* Copy from upstream net/ipv4/esp4.c */
+#ifndef HAVE_ESP_OUTPUT_FILL_TRAILER
 static
 void esp_output_fill_trailer(u8 *tail, int tfclen, int plen, __u8 proto)
 {
@@ -258,15 +259,15 @@ void esp_output_fill_trailer(u8 *tail, int tfclen, int plen, __u8 proto)
 	tail[plen - 2] = plen - 2;
 	tail[plen - 1] = proto;
 }
+#endif
 
 static int mlx5e_ipsec_set_trailer(struct sk_buff *skb,
-				   struct mlx5e_tx_wqe *wqe,
+				   struct mlx5_accel_trailer *tr,
 				   struct xfrm_state *x,
-				   struct xfrm_offload *xo,
-				   u8 *trbuff)
+				   struct xfrm_offload *xo)
 {
+	struct xfrm_encap_tmpl  *encap = x->encap;
 	unsigned int blksize, clen, alen, plen;
-	struct mlx5_wqe_eth_seg *eseg;
 	struct crypto_aead *aead;
 	unsigned int tailen;
 	__u8 proto;
@@ -275,30 +276,34 @@ static int mlx5e_ipsec_set_trailer(struct sk_buff *skb,
 	alen = crypto_aead_authsize(aead);
 	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 	clen = ALIGN(skb->len + 2, blksize);
-	plen = clen - skb->len;
-	plen = max_t(u32, plen, 4);
+	plen = max_t(u32, clen - skb->len, 4);
 	tailen = plen + alen;
 	proto = (x->props.family == AF_INET) ?
 		((struct iphdr *)skb_network_header(skb))->protocol :
 		((struct ipv6hdr *)skb_network_header(skb))->nexthdr;
-	eseg = &wqe->eth;
-	eseg->trailer.params |= cpu_to_be16(MLX5_ETH_WQE_INSERT_TRAILER);
-	if (!x->encap) {
-		eseg->trailer.params |= (proto == IPPROTO_ESP) ?
-					cpu_to_be16(MLX5_ETH_WQE_TRAILER_HDR_OUTER_IP_ASSOC) :
-					cpu_to_be16(MLX5_ETH_WQE_TRAILER_HDR_OUTER_L4_ASSOC);
-	} else { //UDP encapsulated ESP
-		eseg->trailer.params |= (proto == IPPROTO_ESP) ?
-					cpu_to_be16(MLX5_ETH_WQE_TRAILER_HDR_INNER_IP_ASSOC) :
-					cpu_to_be16(MLX5_ETH_WQE_TRAILER_HDR_INNER_L4_ASSOC);
+	tr->wqe_params = MLX5_ETH_WQE_INSERT_TRAILER;
+	if (!encap) {
+		tr->wqe_params |= (proto == IPPROTO_ESP) ?
+				  MLX5_ETH_WQE_TRAILER_HDR_OUTER_IP_ASSOC :
+				  MLX5_ETH_WQE_TRAILER_HDR_OUTER_L4_ASSOC;
+	} else if (encap->encap_type == UDP_ENCAP_ESPINUDP) {
+		tr->wqe_params |= (proto == IPPROTO_ESP) ?
+				  MLX5_ETH_WQE_TRAILER_HDR_INNER_IP_ASSOC :
+				  MLX5_ETH_WQE_TRAILER_HDR_INNER_L4_ASSOC;
+	} else {
+		goto err_tr;
 	}
 
 	if (WARN_ON(tailen > MLX5_MAX_IPSEC_TRAILER_SZ))
-		return 0;
+		goto err_tr;
 
-	esp_output_fill_trailer(trbuff, 0, plen, (u8)xo->proto);
+	esp_output_fill_trailer(tr->trbuff, 0, plen, (u8)xo->proto);
+	tr->trbufflen = tailen;
 
-	return tailen;
+	return 0;
+
+err_tr:
+	return -EOPNOTSUPP;
 }
 #endif
 
@@ -312,7 +317,7 @@ struct sk_buff *mlx5e_ipsec_handle_tx_skb(struct net_device *netdev,
 #endif
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct xfrm_offload *xo = xfrm_offload(skb);
-	struct mlx5e_ipsec_metadata *mdata = NULL;
+	struct mlx5e_ipsec_metadata *mdata;
 	struct mlx5e_ipsec_sa_entry *sa_entry;
 	struct xfrm_state *x;
 	struct sec_path *sp;
@@ -358,12 +363,10 @@ struct sk_buff *mlx5e_ipsec_handle_tx_skb(struct net_device *netdev,
 	sa_entry->set_iv_op(skb, x, xo);
 	if (MLX5_CAP_GEN(priv->mdev, fpga)) {
 		mlx5e_ipsec_set_metadata(skb, mdata, xo);
-	} else { //must be cx ipsec device
 #ifdef CONFIG_MLX5_IPSEC
-		tr->trbufflen = mlx5e_ipsec_set_trailer(skb, wqe,
-							  x, xo,
-							  tr->trbuff);
-		if (!tr->trbufflen)
+	} else {
+		/* Must be cx ipsec device */
+		if (mlx5e_ipsec_set_trailer(skb, tr, x, xo))
 			goto drop;
 
 		mlx5e_ipsec_set_ft_metadata(wqe);
@@ -468,13 +471,8 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 	struct sec_path *sp;
 	u32  sa_handle;
 
-	if (likely(!(ipsec_syndrome & MLX5_IPSEC_METADATA_MARKER_MASK)))
-		return;
-
 	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
 	priv = netdev_priv(netdev);
-	if (!priv->ipsec)
-		return;
 	sp = secpath_set(skb);
 	if (unlikely(!sp)) {
 		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
@@ -497,7 +495,7 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 	switch (ipsec_syndrome & MLX5_IPSEC_METADATA_SYNDROM_MASK) {
 	case MLX5E_IPSEC_OFFLOAD_RX_SYNDROME_DECRYPTED:
 		xo->status = CRYPTO_SUCCESS;
-		if (WARN_ON(priv->ipsec->no_trailer))
+		if (WARN_ON_ONCE(priv->ipsec->no_trailer))
 			xo->flags |= XFRM_ESP_NO_TRAILER;
 		break;
 	case MLX5E_IPSEC_OFFLOAD_RX_SYNDROME_AUTH_FAILED:

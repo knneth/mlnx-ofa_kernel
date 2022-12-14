@@ -1,0 +1,30 @@
+From: Max Gurtovoy <maxg@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/nvfs-dma.h
+
+Change-Id: I4feeba4214e8b4128174c3beddcc61a419874d67
+---
+ drivers/nvme/host/nvfs-dma.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/nvme/host/nvfs-dma.h
++++ b/drivers/nvme/host/nvfs-dma.h
+@@ -21,7 +21,9 @@ static bool nvme_nvfs_unmap_data(struct
+ 
+         if (iod->sg && !is_pci_p2pdma_page(sg_page(iod->sg)) &&
+             !blk_integrity_rq(req) &&
++#if defined(HAVE_BLKDEV_DMA_MAP_BVEC) && defined(HAVE_BLKDEV_REQ_BVEC)
+             !iod->dma_len &&
++#endif
+             nvfs_ops != NULL) {
+ 
+                 int i, count;
+@@ -72,7 +74,9 @@ static blk_status_t nvme_nvfs_map_data(s
+        *is_nvfs_io = false;
+ 
+        if (!blk_integrity_rq(req) && nvfs_get_ops()) {
++#if defined(HAVE_BLKDEV_DMA_MAP_BVEC) && defined(HAVE_BLKDEV_REQ_BVEC)
+                 iod->dma_len = 0;
++#endif
+                 iod->sg = mempool_alloc(dev->iod_mempool, GFP_ATOMIC);
+                 if (!iod->sg) {
+                         nvfs_put_ops();

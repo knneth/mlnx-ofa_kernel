@@ -2,14 +2,9 @@
 #define _COMPAT_LINUX_SKBUFF_H
 
 #include "../../compat/config.h"
-
 #include <linux/version.h>
-#ifdef HAVE_LINUX_SIPHASH_H
-#include <linux/siphash.h>
-#endif
 
 #include_next <linux/skbuff.h>
-
 
 #ifndef HAVE_DEV_ALLOC_PAGES
 static inline struct page *dev_alloc_pages(unsigned int order)

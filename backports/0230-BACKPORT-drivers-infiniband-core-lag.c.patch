@@ -1,0 +1,32 @@
+From: Feras Daoud <ferasda@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/lag.c
+
+Change-Id: I8d40800772af0cece60076fe8597367bbac23f23
+---
+ drivers/infiniband/core/lag.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/lag.c
++++ b/drivers/infiniband/core/lag.c
+@@ -91,9 +91,13 @@ static struct net_device *rdma_get_xmit_
+ 		return ERR_PTR(-ENOMEM);
+ 
+ 	rcu_read_lock();
++#ifdef HAVE_NETDEV_GET_XMIT_SLAVE
+ 	slave = netdev_get_xmit_slave(master, skb,
+ 				      !!(device->lag_flags &
+ 					 RDMA_LAG_FLAGS_HASH_ALL_SLAVES));
++#else
++	slave = NULL;
++#endif
+ 	if (slave)
+ 		dev_hold(slave);
+ 	rcu_read_unlock();
+@@ -130,7 +134,6 @@ struct net_device *rdma_lag_get_ah_roce_
+ 
+ 	if (!netif_is_bond_master(master))
+ 		goto put;
+-
+ 	slave = rdma_get_xmit_slave_udp(device, master, ah_attr, flags);
+ put:
+ 	dev_put(master);

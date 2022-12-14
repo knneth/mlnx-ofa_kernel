@@ -1,14 +1,14 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
-Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
+Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
 ---
- .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 114 ++++++++++++++++--
- 1 file changed, 101 insertions(+), 13 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 189 +++++++++++++++---
+ 1 file changed, 165 insertions(+), 24 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
-@@ -30,8 +30,11 @@
+@@ -30,9 +30,14 @@
   * SOFTWARE.
   */
  
@@ -17,11 +17,39 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 +#ifdef HAVE_NET_PAGE_POOL_H
  #include <net/page_pool.h>
 +#endif
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ #include <net/xdp_sock.h>
++#endif
  #include "en/xdp.h"
+ #include "en/params.h"
  
- int mlx5e_xdp_max_mtu(struct mlx5e_params *params)
-@@ -78,21 +81,31 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -71,7 +76,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+ 
+ 	xdptxd.data = xdpf->data;
+ 	xdptxd.len  = xdpf->len;
+-
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 	if (xdp->rxq->mem.type == MEM_TYPE_ZERO_COPY) {
+ 		/* The xdp_buff was in the UMEM and was copied into a newly
+ 		 * allocated page. The UMEM page was returned via the ZCA, and
+@@ -97,7 +102,9 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+ 		xdptxd.dma_addr     = dma_addr;
+ 		xdpi.frame.xdpf     = xdpf;
+ 		xdpi.frame.dma_addr = dma_addr;
+-	} else {
++	} else
++#endif
++	{	
+ 		/* Driver assumes that convert_to_xdp_frame returns an xdp_frame
+ 		 * that points to the same memory region as the original
+ 		 * xdp_buff. It allows to map the memory only once and to use
+@@ -123,31 +130,50 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+ 		      void *va, u16 *rx_headroom, u32 *len, bool xsk)
+ {
  	struct bpf_prog *prog = READ_ONCE(rq->xdp_prog);
++#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
+ 	struct xdp_umem *umem = rq->umem;
++#endif
  	struct xdp_buff xdp;
  	u32 act;
 +#ifdef HAVE_XDP_REDIRECT
@@ -32,18 +60,39 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		return false;
  
  	xdp.data = va + *rx_headroom;
+-	xdp_set_data_meta_invalid(&xdp);
+-	xdp.data_end = xdp.data + *len;
+-	xdp.data_hard_start = va;
+-	if (xsk)
+-		xdp.handle = di->xsk.handle;
+-	xdp.rxq = &rq->xdp_rxq;
 +#ifdef HAVE_XDP_SET_DATA_META_INVALID
- 	xdp_set_data_meta_invalid(&xdp);
++       xdp_set_data_meta_invalid(&xdp);
 +#endif
- 	xdp.data_end = xdp.data + *len;
++       xdp.data_end = xdp.data + *len;
 +#ifdef HAVE_XDP_BUFF_DATA_HARD_START
- 	xdp.data_hard_start = va;
++       xdp.data_hard_start = va;
++#endif
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
++       if (xsk)
++	       xdp.handle = di->xsk.handle;
 +#endif
 +#ifdef HAVE_NET_XDP_H
- 	xdp.rxq = &rq->xdp_rxq;
++       xdp.rxq = &rq->xdp_rxq;
 +#endif
  
  	act = bpf_prog_run_xdp(prog, &xdp);
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 	if (xsk) {
++#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
+ 		u64 off = xdp.data - xdp.data_hard_start;
+-
+ 		xdp.handle = xsk_umem_adjust_offset(umem, xdp.handle, off);
++#else
++		*rx_headroom = xdp.data - xdp.data_hard_start;
++#endif
+ 	}
++#endif
  	switch (act) {
  	case XDP_PASS:
 +#ifdef HAVE_XDP_BUFF_DATA_HARD_START
@@ -52,7 +101,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		*len = xdp.data_end - xdp.data;
  		return false;
  	case XDP_TX:
-@@ -100,6 +113,7 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -155,6 +181,7 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  			goto xdp_abort;
  		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
  		return true;
@@ -60,7 +109,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  	case XDP_REDIRECT:
  		page_ref_sub(di->page, di->refcnt_bias);
  		di->refcnt_bias = 0;
-@@ -112,12 +126,15 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -167,12 +194,15 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  		mlx5e_page_dma_unmap(rq, di);
  		rq->stats->xdp_redirect++;
  		return true;
@@ -76,26 +125,105 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		/* fall through */
  	case XDP_DROP:
  		rq->stats->xdp_drop++;
-@@ -298,7 +315,12 @@ static void mlx5e_free_xdpsq_desc(struct
- 			/* XDP_REDIRECT */
- 			dma_unmap_single(sq->pdev, xdpi.dma_addr,
- 					 xdpi.xdpf->len, DMA_TO_DEVICE);
+@@ -385,7 +415,9 @@ static bool mlx5e_xmit_xdp_frame(struct
+ 
+ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
+ 				  struct mlx5e_xdp_wqe_info *wi,
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 				  u32 *xsk_frames,
++#endif
+ 				  bool recycle)
+ {
+ 	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
+@@ -399,16 +431,23 @@ static void mlx5e_free_xdpsq_desc(struct
+ 			/* XDP_TX from the XSK RQ and XDP_REDIRECT */
+ 			dma_unmap_single(sq->pdev, xdpi.frame.dma_addr,
+ 					 xdpi.frame.xdpf->len, DMA_TO_DEVICE);
 +#ifdef HAVE_XDP_FRAME
- 			xdp_return_frame(xdpi.xdpf);
+ 			xdp_return_frame(xdpi.frame.xdpf);
 +#else
 +			/* Assumes order0 page*/
-+			put_page(virt_to_page(xdpi.xdpf->data));
++			put_page(virt_to_page(xdpi.frame.xdpf->data));
 +#endif
+ 			break;
+ 		case MLX5E_XDP_XMIT_MODE_PAGE:
+ 			/* XDP_TX from the regular RQ */
+ 			mlx5e_page_release_dynamic(xdpi.page.rq, &xdpi.page.di, recycle);
+ 			break;
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 		case MLX5E_XDP_XMIT_MODE_XSK:
+ 			/* AF_XDP send */
+ 			(*xsk_frames)++;
+ 			break;
++#endif
+ 		default:
+ 			WARN_ON_ONCE(true);
  		}
- 	}
- }
-@@ -378,6 +400,30 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
- 	}
- }
+@@ -419,7 +458,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+ {
+ 	struct mlx5e_xdpsq *sq;
+ 	struct mlx5_cqe64 *cqe;
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 	u32 xsk_frames = 0;
++#endif
+ 	u16 sqcc;
+ 	int i;
  
+@@ -456,7 +497,11 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+ 
+ 			sqcc += wi->num_wqebbs;
+ 
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 			mlx5e_free_xdpsq_desc(sq, wi, &xsk_frames, true);
++#else
++			mlx5e_free_xdpsq_desc(sq, wi, true);
++#endif
+ 		} while (!last_wqe);
+ 
+ 		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
+@@ -467,10 +512,10 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+ 					     (struct mlx5_err_cqe *)cqe);
+ 		}
+ 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
+-
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 	if (xsk_frames)
+ 		xsk_umem_complete_tx(sq->umem, xsk_frames);
+-
++#endif
+ 	sq->stats->cqes += i;
+ 
+ 	mlx5_cqwq_update_db_record(&cq->wq);
+@@ -484,7 +529,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+ 
+ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
+ {
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 	u32 xsk_frames = 0;
++#endif
+ 
+ 	while (sq->cc != sq->pc) {
+ 		struct mlx5e_xdp_wqe_info *wi;
+@@ -495,13 +542,43 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+ 
+ 		sq->cc += wi->num_wqebbs;
+ 
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 		mlx5e_free_xdpsq_desc(sq, wi, &xsk_frames, false);
++#else
++		mlx5e_free_xdpsq_desc(sq, wi, false);
++#endif
+ 	}
+ 
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 	if (xsk_frames)
+ 		xsk_umem_complete_tx(sq->umem, xsk_frames);
++#endif
++}
++
 +void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq)
 +{
-+	struct mlx5e_xdpsq *xdpsq = &rq->xdpsq;
++	struct mlx5e_xdpsq *xdpsq = rq->xdpsq;
 +
 +	if (xdpsq->mpwqe.wqe)
 +		mlx5e_xdp_mpwqe_complete(xdpsq);
@@ -113,79 +241,92 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 +{
 +	sq->xmit_xdp_frame = is_mpw ?
 +		mlx5e_xmit_xdp_frame_mpwqe : mlx5e_xmit_xdp_frame;
-+}
-+
+ }
+ 
 +#ifdef HAVE_NDO_XDP_XMIT
 +#ifndef HAVE_NDO_XDP_FLUSH
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -416,9 +462,14 @@ int mlx5e_xdp_xmit(struct net_device *de
- 		xdpi.xdpf = xdpf;
- 
- 		if (unlikely(!sq->xmit_xdp_frame(sq, &xdpi))) {
-+#ifdef HAVE_XDP_FRAME
- 			dma_unmap_single(sq->pdev, xdpi.dma_addr,
- 					 xdpf->len, DMA_TO_DEVICE);
- 			xdp_return_frame_rx_napi(xdpf);
-+#else
-+			/* Assumes order0 page*/
-+			put_page(virt_to_page(xdpf->data));
-+#endif
- 			drops++;
- 		}
- 	}
-@@ -431,25 +482,62 @@ int mlx5e_xdp_xmit(struct net_device *de
- 
+@@ -562,26 +639,90 @@ int mlx5e_xdp_xmit(struct net_device *de
  	return n - drops;
  }
--
+ 
 -void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq)
 +#else
 +int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp)
  {
--	struct mlx5e_xdpsq *xdpsq = &rq->xdpsq;
+-	struct mlx5e_xdpsq *xdpsq = rq->xdpsq;
 +	struct mlx5e_priv *priv = netdev_priv(dev);
++	struct mlx5e_xdp_xmit_data xdptxd;
 +	struct mlx5e_xdp_info xdpi;
++	struct xdp_frame *xdpf;
 +	struct mlx5e_xdpsq *sq;
 +	int sq_num;
- 
--	if (xdpsq->mpwqe.wqe)
--		mlx5e_xdp_mpwqe_complete(xdpsq);
++	int err = 0;
++ 
 +	/* this flag is sufficient, no need to test internal sq state */
 +	if (unlikely(!mlx5e_xdp_tx_is_enabled(priv)))
 +		return -ENETDOWN;
  
--	mlx5e_xmit_xdp_doorbell(xdpsq);
+-	if (xdpsq->mpwqe.wqe)
+-		mlx5e_xdp_mpwqe_complete(xdpsq);
 +	sq_num = smp_processor_id();
+ 
+-	mlx5e_xmit_xdp_doorbell(xdpsq);
++	if (unlikely(sq_num >= priv->channels.num))
++		return -ENXIO;
  
 -	if (test_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags)) {
 -		xdp_do_flush_map();
 -		__clear_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
--	}
-+	if (unlikely(sq_num >= priv->channels.num))
-+		return -ENXIO;
-+
 +	sq = &priv->channels.c[sq_num]->xdpsq;
 +
-+	xdpi.xdpf = convert_to_xdp_frame(xdp);
-+	if (unlikely(!xdpi.xdpf))
-+		return -ENOSPC;
++	xdpf = convert_to_xdp_frame(xdp);
 +
-+	xdpi.dma_addr = dma_map_single(sq->pdev, xdpi.xdpf->data,
-+				       xdpi.xdpf->len, DMA_TO_DEVICE);
-+	if (unlikely(dma_mapping_error(sq->pdev, xdpi.dma_addr)))
-+		return -ENOSPC;
++	if (unlikely(!xdpf))
++		return -EINVAL;
 +
-+	if (unlikely(!sq->xmit_xdp_frame(sq, &xdpi)))
-+		return -ENOSPC;
++	xdptxd.data = xdpf->data;
++	xdptxd.len  = xdpf->len;
++
++	xdptxd.dma_addr = dma_map_single(sq->pdev, xdptxd.data,
++					 xdptxd.len, DMA_TO_DEVICE);
++
++	if (unlikely(dma_mapping_error(sq->pdev, xdptxd.dma_addr))) {
++		err = -ENOMEM;
++		goto err_release_page;
++	}
++
++	xdpi.mode = MLX5E_XDP_XMIT_MODE_FRAME;
++	xdpi.frame.xdpf = xdpf;
++	xdpi.frame.dma_addr = xdptxd.dma_addr;
++
++	if (unlikely(!sq->xmit_xdp_frame(sq, &xdptxd, &xdpi, 0))) {
++		dma_unmap_single(sq->pdev, xdptxd.dma_addr,
++				 xdptxd.len, DMA_TO_DEVICE);
++		err = -ENOSPC;
++		goto err_release_page;
+ 	}
 +
 +	return 0;
++
++err_release_page:
++#ifdef HAVE_XDP_FRAME
++	xdp_return_frame_rx_napi(xdpf);
++#else
++	/* Assumes order0 page */
++	put_page(virt_to_page(xdpf->data));
++#endif
++
++	return err;
  }
  
 -void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw)
 +void mlx5e_xdp_flush(struct net_device *dev)
  {
+-	sq->xmit_xdp_frame_check = is_mpw ?
+-		mlx5e_xmit_xdp_frame_check_mpwqe : mlx5e_xmit_xdp_frame_check;
 -	sq->xmit_xdp_frame = is_mpw ?
 -		mlx5e_xmit_xdp_frame_mpwqe : mlx5e_xmit_xdp_frame;
 +	struct mlx5e_priv *priv = netdev_priv(dev);

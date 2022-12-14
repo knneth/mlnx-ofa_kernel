@@ -160,25 +160,31 @@ static void mlx5e_tls_del(struct net_device *netdev,
 				direction == TLS_OFFLOAD_CTX_DIR_TX);
 }
 
-static void mlx5e_tls_resync_rx(struct net_device *netdev, struct sock *sk,
-				u32 seq, u64 rcd_sn)
+static int mlx5e_tls_resync(struct net_device *netdev, struct sock *sk,
+			    u32 seq, u8 *rcd_sn_data,
+			    enum tls_offload_ctx_dir direction)
 {
 	struct tls_context *tls_ctx = tls_get_ctx(sk);
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5e_tls_offload_context_rx *rx_ctx;
+	u64 rcd_sn = *(u64 *)rcd_sn_data;
 
+	if (WARN_ON_ONCE(direction != TLS_OFFLOAD_CTX_DIR_RX))
+		return -EINVAL;
 	rx_ctx = mlx5e_get_tls_rx_context(tls_ctx);
 
 	netdev_info(netdev, "resyncing seq %d rcd %lld\n", seq,
 		    be64_to_cpu(rcd_sn));
 	mlx5_accel_tls_resync_rx(priv->mdev, rx_ctx->handle, seq, rcd_sn);
 	atomic64_inc(&priv->tls->sw_stats.rx_tls_resync_reply);
+
+	return 0;
 }
 
 static const struct tlsdev_ops mlx5e_tls_ops = {
 	.tls_dev_add = mlx5e_tls_add,
 	.tls_dev_del = mlx5e_tls_del,
-	.tls_dev_resync_rx = mlx5e_tls_resync_rx,
+	.tls_dev_resync = mlx5e_tls_resync,
 };
 
 void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
@@ -191,6 +197,7 @@ void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
 		return;
 	}
 
+	/* FPGA */
 	if (!mlx5_accel_is_tls_device(priv->mdev))
 		return;
 
@@ -220,6 +227,10 @@ int mlx5e_tls_init(struct mlx5e_priv *priv)
 	if (!tls)
 		return -ENOMEM;
 
+	tls->rx_wq = create_singlethread_workqueue("mlx5e_tls_rx");
+	if (!tls->rx_wq)
+		return -ENOMEM;
+
 	priv->tls = tls;
 	return 0;
 }
@@ -231,6 +242,7 @@ void mlx5e_tls_cleanup(struct mlx5e_priv *priv)
 	if (!tls)
 		return;
 
+	destroy_workqueue(tls->rx_wq);
 	kfree(tls);
 	priv->tls = NULL;
 }

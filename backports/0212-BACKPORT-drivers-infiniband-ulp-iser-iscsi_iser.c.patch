@@ -1,10 +1,10 @@
 From: Sergey Gorenko <sergeygo@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 
-Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
+Change-Id: Idaf9a9e375bfdcbf764486da5a7eb9f17247abe9
 ---
- drivers/infiniband/ulp/iser/iscsi_iser.c | 115 +++++++++++++++++++++++
- 1 file changed, 115 insertions(+)
+ drivers/infiniband/ulp/iser/iscsi_iser.c | 131 ++++++++++++++++++++++++++++++-
+ 1 file changed, 129 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
@@ -103,15 +103,15 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  /**
   * iscsi_iser_check_protection() - check protection information status of task.
   * @task:     iscsi task
-@@ -415,6 +465,7 @@ iscsi_iser_check_protection(struct iscsi
- 		return iser_check_task_pi_status(iser_task, ISER_DIR_OUT,
- 						 sector);
+@@ -412,6 +462,7 @@ iscsi_iser_check_protection(struct iscsi
+ 
+ 	return iser_check_task_pi_status(iser_task, dir, sector);
  }
 +#endif
  
  /**
   * iscsi_iser_conn_create() - create a new iscsi-iser connection
-@@ -586,6 +637,7 @@ iscsi_iser_session_destroy(struct iscsi_
+@@ -583,6 +634,7 @@ iscsi_iser_session_destroy(struct iscsi_
  static inline unsigned int
  iser_dif_prot_caps(int prot_caps)
  {
@@ -119,7 +119,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  	return ((prot_caps & IB_PROT_T10DIF_TYPE_1) ?
  		SHOST_DIF_TYPE1_PROTECTION | SHOST_DIX_TYPE0_PROTECTION |
  		SHOST_DIX_TYPE1_PROTECTION : 0) |
-@@ -593,6 +645,14 @@ iser_dif_prot_caps(int prot_caps)
+@@ -590,6 +642,14 @@ iser_dif_prot_caps(int prot_caps)
  		SHOST_DIF_TYPE2_PROTECTION | SHOST_DIX_TYPE2_PROTECTION : 0) |
  	       ((prot_caps & IB_PROT_T10DIF_TYPE_3) ?
  		SHOST_DIF_TYPE3_PROTECTION | SHOST_DIX_TYPE3_PROTECTION : 0);
@@ -134,9 +134,9 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  }
  
  /**
-@@ -648,8 +708,15 @@ iscsi_iser_session_create(struct iscsi_e
- 			u32 sig_caps = ib_conn->device->ib_device->attrs.sig_prot_cap;
+@@ -648,13 +708,20 @@ iscsi_iser_session_create(struct iscsi_e
  
+ 			shost->sg_prot_tablesize = shost->sg_tablesize;
  			scsi_host_set_prot(shost, iser_dif_prot_caps(sig_caps));
 +#ifdef HAVE_SCSI_CMND_PROT_FLAGS
  			scsi_host_set_guard(shost, SHOST_DIX_GUARD_IP |
@@ -148,13 +148,20 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
 +				scsi_host_set_guard(shost, SHOST_DIX_GUARD_CRC);
 +#endif
  		}
- 
- 		if (iscsi_host_add(shost,
-@@ -757,9 +824,16 @@ iscsi_iser_conn_get_stats(struct iscsi_c
+-
++#ifdef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
+ 		if (!(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG))
+ 			shost->virt_boundary_mask = SZ_4K - 1;
+-
++#endif
+ 		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
+ 			mutex_unlock(&iser_conn->state_mutex);
+ 			goto free_host;
+@@ -759,7 +826,13 @@ iscsi_iser_conn_get_stats(struct iscsi_c
  	stats->r2t_pdus = conn->r2t_pdus_cnt; /* always 0 */
  	stats->tmfcmd_pdus = conn->tmfcmd_pdus_cnt;
  	stats->tmfrsp_pdus = conn->tmfrsp_pdus_cnt;
-+#ifdef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#ifdef HAVE_VIRT_BOUNDARY
  	stats->custom_length = 0;
 +#else
 +	stats->custom_length = 1;
@@ -163,32 +170,8 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
 +#endif
  }
  
-+#ifdef HAVE_ISCSI_GET_EP_PARAM
  static int iscsi_iser_get_ep_param(struct iscsi_endpoint *ep,
- 				   enum iscsi_param param, char *buf)
- {
-@@ -779,6 +853,7 @@ static int iscsi_iser_get_ep_param(struc
- 	}
- 	return -ENOSYS;
- }
-+#endif
- 
- /**
-  * iscsi_iser_ep_connect() - Initiate iSER connection establishment
-@@ -905,7 +980,12 @@ iscsi_iser_ep_disconnect(struct iscsi_en
- 	iscsi_destroy_endpoint(ep);
- }
- 
-+#ifdef HAVE_ISCSI_ATTR_IS_VISIBLE
-+#ifdef HAVE_ATTR_IS_VISIBLE_RET_UMODE_T
- static umode_t iser_attr_is_visible(int param_type, int param)
-+#else
-+static mode_t iser_attr_is_visible(int param_type, int param)
-+#endif
- {
- 	switch (param_type) {
- 	case ISCSI_HOST_PARAM:
-@@ -949,7 +1029,9 @@ static umode_t iser_attr_is_visible(int
+@@ -951,7 +1024,9 @@ static umode_t iser_attr_is_visible(int
  		case ISCSI_PARAM_TGT_RESET_TMO:
  		case ISCSI_PARAM_IFACE_NAME:
  		case ISCSI_PARAM_INITIATOR_NAME:
@@ -198,22 +181,35 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  			return S_IRUGO;
  		default:
  			return 0;
-@@ -958,7 +1040,9 @@ static umode_t iser_attr_is_visible(int
- 
+@@ -961,27 +1036,70 @@ static umode_t iser_attr_is_visible(int
  	return 0;
  }
+ 
++#ifdef USE_SLAVE_ALLOC_HANDLER
++static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
++{
++	struct iscsi_session *session;
++	struct iser_conn *iser_conn;
++	struct ib_device *ib_dev;
++
++	mutex_lock(&unbind_iser_conn_mutex);
++
++	session = starget_to_session(scsi_target(sdev))->dd_data;
++	iser_conn = session->leadconn->dd_data;
++	if (!iser_conn) {
++		mutex_unlock(&unbind_iser_conn_mutex);
++		return -ENOTCONN;
++	}
++	ib_dev = iser_conn->ib_conn.device->ib_device;
++
++	if (!(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG))
++		blk_queue_virt_boundary(sdev->request_queue, ~(SZ_4K - 1));
++
++	mutex_unlock(&unbind_iser_conn_mutex);
++	return 0;
++}
 +#endif
- 
-+#ifdef HAVE_BLK_QUEUE_VIRT_BOUNDARY
- static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
- {
- 	struct iscsi_session *session;
-@@ -982,29 +1066,47 @@ static int iscsi_iser_slave_alloc(struct
- 
- 	return 0;
- }
-+#endif
- 
++
  static struct scsi_host_template iscsi_iser_sht = {
  	.module                 = THIS_MODULE,
  	.name                   = "iSCSI Initiator over iSER",
@@ -235,8 +231,8 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
 +#ifdef ENABLE_CLUSTERING
 +	.use_clustering		= ENABLE_CLUSTERING,
 +#endif
-+#ifdef HAVE_BLK_QUEUE_VIRT_BOUNDARY
- 	.slave_alloc            = iscsi_iser_slave_alloc,
++#ifdef USE_SLAVE_ALLOC_HANDLER
++	.slave_alloc		= iscsi_iser_slave_alloc,
 +#endif
  	.proc_name              = "iscsi_iser",
  	.this_id                = -1,
@@ -251,27 +247,12 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
 +#ifdef HAVE_ISCSI_DISCOVERY_SESSION
  	.caps                   = CAP_RECOVERY_L0 | CAP_MULTI_R2T | CAP_TEXT_NEGO,
 +#else
-+	.caps			= CAP_RECOVERY_L0 | CAP_MULTI_R2T,
++	.caps                   = CAP_RECOVERY_L0 | CAP_MULTI_R2T,
 +#endif
  	/* session management */
  	.create_session         = iscsi_iser_session_create,
  	.destroy_session        = iscsi_iser_session_destroy,
-@@ -1012,10 +1114,14 @@ static struct iscsi_transport iscsi_iser
- 	.create_conn            = iscsi_iser_conn_create,
- 	.bind_conn              = iscsi_iser_conn_bind,
- 	.destroy_conn           = iscsi_conn_teardown,
-+#ifdef HAVE_ISCSI_ATTR_IS_VISIBLE
- 	.attr_is_visible	= iser_attr_is_visible,
-+#endif
- 	.set_param              = iscsi_iser_set_param,
- 	.get_conn_param		= iscsi_conn_get_param,
-+#ifdef HAVE_ISCSI_GET_EP_PARAM
- 	.get_ep_param		= iscsi_iser_get_ep_param,
-+#endif
- 	.get_session_param	= iscsi_session_get_param,
- 	.start_conn             = iscsi_iser_conn_start,
- 	.stop_conn              = iscsi_iser_conn_stop,
-@@ -1029,7 +1135,9 @@ static struct iscsi_transport iscsi_iser
+@@ -1006,7 +1124,9 @@ static struct iscsi_transport iscsi_iser
  	.xmit_task		= iscsi_iser_task_xmit,
  	.cleanup_task		= iscsi_iser_cleanup_task,
  	.alloc_pdu		= iscsi_iser_pdu_alloc,
@@ -281,7 +262,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  	/* recovery */
  	.session_recovery_timedout = iscsi_session_recovery_timedout,
  
-@@ -1049,6 +1157,13 @@ static int __init iser_init(void)
+@@ -1026,6 +1146,13 @@ static int __init iser_init(void)
  		return -EINVAL;
  	}
  

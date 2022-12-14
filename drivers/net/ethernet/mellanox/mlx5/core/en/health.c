@@ -43,7 +43,7 @@ int mlx5e_reporter_cq_diagnose(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg)
 	void *cqc;
 	int err;
 
-	err = mlx5_core_query_cq(priv->mdev, &cq->mcq, out, sizeof(out));
+	err = mlx5_core_query_cq(priv->mdev, &cq->mcq, out);
 	if (err)
 		return err;
 
@@ -206,14 +206,20 @@ int mlx5e_health_report(struct mlx5e_priv *priv,
 	return devlink_health_report(reporter, err_str, err_ctx);
 }
 
+static int devlink_fmsg_binary_put(struct devlink_fmsg *fmsg, const void *value,
+				   u16 value_len)
+{
+	return -EOPNOTSUPP;
+}
+
 #define MLX5_HEALTH_DEVLINK_MAX_SIZE 1024
 static int mlx5e_health_rsc_fmsg_binary(struct devlink_fmsg *fmsg,
 					const void *value, u32 value_len)
 
 {
 	u32 data_size;
+	int err = 0;
 	u32 offset;
-	int err;
 
 	for (offset = 0; offset < value_len; offset += data_size) {
 		data_size = value_len - offset;

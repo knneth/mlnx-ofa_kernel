@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/Makefile
+
+Change-Id: I5e2672db627a39ac808e4f38764323528e47b3aa
+---
+ drivers/infiniband/hw/mlx5/Makefile | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/Makefile
++++ b/drivers/infiniband/hw/mlx5/Makefile
+@@ -25,6 +25,8 @@ mlx5_ib-y := ah.o \
+ 
+ mlx5_ib-$(CONFIG_INFINIBAND_ON_DEMAND_PAGING) += odp.o
+ mlx5_ib-$(CONFIG_MLX5_ESWITCH) += ib_rep.o
+-mlx5_ib-$(CONFIG_INFINIBAND_USER_ACCESS) += devx.o \
+-					    flow.o \
+-					    qos.o
++ifneq ($(CONFIG_INFINIBAND_USER_ACCESS),)
++	mlx5_ib-y += devx.o \
++		     flow.o \
++		     qos.o
++endif

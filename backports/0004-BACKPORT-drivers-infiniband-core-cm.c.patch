@@ -1,14 +1,14 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
 
-Change-Id: I8bec3cb8a6df4aa561802b0d90115032524e0d21
+Change-Id: I241c1d349c7d2875acdc320737b711ffc506dbe9
 ---
  drivers/infiniband/core/cm.c | 11 +++++++++++
  1 file changed, 11 insertions(+)
 
 --- a/drivers/infiniband/core/cm.c
 +++ b/drivers/infiniband/core/cm.c
-@@ -57,6 +57,9 @@
+@@ -31,6 +31,9 @@
  MODULE_AUTHOR("Sean Hefty");
  MODULE_DESCRIPTION("InfiniBand CM");
  MODULE_LICENSE("Dual BSD/GPL");
@@ -18,7 +18,7 @@ Change-Id: I8bec3cb8a6df4aa561802b0d90115032524e0d21
  
  static const char * const ibcm_rej_reason_strs[] = {
  	[IB_CM_REJ_NO_QP]			= "no QP",
-@@ -4304,7 +4307,11 @@ static ssize_t cm_show_counter(struct ko
+@@ -4371,7 +4374,11 @@ static ssize_t cm_show_counter(struct ko
  		       atomic_long_read(&group->counter[cm_attr->index]));
  }
  
@@ -30,7 +30,7 @@ Change-Id: I8bec3cb8a6df4aa561802b0d90115032524e0d21
  	.show = cm_show_counter
  };
  
-@@ -4313,7 +4320,11 @@ static struct kobj_type cm_counter_obj_t
+@@ -4380,7 +4387,11 @@ static struct kobj_type cm_counter_obj_t
  	.default_attrs = cm_counter_default_attrs
  };
  

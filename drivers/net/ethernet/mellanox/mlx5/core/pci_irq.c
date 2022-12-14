@@ -11,6 +11,7 @@
 #endif
 
 #define MLX5_MAX_IRQ_NAME (32)
+#define MLX5_FW_RESERVED_EQS 16
 
 struct mlx5_irq {
 	struct atomic_notifier_head nh;
@@ -128,23 +129,6 @@ err_request_irq:
 		free_irq(irqn, &irq->nh);
 	}
 	return  err;
-}
-
-void mlx5_irq_rename(struct mlx5_core_dev *dev, int vecidx,
-		     const char *name)
-{
-	char *dst_name = mlx5_irq_get(dev, vecidx)->name;
-
-	if (!name) {
-		char default_name[MLX5_MAX_IRQ_NAME];
-
-		irq_set_name(default_name, vecidx);
-		snprintf(dst_name, MLX5_MAX_IRQ_NAME,
-			 "%s@pci:%s", default_name, pci_name(dev->pdev));
-	} else {
-		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
-			 vecidx - MLX5_IRQ_VEC_COMP_BASE);
-	}
 }
 
 static void irq_clear_rmap(struct mlx5_core_dev *dev)
@@ -285,15 +269,23 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_priv *priv = &dev->priv;
 	struct mlx5_irq_table *table = priv->irq_table;
-	int num_eqs = MLX5_CAP_GEN(dev, max_num_eqs) ?
-		      MLX5_CAP_GEN(dev, max_num_eqs) :
-		      1 << MLX5_CAP_GEN(dev, log_max_eq);
+	int max_num_eq = MLX5_CAP_GEN(dev, max_num_eqs);
+	int num_eqs;
 	int max_comp_eqs;
 	int nvec;
 	int err;
 
 	if (mlx5_core_is_sf(dev))
 		return 0;
+
+	if (max_num_eq) {
+		num_eqs = max_num_eq;
+	} else {
+		num_eqs = 1 << MLX5_CAP_GEN(dev, log_max_eq);
+		num_eqs -= MLX5_FW_RESERVED_EQS;
+		if (num_eqs <= 0)
+			return -ENOMEM;
+	}
 
 	max_comp_eqs = num_eqs - MLX5_MAX_ASYNC_EQS;
 	nvec = MLX5_CAP_GEN(dev, num_ports) * num_online_cpus() +
@@ -362,3 +354,4 @@ void mlx5_irq_table_destroy(struct mlx5_core_dev *dev)
 	pci_free_irq_vectors(dev->pdev);
 	kfree(table->irq);
 }
+

@@ -5,7 +5,12 @@
 #define __MLX5_DEVLINK_H__
 
 #include <net/devlink.h>
-#include "eswitch.h"
+
+enum mlx5_devlink_param_id {
+	MLX5_DEVLINK_PARAM_ID_BASE = DEVLINK_PARAM_GENERIC_ID_MAX,
+	MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
+	MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
+};
 
 struct mlx5_core_dev;
 

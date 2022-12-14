@@ -1,0 +1,40 @@
+From: Jianbo Liu <jianbol@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+
+Change-Id: I96fdac0596f44cff9bf81a023a7a0fc82c481167
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+@@ -8,7 +8,9 @@
+ #include <linux/mlx5/fs.h>
+ #include <net/tc_act/tc_ct.h>
+ 
++#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
+ #include "en.h"
++#endif
+ 
+ struct mlx5_esw_flow_attr;
+ struct mlx5e_tc_mod_hdr_acts;
+@@ -149,7 +151,9 @@ mlx5_tc_ct_parse_match(struct mlx5e_priv
+ 		return 0;
+ 
+ 	NL_SET_ERR_MSG_MOD(extack, "mlx5 tc ct offload isn't enabled.");
++#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
+ 	netdev_warn(priv->netdev, "mlx5 tc ct offload isn't enabled.\n");
++#endif
+ 	return -EOPNOTSUPP;
+ }
+ 
+@@ -167,7 +171,9 @@ mlx5_tc_ct_parse_action(struct mlx5e_pri
+ 			struct netlink_ext_ack *extack)
+ {
+ 	NL_SET_ERR_MSG_MOD(extack, "mlx5 tc ct offload isn't enabled.");
++#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
+ 	netdev_warn(priv->netdev, "mlx5 tc ct offload isn't enabled.\n");
++#endif
+ 	return -EOPNOTSUPP;
+ }
+ 

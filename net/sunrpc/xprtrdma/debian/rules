@@ -73,6 +73,7 @@ ifeq ($(WITH_DKMS),1)
 	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp dkms.conf debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp common.postinst debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp *.c debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp *.h debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 

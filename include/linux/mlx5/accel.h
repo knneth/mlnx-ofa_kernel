@@ -35,6 +35,7 @@
 #define __MLX5_ACCEL_H__
 
 #include <linux/mlx5/driver.h>
+#include <linux/mlx5/qp.h>
 
 enum mlx5_accel_esp_aes_gcm_keymat_iv_algo {
 	MLX5_ACCEL_ESP_AES_GCM_IV_ALGO_SEQ,
@@ -45,6 +46,7 @@ enum mlx5_accel_esp_flags {
 	MLX5_ACCEL_ESP_FLAGS_TRANSPORT         = 1UL << 0,
 	MLX5_ACCEL_ESP_FLAGS_ESN_TRIGGERED     = 1UL << 1,
 	MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP = 1UL << 2,
+	MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD      = 1UL << 3,
 };
 
 enum mlx5_accel_esp_action {
@@ -81,6 +83,7 @@ struct mlx5_accel_esp_xfrm_attrs {
 	u32   tfc_pad;
 	u32   flags;
 	u32   sa_handle;
+	u32   aulen;
 	enum mlx5_accel_esp_replay replay_type;
 	union {
 		struct {
@@ -94,17 +97,16 @@ struct mlx5_accel_esp_xfrm_attrs {
 	} keymat;
 
 	union {
-		__be32		a4;
-		__be32		a6[4];
+		__be32 a4;
+		__be32 a6[4];
 	} saddr;
 
 	union {
-		__be32		a4;
-		__be32		a6[4];
+		__be32 a4;
+		__be32 a6[4];
 	} daddr;
 
-	bool is_ipv6;
-	void *priv;
+	u8 is_ipv6;
 };
 
 struct mlx5_accel_esp_xfrm {
@@ -125,20 +127,54 @@ enum mlx5_accel_ipsec_cap {
 	MLX5_ACCEL_IPSEC_CAP_RX_NO_TRAILER	= 1 << 5,
 	MLX5_ACCEL_IPSEC_CAP_ESN		= 1 << 6,
 	MLX5_ACCEL_IPSEC_CAP_TX_IV_IS_ESN	= 1 << 7,
+	MLX5_ACCEL_IPSEC_CAP_FULL_OFFLOAD	= 1 << 8,
 };
 
-#ifdef CONFIG_MLX5_IPSEC
+#ifdef CONFIG_MLX5_ACCEL
 #define MLX5_MAX_AUTH_TAG_BIT_NUM 128
-/* up to 128 Authintaction tag data + 5B (minimum padding, pad len, next hdr) */
-#define MLX5_MAX_IPSEC_TRAILER_SZ (MLX5_MAX_AUTH_TAG_BIT_NUM / BITS_PER_BYTE + 5)
+/* up to 128 Authintaction tag data + 5B (up to 3B padding, 1B pad len, 1B next hdr) */
+#define MLX5_MAX_IPSEC_TRAILER_SZ (DIV_ROUND_UP(MLX5_MAX_AUTH_TAG_BIT_NUM, BITS_PER_BYTE) + 5)
 
 struct mlx5_accel_trailer {
+	u32 wqe_params;
 	u8 trbuff[MLX5_MAX_IPSEC_TRAILER_SZ];
 	u8 trbufflen;
 };
-#endif
 
-#ifdef CONFIG_MLX5_EN_IPSEC
+static inline u32 mlx5_accel_ipsec_get_bytes_cnt(struct mlx5_accel_trailer *tr)
+{
+	return tr->trbufflen;
+}
+
+static inline u16 mlx5_accel_ipsec_get_ds_cnt(struct mlx5_accel_trailer *tr)
+{
+	if (!tr->trbufflen)
+		return 0;
+
+	return DIV_ROUND_UP(sizeof(struct mlx5_wqe_inline_seg) + tr->trbufflen,
+			    MLX5_SEND_WQE_DS);
+}
+
+/* Nullifies trbufflen */
+static inline u16 mlx5_accel_ipsec_set_tr(struct mlx5_accel_trailer *tr,
+					  struct mlx5_wqe_eth_seg  *eseg,
+					  struct mlx5_wqe_data_seg  *dseg)
+{
+	struct mlx5_wqe_inline_seg *inlseg;
+	u16 ds_cnt;
+
+	if (!tr->trbufflen)
+		return 0;
+
+	ds_cnt = mlx5_accel_ipsec_get_ds_cnt(tr);
+	eseg->trailer |= cpu_to_be32(tr->wqe_params);
+	inlseg = (struct mlx5_wqe_inline_seg *)dseg;
+	inlseg->byte_count = cpu_to_be32(tr->trbufflen | MLX5_INLINE_SEG);
+	memcpy(inlseg->data, tr->trbuff, tr->trbufflen);
+	tr->trbufflen = 0;
+
+	return ds_cnt;
+}
 
 u32 mlx5_accel_ipsec_device_caps(struct mlx5_core_dev *mdev);
 
@@ -164,5 +200,5 @@ static inline int
 mlx5_accel_esp_modify_xfrm(struct mlx5_accel_esp_xfrm *xfrm,
 			   const struct mlx5_accel_esp_xfrm_attrs *attrs) { return -EOPNOTSUPP; }
 
-#endif
-#endif
+#endif /* CONFIG_MLX5_ACCEL */
+#endif /* __MLX5_ACCEL_H__ */

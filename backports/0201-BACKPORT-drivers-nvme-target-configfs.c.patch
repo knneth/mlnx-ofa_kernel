@@ -1,0 +1,291 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/configfs.c
+
+Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
+---
+ drivers/nvme/target/configfs.c | 76 ++++++++++++++++++++++++++++++++----------
+ 1 file changed, 59 insertions(+), 17 deletions(-)
+
+--- a/drivers/nvme/target/configfs.c
++++ b/drivers/nvme/target/configfs.c
+@@ -18,8 +18,17 @@
+ 
+ #include "nvmet.h"
+ 
+-static const struct config_item_type nvmet_host_type;
+-static const struct config_item_type nvmet_subsys_type;
++#ifdef MLX_CONFIG_ITEM_TYPE_CONST
++#undef MLX_CONFIG_ITEM_TYPE_CONST
++#endif
++#ifdef CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST
++#define MLX_CONFIG_ITEM_TYPE_CONST const
++#else
++#define MLX_CONFIG_ITEM_TYPE_CONST
++#endif
++
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_host_type;
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_subsys_type;
+ 
+ static LIST_HEAD(nvmet_ports_list);
+ struct list_head *nvmet_ports = &nvmet_ports_list;
+@@ -253,6 +262,7 @@ static ssize_t nvmet_param_inline_data_s
+ CONFIGFS_ATTR(nvmet_, param_inline_data_size);
+ 
+ #ifdef CONFIG_BLK_DEV_INTEGRITY
++#ifdef HAVE_BLKDEV_BIO_INTEGRITY_BYTES
+ static ssize_t nvmet_param_pi_enable_show(struct config_item *item,
+ 		char *page)
+ {
+@@ -281,6 +291,7 @@ static ssize_t nvmet_param_pi_enable_sto
+ 
+ CONFIGFS_ATTR(nvmet_, param_pi_enable);
+ #endif
++#endif
+ 
+ static ssize_t nvmet_addr_trtype_show(struct config_item *item,
+ 		char *page)
+@@ -790,7 +801,7 @@ static struct configfs_item_operations n
+ 	.release		= nvmet_ns_release,
+ };
+ 
+-static const struct config_item_type nvmet_ns_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_ns_type = {
+ 	.ct_item_ops		= &nvmet_ns_item_ops,
+ 	.ct_attrs		= nvmet_ns_attrs,
+ 	.ct_owner		= THIS_MODULE,
+@@ -831,7 +842,7 @@ static struct configfs_group_operations
+ 	.make_group		= nvmet_ns_make,
+ };
+ 
+-static const struct config_item_type nvmet_namespaces_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_namespaces_type = {
+ 	.ct_group_ops		= &nvmet_namespaces_group_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -895,8 +906,13 @@ out_free_link:
+ 	return ret;
+ }
+ 
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ static void nvmet_port_subsys_drop_link(struct config_item *parent,
+ 		struct config_item *target)
++#else
++static int nvmet_port_subsys_drop_link(struct config_item *parent,
++		struct config_item *target)
++#endif
+ {
+ 	struct nvmet_port *port = to_nvmet_port(parent->ci_parent);
+ 	struct nvmet_subsys *subsys = to_subsys(target);
+@@ -908,7 +924,11 @@ static void nvmet_port_subsys_drop_link(
+ 			goto found;
+ 	}
+ 	up_write(&nvmet_config_sem);
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ 	return;
++#else
++	return -EINVAL;
++#endif
+ 
+ found:
+ 	list_del(&p->entry);
+@@ -923,6 +943,9 @@ found:
+ 		nvmet_uninit_offload_subsystem_port_attrs(subsys);
+ 	up_write(&nvmet_config_sem);
+ 	kfree(p);
++#ifdef CONFIGFS_DROP_LINK_RETURNS_INT
++	return 0;
++#endif
+ }
+ 
+ static struct configfs_item_operations nvmet_port_subsys_item_ops = {
+@@ -930,7 +953,7 @@ static struct configfs_item_operations n
+ 	.drop_link		= nvmet_port_subsys_drop_link,
+ };
+ 
+-static const struct config_item_type nvmet_port_subsys_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_port_subsys_type = {
+ 	.ct_item_ops		= &nvmet_port_subsys_item_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -977,8 +1000,14 @@ out_free_link:
+ 	return ret;
+ }
+ 
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ static void nvmet_allowed_hosts_drop_link(struct config_item *parent,
+ 		struct config_item *target)
++#else
++static int nvmet_allowed_hosts_drop_link(struct config_item *parent,
++		struct config_item *target)
++
++#endif
+ {
+ 	struct nvmet_subsys *subsys = to_subsys(parent->ci_parent);
+ 	struct nvmet_host *host = to_host(target);
+@@ -990,7 +1019,11 @@ static void nvmet_allowed_hosts_drop_lin
+ 			goto found;
+ 	}
+ 	up_write(&nvmet_config_sem);
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ 	return;
++#else
++	return -EINVAL;
++#endif
+ 
+ found:
+ 	list_del(&p->entry);
+@@ -998,6 +1031,9 @@ found:
+ 
+ 	up_write(&nvmet_config_sem);
+ 	kfree(p);
++#ifdef CONFIGFS_DROP_LINK_RETURNS_INT
++	return 0;
++#endif
+ }
+ 
+ static struct configfs_item_operations nvmet_allowed_hosts_item_ops = {
+@@ -1005,7 +1041,7 @@ static struct configfs_item_operations n
+ 	.drop_link		= nvmet_allowed_hosts_drop_link,
+ };
+ 
+-static const struct config_item_type nvmet_allowed_hosts_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_allowed_hosts_type = {
+ 	.ct_item_ops		= &nvmet_allowed_hosts_item_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -1104,6 +1140,7 @@ static ssize_t nvmet_subsys_attr_serial_
+ CONFIGFS_ATTR(nvmet_subsys_, attr_serial);
+ 
+ #ifdef CONFIG_BLK_DEV_INTEGRITY
++#ifdef HAVE_BLKDEV_BIO_INTEGRITY_BYTES
+ static ssize_t nvmet_subsys_attr_pi_enable_show(struct config_item *item,
+ 						char *page)
+ {
+@@ -1124,6 +1161,7 @@ static ssize_t nvmet_subsys_attr_pi_enab
+ }
+ CONFIGFS_ATTR(nvmet_subsys_, attr_pi_enable);
+ #endif
++#endif
+ 
+ static ssize_t
+ nvmet_subsys_attr_offload_subsys_unknown_ns_cmds_show(struct config_item *item,
+@@ -1219,8 +1257,10 @@ static struct configfs_attribute *nvmet_
+ 	&nvmet_subsys_attr_attr_version,
+ 	&nvmet_subsys_attr_attr_serial,
+ #ifdef CONFIG_BLK_DEV_INTEGRITY
++#ifdef HAVE_BLKDEV_BIO_INTEGRITY_BYTES
+ 	&nvmet_subsys_attr_attr_pi_enable,
+ #endif
++#endif
+ 	&nvmet_subsys_attr_attr_offload,
+ 	&nvmet_subsys_attr_attr_offload_subsys_unknown_ns_cmds,
+ 	NULL,
+@@ -1241,7 +1281,7 @@ static struct configfs_item_operations n
+ 	.release		= nvmet_subsys_release,
+ };
+ 
+-static const struct config_item_type nvmet_subsys_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_subsys_type = {
+ 	.ct_item_ops		= &nvmet_subsys_item_ops,
+ 	.ct_attrs		= nvmet_subsys_attrs,
+ 	.ct_owner		= THIS_MODULE,
+@@ -1279,7 +1319,7 @@ static struct configfs_group_operations
+ 	.make_group		= nvmet_subsys_make,
+ };
+ 
+-static const struct config_item_type nvmet_subsystems_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_subsystems_type = {
+ 	.ct_group_ops		= &nvmet_subsystems_group_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -1340,7 +1380,7 @@ static struct configfs_item_operations n
+ 	.release	= nvmet_referral_release,
+ };
+ 
+-static const struct config_item_type nvmet_referral_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_referral_type = {
+ 	.ct_owner	= THIS_MODULE,
+ 	.ct_attrs	= nvmet_referral_attrs,
+ 	.ct_item_ops	= &nvmet_referral_item_ops,
+@@ -1365,7 +1405,7 @@ static struct configfs_group_operations
+ 	.make_group		= nvmet_referral_make,
+ };
+ 
+-static const struct config_item_type nvmet_referrals_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_referrals_type = {
+ 	.ct_owner	= THIS_MODULE,
+ 	.ct_group_ops	= &nvmet_referral_group_ops,
+ };
+@@ -1448,7 +1488,7 @@ static struct configfs_item_operations n
+ 	.release		= nvmet_ana_group_release,
+ };
+ 
+-static const struct config_item_type nvmet_ana_group_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_ana_group_type = {
+ 	.ct_item_ops		= &nvmet_ana_group_item_ops,
+ 	.ct_attrs		= nvmet_ana_group_attrs,
+ 	.ct_owner		= THIS_MODULE,
+@@ -1493,7 +1533,7 @@ static struct configfs_group_operations
+ 	.make_group		= nvmet_ana_groups_make_group,
+ };
+ 
+-static const struct config_item_type nvmet_ana_groups_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_ana_groups_type = {
+ 	.ct_group_ops		= &nvmet_ana_groups_group_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -1520,8 +1560,10 @@ static struct configfs_attribute *nvmet_
+ 	&nvmet_attr_addr_tractive,
+ 	&nvmet_attr_param_inline_data_size,
+ #ifdef CONFIG_BLK_DEV_INTEGRITY
++#ifdef HAVE_BLKDEV_BIO_INTEGRITY_BYTES
+ 	&nvmet_attr_param_pi_enable,
+ #endif
++#endif
+ 	&nvmet_attr_param_offload_queues,
+ 	&nvmet_attr_param_offload_srq_size,
+ 	NULL,
+@@ -1531,7 +1573,7 @@ static struct configfs_item_operations n
+ 	.release		= nvmet_port_release,
+ };
+ 
+-static const struct config_item_type nvmet_port_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_port_type = {
+ 	.ct_attrs		= nvmet_port_attrs,
+ 	.ct_item_ops		= &nvmet_port_item_ops,
+ 	.ct_owner		= THIS_MODULE,
+@@ -1605,7 +1647,7 @@ static struct configfs_group_operations
+ 	.make_group		= nvmet_ports_make,
+ };
+ 
+-static const struct config_item_type nvmet_ports_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_ports_type = {
+ 	.ct_group_ops		= &nvmet_ports_group_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -1624,7 +1666,7 @@ static struct configfs_item_operations n
+ 	.release		= nvmet_host_release,
+ };
+ 
+-static const struct config_item_type nvmet_host_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_host_type = {
+ 	.ct_item_ops		= &nvmet_host_item_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+@@ -1647,14 +1689,14 @@ static struct configfs_group_operations
+ 	.make_group		= nvmet_hosts_make_group,
+ };
+ 
+-static const struct config_item_type nvmet_hosts_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_hosts_type = {
+ 	.ct_group_ops		= &nvmet_hosts_group_ops,
+ 	.ct_owner		= THIS_MODULE,
+ };
+ 
+ static struct config_group nvmet_hosts_group;
+ 
+-static const struct config_item_type nvmet_root_type = {
++static MLX_CONFIG_ITEM_TYPE_CONST struct config_item_type nvmet_root_type = {
+ 	.ct_owner		= THIS_MODULE,
+ };
+ 

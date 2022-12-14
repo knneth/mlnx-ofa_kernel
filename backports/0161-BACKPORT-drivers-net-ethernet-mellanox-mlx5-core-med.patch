@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev.c
+
+Change-Id: Ib5fc5d1cda975d615c90e0ceb8192f11f091f710
+---
+ drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev.c
+@@ -9,6 +9,7 @@
+ #include "meddev/sf.h"
+ #include "eswitch.h"
+ 
++#ifdef CONFIG_MLX5_ESWITCH
+ struct mlx5_mdev_table {
+ 	struct mlx5_sf_table sf_table;
+ 	/* Synchronizes with mdev table cleanup check and mdev creation. */
+@@ -289,3 +290,4 @@ bool mlx5_medev_can_and_mark_cleanup(str
+ 	up_write(&table->cleanup_rwsem);
+ 	return true;
+ }
++#endif/*CONFIG_MLX5_ESWITCH*/

@@ -1,0 +1,51 @@
+From: Vu Pham <vuhuong@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+
+Change-Id: I459240cfad151b9ee88329c81d1122f5f8c622bc
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+@@ -204,9 +204,11 @@ static void mlx5e_rep_changelowerstate_e
+ 	struct mlx5e_rep_priv *rpriv;
+ 	struct net_device *lag_dev;
+ 	struct mlx5e_priv *priv;
++#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
+ 	struct list_head *iter;
+ 	struct net_device *dev;
+ 	u16 acl_vport_num;
++#endif
+ 	u16 fwd_vport_num;
+ 	int err;
+ 
+@@ -224,6 +226,7 @@ static void mlx5e_rep_changelowerstate_e
+ 	fwd_vport_num = rpriv->rep->vport;
+ 	lag_dev = netdev_master_upper_dev_get(netdev);
+ 
++#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
+ 	/* Point everyone's egress acl to the vport of the active representor */
+ 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
+ 		priv = netdev_priv(dev);
+@@ -244,6 +247,7 @@ static void mlx5e_rep_changelowerstate_e
+ 					    acl_vport_num, err);
+ 		}
+ 	}
++#endif
+ 
+ 	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
+ 	 * rx_rule with new destination as active vport's root_ft
+@@ -314,6 +318,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
+ 	if (!mlx5_esw_acl_egress_fwd2vport_supported(priv->mdev->priv.eswitch))
+ 		goto out;
+ 
++#ifndef HAVE_NETDEV_FOR_EACH_LOWER_DEV
++	netdev_err(netdev, "VF representors bonding is NOT supported\n");
++	goto out;
++#endif
++
+ 	uplink_priv->bond = kvzalloc(sizeof(*uplink_priv->bond), GFP_KERNEL);
+ 	if (!uplink_priv->bond) {
+ 		ret = -ENOMEM;

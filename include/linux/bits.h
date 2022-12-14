@@ -8,9 +8,17 @@
 #include_next <linux/bits.h>
 #endif
 
+#include <uapi/linux/const.h>
+
 #ifndef GENMASK 
 #define GENMASK(h, l) \
 	(((~0UL) - (1UL << (l)) + 1) & (~0UL >> (BITS_PER_LONG - 1 - (h))))
+#endif
+
+#ifndef GENMASK_ULL
+#define GENMASK_ULL(h, l) \
+        (((~ULL(0)) - (ULL(1) << (l)) + 1) & \
+         (~ULL(0) >> (BITS_PER_LONG_LONG - 1 - (h))))
 #endif
 
 #endif /* COMPAT_BIT_OPS_H */

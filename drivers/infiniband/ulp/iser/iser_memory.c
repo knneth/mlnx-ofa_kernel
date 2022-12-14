@@ -170,7 +170,7 @@ int iser_dma_map_task_data(struct iscsi_iser_task *iser_task,
 	dev = iser_task->iser_conn->ib_conn.device->ib_device;
 
 	data->dma_nents = ib_dma_map_sg(dev, data->sg, data->size, dma_dir);
-	if (data->dma_nents == 0) {
+	if (unlikely(data->dma_nents == 0)) {
 		iser_err("dma_map_sg failed!!!\n");
 		return -EINVAL;
 	}
@@ -237,7 +237,7 @@ int iser_fast_reg_fmr(struct iscsi_iser_task *iser_task,
 	int ret, plen;
 
 	page_vec->npages = 0;
-	page_vec->fake_mr.page_size = SIZE_4K;
+	page_vec->fake_mr.page_size = SZ_4K;
 	plen = ib_sg_to_pages(&page_vec->fake_mr, mem->sg,
 			      mem->dma_nents, NULL, iser_set_page);
 	if (unlikely(plen < mem->dma_nents)) {
@@ -302,8 +302,7 @@ void iser_unreg_mem_fastreg(struct iscsi_iser_task *iser_task,
 }
 
 static void
-iser_set_dif_domain(struct scsi_cmnd *sc, struct ib_sig_attrs *sig_attrs,
-		    struct ib_sig_domain *domain)
+iser_set_dif_domain(struct scsi_cmnd *sc, struct ib_sig_domain *domain)
 {
 	domain->sig_type = IB_SIG_TYPE_T10_DIF;
 	domain->sig.dif.pi_interval = scsi_prot_interval(sc);
@@ -326,21 +325,21 @@ iser_set_sig_attrs(struct scsi_cmnd *sc, struct ib_sig_attrs *sig_attrs)
 	case SCSI_PROT_WRITE_INSERT:
 	case SCSI_PROT_READ_STRIP:
 		sig_attrs->mem.sig_type = IB_SIG_TYPE_NONE;
-		iser_set_dif_domain(sc, sig_attrs, &sig_attrs->wire);
+		iser_set_dif_domain(sc, &sig_attrs->wire);
 		sig_attrs->wire.sig.dif.bg_type = IB_T10DIF_CRC;
 		break;
 	case SCSI_PROT_READ_INSERT:
 	case SCSI_PROT_WRITE_STRIP:
 		sig_attrs->wire.sig_type = IB_SIG_TYPE_NONE;
-		iser_set_dif_domain(sc, sig_attrs, &sig_attrs->mem);
+		iser_set_dif_domain(sc, &sig_attrs->mem);
 		sig_attrs->mem.sig.dif.bg_type = sc->prot_flags & SCSI_PROT_IP_CHECKSUM ?
 						IB_T10DIF_CSUM : IB_T10DIF_CRC;
 		break;
 	case SCSI_PROT_READ_PASS:
 	case SCSI_PROT_WRITE_PASS:
-		iser_set_dif_domain(sc, sig_attrs, &sig_attrs->wire);
+		iser_set_dif_domain(sc, &sig_attrs->wire);
 		sig_attrs->wire.sig.dif.bg_type = IB_T10DIF_CRC;
-		iser_set_dif_domain(sc, sig_attrs, &sig_attrs->mem);
+		iser_set_dif_domain(sc, &sig_attrs->mem);
 		sig_attrs->mem.sig.dif.bg_type = sc->prot_flags & SCSI_PROT_IP_CHECKSUM ?
 						IB_T10DIF_CSUM : IB_T10DIF_CRC;
 		break;
@@ -452,7 +451,7 @@ static int iser_fast_reg_mr(struct iscsi_iser_task *iser_task,
 
 	ib_update_fast_reg_key(mr, ib_inc_rkey(mr->rkey));
 
-	n = ib_map_mr_sg(mr, mem->sg, mem->dma_nents, NULL, SIZE_4K);
+	n = ib_map_mr_sg(mr, mem->sg, mem->dma_nents, NULL, SZ_4K);
 	if (unlikely(n != mem->dma_nents)) {
 		iser_err("failed to map sg (%d/%d)\n",
 			 n, mem->dma_nents);
@@ -528,7 +527,7 @@ int iser_reg_rdma_mem(struct iscsi_iser_task *task,
 		if (unlikely(err))
 			goto err_reg;
 
-		desc->sig_protected = 1;
+		desc->sig_protected = true;
 	}
 
 	return 0;

@@ -8,6 +8,11 @@
 #include "lag_mp.h"
 
 enum {
+	MLX5_LAG_P1,
+	MLX5_LAG_P2,
+};
+
+enum {
 	MLX5_LAG_FLAG_ROCE   = 1 << 0,
 	MLX5_LAG_FLAG_SRIOV  = 1 << 1,
 	MLX5_LAG_FLAG_MULTIPATH = 1 << 2,
@@ -34,7 +39,7 @@ struct lag_tracker {
  */
 struct mlx5_lag {
 	u8                        flags;
-	bool			  shared_fdb;
+	bool                      shared_fdb;
 	u32			  esw_updating;
 	struct kref		  ref;
 	u8                        v2p_map[MLX5_MAX_PORTS];

@@ -38,11 +38,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _COMPAT_LINUX_SUNRPC_XPRTRDMA_H
-#define _COMPAT_LINUX_SUNRPC_XPRTRDMA_H
-
-/* do not include the original header */
-#define _LINUX_SUNRPC_XPRTRDMA_H 1
+#ifndef _LINUX_SUNRPC_XPRTRDMA_H
+#define _LINUX_SUNRPC_XPRTRDMA_H
 
 /*
  * Constants. Max RPC/NFS header is big enough to account for
@@ -52,9 +49,9 @@
  * fully-chunked NFS message (read chunks are the largest). Note only
  * a single chunk type per message is supported currently.
  */
-#define RPCRDMA_MIN_SLOT_TABLE	(2U)
+#define RPCRDMA_MIN_SLOT_TABLE	(4U)
 #define RPCRDMA_DEF_SLOT_TABLE	(128U)
-#define RPCRDMA_MAX_SLOT_TABLE	(256U)
+#define RPCRDMA_MAX_SLOT_TABLE	(16384U)
 
 #define RPCRDMA_MIN_INLINE  (1024)	/* min inline thresh */
 #define RPCRDMA_DEF_INLINE  (4096)	/* default inline thresh */
@@ -73,4 +70,4 @@ enum rpcrdma_memreg {
 	RPCRDMA_LAST
 };
 
-#endif /* _COMPAT_LINUX_SUNRPC_XPRTRDMA_H */
+#endif /* _LINUX_SUNRPC_XPRTRDMA_H */

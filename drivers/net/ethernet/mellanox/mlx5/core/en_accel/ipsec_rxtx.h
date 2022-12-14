@@ -34,8 +34,8 @@
 #ifndef __MLX5E_IPSEC_RXTX_H__
 #define __MLX5E_IPSEC_RXTX_H__
 
-#define MLX5_IPSEC_METADATA_MARKER_MASK 0x80
-#define MLX5_IPSEC_METADATA_SYNDROM_MASK 0x7F
+#define MLX5_IPSEC_METADATA_MARKER_MASK      (0x80)
+#define MLX5_IPSEC_METADATA_SYNDROM_MASK     (0x7F)
 #define MLX5_IPSEC_METADATA_HANDLE(metadata) (((metadata) >> 8) & 0xFF)
 
 #ifdef CONFIG_MLX5_EN_IPSEC
@@ -47,7 +47,7 @@
 
 struct sk_buff *mlx5e_ipsec_handle_rx_skb(struct net_device *netdev,
 					  struct sk_buff *skb, u32 *cqe_bcnt);
-void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
+void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, bool xmit_more);
 
 void mlx5e_ipsec_inverse_table_init(void);
 bool mlx5e_ipsec_feature_check(struct sk_buff *skb, struct net_device *netdev,
@@ -63,8 +63,21 @@ struct sk_buff *mlx5e_ipsec_handle_tx_skb(struct net_device *netdev,
 void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 				       struct sk_buff *skb,
 				       struct mlx5_cqe64 *cqe);
+static inline bool mlx5_ipsec_is_rx_flow(struct mlx5_cqe64 *cqe)
+{
+	return !!(MLX5_IPSEC_METADATA_MARKER_MASK & be32_to_cpu(cqe->ft_metadata));
+}
+#else
+static inline
+void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
+				       struct sk_buff *skb,
+				       struct mlx5_cqe64 *cqe)
+{}
+
+static inline bool mlx5_ipsec_is_rx_flow(struct mlx5_cqe64 *cqe) { return false; }
+#endif /* CONFIG_MLX5_EN_IPSEC */
+
 int mlx5e_ipsec_set_flow_attrs(struct mlx5e_priv *priv, u32 *match_c, u32 *match_v,
 			       struct ethtool_rx_flow_spec *fs);
-#endif /* CONFIG_MLX5_EN_IPSEC */
 
 #endif /* __MLX5E_IPSEC_RXTX_H__ */

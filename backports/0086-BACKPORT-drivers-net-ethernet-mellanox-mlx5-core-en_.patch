@@ -1,0 +1,42 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+
+Change-Id: I65bd65ca491e16cc5126c4e845e2c36c0ec3f955
+---
+ .../ethernet/mellanox/mlx5/core/en_accel/ktls.h  | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+@@ -6,18 +6,26 @@
+ 
+ #include "en.h"
+ 
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined CONFIG_MLX5_EN_TLS && defined HAVE_KTLS_STRUCTS
+ 
+ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
+-int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
+-void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
+-int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
++
+ #else
+ 
+ static inline void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
+ {
+ }
+ 
++#endif
++
++#ifdef HAVE_KTLS_RX_SUPPORT
++
++int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
++void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
++int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
++
++#else
++
+ static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
+ {
+ 	return 0;

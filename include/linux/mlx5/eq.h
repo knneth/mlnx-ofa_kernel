@@ -18,7 +18,6 @@ struct mlx5_eq_param {
 	u8             irq_index;
 	int            nent;
 	u64            mask[4];
-	struct notifier_block *nb;
 };
 
 struct mlx5_eq *

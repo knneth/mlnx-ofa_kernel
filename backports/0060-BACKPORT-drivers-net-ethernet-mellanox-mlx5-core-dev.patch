@@ -1,0 +1,234 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
+
+Change-Id: I086e54f7ab516d848e0c30d5015126bff6a70b29
+---
+ .../net/ethernet/mellanox/mlx5/core/devlink.c | 99 ++++++++++++++-----
+ 1 file changed, 72 insertions(+), 27 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
+@@ -8,12 +8,17 @@
+ #include "eswitch.h"
+ #include "meddev/sf.h"
+ 
++#ifdef HAVE_DEVLINK_DRIVERINIT_VAL
+ static unsigned int esw_offloads_num_big_groups = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
++#else
++unsigned int esw_offloads_num_big_groups = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
++#endif
+ module_param_named(num_of_groups, esw_offloads_num_big_groups,
+ 		   uint, 0644);
+ MODULE_PARM_DESC(num_of_groups,
+ 		 "Eswitch offloads number of big groups in FDB table. Valid range 1 - 1024. Default 4");
+ 
++#ifdef HAVE_DEVLINK_HAS_FLASH_UPDATE
+ static int mlx5_devlink_flash_update(struct devlink *devlink,
+ 				     const char *file_name,
+ 				     const char *component,
+@@ -35,7 +40,40 @@ static int mlx5_devlink_flash_update(str
+ 
+ 	return err;
+ }
++#endif
++
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
++static int mlx5_devlink_reload_down(struct devlink *devlink, 
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS
++			     bool netns_change,
++#endif
++				    struct netlink_ext_ack *extack)
++{
++	struct mlx5_core_dev *dev = devlink_priv(devlink);
++#ifdef CONFIG_MLX5_ESWITCH
++	u16 mode = 0;
++
++	if (!mlx5_devlink_eswitch_mode_get(devlink, &mode)) {
++		if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV) {
++			NL_SET_ERR_MSG_MOD(extack, "Reload not supported in switchdev mode");
++			return -EOPNOTSUPP;
++		}
++	}
++#endif
++
++	return mlx5_unload_one(dev, false);
++}
++
++static int mlx5_devlink_reload_up(struct devlink *devlink,
++				  struct netlink_ext_ack *extack)
++{
++	struct mlx5_core_dev *dev = devlink_priv(devlink);
++
++	return mlx5_load_one(dev, false);
++}
++#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
+ 
++#if defined(HAVE_DEVLINK_HAS_INFO_GET) && defined(HAVE_DEVLINK_INFO_VERSION_FIXED_PUT)
+ static u8 mlx5_fw_ver_major(u32 version)
+ {
+ 	return (version >> 24) & 0xff;
+@@ -52,7 +90,6 @@ static u16 mlx5_fw_ver_subminor(u32 vers
+ }
+ 
+ #define DEVLINK_FW_STRING_LEN 32
+-
+ static int
+ mlx5_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
+ 		      struct netlink_ext_ack *extack)
+@@ -94,48 +131,37 @@ mlx5_devlink_info_get(struct devlink *de
+ 
+ 	return 0;
+ }
+-
+-static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
+-				    struct netlink_ext_ack *extack)
+-{
+-	struct mlx5_core_dev *dev = devlink_priv(devlink);
+-#ifdef CONFIG_MLX5_ESWITCH
+-	u16 mode = 0;
+-
+-	if (!mlx5_devlink_eswitch_mode_get(devlink, &mode)) {
+-		if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV) {
+-			NL_SET_ERR_MSG_MOD(extack, "Reload not supported in switchdev mode");
+-			return -EOPNOTSUPP;
+-		}
+-	}
+ #endif
+ 
+-	return mlx5_unload_one(dev, false);
+-}
+-
+-static int mlx5_devlink_reload_up(struct devlink *devlink,
+-				  struct netlink_ext_ack *extack)
+-{
+-	struct mlx5_core_dev *dev = devlink_priv(devlink);
+-
+-	return mlx5_load_one(dev, false);
+-}
+-
+ static const struct devlink_ops mlx5_devlink_ops = {
+ #ifdef CONFIG_MLX5_ESWITCH
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET
+ 	.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
+ 	.eswitch_mode_get = mlx5_devlink_eswitch_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET */
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET
+ 	.eswitch_inline_mode_set = mlx5_devlink_eswitch_inline_mode_set,
+ 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET */
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET
+ 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
+ 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET */
++#endif
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_IPSEC_MODE_SET
+ 	.eswitch_ipsec_mode_set = mlx5_devlink_eswitch_ipsec_mode_set,
+ 	.eswitch_ipsec_mode_get = mlx5_devlink_eswitch_ipsec_mode_get,
+ #endif
++#ifdef HAVE_DEVLINK_HAS_FLASH_UPDATE
+ 	.flash_update = mlx5_devlink_flash_update,
+-	.info_get = mlx5_devlink_info_get,
++#endif /* HAVE_DEVLINK_HAS_FLASH_UPDATE */
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
+ 	.reload_down = mlx5_devlink_reload_down,
+ 	.reload_up = mlx5_devlink_reload_up,
++#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
++#if defined(HAVE_DEVLINK_HAS_INFO_GET) && defined(HAVE_DEVLINK_INFO_VERSION_FIXED_PUT)
++	.info_get = mlx5_devlink_info_get,
++#endif /* HAVE_DEVLINK_HAS_INFO_GET */
+ };
+ 
+ struct devlink *mlx5_devlink_alloc(void)
+@@ -148,6 +174,8 @@ void mlx5_devlink_free(struct devlink *d
+ 	devlink_free(devlink);
+ }
+ 
++
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAMS_PUBLISHED)
+ static int mlx5_devlink_fs_mode_validate(struct devlink *devlink, u32 id,
+ 					 union devlink_param_value val,
+ 					 struct netlink_ext_ack *extack)
+@@ -212,6 +240,7 @@ static int mlx5_devlink_fs_mode_get(stru
+ 	return 0;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE
+ static int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
+ 					     union devlink_param_value val,
+ 					     struct netlink_ext_ack *extack)
+@@ -226,6 +255,7 @@ static int mlx5_devlink_enable_roce_vali
+ 
+ 	return 0;
+ }
++#endif
+ 
+ #ifdef CONFIG_MLX5_ESWITCH
+ static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id,
+@@ -250,8 +280,10 @@ static const struct devlink_param mlx5_d
+ 			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
+ 			     mlx5_devlink_fs_mode_get, mlx5_devlink_fs_mode_set,
+ 			     mlx5_devlink_fs_mode_validate),
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE
+ 	DEVLINK_PARAM_GENERIC(ENABLE_ROCE, BIT(DEVLINK_PARAM_CMODE_DRIVERINIT),
+ 			      NULL, NULL, mlx5_devlink_enable_roce_validate),
++#endif
+ #ifdef CONFIG_MLX5_ESWITCH
+ 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
+ 			     "fdb_large_groups", DEVLINK_PARAM_TYPE_U32,
+@@ -274,10 +306,12 @@ static void mlx5_devlink_set_params_init
+ 					   MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
+ 					   value);
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE
+ 	value.vbool = MLX5_CAP_GEN(dev, roce);
+ 	devlink_param_driverinit_value_set(devlink,
+ 					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+ 					   value);
++#endif
+ 
+ #ifdef CONFIG_MLX5_ESWITCH
+ 	value.vu32 = esw_offloads_num_big_groups;
+@@ -286,6 +320,7 @@ static void mlx5_devlink_set_params_init
+ 					   value);
+ #endif
+ }
++#endif /* HAVE_DEVLINK_HAS_INFO_GET && HAVE_DEVLINK_INFO_VERSION_FIXED_PUT */
+ 
+ int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
+ {
+@@ -295,25 +330,35 @@ int mlx5_devlink_register(struct devlink
+ 	if (err)
+ 		return err;
+ 
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAMS_PUBLISHED)
+ 	err = devlink_params_register(devlink, mlx5_devlink_params,
+ 				      ARRAY_SIZE(mlx5_devlink_params));
+ 	if (err)
+ 		goto params_reg_err;
+ 	mlx5_devlink_set_params_init_values(devlink);
++#ifdef HAVE_DEVLINK_PARAMS_PUBLISHED
+ 	devlink_params_publish(devlink);
++#endif /* HAVE_DEVLINK_PARAMS_PUBLISHED */
++#ifdef HAVE_DEVLINK_RELOAD_ENABLE
+ 	devlink_reload_enable(devlink);
++#endif
+ 	return 0;
+ 
+ params_reg_err:
+ 	devlink_unregister(devlink);
++#endif
+ 	return err;
+ }
+ 
+ void mlx5_devlink_unregister(struct devlink *devlink)
+ {
++#ifdef HAVE_DEVLINK_RELOAD_DISABLE
+ 	devlink_reload_disable(devlink);
++#endif
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAMS_PUBLISHED)
+ 	devlink_params_unregister(devlink, mlx5_devlink_params,
+ 				  ARRAY_SIZE(mlx5_devlink_params));
++#endif
+ 	devlink_unregister(devlink);
+ }
+ 

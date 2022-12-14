@@ -57,10 +57,6 @@ enum {
 
 enum {
 	MLX5_WQ_FLAG_SIGNATURE		= 1 << 0,
-	/* Exp part */
-	MLX5_EXP_WQ_FLAG_DELAY_DROP	= 1 << 29,
-	MLX5_EXP_WQ_FLAG_SCATTER_FCS	= 1 << 30,
-	MLX5_EXP_WQ_FLAG_RX_END_PADDING = 1 << 31,
 };
 
 /* Increment this value if any changes that break userspace ABI
@@ -102,6 +98,7 @@ struct mlx5_ib_alloc_ucontext_req_v2 {
 enum mlx5_ib_alloc_ucontext_resp_mask {
 	MLX5_IB_ALLOC_UCONTEXT_RESP_MASK_CORE_CLOCK_OFFSET = 1UL << 0,
 	MLX5_IB_ALLOC_UCONTEXT_RESP_MASK_DUMP_FILL_MKEY    = 1UL << 1,
+	MLX5_IB_ALLOC_UCONTEXT_RESP_MASK_ECE               = 1UL << 2,
 };
 
 enum mlx5_user_cmds_supp_uhw {
@@ -320,6 +317,8 @@ struct mlx5_ib_create_qp {
 		__aligned_u64 sq_buf_addr;
 		__aligned_u64 access_key;
 	};
+	__u32  ece_options;
+	__u32  reserved;
 };
 
 /* RX Hash function flags */
@@ -369,7 +368,7 @@ enum mlx5_ib_create_qp_resp_mask {
 
 struct mlx5_ib_create_qp_resp {
 	__u32	bfreg_index;
-	__u32   reserved;
+	__u32   ece_options;
 	__u32	comp_mask;
 	__u32	tirn;
 	__u32	tisn;
@@ -418,12 +417,14 @@ struct mlx5_ib_burst_info {
 struct mlx5_ib_modify_qp {
 	__u32			   comp_mask;
 	struct mlx5_ib_burst_info  burst_info;
-	__u32			   reserved;
+	__u32			   ece_options;
 };
 
 struct mlx5_ib_modify_qp_resp {
 	__u32	response_length;
 	__u32	dctn;
+	__u32   ece_options;
+	__u32   reserved;
 };
 
 struct mlx5_ib_create_wq_resp {
@@ -455,9 +456,9 @@ struct mlx5_ib_clock_info {
 
 enum mlx5_ib_mmap_cmd {
 	MLX5_IB_MMAP_REGULAR_PAGE               = 0,
+	MLX5_IB_MMAP_GET_CONTIGUOUS_PAGES       = 1,
 	MLX5_IB_MMAP_WC_PAGE                    = 2,
 	MLX5_IB_MMAP_NC_PAGE                    = 3,
-	MLX5_IB_MMAP_MAP_DC_INFO_PAGE		= 4,
 	/* 5 is chosen in order to be compatible with old versions of libmlx5 */
 	MLX5_IB_MMAP_CORE_CLOCK                 = 5,
 	MLX5_IB_MMAP_ALLOC_WC                   = 6,

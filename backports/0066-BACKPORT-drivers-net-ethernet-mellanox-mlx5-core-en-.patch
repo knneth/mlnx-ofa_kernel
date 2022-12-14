@@ -1,0 +1,61 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+
+Change-Id: I5c4d8be7275b8dd3e9aa817afd833df0a89af687
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+@@ -18,7 +18,9 @@ struct mlx5e_tc_table {
+ 
+ 	struct rhashtable               ht;
+ 
++#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
+ 	struct mod_hdr_tbl mod_hdr;
++#endif
+ 	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
+ 	DECLARE_HASHTABLE(hairpin_tbl, 8);
+ 
+@@ -42,9 +44,13 @@ struct mlx5e_l2_rule {
+ struct mlx5e_vlan_table {
+ 	struct mlx5e_flow_table		ft;
+ 	DECLARE_BITMAP(active_cvlans, VLAN_N_VID);
++#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
+ 	DECLARE_BITMAP(active_svlans, VLAN_N_VID);
++#endif
+ 	struct mlx5_flow_handle	*active_cvlans_rule[VLAN_N_VID];
++#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
+ 	struct mlx5_flow_handle	*active_svlans_rule[VLAN_N_VID];
++#endif
+ 	struct mlx5_flow_handle	*untagged_rule;
+ 	struct mlx5_flow_handle	*any_cvlan_rule;
+ 	struct mlx5_flow_handle	*any_svlan_rule;
+@@ -186,6 +192,7 @@ static inline int mlx5e_ethtool_get_rxnf
+ #endif /* CONFIG_MLX5_EN_RXNFC */
+ 
+ #ifdef CONFIG_MLX5_EN_ARFS
++#ifndef HAVE_NET_FLOW_KEYS_H
+ #define ARFS_HASH_SHIFT BITS_PER_BYTE
+ #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
+ 
+@@ -224,6 +231,7 @@ static inline void mlx5e_arfs_destroy_ta
+ static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
+ static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
+ #endif
++#endif
+ 
+ #ifdef CONFIG_MLX5_EN_TLS
+ struct mlx5e_accel_fs_tcp;
+@@ -241,8 +249,10 @@ struct mlx5e_flow_steering {
+ 	struct mlx5e_ttc_table          ttc;
+ 	struct mlx5e_ttc_table          inner_ttc;
+ #ifdef CONFIG_MLX5_EN_ARFS
++#ifndef HAVE_NET_FLOW_KEYS_H
+ 	struct mlx5e_arfs_tables        arfs;
+ #endif
++#endif
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	struct mlx5e_accel_fs_tcp      *accel_tcp;
+ #endif

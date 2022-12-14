@@ -8,20 +8,12 @@
 
 #include <linux/version.h>
 #include <linux/kconfig.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
 #include <linux/if.h>
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-#include <generated/autoconf.h>
-#else
-#include <linux/autoconf.h>
-#endif
 #include <linux/compat_autoconf.h>
 #include <linux/compat_fix.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
 #include <linux/uidgid.h>
-#endif
 
 /*
  * The define overwriting module_init is based on the original module_init
@@ -72,27 +64,7 @@ void backport_dependency_symbol(void);
  * code introduced for *that* kernel revision.
  */
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,29))
-#include <linux/compat-2.6.30.h>
-#include <linux/compat-2.6.31.h>
-#include <linux/compat-2.6.32.h>
-#include <linux/compat-2.6.33.h>
-#include <linux/compat-2.6.34.h>
-#include <linux/compat-2.6.35.h>
-#include <linux/compat-2.6.36.h>
-#include <linux/compat-2.6.37.h>
-#include <linux/compat-2.6.38.h>
-#include <linux/compat-2.6.39.h>
-#include <linux/compat-3.0.h>
-#include <linux/compat-3.1.h>
-#include <linux/compat-3.2.h>
-#include <linux/compat-3.3.h>
-#include <linux/compat-3.4.h>
-#include <linux/compat-3.5.h>
-#include <linux/compat-3.6.h>
-#include <linux/compat-3.7.h>
-#include <linux/compat-3.8.h>
-#include <linux/compat-3.9.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0))
 #include <linux/compat-3.10.h>
 #include <linux/compat-3.11.h>
 #include <linux/compat-3.12.h>
@@ -104,15 +76,7 @@ void backport_dependency_symbol(void);
 #include <linux/compat-4.0.h>
 #include <linux/compat-4.1.h>
 #include <linux/compat-4.10.h>
-#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2,6,29) */
-
-#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18))
-#include <linux/compat-2.6.19.h>
-#endif
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
-#include <linux/compat-2.6.17.h>
-#endif
+#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0) */
 
 
 #ifndef HAVE_ELFCOREHDR_ADDR_EXPORTED

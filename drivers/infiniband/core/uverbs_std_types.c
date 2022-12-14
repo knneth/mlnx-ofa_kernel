@@ -38,7 +38,6 @@
 #include <rdma/restrack.h>
 #include "rdma_core.h"
 #include "uverbs.h"
-//#include "uverbs_exp.h"
 
 static int uverbs_free_ah(struct ib_uobject *uobject,
 			  enum rdma_remove_reason why,

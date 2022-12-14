@@ -1,0 +1,86 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
+
+Change-Id: I4a50d8820150ccb644898537b6528c9863fb1eca
+---
+ .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 48 +++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
+@@ -14,26 +14,74 @@ struct mlx5e_accel_tx_tls_state {
+ 	u32 tls_tisn;
+ };
+ 
++#ifdef HAVE_KTLS_STRUCTS
+ u16 mlx5e_ktls_get_stop_room(struct mlx5e_txqsq *sq);
++#if 0
+ u8 mlx5e_ktls_dumps_num_wqebbs(struct mlx5e_txqsq *sq, unsigned int nfrags,
+ 			       unsigned int sync_len);
++#endif
+ 
+ bool mlx5e_ktls_handle_tx_skb(struct tls_context *tls_ctx, struct mlx5e_txqsq *sq,
+ 			      struct sk_buff *skb, int datalen,
+ 			      struct mlx5e_accel_tx_tls_state *state);
++#else
++static inline
++u16 mlx5e_ktls_get_stop_room(struct mlx5e_txqsq *sq)
++{
++	return 0;
++}
++
++static inline
++bool mlx5e_ktls_handle_tx_skb(struct tls_context *tls_ctx, struct mlx5e_txqsq *sq,
++			      struct sk_buff *skb, int datalen,
++			      struct mlx5e_accel_tx_tls_state *state)
++{
++	return false;
++}
++#endif
++
++#ifdef HAVE_KTLS_RX_SUPPORT
+ void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
+ 			      struct mlx5_cqe64 *cqe, u32 *cqe_bcnt);
+ 
+ void mlx5e_ktls_handle_ctx_completion(struct mlx5e_icosq_wqe_info *wi);
+ void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
+ 					  struct mlx5e_icosq *sq);
++#else
++static inline
++void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
++			      struct mlx5_cqe64 *cqe, u32 *cqe_bcnt)
++{
++}
+ 
++static inline
++void mlx5e_ktls_handle_ctx_completion(struct mlx5e_icosq_wqe_info *wi)
++{
++}
++
++static inline
++void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
++					  struct mlx5e_icosq *sq)
++{
++}
++#endif
++
++#ifdef HAVE_KTLS_STRUCTS
+ void mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
+ 					   struct mlx5e_tx_wqe_info *wi,
+ 					   u32 *dma_fifo_cc);
+ #else
+ static inline void
+ mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
++				      struct mlx5e_tx_wqe_info *wi,
++				      u32 *dma_fifo_cc)
++{
++}
++#endif /* HAVE_KTLS_STRUCTS */
++
++#else
++static inline void
++mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
+ 				      struct mlx5e_tx_wqe_info *wi,
+ 				      u32 *dma_fifo_cc)
+ {

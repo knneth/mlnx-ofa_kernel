@@ -392,11 +392,8 @@ int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,
 		mlx5_core_err(mdev, "fpga device start failed %d\n", err);
 		goto out;
 	}
-	err = mlx5_accel_ipsec_init(mdev);
-	if (err) {
-		mlx5_core_err(mdev, "IPSec device start failed %d\n", err);
-		goto err_fpga;
-	}
+
+	mlx5_accel_ipsec_init(mdev);
 
 	err = mlx5_register_device(mdev);
 	if (err) {
@@ -410,7 +407,6 @@ int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,
 
 err_ipsec:
 	mlx5_accel_ipsec_cleanup(mdev);
-err_fpga:
 	mlx5_fpga_device_stop(mdev);
 out:
 	mutex_unlock(&mdev->intf_state_mutex);

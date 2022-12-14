@@ -42,88 +42,7 @@
 #include <rdma/ib_umem_odp.h>
 
 #include "uverbs.h"
-
-static struct ib_umem *peer_umem_get(struct ib_peer_memory_client *ib_peer_mem,
-				     struct ib_umem *umem, unsigned long addr,
-				     int dmasync, unsigned long peer_mem_flags)
-{
-	int ret;
-	const struct peer_memory_client *peer_mem = ib_peer_mem->peer_mem;
-	struct invalidation_ctx *invalidation_ctx = NULL;
-
-	umem->ib_peer_mem = ib_peer_mem;
-	if (peer_mem_flags & IB_PEER_MEM_INVAL_SUPP) {
-		ret = ib_peer_create_invalidation_ctx(ib_peer_mem, umem, &invalidation_ctx);
-		if (ret)
-			goto end;
-	}
-
-	/*
-	 * We always request write permissions to the pages, to force breaking of any CoW
-	 * during the registration of the MR. For read-only MRs we use the "force" flag to
-	 * indicate that CoW breaking is required but the registration should not fail if
-	 * referencing read-only areas.
-	 */
-	ret = peer_mem->get_pages(addr, umem->length,
-				  1, !umem->writable,
-				  &umem->sg_head,
-				  umem->peer_mem_client_context,
-				  invalidation_ctx ?
-				  invalidation_ctx->context_ticket : 0);
-	if (ret)
-		goto out;
-
-	umem->page_shift = ilog2(peer_mem->get_page_size
-				 (umem->peer_mem_client_context));
-	if (BIT(umem->page_shift) <= 0)
-		goto put_pages;
-
-	ret = peer_mem->dma_map(&umem->sg_head,
-				umem->peer_mem_client_context,
-				umem->context->device->dma_device,
-				dmasync,
-				&umem->nmap);
-	if (ret)
-		goto put_pages;
-
-	atomic64_add(umem->nmap, &ib_peer_mem->stats.num_reg_pages);
-	atomic64_add(umem->nmap * BIT(umem->page_shift), &ib_peer_mem->stats.num_reg_bytes);
-	atomic64_inc(&ib_peer_mem->stats.num_alloc_mrs);
-	return umem;
-
-put_pages:
-	peer_mem->put_pages(&umem->sg_head, umem->peer_mem_client_context);
-out:
-	if (invalidation_ctx)
-		ib_peer_destroy_invalidation_ctx(ib_peer_mem, invalidation_ctx);
-end:
-	ib_put_peer_client(ib_peer_mem, umem->peer_mem_client_context);
-	mmdrop(umem->owning_mm);
-	kfree(umem);
-	return ERR_PTR(ret);
-}
-
-static void peer_umem_release(struct ib_umem *umem)
-{
-	struct ib_peer_memory_client *ib_peer_mem = umem->ib_peer_mem;
-	const struct peer_memory_client *peer_mem = ib_peer_mem->peer_mem;
-	struct invalidation_ctx *invalidation_ctx = umem->invalidation_ctx;
-
-	if (invalidation_ctx)
-		ib_peer_destroy_invalidation_ctx(ib_peer_mem, invalidation_ctx);
-
-	peer_mem->dma_unmap(&umem->sg_head,
-			    umem->peer_mem_client_context,
-			    umem->context->device->dma_device);
-	peer_mem->put_pages(&umem->sg_head,
-			    umem->peer_mem_client_context);
-	atomic64_add(umem->nmap, &ib_peer_mem->stats.num_dereg_pages);
-	atomic64_add(umem->nmap * BIT(umem->page_shift), &ib_peer_mem->stats.num_dereg_bytes);
-	atomic64_inc(&ib_peer_mem->stats.num_dealloc_mrs);
-	ib_put_peer_client(ib_peer_mem, umem->peer_mem_client_context);
-	kfree(umem);
-}
- 
+#include "ib_peer_mem.h"
 
 static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int dirty)
 {
@@ -136,9 +55,7 @@ static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int d
 
 	for_each_sg_page(umem->sg_head.sgl, &sg_iter, umem->sg_nents, 0) {
 		page = sg_page_iter_page(&sg_iter);
-		if (!PageDirty(page) && umem->writable && dirty)
-			set_page_dirty_lock(page);
-		put_page(page);
+		unpin_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
 	}
 
 	sg_free_table(&umem->sg_head);
@@ -250,10 +167,13 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 		 * for any address.
 		 */
 		mask |= (sg_dma_address(sg) + pgoff) ^ va;
-		if (i && i != (umem->nmap - 1))
-			/* restrict by length as well for interior SGEs */
-			mask |= sg_dma_len(sg);
 		va += sg_dma_len(sg) - pgoff;
+		/* Except for the last entry, the ending iova alignment sets
+		 * the maximum possible page size as the low bits of the iova
+		 * must be zero when starting the next chunk.
+		 */
+		if (i != (umem->nmap - 1))
+			mask |= va;
 		pgoff = 0;
 	}
 	best_pg_bit = rdma_find_pg_bit(mask, pgsz_bitmap);
@@ -262,66 +182,19 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 }
 EXPORT_SYMBOL(ib_umem_find_best_pgsz);
 
-int ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-					   umem_invalidate_func_t func,
-					   void *cookie)
-{
-	struct invalidation_ctx *invalidation_ctx = umem->invalidation_ctx;
-	int ret = 0;
-
-	mutex_lock(&umem->ib_peer_mem->lock);
-	if (invalidation_ctx->peer_invalidated) {
-		pr_err("ib_umem_activate_invalidation_notifier: pages were invalidated by peer\n");
-		ret = -EINVAL;
-		goto end;
-	}
-	invalidation_ctx->func = func;
-	invalidation_ctx->cookie = cookie;
-	/* from that point any pending invalidations can be called */
-end:
-	mutex_unlock(&umem->ib_peer_mem->lock);
-	return ret;
-}
-EXPORT_SYMBOL(ib_umem_activate_invalidation_notifier);
-
-static struct ib_umem *ib_client_umem_get(struct ib_ucontext *context, unsigned long addr,
-					  size_t size, unsigned long peer_mem_flags,
-					  struct ib_umem *umem, int dmasync,
-					  u8 *peer_exists)
-{
-	struct ib_peer_memory_client *peer_mem_client;
-
-	peer_mem_client = ib_get_peer_client(context, addr, size,
-					     peer_mem_flags,
-					     &umem->peer_mem_client_context);
-	if (peer_mem_client) {
-		*peer_exists = 1;
-		umem->hugetlb = 0;
-		return peer_umem_get(peer_mem_client, umem, addr,
-				     dmasync, peer_mem_flags);
-	}
-
-	return ERR_PTR(-ENOMEM);
-}
-
 /**
- * ib_umem_get - Pin and DMA map userspace memory.
+ * __ib_umem_get - Pin and DMA map userspace memory.
  *
- * If access flags indicate ODP memory, avoid pinning. Instead, stores
- * the mm for future page fault handling in conjunction with MMU notifiers.
- *
- * @udata: userspace context to pin memory for
+ * @device: IB device to connect UMEM
  * @addr: userspace virtual address to start at
  * @size: length of region to pin
  * @access: IB_ACCESS_xxx flags for memory being pinned
- * @dmasync: flush in-flight DMA when the memory region is written
  * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
  */
-struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
-			       size_t size, int access, int dmasync,
-			       unsigned long peer_mem_flags)
+struct ib_umem *__ib_umem_get(struct ib_device *device,
+			      unsigned long addr, size_t size, int access,
+			      unsigned long peer_mem_flags)
 {
-	struct ib_ucontext *context;
 	struct ib_umem *umem;
 	struct page **page_list;
 	unsigned long lock_limit;
@@ -330,20 +203,8 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 	struct mm_struct *mm;
 	unsigned long npages;
 	int ret;
-	unsigned long dma_attrs = 0;
 	struct scatterlist *sg;
 	unsigned int gup_flags = FOLL_WRITE;
-
-	if (!udata)
-		return ERR_PTR(-EIO);
-
-	context = container_of(udata, struct uverbs_attr_bundle, driver_udata)
-			  ->context;
-	if (!context)
-		return ERR_PTR(-EIO);
-
-	if (dmasync)
-		dma_attrs |= DMA_ATTR_WRITE_BARRIER;
 
 	/*
 	 * If the combination of the addr and size requested for this memory
@@ -360,49 +221,18 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
  		return ERR_PTR(-EPERM);
 	}
 
-	if (access & IB_ACCESS_ON_DEMAND) {
-		umem = kzalloc(sizeof(struct ib_umem_odp), GFP_KERNEL);
-		if (!umem)
-			return ERR_PTR(-ENOMEM);
-		umem->is_odp = 1;
-	} else {
-		umem = kzalloc(sizeof(*umem), GFP_KERNEL);
-		if (!umem)
-			return ERR_PTR(-ENOMEM);
-	}
+	if (access & IB_ACCESS_ON_DEMAND)
+		return ERR_PTR(-EOPNOTSUPP);
 
-	umem->context    = context;
+	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
+	if (!umem)
+		return ERR_PTR(-ENOMEM);
+	umem->ibdev      = device;
 	umem->length     = size;
 	umem->address    = addr;
-	umem->page_shift = PAGE_SHIFT;
 	umem->writable   = ib_access_writable(access);
 	umem->owning_mm = mm = current->mm;
 	mmgrab(mm);
-
-	/* For known peer context move directly to peer registration handling */
-	if (context->peer_mem_private_data &&
-	    (peer_mem_flags & IB_PEER_MEM_ALLOW)) {
-		struct ib_umem *ret_umem;
-		u8 peer_exists = 0;
-
-		ret_umem = ib_client_umem_get(context, addr, size,
-					      peer_mem_flags, umem,
-					      dmasync, &peer_exists);
-		if (peer_exists)
-			return ret_umem;
-	}
-
-	if (access & IB_ACCESS_ON_DEMAND) {
-		if (WARN_ON_ONCE(!context->invalidate_range)) {
-			ret = -EINVAL;
-			goto umem_kfree;
-		}
-
-		ret = ib_umem_odp_get(to_ib_umem_odp(umem), access);
-		if (ret)
-			goto umem_kfree;
-		return umem;
-	}
 
 	page_list = (struct page **) __get_free_page(GFP_KERNEL);
 	if (!page_list) {
@@ -412,8 +242,6 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 
 	npages = ib_umem_num_pages(umem);
 	if (npages == 0 || npages > UINT_MAX) {
-		pr_debug("%s: npages(%lu) isn't in the range 1..%u\n", __func__,
-		       npages, UINT_MAX);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -423,8 +251,6 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 	new_pinned = atomic64_add_return(npages, &mm->pinned_vm);
 	if (new_pinned > lock_limit && !capable(CAP_IPC_LOCK)) {
 		atomic64_sub(npages, &mm->pinned_vm);
-		pr_debug("%s: requested to lock(%lu) while limit is(%lu)\n",
-		       __func__, new_pinned, lock_limit);
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -432,11 +258,8 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 	cur_base = addr & PAGE_MASK;
 
 	ret = sg_alloc_table(&umem->sg_head, npages, GFP_KERNEL);
-	if (ret) {
-		pr_debug("%s: failed to allocate sg table, npages=%lu\n",
-		       __func__, npages);
+	if (ret)
 		goto vma;
-	}
 
 	if (!umem->writable)
 		gup_flags |= FOLL_FORCE;
@@ -444,12 +267,11 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 	sg = umem->sg_head.sgl;
 
 	while (npages) {
-		down_read(&mm->mmap_sem);
-		ret = get_user_pages(cur_base,
-				     min_t(unsigned long, npages,
-					   PAGE_SIZE / sizeof (struct page *)),
-				     gup_flags | FOLL_LONGTERM,
-				     page_list, NULL);
+		ret = pin_user_pages_fast(cur_base,
+					  min_t(unsigned long, npages,
+						PAGE_SIZE /
+						sizeof(struct page *)),
+					  gup_flags | FOLL_LONGTERM, page_list);
 		if (ret < 0) {
 			pr_debug("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
 			       min_t(unsigned long, npages,
@@ -463,19 +285,16 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 		npages   -= ret;
 
 		sg = ib_umem_add_sg_table(sg, page_list, ret,
-			dma_get_max_seg_size(context->device->dma_device),
+			dma_get_max_seg_size(device->dma_device),
 			&umem->sg_nents);
-
-		up_read(&mm->mmap_sem);
 	}
 
 	sg_mark_end(sg);
 
-	umem->nmap = ib_dma_map_sg_attrs(context->device,
-				  umem->sg_head.sgl,
-				  umem->sg_nents,
-				  DMA_BIDIRECTIONAL,
-				  dma_attrs);
+	umem->nmap = ib_dma_map_sg(device,
+				   umem->sg_head.sgl,
+				   umem->sg_nents,
+				   DMA_BIDIRECTIONAL);
 
 	if (!umem->nmap) {
 		pr_err("%s: failed to map scatterlist, npages=%lu\n", __func__,
@@ -488,26 +307,26 @@ struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
 	goto out;
 
 umem_release:
-	__ib_umem_release(context->device, umem, 0);
+	__ib_umem_release(device, umem, 0);
 vma:
 	atomic64_sub(ib_umem_num_pages(umem), &mm->pinned_vm);
 out:
 	free_page((unsigned long) page_list);
 	/*
- 	 * If the address belongs to peer memory client, then the first
- 	 * call to get_user_pages will fail. In this case, try to get
- 	 * these pages from the peers.
- 	 */
-	if (ret < 0) {
-		if ((peer_mem_flags & IB_PEER_MEM_ALLOW) && 
-		    !context->peer_mem_private_data) {
-			struct ib_umem *ret_umem;
-			u8 peer_exists = 0;
+	 * If the address belongs to peer memory client, then the first
+	 * call to get_user_pages will fail. In this case, try to get
+	 * these pages from the peers.
+	 */
+	//FIXME: this placement is horrible
+	if (ret < 0 && peer_mem_flags & IB_PEER_MEM_ALLOW) {
+		struct ib_umem *new_umem;
 
-			ret_umem = ib_client_umem_get(context, addr, size, peer_mem_flags,
-						      umem, dmasync, &peer_exists);
-			if (peer_exists)
-				return ret_umem;
+		new_umem = ib_peer_umem_get(umem, ret, peer_mem_flags);
+		if (IS_ERR(new_umem)) {
+			ret = PTR_ERR(new_umem);
+		} else {
+			umem = new_umem;
+			ret = 0;
 		}
 	}
 umem_kfree:
@@ -517,16 +336,22 @@ umem_kfree:
 	}
 	return ret ? ERR_PTR(ret) : umem;
 }
+
+struct ib_umem *ib_umem_get(struct ib_device *device, unsigned long addr,
+			    size_t size, int access)
+{
+	return __ib_umem_get(device, addr, size, access, 0);
+}
 EXPORT_SYMBOL(ib_umem_get);
 
-static void __ib_umem_release_tail(struct ib_umem *umem)
+struct ib_umem *ib_umem_get_peer(struct ib_device *device, unsigned long addr,
+				 size_t size, int access,
+				 unsigned long peer_mem_flags)
 {
-	mmdrop(umem->owning_mm);
-	if (umem->is_odp)
-		kfree(to_ib_umem_odp(umem));
-	else
-		kfree(umem);
+	return __ib_umem_get(device, addr, size, access,
+			     IB_PEER_MEM_ALLOW | peer_mem_flags);
 }
+EXPORT_SYMBOL(ib_umem_get_peer);
 
 /**
  * ib_umem_release - release memory pinned with ib_umem_get
@@ -534,36 +359,28 @@ static void __ib_umem_release_tail(struct ib_umem *umem)
  */
 void ib_umem_release(struct ib_umem *umem)
 {
-	if (umem->ib_peer_mem) {
-		peer_umem_release(umem);
+	if (!umem)
 		return;
-	}
+	if (umem->is_odp)
+		return ib_umem_odp_release(to_ib_umem_odp(umem));
 
-	if (umem->is_odp) {
-		ib_umem_odp_release(to_ib_umem_odp(umem));
-		__ib_umem_release_tail(umem);
-		return;
-	}
-
-	__ib_umem_release(umem->context->device, umem, 1);
+	if (umem->is_peer)
+		return ib_peer_umem_release(umem);
+	__ib_umem_release(umem->ibdev, umem, 1);
 
 	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
-	__ib_umem_release_tail(umem);
+	mmdrop(umem->owning_mm);
+	kfree(umem);
 }
 EXPORT_SYMBOL(ib_umem_release);
 
 int ib_umem_page_count(struct ib_umem *umem)
 {
-	int i;
-	int n;
+	int i, n = 0;
 	struct scatterlist *sg;
 
-	if (umem->is_odp)
-		return ib_umem_num_pages(umem);
-
-	n = 0;
 	for_each_sg(umem->sg_head.sgl, sg, umem->nmap, i)
-		n += sg_dma_len(sg) >> umem->page_shift;
+		n += sg_dma_len(sg) >> PAGE_SHIFT;
 
 	return n;
 }

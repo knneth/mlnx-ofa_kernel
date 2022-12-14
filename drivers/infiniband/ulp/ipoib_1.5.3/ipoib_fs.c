@@ -144,11 +144,7 @@ static int ipoib_mcg_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 static const struct file_operations ipoib_mcg_fops = {
-#else
-static struct file_operations ipoib_mcg_fops = {
-#endif
 	.owner   = THIS_MODULE,
 	.open    = ipoib_mcg_open,
 	.read    = seq_read,
@@ -253,11 +249,7 @@ static int ipoib_path_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 static const struct file_operations ipoib_path_fops = {
-#else
-static struct file_operations ipoib_path_fops = {
-#endif
 	.owner   = THIS_MODULE,
 	.open    = ipoib_path_open,
 	.read    = seq_read,

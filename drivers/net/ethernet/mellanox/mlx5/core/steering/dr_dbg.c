@@ -88,10 +88,10 @@ enum dr_dump_rec_type {
 	DR_DUMP_REC_TYPE_MATCHER_BUILDER = 3204,
 
 	DR_DUMP_REC_TYPE_RULE = 3300,
-	DR_DUMP_REC_TYPE_RULE_RX_ENTRY = 3301,
-	DR_DUMP_REC_TYPE_RULE_TX_ENTRY = 3302,
-	DR_DUMP_REC_TYPE_CX6DX_RULE_RX_ENTRY = 3303,
-	DR_DUMP_REC_TYPE_CX6DX_RULE_TX_ENTRY = 3304,
+	DR_DUMP_REC_TYPE_RULE_RX_ENTRY_V0 = 3301,
+	DR_DUMP_REC_TYPE_RULE_TX_ENTRY_V0 = 3302,
+	DR_DUMP_REC_TYPE_RULE_RX_ENTRY_V1 = 3303,
+	DR_DUMP_REC_TYPE_RULE_TX_ENTRY_V1 = 3304,
 
 	DR_DUMP_REC_TYPE_ACTION_ENCAP_L2 = 3400,
 	DR_DUMP_REC_TYPE_ACTION_ENCAP_L3 = 3401,
@@ -159,12 +159,12 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 			       action->ctr.offeset);
 		break;
 	case DR_ACTION_TYP_TAG:
-		ret = snprintf(tmp_buf, BUF_SIZE, "%d,,0x%llx,0x%llx0x%x\n",
+		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_TAG, action_id, rule_id,
 			       action->flow_tag);
 		break;
 	case DR_ACTION_TYP_MODIFY_HDR:
-		ret = snprintf(tmp_buf, BUF_SIZE, "%d,,0x%llx,0x%llx0x%x\n",
+		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_MODIFY_HDR, action_id,
 			       rule_id, action->rewrite.index);
 		break;
@@ -219,15 +219,21 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 
 static int
 dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_rule_member *rule_mem,
-		 bool is_rx, const u64 rule_id)
+		 bool is_rx, const u64 rule_id,
+		 enum mlx5_ifc_steering_format_version format_ver)
 {
 	char hw_ste_dump[BUF_SIZE] = {};
 	char tmp_buf[BUF_SIZE] = {};
 	enum dr_dump_rec_type mem_rec_type;
 	int ret;
 
-	mem_rec_type = is_rx ? DR_DUMP_REC_TYPE_RULE_RX_ENTRY :
-			       DR_DUMP_REC_TYPE_RULE_TX_ENTRY;
+	if (format_ver == MLX5_HW_CONNECTX_5) {
+		mem_rec_type = is_rx ? DR_DUMP_REC_TYPE_RULE_RX_ENTRY_V0 :
+				       DR_DUMP_REC_TYPE_RULE_TX_ENTRY_V0;
+	} else {
+		mem_rec_type = is_rx ? DR_DUMP_REC_TYPE_RULE_RX_ENTRY_V1 :
+				       DR_DUMP_REC_TYPE_RULE_TX_ENTRY_V1;
+	}
 
 	dr_dump_hex_print(hw_ste_dump, BUF_SIZE, (char *)rule_mem->ste->hw_ste,
 			  DR_STE_SIZE_REDUCED);
@@ -248,13 +254,14 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_rule_member *rule_mem,
 
 static int
 dr_dump_rule_rx_tx(struct dr_dump_ctx *ctx, struct mlx5dr_rule_rx_tx *rule_rx_tx,
-		   bool is_rx, const u64 rule_id)
+		   bool is_rx, const u64 rule_id,
+		   enum mlx5_ifc_steering_format_version format_ver)
 {
 	struct mlx5dr_rule_member *rule_mem;
 	int ret;
 
 	list_for_each_entry(rule_mem, &rule_rx_tx->rule_members_list, list) {
-		ret = dr_dump_rule_mem(ctx, rule_mem, is_rx, rule_id);
+		ret = dr_dump_rule_mem(ctx, rule_mem, is_rx, rule_id, format_ver);
 		if (ret < 0)
 			return ret;
 	}
@@ -264,13 +271,15 @@ dr_dump_rule_rx_tx(struct dr_dump_ctx *ctx, struct mlx5dr_rule_rx_tx *rule_rx_tx
 
 static int dr_dump_rule(struct dr_dump_ctx *ctx, struct mlx5dr_rule *rule)
 {
-	const u64 rule_id = (u64)(uintptr_t)rule;
+	enum mlx5_ifc_steering_format_version format_ver;
 	struct mlx5dr_rule_action_member *action_mem;
+	const u64 rule_id = (u64)(uintptr_t)rule;
 	struct mlx5dr_rule_rx_tx *rx = &rule->rx;
 	struct mlx5dr_rule_rx_tx *tx = &rule->tx;
 	char tmp_buf[BUF_SIZE] = {};
-
 	int ret;
+
+	format_ver = rule->matcher->tbl->dmn->info.caps.sw_format_ver;
 
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx\n",
 		       DR_DUMP_REC_TYPE_RULE,
@@ -284,13 +293,13 @@ static int dr_dump_rule(struct dr_dump_ctx *ctx, struct mlx5dr_rule *rule)
 		return ret;
 
 	if (rx->nic_matcher) {
-		ret = dr_dump_rule_rx_tx(ctx, rx, true, rule_id);
+		ret = dr_dump_rule_rx_tx(ctx, rx, true, rule_id, format_ver);
 		if (ret < 0)
 			return ret;
 	}
 
 	if (tx->nic_matcher) {
-		ret = dr_dump_rule_rx_tx(ctx, tx, false, rule_id);
+		ret = dr_dump_rule_rx_tx(ctx, tx, false, rule_id, format_ver);
 		if (ret < 0)
 			return ret;
 	}
@@ -667,7 +676,7 @@ dr_dump_send_ring(struct dr_dump_ctx *ctx, struct mlx5dr_send_ring *ring,
 		       (u64)(uintptr_t)ring,
 		       domain_id,
 		       ring->cq->mcq.cqn,
-		       ring->qp->mqp.qpn);
+		       ring->qp->qpn);
 	if (ret < 0)
 		return ret;
 
@@ -937,11 +946,10 @@ static int dr_dump_proc_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations mlx5_crdump_fops = {
-	.owner = THIS_MODULE,
-	.read = dr_dump_proc_read,
-	.open = dr_dump_proc_open,
-	.release = dr_dump_proc_release
+static const struct proc_ops mlx5_crdump_ops = {
+	.proc_read = dr_dump_proc_read,
+	.proc_open = dr_dump_proc_open,
+	.proc_release = dr_dump_proc_release
 };
 
 int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn)
@@ -956,7 +964,7 @@ int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn)
 	if (mlx5_smfs_fdb_dump_dir) {
 		proc_entry = proc_create_data(pci_name(dmn->mdev->pdev), 0444,
 					      mlx5_smfs_fdb_dump_dir,
-					      &mlx5_crdump_fops, dmn);
+					      &mlx5_crdump_ops, dmn);
 		if (!proc_entry)
 			mlx5_core_warn(dmn->mdev, "failed to create dump proc file\n");
 	}

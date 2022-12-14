@@ -38,6 +38,9 @@ int rdma_counter_set_auto_mode(struct ib_device *dev, u8 port,
 	int ret;
 
 	port_counter = &dev->port_data[port].port_counter;
+	if (!port_counter->hstats)
+		return -EOPNOTSUPP;
+
 	mutex_lock(&port_counter->lock);
 	if (on) {
 		ret = __counter_set_mode(&port_counter->mode,
@@ -146,11 +149,18 @@ static bool auto_mode_match(struct ib_qp *qp, struct rdma_counter *counter,
 	struct auto_mode_param *param = &counter->mode.param;
 	bool match = true;
 
-	if (!rdma_is_visible_in_pid_ns(&qp->res))
-		return false;
-
-	/* Ensure that counter belongs to the right PID */
-	if (task_pid_nr(counter->res.task) != task_pid_nr(qp->res.task))
+	/*
+	 * Ensure that counter belongs to the right PID.  This operation can
+	 * race with user space which kills the process and leaves QP and
+	 * counters orphans.
+	 *
+	 * It is not a big deal because exitted task will leave both QP and
+	 * counter in the same bucket of zombie process. Just ensure that
+	 * process is still alive before procedding.
+	 *
+	 */
+	if (task_pid_nr(counter->res.task) != task_pid_nr(qp->res.task) ||
+	    !task_pid_nr(qp->res.task))
 		return false;
 
 	if (auto_mask & RDMA_COUNTER_MASK_QP_TYPE)
@@ -192,7 +202,7 @@ static int __rdma_counter_unbind_qp(struct ib_qp *qp)
 	return ret;
 }
 
-static void counter_history_stat_update(const struct rdma_counter *counter)
+static void counter_history_stat_update(struct rdma_counter *counter)
 {
 	struct ib_device *dev = counter->device;
 	struct rdma_port_counter *port_counter;
@@ -201,6 +211,8 @@ static void counter_history_stat_update(const struct rdma_counter *counter)
 	port_counter = &dev->port_data[counter->port].port_counter;
 	if (!port_counter->hstats)
 		return;
+
+	rdma_counter_query_stats(counter);
 
 	for (i = 0; i < counter->stats->num_counters; i++)
 		port_counter->hstats->value[i] += counter->stats->value[i];
@@ -226,9 +238,6 @@ static struct rdma_counter *rdma_get_counter_auto_mode(struct ib_qp *qp,
 	rt = &dev->res[RDMA_RESTRACK_COUNTER];
 	xa_lock(&rt->xa);
 	xa_for_each(&rt->xa, id, res) {
-		if (!rdma_is_visible_in_pid_ns(res))
-			continue;
-
 		counter = container_of(res, struct rdma_counter, res);
 		if ((counter->device != qp->device) || (counter->port != port))
 			goto next;
@@ -412,9 +421,6 @@ static struct ib_qp *rdma_counter_get_qp(struct ib_device *dev, u32 qp_num)
 	if (IS_ERR(res))
 		return NULL;
 
-	if (!rdma_is_visible_in_pid_ns(res))
-		goto err;
-
 	qp = container_of(res, struct ib_qp, res);
 	if (qp->qp_type == IB_QPT_RAW_PACKET && !capable(CAP_NET_RAW))
 		goto err;
@@ -444,11 +450,6 @@ static struct rdma_counter *rdma_get_counter_by_id(struct ib_device *dev,
 	res = rdma_restrack_get_byid(dev, RDMA_RESTRACK_COUNTER, counter_id);
 	if (IS_ERR(res))
 		return NULL;
-
-	if (!rdma_is_visible_in_pid_ns(res)) {
-		rdma_restrack_put(res);
-		return NULL;
-	}
 
 	counter = container_of(res, struct rdma_counter, res);
 	kref_get(&counter->kref);
@@ -521,7 +522,7 @@ int rdma_counter_bind_qpn_alloc(struct ib_device *dev, u8 port,
 		return -EOPNOTSUPP;
 
 	if (port_counter->mode.mode == RDMA_COUNTER_MODE_AUTO)
-		return  -EINVAL;
+		return -EINVAL;
 
 	qp = rdma_counter_get_qp(dev, qp_num);
 	if (!qp)
@@ -609,7 +610,7 @@ int rdma_counter_get_mode(struct ib_device *dev, u8 port,
 void rdma_counter_init(struct ib_device *dev)
 {
 	struct rdma_port_counter *port_counter;
-	u32 port;
+	u32 port, i;
 
 	if (!dev->port_data)
 		return;
@@ -630,13 +631,12 @@ void rdma_counter_init(struct ib_device *dev)
 	return;
 
 fail:
-	rdma_for_each_port(dev, port) {
+	for (i = port; i >= rdma_start_port(dev); i--) {
 		port_counter = &dev->port_data[port].port_counter;
 		kfree(port_counter->hstats);
 		port_counter->hstats = NULL;
+		mutex_destroy(&port_counter->lock);
 	}
-
-	return;
 }
 
 void rdma_counter_release(struct ib_device *dev)
@@ -647,5 +647,6 @@ void rdma_counter_release(struct ib_device *dev)
 	rdma_for_each_port(dev, port) {
 		port_counter = &dev->port_data[port].port_counter;
 		kfree(port_counter->hstats);
+		mutex_destroy(&port_counter->lock);
 	}
 }

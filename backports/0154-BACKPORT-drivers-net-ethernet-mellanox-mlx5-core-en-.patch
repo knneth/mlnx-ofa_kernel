@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.c
+
+Change-Id: Ica7257ab7522140c69a6e5594fa472fe142ca1a0
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.c
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 
+ #include <net/xdp_sock.h>
+ #include "umem.h"
+@@ -265,3 +266,4 @@ u16 mlx5e_xsk_first_unused_channel(struc
+ 
+ 	return res;
+ }
++#endif /*HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS*/

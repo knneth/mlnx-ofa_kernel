@@ -5,7 +5,11 @@
 
 #include_next <linux/rbtree.h>
 
-#ifndef HAVE_RB_ROOT_CACHED
+#if !defined(HAVE_RB_ROOT_CACHED) || defined(HAVE_INTERVAL_TREE_TAKES_RB_ROOT)
+#if defined(HAVE_RB_ROOT_CACHED)
+#undef HAVE_RB_ROOT_CACHED
+#undef RB_ROOT_CACHED
+#endif
 #define rb_root_cached rb_root
 #define RB_ROOT_CACHED RB_ROOT
 #endif

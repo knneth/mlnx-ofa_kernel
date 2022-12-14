@@ -15,5 +15,8 @@ Package: mlnx-ofed-kernel-modules
 Section: kernel
 Architecture: any
 Depends: ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod, lsof, mlnx-ofed-kernel-utils
+Provides: mlnx-rdma-rxe-modules
+Conflicts: mlnx-rdma-rxe-modules
+Replaces: mlnx-rdma-rxe-modules
 Description: mlnx-ofed kernel modules
  This package provides the binary and source code for the mlnx-ofed kernel modules.

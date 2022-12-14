@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+
+Change-Id: Ic18bc11d14b9f9b647638cc1835178ddb04f4e49
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 
+ #include "setup.h"
+ #include "en/params.h"
+@@ -201,3 +202,4 @@ void mlx5e_xsk_redirect_rqts_to_drop(str
+ 		mlx5e_xsk_redirect_rqt_to_drop(priv, i);
+ 	}
+ }
++#endif /* HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS */

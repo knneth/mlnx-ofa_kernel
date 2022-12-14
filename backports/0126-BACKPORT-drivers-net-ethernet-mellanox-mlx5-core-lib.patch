@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+
+Change-Id: I76e2ece63604e528cf213efa4154e0617b0f26f9
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+@@ -53,7 +53,13 @@ static inline int mlx5_clock_get_ptp_ind
+ static inline ktime_t mlx5_timestamp_to_ns(struct mlx5_clock *clock,
+ 					   u64 timestamp)
+ {
++#ifdef HAVE_KTIME_UNION_TV64
++	ktime_t x;
++	x.tv64 = 0;
++	return x;
++#else
+ 	return 0;
++#endif
+ }
+ #endif
+ 

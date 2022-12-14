@@ -1,0 +1,221 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
+
+Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
+---
+ drivers/infiniband/hw/mlx5/main.c | 81 +++++++++++++++++++++++--------
+ 1 file changed, 61 insertions(+), 20 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/main.c
++++ b/drivers/infiniband/hw/mlx5/main.c
+@@ -40,8 +40,13 @@
+ #include <linux/slab.h>
+ #include <linux/bitmap.h>
+ #if defined(CONFIG_X86)
++#ifdef HAVE_ASM_PAT_H
++#include <asm/pat.h>
++#endif
++#ifdef HAVE_ASM_MEMTYPE_H
+ #include <asm/memtype.h>
+ #endif
++#endif
+ #include <linux/sched.h>
+ #include <linux/sched/mm.h>
+ #include <linux/sched/task.h>
+@@ -78,7 +83,9 @@
+ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
+ MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) IB driver");
+ MODULE_LICENSE("Dual BSD/GPL");
+-
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ struct mlx5_ib_event_work {
+ 	struct work_struct	work;
+ 	union {
+@@ -227,13 +234,17 @@ static int mlx5_netdev_event(struct noti
+ 	case NETDEV_CHANGE:
+ 	case NETDEV_UP:
+ 	case NETDEV_DOWN: {
++#ifdef HAVE_NETDEV_MASTER_UPPER_DEV_GET
+ 		struct net_device *lag_ndev = mlx5_lag_get_roce_netdev(mdev);
++#endif
+ 		struct net_device *upper = NULL;
+ 
++#ifdef HAVE_NETDEV_MASTER_UPPER_DEV_GET
+ 		if (lag_ndev) {
+ 			upper = netdev_master_upper_dev_get(lag_ndev);
+ 			dev_put(lag_ndev);
+ 		}
++#endif
+ 
+ 		if (ibdev->is_rep)
+ 			roce = mlx5_get_rep_roce(ibdev, ndev, upper, &port_num);
+@@ -2031,6 +2042,11 @@ static void mlx5_ib_dealloc_ucontext(str
+ 	struct mlx5_ib_ucontext *context = to_mucontext(ibcontext);
+ 	struct mlx5_ib_dev *dev = to_mdev(ibcontext->device);
+ 	struct mlx5_bfreg_info *bfregi;
++#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
++	mutex_lock(&ibcontext->per_mm_list_lock);
++	WARN_ON(!list_empty(&ibcontext->per_mm_list));
++	mutex_unlock(&ibcontext->per_mm_list_lock);
++#endif
+ 
+ 	bfregi = &context->bfregi;
+ 	mlx5_ib_dealloc_transport_domain(dev, context->tdn, context->devx_uid);
+@@ -2075,9 +2091,11 @@ static int get_extended_index(unsigned l
+ }
+ 
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ static void mlx5_ib_disassociate_ucontext(struct ib_ucontext *ibcontext)
+ {
+ }
++#endif
+ 
+ static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
+ {
+@@ -2156,6 +2174,9 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	int dyn_uar = (cmd == MLX5_IB_MMAP_ALLOC_WC);
+ 	int max_valid_idx = dyn_uar ? bfregi->num_sys_pages :
+ 				bfregi->num_static_sys_pages;
++#if defined(CONFIG_X86) && !defined(HAVE_PAT_ENABLED_AS_FUNCTION)
++	pgprot_t tmp_prot = __pgprot(0);
++#endif
+ 
+ 	if (vma->vm_end - vma->vm_start != PAGE_SIZE)
+ 		return -EINVAL;
+@@ -2176,7 +2197,11 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	case MLX5_IB_MMAP_ALLOC_WC:
+ /* Some architectures don't support WC memory */
+ #if defined(CONFIG_X86)
++#ifdef HAVE_PAT_ENABLED_AS_FUNCTION
+ 		if (!pat_enabled())
++#else
++		if (pgprot_val(pgprot_writecombine(tmp_prot)) == pgprot_val(pgprot_noncached(tmp_prot)))
++#endif
+ 			return -EPERM;
+ #elif !(defined(CONFIG_PPC) || ((defined(CONFIG_ARM) || defined(CONFIG_ARM64)) && defined(CONFIG_MMU)))
+ 			return -EPERM;
+@@ -2185,6 +2210,7 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	case MLX5_IB_MMAP_REGULAR_PAGE:
+ 		/* For MLX5_IB_MMAP_REGULAR_PAGE do the best effort to get WC */
+ 		prot = pgprot_writecombine(vma->vm_page_prot);
++#if defined(MIDR_CPU_MODEL_MASK)
+ #if defined(CONFIG_ARM64)
+ 		/*
+ 		 * Fix up arm64 braindamage of using NORMAL_NC for write
+@@ -2197,6 +2223,7 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 			prot = __pgprot_modify(prot, PTE_ATTRINDX_MASK, PTE_ATTRINDX(MT_DEVICE_GRE) | PTE_PXN | PTE_UXN);
+ 		}
+ #endif
++#endif /*MIDR_CPU_MODEL_MASK*/
+ 		break;
+ 	case MLX5_IB_MMAP_NC_PAGE:
+ 		prot = pgprot_noncached(vma->vm_page_prot);
+@@ -3402,15 +3429,17 @@ static struct mlx5_ib_flow_prio *get_flo
+ 	int max_table_size;
+ 	int num_entries;
+ 	int num_groups;
+-	bool esw_encap;
++	bool esw_encap = false;
+ 	u32 flags = 0;
+ 	int priority;
+ 
+ 	max_table_size = BIT(MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev,
+ 						       log_max_ft_size));
+-	if (MLX5_ESWITCH_MANAGER(dev->mdev))
+-		esw_encap = mlx5_eswitch_get_encap_mode(dev->mdev) !=
+-			    DEVLINK_ESWITCH_ENCAP_MODE_NONE;
++#ifdef CONFIG_MLX5_ESWITCH 
++       if (MLX5_ESWITCH_MANAGER(dev->mdev))
++       	esw_encap = mlx5_eswitch_get_encap_mode(dev->mdev) !=
++       		    DEVLINK_ESWITCH_ENCAP_MODE_NONE;
++#endif
+ 
+ 	if (flow_attr->type == IB_FLOW_ATTR_NORMAL) {
+ 		enum mlx5_flow_namespace_type fn_type;
+@@ -4047,7 +4076,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+ 	struct mlx5_flow_namespace *ns = NULL;
+ 	struct mlx5_ib_flow_prio *prio = NULL;
+ 	int max_table_size = 0;
+-	bool esw_encap;
++	bool esw_encap = false;
+ 	u32 flags = 0;
+ 	int priority;
+ 
+@@ -4056,9 +4085,11 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+ 	else
+ 		priority = ib_prio_to_core_prio(fs_matcher->priority, false);
+ 
+-	if (MLX5_ESWITCH_MANAGER(dev->mdev))
+-		esw_encap = mlx5_eswitch_get_encap_mode(dev->mdev) !=
+-			    DEVLINK_ESWITCH_ENCAP_MODE_NONE;
++#ifdef CONFIG_MLX5_ESWITCH 
++       if (MLX5_ESWITCH_MANAGER(dev->mdev))
++       	esw_encap = mlx5_eswitch_get_encap_mode(dev->mdev) !=
++       		    DEVLINK_ESWITCH_ENCAP_MODE_NONE;
++#endif
+ 	if (fs_matcher->ns_type == MLX5_FLOW_NAMESPACE_BYPASS) {
+ 		max_table_size = BIT(MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev,
+ 					log_max_ft_size));
+@@ -6398,9 +6429,10 @@ static struct ib_counters *mlx5_ib_creat
+ static void mlx5_ib_stage_init_cleanup(struct mlx5_ib_dev *dev)
+ {
+ 	mlx5_ib_cleanup_multiport_master(dev);
+-	WARN_ON(!xa_empty(&dev->odp_mkeys));
+-	cleanup_srcu_struct(&dev->odp_srcu);
+-
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++       WARN_ON(!xa_empty(&dev->odp_mkeys));
++       cleanup_srcu_struct(&dev->odp_srcu);
++#endif
+ 	WARN_ON(!xa_empty(&dev->sig_mrs));
+ 	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
+ }
+@@ -6522,7 +6554,9 @@ static const struct ib_device_ops mlx5_i
+ 	.destroy_qp = mlx5_ib_destroy_qp,
+ 	.destroy_srq = mlx5_ib_destroy_srq,
+ 	.detach_mcast = mlx5_ib_mcg_detach,
+-	.disassociate_ucontext = mlx5_ib_disassociate_ucontext,
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
++       .disassociate_ucontext = mlx5_ib_disassociate_ucontext,
++#endif
+ 	.drain_rq = mlx5_ib_drain_rq,
+ 	.drain_sq = mlx5_ib_drain_sq,
+ 	.enable_driver = mlx5_ib_enable_driver,
+@@ -6588,11 +6622,16 @@ static const struct ib_device_ops mlx5_i
+ };
+ 
+ static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {
+-	.get_vf_config = mlx5_ib_get_vf_config,
+-	.get_vf_guid = mlx5_ib_get_vf_guid,
+-	.get_vf_stats = mlx5_ib_get_vf_stats,
+-	.set_vf_guid = mlx5_ib_set_vf_guid,
+-	.set_vf_link_state = mlx5_ib_set_vf_link_state,
++#ifdef HAVE_NDO_SET_VF_MAC
++       .get_vf_config = mlx5_ib_get_vf_config,
++#ifdef HAVE_LINKSTATE
++       .set_vf_link_state = mlx5_ib_set_vf_link_state,
++#endif
++       .get_vf_stats = mlx5_ib_get_vf_stats,
++#ifdef HAVE_IFLA_VF_IB_NODE_PORT_GUID
++       .set_vf_guid = mlx5_ib_set_vf_guid,
++#endif
++#endif
+ };
+ 
+ static const struct ib_device_ops mlx5_ib_dev_mw_ops = {
+@@ -6694,8 +6733,10 @@ static int mlx5_ib_stage_caps_init(struc
+ 			ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_frontend_ns_context_ops);
+ 	}
+ 
+-	if (mlx5_core_is_pf(mdev))
+-		ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_sriov_ops);
++#ifdef HAVE_NDO_SET_VF_MAC
++       if (mlx5_core_is_pf(mdev))
++       	ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_sriov_ops);
++#endif
+ 
+ 	dev->umr_fence = mlx5_get_umr_fence(MLX5_CAP_GEN(mdev, umr_fence));
+ 

@@ -9,8 +9,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netlink.h>
-#include <linux/xz.h>
 #include <linux/vmalloc.h>
+#include <linux/xz.h>
 #include "mlxfw_mfa2.h"
 #include "mlxfw_mfa2_file.h"
 #include "mlxfw_mfa2_tlv.h"

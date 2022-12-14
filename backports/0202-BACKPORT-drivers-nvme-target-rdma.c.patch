@@ -1,0 +1,80 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
+
+Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
+---
+ drivers/nvme/target/rdma.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+--- a/drivers/nvme/target/rdma.c
++++ b/drivers/nvme/target/rdma.c
+@@ -145,8 +145,13 @@ static bool nvmet_rdma_use_srq;
+ module_param_named(use_srq, nvmet_rdma_use_srq, bool, 0444);
+ MODULE_PARM_DESC(use_srq, "Use shared receive queue.");
+ 
++#ifdef HAVE_PARAM_OPS_ULLONG
+ static unsigned long long nvmet_rdma_offload_mem_start = 0;
+ module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ullong, 0444);
++#else
++static unsigned long nvmet_rdma_offload_mem_start = 0;
++module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ulong, 0444);
++#endif
+ MODULE_PARM_DESC(offload_mem_start,
+ 		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
+ 		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");
+@@ -215,11 +220,13 @@ static int offload_buffer_size_set(const
+ 	return param_set_int(val, kp);
+ }
+ 
++#ifndef HAVE_PUT_UNALIGNED_LE24
+ /* XXX: really should move to a generic header sooner or later.. */
+ static inline u32 get_unaligned_le24(const u8 *p)
+ {
+ 	return (u32)p[0] | (u32)p[1] << 8 | (u32)p[2] << 16;
+ }
++#endif
+ 
+ static inline bool nvmet_rdma_need_data_in(struct nvmet_rdma_rsp *rsp)
+ {
+@@ -609,7 +616,13 @@ static void nvmet_rdma_set_sig_domain(st
+ {
+ 	domain->sig_type = IB_SIG_TYPE_T10_DIF;
+ 	domain->sig.dif.bg_type = IB_T10DIF_CRC;
++#ifdef CONFIG_BLK_DEV_INTEGRITY
++#ifdef HAVE_BLK_INTEGRITY_SECTOR_SIZE
++	domain->sig.dif.pi_interval = 1 << bi->sector_size;
++#else
+ 	domain->sig.dif.pi_interval = 1 << bi->interval_exp;
++#endif
++#endif
+ 	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
+ 	if (control & NVME_RW_PRINFO_PRCHK_REF)
+ 		domain->sig.dif.ref_remap = true;
+@@ -1947,6 +1960,7 @@ static void nvmet_rdma_remove_port(struc
+ static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
+ 		struct nvmet_port *nport, char *traddr)
+ {
++#ifdef HAVE_INET_ADDR_IS_ANY
+ 	struct nvmet_rdma_port *port = nport->priv;
+ 	struct rdma_cm_id *cm_id = port->cm_id;
+ 
+@@ -1960,6 +1974,9 @@ static void nvmet_rdma_disc_port_addr(st
+ 	} else {
+ 		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
+ 	}
++#else
++	memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
++#endif
+ }
+ 
+ static u8 nvmet_rdma_get_mdts(const struct nvmet_ctrl *ctrl)
+@@ -2138,6 +2155,9 @@ module_init(nvmet_rdma_init);
+ module_exit(nvmet_rdma_exit);
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_ALIAS("nvmet-transport-1"); /* 1 == NVMF_TRTYPE_RDMA */
+ 
+ #include "rdma_offload.c"

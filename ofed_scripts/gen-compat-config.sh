@@ -190,14 +190,14 @@ if [[ ! -z ${RHEL7_2} ]]; then
    set_config CONFIG_COMPAT_RHEL_7_2 y
 fi
 
-if [[ ! -z ${RHEL7_2} ]]; then
-	set_config CONFIG_COMPAT_IP_TUNNELS y
-	set_config CONFIG_COMPAT_TCF_GACT y
-	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
-	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
-	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
-	set_config CONFIG_COMPAT_TCF_VLAN_MOD m
-fi
+#if [[ ! -z ${RHEL7_2} ]]; then
+#	set_config CONFIG_COMPAT_IP_TUNNELS y
+#	set_config CONFIG_COMPAT_TCF_GACT y
+#	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
+#	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
+#	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
+#	set_config CONFIG_COMPAT_TCF_VLAN_MOD m
+#fi
 
 RHEL7_4_JD=$(echo ${KVERSION} | grep 3.10.0-693.21.3)
 
@@ -210,10 +210,10 @@ if [[ ${RHEL_MAJOR} -eq "7" && ${RHEL_MINOR} -le "4" && ! $RHEL7_4_JD ]]; then
 	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
 fi
 
-RHEL7_4ALT_AARCH64=$(echo ${KVERSION} | grep 4.11.0-.*el7a.aarch64)
-if [[ ! -z ${RHEL7_4ALT_AARCH64} ]]; then
-	set_config CONFIG_COMPAT_KERNEL_4_11_ARM y
-fi
+#RHEL7_4ALT_AARCH64=$(echo ${KVERSION} | grep 4.11.0-.*el7a.aarch64)
+#if [[ ! -z ${RHEL7_4ALT_AARCH64} ]]; then
+#	set_config CONFIG_COMPAT_KERNEL_4_11_ARM y
+#fi
 
 KERNEL4_14=$(echo ${KVERSION} | grep ^4\.14)
 if [[ ! -z ${KERNEL4_14} ]]; then
@@ -229,21 +229,21 @@ if [[ ${CONFIG_COMPAT_KERNEL_4_14} = "y" ]]; then
 	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
 fi
 
-KERNEL4_9=$(echo ${KVERSION} | grep ^4\.9)
-if [[ ! -z ${KERNEL4_9} ]]; then
-	set_config CONFIG_COMPAT_KERNEL_4_9 y
-fi
+#KERNEL4_9=$(echo ${KVERSION} | grep ^4\.9)
+#if [[ ! -z ${KERNEL4_9} ]]; then
+#	set_config CONFIG_COMPAT_KERNEL_4_9 y
+#fi
 
-if [[ ${CONFIG_COMPAT_KERNEL_4_9} = "y" || ${CONFIG_COMPAT_KERNEL_4_11_ARM} = "y" ]]; then
-	set_config CONFIG_NET_SCHED_NEW y
-	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
-	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
-	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
-fi
+#if [[ ${CONFIG_COMPAT_KERNEL_4_9} = "y" || ${CONFIG_COMPAT_KERNEL_4_11_ARM} = "y" ]]; then
+#	set_config CONFIG_NET_SCHED_NEW y
+#	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
+#	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
+#	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
+#fi
 
-if [[ ${CONFIG_COMPAT_KERNEL_4_9} = "y" ]]; then
-	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
-fi
+#if [[ ${CONFIG_COMPAT_KERNEL_4_9} = "y" ]]; then
+#	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
+#fi
 
 if [ -e /etc/debian_version ]; then
 	DEBIAN6=$(cat /etc/debian_version | grep 6\.0)
@@ -865,3 +865,60 @@ if (test ! -f "$HASH_TYPES" -a ! -f "$HASH_TYPES2"); then
 	fi
 fi
 
+function look_exists() {
+    local word="$1"
+    local path="$2"
+    if (grep -qw "$word" ${KLIB_BUILD}/$path &>/dev/null || grep -qw "$word" ${KSRC}/$path &>/dev/null); then
+        return 0
+    fi
+    return 1
+}
+
+function kernel_config_enabled() {
+    local opts=($@)
+    local opt
+    local val
+
+    for opt in $opts ; do
+        val=`grep "CONFIG_$opt=" ${KLIB_BUILD}/.config 2>/dev/null || grep "CONFIG_$opt=" ${KSRC}/.config 2>/dev/null`
+        val=${val##*=}
+        if [ "$val" != "m" ] && [ "$val" != "y" ]; then
+           return 1
+        fi
+    done
+
+    return 0
+}
+
+# In v5.3-rc6
+# ef01adae0e43 net: sched: use major priority number as hardware priority
+if (look_exists "cls_common->prio = tp->prio >> 16" include/net/pkt_cls.h); then
+    set_config CONFIG_COMPAT_TC_PRIO_IS_MAJOR y
+fi
+
+# by default MLX5_TC_CT is enabled by configure and here we disable
+# it if kernel doesn't support it.
+tc_ct=0
+
+# try to detect supported kernel 4.18.0 ngn kernel
+# and enable compat flower and ct
+KERNEL4_18=$(echo ${KVERSION} | grep ^4\.18)
+if [ -n "$KERNEL4_18" ]; then
+    if (look_exists "skb_flow_dissect_ct" include/linux/skbuff.h); then
+        if (! look_exists "struct flow_cls_common_offload" include/net/flow_offload.h); then
+            set_config CONFIG_COMPAT_CLS_FLOWER_4_18_MOD m
+            tc_ct=1
+        fi
+    fi
+fi
+
+if (look_exists "flow_rule_match_ct" include/net/flow_offload.h); then
+    if (kernel_config_enabled NF_FLOW_TABLE NET_TC_SKB_EXT NET_ACT_CT); then
+        set_config CONFIG_COMPAT_KERNEL_CT y
+        tc_ct=1
+    fi
+fi
+
+if [ "$tc_ct" != 1 ]; then
+    set_config CONFIG_MLX5_TC_CT n
+fi

@@ -34,7 +34,6 @@
 #if !defined(IB_ADDR_H)
 #define IB_ADDR_H
 
-#include <net/addrconf.h>
 #include <linux/in.h>
 #include <linux/in6.h>
 #include <linux/if_arp.h>
@@ -294,23 +293,4 @@ static inline struct net_device *rdma_vlan_dev_real_dev(const struct net_device 
 	return is_vlan_dev(dev) ? vlan_dev_real_dev(dev) : NULL;
 }
 
-static inline void rdma_addrconf_ifid_eui48(u8 *eui, struct net_device *dev)
-{
-	memcpy(eui, dev->dev_addr, 3);
-	memcpy(eui + 5, dev->dev_addr + 3, 3);
-	eui[3] = 0xff;
-	eui[4] = 0xfe;
-	eui[0] ^= 2;
-}
-
-static inline void rdma_make_default_gid(struct  net_device *dev,
-					 union ib_gid *gid,
-					 bool std)
-{
-	gid->global.subnet_prefix = cpu_to_be64(0xfe80000000000000LL);
-	if (std)
-		addrconf_ifid_eui48(&gid->raw[8], dev);
-	else
-		rdma_addrconf_ifid_eui48(&gid->raw[8], dev);
-}
 #endif /* IB_ADDR_H */

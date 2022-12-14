@@ -1,0 +1,36 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
+
+Change-Id: I92212778abd8224a41f72234eb504563d65dc68c
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
+@@ -555,6 +555,7 @@ struct mlx5e_ipsec_modify_state_work {
+ 	struct mlx5e_ipsec_sa_entry	*sa_entry;
+ };
+ 
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ static void _update_xfrm_state(struct work_struct *work)
+ {
+ 	int ret;
+@@ -594,13 +595,16 @@ static void mlx5e_xfrm_advance_esn_state
+ 	INIT_WORK(&modify_work->work, _update_xfrm_state);
+ 	WARN_ON(!queue_work(sa_entry->ipsec->wq, &modify_work->work));
+ }
++#endif
+ 
+ static const struct xfrmdev_ops mlx5e_ipsec_xfrmdev_ops = {
+ 	.xdo_dev_state_add	= mlx5e_xfrm_add_state,
+ 	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
+ 	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
+ 	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ 	.xdo_dev_state_advance_esn = mlx5e_xfrm_advance_esn_state,
++#endif
+ };
+ 
+ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)

@@ -147,6 +147,18 @@ enum {
 	IWPM_NLA_HELLO_MAX
 };
 
+/* For RDMA_NLDEV_ATTR_DEV_NODE_TYPE */
+enum {
+	/* IB values map to NodeInfo:NodeType. */
+	RDMA_NODE_IB_CA = 1,
+	RDMA_NODE_IB_SWITCH,
+	RDMA_NODE_IB_ROUTER,
+	RDMA_NODE_RNIC,
+	RDMA_NODE_USNIC,
+	RDMA_NODE_USNIC_UDP,
+	RDMA_NODE_UNSPECIFIED,
+};
+
 /*
  * Local service operations:
  *   RESOLVE - The client requests the local service to resolve a path.
@@ -275,11 +287,13 @@ enum rdma_nldev_command {
 
 	RDMA_NLDEV_CMD_STAT_DEL,
 
-	RDMA_NLDEV_NUM_OPS
-};
+	RDMA_NLDEV_CMD_RES_QP_GET_RAW,
 
-enum {
-	RDMA_NLDEV_ATTR_ENTRY_STRLEN = 16,
+	RDMA_NLDEV_CMD_RES_CQ_GET_RAW,
+
+	RDMA_NLDEV_CMD_RES_MR_GET_RAW,
+
+	RDMA_NLDEV_NUM_OPS
 };
 
 enum rdma_nldev_print_type {
@@ -493,12 +507,11 @@ enum rdma_nldev_attr {
 	 * CHARDEV_NAME is the kernel name for the /dev/ file (no directory)
 	 * CHARDEV is the 64 bit dev_t for the inode
 	 */
-	RDMA_NLDEV_ATTR_CHARDEV_TYPE,           /* string */
-	RDMA_NLDEV_ATTR_CHARDEV_NAME,           /* string */
-	RDMA_NLDEV_ATTR_CHARDEV_ABI,            /* u64 */
-	RDMA_NLDEV_ATTR_CHARDEV,                /* u64 */
+	RDMA_NLDEV_ATTR_CHARDEV_TYPE,		/* string */
+	RDMA_NLDEV_ATTR_CHARDEV_NAME,		/* string */
+	RDMA_NLDEV_ATTR_CHARDEV_ABI,		/* u64 */
+	RDMA_NLDEV_ATTR_CHARDEV,		/* u64 */
 	RDMA_NLDEV_ATTR_UVERBS_DRIVER_ID,       /* u64 */
-
 	/*
 	 * Counter-specific attributes.
 	 */
@@ -512,6 +525,13 @@ enum rdma_nldev_attr {
 	RDMA_NLDEV_ATTR_STAT_HWCOUNTER_ENTRY,	/* nested table */
 	RDMA_NLDEV_ATTR_STAT_HWCOUNTER_ENTRY_NAME,	/* string */
 	RDMA_NLDEV_ATTR_STAT_HWCOUNTER_ENTRY_VALUE,	/* u64 */
+
+	/*
+	 * CQ adaptive moderatio (DIM)
+	 */
+	RDMA_NLDEV_ATTR_DEV_DIM,                /* u8 */
+
+	RDMA_NLDEV_ATTR_RES_RAW,	/* binary */
 
 	/*
 	 * Always the end

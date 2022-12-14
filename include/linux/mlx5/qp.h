@@ -66,8 +66,9 @@ enum mlx5_qp_optpar {
 	MLX5_QP_OPTPAR_RETRY_COUNT		= 1 << 12,
 	MLX5_QP_OPTPAR_RNR_RETRY		= 1 << 13,
 	MLX5_QP_OPTPAR_ACK_TIMEOUT		= 1 << 14,
+	MLX5_QP_OPTPAR_LAG_TX_AFF		= 1 << 15,
 	MLX5_QP_OPTPAR_PRI_PORT			= 1 << 16,
-	MLX5_QP_OPTPAR_PRIMARY_ADDR_PATH_DSCP	= 1 << 17,
+	MLX5_QP_OPTPAR_PRIMARY_ADDR_PATH_DSCP   = 1 << 17,
 	MLX5_QP_OPTPAR_RMPN_XRQN		= 1 << 18,
 	MLX5_QP_OPTPAR_CQN_RCV			= 1 << 19,
 	MLX5_QP_OPTPAR_DC_HS			= 1 << 20,
@@ -105,10 +106,10 @@ enum {
 	MLX5_QP_ST_XRC				= 0x3,
 	MLX5_QP_ST_MLX				= 0x4,
 	MLX5_QP_ST_DCI				= 0x5,
+	MLX5_QP_ST_DCT				= 0x6,
 	MLX5_QP_ST_QP0				= 0x7,
 	MLX5_QP_ST_QP1				= 0x8,
 	MLX5_QP_ST_RAW_ETHERTYPE		= 0x9,
-	MLX5_QP_ST_SW_CNAK			= 0x10,
 	MLX5_QP_ST_RAW_IPV6			= 0xa,
 	MLX5_QP_ST_SNIFFER			= 0xb,
 	MLX5_QP_ST_SYNC_UMR			= 0xe,
@@ -210,23 +211,8 @@ struct mlx5_wqe_ctrl_seg {
 		__be32		general_id;
 		__be32		imm;
 		__be32		umr_mkey;
-		__be32		tisn;
+		__be32		tis_tir_num;
 	};
-};
-
-enum {
-	MLX5_MLX_FLAG_MASK_VL15	= 0x40,
-	MLX5_MLX_FLAG_MASK_SLR	= 0x20,
-	MLX5_MLX_FLAG_MASK_ICRC = 0x8,
-	MLX5_MLX_FLAG_MASK_FL	= 4
-};
-
-struct mlx5_mlx_seg {
-	__be32		rsvd0;
-	u8		flags;
-	u8		stat_rate_sl;
-	u8		rsvd1[8];
-	__be16		dlid;
 };
 
 #define MLX5_WQE_CTRL_DS_MASK 0x3f
@@ -236,10 +222,6 @@ struct mlx5_mlx_seg {
 #define MLX5_WQE_CTRL_OPCODE_MASK 0xff
 #define MLX5_WQE_CTRL_WQE_INDEX_MASK 0x00ffff00
 #define MLX5_WQE_CTRL_WQE_INDEX_SHIFT 8
-#define MLX5_WQE_CTRL_OPMOD_SHIFT 24
-#define MLX5_WQE_CTRL_OPMOD_EXT_ATOMIC 0x08
-#define MLX5_WQE_CTRL_OPMOD_OP_LEN 0x07
-#define MLX5_WQE_CTRL_OPMOD_OP_PTR 7
 
 enum {
 	MLX5_ETH_WQE_L3_INNER_CSUM      = 1 << 4,
@@ -250,11 +232,11 @@ enum {
 
 enum {
 	MLX5_ETH_WQE_SVLAN              = 1 << 0,
-	MLX5_ETH_WQE_TRAILER_HDR_OUTER_IP_ASSOC = 1 << 10,
-	MLX5_ETH_WQE_TRAILER_HDR_OUTER_L4_ASSOC = 1 << 11,
-	MLX5_ETH_WQE_TRAILER_HDR_INNER_IP_ASSOC = 3 << 10,
-	MLX5_ETH_WQE_TRAILER_HDR_INNER_L4_ASSOC = 1 << 12,
-	MLX5_ETH_WQE_INSERT_TRAILER     = 1 << 14,
+	MLX5_ETH_WQE_TRAILER_HDR_OUTER_IP_ASSOC = 1 << 26,
+	MLX5_ETH_WQE_TRAILER_HDR_OUTER_L4_ASSOC = 1 << 27,
+	MLX5_ETH_WQE_TRAILER_HDR_INNER_IP_ASSOC = 3 << 26,
+	MLX5_ETH_WQE_TRAILER_HDR_INNER_L4_ASSOC = 1 << 28,
+	MLX5_ETH_WQE_INSERT_TRAILER     = 1 << 30,
 	MLX5_ETH_WQE_INSERT_VLAN        = 1 << 15,
 };
 
@@ -266,12 +248,6 @@ enum {
 };
 
 enum {
-	MLX5_ETH_WQE_TRAILER_NO_ALIGN   = 0,
-	MLX5_ETH_WQE_TRAILER_WORD_ALIGN   = 1 << 0,
-	MLX5_ETH_WQE_TRAILER_DWORD_ALIGN   = 1 << 1,
-};
-
-enum {
 	MLX5_ETH_WQE_FT_META_IPSEC = BIT(0),
 };
 
@@ -280,10 +256,7 @@ struct mlx5_wqe_eth_seg {
 	u8              swp_outer_l3_offset;
 	u8              swp_inner_l4_offset;
 	u8              swp_inner_l3_offset;
-	union {
-		u8              cs_flags;
-		u8              trailer_alignment;
-	};
+	u8              cs_flags;
 	u8              swp_flags;
 	__be16          mss;
 	__be32          flow_table_metadata;
@@ -296,10 +269,7 @@ struct mlx5_wqe_eth_seg {
 			__be16 type;
 			__be16 vlan_tci;
 		} insert;
-		struct {
-			__be16 params;
-			__be16 data;
-		} trailer;
+		__be32 trailer;
 	};
 };
 
@@ -358,6 +328,7 @@ struct mlx5_av {
 struct mlx5_ib_ah {
 	struct ib_ah		ibah;
 	struct mlx5_av		av;
+	u8			xmit_port;
 };
 
 static inline struct mlx5_ib_ah *to_mah(struct ib_ah *ibah)
@@ -516,23 +487,14 @@ struct mlx5_stride_block_ctrl_seg {
 	__be16		num_entries;
 };
 
-enum {
-	MLX5_CALC_MATRIX	= 1 << 7,
+struct mlx5_wqe_flow_update_ctrl_seg {
+	__be32		flow_idx_update;
+	__be32		dest_handle;
+	u8		reserved0[40];
 };
 
-struct mlx5_vec_calc_seg {
-	u8		calc_op[4];
-	__be32		rsvd0[2];
-	u8		op_tags;
-	u8		mat_le_tag_cs;
-	u8		rsvd1;
-	u8		vec_count;
-	__be32		rsvd2;
-	__be32		cm_lkey;
-	__be64		cm_addr;
-	__be32		vec_size;
-	__be32		vec_lkey;
-	__be64		vec_addr;
+struct mlx5_wqe_header_modify_argument_update_seg {
+	u8		argument_list[64];
 };
 
 struct mlx5_core_qp {
@@ -615,62 +577,8 @@ struct mlx5_qp_context {
 	u8			rsvd1[24];
 };
 
-static inline struct mlx5_core_qp *__mlx5_qp_lookup(struct mlx5_core_dev *dev, u32 qpn)
-{
-	return radix_tree_lookup(&dev->priv.qp_table.tree, qpn);
-}
-
-static inline struct mlx5_core_mkey *__mlx5_mr_lookup(struct mlx5_core_dev *dev, u32 key)
-{
-	return radix_tree_lookup(&dev->priv.mkey_table.tree, key);
-}
-
-int mlx5_core_create_dct(struct mlx5_core_dev *dev,
-			 struct mlx5_core_dct *qp,
-			 u32 *in, int inlen,
-			 u32 *out, int outlen);
-int mlx5_core_create_qp(struct mlx5_core_dev *dev,
-			struct mlx5_core_qp *qp,
-			u32 *in,
-			int inlen);
-int mlx5_core_qp_modify(struct mlx5_core_dev *dev, u16 opcode,
-			u32 opt_param_mask, void *qpc,
-			struct mlx5_core_qp *qp);
-int mlx5_core_destroy_qp(struct mlx5_core_dev *dev,
-			 struct mlx5_core_qp *qp);
-int mlx5_core_destroy_dct(struct mlx5_core_dev *dev,
-			  struct mlx5_core_dct *dct);
-int mlx5_core_qp_query(struct mlx5_core_dev *dev, struct mlx5_core_qp *qp,
-		       u32 *out, int outlen);
-int mlx5_core_dct_query(struct mlx5_core_dev *dev, struct mlx5_core_dct *dct,
-			u32 *out, int outlen);
-
-int mlx5_core_set_delay_drop(struct mlx5_core_dev *dev,
-			     u32 timeout_usec);
-
-int mlx5_core_xrcd_alloc(struct mlx5_core_dev *dev, u32 *xrcdn);
-int mlx5_core_xrcd_dealloc(struct mlx5_core_dev *dev, u32 xrcdn);
-void mlx5_init_qp_table(struct mlx5_core_dev *dev);
-void mlx5_cleanup_qp_table(struct mlx5_core_dev *dev);
 int mlx5_debug_qp_add(struct mlx5_core_dev *dev, struct mlx5_core_qp *qp);
 void mlx5_debug_qp_remove(struct mlx5_core_dev *dev, struct mlx5_core_qp *qp);
-int mlx5_core_create_rq_tracked(struct mlx5_core_dev *dev, u32 *in, int inlen,
-				struct mlx5_core_qp *rq);
-void mlx5_core_destroy_rq_tracked(struct mlx5_core_dev *dev,
-				  struct mlx5_core_qp *rq);
-int mlx5_core_create_sq_tracked(struct mlx5_core_dev *dev, u32 *in, int inlen,
-				struct mlx5_core_qp *sq);
-void mlx5_core_destroy_sq_tracked(struct mlx5_core_dev *dev,
-				  struct mlx5_core_qp *sq);
-int mlx5_core_alloc_q_counter(struct mlx5_core_dev *dev, u16 *counter_id);
-int mlx5_core_dealloc_q_counter(struct mlx5_core_dev *dev, u16 counter_id);
-int mlx5_core_query_q_counter(struct mlx5_core_dev *dev, u16 counter_id,
-			      int reset, void *out, int out_size);
-
-struct mlx5_core_rsc_common *mlx5_core_res_hold(struct mlx5_core_dev *dev,
-						int res_num,
-						enum mlx5_res_type res_type);
-void mlx5_core_res_put(struct mlx5_core_rsc_common *res);
 
 static inline const char *mlx5_qp_type_str(int type)
 {
@@ -688,7 +596,6 @@ static inline const char *mlx5_qp_type_str(int type)
 	case MLX5_QP_ST_SYNC_UMR: return "SYNC_UMR";
 	case MLX5_QP_ST_PTP_1588: return "PTP_1588";
 	case MLX5_QP_ST_REG_UMR: return "REG_UMR";
-	case MLX5_QP_ST_SW_CNAK: return "DC_CNAK";
 	default: return "Invalid transport type";
 	}
 }

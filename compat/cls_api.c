@@ -20,13 +20,11 @@
 #include <net/tc_act/tc_pedit.h>
 #include <net/tc_act/tc_csum.h>
 #include <net/tc_act/tc_skbedit.h>
-#ifdef HAVE_MINIFLOW
-#include <net/tc_act/tc_ct.h>
-#endif
 #include <net/tc_act/tc_tunnel_key.h>
 #ifdef HAVE_IS_TCF_POLICE
 #include <net/tc_act/tc_police.h>
 #endif
+#include <net/tc_act/tc_ct.h>
 
 
 #if !defined(HAVE_IS_TCF_TUNNEL) && defined(HAVE_TCF_TUNNEL_INFO)
@@ -121,10 +119,6 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 		} else if (is_tcf_tunnel_release(act)) {
 			entry->id = FLOW_ACTION_TUNNEL_DECAP;
 #endif
-#ifdef HAVE_MINIFLOW
-		} else if (is_tcf_ct(act)) {
-			entry->id = FLOW_ACTION_CT;
-#endif
 #ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
 		} else if (is_tcf_pedit(act)) {
 			int k;
@@ -160,6 +154,13 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 			entry->police.burst = tcf_police_tcfp_burst(act);
 			entry->police.rate_bytes_ps =
 				tcf_police_rate_bytes_ps(act);
+#endif
+#ifdef CONFIG_COMPAT_ACT_CT
+		} else if (is_tcf_ct(act)) {
+			entry->id = FLOW_ACTION_CT;
+			entry->ct.action = tcf_ct_action(act);
+			entry->ct.zone = tcf_ct_zone(act);
+			entry->ct.flow_table = tcf_ct_ft(act);
 #endif
 		} else {
 			goto err_out;

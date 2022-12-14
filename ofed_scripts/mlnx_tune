@@ -47,8 +47,8 @@ from optparse 					import OptionParser
 from threading import Timer
 
 VERSION_MAJOR					= "5"
-VERSION_MINOR					= "0"
-VERSION_BUILD					= "2"
+VERSION_MINOR					= "1"
+VERSION_BUILD					= "3"
 
 INDENT						= 1
 NA						= "N/A"
@@ -126,6 +126,7 @@ ALL_CPUS_CMD			 		= "ls /sys/devices/system/cpu/"
 CORE_ID_CMD					= "cat /sys/devices/system/node/node%s/cpu%s/topology/core_id"
 IPV4_FORWARDING_CFG				= "/proc/sys/net/ipv4/ip_forward"
 IPV6_FORWARDING_CFG			 	= "/proc/sys/net/ipv6/conf/%s/forwarding"
+IPV4_SEND_REDIRECTS				= "/proc/sys/net/ipv4/conf/{intf}/send_redirects"
 
 RUNNING_PROCESS					= "ps -ef"
 
@@ -156,27 +157,46 @@ class Profile:
 	"""
 	HIGH_THROUGHPUT				= "HIGH_THROUGHPUT"
 	IP_FORWARDING_MULTI_STREAM_THROUGHPUT	= "IP_FORWARDING_MULTI_STREAM_THROUGHPUT"
+	IP_FORWARDING_MULTI_STREAM_THROUGHPUT_SINGLE_PORT	= "IP_FORWARDING_MULTI_STREAM_THROUGHPUT_SINGLE_PORT"
 	IP_FORWARDING_MULTI_STREAM_PACKET_RATE	= "IP_FORWARDING_MULTI_STREAM_PACKET_RATE"
+	IP_FORWARDING_MULTI_STREAM_PACKET_RATE_SINGLE_PORT	= "IP_FORWARDING_MULTI_STREAM_PACKET_RATE_SINGLE_PORT"
 	IP_FORWARDING_MULTI_STREAM_0_LOSS	= "IP_FORWARDING_MULTI_STREAM_0_LOSS"
 	IP_FORWARDING_SINGLE_STREAM		= "IP_FORWARDING_SINGLE_STREAM"
 	IP_FORWARDING_SINGLE_STREAM_0_LOSS	= "IP_FORWARDING_SINGLE_STREAM_0_LOSS"
 	IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT = "IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT"
 	LOW_LATENCY_VMA				= "LOW_LATENCY_VMA"
 	MULTICAST				= "MULTICAST"
-	IP_FORWARDING_SINGLE_STREAM_PROFILES	= [IP_FORWARDING_SINGLE_STREAM, IP_FORWARDING_SINGLE_STREAM_0_LOSS, IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT]
+	IP_FORWARDING_SINGLE_STREAM_PROFILES	= [
+							IP_FORWARDING_SINGLE_STREAM,
+							IP_FORWARDING_SINGLE_STREAM_0_LOSS,
+							IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT
+						  ]
 	IP_FORWARDING_MULTI_STREAM_PROFILES	= [
 							IP_FORWARDING_MULTI_STREAM_THROUGHPUT,
+							IP_FORWARDING_MULTI_STREAM_THROUGHPUT_SINGLE_PORT,
 							IP_FORWARDING_MULTI_STREAM_PACKET_RATE,
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE_SINGLE_PORT,
 							IP_FORWARDING_MULTI_STREAM_0_LOSS
 						  ]
 	IP_FORWARDING_0_LOSS_PROFILES		= [
 							IP_FORWARDING_MULTI_STREAM_0_LOSS,
 							IP_FORWARDING_SINGLE_STREAM_0_LOSS
 						  ]
+	IP_FORWARDING_SINGLE_PORT_PROFILES	= [
+							IP_FORWARDING_MULTI_STREAM_THROUGHPUT_SINGLE_PORT,
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE_SINGLE_PORT,
+							IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT
+						  ]
+	IP_FORWARDING_PACKET_RATE_PROFILES	= [
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE,
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE_SINGLE_PORT,
+						  ]
 	ALLOWED_PROFILES			= [
 							HIGH_THROUGHPUT,
 							IP_FORWARDING_MULTI_STREAM_THROUGHPUT,
+							IP_FORWARDING_MULTI_STREAM_THROUGHPUT_SINGLE_PORT,
 							IP_FORWARDING_MULTI_STREAM_PACKET_RATE,
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE_SINGLE_PORT,
 							IP_FORWARDING_MULTI_STREAM_0_LOSS,
 							IP_FORWARDING_SINGLE_STREAM,
 							IP_FORWARDING_SINGLE_STREAM_0_LOSS,
@@ -1600,7 +1620,8 @@ class IpForwarding:
 		"""
 		logging.debug("Enabling IPv4 forwarding for all interfaces")
 		cmd = "echo 1 > %s"%(IPV4_FORWARDING_CFG)
-		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to set ipv4 forwarding.")
+		(rc, output) = run_command_warn_when_fail(
+			cmd, shell=True,warning_message="Unable to set ipv4 forwarding.")
 		if  not interface_name:
 			interface_name = "all"
 		logging.debug("Enabling IPv6 forwarding for %s"%interface_name)
@@ -1613,6 +1634,16 @@ class IpForwarding:
 		""" disable ip forwarding
 		"""
 		raise NotImplementedError("IP forwarding stop is not implemented yet.")
+
+	def set_send_redirects(self, state, interface_name='all'):
+		""" Set send redirects state.
+		"""
+		logging.debug("Setting send redirects state to '{state}' for '{intf}'".format(
+			      state=state, intf=interface_name))
+		cmd = "echo {state} > {path}".format(
+		      state=state, path=IPV4_SEND_REDIRECTS.format(intf=interface_name))
+		(rc, output) = run_command_warn_when_fail(
+			       cmd, shell=True, warning_message="Unable to set send redirects.")
 
 class HyperThreading:
 	""" Describes the system's Hyper Threading
@@ -1809,26 +1840,44 @@ class RingInfo:
 		( rc, mask ) = run_command_warn_when_fail(cmd, shell=True, warning_message="Unable to set XPS affinity mask to interface_name: %s ring: %s."%(interface_name, self.number))
 		self.xps_mask = mask
 
-	def get_irqs(self, interface_name, ring_number=None):
+	def get_irqs(self, interface_name, pcie_address, ring_number):
 		""" Discover the following interface's irq information:
 		    1. irq hint mask
 		    2. irq number
 		    3. irq smp affinity mask
 		    Disregard interrupts bounded directly to the device.
+		    Supports both by inetrface name and by PCIe addresses formats.
 		"""
 		irqs = []
 		( rc, interrupts ) = getstatusoutput(PROC_INTERRUPT_CMD)
 		assert (not rc), "Unexpected error - cmd: %s bad exit status."%(PROC_INTERRUPT_CMD)
 		for line in interrupts.split('\n'):
-			if (interface_name in line) and ring_number and \
-					('%s%s%s'%(interface_name, '-', str(ring_number)) in line) and \
-					(line.split(interface_name + '-')[1] == str(ring_number)):
-
+			if (self.is_irq_assigned_to_interface_ring(line, interface_name, ring_number) or
+			    self.is_irq_assigned_to_pcie_ring(line, pcie_address, ring_number)):
 				irq			= IrqInfo(line.split()[0].split(":")[0].strip())
 				irq.smp_affinity_mask	= irq.get_affinity_mask()
 				irq.affinity_hint_mask	= irq.get_affinity_hint_mask()
 				irqs.append(irq)
+				break
 		return irqs
+
+	def is_irq_assigned_to_interface_ring(self, irq_line, interface_name, ring_number):
+		""" Check if an IRQ information line is assigned for the given interface
+		    and its ring.
+		"""
+		if ((('{intf}-{num}'.format(intf=interface_name, num=ring_number)) in irq_line) and
+		    (irq_line.split(interface_name + '-')[1] == str(ring_number))):
+			return True
+		return False
+
+	def is_irq_assigned_to_pcie_ring(self, irq_line, pcie_address, ring_number):
+		""" Check if an IRQ information line is assigned for the given PCIe address
+		    and its ring.
+		"""
+		if '_comp{num}@pci:0000:{pci}'.format(num=ring_number, pci=pcie_address) in irq_line:
+			return True
+
+		return False
 
 	def apply_and_set_rps_affinity_mask(self, interface_name):
 		""" Set RPS affinity mask
@@ -1939,7 +1988,7 @@ class InterfaceInfo( object ):
 		assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
 		self.port_index = int(output)
 
-	def get_rings(self):
+	def get_rings(self, pcie_address):
 		""" get rings information.
 		"""
 		rings = []
@@ -1952,7 +2001,7 @@ class InterfaceInfo( object ):
 				rx_ring.set_rps_mask(self.name)
 				if self.supports_xps:
 					rx_ring.set_xps_mask(self.name)
-				rx_ring.irqs = rx_ring.get_irqs(self.name, rx_ring.number)
+				rx_ring.irqs = rx_ring.get_irqs(self.name, pcie_address, rx_ring.number)
 				rings.append(rx_ring)
 		rings.sort(key = lambda ring: int(ring.number))
 		return rings
@@ -2527,7 +2576,7 @@ class PciDeviceInfo:
 				interface.set_parameters()
 			if self.type == Devices.ConnectIB:
 				interface.supports_xps = False
-			interface.rings = interface.get_rings()
+			interface.rings = interface.get_rings(self.pci_slot)
 			interfaces.append(interface)
 
 		# order interfaces by port index
@@ -3308,7 +3357,7 @@ def set_ip_forwarding_single_port_profile(device, node_info):
 	device.apply_and_set_xps_affinity_wanted_mask()
 
 
-def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss):
+def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss, force_single):
 	""" set IP forwarding profile settings for multi stream traffic
 	"""
 	logging.info("Applying IP forwarding multi stream profile.")
@@ -3317,6 +3366,8 @@ def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss):
 	node_info.irq_balancer.stop(node_info)
 	node_info.firewall.stop(node_info)
 	node_info.ip_forwarding.start()
+	if force_single:
+		node_info.ip_forwarding.set_send_redirects("0")
 
 	if not any(node_info.pci_devices):
 		return
@@ -3357,6 +3408,9 @@ def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss):
 							'C', 8, 'tx-usecs')
 
 				interface.apply_network_parameter_value('K', 'off', 'gro', 'generic-receive-offload')
+				if force_single:
+					node_info.ip_forwarding.set_send_redirects("0", interface.name)
+
 
 	node_info = requery_node()
 
@@ -3440,8 +3494,8 @@ def write_info_to_file(file_path, node_info):
 def set_profile (options, node_info):
 	""" setting user profile
 	"""
-	force_single	= options.profile == Profile.IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT
-	use_all_cores	= options.profile == Profile.IP_FORWARDING_MULTI_STREAM_PACKET_RATE
+	force_single	= options.profile in Profile.IP_FORWARDING_SINGLE_PORT_PROFILES
+	use_all_cores	= options.profile in Profile.IP_FORWARDING_PACKET_RATE_PROFILES
 	zero_loss	= options.profile in Profile.IP_FORWARDING_0_LOSS_PROFILES
 
 	if (options.profile == Profile.HIGH_THROUGHPUT):
@@ -3449,7 +3503,8 @@ def set_profile (options, node_info):
 	elif (options.profile in Profile.IP_FORWARDING_SINGLE_STREAM_PROFILES):
 		node_info = set_ip_forwarding_profile_single_stream(node_info, force_single, zero_loss)
 	elif (options.profile in Profile.IP_FORWARDING_MULTI_STREAM_PROFILES):
-		node_info = set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss)
+		node_info = set_ip_forwarding_profile_multi_stream(node_info, use_all_cores,
+								   zero_loss, force_single)
 	elif (options.profile == Profile.LOW_LATENCY_VMA):
 		node_info = set_vma_low_latency_profile(node_info)
 	elif (options.profile == Profile.MULTICAST):

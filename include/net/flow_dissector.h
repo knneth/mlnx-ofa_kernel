@@ -4,7 +4,90 @@
 #include "../../compat/config.h"
 
 #ifndef CONFIG_COMPAT_FLOW_DISSECTOR
+#ifdef HAVE_FLOW_DISSECTOR_H
 #include_next <net/flow_dissector.h>
+#else
+enum flow_dissector_key_id {
+	FLOW_DISSECTOR_KEY_MAX
+};
+
+struct flow_dissector {
+	unsigned int used_keys; /* each bit repesents presence of one key id */
+	unsigned short int offset[FLOW_DISSECTOR_KEY_MAX];
+};
+#endif
+
+#ifndef HAVE_FLOW_DISSECTOR_KEY_TCP
+/**
+ * struct flow_dissector_key_tcp:
+ * @flags: flags
+ */
+struct flow_dissector_key_tcp {
+	__be16 flags;
+};
+
+enum {
+	FLOW_DISSECTOR_KEY_TCP = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_tcp */
+};
+#endif
+
+#ifndef HAVE_FLOW_DISSECTOR_KEY_CVLAN
+#define flow_dissector_key_vlan LINUX_BACKPORT(flow_dissector_key_vlan)
+struct flow_dissector_key_vlan {
+	union {
+		struct {
+			u16	vlan_id:12,
+				vlan_dei:1,
+				vlan_priority:3;
+		};
+		__be16	vlan_tci;
+	};
+	__be16	vlan_tpid;
+};
+
+enum {
+	FLOW_DISSECTOR_KEY_CVLAN = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_vlan */
+};
+#endif /* HAVE_FLOW_DISSECTOR_KEY_CVLAN */
+
+#ifndef HAVE_FLOW_DISSECTOR_KEY_IP
+struct flow_dissector_key_ip {
+	__u8	tos;
+	__u8	ttl;
+};
+
+enum {
+	FLOW_DISSECTOR_KEY_IP = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_ip */
+};
+#endif /* HAVE_FLOW_DISSECTOR_KEY_IP */
+
+#ifndef HAVE_FLOW_DISSECTOR_KEY_ENC_IP
+enum {
+	FLOW_DISSECTOR_KEY_ENC_IP = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_ip */
+};
+#endif
+
+#ifndef HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS
+#define FLOW_DIS_TUN_OPTS_MAX 255
+/**
+ * struct flow_dissector_key_enc_opts:
+ * @data: tunnel option data
+ * @len: length of tunnel option data
+ * @dst_opt_type: tunnel option type
+ */
+struct flow_dissector_key_enc_opts {
+	u8 data[FLOW_DIS_TUN_OPTS_MAX];	/* Using IP_TUNNEL_OPTS_MAX is desired
+					 * here but seems difficult to #include
+					 */
+	u8 len;
+	__be16 dst_opt_type;
+};
+
+enum {
+	FLOW_DISSECTOR_KEY_ENC_OPTS = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_enc_opts */
+};
+#endif /* HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS */
+
 #else/*CONFIG_COMPAT_FLOW_DISSECTOR*/
 #define HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS 1
 #define HAVE_FLOW_DISSECTOR_KEY_VLAN 1
@@ -422,6 +505,24 @@ int init_default_flow_dissectors(void);
 #undef flow_hash_from_keys
 #endif
 
-#endif
+#endif /* CONFIG_COMPAT_FLOW_DISSECTOR */
+
+#ifndef HAVE_FLOW_DISSECTOR_KEY_META
+enum {
+	FLOW_DISSECTOR_KEY_META = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_meta */
+	FLOW_DISSECTOR_KEY_CT, /* struct flow_dissector_key_ct */
+};
+
+/**
+ * struct flow_dissector_key_meta:
+ * @ingress_ifindex: ingress ifindex
+ * @ingress_iftype: ingress interface type
+ */
+struct flow_dissector_key_meta {
+	int ingress_ifindex;
+	u16 ingress_iftype;
+};
+#endif /* HAVE_FLOW_DISSECTOR_KEY_META */
 
 #endif
+

@@ -16,14 +16,12 @@ void mdev_bus_unregister(void);
 struct mdev_parent {
 	struct device *dev;
 	const struct mdev_parent_ops *ops;
-	/* Protects unregistration to wait until create/remove
-	 * are completed.
-	 */
-	refcount_t refcount;
-	struct completion unreg_completion;
+	struct kref ref;
 	struct list_head next;
 	struct kset *mdev_types_kset;
 	struct list_head type_list;
+	/* Synchronize device creation/removal with parent unregistration */
+	struct rw_semaphore unreg_sem;
 };
 
 struct mdev_device {

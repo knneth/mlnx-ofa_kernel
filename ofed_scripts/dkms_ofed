@@ -50,8 +50,6 @@ def_configure_options=" \
 	--with-user_mad-mod \
 	--with-user_access-mod \
 	--with-addr_trans-mod \
-	--with-mlx4-mod \
-	--with-mlx4_en-mod \
 	--with-mlx5-mod \
 	--with-mlxfw-mod \
 	--with-ipoib-mod \
@@ -69,14 +67,8 @@ if [ -f $WDIR/../dkms.conf ];then
 			fi
 		fi
 	done < $WDIR/../dkms.conf
-	# W/A for --with-innova-ipsec flag opens features (not adding new module)
-	if (grep -q "with-innova-ipsec" $WDIR/../dkms.conf); then
-		options="${options} --with-innova-ipsec"
-	fi
-	# W/A for --with-mlx5-ipsec flag opens features (not adding new module)
-	if (grep -q "with-mlx5-ipsec" $WDIR/../dkms.conf); then
-		options="${options} --with-mlx5-ipsec"
-	fi
+	extra_options=`awk '/^#:# ExtraOption/ {print $3}' $WDIR/../dkms.conf`
+	options="${options} ${extra_options}"
 	configure_options=$options
 else
 	configure_options=${configure_options:-"$def_configure_options"}
@@ -99,23 +91,14 @@ module_to_flag()
 		ib_umad)
 		flag=--with-user_mad-mod
 		;;
-		ib_uverbs|ib_ucm)
+		ib_uverbs)
 		flag=--with-user_access-mod
 		;;
 		rdma_cm|rdma_ucm)
 		flag=--with-addr_trans-mod
 		;;
-		mlx4_core|mlx4_ib)
-		flag=--with-mlx4-mod
-		;;
 		mlx5_core|mlx5_ib)
 		flag=--with-mlx5-mod
-		;;
-		mlx4_en)
-		flag=--with-mlx4_en-mod
-		;;
-		mlx4_ib)
-		flag=--with-mlx4_ib-mod
 		;;
 		ib_ipoib)
 		flag=--with-ipoib-mod
@@ -167,8 +150,7 @@ get-modules()
 			;;
 			--with-user_access-mod )
 			modules="$modules \
-				drivers/infiniband/core/ib_uverbs \
-				drivers/infiniband/core/ib_ucm"
+				drivers/infiniband/core/ib_uverbs"
 			;;
 			--with-addr_trans-mod )
 			modules="$modules \
@@ -179,23 +161,10 @@ get-modules()
 					drivers/infiniband/core/ib_addr"
 			fi
 			;;
-			--with-mlx4-mod )
-			modules="$modules \
-				drivers/net/ethernet/mellanox/mlx4/mlx4_core \
-				drivers/infiniband/hw/mlx4/mlx4_ib"
-			;;
 			--with-mlx5-mod )
 			modules="$modules \
 				drivers/net/ethernet/mellanox/mlx5/core/mlx5_core \
 				drivers/infiniband/hw/mlx5/mlx5_ib"
-			;;
-			--with-mlx4_en-mod )
-			modules="$modules \
-				drivers/net/ethernet/mellanox/mlx4/mlx4_en"
-			;;
-			--with-mlx4_ib-mod )
-			modules="$modules \
-				drivers/infiniband/hw/mlx4/mlx4_ib"
 			;;
 			--with-ipoib-mod )
 			modules="$modules \

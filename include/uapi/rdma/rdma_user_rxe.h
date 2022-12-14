@@ -36,10 +36,8 @@
 
 #include <linux/types.h>
 #include <linux/socket.h>
-#ifdef __KERNEL__
 #include <linux/in.h>
 #include <linux/in6.h>
-#endif
 
 union rxe_gid {
 	__u8	raw[16];

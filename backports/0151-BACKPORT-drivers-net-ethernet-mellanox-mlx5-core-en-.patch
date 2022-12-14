@@ -1,0 +1,41 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+
+Change-Id: Ib23708e70821867c1e2ccde711e0702f30ca5f3f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+@@ -4,8 +4,12 @@
+ #ifndef __MLX5_EN_XSK_RX_H__
+ #define __MLX5_EN_XSK_RX_H__
+ 
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
++
+ #include "en.h"
++#ifdef HAVE_NDO_XSK_WAKEUP
+ #include <net/xdp_sock.h>
++#endif
+ 
+ /* RX data path */
+ 
+@@ -24,7 +28,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 					      struct mlx5_cqe64 *cqe,
+ 					      struct mlx5e_wqe_frag_info *wi,
+ 					      u32 cqe_bcnt);
+-
++#ifdef HAVE_NDO_XSK_WAKEUP
+ static inline bool mlx5e_xsk_update_rx_wakeup(struct mlx5e_rq *rq, bool alloc_err)
+ {
+ 	if (!xsk_umem_uses_need_wakeup(rq->umem))
+@@ -37,5 +41,7 @@ static inline bool mlx5e_xsk_update_rx_w
+ 
+ 	return false;
+ }
+-
++#endif
++#endif /*HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS*/
+ #endif /* __MLX5_EN_XSK_RX_H__ */
++

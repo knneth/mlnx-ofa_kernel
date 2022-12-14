@@ -15,19 +15,15 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-MLX4 ?= 1
 MLX5 ?= 1
 MLXFW ?= 1
 WITH_DKMS ?= 1
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
-PYTHON = $(shell if [ -x /usr/bin/python2 ]; then echo /usr/bin/python2; else /usr/bin/python; fi)
+PYTHON = $(shell for i in "" 3 2; do if [ -x /usr/bin/python$$i ]; then echo python$$i; break; fi; done)
 
 MLNX_EN_PATCH_PARAMS ?=
-ifneq ($(MLX4),1)
-	MLNX_EN_PATCH_PARAMS = "$(MLNX_EN_PATCH_PARAMS) --without-mlx4"
-endif
 ifneq ($(MLX5),1)
 	MLNX_EN_PATCH_PARAMS = "$(MLNX_EN_PATCH_PARAMS) --without-mlx5"
 endif
@@ -99,7 +95,7 @@ endif
 	cp -a source/Makefile		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	with_mlx4=$(MLX4) with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/generate_mlnx_en_dkms_conf.sh > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+	with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/generate_mlnx_en_dkms_conf.sh > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -138,7 +134,7 @@ endif
 	install -m 0644 source/debian/mlnx-en.upstart			debian/$(putils)/etc/init/mlnx-en.conf
 	install -m 0755 source/scripts/mlnx-en.d_deb						debian/$(putils)/etc/init.d/mlnx-en.d
 	install -m 0644 source/scripts/mlnx-en.conf					debian/$(putils)/etc/mlnx-en.conf
-	with_mlx4=$(MLX4) with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/deb_mlnx_en_service_install_helper $(CURDIR)/debian/$(putils)
+	with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/deb_mlnx_en_service_install_helper $(CURDIR)/debian/$(putils)
 
 	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --prefix=/usr --root=../../debian/$(putils)
 

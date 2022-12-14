@@ -56,6 +56,7 @@ Options:
                                     Must exist in: 'metadata/features_metadata_db.csv'
     -s, --upstream-status <STATUS>  Upstream status to assign to new commits.
                                     Valid values: [NA, ignore, in_progress, sent, accepted, rejected]
+    -g, --general <TAG>	     add current upsream delta tag to general(f.e v5.6-rc2).
 
     --dry-run                Just print, don't really change anything.
 
@@ -99,6 +100,10 @@ do
 		;;
 		-f | --feature)
 		def_feature="$2"
+		shift
+		;;
+		-g | --general)
+		general="tag: $2"
 		shift
 		;;
 		-s | --upstream-status)
@@ -308,7 +313,6 @@ do
 	subject=
 	feature=
 	upstream=
-	general=
 
 	uniqID=
 	changeID=$(get_by_tag $cid "change-id")
@@ -331,8 +335,10 @@ do
 	subject=$(get_subject $cid)
 	feature=$(get_by_tag $cid "feature")
 	upstream=$(get_by_tag $cid "upstream(.*status)")
-	general=$(get_by_tag $cid "general")
-
+	if [ -z "$general" ]
+	then
+		general=$(get_by_tag $cid "general")
+	fi
 	# auto-detect commits that changes only backports, ofed-scripts
 	if is_backports_change_only $cid ;then
 		feature="backports"

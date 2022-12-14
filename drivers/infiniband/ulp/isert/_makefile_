@@ -12,7 +12,6 @@ variant=default
 endif
 FLAVOR ?= $(variant)
 OFA = $(shell ( test -d $(OFA_DIR)/$(KVER) && echo $(OFA_DIR)/$(KVER) ) || ( test -d $(OFA_DIR)/$(FLAVOR) && echo $(OFA_DIR)/$(FLAVOR) ) || ( test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build ) || ( echo $(OFA_DIR) ))
-OFA_SYMBOLS = $(wildcard $(OFA)/Module*.symvers)
 
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 include $(OFA)/configure.mk.kernel
@@ -82,6 +81,7 @@ rpmmacros =\
 		   --define='_srcrpmdir $(rpmroot)'\
 		   --define='_sourcedir $(rpmroot)'\
 		   --define='_specdir $(PWD)'
+override WITH_MAKE_PARAMS += KBUILD_EXTRA_SYMBOLS=$(OFA)/Module.symvers
 
 default:
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
@@ -113,8 +113,6 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-Iarch/$$(SRCARCH)/include/generated \
 		' \
-		KBUILD_EXTRA_SYMBOLS="$(OFA_SYMBOLS)" \
-		modulesymfile=$(SRC_DIR)/Module.symvers \
 		modules
 else
 # compile with inbox driver
@@ -149,6 +147,7 @@ binrpm: rpmcheck $(rpmspec)
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/
 	cp {$(rpmspec),Kconfig,makefile,Makefile,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
+	cp common.postinst $(rpmroot)/$(PACKAGE)/
 	cp *.c $(rpmroot)/$(PACKAGE)/
 	cp *.h $(rpmroot)/$(PACKAGE)/
 	cp -r debian $(rpmroot)/$(PACKAGE)/

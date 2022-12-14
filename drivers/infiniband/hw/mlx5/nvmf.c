@@ -35,9 +35,8 @@
 #include <linux/mlx5/driver.h>
 #include "srq.h"
 #include <rdma/ib_verbs.h>
-#include <rdma/ib_verbs_exp.h>
+#include <rdma/ib_verbs_nvmf.h>
 #include <linux/mlx5/nvmf.h>
-#include <linux/mlx5/cmd.h>
 #include <linux/mlx5/qp.h>
 
 #include "mlx5_ib.h"

@@ -20,6 +20,7 @@ enum ethtool_fec_config_bits {
 	ETHTOOL_FEC_OFF_BIT,
 	ETHTOOL_FEC_RS_BIT,
 	ETHTOOL_FEC_BASER_BIT,
+	ETHTOOL_FEC_LLRS_BIT,
 };
 
 struct ethtool_fecparam {
@@ -35,8 +36,22 @@ struct ethtool_fecparam {
 #define ETHTOOL_FEC_OFF                 (1 << ETHTOOL_FEC_OFF_BIT)
 #define ETHTOOL_FEC_RS                  (1 << ETHTOOL_FEC_RS_BIT)
 #define ETHTOOL_FEC_BASER               (1 << ETHTOOL_FEC_BASER_BIT)
+#define ETHTOOL_FEC_LLRS                (1 << ETHTOOL_FEC_LLRS_BIT)
 
-#endif
+#else /* ETHTOOL_FEC_NONE */
+
+/* check whether ethtool_fec_config_bits is defined, but without LLRS bit */
+#ifndef ETHTOOL_FEC_LLRS
+#define ETHTOOL_FEC_LLRS_BIT		(ETHTOOL_FEC_BASER_BIT + 1)
+#define ETHTOOL_FEC_LLRS		(1 << ETHTOOL_FEC_LLRS_BIT)
+/* if SPEED_200000 missing, ETHTOOL_LINK_MODE_FEC_LLRS_BIT is defined below */
+#ifdef SPEED_200000
+#define ETHTOOL_LINK_MODE_FEC_LLRS_BIT 74
+#endif /* SPEED_200000 */
+#endif /* ETHTOOL_FEC_LLRS */
+
+#endif /* ETHTOOL_FEC_NONE */
+
 #ifndef ETH_MODULE_SFF_8472
 #define ETH_MODULE_SFF_8472		0x2
 #define ETH_MODULE_SFF_8472_LEN		512
@@ -128,7 +143,16 @@ struct ethtool_fecparam {
 #define ETHTOOL_LINK_MODE_200000baseLR4_ER4_FR4_Full_BIT 64
 #define ETHTOOL_LINK_MODE_200000baseDR4_Full_BIT 65
 #define ETHTOOL_LINK_MODE_200000baseCR4_Full_BIT 66
+#define ETHTOOL_LINK_MODE_100baseT1_Full_BIT 67
+#define ETHTOOL_LINK_MODE_1000baseT1_Full_BIT 68
+#define ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT 69
+#define ETHTOOL_LINK_MODE_400000baseSR8_Full_BIT 70
+#define ETHTOOL_LINK_MODE_400000baseLR8_ER8_FR8_Full_BIT 71
+#define ETHTOOL_LINK_MODE_400000baseDR8_Full_BIT 72
+#define ETHTOOL_LINK_MODE_400000baseCR8_Full_BIT 73
+#define ETHTOOL_LINK_MODE_FEC_LLRS_BIT 74
 #endif
+
 #define SUPPORTED_100000baseCR4_Full 0
 #define ADVERTISED_100000baseCR4_Full 0
 #define SUPPORTED_100000baseSR4_Full 0

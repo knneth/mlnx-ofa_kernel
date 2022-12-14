@@ -16,6 +16,9 @@ Section: kernel
 Architecture: all
 Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof, mlnx-ofed-kernel-utils
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
+Provides: mlnx-rdma-rxe-dkms
+Conflicts: mlnx-rdma-rxe-dkms
+Replaces: mlnx-rdma-rxe-dkms
 Description: DKMS support for mlnx-ofed kernel modules
  This package provides integration with the DKMS infrastructure for
  automatically building out of tree kernel modules.

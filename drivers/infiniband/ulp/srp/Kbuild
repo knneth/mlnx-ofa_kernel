@@ -5,7 +5,9 @@
 # subdir-ccflags-y will be set by the toplevel Makefile.
 ifneq (,$(findstring $(ARCH),i386 x86_64))
   ifndef CONFIG_RETPOLINE
-    CFLAGS_RETPOLINE=-mindirect-branch=thunk-inline -mindirect-branch-register -DRETPOLINE_MLNX
+    ifneq (,$(shell awk 'BEGIN {if ($(VERSION).$(PATCHLEVEL) < 4.15) {print 1}}' </dev/null))
+      CFLAGS_RETPOLINE=-mindirect-branch=thunk-inline -mindirect-branch-register -DRETPOLINE_MLNX
+    endif
   endif
 endif
 

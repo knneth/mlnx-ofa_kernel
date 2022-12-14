@@ -65,7 +65,7 @@ RUN_SYSCTL=${RUN_SYSCTL:-"no"}
 RUN_MLNX_TUNE=${RUN_MLNX_TUNE:-"no"}
 
 UNLOAD_MODULES="mlx5_ib mlx5_core mlx4_fc mlx4_en mlx4_ib mlx4_core mlxfw memtrack compat mlx_compat"
-STATUS_MODULES="mlx4_en mlx4_core mlx5_core mlxfw"
+STATUS_MODULES="mlx5_core mlxfw"
 
 # Allow unsupported modules, if disallowed by current configuration
 modprobe=/sbin/modprobe
@@ -406,22 +406,6 @@ start()
     done
     IFS="${OIFS}"
 
-    if [ "X${MLX4_LOAD}" == "Xyes" ]; then
-        load_module mlx4_core
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-            echo_failure $"Loading Mellanox MLX4 NIC driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
-
-        load_module mlx4_en
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-            echo_failure $"Loading Mellanox MLX4_EN NIC driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
-    fi
-
     if [ "X${MLX5_LOAD}" == "Xyes" ]; then
         load_module mlx5_core
         my_rc=$?
@@ -566,13 +550,6 @@ status()
     local RC=0
 
     local mod_loaded=0
-    if is_module mlx4_core && is_module mlx4_en; then
-        echo
-        echo "  MLX4 NIC driver loaded"
-        echo
-        mod_loaded=1
-    fi
-
     if is_module mlx5_core; then
         echo
         echo "  MLX5 NIC driver loaded"
@@ -586,7 +563,7 @@ status()
         echo
     fi
 
-    if is_module mlx4_en || is_module mlx5_core; then
+    if is_module mlx5_core; then
         get_mlx_en_interfaces
         if [ -n "$mlx_en_interfaces" ]; then
             echo $"Configured Mellanox EN devices:"

@@ -66,6 +66,8 @@ mlx5_sf_get_parent_dev(struct mlx5_core_dev *dev)
 	return sf->parent_dev;
 }
 
+u16 mlx5_sf_vport_to_id(const struct mlx5_core_dev *coredev, u16 vport_num);
+
 #else
 static inline u16 mlx5_core_max_sfs(const struct mlx5_core_dev *dev,
 				    struct mlx5_sf_table *sf_table)
@@ -83,6 +85,13 @@ static inline struct mlx5_core_dev *
 mlx5_sf_get_parent_dev(struct mlx5_core_dev *dev)
 {
 	return NULL;
+}
+
+static inline
+u16 mlx5_sf_vport_to_id(const struct mlx5_core_dev *coredev,
+			u16 vport_num)
+{
+	return 0;
 }
 
 #endif

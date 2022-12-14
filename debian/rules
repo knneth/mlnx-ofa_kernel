@@ -19,7 +19,7 @@ WITH_DKMS ?= 1
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
-PYTHON = $(shell if [ -x /usr/bin/python2 ]; then echo /usr/bin/python2; else /usr/bin/python; fi)
+PYTHON = $(shell for i in "" 3 2; do if [ -x /usr/bin/python$$i ]; then echo python$$i; break; fi; done)
 
 pname:=mlnx-ofed-kernel
 psource:=$(pname)-source
@@ -159,10 +159,9 @@ endif
 	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/cma_roce_mode			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/cma_roce_tos			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/connectx_port_config	debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/*affinity*			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/bin
+	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/sbin
 	install -m 0644 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.upstart	debian/$(putils)/etc/init/openibd.conf
 	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d

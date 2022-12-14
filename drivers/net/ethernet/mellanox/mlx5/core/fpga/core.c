@@ -146,6 +146,11 @@ static const char *mlx5_fpga_name(u32 fpga_id)
 	return ret;
 }
 
+static int mlx5_is_fpga_lookaside(u32 fpga_id)
+{
+	return fpga_id != MLX5_FPGA_NEWTON && fpga_id != MLX5_FPGA_EDISON;
+}
+
 static int mlx5_fpga_device_load_check(struct mlx5_fpga_device *fdev)
 {
 	struct mlx5_fpga_query query;
@@ -164,6 +169,10 @@ static int mlx5_fpga_device_load_check(struct mlx5_fpga_device *fdev)
 
 	mlx5_fpga_info(fdev, "Status %u; Admin image %u; Oper image %u\n",
 		       query.image_status, query.admin_image, query.oper_image);
+
+	/* for FPGA lookaside projects FPGA load status is not important */
+	if (mlx5_is_fpga_lookaside(MLX5_CAP_FPGA(fdev->mdev, fpga_id)))
+		return 0;
 
 	/* For Morse projects FPGA has no influence to network functionality */
 	fpga_id = MLX5_CAP_FPGA(fdev->mdev, fpga_id);
@@ -247,6 +256,10 @@ int mlx5_fpga_device_start(struct mlx5_core_dev *mdev)
 	mlx5_fpga_info(fdev, "FPGA card %s:%u\n", mlx5_fpga_name(fpga_id), fpga_id);
 
 	if (fpga_id == MLX5_FPGA_MORSE || fpga_id == MLX5_FPGA_MORSEQ)
+		goto out;
+
+	/* No QPs if FPGA does not participate in net processing */
+	if (mlx5_is_fpga_lookaside(fpga_id))
 		goto out;
 
 	mlx5_fpga_info(fdev, "%s(%d): image, version %u; SBU %06x:%04x version %d\n",
@@ -382,6 +395,9 @@ void mlx5_fpga_device_stop(struct mlx5_core_dev *mdev)
 
 	fpga_id = MLX5_CAP_FPGA(mdev, fpga_id);
 	if (fpga_id == MLX5_FPGA_MORSE || fpga_id == MLX5_FPGA_MORSEQ)
+		return;
+
+	if (mlx5_is_fpga_lookaside(MLX5_CAP_FPGA(fdev->mdev, fpga_id)))
 		return;
 
 	spin_lock_irqsave(&fdev->state_lock, flags);

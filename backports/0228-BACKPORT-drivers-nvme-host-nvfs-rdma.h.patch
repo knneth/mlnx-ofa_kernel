@@ -1,0 +1,47 @@
+From: Max Gurtovoy <maxg@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/nvfs-rdma.h
+
+Change-Id: I4feeba4214e8b4128174c3beddcc61a419874d22
+---
+ drivers/nvme/host/nvfs-rdma.h | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+--- a/drivers/nvme/host/nvfs-rdma.h
++++ b/drivers/nvme/host/nvfs-rdma.h
+@@ -34,7 +34,12 @@ static bool nvme_rdma_nvfs_unmap_data(st
+ 				dma_dir);
+ 		if (count) {
+ 			nvfs_put_ops();
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 			sg_free_table_chained(&req->data_sgl.sg_table, NVME_INLINE_SG_CNT);
++#else
++			sg_free_table_chained(&req->data_sgl.sg_table, true);
++#endif
++
+ 			return true;
+ 		}
+ 	}
+@@ -89,7 +94,11 @@ static int nvme_rdma_nvfs_map_data(struc
+ 		if (count <= dev->num_inline_segments) {
+ 			if (rq_data_dir(rq) == WRITE && nvme_rdma_queue_idx(queue) &&
+ 					queue->ctrl->use_inline_data &&
++#ifdef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
+ 					blk_rq_payload_bytes(rq) <=
++#else
++					nvme_map_len(rq) <=
++#endif
+ 						nvme_rdma_inline_data_size(queue)) {
+ 				ret = nvme_rdma_map_sg_inline(queue, req, cmnd, count);
+ 				goto out;
+@@ -114,7 +123,11 @@ out:
+ 	}
+ 
+ out_free_table:
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 	sg_free_table_chained(&req->data_sgl.sg_table, NVME_INLINE_SG_CNT);
++#else
++	sg_free_table_chained(&req->data_sgl.sg_table, true);
++#endif
+ 	return ret;
+ }
+ 

@@ -2,12 +2,13 @@
 #define _COMPAT_NET_PKT_CLS_H 1
 
 #include "../../compat/config.h"
+#include_next <uapi/linux/pkt_cls.h>
 #include_next <net/pkt_cls.h>
 #include <net/tc_act/tc_tunnel_key.h>
 
 #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
 #define HAVE_FLOWER_MULTI_MASK 1
-#include <uapi/linux/uapi/pkt_cls.h>
+#include <uapi/linux/pkt_cls.h>
 
 
 #if !defined(CONFIG_NET_SCHED_NEW) && !defined(CONFIG_COMPAT_KERNEL_4_14)
@@ -108,6 +109,63 @@ void __tc_indr_block_cb_unregister(struct net_device *dev,
 	for (; 0; (void)(i), (void)(a), (void)(exts))
 #endif
 
+#ifndef HAVE_TCF_EXTS_NUM_ACTIONS
+#include_next <net/pkt_cls.h>
+#define tcf_exts_num_actions LINUX_BACKPORT(tcf_exts_num_actions)
+unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
+#endif
+
+#ifdef HAVE_TC_FLOWER_OFFLOAD
+#define FLOW_BLOCK_BIND TC_BLOCK_BIND
+#define FLOW_BLOCK_UNBIND TC_BLOCK_UNBIND
+#define FLOW_CLS_REPLACE TC_CLSFLOWER_REPLACE
+#define FLOW_CLS_DESTROY TC_CLSFLOWER_DESTROY
+#define FLOW_CLS_STATS TC_CLSFLOWER_STATS
+#define FLOW_CLS_TMPLT_CREATE TC_CLSFLOWER_TMPLT_CREATE
+#define FLOW_CLS_TMPLT_DESTROY TC_CLSFLOWER_TMPLT_DESTROY
+#define FLOW_BLOCK_BINDER_TYPE_UNSPEC TCF_BLOCK_BINDER_TYPE_UNSPEC
+#define FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS
+#define FLOW_BLOCK_BINDER_TYPE_CLSACT_EGRESS TCF_BLOCK_BINDER_TYPE_CLSACT_EGRESS
+#define flow_block_offload tc_block_offload
+#define __flow_indr_block_cb_register __tc_indr_block_cb_register
+#define __flow_indr_block_cb_unregister __tc_indr_block_cb_unregister
+#endif /* HAVE_TC_FLOWER_OFFLOAD */
+
+#ifdef HAVE___TC_INDR_BLOCK_CB_REGISTER
+#define __flow_indr_block_cb_register __tc_indr_block_cb_register
+#define __flow_indr_block_cb_unregister __tc_indr_block_cb_unregister
+#endif
+
+#if !defined(HAVE_TC_FLOWER_OFFLOAD) && !defined(HAVE_FLOW_CLS_OFFLOAD)
+enum tc_fl_command {
+	TC_CLSFLOWER_REPLACE,
+	TC_CLSFLOWER_DESTROY,
+	TC_CLSFLOWER_STATS,
+};
+
+struct tc_cls_flower_offload {
+	enum tc_fl_command command;
+	u32 prio;
+	unsigned long cookie;
+	struct LINUX_BACKPORT(flow_dissector) *dissector;
+	struct fl_flow_key *mask;
+	struct fl_flow_key *key;
+	struct tcf_exts *exts;
+};
+#endif /* !defined(HAVE_TC_FLOWER_OFFLOAD) && !defined(HAVE_FLOW_CLS_OFFLOAD) */
+
+#ifndef NETIF_F_HW_TC
+#define NETIF_F_HW_TC ((netdev_features_t)1 << ((NETDEV_FEATURE_COUNT + 1)))
+#endif
+
+#ifndef HAVE_FLOW_CLS_OFFLOAD
+#define flow_cls_offload tc_cls_flower_offload
+#endif
+
+#ifndef HAVE_FLOW_CLS_OFFLOAD_FLOW_RULE
+#define flow_cls_offload_flow_rule tc_cls_flower_offload_flow_rule
+#endif
+
 #ifdef CONFIG_MLX5_ESWITCH
 #ifndef HAVE_TC_SETUP_FLOW_ACTION
 #include <net/flow_offload.h>
@@ -118,39 +176,5 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 #endif
 #endif
 
-#ifndef HAVE_TCF_EXTS_NUM_ACTIONS
-#include_next <net/pkt_cls.h>
-#define tcf_exts_num_actions LINUX_BACKPORT(tcf_exts_num_actions)
-unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
-#endif
-
-#ifdef HAVE_FLOW_CLS_OFFLOAD
-#define TC_CLSFLOWER_REPLACE FLOW_CLS_REPLACE
-#define TC_CLSFLOWER_DESTROY FLOW_CLS_DESTROY
-#define TC_CLSFLOWER_STATS FLOW_CLS_STATS
-#define TC_CLSFLOWER_TMPLT_CREATE FLOW_CLS_TMPLT_CREATE
-#define TC_CLSFLOWER_TMPLT_DESTROY FLOW_CLS_TMPLT_DESTROY
-#define tc_cls_flower_offload flow_cls_offload
-
-#ifdef HAVE___FLOW_INDR_BLOCK_CB_REGISTER
-#define __tc_indr_block_cb_register __flow_indr_block_cb_register
-#define __tc_indr_block_cb_unregister __flow_indr_block_cb_unregister
-#endif
-
-static inline struct flow_rule *
-tc_cls_flower_offload_flow_rule(struct tc_cls_flower_offload *tc_flow_cmd)
-{
-        return flow_cls_offload_flow_rule(tc_flow_cmd);
-}
-#endif
-
-#ifdef HAVE_FLOW_BLOCK_OFFLOAD
-#define TC_BLOCK_BIND FLOW_BLOCK_BIND
-#define TC_BLOCK_UNBIND FLOW_BLOCK_UNBIND
-#define TCF_BLOCK_BINDER_TYPE_UNSPEC  FLOW_BLOCK_BINDER_TYPE_UNSPEC
-#define TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS
-#define TCF_BLOCK_BINDER_TYPE_CLSACT_EGRESS  FLOW_BLOCK_BINDER_TYPE_CLSACT_EGRESS
-#define tc_block_offload flow_block_offload
-#endif
 
 #endif	/* _COMPAT_NET_PKT_CLS_H */

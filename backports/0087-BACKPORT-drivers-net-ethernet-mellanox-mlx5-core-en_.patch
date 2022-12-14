@@ -1,0 +1,26 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+
+Change-Id: If4630387924a1ef067b4301f75bac9abebd3beaf
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2019 Mellanox Technologies.
+ 
++#ifdef HAVE_KTLS_STRUCTS
++
+ #include "en_accel/ktls_txrx.h"
+ #include "en_accel/ktls_utils.h"
+ 
+@@ -490,3 +492,5 @@ err_out:
+ 	dev_kfree_skb_any(skb);
+ 	return false;
+ }
++
++#endif

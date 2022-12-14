@@ -1,0 +1,49 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
+
+Change-Id: I6ffa084e8f86a9c50969ce608258d76132c08c2e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
+@@ -4,6 +4,8 @@
+ #ifndef __MLX5_EN_TC_TUNNEL_H__
+ #define __MLX5_EN_TC_TUNNEL_H__
+ 
++#ifdef HAVE_TCF_TUNNEL_INFO
++
+ #include <linux/netdevice.h>
+ #include <linux/mlx5/fs.h>
+ #include <net/pkt_cls.h>
+@@ -28,6 +30,7 @@ struct mlx5e_tc_tunnel {
+ 			       struct mlx5e_priv *priv,
+ 			       struct mlx5e_encap_entry *e,
+ 			       struct netlink_ext_ack *extack);
++
+ 	int (*generate_ip_tun_hdr)(char buf[],
+ 				   __u8 *ip_proto,
+ 				   struct mlx5e_encap_entry *e);
+@@ -36,6 +39,7 @@ struct mlx5e_tc_tunnel {
+ 			       struct flow_cls_offload *f,
+ 			       void *headers_c,
+ 			       void *headers_v);
++
+ 	int (*parse_tunnel)(struct mlx5e_priv *priv,
+ 			    struct mlx5_flow_spec *spec,
+ 			    struct flow_cls_offload *f,
+@@ -65,7 +69,7 @@ int mlx5e_tc_tun_create_header_ipv6(stru
+ #else
+ static inline int
+ mlx5e_tc_tun_create_header_ipv6(struct mlx5e_priv *priv,
+-				struct net_device *mirred_dev,
++struct net_device *mirred_dev,
+ 				struct mlx5e_encap_entry *e) { return -EOPNOTSUPP; }
+ #endif
+ 
+@@ -85,3 +89,4 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+ 				 void *headers_v);
+ 
+ #endif //__MLX5_EN_TC_TUNNEL_H__
++#endif

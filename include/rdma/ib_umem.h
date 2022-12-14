@@ -37,75 +37,48 @@
 #include <linux/scatterlist.h>
 #include <linux/workqueue.h>
 #include <rdma/ib_verbs.h>
-#include <rdma/ib_peer_mem.h>
 
 struct ib_ucontext;
 struct ib_umem_odp;
-struct ib_umem;
-
-typedef void (*umem_invalidate_func_t)(void *invalidation_cookie,
-		struct ib_umem *umem,
-		unsigned long addr, size_t size);
-
-struct invalidation_ctx {
-	struct ib_umem *umem;
-	u64 context_ticket;
-	umem_invalidate_func_t func;
-	void *cookie;
-	int peer_callback;
-	int inflight_invalidation;
-	int peer_invalidated;
-	struct completion comp;
-};
 
 struct ib_umem {
-	struct ib_ucontext     *context;
+	struct ib_device       *ibdev;
 	struct mm_struct       *owning_mm;
 	size_t			length;
 	unsigned long		address;
-	int			page_shift;
 	u32 writable : 1;
-	u32 hugetlb : 1;
 	u32 is_odp : 1;
+	/* Placing at the end of the bitfield list is ABI preserving on LE */
+	u32 is_peer : 1;
 	struct work_struct	work;
 	struct sg_table sg_head;
 	int             nmap;
 	unsigned int    sg_nents;
-	/* peer memory that manages this umem */
-	struct ib_peer_memory_client *ib_peer_mem;
-	struct invalidation_ctx *invalidation_ctx;
-	/* peer memory private context */
-	void *peer_mem_client_context;
+};
+
+typedef void (*umem_invalidate_func_t)(struct ib_umem *umem, void *priv);
+enum ib_peer_mem_flags {
+	IB_PEER_MEM_ALLOW = 1 << 0,
+	IB_PEER_MEM_INVAL_SUPP = 1 << 1,
 };
 
 /* Returns the offset of the umem start relative to the first page. */
 static inline int ib_umem_offset(struct ib_umem *umem)
 {
-	return umem->address & (BIT(umem->page_shift) - 1);
-}
-
-/* Returns the first page of an ODP umem. */
-static inline unsigned long ib_umem_start(struct ib_umem *umem)
-{
-	return umem->address - ib_umem_offset(umem);
-}
-
-/* Returns the address of the page after the last one of an ODP umem. */
-static inline unsigned long ib_umem_end(struct ib_umem *umem)
-{
-	return ALIGN(umem->address + umem->length, BIT(umem->page_shift));
+	return umem->address & ~PAGE_MASK;
 }
 
 static inline size_t ib_umem_num_pages(struct ib_umem *umem)
 {
-	return (ib_umem_end(umem) - ib_umem_start(umem)) >> umem->page_shift;
+	return (ALIGN(umem->address + umem->length, PAGE_SIZE) -
+		ALIGN_DOWN(umem->address, PAGE_SIZE)) >>
+	       PAGE_SHIFT;
 }
 
 #ifdef CONFIG_INFINIBAND_USER_MEM
 
-struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
-			    size_t size, int access, int dmasync,
-			    unsigned long peer_mem_flags);
+struct ib_umem *ib_umem_get(struct ib_device *device, unsigned long addr,
+			    size_t size, int access);
 void ib_umem_release(struct ib_umem *umem);
 int ib_umem_page_count(struct ib_umem *umem);
 int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
@@ -113,26 +86,26 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
 unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 				     unsigned long pgsz_bitmap,
 				     unsigned long virt);
-int  ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-						   umem_invalidate_func_t func,
-						   void *cookie);
+
+struct ib_umem *ib_umem_get_peer(struct ib_device *device, unsigned long addr,
+				 size_t size, int access,
+				 unsigned long peer_mem_flags);
+void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
+					    umem_invalidate_func_t func,
+					    void *cookie);
 
 #else /* CONFIG_INFINIBAND_USER_MEM */
 
 #include <linux/err.h>
 
-static inline struct ib_umem *ib_umem_get(struct ib_udata *udata,
-					     unsigned long addr, size_t size,
-					     int access, int dmasync,
-					     unsigned long peer_mem_flags) {
+static inline struct ib_umem *ib_umem_get(struct ib_device *device,
+					  unsigned long addr, size_t size,
+					  int access)
 {
 	return ERR_PTR(-EINVAL);
 }
 static inline void ib_umem_release(struct ib_umem *umem) { }
 static inline int ib_umem_page_count(struct ib_umem *umem) { return 0; }
-static inline int  ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-						   umem_invalidate_func_t func,
-						   void *cookie) { return 0; }
 static inline int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
 		      		    size_t length) {
 	return -EINVAL;
@@ -141,6 +114,19 @@ static inline int ib_umem_find_best_pgsz(struct ib_umem *umem,
 					 unsigned long pgsz_bitmap,
 					 unsigned long virt) {
 	return -EINVAL;
+}
+
+static inline struct ib_umem *ib_umem_get_peer(struct ib_device *device,
+					       unsigned long addr, size_t size,
+					       int access,
+					       unsigned long peer_mem_flags)
+{
+	return ERR_PTR(-EINVAL);
+}
+
+static inline void ib_umem_activate_invalidation_notifier(
+	struct ib_umem *umem, umem_invalidate_func_t func, void *cookie)
+{
 }
 
 #endif /* CONFIG_INFINIBAND_USER_MEM */

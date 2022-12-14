@@ -47,31 +47,9 @@
 #include <rdma/ib_umem.h>
 #include <rdma/ib_user_verbs.h>
 #include <rdma/uverbs_std_types.h>
-#include <rdma/ib_user_verbs_exp.h>
 
 #define UVERBS_MODULE_NAME ib_uverbs
 #include <rdma/uverbs_named_ioctl.h>
-
-struct uverbs_lock_class {
-	struct lock_class_key	key;
-	char			name[16];
-};
-
-static int uverbs_copy_from_udata(void *dest, struct ib_udata *udata, size_t
-				  len)
-{
-	return copy_from_user(dest, udata->inbuf, len) ? -EFAULT : 0;
-}
-
-static int uverbs_copy_to_udata(struct ib_udata *udata, void *src, size_t len)
-{
-	return copy_to_user(udata->outbuf, src, len) ? -EFAULT : 0;
-}
-
-__used static struct ib_udata_ops uverbs_copy = {
-	.copy_from = uverbs_copy_from_udata,
-	.copy_to   = uverbs_copy_to_udata
-};
 
 static inline void
 ib_uverbs_init_udata(struct ib_udata *udata,
@@ -79,12 +57,10 @@ ib_uverbs_init_udata(struct ib_udata *udata,
 		     void __user *obuf,
 		     size_t ilen, size_t olen)
 {
-	udata->ops    = &uverbs_copy;
 	udata->inbuf  = ibuf;
 	udata->outbuf = obuf;
 	udata->inlen  = ilen;
 	udata->outlen = olen;
-	udata->is_exp = 0;
 }
 
 static inline void
@@ -122,7 +98,7 @@ ib_uverbs_init_udata_buf_or_null(struct ib_udata *udata,
 
 struct ib_uverbs_device {
 	atomic_t				refcount;
-	int					num_comp_vectors;
+	u32					num_comp_vectors;
 	struct completion			comp;
 	struct device				dev;
 	/* First group for device attributes, NULL terminated array */
@@ -179,7 +155,6 @@ struct ib_uverbs_file {
 	spinlock_t		uobjects_lock;
 	struct list_head	uobjects;
 
-	u64 uverbs_exp_cmd_mask;
 	struct mutex umap_lock;
 	struct list_head umaps;
 	struct page *disassociate_page;
@@ -295,24 +270,6 @@ int ib_uverbs_kern_spec_to_ib_spec_filter(enum ib_flow_spec_type type,
 					  const void *kern_spec_val,
 					  size_t kern_filter_sz,
 					  union ib_flow_spec *ib_spec);
-
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DEVICE);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_PD);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_MR);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_COMP_CHANNEL);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_CQ);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_QP);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_AH);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_MW);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_SRQ);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_FLOW);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_WQ);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_RWQ_IND_TBL);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_XRCD);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_FLOW_ACTION);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DM);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_COUNTERS);
-extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DCT);
 
 /*
  * ib_uverbs_query_port_resp.port_cap_flags started out as just a copy of the

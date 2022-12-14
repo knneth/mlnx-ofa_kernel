@@ -148,12 +148,6 @@ int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
 
 		if (device_create_file(&ndev->dev, &dev_attr_parent))
 			goto sysfs_failed;
-
-		if (priv->max_tx_queues > 1) {
-			if (ipoib_set_rss_sysfs(priv))
-				goto sysfs_failed;
-		}
-
 	}
 
 	return 0;

@@ -127,7 +127,7 @@ __malloc void *_uverbs_alloc(struct uverbs_attr_bundle *bundle, size_t size,
 	res = (void *)pbundle->internal_buffer + pbundle->internal_used;
 	pbundle->internal_used =
 		ALIGN(new_used, sizeof(*pbundle->internal_buffer));
-	if (flags & __GFP_ZERO)
+	if (want_init_on_alloc(flags))
 		memset(res, 0, size);
 	return res;
 }
@@ -602,32 +602,12 @@ long ib_uverbs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct ib_uverbs_ioctl_hdr __user *user_hdr =
 		(struct ib_uverbs_ioctl_hdr __user *)arg;
 	struct ib_uverbs_ioctl_hdr hdr;
-	struct ib_device *ib_dev;
 	int srcu_key;
 	int err;
 
-	if (unlikely(cmd != RDMA_VERBS_IOCTL)) {
-		srcu_key = srcu_read_lock(&file->device->disassociate_srcu);
-		ib_dev = srcu_dereference(file->device->ib_dev,
-				&file->device->disassociate_srcu);
-		if (!ib_dev) {
-			err = -EIO;
-			goto out;
-		}
-		
-		if (!ib_dev->ops.exp_ioctl) {
-			err = -ENOIOCTLCMD;
-			goto out;
-		}
+	if (unlikely(cmd != RDMA_VERBS_IOCTL))
+		return -ENOIOCTLCMD;
 
-		if (!file->ucontext) {
-			err = -ENODEV;
-			goto out;
-		}
-		/* provider should provide it's own locking mechanism */
-		err = ib_dev->ops.exp_ioctl(file->ucontext, cmd, arg);
-		goto out;
-	}	
 	err = copy_from_user(&hdr, user_hdr, sizeof(hdr));
 	if (err)
 		return -EFAULT;
@@ -641,7 +621,6 @@ long ib_uverbs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	srcu_key = srcu_read_lock(&file->device->disassociate_srcu);
 	err = ib_uverbs_cmd_verbs(file, &hdr, user_hdr->attrs);
-out:
 	srcu_read_unlock(&file->device->disassociate_srcu, srcu_key);
 	return err;
 }
@@ -740,10 +719,6 @@ void uverbs_fill_udata(struct uverbs_attr_bundle *bundle,
 		udata->outbuf = NULL;
 		udata->outlen = 0;
 	}
-
-	/* There aren't experimental verbs over new uverbs infrastructure */
-	udata->is_exp = 0;
-
 }
 
 int uverbs_copy_to(const struct uverbs_attr_bundle *bundle, size_t idx,
@@ -805,6 +780,9 @@ int uverbs_copy_to_struct_or_zero(const struct uverbs_attr_bundle *bundle,
 				  size_t idx, const void *from, size_t size)
 {
 	const struct uverbs_attr *attr = uverbs_attr_get(bundle, idx);
+
+	if (IS_ERR(attr))
+		return PTR_ERR(attr);
 
 	if (size < attr->ptr_attr.len) {
 		if (clear_user(u64_to_user_ptr(attr->ptr_attr.data) + size,

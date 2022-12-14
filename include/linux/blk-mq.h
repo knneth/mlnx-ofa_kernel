@@ -80,6 +80,11 @@ typedef int blk_status_t;
 #define BLK_STS_NEXUS		-EBADE
 #define BLK_STS_PROTECTION	-EILSEQ
 
+static inline int blk_status_to_errno(blk_status_t status)
+{
+        return status;
+}
+
 #endif /* HAVE_BLK_STATUS_T */
 
 #ifndef HAVE_BLK_PATH_ERROR

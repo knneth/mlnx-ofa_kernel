@@ -20,9 +20,9 @@ static int mlx5e_tc_tun_calc_hlen_geneve(struct mlx5e_encap_entry *e)
 }
 
 static int mlx5e_tc_tun_check_udp_dport_geneve(struct mlx5e_priv *priv,
-					       struct tc_cls_flower_offload *f)
+					       struct flow_cls_offload *f)
 {
-	struct flow_rule *rule = tc_cls_flower_offload_flow_rule(f);
+	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
 	struct netlink_ext_ack *extack = f->common.extack;
 	struct flow_match_ports enc_ports;
 
@@ -48,7 +48,7 @@ static int mlx5e_tc_tun_check_udp_dport_geneve(struct mlx5e_priv *priv,
 
 static int mlx5e_tc_tun_parse_udp_ports_geneve(struct mlx5e_priv *priv,
 					       struct mlx5_flow_spec *spec,
-					       struct tc_cls_flower_offload *f,
+					       struct flow_cls_offload *f,
 					       void *headers_c,
 					       void *headers_v)
 {
@@ -122,9 +122,9 @@ static int mlx5e_gen_ip_tunnel_header_geneve(char buf[],
 
 static int mlx5e_tc_tun_parse_geneve_vni(struct mlx5e_priv *priv,
 					 struct mlx5_flow_spec *spec,
-					 struct tc_cls_flower_offload *f)
+					 struct flow_cls_offload *f)
 {
-	struct flow_rule *rule = tc_cls_flower_offload_flow_rule(f);
+	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
 	struct netlink_ext_ack *extack = f->common.extack;
 	struct flow_match_enc_keyid enc_keyid;
 	void *misc_c, *misc_v;
@@ -154,11 +154,11 @@ static int mlx5e_tc_tun_parse_geneve_vni(struct mlx5e_priv *priv,
 
 static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 					     struct mlx5_flow_spec *spec,
-					     struct tc_cls_flower_offload *f)
+					     struct flow_cls_offload *f)
 {
 	u8 max_tlv_option_data_len = MLX5_CAP_GEN(priv->mdev, max_geneve_tlv_option_data_len);
 	u8 max_tlv_options = MLX5_CAP_GEN(priv->mdev, max_geneve_tlv_options);
-	struct flow_rule *rule = tc_cls_flower_offload_flow_rule(f);
+	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
 	struct netlink_ext_ack *extack = f->common.extack;
 	void *misc_c, *misc_v, *misc_3_c, *misc_3_v;
 	struct geneve_opt *option_key, *option_mask;
@@ -220,14 +220,12 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 		return -EOPNOTSUPP;
 	}
 
+	MLX5_SET(fte_match_set_misc, misc_c, geneve_opt_len, enc_opts.mask->len / 4);
+	MLX5_SET(fte_match_set_misc, misc_v, geneve_opt_len, enc_opts.key->len / 4);
+
 	/* we support matching on one option only, so just get it */
 	option_key = (struct geneve_opt *)&enc_opts.key->data[0];
 	option_mask = (struct geneve_opt *)&enc_opts.mask->data[0];
-
-	/* Don't do option check if class/mask is 0 */
-	if (!option_key->opt_class ||
-	    !memchr_inv(option_mask->opt_data, 0, option_mask->length * 4))
-		return 0;
 
 	if (option_key->length > max_tlv_option_data_len) {
 		NL_SET_ERR_MSG_MOD(extack,
@@ -246,9 +244,6 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 			    "Matching on GENEVE options: can't match on 0 data field\n");
 		return -EOPNOTSUPP;
 	}
-
-	MLX5_SET(fte_match_set_misc, misc_c, geneve_opt_len, enc_opts.mask->len / 4);
-	MLX5_SET(fte_match_set_misc, misc_v, geneve_opt_len, enc_opts.key->len / 4);
 
 	/* add new GENEVE TLV options object */
 	res = mlx5_geneve_tlv_option_add(priv->mdev->geneve, option_key);
@@ -282,7 +277,7 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 
 static int mlx5e_tc_tun_parse_geneve_params(struct mlx5e_priv *priv,
 					    struct mlx5_flow_spec *spec,
-					    struct tc_cls_flower_offload *f)
+					    struct flow_cls_offload *f)
 {
 	void *misc_c = MLX5_ADDR_OF(fte_match_param, spec->match_criteria, misc_parameters);
 	void *misc_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,  misc_parameters);
@@ -311,7 +306,7 @@ static int mlx5e_tc_tun_parse_geneve_params(struct mlx5e_priv *priv,
 
 static int mlx5e_tc_tun_parse_geneve(struct mlx5e_priv *priv,
 				     struct mlx5_flow_spec *spec,
-				     struct tc_cls_flower_offload *f,
+				     struct flow_cls_offload *f,
 				     void *headers_c,
 				     void *headers_v)
 {

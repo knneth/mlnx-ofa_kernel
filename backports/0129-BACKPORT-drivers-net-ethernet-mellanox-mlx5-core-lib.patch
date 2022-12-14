@@ -1,0 +1,16 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
+
+Change-Id: I63cc0205dc354aa8ad78442ebb3230ab3fd29bac
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
+@@ -95,5 +95,4 @@ static inline struct net *mlx5_core_net(
+ {
+ 	return devlink_net(priv_to_devlink(dev));
+ }
+-
+ #endif

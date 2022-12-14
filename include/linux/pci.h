@@ -218,4 +218,8 @@ static inline void register_pcie_dev_attr_group(struct pci_dev *pdev) { }
 static inline void unregister_pcie_dev_attr_group(struct pci_dev *pdev) { }
 #endif
 
+#if !defined(HAVE_PCIE_ASPM_ENABLED) && defined(HAVE_PM_SUSPEND_VIA_FIRMWARE)
+static inline bool pcie_aspm_enabled(struct pci_dev *pdev) { return false; }
+#endif
+
 #endif /* _LINUX_PCI_H */

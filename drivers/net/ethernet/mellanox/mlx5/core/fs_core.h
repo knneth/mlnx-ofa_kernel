@@ -33,7 +33,6 @@
 #ifndef _MLX5_FS_CORE_
 #define _MLX5_FS_CORE_
 
-#include "fs_debugfs.h"
 #include <linux/refcount.h>
 #include <linux/mlx5/fs.h>
 #include <linux/rhashtable.h>
@@ -56,8 +55,6 @@ struct mlx5_pkt_reformat {
 		u32 id;
 	};
 };
-
-#define MINIFLOW_MAX_FLOWS 12
 
 /* FS_TYPE_PRIO_CHAINS is a PRIO that will have namespaces only,
  * and those are in parallel to one another when going over them to connect
@@ -89,7 +86,8 @@ enum fs_flow_table_type {
 	FS_FT_SNIFFER_RX	= 0X5,
 	FS_FT_SNIFFER_TX	= 0X6,
 	FS_FT_RDMA_RX		= 0X7,
-	FS_FT_MAX_TYPE = FS_FT_SNIFFER_TX,
+	FS_FT_RDMA_TX		= 0X8,
+	FS_FT_MAX_TYPE = FS_FT_RDMA_TX,
 };
 
 enum fs_flow_table_op_mod {
@@ -110,9 +108,8 @@ struct mlx5_flow_steering {
 	struct mlx5_core_dev *dev;
 	enum   mlx5_flow_steering_mode	mode;
 	struct kmem_cache		*fgs_cache;
-	struct kmem_cache		*ftes_cache;
+	struct kmem_cache               *ftes_cache;
 	struct mlx5_flow_root_namespace *root_ns;
-	struct dentry			*debugfs;
 	struct mlx5_flow_root_namespace *fdb_root_ns;
 	struct mlx5_flow_namespace	**fdb_sub_ns;
 	struct mlx5_flow_root_namespace **esw_egress_root_ns;
@@ -120,6 +117,7 @@ struct mlx5_flow_steering {
 	struct mlx5_flow_root_namespace	*sniffer_tx_root_ns;
 	struct mlx5_flow_root_namespace	*sniffer_rx_root_ns;
 	struct mlx5_flow_root_namespace	*rdma_rx_root_ns;
+	struct mlx5_flow_root_namespace	*rdma_tx_root_ns;
 	struct mlx5_flow_root_namespace	*egress_root_ns;
 };
 
@@ -136,27 +134,22 @@ struct fs_node {
 	void			(*del_hw_func)(struct fs_node *);
 	void			(*del_sw_func)(struct fs_node *);
 	atomic_t		version;
-	/* debugfs */
-	struct fs_debugfs_node	debugfs;
-	const char		*name;
 };
 
 struct mlx5_flow_rule {
 	struct fs_node				node;
+	struct mlx5_flow_table			*ft;
 	struct mlx5_flow_destination		dest_attr;
 	/* next_ft should be accessed under chain_lock and only of
 	 * destination type is FWD_NEXT_fT.
 	 */
 	struct list_head			next_ft;
 	u32					sw_action;
-	/* Increased when user (sniffer) calls to mlx5_get_flow_rule */
-	atomic_t				users_refcount;
-	/* Completed when users_refcount is decremented to zero */
-	struct completion			complete;
-	struct list_head			clients_data;
-	/* Protect clients data list */
-	struct mutex				clients_lock;
-	struct fs_debugfs_dst			debugfs;
+};
+
+struct mlx5_flow_handle {
+	int num_rules;
+	struct mlx5_flow_rule *rule[];
 };
 
 /* Type of children is mlx5_flow_group */
@@ -171,10 +164,10 @@ struct mlx5_flow_table {
 	enum fs_flow_table_op_mod	op_mod;
 	struct {
 		bool			active;
+		unsigned int		required_groups;
+		unsigned int		group_size;
 		unsigned int		num_groups;
-		unsigned int		required_big_groups;
-		unsigned int		big_group_size;
-		unsigned int		num_big_groups;
+		unsigned int		max_fte;
 	} autogroup;
 	/* Protect fwd_rules */
 	struct mutex			lock;
@@ -182,8 +175,8 @@ struct mlx5_flow_table {
 	struct list_head		fwd_rules;
 	u32				flags;
 	struct rhltable			fgs_hash;
-	struct fs_debugfs_ft		debugfs;
 	enum mlx5_flow_table_miss_action def_miss_action;
+	struct mlx5_flow_namespace	*ns;
 };
 
 struct mlx5_ft_underlay_qp {
@@ -191,7 +184,7 @@ struct mlx5_ft_underlay_qp {
 	u32 qpn;
 };
 
-#define MLX5_FTE_MATCH_PARAM_RESERVED	reserved_at_a00
+#define MLX5_FTE_MATCH_PARAM_RESERVED	reserved_at_c00
 /* Calculate the fte_match_param length and without the reserved length.
  * Make sure the reserved field is the last.
  */
@@ -215,9 +208,7 @@ struct fs_fte {
 	enum fs_fte_status		status;
 	struct mlx5_fc			*counter;
 	struct rhash_head		hash;
-	struct fs_debugfs_fte		debugfs;
 	int				modify_mask;
-	u32				handle;
 };
 
 /* Type of children is mlx5_flow_table/namespace */
@@ -227,20 +218,12 @@ struct fs_prio {
 	unsigned int			start_level;
 	unsigned int			prio;
 	unsigned int			num_ft;
-	struct fs_debugfs_prio		debugfs;
 };
 
 /* Type of children is fs_prio */
 struct mlx5_flow_namespace {
 	/* parent == NULL => root ns */
 	struct	fs_node			node;
-	/* Listeners list for rule add/del operations */
-	struct raw_notifier_head	listeners;
-	/* We take write lock when we iterate on the
-	 * namespace's rules.
-	 */
-	struct  rw_semaphore		ns_rw_sem;
-	struct	fs_debugfs_ns		debugfs;
 	enum mlx5_flow_table_miss_action def_miss_action;
 };
 
@@ -260,7 +243,6 @@ struct mlx5_flow_group {
 	u32				id;
 	struct rhashtable		ftes_hash;
 	struct rhlist_head		hash;
-	struct fs_debugfs_fg		debugfs;
 };
 
 struct mlx5_flow_root_namespace {
@@ -283,12 +265,6 @@ void mlx5_fc_queue_stats_work(struct mlx5_core_dev *dev,
 			      unsigned long delay);
 void mlx5_fc_update_sampling_interval(struct mlx5_core_dev *dev,
 				      unsigned long interval);
-
-struct rule_client_data {
-	struct notifier_block *nb;
-	struct list_head list;
-	void   *client_data;
-};
 
 const struct mlx5_flow_cmds *mlx5_fs_cmd_get_fw_cmds(void);
 
@@ -346,7 +322,9 @@ void mlx5_flow_vport_disable(struct mlx5_flow_root_namespace *ns, int vport);
 	(type == FS_FT_FDB) ? MLX5_CAP_ESW_FLOWTABLE_FDB(mdev, cap) :		\
 	(type == FS_FT_SNIFFER_RX) ? MLX5_CAP_FLOWTABLE_SNIFFER_RX(mdev, cap) :		\
 	(type == FS_FT_SNIFFER_TX) ? MLX5_CAP_FLOWTABLE_SNIFFER_TX(mdev, cap) :		\
-	(BUILD_BUG_ON_ZERO(FS_FT_SNIFFER_TX != FS_FT_MAX_TYPE))\
+	(type == FS_FT_RDMA_RX) ? MLX5_CAP_FLOWTABLE_RDMA_RX(mdev, cap) :		\
+	(type == FS_FT_RDMA_TX) ? MLX5_CAP_FLOWTABLE_RDMA_TX(mdev, cap) :      \
+	(BUILD_BUG_ON_ZERO(FS_FT_RDMA_TX != FS_FT_MAX_TYPE))\
 	)
 
 #endif

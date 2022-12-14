@@ -1,0 +1,46 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+
+Change-Id: I0e0b966f5095ceab22ca0d1030832d65c4b11c02
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+@@ -42,6 +42,10 @@
+ 
+ extern const struct ethtool_ops mlx5i_ethtool_ops;
+ extern const struct ethtool_ops mlx5i_pkey_ethtool_ops;
++#ifdef HAVE_ETHTOOL_OPS_EXT
++extern const struct ethtool_ops_ext mlx5i_ethtool_ops_ext;
++extern const struct ethtool_ops_ext mlx5i_pkey_ethtool_ops_ext;
++#endif
+ 
+ #define MLX5_IB_GRH_BYTES       40
+ #define MLX5_IPOIB_ENCAP_LEN    4
+@@ -113,10 +117,22 @@ struct mlx5i_tx_wqe {
+ 	((struct mlx5i_tx_wqe *)mlx5e_fetch_wqe(&(sq)->wq, pi, sizeof(struct mlx5i_tx_wqe)))
+ 
+ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+-		   struct mlx5_av *av, u32 dqpn, u32 dqkey, bool xmit_more);
++		   struct mlx5_av *av, u32 dqpn, u32 dqkey
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
++		   , bool xmit_more);
++#else
++		   );
++#endif
+ void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
+ 			 bool xmit_more);
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
+ void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
++#elif defined(HAVE_NDO_GET_STATS64)
++struct rtnl_link_stats64 * mlx5i_get_stats(struct net_device *dev,
++					   struct rtnl_link_stats64 *stats);
++#else
++struct net_device_stats * mlx5i_get_stats(struct net_device *dev);
++#endif
+ 
+ #endif /* CONFIG_MLX5_CORE_IPOIB */
+ #endif /* __MLX5E_IPOB_H__ */

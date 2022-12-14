@@ -28,7 +28,7 @@
 
 DEST_DIR=$1; shift
 
-with_mlx4=${with_mlx4:-1}
+with_mlx4=${with_mlx4:-0}
 with_mlx5=${with_mlx5:-1}
 
 # is systemd supported and systemctl exists

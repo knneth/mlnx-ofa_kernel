@@ -1,0 +1,301 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-bdev.c
+
+Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
+---
+ drivers/nvme/target/io-cmd-bdev.c | 125 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 124 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/target/io-cmd-bdev.c
++++ b/drivers/nvme/target/io-cmd-bdev.c
+@@ -52,6 +52,8 @@ void nvmet_bdev_set_limits(struct block_
+ 
+ static void nvmet_bdev_ns_enable_integrity(struct nvmet_ns *ns)
+ {
++#if defined(CONFIG_BLK_DEV_INTEGRITY_T10) && \
++	defined(HAVE_BLKDEV_BIO_INTEGRITY_BYTES)
+ 	struct blk_integrity *bi = bdev_get_integrity(ns->bdev);
+ 
+ 	if (bi) {
+@@ -64,6 +66,7 @@ static void nvmet_bdev_ns_enable_integri
+ 			/* Unsupported metadata type */
+ 			ns->metadata_size = 0;
+ 	}
++#endif
+ }
+ 
+ int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
+@@ -105,6 +108,7 @@ void nvmet_bdev_ns_revalidate(struct nvm
+ 	ns->size = i_size_read(ns->bdev->bd_inode);
+ }
+ 
++#ifdef HAVE_BLK_STATUS_T
+ static u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts)
+ {
+ 	u16 status = NVME_SC_SUCCESS;
+@@ -162,17 +166,29 @@ static u16 blk_to_nvme_status(struct nvm
+ 	}
+ 	return status;
+ }
++#endif
+ 
++#ifdef HAVE_BIO_ENDIO_1_PARAM
+ static void nvmet_bio_done(struct bio *bio)
++#else
++static void nvmet_bio_done(struct bio *bio, int error)
++#endif
+ {
+ 	struct nvmet_req *req = bio->bi_private;
+ 
++#ifdef HAVE_BLK_STATUS_T
+ 	nvmet_req_complete(req, blk_to_nvme_status(req, bio->bi_status));
++#elif defined(HAVE_STRUCT_BIO_BI_ERROR)
++	nvmet_req_complete(req, bio->bi_error ? NVME_SC_INTERNAL | NVME_SC_DNR : 0);
++#else
++	nvmet_req_complete(req, error ? NVME_SC_INTERNAL | NVME_SC_DNR : 0);
++#endif
+ 	if (bio != &req->b.inline_bio)
+ 		bio_put(bio);
+ }
+ 
+-#ifdef CONFIG_BLK_DEV_INTEGRITY
++#if defined(CONFIG_BLK_DEV_INTEGRITY) && \
++	defined(HAVE_BLKDEV_BIO_INTEGRITY_BYTES)
+ static int nvmet_bdev_alloc_bip(struct nvmet_req *req, struct bio *bio,
+ 				struct sg_mapping_iter *miter)
+ {
+@@ -235,6 +251,9 @@ static void nvmet_bdev_execute_rw(struct
+ 	struct blk_plug plug;
+ 	sector_t sector;
+ 	int op, i, rc;
++#ifndef HAVE_BLK_TYPE_OP_IS_SYNC
++	int op_flags = 0;
++#endif
+ 	struct sg_mapping_iter prot_miter;
+ 	unsigned int iter_flags;
+ 	unsigned int total_len = nvmet_rw_data_len(req) + req->metadata_len;
+@@ -248,9 +267,22 @@ static void nvmet_bdev_execute_rw(struct
+ 	}
+ 
+ 	if (req->cmd->rw.opcode == nvme_cmd_write) {
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
++#ifdef HAVE_REQ_IDLE
+ 		op = REQ_OP_WRITE | REQ_SYNC | REQ_IDLE;
++#else
++		op = REQ_OP_WRITE | WRITE_ODIRECT;
++#endif
++#else
++		op = REQ_OP_WRITE;
++		op_flags = REQ_SYNC;
++#endif /* HAVE_BLK_TYPE_OP_IS_SYNC */
+ 		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
+ 			op |= REQ_FUA;
++#else
++			op_flags |= REQ_FUA;
++#endif
+ 		iter_flags = SG_MITER_TO_SG;
+ 	} else {
+ 		op = REQ_OP_READ;
+@@ -258,22 +290,48 @@ static void nvmet_bdev_execute_rw(struct
+ 	}
+ 
+ 	if (is_pci_p2pdma_page(sg_page(req->sg)))
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
+ 		op |= REQ_NOMERGE;
++#else
++		op_flags |= REQ_NOMERGE;
++#endif
+ 
+ 	sector = le64_to_cpu(req->cmd->rw.slba);
+ 	sector <<= (req->ns->blksize_shift - 9);
+ 
+ 	if (req->transfer_len <= NVMET_MAX_INLINE_DATA_LEN) {
+ 		bio = &req->b.inline_bio;
++#ifdef HAVE_BIO_INIT_3_PARAMS
+ 		bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#else
++		bio_init(bio);
++		bio->bi_io_vec = req->inline_bvec;
++		bio->bi_max_vecs = ARRAY_SIZE(req->inline_bvec);
++#endif
+ 	} else {
+ 		bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
+ 	}
++#ifdef HAVE_BIO_BI_DISK
+ 	bio_set_dev(bio, req->ns->bdev);
++#else
++	bio->bi_bdev = req->ns->bdev;
++#endif
++#ifdef HAVE_STRUCT_BIO_BI_ITER
+ 	bio->bi_iter.bi_sector = sector;
++#else
++	bio->bi_sector = sector;
++#endif
+ 	bio->bi_private = req;
+ 	bio->bi_end_io = nvmet_bio_done;
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
+ 	bio->bi_opf = op;
++#else
++	bio_set_op_attrs(bio, op, op_flags);
++#endif
++
++#ifdef HAVE_RH7_STRUCT_BIO_AUX
++	bio_init_aux(bio, &req->bio_aux);
++#endif
+ 
+ 	blk_start_plug(&plug);
+ 	if (req->metadata_len)
+@@ -295,12 +353,28 @@ static void nvmet_bdev_execute_rw(struct
+ 			}
+ 
+ 			bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
++#ifdef HAVE_BIO_BI_DISK
+ 			bio_set_dev(bio, req->ns->bdev);
++#else
++			bio->bi_bdev = req->ns->bdev;
++#endif
++#ifdef HAVE_STRUCT_BIO_BI_ITER
+ 			bio->bi_iter.bi_sector = sector;
++#else
++			bio->bi_sector = sector;
++#endif
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
+ 			bio->bi_opf = op;
++#else
++			bio_set_op_attrs(bio, op, op_flags);
++#endif
+ 
+ 			bio_chain(bio, prev);
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 			submit_bio(prev);
++#else
++			submit_bio(bio_data_dir(prev), prev);
++#endif
+ 		}
+ 
+ 		sector += sg->length >> 9;
+@@ -315,7 +389,11 @@ static void nvmet_bdev_execute_rw(struct
+ 		}
+ 	}
+ 
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 	submit_bio(bio);
++#else
++	submit_bio(bio_data_dir(bio), bio);
++#endif
+ 	blk_finish_plug(&plug);
+ }
+ 
+@@ -326,13 +404,31 @@ static void nvmet_bdev_execute_flush(str
+ 	if (!nvmet_check_transfer_len(req, 0))
+ 		return;
+ 
++#ifdef HAVE_BIO_INIT_3_PARAMS
+ 	bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#else
++	bio_init(bio);
++	bio->bi_io_vec = req->inline_bvec;
++	bio->bi_max_vecs = ARRAY_SIZE(req->inline_bvec);
++#endif
++#ifdef HAVE_BIO_BI_DISK
+ 	bio_set_dev(bio, req->ns->bdev);
++#else
++	bio->bi_bdev = req->ns->bdev;
++#endif
+ 	bio->bi_private = req;
+ 	bio->bi_end_io = nvmet_bio_done;
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
+ 	bio->bi_opf = REQ_OP_WRITE | REQ_PREFLUSH;
++#else
++	bio_set_op_attrs(bio, REQ_OP_WRITE, WRITE_FLUSH);
++#endif
+ 
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 	submit_bio(bio);
++#else
++	submit_bio(bio_data_dir(bio), bio);
++#endif
+ }
+ 
+ u16 nvmet_bdev_flush(struct nvmet_req *req)
+@@ -348,10 +444,17 @@ static u16 nvmet_bdev_discard_range(stru
+ 	struct nvmet_ns *ns = req->ns;
+ 	int ret;
+ 
++#ifdef HAVE___BLKDEV_ISSUE_DISCARD
+ 	ret = __blkdev_issue_discard(ns->bdev,
+ 			le64_to_cpu(range->slba) << (ns->blksize_shift - 9),
+ 			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
+ 			GFP_KERNEL, 0, bio);
++#else
++	ret = blkdev_issue_discard(ns->bdev,
++			le64_to_cpu(range->slba) << (ns->blksize_shift - 9),
++			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
++			GFP_KERNEL, 0);
++#endif
+ 	if (ret && ret != -EOPNOTSUPP) {
+ 		req->error_slba = le64_to_cpu(range->slba);
+ 		return errno_to_nvme_status(req, ret);
+@@ -383,7 +486,11 @@ static void nvmet_bdev_execute_discard(s
+ 		if (status)
+ 			bio_io_error(bio);
+ 		else
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 			submit_bio(bio);
++#else
++			submit_bio(bio_data_dir(bio), bio);
++#endif
+ 	} else {
+ 		nvmet_req_complete(req, status);
+ 	}
+@@ -407,6 +514,7 @@ static void nvmet_bdev_execute_dsm(struc
+ 	}
+ }
+ 
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ static void nvmet_bdev_execute_write_zeroes(struct nvmet_req *req)
+ {
+ 	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
+@@ -423,16 +531,29 @@ static void nvmet_bdev_execute_write_zer
+ 	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length) + 1) <<
+ 		(req->ns->blksize_shift - 9));
+ 
++#ifdef CONFIG_COMPAT_IS_BLKDEV_ISSUE_ZEROOUT_HAS_FLAGS
+ 	ret = __blkdev_issue_zeroout(req->ns->bdev, sector, nr_sector,
+ 			GFP_KERNEL, &bio, 0);
++#else
++	if (__blkdev_issue_zeroout(req->ns->bdev, sector, nr_sector,
++			GFP_KERNEL, &bio, true))
++		ret = -EIO;
++	else
++		ret = 0;
++#endif
+ 	if (bio) {
+ 		bio->bi_private = req;
+ 		bio->bi_end_io = nvmet_bio_done;
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 		submit_bio(bio);
++#else
++		submit_bio(bio_data_dir(bio), bio);
++#endif
+ 	} else {
+ 		nvmet_req_complete(req, errno_to_nvme_status(req, ret));
+ 	}
+ }
++#endif
+ 
+ u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req)
+ {
+@@ -451,9 +572,11 @@ u16 nvmet_bdev_parse_io_cmd(struct nvmet
+ 	case nvme_cmd_dsm:
+ 		req->execute = nvmet_bdev_execute_dsm;
+ 		return 0;
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ 	case nvme_cmd_write_zeroes:
+ 		req->execute = nvmet_bdev_execute_write_zeroes;
+ 		return 0;
++#endif
+ 	default:
+ 		pr_err("unhandled cmd %d on qid %d\n", cmd->common.opcode,
+ 		       req->sq->qid);

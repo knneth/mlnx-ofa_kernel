@@ -6,6 +6,10 @@
 
 #include_next <linux/netdevice.h>
 
+#undef alloc_netdev
+#define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
+	        alloc_netdev_mqs(sizeof_priv, name, name_assign_type, setup, 1, 1)
+
 /* supports eipoib flags */
 #ifndef IFF_EIPOIB_VIF
 #define IFF_EIPOIB_VIF  0x800       /* IPoIB VIF intf(eg ib0.x, ib1.x etc.), using IFF_DONT_BRIDGE */
@@ -359,4 +363,32 @@ struct tc_to_netdev {
 };
 #endif
 
+#ifndef HAVE_NETDEV_NET_NOTIFIER
+struct netdev_net_notifier {
+	struct list_head list;
+	struct notifier_block *nb;
+};
+
+static inline int
+register_netdevice_notifier_dev_net(struct net_device *dev,
+				    struct notifier_block *nb,
+				    struct netdev_net_notifier *nn)
+{
+	return register_netdevice_notifier(nb);
+}
+
+static inline int
+unregister_netdevice_notifier_dev_net(struct net_device *dev,
+				      struct notifier_block *nb,
+				      struct netdev_net_notifier *nn)
+{
+	return unregister_netdevice_notifier(nb);
+}
+#endif /* HAVE_NETDEV_NET_NOTIFIER */
+
+/* const version */
+static inline bool netif_device_present_const(const struct net_device *dev)
+{
+	return test_bit(__LINK_STATE_PRESENT, &dev->state);
+}
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

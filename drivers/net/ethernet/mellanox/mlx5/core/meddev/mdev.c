@@ -8,7 +8,7 @@
 #include "mlx5_core.h"
 #include "meddev/sf.h"
 #include "eswitch.h"
-#ifdef CONFIG_MLX5_ESWITCH
+
 struct mlx5_mdev_table {
 	struct mlx5_sf_table sf_table;
 	/* Synchronizes with mdev table cleanup check and mdev creation. */
@@ -289,4 +289,3 @@ bool mlx5_medev_can_and_mark_cleanup(struct mlx5_core_dev *dev)
 	up_write(&table->cleanup_rwsem);
 	return true;
 }
-#endif/*CONFIG_MLX5_ESWITCH*/

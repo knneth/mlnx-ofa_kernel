@@ -448,9 +448,9 @@ static int uapi_finalize(struct uverbs_api *uapi)
 	uapi->notsupp_method.handler = ib_uverbs_notsupp;
 	uapi->num_write = max_write + 1;
 	uapi->num_write_ex = max_write_ex + 1;
-	data = kmalloc_array(uapi->num_write + uapi->num_write_ex + uapi->num_write_exp,
+	data = kmalloc_array(uapi->num_write + uapi->num_write_ex,
 			     sizeof(*uapi->write_methods), GFP_KERNEL);
-	for (i = 0; i != uapi->num_write + uapi->num_write_ex + uapi->num_write_exp; i++)
+	for (i = 0; i != uapi->num_write + uapi->num_write_ex; i++)
 		data[i] = &uapi->notsupp_method;
 	uapi->write_methods = data;
 	uapi->write_ex_methods = data + uapi->num_write;
@@ -635,7 +635,6 @@ static const struct uapi_definition uverbs_core_api[] = {
 	UAPI_DEF_CHAIN(uverbs_def_obj_intf),
 	UAPI_DEF_CHAIN(uverbs_def_obj_mr),
 	UAPI_DEF_CHAIN(uverbs_def_write_intf),
-	UAPI_DEF_CHAIN(uverbs_def_obj_dct),
 	{},
 };
 
@@ -649,7 +648,7 @@ struct uverbs_api *uverbs_alloc_api(struct ib_device *ibdev)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_RADIX_TREE(&uapi->radix, GFP_KERNEL);
-	uapi->driver_id = ibdev->driver_id;
+	uapi->driver_id = ibdev->ops.driver_id;
 
 	rc = uapi_merge_def(uapi, ibdev, uverbs_core_api, false);
 	if (rc)

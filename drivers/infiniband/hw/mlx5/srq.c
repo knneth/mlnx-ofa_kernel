@@ -57,25 +57,20 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
 	u32 offset;
 	u32 uidx = MLX5_IB_DEFAULT_UIDX;
 
-	if (udata->is_exp) {
-		err = mlx5_ib_exp_create_srq_user(dev, in, udata, &ucmd);
-		if (err)
-			return err;
-	} else {
-		ucmdlen = min(udata->inlen, sizeof(ucmd));
-		if (ib_copy_from_udata(&ucmd, udata, ucmdlen)) {
-			mlx5_ib_dbg(dev, "failed copy udata\n");
-			return -EFAULT;
-		}
+	ucmdlen = min(udata->inlen, sizeof(ucmd));
 
-		if (ucmd.reserved0 || ucmd.reserved1)
-			return -EINVAL;
-		if (udata->inlen > sizeof(ucmd) &&
-		    !ib_is_udata_cleared(udata, sizeof(ucmd),
-					 udata->inlen - sizeof(ucmd)))
-			return -EINVAL;
+	if (ib_copy_from_udata(&ucmd, udata, ucmdlen)) {
+		mlx5_ib_dbg(dev, "failed copy udata\n");
+		return -EFAULT;
 	}
 
+	if (ucmd.reserved0 || ucmd.reserved1)
+		return -EINVAL;
+
+	if (udata->inlen > sizeof(ucmd) &&
+	    !ib_is_udata_cleared(udata, sizeof(ucmd),
+				 udata->inlen - sizeof(ucmd)))
+		return -EINVAL;
 
 	if (in->type != IB_SRQT_BASIC) {
 		err = get_srq_user_index(ucontext, &ucmd, udata->inlen, &uidx);
@@ -85,7 +80,7 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
 
 	srq->wq_sig = !!(ucmd.flags & MLX5_SRQ_FLAG_SIGNATURE);
 
-	srq->umem = ib_umem_get(udata, ucmd.buf_addr, buf_size, 0, 0, IB_PEER_MEM_ALLOW);
+	srq->umem = ib_umem_get_peer(pd->device, ucmd.buf_addr, buf_size, 0, 0);
 	if (IS_ERR(srq->umem)) {
 		mlx5_ib_dbg(dev, "failed umem get, size %d\n", buf_size);
 		err = PTR_ERR(srq->umem);

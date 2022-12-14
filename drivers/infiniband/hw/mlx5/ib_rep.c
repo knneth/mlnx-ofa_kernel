@@ -54,8 +54,9 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 			dev = peer_dev;
 		}
 	}
+
 	if (rep->vport == MLX5_VPORT_UPLINK)
-		profile = &ib_profile;
+		profile = &raw_eth_profile;
 	else
 		return mlx5_ib_set_vport_rep(dev, rep, vport_index);
 
@@ -94,7 +95,6 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	struct mlx5_core_dev *mdev = mlx5_eswitch_get_core_dev(rep->esw);
 	struct mlx5_ib_dev *dev = mlx5_ib_rep_to_dev(rep);
 	struct mlx5_ib_port *port;
-	int i;
 
 	if (mlx5_lag_is_shared_fdb(mdev) &&
 	    !mlx5_lag_is_master(mdev) &&
@@ -104,17 +104,12 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	if (!dev)
 		return;
 
-	for (i = 0; i < dev->num_ports; i++) {
-		port = &dev->port[i];
-		if (port->rep == rep) {
-			write_lock(&port->roce.netdev_lock);
-			port->roce.netdev = NULL;
-			write_unlock(&port->roce.netdev_lock);
-			rep->rep_data[REP_IB].priv = NULL;
-			port->rep = NULL;
-			break;
-		}
-	}
+	port = &dev->port[rep->vport_index];
+	write_lock(&port->roce.netdev_lock);
+	port->roce.netdev = NULL;
+	write_unlock(&port->roce.netdev_lock);
+	rep->rep_data[REP_IB].priv = NULL;
+	port->rep = NULL;
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
 		struct mlx5_core_dev *peer_mdev;
@@ -206,7 +201,7 @@ u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw)
 }
 
 u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
-						 u16 vport)
+		u16 vport)
 {
 	return mlx5_eswitch_get_vport_metadata_for_match(esw, vport);
 }

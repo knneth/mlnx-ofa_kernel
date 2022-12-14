@@ -115,13 +115,25 @@ static inline bool hash_hashed(struct hlist_node *node)
 #else /* hash_init */
 
 #ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
-#define compat_hash_for_each(hash, bkt, e, node) \
-	hash_for_each(hash, bkt, hlnode, e, node)
-#define compat_hash_for_each_possible_rcu(hash, bkt, e, node) \
-	hash_for_each_possible_rcu(hash, bkt, hlnode, e, node)
+#define compat_hash_for_each(name, bkt, obj, member) \
+	hash_for_each(name, bkt, node, obj, member)
+#define compat_hash_for_each_rcu(name, bkt, obj, member) \
+	hash_for_each_rcu(name, bkt, node, obj, member)
+#define compat_hash_for_each_safe(name, bkt, tmp, obj, member) \
+	hash_for_each_safe(name, bkt, node, tmp, obj, member)
+#define compat_hash_for_each_possible(name, obj, member, key) \
+	hash_for_each_possible(name, obj, node, member, key)
+#define compat_hash_for_each_possible_rcu(name, obj, member, key) \
+	hash_for_each_possible_rcu(name, obj, node, member, key)
+#define compat_hash_for_each_possible_safe(name, obj, tmp, member, key) \
+	hash_for_each_possible_safe(name, obj, node, tmp, member, key)
 #else
 #define compat_hash_for_each hash_for_each
+#define compat_hash_for_each_rcu hash_for_each_rcu
+#define compat_hash_for_each_safe hash_for_each_safe
+#define compat_hash_for_each_possible hash_for_each_possible
 #define compat_hash_for_each_possible_rcu hash_for_each_possible_rcu
+#define compat_hash_for_each_possible_safe hash_for_each_possible_safe
 #endif
 
 #endif /* hash_init */

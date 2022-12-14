@@ -12,4 +12,12 @@
 #define GENEVE_UDP_PORT		6081
 #endif
 
+#ifndef HAVE_NETIF_IS_GENEVE
+static inline bool netif_is_geneve(const struct net_device *dev)
+{
+	return dev->rtnl_link_ops &&
+	       !strcmp(dev->rtnl_link_ops->kind, "geneve");
+}
+#endif
+
 #endif /*ifdef_COMPAT__NET_GENEVE_H */

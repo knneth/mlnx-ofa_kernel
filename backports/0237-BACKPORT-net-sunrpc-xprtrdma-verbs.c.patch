@@ -1,0 +1,290 @@
+From: Tom Wu <tomwu@mellanox.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/verbs.c
+
+Change-Id: I22bef4fc8f8ad0574e8b433ca2e659adbe24af4b
+---
+ net/sunrpc/xprtrdma/verbs.c | 80 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 80 insertions(+)
+
+--- a/net/sunrpc/xprtrdma/verbs.c
++++ b/net/sunrpc/xprtrdma/verbs.c
+@@ -55,13 +55,22 @@
+ #include <linux/sunrpc/svc_rdma.h>
+ #include <linux/log2.h>
+ 
++#include <linux/version.h>
++
++#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)) || \
++	(defined(RHEL_MAJOR) && ((RHEL_MAJOR == 7 && RHEL_MINOR >= 6) || \
++	RHEL_MAJOR >= 8)))
+ #include <asm-generic/barrier.h>
++#endif
++
+ #include <asm/bitops.h>
+ 
+ #include <rdma/ib_cm.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ /*
+  * Globals/Macros
+@@ -125,11 +134,13 @@ static void rpcrdma_xprt_drain(struct rp
+ static void
+ rpcrdma_qp_event_handler(struct ib_event *event, void *context)
+ {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	struct rpcrdma_ep *ep = context;
+ 	struct rpcrdma_xprt *r_xprt = container_of(ep, struct rpcrdma_xprt,
+ 						   rx_ep);
+ 
+ 	trace_xprtrdma_qp_event(r_xprt, event);
++#endif
+ }
+ 
+ /**
+@@ -146,7 +157,9 @@ rpcrdma_wc_send(struct ib_cq *cq, struct
+ 		container_of(cqe, struct rpcrdma_sendctx, sc_cqe);
+ 
+ 	/* WARNING: Only wr_cqe and status are reliable at this point */
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_wc_send(sc, wc);
++#endif
+ 	rpcrdma_sendctx_put_locked((struct rpcrdma_xprt *)cq->cq_context, sc);
+ }
+ 
+@@ -165,7 +178,9 @@ rpcrdma_wc_receive(struct ib_cq *cq, str
+ 	struct rpcrdma_xprt *r_xprt = rep->rr_rxprt;
+ 
+ 	/* WARNING: Only wr_cqe and status are reliable at this point */
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_wc_receive(wc);
++#endif
+ 	--r_xprt->rx_ep.rep_receive_count;
+ 	if (wc->status != IB_WC_SUCCESS)
+ 		goto out_flushed;
+@@ -232,7 +247,9 @@ rpcrdma_cm_event_handler(struct rdma_cm_
+ 
+ 	might_sleep();
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_cm_event(r_xprt, event);
++#endif
+ 	switch (event->event) {
+ 	case RDMA_CM_EVENT_ADDR_RESOLVED:
+ 	case RDMA_CM_EVENT_ROUTE_RESOLVED:
+@@ -266,7 +283,9 @@ rpcrdma_cm_event_handler(struct rdma_cm_
+ 		++xprt->connect_cookie;
+ 		ep->rep_connected = 1;
+ 		rpcrdma_update_cm_private(r_xprt, &event->param.conn);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_inline_thresh(r_xprt);
++#endif
+ 		wake_up_all(&ep->rep_connect_wait);
+ 		break;
+ 	case RDMA_CM_EVENT_CONNECT_ERROR:
+@@ -428,7 +447,9 @@ rpcrdma_ia_remove(struct rpcrdma_ia *ia)
+ 	/* Allow waiters to continue */
+ 	complete(&ia->ri_remove_done);
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_remove(r_xprt);
++#endif
+ }
+ 
+ /**
+@@ -586,7 +607,9 @@ static int rpcrdma_ep_recreate_xprt(stru
+ 	struct rpcrdma_ep *ep = &r_xprt->rx_ep;
+ 	int rc, err;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_reinsert(r_xprt);
++#endif
+ 
+ 	rc = -EHOSTUNREACH;
+ 	if (rpcrdma_ia_open(r_xprt))
+@@ -730,7 +753,9 @@ out:
+ 		ep->rep_connected = rc;
+ 
+ out_noupdate:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_connect(r_xprt, rc);
++#endif
+ 	return rc;
+ }
+ 
+@@ -756,7 +781,9 @@ rpcrdma_ep_disconnect(struct rpcrdma_ep
+ 							ep->rep_connected != 1);
+ 	else
+ 		ep->rep_connected = rc;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_disconnect(r_xprt, rc);
++#endif
+ 
+ 	rpcrdma_xprt_drain(r_xprt);
+ 	rpcrdma_reqs_reset(r_xprt);
+@@ -832,6 +859,9 @@ static int rpcrdma_sendctxs_create(struc
+ 		buf->rb_sc_ctxs[i] = sc;
+ 	}
+ 
++#ifndef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
++	buf->rb_flags = 0;
++#endif
+ 	buf->rb_sc_head = 0;
+ 	buf->rb_sc_tail = 0;
+ 	return 0;
+@@ -886,7 +916,11 @@ out_emptyq:
+ 	 * completions recently. This is a sign the Send Queue is
+ 	 * backing up. Cause the caller to pause and try again.
+ 	 */
++#ifdef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
+ 	xprt_wait_for_buffer_space(&r_xprt->rx_xprt);
++#else
++	set_bit(RPCRDMA_BUF_F_EMPTY_SCQ, &buf->rb_flags);
++#endif
+ 	r_xprt->rx_stats.empty_sendctx_q++;
+ 	return NULL;
+ }
+@@ -922,7 +956,14 @@ static void rpcrdma_sendctx_put_locked(s
+ 	/* Paired with READ_ONCE */
+ 	smp_store_release(&buf->rb_sc_tail, next_tail);
+ 
++#ifdef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
+ 	xprt_write_space(&r_xprt->rx_xprt);
++#else
++	if (test_and_clear_bit(RPCRDMA_BUF_F_EMPTY_SCQ, &buf->rb_flags)) {
++		smp_mb__after_atomic();
++		xprt_write_space(&r_xprt->rx_xprt);
++	}
++#endif
+ }
+ 
+ static void
+@@ -955,7 +996,12 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *
+ 	}
+ 
+ 	r_xprt->rx_stats.mrs_allocated += count;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_createmrs(r_xprt, count);
++#endif
++#ifndef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
++	xprt_write_space(&r_xprt->rx_xprt);
++#endif
+ }
+ 
+ static void
+@@ -967,7 +1013,9 @@ rpcrdma_mr_refresh_worker(struct work_st
+ 						   rx_buf);
+ 
+ 	rpcrdma_mrs_create(r_xprt);
++#ifdef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
+ 	xprt_write_space(&r_xprt->rx_xprt);
++#endif
+ }
+ 
+ /**
+@@ -988,7 +1036,11 @@ void rpcrdma_mrs_refresh(struct rpcrdma_
+ 		 * workqueue in order to prevent MR allocation
+ 		 * from recursing into NFS during direct reclaim.
+ 		 */
++#ifdef HAVE_XPRT_RECONNECT_DELAY
+ 		queue_work(xprtiod_workqueue, &buf->rb_refresh_worker);
++#else
++		schedule_work(&buf->rb_refresh_worker);
++#endif
+ 	}
+ }
+ 
+@@ -1088,8 +1140,10 @@ static int rpcrdma_reqs_setup(struct rpc
+ 
+ static void rpcrdma_req_reset(struct rpcrdma_req *req)
+ {
++#ifdef HAVE_RPC_XPRT_OPS_FREE_SLOT
+ 	/* Credits are valid for only one connection */
+ 	req->rl_slot.rq_cong = 0;
++#endif
+ 
+ 	rpcrdma_regbuf_free(req->rl_rdmabuf);
+ 	req->rl_rdmabuf = NULL;
+@@ -1214,6 +1268,9 @@ int rpcrdma_buffer_create(struct rpcrdma
+ 	spin_lock_init(&buf->rb_lock);
+ 	INIT_LIST_HEAD(&buf->rb_mrs);
+ 	INIT_LIST_HEAD(&buf->rb_all_mrs);
++#ifndef HAVE_XPRT_PIN_RQST
++	INIT_LIST_HEAD(&buf->rb_pending);
++#endif
+ 	INIT_WORK(&buf->rb_refresh_worker, rpcrdma_mr_refresh_worker);
+ 
+ 	INIT_LIST_HEAD(&buf->rb_send_bufs);
+@@ -1239,6 +1296,19 @@ out:
+ 	return rc;
+ }
+ 
++#ifndef HAVE_XPRT_PIN_RQST
++void rpcrdma_recv_buffer_put_locked(struct rpcrdma_rep *rep)
++{
++	struct rpcrdma_buffer *buffers = &rep->rr_rxprt->rx_buf;
++
++	if (!rep->rr_temp) {
++		llist_add(&rep->rr_node, &buffers->rb_free_reps);
++	} else {
++		rpcrdma_rep_destroy(rep);
++	}
++}
++#endif
++
+ /**
+  * rpcrdma_req_destroy - Destroy an rpcrdma_req object
+  * @req: unused object to be destroyed
+@@ -1349,7 +1419,9 @@ void rpcrdma_mr_put(struct rpcrdma_mr *m
+ 	struct rpcrdma_xprt *r_xprt = mr->mr_xprt;
+ 
+ 	if (mr->mr_dir != DMA_NONE) {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_mr_unmap(mr);
++#endif
+ #ifdef CONFIG_NVFS
+ 		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ia.ri_id->device->dma_device,
+ 					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
+@@ -1483,7 +1555,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
+ 	rb->rg_iov.addr = ib_dma_map_single(device, rdmab_data(rb),
+ 					    rdmab_length(rb), rb->rg_direction);
+ 	if (ib_dma_mapping_error(device, rdmab_addr(rb))) {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_dma_maperr(rdmab_addr(rb));
++#endif
+ 		return false;
+ 	}
+ 
+@@ -1539,7 +1613,9 @@ rpcrdma_ep_post(struct rpcrdma_ia *ia,
+ 	}
+ 
+ 	rc = frwr_send(ia, req);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_post_send(req, rc);
++#endif
+ 	if (rc)
+ 		return -ENOTCONN;
+ 	return 0;
+@@ -1582,7 +1658,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+ 		if (!rep)
+ 			break;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_post_recv(rep);
++#endif
+ 		rep->rr_recv_wr.next = wr;
+ 		wr = &rep->rr_recv_wr;
+ 		--needed;
+@@ -1594,7 +1672,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+ 	rc = ib_post_recv(r_xprt->rx_ia.ri_id->qp, wr,
+ 			  (const struct ib_recv_wr **)&bad_wr);
+ out:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_post_recvs(r_xprt, count, rc);
++#endif
+ 	if (rc) {
+ 		for (wr = bad_wr; wr;) {
+ 			struct rpcrdma_rep *rep;

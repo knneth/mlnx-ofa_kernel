@@ -42,7 +42,6 @@
 #include <rdma/uverbs_ioctl.h>
 #include <rdma/ib_verbs.h>
 #include <linux/mutex.h>
-#include <rdma/ib_user_verbs_exp.h>
 
 struct ib_uverbs_device;
 
@@ -103,7 +102,6 @@ struct uverbs_api_write_method {
 	u8 is_ex:1;
 	u8 has_udata:1;
 	u8 has_resp:1;
-	u8 is_exp:1;
 	u8 req_size;
 	u8 resp_size;
 };
@@ -119,7 +117,6 @@ struct uverbs_api {
 
 	unsigned int num_write;
 	unsigned int num_write_ex;
-	unsigned int num_write_exp;
 	struct uverbs_api_write_method notsupp_method;
 	const struct uverbs_api_write_method **write_methods;
 	const struct uverbs_api_write_method **write_ex_methods;
@@ -163,17 +160,11 @@ extern const struct uapi_definition uverbs_def_obj_flow_action[];
 extern const struct uapi_definition uverbs_def_obj_intf[];
 extern const struct uapi_definition uverbs_def_obj_mr[];
 extern const struct uapi_definition uverbs_def_write_intf[];
-extern const struct uapi_definition uverbs_def_obj_dct[];
 
 static inline const struct uverbs_api_write_method *
-uapi_get_method(const struct uverbs_api *uapi, u32 command, bool *exp_cmd)
+uapi_get_method(const struct uverbs_api *uapi, u32 command)
 {
 	u32 cmd_idx = command & IB_USER_VERBS_CMD_COMMAND_MASK;
-
-	if (exp_cmd) {
-		u32 flags = (command & IB_USER_VERBS_CMD_FLAGS_MASK) >> IB_USER_VERBS_CMD_FLAGS_SHIFT;
-		*exp_cmd = !flags && (command >= IB_USER_VERBS_EXP_CMD_FIRST);
-	}
 
 	if (command & ~(u32)(IB_USER_VERBS_CMD_FLAG_EXTENDED |
 			     IB_USER_VERBS_CMD_COMMAND_MASK))

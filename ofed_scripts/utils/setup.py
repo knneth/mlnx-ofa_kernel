@@ -51,6 +51,6 @@ setup(name='ofed-le-utils',
       author='Amir Vadai',
       author_email='amirv@mellanox.co.il',
       url='www.mellanox.co.il',
-      scripts=['mlnx_qos', 'tc_wrap.py', 'mlnx_perf', 'mlnx_get_vfs.pl', 'mlnx_qcn', 'mlnx_dump_parser', 'mlx_fs_dump'],
+      scripts=['mlnx_qos', 'tc_wrap.py', 'mlnx_perf', 'mlnx_dump_parser', 'mlx_fs_dump'],
       py_modules=['netlink', 'dcbnetlink', 'genetlink'],
       )

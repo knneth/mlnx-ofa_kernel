@@ -49,7 +49,6 @@ firmware_update_only=0
 fw_update_flags=
 config="/etc/mlnx-en.conf"
 skip_dist_check=0
-with_mlx4=1
 with_mlx5=1
 TMPDIR="/tmp"
 missing_pkgs=0
@@ -760,7 +759,7 @@ if [ "$dist_rpm" == "ubuntu" ] || [ "$dist_rpm" == "debian" ]; then
 			cd ${package}*
 			ENV_VARS=
 			if [ "X$package" == "Xmlnx-en" ]; then
-				ENV_VARS="MLX4=$with_mlx4 MLX5=$with_mlx5"
+				ENV_VARS="MLX5=$with_mlx5"
 			elif [ "X$package" == "Xmstflint" ]; then
 				ENV_VARS="DEB_CONFIGURE_EXTRA_FLAGS='--disable-inband'"
 			fi
@@ -777,9 +776,6 @@ if [ "$dist_rpm" == "ubuntu" ] || [ "$dist_rpm" == "debian" ]; then
 	if [ $build_only -eq 0 ]; then
 		/sbin/depmod >/dev/null 2>&1
 		mods=
-		if [ $with_mlx4 -eq 1 ]; then
-			mods="$mods mlx4_en mlx4_ib"
-		fi
 		if [ $with_mlx5 -eq 1 ]; then
 			mods="$mods mlx5_core"
 		fi
@@ -865,16 +861,9 @@ else # not ubuntu/debian
 		fi
 	fi
 
-	case $KVERSION in
-		*2.6.18*)
-		with_mlx4=0
-		;;
-	esac
-
 	cmd="rpmbuild --rebuild \
 		 --define '_dist .${dist_rpm}' --define '_target_cpu $target_cpu' \
 		 --define 'KVERSION $KVERSION' --define 'KSRC $KSRC' \
-		 --define '_topdir $TOPDIR' --define 'MLX4 $with_mlx4' \
 		 --define '_topdir $TOPDIR' --define 'MLX5 $with_mlx5' \
 		 --define '_topdir $TOPDIR' --define 'MEMTRACK $with_memtrack'"
 

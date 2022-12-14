@@ -1,0 +1,22 @@
+From: Aya Levin <ayal@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+
+Change-Id: I8a6e663298f607547f2ffff6a94f28ed96846760
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+@@ -62,7 +62,11 @@ void mlx5e_destroy_tir(struct mlx5_core_
+ 
+ void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc)
+ {
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 	bool ro_pci_enable = pcie_relaxed_ordering_enabled(mdev->pdev);
++#else
++	bool ro_pci_enable = true;
++#endif
+ 	bool ro_write = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
+ 	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read);
+ 

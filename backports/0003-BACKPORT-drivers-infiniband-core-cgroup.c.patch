@@ -1,7 +1,7 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cgroup.c
 
-Change-Id: I1ad0c79cd32278bce3ae506396dbf3d7e2f586f6
+Change-Id: Ic8ff46794d00709bc496aa420e85a2443f813f03
 ---
  drivers/infiniband/core/cgroup.c | 4 ++++
  1 file changed, 4 insertions(+)

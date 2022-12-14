@@ -1,0 +1,66 @@
+From: Feras Daoud <ferasda@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_umem.h
+
+Change-Id: I9b32cf9d0ea606bb2a29b65ffeef30dc9d713dc4
+---
+ include/rdma/ib_umem.h | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+--- a/include/rdma/ib_umem.h
++++ b/include/rdma/ib_umem.h
+@@ -42,11 +42,18 @@ struct ib_ucontext;
+ struct ib_umem_odp;
+ 
+ struct ib_umem {
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 	struct ib_device       *ibdev;
++#else
++	struct ib_ucontext     *context;
++#endif
+ 	struct mm_struct       *owning_mm;
+ 	size_t			length;
+ 	unsigned long		address;
+ 	u32 writable : 1;
++#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
++	u32 hugetlb : 1;
++#endif
+ 	u32 is_odp : 1;
+ 	/* Placing at the end of the bitfield list is ABI preserving on LE */
+ 	u32 is_peer : 1;
+@@ -77,7 +84,11 @@ static inline size_t ib_umem_num_pages(s
+ 
+ #ifdef CONFIG_INFINIBAND_USER_MEM
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ struct ib_umem *ib_umem_get(struct ib_device *device, unsigned long addr,
++#else
++struct ib_umem *ib_umem_get(struct ib_udata *udata, unsigned long addr,
++#endif
+ 			    size_t size, int access);
+ void ib_umem_release(struct ib_umem *umem);
+ int ib_umem_page_count(struct ib_umem *umem);
+@@ -86,8 +97,11 @@ int ib_umem_copy_from(void *dst, struct
+ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+ 				     unsigned long pgsz_bitmap,
+ 				     unsigned long virt);
+-
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ struct ib_umem *ib_umem_get_peer(struct ib_device *device, unsigned long addr,
++#else
++struct ib_umem *ib_umem_get_peer(struct ib_udata *udata, unsigned long addr,
++#endif
+ 				 size_t size, int access,
+ 				 unsigned long peer_mem_flags);
+ void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
+@@ -98,7 +112,11 @@ void ib_umem_activate_invalidation_notif
+ 
+ #include <linux/err.h>
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ static inline struct ib_umem *ib_umem_get(struct ib_device *device,
++#else
++static inline struct ib_umem *ib_umem_get(struct ib_udata *udata,
++#endif
+ 					  unsigned long addr, size_t size,
+ 					  int access)
+ {

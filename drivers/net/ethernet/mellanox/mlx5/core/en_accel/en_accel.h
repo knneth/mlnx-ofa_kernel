@@ -37,9 +37,10 @@
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 #include "en_accel/ipsec_rxtx.h"
+#include "en_accel/tls.h"
 #include "en_accel/tls_rxtx.h"
-#include "en/txrx.h"
 #include "en.h"
+#include "en/txrx.h"
 
 #if IS_ENABLED(CONFIG_GENEVE)
 #include <net/geneve.h>
@@ -102,48 +103,69 @@ mlx5e_udp_gso_handle_tx_skb(struct sk_buff *skb)
 	udp_hdr(skb)->len = htons(payload_len);
 }
 
-static inline struct sk_buff *
-mlx5e_accel_handle_tx(struct sk_buff *skb,
-		      struct mlx5e_txqsq *sq,
-		      struct net_device *dev,
-		      struct mlx5e_tx_wqe **wqe,
-		      u16 *pi)
+struct mlx5e_accel_tx_state {
+#ifdef CONFIG_MLX5_EN_TLS
+	struct mlx5e_accel_tx_tls_state tls;
+#endif
+};
+
+static inline bool mlx5e_accel_tx_begin(struct net_device *dev,
+					struct mlx5e_txqsq *sq,
+					struct sk_buff *skb,
+					struct mlx5e_accel_tx_state *state)
 {
+	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
+		mlx5e_udp_gso_handle_tx_skb(skb);
+
 #ifdef CONFIG_MLX5_EN_TLS
 	if (test_bit(MLX5E_SQ_STATE_TLS, &sq->state)) {
-		skb = mlx5e_tls_handle_tx_skb(dev, sq, skb, wqe, pi);
-		if (unlikely(!skb))
-			return NULL;
+		/* May send SKBs and WQEs. */
+		if (unlikely(!mlx5e_tls_handle_tx_skb(dev, sq, skb, &state->tls)))
+			return false;
 	}
+#endif
+
+	return true;
+}
+
+static inline bool mlx5e_accel_tx_finish(struct mlx5e_priv *priv,
+					 struct mlx5e_txqsq *sq,
+					 struct sk_buff *skb,
+					 struct mlx5e_tx_wqe *wqe,
+					 struct mlx5e_accel_tx_state *state)
+{
+#ifdef CONFIG_MLX5_EN_TLS
+	mlx5e_tls_handle_tx_wqe(sq, &wqe->ctrl, &state->tls);
 #endif
 
 #ifdef CONFIG_MLX5_EN_IPSEC
 	if (test_bit(MLX5E_SQ_STATE_IPSEC, &sq->state)) {
-		skb = mlx5e_ipsec_handle_tx_skb(dev, sq, *wqe, skb);
+		skb = mlx5e_ipsec_handle_tx_skb(priv->netdev, sq, wqe, skb);
 		if (unlikely(!skb))
 			return NULL;
 	}
 #endif
 
-	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
-		mlx5e_udp_gso_handle_tx_skb(skb);
-
-	return skb;
+	return true;
 }
 
-static inline void
-mlx5e_accel_handle_rx(struct net_device *dev,
-		      struct sk_buff *skb,
-		      struct mlx5_cqe64 *cqe,
-		      u32 *cqe_bcnt)
+static inline int mlx5e_accel_sk_get_rxq(struct sock *sk)
 {
-#ifdef CONFIG_MLX5_EN_TLS
-	mlx5e_tls_handle_rx_skb(dev, skb, cqe_bcnt);
-#endif
+	int rxq = sk_rx_queue_get(sk);
 
-#ifdef CONFIG_MLX5_EN_IPSEC
-	mlx5e_ipsec_offload_handle_rx_skb(dev, skb, cqe);
-#endif
+	if (unlikely(rxq == -1))
+		rxq = 0;
+
+	return rxq;
 }
 
+static inline int mlx5e_accel_init_rx(struct mlx5e_priv *priv)
+{
+	return mlx5e_ktls_init_rx(priv);
+}
+
+static inline void mlx5e_accel_cleanup_rx(struct mlx5e_priv *priv)
+{
+	mlx5e_ktls_cleanup_rx(priv);
+}
 #endif /* __MLX5E_EN_ACCEL_H__ */

@@ -799,8 +799,10 @@ int is_non_trackable_alloc_func(const char *func_name)
 		/* sw steering functions */
 		"dr_icm_chunk_ste_init",
 		"dr_icm_chunk_create",
-		/* our backport function for 5.5 only */
-		"devlink_fmsg_binary_put",
+		/* switchdev header rewrite */
+		"alloc_mod_hdr_actions",
+		/* release order0 pages, for old kernels only */
+		"mlx5e_free_xdpsq_desc",
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);
@@ -835,6 +837,8 @@ int is_non_trackable_free_func(const char *func_name)
 		/* sw steering functions */
 		"dr_icm_chunk_ste_cleanup",
 		"dr_icm_chunk_destroy",
+		/* switchdev header rewrite */
+		"dealloc_mod_hdr_actions",
 	};
 	size_t str_cmp_arr_size = sizeof(str_cmp_arr)/sizeof(char *);
 	int i;
@@ -1086,11 +1090,7 @@ static ssize_t memtrack_read(struct file *filp,
 	if (pos < 0)
 		return -EINVAL;
 
-#ifdef CONFIG_COMPAT_IS_FILE_INODE
 	fname = filp->f_path.dentry->d_name.name;
-#else
-	fname = filp->f_dentry->d_name.name;
-#endif
 
 	memtype = get_rsc_by_name(fname);
 	if (memtype >= MEMTRACK_NUM_OF_MEMTYPES) {
@@ -1119,8 +1119,8 @@ static ssize_t memtrack_read(struct file *filp,
 	}
 }
 
-static const struct file_operations memtrack_proc_fops = {
-	.read = memtrack_read,
+static const struct proc_ops memtrack_proc_ops = {
+	.proc_read = memtrack_read,
 };
 
 static const char *memtrack_proc_entry_name = "mt_memtrack";
@@ -1140,20 +1140,12 @@ static int create_procfs_tree(void)
 
 	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
 		if (bit_mask & track_mask) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
-			proc_ent = create_proc_entry(rsc_names[i], S_IRUGO, memtrack_tree);
-			if (!proc_ent)
-				goto undo_create_root;
-
-			proc_ent->proc_fops = &memtrack_proc_fops;
-#else
-			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_fops, NULL);
+			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_ops, NULL);
 			if (!proc_ent) {
 				printk(KERN_INFO "Warning: Cannot create /proc/%s/%s\n",
 				       memtrack_proc_entry_name, rsc_names[i]);
 				goto undo_create_root;
 			}
-#endif
 		}
 	}
 

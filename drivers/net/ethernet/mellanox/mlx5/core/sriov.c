@@ -35,7 +35,6 @@
 #include <linux/mlx5/vport.h>
 #include "mlx5_core.h"
 #include "eswitch.h"
-#include "ecpf.h"
 
 static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf)
 {
@@ -72,6 +71,7 @@ static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf)
 static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+	struct mlx5_lag *ldev;
 	int err;
 	int vf;
 
@@ -97,6 +97,7 @@ enable_vfs_hca:
 		return err;
 	}
 
+	ldev = mlx5_lag_disable(dev);
 	for (vf = 0; vf < num_vfs; vf++) {
 		err = mlx5_core_enable_hca(dev, vf + 1);
 		if (err) {
@@ -115,11 +116,13 @@ enable_vfs_hca:
 		}
 		mlx5_core_dbg(dev, "successfully enabled VF* %d\n", vf);
 	}
+	mlx5_lag_enable(dev, ldev);
 
 	return 0;
 }
 
-static void mlx5_device_disable_sriov(struct mlx5_core_dev *dev, int num_vfs, bool clear_vf)
+static void
+mlx5_device_disable_sriov(struct mlx5_core_dev *dev, int num_vfs, bool clear_vf)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
 	int err;
@@ -143,6 +146,7 @@ static void mlx5_device_disable_sriov(struct mlx5_core_dev *dev, int num_vfs, bo
 		mlx5_eswitch_disable(dev->priv.eswitch, clear_vf);
 		mlx5_lag_enable(dev, ldev);
 	}
+
 
 	mlx5_destroy_vfs_sysfs(dev, num_vfs);
 
@@ -231,26 +235,20 @@ static u16 mlx5_get_max_vfs(struct mlx5_core_dev *dev)
 	if (mlx5_core_is_ecpf_esw_manager(dev)) {
 		out = mlx5_esw_query_functions(dev);
 
-		/* Old FW doesn't support getting total_vfs from host params
-		 * but supports getting from pci_sriov.
+		/* Old FW doesn't support getting total_vfs from esw func
+		 * but supports getting it from pci_sriov.
 		 */
 		if (IS_ERR(out))
 			goto done;
-
 		host_total_vfs = MLX5_GET(query_esw_functions_out, out,
 					  host_params_context.host_total_vfs);
-
 		kvfree(out);
 		if (host_total_vfs)
 			return host_total_vfs;
 	}
 
 done:
-	/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL
-	 * return in that case 1
-	 */
-	return (pci_sriov_get_totalvfs(dev->pdev) < 0) ? 0 :
-		pci_sriov_get_totalvfs(dev->pdev);
+	return pci_sriov_get_totalvfs(dev->pdev);
 }
 
 int mlx5_sriov_init(struct mlx5_core_dev *dev)

@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+
+Change-Id: If623d49df5f6c300b5d1e77d6e89005fd15d6db1
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 
+ #include "tx.h"
+ #include "umem.h"
+@@ -119,3 +120,4 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 
+ 	return !(budget && work_done);
+ }
++#endif /*HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS*/

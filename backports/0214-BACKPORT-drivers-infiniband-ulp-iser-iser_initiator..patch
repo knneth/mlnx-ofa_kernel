@@ -1,10 +1,10 @@
 From: Sergey Gorenko <sergeygo@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_initiator.c
 
-Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
+Change-Id: I852cf32daad616e4631b002e196e190763079e09
 ---
- drivers/infiniband/ulp/iser/iser_initiator.c | 97 ++++++++++++++++++--
- 1 file changed, 89 insertions(+), 8 deletions(-)
+ drivers/infiniband/ulp/iser/iser_initiator.c | 93 ++++++++++++++++++--
+ 1 file changed, 85 insertions(+), 8 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iser_initiator.c
 +++ b/drivers/infiniband/ulp/iser/iser_initiator.c
@@ -45,19 +45,7 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
  	/* Initial post receive buffers */
  	if (iser_post_recvm(iser_conn, iser_conn->min_posted_rx))
  		return -ENOMEM;
-@@ -367,7 +372,11 @@ int iser_send_command(struct iscsi_conn
- 	unsigned long edtl;
- 	int err;
- 	struct iser_data_buf *data_buf, *prot_buf;
-+#ifdef HAVE_ISCSI_CMD
-+	struct iscsi_cmd *hdr = (struct iscsi_cmd *)task->hdr;
-+#else
- 	struct iscsi_scsi_req *hdr = (struct iscsi_scsi_req *)task->hdr;
-+#endif
- 	struct scsi_cmnd *sc  =  task->sc;
- 	struct iser_tx_desc *tx_desc = &iser_task->desc;
- 	u8 sig_count = ++iser_conn->ib_conn.sig_count;
-@@ -646,6 +655,45 @@ iser_check_remote_inv(struct iser_conn *
+@@ -651,6 +656,45 @@ iser_check_remote_inv(struct iser_conn *
  	return 0;
  }
  
@@ -103,7 +91,7 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
  
  void iser_task_rsp(struct ib_cq *cq, struct ib_wc *wc)
  {
-@@ -671,6 +719,12 @@ void iser_task_rsp(struct ib_cq *cq, str
+@@ -676,6 +720,12 @@ void iser_task_rsp(struct ib_cq *cq, str
  	iser_dbg("op 0x%x itt 0x%x dlen %d\n", hdr->opcode,
  		 hdr->itt, length);
  
@@ -116,16 +104,16 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
  	if (iser_check_remote_inv(iser_conn, wc, hdr)) {
  		iscsi_conn_failure(iser_conn->iscsi_conn,
  				   ISCSI_ERR_CONN_FAILED);
-@@ -761,12 +815,27 @@ void iser_task_rdma_init(struct iscsi_is
+@@ -766,12 +816,27 @@ void iser_task_rdma_init(struct iscsi_is
  void iser_task_rdma_finalize(struct iscsi_iser_task *iser_task)
  {
  	int prot_count = scsi_prot_sg_count(iser_task->sc);
-+#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#ifndef HAVE_VIRT_BOUNDARY
 +	bool is_rdma_data_aligned;
 +#endif
  
  	if (iser_task->dir[ISER_DIR_IN]) {
-+#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#ifndef HAVE_VIRT_BOUNDARY
 +		is_rdma_data_aligned = true;
 +		if (iser_task->data[ISER_DIR_IN].orig_sg) {
 +			iser_finalize_rdma_unaligned_sg(iser_task,
@@ -138,7 +126,7 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
 -		iser_dma_unmap_task_data(iser_task,
 -					 &iser_task->data[ISER_DIR_IN],
 -					 DMA_FROM_DEVICE);
-+#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#ifndef HAVE_VIRT_BOUNDARY
 +		if (is_rdma_data_aligned)
 +#endif
 +			iser_dma_unmap_task_data(iser_task,
@@ -147,11 +135,11 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
  		if (prot_count)
  			iser_dma_unmap_task_data(iser_task,
  						 &iser_task->prot[ISER_DIR_IN],
-@@ -774,10 +843,22 @@ void iser_task_rdma_finalize(struct iscs
+@@ -779,10 +844,22 @@ void iser_task_rdma_finalize(struct iscs
  	}
  
  	if (iser_task->dir[ISER_DIR_OUT]) {
-+#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#ifndef HAVE_VIRT_BOUNDARY
 +		is_rdma_data_aligned = true;
 +		if (iser_task->data[ISER_DIR_OUT].orig_sg) {
 +			iser_finalize_rdma_unaligned_sg(iser_task,
@@ -164,7 +152,7 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
 -		iser_dma_unmap_task_data(iser_task,
 -					 &iser_task->data[ISER_DIR_OUT],
 -					 DMA_TO_DEVICE);
-+#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#ifndef HAVE_VIRT_BOUNDARY
 +		if (is_rdma_data_aligned)
 +#endif
 +			iser_dma_unmap_task_data(iser_task,

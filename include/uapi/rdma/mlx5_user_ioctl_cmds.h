@@ -155,6 +155,22 @@ enum mlx5_ib_devx_umem_dereg_attrs {
 	MLX5_IB_ATTR_DEVX_UMEM_DEREG_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
 };
 
+enum mlx5_ib_pp_obj_methods {
+	MLX5_IB_METHOD_PP_OBJ_ALLOC = (1U << UVERBS_ID_NS_SHIFT),
+	MLX5_IB_METHOD_PP_OBJ_DESTROY,
+};
+
+enum mlx5_ib_pp_alloc_attrs {
+	MLX5_IB_ATTR_PP_OBJ_ALLOC_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+	MLX5_IB_ATTR_PP_OBJ_ALLOC_CTX,
+	MLX5_IB_ATTR_PP_OBJ_ALLOC_FLAGS,
+	MLX5_IB_ATTR_PP_OBJ_ALLOC_INDEX,
+};
+
+enum mlx5_ib_pp_obj_destroy_attrs {
+	MLX5_IB_ATTR_PP_OBJ_DESTROY_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+};
+
 enum mlx5_ib_devx_umem_methods {
 	MLX5_IB_METHOD_DEVX_UMEM_REG = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_METHOD_DEVX_UMEM_DEREG,
@@ -185,6 +201,7 @@ enum mlx5_ib_objects {
 	MLX5_IB_OBJECT_DEVX_ASYNC_CMD_FD,
 	MLX5_IB_OBJECT_DEVX_ASYNC_EVENT_FD,
 	MLX5_IB_OBJECT_VAR,
+	MLX5_IB_OBJECT_PP,
 };
 
 enum mlx5_ib_flow_matcher_create_attrs {
@@ -218,6 +235,11 @@ enum mlx5_ib_flow_type {
 	MLX5_IB_FLOW_TYPE_MC_DEFAULT,
 };
 
+enum mlx5_ib_create_flow_flags {
+	MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DEFAULT_MISS = 1 << 0,
+	MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP = 1 << 1,
+};
+
 enum mlx5_ib_create_flow_attrs {
 	MLX5_IB_ATTR_CREATE_FLOW_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_ATTR_CREATE_FLOW_MATCH_VALUE,
@@ -228,6 +250,7 @@ enum mlx5_ib_create_flow_attrs {
 	MLX5_IB_ATTR_CREATE_FLOW_TAG,
 	MLX5_IB_ATTR_CREATE_FLOW_ARR_COUNTERS_DEVX,
 	MLX5_IB_ATTR_CREATE_FLOW_ARR_COUNTERS_DEVX_OFFSET,
+	MLX5_IB_ATTR_CREATE_FLOW_FLAGS,
 };
 
 enum mlx5_ib_destoy_flow_attrs {

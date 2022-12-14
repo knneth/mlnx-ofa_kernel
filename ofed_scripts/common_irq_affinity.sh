@@ -73,11 +73,17 @@ function get_irq_list
 function show_irq_affinity
 {
 	irq_num=$1
+	show_cpu_number=$2
 	smp_affinity_path="/proc/irq/$irq_num/smp_affinity"
-        if [ -f $smp_affinity_path ]; then
-                echo -n "$irq_num: "
-                cat $smp_affinity_path
-        fi
+	cpu_number_path="/proc/irq/$irq_num/smp_affinity_list"
+	if [ -f $smp_affinity_path ]; then
+		if [ -f $cpu_number_path ] && [ "$show_cpu_number" == "show_cpu_number" ]; then
+			echo -n "$irq_num (cpu #`cat $cpu_number_path`): "
+		else
+			echo -n "$irq_num: "
+		fi
+		cat $smp_affinity_path
+	fi
 }
 
 function show_irq_affinity_hints

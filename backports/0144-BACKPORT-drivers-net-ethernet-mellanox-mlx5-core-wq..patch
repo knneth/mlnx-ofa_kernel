@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/wq.h
+
+Change-Id: I06dc87af314b2c16f95f2e9655a5726311ccb9f5
+---
+ drivers/net/ethernet/mellanox/mlx5/core/wq.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/wq.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/wq.h
+@@ -233,7 +233,11 @@ static inline struct mlx5_cqe64 *mlx5_cq
+ 		return NULL;
+ 
+ 	/* ensure cqe content is read after cqe ownership bit */
++#ifdef dma_rmb
+ 	dma_rmb();
++#else
++	rmb();
++#endif
+ 
+ 	return cqe;
+ }

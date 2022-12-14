@@ -131,6 +131,11 @@ static u16 mlx5_sf_hw_id(const struct mlx5_core_dev *coredev, u16 sf_id)
 	return mlx5_sf_base_id(coredev) + sf_id;
 }
 
+u16 mlx5_sf_vport_to_id(const struct mlx5_core_dev *coredev, u16 vport_num)
+{
+	return vport_num - mlx5_sf_base_id(coredev);
+}
+
 /* Perform SF allocation using parent device BAR. */
 struct mlx5_sf *
 mlx5_sf_alloc(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
@@ -441,7 +446,7 @@ void mlx5_sf_unload(struct mlx5_sf *sf)
 	 */
 		struct devlink *devlink = priv_to_devlink(sf->dev);
 
-		devlink_unregister(devlink);
+		mlx5_devlink_unregister(devlink);
 	}
 
 	mlx5_unload_one(sf->dev, true);

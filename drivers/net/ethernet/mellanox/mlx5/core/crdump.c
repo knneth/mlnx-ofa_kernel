@@ -167,12 +167,11 @@ static int mlx5_crdump_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations mlx5_crdump_fops = {
-	.owner   = THIS_MODULE,
-	.open    = mlx5_crdump_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release
+static const struct proc_ops  mlx5_crdump_ops = {
+	.proc_open    = mlx5_crdump_open,
+	.proc_read    = seq_read,
+	.proc_lseek  = seq_lseek,
+	.proc_release = seq_release
 };
 
 int mlx5_cr_protected_capture(struct mlx5_core_dev *dev)
@@ -282,7 +281,7 @@ int mlx5_crdump_init(struct mlx5_core_dev *dev)
 
 	if (mlx5_crdump_dir)
 		if (!proc_create_data(pci_name(dev->pdev), S_IRUGO,
-				      mlx5_crdump_dir, &mlx5_crdump_fops,
+				      mlx5_crdump_dir, &mlx5_crdump_ops,
 				      crdump)) {
 			pr_warn("failed creating proc file\n");
 			goto clean_mem;

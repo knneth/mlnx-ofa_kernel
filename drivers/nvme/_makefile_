@@ -12,7 +12,6 @@ variant=default
 endif
 FLAVOR ?= $(variant)
 OFA = $(shell ( test -d $(OFA_DIR)/$(KVER) && echo $(OFA_DIR)/$(KVER) ) || ( test -d $(OFA_DIR)/$(FLAVOR) && echo $(OFA_DIR)/$(FLAVOR) ) || ( test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build ) || ( echo $(OFA_DIR) ))
-OFA_SYMBOLS = $(wildcard $(OFA)/Module*.symvers)
 
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 include $(OFA)/configure.mk.kernel
@@ -70,6 +69,10 @@ ifneq ($(shell if (echo $(KVER) | grep -qE 'uek'); then \
 override WITH_MAKE_PARAMS += ctf-dir=$(CWD)/.ctf
 endif
 
+ifeq ($(CONFIG_GPU_DIRECT_STORAGE),y)
+override WITH_MAKE_PARAMS += CONFIG_GPU_DIRECT_STORAGE=y
+endif
+
 ifeq ($(CONFIG_NVME_HOST_WITHOUT_FC),m)
 MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC=m \
 			CONFIG_NVME_TARGET= \
@@ -118,6 +121,7 @@ rpmmacros =\
 		   --define='_srcrpmdir $(rpmroot)'\
 		   --define='_sourcedir $(rpmroot)'\
 		   --define='_specdir $(PWD)'
+override WITH_MAKE_PARAMS += KBUILD_EXTRA_SYMBOLS=$(OFA)/Module.symvers
 
 default:
 # compile with ofed driver
@@ -148,8 +152,6 @@ default:
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-Iarch/$$(SRCARCH)/include/generated \
 		' \
-		KBUILD_EXTRA_SYMBOLS="$(OFA_SYMBOLS)" \
-		modulesymfile=$(SRC_DIR)/Module.symvers \
 		modules
 
 install:
@@ -179,6 +181,7 @@ binrpm: rpmcheck $(rpmspec)
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/
 	cp {$(rpmspec),makefile,Makefile,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
+	cp common.postinst $(rpmroot)/$(PACKAGE)/
 	cp -r target $(rpmroot)/$(PACKAGE)/
 	cp -r host $(rpmroot)/$(PACKAGE)/
 	cp -r lpfc $(rpmroot)/$(PACKAGE)/

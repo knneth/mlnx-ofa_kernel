@@ -1,0 +1,26 @@
+From: Mikhael Goikhman <migo@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
+
+Change-Id: I824da896f3b1a71334b48470c411eab6f1cfee22
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2019 Mellanox Technologies.
+ 
++#ifdef HAVE_KTLS_RX_SUPPORT
++
+ #include <net/inet6_hashtables.h>
+ #include "en_accel/en_accel.h"
+ #include "en_accel/tls.h"
+@@ -638,3 +640,5 @@ void mlx5e_ktls_del_rx(struct net_device
+ 	mlx5_ktls_destroy_key(mdev, priv_rx->key_id);
+ 	kfree(priv_rx);
+ }
++
++#endif /* HAVE_KTLS_RX_SUPPORT */

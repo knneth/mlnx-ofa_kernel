@@ -1,0 +1,62 @@
+From: Roi Dayan <roid@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+
+Change-Id: I6567bcbc1eb147a61b9355701e6e5f371bff55b1
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+@@ -812,9 +812,9 @@ err_orig:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+-	struct flow_rule *flow_rule = flow_cls_offload_flow_rule(flow);
++	struct flow_rule *flow_rule = flow_cls_offload_flow_rule1(flow);
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	struct flow_action_entry *meta_action;
+ 	unsigned long cookie = flow->cookie;
+@@ -906,7 +906,7 @@ mlx5_tc_ct_del_ft_entry(struct mlx5_tc_c
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+ 	unsigned long cookie = flow->cookie;
+ 	struct mlx5_ct_entry *entry;
+@@ -927,7 +927,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
+-				    struct flow_cls_offload *f)
++				    struct flow_cls_offload1 *f)
+ {
+ 	unsigned long cookie = f->cookie;
+ 	struct mlx5_ct_entry *entry;
+@@ -939,7 +939,12 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+ 		return -ENOENT;
+ 
+ 	mlx5_fc_query_cached(entry->shared_counter->counter, &bytes, &packets, &lastuse);
++#ifdef HAVE_FLOW_STATS_UPDATE_5_PARAMS
++	flow_stats_update(&f->stats, bytes, packets, lastuse,
++			  FLOW_ACTION_HW_STATS_DELAYED);
++#else
+ 	flow_stats_update(&f->stats, bytes, packets, lastuse);
++#endif
+ 
+ 	return 0;
+ }
+@@ -948,7 +953,7 @@ static int
+ mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
+ 			      void *cb_priv)
+ {
+-	struct flow_cls_offload *f = type_data;
++	struct flow_cls_offload1 *f = type_data;
+ 	struct mlx5_ct_ft *ft = cb_priv;
+ 
+ 	if (type != TC_SETUP_CLSFLOWER)

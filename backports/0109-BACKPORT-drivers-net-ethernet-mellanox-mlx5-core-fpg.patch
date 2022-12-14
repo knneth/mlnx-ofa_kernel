@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
+
+Change-Id: I17418da60557ad7971fd82e270ccf5c7e775ed3a
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
+@@ -78,7 +78,9 @@ struct mlx5_fpga_device {
+ 	} conn_res;
+ 
+ 	struct mlx5_fpga_ipsec *ipsec;
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	struct mlx5_fpga_tls *tls;
++#endif
+ 
+ 	struct list_head list;
+ 	struct list_head client_data_list;

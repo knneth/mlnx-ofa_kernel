@@ -271,9 +271,9 @@ static struct mlx5dr_icm_mr *
 dr_icm_pool_mr_create(struct mlx5dr_icm_pool *pool)
 {
 	struct mlx5_core_dev *mdev = pool->dmn->mdev;
-	enum mlx5_sw_icm_type dm_type;
+	enum mlx5_sw_icm_type dm_type = 0;
 	struct mlx5dr_icm_mr *icm_mr;
-	size_t log_align_base;
+	size_t log_align_base = 0;
 	int err;
 
 	icm_mr = kvzalloc(sizeof(*icm_mr), GFP_KERNEL);
@@ -286,15 +286,25 @@ dr_icm_pool_mr_create(struct mlx5dr_icm_pool *pool)
 	icm_mr->dm.length = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
 							       pool->icm_type);
 
-	if (pool->icm_type == DR_ICM_TYPE_STE) {
+	switch (pool->icm_type) {
+	case DR_ICM_TYPE_STE:
 		dm_type = MLX5_SW_ICM_TYPE_STEERING;
 		log_align_base = ilog2(icm_mr->dm.length);
-	}
-	else {
+		break;
+	case DR_ICM_TYPE_MODIFY_ACTION:
 		dm_type = MLX5_SW_ICM_TYPE_HEADER_MODIFY;
 		/* Align base is 64B */
 		log_align_base = ilog2(DR_ICM_MODIFY_HDR_ALIGN_BASE);
+		break;
+	case DR_ICM_TYPE_MODIFY_HDR_PTRN:
+		dm_type = MLX5_SW_ICM_TYPE_HEADER_MODIFY_PATTERN;
+		/* Align base is 64B */
+		log_align_base = ilog2(DR_ICM_MODIFY_HDR_ALIGN_BASE);
+		break;
+	default:
+		WARN_ON(pool->icm_type);
 	}
+
 	icm_mr->dm.type = dm_type;
 
 	err = mlx5_dm_sw_icm_alloc(mdev, icm_mr->dm.type, icm_mr->dm.length,
@@ -635,13 +645,7 @@ void mlx5dr_icm_free_chunk(struct mlx5dr_icm_chunk *chunk)
 struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 					       enum mlx5dr_icm_type icm_type)
 {
-	enum mlx5dr_icm_chunk_size max_log_chunk_sz;
-	struct mlx5dr_icm_pool *pool;
-
-	if (icm_type == DR_ICM_TYPE_STE)
-		max_log_chunk_sz = dmn->info.max_log_sw_icm_sz;
-	else
-		max_log_chunk_sz = dmn->info.max_log_action_icm_sz;
+	struct mlx5dr_icm_pool *pool = NULL;
 
 	pool = kvzalloc(sizeof(*pool), GFP_KERNEL);
 	if (!pool)
@@ -649,10 +653,23 @@ struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 
 	pool->dmn = dmn;
 	pool->icm_type = icm_type;
-	pool->max_log_chunk_sz = max_log_chunk_sz;
-	INIT_LIST_HEAD(&pool->buddy_mem_list);
 
+	INIT_LIST_HEAD(&pool->buddy_mem_list);
 	mutex_init(&pool->mutex);
+
+	switch (icm_type) {
+	case DR_ICM_TYPE_STE:
+		pool->max_log_chunk_sz = dmn->info.max_log_sw_icm_sz;
+		break;
+	case DR_ICM_TYPE_MODIFY_ACTION:
+		pool->max_log_chunk_sz = dmn->info.max_log_action_icm_sz;
+		break;
+	case DR_ICM_TYPE_MODIFY_HDR_PTRN:
+		pool->max_log_chunk_sz = dmn->info.max_log_modify_hdr_pattern_icm_sz;
+		break;
+	default:
+		WARN_ON(icm_type);
+	}
 
 	return pool;
 }
@@ -666,4 +683,202 @@ void mlx5dr_icm_pool_destroy(struct mlx5dr_icm_pool *pool)
 
 	mutex_destroy(&pool->mutex);
 	kvfree(pool);
+}
+
+struct dr_arg_pool {
+	enum mlx5dr_arg_chunk_size log_chunk_size;
+	struct mlx5dr_domain *dmn;
+	struct list_head free_list;
+	struct mutex mutex; /* protect arg pool */
+};
+
+struct mlx5dr_arg_pool_mngr {
+	struct mlx5dr_domain *dmn;
+	struct dr_arg_pool *pools[DR_ARG_CHUNK_SIZE_MAX];
+};
+
+static int dr_arg_add_new_objects_to_pool(struct dr_arg_pool *pool)
+{
+	struct mlx5dr_arg_object *arg_obj, *tmp_arg;
+	struct list_head cur_list;
+	u16 object_range;
+	int num_of_objects;
+	u32 obj_id = 0;
+	int ret;
+	int i;
+
+	INIT_LIST_HEAD(&cur_list);
+
+	object_range = pool->dmn->info.caps.log_header_modify_argument_granularity;
+
+	num_of_objects = (1 << (object_range - pool->log_chunk_size));
+	/* Only one general object per range */
+	ret = mlx5dr_cmd_create_modify_header_arg(pool->dmn->mdev,
+						  object_range,
+						  pool->dmn->pdn,
+						  &obj_id);
+	if (ret) {
+		mlx5dr_err(pool->dmn,
+			   "Failed allocating object with range: %d:\n",
+			   object_range);
+		return ret;
+	}
+
+	for (i = 0; i < num_of_objects; i++) {
+		arg_obj = kvzalloc(sizeof(*arg_obj), GFP_KERNEL);
+		if (!arg_obj)
+			goto clean_arg_obj;
+
+		arg_obj->log_chunk_size = pool->log_chunk_size;
+
+		list_add_tail(&arg_obj->list_node, &cur_list);
+
+		arg_obj->obj_id = obj_id;
+		arg_obj->obj_offset = i * (1 << pool->log_chunk_size);
+	}
+
+	list_splice_tail_init(&cur_list, &pool->free_list);
+	return 0;
+
+clean_arg_obj:
+	list_for_each_entry_safe(arg_obj, tmp_arg, &cur_list, list_node) {
+		list_del(&arg_obj->list_node);
+		kvfree(arg_obj);
+	}
+	mlx5dr_cmd_destroy_modify_header_arg(pool->dmn->mdev, obj_id);
+	return -ENOMEM;
+}
+
+static struct dr_arg_pool *dr_arg_pool_create(struct mlx5dr_domain *dmn,
+					      enum mlx5dr_arg_chunk_size chunk_size)
+{
+	struct dr_arg_pool *pool;
+
+	pool = kvzalloc(sizeof(*pool), GFP_KERNEL);
+	if (!pool)
+		return NULL;
+
+	pool->dmn = dmn;
+
+	INIT_LIST_HEAD(&pool->free_list);
+	mutex_init(&pool->mutex);
+
+	pool->log_chunk_size = chunk_size;
+	if (dr_arg_add_new_objects_to_pool(pool))
+		goto free_pool;
+
+	return pool;
+
+free_pool:
+	kvfree(pool);
+
+	return NULL;
+}
+
+static void dr_arg_pool_destroy(struct dr_arg_pool *pool)
+{
+	struct mlx5dr_arg_object *tmp_arg;
+	struct mlx5dr_arg_object *arg_obj;
+
+	list_for_each_entry_safe(arg_obj, tmp_arg, &pool->free_list, list_node) {
+		list_del(&arg_obj->list_node);
+		if (!arg_obj->obj_offset) /* the first in range */
+			mlx5dr_cmd_destroy_modify_header_arg(pool->dmn->mdev,
+							     arg_obj->obj_id);
+		kvfree(arg_obj);
+	}
+
+	mutex_destroy(&pool->mutex);
+	kvfree(pool);
+}
+
+static struct mlx5dr_arg_object *dr_arg_get_obj_from_pool(struct dr_arg_pool *pool)
+{
+	struct mlx5dr_arg_object *arg_obj = NULL;
+	int ret;
+
+	mutex_lock(&pool->mutex);
+	if (list_empty(&pool->free_list)) {
+		ret = dr_arg_add_new_objects_to_pool(pool);
+		if (ret)
+			goto out;
+	}
+
+	arg_obj = list_first_entry_or_null(&pool->free_list,
+					   struct mlx5dr_arg_object,
+					   list_node);
+	WARN(!arg_obj, "couldn't get dr arg obj from pool");
+
+	if (arg_obj)
+		list_del_init(&arg_obj->list_node);
+
+out:
+	mutex_unlock(&pool->mutex);
+	return arg_obj;
+}
+
+static void dr_arg_put_obj_in_pool(struct dr_arg_pool *pool,
+				   struct mlx5dr_arg_object *arg_obj)
+{
+	mutex_lock(&pool->mutex);
+	list_add(&arg_obj->list_node, &pool->free_list);
+	mutex_unlock(&pool->mutex);
+}
+
+void mlx5dr_arg_put_obj(struct mlx5dr_domain *dmn,
+			struct mlx5dr_arg_object *arg_obj)
+{
+	return dr_arg_put_obj_in_pool(
+			dmn->modify_header_arg_pool_mngr->pools[arg_obj->log_chunk_size],
+			arg_obj);
+}
+
+struct mlx5dr_arg_object *mlx5dr_arg_get_obj(struct mlx5dr_domain *dmn,
+					     enum mlx5dr_arg_chunk_size size)
+{
+	if (size >= DR_ARG_CHUNK_SIZE_MAX)
+		return NULL;
+
+	return dr_arg_get_obj_from_pool(dmn->modify_header_arg_pool_mngr->pools[size]);
+}
+
+uint32_t mlx5dr_arg_get_object_id(struct mlx5dr_arg_object *arg_obj)
+{
+	return (arg_obj->obj_id + arg_obj->obj_offset);
+}
+
+struct mlx5dr_arg_pool_mngr *mlx5dr_arg_pool_mngr_create(struct mlx5dr_domain *dmn)
+{
+	struct mlx5dr_arg_pool_mngr *pool_mngr;
+	int i;
+
+	pool_mngr = kvzalloc(sizeof(*pool_mngr), GFP_KERNEL);
+	if (!pool_mngr)
+		return NULL;
+
+	pool_mngr->dmn = dmn;
+
+	for (i = 0; i <= DR_ARG_CHUNK_SIZE_MAX - 1; i++) {
+		pool_mngr->pools[i] = dr_arg_pool_create(dmn, i);
+		if (!pool_mngr->pools[i])
+			goto clean_pools;
+	}
+
+	return pool_mngr;
+
+clean_pools:
+	for (; i > 0; i--)
+		dr_arg_pool_destroy(pool_mngr->pools[i]);
+	kvfree(pool_mngr);
+	return NULL;
+}
+
+void mlx5dr_arg_pool_mngr_destroy(struct mlx5dr_arg_pool_mngr *pool_mngr)
+{
+	int i;
+
+	for (i = 0; i < DR_ARG_CHUNK_SIZE_MAX; i++)
+		dr_arg_pool_destroy(pool_mngr->pools[i]);
+
+	kvfree(pool_mngr);
 }

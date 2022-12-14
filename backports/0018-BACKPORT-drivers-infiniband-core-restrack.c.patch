@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/restrack.c
+
+Change-Id: Icf91c092cfa190db72eaebe41e86c746dc782f4f
+---
+ drivers/infiniband/core/restrack.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/infiniband/core/restrack.c
++++ b/drivers/infiniband/core/restrack.c
+@@ -336,6 +336,7 @@ void rdma_restrack_del(struct rdma_restr
+ 	rdma_restrack_put(res);
+ 	wait_for_completion(&res->comp);
+ 
++
+ out:
+ 	if (res->task) {
+ 		put_task_struct(res->task);

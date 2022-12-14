@@ -188,12 +188,6 @@ if [ "X${devs}" != "X" ]; then
         if [ "X${ib_dev}" == "X" ]; then
             continue
         fi
-        case "${ib_dev}" in
-            mlx4*)
-                log_msg "INFO: MLX4 device (${ib_dev}) does not support Relaxed Packet Ordering, skipping"
-                continue
-                ;;
-        esac
         if (echo "${MLX5_RELAXED_PACKET_ORDERING_ON}" | grep -wq "${ib_dev}") ||
             (echo "${MLX5_RELAXED_PACKET_ORDERING_ON}" | grep -wq "all"); then
             set_relaxed_packet_ordering "${ib_dev}" "1"
@@ -232,12 +226,6 @@ else
         if [ "X${ib_dev}" == "X" ]; then
             continue
         fi
-        case "${ib_dev}" in
-            mlx4*)
-                log_msg "INFO: MLX4 device (${ib_dev}) does not support Relaxed Packet Ordering, skipping"
-                continue
-                ;;
-        esac
         set_relaxed_packet_ordering "${ib_dev}" "1"
     done
 
@@ -259,12 +247,6 @@ else
         if [ "X${ib_dev}" == "X" ]; then
             continue
         fi
-        case "${ib_dev}" in
-            mlx4*)
-                log_msg "INFO: MLX4 device (${ib_dev}) does not support Relaxed Packet Ordering, skipping"
-                continue
-                ;;
-        esac
         set_relaxed_packet_ordering "${ib_dev}" "0"
     done
 fi

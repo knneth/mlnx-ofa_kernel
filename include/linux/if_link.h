@@ -16,4 +16,11 @@ struct ifla_vf_stats {
 };
 #endif
 
+#ifndef HAVE_IFLA_VF_GUID
+struct ifla_vf_guid {
+	__u32 vf;
+	__u64 guid;
+};
+#endif
+
 #endif /* LINUX_IF_LINK_H */

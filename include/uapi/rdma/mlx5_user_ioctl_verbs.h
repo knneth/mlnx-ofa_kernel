@@ -44,6 +44,7 @@ enum mlx5_ib_uapi_flow_table_type {
 	MLX5_IB_UAPI_FLOW_TABLE_TYPE_NIC_TX	= 0x1,
 	MLX5_IB_UAPI_FLOW_TABLE_TYPE_FDB	= 0x2,
 	MLX5_IB_UAPI_FLOW_TABLE_TYPE_RDMA_RX	= 0x3,
+	MLX5_IB_UAPI_FLOW_TABLE_TYPE_RDMA_TX	= 0x4,
 };
 
 enum mlx5_ib_uapi_flow_action_packet_reformat_type {
@@ -62,6 +63,7 @@ enum mlx5_ib_uapi_dm_type {
 	MLX5_IB_UAPI_DM_TYPE_MEMIC,
 	MLX5_IB_UAPI_DM_TYPE_STEERING_SW_ICM,
 	MLX5_IB_UAPI_DM_TYPE_HEADER_MODIFY_SW_ICM,
+	MLX5_IB_UAPI_DM_TYPE_HEADER_MODIFY_PATTERN_SW_ICM,
 };
 
 enum mlx5_ib_uapi_devx_create_event_channel_flags {
@@ -73,6 +75,9 @@ struct mlx5_ib_uapi_devx_async_event_hdr {
 	__u8		out_data[];
 };
 
+enum mlx5_ib_uapi_pp_alloc_flags {
+	MLX5_IB_UAPI_PP_ALLOC_FLAGS_DEDICATED_INDEX = 1 << 0,
+};
 enum mlx5_ib_uapi_devx_query_port_comp_mask {
        MLX5_IB_UAPI_QUERY_PORT_VPORT = BIT(0),
        MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID = BIT(1),

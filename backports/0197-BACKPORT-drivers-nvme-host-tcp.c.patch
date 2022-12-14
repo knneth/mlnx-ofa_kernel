@@ -1,0 +1,108 @@
+From: Tom Wu <tomwu@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/tcp.c
+
+Signed-off-by: Tom Wu <tomwu@mellanox.com>
+---
+ drivers/nvme/host/tcp.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+--- a/drivers/nvme/host/tcp.c
++++ b/drivers/nvme/host/tcp.c
+@@ -3,6 +3,9 @@
+  * NVMe over Fabrics TCP host.
+  * Copyright (c) 2018 Lightbits Labs. All rights reserved.
+  */
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -113,7 +116,9 @@ struct nvme_tcp_ctrl {
+ 	struct work_struct	err_work;
+ 	struct delayed_work	connect_work;
+ 	struct nvme_tcp_request async_req;
++#ifdef HAVE_BLK_MQ_HCTX_TYPE
+ 	u32			io_queues[HCTX_MAX_TYPES];
++#endif
+ };
+ 
+ static LIST_HEAD(nvme_tcp_ctrl_list);
+@@ -1492,7 +1497,9 @@ static struct blk_mq_tag_set *nvme_tcp_a
+ 		set->driver_data = ctrl;
+ 		set->nr_hw_queues = nctrl->queue_count - 1;
+ 		set->timeout = NVME_IO_TIMEOUT;
++#ifdef HAVE_BLK_MQ_HCTX_TYPE
+ 		set->nr_maps = nctrl->opts->nr_poll_queues ? HCTX_MAX_TYPES : 2;
++#endif
+ 	}
+ 
+ 	ret = blk_mq_alloc_tag_set(set);
+@@ -1599,6 +1606,7 @@ static unsigned int nvme_tcp_nr_io_queue
+ static void nvme_tcp_set_io_queues(struct nvme_ctrl *nctrl,
+ 		unsigned int nr_io_queues)
+ {
++#ifdef HAVE_BLK_MQ_HCTX_TYPE
+ 	struct nvme_tcp_ctrl *ctrl = to_tcp_ctrl(nctrl);
+ 	struct nvmf_ctrl_options *opts = nctrl->opts;
+ 
+@@ -1629,6 +1637,7 @@ static void nvme_tcp_set_io_queues(struc
+ 		ctrl->io_queues[HCTX_TYPE_POLL] =
+ 			min(opts->nr_poll_queues, nr_io_queues);
+ 	}
++#endif
+ }
+ 
+ static int nvme_tcp_alloc_io_queues(struct nvme_ctrl *ctrl)
+@@ -2176,6 +2185,7 @@ static blk_status_t nvme_tcp_queue_rq(st
+ 
+ static int nvme_tcp_map_queues(struct blk_mq_tag_set *set)
+ {
++#ifdef HAVE_BLK_MQ_HCTX_TYPE
+ 	struct nvme_tcp_ctrl *ctrl = set->driver_data;
+ 	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
+ 
+@@ -2215,20 +2225,33 @@ static int nvme_tcp_map_queues(struct bl
+ 		ctrl->io_queues[HCTX_TYPE_DEFAULT],
+ 		ctrl->io_queues[HCTX_TYPE_READ],
+ 		ctrl->io_queues[HCTX_TYPE_POLL]);
++#else
++	blk_mq_map_queues(set);
++#endif
+ 
+ 	return 0;
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_POLL
++#ifdef HAVE_BLK_MQ_POLL_FN_1_ARG
+ static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx)
++#else
++static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx, unsigned int tag)
++#endif
+ {
+ 	struct nvme_tcp_queue *queue = hctx->driver_data;
+ 	struct sock *sk = queue->sock->sk;
+ 
++#ifdef HAVE_SKB_QUEUE_EMPTY_LOCKLESS
+ 	if (sk_can_busy_loop(sk) && skb_queue_empty_lockless(&sk->sk_receive_queue))
++#else
++	if (sk_can_busy_loop(sk) && skb_queue_empty(&sk->sk_receive_queue))
++#endif
+ 		sk_busy_loop(sk, true);
+ 	nvme_tcp_try_recv(queue);
+ 	return queue->nr_cqe;
+ }
++#endif
+ 
+ static struct blk_mq_ops nvme_tcp_mq_ops = {
+ 	.queue_rq	= nvme_tcp_queue_rq,
+@@ -2238,7 +2261,9 @@ static struct blk_mq_ops nvme_tcp_mq_ops
+ 	.init_hctx	= nvme_tcp_init_hctx,
+ 	.timeout	= nvme_tcp_timeout,
+ 	.map_queues	= nvme_tcp_map_queues,
++#ifdef HAVE_BLK_MQ_OPS_POLL
+ 	.poll		= nvme_tcp_poll,
++#endif
+ };
+ 
+ static struct blk_mq_ops nvme_tcp_admin_mq_ops = {

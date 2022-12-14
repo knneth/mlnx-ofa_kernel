@@ -264,11 +264,8 @@ void ipoib_transport_dev_cleanup(struct net_device *dev)
 		priv->qp = NULL;
 	}
 
-	if (ib_destroy_cq(priv->send_cq))
-		ipoib_warn(priv, "ib_cq_destroy (send) failed\n");
-
-	if (ib_destroy_cq(priv->recv_cq))
-		ipoib_warn(priv, "ib_cq_destroy (recv) failed\n");
+	ib_destroy_cq(priv->send_cq);
+	ib_destroy_cq(priv->recv_cq);
 }
 
 void ipoib_event(struct ib_event_handler *handler,
@@ -296,5 +293,3 @@ void ipoib_event(struct ib_event_handler *handler,
 		queue_work(ipoib_workqueue, &priv->flush_light);
 	}
 }
-
-#include "rss_tss/ipoib_verbs_rss.c"

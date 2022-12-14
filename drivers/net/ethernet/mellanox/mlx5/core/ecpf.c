@@ -12,33 +12,13 @@ bool mlx5_read_embedded_cpu(struct mlx5_core_dev *dev)
 	return (ioread32be(&dev->iseg->initializing) >> MLX5_ECPU_BIT_NUM) & 1;
 }
 
-static int mlx5_peer_pf_enable_hca(struct mlx5_core_dev *dev)
-{
-	u32 out[MLX5_ST_SZ_DW(enable_hca_out)] = {};
-	u32 in[MLX5_ST_SZ_DW(enable_hca_in)]   = {};
-
-	MLX5_SET(enable_hca_in, in, opcode, MLX5_CMD_OP_ENABLE_HCA);
-	MLX5_SET(enable_hca_in, in, function_id, 0);
-	MLX5_SET(enable_hca_in, in, embedded_cpu_function, 0);
-	return mlx5_cmd_exec(dev, &in, sizeof(in), &out, sizeof(out));
-}
-
-static int mlx5_peer_pf_disable_hca(struct mlx5_core_dev *dev)
-{
-	u32 out[MLX5_ST_SZ_DW(disable_hca_out)] = {};
-	u32 in[MLX5_ST_SZ_DW(disable_hca_in)]   = {};
-
-	MLX5_SET(disable_hca_in, in, opcode, MLX5_CMD_OP_DISABLE_HCA);
-	MLX5_SET(disable_hca_in, in, function_id, 0);
-	MLX5_SET(disable_hca_in, in, embedded_cpu_function, 0);
-	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
-}
-
 static int mlx5_peer_pf_init(struct mlx5_core_dev *dev)
 {
+	u32 in[MLX5_ST_SZ_DW(enable_hca_in)] = {};
 	int err;
 
-	err = mlx5_peer_pf_enable_hca(dev);
+	MLX5_SET(enable_hca_in, in, opcode, MLX5_CMD_OP_ENABLE_HCA);
+	err = mlx5_cmd_exec_in(dev, enable_hca, in);
 	if (err)
 		mlx5_core_err(dev, "Failed to enable peer PF HCA err(%d)\n",
 			      err);
@@ -48,9 +28,11 @@ static int mlx5_peer_pf_init(struct mlx5_core_dev *dev)
 
 static void mlx5_peer_pf_cleanup(struct mlx5_core_dev *dev)
 {
+	u32 in[MLX5_ST_SZ_DW(disable_hca_in)] = {};
 	int err;
 
-	err = mlx5_peer_pf_disable_hca(dev);
+	MLX5_SET(disable_hca_in, in, opcode, MLX5_CMD_OP_DISABLE_HCA);
+	err = mlx5_cmd_exec_in(dev, disable_hca, in);
 	if (err) {
 		mlx5_core_err(dev, "Failed to disable peer PF HCA err(%d)\n",
 			      err);
@@ -86,6 +68,72 @@ void mlx5_ec_cleanup(struct mlx5_core_dev *dev)
 		return;
 
 	mlx5_peer_pf_cleanup(dev);
+}
+
+static int mlx5_regex_enable(struct mlx5_core_dev *dev, int vport, bool en)
+{
+	u32 out_set[MLX5_ST_SZ_BYTES(set_hca_cap_out)] = {};
+	u32 in_query[MLX5_ST_SZ_DW(query_hca_cap_in)] = {};
+	void *set_hca_cap, *query_hca_cap;
+	u32 *out_query, *in_set;
+	int err = 0;
+
+	out_query = kzalloc(MLX5_ST_SZ_BYTES(query_hca_cap_out), GFP_KERNEL);
+	if (!out_query)
+		return -ENOMEM;
+
+	in_set = kzalloc(MLX5_ST_SZ_BYTES(set_hca_cap_in), GFP_KERNEL);
+	if (!in_set) {
+		kfree(out_query);
+		return -ENOMEM;
+	}
+
+	MLX5_SET(query_hca_cap_in, in_query, opcode,
+		 MLX5_CMD_OP_QUERY_HCA_CAP);
+	MLX5_SET(query_hca_cap_in, in_query, op_mod,
+		 MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE |
+		 HCA_CAP_OPMOD_GET_CUR);
+	MLX5_SET(query_hca_cap_in, in_query, other_function, 1);
+	MLX5_SET(query_hca_cap_in, in_query, function_id, vport);
+
+	err =  mlx5_cmd_exec(dev, in_query, MLX5_ST_SZ_BYTES(query_hca_cap_in),
+			     out_query, MLX5_ST_SZ_BYTES(query_hca_cap_out));
+	if (err)
+		goto out;
+
+	query_hca_cap = MLX5_ADDR_OF(query_hca_cap_out, out_query, capability);
+	set_hca_cap = MLX5_ADDR_OF(set_hca_cap_in, in_set, capability);
+	memcpy(set_hca_cap, query_hca_cap, MLX5_ST_SZ_BYTES(cmd_hca_cap));
+
+	MLX5_SET(set_hca_cap_in, in_set, opcode,
+		 MLX5_CMD_OP_SET_HCA_CAP);
+	MLX5_SET(set_hca_cap_in, in_set, op_mod,
+		 MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE |
+		 HCA_CAP_OPMOD_GET_MAX);
+	MLX5_SET(set_hca_cap_in, in_set, other_function, 1);
+	MLX5_SET(set_hca_cap_in, in_set, function_id, vport);
+	MLX5_SET(set_hca_cap_in, in_set,
+		 capability.cmd_hca_cap.regexp, en);
+	if (en) {
+		MLX5_SET(set_hca_cap_in, in_set,
+			 capability.cmd_hca_cap.regexp_num_of_engines,
+			 MLX5_CAP_GEN_MAX(dev, regexp_num_of_engines));
+		MLX5_SET(set_hca_cap_in, in_set,
+			 capability.cmd_hca_cap.regexp_log_crspace_size,
+			 MLX5_CAP_GEN_MAX(dev, regexp_log_crspace_size));
+		MLX5_SET(set_hca_cap_in, in_set,
+			 capability.cmd_hca_cap.regexp_params,
+			 MLX5_CAP_GEN_MAX(dev, regexp_params));
+	}
+	err =  mlx5_cmd_exec(dev, in_set, MLX5_ST_SZ_BYTES(set_hca_cap_in),
+			     out_set, MLX5_ST_SZ_BYTES(set_hca_cap_out));
+	if (err)
+		goto out;
+
+out:
+	kfree(out_query);
+	kfree(in_set);
+	return err;
 }
 
 static ssize_t max_tx_rate_store(struct kobject *kobj,
@@ -154,6 +202,35 @@ static ssize_t mac_show(struct kobject *kobj,
 {
 	return sprintf(buf,
 		       "usage: write <LLADDR|Random> to set Mac Address\n");
+}
+
+static ssize_t regex_en_store(struct kobject *kobj,
+			      struct kobj_attribute *attr,
+			      const char *buf,
+			      size_t count)
+{
+	struct mlx5_smart_nic_vport *tmp =
+		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
+	struct mlx5_eswitch *esw = tmp->esw;
+	int err;
+
+	if (!MLX5_CAP_GEN_MAX(esw->dev, regexp))
+		return -EOPNOTSUPP;
+	if (sysfs_streq(buf, "1"))
+		err = mlx5_regex_enable(esw->dev, tmp->vport, 1);
+	else if (sysfs_streq(buf, "0"))
+		err = mlx5_regex_enable(esw->dev, tmp->vport, 0);
+	else
+		err = -EINVAL;
+
+	return err ? err : count;
+}
+
+static ssize_t regex_en_show(struct kobject *kobj,
+			     struct kobj_attribute *attr,
+			     char *buf)
+{
+	return sprintf(buf, "Usage: write 1/0 to enable/disable regex\n");
 }
 
 static int strpolicy(const char *buf, enum port_state_policy *policy)
@@ -282,6 +359,13 @@ static struct kobj_attribute attr_vport_state = {
 	.store = vport_state_store,
 };
 
+static struct kobj_attribute attr_regex_en = {
+	.attr = {.name = "regex_en",
+		 .mode = 0644 },
+	.show = regex_en_show,
+	.store = regex_en_store,
+};
+
 static struct kobj_attribute attr_config = {
 	.attr = {.name = "config",
 		 .mode = 0444 },
@@ -293,6 +377,7 @@ static struct attribute *smart_nic_attrs[] = {
 	&attr_max_tx_rate.attr,
 	&attr_mac.attr,
 	&attr_vport_state.attr,
+	&attr_regex_en.attr,
 	NULL,
 };
 

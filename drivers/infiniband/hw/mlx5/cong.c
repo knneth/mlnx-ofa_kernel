@@ -270,7 +270,7 @@ static int mlx5_ib_get_cc_params(struct mlx5_ib_dev *dev, u8 port_num,
 
 	node = mlx5_ib_param_to_node(offset);
 
-	err = mlx5_cmd_query_cong_params(mdev, node, out, outlen);
+	err = mlx5_cmd_query_cong_params(mdev, node, out);
 	if (err)
 		goto free;
 

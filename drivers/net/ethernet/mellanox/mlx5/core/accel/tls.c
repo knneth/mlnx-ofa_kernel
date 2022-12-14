@@ -114,7 +114,7 @@ int mlx5_ktls_create_key(struct mlx5_core_dev *mdev,
 	}
 
 	return mlx5_create_encryption_key(mdev, key, sz_bytes,
-					  MLX5_GENERAL_OBJECT_TYPE_ENCRYPTION_KEY_TYPE_TLS,
+					  MLX5_ACCEL_OBJ_TLS_KEY,
 					  p_key_id);
 }
 

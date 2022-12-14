@@ -1,588 +1,480 @@
+// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 /*
- * Copyright (c) 2014,  Mellanox Technologies. All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright (c) 2014-2020,  Mellanox Technologies. All rights reserved.
  */
-
-#include <rdma/ib_peer_mem.h>
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
-
+#include <linux/sched/mm.h>
+#include "ib_peer_mem.h"
 static DEFINE_MUTEX(peer_memory_mutex);
 static LIST_HEAD(peer_memory_list);
 static struct kobject *peers_kobj;
+#define PEER_NO_INVALIDATION_ID U32_MAX
+static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context);
+struct peer_mem_attribute {
+	struct attribute attr;
+	ssize_t (*show)(struct ib_peer_memory_client *ib_peer_client,
+			struct peer_mem_attribute *attr, char *buf);
+	ssize_t (*store)(struct ib_peer_memory_client *ib_peer_client,
+			 struct peer_mem_attribute *attr, const char *buf,
+			 size_t count);
+};
 
-static void complete_peer(struct kref *kref);
-static struct ib_peer_memory_client *get_peer_by_kobj(void *kobj);
-static ssize_t version_show(struct kobject *kobj,
-			    struct kobj_attribute *attr, char *buf)
+#define PEER_ATTR_RO(_name)                                                    \
+	struct peer_mem_attribute peer_attr_ ## _name = __ATTR_RO(_name)
+
+static ssize_t version_show(struct ib_peer_memory_client *ib_peer_client,
+			    struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%s\n", ib_peer_client->peer_mem->version);
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 ib_peer_client->peer_mem->version);
 }
 
-static ssize_t num_alloc_mrs_show(struct kobject *kobj,
-				  struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(version);
+static ssize_t num_alloc_mrs_show(struct ib_peer_memory_client *ib_peer_client,
+				  struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%llu\n", (u64)atomic64_read(&ib_peer_client->stats.num_alloc_mrs));
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(
+		buf, PAGE_SIZE, "%llu\n",
+		(u64)atomic64_read(&ib_peer_client->stats.num_alloc_mrs));
 }
 
-static ssize_t num_dealloc_mrs_show(struct kobject *kobj,
-				    struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(num_alloc_mrs);
+static ssize_t
+num_dealloc_mrs_show(struct ib_peer_memory_client *ib_peer_client,
+		     struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%llu\n", (u64)atomic64_read(&ib_peer_client->stats.num_dealloc_mrs));
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(
+		buf, PAGE_SIZE, "%llu\n",
+		(u64)atomic64_read(&ib_peer_client->stats.num_dealloc_mrs));
 }
 
-static ssize_t num_reg_pages_show(struct kobject *kobj,
-				  struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(num_dealloc_mrs);
+static ssize_t num_reg_pages_show(struct ib_peer_memory_client *ib_peer_client,
+				  struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%llu\n", (u64)atomic64_read(&ib_peer_client->stats.num_reg_pages));
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(
+		buf, PAGE_SIZE, "%llu\n",
+		(u64)atomic64_read(&ib_peer_client->stats.num_reg_pages));
 }
 
-static ssize_t num_dereg_pages_show(struct kobject *kobj,
-				    struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(num_reg_pages);
+static ssize_t
+num_dereg_pages_show(struct ib_peer_memory_client *ib_peer_client,
+		     struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%llu\n", (u64)atomic64_read(&ib_peer_client->stats.num_dereg_pages));
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(
+		buf, PAGE_SIZE, "%llu\n",
+		(u64)atomic64_read(&ib_peer_client->stats.num_dereg_pages));
 }
 
-static ssize_t num_reg_bytes_show(struct kobject *kobj,
-				  struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(num_dereg_pages);
+static ssize_t num_reg_bytes_show(struct ib_peer_memory_client *ib_peer_client,
+				  struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%llu\n", (u64)atomic64_read(&ib_peer_client->stats.num_reg_bytes));
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(
+		buf, PAGE_SIZE, "%llu\n",
+		(u64)atomic64_read(&ib_peer_client->stats.num_reg_bytes));
 }
 
-static ssize_t num_dereg_bytes_show(struct kobject *kobj,
-				    struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(num_reg_bytes);
+static ssize_t
+num_dereg_bytes_show(struct ib_peer_memory_client *ib_peer_client,
+		     struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%llu\n", (u64)atomic64_read(&ib_peer_client->stats.num_dereg_bytes));
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(
+		buf, PAGE_SIZE, "%llu\n",
+		(u64)atomic64_read(&ib_peer_client->stats.num_dereg_bytes));
 }
 
-static ssize_t num_free_callbacks_show(struct kobject *kobj,
-				       struct kobj_attribute *attr, char *buf)
+static PEER_ATTR_RO(num_dereg_bytes);
+static ssize_t
+num_free_callbacks_show(struct ib_peer_memory_client *ib_peer_client,
+			struct peer_mem_attribute *attr, char *buf)
 {
-	struct ib_peer_memory_client *ib_peer_client = get_peer_by_kobj(kobj);
-
-	if (ib_peer_client) {
-		sprintf(buf, "%lu\n", ib_peer_client->stats.num_free_callbacks);
-		kref_put(&ib_peer_client->ref, complete_peer);
-		return strlen(buf);
-	}
-	/* not found - nothing is return */
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			 ib_peer_client->stats.num_free_callbacks);
 }
 
-static struct kobj_attribute version_attr = __ATTR_RO(version);
-static struct kobj_attribute num_alloc_mrs = __ATTR_RO(num_alloc_mrs);
-static struct kobj_attribute num_dealloc_mrs = __ATTR_RO(num_dealloc_mrs);
-static struct kobj_attribute num_reg_pages = __ATTR_RO(num_reg_pages);
-static struct kobj_attribute num_dereg_pages = __ATTR_RO(num_dereg_pages);
-static struct kobj_attribute num_reg_bytes = __ATTR_RO(num_reg_bytes);
-static struct kobj_attribute num_dereg_bytes = __ATTR_RO(num_dereg_bytes);
-static struct kobj_attribute num_free_callbacks = __ATTR_RO(num_free_callbacks);
-
+static PEER_ATTR_RO(num_free_callbacks);
 static struct attribute *peer_mem_attrs[] = {
-			&version_attr.attr,
-			&num_alloc_mrs.attr,
-			&num_dealloc_mrs.attr,
-			&num_reg_pages.attr,
-			&num_dereg_pages.attr,
-			&num_reg_bytes.attr,
-			&num_dereg_bytes.attr,
-			&num_free_callbacks.attr,
+			&peer_attr_version.attr,
+			&peer_attr_num_alloc_mrs.attr,
+			&peer_attr_num_dealloc_mrs.attr,
+			&peer_attr_num_reg_pages.attr,
+			&peer_attr_num_dereg_pages.attr,
+			&peer_attr_num_reg_bytes.attr,
+			&peer_attr_num_dereg_bytes.attr,
+			&peer_attr_num_free_callbacks.attr,
 			NULL,
 };
 
-static void destroy_peer_sysfs(struct ib_peer_memory_client *ib_peer_client)
+static const struct attribute_group peer_mem_attr_group = {
+	.attrs = peer_mem_attrs,
+};
+
+static ssize_t peer_attr_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	kobject_put(ib_peer_client->kobj);
-	if (list_empty(&peer_memory_list))
-		kobject_put(peers_kobj);
+	struct peer_mem_attribute *peer_attr =
+		container_of(attr, struct peer_mem_attribute, attr);
+	if (!peer_attr->show)
+		return -EIO;
+	return peer_attr->show(container_of(kobj, struct ib_peer_memory_client,
+					    kobj),
+			       peer_attr, buf);
 }
 
-static int create_peer_sysfs(struct ib_peer_memory_client *ib_peer_client)
+static const struct sysfs_ops peer_mem_sysfs_ops = {
+	.show = peer_attr_show,
+};
+
+static void ib_peer_memory_client_release(struct kobject *kobj)
 {
-	int ret;
-
-	if (list_empty(&peer_memory_list)) {
-		/* creating under /sys/kernel/mm */
-		peers_kobj = kobject_create_and_add("memory_peers", mm_kobj);
-		if (!peers_kobj)
-			return -ENOMEM;
-	}
-
-	ib_peer_client->peer_mem_attr_group.attrs = peer_mem_attrs;
-	/* Dir alreday was created explicitly to get its kernel object for further usage */
-	ib_peer_client->peer_mem_attr_group.name =  NULL;
-	ib_peer_client->kobj = kobject_create_and_add(ib_peer_client->peer_mem->name,
-		peers_kobj);
-
-	if (!ib_peer_client->kobj) {
-		ret = -EINVAL;
-		goto free;
-	}
-
-	/* Create the files associated with this kobject */
-	ret = sysfs_create_group(ib_peer_client->kobj,
-				 &ib_peer_client->peer_mem_attr_group);
-	if (ret)
-		goto peer_free;
-
-	return 0;
-
-peer_free:
-	kobject_put(ib_peer_client->kobj);
-
-free:
-	if (list_empty(&peer_memory_list))
-		kobject_put(peers_kobj);
-
-	return ret;
+	struct ib_peer_memory_client *ib_peer_client =
+		container_of(kobj, struct ib_peer_memory_client, kobj);
+	kfree(ib_peer_client);
 }
 
-static struct ib_peer_memory_client *get_peer_by_kobj(void *kobj)
-{
-	struct ib_peer_memory_client *ib_peer_client;
+static struct kobj_type peer_mem_type = {
+	.sysfs_ops = &peer_mem_sysfs_ops,
+	.release = ib_peer_memory_client_release,
+};
 
-	mutex_lock(&peer_memory_mutex);
-	list_for_each_entry(ib_peer_client, &peer_memory_list, core_peer_list) {
-		if (ib_peer_client->kobj == kobj) {
-			kref_get(&ib_peer_client->ref);
-			goto found;
-		}
-	}
-
-	ib_peer_client = NULL;
-found:
-	mutex_unlock(&peer_memory_mutex);
-	return ib_peer_client;
-}
-
-/* Caller should be holding the peer client lock, ib_peer_client->lock */
-static struct core_ticket *ib_peer_search_context(struct ib_peer_memory_client *ib_peer_client,
-						  u64 key)
-{
-	struct core_ticket *core_ticket;
-
-	list_for_each_entry(core_ticket, &ib_peer_client->core_ticket_list,
-			    ticket_list) {
-		if (core_ticket->key == key)
-			return core_ticket;
-	}
-
-	return NULL;
-}
-
-static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context)
-{
-	struct ib_peer_memory_client *ib_peer_client = reg_handle;
-	struct invalidation_ctx *invalidation_ctx;
-	struct core_ticket *core_ticket;
-	int need_unlock = 1;
-
-	mutex_lock(&ib_peer_client->lock);
-	ib_peer_client->stats.num_free_callbacks += 1;
-	core_ticket = ib_peer_search_context(ib_peer_client, core_context);
-	if (!core_ticket)
-		goto out;
-
-	invalidation_ctx = (struct invalidation_ctx *)core_ticket->context;
-	/* If context is not ready yet, mark it to be invalidated */
-	if (!invalidation_ctx->func) {
-		invalidation_ctx->peer_invalidated = 1;
-		goto out;
-	}
-	invalidation_ctx->func(invalidation_ctx->cookie,
-					invalidation_ctx->umem, 0, 0);
-	if (invalidation_ctx->inflight_invalidation) {
-		/* init the completion to wait on before letting other thread to run */
-		init_completion(&invalidation_ctx->comp);
-		mutex_unlock(&ib_peer_client->lock);
-		need_unlock = 0;
-		wait_for_completion(&invalidation_ctx->comp);
-	}
-
-	kfree(invalidation_ctx);
-out:
-	if (need_unlock)
-		mutex_unlock(&ib_peer_client->lock);
-
-	return 0;
-}
-
-static int ib_peer_insert_context(struct ib_peer_memory_client *ib_peer_client,
-				  void *context,
-				  u64 *context_ticket)
-{
-	struct core_ticket *core_ticket = kzalloc(sizeof(*core_ticket), GFP_KERNEL);
-
-	if (!core_ticket)
-		return -ENOMEM;
-
-	mutex_lock(&ib_peer_client->lock);
-	core_ticket->key = ib_peer_client->last_ticket++;
-	core_ticket->context = context;
-	list_add_tail(&core_ticket->ticket_list,
-		      &ib_peer_client->core_ticket_list);
-	*context_ticket = core_ticket->key;
-	mutex_unlock(&ib_peer_client->lock);
-
-	return 0;
-}
-
-/* Caller should be holding the peer client lock, specifically, the caller should hold ib_peer_client->lock */
-static int ib_peer_remove_context(struct ib_peer_memory_client *ib_peer_client,
-				  u64 key)
-{
-	struct core_ticket *core_ticket;
-
-	list_for_each_entry(core_ticket, &ib_peer_client->core_ticket_list,
-			    ticket_list) {
-		if (core_ticket->key == key) {
-			list_del(&core_ticket->ticket_list);
-			kfree(core_ticket);
-			return 0;
-		}
-	}
-
-	return 1;
-}
-
-/**
-** ib_peer_create_invalidation_ctx - creates invalidation context for a given umem
-** @ib_peer_mem: peer client to be used
-** @umem: umem struct belongs to that context
-** @invalidation_ctx: output context
-**/
-int ib_peer_create_invalidation_ctx(struct ib_peer_memory_client *ib_peer_mem, struct ib_umem *umem,
-				    struct invalidation_ctx **invalidation_ctx)
-{
-	int ret;
-	struct invalidation_ctx *ctx;
-
-	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
-	if (!ctx)
-		return -ENOMEM;
-
-	ret = ib_peer_insert_context(ib_peer_mem, ctx,
-				     &ctx->context_ticket);
-	if (ret) {
-		kfree(ctx);
-		return ret;
-	}
-
-	ctx->umem = umem;
-	umem->invalidation_ctx = ctx;
-	*invalidation_ctx = ctx;
-	return 0;
-}
-
-/**
- * ** ib_peer_destroy_invalidation_ctx - destroy a given invalidation context
- * ** @ib_peer_mem: peer client to be used
- * ** @invalidation_ctx: context to be invalidated
- * **/
-void ib_peer_destroy_invalidation_ctx(struct ib_peer_memory_client *ib_peer_mem,
-				      struct invalidation_ctx *invalidation_ctx)
-{
-	int peer_callback;
-	int inflight_invalidation;
-
-	/* If we are under peer callback lock was already taken.*/
-	if (!invalidation_ctx->peer_callback)
-		mutex_lock(&ib_peer_mem->lock);
-	ib_peer_remove_context(ib_peer_mem, invalidation_ctx->context_ticket);
-	/* make sure to check inflight flag after took the lock and remove from tree.
-	 * in addition, from that point using local variables for peer_callback and
-	 * inflight_invalidation as after the complete invalidation_ctx can't be accessed
-	 * any more as it may be freed by the callback.
-	 */
-	peer_callback = invalidation_ctx->peer_callback;
-	inflight_invalidation = invalidation_ctx->inflight_invalidation;
-	if (inflight_invalidation)
-		complete(&invalidation_ctx->comp);
-
-	/* On peer callback lock is handled externally */
-	if (!peer_callback)
-		mutex_unlock(&ib_peer_mem->lock);
-
-	/* in case under callback context or callback is pending let it free the invalidation context */
-	if (!peer_callback && !inflight_invalidation)
-		kfree(invalidation_ctx);
-}
 static int ib_memory_peer_check_mandatory(const struct peer_memory_client
 						     *peer_client)
 {
-#define PEER_MEM_MANDATORY_FUNC(x) { offsetof(struct peer_memory_client, x), #x }
-		static const struct {
-			size_t offset;
-			char  *name;
-		} mandatory_table[] = {
-			PEER_MEM_MANDATORY_FUNC(acquire),
-			PEER_MEM_MANDATORY_FUNC(get_pages),
-			PEER_MEM_MANDATORY_FUNC(put_pages),
-			PEER_MEM_MANDATORY_FUNC(get_page_size),
-			PEER_MEM_MANDATORY_FUNC(dma_map),
-			PEER_MEM_MANDATORY_FUNC(dma_unmap)
-		};
-		int i;
-
-		for (i = 0; i < ARRAY_SIZE(mandatory_table); ++i) {
-			if (!*(void **)((void *)peer_client + mandatory_table[i].offset)) {
-				pr_err("Peer memory %s is missing mandatory function %s\n",
-				       peer_client->name, mandatory_table[i].name);
-				return -EINVAL;
-			}
+#define PEER_MEM_MANDATORY_FUNC(x) {offsetof(struct peer_memory_client, x), #x}
+	int i;
+	static const struct {
+		size_t offset;
+		char *name;
+	} mandatory_table[] = {
+		PEER_MEM_MANDATORY_FUNC(acquire),
+		PEER_MEM_MANDATORY_FUNC(get_pages),
+		PEER_MEM_MANDATORY_FUNC(put_pages),
+		PEER_MEM_MANDATORY_FUNC(dma_map),
+		PEER_MEM_MANDATORY_FUNC(dma_unmap),
+	};
+	for (i = 0; i < ARRAY_SIZE(mandatory_table); ++i) {
+		if (!*(void **)((void *)peer_client +
+				mandatory_table[i].offset)) {
+			pr_err("Peer memory %s is missing mandatory function %s\n",
+			       peer_client->name, mandatory_table[i].name);
+			return -EINVAL;
 		}
-
-		return 0;
+	}
+	return 0;
 }
 
-static void complete_peer(struct kref *kref)
-{
-	struct ib_peer_memory_client *ib_peer_client =
-		container_of(kref, struct ib_peer_memory_client, ref);
-
-	complete(&ib_peer_client->unload_comp);
-}
-
-void *ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
-				     invalidate_peer_memory *invalidate_callback)
+void *
+ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
+			       invalidate_peer_memory *invalidate_callback)
 {
 	struct ib_peer_memory_client *ib_peer_client;
-
+	int ret;
 	if (ib_memory_peer_check_mandatory(peer_client))
 		return NULL;
-
 	ib_peer_client = kzalloc(sizeof(*ib_peer_client), GFP_KERNEL);
 	if (!ib_peer_client)
 		return NULL;
-
-	INIT_LIST_HEAD(&ib_peer_client->core_ticket_list);
-	mutex_init(&ib_peer_client->lock);
-	init_completion(&ib_peer_client->unload_comp);
-	kref_init(&ib_peer_client->ref);
+	kobject_init(&ib_peer_client->kobj, &peer_mem_type);
+	refcount_set(&ib_peer_client->usecnt, 1);
+	init_completion(&ib_peer_client->usecnt_zero);
 	ib_peer_client->peer_mem = peer_client;
-
-	/* Once peer supplied a non NULL callback it's an indication that
-	 * invalidation support is required for any memory owning.
+	xa_init_flags(&ib_peer_client->umem_xa, XA_FLAGS_ALLOC);
+	/*
+	 * If the peer wants the invalidation_callback then all memory users
+	 * linked to that peer must support invalidation.
 	 */
 	if (invalidate_callback) {
 		*invalidate_callback = ib_invalidate_peer_memory;
-		ib_peer_client->invalidation_required = 1;
+		ib_peer_client->invalidation_required = true;
 	}
-	ib_peer_client->last_ticket = 1;
-
 	mutex_lock(&peer_memory_mutex);
-	if (create_peer_sysfs(ib_peer_client)) {
-		kfree(ib_peer_client);
-		ib_peer_client = NULL;
-		goto end;
+	if (!peers_kobj) {
+		/* Created under /sys/kernel/mm */
+		peers_kobj = kobject_create_and_add("memory_peers", mm_kobj);
+		if (!peers_kobj)
+			goto err_unlock;
 	}
+	ret = kobject_add(&ib_peer_client->kobj, peers_kobj, peer_client->name);
+	if (ret)
+		goto err_parent;
+	ret = sysfs_create_group(&ib_peer_client->kobj,
+				 &peer_mem_attr_group);
+	if (ret)
+		goto err_parent;
 	list_add_tail(&ib_peer_client->core_peer_list, &peer_memory_list);
-end:
-
 	mutex_unlock(&peer_memory_mutex);
 	return ib_peer_client;
+err_parent:
+	if (list_empty(&peer_memory_list)) {
+		kobject_put(peers_kobj);
+		peers_kobj = NULL;
+	}
+err_unlock:
+	mutex_unlock(&peer_memory_mutex);
+	kobject_put(&ib_peer_client->kobj);
+	return NULL;
 }
 EXPORT_SYMBOL(ib_register_peer_memory_client);
 
 void ib_unregister_peer_memory_client(void *reg_handle)
 {
 	struct ib_peer_memory_client *ib_peer_client = reg_handle;
-
 	mutex_lock(&peer_memory_mutex);
 	list_del(&ib_peer_client->core_peer_list);
-	destroy_peer_sysfs(ib_peer_client);
+	if (list_empty(&peer_memory_list)) {
+		kobject_put(peers_kobj);
+		peers_kobj = NULL;
+	}
 	mutex_unlock(&peer_memory_mutex);
-
-	kref_put(&ib_peer_client->ref, complete_peer);
-	wait_for_completion(&ib_peer_client->unload_comp);
-	kfree(ib_peer_client);
+	/*
+	 * Wait for all umems to be destroyed before returning. Once
+	 * ib_unregister_peer_memory_client() returns no umems will call any
+	 * peer_mem ops.
+	 */
+	if (refcount_dec_and_test(&ib_peer_client->usecnt))
+		complete(&ib_peer_client->usecnt_zero);
+	wait_for_completion(&ib_peer_client->usecnt_zero);
+	kobject_put(&ib_peer_client->kobj);
 }
 EXPORT_SYMBOL(ib_unregister_peer_memory_client);
 
-struct ib_peer_memory_client *ib_get_peer_client(struct ib_ucontext *context, unsigned long addr,
-						 size_t size, unsigned long peer_mem_flags,
-						 void **peer_client_context)
+static struct ib_peer_memory_client *
+ib_get_peer_client(unsigned long addr, size_t size,
+		   unsigned long peer_mem_flags, void **peer_client_context)
 {
 	struct ib_peer_memory_client *ib_peer_client;
 	int ret = 0;
-
 	mutex_lock(&peer_memory_mutex);
-	list_for_each_entry(ib_peer_client, &peer_memory_list, core_peer_list) {
-		/* In case peer requires invalidation it can't own
-		 * memory which doesn't support it
-		 */
-		if ((ib_peer_client->invalidation_required &&
-		     (!(peer_mem_flags & IB_PEER_MEM_INVAL_SUPP))) ||
-		    (!context->peer_mem_private_data &&
-		     ib_peer_client->peer_mem->get_context_private_data))
+	list_for_each_entry(ib_peer_client, &peer_memory_list,
+			    core_peer_list) {
+		if (ib_peer_client->invalidation_required &&
+		    (!(peer_mem_flags & IB_PEER_MEM_INVAL_SUPP)))
 			continue;
-		ret = ib_peer_client->peer_mem->acquire(addr, size,
-						   context->peer_mem_private_data,
-						   context->peer_mem_name,
-						   peer_client_context);
-		if (ret > 0)
-			goto found;
+		ret = ib_peer_client->peer_mem->acquire(addr, size, NULL, NULL,
+							peer_client_context);
+		if (ret > 0) {
+			refcount_inc(&ib_peer_client->usecnt);
+			mutex_unlock(&peer_memory_mutex);
+			return ib_peer_client;
+		}
 	}
-
-	ib_peer_client = NULL;
-
-found:
-	if (ib_peer_client)
-		kref_get(&ib_peer_client->ref);
-
 	mutex_unlock(&peer_memory_mutex);
-	return ib_peer_client;
+	return NULL;
 }
-EXPORT_SYMBOL(ib_get_peer_client);
 
-void ib_put_peer_client(struct ib_peer_memory_client *ib_peer_client,
-			void *peer_client_context)
+static void ib_put_peer_client(struct ib_peer_memory_client *ib_peer_client,
+			       void *peer_client_context)
 {
 	if (ib_peer_client->peer_mem->release)
 		ib_peer_client->peer_mem->release(peer_client_context);
-
-	kref_put(&ib_peer_client->ref, complete_peer);
+	if (refcount_dec_and_test(&ib_peer_client->usecnt))
+		complete(&ib_peer_client->usecnt_zero);
 }
-EXPORT_SYMBOL(ib_put_peer_client);
 
-int ib_get_peer_private_data(struct ib_ucontext *context, u64 peer_id,
-			     char *peer_name)
+static void ib_peer_umem_kref_release(struct kref *kref)
 {
-	struct ib_peer_memory_client *ib_peer_client;
-	void *peer_mem_private_data = NULL;
-	int ret = 0;
-
-	mutex_lock(&peer_memory_mutex);
-	list_for_each_entry(ib_peer_client, &peer_memory_list, core_peer_list) {
-		if ((!ib_peer_client->peer_mem->get_context_private_data) ||
-		    (!ib_peer_client->peer_mem->put_context_private_data) ||
-		    (strcmp(peer_name, ib_peer_client->peer_mem->name) != 0))
-			continue;
-
-		peer_mem_private_data = ib_peer_client->peer_mem->get_context_private_data(peer_id);
-		if (peer_mem_private_data)
-			break;
-	}
-	mutex_unlock(&peer_memory_mutex);
-
-	if (peer_mem_private_data) {
-		int peer_name_size = sizeof(ib_peer_client->peer_mem->name);
-
-		context->peer_mem_name = kzalloc(peer_name_size, GFP_KERNEL);
-		if (!context->peer_mem_name)
-			return -ENOMEM;
-		memcpy(context->peer_mem_name, peer_name, peer_name_size - 1);
-		context->peer_mem_private_data = peer_mem_private_data;
-		context->flags |= IB_UCONTEXT_LOCAL_PEER_ALLOC;
-	} else {
-		ret = -ENODEV;
-	}
-
-	return ret;
+	kfree(container_of(kref, struct ib_umem_peer, kref));
 }
-EXPORT_SYMBOL(ib_get_peer_private_data);
 
-void ib_put_peer_private_data(struct ib_ucontext *context)
+static void ib_unmap_peer_client(struct ib_umem_peer *umem_p)
 {
-	struct ib_peer_memory_client *ib_peer_client;
+	struct ib_peer_memory_client *ib_peer_client = umem_p->ib_peer_client;
+	const struct peer_memory_client *peer_mem = ib_peer_client->peer_mem;
+	struct ib_umem *umem = &umem_p->umem;
 
-	if (!(context->flags & IB_UCONTEXT_LOCAL_PEER_ALLOC))
+	lockdep_assert_held(&umem_p->mapping_lock);
+
+	peer_mem->dma_unmap(&umem_p->umem.sg_head, umem_p->peer_client_context,
+			    umem_p->umem.ibdev->dma_device);
+	peer_mem->put_pages(&umem_p->umem.sg_head, umem_p->peer_client_context);
+	memset(&umem->sg_head, 0, sizeof(umem->sg_head));
+
+	atomic64_add(umem->nmap, &ib_peer_client->stats.num_dereg_pages);
+	atomic64_add(umem->length, &ib_peer_client->stats.num_dereg_bytes);
+	atomic64_inc(&ib_peer_client->stats.num_dealloc_mrs);
+
+	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
+		xa_store(&ib_peer_client->umem_xa, umem_p->xa_id, NULL,
+			 GFP_KERNEL);
+	umem_p->mapped = false;
+}
+
+static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context)
+{
+	struct ib_peer_memory_client *ib_peer_client = reg_handle;
+	struct ib_umem_peer *umem_p;
+
+	/*
+	 * The client is not required to fence against invalidation during
+	 * put_pages() as that would deadlock when we call put_pages() here.
+	 * Thus the core_context cannot be a umem pointer as we have no control
+	 * over the lifetime. Since we won't change the kABI for this to add a
+	 * proper kref, an xarray is used.
+	 */
+	xa_lock(&ib_peer_client->umem_xa);
+	umem_p = xa_load(&ib_peer_client->umem_xa, core_context);
+	if (!umem_p)
+		goto out_unlock;
+	kref_get(&umem_p->kref);
+	xa_unlock(&ib_peer_client->umem_xa);
+	mutex_lock(&umem_p->mapping_lock);
+	if (umem_p->mapped) {
+		/*
+		 * At this point the invalidation_func must be !NULL as the get
+		 * flow does not unlock mapping_lock until it is set, and umems
+		 * that do not require invalidation are not in the xarray.
+		 */
+		umem_p->invalidation_func(&umem_p->umem,
+					  umem_p->invalidation_private);
+		ib_unmap_peer_client(umem_p);
+	}
+	mutex_unlock(&umem_p->mapping_lock);
+	kref_put(&umem_p->kref, ib_peer_umem_kref_release);
+	return 0;
+out_unlock:
+	xa_unlock(&ib_peer_client->umem_xa);
+	return 0;
+}
+
+void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
+					    umem_invalidate_func_t func,
+					    void *priv)
+{
+	struct ib_umem_peer *umem_p =
+		container_of(umem, struct ib_umem_peer, umem);
+
+	if (WARN_ON(!umem->is_peer))
+		return;
+	if (umem_p->xa_id == PEER_NO_INVALIDATION_ID)
 		return;
 
-	mutex_lock(&peer_memory_mutex);
-	list_for_each_entry(ib_peer_client, &peer_memory_list, core_peer_list) {
-		if (strcmp(ib_peer_client->peer_mem->name,
-			   context->peer_mem_name) == 0) {
-			ib_peer_client->peer_mem->put_context_private_data(context->peer_mem_private_data);
-			break;
-		}
+	umem_p->invalidation_func = func;
+	umem_p->invalidation_private = priv;
+	/* Pairs with the lock in ib_peer_umem_get() */
+	mutex_unlock(&umem_p->mapping_lock);
+
+	/* At this point func can be called asynchronously */
+}
+EXPORT_SYMBOL(ib_umem_activate_invalidation_notifier);
+
+struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
+				 unsigned long peer_mem_flags)
+{
+	struct ib_peer_memory_client *ib_peer_client;
+	void *peer_client_context;
+	struct ib_umem_peer *umem_p;
+	int ret;
+	ib_peer_client =
+		ib_get_peer_client(old_umem->address, old_umem->length,
+				   peer_mem_flags, &peer_client_context);
+	if (!ib_peer_client)
+		return ERR_PTR(old_ret);
+	umem_p = kzalloc(sizeof(*umem_p), GFP_KERNEL);
+	if (!umem_p) {
+		ret = -ENOMEM;
+		goto err_client;
 	}
 
-	mutex_unlock(&peer_memory_mutex);
-	context->peer_mem_private_data = NULL;
-	kfree(context->peer_mem_name);
+	kref_init(&umem_p->kref);
+	umem_p->umem = *old_umem;
+	memset(&umem_p->umem.sg_head, 0, sizeof(umem_p->umem.sg_head));
+	umem_p->umem.is_peer = 1;
+	umem_p->ib_peer_client = ib_peer_client;
+	umem_p->peer_client_context = peer_client_context;
+	mutex_init(&umem_p->mapping_lock);
+	umem_p->xa_id = PEER_NO_INVALIDATION_ID;
+
+	mutex_lock(&umem_p->mapping_lock);
+	if (ib_peer_client->invalidation_required) {
+		ret = xa_alloc_cyclic(&ib_peer_client->umem_xa, &umem_p->xa_id,
+				      umem_p,
+				      XA_LIMIT(0, PEER_NO_INVALIDATION_ID - 1),
+				      &ib_peer_client->xa_cyclic_next,
+				      GFP_KERNEL);
+		if (ret < 0)
+			goto err_umem;
+	}
+
+	/*
+	 * We always request write permissions to the pages, to force breaking
+	 * of any CoW during the registration of the MR. For read-only MRs we
+	 * use the "force" flag to indicate that CoW breaking is required but
+	 * the registration should not fail if referencing read-only areas.
+	 */
+	ret = ib_peer_client->peer_mem->get_pages(umem_p->umem.address,
+						  umem_p->umem.length, 1,
+						  !umem_p->umem.writable, NULL,
+						  peer_client_context,
+						  umem_p->xa_id);
+	if (ret)
+		goto err_xa;
+
+	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sg_head,
+						peer_client_context,
+						umem_p->umem.ibdev->dma_device,
+						0, &umem_p->umem.nmap);
+	if (ret)
+		goto err_pages;
+
+	umem_p->mapped = true;
+	atomic64_add(umem_p->umem.nmap, &ib_peer_client->stats.num_reg_pages);
+	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
+	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
+	
+	/*
+	 * If invalidation is allowed then the caller must call
+	 * ib_umem_activate_invalidation_notifier() or ib_peer_umem_release() to
+	 * unlock this mutex. The call to  should be done after the last
+	 * read to sg_head, once the caller is ready for the invalidation
+	 * function to be called.
+	 */
+	if (umem_p->xa_id == PEER_NO_INVALIDATION_ID)
+		mutex_unlock(&umem_p->mapping_lock);
+	/*
+	 * On success the old umem is replaced with the new, larger, allocation
+	 */
+	kfree(old_umem);
+	return &umem_p->umem;
+err_pages:
+	ib_peer_client->peer_mem->put_pages(&umem_p->umem.sg_head,
+					    umem_p->peer_client_context);
+err_xa:
+	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
+		xa_erase(&umem_p->ib_peer_client->umem_xa, umem_p->xa_id);
+err_umem:
+	mutex_unlock(&umem_p->mapping_lock);
+	kref_put(&umem_p->kref, ib_peer_umem_kref_release);
+err_client:
+	ib_put_peer_client(ib_peer_client, peer_client_context);
+	return ERR_PTR(ret);
 }
-EXPORT_SYMBOL(ib_put_peer_private_data);
+
+void ib_peer_umem_release(struct ib_umem *umem)
+{
+	struct ib_umem_peer *umem_p =
+		container_of(umem, struct ib_umem_peer, umem);
+
+	/* invalidation_func being set indicates activate was called */
+	if (umem_p->xa_id == PEER_NO_INVALIDATION_ID ||
+	    umem_p->invalidation_func)
+		mutex_lock(&umem_p->mapping_lock);
+
+	if (umem_p->mapped)
+		ib_unmap_peer_client(umem_p);
+	mutex_unlock(&umem_p->mapping_lock);
+
+	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
+		xa_erase(&umem_p->ib_peer_client->umem_xa, umem_p->xa_id);
+	ib_put_peer_client(umem_p->ib_peer_client, umem_p->peer_client_context);
+	umem_p->ib_peer_client = NULL;
+
+	/* Must match ib_umem_release() */
+	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
+	mmdrop(umem->owning_mm);
+
+	kref_put(&umem_p->kref, ib_peer_umem_kref_release);
+}

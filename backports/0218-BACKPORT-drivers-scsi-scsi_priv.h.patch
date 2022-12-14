@@ -1,0 +1,21 @@
+From: Sergey Gorenko <sergeygo@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/scsi/scsi_priv.h
+
+Change-Id: Ib97434b4ea5bb3b403f41392e7e355b5e78a7241
+---
+ drivers/scsi/scsi_priv.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/scsi/scsi_priv.h
++++ b/drivers/scsi/scsi_priv.h
+@@ -191,5 +191,10 @@ static inline void scsi_dh_release_devic
+  */
+ 
+ #define SCSI_DEVICE_BLOCK_MAX_TIMEOUT	600	/* units in seconds */
++#ifndef HAVE_SCSI_DEVICE_SCSI_INTERNAL_DEVICE_BLOCK
++extern int scsi_internal_device_block(struct scsi_device *sdev);
++extern int scsi_internal_device_unblock(struct scsi_device *sdev,
++					enum scsi_device_state new_state);
++#endif
+ 
+ #endif /* _SCSI_PRIV_H */

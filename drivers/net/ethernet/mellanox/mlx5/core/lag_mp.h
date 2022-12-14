@@ -4,9 +4,14 @@
 #ifndef __MLX5_LAG_MP_H__
 #define __MLX5_LAG_MP_H__
 
-#include <net/ip_fib.h>
 #include "lag.h"
 #include "mlx5_core.h"
+
+enum mlx5_lag_port_affinity {
+	MLX5_LAG_NORMAL_AFFINITY,
+	MLX5_LAG_P1_AFFINITY,
+	MLX5_LAG_P2_AFFINITY,
+};
 
 struct lag_mp {
 	struct notifier_block     fib_nb;

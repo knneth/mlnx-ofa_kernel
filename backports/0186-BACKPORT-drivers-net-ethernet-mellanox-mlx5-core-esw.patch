@@ -1,0 +1,54 @@
+From: Maor Dickman <maord@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+
+Change-Id: Ia441d8da7519c3f1790b9608af6cbf02ce3070b5
+---
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+@@ -2300,12 +2300,18 @@ int mlx5_eswitch_get_vport_config(struct
+ 
+ 	mutex_lock(&esw->state_lock);
+ 	ether_addr_copy(ivi->mac, evport->info.mac);
++#ifdef HAVE_LINKSTATE
+ 	ivi->linkstate = evport->info.link_state;
++#endif
+ 	ivi->vlan = evport->info.vlan;
+ 	ivi->qos = evport->info.qos;
++#ifdef HAVE_VF_VLAN_PROTO
+ 	ivi->vlan_proto = evport->info.vlan_proto;
++#endif
+ 	ivi->spoofchk = evport->info.spoofchk;
++#ifdef HAVE_VF_INFO_TRUST
+ 	ivi->trusted = evport->info.trusted;
++#endif
+ 	ivi->min_tx_rate = evport->info.min_rate;
+ 	ivi->max_tx_rate = evport->info.max_rate;
+ 	mutex_unlock(&esw->state_lock);
+@@ -2957,7 +2963,9 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
+ 	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
+ 	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	struct mlx5_vport_drop_stats stats = {};
++#endif
+ 	int err = 0;
+ 	u32 *out;
+ 
+@@ -3019,12 +3027,13 @@ int mlx5_eswitch_get_vport_stats(struct
+ 
+ 	vf_stats->broadcast =
+ 		MLX5_GET_CTR(out, received_eth_broadcast.packets);
+-
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	err = mlx5_eswitch_query_vport_drop_stats(esw->dev, vport, &stats);
+ 	if (err)
+ 		goto free_out;
+ 	vf_stats->rx_dropped = stats.rx_dropped;
+ 	vf_stats->tx_dropped = stats.tx_dropped;
++#endif
+ #ifdef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
+ 	vf_stats->tx_multicast =
+ 		MLX5_GET_CTR(out, transmitted_eth_multicast.packets) +

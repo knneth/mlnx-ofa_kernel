@@ -553,9 +553,10 @@ static void mlx5_fw_tracer_save_trace(struct mlx5_fw_tracer *tracer,
 	mutex_unlock(&tracer->st_arr.lock);
 }
 
-static void mlx5_tracer_print_trace(struct tracer_string_format *str_frmt,
-				    struct mlx5_core_dev *dev,
-				    u64 trace_timestamp)
+static noinline
+void mlx5_tracer_print_trace(struct tracer_string_format *str_frmt,
+			     struct mlx5_core_dev *dev,
+			     u64 trace_timestamp)
 {
 	struct mlx5_fw_tracer *tracer = dev->tracer;
 
@@ -934,7 +935,7 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
 		return NULL;
 	}
 
-	tracer = kzalloc(sizeof(*tracer), GFP_KERNEL);
+	tracer = kvzalloc(sizeof(*tracer), GFP_KERNEL);
 	if (!tracer)
 		return ERR_PTR(-ENOMEM);
 
@@ -981,7 +982,7 @@ destroy_workqueue:
 	tracer->dev = NULL;
 	destroy_workqueue(tracer->work_queue);
 free_tracer:
-	kfree(tracer);
+	kvfree(tracer);
 	return ERR_PTR(err);
 }
 
@@ -1060,7 +1061,7 @@ void mlx5_fw_tracer_destroy(struct mlx5_fw_tracer *tracer)
 	mlx5_fw_tracer_destroy_log_buf(tracer);
 	flush_workqueue(tracer->work_queue);
 	destroy_workqueue(tracer->work_queue);
-	kfree(tracer);
+	kvfree(tracer);
 }
 
 static int fw_tracer_event(struct notifier_block *nb, unsigned long action, void *data)

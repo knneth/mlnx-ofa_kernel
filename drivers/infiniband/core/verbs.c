@@ -50,8 +50,12 @@
 #include <rdma/ib_cache.h>
 #include <rdma/ib_addr.h>
 #include <rdma/rw.h>
+#include <rdma/lag.h>
 
 #include "core_priv.h"
+#include <trace/events/rdma_core.h>
+
+#include <trace/events/rdma_core.h>
 
 static int ib_resolve_eth_dmac(struct ib_device *device,
 			       struct rdma_ah_attr *ah_attr);
@@ -212,7 +216,7 @@ __attribute_const__ int ib_rate_to_mbps(enum ib_rate rate)
 EXPORT_SYMBOL(ib_rate_to_mbps);
 
 __attribute_const__ enum rdma_transport_type
-rdma_node_get_transport(enum rdma_node_type node_type)
+rdma_node_get_transport(unsigned int node_type)
 {
 
 	if (node_type == RDMA_NODE_USNIC)
@@ -223,9 +227,6 @@ rdma_node_get_transport(enum rdma_node_type node_type)
 		return RDMA_TRANSPORT_IWARP;
 	if (node_type == RDMA_NODE_UNSPECIFIED)
 		return RDMA_TRANSPORT_UNSPECIFIED;
-	if(node_type == RDMA_EXP_NODE_MIC)
-		return RDMA_EXP_TRANSPORT_SCIF;
-
 
 	return RDMA_TRANSPORT_IB;
 }
@@ -241,9 +242,6 @@ enum rdma_link_layer rdma_port_get_link_layer(struct ib_device *device, u8 port_
 	if (lt == RDMA_TRANSPORT_IB)
 		return IB_LINK_LAYER_INFINIBAND;
 
-	if (lt == RDMA_EXP_TRANSPORT_SCIF)
-		return IB_EXP_LINK_LAYER_SCIF;
-
 	return IB_LINK_LAYER_ETHERNET;
 }
 EXPORT_SYMBOL(rdma_port_get_link_layer);
@@ -253,6 +251,8 @@ EXPORT_SYMBOL(rdma_port_get_link_layer);
 /**
  * ib_alloc_pd - Allocates an unused protection domain.
  * @device: The device on which to allocate the protection domain.
+ * @flags: protection domain flags
+ * @caller: caller's build-time module name
  *
  * A protection domain object provides an association between QPs, shared
  * receive queues, address handles, memory regions, and memory windows.
@@ -330,7 +330,7 @@ struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
 EXPORT_SYMBOL(__ib_alloc_pd);
 
 /**
- * ib_dealloc_pd - Deallocates a protection domain.
+ * ib_dealloc_pd_user - Deallocates a protection domain.
  * @pd: The protection domain to deallocate.
  * @udata: Valid user data or NULL for kernel object
  *
@@ -510,8 +510,10 @@ rdma_update_sgid_attr(struct rdma_ah_attr *ah_attr,
 static struct ib_ah *_rdma_create_ah(struct ib_pd *pd,
 				     struct rdma_ah_attr *ah_attr,
 				     u32 flags,
-				     struct ib_udata *udata)
+				     struct ib_udata *udata,
+				     struct net_device *xmit_slave)
 {
+	struct rdma_ah_init_attr init_attr = {};
 	struct ib_device *device = pd->device;
 	struct ib_ah *ah;
 	int ret;
@@ -531,8 +533,11 @@ static struct ib_ah *_rdma_create_ah(struct ib_pd *pd,
 	ah->pd = pd;
 	ah->type = ah_attr->type;
 	ah->sgid_attr = rdma_update_sgid_attr(ah_attr, NULL);
+	init_attr.ah_attr = ah_attr;
+	init_attr.flags = flags;
+	init_attr.xmit_slave = xmit_slave;
 
-	ret = device->ops.create_ah(ah, ah_attr, flags, udata);
+	ret = device->ops.create_ah(ah, &init_attr, udata);
 	if (ret) {
 		kfree(ah);
 		return ERR_PTR(ret);
@@ -557,6 +562,7 @@ struct ib_ah *rdma_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
 			     u32 flags)
 {
 	const struct ib_gid_attr *old_sgid_attr;
+	struct net_device *slave;
 	struct ib_ah *ah;
 	int ret;
 
@@ -564,8 +570,15 @@ struct ib_ah *rdma_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
 	if (ret)
 		return ERR_PTR(ret);
 
-	ah = _rdma_create_ah(pd, ah_attr, flags, NULL);
-
+	slave = rdma_lag_get_ah_roce_slave(pd->device, ah_attr,
+					   (flags & RDMA_CREATE_AH_SLEEPABLE) ?
+					   GFP_KERNEL : GFP_ATOMIC);
+	if (IS_ERR(slave)) {
+		rdma_unfill_sgid_attr(ah_attr, old_sgid_attr);
+		return (void *)slave;
+	}
+	ah = _rdma_create_ah(pd, ah_attr, flags, NULL, slave);
+	rdma_lag_put_ah_roce_slave(slave);
 	rdma_unfill_sgid_attr(ah_attr, old_sgid_attr);
 	return ah;
 }
@@ -604,7 +617,8 @@ struct ib_ah *rdma_create_user_ah(struct ib_pd *pd,
 		}
 	}
 
-	ah = _rdma_create_ah(pd, ah_attr, RDMA_CREATE_AH_SLEEPABLE, udata);
+	ah = _rdma_create_ah(pd, ah_attr, RDMA_CREATE_AH_SLEEPABLE,
+			     udata, NULL);
 
 out:
 	rdma_unfill_sgid_attr(ah_attr, old_sgid_attr);
@@ -675,16 +689,17 @@ static bool find_gid_index(const union ib_gid *gid,
 			   void *context)
 {
 	struct find_gid_index_context *ctx = context;
+	u16 vlan_id = 0xffff;
+	int ret;
 
 	if (ctx->gid_type != gid_attr->gid_type)
 		return false;
 
-	if ((!!(ctx->vlan_id != 0xffff) == !is_vlan_dev(gid_attr->ndev)) ||
-	    (is_vlan_dev(gid_attr->ndev) &&
-	     vlan_dev_vlan_id(gid_attr->ndev) != ctx->vlan_id))
+	ret = rdma_read_gid_l2_fields(gid_attr, &vlan_id, NULL);
+	if (ret)
 		return false;
 
-	return true;
+	return ctx->vlan_id == vlan_id;
 }
 
 static const struct ib_gid_attr *
@@ -820,10 +835,6 @@ int ib_init_ah_attr_from_wc(struct ib_device *device, u8 port_num,
 						   gid_type);
 		if (IS_ERR(sgid_attr))
 			return PTR_ERR(sgid_attr);
-
-		if ((sgid_attr->gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP) &&
-		    (wc->wc_flags & IB_WC_WITH_UDP_SPORT))
-			rdma_ah_set_udp_sport(ah_attr, wc->udp_sport);
 
 		flow_class = be32_to_cpu(grh->version_tclass_flow);
 		if (ll_dest_addr && wc->wc_flags & IB_WC_WITH_VLAN &&
@@ -1077,18 +1088,11 @@ static void __ib_shared_qp_event_handler(struct ib_event *event, void *context)
 	struct ib_qp *qp = context;
 	unsigned long flags;
 
-	spin_lock_irqsave(&qp->device->event_handler_lock, flags);
+	spin_lock_irqsave(&qp->device->qp_open_list_lock, flags);
 	list_for_each_entry(event->element.qp, &qp->open_list, open_list)
 		if (event->element.qp->event_handler)
 			event->element.qp->event_handler(event, event->element.qp->qp_context);
-	spin_unlock_irqrestore(&qp->device->event_handler_lock, flags);
-}
-
-static void __ib_insert_xrcd_qp(struct ib_xrcd *xrcd, struct ib_qp *qp)
-{
-	mutex_lock(&xrcd->tgt_qp_mutex);
-	list_add(&qp->xrcd_list, &xrcd->tgt_qp_list);
-	mutex_unlock(&xrcd->tgt_qp_mutex);
+	spin_unlock_irqrestore(&qp->device->qp_open_list_lock, flags);
 }
 
 static struct ib_qp *__ib_open_qp(struct ib_qp *real_qp,
@@ -1118,9 +1122,9 @@ static struct ib_qp *__ib_open_qp(struct ib_qp *real_qp,
 	qp->qp_num = real_qp->qp_num;
 	qp->qp_type = real_qp->qp_type;
 
-	spin_lock_irqsave(&real_qp->device->event_handler_lock, flags);
+	spin_lock_irqsave(&real_qp->device->qp_open_list_lock, flags);
 	list_add(&qp->open_list, &real_qp->open_list);
-	spin_unlock_irqrestore(&real_qp->device->event_handler_lock, flags);
+	spin_unlock_irqrestore(&real_qp->device->qp_open_list_lock, flags);
 
 	return qp;
 }
@@ -1133,16 +1137,15 @@ struct ib_qp *ib_open_qp(struct ib_xrcd *xrcd,
 	if (qp_open_attr->qp_type != IB_QPT_XRC_TGT)
 		return ERR_PTR(-EINVAL);
 
-	qp = ERR_PTR(-EINVAL);
-	mutex_lock(&xrcd->tgt_qp_mutex);
-	list_for_each_entry(real_qp, &xrcd->tgt_qp_list, xrcd_list) {
-		if (real_qp->qp_num == qp_open_attr->qp_num) {
-			qp = __ib_open_qp(real_qp, qp_open_attr->event_handler,
-					  qp_open_attr->qp_context);
-			break;
-		}
+	down_read(&xrcd->tgt_qps_rwsem);
+	real_qp = xa_load(&xrcd->tgt_qps, qp_open_attr->qp_num);
+	if (!real_qp) {
+		up_read(&xrcd->tgt_qps_rwsem);
+		return ERR_PTR(-EINVAL);
 	}
-	mutex_unlock(&xrcd->tgt_qp_mutex);
+	qp = __ib_open_qp(real_qp, qp_open_attr->event_handler,
+			  qp_open_attr->qp_context);
+	up_read(&xrcd->tgt_qps_rwsem);
 	return qp;
 }
 EXPORT_SYMBOL(ib_open_qp);
@@ -1152,6 +1155,7 @@ static struct ib_qp *create_xrc_qp_user(struct ib_qp *qp,
 					struct ib_udata *udata)
 {
 	struct ib_qp *real_qp = qp;
+	int err;
 
 	qp->event_handler = __ib_shared_qp_event_handler;
 	qp->qp_context = qp;
@@ -1167,7 +1171,12 @@ static struct ib_qp *create_xrc_qp_user(struct ib_qp *qp,
 	if (IS_ERR(qp))
 		return qp;
 
-	__ib_insert_xrcd_qp(qp_init_attr->xrcd, real_qp);
+	err = xa_err(xa_store(&qp_init_attr->xrcd->tgt_qps, real_qp->qp_num,
+			      real_qp, GFP_KERNEL));
+	if (err) {
+		ib_close_qp(qp);
+		return ERR_PTR(err);
+	}
 	return qp;
 }
 
@@ -1205,16 +1214,6 @@ struct ib_qp *ib_create_qp_user(struct ib_pd *pd,
 	ret = ib_create_qp_security(qp, device);
 	if (ret)
 		goto err;
-
-	qp->qp_type    = qp_init_attr->qp_type;
-	qp->rwq_ind_tbl = qp_init_attr->rwq_ind_tbl;
-
-	atomic_set(&qp->usecnt, 0);
-	qp->mrs_used = 0;
-	spin_lock_init(&qp->mr_lock);
-	INIT_LIST_HEAD(&qp->rdma_mrs);
-	INIT_LIST_HEAD(&qp->sig_mrs);
-	qp->port = 0;
 
 	if (qp_init_attr->qp_type == IB_QPT_XRC_TGT) {
 		struct ib_qp *xrc_qp =
@@ -1296,9 +1295,6 @@ static const struct {
 				[IB_QPT_RC]  = (IB_QP_PKEY_INDEX		|
 						IB_QP_PORT			|
 						IB_QP_ACCESS_FLAGS),
-				[IB_EXP_QPT_DC_INI]  = (IB_QP_PKEY_INDEX	|
-							IB_QP_PORT		|
-							IB_QP_DC_KEY),
 				[IB_QPT_XRC_INI] = (IB_QP_PKEY_INDEX		|
 						IB_QP_PORT			|
 						IB_QP_ACCESS_FLAGS),
@@ -1309,15 +1305,6 @@ static const struct {
 						IB_QP_QKEY),
 				[IB_QPT_GSI] = (IB_QP_PKEY_INDEX		|
 						IB_QP_QKEY),
-			},
-			.opt_param = {
-				[IB_QPT_UD]  = (IB_QP_GROUP_RSS		|
-						IB_QP_FLOW_ENTROPY),
-				[IB_QPT_RAW_PACKET] = IB_QP_GROUP_RSS,
-				[IB_QPT_RC] = IB_QP_FLOW_ENTROPY,
-				[IB_QPT_UC] = IB_QP_FLOW_ENTROPY,
-				[IB_QPT_XRC_INI] = IB_QP_FLOW_ENTROPY,
-				[IB_QPT_XRC_TGT] = IB_QP_FLOW_ENTROPY,
 			}
 		},
 	},
@@ -1336,9 +1323,6 @@ static const struct {
 				[IB_QPT_RC]  = (IB_QP_PKEY_INDEX		|
 						IB_QP_PORT			|
 						IB_QP_ACCESS_FLAGS),
-				[IB_EXP_QPT_DC_INI]  = (IB_QP_PKEY_INDEX	|
-							IB_QP_PORT		|
-							IB_QP_DC_KEY),
 				[IB_QPT_XRC_INI] = (IB_QP_PKEY_INDEX		|
 						IB_QP_PORT			|
 						IB_QP_ACCESS_FLAGS),
@@ -1364,8 +1348,6 @@ static const struct {
 						IB_QP_RQ_PSN			|
 						IB_QP_MAX_DEST_RD_ATOMIC	|
 						IB_QP_MIN_RNR_TIMER),
-				[IB_EXP_QPT_DC_INI]  = (IB_QP_AV		|
-							IB_QP_PATH_MTU),
 				[IB_QPT_XRC_INI] = (IB_QP_AV			|
 						IB_QP_PATH_MTU			|
 						IB_QP_DEST_QPN			|
@@ -1383,25 +1365,15 @@ static const struct {
 				 [IB_QPT_UC]  = (IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
 						 IB_QP_PKEY_INDEX),
-				 [IB_QPT_RC]  =
-					(IB_QP_ALT_PATH		|
-					 IB_QP_ACCESS_FLAGS	|
-					 IB_QP_PKEY_INDEX	|
-					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
-				 [IB_EXP_QPT_DC_INI]  =
-					(IB_QP_PKEY_INDEX	|
-					 IB_QP_DC_KEY		|
-					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
-				 [IB_QPT_XRC_INI] =
-					(IB_QP_ALT_PATH		|
-					 IB_QP_ACCESS_FLAGS	|
-					 IB_QP_PKEY_INDEX	|
-					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
-				 [IB_QPT_XRC_TGT] =
-					(IB_QP_ALT_PATH		|
-					 IB_QP_ACCESS_FLAGS	|
-					 IB_QP_PKEY_INDEX	|
-					 IB_EXP_QP_OOO_RW_DATA_PLACEMENT),
+				 [IB_QPT_RC]  = (IB_QP_ALT_PATH			|
+						 IB_QP_ACCESS_FLAGS		|
+						 IB_QP_PKEY_INDEX),
+				 [IB_QPT_XRC_INI] = (IB_QP_ALT_PATH		|
+						 IB_QP_ACCESS_FLAGS		|
+						 IB_QP_PKEY_INDEX),
+				 [IB_QPT_XRC_TGT] = (IB_QP_ALT_PATH		|
+						 IB_QP_ACCESS_FLAGS		|
+						 IB_QP_PKEY_INDEX),
 				 [IB_QPT_SMI] = (IB_QP_PKEY_INDEX		|
 						 IB_QP_QKEY),
 				 [IB_QPT_GSI] = (IB_QP_PKEY_INDEX		|
@@ -1422,10 +1394,6 @@ static const struct {
 						IB_QP_RNR_RETRY			|
 						IB_QP_SQ_PSN			|
 						IB_QP_MAX_QP_RD_ATOMIC),
-				[IB_EXP_QPT_DC_INI]  = (IB_QP_TIMEOUT		|
-							IB_QP_RETRY_CNT		|
-							IB_QP_RNR_RETRY		|
-							IB_QP_MAX_QP_RD_ATOMIC),
 				[IB_QPT_XRC_INI] = (IB_QP_TIMEOUT		|
 						IB_QP_RETRY_CNT			|
 						IB_QP_RNR_RETRY			|
@@ -1447,12 +1415,8 @@ static const struct {
 						 IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
 						 IB_QP_MIN_RNR_TIMER		|
-						 IB_QP_PATH_MIG_STATE		|
+						 IB_QP_PATH_MIG_STATE 		|
 						 IB_QP_OFFLOAD_TYPE),
-				 [IB_EXP_QPT_DC_INI] = (IB_QP_CUR_STATE		|
-							IB_QP_ALT_PATH		|
-							IB_QP_MIN_RNR_TIMER	|
-							IB_QP_PATH_MIG_STATE),
 				 [IB_QPT_XRC_INI] = (IB_QP_CUR_STATE		|
 						 IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
@@ -1486,13 +1450,9 @@ static const struct {
 						IB_QP_ACCESS_FLAGS		|
 						IB_QP_ALT_PATH			|
 						IB_QP_PATH_MIG_STATE		|
-						IB_QP_MIN_RNR_TIMER		|
+						IB_QP_MIN_RNR_TIMER             |
 						IB_QP_OFFLOAD_TYPE		|
 						IB_QP_RMPN_XRQN),
-				[IB_EXP_QPT_DC_INI]  = (IB_QP_CUR_STATE		|
-							IB_QP_ALT_PATH		|
-							IB_QP_PATH_MIG_STATE	|
-							IB_QP_MIN_RNR_TIMER),
 				[IB_QPT_XRC_INI] = (IB_QP_CUR_STATE		|
 						IB_QP_ACCESS_FLAGS		|
 						IB_QP_ALT_PATH			|
@@ -1703,11 +1663,35 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 	const struct ib_gid_attr *old_sgid_attr_alt_av;
 	int ret;
 
+	attr->xmit_slave = NULL;
 	if (attr_mask & IB_QP_AV) {
 		ret = rdma_fill_sgid_attr(qp->device, &attr->ah_attr,
 					  &old_sgid_attr_av);
 		if (ret)
 			return ret;
+
+		if (attr->ah_attr.type == RDMA_AH_ATTR_TYPE_ROCE &&
+		    is_qp_type_connected(qp)) {
+			struct net_device *slave;
+
+			/*
+			 * If the user provided the qp_attr then we have to
+			 * resolve it. Kerne users have to provide already
+			 * resolved rdma_ah_attr's.
+			 */
+			if (udata) {
+				ret = ib_resolve_eth_dmac(qp->device,
+							  &attr->ah_attr);
+				if (ret)
+					goto out_av;
+			}
+			slave = rdma_lag_get_ah_roce_slave(qp->device,
+							   &attr->ah_attr,
+							   GFP_KERNEL);
+			if (IS_ERR(slave))
+				goto out_av;
+			attr->xmit_slave = slave;
+		}
 	}
 	if (attr_mask & IB_QP_ALT_PATH) {
 		/*
@@ -1732,18 +1716,6 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 			ret = EINVAL;
 			goto out;
 		}
-	}
-
-	/*
-	 * If the user provided the qp_attr then we have to resolve it. Kernel
-	 * users have to provide already resolved rdma_ah_attr's
-	 */
-	if ((qp->qp_type != IB_EXP_QPT_DC_INI) && udata && (attr_mask & IB_QP_AV) &&
-	    attr->ah_attr.type == RDMA_AH_ATTR_TYPE_ROCE &&
-	    is_qp_type_connected(qp)) {
-		ret = ib_resolve_eth_dmac(qp->device, &attr->ah_attr);
-		if (ret)
-			goto out;
 	}
 
 	if (rdma_ib_or_roce(qp->device, port)) {
@@ -1787,8 +1759,10 @@ out:
 	if (attr_mask & IB_QP_ALT_PATH)
 		rdma_unfill_sgid_attr(&attr->alt_ah_attr, old_sgid_attr_alt_av);
 out_av:
-	if (attr_mask & IB_QP_AV)
+	if (attr_mask & IB_QP_AV) {
+		rdma_lag_put_ah_roce_slave(attr->xmit_slave);
 		rdma_unfill_sgid_attr(&attr->ah_attr, old_sgid_attr_av);
+	}
 	return ret;
 }
 
@@ -1893,9 +1867,9 @@ int ib_close_qp(struct ib_qp *qp)
 	if (real_qp == qp)
 		return -EINVAL;
 
-	spin_lock_irqsave(&real_qp->device->event_handler_lock, flags);
+	spin_lock_irqsave(&real_qp->device->qp_open_list_lock, flags);
 	list_del(&qp->open_list);
-	spin_unlock_irqrestore(&real_qp->device->event_handler_lock, flags);
+	spin_unlock_irqrestore(&real_qp->device->qp_open_list_lock, flags);
 
 	atomic_dec(&real_qp->usecnt);
 	if (qp->qp_sec)
@@ -1914,21 +1888,18 @@ static int __ib_destroy_shared_qp(struct ib_qp *qp)
 
 	real_qp = qp->real_qp;
 	xrcd = real_qp->xrcd;
-
-	mutex_lock(&xrcd->tgt_qp_mutex);
+	down_write(&xrcd->tgt_qps_rwsem);
 	ib_close_qp(qp);
 	if (atomic_read(&real_qp->usecnt) == 0)
-		list_del(&real_qp->xrcd_list);
+		xa_erase(&xrcd->tgt_qps, real_qp->qp_num);
 	else
 		real_qp = NULL;
-	mutex_unlock(&xrcd->tgt_qp_mutex);
+	up_write(&xrcd->tgt_qps_rwsem);
 
 	if (real_qp) {
 		ret = ib_destroy_qp(real_qp);
 		if (!ret)
 			atomic_dec(&xrcd->usecnt);
-		else
-			__ib_insert_xrcd_qp(xrcd, real_qp);
 	}
 
 	return 0;
@@ -2004,21 +1975,28 @@ struct ib_cq *__ib_create_cq(struct ib_device *device,
 			     const char *caller)
 {
 	struct ib_cq *cq;
+	int ret;
 
-	cq = device->ops.create_cq(device, cq_attr, NULL);
+	cq = rdma_zalloc_drv_obj(device, ib_cq);
+	if (!cq)
+		return ERR_PTR(-ENOMEM);
 
-	if (!IS_ERR(cq)) {
-		cq->device        = device;
-		cq->uobject       = NULL;
-		cq->comp_handler  = comp_handler;
-		cq->event_handler = event_handler;
-		cq->cq_context    = cq_context;
-		atomic_set(&cq->usecnt, 0);
-		cq->res.type = RDMA_RESTRACK_CQ;
-		rdma_restrack_set_task(&cq->res, caller);
-		rdma_restrack_kadd(&cq->res);
+	cq->device = device;
+	cq->uobject = NULL;
+	cq->comp_handler = comp_handler;
+	cq->event_handler = event_handler;
+	cq->cq_context = cq_context;
+	atomic_set(&cq->usecnt, 0);
+	cq->res.type = RDMA_RESTRACK_CQ;
+	rdma_restrack_set_task(&cq->res, caller);
+
+	ret = device->ops.create_cq(cq, cq_attr, NULL);
+	if (ret) {
+		kfree(cq);
+		return ERR_PTR(ret);
 	}
 
+	rdma_restrack_kadd(&cq->res);
 	return cq;
 }
 EXPORT_SYMBOL(__ib_create_cq);
@@ -2037,7 +2015,9 @@ int ib_destroy_cq_user(struct ib_cq *cq, struct ib_udata *udata)
 		return -EBUSY;
 
 	rdma_restrack_del(&cq->res);
-	return cq->device->ops.destroy_cq(cq, udata);
+	cq->device->ops.destroy_cq(cq, udata);
+	kfree(cq);
+	return 0;
 }
 EXPORT_SYMBOL(ib_destroy_cq_user);
 
@@ -2050,6 +2030,50 @@ EXPORT_SYMBOL(ib_resize_cq);
 
 /* Memory regions */
 
+struct ib_mr *ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
+			     u64 virt_addr, int access_flags)
+{
+	struct ib_mr *mr;
+
+	if (access_flags & IB_ACCESS_ON_DEMAND) {
+		if (!(pd->device->attrs.device_cap_flags &
+		      IB_DEVICE_ON_DEMAND_PAGING)) {
+			pr_debug("ODP support not available\n");
+			return ERR_PTR(-EINVAL);
+		}
+	}
+
+	mr = pd->device->ops.reg_user_mr(pd, start, length, virt_addr,
+					 access_flags, NULL);
+
+	if (IS_ERR(mr))
+		return mr;
+
+	mr->device = pd->device;
+	mr->pd = pd;
+	mr->dm = NULL;
+	atomic_inc(&pd->usecnt);
+	mr->res.type = RDMA_RESTRACK_MR;
+	rdma_restrack_kadd(&mr->res);
+
+	return mr;
+}
+EXPORT_SYMBOL(ib_reg_user_mr);
+
+int ib_advise_mr(struct ib_pd *pd, enum ib_uverbs_advise_mr_advice advice,
+		 u32 flags, struct ib_sge *sg_list, u32 num_sge)
+{
+	if (!pd->device->ops.advise_mr)
+		return -EOPNOTSUPP;
+
+	if (!num_sge)
+		return 0;
+
+	return pd->device->ops.advise_mr(pd, advice, flags, sg_list, num_sge,
+					 NULL);
+}
+EXPORT_SYMBOL(ib_advise_mr);
+
 int ib_dereg_mr_user(struct ib_mr *mr, struct ib_udata *udata)
 {
 	struct ib_pd *pd = mr->pd;
@@ -2057,6 +2081,7 @@ int ib_dereg_mr_user(struct ib_mr *mr, struct ib_udata *udata)
 	struct ib_sig_attrs *sig_attrs = mr->sig_attrs;
 	int ret;
 
+	trace_mr_dereg(mr);
 	rdma_restrack_del(&mr->res);
 	ret = mr->device->ops.dereg_mr(mr, udata);
 	if (!ret) {
@@ -2071,7 +2096,7 @@ int ib_dereg_mr_user(struct ib_mr *mr, struct ib_udata *udata)
 EXPORT_SYMBOL(ib_dereg_mr_user);
 
 /**
- * ib_alloc_mr() - Allocates a memory region
+ * ib_alloc_mr_user() - Allocates a memory region
  * @pd:            protection domain associated with the region
  * @mr_type:       memory region type
  * @max_num_sg:    maximum sg entries available for registration.
@@ -2088,13 +2113,18 @@ struct ib_mr *ib_alloc_mr_user(struct ib_pd *pd, enum ib_mr_type mr_type,
 {
 	struct ib_mr *mr;
 
-	if (!pd->device->ops.alloc_mr)
-		return ERR_PTR(-EOPNOTSUPP);
+	if (!pd->device->ops.alloc_mr) {
+		mr = ERR_PTR(-EOPNOTSUPP);
+		goto out;
+	}
 
-	if (WARN_ON_ONCE(mr_type == IB_MR_TYPE_INTEGRITY))
-		return ERR_PTR(-EINVAL);
+	if (mr_type == IB_MR_TYPE_INTEGRITY) {
+		WARN_ON_ONCE(1);
+		mr = ERR_PTR(-EINVAL);
+		goto out;
+	}
 
-	mr = pd->device->ops.alloc_mr(pd, mr_type, max_num_sg);
+	mr = pd->device->ops.alloc_mr(pd, mr_type, max_num_sg, udata);
 	if (!IS_ERR(mr)) {
 		mr->device  = pd->device;
 		mr->pd      = pd;
@@ -2108,6 +2138,8 @@ struct ib_mr *ib_alloc_mr_user(struct ib_pd *pd, enum ib_mr_type mr_type,
 		mr->sig_attrs = NULL;
 	}
 
+out:
+	trace_mr_alloc(pd, mr_type, max_num_sg, mr);
 	return mr;
 }
 EXPORT_SYMBOL(ib_alloc_mr_user);
@@ -2132,21 +2164,27 @@ struct ib_mr *ib_alloc_mr_integrity(struct ib_pd *pd,
 	struct ib_sig_attrs *sig_attrs;
 
 	if (!pd->device->ops.alloc_mr_integrity ||
-	    !pd->device->ops.map_mr_sg_pi)
-		return ERR_PTR(-EOPNOTSUPP);
+	    !pd->device->ops.map_mr_sg_pi) {
+		mr = ERR_PTR(-EOPNOTSUPP);
+		goto out;
+	}
 
-	if (!max_num_meta_sg)
-		return ERR_PTR(-EINVAL);
+	if (!max_num_meta_sg) {
+		mr = ERR_PTR(-EINVAL);
+		goto out;
+	}
 
 	sig_attrs = kzalloc(sizeof(struct ib_sig_attrs), GFP_KERNEL);
-	if (!sig_attrs)
-		return ERR_PTR(-ENOMEM);
+	if (!sig_attrs) {
+		mr = ERR_PTR(-ENOMEM);
+		goto out;
+	}
 
 	mr = pd->device->ops.alloc_mr_integrity(pd, max_num_data_sg,
 						max_num_meta_sg);
 	if (IS_ERR(mr)) {
 		kfree(sig_attrs);
-		return mr;
+		goto out;
 	}
 
 	mr->device = pd->device;
@@ -2160,6 +2198,8 @@ struct ib_mr *ib_alloc_mr_integrity(struct ib_pd *pd,
 	mr->type = IB_MR_TYPE_INTEGRITY;
 	mr->sig_attrs = sig_attrs;
 
+out:
+	trace_mr_integ_alloc(pd, max_num_data_sg, max_num_meta_sg, mr);
 	return mr;
 }
 EXPORT_SYMBOL(ib_alloc_mr_integrity);
@@ -2263,10 +2303,6 @@ int ib_attach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 	    qp->qp_type != IB_QPT_UD || !is_valid_mcast_lid(qp, lid))
 		return -EINVAL;
 
-	if (rdma_node_get_transport(qp->device->node_type) ==
-	    RDMA_EXP_TRANSPORT_SCIF && (qp->qp_type != IB_QPT_RAW_PACKET))
-		return -EINVAL;
-
 	ret = qp->device->ops.attach_mcast(qp, gid, lid);
 	if (!ret)
 		atomic_inc(&qp->usecnt);
@@ -2285,10 +2321,6 @@ int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 	    qp->qp_type != IB_QPT_UD || !is_valid_mcast_lid(qp, lid))
 		return -EINVAL;
 
-	if (rdma_node_get_transport(qp->device->node_type) ==
-	    RDMA_EXP_TRANSPORT_SCIF && (qp->qp_type != IB_QPT_RAW_PACKET))
-		return -EINVAL;
-
 	ret = qp->device->ops.detach_mcast(qp, gid, lid);
 	if (!ret)
 		atomic_dec(&qp->usecnt);
@@ -2296,20 +2328,22 @@ int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 }
 EXPORT_SYMBOL(ib_detach_mcast);
 
-struct ib_xrcd *__ib_alloc_xrcd(struct ib_device *device, const char *caller)
+struct ib_xrcd *__ib_alloc_xrcd(struct ib_device *device,
+				struct ib_udata *udata, struct inode *inode,
+				const char *caller)
 {
 	struct ib_xrcd *xrcd;
 
 	if (!device->ops.alloc_xrcd)
 		return ERR_PTR(-EOPNOTSUPP);
 
-	xrcd = device->ops.alloc_xrcd(device, NULL);
+	xrcd = device->ops.alloc_xrcd(device, udata);
 	if (!IS_ERR(xrcd)) {
 		xrcd->device = device;
-		xrcd->inode = NULL;
+		xrcd->inode = inode;
 		atomic_set(&xrcd->usecnt, 0);
-		mutex_init(&xrcd->tgt_qp_mutex);
-		INIT_LIST_HEAD(&xrcd->tgt_qp_list);
+		init_rwsem(&xrcd->tgt_qps_rwsem);
+		xa_init(&xrcd->tgt_qps);
 	}
 
 	return xrcd;
@@ -2318,19 +2352,10 @@ EXPORT_SYMBOL(__ib_alloc_xrcd);
 
 int ib_dealloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata)
 {
-	struct ib_qp *qp;
-	int ret;
-
 	if (atomic_read(&xrcd->usecnt))
 		return -EBUSY;
 
-	while (!list_empty(&xrcd->tgt_qp_list)) {
-		qp = list_entry(xrcd->tgt_qp_list.next, struct ib_qp, xrcd_list);
-		ret = ib_destroy_qp(qp);
-		if (ret)
-			return ret;
-	}
-
+	WARN_ON(!xa_empty(&xrcd->tgt_qps));
 	return xrcd->device->ops.dealloc_xrcd(xrcd, udata);
 }
 EXPORT_SYMBOL(ib_dealloc_xrcd);
@@ -2381,19 +2406,17 @@ EXPORT_SYMBOL(ib_create_wq);
  */
 int ib_destroy_wq(struct ib_wq *wq, struct ib_udata *udata)
 {
-	int err;
 	struct ib_cq *cq = wq->cq;
 	struct ib_pd *pd = wq->pd;
 
 	if (atomic_read(&wq->usecnt))
 		return -EBUSY;
 
-	err = wq->device->ops.destroy_wq(wq, udata);
-	if (!err) {
-		atomic_dec(&pd->usecnt);
-		atomic_dec(&cq->usecnt);
-	}
-	return err;
+	wq->device->ops.destroy_wq(wq, udata);
+	atomic_dec(&pd->usecnt);
+	atomic_dec(&cq->usecnt);
+
+	return 0;
 }
 EXPORT_SYMBOL(ib_destroy_wq);
 
@@ -2530,6 +2553,16 @@ int ib_set_vf_guid(struct ib_device *device, int vf, u8 port, u64 guid,
 }
 EXPORT_SYMBOL(ib_set_vf_guid);
 
+int ib_get_vf_guid(struct ib_device *device, int vf, u8 port,
+		   struct ifla_vf_guid *node_guid,
+		   struct ifla_vf_guid *port_guid)
+{
+	if (!device->ops.get_vf_guid)
+		return -EOPNOTSUPP;
+
+	return device->ops.get_vf_guid(device, vf, port, node_guid, port_guid);
+}
+EXPORT_SYMBOL(ib_get_vf_guid);
 /**
  * ib_map_mr_sg_pi() - Map the dma mapped SG lists for PI (protection
  *     information) and set an appropriate memory region for registration.
@@ -2803,6 +2836,7 @@ void ib_drain_sq(struct ib_qp *qp)
 		qp->device->ops.drain_sq(qp);
 	else
 		__ib_drain_sq(qp);
+	trace_cq_drain_complete(qp->send_cq);
 }
 EXPORT_SYMBOL(ib_drain_sq);
 
@@ -2831,6 +2865,7 @@ void ib_drain_rq(struct ib_qp *qp)
 		qp->device->ops.drain_rq(qp);
 	else
 		__ib_drain_rq(qp);
+	trace_cq_drain_complete(qp->recv_cq);
 }
 EXPORT_SYMBOL(ib_drain_rq);
 

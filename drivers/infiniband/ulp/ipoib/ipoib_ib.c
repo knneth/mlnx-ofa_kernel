@@ -329,7 +329,8 @@ int ipoib_dma_map_tx(struct ib_device *ca, struct ipoib_tx_buf *tx_req)
 		const skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
 		mapping[i + off] = ib_dma_map_page(ca,
 						 skb_frag_page(frag),
-						 frag->page_offset, skb_frag_size(frag),
+						 skb_frag_off(frag),
+						 skb_frag_size(frag),
 						 DMA_TO_DEVICE);
 		if (unlikely(ib_dma_mapping_error(ca, mapping[i + off])))
 			goto partial_error;
@@ -441,7 +442,6 @@ static void ipoib_ib_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	dev->stats.tx_bytes += tx_req->skb->len;
 
 	dev_kfree_skb_any(tx_req->skb);
-	tx_req->skb = NULL;
 
 	++priv->tx_tail;
 	atomic_dec(&priv->tx_outstanding);
@@ -771,7 +771,7 @@ void ipoib_reap_ah(struct work_struct *work)
 		container_of(work, struct ipoib_dev_priv, ah_reap_task.work);
 	struct net_device *dev = priv->dev;
 
-	priv->fp.__ipoib_reap_ah(dev);
+	__ipoib_reap_ah(dev);
 
 	if (!test_bit(IPOIB_STOP_REAPER, &priv->flags))
 		queue_delayed_work(priv->wq, &priv->ah_reap_task,
@@ -883,16 +883,9 @@ int ipoib_ib_dev_stop_default(struct net_device *dev)
 			while ((int)priv->tx_tail - (int)priv->tx_head < 0) {
 				tx_req = &priv->tx_ring[priv->tx_tail &
 							(priv->sendq_size - 1)];
-				if (!tx_req->skb) {
-					ipoib_dbg(priv,
-						  "timing out; tx skb already empty - continue\n");
-					++priv->tx_tail;
-					continue;
-				}
 				if (!tx_req->is_inline)
 					ipoib_dma_unmap_tx(priv, tx_req);
 				dev_kfree_skb_any(tx_req->skb);
-				tx_req->skb = NULL;
 				++priv->tx_tail;
 				atomic_dec(&priv->tx_outstanding);
 			}
@@ -1335,7 +1328,7 @@ static void __ipoib_ib_dev_flush(struct ipoib_dev_priv *priv,
 			return;
 
 		if (netif_queue_stopped(dev))
-			netif_tx_start_all_queues(dev);
+			netif_start_queue(dev);
 	}
 
 	/*
@@ -1410,4 +1403,3 @@ void ipoib_ib_dev_cleanup(struct net_device *dev)
 	}
 }
 
-#include "rss_tss/ipoib_ib_rss.c"

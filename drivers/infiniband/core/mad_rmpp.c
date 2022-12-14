@@ -90,16 +90,18 @@ void ib_cancel_rmpp_recvs(struct ib_mad_agent_private *agent)
 	struct mad_rmpp_recv *rmpp_recv, *temp_rmpp_recv;
 	unsigned long flags;
 
-	/* ib_process_rmpp_recv_wc() cannot be callable at this point */
 	spin_lock_irqsave(&agent->lock, flags);
 	list_for_each_entry(rmpp_recv, &agent->rmpp_list, list) {
 		if (rmpp_recv->state != RMPP_STATE_COMPLETE)
 			ib_free_recv_mad(rmpp_recv->rmpp_wc);
 		rmpp_recv->state = RMPP_STATE_CANCELING;
+	}
+	spin_unlock_irqrestore(&agent->lock, flags);
+
+	list_for_each_entry(rmpp_recv, &agent->rmpp_list, list) {
 		cancel_delayed_work(&rmpp_recv->timeout_work);
 		cancel_delayed_work(&rmpp_recv->cleanup_work);
 	}
-	spin_unlock_irqrestore(&agent->lock, flags);
 
 	flush_workqueue(agent->qp_info->port_priv->wq);
 
@@ -459,7 +461,6 @@ static inline int get_mad_len(struct mad_rmpp_recv *rmpp_recv)
 static struct ib_mad_recv_wc * complete_rmpp(struct mad_rmpp_recv *rmpp_recv)
 {
 	struct ib_mad_recv_wc *rmpp_wc;
-	unsigned long flags;
 
 	ack_recv(rmpp_recv, rmpp_recv->rmpp_wc);
 	if (rmpp_recv->seg_num > 1)
@@ -467,14 +468,9 @@ static struct ib_mad_recv_wc * complete_rmpp(struct mad_rmpp_recv *rmpp_recv)
 
 	rmpp_wc = rmpp_recv->rmpp_wc;
 	rmpp_wc->mad_len = get_mad_len(rmpp_recv);
-	spin_lock_irqsave(&rmpp_recv->agent->lock, flags);
-	if (!rmpp_recv->agent->send_list_closed)
-		/* 10 seconds until we can find the packet lifetime */
-		queue_delayed_work(rmpp_recv->agent->qp_info->port_priv->wq,
-				   &rmpp_recv->cleanup_work,
-				   msecs_to_jiffies(10000));
-	spin_unlock_irqrestore(&rmpp_recv->agent->lock, flags);
-
+	/* 10 seconds until we can find the packet lifetime */
+	queue_delayed_work(rmpp_recv->agent->qp_info->port_priv->wq,
+			   &rmpp_recv->cleanup_work, msecs_to_jiffies(10000));
 	return rmpp_wc;
 }
 
@@ -551,12 +547,6 @@ start_rmpp(struct ib_mad_agent_private *agent,
 	}
 
 	spin_lock_irqsave(&agent->lock, flags);
-	if (agent->send_list_closed) {
-		spin_unlock_irqrestore(&agent->lock, flags);
-		ib_free_recv_mad(mad_recv_wc);
-		destroy_rmpp_recv(rmpp_recv);
-		return NULL;
-	}
 	if (insert_rmpp_recv(agent, rmpp_recv)) {
 		spin_unlock_irqrestore(&agent->lock, flags);
 		/* duplicate first MAD */
@@ -570,11 +560,11 @@ start_rmpp(struct ib_mad_agent_private *agent,
 		spin_unlock_irqrestore(&agent->lock, flags);
 		complete_rmpp(rmpp_recv);
 	} else {
+		spin_unlock_irqrestore(&agent->lock, flags);
 		/* 40 seconds until we can find the packet lifetimes */
 		queue_delayed_work(agent->qp_info->port_priv->wq,
 				   &rmpp_recv->timeout_work,
 				   msecs_to_jiffies(40000));
-		spin_unlock_irqrestore(&agent->lock, flags);
 		rmpp_recv->newwin += window_size(agent);
 		ack_recv(rmpp_recv, mad_recv_wc);
 		mad_recv_wc = NULL;

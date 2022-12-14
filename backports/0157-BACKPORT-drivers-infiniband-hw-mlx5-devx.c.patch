@@ -1,0 +1,29 @@
+From: root <root@sqa141-008.mtl.labs.mlnx>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
+
+---
+ drivers/infiniband/hw/mlx5/devx.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/devx.c
++++ b/drivers/infiniband/hw/mlx5/devx.c
+@@ -18,6 +18,7 @@
+ #include "mlx5_ib.h"
+ #include "ib_rep.h"
+ #include "qp.h"
++#include <linux/eventfd.h>
+ #include <linux/xarray.h>
+ 
+ #define UVERBS_MODULE_NAME mlx5_ib
+@@ -2326,7 +2327,11 @@ static int devx_umem_get(struct mlx5_ib_
+ 	if (err)
+ 		return err;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	obj->umem = ib_umem_get_peer(&dev->ib_dev, addr, size, access, 0);
++#else
++	obj->umem = ib_umem_get_peer(&attrs->driver_udata, addr, size, access, 0);
++#endif
+ 	if (IS_ERR(obj->umem))
+ 		return PTR_ERR(obj->umem);
+ 

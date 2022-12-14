@@ -1,0 +1,184 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.c
+
+Change-Id: I8a07ccded3353240b5483247b268beb06b21ebcd
+---
+ .../net/ethernet/mellanox/mlx5/core/en/tc_tun.c    | 53 ++++++++++++++++++++--
+ 1 file changed, 48 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.c
+@@ -1,6 +1,7 @@
+ /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+ /* Copyright (c) 2018 Mellanox Technologies. */
+ 
++#ifdef HAVE_TCF_TUNNEL_INFO
+ #include <net/vxlan.h>
+ #include <net/gre.h>
+ #include <net/geneve.h>
+@@ -11,10 +12,18 @@
+ 
+ struct mlx5e_tc_tunnel *mlx5e_get_tc_tun(struct net_device *tunnel_dev)
+ {
++#if !defined(HAVE_TC_INDR_API) && !defined(CONFIG_COMPAT_KERNEL_4_14)
++/* in old kernels with egdev we don't pass the netdev so the filter_dev here
++ * is actually priv->netdev. we only assume and support vxlan */
++	return &vxlan_tunnel;
++#endif
++
+ 	if (netif_is_vxlan(tunnel_dev))
+ 		return &vxlan_tunnel;
++#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS
+ 	else if (netif_is_geneve(tunnel_dev))
+ 		return &geneve_tunnel;
++#endif
+ 	else if (netif_is_gretap(tunnel_dev) ||
+ 		 netif_is_ip6gretap(tunnel_dev))
+ 		return &gre_tunnel;
+@@ -55,7 +64,11 @@ static int get_route_and_out_devs(struct
+ 	 * it's a LAG device, use the uplink
+ 	 */
+ 	*route_dev = dev;
++#ifdef HAVE_NETDEV_PORT_SAME_PARENT_ID
+ 	if (!netdev_port_same_parent_id(priv->netdev, real_dev) ||
++#else
++	if (!switchdev_port_same_parent_id(priv->netdev, real_dev) ||
++#endif
+ 	    dst_is_lag_dev || is_vlan_dev(*route_dev))
+ 		*out_dev = uplink_dev;
+ 	else if (mlx5e_eswitch_rep(dev) &&
+@@ -99,7 +112,11 @@ static int mlx5e_route_lookup_ipv4(struc
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef HAVE_RT_GW_FAMILY
+ 	if (mlx5_lag_is_multipath(mdev) && rt->rt_gw_family != AF_INET) {
++#else
++	if (mlx5_lag_is_multipath(mdev) && !rt->rt_uses_gateway) {
++#endif
+ 		ip_rt_put(rt);
+ 		return -ENETUNREACH;
+ 	}
+@@ -284,8 +301,6 @@ release_neigh:
+ 	neigh_release(n);
+ 	return err;
+ }
+-
+-#if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6)
+ static int mlx5e_route_lookup_ipv6(struct mlx5e_priv *priv,
+ 				   struct net_device *mirred_dev,
+ 				   struct net_device **out_dev,
+@@ -297,13 +312,22 @@ static int mlx5e_route_lookup_ipv6(struc
+ 	struct dst_entry *dst;
+ 	struct neighbour *n;
+ 
++#if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6) && defined(HAVE_IPV6_STUB) 
+ 	int ret;
+ 
++#if defined(HAVE_IPV6_STUB) && defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+ 	dst = ipv6_stub->ipv6_dst_lookup_flow(dev_net(mirred_dev), NULL, fl6,
+-					      NULL);
++			NULL);
+ 	if (IS_ERR(dst))
+ 		return PTR_ERR(dst);
+ 
++#elif defined(HAVE_IPV6_DST_LOOKUP_TAKES_NET)
++	ret = ipv6_stub->ipv6_dst_lookup(dev_net(mirred_dev), NULL, &dst,
++					 fl6);
++	if (ret < 0)
++		return ret;
++#endif
++
+ 	if (!(*out_ttl))
+ 		*out_ttl = ip6_dst_hoplimit(dst);
+ 
+@@ -312,6 +336,9 @@ static int mlx5e_route_lookup_ipv6(struc
+ 		dst_release(dst);
+ 		return ret;
+ 	}
++#else
++	return -EOPNOTSUPP;
++#endif
+ 
+ 	n = dst_neigh_lookup(dst, &fl6->daddr);
+ 	dst_release(dst);
+@@ -439,7 +466,6 @@ release_neigh:
+ 	neigh_release(n);
+ 	return err;
+ }
+-#endif
+ 
+ bool mlx5e_tc_tun_device_to_offload(struct mlx5e_priv *priv,
+ 				    struct net_device *netdev)
+@@ -479,9 +505,15 @@ int mlx5e_tc_tun_parse(struct net_device
+ 				       outer_headers);
+ 	void *headers_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,
+ 				       outer_headers);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#else
++	struct netlink_ext_ack *extack;
++#endif
+ 	int err = 0;
+-
++#ifndef HAVE_TC_CLS_OFFLOAD_EXTACK
++	extack = NULL;
++#endif
+ 	if (!tunnel) {
+ 		netdev_warn(priv->netdev,
+ 			    "decapsulation offload is not supported for %s net device\n",
+@@ -495,6 +527,7 @@ int mlx5e_tc_tun_parse(struct net_device
+ 	if (tunnel->parse_udp_ports) {
+ 		err = tunnel->parse_udp_ports(priv, spec, f,
+ 					      headers_c, headers_v);
++
+ 		if (err)
+ 			goto out;
+ 	}
+@@ -502,6 +535,7 @@ int mlx5e_tc_tun_parse(struct net_device
+ 	if (tunnel->parse_tunnel) {
+ 		err = tunnel->parse_tunnel(priv, spec, f,
+ 					   headers_c, headers_v);
++
+ 		if (err)
+ 			goto out;
+ 	}
+@@ -618,16 +652,21 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+ 				 struct flow_cls_offload *f,
+ 				 void *headers_c,
+ 				 void *headers_v)
++
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_ports enc_ports;
+ 
+ 	/* Full udp dst port must be given */
+ 
+ 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "UDP tunnel decap filter must include enc_dst_port condition");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "UDP tunnel decap filter must include enc_dst_port condition\n");
+ 		return -EOPNOTSUPP;
+@@ -637,8 +676,10 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+ 
+ 	if (memchr_inv(&enc_ports.mask->dst, 0xff,
+ 		       sizeof(enc_ports.mask->dst))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "UDP tunnel decap filter must match enc_dst_port fully");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "UDP tunnel decap filter must match enc_dst_port fully\n");
+ 		return -EOPNOTSUPP;
+@@ -666,3 +707,5 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+ 
+ 	return 0;
+ }
++
++#endif /* HAVE_TCF_TUNNEL_INFO */
