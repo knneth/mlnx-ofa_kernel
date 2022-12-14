@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/main.c
 
 Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
 ---
- drivers/net/ethernet/mellanox/mlx4/main.c | 216 ++++++++++++++++++++--
- 1 file changed, 201 insertions(+), 15 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/main.c | 230 ++++++++++++++++++++--
+ 1 file changed, 215 insertions(+), 15 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/main.c
@@ -235,7 +235,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  	err = devlink_param_driverinit_value_get(devlink,
  						 DEVLINK_PARAM_GENERIC_ID_REGION_SNAPSHOT,
  						 &saved_value);
-@@ -4754,19 +4803,30 @@ static void mlx4_devlink_param_load_driv
+@@ -4754,19 +4803,34 @@ static void mlx4_devlink_param_load_driv
  		devlink_param_value_changed(devlink,
  					    DEVLINK_PARAM_GENERIC_ID_REGION_SNAPSHOT);
  	}
@@ -249,8 +249,12 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  			       struct devlink *devlink);
 -
  static int mlx4_devlink_reload_down(struct devlink *devlink,
-+#ifdef HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
 +				    bool netns_change,
++				    enum devlink_reload_action action,
++				    enum devlink_reload_limit limit,
++#elif defined(HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS)
++			     	    bool netns_change,
 +#endif
  				    struct netlink_ext_ack *extack)
  {
@@ -267,7 +271,28 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  	if (persist->num_vfs)
  		mlx4_warn(persist->dev, "Reload performed on PF, will cause reset on operating Virtual Functions\n");
  	mlx4_restart_one_down(persist->pdev);
-@@ -4788,32 +4848,77 @@ static int mlx4_devlink_reload_up(struct
+@@ -4774,6 +4838,10 @@ static int mlx4_devlink_reload_down(stru
+ }
+ 
+ static int mlx4_devlink_reload_up(struct devlink *devlink,
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++				  enum devlink_reload_action action,
++				  enum devlink_reload_limit limit, u32 *actions_performed,
++#endif
+ 				  struct netlink_ext_ack *extack)
+ {
+ 	struct mlx4_priv *priv = devlink_priv(devlink);
+@@ -4781,6 +4849,9 @@ static int mlx4_devlink_reload_up(struct
+ 	struct mlx4_dev_persistent *persist = dev->persist;
+ 	int err;
+ 
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++	*actions_performed = BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT);
++#endif
+ 	err = mlx4_restart_one_up(persist->pdev, true, devlink);
+ 	if (err)
+ 		mlx4_err(persist->dev, "mlx4_restart_one_up failed, ret=%d\n",
+@@ -4788,32 +4859,80 @@ static int mlx4_devlink_reload_up(struct
  
  	return err;
  }
@@ -283,7 +308,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
 +	struct mlx4_dev *dev = &priv->dev;
 +	struct mlx4_dev_persistent *persist = dev->persist;
 +	int err;
-+
+ 
 +	if (persist->num_vfs)
 +		mlx4_warn(persist->dev, "Reload performed on PF, will cause reset on operating Virtual Functions\n");
 +#ifdef HAVE_DEVLINK_OPS_RELOAD_UP
@@ -298,11 +323,14 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
 +}
 +#endif /*HAVE_DEVLINK_HAS_RELOAD*/
 +#endif /*HAVE_DEVLINK_OPS_RELOAD_UP*/
- 
++
 +#ifdef HAVE_DEVLINK_H
  static const struct devlink_ops mlx4_devlink_ops = {
  	.port_type_set	= mlx4_devlink_port_type_set,
 -	.reload_down	= mlx4_devlink_reload_down,
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++	.reload_actions = BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT),
++#endif
 +#ifdef HAVE_DEVLINK_OPS_RELOAD_UP
  	.reload_up	= mlx4_devlink_reload_up,
 +	.reload_down    = mlx4_devlink_reload_down,
@@ -348,7 +376,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  	}
  	dev->persist->pdev = pdev;
  	dev->persist->dev = dev;
-@@ -4823,32 +4928,59 @@ static int mlx4_init_one(struct pci_dev
+@@ -4823,32 +4942,59 @@ static int mlx4_init_one(struct pci_dev
  	mutex_init(&dev->persist->interface_state_mutex);
  	mutex_init(&dev->persist->pci_status_mutex);
  
@@ -408,7 +436,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  	return ret;
  }
  
-@@ -4945,10 +5077,14 @@ static void mlx4_remove_one(struct pci_d
+@@ -4945,10 +5091,14 @@ static void mlx4_remove_one(struct pci_d
  	struct mlx4_dev_persistent *persist = pci_get_drvdata(pdev);
  	struct mlx4_dev  *dev  = persist->dev;
  	struct mlx4_priv *priv = mlx4_priv(dev);
@@ -423,7 +451,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  
  	if (mlx4_is_slave(dev))
  		persist->interface_state |= MLX4_INTERFACE_STATE_NOWAIT;
-@@ -4983,11 +5119,19 @@ static void mlx4_remove_one(struct pci_d
+@@ -4983,11 +5133,19 @@ static void mlx4_remove_one(struct pci_d
  
  	pci_release_regions(pdev);
  	mlx4_pci_disable_device(dev);
@@ -443,7 +471,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  }
  
  static int restore_current_port_types(struct mlx4_dev *dev,
-@@ -5009,13 +5153,14 @@ static int restore_current_port_types(st
+@@ -5009,13 +5167,14 @@ static int restore_current_port_types(st
  	return err;
  }
  
@@ -460,7 +488,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  {
  	struct mlx4_dev_persistent *persist = pci_get_drvdata(pdev);
  	struct mlx4_dev	 *dev  = persist->dev;
-@@ -5044,12 +5189,49 @@ static int mlx4_restart_one_up(struct pc
+@@ -5044,12 +5203,49 @@ static int mlx4_restart_one_up(struct pc
  
  	return err;
  }
@@ -511,7 +539,7 @@ Change-Id: I1139db204558d84a91e85c0815c268eca32069d8
  
  #define MLX_SP(id) { PCI_VDEVICE(MELLANOX, id), MLX4_PCI_DEV_FORCE_SENSE_PORT }
  #define MLX_VF(id) { PCI_VDEVICE(MELLANOX, id), MLX4_PCI_DEV_IS_VF }
-@@ -5187,7 +5369,11 @@ static void mlx4_shutdown(struct pci_dev
+@@ -5187,7 +5383,11 @@ static void mlx4_shutdown(struct pci_dev
  	mutex_unlock(&persist->interface_state_mutex);
  }
  

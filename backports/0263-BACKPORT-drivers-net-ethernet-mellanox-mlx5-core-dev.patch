@@ -2,12 +2,12 @@ From: Feras Daoud <ferasda@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/devlink.c | 59 ++++++++++++++++++-
- 1 file changed, 58 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/devlink.c | 82 ++++++++++++++++++-
+ 1 file changed, 78 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
-@@ -8,23 +8,40 @@
+@@ -8,23 +8,43 @@
  #include "eswitch.h"
  #include "meddev/sf.h"
  
@@ -28,6 +28,9 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  				     struct netlink_ext_ack *extack)
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
++#ifdef HAVE_DEVLINK_FLASH_UPDATE_PARAMS_HAS_STRUCT_FW
++	return mlx5_firmware_flash(dev, params->fw, extack);
++#else
  	const struct firmware *fw;
  	int err;
  
@@ -49,22 +52,44 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  	if (err)
  		return err;
  
-@@ -33,8 +50,13 @@ static int mlx5_devlink_flash_update(str
+@@ -32,10 +52,20 @@ static int mlx5_devlink_flash_update(str
+ 	release_firmware(fw);
  
  	return err;
++#endif /* HAVE_DEVLINK_FLASH_UPDATE_PARAMS_HAS_STRUCT_FW */
  }
 +#endif
  
 +#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
  static int mlx5_devlink_reload_down(struct devlink *devlink,
-+#ifdef HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS
-+			     bool netns_change,
+-			     struct netlink_ext_ack *extack)
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++				    bool netns_change,
++				    enum devlink_reload_action action,
++				    enum devlink_reload_limit limit,
++#elif defined(HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS)
++			     	    bool netns_change,
 +#endif
- 			     struct netlink_ext_ack *extack)
++				    struct netlink_ext_ack *extack)
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
-@@ -49,20 +71,33 @@ static int mlx5_devlink_reload_up(struct
  
+@@ -43,26 +73,48 @@ static int mlx5_devlink_reload_down(stru
+ }
+ 
+ static int mlx5_devlink_reload_up(struct devlink *devlink,
+-			   struct netlink_ext_ack *extack)
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++				  enum devlink_reload_action action,
++				  enum devlink_reload_limit limit, u32 *actions_performed,
++#endif
++				  struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+-
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++	*actions_performed = BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT);
++#endif
  	return mlx5_load_one(dev, false);
  }
 +#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
@@ -88,6 +113,9 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  	.flash_update = mlx5_devlink_flash_update,
 +#endif /* HAVE_DEVLINK_HAS_FLASH_UPDATE */
 +#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++	.reload_actions = BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT),
++#endif
  	.reload_down = mlx5_devlink_reload_down,
  	.reload_up = mlx5_devlink_reload_up,
 +#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
@@ -97,7 +125,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  };
  
  struct devlink *mlx5_devlink_alloc()
-@@ -75,6 +110,8 @@ void mlx5_devlink_free(struct devlink *d
+@@ -75,6 +127,8 @@ void mlx5_devlink_free(struct devlink *d
  	devlink_free(devlink);
  }
  
@@ -106,7 +134,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  static int mlx5_devlink_fs_mode_validate(struct devlink *devlink, u32 id,
  					 union devlink_param_value val,
  					 struct netlink_ext_ack *extack)
-@@ -144,6 +181,7 @@ enum mlx5_devlink_param_id {
+@@ -144,6 +198,7 @@ enum mlx5_devlink_param_id {
  	MLX5_DEVLINK_PARAM_FLOW_STEERING_MODE,
  };
  
@@ -114,7 +142,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  static int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
  					     union devlink_param_value val,
  					     struct netlink_ext_ack *extack)
-@@ -158,6 +196,7 @@ static int mlx5_devlink_enable_roce_vali
+@@ -158,6 +213,7 @@ static int mlx5_devlink_enable_roce_vali
  
  	return 0;
  }
@@ -122,7 +150,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  
  static const struct devlink_param mlx5_devlink_params[] = {
  	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_FLOW_STEERING_MODE,
-@@ -165,8 +204,10 @@ static const struct devlink_param mlx5_d
+@@ -165,8 +221,10 @@ static const struct devlink_param mlx5_d
  			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
  			     mlx5_devlink_fs_mode_get, mlx5_devlink_fs_mode_set,
  			     mlx5_devlink_fs_mode_validate),
@@ -133,7 +161,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  };
  
  static void mlx5_devlink_set_params_init_values(struct devlink *devlink)
-@@ -182,12 +223,16 @@ static void mlx5_devlink_set_params_init
+@@ -182,12 +240,16 @@ static void mlx5_devlink_set_params_init
  					   MLX5_DEVLINK_PARAM_FLOW_STEERING_MODE,
  					   value);
  
@@ -150,7 +178,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
  {
  	int err;
-@@ -196,28 +241,39 @@ int mlx5_devlink_register(struct devlink
+@@ -196,28 +258,39 @@ int mlx5_devlink_register(struct devlink
  	if (err)
  		return err;
  
@@ -190,7 +218,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
  static u8 mlx5_fw_ver_major(u32 version)
  {
  	return (version >> 24) & 0xff;
-@@ -276,4 +332,5 @@ mlx5_devlink_info_get(struct devlink *de
+@@ -276,4 +349,5 @@ mlx5_devlink_info_get(struct devlink *de
  
  	return 0;
  }

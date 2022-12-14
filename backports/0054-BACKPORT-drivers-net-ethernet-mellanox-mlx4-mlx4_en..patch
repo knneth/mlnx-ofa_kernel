@@ -36,7 +36,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  #include "mlx4_stats.h"
 @@ -61,6 +70,43 @@
  #define DRV_NAME	"mlx4_en"
- #define DRV_VERSION	"4.9-4.0.8"
+ #define DRV_VERSION	"4.9-4.1.7"
  
 +#ifndef CONFIG_COMPAT_DISABLE_DCB
 +#ifdef CONFIG_MLX4_EN_DCB

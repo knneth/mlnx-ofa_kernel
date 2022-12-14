@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_rx.c
 
 Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
 ---
- drivers/net/ethernet/mellanox/mlx4/en_rx.c | 317 ++++++++++++++++++++-
- 1 file changed, 312 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/en_rx.c | 321 ++++++++++++++++++++-
+ 1 file changed, 316 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_rx.c
@@ -109,18 +109,22 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
  			   struct mlx4_en_rx_ring **pring,
  			   u32 size, u16 stride, int node, int queue_index)
-@@ -286,8 +351,10 @@ int mlx4_en_create_rx_ring(struct mlx4_e
+@@ -286,8 +351,14 @@ int mlx4_en_create_rx_ring(struct mlx4_e
  	ring->log_stride = ffs(ring->stride) - 1;
  	ring->buf_size = ring->size * ring->stride + TXBB_SIZE;
  
 +#ifdef HAVE_NET_XDP_H
++#ifdef HAVE_XDP_RXQ_INFO_REG_GET_4_PARAMS
++	if (xdp_rxq_info_reg(&ring->xdp_rxq, priv->dev, queue_index, 0) < 0)
++#else
  	if (xdp_rxq_info_reg(&ring->xdp_rxq, priv->dev, queue_index) < 0)
++#endif
  		goto err_ring;
 +#endif
  
  	tmp = size * roundup_pow_of_two(MLX4_EN_MAX_RX_FRAGS *
  					sizeof(struct mlx4_en_rx_alloc));
-@@ -318,8 +385,10 @@ err_info:
+@@ -318,8 +389,10 @@ err_info:
  	kvfree(ring->rx_info);
  	ring->rx_info = NULL;
  err_xdp_info:
@@ -131,7 +135,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	kfree(ring);
  	*pring = NULL;
  
-@@ -363,6 +432,9 @@ int mlx4_en_activate_rx_rings(struct mlx
+@@ -363,6 +436,9 @@ int mlx4_en_activate_rx_rings(struct mlx
  		/* Initialize all descriptors */
  		for (i = 0; i < ring->size; i++)
  			mlx4_en_init_rx_desc(priv, ring, i);
@@ -141,7 +145,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	}
  	err = mlx4_en_fill_rx_buffers(priv);
  	if (err)
-@@ -436,6 +508,7 @@ void mlx4_en_destroy_rx_ring(struct mlx4
+@@ -436,6 +512,7 @@ void mlx4_en_destroy_rx_ring(struct mlx4
  {
  	struct mlx4_en_dev *mdev = priv->mdev;
  	struct mlx4_en_rx_ring *ring = *pring;
@@ -149,7 +153,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	struct bpf_prog *old_prog;
  
  	old_prog = rcu_dereference_protected(
-@@ -443,7 +516,10 @@ void mlx4_en_destroy_rx_ring(struct mlx4
+@@ -443,7 +520,10 @@ void mlx4_en_destroy_rx_ring(struct mlx4
  					lockdep_is_held(&mdev->state_lock));
  	if (old_prog)
  		bpf_prog_put(old_prog);
@@ -160,7 +164,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	mlx4_free_hwq_res(mdev->dev, &ring->wqres, size * stride + TXBB_SIZE);
  	kvfree(ring->rx_info);
  	ring->rx_info = NULL;
-@@ -470,11 +546,19 @@ void mlx4_en_deactivate_rx_ring(struct m
+@@ -470,11 +550,19 @@ void mlx4_en_deactivate_rx_ring(struct m
  
  static int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
  				    struct mlx4_en_rx_alloc *frags,
@@ -181,7 +185,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	bool release = true;
  	int nr, frag_size;
  	struct page *page;
-@@ -492,15 +576,28 @@ static int mlx4_en_complete_rx_desc(stru
+@@ -492,15 +580,28 @@ static int mlx4_en_complete_rx_desc(stru
  		dma_sync_single_range_for_cpu(priv->ddev, dma, frags->page_offset,
  					      frag_size, priv->dma_dir);
  
@@ -211,7 +215,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  		} else if (!priv->rx_headroom) {
  			/* rx_headroom for non XDP setup is always 0.
  			 * When XDP is set, the above condition will
-@@ -524,13 +621,16 @@ static int mlx4_en_complete_rx_desc(stru
+@@ -524,13 +625,16 @@ static int mlx4_en_complete_rx_desc(stru
  			break;
  		frag_info++;
  	}
@@ -229,7 +233,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	}
  	return 0;
  }
-@@ -698,11 +798,17 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -698,11 +802,17 @@ int mlx4_en_process_rx_cq(struct net_dev
  	struct mlx4_en_priv *priv = netdev_priv(dev);
  	int factor = priv->cqe_factor;
  	struct mlx4_en_rx_ring *ring;
@@ -247,7 +251,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	int polled = 0;
  	int index;
  
-@@ -711,11 +817,15 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -711,11 +821,15 @@ int mlx4_en_process_rx_cq(struct net_dev
  
  	ring = priv->rx_ring[cq_ring];
  
@@ -263,7 +267,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  	/* We assume a 1:1 mapping between CQEs and Rx descriptors, so Rx
  	 * descriptor offset can be deduced from the CQE index instead of
-@@ -727,7 +837,9 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -727,7 +841,9 @@ int mlx4_en_process_rx_cq(struct net_dev
  	while (XNOR(cqe->owner_sr_opcode & MLX4_CQE_OWNER_MASK,
  		    cq->mcq.cons_index & cq->size)) {
  		struct mlx4_en_rx_alloc *frags;
@@ -273,7 +277,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  		struct sk_buff *skb;
  		unsigned int length;
  		int ip_summed;
-@@ -740,7 +852,11 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -740,7 +856,11 @@ int mlx4_en_process_rx_cq(struct net_dev
  		/*
  		 * make sure we read the CQE after we read the ownership bit
  		 */
@@ -285,7 +289,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  		/* Drop packet on bad receive or bad checksum */
  		if (unlikely((cqe->owner_sr_opcode & MLX4_CQE_OPCODE_MASK) ==
-@@ -767,6 +883,7 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -767,6 +887,7 @@ int mlx4_en_process_rx_cq(struct net_dev
  		if (priv->flags & MLX4_EN_FLAG_RX_FILTER_NEEDED) {
  			const struct ethhdr *ethh = va;
  			dma_addr_t dma;
@@ -293,7 +297,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  			/* Get pointer to first fragment since we haven't
  			 * skb yet and cast it to ethhdr struct
  			 */
-@@ -782,7 +899,7 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -782,7 +903,7 @@ int mlx4_en_process_rx_cq(struct net_dev
  				/* Drop the packet, since HW loopback-ed it */
  				mac_hash = ethh->h_source[MLX4_EN_MAC_HASH_IDX];
  				bucket = &priv->mac_hash[mac_hash];
@@ -302,7 +306,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  					if (ether_addr_equal_64bits(entry->mac,
  								    ethh->h_source))
  						goto next;
-@@ -801,9 +918,12 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -801,9 +922,12 @@ int mlx4_en_process_rx_cq(struct net_dev
  		/* A bpf program gets first chance to drop the packet. It may
  		 * read bytes but not past the end of the frag.
  		 */
@@ -315,7 +319,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  			u32 act;
  
  			dma = frags[0].dma + frags[0].page_offset;
-@@ -811,20 +931,29 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -811,20 +935,29 @@ int mlx4_en_process_rx_cq(struct net_dev
  						priv->frag_info[0].frag_size,
  						DMA_FROM_DEVICE);
  
@@ -345,7 +349,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  			switch (act) {
  			case XDP_PASS:
-@@ -836,13 +965,17 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -836,13 +969,17 @@ int mlx4_en_process_rx_cq(struct net_dev
  					frags[0].page = NULL;
  					goto next;
  				}
@@ -363,7 +367,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  				/* fall through */
  			case XDP_DROP:
  				ring->xdp_drop++;
-@@ -850,6 +983,7 @@ xdp_drop_no_cnt:
+@@ -850,6 +987,7 @@ xdp_drop_no_cnt:
  				goto next;
  			}
  		}
@@ -371,7 +375,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  		ring->bytes += length;
  		ring->packets++;
-@@ -876,15 +1010,53 @@ xdp_drop_no_cnt:
+@@ -876,15 +1014,53 @@ xdp_drop_no_cnt:
  						       MLX4_CQE_STATUS_UDP)) &&
  			    (cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IPOK)) &&
  			    cqe->checksum == cpu_to_be16(0xffff)) {
@@ -425,7 +429,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  			} else {
  				if (!(priv->flags & MLX4_EN_FLAG_RX_CSUM_NON_TCP_UDP &&
  				      (cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IP_ANY))))
-@@ -892,40 +1064,98 @@ xdp_drop_no_cnt:
+@@ -892,40 +1068,98 @@ xdp_drop_no_cnt:
  				if (check_csum(cqe, skb, va, dev->features))
  					goto csum_none;
  				ip_summed = CHECKSUM_COMPLETE;
@@ -524,7 +528,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  			skb_clear_hash(skb);
  		}
  next:
-@@ -936,19 +1166,27 @@ next:
+@@ -936,19 +1170,27 @@ next:
  			break;
  	}
  
@@ -552,7 +556,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  	mlx4_en_refill_rx_buffers(priv, ring);
  
-@@ -987,22 +1225,42 @@ int mlx4_en_poll_rx_cq(struct napi_struc
+@@ -987,22 +1229,42 @@ int mlx4_en_poll_rx_cq(struct napi_struc
  		}
  	}
  
@@ -595,7 +599,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  		if (likely(cpumask_test_cpu(cpu_curr, aff)))
  			return budget;
-@@ -1015,10 +1273,31 @@ int mlx4_en_poll_rx_cq(struct napi_struc
+@@ -1015,10 +1277,31 @@ int mlx4_en_poll_rx_cq(struct napi_struc
  		 */
  		if (done)
  			done--;
@@ -627,7 +631,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	return done;
  }
  
-@@ -1028,6 +1307,7 @@ void mlx4_en_calc_rx_buf(struct net_devi
+@@ -1028,6 +1311,7 @@ void mlx4_en_calc_rx_buf(struct net_devi
  	int eff_mtu = MLX4_EN_EFF_MTU(dev->mtu);
  	int i = 0;
  
@@ -635,7 +639,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	/* bpf requires buffers to be set up as 1 packet per page.
  	 * This only works when num_frags == 1.
  	 */
-@@ -1040,7 +1320,9 @@ void mlx4_en_calc_rx_buf(struct net_devi
+@@ -1040,7 +1324,9 @@ void mlx4_en_calc_rx_buf(struct net_devi
  		priv->dma_dir = PCI_DMA_BIDIRECTIONAL;
  		priv->rx_headroom = XDP_PACKET_HEADROOM;
  		i = 1;
@@ -646,7 +650,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  		int frag_size_max = 2048, buf_size = 0;
  
  		/* should not happen, right ? */
-@@ -1102,7 +1384,11 @@ static int mlx4_en_config_rss_qp(struct
+@@ -1102,7 +1388,11 @@ static int mlx4_en_config_rss_qp(struct
  	if (!context)
  		return -ENOMEM;
  
@@ -658,7 +662,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	if (err) {
  		en_err(priv, "Failed to allocate qp #%x\n", qpn);
  		goto out;
-@@ -1117,7 +1403,11 @@ static int mlx4_en_config_rss_qp(struct
+@@ -1117,7 +1407,11 @@ static int mlx4_en_config_rss_qp(struct
  	/* Cancel FCS removal if FW allows */
  	if (mdev->dev->caps.flags & MLX4_DEV_CAP_FLAG_FCS_KEEP) {
  		context->param3 |= cpu_to_be32(1 << 29);
@@ -670,7 +674,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  			ring->fcs_del = 0;
  		else
  			ring->fcs_del = ETH_FCS_LEN;
-@@ -1147,7 +1437,11 @@ int mlx4_en_create_drop_qp(struct mlx4_e
+@@ -1147,7 +1441,11 @@ int mlx4_en_create_drop_qp(struct mlx4_e
  		en_err(priv, "Failed reserving drop qpn\n");
  		return err;
  	}
@@ -682,7 +686,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	if (err) {
  		en_err(priv, "Failed allocating drop qp\n");
  		mlx4_qp_release_range(priv->mdev->dev, qpn, 1);
-@@ -1220,7 +1514,12 @@ int mlx4_en_config_rss_steer(struct mlx4
+@@ -1220,7 +1518,12 @@ int mlx4_en_config_rss_steer(struct mlx4
  	}
  
  	/* Configure RSS indirection qp */
@@ -695,7 +699,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	if (err) {
  		en_err(priv, "Failed to allocate RSS indirection QP\n");
  		goto rss_err;
-@@ -1253,9 +1552,17 @@ int mlx4_en_config_rss_steer(struct mlx4
+@@ -1253,9 +1556,17 @@ int mlx4_en_config_rss_steer(struct mlx4
  
  	rss_context->flags = rss_mask;
  	rss_context->hash_fn = MLX4_RSS_HASH_TOP;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
 
 Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
 ---
- drivers/infiniband/ulp/isert/ib_isert.c | 444 +++++++++++++++++++++++++++++++-
- 1 file changed, 436 insertions(+), 8 deletions(-)
+ drivers/infiniband/ulp/isert/ib_isert.c | 456 +++++++++++++++++++++++-
+ 1 file changed, 448 insertions(+), 8 deletions(-)
 
 --- a/drivers/infiniband/ulp/isert/ib_isert.c
 +++ b/drivers/infiniband/ulp/isert/ib_isert.c
@@ -443,7 +443,28 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  static int
  isert_check_pi_status(struct se_cmd *se_cmd, struct ib_mr *sig_mr)
  {
-@@ -1664,6 +1870,7 @@ isert_check_pi_status(struct se_cmd *se_
+@@ -1650,12 +1856,20 @@ isert_check_pi_status(struct se_cmd *se_
+ 		}
+ 		sec_offset_err = mr_status.sig_err.sig_err_offset;
+ 		do_div(sec_offset_err, block_size);
++#ifdef HAVE_SE_CMD_HAS_SENSE_INFO
++		se_cmd->sense_info = sec_offset_err + se_cmd->t_task_lba;
++#else
+ 		se_cmd->bad_sector = sec_offset_err + se_cmd->t_task_lba;
++#endif
+ 
+ 		isert_err("PI error found type %d at sector 0x%llx "
+ 			  "expected 0x%x vs actual 0x%x\n",
+ 			  mr_status.sig_err.err_type,
++#ifdef HAVE_SE_CMD_HAS_SENSE_INFO
++			  (unsigned long long)se_cmd->sense_info,
++#else
+ 			  (unsigned long long)se_cmd->bad_sector,
++#endif
+ 			  mr_status.sig_err.expected,
+ 			  mr_status.sig_err.actual);
+ 		ret = 1;
+@@ -1664,6 +1878,7 @@ isert_check_pi_status(struct se_cmd *se_
  fail_mr_status:
  	return ret;
  }
@@ -451,7 +472,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  
  static void
  isert_rdma_write_done(struct ib_cq *cq, struct ib_wc *wc)
-@@ -1672,8 +1879,10 @@ isert_rdma_write_done(struct ib_cq *cq,
+@@ -1672,8 +1887,10 @@ isert_rdma_write_done(struct ib_cq *cq,
  	struct isert_device *device = isert_conn->device;
  	struct iser_tx_desc *desc = cqe_to_tx_desc(wc->wr_cqe);
  	struct isert_cmd *isert_cmd = tx_desc_to_cmd(desc);
@@ -462,7 +483,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  
  	if (unlikely(wc->status != IB_WC_SUCCESS)) {
  		isert_print_wc(wc, "rdma write");
-@@ -1685,6 +1894,7 @@ isert_rdma_write_done(struct ib_cq *cq,
+@@ -1685,6 +1902,7 @@ isert_rdma_write_done(struct ib_cq *cq,
  
  	isert_dbg("Cmd %p\n", isert_cmd);
  
@@ -470,7 +491,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	ret = isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
  	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
  
-@@ -1701,10 +1911,22 @@ isert_rdma_write_done(struct ib_cq *cq,
+@@ -1701,10 +1919,22 @@ isert_rdma_write_done(struct ib_cq *cq,
  		/*
  		 * XXX: isert_put_response() failure is not retried.
  		 */
@@ -493,7 +514,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  }
  
  static void
-@@ -1714,9 +1936,15 @@ isert_rdma_read_done(struct ib_cq *cq, s
+@@ -1714,9 +1944,15 @@ isert_rdma_read_done(struct ib_cq *cq, s
  	struct isert_device *device = isert_conn->device;
  	struct iser_tx_desc *desc = cqe_to_tx_desc(wc->wr_cqe);
  	struct isert_cmd *isert_cmd = tx_desc_to_cmd(desc);
@@ -509,7 +530,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  
  	if (unlikely(wc->status != IB_WC_SUCCESS)) {
  		isert_print_wc(wc, "rdma read");
-@@ -1730,8 +1958,10 @@ isert_rdma_read_done(struct ib_cq *cq, s
+@@ -1730,8 +1966,10 @@ isert_rdma_read_done(struct ib_cq *cq, s
  
  	iscsit_stop_dataout_timer(cmd);
  
@@ -520,7 +541,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
  	cmd->write_data_done = 0;
  
-@@ -1746,9 +1976,11 @@ isert_rdma_read_done(struct ib_cq *cq, s
+@@ -1746,9 +1984,11 @@ isert_rdma_read_done(struct ib_cq *cq, s
  	 * se_cmd->cmd_kref reference after T10-PI error, and handle
  	 * any non-zero ->queue_status() callback error retries.
  	 */
@@ -532,7 +553,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  		target_execute_cmd(se_cmd);
  }
  
-@@ -1759,7 +1991,11 @@ isert_do_control_comp(struct work_struct
+@@ -1759,7 +1999,11 @@ isert_do_control_comp(struct work_struct
  			struct isert_cmd, comp_work);
  	struct isert_conn *isert_conn = isert_cmd->conn;
  	struct ib_device *ib_dev = isert_conn->cm_id->device;
@@ -544,7 +565,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  
  	isert_dbg("Cmd %p i_state %d\n", isert_cmd, cmd->i_state);
  
-@@ -1806,10 +2042,17 @@ isert_send_done(struct ib_cq *cq, struct
+@@ -1806,10 +2050,17 @@ isert_send_done(struct ib_cq *cq, struct
  	struct ib_device *ib_dev = isert_conn->cm_id->device;
  	struct iser_tx_desc *tx_desc = cqe_to_tx_desc(wc->wr_cqe);
  	struct isert_cmd *isert_cmd = tx_desc_to_cmd(tx_desc);
@@ -562,7 +583,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  		if (wc->status == IB_WC_SIG_PIPELINE_CANCELED) {
  			isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
  			isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
-@@ -1822,21 +2065,30 @@ isert_send_done(struct ib_cq *cq, struct
+@@ -1822,21 +2073,30 @@ isert_send_done(struct ib_cq *cq, struct
  			kref_get(&cmd->cmd_kref);
  			transport_generic_request_failure(cmd, cmd->pi_err);
  		} else {
@@ -593,7 +614,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	case ISTATE_SEND_TASKMGTRSP:
  	case ISTATE_SEND_LOGOUTRSP:
  	case ISTATE_SEND_REJECT:
-@@ -1847,7 +2099,11 @@ isert_send_done(struct ib_cq *cq, struct
+@@ -1847,7 +2107,11 @@ isert_send_done(struct ib_cq *cq, struct
  		queue_work(isert_comp_wq, &isert_cmd->comp_work);
  		return;
  	default:
@@ -605,7 +626,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  		isert_completion_put(tx_desc, isert_cmd, ib_dev, false);
  		break;
  	}
-@@ -1875,7 +2131,12 @@ isert_post_response(struct isert_conn *i
+@@ -1875,7 +2139,12 @@ isert_post_response(struct isert_conn *i
  static int
  isert_put_response(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
  {
@@ -618,7 +639,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_send_wr *send_wr = &isert_cmd->tx_desc.send_wr;
  	struct iscsi_scsi_rsp *hdr = (struct iscsi_scsi_rsp *)
-@@ -1926,7 +2187,12 @@ isert_put_response(struct iscsi_conn *co
+@@ -1926,7 +2195,12 @@ isert_put_response(struct iscsi_conn *co
  static void
  isert_aborted_task(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
  {
@@ -631,7 +652,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  
  	spin_lock_bh(&conn->cmd_lock);
-@@ -1939,33 +2205,42 @@ isert_aborted_task(struct iscsi_conn *co
+@@ -1939,33 +2213,42 @@ isert_aborted_task(struct iscsi_conn *co
  	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
  }
  
@@ -676,7 +697,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_send_wr *send_wr = &isert_cmd->tx_desc.send_wr;
  
-@@ -1984,7 +2259,12 @@ isert_put_nopin(struct iscsi_cmd *cmd, s
+@@ -1984,7 +2267,12 @@ isert_put_nopin(struct iscsi_cmd *cmd, s
  static int
  isert_put_logout_rsp(struct iscsi_cmd *cmd, struct iscsi_conn *conn)
  {
@@ -689,7 +710,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_send_wr *send_wr = &isert_cmd->tx_desc.send_wr;
  
-@@ -2002,7 +2282,12 @@ isert_put_logout_rsp(struct iscsi_cmd *c
+@@ -2002,7 +2290,12 @@ isert_put_logout_rsp(struct iscsi_cmd *c
  static int
  isert_put_tm_rsp(struct iscsi_cmd *cmd, struct iscsi_conn *conn)
  {
@@ -702,7 +723,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_send_wr *send_wr = &isert_cmd->tx_desc.send_wr;
  
-@@ -2020,7 +2305,12 @@ isert_put_tm_rsp(struct iscsi_cmd *cmd,
+@@ -2020,7 +2313,12 @@ isert_put_tm_rsp(struct iscsi_cmd *cmd,
  static int
  isert_put_reject(struct iscsi_cmd *cmd, struct iscsi_conn *conn)
  {
@@ -715,7 +736,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_send_wr *send_wr = &isert_cmd->tx_desc.send_wr;
  	struct isert_device *device = isert_conn->device;
-@@ -2052,10 +2342,16 @@ isert_put_reject(struct iscsi_cmd *cmd,
+@@ -2052,10 +2350,16 @@ isert_put_reject(struct iscsi_cmd *cmd,
  	return isert_post_response(isert_conn, isert_cmd);
  }
  
@@ -732,7 +753,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_send_wr *send_wr = &isert_cmd->tx_desc.send_wr;
  	struct iscsi_text_rsp *hdr =
-@@ -2094,7 +2390,9 @@ isert_put_text_rsp(struct iscsi_cmd *cmd
+@@ -2094,7 +2398,9 @@ isert_put_text_rsp(struct iscsi_cmd *cmd
  
  	return isert_post_response(isert_conn, isert_cmd);
  }
@@ -742,7 +763,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  static inline void
  isert_set_dif_domain(struct se_cmd *se_cmd, struct ib_sig_attrs *sig_attrs,
  		     struct ib_sig_domain *domain)
-@@ -2151,12 +2449,17 @@ isert_set_sig_attrs(struct se_cmd *se_cm
+@@ -2151,12 +2457,17 @@ isert_set_sig_attrs(struct se_cmd *se_cm
  
  	return 0;
  }
@@ -760,7 +781,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	enum dma_data_direction dir = target_reverse_dma_direction(se_cmd);
  	u8 port_num = conn->cm_id->port_num;
  	u64 addr;
-@@ -2169,13 +2472,18 @@ isert_rdma_rw_ctx_post(struct isert_cmd
+@@ -2169,13 +2480,18 @@ isert_rdma_rw_ctx_post(struct isert_cmd
  	if (dir == DMA_FROM_DEVICE) {
  		addr = cmd->write_va;
  		rkey = cmd->write_stag;
@@ -779,7 +800,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	if (isert_prot_cmd(conn, se_cmd)) {
  		struct ib_sig_attrs sig_attrs;
  
-@@ -2193,6 +2501,11 @@ isert_rdma_rw_ctx_post(struct isert_cmd
+@@ -2193,6 +2509,11 @@ isert_rdma_rw_ctx_post(struct isert_cmd
  				se_cmd->t_data_sg, se_cmd->t_data_nents,
  				offset, addr, rkey, dir);
  	}
@@ -791,7 +812,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  
  	if (ret < 0) {
  		isert_err("Cmd: %p failed to prepare RDMA res\n", cmd);
-@@ -2212,7 +2525,12 @@ static int
+@@ -2212,7 +2533,12 @@ static int
  isert_put_datain(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
  {
  	struct se_cmd *se_cmd = &cmd->se_cmd;
@@ -804,7 +825,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	struct isert_conn *isert_conn = conn->context;
  	struct ib_cqe *cqe = NULL;
  	struct ib_send_wr *chain_wr = NULL;
-@@ -2268,7 +2586,12 @@ err:
+@@ -2268,7 +2594,12 @@ err:
  static int
  isert_get_dataout(struct iscsi_conn *conn, struct iscsi_cmd *cmd, bool recovery)
  {
@@ -817,7 +838,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	int ret;
  
  	isert_dbg("Cmd: %p RDMA_READ data_length: %u write_data_done: %u\n",
-@@ -2286,7 +2609,12 @@ isert_get_dataout(struct iscsi_conn *con
+@@ -2286,7 +2617,12 @@ isert_get_dataout(struct iscsi_conn *con
  static int
  isert_immediate_queue(struct iscsi_conn *conn, struct iscsi_cmd *cmd, int state)
  {
@@ -830,7 +851,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	int ret = 0;
  
  	switch (state) {
-@@ -2329,9 +2657,11 @@ isert_response_queue(struct iscsi_conn *
+@@ -2329,9 +2665,11 @@ isert_response_queue(struct iscsi_conn *
  	case ISTATE_SEND_REJECT:
  		ret = isert_put_reject(cmd, conn);
  		break;
@@ -842,7 +863,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	case ISTATE_SEND_STATUS:
  		/*
  		 * Special case for sending non GOOD SCSI status from TX thread
-@@ -2500,11 +2830,47 @@ isert_set_conn_info(struct iscsi_np *np,
+@@ -2500,11 +2838,47 @@ isert_set_conn_info(struct iscsi_np *np,
  {
  	struct rdma_cm_id *cm_id = isert_conn->cm_id;
  	struct rdma_route *cm_route = &cm_id->route;
@@ -890,7 +911,19 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  }
  
  static int
-@@ -2665,14 +3031,19 @@ isert_put_unsol_pending_cmds(struct iscs
+@@ -2633,7 +3007,11 @@ isert_wait4cmds(struct iscsi_conn *conn)
+ 	isert_info("iscsi_conn %p\n", conn);
+ 
+ 	if (conn->sess) {
++#ifdef HAVE_TARGET_STOP_SESSION
++		target_stop_session(conn->sess->se_sess);
++#else
+ 		target_sess_cmd_list_set_waiting(conn->sess->se_sess);
++#endif
+ 		target_wait_for_sess_cmds(conn->sess->se_sess);
+ 	}
+ }
+@@ -2665,14 +3043,19 @@ isert_put_unsol_pending_cmds(struct iscs
  	list_for_each_entry_safe(cmd, tmp, &drop_cmd_list, i_conn_node) {
  		list_del_init(&cmd->i_conn_node);
  		if (cmd->i_state != ISTATE_REMOVE) {
@@ -911,7 +944,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  static void isert_wait_conn(struct iscsi_conn *conn)
  {
  	struct isert_conn *isert_conn = conn->context;
-@@ -2690,15 +3061,40 @@ static void isert_wait_conn(struct iscsi
+@@ -2690,15 +3073,40 @@ static void isert_wait_conn(struct iscsi
  
  	queue_work(isert_release_wq, &isert_conn->release_work);
  }
@@ -952,7 +985,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  static void isert_get_rx_pdu(struct iscsi_conn *conn)
  {
  	struct completion comp;
-@@ -2707,18 +3103,28 @@ static void isert_get_rx_pdu(struct iscs
+@@ -2707,18 +3115,28 @@ static void isert_get_rx_pdu(struct iscs
  
  	wait_for_completion_interruptible(&comp);
  }
@@ -981,7 +1014,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	.iscsit_get_login_rx	= isert_get_login_rx,
  	.iscsit_put_login_tx	= isert_put_login_tx,
  	.iscsit_immediate_queue	= isert_immediate_queue,
-@@ -2727,8 +3133,12 @@ static struct iscsit_transport iser_targ
+@@ -2727,8 +3145,12 @@ static struct iscsit_transport iser_targ
  	.iscsit_queue_data_in	= isert_put_datain,
  	.iscsit_queue_status	= isert_put_response,
  	.iscsit_aborted_task	= isert_aborted_task,
@@ -994,7 +1027,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  };
  
  static int __init isert_init(void)
-@@ -2749,12 +3159,24 @@ static int __init isert_init(void)
+@@ -2749,12 +3171,24 @@ static int __init isert_init(void)
  		ret = -ENOMEM;
  		goto destroy_comp_wq;
  	}
@@ -1021,7 +1054,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  destroy_comp_wq:
  	destroy_workqueue(isert_comp_wq);
  
-@@ -2763,6 +3185,9 @@ destroy_comp_wq:
+@@ -2763,6 +3197,9 @@ destroy_comp_wq:
  
  static void __exit isert_exit(void)
  {
@@ -1031,7 +1064,7 @@ Change-Id: Id3dbb943d26e1474f385dbcabfc60aa2c858e1ce
  	flush_scheduled_work();
  	destroy_workqueue(isert_release_wq);
  	destroy_workqueue(isert_comp_wq);
-@@ -2773,6 +3198,9 @@ static void __exit isert_exit(void)
+@@ -2773,6 +3210,9 @@ static void __exit isert_exit(void)
  MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
  MODULE_AUTHOR("nab@Linux-iSCSI.org");
  MODULE_LICENSE("GPL");

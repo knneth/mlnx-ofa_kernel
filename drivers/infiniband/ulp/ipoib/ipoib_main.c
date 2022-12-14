@@ -54,7 +54,7 @@
 #include <linux/inet.h>
 #include <linux/sched/signal.h>
 
-#define DRV_VERSION	"4.9-4.0.8"
+#define DRV_VERSION	"4.9-4.1.7"
 
 const char ipoib_driver_version[] = DRV_VERSION;
 

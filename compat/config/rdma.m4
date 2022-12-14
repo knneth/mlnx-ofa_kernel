@@ -846,6 +846,31 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
                 AC_MSG_RESULT(no)
         ])
 
+	AC_MSG_CHECKING([if devlink_ops.reload_down has 5 params])
+        MLNX_BG_LB_LINUX_TRY_COMPILE([
+                #include <net/devlink.h>
+
+		static int devlink_reload_down(struct devlink *devlink, bool netns_change,
+				enum devlink_reload_action action, enum devlink_reload_limit limit,
+                		struct netlink_ext_ack *extack)
+		{
+		        return 0;
+		}
+
+        ],[
+                struct devlink_ops dlops = {
+                        .reload_down = devlink_reload_down,
+		};
+
+                return 0;
+        ],[
+                AC_MSG_RESULT(yes)
+                MLNX_AC_DEFINE(HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION, 1,
+                          [reload_down has 5 params])
+        ],[
+                AC_MSG_RESULT(no)
+        ])
+
 	AC_MSG_CHECKING([if struct devlink_ops has info_get])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/devlink.h>
@@ -1110,6 +1135,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_FLASH_UPDATE_GET_3_PARAMS, 1,
 			  [struct devlink_ops flash_update get 3 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if devlink_flash_update_params has struct firmware fw])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/devlink.h>
+	],[
+		struct devlink_flash_update_params *x;
+		x->fw = NULL;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DEVLINK_FLASH_UPDATE_PARAMS_HAS_STRUCT_FW, 1,
+			  [devlink_flash_update_params has struct firmware fw])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -6053,6 +6094,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if netlink.h has nla_strscpy])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/netlink.h>
+	],[
+		nla_strscpy(NULL, NULL ,0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NLA_STRSCPY, 1,
+			  [nla_strscpy exist])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if netlink.h has nla_nest_start_noflag])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/netlink.h>
@@ -9246,6 +9302,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if xdp_rxq_info_reg get 4 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/xdp.h>
+	],[
+		xdp_rxq_info_reg(NULL, NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDP_RXQ_INFO_REG_GET_4_PARAMS, 1,
+			  [xdp_rxq_info_reg get 4 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if net/xdp.h has struct xdp_frame])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/xdp.h>
@@ -9466,6 +9537,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TARGET_PUT_SESS_CMD_HAS_1_PARAM, 1,
 			  [target_put_sess_cmd in target_core_fabric.h has 1 parameter])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if target/target_core_fabric.h has target_stop_session])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <target/target_core_base.h>
+		#include <target/target_core_fabric.h>
+	],[
+		target_stop_session(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TARGET_STOP_SESSION, 1,
+			  [target_stop_session is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -9719,6 +9806,24 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_MM_STRUCT_FREE_AREA_CACHE, 1,
 			[mm_types.h struct mm_struct has free_area_cache])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if target_core_base.h struct se_cmd has member sense_info])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <target/target_core_base.h>
+
+	],[
+		struct se_cmd se = {
+			.sense_info = 0,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SE_CMD_HAS_SENSE_INFO, 1,
+			[struct se_cmd has member sense_info])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -11546,6 +11651,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DEVICE_REMOVE_FILE_SELF, 1,
 			[device.h has device_remove_file_self])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if genhd.h has revalidate_disk])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/genhd.h>
+	],[
+		revalidate_disk(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_REVALIDATE_DISK, 1,
+			[genhd.h has revalidate_disk])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -14982,6 +15102,50 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_REQUEST_MQ_HCTX, 1,
 			[blkdev.h struct request has mq_hctx])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if have put_unaligned_le24])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/unaligned/generic.h>
+	],[
+		put_unaligned_le24(0, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PUT_UNALIGNED_LE24, 1,
+				[put_unaligned_le24 existing])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/blkdev.h has blk_alloc_queue_rh])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		blk_alloc_queue_rh(NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_ALLOC_QUEUE_RH, 1,
+				[linux/blkdev.h has blk_alloc_queue_rh])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blkdev_issue_flush has 2 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		blkdev_issue_flush(NULL, 0);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLKDEV_ISSUE_FLUSH_2_PARAM, 1,
+				[blkdev_issue_flush has 2 params])
 	],[
 		AC_MSG_RESULT(no)
 	])

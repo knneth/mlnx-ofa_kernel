@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -34,26 +34,25 @@
 #include <linux/init.h>
 #include <linux/errno.h>
 
-#define DRV_NAME	"usnic_verbs"
-#define DRV_VERSION	"4.9-4.1.7"
-#define DRV_RELDATE	"08 Dec 2021"
+#define DRV_NAME	"mlx5_vdpa"
+#define DRV_VERSION	"2.31"
 
-MODULE_AUTHOR("Alaa Hleihel");
-MODULE_DESCRIPTION("usnic_verbs dummy kernel module");
+MODULE_AUTHOR("Mohammad Kabat");
+MODULE_DESCRIPTION("mlx5_vdpa dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
 #ifdef RETPOLINE_MLNX
 MODULE_INFO(retpoline, "Y");
 #endif
 MODULE_VERSION(DRV_VERSION);
 
-static int __init usnic_verbs_init(void)
+static int __init vdpa_init(void)
 {
 	return 0;
 }
 
-static void __exit usnic_verbs_cleanup(void)
+static void __exit vdpa_cleanup(void)
 {
 }
 
-module_init(usnic_verbs_init);
-module_exit(usnic_verbs_cleanup);
+module_init(vdpa_init);
+module_exit(vdpa_cleanup);
