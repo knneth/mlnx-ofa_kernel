@@ -33,7 +33,7 @@ static void mlx5_ib_register_peer_vport_reps(struct mlx5_core_dev *mdev);
 static int
 mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 {
-	int num_ports = mlx5_eswitch_get_total_vports(dev);
+	u32 num_ports = mlx5_eswitch_get_total_vports(dev);
 	const struct mlx5_ib_profile *profile;
 	struct mlx5_core_dev *peer_dev;
 	struct mlx5_ib_dev *ibdev;
@@ -45,8 +45,6 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 		peer_dev = mlx5_lag_get_peer_mdev(dev);
 		if (mlx5_lag_is_master(dev)) {
 			num_ports += mlx5_eswitch_get_total_vports(peer_dev) - 1;
-			if (num_ports > 255)
-				return -EINVAL;
 		} else {
 			if (rep->vport == MLX5_VPORT_UPLINK)
 				return 0;
@@ -219,7 +217,7 @@ u32 mlx5_ib_eswitch_get_vport_metadata_mask(void)
 
 struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 						   struct mlx5_ib_sq *sq,
-						   u16 port)
+						   u32 port)
 {
 	struct mlx5_eswitch *esw = dev->mdev->priv.eswitch;
 	struct mlx5_eswitch_rep *rep;

@@ -87,7 +87,6 @@ enum devlink_param_generic_id {
 
 #endif /* HAVE_DEVLINK_H */
 
-
 #ifndef HAVE_DEVLINK_NET
 static inline struct net *devlink_net(const struct devlink *devlink)
 {
@@ -127,7 +126,14 @@ devlink_param_driverinit_value_get(struct devlink *devlink, u32 param_id,
 
 	return 0;
 }
+
+struct devlink_param_gset_ctx {
+	union devlink_param_value val;
+	enum devlink_param_cmode cmode;
+};
+
 #endif /* HAVE_DEVLINK_DRIVERINIT_VAL */
+
 
 #ifndef HAVE_DEVLINK_PORT_STRUCT
 struct devlink_port_phys_attrs {

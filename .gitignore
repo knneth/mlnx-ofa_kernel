@@ -88,9 +88,6 @@ compat.config
 include/linux/autoconf.h
 include/generated/autoconf.h
 include/linux/compat_autoconf.h
-configure
-makefile
-Makefile
 backports_applied
 openib.conf.tmp
 ofed_scripts/utils/build/

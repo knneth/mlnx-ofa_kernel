@@ -289,12 +289,134 @@ disable_en_store(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RW(disable_en);
 
+static ssize_t
+max_cmpl_eq_count_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+
+	return sprintf(buf, "%d\n", sf->max_cmpl_eq_count);
+}
+
+static ssize_t
+max_cmpl_eq_count_store(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	if (val < 1 && val > 8)
+		return -EINVAL;
+
+	sf->max_cmpl_eq_count = val;
+	return len;
+}
+static DEVICE_ATTR_RW(max_cmpl_eq_count);
+
+static ssize_t
+cmpl_eq_depth_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+
+	return sprintf(buf, "%d\n", sf->cmpl_eq_depth);
+}
+
+static bool is_eq_depth_valid(int val)
+{
+	return (val >= 2 && val <= 4096);
+}
+
+static ssize_t
+cmpl_eq_depth_store(struct device *dev, struct device_attribute *attr,
+		    const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	if (!is_eq_depth_valid(val))
+		return -EINVAL;
+
+	sf->cmpl_eq_depth = val;
+	return len;
+}
+static DEVICE_ATTR_RW(cmpl_eq_depth);
+
+static ssize_t
+async_eq_depth_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+
+	return sprintf(buf, "%d\n", sf->async_eq_depth);
+}
+
+static ssize_t
+async_eq_depth_store(struct device *dev, struct device_attribute *attr,
+		    const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	if (!is_eq_depth_valid(val))
+		return -EINVAL;
+
+	sf->async_eq_depth = val;
+	return len;
+}
+static DEVICE_ATTR_RW(async_eq_depth);
+
+static ssize_t
+disable_fc_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+
+	return sprintf(buf, "%d\n", !!sf->disable_fc);
+}
+
+static ssize_t
+disable_fc_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	if (val < 0 && val > 1)
+		return -EINVAL;
+
+	sf->disable_fc = val;
+
+	return len;
+}
+static DEVICE_ATTR_RW(disable_fc);
+
 static struct attribute *mlx5_meddev_dev_attrs[] = {
 	&dev_attr_mac_addr.attr,
 	&dev_attr_netdev.attr,
 	&dev_attr_disable_en.attr,
 	&dev_attr_roce_disable.attr,
 	&dev_attr_uc_list.attr,
+	&dev_attr_max_cmpl_eq_count.attr,
+	&dev_attr_cmpl_eq_depth.attr,
+	&dev_attr_async_eq_depth.attr,
+	&dev_attr_disable_fc.attr,
 	NULL,
 };
 

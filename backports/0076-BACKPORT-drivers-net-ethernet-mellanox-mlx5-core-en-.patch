@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I21fd0b05a493334a70ffd9c7cf858424d50b00dc
 ---
- .../mellanox/mlx5/core/en/tc_tun_vxlan.c        | 17 ++++++++++++++++-
- 1 file changed, 16 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en/tc_tun_vxlan.c         | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
@@ -75,9 +75,8 @@ Change-Id: I21fd0b05a493334a70ffd9c7cf858424d50b00dc
  		netdev_warn(priv->netdev,
  			    "Matching on VXLAN VNI is not supported\n");
  		return -EOPNOTSUPP;
-@@ -151,3 +164,5 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
- 	.parse_udp_ports      = mlx5e_tc_tun_parse_udp_ports_vxlan,
+@@ -152,3 +165,4 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
  	.parse_tunnel         = mlx5e_tc_tun_parse_vxlan,
+ 	.cmp_encap_info       = mlx5e_tc_tun_cmp_encap_info_generic,
  };
-+
 +#endif /* HAVE_TCF_TUNNEL_INFO */

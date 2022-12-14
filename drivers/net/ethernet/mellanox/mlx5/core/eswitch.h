@@ -76,6 +76,24 @@
 #define esw_chains(esw) \
 	((esw)->fdb_table.offloads.esw_chains_priv)
 
+struct vport_meter {
+	int rate;
+	int burst;
+	int meter_obj_id;
+	int meter_idx;
+	struct mlx5e_flow_meter_aso_obj *meter_obj;
+	struct mlx5_flow_table *meter_tbl;
+	struct mlx5_flow_group *meter_grp;
+	struct mlx5_flow_handle *meter_rule;
+	struct mlx5_flow_table *color_tbl;
+	struct mlx5_flow_group *color_grp;
+	struct mlx5_flow_handle *fwd_green_rule;
+	struct mlx5_flow_handle *drop_red_rule;
+	struct mlx5_fc *drop_counter;
+	u64 packets_dropped;
+	u64 bytes_dropped;
+};
+
 struct vport_ingress {
 	struct mlx5_flow_table *acl;
 	struct mlx5_flow_handle *allow_rule;
@@ -89,6 +107,8 @@ struct vport_ingress {
 		struct mlx5_fc *drop_counter;
 	} legacy;
 	struct {
+		struct mutex vf_meter_lock;		/* protect vf meter operations */
+		struct vport_meter *meter_xps[2];	/* bps: 0, pps: 1 */
 		/* Optional group to add an FTE to do internal priority
 		 * tagging on ingress packets.
 		 */
@@ -106,22 +126,22 @@ struct vport_egress {
 	struct mlx5_flow_table *acl;
 	struct mlx5_flow_handle  *allowed_vlan;
 	struct mlx5_flow_group *vlan_grp;
-	union {
-		struct {
-			struct mlx5_flow_group *allow_untagged_grp;
-			struct mlx5_flow_group *drop_grp;
-			struct mlx5_flow_handle *drop_rule;
-			struct mlx5_flow_handle *allow_untagged_rule;
-			struct list_head allow_vlans_rules;
-			struct mlx5_fc *drop_counter;
-		} legacy;
-		struct {
-			struct mlx5_flow_handle *bounce_rule;
-			struct mlx5_flow_group *bounce_grp;
-			struct mlx5_flow_handle *fwd_rule;
-			struct mlx5_flow_group *fwd_grp;
-		} offloads;
-	};
+	struct {
+		struct mlx5_flow_group *allow_untagged_grp;
+		struct mlx5_flow_group *drop_grp;
+		struct mlx5_flow_handle *drop_rule;
+		struct mlx5_flow_handle *allow_untagged_rule;
+		struct list_head allow_vlans_rules;
+		struct mlx5_fc *drop_counter;
+	} legacy;
+	struct {
+		struct mutex vf_meter_lock;		/* protect vf meter operations */
+		struct vport_meter *meter_xps[2];	/* bps: 0, pps: 1 */
+		struct mlx5_flow_handle *bounce_rule;
+		struct mlx5_flow_group *bounce_grp;
+		struct mlx5_flow_handle *fwd_rule;
+		struct mlx5_flow_group *fwd_grp;
+	} offloads;
 };
 
 struct mlx5_vport_drop_stats {
@@ -239,6 +259,24 @@ struct mlx5_acl_vlan {
 	struct list_head	list;
 };
 
+struct mlx5_pet_actions {
+	struct mlx5_flow_table *ft;
+	struct mlx5_flow_group *fg;
+	struct mlx5_modify_hdr *hdr;
+	struct mlx5_flow_handle *rule;
+	struct mlx5_pkt_reformat *pkt_reformat;
+};
+
+struct mlx5_vport_match_actions {
+	struct mlx5_pet_actions push_pet_hdr;
+	struct mlx5_pet_actions copy_data_to_pet_hdr;
+};
+
+struct mlx5_pet_info {
+	u16 ether_type;
+	bool enabled;
+};
+
 struct mlx5_esw_offload {
 	struct mlx5_flow_table *ft_offloads_restore;
 	struct mlx5_flow_group *restore_group;
@@ -266,6 +304,8 @@ struct mlx5_esw_offload {
 	DECLARE_HASHTABLE(termtbl_tbl, 8);
 	struct mutex termtbl_mutex; /* protects termtbl hash */
 	const struct mlx5_eswitch_rep_ops *rep_ops[NUM_REP_TYPES];
+	struct mlx5_vport_match_actions pet_vport_action;
+	struct mlx5_pet_info pet_info;
 	u8 inline_mode;
 	enum devlink_eswitch_encap_mode encap;
 	enum devlink_eswitch_ipsec_mode ipsec;
@@ -296,6 +336,7 @@ struct mlx5_esw_functions {
 enum {
 	MLX5_ESWITCH_VPORT_MATCH_METADATA = BIT(0),
 	MLX5_ESWITCH_REG_C1_LOOPBACK_ENABLED = BIT(1),
+	MLX5_ESWITCH_PET_INSERT = BIT(2),
 };
 
 struct mlx5_esw_handler {
@@ -406,7 +447,7 @@ enum mlx5_esw_int_vport_type {
 
 struct mlx5_esw_int_vport {
 	enum mlx5_esw_int_vport_type type;
-	struct net_device *netdev;
+	int ifindex;
 	u32 match_metadata;
 	u32 mapping;
 	struct list_head list;
@@ -415,12 +456,15 @@ struct mlx5_esw_int_vport {
 	struct completion res_ready;
 	int compl_result;
 	bool removing;
+	struct rcu_head rcu_head;
 };
 
 void esw_offloads_disable(struct mlx5_eswitch *esw);
 int esw_offloads_enable(struct mlx5_eswitch *esw);
 void esw_offloads_cleanup_reps(struct mlx5_eswitch *esw);
 int esw_offloads_init_reps(struct mlx5_eswitch *esw);
+int mlx5_esw_offloads_pet_insert_set(struct mlx5_eswitch *esw, bool enable);
+bool mlx5e_esw_offloads_pet_supported(const struct mlx5_eswitch *esw);
 
 u32 mlx5_esw_match_metadata_alloc(struct mlx5_eswitch *esw);
 void mlx5_esw_match_metadata_free(struct mlx5_eswitch *esw, u32 metadata);
@@ -1036,6 +1080,9 @@ mlx5_esw_put_int_vport(struct mlx5_eswitch *esw,
 		       struct mlx5_esw_int_vport *int_vport);
 void mlx5_esw_init_int_vport(struct mlx5_eswitch *esw);
 void mlx5_esw_cleanup_int_vport(struct mlx5_eswitch *esw);
+bool mlx5e_esw_offloads_pet_enabled(const struct mlx5_eswitch *esw);
+int mlx5e_esw_offloads_pet_setup(struct mlx5_eswitch *esw);
+void mlx5e_esw_offloads_pet_cleanup(struct mlx5_eswitch *esw);
 
 #else  /* CONFIG_MLX5_ESWITCH */
 /* eswitch API stubs */
@@ -1070,6 +1117,11 @@ static inline u16 mlx5_eswitch_max_sfs(const struct mlx5_core_dev *dev)
 {
 	return 0;
 }
+
+static inline bool mlx5e_esw_offloads_pet_enabled(const struct mlx5_eswitch *esw)
+{
+	return false;
+};
 
 #endif /* CONFIG_MLX5_ESWITCH */
 

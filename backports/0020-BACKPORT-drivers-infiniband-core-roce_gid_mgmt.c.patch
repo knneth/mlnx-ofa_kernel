@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
 
 Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
 ---
- drivers/infiniband/core/roce_gid_mgmt.c | 194 ++++++++++++++++++++----
- 1 file changed, 162 insertions(+), 32 deletions(-)
+ drivers/infiniband/core/roce_gid_mgmt.c | 193 ++++++++++++++++++++----
+ 1 file changed, 161 insertions(+), 32 deletions(-)
 
 --- a/drivers/infiniband/core/roce_gid_mgmt.c
 +++ b/drivers/infiniband/core/roce_gid_mgmt.c
@@ -49,7 +49,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  	return BONDING_SLAVE_STATE_NA;
 @@ -333,7 +347,9 @@ static void bond_delete_netdev_default_g
  static void enum_netdev_ipv4_ips(struct ib_device *ib_dev,
- 				 u8 port, struct net_device *ndev)
+ 				 u32 port, struct net_device *ndev)
  {
 +#ifndef HAVE_FOR_IFA
  	const struct in_ifaddr *ifa;
@@ -85,7 +85,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  
 +#if IS_ENABLED(CONFIG_IPV6)
  static void enum_netdev_ipv6_ips(struct ib_device *ib_dev,
- 				 u8 port, struct net_device *ndev)
+ 				 u32 port, struct net_device *ndev)
  {
 @@ -419,13 +443,15 @@ static void enum_netdev_ipv6_ips(struct
  		kfree(sin6_iter);
@@ -93,7 +93,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  }
 +#endif
  
- static void _add_netdev_ips(struct ib_device *ib_dev, u8 port,
+ static void _add_netdev_ips(struct ib_device *ib_dev, u32 port,
  			    struct net_device *ndev)
  {
  	enum_netdev_ipv4_ips(ib_dev, port, ndev);
@@ -104,7 +104,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
 +#endif
  }
  
- static void add_netdev_ips(struct ib_device *ib_dev, u8 port,
+ static void add_netdev_ips(struct ib_device *ib_dev, u32 port,
 @@ -440,27 +466,6 @@ static void del_netdev_ips(struct ib_dev
  	ib_cache_gid_del_all_netdev_gids(ib_dev, port, cookie);
  }
@@ -118,7 +118,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
 - *
 - * del_default_gids() deletes the default GIDs of the event/cookie netdevice.
 - */
--static void del_default_gids(struct ib_device *ib_dev, u8 port,
+-static void del_default_gids(struct ib_device *ib_dev, u32 port,
 -			     struct net_device *rdma_ndev, void *cookie)
 -{
 -	struct net_device *cookie_ndev = cookie;
@@ -130,7 +130,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
 -				     IB_CACHE_GID_DEFAULT_MODE_DELETE);
 -}
 -
- static void add_default_gids(struct ib_device *ib_dev, u8 port,
+ static void add_default_gids(struct ib_device *ib_dev, u32 port,
  			     struct net_device *rdma_ndev, void *cookie)
  {
 @@ -484,7 +489,9 @@ static void enum_all_gids_of_dev_cb(stru
@@ -188,7 +188,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  }
 +#endif /* HAVE_NETDEV_WALK_ALL_UPPER_DEV_RCU */
  
- static void handle_netdev_upper(struct ib_device *ib_dev, u8 port,
+ static void handle_netdev_upper(struct ib_device *ib_dev, u32 port,
  				void *cookie,
 @@ -560,15 +581,64 @@ static void handle_netdev_upper(struct i
  						      struct net_device *ndev))
@@ -256,16 +256,15 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  
  	handle_netdev(ib_dev, port, ndev);
  	list_for_each_entry_safe(upper_iter, upper_temp, &upper_list,
-@@ -598,6 +668,8 @@ static void add_netdev_upper_ips(struct
+@@ -597,6 +667,7 @@ static void add_netdev_upper_ips(struct
+ {
  	handle_netdev_upper(ib_dev, port, cookie, _add_netdev_ips);
  }
- 
 +#endif /* USE_UPPER_INFO */
-+
- static void del_netdev_default_ips_join(struct ib_device *ib_dev, u8 port,
+ 
+ static void del_netdev_default_ips_join(struct ib_device *ib_dev, u32 port,
  					struct net_device *rdma_ndev,
- 					void *cookie)
-@@ -672,11 +744,33 @@ static const struct netdev_event_work_cm
+@@ -672,11 +743,33 @@ static const struct netdev_event_work_cm
  	.filter	= is_eth_port_of_netdev_filter
  };
  
@@ -287,7 +286,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
 + *
 + * del_default_gids() deletes the default GIDs of the event/cookie netdevice.
 + */
-+static void del_default_gids(struct ib_device *ib_dev, u8 port,
++static void del_default_gids(struct ib_device *ib_dev, u32 port,
 +			     struct net_device *rdma_ndev, void *cookie)
 +{
 +	struct net_device *cookie_ndev = cookie;
@@ -302,7 +301,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  static void
  ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
  		  struct netdev_event_work_cmd *cmds)
-@@ -692,9 +786,9 @@ ndev_event_unlink(struct netdev_notifier
+@@ -692,9 +785,9 @@ ndev_event_unlink(struct netdev_notifier
  	cmds[1] = add_cmd;
  }
  
@@ -315,7 +314,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  };
  
  static void
-@@ -735,6 +829,7 @@ static void netdevice_event_changeupper(
+@@ -735,6 +828,7 @@ static void netdevice_event_changeupper(
  	else
  		ndev_event_unlink(changeupper_info, cmds);
  }
@@ -323,7 +322,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  
  static const struct netdev_event_work_cmd add_default_gid_cmd = {
  	.cb	= add_default_gids,
-@@ -757,9 +852,22 @@ static int netdevice_event(struct notifi
+@@ -757,9 +851,22 @@ static int netdevice_event(struct notifi
  				.filter = is_eth_port_of_netdev_filter
  			};
  	static const struct netdev_event_work_cmd bonding_event_ips_del_cmd = {
@@ -347,7 +346,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  
  	if (ndev->type != ARPHRD_ETHER)
  		return NOTIFY_DONE;
-@@ -767,6 +875,9 @@ static int netdevice_event(struct notifi
+@@ -767,6 +874,9 @@ static int netdevice_event(struct notifi
  	switch (event) {
  	case NETDEV_REGISTER:
  	case NETDEV_UP:
@@ -357,7 +356,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  		cmds[0] = bonding_default_del_cmd_join;
  		cmds[1] = add_default_gid_cmd;
  		cmds[2] = add_cmd;
-@@ -787,18 +898,24 @@ static int netdevice_event(struct notifi
+@@ -787,18 +897,24 @@ static int netdevice_event(struct notifi
  		}
  		break;
  
@@ -382,7 +381,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  		break;
  
  	default:
-@@ -903,6 +1020,13 @@ static struct notifier_block nb_inet6add
+@@ -903,6 +1019,13 @@ static struct notifier_block nb_inet6add
  	.notifier_call = inet6addr_event
  };
  
@@ -396,7 +395,7 @@ Change-Id: I5b82013ef23366a974c02f3499fd2a359c93a23c
  int __init roce_gid_mgmt_init(void)
  {
  	gid_cache_wq = alloc_ordered_workqueue("gid-cache-wq", 0);
-@@ -919,11 +1043,17 @@ int __init roce_gid_mgmt_init(void)
+@@ -919,11 +1042,17 @@ int __init roce_gid_mgmt_init(void)
  	 */
  	register_netdevice_notifier(&nb_netdevice);
  

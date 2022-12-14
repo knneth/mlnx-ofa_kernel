@@ -53,14 +53,8 @@ enum {
 };
 
 enum {
-	MLX5_FPGA_CAP_SANDBOX_PRODUCT_ID_EXAMPLE  = 0x1,
 	MLX5_FPGA_CAP_SANDBOX_PRODUCT_ID_IPSEC    = 0x2,
 	MLX5_FPGA_CAP_SANDBOX_PRODUCT_ID_TLS      = 0x3,
-};
-
-enum {
-	MLX5_FPGA_SHELL_CAPS_QP_TYPE_SHELL_QP    = 0x1,
-	MLX5_FPGA_SHELL_CAPS_QP_TYPE_SANDBOX_QP  = 0x2,
 };
 
 struct mlx5_ifc_fpga_shell_caps_bits {
@@ -146,8 +140,6 @@ enum {
 	MLX5_FPGA_CTRL_OPERATION_SANDBOX_BYPASS_ON   = 0x4,
 	MLX5_FPGA_CTRL_OPERATION_SANDBOX_BYPASS_OFF  = 0x5,
 	MLX5_FPGA_CTRL_OPERATION_RESET_SANDBOX       = 0x6,
-	MLX5_FPGA_CTRL_OPERATION_DISCONNECT          = 0x9,
-	MLX5_FPGA_CTRL_OPERATION_CONNECT             = 0xA,
 };
 
 struct mlx5_ifc_fpga_ctrl_bits {
@@ -476,47 +468,6 @@ struct mlx5_ifc_ipsec_counters_bits {
 	u8         fail_delete_sa[0x40];
 
 	u8         dropped_cmd[0x40];
-};
-
-struct mlx5_ifc_fpga_shell_counters_bits {
-	u8         reserved_0[0x20];
-
-	u8         clear[0x1];
-	u8         reserved_1[0x1f];
-
-	u8         reserved_2[0x40];
-
-	u8         ddr_read_requests[0x40];
-
-	u8         ddr_write_requests[0x40];
-
-	u8         ddr_read_bytes[0x40];
-
-	u8         ddr_write_bytes[0x40];
-
-	u8         reserved_3[0x200];
-};
-
-enum {
-	MLX5_FPGA_SHELL_QP_PACKET_TYPE_DDR_READ            = 0x0,
-	MLX5_FPGA_SHELL_QP_PACKET_TYPE_DDR_WRITE           = 0x1,
-	MLX5_FPGA_SHELL_QP_PACKET_TYPE_DDR_READ_RESPONSE   = 0x2,
-	MLX5_FPGA_SHELL_QP_PACKET_TYPE_DDR_WRITE_RESPONSE  = 0x3,
-};
-
-struct mlx5_ifc_fpga_shell_qp_packet_bits {
-	u8         version[0x4];
-	u8         syndrome[0x4];
-	u8         reserved_at_8[0x4];
-	u8         type[0x4];
-	u8         reserved_at_10[0x8];
-	u8         tid[0x8];
-
-	u8         len[0x20];
-
-	u8         address[0x40];
-
-	u8         data[0][0x8];
 };
 
 enum {

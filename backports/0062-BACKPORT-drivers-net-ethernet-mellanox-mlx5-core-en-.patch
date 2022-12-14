@@ -16,7 +16,7 @@ Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
  	struct mod_hdr_tbl mod_hdr;
 +#endif
  	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
- 	DECLARE_HASHTABLE(hairpin_tbl, 16);
+ 	DECLARE_HASHTABLE(hairpin_tbl, 8);
  	struct kobject *hp_config;
 @@ -210,6 +212,7 @@ static inline int mlx5e_ethtool_get_rxnf
  #endif /* CONFIG_MLX5_EN_RXNFC */
@@ -39,7 +39,7 @@ Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
  	struct mlx5e_ttc_table          inner_ttc;
  #ifdef CONFIG_MLX5_EN_ARFS
 +#ifndef HAVE_NET_FLOW_KEYS_H
- 	struct mlx5e_arfs_tables        arfs;
+ 	struct mlx5e_arfs_tables       *arfs;
  #endif
 +#endif
  #ifdef CONFIG_MLX5_EN_TLS

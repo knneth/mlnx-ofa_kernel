@@ -42,7 +42,7 @@ struct mlx5_ib_gsi_wr {
 struct mlx5_ib_gsi_qp {
 	struct ib_qp ibqp;
 	struct ib_qp *rx_qp;
-	u8 port_num;
+	u32 port_num;
 	struct ib_qp_cap cap;
 	enum ib_sig_type sq_sig_type;
 	/* Serialize qp state modifications */

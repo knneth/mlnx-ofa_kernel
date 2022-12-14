@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
 ---
- .../mellanox/mlx5/core/en/tc_tun_geneve.c     | 40 ++++++++++++++++++-
- 1 file changed, 38 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en/tc_tun_geneve.c     | 38 ++++++++++++++++++-
+ 1 file changed, 36 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
@@ -125,8 +125,8 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev,
  			    "Matching on GENEVE options: unsupported options len (len=%d)\n",
  			    enc_opts.key->len);
-@@ -228,8 +250,10 @@ static int mlx5e_tc_tun_parse_geneve_opt
- 	option_mask = (struct geneve_opt *)&enc_opts.mask->data[0];
+@@ -232,8 +254,10 @@ static int mlx5e_tc_tun_parse_geneve_opt
+ 		return 0;
  
  	if (option_key->length > max_tlv_option_data_len) {
 +#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
@@ -136,7 +136,7 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev,
  			    "Matching on GENEVE options: unsupported option len (key=%d, mask=%d)\n",
  			    option_key->length, option_mask->length);
-@@ -238,8 +262,10 @@ static int mlx5e_tc_tun_parse_geneve_opt
+@@ -242,8 +266,10 @@ static int mlx5e_tc_tun_parse_geneve_opt
  
  	/* data can't be all 0 - fail to offload such rule */
  	if (!memchr_inv(option_key->opt_data, 0, option_key->length * 4)) {
@@ -147,7 +147,7 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev,
  			    "Matching on GENEVE options: can't match on 0 data field\n");
  		return -EOPNOTSUPP;
-@@ -248,8 +274,10 @@ static int mlx5e_tc_tun_parse_geneve_opt
+@@ -252,8 +278,10 @@ static int mlx5e_tc_tun_parse_geneve_opt
  	/* add new GENEVE TLV options object */
  	res = mlx5_geneve_tlv_option_add(priv->mdev->geneve, option_key);
  	if (res) {
@@ -158,7 +158,7 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev,
  			    "Matching on GENEVE options: failed creating TLV opt object (class:type:len = 0x%x:0x%x:%d)\n",
  			    be16_to_cpu(option_key->opt_class),
-@@ -281,12 +309,16 @@ static int mlx5e_tc_tun_parse_geneve_par
+@@ -285,12 +313,16 @@ static int mlx5e_tc_tun_parse_geneve_par
  {
  	void *misc_c = MLX5_ADDR_OF(fte_match_param, spec->match_criteria, misc_parameters);
  	void *misc_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,  misc_parameters);
@@ -175,22 +175,9 @@ Change-Id: I57b4f430b79939ce332bb0a1049195f39a1cdf13
  		netdev_warn(priv->netdev, "Matching on GENEVE OAM is not supported\n");
  		return -EOPNOTSUPP;
  	}
-@@ -319,10 +351,12 @@ static int mlx5e_tc_tun_parse_geneve(str
- 		return err;
- 
- 	err = mlx5e_tc_tun_parse_geneve_vni(priv, spec, f);
-+
- 	if (err)
- 		return err;
- 
- 	return mlx5e_tc_tun_parse_geneve_options(priv, spec, f);
-+
- }
- 
- struct mlx5e_tc_tunnel geneve_tunnel = {
-@@ -335,3 +369,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
- 	.parse_udp_ports      = mlx5e_tc_tun_parse_udp_ports_geneve,
+@@ -367,3 +399,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
  	.parse_tunnel         = mlx5e_tc_tun_parse_geneve,
+ 	.cmp_encap_info       = mlx5e_tc_tun_cmp_encap_info_geneve,
  };
 +
 +#endif /* HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS */

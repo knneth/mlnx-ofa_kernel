@@ -312,9 +312,14 @@ static void mlx5e_get_ethtool_stats(struct net_device *dev,
 void mlx5e_ethtool_get_ringparam(struct mlx5e_priv *priv,
 				 struct ethtool_ringparam *param)
 {
-	param->rx_max_pending = 1 << MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE;
+	if (priv->shared_rq) {
+		param->rx_max_pending = 0;
+		param->rx_pending     = 0;
+	} else {
+		param->rx_max_pending = 1 << MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE;
+		param->rx_pending     = 1 << priv->channels.params.log_rq_mtu_frames;
+	}
 	param->tx_max_pending = 1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE;
-	param->rx_pending     = 1 << priv->channels.params.log_rq_mtu_frames;
 	param->tx_pending     = 1 << priv->channels.params.log_sq_size;
 }
 
@@ -345,7 +350,8 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 		return -EINVAL;
 	}
 
-	if (param->rx_pending < (1 << MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE)) {
+	if (!priv->shared_rq &&
+	    param->rx_pending < (1 << MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE)) {
 		netdev_info(priv->netdev, "%s: rx_pending (%d) < min (%d)\n",
 			    __func__, param->rx_pending,
 			    1 << MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE);
@@ -485,15 +491,21 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 		goto out;
 	}
 
-	new_channels.params = priv->channels.params;
+	new_channels.params = *cur_params;
 	new_channels.params.num_channels = count;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	new_channels.params.num_rl_txqs = ch->other_count;
 #endif
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
+		struct mlx5e_params old_params;
+
+		old_params = *cur_params;
 		*cur_params = new_channels.params;
 		err = mlx5e_num_channels_changed(priv);
+		if (err)
+			*cur_params = old_params;
+
 		goto out;
 	}
 
@@ -535,10 +547,16 @@ int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
 	if (!MLX5_CAP_GEN(priv->mdev, cq_moderation))
 		return -EOPNOTSUPP;
 
-	rx_moder = &priv->channels.params.rx_cq_moderation;
-	coal->rx_coalesce_usecs		= rx_moder->usec;
-	coal->rx_max_coalesced_frames	= rx_moder->pkts;
-	coal->use_adaptive_rx_coalesce	= priv->channels.params.rx_dim_enabled;
+	if (priv->shared_rq) {
+		coal->rx_coalesce_usecs		= 0;
+		coal->rx_max_coalesced_frames	= 0;
+		coal->use_adaptive_rx_coalesce	= 0;
+	} else {
+		rx_moder = &priv->channels.params.rx_cq_moderation;
+		coal->rx_coalesce_usecs		= rx_moder->usec;
+		coal->rx_max_coalesced_frames	= rx_moder->pkts;
+		coal->use_adaptive_rx_coalesce	= priv->channels.params.rx_dim_enabled;
+	}
 
 	tx_moder = &priv->channels.params.tx_cq_moderation;
 	coal->tx_coalesce_usecs		= tx_moder->usec;
@@ -576,6 +594,9 @@ mlx5e_set_priv_channels_coalesce(struct mlx5e_priv *priv, struct ethtool_coalesc
 						coal->tx_max_coalesced_frames);
 		}
 
+		if (priv->shared_rq)
+			continue;
+
 		mlx5_core_modify_cq_moderation(mdev, &c->rq.cq.mcq,
 					       coal->rx_coalesce_usecs,
 					       coal->rx_max_coalesced_frames);
@@ -612,6 +633,15 @@ int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
 	new_channels.params = priv->channels.params;
 
 	rx_moder          = &new_channels.params.rx_cq_moderation;
+	if (priv->shared_rq) {
+		if (coal->rx_coalesce_usecs ||
+		    coal->rx_max_coalesced_frames ||
+		    coal->use_adaptive_rx_coalesce) {
+			err = -EOPNOTSUPP;
+			goto out;
+		}
+	}
+
 	rx_moder->usec    = coal->rx_coalesce_usecs;
 	rx_moder->pkts    = coal->rx_max_coalesced_frames;
 	new_channels.params.rx_dim_enabled = !!coal->use_adaptive_rx_coalesce;
@@ -769,11 +799,11 @@ static int get_fec_supported_advertised(struct mlx5_core_dev *dev,
 	return 0;
 }
 
-static void ptys2ethtool_supported_advertised_port(struct ethtool_link_ksettings *link_ksettings,
-						   u32 eth_proto_cap,
-						   u8 connector_type, bool ext)
+static void ptys2ethtool_supported_advertised_port(struct mlx5_core_dev *mdev,
+						   struct ethtool_link_ksettings *link_ksettings,
+						   u32 eth_proto_cap, u8 connector_type)
 {
-	if ((!connector_type && !ext) || connector_type >= MLX5E_CONNECTOR_TYPE_NUMBER) {
+	if (!MLX5_CAP_PCAM_FEATURE(mdev, ptys_connector_type)) {
 		if (eth_proto_cap & (MLX5E_PROT_MASK(MLX5E_10GBASE_CR)
 				   | MLX5E_PROT_MASK(MLX5E_10GBASE_SR)
 				   | MLX5E_PROT_MASK(MLX5E_40GBASE_CR4)
@@ -909,9 +939,9 @@ static int ptys2connector_type[MLX5E_CONNECTOR_TYPE_NUMBER] = {
 		[MLX5E_PORT_OTHER]              = PORT_OTHER,
 	};
 
-static u8 get_connector_port(u32 eth_proto, u8 connector_type, bool ext)
+static u8 get_connector_port(struct mlx5_core_dev *mdev, u32 eth_proto, u8 connector_type)
 {
-	if ((connector_type || ext) && connector_type < MLX5E_CONNECTOR_TYPE_NUMBER)
+	if (MLX5_CAP_PCAM_FEATURE(mdev, ptys_connector_type))
 		return ptys2connector_type[connector_type];
 
 	if (eth_proto &
@@ -1012,11 +1042,11 @@ int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
 			 data_rate_oper, link_ksettings);
 
 	eth_proto_oper = eth_proto_oper ? eth_proto_oper : eth_proto_cap;
-
-	link_ksettings->base.port = get_connector_port(eth_proto_oper,
-						       connector_type, ext);
-	ptys2ethtool_supported_advertised_port(link_ksettings, eth_proto_admin,
-					       connector_type, ext);
+	connector_type = connector_type < MLX5E_CONNECTOR_TYPE_NUMBER ?
+			 connector_type : MLX5E_PORT_UNKNOWN;
+	link_ksettings->base.port = get_connector_port(mdev, eth_proto_oper, connector_type);
+	ptys2ethtool_supported_advertised_port(mdev, link_ksettings, eth_proto_admin,
+					       connector_type);
 	get_lp_advertising(mdev, eth_proto_lp, link_ksettings);
 
 	if (an_status == MLX5_AN_COMPLETE)

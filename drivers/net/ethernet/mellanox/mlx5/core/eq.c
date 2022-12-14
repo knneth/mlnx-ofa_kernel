@@ -727,6 +727,9 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 		.nent = MLX5_NUM_ASYNC_EQE,
 	};
 
+	if (mlx5_core_is_sf(dev) && dev->async_eq_depth)
+		param.nent = dev->async_eq_depth;
+
 	gather_async_events_mask(dev, param.mask);
 	err = setup_async_eq(dev, &table->async_eq, &param, "async");
 	if (err)
@@ -882,6 +885,11 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 	INIT_LIST_HEAD(&table->comp_eqs_list);
 	ncomp_eqs = table->num_comp_eqs;
 	nent = MLX5_COMP_EQ_SIZE;
+
+	/* If user specified completion EQ depth, honor that */
+	if (mlx5_core_is_sf(dev) && dev->cmpl_eq_depth)
+		nent = dev->cmpl_eq_depth;
+
 	for (i = 0; i < ncomp_eqs; i++) {
 		int vecidx = i + MLX5_IRQ_VEC_COMP_BASE;
 		struct mlx5_eq_param param = {};
@@ -1001,8 +1009,15 @@ int mlx5_eq_table_create(struct mlx5_core_dev *dev)
 	int err;
 
 	eq_table->num_comp_eqs = mlx5_irq_get_num_comp(eq_table->irq_table);
-	if (mlx5_core_is_sf(dev) && eq_table->num_comp_eqs > MLX5_MAX_SF_EQS)
+	if (mlx5_core_is_sf(dev) &&
+	    (eq_table->num_comp_eqs > MLX5_MAX_SF_EQS ||
+	     dev->max_cmpl_eq_count)) {
 		eq_table->num_comp_eqs = MLX5_MAX_SF_EQS;
+		/* If user has setup non zero max completion EQs, honor that */
+		if (dev->max_cmpl_eq_count)
+			eq_table->num_comp_eqs = min_t(int, dev->max_cmpl_eq_count,
+						       eq_table->num_comp_eqs);
+	}
 
 	err = create_async_eqs(dev);
 	if (err) {

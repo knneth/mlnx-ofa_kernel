@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
 
 Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
 ---
- drivers/nvme/host/rdma.c | 265 +++++++++++++++++++++++++++++++++++++++
- 1 file changed, 265 insertions(+)
+ drivers/nvme/host/rdma.c | 273 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 273 insertions(+)
 
 --- a/drivers/nvme/host/rdma.c
 +++ b/drivers/nvme/host/rdma.c
@@ -28,7 +28,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  #include <rdma/ib_verbs.h>
  #include <rdma/rdma_cm.h>
-@@ -130,7 +136,9 @@ struct nvme_rdma_ctrl {
+@@ -131,7 +137,9 @@ struct nvme_rdma_ctrl {
  
  	struct nvme_ctrl	ctrl;
  	bool			use_inline_data;
@@ -38,7 +38,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  };
  
  static inline struct nvme_rdma_ctrl *to_rdma_ctrl(struct nvme_ctrl *ctrl)
-@@ -159,8 +167,22 @@ static int nvme_rdma_cm_handler(struct r
+@@ -160,8 +168,22 @@ static int nvme_rdma_cm_handler(struct r
  static void nvme_rdma_recv_done(struct ib_cq *cq, struct ib_wc *wc);
  static void nvme_rdma_complete_rq(struct request *rq);
  
@@ -61,7 +61,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  static inline int nvme_rdma_queue_idx(struct nvme_rdma_queue *queue)
  {
-@@ -169,9 +191,13 @@ static inline int nvme_rdma_queue_idx(st
+@@ -170,9 +192,13 @@ static inline int nvme_rdma_queue_idx(st
  
  static bool nvme_rdma_poll_queue(struct nvme_rdma_queue *queue)
  {
@@ -75,7 +75,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  }
  
  static inline size_t nvme_rdma_inline_data_size(struct nvme_rdma_queue *queue)
-@@ -291,21 +317,49 @@ static int nvme_rdma_create_qp(struct nv
+@@ -292,21 +318,49 @@ static int nvme_rdma_create_qp(struct nv
  	return ret;
  }
  
@@ -125,7 +125,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	struct nvme_rdma_queue *queue = &ctrl->queues[queue_idx];
  
  	nvme_req(rq)->ctrl = &ctrl->ctrl;
-@@ -323,6 +377,21 @@ static int nvme_rdma_init_request(struct
+@@ -324,6 +378,21 @@ static int nvme_rdma_init_request(struct
  
  	return 0;
  }
@@ -147,7 +147,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  static int nvme_rdma_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
  		unsigned int hctx_idx)
-@@ -453,6 +522,9 @@ static void nvme_rdma_destroy_queue_ib(s
+@@ -454,6 +523,9 @@ static void nvme_rdma_destroy_queue_ib(s
  			sizeof(struct nvme_completion), DMA_FROM_DEVICE);
  
  	nvme_rdma_dev_put(dev);
@@ -157,7 +157,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  }
  
  static int nvme_rdma_get_max_fr_pages(struct ib_device *ibdev, bool pi_support)
-@@ -470,14 +542,22 @@ static int nvme_rdma_get_max_fr_pages(st
+@@ -471,14 +543,22 @@ static int nvme_rdma_get_max_fr_pages(st
  static int nvme_rdma_create_cq(struct ib_device *ibdev,
  		struct nvme_rdma_queue *queue)
  {
@@ -180,7 +180,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	/* Polling queues need direct cq polling context */
  	if (nvme_rdma_poll_queue(queue)) {
-@@ -504,6 +584,9 @@ static int nvme_rdma_create_queue_ib(str
+@@ -505,6 +585,9 @@ static int nvme_rdma_create_queue_ib(str
  	const int send_wr_factor = 3;			/* MR, SEND, INV */
  	const int cq_factor = send_wr_factor + 1;	/* + RECV */
  	int ret, pages_per_mr;
@@ -190,7 +190,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	queue->device = nvme_rdma_find_get_device(queue->cm_id);
  	if (!queue->device) {
-@@ -531,15 +614,29 @@ static int nvme_rdma_create_queue_ib(str
+@@ -532,15 +615,29 @@ static int nvme_rdma_create_queue_ib(str
  		goto out_destroy_qp;
  	}
  
@@ -220,7 +220,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  			      pages_per_mr, 0);
  	if (ret) {
  		dev_err(queue->ctrl->ctrl.device,
-@@ -742,6 +839,7 @@ static int nvme_rdma_alloc_io_queues(str
+@@ -749,6 +846,7 @@ static int nvme_rdma_alloc_io_queues(str
  	dev_info(ctrl->ctrl.device,
  		"creating %d I/O queues.\n", nr_io_queues);
  
@@ -228,7 +228,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	if (opts->nr_write_queues && nr_read_queues < nr_io_queues) {
  		/*
  		 * separate read/write queues
-@@ -769,6 +867,7 @@ static int nvme_rdma_alloc_io_queues(str
+@@ -776,6 +874,7 @@ static int nvme_rdma_alloc_io_queues(str
  		ctrl->io_queues[HCTX_TYPE_POLL] =
  			min(nr_poll_queues, nr_io_queues);
  	}
@@ -236,7 +236,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	for (i = 1; i < ctrl->ctrl.queue_count; i++) {
  		ret = nvme_rdma_alloc_queue(ctrl, i,
-@@ -805,7 +904,9 @@ static struct blk_mq_tag_set *nvme_rdma_
+@@ -812,7 +911,9 @@ static struct blk_mq_tag_set *nvme_rdma_
  		set->driver_data = ctrl;
  		set->nr_hw_queues = 1;
  		set->timeout = ADMIN_TIMEOUT;
@@ -246,7 +246,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	} else {
  		set = &ctrl->tag_set;
  		memset(set, 0, sizeof(*set));
-@@ -822,7 +923,9 @@ static struct blk_mq_tag_set *nvme_rdma_
+@@ -829,7 +930,9 @@ static struct blk_mq_tag_set *nvme_rdma_
  		set->driver_data = ctrl;
  		set->nr_hw_queues = nctrl->queue_count - 1;
  		set->timeout = NVME_IO_TIMEOUT;
@@ -256,7 +256,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	}
  
  	ret = blk_mq_alloc_tag_set(set);
-@@ -863,9 +966,11 @@ static int nvme_rdma_configure_admin_que
+@@ -870,9 +973,11 @@ static int nvme_rdma_configure_admin_que
  	ctrl->ctrl.numa_node = dev_to_node(ctrl->device->dev->dma_device);
  
  	/* T10-PI support */
@@ -268,7 +268,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	ctrl->max_fr_pages = nvme_rdma_get_max_fr_pages(ctrl->device->dev,
  							pi_capable);
-@@ -904,6 +1009,10 @@ static int nvme_rdma_configure_admin_que
+@@ -911,6 +1016,10 @@ static int nvme_rdma_configure_admin_que
  	if (error)
  		goto out_cleanup_queue;
  
@@ -279,7 +279,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	error = nvme_enable_ctrl(&ctrl->ctrl);
  	if (error)
  		goto out_stop_queue;
-@@ -915,7 +1024,11 @@ static int nvme_rdma_configure_admin_que
+@@ -922,7 +1031,11 @@ static int nvme_rdma_configure_admin_que
  	else
  		ctrl->ctrl.max_integrity_segments = 0;
  
@@ -291,7 +291,19 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	error = nvme_init_identify(&ctrl->ctrl);
  	if (error)
-@@ -997,8 +1110,10 @@ static int nvme_rdma_configure_io_queues
+@@ -935,7 +1048,11 @@ out_disable_ctrl:
+ 		nvme_shutdown_ctrl(&ctrl->ctrl);
+ 	else
+ 		nvme_disable_ctrl(&ctrl->ctrl);
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 	blk_mq_quiesce_queue(ctrl->ctrl.admin_q);
++#else
++	blk_mq_stop_hw_queues(ctrl->ctrl.admin_q);
++#endif
+ 	blk_sync_queue(ctrl->ctrl.admin_q);
+ out_stop_queue:
+ 	nvme_rdma_stop_queue(&ctrl->queues[0]);
+@@ -1007,8 +1124,10 @@ static int nvme_rdma_configure_io_queues
  			ret = -ENODEV;
  			goto out_wait_freeze_timed_out;
  		}
@@ -302,7 +314,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  		nvme_unfreeze(&ctrl->ctrl);
  	}
  
-@@ -1021,7 +1136,11 @@ out_free_io_queues:
+@@ -1033,12 +1152,20 @@ out_free_io_queues:
  static void nvme_rdma_teardown_admin_queue(struct nvme_rdma_ctrl *ctrl,
  		bool remove)
  {
@@ -313,10 +325,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
 +#endif
  	blk_sync_queue(ctrl->ctrl.admin_q);
  	nvme_rdma_stop_queue(&ctrl->queues[0]);
- 	if (ctrl->ctrl.admin_tagset) {
-@@ -1030,7 +1149,11 @@ static void nvme_rdma_teardown_admin_que
- 		blk_mq_tagset_wait_completed_request(ctrl->ctrl.admin_tagset);
- 	}
+ 	nvme_cancel_admin_tagset(&ctrl->ctrl);
  	if (remove)
 +#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
  		blk_mq_unquiesce_queue(ctrl->ctrl.admin_q);
@@ -326,7 +335,19 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	nvme_rdma_destroy_admin_queue(ctrl, remove);
  }
  
-@@ -1194,7 +1317,11 @@ static void nvme_rdma_error_recovery_wor
+@@ -1166,7 +1293,11 @@ disable_ctrl:
+ 	else
+ 		nvme_disable_ctrl(&ctrl->ctrl);
+ 
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 	blk_mq_quiesce_queue(ctrl->ctrl.admin_q);
++#else
++	blk_mq_stop_hw_queues(ctrl->ctrl.admin_q);
++#endif
+ 	blk_sync_queue(ctrl->ctrl.admin_q);
+ 	nvme_rdma_stop_queue(&ctrl->queues[0]);
+ 	nvme_cancel_admin_tagset(&ctrl->ctrl);
+@@ -1206,7 +1337,11 @@ static void nvme_rdma_error_recovery_wor
  	nvme_rdma_teardown_io_queues(ctrl, false);
  	nvme_start_queues(&ctrl->ctrl);
  	nvme_rdma_teardown_admin_queue(ctrl, false);
@@ -338,7 +359,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	if (!nvme_change_ctrl_state(&ctrl->ctrl, NVME_CTRL_CONNECTING)) {
  		/* state change failure is ok if we started ctrl delete */
-@@ -1311,8 +1438,12 @@ static void nvme_rdma_unmap_data(struct
+@@ -1323,8 +1458,12 @@ static void nvme_rdma_unmap_data(struct
  	if (blk_integrity_rq(rq)) {
  		ib_dma_unmap_sg(ibdev, req->metadata_sgl->sg_table.sgl,
  				req->metadata_sgl->nents, rq_dma_dir(rq));
@@ -351,7 +372,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	}
  
  	if (req->use_sig_mr)
-@@ -1330,7 +1461,11 @@ static void nvme_rdma_unmap_data(struct
+@@ -1342,7 +1481,11 @@ static void nvme_rdma_unmap_data(struct
  
  	ib_dma_unmap_sg(ibdev, req->data_sgl.sg_table.sgl, req->data_sgl.nents,
  			rq_dma_dir(rq));
@@ -363,7 +384,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  }
  
  static int nvme_rdma_set_sg_null(struct nvme_command *c)
-@@ -1434,7 +1569,13 @@ static void nvme_rdma_set_sig_domain(str
+@@ -1446,7 +1589,13 @@ static void nvme_rdma_set_sig_domain(str
  {
  	domain->sig_type = IB_SIG_TYPE_T10_DIF;
  	domain->sig.dif.bg_type = IB_T10DIF_CRC;
@@ -377,7 +398,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
  	if (control & NVME_RW_PRINFO_PRCHK_REF)
  		domain->sig.dif.ref_remap = true;
-@@ -1496,7 +1637,9 @@ static int nvme_rdma_map_sg_pi(struct nv
+@@ -1508,7 +1657,9 @@ static int nvme_rdma_map_sg_pi(struct nv
  	struct ib_reg_wr *wr = &req->reg_wr;
  	struct request *rq = blk_mq_rq_from_pdu(req);
  	struct nvme_ns *ns = rq->q->queuedata;
@@ -387,7 +408,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	struct nvme_keyed_sgl_desc *sg = &c->common.dptr.ksgl;
  	int nr;
  
-@@ -1510,8 +1653,13 @@ static int nvme_rdma_map_sg_pi(struct nv
+@@ -1522,8 +1673,13 @@ static int nvme_rdma_map_sg_pi(struct nv
  	if (unlikely(nr))
  		goto mr_put;
  
@@ -401,7 +422,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	nvme_rdma_set_prot_checks(c, &req->mr->sig_attrs->check_mask);
  
  	ib_update_fast_reg_key(req->mr, ib_inc_rkey(req->mr->rkey));
-@@ -1561,9 +1709,18 @@ static int nvme_rdma_map_data(struct nvm
+@@ -1573,9 +1729,18 @@ static int nvme_rdma_map_data(struct nvm
  		return nvme_rdma_set_sg_null(c);
  
  	req->data_sgl.sg_table.sgl = (struct scatterlist *)(req + 1);
@@ -420,7 +441,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	if (ret)
  		return -ENOMEM;
  
-@@ -1589,10 +1746,19 @@ static int nvme_rdma_map_data(struct nvm
+@@ -1601,10 +1766,19 @@ static int nvme_rdma_map_data(struct nvm
  	if (blk_integrity_rq(rq)) {
  		req->metadata_sgl->sg_table.sgl =
  			(struct scatterlist *)(req->metadata_sgl + 1);
@@ -440,7 +461,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  		if (unlikely(ret)) {
  			ret = -ENOMEM;
  			goto out_unmap_sg;
-@@ -1618,7 +1784,11 @@ static int nvme_rdma_map_data(struct nvm
+@@ -1630,7 +1804,11 @@ static int nvme_rdma_map_data(struct nvm
  	if (count <= dev->num_inline_segments) {
  		if (rq_data_dir(rq) == WRITE && nvme_rdma_queue_idx(queue) &&
  		    queue->ctrl->use_inline_data &&
@@ -452,7 +473,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  				nvme_rdma_inline_data_size(queue)) {
  			ret = nvme_rdma_map_sg_inline(queue, req, c, count);
  			goto out;
-@@ -1643,13 +1813,21 @@ out_unmap_pi_sg:
+@@ -1655,13 +1833,21 @@ out_unmap_pi_sg:
  				req->metadata_sgl->nents, rq_dma_dir(rq));
  out_free_pi_table:
  	if (blk_integrity_rq(rq))
@@ -474,7 +495,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	return ret;
  }
  
-@@ -2043,6 +2221,7 @@ static int nvme_rdma_cm_handler(struct r
+@@ -2055,6 +2241,7 @@ static int nvme_rdma_cm_handler(struct r
  	return 0;
  }
  
@@ -482,7 +503,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  static void nvme_rdma_complete_timed_out(struct request *rq)
  {
  	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
-@@ -2054,6 +2233,7 @@ static void nvme_rdma_complete_timed_out
+@@ -2066,6 +2253,7 @@ static void nvme_rdma_complete_timed_out
  		blk_mq_complete_request(rq);
  	}
  }
@@ -490,7 +511,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  static enum blk_eh_timer_return
  nvme_rdma_timeout(struct request *rq, bool reserved)
-@@ -2065,6 +2245,16 @@ nvme_rdma_timeout(struct request *rq, bo
+@@ -2077,6 +2265,16 @@ nvme_rdma_timeout(struct request *rq, bo
  	dev_warn(ctrl->ctrl.device, "I/O %d QID %d timeout\n",
  		 rq->tag, nvme_rdma_queue_idx(queue));
  
@@ -507,7 +528,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	if (ctrl->ctrl.state != NVME_CTRL_LIVE) {
  		/*
  		 * If we are resetting, connecting or deleting we should
-@@ -2079,8 +2269,22 @@ nvme_rdma_timeout(struct request *rq, bo
+@@ -2091,8 +2289,22 @@ nvme_rdma_timeout(struct request *rq, bo
  		 * All other requests should be cancelled by the error
  		 * recovery work, so it's fine that we fail it here.
  		 */
@@ -530,7 +551,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	}
  
  	/*
-@@ -2170,12 +2374,22 @@ unmap_qe:
+@@ -2184,12 +2396,22 @@ unmap_qe:
  	return ret;
  }
  
@@ -553,7 +574,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  static void nvme_rdma_check_pi_status(struct nvme_rdma_request *req)
  {
-@@ -2212,20 +2426,33 @@ static void nvme_rdma_complete_rq(struct
+@@ -2226,20 +2448,33 @@ static void nvme_rdma_complete_rq(struct
  {
  	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
  	struct nvme_rdma_queue *queue = req->queue;
@@ -587,7 +608,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
  
  	if (opts->nr_write_queues && ctrl->io_queues[HCTX_TYPE_READ]) {
-@@ -2268,24 +2495,55 @@ static int nvme_rdma_map_queues(struct b
+@@ -2282,24 +2517,55 @@ static int nvme_rdma_map_queues(struct b
  		ctrl->io_queues[HCTX_TYPE_POLL]);
  
  	return 0;
@@ -643,7 +664,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	.init_hctx	= nvme_rdma_init_admin_hctx,
  	.timeout	= nvme_rdma_timeout,
  };
-@@ -2296,7 +2554,11 @@ static void nvme_rdma_shutdown_ctrl(stru
+@@ -2310,7 +2576,11 @@ static void nvme_rdma_shutdown_ctrl(stru
  	cancel_delayed_work_sync(&ctrl->reconnect_work);
  
  	nvme_rdma_teardown_io_queues(ctrl, shutdown);
@@ -655,7 +676,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	if (shutdown)
  		nvme_shutdown_ctrl(&ctrl->ctrl);
  	else
-@@ -2554,3 +2816,6 @@ module_init(nvme_rdma_init_module);
+@@ -2568,3 +2838,6 @@ module_init(nvme_rdma_init_module);
  module_exit(nvme_rdma_cleanup_module);
  
  MODULE_LICENSE("GPL v2");

@@ -220,6 +220,7 @@ struct flow_action_entry {
 			u32 mark;
 			u32 labels[4];
 			u16 zone;
+			bool orig_dir;
 		} ct_metadata;
 	};
 };

@@ -28,11 +28,11 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
 +	/* This is a WA for old kernels (<3.10) that don't delete vlan id 0
 +	 * when the interface goes down.
 +	 */
-+	if (test_bit(vid, priv->fs.vlan.active_cvlans))
++	if (test_bit(vid, priv->fs.vlan->active_cvlans))
 +		return 0;
 +#endif
 +
- 	set_bit(vid, priv->fs.vlan.active_cvlans);
+ 	set_bit(vid, priv->fs.vlan->active_cvlans);
  
  	err = mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_CTAG_VID, vid);
 @@ -360,7 +370,8 @@ static int mlx5e_vlan_rx_add_svid(struct

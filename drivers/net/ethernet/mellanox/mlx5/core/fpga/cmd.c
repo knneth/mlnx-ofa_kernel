@@ -36,7 +36,6 @@
 
 #include "mlx5_core.h"
 #include "fpga/cmd.h"
-#include "core.h"
 
 #define MLX5_FPGA_ACCESS_REG_SZ (MLX5_ST_SZ_DW(fpga_access_reg) + \
 				 MLX5_FPGA_ACCESS_REG_SIZE_MAX)
@@ -123,30 +122,6 @@ int mlx5_fpga_sbu_caps(struct mlx5_core_dev *dev, void *caps, int size)
 	return ret;
 }
 
-static int mlx5_fpga_ctrl_write(struct mlx5_core_dev *dev, u8 op,
-				enum mlx5_fpga_image image)
-{
-	u32 in[MLX5_ST_SZ_DW(fpga_ctrl)] = {0};
-	u32 out[MLX5_ST_SZ_DW(fpga_ctrl)];
-
-	MLX5_SET(fpga_ctrl, in, operation, op);
-	MLX5_SET(fpga_ctrl, in, flash_select_admin, image);
-
-	return mlx5_core_access_reg(dev, in, sizeof(in), out, sizeof(out),
-				    MLX5_REG_FPGA_CTRL, 0, true);
-}
-
-int mlx5_fpga_load(struct mlx5_core_dev *dev, enum mlx5_fpga_image image)
-{
-	return mlx5_fpga_ctrl_write(dev, MLX5_FPGA_CTRL_OPERATION_LOAD, image);
-}
-
-int mlx5_fpga_image_select(struct mlx5_core_dev *dev,
-			   enum mlx5_fpga_image image)
-{
-	return mlx5_fpga_ctrl_write(dev, MLX5_FPGA_CTRL_OPERATION_FLASH_SELECT, image);
-}
-
 int mlx5_fpga_query(struct mlx5_core_dev *dev, struct mlx5_fpga_query *query)
 {
 	u32 in[MLX5_ST_SZ_DW(fpga_ctrl)] = {0};
@@ -158,68 +133,9 @@ int mlx5_fpga_query(struct mlx5_core_dev *dev, struct mlx5_fpga_query *query)
 	if (err)
 		return err;
 
-	query->image_status = MLX5_GET(fpga_ctrl, out, status);
+	query->status = MLX5_GET(fpga_ctrl, out, status);
 	query->admin_image = MLX5_GET(fpga_ctrl, out, flash_select_admin);
 	query->oper_image = MLX5_GET(fpga_ctrl, out, flash_select_oper);
-	return 0;
-}
-
-int mlx5_fpga_ctrl_connect(struct mlx5_core_dev *dev,
-			   enum mlx5_fpga_connect *connect)
-{
-	u32 in[MLX5_ST_SZ_DW(fpga_ctrl)] = {0};
-	u32 out[MLX5_ST_SZ_DW(fpga_ctrl)];
-	int status;
-	int err;
-
-	if (*connect == MLX5_FPGA_CONNECT_QUERY) {
-		err = mlx5_core_access_reg(dev, in, sizeof(in), out,
-					   sizeof(out), MLX5_REG_FPGA_CTRL,
-					   0, false);
-		if (err)
-			return err;
-		status = MLX5_GET(fpga_ctrl, out, status);
-		*connect = (status == MLX5_FDEV_STATE_DISCONNECTED) ?
-			MLX5_FPGA_CONNECT_DISCONNECT :
-			MLX5_FPGA_CONNECT_CONNECT;
-	} else {
-		MLX5_SET(fpga_ctrl, in, operation, *connect);
-		err = mlx5_core_access_reg(dev, in, sizeof(in), out,
-					   sizeof(out), MLX5_REG_FPGA_CTRL,
-					   0, true);
-	}
-	return err;
-}
-
-int mlx5_fpga_query_mtmp(struct mlx5_core_dev *dev,
-			 struct mlx5_fpga_temperature *temp)
-{
-	u32 in[MLX5_ST_SZ_DW(mtmp_reg)] = {0};
-	u32 out[MLX5_ST_SZ_DW(mtmp_reg)] = {0};
-	int err;
-
-	MLX5_SET(mtmp_reg, in, sensor_index, temp->index);
-	MLX5_SET(mtmp_reg, in, i,
-		 ((temp->index < MLX5_FPGA_INTERNAL_SENSORS_LOW) ||
-		 (temp->index > MLX5_FPGA_INTERNAL_SENSORS_HIGH)) ? 1 : 0);
-
-	err = mlx5_core_access_reg(dev, in, sizeof(in), out, sizeof(out),
-				   MLX5_REG_MTMP, 0, false);
-	if (err)
-		return err;
-
-	temp->index = MLX5_GET(mtmp_reg, out, sensor_index);
-	temp->temperature = MLX5_GET(mtmp_reg, out, temperature);
-	temp->mte = MLX5_GET(mtmp_reg, out, mte);
-	temp->max_temperature = MLX5_GET(mtmp_reg, out, max_temperature);
-	temp->tee = MLX5_GET(mtmp_reg, out, tee);
-	temp->temperature_threshold_hi = MLX5_GET(mtmp_reg, out,
-		temperature_threshold_hi);
-	temp->temperature_threshold_lo = MLX5_GET(mtmp_reg, out,
-		temperature_threshold_lo);
-	memcpy(temp->sensor_name, MLX5_ADDR_OF(mtmp_reg, out, sensor_name),
-	       MLX5_FLD_SZ_BYTES(mtmp_reg, sensor_name));
-
 	return 0;
 }
 
@@ -316,31 +232,4 @@ int mlx5_fpga_query_qp_counters(struct mlx5_core_dev *dev, u32 fpga_qpn,
 					 rx_total_drop);
 
 	return ret;
-}
-
-int mlx5_fpga_shell_counters(struct mlx5_core_dev *dev, bool clear,
-			     struct mlx5_fpga_shell_counters *data)
-{
-	u32 in[MLX5_ST_SZ_DW(fpga_shell_counters)] = {0};
-	u32 out[MLX5_ST_SZ_DW(fpga_shell_counters)];
-	int err;
-
-	MLX5_SET(fpga_shell_counters, in, clear, clear);
-	err = mlx5_core_access_reg(dev, in, sizeof(in), out, sizeof(out),
-				   MLX5_REG_FPGA_SHELL_CNTR, 0, false);
-	if (err)
-		goto out;
-	if (data) {
-		data->ddr_read_requests = MLX5_GET64(fpga_shell_counters, out,
-						     ddr_read_requests);
-		data->ddr_write_requests = MLX5_GET64(fpga_shell_counters, out,
-						      ddr_write_requests);
-		data->ddr_read_bytes = MLX5_GET64(fpga_shell_counters, out,
-						  ddr_read_bytes);
-		data->ddr_write_bytes = MLX5_GET64(fpga_shell_counters, out,
-						   ddr_write_bytes);
-	}
-
-out:
-	return err;
 }

@@ -26,6 +26,13 @@
 #define MLX5_XMIT_MORE_SKB_CB 0xa
 #define MLX5E_RX_ERR_CQE(cqe) (get_cqe_opcode(cqe) != MLX5_CQE_RESP_SEND)
 
+static inline
+ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns func, struct mlx5_clock *clock, u64 cqe_ts)
+{
+	return INDIRECT_CALL_2(func, mlx5_real_time_cyc2time, mlx5_timecounter_cyc2time,
+			       clock, cqe_ts);
+}
+
 enum mlx5e_icosq_wqe_type {
 	MLX5E_ICOSQ_WQE_NOP,
 	MLX5E_ICOSQ_WQE_UMR_RX,
@@ -50,6 +57,7 @@ void mlx5e_page_release_dynamic(struct mlx5e_rq *rq,
 				bool recycle);
 INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq));
 INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq));
+INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_skip(struct mlx5e_rq *rq));
 int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget);
 void mlx5e_free_rx_descs(struct mlx5e_rq *rq);
 void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);

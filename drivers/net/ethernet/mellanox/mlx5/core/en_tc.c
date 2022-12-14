@@ -69,6 +69,7 @@
 #include "lib/geneve.h"
 #include "lib/fs_chains.h"
 #include "diag/en_tc_tracepoint.h"
+#include <asm/div64.h>
 
 #define nic_chains(priv) ((priv)->fs.tc.chains)
 #define MLX5_MH_ACT_SZ MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)
@@ -1317,7 +1318,7 @@ mlx5e_add_offloaded_nic_rule(struct mlx5e_priv *priv,
 			if (IS_ERR(dest[dest_ix].ft))
 				return ERR_CAST(dest[dest_ix].ft);
 		} else {
-			dest[dest_ix].ft = priv->fs.vlan.ft.t;
+			dest[dest_ix].ft = priv->fs.vlan->ft.t;
 		}
 		dest_ix++;
 	}
@@ -2416,8 +2417,8 @@ static int __parse_cls_flower(struct mlx5e_priv *priv,
 	      BIT(FLOW_DISSECTOR_KEY_ENC_OPTS) |
 	      BIT(FLOW_DISSECTOR_KEY_MPLS))) {
 		NL_SET_ERR_MSG_MOD(extack, "Unsupported key");
-		netdev_warn(priv->netdev, "Unsupported key used: 0x%x\n",
-			    dissector->used_keys);
+		netdev_dbg(priv->netdev, "Unsupported key used: 0x%x\n",
+			   dissector->used_keys);
 		return -EOPNOTSUPP;
 	}
 
@@ -3970,8 +3971,9 @@ static int verify_uplink_forwarding(struct mlx5e_priv *priv,
 	} else if (out_dev != rep_priv->netdev) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "devices are not the same uplink, can't offload forwarding");
-		pr_err("devices %s %s are both uplink but not the same, can't offload forwarding\n",
-		       priv->netdev->name, out_dev->name);
+		if (!netif_is_ovs_master(attr->parse_attr->filter_dev))
+			pr_err("devices %s %s are both uplink but not the same, can't offload forwarding\n",
+			       priv->netdev->name, out_dev->name);
 		return -EOPNOTSUPP;
 	}
 	return 0;
@@ -4035,6 +4037,7 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 	bool encap = false, decap = false;
 	u32 action = attr->action;
 	int err, i, if_count = 0;
+	bool ptype_host = false;
 	bool mpls_push = false;
 
 	if (!flow_action_has_entries(flow_action))
@@ -4055,6 +4058,9 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 						   "skbedit is only supported with type host");
 				return -EOPNOTSUPP;
 			}
+
+			ptype_host = true;
+
 			break;
 		case FLOW_ACTION_DROP:
 			action |= MLX5_FLOW_CONTEXT_ACTION_DROP |
@@ -4119,6 +4125,12 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 			if (!netif_is_ovs_master(out_dev)) {
 				NL_SET_ERR_MSG_MOD(extack,
 						   "redirect to ingress is supported only for OVS internal ports");
+				return -EOPNOTSUPP;
+			}
+
+			if (!ptype_host) {
+				NL_SET_ERR_MSG_MOD(extack,
+						   "redirect to int port ingress requires ptype=host action");
 				return -EOPNOTSUPP;
 			}
 
@@ -5018,13 +5030,13 @@ errout:
 	return err;
 }
 
-static int apply_police_params(struct mlx5e_priv *priv, u32 rate,
+static int apply_police_params(struct mlx5e_priv *priv, u64 rate,
 			       struct netlink_ext_ack *extack)
 {
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch *esw;
+	u32 rate_mbps = 0;
 	u16 vport_num;
-	u32 rate_mbps;
 	int err;
 
 	vport_num = rpriv->rep->vport;
@@ -5041,7 +5053,12 @@ static int apply_police_params(struct mlx5e_priv *priv, u32 rate,
 	 * Moreover, if rate is non zero we choose to configure to a minimum of
 	 * 1 mbit/sec.
 	 */
-	rate_mbps = rate ? max_t(u32, (rate * 8 + 500000) / 1000000, 1) : 0;
+	if (rate) {
+		rate = (rate * BITS_PER_BYTE) + 500000;
+		do_div(rate, 1000000);
+		rate_mbps = max_t(u64, rate, 1);
+	}
+
 	err = mlx5_esw_modify_vport_rate(esw, vport_num, rate_mbps);
 	if (err)
 		NL_SET_ERR_MSG_MOD(extack, "failed applying action to hardware");
@@ -5237,7 +5254,7 @@ int mlx5e_tc_nic_init(struct mlx5e_priv *priv)
 	attr.ns = MLX5_FLOW_NAMESPACE_KERNEL;
 	attr.max_ft_sz = mlx5e_tc_nic_get_ft_size(dev);
 	attr.max_grp_num = MLX5E_TC_TABLE_NUM_GROUPS;
-	attr.default_ft = priv->fs.vlan.ft.t;
+	attr.default_ft = priv->fs.vlan->ft.t;
 	attr.chains_mapping = chains_mapping;
 
 	tc->chains = mlx5_chains_create(dev, &attr);

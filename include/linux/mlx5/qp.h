@@ -110,12 +110,9 @@ enum {
 	MLX5_QP_ST_QP0				= 0x7,
 	MLX5_QP_ST_QP1				= 0x8,
 	MLX5_QP_ST_RAW_ETHERTYPE		= 0x9,
-	MLX5_QP_ST_SW_CNAK			= 0x10,
 	MLX5_QP_ST_RAW_IPV6			= 0xa,
-	MLX5_QP_ST_SNIFFER			= 0xb,
-	MLX5_QP_ST_SYNC_UMR			= 0xe,
-	MLX5_QP_ST_PTP_1588			= 0xd,
 	MLX5_QP_ST_REG_UMR			= 0xc,
+	MLX5_QP_ST_SW_CNAK			= 0x10,
 	MLX5_QP_ST_MAX
 };
 
@@ -563,9 +560,6 @@ static inline const char *mlx5_qp_type_str(int type)
 	case MLX5_QP_ST_QP1: return "QP1";
 	case MLX5_QP_ST_RAW_ETHERTYPE: return "RAW_ETHERTYPE";
 	case MLX5_QP_ST_RAW_IPV6: return "RAW_IPV6";
-	case MLX5_QP_ST_SNIFFER: return "SNIFFER";
-	case MLX5_QP_ST_SYNC_UMR: return "SYNC_UMR";
-	case MLX5_QP_ST_PTP_1588: return "PTP_1588";
 	case MLX5_QP_ST_REG_UMR: return "REG_UMR";
 	case MLX5_QP_ST_SW_CNAK: return "DC_CNAK";
 	default: return "Invalid transport type";
@@ -595,6 +589,13 @@ static inline const char *mlx5_qp_state_str(int state)
 	return "SUSPENDED";
 	default: return "Invalid QP state";
 	}
+}
+
+static inline int mlx5_get_qp_default_ts(struct mlx5_core_dev *dev)
+{
+	return !MLX5_CAP_ROCE(dev, qp_ts_format) ?
+		       MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING :
+		       MLX5_QPC_TIMESTAMP_FORMAT_DEFAULT;
 }
 
 #endif /* MLX5_QP_H */

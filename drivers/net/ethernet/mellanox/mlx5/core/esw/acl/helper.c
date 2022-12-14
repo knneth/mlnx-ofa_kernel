@@ -6,7 +6,8 @@
 #include "helper.h"
 
 struct mlx5_flow_table *
-esw_acl_table_create(struct mlx5_eswitch *esw, u16 vport_num, int ns, int size)
+esw_acl_table_create(struct mlx5_eswitch *esw, u16 vport_num, int ns,
+		     int prio, int size)
 {
 	struct mlx5_core_dev *dev = esw->dev;
 	struct mlx5_flow_namespace *root_ns;
@@ -33,7 +34,7 @@ esw_acl_table_create(struct mlx5_eswitch *esw, u16 vport_num, int ns, int size)
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
-	acl = mlx5_create_vport_flow_table(root_ns, 0, size, 0, vport_num);
+	acl = mlx5_create_vport_flow_table(root_ns, prio, size, 0, vport_num);
 	if (IS_ERR(acl)) {
 		err = PTR_ERR(acl);
 		esw_warn(dev, "vport[%d] create %s ACL table, err(%d)\n", vport_num,

@@ -2,13 +2,18 @@
 // // Copyright (c) 2020 Mellanox Technologies.
 
 #include "en.h"
-#include "en_accel/ipsec.h"
 #include "linux/dma-mapping.h"
 #include "en/txrx.h"
 #include "en/params.h"
 
 #ifndef __MLX5_EN_ASO_H__
 #define __MLX5_EN_ASO_H__
+
+#define MLX5E_ASO_WQEBBS \
+	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe), MLX5_SEND_WQE_BB))
+#define MLX5E_ASO_WQEBBS_DATA \
+	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe_data), MLX5_SEND_WQE_BB))
+#define ASO_CTRL_READ_EN BIT(0)
 
 enum {
 	MLX5_ASO_SOFT_ARM = BIT(0),
@@ -56,7 +61,7 @@ struct mlx5e_asosq {
 	struct mlx5_wq_ctrl        wq_ctrl;
 } ____cacheline_aligned_in_smp;
 
-struct mlx5e_ipsec_aso {
+struct mlx5e_aso {
 	struct mlx5_core_mkey mkey;
 	dma_addr_t dma_addr;
 	void *ctx;
@@ -82,14 +87,14 @@ enum {
 };
 
 enum {
-	ASO_DATA_MASK_MODE_BITWISE_64BIT,
-	ASO_DATA_MASK_MODE_BYTEWISE_64BYTE,
-	ASO_DATA_MASK_MODE_CALCULATED_64BYTE,
+	LOGICAL_AND,
+	LOGICAL_OR,
 };
 
 enum {
-	MLX5_IPSEC_ASO_REMOVE_FLOW_PKT_CNT_OFFSET,
-	MLX5_IPSEC_ASO_REMOVE_FLOW_SOFT_LFT_OFFSET,
+	ASO_DATA_MASK_MODE_BITWISE_64BIT,
+	ASO_DATA_MASK_MODE_BYTEWISE_64BYTE,
+	ASO_DATA_MASK_MODE_CALCULATED_64BYTE,
 };
 
 struct mlx5e_aso_ctrl_param {
@@ -116,12 +121,19 @@ enum {
 	ARM_ESN_EVENT = BIT(5),
 };
 
-int mlx5e_ipsec_aso_query(struct mlx5e_priv *priv, u32 obj_id,
-			  u32 *hard_cnt, u32 *soft_cnt,
-			  u8 *event_arm, u32 *mode_param);
-int mlx5e_ipsec_aso_set(struct mlx5e_priv *priv, u32 obj_id, u8 flags,
-			u32 comparator, u32 *hard_cnt, u32 *soft_cnt,
-			u8 *event_arm, u32 *mode_param);
-void mlx5e_aso_setup(struct mlx5e_priv *priv);
-void mlx5e_aso_cleanup(struct mlx5e_priv *priv);
+enum {
+	MLX5_ACCESS_ASO_OPC_MOD_IPSEC,
+	MLX5_ACCESS_ASO_OPC_MOD_FLOW_METER = 0x2,
+};
+
+void mlx5e_build_aso_wqe(struct mlx5e_aso *aso, struct mlx5e_asosq *sq,
+			 u8 ds_cnt, struct mlx5_wqe_ctrl_seg *cseg,
+			 struct mlx5_wqe_aso_ctrl_seg *aso_ctrl,
+			 u32 obj_id, u32 opc_mode,
+			 struct mlx5e_aso_ctrl_param *param);
+int mlx5e_poll_aso_cq(struct mlx5e_cq *cq);
+void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
+				u16 pi, u16 nnops);
+struct mlx5e_aso *mlx5e_aso_setup(struct mlx5e_priv *priv, int size);
+void mlx5e_aso_cleanup(struct mlx5e_priv *priv, struct mlx5e_aso *aso);
 #endif

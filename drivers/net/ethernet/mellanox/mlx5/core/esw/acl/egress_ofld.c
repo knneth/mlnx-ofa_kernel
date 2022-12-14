@@ -5,6 +5,9 @@
 #include "eswitch.h"
 #include "helper.h"
 #include "ofld.h"
+#include "esw/vf_meter.h"
+
+#define MLX5_ESW_EGRESS_ACL_DEFAULT_PRIO 4
 
 static void esw_acl_egress_ofld_fwd2vport_destroy(struct mlx5_vport *vport)
 {
@@ -172,7 +175,9 @@ int esw_acl_egress_ofld_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport
 	if (MLX5_CAP_GEN(esw->dev, prio_tag_required))
 		table_size++;
 	vport->egress.acl = esw_acl_table_create(esw, vport->vport,
-						 MLX5_FLOW_NAMESPACE_ESW_EGRESS, table_size);
+						 MLX5_FLOW_NAMESPACE_ESW_EGRESS,
+						 MLX5_ESW_EGRESS_ACL_DEFAULT_PRIO,
+						 table_size);
 	if (IS_ERR_OR_NULL(vport->egress.acl)) {
 		err = PTR_ERR(vport->egress.acl);
 		vport->egress.acl = NULL;
@@ -200,6 +205,7 @@ group_err:
 
 void esw_acl_egress_ofld_cleanup(struct mlx5_vport *vport)
 {
+	esw_vf_meter_egress_destroy(vport);
 	esw_acl_egress_ofld_rules_destroy(vport);
 	esw_acl_egress_ofld_groups_destroy(vport);
 	esw_acl_egress_table_destroy(vport);

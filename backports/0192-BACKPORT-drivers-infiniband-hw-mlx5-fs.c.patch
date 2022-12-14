@@ -34,7 +34,7 @@ Change-Id: I9a1003208274fb37ac5244c90e2b2969b9c45b2d
  	u32 flags = 0;
  	int priority;
  
-@@ -1909,7 +1910,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+@@ -1910,7 +1911,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
  	struct mlx5_flow_context flow_context = {.flow_tag =
  		MLX5_FS_DEFAULT_FLOW_TAG};
  	u32 *offset_attr, offset = 0, counter_id = 0;

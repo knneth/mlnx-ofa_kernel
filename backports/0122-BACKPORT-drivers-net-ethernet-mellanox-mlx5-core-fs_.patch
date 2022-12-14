@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
 ---
- .../ethernet/mellanox/mlx5/core/fs_counters.c | 87 +++++++++++++++++--
- 1 file changed, 79 insertions(+), 8 deletions(-)
+ .../ethernet/mellanox/mlx5/core/fs_counters.c | 86 +++++++++++++++++--
+ 1 file changed, 78 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
@@ -108,14 +108,17 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  }
  
  static int get_max_bulk_query_len(struct mlx5_core_dev *dev)
-@@ -300,21 +357,28 @@ struct mlx5_fc *mlx5_fc_create(struct ml
+@@ -300,7 +357,9 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  {
- 	struct mlx5_fc *counter = mlx5_fc_acquire(dev, aging);
  	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
+ 	struct mlx5_fc *counter;
 +#ifdef USE_IDR
  	int err;
 +#endif
  
+ 	if (dev->disable_fc)
+ 		return ERR_PTR(-EOPNOTSUPP);
+@@ -309,16 +368,20 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  	if (IS_ERR(counter))
  		return counter;
  
@@ -125,11 +128,10 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  	counter->aging = aging;
  
  	if (aging) {
--		u32 id = counter->id;
 +#ifdef USE_IDR
-+       	u32 id = counter->id;
+ 		u32 id = counter->id;
+-
 +#endif
- 
  		counter->cache.lastuse = jiffies;
  		counter->lastbytes = counter->cache.bytes;
  		counter->lastpackets = counter->cache.packets;
@@ -138,7 +140,7 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  		idr_preload(GFP_KERNEL);
  		spin_lock(&fc_stats->counters_idr_lock);
  
-@@ -325,7 +389,7 @@ struct mlx5_fc *mlx5_fc_create(struct ml
+@@ -329,7 +392,7 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  		idr_preload_end();
  		if (err)
  			goto err_out_alloc;
@@ -147,7 +149,7 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  		llist_add(&counter->addlist, &fc_stats->addlist);
  
  		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
-@@ -333,9 +397,11 @@ struct mlx5_fc *mlx5_fc_create(struct ml
+@@ -337,9 +400,11 @@ struct mlx5_fc *mlx5_fc_create(struct ml
  
  	return counter;
  
@@ -159,9 +161,9 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  }
  EXPORT_SYMBOL(mlx5_fc_create);
  
-@@ -367,8 +433,10 @@ int mlx5_init_fc_stats(struct mlx5_core_
- 	int max_bulk_len;
- 	int max_out_len;
+@@ -374,8 +439,10 @@ int mlx5_init_fc_stats(struct mlx5_core_
+ 	if (dev->disable_fc)
+ 		return 0;
  
 +#ifdef USE_IDR
  	spin_lock_init(&fc_stats->counters_idr_lock);
@@ -170,7 +172,7 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  	INIT_LIST_HEAD(&fc_stats->counters);
  	init_llist_head(&fc_stats->addlist);
  	init_llist_head(&fc_stats->dellist);
-@@ -413,7 +481,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
+@@ -423,7 +490,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
  		mlx5_fc_release(dev, counter);
  
  	mlx5_fc_pool_cleanup(&fc_stats->fc_pool);
@@ -180,7 +182,7 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  	kfree(fc_stats->bulk_query_out);
  }
  
-@@ -444,6 +514,7 @@ void mlx5_fc_query_cached(struct mlx5_fc
+@@ -454,6 +523,7 @@ void mlx5_fc_query_cached(struct mlx5_fc
  	counter->lastpackets = c.packets;
  }
  
@@ -188,7 +190,7 @@ Change-Id: I7972e14197382a563bde3a60f29231361f5615d9
  void mlx5_fc_queue_stats_work(struct mlx5_core_dev *dev,
  			      struct delayed_work *dwork,
  			      unsigned long delay)
-@@ -461,7 +532,7 @@ void mlx5_fc_update_sampling_interval(st
+@@ -471,7 +541,7 @@ void mlx5_fc_update_sampling_interval(st
  	fc_stats->sampling_interval = min_t(unsigned long, interval,
  					    fc_stats->sampling_interval);
  }

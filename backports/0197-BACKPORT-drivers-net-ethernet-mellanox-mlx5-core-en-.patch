@@ -17,8 +17,8 @@ Subject: [PATCH] BACKPORT:
  #include <net/bareudp.h>
  #include <net/mpls.h>
  #include "en/tc_tun.h"
-@@ -132,3 +134,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
- 	.parse_udp_ports      = parse_udp_ports,
+@@ -133,3 +135,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
  	.parse_tunnel         = parse_tunnel,
+ 	.cmp_encap_info       = mlx5e_tc_tun_cmp_encap_info_generic,
  };
 +#endif /* HAVE_NET_BAREUDP_H */

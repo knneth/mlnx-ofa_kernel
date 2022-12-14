@@ -82,7 +82,7 @@ Change-Id: I80381bf26b9e180fe3ef372bd9e6b1a01f9c9287
  }
 +#endif
  
- static int mlx5_add_netdev_notifier(struct mlx5_ib_dev *dev, u8 port_num)
+ static int mlx5_add_netdev_notifier(struct mlx5_ib_dev *dev, u32 port_num)
  {
  	int err;
  
@@ -97,7 +97,7 @@ Change-Id: I80381bf26b9e180fe3ef372bd9e6b1a01f9c9287
  	if (err) {
  		dev->port[port_num].roce.nb.notifier_call = NULL;
 @@ -3427,10 +3444,12 @@ static int mlx5_add_netdev_notifier(stru
- static void mlx5_remove_netdev_notifier(struct mlx5_ib_dev *dev, u8 port_num)
+ static void mlx5_remove_netdev_notifier(struct mlx5_ib_dev *dev, u32 port_num)
  {
  	if (dev->port[port_num].roce.nb.notifier_call) {
 +#ifdef HAVE_UNREGISTER_NETDEVICE_NOTIFIER_NET
@@ -109,7 +109,7 @@ Change-Id: I80381bf26b9e180fe3ef372bd9e6b1a01f9c9287
  			unregister_netdevice_notifier(&dev->port[port_num].roce.nb);
  		dev->port[port_num].roce.nb.notifier_call = NULL;
  	}
-@@ -4037,9 +4056,10 @@ static const struct uapi_definition mlx5
+@@ -4038,9 +4057,10 @@ static const struct uapi_definition mlx5
  static void mlx5_ib_stage_init_cleanup(struct mlx5_ib_dev *dev)
  {
  	mlx5_ib_cleanup_multiport_master(dev);

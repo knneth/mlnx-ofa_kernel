@@ -131,4 +131,5 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel = {
 	.generate_ip_tun_hdr  = generate_ip_tun_hdr,
 	.parse_udp_ports      = parse_udp_ports,
 	.parse_tunnel         = parse_tunnel,
+	.cmp_encap_info       = mlx5e_tc_tun_cmp_encap_info_generic,
 };

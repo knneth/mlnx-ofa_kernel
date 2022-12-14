@@ -214,7 +214,7 @@ Change-Id: I1c4cffffb3eb043113af3d7a1ed36df139dde298
  		trace_xprtrdma_mr_unmap(mr);
 +#endif
  #ifdef CONFIG_NVFS
- 		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ia.ri_id->device->dma_device,
+ 		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ep->re_id->device->dma_device,
  					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
 @@ -1327,7 +1393,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
  	rb->rg_iov.addr = ib_dma_map_single(device, rdmab_data(rb),

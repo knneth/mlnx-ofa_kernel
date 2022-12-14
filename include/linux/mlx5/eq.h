@@ -4,8 +4,6 @@
 #ifndef MLX5_CORE_EQ_H
 #define MLX5_CORE_EQ_H
 
-#include <linux/interrupt.h>
-
 #define MLX5_IRQ_VEC_COMP_BASE 1
 #define MLX5_NUM_CMD_EQE   (32)
 #define MLX5_NUM_ASYNC_EQE (0x1000)

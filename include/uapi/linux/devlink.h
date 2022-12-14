@@ -41,6 +41,11 @@ enum devlink_eswitch_vport_match_mode {
 	DEVLINK_ESWITCH_VPORT_MATCH_MODE_LEGACY,
 };
 
+enum devlink_ct_action_on_nat_conns {
+	DEVLINK_CT_ACTION_ON_NAT_CONNS_DISABLE,
+	DEVLINK_CT_ACTION_ON_NAT_CONNS_ENABLE,
+};
+
 #ifndef HAVE_DEVLINK_PORT_FLAVOUR
 enum devlink_port_flavour {
 	DEVLINK_PORT_FLAVOUR_PHYSICAL,
@@ -59,5 +64,18 @@ enum devlink_port_flavour_virtual {
 #else /* HAVE_DEVLINK_H */
 
 #endif /* HAVE_DEVLINK_H */
+
+#ifndef HAVE_DEVLINK_PARAM_CMODE
+enum devlink_param_cmode {
+	DEVLINK_PARAM_CMODE_RUNTIME,
+	DEVLINK_PARAM_CMODE_DRIVERINIT,
+	DEVLINK_PARAM_CMODE_PERMANENT,
+
+	/* Add new configuration modes above */
+	__DEVLINK_PARAM_CMODE_MAX,
+	DEVLINK_PARAM_CMODE_MAX = __DEVLINK_PARAM_CMODE_MAX - 1
+};
+#endif /* HAVE_DEVLINK_PARAM_CMODE */
+
 
 #endif /* COMPAT_LINUX_UAPI_DEVLINK_H */

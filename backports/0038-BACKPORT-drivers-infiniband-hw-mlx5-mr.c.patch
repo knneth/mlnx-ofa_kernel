@@ -18,7 +18,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  #include <rdma/ib_umem.h>
  #include <rdma/ib_umem_odp.h>
  #include <rdma/ib_verbs.h>
-@@ -559,9 +562,17 @@ static void clean_keys(struct mlx5_ib_de
+@@ -560,9 +563,17 @@ static void clean_keys(struct mlx5_ib_de
  	}
  }
  
@@ -36,7 +36,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  
  	WRITE_ONCE(dev->fill_delay, 0);
  }
-@@ -581,7 +592,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
+@@ -582,7 +593,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
  	}
  
  	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
@@ -49,7 +49,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  	for (i = 0; i < MAX_MR_CACHE_ENTRIES; i++) {
  		ent = &cache->ent[i];
  		INIT_LIST_HEAD(&ent->head);
-@@ -738,19 +753,31 @@ static int mr_cache_max_order(struct mlx
+@@ -739,19 +754,31 @@ static int mr_cache_max_order(struct mlx
  	return MLX5_MAX_UMR_SHIFT;
  }
  
@@ -81,7 +81,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  		if (IS_ERR(odp)) {
  			mlx5_ib_dbg(dev, "umem get failed (%ld)\n",
  				    PTR_ERR(odp));
-@@ -764,14 +791,27 @@ static int mr_umem_get(struct mlx5_ib_de
+@@ -765,14 +792,27 @@ static int mr_umem_get(struct mlx5_ib_de
  		*npages = *ncont << (*page_shift - PAGE_SHIFT);
  		if (order)
  			*order = ilog2(roundup_pow_of_two(*ncont));
@@ -112,7 +112,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  		if (IS_ERR(u)) {
  			mlx5_ib_dbg(dev, "umem get failed (%ld)\n", PTR_ERR(u));
  			return PTR_ERR(u);
-@@ -950,6 +990,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+@@ -951,6 +991,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
  		goto free_xlt;
  	}
  
@@ -120,7 +120,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  	if (mr->umem->is_odp) {
  		if (!(flags & MLX5_IB_UPD_XLT_INDIRECT)) {
  			struct ib_umem_odp *odp = to_ib_umem_odp(mr->umem);
-@@ -958,6 +999,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+@@ -959,6 +1000,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
  			pages_to_map = min_t(size_t, pages_to_map, max_pages);
  		}
  	}
@@ -128,7 +128,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  
  	sg.addr = dma;
  	sg.lkey = dev->umrc.pd->local_dma_lkey;
-@@ -1269,7 +1311,11 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1278,7 +1320,11 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  		return &mr->ibmr;
  	}
  
@@ -140,7 +140,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
         		  &npages, &page_shift, &ncont, &order, true);
  
  	if (err < 0)
-@@ -1333,6 +1379,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1342,6 +1388,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  		/* After this point the MR can be invalidated */
  	}
  
@@ -148,7 +148,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  	if (is_odp_mr(mr)) {
  		to_ib_umem_odp(mr->umem)->private = mr;
  		init_waitqueue_head(&mr->q_deferred_work);
-@@ -1345,6 +1392,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1354,6 +1401,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  			return ERR_PTR(err);
  		}
  	}
@@ -156,7 +156,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  
  	return &mr->ibmr;
  error:
-@@ -1449,7 +1497,11 @@ int mlx5_ib_rereg_user_mr(struct ib_mr *
+@@ -1458,7 +1506,11 @@ int mlx5_ib_rereg_user_mr(struct ib_mr *
  		flags |= IB_MR_REREG_TRANS;
  		ib_umem_release(mr->umem);
  		mr->umem = NULL;
@@ -168,7 +168,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  				  &npages, &page_shift, &ncont, &order, false);
  		if (err)
  			goto err;
-@@ -1522,7 +1574,11 @@ mlx5_alloc_priv_descs(struct ib_device *
+@@ -1531,7 +1583,11 @@ mlx5_alloc_priv_descs(struct ib_device *
  	int add_size;
  	int ret;
  
@@ -180,7 +180,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  
  	mr->descs_alloc = kzalloc(size + add_size, GFP_KERNEL);
  	if (!mr->descs_alloc)
-@@ -1586,10 +1642,14 @@ static void dereg_mr(struct mlx5_ib_dev
+@@ -1595,10 +1651,14 @@ static void dereg_mr(struct mlx5_ib_dev
  	struct ib_umem *umem = mr->umem;
  
  	/* Stop all DMA */
@@ -195,7 +195,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  
  	if (mr->cache_ent)
  		mlx5_mr_cache_free(dev, mr);
-@@ -1610,10 +1670,12 @@ int mlx5_ib_dereg_mr(struct ib_mr *ibmr,
+@@ -1619,10 +1679,12 @@ int mlx5_ib_dereg_mr(struct ib_mr *ibmr,
  		dereg_mr(to_mdev(mmr->klm_mr->ibmr.device), mmr->klm_mr);
  	}
  
@@ -208,7 +208,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  
  	dereg_mr(to_mdev(ibmr->device), mmr);
  
-@@ -2525,7 +2587,11 @@ static ssize_t order_attr_store(struct k
+@@ -2534,7 +2596,11 @@ static ssize_t order_attr_store(struct k
  	return oa->store(co, oa, buf, size);
  }
  
@@ -220,7 +220,7 @@ Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
  	.show = order_attr_show,
  	.store = order_attr_store,
  };
-@@ -2663,7 +2729,11 @@ static ssize_t cache_attr_store(struct k
+@@ -2672,7 +2738,11 @@ static ssize_t cache_attr_store(struct k
  	return ca->store(dev, buf, size);
  }
  

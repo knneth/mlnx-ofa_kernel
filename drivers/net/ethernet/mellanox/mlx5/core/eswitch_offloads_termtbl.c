@@ -139,10 +139,9 @@ mlx5_eswitch_termtbl_get_create(struct mlx5_eswitch *esw,
 	memcpy(&tt->flow_act, flow_act, sizeof(*flow_act));
 
 	err = mlx5_eswitch_termtbl_create(esw->dev, tt, flow_act);
-	if (err) {
-		esw_warn(esw->dev, "Failed to create termination table\n");
+	if (err)
 		goto tt_create_err;
-	}
+
 	hash_add(esw->offloads.termtbl_tbl, &tt->termtbl_hlist, hash_key);
 tt_add_ref:
 	tt->ref_count++;
@@ -237,7 +236,7 @@ mlx5_eswitch_termtbl_required(struct mlx5_eswitch *esw,
 
 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, termination_table) ||
 	    attr->flags & MLX5_ESW_ATTR_FLAG_SLOW_PATH ||
-	    !mlx5_eswitch_offload_is_uplink_port(esw, spec))
+	    (!mlx5_eswitch_offload_is_uplink_port(esw, spec) && !attr->esw_attr->int_port))
 		return false;
 
 	/* push vlan on RX */
@@ -246,7 +245,7 @@ mlx5_eswitch_termtbl_required(struct mlx5_eswitch *esw,
 
 	/* hairpin */
 	for (i = esw_attr->split_count; i < esw_attr->out_count; i++)
-		if (esw_attr->dests[i].rep &&
+		if (!esw_attr->dest_int_port && esw_attr->dests[i].rep &&
 		    esw_attr->dests[i].rep->vport == MLX5_VPORT_UPLINK)
 			return true;
 
@@ -281,10 +280,9 @@ mlx5_eswitch_add_termtbl_rule(struct mlx5_eswitch *esw,
 		/* get the terminating table for the action list */
 		tt = mlx5_eswitch_termtbl_get_create(esw, &term_tbl_act,
 						     &dest[i], attr);
-		if (IS_ERR(tt)) {
-			esw_warn(esw->dev, "Failed to create termination table\n");
+		if (IS_ERR(tt))
 			goto revert_changes;
-		}
+
 		attr->dests[num_vport_dests].termtbl = tt;
 		num_vport_dests++;
 

@@ -68,7 +68,7 @@ struct mlx5_modify_raw_qp_param {
 	struct mlx5_rate_limit rl;
 
 	u8 rq_q_ctr_id;
-	u16 port;
+	u32 port;
 };
 
 struct mlx5_ib_sqd {
@@ -1180,6 +1180,13 @@ static void destroy_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 		mlx5_frag_buf_free(dev->mdev, &qp->buf);
 }
 
+static int get_qp_default_ts(struct mlx5_ib_dev *dev)
+{
+	return !MLX5_CAP_ROCE(dev->mdev, qp_ts_format) ?
+		       MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING :
+		       MLX5_QPC_TIMESTAMP_FORMAT_DEFAULT;
+}
+
 static int _create_kernel_qp(struct mlx5_ib_dev *dev,
 			     struct ib_qp_init_attr *init_attr,
 			     struct mlx5_ib_qp *qp, u32 **in, int *inlen,
@@ -1245,6 +1252,7 @@ static int _create_kernel_qp(struct mlx5_ib_dev *dev,
 
 	qpc = MLX5_ADDR_OF(create_qp_in, *in, qpc);
 	MLX5_SET(qpc, qpc, uar_page, uar_index);
+	MLX5_SET(qpc, qpc, ts_format, get_qp_default_ts(dev));
 	MLX5_SET(qpc, qpc, log_page_size, qp->buf.page_shift - MLX5_ADAPTER_PAGE_SHIFT);
 
 	/* Set "fast registration enabled" for all kernel QPs */
@@ -1342,10 +1350,75 @@ static void destroy_flow_rule_vport_sq(struct mlx5_ib_sq *sq)
 	sq->flow_rule = NULL;
 }
 
+static int get_rq_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq)
+{
+	bool fr_supported =
+		MLX5_CAP_GEN(dev->mdev, rq_ts_format) ==
+			MLX5_RQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
+		MLX5_CAP_GEN(dev->mdev, rq_ts_format) ==
+			MLX5_RQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
+
+	if (send_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION) {
+		if (!fr_supported) {
+			mlx5_ib_dbg(dev, "Free running TS format is not supported\n");
+			return -EOPNOTSUPP;
+		}
+		return MLX5_RQC_TIMESTAMP_FORMAT_FREE_RUNNING;
+	}
+	return fr_supported ? MLX5_RQC_TIMESTAMP_FORMAT_FREE_RUNNING :
+			      MLX5_RQC_TIMESTAMP_FORMAT_DEFAULT;
+}
+
+static int get_sq_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq)
+{
+	bool fr_supported =
+		MLX5_CAP_GEN(dev->mdev, sq_ts_format) ==
+			MLX5_SQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
+		MLX5_CAP_GEN(dev->mdev, sq_ts_format) ==
+			MLX5_SQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
+
+	if (send_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION) {
+		if (!fr_supported) {
+			mlx5_ib_dbg(dev, "Free running TS format is not supported\n");
+			return -EOPNOTSUPP;
+		}
+		return MLX5_SQC_TIMESTAMP_FORMAT_FREE_RUNNING;
+	}
+	return fr_supported ? MLX5_SQC_TIMESTAMP_FORMAT_FREE_RUNNING :
+			      MLX5_SQC_TIMESTAMP_FORMAT_DEFAULT;
+}
+
+static int get_qp_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq,
+			    struct mlx5_ib_cq *recv_cq)
+{
+	bool fr_supported =
+		MLX5_CAP_ROCE(dev->mdev, qp_ts_format) ==
+			MLX5_QP_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
+		MLX5_CAP_ROCE(dev->mdev, qp_ts_format) ==
+			MLX5_QP_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
+	int ts_format = fr_supported ? MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING :
+				       MLX5_QPC_TIMESTAMP_FORMAT_DEFAULT;
+
+	if (recv_cq &&
+	    recv_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION)
+		ts_format = MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING;
+
+	if (send_cq &&
+	    send_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION)
+		ts_format = MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING;
+
+	if (ts_format == MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING &&
+	    !fr_supported) {
+		mlx5_ib_dbg(dev, "Free running TS format is not supported\n");
+		return -EOPNOTSUPP;
+	}
+	return ts_format;
+}
+
 static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 				   struct ib_udata *udata,
 				   struct mlx5_ib_sq *sq, void *qpin,
-				   struct ib_pd *pd)
+				   struct ib_pd *pd, struct mlx5_ib_cq *cq)
 {
 	struct mlx5_ib_ubuffer *ubuffer = &sq->ubuffer;
 	__be64 *pas;
@@ -1359,6 +1432,11 @@ static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 	int npages;
 	int ncont = 0;
 	u32 offset = 0;
+	int ts_format;
+
+	ts_format = get_sq_ts_format(dev, cq);
+	if (ts_format < 0)
+		return ts_format;
 
 	err = mlx5_ib_umem_get(dev, udata, ubuffer->buf_addr, ubuffer->buf_size,
 			       &sq->ubuffer.umem, &npages, &page_shift, &ncont,
@@ -1379,6 +1457,7 @@ static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 	if (MLX5_CAP_ETH(dev->mdev, multi_pkt_send_wqe))
 		MLX5_SET(sqc, sqc, allow_multi_pkt_send_wqe, 1);
 	MLX5_SET(sqc, sqc, state, MLX5_SQC_STATE_RST);
+	MLX5_SET(sqc, sqc, ts_format, ts_format);
 	MLX5_SET(sqc, sqc, user_index, MLX5_GET(qpc, qpc, user_index));
 	MLX5_SET(sqc, sqc, cqn, MLX5_GET(qpc, qpc, cqn_snd));
 	MLX5_SET(sqc, sqc, tis_lst_sz, 1);
@@ -1441,7 +1520,8 @@ static size_t get_rq_pas_size(void *qpc)
 
 static int create_raw_packet_qp_rq(struct mlx5_ib_dev *dev,
 				   struct mlx5_ib_rq *rq, void *qpin,
-				   size_t qpinlen, struct ib_pd *pd)
+				   size_t qpinlen,
+				   struct ib_pd *pd, struct mlx5_ib_cq *cq)
 {
 	struct mlx5_ib_qp *mqp = rq->base.container_mibqp;
 	__be64 *pas;
@@ -1451,8 +1531,13 @@ static int create_raw_packet_qp_rq(struct mlx5_ib_dev *dev,
 	void *wq;
 	void *qpc = MLX5_ADDR_OF(create_qp_in, qpin, qpc);
 	size_t rq_pas_size = get_rq_pas_size(qpc);
+	int ts_format;
 	size_t inlen;
 	int err;
+
+	ts_format = get_rq_ts_format(dev, cq);
+	if (ts_format < 0)
+		return ts_format;
 
 	if (qpinlen < rq_pas_size + MLX5_BYTE_OFF(create_qp_in, pas))
 		return -EINVAL;
@@ -1468,6 +1553,7 @@ static int create_raw_packet_qp_rq(struct mlx5_ib_dev *dev,
 		MLX5_SET(rqc, rqc, vsd, 1);
 	MLX5_SET(rqc, rqc, mem_rq_type, MLX5_RQC_MEM_RQ_TYPE_MEMORY_RQ_INLINE);
 	MLX5_SET(rqc, rqc, state, MLX5_RQC_STATE_RST);
+	MLX5_SET(rqc, rqc, ts_format, ts_format);
 	MLX5_SET(rqc, rqc, flush_in_error_en, 1);
 	MLX5_SET(rqc, rqc, user_index, MLX5_GET(qpc, qpc, user_index));
 	MLX5_SET(rqc, rqc, cqn, MLX5_GET(qpc, qpc, cqn_rcv));
@@ -1565,10 +1651,10 @@ static int create_raw_packet_qp_tir(struct mlx5_ib_dev *dev,
 }
 
 static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
-				u32 *in, size_t inlen,
-				struct ib_pd *pd,
+				u32 *in, size_t inlen, struct ib_pd *pd,
 				struct ib_udata *udata,
-				struct mlx5_ib_create_qp_resp *resp)
+				struct mlx5_ib_create_qp_resp *resp,
+				struct ib_qp_init_attr *init_attr)
 {
 	struct mlx5_ib_raw_packet_qp *raw_packet_qp = &qp->raw_packet_qp;
 	struct mlx5_ib_sq *sq = &raw_packet_qp->sq;
@@ -1587,7 +1673,8 @@ static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 		if (err)
 			return err;
 
-		err = create_raw_packet_qp_sq(dev, udata, sq, in, pd);
+		err = create_raw_packet_qp_sq(dev, udata, sq, in, pd,
+					      to_mcq(init_attr->send_cq));
 		if (err)
 			goto err_destroy_tis;
 
@@ -1609,7 +1696,8 @@ static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			rq->flags |= MLX5_IB_RQ_CVLAN_STRIPPING;
 		if (qp->flags & IB_QP_CREATE_PCI_WRITE_END_PADDING)
 			rq->flags |= MLX5_IB_RQ_PCI_WRITE_END_PADDING;
-		err = create_raw_packet_qp_rq(dev, rq, in, inlen, pd);
+		err = create_raw_packet_qp_rq(dev, rq, in, inlen, pd,
+					      to_mcq(init_attr->recv_cq));
 		if (err)
 			goto err_destroy_sq;
 
@@ -2025,6 +2113,7 @@ static int create_xrc_tgt_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	if (qp->flags & IB_QP_CREATE_MANAGED_RECV)
 		MLX5_SET(qpc, qpc, cd_slave_receive, 1);
 
+	MLX5_SET(qpc, qpc, ts_format, get_qp_default_ts(dev));
 	MLX5_SET(qpc, qpc, rq_type, MLX5_SRQ_RQ);
 	MLX5_SET(qpc, qpc, no_sq, 1);
 	MLX5_SET(qpc, qpc, cqn_rcv, to_mcq(devr->c0)->mcq.cqn);
@@ -2079,9 +2168,10 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	struct mlx5_ib_cq *recv_cq;
 	unsigned long flags;
 	struct mlx5_ib_qp_base *base;
+	int ts_format = 0;
 	int mlx5_st;
 	void *qpc;
-	u32 *in;
+	u32 *in = NULL;
 	int err;
 
 	spin_lock_init(&qp->sq.lock);
@@ -2115,6 +2205,13 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 
 	if (ucmd->sq_wqe_count > (1 << MLX5_CAP_GEN(mdev, log_max_qp_sz)))
 		return -EINVAL;
+
+	if (init_attr->qp_type != IB_QPT_RAW_PACKET) {
+		ts_format = get_qp_ts_format(dev, to_mcq(init_attr->send_cq),
+					     to_mcq(init_attr->recv_cq));
+		if (ts_format < 0)
+			return ts_format;
+	}
 
 	err = _create_user_qp(dev, pd, qp, udata, init_attr, &in, &params->resp,
 			      &inlen, base, ucmd);
@@ -2163,6 +2260,9 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		MLX5_SET(qpc, qpc, log_rq_stride, qp->rq.wqe_shift - 4);
 		MLX5_SET(qpc, qpc, log_rq_size, ilog2(qp->rq.wqe_cnt));
 	}
+
+	if (init_attr->qp_type != IB_QPT_RAW_PACKET)
+		MLX5_SET(qpc, qpc, ts_format, ts_format);
 
 	qp->rq_type = get_rx_type(qp, init_attr);
 	MLX5_SET(qpc, qpc, rq_type, qp->rq_type);
@@ -2219,7 +2319,7 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		qp->raw_packet_qp.sq.ubuffer.buf_addr = ucmd->sq_buf_addr;
 		raw_packet_qp_copy_info(qp, &qp->raw_packet_qp);
 		err = create_raw_packet_qp(dev, qp, in, inlen, pd, udata,
-					   &params->resp);
+					   &params->resp, init_attr);
 	} else
 		err = mlx5_qpc_create_qp(dev, &base->mqp, in, inlen, out);
 
@@ -5033,6 +5133,7 @@ static int  create_rq(struct mlx5_ib_rwq *rwq, struct ib_pd *pd,
 	struct mlx5_ib_dev *dev;
 	int has_net_offloads;
 	__be64 *rq_pas0;
+	int ts_format;
 	void *in;
 	void *rqc;
 	void *wq;
@@ -5040,6 +5141,10 @@ static int  create_rq(struct mlx5_ib_rwq *rwq, struct ib_pd *pd,
 	int err;
 
 	dev = to_mdev(pd->device);
+
+	ts_format = get_rq_ts_format(dev, to_mcq(init_attr->cq));
+	if (ts_format < 0)
+		return ts_format;
 
 	inlen = MLX5_ST_SZ_BYTES(create_rq_in) + sizeof(u64) * rwq->rq_num_pas;
 	in = kvzalloc(inlen, GFP_KERNEL);
@@ -5050,6 +5155,7 @@ static int  create_rq(struct mlx5_ib_rwq *rwq, struct ib_pd *pd,
 	rqc = MLX5_ADDR_OF(create_rq_in, in, ctx);
 	MLX5_SET(rqc,  rqc, mem_rq_type,
 		 MLX5_RQC_MEM_RQ_TYPE_MEMORY_RQ_INLINE);
+	MLX5_SET(rqc, rqc, ts_format, ts_format);
 	MLX5_SET(rqc, rqc, user_index, rwq->user_index);
 	MLX5_SET(rqc,  rqc, cqn, to_mcq(init_attr->cq)->mcq.cqn);
 	MLX5_SET(rqc,  rqc, state, MLX5_RQC_STATE_RST);

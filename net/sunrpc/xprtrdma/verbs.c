@@ -1195,10 +1195,10 @@ void rpcrdma_mr_put(struct rpcrdma_mr *mr)
 	if (mr->mr_dir != DMA_NONE) {
 		trace_xprtrdma_mr_unmap(mr);
 #ifdef CONFIG_NVFS
-		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ia.ri_id->device->dma_device,
+		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ep->re_id->device->dma_device,
 					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
 			pr_debug("rpcrdma_nvfs_unmap_data device %s mr->mr_sg: %p , nents: %d\n",
-				 r_xprt->rx_ia.ri_id->device->name, mr->mr_sg, mr->mr_nents);
+				 r_xprt->rx_ep->re_id->device->name, mr->mr_sg, mr->mr_nents);
 		else
 #endif
 		ib_dma_unmap_sg(r_xprt->rx_ep->re_id->device,

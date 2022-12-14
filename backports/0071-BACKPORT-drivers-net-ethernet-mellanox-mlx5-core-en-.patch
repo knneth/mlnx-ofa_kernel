@@ -3,12 +3,22 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 
 Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc_ct.c  | 17 ++++++++++++-----
- 1 file changed, 12 insertions(+), 5 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 20 ++++++++++++++-----
+ 1 file changed, 15 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
-@@ -936,9 +936,9 @@ err_orig:
+@@ -743,6 +743,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
+ 	}
+ 
+ 	ct_state |= MLX5_CT_STATE_ESTABLISHED_BIT | MLX5_CT_STATE_TRK_BIT;
++#ifdef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
++	ct_state |= meta->ct_metadata.orig_dir ? 0 : MLX5_CT_STATE_REPLY_BIT;
++#endif
+ 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
+ 					     ct_state,
+ 					     meta->ct_metadata.mark,
+@@ -1027,9 +1030,9 @@ err_orig:
  
  static int
  mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
@@ -20,7 +30,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	struct flow_action_entry *meta_action;
  	unsigned long cookie = flow->cookie;
-@@ -1038,7 +1038,7 @@ err_set:
+@@ -1134,7 +1137,7 @@ err_set:
  
  static int
  mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
@@ -29,7 +39,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  {
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	unsigned long cookie = flow->cookie;
-@@ -1072,7 +1072,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+@@ -1168,7 +1171,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
  
  static int
  mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
@@ -38,10 +48,10 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  {
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	unsigned long cookie = f->cookie;
-@@ -1099,8 +1099,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+@@ -1195,8 +1198,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
  	spin_unlock_bh(&ct_priv->foo_lock);
  
- 	mlx5_fc_query_cached(entry->shared_counter->counter, &bytes, &packets, &lastuse);
+ 	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
 +#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
  	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
  			  FLOW_ACTION_HW_STATS_DELAYED);
@@ -54,7 +64,7 @@ Change-Id: I5ba595c9f930bea4cb502759713efcc38c1b1cdd
  
  	mlx5_tc_ct_entry_put(entry);
  	return 0;
-@@ -1110,7 +1117,7 @@ static int
+@@ -1206,7 +1216,7 @@ static int
  mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
  			      void *cb_priv)
  {

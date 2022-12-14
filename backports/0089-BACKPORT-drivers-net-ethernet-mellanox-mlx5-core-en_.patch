@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Iaf528d1635c14cc3c4d522de9d9e10e3f7996604
 ---
- .../ethernet/mellanox/mlx5/core/en_accel/ktls.h  | 16 ++++++++++++----
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h | 16 ++++++++++++----
  1 file changed, 12 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
@@ -29,7 +29,7 @@ Change-Id: Iaf528d1635c14cc3c4d522de9d9e10e3f7996604
  
 +#endif
 +
-+#ifdef HAVE_KTLS_RX_SUPPORT
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_KTLS_RX_SUPPORT)
 +
 +int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
 +void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);

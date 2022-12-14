@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 Change-Id: I550c1e7a80d3e16381301c23217dcd5c266c10df
 ---
- .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 30 +++++++++++++++++++
- 1 file changed, 30 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 31 ++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
@@ -19,7 +19,7 @@ Change-Id: I550c1e7a80d3e16381301c23217dcd5c266c10df
  };
  
  struct mlx5e_rep_priv {
-@@ -269,7 +273,29 @@ static inline bool mlx5e_eswitch_rep(str
+@@ -270,7 +274,29 @@ static inline bool mlx5e_eswitch_rep(str
  	       mlx5e_eswitch_uplink_rep(netdev);
  }
  
@@ -48,15 +48,16 @@ Change-Id: I550c1e7a80d3e16381301c23217dcd5c266c10df
 +#endif
  
  #else /* CONFIG_MLX5_ESWITCH */
- static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
-@@ -287,6 +313,10 @@ static inline void mlx5e_remove_sqs_fwd_
+ static inline bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv) { return false; }
+@@ -287,7 +313,10 @@ static inline bool mlx5e_eswitch_vf_rep(
+ static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
  static inline struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev)
  { return NULL; }
- 
+-
 +#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
 +static inline int mlx5e_rep_get_phys_port_name(struct net_device *dev,
 +					       char *buf, size_t len) { return 0; }
 +#endif
  #endif
  
- static inline bool mlx5e_is_vport_rep(struct mlx5e_priv *priv)
+ static inline bool mlx5e_is_vport_rep(const struct mlx5e_priv *priv)

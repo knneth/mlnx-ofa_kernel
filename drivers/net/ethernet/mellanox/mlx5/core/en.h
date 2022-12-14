@@ -57,6 +57,7 @@
 #include "en/dcbnl.h"
 #include "en/fs.h"
 #include "lib/hv_vhca.h"
+#include "lib/clock.h"
 
 extern const struct net_device_ops mlx5e_netdev_ops;
 struct page_pool;
@@ -445,6 +446,7 @@ struct mlx5e_txqsq {
 	struct mlx5e_sq_flow_map   flow_map;
 #endif
 	struct mlx5e_ptpsq        *ptpsq;
+	cqe_ts_to_ns               ptp_cyc2time;
 } ____cacheline_aligned_in_smp;
 
 struct mlx5e_dma_info {
@@ -638,6 +640,7 @@ typedef bool (*mlx5e_fp_post_rx_wqes)(struct mlx5e_rq *rq);
 typedef void (*mlx5e_fp_dealloc_wqe)(struct mlx5e_rq*, u16);
 
 int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool xsk);
+void mlx5e_rq_init_handler(struct mlx5e_rq *rq);
 
 enum mlx5e_rq_flag {
 	MLX5E_RQ_FLAG_XDP_XMIT,
@@ -729,6 +732,7 @@ struct mlx5e_rq {
 
 	/* XDP read-mostly */
 	struct xdp_rxq_info    xdp_rxq;
+	cqe_ts_to_ns           ptp_cyc2time;
 } ____cacheline_aligned_in_smp;
 
 enum mlx5e_channel_state {
@@ -767,7 +771,7 @@ struct mlx5e_channel {
 	spinlock_t                 async_icosq_lock;
 
 	/* data path - accessed per napi poll */
-	struct irq_desc *irq_desc;
+	const struct cpumask	  *aff_mask;
 	struct mlx5e_ch_stats     *stats;
 
 	/* control */
@@ -978,7 +982,8 @@ struct mlx5e_priv {
 	struct mlx5e_port_ptp_stats port_ptp_stats;
 	u16                        max_nch;
 	u8                         max_opened_tc;
-	bool                       port_ptp_opened;
+	u8                         port_ptp_opened:1;
+	u8                         shared_rq:1;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	struct mlx5e_sq_stats      special_sq_stats[MLX5E_MAX_RL_QUEUES];
 	int                        max_opened_special_sq;
@@ -1022,6 +1027,8 @@ struct mlx5e_priv {
 	struct mlx5e_ecn_ctx ecn_ctx[MLX5E_CONG_PROTOCOL_NUM];
 	struct mlx5e_ecn_enable_ctx ecn_enable_ctx[MLX5E_CONG_PROTOCOL_NUM][8];
 	struct mlx5e_delay_drop delay_drop;
+
+	struct mlx5e_flow_meters *flow_meters;
 };
 
 struct mlx5e_rx_handlers {
@@ -1114,12 +1121,20 @@ struct mlx5e_tirc_config mlx5e_tirc_get_default_config(enum mlx5e_traffic_types 
 struct mlx5e_xsk_param;
 
 struct mlx5e_rq_param;
-int mlx5e_open_rq(struct mlx5e_channel *c, struct mlx5e_params *params,
-		  struct mlx5e_rq_param *param, struct mlx5e_xsk_param *xsk,
-		  struct xdp_umem *umem, struct mlx5e_rq *rq);
+struct mlx5e_create_cq_param {
+	struct napi_struct *napi;
+	struct mlx5e_ch_stats *ch_stats;
+	int node;
+	int ix;
+};
+
 int mlx5e_wait_for_min_rx_wqes(struct mlx5e_rq *rq, int wait_time);
 void mlx5e_deactivate_rq(struct mlx5e_rq *rq);
-void mlx5e_close_rq(struct mlx5e_rq *rq);
+void mlx5e_close_rq(struct mlx5e_channel *c, struct mlx5e_rq *rq);
+int mlx5e_open_rq(struct mlx5e_channel *c, struct mlx5e_params *params,
+		  struct mlx5e_rq_param *param, struct mlx5e_xsk_param *xsk,
+		  struct xdp_umem *umem, struct mlx5e_create_cq_param *ccp,
+		  struct mlx5e_rq *rq);
 
 struct mlx5e_sq_param;
 int mlx5e_open_icosq(struct mlx5e_channel *c, struct mlx5e_params *params,
@@ -1129,13 +1144,6 @@ int mlx5e_open_xdpsq(struct mlx5e_channel *c, struct mlx5e_params *params,
 		     struct mlx5e_sq_param *param, struct xdp_umem *umem,
 		     struct mlx5e_xdpsq *sq, bool is_redirect);
 void mlx5e_close_xdpsq(struct mlx5e_xdpsq *sq);
-
-struct mlx5e_create_cq_param {
-	struct napi_struct *napi;
-	struct mlx5e_ch_stats *ch_stats;
-	int node;
-	int ix;
-};
 
 struct mlx5e_cq_param;
 int mlx5e_open_cq(struct mlx5e_priv *priv, struct dim_cq_moder moder,
@@ -1360,6 +1368,7 @@ int mlx5e_set_vf_mac(struct net_device *dev, int vf, u8 *mac);
 int mlx5e_set_vf_rate(struct net_device *dev, int vf, int min_tx_rate, int max_tx_rate);
 int mlx5e_get_vf_config(struct net_device *dev, int vf, struct ifla_vf_info *ivi);
 int mlx5e_get_vf_stats(struct net_device *dev, int vf, struct ifla_vf_stats *vf_stats);
+bool mlx5e_is_rep_shared_rq(const struct mlx5e_priv *priv);
 #endif
 
 void mlx5e_build_common_cq_param(struct mlx5e_priv *priv,

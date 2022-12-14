@@ -112,9 +112,6 @@ module_to_flag()
 		mlxfw)
 		flag=--with-mlxfw-mod
 		;;
-		mlx5_fpga_tools)
-		flag=--with-innova-flex
-		;;
 		mdev)
 		flag=--with-mdev-mod
 		;;
@@ -177,10 +174,6 @@ get-modules()
 			--with-mlxfw-mod )
 			modules="$modules \
 				drivers/net/ethernet/mellanox/mlxfw/mlxfw"
-			;;
-			--with-innova-flex | --with-innova-ipsec )
-			modules="$modules \
-				drivers/net/ethernet/mellanox/mlx5/fpga/mlx5_fpga_tools"
 			;;
 			--with-mdev-mod )
 			modules="$modules \

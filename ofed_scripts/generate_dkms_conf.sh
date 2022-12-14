@@ -32,7 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"5.2"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"5.3"}
 
 echo STRIP_MODS=\${STRIP_MODS:-"yes"}
 echo kernelver=\${kernelver:-\$\(uname -r\)}
@@ -53,7 +53,7 @@ do
 	let i++
 done
 
-EXTRA_OPTIONS="--with-innova-ipsec --with-mlx5-ipsec --with-gds --without-gds"
+EXTRA_OPTIONS="--with-mlx5-ipsec --with-gds --without-gds"
 for option in $EXTRA_OPTIONS; do
 	if echo "$configure_options" | grep -q -- "$option"; then
 		echo "#:# ExtraOption $option"

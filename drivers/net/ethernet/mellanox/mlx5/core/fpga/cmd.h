@@ -33,7 +33,6 @@
 #ifndef __MLX5_FPGA_H__
 #define __MLX5_FPGA_H__
 
-#include <linux/in6.h>
 #include <linux/mlx5/driver.h>
 
 enum mlx5_fpga_id {
@@ -45,28 +44,20 @@ enum mlx5_fpga_id {
 
 enum mlx5_fpga_image {
 	MLX5_FPGA_IMAGE_USER = 0,
-	MLX5_FPGA_IMAGE_FACTORY = 1,
-	MLX5_FPGA_IMAGE_MAX = MLX5_FPGA_IMAGE_FACTORY,
-	MLX5_FPGA_IMAGE_FACTORY_FAILOVER = 2,
+	MLX5_FPGA_IMAGE_FACTORY,
 };
 
 enum mlx5_fpga_status {
 	MLX5_FPGA_STATUS_SUCCESS = 0,
 	MLX5_FPGA_STATUS_FAILURE = 1,
 	MLX5_FPGA_STATUS_IN_PROGRESS = 2,
-	MLX5_FPGA_STATUS_DISCONNECTED = 3,
-};
-
-enum mlx5_fpga_tee {
-	MLX5_FPGA_TEE_DISABLE = 0,
-	MLX5_FPGA_TEE_GENERATE_EVENT = 1,
-	MLX5_FPGA_TEE_GENERATE_SINGLE_EVENT = 2,
+	MLX5_FPGA_STATUS_NONE = 0xFFFF,
 };
 
 struct mlx5_fpga_query {
 	enum mlx5_fpga_image admin_image;
 	enum mlx5_fpga_image oper_image;
-	enum mlx5_fpga_status image_status;
+	enum mlx5_fpga_status status;
 };
 
 enum mlx5_fpga_qpc_field_select {
@@ -81,49 +72,12 @@ struct mlx5_fpga_qp_counters {
 	u64 rx_total_drop;
 };
 
-struct mlx5_fpga_shell_counters {
-	u64 ddr_read_requests;
-	u64 ddr_write_requests;
-	u64 ddr_read_bytes;
-	u64 ddr_write_bytes;
-};
-
-#define MLX5_FPGA_INTERNAL_SENSORS_LOW 63
-#define MLX5_FPGA_INTERNAL_SENSORS_HIGH 63
-
-struct mlx5_fpga_temperature {
-	u32 temperature;
-	u32 index;
-	u32 tee;
-	u32 max_temperature;
-	u32 temperature_threshold_hi;
-	u32 temperature_threshold_lo;
-	u32 mte;
-	u32 mtr;
-	char sensor_name[16];
-};
-
-enum mlx5_fpga_connect {
-	MLX5_FPGA_CONNECT_QUERY = 0,
-	MLX5_FPGA_CONNECT_DISCONNECT = 0x9,
-	MLX5_FPGA_CONNECT_CONNECT = 0xA,
-};
-
 int mlx5_fpga_caps(struct mlx5_core_dev *dev);
 int mlx5_fpga_query(struct mlx5_core_dev *dev, struct mlx5_fpga_query *query);
-int mlx5_fpga_query_mtmp(struct mlx5_core_dev *dev,
-			 struct mlx5_fpga_temperature *temp);
 int mlx5_fpga_ctrl_op(struct mlx5_core_dev *dev, u8 op);
 int mlx5_fpga_access_reg(struct mlx5_core_dev *dev, u8 size, u64 addr,
 			 void *buf, bool write);
 int mlx5_fpga_sbu_caps(struct mlx5_core_dev *dev, void *caps, int size);
-int mlx5_fpga_load(struct mlx5_core_dev *dev, enum mlx5_fpga_image image);
-int mlx5_fpga_image_select(struct mlx5_core_dev *dev,
-			   enum mlx5_fpga_image image);
-int mlx5_fpga_ctrl_connect(struct mlx5_core_dev *dev,
-			   enum mlx5_fpga_connect *connect);
-int mlx5_fpga_shell_counters(struct mlx5_core_dev *dev, bool clear,
-			     struct mlx5_fpga_shell_counters *data);
 
 int mlx5_fpga_create_qp(struct mlx5_core_dev *dev, void *fpga_qpc,
 			u32 *fpga_qpn);

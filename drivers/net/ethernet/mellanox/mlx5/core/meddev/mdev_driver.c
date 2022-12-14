@@ -49,6 +49,10 @@ static int mlx5_meddev_probe(struct device *dev)
 	coredev->iseg_base = sf->bar_base_addr;
 	coredev->coredev_type = MLX5_COREDEV_SF;
 	coredev->disable_en = sf->disable_en;
+	coredev->max_cmpl_eq_count = sf->max_cmpl_eq_count;
+	coredev->cmpl_eq_depth = sf->cmpl_eq_depth;
+	coredev->async_eq_depth = sf->async_eq_depth;
+	coredev->disable_fc = sf->disable_fc;
 
 	sf->dev = coredev;
 	ret = mlx5_sf_load(sf);

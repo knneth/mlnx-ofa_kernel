@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
 
 Change-Id: Ie1dd2fc0f205c8e3277d9b89f1707ceefb7bbd14
 ---
- .../ethernet/mellanox/mlx5/core/en_dcbnl.c    | 19 ++++++++++++++++++-
- 1 file changed, 18 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en_dcbnl.c    | 25 ++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
@@ -58,8 +58,8 @@ Change-Id: Ie1dd2fc0f205c8e3277d9b89f1707ceefb7bbd14
 +#endif
  	struct mlx5e_channels new_channels = {};
  	bool reset_channels = true;
- 	int err = 0;
-@@ -1181,7 +1192,12 @@ static int mlx5e_set_trust_state(struct
+ 	bool opened;
+@@ -1184,7 +1195,12 @@ static int mlx5e_set_trust_state(struct
  
  	/* In DSCP trust state, we need 8 send queues per channel */
  	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
@@ -73,7 +73,29 @@ Change-Id: Ie1dd2fc0f205c8e3277d9b89f1707ceefb7bbd14
  
  	return err;
  }
-@@ -1265,3 +1281,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+@@ -1205,7 +1221,9 @@ static int mlx5e_trust_initialize(struct
+ {
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+ 	int err;
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ 	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
++#endif
+ 	const bool take_rtnl = priv->netdev->reg_state == NETREG_REGISTERED;
+ 
+ 	priv->dcbx_dp.trust_state = MLX5_QPTS_TRUST_PCP;
+@@ -1222,7 +1240,11 @@ static int mlx5e_trust_initialize(struct
+ 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
+ 		if (take_rtnl)
+ 			rtnl_lock();
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ 		mlx5e_setup_tc_mqprio(priv, &mqprio);
++#else
++		mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);
++#endif
+ 		if (take_rtnl)
+ 			rtnl_unlock();
+ 	}
+@@ -1275,3 +1297,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
  
  	mlx5e_ets_init(priv);
  }

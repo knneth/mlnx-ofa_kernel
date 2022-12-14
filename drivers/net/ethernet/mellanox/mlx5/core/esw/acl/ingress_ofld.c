@@ -5,6 +5,9 @@
 #include "eswitch.h"
 #include "helper.h"
 #include "ofld.h"
+#include "esw/vf_meter.h"
+
+#define MLX5_ESW_INGRESS_ACL_DEFAULT_PRIO 4
 
 static bool
 esw_acl_ingress_prio_tag_enabled(const struct mlx5_eswitch *esw,
@@ -257,6 +260,7 @@ int esw_acl_ingress_ofld_setup(struct mlx5_eswitch *esw,
 
 	vport->ingress.acl = esw_acl_table_create(esw, vport->vport,
 						  MLX5_FLOW_NAMESPACE_ESW_INGRESS,
+						  MLX5_ESW_INGRESS_ACL_DEFAULT_PRIO,
 						  num_ftes);
 	if (IS_ERR_OR_NULL(vport->ingress.acl)) {
 		err = PTR_ERR(vport->ingress.acl);
@@ -287,6 +291,7 @@ group_err:
 void esw_acl_ingress_ofld_cleanup(struct mlx5_eswitch *esw,
 				  struct mlx5_vport *vport)
 {
+	esw_vf_meter_ingress_destroy(vport);
 	esw_acl_ingress_ofld_rules_destroy(esw, vport);
 	esw_acl_ingress_ofld_groups_destroy(vport);
 	esw_acl_ingress_table_destroy(vport);

@@ -129,7 +129,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  }
  
  int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
-@@ -329,7 +384,9 @@ static int mlx5i_create_flow_steering(st
+@@ -330,7 +385,9 @@ static int mlx5i_create_flow_steering(st
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -139,7 +139,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  	}
  
  	mlx5e_set_ttc_basic_params(priv, &ttc_params);
-@@ -529,9 +586,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -530,9 +587,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:
@@ -153,7 +153,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -670,7 +731,13 @@ static int mlx5i_xmit(struct net_device
+@@ -671,7 +732,13 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
  
@@ -167,7 +167,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	return NETDEV_TX_OK;
  }
-@@ -767,8 +834,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -768,8 +835,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -178,7 +178,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	return 0;
  
-@@ -802,6 +871,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -803,6 +872,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

@@ -40,7 +40,6 @@
 #include "en/ptp.h"
 #include "ipoib/ipoib.h"
 #include "en_accel/en_accel.h"
-#include "lib/clock.h"
 
 static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
 				       u32 cqcc, void *data)
@@ -913,7 +912,7 @@ static void mlx5e_consume_skb(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		struct skb_shared_hwtstamps hwts = {};
 		u64 ts = get_cqe_ts(cqe);
 
-		hwts.hwtstamp = mlx5_timestamp_to_ns(sq->clock, ts);
+		hwts.hwtstamp = mlx5e_cqe_ts_to_ns(sq->ptp_cyc2time, sq->clock, ts);
 		if (sq->ptpsq)
 			mlx5e_skb_cb_hwtstamp_handler(skb, MLX5E_SKB_CB_CQE_HWTSTAMP,
 						      hwts.hwtstamp, sq->ptpsq->cq_stats);

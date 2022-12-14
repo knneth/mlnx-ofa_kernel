@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 
 Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 ---
- drivers/net/ethernet/mellanox/mlx5/core/devlink.c | 247 +++++++++++++++++++---
- 1 file changed, 217 insertions(+), 30 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/devlink.c | 251 +++++++++++++++---
+ 1 file changed, 221 insertions(+), 30 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
-@@ -4,22 +4,50 @@
+@@ -4,23 +4,55 @@
  #include <devlink.h>
  
  #include "mlx5_core.h"
@@ -17,6 +17,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 +#endif
  #include "fs_core.h"
  #include "eswitch.h"
+ #include "en/tc_ct.h"
  
 +#ifdef HAVE_DEVLINK_DRIVERINIT_VAL
 +static unsigned int esw_offloads_num_big_groups = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
@@ -52,7 +53,11 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 -	err = request_firmware_direct(&fw, file_name, &dev->pdev->dev);
 +	err = request_firmware_direct(&fw,
 +#ifdef HAVE_FLASH_UPDATE_GET_3_PARAMS
++#ifdef HAVE_DEVLINK_FLASH_UPDATE_PARAMS_HAS_STRUCT_FW
++			params->fw->data,
++#else
 +			params->file_name,
++#endif
 +#else
 +			file_name,
 +#endif
@@ -60,7 +65,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  	if (err)
  		return err;
  
-@@ -28,7 +56,134 @@ static int mlx5_devlink_flash_update(str
+@@ -29,7 +61,134 @@ static int mlx5_devlink_flash_update(str
  
  	return err;
  }
@@ -80,7 +85,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 +		NL_SET_ERR_MSG_MOD(extack, "FW activate requires reboot");
 +		return -EINVAL;
 +	}
- 
++
 +	net_port_alive = !!(reset_type & MLX5_MFRL_REG_RESET_TYPE_NET_PORT_ALIVE);
 +	err = mlx5_fw_reset_set_reset_sync(dev, net_port_alive);
 +	if (err)
@@ -188,14 +193,14 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 +	return mlx5_load_one(dev, false);
 +#endif /* HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION */
 +}
-+
+ 
 +#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
 +
 +#if defined(HAVE_DEVLINK_HAS_INFO_GET) && defined(HAVE_DEVLINK_INFO_VERSION_FIXED_PUT)
  static u8 mlx5_fw_ver_major(u32 version)
  {
  	return (version >> 24) & 0xff;
-@@ -45,7 +200,6 @@ static u16 mlx5_fw_ver_subminor(u32 vers
+@@ -46,7 +205,6 @@ static u16 mlx5_fw_ver_subminor(u32 vers
  }
  
  #define DEVLINK_FW_STRING_LEN 32
@@ -203,7 +208,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  static int
  mlx5_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
  		      struct netlink_ext_ack *extack)
-@@ -87,49 +241,42 @@ mlx5_devlink_info_get(struct devlink *de
+@@ -88,49 +246,42 @@ mlx5_devlink_info_get(struct devlink *de
  
  	return 0;
  }
@@ -273,7 +278,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  };
  
  struct devlink *mlx5_devlink_alloc(void)
-@@ -142,6 +289,8 @@ void mlx5_devlink_free(struct devlink *d
+@@ -143,6 +294,8 @@ void mlx5_devlink_free(struct devlink *d
  	devlink_free(devlink);
  }
  
@@ -282,7 +287,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  static int mlx5_devlink_fs_mode_validate(struct devlink *devlink, u32 id,
  					 union devlink_param_value val,
  					 struct netlink_ext_ack *extack)
-@@ -206,6 +355,7 @@ static int mlx5_devlink_fs_mode_get(stru
+@@ -207,6 +360,7 @@ static int mlx5_devlink_fs_mode_get(stru
  	return 0;
  }
  
@@ -290,7 +295,7 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  static int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
  					     union devlink_param_value val,
  					     struct netlink_ext_ack *extack)
-@@ -220,6 +370,7 @@ static int mlx5_devlink_enable_roce_vali
+@@ -221,6 +375,7 @@ static int mlx5_devlink_enable_roce_vali
  
  	return 0;
  }
@@ -298,9 +303,9 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  
  #ifdef CONFIG_MLX5_ESWITCH
  static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id,
-@@ -254,14 +405,41 @@ static int mlx5_devlink_e2e_cache_size_v
- #endif
- #endif /* CONFIG_MLX5_ESWITCH */
+@@ -323,6 +478,26 @@ static int mlx5_devlink_ct_max_offloaded
+ 	return 0;
+ }
  
 +#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
 +static int mlx5_devlink_enable_remote_dev_reset_set(struct devlink *devlink, u32 id,
@@ -323,8 +328,9 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 +#endif
 +
  static const struct devlink_param mlx5_devlink_params[] = {
- 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
- 			     "flow_steering_mode", DEVLINK_PARAM_TYPE_STRING,
+ 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_ACTION_ON_NAT_CONNS,
+ 			     "ct_action_on_nat_conns", DEVLINK_PARAM_TYPE_BOOL,
+@@ -335,8 +510,15 @@ static const struct devlink_param mlx5_d
  			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
  			     mlx5_devlink_fs_mode_get, mlx5_devlink_fs_mode_set,
  			     mlx5_devlink_fs_mode_validate),
@@ -337,10 +343,10 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 +			mlx5_devlink_enable_remote_dev_reset_get,
 +			mlx5_devlink_enable_remote_dev_reset_set, NULL),
 +#endif
- #ifdef CONFIG_MLX5_ESWITCH
- 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
- 			     "fdb_large_groups", DEVLINK_PARAM_TYPE_U32,
-@@ -291,13 +469,15 @@ static void mlx5_devlink_set_params_init
+ 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_MAX_OFFLOADED_CONNS,
+ 			     "ct_max_offloaded_conns", DEVLINK_PARAM_TYPE_U32,
+ 			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
+@@ -378,13 +560,15 @@ static void mlx5_devlink_set_params_init
  					   MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
  					   value);
  
@@ -357,15 +363,15 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
  	devlink_param_driverinit_value_set(devlink,
  					   MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
  					   value);
-@@ -308,6 +488,7 @@ static void mlx5_devlink_set_params_init
- 					   value);
+@@ -402,6 +586,7 @@ static void mlx5_devlink_set_params_init
+ 	}
  #endif
  }
 +#endif /* HAVE_DEVLINK_HAS_INFO_GET && HAVE_DEVLINK_INFO_VERSION_FIXED_PUT */
  
  int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
  {
-@@ -317,22 +498,28 @@ int mlx5_devlink_register(struct devlink
+@@ -411,23 +596,29 @@ int mlx5_devlink_register(struct devlink
  	if (err)
  		return err;
  
@@ -394,3 +400,4 @@ Change-Id: I93c3fb22c977017182049e5e7701c279faee73e0
 +#endif
  	devlink_unregister(devlink);
  }
+ 

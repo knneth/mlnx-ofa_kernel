@@ -10,7 +10,7 @@ Change-Id: I49561be716edd0958af7399efac7257fc6ec4955
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 @@ -30,6 +30,9 @@ struct mlx5e_port_ptp {
  	/* data path - accessed per napi poll */
- 	struct irq_desc *irq_desc;
+ 	const struct cpumask   *aff_mask;
  	struct mlx5e_ch_stats     *stats;
 +#ifndef HAVE_NAPI_STATE_MISSED
 +	unsigned long              flags;

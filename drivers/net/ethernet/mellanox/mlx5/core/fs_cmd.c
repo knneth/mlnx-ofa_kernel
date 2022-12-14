@@ -109,7 +109,8 @@ static int mlx5_cmd_stub_delete_fte(struct mlx5_flow_root_namespace *ns,
 
 static int mlx5_cmd_stub_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns,
 					       int reformat_type,
-					       int reformat_param_0,
+					       u8 reformat_param_0,
+					       u8 reformat_param_1,
 					       size_t size,
 					       void *reformat_data,
 					       enum mlx5_flow_namespace_type namespace,
@@ -533,6 +534,7 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 				case MLX5_REFORMAT_TYPE_L2_TO_NVGRE:
 				case MLX5_REFORMAT_TYPE_L2_TO_L2_TUNNEL:
 				case MLX5_REFORMAT_TYPE_L2_TO_L3_TUNNEL:
+				case MLX5_REFORMAT_TYPE_INSERT_HDR:
 					id = mlx5_fs_dr_action_get_pkt_reformat_id(fte->action.pkt_reformat);
 					break;
 				default:
@@ -652,6 +654,27 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 
 		MLX5_SET(flow_context, in_flow_context, flow_counter_list_size,
 			 list_size);
+	}
+
+	if (fte->action.action & MLX5_FLOW_CONTEXT_ACTION_EXECUTE_ASO) {
+		void *execute_aso;
+		void *exe_aso_ctrl;
+
+		execute_aso = MLX5_ADDR_OF(flow_context, in_flow_context,
+					   execute_aso[0]);
+		MLX5_SET(execute_aso, execute_aso, valid, 1);
+		MLX5_SET(execute_aso, execute_aso, aso_object_id,
+			 fte->action.flow_meter.flow_meter_obj_id);
+
+		exe_aso_ctrl = MLX5_ADDR_OF(execute_aso, execute_aso, exe_aso_ctrl);
+		MLX5_SET(exe_aso_ctrl_flow_meter, exe_aso_ctrl, return_reg_id,
+			 fte->action.flow_meter.return_reg_id);
+		MLX5_SET(exe_aso_ctrl_flow_meter, exe_aso_ctrl, aso_type,
+			 MLX5_EXE_ASO_FLOW_METER);
+		MLX5_SET(exe_aso_ctrl_flow_meter, exe_aso_ctrl, init_color,
+			 MLX5_FLOW_METER_COLOR_GREEN);
+		MLX5_SET(exe_aso_ctrl_flow_meter, exe_aso_ctrl, meter_id,
+			 fte->action.flow_meter.meter_id);
 	}
 
 	err = mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));
@@ -787,7 +810,8 @@ int mlx5_cmd_fc_bulk_query(struct mlx5_core_dev *dev, u32 base_id, int bulk_len,
 
 static int mlx5_cmd_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns,
 					  int reformat_type,
-					  int reformat_param_0,
+					  u8 reformat_param_0,
+					  u8 reformat_param_1,
 					  size_t size,
 					  void *reformat_data,
 					  enum mlx5_flow_namespace_type namespace,
@@ -833,6 +857,8 @@ static int mlx5_cmd_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns,
 		 reformat_type, reformat_type);
 	MLX5_SET(packet_reformat_context_in, packet_reformat_context_in,
 		 reformat_param_0, reformat_param_0);
+	MLX5_SET(packet_reformat_context_in, packet_reformat_context_in,
+		 reformat_param_1, reformat_param_1);
 	memcpy(reformat, reformat_data, size);
 
 	err = mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));

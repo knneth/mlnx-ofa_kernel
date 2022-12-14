@@ -561,19 +561,31 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if devlink.h devlink_port_attrs_pci_pf_set get 2 params])
+	AC_MSG_CHECKING([if devlink has devlink_port_attrs_pci_vf_set has 5 params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/devlink.h>
 	],[
-		devlink_port_attrs_pci_pf_set(NULL, 0);
-
+		devlink_port_attrs_pci_vf_set(NULL, NULL, 0, 0, 0);
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET_GET_2_PARAMS, 1,
-			  [devlink.h devlink_port_attrs_pci_pf_set get 2 params])
+		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_VF_SET_GET_5_PARAMS, 1,
+			  [devlink_port_attrs_pci_vf_set has 5 params])
 	],[
 		AC_MSG_RESULT(no)
+		AC_MSG_CHECKING([if devlink has devlink_port_attrs_pci_vf_set has 5 params and controller num])
+		MLNX_BG_LB_LINUX_TRY_COMPILE([
+			#include <net/devlink.h>
+		],[
+			devlink_port_attrs_pci_vf_set(NULL, 0, 0, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_VF_SET_GET_CONTROLLER_NUM, 1,
+				 [devlink_port_attrs_pci_vf_set has 5 params and controller num])
+		],[
+			AC_MSG_RESULT(no)
+		])
 	])
 
 	AC_MSG_CHECKING([if devlink.h has devlink_fmsg_binary_pair_nest_start])
@@ -1213,6 +1225,19 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 			  [devlink_port_attrs_pci_pf_set has 4 params])
 	],[
 		AC_MSG_RESULT(no)
+		AC_MSG_CHECKING([if devlink has devlink_port_attrs_pci_pf_set has 4 params and controller num])
+		MLNX_BG_LB_LINUX_TRY_COMPILE([
+			#include <net/devlink.h>
+		],[
+			devlink_port_attrs_pci_pf_set(NULL, 0, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET_CONTROLLER_NUM, 1,
+				  [devlink_port_attrs_pci_pf_set has 4 params and controller num])
+		],[
+			AC_MSG_RESULT(no)
+		])
 	])
 
 	AC_MSG_CHECKING([if devlink has devlink_port_attrs_pci_pf_set has 2 params])
@@ -1225,6 +1250,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET_2_PARAMS, 1,
 			  [devlink_port_attrs_pci_pf_set has 2 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if devlink_flash_update_params has struct firmware fw])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/devlink.h>
+	],[
+		struct devlink_flash_update_params *x;
+		x->fw = NULL;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DEVLINK_FLASH_UPDATE_PARAMS_HAS_STRUCT_FW, 1,
+			  [devlink_flash_update_params has struct firmware fw])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -1868,25 +1909,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_PTP_CLOCK_INFO_GETTIME_32BIT, 1,
 			  [gettime 32bit is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct ptp_clock_info has adjfine])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/ptp_clock_kernel.h>
-	],[
-		struct ptp_clock_info info = {
-			.adjfine = NULL,
-		};
-		long x;
-
-		scaled_ppm_to_ppb(x);
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_PTP_CLOCK_INFO_ADJFINE, 1,
-			  [adjfine is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -2782,6 +2804,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DEVLINK_H, 1,
 			  [include/net/devlink.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if enum devlink_param_cmode exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <uapi/linux/devlink.h>
+	],[
+		enum devlink_param_cmode p;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DEVLINK_PARAM_CMODE, 1,
+			  [enum devlink_param_cmode exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -4592,6 +4629,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if netlink.h has nla_strlcpy])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/netlink.h>
+	],[
+		nla_strlcpy(NULL, NULL ,0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NLA_STRLCPY, 1,
+			  [nla_strlcpy exist])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if netlink.h has nla_nest_start_noflag])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/netlink.h>
@@ -5316,6 +5368,11 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		[net/core/devlink.c],
 		[AC_DEFINE(HAVE_DEVLINK_PARAMS_PUBLISHED, 1,
 			[devlink_params_publish is exported by the kernel])],
+	[])
+	LB_CHECK_SYMBOL_EXPORT([devlink_flash_update_begin_notify],
+		[net/core/devlink.c],
+		[AC_DEFINE(HAVE_DEVLINK_FLASH_UPDATE_BEGIN_NOTIFY_EXPORTED, 1,
+			[devlink_flash_update_begin_notify is exported by the kernel])],
 	[])
 	LB_CHECK_SYMBOL_EXPORT([split_page],
 		[mm/page_alloc.c],
@@ -7999,6 +8056,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_FLOW_CLS_OFFLOAD, 1,
 			  [struct flow_cls_offload exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct flow_action_entry has ct_metadata.orig_dir])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/flow_offload.h>
+	],[
+		struct flow_action_entry x = {
+			.ct_metadata.orig_dir = true,
+		};
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR, 1,
+			  [struct flow_action_entry has ct_metadata.orig_dir])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -10764,6 +10837,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if xdp_rxq_info_reg get 4 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/xdp.h>
+	],[
+		xdp_rxq_info_reg(NULL, NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDP_RXQ_INFO_REG_GET_4_PARAMS, 1,
+			  [xdp_rxq_info_reg get 4 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if net/xdp.h exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/xdp.h>
@@ -13377,6 +13465,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_INODE_LOCK, 1,
 			[fs.h has inode_lock])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/blk-mq.h has blk_mq_set_request_complete])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		blk_mq_set_request_complete(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_SET_REQUEST_COMPLETE, 1,
+			  [linux/blk-mq.h has blk_mq_set_request_complete])
 	],[
 		AC_MSG_RESULT(no)
 	])

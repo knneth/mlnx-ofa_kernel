@@ -42,7 +42,7 @@ Change-Id: I310d4d9a49420e68fabd73295fb5d65508db3b42
  		trace_xprtrdma_mr_unmap(mr);
 +#endif
  #ifdef CONFIG_NVFS
- 		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ia.ri_id->device->dma_device,
+ 		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ep->re_id->device->dma_device,
  					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
 @@ -153,7 +161,9 @@ int frwr_mr_init(struct rpcrdma_xprt *r_
  

@@ -8,7 +8,7 @@ Change-Id: Ic6a61bc7ef265a550cb5a9bb7d870e7918a7fae0
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
-@@ -909,13 +909,14 @@ void ipoib_mcast_restart_task(struct wor
+@@ -913,13 +913,14 @@ void ipoib_mcast_restart_task(struct wor
  		clear_bit(IPOIB_MCAST_FLAG_FOUND, &mcast->flags);
  
  	/* Mark all of the entries that are found or don't exist */

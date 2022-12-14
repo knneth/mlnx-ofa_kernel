@@ -22,7 +22,7 @@ Change-Id: Ia746cd92485be12cd7be16ab1550c38b0ff7d875
  
  	if (MLX5_CAP_GEN_64(dev, general_obj_types) &
  		MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q) {
-@@ -680,15 +682,20 @@ static const struct mlxfw_dev_ops mlx5_m
+@@ -686,15 +688,20 @@ static const struct mlxfw_dev_ops mlx5_m
  };
  
  int mlx5_firmware_flash(struct mlx5_core_dev *dev,
@@ -45,7 +45,7 @@ Change-Id: Ia746cd92485be12cd7be16ab1550c38b0ff7d875
  		},
  		.mlx5_core_dev = dev
  	};
-@@ -702,7 +709,11 @@ int mlx5_firmware_flash(struct mlx5_core
+@@ -708,7 +715,11 @@ int mlx5_firmware_flash(struct mlx5_core
  	}
  
  	return mlxfw_firmware_flash(&mlx5_mlxfw_dev.mlxfw_dev,

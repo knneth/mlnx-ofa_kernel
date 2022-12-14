@@ -275,7 +275,8 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	dest[0].ft = mlx5_chains_get_table(esw_chains(esw), 0, 1, 0);
 	dest[1].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
 	dest[1].counter_id = mlx5_fc_id(esw_ipsec_decap_rule_counter(esw));
-	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, MLX5_REFORMAT_TYPE_DEL_ESP_TRANSPORT, 0, 0, NULL, MLX5_FLOW_NAMESPACE_FDB);
+	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, MLX5_REFORMAT_TYPE_DEL_ESP_TRANSPORT,
+							   0, 0, 0, NULL, MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(flow_act.pkt_reformat)) {
 		err = PTR_ERR(flow_act.pkt_reformat);
 		esw_warn(esw->dev, "Failed to allocate delete esp reformat, err=%d\n", err);
@@ -629,8 +630,8 @@ void mlx5_esw_ipsec_full_offload_get_stats(struct mlx5_eswitch *esw, void *ipsec
 
 	if (!esw_ipsec_decap_rule_counter(esw) ||
 	    !esw_ipsec_decap_miss_rule_counter(esw) ||
-	    !esw_ipsec_decap_miss_rule_counter(esw) ||
-	    !esw_ipsec_tx_chk_counter(esw))
+	    !esw_ipsec_tx_chk_counter(esw) ||
+	    !esw_ipsec_tx_chk_drop_counter(esw))
 		return;
 
 	err = mlx5_fc_query(esw->dev, esw_ipsec_decap_rule_counter(esw),

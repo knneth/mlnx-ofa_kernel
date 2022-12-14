@@ -108,6 +108,7 @@ enum dr_dump_rec_type {
 	DR_DUMP_REC_TYPE_ACTION_PUSH_VLAN = 3412,
 	DR_DUMP_REC_TYPE_ACTION_POP_VLAN = 3413,
 	DR_DUMP_REC_TYPE_ACTION_SAMPLER = 3415,
+	DR_DUMP_REC_TYPE_ACTION_INSERT_HDR = 3420,
 };
 
 static u64 dr_dump_icm_to_idx(u64 icm_addr)
@@ -213,6 +214,13 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_PUSH_VLAN, action_id,
 			       rule_id, action->push_vlan.vlan_hdr);
+		break;
+	case DR_ACTION_TYP_INSERT_HDR:
+		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,0x%x,0x%x\n",
+			       DR_DUMP_REC_TYPE_ACTION_INSERT_HDR, action_id,
+			       rule_id, action->reformat.reformat_id,
+			       action->reformat.reformat_param_0,
+			       action->reformat.reformat_param_1);
 		break;
 	default:
 		return 0;

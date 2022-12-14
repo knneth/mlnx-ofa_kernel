@@ -42,7 +42,7 @@
 #include "en_accel/ipsec_rxtx.h"
 #include "en_accel/ipsec_fs.h"
 #include "eswitch.h"
-#include "en/aso.h"
+#include "en/ipsec_aso.h"
 #include "../esw/ipsec.h"
 
 #ifndef XFRM_OFFLOAD_FULL
@@ -719,7 +719,7 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 		goto out_fs;
 
 	if (mlx5_is_ipsec_full_offload(priv))
-		mlx5e_aso_setup(priv);
+		priv->ipsec->aso = mlx5e_aso_setup(priv, MLX5_ST_SZ_BYTES(ipsec_aso));
 
 	netdev_dbg(priv->netdev, "IPSec attached to netdevice\n");
 	return 0;
@@ -739,8 +739,10 @@ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
 	if (!ipsec)
 		return;
 
-	if (mlx5_is_ipsec_full_offload(priv))
-		mlx5e_aso_cleanup(priv);
+	if (mlx5_is_ipsec_full_offload(priv)) {
+		mlx5e_aso_cleanup(priv, priv->ipsec->aso);
+		priv->ipsec->aso = NULL;
+	}
 
 	mlx5e_accel_ipsec_fs_cleanup(priv);
 	destroy_workqueue(ipsec->wq);

@@ -105,8 +105,15 @@ static inline bool blk_path_error(blk_status_t error)
 }
 #endif
 
-#if !defined(HAVE_BLK_MQ_REQUEST_COMPLETED) && \
-	defined(HAVE_MQ_RQ_STATE)
+#ifdef HAVE_MQ_RQ_STATE
+#ifndef HAVE_BLK_MQ_SET_REQUEST_COMPLETE
+static inline void blk_mq_set_request_complete(struct request *rq)
+{
+	WRITE_ONCE(rq->state, MQ_RQ_COMPLETE);
+}
+#endif
+
+#ifndef HAVE_BLK_MQ_REQUEST_COMPLETED
 static inline enum mq_rq_state blk_mq_rq_state(struct request *rq)
 {
 	return READ_ONCE(rq->state);
@@ -117,6 +124,7 @@ static inline int blk_mq_request_completed(struct request *rq)
 	return blk_mq_rq_state(rq) == MQ_RQ_COMPLETE;
 }
 #endif
+#endif /* HAVE_MQ_RQ_STATE */
 
 #ifndef HAVE_BLK_MQ_TAGSET_WAIT_COMPLETED_REQUEST
 #ifdef HAVE_MQ_RQ_STATE

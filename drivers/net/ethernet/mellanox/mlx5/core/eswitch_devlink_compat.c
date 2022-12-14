@@ -8,6 +8,7 @@
 #include <linux/fs.h>
 #include "mlx5_core.h"
 #include "eswitch.h"
+#include "devlink.h"
 #include "en.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
@@ -44,6 +45,11 @@ static char *vport_match_to_str[] = {
 	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_LEGACY] = "legacy",
 };
 
+static char *ct_action_on_nat_conns_to_str[] = {
+	[DEVLINK_CT_ACTION_ON_NAT_CONNS_DISABLE] = "disable",
+	[DEVLINK_CT_ACTION_ON_NAT_CONNS_ENABLE] = "enable",
+};
+
 struct devlink_compat_op {
 #ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 	int (*write_enum)(struct devlink *devlink, enum devlink_eswitch_encap_mode set, struct netlink_ext_ack *extack);
@@ -66,6 +72,11 @@ struct devlink_compat_op {
 
 	int (*read_vport_match_mode)(struct devlink *devlink, enum devlink_eswitch_vport_match_mode *read);
 	int (*write_vport_match_mode)(struct devlink *devlink, enum devlink_eswitch_vport_match_mode set);
+
+	int (*read_ct_action_on_nat_conns)(struct devlink *devlink, u32 id,
+					   struct devlink_param_gset_ctx *ctx);
+	int (*write_ct_action_on_nat_conns)(struct devlink *devlink, u32 id,
+					   struct devlink_param_gset_ctx *ctx);
 
 	char **map;
 	int map_size;
@@ -119,6 +130,13 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.map = vport_match_to_str,
 		.map_size = ARRAY_SIZE(vport_match_to_str),
 		.compat_name = "vport_match_mode",
+	},
+	{
+		.read_ct_action_on_nat_conns = mlx5_devlink_ct_action_on_nat_conns_get,
+		.write_ct_action_on_nat_conns = mlx5_devlink_ct_action_on_nat_conns_set,
+		.map = ct_action_on_nat_conns_to_str,
+		.map_size = ARRAY_SIZE(ct_action_on_nat_conns_to_str),
+		.compat_name = "ct_action_on_nat_conns",
 	},
 };
 
@@ -175,6 +193,11 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 	} else if (op->read_vport_match_mode) {
 		ret = op->read_vport_match_mode(devlink, &read_vport_match_mode);
 		read = read_vport_match_mode;
+	} else if (op->read_ct_action_on_nat_conns) {
+		struct devlink_param_gset_ctx ctx;
+
+		ret = op->read_ct_action_on_nat_conns(devlink, 0, &ctx);
+		read = ctx.val.vbool;
 	} else
 		ret = -ENOENT;
 
@@ -262,7 +285,12 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 				   );
 	else if (op->write_steering_mode)
 		ret = op->write_steering_mode(devlink, set);
-	else if (op->write_vport_match_mode)
+	else if (op->write_ct_action_on_nat_conns) {
+		struct devlink_param_gset_ctx ctx;
+
+		ctx.val.vbool = set;
+		ret = op->read_ct_action_on_nat_conns(devlink, 0, &ctx);
+	} else if (op->write_vport_match_mode)
 		ret = op->write_vport_match_mode(devlink, set);
 	else if (op->write_enum_ipsec)
 		ret = op->write_enum_ipsec(devlink, set

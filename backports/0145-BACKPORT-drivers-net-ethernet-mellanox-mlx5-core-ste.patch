@@ -9,7 +9,7 @@ Change-Id: Ic7d9998c507e901f2f7ebd8ec4f8cf0751f668a5
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
-@@ -961,11 +961,20 @@ static int dr_dump_proc_release(struct i
+@@ -969,11 +969,20 @@ static int dr_dump_proc_release(struct i
  	return 0;
  }
  
@@ -30,7 +30,7 @@ Change-Id: Ic7d9998c507e901f2f7ebd8ec4f8cf0751f668a5
  
  int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn)
  {
-@@ -979,7 +988,11 @@ int mlx5dr_dbg_init_dump(struct mlx5dr_d
+@@ -987,7 +996,11 @@ int mlx5dr_dbg_init_dump(struct mlx5dr_d
  	if (mlx5_smfs_fdb_dump_dir) {
  		proc_entry = proc_create_data(pci_name(dmn->mdev->pdev), 0444,
  					      mlx5_smfs_fdb_dump_dir,

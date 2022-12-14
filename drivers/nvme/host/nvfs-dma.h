@@ -16,7 +16,7 @@ static bool nvme_nvfs_unmap_data(struct nvme_dev *dev, struct request *req)
 {
         struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
         enum dma_data_direction dma_dir = rq_dma_dir(req);
-        const int last_prp = dev->ctrl.page_size / sizeof(__le64) - 1;
+        const int last_prp = NVME_CTRL_PAGE_SIZE / sizeof(__le64) - 1;
         dma_addr_t dma_addr = iod->first_dma, next_dma_addr;
 
         if (iod->sg && !is_pci_p2pdma_page(sg_page(iod->sg)) &&

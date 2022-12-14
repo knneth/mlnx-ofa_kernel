@@ -32,7 +32,7 @@ struct mlx5e_tc_table {
 
 	struct mod_hdr_tbl mod_hdr;
 	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
-	DECLARE_HASHTABLE(hairpin_tbl, 16);
+	DECLARE_HASHTABLE(hairpin_tbl, 8);
 	struct kobject *hp_config;
 	struct mlx5_prio_hp *prio_hp;
 	struct mlx5e_priv *prio_hp_ppriv;
@@ -260,12 +260,12 @@ struct mlx5e_flow_steering {
 	struct mlx5e_ethtool_steering   ethtool;
 #endif
 	struct mlx5e_tc_table           tc;
-	struct mlx5e_vlan_table         vlan;
+	struct mlx5e_vlan_table        *vlan;
 	struct mlx5e_l2_table           l2;
 	struct mlx5e_ttc_table          ttc;
 	struct mlx5e_ttc_table          inner_ttc;
 #ifdef CONFIG_MLX5_EN_ARFS
-	struct mlx5e_arfs_tables        arfs;
+	struct mlx5e_arfs_tables       *arfs;
 #endif
 #ifdef CONFIG_MLX5_EN_TLS
 	struct mlx5e_accel_fs_tcp      *accel_tcp;

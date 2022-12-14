@@ -331,7 +331,7 @@ static void dr_ste_v0_set_tx_push_vlan(u8 *hw_ste_p, u32 vlan_hdr,
 	MLX5_SET(ste_sx_transmit, hw_ste_p, action_type,
 		 DR_STE_ACTION_TYPE_PUSH_VLAN);
 	MLX5_SET(ste_sx_transmit, hw_ste_p, encap_pointer_vlan_data, vlan_hdr);
-	/* Due to HW limitation we need to set this bit, otherwise reforamt +
+	/* Due to HW limitation we need to set this bit, otherwise reformat +
 	 * push vlan will not work.
 	 */
 	if (go_back)
@@ -437,8 +437,8 @@ dr_ste_v0_set_actions_tx(struct mlx5dr_domain *dmn,
 						attr->gvmi);
 
 		dr_ste_v0_set_tx_encap(last_ste,
-				       attr->reformat_id,
-				       attr->reformat_size,
+				       attr->reformat.reformat_id,
+				       attr->reformat.reformat_size,
 				       action_type_set[DR_ACTION_TYP_L2_TO_TNL_L3]);
 		/* Whenever prio_tag_required enabled, we can be sure that the
 		 * previous table (ACL) already push vlan to our packet,
@@ -1802,6 +1802,7 @@ static struct mlx5dr_ste_ctx ste_ctx_v0 = {
 	.set_byte_mask				= &dr_ste_v0_set_byte_mask,
 	.get_byte_mask				= &dr_ste_v0_get_byte_mask,
 	/* Actions */
+	.actions_caps				= DR_STE_CTX_NO_ACTIONS_CAPS,
 	.set_actions_rx				= &dr_ste_v0_set_actions_rx,
 	.set_actions_tx				= &dr_ste_v0_set_actions_tx,
 	.modify_field_arr_sz			= ARRAY_SIZE(dr_ste_v0_action_modify_field_arr),

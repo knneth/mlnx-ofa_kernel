@@ -169,7 +169,7 @@ Change-Id: Iff568049a9fb34fea6c96a22d725026796430411
  	return ret;
  }
  
-@@ -1671,6 +1732,9 @@ void mlx5_odp_init_mr_cache_entry(struct
+@@ -1687,6 +1748,9 @@ void mlx5_odp_init_mr_cache_entry(struct
  
  static const struct ib_device_ops mlx5_ib_dev_odp_ops = {
  	.advise_mr = mlx5_ib_advise_mr,

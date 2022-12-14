@@ -119,9 +119,11 @@ endif
 	dh_installdirs -p$(putils)  sbin
 	dh_installdirs -p$(putils)  lib/udev
 	dh_installdirs -p$(putils)  usr/sbin
+	dh_installdirs -p$(putils)  lib/systemd/system
 
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_bf_configure_ct	debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_bf_udev		debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/mlnx-bf.conf		debian/$(putils)/etc/modprobe.d
@@ -137,6 +139,7 @@ endif
 	install -m 0755 source/scripts/mlnx-en.d_deb						debian/$(putils)/etc/init.d/mlnx-en.d
 	install -m 0644 source/scripts/mlnx-en.conf					debian/$(putils)/etc/mlnx-en.conf
 	with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/deb_mlnx_en_service_install_helper $(CURDIR)/debian/$(putils)
+	install -m 0644 scripts/mlnx-en.d.service			debian/$(putils)/lib/systemd/system
 
 	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
 

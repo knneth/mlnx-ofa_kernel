@@ -24,7 +24,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  
  enum {
  	MLX5_BOARD_ID_LEN = 64,
-@@ -461,9 +467,11 @@ struct mlx5_core_health {
+@@ -459,9 +465,11 @@ struct mlx5_core_health {
  	struct workqueue_struct	       *wq;
  	unsigned long			flags;
  	struct work_struct		fatal_report_work;
@@ -36,7 +36,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  	struct mlx5_fw_crdump		*crdump;
  };
  
-@@ -529,6 +537,9 @@ struct mlx5_fc_stats {
+@@ -560,6 +568,9 @@ struct mlx5_fc_stats {
  	unsigned long sampling_interval; /* jiffies */
  	u32 *bulk_query_out;
  	struct mlx5_fc_pool fc_pool;
@@ -46,7 +46,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  };
  
  struct mlx5_events;
-@@ -583,6 +594,9 @@ struct mlx5_priv {
+@@ -614,6 +625,9 @@ struct mlx5_priv {
  	/* IRQ table valid only for real pci devices PF or VF */
  	struct mlx5_irq_table   *irq_table;
  	struct mlx5_eq_table	*eq_table;
@@ -56,10 +56,10 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  
  	/* pages stuff */
  	struct mlx5_nb          pg_nb;
-@@ -709,9 +723,13 @@ struct mlx5_clock {
- 	u32                        nominal_c_mult;
- 	unsigned long              overflow_period;
- 	struct delayed_work        overflow_work;
+@@ -747,9 +761,13 @@ struct mlx5_clock {
+ 	struct mlx5_nb             pps_nb;
+ 	seqlock_t                  lock;
+ 	struct hwtstamp_config     hwtstamp_config;
 +#if (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
  	struct ptp_clock          *ptp;
  	struct ptp_clock_info      ptp_info;
@@ -67,10 +67,10 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  	struct mlx5_pps            pps_info;
 +#endif
 +#endif
- 	ktime_t (*cyc2time)(struct mlx5_clock *clock, u64 timestamp);
- 	void                      *addr_h;
- 	void                      *addr_l;
-@@ -864,8 +882,13 @@ struct mlx5_cmd_work_ent {
+ 	struct mlx5_timer          timer;
+ };
+ 
+@@ -903,8 +921,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -84,7 +84,7 @@ Change-Id: I16e9a61032a472b5f38138f7404206a303412edc
  	u16			op;
  	bool			polling;
  	/* Track the max comp handlers */
-@@ -999,7 +1022,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
+@@ -1038,7 +1061,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
  struct mlx5_async_ctx {
  	struct mlx5_core_dev *dev;
  	atomic_t num_inflight;

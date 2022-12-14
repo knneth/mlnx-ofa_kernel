@@ -3,41 +3,33 @@
 
 #include "aso.h"
 
-#define MLX5E_ASO_WQEBBS \
-	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe), MLX5_SEND_WQE_BB))
-#define MLX5E_ASO_WQEBBS_DATA \
-	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe_data), MLX5_SEND_WQE_BB))
-#define ASO_OPC_MOD_IPSEC_SHIFTED (MLX5_ACCESS_ASO_OPC_MOD_IPSEC << MLX5_WQE_CTRL_WQE_OPC_MOD_SHIFT)
-#define ASO_CTRL_READ_EN BIT(0)
-
-enum {
-	MLX5_ACCESS_ASO_OPC_MOD_IPSEC,
-};
-
-static int mlx5e_aso_reg_mr(struct mlx5e_priv *priv)
+static int mlx5e_aso_reg_mr(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
-	size_t size = MLX5_ST_SZ_BYTES(ipsec_aso);
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct device *dma_device;
 	dma_addr_t dma_addr;
 	int err;
 
-	dma_device = &mdev->pdev->dev;
-	aso->ctx = kzalloc(size, GFP_KERNEL);
-	if (!aso->ctx)
-		return -ENOMEM;
-
 	err = mlx5_core_alloc_pd(mdev, &aso->pdn);
 	if (err) {
 		mlx5_core_err(mdev, "alloc pd failed, %d\n", err);
-		goto out_pd;
+		return err;
 	}
 
-	dma_addr = dma_map_single(dma_device, aso->ctx, size, DMA_BIDIRECTIONAL);
+	if (aso->size == 0)
+		return 0;
+
+	aso->ctx = kzalloc(aso->size, GFP_KERNEL);
+	if (!aso->ctx) {
+		err = -ENOMEM;
+		goto out_mem;
+	}
+
+	dma_device = &mdev->pdev->dev;
+	dma_addr = dma_map_single(dma_device, aso->ctx, aso->size, DMA_BIDIRECTIONAL);
 	err = dma_mapping_error(dma_device, dma_addr);
 	if (err) {
-		mlx5_core_warn(mdev, "Can't dma ipsec_aso\n");
+		mlx5_core_warn(mdev, "Can't dma aso\n");
 		goto out_dma;
 	}
 
@@ -48,57 +40,52 @@ static int mlx5e_aso_reg_mr(struct mlx5e_priv *priv)
 	}
 
 	aso->dma_addr = dma_addr;
-	aso->size = size;
 
 	return 0;
 
 out_mkey:
-	dma_unmap_single(dma_device, dma_addr, size, DMA_BIDIRECTIONAL);
+	dma_unmap_single(dma_device, dma_addr, aso->size, DMA_BIDIRECTIONAL);
 
 out_dma:
-	mlx5_core_dealloc_pd(mdev, aso->pdn);
-out_pd:
 	kfree(aso->ctx);
 	aso->ctx = NULL;
+out_mem:
+	mlx5_core_dealloc_pd(mdev, aso->pdn);
 	return err;
 }
 
-static void mlx5e_aso_dereg_mr(struct mlx5e_priv *priv)
+static void mlx5e_aso_dereg_mr(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
+	mlx5_core_dealloc_pd(priv->mdev, aso->pdn);
 
 	if (!aso->ctx)
 		return;
 
 	mlx5_core_destroy_mkey(priv->mdev, &aso->mkey);
 	dma_unmap_single(&priv->mdev->pdev->dev, aso->dma_addr, aso->size, DMA_BIDIRECTIONAL);
-	mlx5_core_dealloc_pd(priv->mdev, aso->pdn);
 	kfree(aso->ctx);
 	aso->ctx = NULL;
 }
 
-static void mlx5e_build_aso_wqe(struct mlx5e_ipsec_aso *aso,
-				struct mlx5e_asosq *sq,
-				struct mlx5e_aso_wqe *wqe,
-				u32 ipsec_obj_id,
-				struct mlx5e_aso_ctrl_param *param)
+void mlx5e_build_aso_wqe(struct mlx5e_aso *aso, struct mlx5e_asosq *sq,
+			 u8 ds_cnt, struct mlx5_wqe_ctrl_seg *cseg,
+			 struct mlx5_wqe_aso_ctrl_seg *aso_ctrl,
+			 u32 obj_id, u32 opc_mode,
+			 struct mlx5e_aso_ctrl_param *param)
 {
-	struct mlx5_wqe_aso_ctrl_seg *aso_ctrl = &wqe->aso_ctrl;
-	struct mlx5_wqe_ctrl_seg *cseg = &wqe->ctrl;
-	u8 ds_cnt;
-
-	ds_cnt = DIV_ROUND_UP(sizeof(*wqe), MLX5_SEND_WQE_DS);
-	cseg->opmod_idx_opcode = cpu_to_be32(ASO_OPC_MOD_IPSEC_SHIFTED |
+	cseg->opmod_idx_opcode = cpu_to_be32((opc_mode << MLX5_WQE_CTRL_WQE_OPC_MOD_SHIFT) |
 					     (sq->pc << MLX5_WQE_CTRL_WQE_INDEX_SHIFT) |
 					     MLX5_OPCODE_ACCESS_ASO);
 	cseg->qpn_ds     = cpu_to_be32((sq->sqn << MLX5_WQE_CTRL_QPN_SHIFT) | ds_cnt);
 	cseg->fm_ce_se   = MLX5_WQE_CTRL_CQ_UPDATE;
-	cseg->general_id = cpu_to_be32(ipsec_obj_id);
+	cseg->general_id = cpu_to_be32(obj_id);
 
 	memset(aso_ctrl, 0, sizeof(*aso_ctrl));
-	aso_ctrl->va_l  = cpu_to_be32(aso->dma_addr | ASO_CTRL_READ_EN);
-	aso_ctrl->va_h  = cpu_to_be32(aso->dma_addr >> 32);
-	aso_ctrl->l_key = cpu_to_be32(aso->mkey.key);
+	if (aso->dma_addr) {
+		aso_ctrl->va_l  = cpu_to_be32(aso->dma_addr | ASO_CTRL_READ_EN);
+		aso_ctrl->va_h  = cpu_to_be32(aso->dma_addr >> 32);
+		aso_ctrl->l_key = cpu_to_be32(aso->mkey.key);
+	}
 
 	if (param) {
 		aso_ctrl->data_mask_mode = param->data_mask_mode << 6;
@@ -114,7 +101,7 @@ static void mlx5e_build_aso_wqe(struct mlx5e_ipsec_aso *aso,
 	}
 }
 
-static int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
+int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
 {
 	struct mlx5e_asosq *sq = container_of(cq, struct mlx5e_asosq, cq);
 	struct mlx5_cqe64 *cqe;
@@ -202,8 +189,8 @@ static int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
 	return err;
 }
 
-static void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
-				       u16 pi, u16 nnops)
+void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
+				u16 pi, u16 nnops)
 {
 	struct mlx5e_aso_wqe_info *edge_wi, *wi = &sq->db.aso_wqe[pi];
 
@@ -214,127 +201,6 @@ static void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_c
 		wi->opcode = MLX5_OPCODE_NOP;
 		mlx5e_post_nop(wq, sq->sqn, &sq->pc);
 	}
-}
-
-static int mlx5e_aso_send_ipsec_aso(struct mlx5e_priv *priv, u32 ipsec_obj_id,
-				    struct mlx5e_aso_ctrl_param *param,
-				    u32 *hard_cnt, u32 *soft_cnt,
-				    u8 *event_arm, u32 *mode_param)
-{
-	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
-	struct mlx5e_asosq *sq = &aso->sq;
-	struct mlx5_wq_cyc *wq = &sq->wq;
-	struct mlx5e_aso_wqe *aso_wqe;
-	u16 pi, contig_wqebbs_room;
-	int err = 0;
-
-	memset(aso->ctx, 0, aso->size);
-
-	pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
-	contig_wqebbs_room = mlx5_wq_cyc_get_contig_wqebbs(wq, pi);
-
-	if (unlikely(contig_wqebbs_room < MLX5E_ASO_WQEBBS)) {
-		mlx5e_fill_asosq_frag_edge(sq, wq, pi, contig_wqebbs_room);
-		pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
-	}
-
-	aso_wqe = mlx5_wq_cyc_get_wqe(wq, pi);
-
-	/* read enable always set */
-	mlx5e_build_aso_wqe(aso, sq, aso_wqe, ipsec_obj_id, param);
-
-	sq->db.aso_wqe[pi].opcode = MLX5_OPCODE_ACCESS_ASO;
-	sq->db.aso_wqe[pi].with_data = false;
-	sq->pc += MLX5E_ASO_WQEBBS;
-	sq->doorbell_cseg = &aso_wqe->ctrl;
-
-	mlx5e_notify_hw(&sq->wq, sq->pc, sq->uar_map, sq->doorbell_cseg);
-
-	WRITE_ONCE(sq->doorbell_cseg, NULL); /* Ensure doorbell is written on uar_page before poll_cq */
-
-	err = mlx5e_poll_aso_cq(&sq->cq);
-	if (err)
-		return err;
-
-	if (hard_cnt)
-		*hard_cnt = MLX5_GET(ipsec_aso, aso->ctx, remove_flow_pkt_cnt);
-	if (soft_cnt)
-		*soft_cnt = MLX5_GET(ipsec_aso, aso->ctx, remove_flow_soft_lft);
-
-	if (event_arm) {
-		*event_arm = 0;
-		if (MLX5_GET(ipsec_aso, aso->ctx, esn_event_arm))
-			*event_arm |= MLX5_ASO_ESN_ARM;
-		if (MLX5_GET(ipsec_aso, aso->ctx, soft_lft_arm))
-			*event_arm |= MLX5_ASO_SOFT_ARM;
-		if (MLX5_GET(ipsec_aso, aso->ctx, hard_lft_arm))
-			*event_arm |= MLX5_ASO_HARD_ARM;
-		if (MLX5_GET(ipsec_aso, aso->ctx, remove_flow_enable))
-			*event_arm |= MLX5_ASO_REMOVE_FLOW_ENABLE;
-	}
-
-	if (mode_param)
-		*mode_param = MLX5_GET(ipsec_aso, aso->ctx, mode_parameter);
-
-	return err;
-}
-
-#define UPPER32_MASK GENMASK_ULL(63, 32)
-
-int mlx5e_ipsec_aso_query(struct mlx5e_priv *priv, u32 obj_id,
-			  u32 *hard_cnt, u32 *soft_cnt,
-			  u8 *event_arm, u32 *mode_param)
-{
-	return mlx5e_aso_send_ipsec_aso(priv, obj_id, NULL, hard_cnt, soft_cnt,
-					event_arm, mode_param);
-}
-
-int mlx5e_ipsec_aso_set(struct mlx5e_priv *priv, u32 obj_id, u8 flags,
-			u32 comparator, u32 *hard_cnt, u32 *soft_cnt,
-			u8 *event_arm, u32 *mode_param)
-{
-	struct mlx5e_aso_ctrl_param param = {};
-	int err = 0;
-
-	if (!flags)
-		return -EINVAL;
-
-	param.data_mask_mode = ASO_DATA_MASK_MODE_BITWISE_64BIT;
-	param.condition_0_operand = ALWAYS_TRUE;
-	param.condition_1_operand = ALWAYS_TRUE;
-
-	if (flags & ARM_ESN_EVENT) {
-		param.data_offset = MLX5_IPSEC_ASO_REMOVE_FLOW_PKT_CNT_OFFSET;
-		param.bitwise_data = BIT(22) << 32;
-		param.data_mask = param.bitwise_data;
-		return mlx5e_aso_send_ipsec_aso(priv, obj_id, &param, NULL, NULL, NULL, NULL);
-	}
-
-	if (flags & SET_SOFT) {
-		param.data_offset = MLX5_IPSEC_ASO_REMOVE_FLOW_SOFT_LFT_OFFSET;
-		param.bitwise_data = (u64)(comparator) << 32;
-		param.data_mask = UPPER32_MASK;
-		err = mlx5e_aso_send_ipsec_aso(priv, obj_id, &param, hard_cnt, soft_cnt,
-					       NULL, NULL);
-		if (flags == SET_SOFT)
-			return err;
-	}
-
-	/* For ASO_WQE big Endian format,
-	 * ARM_SOFT is BIT(25 + 32)
-	 * SET COUNTER BIT 31 is BIT(31)
-	 */
-	param.data_offset = MLX5_IPSEC_ASO_REMOVE_FLOW_PKT_CNT_OFFSET;
-
-	if (flags & SET_CNT_BIT31)
-		param.bitwise_data = IPSEC_SW_LIMIT;
-	if (flags & ARM_SOFT)
-		param.bitwise_data |= BIT(25 + 32);
-	if (flags & CLEAR_SOFT)
-		param.bitwise_data &= ~(BIT(25 + 32));
-
-	param.data_mask = param.bitwise_data;
-	return mlx5e_aso_send_ipsec_aso(priv, obj_id, &param, hard_cnt, soft_cnt, NULL, NULL);
 }
 
 static void mlx5e_aso_build_cq_param(struct mlx5e_priv *priv,
@@ -349,6 +215,7 @@ static void mlx5e_aso_build_cq_param(struct mlx5e_priv *priv,
 }
 
 static void mlx5e_build_sq_param_common_aso(struct mlx5e_priv *priv,
+					    struct mlx5e_aso *aso,
 					    struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
@@ -356,26 +223,27 @@ static void mlx5e_build_sq_param_common_aso(struct mlx5e_priv *priv,
 
 	MLX5_SET(wq, wq, log_wq_stride, ilog2(MLX5_SEND_WQE_BB));
 
-	MLX5_SET(wq, wq, pd, priv->ipsec->aso->pdn);
+	MLX5_SET(wq, wq, pd, aso->pdn);
 	param->wq.buf_numa_node = dev_to_node(priv->mdev->device);
 }
 
 static void mlx5e_build_asosq_param(struct mlx5e_priv *priv,
+				    struct mlx5e_aso *aso,
 				    struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common_aso(priv, param);
+	mlx5e_build_sq_param_common_aso(priv, aso, param);
 	MLX5_SET(wq, wq, log_wq_sz, MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE);
 }
 
-static void mlx5e_aso_build_param(struct mlx5e_priv *priv, struct mlx5e_ipsec_aso *aso)
+static void mlx5e_aso_build_param(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
 	mlx5e_aso_build_cq_param(priv, &aso->cq_param);
 
 	aso->cpu = cpumask_first(mlx5_comp_irq_get_affinity_mask(priv->mdev, 0));
-	mlx5e_build_asosq_param(priv, &aso->sq_param);
+	mlx5e_build_asosq_param(priv, aso, &aso->sq_param);
 }
 
 static int mlx5e_alloc_asosq_db(struct mlx5e_asosq *sq, int numa)
@@ -391,9 +259,8 @@ static int mlx5e_alloc_asosq_db(struct mlx5e_asosq *sq, int numa)
 	return 0;
 }
 
-static int mlx5e_alloc_asosq(struct mlx5e_priv *priv)
+static int mlx5e_alloc_asosq(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
 	struct mlx5e_sq_param *param = &aso->sq_param;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_asosq *sq = &aso->sq;
@@ -428,15 +295,14 @@ static void mlx5e_free_asosq(struct mlx5e_asosq *sq)
 	mlx5_wq_destroy(&sq->wq_ctrl);
 }
 
-static int mlx5e_open_asosq(struct mlx5e_priv *priv)
+static int mlx5e_open_asosq(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
 	struct mlx5e_sq_param *param = &aso->sq_param;
 	struct mlx5e_create_sq_param csp = {};
 	struct mlx5e_asosq *sq = &aso->sq;
 	int err;
 
-	err = mlx5e_alloc_asosq(priv);
+	err = mlx5e_alloc_asosq(priv, aso);
 	if (err)
 		return err;
 
@@ -448,6 +314,7 @@ static int mlx5e_open_asosq(struct mlx5e_priv *priv)
 		mlx5_core_err(priv->mdev, "fail to open aso sq err=%d\n", err);
 		goto err_free_asosq;
 	}
+	mlx5_core_dbg(priv->mdev, "sq->sqn = 0x%x\n", sq->sqn);
 
 	set_bit(MLX5E_SQ_STATE_ENABLED, &sq->state);
 
@@ -459,9 +326,9 @@ err_free_asosq:
 	return err;
 }
 
-static void mlx5e_close_asosq(struct mlx5e_priv *priv)
+static void mlx5e_close_asosq(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	struct mlx5e_asosq *sq = &priv->ipsec->aso->sq;
+	struct mlx5e_asosq *sq = &aso->sq;
 
 	clear_bit(MLX5E_SQ_STATE_ENABLED, &sq->state);
 	mlx5e_destroy_sq(priv->mdev, sq->sqn);
@@ -514,20 +381,18 @@ err_free_cq:
 	return err;
 }
 
-void mlx5e_aso_setup(struct mlx5e_priv *priv)
+struct mlx5e_aso *
+mlx5e_aso_setup(struct mlx5e_priv *priv, int size)
 {
-	struct mlx5e_ipsec_aso *aso;
+	struct mlx5e_aso *aso;
 	int err;
 
-	if (priv->ipsec->aso)
-		return;
+	aso = kzalloc(sizeof(*aso), GFP_KERNEL);
+	if (!aso)
+		return NULL;
 
-	priv->ipsec->aso = kzalloc(sizeof(*aso), GFP_KERNEL);
-	if (!priv->ipsec->aso)
-		return;
-
-	aso = priv->ipsec->aso;
-	err = mlx5e_aso_reg_mr(priv);
+	aso->size = size;
+	err = mlx5e_aso_reg_mr(priv, aso);
 	if (err)
 		goto err_mr;
 
@@ -536,29 +401,28 @@ void mlx5e_aso_setup(struct mlx5e_priv *priv)
 	if (err)
 		goto err_cq;
 
-	err = mlx5e_open_asosq(priv);
+	err = mlx5e_open_asosq(priv, aso);
 	if (err)
 		goto err_sq;
 
-	return;
+	return aso;
 
 err_sq:
 	mlx5e_close_cq(&aso->sq.cq);
 err_cq:
-	mlx5e_aso_dereg_mr(priv);
+	mlx5e_aso_dereg_mr(priv, aso);
 err_mr:
-	kfree(priv->ipsec->aso);
-	priv->ipsec->aso = NULL;
+	kfree(aso);
+	return NULL;
 }
 
-void mlx5e_aso_cleanup(struct mlx5e_priv *priv)
+void mlx5e_aso_cleanup(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 {
-	if (!priv->ipsec->aso)
+	if (!aso)
 		return;
 
-	mlx5e_close_asosq(priv);
-	mlx5e_close_cq(&priv->ipsec->aso->sq.cq);
-	mlx5e_aso_dereg_mr(priv);
-	kfree(priv->ipsec->aso);
-	priv->ipsec->aso = NULL;
+	mlx5e_close_asosq(priv, aso);
+	mlx5e_close_cq(&aso->sq.cq);
+	mlx5e_aso_dereg_mr(priv, aso);
+	kfree(aso);
 }

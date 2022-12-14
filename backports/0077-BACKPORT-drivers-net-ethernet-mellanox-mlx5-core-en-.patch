@@ -8,7 +8,7 @@ Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
-@@ -29,7 +29,7 @@
+@@ -36,7 +36,7 @@ ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns
  enum mlx5e_icosq_wqe_type {
  	MLX5E_ICOSQ_WQE_NOP,
  	MLX5E_ICOSQ_WQE_UMR_RX,
@@ -17,7 +17,7 @@ Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
  	MLX5E_ICOSQ_WQE_UMR_TLS,
  	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
  	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
-@@ -55,8 +55,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
+@@ -63,8 +63,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
  void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
  
  /* TX */
@@ -45,7 +45,7 @@ Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
  netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev);
  bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget);
  void mlx5e_free_txqsq_descs(struct mlx5e_txqsq *sq);
-@@ -215,7 +234,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+@@ -223,7 +242,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
  {
  	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
  	/* ensure wqe is visible to device before updating doorbell record */
@@ -57,7 +57,7 @@ Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
  
  	*wq->db = cpu_to_be32(pc);
  
-@@ -407,8 +430,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -415,8 +438,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
  	case IPPROTO_UDP:
  		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  		fallthrough;

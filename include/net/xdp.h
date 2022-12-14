@@ -10,6 +10,30 @@
 #define MEM_TYPE_XSK_BUFF_POOL MEM_TYPE_ZERO_COPY
 #endif
 #endif
+
+#else
+
+struct xdp_rxq_info {};
+struct xdp_frame {};
+
+static inline
+void xdp_rxq_info_unused(struct xdp_rxq_info *xdp_rxq)
+{
+	return;
+}
+
+static inline
+void xdp_rxq_info_unreg_mem_model(struct xdp_rxq_info *xdp_rxq)
+{
+	return;
+}
+
+static inline
+void xdp_rxq_info_unreg(struct xdp_rxq_info *xdp_rxq)
+{
+	return;
+}
+
 #endif
 
 #endif /* COMPAT_NET_XDP_H */

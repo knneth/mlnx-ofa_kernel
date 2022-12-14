@@ -210,6 +210,13 @@ get_upstream_from_csv()
 	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*general.*//')
 }
 
+get_general_from_csv()
+{
+	local line=$1; shift
+
+	echo $(echo "$line" | sed -r -e 's/.*;\s*general=\s*//' -e 's/;.*//')
+}
+
 map_id_new_to_old()
 {
 	local newid=$1; shift
@@ -268,6 +275,28 @@ get_upstream_status_from_ref()
 		status=NA
 	fi
 	echo $status
+}
+
+get_general_from_ref()
+{
+	local uniqID=$1; shift
+	local ref_db=$1; shift
+	local subject=$1; shift
+
+	if [ "X$changeid_map" != "X" ]; then
+		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
+	fi
+	local line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)
+	if [ "X$line" == "X" ]; then
+		echo ""
+		return
+	fi
+	local tag=$(get_general_from_csv "$line")
+	if [ "X$tag" == "X-1" ]; then
+		echo ""
+		return
+	fi
+	echo $tag
 }
 
 ##################################################################
@@ -355,6 +384,9 @@ do
 		if [ "X$upstream" == "X" ]; then
 			upstream=$(get_upstream_status_from_ref "$uniqID" "$ref_db" "$subject")
 		fi
+		if [ "X$upstream" == "Xaccepted" ]; then
+			general=$(get_general_from_ref "$uniqID" "$ref_db" "$subject")
+		fi
 	fi
 
 	if [ "X$feature" == "X" ]; then
@@ -364,6 +396,7 @@ do
 		upstream=$def_ustatus
 	fi
 	entry="$uniqID; subject=${subject}; feature=${feature}; upstream_status=${upstream}; general=${general};"
+	general="" #remove for each iteration
 	echo "'$entry' to metadata/${author}.csv"
 	csvfile="${WDIR}/metadata/${author}.csv"
 	if [ $dry_run -eq 0 ]; then

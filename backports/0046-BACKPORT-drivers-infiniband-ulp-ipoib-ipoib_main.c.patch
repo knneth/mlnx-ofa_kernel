@@ -19,7 +19,7 @@ Change-Id: I38e78574bf498f7fd15fad71d6b5ebfce7bdd517
  int ipoib_sendq_size __read_mostly = IPOIB_TX_RING_SIZE;
  int ipoib_recvq_size __read_mostly = IPOIB_RX_RING_SIZE;
 @@ -101,7 +104,9 @@ static struct net_device *ipoib_get_net_
- 		struct ib_device *dev, u8 port, u16 pkey,
+ 		struct ib_device *dev, u32 port, u16 pkey,
  		const union ib_gid *gid, const struct sockaddr *addr,
  		void *client_data);
 +#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)

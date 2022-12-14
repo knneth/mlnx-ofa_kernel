@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/nvme.h
 
 Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
 ---
- drivers/nvme/host/nvme.h | 112 +++++++++++++++++++++++++++++++++++++++++++++++
+ drivers/nvme/host/nvme.h | 112 +++++++++++++++++++++++++++++++++++++++
  1 file changed, 112 insertions(+)
 
 --- a/drivers/nvme/host/nvme.h
@@ -166,19 +166,19 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  }
  
  static inline void nvme_get_ctrl(struct nvme_ctrl *ctrl)
-@@ -576,7 +644,11 @@ static inline bool nvme_is_aen_req(u16 q
- }
+@@ -577,7 +645,11 @@ static inline bool nvme_is_aen_req(u16 q
  
  void nvme_complete_rq(struct request *req);
+ blk_status_t nvme_host_path_error(struct request *req);
 +#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
  bool nvme_cancel_request(struct request *req, void *data, bool reserved);
 +#else
 +void nvme_cancel_request(struct request *req, void *data, bool reserved);
 +#endif
+ void nvme_cancel_tagset(struct nvme_ctrl *ctrl);
+ void nvme_cancel_admin_tagset(struct nvme_ctrl *ctrl);
  bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
- 		enum nvme_ctrl_state new_state);
- bool nvme_wait_reset(struct nvme_ctrl *ctrl);
-@@ -592,8 +664,10 @@ int nvme_init_identify(struct nvme_ctrl
+@@ -595,8 +667,10 @@ int nvme_init_identify(struct nvme_ctrl
  
  void nvme_remove_namespaces(struct nvme_ctrl *ctrl);
  
@@ -189,7 +189,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  
  void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
  		volatile union nvme_result *res);
-@@ -609,17 +683,29 @@ int nvme_wait_freeze_timeout(struct nvme
+@@ -612,17 +686,29 @@ int nvme_wait_freeze_timeout(struct nvme
  void nvme_start_freeze(struct nvme_ctrl *ctrl);
  
  #define NVME_QID_ANY -1
@@ -219,7 +219,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  int nvme_set_features(struct nvme_ctrl *dev, unsigned int fid,
  		      unsigned int dword11, void *buffer, size_t buflen,
  		      u32 *result);
-@@ -639,7 +725,11 @@ struct nvme_ns *nvme_get_ns_from_disk(st
+@@ -642,7 +728,11 @@ struct nvme_ns *nvme_get_ns_from_disk(st
  		struct nvme_ns_head **head, int *srcu_idx);
  void nvme_put_ns_from_disk(struct nvme_ns_head *head, int idx);
  
@@ -231,7 +231,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  extern const struct block_device_operations nvme_ns_head_ops;
  
  #ifdef CONFIG_NVME_MULTIPATH
-@@ -680,7 +770,12 @@ static inline void nvme_trace_bio_comple
+@@ -683,7 +773,12 @@ static inline void nvme_trace_bio_comple
  	struct nvme_ns *ns = req->q->queuedata;
  
  	if (req->cmd_flags & REQ_NVME_MPATH)
@@ -244,7 +244,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  }
  
  extern struct device_attribute dev_attr_ana_grpid;
-@@ -737,9 +832,11 @@ static inline void nvme_trace_bio_comple
+@@ -740,9 +835,11 @@ static inline void nvme_trace_bio_comple
  static inline int nvme_mpath_init(struct nvme_ctrl *ctrl,
  		struct nvme_id_ctrl *id)
  {
@@ -256,7 +256,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  	return 0;
  }
  static inline void nvme_mpath_uninit(struct nvme_ctrl *ctrl)
-@@ -793,7 +890,9 @@ static inline int nvme_update_zone_info(
+@@ -796,7 +893,9 @@ static inline int nvme_update_zone_info(
  int nvme_nvm_register(struct nvme_ns *ns, char *disk_name, int node);
  void nvme_nvm_unregister(struct nvme_ns *ns);
  extern const struct attribute_group nvme_nvm_attr_group;
@@ -266,7 +266,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  #else
  static inline int nvme_nvm_register(struct nvme_ns *ns, char *disk_name,
  				    int node)
-@@ -802,11 +901,13 @@ static inline int nvme_nvm_register(stru
+@@ -805,11 +904,13 @@ static inline int nvme_nvm_register(stru
  }
  
  static inline void nvme_nvm_unregister(struct nvme_ns *ns) {};
@@ -280,7 +280,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  #endif /* CONFIG_NVM */
  
  static inline struct nvme_ns *nvme_get_ns_from_dev(struct device *dev)
-@@ -831,4 +932,15 @@ struct nvme_ctrl *nvme_ctrl_get_by_path(
+@@ -834,4 +935,15 @@ struct nvme_ctrl *nvme_ctrl_get_by_path(
  struct nvme_ns *nvme_find_get_ns(struct nvme_ctrl *ctrl, unsigned nsid);
  void nvme_put_ns(struct nvme_ns *ns);
  

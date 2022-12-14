@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 ---
- drivers/infiniband/core/umem.c | 283 +++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 272 insertions(+), 11 deletions(-)
+ drivers/infiniband/core/umem.c | 296 +++++++++++++++++++++++++++++++--
+ 1 file changed, 285 insertions(+), 11 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
@@ -63,7 +63,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  /**
   * ib_umem_find_best_pgsz - Find best HW page size to use for this MR
-@@ -191,21 +211,61 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -191,21 +211,64 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -93,6 +93,9 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 +	struct scatterlist *sg = NULL;
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
  	unsigned int gup_flags = FOLL_WRITE;
++#endif
++#if defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES) && (!defined(HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED) && !defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS))
++	unsigned long index;
 +#endif
 +#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
 +	struct vm_area_struct **vma_list;
@@ -126,7 +129,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -228,19 +288,40 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -228,19 +291,40 @@ struct ib_umem *__ib_umem_get(struct ib_
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
@@ -167,7 +170,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -249,55 +330,183 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -249,55 +333,193 @@ struct ib_umem *__ib_umem_get(struct ib_
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -303,7 +306,17 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 +			GFP_KERNEL);
 +		umem->sg_nents = umem->sg_head.nents;
 +		if (IS_ERR(sg)) {
++#ifdef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
 +			unpin_user_pages_dirty_lock(page_list, ret, 0);
++#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS)
++			put_user_pages_dirty_lock(page_list, ret, 0);
++#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS)
++			for (index = 0; index < ret; index++)
++				put_user_page(page_list[index]);
++#else
++			for (index = 0; index < ret; index++)
++				put_page(page_list[index]);
++#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
 +			ret = PTR_ERR(sg);
 +			goto umem_release;
 +			}
@@ -359,7 +372,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  	if (!umem->nmap) {
  		pr_err("%s: failed to map scatterlist, npages=%lu\n", __func__,
-@@ -310,7 +519,11 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -310,7 +532,11 @@ struct ib_umem *__ib_umem_get(struct ib_
  	goto out;
  
  umem_release:
@@ -371,7 +384,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	/*
  	 * If the address belongs to peer memory client, then the first
  	 * call to get_user_pages will fail. In this case, try to get
-@@ -329,9 +542,24 @@ umem_release:
+@@ -329,9 +555,24 @@ umem_release:
  		ret = 0;
  		goto out;
  	}
@@ -396,7 +409,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	free_page((unsigned long) page_list);
  umem_kfree:
  	if (ret) {
-@@ -341,19 +569,36 @@ umem_kfree:
+@@ -341,19 +582,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -433,7 +446,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -365,14 +610,30 @@ void ib_umem_release(struct ib_umem *ume
+@@ -365,14 +623,30 @@ void ib_umem_release(struct ib_umem *ume
  {
  	if (!umem)
  		return;

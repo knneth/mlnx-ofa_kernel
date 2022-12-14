@@ -38,6 +38,9 @@
 #include <linux/mlx5/port.h>
 #include "mlx5_core.h"
 #include "eswitch.h"
+#ifdef CONFIG_MLX5_ESWITCH
+#include "esw/vf_meter.h"
+#endif
 
 struct vf_attributes {
 	struct attribute attr;
@@ -879,6 +882,96 @@ static ssize_t stats_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 {
 	return -ENOTSUPP;
 }
+
+static ssize_t vf_meter_common_show(struct mlx5_sriov_vf *g,
+				    struct vf_attributes *oa, char *buf,
+				    int data_type)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	u64 data;
+	int err;
+
+	err = mlx5_eswitch_get_vf_meter_data(esw, g->vf + 1, data_type,
+					     g->meter_type.rx_tx,
+					     g->meter_type.xps, &data);
+	if (err)
+		return err;
+
+	return sprintf(buf, "%lld\n", data);
+}
+
+static ssize_t vf_meter_common_store(struct mlx5_sriov_vf *g,
+				     struct vf_attributes *oa,
+				     const char *buf, size_t count,
+				     int data_type)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	s64 data;
+	int err;
+
+	err = kstrtos64(buf, 10, &data);
+	if (err)
+		return err;
+
+	if (data < 0)
+		return -EINVAL;
+
+	err = mlx5_eswitch_set_vf_meter_data(esw, g->vf + 1, data_type,
+					     g->meter_type.rx_tx,
+					     g->meter_type.xps, data);
+
+	return err ? err : count;
+}
+
+static ssize_t rate_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+			 char *buf)
+{
+	return vf_meter_common_show(g, oa, buf, MLX5_RATE_LIMIT_DATA_RATE);
+}
+
+static ssize_t rate_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+			  const char *buf, size_t count)
+{
+	return vf_meter_common_store(g, oa, buf, count, MLX5_RATE_LIMIT_DATA_RATE);
+}
+
+static ssize_t burst_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+			  char *buf)
+{
+	return vf_meter_common_show(g, oa, buf, MLX5_RATE_LIMIT_DATA_BURST);
+}
+
+static ssize_t burst_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+			   const char *buf, size_t count)
+{
+	return vf_meter_common_store(g, oa, buf, count, MLX5_RATE_LIMIT_DATA_BURST);
+}
+
+static ssize_t bytes_dropped_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+				  char *buf)
+{
+	return vf_meter_common_show(g, oa, buf, MLX5_RATE_LIMIT_DATA_BYTES_DROPPED);
+}
+
+static ssize_t bytes_dropped_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+				   const char *buf, size_t count)
+{
+	return -EOPNOTSUPP;
+}
+
+static ssize_t packets_dropped_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+				    char *buf)
+{
+	return vf_meter_common_show(g, oa, buf, MLX5_RATE_LIMIT_DATA_PACKETS_DROPPED);
+}
+
+static ssize_t packets_dropped_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
+				     const char *buf, size_t count)
+{
+	return -EOPNOTSUPP;
+}
 #endif /* CONFIG_MLX5_ESWITCH */
 
 static ssize_t num_vf_store(struct device *device, struct device_attribute *attr,
@@ -991,6 +1084,24 @@ static struct kobj_type pf_type_eth = {
 	.sysfs_ops     = &vf_sysfs_ops,
 	.default_attrs = pf_eth_attrs
 };
+
+VF_ATTR(rate);
+VF_ATTR(burst);
+VF_ATTR(bytes_dropped);
+VF_ATTR(packets_dropped);
+
+static struct attribute *vf_meters_eth_attrs[] = {
+	&vf_attr_rate.attr,
+	&vf_attr_burst.attr,
+	&vf_attr_bytes_dropped.attr,
+	&vf_attr_packets_dropped.attr,
+	NULL
+};
+
+static struct kobj_type vf_meters_type_eth = {
+	.sysfs_ops     = &vf_sysfs_ops,
+	.default_attrs = vf_meters_eth_attrs
+};
 #endif /* CONFIG_MLX5_ESWITCH */
 
 static struct attribute *vf_ib_attrs[] = {
@@ -1092,6 +1203,156 @@ void mlx5_destroy_vf_group_sysfs(struct mlx5_core_dev *dev,
 #endif
 }
 
+#ifdef CONFIG_MLX5_ESWITCH
+static void mlx5_destroy_vfs_sysfs_meters(struct mlx5_core_dev *dev, int num_vfs)
+{
+	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+	struct mlx5_sriov_vf_meters *meters;
+	struct mlx5_sriov_vf *vf;
+	int i, j;
+
+	for (i = 0; i < num_vfs; i++) {
+		vf = &sriov->vfs[i];
+
+		meters = vf->meters;
+		if (!meters)
+			break;
+
+		for (j = 0; j < 4; j++)
+			kobject_put(&meters->meters[j].kobj);
+
+		kobject_put(meters->rx_kobj);
+		kobject_put(meters->tx_kobj);
+		kobject_put(meters->kobj);
+
+		kfree(meters);
+	}
+}
+
+static int mlx5_init_vfs_sysfs_init_meter(struct mlx5_sriov_vf *vf,
+					  struct mlx5_sriov_vf_meters *meters,
+					  struct mlx5_sriov_vf *meter,
+					  int rx_tx, int xps)
+{
+	struct kobject *parent;
+	int err;
+
+	if (rx_tx == MLX5_RATE_LIMIT_TX)
+		parent = meters->tx_kobj;
+	else
+		parent = meters->rx_kobj;
+
+	err = kobject_init_and_add(&meter->kobj, &vf_meters_type_eth, parent,
+				   (xps == MLX5_RATE_LIMIT_PPS) ? "pps" : "bps");
+	if (err)
+		return err;
+
+	meter->dev = vf->dev;
+	meter->vf = vf->vf;
+	meter->meter_type.rx_tx = rx_tx;
+	meter->meter_type.xps = xps;
+
+	return 0;
+}
+
+int mlx5_create_vfs_sysfs_meters(struct mlx5_core_dev *dev, int num_vfs)
+{
+	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+	struct mlx5_sriov_vf_meters *meters;
+	struct mlx5_sriov_vf *vf;
+	int err, i;
+
+	if (!(MLX5_CAP_GEN_64(dev, general_obj_types) &
+	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+		return 0;
+
+	if (!(MLX5_CAP_QOS(dev, flow_meter_reg_id) & 0x20)) {
+		mlx5_core_warn(dev, "Metadata reg C5 can't be used for flow meter.\n");
+		return 0;
+	}
+
+	if (!MLX5_CAP_ESW_EGRESS_ACL(dev, execute_aso))
+		return 0;
+
+	for (i = 0; i < num_vfs; i++) {
+		vf = &sriov->vfs[i];
+
+		meters = kzalloc(sizeof(*meters), GFP_KERNEL);
+		if (!meters) {
+			err = -ENOMEM;
+			goto err_vf_meters;
+		}
+
+		meters->kobj = kobject_create_and_add("meters", &vf->kobj);
+		if (!meters->kobj) {
+			err = -EINVAL;
+			goto err_vf_meters;
+		}
+
+		meters->rx_kobj = kobject_create_and_add("rx", meters->kobj);
+		if (!meters->rx_kobj) {
+			err = -EINVAL;
+			goto err_vf_meters;
+		}
+
+		meters->tx_kobj = kobject_create_and_add("tx", meters->kobj);
+		if (!meters->tx_kobj) {
+			err = -EINVAL;
+			goto err_vf_meters;
+		}
+
+		err = mlx5_init_vfs_sysfs_init_meter(vf, meters,
+						     &meters->meters[0],
+						     MLX5_RATE_LIMIT_RX,
+						     MLX5_RATE_LIMIT_BPS);
+		if (err)
+			goto err_vf_meters;
+
+		err = mlx5_init_vfs_sysfs_init_meter(vf, meters,
+						     &meters->meters[1],
+						     MLX5_RATE_LIMIT_RX,
+						     MLX5_RATE_LIMIT_PPS);
+		if (err)
+			goto err_put_meter_0;
+
+		err = mlx5_init_vfs_sysfs_init_meter(vf, meters,
+						     &meters->meters[2],
+						     MLX5_RATE_LIMIT_TX,
+						     MLX5_RATE_LIMIT_BPS);
+		if (err)
+			goto err_put_meter_1;
+
+		err = mlx5_init_vfs_sysfs_init_meter(vf, meters,
+						     &meters->meters[3],
+						     MLX5_RATE_LIMIT_TX,
+						     MLX5_RATE_LIMIT_PPS);
+		if (err)
+			goto err_put_meter_2;
+
+		vf->meters = meters;
+	}
+
+	return 0;
+
+err_put_meter_2:
+	kobject_put(&meters->meters[2].kobj);
+err_put_meter_1:
+	kobject_put(&meters->meters[1].kobj);
+err_put_meter_0:
+	kobject_put(&meters->meters[0].kobj);
+err_vf_meters:
+	kobject_put(meters->rx_kobj);
+	kobject_put(meters->tx_kobj);
+	kobject_put(meters->kobj);
+
+	kfree(meters);
+
+	mlx5_destroy_vfs_sysfs_meters(dev, num_vfs);
+
+	return err;
+}
+#endif
+
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
@@ -1138,6 +1399,14 @@ int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs)
 	}
 #endif
 
+#ifdef CONFIG_MLX5_ESWITCH
+	err = mlx5_create_vfs_sysfs_meters(dev, num_vfs);
+	if (err) {
+		--vf;
+		goto err_vf;
+	}
+#endif
+
 	return 0;
 
 err_vf:
@@ -1156,6 +1425,10 @@ void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs)
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
 	struct mlx5_sriov_vf *tmp;
 	int vf;
+
+#ifdef CONFIG_MLX5_ESWITCH
+	mlx5_destroy_vfs_sysfs_meters(dev, num_vfs);
+#endif
 
 #ifdef CONFIG_MLX5_ESWITCH
 	if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_ETH && num_vfs) {

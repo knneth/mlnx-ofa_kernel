@@ -227,6 +227,10 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 	option_key = (struct geneve_opt *)&enc_opts.key->data[0];
 	option_mask = (struct geneve_opt *)&enc_opts.mask->data[0];
 
+	if (option_mask->opt_class == 0 && option_mask->type == 0 &&
+	    !memchr_inv(option_mask->opt_data, 0, option_mask->length * 4))
+		return 0;
+
 	if (option_key->length > max_tlv_option_data_len) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Matching on GENEVE options: unsupported option len");
@@ -325,6 +329,33 @@ static int mlx5e_tc_tun_parse_geneve(struct mlx5e_priv *priv,
 	return mlx5e_tc_tun_parse_geneve_options(priv, spec, f);
 }
 
+static int mlx5e_tc_tun_cmp_encap_info_geneve(struct mlx5e_encap_key *a,
+					      struct mlx5e_encap_key *b)
+{
+	struct ip_tunnel_info *a_info =
+		container_of(a->ip_tun_key, struct ip_tunnel_info, key);
+	struct ip_tunnel_info *b_info =
+		container_of(b->ip_tun_key, struct ip_tunnel_info, key);
+	bool a_has_opts, b_has_opts;
+
+	if (mlx5e_tc_tun_cmp_encap_info_generic(a, b))
+		return 1;
+
+	a_has_opts = !!(a->ip_tun_key->tun_flags & TUNNEL_GENEVE_OPT);
+	b_has_opts = !!(b->ip_tun_key->tun_flags & TUNNEL_GENEVE_OPT);
+
+	/* keys are equal when both don't have any options attached */
+	if (!a_has_opts && !b_has_opts)
+		return 0;
+
+	if (a_has_opts != b_has_opts)
+		return 1;
+
+	return !(a_info->options_len == b_info->options_len &&
+		  /* options stored next to ip_tunnel_info struct */
+		  !memcmp(a_info + 1, b_info + 1, a_info->options_len));
+}
+
 struct mlx5e_tc_tunnel geneve_tunnel = {
 	.tunnel_type          = MLX5E_TC_TUNNEL_TYPE_GENEVE,
 	.match_level          = MLX5_MATCH_L4,
@@ -334,4 +365,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
 	.generate_ip_tun_hdr  = mlx5e_gen_ip_tunnel_header_geneve,
 	.parse_udp_ports      = mlx5e_tc_tun_parse_udp_ports_geneve,
 	.parse_tunnel         = mlx5e_tc_tun_parse_geneve,
+	.cmp_encap_info       = mlx5e_tc_tun_cmp_encap_info_geneve,
 };

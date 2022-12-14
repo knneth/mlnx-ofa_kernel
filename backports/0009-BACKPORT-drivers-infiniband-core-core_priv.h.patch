@@ -104,4 +104,4 @@ Change-Id: Ia002fd2f14cd80fdfb7bbfdbca4a3821624db6b0
 +#endif
  
  int ib_get_cached_subnet_prefix(struct ib_device *device,
- 				u8                port_num,
+ 				u32 port_num,

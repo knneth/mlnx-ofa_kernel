@@ -91,6 +91,7 @@ enum {
 	FDB_SLOW_PATH,
 	FDB_CRYPTO_EGRESS,
 	FDB_PER_VPORT,
+	FDB_PET_PUSH_PATH,
 };
 
 struct mlx5_pkt_reformat;
@@ -195,6 +196,12 @@ struct mlx5_flow_group *
 mlx5_create_flow_group(struct mlx5_flow_table *ft, u32 *in);
 void mlx5_destroy_flow_group(struct mlx5_flow_group *fg);
 
+struct mlx5_flow_meter {
+	int return_reg_id;
+	int flow_meter_obj_id;
+	int meter_id;
+};
+
 struct mlx5_fs_vlan {
         u16 ethtype;
         u16 vid;
@@ -219,6 +226,7 @@ struct mlx5_flow_act {
 	u32 flags;
 	struct mlx5_fs_vlan vlan[MLX5_FS_VLAN_DEPTH];
 	struct ib_counters *counters;
+	struct mlx5_flow_meter flow_meter;
 };
 
 #define MLX5_DECLARE_FLOW_ACT(name) \
@@ -260,7 +268,8 @@ void mlx5_modify_header_dealloc(struct mlx5_core_dev *dev,
 
 struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
 						     int reformat_type,
-						     int reformat_param_0,
+						     u8 reformat_param_0,
+						     u8 reformat_param_1,
 						     size_t size,
 						     void *reformat_data,
 						     enum mlx5_flow_namespace_type ns_type);

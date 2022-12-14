@@ -12,8 +12,12 @@ struct mlx5_sf {
 	struct mlx5_core_dev *dev;
 	struct mlx5_core_dev *parent_dev;
 	phys_addr_t bar_base_addr;
+	int max_cmpl_eq_count;
+	int cmpl_eq_depth;
+	int async_eq_depth;
 	u16 idx;	/* Index allocated by the SF table bitmap */
-	bool disable_en;
+	u8 disable_en : 1;
+	u8 disable_fc : 1;
 };
 
 struct mlx5_sf_table {

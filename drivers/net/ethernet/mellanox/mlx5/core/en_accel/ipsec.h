@@ -102,7 +102,7 @@ struct mlx5e_ipsec {
 	struct workqueue_struct *wq;
 	struct mlx5e_accel_fs_esp *rx_fs;
 	struct mlx5e_ipsec_tx *tx_fs;
-	struct mlx5e_ipsec_aso *aso;
+	struct mlx5e_aso *aso;
 };
 
 struct mlx5e_ipsec_esn_state {

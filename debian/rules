@@ -131,10 +131,13 @@ endif
 	dh_installdirs -p$(putils)  usr/bin
 	dh_installdirs -p$(putils)  usr/sbin
 	dh_installdirs -p$(putils)  lib/udev
+	dh_installdirs -p$(putils)  lib/systemd/system
 	dh_installdirs -p$(putils)  etc/udev/rules.d
 	dh_installdirs -p$(putils)  etc/init.d
 	dh_installdirs -p$(putils)  etc/init
+	dh_installdirs -p$(putils)  etc/systemd/system
 	dh_installdirs -p$(putils)  usr/share/doc/ib2ib
+	dh_installdirs -p$(putils)  usr/share/mlnx_ofed
 
 	cp source/ofed_scripts/openib.conf debian/$(putils)/etc/infiniband
 	cp source/ofed_scripts/mlx5.conf   debian/$(putils)/etc/infiniband
@@ -144,7 +147,8 @@ endif
 
 	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/etc/udev/rules.d
 	install -m 0644 source/ofed_scripts/82-net-setup-link.rules   debian/$(putils)/etc/udev/rules.d
-	$(CURDIR)/ofed_scripts/deb_service_install_helper $(CURDIR)/debian/$(putils)
+	install -m 0644 ofed_scripts/openibd.service   debian/$(putils)/lib/systemd/system
+	install -m 0644 ofed_scripts/mlnx_interface_mgr\@.service  debian/$(putils)/etc/systemd/system
 
 	# Prepare /etc/infiniband/info
 	echo '#!/bin/bash'						> debian/$(putils)/etc/infiniband/info
@@ -159,6 +163,7 @@ endif
 	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_bf_configure_ct	debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_bf_udev		debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
@@ -181,6 +186,7 @@ endif
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_counters		debian/$(putils)/usr/sbin
+	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh		debian/$(putils)/usr/share/mlnx_ofed
 
 	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
 

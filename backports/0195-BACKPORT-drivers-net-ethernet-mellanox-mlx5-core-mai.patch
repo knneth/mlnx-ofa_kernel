@@ -151,9 +151,9 @@ Change-Id: I4dbb7a15d50ae534cf9c2e2942d372ae2b7b22c7
  	return 0;
  
  err_load_one:
-@@ -1832,8 +1855,9 @@ static void remove_one(struct pci_dev *p
- 	if (priv->steering->mode == MLX5_FLOW_STEERING_MODE_DMFS &&
- 	    mlx5_try_fast_unload(dev))
+@@ -1831,8 +1854,9 @@ static void remove_one(struct pci_dev *p
+ 	set_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state);
+ 	if (mlx5_try_fast_unload(dev))
  		dev_dbg(&dev->pdev->dev, "mlx5_try_fast_unload failed\n");
 -
 +#ifdef HAVE_DEVLINK_RELOAD_DISABLE

@@ -39,6 +39,7 @@ ex()
 KER_UNAME_R=`uname -r`
 KER_PATH=/lib/modules/${KER_UNAME_R}/build
 NJOBS=1
+ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
 
 usage()
 {
@@ -168,6 +169,12 @@ parseparams() {
 				CONFIG_MLXFW=""
 				DEFINE_MLXFW='#undef CONFIG_MLXFW'
 			;;
+			--enable-container-build)
+				ENABLE_CONTAINER_BUILD=1
+			;;
+			--disable-container-build)
+				ENABLE_CONTAINER_BUILD=0
+			;;
 			*)
 				echo "Bad input parameter: $1"
 				usage
@@ -270,9 +277,11 @@ CWD=$(pwd)
 CONFIG="config.mk"
 PATCH_DIR=${PATCH_DIR:-""}
 
-if [ -e "/.dockerenv" ] || (grep -q docker /proc/self/cgroup &>/dev/null); then
-    CONFIG_MLNX_BLOCK_REQUEST_MODULE=y
-    DEFINE_CONFIG_MLNX_BLOCK_REQUEST_MODULE="#undef CONFIG_MLNX_BLOCK_REQUEST_MODULE\n#define CONFIG_MLNX_BLOCK_REQUEST_MODULE 1"
+if [ $ENABLE_CONTAINER_BUILD -eq 0 ]; then
+    if [ -e "/.dockerenv" ] || (grep -q docker /proc/self/cgroup &>/dev/null); then
+        CONFIG_MLNX_BLOCK_REQUEST_MODULE=y
+        DEFINE_CONFIG_MLNX_BLOCK_REQUEST_MODULE="#undef CONFIG_MLNX_BLOCK_REQUEST_MODULE\n#define CONFIG_MLNX_BLOCK_REQUEST_MODULE 1"
+    fi
 fi
 
 case $KVERSION in
@@ -344,6 +353,14 @@ if [ "X${CONFIG_MLX5_EN_ARFS=}" == "Xy" ]; then
         CONFIG_MLX5_EN_ARFS=
         DEFINE_MLX5_EN_ARFS='#undef CONFIG_MLX5_EN_ARFS'
     fi
+fi
+
+check_autofconf CONFIG_DCB
+if [ "X${CONFIG_MLX5_CORE_EN_DCB}" == "Xy" ]; then
+       if ! [ "X${CONFIG_DCB}" == "X1" ]; then
+               echo "Warning: CONFIG_DCB is not enabled in the kernel, cannot enable CONFIG_MLX5_CORE_EN_DCB."
+               CONFIG_MLX5_CORE_EN_DCB=
+       fi
 fi
 
 check_autofconf CONFIG_TLS_DEVICE

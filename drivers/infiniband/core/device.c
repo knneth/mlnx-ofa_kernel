@@ -747,13 +747,17 @@ static void remove_client_context(struct ib_device *device,
 static int alloc_port_data(struct ib_device *device)
 {
 	struct ib_port_data_rcu *pdata_rcu;
-	unsigned int port;
+	u32 port;
 
 	if (device->port_data)
 		return 0;
 
 	/* This can only be called once the physical port range is defined */
 	if (WARN_ON(!device->phys_port_cnt))
+		return -EINVAL;
+
+	/* Reserve U32_MAX so the logic to go over all the ports is sane */
+	if (WARN_ON(device->phys_port_cnt == U32_MAX))
 		return -EINVAL;
 
 	/*
@@ -787,7 +791,7 @@ static int alloc_port_data(struct ib_device *device)
 	return 0;
 }
 
-static int verify_immutable(const struct ib_device *dev, u8 port)
+static int verify_immutable(const struct ib_device *dev, u32 port)
 {
 	return WARN_ON(!rdma_cap_ib_mad(dev, port) &&
 			    rdma_max_mad_size(dev, port) != 0);
@@ -795,7 +799,7 @@ static int verify_immutable(const struct ib_device *dev, u8 port)
 
 static int setup_port_data(struct ib_device *device)
 {
-	unsigned int port;
+	u32 port;
 	int ret;
 
 	ret = alloc_port_data(device);
@@ -2014,7 +2018,7 @@ void ib_dispatch_event_clients(struct ib_event *event)
 }
 
 static int iw_query_port(struct ib_device *device,
-			   u8 port_num,
+			   u32 port_num,
 			   struct ib_port_attr *port_attr)
 {
 	struct in_device *inetdev;
@@ -2053,7 +2057,7 @@ static int iw_query_port(struct ib_device *device,
 }
 
 static int __ib_query_port(struct ib_device *device,
-			   u8 port_num,
+			   u32 port_num,
 			   struct ib_port_attr *port_attr)
 {
 	union ib_gid gid = {};
@@ -2087,7 +2091,7 @@ static int __ib_query_port(struct ib_device *device,
  * @port_attr pointer.
  */
 int ib_query_port(struct ib_device *device,
-		  u8 port_num,
+		  u32 port_num,
 		  struct ib_port_attr *port_attr)
 {
 	if (!rdma_is_port_valid(device, port_num))
@@ -2139,7 +2143,7 @@ static void add_ndev_hash(struct ib_port_data *pdata)
  * NETDEV_UNREGISTER event.
  */
 int ib_device_set_netdev(struct ib_device *ib_dev, struct net_device *ndev,
-			 unsigned int port)
+			 u32 port)
 {
 	struct net_device *old_ndev;
 	struct ib_port_data *pdata;
@@ -2182,7 +2186,7 @@ EXPORT_SYMBOL(ib_device_set_netdev);
 static void free_netdevs(struct ib_device *ib_dev)
 {
 	unsigned long flags;
-	unsigned int port;
+	u32 port;
 
 	if (!ib_dev->port_data)
 		return;
@@ -2213,7 +2217,7 @@ static void free_netdevs(struct ib_device *ib_dev)
 }
 
 struct net_device *ib_device_get_netdev(struct ib_device *ib_dev,
-					unsigned int port)
+					u32 port)
 {
 	struct ib_port_data *pdata;
 	struct net_device *res;
@@ -2301,7 +2305,7 @@ void ib_enum_roce_netdev(struct ib_device *ib_dev,
 			 roce_netdev_callback cb,
 			 void *cookie, unsigned long ndev_event)
 {
-	unsigned int port;
+	u32 port;
 
 	/*
 	 * rdma bond device doesn't need to do any GID handling during
@@ -2389,7 +2393,7 @@ int ib_enum_all_devs(nldev_callback nldev_cb, struct sk_buff *skb,
  * ib_query_pkey() fetches the specified P_Key table entry.
  */
 int ib_query_pkey(struct ib_device *device,
-		  u8 port_num, u16 index, u16 *pkey)
+		  u32 port_num, u16 index, u16 *pkey)
 {
 	if (!rdma_is_port_valid(device, port_num))
 		return -EINVAL;
@@ -2434,7 +2438,7 @@ EXPORT_SYMBOL(ib_modify_device);
  * @port_modify_mask and @port_modify structure.
  */
 int ib_modify_port(struct ib_device *device,
-		   u8 port_num, int port_modify_mask,
+		   u32 port_num, int port_modify_mask,
 		   struct ib_port_modify *port_modify)
 {
 	int rc;
@@ -2466,10 +2470,10 @@ EXPORT_SYMBOL(ib_modify_port);
  *   parameter may be NULL.
  */
 int ib_find_gid(struct ib_device *device, union ib_gid *gid,
-		u8 *port_num, u16 *index)
+		u32 *port_num, u16 *index)
 {
 	union ib_gid tmp_gid;
-	unsigned int port;
+	u32 port;
 	int ret, i;
 
 	rdma_for_each_port (device, port) {
@@ -2503,7 +2507,7 @@ EXPORT_SYMBOL(ib_find_gid);
  * @index: The index into the PKey table where the PKey was found.
  */
 int ib_find_pkey(struct ib_device *device,
-		 u8 port_num, u16 pkey, u16 *index)
+		 u32 port_num, u16 pkey, u16 *index)
 {
 	int ret, i;
 	u16 tmp_pkey;
@@ -2546,7 +2550,7 @@ EXPORT_SYMBOL(ib_find_pkey);
  *
  */
 struct net_device *ib_get_net_dev_by_params(struct ib_device *dev,
-					    u8 port,
+					    u32 port,
 					    u16 pkey,
 					    const union ib_gid *gid,
 					    const struct sockaddr *addr)

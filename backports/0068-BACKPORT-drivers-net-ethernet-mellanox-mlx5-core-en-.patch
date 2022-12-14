@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 
 Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
 ---
- .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 388 +++++++++++++++++-
- 1 file changed, 384 insertions(+), 4 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 389 +++++++++++++++++-
+ 1 file changed, 385 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
@@ -296,10 +296,10 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  						  mlx5e_rep_setup_ft_cb,
  						  priv, priv, true);
 +#endif /* HAVE_TC_SETUP_FT */
- 	default:
- 		return -EOPNOTSUPP;
- 	}
- }
++	default:
++		return -EOPNOTSUPP;
++	}
++}
 +#endif
 +
 +#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
@@ -320,10 +320,10 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
 +	switch (type) {
 +	case TC_SETUP_CLSFLOWER:
 +		return mlx5e_rep_setup_tc_cls_flower(priv, type_data, flags);
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}
+ }
 +#else
 +int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
 +			  void *cb_priv)
@@ -486,7 +486,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  	int type = (int) tc_setup_type;
  
  	switch (type) {
-@@ -539,15 +832,77 @@ int mlx5e_rep_indr_setup_cb(struct net_d
+@@ -539,15 +832,78 @@ int mlx5e_rep_indr_setup_cb(struct net_d
  		return mlx5e_rep_indr_setup_block(netdev, sch, cb_priv, type_data,
  						  mlx5e_rep_indr_setup_block_e2e_cb,
  						  data, cleanup);
@@ -546,7 +546,8 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
 +	struct net_device *netdev = netdev_notifier_info_to_dev(ptr);
 +
 +	if (!mlx5e_tc_tun_device_to_offload(priv, netdev) &&
-+	    !(is_vlan_dev(netdev) && vlan_dev_real_dev(netdev) == rpriv->netdev))
++	    !(is_vlan_dev(netdev) && vlan_dev_real_dev(netdev) == rpriv->netdev) &&
++	    !netif_is_ovs_master(netdev))
 +		return NOTIFY_OK;
 +
 +	switch (event) {
@@ -564,7 +565,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  int mlx5e_rep_tc_netdevice_event_register(struct mlx5e_rep_priv *rpriv)
  {
  	struct mlx5_rep_uplink_priv *uplink_priv = &rpriv->uplink_priv;
-@@ -555,14 +910,35 @@ int mlx5e_rep_tc_netdevice_event_registe
+@@ -555,14 +911,35 @@ int mlx5e_rep_tc_netdevice_event_registe
  	/* init indirect block notifications */
  	INIT_LIST_HEAD(&uplink_priv->tc_indr_block_priv_list);
  
@@ -600,9 +601,9 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  
  #if IS_ENABLED(CONFIG_NET_TC_SKB_EXT) || IS_ENABLED(CONFIG_MLX5_TC_SAMPLE)
  static bool mlx5e_restore_tunnel(struct mlx5e_priv *priv, struct sk_buff *skb,
-@@ -709,11 +1085,15 @@ static bool mlx5e_handle_int_port(struct
+@@ -703,11 +1080,15 @@ static bool mlx5e_handle_int_port(struct
  
- 	if (int_vport->type) {
+ 	if (type) {
  		skb_push_rcsum(skb, skb->mac_len);
 +#ifdef HAVE_SKB_SET_REDIRECTED
  		skb_set_redirected(skb, false);
@@ -612,7 +613,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  		skb->pkt_type = PACKET_HOST;
 +#ifdef HAVE_SKB_SET_REDIRECTED
  		skb_set_redirected(skb, true);
-+#endif
++#endif	
  		err = netif_receive_skb(skb);
  	}
  

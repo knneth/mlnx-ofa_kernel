@@ -21,7 +21,6 @@ net/sunrpc/xprtrdma
 include/linux/mlx5/
 include/rdma/
 include/uapi/rdma/
-include/uapi/linux/const.h
 include/scsi/scsi_transport_srp.h
 include/scsi/srp.h
 include/scsi/iser.h
@@ -34,7 +33,6 @@ include/linux/mdev.h
 include/linux/sunrpc/svc_rdma.h
 include/linux/sunrpc/xprtrdma.h
 include/linux/nospec.h
-include/linux/const.h
 include/linux/indirect_call_wrapper.h
 include/trace/events/ib_umad.h
 include/trace/events/ib_mad.h

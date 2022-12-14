@@ -648,7 +648,7 @@ static int tx_add_rule_full(struct mlx5e_priv *priv,
 	reformat_type = (attrs->is_ipv6) ? MLX5_REFORMAT_TYPE_ADD_ESP_TRANSPORT_OVER_IPV6 :
 			MLX5_REFORMAT_TYPE_ADD_ESP_TRANSPORT_OVER_IPV4;
 	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, reformat_type,
-							   attrs->aulen / 4, 16, reformatbf, MLX5_FLOW_NAMESPACE_FDB);
+							   attrs->aulen / 4, 0, 16, reformatbf, MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(flow_act.pkt_reformat)) {
 		err = PTR_ERR(flow_act.pkt_reformat);
 		netdev_err(priv->netdev, "Failed to allocate IPsec Tx reformat context err=%d\n",  err);

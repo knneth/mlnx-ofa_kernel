@@ -123,7 +123,8 @@ static MLX5E_DECLARE_STATS_GRP_OP_NUM_STATS(ipsec_hw)
 	if (!priv->ipsec)
 		return 0;
 
-	if (mlx5_accel_ipsec_device_caps(priv->mdev) & MLX5_ACCEL_IPSEC_CAP_FULL_OFFLOAD)
+	if ((mlx5_accel_ipsec_device_caps(priv->mdev) & MLX5_ACCEL_IPSEC_CAP_FULL_OFFLOAD) &&
+	    mlx5_is_ipsec_full_offload(priv))
 		num_stats = NUM_IPSEC_HW_COUNTERS_FULL;
 	else if (mlx5_fpga_ipsec_device_caps(priv->mdev))
 		num_stats = NUM_IPSEC_HW_COUNTERS;
@@ -150,7 +151,7 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STRS(ipsec_hw)
 		return idx;
 
 	if ((mlx5_accel_ipsec_device_caps(priv->mdev) & MLX5_ACCEL_IPSEC_CAP_FULL_OFFLOAD) &&
-	    (mlx5_is_ipsec_full_offload(priv)))
+	    mlx5_is_ipsec_full_offload(priv))
 		for (i = 0; i < NUM_IPSEC_HW_COUNTERS_FULL; i++)
 			strcpy(data + (idx++) * ETH_GSTRING_LEN,
 			       mlx5e_ipsec_hw_stats_desc_full[i].format);
@@ -170,7 +171,7 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(ipsec_hw)
 		return idx;
 
 	if ((mlx5_accel_ipsec_device_caps(priv->mdev) & MLX5_ACCEL_IPSEC_CAP_FULL_OFFLOAD) &&
-	    (mlx5_is_ipsec_full_offload(priv))) {
+	    mlx5_is_ipsec_full_offload(priv)) {
 		mlx5_esw_ipsec_full_offload_get_stats(priv->mdev->priv.eswitch,
 						      &priv->ipsec->stats);
 		for (i = 0; i < NUM_IPSEC_HW_COUNTERS_FULL; i++)

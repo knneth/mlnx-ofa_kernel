@@ -211,6 +211,16 @@ do
 		fi
 	fi
 
+	if (echo $feature | grep -Eq "_bugs$"); then
+		if (echo -e "in_progress NA" | grep -wq -- "$upstream"); then
+			commit_msg=$(git log -1 --format="%b" $cid)
+			if !(echo "$commit_msg"  | grep -Eq "^[F|f]ixes: [0-9a-f]{12,40}" ); then
+				cerrs="$cerrs\n-E- Missing or wrong format of 'Fixes' line in commit message! Excpected format like: 'Fixes: <12+ chars of sha1>'"
+				RC=$(( $RC + 1))
+			fi
+		fi
+	fi
+
 	if [ ! -z "$cerrs" ]; then
 		echo -n "At line --> '$line'"
 		echo -e "$cerrs"

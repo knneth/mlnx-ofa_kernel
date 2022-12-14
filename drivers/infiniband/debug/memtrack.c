@@ -839,6 +839,8 @@ int is_non_trackable_free_func(const char *func_name)
 		"dr_icm_chunk_destroy",
 		/* switchdev header rewrite */
 		"dealloc_mod_hdr_actions",
+		/* external function in mdev module */
+		"create_store",
 	};
 	size_t str_cmp_arr_size = sizeof(str_cmp_arr)/sizeof(char *);
 	int i;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
 
 Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
 ---
- .../net/ethernet/mellanox/mlx5/core/en_rx.c   | 258 ++++++++++++++++--
- 1 file changed, 235 insertions(+), 23 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_rx.c   | 255 ++++++++++++++++--
+ 1 file changed, 233 insertions(+), 22 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
@@ -19,15 +19,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  #include <net/inet_ecn.h>
  #include "en.h"
  #include "en/txrx.h"
-@@ -49,6 +52,7 @@
- #include "en_accel/tls_rxtx.h"
- #include "lib/clock.h"
- #include "en/xdp.h"
-+#include "en/txrx.h"
- #include "en/xsk/rx.h"
- #include "en/health.h"
- #include "en/params.h"
-@@ -415,10 +419,14 @@ err_no_page:
+@@ -414,10 +417,14 @@ err_no_page:
  static inline int mlx5e_page_alloc_pool(struct mlx5e_rq *rq,
  					struct mlx5e_dma_info *dma_info)
  {
@@ -45,7 +37,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	if (unlikely(!dma_info->page))
  		return -ENOMEM;
  
-@@ -428,8 +436,12 @@ static inline int mlx5e_page_alloc_pool(
+@@ -427,8 +434,12 @@ static inline int mlx5e_page_alloc_pool(
  	dma_info->addr = dma_map_page(rq->pdev, dma_info->page, 0,
  				      PAGE_SIZE, rq->buff.map_dir);
  	if (unlikely(dma_mapping_error(rq->pdev, dma_info->addr))) {
@@ -60,7 +52,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  		dma_info->page = NULL;
  		return -ENOMEM;
  	}
-@@ -440,9 +452,11 @@ static inline int mlx5e_page_alloc_pool(
+@@ -439,9 +450,11 @@ static inline int mlx5e_page_alloc_pool(
  static inline int mlx5e_page_alloc(struct mlx5e_rq *rq,
  				   struct mlx5e_dma_info *dma_info)
  {
@@ -72,7 +64,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  		return mlx5e_page_alloc_pool(rq, dma_info);
  }
  
-@@ -455,6 +469,7 @@ void mlx5e_page_release_dynamic(struct m
+@@ -454,6 +467,7 @@ void mlx5e_page_release_dynamic(struct m
  				struct mlx5e_dma_info *dma_info,
  				bool recycle)
  {
@@ -80,7 +72,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	if (likely(recycle)) {
  		if (mlx5e_rx_cache_put(rq, dma_info))
  			return;
-@@ -464,22 +479,40 @@ void mlx5e_page_release_dynamic(struct m
+@@ -463,22 +477,40 @@ void mlx5e_page_release_dynamic(struct m
  		page_pool_recycle_direct(rq->page_pool, dma_info->page);
  	} else {
  		mlx5e_page_dma_unmap(rq, dma_info);
@@ -121,7 +113,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  		mlx5e_page_release_dynamic(rq, dma_info, recycle);
  }
  
-@@ -560,16 +593,22 @@ static int mlx5e_alloc_rx_wqes(struct ml
+@@ -559,16 +591,22 @@ static int mlx5e_alloc_rx_wqes(struct ml
  	int err;
  	int i;
  
@@ -144,7 +136,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	for (i = 0; i < wqe_bulk; i++) {
  		struct mlx5e_rx_wqe_cyc *wqe = mlx5_wq_cyc_get_wqe(wq, ix + i);
-@@ -632,6 +671,7 @@ static void mlx5e_mpwqe_page_release(str
+@@ -631,6 +669,7 @@ static void mlx5e_mpwqe_page_release(str
  static void
  mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi, bool recycle)
  {
@@ -152,7 +144,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	bool no_xdp_xmit;
  	struct mlx5e_dma_info *dma_info = wi->umr.dma_info;
  	int i;
-@@ -646,6 +686,13 @@ mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq,
+@@ -645,6 +684,13 @@ mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq,
  	for (i = 0; i < MLX5_MPWRQ_PAGES_PER_WQE; i++)
  		if (no_xdp_xmit || !test_bit(i, wi->xdp_xmit_bitmap))
  			mlx5e_mpwqe_page_release(rq, &dma_info[i], recycle);
@@ -166,7 +158,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  }
  
  static void mlx5e_post_rx_mpwqe(struct mlx5e_rq *rq, u8 n)
-@@ -659,7 +706,11 @@ static void mlx5e_post_rx_mpwqe(struct m
+@@ -658,7 +704,11 @@ static void mlx5e_post_rx_mpwqe(struct m
  	} while (--n);
  
  	/* ensure wqes are visible to device before updating doorbell record */
@@ -178,7 +170,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	mlx5_wq_ll_update_db_record(wq);
  
-@@ -678,14 +729,20 @@ static int mlx5e_alloc_rx_mpwqe(struct m
+@@ -677,14 +727,20 @@ static int mlx5e_alloc_rx_mpwqe(struct m
  	int err;
  	int i;
  
@@ -199,7 +191,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	pi = mlx5e_icosq_get_next_pi(sq, MLX5E_UMR_WQEBBS);
  	umr_wqe = mlx5_wq_cyc_get_wqe(wq, pi);
-@@ -698,7 +755,9 @@ static int mlx5e_alloc_rx_mpwqe(struct m
+@@ -697,7 +753,9 @@ static int mlx5e_alloc_rx_mpwqe(struct m
  		umr_wqe->inline_mtts[i].ptag = cpu_to_be64(dma_info->addr | MLX5_EN_WR);
  	}
  
@@ -209,7 +201,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	wi->consumed_strides = 0;
  
  	umr_wqe->ctrl.opmod_idx_opcode =
-@@ -724,7 +783,9 @@ err_unmap:
+@@ -723,7 +781,9 @@ err_unmap:
  		mlx5e_mpwqe_page_release(rq, dma_info, true);
  	}
  
@@ -219,7 +211,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	rq->stats->buff_alloc_err++;
  
  	return err;
-@@ -764,7 +825,11 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -763,7 +823,11 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
  	} while (mlx5_wq_cyc_missing(wq) >= wqe_bulk);
  
  	/* ensure wqes are visible to device before updating doorbell record */
@@ -231,7 +223,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	mlx5_wq_cyc_update_db_record(wq);
  
-@@ -786,7 +851,7 @@ void mlx5e_free_icosq_descs(struct mlx5e
+@@ -795,7 +859,7 @@ void mlx5e_free_icosq_descs(struct mlx5e
  		ci = mlx5_wq_cyc_ctr2ix(&sq->wq, sqcc);
  		wi = &sq->db.wqe_info[ci];
  		sqcc += wi->num_wqebbs;
@@ -240,7 +232,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  		switch (wi->wqe_type) {
  		case MLX5E_ICOSQ_WQE_SET_PSV_TLS:
  			mlx5e_ktls_handle_ctx_completion(wi);
-@@ -855,7 +920,7 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *c
+@@ -864,7 +928,7 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *c
  				break;
  			case MLX5E_ICOSQ_WQE_NOP:
  				break;
@@ -249,7 +241,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  			case MLX5E_ICOSQ_WQE_UMR_TLS:
  				break;
  			case MLX5E_ICOSQ_WQE_SET_PSV_TLS:
-@@ -1011,11 +1076,15 @@ static void mlx5e_lro_update_hdr(struct
+@@ -1020,11 +1084,15 @@ static void mlx5e_lro_update_hdr(struct
  static inline void mlx5e_skb_set_hash(struct mlx5_cqe64 *cqe,
  				      struct sk_buff *skb)
  {
@@ -265,7 +257,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  }
  
  static inline bool is_last_ethertype_ip(struct sk_buff *skb, int *network_depth,
-@@ -1045,7 +1114,11 @@ static inline void mlx5e_enable_ecn(stru
+@@ -1054,7 +1122,11 @@ static inline void mlx5e_enable_ecn(stru
  
  	ip = skb->data + network_depth;
  	rc = ((proto == htons(ETH_P_IP)) ? IP_ECN_set_ce((struct iphdr *)ip) :
@@ -277,7 +269,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	rq->stats->ecn_mark += !!rc;
  }
-@@ -1192,8 +1265,10 @@ csum_unnecessary:
+@@ -1201,8 +1273,10 @@ csum_unnecessary:
  		   (cqe->hds_ip_ext & CQE_L4_OK))) {
  		skb->ip_summed = CHECKSUM_UNNECESSARY;
  		if (cqe_is_tunneled(cqe)) {
@@ -290,7 +282,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  			stats->csum_unnecessary_inner++;
  			return;
  		}
-@@ -1217,6 +1292,10 @@ static inline void mlx5e_build_rx_skb(st
+@@ -1226,6 +1300,10 @@ static inline void mlx5e_build_rx_skb(st
  	struct net_device *netdev = rq->netdev;
  	struct mlx5_core_dev *mdev = rq->mdev;
  	struct mlx5_eswitch *esw;
@@ -301,7 +293,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	esw = mdev->priv.eswitch;
  	skb->mac_len = ETH_HLEN;
-@@ -1235,6 +1314,16 @@ static inline void mlx5e_build_rx_skb(st
+@@ -1244,6 +1322,16 @@ static inline void mlx5e_build_rx_skb(st
  		stats->packets += lro_num_seg - 1;
  		stats->lro_packets++;
  		stats->lro_bytes += cqe_bcnt;
@@ -318,12 +310,12 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	}
  
  	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp)))
-@@ -1255,7 +1344,16 @@ static inline void mlx5e_build_rx_skb(st
+@@ -1264,7 +1352,16 @@ static inline void mlx5e_build_rx_skb(st
  	if (mlx5_eswitch_mode(esw) != MLX5_ESWITCH_OFFLOADS)
  		skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
  
--	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
 +#ifndef CONFIG_COMPAT_LRO_ENABLED_IPOIB
+ 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
 +#else
 +	l4_hdr_type = get_cqe_l4_hdr_type(cqe);
 +	mlx5e_handle_csum(netdev, cqe, rq, skb,
@@ -332,11 +324,10 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
 +			  (l4_hdr_type != CQE_L4_HDR_TYPE_NONE) &&
 +			  (l4_hdr_type != CQE_L4_HDR_TYPE_UDP)));
 +#endif
-+mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
  	/* checking CE bit in cqe - MSB in ml_path field */
  	if (unlikely(cqe->ml_path & MLX5E_CE_BIT_MASK))
  		mlx5e_enable_ecn(rq, skb);
-@@ -1304,24 +1402,45 @@ struct sk_buff *mlx5e_build_linear_skb(s
+@@ -1313,24 +1410,45 @@ struct sk_buff *mlx5e_build_linear_skb(s
  	return skb;
  }
  
@@ -382,7 +373,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	struct sk_buff *skb;
  	void *va, *data;
  	u32 frag_size;
-@@ -1335,11 +1454,15 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_r
+@@ -1344,11 +1462,15 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_r
  	net_prefetchw(va); /* xdp_frame data area */
  	net_prefetch(data);
  
@@ -398,7 +389,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	frag_size = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt);
  	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt);
  	if (unlikely(!skb))
-@@ -1365,7 +1488,11 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5
+@@ -1374,7 +1496,11 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5
  	/* XDP is not supported in this configuration, as incoming packets
  	 * might spread among multiple pages.
  	 */
@@ -410,7 +401,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  			     ALIGN(MLX5E_RX_MAX_HEAD, sizeof(long)));
  	if (unlikely(!skb)) {
  		rq->stats->buff_alloc_err++;
-@@ -1410,6 +1537,9 @@ static void trigger_report(struct mlx5e_
+@@ -1419,6 +1545,9 @@ static void trigger_report(struct mlx5e_
  void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
  			 bool xmit_more)
  {
@@ -420,7 +411,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
  	struct sk_buff *skb;
-@@ -1443,13 +1573,19 @@ void mlx5e_handle_rx_cqe(struct mlx5e_rq
+@@ -1452,13 +1581,19 @@ void mlx5e_handle_rx_cqe(struct mlx5e_rq
  
  	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
  
@@ -441,7 +432,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	napi_gro_receive(rq->cq.napi, skb);
  
  free_wqe:
-@@ -1462,10 +1598,14 @@ wq_cyc_pop:
+@@ -1526,10 +1661,14 @@ static bool mlx5e_rep_lookup_and_update(
  void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
  			     bool xmit_more)
  {
@@ -460,9 +451,9 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	struct mlx5e_tc_update_priv tc_priv = {};
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
-@@ -1500,8 +1640,10 @@ void mlx5e_handle_rx_cqe_rep(struct mlx5
- 
- 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+@@ -1567,8 +1706,10 @@ void mlx5e_handle_rx_cqe_rep(struct mlx5
+ 	if (!mlx5e_rep_lookup_and_update(rq, skb))
+ 		goto free_wqe;
  
 +#ifdef HAVE_SKB_VLAN_POP
  	if (rep->vlan && skb_vlan_tag_present(skb))
@@ -471,7 +462,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	/* skip rep_tc_update_skb if packet is IPsec */
  	if (!mlx5_ipsec_is_rx_flow(cqe) &&
-@@ -1604,7 +1746,11 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
+@@ -1674,7 +1815,11 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
  	struct mlx5e_dma_info *head_di = di;
  	struct sk_buff *skb;
  
@@ -483,7 +474,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  			     ALIGN(MLX5E_RX_MAX_HEAD, sizeof(long)));
  	if (unlikely(!skb)) {
  		rq->stats->buff_alloc_err++;
-@@ -1646,7 +1792,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -1716,7 +1861,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
  	struct mlx5e_dma_info *di = &wi->umr.dma_info[page_idx];
  	u16 rx_headroom = rq->buff.headroom;
  	u32 cqe_bcnt32 = cqe_bcnt;
@@ -493,7 +484,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	struct sk_buff *skb;
  	void *va, *data;
  	u32 frag_size;
-@@ -1666,14 +1814,18 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -1736,14 +1883,18 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
  	net_prefetchw(va); /* xdp_frame data area */
  	net_prefetch(data);
  
@@ -512,7 +503,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	frag_size = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt32);
  	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt32);
  	if (unlikely(!skb))
-@@ -1688,6 +1840,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -1758,6 +1909,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
  void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
  			       bool xmit_more)
  {
@@ -522,7 +513,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	u16 cstrides       = mpwrq_get_cqe_consumed_strides(cqe);
  	u16 wqe_id         = be16_to_cpu(cqe->wqe_id);
  	struct mlx5e_mpw_info *wi = &rq->mpwqe.info[wqe_id];
-@@ -1727,13 +1882,19 @@ void mlx5e_handle_rx_cqe_mpwrq(struct ml
+@@ -1797,13 +1951,19 @@ void mlx5e_handle_rx_cqe_mpwrq(struct ml
  
  	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
  
@@ -543,7 +534,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	napi_gro_receive(rq->cq.napi, skb);
  
  mpwrq_cqe_out:
-@@ -1752,12 +1913,23 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
+@@ -1822,12 +1982,23 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
  	struct mlx5_cqwq *cqwq = &cq->wq;
  	struct mlx5_cqe64 *cqe, *next_cqe;
  	int work_done = 0;
@@ -567,7 +558,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	if (rq->cqd.left) {
  		work_done += mlx5e_decompress_cqes_cont(rq, cqwq, 0, budget);
-@@ -1792,13 +1964,19 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
+@@ -1862,13 +2033,19 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
  	} while ((++work_done < budget) && cqe);
  
  out:
@@ -589,7 +580,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	return work_done;
  }
-@@ -1824,6 +2002,9 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1894,6 +2071,9 @@ static inline void mlx5i_complete_rx_cqe
  	u32 qpn;
  	u8 *dgid;
  	u8 g;
@@ -599,7 +590,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  
  	qpn = be32_to_cpu(cqe->sop_drop_qpn) & 0xffffff;
  	netdev = mlx5i_pkey_get_netdev(rq->netdev, qpn);
-@@ -1866,6 +2047,12 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1936,6 +2116,12 @@ static inline void mlx5i_complete_rx_cqe
  
  	skb->protocol = *((__be16 *)(skb->data));
  
@@ -612,7 +603,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	if ((netdev->features & NETIF_F_RXCSUM) &&
  	    (likely((cqe->hds_ip_ext & CQE_L3_OK) &&
  		    (cqe->hds_ip_ext & CQE_L4_OK)))) {
-@@ -1905,6 +2092,9 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1975,6 +2161,9 @@ static inline void mlx5i_complete_rx_cqe
  void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
  			 bool xmit_more)
  {
@@ -622,7 +613,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
  	struct sk_buff *skb;
-@@ -1933,6 +2123,11 @@ void mlx5i_handle_rx_cqe(struct mlx5e_rq
+@@ -2003,6 +2192,11 @@ void mlx5i_handle_rx_cqe(struct mlx5e_rq
  		goto wq_free_wqe;
  	}
  	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
@@ -634,7 +625,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	napi_gro_receive(rq->cq.napi, skb);
  
  wq_free_wqe:
-@@ -1951,6 +2146,9 @@ const struct mlx5e_rx_handlers mlx5i_rx_
+@@ -2021,6 +2215,9 @@ const struct mlx5e_rx_handlers mlx5i_rx_
  void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
  			       bool xmit_more)
  {
@@ -644,7 +635,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
  	struct sk_buff *skb;
-@@ -1996,11 +2194,19 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
+@@ -2071,11 +2268,19 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
  
  	switch (rq->wq_type) {
  	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
@@ -664,7 +655,7 @@ Change-Id: Icc6fb41028f2b58b0a0283afecf42c1845301d21
  		rq->post_wqes = mlx5e_post_rx_mpwqes;
  		rq->dealloc_wqe = mlx5e_dealloc_rx_mpwqe;
  
-@@ -2017,11 +2223,17 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
+@@ -2092,11 +2297,17 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
  		}
  		break;
  	default: /* MLX5_WQ_TYPE_CYCLIC */

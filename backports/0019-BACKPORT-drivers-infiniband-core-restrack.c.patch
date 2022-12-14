@@ -8,7 +8,7 @@ Change-Id: Ifec7fb3e32cdf50f0ac23e5947e115f634920189
 
 --- a/drivers/infiniband/core/restrack.c
 +++ b/drivers/infiniband/core/restrack.c
-@@ -336,6 +336,7 @@ void rdma_restrack_del(struct rdma_restr
+@@ -337,6 +337,7 @@ void rdma_restrack_del(struct rdma_restr
  	rdma_restrack_put(res);
  	wait_for_completion(&res->comp);
  

@@ -557,6 +557,7 @@ static int ipoib_mcast_join(struct net_device *dev, struct ipoib_mcast *mcast)
 		spin_unlock_irq(&priv->lock);
 		complete(&mcast->done);
 		spin_lock_irq(&priv->lock);
+		return ret;
 	}
 	return 0;
 }
@@ -635,6 +636,7 @@ void ipoib_mcast_join_task(struct work_struct *work)
 	 * We'll never get here until the broadcast group is both allocated
 	 * and attached
 	 */
+rescan:
 	list_for_each_entry(mcast, &priv->multicast_list, list) {
 		if (IS_ERR_OR_NULL(mcast->mc) &&
 		    !test_bit(IPOIB_MCAST_FLAG_BUSY, &mcast->flags) &&
@@ -647,6 +649,8 @@ void ipoib_mcast_join_task(struct work_struct *work)
 					spin_unlock_irq(&priv->lock);
 					return;
 				}
+				/*ipoib_mcast_join() drops lock, restart foreach loop*/
+				goto rescan;
 			} else if (!delay_until ||
 				 time_before(mcast->delay_until, delay_until))
 				delay_until = mcast->delay_until;

@@ -228,6 +228,13 @@ enum {
 #endif /* CONFIG_COMPAT_CLS_FLOWER_MOD */
 #endif /* CONFIG_COMPAT_KERNEL_4_14 */
 
+#ifndef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
+enum {
+	TCA_FLOWER_KEY_CT_FLAGS_INVALID = 1 << 4, /* Conntrack is invalid. */
+	TCA_FLOWER_KEY_CT_FLAGS_REPLY = 1 << 5, /* Packet is in the reply direction. */
+};
+#endif
+
 #ifndef HAVE_TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT
 enum {
 	TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT = (1 << 0),
@@ -268,6 +275,8 @@ enum {
 	TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED = 1 << 1, /* Part of an existing connection. */
 	TCA_FLOWER_KEY_CT_FLAGS_RELATED = 1 << 2, /* Related to an established connection. */
 	TCA_FLOWER_KEY_CT_FLAGS_TRACKED = 1 << 3, /* Conntrack has occurred. */
+	TCA_FLOWER_KEY_CT_FLAGS_INVALID = 1 << 4, /* Conntrack is invalid. */
+	TCA_FLOWER_KEY_CT_FLAGS_REPLY = 1 << 5, /* Packet is in the reply direction. */
 };
 
 #define __TCA_ACT_SAMPLE 26

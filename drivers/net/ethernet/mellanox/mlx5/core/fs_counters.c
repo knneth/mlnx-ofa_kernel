@@ -298,10 +298,14 @@ static struct mlx5_fc *mlx5_fc_acquire(struct mlx5_core_dev *dev, bool aging)
 
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 {
-	struct mlx5_fc *counter = mlx5_fc_acquire(dev, aging);
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
+	struct mlx5_fc *counter;
 	int err;
 
+	if (dev->disable_fc)
+		return ERR_PTR(-EOPNOTSUPP);
+
+	counter = mlx5_fc_acquire(dev, aging);
 	if (IS_ERR(counter))
 		return counter;
 
@@ -367,6 +371,9 @@ int mlx5_init_fc_stats(struct mlx5_core_dev *dev)
 	int max_bulk_len;
 	int max_out_len;
 
+	if (dev->disable_fc)
+		return 0;
+
 	spin_lock_init(&fc_stats->counters_idr_lock);
 	idr_init(&fc_stats->counters_idr);
 	INIT_LIST_HEAD(&fc_stats->counters);
@@ -400,6 +407,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
 	struct llist_node *tmplist;
 	struct mlx5_fc *counter;
 	struct mlx5_fc *tmp;
+
+	if (dev->disable_fc)
+		return;
 
 	cancel_delayed_work_sync(&dev->priv.fc_stats.work);
 	destroy_workqueue(dev->priv.fc_stats.wq);

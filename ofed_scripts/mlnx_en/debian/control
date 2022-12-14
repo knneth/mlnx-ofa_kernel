@@ -2,7 +2,7 @@ Source: mlnx-en
 Section: net
 Priority: optional
 Maintainer: Vladimir Sokolovsky <vlad@mellanox.com>
-Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dkms
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dkms, python3-distutils | python
 Standards-Version: 3.9.2
 Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux_sw_drivers
 
@@ -14,7 +14,7 @@ Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 Package: mlnx-en-dkms
 Section: kernel
 Architecture: all
-Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, mlnx-en-utils
+Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, mlnx-en-utils, python3-distutils | python
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
 Description: DKMS support for mlnx-ofed kernel modules
  This package provides integration with the DKMS infrastructure for

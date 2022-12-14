@@ -78,8 +78,9 @@ struct mlx5_flow_cmds {
 
 	int (*packet_reformat_alloc)(struct mlx5_flow_root_namespace *ns,
 				     int reformat_type,
-				     int reformat_param_0,
-				     size_t size,
+				     u8 reformat_param_0,
+				     u8 reformat_param_1,
+				     size_t reformat_data_size,
 				     void *reformat_data,
 				     enum mlx5_flow_namespace_type namespace,
 				     struct mlx5_pkt_reformat *pkt_reformat);

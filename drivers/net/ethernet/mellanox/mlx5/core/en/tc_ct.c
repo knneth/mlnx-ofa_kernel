@@ -23,19 +23,21 @@
 #include "eswitch.h"
 #include "en_tc.h"
 #include "en_rep.h"
-#include "fs_core.h"
 
 #define MLX5_CT_ZONE_BITS (mlx5e_tc_attr_to_reg_mappings[ZONE_TO_REG].mlen * 8)
 #define MLX5_CT_ZONE_MASK GENMASK(MLX5_CT_ZONE_BITS - 1, 0)
 #define MLX5_CT_STATE_ESTABLISHED_BIT BIT(1)
 #define MLX5_CT_STATE_TRK_BIT BIT(2)
 #define MLX5_CT_STATE_NAT_BIT BIT(3)
+#define MLX5_CT_STATE_REPLY_BIT BIT(4)
 
 #define MLX5_CT_LABELS_BITS (mlx5e_tc_attr_to_reg_mappings[LABELS_TO_REG].mlen * 8)
 #define MLX5_CT_LABELS_MASK GENMASK(MLX5_CT_LABELS_BITS - 1, 0)
 
 #define ct_dbg(fmt, args...)\
 	netdev_dbg(ct_priv->netdev, "ct_debug: " fmt "\n", ##args)
+
+#define MLX5_CT_DEFAULT_MAX_OFFLOADED_CONNS UINT_MAX
 
 struct mlx5_tc_ct_priv {
 	struct mlx5_core_dev *dev;
@@ -49,15 +51,15 @@ struct mlx5_tc_ct_priv {
 	struct mlx5_flow_table *ct;
 	struct mlx5_flow_table *ct_nat;
 	struct mlx5_flow_table *post_ct;
-	struct mlx5_flow_table *trk_new_ct;
-	struct mlx5_flow_group *miss_grp;
-	struct mlx5_flow_handle *miss_rule;
+	struct mlx5_flow_group *ct_nat_miss_group;
+	struct mlx5_flow_handle *ct_nat_miss_rule;
 	struct mutex control_lock; /* guards parallel adds/dels */
 	struct mapping_ctx *zone_mapping;
 	struct mapping_ctx *labels_mapping;
 	enum mlx5_flow_namespace_type ns_type;
 	struct mlx5_fs_chains *chains;
 	spinlock_t foo_lock; /* protects ft entries */
+	atomic_t num_offloaded_flows;
 };
 
 struct mlx5_ct_flow {
@@ -120,20 +122,23 @@ struct mlx5_ct_tuple {
 	u16 zone;
 };
 
-struct mlx5_ct_shared_counter {
+struct mlx5_ct_counter {
 	struct mlx5_fc *counter;
 	refcount_t refcount;
+	bool is_shared;
 };
 
 enum {
 	MLX5_CT_ENTRY_FLAG_VALID,
+	MLX5_CT_ENTRY_IN_CT_TABLE,
+	MLX5_CT_ENTRY_IN_CT_NAT_TABLE,
 };
 
 struct mlx5_ct_entry {
 	struct rhash_head node;
 	struct rhash_head tuple_node;
 	struct rhash_head tuple_nat_node;
-	struct mlx5_ct_shared_counter *shared_counter;
+	struct mlx5_ct_counter *counter;
 	unsigned long cookie;
 	unsigned long restore_cookie;
 	struct mlx5_ct_tuple tuple;
@@ -180,9 +185,49 @@ static const struct rhashtable_params tuples_nat_ht_params = {
 };
 
 static bool
+mlx5_tc_ct_entry_in_ct_table(struct mlx5_ct_entry *entry)
+{
+	return test_bit(MLX5_CT_ENTRY_IN_CT_TABLE, &entry->flags);
+}
+
+static bool
+mlx5_tc_ct_entry_in_ct_nat_table(struct mlx5_ct_entry *entry)
+{
+	return test_bit(MLX5_CT_ENTRY_IN_CT_NAT_TABLE, &entry->flags);
+}
+
+static bool
 mlx5_tc_ct_entry_valid(struct mlx5_ct_entry *entry)
 {
 	return test_bit(MLX5_CT_ENTRY_FLAG_VALID, &entry->flags);
+}
+
+static bool
+mlx5_tc_ct_dup_nat_entries(struct mlx5_tc_ct_priv *ct_priv)
+{
+	return ct_priv->dev->mlx5e_res.ct.ct_action_on_nat_conns;
+}
+
+static int
+mlx5_get_label_mapping(struct mlx5_tc_ct_priv *ct_priv,
+		       u32 *labels, u32 *id)
+{
+	if (!memchr_inv(labels, 0, sizeof(u32) * 4)) {
+		*id = 0;
+		return 0;
+	}
+
+	if (mapping_add(ct_priv->labels_mapping, labels, id))
+		return -EOPNOTSUPP;
+
+	return 0;
+}
+
+static void
+mlx5_put_label_mapping(struct mlx5_tc_ct_priv *ct_priv, u32 id)
+{
+	if (id)
+		mapping_remove(ct_priv->labels_mapping, id);
 }
 
 // Must be called under rcu_read_lock()
@@ -205,6 +250,24 @@ mlx5_tc_ct_entry_get(struct mlx5_tc_ct_priv *ct_priv, struct mlx5_ct_tuple *tupl
 	}
 
 	return entry ? ERR_PTR(-EINVAL) : NULL;
+}
+
+u32
+mlx5_tc_ct_max_offloaded_conns_get(struct mlx5_core_dev *dev)
+{
+	return dev->mlx5e_res.ct.max_offloaded_conns;
+}
+
+void
+mlx5_tc_ct_max_offloaded_conns_set(struct mlx5_core_dev *dev, u32 max)
+{
+	dev->mlx5e_res.ct.max_offloaded_conns = max;
+}
+
+static void
+mlx5_tc_ct_init_ct_max_offloaded_conns(struct mlx5_core_dev *dev)
+{
+	dev->mlx5e_res.ct.max_offloaded_conns = MLX5_CT_DEFAULT_MAX_OFFLOADED_CONNS;
 }
 
 static int
@@ -435,13 +498,14 @@ mlx5_tc_ct_set_tuple_match(struct mlx5e_priv *priv, struct mlx5_flow_spec *spec,
 }
 
 static void
-mlx5_tc_ct_shared_counter_put(struct mlx5_tc_ct_priv *ct_priv, struct mlx5_ct_entry *entry)
+mlx5_tc_ct_counter_put(struct mlx5_tc_ct_priv *ct_priv, struct mlx5_ct_entry *entry)
 {
-	if (!refcount_dec_and_test(&entry->shared_counter->refcount))
+	if (entry->counter->is_shared &&
+	    !refcount_dec_and_test(&entry->counter->refcount))
 		return;
 
-	mlx5_fc_destroy(ct_priv->dev, entry->shared_counter->counter);
-	kfree(entry->shared_counter);
+	mlx5_fc_destroy(ct_priv->dev, entry->counter->counter);
+	kfree(entry->counter);
 }
 
 static void
@@ -457,7 +521,7 @@ mlx5_tc_ct_entry_del_rule(struct mlx5_tc_ct_priv *ct_priv,
 	mlx5_tc_rule_delete(netdev_priv(ct_priv->netdev), zone_rule->rule, attr);
 	mlx5e_mod_hdr_detach(ct_priv->dev,
 			     ct_priv->mod_hdr_tbl, zone_rule->mh);
-	mapping_remove(ct_priv->labels_mapping, attr->ct_attr.ct_labels_id);
+	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
 	kfree(attr);
 }
 
@@ -465,8 +529,12 @@ static void
 mlx5_tc_ct_entry_del_rules(struct mlx5_tc_ct_priv *ct_priv,
 			   struct mlx5_ct_entry *entry)
 {
-	mlx5_tc_ct_entry_del_rule(ct_priv, entry, true);
-	mlx5_tc_ct_entry_del_rule(ct_priv, entry, false);
+	atomic_dec(&ct_priv->num_offloaded_flows);
+
+	if (mlx5_tc_ct_entry_in_ct_nat_table(entry))
+		mlx5_tc_ct_entry_del_rule(ct_priv, entry, true);
+	if (mlx5_tc_ct_entry_in_ct_table(entry))
+		mlx5_tc_ct_entry_del_rule(ct_priv, entry, false);
 
 	atomic_dec(&ct_priv->dev->priv.ct_debugfs->stats.offloaded);
 }
@@ -497,22 +565,22 @@ mlx5_tc_ct_entry_set_registers(struct mlx5_tc_ct_priv *ct_priv,
 	struct mlx5_core_dev *dev = ct_priv->dev;
 	int err;
 
-	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, ct_priv->ns_type,
 					CTSTATE_TO_REG, ct_state);
 	if (err)
 		return err;
 
-	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, ct_priv->ns_type,
 					MARK_TO_REG, mark);
 	if (err)
 		return err;
 
-	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, ct_priv->ns_type,
 					LABELS_TO_REG, labels_id);
 	if (err)
 		return err;
 
-	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, ct_priv->ns_type,
 					ZONE_RESTORE_TO_REG, zone_restore_id);
 	if (err)
 		return err;
@@ -522,7 +590,7 @@ mlx5_tc_ct_entry_set_registers(struct mlx5_tc_ct_priv *ct_priv,
 	 * reg_b upon miss.
 	 */
 	if (ct_priv->ns_type != MLX5_FLOW_NAMESPACE_FDB) {
-		err = mlx5e_tc_match_to_reg_set(dev, mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+		err = mlx5e_tc_match_to_reg_set(dev, mod_acts, ct_priv->ns_type,
 						NIC_ZONE_RESTORE_TO_REG, zone_restore_id);
 		if (err)
 			return err;
@@ -661,8 +729,8 @@ mlx5_tc_ct_entry_create_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
 	if (!meta)
 		return -EOPNOTSUPP;
 
-	err = mapping_add(ct_priv->labels_mapping, meta->ct_metadata.labels,
-			  &attr->ct_attr.ct_labels_id);
+	err = mlx5_get_label_mapping(ct_priv, meta->ct_metadata.labels,
+				     &attr->ct_attr.ct_labels_id);
 	if (err)
 		return -EOPNOTSUPP;
 	if (nat) {
@@ -698,7 +766,7 @@ mlx5_tc_ct_entry_create_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
 
 err_mapping:
 	dealloc_mod_hdr_actions(&mod_acts);
-	mapping_remove(ct_priv->labels_mapping, attr->ct_attr.ct_labels_id);
+	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
 	return err;
 }
 
@@ -741,7 +809,7 @@ mlx5_tc_ct_entry_add_rule(struct mlx5_tc_ct_priv *ct_priv,
 	attr->dest_ft = ct_priv->post_ct;
 	attr->ft = nat ? ct_priv->ct_nat : ct_priv->ct;
 	attr->outer_match_level = MLX5_MATCH_L4;
-	attr->counter = entry->shared_counter->counter;
+	attr->counter = entry->counter->counter;
 	attr->flags |= MLX5_ESW_ATTR_FLAG_NO_IN_PORT;
 	if (ct_priv->ns_type == MLX5_FLOW_NAMESPACE_FDB)
 		attr->esw_attr->in_mdev = priv->mdev;
@@ -765,7 +833,7 @@ mlx5_tc_ct_entry_add_rule(struct mlx5_tc_ct_priv *ct_priv,
 err_rule:
 	mlx5e_mod_hdr_detach(ct_priv->dev,
 			     ct_priv->mod_hdr_tbl, zone_rule->mh);
-	mapping_remove(ct_priv->labels_mapping, attr->ct_attr.ct_labels_id);
+	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
 err_mod_hdr:
 	kfree(attr);
 err_attr:
@@ -777,11 +845,13 @@ static void mlx5_tc_ct_entry_remove_from_tuples(struct mlx5_ct_entry *entry)
 {
 	struct mlx5_tc_ct_priv *ct_priv = entry->ct_priv;
 
-	rhashtable_remove_fast(&ct_priv->ct_tuples_nat_ht,
-			       &entry->tuple_nat_node,
-			       tuples_nat_ht_params);
-	rhashtable_remove_fast(&ct_priv->ct_tuples_ht, &entry->tuple_node,
-			       tuples_ht_params);
+	if (mlx5_tc_ct_entry_in_ct_table(entry))
+		rhashtable_remove_fast(&ct_priv->ct_tuples_ht, &entry->tuple_node,
+				       tuples_ht_params);
+	if (mlx5_tc_ct_entry_in_ct_nat_table(entry))
+		rhashtable_remove_fast(&ct_priv->ct_tuples_nat_ht,
+				       &entry->tuple_nat_node,
+				       tuples_nat_ht_params);
 }
 
 static void mlx5_tc_ct_entry_del(struct mlx5_ct_entry *entry)
@@ -794,7 +864,7 @@ static void mlx5_tc_ct_entry_del(struct mlx5_ct_entry *entry)
 	mlx5_tc_ct_entry_remove_from_tuples(entry);
 	spin_unlock_bh(&ct_priv->foo_lock);
 
-	mlx5_tc_ct_shared_counter_put(ct_priv, entry);
+	mlx5_tc_ct_counter_put(ct_priv, entry);
 	kfree_rcu(entry, rcu_head);
 }
 
@@ -827,15 +897,35 @@ __mlx5_tc_ct_entry_put(struct mlx5_ct_entry *entry)
 	queue_work(priv->wq, &entry->work);
 }
 
-static struct mlx5_ct_shared_counter*
+static struct mlx5_ct_counter *
+mlx5_tc_ct_counter_create(struct mlx5_tc_ct_priv *ct_priv)
+{
+	struct mlx5_ct_counter *counter;
+	int ret;
+
+	counter = kzalloc(sizeof(*counter), GFP_KERNEL);
+	if (!counter)
+		return ERR_PTR(-ENOMEM);
+
+	counter->is_shared = false;
+	counter->counter = mlx5_fc_create(ct_priv->dev, true);
+	if (IS_ERR(counter->counter)) {
+		ct_dbg("Failed to create counter for ct entry");
+		ret = PTR_ERR(counter->counter);
+		kfree(counter);
+		return ERR_PTR(ret);
+	}
+
+	return counter;
+}
+
+static struct mlx5_ct_counter *
 mlx5_tc_ct_shared_counter_get(struct mlx5_tc_ct_priv *ct_priv,
 			      struct mlx5_ct_entry *entry)
 {
-	struct mlx5_ct_shared_counter *shared_counter;
 	struct mlx5_ct_tuple rev_tuple = entry->tuple;
-	struct mlx5_core_dev *dev = ct_priv->dev;
+	struct mlx5_ct_counter *shared_counter;
 	struct mlx5_ct_entry *rev_entry;
-	struct mlx5_fc *counter;
 	__be16 tmp_port;
 
 	/* get the reversed tuple */
@@ -868,14 +958,14 @@ mlx5_tc_ct_shared_counter_get(struct mlx5_tc_ct_priv *ct_priv,
 		goto create_counter;
 	}
 
-	if (rev_entry && refcount_inc_not_zero(&rev_entry->shared_counter->refcount)) {
+	if (rev_entry && refcount_inc_not_zero(&rev_entry->counter->refcount)) {
 		ct_dbg("Using shared counter entry=0x%p rev=0x%p\n", entry, rev_entry);
-		shared_counter = rev_entry->shared_counter;
+		shared_counter = rev_entry->counter;
 		rcu_read_unlock();
 		spin_unlock_bh(&ct_priv->foo_lock);
 
 		mlx5_tc_ct_entry_put(rev_entry);
-		return shared_counter;
+		return rev_entry->counter;
 	}
 
 	rcu_read_unlock();
@@ -883,18 +973,12 @@ mlx5_tc_ct_shared_counter_get(struct mlx5_tc_ct_priv *ct_priv,
 
 create_counter:
 
-	shared_counter = kzalloc(sizeof(*entry->shared_counter), GFP_KERNEL);
-	if (!shared_counter)
-		return ERR_PTR(-ENOMEM);
-
-	counter = mlx5_fc_create(dev, true);
-	if (IS_ERR(counter)) {
-		ct_dbg("Failed to create counter for ct entry");
-		kfree(shared_counter);
-		return ERR_PTR(PTR_ERR(counter));
+	shared_counter = mlx5_tc_ct_counter_create(ct_priv);
+	if (IS_ERR(shared_counter)) {
+		return ERR_PTR(PTR_ERR(shared_counter));
 	}
 
-	shared_counter->counter = counter;
+	shared_counter->is_shared = true;
 	refcount_set(&shared_counter->refcount, 1);
 	return shared_counter;
 }
@@ -907,22 +991,29 @@ mlx5_tc_ct_entry_add_rules(struct mlx5_tc_ct_priv *ct_priv,
 {
 	int err;
 
-	entry->shared_counter = mlx5_tc_ct_shared_counter_get(ct_priv, entry);
-	if (IS_ERR(entry->shared_counter)) {
-		err = PTR_ERR(entry->shared_counter);
-		ct_dbg("Failed to create counter for ct entry");
+	if (nf_ct_acct_enabled(dev_net(ct_priv->netdev)))
+		entry->counter = mlx5_tc_ct_counter_create(ct_priv);
+	else
+		entry->counter = mlx5_tc_ct_shared_counter_get(ct_priv, entry);
+
+	if (IS_ERR(entry->counter)) {
+		err = PTR_ERR(entry->counter);
 		return err;
 	}
 
-	err = mlx5_tc_ct_entry_add_rule(ct_priv, flow_rule, entry, false,
-					zone_restore_id);
-	if (err)
-		goto err_orig;
+	if (mlx5_tc_ct_entry_in_ct_table(entry)) {
+		err = mlx5_tc_ct_entry_add_rule(ct_priv, flow_rule, entry, false,
+						zone_restore_id);
+		if (err)
+			goto err_orig;
+	}
 
-	err = mlx5_tc_ct_entry_add_rule(ct_priv, flow_rule, entry, true,
-					zone_restore_id);
-	if (err)
-		goto err_nat;
+	if (mlx5_tc_ct_entry_in_ct_nat_table(entry)) {
+		err = mlx5_tc_ct_entry_add_rule(ct_priv, flow_rule, entry, true,
+						zone_restore_id);
+		if (err)
+			goto err_nat;
+	}
 
 	atomic_inc(&ct_priv->dev->priv.ct_debugfs->stats.offloaded);
 	return 0;
@@ -930,7 +1021,7 @@ mlx5_tc_ct_entry_add_rules(struct mlx5_tc_ct_priv *ct_priv,
 err_nat:
 	mlx5_tc_ct_entry_del_rule(ct_priv, entry, false);
 err_orig:
-	mlx5_tc_ct_shared_counter_put(ct_priv, entry);
+	mlx5_tc_ct_counter_put(ct_priv, entry);
 	return err;
 }
 
@@ -944,6 +1035,11 @@ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
 	unsigned long cookie = flow->cookie;
 	struct mlx5_ct_entry *entry;
 	int err;
+
+	/* Two rules inserted per connection */
+	if (atomic_read(&ct_priv->num_offloaded_flows) >=
+	    mlx5_tc_ct_max_offloaded_conns_get(ct_priv->dev) * 2)
+		return -ENOSPC;
 
 	meta_action = mlx5_tc_ct_get_ct_metadata_action(flow_rule);
 	if (!meta_action)
@@ -988,18 +1084,24 @@ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
 	if (err)
 		goto err_entries;
 
-	err = rhashtable_lookup_insert_fast(&ct_priv->ct_tuples_ht,
-					    &entry->tuple_node,
-					    tuples_ht_params);
-	if (err)
-		goto err_tuple;
-
 	if (memcmp(&entry->tuple, &entry->tuple_nat, sizeof(entry->tuple))) {
 		err = rhashtable_lookup_insert_fast(&ct_priv->ct_tuples_nat_ht,
 						    &entry->tuple_nat_node,
 						    tuples_nat_ht_params);
 		if (err)
 			goto err_tuple_nat;
+
+		set_bit(MLX5_CT_ENTRY_IN_CT_NAT_TABLE, &entry->flags);
+	}
+
+	if (!mlx5_tc_ct_entry_in_ct_nat_table(entry) || mlx5_tc_ct_dup_nat_entries(ct_priv)) {
+		err = rhashtable_lookup_insert_fast(&ct_priv->ct_tuples_ht,
+						    &entry->tuple_node,
+						    tuples_ht_params);
+		if (err)
+			goto err_tuple;
+
+		set_bit(MLX5_CT_ENTRY_IN_CT_TABLE, &entry->flags);
 	}
 	spin_unlock_bh(&ct_priv->foo_lock);
 
@@ -1011,21 +1113,15 @@ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
 	set_bit(MLX5_CT_ENTRY_FLAG_VALID, &entry->flags);
 	mlx5_tc_ct_entry_put(entry); /* this function reference */
 
+	atomic_inc(&ct_priv->num_offloaded_flows);
+
 	return 0;
 
 err_rules:
 	spin_lock_bh(&ct_priv->foo_lock);
-	rhashtable_remove_fast(&ct_priv->ct_tuples_nat_ht,
-			       &entry->tuple_nat_node, tuples_nat_ht_params);
-err_tuple_nat:
-	if (entry->tuple_node.next)
-		rhashtable_remove_fast(&ct_priv->ct_tuples_ht,
-				       &entry->tuple_node,
-				       tuples_ht_params);
 err_tuple:
-	rhashtable_remove_fast(&ft->ct_entries_ht,
-			       &entry->node,
-			       cts_ht_params);
+	mlx5_tc_ct_entry_remove_from_tuples(entry);
+err_tuple_nat:
 err_entries:
 	spin_unlock_bh(&ct_priv->foo_lock);
 err_set:
@@ -1098,7 +1194,7 @@ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
 	rcu_read_unlock();
 	spin_unlock_bh(&ct_priv->foo_lock);
 
-	mlx5_fc_query_cached(entry->shared_counter->counter, &bytes, &packets, &lastuse);
+	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
 			  FLOW_ACTION_HW_STATS_DELAYED);
 
@@ -1193,7 +1289,7 @@ mlx5_tc_ct_add_no_trk_match(struct mlx5e_priv *priv,
 void mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr)
 {
 	if (ct_attr->ct_labels_id)
-		mapping_remove(priv->labels_mapping, ct_attr->ct_labels_id);
+		mlx5_put_label_mapping(priv, ct_attr->ct_labels_id);
 }
 
 int
@@ -1204,8 +1300,8 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		       struct netlink_ext_ack *extack)
 {
 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+	bool trk, est, untrk, unest, new, rpl, unrpl;
 	struct flow_dissector_key_ct *mask, *key;
-	bool trk, est, untrk, unest, new;
 	u32 ctstate = 0, ctstate_mask = 0;
 	u16 ct_state_on, ct_state_off;
 	u16 ct_state, ct_state_mask;
@@ -1231,9 +1327,10 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 
 	if (ct_state_mask & ~(TCA_FLOWER_KEY_CT_FLAGS_TRACKED |
 			      TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED |
-			      TCA_FLOWER_KEY_CT_FLAGS_NEW)) {
+			      TCA_FLOWER_KEY_CT_FLAGS_NEW |
+			      TCA_FLOWER_KEY_CT_FLAGS_REPLY)) {
 		NL_SET_ERR_MSG_MOD(extack,
-				   "only ct_state trk, est and new are supported for offload");
+				   "only ct_state trk, est, new and rpl are supported for offload");
 		return -EOPNOTSUPP;
 	}
 
@@ -1242,13 +1339,17 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 	trk = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
 	new = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_NEW;
 	est = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
+	rpl = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_REPLY;
 	untrk = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
 	unest = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
+	unrpl = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_REPLY;
 
 	ctstate |= trk ? MLX5_CT_STATE_TRK_BIT : 0;
 	ctstate |= est ? MLX5_CT_STATE_ESTABLISHED_BIT : 0;
+	ctstate |= rpl ? MLX5_CT_STATE_REPLY_BIT : 0;
 	ctstate_mask |= (untrk || trk) ? MLX5_CT_STATE_TRK_BIT : 0;
 	ctstate_mask |= (unest || est) ? MLX5_CT_STATE_ESTABLISHED_BIT : 0;
+	ctstate_mask |= (unrpl || rpl) ? MLX5_CT_STATE_REPLY_BIT : 0;
 
 	if (new) {
 		NL_SET_ERR_MSG_MOD(extack,
@@ -1271,7 +1372,7 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		ct_labels[1] = key->ct_labels[1] & mask->ct_labels[1];
 		ct_labels[2] = key->ct_labels[2] & mask->ct_labels[2];
 		ct_labels[3] = key->ct_labels[3] & mask->ct_labels[3];
-		if (mapping_add(priv->labels_mapping, ct_labels, &ct_attr->ct_labels_id))
+		if (mlx5_get_label_mapping(priv, ct_labels, &ct_attr->ct_labels_id))
 			return -EOPNOTSUPP;
 		mlx5e_tc_match_to_reg_match(spec, LABELS_TO_REG, ct_attr->ct_labels_id,
 					    MLX5_CT_LABELS_MASK);
@@ -1321,7 +1422,7 @@ static int tc_ct_pre_ct_add_rules(struct mlx5_ct_ft *ct_ft,
 		return -ENOMEM;
 
 	zone = ct_ft->zone & MLX5_CT_ZONE_MASK;
-	err = mlx5e_tc_match_to_reg_set(dev, &pre_mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(dev, &pre_mod_acts, ct_priv->ns_type,
 					ZONE_TO_REG, zone);
 	if (err) {
 		ct_dbg("Failed to set zone register mapping");
@@ -1633,14 +1734,14 @@ mlx5_tc_ct_del_ft_cb(struct mlx5_tc_ct_priv *ct_priv, struct mlx5_ct_ft *ft)
  *      | set zone
  *      v
  * +--------------------+
- * + CT (nat or no nat) +    miss          +---------------------+  miss
- * + tuple + zone match +----------------->+ trk_new_ct          +-------> SW
- * +--------------------+                  + vxlan||roce match   +
- *      | set mark                         +---------------------+
- *      | set labels_id                             | set ct_state +trk+new
- *      | set established                           | set zone_restore
- *	| set zone_restore                          v
- *      | do nat (if needed)                      post_ct
+ * + CT (nat or no nat) +
+ * + tuple + zone match +
+ * +--------------------+
+ *      | set mark
+ *      | set labels_id
+ *      | set established
+ *	| set zone_restore
+ *      | do nat (if needed)
  *      v
  * +--------------+
  * + post_ct      + original filter actions
@@ -1727,14 +1828,14 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *ct_priv,
 	}
 	ct_flow->chain_mapping = chain_mapping;
 
-	err = mlx5e_tc_match_to_reg_set(priv->mdev, &pre_mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(priv->mdev, &pre_mod_acts, ct_priv->ns_type,
 					CHAIN_TO_REG, chain_mapping);
 	if (err) {
 		ct_dbg("Failed to set chain register mapping");
 		goto err_mapping;
 	}
 
-	err = mlx5e_tc_match_to_reg_set(priv->mdev, &pre_mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+	err = mlx5e_tc_match_to_reg_set(priv->mdev, &pre_mod_acts, ct_priv->ns_type,
 					FTEID_TO_REG, fte_id);
 	if (err) {
 		ct_dbg("Failed to set fte_id register mapping");
@@ -2055,12 +2156,15 @@ tc_ct_add_miss_rule(struct mlx5_flow_table *ft,
 }
 
 static int
-tc_ct_add_ct_table_miss_rule(struct mlx5_tc_ct_priv *ct_priv)
+tc_ct_add_ct_table_miss_rule(struct mlx5_flow_table *from,
+			     struct mlx5_flow_table *to,
+			     struct mlx5_flow_group **miss_group,
+			     struct mlx5_flow_handle **miss_rule)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
-	struct mlx5_flow_handle *miss_rule;
-	struct mlx5_flow_group *miss_group;
-	int max_fte = ct_priv->ct->max_fte;
+	struct mlx5_flow_group *group;
+	struct mlx5_flow_handle *rule;
+	int max_fte = from->max_fte;
 	u32 *flow_group_in;
 	int err = 0;
 
@@ -2073,36 +2177,37 @@ tc_ct_add_ct_table_miss_rule(struct mlx5_tc_ct_priv *ct_priv)
 		 max_fte - 2);
 	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index,
 		 max_fte - 1);
-	miss_group = mlx5_create_flow_group(ct_priv->ct, flow_group_in);
-	if (IS_ERR(miss_group)) {
-		err = PTR_ERR(miss_group);
+	group = mlx5_create_flow_group(from, flow_group_in);
+	if (IS_ERR(group)) {
+		err = PTR_ERR(group);
 		goto err_miss_grp;
 	}
 
 	/* add miss rule to next fdb */
-	miss_rule = tc_ct_add_miss_rule(ct_priv->ct, ct_priv->trk_new_ct);
-	if (IS_ERR(miss_rule)) {
-		err = PTR_ERR(miss_rule);
+	rule = tc_ct_add_miss_rule(from, to);
+	if (IS_ERR(rule)) {
+		err = PTR_ERR(rule);
 		goto err_miss_rule;
 	}
 
-	ct_priv->miss_grp = miss_group;
-	ct_priv->miss_rule = miss_rule;
+	*miss_group = group;
+	*miss_rule = rule;
 	kvfree(flow_group_in);
 	return 0;
 
 err_miss_rule:
-	mlx5_destroy_flow_group(miss_group);
+	mlx5_destroy_flow_group(group);
 err_miss_grp:
 	kvfree(flow_group_in);
 	return err;
 }
 
 static void
-tc_ct_del_ct_table_miss_rule(struct mlx5_tc_ct_priv *ct_priv)
+tc_ct_del_ct_table_miss_rule(struct mlx5_flow_group *miss_group,
+			     struct mlx5_flow_handle *miss_rule)
 {
-	mlx5_del_flow_rules(ct_priv->miss_rule);
-	mlx5_destroy_flow_group(ct_priv->miss_grp);
+	mlx5_del_flow_rules(miss_rule);
+	mlx5_destroy_flow_group(miss_group);
 }
 
 #define INIT_ERR_PREFIX "tc ct offload init failed"
@@ -2176,17 +2281,11 @@ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 		goto err_post_ct_tbl;
 	}
 
-	ct_priv->trk_new_ct = mlx5_chains_create_global_table(chains);
-	if (IS_ERR(ct_priv->trk_new_ct)) {
-		err = PTR_ERR(ct_priv->trk_new_ct);
-		mlx5_core_warn(dev, "%s, failed to create trk new ct table err: %d",
-			       INIT_ERR_PREFIX, err);
-		goto err_trk_new_ct_tbl;
-	}
-
-	err = tc_ct_add_ct_table_miss_rule(ct_priv);
+	err = tc_ct_add_ct_table_miss_rule(ct_priv->ct_nat, ct_priv->ct,
+					   &ct_priv->ct_nat_miss_group,
+					   &ct_priv->ct_nat_miss_rule);
 	if (err)
-		goto err_init_ct_tbl;
+		goto err_add_miss;
 
 	ct_priv->fte_ids = fte_ids;
 	mutex_init(&ct_priv->control_lock);
@@ -2194,11 +2293,11 @@ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 	rhashtable_init(&ct_priv->ct_tuples_ht, &tuples_ht_params);
 	rhashtable_init(&ct_priv->ct_tuples_nat_ht, &tuples_nat_ht_params);
 
+	mlx5_tc_ct_init_ct_max_offloaded_conns(dev);
+
 	return ct_priv;
 
-err_init_ct_tbl:
-	mlx5_chains_destroy_global_table(chains, ct_priv->trk_new_ct);
-err_trk_new_ct_tbl:
+err_add_miss:
 	mlx5_chains_destroy_global_table(chains, ct_priv->post_ct);
 err_post_ct_tbl:
 	mlx5_chains_destroy_global_table(chains, ct_priv->ct_nat);
@@ -2226,8 +2325,7 @@ mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv)
 
 	chains = ct_priv->chains;
 
-	tc_ct_del_ct_table_miss_rule(ct_priv);
-	mlx5_chains_destroy_global_table(chains, ct_priv->trk_new_ct);
+	tc_ct_del_ct_table_miss_rule(ct_priv->ct_nat_miss_group, ct_priv->ct_nat_miss_rule);
 	mlx5_chains_destroy_global_table(chains, ct_priv->post_ct);
 	mlx5_chains_destroy_global_table(chains, ct_priv->ct_nat);
 	mlx5_chains_destroy_global_table(chains, ct_priv->ct);

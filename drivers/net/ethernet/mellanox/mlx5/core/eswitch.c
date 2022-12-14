@@ -36,6 +36,7 @@
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/fs.h>
 #include "esw/acl/lgcy.h"
+#include "esw/vf_meter.h"
 #include "mlx5_core.h"
 #include "lib/eq.h"
 #include "eswitch.h"
@@ -1782,6 +1783,7 @@ static void mlx5_eswitch_clear_vf_vports_info(struct mlx5_eswitch *esw)
 		memset(&vport->qos, 0, sizeof(vport->qos));
 		memset(&vport->info, 0, sizeof(vport->info));
 		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_AUTO;
+		vport->info.vlan_proto = htons(ETH_P_8021Q);
 	}
 }
 
@@ -2207,6 +2209,8 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 			err = -ENOSPC;
 			goto abort;
 		}
+		mutex_init(&vport->ingress.offloads.vf_meter_lock);
+		mutex_init(&vport->egress.offloads.vf_meter_lock);
 		if (access_other_hca_roce &&
 		    vport->vport != MLX5_VPORT_UPLINK &&
 		    !mlx5_eswitch_is_sf_vport(esw, vport->vport))

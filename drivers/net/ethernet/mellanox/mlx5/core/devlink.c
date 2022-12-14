@@ -6,6 +6,7 @@
 #include "mlx5_core.h"
 #include "fs_core.h"
 #include "eswitch.h"
+#include "en/tc_ct.h"
 
 static int mlx5_devlink_flash_update(struct devlink *devlink,
 				     const char *file_name,
@@ -252,9 +253,83 @@ static int mlx5_devlink_e2e_cache_size_validate(struct devlink *devlink, u32 id,
 	return 0;
 }
 #endif
+static int mlx5_devlink_esw_pet_insert_set(struct devlink *devlink, u32 id,
+					   struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	if (!MLX5_ESWITCH_MANAGER(dev))
+		return -EOPNOTSUPP;
+
+	return mlx5_esw_offloads_pet_insert_set(dev->priv.eswitch, ctx->val.vbool);
+}
+
+static int mlx5_devlink_esw_pet_insert_get(struct devlink *devlink, u32 id,
+					   struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	if (!MLX5_ESWITCH_MANAGER(dev))
+		return -EOPNOTSUPP;
+
+	ctx->val.vbool = mlx5_eswitch_pet_insert_allowed(dev->priv.eswitch);
+	return 0;
+}
+
+static int mlx5_devlink_esw_pet_insert_validate(struct devlink *devlink, u32 id,
+						union devlink_param_value val,
+						struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+	u8 esw_mode;
+
+	if (!MLX5_ESWITCH_MANAGER(dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch is unsupported");
+		return -EOPNOTSUPP;
+	}
+
+	esw_mode = mlx5_eswitch_mode(dev->priv.eswitch);
+	if (esw_mode == MLX5_ESWITCH_OFFLOADS) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "E-Switch must either disabled or non switchdev mode");
+		return -EBUSY;
+	}
+
+	if (!mlx5e_esw_offloads_pet_supported(dev->priv.eswitch))
+		return -EOPNOTSUPP;
+
+	if (!mlx5_core_is_ecpf(dev))
+		return -EOPNOTSUPP;
+
+	return 0;
+}
 #endif /* CONFIG_MLX5_ESWITCH */
 
+static int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
+						   struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	mlx5_tc_ct_max_offloaded_conns_set(dev, ctx->val.vu32);
+	return 0;
+}
+
+static int mlx5_devlink_ct_max_offloaded_conns_get(struct devlink *devlink, u32 id,
+						   struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	ctx->val.vu32 = mlx5_tc_ct_max_offloaded_conns_get(dev);
+	return 0;
+}
+
 static const struct devlink_param mlx5_devlink_params[] = {
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_ACTION_ON_NAT_CONNS,
+			     "ct_action_on_nat_conns", DEVLINK_PARAM_TYPE_BOOL,
+			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
+			     mlx5_devlink_ct_action_on_nat_conns_get,
+			     mlx5_devlink_ct_action_on_nat_conns_set,
+			     NULL),
 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
 			     "flow_steering_mode", DEVLINK_PARAM_TYPE_STRING,
 			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
@@ -262,6 +337,12 @@ static const struct devlink_param mlx5_devlink_params[] = {
 			     mlx5_devlink_fs_mode_validate),
 	DEVLINK_PARAM_GENERIC(ENABLE_ROCE, BIT(DEVLINK_PARAM_CMODE_DRIVERINIT),
 			      NULL, NULL, mlx5_devlink_enable_roce_validate),
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_MAX_OFFLOADED_CONNS,
+			     "ct_max_offloaded_conns", DEVLINK_PARAM_TYPE_U32,
+			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
+			     mlx5_devlink_ct_max_offloaded_conns_get,
+			     mlx5_devlink_ct_max_offloaded_conns_set,
+			     NULL),
 #ifdef CONFIG_MLX5_ESWITCH
 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
 			     "fdb_large_groups", DEVLINK_PARAM_TYPE_U32,
@@ -275,6 +356,12 @@ static const struct devlink_param mlx5_devlink_params[] = {
 			     NULL, NULL,
 			     mlx5_devlink_e2e_cache_size_validate),
 #endif
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_ESW_PET_INSERT,
+			     "esw_pet_insert", DEVLINK_PARAM_TYPE_BOOL,
+			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
+			     mlx5_devlink_esw_pet_insert_get,
+			     mlx5_devlink_esw_pet_insert_set,
+			     mlx5_devlink_esw_pet_insert_validate),
 #endif /* CONFIG_MLX5_ESWITCH */
 };
 
@@ -306,6 +393,13 @@ static void mlx5_devlink_set_params_init_values(struct devlink *devlink)
 	devlink_param_driverinit_value_set(devlink,
 					   MLX5_DEVLINK_PARAM_ID_ESW_E2E_CACHE_SIZE,
 					   value);
+
+	if (MLX5_ESWITCH_MANAGER(dev)) {
+		value.vbool = false;
+		devlink_param_driverinit_value_set(devlink,
+						   MLX5_DEVLINK_PARAM_ID_ESW_PET_INSERT,
+						   value);
+	}
 #endif
 }
 
@@ -335,4 +429,24 @@ void mlx5_devlink_unregister(struct devlink *devlink)
 	devlink_params_unregister(devlink, mlx5_devlink_params,
 				  ARRAY_SIZE(mlx5_devlink_params));
 	devlink_unregister(devlink);
+}
+
+int
+mlx5_devlink_ct_action_on_nat_conns_set(struct devlink *devlink, u32 id,
+					struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	dev->mlx5e_res.ct.ct_action_on_nat_conns = ctx->val.vbool;
+	return 0;
+}
+
+int
+mlx5_devlink_ct_action_on_nat_conns_get(struct devlink *devlink, u32 id,
+					struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	ctx->val.vbool = dev->mlx5e_res.ct.ct_action_on_nat_conns;
+	return 0;
 }

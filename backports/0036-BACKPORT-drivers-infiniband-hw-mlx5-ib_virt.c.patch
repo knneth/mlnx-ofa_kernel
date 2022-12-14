@@ -13,10 +13,10 @@ Change-Id: I8395e6c09f62a99f70fae8b3275715f785eeb5fe
  }
  
 +#ifdef HAVE_IFLA_VF_IB_NODE_PORT_GUID
- static int set_vf_node_guid(struct ib_device *device, int vf, u8 port, u64 guid)
+ static int set_vf_node_guid(struct ib_device *device, int vf, u32 port,
+ 			    u64 guid)
  {
- 	struct mlx5_ib_dev *dev = to_mdev(device);
-@@ -221,3 +222,6 @@ int mlx5_ib_get_vf_guid(struct ib_device
+@@ -223,3 +224,6 @@ int mlx5_ib_get_vf_guid(struct ib_device
  
  	return 0;
  }

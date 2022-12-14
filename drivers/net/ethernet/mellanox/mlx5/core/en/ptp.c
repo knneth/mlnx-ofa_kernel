@@ -3,7 +3,6 @@
 
 #include "en/ptp.h"
 #include "en/txrx.h"
-#include "lib/clock.h"
 
 struct mlx5e_skb_cb_hwtstamp {
 	ktime_t cqe_hwtstamp;
@@ -70,6 +69,7 @@ static void mlx5e_ptp_handle_ts_cqe(struct mlx5e_ptpsq *ptpsq,
 				    int budget)
 {
 	struct sk_buff *skb = mlx5e_skb_fifo_pop(&ptpsq->skb_fifo);
+	struct mlx5e_txqsq *sq = &ptpsq->txqsq;
 	ktime_t hwtstamp;
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
@@ -77,7 +77,7 @@ static void mlx5e_ptp_handle_ts_cqe(struct mlx5e_ptpsq *ptpsq,
 		goto out;
 	}
 
-	hwtstamp = mlx5_timestamp_to_ns(ptpsq->txqsq.clock, get_cqe_ts(cqe));
+	hwtstamp = mlx5e_cqe_ts_to_ns(sq->ptp_cyc2time, sq->clock, get_cqe_ts(cqe));
 	mlx5e_skb_cb_hwtstamp_handler(skb, MLX5E_SKB_CB_PORT_HWTSTAMP,
 				      hwtstamp, ptpsq->cq_stats);
 	ptpsq->cq_stats->cqe++;
@@ -183,6 +183,9 @@ static int mlx5e_ptp_alloc_txqsq(struct mlx5e_port_ptp *c, int txq_ix,
 	if (!MLX5_CAP_ETH(mdev, wqe_vlan_insert))
 		set_bit(MLX5E_SQ_STATE_VLAN_NEED_L2_INLINE, &sq->state);
 	sq->stop_room = param->stop_room;
+	sq->ptp_cyc2time = mlx5_is_real_time_sq(mdev) ?
+			   mlx5_real_time_cyc2time :
+			   mlx5_timecounter_cyc2time;
 
 	node = dev_to_node(mlx5_core_dma_dev(mdev));
 
@@ -479,7 +482,7 @@ int mlx5e_port_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.mkey.key);
 	c->num_tc   = params->num_tc;
 	c->stats    = &priv->port_ptp_stats.ch;
-	c->irq_desc = irq_to_desc(irq);
+	c->aff_mask = irq_get_affinity_mask(irq);
 	c->lag_port = lag_port;
 
 	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll, 64);

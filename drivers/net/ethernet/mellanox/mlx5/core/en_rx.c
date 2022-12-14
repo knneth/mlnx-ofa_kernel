@@ -47,7 +47,6 @@
 #include "fpga/ipsec.h"
 #include "en_accel/ipsec_rxtx.h"
 #include "en_accel/tls_rxtx.h"
-#include "lib/clock.h"
 #include "en/xdp.h"
 #include "en/xsk/rx.h"
 #include "en/health.h"
@@ -773,6 +772,16 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
 	return !!err;
 }
 
+INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_skip(struct mlx5e_rq *rq)
+{
+	/* Empty function for representors in
+	 * shared_rq mode. return false as if
+	 * RQ (even though non-existent) is not
+	 * ready.
+	 */
+	return false;
+}
+
 void mlx5e_free_icosq_descs(struct mlx5e_icosq *sq)
 {
 	u16 sqcc;
@@ -1238,8 +1247,8 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	}
 
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp)))
-		skb_hwtstamps(skb)->hwtstamp =
-				mlx5_timestamp_to_ns(rq->clock, get_cqe_ts(cqe));
+		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
+								  rq->clock, get_cqe_ts(cqe));
 
 	skb_record_rx_queue(skb, rq->ix);
 
@@ -1459,6 +1468,61 @@ wq_cyc_pop:
 }
 
 #ifdef CONFIG_MLX5_ESWITCH
+/* Metadata_0 is used for vport identification */
+struct mlx5_pet_hdr {
+	u16 pet_ether_type;
+	u16 metadata_0;
+	u16 metadata_1;
+	u16 metadata_2;
+	u16 orig_ether_type;
+} __packed;
+
+static void *mlx5e_rep_netdev_get(struct mlx5_eswitch *esw, struct mlx5_eswitch_rep *rep)
+{
+	struct mlx5e_rep_priv *rpriv;
+
+	rpriv = rep->rep_data[REP_ETH].priv;
+	return rpriv->netdev;
+}
+
+/* Hardware will insert 2 bytes of programmable ether type (0x8CE4) followed
+ * by 6 bytes of metadata. out of 6 bytes, we are only interested in upper 2
+ * bytes that will contain unique metadata assigned by eswitch.
+ * Strip 8 bytes and update skb protocol and dev fields.
+ */
+static bool mlx5e_rep_lookup_and_update(struct mlx5e_rq *rq, struct sk_buff *skb)
+{
+	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
+	struct mlx5_eswitch *esw = rq->mdev->priv.eswitch;
+	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+	struct mlx5_eswitch_rep *vport_rep;
+	struct mlx5_pet_hdr pet_hdr = {};
+	struct ethhdr *curr_eth_hdr;
+	struct ethhdr *new_eth_hdr;
+
+	if (!esw->offloads.pet_info.enabled)
+		return true;
+
+	/* Copy 10 bytes of PET header to local stack for parsing */
+	skb_copy_bits(skb, -2, &pet_hdr, sizeof(pet_hdr));
+	if (pet_hdr.pet_ether_type != esw->offloads.pet_info.ether_type)
+		return false;
+
+	vport_rep = xa_load(&rpriv->vport_rep_map, be32_to_cpu(pet_hdr.metadata_0));
+	if (!vport_rep)
+		return false;
+
+	skb_push(skb, ETH_HLEN);
+	curr_eth_hdr = (struct ethhdr *)(skb->data);
+	new_eth_hdr = (struct ethhdr *)(skb->data + 8);
+	memmove(new_eth_hdr, curr_eth_hdr, 12);
+	skb_set_mac_header(skb, 8);
+	skb_pull_inline(skb, ETH_HLEN + 8);
+	skb->protocol = pet_hdr.orig_ether_type;
+	skb->dev = mlx5e_rep_netdev_get(esw, vport_rep);
+	return true;
+}
+
 void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 			     bool xmit_more)
 {
@@ -1499,6 +1563,9 @@ void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	}
 
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+
+	if (!mlx5e_rep_lookup_and_update(rq, skb))
+		goto free_wqe;
 
 	if (rep->vlan && skb_vlan_tag_present(skb))
 		skb_vlan_pop(skb);
@@ -1564,6 +1631,9 @@ static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64
 		goto mpwrq_cqe_out;
 
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+
+	if (!mlx5e_rep_lookup_and_update(rq, skb))
+		goto mpwrq_cqe_out;
 
 	/* skip rep_tc_update_skb if packet is IPsec */
 	if (!mlx5_ipsec_is_rx_flow(cqe) &&
@@ -1877,8 +1947,8 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 	}
 
 	if (unlikely(mlx5e_rx_hw_stamp(tstamp)))
-		skb_hwtstamps(skb)->hwtstamp =
-				mlx5_timestamp_to_ns(rq->clock, get_cqe_ts(cqe));
+		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
+								  rq->clock, get_cqe_ts(cqe));
 
 	skb_record_rx_queue(skb, rq->ix);
 
@@ -1987,6 +2057,11 @@ wq_free_wqe:
 }
 
 #endif /* CONFIG_MLX5_EN_IPSEC */
+
+void mlx5e_rq_init_handler(struct mlx5e_rq *rq)
+{
+	rq->post_wqes = mlx5e_post_rx_skip;
+}
 
 int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool xsk)
 {

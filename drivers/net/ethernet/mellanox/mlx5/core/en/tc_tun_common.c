@@ -195,7 +195,7 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 		return;
 
 	e->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev,
-						     e->reformat_type, 0,
+						     e->reformat_type, 0, 0,
 						     e->encap_size, e->encap_header,
 						     MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(e->pkt_reformat)) {
@@ -569,13 +569,8 @@ void mlx5e_detach_decap(struct mlx5e_priv *priv,
 	mlx5e_decap_dealloc(priv, d);
 }
 
-struct encap_key {
-	const struct ip_tunnel_key *ip_tun_key;
-	struct mlx5e_tc_tunnel *tc_tunnel;
-};
-
-static inline int cmp_encap_info(struct encap_key *a,
-				 struct encap_key *b)
+int mlx5e_tc_tun_cmp_encap_info_generic(struct mlx5e_encap_key *a,
+					struct mlx5e_encap_key *b)
 {
 	return memcmp(a->ip_tun_key, b->ip_tun_key, sizeof(*a->ip_tun_key)) ||
 		a->tc_tunnel->tunnel_type != b->tc_tunnel->tunnel_type;
@@ -587,7 +582,7 @@ static inline int cmp_decap_info(struct mlx5e_decap_key *a,
 	return memcmp(&a->key, &b->key, sizeof(b->key));
 }
 
-static inline int hash_encap_info(struct encap_key *key)
+static inline int hash_encap_info(struct mlx5e_encap_key *key)
 {
 	return jhash(key->ip_tun_key, sizeof(*key->ip_tun_key),
 		     key->tc_tunnel->tunnel_type);
@@ -609,18 +604,18 @@ static bool mlx5e_decap_take(struct mlx5e_decap_entry *e)
 }
 
 static struct mlx5e_encap_entry *
-mlx5e_encap_get(struct mlx5e_priv *priv, struct encap_key *key,
+mlx5e_encap_get(struct mlx5e_priv *priv, struct mlx5e_encap_key *key,
 		uintptr_t hash_key)
 {
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+	struct mlx5e_encap_key e_key;
 	struct mlx5e_encap_entry *e;
-	struct encap_key e_key;
 
 	hash_for_each_possible_rcu(esw->offloads.encap_tbl, e,
 				   encap_hlist, hash_key) {
 		e_key.ip_tun_key = &e->tun_info->key;
 		e_key.tc_tunnel = e->tunnel;
-		if (!cmp_encap_info(&e_key, key) &&
+		if (!e->tunnel->cmp_encap_info(&e_key, key) &&
 		    mlx5e_encap_take(e))
 			return e;
 	}
@@ -702,8 +697,8 @@ int mlx5e_attach_encap(struct mlx5e_priv *priv,
 	struct mlx5_flow_attr *attr = flow->attr;
 	const struct ip_tunnel_info *tun_info;
 	unsigned long tbl_time_before = 0;
-	struct encap_key key;
 	struct mlx5e_encap_entry *e;
+	struct mlx5e_encap_key key;
 	bool entry_created = false;
 	unsigned short family;
 	uintptr_t hash_key;
@@ -876,7 +871,7 @@ int mlx5e_attach_decap(struct mlx5e_priv *priv,
 
 	d->pkt_reformat = mlx5_packet_reformat_alloc(priv->mdev,
 						     MLX5_REFORMAT_TYPE_L3_TUNNEL_TO_L2,
-						     0,
+						     0, 0,
 						     sizeof(parse_attr->eth),
 						     &parse_attr->eth,
 						     MLX5_FLOW_NAMESPACE_FDB);

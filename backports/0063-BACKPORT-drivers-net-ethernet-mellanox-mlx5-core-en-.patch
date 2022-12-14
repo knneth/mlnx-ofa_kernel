@@ -75,7 +75,7 @@ Change-Id: Id06a527c9174765e25040d8ad1129d5bfa38787c
 +	err = devlink_fmsg_arr_pair_nest_start(fmsg, "data");
 +#endif
  	if (err)
- 		return err;
+ 		goto free_page;
  
 @@ -296,7 +319,12 @@ int mlx5e_health_rsc_fmsg_dump(struct ml
  

@@ -1829,8 +1829,7 @@ static void remove_one(struct pci_dev *pdev)
 		goto out;
  
 	set_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state);
-	if (priv->steering->mode == MLX5_FLOW_STEERING_MODE_DMFS &&
-	    mlx5_try_fast_unload(dev))
+	if (mlx5_try_fast_unload(dev))
 		dev_dbg(&dev->pdev->dev, "mlx5_try_fast_unload failed\n");
 
 	devlink_reload_disable(devlink);

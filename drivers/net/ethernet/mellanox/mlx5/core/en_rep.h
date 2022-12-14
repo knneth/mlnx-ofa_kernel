@@ -106,6 +106,7 @@ struct mlx5e_rep_priv {
 	struct mlx5_rep_uplink_priv uplink_priv; /* valid for uplink rep */
 	struct rtnl_link_stats64 prev_vf_vport_stats;
 	struct devlink_port dl_port;
+	struct xarray vport_rep_map;
 };
 
 static inline
@@ -250,7 +251,7 @@ void mlx5e_rep_bond_unslave(struct mlx5_eswitch *esw,
 			    const struct net_device *lag_dev);
 int mlx5e_rep_bond_update(struct mlx5e_priv *priv, bool cleanup);
 
-bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv);
+bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv);
 
 bool mlx5e_rep_has_offload_stats(const struct net_device *dev, int attr_id);
 int mlx5e_rep_get_offload_stats(int attr_id, const struct net_device *dev,
@@ -272,7 +273,7 @@ static inline bool mlx5e_eswitch_rep(struct net_device *netdev)
 struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev);
 
 #else /* CONFIG_MLX5_ESWITCH */
-static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
+static inline bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv) { return false; }
 static inline int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv) { return 0; }
 static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,
 					       int attr_id) { return false; }
@@ -289,7 +290,7 @@ static inline struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device 
 
 #endif
 
-static inline bool mlx5e_is_vport_rep(struct mlx5e_priv *priv)
+static inline bool mlx5e_is_vport_rep(const struct mlx5e_priv *priv)
 {
 	return (MLX5_ESWITCH_MANAGER(priv->mdev) && priv->ppriv);
 }

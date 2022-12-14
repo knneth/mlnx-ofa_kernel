@@ -9,7 +9,7 @@ Change-Id: I3a3d8b82f3091d678fb89a01e0d6757da003874b
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c
-@@ -228,7 +228,11 @@ static void dr_destroy_qp(struct mlx5_co
+@@ -229,7 +229,11 @@ static void dr_destroy_qp(struct mlx5_co
  
  static void dr_cmd_notify_hw(struct mlx5dr_qp *dr_qp, void *ctrl)
  {

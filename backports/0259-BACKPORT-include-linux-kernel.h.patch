@@ -1,0 +1,21 @@
+From: Mark Bloch <mbloch@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/kernel.h
+
+Change-Id: Id7f24304dabbdd6037f5d08442fb2528d0579a61
+---
+ include/linux/kernel.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/linux/kernel.h
++++ b/include/linux/kernel.h
+@@ -29,6 +29,10 @@
+ #define SIZE_MAX       (~(size_t)0)
+ #endif
+ 
++#ifndef U8_MAX
++#define U8_MAX        ((u8)~0U)
++#endif
++
+ #ifndef U16_MAX
+ #define U16_MAX        ((u16)~0U)
+ #endif

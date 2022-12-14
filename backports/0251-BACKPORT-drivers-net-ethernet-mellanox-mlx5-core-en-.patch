@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 
 Change-Id: I353c3bed6eaad496cd7667bbbce5d92b933b02b6
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 34 +++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 42 +++++++++++++++++++
+ 1 file changed, 42 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-@@ -25,10 +25,19 @@ static void mlx5e_skb_cb_hwtstamp_tx(str
+@@ -24,10 +24,19 @@ static void mlx5e_skb_cb_hwtstamp_tx(str
  				     struct mlx5e_ptp_cq_stats *cq_stats)
  {
  	struct skb_shared_hwtstamps hwts = {};
@@ -28,7 +28,7 @@ Change-Id: I353c3bed6eaad496cd7667bbbce5d92b933b02b6
  
  	/* Maximal allowed diff is 1 / 128 second */
  	if (diff > (NSEC_PER_SEC >> 7)) {
-@@ -57,8 +66,13 @@ void mlx5e_skb_cb_hwtstamp_handler(struc
+@@ -56,8 +65,13 @@ void mlx5e_skb_cb_hwtstamp_handler(struc
  	/* If both CQEs arrive, check and report the port tstamp, and clear skb cb as
  	 * skb soon to be released.
  	 */
@@ -83,7 +83,7 @@ Change-Id: I353c3bed6eaad496cd7667bbbce5d92b933b02b6
  
  	ch_stats->arm++;
  
-@@ -340,6 +371,9 @@ static int mlx5e_ptp_open_cqs(struct mlx
+@@ -343,6 +374,9 @@ static int mlx5e_ptp_open_cqs(struct mlx
  	ccp.ch_stats = c->stats;
  	ccp.napi     = &c->napi;
  	ccp.ix       = c->ix;
@@ -93,3 +93,19 @@ Change-Id: I353c3bed6eaad496cd7667bbbce5d92b933b02b6
  
  	cq_param = &cparams->txq_sq_param.cqp;
  
+@@ -482,7 +516,15 @@ int mlx5e_port_ptp_open(struct mlx5e_pri
+ 	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.mkey.key);
+ 	c->num_tc   = params->num_tc;
+ 	c->stats    = &priv->port_ptp_stats.ch;
++#ifdef HAVE_IRQ_GET_AFFINITY_MASK
+ 	c->aff_mask = irq_get_affinity_mask(irq);
++#else
++#ifndef HAVE_IRQ_DATA_AFFINITY
++	c->aff_mask = irq_data_get_affinity_mask(irq_desc_get_irq_data(irq_to_desc(irq)));
++#else
++	c->aff_mask = irq_desc_get_irq_data(irq_to_desc(irq))->affinity;
++#endif
++#endif
+ 	c->lag_port = lag_port;
+ 
+ 	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll, 64);

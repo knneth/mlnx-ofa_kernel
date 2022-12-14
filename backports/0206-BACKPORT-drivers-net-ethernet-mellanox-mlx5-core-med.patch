@@ -17,7 +17,7 @@ Change-Id: I96dcdc30d9ca283f94b2a335c2365f74f11b5fc2
  struct mlx5_mdev_table {
  	struct mlx5_sf_table sf_table;
  	/* Synchronizes with mdev table cleanup check and mdev creation. */
-@@ -389,3 +390,4 @@ bool mlx5_medev_can_and_mark_cleanup(str
+@@ -511,3 +512,4 @@ bool mlx5_medev_can_and_mark_cleanup(str
  	up_write(&table->cleanup_rwsem);
  	return true;
  }

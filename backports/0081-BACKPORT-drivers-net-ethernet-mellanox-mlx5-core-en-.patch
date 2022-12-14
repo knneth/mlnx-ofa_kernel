@@ -28,7 +28,7 @@ Change-Id: Ib51e56da42fde827d6ca0041412b892b2f369e90
  
  	if (!mlx5e_validate_xsk_param(params, xsk, priv->mdev))
  		return -EINVAL;
-@@ -210,3 +215,5 @@ void mlx5e_xsk_redirect_rqts_to_drop(str
+@@ -200,3 +205,5 @@ void mlx5e_xsk_redirect_rqts_to_drop(str
  		mlx5e_xsk_redirect_rqt_to_drop(priv, i);
  	}
  }

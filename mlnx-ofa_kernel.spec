@@ -76,8 +76,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.2}
-%{!?_release: %global _release OFED.5.2.2.2.0.1}
+%{!?_version: %global _version 5.3}
+%{!?_release: %global _release OFED.5.3.1.0.0.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -132,7 +132,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.2-2.2.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.3-1.0.0.tgz
 
 
 # build KMP rpms?
@@ -188,7 +188,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.2-2.2.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.3-1.0.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -221,7 +221,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.2-2.2.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.3-1.0.0.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -407,16 +407,6 @@ install -d %{buildroot}%{_unitdir}
 install -d %{buildroot}/etc/systemd/system
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/openibd.service %{buildroot}%{_unitdir}
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/mlnx_interface_mgr\@.service %{buildroot}/etc/systemd/system
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo '# For IPoIB Pkeys' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-%else
-# no systemd support
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add", RUN+="/bin/mlnx_interface_mgr.sh $env{INTERFACE} <&- >/dev/null 2>&1 &"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo '# For IPoIB Pkeys' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="add", RUN+="/bin/mlnx_interface_mgr.sh $env{INTERFACE} <&- >/dev/null 2>&1 &"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
 %endif
 
 install -d %{buildroot}/bin
@@ -668,6 +658,7 @@ fi
 %endif
 /sbin/sysctl_perf_tuning
 /sbin/mlnx_bf_configure
+/sbin/mlnx_bf_configure_ct
 /sbin/mlnx-sf
 /lib/udev/mlnx_bf_udev
 /usr/sbin/show_gids
@@ -679,6 +670,7 @@ fi
 /usr/sbin/show_counters
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
+%_datadir/mlnx_ofed/mlnx_bf_assign_ct_cores.sh
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %config(noreplace) /etc/modprobe.d/mlnx-bf.conf
 %{_sbindir}/*

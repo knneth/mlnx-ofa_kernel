@@ -130,6 +130,9 @@
 #define KERNEL_TX_IPSEC_NUM_LEVELS 1
 #define KERNEL_TX_MIN_LEVEL        (KERNEL_TX_IPSEC_NUM_LEVELS)
 
+#define MLX5_INGRESS_ACL_NUM_PRIOS 5
+#define MLX5_EGRESS_ACL_NUM_PRIOS 5
+
 struct node_caps {
 	size_t	arr_sz;
 	long	*caps;
@@ -1945,8 +1948,10 @@ err_alloc_fte:
 
 static bool fwd_next_prio_supported(struct mlx5_flow_table *ft)
 {
-	return ((ft->type == FS_FT_NIC_RX) &&
-		(MLX5_CAP_FLOWTABLE(get_dev(&ft->node), nic_rx_multi_path_tirs)));
+	return ((ft->type == FS_FT_ESW_EGRESS_ACL ||
+		 ft->type == FS_FT_ESW_INGRESS_ACL) ||
+		((ft->type == FS_FT_NIC_RX) &&
+		 (MLX5_CAP_FLOWTABLE(get_dev(&ft->node), nic_rx_multi_path_tirs))));
 }
 
 struct mlx5_flow_handle *
@@ -2852,6 +2857,12 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 		goto out_err;
 	}
 
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_PET_PUSH_PATH, 2);
+	if (IS_ERR(maj_prio)) {
+		err = PTR_ERR(maj_prio);
+		goto out_err;
+	}
+
 	set_prio_attrs(steering->fdb_root_ns);
 	return 0;
 
@@ -2866,27 +2877,41 @@ out_err:
 static int init_egress_acl_root_ns(struct mlx5_flow_steering *steering, int vport)
 {
 	struct fs_prio *prio;
+	int i;
 
 	steering->esw_egress_root_ns[vport] = create_root_ns(steering, FS_FT_ESW_EGRESS_ACL);
 	if (!steering->esw_egress_root_ns[vport])
 		return -ENOMEM;
 
-	/* create 1 prio*/
-	prio = fs_create_prio(&steering->esw_egress_root_ns[vport]->ns, 0, 1);
-	return PTR_ERR_OR_ZERO(prio);
+	/* create 5 prios, and the first 4 are for vf metering */
+	for (i = 0; i < MLX5_EGRESS_ACL_NUM_PRIOS; i++) {
+		prio = fs_create_prio(&steering->esw_egress_root_ns[vport]->ns, i, 1);
+		if (IS_ERR(prio))
+			return PTR_ERR(prio);
+	}
+	set_prio_attrs(steering->esw_egress_root_ns[vport]);
+
+	return 0;
 }
 
 static int init_ingress_acl_root_ns(struct mlx5_flow_steering *steering, int vport)
 {
 	struct fs_prio *prio;
+	int i;
 
 	steering->esw_ingress_root_ns[vport] = create_root_ns(steering, FS_FT_ESW_INGRESS_ACL);
 	if (!steering->esw_ingress_root_ns[vport])
 		return -ENOMEM;
 
-	/* create 1 prio*/
-	prio = fs_create_prio(&steering->esw_ingress_root_ns[vport]->ns, 0, 1);
-	return PTR_ERR_OR_ZERO(prio);
+	/* create 5 prios, and the first 4 are for vf metering */
+	for (i = 0; i < MLX5_INGRESS_ACL_NUM_PRIOS; i++) {
+		prio = fs_create_prio(&steering->esw_ingress_root_ns[vport]->ns, i, 1);
+		if (IS_ERR(prio))
+			return PTR_ERR(prio);
+	}
+	set_prio_attrs(steering->esw_ingress_root_ns[vport]);
+
+	return 0;
 }
 
 static int init_egress_acls_root_ns(struct mlx5_core_dev *dev)
@@ -3222,7 +3247,8 @@ EXPORT_SYMBOL(mlx5_modify_header_dealloc);
 
 struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
 						     int reformat_type,
-						     int reformat_param_0,
+						     u8 reformat_param_0,
+						     u8 reformat_param_1,
 						     size_t size,
 						     void *reformat_data,
 						     enum mlx5_flow_namespace_type ns_type)
@@ -3241,7 +3267,8 @@ struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
 
 	pkt_reformat->ns_type = ns_type;
 	pkt_reformat->reformat_type = reformat_type;
-	err = root->cmds->packet_reformat_alloc(root, reformat_type, reformat_param_0,
+	err = root->cmds->packet_reformat_alloc(root, reformat_type,
+						reformat_param_0, reformat_param_1,
 						size, reformat_data, ns_type,
 						pkt_reformat);
 	if (err) {

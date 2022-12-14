@@ -158,6 +158,9 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 		caps->flex_parser_id_mpls_over_udp =
 			MLX5_CAP_GEN(mdev, flex_parser_id_outer_first_mpls_over_udp_label);
 
+	caps->max_reformat_insert_size = MLX5_CAP_GEN_2(mdev, max_reformat_insert_size);
+	caps->max_reformat_insert_offset = MLX5_CAP_GEN_2(mdev, max_reformat_insert_offset);
+
 	caps->nic_rx_drop_address =
 		MLX5_CAP64_FLOWTABLE(mdev, sw_steering_nic_rx_action_drop_icm_address);
 	caps->nic_tx_drop_address =
@@ -259,6 +262,13 @@ int mlx5dr_cmd_query_flow_sampler(struct mlx5_core_dev *dev,
 int mlx5dr_cmd_sync_steering(struct mlx5_core_dev *mdev)
 {
 	u32 in[MLX5_ST_SZ_DW(sync_steering_in)] = {};
+
+	/* Skip SYNC in case the device is internal error state.
+	 * Besides a device error, this also happens when we're
+	 * in fast teardown
+	 */
+	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
+		return 0;
 
 	MLX5_SET(sync_steering_in, in, opcode, MLX5_CMD_OP_SYNC_STEERING);
 
@@ -488,6 +498,8 @@ int mlx5dr_cmd_destroy_flow_table(struct mlx5_core_dev *mdev,
 
 int mlx5dr_cmd_create_reformat_ctx(struct mlx5_core_dev *mdev,
 				   enum mlx5_reformat_ctx_type rt,
+				   u8 reformat_param_0,
+				   u8 reformat_param_1,
 				   size_t reformat_size,
 				   void *reformat_data,
 				   u32 *reformat_id)
@@ -514,6 +526,8 @@ int mlx5dr_cmd_create_reformat_ctx(struct mlx5_core_dev *mdev,
 	pdata = MLX5_ADDR_OF(packet_reformat_context_in, prctx, reformat_data);
 
 	MLX5_SET(packet_reformat_context_in, prctx, reformat_type, rt);
+	MLX5_SET(packet_reformat_context_in, prctx, reformat_param_0, reformat_param_0);
+	MLX5_SET(packet_reformat_context_in, prctx, reformat_param_1, reformat_param_1);
 	MLX5_SET(packet_reformat_context_in, prctx, reformat_data_size, reformat_size);
 	memcpy(pdata, reformat_data, reformat_size);
 

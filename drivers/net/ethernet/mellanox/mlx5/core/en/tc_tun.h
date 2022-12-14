@@ -19,6 +19,11 @@ enum {
 	MLX5E_TC_TUNNEL_TYPE_MPLSOUDP,
 };
 
+struct mlx5e_encap_key {
+	const struct ip_tunnel_key *ip_tun_key;
+	struct mlx5e_tc_tunnel     *tc_tunnel;
+};
+
 struct mlx5e_tc_tunnel {
 	int tunnel_type;
 	enum mlx5_flow_match_level match_level;
@@ -42,6 +47,8 @@ struct mlx5e_tc_tunnel {
 			    struct flow_cls_offload *f,
 			    void *headers_c,
 			    void *headers_v);
+	int (*cmp_encap_info)(struct mlx5e_encap_key *a,
+			      struct mlx5e_encap_key *b);
 };
 
 /* Helper struct for accessing a struct containing list_head array.
@@ -132,6 +139,9 @@ int mlx5e_tc_tun_parse_udp_ports(struct mlx5e_priv *priv,
 				 struct flow_cls_offload *f,
 				 void *headers_c,
 				 void *headers_v);
+
+int mlx5e_tc_tun_cmp_encap_info_generic(struct mlx5e_encap_key *a,
+					struct mlx5e_encap_key *b);
 
 void mlx5e_detach_encap(struct mlx5e_priv *priv,
 			struct mlx5e_tc_flow *flow, int out_index);

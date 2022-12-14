@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
 
 Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
 ---
- drivers/nvme/host/fabrics.c | 41 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 41 insertions(+)
+ drivers/nvme/host/fabrics.c | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
 
 --- a/drivers/nvme/host/fabrics.c
 +++ b/drivers/nvme/host/fabrics.c
@@ -82,7 +82,7 @@ Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
  	if (ret) {
  		nvmf_log_connect_error(ctrl, ret, le32_to_cpu(res.u32),
  				       &cmd, data);
-@@ -550,9 +577,16 @@ static struct nvmf_transport_ops *nvmf_l
+@@ -550,11 +577,22 @@ static struct nvmf_transport_ops *nvmf_l
  blk_status_t nvmf_fail_nonready_command(struct nvme_ctrl *ctrl,
  		struct request *rq)
  {
@@ -98,8 +98,14 @@ Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
 +#endif
  		return BLK_STS_RESOURCE;
  
- 	nvme_req(rq)->status = NVME_SC_HOST_PATH_ERROR;
-@@ -633,7 +667,11 @@ static int nvmf_parse_options(struct nvm
++#ifndef HAVE_MQ_RQ_STATE
++	blk_mq_start_request(rq);
++#endif
++
+ 	return nvme_host_path_error(rq);
+ }
+ EXPORT_SYMBOL_GPL(nvmf_fail_nonready_command);
+@@ -630,7 +668,11 @@ static int nvmf_parse_options(struct nvm
  
  	/* Set defaults */
  	opts->queue_size = NVMF_DEF_QUEUE_SIZE;
@@ -111,7 +117,7 @@ Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
  	opts->reconnect_delay = NVMF_DEF_RECONNECT_DELAY;
  	opts->kato = NVME_DEFAULT_KATO;
  	opts->duplicate_connect = false;
-@@ -1212,6 +1250,9 @@ static void __exit nvmf_exit(void)
+@@ -1209,6 +1251,9 @@ static void __exit nvmf_exit(void)
  }
  
  MODULE_LICENSE("GPL v2");

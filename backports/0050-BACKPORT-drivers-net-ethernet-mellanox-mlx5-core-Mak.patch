@@ -8,8 +8,8 @@ Change-Id: I7670bd542ef7e272ab925429eac8f1bb6d00c5a0
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
-@@ -58,8 +58,12 @@ mlx5_core-$(CONFIG_MLX5_ESWITCH)   += es
- 				      esw/vporttbl.o
+@@ -60,8 +60,12 @@ mlx5_core-$(CONFIG_MLX5_ESWITCH)   += es
+ 				      esw/vporttbl.o esw/pet_offloads.o \
  
  mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o
 -mlx5_core-$(CONFIG_VXLAN)          += lib/vxlan.o

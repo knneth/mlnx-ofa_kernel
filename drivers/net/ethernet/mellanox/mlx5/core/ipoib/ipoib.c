@@ -237,6 +237,7 @@ int mlx5i_create_underlay_qp(struct mlx5e_priv *priv)
 	}
 
 	qpc = MLX5_ADDR_OF(create_qp_in, in, qpc);
+	MLX5_SET(qpc, qpc, ts_format, mlx5_get_qp_default_ts(priv->mdev));
 	MLX5_SET(qpc, qpc, st, MLX5_QP_ST_UD);
 	MLX5_SET(qpc, qpc, pm_state, MLX5_QP_PM_MIGRATED);
 	MLX5_SET(qpc, qpc, ulp_stateless_offload_mode,
@@ -722,7 +723,7 @@ static const struct mlx5e_profile *mlx5_get_profile(struct mlx5_core_dev *mdev)
 	return &mlx5i_nic_profile;
 }
 
-static int mlx5_rdma_setup_rn(struct ib_device *ibdev, u8 port_num,
+static int mlx5_rdma_setup_rn(struct ib_device *ibdev, u32 port_num,
 			      struct net_device *netdev, void *param)
 {
 	struct mlx5_core_dev *mdev = (struct mlx5_core_dev *)param;

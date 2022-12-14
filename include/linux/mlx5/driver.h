@@ -109,7 +109,6 @@ enum {
 	MLX5_REG_FPGA_CAP	 = 0x4022,
 	MLX5_REG_FPGA_CTRL	 = 0x4023,
 	MLX5_REG_FPGA_ACCESS_REG = 0x4024,
-	MLX5_REG_FPGA_SHELL_CNTR = 0x4025,
 	MLX5_REG_CORE_DUMP	 = 0x402e,
 	MLX5_REG_PCAP		 = 0x5001,
 	MLX5_REG_PMTU		 = 0x5003,
@@ -131,7 +130,6 @@ enum {
 	MLX5_REG_PCAM		 = 0x507f,
 	MLX5_REG_NODE_DESC	 = 0x6001,
 	MLX5_REG_HOST_ENDIANNESS = 0x7004,
-	MLX5_REG_MTMP		 = 0x900a,
 	MLX5_REG_MCIA		 = 0x9014,
 	MLX5_REG_MFRL		 = 0x9028,
 	MLX5_REG_MLCR		 = 0x902b,
@@ -488,10 +486,43 @@ struct mlx5_vf_context {
 	enum port_state_policy	policy;
 };
 
+enum {
+	MLX5_RATE_LIMIT_RX,
+	MLX5_RATE_LIMIT_TX,
+};
+
+enum {
+	MLX5_RATE_LIMIT_BPS,
+	MLX5_RATE_LIMIT_PPS,
+};
+
+enum {
+	MLX5_RATE_LIMIT_DATA_RATE,
+	MLX5_RATE_LIMIT_DATA_BURST,
+	MLX5_RATE_LIMIT_DATA_PACKETS_DROPPED,
+	MLX5_RATE_LIMIT_DATA_BYTES_DROPPED,
+};
+
+struct mlx5_sriov_vf_meter_type {
+	int	rx_tx;
+	int	xps;
+};
+
 struct mlx5_sriov_vf {
 	struct mlx5_core_dev   *dev;
 	struct kobject		kobj;
 	int			vf;
+	union {
+		struct mlx5_sriov_vf_meters *meters;
+		struct mlx5_sriov_vf_meter_type meter_type;
+	};
+};
+
+struct mlx5_sriov_vf_meters {
+	struct kobject		*kobj;
+	struct kobject		*rx_kobj;
+	struct kobject		*tx_kobj;
+	struct mlx5_sriov_vf	meters[4];
 };
 
 struct mlx5_core_sriov {
@@ -548,8 +579,8 @@ struct mlx5_rate_limit {
 
 struct mlx5_rl_entry {
 	u8 rl_raw[MLX5_ST_SZ_BYTES(set_pp_rate_limit_context)];
-	u16 index;
 	u64 refcount;
+	u16 index;
 	u16 uid;
 	u8 dedicated : 1;
 };
@@ -675,6 +706,11 @@ struct mlx5e_resources {
 	struct mlx5_core_mkey      mkey;
 	struct mlx5_sq_bfreg       bfreg;
 	u32                        max_rl_queues;
+
+	struct {
+		bool ct_action_on_nat_conns;
+		u32 max_offloaded_conns;
+	} ct;
 };
 
 enum mlx5_sw_icm_type {
@@ -699,23 +735,22 @@ struct mlx5_pps {
 	u8                         enabled;
 };
 
-struct mlx5_clock {
-	struct mlx5_core_dev      *mdev;
-	struct mlx5_nb             pps_nb;
-	seqlock_t                  lock;
+struct mlx5_timer {
 	struct cyclecounter        cycles;
 	struct timecounter         tc;
-	struct hwtstamp_config     hwtstamp_config;
 	u32                        nominal_c_mult;
 	unsigned long              overflow_period;
 	struct delayed_work        overflow_work;
+};
+
+struct mlx5_clock {
+	struct mlx5_nb             pps_nb;
+	seqlock_t                  lock;
+	struct hwtstamp_config     hwtstamp_config;
 	struct ptp_clock          *ptp;
 	struct ptp_clock_info      ptp_info;
 	struct mlx5_pps            pps_info;
-	ktime_t (*cyc2time)(struct mlx5_clock *clock, u64 timestamp);
-	void                      *addr_h;
-	void                      *addr_l;
-	u8                         time_stamp_mode;
+	struct mlx5_timer          timer;
 };
 
 struct mlx5_mst_dump;
@@ -817,7 +852,11 @@ struct mlx5_core_dev {
 	u32                      vsc_addr;
 	struct mlx5_hv_vhca	*hv_vhca;
 	struct mlx5_local_lb local_lb;
-	bool disable_en;
+	int max_cmpl_eq_count;
+	int cmpl_eq_depth;
+	int async_eq_depth;
+	u8 disable_en : 1;
+	u8 disable_fc : 1;
 };
 
 struct mlx5_db {

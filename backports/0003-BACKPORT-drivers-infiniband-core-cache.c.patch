@@ -8,7 +8,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
 
 --- a/drivers/infiniband/core/cache.c
 +++ b/drivers/infiniband/core/cache.c
-@@ -1410,10 +1410,19 @@ struct net_device *rdma_read_gid_attr_nd
+@@ -1402,10 +1402,19 @@ struct net_device *rdma_read_gid_attr_nd
  }
  EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
  
@@ -29,7 +29,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
  
  	if (is_vlan_dev(lower_dev))
  		*vlan_id = vlan_dev_vlan_id(lower_dev);
-@@ -1423,6 +1432,7 @@ static int get_lower_dev_vlan(struct net
+@@ -1415,6 +1424,7 @@ static int get_lower_dev_vlan(struct net
  	 */
  	return 1;
  }
@@ -37,7 +37,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
  
  /**
   * rdma_read_gid_l2_fields - Read the vlan ID and source MAC address
-@@ -1439,9 +1449,11 @@ static int get_lower_dev_vlan(struct net
+@@ -1431,9 +1441,11 @@ static int get_lower_dev_vlan(struct net
  int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
  			    u16 *vlan_id, u8 *smac)
  {
@@ -49,7 +49,7 @@ Change-Id: Ic7ce62727f587f9a3c409ca0b23be763c098a7f4
  	struct net_device *ndev;
  
  	rcu_read_lock();
-@@ -1457,12 +1469,19 @@ int rdma_read_gid_l2_fields(const struct
+@@ -1449,12 +1461,19 @@ int rdma_read_gid_l2_fields(const struct
  		if (is_vlan_dev(ndev)) {
  			*vlan_id = vlan_dev_vlan_id(ndev);
  		} else {

@@ -80,10 +80,10 @@ static void frwr_mr_recycle(struct rpcrdma_mr *mr)
 	if (mr->mr_dir != DMA_NONE) {
 		trace_xprtrdma_mr_unmap(mr);
 #ifdef CONFIG_NVFS
-		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ia.ri_id->device->dma_device,
+		if (rpcrdma_nvfs_unmap_data(r_xprt->rx_ep->re_id->device->dma_device,
 					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
 			pr_debug("rpcrdma_nvfs_unmap_data device %s mr->mr_sg: %p , nents: %d\n",
-				 r_xprt->rx_ia.ri_id->device->name, mr->mr_sg, mr->mr_nents);
+				 r_xprt->rx_ep->re_id->device->name, mr->mr_sg, mr->mr_nents);
 		else
 #endif
 		ib_dma_unmap_sg(r_xprt->rx_ep->re_id->device,
@@ -328,14 +328,14 @@ struct rpcrdma_mr_seg *frwr_map(struct rpcrdma_xprt *r_xprt,
 	mr->mr_nents = i;
 
 #ifdef CONFIG_NVFS
-	dma_nents = rpcrdma_nvfs_map_data(ia->ri_id->device->dma_device,
+	dma_nents = rpcrdma_nvfs_map_data(ep->re_id->device->dma_device,
 					  mr->mr_sg, i, mr->mr_dir,
 					  &is_nvfs_io);
 	if (dma_nents == -EIO) {
 	        goto out_dmamap_err;
         } else if (is_nvfs_io) {
 	             pr_debug("rpcrdma_nvfs_map_data device %s mr->mr_sg: %p , nents: %d\n",
-                              ia->ri_id->device->name, mr->mr_sg, mr->mr_nents);
+                              ep->re_id->device->name, mr->mr_sg, mr->mr_nents);
         } else
 #endif
 	{
