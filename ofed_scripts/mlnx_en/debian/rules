@@ -124,9 +124,9 @@ endif
 	dh_installdirs -p$(putils)  usr/sbin
 
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_eswitch_set		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_net_rules		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx-eswitch.conf		debian/$(putils)/etc/modprobe.d
+	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx-bf.conf		debian/$(putils)/etc/modprobe.d
 	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin

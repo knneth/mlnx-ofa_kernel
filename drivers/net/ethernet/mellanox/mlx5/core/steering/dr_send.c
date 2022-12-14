@@ -329,10 +329,14 @@ static int dr_handle_pending_wc(struct mlx5dr_domain *dmn,
 
 	do {
 		ne = dr_poll_cq(send_ring->cq, 1);
-		if (ne < 0)
+		if (unlikely(ne < 0)) {
+			mlx5_core_warn_once(dmn->mdev, "SMFS QPN 0x%x disabled",
+					    send_ring->qp->mqp.qpn);
+			send_ring->err_state = true;
 			return ne;
-		else if (ne == 1)
+		} else if (ne == 1) {
 			send_ring->pending_wqe -= send_ring->signal_th;
+		}
 	} while (is_drain && send_ring->pending_wqe);
 
 	return 0;
@@ -363,17 +367,21 @@ static int dr_postsend_icm_data(struct mlx5dr_domain *dmn,
 {
 	struct mlx5dr_send_ring *send_ring = dmn->send_ring;
 	u32 buff_offset;
-	int ret;
+	int ret = 0;
 
-	if (unlikely(dmn->mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)) {
+	if (unlikely(dmn->mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR ||
+		     send_ring->err_state)) {
 		mlx5_core_dbg_once(dmn->mdev,
-				   "Postsend while device is shutting down\n");
+				   "Skipping post send: QP err state: %d, device err: %d",
+				   send_ring->err_state, dmn->mdev->state);
 		return 0;
 	}
 
+	spin_lock(&send_ring->lock);
+
 	ret = dr_handle_pending_wc(dmn, send_ring);
 	if (ret)
-		return ret;
+		goto out_unlock;
 
 	if (send_info->write.length > dmn->info.max_inline_size) {
 		buff_offset = (send_ring->tx_head &
@@ -391,6 +399,8 @@ static int dr_postsend_icm_data(struct mlx5dr_domain *dmn,
 	dr_fill_data_segs(send_ring, send_info);
 	dr_post_send(send_ring->qp, send_info);
 
+out_unlock:
+	spin_unlock(&send_ring->lock);
 	return 0;
 }
 
@@ -577,9 +587,7 @@ int mlx5dr_send_postsend_action(struct mlx5dr_domain *dmn,
 	send_info.remote_addr = action->rewrite.chunk->mr_addr;
 	send_info.rkey = action->rewrite.chunk->rkey;
 
-	mutex_lock(&dmn->mutex);
 	ret = dr_postsend_icm_data(dmn, &send_info);
-	mutex_unlock(&dmn->mutex);
 
 	return ret;
 }
@@ -892,6 +900,7 @@ int mlx5dr_send_ring_alloc(struct mlx5dr_domain *dmn)
 	init_attr.pdn = dmn->pdn;
 	init_attr.uar = dmn->uar;
 	init_attr.max_send_wr = QUEUE_SIZE;
+	spin_lock_init(&dmn->send_ring->lock);
 
 	dmn->send_ring->qp = dr_create_rc_qp(dmn->mdev, &init_attr);
 	if (!dmn->send_ring->qp)  {
@@ -996,7 +1005,9 @@ int mlx5dr_send_ring_force_drain(struct mlx5dr_domain *dmn)
 			return ret;
 	}
 
+	spin_lock(&send_ring->lock);
 	ret = dr_handle_pending_wc(dmn, send_ring);
+	spin_unlock(&send_ring->lock);
 
 	return ret;
 }

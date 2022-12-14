@@ -261,7 +261,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  		mlx5e_add_l2_flow_rule(priv, &ea->promisc, MLX5E_PROMISC);
  		if (!priv->fs.vlan.cvlan_filter_disabled)
  			mlx5e_add_any_vid_rules(priv);
-@@ -1399,6 +1476,7 @@ err_destroy_flow_table:
+@@ -1383,6 +1460,7 @@ err_destroy_flow_table:
  	return err;
  }
  
@@ -269,7 +269,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  #define MLX5E_NUM_VLAN_GROUPS	4
  #define MLX5E_VLAN_GROUP0_SIZE	BIT(12)
  #define MLX5E_VLAN_GROUP1_SIZE	BIT(12)
-@@ -1408,6 +1486,15 @@ err_destroy_flow_table:
+@@ -1392,6 +1470,15 @@ err_destroy_flow_table:
  				 MLX5E_VLAN_GROUP1_SIZE +\
  				 MLX5E_VLAN_GROUP2_SIZE +\
  				 MLX5E_VLAN_GROUP3_SIZE)
@@ -285,7 +285,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  
  static int __mlx5e_create_vlan_table_groups(struct mlx5e_flow_table *ft, u32 *in,
  					    int inlen)
-@@ -1430,8 +1517,12 @@ static int __mlx5e_create_vlan_table_gro
+@@ -1414,8 +1501,12 @@ static int __mlx5e_create_vlan_table_gro
  
  	memset(in, 0, inlen);
  	MLX5_SET_CFG(in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
@@ -298,7 +298,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  	MLX5_SET_CFG(in, start_flow_index, ix);
  	ix += MLX5E_VLAN_GROUP1_SIZE;
  	MLX5_SET_CFG(in, end_flow_index, ix - 1);
-@@ -1442,7 +1533,11 @@ static int __mlx5e_create_vlan_table_gro
+@@ -1426,7 +1517,11 @@ static int __mlx5e_create_vlan_table_gro
  
  	memset(in, 0, inlen);
  	MLX5_SET_CFG(in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
@@ -310,7 +310,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  	MLX5_SET_CFG(in, start_flow_index, ix);
  	ix += MLX5E_VLAN_GROUP2_SIZE;
  	MLX5_SET_CFG(in, end_flow_index, ix - 1);
-@@ -1451,6 +1546,7 @@ static int __mlx5e_create_vlan_table_gro
+@@ -1435,6 +1530,7 @@ static int __mlx5e_create_vlan_table_gro
  		goto err_destroy_groups;
  	ft->num_groups++;
  
@@ -318,7 +318,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  	memset(in, 0, inlen);
  	MLX5_SET_CFG(in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
  	MLX5_SET_TO_ONES(fte_match_param, mc, outer_headers.svlan_tag);
-@@ -1461,6 +1557,7 @@ static int __mlx5e_create_vlan_table_gro
+@@ -1445,6 +1541,7 @@ static int __mlx5e_create_vlan_table_gro
  	if (IS_ERR(ft->g[ft->num_groups]))
  		goto err_destroy_groups;
  	ft->num_groups++;
@@ -326,7 +326,7 @@ Change-Id: I8f7b21a13d2d6ca074bec9493a50e1d81d5e8118
  
  	return 0;
  
-@@ -1551,7 +1648,9 @@ int mlx5e_create_flow_steering(struct ml
+@@ -1535,7 +1632,9 @@ int mlx5e_create_flow_steering(struct ml
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);

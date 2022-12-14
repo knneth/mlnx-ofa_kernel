@@ -649,6 +649,7 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 		.nent = MLX5_NUM_CMD_EQE,
 	};
 
+	mlx5_cmd_allowed_opcode(dev, MLX5_CMD_OP_CREATE_EQ);
 	param.mask[0] = 1ull << MLX5_EVENT_TYPE_CMD;
 	err = create_async_eq(dev, &table->cmd_eq.core, &param);
 	if (err) {
@@ -661,6 +662,7 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 		goto err1;
 	}
 	mlx5_cmd_use_events(dev);
+	mlx5_cmd_allowed_opcode(dev, 0);
 
 	table->async_eq.irq_nb.notifier_call = mlx5_eq_async_int;
 	param = (struct mlx5_eq_param) {

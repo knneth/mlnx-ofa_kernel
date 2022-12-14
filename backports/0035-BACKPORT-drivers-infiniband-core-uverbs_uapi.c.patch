@@ -8,7 +8,7 @@ Change-Id: I522d3b95f5d33de49b5a20ad96a7bfa2386aba30
 
 --- a/drivers/infiniband/core/uverbs_uapi.c
 +++ b/drivers/infiniband/core/uverbs_uapi.c
-@@ -476,7 +476,11 @@ static void uapi_remove_range(struct uve
+@@ -478,7 +478,11 @@ static void uapi_remove_range(struct uve
  		if (iter.index > last)
  			return;
  		kfree(rcu_dereference_protected(*slot, true));
@@ -20,7 +20,7 @@ Change-Id: I522d3b95f5d33de49b5a20ad96a7bfa2386aba30
  	}
  }
  
-@@ -565,7 +569,11 @@ again:
+@@ -567,7 +571,11 @@ again:
  
  			if (method_elm->disabled) {
  				kfree(method_elm);

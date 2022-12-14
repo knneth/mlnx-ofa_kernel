@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
 
 Change-Id: I8d810fb71e2704f5f751d860e4f450c87a49fd5d
 ---
- drivers/infiniband/core/device.c | 234 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 217 insertions(+), 17 deletions(-)
+ drivers/infiniband/core/device.c | 226 ++++++++++++++++++++++++++++---
+ 1 file changed, 209 insertions(+), 17 deletions(-)
 
 --- a/drivers/infiniband/core/device.c
 +++ b/drivers/infiniband/core/device.c
@@ -371,27 +371,7 @@ Change-Id: I8d810fb71e2704f5f751d860e4f450c87a49fd5d
  /**
   * ib_find_pkey - Returns the PKey table index where a specified
   *   PKey value occurs.
-@@ -2541,11 +2663,19 @@ static const struct rdma_nl_cbs ibnl_ls_
- 		.flags = RDMA_NL_ADMIN_PERM,
- 	},
- 	[RDMA_NL_LS_OP_SET_TIMEOUT] = {
-+#ifdef HAVE_NETLINK_EXT_ACK
- 		.doit = ib_nl_handle_set_timeout,
-+#else
-+		.dump = ib_nl_handle_set_timeout,
-+#endif
- 		.flags = RDMA_NL_ADMIN_PERM,
- 	},
- 	[RDMA_NL_LS_OP_IP_RESOLVE] = {
-+#ifdef HAVE_NETLINK_EXT_ACK
- 		.doit = ib_nl_handle_ip_res_resp,
-+#else
-+		.dump = ib_nl_handle_ip_res_resp,
-+#endif
- 		.flags = RDMA_NL_ADMIN_PERM,
- 	},
- };
-@@ -2558,17 +2688,62 @@ static int __init ib_core_init(void)
+@@ -2558,17 +2680,62 @@ static int __init ib_core_init(void)
  	if (!ib_wq)
  		return -ENOMEM;
  
@@ -457,7 +437,7 @@ Change-Id: I8d810fb71e2704f5f751d860e4f450c87a49fd5d
  	if (!ib_comp_unbound_wq) {
  		ret = -ENOMEM;
  		goto err_comp;
-@@ -2580,6 +2755,14 @@ static int __init ib_core_init(void)
+@@ -2580,6 +2747,14 @@ static int __init ib_core_init(void)
  		goto err_comp_unbound;
  	}
  
@@ -472,7 +452,7 @@ Change-Id: I8d810fb71e2704f5f751d860e4f450c87a49fd5d
  	ret = addr_init();
  	if (ret) {
  		pr_warn("Could't init IB address resolution\n");
-@@ -2598,33 +2781,44 @@ static int __init ib_core_init(void)
+@@ -2598,33 +2773,44 @@ static int __init ib_core_init(void)
  		goto err_mad;
  	}
  
@@ -523,7 +503,7 @@ Change-Id: I8d810fb71e2704f5f751d860e4f450c87a49fd5d
  	class_unregister(&ib_class);
  err_comp_unbound:
  	destroy_workqueue(ib_comp_unbound_wq);
-@@ -2640,8 +2834,12 @@ static void __exit ib_core_cleanup(void)
+@@ -2640,8 +2826,12 @@ static void __exit ib_core_cleanup(void)
  	roce_gid_mgmt_cleanup();
  	nldev_exit();
  	rdma_nl_unregister(RDMA_NL_LS);
@@ -536,7 +516,7 @@ Change-Id: I8d810fb71e2704f5f751d860e4f450c87a49fd5d
  	ib_sa_cleanup();
  	ib_mad_cleanup();
  	addr_cleanup();
-@@ -2651,7 +2849,9 @@ static void __exit ib_core_cleanup(void)
+@@ -2651,7 +2841,9 @@ static void __exit ib_core_cleanup(void)
  	destroy_workqueue(ib_comp_wq);
  	/* Make sure that any pending umem accounting work is done. */
  	destroy_workqueue(ib_wq);

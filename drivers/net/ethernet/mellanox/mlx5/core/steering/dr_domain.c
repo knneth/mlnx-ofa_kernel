@@ -361,7 +361,9 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 	dmn->mdev = mdev;
 	dmn->type = type;
 	refcount_set(&dmn->refcount, 1);
-	mutex_init(&dmn->mutex);
+	mutex_init(&dmn->info.rx.mutex);
+	mutex_init(&dmn->info.tx.mutex);
+	mutex_init(&dmn->dbg_mutex);
 
 	if (dr_domain_caps_init(mdev, dmn)) {
 		mlx5dr_err(dmn, "Failed init domain, no caps\n");
@@ -390,8 +392,18 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 		goto uninit_resourses;
 	}
 
+	ret = mlx5dr_dbg_init_dump(dmn);
+	if (ret) {
+		mlx5dr_err(dmn, "Failed initialize domain dump tool\n");
+		goto uninit_cache;
+	}
+
+	INIT_LIST_HEAD(&dmn->tbl_list);
+
 	return dmn;
 
+uninit_cache:
+	dr_domain_uninit_cache(dmn);
 uninit_resourses:
 	dr_domain_uninit_resources(dmn);
 uninit_caps:
@@ -409,9 +421,9 @@ int mlx5dr_domain_sync(struct mlx5dr_domain *dmn, u32 flags)
 	int ret = 0;
 
 	if (flags & MLX5DR_DOMAIN_SYNC_FLAGS_SW) {
-		mutex_lock(&dmn->mutex);
+		mlx5dr_domain_lock(dmn);
 		ret = mlx5dr_send_ring_force_drain(dmn);
-		mutex_unlock(&dmn->mutex);
+		mlx5dr_domain_unlock(dmn);
 		if (ret) {
 			mlx5dr_err(dmn, "Force drain failed flags: %d, ret: %d\n",
 				   flags, ret);
@@ -432,10 +444,13 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 
 	/* make sure resources are not used by the hardware */
 	mlx5dr_cmd_sync_steering(dmn->mdev);
+	mlx5dr_dbg_cleanup_dump(dmn);
 	dr_domain_uninit_cache(dmn);
 	dr_domain_uninit_resources(dmn);
 	dr_domain_caps_uninit(dmn);
-	mutex_destroy(&dmn->mutex);
+	mutex_destroy(&dmn->info.tx.mutex);
+	mutex_destroy(&dmn->info.rx.mutex);
+	mutex_destroy(&dmn->dbg_mutex);
 	kfree(dmn);
 	return 0;
 }
@@ -443,7 +458,7 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 			    struct mlx5dr_domain *peer_dmn)
 {
-	mutex_lock(&dmn->mutex);
+	mlx5dr_domain_lock(dmn);
 
 	if (dmn->peer_dmn)
 		refcount_dec(&dmn->peer_dmn->refcount);
@@ -453,5 +468,5 @@ void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 	if (dmn->peer_dmn)
 		refcount_inc(&dmn->peer_dmn->refcount);
 
-	mutex_unlock(&dmn->mutex);
+	mlx5dr_domain_unlock(dmn);
 }

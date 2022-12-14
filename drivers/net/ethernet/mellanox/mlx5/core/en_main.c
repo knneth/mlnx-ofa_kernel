@@ -680,6 +680,7 @@ static int mlx5e_alloc_rq(struct mlx5e_channel *c,
 				rq->mpwqe.num_strides << rq->mpwqe.log_stride_sz;
 			u64 dma_offset = mlx5e_get_mpwqe_offset(rq, i);
 
+			byte_count -= rq->buff.headroom;
 			wqe->data[0].addr = cpu_to_be64(dma_offset + rq->buff.headroom);
 			wqe->data[0].byte_count = cpu_to_be32(byte_count);
 			wqe->data[0].lkey = rq->mkey_be;
@@ -940,6 +941,28 @@ static int mlx5e_wait_for_min_rx_wqes(struct mlx5e_rq *rq, int wait_time)
 	return -ETIMEDOUT;
 }
 
+void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq)
+{
+	struct mlx5_wq_ll *wq;
+	u16 head;
+	int i;
+
+	if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
+		return;
+
+	wq = &rq->mpwqe.wq;
+	head = wq->head;
+
+	/* Outstanding UMR WQEs (in progress) start at wq->head */
+	for (i = 0; i < rq->mpwqe.umr_in_progress; i++) {
+		rq->dealloc_wqe(rq, head);
+		head = mlx5_wq_ll_get_wqe_next_ix(wq, head);
+	}
+
+	rq->mpwqe.actual_wq_head = wq->head;
+	rq->mpwqe.umr_in_progress = 0;
+}
+
 void mlx5e_free_rx_descs(struct mlx5e_rq *rq)
 {
 	__be16 wqe_ix_be;
@@ -947,14 +970,8 @@ void mlx5e_free_rx_descs(struct mlx5e_rq *rq)
 
 	if (rq->wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ) {
 		struct mlx5_wq_ll *wq = &rq->mpwqe.wq;
-		u16 head = wq->head;
-		int i;
 
-		/* Outstanding UMR WQEs (in progress) start at wq->head */
-		for (i = 0; i < rq->mpwqe.umr_in_progress; i++) {
-			rq->dealloc_wqe(rq, head);
-			head = mlx5_wq_ll_get_wqe_next_ix(wq, head);
-		}
+		mlx5e_free_rx_in_progress_descs(rq);
 
 		while (!mlx5_wq_ll_is_empty(wq)) {
 			struct mlx5e_rx_wqe_ll *wqe;
@@ -3734,12 +3751,14 @@ static int mlx5e_setup_tc_block(struct net_device *dev,
 				struct tc_block_offload *f)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct flow_block_offload *f = type_data;
 
 	if (f->binder_type != TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
 		return -EOPNOTSUPP;
 
 	switch (f->command) {
 	case TC_BLOCK_BIND:
+		f->unlocked_driver_cb = true;
 		return tcf_block_cb_register(f->block, mlx5e_setup_tc_block_cb,
 					     priv, priv, f->extack);
 	case TC_BLOCK_UNBIND:
@@ -5343,14 +5362,16 @@ static int mlx5e_init_nic_tx(struct mlx5e_priv *priv)
 	int err;
 
 #ifdef CONFIG_MLX5_IPSEC
-	priv->fs.egress_ns = mlx5_get_flow_namespace(priv->mdev,
-						     MLX5_FLOW_NAMESPACE_EGRESS_KERNEL);
-	if (!priv->fs.egress_ns)
-		return -EOPNOTSUPP;
+	if (mlx5e_is_ipsec_device(priv->mdev) && MLX5_IPSEC_DEV(priv->mdev)) {
+		priv->fs.egress_ns = mlx5_get_flow_namespace(priv->mdev,
+							     MLX5_FLOW_NAMESPACE_EGRESS_KERNEL);
+		if (!priv->fs.egress_ns)
+			return -EOPNOTSUPP;
 
-	err = mlx5e_ipsec_create_tx_ft(priv);
-	if (err)
-		return err;
+		err = mlx5e_ipsec_create_tx_ft(priv);
+		if (err)
+			return err;
+	}
 #endif
 
 	err = mlx5e_create_tises(priv);

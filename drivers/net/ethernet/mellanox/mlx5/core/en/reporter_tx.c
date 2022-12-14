@@ -410,7 +410,7 @@ int mlx5e_reporter_tx_create(struct mlx5e_priv *priv)
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct devlink *devlink;
 
-	devlink = mlx5_core_to_devlink(mdev);
+	devlink = priv_to_devlink(mdev);
 	reporter =
 		devlink_health_reporter_create(devlink, &mlx5_tx_reporter_ops,
 					       MLX5_REPORTER_TX_GRACEFUL_PERIOD,

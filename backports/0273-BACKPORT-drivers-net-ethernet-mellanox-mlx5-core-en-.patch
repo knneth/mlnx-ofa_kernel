@@ -8,7 +8,7 @@ Change-Id: Ibd1c6919fc12fdd5125f9e8eb3e63bf51caa1b32
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
-@@ -22,10 +22,12 @@ void mlx5e_reporter_tx_destroy(struct ml
+@@ -21,10 +21,12 @@ void mlx5e_reporter_tx_destroy(struct ml
  void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq);
  int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq);
  
@@ -21,7 +21,7 @@ Change-Id: Ibd1c6919fc12fdd5125f9e8eb3e63bf51caa1b32
  
  int mlx5e_reporter_rx_create(struct mlx5e_priv *priv);
  void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv);
-@@ -37,7 +39,9 @@ void mlx5e_reporter_rx_timeout(struct ml
+@@ -36,7 +38,9 @@ void mlx5e_reporter_rx_timeout(struct ml
  
  struct mlx5e_err_ctx {
  	int (*recover)(void *ctx);
@@ -31,7 +31,7 @@ Change-Id: Ibd1c6919fc12fdd5125f9e8eb3e63bf51caa1b32
  	void *ctx;
  };
  
-@@ -50,8 +54,54 @@ int mlx5e_health_report(struct mlx5e_pri
+@@ -49,8 +53,54 @@ int mlx5e_health_report(struct mlx5e_pri
  int mlx5e_health_create_reporters(struct mlx5e_priv *priv);
  void mlx5e_health_destroy_reporters(struct mlx5e_priv *priv);
  void mlx5e_health_channels_update(struct mlx5e_priv *priv);

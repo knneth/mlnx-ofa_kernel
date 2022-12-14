@@ -58,7 +58,8 @@ void mlx5_cq_tasklet_cb(unsigned long data)
 	list_for_each_entry_safe(mcq, temp, &ctx->process_list,
 				 tasklet_ctx.list) {
 		list_del_init(&mcq->tasklet_ctx.list);
-		mcq->tasklet_ctx.comp(mcq, NULL);
+		if (mcq->tasklet_ctx.comp)
+			mcq->tasklet_ctx.comp(mcq, NULL);
 		mlx5_cq_put(mcq);
 		if (time_after(jiffies, end))
 			break;

@@ -124,6 +124,8 @@
 #define KERNEL_TX_IPSEC_NUM_LEVELS 1
 #define KERNEL_TX_MIN_LEVEL KERNEL_TX_IPSEC_NUM_LEVELS
 
+#define DST_NAME_SIZE 20
+
 struct node_caps {
 	size_t	arr_sz;
 	long	*caps;
@@ -1611,36 +1613,36 @@ static void notify_add_rule(struct mlx5_flow_rule *rule)
 	raw_notifier_call_chain(&ns->listeners, MLX5_RULE_EVENT_ADD, &evt_data);
 }
 
-static char *get_dest_name(struct mlx5_flow_destination *dest)
+static char *get_dest_name(struct mlx5_flow_destination *dest,
+			   char name[DST_NAME_SIZE])
 {
-	char *name = kzalloc(sizeof(char) * 20, GFP_KERNEL);
-
 	if (!dest) {
-		snprintf(name, 20, "no destination");
+		snprintf(name, DST_NAME_SIZE, "no destination");
 		return name;
 	}
 
 	switch (dest->type) {
 	case MLX5_FLOW_DESTINATION_TYPE_COUNTER:
-		snprintf(name, 20, "dest_%s_%u", "counter",
+		snprintf(name, DST_NAME_SIZE, "dest_%s_%u", "counter",
 			 dest->counter_id);
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE:
-		snprintf(name, 20, "dest_%s_%u", "flow_table",
+		snprintf(name, DST_NAME_SIZE, "dest_%s_%u", "flow_table",
 			 dest->ft->id);
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_VPORT:
-		snprintf(name, 20, "dest_%s_%u", "vport",
+		snprintf(name, DST_NAME_SIZE, "dest_%s_%u", "vport",
 			 dest->vport.num);
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_TIR:
-		snprintf(name, 20, "dest_%s_%u", "tir", dest->tir_num);
+		snprintf(name, DST_NAME_SIZE, "dest_%s_%u", "tir",
+			 dest->tir_num);
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_PORT:
-		snprintf(name, 20, "dest_port");
+		snprintf(name, DST_NAME_SIZE, "dest_port");
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM:
-		snprintf(name, 20, "dest_%s_%u", "flow_table_num",
+		snprintf(name, DST_NAME_SIZE, "dest_%s_%u", "flow_table_num",
 			 dest->ft_num);
 		return name;
 	}
@@ -1656,6 +1658,7 @@ static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
 					    struct fs_fte *fte)
 {
 	struct mlx5_flow_handle *handle;
+	char name[DST_NAME_SIZE];
 	char *dest_name;
 	int old_action;
 	int i;
@@ -1677,9 +1680,9 @@ static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
 
 	for (i = 0; i < handle->num_rules; i++) {
 		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
-			dest_name = get_dest_name(&handle->rule[i]->dest_attr);
+			dest_name = get_dest_name(&handle->rule[i]->dest_attr,
+						  name);
 			tree_add_node(&handle->rule[i]->node, &fte->node, dest_name);
-			kfree(dest_name);
 			trace_mlx5_fs_add_rule(handle->rule[i]);
 			notify_add_rule(handle->rule[i]);
 		}
@@ -1866,6 +1869,14 @@ search_again_locked:
 			tree_put_node(&fte_tmp->node, false);
 			goto skip_search;
 		}
+
+	/* During rekey process, we can have two IPsec rules with duplicate match value but different encryption key.
+	 * Thus, do not allow modify op_mod for IPsec rule
+	 */
+	if (flow_act->action &
+	    (MLX5_FLOW_CONTEXT_ACTION_IPSEC_DECRYPT |
+	     MLX5_FLOW_CONTEXT_ACTION_IPSEC_ENCRYPT))
+		goto skip_search;
 
 	/* Try to find a fg that already contains a matching fte */
 	list_for_each_entry(iter, match_head, list) {

@@ -1029,6 +1029,10 @@ static bool ext_link_mode_requested(const unsigned long *adver)
 	int size = __ETHTOOL_LINK_MODE_MASK_NBITS - MLX5E_MIN_PTYS_EXT_LINK_MODE_BIT;
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(modes);
 
+	/* bitmap_intersects returns true for empty modes, but we want false */
+	if (size <= 0)
+		return false;
+
 	bitmap_set(modes, MLX5E_MIN_PTYS_EXT_LINK_MODE_BIT, size);
 	return bitmap_intersects(modes, adver, __ETHTOOL_LINK_MODE_MASK_NBITS);
 }

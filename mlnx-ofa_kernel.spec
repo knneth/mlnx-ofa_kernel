@@ -46,7 +46,12 @@
 %global PYTHON3 %{RHEL8} || %{FEDORA3X}
 
 # Workaround: To be removed when mlnx_tune has python3 support:
-%global REMOVE_MLNX_TUNE  (!%{KMP}) && %{RHEL8}
+# mlnx_tune is a python2 script. Avoid generating dependencies
+# from it in some distributions to avoid dragging in a python2
+# dependency
+%if (!%{KMP}) && %{RHEL8}
+%global __requires_exclude_from mlnx_tune
+%endif
 
 %global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux")
 
@@ -73,7 +78,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 5.0}
-%{!?_release: %global _release OFED.5.0.1.0.0.0.1.g34c46d3}
+%{!?_release: %global _release OFED.5.0.2.1.8.1.g5f67178}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -128,7 +133,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-1.0.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-2.1.8.tgz
 
 
 # build KMP rpms?
@@ -182,7 +187,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-1.0.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-2.1.8.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -215,7 +220,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-1.0.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-2.1.8.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -341,9 +346,6 @@ for flavor in %flavors_to_build; do
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
 done
-%if %{REMOVE_MLNX_TUNE}
-rm -f %{buildroot}/usr/sbin/mlnx_tune
-%endif
 
 if [[ "$(ls %{buildroot}/%{_bindir}/tc_wrap.py* 2>/dev/null)" != "" ]]; then
 	echo '%{_bindir}/tc_wrap.py*' >> ofed-files
@@ -670,11 +672,8 @@ fi
 /etc/systemd/system/mlnx_interface_mgr@.service
 %endif
 /sbin/sysctl_perf_tuning
-/sbin/mlnx_eswitch_set
-/sbin/mlnx_net_rules
-%if %{REMOVE_MLNX_TUNE}
-/usr/sbin/mlnx_tune
-%endif
+/sbin/mlnx_bf_configure
+/sbin/mlnx-sf
 /usr/sbin/show_gids
 /usr/sbin/compat_gid_gen
 /usr/sbin/cma_roce_mode
@@ -685,7 +684,7 @@ fi
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
 %config(noreplace) /etc/modprobe.d/mlnx.conf
-%config(noreplace) /etc/modprobe.d/mlnx-eswitch.conf
+%config(noreplace) /etc/modprobe.d/mlnx-bf.conf
 %{_sbindir}/*
 %config(noreplace) /etc/udev/rules.d/90-ib.rules
 %config(noreplace) /etc/udev/rules.d/82-net-setup-link.rules

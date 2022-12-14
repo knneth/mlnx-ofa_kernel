@@ -522,11 +522,15 @@ static int esw_create_legacy_table(struct mlx5_eswitch *esw)
 
 static int esw_legacy_enable(struct mlx5_eswitch *esw)
 {
-	int ret;
+	struct mlx5_vport *vport;
+	int ret, i;
 
 	ret = esw_create_legacy_table(esw);
 	if (ret)
 		return ret;
+
+	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs)
+		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_AUTO;
 
 	mlx5_eswitch_enable_pf_vf_vports(esw, MLX5_LEGACY_SRIOV_VPORT_EVENTS);
 	return 0;
@@ -2339,8 +2343,10 @@ static void mlx5_eswitch_clear_vf_vports_info(struct mlx5_eswitch *esw)
 	struct mlx5_vport *vport;
 	int i;
 
-	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs)
+	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
 		memset(&vport->info, 0, sizeof(vport->info));
+		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_AUTO;
+	}
 }
 
 /* Public E-Switch API */

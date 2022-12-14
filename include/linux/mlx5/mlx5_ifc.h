@@ -904,7 +904,7 @@ struct mlx5_ifc_debug_cap_bits {
 	u8         core_dump_qp[0x1];
 	u8         reserved_at_2[0x7];
 	u8         resource_dump[0x1];
-	u8         reserved_at_a[0x8];
+	u8         reserved_at_a[0xe];
 	u8         log_max_samples[0x8];
 
 	u8         single[0x1];

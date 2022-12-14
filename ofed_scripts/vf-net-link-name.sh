@@ -10,7 +10,7 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 is_bf=`lspci -s 00:00.0 2> /dev/null | grep -wq "PCI bridge: Mellanox Technologies" && echo 1 || echo 0`
 if [ $is_bf -eq 1 ]; then
-	echo NAME=${2/vf-1/hpf}
+	echo NAME=`echo ${2} | sed -e "s/vf-1/hpf/;s/\(pf[[:digit:]]\+\)p.*/\1m0/"`
 	exit 0
 fi
 

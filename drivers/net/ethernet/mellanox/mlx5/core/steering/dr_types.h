@@ -115,7 +115,7 @@ enum mlx5dr_ipv {
 
 struct mlx5dr_icm_pool;
 struct mlx5dr_icm_chunk;
-struct mlx5dr_icm_bucket;
+struct mlx5dr_icm_buddy_mem;
 struct mlx5dr_ste_htbl;
 struct mlx5dr_match_param;
 struct mlx5dr_cmd_caps;
@@ -650,6 +650,7 @@ struct mlx5dr_domain_rx_tx {
 	u64 drop_icm_addr;
 	u64 default_icm_addr;
 	enum mlx5dr_ste_entry_type ste_type;
+	struct mutex mutex; /* protect rx/tx domain */
 };
 
 struct mlx5dr_domain_info {
@@ -674,12 +675,14 @@ struct mlx5dr_domain {
 	struct mlx5_uars_page *uar;
 	enum mlx5dr_domain_type type;
 	refcount_t refcount;
-	struct mutex mutex; /* protect domain */
 	struct mlx5dr_icm_pool *ste_icm_pool;
 	struct mlx5dr_icm_pool *action_icm_pool;
 	struct mlx5dr_send_ring *send_ring;
 	struct mlx5dr_domain_info info;
 	struct mlx5dr_domain_cache cache;
+	struct list_head tbl_list;
+	struct mutex dbg_mutex; /* protects dump resources */
+
 };
 
 struct mlx5dr_table_rx_tx {
@@ -699,6 +702,7 @@ struct mlx5dr_table {
 	struct list_head matcher_list;
 	struct mlx5dr_action *miss_action;
 	refcount_t refcount;
+	struct list_head tbl_list;
 };
 
 struct mlx5dr_matcher_rx_tx {
@@ -724,6 +728,7 @@ struct mlx5dr_matcher {
 	u8 match_criteria;
 	refcount_t refcount;
 	struct mlx5dv_flow_matcher *dv_matcher;
+	struct list_head rule_list;
 };
 
 struct mlx5dr_rule_member {
@@ -785,6 +790,11 @@ struct mlx5dr_action {
 	};
 };
 
+struct mlx5dr_rule_action_member {
+	struct mlx5dr_action *action;
+	struct list_head list;
+};
+
 enum mlx5dr_connect_type {
 	CONNECT_HIT	= 1,
 	CONNECT_MISS	= 2,
@@ -808,25 +818,50 @@ struct mlx5dr_rule {
 	struct mlx5dr_rule_rx_tx rx;
 	struct mlx5dr_rule_rx_tx tx;
 	struct list_head rule_actions_list;
+	struct list_head rule_list;
 };
 
 void mlx5dr_rule_update_rule_member(struct mlx5dr_ste *new_ste,
 				    struct mlx5dr_ste *ste);
 
 struct mlx5dr_icm_chunk {
-	struct mlx5dr_icm_bucket *bucket;
+	struct mlx5dr_icm_buddy_mem *buddy_mem;
 	struct list_head chunk_list;
 	u32 rkey;
 	u32 num_of_entries;
 	u32 byte_size;
 	u64 icm_addr;
 	u64 mr_addr;
+	/* indicates the -offset- of this chunk in the whole memory */
+	u32 seg;
 
 	/* Memory optimisation */
 	struct mlx5dr_ste *ste_arr;
 	u8 *hw_ste_arr;
 	struct list_head *miss_list;
 };
+
+static inline void mlx5dr_domain_nic_lock(struct mlx5dr_domain_rx_tx *nic_dmn)
+{
+        mutex_lock(&nic_dmn->mutex);
+}
+
+static inline void mlx5dr_domain_nic_unlock(struct mlx5dr_domain_rx_tx *nic_dmn)
+{
+        mutex_unlock(&nic_dmn->mutex);
+}
+
+static inline void mlx5dr_domain_lock(struct mlx5dr_domain *dmn)
+{
+        mlx5dr_domain_nic_lock(&dmn->info.rx);
+        mlx5dr_domain_nic_lock(&dmn->info.tx);
+}
+
+static inline void mlx5dr_domain_unlock(struct mlx5dr_domain *dmn)
+{
+        mlx5dr_domain_nic_unlock(&dmn->info.tx);
+        mlx5dr_domain_nic_unlock(&dmn->info.rx);
+}
 
 static inline int
 mlx5dr_matcher_supp_flex_parser_icmp_v4(struct mlx5dr_cmd_caps *caps)
@@ -845,6 +880,15 @@ int mlx5dr_matcher_select_builders(struct mlx5dr_matcher *matcher,
 				   enum mlx5dr_ipv outer_ipv,
 				   enum mlx5dr_ipv inner_ipv);
 
+static inline int
+mlx5dr_icm_pool_dm_type_to_entry_size(enum mlx5dr_icm_type icm_type)
+{
+	if (icm_type == DR_ICM_TYPE_STE)
+		return DR_STE_SIZE;
+
+	return DR_MODIFY_ACTION_SIZE;
+}
+
 static inline u32
 mlx5dr_icm_pool_chunk_size_to_entries(enum mlx5dr_icm_chunk_size chunk_size)
 {
@@ -858,10 +902,7 @@ mlx5dr_icm_pool_chunk_size_to_byte(enum mlx5dr_icm_chunk_size chunk_size,
 	int num_of_entries;
 	int entry_size;
 
-	if (icm_type == DR_ICM_TYPE_STE)
-		entry_size = DR_STE_SIZE;
-	else
-		entry_size = DR_MODIFY_ACTION_SIZE;
+	entry_size = mlx5dr_icm_pool_dm_type_to_entry_size(icm_type);
 
 	num_of_entries = mlx5dr_icm_pool_chunk_size_to_entries(chunk_size);
 
@@ -884,7 +925,7 @@ mlx5dr_is_sf_vport(struct mlx5dr_cmd_caps *caps, u32 vport)
 static inline u32
 mlx5dr_sf_vport_to_idx(struct mlx5dr_cmd_caps *caps, u32 vport)
 {
-	return vport - caps->sf_vport_base + caps->num_pf_vf_vports;
+	return vport - caps->sf_vport_base;
 }
 
 static inline struct mlx5dr_cmd_vport_cap *
@@ -1083,6 +1124,9 @@ struct mlx5dr_send_ring {
 	struct ib_wc wc[MAX_SEND_CQE];
 	u8 sync_buff[MIN_READ_SYNC];
 	struct mlx5dr_mr *sync_mr;
+	spinlock_t lock; /* Protect the send ring */
+	/* send_ring is not usable in err state */
+	bool err_state;
 };
 
 int mlx5dr_send_ring_alloc(struct mlx5dr_domain *dmn);

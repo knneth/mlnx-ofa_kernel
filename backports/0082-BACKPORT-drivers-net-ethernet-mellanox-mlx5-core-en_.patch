@@ -1,9 +1,9 @@
 From: Aya Levin <ayal@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
-Change-Id: I26b487e588824147faa5488d27d1b5063106545b
+Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_tx.c | 152 +++++++++++++++++++++---
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 152 ++++++++++++++++--
  1 file changed, 138 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
@@ -318,7 +318,7 @@ Change-Id: I26b487e588824147faa5488d27d1b5063106545b
  }
  
  static void mlx5e_dump_error_cqe(struct mlx5e_txqsq *sq,
-@@ -660,7 +767,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -649,7 +756,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  				continue;
  			}
  
@@ -330,7 +330,7 @@ Change-Id: I26b487e588824147faa5488d27d1b5063106545b
  				     SKBTX_HW_TSTAMP)) {
  				struct skb_shared_hwtstamps hwts = {};
  
-@@ -680,7 +791,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -669,7 +780,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  			npkts++;
  			nbytes += wi->num_bytes;
  			sqcc += wi->num_wqebbs;
@@ -341,7 +341,7 @@ Change-Id: I26b487e588824147faa5488d27d1b5063106545b
 +#endif
  		} while (!last_wqe);
  
- 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
+ 		if (unlikely(get_cqe_opcode(cqe) == MLX5_CQE_REQ_ERR)) {
 @@ -756,8 +871,11 @@ mlx5i_txwqe_build_datagram(struct mlx5_a
  }
  

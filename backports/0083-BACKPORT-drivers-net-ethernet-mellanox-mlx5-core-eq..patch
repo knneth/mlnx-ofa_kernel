@@ -55,7 +55,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -812,7 +826,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -814,7 +828,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -67,7 +67,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  
  	return eqe;
  }
-@@ -962,6 +980,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
+@@ -964,6 +982,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
  	return ERR_PTR(-ENOENT);
  }
  

@@ -795,9 +795,12 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"sdp_bcopy_get",
 		"sdp_destroy_resources",
 		"tcf_exts_init",
+		"tcf_hashinfo_init",
 		/* sw steering functions */
 		"dr_icm_chunk_ste_init",
-		"dr_icm_chunks_create",
+		"dr_icm_chunk_create",
+		/* our backport function for 5.5 only */
+		"devlink_fmsg_binary_put",
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);

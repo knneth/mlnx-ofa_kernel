@@ -1020,10 +1020,6 @@ start()
         done
     fi
 
-    if [ -x /sbin/mlnx_eswitch_set  ]; then
-        /sbin/mlnx_eswitch_set
-    fi
-
     if [ "X${MLX5_FPGA_LOAD}" == "Xyes" ]; then
         load_module mlx5_fpga_tools
         my_rc=$?

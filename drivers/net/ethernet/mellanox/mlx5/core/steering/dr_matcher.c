@@ -509,6 +509,8 @@ static int dr_matcher_add_to_tbl(struct mlx5dr_matcher *matcher)
 			return ret;
 	}
 
+	mutex_lock(&tbl->dmn->dbg_mutex);
+
 	if (prev_matcher)
 		list_add(&matcher->matcher_list, &prev_matcher->matcher_list);
 	else if (next_matcher)
@@ -516,6 +518,8 @@ static int dr_matcher_add_to_tbl(struct mlx5dr_matcher *matcher)
 			      &next_matcher->matcher_list);
 	else
 		list_add(&matcher->matcher_list, &tbl->matcher_list);
+
+	mutex_unlock(&tbl->dmn->dbg_mutex);
 
 	return 0;
 }
@@ -689,8 +693,9 @@ mlx5dr_matcher_create(struct mlx5dr_table *tbl,
 	matcher->match_criteria = match_criteria_enable;
 	refcount_set(&matcher->refcount, 1);
 	INIT_LIST_HEAD(&matcher->matcher_list);
+	INIT_LIST_HEAD(&matcher->rule_list);
 
-	mutex_lock(&tbl->dmn->mutex);
+	mlx5dr_domain_lock(tbl->dmn);
 
 	ret = dr_matcher_init(matcher, mask);
 	if (ret)
@@ -700,14 +705,14 @@ mlx5dr_matcher_create(struct mlx5dr_table *tbl,
 	if (ret)
 		goto matcher_uninit;
 
-	mutex_unlock(&tbl->dmn->mutex);
+	mlx5dr_domain_unlock(tbl->dmn);
 
 	return matcher;
 
 matcher_uninit:
 	dr_matcher_uninit(matcher);
 free_matcher:
-	mutex_unlock(&tbl->dmn->mutex);
+	mlx5dr_domain_unlock(tbl->dmn);
 	kfree(matcher);
 dec_ref:
 	refcount_dec(&tbl->refcount);
@@ -791,13 +796,14 @@ int mlx5dr_matcher_destroy(struct mlx5dr_matcher *matcher)
 	if (refcount_read(&matcher->refcount) > 1)
 		return -EBUSY;
 
-	mutex_lock(&tbl->dmn->mutex);
-
+	mlx5dr_domain_lock(tbl->dmn);
+	mutex_lock(&tbl->dmn->dbg_mutex);
 	dr_matcher_remove_from_tbl(matcher);
+	mutex_unlock(&tbl->dmn->dbg_mutex);
 	dr_matcher_uninit(matcher);
 	refcount_dec(&matcher->tbl->refcount);
 
-	mutex_unlock(&tbl->dmn->mutex);
+	mlx5dr_domain_unlock(tbl->dmn);
 	kfree(matcher);
 
 	return 0;

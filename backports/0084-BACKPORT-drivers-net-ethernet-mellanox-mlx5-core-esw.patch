@@ -36,7 +36,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  	mutex_unlock(&mlx5e_vport_match_ida_mutex);
  
  	return match_id;
-@@ -622,6 +633,7 @@ static void update_allmulti_vports(struc
+@@ -626,6 +637,7 @@ static void update_allmulti_vports(struc
  	u8 *mac = vaddr->node.addr;
  	struct mlx5_vport *vport;
  	u16 i, vport_num;
@@ -44,7 +44,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	mlx5_esw_for_all_vports(esw, i, vport) {
  		struct hlist_head *vport_hash = vport->mc_list;
-@@ -669,6 +681,7 @@ static int esw_add_mc_addr(struct mlx5_e
+@@ -673,6 +685,7 @@ static int esw_add_mc_addr(struct mlx5_e
  	struct esw_mc_addr *esw_mc;
  	u8 *mac = vaddr->node.addr;
  	u16 vport = vaddr->vport;
@@ -52,7 +52,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	if (!esw->fdb_table.legacy.fdb)
  		return 0;
-@@ -709,6 +722,7 @@ static int esw_del_mc_addr(struct mlx5_e
+@@ -713,6 +726,7 @@ static int esw_del_mc_addr(struct mlx5_e
  	struct esw_mc_addr *esw_mc;
  	u8 *mac = vaddr->node.addr;
  	u16 vport = vaddr->vport;
@@ -60,7 +60,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	if (!esw->fdb_table.legacy.fdb)
  		return 0;
-@@ -759,6 +773,7 @@ static void esw_apply_vport_addr_list(st
+@@ -763,6 +777,7 @@ static void esw_apply_vport_addr_list(st
  	struct hlist_head *hash;
  	struct hlist_node *tmp;
  	int hi;
@@ -68,7 +68,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	vport_addr_add = is_uc ? esw_add_uc_addr :
  				 esw_add_mc_addr;
-@@ -795,6 +810,7 @@ static void esw_update_vport_addr_list(s
+@@ -799,6 +814,7 @@ static void esw_update_vport_addr_list(s
  	int err;
  	int hi;
  	int i;
@@ -76,7 +76,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	size = is_uc ? MLX5_MAX_UC_PER_VPORT(esw->dev) :
  		       MLX5_MAX_MC_PER_VPORT(esw->dev);
-@@ -916,6 +932,7 @@ static void esw_update_vport_mc_promisc(
+@@ -920,6 +936,7 @@ static void esw_update_vport_mc_promisc(
  	struct hlist_head *hash;
  	struct hlist_node *tmp;
  	int hi;
@@ -84,7 +84,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	hash = vport->mc_list;
  
-@@ -2585,10 +2602,14 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2591,10 +2608,14 @@ int mlx5_eswitch_init(struct mlx5_core_d
  	if (err)
  		goto abort;
  
@@ -99,7 +99,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  	atomic64_set(&esw->offloads.num_flows, 0);
  	mutex_init(&esw->state_lock);
  	mutex_init(&esw->mode_lock);
-@@ -2602,7 +2623,11 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2608,7 +2629,11 @@ int mlx5_eswitch_init(struct mlx5_core_d
  		vport->info.vlan_proto = htons(ETH_P_8021Q);
  		vport->info.roce = true;
  		vport->match_id = esw_get_unique_match_id();
@@ -111,7 +111,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  			err = -ENOSPC;
  			goto abort;
  		}
-@@ -2640,8 +2665,12 @@ abort:
+@@ -2646,8 +2671,12 @@ abort:
  	mlx5_esw_for_all_vports(esw, j, vport) {
  		if (j == i)
  			break;
@@ -124,7 +124,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  	}
  	mutex_unlock(&mlx5e_vport_match_ida_mutex);
  	kfree(esw->vports);
-@@ -2699,7 +2728,11 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -2705,7 +2734,11 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  	esw->dev->priv.eswitch = NULL;
  	mutex_lock(&mlx5e_vport_match_ida_mutex);
  	mlx5_esw_for_all_vports(esw, i, vport)
@@ -136,7 +136,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  	mutex_unlock(&mlx5e_vport_match_ida_mutex);
  	flush_work(&esw->handler.start_handler);
  	flush_work(&esw->handler.stop_handler);
-@@ -2707,8 +2740,10 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -2713,8 +2746,10 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  	esw_offloads_cleanup_reps(esw);
  	mutex_destroy(&esw->mode_lock);
  	mutex_destroy(&esw->state_lock);
@@ -147,7 +147,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  	kfree(esw->vports);
  	kfree(esw);
  }
-@@ -2900,6 +2935,7 @@ unlock:
+@@ -2906,6 +2941,7 @@ unlock:
  	return err;
  }
  
@@ -155,7 +155,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
  				  u16 vport, struct ifla_vf_info *ivi)
  {
-@@ -2913,18 +2949,31 @@ int mlx5_eswitch_get_vport_config(struct
+@@ -2919,18 +2955,31 @@ int mlx5_eswitch_get_vport_config(struct
  
  	mutex_lock(&esw->state_lock);
  	ether_addr_copy(ivi->mac, evport->info.mac);
@@ -197,7 +197,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
  				  u8 qos, __be16 proto, u8 set_flags)
-@@ -3278,6 +3327,7 @@ int mlx5_eswitch_set_vport_rate(struct m
+@@ -3284,6 +3333,7 @@ int mlx5_eswitch_set_vport_rate(struct m
  	bool min_rate_supported;
  	bool max_rate_supported;
  	int err = 0;
@@ -205,7 +205,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	if (!ESW_ALLOWED(esw))
  		return -EPERM;
-@@ -3288,7 +3338,6 @@ int mlx5_eswitch_set_vport_rate(struct m
+@@ -3294,7 +3344,6 @@ int mlx5_eswitch_set_vport_rate(struct m
  	min_rate_supported = MLX5_CAP_QOS(esw->dev, esw_bw_share) &&
  				fw_max_bw_share >= MLX5_MIN_BW_SHARE;
  	max_rate_supported = MLX5_CAP_QOS(esw->dev, esw_rate_limit);
@@ -213,7 +213,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  
  	if ((min_rate && !min_rate_supported) || (max_rate && !max_rate_supported))
  		return -EOPNOTSUPP;
-@@ -3573,7 +3622,9 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -3579,7 +3628,9 @@ int mlx5_eswitch_get_vport_stats(struct
  	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
  	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
  	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {0};
@@ -223,7 +223,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  	int err = 0;
  	u32 *out;
  
-@@ -3637,11 +3688,13 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -3643,11 +3694,13 @@ int mlx5_eswitch_get_vport_stats(struct
  	vf_stats->broadcast =
  		MLX5_GET_CTR(out, received_eth_broadcast.packets);
  
@@ -242,7 +242,7 @@ Change-Id: I801847396dc85cad0ce8f062ec036b204bfd06bc
  #ifdef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
  	vf_stats->tx_multicast =
  		MLX5_GET_CTR(out, transmitted_eth_multicast.packets) +
-@@ -3664,7 +3717,6 @@ int mlx5_eswitch_get_vport_stats_backpor
+@@ -3670,7 +3723,6 @@ int mlx5_eswitch_get_vport_stats_backpor
  	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
  	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {0};
  	int err = 0;

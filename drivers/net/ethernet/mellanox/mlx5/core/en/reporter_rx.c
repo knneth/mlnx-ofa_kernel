@@ -90,7 +90,7 @@ static int mlx5e_rx_reporter_err_icosq_cqe_recover(void *ctx)
 		goto out;
 
 	mlx5e_reset_icosq_cc_pc(icosq);
-	mlx5e_free_rx_descs(rq);
+	mlx5e_free_rx_in_progress_descs(rq);
 	clear_bit(MLX5E_SQ_STATE_RECOVERING, &icosq->state);
 	mlx5e_activate_icosq(icosq);
 	mlx5e_activate_rq(rq);
@@ -139,15 +139,8 @@ static int mlx5e_rx_reporter_err_rq_cqe_recover(void *ctx)
 		goto out;
 	}
 
-	if (state == MLX5_RQC_STATE_ERR)
-		mlx5_core_warn_once(mdev, "RQ recovery on [rqn=0x%x, ix=0x%x] was skipped\n",
-				    rq->rqn, rq->channel->ix);
-	/* Work around FW issue which indicates queue in error state
-	 * while queue is in flushing. Recovering while queue is not
-	 * in error state, cause bad page state. Avoid recovery
-	 * altogether until FW issue is resolved.
-	 */
-	goto out;
+	if (state != MLX5_RQC_STATE_ERR)
+		goto out;
 
 	mlx5e_deactivate_rq(rq);
 	mlx5e_free_rx_descs(rq);

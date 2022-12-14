@@ -93,6 +93,11 @@ check_kerver()
         return 0
 }
 
+check_kerver_rh()
+{
+	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 1062 ? 0 : 1)'
+}
+
 parseparams() {
 
 	while [ ! -z "$1" ]
@@ -321,11 +326,13 @@ case "$ARCH" in i386 | x86_64)
 esac
 
 if ! check_kerver ${KVERSION} ${SWITCH_SUPPORTED_KVERSION}; then
-    if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
-                        CONFIG_MLX5_ESWITCH=
+	if ! check_kerver_rh ${KVERSION}; then
+		if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
+			CONFIG_MLX5_ESWITCH=
 			CONFIG_MLX5_SW_STEERING=
-        echo "Warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION}). Disabling."
-    fi
+			echo "Warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION}). Disabling."
+		fi
+	fi
 fi
 
 check_autofconf CONFIG_RFS_ACCEL

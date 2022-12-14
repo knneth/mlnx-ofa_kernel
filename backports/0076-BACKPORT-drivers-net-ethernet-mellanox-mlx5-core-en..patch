@@ -1,10 +1,10 @@
-From: Mikhael Goikhman <migo@mellanox.com>
+From: Aya Levin <ayal@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en.h
 
-Change-Id: If9281d721e753378be6f29628f5174fd96562b69
+Change-Id: I0f3aed892bab2b726dbc703a15d07cb3429bc84d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en.h | 275 +++++++++++++++++++++++++--
- 1 file changed, 256 insertions(+), 19 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en.h | 276 +++++++++++++++++--
+ 1 file changed, 257 insertions(+), 19 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en.h
@@ -130,17 +130,19 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  enum {
  	MLX5E_RQ_STATE_ENABLED,
-@@ -394,13 +438,16 @@ enum {
+@@ -394,6 +438,10 @@ enum {
  	MLX5E_SQ_STATE_AM,
  	MLX5E_SQ_STATE_TLS,
  	MLX5E_SQ_STATE_VLAN_NEED_L2_INLINE,
 +#ifdef HAVE_XDP_REDIRECT
 +	MLX5E_SQ_STATE_REDIRECT,
 +#endif
++
  };
  
  struct mlx5e_sq_wqe_info {
- 	u8  opcode;
+@@ -401,7 +449,7 @@ struct mlx5e_sq_wqe_info {
+ 	u8 num_wqebbs;
  };
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
@@ -148,7 +150,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  struct mlx5e_sq_flow_map {
  	struct hlist_node hlist;
  	u32               dst_ip;
-@@ -456,7 +503,7 @@ struct mlx5e_txqsq {
+@@ -457,7 +505,7 @@ struct mlx5e_txqsq {
  	int                        txq_ix;
  	u32                        rate_limit;
  	struct work_struct         recover_work;
@@ -157,7 +159,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  	struct mlx5e_sq_flow_map   flow_map;
  #endif
  } ____cacheline_aligned_in_smp;
-@@ -467,6 +514,7 @@ struct mlx5e_dma_info {
+@@ -468,6 +516,7 @@ struct mlx5e_dma_info {
  	u32 refcnt_bias;
  };
  
@@ -165,7 +167,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  struct mlx5e_xdp_info {
  	struct xdp_frame      *xdpf;
  	dma_addr_t            dma_addr;
-@@ -533,6 +581,7 @@ struct mlx5e_xdpsq {
+@@ -534,6 +583,7 @@ struct mlx5e_xdpsq {
  	struct mlx5_wq_ctrl        wq_ctrl;
  	struct mlx5e_channel      *channel;
  } ____cacheline_aligned_in_smp;
@@ -173,15 +175,15 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  struct mlx5e_icosq {
  	/* data path */
-@@ -573,8 +622,24 @@ struct mlx5e_umr_dma_info {
+@@ -574,9 +624,25 @@ struct mlx5e_umr_dma_info {
  struct mlx5e_mpw_info {
  	struct mlx5e_umr_dma_info umr;
  	u16 consumed_strides;
 +#ifdef HAVE_XDP_BUFF
  	DECLARE_BITMAP(xdp_xmit_bitmap, MLX5_MPWRQ_PAGES_PER_WQE);
 +#endif
-+};
-+
+ };
+ 
 +#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
 +#define IS_HW_LRO(params) \
 +	((params)->lro_en && MLX5E_GET_PFLAG(params, MLX5E_PFLAG_HWLRO))
@@ -193,12 +195,13 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
 +struct mlx5e_sw_lro {
 +	struct net_lro_mgr	lro_mgr;
 +	struct net_lro_desc	lro_desc[MLX5E_LRO_MAX_DESC];
- };
++};
 +#endif
- 
++
  #define MLX5E_MAX_RX_FRAGS 4
  
-@@ -686,10 +751,18 @@ struct mlx5e_rq {
+ #define MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT	4
+@@ -687,10 +753,18 @@ struct mlx5e_rq {
  	struct mlx5e_dim       dim_obj; /* Adaptive Moderation */
  
  	/* XDP */
@@ -217,7 +220,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  	struct work_struct     recover_work;
  
-@@ -702,9 +775,16 @@ struct mlx5e_rq {
+@@ -703,9 +777,16 @@ struct mlx5e_rq {
  	struct mlx5_core_mkey  umr_mkey;
  
  	/* XDP read-mostly */
@@ -234,7 +237,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  struct mlx5e_channel {
  	/* data path */
  	struct mlx5e_rq            rq;
-@@ -714,19 +794,28 @@ struct mlx5e_channel {
+@@ -715,19 +796,28 @@ struct mlx5e_channel {
  	u16			   num_special_sq;
  #endif
  	struct mlx5e_icosq         icosq;   /* internal control operations */
@@ -263,7 +266,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  	struct mlx5e_ch_stats     *stats;
  
  	/* control */
-@@ -750,8 +839,12 @@ struct mlx5e_channel_stats {
+@@ -751,8 +841,12 @@ struct mlx5e_channel_stats {
  	struct mlx5e_ch_stats ch;
  	struct mlx5e_sq_stats sq[MLX5E_MAX_NUM_TC];
  	struct mlx5e_rq_stats rq;
@@ -276,7 +279,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  } ____cacheline_aligned_in_smp;
  
  enum {
-@@ -854,10 +947,10 @@ struct mlx5e_priv {
+@@ -855,10 +949,10 @@ struct mlx5e_priv {
  				   MLX5E_MAX_RL_QUEUES];
  	int channel_tc2txq[MLX5E_MAX_NUM_CHANNELS][MLX5E_MAX_NUM_TC];
  	int channel_tc2realtxq[MLX5E_MAX_NUM_CHANNELS][MLX5E_MAX_NUM_TC];
@@ -289,7 +292,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  	struct mlx5e_dcbx_dp       dcbx_dp;
  #endif
  	/* priv data path fields - end */
-@@ -891,7 +984,13 @@ struct mlx5e_priv {
+@@ -892,7 +986,13 @@ struct mlx5e_priv {
  	struct net_device         *netdev;
  	struct mlx5e_stats         stats;
  	struct mlx5e_channel_stats channel_stats[MLX5E_MAX_NUM_CHANNELS];
@@ -303,7 +306,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	struct mlx5e_sq_stats      special_sq_stats[MLX5E_MAX_RL_QUEUES];
  	int                        max_opened_special_sq;
-@@ -901,9 +1000,11 @@ struct mlx5e_priv {
+@@ -902,9 +1002,11 @@ struct mlx5e_priv {
  	u16                        drop_rq_q_counter;
  	struct notifier_block      events_nb;
  
@@ -315,7 +318,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  	const struct mlx5e_profile *profile;
  	void                      *ppriv;
-@@ -913,6 +1014,7 @@ struct mlx5e_priv {
+@@ -914,6 +1016,7 @@ struct mlx5e_priv {
  #ifdef CONFIG_MLX5_EN_TLS
  	struct mlx5e_tls          *tls;
  #endif
@@ -323,7 +326,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  	struct devlink_health_reporter *tx_reporter;
  	struct devlink_health_reporter *rx_reporter;
  
-@@ -929,14 +1031,6 @@ struct mlx5e_priv {
+@@ -930,14 +1033,6 @@ struct mlx5e_priv {
  	struct mlx5e_ecn_enable_ctx ecn_enable_ctx[MLX5E_CONG_PROTOCOL_NUM][8];
  	struct mlx5e_delay_drop delay_drop;
  };
@@ -338,7 +341,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  struct mlx5e_profile {
  	int	(*init)(struct mlx5_core_dev *mdev,
-@@ -959,15 +1053,56 @@ struct mlx5e_profile {
+@@ -960,15 +1055,56 @@ struct mlx5e_profile {
  	int	max_tc;
  };
  
@@ -395,7 +398,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  void mlx5e_trigger_irq(struct mlx5e_icosq *sq);
  void mlx5e_completion_event(struct mlx5_core_cq *mcq, struct mlx5_eqe *eqe);
-@@ -1028,16 +1163,30 @@ void mlx5e_update_stats(struct mlx5e_pri
+@@ -1029,16 +1165,30 @@ void mlx5e_update_stats(struct mlx5e_pri
  int mlx5e_sysfs_create(struct net_device *dev);
  void mlx5e_sysfs_remove(struct net_device *dev);
  
@@ -427,7 +430,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  void mlx5e_init_l2_addr(struct mlx5e_priv *priv);
  int mlx5e_self_test_num(struct mlx5e_priv *priv);
-@@ -1045,17 +1194,37 @@ void mlx5e_self_test(struct net_device *
+@@ -1046,17 +1196,37 @@ void mlx5e_self_test(struct net_device *
  		     u64 *buf);
  void mlx5e_set_rx_mode_work(struct work_struct *work);
  
@@ -465,7 +468,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  struct mlx5e_redirect_rqt_param {
  	bool is_rss;
  	union {
-@@ -1126,13 +1295,23 @@ void mlx5e_create_debugfs(struct mlx5e_p
+@@ -1128,13 +1298,23 @@ void mlx5e_create_debugfs(struct mlx5e_p
  void mlx5e_destroy_debugfs(struct mlx5e_priv *priv);
  
  extern const struct ethtool_ops mlx5e_ethtool_ops;
@@ -489,7 +492,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  int mlx5e_create_tir(struct mlx5_core_dev *mdev,
  		     struct mlx5e_tir *tir, u32 *in, int inlen);
-@@ -1142,6 +1321,9 @@ int mlx5e_create_mdev_resources(struct m
+@@ -1144,6 +1324,9 @@ int mlx5e_create_mdev_resources(struct m
  void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev);
  int mlx5e_refresh_tirs(struct mlx5e_priv *priv, bool enable_uc_lb);
  int mlx5e_modify_tirs_lro(struct mlx5e_priv *priv);
@@ -499,7 +502,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  /* common netdev helpers */
  void mlx5e_create_q_counters(struct mlx5e_priv *priv);
-@@ -1196,27 +1378,53 @@ void mlx5e_ethtool_get_ringparam(struct
+@@ -1198,27 +1381,53 @@ void mlx5e_ethtool_get_ringparam(struct
  				 struct ethtool_ringparam *param);
  int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
  				struct ethtool_ringparam *param);
@@ -555,7 +558,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam);
  int mlx5e_ethtool_set_pauseparam(struct mlx5e_priv *priv,
-@@ -1248,10 +1456,12 @@ void mlx5e_build_rq_params(struct mlx5_c
+@@ -1250,10 +1459,12 @@ void mlx5e_build_rq_params(struct mlx5_c
  void mlx5e_build_rss_params(struct mlx5e_rss_params *rss_params,
  			    u16 num_channels);
  
@@ -568,7 +571,7 @@ Change-Id: If9281d721e753378be6f29628f5174fd96562b69
  
  static inline bool mlx5e_dropless_rq_supported(struct mlx5_core_dev *mdev)
  {
-@@ -1261,21 +1471,48 @@ static inline bool mlx5e_dropless_rq_sup
+@@ -1263,21 +1474,48 @@ static inline bool mlx5e_dropless_rq_sup
  
  void mlx5e_rx_dim_work(struct work_struct *work);
  void mlx5e_tx_dim_work(struct work_struct *work);

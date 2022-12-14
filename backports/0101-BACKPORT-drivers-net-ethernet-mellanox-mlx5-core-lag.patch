@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
 
 Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
 ---
- .../net/ethernet/mellanox/mlx5/core/lag_mp.c  | 50 ++++++++++++++++++-
+ drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c | 50 +++++++++++++++++++++++-
  1 file changed, 48 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.c
@@ -49,7 +49,7 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  static void mlx5_lag_set_port_affinity(struct mlx5_lag *ldev, int port)
  {
  	struct lag_tracker tracker;
-@@ -123,7 +134,11 @@ static void mlx5_lag_fib_route_event(str
+@@ -122,7 +133,11 @@ static void mlx5_lag_fib_route_event(str
  	/* Handle add/replace event */
  	if (fi->fib_nhs == 1) {
  		if (__mlx5_lag_is_active(ldev)) {
@@ -61,7 +61,7 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  			int i = mlx5_lag_dev_get_netdev_idx(ldev, nh_dev);
  
  			mlx5_lag_set_port_affinity(ldev, ++i);
-@@ -135,10 +150,17 @@ static void mlx5_lag_fib_route_event(str
+@@ -134,10 +149,17 @@ static void mlx5_lag_fib_route_event(str
  		return;
  
  	/* Verify next hops are ports of the same hca */
@@ -79,7 +79,7 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  		mlx5_core_warn(ldev->pf[0].dev, "Multipath offload require two ports of the same HCA\n");
  		return;
  	}
-@@ -168,7 +190,11 @@ static void mlx5_lag_fib_nexthop_event(s
+@@ -167,7 +189,11 @@ static void mlx5_lag_fib_nexthop_event(s
  
  	/* nh added/removed */
  	if (event == FIB_EVENT_NH_DEL) {
@@ -91,7 +91,7 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  
  		if (i >= 0) {
  			i = (i + 1) % 2 + 1; /* peer port */
-@@ -240,6 +266,9 @@ static int mlx5_lag_fib_event(struct not
+@@ -239,6 +265,9 @@ static int mlx5_lag_fib_event(struct not
  	struct fib_entry_notifier_info *fen_info;
  	struct fib_nh_notifier_info *fnh_info;
  	struct fib_info *fi;
@@ -101,7 +101,7 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  
  	if (info->family != AF_INET)
  		return NOTIFY_DONE;
-@@ -255,8 +284,14 @@ static int mlx5_lag_fib_event(struct not
+@@ -254,8 +283,14 @@ static int mlx5_lag_fib_event(struct not
  		fen_info = container_of(info, struct fib_entry_notifier_info,
  					info);
  		fi = fen_info->fi;
@@ -116,8 +116,8 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  			return NOTIFY_DONE;
  		}
  		fib_work = mlx5_lag_init_fib_work(ldev, event);
-@@ -296,8 +331,13 @@ int mlx5_lag_mp_init(struct mlx5_lag *ld
- 		return 0;
+@@ -299,8 +334,13 @@ int mlx5_lag_mp_init(struct mlx5_lag *ld
+ 		return -ENOMEM;
  
  	mp->fib_nb.notifier_call = mlx5_lag_fib_event;
 +#ifdef HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS
@@ -127,10 +127,10 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
  	err = register_fib_notifier(&mp->fib_nb,
  				    mlx5_lag_fib_event_flush);
 +#endif
- 	if (err)
+ 	if (err) {
+ 		destroy_workqueue(mp->wq);
  		mp->fib_nb.notifier_call = NULL;
- 
-@@ -311,6 +351,12 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
+@@ -316,7 +356,13 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
  	if (!mp->fib_nb.notifier_call)
  		return;
  
@@ -139,6 +139,7 @@ Change-Id: Ia45d22b3ddef3c6b67e2fafb5b8c3e0bd9209d4b
 +#else
  	unregister_fib_notifier(&mp->fib_nb);
 +#endif
+ 	destroy_workqueue(mp->wq);
  	mp->fib_nb.notifier_call = NULL;
  }
 +#endif /* HAVE_FIB_NH_NOTIFIER_INFO */

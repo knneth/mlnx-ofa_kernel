@@ -46,7 +46,7 @@
 #include "fs_core.h"
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"5.0-1.0.0.0"
+#define DRIVER_VERSION	"5.0-2.1.8"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 
@@ -418,6 +418,11 @@ int mlx5_cr_protected_capture(struct mlx5_core_dev *dev);
 #define MLX5_CORE_PROC "driver/mlx5_core"
 #define MLX5_CORE_PROC_CRDUMP "crdump"
 extern struct proc_dir_entry *mlx5_crdump_dir;
+#define MLX5_CORE_PROC_SMFS_DUMP "smfs_dump"
+extern struct proc_dir_entry *mlx5_smfs_dump_dir;
+#define MLX5_CORE_PROC_SMFS_FDB_DUMP "fdb"
+extern struct proc_dir_entry *mlx5_smfs_fdb_dump_dir;
+
 int mlx5_crdump_init(struct mlx5_core_dev *dev);
 void mlx5_crdump_cleanup(struct mlx5_core_dev *dev);
 int mlx5_fill_cr_dump(struct mlx5_core_dev *dev);

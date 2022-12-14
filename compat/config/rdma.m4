@@ -1682,6 +1682,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct flow_block_offload hash unlocked_driver_cb])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/pkt_cls.h>
+	],[
+		struct flow_block_offload x;
+		x.unlocked_driver_cb = true;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_UNLOCKED_DRIVER_CB, 1,
+			  [struct flow_block_offload has unlocked_driver_cb])
+	],[
+		AC_MSG_RESULT(no)
+	])
 
 	AC_MSG_CHECKING([if struct netlink_ext_ack exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -14774,6 +14789,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BLKDEV_REQ_BVEC, 1,
 				[linux/blkdev.h has req_bvec])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/blkdev.h has QUEUE_FLAG_QUIESCED])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		int x = QUEUE_FLAG_QUIESCED;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLKDEV_QUEUE_FLAG_QUIESCED, 1,
+				[linux/blkdev.h has QUEUE_FLAG_QUIESCED])
 	],[
 		AC_MSG_RESULT(no)
 	])

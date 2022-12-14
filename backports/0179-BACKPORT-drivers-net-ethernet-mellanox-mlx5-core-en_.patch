@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
 ---
- .../mellanox/mlx5/core/en_accel/ipsec_rxtx.c       | 41 ++++++++++++++++++++--
+ .../mellanox/mlx5/core/en_accel/ipsec_rxtx.c  | 41 ++++++++++++++++++-
  1 file changed, 39 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
@@ -73,10 +73,10 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  	u32  sa_handle;
  
  	if (likely(!(ipsec_syndrome & MLX5_IPSEC_METADATA_MARKER_MASK)))
-@@ -473,8 +493,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
- 
- 	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
+@@ -475,8 +495,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  	priv = netdev_priv(netdev);
+ 	if (!priv->ipsec)
+ 		return;
 -	sp = secpath_set(skb);
 -	if (unlikely(!sp)) {
 +#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
@@ -89,7 +89,7 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
  		return;
  	}
-@@ -485,9 +510,14 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -487,9 +512,14 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  		return;
  	}
  
@@ -104,7 +104,7 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  
  	xo = xfrm_offload(skb);
  	xo->flags = CRYPTO_DONE;
-@@ -512,11 +542,18 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -514,11 +544,18 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  bool mlx5e_ipsec_feature_check(struct sk_buff *skb, struct net_device *netdev,
  			       netdev_features_t features)
  {

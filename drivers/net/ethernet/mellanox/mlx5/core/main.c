@@ -101,6 +101,8 @@ MODULE_PARM_DESC(probe_vf, "probe VFs or not, 0 = not probe, 1 = probe. Default 
 
 struct proc_dir_entry *mlx5_core_proc_dir;
 struct proc_dir_entry *mlx5_crdump_dir;
+struct proc_dir_entry *mlx5_smfs_dump_dir;
+struct proc_dir_entry *mlx5_smfs_fdb_dump_dir;
 
 static u32 sw_owner_id[4];
 
@@ -979,6 +981,8 @@ static ssize_t mlx5_roce_enable_set_enabled(struct device *device,
 {
 	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
+	struct devlink *devlink = priv_to_devlink(dev);
+	union devlink_param_value value;
 	int ret;
 	bool val;
 
@@ -986,8 +990,15 @@ static ssize_t mlx5_roce_enable_set_enabled(struct device *device,
 	if (ret)
 		return -EINVAL;
 
+	if (val && !MLX5_CAP_GEN(dev,roce))
+		return -EOPNOTSUPP;
+
 	mutex_lock(&dev->roce.state_lock);
 	dev->roce.enabled = val;
+	value.vbool = val;
+	devlink_param_driverinit_value_set(devlink,
+					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+					   value);
 	mlx5_reload_interface(dev, MLX5_INTERFACE_PROTOCOL_IB);
 	mutex_unlock(&dev->roce.state_lock);
 
@@ -1251,15 +1262,15 @@ static int mlx5_function_setup(struct mlx5_core_dev *dev, bool boot)
 		return err;
 	}
 
-	/* remove any previous indication of internal error */
-	dev->state = MLX5_DEVICE_STATE_UP;
-
 	err = wait_fw_init(dev, FW_INIT_TIMEOUT_MILI, 0);
 	if (err) {
 		mlx5_core_err(dev, "Firmware over %d MS in initializing state, aborting\n",
 			      FW_INIT_TIMEOUT_MILI);
 		goto err_cmd_cleanup;
 	}
+
+	/* remove any previous indication of internal error */
+	dev->state = MLX5_DEVICE_STATE_UP;
 
 	err = mlx5_core_enable_hca(dev, 0);
 	if (err) {
@@ -1512,6 +1523,7 @@ int mlx5_load_one(struct mlx5_core_dev *dev, bool boot)
 		goto out;
 
 	if (boot) {
+		dev->roce.enabled = MLX5_CAP_GEN(dev, roce);
 		err = mlx5_init_once(dev);
 		if (err) {
 			mlx5_core_err(dev, "sw objs init failed\n");
@@ -1522,6 +1534,12 @@ int mlx5_load_one(struct mlx5_core_dev *dev, bool boot)
 	err = mlx5_load(dev);
 	if (err)
 		goto err_load;
+
+	if (boot) {
+		err = mlx5_devlink_register(priv_to_devlink(dev), dev->device);
+		if (err)
+			goto err_devlink_reg;
+	}
 
 	mlx5_diag_cnt_init(dev);
 	mlx5_lag_add_mdev(dev);
@@ -1539,7 +1557,8 @@ int mlx5_load_one(struct mlx5_core_dev *dev, bool boot)
 		}
 	}
 
-	register_pcie_dev_attr_group(dev->pdev);
+	if (!mlx5_core_is_sf(dev))
+		register_pcie_dev_attr_group(dev->pdev);
 
 	set_bit(MLX5_INTERFACE_STATE_UP, &dev->intf_state);
 out:
@@ -1550,6 +1569,9 @@ out:
 err_reg_dev:
 	mlx5_lag_remove_mdev(dev);
 	mlx5_diag_cnt_cleanup(dev);
+	if (boot)
+		mlx5_devlink_unregister(priv_to_devlink(dev));
+err_devlink_reg:
 	mlx5_unload(dev);
 err_load:
 	if (boot)
@@ -1952,7 +1974,6 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
 	mutex_init(&priv->bfregs.wc_head.lock);
 	INIT_LIST_HEAD(&priv->bfregs.reg_head.list);
 	INIT_LIST_HEAD(&priv->bfregs.wc_head.list);
-	dev->roce.enabled = true;
 	mutex_init(&dev->roce.state_lock);
 	mutex_init(&priv->alloc_mutex);
 	mutex_init(&priv->pgdir_mutex);
@@ -2107,10 +2128,6 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	request_module_nowait(MLX5_IB_MOD);
 
-	err = mlx5_devlink_register(devlink, &pdev->dev);
-	if (err)
-		goto clean_load;
-
 	err = mlx5_crdump_enable(dev);
 	if (err)
 		dev_err(&pdev->dev, "mlx5_crdump_enable failed with error code %d\n", err);
@@ -2118,8 +2135,6 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	pci_save_state(pdev);
 	return 0;
 
-clean_load:
-	mlx5_unload_one(dev, true);
 err_load_one:
 	mlx5_crdump_cleanup(dev);
 clean_crdump:
@@ -2145,7 +2160,7 @@ static void remove_one(struct pci_dev *pdev)
 	struct mlx5_priv *priv;
 
 	dev  = pci_get_drvdata(pdev);
-	devlink = mlx5_core_to_devlink(dev);
+	devlink = priv_to_devlink(dev);
 	priv = &dev->priv;
 
 	if (pdev->is_virtfn && !priv->sriov.probe_vf)
@@ -2453,12 +2468,28 @@ static int mlx5_create_core_dir(void)
 	}
 
 	mlx5_crdump_dir = proc_mkdir(MLX5_CORE_PROC_CRDUMP, mlx5_core_proc_dir);
-	if (!mlx5_crdump_dir) {
-		remove_proc_entry(MLX5_CORE_PROC, NULL);
-		return -1;
-	}
+	if (!mlx5_crdump_dir)
+		goto remove_core_proc;
+
+	mlx5_smfs_dump_dir = proc_mkdir(MLX5_CORE_PROC_SMFS_DUMP,
+					mlx5_core_proc_dir);
+	if (!mlx5_smfs_dump_dir)
+		goto remove_core_proc_crdump;
+
+	mlx5_smfs_fdb_dump_dir = proc_mkdir(MLX5_CORE_PROC_SMFS_FDB_DUMP,
+					    mlx5_smfs_dump_dir);
+	if (!mlx5_smfs_fdb_dump_dir)
+		goto remove_core_proc_smfs_dump;
 
 	return 0;
+
+remove_core_proc_smfs_dump:
+	remove_proc_entry(MLX5_CORE_PROC_SMFS_DUMP, NULL);
+remove_core_proc_crdump:
+	remove_proc_entry(MLX5_CORE_PROC_CRDUMP, NULL);
+remove_core_proc:
+	remove_proc_entry(MLX5_CORE_PROC, NULL);
+	return -1;
 }
 
 static void mlx5_remove_core_dir(void)
@@ -2466,6 +2497,10 @@ static void mlx5_remove_core_dir(void)
 	if (mlx5_core_proc_dir) {
 		if (mlx5_crdump_dir)
 			remove_proc_entry(MLX5_CORE_PROC_CRDUMP, mlx5_core_proc_dir);
+		if (mlx5_smfs_fdb_dump_dir)
+			remove_proc_entry(MLX5_CORE_PROC_SMFS_FDB_DUMP, mlx5_smfs_dump_dir);
+		if (mlx5_smfs_dump_dir)
+			remove_proc_entry(MLX5_CORE_PROC_SMFS_DUMP, mlx5_core_proc_dir);
 		remove_proc_entry(MLX5_CORE_PROC, NULL);
 	}
 }

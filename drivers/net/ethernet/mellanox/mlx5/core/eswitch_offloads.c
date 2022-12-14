@@ -1536,9 +1536,10 @@ int esw_offloads_init_reps(struct mlx5_eswitch *esw)
 static void __esw_offloads_unload_rep(struct mlx5_eswitch *esw,
 				      struct mlx5_eswitch_rep *rep, u8 rep_type)
 {
-	if (atomic_cmpxchg(&rep->rep_data[rep_type].state,
-			   REP_LOADED, REP_REGISTERED) == REP_LOADED)
+	if (atomic_read(&rep->rep_data[rep_type].state) == REP_LOADED) {
+		atomic_set(&rep->rep_data[rep_type].state, REP_REGISTERED);
 		esw->offloads.rep_ops[rep_type]->unload(rep);
+	}
 }
 
 static void __unload_reps_special_vport(struct mlx5_eswitch *esw, u8 rep_type)
@@ -1608,12 +1609,10 @@ static int __esw_offloads_load_rep(struct mlx5_eswitch *esw,
 {
 	int err = 0;
 
-	if (atomic_cmpxchg(&rep->rep_data[rep_type].state,
-			   REP_REGISTERED, REP_LOADED) == REP_REGISTERED) {
+	if (atomic_read(&rep->rep_data[rep_type].state) == REP_REGISTERED) {
 		err = esw->offloads.rep_ops[rep_type]->load(esw->dev, rep);
-		if (err)
-			atomic_set(&rep->rep_data[rep_type].state,
-				   REP_REGISTERED);
+		if (!err)
+			atomic_set(&rep->rep_data[rep_type].state, REP_LOADED);
 	}
 
 	return err;
@@ -2865,7 +2864,8 @@ int mlx5_esw_funcs_changed_handler(struct notifier_block *nb, unsigned long type
 
 int esw_offloads_enable(struct mlx5_eswitch *esw)
 {
-	int err;
+	struct mlx5_vport *vport;
+	int err, i;
 
 	mlx5_rdma_enable_roce(esw->dev);
 	err = esw_offloads_steering_init(esw);
@@ -2875,6 +2875,10 @@ int esw_offloads_enable(struct mlx5_eswitch *esw)
 	err = esw_set_passing_vport_metadata(esw, true);
 	if (err)
 		goto err_vport_metadata;
+
+	/* Representor will control the vport link state */
+	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs)
+		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_DOWN;
 
 	mlx5_eswitch_enable_pf_vf_vports(esw, MLX5_VPORT_UC_ADDR_CHANGE);
 

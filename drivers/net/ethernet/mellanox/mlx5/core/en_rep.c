@@ -690,6 +690,8 @@ mlx5e_rep_indr_setup_tc_block(struct net_device *netdev,
 	if (f->binder_type != TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
 		return -EOPNOTSUPP;
 
+	f->unlocked_driver_cb = true;
+
 	switch (f->command) {
 	case TC_BLOCK_BIND:
 		indr_priv = mlx5e_rep_indr_block_priv_lookup(rpriv, netdev);
@@ -1332,8 +1334,11 @@ static int mlx5e_rep_setup_tc_block(struct net_device *dev,
 static int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
 			      void *type_data)
 {
+	struct flow_block_offload *f = type_data;
+
 	switch (type) {
 	case TC_SETUP_BLOCK:
+		f->unlocked_driver_cb = true;
 		return mlx5e_rep_setup_tc_block(dev, type_data);
 	default:
 		return -EOPNOTSUPP;
@@ -2003,7 +2008,7 @@ mlx5e_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
 		mlx5_smartnic_sysfs_init(netdev);
-		mlx5_eswitch_compat_sysfs_init(netdev);
+		mlx5e_sysfs_create(netdev);
 	}
 
 	return 0;
@@ -2076,7 +2081,7 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	}
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
-		mlx5_eswitch_compat_sysfs_cleanup(netdev);
+		mlx5e_sysfs_remove(netdev);
 		mlx5_smartnic_sysfs_cleanup(netdev);
 	}
 

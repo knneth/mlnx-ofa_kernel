@@ -28,7 +28,10 @@ static int mlx5_devlink_flash_update(struct devlink *devlink,
 	if (err)
 		return err;
 
-	return mlx5_firmware_flash(dev, fw, extack);
+	err = mlx5_firmware_flash(dev, fw, extack);
+	release_firmware(fw);
+
+	return err;
 }
 
 static int mlx5_devlink_reload_down(struct devlink *devlink,
@@ -70,17 +73,6 @@ struct devlink *mlx5_devlink_alloc()
 void mlx5_devlink_free(struct devlink *devlink)
 {
 	devlink_free(devlink);
-}
-
-struct devlink *mlx5_core_to_devlink(struct mlx5_core_dev *dev)
-{
-	struct mlx5_sf *sf;
-
-	if (!mlx5_core_is_sf(dev))
-		return priv_to_devlink(dev);
-
-	sf = container_of(dev, struct mlx5_sf, dev);
-	return priv_to_devlink(sf);
 }
 
 static int mlx5_devlink_fs_mode_validate(struct devlink *devlink, u32 id,
