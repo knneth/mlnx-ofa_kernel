@@ -730,6 +730,7 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 				break;
 			}
 
+			num += ret;
 			p = page_to_phys(local_page_list[j]);
 			k++;
 		}

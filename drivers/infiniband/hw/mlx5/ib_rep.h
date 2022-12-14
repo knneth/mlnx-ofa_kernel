@@ -28,6 +28,7 @@ struct net_device *mlx5_ib_get_rep_netdev(struct mlx5_eswitch *esw,
 u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw);
 u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 						 u16 vport);
+u32 mlx5_ib_eswitch_get_vport_metadata_mask(void);
 #else /* CONFIG_MLX5_ESWITCH */
 static inline u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw)
 {
@@ -80,6 +81,12 @@ u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw)
 static inline
 u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 						 u16 vport)
+{
+	return 0;
+};
+
+static inline
+u32 mlx5_ib_eswitch_get_vport_metadata_mask(void)
 {
 	return 0;
 };

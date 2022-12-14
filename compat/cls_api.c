@@ -23,6 +23,30 @@
 #ifdef HAVE_MINIFLOW
 #include <net/tc_act/tc_ct.h>
 #endif
+#include <net/tc_act/tc_tunnel_key.h>
+
+
+#if !defined(HAVE_IS_TCF_TUNNEL) && defined(HAVE_TCF_TUNNEL_INFO)
+
+struct tcf_tunnel_key {
+	struct tcf_common	common;
+	int			tcft_action;
+	struct ip_tunnel_info	ti;
+ };
+
+#define to_tunnel_key(pc) \
+        container_of(pc, struct tcf_tunnel_key, common)
+
+static void parse_tunnel(const struct tc_action *act,
+			 struct flow_action_entry *entry)
+{
+	struct tcf_tunnel_key *t;
+
+	t = to_tunnel_key(act->priv);
+
+	entry->tunnel = &t->ti;
+}
+#endif
 
 int tc_setup_flow_action(struct flow_action *flow_action,
 			 const struct tcf_exts *exts)
@@ -85,6 +109,12 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 		} else if (is_tcf_tunnel_set(act)) {
 			entry->id = FLOW_ACTION_TUNNEL_ENCAP;
 			entry->tunnel = tcf_tunnel_info(act);
+		} else if (is_tcf_tunnel_release(act)) {
+			entry->id = FLOW_ACTION_TUNNEL_DECAP;
+#elif defined(HAVE_TCF_TUNNEL_INFO)
+		} else if (is_tcf_tunnel_set(act)) {
+			entry->id = FLOW_ACTION_TUNNEL_ENCAP;
+			parse_tunnel(act, entry);
 		} else if (is_tcf_tunnel_release(act)) {
 			entry->id = FLOW_ACTION_TUNNEL_DECAP;
 #endif

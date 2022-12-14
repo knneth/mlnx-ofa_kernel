@@ -1,34 +1,11 @@
 #ifndef _COMPAT_NET_PKT_CLS_H
 #define _COMPAT_NET_PKT_CLS_H 1
 
+#include "../../compat/config.h"
 #include_next <net/pkt_cls.h>
-
-#ifndef HAVE_TC_SETUP_TYPE
-enum tc_setup_type {
-	dummy,
-};
-#endif
-
-#ifndef HAVE___TC_INDR_BLOCK_CB_REGISTER
-typedef int tc_indr_block_bind_cb_t(struct net_device *dev, void *cb_priv,
-                                    enum tc_setup_type type, void *type_data);
-
-static inline
-int __tc_indr_block_cb_register(struct net_device *dev, void *cb_priv,
-                                tc_indr_block_bind_cb_t *cb, void *cb_ident)
-{
-	        return 0;
-}
-
-static inline
-void __tc_indr_block_cb_unregister(struct net_device *dev,
-                                   tc_indr_block_bind_cb_t *cb, void *cb_ident)
-{
-}
-#endif
+#include <net/tc_act/tc_tunnel_key.h>
 
 #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
-#include "../../compat/config.h"
 #define HAVE_FLOWER_MULTI_MASK 1
 #include <uapi/linux/uapi/pkt_cls.h>
 
@@ -90,6 +67,30 @@ static inline bool tc_skip_hw(u32 flags)
 
 #endif
 
+#ifndef HAVE_TC_SETUP_TYPE
+enum tc_setup_type {
+	dummy,
+};
+#endif
+
+#ifndef HAVE___TC_INDR_BLOCK_CB_REGISTER
+typedef int tc_indr_block_bind_cb_t(struct net_device *dev, void *cb_priv,
+                                    enum tc_setup_type type, void *type_data);
+
+static inline
+int __tc_indr_block_cb_register(struct net_device *dev, void *cb_priv,
+                                tc_indr_block_bind_cb_t *cb, void *cb_ident)
+{
+	        return 0;
+}
+
+static inline
+void __tc_indr_block_cb_unregister(struct net_device *dev,
+                                   tc_indr_block_bind_cb_t *cb, void *cb_ident)
+{
+}
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)) && (LINUX_VERSION_CODE <= KERNEL_VERSION(4,7,10))
 #undef tc_for_each_action
 #define tc_for_each_action(_a, _exts) \
@@ -110,6 +111,7 @@ static inline bool tc_skip_hw(u32 flags)
 #ifdef CONFIG_MLX5_ESWITCH
 #ifndef HAVE_TC_SETUP_FLOW_ACTION
 #include <net/flow_offload.h>
+
 #define tc_setup_flow_action LINUX_BACKPORT(tc_setup_flow_action)
 int tc_setup_flow_action(struct flow_action *flow_action,
 			 const struct tcf_exts *exts);
@@ -120,6 +122,30 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 #include_next <net/pkt_cls.h>
 #define tcf_exts_num_actions LINUX_BACKPORT(tcf_exts_num_actions)
 unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
+#endif
+
+#ifdef HAVE_FLOW_CLS_OFFLOAD
+#define TC_CLSFLOWER_REPLACE FLOW_CLS_REPLACE
+#define TC_CLSFLOWER_DESTROY FLOW_CLS_DESTROY
+#define TC_CLSFLOWER_STATS FLOW_CLS_STATS
+#define TC_CLSFLOWER_TMPLT_CREATE FLOW_CLS_TMPLT_CREATE
+#define TC_CLSFLOWER_TMPLT_DESTROY FLOW_CLS_TMPLT_DESTROY
+#define tc_cls_flower_offload flow_cls_offload
+
+static inline struct flow_rule *
+tc_cls_flower_offload_flow_rule(struct tc_cls_flower_offload *tc_flow_cmd)
+{
+        return flow_cls_offload_flow_rule(tc_flow_cmd);
+}
+#endif
+
+#ifdef HAVE_FLOW_BLOCK_OFFLOAD
+#define TC_BLOCK_BIND FLOW_BLOCK_BIND
+#define TC_BLOCK_UNBIND FLOW_BLOCK_UNBIND
+#define TCF_BLOCK_BINDER_TYPE_UNSPEC  FLOW_BLOCK_BINDER_TYPE_UNSPEC
+#define TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS
+#define TCF_BLOCK_BINDER_TYPE_CLSACT_EGRESS  FLOW_BLOCK_BINDER_TYPE_CLSACT_EGRESS
+#define tc_block_offload flow_block_offload
 #endif
 
 #endif	/* _COMPAT_NET_PKT_CLS_H */

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 
 Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
 ---
- drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c | 113 +++++++++++++++++++++-
- 1 file changed, 111 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c | 114 +++++++++++++++++++++-
+ 1 file changed, 112 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
@@ -47,7 +47,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  
  		free_irq(irqn, &irq->nh);
  	}
-@@ -157,8 +174,13 @@ static int irq_set_rmap(struct mlx5_core
+@@ -174,8 +191,13 @@ static int irq_set_rmap(struct mlx5_core
  
  	vecidx = MLX5_IRQ_VEC_COMP_BASE;
  	for (; vecidx < irq_table->nvec; vecidx++) {
@@ -61,7 +61,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  		if (err) {
  			mlx5_core_err(mdev, "irq_cpu_rmap_add failed. err %d",
  				      err);
-@@ -178,12 +200,23 @@ err_out:
+@@ -195,12 +217,23 @@ err_out:
  
  static int set_comp_irq_affinity_hint(struct mlx5_core_dev *mdev, int i)
  {
@@ -86,7 +86,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  	if (!zalloc_cpumask_var(&irq->mask, GFP_KERNEL)) {
  		mlx5_core_warn(mdev, "zalloc_cpumask_var failed");
  		return -ENOMEM;
-@@ -201,12 +234,23 @@ static int set_comp_irq_affinity_hint(st
+@@ -218,12 +251,23 @@ static int set_comp_irq_affinity_hint(st
  
  static void clear_comp_irq_affinity_hint(struct mlx5_core_dev *mdev, int i)
  {
@@ -111,7 +111,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  	irq_set_affinity_hint(irqn, NULL);
  	free_cpumask_var(irq->mask);
  }
-@@ -260,8 +304,13 @@ static void unrequest_irqs(struct mlx5_c
+@@ -277,8 +321,13 @@ static void unrequest_irqs(struct mlx5_c
  	int i;
  
  	for (i = 0; i < table->nvec; i++)
@@ -125,8 +125,8 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  }
  
  int mlx5_irq_table_create(struct mlx5_core_dev *dev)
-@@ -273,6 +322,9 @@ int mlx5_irq_table_create(struct mlx5_co
- 		      1 << MLX5_CAP_GEN(dev, log_max_eq);
+@@ -291,6 +340,9 @@ int mlx5_irq_table_create(struct mlx5_co
+ 	int max_comp_eqs;
  	int nvec;
  	int err;
 +#ifndef HAVE_PCI_IRQ_API
@@ -135,7 +135,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  
  	if (mlx5_core_is_sf(dev))
  		return 0;
-@@ -284,9 +336,21 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -303,9 +355,21 @@ int mlx5_irq_table_create(struct mlx5_co
  		return -ENOMEM;
  
  	table->irq = kcalloc(nvec, sizeof(*table->irq), GFP_KERNEL);
@@ -157,7 +157,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  	nvec = pci_alloc_irq_vectors(dev->pdev, MLX5_IRQ_VEC_COMP_BASE + 1,
  				     nvec, PCI_IRQ_MSIX);
  	if (nvec < 0) {
-@@ -295,6 +359,31 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -314,6 +378,32 @@ int mlx5_irq_table_create(struct mlx5_co
  	}
  
  	table->nvec = nvec;
@@ -175,13 +175,14 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
 +retry:
 +	table->nvec = nvec;
 +	err = pci_enable_msix(dev->pdev, priv->msix_arr, nvec);
-+	if (err == 0) {
-+		return 0;
-+	} else if (err < 0) {
++	if (err < 0) {
 +		goto err_free_irq;
 +	} else if (err > 2) {
 +		nvec = err;
 +		goto retry;
++	} else if (err) {
++		mlx5_core_err(dev, "Can't enable the minimum required num of MSIX, %d\n", err);
++		goto err_free_irq;
 +	}
 +	mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
 +#endif /* HAVE_PCI_ENABLE_MSIX_RANGE */
@@ -189,7 +190,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  
  	err = irq_set_rmap(dev);
  	if (err)
-@@ -317,15 +406,25 @@ err_set_affinity:
+@@ -336,15 +426,25 @@ err_set_affinity:
  err_request_irqs:
  	irq_clear_rmap(dev);
  err_set_rmap:
@@ -215,7 +216,7 @@ Change-Id: I4357f1536382d593df2ea8478e60cbf24b59a654
  	int i;
  
  	if (mlx5_core_is_sf(dev))
-@@ -338,8 +437,18 @@ void mlx5_irq_table_destroy(struct mlx5_
+@@ -357,8 +457,18 @@ void mlx5_irq_table_destroy(struct mlx5_
  	irq_clear_rmap(dev);
  	clear_comp_irqs_affinity_hints(dev);
  	for (i = 0; i < table->nvec; i++)

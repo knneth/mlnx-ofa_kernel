@@ -271,10 +271,10 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  } ____cacheline_aligned_in_smp;
  
  enum {
-@@ -837,10 +925,10 @@ struct mlx5e_priv {
- 	struct mlx5e_txqsq *txq2sq[MLX5E_MAX_NUM_CHANNELS * MLX5E_MAX_NUM_TC +
+@@ -838,10 +926,10 @@ struct mlx5e_priv {
  				   MLX5E_MAX_RL_QUEUES];
  	int channel_tc2txq[MLX5E_MAX_NUM_CHANNELS][MLX5E_MAX_NUM_TC];
+ 	int channel_tc2realtxq[MLX5E_MAX_NUM_CHANNELS][MLX5E_MAX_NUM_TC];
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 +#if defined(CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  	DECLARE_HASHTABLE(flow_map_hash, ilog2(MLX5E_MAX_RL_QUEUES));
@@ -284,7 +284,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  	struct mlx5e_dcbx_dp       dcbx_dp;
  #endif
  	/* priv data path fields - end */
-@@ -874,7 +962,13 @@ struct mlx5e_priv {
+@@ -875,7 +963,13 @@ struct mlx5e_priv {
  	struct net_device         *netdev;
  	struct mlx5e_stats         stats;
  	struct mlx5e_channel_stats channel_stats[MLX5E_MAX_NUM_CHANNELS];
@@ -298,7 +298,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	struct mlx5e_sq_stats      special_sq_stats[MLX5E_MAX_RL_QUEUES];
  	int                        max_opened_special_sq;
-@@ -884,9 +978,11 @@ struct mlx5e_priv {
+@@ -885,9 +979,11 @@ struct mlx5e_priv {
  	u16                        drop_rq_q_counter;
  	struct notifier_block      events_nb;
  
@@ -310,7 +310,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  	const struct mlx5e_profile *profile;
  	void                      *ppriv;
-@@ -896,7 +992,12 @@ struct mlx5e_priv {
+@@ -897,7 +993,12 @@ struct mlx5e_priv {
  #ifdef CONFIG_MLX5_EN_TLS
  	struct mlx5e_tls          *tls;
  #endif
@@ -323,7 +323,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  	struct dentry *dfs_root;
  
-@@ -911,14 +1012,6 @@ struct mlx5e_priv {
+@@ -912,14 +1013,6 @@ struct mlx5e_priv {
  	struct mlx5e_ecn_enable_ctx ecn_enable_ctx[MLX5E_CONG_PROTOCOL_NUM][8];
  	struct mlx5e_delay_drop delay_drop;
  };
@@ -338,7 +338,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  struct mlx5e_profile {
  	int	(*init)(struct mlx5_core_dev *mdev,
-@@ -940,15 +1033,56 @@ struct mlx5e_profile {
+@@ -942,15 +1035,56 @@ struct mlx5e_profile {
  	int	max_tc;
  };
  
@@ -395,7 +395,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  void mlx5e_trigger_irq(struct mlx5e_icosq *sq);
  void mlx5e_completion_event(struct mlx5_core_cq *mcq, struct mlx5_eqe *eqe);
-@@ -989,16 +1123,30 @@ void mlx5e_update_stats(struct mlx5e_pri
+@@ -991,16 +1125,30 @@ void mlx5e_update_stats(struct mlx5e_pri
  int mlx5e_sysfs_create(struct net_device *dev);
  void mlx5e_sysfs_remove(struct net_device *dev);
  
@@ -427,7 +427,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  void mlx5e_init_l2_addr(struct mlx5e_priv *priv);
  int mlx5e_self_test_num(struct mlx5e_priv *priv);
-@@ -1006,16 +1154,36 @@ void mlx5e_self_test(struct net_device *
+@@ -1008,16 +1156,36 @@ void mlx5e_self_test(struct net_device *
  		     u64 *buf);
  void mlx5e_set_rx_mode_work(struct work_struct *work);
  
@@ -464,7 +464,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  struct mlx5e_redirect_rqt_param {
  	bool is_rss;
  	union {
-@@ -1064,7 +1232,6 @@ void mlx5e_set_rx_cq_mode_params(struct
+@@ -1066,7 +1234,6 @@ void mlx5e_set_rx_cq_mode_params(struct
  void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
  void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
  			       struct mlx5e_params *params);
@@ -472,7 +472,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  int mlx5e_modify_sq(struct mlx5_core_dev *mdev, u32 sqn,
  		    struct mlx5e_modify_sq_param *p);
  void mlx5e_activate_txqsq(struct mlx5e_txqsq *sq);
-@@ -1098,6 +1265,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -1100,6 +1267,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_OUTER_L4_UDP;
  	}
  
@@ -480,7 +480,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  	if (swp_spec->is_tun) {
  		eseg->swp_inner_l3_offset = skb_inner_network_offset(skb) / 2;
  		if (swp_spec->tun_l3_proto == htons(ETH_P_IPV6))
-@@ -1107,12 +1275,19 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -1109,12 +1277,19 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
  		if (swp_spec->l3_proto == htons(ETH_P_IPV6))
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L3_IPV6;
  	}
@@ -500,7 +500,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  		break;
  	}
  }
-@@ -1155,7 +1330,11 @@ void mlx5e_notify_hw(struct mlx5_wq_cyc
+@@ -1157,7 +1332,11 @@ void mlx5e_notify_hw(struct mlx5_wq_cyc
  {
  	ctrl->fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
  	/* ensure wqe is visible to device before updating doorbell record */
@@ -512,7 +512,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  	*wq->db = cpu_to_be32(pc);
  
-@@ -1176,13 +1355,23 @@ static inline void mlx5e_cq_arm(struct m
+@@ -1178,13 +1357,23 @@ static inline void mlx5e_cq_arm(struct m
  }
  
  extern const struct ethtool_ops mlx5e_ethtool_ops;
@@ -536,7 +536,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  int mlx5e_create_tir(struct mlx5_core_dev *mdev,
  		     struct mlx5e_tir *tir, u32 *in, int inlen);
-@@ -1192,6 +1381,9 @@ int mlx5e_create_mdev_resources(struct m
+@@ -1194,6 +1383,9 @@ int mlx5e_create_mdev_resources(struct m
  void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev);
  int mlx5e_refresh_tirs(struct mlx5e_priv *priv, bool enable_uc_lb);
  int mlx5e_modify_tirs_lro(struct mlx5e_priv *priv);
@@ -546,7 +546,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  /* common netdev helpers */
  void mlx5e_create_q_counters(struct mlx5e_priv *priv);
-@@ -1246,27 +1438,53 @@ void mlx5e_ethtool_get_ringparam(struct
+@@ -1249,27 +1441,53 @@ void mlx5e_ethtool_get_ringparam(struct
  				 struct ethtool_ringparam *param);
  int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
  				struct ethtool_ringparam *param);
@@ -602,7 +602,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam);
  int mlx5e_ethtool_set_pauseparam(struct mlx5e_priv *priv,
-@@ -1299,10 +1517,12 @@ void mlx5e_build_rss_params(struct mlx5e
+@@ -1302,10 +1520,12 @@ void mlx5e_build_rss_params(struct mlx5e
  			    u16 num_channels);
  u8 mlx5e_params_calculate_tx_min_inline(struct mlx5_core_dev *mdev);
  
@@ -615,7 +615,7 @@ Change-Id: I24f5cbae494ccd0c7baf5320d1b68492f5ae0bd5
  
  static inline bool mlx5e_dropless_rq_supported(struct mlx5_core_dev *mdev)
  {
-@@ -1312,21 +1532,48 @@ static inline bool mlx5e_dropless_rq_sup
+@@ -1315,21 +1535,48 @@ static inline bool mlx5e_dropless_rq_sup
  
  void mlx5e_rx_dim_work(struct work_struct *work);
  void mlx5e_tx_dim_work(struct work_struct *work);

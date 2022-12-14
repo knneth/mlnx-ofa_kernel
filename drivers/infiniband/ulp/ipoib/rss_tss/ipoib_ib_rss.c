@@ -268,8 +268,10 @@ static void ipoib_ib_handle_tx_wc_rss(struct ipoib_send_ring *send_ring,
 	tx_req->skb = NULL;
 
 	++send_ring->tx_tail;
+	atomic_dec(&send_ring->tx_outstanding);
+
 	if (unlikely(__netif_subqueue_stopped(dev, send_ring->index) &&
-		     ((send_ring->tx_head - send_ring->tx_tail) <= priv->sendq_size >> 1) &&
+		     (atomic_read(&send_ring->tx_outstanding) <= priv->sendq_size >> 1) &&
 		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
 		netif_wake_subqueue(dev, send_ring->index);
 
@@ -517,7 +519,7 @@ int ipoib_send_rss(struct net_device *dev, struct sk_buff *skb,
 	else
 		send_ring->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
 	/* increase the tx_head after send success, but use it for queue state */
-	if (send_ring->tx_head - send_ring->tx_tail == priv->sendq_size - 1) {
+	if (atomic_read(&send_ring->tx_outstanding) == priv->sendq_size - 1) {
 		ipoib_dbg(priv, "TX ring full, stopping kernel net queue\n");
 		netif_stop_subqueue(dev, queue_index);
 	}
@@ -545,6 +547,7 @@ int ipoib_send_rss(struct net_device *dev, struct sk_buff *skb,
 		netdev_get_tx_queue(dev, queue_index)->trans_start = jiffies;
 		rc = send_ring->tx_head;
 		++send_ring->tx_head;
+		atomic_inc(&send_ring->tx_outstanding);
 	}
 
 	return rc;
@@ -793,6 +796,7 @@ static void ipoib_ib_send_ring_stop(struct ipoib_dev_priv *priv)
 			dev_kfree_skb_any(tx_req->skb);
 			tx_req->skb = NULL;
 			++tx_ring->tx_tail;
+			atomic_dec(&tx_ring->tx_outstanding);
 		}
 		tx_ring++;
 	}

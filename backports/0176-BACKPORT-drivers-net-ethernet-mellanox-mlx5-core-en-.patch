@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.c
 
 Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc_tun.c    | 64 +++++++++++++++++++---
- 1 file changed, 57 insertions(+), 7 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/tc_tun.c    | 63 +++++++++++++++++++---
+ 1 file changed, 56 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.c
@@ -47,11 +47,23 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  	struct dst_entry *dst;
  
 -#if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6)
-+#if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6) && defined(__IPV6_SUPPORT__)
++#if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6) && defined(HAVE_IPV6_STUB) && defined(HAVE_IPV6_DST_LOOKUP_TAKES_NET)
  	int ret;
  
  	ret = ipv6_stub->ipv6_dst_lookup(dev_net(mirred_dev), NULL, &dst,
-@@ -527,8 +536,10 @@ int mlx5e_tc_tun_init_encap_attr(struct
+@@ -492,6 +501,11 @@ out:
+ 
+ int mlx5e_tc_tun_get_type(struct net_device *tunnel_dev)
+ {
++#if !defined(HAVE___TC_INDR_BLOCK_CB_REGISTER) && !defined(CONFIG_COMPAT_KERNEL_4_14)
++/* in old kernels with egdev we don't pass the netdev so the filter_dev here
++ * is actually priv->netdev. we only assume and support vxlan */
++	return MLX5E_TC_TUNNEL_TYPE_VXLAN;
++#endif
+ 	if (netif_is_vxlan(tunnel_dev))
+ 		return MLX5E_TC_TUNNEL_TYPE_VXLAN;
+ 	else if (netif_is_gretap(tunnel_dev) ||
+@@ -527,8 +541,10 @@ int mlx5e_tc_tun_init_encap_attr(struct
  		int dst_port =  be16_to_cpu(e->tun_info.key.tp_dst);
  
  		if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
@@ -62,7 +74,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  			netdev_warn(priv->netdev,
  				    "%d isn't an offloaded vxlan udp dport\n",
  				    dst_port);
-@@ -551,10 +562,18 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -551,10 +567,18 @@ static int mlx5e_tc_tun_parse_vxlan(stru
  				    struct mlx5_flow_spec *spec,
  				    struct tc_cls_flower_offload *f,
  				    void *headers_c,
@@ -82,7 +94,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  	void *misc_c = MLX5_ADDR_OF(fte_match_param,
  				    spec->match_criteria,
  				    misc_parameters);
-@@ -568,8 +587,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -568,8 +592,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
  	/* Full udp dst port must be given */
  	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS) ||
  	    memchr_inv(&enc_ports.mask->dst, 0xff, sizeof(enc_ports.mask->dst))) {
@@ -93,7 +105,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  		netdev_warn(priv->netdev,
  			    "VXLAN decap filter must include enc_dst_port condition\n");
  		return -EOPNOTSUPP;
-@@ -577,8 +598,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -577,8 +603,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
  
  	/* udp dst port must be knonwn as a VXLAN port */
  	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, be16_to_cpu(enc_ports.key->dst))) {
@@ -104,7 +116,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  		netdev_warn(priv->netdev,
  			    "UDP port %d is not registered as a VXLAN port\n",
  			    be16_to_cpu(enc_ports.key->dst));
-@@ -617,17 +640,25 @@ static int mlx5e_tc_tun_parse_gretap(str
+@@ -617,17 +645,25 @@ static int mlx5e_tc_tun_parse_gretap(str
  				     struct mlx5_flow_spec *spec,
  				     struct tc_cls_flower_offload *f,
  				     void *outer_headers_c,
@@ -131,7 +143,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  		netdev_warn(priv->netdev, "GRE HW offloading is not supported\n");
  		return -EOPNOTSUPP;
  	}
-@@ -659,20 +690,38 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -659,7 +695,11 @@ int mlx5e_tc_tun_parse(struct net_device
  		       struct mlx5_flow_spec *spec,
  		       struct tc_cls_flower_offload *f,
  		       void *headers_c,
@@ -144,14 +156,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  {
  	int tunnel_type;
  	int err = 0;
- 
-+#if !defined(HAVE___TC_INDR_BLOCK_CB_REGISTER) && !defined(CONFIG_COMPAT_KERNEL_4_14)
-+/* in old kernels with egdev we don't pass the netdev so the filter_dev here
-+ * is actually priv->netdev. we only assume and support vxlan */
-+	tunnel_type = MLX5E_TC_TUNNEL_TYPE_VXLAN;
-+#else
- 	tunnel_type = mlx5e_tc_tun_get_type(filter_dev);
-+#endif
+@@ -668,11 +708,19 @@ int mlx5e_tc_tun_parse(struct net_device
  	if (tunnel_type == MLX5E_TC_TUNNEL_TYPE_VXLAN) {
  		*match_level = MLX5_MATCH_L4;
  		err = mlx5e_tc_tun_parse_vxlan(priv, spec, f,
@@ -173,7 +178,7 @@ Change-Id: Ifc7cb27a48a57f19f3d9a84401e657350654e8a5
  	} else {
  		netdev_warn(priv->netdev,
  			    "decapsulation offload is not supported for %s (kind: \"%s\")\n",
-@@ -683,3 +732,4 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -683,3 +731,4 @@ int mlx5e_tc_tun_parse(struct net_device
  	}
  	return err;
  }

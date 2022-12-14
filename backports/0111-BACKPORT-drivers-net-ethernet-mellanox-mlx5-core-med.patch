@@ -8,7 +8,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/meddev/sf.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/meddev/sf.c
-@@ -230,7 +230,12 @@ u16 mlx5_core_max_sfs(const struct mlx5_
+@@ -249,7 +249,12 @@ u16 mlx5_core_max_sfs(const struct mlx5_
  
  static void *mlx5_sf_dma_alloc(struct device *dev, size_t size,
  			       dma_addr_t *dma_handle, gfp_t gfp,
@@ -21,7 +21,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  {
  	return dma_alloc_attrs(dev->parent, size, dma_handle, gfp, attrs);
  }
-@@ -238,7 +243,11 @@ static void *mlx5_sf_dma_alloc(struct de
+@@ -257,7 +262,11 @@ static void *mlx5_sf_dma_alloc(struct de
  static void
  mlx5_sf_dma_free(struct device *dev, size_t size,
  		 void *vaddr, dma_addr_t dma_handle,
@@ -34,7 +34,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  {
  	dma_free_attrs(dev->parent, size, vaddr, dma_handle, attrs);
  }
-@@ -246,7 +255,11 @@ mlx5_sf_dma_free(struct device *dev, siz
+@@ -265,7 +274,11 @@ mlx5_sf_dma_free(struct device *dev, siz
  static int
  mlx5_sf_dma_mmap(struct device *dev, struct vm_area_struct *vma,
  		 void *cpu_addr, dma_addr_t dma_addr, size_t size,
@@ -47,7 +47,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  {
  	return dma_mmap_attrs(dev->parent, vma, cpu_addr,
  			      dma_addr, size, attrs);
-@@ -255,7 +268,11 @@ mlx5_sf_dma_mmap(struct device *dev, str
+@@ -274,7 +287,11 @@ mlx5_sf_dma_mmap(struct device *dev, str
  static int
  mlx5_sf_dma_get_sgtable(struct device *dev, struct sg_table *sgt,
  			void *cpu_addr, dma_addr_t dma_addr, size_t size,
@@ -60,7 +60,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  {
  	return dma_get_sgtable_attrs(dev->parent, sgt, cpu_addr,
  				     dma_addr, size, attrs);
-@@ -265,38 +282,67 @@ static dma_addr_t
+@@ -284,38 +301,67 @@ static dma_addr_t
  mlx5_sf_dma_map_page(struct device *dev, struct page *page,
  		     unsigned long offset, size_t size,
  		     enum dma_data_direction dir,
@@ -133,7 +133,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  {
  	return dma_map_resource(dev->parent, phys_addr, size, dir, attrs);
  }
-@@ -308,6 +354,7 @@ mlx5_sf_dma_unmap_resource(struct device
+@@ -327,6 +373,7 @@ mlx5_sf_dma_unmap_resource(struct device
  {
  	dma_unmap_resource(dev->parent, dma_handle, size, dir, attrs);
  }
@@ -141,7 +141,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  
  static void
  mlx5_sf_dma_sync_single_for_cpu(struct device *dev,
-@@ -341,6 +388,7 @@ mlx5_sf_dma_sync_sg_for_device(struct de
+@@ -360,6 +407,7 @@ mlx5_sf_dma_sync_sg_for_device(struct de
  	dma_sync_sg_for_device(dev->parent, sg, nents, dir);
  }
  
@@ -149,7 +149,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  static void
  mlx5_sf_dma_cache_sync(struct device *dev, void *vaddr, size_t size,
  		       enum dma_data_direction dir)
-@@ -348,7 +396,13 @@ mlx5_sf_dma_cache_sync(struct device *de
+@@ -367,7 +415,13 @@ mlx5_sf_dma_cache_sync(struct device *de
  	dma_cache_sync(dev->parent, vaddr, size, dir);
  }
  
@@ -163,7 +163,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  	.alloc = mlx5_sf_dma_alloc,
  	.free = mlx5_sf_dma_free,
  	.mmap = mlx5_sf_dma_mmap,
-@@ -357,20 +411,32 @@ static const struct dma_map_ops mlx5_sf_
+@@ -376,20 +430,32 @@ static const struct dma_map_ops mlx5_sf_
  	.unmap_page = mlx5_sf_dma_unmap_page,
  	.map_sg = mlx5_sf_dma_map_sg,
  	.unmap_sg = mlx5_sf_dma_unmap_sg,
@@ -196,7 +196,7 @@ Change-Id: I1c1f92939d399602626b6604c9aea148e330fc05
  	dev->dma_mask = pdev->dev.dma_mask;
  	dev->dma_parms = pdev->dev.dma_parms;
  	dma_set_coherent_mask(dev, pdev->dev.coherent_dma_mask);
-@@ -452,8 +518,10 @@ struct net_device *mlx5_sf_get_netdev(st
+@@ -471,8 +537,10 @@ struct net_device *mlx5_sf_get_netdev(st
  
  	vport_num = mlx5_sf_hw_id(parent_dev, sf->idx);
  

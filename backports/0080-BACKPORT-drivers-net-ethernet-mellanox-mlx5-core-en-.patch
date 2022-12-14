@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
 Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c | 128 ++++++++++++++++++++---
- 1 file changed, 111 insertions(+), 17 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 124 +++++++++++++++---
+ 1 file changed, 107 insertions(+), 17 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
@@ -52,26 +52,16 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		*len = xdp.data_end - xdp.data;
  		return false;
  	case XDP_TX:
-@@ -100,25 +113,33 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -100,6 +113,7 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  			goto xdp_abort;
  		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
  		return true;
 +#ifdef HAVE_XDP_REDIRECT
  	case XDP_REDIRECT:
- 		mlx5e_page_dma_unmap(rq, di);
  		page_ref_sub(di->page, di->refcnt_bias);
- 		/* When XDP enabled then page-refcnt==1 here */
- 		err = xdp_do_redirect(rq->netdev, &xdp, prog);
- 		if (unlikely(err)) {
-+#ifdef HAVE_NET_PAGE_POOL_H
- 			page_pool_recycle_direct(rq->page_pool, di->page);
-+#else
-+			put_page(di->page);
-+#endif
- 			goto xdp_abort;
- 		}
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
- 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
+ 		di->refcnt_bias = 0;
+@@ -112,12 +126,15 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+ 		mlx5e_page_dma_unmap(rq, di);
  		rq->stats->xdp_redirect++;
  		return true;
 +#endif
@@ -86,7 +76,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		/* fall through */
  	case XDP_DROP:
  		rq->stats->xdp_drop++;
-@@ -301,7 +322,12 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -300,7 +317,12 @@ static void mlx5e_free_xdpsq_desc(struct
  			/* XDP_REDIRECT */
  			dma_unmap_single(sq->pdev, xdpi.dma_addr,
  					 xdpi.xdpf->len, DMA_TO_DEVICE);
@@ -100,7 +90,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		}
  	}
  }
-@@ -381,6 +407,30 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -380,6 +402,30 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
  	}
  }
  
@@ -131,7 +121,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -419,9 +469,14 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -418,9 +464,14 @@ int mlx5e_xdp_xmit(struct net_device *de
  		xdpi.xdpf = xdpf;
  
  		if (unlikely(!sq->xmit_xdp_frame(sq, &xdpi))) {
@@ -149,7 +139,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  			drops++;
  		}
  	}
-@@ -434,25 +489,64 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -433,25 +484,64 @@ int mlx5e_xdp_xmit(struct net_device *de
  
  	return n - drops;
  }

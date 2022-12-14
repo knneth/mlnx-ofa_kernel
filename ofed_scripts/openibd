@@ -573,7 +573,7 @@ load_module_external()
 is_ref()
 {
     local refcnt
-    refcnt=`cat /sys/module/"$1"/refcnt 2> /dev/nill`
+    refcnt=`cat /sys/module/"$1"/refcnt 2> /dev/null`
     return $refcnt
 }
 

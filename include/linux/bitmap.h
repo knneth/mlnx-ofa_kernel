@@ -7,7 +7,9 @@
 
 
 #ifndef HAVE_BITMAP_KZALLOC
+#define bitmap_alloc LINUX_BACKPORT(bitmap_alloc)
 extern unsigned long *bitmap_alloc(unsigned int nbits, gfp_t flags);
+#define bitmap_zalloc LINUX_BACKPORT(bitmap_zalloc)
 extern unsigned long *bitmap_zalloc(unsigned int nbits, gfp_t flags);
 #endif
 

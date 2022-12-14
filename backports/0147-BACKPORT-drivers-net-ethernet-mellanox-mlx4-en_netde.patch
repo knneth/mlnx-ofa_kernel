@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 
 Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
 ---
- drivers/net/ethernet/mellanox/mlx4/en_netdev.c | 941 ++++++++++++++++++++++++-
- 1 file changed, 928 insertions(+), 13 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/en_netdev.c | 946 ++++++++++++++++++++++++-
+ 1 file changed, 933 insertions(+), 13 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
@@ -874,7 +874,25 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static netdev_features_t mlx4_en_fix_features(struct net_device *netdev,
  					      netdev_features_t features)
  {
-@@ -3125,20 +3565,31 @@ static netdev_features_t mlx4_en_fix_fea
+@@ -3123,34 +3563,49 @@ static netdev_features_t mlx4_en_fix_fea
+ 	else
+ 		features &= ~NETIF_F_HW_VLAN_STAG_RX;
+ 
++#ifdef HAVE_NETIF_F_RXFCS
+ 	/* LRO/HW-GRO features cannot be combined with RX-FCS */
+ 	if (features & NETIF_F_RXFCS) {
+ 		if (features & NETIF_F_LRO) {
+ 			netdev_warn(netdev, "Dropping LRO feature since RX-FCS is requested\n");
+ 			features &= ~NETIF_F_LRO;
+ 		}
++#ifdef HAVE_NETIF_F_GRO_HW
+ 		if (features & NETIF_F_GRO_HW) {
+ 			netdev_warn(netdev, "Dropping HW-GRO feature since RX-FCS is requested\n");
+ 			features &= ~NETIF_F_GRO_HW;
+ 		}
++#endif
+ 	}
++#endif
  
  	return features;
  }
@@ -908,7 +926,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	if (DEV_FEATURE_CHANGED(netdev, features, NETIF_F_RXALL)) {
  		u8 ignore_fcs_value = (features & NETIF_F_RXALL) ? 1 : 0;
  
-@@ -3149,6 +3600,7 @@ static int mlx4_en_set_features(struct n
+@@ -3161,6 +3616,7 @@ static int mlx4_en_set_features(struct n
  		if (ret)
  			return ret;
  	}
@@ -916,7 +934,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	if (DEV_FEATURE_CHANGED(netdev, features, NETIF_F_HW_VLAN_CTAG_RX)) {
  		en_info(priv, "Turn %s RX vlan strip offload\n",
-@@ -3160,9 +3612,11 @@ static int mlx4_en_set_features(struct n
+@@ -3172,9 +3628,11 @@ static int mlx4_en_set_features(struct n
  		en_info(priv, "Turn %s TX vlan strip offload\n",
  			(features & NETIF_F_HW_VLAN_CTAG_TX) ? "ON" : "OFF");
  
@@ -928,7 +946,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	if (DEV_FEATURE_CHANGED(netdev, features, NETIF_F_LOOPBACK)) {
  		en_info(priv, "Turn %s loopback\n",
-@@ -3180,6 +3634,7 @@ static int mlx4_en_set_features(struct n
+@@ -3192,6 +3650,7 @@ static int mlx4_en_set_features(struct n
  	return 0;
  }
  
@@ -936,7 +954,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_en_set_vf_mac(struct net_device *dev, int queue, u8 *mac)
  {
  	struct mlx4_en_priv *en_priv = netdev_priv(dev);
-@@ -3187,17 +3642,28 @@ static int mlx4_en_set_vf_mac(struct net
+@@ -3199,17 +3658,28 @@ static int mlx4_en_set_vf_mac(struct net
  
  	return mlx4_set_vf_mac(mdev->dev, en_priv->port, queue, mac);
  }
@@ -965,7 +983,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_en_set_vf_rate(struct net_device *dev, int vf, int min_tx_rate,
  			       int max_tx_rate)
  {
-@@ -3207,7 +3673,17 @@ static int mlx4_en_set_vf_rate(struct ne
+@@ -3219,7 +3689,17 @@ static int mlx4_en_set_vf_rate(struct ne
  	return mlx4_set_vf_rate(mdev->dev, en_priv->port, vf, min_tx_rate,
  				max_tx_rate);
  }
@@ -983,7 +1001,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_en_set_vf_spoofchk(struct net_device *dev, int vf, bool setting)
  {
  	struct mlx4_en_priv *en_priv = netdev_priv(dev);
-@@ -3215,6 +3691,7 @@ static int mlx4_en_set_vf_spoofchk(struc
+@@ -3227,6 +3707,7 @@ static int mlx4_en_set_vf_spoofchk(struc
  
  	return mlx4_set_vf_spoofchk(mdev->dev, en_priv->port, vf, setting);
  }
@@ -991,7 +1009,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  static int mlx4_en_get_vf_config(struct net_device *dev, int vf, struct ifla_vf_info *ivf)
  {
-@@ -3224,6 +3701,7 @@ static int mlx4_en_get_vf_config(struct
+@@ -3236,6 +3717,7 @@ static int mlx4_en_get_vf_config(struct
  	return mlx4_get_vf_config(mdev->dev, en_priv->port, vf, ivf);
  }
  
@@ -999,7 +1017,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_en_set_vf_link_state(struct net_device *dev, int vf, int link_state)
  {
  	struct mlx4_en_priv *en_priv = netdev_priv(dev);
-@@ -3231,7 +3709,9 @@ static int mlx4_en_set_vf_link_state(str
+@@ -3243,7 +3725,9 @@ static int mlx4_en_set_vf_link_state(str
  
  	return mlx4_set_vf_link_state(mdev->dev, en_priv->port, vf, link_state);
  }
@@ -1009,7 +1027,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_en_get_vf_stats(struct net_device *dev, int vf,
  				struct ifla_vf_stats *vf_stats)
  {
-@@ -3240,10 +3720,16 @@ static int mlx4_en_get_vf_stats(struct n
+@@ -3252,10 +3736,16 @@ static int mlx4_en_get_vf_stats(struct n
  
  	return mlx4_get_vf_stats(mdev->dev, en_priv->port, vf, vf_stats);
  }
@@ -1026,7 +1044,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
  	struct mlx4_dev *mdev = priv->mdev->dev;
-@@ -3260,6 +3746,7 @@ static int mlx4_en_get_phys_port_id(stru
+@@ -3272,6 +3762,7 @@ static int mlx4_en_get_phys_port_id(stru
  	}
  	return 0;
  }
@@ -1034,7 +1052,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  static void mlx4_en_add_vxlan_offloads(struct work_struct *work)
  {
-@@ -3279,13 +3766,21 @@ out:
+@@ -3291,13 +3782,21 @@ out:
  		return;
  	}
  
@@ -1056,7 +1074,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  }
  
  static void mlx4_en_del_vxlan_offloads(struct work_struct *work)
-@@ -3293,13 +3788,21 @@ static void mlx4_en_del_vxlan_offloads(s
+@@ -3305,13 +3804,21 @@ static void mlx4_en_del_vxlan_offloads(s
  	int ret;
  	struct mlx4_en_priv *priv = container_of(work, struct mlx4_en_priv,
  						 vxlan_del_task);
@@ -1078,7 +1096,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	ret = mlx4_SET_PORT_VXLAN(priv->mdev->dev, priv->port,
  				  VXLAN_STEER_BY_OUTER_MAC, 0);
-@@ -3309,6 +3812,8 @@ static void mlx4_en_del_vxlan_offloads(s
+@@ -3321,6 +3828,8 @@ static void mlx4_en_del_vxlan_offloads(s
  	priv->vxlan_port = 0;
  }
  
@@ -1087,7 +1105,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static void mlx4_en_add_vxlan_port(struct  net_device *dev,
  				   struct udp_tunnel_info *ti)
  {
-@@ -3360,13 +3865,66 @@ static void mlx4_en_del_vxlan_port(struc
+@@ -3372,13 +3881,66 @@ static void mlx4_en_del_vxlan_port(struc
  
  	queue_work(priv->mdev->workqueue, &priv->vxlan_del_task);
  }
@@ -1114,13 +1132,13 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
 +	priv->vxlan_port = port;
 +	queue_work(priv->mdev->workqueue, &priv->vxlan_add_task);
 +}
- 
++
 +static void mlx4_en_del_vxlan_port(struct  net_device *dev,
 +				   sa_family_t sa_family, __be16 port)
 +{
 +	struct mlx4_en_priv *priv = netdev_priv(dev);
 +	__be16 current_port;
-+
+ 
 +	if (priv->mdev->dev->caps.tunnel_offload_mode != MLX4_TUNNEL_OFFLOAD_MODE_VXLAN)
 +		return;
 +
@@ -1154,7 +1172,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	/* The ConnectX-3 doesn't support outer IPv6 checksums but it does
  	 * support inner IPv6 checksums and segmentation so  we need to
-@@ -3384,7 +3942,14 @@ static netdev_features_t mlx4_en_feature
+@@ -3396,7 +3958,14 @@ static netdev_features_t mlx4_en_feature
  
  	return features;
  }
@@ -1169,7 +1187,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_en_set_tx_maxrate(struct net_device *dev, int queue_index, u32 maxrate)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -3411,7 +3976,9 @@ static int mlx4_en_set_tx_maxrate(struct
+@@ -3423,7 +3992,9 @@ static int mlx4_en_set_tx_maxrate(struct
  			     &params);
  	return err;
  }
@@ -1179,7 +1197,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static int mlx4_xdp_set(struct net_device *dev, struct bpf_prog *prog)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -3475,7 +4042,11 @@ static int mlx4_xdp_set(struct net_devic
+@@ -3487,7 +4058,11 @@ static int mlx4_xdp_set(struct net_devic
  		en_warn(priv, "Reducing the number of TX rings, to not exceed the max total rings number.\n");
  	}
  
@@ -1191,7 +1209,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	if (err) {
  		if (prog)
  			bpf_prog_sub(prog, priv->rx_ring_num - 1);
-@@ -3516,6 +4087,7 @@ out:
+@@ -3528,6 +4103,7 @@ out:
  	return err;
  }
  
@@ -1199,7 +1217,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static u32 mlx4_xdp_query(struct net_device *dev)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -3536,6 +4108,14 @@ static u32 mlx4_xdp_query(struct net_dev
+@@ -3548,6 +4124,14 @@ static u32 mlx4_xdp_query(struct net_dev
  
  	return prog_id;
  }
@@ -1214,7 +1232,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  static int mlx4_xdp(struct net_device *dev, struct netdev_bpf *xdp)
  {
-@@ -3543,41 +4123,142 @@ static int mlx4_xdp(struct net_device *d
+@@ -3555,40 +4139,142 @@ static int mlx4_xdp(struct net_device *d
  	case XDP_SETUP_PROG:
  		return mlx4_xdp_set(dev, xdp->prog);
  	case XDP_QUERY_PROG:
@@ -1279,7 +1297,8 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
 +#if defined(HAVE_NDO_SETUP_TC_4_PARAMS) || \
 +    defined(HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX) || \
 +    defined(HAVE_TC_FLOWER_OFFLOAD) && \
-+    !defined(CONFIG_COMPAT_CLS_FLOWER_MOD) || defined(CONFIG_COMPAT_KERNEL_4_14)
++    !defined(CONFIG_COMPAT_CLS_FLOWER_MOD) || defined(CONFIG_COMPAT_KERNEL_4_14) || \
++    defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE)
  	.ndo_setup_tc		= __mlx4_en_setup_tc,
 +#else
 +	.ndo_setup_tc           = mlx4_en_setup_tc,
@@ -1337,8 +1356,8 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
 +#ifdef HAVE_NETDEV_EXT_NDO_GET_PHYS_PORT_ID
 +	.ndo_get_phys_port_id = mlx4_en_get_phys_port_id,
 +#endif
- };
- 
++};
++
 +static const struct net_device_ops_ext mlx4_netdev_ops_master_ext = {
 +	.size			= sizeof(struct net_device_ops_ext),
 +#ifdef HAVE_NETDEV_OPS_EXT_NDO_SET_VF_SPOOFCHK
@@ -1351,13 +1370,12 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
 +	.ndo_get_phys_port_id	= mlx4_en_get_phys_port_id,
 +#endif
 +	.ndo_set_features	= mlx4_en_set_features,
-+};
+ };
 +#endif
-+
+ 
  struct mlx4_en_bond {
  	struct work_struct work;
- 	struct mlx4_en_priv *priv;
-@@ -3585,6 +4266,7 @@ struct mlx4_en_bond {
+@@ -3597,6 +4283,7 @@ struct mlx4_en_bond {
  	struct mlx4_port_map port_map;
  };
  
@@ -1365,7 +1383,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  static void mlx4_en_bond_work(struct work_struct *work)
  {
  	struct mlx4_en_bond *bond = container_of(work,
-@@ -3753,6 +4435,7 @@ int mlx4_en_netdev_event(struct notifier
+@@ -3765,6 +4452,7 @@ int mlx4_en_netdev_event(struct notifier
  
  	return NOTIFY_DONE;
  }
@@ -1373,7 +1391,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  void mlx4_en_update_pfc_stats_bitmap(struct mlx4_dev *dev,
  				     struct mlx4_en_stats_bitmap *stats_bitmap,
-@@ -3854,12 +4537,46 @@ void mlx4_en_set_stats_bitmap(struct mlx
+@@ -3866,12 +4554,46 @@ void mlx4_en_set_stats_bitmap(struct mlx
  static void mlx4_en_set_netdev_ops(struct mlx4_en_priv *priv)
  {
  	if (mlx4_is_master(priv->mdev->dev)) {
@@ -1420,7 +1438,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  		priv->dev_ops.ndo_get_vf_config = mlx4_en_get_vf_config;
  		priv->dev_ops.ndo_do_ioctl = mlx4_en_ioctl;
  	}
-@@ -3868,11 +4585,27 @@ static void mlx4_en_set_netdev_ops(struc
+@@ -3880,11 +4602,27 @@ static void mlx4_en_set_netdev_ops(struc
  		priv->dev_ops.ndo_start_xmit = mlx4_en_vgtp_xmit;
  
  	priv->dev->netdev_ops = &priv->dev_ops;
@@ -1448,7 +1466,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	struct net_device *dev;
  	struct mlx4_en_priv *priv;
  	int i, t;
-@@ -3895,14 +4628,25 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3907,14 +4645,25 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	}
  	if (udev_dev_port_dev_id == 0) {
  		/* in mode 0 update dev_port */
@@ -1474,7 +1492,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	}
  
  	/*
-@@ -3940,7 +4684,11 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3952,7 +4701,11 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		mdev->profile.prof[priv->port].num_tx_rings_p_up;
  	priv->num_up = prof->num_up;
  	priv->tx_work_limit = MLX4_EN_DEFAULT_TX_WORK;
@@ -1486,7 +1504,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	for (t = 0; t < MLX4_EN_NUM_TX_TYPES; t++) {
  		priv->tx_ring_num[t] = prof->tx_ring_num[t];
-@@ -3967,6 +4715,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3979,6 +4732,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	priv->cqe_size = mdev->dev->caps.cqe_size;
  	priv->mac_index = -1;
  	priv->msg_enable = MLX4_EN_MSG_LEVEL;
@@ -1494,7 +1512,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  #ifdef CONFIG_MLX4_EN_DCB
  	if (!mlx4_is_slave(priv->mdev->dev)) {
  		u8 config = 0;
-@@ -3987,6 +4736,9 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3999,6 +4753,9 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  
  		if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_ETS_CFG) {
  			dev->dcbnl_ops = &mlx4_en_dcbnl_ops;
@@ -1504,7 +1522,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  		} else {
  			en_info(priv, "enabling only PFC DCB ops\n");
  			dev->dcbnl_ops = &mlx4_en_dcbnl_pfc_ops;
-@@ -4003,6 +4755,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4015,6 +4772,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		}
  	}
  #endif
@@ -1512,7 +1530,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	for (i = 0; i < MLX4_EN_MAC_HASH_SIZE; ++i)
  		INIT_HLIST_HEAD(&priv->mac_hash[i]);
-@@ -4084,24 +4837,41 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4096,24 +4854,41 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	netif_set_real_num_tx_queues(dev, priv->tx_ring_num[TX]);
  	netif_set_real_num_rx_queues(dev, priv->rx_ring_num);
  
@@ -1554,7 +1572,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	if (!(mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_SKIP_OUTER_VLAN)) {
  		dev->features |= NETIF_F_HW_VLAN_STAG_RX |
  			NETIF_F_HW_VLAN_STAG_FILTER;
-@@ -4135,45 +4905,141 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4147,45 +4922,141 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		      MLX4_DEV_CAP_FLAG2_SKIP_OUTER_VLAN))
  			dev->hw_features |= NETIF_F_HW_VLAN_STAG_TX;
  	}
@@ -1696,7 +1714,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	mdev->pndev[port] = dev;
  	mdev->upper[port] = NULL;
-@@ -4245,8 +5111,34 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4257,8 +5128,34 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	}
  
  	priv->registered = 1;
@@ -1731,7 +1749,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  
  	if (mlx4_is_master(priv->mdev->dev)) {
  		for (i = 0; i < priv->mdev->dev->persist->num_vfs; i++) {
-@@ -4280,6 +5172,13 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4292,6 +5189,13 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		}
  	}
  
@@ -1745,7 +1763,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	return 0;
  
  out:
-@@ -4300,8 +5199,12 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4312,8 +5216,12 @@ int mlx4_en_reset_config(struct net_devi
  
  	if (priv->hwtstamp_config.tx_type == ts_config.tx_type &&
  	    priv->hwtstamp_config.rx_filter == ts_config.rx_filter &&
@@ -1758,7 +1776,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  		return 0; /* Nothing to change */
  
  	if (DEV_FEATURE_CHANGED(dev, features, NETIF_F_HW_VLAN_CTAG_RX) &&
-@@ -4320,7 +5223,11 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4332,7 +5240,11 @@ int mlx4_en_reset_config(struct net_devi
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	memcpy(&new_prof.hwtstamp_config, &ts_config, sizeof(ts_config));
  
@@ -1770,7 +1788,7 @@ Change-Id: I2071c7236a02f0bbc470518e44e7fefc65ab9270
  	if (err)
  		goto out;
  
-@@ -4340,18 +5247,26 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4352,18 +5264,26 @@ int mlx4_en_reset_config(struct net_devi
  		/* RX time-stamping is OFF, update the RX vlan offload
  		 * to the latest wanted state
  		 */

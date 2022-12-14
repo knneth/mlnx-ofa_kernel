@@ -40,7 +40,8 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-%global RHEL8 %(if test `grep -E '^(ID="rhel"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
+# Force python3 on RHEL8 and OL8:
+%global PYTHON3 %(if test `grep -E '^(ID="(rhel|ol|centos)"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -65,14 +66,14 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 4.7}
-%{!?_release: %global _release OFED.4.7.1.0.0.1.g1c4bf42}
+%{!?_release: %global _release OFED.4.7.3.2.9.1.g457f064}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
 %global devel_pname %{_name}-devel
 %global non_kmp_pname %{_name}-modules
 
-%if %{RHEL8}
+%if %{PYTHON3}
 %global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=python3
 %else
 %global mlnx_python_env    :
@@ -120,7 +121,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-3.2.9.tgz
 
 
 # build KMP rpms?
@@ -174,7 +175,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-3.2.9.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -207,7 +208,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-3.2.9.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -272,7 +273,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 set -- *
 mkdir source
 mv "$@" source/
-%if %{RHEL8}
+%if %{PYTHON3}
 sed -s -i -e '1s|python\>|python3|' `grep -rl '^#!.*python' source/ofed_scripts`
 %endif
 mkdir obj

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fc.c
 
 Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
 ---
- drivers/nvme/host/fc.c | 117 ++++++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 115 insertions(+), 2 deletions(-)
+ drivers/nvme/host/fc.c | 121 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 119 insertions(+), 2 deletions(-)
 
 --- a/drivers/nvme/host/fc.c
 +++ b/drivers/nvme/host/fc.c
@@ -205,7 +205,17 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  
  	ret = nvmf_connect_admin_queue(&ctrl->ctrl);
  	if (ret)
-@@ -2788,7 +2879,11 @@ nvme_fc_delete_association(struct nvme_f
+@@ -2768,7 +2859,9 @@ nvme_fc_delete_association(struct nvme_f
+ 		nvme_stop_queues(&ctrl->ctrl);
+ 		blk_mq_tagset_busy_iter(&ctrl->tag_set,
+ 				nvme_fc_terminate_exchange, &ctrl->ctrl);
++#ifdef HAVE_MQ_RQ_STATE
+ 		blk_mq_tagset_wait_completed_request(&ctrl->tag_set);
++#endif
+ 	}
+ 
+ 	/*
+@@ -2789,10 +2882,16 @@ nvme_fc_delete_association(struct nvme_f
  	 * terminate the exchanges.
  	 */
  	nvme_stop_keep_alive(&ctrl->ctrl);
@@ -216,8 +226,13 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
 +#endif
  	blk_mq_tagset_busy_iter(&ctrl->admin_tag_set,
  				nvme_fc_terminate_exchange, &ctrl->ctrl);
++#ifdef HAVE_MQ_RQ_STATE
+ 	blk_mq_tagset_wait_completed_request(&ctrl->admin_tag_set);
++#endif
  
-@@ -2821,7 +2916,11 @@ nvme_fc_delete_association(struct nvme_f
+ 	/* kill the aens as they are a separate path */
+ 	nvme_fc_abort_aen_ops(ctrl);
+@@ -2823,7 +2922,11 @@ nvme_fc_delete_association(struct nvme_f
  	nvme_fc_free_queue(&ctrl->queues[0]);
  
  	/* re-enable the admin_q so anything new can fast fail */
@@ -229,7 +244,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  
  	/* resume the io queues so that things will fast fail */
  	nvme_start_queues(&ctrl->ctrl);
-@@ -2974,11 +3073,18 @@ nvme_fc_connect_ctrl_work(struct work_st
+@@ -2976,11 +3079,18 @@ nvme_fc_connect_ctrl_work(struct work_st
  			ctrl->cnum);
  }
  
@@ -249,7 +264,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  	.exit_request	= nvme_fc_exit_request,
  	.init_hctx	= nvme_fc_init_admin_hctx,
  	.timeout	= nvme_fc_timeout,
-@@ -3097,7 +3203,9 @@ nvme_fc_init_ctrl(struct device *dev, st
+@@ -3099,7 +3209,9 @@ nvme_fc_init_ctrl(struct device *dev, st
  	ctrl->admin_tag_set.driver_data = ctrl;
  	ctrl->admin_tag_set.nr_hw_queues = 1;
  	ctrl->admin_tag_set.timeout = ADMIN_TIMEOUT;
@@ -259,7 +274,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  
  	ret = blk_mq_alloc_tag_set(&ctrl->admin_tag_set);
  	if (ret)
-@@ -3477,3 +3585,8 @@ module_init(nvme_fc_init_module);
+@@ -3479,3 +3591,8 @@ module_init(nvme_fc_init_module);
  module_exit(nvme_fc_exit_module);
  
  MODULE_LICENSE("GPL v2");

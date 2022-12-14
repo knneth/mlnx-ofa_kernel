@@ -383,7 +383,7 @@ Change-Id: I1b5023c98ba55bb02ad9f0b764d00a242e598b5a
  								GFP_ATOMIC | __GFP_MEMALLOC);
  					if (!npage) {
  						ring->xdp_drop++;
-@@ -879,20 +1024,25 @@ int mlx4_en_process_rx_cq(struct net_dev
+@@ -879,13 +1024,17 @@ int mlx4_en_process_rx_cq(struct net_dev
  					frags[0].page_offset = XDP_PACKET_HEADROOM;
  					goto next;
  				}
@@ -397,11 +397,11 @@ Change-Id: I1b5023c98ba55bb02ad9f0b764d00a242e598b5a
  			case XDP_ABORTED:
 +#if defined(HAVE_TRACE_XDP_EXCEPTION) && !defined(MLX_DISABLE_TRACEPOINTS)
  				trace_xdp_exception(dev, xdp_prog, act);
- 				/* fall through */
 +#endif
+ 				/* fall through */
  			case XDP_DROP:
  				ring->xdp_drop++;
- xdp_drop_no_cnt:
+@@ -893,6 +1042,7 @@ xdp_drop_no_cnt:
  				goto next;
  			}
  		}

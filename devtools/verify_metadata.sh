@@ -121,6 +121,13 @@ get_upstream_from_csv()
 	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*general.*//')
 }
 
+get_tag_from_csv()
+{
+	local line=$1; shift
+
+	echo "$line" | sed -e 's/.*tag://g' -e 's/;//g'
+}
+
 ##################################################################
 #
 # main
@@ -190,6 +197,18 @@ do
 	elif ! (echo -e "$STATUS_DB" | grep -wq -- "$upstream"); then
 		cerrs="$cerrs\n-E- invalid upstream_status '$upstream' !"
 		RC=$(( $RC + 1))
+	fi
+
+	upstream=$(get_upstream_from_csv "$line")
+	if (echo -e "accepted" | grep -wq -- "$upstream"); then
+		tag=$(get_tag_from_csv "$line")
+		if  [ -z "$tag" ] ; then
+			cerrs="$cerrs\n-E- missing tag for the accepted commit!"
+			RC=$(( $RC + 1))
+		elif !  echo $tag | grep -q "^v*[1-9]\.*[0-9][0-9]*\.*[0-9]*-rc*[1-9]" ; then
+			cerrs="$cerrs\n-E- tag: $tag has wrong format! Expected format like: v5.3-rc1"
+			RC=$(( $RC + 1))
+		fi
 	fi
 
 	if [ ! -z "$cerrs" ]; then

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Copyright (c) 2017 Mellanox Technologies. All rights reserved.
 #
@@ -47,8 +47,8 @@ from optparse 					import OptionParser
 from threading import Timer
 
 VERSION_MAJOR					= "4"
-VERSION_MINOR					= "6"
-VERSION_BUILD					= "7"
+VERSION_MINOR					= "7"
+VERSION_BUILD					= "5"
 
 INDENT						= 1
 NA						= "N/A"
@@ -91,7 +91,7 @@ SET_TRANSPARENT_HUGEPAGES_DEFRAG_CMD		= "echo %s > /sys/kernel/mm/transparent_hu
 PROC_INTERRUPT_CMD				= "cat /proc/interrupts"
 DEVICE_INTERRUPTS_CMD				= "ls /sys/bus/pci/devices/*%s/msi_irqs/"
 RINGS_CMD					= "ls /sys/class/net/%s/queues/"
-IRQ_EXISTS_CMD					= "cat /proc/irq/%s/"
+IRQ_EXISTS_CMD					= "ls /proc/irq/%s/"
 IRQ_AFFINITY_MASK_CMD				= "cat /proc/irq/%s/smp_affinity"
 IRQ_AFFINITY_MASK_SET_CMD			= "echo  %s > /proc/irq/%s/smp_affinity"
 IRQ_AFFINITY_HINT_MASK_CMD			= "cat /proc/irq/%s/affinity_hint"
@@ -289,6 +289,7 @@ class OS:
 	CENTOS7_3			= "CENTOS7.3"
 	CENTOS7_4			= "CENTOS7.4"
 	CENTOS7_5			= "CENTOS7.5"
+	CENTOS7_6			= "CENTOS7.6"
 	RH6_4				= "RH6.4"
 	RH6_5				= "RH6.5"
 	RH6_6				= "RH6.6"
@@ -332,12 +333,13 @@ class OS:
 						UBUNTU15_04, UBUNTU15_10, UBUNTU16_04, UBUNTU16_10,
 						UBUNTU17_04, UBUNTU17_10, UBUNTU18_04, XENSERVER7_0,
 						XENSERVER7_2, CENTOS7_0, CENTOS7_1, CENTOS7_2,
-						CENTOS7_3, CENTOS7_4, CENTOS7_5
+						CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6
 					  ]
 	SYSTEMCTL_ACCESS_OS		= [
 						RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6,
 						RH8_0, CENTOS7_0, CENTOS7_1, CENTOS7_2, CENTOS7_3,
-						CENTOS7_4, CENTOS7_5, XENSERVER7_0, XENSERVER7_2
+						CENTOS7_4, CENTOS7_5, CENTOS7_6, XENSERVER7_0,
+						XENSERVER7_2
 					  ]
 	SUSE				= [SLES11_3, SLES11_4, SLES12]
 	PPC_DEVICE_NEW_FORMAT_OS	= [RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6, RH8_0]
@@ -431,6 +433,8 @@ class OS:
 					return OS.CENTOS7_4
 				if os_version.startswith('7.5'):
 					return OS.CENTOS7_5
+				if os_version.startswith('7.6'):
+					return OS.CENTOS7_6
 			if linux_dist == 'debian':
 				return OS.DEBIAN
 			if linux_dist == "freebsd":
@@ -757,8 +761,8 @@ class Cpu:
 		self.nmi_watchdog	= Status.INACTIVE
 		self.vm_stat_interval	= 0
 
-		(rc, cpuinfo_output) = run_command_warn_when_fail(CPUINFO_CMD, "Unable to collect cpu info.")
-		(rc, architecture_info_output) = run_command_warn_when_fail(GET_ARCHITECTURE_INFO_CMD, "Unable to collect architecture info.")
+		(rc, cpuinfo_output) = run_command_warn_when_fail(CPUINFO_CMD, warning_message="Unable to collect cpu info.")
+		(rc, architecture_info_output) = run_command_warn_when_fail(GET_ARCHITECTURE_INFO_CMD, warning_message="Unable to collect architecture info.")
 		# Get CPU vendor name. TODO - Move to OS/ARCH access module.
 		architecture_str = architecture_info_output.lower()
 		if Architecture.X86_64.lower() in architecture_str:
@@ -776,7 +780,7 @@ class Cpu:
 		""" Collects CPU information common for all systems
 		"""
 		arr = []
-		(rc, output) = run_command_warn_when_fail(NUMA_NODES_CMD, "Unable to collect NUMA node info.")
+		(rc, output) = run_command_warn_when_fail(NUMA_NODES_CMD, warning_message="Unable to collect NUMA node info.")
 		if not rc:
 			for line in output.split("\n"):
 				if "node" in line:
@@ -786,7 +790,7 @@ class Cpu:
 		socket_dict = {}
 		for socket in arr:
 			socket_dict[socket] = []
-			(rc, output) = run_command_warn_when_fail(NUMA_CORES_CMD%socket, "Unable to collect NUMA cores info.")
+			(rc, output) = run_command_warn_when_fail(NUMA_CORES_CMD%socket, warning_message="Unable to collect NUMA cores info.")
 			if not rc:
 				for element in output.split('\n'):
 					if 'cpu' in element and element.replace('cpu','').isdigit():
@@ -796,7 +800,7 @@ class Cpu:
 			# If no NUMA found - consider all CPUs to be on NUMA 0.
 			self.sockets = 1
 			socket_dict[0] = []
-			(rc, output) = run_command_warn_when_fail(ALL_CPUS_CMD, "Unable to find any CPU on the system.")
+			(rc, output) = run_command_warn_when_fail(ALL_CPUS_CMD, warning_message="Unable to find any CPU on the system.")
 			for element in output.split('\n'):
 				if 'cpu' in element and element.replace('cpu','').isdigit():
 					socket_dict[0].append(int(element.replace('cpu','')))
@@ -814,7 +818,7 @@ class Cpu:
 				self.physical_cores[numa] = []
 				self.offline_cores[numa] = []
 				for core in self.sockets_cores[numa]:
-					(rc, output) = run_command_debug_when_fail(CORE_ID_CMD%(numa,core), "Unable to collect CORE ID info. Core " + str(core) + " might be offline.")
+					(rc, output) = run_command_debug_when_fail(CORE_ID_CMD%(numa, core), debug_message="Unable to collect CORE ID info. Core " + str(core) + " might be offline.")
 					if rc:
 						self.offline_cores[numa].append(core)
 						continue
@@ -826,15 +830,15 @@ class Cpu:
 						self.physical_cores[numa].append(core)
 				self.sockets_cores[numa] = [c for c in self.sockets_cores[numa] if c not in self.offline_cores[numa]]
 
-		(rc, output) = run_command_warn_when_fail(GET_WATCHDOG_CMD, "Unable to collect watchdog info.")
+		(rc, output) = run_command_warn_when_fail(GET_WATCHDOG_CMD, warning_message="Unable to collect watchdog info.")
 		if not rc and int(output) != 0:
 			self.watchdog		= Status.ACTIVE
 
-		(rc, output) = run_command_warn_when_fail(GET_NMI_WATCHDOG_CMD, "Unable to collect NMI watchdog info.")
+		(rc, output) = run_command_warn_when_fail(GET_NMI_WATCHDOG_CMD, warning_message="Unable to collect NMI watchdog info.")
 		if not rc and int(output) != 0:
 			self.nmi_watchdog	= Status.ACTIVE
 
-		(rc, output) = run_command_warn_when_fail(GET_VM_STAT_INTERVAL_CMD, "Unable to collect VM stat interval info.")
+		(rc, output) = run_command_warn_when_fail(GET_VM_STAT_INTERVAL_CMD, warning_message="Unable to collect VM stat interval info.")
 		if not rc and int(output) > 0:
 			self.vm_stat_interval	= int(output)
 
@@ -852,7 +856,7 @@ class Cpu:
 				self.actual_freq = float(line.split(":")[1].split("MHz")[0].strip())
 				break
 
-		(rc, lscpu_output) = run_command_warn_when_fail(LSCPU_CMD, "Unable to collect cpu info.")
+		(rc, lscpu_output) = run_command_warn_when_fail(LSCPU_CMD, warning_message="Unable to collect cpu info.")
 		for line in lscpu_output.split('\n'):
 			if "Architecture" in line:
 				architecture_str = line.split()[1].strip().lower()
@@ -874,7 +878,7 @@ class Cpu:
 			if match:
 				total_cores+=1
 
-		(rc, lscpu_output) = run_command_warn_when_fail(LSCPU_CMD, "Unable to collect cpu info.")
+		(rc, lscpu_output) = run_command_warn_when_fail(LSCPU_CMD, warning_message="Unable to collect cpu info.")
 		for line in lscpu_output.split('\n'):
 			if "Architecture" in line:
 				architecture_str = line.split()[1].strip().lower()
@@ -921,7 +925,7 @@ class Cpu:
 		if self.vendor == CPUVendor.INTEL:
 			self.architecture = self.convert_architecture_number_to_name(
 				int(cpu_model_number), int(cpu_family_number))
-		(rc, output) = run_command_warn_when_fail("%s %s"%(DMIDECODE, "-s processor-frequency"), "Unable to collect processor frequency")
+		(rc, output) = run_command_warn_when_fail("%s %s"%(DMIDECODE, "-s processor-frequency"), warning_message="Unable to collect processor frequency")
 		if rc:
 			self.max_freq = None
 		else:
@@ -946,18 +950,18 @@ class Cpu:
 		"""
 		for i in range(self.total_cores):
 			logging.debug("Setting core number %s to high perforamnce"%i)
-			rc = run_command_warn_when_fail(CPU_MAX_PERFORMANCE_CMD%i)
+			rc = run_command_warn_when_fail(CPU_MAX_PERFORMANCE_CMD%i, shell=True)
 
 	def stop_monitoring_services(self):
 		""" Stops monitoring services to ensure minimum overhead on the CPU.
 		"""
 		if self.watchdog != Status.INACTIVE:
-			(rc, output) = run_command_warn_when_fail(SET_WATCHDOG_CMD%0, "Unable to disable watchdog info.")
+			(rc, output) = run_command_warn_when_fail(SET_WATCHDOG_CMD%0, shell=True, warning_message="Unable to disable watchdog info.")
 
 		if self.nmi_watchdog != Status.INACTIVE:
-			(rc, output) = run_command_warn_when_fail(SET_NMI_WATCHDOG_CMD%0, "Unable to disable NMI watchdog info.")
+			(rc, output) = run_command_warn_when_fail(SET_NMI_WATCHDOG_CMD%0, shell=True, warning_message="Unable to disable NMI watchdog info.")
 
-		(rc, output) = run_command_warn_when_fail(SET_VM_STAT_INTERVAL_CMD%30, "Unable to set VM stat interval info.")
+		(rc, output) = run_command_warn_when_fail(SET_VM_STAT_INTERVAL_CMD%30, shell=True, warning_message="Unable to set VM stat interval info.")
 
 class Memory:
 	""" Describes the system's Memory
@@ -1024,7 +1028,7 @@ class Memory:
 		self.vm_swappiness			= 0
 		self.vm_zone_reclaim_mode		= Memory.ZONE_RECLAIM_INVALID
 
-		(rc, output) = run_command_warn_when_fail(GET_MEMORY_INFO_CMD, "Unable to collect memory info.")
+		(rc, output) = run_command_warn_when_fail(GET_MEMORY_INFO_CMD, warning_message="Unable to collect memory info.")
 		if not rc:
 			for line in output.split('\n'):
 				if Memory.TOTAL in line.lower():
@@ -1034,19 +1038,19 @@ class Memory:
 					self.free_memory_kbytes		= int(line.split(":")[1].strip().split()[0])
 					continue
 
-		(rc, output) = run_command_warn_when_fail(GET_NUMA_BALANCING_CMD, "Unable to collect NUMA balancing info.")
+		(rc, output) = run_command_warn_when_fail(GET_NUMA_BALANCING_CMD, warning_message="Unable to collect NUMA balancing info.")
 		if not rc and int(output) != 0:
 			self.numa_balancing			= Status.ACTIVE
 
-		(rc, output) = run_command_warn_when_fail(GET_MAX_SHARED_MEMORY_SEGMENT_SIZE_CMD, "Unable to collect max shared memory segment size info.")
+		(rc, output) = run_command_warn_when_fail(GET_MAX_SHARED_MEMORY_SEGMENT_SIZE_CMD, warning_message="Unable to collect max shared memory segment size info.")
 		if not rc:
 			self.max_shared_memory_segment_size	= int(output)
 
-		(rc, output) = run_command_warn_when_fail(GET_VM_SWAPPINESS_CMD, "Unable to collect VM swappiness info.")
+		(rc, output) = run_command_warn_when_fail(GET_VM_SWAPPINESS_CMD, warning_message="Unable to collect VM swappiness info.")
 		if not rc:
 			self.vm_swappiness			= int(output)
 
-		(rc, output) = run_command_warn_when_fail(GET_VM_ZONE_RECLAIM_MODE_CMD, "Unable to collect VM zone reclaim mode info.")
+		(rc, output) = run_command_warn_when_fail(GET_VM_ZONE_RECLAIM_MODE_CMD, warning_message="Unable to collect VM zone reclaim mode info.")
 		if not rc:
 			self.vm_zone_reclaim_mode		= self.int_to_zone_reclaim(int(output))
 
@@ -1056,13 +1060,13 @@ class Memory:
 		self.hugepages.disable_operations(node_info)
 
 		if self.numa_balancing == Status.ACTIVE:
-			(rc, output) = run_command_warn_when_fail(SET_NUMA_BALANCING_CMD%0, "Unable to disable NUMA balancing.")
+			(rc, output) = run_command_warn_when_fail(SET_NUMA_BALANCING_CMD%0, shell=True, warning_message="Unable to disable NUMA balancing.")
 
 		if self.vm_swappiness != 0:
-			(rc, output) = run_command_warn_when_fail(SET_VM_SWAPPINESS_CMD%0, "Unable to disable VM swappiness.")
+			(rc, output) = run_command_warn_when_fail(SET_VM_SWAPPINESS_CMD%0, shell=True, warning_message="Unable to disable VM swappiness.")
 
 		if self.vm_zone_reclaim_mode not in (Memory.ZONE_RECLAIM_OFF, Memory.ZONE_RECLAIM_INVALID):
-			(rc, output) = run_command_warn_when_fail(SET_VM_ZONE_RECLAIM_MODE_CMD%int(Memory().ZONE_RECLAIM_OFF), "Unable to disable VM zone reclaim.")
+			(rc, output) = run_command_warn_when_fail(SET_VM_ZONE_RECLAIM_MODE_CMD%int(Memory().ZONE_RECLAIM_OFF), shell=True, warning_message="Unable to disable VM zone reclaim.")
 
 
 class Hugepages:
@@ -1119,25 +1123,25 @@ class Hugepages:
 		self.transparent_hugepages_enabled	= Hugepages.POLICY_UNKNOWN
 		self.transparent_hugepages_defrag	= Hugepages.POLICY_UNKNOWN
 
-		(rc, output) = run_command_warn_when_fail(GET_VM_HUGEPAGES_CMD, "Unable to collect VM hugepages info.")
+		(rc, output) = run_command_warn_when_fail(GET_VM_HUGEPAGES_CMD, warning_message="Unable to collect VM hugepages info.")
 		if not rc and int(output) > 0:
 			self.vm_hugepages			= int(output)
 
 		for numa in range(node_info.cpu.sockets):
 			self.numa_hugepages[numa]	= {}
 			for page_size in Hugepages.PAGE_SUPPORTED:
-				(rc, output) = run_command_warn_when_fail(GET_NUMA_HUGEPAGES_CMD%(numa, page_size), "Unable to collect NUMA %s %sKB hugepages info."%(numa, page_size))
+				(rc, output) = run_command_warn_when_fail(GET_NUMA_HUGEPAGES_CMD%(numa, page_size), warning_message="Unable to collect NUMA %s %sKB hugepages info."%(numa, page_size))
 				if not rc and int(output) > 0:
 					self.numa_hugepages[numa][page_size]	= int(output)
 
 		policy_pattern	= re.compile("\[\w+\]")
-		(rc, output) = run_command_warn_when_fail(GET_TRANSPARENT_HUGEPAGES_ENABLED_CMD, "Unable to collect transparent hugepages info.")
+		(rc, output) = run_command_warn_when_fail(GET_TRANSPARENT_HUGEPAGES_ENABLED_CMD, warning_message="Unable to collect transparent hugepages info.")
 		if not rc:
 			match = policy_pattern.search(output)
 			if match:
 				self.transparent_hugepages_enabled	= self.str_to_policy(match.group(0).strip("[]"))
 
-		(rc, output) = run_command_warn_when_fail(GET_TRANSPARENT_HUGEPAGES_DEFRAG_CMD, "Unable to collect transparent hugepages info.")
+		(rc, output) = run_command_warn_when_fail(GET_TRANSPARENT_HUGEPAGES_DEFRAG_CMD, warning_message="Unable to collect transparent hugepages info.")
 		if not rc:
 			match = policy_pattern.search(output)
 			if match:
@@ -1147,10 +1151,10 @@ class Hugepages:
 		""" Disables all hegupages operations done by the system.
 		"""
 		if self.transparent_hugepages_enabled != Hugepages.POLICY_NEVER:
-			(rc, output) = run_command_warn_when_fail(SET_TRANSPARENT_HUGEPAGES_ENABLED_CMD%Hugepages.POLICY_NEVER, "Unable to set transparent hugepages enabled to '%s'."%Hugepages.POLICY_NEVER)
+			(rc, output) = run_command_warn_when_fail(SET_TRANSPARENT_HUGEPAGES_ENABLED_CMD%Hugepages.POLICY_NEVER, shell=True, warning_message="Unable to set transparent hugepages enabled to '%s'."%Hugepages.POLICY_NEVER)
 
 		if self.transparent_hugepages_defrag != Hugepages.POLICY_NEVER:
-			(rc, output) = run_command_warn_when_fail(SET_TRANSPARENT_HUGEPAGES_DEFRAG_CMD%Hugepages.POLICY_NEVER, "Unable to set transparent hugepages defrag to '%s'."%Hugepages.POLICY_NEVER)
+			(rc, output) = run_command_warn_when_fail(SET_TRANSPARENT_HUGEPAGES_DEFRAG_CMD%Hugepages.POLICY_NEVER, shell=True, warning_message="Unable to set transparent hugepages defrag to '%s'."%Hugepages.POLICY_NEVER)
 
 class KernelModule(object):
 	""" Describes a kernel module
@@ -1230,13 +1234,13 @@ class KernelModule(object):
 		""" Loads the kernel module
 		"""
 		cmd = LOAD_MODULE_CMD%self.name
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to load kernel module '%s'"%self.name)
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to load kernel module '%s'"%self.name)
 
 	def unload(self):
 		""" Unloads the kernel module
 		"""
 		cmd = UNLOAD_MODULE_CMD%self.name
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to unload kernel module '%s'"%self.name)
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to unload kernel module '%s'"%self.name)
 
 
 class ServiceState(object):
@@ -1366,7 +1370,7 @@ class Service(object):
 			exists_cmd = "ls -l %s"%(os.path.join(Service.SERVICE_PATH, (self.name, self.to_suse())[node_info.os.name in OS.SUSE]))
 
 		if exists_cmd:
-			(rc, output) = run_command_warn_when_fail(exists_cmd, "Unable to check service %s existence" % self.name)
+			(rc, output) = run_command_warn_when_fail(exists_cmd, warning_message="Unable to check service %s existence" % self.name)
 			if rc:
 				self.status = Status.NOT_PRESENT
 				return
@@ -1391,7 +1395,7 @@ class Service(object):
 			cmd = "%s stop %s.service"%(Service.SYSTEMCTL, self.name)
 		else:
 			cmd = "%s stop"%(os.path.join(Service.SERVICE_PATH, (self.name, self.to_suse())[node_info.os.name in OS.SUSE]))
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to stop %s service"%self.name)
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to stop %s service"%self.name)
 		if (not rc):
 			self.read_status(node_info)
 
@@ -1406,7 +1410,7 @@ class Service(object):
 			cmd = "%s start %s.service"%(Service.SYSTEMCTL, self.name)
 		else:
 			cmd = "%s start"%(os.path.join(Service.SERVICE_PATH, (self.name, self.to_suse())[node_info.os.name in OS.SUSE]))
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to start %s service"%self.name)
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to start %s service"%self.name)
 		if (not rc):
 			self.read_status(node_info)
 
@@ -1419,13 +1423,13 @@ class IpTable(Service):
 		""" Flushes IP tables. If table name is given, flushes the table.
 		"""
 		cmd = "%s%s -F"%((self.name, self.to_suse())[node_info.os.name in OS.SUSE], ("", " -t %s"%table)[self.is_valid_table_name(table)])
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to flush %s%s"%(self.name, ("", " (table=%s)"%table)[self.is_valid_table_name(table)]))
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to flush %s%s"%(self.name, ("", " (table=%s)"%table)[self.is_valid_table_name(table)]))
 
 	def delete_chain(self, node_info, table = None):
 		""" Deletes chains in IP tables. If table name is given, deletes chains in the table.
 		"""
 		cmd = "%s %s -X"%((self.name, self.to_suse())[node_info.os.name in OS.SUSE], ("", "-t %s"%table)[self.is_valid_table_name(table)])
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to delete chain in  %s%s"%(self.name, ("", " (table=%s)"%table)[self.is_valid_table_name(table)]))
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to delete chain in  %s%s"%(self.name, ("", " (table=%s)"%table)[self.is_valid_table_name(table)]))
 
 	def is_valid_table_name(self, table):
 		""" Verify a table name is valid
@@ -1486,7 +1490,7 @@ class Firewall:
 		"""
 		if node_info.os.name in OS.SUSE:
 			cmd = Service.FIREWALL_SUSE%'stop'
-			(rc, output) = run_command_warn_when_fail(cmd, "Unable to stop firewall.")
+			(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to stop firewall.")
 		else:
 			for service in [self.firewall, self.iptable, self.ipv6table]:
 				service.stop(node_info)
@@ -1532,7 +1536,7 @@ class IpForwarding:
 		""" Reads current IP forwarding IPv4/6 statuses from the system and update the class status fields
 		"""
 		cmd = "cat %s"%(IPV4_FORWARDING_CFG)
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to check ipv4 forwarding status.")
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to check ipv4 forwarding status.")
 		if rc:
 			self.ipv4_status = Status.NOT_PRESENT
 		else:
@@ -1542,7 +1546,7 @@ class IpForwarding:
 				self.ipv4_status = Status.INACTIVE
 
 		cmd = "cat %s"%(IPV6_FORWARDING_CFG%"all")
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to check ipv6 forwarding status.")
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to check ipv6 forwarding status.")
 		if rc:
 			self.ipv6_status = Status.NOT_PRESENT
 		else:
@@ -1556,14 +1560,14 @@ class IpForwarding:
 		"""
 		logging.debug("Enabling IPv4 forwarding for all interfaces")
 		cmd = "echo 1 > %s"%(IPV4_FORWARDING_CFG)
-		(rc, output) = run_command_warn_when_fail(cmd, "Unable to set ipv4 forwarding.")
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to set ipv4 forwarding.")
 		if  not interface_name:
 			interface_name = "all"
 		logging.debug("Enabling IPv6 forwarding for %s"%interface_name)
 		cmd = "echo 1 > %s"%(IPV6_FORWARDING_CFG%interface_name)
 		# Talgi - This cause connectivity loss due to a bug in ofed.
 		# Will be enabled once the issue is fixed.
-		#(rc, output) = run_command_warn_when_fail(cmd, "Unable to set ipv6 forwarding.")
+		#(rc, output) = run_command_warn_when_fail(cmd, warning_message="Unable to set ipv6 forwarding.")
 
 	def stop(self):
 		""" disable ip forwarding
@@ -1626,7 +1630,7 @@ class Iommu:
 		""" Reads current Hyper Threading status from the system and update the class status field
 		"""
 		self.status = Status.INACTIVE
-		(rc, output) = run_command_warn_when_fail(KERNEL_PARAMETERS, "Unable to check iommu status.")
+		(rc, output) = run_command_warn_when_fail(KERNEL_PARAMETERS, warning_message="Unable to check iommu status.")
 		if rc:
 			self.status = Status.NOT_PRESENT
 		else:
@@ -1671,13 +1675,13 @@ class Driver:
 	def collect_info(self):
 		""" Collects CPU information from the system and updates the class fields
 		"""
-		( rc, ofed_path) = run_command_warn_when_fail(OFED_PATH, "MLNX OFED is not installed.")
+		( rc, ofed_path) = run_command_warn_when_fail(OFED_PATH, warning_message="MLNX OFED is not installed.")
 
 		if rc:
 			self.installed = False
 		else:
 			self.installed = True
-			( rc, version) = run_command_warn_when_fail(ofed_path, "Unable to find OFED version.")
+			( rc, version) = run_command_warn_when_fail(ofed_path, warning_message="Unable to find OFED version.")
 			if rc:
 				self.version = None
 			else:
@@ -1721,7 +1725,7 @@ class IrqInfo:
 		"""
 		if ( self.wanted_mask != self.smp_affinity_mask ):
 			cmd = IRQ_AFFINITY_MASK_SET_CMD%(self.wanted_mask, self.number)
-			( rc, output ) = run_command_warn_when_fail(cmd, "Unable to set IRQ affinity mask.")
+			( rc, output ) = run_command_warn_when_fail(cmd, shell=True, warning_message="Unable to set IRQ affinity mask.")
 			if (not rc):
 				self.smp_affinity_mask = self.get_affinity_mask()
 
@@ -1791,7 +1795,7 @@ class RingInfo:
 		""" Set RPS affinity mask
 		"""
 		cmd = RPS_AFFINITY_MASK_SET_CMD%(self.rps_wanted_mask, interface_name, self.number)
-		( rc, output ) = run_command_warn_when_fail(cmd, "Unable to set RPS affinity mask to interface_name: %s ring: %s."%(interface_name, self.number))
+		( rc, output ) = run_command_warn_when_fail(cmd, shell=True, warning_message="Unable to set RPS affinity mask to interface_name: %s ring: %s."%(interface_name, self.number))
 		if (not rc):
 			self.set_rps_mask(interface_name)
 
@@ -1799,7 +1803,7 @@ class RingInfo:
 		""" Set XPS affinity mask
 		"""
 		cmd = XPS_AFFINITY_MASK_SET_CMD%(self.xps_wanted_mask, interface_name, self.number)
-		( rc, output ) = run_command_warn_when_fail(cmd, "Unable to set XPS affinity mask to interface_name: %s ring: %s."%(interface_name, self.number))
+		( rc, output ) = run_command_warn_when_fail(cmd, shell=True, warning_message="Unable to set XPS affinity mask to interface_name: %s ring: %s."%(interface_name, self.number))
 		if (not rc):
 			self.set_xps_mask(interface_name)
 
@@ -1892,7 +1896,7 @@ class InterfaceInfo( object ):
 		""" Set interface port index (any number, port1 will always get a lower number than port 2).
 		"""
 		cmd = INTERFACE_INDEX_CMD%(self.name)
-		( rc, output ) = run_command_warn_when_fail(cmd,"Failed to find interface port.")
+		( rc, output ) = run_command_warn_when_fail(cmd, warning_message="Failed to find interface port.")
 		assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
 		self.port_index = int(output)
 
@@ -1964,7 +1968,7 @@ class InterfaceInfo( object ):
 			if ("tx-" in line ):
 				tx_num = line.split('tx-')[1]
 				cmd = XPS_AFFINITY_MASK_SET_CMD%(0, self.name, tx_num)
-				( rc, output ) = getstatusoutput(cmd)
+				( rc, output ) = getstatusoutput(cmd, shell=True)
 				assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
 
 	def set_xps(self, core_list, create_one_mask_from_core_list):
@@ -2098,7 +2102,7 @@ class EthInterfaceInfo(InterfaceInfo):
 		if node_info.os.name in OS.TC_QDISC_NO_QUEUE_METHOD_SUPPORT_OS:
 			logging.debug("Setting %s to no queue." % (self.name))
 			cmd = ADD_INTERFACE_QDISC_NO_QUEUE_CMD % (self.name)
-			run_command_warn_when_fail(cmd, "Failed to set %s to no queue." % (self.name))
+			run_command_warn_when_fail(cmd, warning_message="Failed to set %s to no queue." % (self.name))
 		else:
 			self.apply_qdisc_tx_len(0)
 
@@ -2120,13 +2124,13 @@ class EthInterfaceInfo(InterfaceInfo):
 		"""
 		logging.debug("Setting transmit queue length to %s for interface %s."%(tx_len, self.name))
 		cmd = SET_TXQ_LENGTH_CMD%(self.name, str(tx_len))
-		run_command_warn_when_fail(cmd,"Failed to set transmit queue length for %s."%(self.name))
+		run_command_warn_when_fail(cmd, warning_message="Failed to set transmit queue length for %s."%(self.name))
 		logging.debug("Adding %s to queueing discipline."%(self.name))
 		cmd = ADD_INTERFACE_TO_QDISC_CMD%(self.name)
-		run_command_warn_when_fail(cmd,"Failed to add %s to queueing discipline."%(self.name))
+		run_command_warn_when_fail(cmd, warning_message="Failed to add %s to queueing discipline."%(self.name))
 		logging.debug("Removing %s from queueing discipline."%(self.name))
 		cmd = DEL_INTERFACE_FROM_QDISC_CMD%(self.name)
-		run_command_warn_when_fail(cmd,"Failed to remove %s from queueing discipline."%(self.name))
+		run_command_warn_when_fail(cmd, warning_message="Failed to remove %s from queueing discipline."%(self.name))
 
 	def get_network_parameter_value(self, group, parameter, appearance_index = 1):
 		""" Gets current network parameter value.
@@ -2137,7 +2141,7 @@ class EthInterfaceInfo(InterfaceInfo):
 
 		logging.debug("Checking %s value for interface %s."%(parameter, self.name))
 		cmd = GET_NETWORK_PARAMETERS_CMD%(group, self.name)
-		(rc, output) = run_command_warn_when_fail(cmd,"Failed to get %s value for %s."%(parameter, self.name))
+		(rc, output) = run_command_warn_when_fail(cmd, warning_message="Failed to get %s value for %s."%(parameter, self.name))
 		if not rc:
 			found_index = 0
 			for line in output.split('\n'):
@@ -2176,7 +2180,7 @@ class EthInterfaceInfo(InterfaceInfo):
 					set_string += "%s %s "%(param_set, value)
 				logging.debug("Setting %s for %s."%(set_string, self.name))
 				cmd = SET_MULTIPLE_NETWORK_PARAMETER_CMD%(group, self.name, set_string)
-				(rc, out) = run_command_warn_when_fail(cmd,"Failed setting %s for %s."%(set_string, self.name))
+				(rc, out) = run_command_warn_when_fail(cmd, warning_message="Failed setting %s for %s."%(set_string, self.name))
 				return rc
 		# No need to set anything
 		return 0
@@ -2409,7 +2413,7 @@ class PciDeviceInfo:
 		""" find device closest numa to a device by its PCI location
 		"""
 		cmd = NUMA_SUPPORT_CMD%(self.pci_slot)
-		( rc, output ) = run_command_warn_when_fail(cmd,"Failed to find device's NUMA node.")
+		( rc, output ) = run_command_warn_when_fail(cmd, warning_message="Failed to find device's NUMA node.")
 		numa = -1
 		if not rc:
 			numa = int(output.strip())
@@ -2424,7 +2428,7 @@ class PciDeviceInfo:
 			return 'ib'
 
 		cmd = INTERFACE_PORT_CMD%(interface_name)
-		( rc, output ) = run_command_warn_when_fail(cmd,"Failed to find interface port. interface: %s"%(interface_name))
+		( rc, output ) = run_command_warn_when_fail(cmd, warning_message="Failed to find interface port. interface: %s"%(interface_name))
 		if rc:
 			assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
 		elif '1' in output.strip():
@@ -2438,7 +2442,7 @@ class PciDeviceInfo:
 				cmd = GET_PORT_LINK_TYPE_CMD_MLX4_PPC%(self.pci_slot.split(':')[0], self.pci_slot.split(':')[1], self.pci_slot.split(':')[2] ,port)
 			else:
 				cmd = GET_PORT_LINK_TYPE_CMD_MLX4%(self.pci_slot.split(':')[0], self.pci_slot.split(':')[1], port)
-			( rc, output ) = run_command_warn_when_fail(cmd,"Failed to find interface type. interface: %s"%interface_name)
+			( rc, output ) = run_command_warn_when_fail(cmd, warning_message="Failed to find interface type. interface: %s"%interface_name)
 			if rc:
 				assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
 			elif 'ib' in output.strip().lower():
@@ -2465,7 +2469,7 @@ class PciDeviceInfo:
 		"""
 		interfaces = []
 		cmd = FIND_INTERFACES_FROM_PCI_BUS_CMD%(self.pci_slot)
-		( rc, output ) = run_command_warn_when_fail(cmd, "Can't find network interface for Mellanox pci device: %s. Please load device core driver: %s"%(self.pci_slot, self.core_driver))
+		( rc, output ) = run_command_warn_when_fail(cmd, warning_message="Can't find network interface for Mellanox pci device: %s. Please load device core driver: %s"%(self.pci_slot, self.core_driver))
 		if rc:
 			return interfaces
 		interfaces_names = [x for x in output.split('\n')]
@@ -2504,8 +2508,8 @@ class PciDeviceInfo:
 		( rc, all_interrupts ) = getstatusoutput(PROC_INTERRUPT_CMD)
 		assert (not rc), "Unexpected error - cmd: %s bad exit status."%(PROC_INTERRUPT_CMD)
 		cmd = DEVICE_INTERRUPTS_CMD%(self.pci_slot)
-		( rc, device_irqs ) = run_command_warn_when_fail(cmd, "Can't find interrupts for Mellanox pci device %s. Please make sure %s is loaded."\
-									%(self.pci_slot, self.core_driver))
+		( rc, device_irqs ) = run_command_warn_when_fail(cmd, warning_message="Can't find interrupts for Mellanox pci device %s. Please make sure %s is loaded."\
+							                                %(self.pci_slot, self.core_driver))
 		if rc:
 			return irqs
 
@@ -2574,7 +2578,7 @@ class PciDeviceInfo:
 		else:
 			# Use device local CPU list as NUMA aware core list
 			cmd = LOCAL_CPUS_CMD%(self.pci_slot)
-			( rc, output ) = run_command_warn_when_fail(cmd,"Failed to find device's local CPU list.")
+			( rc, output ) = run_command_warn_when_fail(cmd, warning_message="Failed to find device's local CPU list.")
 			if not rc:
 				for core in output.split(','):
 					if '-' in core:
@@ -2924,15 +2928,20 @@ class FppPciDeviceInfo(PciDeviceInfo):
 # Command execution functions
 DEFAULT_TIMEOUT = 60  # Seconds
 FAILED_RC = 1
-def getstatusoutput(cmd, timeout=DEFAULT_TIMEOUT):
+def getstatusoutput(cmd, shell=False, timeout=DEFAULT_TIMEOUT):
 	""" A simillar implementation to the depricated commands.getstatusoutput()
 	    Run the command and returns output and RC.
 	"""
-	cmd_args = cmd.split()
-	# Process wildcard chars
-	cmd_args = [glob.glob(arg)[0] if "*" in arg else arg for arg in cmd_args]
+	cmd_args = cmd
+	if not shell:
+		cmd_args = cmd.split()
+		# Process wildcard chars
+		try:
+			cmd_args = [glob.glob(arg)[0] if "*" in arg else arg for arg in cmd_args]
+		except IndexError as err:
+			return FAILED_RC, "Failed to parse wildcard path."
 	try:
-		process = sp.Popen(cmd_args, shell=False, stdout=sp.PIPE, stderr=sp.PIPE)
+		process = sp.Popen(cmd_args, shell=shell, stdout=sp.PIPE, stderr=sp.PIPE)
 	except OSError as err:
 		return FAILED_RC, ""
 	else:
@@ -2944,50 +2953,50 @@ def getstatusoutput(cmd, timeout=DEFAULT_TIMEOUT):
 		timer.cancel()
 		return process.returncode, stdout
 
-def run_command_debug_when_fail(cmd, debug_message=False, prnt=False):
+def run_command_debug_when_fail(cmd, shell=False, debug_message=False, prnt=False):
 	""" run command and print debug message when failed
 	"""
 	if prnt:
 		logging.debug("Run cmd: %s"%cmd)
-	( rc, output) = getstatusoutput(cmd)
+	( rc, output) = getstatusoutput(cmd, shell=shell)
 	if rc:
 		logging.debug("Failed to run cmd: %s"%cmd)
 		if debug_message:
 			logging.debug("%s"%(debug_message))
 	return (rc, output)
 
-def run_command_warn_when_fail(cmd, warning_message=False, prnt=False):
+def run_command_warn_when_fail(cmd, shell=False, warning_message=False, prnt=False):
 	""" run command and print warning message when failed
 	"""
 	if prnt:
 		logging.info("Run cmd: %s"%cmd)
 	else:
 		logging.debug("Run cmd: %s"%cmd)
-	( rc, output) = getstatusoutput(cmd)
+	( rc, output) = getstatusoutput(cmd, shell=shell)
 	if rc:
 		logging.warning("Failed to run cmd: %s"%cmd)
 		if warning_message:
 			logging.warning("%s"%(warning_message))
 	return (rc, output)
 
-def run_command(cmd, prnt=False):
+def run_command(cmd, shell=False, prnt=False):
 	""" run command
 	"""
 	if prnt:
 		logging.info("Run cmd: %s"%cmd)
 	else:
 		logging.debug("Run cmd: %s"%cmd)
-	( rc, output) = getstatusoutput(cmd)
+	( rc, output) = getstatusoutput(cmd, shell=shell)
 	return (rc, output)
 
-def run_command_exit_when_fail(cmd, error_message=False, prnt=False):
+def run_command_exit_when_fail(cmd, shell=False, error_message=False, prnt=False):
 	""" run command, print error message and exit when failed
 	"""
 	if prnt:
 		logging.info("Run cmd: %s"%(cmd))
 	else:
 		logging.debug("Run cmd: %s"%cmd)
-	( rc, output) = getstatusoutput(cmd)
+	( rc, output) = getstatusoutput(cmd, shell=shell)
 	if rc:
 		logging.error("Failed to run cmd: %s"%(cmd))
 		if error_message:
@@ -3025,17 +3034,17 @@ def force_sw_dependencies(profile):
 	""" Force all needed software are installed on the server.
 	"""
 	# Check general purpose tools
-	(rc, output) = run_command_warn_when_fail(MST_START, "Please install Mellanox Firmware tools ( mft )")
-	output = run_command_exit_when_fail("%s --version"%(ETHTOOL), "Please install ethtool tool.")
-	output = run_command_exit_when_fail(LSPCI, "Please install lspci tool.")
-	(rc, output) = run_command_warn_when_fail("%s -V"%DMIDECODE, "It is recommended to install dmidecode tool.")
-	output = run_command_exit_when_fail(LSMOD, "Please install lsmod tool.")
+	(rc, output) = run_command_warn_when_fail(MST_START, warning_message="Please install Mellanox Firmware tools ( mft )")
+	output = run_command_exit_when_fail("%s --version"%(ETHTOOL), error_message="Please install ethtool tool.")
+	output = run_command_exit_when_fail(LSPCI, error_message="Please install lspci tool.")
+	(rc, output) = run_command_warn_when_fail("%s -V"%DMIDECODE, warning_message="It is recommended to install dmidecode tool.")
+	output = run_command_exit_when_fail(LSMOD, error_message="Please install lsmod tool.")
 	if "mlx" not in output:
 		logging.error( "Driver don't exist/not loaded. Please load Mellanox driver.")
 
 	# Check profile specific tools
 	if profile in Profile.NEED_IFCONFIG:
-		output = run_command_exit_when_fail(IFCONFIG, "Please install %s tool."%IFCONFIG)
+		output = run_command_exit_when_fail(IFCONFIG, error_message="Please install %s tool."%IFCONFIG)
 
 def set_logger(options):
 	""" Force dependencies between input arguments

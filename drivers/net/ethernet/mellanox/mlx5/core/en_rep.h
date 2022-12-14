@@ -150,11 +150,18 @@ enum {
 	MLX5_ENCAP_ENTRY_VALID     = BIT(0),
 };
 
+struct encap_id_entry {
+	u32 encap_id;
+	struct list_head list;
+};
+
 struct mlx5e_encap_entry {
 	/* attached neigh hash entry */
 	struct mlx5e_neigh_hash_entry *nhe;
 	/* neigh hash entry list of encaps sharing the same neigh */
 	struct list_head encap_list;
+	/* dealloc invalid encap_ids only when freeing mlx5e_encap_entry */
+	struct list_head encap_id_list;
 	struct mlx5e_neigh m_neigh;
 	/* a node of the eswitch encap hash table which keeping all the encap
 	 * entries
@@ -188,11 +195,18 @@ struct mlx5e_rep_sq {
 };
 
 void *mlx5e_alloc_nic_rep_priv(struct mlx5_core_dev *mdev);
+void mlx5e_init_nic_rep_priv(struct mlx5e_rep_priv *rpriv,
+			     struct net_device *netdev);
 void mlx5e_rep_register_vport_reps(struct mlx5_core_dev *mdev);
 void mlx5e_rep_unregister_vport_reps(struct mlx5_core_dev *mdev);
 bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv);
+bool mlx5e_is_vport_rep_loaded(struct mlx5e_priv *priv);
 int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv);
 void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv);
+
+bool mlx5e_rep_has_offload_stats(const struct net_device *dev, int attr_id);
+int mlx5e_rep_get_offload_stats(int attr_id, const struct net_device *dev,
+				void *sp);
 
 void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
 
@@ -203,10 +217,21 @@ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
 
 void mlx5e_rep_queue_neigh_stats_work(struct mlx5e_priv *priv);
 
+int mlx5e_enslave_rep(struct mlx5_eswitch *esw, struct net_device *netdev,
+		      struct net_device *lag_dev);
+void mlx5e_unslave_rep(struct mlx5_eswitch *esw, const struct net_device *netdev,
+		       const struct net_device *lag_dev);
+
 bool mlx5e_eswitch_rep(struct net_device *netdev);
+
+int mlx5e_rep_get_port_parent_id(struct net_device *dev,
+				 struct netdev_phys_item_id *ppid);
+int mlx5e_rep_get_phys_port_name(struct net_device *dev,
+				 char *buf, size_t len);
 
 #else /* CONFIG_MLX5_ESWITCH */
 static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
+static inline bool mlx5e_is_vport_rep_loaded(struct mlx5e_priv *priv) { return false; }
 static inline int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv) { return 0; }
 static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
 #endif

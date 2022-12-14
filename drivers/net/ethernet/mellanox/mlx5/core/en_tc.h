@@ -125,6 +125,7 @@ struct mlx5e_tc_flow {
 	struct list_head	unready; /* flows not ready to be offloaded (e.g due to missing route) */
 	int			tmp_efi_index;
 	struct list_head	tmp_list; /* temporary flow list used by neigh update */
+	struct net_device      *added_dev;
 	refcount_t		refcnt;
 	struct rcu_head		rcu_head;
 	struct completion	init_done;
@@ -223,6 +224,16 @@ int alloc_mod_hdr_actions(struct mlx5e_priv *priv,
 			  int namespace,
 			  struct mlx5e_tc_flow_parse_attr *parse_attr,
 			  gfp_t flags);
+int parse_tc_pedit_action(struct mlx5e_priv *priv,
+			  const struct flow_action_entry *act, int namespace,
+			  struct mlx5e_tc_flow_parse_attr *parse_attr,
+			  struct pedit_headers_action *hdrs,
+			  struct netlink_ext_ack *extack);
+int alloc_tc_pedit_action(struct mlx5e_priv *priv, int namespace,
+			  struct mlx5e_tc_flow_parse_attr *parse_attr,
+			  struct pedit_headers_action *hdrs,
+			  u32 *action_flags,
+			  struct netlink_ext_ack *extack);
 bool mlx5e_is_valid_eswitch_fwd_dev(struct mlx5e_priv *priv,
 				    struct net_device *out_dev);
 

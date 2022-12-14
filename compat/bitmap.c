@@ -29,7 +29,6 @@ EXPORT_SYMBOL(bitmap_zalloc);
 #endif
 
 #ifndef HAVE_BITMAP_FREE
-#define bitmap_free LINUX_BACKPORT(bitmap_free)
 void bitmap_free(const unsigned long *bitmap)
 {
 	kfree(bitmap);

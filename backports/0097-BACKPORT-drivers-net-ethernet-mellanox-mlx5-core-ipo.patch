@@ -175,7 +175,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	}
  
  	mlx5e_set_ttc_basic_params(priv, &ttc_params);
-@@ -522,9 +604,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -523,9 +605,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:
@@ -189,7 +189,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -660,8 +746,14 @@ static int mlx5i_xmit(struct net_device
+@@ -661,8 +747,14 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5e_txqsq *sq   = epriv->txq2sq[skb_get_queue_mapping(skb)];
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
@@ -205,7 +205,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  }
  
  static void mlx5i_set_pkey_index(struct net_device *netdev, int id)
-@@ -751,9 +843,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -752,9 +844,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -217,7 +217,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	return 0;
  
  destroy_ht:
-@@ -781,6 +874,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -782,6 +875,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

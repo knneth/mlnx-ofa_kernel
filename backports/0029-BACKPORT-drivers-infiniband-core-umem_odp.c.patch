@@ -295,7 +295,7 @@ Change-Id: I0d7ec33ae7f5197f1743af46234b8168fcb1a22d
  		up_read(&owning_mm->mmap_sem);
  
  		if (npages < 0) {
-@@ -743,9 +897,14 @@ int ib_umem_odp_map_dma_pages(struct ib_
+@@ -744,9 +898,14 @@ int ib_umem_odp_map_dma_pages(struct ib_
  			 * to hit an error was already released by
  			 * ib_umem_odp_map_dma_single_page().
  			 */
@@ -310,7 +310,7 @@ Change-Id: I0d7ec33ae7f5197f1743af46234b8168fcb1a22d
  			break;
  		}
  	}
-@@ -827,10 +986,16 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
+@@ -828,10 +987,16 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
  /* @last is not a part of the interval. See comment for function
   * node_last.
   */
@@ -327,7 +327,7 @@ Change-Id: I0d7ec33ae7f5197f1743af46234b8168fcb1a22d
  				  void *cookie)
  {
  	int ret_val = 0;
-@@ -843,8 +1008,10 @@ int rbt_ib_umem_for_each_in_range(struct
+@@ -844,8 +1009,10 @@ int rbt_ib_umem_for_each_in_range(struct
  	for (node = rbt_ib_umem_iter_first(root, start, last - 1);
  			node; node = next) {
  		/* TODO move the blockable decision up to the callback */
@@ -338,7 +338,7 @@ Change-Id: I0d7ec33ae7f5197f1743af46234b8168fcb1a22d
  		next = rbt_ib_umem_iter_next(node, start, last - 1);
  		umem = container_of(node, struct ib_umem_odp, interval_tree);
  		ret_val = cb(umem, start, last, cookie) || ret_val;
-@@ -853,8 +1020,13 @@ int rbt_ib_umem_for_each_in_range(struct
+@@ -854,8 +1021,13 @@ int rbt_ib_umem_for_each_in_range(struct
  	return ret_val;
  }
  EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);

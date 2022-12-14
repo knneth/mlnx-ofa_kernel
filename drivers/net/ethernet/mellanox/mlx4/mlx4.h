@@ -56,7 +56,7 @@
 #include "fw_qos.h"
 
 #define DRV_NAME	"mlx4_core"
-#define DRV_VERSION	"4.7-1.0.0"
+#define DRV_VERSION	"4.7-3.2.9"
 #define DRV_NAME_FOR_FW	"Linux-MLNX_OFED," DRV_VERSION
 
 #define MLX4_FS_NUM_OF_L2_ADDR		8

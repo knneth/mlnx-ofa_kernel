@@ -54,7 +54,7 @@
 #include <linux/inet.h>
 #include <linux/sched/signal.h>
 
-#define DRV_VERSION	"4.7-1.0.0"
+#define DRV_VERSION	"4.7-3.2.9"
 
 const char ipoib_driver_version[] = DRV_VERSION;
 
@@ -1254,8 +1254,20 @@ send_using_neigh:
 	}
 
 	if (skb_queue_len(&neigh->queue) < IPOIB_MAX_PATH_REC_QUEUE) {
-		push_pseudo_header(skb, phdr->hwaddr);
 		spin_lock_irqsave(&priv->lock, flags);
+		/*
+		 * to avoid race with path_rec_completion check if it already
+		 * done, if yes re-send the packet, otherwise push the skb into
+		 * the queue.
+		 * it is safe to check it here while priv->lock around.
+		 */
+		if (neigh->ah && neigh->ah->valid)
+			if (!ipoib_cm_get(neigh) ||
+			    (ipoib_cm_get(neigh) && ipoib_cm_up(neigh))) {
+				spin_unlock_irqrestore(&priv->lock, flags);
+				goto send_using_neigh;
+			}
+		push_pseudo_header(skb, phdr->hwaddr);
 		__skb_queue_tail(&neigh->queue, skb);
 		spin_unlock_irqrestore(&priv->lock, flags);
 	} else {
@@ -1833,6 +1845,7 @@ static int ipoib_dev_init_default(struct net_device *dev)
 	}
 
 	/* priv->tx_head, tx_tail & tx_outstanding are already 0 */
+	atomic_set(&priv->tx_outstanding, 0);
 
 	if (ipoib_transport_dev_init(dev, priv->ca)) {
 		pr_warn("%s: ipoib_transport_dev_init failed\n",

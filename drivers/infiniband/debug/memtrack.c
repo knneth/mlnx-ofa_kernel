@@ -794,6 +794,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"update_send_head",
 		"sdp_bcopy_get",
 		"sdp_destroy_resources",
+		"tcf_exts_init",
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);

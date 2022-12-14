@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.h
 
 Change-Id: I10a7b7f0f4f4e82220d51b78979dea888dab6c87
 ---
- drivers/infiniband/ulp/iser/iscsi_iser.h | 31 ++++++++++++++++++++++++
- 1 file changed, 31 insertions(+)
+ drivers/infiniband/ulp/iser/iscsi_iser.h | 26 ++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.h
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.h
@@ -41,24 +41,14 @@ Change-Id: I10a7b7f0f4f4e82220d51b78979dea888dab6c87
  #define iser_dbg(fmt, arg...)				 \
  	do {						 \
  		if (unlikely(iser_debug_level > 2))	 \
-@@ -207,6 +229,8 @@ struct iser_data_buf {
+@@ -207,6 +229,10 @@ struct iser_data_buf {
  	int                size;
  	unsigned long      data_len;
  	int                dma_nents;
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
 +	struct scatterlist *orig_sg;
 +	unsigned int       orig_size;
++#endif
  };
  
  /* fwd declarations */
-@@ -678,4 +702,11 @@ iser_login(struct ib_cqe *cqe)
- 	return container_of(cqe, struct iser_login_desc, cqe);
- }
- 
-+static inline int iser_use_bounce_buffer(struct ib_conn *ib_conn,
-+					 struct ib_device *ib_dev)
-+{
-+	return !(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG) ||
-+		ib_conn->pi_support;
-+}
-+
- #endif

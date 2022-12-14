@@ -1294,6 +1294,7 @@ static int mlx5_ib_mr_initiator_pfault_handler(
 		*wqe += sizeof(struct mlx5_wqe_xrc_seg);
 
 	if (qp->ibqp.qp_type == IB_QPT_UD ||
+	    qp->ibqp.qp_type == IB_EXP_QPT_DC_INI ||
 	    qp->qp_sub_type == MLX5_IB_QPT_DCI) {
 		av = *wqe;
 		if (av->dqp_dct & cpu_to_be32(MLX5_EXTENDED_UD_AV))

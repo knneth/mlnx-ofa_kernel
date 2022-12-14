@@ -30,7 +30,29 @@ max_mdevs_show(struct kobject *kobj, struct device *dev, char *buf)
 
 	return sprintf(buf, "%d\n", max_sfs);
 }
-static MDEV_TYPE_ATTR_RO(max_mdevs);
+
+static ssize_t
+max_mdevs_store(struct kobject *kobj, struct device *dev,
+		const char *buf, size_t count)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct mlx5_core_dev *coredev;
+	struct mlx5_mdev_table *table;
+	u16 new_max_sfs;
+	int ret;
+
+	coredev = pci_get_drvdata(pdev);
+
+	if (kstrtou16(buf, 10, &new_max_sfs))
+		return -EINVAL;
+
+	table = coredev->priv.eswitch->mdev_table;
+	ret = mlx5_sf_set_max_sfs(coredev, &table->sf_table, new_max_sfs);
+	if (ret)
+		return ret;
+	return count;
+}
+static MDEV_TYPE_ATTR_RW(max_mdevs);
 
 static ssize_t
 available_instances_show(struct kobject *kobj, struct device *dev, char *buf)
@@ -261,7 +283,7 @@ bool mlx5_medev_can_and_mark_cleanup(struct mlx5_core_dev *dev)
 	if (mlx5_get_free_sfs(dev, &table->sf_table) !=
 	    mlx5_core_max_sfs(dev, &table->sf_table)) {
 		up_write(&table->cleanup_rwsem);
-		return -EBUSY;
+		return false;
 	}
 	table->cleanup_started = true;
 	up_write(&table->cleanup_rwsem);

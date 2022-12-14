@@ -116,8 +116,15 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 		}
 	}
 
-	if (rep->vport == MLX5_VPORT_UPLINK)
+	if (rep->vport == MLX5_VPORT_UPLINK) {
+		struct mlx5_core_dev *peer_mdev;
+
+		if (mlx5_lag_is_shared_fdb(mdev)) {
+			peer_mdev = mlx5_lag_get_peer_mdev(mdev);
+			mlx5_ib_unregister_vport_reps(peer_mdev);
+		}
 		__mlx5_ib_remove(dev, dev->profile, MLX5_IB_STAGE_MAX);
+	}
 }
 
 static void *mlx5_ib_vport_get_proto_dev(struct mlx5_eswitch_rep *rep)
@@ -202,6 +209,11 @@ u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 						 u16 vport)
 {
 	return mlx5_eswitch_get_vport_metadata_for_match(esw, vport);
+}
+
+u32 mlx5_ib_eswitch_get_vport_metadata_mask(void)
+{
+	return mlx5_eswitch_get_vport_metadata_mask();
 }
 
 struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,

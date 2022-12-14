@@ -130,6 +130,23 @@ err_request_irq:
 	return  err;
 }
 
+void mlx5_irq_rename(struct mlx5_core_dev *dev, int vecidx,
+		     const char *name)
+{
+	char *dst_name = mlx5_irq_get(dev, vecidx)->name;
+
+	if (!name) {
+		char default_name[MLX5_MAX_IRQ_NAME];
+
+		irq_set_name(default_name, vecidx);
+		snprintf(dst_name, MLX5_MAX_IRQ_NAME,
+			 "%s@pci:%s", default_name, pci_name(dev->pdev));
+	} else {
+		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
+			 vecidx - MLX5_IRQ_VEC_COMP_BASE);
+	}
+}
+
 static void irq_clear_rmap(struct mlx5_core_dev *dev)
 {
 #ifdef CONFIG_RFS_ACCEL
@@ -271,15 +288,17 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 	int num_eqs = MLX5_CAP_GEN(dev, max_num_eqs) ?
 		      MLX5_CAP_GEN(dev, max_num_eqs) :
 		      1 << MLX5_CAP_GEN(dev, log_max_eq);
+	int max_comp_eqs;
 	int nvec;
 	int err;
 
 	if (mlx5_core_is_sf(dev))
 		return 0;
 
+	max_comp_eqs = num_eqs - MLX5_MAX_ASYNC_EQS;
 	nvec = MLX5_CAP_GEN(dev, num_ports) * num_online_cpus() +
 	       MLX5_IRQ_VEC_COMP_BASE;
-	nvec = min_t(int, nvec, num_eqs);
+	nvec = min_t(int, nvec, max_comp_eqs + MLX5_IRQ_VEC_COMP_BASE);
 	if (nvec <= MLX5_IRQ_VEC_COMP_BASE)
 		return -ENOMEM;
 

@@ -48,7 +48,7 @@ Change-Id: Icd3be368ca07f8ca24932d061b9ce8f094a82b1c
  
  repost:
  	if (unlikely(ipoib_ib_post_receive(dev, wr_id)))
-@@ -519,6 +531,10 @@ poll_more:
+@@ -520,6 +532,10 @@ poll_more:
  	}
  
  	if (done < budget) {

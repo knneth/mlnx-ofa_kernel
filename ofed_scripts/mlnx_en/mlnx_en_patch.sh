@@ -53,7 +53,46 @@ Usage: `basename $0` [--help]: Prints this message
 		[-j[N]|--with-njobs=[N]] : Allow N configure jobs at once; jobs as number of CPUs with no arg.
 EOF
 }
-			 
+
+check_kerver_list()
+{
+	local kver=$1
+	shift
+	local kverlist=$@
+
+	for i in $kverlist; do
+		if echo $kver | grep -q "\b$i" ; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+# Compare 2 kernel versions
+check_kerver()
+{
+        local kver=$1
+        local min_kver=$2
+        shift 2
+
+        kver_a=$(echo -n ${kver} | cut -d '.' -f 1)
+        kver_b=$(echo -n ${kver} | cut -d '.' -f 2)
+        kver_c=$(echo -n ${kver} | cut -d '.' -f 3 | cut -d '-' -f 1 | tr -d [:alpha:][:punct:])
+
+        min_kver_a=$(echo -n ${min_kver} | cut -d '.' -f 1)
+        min_kver_b=$(echo -n ${min_kver} | cut -d '.' -f 2)
+        min_kver_c=$(echo -n ${min_kver} | cut -d '.' -f 3 | cut -d '-' -f 1 | tr -d [:alpha:][:punct:])
+
+        if [ ${kver_a} -lt ${min_kver_a} ] ||
+                [[ ${kver_a} -eq ${min_kver_a} && ${kver_b} -lt ${min_kver_b} ]] ||
+                [[ ${kver_a} -eq ${min_kver_a} && ${kver_b} -eq ${min_kver_b} && ${kver_c} -lt ${min_kver_c} ]]; then
+                return 1
+        fi
+
+        return 0
+}
+
 parseparams() {
 
 	while [ ! -z "$1" ]
@@ -157,13 +196,7 @@ CONFIG_MLX5_CORE_EN="y"
 CONFIG_MLX5_CORE_EN_DCB="y"
 CONFIG_MLX5_EN_ARFS="y"
 CONFIG_MLX5_EN_RXNFC="y"
-CONFIG_MLX5_ESWITCH=""
-if ! check_kerver ${KVERSION} ${SWITCH_SUPPORTED_KVERSION}; then
-    if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
-                        CONFIG_MLX5_ESWITCH=
-        echo "Error: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-    fi
-fi
+CONFIG_MLX5_ESWITCH="y"
 CONFIG_MLX5_MPFS="y"
 CONFIG_MLXFW="m"
 CONFIG_MLNX_BLOCK_REQUEST_MODULE=''
@@ -270,6 +303,13 @@ case "$ARCH" in i386 | x86_64)
 	fi
 	;;
 esac
+
+if ! check_kerver ${KVERSION} ${SWITCH_SUPPORTED_KVERSION}; then
+    if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
+                        CONFIG_MLX5_ESWITCH=
+        echo "Warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION}). Disabling."
+    fi
+fi
 
 check_autofconf CONFIG_RFS_ACCEL
 if [ "X${CONFIG_MLX5_EN_ARFS=}" == "Xy" ]; then

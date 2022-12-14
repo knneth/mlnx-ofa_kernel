@@ -399,7 +399,7 @@ static int mlx5e_grp_rep_vport_fill_stats(struct mlx5e_priv *priv, u64 *data,
 	int i;
 
 	for (i = 0; i < NUM_VPORT_REP_HW_COUNTERS; i++)
-		data[idx++] = MLX5E_READ_CTR64_BE(priv->stats.vport.query_vport_out,
+		data[idx++] = MLX5E_READ_CTR64_CPU(&priv->stats.vf_vport,
 						  vport_rep_stats_desc, i);
 	return idx;
 }
@@ -427,30 +427,9 @@ static void mlx5e_vf_rep_update_hw_counters(struct mlx5e_priv *priv)
 	vport_stats->tx_bytes   = vf_stats.rx_bytes;
 }
 
-static void mlx5e_uplink_rep_update_hw_counters(struct mlx5e_priv *priv)
-{
-	struct mlx5e_pport_stats *pstats = &priv->stats.pport;
-	struct rtnl_link_stats64 *vport_stats;
-
-	mlx5e_grp_802_3_update_stats(priv);
-
-	vport_stats = &priv->stats.vf_vport;
-
-	vport_stats->rx_packets = PPORT_802_3_GET(pstats, a_frames_received_ok);
-	vport_stats->rx_bytes   = PPORT_802_3_GET(pstats, a_octets_received_ok);
-	vport_stats->tx_packets = PPORT_802_3_GET(pstats, a_frames_transmitted_ok);
-	vport_stats->tx_bytes   = PPORT_802_3_GET(pstats, a_octets_transmitted_ok);
-}
-
 static void mlx5e_grp_rep_vport_update_stats(struct mlx5e_priv *priv)
 {
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-	struct mlx5_eswitch_rep *rep = rpriv->rep;
-
-	if (rep->vport == MLX5_VPORT_UPLINK)
-		mlx5e_uplink_rep_update_hw_counters(priv);
-	else
-		mlx5e_vf_rep_update_hw_counters(priv);
+	mlx5e_vf_rep_update_hw_counters(priv);
 }
 
 static const struct counter_desc sw_rep_stats_desc[] = {

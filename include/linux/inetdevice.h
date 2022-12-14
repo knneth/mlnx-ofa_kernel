@@ -8,10 +8,16 @@
 static inline __be32 confirm_addr_indev(struct in_device *in_dev, __be32 dst,
                                         __be32 local, int scope)
 {
+#ifndef HAVE_FOR_IFA
+	const struct in_ifaddr *ifa;
+#endif
         int same = 0;
         __be32 addr = 0;
-
-        for_ifa(in_dev) {
+#ifndef HAVE_FOR_IFA
+	in_dev_for_each_ifa_rcu(ifa, in_dev) {
+#else
+	for_ifa(in_dev) {
+#endif
                 if (!addr &&
                     (local == ifa->ifa_local || !local) &&
                     ifa->ifa_scope <= scope) {
@@ -37,7 +43,10 @@ static inline __be32 confirm_addr_indev(struct in_device *in_dev, __be32 dst,
                                 same = 0;
                         }
                 }
-        } endfor_ifa(in_dev);
+        }
+#ifdef HAVE_FOR_IFA
+	endfor_ifa(in_dev);
+#endif
 
         return same ? addr : 0;
 }

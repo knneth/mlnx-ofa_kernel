@@ -171,8 +171,9 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 	}
 
 	MLX5_SET(set_flow_table_root_in, in, underlay_qpn, underlay_qpn);
-	if (ft->type == FS_FT_ESW_EGRESS_ACL ||
-	    ft->type == FS_FT_ESW_INGRESS_ACL || ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		/* FIXME: Honor HCA_CAP.esw_fdb flow_table_root_per_port
 		 * for FDB table type.
 		 */
@@ -455,8 +456,9 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 	MLX5_SET(set_fte_in, in, table_type, ft->type);
 	MLX5_SET(set_fte_in, in, table_id,   ft->id);
 	MLX5_SET(set_fte_in, in, flow_index, fte->index);
-	if (ft->type == FS_FT_ESW_EGRESS_ACL ||
-	    ft->type == FS_FT_ESW_INGRESS_ACL || ft->vport) {
+	if (!mlx5_esw_is_manager_vport(dev, ft->vport) &&
+	    (ft->type == FS_FT_ESW_EGRESS_ACL ||
+	     ft->type == FS_FT_ESW_INGRESS_ACL)) {
 		MLX5_SET(set_fte_in, in, vport_number, ft->vport);
 		MLX5_SET(set_fte_in, in, other_vport, 1);
 	}

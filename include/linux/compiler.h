@@ -32,10 +32,6 @@ static __always_inline void __read_once_size(const volatile void *p, void *res, 
 #define __aligned(x)		__attribute__((aligned(x)))
 #endif
 
-#ifndef BIT_ULL
-#define BIT_ULL(nr)		(1ULL << (nr))
-#endif
-
 #ifndef READ_ONCE
 #define READ_ONCE(val)		ACCESS_ONCE(val)
 #elif !defined (HAVE_CONST_READ_ONCE_SIZE)

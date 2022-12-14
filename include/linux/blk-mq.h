@@ -5,6 +5,9 @@
 #include <linux/version.h>
 
 #include_next <linux/blk-mq.h>
+#ifndef HAVE_BLK_MQ_TAGSET_WAIT_COMPLETED_REQUEST
+#include <linux/delay.h>
+#endif
 
 #ifndef HAVE_BLK_MQ_MAP_QUEUES
 int blk_mq_map_queues(struct blk_mq_tag_set *set);
@@ -94,6 +97,53 @@ static inline bool blk_path_error(blk_status_t error)
 
 	/* Anything else could be a path failure, so should be retried */
 	return true;
+}
+#endif
+
+#if !defined(HAVE_BLK_MQ_REQUEST_COMPLETED) && \
+	defined(HAVE_MQ_RQ_STATE)
+static inline enum mq_rq_state blk_mq_rq_state(struct request *rq)
+{
+	return READ_ONCE(rq->state);
+}
+
+static inline int blk_mq_request_completed(struct request *rq)
+{
+	return blk_mq_rq_state(rq) == MQ_RQ_COMPLETE;
+}
+#endif
+
+#if !defined(HAVE_BLK_MQ_TAGSET_WAIT_COMPLETED_REQUEST) && \
+	defined(HAVE_MQ_RQ_STATE)
+#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
+static inline bool blk_mq_tagset_count_completed_rqs(struct request *rq,
+                        void *data, bool reserved)
+#else
+static inline void blk_mq_tagset_count_completed_rqs(struct request *rq,
+                        void *data, bool reserved)
+#endif
+{
+   unsigned *count = data;
+
+   if (blk_mq_request_completed(rq))
+       (*count)++;
+#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
+   return true;
+#endif
+}
+
+static inline void
+blk_mq_tagset_wait_completed_request(struct blk_mq_tag_set *tagset)
+{
+   while (true) {
+       unsigned count = 0;
+
+       blk_mq_tagset_busy_iter(tagset,
+               blk_mq_tagset_count_completed_rqs, &count);
+       if (!count)
+           break;
+       msleep(5);
+   }
 }
 #endif
 

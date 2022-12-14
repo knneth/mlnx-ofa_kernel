@@ -770,7 +770,7 @@ void ipoib_cm_send(struct net_device *dev, struct sk_buff *skb, struct ipoib_cm_
 		priv->tx_wr.wr.send_flags &= ~IB_SEND_INLINE;
 	}
 
-	if ((priv->tx_head - priv->tx_tail) == priv->sendq_size - 1) {
+	if (atomic_read(&priv->tx_outstanding) == priv->sendq_size - 1) {
 		ipoib_dbg(priv, "TX ring 0x%x full, stopping kernel net queue\n",
 			  tx->qp->qp_num);
 		netif_stop_queue(dev);
@@ -801,7 +801,7 @@ void ipoib_cm_send(struct net_device *dev, struct sk_buff *skb, struct ipoib_cm_
 	} else {
 		netif_trans_update(dev);
 		++tx->tx_head;
-		++priv->tx_head;
+		atomic_inc(&priv->tx_outstanding);
 	}
 }
 
@@ -838,12 +838,12 @@ void ipoib_cm_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	netif_tx_lock(dev);
 
 	++tx->tx_tail;
-	++priv->tx_tail;
+	atomic_dec(&priv->tx_outstanding);
 
 	if (unlikely(netif_queue_stopped(dev) &&
-		     (priv->tx_head - priv->tx_tail) <= priv->sendq_size >> 1 &&
-		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
-		netif_wake_queue(dev);
+	    (atomic_read(&priv->tx_outstanding) <= priv->sendq_size >> 1) &&
+	    test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
+			netif_wake_queue(dev);
 
 	if (wc->status != IB_WC_SUCCESS &&
 	    wc->status != IB_WC_WR_FLUSH_ERR) {
@@ -1287,10 +1287,10 @@ timeout:
 		tx_req->skb = NULL;
 		netif_tx_lock_bh(p->dev);
 		++p->tx_tail;
-		++priv->tx_tail;
-		if (unlikely(priv->tx_head - priv->tx_tail == priv->sendq_size >> 1) &&
-		    netif_queue_stopped(p->dev) &&
-		    test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
+		atomic_dec(&priv->tx_outstanding);
+		if (unlikely(atomic_read(&priv->tx_outstanding) <= priv->sendq_size >> 1) &&
+			     netif_queue_stopped(p->dev) &&
+	  		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
 			netif_wake_queue(p->dev);
 		netif_tx_unlock_bh(p->dev);
 	}

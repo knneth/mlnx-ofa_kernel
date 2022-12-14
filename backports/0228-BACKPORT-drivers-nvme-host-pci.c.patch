@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pci.c
 
 Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 ---
- drivers/nvme/host/pci.c | 504 +++++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 501 insertions(+), 3 deletions(-)
+ drivers/nvme/host/pci.c | 506 +++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 503 insertions(+), 3 deletions(-)
 
 --- a/drivers/nvme/host/pci.c
 +++ b/drivers/nvme/host/pci.c
@@ -1029,7 +1029,18 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	if (pci_is_enabled(pdev)) {
  		pci_disable_pcie_error_reporting(pdev);
-@@ -2586,7 +3000,11 @@ static void nvme_dev_disable(struct nvme
+@@ -2577,8 +2991,10 @@ static void nvme_dev_disable(struct nvme
+ 
+ 	blk_mq_tagset_busy_iter(&dev->tagset, nvme_cancel_request, &dev->ctrl);
+ 	blk_mq_tagset_busy_iter(&dev->admin_tagset, nvme_cancel_request, &dev->ctrl);
++#ifdef HAVE_MQ_RQ_STATE
+ 	blk_mq_tagset_wait_completed_request(&dev->tagset);
+ 	blk_mq_tagset_wait_completed_request(&dev->admin_tagset);
++#endif
+ 
+ 	/*
+ 	 * The driver will not be starting up queues again if shutting down so
+@@ -2588,7 +3004,11 @@ static void nvme_dev_disable(struct nvme
  	if (shutdown) {
  		nvme_start_queues(&dev->ctrl);
  		if (dev->ctrl.admin_q && !blk_queue_dying(dev->ctrl.admin_q))
@@ -1041,7 +1052,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	}
  	mutex_unlock(&dev->shutdown_lock);
  }
-@@ -2625,7 +3043,12 @@ static void nvme_pci_free_ctrl(struct nv
+@@ -2627,7 +3047,12 @@ static void nvme_pci_free_ctrl(struct nv
  	if (dev->ctrl.admin_q)
  		blk_put_queue(dev->ctrl.admin_q);
  	kfree(dev->queues);
@@ -1054,7 +1065,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	mempool_destroy(dev->iod_mempool);
  	kfree(dev);
  }
-@@ -2645,7 +3068,9 @@ static void nvme_reset_work(struct work_
+@@ -2647,7 +3072,9 @@ static void nvme_reset_work(struct work_
  {
  	struct nvme_dev *dev =
  		container_of(work, struct nvme_dev, ctrl.reset_work);
@@ -1064,7 +1075,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	int result = -ENODEV;
  	enum nvme_ctrl_state new_state = NVME_CTRL_LIVE;
  
-@@ -2702,6 +3127,7 @@ static void nvme_reset_work(struct work_
+@@ -2704,6 +3131,7 @@ static void nvme_reset_work(struct work_
  	if (result)
  		goto out;
  
@@ -1072,7 +1083,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	if (dev->ctrl.oacs & NVME_CTRL_OACS_SEC_SUPP) {
  		if (!dev->ctrl.opal_dev)
  			dev->ctrl.opal_dev =
-@@ -2712,6 +3138,7 @@ static void nvme_reset_work(struct work_
+@@ -2714,6 +3142,7 @@ static void nvme_reset_work(struct work_
  		free_opal_dev(dev->ctrl.opal_dev);
  		dev->ctrl.opal_dev = NULL;
  	}
@@ -1080,7 +1091,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	if (dev->ctrl.oacs & NVME_CTRL_OACS_DBBUF_SUPP) {
  		result = nvme_dbbuf_dma_alloc(dev);
-@@ -2908,6 +3335,13 @@ static int nvme_probe(struct pci_dev *pd
+@@ -2910,6 +3339,13 @@ static int nvme_probe(struct pci_dev *pd
  	if (!dev)
  		return -ENOMEM;
  
@@ -1094,7 +1105,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	dev->queues = kcalloc_node(max_queue_count() + num_p2p_queues, sizeof(struct nvme_queue),
  					GFP_KERNEL, node);
  	if (!dev->queues)
-@@ -2982,10 +3416,24 @@ static int nvme_probe(struct pci_dev *pd
+@@ -2984,10 +3420,24 @@ static int nvme_probe(struct pci_dev *pd
  	put_device(dev->dev);
   free:
  	kfree(dev->queues);
@@ -1119,7 +1130,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static void nvme_reset_prepare(struct pci_dev *pdev)
  {
  	struct nvme_dev *dev = pci_get_drvdata(pdev);
-@@ -2997,6 +3445,7 @@ static void nvme_reset_done(struct pci_d
+@@ -2999,6 +3449,7 @@ static void nvme_reset_done(struct pci_d
  	struct nvme_dev *dev = pci_get_drvdata(pdev);
  	nvme_reset_ctrl_sync(&dev->ctrl);
  }
@@ -1127,7 +1138,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  static void nvme_shutdown(struct pci_dev *pdev)
  {
-@@ -3105,11 +3554,20 @@ static const struct pci_error_handlers n
+@@ -3107,11 +3558,20 @@ static const struct pci_error_handlers n
  	.error_detected	= nvme_error_detected,
  	.slot_reset	= nvme_slot_reset,
  	.resume		= nvme_error_resume,
@@ -1150,7 +1161,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_VDEVICE(INTEL, 0x0953),
  		.driver_data = NVME_QUIRK_STRIPE_SIZE |
  				NVME_QUIRK_DEALLOCATE_ZEROES, },
-@@ -3122,6 +3580,17 @@ static const struct pci_device_id nvme_i
+@@ -3124,6 +3584,17 @@ static const struct pci_device_id nvme_i
  	{ PCI_VDEVICE(INTEL, 0x0a55),
  		.driver_data = NVME_QUIRK_STRIPE_SIZE |
  				NVME_QUIRK_DEALLOCATE_ZEROES, },
@@ -1168,7 +1179,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_VDEVICE(INTEL, 0xf1a5),	/* Intel 600P/P3100 */
  		.driver_data = NVME_QUIRK_NO_DEEPEST_PS |
  				NVME_QUIRK_MEDIUM_PRIO_SQ },
-@@ -3155,6 +3624,26 @@ static const struct pci_device_id nvme_i
+@@ -3157,6 +3628,26 @@ static const struct pci_device_id nvme_i
  };
  MODULE_DEVICE_TABLE(pci, nvme_id_table);
  
@@ -1195,7 +1206,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static struct pci_driver nvme_driver = {
  	.name		= "nvme",
  	.id_table	= nvme_id_table,
-@@ -3164,7 +3653,11 @@ static struct pci_driver nvme_driver = {
+@@ -3166,7 +3657,11 @@ static struct pci_driver nvme_driver = {
  	.driver		= {
  		.pm	= &nvme_dev_pm_ops,
  	},
@@ -1207,7 +1218,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	.err_handler	= &nvme_err_handler,
  };
  
-@@ -3173,7 +3666,9 @@ static int __init nvme_init(void)
+@@ -3175,7 +3670,9 @@ static int __init nvme_init(void)
  	BUILD_BUG_ON(sizeof(struct nvme_create_cq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_create_sq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_delete_queue) != 64);
@@ -1217,7 +1228,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	return pci_register_driver(&nvme_driver);
  }
  
-@@ -3185,6 +3680,9 @@ static void __exit nvme_exit(void)
+@@ -3187,6 +3684,9 @@ static void __exit nvme_exit(void)
  
  MODULE_AUTHOR("Matthew Wilcox <willy@linux.intel.com>");
  MODULE_LICENSE("GPL");

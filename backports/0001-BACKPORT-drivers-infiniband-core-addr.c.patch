@@ -12,7 +12,7 @@ Change-Id: I9d3d108e2ae2c20836813443fa7c10924b357c17
  #include <net/neighbour.h>
  #include <net/route.h>
  #include <net/netevent.h>
-+#ifdef HAVE_IPV6_STUBS
++#ifdef HAVE_IPV6_STUBS_H
  #include <net/ipv6_stubs.h>
 +#endif
  #include <net/ip6_route.h>
@@ -260,7 +260,7 @@ Change-Id: I9d3d108e2ae2c20836813443fa7c10924b357c17
  	struct dst_entry *dst;
  	int ret;
 -
-+#ifdef HAVE_IPV6_MOD_ENABLED	
++#ifdef HAVE_IPV6_MOD_ENABLED
  	if (!ipv6_mod_enabled())
  		return -EADDRNOTAVAIL;
 +#endif

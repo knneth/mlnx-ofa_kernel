@@ -2,39 +2,11 @@
 #include <linux/scatterlist.h>
 #include <linux/highmem.h>
 
-
 #define sg_mapping_iter LINUX_BACKPORT(sg_mapping_iter)
-#define sg_page_iter LINUX_BACKPORT(sg_page_iter)
-#define __sg_page_iter_next LINUX_BACKPORT(__sg_page_iter_next)
-#define __sg_page_iter_start LINUX_BACKPORT(__sg_page_iter_start)
-#define sg_page_iter_page LINUX_BACKPORT(sg_page_iter_page)
-#define sg_page_iter_dma_address LINUX_BACKPORT(sg_page_iter_dma_address)
-
 #define sg_miter_start LINUX_BACKPORT(sg_miter_start)
 #define sg_miter_skip LINUX_BACKPORT(sg_miter_skip)
 #define sg_miter_next LINUX_BACKPORT(sg_miter_next)
 #define sg_miter_stop LINUX_BACKPORT(sg_miter_stop)
-
-/*
- * sg page iterator
- *
- * Iterates over sg entries page-by-page.  On each successful iteration,
- * you can call sg_page_iter_page(@piter) and sg_page_iter_dma_address(@piter)
- * to get the current page and its dma address. @piter->sg will point to the
- * sg holding this page and @piter->sg_pgoffset to the page's page offset
- * within the sg. The iteration will stop either when a maximum number of sg
- * entries was reached or a terminating sg (sg_last(sg) == true) was reached.
- */
-struct sg_page_iter {
-	struct scatterlist	*sg;		/* sg holding the page */
-	unsigned int		sg_pgoffset;	/* page offset within the sg */
-
-	/* these are internal states, keep away */
-	unsigned int		__nents;	/* remaining sg entries */
-	int			__pg_advance;	/* nr pages to advance at the
-						 * next step */
-};
-
 
 /*
  * Mapping sg iterator
@@ -72,26 +44,7 @@ struct sg_mapping_iter {
 
 void sg_miter_stop(struct sg_mapping_iter *miter);
 
-
-/**
- * sg_page_iter_page - get the current page held by the page iterator
- * @piter:	page iterator holding the page
- */
-static inline struct page *sg_page_iter_page(struct sg_page_iter *piter)
-{
-	return nth_page(sg_page(piter->sg), piter->sg_pgoffset);
-}
-
-/**
- * sg_page_iter_dma_address - get the dma address of the current page held by
- * the page iterator.
- * @piter:	page iterator holding the page
- */
-static inline dma_addr_t sg_page_iter_dma_address(struct sg_page_iter *piter)
-{
-	return sg_dma_address(piter->sg) + (piter->sg_pgoffset << PAGE_SHIFT);
-}
-
+#ifndef HAVE_SG_PAGE_ITER
 void __sg_page_iter_start(struct sg_page_iter *piter,
 			  struct scatterlist *sglist, unsigned int nents,
 			  unsigned long pgoffset)
@@ -102,7 +55,7 @@ void __sg_page_iter_start(struct sg_page_iter *piter,
 	piter->sg = sglist;
 	piter->sg_pgoffset = pgoffset;
 }
-/* EXPORT_SYMBOL(__sg_page_iter_start); */
+EXPORT_SYMBOL(__sg_page_iter_start);
 
 static int sg_page_count(struct scatterlist *sg)
 {
@@ -126,8 +79,8 @@ bool __sg_page_iter_next(struct sg_page_iter *piter)
 
 	return true;
 }
-/* EXPORT_SYMBOL(__sg_page_iter_next); */
-
+EXPORT_SYMBOL(__sg_page_iter_next);
+#endif
 /**
  * sg_miter_start - start mapping iteration over a sg list
  * @miter: sg mapping iter to be started

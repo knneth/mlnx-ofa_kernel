@@ -144,4 +144,57 @@ static inline int sg_alloc_table_chained(struct sg_table *table, int nents,
 #endif
 #endif /* defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 2 */
 
+#ifndef HAVE_SG_PAGE_ITER
+#define sg_page_iter LINUX_BACKPORT(sg_page_iter)
+
+/*
+ * sg page iterator
+ *
+ * Iterates over sg entries page-by-page.  On each successful iteration,
+ * you can call sg_page_iter_page(@piter) and sg_page_iter_dma_address(@piter)
+ * to get the current page and its dma address. @piter->sg will point to the
+ * sg holding this page and @piter->sg_pgoffset to the page's page offset
+ * within the sg. The iteration will stop either when a maximum number of sg
+ * entries was reached or a terminating sg (sg_last(sg) == true) was reached.
+ */
+struct sg_page_iter {
+	struct scatterlist	*sg;		/* sg holding the page */
+	unsigned int		sg_pgoffset;	/* page offset within the sg */
+
+	/* these are internal states, keep away */
+	unsigned int		__nents;	/* remaining sg entries */
+	int			__pg_advance;	/* nr pages to advance at */
+						/* the next step */
+};
+
+
+#define __sg_page_iter_next LINUX_BACKPORT(__sg_page_iter_next)
+#define __sg_page_iter_start LINUX_BACKPORT(__sg_page_iter_start)
+#define sg_page_iter_page LINUX_BACKPORT(sg_page_iter_page)
+
+bool __sg_page_iter_next(struct sg_page_iter *piter);
+void __sg_page_iter_start(struct sg_page_iter *piter,
+			  struct scatterlist *sglist, unsigned int nents,
+			  unsigned long pgoffset);
+
+static inline struct page *sg_page_iter_page(struct sg_page_iter *piter)
+{
+	return nth_page(sg_page(piter->sg), piter->sg_pgoffset);
+}
+
+/**
+ * for_each_sg_page - iterate over the pages of the given sg list
+ * @sglist:	sglist to iterate over
+ * @piter:	page iterator to hold current page, sg, sg_pgoffset
+ * @nents:	maximum number of sg entries to iterate over
+ * @pgoffset:	starting page offset
+ *
+ * Callers may use sg_page_iter_page() to get each page pointer.
+ */
+#define for_each_sg_page(sglist, piter, nents, pgoffset)		   \
+	for (__sg_page_iter_start((piter), (sglist), (nents), (pgoffset)); \
+	     __sg_page_iter_next(piter);)
+
+
+#endif
 #endif /* _COMPAT_LINUX_SCATTERLIST_H */

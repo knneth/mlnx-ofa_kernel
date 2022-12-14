@@ -54,7 +54,27 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  }
  
  static int nvme_tcp_alloc_io_queues(struct nvme_ctrl *ctrl)
-@@ -2132,6 +2141,7 @@ static blk_status_t nvme_tcp_queue_rq(st
+@@ -1756,7 +1765,9 @@ static void nvme_tcp_teardown_admin_queu
+ 	if (ctrl->admin_tagset) {
+ 		blk_mq_tagset_busy_iter(ctrl->admin_tagset,
+ 			nvme_cancel_request, ctrl);
++#ifdef HAVE_MQ_RQ_STATE
+ 		blk_mq_tagset_wait_completed_request(ctrl->admin_tagset);
++#endif
+ 	}
+ 	blk_mq_unquiesce_queue(ctrl->admin_q);
+ 	nvme_tcp_destroy_admin_queue(ctrl, remove);
+@@ -1772,7 +1783,9 @@ static void nvme_tcp_teardown_io_queues(
+ 	if (ctrl->tagset) {
+ 		blk_mq_tagset_busy_iter(ctrl->tagset,
+ 			nvme_cancel_request, ctrl);
++#ifdef HAVE_MQ_RQ_STATE
+ 		blk_mq_tagset_wait_completed_request(ctrl->tagset);
++#endif
+ 	}
+ 	if (remove)
+ 		nvme_start_queues(ctrl);
+@@ -2136,6 +2149,7 @@ static blk_status_t nvme_tcp_queue_rq(st
  
  static int nvme_tcp_map_queues(struct blk_mq_tag_set *set)
  {
@@ -62,7 +82,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	struct nvme_tcp_ctrl *ctrl = set->driver_data;
  	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
  
-@@ -2160,6 +2170,9 @@ static int nvme_tcp_map_queues(struct bl
+@@ -2164,6 +2178,9 @@ static int nvme_tcp_map_queues(struct bl
  		"mapped %d/%d default/read queues.\n",
  		ctrl->io_queues[HCTX_TYPE_DEFAULT],
  		ctrl->io_queues[HCTX_TYPE_READ]);

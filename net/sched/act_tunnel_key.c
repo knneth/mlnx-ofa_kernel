@@ -33,12 +33,7 @@ static struct tcf_hashinfo tunnel_key_hash_info = {
 struct tcf_tunnel_key {
 	struct tcf_common	common;
 	int tcft_action;
-	__be32 ipv4_src;
-	__be32 ipv4_dst;
-	__be16 dstport;
-	u32 id;
-	u8 tos;
-	u8 ttl;
+	struct ip_tunnel_info	ti;
 };
 
 static int tcf_tunnel_key_release(struct tcf_tunnel_key *t, int bind)
@@ -109,17 +104,18 @@ static int tcf_tunnel_key_init(struct net *net, struct nlattr *nla,
 	t->tcf_action = parm->action;
 	t->tcft_action = parm->t_action;
 	if (tb[TCA_TUNNEL_KEY_ENC_IPV4_SRC])
-		t->ipv4_src = nla_get_be32(tb[TCA_TUNNEL_KEY_ENC_IPV4_SRC]);
+		t->ti.key.u.ipv4.src = nla_get_be32(tb[TCA_TUNNEL_KEY_ENC_IPV4_SRC]);
 	if (tb[TCA_TUNNEL_KEY_ENC_IPV4_DST])
-		t->ipv4_dst = nla_get_be32(tb[TCA_TUNNEL_KEY_ENC_IPV4_DST]);
+		t->ti.key.u.ipv4.dst = nla_get_be32(tb[TCA_TUNNEL_KEY_ENC_IPV4_DST]);
 	if (tb[TCA_TUNNEL_KEY_ENC_DST_PORT])
-		t->dstport = nla_get_u16(tb[TCA_TUNNEL_KEY_ENC_DST_PORT]);
+		t->ti.key.tp_dst = nla_get_u16(tb[TCA_TUNNEL_KEY_ENC_DST_PORT]);
 	if (tb[TCA_TUNNEL_KEY_ENC_KEY_ID])
-		t->id = nla_get_u32(tb[TCA_TUNNEL_KEY_ENC_KEY_ID]);
+		t->ti.key.tun_id =
+			key32_to_tunnel_id(nla_get_u32(tb[TCA_TUNNEL_KEY_ENC_KEY_ID]));
 	if (tb[TCA_TUNNEL_KEY_ENC_TOS])
-		t->tos = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TOS]);
+		t->ti.key.tos = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TOS]);
 	if (tb[TCA_TUNNEL_KEY_ENC_TTL])
-		t->ttl = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TTL]);
+		t->ti.key.ttl = nla_get_u8(tb[TCA_TUNNEL_KEY_ENC_TTL]);
 	spin_unlock_bh(&t->tcf_lock);
 
 	if (ret == ACT_P_CREATED) {
@@ -172,21 +168,22 @@ static int tcf_tunnel_key_dump(struct sk_buff *skb, struct tc_action *a, int bin
 	tcft.expires = jiffies_to_clock_t(t->tcf_tm.expires);
 	if (nla_put(skb, TCA_TUNNEL_KEY_TM, sizeof(tcft), &tcft))
 		goto nla_put_failure;
-	if (t->ipv4_src &&
-	    nla_put_be32(skb, TCA_TUNNEL_KEY_ENC_IPV4_SRC, t->ipv4_src))
+	if (t->ti.key.u.ipv4.src &&
+	    nla_put_be32(skb, TCA_TUNNEL_KEY_ENC_IPV4_SRC, t->ti.key.u.ipv4.src))
 		goto nla_put_failure;
-	if (t->ipv4_dst &&
-	    nla_put_be32(skb, TCA_TUNNEL_KEY_ENC_IPV4_DST, t->ipv4_dst))
+	if (t->ti.key.u.ipv4.dst &&
+	    nla_put_be32(skb, TCA_TUNNEL_KEY_ENC_IPV4_DST, t->ti.key.u.ipv4.dst))
 		goto nla_put_failure;
-	if (t->dstport &&
-	    nla_put_u16(skb, TCA_TUNNEL_KEY_ENC_DST_PORT, t->dstport))
+	if (t->ti.key.tp_dst &&
+	    nla_put_u16(skb, TCA_TUNNEL_KEY_ENC_DST_PORT, t->ti.key.tp_dst))
 		goto nla_put_failure;
-	if (t->id &&
-	    nla_put_u32(skb, TCA_TUNNEL_KEY_ENC_KEY_ID, t->id))
+	if (t->ti.key.tun_id &&
+	    nla_put_u32(skb, TCA_TUNNEL_KEY_ENC_KEY_ID,
+			tunnel_id_to_key32(t->ti.key.tun_id)))
 		goto nla_put_failure;
-	if (t->tos && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TOS, t->tos))
+	if (t->ti.key.tos && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TOS, t->ti.key.tos))
 		goto nla_put_failure;
-	if (t->ttl && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TTL, t->ttl))
+	if (t->ti.key.ttl && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TTL, t->ti.key.ttl))
 		goto nla_put_failure;
 	return skb->len;
 
@@ -296,7 +293,7 @@ static const struct nla_policy tunnel_key_policy[TCA_TUNNEL_KEY_MAX + 1] = {
 	[TCA_TUNNEL_KEY_ENC_IPV6_SRC] = { .len = sizeof(struct in6_addr) },
 	[TCA_TUNNEL_KEY_ENC_IPV6_DST] = { .len = sizeof(struct in6_addr) },
 	[TCA_TUNNEL_KEY_ENC_KEY_ID]   = { .type = NLA_U32 },
-#ifdef TCA_TUNNEL_KEY_ENC_DST_PORT
+#ifdef HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT
 	[TCA_TUNNEL_KEY_ENC_DST_PORT] = {.type = NLA_U16},
 #endif
 #ifdef HAVE_TCA_TUNNEL_KEY_ENC_TOS
@@ -348,7 +345,7 @@ static int tunnel_key_init(struct net *net, struct nlattr *nla,
 		}
 
 		key_id = key32_to_tunnel_id(nla_get_be32(tb[TCA_TUNNEL_KEY_ENC_KEY_ID]));
-#ifdef TCA_TUNNEL_KEY_ENC_DST_PORT
+#ifdef HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT
 		if (tb[TCA_TUNNEL_KEY_ENC_DST_PORT])
 			dst_port = nla_get_be16(tb[TCA_TUNNEL_KEY_ENC_DST_PORT]);
 #endif
@@ -512,12 +509,12 @@ static int tunnel_key_dump(struct sk_buff *skb, struct tc_action *a,
 		if (nla_put_be32(skb, TCA_TUNNEL_KEY_ENC_KEY_ID, key_id) ||
 		    tunnel_key_dump_addresses(skb,
 					      &params->tcft_enc_metadata->u.tun_info)
-#ifdef TCA_TUNNEL_KEY_ENC_DST_PORT
+#ifdef HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT
 		    || nla_put_be16(skb, TCA_TUNNEL_KEY_ENC_DST_PORT, key->tp_dst)
 #endif
 			)
 			goto nla_put_failure;
-#ifdef TCA_TUNNEL_KEY_ENC_TOS
+#ifdef HAVE_TCA_TUNNEL_KEY_ENC_TOS
 		if (key->tos && nla_put_u8(skb, TCA_TUNNEL_KEY_ENC_TOS, key->tos))
 			goto nla_put_failure;
 

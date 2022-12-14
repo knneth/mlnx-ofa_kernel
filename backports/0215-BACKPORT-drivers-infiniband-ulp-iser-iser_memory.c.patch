@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_memory.c
 
 Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
 ---
- drivers/infiniband/ulp/iser/iser_memory.c | 365 +++++++++++++++++++++++++++++-
- 1 file changed, 362 insertions(+), 3 deletions(-)
+ drivers/infiniband/ulp/iser/iser_memory.c | 363 +++++++++++++++++++++++++++++-
+ 1 file changed, 362 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/ulp/iser/iser_memory.c
 +++ b/drivers/infiniband/ulp/iser/iser_memory.c
@@ -16,10 +16,11 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  
  #include "iscsi_iser.h"
  static
-@@ -67,6 +68,245 @@ static const struct iser_reg_ops fmr_ops
+@@ -67,6 +68,247 @@ static const struct iser_reg_ops fmr_ops
  	.reg_desc_put	= iser_reg_desc_put_fmr,
  };
  
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
 +#define IS_4K_ALIGNED(addr) ((((unsigned long)addr) & ~MASK_4K) == 0)
 +static void iser_free_bounce_sg(struct iser_data_buf *data)
 +{
@@ -258,14 +259,16 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
 +
 +	return ret_len;
 +}
++#endif
 +
  void iser_reg_comp(struct ib_cq *cq, struct ib_wc *wc)
  {
  	iser_err_comp(wc, "memreg");
-@@ -159,6 +399,50 @@ static void iser_dump_page_vec(struct is
+@@ -159,6 +401,52 @@ static void iser_dump_page_vec(struct is
  		iser_err("vec[%d]: %llx\n", i, page_vec->pages[i]);
  }
  
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
 +static int fall_to_bounce_buf(struct iscsi_iser_task *iser_task,
 +			      struct iser_data_buf *mem,
 +			      enum iser_data_dir cmd_dir)
@@ -309,11 +312,12 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
 +
 +	return 0;
 +}
++#endif
 +
  int iser_dma_map_task_data(struct iscsi_iser_task *iser_task,
  			    struct iser_data_buf *data,
  			    enum iser_data_dir iser_dir,
-@@ -306,8 +590,17 @@ iser_set_dif_domain(struct scsi_cmnd *sc
+@@ -306,8 +594,17 @@ iser_set_dif_domain(struct scsi_cmnd *sc
  		    struct ib_sig_domain *domain)
  {
  	domain->sig_type = IB_SIG_TYPE_T10_DIF;
@@ -331,7 +335,7 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  	/*
  	 * At the moment we hard code those, but in the future
  	 * we will take them from sc.
-@@ -315,8 +608,14 @@ iser_set_dif_domain(struct scsi_cmnd *sc
+@@ -315,8 +612,14 @@ iser_set_dif_domain(struct scsi_cmnd *sc
  	domain->sig.dif.apptag_check_mask = 0xffff;
  	domain->sig.dif.app_escape = true;
  	domain->sig.dif.ref_escape = true;
@@ -346,7 +350,7 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  };
  
  static int
-@@ -333,16 +632,30 @@ iser_set_sig_attrs(struct scsi_cmnd *sc,
+@@ -333,16 +636,30 @@ iser_set_sig_attrs(struct scsi_cmnd *sc,
  	case SCSI_PROT_WRITE_STRIP:
  		sig_attrs->wire.sig_type = IB_SIG_TYPE_NONE;
  		iser_set_dif_domain(sc, sig_attrs, &sig_attrs->mem);
@@ -377,7 +381,7 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  		break;
  	default:
  		iser_err("Unsupported PI operation %d\n",
-@@ -353,6 +666,7 @@ iser_set_sig_attrs(struct scsi_cmnd *sc,
+@@ -353,6 +670,7 @@ iser_set_sig_attrs(struct scsi_cmnd *sc,
  	return 0;
  }
  
@@ -385,7 +389,7 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  static inline void
  iser_set_prot_checks(struct scsi_cmnd *sc, u8 *mask)
  {
-@@ -362,6 +676,30 @@ iser_set_prot_checks(struct scsi_cmnd *s
+@@ -362,6 +680,30 @@ iser_set_prot_checks(struct scsi_cmnd *s
  	if (sc->prot_flags & SCSI_PROT_GUARD_CHECK)
  		*mask |= IB_SIG_CHECK_GUARD;
  }
@@ -416,7 +420,7 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  
  static inline void
  iser_inv_rkey(struct ib_send_wr *inv_wr,
-@@ -395,8 +733,13 @@ iser_reg_sig_mr(struct iscsi_iser_task *
+@@ -395,8 +737,13 @@ iser_reg_sig_mr(struct iscsi_iser_task *
  	ret = iser_set_sig_attrs(iser_task->sc, sig_attrs);
  	if (ret)
  		goto err;
@@ -431,49 +435,37 @@ Change-Id: Iaa63445373c9fc6a2ed7659241bbdea21e535ef2
  
  	if (rsc->mr_valid)
  		iser_inv_rkey(&tx_desc->inv_wr, mr, cqe, &wr->wr);
-@@ -505,11 +848,23 @@ int iser_reg_rdma_mem(struct iscsi_iser_
+@@ -504,12 +851,22 @@ int iser_reg_rdma_mem(struct iscsi_iser_
+ {
  	struct ib_conn *ib_conn = &task->iser_conn->ib_conn;
  	struct iser_device *device = ib_conn->device;
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++	struct ib_device *ib_dev = device->ib_device;
++#endif
  	struct iser_data_buf *mem = &task->data[dir];
-+	struct iser_data_buf *sig_mem = &task->prot[dir];
  	struct iser_mem_reg *reg = &task->rdma_reg[dir];
  	struct iser_fr_desc *desc = NULL;
  	bool use_dma_key;
  	int err;
  
-+	if (iser_use_bounce_buffer(ib_conn, device->ib_device)) {
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++	if (!(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG)) {
 +		err = iser_handle_unaligned_buf(task, mem, dir);
 +		if (unlikely(err))
 +			return err;
-+
-+		if (scsi_get_prot_op(task->sc) != SCSI_PROT_NORMAL) {
-+			err = iser_handle_unaligned_buf(task, sig_mem, dir);
-+			if (unlikely(err))
-+				goto err_handle_unaligned;
-+		}
 +	}
++#endif
  	use_dma_key = mem->dma_nents == 1 && (all_imm || !iser_always_reg) &&
  		      scsi_get_prot_op(task->sc) == SCSI_PROT_NORMAL;
  
-@@ -523,8 +878,7 @@ int iser_reg_rdma_mem(struct iscsi_iser_
- 		if (unlikely(err))
- 			goto err_reg;
- 	} else {
--		err = iser_reg_sig_mr(task, mem, &task->prot[dir],
--				      &desc->rsc, reg);
-+		err = iser_reg_sig_mr(task, mem, sig_mem, &desc->rsc, reg);
- 		if (unlikely(err))
- 			goto err_reg;
- 
-@@ -536,6 +890,11 @@ int iser_reg_rdma_mem(struct iscsi_iser_
+@@ -536,6 +893,10 @@ int iser_reg_rdma_mem(struct iscsi_iser_
  err_reg:
  	if (desc)
  		device->reg_ops->reg_desc_put(ib_conn, desc);
-+	if (sig_mem->orig_sg)
-+		iser_free_bounce_sg(sig_mem);
-+err_handle_unaligned:
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
 +	if (mem->orig_sg)
 +		iser_free_bounce_sg(mem);
++#endif
  
  	return err;
  }

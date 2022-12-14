@@ -1449,6 +1449,7 @@ err_irq_table:
 static void mlx5_unload(struct mlx5_core_dev *dev)
 {
 	mlx5_ec_cleanup(dev);
+	mlx5_lag_remove_mdev(dev);
 	mlx5_diag_cnt_cleanup(dev);
 	mlx5_sriov_detach(dev);
 	mlx5_cleanup_fs(dev);
@@ -1496,6 +1497,7 @@ int mlx5_load_one(struct mlx5_core_dev *dev, bool boot)
 		goto err_load;
 
 	mlx5_diag_cnt_init(dev);
+	mlx5_lag_add_mdev(dev);
 
 	if (mlx5_device_registered(dev)) {
 		if (dev->priv.sw_reset_lag)
@@ -1519,6 +1521,7 @@ out:
 	return err;
 
 err_reg_dev:
+	mlx5_lag_remove_mdev(dev);
 	mlx5_diag_cnt_cleanup(dev);
 	mlx5_unload(dev);
 err_load:
@@ -2373,8 +2376,10 @@ static const struct pci_device_id mlx5_core_pci_table[] = {
 	{ PCI_VDEVICE(MELLANOX, 0x101c), MLX5_PCI_DEV_IS_VF},	/* ConnectX-6 VF */
 	{ PCI_VDEVICE(MELLANOX, 0x101d) },			/* ConnectX-6 Dx */
 	{ PCI_VDEVICE(MELLANOX, 0x101e), MLX5_PCI_DEV_IS_VF},	/* ConnectX Family mlx5Gen Virtual Function */
+	{ PCI_VDEVICE(MELLANOX, 0x101f) },			/* ConnectX-6 Lx */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d2) },			/* BlueField integrated ConnectX-5 network controller */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d3), MLX5_PCI_DEV_IS_VF},	/* BlueField integrated ConnectX-5 network controller VF */
+	{ PCI_VDEVICE(MELLANOX, 0xa2d6) },			/* BlueField integrated Connectx-6Dx */
 	{ 0, }
 };
 

@@ -2,6 +2,7 @@
 /* Copyright (c) 2019 Mellanox Technologies. */
 
 #include <linux/atomic.h>
+#include <net/tc_act/tc_pedit.h>
 
 #include "lib/devcom.h"
 #include "miniflow.h"
@@ -58,6 +59,9 @@ module_param(enable_ct_ageing, int, 0644);
 
 static int max_nr_mf = 1024*1024;
 module_param(max_nr_mf, int, 0644);
+
+static uint ct_merger_probability;
+module_param(ct_merger_probability, uint, 0644);
 
 /* Derived from current insertion rate (flows/s) */
 #define MINIFLOW_WORKQUEUE_MAX_SIZE 40 * 1000
@@ -186,16 +190,17 @@ static void miniflow_cleanup(struct mlx5e_miniflow *miniflow)
 	struct mlx5e_tc_flow *flow;
 	int j;
 
-	if (miniflow->aged)
-		return;
-
-	for (j = 0; j < MINIFLOW_MAX_CT_TUPLES; j++) {
-		flow = miniflow->ct_tuples[j].flow;
-		if (flow) {
-			mlx5e_flow_put(flow->priv, flow);
-			miniflow->ct_tuples[j].flow = NULL;
+	/* If return value is non-zero, the bit was set in
+	 * ct_flow_offload_del(), so no need to cleanup again
+	 */
+	if (!test_and_set_bit(0, &miniflow->cleanup))
+		for (j = 0; j < MINIFLOW_MAX_CT_TUPLES; j++) {
+			flow = miniflow->ct_tuples[j].flow;
+			if (flow) {
+				mlx5e_flow_put(flow->priv, flow);
+				miniflow->ct_tuples[j].flow = NULL;
+			}
 		}
-	}
 }
 
 static struct mlx5e_miniflow *miniflow_alloc(void)
@@ -290,6 +295,9 @@ static void miniflow_merge_match(struct mlx5e_tc_flow *mflow,
 	mflow->esw_attr->outer_match_level =
 		max(flow->esw_attr->outer_match_level,
 		    mflow->esw_attr->outer_match_level);
+
+	mflow->esw_attr->is_tunnel_flow |=
+		flow->esw_attr->is_tunnel_flow;
 }
 
 static void miniflow_merge_action(struct mlx5e_tc_flow *mflow,
@@ -413,6 +421,7 @@ static int miniflow_merge_hdr(struct mlx5e_priv *priv,
 {
 	struct mlx5e_tc_flow_parse_attr *dst_parse_attr;
 	struct mlx5e_tc_flow_parse_attr *src_parse_attr;
+	struct pedit_headers_action hdrs[2] = {};
 	int max_actions, action_size;
 	int err;
 
@@ -420,10 +429,11 @@ static int miniflow_merge_hdr(struct mlx5e_priv *priv,
 		return 0;
 
 	action_size = MLX5_MH_ACT_SZ;
+	hdrs[TCA_PEDIT_KEY_EX_CMD_SET].pedits = 16; /* maximum */
 
 	dst_parse_attr = mflow->esw_attr->parse_attr;
 	if (!dst_parse_attr->mod_hdr_actions) {
-		err = alloc_mod_hdr_actions(priv, 0 /* maximum */,
+		err = alloc_mod_hdr_actions(priv, hdrs,
 					    MLX5_FLOW_NAMESPACE_FDB,
 					    dst_parse_attr, GFP_ATOMIC);
 		if (err) {
@@ -586,6 +596,70 @@ static int miniflow_register_ct_flow(struct mlx5e_miniflow *miniflow)
 	return err;
 }
 
+static int __miniflow_ct_parse_nat(struct mlx5e_priv *priv,
+				   struct mlx5e_ct_tuple *ct_tuple,
+				   struct mlx5e_tc_flow_parse_attr *parse_attr)
+{
+	struct pedit_headers_action hdrs[2] = {};
+	int namespace = MLX5_FLOW_NAMESPACE_FDB;
+	struct flow_action_entry acts[2] = {};
+	int action_flags = 0;
+	int i;
+
+	acts[0].id = FLOW_ACTION_MANGLE;
+	acts[0].mangle.htype = FLOW_ACT_MANGLE_HDR_TYPE_IP4;
+	acts[0].mangle.mask = 0;
+	acts[0].mangle.val = ct_tuple->ipv4;
+	acts[0].mangle.offset = ct_tuple->nat & IPS_SRC_NAT ?
+				offsetof(struct iphdr, saddr) :
+				offsetof(struct iphdr, daddr);
+
+	acts[1].id = FLOW_ACTION_MANGLE;
+	acts[1].mangle.htype = FLOW_ACT_MANGLE_HDR_TYPE_IP4;
+	acts[1].mangle.mask = 0xFFFF0000;
+	acts[1].mangle.val = ct_tuple->port;
+
+	switch (ct_tuple->proto) {
+	case IPPROTO_UDP:
+		acts[1].mangle.htype = FLOW_ACT_MANGLE_HDR_TYPE_UDP;
+		acts[1].mangle.offset = ct_tuple->nat & IPS_SRC_NAT ?
+					offsetof(struct udphdr, source) :
+					offsetof(struct udphdr, dest);
+	break;
+	case IPPROTO_TCP:
+		acts[1].mangle.htype = FLOW_ACT_MANGLE_HDR_TYPE_TCP;
+		acts[1].mangle.offset = ct_tuple->nat & IPS_SRC_NAT ?
+					offsetof(struct tcphdr, source) :
+					offsetof(struct tcphdr, dest);
+	break;
+	}
+
+	for (i = 0; i < 2; i++)
+		parse_tc_pedit_action(priv, &acts[i], namespace, parse_attr,
+				      hdrs, NULL);
+
+	return alloc_tc_pedit_action(priv, namespace, parse_attr, hdrs,
+				     &action_flags, NULL);
+}
+
+static int miniflow_ct_parse_nat(struct mlx5e_priv *priv,
+				 struct mlx5e_tc_flow *flow,
+				 struct mlx5e_ct_tuple *ct_tuple)
+{
+	int err;
+
+	if (!ct_tuple->nat)
+		return 0;
+
+	err = __miniflow_ct_parse_nat(priv, ct_tuple,
+				      flow->esw_attr->parse_attr);
+	if (err)
+		return err;
+
+	flow->esw_attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
+	return 0;
+}
+
 static struct mlx5e_ct_tuple *
 miniflow_ct_tuple_alloc(struct mlx5e_miniflow *miniflow)
 {
@@ -623,9 +697,17 @@ miniflow_ct_flow_alloc(struct mlx5e_priv *priv,
 	flow->esw_attr->parse_attr = parse_attr;
 	flow->esw_attr->action = MLX5_FLOW_CONTEXT_ACTION_COUNT;
 
+	err = miniflow_ct_parse_nat(priv, flow, ct_tuple);
+	if (err)
+		goto err_free;
+
 	ct_tuple->flow = flow;
 
 	return flow;
+
+err_free:
+	mlx5e_flow_put(priv, flow);
+	return NULL;
 }
 
 static int miniflow_resolve_path_flows(struct mlx5e_miniflow *miniflow)
@@ -783,12 +865,17 @@ static int miniflow_alloc_flow(struct mlx5e_miniflow *miniflow,
 		}
 
 		miniflow->flow = mflow;
-		miniflow->aged = false;
 		mflow->miniflow = miniflow;
+	} else {
+		err = miniflow_verify_path_flows(miniflow);
+		if (err) {
+			inc_debug_counter(&nr_of_total_mf_err_verify_path);
+			goto err_rcu;
+		}
 	}
 
-	mflow->esw_attr->in_rep = rpriv->rep;
-	mflow->esw_attr->in_mdev = priv->mdev;
+	mflow->esw_attr->in_rep = in_rep;
+	mflow->esw_attr->in_mdev = in_mdev;
 
 	if (MLX5_CAP_ESW(esw->dev, counter_eswitch_affinity) ==
 	    MLX5_COUNTER_SOURCE_ESWITCH)
@@ -863,6 +950,7 @@ static int miniflow_add_peer_flow(struct mlx5e_miniflow *miniflow,
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct mlx5_devcom *devcom = priv->mdev->priv.devcom;
 	struct mlx5e_rep_priv *peer_urpriv;
+	struct mlx5_eswitch_rep *in_rep;
 	struct mlx5e_tc_flow *peer_flow;
 	struct mlx5_core_dev *in_mdev;
 	struct mlx5_eswitch *peer_esw;
@@ -875,12 +963,15 @@ static int miniflow_add_peer_flow(struct mlx5e_miniflow *miniflow,
 	peer_urpriv = mlx5_eswitch_get_uplink_priv(peer_esw, REP_ETH);
 	peer_priv = netdev_priv(peer_urpriv->netdev);
 
-	if (flow->esw_attr->in_rep->vport == MLX5_VPORT_UPLINK)
+	if (flow->esw_attr->in_rep->vport == MLX5_VPORT_UPLINK) {
 		in_mdev = peer_priv->mdev;
-	else
+		in_rep = peer_urpriv->rep;
+	} else {
 		in_mdev = priv->mdev;
+		in_rep = flow->esw_attr->in_rep;
+	}
 
-	err = miniflow_alloc_flow(miniflow, peer_priv, flow->esw_attr->in_rep,
+	err = miniflow_alloc_flow(miniflow, peer_priv, in_rep,
 				  in_mdev, &peer_flow, NULL);
 	if (err)
 		goto out;
@@ -1256,6 +1347,11 @@ int miniflow_configure_ct(struct mlx5e_priv *priv,
 	ct_tuple->zone = *cto->zone;
 	ct_tuple->tuple = *cto->tuple;
 
+	ct_tuple->nat = cto->nat;
+	ct_tuple->ipv4 = cto->ipv4;
+	ct_tuple->port = cto->port;
+	ct_tuple->proto = cto->proto;
+
 	ct_tuple->flow = NULL;
 
 	miniflow_path_append_cookie(miniflow, cookie, MFC_CT_FLOW);
@@ -1263,6 +1359,22 @@ int miniflow_configure_ct(struct mlx5e_priv *priv,
 
 err:
 	miniflow_abort(miniflow);
+	return -1;
+}
+
+static int miniflow_merge_rand_check(void)
+{
+	unsigned int rand;
+	unsigned int probability = atomic_read((atomic_t *)&ct_merger_probability);
+
+	if (probability == 0)
+		return 0;
+
+	get_random_bytes(&rand, sizeof(unsigned int));
+
+	if (rand < UINT_MAX / probability)
+		return 0;
+
 	return -1;
 }
 
@@ -1332,6 +1444,10 @@ int miniflow_configure(struct mlx5e_priv *priv,
 	if (!mf->last_flow)
 		return 0;
 
+	err = miniflow_merge_rand_check();
+	if (err)
+		goto err;
+
 	if (miniflow_workqueue_busy())
 		goto err;
 
@@ -1388,9 +1504,9 @@ void ct_flow_offload_get_stats(struct list_head *head, u64 *lastuse)
 
 static void ct_flow_offload_del(struct mlx5e_tc_flow *flow)
 {
-	flow->miniflow->aged = true;
-	/* We already hold dep_lock, set flag to flase */
-	mlx5e_flow_put_lock(flow->priv, flow, false);
+	if (!test_and_set_bit(0, &flow->miniflow->cleanup))
+		/* We already hold dep_lock, set flag to flase */
+		mlx5e_flow_put_lock(flow->priv, flow, false);
 }
 
 int ct_flow_offload_destroy(struct list_head *head)

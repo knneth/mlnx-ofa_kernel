@@ -88,8 +88,11 @@ static inline bool __is_tcf_gact_act(const struct tc_action *a, int act)
 
 	if (a->ops && a->ops->type != TCA_ACT_GACT)
 		return false;
-
+#ifdef CONFIG_COMPAT_KERNEL3_10_0_327
+	gact = to_gact(a->priv);
+#else
 	gact = to_gact(a);
+#endif
 	if (gact->tcf_action == act)
 		return true;
 

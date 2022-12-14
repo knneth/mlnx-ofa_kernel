@@ -36,7 +36,7 @@ Change-Id: If260c78bcb28351af089f6b1ffb3a177a75990d0
  
  repost:
  	if (unlikely(ipoib_ib_post_receive_rss(dev, recv_ring, wr_id)))
-@@ -330,6 +340,10 @@ poll_more:
+@@ -332,6 +342,10 @@ poll_more:
  	}
  
  	if (done < budget) {

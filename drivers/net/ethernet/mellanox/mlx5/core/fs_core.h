@@ -146,8 +146,10 @@ struct mlx5_flow_table {
 	enum fs_flow_table_op_mod	op_mod;
 	struct {
 		bool			active;
-		unsigned int		required_groups;
 		unsigned int		num_groups;
+		unsigned int		required_big_groups;
+		unsigned int		big_group_size;
+		unsigned int		num_big_groups;
 	} autogroup;
 	/* Protect fwd_rules */
 	struct mutex			lock;

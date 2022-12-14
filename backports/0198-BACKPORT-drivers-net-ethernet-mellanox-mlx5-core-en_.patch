@@ -88,7 +88,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  
  static ssize_t mlx5e_show_lro_timeout(struct device *device,
  				      struct device_attribute *attr,
-@@ -813,6 +836,7 @@ static void mlx5e_remove_attributes(stru
+@@ -819,6 +842,7 @@ static void mlx5e_remove_attributes(stru
  	}
  }
  
@@ -96,7 +96,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  static ssize_t mlx5e_show_prio2buffer(struct device *device,
  				      struct device_attribute *attr,
-@@ -955,7 +979,9 @@ static ssize_t mlx5e_store_buffer_size(s
+@@ -961,7 +985,9 @@ static ssize_t mlx5e_store_buffer_size(s
  	return count;
  }
  #endif
@@ -106,7 +106,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  static DEVICE_ATTR(buffer_size, S_IRUGO | S_IWUSR,
  		   mlx5e_show_buffer_size,
-@@ -965,6 +991,7 @@ static DEVICE_ATTR(prio2buffer, S_IRUGO
+@@ -971,6 +997,7 @@ static DEVICE_ATTR(prio2buffer, S_IRUGO
  		   mlx5e_show_prio2buffer,
  		   mlx5e_store_prio2buffer);
  #endif
@@ -114,7 +114,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  
  #ifdef CONFIG_MLX5_ESWITCH
  static DEVICE_ATTR(vf_roce, S_IRUGO | S_IWUSR,
-@@ -996,10 +1023,22 @@ static ssize_t mlx5e_store_force_local_l
+@@ -1002,10 +1029,22 @@ static ssize_t mlx5e_store_force_local_l
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -137,7 +137,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
-@@ -1032,7 +1071,9 @@ static struct attribute *mlx5e_debug_gro
+@@ -1038,7 +1077,9 @@ static struct attribute *mlx5e_debug_gro
  };
  
  static struct attribute *mlx5e_qos_attrs[] = {
@@ -147,7 +147,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  	&dev_attr_maxrate.attr,
  	NULL,
  };
-@@ -1083,6 +1124,7 @@ static int update_qos_sysfs(struct net_d
+@@ -1089,6 +1130,7 @@ static int update_qos_sysfs(struct net_d
  {
  	int err = 0;
  
@@ -155,7 +155,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  	if (MLX5_BUFFER_SUPPORTED(mdev)) {
  		err = sysfs_add_file_to_group(&dev->dev.kobj,
-@@ -1093,6 +1135,7 @@ static int update_qos_sysfs(struct net_d
+@@ -1099,6 +1141,7 @@ static int update_qos_sysfs(struct net_d
  					      "qos");
  	}
  #endif
@@ -163,7 +163,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  
  	return err;
  }
-@@ -1166,6 +1209,8 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1172,6 +1215,8 @@ int mlx5e_sysfs_create(struct net_device
  	if (err)
  		goto remove_debug_group;
  
@@ -172,7 +172,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  	return 0;
  
  remove_debug_group:
-@@ -1190,6 +1235,8 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1196,6 +1241,8 @@ void mlx5e_sysfs_remove(struct net_devic
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	int i;
  
@@ -181,7 +181,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  	sysfs_remove_group(&dev->dev.kobj, &qos_group);
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  	sysfs_remove_group(&dev->dev.kobj, &settings_group);
-@@ -1203,7 +1250,7 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1209,7 +1256,7 @@ void mlx5e_sysfs_remove(struct net_devic
  	kobject_put(priv->ecn_root_kobj);
  }
  
@@ -190,7 +190,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  enum {
  	ATTR_DST_IP,
  	ATTR_DST_PORT,
-@@ -1272,24 +1319,36 @@ static ssize_t mlx5e_flow_param_store(st
+@@ -1278,24 +1325,36 @@ static ssize_t mlx5e_flow_param_store(st
  }
  
  static ssize_t mlx5e_dst_port_store(struct netdev_queue *queue,

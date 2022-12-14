@@ -71,7 +71,8 @@ void mlx5_sf_table_cleanup(struct mlx5_core_dev *dev,
 			   struct mlx5_sf_table *sf_table)
 {
 	mutex_destroy(&sf_table->lock);
-	bitmap_free(sf_table->sf_id_bitmap);
+	if (sf_table->sf_id_bitmap)
+		bitmap_free(sf_table->sf_id_bitmap);
 }
 
 static int mlx5_cmd_alloc_sf(struct mlx5_core_dev *mdev, u16 function_id)
@@ -104,6 +105,10 @@ static int alloc_sf_id(struct mlx5_sf_table *sf_table, u16 *sf_id)
 	u16 idx;
 
 	mutex_lock(&sf_table->lock);
+	if (!sf_table->sf_id_bitmap) {
+		ret = -ENOSPC;
+		goto done;
+	}
 	idx = find_first_zero_bit(sf_table->sf_id_bitmap, sf_table->max_sfs);
 	if (idx == sf_table->max_sfs) {
 		ret = -ENOSPC;
@@ -206,6 +211,18 @@ void mlx5_sf_free(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
 	devlink_free(devlink);
 }
 
+u16 mlx5_get_free_sfs_locked(struct mlx5_core_dev *dev,
+			     struct mlx5_sf_table *sf_table)
+{
+	u16 free_sfs = 0;
+
+	if (sf_table->sf_id_bitmap)
+		free_sfs = sf_table->max_sfs -
+				bitmap_weight(sf_table->sf_id_bitmap,
+					      sf_table->max_sfs);
+	return free_sfs;
+}
+
 u16 mlx5_get_free_sfs(struct mlx5_core_dev *dev, struct mlx5_sf_table *sf_table)
 {
 	u16 free_sfs = 0;
@@ -214,18 +231,20 @@ u16 mlx5_get_free_sfs(struct mlx5_core_dev *dev, struct mlx5_sf_table *sf_table)
 		return 0;
 
 	mutex_lock(&sf_table->lock);
-	if (sf_table->sf_id_bitmap)
-		free_sfs = sf_table->max_sfs -
-				bitmap_weight(sf_table->sf_id_bitmap,
-					      sf_table->max_sfs);
+	free_sfs = mlx5_get_free_sfs_locked(dev, sf_table);
 	mutex_unlock(&sf_table->lock);
 	return free_sfs;
 }
 
 u16 mlx5_core_max_sfs(const struct mlx5_core_dev *dev,
-		      const struct mlx5_sf_table *sf_table)
+		      struct mlx5_sf_table *sf_table)
 {
-	return mlx5_core_is_sf_supported(dev) ? sf_table->max_sfs : 0;
+	u16 max_sfs;
+
+	mutex_lock(&sf_table->lock);
+	max_sfs = mlx5_core_is_sf_supported(dev) ? sf_table->max_sfs : 0;
+	mutex_unlock(&sf_table->lock);
+	return max_sfs;
 }
 
 static void *mlx5_sf_dma_alloc(struct device *dev, size_t size,
@@ -461,4 +480,124 @@ struct net_device *mlx5_sf_get_netdev(struct mlx5_sf *sf)
 	 */
 	dev_hold(ndev);
 	return ndev;
+}
+
+static int mlx5_cmd_set_sf_partitions(struct mlx5_core_dev *mdev, int n,
+				      u8 *parts)
+{
+	unsigned int inlen = MLX5_ST_SZ_BYTES(set_sf_partitions_out) +
+		n * MLX5_ST_SZ_BYTES(sf_partition);
+	u32 out[MLX5_ST_SZ_DW(set_sf_partitions_out)] = {};
+	void *dest_parts;
+	u32 *in;
+	int err;
+
+	in = kvzalloc(inlen, GFP_KERNEL);
+	if (!in)
+		return -ENOMEM;
+
+	MLX5_SET(set_sf_partitions_in, in, opcode,
+		 MLX5_CMD_OP_SET_SF_PARTITION);
+	MLX5_SET(set_sf_partitions_in, in, num_sf_partitions, n);
+	dest_parts = MLX5_ADDR_OF(set_sf_partitions_in, in, sf_partition);
+	memcpy(dest_parts, parts, n * MLX5_ST_SZ_BYTES(sf_partition));
+
+	err = mlx5_cmd_exec(mdev, in, inlen, out, sizeof(out));
+	if (err)
+		mlx5_core_err(mdev, "%s err %d\n", __func__, err);
+	kvfree(in);
+	return err;
+}
+
+static int reinit_sf_table(struct mlx5_core_dev *dev,
+			   struct mlx5_sf_table *sf_table,
+			   u16 new_max_sfs, u32 log_sf_bar_size)
+{
+	unsigned long *sf_id_bitmap;
+
+	if (sf_table->sf_id_bitmap) {
+		bitmap_free(sf_table->sf_id_bitmap);
+		sf_table->sf_id_bitmap = NULL;
+		sf_table->max_sfs = 0;
+	}
+
+	sf_id_bitmap = bitmap_zalloc(new_max_sfs, GFP_KERNEL);
+	if (!sf_id_bitmap)
+		return -ENOMEM;
+	sf_table->sf_id_bitmap = sf_id_bitmap;
+	sf_table->max_sfs = new_max_sfs;
+	sf_table->log_sf_bar_size = log_sf_bar_size;
+	return 0;
+}
+
+int mlx5_sf_set_max_sfs(struct mlx5_core_dev *dev,
+			struct mlx5_sf_table *sf_table, u16 new_max_sfs)
+{
+	u16 p0_log_new_num_sfs;
+	int log_bar_size_delta;
+	int p0_log_bar_sz;
+	void *sf_parts;
+	u16 p0_num_sfs;
+	int n_support;
+	int outlen;
+	u32 *out;
+	int ret;
+
+	if (!new_max_sfs || !is_power_of_2(new_max_sfs) ||
+	    new_max_sfs > mlx5_eswitch_max_sfs(dev))
+		return -EINVAL;
+
+	outlen = MLX5_ST_SZ_BYTES(query_sf_partitions_out) +
+					MLX5_ST_SZ_BYTES(sf_partition);
+	out = kvzalloc(outlen, GFP_KERNEL);
+	if (!out)
+		return -ENOMEM;
+
+	/* Lock the sf table so that allocation doesn't happen in parallel */
+	mutex_lock(&sf_table->lock);
+	if (sf_table->max_sfs &&
+	    mlx5_get_free_sfs_locked(dev, sf_table) != sf_table->max_sfs) {
+		ret = -EBUSY;
+		goto free_parts_out;
+	}
+
+	/* Query first partition */
+	ret = mlx5_cmd_query_sf_partitions(dev, out, outlen);
+	if (ret)
+		goto free_parts_out;
+
+	n_support = MLX5_GET(query_sf_partitions_out, out, num_sf_partitions);
+	sf_parts = MLX5_ADDR_OF(query_sf_partitions_out, out, sf_partition);
+	p0_num_sfs = 1 << MLX5_GET(sf_partition, sf_parts, log_num_sf);
+	p0_log_bar_sz = MLX5_GET(sf_partition, sf_parts, log_sf_bar_size);
+	if (p0_num_sfs == new_max_sfs) {
+		ret = 0;
+		goto free_parts_out;
+	}
+	p0_log_new_num_sfs = ilog2(new_max_sfs);
+	if (new_max_sfs > p0_num_sfs) {
+		log_bar_size_delta =
+			p0_log_new_num_sfs -
+				MLX5_GET(sf_partition, sf_parts, log_num_sf);
+		p0_log_bar_sz -= log_bar_size_delta;
+	} else {
+		log_bar_size_delta =
+			MLX5_GET(sf_partition, sf_parts, log_num_sf) -
+							p0_log_new_num_sfs;
+		p0_log_bar_sz += log_bar_size_delta;
+	}
+
+	MLX5_SET(sf_partition, sf_parts, log_num_sf, p0_log_new_num_sfs);
+	MLX5_SET(sf_partition, sf_parts, log_sf_bar_size, p0_log_bar_sz);
+
+	ret = mlx5_cmd_set_sf_partitions(dev, 1, sf_parts);
+	if (ret)
+		goto free_parts_out;
+
+	ret = reinit_sf_table(dev, sf_table, new_max_sfs, p0_log_bar_sz);
+
+free_parts_out:
+	mutex_unlock(&sf_table->lock);
+	kvfree(out);
+	return ret;
 }

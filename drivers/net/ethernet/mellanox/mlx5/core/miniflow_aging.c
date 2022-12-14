@@ -514,7 +514,7 @@ int mlx5_ct_flow_offload_add(const struct net *net,
 	if (entry->flow.flags & (FLOW_OFFLOAD_DYING | FLOW_OFFLOAD_TEARDOWN)) {
 		spin_unlock(&entry->dep_lock);
 		err = -EAGAIN;
-		goto out;
+		goto err_flow;
 	}
 	tc_flow->dep_lock = &entry->dep_lock;
 	ct_flow_offload_add(tc_flow, &entry->deps);
@@ -527,7 +527,7 @@ int mlx5_ct_flow_offload_add(const struct net *net,
 out:
 	spin_unlock(&flowtable->ht_lock);
 	rcu_read_unlock();
-
+err_flow:
 	return err;
 }
 

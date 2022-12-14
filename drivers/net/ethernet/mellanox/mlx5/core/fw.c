@@ -597,7 +597,7 @@ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
 }
 
 static int query_other_hca_cap(struct mlx5_core_dev *mdev,
-			       int function_id, void *out)
+			       u16 function_id, void *out)
 {
 	int out_sz = MLX5_ST_SZ_BYTES(query_other_hca_cap_out);
 	int in_sz = MLX5_ST_SZ_BYTES(query_other_hca_cap_in);
@@ -619,7 +619,7 @@ static int query_other_hca_cap(struct mlx5_core_dev *mdev,
 }
 
 static int modify_other_hca_cap(struct mlx5_core_dev *mdev,
-				int function_id, void *in)
+				u16 function_id, void *in)
 {
 	int out_sz = MLX5_ST_SZ_BYTES(modify_other_hca_cap_out);
 	int in_sz = MLX5_ST_SZ_BYTES(modify_other_hca_cap_in);
@@ -641,7 +641,7 @@ static int modify_other_hca_cap(struct mlx5_core_dev *mdev,
 }
 
 int mlx5_get_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				int function_id, bool *value)
+				u16 function_id, bool *value)
 {
 	int out_sz = MLX5_ST_SZ_BYTES(query_other_hca_cap_out);
 	void *out;
@@ -666,7 +666,7 @@ out:
 }
 
 int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				   int function_id, bool value)
+				   u16 function_id, bool value)
 {
 	int in_sz = MLX5_ST_SZ_BYTES(modify_other_hca_cap_in);
 	struct mlx5_ifc_other_hca_cap_bits *other_capability;

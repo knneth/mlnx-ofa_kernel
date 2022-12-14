@@ -77,7 +77,7 @@
 #include <rdma/uverbs_named_ioctl.h>
 
 #define DRIVER_NAME "mlx5_ib"
-#define DRIVER_VERSION	"4.7-1.0.0"
+#define DRIVER_VERSION	"4.7-3.2.9"
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB HCA IB driver");
@@ -546,12 +546,17 @@ static int mlx5_query_port_roce(struct ib_device *device, u8 port_num,
 	props->qkey_viol_cntr = qkey_viol_cntr;
 
 	/* If this is a stub query for an unaffiliated port stop here */
-	if (!put_mdev)
+	if (!put_mdev) {
+		props->state = IB_PORT_NOP;
 		goto out;
+	}
 
 	ndev = mlx5_ib_get_netdev(device, port_num);
-	if (!ndev)
+	if (!ndev) {
+		/* Port may not be even created in HW, like SF's port */
+		props->state = IB_PORT_NOP;
 		goto out;
+	}
 
 	if (dev->lag_active) {
 		rcu_read_lock();
@@ -3612,7 +3617,8 @@ static void mlx5_ib_set_rule_source_port(struct mlx5_ib_dev *dev,
 		misc = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
 				    misc_parameters_2);
 
-		MLX5_SET_TO_ONES(fte_match_set_misc2, misc, metadata_reg_c_0);
+		MLX5_SET(fte_match_set_misc2, misc, metadata_reg_c_0,
+			 mlx5_ib_eswitch_get_vport_metadata_mask());
 	} else {
 		misc = MLX5_ADDR_OF(fte_match_param, spec->match_value,
 				    misc_parameters);

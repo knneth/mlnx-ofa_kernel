@@ -1,15 +1,23 @@
-From: Mikhael Goikhman <migo@mellanox.com>
+From: Vu Pham <vuhuong@mellanox.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
 
-Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
+Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
 ---
- .../ethernet/mellanox/mlx5/core/eswitch_offloads.c | 200 +++++++++++++++++----
- 1 file changed, 164 insertions(+), 36 deletions(-)
+ .../ethernet/mellanox/mlx5/core/eswitch_offloads.c | 255 ++++++++++++++++++---
+ 1 file changed, 219 insertions(+), 36 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
-@@ -89,7 +89,11 @@ u16 mlx5_eswitch_get_prio_range(struct m
+@@ -40,6 +40,7 @@
+ #include "eswitch.h"
+ #include "rdma.h"
+ #include "en.h"
++#include "en_rep.h"
+ #include "fs_core.h"
+ #include "lib/devcom.h"
+ #include "lib/eq.h"
+@@ -98,7 +99,11 @@ u16 mlx5_eswitch_get_prio_range(struct m
  	if (esw->fdb_table.flags & ESW_FDB_CHAINS_AND_PRIOS_SUPPORTED)
  		return FDB_MAX_PRIO;
  
@@ -21,17 +29,18 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  }
  
  static void
-@@ -1405,15 +1409,23 @@ out:
+@@ -1430,16 +1435,23 @@ out:
  	return flow_rule;
  }
  
 -static int esw_offloads_start_imp(struct mlx5_eswitch *esw,
--				  struct netlink_ext_ack *extack)
+-				  struct netlink_ext_ack *extack,
+-				  struct mlx5_lag *ldev)
 +static int esw_offloads_start_imp(struct mlx5_eswitch *esw
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +				  , struct netlink_ext_ack *extack
 +#endif
-+				 )
++				  , struct mlx5_lag *ldev)
  {
  	int err, err1;
  
@@ -44,10 +53,10 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
 +		esw_warn(esw->dev,
 +			 "Can't set offloads mode, SRIOV legacy not enabled\n");
 +#endif
- 		atomic_set(&esw->handler.in_progress, 0);
- 		return -EINVAL;
+ 		err = -EINVAL;
+ 		goto done;
  	}
-@@ -1422,19 +1434,33 @@ static int esw_offloads_start_imp(struct
+@@ -1448,19 +1460,33 @@ static int esw_offloads_start_imp(struct
  	mlx5_eswitch_update_num_of_vfs(esw, esw->dev->priv.sriov.num_vfs);
  	err = mlx5_eswitch_enable(esw, MLX5_ESWITCH_OFFLOADS);
  	if (err) {
@@ -86,8 +95,8 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
 +#endif
  		}
  	}
- 	mlx5_lag_enable(esw->dev);
-@@ -1448,19 +1474,34 @@ void esw_offloads_start_handler(struct w
+ 
+@@ -1476,21 +1502,35 @@ void esw_offloads_start_handler(struct w
  		container_of(work, struct mlx5_esw_handler, start_handler);
  	struct mlx5_eswitch *esw =
  		container_of(handler, struct mlx5_eswitch, handler);
@@ -95,54 +104,55 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  	struct netlink_ext_ack *extack = handler->extack;
 +#endif
  
--	esw_offloads_start_imp(esw, extack);
--}
--
--static int esw_offloads_start(struct mlx5_eswitch *esw,
--			      struct netlink_ext_ack *extack)
+-	esw_offloads_start_imp(esw, extack, handler->ldev);
 +	esw_offloads_start_imp(esw
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +			       , extack
 +#endif
-+			      );
-+}
-+
++			      , handler->ldev);
+ }
+ 
+-static int esw_offloads_start(struct mlx5_eswitch *esw,
+-			      struct netlink_ext_ack *extack,
+-			      struct mlx5_lag *ldev)
 +static int esw_offloads_start(struct mlx5_eswitch *esw
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +			      , struct netlink_ext_ack *extack
 +#endif
-+			     )
++			      , struct mlx5_lag *ldev)
  {
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
  	esw->handler.extack = extack;
 +#endif
+ 	esw->handler.ldev = ldev;
  	if (strcmp(current->comm, "devlink"))
  		return schedule_work(&esw->handler.start_handler) != true;
  	else
--		return esw_offloads_start_imp(esw, extack);
+-		return esw_offloads_start_imp(esw, extack, ldev);
 +		return esw_offloads_start_imp(esw
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +					      , extack
 +#endif
-+					     );
++					      , ldev   );
  }
  
  void esw_offloads_cleanup_reps(struct mlx5_eswitch *esw)
-@@ -2731,8 +2772,11 @@ err_vport_metadata:
+@@ -2859,9 +2899,11 @@ err_vport_metadata:
  	return err;
  }
  
 -static int esw_offloads_stop_imp(struct mlx5_eswitch *esw,
--				 struct netlink_ext_ack *extack)
+-				 struct netlink_ext_ack *extack,
+-				 struct mlx5_lag *ldev)
 +static int esw_offloads_stop_imp(struct mlx5_eswitch *esw
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +				 , struct netlink_ext_ack *extack
 +#endif
-+				)
++				 , struct mlx5_lag *ldev)
  {
  	bool can_cleanup;
  	int err, err1;
-@@ -2744,11 +2788,19 @@ static int esw_offloads_stop_imp(struct
+@@ -2875,11 +2917,19 @@ static int esw_offloads_stop_imp(struct
  	mlx5_eswitch_disable(esw);
  	err = mlx5_eswitch_enable(esw, MLX5_ESWITCH_LEGACY);
  	if (err) {
@@ -166,8 +176,8 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
 +#endif
  	}
  
- 	mlx5_lag_enable(esw->dev);
-@@ -2762,20 +2814,35 @@ void esw_offloads_stop_handler(struct wo
+ done:
+@@ -2894,23 +2944,40 @@ void esw_offloads_stop_handler(struct wo
  		container_of(work, struct mlx5_esw_handler, stop_handler);
  	struct mlx5_eswitch *esw =
  		container_of(handler, struct mlx5_eswitch, handler);
@@ -175,38 +185,40 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  	struct netlink_ext_ack *extack = handler->extack;
 +#endif
  
--	esw_offloads_stop_imp(esw, extack);
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-+       esw_offloads_stop_imp(esw, extack);
+ 	esw_offloads_stop_imp(esw, extack, handler->ldev);
 +#else
-+	esw_offloads_stop_imp(esw);
++	esw_offloads_stop_imp(esw, handler->ldev);
 +#endif
  }
  
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
  static int esw_offloads_stop(struct mlx5_eswitch *esw,
- 			     struct netlink_ext_ack *extack)
+ 			     struct netlink_ext_ack *extack,
+ 			     struct mlx5_lag *ldev)
 +#else
-+static int esw_offloads_stop(struct mlx5_eswitch *esw)
++static int esw_offloads_stop(struct mlx5_eswitch *esw,
++			     struct mlx5_lag *ldev)
 +#endif
  {
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
  	esw->handler.extack = extack;
--
 +#endif
+ 
+ 	esw->handler.ldev = ldev;
+ 
  	if (strcmp(current->comm, "devlink"))
  		return schedule_work(&esw->handler.stop_handler) != true;
  	else
--		return esw_offloads_stop_imp(esw, extack);
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-+       	return esw_offloads_stop_imp(esw, extack);
+ 		return esw_offloads_stop_imp(esw, extack, ldev);
 +#else
-+		return esw_offloads_stop_imp(esw);
++		return esw_offloads_stop_imp(esw, ldev);
 +#endif
  }
  
  void esw_offloads_disable(struct mlx5_eswitch *esw)
-@@ -2882,8 +2949,34 @@ static int mlx5_devlink_eswitch_check(st
+@@ -3017,8 +3084,34 @@ static int mlx5_devlink_eswitch_check(st
  	return 0;
  }
  
@@ -243,23 +255,23 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2907,15 +3000,23 @@ int mlx5_devlink_eswitch_mode_set(struct
+@@ -3043,15 +3136,23 @@ int mlx5_devlink_eswitch_mode_set(struct
  
- 	mlx5_lag_disable(esw->dev);
+ 	ldev = mlx5_lag_disable(esw->dev);
  	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV)
--		return esw_offloads_start(esw, extack);
-+			return esw_offloads_start(dev->priv.eswitch
-+	#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-+						  , extack
-+	#endif
-+						 );
+-		return esw_offloads_start(esw, extack, ldev);
++		return esw_offloads_start(dev->priv.eswitch
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++					  , extack
++#endif
++					  , ldev);
  	else if (mode == DEVLINK_ESWITCH_MODE_LEGACY)
--		return esw_offloads_stop(esw, extack);
-+			return esw_offloads_stop(dev->priv.eswitch
-+	#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-+						 , extack
-+	#endif
-+						);
+-		return esw_offloads_stop(esw, extack, ldev);
++		return esw_offloads_stop(dev->priv.eswitch
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++					 , extack
++#endif
++					 , ldev);
  
  	atomic_dec(&esw->handler.in_progress);
  	return -EINVAL;
@@ -270,7 +282,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	int err;
-@@ -2927,8 +3028,11 @@ int mlx5_devlink_eswitch_mode_get(struct
+@@ -3063,8 +3164,11 @@ int mlx5_devlink_eswitch_mode_get(struct
  	return esw_mode_to_devlink(dev->priv.eswitch->mode, mode);
  }
  
@@ -284,7 +296,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2945,15 +3049,23 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -3081,15 +3185,23 @@ int mlx5_devlink_eswitch_inline_mode_set
  			return 0;
  		/* fall through */
  	case MLX5_CAP_INLINE_MODE_L2:
@@ -308,7 +320,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  		return -EOPNOTSUPP;
  	}
  
-@@ -2964,8 +3076,12 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -3100,8 +3212,12 @@ int mlx5_devlink_eswitch_inline_mode_set
  	mlx5_esw_for_each_host_func_vport(esw, vport, esw->esw_funcs.num_vfs) {
  		err = mlx5_modify_nic_vport_min_inline(dev, vport, mlx5_mode);
  		if (err) {
@@ -323,7 +335,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  			goto revert_inline_mode;
  		}
  	}
-@@ -2983,7 +3099,7 @@ out:
+@@ -3119,7 +3235,7 @@ out:
  	return err;
  }
  
@@ -332,7 +344,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -2998,7 +3114,7 @@ int mlx5_devlink_eswitch_inline_mode_get
+@@ -3134,7 +3250,7 @@ int mlx5_devlink_eswitch_inline_mode_get
  
  int mlx5_eswitch_inline_mode_get(struct mlx5_eswitch *esw, u8 *mode)
  {
@@ -341,13 +353,18 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  	struct mlx5_core_dev *dev = esw->dev;
  	int vport;
  
-@@ -3033,8 +3149,11 @@ out:
+@@ -3169,8 +3285,16 @@ out:
  	return 0;
  }
  
 -int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink, u8 encap,
 -					struct netlink_ext_ack *extack)
-+int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink, u8 encap
++int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM
++					enum devlink_eswitch_encap_mode encap
++#else
++					u8 encap
++#endif
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +					, struct netlink_ext_ack *extack
 +#endif
@@ -355,7 +372,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3061,8 +3180,13 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3197,8 +3321,13 @@ int mlx5_devlink_eswitch_encap_mode_set(
  		return 0;
  
  	if (atomic64_read(&esw->offloads.num_flows) > 0) {
@@ -369,7 +386,7 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  		return -EOPNOTSUPP;
  	}
  
-@@ -3073,8 +3197,12 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3209,8 +3338,12 @@ int mlx5_devlink_eswitch_encap_mode_set(
  	err = esw_create_offloads_fdb_tables(esw, esw->nvports);
  
  	if (err) {
@@ -382,12 +399,69 @@ Change-Id: Idc3a5076303f878604bf24cf98958db38d11df13
  		esw->offloads.encap = !encap;
  		(void)esw_create_offloads_fdb_tables(esw, esw->nvports);
  	}
-@@ -3082,7 +3210,7 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3218,7 +3351,11 @@ int mlx5_devlink_eswitch_encap_mode_set(
  	return err;
  }
  
 -int mlx5_devlink_eswitch_encap_mode_get(struct devlink *devlink, u8 *encap)
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM
++int DEVLINK_LOCK(mlx5_devlink_eswitch_encap_mode_get, enum devlink_eswitch_encap_mode *, encap)
++#else
 +int DEVLINK_LOCK(mlx5_devlink_eswitch_encap_mode_get, u8 *, encap)
++#endif
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
+@@ -3232,6 +3369,52 @@ int mlx5_devlink_eswitch_encap_mode_get(
+ 	return 0;
+ }
+ 
++int mlx5_devlink_eswitch_uplink_rep_mode_set(struct devlink *devlink, u8 mode
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++					, struct netlink_ext_ack *extack
++#endif
++					)
++{
++	struct mlx5_core_dev *dev = devlink_priv(devlink);
++	struct mlx5_eswitch *esw = dev->priv.eswitch;
++	int err;
++
++	err = mlx5_devlink_eswitch_check(devlink);
++	if (err)
++		return err;
++
++	if (esw->mode != MLX5_ESWITCH_LEGACY) {
++		return -EOPNOTSUPP;
++	}
++
++	if (mode == esw->offloads.uplink_rep_mode)
++		return 0;
++
++	if (mode == MLX5_ESW_UPLINK_REP_MODE_NEW_NETDEV) {
++		mlx5e_rep_unregister_vport_reps(dev);
++	} else if (mode == MLX5_ESW_UPLINK_REP_MODE_NIC_NETDEV) {
++		mlx5e_rep_register_vport_reps(dev);
++	} else
++		return -EOPNOTSUPP;
++
++	mlx5_esw_set_uplink_rep_mode(dev, mode);
++	return 0;
++}
++
++int DEVLINK_LOCK(mlx5_devlink_eswitch_uplink_rep_mode_get, u8 *, mode)
++{
++	struct mlx5_core_dev *dev = devlink_priv(devlink);
++	struct mlx5_eswitch *esw = dev->priv.eswitch;
++	int err;
++
++	err = mlx5_devlink_eswitch_check(devlink);
++	if (err)
++		return err;
++
++	*mode = esw->offloads.uplink_rep_mode;
++	return 0;
++}
++
+ void mlx5_eswitch_register_vport_reps(struct mlx5_eswitch *esw,
+ 				      const struct mlx5_eswitch_rep_ops *ops,
+ 				      u8 rep_type)

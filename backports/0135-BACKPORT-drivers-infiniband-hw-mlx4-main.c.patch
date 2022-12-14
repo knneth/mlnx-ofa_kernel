@@ -33,7 +33,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
 +#endif
 +
  #define DRV_NAME	MLX4_IB_DRV_NAME
- #define DRV_VERSION	"4.7-1.0.0"
+ #define DRV_VERSION	"4.7-3.2.9"
  
 @@ -71,6 +83,9 @@
  MODULE_AUTHOR("Roland Dreier");

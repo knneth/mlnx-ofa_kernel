@@ -103,6 +103,7 @@ struct devx_obj {
 		struct mlx5_ib_devx_mr	devx_mr;
 		struct mlx5_core_dct	core_dct;
 		struct mlx5_core_cq	core_cq;
+		u32			flow_counter_bulk_size;
 	};
 	struct list_head event_sub; /* holds devx_event_subscription entries */
 };
@@ -195,15 +196,20 @@ bool mlx5_ib_devx_is_flow_dest(void *obj, int *dest_id, int *dest_type)
 	}
 }
 
-bool mlx5_ib_devx_is_flow_counter(void *obj, u32 *counter_id)
+bool mlx5_ib_devx_is_flow_counter(void *obj, u32 offset, u32 *counter_id)
 {
 	struct devx_obj *devx_obj = obj;
 	u16 opcode = MLX5_GET(general_obj_in_cmd_hdr, devx_obj->dinbox, opcode);
 
 	if (opcode == MLX5_CMD_OP_DEALLOC_FLOW_COUNTER) {
+
+		if (offset && offset >= devx_obj->flow_counter_bulk_size)
+			return false;
+
 		*counter_id = MLX5_GET(dealloc_flow_counter_in,
 				       devx_obj->dinbox,
 				       flow_counter_id);
+		*counter_id += offset;
 		return true;
 	}
 
@@ -985,6 +991,8 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 				       u64 *comp_mask)
 {
 	u32 out[MLX5_ST_SZ_DW(query_esw_vport_context_out)] = {};
+	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+	bool other_vport;
 	u64 icm_rx;
 	u64 icm_tx;
 	int err;
@@ -994,9 +1002,10 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 		icm_rx = MLX5_CAP_ESW_FLOWTABLE_64(mdev, uplink_icm_address_rx);
 		icm_tx = MLX5_CAP_ESW_FLOWTABLE_64(mdev, uplink_icm_address_tx);
 	} else {
-		err = mlx5_eswitch_query_esw_vport_context(mdev->priv.eswitch,
+		other_vport = !mlx5_eswitch_is_manager_vport(esw, vport_num);
+		err = mlx5_eswitch_query_esw_vport_context(esw,
 							   vport_num,
-							   vport_num != MLX5_VPORT_PF,
+							   other_vport,
 							   out, sizeof(out));
 		if (err)
 			return err;
@@ -1083,7 +1092,7 @@ static int mlx5_ib_fill_vport_ctx(struct mlx5_ib_dev *dev,
 		reg_c0.value =
 			mlx5_ib_eswitch_get_vport_metadata_for_match(rep->esw,
 								     rep->vport);
-		reg_c0.mask = 0xffffffff;
+		reg_c0.mask = mlx5_ib_eswitch_get_vport_metadata_mask();
 
 		if (uverbs_copy_to(attrs,
 				   MLX5_IB_ATTR_DEVX_QUERY_PORT_MATCH_REG_C_0,
@@ -1664,6 +1673,13 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_OBJ_CREATE)(
 
 	if (err)
 		goto obj_free;
+
+	if (opcode == MLX5_CMD_OP_ALLOC_FLOW_COUNTER) {
+		u8 bulk = MLX5_GET(alloc_flow_counter_in,
+				   cmd_in,
+				   flow_counter_bulk);
+		obj->flow_counter_bulk_size = 128UL * bulk;
+	}
 
 	uobj->object = obj;
 	INIT_LIST_HEAD(&obj->event_sub);

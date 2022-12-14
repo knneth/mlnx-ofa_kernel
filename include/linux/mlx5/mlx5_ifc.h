@@ -125,6 +125,7 @@ enum {
 	MLX5_CMD_OP_MODIFY_OTHER_HCA_CAP          = 0x10f,
 	MLX5_CMD_OP_SET_TUNNELED_OPERATIONS       = 0x110,
 	MLX5_CMD_OP_QUERY_SF_PARTITION            = 0x111,
+	MLX5_CMD_OP_SET_SF_PARTITION              = 0x112,
 	MLX5_CMD_OP_ALLOC_SF                      = 0x113,
 	MLX5_CMD_OP_DEALLOC_SF                    = 0x114,
 	MLX5_CMD_OP_CREATE_MKEY                   = 0x200,
@@ -719,7 +720,7 @@ struct mlx5_ifc_flow_table_eswitch_cap_bits {
 	u8      flow_source[0x1];
 	u8      reserved_at_18[0x2];
 	u8      multi_fdb_encap[0x1];
-	u8      reserved_at_1b[0x1];
+	u8      egress_acl_forward_to_vport[0x1];
 	u8      fdb_multi_path_to_table[0x1];
 	u8      reserved_at_1d[0x3];
 
@@ -10738,6 +10739,30 @@ struct mlx5_ifc_affiliated_event_header_bits {
 	u8         obj_type[0x10];
 
 	u8         obj_id[0x20];
+};
+
+struct mlx5_ifc_set_sf_partitions_out_bits {
+	u8         status[0x8];
+	u8         reserved_at_8[0x18];
+
+	u8         syndrome[0x20];
+
+	u8         reserved_at_40[0x40];
+};
+
+struct mlx5_ifc_set_sf_partitions_in_bits {
+	u8         opcode[0x10];
+	u8         reserved_at_10[0x10];
+
+	u8         reserved_at_20[0x10];
+	u8         op_mod[0x10];
+
+	u8         reserved_at_40[0x18];
+	u8         num_sf_partitions[0x8];
+
+	u8         reserved_at_60[0x20];
+
+	struct mlx5_ifc_sf_partition_bits sf_partition[0];
 };
 
 #endif /* MLX5_IFC_H */

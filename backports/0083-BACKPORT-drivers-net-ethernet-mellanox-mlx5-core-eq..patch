@@ -18,7 +18,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  
  struct mlx5_eq_table {
  	struct list_head        comp_eqs_list;
-@@ -148,7 +150,11 @@ static int mlx5_eq_comp_int(struct notif
+@@ -149,7 +151,11 @@ static int mlx5_eq_comp_int(struct notif
  		/* Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -30,7 +30,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
  		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
  
-@@ -215,7 +221,11 @@ static int mlx5_eq_async_int(struct noti
+@@ -216,7 +222,11 @@ static int mlx5_eq_async_int(struct noti
  		 * Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -42,7 +42,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  
  		if (likely(eqe->type < MLX5_EVENT_TYPE_MAX))
  			atomic_notifier_call_chain(&eqt->nh[eqe->type], eqe->type, eqe);
-@@ -306,7 +316,11 @@ create_map_eq(struct mlx5_core_dev *dev,
+@@ -307,7 +317,11 @@ create_map_eq(struct mlx5_core_dev *dev,
  
  	eq->vecidx = vecidx;
  	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
@@ -55,7 +55,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -779,7 +793,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -812,7 +826,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -67,7 +67,7 @@ Change-Id: Ifb5c7eb75f3d3b9599818070f572cd4d494ebfc7
  
  	return eqe;
  }
-@@ -929,6 +947,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
+@@ -962,6 +980,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
  	return ERR_PTR(-ENOENT);
  }
  

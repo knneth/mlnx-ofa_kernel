@@ -2349,11 +2349,11 @@ static int cmd_sysfs_init(struct mlx5_core_dev *dev)
 	struct mlx5_cmd *cmd = &dev->cmd;
 	struct cmd_msg_cache *cache = cmd->cache;
 	struct cmd_msg_cache *ch;
-	struct device *class_dev = &dev->pdev->dev;
+	struct device *class_dev = dev->device;
 	int err;
 	int i;
 
-	cmd->ko = kobject_create_and_add("commands_cache", &dev->pdev->dev.kobj);
+	cmd->ko = kobject_create_and_add("commands_cache", &class_dev->kobj);
 	if (!cmd->ko)
 		return -ENOMEM;
 
@@ -2387,7 +2387,7 @@ err_rm:
 
 static void cmd_sysfs_cleanup(struct mlx5_core_dev *dev)
 {
-	struct device *class_dev = &dev->pdev->dev;
+	struct device *class_dev = dev->device;
 	struct cmd_msg_cache *ch;
 	int i;
 

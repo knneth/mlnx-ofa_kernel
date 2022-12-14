@@ -72,7 +72,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  	mlx5_accel_ipsec_cleanup(dev);
  err_ipsec_start:
  	mlx5_fpga_device_stop(dev);
-@@ -1453,7 +1475,9 @@ static void mlx5_unload(struct mlx5_core
+@@ -1454,7 +1476,9 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_sriov_detach(dev);
  	mlx5_cleanup_fs(dev);
  	mlx5_accel_ipsec_cleanup(dev);
@@ -82,7 +82,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  	mlx5_fpga_device_stop(dev);
  	mlx5_fw_tracer_cleanup(dev->tracer);
  	mlx5_eq_table_destroy(dev);
-@@ -1611,12 +1635,18 @@ out:
+@@ -1614,12 +1638,18 @@ out:
  
  static const struct devlink_ops mlx5_devlink_ops = {
  #ifdef CONFIG_MLX5_ESWITCH
@@ -101,7 +101,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  #endif
  };
  
-@@ -1922,7 +1952,7 @@ static void capi_cleanup(struct mlx5_cor
+@@ -1925,7 +1955,7 @@ static void capi_cleanup(struct mlx5_cor
  int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
  {
  	struct mlx5_priv *priv = &dev->priv;
@@ -110,7 +110,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  
  	dev->profile = &profile[profile_idx];
  
-@@ -2331,7 +2361,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -2334,7 +2364,11 @@ static void mlx5_pci_resume(struct pci_d
  		mlx5_core_info(dev, "%s: device recovered\n", __func__);
  }
  
@@ -122,7 +122,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2404,7 +2438,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2409,7 +2443,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

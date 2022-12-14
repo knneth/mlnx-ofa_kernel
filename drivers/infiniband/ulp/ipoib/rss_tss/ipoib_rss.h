@@ -71,6 +71,7 @@ struct ipoib_send_ring {
 	struct ipoib_tx_buf	*tx_ring;
 	unsigned		tx_head;
 	unsigned		tx_tail;
+	atomic_t                tx_outstanding;
 	struct napi_struct	napi;
 	struct work_struct	reschedule_napi_work;
 	struct ib_sge		tx_sge[MAX_SKB_FRAGS + 1];

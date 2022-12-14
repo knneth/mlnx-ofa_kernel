@@ -1159,20 +1159,19 @@ err_vf:
 	return err;
 }
 
-void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev)
+void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
 	struct mlx5_sriov_vf *tmp;
 	int vf;
 
 #ifdef CONFIG_MLX5_ESWITCH
-	if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_ETH &&
-	    sriov->num_vfs) {
-		tmp = &sriov->vfs[sriov->num_vfs];
+	if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_ETH && num_vfs) {
+		tmp = &sriov->vfs[num_vfs];
 		kobject_put(&tmp->kobj);
 	}
 #endif
-	for (vf = 0; vf < sriov->num_vfs; vf++) {
+	for (vf = 0; vf < num_vfs; vf++) {
 		tmp = &sriov->vfs[vf];
 		kobject_put(&tmp->kobj);
 	}

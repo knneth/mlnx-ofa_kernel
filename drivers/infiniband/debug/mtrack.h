@@ -25,6 +25,37 @@
 	dump_stack();								\
 })
 
+#ifdef CONFIG_ARM64
+#undef ioremap
+static inline void *ioremap(phys_addr_t phys_addr, size_t size)
+{
+	return __ioremap(phys_addr, size, __pgprot(PROT_DEVICE_nGnRE));
+}
+
+#undef ioremap_nocache
+static inline void *ioremap_nocache(phys_addr_t phys_addr, size_t size)
+{
+	return __ioremap(phys_addr, size, __pgprot(PROT_DEVICE_nGnRE));
+}
+
+#undef ioremap_wc
+static inline void *ioremap_wc(phys_addr_t phys_addr, size_t size)
+{
+	return __ioremap(phys_addr, size, __pgprot(PROT_NORMAL_NC));
+}
+
+/* ARCH_HAS_IOREMAP_WC was defined for arm64 until 2014-07-24 */
+#ifndef ARCH_HAS_IOREMAP_WC
+#define ARCH_HAS_IOREMAP_WC 1
+#endif
+
+#undef iounmap
+static inline void iounmap(void *addr)
+{
+	__iounmap(addr);
+}
+#endif /* CONFIG_ARM64 */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
 #define RDMA_KZALLOC_H
 #define kzalloc(size, flags) ({							\
@@ -146,7 +177,8 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
 	else									\
 		__memtrack_addr = kcalloc(n, size, flags);			\
-	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && (n) * (size) > 0) {		\
+	if ((!ZERO_OR_NULL_PTR(__memtrack_addr) && (n) * (size) > 0) &&		\
+	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -159,7 +191,8 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
 	else									\
 		__memtrack_addr = kcalloc(n, size, flags);			\
-	if (__memtrack_addr && (n) * (size) > 0) {				\
+	if ((__memtrack_addr && (n) * (size) > 0) &&				\
+	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -224,7 +257,7 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc"); \
 	else									\
 		__memtrack_addr = kvmalloc(sz, flgs);			\
-	if (__memtrack_addr) {							\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
 			memset(__memtrack_addr, 0x5A, sz);			\
@@ -648,9 +681,6 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_wc");\
 	else									\
 		__memtrack_addr = ioremap_nocache(phys_addr, size);			\
-	if (__memtrack_addr) {						\
-		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
-	}									\
 	__memtrack_addr;							\
 })
 #endif
@@ -688,9 +718,6 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_nocache"); \
 	else									\
 		__memtrack_addr = ioremap(phys_addr, size);			\
-	if (__memtrack_addr) {							\
-		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
-	}									\
 	__memtrack_addr;							\
 })
 #else
@@ -702,9 +729,6 @@
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_nocache"); \
 	else									\
 		__memtrack_addr = ioremap(phys_addr, size);			\
-	if (__memtrack_addr) {							\
-		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
-	}									\
 	__memtrack_addr;							\
 })
 #else

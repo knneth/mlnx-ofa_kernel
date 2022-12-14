@@ -46,7 +46,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  
  		if (ibdev->is_rep)
  			roce = mlx5_get_rep_roce(ibdev, ndev, &port_num);
-@@ -998,8 +1007,10 @@ int mlx5_ib_query_device(struct ib_devic
+@@ -1003,8 +1012,10 @@ int mlx5_ib_query_device(struct ib_devic
  	if (MLX5_CAP_GEN(mdev, cd))
  		props->device_cap_flags |= IB_DEVICE_CROSS_CHANNEL;
  
@@ -57,7 +57,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  
  	if (mlx5_ib_port_link_layer(ibdev, 1) ==
  	    IB_LINK_LAYER_ETHERNET && raw_support) {
-@@ -1822,7 +1833,9 @@ static int alloc_capi_context(struct mlx
+@@ -1827,7 +1838,9 @@ static int alloc_capi_context(struct mlx
  		goto out_mm;
  	}
  
@@ -67,7 +67,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	return 0;
  
  out_mm:
-@@ -1840,7 +1853,9 @@ static int free_capi_context(struct mlx5
+@@ -1845,7 +1858,9 @@ static int free_capi_context(struct mlx5
  	err = mlx5_core_destroy_pec(dev->mdev, cctx->pasid);
  	if (err)
  		mlx5_ib_warn(dev, "destroy pec failed\n");
@@ -77,7 +77,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	mmdrop(cctx->mm);
  	return err;
  }
-@@ -2143,9 +2158,11 @@ static int get_extended_index(unsigned l
+@@ -2148,9 +2163,11 @@ static int get_extended_index(unsigned l
  }
  
  
@@ -89,7 +89,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  
  static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
  {
-@@ -2202,6 +2219,9 @@ static int uar_mmap(struct mlx5_ib_dev *
+@@ -2207,6 +2224,9 @@ static int uar_mmap(struct mlx5_ib_dev *
  	int dyn_uar = (cmd == MLX5_IB_MMAP_ALLOC_WC);
  	int max_valid_idx = dyn_uar ? bfregi->num_sys_pages :
  				bfregi->num_static_sys_pages;
@@ -99,7 +99,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  
  	if (vma->vm_end - vma->vm_start != PAGE_SIZE)
  		return -EINVAL;
-@@ -2222,7 +2242,11 @@ static int uar_mmap(struct mlx5_ib_dev *
+@@ -2227,7 +2247,11 @@ static int uar_mmap(struct mlx5_ib_dev *
  	case MLX5_IB_MMAP_ALLOC_WC:
  /* Some architectures don't support WC memory */
  #if defined(CONFIG_X86)
@@ -111,7 +111,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  			return -EPERM;
  #elif !(defined(CONFIG_PPC) || ((defined(CONFIG_ARM) || defined(CONFIG_ARM64)) && defined(CONFIG_MMU)))
  			return -EPERM;
-@@ -3367,7 +3391,9 @@ static struct mlx5_ib_flow_prio *get_flo
+@@ -3372,7 +3396,9 @@ static struct mlx5_ib_flow_prio *get_flo
  						struct ib_flow_attr *flow_attr,
  						enum flow_table_type ft_type)
  {
@@ -121,7 +121,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	bool dont_trap = flow_attr->flags & IB_FLOW_ATTR_FLAGS_DONT_TRAP;
  	struct mlx5_flow_namespace *ns = NULL;
  	struct mlx5_ib_flow_prio *prio;
-@@ -3381,11 +3407,12 @@ static struct mlx5_ib_flow_prio *get_flo
+@@ -3386,11 +3412,12 @@ static struct mlx5_ib_flow_prio *get_flo
  
  	max_table_size = BIT(MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev,
  						       log_max_ft_size));
@@ -135,7 +135,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	if (flow_attr->type == IB_FLOW_ATTR_NORMAL) {
  		enum mlx5_flow_namespace_type fn_type;
  
-@@ -4050,7 +4077,9 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+@@ -4056,7 +4083,9 @@ _get_flow_table(struct mlx5_ib_dev *dev,
  		struct mlx5_ib_flow_matcher *fs_matcher,
  		bool mcast)
  {
@@ -145,7 +145,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	struct mlx5_flow_namespace *ns = NULL;
  	struct mlx5_ib_flow_prio *prio = NULL;
  	int max_table_size = 0;
-@@ -4058,11 +4087,12 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+@@ -4064,11 +4093,12 @@ _get_flow_table(struct mlx5_ib_dev *dev,
  	u32 flags = 0;
  	int priority;
  
@@ -159,7 +159,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	if (mcast)
  		priority = MLX5_IB_FLOW_MCAST_PRIO;
  	else
-@@ -6271,11 +6301,11 @@ static void mlx5_ib_stage_init_cleanup(s
+@@ -6277,11 +6307,11 @@ static void mlx5_ib_stage_init_cleanup(s
  	struct mlx5_core_dev *mdev = dev->mdev;
  
  	mlx5_ib_cleanup_multiport_master(dev);
@@ -173,7 +173,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  
  	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
  
-@@ -6442,7 +6472,9 @@ static const struct ib_device_ops mlx5_i
+@@ -6448,7 +6478,9 @@ static const struct ib_device_ops mlx5_i
  	.destroy_qp = mlx5_ib_destroy_qp,
  	.destroy_srq = mlx5_ib_destroy_srq,
  	.detach_mcast = mlx5_ib_mcg_detach,
@@ -183,7 +183,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  	.drain_rq = mlx5_ib_drain_rq,
  	.drain_sq = mlx5_ib_drain_sq,
  	.enable_driver = mlx5_ib_enable_driver,
-@@ -6488,6 +6520,9 @@ static const struct ib_device_ops mlx5_i
+@@ -6494,6 +6526,9 @@ static const struct ib_device_ops mlx5_i
  #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
  	.exp_prefetch_mr	= mlx5_ib_prefetch_mr,
  #endif
@@ -193,7 +193,7 @@ Change-Id: Id81a8fee200ee23e1323bd945409bd1ecbce3d3f
  
  
  	INIT_RDMA_OBJ_SIZE(ib_ah, mlx5_ib_ah, ibah),
-@@ -6517,10 +6552,16 @@ static const struct ib_device_ops mlx5_i
+@@ -6523,10 +6558,16 @@ static const struct ib_device_ops mlx5_i
  };
  
  static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {

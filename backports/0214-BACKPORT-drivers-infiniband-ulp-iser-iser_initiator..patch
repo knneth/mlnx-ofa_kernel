@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_initiator.c
 
 Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
 ---
- drivers/infiniband/ulp/iser/iser_initiator.c | 116 ++++++++++++++++---
- 1 file changed, 102 insertions(+), 14 deletions(-)
+ drivers/infiniband/ulp/iser/iser_initiator.c | 97 ++++++++++++++++++--
+ 1 file changed, 89 insertions(+), 8 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iser_initiator.c
 +++ b/drivers/infiniband/ulp/iser/iser_initiator.c
@@ -116,76 +116,60 @@ Change-Id: Iddde317e2aaea8876d559d7bc63ace90463cc130
  	if (iser_check_remote_inv(iser_conn, wc, hdr)) {
  		iscsi_conn_failure(iser_conn->iscsi_conn,
  				   ISCSI_ERR_CONN_FAILED);
-@@ -761,26 +815,60 @@ void iser_task_rdma_init(struct iscsi_is
+@@ -761,12 +815,27 @@ void iser_task_rdma_init(struct iscsi_is
  void iser_task_rdma_finalize(struct iscsi_iser_task *iser_task)
  {
  	int prot_count = scsi_prot_sg_count(iser_task->sc);
-+	int is_rdma_data_aligned = 1;
-+	int is_rdma_prot_aligned = 1;
-+	/* if we were reading, copy back to unaligned sglist,
-+	* anyway dma_unmap and free the copy
-+	*/
-+	if (iser_task->data[ISER_DIR_IN].orig_sg) {
-+		is_rdma_data_aligned = 0;
-+		iser_finalize_rdma_unaligned_sg(iser_task,
-+						&iser_task->data[ISER_DIR_IN],
-+						ISER_DIR_IN);
-+	}
-+
-+	if (iser_task->data[ISER_DIR_OUT].orig_sg) {
-+		is_rdma_data_aligned = 0;
-+		iser_finalize_rdma_unaligned_sg(iser_task,
-+						&iser_task->data[ISER_DIR_OUT],
-+						ISER_DIR_OUT);
-+	}
-+
-+	if (iser_task->prot[ISER_DIR_IN].orig_sg) {
-+		is_rdma_prot_aligned = 0;
-+		iser_finalize_rdma_unaligned_sg(iser_task,
-+						&iser_task->prot[ISER_DIR_IN],
-+						ISER_DIR_IN);
-+	}
-+
-+	if (iser_task->prot[ISER_DIR_OUT].orig_sg) {
-+		is_rdma_prot_aligned = 0;
-+		iser_finalize_rdma_unaligned_sg(iser_task,
-+						&iser_task->prot[ISER_DIR_OUT],
-+						ISER_DIR_OUT);
-+	}
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++	bool is_rdma_data_aligned;
++#endif
  
  	if (iser_task->dir[ISER_DIR_IN]) {
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++		is_rdma_data_aligned = true;
++		if (iser_task->data[ISER_DIR_IN].orig_sg) {
++			iser_finalize_rdma_unaligned_sg(iser_task,
++							&iser_task->data[ISER_DIR_IN],
++							ISER_DIR_IN);
++			is_rdma_data_aligned = false;
++		}
++#endif
  		iser_unreg_rdma_mem(iser_task, ISER_DIR_IN);
 -		iser_dma_unmap_task_data(iser_task,
 -					 &iser_task->data[ISER_DIR_IN],
 -					 DMA_FROM_DEVICE);
--		if (prot_count)
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
 +		if (is_rdma_data_aligned)
- 			iser_dma_unmap_task_data(iser_task,
--						 &iser_task->prot[ISER_DIR_IN],
--						 DMA_FROM_DEVICE);
-+						&iser_task->data[ISER_DIR_IN],
-+						DMA_FROM_DEVICE);
-+		if (prot_count && is_rdma_prot_aligned)
++#endif
 +			iser_dma_unmap_task_data(iser_task,
-+						&iser_task->prot[ISER_DIR_IN],
-+						DMA_FROM_DEVICE);
++						 &iser_task->data[ISER_DIR_IN],
++						 DMA_FROM_DEVICE);
+ 		if (prot_count)
+ 			iser_dma_unmap_task_data(iser_task,
+ 						 &iser_task->prot[ISER_DIR_IN],
+@@ -774,10 +843,22 @@ void iser_task_rdma_finalize(struct iscs
  	}
  
  	if (iser_task->dir[ISER_DIR_OUT]) {
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++		is_rdma_data_aligned = true;
++		if (iser_task->data[ISER_DIR_OUT].orig_sg) {
++			iser_finalize_rdma_unaligned_sg(iser_task,
++							&iser_task->data[ISER_DIR_OUT],
++							ISER_DIR_OUT);
++			is_rdma_data_aligned = false;
++		}
++#endif
  		iser_unreg_rdma_mem(iser_task, ISER_DIR_OUT);
 -		iser_dma_unmap_task_data(iser_task,
 -					 &iser_task->data[ISER_DIR_OUT],
 -					 DMA_TO_DEVICE);
--		if (prot_count)
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
 +		if (is_rdma_data_aligned)
++#endif
 +			iser_dma_unmap_task_data(iser_task,
-+						&iser_task->data[ISER_DIR_OUT],
-+						DMA_TO_DEVICE);
-+		if (prot_count && is_rdma_prot_aligned)
++						 &iser_task->data[ISER_DIR_OUT],
++						 DMA_TO_DEVICE);
+ 		if (prot_count)
  			iser_dma_unmap_task_data(iser_task,
--						 &iser_task->prot[ISER_DIR_OUT],
--						 DMA_TO_DEVICE);
-+						&iser_task->prot[ISER_DIR_OUT],
-+						DMA_TO_DEVICE);
- 	}
- }
+ 						 &iser_task->prot[ISER_DIR_OUT],

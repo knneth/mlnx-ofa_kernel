@@ -744,13 +744,14 @@ static ssize_t mlx5e_show_vf_roce(struct device *device,
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+	struct mlx5_vport *vport;
 	int len = 0;
 	bool mode;
 	int err = 0;
 	int i;
 
-	for (i = 1; i < esw->total_vports; i++) {
-		err = mlx5_eswitch_vport_get_other_hca_cap_roce(esw, i, &mode);
+	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
+		err = mlx5_eswitch_vport_get_other_hca_cap_roce(esw, vport, &mode);
 		if (err)
 			break;
 		len += sprintf(buf + len, "vf_num %d: %d\n", i - 1, mode);
@@ -769,6 +770,7 @@ static ssize_t mlx5e_store_vf_roce(struct device *device,
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+	struct mlx5_vport *vport;
 	int vf_num, err;
 	int mode;
 
@@ -776,7 +778,11 @@ static ssize_t mlx5e_store_vf_roce(struct device *device,
 	if (err != 2)
 		return -EINVAL;
 
-	err = mlx5_eswitch_vport_modify_other_hca_cap_roce(esw, vf_num + 1, (bool)mode);
+	vport = mlx5_eswitch_get_vport(esw, vf_num + 1);
+	if (IS_ERR(vport))
+		return PTR_ERR(vport);
+
+	err = mlx5_eswitch_vport_modify_other_hca_cap_roce(esw, vport, (bool)mode);
 	if (err)
 		return err;
 

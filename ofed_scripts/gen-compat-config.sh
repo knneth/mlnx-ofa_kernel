@@ -69,15 +69,19 @@ fi
 
 let KERNEL_SUBLEVEL3=${KERNEL_SUBLEVEL3}+1
 let KERNEL_SUBLEVEL4=${KERNEL_SUBLEVEL4}+1
-if [[ ${KERNEL_VERSION} -eq "2" ]] || [[ ${KERNEL_VERSION} -eq "3" ]]; then
-	for i in $(seq ${KERNEL_SUBLEVEL3} ${COMPAT_LATEST_3_VERSION}); do
-		set_config CONFIG_COMPAT_KERNEL_3_${i} y
-	done
 
-        for i in $(seq ${KERNEL_SUBLEVEL4} ${COMPAT_LATEST_4_VERSION}); do
-	        set_config CONFIG_COMPAT_KERNEL_4_${i} y
-        done
+if [[ ${KERNEL_VERSION} -le "4" ]]; then
+	for i in $(seq ${KERNEL_SUBLEVEL4} ${COMPAT_LATEST_4_VERSION}); do
+		set_config CONFIG_COMPAT_KERNEL_4_${i} y
+	done
+	if [[ ${KERNEL_VERSION} -le "3" ]]; then
+		for i in $(seq ${KERNEL_SUBLEVEL3} ${COMPAT_LATEST_3_VERSION}); do
+			set_config CONFIG_COMPAT_KERNEL_3_${i} y
+		done
+	fi
 fi
+
+
 # The purpose of these seem to be the inverse of the above other varibales.
 # The RHEL checks seem to annotate the existance of RHEL minor versions.
 RHEL_MAJOR=$(grep ^RHEL_MAJOR ${KLIB_BUILD}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
@@ -214,6 +218,11 @@ fi
 KERNEL4_14=$(echo ${KVERSION} | grep ^4\.14)
 if [[ ! -z ${KERNEL4_14} ]]; then
 	set_config CONFIG_COMPAT_KERNEL_4_14 y
+fi
+
+KERNEL3_10_0_327=$(echo ${KVERSION} | grep ^3\.10\.0\-327)
+if [[ ! -z ${KERNEL3_10_0_327} ]]; then
+	set_config CONFIG_COMPAT_KERNEL3_10_0_327 y
 fi
 
 if [[ ${CONFIG_COMPAT_KERNEL_4_14} = "y" ]]; then

@@ -3207,6 +3207,7 @@ struct cls_fl_filter {
 		struct rcu_head	rcu;
 	};
 	struct net_device *hw_dev;
+	u32 mlx5e_flags;
 };
 
 static unsigned short int fl_mask_range(const struct fl_flow_mask *mask)
@@ -3336,7 +3337,8 @@ static int fl_init(struct tcf_proto *tp)
 static void __fl_destroy_filter(struct cls_fl_filter *f)
 {
 	tcf_exts_destroy(&f->exts);
-	tcf_exts_put_net(&f->exts);
+	/* we should get flower from upstream with put/net to avoid races */
+	/* tcf_exts_put_net(&f->exts); */
 	kfree(f);
 }
 
@@ -3361,6 +3363,7 @@ static void fl_hw_destroy_filter(struct tcf_proto *tp, struct cls_fl_filter *f)
 {
 	struct tc_cls_flower_offload cls_flower = {};
 	struct net_device *dev = f->hw_dev;
+	struct mlx5e_priv *priv;
 
 	if (!tc_can_offload(dev))
 		return;
@@ -3370,7 +3373,8 @@ static void fl_hw_destroy_filter(struct tcf_proto *tp, struct cls_fl_filter *f)
 	cls_flower.cookie = (unsigned long) f;
 	cls_flower.egress_dev = f->hw_dev != tp->q->dev_queue->dev;
 
-	dev->netdev_ops->ndo_setup_tc(dev, TC_SETUP_CLSFLOWER, &cls_flower);
+	priv = netdev_priv(dev);
+	mlx5e_delete_flower(dev, priv, &cls_flower, f->mlx5e_flags);
 }
 
 static int fl_hw_replace_filter(struct tcf_proto *tp,
@@ -3380,7 +3384,6 @@ static int fl_hw_replace_filter(struct tcf_proto *tp,
 {
 	struct net_device *dev = tp->q->dev_queue->dev;
 	struct tc_cls_flower_offload cls_flower = {};
-	unsigned long flags = 0;
 	struct mlx5e_priv *priv;
 	struct mlx5_eswitch *esw;
 	int err;
@@ -3399,10 +3402,10 @@ static int fl_hw_replace_filter(struct tcf_proto *tp,
 			f->hw_dev = dev;
 			return tc_skip_sw(f->flags) ? -EINVAL : 0;
 		}
-		flags = MLX5_TC_FLAG(EGRESS);
+		f->mlx5e_flags = MLX5_TC_FLAG(EGRESS);
 	} else {
 		f->hw_dev = dev;
-		flags = MLX5_TC_FLAG(INGRESS);
+		f->mlx5e_flags = MLX5_TC_FLAG(INGRESS);
 	}
 
 	tc_cls_common_offload_init(&cls_flower.common, tp);
@@ -3413,7 +3416,7 @@ static int fl_hw_replace_filter(struct tcf_proto *tp,
 	cls_flower.key = &f->mkey;
 	cls_flower.exts = &f->exts;
 	priv = netdev_priv(f->hw_dev);
-	err = mlx5e_configure_flower(dev, priv, &cls_flower, flags);
+	err = mlx5e_configure_flower(dev, priv, &cls_flower, f->mlx5e_flags);
 	if (!err)
 		f->flags |= TCA_CLS_FLAGS_IN_HW;
 
@@ -3426,6 +3429,7 @@ static void fl_hw_update_stats(struct tcf_proto *tp, struct cls_fl_filter *f)
 {
 	struct tc_cls_flower_offload cls_flower = {};
 	struct net_device *dev = f->hw_dev;
+	struct mlx5e_priv *priv;
 
 	if (!tc_can_offload(dev))
 		return;
@@ -3436,8 +3440,8 @@ static void fl_hw_update_stats(struct tcf_proto *tp, struct cls_fl_filter *f)
 	cls_flower.exts = &f->exts;
 	cls_flower.egress_dev = f->hw_dev != tp->q->dev_queue->dev;
 
-	dev->netdev_ops->ndo_setup_tc(dev, TC_SETUP_CLSFLOWER,
-				      &cls_flower);
+	priv = netdev_priv(dev);
+	mlx5e_stats_flower(dev, priv, &cls_flower, f->mlx5e_flags);
 }
 
 static void __fl_delete(struct tcf_proto *tp, struct cls_fl_filter *f)
@@ -3667,6 +3671,9 @@ static int fl_set_key_flags(struct nlattr **tb,
 
 	fl_set_key_flag(key, mask, flags_key, flags_mask,
 			TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT, FLOW_DIS_IS_FRAGMENT);
+	fl_set_key_flag(key, mask, flags_key, flags_mask,
+			TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST,
+			FLOW_DIS_FIRST_FRAG);
 
 	return 0;
 }
@@ -4287,6 +4294,9 @@ static int fl_dump_key_flags(struct sk_buff *skb, u32 flags_key, u32 flags_mask)
 
 	fl_get_key_flag(flags_key, flags_mask, &key, &mask,
 			TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT, FLOW_DIS_IS_FRAGMENT);
+	fl_get_key_flag(flags_key, flags_mask, &key, &mask,
+			TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST,
+			FLOW_DIS_FIRST_FRAG);
 
 	_key = cpu_to_be32(key);
 	_mask = cpu_to_be32(mask);

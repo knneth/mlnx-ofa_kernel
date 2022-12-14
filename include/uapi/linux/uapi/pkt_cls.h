@@ -224,18 +224,18 @@ enum {
 #define TCA_CLS_FLAGS_NOT_IN_HW (1 << 3) /* filter isn't offloaded to HW */
 #endif
 
+#endif /* CONFIG_COMPAT_CLS_FLOWER_MOD */
+#endif /* CONFIG_COMPAT_KERNEL_4_14 */
+
 #ifndef HAVE_TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT
 enum {
 	TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT = (1 << 0),
-};
-#endif
-
-#ifndef HAVE_TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST
-enum {
 	TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST = (1 << 1),
 };
+#elif !defined(HAVE_TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST)
+enum {
+        TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST = (1 << 1),
+};
 #endif
 
-#endif /* CONFIG_COMPAT_CLS_FLOWER_MOD */
-#endif /* CONFIG_COMPAT_KERNEL_4_14 */
 #endif /* _COMPAT_UAPI_PKT_CLS_H */

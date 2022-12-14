@@ -46,7 +46,7 @@ Change-Id: I57ba757456a15c6e8fbdc5b761b4d65d7e7eca74
  #define	IPOIB_OP_RECV   (1ul << 31)
  #ifdef CONFIG_INFINIBAND_IPOIB_CM
  #define	IPOIB_OP_CM     (1ul << 30)
-@@ -444,6 +459,12 @@ struct ipoib_dev_priv {
+@@ -445,6 +460,12 @@ struct ipoib_dev_priv {
  	__be16 tss_qpn_mask_sz; /* Put in ipoib header reserved */
  	atomic_t tx_ring_ind;
  
@@ -59,7 +59,7 @@ Change-Id: I57ba757456a15c6e8fbdc5b761b4d65d7e7eca74
  	/* Function pointers for RSS support */
  	struct ipoib_func_pointers fp;
  };
-@@ -878,5 +899,6 @@ extern int ipoib_debug_level;
+@@ -879,5 +900,6 @@ extern int ipoib_debug_level;
  #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
  
  extern const char ipoib_driver_version[];

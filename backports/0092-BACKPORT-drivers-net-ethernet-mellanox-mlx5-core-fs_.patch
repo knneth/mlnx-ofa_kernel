@@ -73,10 +73,10 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  
  	root = find_root(&ft->node);
  	if (fg->node.active && root->cmds->destroy_flow_group(root, ft, fg))
-@@ -629,7 +645,11 @@ static void del_sw_flow_group(struct fs_
- 	ida_destroy(&fg->fte_allocator);
- 	if (ft->autogroup.active)
+@@ -632,7 +648,11 @@ static void del_sw_flow_group(struct fs_
+ 			ft->autogroup.num_big_groups--;
  		ft->autogroup.num_groups--;
+ 	}
 +#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
 +	err = bp_rhltable_remove(&ft->fgs_hash,
 +#else
@@ -85,7 +85,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  			      &fg->hash,
  			      rhash_fg);
  	WARN_ON(err);
-@@ -739,7 +759,11 @@ static struct mlx5_flow_group *alloc_ins
+@@ -742,7 +762,11 @@ static struct mlx5_flow_group *alloc_ins
  		return fg;
  
  	/* initialize refcnt, add to parent list */
@@ -97,7 +97,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  			      &fg->hash,
  			      rhash_fg);
  	if (ret) {
-@@ -769,7 +793,11 @@ static struct mlx5_flow_table *alloc_flo
+@@ -772,7 +796,11 @@ static struct mlx5_flow_table *alloc_flo
  	if (!ft)
  		return ERR_PTR(-ENOMEM);
  
@@ -109,7 +109,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	if (ret) {
  		kfree(ft);
  		return ERR_PTR(ret);
-@@ -1113,7 +1141,9 @@ static struct mlx5_flow_table *__mlx5_cr
+@@ -1116,7 +1144,9 @@ static struct mlx5_flow_table *__mlx5_cr
  	fs_prio->num_ft++;
  	up_write_ref_node(&fs_prio->node, false);
  	mutex_unlock(&root->chain_lock);
@@ -119,7 +119,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	return ft;
  destroy_ft:
  	root->cmds->destroy_flow_table(root, ft);
-@@ -1217,7 +1247,9 @@ struct mlx5_flow_group *mlx5_create_flow
+@@ -1222,7 +1252,9 @@ struct mlx5_flow_group *mlx5_create_flow
  		tree_put_node(&fg->node, false);
  		return ERR_PTR(err);
  	}
@@ -130,7 +130,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	fg->node.active = true;
  
  	return fg;
-@@ -1456,7 +1488,9 @@ static int create_auto_flow_group(struct
+@@ -1462,7 +1494,9 @@ static int create_auto_flow_group(struct
  	err = root->cmds->create_flow_group(root, ft, in, fg);
  	if (!err) {
  		fg->node.active = true;
@@ -140,7 +140,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	}
  
  	kvfree(in);
-@@ -1650,14 +1684,18 @@ static struct mlx5_flow_handle *add_rule
+@@ -1656,14 +1690,18 @@ static struct mlx5_flow_handle *add_rule
  		fte->action.action = old_action;
  		return handle;
  	}
@@ -159,7 +159,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  			notify_add_rule(handle->rule[i]);
  		}
  	}
-@@ -1717,16 +1755,26 @@ static int build_match_list(struct match
+@@ -1723,16 +1761,26 @@ static int build_match_list(struct match
  			    struct mlx5_flow_table *ft,
  			    struct mlx5_flow_spec *spec)
  {
@@ -186,7 +186,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  		struct match_list *curr_match;
  
  		if (likely(list_empty(&match_head->list))) {
-@@ -1824,6 +1872,9 @@ try_add_to_existing_fg(struct mlx5_flow_
+@@ -1831,6 +1879,9 @@ try_add_to_existing_fg(struct mlx5_flow_
  search_again_locked:
  	version = matched_fgs_get_version(match_head);
  	if (flow_act->flags & FLOW_ACT_NO_APPEND)
@@ -196,7 +196,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  		list_for_each_entry(iter, match_head, list) {
  			struct fs_fte *fte_tmp;
  
-@@ -1841,7 +1892,7 @@ search_again_locked:
+@@ -1848,7 +1899,7 @@ search_again_locked:
  			tree_put_node(&fte_tmp->node, false);
  			goto skip_search;
  		}
@@ -205,7 +205,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	/* Try to find a fg that already contains a matching fte */
  	list_for_each_entry(iter, match_head, list) {
  		struct fs_fte *fte_tmp;
-@@ -2710,6 +2761,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
+@@ -2723,6 +2774,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
  	fs_debugfs_cleanup(dev);
  	kmem_cache_destroy(steering->ftes_cache);
  	kmem_cache_destroy(steering->fgs_cache);
@@ -216,7 +216,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	kfree(steering);
  }
  
-@@ -2984,6 +3039,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -2997,6 +3052,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  	steering->dev = dev;
  	dev->priv.steering = steering;
  
@@ -227,7 +227,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev_name(dev->device));
  	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev_name(dev->device));
  	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
-@@ -3053,12 +3112,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -3066,12 +3125,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  			goto err;
  	}
  

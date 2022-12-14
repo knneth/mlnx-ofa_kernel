@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/miniflow.c
 
 Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/miniflow.c | 57 +++++++++++++++++++++-
- 1 file changed, 55 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/miniflow.c | 59 +++++++++++++++++++++-
+ 1 file changed, 57 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/miniflow.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/miniflow.c
@@ -15,10 +15,10 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
 +#ifdef CONFIG_COMPAT_NFT_GEN_FLOW_OFFLOAD
 +#include <net/netfilter/nft_gen_flow_offload.h>
 +#endif
+ #include <net/tc_act/tc_pedit.h>
  
  #include "lib/devcom.h"
- #include "miniflow.h"
-@@ -72,6 +75,19 @@ DEFINE_PER_CPU(struct mlx5e_miniflow *,
+@@ -76,6 +79,19 @@ DEFINE_PER_CPU(struct mlx5e_miniflow *,
  
  static DEFINE_SPINLOCK(miniflow_lock);
  
@@ -38,7 +38,7 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
  static const struct rhashtable_params mf_ht_params = {
  	.head_offset = offsetof(struct mlx5e_miniflow, node),
  	.key_offset = offsetof(struct mlx5e_miniflow, path.cookies),
-@@ -105,7 +121,9 @@ ssize_t mlx5_show_counters_ct(char *buf)
+@@ -109,7 +125,9 @@ ssize_t mlx5_show_counters_ct(char *buf)
  	p += _sprintf(p, buf, "nr_of_total_del_mf_succ                 : %lld\n", atomic64_read(&nr_of_total_del_mf_succ));
  	p += _sprintf(p, buf, "\n");
  	p += _sprintf(p, buf, "currently_in_hw                         : %d\n", atomic_read(&currently_in_hw));
@@ -48,7 +48,7 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
  	p += _sprintf(p, buf, "\n");
  	p += _sprintf(p, buf, "nr_of_total_mf_err                      : %lld\n", atomic64_read(&nr_of_total_mf_err));
  	p += _sprintf(p, buf, "nr_of_total_mf_err_alloc_flow           : %lld\n", atomic64_read(&nr_of_total_mf_err_alloc_flow));
-@@ -562,7 +580,11 @@ static int miniflow_register_ct_tuple(st
+@@ -572,7 +590,11 @@ static int miniflow_register_ct_tuple(st
  	zone = &ct_tuple->zone;
  	tuple = &ct_tuple->tuple;
  
@@ -60,7 +60,7 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
  }
  
  static int miniflow_register_ct_flow(struct mlx5e_miniflow *miniflow)
-@@ -1081,19 +1103,23 @@ static int miniflow_cache_get(void)
+@@ -1172,19 +1194,23 @@ static int miniflow_cache_get(void)
  	if (!miniflow_cache)
  		return -ENOMEM;
  
@@ -86,7 +86,7 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
  err_wq:
  	kmem_cache_destroy(miniflow_cache);
  	atomic_dec(&miniflow_cache_ref);
-@@ -1103,7 +1129,11 @@ err_wq:
+@@ -1194,7 +1220,11 @@ err_wq:
  static void miniflow_cache_put(void)
  {
  	if (atomic_dec_and_test(&miniflow_cache_ref)) {
@@ -98,7 +98,20 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
  		destroy_workqueue(miniflow_wq);
  		kmem_cache_destroy(miniflow_cache);
  	}
-@@ -1369,6 +1399,28 @@ int ct_flow_offload_add(void *arg, struc
+@@ -1347,10 +1377,12 @@ int miniflow_configure_ct(struct mlx5e_p
+ 	ct_tuple->zone = *cto->zone;
+ 	ct_tuple->tuple = *cto->tuple;
+ 
++#ifdef HAVE_TC_CT_OFFLOAD_NAT
+ 	ct_tuple->nat = cto->nat;
+ 	ct_tuple->ipv4 = cto->ipv4;
+ 	ct_tuple->port = cto->port;
+ 	ct_tuple->proto = cto->proto;
++#endif
+ 
+ 	ct_tuple->flow = NULL;
+ 
+@@ -1485,6 +1517,28 @@ int ct_flow_offload_add(void *arg, struc
  	return 0;
  }
  
@@ -127,7 +140,7 @@ Change-Id: Iec18e297e96ee83d4a7db4c65f0efa8d4589510f
  void ct_flow_offload_get_stats(struct list_head *head, u64 *lastuse)
  {
  	struct mlx5e_tc_flow *flow, *tmp;
-@@ -1385,6 +1437,7 @@ void ct_flow_offload_get_stats(struct li
+@@ -1501,6 +1555,7 @@ void ct_flow_offload_get_stats(struct li
  		}
  	}
  }

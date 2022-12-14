@@ -23,7 +23,7 @@ Change-Id: If4acbbc40a59e42b873b89b9fe8ceb0ae6315d77
  
  #define UVERBS_MODULE_NAME mlx5_ib
  #include <rdma/uverbs_named_ioctl.h>
-@@ -1475,10 +1480,12 @@ static int devx_handle_mkey_create(struc
+@@ -1484,10 +1489,12 @@ static int devx_handle_mkey_create(struc
  	return 0;
  }
  
@@ -36,7 +36,7 @@ Change-Id: If4acbbc40a59e42b873b89b9fe8ceb0ae6315d77
  
  /* This function to delete from the radix tree needs to be called before
   * destroying the underlying mkey. Otherwise a race might occur in case that
-@@ -1563,11 +1570,19 @@ static int devx_obj_cleanup(struct ib_uo
+@@ -1572,11 +1579,19 @@ static int devx_obj_cleanup(struct ib_uo
  		devx_cleanup_subscription(dev, sub_entry);
  	mutex_unlock(&devx_event_table->event_xa_lock);
  
@@ -60,7 +60,7 @@ Change-Id: If4acbbc40a59e42b873b89b9fe8ceb0ae6315d77
  
  	kfree(obj);
  	return ret;
-@@ -1953,7 +1968,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+@@ -1969,7 +1984,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
  	async_data->mdev = mdev;
  	async_data->fd_uobj = fd_uobj;
  

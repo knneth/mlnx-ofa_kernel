@@ -31,7 +31,7 @@ Change-Id: I0317ae29fe8b9d12d726e2fef71483d53ca067e8
  	if (l4num == IPPROTO_TCP)
  		flow_offload_fixup_tcp(&ct->proto.tcp);
  
-+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,19,0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
 +	l4proto = __nf_ct_l4proto_find(nf_ct_l3num(ct), l4num);
 +#else
  	l4proto = __nf_ct_l4proto_find(l4num);

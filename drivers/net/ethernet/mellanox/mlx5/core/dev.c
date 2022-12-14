@@ -278,6 +278,30 @@ static bool mlx5_has_added_dev_by_protocol(struct mlx5_core_dev *mdev, int proto
 	return found;
 }
 
+void mlx5_reload_interfaces(struct mlx5_core_dev *mdev,
+			    int protocol1, int protocol2,
+			    bool valid1, bool valid2)
+{
+	bool reload1;
+	bool reload2;
+
+	mutex_lock(&mlx5_intf_mutex);
+
+	reload1 = valid1 && mlx5_has_added_dev_by_protocol(mdev, protocol1);
+	reload2 = valid2 && mlx5_has_added_dev_by_protocol(mdev, protocol2);
+
+	if (reload2)
+		mlx5_remove_dev_by_protocol(mdev, protocol2);
+	if (reload1)
+		mlx5_remove_dev_by_protocol(mdev, protocol1);
+	if (reload1)
+		mlx5_add_dev_by_protocol(mdev, protocol1);
+	if (reload2)
+		mlx5_add_dev_by_protocol(mdev, protocol2);
+
+	mutex_unlock(&mlx5_intf_mutex);
+}
+
 void mlx5_reload_interface(struct mlx5_core_dev *mdev, int protocol)
 {
 	mutex_lock(&mlx5_intf_mutex);

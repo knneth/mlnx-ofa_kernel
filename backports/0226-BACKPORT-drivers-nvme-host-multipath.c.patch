@@ -49,7 +49,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  
  	if (nvme_path_is_optimized(ns)) {
  		int node, srcu_idx;
-@@ -558,9 +574,15 @@ static void nvme_ana_work(struct work_st
+@@ -560,9 +576,15 @@ static void nvme_ana_work(struct work_st
  	nvme_read_ana_log(ctrl, false);
  }
  
@@ -65,7 +65,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  
  	dev_info(ctrl->device, "ANATT timeout, resetting controller.\n");
  	nvme_reset_ctrl(ctrl);
-@@ -660,8 +682,16 @@ void nvme_mpath_remove_disk(struct nvme_
+@@ -662,8 +684,16 @@ void nvme_mpath_remove_disk(struct nvme_
  {
  	if (!head->disk)
  		return;
@@ -82,7 +82,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	blk_set_queue_dying(head->disk->queue);
  	/* make sure all pending bios are cleaned up */
  	kblockd_schedule_work(&head->requeue_work);
-@@ -684,7 +714,11 @@ int nvme_mpath_init(struct nvme_ctrl *ct
+@@ -686,7 +716,11 @@ int nvme_mpath_init(struct nvme_ctrl *ct
  	ctrl->anagrpmax = le32_to_cpu(id->anagrpmax);
  
  	mutex_init(&ctrl->ana_lock);
@@ -94,7 +94,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	ctrl->ana_log_size = sizeof(struct nvme_ana_rsp_hdr) +
  		ctrl->nanagrpid * sizeof(struct nvme_ana_group_desc);
  	ctrl->ana_log_size += ctrl->max_namespaces * sizeof(__le32);
-@@ -699,6 +733,10 @@ int nvme_mpath_init(struct nvme_ctrl *ct
+@@ -701,6 +735,10 @@ int nvme_mpath_init(struct nvme_ctrl *ct
  	}
  
  	INIT_WORK(&ctrl->ana_work, nvme_ana_work);
@@ -105,7 +105,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	ctrl->ana_log_buf = kmalloc(ctrl->ana_log_size, GFP_KERNEL);
  	if (!ctrl->ana_log_buf) {
  		error = -ENOMEM;
-@@ -721,4 +759,5 @@ void nvme_mpath_uninit(struct nvme_ctrl
+@@ -723,4 +761,5 @@ void nvme_mpath_uninit(struct nvme_ctrl
  	kfree(ctrl->ana_log_buf);
  	ctrl->ana_log_buf = NULL;
  }

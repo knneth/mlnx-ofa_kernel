@@ -46,9 +46,17 @@
 #include "fs_core.h"
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.7-1.0.0"
+#define DRIVER_VERSION	"4.7-3.2.9"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
+
+/* Number of EQs reserved for non-completion purposes */
+#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+#define MLX5_MAX_ASYNC_EQS 4
+#else
+#define MLX5_MAX_ASYNC_EQS 3
+#endif
+
 
 extern uint mlx5_core_debug_mask;
 
@@ -215,8 +223,8 @@ int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
 void mlx5_recover_device(struct mlx5_core_dev *dev);
-void mlx5_add_pci_to_irq_name(struct mlx5_core_dev *dev, const char *src_name,
-			      char *dest_name);
+void mlx5_rename_comp_eq(struct mlx5_core_dev *dev, unsigned int eq_ix,
+			 char *name);
 int mlx5_sriov_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_cleanup(struct mlx5_core_dev *dev);
 int mlx5_sriov_attach(struct mlx5_core_dev *dev);
@@ -226,7 +234,7 @@ int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
-void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev);
+void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 			       u32 group_id, struct kobject *group_kobj);
 void mlx5_destroy_vf_group_sysfs(struct mlx5_core_dev *dev,
@@ -261,6 +269,8 @@ int mlx5_query_pddr_troubleshooting_info(struct mlx5_core_dev *mdev,
 					 u16 *monitor_opcode,
 					 u8 *status_message);
 
+void mlx5_lag_remove_mdev(struct mlx5_core_dev *dev);
+void mlx5_lag_add_mdev(struct mlx5_core_dev *dev);
 void mlx5_lag_add(struct mlx5_core_dev *dev,
 		  struct net_device *netdev,
 		  bool intf_mutex_held);
@@ -275,6 +285,8 @@ int mlx5_irq_attach_nb(struct mlx5_irq_table *irq_table, int vecidx,
 		       struct notifier_block *nb);
 int mlx5_irq_detach_nb(struct mlx5_irq_table *irq_table, int vecidx,
 		       struct notifier_block *nb);
+void mlx5_irq_rename(struct mlx5_core_dev *dev, int vecidx,
+		     const char *name);
 struct cpumask *
 mlx5_irq_get_affinity_mask(struct mlx5_irq_table *irq_table, int vecidx);
 struct cpu_rmap *mlx5_irq_get_rmap(struct mlx5_irq_table *table);
@@ -285,8 +297,8 @@ void mlx5_events_cleanup(struct mlx5_core_dev *dev);
 void mlx5_events_start(struct mlx5_core_dev *dev);
 void mlx5_events_stop(struct mlx5_core_dev *dev);
 
-void mlx5_lag_enable(struct mlx5_core_dev *dev);
-void mlx5_lag_disable(struct mlx5_core_dev *dev);
+void mlx5_lag_enable(struct mlx5_core_dev *dev, struct mlx5_lag *ldev);
+struct mlx5_lag *mlx5_lag_disable(struct mlx5_core_dev *dev);
 
 #ifdef CONFIG_MLX5_ESWITCH
 int esw_offloads_load_all_reps(struct mlx5_eswitch *esw);
@@ -376,9 +388,9 @@ void mlx5e_init(void);
 void mlx5e_cleanup(void);
 
 int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				   int function_id, bool value);
+				   u16 function_id, bool value);
 int mlx5_get_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				int function_id, bool *value);
+				u16 function_id, bool *value);
 
 static inline bool mlx5_sriov_is_enabled(struct mlx5_core_dev *dev)
 {
@@ -417,6 +429,9 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 }
 
 void mlx5_reload_interface(struct mlx5_core_dev *mdev, int protocol);
+void mlx5_reload_interfaces(struct mlx5_core_dev *mdev,
+			    int protocol1, int protocol2,
+			    bool valid1, bool valid2);
 void mlx5_lag_update(struct mlx5_core_dev *dev);
 
 enum {

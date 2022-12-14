@@ -36,14 +36,36 @@
  */
 void backport_dependency_symbol(void);
 
+#ifndef __has_attribute
+# define __has_attribute(x) __GCC4_has_attribute_##x
+# define __GCC4_has_attribute___assume_aligned__      (__GNUC_MINOR__ >= 9)
+# define __GCC4_has_attribute___copy__                0
+# define __GCC4_has_attribute___designated_init__     0
+# define __GCC4_has_attribute___externally_visible__  1
+# define __GCC4_has_attribute___noclone__             1
+# define __GCC4_has_attribute___nonstring__           0
+# define __GCC4_has_attribute___no_sanitize_address__ (__GNUC_MINOR__ >= 8)
+#endif
+
+#ifndef __GCC4_has_attribute___copy__
+# define __GCC4_has_attribute___copy__                0
+#endif
+
+#if __has_attribute(__copy__)
+# define __copy(symbol)                 __attribute__((__copy__(symbol)))
+#else
+# define __copy(symbol)
+#endif
+
 #undef module_init
-#define module_init(initfn)						\
-	static int __init __init_backport(void)				\
-	{								\
-		backport_dependency_symbol();				\
-		return initfn();					\
-	}								\
-	int init_module(void) __attribute__((alias("__init_backport")));
+#define module_init(initfn)                                             \
+	static int __init __init_backport(void)                         \
+	{                                                               \
+		backport_dependency_symbol();                           \
+		return initfn();                                        \
+	}                                                               \
+	int init_module(void)  __copy(initfn)  __attribute__((alias("__init_backport")));
+
 
 /*
  * Each compat file represents compatibility code for new kernel

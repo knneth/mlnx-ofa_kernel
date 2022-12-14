@@ -8,6 +8,7 @@
 #else
 
 #include <net/flow_dissector.h>
+#include <net/ip_tunnels.h>
 
 struct flow_match {
 	struct flow_dissector	*dissector;

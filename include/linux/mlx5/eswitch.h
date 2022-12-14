@@ -59,6 +59,7 @@ struct mlx5_eswitch_rep {
 	u16		       vport_index;
 	u32		       vlan_refcount;
 	struct		       mlx5_eswitch *esw;
+	u32		       metadata_reg_c_0;
 };
 
 void mlx5_eswitch_register_vport_reps(struct mlx5_eswitch *esw,
@@ -79,6 +80,7 @@ mlx5_eswitch_add_send_to_vport_rule(struct mlx5_eswitch *on_esw,
 				    u32 sqn);
 u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev);
 u32 mlx5_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw, u16 vport);
+u32 mlx5_eswitch_get_vport_metadata_mask(void);
 int mlx5_eswitch_query_esw_vport_context(struct mlx5_eswitch *esw, u16 vport,
 					 bool other_vport,
 					 void *out, int outlen);
@@ -87,9 +89,15 @@ struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw);
 #ifdef CONFIG_MLX5_ESWITCH
 u16 mlx5_eswitch_get_encap_mode(struct mlx5_eswitch *esw);
 u32 mlx5_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw);
+bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num);
 #else  /* CONFIG_MLX5_ESWITCH */
 static inline u16 mlx5_eswitch_get_encap_mode(struct mlx5_eswitch *esw) { return 0; }
 static inline u32 mlx5_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw) { return 0; }
+static bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw,
+					  u16 vport_num)
+{
+	return false;
+}
 #endif /* CONFIG_MLX5_ESWITCH */
 
 #endif

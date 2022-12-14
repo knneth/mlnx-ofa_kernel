@@ -307,13 +307,13 @@ int ipoib_dev_init_default_rss(struct net_device *dev)
 		}
 		send_ring->dev = dev;
 		send_ring->index = i;
+		/* priv->tx_head, tx_tail & tx_outstanding are already 0 */
+		atomic_set(&send_ring->tx_outstanding, 0);
 		send_ring++;
 		tx_allocated++;
 	}
 
 	ipoib_napi_add_rss(dev);
-
-	/* priv->tx_head, tx_tail & tx_outstanding are already 0 */
 
 	if (ipoib_transport_dev_init_rss(dev, priv->ca)) {
 		pr_warn("%s: ipoib_transport_dev_init_rss failed\n", priv->ca->name);

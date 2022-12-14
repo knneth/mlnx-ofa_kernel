@@ -217,15 +217,13 @@ static void mlx5_update_tm_cap(struct mlx5_ib_dev *dev,
 	if (!MLX5_CAP_GEN(dev->mdev, tag_matching))
 		return;
 
-	if (MLX5_CAP_GEN(dev->mdev, rndv_offload_rc))
+	if (MLX5_CAP_GEN(dev->mdev, rndv_offload_rc)) {
 		props->tm_caps.capability_flags |= IB_EXP_TM_CAP_RC;
+		props->tm_caps.max_rndv_hdr_size = MLX5_TM_MAX_RNDV_MSG_SIZE;
+	}
 	if (MLX5_CAP_GEN(dev->mdev, rndv_offload_dc))
 		props->tm_caps.capability_flags |= IB_EXP_TM_CAP_DC;
 
-	if (!props->tm_caps.capability_flags)
-		return;
-
-	props->tm_caps.max_rndv_hdr_size = MLX5_TM_MAX_RNDV_MSG_SIZE;
 	props->tm_caps.max_num_tags =
 		(1 << MLX5_CAP_GEN(dev->mdev,
 				   log_tag_matching_list_sz)) - 1;

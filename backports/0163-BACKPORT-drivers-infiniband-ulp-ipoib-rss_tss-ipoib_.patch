@@ -8,7 +8,7 @@ Change-Id: Ie36223a8a89f1c0895e95e46421b0720ac0e690d
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_rss.h
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_rss.h
-@@ -103,6 +103,9 @@ struct ipoib_recv_ring {
+@@ -104,6 +104,9 @@ struct ipoib_recv_ring {
  	struct ipoib_rx_cm_info	cm;
  	struct ipoib_rx_ring_stats stats;
  	unsigned		index;
