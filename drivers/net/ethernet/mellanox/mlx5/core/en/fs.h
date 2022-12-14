@@ -117,10 +117,30 @@ enum {
 	MLX5E_L2_FT_LEVEL,
 	MLX5E_TTC_FT_LEVEL,
 	MLX5E_INNER_TTC_FT_LEVEL,
+#ifdef CONFIG_MLX5_EN_ACCEL_FS
+	MLX5E_ACCEL_FS_FT_LEVEL,
+	MLX5E_ACCEL_FS_ERR_FT_LEVEL,
+#endif
 #ifdef CONFIG_MLX5_EN_ARFS
 	MLX5E_ARFS_FT_LEVEL
 #endif
 };
+
+#define MLX5E_TTC_NUM_GROUPS	3
+#define MLX5E_TTC_GROUP1_SIZE	(BIT(3) + MLX5E_NUM_TUNNEL_TT)
+#define MLX5E_TTC_GROUP2_SIZE	 BIT(1)
+#define MLX5E_TTC_GROUP3_SIZE	 BIT(0)
+#define MLX5E_TTC_TABLE_SIZE	(MLX5E_TTC_GROUP1_SIZE +\
+				 MLX5E_TTC_GROUP2_SIZE +\
+				 MLX5E_TTC_GROUP3_SIZE)
+
+#define MLX5E_INNER_TTC_NUM_GROUPS	3
+#define MLX5E_INNER_TTC_GROUP1_SIZE	BIT(3)
+#define MLX5E_INNER_TTC_GROUP2_SIZE	BIT(1)
+#define MLX5E_INNER_TTC_GROUP3_SIZE	BIT(0)
+#define MLX5E_INNER_TTC_TABLE_SIZE	(MLX5E_INNER_TTC_GROUP1_SIZE +\
+					 MLX5E_INNER_TTC_GROUP2_SIZE +\
+					 MLX5E_INNER_TTC_GROUP3_SIZE)
 
 #ifdef CONFIG_MLX5_EN_RXNFC
 
@@ -176,6 +196,38 @@ struct mlx5e_arfs_tables {
 	struct workqueue_struct        *wq;
 };
 
+enum  accel_fs_type {
+	ACCEL_FS_IPV4_TCP,
+	ACCEL_FS_IPV6_TCP,
+#ifdef CONFIG_MLX5_IPSEC
+	ACCEL_FS_IPV4_ESP,
+	ACCEL_FS_IPV6_ESP,
+#endif
+	ACCEL_FS_NUM_TYPES,
+};
+
+#ifdef CONFIG_MLX5_IPSEC
+enum accel_fs_ipsec_default_type {
+	IPV4_ESP,
+	IPV6_ESP,
+	IPSEC_DEFAULT_TYPES,
+};
+
+struct mlx5e_ipsec_default {
+	struct mlx5e_flow_table  ft_rx_err;
+	struct mlx5_flow_handle *copy_fte;
+	struct mlx5_modify_hdr  *copy_modify_hdr;
+};
+#endif
+
+struct mlx5e_accel_fs {
+	struct mlx5e_flow_table  accel_tables[ACCEL_FS_NUM_TYPES];
+	struct mlx5_flow_handle *default_rules[ACCEL_FS_NUM_TYPES];
+#ifdef CONFIG_MLX5_IPSEC
+	struct mlx5e_ipsec_default ipsec_default[IPSEC_DEFAULT_TYPES];
+#endif
+};
+
 int mlx5e_arfs_create_tables(struct mlx5e_priv *priv);
 void mlx5e_arfs_destroy_tables(struct mlx5e_priv *priv);
 int mlx5e_arfs_enable(struct mlx5e_priv *priv);
@@ -193,6 +245,9 @@ struct mlx5e_sniffer;
 
 struct mlx5e_flow_steering {
 	struct mlx5_flow_namespace      *ns;
+#ifdef CONFIG_MLX5_IPSEC
+	struct mlx5_flow_namespace      *egress_ns;
+#endif
 #ifdef CONFIG_MLX5_EN_RXNFC
 	struct mlx5e_ethtool_steering   ethtool;
 #endif
@@ -203,6 +258,9 @@ struct mlx5e_flow_steering {
 	struct mlx5e_ttc_table          inner_ttc;
 #ifdef CONFIG_MLX5_EN_ARFS
 	struct mlx5e_arfs_tables        arfs;
+#endif
+#ifdef CONFIG_MLX5_EN_ACCEL_FS
+	struct mlx5e_accel_fs           accel;
 #endif
 	struct mlx5e_sniffer            *sniffer;
 };

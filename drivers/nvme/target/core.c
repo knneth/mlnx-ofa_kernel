@@ -291,7 +291,7 @@ static bool nvmet_peer_to_peer_capable(struct nvmet_port *port)
 
 	ops = nvmet_transports[port->disc_addr.trtype];
 	if (ops->peer_to_peer_capable &&
-	    ops->install_offload_queue &&
+	    ops->install_queue &&
 	    ops->create_offload_ctrl &&
 	    ops->destroy_offload_ctrl &&
 	    ops->enable_offload_ns &&
@@ -306,7 +306,8 @@ static bool nvmet_peer_to_peer_capable(struct nvmet_port *port)
 	    ops->offload_ns_write_inline_cmds &&
 	    ops->offload_ns_flush_cmds &&
 	    ops->offload_ns_error_cmds &&
-	    ops->offload_ns_backend_error_cmds)
+	    ops->offload_ns_backend_error_cmds &&
+	    ops->check_subsys_match_offload_port)
 		return ops->peer_to_peer_capable(port);
 
 	return false;
@@ -378,7 +379,7 @@ void nvmet_port_del_ctrls(struct nvmet_port *port, struct nvmet_subsys *subsys)
 	mutex_unlock(&subsys->lock);
 }
 
-int nvmet_enable_port(struct nvmet_port *port, bool offloadble)
+int nvmet_enable_port(struct nvmet_port *port, struct nvmet_subsys *subsys)
 {
 	const struct nvmet_fabrics_ops *ops;
 	int ret;
@@ -405,7 +406,13 @@ int nvmet_enable_port(struct nvmet_port *port, bool offloadble)
 	if (ret)
 		goto out_module_put;
 
-	if (offloadble && !nvmet_peer_to_peer_capable(port)) {
+	if (subsys->offloadble && !nvmet_peer_to_peer_capable(port)) {
+		ret = -EINVAL;
+		goto out_remove_port;
+	}
+
+	if (subsys->offloadble &&
+	    !ops->check_subsys_match_offload_port(port, subsys)) {
 		ret = -EINVAL;
 		goto out_remove_port;
 	}
@@ -416,7 +423,7 @@ int nvmet_enable_port(struct nvmet_port *port, bool offloadble)
 
 	port->ops = ops;
 	port->enabled = true;
-	port->offload = offloadble;
+	port->offload = subsys->offloadble;
 	return 0;
 
 out_remove_port:
@@ -611,6 +618,35 @@ static void nvmet_p2pmem_ns_add_p2p(struct nvmet_ctrl *ctrl,
 		ns->nsid);
 }
 
+static int nvmet_offload_ns_enable(struct nvmet_ns *ns)
+{
+	struct nvmet_subsys *subsys = ns->subsys;
+	struct nvmet_port *port;
+	struct nvmet_subsys_link *s;
+	struct nvmet_ctrl *ctrl;
+	int ret = 0;
+
+	list_for_each_entry(port, nvmet_ports, global_entry) {
+		list_for_each_entry(s, &port->subsystems, entry) {
+			if (s->subsys != subsys)
+				continue;
+			if (!port->ops->check_subsys_match_offload_port(port,
+									subsys))
+				return -EINVAL;
+		}
+	}
+
+	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry) {
+		if (ctrl->offload_ctrl) {
+			ret = ctrl->ops->enable_offload_ns(ctrl, ns);
+			if (ret)
+				return ret;
+		}
+	}
+
+	return ret;
+}
+
 int nvmet_ns_enable(struct nvmet_ns *ns)
 {
 	struct nvmet_subsys *subsys = ns->subsys;
@@ -650,12 +686,6 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
 		pci_dev_get(ns->pdev);
 	}
 
-	if (ns->pdev && !list_empty(&subsys->namespaces)) {
-		pr_err("Offloaded subsystem doesn't support many namespaces\n");
-		ret = -EINVAL;
-		goto out_pdev_put;
-	}
-
 	ret = percpu_ref_init(&ns->ref, nvmet_destroy_namespace,
 				0, GFP_KERNEL);
 	if (ret)
@@ -678,22 +708,16 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
 
 		list_add_tail_rcu(&ns->dev_link, &old->dev_link);
 	}
+	subsys->nr_namespaces++;
 
 	if (ns->pdev) {
-		list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry) {
-			// TODO: enable only one ns
-			if (ctrl->offload_ctrl) {
-				ret = ctrl->ops->enable_offload_ns(ctrl);
-				if (ret)
-					goto out_remove_list;
-			}
-		}
+		ret = nvmet_offload_ns_enable(ns);
+		if (ret)
+			goto out_remove_list;
 	}
 
 	if (ns->nsid > subsys->max_nsid)
 		subsys->max_nsid = ns->nsid;
-
-	subsys->nr_namespaces++;
 
 	nvmet_ns_changed(subsys, ns->nsid);
 	ns->enabled = true;
@@ -702,6 +726,7 @@ out_unlock:
 	mutex_unlock(&subsys->lock);
 	return ret;
 out_remove_list:
+	subsys->nr_namespaces--;
 	list_del_rcu(&ns->dev_link);
 	percpu_ref_kill(&ns->ref);
 	synchronize_rcu();
@@ -757,7 +782,7 @@ void nvmet_ns_disable(struct nvmet_ns *ns)
 	if (ns->pdev) {
 		list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry) {
 			if (ctrl->offload_ctrl)
-				ctrl->ops->disable_offload_ns(ctrl);
+				ctrl->ops->disable_offload_ns(ctrl, ns);
 		}
 	}
 

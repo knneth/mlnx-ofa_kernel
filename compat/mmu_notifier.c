@@ -15,6 +15,22 @@ EXPORT_SYMBOL_GPL(mmu_notifier_call_srcu);
 #include <linux/mmu_notifier.h>
 #include <linux/rculist.h>
 #include <linux/sched.h>
+#include <linux/sched/mm.h>
+#ifndef HAVE_MMU_NOTIFIER_HAS_LOCK
+struct mmu_notifier_mm {
+	/* all mmu notifiers registered in this mm are queued in this list */
+	struct hlist_head list;
+	bool has_itree;
+	/* to serialize the list modifications and hlist_unhashed */
+	spinlock_t lock;
+	unsigned long invalidate_seq;
+	unsigned long active_invalidate_ranges;
+	struct rb_root_cached itree;
+	wait_queue_head_t wq;
+	struct hlist_head deferred_list;
+};
+#endif
+
 void mmu_notifier_unregister_no_release(struct mmu_notifier *mn,
 					struct mm_struct *mm)
 {

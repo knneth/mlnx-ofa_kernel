@@ -74,6 +74,7 @@ enum mlx5_flow_namespace_type {
 	MLX5_FLOW_NAMESPACE_SNIFFER_RX,
 	MLX5_FLOW_NAMESPACE_SNIFFER_TX,
 	MLX5_FLOW_NAMESPACE_EGRESS,
+	MLX5_FLOW_NAMESPACE_EGRESS_KERNEL,
 	MLX5_FLOW_NAMESPACE_RDMA_RX,
 	MLX5_FLOW_NAMESPACE_RDMA_RX_KERNEL,
 };
@@ -84,6 +85,8 @@ enum {
 	FDB_SLOW_PATH,
 };
 
+struct mlx5_pkt_reformat;
+struct mlx5_modify_hdr;
 struct mlx5_flow_table;
 struct mlx5_flow_group;
 struct mlx5_flow_namespace;
@@ -126,7 +129,7 @@ struct mlx5_flow_destination {
 		struct {
 			u16		num;
 			u16		vhca_id;
-			u32		reformat_id;
+			struct mlx5_pkt_reformat *pkt_reformat;
 			u8		flags;
 		} vport;
 	};
@@ -200,8 +203,9 @@ enum {
 
 struct mlx5_flow_act {
 	u32 action;
-	u32 reformat_id;
-	u32 modify_id;
+	struct mlx5_modify_hdr  *modify_hdr;
+	struct mlx5_pkt_reformat *pkt_reformat;
+	u32 ipsec_obj_id;
 	uintptr_t esp_id;
 	u32 flags;
 	struct mlx5_fs_vlan vlan[MLX5_FS_VLAN_DEPTH];
@@ -210,8 +214,6 @@ struct mlx5_flow_act {
 
 #define MLX5_DECLARE_FLOW_ACT(name) \
 	struct mlx5_flow_act name = { .action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,\
-				      .reformat_id = 0, \
-				      .modify_id = 0, \
 				      .flags =  0, }
 
 /* Single destination per rule.
@@ -246,20 +248,19 @@ int mlx5_fs_remove_rx_underlay_qpn(struct mlx5_core_dev *dev, u32 underlay_qpn);
 
 void mlx5_get_flow_rule(struct mlx5_flow_rule *rule);
 void mlx5_put_flow_rule(struct mlx5_flow_rule *rule);
-int mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
-			     u8 namespace, u8 num_actions,
-			     void *modify_actions, u32 *modify_header_id);
+struct mlx5_modify_hdr *mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
+						 u8 ns_type, u8 num_actions,
+						 void *modify_actions);
 void mlx5_modify_header_dealloc(struct mlx5_core_dev *dev,
-				u32 modify_header_id);
+				struct mlx5_modify_hdr *modify_hdr);
 
-int mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
-			       int reformat_type,
-			       size_t size,
-			       void *reformat_data,
-			       enum mlx5_flow_namespace_type namespace,
-			       u32 *packet_reformat_id);
+struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
+						     int reformat_type,
+						     size_t size,
+						     void *reformat_data,
+						     enum mlx5_flow_namespace_type ns_type);
 void mlx5_packet_reformat_dealloc(struct mlx5_core_dev *dev,
-				  u32 packet_reformat_id);
+				  struct mlx5_pkt_reformat *reformat);
 
 enum {
 	MLX5_RULE_EVENT_ADD,

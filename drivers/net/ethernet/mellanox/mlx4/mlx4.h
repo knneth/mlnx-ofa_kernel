@@ -56,7 +56,7 @@
 #include "fw_qos.h"
 
 #define DRV_NAME	"mlx4_core"
-#define DRV_VERSION	"4.7-3.2.9"
+#define DRV_VERSION	"4.9-0.1.7"
 #define DRV_NAME_FOR_FW	"Linux-MLNX_OFED," DRV_VERSION
 
 #define MLX4_FS_NUM_OF_L2_ADDR		8
@@ -1076,8 +1076,7 @@ void mlx4_crdump_proc_init(struct proc_dir_entry *proc_core_dir);
 void mlx4_crdump_proc_cleanup(struct proc_dir_entry *proc_core_dir);
 int mlx4_crdump_init(struct mlx4_dev *dev);
 void mlx4_crdump_end(struct mlx4_dev *dev);
-int mlx4_restart_one(struct pci_dev *pdev, bool reload,
-		     struct devlink *devlink);
+int mlx4_restart_one(struct pci_dev *pdev);
 int mlx4_register_device(struct mlx4_dev *dev);
 void mlx4_unregister_device(struct mlx4_dev *dev);
 void mlx4_dispatch_event(struct mlx4_dev *dev, enum mlx4_dev_event type,

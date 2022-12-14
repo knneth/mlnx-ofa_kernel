@@ -54,7 +54,7 @@ static int uverbs_exp_free_dct(struct ib_uobject *uobject,
 	if (ret && why == RDMA_REMOVE_DESTROY)
 		return ret;
 
-	ib_uverbs_release_uevent(uobject->context->ufile, &udct->uevent);
+	ib_uverbs_release_uevent(&udct->uevent);
 
 	return ret;
 }

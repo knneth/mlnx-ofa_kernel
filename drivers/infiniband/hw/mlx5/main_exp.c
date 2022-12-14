@@ -40,8 +40,11 @@
 #include <rdma/ib_umem.h>
 #include <rdma/ib_user_verbs.h>
 #include <rdma/ib_user_verbs_exp.h>
+#include <rdma/restrack.h>
 #include "mlx5_ib.h"
 #include "cmd.h"
+
+#include "../../core/restrack.h"
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
 static void copy_odp_exp_caps(struct ib_exp_odp_caps *exp_caps,
@@ -1901,17 +1904,15 @@ static int tclass_update_qp(struct mlx5_ib_dev *ibdev, struct mlx5_ib_qp *mqp,
 	return err;
 }
 
-/* Locking here is a mess, mutex -> spinlock -> mutex
- * We have no other choice as we need to lock the QP
- * which uses a mutex, and the QP list uses a spinlock
- * and TCD use a mutex as well.
- */
 static void tclass_update_qps(struct mlx5_tc_data *tcd)
 {
 	struct mlx5_ib_dev *ibdev = tcd->ibdev;
 	struct mlx5_qp_context *context;
+	struct rdma_restrack_entry *res;
+	struct rdma_restrack_root *rt;
 	struct mlx5_ib_qp *mqp;
-	unsigned long flags;
+	unsigned long id = 0;
+	struct ib_qp *ibqp;
 	u8 tclass;
 	int ret;
 
@@ -1922,9 +1923,23 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 	if (!context)
 		return;
 
-	spin_lock_irqsave(&ibdev->reset_flow_resource_lock, flags);
-	list_for_each_entry(mqp, &ibdev->qp_list, qps_list) {
+	rt = &ibdev->ib_dev.res[RDMA_RESTRACK_QP];
+	xa_lock(&rt->xa);
+	xa_for_each(&rt->xa, id, res) {
+		if (!rdma_restrack_get(res))
+			continue;
+
+		xa_unlock(&rt->xa);
+
+		ibqp = container_of(res, struct ib_qp, res);
+		mqp = to_mqp(ibqp);
+
+		if (ibqp->qp_type == IB_QPT_GSI ||
+		    mqp->qp_sub_type == MLX5_IB_QPT_DCT)
+			goto cont;
+
 		mutex_lock(&mqp->mutex);
+
 		if (mqp->state == IB_QPS_RTS &&
 		    rdma_ah_get_ah_flags(&mqp->ah) & IB_AH_GRH) {
 
@@ -1941,8 +1956,11 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 			}
 		}
 		mutex_unlock(&mqp->mutex);
+cont:
+		rdma_restrack_put(res);
+		xa_lock(&rt->xa);
 	}
-	spin_unlock_irqrestore(&ibdev->reset_flow_resource_lock, flags);
+	xa_unlock(&rt->xa);
 	kfree(context);
 }
 
@@ -2429,7 +2447,6 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 	phys_addr_t pfn;
 	u32 uar_index;
 	size_t map_size = vma->vm_end - vma->vm_start;
-	struct rdma_umap_priv *vma_prv;
 	pgprot_t vm_page_prot;
 	int err;
 
@@ -2472,21 +2489,15 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 		return err;
 	}
 
-	vma_prv = kzalloc(sizeof(struct rdma_umap_priv), GFP_KERNEL);
-	if (!vma_prv) {
-		mlx5_cmd_free_uar(dev->mdev, uar_index);
-		return -ENOMEM;
-	}
 	pfn = idx2pfn(dev, uar_index);
 
 	vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 	vm_page_prot = mlx5_ib_pgprot_writecombine(vm_page_prot);
 
-	if (rdma_user_mmap_io(&context->ibucontext, vma, pfn, map_size, vm_page_prot, vma_prv)) {
+	if (rdma_user_mmap_io(&context->ibucontext, vma, pfn, map_size, vm_page_prot, NULL)) {
 
 		mlx5_ib_err(dev, "io remap failed\n");
 		mlx5_cmd_free_uar(dev->mdev, uar_index);
-		kfree(vma_prv);
 		return -EAGAIN;
 	}
 
@@ -2553,6 +2564,7 @@ struct ib_dm *mlx5_ib_exp_alloc_dm(struct ib_device *ibdev,
 
 	dm->dev_addr = dm->ibdm.dev_addr = memic_addr;
 
+	dm->exp_flow = true;
 	return &dm->ibdm;
 
 err_vma:

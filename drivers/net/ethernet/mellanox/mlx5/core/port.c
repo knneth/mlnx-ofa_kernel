@@ -294,7 +294,69 @@ int mlx5_query_module_num(struct mlx5_core_dev *dev, int *module_num)
 }
 EXPORT_SYMBOL_GPL(mlx5_query_module_num);
 
-static int mlx5_eeprom_page(int offset)
+static int
+mlx5_access_mcia_reg(struct mlx5_core_dev *dev,
+		     void *in, void *out)
+{
+	int module_num, err;
+
+	if (!in || !out)
+		return -EINVAL;
+
+	err = mlx5_query_module_num(dev, &module_num);
+	if (err)
+		return err;
+
+	/* Common settings */
+	MLX5_SET(mcia_reg, in, l, 0);
+	MLX5_SET(mcia_reg, in, module, module_num);
+
+	err = mlx5_core_access_reg(dev, in, MLX5_ST_SZ_BYTES(mcia_reg),
+				   out, MLX5_ST_SZ_BYTES(mcia_reg),
+				   MLX5_REG_MCIA, 0, 0);
+	if (err)
+		return err;
+
+	err = MLX5_GET(mcia_reg, out, status);
+	if (err) {
+		mlx5_core_err(dev, "query_mcia_reg failed: status: 0x%x\n",
+			      err);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+#define MCIA_MODULE_ID_READ_SZ 2
+int mlx5_query_module_id(struct mlx5_core_dev *dev,
+			 enum mlx5_module_id *module_id,
+			 u8 *revision_id)
+{
+	u32 out[MLX5_ST_SZ_DW(mcia_reg)];
+	u32 in[MLX5_ST_SZ_DW(mcia_reg)];
+	u8 *ptr;
+	int err;
+
+	memset(in, 0, sizeof(in));
+
+	MLX5_SET(mcia_reg, in, i2c_device_address, MLX5_I2C_ADDR_LOW);
+	MLX5_SET(mcia_reg, in, page_number, 0);
+	MLX5_SET(mcia_reg, in, device_address, 0);
+	MLX5_SET(mcia_reg, in, size, MCIA_MODULE_ID_READ_SZ);
+
+	err = mlx5_access_mcia_reg(dev, in, out);
+	if (err)
+		return err;
+
+	ptr = MLX5_ADDR_OF(mcia_reg, out, dword_0);
+	*module_id = ptr[0];
+	*revision_id = ptr[1];
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mlx5_query_module_id);
+
+static int mlx5_eeprom_page(u16 offset)
 {
 	if (offset < MLX5_EEPROM_PAGE_LENGTH)
 		/* Addresses between 0-255 - page 00 */
@@ -317,55 +379,69 @@ static int mlx5_eeprom_high_page_offset(int page_num)
 	return page_num * MLX5_EEPROM_HIGH_PAGE_LENGTH;
 }
 
-int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
-			     u16 offset, u16 size, u8 *data)
+static void mlx5_eeprom_qsfp_params(int *page_num,
+				    u16 *offset, u16 *i2c_addr)
 {
-	int module_num, page_num, status, err;
+	*i2c_addr = MLX5_I2C_ADDR_LOW;
+	*page_num = mlx5_eeprom_page(*offset);
+	*offset -=  mlx5_eeprom_high_page_offset(*page_num);
+}
+
+static void mlx5_eeprom_sfp_params(int *page_num,
+				   u16 *offset, u16 *i2c_addr)
+{
+	/* Right now the SFP page length is 512. Therefore,
+	 * the page number is zero for both low and and high pages.
+	 */
+	*page_num = 0;
+
+	/* SFP highpage size 512 and i2c_addr 0x51 */
+	*i2c_addr = MLX5_I2C_ADDR_LOW;
+	if (*offset >= MLX5_EEPROM_PAGE_LENGTH) {
+		*i2c_addr = MLX5_I2C_ADDR_HIGH;
+		*offset -= MLX5_EEPROM_PAGE_LENGTH;
+	}
+}
+
+static void
+mlx5_eeprom_calculate_params(enum mlx5_module_id module_id, int *page_num,
+			     u16 *offset, u16 *i2c_addr)
+{
+	if (module_id == MLX5_MODULE_ID_SFP)
+		mlx5_eeprom_sfp_params(page_num, offset, i2c_addr);
+	else
+		mlx5_eeprom_qsfp_params(page_num, offset, i2c_addr);
+}
+
+int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
+			     u16 offset, u16 size, u8 *data,
+			     enum mlx5_module_id module_id)
+{
 	u32 out[MLX5_ST_SZ_DW(mcia_reg)];
 	u32 in[MLX5_ST_SZ_DW(mcia_reg)];
+	int page_num, err;
 	u16 i2c_addr;
-	void *ptr = MLX5_ADDR_OF(mcia_reg, out, dword_0);
-
-	err = mlx5_query_module_num(dev, &module_num);
-	if (err)
-		return err;
+	void *ptr;
 
 	memset(in, 0, sizeof(in));
 	size = min_t(int, size, MLX5_EEPROM_MAX_BYTES);
 
-	/* Get the page number related to the given offset */
-	page_num = mlx5_eeprom_page(offset);
+	/* Adjust parameter based on module_id */
+	mlx5_eeprom_calculate_params(module_id, &page_num, &offset, &i2c_addr);
 
-	/* Set the right offset according to the page number,
-	 * For page_num > 0, relative offset is always >= 128 (high page).
-	 */
-	offset -= mlx5_eeprom_high_page_offset(page_num);
+	/* Cross pages read should not happen */
+	WARN_ON(offset + size > MLX5_EEPROM_PAGE_LENGTH);
 
-	if (offset + size > MLX5_EEPROM_PAGE_LENGTH)
-		/* Cross pages read, read until offset 256 in low page */
-		size -= offset + size - MLX5_EEPROM_PAGE_LENGTH;
-
-	i2c_addr = MLX5_I2C_ADDR_LOW;
-
-	MLX5_SET(mcia_reg, in, l, 0);
-	MLX5_SET(mcia_reg, in, module, module_num);
 	MLX5_SET(mcia_reg, in, i2c_device_address, i2c_addr);
 	MLX5_SET(mcia_reg, in, page_number, page_num);
 	MLX5_SET(mcia_reg, in, device_address, offset);
 	MLX5_SET(mcia_reg, in, size, size);
 
-	err = mlx5_core_access_reg(dev, in, sizeof(in), out,
-				   sizeof(out), MLX5_REG_MCIA, 0, 0);
+	err = mlx5_access_mcia_reg(dev, in, out);
 	if (err)
 		return err;
 
-	status = MLX5_GET(mcia_reg, out, status);
-	if (status) {
-		mlx5_core_err(dev, "query_mcia_reg failed: status: 0x%x\n",
-			      status);
-		return -EIO;
-	}
-
+	ptr = MLX5_ADDR_OF(mcia_reg, out, dword_0);
 	memcpy(data, ptr, size);
 
 	return size;
@@ -397,29 +473,6 @@ int mlx5_query_port_vl_hw_cap(struct mlx5_core_dev *dev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mlx5_query_port_vl_hw_cap);
-
-int mlx5_core_query_ib_ppcnt(struct mlx5_core_dev *dev,
-			     u8 port_num, void *out, size_t sz)
-{
-	u32 *in;
-	int err;
-
-	in  = kvzalloc(sz, GFP_KERNEL);
-	if (!in) {
-		err = -ENOMEM;
-		return err;
-	}
-
-	MLX5_SET(ppcnt_reg, in, local_port, port_num);
-
-	MLX5_SET(ppcnt_reg, in, grp, MLX5_INFINIBAND_PORT_COUNTERS_GROUP);
-	err = mlx5_core_access_reg(dev, in, sz, out,
-				   sz, MLX5_REG_PPCNT, 0, 0);
-
-	kvfree(in);
-	return err;
-}
-EXPORT_SYMBOL_GPL(mlx5_core_query_ib_ppcnt);
 
 static int mlx5_query_pfcc_reg(struct mlx5_core_dev *dev, u32 *out,
 			       u32 out_size)

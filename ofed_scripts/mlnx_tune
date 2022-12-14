@@ -46,9 +46,9 @@ import subprocess as sp
 from optparse 					import OptionParser
 from threading import Timer
 
-VERSION_MAJOR					= "4"
-VERSION_MINOR					= "7"
-VERSION_BUILD					= "5"
+VERSION_MAJOR					= "5"
+VERSION_MINOR					= "0"
+VERSION_BUILD					= "2"
 
 INDENT						= 1
 NA						= "N/A"
@@ -283,68 +283,85 @@ class Unit:
 		return float(value * Unit.unit_to_ratio[original_unit]) / Unit.unit_to_ratio[wanted_unit]
 
 class OS:
-	CENTOS7_0			= "CENTOS7.0"
-	CENTOS7_1			= "CENTOS7.1"
-	CENTOS7_2			= "CENTOS7.2"
-	CENTOS7_3			= "CENTOS7.3"
-	CENTOS7_4			= "CENTOS7.4"
-	CENTOS7_5			= "CENTOS7.5"
-	CENTOS7_6			= "CENTOS7.6"
-	RH6_4				= "RH6.4"
-	RH6_5				= "RH6.5"
-	RH6_6				= "RH6.6"
-	RH6_7				= "RH6.7"
-	RH7_0				= "RH7.0"
-	RH7_1				= "RH7.1"
-	RH7_2				= "RH7.2"
-	RH7_3				= "RH7.3"
-	RH7_4				= "RH7.4"
-	RH7_5				= "RH7.5"
-	RH7_6				= "RH7.6"
-	RH8_0				= "RH8.0"
-	FEDORA				= "FEDORA"
-	SLES11_3			= "SLES11.3"
-	SLES11_4			= "SLES11.4"
-	SLES12				= "SLES12"
-	UBUNTU14_04			= "UBUNTU14.04"
-	UBUNTU14_10			= "UBUNTU14.10"
-	UBUNTU15_04			= "UBUNTU15.04"
-	UBUNTU15_10			= "UBUNTU15.10"
-	UBUNTU16_04			= "UBUNTU16.04"
-	UBUNTU16_10			= "UBUNTU16.10"
-	UBUNTU17_04			= "UBUNTU17.04"
-	UBUNTU17_10			= "UBUNTU17.10"
-	UBUNTU18_04			= "UBUNTU18.04"
-	XENSERVER7_0			= "Xen Server 7.0"
-	XENSERVER7_2			= "Xen Server 7.2"
+	CENTOS6_3			= "CentOS6.3"
+	CENTOS6_10			= "CentOS6.10"
+	CENTOS7_2			= "CentOS7.2"
+	CENTOS7_3			= "CentOS7.3"
+	CENTOS7_4			= "CentOS7.4"
+	CENTOS7_5			= "CentOS7.5"
+	CENTOS7_6			= "CentOS7.6"
+	CENTOS7_7			= "CentOS7.7"
+	CENTOS7_8			= "CentOS7.8"
+	CENTOS8_0			= "CentOS8.0"
+	CENTOS8_1			= "CentOS8.1"
+	DEBIAN8_9			= "Debian8.9"
+	DEBIAN8_11			= "Debian8.11"
+	DEBIAN9_6			= "Debian9.6"
+	DEBIAN9_9			= "Debian9.9"
+	DEBIAN9_11			= "Debian9.11"
+	DEBIAN10_0			= "Debian10.0"
+	EULEROS2_0_3			= "EulerOS2.0sp3"
+	EULEROS2_0_8			= "EulerOS2.0sp8"
+	FEDORA30			= "Fedora30"
+	OL6_10				= "OL6.10"
+	OL7_4				= "OL7.4"
+	OL7_7				= "OL7.7"
+	OL7_8				= "OL7.8"
+	OL8_0				= "OL8.0"
+	OL8_1				= "OL8.1"
+	RH6_3				= "RHEL6.3"
+	RH6_10				= "RHEL6.10"
+	RH7_2				= "RHEL7.2"
+	RH7_3				= "RHEL7.3"
+	RH7_4				= "RHEL7.4"
+	RH7_5				= "RHEL7.5"
+	RH7_6				= "RHEL7.6"
+	RH7_7				= "RHEL7.7"
+	RH7_8				= "RHEL7.8"
+	RH8_0				= "RHEL8.0"
+	RH8_1				= "RHEL8.1"
+	RH8_2				= "RHEL8.2"
+	SLES11_3			= "SLES11SP3"
+	SLES11_4			= "SLES11SP4"
+	SLES12_3			= "SLES12SP3"
+	SLES12_4			= "SLES12SP4"
+	SLES12_5			= "SLES12SP5"
+	SLES15_0			= "SLES15SP0"
+	SLES15_1			= "SLES15SP1"
+	UBUNTU14_04			= "Ubuntu14.04"
+	UBUNTU16_04			= "Ubuntu16.04"
+	UBUNTU18_04			= "Ubuntu18.04"
+	UBUNTU19_04			= "Ubuntu19.04"
+	UBUNTU19_10			= "Ubuntu19.10"
 	ESX				= "ESX"
 	WIN				= "WIN"
 	FREEBSD				= "FREEBSD"
 	POWER_KVM			= "POWER KVM"
 	SUNOS				= "SUNOS"
 	UEFI				= "UEFI"
-	DEBIAN				= "DEBIAN"
 	UNKNOWN				= "UNKNOWN"
 	ALL				= "ALL"
-	SUPPORTED_OS			= [
-						RH6_4, RH6_5, RH6_6, RH6_7, RH7_0, RH7_1, RH7_2,
-						RH7_3, RH7_4, RH7_5, RH7_6, RH8_0, SLES11_3,
-						SLES11_4, SLES12, UBUNTU14_04, UBUNTU14_10,
-						UBUNTU15_04, UBUNTU15_10, UBUNTU16_04, UBUNTU16_10,
-						UBUNTU17_04, UBUNTU17_10, UBUNTU18_04, XENSERVER7_0,
-						XENSERVER7_2, CENTOS7_0, CENTOS7_1, CENTOS7_2,
-						CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6
-					  ]
-	SYSTEMCTL_ACCESS_OS		= [
-						RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6,
-						RH8_0, CENTOS7_0, CENTOS7_1, CENTOS7_2, CENTOS7_3,
-						CENTOS7_4, CENTOS7_5, CENTOS7_6, XENSERVER7_0,
-						XENSERVER7_2
-					  ]
-	SUSE				= [SLES11_3, SLES11_4, SLES12]
-	PPC_DEVICE_NEW_FORMAT_OS	= [RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6, RH8_0]
-	NO_IPV6_FORWARDING_SUPPORT_OS	= [UBUNTU14_04]
-	TC_QDISC_NO_QUEUE_METHOD_SUPPORT_OS = [RH7_3, RH7_4, RH7_5, RH7_6, RH8_0]
+	SUPPORTED_OS = [
+		CENTOS6_3, CENTOS6_10, CENTOS7_2,CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6,
+		CENTOS7_7, CENTOS8_0, CENTOS8_1, DEBIAN8_9, DEBIAN8_11, DEBIAN9_6,
+		DEBIAN9_9, DEBIAN9_11, DEBIAN10_0, EULEROS2_0_3, EULEROS2_0_8, FEDORA30, OL6_10,
+		OL7_4, OL7_7, OL7_8, OL8_0, OL8_1, RH6_3, RH6_10, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6,
+		RH7_7, RH7_8, RH8_0, RH8_1, SLES11_3, SLES11_4, SLES12_3, SLES12_4, SLES12_5,
+		SLES15_0, SLES15_1, UBUNTU14_04, UBUNTU16_04, UBUNTU18_04, UBUNTU19_04, UBUNTU19_10
+		]
+	SYSTEMCTL_ACCESS_OS = [
+		CENTOS7_2, CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6, CENTOS7_7, CENTOS8_0,
+		CENTOS8_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6, RH7_7, RH7_8, RH8_0, RH8_1, RH8_2
+		]
+	SUSE = [SLES11_3, SLES11_4, SLES12_3, SLES12_4, SLES12_5, SLES15_0, SLES15_1]
+	PPC_DEVICE_NEW_FORMAT_OS = [
+		CENTOS7_2, CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6, CENTOS7_7, CENTOS8_0,
+		CENTOS8_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6, RH7_7, RH7_8, RH8_0, RH8_1, RH8_2,
+		]
+	NO_IPV6_FORWARDING_SUPPORT_OS = [UBUNTU14_04]
+	TC_QDISC_NO_QUEUE_METHOD_SUPPORT_OS = [
+		RH7_4, RH7_5, RH7_6, RH7_7, RH7_8, RH8_0, RH8_1, RH8_2
+		]
 
 	def get_os(self):
 		""" Return local OS Type (one of the list OS_ALL)
@@ -370,18 +387,10 @@ class OS:
 			except IndexError as err:
 				os_version = ""
 			if any(dist in linux_dist for dist in ['redhat', 'red hat']):
-				if os_version == '6.4':
-					return OS.RH6_4
-				if os_version == '6.5':
-					return OS.RH6_5
-				if os_version == '6.6':
-					return OS.RH6_6
-				if os_version == '6.7':
-					return OS.RH6_7
-				if os_version == '7.0':
-					return OS.RH7_0
-				if os_version == '7.1':
-					return OS.RH7_1
+				if os_version == '6.3':
+					return OS.RH6_3
+				if os_version == '6.10':
+					return OS.RH6_10
 				if os_version == '7.2':
 					return OS.RH7_2
 				if os_version == '7.3':
@@ -392,10 +401,19 @@ class OS:
 					return OS.RH7_5
 				if os_version == '7.6':
 					return OS.RH7_6
+				if os_version == '7.7':
+					return OS.RH7_7
+				if os_version == '7.8':
+					return OS.RH7_8
 				if os_version == '8.0':
 					return OS.RH8_0
+				if os_version == '8.1':
+					return OS.RH8_1
+				if os_version == '8.2':
+					return OS.RH8_2
 			if linux_dist == 'fedora':
-				return OS.FEDORA
+				if os_version == '30':
+					return OS.FEDORA30
 			if 'suse' in linux_dist:
 				if os_version == '11':
 					return OS.SLES11_3
@@ -404,27 +422,19 @@ class OS:
 			if linux_dist == 'ubuntu':
 				if os_version == '14.04':
 					return OS.UBUNTU14_04
-				if os_version == '14.10':
-					return OS.UBUNTU14_10
-				if os_version == '15.04':
-					return OS.UBUNTU15_04
-				if os_version == '15.10':
-					return OS.UBUNTU15_10
 				if os_version == '16.04':
 					return OS.UBUNTU16_04
-				if os_version == '16.10':
-					return OS.UBUNTU16_10
-				if os_version == '17.04':
-					return OS.UBUNTU17_04
-				if os_version == '17.10':
-					return OS.UBUNTU17_10
 				if os_version == '18.04':
 					return OS.UBUNTU18_04
+				if os_version == '19.04':
+					return OS.UBUNTU19_04
+				if os_version == '19.10':
+					return OS.UBUNTU19_10
 			if 'centos' in linux_dist:
-				if os_version.startswith('7.0'):
-					return OS.CENTOS7_0
-				if os_version.startswith('7.1'):
-					return OS.CENTOS7_1
+				if os_version.startswith('6.3'):
+					return OS.CENTOS6_3
+				if os_version.startswith('6.10'):
+					return OS.CENTOS6_10
 				if os_version.startswith('7.2'):
 					return OS.CENTOS7_2
 				if os_version.startswith('7.3'):
@@ -435,17 +445,47 @@ class OS:
 					return OS.CENTOS7_5
 				if os_version.startswith('7.6'):
 					return OS.CENTOS7_6
+				if os_version.startswith('7.7'):
+					return OS.CENTOS7_7
+				if os_version.startswith('8.0'):
+					return OS.CENTOS8_0
+				if os_version.startswith('8.1'):
+					return OS.CENTOS8_1
 			if linux_dist == 'debian':
-				return OS.DEBIAN
+				if os_version.startswith('8.9'):
+					return OS.DEBIAN8_9
+				if os_version.startswith('8.11'):
+					return OS.DEBIAN8_11
+				if os_version.startswith('9.6'):
+					return OS.DEBIAN9_6
+				if os_version.startswith('9.9'):
+					return OS.DEBIAN9_9
+				if os_version.startswith('9.11'):
+					return OS.DEBIAN9_11
+				if os_version.startswith('10.0'):
+					return OS.DEBIAN10_0
+			if 'oracle' in linux_dist:
+				if os_version.startswith('6.10'):
+					return OS.OL6_10
+				if os_version.startswith('7.4'):
+					return OS.OL7_4
+				if os_version.startswith('7.6'):
+					return OS.OL7_6
+				if os_version.startswith('7.7'):
+					return OS.OL7_7
+				if os_version.startswith('8.0'):
+					return OS.OL8_0
+				if os_version.startswith('8.1'):
+					return OS.OL8_1
 			if linux_dist == "freebsd":
 				return OS.FREEBSD
 			if linux_dist == "ibm_powerkvm":
 				return OS.POWER_KVM
 			if linux_dist == 'xenserver':
-				if os_version == '7.0.0':
-					return OS.XENSERVER7_0
-				if os_version == '7.2.0':
-					return OS.XENSERVER7_2
+				if os_version == '6.5.0':
+					return OS.XENSERVER6_5
+				if os_version == '7.1.0':
+					return OS.XENSERVER7_1
 
 		logging.warning("Unknown OS [%s,%s,%s]. Tuning might be non-optimized." % (str(platform.system()), str(platform.release()), str(platform.dist())))
 		return OS.UNKNOWN
@@ -1766,8 +1806,7 @@ class RingInfo:
 		""" set ring xps number
 		"""
 		cmd = XPS_AFFINITY_MASK_CMD%(interface_name, self.number)
-		( rc, mask ) = getstatusoutput(cmd)
-		assert (not rc), "Unexpected error - cmd: %s bad exit status."%(cmd)
+		( rc, mask ) = run_command_warn_when_fail(cmd, shell=True, warning_message="Unable to set XPS affinity mask to interface_name: %s ring: %s."%(interface_name, self.number))
 		self.xps_mask = mask
 
 	def get_irqs(self, interface_name, ring_number=None):

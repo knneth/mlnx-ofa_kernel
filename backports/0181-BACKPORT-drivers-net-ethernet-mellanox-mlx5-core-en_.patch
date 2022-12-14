@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I7d0a4eaa7073e88ce589ebab07b032febb836714
 ---
- .../net/ethernet/mellanox/mlx5/core/en_accel/tls.h | 30 ++++++++++++++++++++--
- 1 file changed, 28 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en_accel/tls.h         | 32 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
-@@ -54,7 +54,11 @@ struct mlx5e_tls {
+@@ -56,7 +56,11 @@ struct mlx5e_tls {
  };
  
  struct mlx5e_tls_offload_context_tx {
@@ -21,7 +21,7 @@ Change-Id: I7d0a4eaa7073e88ce589ebab07b032febb836714
  	u32 expected_seq;
  	__be32 swid;
  };
-@@ -63,14 +67,27 @@ static inline struct mlx5e_tls_offload_c
+@@ -65,14 +69,27 @@ static inline struct mlx5e_tls_offload_c
  mlx5e_get_tls_tx_context(struct tls_context *tls_ctx)
  {
  	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_tx) >
@@ -50,7 +50,7 @@ Change-Id: I7d0a4eaa7073e88ce589ebab07b032febb836714
  	__be32 handle;
  };
  
-@@ -78,8 +95,17 @@ static inline struct mlx5e_tls_offload_c
+@@ -80,8 +97,17 @@ static inline struct mlx5e_tls_offload_c
  mlx5e_get_tls_rx_context(struct tls_context *tls_ctx)
  {
  	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_rx) >
@@ -69,3 +69,14 @@ Change-Id: I7d0a4eaa7073e88ce589ebab07b032febb836714
  			    struct mlx5e_tls_offload_context_rx,
  			    base);
  }
+@@ -98,8 +124,10 @@ int mlx5e_tls_get_stats(struct mlx5e_pri
+ 
+ static inline void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	if (mlx5_accel_is_ktls_device(priv->mdev))
+ 		mlx5e_ktls_build_netdev(priv);
++#endif
+ }
+ 
+ static inline int mlx5e_tls_init(struct mlx5e_priv *priv) { return 0; }

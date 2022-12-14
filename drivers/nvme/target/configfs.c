@@ -830,10 +830,10 @@ static int nvmet_port_subsys_allow_link(struct config_item *parent,
 	}
 
 	if (list_empty(&port->subsystems)) {
-		ret = nvmet_enable_port(port, subsys->offloadble);
+		ret = nvmet_enable_port(port, subsys);
 		if (ret)
 			goto out_free_link;
-	} else if (port->offload) {
+	} else if (port->offload && !port->many_offload_subsys_support) {
 		/*
 		 * This limitation exists only in 1.0 spec.
 		 * Spec 1.1 solved it by passing CNTLID in private data format.
@@ -1108,7 +1108,6 @@ static ssize_t nvmet_subsys_attr_offload_store(struct config_item *item,
 	struct nvmet_subsys *subsys = to_subsys(item);
 	bool offload;
 	struct nvmet_ns *ns;
-	int ns_count = 0;
 	int ret = 0;
 
 	if (strtobool(page, &offload))
@@ -1132,17 +1131,7 @@ static ssize_t nvmet_subsys_attr_offload_store(struct config_item *item,
 	}
 
 	if (offload) {
-		list_for_each_entry_rcu(ns, &subsys->namespaces, dev_link)
-			ns_count++;
-		if (ns_count > 1) {
-			pr_err("Offloaded subsystem doesn't support many namespaces\n");
-			ret = -EINVAL;
-			goto out_unlock;
-		}
-	}
-
-	list_for_each_entry_rcu(ns, &subsys->namespaces, dev_link) {
-		if (offload) {
+		list_for_each_entry_rcu(ns, &subsys->namespaces, dev_link) {
 			ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
 			if (!ns->pdev) {
 				pr_err("Couldn't find nvme pci device from device %s\n",
@@ -1150,6 +1139,11 @@ static ssize_t nvmet_subsys_attr_offload_store(struct config_item *item,
 				ret = -EINVAL;
 				goto out_unlock;
 			}
+		}
+	}
+
+	list_for_each_entry_rcu(ns, &subsys->namespaces, dev_link) {
+		if (offload) {
 			pci_dev_get(ns->pdev);
 		} else {
 			WARN_ON_ONCE(!ns->pdev);

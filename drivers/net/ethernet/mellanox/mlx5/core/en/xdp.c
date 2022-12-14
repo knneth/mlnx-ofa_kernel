@@ -133,14 +133,12 @@ static void mlx5e_xdp_mpwqe_session_start(struct mlx5e_xdpsq *sq)
 	u8  wqebbs;
 	u16 pi;
 
-	mlx5e_xdpsq_fetch_wqe(sq, &session->wqe);
+	session->wqe = mlx5e_xdpsq_fetch_wqe(sq, &pi);
 
 	prefetchw(session->wqe->data);
 	session->ds_count  = MLX5E_XDP_TX_EMPTY_DS_COUNT;
 	session->pkt_count = 0;
 	session->complete  = 0;
-
-	pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
 
 /* The mult of MLX5_SEND_WQE_MAX_WQEBBS * MLX5_SEND_WQEBB_NUM_DS
  * (16 * 4 == 64) does not fit in the 6-bit DS field of Ctrl Segment.

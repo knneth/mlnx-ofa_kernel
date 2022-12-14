@@ -22,7 +22,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  {
  	if (sg_pcopy_from_buffer(req->sg, req->sg_cnt, buf, len, off) != len) {
  		req->error_loc = offsetof(struct nvme_common_command, dptr);
-@@ -525,7 +530,9 @@ void nvmet_put_namespace(struct nvmet_ns
+@@ -532,7 +537,9 @@ void nvmet_put_namespace(struct nvmet_ns
  static void nvmet_ns_dev_disable(struct nvmet_ns *ns)
  {
  	nvmet_bdev_ns_disable(ns);
@@ -32,7 +32,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  }
  
  static int nvmet_p2pmem_ns_enable(struct nvmet_ns *ns)
-@@ -627,8 +634,10 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+@@ -663,8 +670,10 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
  		goto out_unlock;
  
  	ret = nvmet_bdev_ns_enable(ns);
@@ -43,7 +43,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  	if (ret)
  		goto out_unlock;
  
-@@ -996,9 +1005,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1021,9 +1030,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
  		return ret;
  	}
  
@@ -55,7 +55,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  		return nvmet_bdev_parse_io_cmd(req);
  }
  
-@@ -1087,9 +1098,69 @@ void nvmet_req_execute(struct nvmet_req
+@@ -1112,9 +1123,69 @@ void nvmet_req_execute(struct nvmet_req
  }
  EXPORT_SYMBOL_GPL(nvmet_req_execute);
  
@@ -125,7 +125,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  
  	if (IS_ENABLED(CONFIG_PCI_P2PDMA)) {
  		if (req->sq->ctrl && req->ns)
-@@ -1112,9 +1183,15 @@ int nvmet_req_alloc_sgl(struct nvmet_req
+@@ -1137,9 +1208,15 @@ int nvmet_req_alloc_sgl(struct nvmet_req
  		 */
  	}
  
@@ -141,7 +141,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  
  	return 0;
  }
-@@ -1125,7 +1202,11 @@ void nvmet_req_free_sgl(struct nvmet_req
+@@ -1150,7 +1227,11 @@ void nvmet_req_free_sgl(struct nvmet_req
  	if (req->p2p_dev)
  		pci_p2pmem_free_sgl(req->p2p_dev, req->sg);
  	else
@@ -153,7 +153,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  
  	req->sg = NULL;
  	req->sg_cnt = 0;
-@@ -1655,3 +1736,6 @@ module_init(nvmet_init);
+@@ -1680,3 +1761,6 @@ module_init(nvmet_init);
  module_exit(nvmet_exit);
  
  MODULE_LICENSE("GPL v2");

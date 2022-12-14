@@ -36,6 +36,7 @@
 #include <linux/tcp.h>
 #include <linux/mlx5/fs.h>
 #include "en.h"
+#include "en_accel/fs.h"
 #include "lib/mpfs.h"
 
 static int mlx5e_add_l2_flow_rule(struct mlx5e_priv *priv,
@@ -904,22 +905,6 @@ del_rules:
 	return err;
 }
 
-#define MLX5E_TTC_NUM_GROUPS	3
-#define MLX5E_TTC_GROUP1_SIZE	(BIT(3) + MLX5E_NUM_TUNNEL_TT)
-#define MLX5E_TTC_GROUP2_SIZE	 BIT(1)
-#define MLX5E_TTC_GROUP3_SIZE	 BIT(0)
-#define MLX5E_TTC_TABLE_SIZE	(MLX5E_TTC_GROUP1_SIZE +\
-				 MLX5E_TTC_GROUP2_SIZE +\
-				 MLX5E_TTC_GROUP3_SIZE)
-
-#define MLX5E_INNER_TTC_NUM_GROUPS	3
-#define MLX5E_INNER_TTC_GROUP1_SIZE	BIT(3)
-#define MLX5E_INNER_TTC_GROUP2_SIZE	BIT(1)
-#define MLX5E_INNER_TTC_GROUP3_SIZE	BIT(0)
-#define MLX5E_INNER_TTC_TABLE_SIZE	(MLX5E_INNER_TTC_GROUP1_SIZE +\
-					 MLX5E_INNER_TTC_GROUP2_SIZE +\
-					 MLX5E_INNER_TTC_GROUP3_SIZE)
-
 static int mlx5e_create_ttc_table_groups(struct mlx5e_ttc_table *ttc,
 					 bool use_ipv)
 {
@@ -1576,11 +1561,18 @@ int mlx5e_create_flow_steering(struct mlx5e_priv *priv)
 		goto err_destroy_inner_ttc_table;
 	}
 
+	err = mlx5e_accel_fs_create_tables(priv);
+	if (err) {
+		netdev_err(priv->netdev, "Failed to create accel_fs tables, err=%d\n",
+				err);
+		goto err_destroy_ttc_table;
+	}
+
 	err = mlx5e_create_l2_table(priv);
 	if (err) {
 		netdev_err(priv->netdev, "Failed to create l2 table, err=%d\n",
 			   err);
-		goto err_destroy_ttc_table;
+		goto err_destroy_accel_fs_table;
 	}
 
 	err = mlx5e_create_vlan_table(priv);
@@ -1596,6 +1588,8 @@ int mlx5e_create_flow_steering(struct mlx5e_priv *priv)
 
 err_destroy_l2_table:
 	mlx5e_destroy_l2_table(priv);
+err_destroy_accel_fs_table:
+	mlx5e_accel_fs_destroy_tables(priv);
 err_destroy_ttc_table:
 	mlx5e_destroy_ttc_table(priv, &priv->fs.ttc);
 err_destroy_inner_ttc_table:
@@ -1610,6 +1604,7 @@ void mlx5e_destroy_flow_steering(struct mlx5e_priv *priv)
 {
 	mlx5e_destroy_vlan_table(priv);
 	mlx5e_destroy_l2_table(priv);
+	mlx5e_accel_fs_destroy_tables(priv);
 	mlx5e_destroy_ttc_table(priv, &priv->fs.ttc);
 	mlx5e_destroy_inner_ttc_table(priv, &priv->fs.inner_ttc);
 	mlx5e_arfs_destroy_tables(priv);

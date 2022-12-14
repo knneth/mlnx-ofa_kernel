@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
 
 Change-Id: I2bc488ac8a160796abc67f9a300778c244c7fdfe
 ---
- drivers/infiniband/core/core_priv.h | 51 +++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/core_priv.h | 51 +++++++++++++++++++++++++++++
  1 file changed, 51 insertions(+)
 
 --- a/drivers/infiniband/core/core_priv.h
@@ -99,14 +99,14 @@ Change-Id: I2bc488ac8a160796abc67f9a300778c244c7fdfe
  			     struct nlmsghdr *nlh,
  			     struct netlink_ext_ack *extack);
 +#else
-+			     struct netlink_callback *cb);
++			     struct nlmsghdr *nlh);
 +#endif
  int ib_nl_handle_ip_res_resp(struct sk_buff *skb,
 +#ifdef HAVE_NETLINK_EXT_ACK
  			     struct nlmsghdr *nlh,
  			     struct netlink_ext_ack *extack);
 +#else
-+			     struct netlink_callback *cb);
++			     struct nlmsghdr *nlh);
 +#endif
  
  int ib_get_cached_subnet_prefix(struct ib_device *device,

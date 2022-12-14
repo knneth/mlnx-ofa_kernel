@@ -54,7 +54,6 @@
 
 #define MLX5_CR_SPACE_DOMAIN 0x2
 #define MLX5_ICMD_SPACE_DOMAIN 0x3
-#define MLX5_SEMAPHORE_SPACE_DOMAIN 0xA
 
 #define MLX5_HWID_ADDR 0xf0014
 #define MLX5_ADDR_REG 0x58
@@ -7058,42 +7057,6 @@ static int mlx5_pciconf_write(struct mlx5_core_dev *dev,
 
 out:
 	return ret;
-}
-
-int mlx5_pciconf_set_sem_addr_space(struct mlx5_core_dev *dev,
-				    u32 sem_space_address, int state)
-{
-	u32 data, id = 0;
-	int ret;
-
-	ret = mlx5_pciconf_set_addr_space(dev, MLX5_SEMAPHORE_SPACE_DOMAIN);
-	if (ret)
-		return ret;
-
-	if (state == LOCK) {
-		/* Get a unique ID based on the counter */
-		ret = pci_read_config_dword(dev->pdev,
-					    dev->mst_dump->vsec_addr +
-					    PCI_COUNTER_OFFSET,
-					    &id);
-		if (ret)
-			return ret;
-	}
-
-	/* Try to modify lock */
-	ret = mlx5_pciconf_write(dev, sem_space_address, id);
-	if (ret)
-		return ret;
-
-	/* Verify lock was modified */
-	ret = mlx5_pciconf_read(dev, sem_space_address, &data);
-	if (ret)
-		return -EINVAL;
-
-	if (data != id)
-		return -EBUSY;
-
-	return 0;
 }
 
 int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,

@@ -18,7 +18,7 @@ Change-Id: I1ea12b5cda62bc7c69c92b3442ed939faff1f286
  #ifndef __MLX5E_TLS_RXTX_H__
  #define __MLX5E_TLS_RXTX_H__
  
-@@ -51,3 +53,5 @@ void mlx5e_tls_handle_rx_skb(struct net_
+@@ -52,3 +54,5 @@ void mlx5e_tls_handle_rx_skb(struct net_
  #endif /* CONFIG_MLX5_EN_TLS */
  
  #endif /* __MLX5E_TLS_RXTX_H__ */

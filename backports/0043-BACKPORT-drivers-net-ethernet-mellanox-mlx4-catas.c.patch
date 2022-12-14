@@ -3,24 +3,28 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/catas.c
 
 Change-Id: I1cf3229484da2664d694b2ec8830be9072113211
 ---
- drivers/net/ethernet/mellanox/mlx4/catas.c | 21 +++++++++++++++++++++
- 1 file changed, 21 insertions(+)
+ drivers/net/ethernet/mellanox/mlx4/catas.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/catas.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/catas.c
-@@ -210,7 +210,11 @@ static void mlx4_handle_error_state(stru
+@@ -210,7 +210,15 @@ static void mlx4_handle_error_state(stru
  	mutex_lock(&persist->interface_state_mutex);
  	if (persist->interface_state & MLX4_INTERFACE_STATE_UP &&
  	    !(persist->interface_state & MLX4_INTERFACE_STATE_DELETION)) {
-+#ifdef HAVE_DEVLINK_DRIVERINIT_VAL
- 		err = mlx4_restart_one(persist->pdev, false, NULL);
++#ifdef HAVE_DEVLINK_OPS_RELOAD_UP
+ 		err = mlx4_restart_one(persist->pdev);
++#else
++#ifdef HAVE_DEVLINK_H
++		err = mlx4_restart_one(persist->pdev, false, NULL);
 +#else
 +		err = mlx4_restart_one(persist->pdev);
++#endif
 +#endif
  		mlx4_info(persist->dev, "mlx4_restart_one was ended, ret=%d\n",
  			  err);
  	}
-@@ -229,10 +233,19 @@ static void dump_err_buf(struct mlx4_dev
+@@ -229,10 +237,19 @@ static void dump_err_buf(struct mlx4_dev
  			 i, swab32(readl(priv->catas_err.map + i)));
  }
  
@@ -40,7 +44,7 @@ Change-Id: I1cf3229484da2664d694b2ec8830be9072113211
  	u32 slave_read;
  
  	if (mlx4_is_slave(dev)) {
-@@ -275,7 +288,11 @@ void mlx4_start_catas_poll(struct mlx4_d
+@@ -275,7 +292,11 @@ void mlx4_start_catas_poll(struct mlx4_d
  	phys_addr_t addr;
  
  	INIT_LIST_HEAD(&priv->catas_err.list);
@@ -52,7 +56,7 @@ Change-Id: I1cf3229484da2664d694b2ec8830be9072113211
  	priv->catas_err.map = NULL;
  
  	if (!mlx4_is_slave(dev)) {
-@@ -291,6 +308,10 @@ void mlx4_start_catas_poll(struct mlx4_d
+@@ -291,6 +312,10 @@ void mlx4_start_catas_poll(struct mlx4_d
  		}
  	}
  

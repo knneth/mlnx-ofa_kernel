@@ -20,6 +20,8 @@
 static unsigned int
 __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps,
 					  struct nvmet_port *nport);
+static int nvmet_rdma_attach_xrq(struct nvmet_rdma_xrq *xrq,
+				 struct nvmet_ctrl *ctrl);
 
 static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 					  struct nvmet_rdma_xrq *xrq)
@@ -28,7 +30,7 @@ static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 	unsigned int sqe_inline_size = __nvmet_rdma_peer_to_peer_sqe_inline_size(nvmf_caps, xrq->port);
 
 	srq_attr->ext.nvmf.type = IB_NVMF_READ_WRITE_FLUSH_OFFLOAD;
-	srq_attr->ext.nvmf.log_max_namespace = nvmf_caps->max_namespace;
+	srq_attr->ext.nvmf.log_max_namespace = ilog2(nvmf_caps->max_namespace);
 	srq_attr->ext.nvmf.cmd_size = (sizeof(struct nvme_command) + sqe_inline_size) / 16;
 	srq_attr->ext.nvmf.data_offset = 0;
 	srq_attr->ext.nvmf.log_max_io_size = ilog2(nvmf_caps->max_io_sz);
@@ -116,8 +118,9 @@ static void nvmet_rdma_destroy_xrq(struct kref *ref)
 	ib_destroy_srq(xrq->ofl_srq);
 	if (st->dynamic) {
 		for (i = 0 ; i < st->num_pages ; i++)
-			dma_free_coherent(ndev->device->dma_device, st->page_size,
-					  st->staging_pages[i], st->staging_dma_addrs[i]);
+			dma_free_coherent(ndev->device->dma_device,
+					  st->page_size, st->staging_pages[i],
+					  st->staging_dma_addrs[i]);
 	}
 
 	ib_free_cq(xrq->cq);
@@ -126,16 +129,17 @@ static void nvmet_rdma_destroy_xrq(struct kref *ref)
 	kref_put(&ndev->ref, nvmet_rdma_free_dev);
 }
 
-static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
-			       struct nvmet_rdma_queue *queue)
+static int nvmet_rdma_init_xrq(struct nvmet_rdma_queue *queue,
+			       struct nvmet_subsys *subsys)
 {
 	struct ib_srq_init_attr srq_attr = { NULL, };
 	struct ib_srq *srq;
 	int ret, i, j;
 	struct nvmet_rdma_xrq *xrq;
+	struct nvmet_rdma_staging_buf *st;
 	struct nvmet_port *port = queue->port;
 	size_t srq_size = port->offload_srq_size;
-
+	struct nvmet_rdma_device *ndev = queue->dev;
 
 	xrq = kzalloc(sizeof(*xrq), GFP_KERNEL);
 	if (!xrq)
@@ -147,29 +151,30 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 	mutex_init(&xrq->be_mutex);
 	xrq->ndev = ndev;
 	xrq->port = port;
+	xrq->subsys = subsys;
 
 	if (!list_empty(&nvmet_rdma_st_pool.list)) {
-		xrq->st = list_first_entry(&nvmet_rdma_st_pool.list,
-					struct nvmet_rdma_staging_buf, entry);
-		list_del(&xrq->st->entry);
+		st = list_first_entry(&nvmet_rdma_st_pool.list,
+				      struct nvmet_rdma_staging_buf, entry);
+		list_del(&st->entry);
 	} else {
-		u16 num_pages = nvmet_rdma_offload_buffer_size_mb / NVMET_DYNAMIC_STAGING_BUFFER_PAGE_SIZE_MB;
-		xrq->st = nvmet_rdma_alloc_st_buff(num_pages,
+		u16 num_pages = nvmet_rdma_offload_buffer_size_mb /
+				NVMET_DYNAMIC_STAGING_BUFFER_PAGE_SIZE_MB;
+		st = nvmet_rdma_alloc_st_buff(num_pages,
 				NVMET_DYNAMIC_STAGING_BUFFER_PAGE_SIZE_MB,
 				true);
 	}
-	if (!xrq->st) {
+	if (!st) {
 		ret = -ENOMEM;
 		goto free_xrq;
 	}
+	xrq->st = st;
 
 	pr_info("using %s staging buffer %p\n",
-		xrq->st->dynamic ? "dynamic" : "static", xrq->st);
+		st->dynamic ? "dynamic" : "static", st);
 
-
-	xrq->cq = ib_alloc_cq(ndev->device, queue, 4096,
-			      queue->idx % ndev->device->num_comp_vectors,
-			      IB_POLL_WORKQUEUE);
+	/* This CQ is not associated to a specific queue */
+	xrq->cq = ib_alloc_cq(ndev->device, NULL, 4096, 0, IB_POLL_WORKQUEUE);
 	if (IS_ERR(xrq->cq)) {
 		ret = PTR_ERR(xrq->cq);
 		pr_err("failed to create CQ for xrq cqe= %d ret= %d\n",
@@ -185,19 +190,20 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 		goto free_xrq_cq;
 	}
 
-	for (i = 0 ; i < xrq->st->num_pages ; i++) {
-		if (xrq->st->dynamic) {
-			xrq->st->staging_pages[i] = dma_alloc_coherent(ndev->device->dma_device,
-									xrq->st->page_size,
-									&xrq->st->staging_dma_addrs[i],
-									GFP_KERNEL);
-			if (!xrq->st->staging_pages[i]) {
+	for (i = 0 ; i < st->num_pages ; i++) {
+		if (st->dynamic) {
+			st->staging_pages[i] =
+				dma_alloc_coherent(ndev->device->dma_device,
+						   st->page_size,
+						   &st->staging_dma_addrs[i],
+						   GFP_KERNEL);
+			if (!st->staging_pages[i]) {
 				ret = -ENOMEM;
 				goto release_st_buf;
 			}
 		}
 		memcpy(&srq_attr.ext.nvmf.staging_buffer_pas[i],
-		       &xrq->st->staging_dma_addrs[i], sizeof(dma_addr_t));
+		       &st->staging_dma_addrs[i], sizeof(dma_addr_t));
 	}
 
 	srq_attr.ext.cq = xrq->cq;
@@ -221,7 +227,7 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_device *ndev,
 
 	xrq->ofl_srq = srq;
 	xrq->ofl_srq_size = srq_size;
-	xrq->st->xrq = xrq;
+	st->xrq = xrq;
 	xrq->nvme_queue_depth = srq_attr.ext.nvmf.nvme_queue_size;
 	queue->xrq = xrq;
 
@@ -246,33 +252,36 @@ out_free_cmds:
 out_destroy_srq:
 	ib_destroy_srq(srq);
 release_st_buf:
-	if (xrq->st->dynamic) {
+	if (st->dynamic) {
 		for (j = 0 ; j < i ; j++)
-			dma_free_coherent(ndev->device->dma_device, xrq->st->page_size,
-					  xrq->st->staging_pages[j], xrq->st->staging_dma_addrs[j]);
+			dma_free_coherent(ndev->device->dma_device,
+					  st->page_size, st->staging_pages[j],
+					  st->staging_dma_addrs[j]);
 	}
 	kfree(srq_attr.ext.nvmf.staging_buffer_pas);
 free_xrq_cq:
 	ib_free_cq(xrq->cq);
 free_xrq_st:
-	nvmet_rdma_release_st_buff(xrq->st);
+	nvmet_rdma_release_st_buff(st);
 free_xrq:
 	kfree(xrq);
 
 	return ret;
 }
 
-static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_device *ndev,
-				   struct nvmet_rdma_queue *queue)
+static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_queue *queue,
+				   struct nvmet_ctrl *ctrl)
 {
 	struct nvmet_rdma_xrq *xrq;
+	struct nvmet_subsys *subsys = ctrl ? ctrl->subsys : NULL;
 	int active_xrq = 0;
 	uint min = UINT_MAX;
 	int ret = 0;
 
 	mutex_lock(&nvmet_rdma_xrq_mutex);
 	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
-		if (xrq->port == queue->port) {
+		if (xrq->port == queue->port &&
+		    (!subsys || xrq->subsys == subsys)) {
 			active_xrq++;
 			if (kref_read(&xrq->ref) && kref_read(&xrq->ref) < min)
 				min = kref_read(&xrq->ref);
@@ -281,6 +290,7 @@ static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_device *ndev,
 
 	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
 		if (xrq->port == queue->port &&
+		    (!subsys || xrq->subsys == subsys) &&
 		    active_xrq == queue->port->offload_queues &&
 		    kref_read(&xrq->ref) == min &&
 		    kref_get_unless_zero(&xrq->ref)) {
@@ -289,37 +299,58 @@ static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_device *ndev,
 		}
 	}
 
-	ret = nvmet_rdma_init_xrq(ndev, queue);
-	if (!ret) {
-		kref_get(&queue->xrq->ref);
-		list_add_tail(&queue->xrq->entry, &nvmet_rdma_xrq_list);
-	}
+	ret = nvmet_rdma_init_xrq(queue, subsys);
+	if (ret)
+		goto out_unlock;
+
+	kref_get(&queue->xrq->ref);
+	list_add_tail(&queue->xrq->entry, &nvmet_rdma_xrq_list);
+	if (ctrl)
+		ret = nvmet_rdma_attach_xrq(queue->xrq, ctrl);
+
 out_unlock:
 	mutex_unlock(&nvmet_rdma_xrq_mutex);
 	return ret;
 }
 
-static int nvmet_rdma_install_offload_queue(struct nvmet_ctrl *ctrl,
-					    struct nvmet_req *req)
+static u16 nvmet_rdma_install_offload_queue(struct nvmet_sq *sq)
 {
 	struct nvmet_rdma_queue *queue =
-		container_of(req->sq, struct nvmet_rdma_queue, nvme_sq);
+		container_of(sq, struct nvmet_rdma_queue, nvme_sq);
+	int qp_attr_mask = IB_QP_STATE | IB_QP_OFFLOAD_TYPE;
 	struct ib_qp_attr attr;
+	int ret;
 
-	WARN_ON_ONCE(!queue->offload);
+	if (!queue->offload)
+		return 0;
 
 	memset(&attr, 0, sizeof(attr));
 	attr.qp_state = IB_QPS_RTS;
 	attr.offload_type = IB_QP_OFFLOAD_NVMF;
 
-	return ib_modify_qp(queue->cm_id->qp, &attr,
-			    IB_QP_STATE | IB_QP_OFFLOAD_TYPE);
+	if (!queue->xrq) {
+		WARN_ON_ONCE(!queue->dev->rts2rts_qp_rmp);
+		ret = nvmet_rdma_find_get_xrq(queue, sq->ctrl);
+		if (ret) {
+			pr_err("failed to get XRQ for queue (%d)\n",
+			       queue->host_qid);
+			return NVME_SC_INTERNAL | NVME_SC_DNR;
+		}
+		qp_attr_mask |= IB_QP_RMPN_XRQN;
+		attr.rmpn_xrqn = queue->xrq->ofl_srq->ext.xrc.srq_num;
+	}
+
+	ret = ib_modify_qp(queue->cm_id->qp, &attr, qp_attr_mask);
+	if (ret)
+		return NVME_SC_INTERNAL | NVME_SC_DNR;
+	return 0;
 }
 
 static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 {
 	lockdep_assert_held(&be_ctrl->xrq->be_mutex);
 	list_del_init(&be_ctrl->entry);
+	be_ctrl->xrq->nr_be_ctrls--;
 
 	if (be_ctrl->ibns)
 		ib_detach_nvmf_ns(be_ctrl->ibns);
@@ -442,8 +473,19 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	struct nvmet_rdma_backend_ctrl *be_ctrl;
 	struct ib_nvmf_backend_ctrl_init_attr init_attr;
 	struct ib_nvmf_ns_init_attr ns_init_attr;
+	struct ib_nvmf_caps *nvmf_caps = &xrq->ndev->device->attrs.nvmf_caps;
 	int err;
 	unsigned be_nsid;
+
+	mutex_lock(&xrq->be_mutex);
+	if (xrq->nr_be_ctrls == nvmf_caps->max_be_ctrl) {
+		pr_err("Reached max number of supported be ctrl per XRQ (%u)\n",
+		       nvmf_caps->max_be_ctrl);
+		err = -EINVAL;
+		mutex_unlock(&xrq->be_mutex);
+		goto out_err;
+	}
+	mutex_unlock(&xrq->be_mutex);
 
 	be_ctrl = kzalloc(sizeof(*be_ctrl), GFP_KERNEL);
 	if (!be_ctrl) {
@@ -466,6 +508,8 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 			NVME_PEER_MEM_LOG_PG_SZ,
 			nvmet_rdma_stop_master_peer, be_ctrl);
 	if (!be_ctrl->ofl) {
+		pr_err("Failed to get peer resource xrq=%p be_ctrl=%p\n",
+		       xrq, be_ctrl);
 		err = -ENODEV;
 		goto out_free_be_ctrl;
 	}
@@ -474,13 +518,13 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	be_ctrl->ns = ns;
 	be_ctrl->xrq = xrq;
 
-	err = nvmet_rdma_init_be_ctrl_attr(&init_attr, be_ctrl,
-			&xrq->ndev->device->attrs.nvmf_caps);
+	err = nvmet_rdma_init_be_ctrl_attr(&init_attr, be_ctrl, nvmf_caps);
 	if (err)
 		goto out_put_resource;
 
 	be_ctrl->ibctrl = ib_create_nvmf_backend_ctrl(xrq->ofl_srq, &init_attr);
 	if (IS_ERR(be_ctrl->ibctrl)) {
+		pr_err("Failed to create nvmf backend ctrl xrq=%p\n", xrq);
 		err = PTR_ERR(be_ctrl->ibctrl);
 		goto out_put_resource;
 	}
@@ -495,12 +539,15 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 				be_ctrl->ibctrl->id);
 	be_ctrl->ibns = ib_attach_nvmf_ns(be_ctrl->ibctrl, &ns_init_attr);
 	if (IS_ERR(be_ctrl->ibns)) {
+		pr_err("Failed to attach nvmf ns xrq=%p be_ctrl=%p\n",
+		       xrq, be_ctrl);
 		err = PTR_ERR(be_ctrl->ibns);
 		goto out_destroy_be_ctrl;
 	}
 
 	mutex_lock(&xrq->be_mutex);
 	list_add_tail(&be_ctrl->entry, &xrq->be_ctrls_list);
+	xrq->nr_be_ctrls++;
 	mutex_unlock(&xrq->be_mutex);
 
 	return be_ctrl;
@@ -516,21 +563,43 @@ out_err:
 	return ERR_PTR(err);
 }
 
-static void nvmet_rdma_free_be_ctrls(struct nvmet_rdma_xrq *xrq)
+/**
+ * Passing ns == NULL will destroy all the be ctrs for the given XRQ
+ **/
+static void nvmet_rdma_free_be_ctrls(struct nvmet_rdma_xrq *xrq,
+				     struct nvmet_ns *ns)
 {
 	struct nvmet_rdma_backend_ctrl *be_ctrl, *next;
 
-	xrq->subsys = NULL;
 	mutex_lock(&xrq->be_mutex);
 	list_for_each_entry_safe(be_ctrl, next, &xrq->be_ctrls_list, entry)
-		nvmet_rdma_free_be_ctrl(be_ctrl);
+		if (!ns || be_ctrl->ns == ns)
+			nvmet_rdma_free_be_ctrl(be_ctrl);
 	mutex_unlock(&xrq->be_mutex);
 }
 
-static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl)
+static bool nvmet_rdma_ns_attached_to_xrq(struct nvmet_rdma_xrq *xrq,
+					  struct nvmet_ns *ns)
+{
+	struct nvmet_rdma_backend_ctrl *be_ctrl;
+	bool found = false;
+
+	mutex_lock(&xrq->be_mutex);
+	list_for_each_entry(be_ctrl, &xrq->be_ctrls_list, entry) {
+		if (be_ctrl->ns == ns) {
+			found = true;
+			break;
+		}
+	}
+	mutex_unlock(&xrq->be_mutex);
+
+	return found;
+}
+
+static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl,
+					struct nvmet_ns *ns)
 {
 	struct nvmet_rdma_xrq *xrq;
-	struct nvmet_ns *ns;
 	struct nvmet_rdma_backend_ctrl *be_ctrl;
 	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
 	struct nvmet_rdma_offload_ctx *offload_ctx;
@@ -539,17 +608,12 @@ static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl)
 	mutex_lock(&offload_ctrl->ctx_mutex);
 	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry) {
 		xrq = offload_ctx->xrq;
-		if (xrq->subsys != ctrl->subsys) {
-			rcu_read_lock();
-			list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link) {
-				be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
-				if (IS_ERR(be_ctrl)) {
-					err = PTR_ERR(be_ctrl);
-					goto out_free;
-				}
+		if (!nvmet_rdma_ns_attached_to_xrq(xrq, ns)) {
+			be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
+			if (IS_ERR(be_ctrl)) {
+				err = PTR_ERR(be_ctrl);
+				goto out_free;
 			}
-			rcu_read_unlock();
-			xrq->subsys = ctrl->subsys;
 		}
 	}
 	mutex_unlock(&offload_ctrl->ctx_mutex);
@@ -557,22 +621,22 @@ static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl)
 	return 0;
 
 out_free:
-	rcu_read_unlock();
 	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry)
-		nvmet_rdma_free_be_ctrls(offload_ctx->xrq);
+		nvmet_rdma_free_be_ctrls(offload_ctx->xrq, ns);
 	mutex_unlock(&offload_ctrl->ctx_mutex);
 
 	return err;
 }
 
-static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl)
+static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl,
+					  struct nvmet_ns *ns)
 {
 	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
 	struct nvmet_rdma_offload_ctx *offload_ctx;
 
 	mutex_lock(&offload_ctrl->ctx_mutex);
 	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry)
-		nvmet_rdma_free_be_ctrls(offload_ctx->xrq);
+		nvmet_rdma_free_be_ctrls(offload_ctx->xrq, ns);
 	mutex_unlock(&offload_ctrl->ctx_mutex);
 }
 
@@ -586,7 +650,7 @@ static void nvmet_rdma_free_offload_ctx(struct nvmet_rdma_offload_ctx *offload_c
 	mutex_lock(&xrq->offload_ctrl_mutex);
 	xrq->offload_ctrls_cnt--;
 	if (!xrq->offload_ctrls_cnt)
-		nvmet_rdma_free_be_ctrls(xrq);
+		nvmet_rdma_free_be_ctrls(xrq, NULL);
 	list_del_init(&offload_ctx->entry);
 	mutex_unlock(&xrq->offload_ctrl_mutex);
 	kfree(offload_ctx);
@@ -602,74 +666,84 @@ static void nvmet_rdma_free_offload_ctxs(struct nvmet_rdma_offload_ctrl *offload
 	mutex_unlock(&offload_ctrl->ctx_mutex);
 }
 
-static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)
+static int nvmet_rdma_attach_xrq(struct nvmet_rdma_xrq *xrq,
+				 struct nvmet_ctrl *ctrl)
 {
-	struct nvmet_rdma_xrq *xrq;
 	struct nvmet_ns *ns;
-	struct nvmet_rdma_backend_ctrl *be_ctrl;
-	struct nvmet_rdma_offload_ctrl *offload_ctrl = NULL;
-	int err = 0;
-	bool be_ctrl_created;
 	struct nvmet_rdma_offload_ctx *offload_ctx;
+	struct nvmet_rdma_backend_ctrl *be_ctrl;
+	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
+	int err;
 
-	mutex_lock(&nvmet_rdma_xrq_mutex);
-	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
-		if (xrq->port == ctrl->port) {
-			if (!offload_ctrl) {
-				offload_ctrl = kzalloc(sizeof(*offload_ctrl), GFP_KERNEL);
-				if (!offload_ctrl) {
-					err = -ENOMEM;
-					goto out_unlock;
-				}
-				INIT_LIST_HEAD(&offload_ctrl->ctx_list);
-				mutex_init(&offload_ctrl->ctx_mutex);
-			}
+	offload_ctx = kzalloc(sizeof(*offload_ctx), GFP_KERNEL);
+	if (!offload_ctx)
+		return -ENOMEM;
 
-			offload_ctx = kzalloc(sizeof(*offload_ctx), GFP_KERNEL);
-			if (!offload_ctx) {
-				err = -ENOMEM;
-				goto out_free;
-			}
-			offload_ctx->xrq = xrq;
+	offload_ctx->xrq = xrq;
+	if (!xrq->subsys)
+		xrq->subsys = ctrl->subsys;
 
-			if (xrq->subsys != ctrl->subsys) {
-				be_ctrl_created = false;
-				rcu_read_lock();
-				list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link) {
-					be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
-					if (IS_ERR(be_ctrl)) {
-						err = PTR_ERR(be_ctrl);
-						goto out_free_offload_ctx;
-					}
-					be_ctrl_created = true;
-				}
-				rcu_read_unlock();
-				if (be_ctrl_created)
-					xrq->subsys = ctrl->subsys;
+	rcu_read_lock();
+	list_for_each_entry_rcu(ns, &ctrl->subsys->namespaces, dev_link) {
+		if (!nvmet_rdma_ns_attached_to_xrq(xrq, ns)) {
+			be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
+			if (IS_ERR(be_ctrl)) {
+				err = PTR_ERR(be_ctrl);
+				goto out_free_offload_ctx;
 			}
-			mutex_lock(&xrq->offload_ctrl_mutex);
-			xrq->offload_ctrls_cnt++;
-			mutex_unlock(&xrq->offload_ctrl_mutex);
-			mutex_lock(&offload_ctrl->ctx_mutex);
-			list_add_tail(&offload_ctx->entry, &offload_ctrl->ctx_list);
-			mutex_unlock(&offload_ctrl->ctx_mutex);
 		}
 	}
+	rcu_read_unlock();
 
-	mutex_unlock(&nvmet_rdma_xrq_mutex);
+	mutex_lock(&xrq->offload_ctrl_mutex);
+	xrq->offload_ctrls_cnt++;
+	mutex_unlock(&xrq->offload_ctrl_mutex);
+	mutex_lock(&offload_ctrl->ctx_mutex);
+	list_add_tail(&offload_ctx->entry, &offload_ctrl->ctx_list);
+	mutex_unlock(&offload_ctrl->ctx_mutex);
 
-	ctrl->offload_ctrl = offload_ctrl;
-
-	return offload_ctrl ? 0 : -ENODEV;
+	return 0;
 
 out_free_offload_ctx:
 	rcu_read_unlock();
+	nvmet_rdma_free_be_ctrls(xrq, NULL);
 	kfree(offload_ctx);
+
+	return err;
+}
+
+static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)
+{
+	struct nvmet_rdma_xrq *xrq;
+	struct nvmet_rdma_offload_ctrl *offload_ctrl;
+	int err;
+
+	offload_ctrl = kzalloc(sizeof(*offload_ctrl), GFP_KERNEL);
+	if (!offload_ctrl)
+		return -ENOMEM;
+
+	ctrl->offload_ctrl = offload_ctrl;
+	INIT_LIST_HEAD(&offload_ctrl->ctx_list);
+	mutex_init(&offload_ctrl->ctx_mutex);
+
+	mutex_lock(&nvmet_rdma_xrq_mutex);
+	list_for_each_entry(xrq, &nvmet_rdma_xrq_list, entry) {
+		if (xrq->port == ctrl->port &&
+		    (!xrq->subsys || xrq->subsys == ctrl->subsys)) {
+			err = nvmet_rdma_attach_xrq(xrq, ctrl);
+			if (err)
+				goto out_free;
+		}
+	}
+	mutex_unlock(&nvmet_rdma_xrq_mutex);
+
+	return 0;
+
 out_free:
 	nvmet_rdma_free_offload_ctxs(offload_ctrl);
 	kfree(offload_ctrl);
-out_unlock:
 	mutex_unlock(&nvmet_rdma_xrq_mutex);
+	ctrl->offload_ctrl = NULL;
 
 	return err;
 }
@@ -852,6 +926,44 @@ static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *nport)
 	struct rdma_cm_id *cm_id = port->cm_id;
 
 	return cm_id->device->attrs.device_cap_flags & IB_DEVICE_NVMF_TARGET_OFFLOAD;
+}
+
+static bool nvmet_rdma_check_subsys_match_offload_port(struct nvmet_port *nport,
+						struct nvmet_subsys *subsys)
+{
+	struct nvmet_rdma_port *port = nport->priv;
+	struct rdma_cm_id *cm_id = port->cm_id;
+	struct ib_nvmf_caps *nvmf_caps = &cm_id->device->attrs.nvmf_caps;
+	struct nvmet_ns *ns;
+
+	if (nvmf_caps->max_frontend_nsid) {
+		list_for_each_entry_rcu(ns, &subsys->namespaces, dev_link) {
+			if (ns->nsid > nvmf_caps->max_frontend_nsid) {
+				pr_err("Reached maximal namespace ID (%u/%u)\n",
+				       ns->nsid, nvmf_caps->max_frontend_nsid);
+				return false;
+			}
+		}
+	}
+
+	if (subsys->nr_namespaces > nvmf_caps->max_namespace) {
+		pr_err("Reached max number of ns per offload subsys (%u/%u)\n",
+		       subsys->nr_namespaces, nvmf_caps->max_namespace);
+		return false;
+	}
+
+	/*
+	 * Assume number of namespaces equals number of backend controllers,
+	 * because in the current implementation a backend controller is created
+	 * for each namespace.
+	 */
+	if (subsys->nr_namespaces > nvmf_caps->max_be_ctrl) {
+		pr_err("Reached max number of supported be ctrl per XRQ (%u)\n",
+		       nvmf_caps->max_be_ctrl);
+		return false;
+	}
+
+	return true;
 }
 
 static int nvmet_rdma_init_st_pool(struct nvmet_rdma_staging_buf_pool *pool,

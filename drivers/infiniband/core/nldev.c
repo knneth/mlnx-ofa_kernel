@@ -41,6 +41,10 @@
 #include "core_priv.h"
 #include "cma_priv.h"
 #include "restrack.h"
+#include "uverbs.h"
+
+typedef int (*res_fill_func_t)(struct sk_buff*, bool,
+			       struct rdma_restrack_entry*, uint32_t);
 
 static const struct nla_policy nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
 	[RDMA_NLDEV_ATTR_DEV_INDEX]     = { .type = NLA_U32 },
@@ -168,6 +172,19 @@ static int _rdma_nl_put_driver_u64(struct sk_buff *msg, const char *name,
 
 	return 0;
 }
+
+int rdma_nl_put_driver_string(struct sk_buff *msg, const char *name,
+			      const char *str)
+{
+	if (put_driver_name_print_type(msg, name,
+				       RDMA_NLDEV_PRINT_TYPE_UNSPEC))
+		return -EMSGSIZE;
+	if (nla_put_string(msg, RDMA_NLDEV_ATTR_DRIVER_STRING, str))
+		return -EMSGSIZE;
+
+	return 0;
+}
+EXPORT_SYMBOL(rdma_nl_put_driver_string);
 
 int rdma_nl_put_driver_u32(struct sk_buff *msg, const char *name, u32 value)
 {
@@ -410,6 +427,14 @@ static bool fill_res_entry(struct ib_device *dev, struct sk_buff *msg,
 	return dev->ops.fill_res_entry(msg, res);
 }
 
+static bool fill_stat_entry(struct ib_device *dev, struct sk_buff *msg,
+			    struct rdma_restrack_entry *res)
+{
+	if (!dev->ops.fill_stat_entry)
+		return false;
+	return dev->ops.fill_stat_entry(msg, res);
+}
+
 static int fill_res_qp_entry(struct sk_buff *msg, bool has_cap_net_admin,
 			     struct rdma_restrack_entry *res, uint32_t port)
 {
@@ -545,7 +570,7 @@ static int fill_res_cq_entry(struct sk_buff *msg, bool has_cap_net_admin,
 		goto err;
 	if (!rdma_is_kernel_res(res) &&
 	    nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_CTXN,
-			cq->uobject->context->res.id))
+			cq->uobject->uevent.uobject.context->res.id))
 		goto err;
 
 	if (fill_res_name_pid(msg, res))
@@ -707,8 +732,8 @@ err:
 	return ret;
 }
 
-static int fill_stat_hwcounter_entry(struct sk_buff *msg,
-				     const char *name, u64 value)
+int rdma_nl_stat_hwcounter_entry(struct sk_buff *msg, const char *name,
+				 u64 value)
 {
 	struct nlattr *entry_attr;
 
@@ -730,6 +755,25 @@ err:
 	nla_nest_cancel(msg, entry_attr);
 	return -EMSGSIZE;
 }
+EXPORT_SYMBOL(rdma_nl_stat_hwcounter_entry);
+
+static int fill_stat_mr_entry(struct sk_buff *msg, bool has_cap_net_admin,
+			      struct rdma_restrack_entry *res, uint32_t port)
+{
+	struct ib_mr *mr = container_of(res, struct ib_mr, res);
+	struct ib_device *dev = mr->pd->device;
+
+	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_MRN, res->id))
+		goto err;
+
+	if (fill_stat_entry(dev, msg, res))
+		goto err;
+
+	return 0;
+
+err:
+	return -EMSGSIZE;
+}
 
 static int fill_stat_counter_hwcounters(struct sk_buff *msg,
 					struct rdma_counter *counter)
@@ -743,7 +787,7 @@ static int fill_stat_counter_hwcounters(struct sk_buff *msg,
 		return -EMSGSIZE;
 
 	for (i = 0; i < st->num_counters; i++)
-		if (fill_stat_hwcounter_entry(msg, st->names[i], st->value[i]))
+		if (rdma_nl_stat_hwcounter_entry(msg, st->names[i], st->value[i]))
 			goto err;
 
 	nla_nest_end(msg, table_attr);
@@ -1093,8 +1137,6 @@ static int nldev_res_get_dumpit(struct sk_buff *skb,
 }
 
 struct nldev_fill_res_entry {
-	int (*fill_res_func)(struct sk_buff *msg, bool has_cap_net_admin,
-			     struct rdma_restrack_entry *res, u32 port);
 	enum rdma_nldev_attr nldev_attr;
 	enum rdma_nldev_command nldev_cmd;
 	u8 flags;
@@ -1108,21 +1150,18 @@ enum nldev_res_flags {
 
 static const struct nldev_fill_res_entry fill_entries[RDMA_RESTRACK_MAX] = {
 	[RDMA_RESTRACK_QP] = {
-		.fill_res_func = fill_res_qp_entry,
 		.nldev_cmd = RDMA_NLDEV_CMD_RES_QP_GET,
 		.nldev_attr = RDMA_NLDEV_ATTR_RES_QP,
 		.entry = RDMA_NLDEV_ATTR_RES_QP_ENTRY,
 		.id = RDMA_NLDEV_ATTR_RES_LQPN,
 	},
 	[RDMA_RESTRACK_CM_ID] = {
-		.fill_res_func = fill_res_cm_id_entry,
 		.nldev_cmd = RDMA_NLDEV_CMD_RES_CM_ID_GET,
 		.nldev_attr = RDMA_NLDEV_ATTR_RES_CM_ID,
 		.entry = RDMA_NLDEV_ATTR_RES_CM_ID_ENTRY,
 		.id = RDMA_NLDEV_ATTR_RES_CM_IDN,
 	},
 	[RDMA_RESTRACK_CQ] = {
-		.fill_res_func = fill_res_cq_entry,
 		.nldev_cmd = RDMA_NLDEV_CMD_RES_CQ_GET,
 		.nldev_attr = RDMA_NLDEV_ATTR_RES_CQ,
 		.flags = NLDEV_PER_DEV,
@@ -1130,7 +1169,6 @@ static const struct nldev_fill_res_entry fill_entries[RDMA_RESTRACK_MAX] = {
 		.id = RDMA_NLDEV_ATTR_RES_CQN,
 	},
 	[RDMA_RESTRACK_MR] = {
-		.fill_res_func = fill_res_mr_entry,
 		.nldev_cmd = RDMA_NLDEV_CMD_RES_MR_GET,
 		.nldev_attr = RDMA_NLDEV_ATTR_RES_MR,
 		.flags = NLDEV_PER_DEV,
@@ -1138,7 +1176,6 @@ static const struct nldev_fill_res_entry fill_entries[RDMA_RESTRACK_MAX] = {
 		.id = RDMA_NLDEV_ATTR_RES_MRN,
 	},
 	[RDMA_RESTRACK_PD] = {
-		.fill_res_func = fill_res_pd_entry,
 		.nldev_cmd = RDMA_NLDEV_CMD_RES_PD_GET,
 		.nldev_attr = RDMA_NLDEV_ATTR_RES_PD,
 		.flags = NLDEV_PER_DEV,
@@ -1146,7 +1183,6 @@ static const struct nldev_fill_res_entry fill_entries[RDMA_RESTRACK_MAX] = {
 		.id = RDMA_NLDEV_ATTR_RES_PDN,
 	},
 	[RDMA_RESTRACK_COUNTER] = {
-		.fill_res_func = fill_res_counter_entry,
 		.nldev_cmd = RDMA_NLDEV_CMD_STAT_GET,
 		.nldev_attr = RDMA_NLDEV_ATTR_STAT_COUNTER,
 		.entry = RDMA_NLDEV_ATTR_STAT_COUNTER_ENTRY,
@@ -1156,7 +1192,8 @@ static const struct nldev_fill_res_entry fill_entries[RDMA_RESTRACK_MAX] = {
 
 static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 			       struct netlink_ext_ack *extack,
-			       enum rdma_restrack_type res_type)
+			       enum rdma_restrack_type res_type,
+			       res_fill_func_t fill_func)
 {
 	const struct nldev_fill_res_entry *fe = &fill_entries[res_type];
 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
@@ -1219,7 +1256,9 @@ static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	}
 
 	has_cap_net_admin = netlink_capable(skb, CAP_NET_ADMIN);
-	ret = fe->fill_res_func(msg, has_cap_net_admin, res, port);
+
+	ret = fill_func(msg, has_cap_net_admin, res, port);
+
 	rdma_restrack_put(res);
 	if (ret)
 		goto err_free;
@@ -1239,7 +1278,8 @@ err:
 
 static int res_get_common_dumpit(struct sk_buff *skb,
 				 struct netlink_callback *cb,
-				 enum rdma_restrack_type res_type)
+				 enum rdma_restrack_type res_type,
+				 res_fill_func_t fill_func)
 {
 	const struct nldev_fill_res_entry *fe = &fill_entries[res_type];
 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
@@ -1327,7 +1367,8 @@ static int res_get_common_dumpit(struct sk_buff *skb,
 			goto msg_full;
 		}
 
-		ret = fe->fill_res_func(skb, has_cap_net_admin, res, port);
+		ret = fill_func(skb, has_cap_net_admin, res, port);
+
 		rdma_restrack_put(res);
 
 		if (ret) {
@@ -1370,17 +1411,19 @@ err_index:
 	return ret;
 }
 
-#define RES_GET_FUNCS(name, type)                                              \
-	static int nldev_res_get_##name##_dumpit(struct sk_buff *skb,          \
+#define RES_GET_FUNCS(name, type)					       \
+	static int nldev_res_get_##name##_dumpit(struct sk_buff *skb,	       \
 						 struct netlink_callback *cb)  \
-	{                                                                      \
-		return res_get_common_dumpit(skb, cb, type);                   \
-	}                                                                      \
-	static int nldev_res_get_##name##_doit(struct sk_buff *skb,            \
-					       struct nlmsghdr *nlh,           \
+	{								       \
+		return res_get_common_dumpit(skb, cb, type,		       \
+					     fill_res_##name##_entry);	       \
+	}								       \
+	static int nldev_res_get_##name##_doit(struct sk_buff *skb,	       \
+					       struct nlmsghdr *nlh,	       \
 					       struct netlink_ext_ack *extack) \
-	{                                                                      \
-		return res_get_common_doit(skb, nlh, extack, type);            \
+	{								       \
+		return res_get_common_doit(skb, nlh, extack, type,	       \
+					   fill_res_##name##_entry);	       \
 	}
 
 RES_GET_FUNCS(qp, RDMA_RESTRACK_QP);
@@ -1774,7 +1817,7 @@ static int stat_get_doit_default_counter(struct sk_buff *skb,
 	for (i = 0; i < num_cnts; i++) {
 		v = stats->value[i] +
 			rdma_counter_get_hwstat_value(device, port, i);
-		if (fill_stat_hwcounter_entry(msg, stats->names[i], v)) {
+		if (rdma_nl_stat_hwcounter_entry(msg, stats->names[i], v)) {
 			ret = -EMSGSIZE;
 			goto err_table;
 		}
@@ -1879,7 +1922,10 @@ static int nldev_stat_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	case RDMA_NLDEV_ATTR_RES_QP:
 		ret = stat_get_doit_qp(skb, nlh, extack, tb);
 		break;
-
+	case RDMA_NLDEV_ATTR_RES_MR:
+		ret = res_get_common_doit(skb, nlh, extack, RDMA_RESTRACK_MR,
+					  fill_stat_mr_entry);
+		break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -1903,7 +1949,10 @@ static int nldev_stat_get_dumpit(struct sk_buff *skb,
 	case RDMA_NLDEV_ATTR_RES_QP:
 		ret = nldev_res_get_counter_dumpit(skb, cb);
 		break;
-
+	case RDMA_NLDEV_ATTR_RES_MR:
+		ret = res_get_common_dumpit(skb, cb, RDMA_RESTRACK_MR,
+					    fill_stat_mr_entry);
+		break;
 	default:
 		ret = -EINVAL;
 		break;

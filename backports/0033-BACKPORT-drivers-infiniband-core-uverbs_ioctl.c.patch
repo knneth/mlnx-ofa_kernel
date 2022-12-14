@@ -8,7 +8,7 @@ Change-Id: If5f6c2692b4a78f8fd7314b1fa382ae4b8c73a27
 
 --- a/drivers/infiniband/core/uverbs_ioctl.c
 +++ b/drivers/infiniband/core/uverbs_ioctl.c
-@@ -567,11 +567,16 @@ static int ib_uverbs_cmd_verbs(struct ib
+@@ -549,11 +549,16 @@ static int ib_uverbs_cmd_verbs(struct ib
  
  	if (unlikely(hdr->driver_id != uapi->driver_id))
  		return -EINVAL;

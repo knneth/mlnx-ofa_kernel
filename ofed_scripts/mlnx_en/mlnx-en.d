@@ -433,8 +433,8 @@ start()
         exit 1
     fi
 
-    if [ -x /sbin/mlnx_eswitch_set  ]; then
-        /sbin/mlnx_eswitch_set
+    if [ -x /sbin/mlnx_bf_configure  ]; then
+        /sbin/mlnx_bf_configure
     fi
 
     if [ $my_rc -eq 0 ]; then

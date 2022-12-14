@@ -397,6 +397,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *qp,
 				enum ib_qp_offload_type offload_type);
 
+int mlx5_ib_set_qp_srqn(struct mlx5_qp_context *context, struct ib_qp *qp,
+			u32 srqn);
+
 int mlx5_ib_set_vma_data(struct vm_area_struct *vma,
 			 struct mlx5_ib_ucontext *ctx,
 			 struct mlx5_ib_vma_private_data *vma_prv);

@@ -1,11 +1,11 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Mikhael Goikhman <migo@mellanox.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 
-Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
+Change-Id: Ic84a3d313a65222f34d2ff07f8d7eec8ea8a3ca5
 ---
- .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c  | 102 ++++++++++++++++++++-
- 1 file changed, 99 insertions(+), 3 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c  | 104 ++++++++++++++++++++-
+ 1 file changed, 101 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
@@ -69,15 +69,17 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  static void mlx5i_tx_timeout_work(struct work_struct *work)
  {
  	struct mlx5e_priv *priv = container_of(work, struct mlx5e_priv,
-@@ -100,6 +135,7 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -100,6 +135,9 @@ int mlx5i_init(struct mlx5_core_dev *mde
  {
  	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
  	int err;
++#ifndef HAVE_NET_DEVICE_MIN_MAX_MTU
 +	u16 max_mtu;
++#endif
  
  	err = mlx5e_netdev_init(netdev, priv, mdev, profile, ppriv);
  	if (err)
-@@ -107,7 +143,12 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -107,7 +145,12 @@ int mlx5i_init(struct mlx5_core_dev *mde
  
  	INIT_WORK(&priv->tx_timeout_work, mlx5i_tx_timeout_work);
  	mlx5e_set_netdev_mtu_boundaries(priv);
@@ -88,9 +90,9 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
 +	netdev->mtu = max_mtu;
 +#endif
  
- 	mlx5e_build_nic_params(mdev, &priv->rss_params, &priv->channels.params,
- 			       mlx5e_get_netdev_max_channels(priv),
-@@ -117,6 +158,7 @@ int mlx5i_init(struct mlx5_core_dev *mde
+ 	mlx5e_build_nic_params(priv, &priv->rss_params, &priv->channels.params,
+ 			       netdev->mtu);
+@@ -116,6 +159,7 @@ int mlx5i_init(struct mlx5_core_dev *mde
  	mlx5e_timestamp_init(priv);
  
  	/* netdev init */
@@ -98,7 +100,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	netdev->hw_features    |= NETIF_F_SG;
  	netdev->hw_features    |= NETIF_F_IP_CSUM;
  	netdev->hw_features    |= NETIF_F_IPV6_CSUM;
-@@ -124,10 +166,32 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -123,10 +167,32 @@ int mlx5i_init(struct mlx5_core_dev *mde
  	netdev->hw_features    |= NETIF_F_TSO;
  	netdev->hw_features    |= NETIF_F_TSO6;
  	netdev->hw_features    |= NETIF_F_RXCSUM;
@@ -131,7 +133,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  
  	return 0;
  }
-@@ -166,10 +230,20 @@ static void mlx5i_grp_sw_update_stats(st
+@@ -165,10 +231,20 @@ static void mlx5i_grp_sw_update_stats(st
  	memcpy(&priv->stats.sw, &s, sizeof(s));
  }
  
@@ -152,7 +154,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  
  	mlx5i_grp_sw_update_stats(priv);
  
-@@ -178,6 +252,10 @@ void mlx5i_get_stats(struct net_device *
+@@ -177,6 +253,10 @@ void mlx5i_get_stats(struct net_device *
  	stats->tx_packets = sstats->tx_packets;
  	stats->tx_bytes   = sstats->tx_bytes;
  	stats->tx_dropped = sstats->tx_queue_dropped;
@@ -163,7 +165,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  }
  
  int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
-@@ -327,7 +405,11 @@ static int mlx5i_create_flow_steering(st
+@@ -338,7 +418,11 @@ static int mlx5i_create_flow_steering(st
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -175,7 +177,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	}
  
  	mlx5e_set_ttc_basic_params(priv, &ttc_params);
-@@ -523,9 +605,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -534,9 +618,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:
@@ -189,7 +191,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -661,8 +747,14 @@ static int mlx5i_xmit(struct net_device
+@@ -672,8 +760,14 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5e_txqsq *sq   = epriv->txq2sq[skb_get_queue_mapping(skb)];
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
@@ -205,7 +207,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  }
  
  static void mlx5i_set_pkey_index(struct net_device *netdev, int id)
-@@ -752,9 +844,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -763,9 +857,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -217,7 +219,7 @@ Change-Id: I04c7c81d80a1f393bd1c816efa2a7d49abb24d23
  	return 0;
  
  destroy_ht:
-@@ -782,6 +875,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -793,6 +888,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

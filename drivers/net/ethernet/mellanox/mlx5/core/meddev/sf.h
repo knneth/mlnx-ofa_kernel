@@ -6,10 +6,12 @@
 
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/eswitch.h>
+#include <linux/mdev.h>
 
 struct mlx5_sf {
-	struct mlx5_core_dev dev;
+	struct mlx5_core_dev *dev;
 	struct mlx5_core_dev *parent_dev;
+	phys_addr_t bar_base_addr;
 	u16 idx;	/* Index allocated by the SF table bitmap */
 };
 
@@ -55,6 +57,15 @@ int mlx5_sf_set_max_sfs(struct mlx5_core_dev *dev,
 int mlx5_sf_load(struct mlx5_sf *sf);
 void mlx5_sf_unload(struct mlx5_sf *sf);
 
+static inline struct mlx5_core_dev *
+mlx5_sf_get_parent_dev(struct mlx5_core_dev *dev)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev->device);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+
+	return sf->parent_dev;
+}
+
 #else
 static inline u16 mlx5_core_max_sfs(const struct mlx5_core_dev *dev,
 				    struct mlx5_sf_table *sf_table)
@@ -68,14 +79,12 @@ static inline u16 mlx5_get_free_sfs(struct mlx5_core_dev *dev,
 	return 0;
 }
 
-#endif
-
 static inline struct mlx5_core_dev *
 mlx5_sf_get_parent_dev(struct mlx5_core_dev *dev)
 {
-	struct mlx5_sf *sf = container_of(dev, struct mlx5_sf, dev);
-
-	return sf->parent_dev;
+	return NULL;
 }
+
+#endif
 
 #endif

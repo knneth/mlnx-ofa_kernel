@@ -8,8 +8,8 @@ Change-Id: Ia0230742a3ca4ebbbb99e9050c041b3405ea778e
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag_mp.h
-@@ -13,7 +13,7 @@ struct lag_mp {
- 	struct fib_info           *mfi; /* used in tracking fib events */
+@@ -14,7 +14,7 @@ struct lag_mp {
+ 	struct workqueue_struct   *wq;
  };
  
 -#ifdef CONFIG_MLX5_ESWITCH

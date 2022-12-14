@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/sw/rxe/rxe_verbs.c
 
 Change-Id: Iae09680cbbb7e933fb8a8fa4caf6a3a2a54c22bb
 ---
- drivers/infiniband/sw/rxe/rxe_verbs.c | 14 ++++++++++++--
- 1 file changed, 12 insertions(+), 2 deletions(-)
+ drivers/infiniband/sw/rxe/rxe_verbs.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 --- a/drivers/infiniband/sw/rxe/rxe_verbs.c
 +++ b/drivers/infiniband/sw/rxe/rxe_verbs.c
@@ -18,23 +18,7 @@ Change-Id: Iae09680cbbb7e933fb8a8fa4caf6a3a2a54c22bb
  #include <net/addrconf.h>
  #include <rdma/uverbs_ioctl.h>
  #include "rxe.h"
-@@ -982,9 +984,13 @@ static int rxe_dereg_mr(struct ib_mr *ib
- 	rxe_drop_ref(mr);
- 	return 0;
- }
--
-+#ifdef HAVE_NDO_ALLOC_MR_HAS_4_PARAMS
-+struct ib_mr *rxe_alloc_mr(struct ib_pd *ibpd, enum ib_mr_type mr_type,
-+			   u32 max_num_sg, struct ib_udata *udata)
-+#else
- static struct ib_mr *rxe_alloc_mr(struct ib_pd *ibpd, enum ib_mr_type mr_type,
--				  u32 max_num_sg, struct ib_udata *udata)
-+				  u32 max_num_sg)
-+#endif
- {
- 	struct rxe_dev *rxe = to_rdev(ibpd->device);
- 	struct rxe_pd *pd = to_rpd(ibpd);
-@@ -1180,7 +1186,11 @@ int rxe_register_device(struct rxe_dev *
+@@ -1180,7 +1182,11 @@ int rxe_register_device(struct rxe_dev *
  	dev->local_dma_lkey = 0;
  	addrconf_addr_eui48((unsigned char *)&dev->node_guid,
  			    rxe->ndev->dev_addr);

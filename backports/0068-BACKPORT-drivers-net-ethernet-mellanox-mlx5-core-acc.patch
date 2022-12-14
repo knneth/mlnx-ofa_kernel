@@ -17,7 +17,7 @@ Change-Id: Ia3135c61dd806353ad9e7833e66addede0d94e89
  #ifndef __MLX5_ACCEL_TLS_H__
  #define __MLX5_ACCEL_TLS_H__
  
-@@ -92,3 +94,5 @@ static inline void mlx5_accel_tls_cleanu
+@@ -137,3 +139,5 @@ static inline void mlx5_accel_tls_cleanu
  #endif
  
  #endif	/* __MLX5_ACCEL_TLS_H__ */

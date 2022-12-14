@@ -302,13 +302,28 @@ void mlx5_fpga_device_query(struct mlx5_fpga_device *fdev,
 			    struct mlx5_fpga_query *query)
 {
 	unsigned long flags;
+	int err;
 
 	spin_lock_irqsave(&fdev->state_lock, flags);
-	query->image_status = fdev->image_status;
-	query->admin_image = fdev->last_admin_image;
-	query->oper_image = fdev->last_oper_image;
+
+	err = mlx5_fpga_query(fdev->mdev, query);
+
+	if (err) {
+		query->admin_image = 2; /* Failover */
+		query->oper_image = 2; /* Failover */
+		query->image_status = 1; /* Failure */
+	}
+
+	fdev->last_admin_image = query->admin_image;
+	fdev->last_oper_image = query->oper_image;
+	fdev->image_status = query->image_status;
+
 	spin_unlock_irqrestore(&fdev->state_lock, flags);
+
+	if (err)
+		mlx5_fpga_err(fdev, "Failed to query status: %d\n", err);
 }
+
 EXPORT_SYMBOL(mlx5_fpga_device_query);
 
 int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,

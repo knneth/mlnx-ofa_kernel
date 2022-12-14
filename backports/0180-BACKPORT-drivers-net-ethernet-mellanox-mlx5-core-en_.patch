@@ -32,7 +32,7 @@ Change-Id: I8917a6d900ac05ac8cb7e3132cde7814c1b8f26e
  };
  
  void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
-@@ -194,12 +198,12 @@ void mlx5e_tls_build_netdev(struct mlx5e
+@@ -199,12 +203,12 @@ void mlx5e_tls_build_netdev(struct mlx5e
  		netdev->features          |= NETIF_F_HW_TLS_TX;
  		netdev->hw_features       |= NETIF_F_HW_TLS_TX;
  	}

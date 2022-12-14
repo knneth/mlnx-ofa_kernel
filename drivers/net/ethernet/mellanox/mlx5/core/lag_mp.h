@@ -11,6 +11,7 @@
 struct lag_mp {
 	struct notifier_block     fib_nb;
 	struct fib_info           *mfi; /* used in tracking fib events */
+	struct workqueue_struct   *wq;
 };
 
 #ifdef CONFIG_MLX5_ESWITCH

@@ -33,6 +33,7 @@
 #define __MLX5_EN_XDP_H__
 
 #include "en.h"
+#include "en/txrx.h"
 
 #define MLX5E_XDP_MIN_INLINE (ETH_HLEN + VLAN_HLEN)
 #define MLX5E_XDP_TX_EMPTY_DS_COUNT \
@@ -138,14 +139,17 @@ no_inline:
 	session->ds_count++;
 }
 
-static inline void mlx5e_xdpsq_fetch_wqe(struct mlx5e_xdpsq *sq,
-					 struct mlx5e_tx_wqe **wqe)
+static inline struct mlx5e_tx_wqe *
+mlx5e_xdpsq_fetch_wqe(struct mlx5e_xdpsq *sq, u16 *pi)
 {
 	struct mlx5_wq_cyc *wq = &sq->wq;
-	u16 pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
+	struct mlx5e_tx_wqe *wqe;
 
-	*wqe = mlx5_wq_cyc_get_wqe(wq, pi);
-	memset(*wqe, 0, sizeof(**wqe));
+	*pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
+	wqe = mlx5_wq_cyc_get_wqe(wq, *pi);
+	memset(wqe, 0, sizeof(*wqe));
+
+	return wqe;
 }
 
 static inline void

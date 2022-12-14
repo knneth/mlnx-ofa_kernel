@@ -92,6 +92,19 @@ struct mlx5_accel_esp_xfrm_attrs {
 	union {
 		struct aes_gcm_keymat aes_gcm;
 	} keymat;
+
+	union {
+		__be32		a4;
+		__be32		a6[4];
+	} saddr;
+
+	union {
+		__be32		a4;
+		__be32		a6[4];
+	} daddr;
+
+	bool is_ipv6;
+	void *priv;
 };
 
 struct mlx5_accel_esp_xfrm {
@@ -114,7 +127,18 @@ enum mlx5_accel_ipsec_cap {
 	MLX5_ACCEL_IPSEC_CAP_TX_IV_IS_ESN	= 1 << 7,
 };
 
-#ifdef CONFIG_MLX5_ACCEL
+#ifdef CONFIG_MLX5_IPSEC
+#define MLX5_MAX_AUTH_TAG_BIT_NUM 128
+/* up to 128 Authintaction tag data + 5B (minimum padding, pad len, next hdr) */
+#define MLX5_MAX_IPSEC_TRAILER_SZ (MLX5_MAX_AUTH_TAG_BIT_NUM / BITS_PER_BYTE + 5)
+
+struct mlx5_accel_trailer {
+	u8 trbuff[MLX5_MAX_IPSEC_TRAILER_SZ];
+	u8 trbufflen;
+};
+#endif
+
+#ifdef CONFIG_MLX5_EN_IPSEC
 
 u32 mlx5_accel_ipsec_device_caps(struct mlx5_core_dev *mdev);
 

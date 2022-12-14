@@ -93,6 +93,10 @@ void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev)
 		caps->max_cmd_timeout_us = 1 << MLX5_CAP_NVMF(mdev, log_max_cmd_timeout);
 	else
 		caps->max_cmd_timeout_us = 0;
+	if (MLX5_CAP_NVMF(mdev, log_max_frontend_nsid))
+		caps->max_frontend_nsid = 1 << MLX5_CAP_NVMF(mdev, log_max_frontend_nsid);
+	else
+		caps->max_frontend_nsid = 0;
 }
 
 static void set_nvmf_backend_ctrl_attrs(struct ib_nvmf_backend_ctrl_init_attr *attr,

@@ -39,3 +39,6 @@ include/linux/sunrpc/svc_rdma.h
 include/linux/sunrpc/xprtrdma.h
 include/trace/events/ib_umad.h
 include/trace/events/ib_mad.h
+include/trace/events/rpcrdma.h
+include/linux/blk-mq-rdma.h
+block/blk-mq-rdma.c

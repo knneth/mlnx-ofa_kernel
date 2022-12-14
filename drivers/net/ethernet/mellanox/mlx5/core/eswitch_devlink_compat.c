@@ -75,6 +75,7 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct devlink *devlink = priv_to_devlink(dev);
 	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
@@ -90,12 +91,17 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 	if (!op)
 		return -ENOENT;
 
+	if (atomic_inc_return(&esw->handler.in_progress) > 1)
+		return -EBUSY;
+
 	if (op->read_u16) {
 		ret = op->read_u16(devlink, &read);
 	} else {
 		ret = op->read_u8(devlink, &read8);
 		read = read8;
 	}
+
+	atomic_set(&esw->handler.in_progress, 0);
 
 	if (ret < 0)
 		return ret;
@@ -116,6 +122,7 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct devlink *devlink = priv_to_devlink(dev);
 	static struct netlink_ext_ack ack = { ._msg = NULL };
 	const char *entname = attr->attr.name;
@@ -146,10 +153,22 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 		return -EINVAL;
 	}
 
+	/* For eswitch_mode_set, in_progress will be incremented inside
+	 * the callback function, and the value will be kept after return
+	 * because it will be set to zero later when eswitch offloads
+	 * start/stop is really finished by worker.
+	 */
+	if ((strcmp(entname, "mode") != 0) &&
+	    atomic_inc_return(&esw->handler.in_progress) > 1)
+		return -EBUSY;
+
 	if (op->write_u16)
 		ret = op->write_u16(devlink, set, &ack);
 	else
 		ret = op->write_u8(devlink, set, &ack);
+
+	if (strcmp(entname, "mode") != 0)
+		atomic_set(&esw->handler.in_progress, 0);
 
 	if (ack._msg)
 		mlx5_core_warn(dev, "%s\n", ack._msg);

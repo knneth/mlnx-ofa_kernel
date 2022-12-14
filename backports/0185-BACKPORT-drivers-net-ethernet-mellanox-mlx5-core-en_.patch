@@ -8,7 +8,7 @@ Change-Id: I56f9aa4173fb655cbe8d17c379caf6b810a6ee08
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-@@ -225,6 +225,20 @@ static const u32 mlx5e_link_speed[MLX5E_
+@@ -213,6 +213,20 @@ static const u32 mlx5e_link_speed[MLX5E_
  	[MLX5E_50GBASE_KR2]       = 50000,
  };
  

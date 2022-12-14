@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_rep.h | 37 ++++++++++++++++++++++++
- 1 file changed, 37 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_rep.h | 41 ++++++++++++++++++++++--
+ 1 file changed, 39 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
@@ -57,12 +57,12 @@ Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
  enum {
  	/* set when the encap entry is successfully offloaded into HW */
  	MLX5_ENCAP_ENTRY_VALID     = BIT(0),
-@@ -154,15 +162,27 @@ struct encap_id_entry {
- 	u32 encap_id;
+@@ -154,36 +162,58 @@ struct encap_id_entry {
+ 	struct mlx5_pkt_reformat *pkt_reformat;
  	struct list_head list;
  };
 +#endif
- 
++
 +#ifdef HAVE_NET_TC_ACT_TC_TUNNEL_KEY_H
 +#if !defined(HAVE_IP_TUNNEL_INFO) && !defined(CONFIG_COMPAT_IP_TUNNELS)
 +struct mlx5_encap_info {
@@ -72,6 +72,7 @@ Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
 +};
 +#endif
 + 
+ 
  struct mlx5e_encap_entry {
  	/* attached neigh hash entry */
  	struct mlx5e_neigh_hash_entry *nhe;
@@ -85,21 +86,19 @@ Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
  	/* a node of the eswitch encap hash table which keeping all the encap
  	 * entries
  	 */
-@@ -170,7 +190,11 @@ struct mlx5e_encap_entry {
+ 	struct hlist_node encap_hlist;
  	struct list_head flows;
- 	/* positive id or negative error code */
- 	s64 encap_id;
+ 	struct mlx5_pkt_reformat *pkt_reformat;
 +#if defined(HAVE_IP_TUNNEL_INFO) || defined(CONFIG_COMPAT_IP_TUNNELS)
- 	struct ip_tunnel_info tun_info;
+ 	const struct ip_tunnel_info *tun_info;
 +#else
 +	struct mlx5_encap_info tun_info;
 +#endif
  	unsigned char h_dest[ETH_ALEN];	/* destination eth addr	*/
  
  	struct net_device *out_dev;
-@@ -178,14 +202,19 @@ struct mlx5e_encap_entry {
- 	int tunnel_type;
- 	int tunnel_hlen;
+ 	struct net_device *route_dev;
+ 	struct mlx5e_tc_tunnel *tunnel;
  	int reformat_type;
 +#ifdef HAVE_TCF_TUNNEL_INFO
  	u8 flags;
@@ -117,7 +116,7 @@ Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
  
  struct mlx5e_rep_sq {
  	struct mlx5_flow_handle	*send_to_vport_rule;
-@@ -210,10 +239,12 @@ int mlx5e_rep_get_offload_stats(int attr
+@@ -208,10 +238,12 @@ int mlx5e_rep_get_offload_stats(int attr
  
  void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
  
@@ -130,10 +129,10 @@ Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
  
  void mlx5e_rep_queue_neigh_stats_work(struct mlx5e_priv *priv);
  
-@@ -228,12 +259,18 @@ int mlx5e_rep_get_port_parent_id(struct
- 				 struct netdev_phys_item_id *ppid);
- int mlx5e_rep_get_phys_port_name(struct net_device *dev,
+@@ -229,14 +261,19 @@ int mlx5e_rep_get_phys_port_name(struct
  				 char *buf, size_t len);
+ int mlx5e_uplink_rep_set_vf_vlan(struct net_device *dev, int vf, u16 vlan,
+ 				 u8 qos, __be16 vlan_proto);
 +int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr);
 +
 +#ifdef HAVE_SWITCHDEV_H_COMPAT
@@ -145,7 +144,10 @@ Change-Id: If510cac5261012c2d72aa76ee3c23fc36fa5bb6b
  static inline bool mlx5e_is_vport_rep_loaded(struct mlx5e_priv *priv) { return false; }
  static inline int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv) { return 0; }
  static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
-+static inline int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr) { return 0; }
+-static int mlx5e_uplink_rep_set_vf_vlan(struct net_device *dev, int vf, u16 vlan,
+-					u8 qos, __be16 vlan_proto)
++static inline int mlx5e_uplink_rep_set_vf_vlan(struct net_device *dev, int vf, u16 vlan,
++					       u8 qos, __be16 vlan_proto)
+ { return -EOPNOTSUPP; }
  #endif
  
- static inline bool mlx5e_is_vport_rep(struct mlx5e_priv *priv)

@@ -1,9 +1,9 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Aya Levin <ayal@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.c
 
-Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
+Change-Id: I2c201fba54108ee5852a988084e2babb526290fb
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_stats.c | 91 +++++++++++++++++++---
+ .../ethernet/mellanox/mlx5/core/en_stats.c    | 91 +++++++++++++++++--
  1 file changed, 82 insertions(+), 9 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.c
@@ -14,10 +14,10 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  
 -#ifdef CONFIG_MLX5_EN_TLS
 +#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
- 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_ooo) },
- 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_resync_bytes) },
- #endif
-@@ -65,14 +65,18 @@ static const struct counter_desc sw_stat
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_encrypted_packets) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_encrypted_bytes) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_ctx) },
+@@ -73,14 +73,18 @@ static const struct counter_desc sw_stat
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_csum_complete_tail) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_csum_complete_tail_slow) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_csum_unnecessary_inner) },
@@ -36,7 +36,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_csum_none) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_csum_partial) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_csum_partial_inner) },
-@@ -83,12 +87,19 @@ static const struct counter_desc sw_stat
+@@ -91,12 +95,19 @@ static const struct counter_desc sw_stat
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqes) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_queue_wake) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqe_err) },
@@ -53,10 +53,10 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xdp_err) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xdp_cqes) },
 +#endif
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqe_compress_blks) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqe_compress_pkts) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_wqe_err) },
- 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler_cqes) },
- 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler_strides) },
-@@ -137,6 +148,25 @@ static int mlx5e_grp_sw_fill_stats(struc
+@@ -148,6 +159,25 @@ static int mlx5e_grp_sw_fill_stats(struc
  		data[idx++] = MLX5E_READ_CTR64_CPU(&priv->stats.sw, sw_stats_desc, i);
  	return idx;
  }
@@ -82,7 +82,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  
  void mlx5e_grp_sw_update_stats(struct mlx5e_priv *priv)
  {
-@@ -148,8 +178,12 @@ void mlx5e_grp_sw_update_stats(struct ml
+@@ -159,8 +189,12 @@ void mlx5e_grp_sw_update_stats(struct ml
  	for (i = 0; i < mlx5e_get_netdev_max_channels(priv); i++) {
  		struct mlx5e_channel_stats *channel_stats =
  			&priv->channel_stats[i];
@@ -95,7 +95,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  		struct mlx5e_rq_stats *rq_stats = &channel_stats->rq;
  		struct mlx5e_ch_stats *ch_stats = &channel_stats->ch;
  		int j;
-@@ -166,14 +200,18 @@ void mlx5e_grp_sw_update_stats(struct ml
+@@ -177,14 +211,18 @@ void mlx5e_grp_sw_update_stats(struct ml
  		s->rx_csum_complete_tail_slow += rq_stats->csum_complete_tail_slow;
  		s->rx_csum_unnecessary += rq_stats->csum_unnecessary;
  		s->rx_csum_unnecessary_inner += rq_stats->csum_unnecessary_inner;
@@ -114,7 +114,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  		s->rx_wqe_err   += rq_stats->wqe_err;
  		s->rx_mpwqe_filler_cqes    += rq_stats->mpwqe_filler_cqes;
  		s->rx_mpwqe_filler_strides += rq_stats->mpwqe_filler_strides;
-@@ -196,6 +234,7 @@ void mlx5e_grp_sw_update_stats(struct ml
+@@ -208,6 +246,7 @@ void mlx5e_grp_sw_update_stats(struct ml
  		s->ch_arm         += ch_stats->arm;
  		s->ch_aff_change  += ch_stats->aff_change;
  		s->ch_eq_rearm    += ch_stats->eq_rearm;
@@ -122,7 +122,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  		/* xdp redirect */
  		s->tx_xdp_xmit    += xdpsq_red_stats->xmit;
  		s->tx_xdp_mpwqe   += xdpsq_red_stats->mpwqe;
-@@ -203,6 +242,7 @@ void mlx5e_grp_sw_update_stats(struct ml
+@@ -215,6 +254,7 @@ void mlx5e_grp_sw_update_stats(struct ml
  		s->tx_xdp_full    += xdpsq_red_stats->full;
  		s->tx_xdp_err     += xdpsq_red_stats->err;
  		s->tx_xdp_cqes    += xdpsq_red_stats->cqes;
@@ -130,16 +130,17 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  
  		for (j = 0; j < priv->max_opened_tc; j++) {
  			struct mlx5e_sq_stats *sq_stats = &channel_stats->sq[j];
-@@ -224,13 +264,16 @@ void mlx5e_grp_sw_update_stats(struct ml
+@@ -236,7 +276,7 @@ void mlx5e_grp_sw_update_stats(struct ml
  			s->tx_csum_partial_inner += sq_stats->csum_partial_inner;
  			s->tx_csum_none		+= sq_stats->csum_none;
  			s->tx_csum_partial	+= sq_stats->csum_partial;
 -#ifdef CONFIG_MLX5_EN_TLS
 +#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
- 			s->tx_tls_ooo		+= sq_stats->tls_ooo;
- 			s->tx_tls_resync_bytes	+= sq_stats->tls_resync_bytes;
- #endif
- 			s->tx_cqes		+= sq_stats->cqes;
+ 			s->tx_tls_encrypted_packets += sq_stats->tls_encrypted_packets;
+ 			s->tx_tls_encrypted_bytes   += sq_stats->tls_encrypted_bytes;
+ 			s->tx_tls_ctx               += sq_stats->tls_ctx;
+@@ -253,6 +293,9 @@ void mlx5e_grp_sw_update_stats(struct ml
+ 			s->tx_cqe_compress_pkts += sq_stats->cqe_compress_pkts;
  		}
  	}
 +#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
@@ -148,7 +149,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  }
  
  static const struct counter_desc q_stats_desc[] = {
-@@ -409,7 +452,11 @@ static void mlx5e_vf_rep_update_hw_count
+@@ -431,7 +474,11 @@ static void mlx5e_vf_rep_update_hw_count
  	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
  	struct mlx5e_rep_priv *rpriv = priv->ppriv;
  	struct mlx5_eswitch_rep *rep = rpriv->rep;
@@ -160,7 +161,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  	struct ifla_vf_stats vf_stats;
  	int err;
  
-@@ -1348,8 +1395,12 @@ static const struct counter_desc rq_stat
+@@ -1512,8 +1559,12 @@ static const struct counter_desc rq_stat
  	{ MLX5E_DECLARE_RX_STAT(struct mlx5e_rq_stats, csum_unnecessary) },
  	{ MLX5E_DECLARE_RX_STAT(struct mlx5e_rq_stats, csum_unnecessary_inner) },
  	{ MLX5E_DECLARE_RX_STAT(struct mlx5e_rq_stats, csum_none) },
@@ -173,7 +174,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  	{ MLX5E_DECLARE_RX_STAT(struct mlx5e_rq_stats, lro_packets) },
  	{ MLX5E_DECLARE_RX_STAT(struct mlx5e_rq_stats, lro_bytes) },
  	{ MLX5E_DECLARE_RX_STAT(struct mlx5e_rq_stats, ecn_mark) },
-@@ -1394,6 +1445,7 @@ static const struct counter_desc sq_stat
+@@ -1573,6 +1624,7 @@ static const struct counter_desc sq_stat
  	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, cqe_err) },
  };
  
@@ -181,7 +182,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  static const struct counter_desc rq_xdpsq_stats_desc[] = {
  	{ MLX5E_DECLARE_RQ_XDPSQ_STAT(struct mlx5e_xdpsq_stats, xmit) },
  	{ MLX5E_DECLARE_RQ_XDPSQ_STAT(struct mlx5e_xdpsq_stats, mpwqe) },
-@@ -1402,7 +1454,9 @@ static const struct counter_desc rq_xdps
+@@ -1581,7 +1633,9 @@ static const struct counter_desc rq_xdps
  	{ MLX5E_DECLARE_RQ_XDPSQ_STAT(struct mlx5e_xdpsq_stats, err) },
  	{ MLX5E_DECLARE_RQ_XDPSQ_STAT(struct mlx5e_xdpsq_stats, cqes) },
  };
@@ -192,7 +193,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  static const struct counter_desc xdpsq_stats_desc[] = {
  	{ MLX5E_DECLARE_XDPSQ_STAT(struct mlx5e_xdpsq_stats, xmit) },
  	{ MLX5E_DECLARE_XDPSQ_STAT(struct mlx5e_xdpsq_stats, mpwqe) },
-@@ -1411,6 +1465,7 @@ static const struct counter_desc xdpsq_s
+@@ -1590,6 +1644,7 @@ static const struct counter_desc xdpsq_s
  	{ MLX5E_DECLARE_XDPSQ_STAT(struct mlx5e_xdpsq_stats, err) },
  	{ MLX5E_DECLARE_XDPSQ_STAT(struct mlx5e_xdpsq_stats, cqes) },
  };
@@ -200,7 +201,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  
  static const struct counter_desc ch_stats_desc[] = {
  	{ MLX5E_DECLARE_CH_STAT(struct mlx5e_ch_stats, events) },
-@@ -1422,8 +1477,12 @@ static const struct counter_desc ch_stat
+@@ -1601,8 +1656,12 @@ static const struct counter_desc ch_stat
  
  #define NUM_RQ_STATS			ARRAY_SIZE(rq_stats_desc)
  #define NUM_SQ_STATS			ARRAY_SIZE(sq_stats_desc)
@@ -215,7 +216,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  #define NUM_CH_STATS			ARRAY_SIZE(ch_stats_desc)
  #define MLX5E_GET_PFLAG_PER_CH_STATS(priv) \
  	(MLX5E_GET_PFLAG(&(priv)->channels.params, MLX5E_PFLAG_PER_CH_STATS))
-@@ -1437,8 +1496,16 @@ static int mlx5e_grp_channels_get_num_st
+@@ -1616,8 +1675,16 @@ static int mlx5e_grp_channels_get_num_st
  
  	return (NUM_RQ_STATS * max_nch) +
  	       (NUM_CH_STATS * max_nch) +
@@ -234,7 +235,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  #ifndef CONFIG_MLX5_EN_SPECIAL_SQ
  	       (NUM_SQ_STATS * max_nch * priv->max_opened_tc);
  #else
-@@ -1465,9 +1532,11 @@ static int mlx5e_grp_channels_fill_strin
+@@ -1644,9 +1711,11 @@ static int mlx5e_grp_channels_fill_strin
  		for (j = 0; j < NUM_RQ_STATS; j++)
  			sprintf(data + (idx++) * ETH_GSTRING_LEN,
  				rq_stats_desc[j].format, i);
@@ -246,7 +247,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  	}
  
  	for (tc = 0; tc < priv->max_opened_tc; tc++)
-@@ -1476,11 +1545,12 @@ static int mlx5e_grp_channels_fill_strin
+@@ -1655,11 +1724,12 @@ static int mlx5e_grp_channels_fill_strin
  				sprintf(data + (idx++) * ETH_GSTRING_LEN,
  					sq_stats_desc[j].format,
  					priv->channel_tc2txq[i][tc]);
@@ -260,7 +261,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	/* Special TX queue counters */
-@@ -1515,10 +1585,12 @@ static int mlx5e_grp_channels_fill_stats
+@@ -1694,10 +1764,12 @@ static int mlx5e_grp_channels_fill_stats
  			data[idx++] =
  				MLX5E_READ_CTR64_CPU(&priv->channel_stats[i].rq,
  						     rq_stats_desc, j);
@@ -273,7 +274,7 @@ Change-Id: I53b71b65a40aa9cbce25e1e31feaed5620880105
  	}
  
  	for (tc = 0; tc < priv->max_opened_tc; tc++)
-@@ -1527,12 +1599,13 @@ static int mlx5e_grp_channels_fill_stats
+@@ -1706,12 +1778,13 @@ static int mlx5e_grp_channels_fill_stats
  				data[idx++] =
  					MLX5E_READ_CTR64_CPU(&priv->channel_stats[i].sq[tc],
  							     sq_stats_desc, j);

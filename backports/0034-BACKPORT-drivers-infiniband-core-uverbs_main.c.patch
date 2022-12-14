@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
 
 Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
 ---
- drivers/infiniband/core/uverbs_main.c | 82 ++++++++++++++++++++++++++++++++---
- 1 file changed, 77 insertions(+), 5 deletions(-)
+ drivers/infiniband/core/uverbs_main.c | 84 ++++++++++++++++++++++++++++++++---
+ 1 file changed, 78 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
@@ -44,7 +44,20 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  	if (!srcu_dereference(ufile->device->ib_dev,
  			      &ufile->device->disassociate_srcu))
  		return ERR_PTR(-EIO);
-@@ -620,8 +631,14 @@ static ssize_t verify_hdr(struct ib_uver
+@@ -482,7 +493,12 @@ void ib_uverbs_init_async_event_file(
+ 	if (!uverbs_file->async_file) {
+ 		/* Pairs with the put in ib_uverbs_release_file */
+ 		uverbs_uobject_get(&async_file->uobj);
++#ifdef HAVE_SMP_LOAD_ACQUIRE
+ 		smp_store_release(&uverbs_file->async_file, async_file);
++#else
++		smp_wmb();
++		uverbs_file->async_file = async_file;
++#endif
+ 	}
+ 	mutex_unlock(&uverbs_file->ucontext_lock);
+ 
+@@ -514,8 +530,14 @@ static ssize_t verify_hdr(struct ib_uver
  			if (hdr->out_words * 8 < method_elm->resp_size)
  				return -ENOSPC;
  
@@ -59,7 +72,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  				return -EFAULT;
  		} else {
  			if (hdr->out_words || ex_hdr->provider_out_words)
-@@ -705,9 +722,13 @@ static ssize_t verify_exp_hdr(struct ib_
+@@ -599,9 +621,13 @@ static ssize_t verify_exp_hdr(struct ib_
  	if (ex_hdr->response) {
  		if (!hdr->out_words && !ex_hdr->provider_out_words)
  			return -EINVAL;
@@ -74,7 +87,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  			return -EFAULT;
  	} else {
  		if (hdr->out_words || ex_hdr->provider_out_words)
-@@ -1034,11 +1055,20 @@ static void rdma_umap_close(struct vm_ar
+@@ -905,11 +931,20 @@ static void rdma_umap_close(struct vm_ar
   * Once the zap_vma_ptes has been called touches to the VMA will come here and
   * we return a dummy writable zero page for all the pfns.
   */
@@ -95,7 +108,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  
  	if (!priv)
  		return VM_FAULT_SIGBUS;
-@@ -1069,11 +1099,13 @@ static vm_fault_t rdma_umap_fault(struct
+@@ -940,11 +975,13 @@ static vm_fault_t rdma_umap_fault(struct
  
  	return ret;
  }
@@ -109,20 +122,26 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
 +#endif
  };
  
- /*
-@@ -1167,6 +1199,11 @@ void uverbs_user_mmap_disassociate(struc
+ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
+@@ -1000,11 +1037,16 @@ void uverbs_user_mmap_disassociate(struc
  
  			zap_vma_ptes(vma, vma->vm_start,
  				     vma->vm_end - vma->vm_start);
+-
 +#ifndef HAVE_VM_FAULT_T
 +			vma->vm_flags &= ~(VM_SHARED | VM_MAYSHARE);
 +			vma->vm_ops = NULL;
 +			kfree(priv);
++#else
+ 			if (priv->entry) {
+ 				rdma_user_mmap_entry_put(priv->entry);
+ 				priv->entry = NULL;
+ 			}
 +#endif
  		}
  		mutex_unlock(&ufile->umap_lock);
  	skip_mm:
-@@ -1251,8 +1288,11 @@ static int ib_uverbs_open(struct inode *
+@@ -1089,8 +1131,11 @@ static int ib_uverbs_open(struct inode *
  	srcu_read_unlock(&dev->disassociate_srcu, srcu_key);
  
  	setup_ufile_idr_uobject(file);
@@ -135,7 +154,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  
  err_module:
  	module_put(ib_dev->owner);
-@@ -1359,8 +1399,16 @@ static const struct attribute_group dev_
+@@ -1197,8 +1242,16 @@ static const struct attribute_group dev_
  	.attrs = ib_dev_attrs,
  };
  
@@ -152,7 +171,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  
  static int ib_uverbs_create_uapi(struct ib_device *device,
  				 struct ib_uverbs_device *uverbs_dev)
-@@ -1411,11 +1459,19 @@ static void ib_uverbs_add_one(struct ib_
+@@ -1248,11 +1301,19 @@ static void ib_uverbs_add_one(struct ib_
  	rcu_assign_pointer(uverbs_dev->ib_dev, device);
  	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
  
@@ -172,7 +191,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
  		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
  	else
-@@ -1442,7 +1498,11 @@ static void ib_uverbs_add_one(struct ib_
+@@ -1279,7 +1340,11 @@ static void ib_uverbs_add_one(struct ib_
  	return;
  
  err_uapi:
@@ -184,15 +203,15 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  err:
  	if (atomic_dec_and_test(&uverbs_dev->refcount))
  		ib_uverbs_comp_dev(uverbs_dev);
-@@ -1481,7 +1541,6 @@ static void ib_uverbs_free_hw_resources(
- 		ib_uverbs_event_handler(&file->event_handler, &event);
+@@ -1315,7 +1380,6 @@ static void ib_uverbs_free_hw_resources(
+ 
  		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
  		kref_put(&file->ref, ib_uverbs_release_file);
 -
  		mutex_lock(&uverbs_dev->lists_mutex);
  	}
- 
-@@ -1517,7 +1576,11 @@ static void ib_uverbs_remove_one(struct
+ 	mutex_unlock(&uverbs_dev->lists_mutex);
+@@ -1332,7 +1396,11 @@ static void ib_uverbs_remove_one(struct
  		return;
  
  	cdev_device_del(&uverbs_dev->cdev, &uverbs_dev->dev);
@@ -204,7 +223,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  
  	if (device->ops.disassociate_ucontext) {
  		/* We disassociate HW resources and immediately return.
-@@ -1543,7 +1606,11 @@ static void ib_uverbs_remove_one(struct
+@@ -1358,7 +1426,11 @@ static void ib_uverbs_remove_one(struct
  	put_device(&uverbs_dev->dev);
  }
  
@@ -216,7 +235,7 @@ Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
  {
  	if (mode)
  		*mode = 0666;
-@@ -1579,7 +1646,12 @@ static int __init ib_uverbs_init(void)
+@@ -1394,7 +1466,12 @@ static int __init ib_uverbs_init(void)
  
  	uverbs_class->devnode = uverbs_devnode;
  

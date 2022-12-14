@@ -147,6 +147,7 @@ struct nvmet_port {
 	int				inline_data_size;
 	u32				offload_queues;
 	size_t				offload_srq_size;
+	bool				many_offload_subsys_support;
 };
 
 static inline struct nvmet_port *to_nvmet_port(struct config_item *item)
@@ -300,12 +301,11 @@ struct nvmet_fabrics_ops {
 	u16 (*install_queue)(struct nvmet_sq *nvme_sq);
 	bool (*is_port_active)(struct nvmet_port *port);
 	bool (*peer_to_peer_capable)(struct nvmet_port *port);
-	int (*install_offload_queue)(struct nvmet_ctrl *ctrl,
-				     struct nvmet_req *req);
 	int (*create_offload_ctrl)(struct nvmet_ctrl *ctrl);
 	void (*destroy_offload_ctrl)(struct nvmet_ctrl *ctrl);
-	int (*enable_offload_ns)(struct nvmet_ctrl *ctrl);
-	void (*disable_offload_ns)(struct nvmet_ctrl *ctrl);
+	int (*enable_offload_ns)(struct nvmet_ctrl *ctrl, struct nvmet_ns *ns);
+	void (*disable_offload_ns)(struct nvmet_ctrl *ctrl,
+				   struct nvmet_ns *ns);
 	unsigned int (*peer_to_peer_sqe_inline_size)(struct nvmet_ctrl *ctrl);
 	u8 (*peer_to_peer_mdts)(struct nvmet_port *port);
 	u64 (*offload_subsys_unknown_ns_cmds)(struct nvmet_subsys *subsys);
@@ -317,6 +317,8 @@ struct nvmet_fabrics_ops {
 	u64 (*offload_ns_flush_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_error_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_backend_error_cmds)(struct nvmet_ns *ns);
+	bool (*check_subsys_match_offload_port)(struct nvmet_port *port,
+						struct nvmet_subsys *subsys);
 };
 
 #define NVMET_MAX_INLINE_BIOVEC	8
@@ -458,7 +460,7 @@ void nvmet_unregister_transport(const struct nvmet_fabrics_ops *ops);
 void nvmet_port_del_ctrls(struct nvmet_port *port,
 			  struct nvmet_subsys *subsys);
 
-int nvmet_enable_port(struct nvmet_port *port, bool offloadble);
+int nvmet_enable_port(struct nvmet_port *port, struct nvmet_subsys *subsys);
 void nvmet_disable_port(struct nvmet_port *port);
 bool nvmet_is_port_active(struct nvmet_port *port);
 

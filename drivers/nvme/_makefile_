@@ -12,6 +12,7 @@ variant=default
 endif
 FLAVOR ?= $(variant)
 OFA = $(shell ( test -d $(OFA_DIR)/$(KVER) && echo $(OFA_DIR)/$(KVER) ) || ( test -d $(OFA_DIR)/$(FLAVOR) && echo $(OFA_DIR)/$(FLAVOR) ) || ( test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build ) || ( echo $(OFA_DIR) ))
+OFA_SYMBOLS = $(wildcard $(OFA)/Module*.symvers)
 
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 include $(OFA)/configure.mk.kernel
@@ -120,8 +121,7 @@ rpmmacros =\
 
 default:
 # compile with ofed driver
-	-cp -f $(OFA)/Module*.symvers $(SRC_DIR)/Module.symvers
-	make -C $(K_BUILD) O=$(K_OBJ) SUBDIRS=$(shell pwd) $(WITH_MAKE_PARAMS) \
+	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
 		$(MY_NVMF_KCONFIGS) \
 		CONFIG_DTRACE= \
 		CONFIG_CTF= \
@@ -148,11 +148,12 @@ default:
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-Iarch/$$(SRCARCH)/include/generated \
 		' \
+		KBUILD_EXTRA_SYMBOLS="$(OFA_SYMBOLS)" \
 		modulesymfile=$(SRC_DIR)/Module.symvers \
 		modules
 
 install:
-	make -C $(K_BUILD) O=$(K_OBJ) SUBDIRS=$(shell pwd) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) $(WITH_MAKE_PARAMS) modules_install
+	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) $(WITH_MAKE_PARAMS) modules_install
 	if [ ! -n "$(INSTALL_MOD_PATH)" ]; then /sbin/depmod $(KVER);fi;
 
 rpmcheck:

@@ -98,6 +98,8 @@ struct mlx5e_sw_stats {
 	u64 tx_xdp_full;
 	u64 tx_xdp_err;
 	u64 tx_xdp_cqes;
+	u64 tx_cqe_compress_blks;
+	u64 tx_cqe_compress_pkts;
 	u64 rx_wqe_err;
 	u64 rx_mpwqe_filler_cqes;
 	u64 rx_mpwqe_filler_strides;
@@ -115,6 +117,7 @@ struct mlx5e_sw_stats {
 	u64 rx_cache_waive;
 	u64 rx_congst_umr;
 	u64 rx_arfs_err;
+	u64 rx_recover;
 	u64 ch_events;
 	u64 ch_poll;
 	u64 ch_arm;
@@ -122,8 +125,16 @@ struct mlx5e_sw_stats {
 	u64 ch_eq_rearm;
 
 #ifdef CONFIG_MLX5_EN_TLS
+	u64 tx_tls_encrypted_packets;
+	u64 tx_tls_encrypted_bytes;
+	u64 tx_tls_ctx;
 	u64 tx_tls_ooo;
+	u64 tx_tls_dump_packets;
+	u64 tx_tls_dump_bytes;
 	u64 tx_tls_resync_bytes;
+	u64 tx_tls_skip_no_sync_data;
+	u64 tx_tls_drop_no_sync_data;
+	u64 tx_tls_drop_bypass_req;
 #endif
 };
 
@@ -171,6 +182,8 @@ struct mlx5e_pport_stats {
 	__be64 phy_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 phy_statistical_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 eth_ext_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
+	__be64 per_tc_prio_counters[NUM_PPORT_PRIO][MLX5_ST_SZ_QW(ppcnt_reg)];
+	__be64 per_tc_congest_prio_counters[NUM_PPORT_PRIO][MLX5_ST_SZ_QW(ppcnt_reg)];
 };
 
 #define PCIE_PERF_GET(pcie_stats, c) \
@@ -217,6 +230,7 @@ struct mlx5e_rq_stats {
 	u64 cache_waive;
 	u64 congst_umr;
 	u64 arfs_err;
+	u64 recover;
 };
 
 struct mlx5e_sq_stats {
@@ -233,8 +247,16 @@ struct mlx5e_sq_stats {
 	u64 added_vlan_packets;
 	u64 nop;
 #ifdef CONFIG_MLX5_EN_TLS
+	u64 tls_encrypted_packets;
+	u64 tls_encrypted_bytes;
+	u64 tls_ctx;
 	u64 tls_ooo;
+	u64 tls_dump_packets;
+	u64 tls_dump_bytes;
 	u64 tls_resync_bytes;
+	u64 tls_skip_no_sync_data;
+	u64 tls_drop_no_sync_data;
+	u64 tls_drop_bypass_req;
 #endif
 	/* less likely accessed in data path */
 	u64 csum_none;
@@ -243,6 +265,8 @@ struct mlx5e_sq_stats {
 	u64 recover;
 	/* dirtied @completion */
 	u64 cqes ____cacheline_aligned_in_smp;
+	u64 cqe_compress_blks;
+	u64 cqe_compress_pkts;
 	u64 wake;
 	u64 cqe_err;
 };

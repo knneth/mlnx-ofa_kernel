@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
 Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 ---
- .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 124 +++++++++++++++---
- 1 file changed, 107 insertions(+), 17 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 114 ++++++++++++++++--
+ 1 file changed, 101 insertions(+), 13 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
@@ -76,21 +76,20 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  		/* fall through */
  	case XDP_DROP:
  		rq->stats->xdp_drop++;
-@@ -300,7 +317,12 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -298,7 +315,12 @@ static void mlx5e_free_xdpsq_desc(struct
  			/* XDP_REDIRECT */
  			dma_unmap_single(sq->pdev, xdpi.dma_addr,
  					 xdpi.xdpf->len, DMA_TO_DEVICE);
--			xdp_return_frame(xdpi.xdpf);
 +#ifdef HAVE_XDP_FRAME
-+       		xdp_return_frame(xdpi.xdpf);
+ 			xdp_return_frame(xdpi.xdpf);
 +#else
-+				/* Assumes order0 page*/
-+				put_page(virt_to_page(xdpi.xdpf->data));
++			/* Assumes order0 page*/
++			put_page(virt_to_page(xdpi.xdpf->data));
 +#endif
  		}
  	}
  }
-@@ -380,6 +402,30 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -378,6 +400,30 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
  	}
  }
  
@@ -121,17 +120,14 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -418,9 +464,14 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -416,9 +462,14 @@ int mlx5e_xdp_xmit(struct net_device *de
  		xdpi.xdpf = xdpf;
  
  		if (unlikely(!sq->xmit_xdp_frame(sq, &xdpi))) {
--			dma_unmap_single(sq->pdev, xdpi.dma_addr,
--					 xdpf->len, DMA_TO_DEVICE);
--			xdp_return_frame_rx_napi(xdpf);
 +#ifdef HAVE_XDP_FRAME
-+       		dma_unmap_single(sq->pdev, xdpi.dma_addr,
-+       				 xdpf->len, DMA_TO_DEVICE);
-+       		xdp_return_frame_rx_napi(xdpf);
+ 			dma_unmap_single(sq->pdev, xdpi.dma_addr,
+ 					 xdpf->len, DMA_TO_DEVICE);
+ 			xdp_return_frame_rx_napi(xdpf);
 +#else
 +			/* Assumes order0 page*/
 +			put_page(virt_to_page(xdpf->data));
@@ -139,7 +135,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  			drops++;
  		}
  	}
-@@ -433,25 +484,64 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -431,25 +482,62 @@ int mlx5e_xdp_xmit(struct net_device *de
  
  	return n - drops;
  }
@@ -156,7 +152,8 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
  
 -	if (xdpsq->mpwqe.wqe)
 -		mlx5e_xdp_mpwqe_complete(xdpsq);
-+	if (unlikely(!test_bit(MLX5E_STATE_OPENED, &priv->state)))
++	/* this flag is sufficient, no need to test internal sq state */
++	if (unlikely(!mlx5e_xdp_tx_is_enabled(priv)))
 +		return -ENETDOWN;
  
 -	mlx5e_xmit_xdp_doorbell(xdpsq);
@@ -171,9 +168,6 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 +
 +	sq = &priv->channels.c[sq_num]->xdpsq;
 +
-+	if (unlikely(!test_bit(MLX5E_SQ_STATE_ENABLED, &sq->state)))
-+		return -ENETDOWN;
-+
 +	xdpi.xdpf = convert_to_xdp_frame(xdp);
 +	if (unlikely(!xdpi.xdpf))
 +		return -ENOSPC;
@@ -183,7 +177,7 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 +	if (unlikely(dma_mapping_error(sq->pdev, xdpi.dma_addr)))
 +		return -ENOSPC;
 +
-+	if (unlikely(!mlx5e_xmit_xdp_frame(sq, &xdpi)))
++	if (unlikely(!sq->xmit_xdp_frame(sq, &xdpi)))
 +		return -ENOSPC;
 +
 +	return 0;
@@ -198,7 +192,8 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 +	struct mlx5e_xdpsq *sq;
 +	int sq_num;
 +
-+	if (unlikely(!test_bit(MLX5E_STATE_OPENED, &priv->state)))
++	/* this flag is sufficient, no need to test internal sq state */
++	if (unlikely(!mlx5e_xdp_tx_is_enabled(priv)))
 +		return;
 +
 +	sq_num = smp_processor_id();
@@ -208,9 +203,8 @@ Change-Id: Id057ce21ed1ec934c4e6151ed2624fda4fd5e7e5
 +
 +	sq = &priv->channels.c[sq_num]->xdpsq;
 +
-+	if (unlikely(!test_bit(MLX5E_SQ_STATE_ENABLED, &sq->state)))
-+		return;
-+
++	if (sq->mpwqe.wqe)
++		mlx5e_xdp_mpwqe_complete(sq);
 +	mlx5e_xmit_xdp_doorbell(sq);
  }
 +#endif

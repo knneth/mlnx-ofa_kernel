@@ -1779,7 +1779,8 @@ static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			resp->comp_mask |= MLX5_IB_CREATE_QP_RESP_MASK_RQN;
 			resp->tirn = rq->tirn;
 			resp->comp_mask |= MLX5_IB_CREATE_QP_RESP_MASK_TIRN;
-			if (MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner)) {
+			if (MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner) ||
+			    MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner_v2)) {
 				resp->tir_icm_addr = MLX5_GET(
 					create_tir_out, out, icm_address_31_0);
 				resp->tir_icm_addr |=
@@ -2127,7 +2128,8 @@ create_tir:
 	if (mucontext->devx_uid) {
 		resp.comp_mask |= MLX5_IB_CREATE_QP_RESP_MASK_TIRN;
 		resp.tirn = qp->rss_qp.tirn;
-		if (MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner)) {
+		if (MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner) ||
+		    MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev, sw_owner_v2)) {
 			resp.tir_icm_addr =
 				MLX5_GET(create_tir_out, out, icm_address_31_0);
 			resp.tir_icm_addr |= (u64)MLX5_GET(create_tir_out, out,
@@ -2579,7 +2581,8 @@ static int create_qp_common(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		MLX5_SET(qpc, qpc, log_rq_size, ilog2(qp->rq.wqe_cnt));
 	}
 
-	MLX5_SET(qpc, qpc, rq_type, get_rx_type(qp, init_attr));
+	qp->rq_type = get_rx_type(qp, init_attr);
+	MLX5_SET(qpc, qpc, rq_type, qp->rq_type);
 
 	if (qp->sq.wqe_cnt) {
 		MLX5_SET(qpc, qpc, log_sq_size, ilog2(qp->sq.wqe_cnt));
@@ -3515,12 +3518,12 @@ static enum mlx5_qp_optpar opt_mask[MLX5_QP_NUM_STATE][MLX5_QP_NUM_STATE][MLX5_Q
 					  MLX5_QP_OPTPAR_RNR_TIMEOUT	|
 					  MLX5_QP_OPTPAR_PM_STATE	|
 					  MLX5_QP_OPTPAR_ALT_ADDR_PATH	|
-					  MLX5_QP_OPTPAR_OFFLOAD_TYPE,
+					  MLX5_QP_OPTPAR_OFFLOAD_TYPE	|
+					  MLX5_QP_OPTPAR_RMPN_XRQN,
 			[MLX5_QP_ST_UC] = MLX5_QP_OPTPAR_RWE		|
 					  MLX5_QP_OPTPAR_PM_STATE	|
 					  MLX5_QP_OPTPAR_ALT_ADDR_PATH,
 			[MLX5_QP_ST_UD] = MLX5_QP_OPTPAR_Q_KEY		|
-					  MLX5_QP_OPTPAR_SRQN		|
 					  MLX5_QP_OPTPAR_CQN_RCV,
 			[MLX5_QP_ST_XRC] = MLX5_QP_OPTPAR_RRE		|
 					  MLX5_QP_OPTPAR_RAE		|
@@ -3610,6 +3613,8 @@ static int ib_nr_to_mlx5_nr(int ib_mask)
 		return MLX5_QP_OPTPAR_PM_STATE;
 	case IB_QP_OFFLOAD_TYPE:
 		return MLX5_QP_OPTPAR_OFFLOAD_TYPE;
+	case IB_QP_RMPN_XRQN:
+		return MLX5_QP_OPTPAR_RMPN_XRQN;
 	case IB_QP_CAP:
 		return 0;
 	case IB_QP_DEST_QPN:
@@ -3877,9 +3882,6 @@ static int __mlx5_ib_qp_set_counter(struct ib_qp *qp,
 	struct mlx5_ib_qp_base *base;
 	u32 set_id;
 
-	if (!MLX5_CAP_GEN(dev->mdev, rts2rts_qp_counters_set_id))
-		return 0;
-
 	if (counter)
 		set_id = counter->id;
 	else
@@ -3953,6 +3955,7 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 	int err;
 	u16 op;
 	u8 tx_affinity = 0;
+	struct ib_srq *old_srq = NULL;
 
 	mlx5_st = to_mlx5_st(ibqp->qp_type == IB_QPT_DRIVER ?
 			     qp->qp_sub_type : ibqp->qp_type);
@@ -4174,9 +4177,21 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 	optpar = ib_mask_to_mlx5_opt(attr_mask);
 	optpar &= opt_mask[mlx5_cur][mlx5_new][mlx5_st];
 
+	if (attr_mask & IB_QP_RMPN_XRQN) {
+		old_srq = ibqp->srq;
+		err = mlx5_ib_set_qp_srqn(context, ibqp, attr->rmpn_xrqn);
+		if (err) {
+			old_srq = NULL;
+			goto out;
+		}
+		atomic_dec(&old_srq->usecnt);
+		atomic_inc(&ibqp->srq->usecnt);
+	}
+
 	if (attr_mask & IB_QP_OFFLOAD_TYPE) {
-		if (mlx5_ib_set_qp_offload_type(context, ibqp,
-						attr->offload_type))
+		err = mlx5_ib_set_qp_offload_type(context, ibqp,
+						  attr->offload_type);
+		if (err)
 			goto out;
 	}
 
@@ -4264,6 +4279,7 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 		qp->sq.cur_post = 0;
 		if (qp->sq.wqe_cnt)
 			qp->sq.cur_edge = get_sq_edge(&qp->sq, 0);
+		qp->sq.last_poll = 0;
 		if (qp->db.db) {
 			qp->db.db[MLX5_RCV_DBR] = 0;
 			qp->db.db[MLX5_SND_DBR] = 0;
@@ -4277,6 +4293,11 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 	}
 
 out:
+	if (err && old_srq) {
+		atomic_dec(&ibqp->srq->usecnt);
+		atomic_inc(&old_srq->usecnt);
+		ibqp->srq = old_srq;
+	}
 	kfree(context);
 	return err;
 }
@@ -6192,7 +6213,9 @@ static void to_rdma_ah_attr(struct mlx5_ib_dev *ibdev,
 	rdma_ah_set_path_bits(ah_attr, path->grh_mlid & 0x7f);
 	rdma_ah_set_static_rate(ah_attr,
 				path->static_rate ? path->static_rate - 5 : 0);
-	if (path->grh_mlid & (1 << 7)) {
+
+	if (path->grh_mlid & (1 << 7) ||
+	    ah_attr->type == RDMA_AH_ATTR_TYPE_ROCE) {
 		u32 tc_fl = be32_to_cpu(path->tclass_flowlabel);
 
 		rdma_ah_set_grh(ah_attr, NULL,
@@ -7268,12 +7291,18 @@ void mlx5_ib_drain_rq(struct ib_qp *qp)
  */
 int mlx5_ib_qp_set_counter(struct ib_qp *qp, struct rdma_counter *counter)
 {
+	struct mlx5_ib_dev *dev = to_mdev(qp->device);
 	struct mlx5_ib_qp *mqp = to_mqp(qp);
 	int err = 0;
 
 	mutex_lock(&mqp->mutex);
 	if (mqp->state == IB_QPS_RESET) {
 		qp->counter = counter;
+		goto out;
+	}
+
+	if (!MLX5_CAP_GEN(dev->mdev, rts2rts_qp_counters_set_id)) {
+		err = -EOPNOTSUPP;
 		goto out;
 	}
 

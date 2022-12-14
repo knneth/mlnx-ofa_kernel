@@ -8,7 +8,7 @@ Change-Id: I6dcb22c86df48f1f046cfacf1e557312b9f6a906
 
 --- a/drivers/infiniband/core/verbs.c
 +++ b/drivers/infiniband/core/verbs.c
-@@ -1814,7 +1814,11 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -1815,7 +1815,11 @@ int ib_get_eth_speed(struct ib_device *d
  	int rc;
  	u32 netdev_speed;
  	struct net_device *netdev;
@@ -20,7 +20,7 @@ Change-Id: I6dcb22c86df48f1f046cfacf1e557312b9f6a906
  
  	if (rdma_port_get_link_layer(dev, port_num) != IB_LINK_LAYER_ETHERNET)
  		return -EINVAL;
-@@ -1824,13 +1828,21 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -1825,13 +1829,21 @@ int ib_get_eth_speed(struct ib_device *d
  		return -ENODEV;
  
  	rtnl_lock();
@@ -42,7 +42,7 @@ Change-Id: I6dcb22c86df48f1f046cfacf1e557312b9f6a906
  	} else {
  		netdev_speed = SPEED_1000;
  		pr_warn("%s speed is unknown, defaulting to %d\n", netdev->name,
-@@ -2489,6 +2501,7 @@ int ib_check_mr_status(struct ib_mr *mr,
+@@ -2490,6 +2502,7 @@ int ib_check_mr_status(struct ib_mr *mr,
  }
  EXPORT_SYMBOL(ib_check_mr_status);
  
@@ -50,7 +50,7 @@ Change-Id: I6dcb22c86df48f1f046cfacf1e557312b9f6a906
  int ib_set_vf_link_state(struct ib_device *device, int vf, u8 port,
  			 int state)
  {
-@@ -2528,6 +2541,7 @@ int ib_set_vf_guid(struct ib_device *dev
+@@ -2529,6 +2542,7 @@ int ib_set_vf_guid(struct ib_device *dev
  	return device->ops.set_vf_guid(device, vf, port, guid, type);
  }
  EXPORT_SYMBOL(ib_set_vf_guid);
@@ -58,7 +58,7 @@ Change-Id: I6dcb22c86df48f1f046cfacf1e557312b9f6a906
  
  /**
   * ib_map_mr_sg_pi() - Map the dma mapped SG lists for PI (protection
-@@ -2939,3 +2953,24 @@ bool __rdma_block_iter_next(struct ib_bl
+@@ -2940,3 +2954,24 @@ bool __rdma_block_iter_next(struct ib_bl
  	return true;
  }
  EXPORT_SYMBOL(__rdma_block_iter_next);

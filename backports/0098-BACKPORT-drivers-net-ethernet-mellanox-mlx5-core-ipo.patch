@@ -20,7 +20,7 @@ Change-Id: I6c7c3512419240d4213419b173db3a3fff02a269
  
  #define MLX5_IB_GRH_BYTES       40
  #define MLX5_IPOIB_ENCAP_LEN    4
-@@ -122,10 +126,21 @@ static inline void mlx5i_sq_fetch_wqe(st
+@@ -124,10 +128,21 @@ static inline void mlx5i_sq_fetch_wqe(st
  }
  
  netdev_tx_t mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,

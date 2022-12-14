@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
 
 Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
 ---
- drivers/net/ethernet/mellanox/mlx4/en_ethtool.c | 911 +++++++++++++++++++++++-
- 1 file changed, 904 insertions(+), 7 deletions(-)
+ .../net/ethernet/mellanox/mlx4/en_ethtool.c   | 916 +++++++++++++++++-
+ 1 file changed, 909 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
@@ -326,7 +326,18 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  static u32 ptys_get_active_port(struct mlx4_ptys_reg *ptys_reg)
  {
-@@ -713,8 +953,12 @@ static u32 ptys_get_active_port(struct m
+@@ -707,14 +947,23 @@ static u32 ptys_get_active_port(struct m
+ 	return PORT_OTHER;
+ }
+ 
++#ifndef FIELD_SIZEOF
++#define MLX4_LINK_MODES_SZ \
++	(sizeof_field(struct mlx4_ptys_reg, eth_proto_cap) * 8)
++#else
+ #define MLX4_LINK_MODES_SZ \
+ 	(FIELD_SIZEOF(struct mlx4_ptys_reg, eth_proto_cap) * 8)
++#endif
+ 
  enum ethtool_report {
  	SUPPORTED = 0,
  	ADVERTISED = 1,
@@ -339,7 +350,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  struct ptys2ethtool_config {
  	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
  	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertised);
-@@ -749,8 +993,10 @@ static unsigned long *ptys2ethtool_link_
+@@ -749,8 +998,10 @@ static unsigned long *ptys2ethtool_link_
  			__set_bit(modes[i], cfg->advertised);		\
  		}							\
  	})
@@ -350,7 +361,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static struct ptys2ethtool_config ptys2ethtool_map[MLX4_LINK_MODES_SZ];
  
  void __init mlx4_en_init_ptys2ethtool_map(void)
-@@ -791,7 +1037,103 @@ void __init mlx4_en_init_ptys2ethtool_ma
+@@ -791,7 +1042,103 @@ void __init mlx4_en_init_ptys2ethtool_ma
  	MLX4_BUILD_PTYS2ETHTOOL_CONFIG(MLX4_56GBASE_SR4, SPEED_56000,
  				       ETHTOOL_LINK_MODE_56000baseSR4_Full_BIT);
  };
@@ -454,18 +465,18 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static void ptys2ethtool_update_link_modes(unsigned long *link_modes,
  					   u32 eth_proto,
  					   enum ethtool_report report)
-@@ -805,7 +1147,22 @@ static void ptys2ethtool_update_link_mod
+@@ -805,7 +1152,22 @@ static void ptys2ethtool_update_link_mod
  				  __ETHTOOL_LINK_MODE_MASK_NBITS);
  	}
  }
 +#endif
-+
+ 
 +#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
 +static u32 ptys2ethtool_link_modes(u32 eth_proto, enum ethtool_report report)
 +{
 +	int i;
 +	u32 link_modes = 0;
- 
++
 +	for (i = 0; i < MLX4_LINK_MODES_SZ; i++) {
 +		if (eth_proto & MLX4_PROT_MASK(i))
 +			link_modes |= deprecated_ptys2ethtool_map[i][report];
@@ -477,7 +488,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static u32 ethtool2ptys_link_modes(const unsigned long *link_modes,
  				   enum ethtool_report report)
  {
-@@ -822,7 +1179,21 @@ static u32 ethtool2ptys_link_modes(const
+@@ -822,7 +1184,21 @@ static u32 ethtool2ptys_link_modes(const
  	}
  	return ptys_modes;
  }
@@ -499,7 +510,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  /* Convert actual speed (SPEED_XXX) to ptys link modes */
  static u32 speed2ptys_link_modes(u32 speed)
  {
-@@ -830,12 +1201,17 @@ static u32 speed2ptys_link_modes(u32 spe
+@@ -830,12 +1206,17 @@ static u32 speed2ptys_link_modes(u32 spe
  	u32 ptys_modes = 0;
  
  	for (i = 0; i < MLX4_LINK_MODES_SZ; i++) {
@@ -517,12 +528,12 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int
  ethtool_get_ptys_link_ksettings(struct net_device *dev,
  				struct ethtool_link_ksettings *link_ksettings)
-@@ -923,7 +1299,86 @@ ethtool_get_ptys_link_ksettings(struct n
+@@ -923,7 +1304,86 @@ ethtool_get_ptys_link_ksettings(struct n
  
  	return ret;
  }
 +#endif
- 
++
 +#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
 +static int ethtool_get_ptys_settings(struct net_device *dev,
 +				     struct ethtool_cmd *cmd)
@@ -587,7 +598,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
 +
 +	cmd->lp_advertising |= (priv->port_state.flags & MLX4_EN_PORT_ANC) ?
 +			ADVERTISED_Autoneg : 0;
-+
+ 
 +	cmd->phy_address = 0;
 +	cmd->mdio_support = 0;
 +	cmd->maxtxpkt = 0;
@@ -604,7 +615,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static void
  ethtool_get_default_link_ksettings(
  	struct net_device *dev, struct ethtool_link_ksettings *link_ksettings)
-@@ -958,7 +1413,37 @@ ethtool_get_default_link_ksettings(
+@@ -958,7 +1418,37 @@ ethtool_get_default_link_ksettings(
  		link_ksettings->base.port = -1;
  	}
  }
@@ -642,12 +653,12 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int
  mlx4_en_get_link_ksettings(struct net_device *dev,
  			   struct ethtool_link_ksettings *link_ksettings)
-@@ -987,7 +1472,36 @@ mlx4_en_get_link_ksettings(struct net_de
+@@ -987,7 +1477,36 @@ mlx4_en_get_link_ksettings(struct net_de
  	}
  	return 0;
  }
 +#endif
-+
+ 
 +#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
 +static int mlx4_en_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 +{
@@ -665,7 +676,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
 +		ret = ethtool_get_ptys_settings(dev, cmd);
 +	if (ret) /* ETH PROT CRTL is not supported or PTYS CMD failed */
 +		ethtool_get_default_settings(dev, cmd);
- 
++
 +	if (netif_carrier_ok(dev)) {
 +		ethtool_cmd_speed_set(cmd, priv->port_state.link_speed);
 +		cmd->duplex = DUPLEX_FULL;
@@ -679,7 +690,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  /* Calculate PTYS admin according ethtool speed (SPEED_XXX) */
  static __be32 speed_set_ptys_admin(struct mlx4_en_priv *priv, u32 speed,
  				   __be32 proto_cap)
-@@ -1007,6 +1521,7 @@ static __be32 speed_set_ptys_admin(struc
+@@ -1007,6 +1526,7 @@ static __be32 speed_set_ptys_admin(struc
  	return proto_admin;
  }
  
@@ -687,7 +698,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int
  mlx4_en_set_link_ksettings(struct net_device *dev,
  			   const struct ethtool_link_ksettings *link_ksettings)
-@@ -1093,7 +1608,74 @@ mlx4_en_set_link_ksettings(struct net_de
+@@ -1093,7 +1613,74 @@ mlx4_en_set_link_ksettings(struct net_de
  	mutex_unlock(&priv->mdev->state_lock);
  	return 0;
  }
@@ -762,7 +773,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_get_coalesce(struct net_device *dev,
  			      struct ethtool_coalesce *coal)
  {
-@@ -1232,12 +1814,25 @@ static int mlx4_en_set_ringparam(struct
+@@ -1232,12 +1819,25 @@ static int mlx4_en_set_ringparam(struct
  			MLX4_EN_MIN_RX_SIZE);
  		return -EINVAL;
  	}
@@ -788,7 +799,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	rx_size = roundup_pow_of_two(param->rx_pending);
  	tx_size = roundup_pow_of_two(param->tx_pending);
-@@ -1255,7 +1850,11 @@ static int mlx4_en_set_ringparam(struct
+@@ -1255,7 +1855,11 @@ static int mlx4_en_set_ringparam(struct
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	new_prof.tx_ring_size = tx_size;
  	new_prof.rx_ring_size = rx_size;
@@ -800,7 +811,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	if (err)
  		goto out;
  
-@@ -1292,18 +1891,27 @@ static void mlx4_en_get_ringparam(struct
+@@ -1292,18 +1896,27 @@ static void mlx4_en_get_ringparam(struct
  	param->tx_pending = priv->tx_ring[TX][0]->size;
  }
  
@@ -828,7 +839,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_check_rxfh_func(struct net_device *dev, u8 hfunc)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1325,9 +1933,19 @@ static int mlx4_en_check_rxfh_func(struc
+@@ -1325,9 +1938,19 @@ static int mlx4_en_check_rxfh_func(struc
  
  	return -EINVAL;
  }
@@ -849,7 +860,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
  	u32 n = mlx4_en_get_rxfh_indir_size(dev);
-@@ -1342,15 +1960,30 @@ static int mlx4_en_get_rxfh(struct net_d
+@@ -1342,15 +1965,30 @@ static int mlx4_en_get_rxfh(struct net_d
  			break;
  		ring_index[i] = i % rss_rings;
  	}
@@ -880,7 +891,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
  	u32 n = mlx4_en_get_rxfh_indir_size(dev);
-@@ -1380,11 +2013,13 @@ static int mlx4_en_set_rxfh(struct net_d
+@@ -1380,11 +2018,13 @@ static int mlx4_en_set_rxfh(struct net_d
  	if (!is_power_of_2(rss_rings))
  		return -EINVAL;
  
@@ -894,7 +905,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	mutex_lock(&mdev->state_lock);
  	if (priv->port_up) {
-@@ -1394,10 +2029,14 @@ static int mlx4_en_set_rxfh(struct net_d
+@@ -1394,10 +2034,14 @@ static int mlx4_en_set_rxfh(struct net_d
  
  	if (ring_index)
  		priv->prof->rss_rings = rss_rings;
@@ -909,7 +920,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	if (port_up) {
  		err = mlx4_en_start_port(dev);
-@@ -1413,7 +2052,11 @@ static int mlx4_en_set_rxfh(struct net_d
+@@ -1413,7 +2057,11 @@ static int mlx4_en_set_rxfh(struct net_d
  	((field) == 0 || (field) == (__force typeof(field))-1)
  
  static int mlx4_en_validate_flow(struct net_device *dev,
@@ -921,7 +932,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  {
  	struct ethtool_usrip4_spec *l3_mask;
  	struct ethtool_tcpip4_spec *l4_mask;
-@@ -1422,11 +2065,13 @@ static int mlx4_en_validate_flow(struct
+@@ -1422,11 +2070,13 @@ static int mlx4_en_validate_flow(struct
  	if (cmd->fs.location >= MAX_NUM_OF_FS_RULES)
  		return -EINVAL;
  
@@ -935,7 +946,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	switch (cmd->fs.flow_type & ~(FLOW_EXT | FLOW_MAC_EXT)) {
  	case TCP_V4_FLOW:
-@@ -1467,6 +2112,7 @@ static int mlx4_en_validate_flow(struct
+@@ -1467,6 +2117,7 @@ static int mlx4_en_validate_flow(struct
  		return -EINVAL;
  	}
  
@@ -943,7 +954,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	if ((cmd->fs.flow_type & FLOW_EXT)) {
  		if (cmd->fs.m_ext.vlan_etype ||
  		    !((cmd->fs.m_ext.vlan_tci & cpu_to_be16(VLAN_VID_MASK)) ==
-@@ -1481,11 +2127,16 @@ static int mlx4_en_validate_flow(struct
+@@ -1481,11 +2132,16 @@ static int mlx4_en_validate_flow(struct
  
  		}
  	}
@@ -960,7 +971,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  					struct list_head *rule_list_h,
  					struct mlx4_spec_list *spec_l2,
  					unsigned char *mac)
-@@ -1497,11 +2148,13 @@ static int mlx4_en_ethtool_add_mac_rule(
+@@ -1497,11 +2153,13 @@ static int mlx4_en_ethtool_add_mac_rule(
  	memcpy(spec_l2->eth.dst_mac_msk, &mac_msk, ETH_ALEN);
  	memcpy(spec_l2->eth.dst_mac, mac, ETH_ALEN);
  
@@ -974,7 +985,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	list_add_tail(&spec_l2->list, rule_list_h);
  
-@@ -1509,7 +2162,11 @@ static int mlx4_en_ethtool_add_mac_rule(
+@@ -1509,7 +2167,11 @@ static int mlx4_en_ethtool_add_mac_rule(
  }
  
  static int mlx4_en_ethtool_add_mac_rule_by_ipv4(struct mlx4_en_priv *priv,
@@ -986,7 +997,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  						struct list_head *rule_list_h,
  						struct mlx4_spec_list *spec_l2,
  						__be32 ipv4_dst)
-@@ -1518,9 +2175,11 @@ static int mlx4_en_ethtool_add_mac_rule_
+@@ -1518,9 +2180,11 @@ static int mlx4_en_ethtool_add_mac_rule_
  	unsigned char mac[ETH_ALEN];
  
  	if (!ipv4_is_multicast(ipv4_dst)) {
@@ -998,7 +1009,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  			memcpy(&mac, priv->dev->dev_addr, ETH_ALEN);
  	} else {
  		ip_eth_mc_map(ipv4_dst, mac);
-@@ -1533,7 +2192,11 @@ static int mlx4_en_ethtool_add_mac_rule_
+@@ -1533,7 +2197,11 @@ static int mlx4_en_ethtool_add_mac_rule_
  }
  
  static int add_ip_rule(struct mlx4_en_priv *priv,
@@ -1010,7 +1021,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  		       struct list_head *list_h)
  {
  	int err;
-@@ -1571,7 +2234,11 @@ free_spec:
+@@ -1571,7 +2239,11 @@ free_spec:
  }
  
  static int add_tcp_udp_rule(struct mlx4_en_priv *priv,
@@ -1022,7 +1033,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  			     struct list_head *list_h, int proto)
  {
  	int err;
-@@ -1639,7 +2306,11 @@ free_spec:
+@@ -1639,7 +2311,11 @@ free_spec:
  }
  
  static int mlx4_en_ethtool_to_net_trans_rule(struct net_device *dev,
@@ -1034,7 +1045,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  					     struct list_head *rule_list_h)
  {
  	int err;
-@@ -1679,7 +2350,11 @@ static int mlx4_en_ethtool_to_net_trans_
+@@ -1679,7 +2355,11 @@ static int mlx4_en_ethtool_to_net_trans_
  }
  
  static int mlx4_en_flow_replace(struct net_device *dev,
@@ -1046,7 +1057,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  {
  	int err;
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1755,7 +2430,11 @@ out_free_list:
+@@ -1755,7 +2435,11 @@ out_free_list:
  }
  
  static int mlx4_en_flow_detach(struct net_device *dev,
@@ -1058,7 +1069,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  {
  	int err = 0;
  	struct ethtool_flow_id *rule;
-@@ -1784,7 +2463,12 @@ out:
+@@ -1784,7 +2468,12 @@ out:
  
  }
  
@@ -1071,7 +1082,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  			    int loc)
  {
  	int err = 0;
-@@ -1816,13 +2500,24 @@ static int mlx4_en_get_num_flows(struct
+@@ -1816,13 +2505,24 @@ static int mlx4_en_get_num_flows(struct
  
  }
  
@@ -1096,7 +1107,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	if ((cmd->cmd == ETHTOOL_GRXCLSRLCNT ||
  	     cmd->cmd == ETHTOOL_GRXCLSRULE ||
-@@ -1845,7 +2540,11 @@ static int mlx4_en_get_rxnfc(struct net_
+@@ -1845,7 +2545,11 @@ static int mlx4_en_get_rxnfc(struct net_
  		while ((!err || err == -ENOENT) && priority < cmd->rule_cnt) {
  			err = mlx4_en_get_flow(dev, cmd, i);
  			if (!err)
@@ -1108,7 +1119,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  			i++;
  		}
  		err = 0;
-@@ -1858,11 +2557,18 @@ static int mlx4_en_get_rxnfc(struct net_
+@@ -1858,11 +2562,18 @@ static int mlx4_en_get_rxnfc(struct net_
  	return err;
  }
  
@@ -1127,7 +1138,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	if (mdev->dev->caps.steering_mode !=
  	    MLX4_STEERING_MODE_DEVICE_MANAGED || !priv->port_up)
-@@ -1887,8 +2593,11 @@ static int mlx4_en_get_max_num_rx_rings(
+@@ -1887,8 +2598,11 @@ static int mlx4_en_get_max_num_rx_rings(
  {
  	return min_t(int, num_online_cpus(), MAX_RX_RINGS);
  }
@@ -1140,7 +1151,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  				 struct ethtool_channels *channel)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1903,7 +2612,11 @@ static void mlx4_en_get_channels(struct
+@@ -1903,7 +2617,11 @@ static void mlx4_en_get_channels(struct
  			    priv->prof->num_up;
  }
  
@@ -1152,7 +1163,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  				struct ethtool_channels *channel)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1946,7 +2659,11 @@ static int mlx4_en_set_channels(struct n
+@@ -1946,7 +2664,11 @@ static int mlx4_en_set_channels(struct n
  	new_prof.tx_ring_num[TX_XDP] = xdp_count;
  	new_prof.rx_ring_num = channel->rx_count;
  
@@ -1164,7 +1175,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	if (err)
  		goto out;
  
-@@ -1979,6 +2696,7 @@ out:
+@@ -1979,6 +2701,7 @@ out:
  	return err;
  }
  
@@ -1172,7 +1183,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_get_ts_info(struct net_device *dev,
  			       struct ethtool_ts_info *info)
  {
-@@ -2004,12 +2722,15 @@ static int mlx4_en_get_ts_info(struct ne
+@@ -2004,12 +2727,15 @@ static int mlx4_en_get_ts_info(struct ne
  			(1 << HWTSTAMP_FILTER_NONE) |
  			(1 << HWTSTAMP_FILTER_ALL);
  
@@ -1188,7 +1199,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  static int mlx4_en_set_inline_scatter_thold(struct net_device *dev, int thold)
  {
-@@ -2052,7 +2773,11 @@ static int mlx4_en_set_inline_scatter_th
+@@ -2052,7 +2778,11 @@ static int mlx4_en_set_inline_scatter_th
  	mutex_lock(&mdev->state_lock);
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	new_prof.inline_scatter_thold = thold;
@@ -1200,7 +1211,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	if (err) {
  		en_err(priv, "Failed allocating port resources\n");
  		goto out;
-@@ -2088,12 +2813,18 @@ static int mlx4_en_set_priv_flags(struct
+@@ -2088,12 +2818,18 @@ static int mlx4_en_set_priv_flags(struct
  	bool phv_enabled_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_PHV);
  	bool is_enabled_new = !!(flags & MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
  	bool is_enabled_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
@@ -1219,7 +1230,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	int i;
  	int ret = 0;
  
-@@ -2105,6 +2836,39 @@ static int mlx4_en_set_priv_flags(struct
+@@ -2105,6 +2841,39 @@ static int mlx4_en_set_priv_flags(struct
  		return -EINVAL;
  
  
@@ -1259,7 +1270,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  #ifdef CONFIG_MLX4_EN_DCB
  	if (qcn_disable_new != qcn_disable_old) {
  		ret = mlx4_disable_32_14_4_e_write(mdev->dev, qcn_disable_new,
-@@ -2123,6 +2887,67 @@ static int mlx4_en_set_priv_flags(struct
+@@ -2123,6 +2892,67 @@ static int mlx4_en_set_priv_flags(struct
  			qcn_disable_new ? "ON" : "OFF");
  	}
  #endif
@@ -1327,7 +1338,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  
  	if (ld_new != ld_old) {
  		if (!(mdev->dev->caps.flags2 &
-@@ -2214,6 +3039,7 @@ static u32 mlx4_en_get_priv_flags(struct
+@@ -2214,6 +3044,7 @@ static u32 mlx4_en_get_priv_flags(struct
  	return priv->pflags;
  }
  
@@ -1335,7 +1346,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_get_tunable(struct net_device *dev,
  			       const struct ethtool_tunable *tuna,
  			       void *data)
-@@ -2262,9 +3088,10 @@ static int mlx4_en_set_tunable(struct ne
+@@ -2262,9 +3093,10 @@ static int mlx4_en_set_tunable(struct ne
  
  	return ret;
  }
@@ -1347,7 +1358,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_get_module_info(struct net_device *dev,
  				   struct ethtool_modinfo *modinfo)
  {
-@@ -2345,7 +3172,9 @@ static int mlx4_en_get_module_eeprom(str
+@@ -2345,7 +3177,9 @@ static int mlx4_en_get_module_eeprom(str
  	}
  	return 0;
  }
@@ -1357,7 +1368,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_set_phys_id(struct net_device *dev,
  			       enum ethtool_phys_id_state state)
  {
-@@ -2371,17 +3200,48 @@ static int mlx4_en_set_phys_id(struct ne
+@@ -2371,17 +3205,48 @@ static int mlx4_en_set_phys_id(struct ne
  	err = mlx4_SET_PORT_BEACON(mdev->dev, priv->port, beacon_duration);
  	return err;
  }
@@ -1406,7 +1417,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	.get_wol = mlx4_en_get_wol,
  	.set_wol = mlx4_en_set_wol,
  	.get_msglevel = mlx4_en_get_msglevel,
-@@ -2394,22 +3254,59 @@ const struct ethtool_ops mlx4_en_ethtool
+@@ -2394,22 +3259,59 @@ const struct ethtool_ops mlx4_en_ethtool
  	.set_ringparam = mlx4_en_set_ringparam,
  	.get_rxnfc = mlx4_en_get_rxnfc,
  	.set_rxnfc = mlx4_en_set_rxnfc,

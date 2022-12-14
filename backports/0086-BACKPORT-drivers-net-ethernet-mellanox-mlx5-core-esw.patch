@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
 ---
- .../mellanox/mlx5/core/eswitch_devlink_compat.c    | 55 ++++++++++++++++++++--
- 1 file changed, 51 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/eswitch_devlink_compat.c    | 82 ++++++++++++++++++++--
+ 1 file changed, 78 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
@@ -17,13 +17,18 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
  #include <linux/fs.h>
  #include "mlx5_core.h"
  #include "eswitch.h"
-@@ -28,9 +29,22 @@ static char *encap_to_str[] = {
+@@ -28,11 +29,33 @@ static char *encap_to_str[] = {
  	[DEVLINK_ESWITCH_ENCAP_MODE_BASIC] = "basic",
  };
  
 +static char *uplink_rep_mode_to_str[] = {
 +	[MLX5_ESW_UPLINK_REP_MODE_NEW_NETDEV] = "new_netdev",
 +	[MLX5_ESW_UPLINK_REP_MODE_NIC_NETDEV] = "nic_netdev",
++};
++
++static char *steering_mode_to_str[] = {
++	[DEVLINK_ESWITCH_STEERING_MODE_DMFS] = "dmfs",
++	[DEVLINK_ESWITCH_STEERING_MODE_SMFS] = "smfs",
 +};
 +
  struct devlink_compat_op {
@@ -39,8 +44,14 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
 +	int (*read_enum)(struct devlink *devlink, enum devlink_eswitch_encap_mode *read);
  	int (*read_u8)(struct devlink *devlink, u8 *read);
  	int (*read_u16)(struct devlink *devlink, u16 *read);
++
++	int (*read_steering_mode)(struct devlink *devlink, enum devlink_eswitch_steering_mode *read);
++	int (*write_steering_mode)(struct devlink *devlink, enum devlink_eswitch_steering_mode set);
++
  	char **map;
-@@ -54,12 +68,24 @@ static struct devlink_compat_op devlink_
+ 	int map_size;
+ 	char *compat_name;
+@@ -54,12 +77,31 @@ static struct devlink_compat_op devlink_
  		.compat_name = "inline",
  	},
  	{
@@ -62,18 +73,26 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
 +		.map_size = ARRAY_SIZE(uplink_rep_mode_to_str),
 +		.compat_name = "uplink_rep_mode",
 +	},
++	{
++		.read_steering_mode = mlx5_devlink_eswitch_steering_mode_get,
++		.write_steering_mode = mlx5_devlink_eswitch_steering_mode_set,
++		.map = steering_mode_to_str,
++		.map_size = ARRAY_SIZE(steering_mode_to_str),
++		.compat_name = "steering_mode",
++	},
  };
  
  struct compat_devlink {
-@@ -79,6 +105,7 @@ static ssize_t esw_compat_read(struct ko
+@@ -80,6 +122,8 @@ static ssize_t esw_compat_read(struct ko
  	const char *entname = attr->attr.name;
  	struct devlink_compat_op *op = 0;
  	int i = 0, ret, len = 0;
 +	enum devlink_eswitch_encap_mode read_enum;
++	enum devlink_eswitch_steering_mode read_steering_mode;
  	u8 read8;
  	u16 read;
  
-@@ -92,9 +119,12 @@ static ssize_t esw_compat_read(struct ko
+@@ -96,10 +140,19 @@ static ssize_t esw_compat_read(struct ko
  
  	if (op->read_u16) {
  		ret = op->read_u16(devlink, &read);
@@ -81,15 +100,22 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
 +	} else if (op->read_u8) {
  		ret = op->read_u8(devlink, &read8);
  		read = read8;
-+	} else {
++	} else if (op->read_enum){
 +		ret = op->read_enum(devlink, &read_enum);
 +		read = read_enum;
  	}
++	else if (op->read_steering_mode) {
++		ret = op->read_steering_mode(devlink, &read_steering_mode);
++		read = read_steering_mode;
++	}
++	else
++		return -ENOENT;
  
- 	if (ret < 0)
-@@ -117,7 +147,9 @@ static ssize_t esw_compat_write(struct k
- 						       devlink_kobj);
+ 	atomic_set(&esw->handler.in_progress, 0);
+ 
+@@ -124,7 +177,9 @@ static ssize_t esw_compat_write(struct k
  	struct mlx5_core_dev *dev = cdevlink->mdev;
+ 	struct mlx5_eswitch *esw = dev->priv.eswitch;
  	struct devlink *devlink = priv_to_devlink(dev);
 +#ifdef HAVE_NETLINK_EXT_ACK
  	static struct netlink_ext_ack ack = { ._msg = NULL };
@@ -97,8 +123,8 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
  	const char *entname = attr->attr.name;
  	struct devlink_compat_op *op = 0;
  	u16 set = 0;
-@@ -147,13 +179,28 @@ static ssize_t esw_compat_write(struct k
- 	}
+@@ -163,16 +218,35 @@ static ssize_t esw_compat_write(struct k
+ 		return -EBUSY;
  
  	if (op->write_u16)
 -		ret = op->write_u16(devlink, set, &ack);
@@ -113,13 +139,20 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
 +				   , &ack
 +#endif
 +				   );
- 	else
--		ret = op->write_u8(devlink, set, &ack);
++	else if (op->write_enum)
 +		ret = op->write_enum(devlink, set
 +#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +				   , &ack
 +#endif
 +				   );
++	else if (op->write_steering_mode)
++		ret = op->write_steering_mode(devlink, set);
+ 	else
+-		ret = op->write_u8(devlink, set, &ack);
++		return -EINVAL;
+ 
+ 	if (strcmp(entname, "mode") != 0)
+ 		atomic_set(&esw->handler.in_progress, 0);
  
 +#ifdef HAVE_NETLINK_EXT_ACK
  	if (ack._msg)

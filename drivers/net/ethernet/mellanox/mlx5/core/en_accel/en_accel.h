@@ -38,9 +38,12 @@
 #include <linux/netdevice.h>
 #include "en_accel/ipsec_rxtx.h"
 #include "en_accel/tls_rxtx.h"
+#include "en/txrx.h"
 #include "en.h"
 
 #if IS_ENABLED(CONFIG_GENEVE)
+#include <net/geneve.h>
+
 static inline bool mlx5_geneve_tx_allowed(struct mlx5_core_dev *mdev)
 {
 	return mlx5_tx_swp_supported(mdev);
@@ -116,7 +119,7 @@ mlx5e_accel_handle_tx(struct sk_buff *skb,
 
 #ifdef CONFIG_MLX5_EN_IPSEC
 	if (test_bit(MLX5E_SQ_STATE_IPSEC, &sq->state)) {
-		skb = mlx5e_ipsec_handle_tx_skb(dev, *wqe, skb);
+		skb = mlx5e_ipsec_handle_tx_skb(dev, sq, *wqe, skb);
 		if (unlikely(!skb))
 			return NULL;
 	}
@@ -126,6 +129,21 @@ mlx5e_accel_handle_tx(struct sk_buff *skb,
 		mlx5e_udp_gso_handle_tx_skb(skb);
 
 	return skb;
+}
+
+static inline void
+mlx5e_accel_handle_rx(struct net_device *dev,
+		      struct sk_buff *skb,
+		      struct mlx5_cqe64 *cqe,
+		      u32 *cqe_bcnt)
+{
+#ifdef CONFIG_MLX5_EN_TLS
+	mlx5e_tls_handle_rx_skb(dev, skb, cqe_bcnt);
+#endif
+
+#ifdef CONFIG_MLX5_EN_IPSEC
+	mlx5e_ipsec_offload_handle_rx_skb(dev, skb, cqe);
+#endif
 }
 
 #endif /* __MLX5E_EN_ACCEL_H__ */

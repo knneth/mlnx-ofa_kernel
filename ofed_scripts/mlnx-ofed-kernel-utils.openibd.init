@@ -109,6 +109,10 @@ fi
 # This flag should be disabled when the OS root file system is on remote storage.
 ALLOW_STOP=${ALLOW_STOP:-"yes"}
 
+# Run the service script with force mode to enable loading the driver stack even
+# if the available modules were not installed by MLNX_OFED package.
+FORCE_MODE=${FORCE_MODE:-"no"}
+
 OPENIBD_PRE_START=${OPENIBD_PRE_START:-"/etc/infiniband/pre-start-hook.sh"}
 OPENIBD_POST_START=${OPENIBD_POST_START:-"/etc/infiniband/post-start-hook.sh"}
 OPENIBD_PRE_STOP=${OPENIBD_PRE_STOP:-"/etc/infiniband/pre-stop-hook.sh"}
@@ -1020,10 +1024,6 @@ start()
         done
     fi
 
-    if [ -x /sbin/mlnx_eswitch_set  ]; then
-        /sbin/mlnx_eswitch_set
-    fi
-
     if [ "X${MLX5_FPGA_LOAD}" == "Xyes" ]; then
         load_module mlx5_fpga_tools
         my_rc=$?
@@ -1037,16 +1037,16 @@ start()
     if [ "X${ESP_OFFLOAD_LOAD}" == "Xyes" ]; then
         load_module_external esp4_offload
         my_rc=$?
+        RC=$[ $RC + $my_rc ]
         if [ $my_rc -ne 0 ]; then
             echo_failure $"Loading ESP Offload for IPv4 module: "
         else
             load_module_external esp6_offload
             my_rc=$?
             if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading ESP Offload for IPv6 module: "
+                echo_warning $"Loading ESP Offload for IPv6 module: "
             fi
         fi
-        RC=$[ $RC + $my_rc ]
     fi
 
     # Load QLogic QIB driver
@@ -1135,10 +1135,12 @@ start()
                                 if [ "X${SRP_DAEMON_ENABLE}" == "Xyes" ]; then
                                     if [ -e /etc/init.d/srpd ]; then
                                         /etc/init.d/srpd start > /dev/null 2>&1
-                                    else
+                                    elif which srp_daemon.sh &>/dev/null ; then
                                         srp_daemon.sh &
                                         srp_daemon_pid=$!
                                         echo ${srp_daemon_pid} > ${srp_daemon_pidfile}
+                                    else
+                                        systemctl start srp_daemon
                                     fi
                                 fi
                         ;;
@@ -1369,6 +1371,13 @@ stop()
             fi
 
             # Check if applications which use infiniband are running
+            for serv in ibacm srp_daemon
+            do
+                    if systemctl is-active --quiet $serv 2>/dev/null; then
+                            systemctl stop $serv
+                    fi
+            done
+
             local apps="opensm osmtest ibbs ibns ibacm"
             local pid
             for app in $apps
@@ -1695,6 +1704,10 @@ trap 'trap_handler' 2 9 15
 if [[ "$ACTION" =~ force-.* ]]; then
     FORCE=1
     ACTION=$(echo $ACTION | sed -e 's/force-//')
+fi
+
+if [ "X${FORCE_MODE}" == "Xyes" ]; then
+	FORCE=1
 fi
 
 case $ACTION in

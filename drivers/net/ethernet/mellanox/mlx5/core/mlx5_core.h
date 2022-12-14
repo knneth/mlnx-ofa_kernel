@@ -46,7 +46,7 @@
 #include "fs_core.h"
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.7-3.2.9"
+#define DRIVER_VERSION	"4.9-0.1.7"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 
@@ -121,6 +121,11 @@ enum {
 enum {
 	MLX5_DRIVER_STATUS_ABORTED = 0xfe,
 	MLX5_DRIVER_SYND = 0xbadd00de,
+};
+
+enum mlx5_semaphore_space_address {
+	MLX5_SEMAPHORE_SPACE_DOMAIN     = 0xA,
+	MLX5_SEMAPHORE_SW_RESET         = 0x20,
 };
 
 enum mlx5_pddr_page_select {
@@ -221,6 +226,7 @@ int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force);
+void mlx5_error_sw_reset(struct mlx5_core_dev *dev);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
 void mlx5_recover_device(struct mlx5_core_dev *dev);
 void mlx5_rename_comp_eq(struct mlx5_core_dev *dev, unsigned int eq_ix,
@@ -341,6 +347,9 @@ int mlx5_set_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size);
 int mlx5_query_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 *arm, u8 *mode);
 int mlx5_set_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 arm, u8 mode);
 
+struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev);
+void mlx5_dm_cleanup(struct mlx5_core_dev *dev);
+
 #define MLX5_PPS_CAP(mdev) (MLX5_CAP_GEN((mdev), pps) &&		\
 			    MLX5_CAP_GEN((mdev), pps_modify) &&		\
 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
@@ -348,7 +357,10 @@ int mlx5_set_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 arm, u8 mode);
 
 ssize_t mlx5_show_counters_ct(char *buf);
 
-int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw);
+int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw,
+			struct netlink_ext_ack *extack);
+int mlx5_fw_version_query(struct mlx5_core_dev *dev,
+			  u32 *running_ver, u32 *stored_ver);
 
 enum {
 	UNLOCK,
@@ -356,16 +368,10 @@ enum {
 	CAP_ID = 0x9,
 };
 
-enum mlx5_semaphore_space_address {
-	MLX5_SEMAPHORE_SW_RESET		= 0x20,
-};
-
 int mlx5_pciconf_cap9_sem(struct mlx5_core_dev *dev, int state);
 int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space);
 int mlx5_pciconf_set_protected_addr_space(struct mlx5_core_dev *dev,
 					  u32 *ret_space_size);
-int mlx5_pciconf_set_sem_addr_space(struct mlx5_core_dev *dev,
-				    u32 sem_space_address, int state);
 int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,
 			  unsigned int offset, u32 *data,
 			  int length);
@@ -412,6 +418,11 @@ int mlx5_cr_protected_capture(struct mlx5_core_dev *dev);
 #define MLX5_CORE_PROC "driver/mlx5_core"
 #define MLX5_CORE_PROC_CRDUMP "crdump"
 extern struct proc_dir_entry *mlx5_crdump_dir;
+#define MLX5_CORE_PROC_SMFS_DUMP "smfs_dump"
+extern struct proc_dir_entry *mlx5_smfs_dump_dir;
+#define MLX5_CORE_PROC_SMFS_FDB_DUMP "fdb"
+extern struct proc_dir_entry *mlx5_smfs_fdb_dump_dir;
+
 int mlx5_crdump_init(struct mlx5_core_dev *dev);
 void mlx5_crdump_cleanup(struct mlx5_core_dev *dev);
 int mlx5_fill_cr_dump(struct mlx5_core_dev *dev);
@@ -438,11 +449,10 @@ enum {
 	MLX5_NIC_IFC_FULL		= 0,
 	MLX5_NIC_IFC_DISABLED		= 1,
 	MLX5_NIC_IFC_NO_DRAM_NIC	= 2,
-	MLX5_NIC_IFC_SW_RESET		= 7,
-	MLX5_NIC_IFC_INVALID		= 3
+	MLX5_NIC_IFC_SW_RESET		= 7
 };
 
-u8 mlx5_get_nic_mode(struct mlx5_core_dev *dev);
+u8 mlx5_get_nic_state(struct mlx5_core_dev *dev);
 void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state);
 
 int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);

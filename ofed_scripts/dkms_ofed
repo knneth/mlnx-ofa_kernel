@@ -73,6 +73,10 @@ if [ -f $WDIR/../dkms.conf ];then
 	if (grep -q "with-innova-ipsec" $WDIR/../dkms.conf); then
 		options="${options} --with-innova-ipsec"
 	fi
+	# W/A for --with-mlx5-ipsec flag opens features (not adding new module)
+	if (grep -q "with-mlx5-ipsec" $WDIR/../dkms.conf); then
+		options="${options} --with-mlx5-ipsec"
+	fi
 	configure_options=$options
 else
 	configure_options=${configure_options:-"$def_configure_options"}

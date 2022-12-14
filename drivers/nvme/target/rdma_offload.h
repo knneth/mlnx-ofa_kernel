@@ -85,6 +85,7 @@ struct nvmet_rdma_xrq {
 	int				offload_ctrls_cnt;
 	struct mutex			offload_ctrl_mutex;
 	struct list_head		be_ctrls_list;
+	int				nr_be_ctrls;
 	struct mutex			be_mutex;
 	struct ib_srq			*ofl_srq;
 	struct ib_cq			*cq;
@@ -98,15 +99,18 @@ struct nvmet_rdma_xrq {
 
 static void nvmet_rdma_free_st_buff(struct nvmet_rdma_staging_buf *st);
 static void nvmet_rdma_destroy_xrq(struct kref *ref);
-static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_device *ndev,
-				   struct nvmet_rdma_queue *queue);
-static int nvmet_rdma_install_offload_queue(struct nvmet_ctrl *ctrl,
-					    struct nvmet_req *req);
+static int nvmet_rdma_find_get_xrq(struct nvmet_rdma_queue *queue,
+				   struct nvmet_ctrl *ctrl);
+static u16 nvmet_rdma_install_offload_queue(struct nvmet_sq *sq);
 static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl);
 static void nvmet_rdma_destroy_offload_ctrl(struct nvmet_ctrl *ctrl);
-static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl);
-static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl);
+static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl,
+					struct nvmet_ns *ns);
+static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl,
+					  struct nvmet_ns *ns);
 static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *nport);
+static bool nvmet_rdma_check_subsys_match_offload_port(struct nvmet_port *nport,
+						struct nvmet_subsys *subsys);
 static unsigned int nvmet_rdma_peer_to_peer_sqe_inline_size(struct nvmet_ctrl *ctrl);
 static u8 nvmet_rdma_peer_to_peer_mdts(struct nvmet_port *nport);
 static u64 nvmet_rdma_offload_subsys_unknown_ns_cmds(struct nvmet_subsys *subsys);

@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
 
 Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
 ---
- drivers/infiniband/core/nldev.c | 292 ++++++++++++++++++++++++++++++++++++----
- 1 file changed, 266 insertions(+), 26 deletions(-)
+ drivers/infiniband/core/nldev.c | 297 ++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 272 insertions(+), 25 deletions(-)
 
 --- a/drivers/infiniband/core/nldev.c
 +++ b/drivers/infiniband/core/nldev.c
-@@ -115,9 +115,13 @@ static const struct nla_policy nldev_pol
+@@ -119,9 +119,13 @@ static const struct nla_policy nldev_pol
  	[RDMA_NLDEV_ATTR_DRIVER_STRING]		= { .type = NLA_NUL_STRING,
  				    .len = RDMA_NLDEV_ATTR_ENTRY_STRLEN },
  	[RDMA_NLDEV_ATTR_DRIVER_PRINT_TYPE]	= { .type = NLA_U8 },
@@ -25,7 +25,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	[RDMA_NLDEV_ATTR_DRIVER_U64]		= { .type = NLA_U64 },
  	[RDMA_NLDEV_ATTR_RES_PDN]		= { .type = NLA_U32 },
  	[RDMA_NLDEV_ATTR_RES_CQN]               = { .type = NLA_U32 },
-@@ -325,9 +329,12 @@ static int fill_res_info_entry(struct sk
+@@ -342,9 +346,12 @@ static int fill_res_info_entry(struct sk
  			       const char *name, u64 curr)
  {
  	struct nlattr *entry_attr;
@@ -39,7 +39,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	if (!entry_attr)
  		return -EMSGSIZE;
  
-@@ -362,7 +369,11 @@ static int fill_res_info(struct sk_buff
+@@ -379,7 +386,11 @@ static int fill_res_info(struct sk_buff
  	if (fill_nldev_handle(msg, device))
  		return -EMSGSIZE;
  
@@ -51,7 +51,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	if (!table_attr)
  		return -EMSGSIZE;
  
-@@ -778,8 +789,12 @@ static int fill_res_counter_entry(struct
+@@ -822,8 +833,12 @@ static int fill_res_counter_entry(struct
  	return 0;
  }
  
@@ -64,7 +64,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct ib_device *device;
-@@ -787,8 +802,16 @@ static int nldev_get_doit(struct sk_buff
+@@ -831,8 +846,16 @@ static int nldev_get_doit(struct sk_buff
  	u32 index;
  	int err;
  
@@ -81,7 +81,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
  
-@@ -804,7 +827,11 @@ static int nldev_get_doit(struct sk_buff
+@@ -848,7 +871,11 @@ static int nldev_get_doit(struct sk_buff
  		goto err;
  	}
  
@@ -93,7 +93,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
  			0, 0);
  
-@@ -815,7 +842,11 @@ static int nldev_get_doit(struct sk_buff
+@@ -859,7 +886,11 @@ static int nldev_get_doit(struct sk_buff
  	nlmsg_end(msg, nlh);
  
  	ib_device_put(device);
@@ -105,7 +105,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_free:
  	nlmsg_free(msg);
-@@ -824,16 +855,29 @@ err:
+@@ -868,16 +899,29 @@ err:
  	return err;
  }
  
@@ -135,7 +135,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
  
-@@ -876,7 +920,11 @@ static int _nldev_get_dumpit(struct ib_d
+@@ -920,7 +964,11 @@ static int _nldev_get_dumpit(struct ib_d
  	if (idx < start)
  		return 0;
  
@@ -147,7 +147,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
  			0, NLM_F_MULTI);
  
-@@ -902,8 +950,12 @@ static int nldev_get_dumpit(struct sk_bu
+@@ -946,8 +994,12 @@ static int nldev_get_dumpit(struct sk_bu
  	return ib_enum_all_devs(_nldev_get_dumpit, skb, cb);
  }
  
@@ -160,7 +160,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct ib_device *device;
-@@ -912,8 +964,16 @@ static int nldev_port_get_doit(struct sk
+@@ -956,8 +1008,16 @@ static int nldev_port_get_doit(struct sk
  	u32 port;
  	int err;
  
@@ -178,7 +178,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	if (err ||
  	    !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
  	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
-@@ -936,7 +996,11 @@ static int nldev_port_get_doit(struct sk
+@@ -980,7 +1040,11 @@ static int nldev_port_get_doit(struct sk
  		goto err;
  	}
  
@@ -190,7 +190,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
  			0, 0);
  
-@@ -947,7 +1011,11 @@ static int nldev_port_get_doit(struct sk
+@@ -991,7 +1055,11 @@ static int nldev_port_get_doit(struct sk
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
  
@@ -203,7 +203,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_free:
  	nlmsg_free(msg);
-@@ -968,7 +1036,11 @@ static int nldev_port_get_dumpit(struct
+@@ -1012,7 +1080,11 @@ static int nldev_port_get_dumpit(struct
  	int err;
  	unsigned int p;
  
@@ -215,7 +215,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  				     nldev_policy, NULL);
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
-@@ -994,7 +1066,11 @@ static int nldev_port_get_dumpit(struct
+@@ -1038,7 +1110,11 @@ static int nldev_port_get_dumpit(struct
  			continue;
  		}
  
@@ -227,7 +227,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  				cb->nlh->nlmsg_seq,
  				RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  						 RDMA_NLDEV_CMD_PORT_GET),
-@@ -1014,8 +1090,12 @@ out:
+@@ -1058,8 +1134,12 @@ out:
  	return skb->len;
  }
  
@@ -240,7 +240,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct ib_device *device;
-@@ -1023,8 +1103,17 @@ static int nldev_res_get_doit(struct sk_
+@@ -1067,8 +1147,17 @@ static int nldev_res_get_doit(struct sk_
  	u32 index;
  	int ret;
  
@@ -259,7 +259,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
  
-@@ -1039,7 +1128,11 @@ static int nldev_res_get_doit(struct sk_
+@@ -1083,7 +1172,11 @@ static int nldev_res_get_doit(struct sk_
  		goto err;
  	}
  
@@ -271,7 +271,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_RES_GET),
  			0, 0);
  
-@@ -1049,7 +1142,11 @@ static int nldev_res_get_doit(struct sk_
+@@ -1093,7 +1186,11 @@ static int nldev_res_get_doit(struct sk_
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -284,7 +284,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_free:
  	nlmsg_free(msg);
-@@ -1069,7 +1166,11 @@ static int _nldev_res_get_dumpit(struct
+@@ -1113,7 +1210,11 @@ static int _nldev_res_get_dumpit(struct
  	if (idx < start)
  		return 0;
  
@@ -296,17 +296,17 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_RES_GET),
  			0, NLM_F_MULTI);
  
-@@ -1155,7 +1256,9 @@ static const struct nldev_fill_res_entry
+@@ -1191,7 +1292,9 @@ static const struct nldev_fill_res_entry
  };
  
  static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 +#ifdef HAVE_NETLINK_EXT_ACK
  			       struct netlink_ext_ack *extack,
 +#endif
- 			       enum rdma_restrack_type res_type)
+ 			       enum rdma_restrack_type res_type,
+ 			       res_fill_func_t fill_func)
  {
- 	const struct nldev_fill_res_entry *fe = &fill_entries[res_type];
-@@ -1167,7 +1270,11 @@ static int res_get_common_doit(struct sk
+@@ -1204,7 +1307,11 @@ static int res_get_common_doit(struct sk
  	struct sk_buff *msg;
  	int ret;
  
@@ -318,7 +318,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  				     nldev_policy, extack);
  	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX] || !fe->id || !tb[fe->id])
  		return -EINVAL;
-@@ -1209,7 +1316,11 @@ static int res_get_common_doit(struct sk
+@@ -1246,7 +1353,11 @@ static int res_get_common_doit(struct sk
  		goto err;
  	}
  
@@ -330,7 +330,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, fe->nldev_cmd),
  			0, 0);
  
-@@ -1218,7 +1329,11 @@ static int res_get_common_doit(struct sk
+@@ -1255,7 +1366,11 @@ static int res_get_common_doit(struct sk
  		goto err_free;
  	}
  
@@ -340,10 +340,10 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
 +#else
 +       has_cap_net_admin =  (sock_net(skb->sk) == &init_net);
 +#endif
- 	ret = fe->fill_res_func(msg, has_cap_net_admin, res, port);
- 	rdma_restrack_put(res);
- 	if (ret)
-@@ -1226,7 +1341,11 @@ static int res_get_common_doit(struct sk
+ 
+ 	ret = fill_func(msg, has_cap_net_admin, res, port);
+ 
+@@ -1265,7 +1380,11 @@ static int res_get_common_doit(struct sk
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -355,7 +355,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_free:
  	nlmsg_free(msg);
-@@ -1256,7 +1375,11 @@ static int res_get_common_dumpit(struct
+@@ -1296,7 +1415,11 @@ static int res_get_common_dumpit(struct
  	u32 index, port = 0;
  	bool filled = false;
  
@@ -367,7 +367,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  				     nldev_policy, NULL);
  	/*
  	 * Right now, we are expecting the device index to get res information,
-@@ -1285,7 +1408,11 @@ static int res_get_common_dumpit(struct
+@@ -1325,7 +1448,11 @@ static int res_get_common_dumpit(struct
  		}
  	}
  
@@ -379,7 +379,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, fe->nldev_cmd),
  			0, NLM_F_MULTI);
  
-@@ -1294,13 +1421,21 @@ static int res_get_common_dumpit(struct
+@@ -1334,13 +1461,21 @@ static int res_get_common_dumpit(struct
  		goto err;
  	}
  
@@ -402,7 +402,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  	rt = &device->res[res_type];
  	xa_lock(&rt->xa);
-@@ -1320,7 +1455,11 @@ static int res_get_common_dumpit(struct
+@@ -1360,7 +1495,11 @@ static int res_get_common_dumpit(struct
  
  		filled = true;
  
@@ -414,7 +414,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  		if (!entry_attr) {
  			ret = -EMSGSIZE;
  			rdma_restrack_put(res);
-@@ -1361,7 +1500,6 @@ msg_full:
+@@ -1402,7 +1541,6 @@ msg_full:
  
  res_err:
  	nla_nest_cancel(skb, table_attr);
@@ -422,35 +422,37 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  err:
  	nlmsg_cancel(skb, nlh);
  
-@@ -1370,6 +1508,7 @@ err_index:
+@@ -1411,6 +1549,7 @@ err_index:
  	return ret;
  }
  
 +#ifdef HAVE_NETLINK_EXT_ACK
- #define RES_GET_FUNCS(name, type)                                              \
- 	static int nldev_res_get_##name##_dumpit(struct sk_buff *skb,          \
+ #define RES_GET_FUNCS(name, type)					       \
+ 	static int nldev_res_get_##name##_dumpit(struct sk_buff *skb,	       \
  						 struct netlink_callback *cb)  \
-@@ -1382,6 +1521,19 @@ err_index:
- 	{                                                                      \
- 		return res_get_common_doit(skb, nlh, extack, type);            \
+@@ -1425,6 +1564,21 @@ err_index:
+ 		return res_get_common_doit(skb, nlh, extack, type,	       \
+ 					   fill_res_##name##_entry);	       \
  	}
 +#else
 +#define RES_GET_FUNCS(name, type)                                              \
 +	static int nldev_res_get_##name##_dumpit(struct sk_buff *skb,          \
 +						 struct netlink_callback *cb)  \
 +	{                                                                      \
-+		return res_get_common_dumpit(skb, cb, type);                   \
++		return res_get_common_dumpit(skb, cb, type,                    \
++				fill_res_##name##_entry);                      \
 +	}                                                                      \
 +	static int nldev_res_get_##name##_doit(struct sk_buff *skb,            \
 +					       struct nlmsghdr *nlh)           \
 +	{                                                                      \
-+		return res_get_common_doit(skb, nlh, type);                    \
++		return res_get_common_doit(skb, nlh, type,                     \
++				fill_res_##name##_entry);                      \
 +	}
 +#endif
  
  RES_GET_FUNCS(qp, RDMA_RESTRACK_QP);
  RES_GET_FUNCS(cm_id, RDMA_RESTRACK_CM_ID);
-@@ -1425,8 +1577,11 @@ void rdma_link_unregister(struct rdma_li
+@@ -1468,8 +1622,11 @@ void rdma_link_unregister(struct rdma_li
  }
  EXPORT_SYMBOL(rdma_link_unregister);
  
@@ -464,7 +466,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	char ibdev_name[IB_DEVICE_NAME_MAX];
-@@ -1436,7 +1591,11 @@ static int nldev_newlink(struct sk_buff
+@@ -1479,7 +1636,11 @@ static int nldev_newlink(struct sk_buff
  	char type[IFNAMSIZ];
  	int err;
  
@@ -476,7 +478,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  				     nldev_policy, extack);
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_NAME] ||
  	    !tb[RDMA_NLDEV_ATTR_LINK_TYPE] || !tb[RDMA_NLDEV_ATTR_NDEV_NAME])
-@@ -1472,15 +1631,22 @@ static int nldev_newlink(struct sk_buff
+@@ -1515,15 +1676,22 @@ static int nldev_newlink(struct sk_buff
  	return err;
  }
  
@@ -501,7 +503,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  				     nldev_policy, extack);
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
-@@ -1499,8 +1665,11 @@ static int nldev_dellink(struct sk_buff
+@@ -1542,8 +1710,11 @@ static int nldev_dellink(struct sk_buff
  	return 0;
  }
  
@@ -515,7 +517,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct sk_buff *msg;
-@@ -1515,7 +1684,11 @@ static int nldev_sys_get_doit(struct sk_
+@@ -1558,7 +1729,11 @@ static int nldev_sys_get_doit(struct sk_
  	if (!msg)
  		return -ENOMEM;
  
@@ -527,7 +529,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  					 RDMA_NLDEV_CMD_SYS_GET),
  			0, 0);
-@@ -1527,11 +1700,18 @@ static int nldev_sys_get_doit(struct sk_
+@@ -1570,11 +1745,18 @@ static int nldev_sys_get_doit(struct sk_
  		return err;
  	}
  	nlmsg_end(msg, nlh);
@@ -548,7 +550,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	u8 enable;
-@@ -1551,8 +1731,11 @@ static int nldev_set_sys_set_doit(struct
+@@ -1594,8 +1776,11 @@ static int nldev_set_sys_set_doit(struct
  	return err;
  }
  
@@ -562,7 +564,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	u32 index, port, mode, mask = 0, qpn, cntn = 0;
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
-@@ -1587,7 +1770,11 @@ static int nldev_stat_set_doit(struct sk
+@@ -1630,7 +1815,11 @@ static int nldev_stat_set_doit(struct sk
  		ret = -ENOMEM;
  		goto err;
  	}
@@ -574,7 +576,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  					 RDMA_NLDEV_CMD_STAT_SET),
  			0, 0);
-@@ -1625,7 +1812,11 @@ static int nldev_stat_set_doit(struct sk
+@@ -1668,7 +1857,11 @@ static int nldev_stat_set_doit(struct sk
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -586,7 +588,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_fill:
  	rdma_counter_unbind_qpn(device, port, qpn, cntn);
-@@ -1636,8 +1827,11 @@ err:
+@@ -1679,8 +1872,11 @@ err:
  	return ret;
  }
  
@@ -600,7 +602,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct ib_device *device;
-@@ -1672,7 +1866,11 @@ static int nldev_stat_del_doit(struct sk
+@@ -1715,7 +1911,11 @@ static int nldev_stat_del_doit(struct sk
  		ret = -ENOMEM;
  		goto err;
  	}
@@ -612,7 +614,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  					 RDMA_NLDEV_CMD_STAT_SET),
  			0, 0);
-@@ -1693,7 +1891,11 @@ static int nldev_stat_del_doit(struct sk
+@@ -1736,7 +1936,11 @@ static int nldev_stat_del_doit(struct sk
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -624,7 +626,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_fill:
  	rdma_counter_bind_qpn(device, port, qpn, cntn);
-@@ -1706,8 +1908,12 @@ err:
+@@ -1749,8 +1953,12 @@ err:
  
  static int stat_get_doit_default_counter(struct sk_buff *skb,
  					 struct nlmsghdr *nlh,
@@ -637,7 +639,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct rdma_hw_stats *stats;
  	struct nlattr *table_attr;
-@@ -1742,7 +1948,11 @@ static int stat_get_doit_default_counter
+@@ -1785,7 +1993,11 @@ static int stat_get_doit_default_counter
  		goto err;
  	}
  
@@ -649,7 +651,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  					 RDMA_NLDEV_CMD_STAT_GET),
  			0, 0);
-@@ -1784,7 +1994,11 @@ static int stat_get_doit_default_counter
+@@ -1827,7 +2039,11 @@ static int stat_get_doit_default_counter
  	mutex_unlock(&stats->lock);
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -661,7 +663,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_table:
  	nla_nest_cancel(msg, table_attr);
-@@ -1798,7 +2012,11 @@ err:
+@@ -1841,7 +2057,11 @@ err:
  }
  
  static int stat_get_doit_qp(struct sk_buff *skb, struct nlmsghdr *nlh,
@@ -673,7 +675,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  {
  	static enum rdma_nl_counter_mode mode;
-@@ -1809,7 +2027,11 @@ static int stat_get_doit_qp(struct sk_bu
+@@ -1852,7 +2072,11 @@ static int stat_get_doit_qp(struct sk_bu
  	int ret;
  
  	if (tb[RDMA_NLDEV_ATTR_STAT_COUNTER_ID])
@@ -685,7 +687,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  	if (!tb[RDMA_NLDEV_ATTR_STAT_MODE] ||
  	    !tb[RDMA_NLDEV_ATTR_DEV_INDEX] || !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
-@@ -1832,7 +2054,11 @@ static int stat_get_doit_qp(struct sk_bu
+@@ -1875,7 +2099,11 @@ static int stat_get_doit_qp(struct sk_bu
  		goto err;
  	}
  
@@ -697,7 +699,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  					 RDMA_NLDEV_CMD_STAT_GET),
  			0, 0);
-@@ -1852,7 +2078,11 @@ static int stat_get_doit_qp(struct sk_bu
+@@ -1895,7 +2123,11 @@ static int stat_get_doit_qp(struct sk_bu
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -709,7 +711,7 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  
  err_msg:
  	nlmsg_free(msg);
-@@ -1861,8 +2091,11 @@ err:
+@@ -1904,8 +2136,11 @@ err:
  	return ret;
  }
  
@@ -723,16 +725,16 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	int ret;
-@@ -1873,11 +2106,18 @@ static int nldev_stat_get_doit(struct sk
+@@ -1916,14 +2151,26 @@ static int nldev_stat_get_doit(struct sk
  		return -EINVAL;
  
  	if (!tb[RDMA_NLDEV_ATTR_STAT_RES])
 +#ifdef HAVE_NETLINK_EXT_ACK
  		return stat_get_doit_default_counter(skb, nlh, extack, tb);
--
 +#else
 +		return stat_get_doit_default_counter(skb, nlh,  tb);
 +#endif
+ 
  	switch (nla_get_u32(tb[RDMA_NLDEV_ATTR_STAT_RES])) {
  	case RDMA_NLDEV_ATTR_RES_QP:
 +#ifdef HAVE_NETLINK_EXT_ACK
@@ -741,5 +743,12 @@ Change-Id: Icd883b6fd7044bc71e9e708b1f58b8203422a56a
 +		ret = stat_get_doit_qp(skb, nlh, tb);
 +#endif
  		break;
- 
+ 	case RDMA_NLDEV_ATTR_RES_MR:
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		ret = res_get_common_doit(skb, nlh, extack, RDMA_RESTRACK_MR,
++#else
++		ret = res_get_common_doit(skb, nlh, RDMA_RESTRACK_MR,
++#endif
+ 					  fill_stat_mr_entry);
+ 		break;
  	default:

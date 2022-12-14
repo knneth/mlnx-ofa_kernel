@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/verbs.c
 Change-Id: Iadb0a04249d1618894a9bae560f758c2e4227f5f
 Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
 ---
- net/sunrpc/xprtrdma/verbs.c | 63 +++++++++++++++++++++++++++++++++++++++++++++
+ net/sunrpc/xprtrdma/verbs.c | 63 +++++++++++++++++++++++++++++++++++++
  1 file changed, 63 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/verbs.c
@@ -116,8 +116,8 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  }
  
  /**
-@@ -613,7 +638,9 @@ rpcrdma_ep_recreate_xprt(struct rpcrdma_
- {
+@@ -614,7 +639,9 @@ static int rpcrdma_ep_recreate_xprt(stru
+ 	struct rpcrdma_ep *ep = &r_xprt->rx_ep;
  	int rc, err;
  
 +#ifdef HAVE_TRACE_RPCRDMA_H
@@ -126,7 +126,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  	rc = -EHOSTUNREACH;
  	if (rpcrdma_ia_open(r_xprt))
-@@ -651,7 +678,9 @@ rpcrdma_ep_reconnect(struct rpcrdma_xprt
+@@ -653,7 +680,9 @@ static int rpcrdma_ep_reconnect(struct r
  	struct rdma_cm_id *id, *old;
  	int err, rc;
  
@@ -134,9 +134,9 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	trace_xprtrdma_reconnect(r_xprt);
 +#endif
  
- 	rpcrdma_ep_disconnect(ep, ia);
+ 	rpcrdma_ep_disconnect(&r_xprt->rx_ep, ia);
  
-@@ -775,7 +804,9 @@ rpcrdma_ep_disconnect(struct rpcrdma_ep
+@@ -779,7 +808,9 @@ rpcrdma_ep_disconnect(struct rpcrdma_ep
  							ep->rep_connected != 1);
  	else
  		ep->rep_connected = rc;
@@ -146,7 +146,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  	rpcrdma_xprt_drain(r_xprt);
  }
-@@ -976,7 +1007,9 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *
+@@ -980,7 +1011,9 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *
  	list_splice(&all, &buf->rb_all);
  	r_xprt->rx_stats.mrs_allocated += count;
  	spin_unlock(&buf->rb_mrlock);
@@ -156,7 +156,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  	xprt_write_space(&r_xprt->rx_xprt);
  }
-@@ -1096,6 +1129,9 @@ int rpcrdma_buffer_create(struct rpcrdma
+@@ -1100,6 +1133,9 @@ int rpcrdma_buffer_create(struct rpcrdma
  	spin_lock_init(&buf->rb_lock);
  	INIT_LIST_HEAD(&buf->rb_mrs);
  	INIT_LIST_HEAD(&buf->rb_all);
@@ -166,7 +166,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	INIT_DELAYED_WORK(&buf->rb_refresh_worker,
  			  rpcrdma_mr_refresh_worker);
  
-@@ -1143,6 +1179,19 @@ static void rpcrdma_rep_destroy(struct r
+@@ -1147,6 +1183,19 @@ static void rpcrdma_rep_destroy(struct r
  	kfree(rep);
  }
  
@@ -186,7 +186,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  /**
   * rpcrdma_req_destroy - Destroy an rpcrdma_req object
   * @req: unused object to be destroyed
-@@ -1255,7 +1304,9 @@ rpcrdma_mr_get(struct rpcrdma_xprt *r_xp
+@@ -1259,7 +1308,9 @@ rpcrdma_mr_get(struct rpcrdma_xprt *r_xp
  	return mr;
  
  out_nomrs:
@@ -196,7 +196,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	if (r_xprt->rx_ep.rep_connected != -ENODEV)
  		schedule_delayed_work(&buf->rb_refresh_worker, 0);
  
-@@ -1295,7 +1346,9 @@ rpcrdma_mr_unmap_and_put(struct rpcrdma_
+@@ -1299,7 +1350,9 @@ rpcrdma_mr_unmap_and_put(struct rpcrdma_
  	struct rpcrdma_xprt *r_xprt = mr->mr_xprt;
  
  	if (mr->mr_dir != DMA_NONE) {
@@ -206,7 +206,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  		ib_dma_unmap_sg(r_xprt->rx_ia.ri_id->device,
  				mr->mr_sg, mr->mr_nents, mr->mr_dir);
  		mr->mr_dir = DMA_NONE;
-@@ -1437,7 +1490,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
+@@ -1441,7 +1494,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
  	rb->rg_iov.addr = ib_dma_map_single(device, rdmab_data(rb),
  					    rdmab_length(rb), rb->rg_direction);
  	if (ib_dma_mapping_error(device, rdmab_addr(rb))) {
@@ -216,7 +216,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  		return false;
  	}
  
-@@ -1494,7 +1549,9 @@ rpcrdma_ep_post(struct rpcrdma_ia *ia,
+@@ -1498,7 +1553,9 @@ rpcrdma_ep_post(struct rpcrdma_ia *ia,
  	}
  
  	rc = frwr_send(ia, req);
@@ -226,7 +226,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	if (rc)
  		return -ENOTCONN;
  	return 0;
-@@ -1541,7 +1598,9 @@ rpcrdma_post_recvs(struct rpcrdma_xprt *
+@@ -1545,7 +1602,9 @@ rpcrdma_post_recvs(struct rpcrdma_xprt *
  			break;
  		}
  
@@ -236,7 +236,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  		rep->rr_recv_wr.next = wr;
  		wr = &rep->rr_recv_wr;
  		++count;
-@@ -1563,5 +1622,9 @@ rpcrdma_post_recvs(struct rpcrdma_xprt *
+@@ -1567,5 +1626,9 @@ rpcrdma_post_recvs(struct rpcrdma_xprt *
  	}
  	ep->rep_receive_count += count;
  out:

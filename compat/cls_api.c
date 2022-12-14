@@ -24,6 +24,9 @@
 #include <net/tc_act/tc_ct.h>
 #endif
 #include <net/tc_act/tc_tunnel_key.h>
+#ifdef HAVE_IS_TCF_POLICE
+#include <net/tc_act/tc_police.h>
+#endif
 
 
 #if !defined(HAVE_IS_TCF_TUNNEL) && defined(HAVE_TCF_TUNNEL_INFO)

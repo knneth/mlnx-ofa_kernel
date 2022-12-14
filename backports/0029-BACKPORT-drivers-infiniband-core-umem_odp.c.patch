@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
 Change-Id: I0d7ec33ae7f5197f1743af46234b8168fcb1a22d
 ---
- drivers/infiniband/core/umem_odp.c | 186 +++++++++++++++++++++++++++++++++++--
+ drivers/infiniband/core/umem_odp.c | 186 +++++++++++++++++++++++++++--
  1 file changed, 179 insertions(+), 7 deletions(-)
 
 --- a/drivers/infiniband/core/umem_odp.c
@@ -116,11 +116,11 @@ Change-Id: I0d7ec33ae7f5197f1743af46234b8168fcb1a22d
  					     mmu_notifier_range_blockable(range),
  					     &call_rsync);
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT 
++#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
 +	ret = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, range->start,
 +					    range->end,
 +					    invalidate_range_start_trampoline,
-+					    range->blockable, NULL);
++					    range->blockable, &call_rsync);
 +#else
 +	ret = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, start, end,
 +					    invalidate_range_start_trampoline,

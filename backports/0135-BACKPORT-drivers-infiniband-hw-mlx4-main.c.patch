@@ -33,7 +33,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
 +#endif
 +
  #define DRV_NAME	MLX4_IB_DRV_NAME
- #define DRV_VERSION	"4.7-3.2.9"
+ #define DRV_VERSION	"4.9-0.1.7"
  
 @@ -71,6 +83,9 @@
  MODULE_AUTHOR("Roland Dreier");
@@ -75,7 +75,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
  	}
  	if (dev)
  		dev_hold(dev);
-@@ -1145,9 +1169,11 @@ static void mlx4_ib_dealloc_ucontext(str
+@@ -1157,9 +1181,11 @@ static void mlx4_ib_dealloc_ucontext(str
  
  }
  
@@ -87,7 +87,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
  
  static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
  {
-@@ -2756,7 +2782,9 @@ static const struct ib_device_ops mlx4_i
+@@ -2771,7 +2797,9 @@ static const struct ib_device_ops mlx4_i
  	.destroy_qp = mlx4_ib_destroy_qp,
  	.destroy_srq = mlx4_ib_destroy_srq,
  	.detach_mcast = mlx4_ib_mcg_detach,
@@ -97,7 +97,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
  	.drain_rq = mlx4_ib_drain_rq,
  	.drain_sq = mlx4_ib_drain_sq,
  	.get_dev_fw_str = get_fw_ver_str,
-@@ -2792,6 +2820,9 @@ static const struct ib_device_ops mlx4_i
+@@ -2807,6 +2835,9 @@ static const struct ib_device_ops mlx4_i
  	.exp_create_qp = mlx4_ib_exp_create_qp,
  	.exp_query_device	= mlx4_ib_exp_query_device,
  	.exp_ioctl         = mlx4_ib_exp_ioctl,
@@ -107,7 +107,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
  
  	INIT_RDMA_OBJ_SIZE(ib_ah, mlx4_ib_ah, ibah),
  	INIT_RDMA_OBJ_SIZE(ib_pd, mlx4_ib_pd, ibpd),
-@@ -3127,9 +3158,11 @@ static void *mlx4_ib_add(struct mlx4_dev
+@@ -3142,9 +3173,11 @@ static void *mlx4_ib_add(struct mlx4_dev
  	}
  
  	ibdev->ib_active = true;
@@ -119,7 +119,7 @@ Change-Id: I91abcca50d3559fdcfeb05a4fbcf9d09a463a9df
  
  	if (mlx4_is_mfunc(ibdev->dev))
  		init_pkeys(ibdev);
-@@ -3264,10 +3297,14 @@ static void mlx4_ib_remove(struct mlx4_d
+@@ -3279,10 +3312,14 @@ static void mlx4_ib_remove(struct mlx4_d
  	struct mlx4_ib_dev *ibdev = ibdev_ptr;
  	int dev_idx, ret;
  	int p;

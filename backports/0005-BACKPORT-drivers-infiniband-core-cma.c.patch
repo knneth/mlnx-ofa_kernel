@@ -278,7 +278,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  	route->path_rec->traffic_class = tos;
  	route->path_rec->mtu = iboe_get_mtu(ndev->mtu);
  	route->path_rec->rate_selector = IB_SA_EQ;
-@@ -3310,9 +3443,11 @@ static int cma_port_is_unique(struct rdm
+@@ -3319,9 +3452,11 @@ static int cma_port_is_unique(struct rdm
  	struct rdma_id_private *cur_id;
  	struct sockaddr  *daddr = cma_dst_addr(id_priv);
  	struct sockaddr  *saddr = cma_src_addr(id_priv);
@@ -291,7 +291,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  		struct sockaddr  *cur_daddr = cma_dst_addr(cur_id);
  		struct sockaddr  *cur_saddr = cma_src_addr(cur_id);
  		__be16 cur_dport = cma_port(cur_daddr);
-@@ -3351,7 +3486,11 @@ static int cma_alloc_any_port(enum rdma_
+@@ -3360,7 +3495,11 @@ static int cma_alloc_any_port(enum rdma_
  	unsigned int rover;
  	struct net *net = id_priv->id.route.addr.dev_addr.net;
  
@@ -303,7 +303,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  	remaining = (high - low) + 1;
  	rover = prandom_u32() % remaining + low;
  retry:
-@@ -3397,9 +3536,10 @@ static int cma_check_port(struct rdma_bi
+@@ -3406,9 +3545,10 @@ static int cma_check_port(struct rdma_bi
  {
  	struct rdma_id_private *cur_id;
  	struct sockaddr *addr, *cur_addr;
@@ -315,7 +315,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  		if (id_priv == cur_id)
  			continue;
  
-@@ -4721,6 +4861,7 @@ static void cma_remove_one(struct ib_dev
+@@ -4730,6 +4870,7 @@ static void cma_remove_one(struct ib_dev
  	kfree(cma_dev);
  }
  
@@ -323,7 +323,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  static int cma_init_net(struct net *net)
  {
  	struct cma_pernet *pernet = cma_pernet(net);
-@@ -4749,6 +4890,7 @@ static struct pernet_operations cma_pern
+@@ -4758,6 +4899,7 @@ static struct pernet_operations cma_pern
  	.id = &cma_pernet_id,
  	.size = sizeof(struct cma_pernet),
  };
@@ -331,7 +331,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  
  static int __init cma_init(void)
  {
-@@ -4758,9 +4900,11 @@ static int __init cma_init(void)
+@@ -4767,9 +4909,11 @@ static int __init cma_init(void)
  	if (!cma_wq)
  		return -ENOMEM;
  
@@ -343,7 +343,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  
  	ib_sa_register_client(&sa_client);
  	register_netdevice_notifier(&cma_nb);
-@@ -4776,7 +4920,9 @@ static int __init cma_init(void)
+@@ -4785,7 +4929,9 @@ static int __init cma_init(void)
  err:
  	unregister_netdevice_notifier(&cma_nb);
  	ib_sa_unregister_client(&sa_client);
@@ -353,7 +353,7 @@ Change-Id: I2b7cf0dc49cfe0e3ab643e6d3c32777f8defa6dd
  	destroy_workqueue(cma_wq);
  	return ret;
  }
-@@ -4787,8 +4933,16 @@ static void __exit cma_cleanup(void)
+@@ -4796,8 +4942,16 @@ static void __exit cma_cleanup(void)
  	ib_unregister_client(&cma_client);
  	unregister_netdevice_notifier(&cma_nb);
  	ib_sa_unregister_client(&sa_client);

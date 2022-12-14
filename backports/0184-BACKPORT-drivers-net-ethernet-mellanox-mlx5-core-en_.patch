@@ -17,7 +17,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  
  static enum mlx5e_traffic_types arfs_get_tt(enum arfs_type type)
  {
-@@ -157,7 +157,11 @@ void mlx5e_arfs_destroy_tables(struct ml
+@@ -177,7 +177,11 @@ void mlx5e_arfs_destroy_tables(struct ml
  {
  	int i;
  
@@ -29,7 +29,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  		return;
  
  	arfs_del_rules(priv);
-@@ -346,7 +350,11 @@ int mlx5e_arfs_create_tables(struct mlx5
+@@ -366,7 +370,11 @@ int mlx5e_arfs_create_tables(struct mlx5
  	int err = 0;
  	int i;
  
@@ -41,7 +41,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  		return 0;
  
  	spin_lock_init(&priv->fs.arfs.arfs_lock);
-@@ -377,6 +385,8 @@ static void arfs_may_expire_flow(struct
+@@ -397,6 +405,8 @@ static void arfs_may_expire_flow(struct
  	int j;
  
  	HLIST_HEAD(del_list);
@@ -50,7 +50,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  	spin_lock_bh(&priv->fs.arfs.arfs_lock);
  	mlx5e_for_each_arfs_rule(arfs_rule, htmp, priv->fs.arfs.arfs_tables, i, j) {
  		if (!work_pending(&arfs_rule->arfs_work) &&
-@@ -390,7 +400,7 @@ static void arfs_may_expire_flow(struct
+@@ -410,7 +420,7 @@ static void arfs_may_expire_flow(struct
  		}
  	}
  	spin_unlock_bh(&priv->fs.arfs.arfs_lock);
@@ -59,7 +59,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  		if (arfs_rule->rule)
  			mlx5_del_flow_rules(arfs_rule->rule);
  		hlist_del(&arfs_rule->hlist);
-@@ -406,6 +416,8 @@ static void arfs_del_rules(struct mlx5e_
+@@ -426,6 +436,8 @@ static void arfs_del_rules(struct mlx5e_
  	int j;
  
  	HLIST_HEAD(del_list);
@@ -68,7 +68,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  	spin_lock_bh(&priv->fs.arfs.arfs_lock);
  	mlx5e_for_each_arfs_rule(rule, htmp, priv->fs.arfs.arfs_tables, i, j) {
  		hlist_del_init(&rule->hlist);
-@@ -413,7 +425,7 @@ static void arfs_del_rules(struct mlx5e_
+@@ -433,7 +445,7 @@ static void arfs_del_rules(struct mlx5e_
  	}
  	spin_unlock_bh(&priv->fs.arfs.arfs_lock);
  
@@ -77,7 +77,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  		cancel_work_sync(&rule->arfs_work);
  		if (rule->rule)
  			mlx5_del_flow_rules(rule->rule);
-@@ -687,9 +699,10 @@ static struct arfs_rule *arfs_find_rule(
+@@ -707,9 +719,10 @@ static struct arfs_rule *arfs_find_rule(
  	struct hlist_head *head;
  	__be16 src_port = arfs_get_src_port(skb);
  	__be16 dst_port = arfs_get_dst_port(skb);
@@ -89,7 +89,7 @@ Change-Id: Ib3e9587149008b9caf76850785a0838afce37b7c
  		if (arfs_rule->tuple.src_port == src_port &&
  		    arfs_rule->tuple.dst_port == dst_port &&
  		    arfs_cmp_ips(&arfs_rule->tuple, skb)) {
-@@ -712,8 +725,10 @@ int mlx5e_rx_flow_steer(struct net_devic
+@@ -732,8 +745,10 @@ int mlx5e_rx_flow_steer(struct net_devic
  	    skb->protocol != htons(ETH_P_IPV6))
  		return -EPROTONOSUPPORT;
  

@@ -32,31 +32,42 @@ LB_LINUX_CONFIG_VALUE([XEN_INTERFACE_VERSION],[XEN_INCLUDES="$XEN_INCLUDES -D__X
 #
 AC_DEFUN([LB_LINUX_VERSION],[
 KMODEXT=".ko"
-
-MODULE_TARGET="SUBDIRS"
-makerule="$PWD/build"
-AC_MSG_CHECKING([for external module build support])
-rm -f build/conftest.i
-LB_LINUX_TRY_MAKE([],[],
-	[$makerule MLNX_KERNEL_TEST=conftest.i],
-	[test -s build/conftest.i],
-	[
-		AC_MSG_RESULT([no])
-	],[
-		makerule="_module_$makerule"
-		MODULE_TARGET="M"
-		LB_LINUX_TRY_MAKE([],[],
-			[$makerule MLNX_KERNEL_TEST=conftest.i],
-			[test -s build/conftest.i],
-			[
-				AC_MSG_RESULT([yes])
-			],[
-				AC_MSG_ERROR([unknown; check config.log for details])
-			])
-	])
-
-AC_SUBST(MODULE_TARGET)
 AC_SUBST(KMODEXT)
+
+makerule="$PWD/build"
+AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
+[
+	lb_cv_module_target=""
+	MODULE_TARGET="SUBDIRS"
+	rm -f build/conftest.i
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule MLNX_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="SUBDIRS"],[
+	MODULE_TARGET="M"
+	makerule="$PWD/build/"
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule MLNX_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="M54"], [
+	MODULE_TARGET="M"
+	makerule="_module_$PWD/build"
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule MLNX_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="M"], [
+			AC_MSG_ERROR([kernel module make failed; check config.log for details])
+	])])])
+])
+AS_IF([test -z "$lb_cv_module_target"],
+	[AC_MSG_ERROR([unknown external module build target])],
+[test "x$lb_cv_module_target" = "xM54"],
+	[makerule="$PWD/build"
+	lb_cv_module_target="M"],
+[test "x$lb_cv_module_target" = "xM"],
+	[makerule="_module_$PWD/build"])
+MODULE_TARGET=$lb_cv_module_target
+AC_SUBST(MODULE_TARGET)
 ])
 
 #

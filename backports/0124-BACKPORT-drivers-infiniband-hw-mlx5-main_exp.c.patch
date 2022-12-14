@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main_exp.c
 
 Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
 ---
- drivers/infiniband/hw/mlx5/main_exp.c | 84 +++++++++++++++++++++++++++++++++++
- 1 file changed, 84 insertions(+)
+ drivers/infiniband/hw/mlx5/main_exp.c | 74 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 74 insertions(+)
 
 --- a/drivers/infiniband/hw/mlx5/main_exp.c
 +++ b/drivers/infiniband/hw/mlx5/main_exp.c
-@@ -1164,7 +1164,11 @@ static ssize_t dc_attr_store(struct kobj
+@@ -1167,7 +1167,11 @@ static ssize_t dc_attr_store(struct kobj
  	return dc_attr->store(d, dc_attr, buf, size);
  }
  
@@ -20,8 +20,8 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
  	.show = dc_attr_show,
  	.store = dc_attr_store
  };
-@@ -2432,6 +2436,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev
- 	struct rdma_umap_priv *vma_prv;
+@@ -2449,6 +2453,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev
+ 	size_t map_size = vma->vm_end - vma->vm_start;
  	pgprot_t vm_page_prot;
  	int err;
 +#if defined(CONFIG_X86) && !defined(HAVE_PAT_ENABLED_AS_FUNCTION)
@@ -30,7 +30,7 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
  
  	if (indx % uars_per_page) {
  		mlx5_ib_warn(dev, "invalid uar index %d, should be system page aligned and there are %d uars per page.\n",
-@@ -2440,7 +2447,11 @@ int alloc_and_map_wc(struct mlx5_ib_dev
+@@ -2457,7 +2464,11 @@ int alloc_and_map_wc(struct mlx5_ib_dev
  	}
  
  #if defined(CONFIG_X86)
@@ -42,7 +42,7 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
  		mlx5_ib_dbg(dev, "write combine not available\n");
  		return -EPERM;
  	}
-@@ -2589,3 +2600,76 @@ int mlx5_ib_exp_set_context_attr(struct
+@@ -2601,3 +2612,66 @@ int mlx5_ib_exp_set_context_attr(struct
  
  	return 0;
  }
@@ -72,27 +72,17 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
 +	if (addr)
 +		return current->mm->get_unmapped_area(file, addr, len,
 +						      pgoff, flags);
++
 +	command = get_command(pgoff);
-+	if (command == MLX5_IB_MMAP_REGULAR_PAGE ||
-+	    command == MLX5_IB_MMAP_WC_PAGE ||
-+	    command == MLX5_IB_MMAP_NC_PAGE ||
-+	    command == MLX5_IB_MMAP_MAP_DC_INFO_PAGE ||
-+	    command == MLX5_IB_EXP_ALLOC_N_MMAP_WC ||
-+	    command == MLX5_IB_MMAP_CORE_CLOCK ||
-+	    command == MLX5_IB_MMAP_ALLOC_WC ||
-+	    command == MLX5_IB_MMAP_DEVICE_MEM ||
-+	    command == MLX5_IB_MMAP_CLOCK_INFO ||
-+	    command == MLX5_IB_EXP_MMAP_CLOCK_INFO)
-+		return current->mm->get_unmapped_area(file, addr, len,
++	if (command == MLX5_IB_MMAP_GET_CONTIGUOUS_PAGES ||
++            command == MLX5_IB_EXP_MMAP_GET_CONTIGUOUS_PAGES_DEV_NUMA ||
++	    command == MLX5_IB_EXP_MMAP_GET_CONTIGUOUS_PAGES_CPU_NUMA)
++		goto flow;
++
++	return current->mm->get_unmapped_area(file, addr, len,
 +						      pgoff, flags);
 +
-+	if (command != MLX5_IB_MMAP_GET_CONTIGUOUS_PAGES &&
-+	    command != MLX5_IB_EXP_MMAP_GET_CONTIGUOUS_PAGES_DEV_NUMA &&
-+	    command != MLX5_IB_EXP_MMAP_GET_CONTIGUOUS_PAGES_CPU_NUMA) {
-+		pr_warn("get_unmapped_area unsupported command %ld\n", command);
-+		return -EINVAL;
-+	}
-+
++flow:
 +	order = get_pg_order(pgoff);
 +
 +	/*

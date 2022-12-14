@@ -98,11 +98,21 @@ static int arfs_disable(struct mlx5e_priv *priv)
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 	for (i = 0; i < ARFS_NUM_TYPES; i++) {
+		struct mlx5_flow_handle *handle;
 		dest.tir_num = tir[i].tirn;
 		tt = arfs_get_tt(i);
+#ifdef CONFIG_MLX5_EN_ACCEL_FS
+		if (tt == ARFS_IPV4_TCP)
+			handle = priv->fs.accel.default_rules[ACCEL_FS_IPV4_TCP];
+		else if (tt == ARFS_IPV6_TCP)
+			handle = priv->fs.accel.default_rules[ACCEL_FS_IPV6_TCP];
+		else
+			handle = priv->fs.ttc.rules[tt];
+#else
+		handle = priv->fs.ttc.rules[tt];
+#endif
 		/* Modify ttc rules destination to bypass the aRFS tables*/
-		err = mlx5_modify_rule_destination(priv->fs.ttc.rules[tt],
-						   &dest, NULL);
+		err = mlx5_modify_rule_destination(handle, &dest, NULL);
 		if (err) {
 			netdev_err(priv->netdev,
 				   "%s: modify ttc destination failed\n",
@@ -131,11 +141,21 @@ int mlx5e_arfs_enable(struct mlx5e_priv *priv)
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 	for (i = 0; i < ARFS_NUM_TYPES; i++) {
+		struct mlx5_flow_handle *handle;
 		dest.ft = priv->fs.arfs.arfs_tables[i].ft.t;
 		tt = arfs_get_tt(i);
+#ifdef CONFIG_MLX5_EN_ACCEL_FS
+		if (tt == ARFS_IPV4_TCP)
+			handle = priv->fs.accel.default_rules[ACCEL_FS_IPV4_TCP];
+		else if (tt == ARFS_IPV6_TCP)
+			handle = priv->fs.accel.default_rules[ACCEL_FS_IPV6_TCP];
+		else
+			handle = priv->fs.ttc.rules[tt];
+#else
+		handle = priv->fs.ttc.rules[tt];
+#endif
 		/* Modify ttc rules destination to point on the aRFS FTs */
-		err = mlx5_modify_rule_destination(priv->fs.ttc.rules[tt],
-						   &dest, NULL);
+		err = mlx5_modify_rule_destination(handle, &dest, NULL);
 		if (err) {
 			netdev_err(priv->netdev,
 				   "%s: modify ttc destination failed err=%d\n",

@@ -297,7 +297,7 @@ WITH_HPAGE_PATCH=${WITH_HPAGE_PATCH:-"no"}
 
 QUILT=${QUILT:-$(/usr/bin/which quilt  2> /dev/null)}
 GIT=${GIT:-$(/usr/bin/which git 2> /dev/null)}
-REJECT=`$GIT am --help 2> /dev/null | grep -qw '\-\-reject' && echo -n '--reject'`
+REJECT="--reject"
 
 if [[ ! -x "$GIT" || ! -d ".git" ]]; then
     WITH_GIT="no"

@@ -20,17 +20,36 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
  
-@@ -73,6 +76,9 @@ svc_rdma_get_rw_ctxt(struct svcxprt_rdma
+@@ -72,8 +75,16 @@ svc_rdma_get_rw_ctxt(struct svcxprt_rdma
+ 	}
  
  	ctxt->rw_sg_table.sgl = ctxt->rw_first_sgl;
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
++	if (sg_alloc_table_chained(&ctxt->rw_sg_table, sges,
++				ctxt->rw_sg_table.sgl, SG_CHUNK_SIZE)) {
++#else
  	if (sg_alloc_table_chained(&ctxt->rw_sg_table, sges,
 +#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_GFP_MASK
 +				   GFP_ATOMIC,
 +#endif
  				   ctxt->rw_sg_table.sgl)) {
++#endif
  		kfree(ctxt);
  		ctxt = NULL;
-@@ -207,7 +213,9 @@ static void svc_rdma_write_done(struct i
+ 	}
+@@ -84,7 +95,11 @@ out:
+ static void svc_rdma_put_rw_ctxt(struct svcxprt_rdma *rdma,
+ 				 struct svc_rdma_rw_ctxt *ctxt)
+ {
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
++	sg_free_table_chained(&ctxt->rw_sg_table, SG_CHUNK_SIZE);
++#else
+ 	sg_free_table_chained(&ctxt->rw_sg_table, true);
++#endif
+ 
+ 	spin_lock(&rdma->sc_rw_ctxt_lock);
+ 	list_add(&ctxt->rw_list, &rdma->sc_rw_ctxts);
+@@ -207,7 +222,9 @@ static void svc_rdma_write_done(struct i
  	struct svc_rdma_write_info *info =
  			container_of(cc, struct svc_rdma_write_info, wi_cc);
  
@@ -40,7 +59,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  	atomic_add(cc->cc_sqecount, &rdma->sc_sq_avail);
  	wake_up(&rdma->sc_send_wait);
-@@ -265,7 +273,9 @@ static void svc_rdma_wc_read_done(struct
+@@ -265,7 +282,9 @@ static void svc_rdma_wc_read_done(struct
  	struct svc_rdma_read_info *info =
  			container_of(cc, struct svc_rdma_read_info, ri_cc);
  
@@ -50,7 +69,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  	atomic_add(cc->cc_sqecount, &rdma->sc_sq_avail);
  	wake_up(&rdma->sc_send_wait);
-@@ -322,18 +332,24 @@ static int svc_rdma_post_chunk_ctxt(stru
+@@ -322,18 +341,24 @@ static int svc_rdma_post_chunk_ctxt(stru
  		if (atomic_sub_return(cc->cc_sqecount,
  				      &rdma->sc_sq_avail) > 0) {
  			ret = ib_post_send(rdma->sc_qp, first_wr, &bad_wr);
@@ -75,7 +94,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	} while (1);
  
  	set_bit(XPT_CLOSE, &xprt->xpt_flags);
-@@ -438,7 +454,9 @@ svc_rdma_build_writes(struct svc_rdma_wr
+@@ -438,7 +463,9 @@ svc_rdma_build_writes(struct svc_rdma_wr
  		if (ret < 0)
  			goto out_initerr;
  
@@ -85,7 +104,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  		list_add(&ctxt->rw_list, &cc->cc_rwctxts);
  		cc->cc_sqecount += ret;
  		if (write_len == seg_length - info->wi_seg_off) {
-@@ -464,7 +482,9 @@ out_noctx:
+@@ -464,7 +491,9 @@ out_noctx:
  
  out_initerr:
  	svc_rdma_put_rw_ctxt(rdma, ctxt);
@@ -95,7 +114,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	return -EIO;
  }
  
-@@ -529,7 +549,9 @@ int svc_rdma_send_write_chunk(struct svc
+@@ -529,7 +558,9 @@ int svc_rdma_send_write_chunk(struct svc
  	if (ret < 0)
  		goto out_err;
  
@@ -105,7 +124,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	return xdr->page_len;
  
  out_err:
-@@ -587,7 +609,9 @@ int svc_rdma_send_reply_chunk(struct svc
+@@ -587,7 +618,9 @@ int svc_rdma_send_reply_chunk(struct svc
  	if (ret < 0)
  		goto out_err;
  
@@ -115,7 +134,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	return consumed;
  
  out_err:
-@@ -659,7 +683,9 @@ out_overrun:
+@@ -659,7 +692,9 @@ out_overrun:
  	return -EINVAL;
  
  out_initerr:
@@ -125,7 +144,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  	svc_rdma_put_rw_ctxt(cc->cc_rdma, ctxt);
  	return -EIO;
  }
-@@ -690,7 +716,9 @@ static int svc_rdma_build_read_chunk(str
+@@ -690,7 +725,9 @@ static int svc_rdma_build_read_chunk(str
  		if (ret < 0)
  			break;
  
@@ -135,7 +154,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  		info->ri_chunklen += rs_length;
  	}
  
-@@ -721,7 +749,9 @@ static int svc_rdma_build_normal_read_ch
+@@ -721,7 +758,9 @@ static int svc_rdma_build_normal_read_ch
  	if (ret < 0)
  		goto out;
  
@@ -145,7 +164,7 @@ Signed-off-by: Vasily Philipov <vasilyf@mellanox.com>
  
  	head->rc_hdr_count = 0;
  
-@@ -777,7 +807,9 @@ static int svc_rdma_build_pz_read_chunk(
+@@ -777,7 +816,9 @@ static int svc_rdma_build_pz_read_chunk(
  	if (ret < 0)
  		goto out;
  

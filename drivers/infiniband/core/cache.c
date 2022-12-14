@@ -1052,11 +1052,17 @@ int ib_get_cached_pkey(struct ib_device *device,
 
 	cache = device->port_data[port_num].cache.pkey;
 
+	if (!cache) {
+		ret = -ENOENT;
+		goto out;
+	}
+
 	if (index < 0 || index >= cache->table_len)
 		ret = -EINVAL;
 	else
 		*pkey = cache->table[index];
 
+out:
 	read_unlock_irqrestore(&device->cache.lock, flags);
 
 	return ret;
@@ -1099,6 +1105,8 @@ int ib_find_cached_pkey(struct ib_device *device,
 	cache = device->port_data[port_num].cache.pkey;
 
 	*index = -1;
+	if (!cache)
+		goto out;
 
 	for (i = 0; i < cache->table_len; ++i)
 		if ((cache->table[i] & 0x7fff) == (pkey & 0x7fff)) {
@@ -1115,6 +1123,7 @@ int ib_find_cached_pkey(struct ib_device *device,
 		ret = 0;
 	}
 
+out:
 	read_unlock_irqrestore(&device->cache.lock, flags);
 
 	return ret;
@@ -1139,6 +1148,8 @@ int ib_find_exact_cached_pkey(struct ib_device *device,
 	cache = device->port_data[port_num].cache.pkey;
 
 	*index = -1;
+	if (!cache)
+		goto out;
 
 	for (i = 0; i < cache->table_len; ++i)
 		if (cache->table[i] == pkey) {
@@ -1147,6 +1158,7 @@ int ib_find_exact_cached_pkey(struct ib_device *device,
 			break;
 		}
 
+out:
 	read_unlock_irqrestore(&device->cache.lock, flags);
 
 	return ret;

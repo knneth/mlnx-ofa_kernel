@@ -76,6 +76,11 @@
 extern struct workqueue_struct *mlx5_ib_sigerr_sqd_wq;
 
 enum {
+	MLX5_IB_MMAP_OFFSET_START = 9,
+	MLX5_IB_MMAP_OFFSET_END = 255,
+};
+
+enum {
 	MLX5_IB_MMAP_CMD_SHIFT	= 8,
 	MLX5_IB_MMAP_CMD_MASK	= 0xff,
 };
@@ -121,9 +126,10 @@ enum {
 	MLX5_MEMIC_BASE_SIZE	= 1 << MLX5_MEMIC_BASE_ALIGN,
 };
 
-#define MLX5_LOG_SW_ICM_BLOCK_SIZE(dev)                                        \
-	(MLX5_CAP_DEV_MEM(dev, log_sw_icm_alloc_granularity))
-#define MLX5_SW_ICM_BLOCK_SIZE(dev) (1 << MLX5_LOG_SW_ICM_BLOCK_SIZE(dev))
+enum mlx5_ib_mmap_type {
+	MLX5_IB_MMAP_TYPE_MEMIC = 1,
+	MLX5_IB_MMAP_TYPE_VAR = 2,
+};
 
 struct mlx5_ib_peer_id;
 
@@ -151,11 +157,24 @@ struct mlx5_ib_ucontext {
 
 	u64			lib_caps;
 	struct mlx5_capi_context cctx;
-	DECLARE_BITMAP(dm_pages, MLX5_MAX_MEMIC_PAGES);
 	u16			devx_uid;
 	/* For RoCE LAG TX affinity */
 	atomic_t		tx_port_affinity;
 };
+
+struct mlx5_user_mmap_entry {
+	struct rdma_user_mmap_entry rdma_entry;
+	u8 mmap_flag;
+	u64 address;
+	u32 page_idx;
+};
+
+static inline struct mlx5_user_mmap_entry *
+to_mmmap(struct rdma_user_mmap_entry *rdma_entry)
+{
+	return container_of(rdma_entry,
+			    struct mlx5_user_mmap_entry, rdma_entry);
+}
 
 static inline struct mlx5_ib_ucontext *to_mucontext(struct ib_ucontext *ibucontext)
 {
@@ -300,6 +319,7 @@ struct mlx5_ib_wq {
 	unsigned		head;
 	unsigned		tail;
 	u16			cur_post;
+	u16			last_poll;
 	void			*cur_edge;
 };
 
@@ -453,6 +473,7 @@ struct mlx5_ib_qp {
 	int			max_inline_data;
 	struct mlx5_bf	        bf;
 	int			has_rq;
+	u32			rq_type;
 
 	/* only for user space QPs. For kernel
 	 * we have it from the bf object
@@ -607,6 +628,8 @@ struct mlx5_ib_dm {
 		} icm_dm;
 		/* other dm types specific params should be added here */
 	};
+	struct mlx5_user_mmap_entry mentry;
+	bool exp_flow;
 };
 
 #define MLX5_IB_MTT_PRESENT (MLX5_IB_MTT_READ | MLX5_IB_MTT_WRITE)
@@ -615,12 +638,17 @@ struct mlx5_ib_dm {
 					 IB_ACCESS_REMOTE_WRITE  |\
 					 IB_ACCESS_REMOTE_READ   |\
 					 IB_ACCESS_REMOTE_ATOMIC |\
-					 IB_ZERO_BASED)
+					 IB_ZERO_BASED		 |\
+					 IB_ACCESS_OPTIONAL)
 
 #define MLX5_IB_DM_SW_ICM_ALLOWED_ACCESS (IB_ACCESS_LOCAL_WRITE   |\
 					  IB_ACCESS_REMOTE_WRITE  |\
 					  IB_ACCESS_REMOTE_READ   |\
-					  IB_ZERO_BASED)
+					  IB_ZERO_BASED		  |\
+					  IB_ACCESS_OPTIONAL)
+
+#define mlx5_update_odp_stats(mr, counter_name, value)		\
+	atomic64_add(value, &((mr)->odp_stats.counter_name))
 
 struct mlx5_ib_mr {
 	struct ib_mr		ibmr;
@@ -665,6 +693,8 @@ struct mlx5_ib_mr {
 	int			nchild;
 	struct mlx5_async_work  cb_work;
 	atomic_t		num_pending_prefetch;
+	struct ib_odp_counters	odp_stats;
+	bool			is_odp_implicit;
 	struct mlx5_ib_peer_id *peer_id;
 	atomic_t      invalidated;
 	struct completion invalidation_comp;
@@ -931,7 +961,10 @@ struct mlx5_ib_flow_action {
 		struct {
 			struct mlx5_ib_dev *dev;
 			u32 sub_type;
-			u32 action_id;
+			union {
+				struct mlx5_modify_hdr *modify_hdr;
+				struct mlx5_pkt_reformat *pkt_reformat;
+			};
 		} flow_action_raw;
 	};
 };
@@ -944,8 +977,6 @@ struct mlx5_dm {
 	 */
 	spinlock_t lock;
 	DECLARE_BITMAP(memic_alloc_pages, MLX5_MAX_MEMIC_PAGES);
-	unsigned long *steering_sw_icm_alloc_blocks;
-	unsigned long *header_modify_sw_icm_alloc_blocks;
 };
 
 struct mlx5_read_counters_attr {
@@ -1060,6 +1091,15 @@ enum mlx5_ib_wc_sup_state {
 	MLX5_IB_WC_SUPPORTED,
 };
 
+struct mlx5_var_table {
+	/* serialize updating the bitmap */
+	struct mutex bitmap_lock;
+	unsigned long *bitmap;
+	u64 hw_start_addr;
+	u32 stride_size;
+	u64 num_var_hw_entries;
+};
+
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
@@ -1131,6 +1171,7 @@ struct mlx5_ib_dev {
 	struct mlx5_srq_table   srq_table;
 	struct mlx5_async_ctx   async_ctx;
 	struct mlx5_devx_event_table devx_event_table;
+	struct mlx5_var_table var_table;
 	struct mlx5_core_capi   capi;
 	enum mlx5_ib_wc_sup_state wc_support;
 
@@ -1488,6 +1529,10 @@ struct mlx5_core_dev *mlx5_ib_get_native_port_mdev(struct mlx5_ib_dev *dev,
 						   u8 *native_port_num);
 void mlx5_ib_put_native_port_mdev(struct mlx5_ib_dev *dev,
 				  u8 port_num);
+int mlx5_ib_fill_res_entry(struct sk_buff *msg,
+			   struct rdma_restrack_entry *res);
+int mlx5_ib_fill_stat_entry(struct sk_buff *msg,
+			    struct rdma_restrack_entry *res);
 struct ib_qp *mlx5_ib_create_dct(struct ib_pd *pd,
 				 struct ib_qp_init_attr *attr,
 				 struct mlx5_ib_create_qp *ucmd, 

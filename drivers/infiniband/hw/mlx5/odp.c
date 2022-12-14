@@ -253,6 +253,7 @@ void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp, unsigned long start,
 	const u64 umr_block_mask = (MLX5_UMR_MTT_ALIGNMENT /
 				    sizeof(struct mlx5_mtt)) - 1;
 	u64 idx = 0, blk_start_idx = 0;
+	u64 invalidations = 0;
 	struct ib_umem *umem;
 	struct ib_umem_odp *odp_mr;
 	int in_block = 0, np_stat;
@@ -294,6 +295,9 @@ void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp, unsigned long start,
 				blk_start_idx = idx;
 				in_block = 1;
 			}
+
+			/* Count page invalidations */
+			invalidations += idx - blk_start_idx + 1;
 		} else {
 			u64 umr_offset = idx & umr_block_mask;
 
@@ -311,6 +315,9 @@ void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp, unsigned long start,
 				   idx - blk_start_idx + 1, 0,
 				   MLX5_IB_UPD_XLT_ZAP |
 				   MLX5_IB_UPD_XLT_ATOMIC);
+
+	mlx5_update_odp_stats(mr, invalidations, invalidations);
+
 	/*
 	 * We are now sure that the device will not access the
 	 * memory. We can safely unmap it, and mark it as dirty if
@@ -407,6 +414,9 @@ void mlx5_ib_internal_fill_odp_caps(struct mlx5_ib_dev *dev)
 
 	if (MLX5_CAP_ODP(dev->mdev, dc_odp_caps.atomic))
 		caps->per_transport_caps.dc_odp_caps |= IB_ODP_SUPPORT_ATOMIC;
+
+	if (MLX5_CAP_ODP(dev->mdev, dc_odp_caps.srq_receive))
+		caps->per_transport_caps.dc_odp_caps |= IB_ODP_SUPPORT_SRQ_RECV;
 
 	if (MLX5_CAP_GEN(dev->mdev, fixed_buffer_size) &&
 	    MLX5_CAP_GEN(dev->mdev, null_mkey) &&
@@ -635,6 +645,8 @@ struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
 	init_waitqueue_head(&imr->q_leaf_free);
 	atomic_set(&imr->num_leaf_free, 0);
 	atomic_set(&imr->num_pending_prefetch, 0);
+
+	imr->is_odp_implicit = true;
 
 	return imr;
 }
@@ -987,6 +999,12 @@ next_mr:
 		ret = pagefault_mr(dev, mr, io_virt, bcnt, bytes_mapped, flags);
 		if (ret < 0)
 			goto srcu_unlock;
+		/*
+		 * When prefetching a page, page fault is generated
+		 * in order to bring the page to the main memory.
+		 * In the current flow, page faults are being counted.
+		 */
+		mlx5_update_odp_stats(mr, faults, ret);
 
 		npages += ret;
 		ret = 0;

@@ -205,8 +205,8 @@ do
 		if  [ -z "$tag" ] ; then
 			cerrs="$cerrs\n-E- missing tag for the accepted commit!"
 			RC=$(( $RC + 1))
-		elif !  echo $tag | grep -q "^v*[1-9]\.*[0-9][0-9]*\.*[0-9]*-rc*[1-9]" ; then
-			cerrs="$cerrs\n-E- tag: $tag has wrong format! Expected format like: v5.3-rc1"
+		elif !   echo $tag | grep -Eq '^v?(2\.6|[3-9])\.[0-9]+(-rc[1-9]+(-s)?)?$'  ; then
+			cerrs="$cerrs\n-E- tag: $tag has wrong format! Expected format like: v5.3-rc1 or v5.3"
 			RC=$(( $RC + 1))
 		fi
 	fi

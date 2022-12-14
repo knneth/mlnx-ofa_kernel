@@ -40,8 +40,20 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-# Force python3 on RHEL8 and OL8:
-%global PYTHON3 %(if test `grep -E '^(ID="(rhel|ol|centos)"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
+# Force python3 on RHEL8, fedora3x and similar:
+%global RHEL8 %(if test `grep -E '^(ID="(rhel|ol|centos)"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
+%global FEDORA3X %{!?fedora:0}%{?fedora:%(if [ %{fedora} -ge 30 ]; then echo 1; else echo 0; fi)}
+%global PYTHON3 %{RHEL8} || %{FEDORA3X}
+
+# Workaround: To be removed when mlnx_tune has python3 support:
+# mlnx_tune is a python2 script. Avoid generating dependencies
+# from it in some distributions to avoid dragging in a python2
+# dependency
+%if (!%{KMP}) && %{RHEL8}
+%global __requires_exclude_from mlnx_tune
+%endif
+
+%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux")
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -65,8 +77,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.7}
-%{!?_release: %global _release OFED.4.7.3.2.9.1.g457f064}
+%{!?_version: %global _version 4.9}
+%{!?_release: %global _release OFED.4.9.0.1.7.1.gd3d963b}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -121,7 +133,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-3.2.9.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-0.1.7.tgz
 
 
 # build KMP rpms?
@@ -131,7 +143,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %(cat > %{_builddir}/kmp.files << EOF
 %defattr(644,root,root,755)
 /lib/modules/%2-%1
-%if "%{_vendor}" == "redhat"
+%if %{IS_RHEL_VENDOR}
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
 %endif
 EOF)
@@ -175,7 +187,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-3.2.9.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-0.1.7.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -208,7 +220,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.7-3.2.9.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-0.1.7.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -244,7 +256,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %debug_package
 %endif
 
-%if "%{_vendor}" == "redhat"
+%if %{IS_RHEL_VENDOR}
 %global __find_requires %{nil}
 %endif
 
@@ -254,7 +266,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %endif
 
 # set modules dir
-%if "%{_vendor}" == "redhat"
+%if %{IS_RHEL_VENDOR}
 %if 0%{?fedora}
 %global install_mod_dir updates
 %else
@@ -342,7 +354,7 @@ fi
 # Set the module(s) to be executable, so that they will be stripped when packaged.
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
 
-%if "%{_vendor}" == "redhat"
+%if %{IS_RHEL_VENDOR}
 %if ! 0%{?fedora}
 %{__install} -d %{buildroot}%{_sysconfdir}/depmod.d/
 for module in `find %{buildroot}/ -name '*.ko' -o -name '*.ko.gz' | sort`
@@ -646,7 +658,7 @@ fi
 %files -n %{utils_pname} -f ofed-files
 %defattr(-,root,root,-)
 %if "%{KMP}" == "1"
-%if "%{_vendor}" == "redhat"
+%if %{IS_RHEL_VENDOR}
 %endif # end rh
 %endif # end KMP=1
 %dir /etc/infiniband
@@ -660,9 +672,8 @@ fi
 /etc/systemd/system/mlnx_interface_mgr@.service
 %endif
 /sbin/sysctl_perf_tuning
-/sbin/mlnx_eswitch_set
-/sbin/mlnx_net_rules
-/usr/sbin/mlnx_tune
+/sbin/mlnx_bf_configure
+/sbin/mlnx-sf
 /usr/sbin/show_gids
 /usr/sbin/compat_gid_gen
 /usr/sbin/cma_roce_mode
@@ -673,7 +684,7 @@ fi
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
 %config(noreplace) /etc/modprobe.d/mlnx.conf
-%config(noreplace) /etc/modprobe.d/mlnx-eswitch.conf
+%config(noreplace) /etc/modprobe.d/mlnx-bf.conf
 %{_sbindir}/*
 %config(noreplace) /etc/udev/rules.d/90-ib.rules
 %config(noreplace) /etc/udev/rules.d/82-net-setup-link.rules
@@ -696,7 +707,7 @@ fi
 %if "%{KMP}" != "1"
 %files -n %{non_kmp_pname}
 /lib/modules/%{KVERSION}/%{install_mod_dir}/
-%if "%{_vendor}" == "redhat"
+%if %{IS_RHEL_VENDOR}
 %if ! 0%{?fedora}
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
 %endif

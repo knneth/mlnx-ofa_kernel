@@ -62,7 +62,7 @@
 #include <rdma/mlx4-abi.h>
 
 #define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"4.7-3.2.9"
+#define DRV_VERSION	"4.9-0.1.7"
 
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF
@@ -217,6 +217,13 @@ static int rdma_is_default_gid(struct  net_device *dev,
 	return !memcmp(&default_gid, gid, sizeof(default_gid));
 }
 
+static void free_gid_entry(struct gid_entry *entry)
+{
+	memset(&entry->gid, 0, sizeof(entry->gid));
+	kfree(entry->ctx);
+	entry->ctx = NULL;
+}
+
 static int mlx4_ib_add_gid(const struct ib_gid_attr *attr, void **context)
 {
 	struct mlx4_ib_dev *ibdev = to_mdev(attr->device);
@@ -289,6 +296,8 @@ static int mlx4_ib_add_gid(const struct ib_gid_attr *attr, void **context)
 		addr_table = kmalloc(sizeof(*addr_table), GFP_ATOMIC);
 		if (!addr_table) {
 			ret = -ENOMEM;
+			*context = NULL;
+			free_gid_entry(&port_gid_table->gids[free]);
 		} else {
 			for (i = 0; i < MLX4_MAX_PORT_GIDS; i++) {
 				memcpy(addr_table->addr[i].gid,
@@ -306,6 +315,12 @@ static int mlx4_ib_add_gid(const struct ib_gid_attr *attr, void **context)
 		ret = mlx4_update_roce_addr_table(ibdev->dev, attr->port_num,
 						  addr_table,
 						  MLX4_CMD_WRAPPED);
+		if (ret) {
+			spin_lock_bh(&iboe->lock);
+			*context = NULL;
+			free_gid_entry(&port_gid_table->gids[free]);
+			spin_unlock_bh(&iboe->lock);
+		}
 		kfree(addr_table);
 	}
 
@@ -335,10 +350,7 @@ static int mlx4_ib_del_gid(const struct ib_gid_attr *attr, void **context)
 		if (!ctx->refcount) {
 			unsigned int real_index = ctx->real_index;
 
-			memset(&port_gid_table->gids[real_index].gid, 0,
-			       sizeof(port_gid_table->gids[real_index].gid));
-			kfree(port_gid_table->gids[real_index].ctx);
-			port_gid_table->gids[real_index].ctx = NULL;
+			free_gid_entry(&port_gid_table->gids[real_index]);
 			hw_update = 1;
 		}
 	}
@@ -1163,7 +1175,8 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 		return rdma_user_mmap_io(context, vma,
 					 to_mucontext(context)->uar.pfn,
 					 PAGE_SIZE,
-					 pgprot_noncached(vma->vm_page_prot), NULL);
+					 pgprot_noncached(vma->vm_page_prot),
+					 NULL);
 
 	case 1:
 		if (dev->dev->caps.bf_reg_size == 0)
@@ -1172,7 +1185,8 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 			context, vma,
 			to_mucontext(context)->uar.pfn +
 				dev->dev->caps.num_uars,
-			PAGE_SIZE, pgprot_writecombine(vma->vm_page_prot), NULL);
+			PAGE_SIZE, pgprot_writecombine(vma->vm_page_prot),
+		       	NULL);
 
 	case 3: {
 		struct mlx4_clock_params params;
@@ -1188,7 +1202,8 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 					    params.bar) +
 			 params.offset) >>
 				PAGE_SHIFT,
-			PAGE_SIZE, pgprot_noncached(vma->vm_page_prot), NULL);
+			PAGE_SIZE, pgprot_noncached(vma->vm_page_prot),
+		       	NULL);
 	}
 
 	default:

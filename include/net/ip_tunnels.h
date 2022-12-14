@@ -120,6 +120,12 @@ struct ip_tunnel_info {
 	u8			mode;
 };
 
+/* Definition to suppress compiler warnings */
+struct tnl_ptk_info {
+	__be16 flags, prtoto;
+	__be32 key, seq;
+};
+
 static inline unsigned short ip_tunnel_info_af(const struct ip_tunnel_info
 					       *tun_info)
 {

@@ -598,3 +598,25 @@ int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *q
 
 	return 0;
 }
+
+int mlx5_ib_set_qp_srqn(struct mlx5_qp_context *context, struct ib_qp *qp,
+			u32 srqn)
+{
+	struct mlx5_ib_dev *dev = to_mdev(qp->device);
+	struct mlx5_srq_table *table = &dev->srq_table;
+	struct mlx5_core_srq *msrq;
+
+	if (to_mqp(qp)->rq_type != MLX5_SRQ_RQ)
+		return -EINVAL;
+
+	xa_lock(&table->array);
+	msrq = xa_load(&table->array, srqn);
+	xa_unlock(&table->array);
+	if (!msrq)
+		return -EINVAL;
+
+	qp->srq = &to_mibsrq(msrq)->ibsrq;
+	context->rq_type_srqn |= cpu_to_be32(srqn & 0xffffff);
+
+	return 0;
+}

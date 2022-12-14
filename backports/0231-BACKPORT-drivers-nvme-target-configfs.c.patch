@@ -137,7 +137,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_allowed_hosts_item_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1190,7 +1224,7 @@ static struct configfs_item_operations n
+@@ -1184,7 +1218,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_subsys_release,
  };
  
@@ -146,7 +146,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_subsys_item_ops,
  	.ct_attrs		= nvmet_subsys_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -1228,7 +1262,7 @@ static struct configfs_group_operations
+@@ -1222,7 +1256,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_subsys_make,
  };
  
@@ -155,7 +155,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_subsystems_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1289,7 +1323,7 @@ static struct configfs_item_operations n
+@@ -1283,7 +1317,7 @@ static struct configfs_item_operations n
  	.release	= nvmet_referral_release,
  };
  
@@ -164,7 +164,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner	= THIS_MODULE,
  	.ct_attrs	= nvmet_referral_attrs,
  	.ct_item_ops	= &nvmet_referral_item_ops,
-@@ -1314,7 +1348,7 @@ static struct configfs_group_operations
+@@ -1308,7 +1342,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_referral_make,
  };
  
@@ -173,7 +173,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner	= THIS_MODULE,
  	.ct_group_ops	= &nvmet_referral_group_ops,
  };
-@@ -1397,7 +1431,7 @@ static struct configfs_item_operations n
+@@ -1391,7 +1425,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_ana_group_release,
  };
  
@@ -182,7 +182,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_ana_group_item_ops,
  	.ct_attrs		= nvmet_ana_group_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -1442,7 +1476,7 @@ static struct configfs_group_operations
+@@ -1436,7 +1470,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ana_groups_make_group,
  };
  
@@ -191,7 +191,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_ana_groups_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1477,7 +1511,7 @@ static struct configfs_item_operations n
+@@ -1471,7 +1505,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_port_release,
  };
  
@@ -200,7 +200,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_attrs		= nvmet_port_attrs,
  	.ct_item_ops		= &nvmet_port_item_ops,
  	.ct_owner		= THIS_MODULE,
-@@ -1551,7 +1585,7 @@ static struct configfs_group_operations
+@@ -1545,7 +1579,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ports_make,
  };
  
@@ -209,7 +209,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_ports_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1570,7 +1604,7 @@ static struct configfs_item_operations n
+@@ -1564,7 +1598,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_host_release,
  };
  
@@ -218,7 +218,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_host_item_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1593,14 +1627,14 @@ static struct configfs_group_operations
+@@ -1587,14 +1621,14 @@ static struct configfs_group_operations
  	.make_group		= nvmet_hosts_make_group,
  };
  

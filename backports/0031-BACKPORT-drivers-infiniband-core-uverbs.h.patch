@@ -8,7 +8,7 @@ Change-Id: Ib933ada9ee9aea012c3908b64ebd41eeb15f9be7
 
 --- a/drivers/infiniband/core/uverbs.h
 +++ b/drivers/infiniband/core/uverbs.h
-@@ -186,7 +186,6 @@ struct ib_uverbs_file {
+@@ -183,7 +183,6 @@ struct ib_uverbs_file {
  	struct mutex umap_lock;
  	struct list_head umaps;
  	struct page *disassociate_page;

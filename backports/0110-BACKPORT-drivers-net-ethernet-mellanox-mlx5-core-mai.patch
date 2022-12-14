@@ -1,14 +1,14 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Mikhael Goikhman <migo@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 
-Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
+Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/main.c | 38 +++++++++++++++++++++++++-
- 1 file changed, 37 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/main.c | 36 +++++++++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
-@@ -82,6 +82,9 @@
+@@ -85,6 +85,9 @@
  MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
  MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) core driver");
  MODULE_LICENSE("Dual BSD/GPL");
@@ -18,7 +18,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  MODULE_VERSION(DRIVER_VERSION);
  
  unsigned int mlx5_core_debug_mask;
-@@ -883,6 +886,7 @@ int mlx5_core_disable_sf_hca(struct mlx5
+@@ -888,6 +891,7 @@ int mlx5_core_disable_sf_hca(struct mlx5
  	return disable_hca(dev, sf_func_id, 0);
  }
  
@@ -26,7 +26,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev,
  			     struct ptp_system_timestamp *sts)
  {
-@@ -902,6 +906,20 @@ u64 mlx5_read_internal_timer(struct mlx5
+@@ -907,6 +911,20 @@ u64 mlx5_read_internal_timer(struct mlx5
  
  	return (u64)timer_l | (u64)timer_h1 << 32;
  }
@@ -47,7 +47,31 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  
  static int mlx5_core_set_issi(struct mlx5_core_dev *dev)
  {
-@@ -1388,11 +1406,13 @@ static int mlx5_load(struct mlx5_core_de
+@@ -981,8 +999,10 @@ static ssize_t mlx5_roce_enable_set_enab
+ {
+ 	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
+ 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 	union devlink_param_value value;
++#endif
+ 	int ret;
+ 	bool val;
+ 
+@@ -995,10 +1015,12 @@ static ssize_t mlx5_roce_enable_set_enab
+ 
+ 	mutex_lock(&dev->roce.state_lock);
+ 	dev->roce.enabled = val;
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
+ 	value.vbool = val;
+ 	devlink_param_driverinit_value_set(devlink,
+ 					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+ 					   value);
++#endif
+ 	mlx5_reload_interface(dev, MLX5_INTERFACE_PROTOCOL_IB);
+ 	mutex_unlock(&dev->roce.state_lock);
+ 
+@@ -1425,11 +1447,13 @@ static int mlx5_load(struct mlx5_core_de
  		goto err_ipsec_start;
  	}
  
@@ -61,7 +85,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  
  	err = mlx5_init_fs(dev);
  	if (err) {
-@@ -1425,8 +1445,10 @@ err_ec:
+@@ -1462,8 +1486,10 @@ err_ec:
  err_sriov:
  	mlx5_cleanup_fs(dev);
  err_fs:
@@ -72,7 +96,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  	mlx5_accel_ipsec_cleanup(dev);
  err_ipsec_start:
  	mlx5_fpga_device_stop(dev);
-@@ -1454,7 +1476,9 @@ static void mlx5_unload(struct mlx5_core
+@@ -1493,7 +1519,9 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_sriov_detach(dev);
  	mlx5_cleanup_fs(dev);
  	mlx5_accel_ipsec_cleanup(dev);
@@ -80,28 +104,9 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  	mlx5_accel_tls_cleanup(dev);
 +#endif
  	mlx5_fpga_device_stop(dev);
+ 	mlx5_rsc_dump_cleanup(dev);
  	mlx5_fw_tracer_cleanup(dev->tracer);
- 	mlx5_eq_table_destroy(dev);
-@@ -1614,12 +1638,18 @@ out:
- 
- static const struct devlink_ops mlx5_devlink_ops = {
- #ifdef CONFIG_MLX5_ESWITCH
-+#ifdef HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET
- 	.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
- 	.eswitch_mode_get = mlx5_devlink_eswitch_mode_get,
-+#endif /* HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET */
-+#ifdef HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET
- 	.eswitch_inline_mode_set = mlx5_devlink_eswitch_inline_mode_set,
- 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
-+#endif /* HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET */
-+#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET
- 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
- 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
-+#endif /* HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET */
- #endif
- };
- 
-@@ -1925,7 +1955,7 @@ static void capi_cleanup(struct mlx5_cor
+@@ -1962,7 +1990,7 @@ static void capi_cleanup(struct mlx5_cor
  int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
  {
  	struct mlx5_priv *priv = &dev->priv;
@@ -110,7 +115,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  
  	dev->profile = &profile[profile_idx];
  
-@@ -2334,7 +2364,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -2368,7 +2396,11 @@ static void mlx5_pci_resume(struct pci_d
  		mlx5_core_info(dev, "%s: device recovered\n", __func__);
  }
  
@@ -122,7 +127,7 @@ Change-Id: Ifc5c16b30f78d7d507861cd96e004c44280e94e4
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2409,7 +2443,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2445,7 +2477,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

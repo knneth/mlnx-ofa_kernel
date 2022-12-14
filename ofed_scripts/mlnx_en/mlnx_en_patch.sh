@@ -93,6 +93,11 @@ check_kerver()
         return 0
 }
 
+check_kerver_rh()
+{
+	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 1062 ? 0 : 1)'
+}
+
 parseparams() {
 
 	while [ ! -z "$1" ]
@@ -152,8 +157,16 @@ parseparams() {
 				DEFINE_MLX5_EN_RXNFC='#undef CONFIG_MLX5_EN_RXNFC'
 				CONFIG_MLX5_ESWITCH=""
 				DEFINE_MLX5_ESWITCH='#undef CONFIG_MLX5_ESWITCH'
+				CONFIG_MLX5_SW_STEERING=""
+				DEFINE_MLX5_SW_STEERING='#undef CONFIG_MLX5_SW_STEERING'
 				CONFIG_MLX5_MPFS=""
 				DEFINE_MLX5_MPFS='#undef CONFIG_MLX5_MPFS'
+				CONFIG_MLX5_ACCEL=""
+				DEFINE_MLX5_ACCEL='#undef CONFIG_MLX5_ACCEL'
+				CONFIG_MLX5_EN_TLS=""
+				DEFINE_MLX5_EN_TLS='#undef CONFIG_MLX5_EN_TLS'
+				CONFIG_MLX5_TLS=""
+				DEFINE_MLX5_TLS='#undef CONFIG_MLX5_TLS'
 			;;
 			--without-mlxfw)
 				CONFIG_MLXFW=""
@@ -180,7 +193,7 @@ function check_autofconf {
 main() {
 
 SWITCH_SUPPORTED_KVERSION="4.3.0"
-SWITCH_SUPPORTED_KVERSION_LIST="3.10.0-862 3.10.0-957 3.10.0-693 3.10.0-327"
+SWITCH_SUPPORTED_KVERSION_LIST="3.10.0-862 3.10.0-957 3.10.0-693 3.10.0-327 3.10.0-1062 4.18.0-80"
 
 #Set default values
 WITH_QUILT=${WITH_QUILT:-"yes"}
@@ -197,7 +210,11 @@ CONFIG_MLX5_CORE_EN_DCB="y"
 CONFIG_MLX5_EN_ARFS="y"
 CONFIG_MLX5_EN_RXNFC="y"
 CONFIG_MLX5_ESWITCH="y"
+CONFIG_MLX5_SW_STEERING="y"
 CONFIG_MLX5_MPFS="y"
+CONFIG_MLX5_ACCEL="y"
+CONFIG_MLX5_EN_TLS="y"
+CONFIG_MLX5_TLS="y"
 CONFIG_MLXFW="m"
 CONFIG_MLNX_BLOCK_REQUEST_MODULE=''
 DEFINE_MLX4_EN_DCB='#undef CONFIG_MLX4_EN_DCB'
@@ -210,7 +227,11 @@ DEFINE_MLX5_CORE_EN_DCB='#undef CONFIG_MLX5_CORE_EN_DCB\n#define CONFIG_MLX5_COR
 DEFINE_MLX5_EN_ARFS='#undef CONFIG_MLX5_EN_ARFS\n#define CONFIG_MLX5_EN_ARFS 1'
 DEFINE_MLX5_EN_RXNFC='#undef CONFIG_MLX5_EN_RXNFC\n#define CONFIG_MLX5_EN_RXNFC 1'
 DEFINE_MLX5_ESWITCH='#undef CONFIG_MLX5_ESWITCH\n#define CONFIG_MLX5_ESWITCH 1'
+DEFINE_MLX5_SW_STEERING='#undef CONFIG_MLX5_SW_STEERING\n#define CONFIG_MLX5_SW_STEERING 1'
 DEFINE_MLX5_MPFS='#undef CONFIG_MLX5_MPFS\n#define CONFIG_MLX5_MPFS 1'
+DEFINE_MLX5_ACCEL='#undef CONFIG_MLX5_ACCEL\n#define CONFIG_MLX5_ACCEL 1'
+DEFINE_MLX5_EN_TLS='#undef CONFIG_MLX5_EN_TLS\n#define CONFIG_MLX5_EN_TLS 1'
+DEFINE_MLX5_TLS='#undef CONFIG_MLX5_TLS\n#define CONFIG_MLX5_TLS 1'
 DEFINE_MLXFW='#undef CONFIG_MLXFW\n#define CONFIG_MLXFW 1'
 DEFINE_CONFIG_MLNX_BLOCK_REQUEST_MODULE='#undef CONFIG_MLNX_BLOCK_REQUEST_MODULE'
 
@@ -305,10 +326,13 @@ case "$ARCH" in i386 | x86_64)
 esac
 
 if ! check_kerver ${KVERSION} ${SWITCH_SUPPORTED_KVERSION}; then
-    if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
-                        CONFIG_MLX5_ESWITCH=
-        echo "Warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION}). Disabling."
-    fi
+	if ! check_kerver_rh ${KVERSION}; then
+		if ! check_kerver_list $KVERSION $SWITCH_SUPPORTED_KVERSION_LIST; then
+			CONFIG_MLX5_ESWITCH=
+			CONFIG_MLX5_SW_STEERING=
+			echo "Warning: CONFIG_MLX5_ESWITCH requires kernel version ${SWITCH_SUPPORTED_KVERSION} or higher (current: ${KVERSION}). Disabling."
+		fi
+	fi
 fi
 
 check_autofconf CONFIG_RFS_ACCEL
@@ -317,6 +341,19 @@ if [ "X${CONFIG_MLX5_EN_ARFS=}" == "Xy" ]; then
         echo "Warning: CONFIG_RFS_ACCEL is not enabled in the kernel, cannot enable CONFIG_MLX5_EN_ARFS."
         CONFIG_MLX5_EN_ARFS=
         DEFINE_MLX5_EN_ARFS='#undef CONFIG_MLX5_EN_ARFS'
+    fi
+fi
+
+check_autofconf CONFIG_TLS_DEVICE
+if [ "X${CONFIG_MLX5_EN_TLS}" == "Xy" ]; then
+    if ! [ "X${CONFIG_TLS_DEVICE}" == "X1" ]; then
+        echo "Warning: CONFIG_TLS_DEVICE is not enabled in the kernel, cannot enable CONFIG_MLX5_EN_TLS."
+        CONFIG_MLX5_EN_TLS=
+        CONFIG_MLX5_TLS=
+        check_autofconf CONFIG_MLX5_EN_IPSEC
+        if ! [ "X${CONFIG_MLX5_EN_IPSEC}" == "X1" ]; then
+                CONFIG_MLX5_ACCEL=
+        fi
     fi
 fi
         # Create config.mk
@@ -347,7 +384,11 @@ CONFIG_MLX5_CORE_EN_DCB:=${CONFIG_MLX5_CORE_EN_DCB}
 CONFIG_MLX5_EN_ARFS:=${CONFIG_MLX5_EN_ARFS}
 CONFIG_MLX5_EN_RXNFC:=${CONFIG_MLX5_EN_RXNFC}
 CONFIG_MLX5_ESWITCH:=${CONFIG_MLX5_ESWITCH}
+CONFIG_MLX5_SW_STEERING:=${CONFIG_MLX5_SW_STEERING}
+CONFIG_MLX5_ACCEL:=${CONFIG_MLX5_ACCEL}
 CONFIG_MLX5_MPFS:=${CONFIG_MLX5_MPFS}
+CONFIG_MLX5_EN_TLS:=${CONFIG_MLX5_EN_TLS}
+CONFIG_MLX5_TLS:=${CONFIG_MLX5_TLS}
 CONFIG_MLXFW:=${CONFIG_MLXFW}
 CONFIG_MLNX_BLOCK_REQUEST_MODULE:=${CONFIG_MLNX_BLOCK_REQUEST_MODULE}
 EOFCONFIG
@@ -377,6 +418,21 @@ if [ "${CONFIG_MLX5_ESWITCH}" == "" ]; then
         DEFINE_MLX5_ESWITCH="#undef CONFIG_MLX5_ESWITCH"
 fi
 
+if [ "${CONFIG_MLX5_SW_STEERING}" == "" ]; then
+        DEFINE_MLX5_SW_STEERING="#undef CONFIG_MLX5_SW_STEERING"
+fi
+
+if [ "${CONFIG_MLX5_EN_TLS}" == "" ]; then
+        DEFINE_MLX5_EN_TLS="#undef CONFIG_MLX5_EN_TLS"
+fi
+
+if [ "${CONFIG_MLX5_TLS}" == "" ]; then
+        DEFINE_MLX5_TLS="#undef CONFIG_MLX5_TLS"
+fi
+
+if [ "${CONFIG_MLX5_ACCEL}" == "" ]; then
+        DEFINE_MLX5_ACCEL="#undef CONFIG_MLX5_ACCEL"
+fi
 cat >> ${AUTOCONF_H}<< EOFAUTO
 $(echo -e "${DEFINE_MLX4_CORE}")
 $(echo -e "${DEFINE_MLX4_CORE_GEN2}")
@@ -388,7 +444,11 @@ $(echo -e "${DEFINE_MLX5_CORE_EN_DCB}")
 $(echo -e "${DEFINE_MLX5_EN_ARFS}")
 $(echo -e "${DEFINE_MLX5_EN_RXNFC}")
 $(echo -e "${DEFINE_MLX5_ESWITCH}")
+$(echo -e "${DEFINE_MLX5_SW_STEERING}")
 $(echo -e "${DEFINE_MLX5_MPFS}")
+$(echo -e "${DEFINE_MLX5_ACCEL}")
+$(echo -e "${DEFINE_MLX5_EN_TLS}")
+$(echo -e "${DEFINE_MLX5_TLS}")
 $(echo -e "${DEFINE_MLXFW}")
 $(echo -e "${DEFINE_COMPAT_OLD_VERSION}")
 $(echo -e "${DEFINE_COMPAT_KOBJECT_BACKPORT}")

@@ -108,6 +108,7 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 	u16 qid = le16_to_cpu(c->qid);
 	u16 sqsize = le16_to_cpu(c->sqsize);
 	struct nvmet_ctrl *old;
+	u16 ret;
 
 	old = cmpxchg(&req->sq->ctrl, NULL, ctrl);
 	if (old) {
@@ -118,7 +119,8 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 	if (!sqsize) {
 		pr_warn("queue size zero!\n");
 		req->error_loc = offsetof(struct nvmf_connect_command, sqsize);
-		return NVME_SC_CONNECT_INVALID_PARAM | NVME_SC_DNR;
+		ret = NVME_SC_CONNECT_INVALID_PARAM | NVME_SC_DNR;
+		goto err;
 	}
 
 	/* note: convert queue size from 0's-based value to 1's-based value */
@@ -131,16 +133,19 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 	}
 
 	if (ctrl->ops->install_queue) {
-		u16 ret = ctrl->ops->install_queue(req->sq);
-
+		ret = ctrl->ops->install_queue(req->sq);
 		if (ret) {
 			pr_err("failed to install queue %d cntlid %d ret %x\n",
-				qid, ret, ctrl->cntlid);
-			return ret;
+				qid, ctrl->cntlid, ret);
+			goto err;
 		}
 	}
 
 	return 0;
+
+err:
+	req->sq->ctrl = NULL;
+	return ret;
 }
 
 static void nvmet_execute_admin_connect(struct nvmet_req *req)
@@ -247,20 +252,12 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 		goto out_ctrl_put;
 	}
 
-	if (req->port->offload) {
-		/*
-		 * create offloaded ctrl for P2P I/O when receiving first
-		 * successful I/O connect and destroy it when freeing the
-		 * controller
-		 */
-		if (!ctrl->offload_ctrl) {
-			status = ctrl->ops->create_offload_ctrl(ctrl);
-			if (status) {
-				status = NVME_SC_INTERNAL | NVME_SC_DNR;
-				goto out_ctrl_put;
-			}
-		}
-		status = ctrl->ops->install_offload_queue(ctrl, req);
+	/*
+	 * create offloaded ctrl for P2P I/O when receiving first successful
+	 * I/O connect and destroy it when freeing the controller
+	 */
+	if (req->port->offload && !ctrl->offload_ctrl) {
+		status = ctrl->ops->create_offload_ctrl(ctrl);
 		if (status) {
 			status = NVME_SC_INTERNAL | NVME_SC_DNR;
 			goto out_ctrl_put;

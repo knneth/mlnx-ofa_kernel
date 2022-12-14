@@ -38,6 +38,7 @@
 #include "accel/ipsec.h"
 #include "fpga/sdk.h"
 #include "en_accel/ipsec.h"
+#include "fpga/ipsec.h"
 
 static const struct counter_desc mlx5e_ipsec_hw_stats_desc[] = {
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_dec_in_packets) },
@@ -80,25 +81,29 @@ int mlx5e_ipsec_get_count(struct mlx5e_priv *priv)
 	if (!priv->ipsec)
 		return 0;
 
-	return NUM_IPSEC_COUNTERS;
+	return (mlx5_fpga_ipsec_device_caps(priv->mdev)) ? NUM_IPSEC_COUNTERS :
+		NUM_IPSEC_SW_COUNTERS;
 }
 
 int mlx5e_ipsec_get_strings(struct mlx5e_priv *priv, uint8_t *data)
 {
-	unsigned int i, idx = 0;
+	unsigned int i, idx = 0, num_stat = NUM_IPSEC_SW_COUNTERS;
 
 	if (!priv->ipsec)
 		return 0;
 
-	for (i = 0; i < NUM_IPSEC_HW_COUNTERS; i++)
-		strcpy(data + (idx++) * ETH_GSTRING_LEN,
-		       mlx5e_ipsec_hw_stats_desc[i].format);
+	if (mlx5_fpga_ipsec_device_caps(priv->mdev)) {
+		for (i = 0; i < NUM_IPSEC_HW_COUNTERS; i++)
+			strcpy(data + (idx++) * ETH_GSTRING_LEN,
+			       mlx5e_ipsec_hw_stats_desc[i].format);
+		num_stat += NUM_IPSEC_HW_COUNTERS;
+	}
 
 	for (i = 0; i < NUM_IPSEC_SW_COUNTERS; i++)
 		strcpy(data + (idx++) * ETH_GSTRING_LEN,
 		       mlx5e_ipsec_sw_stats_desc[i].format);
 
-	return NUM_IPSEC_COUNTERS;
+	return num_stat;
 }
 
 void mlx5e_ipsec_update_stats(struct mlx5e_priv *priv)
@@ -116,18 +121,22 @@ void mlx5e_ipsec_update_stats(struct mlx5e_priv *priv)
 
 int mlx5e_ipsec_get_stats(struct mlx5e_priv *priv, u64 *data)
 {
-	int i, idx = 0;
+	int i, idx = 0, num_stat = NUM_IPSEC_SW_COUNTERS;
 
 	if (!priv->ipsec)
 		return 0;
 
-	for (i = 0; i < NUM_IPSEC_HW_COUNTERS; i++)
-		data[idx++] = MLX5E_READ_CTR64_CPU(&priv->ipsec->stats,
-						   mlx5e_ipsec_hw_stats_desc, i);
+	if (mlx5_fpga_ipsec_device_caps(priv->mdev)) {
+		num_stat += NUM_IPSEC_HW_COUNTERS;
+		for (i = 0; i < NUM_IPSEC_HW_COUNTERS; i++)
+			data[idx++] = MLX5E_READ_CTR64_CPU(&priv->ipsec->stats,
+							   mlx5e_ipsec_hw_stats_desc,
+							   i);
+	}
 
 	for (i = 0; i < NUM_IPSEC_SW_COUNTERS; i++)
 		data[idx++] = MLX5E_READ_CTR_ATOMIC64(&priv->ipsec->sw_stats,
 						      mlx5e_ipsec_sw_stats_desc, i);
 
-	return NUM_IPSEC_COUNTERS;
+	return num_stat;
 }

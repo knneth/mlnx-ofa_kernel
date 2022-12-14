@@ -33,6 +33,7 @@
 #include <linux/irq.h>
 #include "en.h"
 #include "en/xdp.h"
+#include "en/txrx.h"
 
 static inline bool mlx5e_channel_no_affinity_change(struct mlx5e_channel *c)
 {
@@ -74,6 +75,7 @@ void mlx5e_trigger_irq(struct mlx5e_icosq *sq)
 	u16 pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
 
 	sq->db.ico_wqe[pi].opcode = MLX5_OPCODE_NOP;
+	sq->db.ico_wqe[pi].num_wqebbs = 1;
 	nopwqe = mlx5e_post_nop(wq, sq->sqn, &sq->pc);
 	mlx5e_notify_hw(wq, sq->pc, sq->uar_map, &nopwqe->ctrl);
 }

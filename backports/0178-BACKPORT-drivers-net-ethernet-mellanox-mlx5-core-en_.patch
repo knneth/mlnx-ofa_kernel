@@ -9,7 +9,7 @@ Change-Id: I5522d275fd266a06f64cae97d01e3b37e1ae431e
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
-@@ -500,6 +500,7 @@ struct mlx5e_ipsec_modify_state_work {
+@@ -481,6 +481,7 @@ struct mlx5e_ipsec_modify_state_work {
  	struct mlx5e_ipsec_sa_entry	*sa_entry;
  };
  
@@ -17,7 +17,7 @@ Change-Id: I5522d275fd266a06f64cae97d01e3b37e1ae431e
  static void _update_xfrm_state(struct work_struct *work)
  {
  	int ret;
-@@ -539,13 +540,16 @@ static void mlx5e_xfrm_advance_esn_state
+@@ -520,13 +521,16 @@ static void mlx5e_xfrm_advance_esn_state
  	INIT_WORK(&modify_work->work, _update_xfrm_state);
  	WARN_ON(!queue_work(sa_entry->ipsec->wq, &modify_work->work));
  }

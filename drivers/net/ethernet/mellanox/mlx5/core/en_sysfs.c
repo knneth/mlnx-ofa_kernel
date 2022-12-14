@@ -1175,7 +1175,7 @@ int mlx5e_sysfs_create(struct net_device *dev)
 	return 0;
 
 remove_debug_group:
-	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
+	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 remove_qos_group:
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 remove_settings_group:

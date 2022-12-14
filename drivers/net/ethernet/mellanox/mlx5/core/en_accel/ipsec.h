@@ -84,6 +84,8 @@ struct mlx5e_ipsec {
 	struct mlx5e_ipsec_sw_stats sw_stats;
 	struct mlx5e_ipsec_stats stats;
 	struct workqueue_struct *wq;
+
+	struct mlx5_flow_table *ft_tx;
 };
 
 struct mlx5e_ipsec_esn_state {

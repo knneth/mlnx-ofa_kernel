@@ -469,11 +469,20 @@ enum {
 	MLX5_OPCODE_SET_PSV		= 0x20,
 	MLX5_OPCODE_GET_PSV		= 0x21,
 	MLX5_OPCODE_CHECK_PSV		= 0x22,
+	MLX5_OPCODE_DUMP		= 0x23,
 	MLX5_OPCODE_RGET_PSV		= 0x26,
 	MLX5_OPCODE_RCHECK_PSV		= 0x27,
 
 	MLX5_OPCODE_UMR			= 0x25,
 
+};
+
+enum {
+	MLX5_OPC_MOD_TLS_TIS_STATIC_PARAMS = 0x1,
+};
+
+enum {
+	MLX5_OPC_MOD_TLS_TIS_PROGRESS_PARAMS = 0x1,
 };
 
 enum {
@@ -802,7 +811,12 @@ struct mlx5_cqe64 {
 	u8		l4_l3_hdr_type;
 	__be16		vlan_info;
 	__be32		srqn; /* [31:24]: lro_num_seg, [23:0]: srqn */
-	__be32		imm_inval_pkey;
+	union {
+		__be32		immediate;
+		__be32		inval_rkey;
+		__be32		pkey;
+		__be32		ft_metadata;
+	};
 	u8		rsvd40[4];
 	__be32		byte_cnt;
 	__be32		timestamp_h;
@@ -1160,7 +1174,11 @@ enum mlx5_cap_type {
 	MLX5_CAP_DEBUG,
 	MLX5_CAP_NVMF,
 	MLX5_CAP_DEV_MEM,
+	MLX5_CAP_RESERVED_16,
+	MLX5_CAP_TLS,
+	MLX5_CAP_VDPA_EMULATION = 0x13,
 	MLX5_CAP_DEV_EVENT = 0x14,
+	MLX5_CAP_IPSEC,
 	/* NUM OF CAP Types */
 	MLX5_CAP_NUM
 };
@@ -1225,6 +1243,9 @@ enum mlx5_qcam_feature_groups {
 
 #define MLX5_CAP_FLOWTABLE(mdev, cap) \
 	MLX5_GET(flow_table_nic_cap, mdev->caps.hca_cur[MLX5_CAP_FLOW_TABLE], cap)
+
+#define MLX5_CAP64_FLOWTABLE(mdev, cap) \
+	MLX5_GET64(flow_table_nic_cap, (mdev)->caps.hca_cur[MLX5_CAP_FLOW_TABLE], cap)
 
 #define MLX5_CAP_FLOWTABLE_MAX(mdev, cap) \
 	MLX5_GET(flow_table_nic_cap, mdev->caps.hca_max[MLX5_CAP_FLOW_TABLE], cap)
@@ -1293,6 +1314,10 @@ enum mlx5_qcam_feature_groups {
 	MLX5_GET(e_switch_cap, \
 		 mdev->caps.hca_cur[MLX5_CAP_ESWITCH], cap)
 
+#define MLX5_CAP64_ESW_FLOWTABLE(mdev, cap) \
+	MLX5_GET64(flow_table_eswitch_cap, \
+		(mdev)->caps.hca_cur[MLX5_CAP_ESWITCH_FLOW_TABLE], cap)
+
 #define MLX5_CAP_ESW_MAX(mdev, cap) \
 	MLX5_GET(e_switch_cap, \
 		 mdev->caps.hca_max[MLX5_CAP_ESWITCH], cap)
@@ -1318,6 +1343,9 @@ enum mlx5_qcam_feature_groups {
 
 #define MLX5_CAP_DEVICE_MEM(mdev, cap)\
 	MLX5_GET(device_mem_cap, mdev->caps.hca_cur[MLX5_CAP_DEV_MEM], cap)
+
+#define MLX5_CAP_IPSEC(mdev, cap)\
+	MLX5_GET(ipsec_cap, (mdev)->caps.hca_cur[MLX5_CAP_IPSEC], cap)
 
 #define MLX5_CAP64_DEVICE_MEM(mdev, cap)\
 	MLX5_GET64(device_mem_cap, mdev->caps.hca_cur[MLX5_CAP_DEV_MEM], cap)
@@ -1355,8 +1383,19 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP64_DEV_MEM(mdev, cap)\
 	MLX5_GET64(device_mem_cap, mdev->caps.hca_cur[MLX5_CAP_DEV_MEM], cap)
 
+#define MLX5_CAP_TLS(mdev, cap) \
+	MLX5_GET(tls_cap, (mdev)->caps.hca_cur[MLX5_CAP_TLS], cap)
+
 #define MLX5_CAP_DEV_EVENT(mdev, cap)\
 	MLX5_ADDR_OF(device_event_cap, (mdev)->caps.hca_cur[MLX5_CAP_DEV_EVENT], cap)
+
+#define MLX5_CAP_DEV_VDPA_EMULATION(mdev, cap)\
+	MLX5_GET(device_virtio_emulation_cap, \
+		(mdev)->caps.hca_cur[MLX5_CAP_VDPA_EMULATION], cap)
+
+#define MLX5_CAP64_DEV_VDPA_EMULATION(mdev, cap)\
+	MLX5_GET64(device_virtio_emulation_cap, \
+		(mdev)->caps.hca_cur[MLX5_CAP_VDPA_EMULATION], cap)
 
 enum {
 	MLX5_CMD_STAT_OK			= 0x0,
@@ -1386,6 +1425,7 @@ enum {
 	MLX5_PER_PRIORITY_COUNTERS_GROUP      = 0x10,
 	MLX5_PER_TRAFFIC_CLASS_COUNTERS_GROUP = 0x11,
 	MLX5_PHYSICAL_LAYER_COUNTERS_GROUP    = 0x12,
+	MLX5_PER_TRAFFIC_CLASS_CONGESTION_GROUP = 0x13,
 	MLX5_PHYSICAL_LAYER_STATISTICAL_GROUP = 0x16,
 	MLX5_INFINIBAND_PORT_COUNTERS_GROUP   = 0x20,
 };

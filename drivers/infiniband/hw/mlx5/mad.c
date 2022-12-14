@@ -200,6 +200,29 @@ static void pma_cnt_assign(struct ib_pma_portcounters *pma_cnt,
 			     vl_15_dropped);
 }
 
+static int mlx5_core_query_ib_ppcnt(struct mlx5_core_dev *dev,
+				    void *out, size_t sz)
+{
+	u32 *in;
+	int err;
+
+	in  = kvzalloc(sz, GFP_KERNEL);
+	if (!in) {
+		err = -ENOMEM;
+		return err;
+	}
+
+	MLX5_SET(ppcnt_reg, in, local_port, 1);
+
+	MLX5_SET(ppcnt_reg, in, grp, MLX5_INFINIBAND_PORT_COUNTERS_GROUP);
+	err = mlx5_core_access_reg(dev, in, sz, out,
+				   sz, MLX5_REG_PPCNT, 0, 0);
+
+	kvfree(in);
+	return err;
+}
+
+
 static int process_pma_cmd(struct mlx5_core_dev *mdev, u8 port_num,
 			   const struct ib_mad *in_mad, struct ib_mad *out_mad)
 {
@@ -237,8 +260,7 @@ static int process_pma_cmd(struct mlx5_core_dev *mdev, u8 port_num,
 		if (!out_cnt)
 			return IB_MAD_RESULT_FAILURE;
 
-		err = mlx5_core_query_ib_ppcnt(mdev, port_num,
-					       out_cnt, sz);
+		err = mlx5_core_query_ib_ppcnt(mdev, out_cnt, sz);
 		if (!err)
 			pma_cnt_assign(pma_cnt, out_cnt);
 		}

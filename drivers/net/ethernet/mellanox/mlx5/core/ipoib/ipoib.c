@@ -109,8 +109,7 @@ int mlx5i_init(struct mlx5_core_dev *mdev,
 	mlx5e_set_netdev_mtu_boundaries(priv);
 	netdev->mtu = netdev->max_mtu;
 
-	mlx5e_build_nic_params(mdev, &priv->rss_params, &priv->channels.params,
-			       mlx5e_get_netdev_max_channels(priv),
+	mlx5e_build_nic_params(priv, &priv->rss_params, &priv->channels.params,
 			       netdev->mtu);
 	mlx5i_build_nic_params(mdev, &priv->channels.params);
 
@@ -280,6 +279,18 @@ void mlx5i_destroy_underlay_qp(struct mlx5_core_dev *mdev, struct mlx5_core_qp *
 	mlx5_core_destroy_qp(mdev, qp);
 }
 
+int mlx5i_create_tis(struct mlx5_core_dev *mdev, u32 underlay_qpn, u32 *tisn)
+{
+	u32 in[MLX5_ST_SZ_DW(create_tis_in)] = {};
+	void *tisc;
+
+	tisc = MLX5_ADDR_OF(create_tis_in, in, ctx);
+
+	MLX5_SET(tisc, tisc, underlay_qpn, underlay_qpn);
+
+	return mlx5e_create_tis(mdev, in, 0, tisn);
+}
+
 static int mlx5i_init_tx(struct mlx5e_priv *priv)
 {
 	struct mlx5i_priv *ipriv = priv->ppriv;
@@ -291,7 +302,7 @@ static int mlx5i_init_tx(struct mlx5e_priv *priv)
 		return err;
 	}
 
-	err = mlx5e_create_tis(priv->mdev, 0 /* tc */, ipriv->qp.qpn, 0, &priv->tisn[0][0]);
+	err = mlx5i_create_tis(priv->mdev, ipriv->qp.qpn, &priv->tisn[0][0]);
 	if (err) {
 		mlx5_core_warn(priv->mdev, "create tis failed, %d\n", err);
 		goto err_destroy_underlay_qp;

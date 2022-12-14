@@ -419,7 +419,6 @@ void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 
 	if (counter->aging) {
 		llist_add(&counter->dellist, &fc_stats->dellist);
-		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
 		return;
 	}
 

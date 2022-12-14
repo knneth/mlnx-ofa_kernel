@@ -30,52 +30,89 @@
  * SOFTWARE.
  *
  */
-
 #include <linux/mlx5/device.h>
 
 #include "accel/ipsec.h"
 #include "mlx5_core.h"
 #include "fpga/ipsec.h"
+#include "en_accel/ipsec_offload.h"
 
+#ifdef CONFIG_MLX5_EN_IPSEC
 u32 mlx5_accel_ipsec_device_caps(struct mlx5_core_dev *mdev)
 {
+	if (mlx5e_is_ipsec_device(mdev))
+		return mlx5e_ipsec_device_caps(mdev);
+
 	return mlx5_fpga_ipsec_device_caps(mdev);
 }
 EXPORT_SYMBOL_GPL(mlx5_accel_ipsec_device_caps);
 
 unsigned int mlx5_accel_ipsec_counters_count(struct mlx5_core_dev *mdev)
 {
+	if (mlx5e_is_ipsec_device(mdev))
+		return 0;
+
 	return mlx5_fpga_ipsec_counters_count(mdev);
 }
 
 int mlx5_accel_ipsec_counters_read(struct mlx5_core_dev *mdev, u64 *counters,
 				   unsigned int count)
 {
+	if (mlx5e_is_ipsec_device(mdev))
+		return 0;
+
 	return mlx5_fpga_ipsec_counters_read(mdev, counters, count);
 }
 
 void *mlx5_accel_esp_create_hw_context(struct mlx5_core_dev *mdev,
 				       struct mlx5_accel_esp_xfrm *xfrm,
-				       const __be32 saddr[4],
-				       const __be32 daddr[4],
-				       const __be32 spi, bool is_ipv6)
+				       u32 *sa_handle)
 {
-	return mlx5_fpga_ipsec_create_sa_ctx(mdev, xfrm, saddr, daddr,
-					     spi, is_ipv6);
+	__be32 saddr[4] = {0}, daddr[4] = {0};
+
+	if (mlx5e_is_ipsec_device(mdev))
+		return mlx5e_ipsec_create_sa_ctx(mdev, xfrm, sa_handle);
+
+	if (xfrm->attrs.is_ipv6) {
+		saddr[3] = xfrm->attrs.saddr.a4;
+		daddr[3] = xfrm->attrs.daddr.a4;
+	} else {
+		memcpy(saddr, xfrm->attrs.saddr.a6, sizeof(saddr));
+		memcpy(daddr, xfrm->attrs.daddr.a6, sizeof(daddr));
+	}
+
+	return mlx5_fpga_ipsec_create_sa_ctx(mdev, xfrm, saddr,
+					     daddr, xfrm->attrs.spi,
+					     xfrm->attrs.is_ipv6, sa_handle);
 }
 
-void mlx5_accel_esp_free_hw_context(void *context)
+void mlx5_accel_esp_free_hw_context(struct mlx5_accel_esp_xfrm *xfrm,
+				    void *context)
 {
+	if (mlx5e_is_ipsec_device(xfrm->mdev))
+		return mlx5e_ipsec_delete_sa_ctx(context);
+
 	mlx5_fpga_ipsec_delete_sa_ctx(context);
 }
 
 int mlx5_accel_ipsec_init(struct mlx5_core_dev *mdev)
 {
+	if (mlx5e_is_ipsec_device(mdev))
+		return 0;
+
 	return mlx5_fpga_ipsec_init(mdev);
+}
+
+void mlx5_accel_ipsec_build_fs_cmds(void)
+{
+	mlx5_fpga_ipsec_build_fs_cmds();
 }
 
 void mlx5_accel_ipsec_cleanup(struct mlx5_core_dev *mdev)
 {
+	if (mlx5e_is_ipsec_device(mdev))
+		return;
+
 	mlx5_fpga_ipsec_cleanup(mdev);
 }
 
@@ -86,7 +123,11 @@ mlx5_accel_esp_create_xfrm(struct mlx5_core_dev *mdev,
 {
 	struct mlx5_accel_esp_xfrm *xfrm;
 
-	xfrm = mlx5_fpga_esp_create_xfrm(mdev, attrs, flags);
+	if (mlx5e_is_ipsec_device(mdev))
+		xfrm = mlx5e_ipsec_esp_create_xfrm(mdev, attrs, flags);
+	else
+		xfrm = mlx5_fpga_esp_create_xfrm(mdev, attrs, flags);
+
 	if (IS_ERR(xfrm))
 		return xfrm;
 
@@ -97,6 +138,9 @@ EXPORT_SYMBOL_GPL(mlx5_accel_esp_create_xfrm);
 
 void mlx5_accel_esp_destroy_xfrm(struct mlx5_accel_esp_xfrm *xfrm)
 {
+	if (mlx5e_is_ipsec_device(xfrm->mdev))
+		return mlx5e_ipsec_esp_destroy_xfrm(xfrm);
+
 	mlx5_fpga_esp_destroy_xfrm(xfrm);
 }
 EXPORT_SYMBOL_GPL(mlx5_accel_esp_destroy_xfrm);
@@ -104,6 +148,11 @@ EXPORT_SYMBOL_GPL(mlx5_accel_esp_destroy_xfrm);
 int mlx5_accel_esp_modify_xfrm(struct mlx5_accel_esp_xfrm *xfrm,
 			       const struct mlx5_accel_esp_xfrm_attrs *attrs)
 {
+	if (mlx5e_is_ipsec_device(xfrm->mdev))
+		return mlx5e_ipsec_esp_modify_xfrm(xfrm, attrs);
+
 	return mlx5_fpga_esp_modify_xfrm(xfrm, attrs);
 }
 EXPORT_SYMBOL_GPL(mlx5_accel_esp_modify_xfrm);
+
+#endif /* CONFIG_MLX5_EN_IPSEC */

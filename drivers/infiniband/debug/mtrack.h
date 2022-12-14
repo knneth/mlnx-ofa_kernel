@@ -495,7 +495,7 @@ static inline void iounmap(void *addr)
 
 #define vfree(addr) ({ \
 	void *__memtrack_addr = (void *)addr;					\
-	if (__memtrack_addr) {							\
+	if (__memtrack_addr && !is_non_trackable_free_func(__func__)) {		\
 		memtrack_free(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	vfree(__memtrack_addr);							\

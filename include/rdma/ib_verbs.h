@@ -71,6 +71,9 @@
 #define IB_FW_VERSION_NAME_MAX	ETHTOOL_FWVERS_LEN
 
 struct ib_umem_odp;
+struct ib_uqp_object;
+struct ib_usrq_object;
+struct ib_uwq_object;
 
 extern struct workqueue_struct *ib_wq;
 extern struct workqueue_struct *ib_comp_wq;
@@ -91,6 +94,8 @@ struct ib_nvmf_ctrl;
 struct mlx5_core_srq;
 struct ib_mr_init_attr;
 
+struct ib_ucq_object;
+
 __printf(3, 4) __cold
 void ibdev_printk(const char *level, const struct ib_device *ibdev,
 		  const char *format, ...);
@@ -109,7 +114,7 @@ void ibdev_notice(const struct ib_device *ibdev, const char *format, ...);
 __printf(2, 3) __cold
 void ibdev_info(const struct ib_device *ibdev, const char *format, ...);
 
-#if defined(CONFIG_DYNAMIC_DEBUG)
+#if defined(CONFIG_DYNAMIC_DEBUG) && defined(dynamic_ibdev_dbg)
 #define ibdev_dbg(__dev, format, args...)                       \
 	dynamic_ibdev_dbg(__dev, format, ##args)
 #elif defined(DEBUG)
@@ -296,6 +301,7 @@ enum ib_device_cap_flags {
 	IB_DEVICE_SIGNATURE_PIPELINE		= (1ULL << 38),
 	/* Jump to this value to minimize conflicts with upstream */
 	IB_DEVICE_NVMF_TARGET_OFFLOAD		= (1ULL << 60),
+	IB_DEVICE_QP_MODIFY_RMP			= (1ULL << 61),
 };
 
 enum ib_atomic_cap {
@@ -1229,6 +1235,7 @@ enum ib_qp_attr_mask {
 	/* we might need to update this bit after upstream rebase */
 	IB_QP_OFFLOAD_TYPE		= (1<<24),
 	IB_QP_RATE_LIMIT		= (1<<25),
+	IB_QP_RMPN_XRQN			= (1<<26),
 
 	/* EXP stuff with shift of 0x06 to support both user and kernel masks */
 	IB_QP_GROUP_RSS		= (1<<27),
@@ -1291,6 +1298,7 @@ struct ib_qp_attr {
 	u32			flow_entropy;
 	enum ib_qp_offload_type	offload_type;
 	struct ib_exp_burst_info	burst_info;
+	u32			rmpn_xrqn;
 };
 
 enum ib_wr_opcode {
@@ -1443,8 +1451,11 @@ enum ib_access_flags {
 	IB_ZERO_BASED = IB_UVERBS_ACCESS_ZERO_BASED,
 	IB_ACCESS_ON_DEMAND = IB_UVERBS_ACCESS_ON_DEMAND,
 	IB_ACCESS_HUGETLB = IB_UVERBS_ACCESS_HUGETLB,
+	IB_ACCESS_RELAXED_ORDERING = IB_UVERBS_ACCESS_RELAXED_ORDERING,
 
-	IB_ACCESS_SUPPORTED = ((IB_ACCESS_HUGETLB << 1) - 1)
+	IB_ACCESS_OPTIONAL = IB_UVERBS_ACCESS_OPTIONAL_RANGE,
+	IB_ACCESS_SUPPORTED =
+		((IB_ACCESS_HUGETLB << 1) - 1) | IB_ACCESS_OPTIONAL,
 };
 
 /*
@@ -1516,6 +1527,7 @@ struct ib_ucontext {
 	 * Implementation details of the RDMA core, don't use in drivers:
 	 */
 	struct rdma_restrack_entry res;
+	struct xarray mmap_xa;
 };
 
 struct ib_uobject {
@@ -1596,7 +1608,7 @@ enum ib_poll_context {
 
 struct ib_cq {
 	struct ib_device       *device;
-	struct ib_uobject      *uobject;
+	struct ib_ucq_object   *uobject;
 	ib_comp_handler   	comp_handler;
 	void                  (*event_handler)(struct ib_event *, void *);
 	void                   *cq_context;
@@ -1618,7 +1630,7 @@ struct ib_cq {
 struct ib_srq {
 	struct ib_device       *device;
 	struct ib_pd	       *pd;
-	struct ib_uobject      *uobject;
+	struct ib_usrq_object  *uobject;
 	void		      (*event_handler)(struct ib_event *, void *);
 	void		       *srq_context;
 	enum ib_srq_type	srq_type;
@@ -1663,7 +1675,7 @@ enum ib_wq_state {
 
 struct ib_wq {
 	struct ib_device       *device;
-	struct ib_uobject      *uobject;
+	struct ib_uwq_object   *uobject;
 	void		    *wq_context;
 	void		    (*event_handler)(struct ib_event *, void *);
 	struct ib_pd	       *pd;
@@ -1779,7 +1791,7 @@ struct ib_qp {
 	atomic_t		usecnt;
 	struct list_head	open_list;
 	struct ib_qp           *real_qp;
-	struct ib_uobject      *uobject;
+	struct ib_uqp_object   *uobject;
 	void                  (*event_handler)(struct ib_event *, void *);
 	void		       *qp_context;
 	/* sgid_attrs associated with the AV's */
@@ -2274,6 +2286,11 @@ struct rdma_netdev_alloc_params {
 				      struct net_device *netdev, void *param);
 };
 
+struct ib_odp_counters {
+	atomic64_t faults;
+	atomic64_t invalidations;
+};
+
 struct ib_counters {
 	struct ib_device	*device;
 	struct ib_uobject	*uobject;
@@ -2313,6 +2330,21 @@ struct ib_device_immutable {
 	rdma_zalloc_drv_obj_gfp(ib_dev, ib_type, GFP_KERNEL)
 
 #define DECLARE_RDMA_OBJ_SIZE(ib_struct) size_t size_##ib_struct
+
+struct rdma_user_mmap_entry {
+	struct kref ref;
+	struct ib_ucontext *ucontext;
+	unsigned long start_pgoff;
+	size_t npages;
+	bool driver_removed;
+};
+
+/* Return the offset (in bytes) the user should pass to libc's mmap() */
+static inline u64
+rdma_user_mmap_get_offset(const struct rdma_user_mmap_entry *entry)
+{
+	return (u64)entry->start_pgoff << PAGE_SHIFT;
+}
 
 /**
  * struct ib_device_ops - InfiniBand device operations
@@ -2422,6 +2454,13 @@ struct ib_device_ops {
 			      struct ib_udata *udata);
 	void (*dealloc_ucontext)(struct ib_ucontext *context);
 	int (*mmap)(struct ib_ucontext *context, struct vm_area_struct *vma);
+	/**
+	 * This will be called once refcount of an entry in mmap_xa reaches
+	 * zero. The type of the memory that was mapped may differ between
+	 * entries and is opaque to the rdma_user_mmap interface.
+	 * Therefore needs to be implemented by the driver in mmap_free.
+	 */
+	void (*mmap_free)(struct rdma_user_mmap_entry *entry);
 	void (*disassociate_ucontext)(struct ib_ucontext *ibcontext);
 	int (*alloc_pd)(struct ib_pd *pd, struct ib_udata *udata);
 	void (*dealloc_pd)(struct ib_pd *pd, struct ib_udata *udata);
@@ -2671,6 +2710,13 @@ struct ib_device_ops {
 	 */
 	int (*counter_update_stats)(struct rdma_counter *counter);
 
+	/**
+	 * Allows rdma drivers to add their own restrack attributes
+	 * dumped via 'rdma stat' iproute2 command.
+	 */
+	int (*fill_stat_entry)(struct sk_buff *msg,
+			       struct rdma_restrack_entry *entry);
+
 	DECLARE_RDMA_OBJ_SIZE(ib_ah);
 	DECLARE_RDMA_OBJ_SIZE(ib_pd);
 	DECLARE_RDMA_OBJ_SIZE(ib_srq);
@@ -2895,25 +2941,29 @@ static inline void *ib_get_client_data(struct ib_device *device,
 }
 void  ib_set_client_data(struct ib_device *device, struct ib_client *client,
 			 void *data);
-struct rdma_umap_priv {
-	struct vm_area_struct *vma;
-	struct list_head list;
-};
 void ib_set_device_ops(struct ib_device *device,
 		       const struct ib_device_ops *ops);
 
-#if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
 int rdma_user_mmap_io(struct ib_ucontext *ucontext, struct vm_area_struct *vma,
-		      unsigned long pfn, unsigned long size, pgprot_t prot, struct rdma_umap_priv *priv);
-#else
-static inline int rdma_user_mmap_io(struct ib_ucontext *ucontext,
-				    struct vm_area_struct *vma,
-				    unsigned long pfn, unsigned long size,
-				    pgprot_t prot, struct rdma_umap_priv *priv)
-{
-	return -EINVAL;
-}
-#endif
+		      unsigned long pfn, unsigned long size, pgprot_t prot,
+		      struct rdma_user_mmap_entry *entry);
+int rdma_user_mmap_entry_insert(struct ib_ucontext *ucontext,
+				struct rdma_user_mmap_entry *entry,
+				size_t length);
+int rdma_user_mmap_entry_insert_range(struct ib_ucontext *ucontext,
+				      struct rdma_user_mmap_entry *entry,
+				      size_t length, u32 min_pgoff,
+				      u32 max_pgoff);
+
+struct rdma_user_mmap_entry *
+rdma_user_mmap_entry_get_pgoff(struct ib_ucontext *ucontext,
+			       unsigned long pgoff);
+struct rdma_user_mmap_entry *
+rdma_user_mmap_entry_get(struct ib_ucontext *ucontext,
+			 struct vm_area_struct *vma);
+void rdma_user_mmap_entry_put(struct rdma_user_mmap_entry *entry);
+
+void rdma_user_mmap_entry_remove(struct rdma_user_mmap_entry *entry);
 
 static inline int ib_copy_from_udata(void *dest, struct ib_udata *udata, size_t len)
 {
@@ -4421,6 +4471,12 @@ static inline int ib_active_speed_enum_to_rate(enum ib_port_speed active_speed,
 
 static inline int ib_check_mr_access(int flags)
 {
+	/* Only access flags that are defined in the access flags enum are
+	 * supported
+	 */
+	if (flags & ~IB_ACCESS_SUPPORTED)
+		return -EINVAL;
+
 	/*
 	 * Using a physical address memory region is allowed only when:
 	 * - Application is capable of writing to physical memory

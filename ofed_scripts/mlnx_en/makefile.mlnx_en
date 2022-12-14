@@ -139,7 +139,7 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 	@echo "Kernel build: $(KSRC_OBJ)"
 	@echo "Kernel sources: $(KSRC)"
 	env CWD=$(CWD) BACKPORT_INCLUDES=$(BACKPORT_INCLUDES) \
-		$(MAKE) -C $(KSRC_OBJ) SUBDIRS="$(CWD)" \
+		$(MAKE) -C $(KSRC_OBJ) M="$(CWD)" \
 		V=$(V) KBUILD_NOCMDDEP=1 $(WITH_MAKE_PARAMS) \
 		CONFIG_COMPAT_VERSION=$(CONFIG_COMPAT_VERSION) \
 		CONFIG_COMPAT_KOBJECT_BACKPORT=$(CONFIG_COMPAT_KOBJECT_BACKPORT) \
@@ -153,6 +153,10 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 		CONFIG_MLX5_CORE_EN_DCB=$(CONFIG_MLX5_CORE_EN_DCB) \
 		CONFIG_MLX5_EN_ARFS=$(CONFIG_MLX5_EN_ARFS) \
 		CONFIG_MLX5_EN_RXNFC=$(CONFIG_MLX5_EN_RXNFC) \
+		CONFIG_MLX5_ACCEL=$(CONFIG_MLX5_ACCEL) \
+		CONFIG_MLX5_EN_TLS=$(CONFIG_MLX5_EN_TLS) \
+		CONFIG_MLX5_TLS=$(CONFIG_MLX5_TLS) \
+		CONFIG_MLX5_SW_STEERING=$(CONFIG_MLX5_SW_STEERING) \
 		CONFIG_MLX5_ESWITCH=$(CONFIG_MLX5_ESWITCH) \
 		CONFIG_MLX5_MPFS=$(CONFIG_MLX5_MPFS) \
 		CONFIG_MLXFW=$(CONFIG_MLXFW) \
@@ -193,7 +197,7 @@ install_modules:
 	@echo "Installing kernel modules"
 
 ifeq ($(shell /usr/bin/lsb_release -s -i 2>/dev/null | grep -qiE "debian|ubuntu" 2>/dev/null && echo YES || echo ''),)
-	$(MAKE) -C $(KSRC_OBJ) SUBDIRS="$(CWD)" \
+	$(MAKE) -C $(KSRC_OBJ) M="$(CWD)" \
 		INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) \
 		INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) \
 		$(WITH_MAKE_PARAMS) modules_install;
@@ -207,7 +211,7 @@ endif
 clean: clean_kernel
 
 clean_kernel:
-	$(MAKE) -C $(KSRC_OBJ) SUBDIRS="$(CWD)" $(WITH_MAKE_PARAMS) clean
+	$(MAKE) -C $(KSRC_OBJ) M="$(CWD)" $(WITH_MAKE_PARAMS) clean
 	@/bin/rm -f $(clean-files)
 
 clean-files := Module.symvers modules.order Module.markers compat/modules.order

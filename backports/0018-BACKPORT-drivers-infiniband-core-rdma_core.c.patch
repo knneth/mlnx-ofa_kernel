@@ -8,7 +8,7 @@ Change-Id: Icf172e7fc8d54246725f7c91420bbd9f857ae6a8
 
 --- a/drivers/infiniband/core/rdma_core.c
 +++ b/drivers/infiniband/core/rdma_core.c
-@@ -79,7 +79,13 @@ static int uverbs_try_lock_object(struct
+@@ -74,7 +74,13 @@ static int uverbs_try_lock_object(struct
  	 */
  	switch (mode) {
  	case UVERBS_LOOKUP_READ:
@@ -22,7 +22,7 @@ Change-Id: Icf172e7fc8d54246725f7c91420bbd9f857ae6a8
  			-EBUSY : 0;
  	case UVERBS_LOOKUP_WRITE:
  		/* lock is exclusive */
-@@ -437,15 +443,19 @@ alloc_begin_idr_uobject(const struct uve
+@@ -435,15 +441,19 @@ alloc_begin_idr_uobject(const struct uve
  	if (ret)
  		goto uobj_put;
  
@@ -31,18 +31,18 @@ Change-Id: Icf172e7fc8d54246725f7c91420bbd9f857ae6a8
  				   RDMACG_RESOURCE_HCA_OBJECT);
  	if (ret)
  		goto remove;
- 
 +#endif
+ 
  	return uobj;
  
 +#ifdef HAVE_CGROUP_RDMA_H
  remove:
- 	xa_erase(&ufile->idr, uobj->id);
+ 	xa_erase(&attrs->ufile->idr, uobj->id);
 +#endif
  uobj_put:
  	uverbs_uobject_put(uobj);
  	return ERR_PTR(ret);
-@@ -503,9 +513,10 @@ struct ib_uobject *rdma_alloc_begin_uobj
+@@ -516,9 +526,10 @@ struct ib_uobject *rdma_alloc_begin_uobj
  
  static void alloc_abort_idr_uobject(struct ib_uobject *uobj)
  {
@@ -54,7 +54,7 @@ Change-Id: Icf172e7fc8d54246725f7c91420bbd9f857ae6a8
  	xa_erase(&uobj->ufile->idr, uobj->id);
  }
  
-@@ -529,15 +540,17 @@ static int __must_check destroy_hw_idr_u
+@@ -542,15 +553,17 @@ static int __must_check destroy_hw_idr_u
  	if (why == RDMA_REMOVE_ABORT)
  		return 0;
  
@@ -73,15 +73,7 @@ Change-Id: Icf172e7fc8d54246725f7c91420bbd9f857ae6a8
  	/* Matches the kref in alloc_commit_idr_uobject */
  	uverbs_uobject_put(uobj);
  }
-@@ -579,7 +592,6 @@ static int alloc_commit_idr_uobject(stru
- 	 */
- 	old = xa_store(&ufile->idr, uobj->id, uobj, GFP_KERNEL);
- 	WARN_ON(old != NULL);
--
- 	return 0;
- }
- 
-@@ -811,8 +823,10 @@ static void ufile_destroy_ucontext(struc
+@@ -799,8 +812,10 @@ static void ufile_destroy_ucontext(struc
  			ib_dev->ops.disassociate_ucontext(ucontext);
  	}
  

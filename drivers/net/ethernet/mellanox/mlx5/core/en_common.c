@@ -182,18 +182,6 @@ out:
 	return err;
 }
 
-u8 mlx5e_params_calculate_tx_min_inline(struct mlx5_core_dev *mdev)
-{
-	u8 min_inline_mode;
-
-	mlx5_query_min_inline(mdev, &min_inline_mode);
-	if (min_inline_mode == MLX5_INLINE_MODE_NONE &&
-	    !MLX5_CAP_ETH(mdev, wqe_vlan_insert))
-		min_inline_mode = MLX5_INLINE_MODE_L2;
-
-	return min_inline_mode;
-}
-
 /* speed in units of 1Mb */
 static const u32 mlx5e_link_speed[MLX5E_LINK_MODES_NUMBER] = {
 	[MLX5E_1000BASE_CX_SGMII] = 1000,

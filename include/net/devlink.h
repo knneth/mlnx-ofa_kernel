@@ -60,6 +60,18 @@ static inline void devlink_unregister(struct devlink *devlink)
 {
 }
 
+
+enum devlink_param_generic_id {
+	DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+
+	/* add new param generic ids above here*/
+	__DEVLINK_PARAM_GENERIC_ID_MAX,
+	DEVLINK_PARAM_GENERIC_ID_MAX = __DEVLINK_PARAM_GENERIC_ID_MAX - 1,
+};
+
+#define DEVLINK_PARAM_GENERIC_ENABLE_ROCE_NAME "enable_roce"
+#define DEVLINK_PARAM_GENERIC_ENABLE_ROCE_TYPE DEVLINK_PARAM_TYPE_BOOL
+
 #endif /* HAVE_DEVLINK_H */
 
 #endif /* COMPAT_LINUX_DEVLINK_H */

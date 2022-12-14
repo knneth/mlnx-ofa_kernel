@@ -75,7 +75,7 @@ enum {
 struct mlx5_nic_flow_attr {
 	u32 action;
 	u32 flow_tag;
-	u32 mod_hdr_id;
+	struct mlx5_modify_hdr *modify_hdr;
 	u32 hairpin_tirn;
 	u8 match_level;
 	struct mlx5_flow_table	*hairpin_ft;
@@ -145,7 +145,8 @@ struct mlx5e_tc_flow {
 };
 
 struct mlx5e_tc_flow_parse_attr {
-	struct ip_tunnel_info tun_info[MLX5_MAX_FLOW_FWD_VPORTS];
+	const struct ip_tunnel_info *tun_info[MLX5_MAX_FLOW_FWD_VPORTS];
+	struct ip_tunnel_info tun_info2[MLX5_MAX_FLOW_FWD_VPORTS];
 	struct net_device *filter_dev;
 	struct mlx5_flow_spec spec;
 	int num_mod_hdr_actions;
@@ -154,7 +155,7 @@ struct mlx5e_tc_flow_parse_attr {
 	int mirred_ifindex[MLX5_MAX_FLOW_FWD_VPORTS];
 };
 
-#define MLX5_MH_ACT_SZ MLX5_UN_SZ_BYTES(set_action_in_add_action_in_auto)
+#define MLX5_MH_ACT_SZ MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)
 
 struct pedit_headers {
 	struct ethhdr  eth;

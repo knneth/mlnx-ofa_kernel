@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/mlx4.h
 
 Change-Id: I0a9fca4ea2b591e57bdc652bc48774ba55e5120f
 ---
- drivers/net/ethernet/mellanox/mlx4/mlx4.h | 18 ++++++++++++++++--
- 1 file changed, 16 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/mlx4.h | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/mlx4.h
 +++ b/drivers/net/ethernet/mellanox/mlx4/mlx4.h
@@ -52,20 +52,23 @@ Change-Id: I0a9fca4ea2b591e57bdc652bc48774ba55e5120f
  void __mlx4_mpt_free_icm(struct mlx4_dev *dev, u32 index);
  u32 __mlx4_alloc_mtt_range(struct mlx4_dev *dev, int order);
  void __mlx4_free_mtt_range(struct mlx4_dev *dev, u32 first_seg, int order);
-@@ -1076,8 +1088,12 @@ void mlx4_crdump_proc_init(struct proc_d
+@@ -1076,7 +1088,15 @@ void mlx4_crdump_proc_init(struct proc_d
  void mlx4_crdump_proc_cleanup(struct proc_dir_entry *proc_core_dir);
  int mlx4_crdump_init(struct mlx4_dev *dev);
  void mlx4_crdump_end(struct mlx4_dev *dev);
-+#ifdef HAVE_DEVLINK_DRIVERINIT_VAL
- int mlx4_restart_one(struct pci_dev *pdev, bool reload,
- 		     struct devlink *devlink);
++#ifdef HAVE_DEVLINK_OPS_RELOAD_UP
+ int mlx4_restart_one(struct pci_dev *pdev);
++#else
++#ifdef HAVE_DEVLINK_H
++int mlx4_restart_one(struct pci_dev *pdev, bool reload, struct devlink *devlink);
 +#else
 +int mlx4_restart_one(struct pci_dev *pdev);
-+#endif
++#endif /*HAVE_DEVLINK_H*/
++#endif /*HAVE_DEVLINK_OPS_RELOAD_UP*/
  int mlx4_register_device(struct mlx4_dev *dev);
  void mlx4_unregister_device(struct mlx4_dev *dev);
  void mlx4_dispatch_event(struct mlx4_dev *dev, enum mlx4_dev_event type,
-@@ -1261,9 +1277,7 @@ void mlx4_srq_event(struct mlx4_dev *dev
+@@ -1260,9 +1280,7 @@ void mlx4_srq_event(struct mlx4_dev *dev
  
  void mlx4_enter_error_state(struct mlx4_dev_persistent *persist);
  int mlx4_comm_internal_err(u32 slave_read);

@@ -68,7 +68,7 @@ enum mlx5_qp_optpar {
 	MLX5_QP_OPTPAR_ACK_TIMEOUT		= 1 << 14,
 	MLX5_QP_OPTPAR_PRI_PORT			= 1 << 16,
 	MLX5_QP_OPTPAR_PRIMARY_ADDR_PATH_DSCP	= 1 << 17,
-	MLX5_QP_OPTPAR_SRQN			= 1 << 18,
+	MLX5_QP_OPTPAR_RMPN_XRQN		= 1 << 18,
 	MLX5_QP_OPTPAR_CQN_RCV			= 1 << 19,
 	MLX5_QP_OPTPAR_DC_HS			= 1 << 20,
 	MLX5_QP_OPTPAR_DC_KEY			= 1 << 21,
@@ -206,7 +206,12 @@ struct mlx5_wqe_ctrl_seg {
 	u8			signature;
 	u8			rsvd[2];
 	u8			fm_ce_se;
-	__be32			imm;
+	union {
+		__be32		general_id;
+		__be32		imm;
+		__be32		umr_mkey;
+		__be32		tisn;
+	};
 };
 
 enum {
@@ -245,6 +250,11 @@ enum {
 
 enum {
 	MLX5_ETH_WQE_SVLAN              = 1 << 0,
+	MLX5_ETH_WQE_TRAILER_HDR_OUTER_IP_ASSOC = 1 << 10,
+	MLX5_ETH_WQE_TRAILER_HDR_OUTER_L4_ASSOC = 1 << 11,
+	MLX5_ETH_WQE_TRAILER_HDR_INNER_IP_ASSOC = 3 << 10,
+	MLX5_ETH_WQE_TRAILER_HDR_INNER_L4_ASSOC = 1 << 12,
+	MLX5_ETH_WQE_INSERT_TRAILER     = 1 << 14,
 	MLX5_ETH_WQE_INSERT_VLAN        = 1 << 15,
 };
 
@@ -255,15 +265,28 @@ enum {
 	MLX5_ETH_WQE_SWP_OUTER_L4_UDP   = 1 << 5,
 };
 
+enum {
+	MLX5_ETH_WQE_TRAILER_NO_ALIGN   = 0,
+	MLX5_ETH_WQE_TRAILER_WORD_ALIGN   = 1 << 0,
+	MLX5_ETH_WQE_TRAILER_DWORD_ALIGN   = 1 << 1,
+};
+
+enum {
+	MLX5_ETH_WQE_FT_META_IPSEC = BIT(0),
+};
+
 struct mlx5_wqe_eth_seg {
 	u8              swp_outer_l4_offset;
 	u8              swp_outer_l3_offset;
 	u8              swp_inner_l4_offset;
 	u8              swp_inner_l3_offset;
-	u8              cs_flags;
+	union {
+		u8              cs_flags;
+		u8              trailer_alignment;
+	};
 	u8              swp_flags;
 	__be16          mss;
-	__be32          rsvd2;
+	__be32          flow_table_metadata;
 	union {
 		struct {
 			__be16 sz;
@@ -273,6 +296,10 @@ struct mlx5_wqe_eth_seg {
 			__be16 type;
 			__be16 vlan_tci;
 		} insert;
+		struct {
+			__be16 params;
+			__be16 data;
+		} trailer;
 	};
 };
 

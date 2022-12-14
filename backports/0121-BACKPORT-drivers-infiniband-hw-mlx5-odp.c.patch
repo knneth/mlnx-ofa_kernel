@@ -8,7 +8,7 @@ Change-Id: I8fd4fd63f65dfe78966a79369be71b6dd5bc53e9
 
 --- a/drivers/infiniband/hw/mlx5/odp.c
 +++ b/drivers/infiniband/hw/mlx5/odp.c
-@@ -670,7 +670,11 @@ void mlx5_ib_free_implicit_mr(struct mlx
+@@ -682,7 +682,11 @@ void mlx5_ib_free_implicit_mr(struct mlx
  
  	down_read(&per_mm->umem_rwsem);
  	rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, 0, ULLONG_MAX,

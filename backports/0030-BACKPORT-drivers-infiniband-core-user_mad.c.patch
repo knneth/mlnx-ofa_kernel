@@ -239,9 +239,9 @@ Change-Id: I135756e35348b8e0aa5df3feab86e2a290310e24
  }
  
 @@ -1294,8 +1370,11 @@ static void ib_umad_kill_port(struct ib_
+ 	mutex_unlock(&port->file_mutex);
  
  	cdev_device_del(&port->sm_cdev, &port->sm_dev);
- 	cdev_device_del(&port->cdev, &port->dev);
 +#ifndef HAVE_IDA_ALLOC_MAX
 +	clear_bit(port->dev_num, dev_map);
 +#else

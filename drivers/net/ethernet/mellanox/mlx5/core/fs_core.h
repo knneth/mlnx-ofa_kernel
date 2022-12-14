@@ -38,6 +38,24 @@
 #include <linux/mlx5/fs.h>
 #include <linux/rhashtable.h>
 #include <linux/llist.h>
+#include <steering/fs_dr.h>
+
+struct mlx5_modify_hdr {
+	enum mlx5_flow_namespace_type ns_type;
+	union {
+		struct mlx5_fs_dr_action action;
+		u32 id;
+	};
+};
+
+struct mlx5_pkt_reformat {
+	enum mlx5_flow_namespace_type ns_type;
+	int reformat_type; /* from mlx5_ifc */
+	union {
+		struct mlx5_fs_dr_action action;
+		u32 id;
+	};
+};
 
 #define MINIFLOW_MAX_FLOWS 12
 
@@ -83,9 +101,15 @@ enum fs_fte_status {
 	FS_FTE_STATUS_EXISTING = 1UL << 0,
 };
 
+enum mlx5_flow_steering_mode {
+	MLX5_FLOW_STEERING_MODE_DMFS,
+	MLX5_FLOW_STEERING_MODE_SMFS
+};
+
 struct mlx5_flow_steering {
 	struct mlx5_core_dev *dev;
-	struct kmem_cache               *fgs_cache;
+	enum   mlx5_flow_steering_mode	mode;
+	struct kmem_cache		*fgs_cache;
 	struct kmem_cache		*ftes_cache;
 	struct mlx5_flow_root_namespace *root_ns;
 	struct dentry			*debugfs;
@@ -138,6 +162,7 @@ struct mlx5_flow_rule {
 /* Type of children is mlx5_flow_group */
 struct mlx5_flow_table {
 	struct fs_node			node;
+	struct mlx5_fs_dr_table		fs_dr_table;
 	u32				id;
 	u16				vport;
 	unsigned int			max_fte;
@@ -181,6 +206,7 @@ struct mlx5_ft_underlay_qp {
 /* Type of children is mlx5_flow_rule */
 struct fs_fte {
 	struct fs_node			node;
+	struct mlx5_fs_dr_rule		fs_dr_rule;
 	u32				val[MLX5_ST_SZ_DW_MATCH_PARAM];
 	u32				dests_size;
 	u32				index;
@@ -226,6 +252,7 @@ struct mlx5_flow_group_mask {
 /* Type of children is fs_fte */
 struct mlx5_flow_group {
 	struct fs_node			node;
+	struct mlx5_fs_dr_matcher	fs_dr_matcher;
 	struct mlx5_flow_group_mask	mask;
 	u32				start_index;
 	u32				max_ftes;
@@ -238,6 +265,8 @@ struct mlx5_flow_group {
 
 struct mlx5_flow_root_namespace {
 	struct mlx5_flow_namespace	ns;
+	enum   mlx5_flow_steering_mode	mode;
+	struct mlx5_fs_dr_domain	fs_dr_domain;
 	enum   fs_flow_table_type	table_type;
 	struct mlx5_core_dev		*dev;
 	struct mlx5_flow_table		*root_ft;
@@ -261,8 +290,19 @@ struct rule_client_data {
 	void   *client_data;
 };
 
+const struct mlx5_flow_cmds *mlx5_fs_cmd_get_fw_cmds(void);
+
+int mlx5_flow_namespace_set_peer(struct mlx5_flow_root_namespace *ns,
+				 struct mlx5_flow_root_namespace *peer_ns);
+
+int mlx5_flow_namespace_set_mode(struct mlx5_flow_namespace *ns,
+				 enum mlx5_flow_steering_mode mode);
+
 int mlx5_init_fs(struct mlx5_core_dev *dev);
 void mlx5_cleanup_fs(struct mlx5_core_dev *dev);
+
+int mlx5_flow_vport_enable(struct mlx5_flow_root_namespace *ns, int vport);
+void mlx5_flow_vport_disable(struct mlx5_flow_root_namespace *ns, int vport);
 
 #define fs_get_obj(v, _node)  {v = container_of((_node), typeof(*v), node); }
 

@@ -722,7 +722,7 @@ static int srq_event_notifier(struct notifier_block *nb,
 	struct mlx5_eqe *eqe;
 	u32 srqn;
 	struct mlx5_core_nvmf_be_ctrl *ctrl;
-	u32 qpn_id_handle;
+	u32 qpn_id_handle = 0;
 	bool found = false;
 
 	if (type != MLX5_EVENT_TYPE_SRQ_CATAS_ERROR &&

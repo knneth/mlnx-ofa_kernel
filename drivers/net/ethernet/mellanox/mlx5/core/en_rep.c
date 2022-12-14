@@ -47,6 +47,7 @@
 #include "fs_core.h"
 #include "ecpf.h"
 #include "lib/port_tun.h"
+#include "lib/mlx5.h"
 #include "miniflow.h"
 
 #define MLX5E_REP_PARAMS_DEF_NUM_CHANNELS 1
@@ -206,6 +207,28 @@ static int mlx5e_rep_set_channels(struct net_device *dev,
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
 	return mlx5e_ethtool_set_channels(priv, ch);
+}
+
+void mlx5e_replace_rep_vport_rx_rule_metadata(const struct net_device *dev)
+{
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+	struct mlx5_flow_handle *flow_rule;
+	struct mlx5_flow_destination dest;
+
+	ASSERT_RTNL();
+
+	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
+	dest.tir_num = priv->direct_tir[0].tirn;
+
+	flow_rule = mlx5_eswitch_create_vport_rx_rule(priv->mdev->priv.eswitch,
+						      rpriv->rep->vport,
+						      &dest);
+	if (IS_ERR(flow_rule))
+		return;
+
+	mlx5_del_flow_rules(rpriv->vport_rx_rule);
+	rpriv->vport_rx_rule = flow_rule;
 }
 
 static int mlx5e_rep_get_coalesce(struct net_device *netdev,
@@ -667,6 +690,8 @@ mlx5e_rep_indr_setup_tc_block(struct net_device *netdev,
 	if (f->binder_type != TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
 		return -EOPNOTSUPP;
 
+	f->unlocked_driver_cb = true;
+
 	switch (f->command) {
 	case TC_BLOCK_BIND:
 		indr_priv = mlx5e_rep_indr_block_priv_lookup(rpriv, netdev);
@@ -984,10 +1009,12 @@ static int mlx5e_rep_neigh_init(struct mlx5e_rep_priv *rpriv)
 			  mlx5e_rep_neigh_stats_work);
 	mlx5e_rep_neigh_update_init_interval(rpriv);
 
+#ifndef HAVE_MINIFLOW
 	rpriv->neigh_update.netevent_nb.notifier_call = mlx5e_rep_netevent_event;
 	err = register_netevent_notifier(&rpriv->neigh_update.netevent_nb);
 	if (err)
 		goto out_err;
+#endif
 	return 0;
 
 out_err:
@@ -1000,8 +1027,9 @@ static void mlx5e_rep_neigh_cleanup(struct mlx5e_rep_priv *rpriv)
 	struct mlx5e_neigh_update_table *neigh_update = &rpriv->neigh_update;
 	struct mlx5e_priv *priv = netdev_priv(rpriv->netdev);
 
+#ifndef HAVE_MINIFLOW
 	unregister_netevent_notifier(&neigh_update->netevent_nb);
-
+#endif
 	flush_workqueue(priv->wq); /* flush neigh update works */
 
 	cancel_delayed_work_sync(&rpriv->neigh_update.neigh_stats_work);
@@ -1306,8 +1334,11 @@ static int mlx5e_rep_setup_tc_block(struct net_device *dev,
 static int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
 			      void *type_data)
 {
+	struct flow_block_offload *f = type_data;
+
 	switch (type) {
 	case TC_SETUP_BLOCK:
+		f->unlocked_driver_cb = true;
 		return mlx5e_rep_setup_tc_block(dev, type_data);
 	default:
 		return -EOPNOTSUPP;
@@ -1318,19 +1349,15 @@ bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv)
 {
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep;
-	struct mlx5_eswitch *esw;
 
-	if (!MLX5_ESWITCH_MANAGER(priv->mdev))
+	if (!mlx5e_is_vport_rep_loaded(priv))
 		return false;
 
-	esw = priv->mdev->priv.eswitch;
+	rep = rpriv->rep;
+	if (rep->vport != MLX5_VPORT_UPLINK)
+		return false;
 
-	if (esw && esw->mode == MLX5_ESWITCH_OFFLOADS) {
-		rep = rpriv->rep;
-		return (rep->vport == MLX5_VPORT_UPLINK);
-	}
-
-	return false;
+	return true;
 }
 
 bool mlx5e_is_vport_rep_loaded(struct mlx5e_priv *priv)
@@ -1402,6 +1429,18 @@ static int mlx5e_rep_change_mtu(struct net_device *netdev, int new_mtu)
 	return mlx5e_change_mtu(netdev, new_mtu, NULL);
 }
 
+int mlx5e_uplink_rep_set_vf_vlan(struct net_device *dev, int vf, u16 vlan,
+				 u8 qos, __be16 vlan_proto)
+{
+	netdev_warn_once(dev, "legacy vf vlan setting isn't supported in switchdev mode\n");
+
+	if (vlan != 0)
+		return -EOPNOTSUPP;
+
+	/* allow setting 0-vid for compatibility with libvirt */
+	return 0;
+}
+
 static const struct net_device_ops mlx5e_netdev_ops_rep = {
 	.ndo_open                = mlx5e_rep_open,
 	.ndo_stop                = mlx5e_rep_close,
@@ -1418,7 +1457,8 @@ static const struct net_device_ops mlx5e_netdev_ops_rep = {
 bool mlx5e_eswitch_rep(struct net_device *netdev)
 {
 	if (netdev->netdev_ops == &mlx5e_netdev_ops_rep ||
-	    netdev->netdev_ops == &mlx5e_netdev_ops)
+	    (netdev->netdev_ops == &mlx5e_netdev_ops &&
+	      mlx5e_is_uplink_rep(netdev_priv(netdev))))
 		return true;
 
 	return false;
@@ -1854,12 +1894,28 @@ mlx5e_vport_uplink_rep_load(struct mlx5_core_dev *dev,
 
 	netdev = rpriv->netdev;
 	priv = netdev_priv(netdev);
-	err = mlx5e_add_sqs_fwd_rules(priv);
+
+	mutex_lock(&priv->state_lock);
+	if (test_bit(MLX5E_STATE_OPENED, &priv->state))
+		err = mlx5e_add_sqs_fwd_rules(priv);
+	mutex_unlock(&priv->state_lock);
 	if (err)
 		goto err_neigh_cleanup;
 
+#ifdef HAVE_MINIFLOW
+	err = tc_setup_cb_egdev_all_register(netdev,
+					     mlx5e_rep_setup_tc_cb_egdev,
+					     priv);
+	if (err)
+		goto err_destroy_sqs;
+#endif
+
 	return 0;
 
+#ifdef HAVE_MINIFLOW
+err_destroy_sqs:
+	mlx5e_remove_sqs_fwd_rules(priv);
+#endif
 err_neigh_cleanup:
 	mlx5e_rep_neigh_cleanup(rpriv);
 
@@ -1906,6 +1962,7 @@ mlx5e_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 		return -EINVAL;
 	}
 
+	dev_net_set(netdev, mlx5_core_net(dev));
 	rpriv->netdev = netdev;
 	rep->rep_data[REP_ETH].priv = rpriv;
 	INIT_LIST_HEAD(&rpriv->vport_sqs_list);
@@ -1951,7 +2008,7 @@ mlx5e_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
 		mlx5_smartnic_sysfs_init(netdev);
-		mlx5_eswitch_compat_sysfs_init(netdev);
+		mlx5e_sysfs_create(netdev);
 	}
 
 	return 0;
@@ -1989,7 +2046,16 @@ mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
 	struct net_device *netdev = rpriv->netdev;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 
-	mlx5e_remove_sqs_fwd_rules(priv);
+#ifdef HAVE_MINIFLOW
+	tc_setup_cb_egdev_all_unregister(netdev,
+					 mlx5e_rep_setup_tc_cb_egdev,
+					 priv);
+#endif
+
+	mutex_lock(&priv->state_lock);
+	if (test_bit(MLX5E_STATE_OPENED, &priv->state))
+		mlx5e_remove_sqs_fwd_rules(priv);
+	mutex_unlock(&priv->state_lock);
 	mlx5e_rep_neigh_cleanup(rpriv);
 	mlx5e_cleanup_uplink_rep_tx(rpriv);
 }
@@ -2015,7 +2081,7 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	}
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
-		mlx5_eswitch_compat_sysfs_cleanup(netdev);
+		mlx5e_sysfs_remove(netdev);
 		mlx5_smartnic_sysfs_cleanup(netdev);
 	}
 

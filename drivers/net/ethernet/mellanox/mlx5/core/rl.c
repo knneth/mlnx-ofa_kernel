@@ -134,6 +134,9 @@ static int mlx5_set_pp_rate_limit_cmd(struct mlx5_core_dev *dev,
 
 	MLX5_SET(set_pp_rate_limit_in, in, opcode,
 		 MLX5_CMD_OP_SET_PP_RATE_LIMIT);
+	MLX5_SET(set_pp_rate_limit_in, in, uid,
+		 MLX5_CAP_QOS(dev, packet_pacing_uid) ?
+		 MLX5_SHARED_RESOURCE_UID : 0);
 	MLX5_SET(set_pp_rate_limit_in, in, rate_limit_index, index);
 	MLX5_SET(set_pp_rate_limit_in, in, rate_limit, rl->rate);
 	MLX5_SET(set_pp_rate_limit_in, in, burst_upper_bound, rl->max_burst_sz);

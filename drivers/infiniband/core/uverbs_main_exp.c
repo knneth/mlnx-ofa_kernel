@@ -55,12 +55,5 @@ out:
 
 void ib_uverbs_dct_event_handler(struct ib_event *event, void *context_ptr)
 {
-	struct ib_uevent_object *uobj;
-
-	uobj = container_of(event->element.dct->uobject,
-			    struct ib_uevent_object, uobject);
-
-	ib_uverbs_async_handler(context_ptr, uobj->uobject.user_handle,
-				event->event, &uobj->event_list,
-				&uobj->events_reported);
+	uverbs_uobj_event(&event->element.dct->uobject->uevent, event);
 }

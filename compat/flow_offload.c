@@ -155,4 +155,13 @@ void flow_rule_match_enc_keyid(const struct flow_rule *rule,
 EXPORT_SYMBOL(flow_rule_match_enc_keyid);
 #endif /* HAVE_FLOW_DISSECTOR_KEY_ENC_KEYID */
 
+#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS
+void flow_rule_match_enc_opts(const struct flow_rule *rule,
+                              struct flow_match_enc_opts *out)
+{
+        FLOW_DISSECTOR_MATCH(rule, FLOW_DISSECTOR_KEY_ENC_OPTS, out);
+}
+EXPORT_SYMBOL(flow_rule_match_enc_opts);
+#endif /* HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS */
+
 #endif /* HAVE_FLOW_RULE_MATCH_CVLAN */

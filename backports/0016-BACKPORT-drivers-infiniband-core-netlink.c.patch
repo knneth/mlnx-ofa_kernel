@@ -3,16 +3,21 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
 
 Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
 ---
- drivers/infiniband/core/netlink.c | 128 ++++++++++++++++++++++++++++++++++++--
- 1 file changed, 122 insertions(+), 6 deletions(-)
+ drivers/infiniband/core/netlink.c | 133 ++++++++++++++++++++++++++++--
+ 1 file changed, 127 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/netlink.c
 +++ b/drivers/infiniband/core/netlink.c
-@@ -46,16 +46,24 @@
+@@ -46,16 +46,29 @@
  #include "core_priv.h"
  
  static DEFINE_MUTEX(rdma_nl_mutex);
++
++#if !defined(HAVE_NETLINK_DUMP_CONTROL_DUMP) ||\
++	!defined(HAVE_STRUCT_CLASS_NS_TYPE) || !defined(HAVE_PERENT_OPERATIONS_ID)
 +static struct sock *nls;
++#endif
++
  static struct {
  	const struct rdma_nl_cbs   *cb_table;
  } rdma_nl_types[RDMA_NL_NUM_CLIENTS];
@@ -33,7 +38,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  EXPORT_SYMBOL(rdma_nl_chk_listeners);
  
  static bool is_nl_msg_valid(unsigned int type, unsigned int op)
-@@ -103,6 +111,7 @@ is_nl_valid(const struct sk_buff *skb, u
+@@ -103,6 +116,7 @@ is_nl_valid(const struct sk_buff *skb, u
  
  	if (!cb_table || (!cb_table[op].dump && !cb_table[op].doit))
  		return false;
@@ -41,7 +46,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  	return true;
  }
  
-@@ -166,8 +175,12 @@ int ibnl_put_attr(struct sk_buff *skb, s
+@@ -166,8 +180,12 @@ int ibnl_put_attr(struct sk_buff *skb, s
  }
  EXPORT_SYMBOL(ibnl_put_attr);
  
@@ -54,7 +59,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  {
  	int type = nlh->nlmsg_type;
  	unsigned int index = RDMA_NL_GET_CLIENT(type);
-@@ -180,7 +193,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
+@@ -180,7 +198,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
  	cb_table = rdma_nl_types[index].cb_table;
  
  	if ((cb_table[op].flags & RDMA_NL_ADMIN_PERM) &&
@@ -66,7 +71,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  		return -EPERM;
  
  	/*
-@@ -189,21 +206,35 @@ static int rdma_nl_rcv_msg(struct sk_buf
+@@ -189,21 +211,35 @@ static int rdma_nl_rcv_msg(struct sk_buf
  	 */
  	if (index == RDMA_NL_LS) {
  		if (cb_table[op].doit)
@@ -103,7 +108,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  
  	return 0;
  }
-@@ -215,10 +246,16 @@ static int rdma_nl_rcv_msg(struct sk_buf
+@@ -215,10 +251,16 @@ static int rdma_nl_rcv_msg(struct sk_buf
   * for that consumer only.
   */
  static int rdma_nl_rcv_skb(struct sk_buff *skb, int (*cb)(struct sk_buff *,
@@ -120,7 +125,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  	struct nlmsghdr *nlh;
  	int err;
  
-@@ -246,13 +283,21 @@ static int rdma_nl_rcv_skb(struct sk_buf
+@@ -246,13 +288,21 @@ static int rdma_nl_rcv_skb(struct sk_buf
  		if (nlh->nlmsg_type < NLMSG_MIN_TYPE)
  			goto ack;
  
@@ -142,7 +147,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  
  skip:
  		msglen = NLMSG_ALIGN(nlh->nlmsg_len);
-@@ -271,6 +316,7 @@ static void rdma_nl_rcv(struct sk_buff *
+@@ -271,6 +321,7 @@ static void rdma_nl_rcv(struct sk_buff *
  	mutex_unlock(&rdma_nl_mutex);
  }
  
@@ -150,7 +155,7 @@ Change-Id: I0ad1e7f4850a3089fa22bb47c6bb142142351faa
  int rdma_nl_unicast(struct net *net, struct sk_buff *skb, u32 pid)
  {
  	struct rdma_dev_net *rnet = rdma_net_to_dev_net(net);
-@@ -313,23 +359,93 @@ void rdma_nl_exit(void)
+@@ -313,23 +364,93 @@ void rdma_nl_exit(void)
  int rdma_nl_net_init(struct rdma_dev_net *rnet)
  {
  	struct net *net = read_pnet(&rnet->net);

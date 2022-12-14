@@ -411,7 +411,7 @@ struct ib_dct_attr {
 
 struct ib_dct {
 	struct ib_device       *device;
-	struct ib_uobject      *uobject;
+	struct ib_udct_object  *uobject;
 	struct ib_pd	       *pd;
 	struct ib_cq	       *cq;
 	struct ib_srq	       *srq;

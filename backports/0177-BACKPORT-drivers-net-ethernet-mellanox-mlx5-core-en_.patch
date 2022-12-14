@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I2ab867e893bb386efb2171292749ceaed1eecd6b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-@@ -121,9 +121,10 @@ mlx5e_accel_handle_tx(struct sk_buff *sk
+@@ -124,9 +124,10 @@ mlx5e_accel_handle_tx(struct sk_buff *sk
  			return NULL;
  	}
  #endif
@@ -21,3 +21,12 @@ Change-Id: I2ab867e893bb386efb2171292749ceaed1eecd6b
  
  	return skb;
  }
+@@ -137,7 +138,7 @@ mlx5e_accel_handle_rx(struct net_device
+ 		      struct mlx5_cqe64 *cqe,
+ 		      u32 *cqe_bcnt)
+ {
+-#ifdef CONFIG_MLX5_EN_TLS
++#if  defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_TLS_OFFLOAD_RX_RSYNC_REQUEST)
+ 	mlx5e_tls_handle_rx_skb(dev, skb, cqe_bcnt);
+ #endif
+ 

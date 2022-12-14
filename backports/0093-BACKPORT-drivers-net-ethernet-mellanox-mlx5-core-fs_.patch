@@ -8,7 +8,7 @@ Change-Id: I1047f3e0a5c5648636d4f4699cbf55dddc414801
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
-@@ -97,6 +97,10 @@ struct mlx5_flow_steering {
+@@ -121,6 +121,10 @@ struct mlx5_flow_steering {
  	struct mlx5_flow_root_namespace	*sniffer_rx_root_ns;
  	struct mlx5_flow_root_namespace	*rdma_rx_root_ns;
  	struct mlx5_flow_root_namespace	*egress_root_ns;
@@ -19,7 +19,7 @@ Change-Id: I1047f3e0a5c5648636d4f4699cbf55dddc414801
  };
  
  struct fs_node {
-@@ -156,7 +160,11 @@ struct mlx5_flow_table {
+@@ -181,7 +185,11 @@ struct mlx5_flow_table {
  	/* FWD rules that point on this flow table */
  	struct list_head		fwd_rules;
  	u32				flags;
@@ -32,7 +32,7 @@ Change-Id: I1047f3e0a5c5648636d4f4699cbf55dddc414801
  	struct fs_debugfs_ft		debugfs;
  	enum mlx5_flow_table_miss_action def_miss_action;
  };
-@@ -232,7 +240,11 @@ struct mlx5_flow_group {
+@@ -259,7 +267,11 @@ struct mlx5_flow_group {
  	struct ida			fte_allocator;
  	u32				id;
  	struct rhashtable		ftes_hash;
@@ -44,7 +44,7 @@ Change-Id: I1047f3e0a5c5648636d4f4699cbf55dddc414801
  	struct fs_debugfs_fg		debugfs;
  };
  
-@@ -249,11 +261,13 @@ struct mlx5_flow_root_namespace {
+@@ -278,11 +290,13 @@ struct mlx5_flow_root_namespace {
  
  int mlx5_init_fc_stats(struct mlx5_core_dev *dev);
  void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev);

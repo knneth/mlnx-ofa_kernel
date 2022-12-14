@@ -2,9 +2,14 @@
 #define _COMPAT_LINUX_SKBUFF_H
 
 #include "../../compat/config.h"
+
 #include <linux/version.h>
+#ifdef HAVE_LINUX_SIPHASH_H
+#include <linux/siphash.h>
+#endif
 
 #include_next <linux/skbuff.h>
+
 
 #ifndef HAVE_DEV_ALLOC_PAGES
 static inline struct page *dev_alloc_pages(unsigned int order)
@@ -69,4 +74,10 @@ static inline void skb_clear_hash(struct sk_buff *skb)
 }
 #endif
 
+#ifndef HAVE_SKB_FRAG_OFF_ADD
+static inline void skb_frag_off_add(skb_frag_t *frag, int delta)
+{
+	frag->page_offset += delta;
+}
+#endif
 #endif /* _COMPAT_LINUX_SKBUFF_H */

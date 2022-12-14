@@ -309,7 +309,7 @@ static inline struct ib_qp *_ib_create_qp(struct ib_device *dev,
 					  struct ib_pd *pd,
 					  struct ib_qp_init_attr *attr,
 					  struct ib_udata *udata,
-					  struct ib_uobject *uobj)
+					  struct ib_uqp_object *uobj)
 {
 	struct ib_qp *qp;
 
@@ -375,4 +375,15 @@ bool rdma_check_gid_user_access(const struct ib_gid_attr *attr);
 
 int rdma_nl_net_init(struct rdma_dev_net *rnet);
 void rdma_nl_net_exit(struct rdma_dev_net *rnet);
+
+struct rdma_umap_priv {
+	struct vm_area_struct *vma;
+	struct list_head list;
+	struct rdma_user_mmap_entry *entry;
+};
+
+void rdma_umap_priv_init(struct rdma_umap_priv *priv,
+			 struct vm_area_struct *vma,
+			 struct rdma_user_mmap_entry *entry);
+
 #endif /* _CORE_PRIV_H */
