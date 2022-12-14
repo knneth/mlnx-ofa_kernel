@@ -32,12 +32,6 @@ struct ib_peer_memory_client {
 	bool invalidation_required;
 };
 
-enum ib_umem_mapped_state {
-	UMEM_PEER_UNMAPPED,
-	UMEM_PEER_MAPPED,
-	UMEM_PEER_INVALIDATED,
-};
-
 struct ib_umem_peer {
 	struct ib_umem umem;
 	struct kref kref;
@@ -47,7 +41,7 @@ struct ib_umem_peer {
 	umem_invalidate_func_t invalidation_func;
 	void *invalidation_private;
 	struct mutex mapping_lock;
-	enum ib_umem_mapped_state mapped_state;
+	bool mapped;
 	u32 xa_id;
 };
 

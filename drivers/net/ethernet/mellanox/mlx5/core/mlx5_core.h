@@ -45,7 +45,7 @@
 #include "fs_core.h"
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"5.1-2.5.8.0.60"
+#define DRIVER_VERSION	"5.1-2.5.8"
 
 /* Number of EQs reserved for non-completion purposes */
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING

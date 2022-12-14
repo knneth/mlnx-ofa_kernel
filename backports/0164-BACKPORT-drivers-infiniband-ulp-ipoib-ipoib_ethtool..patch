@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 
 Change-Id: I9f40fb74b6d5c921eefa90e785a861c0783d366e
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 105 +++++++++++++++++++
- 1 file changed, 105 insertions(+)
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 101 +++++++++++++++++++
+ 1 file changed, 101 insertions(+)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
@@ -96,7 +96,7 @@ Change-Id: I9f40fb74b6d5c921eefa90e785a861c0783d366e
  static int ipoib_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *cmd)
  {
-@@ -310,18 +358,75 @@ static int ipoib_get_link_ksettings(stru
+@@ -310,18 +358,71 @@ static int ipoib_get_link_ksettings(stru
  
  	return 0;
  }
@@ -131,10 +131,6 @@ Change-Id: I9f40fb74b6d5c921eefa90e785a861c0783d366e
 +#endif
  
  static const struct ethtool_ops ipoib_ethtool_ops = {
-+#ifdef HAVE_SUPPORTED_COALESCE_PARAM
-+	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS |
-+		       		     ETHTOOL_COALESCE_RX_MAX_FRAMES,
-+#endif
 +#ifdef HAVE_GET_SET_LINK_KSETTINGS
  	.get_link_ksettings	= ipoib_get_link_ksettings,
 +#endif

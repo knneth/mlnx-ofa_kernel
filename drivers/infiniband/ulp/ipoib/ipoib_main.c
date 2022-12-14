@@ -53,7 +53,7 @@
 #include <rdma/ib_cache.h>
 #include <linux/inet.h>
 
-#define DRV_VERSION	"5.1-2.5.8.0.60"
+#define DRV_VERSION	"5.1-2.5.8"
 
 const char ipoib_driver_version[] = DRV_VERSION;
 

@@ -1241,8 +1241,6 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 
 	if (IS_ERR(mr)) {
 		err = PTR_ERR(mr);
-		if (umem->is_peer)
-			ib_umem_stop_invalidation_notifier(umem);
 		goto error;
 	}
 
@@ -1532,18 +1530,8 @@ static void dereg_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr)
 	/* Stop all DMA */
 	if (is_odp_mr(mr))
 		mlx5_ib_fence_odp_mr(mr);
-	else {
-		/*
-		 * For peers, need to disable the invalidation notifier
-		 * before calling destroy_mkey().
-		 */
-		if (umem && umem->is_peer) {
-			if (mlx5_mr_cache_invalidate(mr))
-				return;
-			ib_umem_stop_invalidation_notifier(umem);
-		}
+	else
 		clean_mr(dev, mr);
-	}
 
 	if (mr->allocated_from_cache)
 		mlx5_mr_cache_free(dev, mr);
