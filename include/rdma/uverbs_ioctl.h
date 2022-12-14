@@ -1,33 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
 /*
  * Copyright (c) 2017, Mellanox Technologies inc.  All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #ifndef _UVERBS_IOCTL_
@@ -173,7 +146,7 @@ enum uapi_radix_data {
 	UVERBS_API_OBJ_KEY_BITS = 5,
 	UVERBS_API_OBJ_KEY_SHIFT =
 		UVERBS_API_METHOD_KEY_BITS + UVERBS_API_METHOD_KEY_SHIFT,
-	UVERBS_API_OBJ_KEY_NUM_CORE = 24,
+	UVERBS_API_OBJ_KEY_NUM_CORE = 20,
 	UVERBS_API_OBJ_KEY_NUM_DRIVER =
 		(1 << UVERBS_API_OBJ_KEY_BITS) - UVERBS_API_OBJ_KEY_NUM_CORE,
 	UVERBS_API_OBJ_KEY_MASK = GENMASK(31, UVERBS_API_OBJ_KEY_SHIFT),
@@ -384,8 +357,7 @@ struct uapi_definition {
 #define DECLARE_UVERBS_OBJECT(_object_id, ...)                                 \
 	{                                                                      \
 		.kind = UAPI_DEF_OBJECT_START,                                 \
-		.scope = 0,                                 \
-		{ .object_start = { .object_id = _object_id } },                   \
+		.object_start = { .object_id = _object_id },                   \
 	},                                                                     \
 		##__VA_ARGS__
 
@@ -394,9 +366,9 @@ struct uapi_definition {
 	{                                                                      \
 		.kind = UAPI_DEF_WRITE,                                        \
 		.scope = UAPI_SCOPE_OBJECT,                                    \
-		{ .write = { .is_ex = 0, .command_num = _command_num } ,          \
-		 _cmd_desc },                                                     \
-		{ .func_write = _func },                                           \
+		.write = { .is_ex = 0, .command_num = _command_num },          \
+		.func_write = _func,                                           \
+		_cmd_desc,                                                     \
 	},                                                                     \
 		##__VA_ARGS__
 
@@ -405,9 +377,9 @@ struct uapi_definition {
 	{                                                                      \
 		.kind = UAPI_DEF_WRITE,                                        \
 		.scope = UAPI_SCOPE_OBJECT,                                    \
-		{ .write = { .is_ex = 1, .command_num = _command_num } ,          \
-		_cmd_desc } ,                                                     \
-		{ .func_write = _func },                                           \
+		.write = { .is_ex = 1, .command_num = _command_num },          \
+		.func_write = _func,                                           \
+		_cmd_desc,                                                     \
 	},                                                                     \
 		##__VA_ARGS__
 
@@ -419,14 +391,11 @@ struct uapi_definition {
 	{                                                                      \
 		.kind = UAPI_DEF_IS_SUPPORTED_DEV_FN,                          \
 		.scope = UAPI_SCOPE_OBJECT,                                    \
-		{ .object_start = { .object_id = 0 } },                   \
-		{								\
-			.needs_fn_offset =                                             \
+		.needs_fn_offset =                                             \
 			offsetof(struct ib_device_ops, ibdev_fn) +             \
-			BUILD_BUG_ON_ZERO(                                     \
-			    sizeof(((struct ib_device_ops *)0)->ibdev_fn) !=   \
-			    sizeof(void *))				       \
-		},								\
+			BUILD_BUG_ON_ZERO(sizeof_field(struct ib_device_ops,   \
+						       ibdev_fn) !=            \
+					  sizeof(void *)),                     \
 	}
 
 /*
@@ -437,41 +406,32 @@ struct uapi_definition {
 	{                                                                      \
 		.kind = UAPI_DEF_IS_SUPPORTED_DEV_FN,                          \
 		.scope = UAPI_SCOPE_METHOD,                                    \
-		{ .object_start = { .object_id = 0 } },                   \
-		{								\
-			.needs_fn_offset =                                             \
-				offsetof(struct ib_device_ops, ibdev_fn) +             \
-				BUILD_BUG_ON_ZERO(                                     \
-				    sizeof(((struct ib_device_ops *)0)->ibdev_fn) !=   \
-				    sizeof(void *))					\
-		},                                   \
+		.needs_fn_offset =                                             \
+			offsetof(struct ib_device_ops, ibdev_fn) +             \
+			BUILD_BUG_ON_ZERO(sizeof_field(struct ib_device_ops,   \
+						       ibdev_fn) !=            \
+					  sizeof(void *)),                     \
 	}
 
 /* Call a function to determine if the entire object is supported or not */
 #define UAPI_DEF_IS_OBJ_SUPPORTED(_func)                                       \
 	{                                                                      \
 		.kind = UAPI_DEF_IS_SUPPORTED_FUNC,                            \
-		.scope = UAPI_SCOPE_OBJECT,					\
-		{ .object_start = { .object_id = 0 } },                   \
-		{ .func_is_supported = _func },        \
+		.scope = UAPI_SCOPE_OBJECT, .func_is_supported = _func,        \
 	}
 
 /* Include another struct uapi_definition in this one */
 #define UAPI_DEF_CHAIN(_def_var)                                               \
 	{                                                                      \
-		.kind = UAPI_DEF_CHAIN,						\
-		.scope = 0,                               \
-		{ .object_start = { .object_id = 0 } },                   \
-		{ .chain = _def_var } ,                     \
+		.kind = UAPI_DEF_CHAIN, .chain = _def_var,                     \
 	}
 
 /* Temporary until the tree base description is replaced */
 #define UAPI_DEF_CHAIN_OBJ_TREE(_object_enum, _object_ptr, ...)                \
 	{                                                                      \
 		.kind = UAPI_DEF_CHAIN_OBJ_TREE,                               \
-		.scope = 0,                               \
-		{ .object_start = { .object_id = _object_enum } },                 \
-		{ .chain_obj_tree = _object_ptr },                                 \
+		.object_start = { .object_id = _object_enum },                 \
+		.chain_obj_tree = _object_ptr,                                 \
 	},								       \
 		##__VA_ARGS__
 #define UAPI_DEF_CHAIN_OBJ_TREE_NAMED(_object_enum, ...)                       \
@@ -504,8 +464,7 @@ struct uapi_definition {
  */
 #define UVERBS_ATTR_STRUCT(_type, _last)                                       \
 	.zero_trailing = 1,                                                    \
-	UVERBS_ATTR_SIZE(((uintptr_t)(&((_type *)0)->_last + 1)),              \
-			 sizeof(_type))
+	UVERBS_ATTR_SIZE(offsetofend(_type, _last), sizeof(_type))
 /*
  * Specifies at least min_len bytes must be passed in, but the amount can be
  * larger, up to the protocol maximum size. No check for zeroing is done.
@@ -678,6 +637,7 @@ struct uverbs_attr_bundle {
 	struct ib_udata ucore;
 	struct ib_uverbs_file *ufile;
 	struct ib_ucontext *context;
+	struct ib_uobject *uobject;
 	DECLARE_BITMAP(attr_present, UVERBS_API_ATTR_BKEY_LEN);
 	struct uverbs_attr attrs[];
 };
@@ -761,6 +721,9 @@ uverbs_attr_get_len(const struct uverbs_attr_bundle *attrs_bundle, u16 idx)
 
 	return attr->ptr_attr.len;
 }
+
+void uverbs_finalize_uobj_create(const struct uverbs_attr_bundle *attrs_bundle,
+				 u16 idx);
 
 /*
  * uverbs_attr_ptr_get_array_size() - Get array size pointer by a ptr

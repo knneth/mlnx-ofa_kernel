@@ -1,51 +1,24 @@
-From: Mikhael Goikhman <migo@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
 
-Change-Id: I556e581ab2219471a8d006235516f1b8d079f1a5
+Change-Id: Ifbfca2eda03c77486c02cecfc3d4afea2e9840e3
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c | 9 ++++++---
- 1 file changed, 6 insertions(+), 3 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
-@@ -81,12 +81,13 @@ bool mlx5_vxlan_lookup_port(struct mlx5_
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+@@ -53,7 +53,13 @@ static inline int mlx5_clock_get_ptp_ind
+ static inline ktime_t mlx5_timestamp_to_ns(struct mlx5_clock *clock,
+ 					   u64 timestamp)
  {
- 	struct mlx5_vxlan_port *vxlanp;
- 	bool found = false;
-+	COMPAT_HL_NODE
++#ifdef HAVE_KTIME_UNION_TV64
++	ktime_t x;
++	x.tv64 = 0;
++	return x;
++#else
+ 	return 0;
++#endif
+ }
+ #endif
  
- 	if (!mlx5_vxlan_allowed(vxlan))
- 		return NULL;
- 
- 	rcu_read_lock();
--	hash_for_each_possible_rcu(vxlan->htable, vxlanp, hlist, port)
-+	compat_hash_for_each_possible_rcu(vxlan->htable, vxlanp, hlist, port)
- 		if (vxlanp->udp_port == port) {
- 			found = true;
- 			break;
-@@ -99,8 +100,9 @@ bool mlx5_vxlan_lookup_port(struct mlx5_
- static struct mlx5_vxlan_port *vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 port)
- {
- 	struct mlx5_vxlan_port *vxlanp;
-+	COMPAT_HL_NODE
- 
--	hash_for_each_possible(vxlan->htable, vxlanp, hlist, port)
-+	compat_hash_for_each_possible(vxlan->htable, vxlanp, hlist, port)
- 		if (vxlanp->udp_port == port)
- 			return vxlanp;
- 	return NULL;
-@@ -205,12 +207,13 @@ void mlx5_vxlan_destroy(struct mlx5_vxla
- 	struct mlx5_vxlan_port *vxlanp;
- 	struct hlist_node *tmp;
- 	int bkt;
-+	COMPAT_HL_NODE
- 
- 	if (!mlx5_vxlan_allowed(vxlan))
- 		return;
- 
- 	/* Lockless since we are the only hash table consumers*/
--	hash_for_each_safe(vxlan->htable, bkt, tmp, vxlanp, hlist) {
-+	compat_hash_for_each_safe(vxlan->htable, bkt, tmp, vxlanp, hlist) {
- 		hash_del(&vxlanp->hlist);
- 		mlx5_vxlan_core_del_port_cmd(vxlan->mdev, vxlanp->udp_port);
- 		kfree(vxlanp);

@@ -3,14 +3,13 @@
 
 #include "../../../compat/config.h"
 
-#ifdef HAVE_UAPI_LINUX_EVENTPOLL_H
 #include_next <uapi/linux/eventpoll.h>
-#endif
 
 #ifndef EPOLLIN
 #include <linux/poll.h>
 #define EPOLLIN		POLLIN
 #define EPOLLOUT	POLLOUT
+#define EPOLLERR        POLLERR
 #define EPOLLWRNORM	POLLWRNORM
 #define EPOLLRDNORM	POLLRDNORM
 #define EPOLLRDHUP	POLLRDHUP

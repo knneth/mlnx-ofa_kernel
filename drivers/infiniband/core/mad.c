@@ -966,7 +966,7 @@ struct ib_mad_agent *ib_register_mad_agent(struct ib_device *device,
 	INIT_DELAYED_WORK(&mad_agent_priv->timed_work, timeout_sends);
 	INIT_LIST_HEAD(&mad_agent_priv->local_list);
 	INIT_WORK(&mad_agent_priv->local_work, local_completions);
-	atomic_set(&mad_agent_priv->refcount, 1);
+	refcount_set(&mad_agent_priv->refcount, 1);
 	init_completion(&mad_agent_priv->comp);
 
 	ret2 = ib_mad_agent_security_setup(&mad_agent_priv->agent, qp_type);
@@ -1048,7 +1048,7 @@ EXPORT_SYMBOL(ib_register_mad_agent);
 
 static inline void deref_mad_agent(struct ib_mad_agent_private *mad_agent_priv)
 {
-	if (atomic_dec_and_test(&mad_agent_priv->refcount))
+	if (refcount_dec_and_test(&mad_agent_priv->refcount))
 		complete(&mad_agent_priv->comp);
 }
 
@@ -1384,7 +1384,7 @@ static int handle_outgoing_dr_smp(struct ib_mad_agent_private *mad_agent_priv,
 			 * Reference MAD agent until receive
 			 * side of local completion handled
 			 */
-			atomic_inc(&mad_agent_priv->refcount);
+			refcount_inc(&mad_agent_priv->refcount);
 		} else
 			kfree(mad_priv);
 		break;
@@ -1424,7 +1424,7 @@ static int handle_outgoing_dr_smp(struct ib_mad_agent_private *mad_agent_priv,
 		local->return_wc_byte_len = mad_size;
 	}
 	/* Reference MAD agent until send side of local completion handled */
-	atomic_inc(&mad_agent_priv->refcount);
+	refcount_inc(&mad_agent_priv->refcount);
 	/* Queue local completion to local list */
 	spin_lock_irqsave(&mad_agent_priv->lock, flags);
 	list_add_tail(&local->completion_list, &mad_agent_priv->local_list);
@@ -1582,7 +1582,7 @@ struct ib_mad_send_buf * ib_create_send_mad(struct ib_mad_agent *mad_agent,
 	}
 
 	mad_send_wr->send_buf.mad_agent = mad_agent;
-	atomic_inc(&mad_agent_priv->refcount);
+	refcount_inc(&mad_agent_priv->refcount);
 	return &mad_send_wr->send_buf;
 }
 EXPORT_SYMBOL(ib_create_send_mad);
@@ -1759,7 +1759,7 @@ static int send_sa_cc_mad(struct ib_mad_send_wr_private *mad_send_wr,
 	mad_send_wr->refcount = 1 + (mad_send_wr->timeout > 0);
 
 	/* Reference MAD agent until send completes */
-	atomic_inc(&mad_agent_priv->refcount);
+	refcount_inc(&mad_agent_priv->refcount);
 	spin_lock_irqsave(&mad_agent_priv->lock, flags);
 	if (mad_agent_priv->send_list_closed) {
 		spin_unlock_irqrestore(&mad_agent_priv->lock, flags);
@@ -1856,10 +1856,10 @@ int ib_post_send_mad(struct ib_mad_send_buf *send_buf,
 				goto error;
 		} else {
 			/* Reference MAD agent until send completes */
-			atomic_inc(&mad_agent_priv->refcount);
+			refcount_inc(&mad_agent_priv->refcount);
 			spin_lock_irqsave(&mad_agent_priv->lock, flags);
 			list_add_tail(&mad_send_wr->agent_list,
-				      &mad_agent_priv->send_list);
+					&mad_agent_priv->send_list);
 			spin_unlock_irqrestore(&mad_agent_priv->lock, flags);
 
 			if (ib_mad_kernel_rmpp_agent(&mad_agent_priv->agent)) {
@@ -1874,8 +1874,8 @@ int ib_post_send_mad(struct ib_mad_send_buf *send_buf,
 				spin_lock_irqsave(&mad_agent_priv->lock, flags);
 				list_del(&mad_send_wr->agent_list);
 				spin_unlock_irqrestore(&mad_agent_priv->lock,
-						       flags);
-				atomic_dec(&mad_agent_priv->refcount);
+						flags);
+				deref_mad_agent(mad_agent_priv);
 				goto error;
 			}
 		}
@@ -2282,7 +2282,7 @@ find_mad_agent(struct ib_mad_port_private *port_priv,
 		hi_tid = be64_to_cpu(mad_hdr->tid) >> 32;
 		rcu_read_lock();
 		mad_agent = xa_load(&ib_mad_clients, hi_tid);
-		if (mad_agent && !atomic_inc_not_zero(&mad_agent->refcount))
+		if (mad_agent && !refcount_inc_not_zero(&mad_agent->refcount))
 			mad_agent = NULL;
 		rcu_read_unlock();
 	} else {
@@ -2334,7 +2334,7 @@ find_mad_agent(struct ib_mad_port_private *port_priv,
 			}
 		}
 		if (mad_agent)
-			atomic_inc(&mad_agent->refcount);
+			refcount_inc(&mad_agent->refcount);
 out:
 		spin_unlock_irqrestore(&port_priv->reg_lock, flags);
 	}
@@ -2559,7 +2559,7 @@ static void ib_mad_complete_recv(struct ib_mad_agent_private *mad_agent_priv,
 				mad_agent_priv->agent.recv_handler(
 						&mad_agent_priv->agent, NULL,
 						mad_recv_wc);
-				atomic_dec(&mad_agent_priv->refcount);
+				deref_mad_agent(mad_agent_priv);
 			} else {
 				/* not user rmpp, revert to normal behavior and
 				 * drop the mad */
@@ -2576,7 +2576,7 @@ static void ib_mad_complete_recv(struct ib_mad_agent_private *mad_agent_priv,
 					&mad_agent_priv->agent,
 					&mad_send_wr->send_buf,
 					mad_recv_wc);
-			atomic_dec(&mad_agent_priv->refcount);
+			deref_mad_agent(mad_agent_priv);
 
 			mad_send_wc.status = IB_WC_SUCCESS;
 			mad_send_wc.vendor_err = 0;
@@ -3180,7 +3180,7 @@ static void cancel_mads(struct ib_mad_agent_private *mad_agent_priv)
 			sa_cc_mad_done(get_cc_obj(mad_send_wr));
 		mad_agent_priv->agent.send_handler(&mad_agent_priv->agent,
 						   &mad_send_wc);
-		atomic_dec(&mad_agent_priv->refcount);
+		deref_mad_agent(mad_agent_priv);
 	}
 
 	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
@@ -3333,7 +3333,7 @@ static void local_completions(struct work_struct *work)
 						&local->mad_send_wr->send_buf,
 						&local->mad_priv->header.recv_wc);
 			spin_lock_irqsave(&recv_mad_agent->lock, flags);
-			atomic_dec(&recv_mad_agent->refcount);
+			deref_mad_agent(recv_mad_agent);
 			spin_unlock_irqrestore(&recv_mad_agent->lock, flags);
 		}
 
@@ -3346,7 +3346,7 @@ local_send_completion:
 						   &mad_send_wc);
 
 		spin_lock_irqsave(&mad_agent_priv->lock, flags);
-		atomic_dec(&mad_agent_priv->refcount);
+		deref_mad_agent(mad_agent_priv);
 		if (free_mad)
 			kfree(local->mad_priv);
 		kfree(local);
@@ -3438,7 +3438,7 @@ static void timeout_sends(struct work_struct *work)
 		mad_agent_priv->agent.send_handler(&mad_agent_priv->agent,
 						   &mad_send_wc);
 
-		atomic_dec(&mad_agent_priv->refcount);
+		deref_mad_agent(mad_agent_priv);
 		spin_lock_irqsave(&mad_agent_priv->lock, flags);
 	}
 	spin_unlock_irqrestore(&mad_agent_priv->lock, flags);
@@ -3852,13 +3852,16 @@ static int ib_mad_port_close(struct ib_device *device, int port_num)
 	return 0;
 }
 
-static void ib_mad_init_device(struct ib_device *device)
+static int ib_mad_init_device(struct ib_device *device)
 {
 	int start, i;
+	unsigned int count = 0;
+	int ret;
 
-	if (init_sa_cc_sysfs(device)) {
+	ret = init_sa_cc_sysfs(device);
+	if (ret) {
 		dev_err(&device->dev, "Couldn't open mad congestion control sysfs\n");
-		return;
+		return ret;
 	}
 
 	start = rdma_start_port(device);
@@ -3867,17 +3870,25 @@ static void ib_mad_init_device(struct ib_device *device)
 		if (!rdma_cap_ib_mad(device, i))
 			continue;
 
-		if (ib_mad_port_open(device, i)) {
+		ret = ib_mad_port_open(device, i);
+		if (ret) {
 			dev_err(&device->dev, "Couldn't open port %d\n", i);
 			goto error;
 		}
-		if (ib_agent_port_open(device, i)) {
+		ret = ib_agent_port_open(device, i);
+		if (ret) {
 			dev_err(&device->dev,
 				"Couldn't open port %d for agents\n", i);
 			goto error_agent;
 		}
+		count++;
 	}
-	return;
+	if (!count) {
+		cleanup_sa_cc_sysfs(device);
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
 
 error_agent:
 	if (ib_mad_port_close(device, i))
@@ -3896,6 +3907,7 @@ error:
 	}
 
 	cleanup_sa_cc_sysfs(device);
+	return ret;
 }
 
 static void ib_mad_remove_device(struct ib_device *device, void *client_data)

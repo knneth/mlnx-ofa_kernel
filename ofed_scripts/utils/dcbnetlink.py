@@ -107,6 +107,8 @@ DCB_ATTR_DCB_BUFFER = 10
 DCB_ATTR_IEEE_APP_UNSPEC = 0
 DCB_ATTR_IEEE_APP = 1
 
+IEEE_8021QAZ_APP_SEL_ETHERTYPE	= 1
+
 class DcbnlHdr:
 	def __init__(self, len, type):
 		self.len = len
@@ -247,9 +249,10 @@ class DcbController:
 		buffer_size = array.array('I')
 		buffer_size.fromstring(ieee[DCB_ATTR_DCB_BUFFER].str()[8:])
 
-		return prio2buffer, buffer_size
+		return prio2buffer, buffer_size[:8], buffer_size[8]
 
-	def set_dcb_buffer(self, _prio2buffer, _buffer_size):
+	def set_dcb_buffer(self, _prio2buffer, _buffer_size, _tot_size):
+		_buffer_size.append(_tot_size)
 		dcb_buffer = _prio2buffer.tostring() + _buffer_size.tostring()
 
 		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
@@ -501,6 +504,11 @@ class DcbAppTable:
 
 			if temp != "":
 				print(temp)
+
+	def printDefaultPriority(self):
+		for app in self.apps.values():
+			if app.selector == IEEE_8021QAZ_APP_SEL_ETHERTYPE:
+				print("\tprio:%d" % app.priority)
 
 	def delAppEntry(self, ctrl, selector):
 		for i in range(len(self.apps)):

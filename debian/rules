@@ -16,6 +16,7 @@
 #export DH_VERBOSE=1
 
 WITH_DKMS ?= 1
+WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
@@ -74,7 +75,11 @@ override_dh_auto_install:
 ifneq ($(WITH_DKMS),1)
 	make install_modules INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) KERNELRELEASE=$(kernelver)
 	find $(INSTALL_MOD_PATH) \( -type f -a -name "modules.*" \) -delete
+ifeq ($(WITH_MOD_SIGN),1)
+	ofed_scripts/tools/sign-modules $(INSTALL_MOD_PATH)/lib/modules/ $(kernel_source_dir)
 endif
+endif
+
 
 	# For dkms
 	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(pversion)
@@ -125,6 +130,7 @@ endif
 	dh_installdirs -p$(putils)  bin
 	dh_installdirs -p$(putils)  usr/bin
 	dh_installdirs -p$(putils)  usr/sbin
+	dh_installdirs -p$(putils)  lib/udev
 	dh_installdirs -p$(putils)  etc/udev/rules.d
 	dh_installdirs -p$(putils)  etc/init.d
 	dh_installdirs -p$(putils)  etc/init
@@ -153,6 +159,7 @@ endif
 	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_bf_udev		debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
@@ -199,5 +206,8 @@ ifneq ($(WITH_DKMS),1)
 override_dh_strip:
 	dh_strip
 	find debian -name '*.ko' | xargs strip -g
+ifeq ($(WITH_MOD_SIGN),1)
+	ofed_scripts/tools/sign-modules $(INSTALL_MOD_PATH)/lib/modules/ $(kernel_source_dir)
+endif
 endif
 endif

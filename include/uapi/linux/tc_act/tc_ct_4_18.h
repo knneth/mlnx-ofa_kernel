@@ -2,6 +2,8 @@
 #ifndef __UAPI_TC_CT_H
 #define __UAPI_TC_CT_H
 
+#include "../../../../compat/config.h"
+
 #include <linux/types.h>
 #include <linux/pkt_cls.h>
 

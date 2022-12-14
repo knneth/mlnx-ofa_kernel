@@ -35,6 +35,7 @@ struct mlx5e_tc_table {
 	DECLARE_HASHTABLE(hairpin_tbl, 16);
 	struct kobject *hp_config;
 	struct mlx5_prio_hp *prio_hp;
+	struct mlx5e_priv *prio_hp_ppriv;
 	int num_prio_hp;
 	atomic_t hp_fwd_ref_cnt;
 	struct mlx5_flow_table *hp_fwd;
@@ -44,7 +45,9 @@ struct mlx5e_tc_table {
 	struct notifier_block     netdevice_nb;
 	struct netdev_net_notifier	netdevice_nn;
 
+	struct idr			fte_ids;
 	struct mlx5_tc_ct_priv         *ct;
+	struct mapping_ctx             *chains_mapping;
 };
 
 struct mlx5e_flow_table {

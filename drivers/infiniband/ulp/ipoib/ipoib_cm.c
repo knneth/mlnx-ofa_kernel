@@ -513,13 +513,13 @@ static int ipoib_cm_rx_handler(struct ib_cm_id *cm_id,
 		return ipoib_cm_req_handler(cm_id, event);
 	case IB_CM_DREQ_RECEIVED:
 		ib_send_cm_drep(cm_id, NULL, 0);
-		/* Fall through */
+		fallthrough;
 	case IB_CM_REJ_RECEIVED:
 		p = cm_id->context;
 		priv = ipoib_priv(p->dev);
 		if (ib_modify_qp(p->qp, &ipoib_cm_err_attr, IB_QP_STATE))
 			ipoib_warn(priv, "unable to move qp to error state\n");
-		/* Fall through */
+		fallthrough;
 	default:
 		return 0;
 	}
@@ -765,7 +765,8 @@ void ipoib_cm_send(struct net_device *dev, struct sk_buff *skb, struct ipoib_cm_
 		priv->tx_wr.wr.send_flags &= ~IB_SEND_INLINE;
 	}
 
-	if (atomic_read(&priv->tx_outstanding) == priv->sendq_size - 1) {
+	if ((priv->global_tx_head - priv->global_tx_tail) ==
+	    priv->sendq_size - 1) {
 		ipoib_dbg(priv, "TX ring 0x%x full, stopping kernel net queue\n",
 			  tx->qp->qp_num);
 		netif_stop_queue(dev);
@@ -796,7 +797,7 @@ void ipoib_cm_send(struct net_device *dev, struct sk_buff *skb, struct ipoib_cm_
 	} else {
 		netif_trans_update(dev);
 		++tx->tx_head;
-		atomic_inc(&priv->tx_outstanding);
+		++priv->global_tx_head;
 	}
 }
 
@@ -832,12 +833,13 @@ void ipoib_cm_handle_tx_wc(struct net_device *dev, struct ib_wc *wc)
 	netif_tx_lock(dev);
 
 	++tx->tx_tail;
-	atomic_dec(&priv->tx_outstanding);
+	++priv->global_tx_tail;
 
 	if (unlikely(netif_queue_stopped(dev) &&
-	    (atomic_read(&priv->tx_outstanding) <= priv->sendq_size >> 1) &&
-	    test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
-			netif_wake_queue(dev);
+		     ((priv->global_tx_head - priv->global_tx_tail) <=
+		      priv->sendq_size >> 1) &&
+		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
+		netif_wake_queue(dev);
 
 	if (wc->status != IB_WC_SUCCESS &&
 	    wc->status != IB_WC_WR_FLUSH_ERR) {
@@ -1279,10 +1281,11 @@ timeout:
 		dev_kfree_skb_any(tx_req->skb);
 		netif_tx_lock_bh(p->dev);
 		++p->tx_tail;
-		atomic_dec(&priv->tx_outstanding);
-		if (unlikely(atomic_read(&priv->tx_outstanding) <= priv->sendq_size >> 1) &&
-			     netif_queue_stopped(p->dev) &&
-	  		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
+		++priv->global_tx_tail;
+		if (unlikely((priv->global_tx_head - priv->global_tx_tail) <=
+			     priv->sendq_size >> 1) &&
+		    netif_queue_stopped(p->dev) &&
+		    test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
 			netif_wake_queue(p->dev);
 		netif_tx_unlock_bh(p->dev);
 	}

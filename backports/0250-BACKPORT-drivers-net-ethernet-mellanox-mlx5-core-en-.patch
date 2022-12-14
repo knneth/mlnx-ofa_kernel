@@ -1,0 +1,20 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.h
+
+Change-Id: If6e7d39dad0842f8a85ea34c7be47ff0a2b04dd4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/umem.h
+@@ -24,6 +24,8 @@ void mlx5e_build_xsk_param(struct xdp_um
+ /* .ndo_bpf callback. */
+ int mlx5e_xsk_setup_umem(struct net_device *dev, struct xdp_umem *umem, u16 qid);
+ 
++#ifndef HAVE_XSK_BUFF_ALLOC
+ int mlx5e_xsk_resize_reuseq(struct xdp_umem *umem, u32 nentries);
++#endif
+ 
+ #endif /* __MLX5_EN_XSK_UMEM_H__ */

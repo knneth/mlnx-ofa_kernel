@@ -3,6 +3,7 @@
 
 #include "setup.h"
 #include "en/params.h"
+#include "en/txrx.h"
 
 /* It matches XDP_UMEM_MIN_CHUNK_SIZE, but as this constant is private and may
  * change unexpectedly, and mlx5e has a minimum valid stride size for striding
@@ -41,16 +42,20 @@ static void mlx5e_build_xsk_cparam(struct mlx5e_priv *priv,
 {
 	mlx5e_build_rq_param(priv, params, xsk, &cparam->rq);
 	mlx5e_build_xdpsq_param(priv, params, &cparam->xdp_sq);
-	mlx5e_build_rx_cq_param(priv, params, xsk, &cparam->rx_cq);
-	mlx5e_build_tx_cq_param(priv, params, &cparam->tx_cq);
 }
 
 int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
 		   struct mlx5e_xsk_param *xsk, struct xdp_umem *umem,
 		   struct mlx5e_channel *c)
 {
+	struct mlx5e_create_cq_param ccp = {};
 	struct mlx5e_channel_param *cparam;
 	int err;
+
+	ccp.napi = &c->napi;
+	ccp.ch_stats = c->stats;
+	ccp.node = cpu_to_node(c->cpu);
+	ccp.ix = c->ix;
 
 	if (!mlx5e_validate_xsk_param(params, xsk, priv->mdev))
 		return -EINVAL;
@@ -61,7 +66,8 @@ int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	mlx5e_build_xsk_cparam(priv, params, xsk, cparam);
 
-	err = mlx5e_open_cq(c, params->rx_cq_moderation, &cparam->rx_cq, &c->xskrq.cq);
+	err = mlx5e_open_cq(c->priv, params->rx_cq_moderation, &cparam->rq.cqp, &ccp,
+			    &c->xskrq.cq);
 	if (unlikely(err))
 		goto err_free_cparam;
 
@@ -69,7 +75,8 @@ int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	if (unlikely(err))
 		goto err_close_rx_cq;
 
-	err = mlx5e_open_cq(c, params->tx_cq_moderation, &cparam->tx_cq, &c->xsksq.cq);
+	err = mlx5e_open_cq(c->priv, params->tx_cq_moderation, &cparam->xdp_sq.cqp, &ccp,
+			    &c->xsksq.cq);
 	if (unlikely(err))
 		goto err_close_rq;
 
@@ -107,13 +114,15 @@ err_free_cparam:
 void mlx5e_close_xsk(struct mlx5e_channel *c)
 {
 	clear_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
-	napi_synchronize(&c->napi);
-	synchronize_rcu(); /* Sync with the XSK wakeup. */
+	synchronize_rcu(); /* Sync with the XSK wakeup and with NAPI. */
 
 	mlx5e_close_rq(&c->xskrq);
 	mlx5e_close_cq(&c->xskrq.cq);
 	mlx5e_close_xdpsq(&c->xsksq);
 	mlx5e_close_cq(&c->xsksq.cq);
+
+	memset(&c->xskrq, 0, sizeof(c->xskrq));
+	memset(&c->xsksq, 0, sizeof(c->xsksq));
 }
 
 void mlx5e_activate_xsk(struct mlx5e_channel *c)
@@ -121,9 +130,9 @@ void mlx5e_activate_xsk(struct mlx5e_channel *c)
 	set_bit(MLX5E_RQ_STATE_ENABLED, &c->xskrq.state);
 	/* TX queue is created active. */
 
-	spin_lock(&c->async_icosq_lock);
+	spin_lock_bh(&c->async_icosq_lock);
 	mlx5e_trigger_irq(&c->async_icosq);
-	spin_unlock(&c->async_icosq_lock);
+	spin_unlock_bh(&c->async_icosq_lock);
 }
 
 void mlx5e_deactivate_xsk(struct mlx5e_channel *c)

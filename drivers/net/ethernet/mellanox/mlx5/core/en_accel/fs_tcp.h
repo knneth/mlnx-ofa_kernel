@@ -19,7 +19,7 @@ static inline void mlx5e_accel_fs_tcp_destroy(struct mlx5e_priv *priv) {}
 static inline struct mlx5_flow_handle *mlx5e_accel_fs_add_sk(struct mlx5e_priv *priv,
 							     struct sock *sk, u32 tirn,
 							     uint32_t flow_tag)
-{ return NULL; }
+{ return ERR_PTR(-EOPNOTSUPP); }
 static inline void mlx5e_accel_fs_del_sk(struct mlx5_flow_handle *rule) {}
 #endif
 

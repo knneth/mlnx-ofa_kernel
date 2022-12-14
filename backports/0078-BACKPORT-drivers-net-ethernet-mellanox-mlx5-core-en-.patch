@@ -1,83 +1,47 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+From: Mikhael Goikhman <migo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 
-Change-Id: Ia672546c1e50f491da41bf61d500e065c706247a
+Change-Id: Ice606d926983d8a7d975f20132562a7b96d3b999
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c   | 17 ++++++++++++++++-
- 1 file changed, 16 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+@@ -32,6 +32,7 @@
+ #ifndef __MLX5_EN_XDP_H__
+ #define __MLX5_EN_XDP_H__
  
-+#ifdef HAVE_TCF_TUNNEL_INFO
-+
- #include <net/vxlan.h>
- #include "lib/vxlan.h"
- #include "en/tc_tun.h"
-@@ -17,9 +19,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
++#ifdef HAVE_XDP_BUFF
+ #include <linux/indirect_call_wrapper.h>
  
- static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
- 					      struct flow_cls_offload *f)
-+
- {
- 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
--	struct netlink_ext_ack *extack = f->common.extack;
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
-+       struct netlink_ext_ack *extack = f->common.extack;
+ #include "en.h"
+@@ -54,8 +55,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
+ void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw);
+ void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq);
++#ifdef HAVE_NDO_XDP_XMIT
++#ifndef HAVE_NDO_XDP_FLUSH
+ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
+ 		   u32 flags);
++#else
++int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp);
++void mlx5e_xdp_flush(struct net_device *dev);
 +#endif
- 	struct flow_match_ports enc_ports;
- 
- 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS))
-@@ -31,8 +36,10 @@ static int mlx5e_tc_tun_check_udp_dport_
- 
- 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan,
- 				    be16_to_cpu(enc_ports.key->dst))) {
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 		NL_SET_ERR_MSG_MOD(extack,
- 				   "Matched UDP dst port is not registered as a VXLAN port");
 +#endif
- 		netdev_warn(priv->netdev,
- 			    "UDP port %d is not registered as a VXLAN port\n",
- 			    be16_to_cpu(enc_ports.key->dst));
-@@ -67,8 +74,10 @@ static int mlx5e_tc_tun_init_encap_attr_
- 	e->tunnel = &vxlan_tunnel;
  
- 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 		NL_SET_ERR_MSG_MOD(extack,
- 				   "vxlan udp dport was not registered with the HW");
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq,
+ 							  struct mlx5e_xmit_data *xdptxd,
+@@ -103,7 +111,6 @@ static inline void mlx5e_xmit_xdp_doorbe
+ 		sq->doorbell_cseg = NULL;
+ 	}
+ }
+-
+ /* Enable inline WQEs to shift some load from a congested HCA (HW) to
+  * a less congested cpu (SW).
+  */
+@@ -184,3 +191,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
+ 	return fifo->xi[(*fifo->cc)++ & fifo->mask];
+ }
+ #endif
 +#endif
- 		netdev_warn(priv->netdev,
- 			    "%d isn't an offloaded vxlan udp dport\n",
- 			    dst_port);
-@@ -105,7 +114,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
- 				    void *headers_v)
- {
- 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 	struct netlink_ext_ack *extack = f->common.extack;
-+#endif
- 	struct flow_match_enc_keyid enc_keyid;
- 	void *misc_c, *misc_v;
- 
-@@ -124,8 +135,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
- 
- 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
- 					ft_field_support.outer_vxlan_vni)) {
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 		NL_SET_ERR_MSG_MOD(extack,
- 				   "Matching on VXLAN VNI is not supported");
-+#endif
- 		netdev_warn(priv->netdev,
- 			    "Matching on VXLAN VNI is not supported\n");
- 		return -EOPNOTSUPP;
-@@ -149,3 +162,5 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
- 	.parse_udp_ports      = mlx5e_tc_tun_parse_udp_ports_vxlan,
- 	.parse_tunnel         = mlx5e_tc_tun_parse_vxlan,
- };
-+
-+#endif /* HAVE_TCF_TUNNEL_INFO */

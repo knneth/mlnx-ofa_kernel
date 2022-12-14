@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/user_mad.c
 
-Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
+Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
 ---
- drivers/infiniband/core/user_mad.c | 111 ++++++++++++++++++++++++++---
- 1 file changed, 101 insertions(+), 10 deletions(-)
+ drivers/infiniband/core/user_mad.c | 59 ++++++++++++++++++++++++++----
+ 1 file changed, 51 insertions(+), 8 deletions(-)
 
 --- a/drivers/infiniband/core/user_mad.c
 +++ b/drivers/infiniband/core/user_mad.c
@@ -18,21 +18,19 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  
  enum {
  	IB_UMAD_MAX_PORTS  = RDMA_MAX_PORTS,
-@@ -142,9 +145,11 @@ static const dev_t base_issm_dev = MKDEV
- 				   IB_UMAD_NUM_FIXED_MINOR;
+@@ -143,7 +146,11 @@ static const dev_t base_issm_dev = MKDEV
  static dev_t dynamic_umad_dev;
  static dev_t dynamic_issm_dev;
--
+ 
 +#ifdef HAVE_IDA_ALLOC_MAX
  static DEFINE_IDA(umad_ida);
--
 +#else
 +static DECLARE_BITMAP(dev_map, IB_UMAD_MAX_PORTS);
 +#endif
- static void ib_umad_add_one(struct ib_device *device);
- static void ib_umad_remove_one(struct ib_device *device, void *client_data);
  
-@@ -342,9 +347,9 @@ static ssize_t copy_recv_mad(struct ib_u
+ static int ib_umad_add_one(struct ib_device *device);
+ static void ib_umad_remove_one(struct ib_device *device, void *client_data);
+@@ -342,9 +349,9 @@ static ssize_t copy_recv_mad(struct ib_u
  				return -EFAULT;
  		}
  	}
@@ -44,7 +42,7 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  	return hdr_size(file) + packet->length;
  }
  
-@@ -363,10 +368,10 @@ static ssize_t copy_send_mad(struct ib_u
+@@ -363,10 +370,10 @@ static ssize_t copy_send_mad(struct ib_u
  
  	if (copy_to_user(buf, packet->mad.data, packet->length))
  		return -EFAULT;
@@ -57,7 +55,7 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  	return size;
  }
  
-@@ -521,10 +526,10 @@ static ssize_t ib_umad_write(struct file
+@@ -521,10 +528,10 @@ static ssize_t ib_umad_write(struct file
  	}
  
  	mutex_lock(&file->mutex);
@@ -70,7 +68,7 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  	agent = __get_agent(file, packet->mad.hdr.id);
  	if (!agent) {
  		ret = -EINVAL;
-@@ -1009,8 +1014,11 @@ static int ib_umad_open(struct inode *in
+@@ -1009,8 +1016,11 @@ static int ib_umad_open(struct inode *in
  	filp->private_data = file;
  
  	list_add_tail(&file->port_list, &port->file_list);
@@ -83,58 +81,7 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  out:
  	mutex_unlock(&port->file_mutex);
  	return ret;
-@@ -1186,7 +1194,11 @@ static struct ib_client issm_client = {
- };
- MODULE_ALIAS_RDMA_CLIENT("issm");
- 
-+#ifdef HAVE_DEV_GROUPS
- static ssize_t ibdev_show(struct device *dev, struct device_attribute *attr,
-+#else
-+static ssize_t show_ibdev(struct device *dev, struct device_attribute *attr,
-+#endif
- 			  char *buf)
- {
- 	struct ib_umad_port *port = dev_get_drvdata(dev);
-@@ -1196,9 +1208,17 @@ static ssize_t ibdev_show(struct device
- 
- 	return sprintf(buf, "%s\n", dev_name(&port->ib_dev->dev));
- }
-+#ifdef HAVE_DEV_GROUPS
- static DEVICE_ATTR_RO(ibdev);
-+#else
-+static DEVICE_ATTR(ibdev, S_IRUGO, show_ibdev, NULL);
-+#endif
- 
-+#ifdef HAVE_DEV_GROUPS
- static ssize_t port_show(struct device *dev, struct device_attribute *attr,
-+#else
-+static ssize_t show_port(struct device *dev, struct device_attribute *attr,
-+#endif
- 			 char *buf)
- {
- 	struct ib_umad_port *port = dev_get_drvdata(dev);
-@@ -1208,6 +1228,7 @@ static ssize_t port_show(struct device *
- 
- 	return sprintf(buf, "%d\n", port->port_num);
- }
-+#ifdef HAVE_DEV_GROUPS
- static DEVICE_ATTR_RO(port);
- 
- static struct attribute *umad_class_dev_attrs[] = {
-@@ -1216,12 +1237,20 @@ static struct attribute *umad_class_dev_
- 	NULL,
- };
- ATTRIBUTE_GROUPS(umad_class_dev);
-+#else
-+static DEVICE_ATTR(port, S_IRUGO, show_port, NULL);
-+#endif
- 
-+#ifdef HAVE_CLASS_DEVNODE_UMODE_T
- static char *umad_devnode(struct device *dev, umode_t *mode)
-+#else
-+static char *umad_devnode(struct device *dev, mode_t *mode)
-+#endif
- {
+@@ -1222,6 +1232,7 @@ static char *umad_devnode(struct device
  	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
  }
  
@@ -142,21 +89,13 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  static ssize_t abi_version_show(struct class *class,
  				struct class_attribute *attr, char *buf)
  {
-@@ -1234,14 +1263,31 @@ static struct attribute *umad_class_attr
+@@ -1234,14 +1245,21 @@ static struct attribute *umad_class_attr
  	NULL,
  };
  ATTRIBUTE_GROUPS(umad_class);
 +#else
-+#ifdef HAVE_CLASS_ATTR_STRING
 +static CLASS_ATTR_STRING(abi_version, S_IRUGO,
 +                         __stringify(IB_USER_MAD_ABI_VERSION));
-+#else
-+static ssize_t show_abi_version(struct class *class, char *buf)
-+{
-+	        return sprintf(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
-+}
-+static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
-+#endif/*HAVE_CLASS_ATTR_STRING*/
 +#endif/*HAVE_CLASS_GROUPS*/
  
  static struct class umad_class = {
@@ -165,16 +104,14 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
 +#ifdef HAVE_CLASS_GROUPS
  	.class_groups	= umad_class_groups,
 +#endif
-+#ifdef HAVE_DEV_GROUPS
  	.dev_groups	= umad_class_dev_groups,
-+#endif
  };
  
 +
  static void ib_umad_release_port(struct device *device)
  {
  	struct ib_umad_port *port = dev_get_drvdata(device);
-@@ -1271,10 +1317,19 @@ static int ib_umad_init_port(struct ib_d
+@@ -1271,10 +1289,19 @@ static int ib_umad_init_port(struct ib_d
  	dev_t base_issm;
  	int ret;
  
@@ -194,37 +131,7 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  	if (devnum >= IB_UMAD_NUM_FIXED_MINOR) {
  		base_umad = dynamic_umad_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
  		base_issm = dynamic_issm_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
-@@ -1300,6 +1355,12 @@ static int ib_umad_init_port(struct ib_d
- 	if (ret)
- 		goto err_cdev;
- 
-+#ifndef HAVE_DEV_GROUPS
-+	if (device_create_file(&port->dev, &dev_attr_ibdev))
-+		goto err_dev;
-+	if (device_create_file(&port->dev, &dev_attr_port))
-+		goto err_dev;
-+#endif
- 	ib_umad_init_port_dev(&port->sm_dev, port, device);
- 	port->sm_dev.devt = base_issm;
- 	dev_set_name(&port->sm_dev, "issm%d", port->dev_num);
-@@ -1310,14 +1371,28 @@ static int ib_umad_init_port(struct ib_d
- 	if (ret)
- 		goto err_dev;
- 
-+#ifndef HAVE_DEV_GROUPS
-+	if (device_create_file(&port->sm_dev, &dev_attr_ibdev))
-+		goto err_sm_dev;
-+	if (device_create_file(&port->sm_dev, &dev_attr_port))
-+		goto err_sm_dev;
-+#endif
- 	return 0;
- 
-+#ifndef HAVE_DEV_GROUPS
-+err_sm_dev:
-+	cdev_device_del(&port->sm_cdev, &port->sm_dev);
-+#endif
- err_dev:
- 	put_device(&port->sm_dev);
+@@ -1317,7 +1344,11 @@ err_dev:
  	cdev_device_del(&port->cdev, &port->dev);
  err_cdev:
  	put_device(&port->dev);
@@ -236,7 +143,7 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  	return ret;
  }
  
-@@ -1347,8 +1422,11 @@ static void ib_umad_kill_port(struct ib_
+@@ -1347,8 +1378,11 @@ static void ib_umad_kill_port(struct ib_
  	mutex_unlock(&port->file_mutex);
  
  	cdev_device_del(&port->sm_cdev, &port->sm_dev);
@@ -249,16 +156,12 @@ Change-Id: Iad3a207c4d76ebea67cf235a235b3375fe9eb16b
  	/* balances device_initialize() */
  	put_device(&port->sm_dev);
  	put_device(&port->dev);
-@@ -1442,6 +1520,19 @@ static int __init ib_umad_init(void)
+@@ -1444,6 +1478,15 @@ static int __init ib_umad_init(void)
  		goto out_chrdev;
  	}
  
 +#ifndef HAVE_CLASS_GROUPS
-+#ifdef HAVE_CLASS_ATTR_STRING
 +	ret = class_create_file(&umad_class, &class_attr_abi_version.attr);
-+#else
-+	ret = class_create_file(&umad_class, &class_attr_abi_version);
-+#endif/*HAVE_CLASS_ATTR_STRING*/
 +	if (ret) {
 +		pr_err("couldn't create abi_version attribute\n");
 +		goto out_class;

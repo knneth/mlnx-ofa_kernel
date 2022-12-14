@@ -42,6 +42,7 @@
 
 extern const struct ethtool_ops mlx5i_ethtool_ops;
 extern const struct ethtool_ops mlx5i_pkey_ethtool_ops;
+extern const struct mlx5e_rx_handlers mlx5i_rx_handlers;
 
 #define MLX5_IB_GRH_BYTES       40
 #define MLX5_IPOIB_ENCAP_LEN    4
@@ -56,7 +57,7 @@ struct mlx5i_priv {
 	u32    qkey;
 	u16    pkey_index;
 	struct mlx5i_pkey_qpn_ht *qpn_htbl;
-	char  *mlx5e_priv[0];
+	char  *mlx5e_priv[];
 };
 
 int mlx5i_create_tis(struct mlx5_core_dev *mdev, u32 underlay_qpn, u32 *tisn);
@@ -106,7 +107,7 @@ struct mlx5i_tx_wqe {
 	struct mlx5_wqe_datagram_seg datagram;
 	struct mlx5_wqe_eth_pad      pad;
 	struct mlx5_wqe_eth_seg      eth;
-	struct mlx5_wqe_data_seg     data[0];
+	struct mlx5_wqe_data_seg     data[];
 };
 
 #define MLX5I_SQ_FETCH_WQE(sq, pi) \
@@ -114,8 +115,6 @@ struct mlx5i_tx_wqe {
 
 void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		   struct mlx5_av *av, u32 dqpn, u32 dqkey, bool xmit_more);
-void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			 bool xmit_more);
 void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
 
 #endif /* CONFIG_MLX5_CORE_IPOIB */

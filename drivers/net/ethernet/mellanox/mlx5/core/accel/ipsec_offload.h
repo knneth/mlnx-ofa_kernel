@@ -22,8 +22,8 @@ static inline bool mlx5_is_ipsec_device(struct mlx5_core_dev *mdev)
 	    MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_IPSEC))
 		return false;
 
-	return MLX5_CAP_IPSEC(mdev, ipsec_crypto_offload) &&
-		MLX5_CAP_ETH(mdev, insert_trailer);
+	return (MLX5_CAP_IPSEC(mdev, ipsec_crypto_offload) && MLX5_CAP_ETH(mdev, insert_trailer)) ||
+	       MLX5_CAP_IPSEC(mdev, ipsec_full_offload);
 }
 
 #else

@@ -23,9 +23,12 @@
 #include <linux/radix-tree.h>
 #include <linux/t10-pi.h>
 
+#define NVMET_DEFAULT_VS		NVME_VS(1, 3, 0)
+
 #define NVMET_ASYNC_EVENTS		4
 #define NVMET_ERROR_LOG_SLOTS		128
 #define NVMET_NO_ERROR_LOC		((u16)-1)
+#define NVMET_DEFAULT_CTRL_MODEL	"Linux"
 
 /*
  * Supported optional AENs:
@@ -53,7 +56,6 @@
 	(cpu_to_le32(offsetof(struct nvmf_connect_command, x)))
 
 struct nvmet_ns {
-	struct list_head	dev_link;
 	struct percpu_ref	ref;
 	struct block_device	*bdev;
 	struct pci_dev		*pdev;
@@ -82,6 +84,7 @@ struct nvmet_ns {
 	struct pci_dev		*p2p_dev;
 	int			pi_type;
 	int			metadata_size;
+	u32			offload_cmd_tmo_us;
 };
 
 static inline struct nvmet_ns *to_nvmet_ns(struct config_item *item)
@@ -216,15 +219,22 @@ struct nvmet_ctrl {
 	void			*offload_ctrl;
 };
 
+struct nvmet_subsys_model {
+	struct rcu_head		rcuhead;
+	char			number[];
+};
+
 struct nvmet_subsys {
 	enum nvme_subsys_type	type;
 
 	struct mutex		lock;
 	struct kref		ref;
 
-	struct list_head	namespaces;
+	struct xarray		namespaces;
 	unsigned int		nr_namespaces;
 	unsigned int		max_nsid;
+	u16			cntlid_min;
+	u16			cntlid_max;
 
 	struct list_head	ctrls;
 
@@ -254,6 +264,14 @@ struct nvmet_subsys {
 	u64 (*offload_ns_flush_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_error_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_backend_error_cmds)(struct nvmet_ns *ns);
+
+	struct nvmet_subsys_model	__rcu *model;
+
+#ifdef CONFIG_NVME_TARGET_PASSTHRU
+	struct nvme_ctrl	*passthru_ctrl;
+	char			*passthru_ctrl_path;
+	struct config_group	passthru_group;
+#endif /* CONFIG_NVME_TARGET_PASSTHRU */
 };
 
 static inline struct nvmet_subsys *to_subsys(struct config_item *item)
@@ -297,8 +315,9 @@ struct nvmet_fabrics_ops {
 	struct module *owner;
 	unsigned int type;
 	unsigned int msdbd;
-	bool has_keyed_sgls : 1;
-	bool metadata_support : 1;
+	unsigned int flags;
+#define NVMF_KEYED_SGLS			(1 << 0)
+#define NVMF_METADATA_SUPPORTED		(1 << 1)
 	void (*queue_response)(struct nvmet_req *req);
 	int (*add_port)(struct nvmet_port *port);
 	void (*remove_port)(struct nvmet_port *port);
@@ -307,7 +326,6 @@ struct nvmet_fabrics_ops {
 			struct nvmet_port *port, char *traddr);
 	u16 (*install_queue)(struct nvmet_sq *nvme_sq);
 	void (*discovery_chg)(struct nvmet_port *port);
-	u8 (*get_mdts)(const struct nvmet_ctrl *ctrl);
 	bool (*is_port_active)(struct nvmet_port *port);
 	bool (*peer_to_peer_capable)(struct nvmet_port *port);
 	int (*create_offload_ctrl)(struct nvmet_ctrl *ctrl);
@@ -326,6 +344,7 @@ struct nvmet_fabrics_ops {
 	u64 (*offload_ns_flush_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_error_cmds)(struct nvmet_ns *ns);
 	u64 (*offload_ns_backend_error_cmds)(struct nvmet_ns *ns);
+	u8 (*get_mdts)(const struct nvmet_ctrl *ctrl);
 	bool (*check_subsys_match_offload_port)(struct nvmet_port *port,
 						struct nvmet_subsys *subsys);
 };
@@ -352,6 +371,11 @@ struct nvmet_req {
 			struct bio_vec          *bvec;
 			struct work_struct      work;
 		} f;
+		struct {
+			struct request		*rq;
+			struct work_struct      work;
+			bool			use_workqueue;
+		} p;
 	};
 	int			sg_cnt;
 	int			metadata_sg_cnt;
@@ -431,6 +455,8 @@ void nvmet_req_complete(struct nvmet_req *req, u16 status);
 int nvmet_req_alloc_sgls(struct nvmet_req *req);
 void nvmet_req_free_sgls(struct nvmet_req *req);
 
+void nvmet_execute_set_features(struct nvmet_req *req);
+void nvmet_execute_get_features(struct nvmet_req *req);
 void nvmet_execute_keep_alive(struct nvmet_req *req);
 
 void nvmet_cq_setup(struct nvmet_ctrl *ctrl, struct nvmet_cq *cq, u16 qid,
@@ -518,6 +544,7 @@ void nvmet_add_async_event(struct nvmet_ctrl *ctrl, u8 event_type,
  */
 #define NVMET_MAX_ANAGRPS	128
 #define NVMET_DEFAULT_ANA_GRPID	1
+#define NVMET_DEFAULT_CMD_TIMEOUT_USEC 30000000
 
 #define NVMET_KAS		10
 #define NVMET_DISC_KATO_MS		120000
@@ -566,6 +593,43 @@ static inline u32 nvmet_dsm_len(struct nvmet_req *req)
 {
 	return (le32_to_cpu(req->cmd->dsm.nr) + 1) *
 		sizeof(struct nvme_dsm_range);
+}
+
+#ifdef CONFIG_NVME_TARGET_PASSTHRU
+void nvmet_passthru_subsys_free(struct nvmet_subsys *subsys);
+int nvmet_passthru_ctrl_enable(struct nvmet_subsys *subsys);
+void nvmet_passthru_ctrl_disable(struct nvmet_subsys *subsys);
+u16 nvmet_parse_passthru_admin_cmd(struct nvmet_req *req);
+u16 nvmet_parse_passthru_io_cmd(struct nvmet_req *req);
+static inline struct nvme_ctrl *nvmet_passthru_ctrl(struct nvmet_subsys *subsys)
+{
+	return subsys->passthru_ctrl;
+}
+#else /* CONFIG_NVME_TARGET_PASSTHRU */
+static inline void nvmet_passthru_subsys_free(struct nvmet_subsys *subsys)
+{
+}
+static inline void nvmet_passthru_ctrl_disable(struct nvmet_subsys *subsys)
+{
+}
+static inline u16 nvmet_parse_passthru_admin_cmd(struct nvmet_req *req)
+{
+	return 0;
+}
+static inline u16 nvmet_parse_passthru_io_cmd(struct nvmet_req *req)
+{
+	return 0;
+}
+static inline struct nvme_ctrl *nvmet_passthru_ctrl(struct nvmet_subsys *subsys)
+{
+	return NULL;
+}
+#endif /* CONFIG_NVME_TARGET_PASSTHRU */
+
+static inline struct nvme_ctrl *
+nvmet_req_passthru_ctrl(struct nvmet_req *req)
+{
+	return nvmet_passthru_ctrl(req->sq->ctrl->subsys);
 }
 
 u16 errno_to_nvme_status(struct nvmet_req *req, int errno);

@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
 
-Change-Id: Id8176b1b1e5783bf70d7424ec31e93b845d2d75c
+Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
 ---
- drivers/infiniband/core/uverbs_cmd.c | 41 ++++++++++++++++++++++++++++
- 1 file changed, 41 insertions(+)
+ drivers/infiniband/core/uverbs_cmd.c | 19 ++++++++++++++++++-
+ 1 file changed, 18 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/uverbs_cmd.c
 +++ b/drivers/infiniband/core/uverbs_cmd.c
@@ -55,71 +55,16 @@ Change-Id: Id8176b1b1e5783bf70d7424ec31e93b845d2d75c
  err:
  	mutex_unlock(&file->ucontext_lock);
  	up_read(&file->hw_destroy_rwsem);
-@@ -580,7 +593,11 @@ static int ib_uverbs_open_xrcd(struct uv
- 	struct ib_uverbs_open_xrcd_resp	resp;
- 	struct ib_uxrcd_object         *obj;
- 	struct ib_xrcd                 *xrcd = NULL;
-+#ifdef HAVE_FDGET
- 	struct fd			f = {NULL, 0};
+@@ -3302,7 +3315,11 @@ static int __uverbs_create_xsrq(struct u
+ 	struct ib_srq                   *srq;
+ 	struct ib_srq_init_attr          attr;
+ 	int ret;
+-	struct ib_uobject *xrcd_uobj;
++#ifndef uninitialized_var
++	struct ib_uobject               *xrcd_uobj;
 +#else
-+	struct file                    *f = NULL;
++	struct ib_uobject               *uninitialized_var(xrcd_uobj);
 +#endif
- 	struct inode                   *inode = NULL;
- 	int				ret = 0;
- 	int				new_xrcd = 0;
-@@ -593,6 +610,7 @@ static int ib_uverbs_open_xrcd(struct uv
- 	mutex_lock(&ibudev->xrcd_tree_mutex);
+ 	struct ib_device *ib_dev;
  
- 	if (cmd.fd != -1) {
-+#ifdef HAVE_FDGET
- 		/* search for file descriptor */
- 		f = fdget(cmd.fd);
- 		if (!f.file) {
-@@ -601,6 +619,19 @@ static int ib_uverbs_open_xrcd(struct uv
- 		}
- 
- 		inode = file_inode(f.file);
-+#else
-+		f = fget(cmd.fd);
-+		if (!f) {
-+			ret = -EBADF;
-+			goto err_tree_mutex_unlock;
-+		}
-+
-+		inode = f->f_dentry->d_inode;
-+		if (!inode) {
-+			ret = -EBADF;
-+			goto err_tree_mutex_unlock;
-+		}
-+#endif
- 		xrcd = find_xrcd(ibudev, inode);
- 		if (!xrcd && !(cmd.oflags & O_CREAT)) {
- 			/* no file descriptor. Need CREATE flag */
-@@ -649,8 +680,13 @@ static int ib_uverbs_open_xrcd(struct uv
- 	if (ret)
- 		goto err_copy;
- 
-+#ifdef HAVE_FDGET
- 	if (f.file)
- 		fdput(f);
-+#else
-+	if (f)
-+		fput(f);
-+#endif
- 
- 	mutex_unlock(&ibudev->xrcd_tree_mutex);
- 
-@@ -671,8 +707,13 @@ err:
- 	uobj_alloc_abort(&obj->uobject, attrs);
- 
- err_tree_mutex_unlock:
-+#ifdef HAVE_FDGET
- 	if (f.file)
- 		fdput(f);
-+#else
-+	if (f)
-+		fput(f);
-+#endif
- 
- 	mutex_unlock(&ibudev->xrcd_tree_mutex);
- 
+ 	obj = (struct ib_usrq_object *)uobj_alloc(UVERBS_OBJECT_SRQ, attrs,

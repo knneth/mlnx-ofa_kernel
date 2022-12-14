@@ -1,0 +1,20 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/module.c
+
+Change-Id: Icef4aa49bcef3c89bc327e8cf5c8227e4cdb9629
+---
+ net/sunrpc/xprtrdma/module.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/net/sunrpc/xprtrdma/module.c
++++ b/net/sunrpc/xprtrdma/module.c
+@@ -17,7 +17,9 @@
+ #include "xprt_rdma.h"
+ 
+ #define CREATE_TRACE_POINTS
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ MODULE_AUTHOR("Open Grid Computing and Network Appliance, Inc.");
+ MODULE_DESCRIPTION("RPC/RDMA Transport");

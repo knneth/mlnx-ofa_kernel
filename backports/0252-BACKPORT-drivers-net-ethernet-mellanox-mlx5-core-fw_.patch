@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
+
+Change-Id: I29c8b0fc743411495626b9130eb57a3716da2e6f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
+@@ -11,7 +11,9 @@ bool mlx5_fw_reset_enable_remote_dev_res
+ int mlx5_fw_reset_query(struct mlx5_core_dev *dev, u8 *reset_level, u8 *reset_type);
+ int mlx5_fw_reset_set_reset_sync(struct mlx5_core_dev *dev, u8 reset_type_sel);
+ int mlx5_fw_reset_set_live_patch(struct mlx5_core_dev *dev);
+-
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++int mlx5_fw_reset_wait_reset_done(struct mlx5_core_dev *dev);
++#endif
+ void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev);
+ void mlx5_fw_reset_events_stop(struct mlx5_core_dev *dev);
+ int mlx5_fw_reset_init(struct mlx5_core_dev *dev);

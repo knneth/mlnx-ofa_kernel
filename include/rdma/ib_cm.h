@@ -6,6 +6,7 @@
  * Copyright (c) 2005 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2019, Mellanox Technologies inc.  All rights reserved.
  */
+
 #ifndef IB_CM_H
 #define IB_CM_H
 
@@ -168,8 +169,7 @@ enum ib_cm_rej_reason {
 	IB_CM_REJ_INVALID_CLASS_VERSION		= 31,
 	IB_CM_REJ_INVALID_FLOW_LABEL		= 32,
 	IB_CM_REJ_INVALID_ALT_FLOW_LABEL	= 33,
-	IB_CM_REJ_VENDOR_OPTION_NOT_SUPPORTED	=
-		RDMA_USER_CM_REJ_VENDOR_OPTION_NOT_SUPPORTED,
+	IB_CM_REJ_VENDOR_OPTION_NOT_SUPPORTED	= 35,
 };
 
 struct ib_cm_rej_event_param {
@@ -365,7 +365,6 @@ struct ib_cm_req_param {
 	u32			starting_psn;
 	const void		*private_data;
 	u8			private_data_len;
-	u8			peer_to_peer;
 	u8			responder_resources;
 	u8			initiator_depth;
 	u8			remote_cm_response_timeout;

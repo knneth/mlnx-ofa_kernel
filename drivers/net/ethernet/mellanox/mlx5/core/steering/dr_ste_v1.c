@@ -457,16 +457,21 @@ static void dr_ste_v1_set_accelerated_rewrite_actions(u8 *hw_ste_p,
 						      u8 *d_action,
 						      u16 num_of_actions,
 						      u32 re_write_index,
-						      u32 re_write_args)
+						      u32 re_write_args,
+						      u8 *action_data)
 {
-	MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
-		 action_id, DR_STE_V1_ACTION_ID_ACCELERATED_LIST);
-	MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
-		 modify_actions_pattern_pointer, re_write_index);
-	MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
-		 number_of_modify_actions, num_of_actions);
-	MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
-		 modify_actions_argument_pointer, re_write_args);
+	if (action_data) {
+		memcpy(d_action, action_data, DR_MODIFY_ACTION_SIZE);
+	} else {
+		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
+			 action_id, DR_STE_V1_ACTION_ID_ACCELERATED_LIST);
+		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
+			 modify_actions_pattern_pointer, re_write_index);
+		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
+			 number_of_modify_actions, num_of_actions);
+		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
+			 modify_actions_argument_pointer, re_write_args);
+	}
 
 	dr_ste_v1_set_reparse(hw_ste_p);
 }
@@ -503,7 +508,8 @@ static void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 		dr_ste_v1_set_accelerated_rewrite_actions(last_ste, action,
 							  attr->modify_actions,
 							  attr->modify_index,
-							  attr->args_index);
+							  attr->args_index,
+							  attr->single_modify_action);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 		allow_encap = false;
@@ -513,15 +519,15 @@ static void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 		int i;
 
 		for (i = 0; i < attr->vlans.count; i++) {
-			if (action_sz < DR_STE_ACTION_SINGLE_SZ || !allow_encap) {
+			if (action_sz < DR_STE_ACTION_DOUBLE_SZ || !allow_encap) {
 				dr_ste_v1_arr_init_next_match(&last_ste, added_stes, attr->gvmi);
 				action = MLX5_ADDR_OF(ste_mask_and_match, last_ste, action);
 				action_sz = DR_STE_ACTION_TRIPLE_SZ;
 				allow_encap = true;
 			}
 			dr_ste_v1_set_tx_push_vlan(last_ste, action, attr->vlans.headers[i]);
-			action_sz -= DR_STE_ACTION_SINGLE_SZ;
-			action += DR_STE_ACTION_SINGLE_SZ;
+			action_sz -= DR_STE_ACTION_DOUBLE_SZ;
+			action += DR_STE_ACTION_DOUBLE_SZ;
 		}
 	}
 
@@ -574,7 +580,8 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 		dr_ste_v1_set_accelerated_rewrite_actions(last_ste, action,
 							  attr->decap_actions,
 							  attr->decap_index,
-							  attr->decap_args_index);
+							  attr->decap_args_index,
+							  NULL);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 		allow_modify_hdr = false;
@@ -631,7 +638,8 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 		dr_ste_v1_set_accelerated_rewrite_actions(last_ste, action,
 							  attr->modify_actions,
 							  attr->modify_index,
-							  attr->args_index);
+							  attr->args_index,
+							  attr->single_modify_action);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 	}
@@ -1203,6 +1211,7 @@ static int dr_ste_v1_build_eth_ipv6_l3_l4_tag(struct mlx5dr_match_param *value,
 					      u8 *tag)
 {
 	struct mlx5dr_match_spec *spec = sb->inner ? &value->inner : &value->outer;
+	struct mlx5dr_match_misc *misc = &value->misc;
 
 	DR_STE_SET_TAG(eth_l4_v1, tag, dst_port, spec, tcp_dport);
 	DR_STE_SET_TAG(eth_l4_v1, tag, src_port, spec, tcp_sport);
@@ -1213,6 +1222,11 @@ static int dr_ste_v1_build_eth_ipv6_l3_l4_tag(struct mlx5dr_match_param *value,
 	DR_STE_SET_TAG(eth_l4_v1, tag, dscp, spec, ip_dscp);
 	DR_STE_SET_TAG(eth_l4_v1, tag, ecn, spec, ip_ecn);
 	DR_STE_SET_TAG(eth_l4_v1, tag, ipv6_hop_limit, spec, ttl_hoplimit);
+
+	if (sb->inner)
+		DR_STE_SET_TAG(eth_l4_v1, tag, flow_label, misc, inner_ipv6_flow_label);
+	else
+		DR_STE_SET_TAG(eth_l4_v1, tag, flow_label, misc, outer_ipv6_flow_label);
 
 	if (spec->tcp_flags) {
 		DR_STE_SET_TCP_FLAGS(eth_l4_v1, tag, spec);
@@ -1681,13 +1695,13 @@ dr_ste_v1_find_cached_pattern(struct mlx5dr_domain *dmn,
 	struct dr_cached_pattern *cached_action;
 
 	list_for_each_entry_safe(cached_action, tmp_cached_action,
-				 &dmn->modify_hdr_list, list) {
+			&dmn->modify_hdr_list, list) {
 		if (dr_ste_v1_compare_pattern(cached_action->type,
-					      cached_action->rewrite_data.num_of_actions,
-					      cached_action->rewrite_data.data,
-					      action->action_type,
-					      action->rewrite.num_of_actions,
-					      action->rewrite.data))
+					cached_action->rewrite_data.num_of_actions,
+					cached_action->rewrite_data.data,
+					action->action_type,
+					action->rewrite.num_of_actions,
+					action->rewrite.data))
 			return cached_action;
 	}
 

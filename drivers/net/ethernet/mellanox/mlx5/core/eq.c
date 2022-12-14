@@ -530,6 +530,29 @@ int mlx5_vector2eq(struct mlx5_core_dev *dev, int vector, struct mlx5_eq_comp *e
 	return err;
 }
 
+void mlx5_rename_comp_eq(struct mlx5_core_dev *dev, unsigned int eq_ix,
+			 char *name)
+{
+	struct mlx5_eq_table *table = dev->priv.eq_table;
+	int irq_ix;
+	int err;
+
+	if (mlx5_core_is_sf(dev))
+		return;
+
+	mutex_lock(&table->lock);
+	if (eq_ix >= table->num_comp_eqs) {
+		err = -ENOENT;
+		dev_err(&dev->pdev->dev, "%s: failed: %d\n",
+			__func__, err);
+		goto unlock;
+	}
+	irq_ix = eq_ix + MLX5_IRQ_VEC_COMP_BASE;
+	mlx5_irq_rename(dev, irq_ix, name);
+unlock:
+	mutex_unlock(&table->lock);
+}
+
 static int destroy_async_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq)
 {
 	struct mlx5_eq_table *eq_table = dev->priv.eq_table;
@@ -632,6 +655,10 @@ static void gather_async_events_mask(struct mlx5_core_dev *dev, u64 mask[4])
 	if (mlx5_eswitch_is_funcs_handler(dev))
 		async_event_mask |=
 			(1ull << MLX5_EVENT_TYPE_ESW_FUNCTIONS_CHANGED);
+
+	if (MLX5_CAP_IPSEC(dev, ipsec_full_offload))
+		async_event_mask |=
+			(1ull << MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT);
 
 	mask[0] = async_event_mask;
 

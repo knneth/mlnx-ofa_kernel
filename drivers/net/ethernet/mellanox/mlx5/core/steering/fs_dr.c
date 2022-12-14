@@ -384,7 +384,7 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 	if (fte->action.action & MLX5_FLOW_CONTEXT_ACTION_FWD_DEST) {
 		list_for_each_entry(dst, &fte->node.children, node.list) {
 			enum mlx5_flow_destination_type type = dst->dest_attr.type;
-			u32 ft_id;
+			u32 id;
 
 			if (num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX ||
 			    num_term_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX) {
@@ -422,8 +422,21 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 				num_term_actions++;
 				break;
 			case MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM:
-				ft_id = dst->dest_attr.ft_num;
-				tmp_action = mlx5dr_action_create_dest_table_num(domain, ft_id);
+				id = dst->dest_attr.ft_num;
+				tmp_action = mlx5dr_action_create_dest_table_num(domain,
+										 id);
+				if (!tmp_action) {
+					err = -ENOMEM;
+					goto free_actions;
+				}
+				fs_dr_actions[fs_dr_num_actions++] = tmp_action;
+				term_actions[num_term_actions++].dest = tmp_action;
+				break;
+			case MLX5_FLOW_DESTINATION_TYPE_FLOW_SAMPLER:
+				id = dst->dest_attr.sampler_id;
+				tmp_action =
+					mlx5dr_action_create_flow_sampler(domain,
+									  id);
 				if (!tmp_action) {
 					err = -ENOMEM;
 					goto free_actions;
@@ -486,7 +499,8 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 	rule = mlx5dr_rule_create(group->fs_dr_matcher.dr_matcher,
 				  &params,
 				  num_actions,
-				  actions);
+				  actions,
+				  fte->flow_context.flow_source);
 	if (!rule) {
 		err = -EINVAL;
 		goto free_actions;

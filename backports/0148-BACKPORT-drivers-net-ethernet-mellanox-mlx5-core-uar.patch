@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/uar.c
+
+Change-Id: I63022f07ee4697bad4707600d2bc35b7179996b2
+---
+ drivers/net/ethernet/mellanox/mlx5/core/uar.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/uar.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
+@@ -358,9 +358,13 @@ static int mlx5_get_pcie_dev_link_caps(s
+ 		*width = (lnkcap1 & PCI_EXP_LNKCAP_MLW) >>
+ 			PCI_EXP_LNKCAP_MLW_SHIFT;
+ 		if (*speed == PCI_SPEED_UNKNOWN) { /* pre-r3.0 */
++#ifdef PCI_EXP_LNKCAP_SLS_8_0GB
+ 			if (lnkcap1 & PCI_EXP_LNKCAP_SLS_8_0GB)
+ 				*speed = PCIE_SPEED_8_0GT;
+ 			else if (lnkcap1 & PCI_EXP_LNKCAP_SLS_5_0GB)
++#else
++			if (lnkcap1 & PCI_EXP_LNKCAP_SLS_5_0GB)
++#endif
+ 				*speed = PCIE_SPEED_5_0GT;
+ 			else if (lnkcap1 & PCI_EXP_LNKCAP_SLS_2_5GB)
+ 				*speed = PCIE_SPEED_2_5GT;

@@ -1,0 +1,88 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
+
+Change-Id: I3702cac81a67d91f8c4384ecf4d14973c485155f
+---
+ drivers/infiniband/hw/mlx5/cq.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/cq.c
++++ b/drivers/infiniband/hw/mlx5/cq.c
+@@ -44,9 +44,19 @@
+ 
+ static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq, struct mlx5_eqe *eqe)
+ {
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
++	struct mlx5_ib_cq *mlx5ib_cq = to_mibcq(cq);
++	struct ib_cq *ibcq = &mlx5ib_cq->ibcq;
++
++	ibcq->comp_handler(ibcq, ibcq->cq_context);
++
++	if (unlikely(mlx5ib_cq->tsk))
++		kick_process(mlx5ib_cq->tsk);
++#else
+ 	struct ib_cq *ibcq = &to_mibcq(cq)->ibcq;
+ 
+ 	ibcq->comp_handler(ibcq, ibcq->cq_context);
++#endif
+ }
+ 
+ static void mlx5_ib_cq_event(struct mlx5_core_cq *mcq, enum mlx5_event type)
+@@ -743,9 +753,15 @@ static int create_cq_user(struct mlx5_ib
+ 	*cqe_size = ucmd.cqe_size;
+ 
+ 	cq->buf.umem =
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 				 entries * ucmd.cqe_size,
+ 				 IB_ACCESS_LOCAL_WRITE, 0);
++#else
++		ib_umem_get_peer(udata, ucmd.buf_addr,
++				 entries * ucmd.cqe_size,
++				 IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(cq->buf.umem)) {
+ 		err = PTR_ERR(cq->buf.umem);
+ 		return err;
+@@ -936,8 +952,13 @@ int mlx5_ib_create_cq(struct ib_cq *ibcq
+ 	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+ 	struct mlx5_ib_cq *cq = to_mcq(ibcq);
+ 	u32 out[MLX5_ST_SZ_DW(create_cq_out)];
++#ifndef uninitialized_var
+ 	int index;
+ 	int inlen;
++#else
++	int uninitialized_var(index);
++	int uninitialized_var(inlen);
++#endif
+ 	u32 *cqb = NULL;
+ 	void *cqc;
+ 	int cqe_size;
+@@ -1152,9 +1173,15 @@ static int resize_user(struct mlx5_ib_de
+ 	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem = ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 				(size_t)ucmd.cqe_size * entries,
+ 				IB_ACCESS_LOCAL_WRITE, 0);
++#else
++	umem = ib_umem_get_peer(udata, ucmd.buf_addr,
++				(size_t)ucmd.cqe_size * entries,
++				IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(umem)) {
+ 		err = PTR_ERR(umem);
+ 		return err;
+@@ -1257,7 +1284,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
+ 	__be64 *pas;
+ 	int page_shift;
+ 	int inlen;
++#ifndef uninitialized_var
+ 	int cqe_size;
++#else
++	int uninitialized_var(cqe_size);
++#endif
+ 	unsigned long flags;
+ 
+ 	if (!MLX5_CAP_GEN(dev->mdev, cq_resize)) {

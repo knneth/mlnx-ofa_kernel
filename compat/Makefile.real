@@ -7,10 +7,6 @@ obj-$(CONFIG_COMPAT_NET_SCH_FQ_CODEL) += sch_fq_codel.o
 
 mlx_compat-y += main.o
 
-# Compat kernel compatibility code
-mlx_compat-y += kthread.o
-
-
 mlx_compat-$(CONFIG_COMPAT_KFIFO) += kfifo.o
 
 mlx_compat-$(CONFIG_COMPAT_KERNEL_3_10) += compat-3.10.o
@@ -49,10 +45,8 @@ mlx_compat-y += rhashtable.o
 mlx_compat-y += ../block/blk-mq-rdma.o
 mlx_compat-y += exec.o
 mlx_compat-y += pci.o
-mlx_compat-y += rbtree.o
 mlx_compat-y += syscall.o
 mlx_compat-y += mmu_notifier.o
-mlx_compat-y += radix-tree.o
 mlx_compat-y += xarray.o
 mlx_compat-y += rdma_dim.o
 mlx_compat-y += dim.o

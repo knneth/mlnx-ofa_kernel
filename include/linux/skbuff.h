@@ -19,12 +19,6 @@ static inline struct page *dev_alloc_page(void)
 	return dev_alloc_pages(0);
 }
 #endif
-#ifndef HAVE_SKB_PULL_INLINE
-static inline unsigned char *skb_pull_inline(struct sk_buff *skb, unsigned int len)
-{
-	return unlikely(len > skb->len) ? NULL : __skb_pull(skb, len);
-}
-#endif /* HAVE_SKB_PULL_INLINE */
 
 #ifndef SKB_TRUESIZE
 #define SKB_TRUESIZE(X) ((X) +						\
@@ -39,10 +33,6 @@ extern void v2_6_28_skb_add_rx_frag(struct sk_buff *skb, int i, struct page *pag
 #define skb_add_rx_frag(skb, i, page, off, size, truesize) \
 	v2_6_28_skb_add_rx_frag(skb, i, page, off, size)
 #else /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) */
-#ifdef HAVE_SKB_ADD_RX_FRAG_5_PARAMS
-#define skb_add_rx_frag(skb, i, page, off, size, truesize) \
-	skb_add_rx_frag(skb, i, page, off, size)
-#endif /* HAVE_SKB_ADD_RX_FRAG_5_PARAMS */
 #endif /*  LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) */
 
 #ifndef HAVE_SKB_PUT_ZERO

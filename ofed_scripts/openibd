@@ -146,10 +146,19 @@ if ( grep -i 'SuSE Linux' /etc/issue /etc/os-release >/dev/null 2>&1 ); then
 fi
 
 #########################################################################
+is_serial()
+{
+	if [ "$CONSOLETYPE" = 'serial' ]; then
+		return 0
+	fi
+	case `tty` in ttyS0)
+		return 0
+		;;
+	esac
+	return 1
+}
 # Get a sane screen width
 [ -z "${COLUMNS:-}" ] && COLUMNS=80
-
-[ -z "${CONSOLETYPE:-}" ] && [ -x /sbin/consoletype ] && CONSOLETYPE="`/sbin/consoletype`"
 
 # Read in our configuration
 if [ -z "${BOOTUP:-}" ]; then
@@ -167,7 +176,7 @@ if [ -z "${BOOTUP:-}" ]; then
     SETCOLOR_NORMAL="echo -en \\033[0;39m"
     LOGLEVEL=1
   fi
-  if [ "$CONSOLETYPE" = "serial" ]; then
+  if  is_serial; then
       BOOTUP=serial
       MOVE_TO_COL=
       SETCOLOR_SUCCESS=
@@ -345,7 +354,7 @@ UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target 
 UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
 UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw vfio_mdev"
 
-STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib mlx4_core mlx4_ib mlx4_en mlx4_vnic mlx5_core mlx5_ib ib_uverbs ib_umad ib_cm ib_core eth_ipoib mlxfw mlx5_fpga_tools"
+STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib mlx4_core mlx4_ib mlx4_en mlx4_vnic mlx5_core mlx5_ib ib_uverbs ib_umad ib_cm ib_core eth_ipoib mlxfw"
 
 if (modinfo scsi_transport_srp 2>/dev/null | grep depends: | grep -q compat 2>/dev/null) ||
     (lsmod 2>/dev/null | grep scsi_transport_srp | grep -q compat); then
@@ -1091,6 +1100,13 @@ start()
 
 
     if [ "X${MLX5_LOAD}" == "Xyes" ]; then
+        load_module mlx5_ib
+        my_rc=$?
+        if [ $my_rc -ne 0 ]; then
+                echo_failure $"Loading Mellanox MLX5_IB HCA driver: "
+        fi
+        RC=$[ $RC + $my_rc ]
+
         load_module mlx5_core
         my_rc=$?
         if [ $my_rc -ne 0 ]; then
@@ -1113,11 +1129,6 @@ start()
                 fi
                 xe_bond_recover mlx5_core
             fi
-        fi
-        load_module mlx5_ib
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading Mellanox MLX5_IB HCA driver: "
         fi
         RC=$[ $RC + $my_rc ]
     fi
@@ -1148,15 +1159,6 @@ start()
                 fi
             done
         done
-    fi
-
-    if [ "X${MLX5_FPGA_LOAD}" == "Xyes" ]; then
-        load_module mlx5_fpga_tools
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading Mellanox MLX5 FPGA Tools driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
     fi
 
     # Load ESP Offload kernel modules for Innova IPsec

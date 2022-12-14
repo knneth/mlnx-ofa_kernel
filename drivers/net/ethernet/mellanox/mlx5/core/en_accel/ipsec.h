@@ -41,8 +41,10 @@
 #include <linux/idr.h>
 
 #include "accel/ipsec.h"
+#include "en/aso.h"
 
 #define MLX5E_IPSEC_SADB_RX_BITS 10
+#define MLX5E_IPSEC_SADB_TX_BITS 10
 #define MLX5E_IPSEC_ESN_SCOPE_MID 0x80000000L
 
 struct mlx5e_priv;
@@ -73,6 +75,15 @@ struct mlx5e_ipsec_stats {
 	u64 ipsec_del_sa_success;
 	u64 ipsec_del_sa_fail;
 	u64 ipsec_cmd_drop;
+
+	u64 ipsec_full_rx_pkts;
+	u64 ipsec_full_rx_bytes;
+	u64 ipsec_full_rx_pkts_drop;
+	u64 ipsec_full_rx_bytes_drop;
+	u64 ipsec_full_tx_pkts;
+	u64 ipsec_full_tx_bytes;
+	u64 ipsec_full_tx_pkts_drop;
+	u64 ipsec_full_tx_bytes_drop;
 };
 
 struct mlx5e_accel_fs_esp;
@@ -81,14 +92,17 @@ struct mlx5e_ipsec_tx;
 struct mlx5e_ipsec {
 	struct mlx5e_priv *en_priv;
 	DECLARE_HASHTABLE(sadb_rx, MLX5E_IPSEC_SADB_RX_BITS);
+	DECLARE_HASHTABLE(sadb_tx, MLX5E_IPSEC_SADB_TX_BITS);
 	bool no_trailer;
 	spinlock_t sadb_rx_lock; /* Protects sadb_rx and halloc */
+	spinlock_t sadb_tx_lock; /* Protects sadb_tx and halloc */
 	struct ida halloc;
 	struct mlx5e_ipsec_sw_stats sw_stats;
 	struct mlx5e_ipsec_stats stats;
 	struct workqueue_struct *wq;
 	struct mlx5e_accel_fs_esp *rx_fs;
 	struct mlx5e_ipsec_tx *tx_fs;
+	struct mlx5e_ipsec_aso *aso;
 };
 
 struct mlx5e_ipsec_esn_state {
@@ -103,6 +117,19 @@ struct mlx5e_ipsec_rule {
 	struct mlx5_pkt_reformat *pkt_reformat;
 };
 
+#define IPSEC_NO_LIMIT     GENMASK_ULL(63, 0)
+#define IPSEC_SW_LIMIT_BIT 31
+#define IPSEC_HW_LIMIT     BIT(IPSEC_SW_LIMIT_BIT + 1)
+#define IPSEC_SW_LIMIT     BIT(IPSEC_SW_LIMIT_BIT)
+#define IPSEC_SW_MASK      GENMASK(IPSEC_SW_LIMIT_BIT - 1, 0)
+#define IPSEC_SAFE         (IPSEC_SW_LIMIT / 16)
+
+struct mlx5e_ipsec_state_lft {
+	u64 round_soft; /* Number of interrupt before send soft event */
+	u64 round_hard; /* Number of interrupt before send hard event */
+	bool is_simulated;
+};
+
 struct mlx5e_ipsec_sa_entry {
 	struct hlist_node hlist; /* Item in SADB_RX hashtable */
 	struct mlx5e_ipsec_esn_state esn_state;
@@ -115,6 +142,7 @@ struct mlx5e_ipsec_sa_entry {
 			  struct xfrm_offload *xo);
 	u32 ipsec_obj_id;
 	struct mlx5e_ipsec_rule ipsec_rule;
+	struct mlx5e_ipsec_state_lft lft;
 };
 
 void mlx5e_ipsec_build_inverse_table(void);
@@ -126,7 +154,7 @@ struct xfrm_state *mlx5e_ipsec_sadb_rx_lookup(struct mlx5e_ipsec *dev,
 					      unsigned int handle);
 int mlx5e_ipsec_sadb_rx_lookup_rev(struct mlx5e_ipsec *ipsec,
 				   struct ethtool_rx_flow_spec *fs, u32 *handle);
-
+int mlx5e_ipsec_async_event(struct mlx5e_priv *priv, u32 obj_id);
 #else
 
 static inline void mlx5e_ipsec_build_inverse_table(void)
@@ -146,6 +174,10 @@ static inline void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)
 {
 }
 
+static inline int mlx5e_ipsec_async_event(struct mlx5e_priv *priv, u32 obj_id)
+{
+	return NOTIFY_DONE;
+}
 #endif
 
 #endif	/* __MLX5E_IPSEC_H__ */

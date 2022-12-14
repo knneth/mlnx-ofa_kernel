@@ -55,8 +55,6 @@
 #include "core_priv.h"
 #include <trace/events/rdma_core.h>
 
-#include <trace/events/rdma_core.h>
-
 static int ib_resolve_eth_dmac(struct ib_device *device,
 			       struct rdma_ah_attr *ah_attr);
 
@@ -81,7 +79,8 @@ static const char * const ib_events[] = {
 	[IB_EVENT_CLIENT_REREGISTER]	= "client reregister",
 	[IB_EVENT_GID_CHANGE]		= "GID changed",
 	[IB_EXP_EVENT_XRQ_QP_ERR]	= "XRQ QP error",
-	[IB_EXP_EVENT_XRQ_NVMF_BACKEND_CTRL_ERR] = "XRQ NVMF backend ctrl error",
+	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR] = "XRQ NVMF backend ctrl PCI error",
+	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR] = "XRQ NVMF backend ctrl timeout error",
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event)
@@ -569,7 +568,6 @@ struct ib_ah *rdma_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
 	ret = rdma_fill_sgid_attr(pd->device, ah_attr, &old_sgid_attr);
 	if (ret)
 		return ERR_PTR(ret);
-
 	slave = rdma_lag_get_ah_roce_slave(pd->device, ah_attr,
 					   (flags & RDMA_CREATE_AH_SLEEPABLE) ?
 					   GFP_KERNEL : GFP_ATOMIC);
@@ -738,7 +736,7 @@ int ib_get_gids_from_rdma_hdr(const union rdma_network_hdr *hdr,
 				       (struct in6_addr *)dgid);
 		return 0;
 	} else if (net_type == RDMA_NETWORK_IPV6 ||
-		   net_type == RDMA_NETWORK_IB) {
+		   net_type == RDMA_NETWORK_IB || RDMA_NETWORK_ROCE_V1) {
 		*dgid = hdr->ibgrh.dgid;
 		*sgid = hdr->ibgrh.sgid;
 		return 0;
@@ -1001,14 +999,28 @@ EXPORT_SYMBOL(rdma_destroy_ah_user);
 
 /* Shared receive queues */
 
-struct ib_srq *ib_create_srq(struct ib_pd *pd,
-			     struct ib_srq_init_attr *srq_init_attr)
+/**
+ * ib_create_srq_user - Creates a SRQ associated with the specified protection
+ *   domain.
+ * @pd: The protection domain associated with the SRQ.
+ * @srq_init_attr: A list of initial attributes required to create the
+ *   SRQ.  If SRQ creation succeeds, then the attributes are updated to
+ *   the actual capabilities of the created SRQ.
+ * @uobject: uobject pointer if this is not a kernel SRQ
+ * @udata: udata pointer if this is not a kernel SRQ
+ *
+ * srq_attr->max_wr and srq_attr->max_sge are read the determine the
+ * requested size of the SRQ, and set to the actual values allocated
+ * on return.  If ib_create_srq() succeeds, then max_wr and max_sge
+ * will always be at least as large as the requested values.
+ */
+struct ib_srq *ib_create_srq_user(struct ib_pd *pd,
+				  struct ib_srq_init_attr *srq_init_attr,
+				  struct ib_usrq_object *uobject,
+				  struct ib_udata *udata)
 {
 	struct ib_srq *srq;
 	int ret;
-
-	if (!pd->device->ops.create_srq)
-		return ERR_PTR(-EOPNOTSUPP);
 
 	srq = rdma_zalloc_drv_obj(pd->device, ib_srq);
 	if (!srq)
@@ -1019,6 +1031,7 @@ struct ib_srq *ib_create_srq(struct ib_pd *pd,
 	srq->event_handler = srq_init_attr->event_handler;
 	srq->srq_context = srq_init_attr->srq_context;
 	srq->srq_type = srq_init_attr->srq_type;
+	srq->uobject = uobject;
 
 	if (ib_srq_has_cq(srq->srq_type)) {
 		srq->ext.cq = srq_init_attr->ext.cq;
@@ -1030,7 +1043,7 @@ struct ib_srq *ib_create_srq(struct ib_pd *pd,
 	}
 	atomic_inc(&pd->usecnt);
 
-	ret = pd->device->ops.create_srq(srq, srq_init_attr, NULL);
+	ret = pd->device->ops.create_srq(srq, srq_init_attr, udata);
 	if (ret) {
 		atomic_dec(&srq->pd->usecnt);
 		if (srq->srq_type == IB_SRQT_XRC)
@@ -1043,7 +1056,7 @@ struct ib_srq *ib_create_srq(struct ib_pd *pd,
 
 	return srq;
 }
-EXPORT_SYMBOL(ib_create_srq);
+EXPORT_SYMBOL(ib_create_srq_user);
 
 int ib_modify_srq(struct ib_srq *srq,
 		  struct ib_srq_attr *srq_attr,
@@ -1151,8 +1164,7 @@ struct ib_qp *ib_open_qp(struct ib_xrcd *xrcd,
 EXPORT_SYMBOL(ib_open_qp);
 
 static struct ib_qp *create_xrc_qp_user(struct ib_qp *qp,
-					struct ib_qp_init_attr *qp_init_attr,
-					struct ib_udata *udata)
+					struct ib_qp_init_attr *qp_init_attr)
 {
 	struct ib_qp *real_qp = qp;
 	int err;
@@ -1180,9 +1192,18 @@ static struct ib_qp *create_xrc_qp_user(struct ib_qp *qp,
 	return qp;
 }
 
-struct ib_qp *ib_create_qp_user(struct ib_pd *pd,
-				struct ib_qp_init_attr *qp_init_attr,
-				struct ib_udata *udata)
+/**
+ * ib_create_qp - Creates a kernel QP associated with the specified protection
+ *   domain.
+ * @pd: The protection domain associated with the QP.
+ * @qp_init_attr: A list of initial attributes required to create the
+ *   QP.  If QP creation succeeds, then the attributes are updated to
+ *   the actual capabilities of the created QP.
+ *
+ * NOTE: for user qp use ib_create_qp_user with valid udata!
+ */
+struct ib_qp *ib_create_qp(struct ib_pd *pd,
+			   struct ib_qp_init_attr *qp_init_attr)
 {
 	struct ib_device *device = pd ? pd->device : qp_init_attr->xrcd->device;
 	struct ib_qp *qp;
@@ -1217,7 +1238,7 @@ struct ib_qp *ib_create_qp_user(struct ib_pd *pd,
 
 	if (qp_init_attr->qp_type == IB_QPT_XRC_TGT) {
 		struct ib_qp *xrc_qp =
-			create_xrc_qp_user(qp, qp_init_attr, udata);
+			create_xrc_qp_user(qp, qp_init_attr);
 
 		if (IS_ERR(xrc_qp)) {
 			ret = PTR_ERR(xrc_qp);
@@ -1273,7 +1294,7 @@ err:
 	return ERR_PTR(ret);
 
 }
-EXPORT_SYMBOL(ib_create_qp_user);
+EXPORT_SYMBOL(ib_create_qp);
 
 static const struct {
 	int			valid;
@@ -1713,7 +1734,7 @@ static int _ib_modify_qp(struct ib_qp *qp, struct ib_qp_attr *attr,
 		if (!(rdma_protocol_ib(qp->device,
 				       attr->alt_ah_attr.port_num) &&
 		      rdma_protocol_ib(qp->device, port))) {
-			ret = EINVAL;
+			ret = -EINVAL;
 			goto out;
 		}
 	}
@@ -1804,7 +1825,7 @@ int ib_get_eth_speed(struct ib_device *dev, u8 port_num, u8 *speed, u8 *width)
 
 	dev_put(netdev);
 
-	if (!rc) {
+	if (!rc && lksettings.base.speed != (u32)SPEED_UNKNOWN) {
 		netdev_speed = lksettings.base.speed;
 	} else {
 		netdev_speed = SPEED_1000;
@@ -2003,6 +2024,9 @@ EXPORT_SYMBOL(__ib_create_cq);
 
 int rdma_set_cq_moderation(struct ib_cq *cq, u16 cq_count, u16 cq_period)
 {
+	if (cq->shared)
+		return -EOPNOTSUPP;
+
 	return cq->device->ops.modify_cq ?
 		cq->device->ops.modify_cq(cq, cq_count,
 					  cq_period) : -EOPNOTSUPP;
@@ -2011,6 +2035,9 @@ EXPORT_SYMBOL(rdma_set_cq_moderation);
 
 int ib_destroy_cq_user(struct ib_cq *cq, struct ib_udata *udata)
 {
+	if (WARN_ON_ONCE(cq->shared))
+		return -EOPNOTSUPP;
+
 	if (atomic_read(&cq->usecnt))
 		return -EBUSY;
 
@@ -2023,6 +2050,9 @@ EXPORT_SYMBOL(ib_destroy_cq_user);
 
 int ib_resize_cq(struct ib_cq *cq, int cqe)
 {
+	if (cq->shared)
+		return -EOPNOTSUPP;
+
 	return cq->device->ops.resize_cq ?
 		cq->device->ops.resize_cq(cq, cqe, NULL) : -EOPNOTSUPP;
 }
@@ -2096,11 +2126,10 @@ int ib_dereg_mr_user(struct ib_mr *mr, struct ib_udata *udata)
 EXPORT_SYMBOL(ib_dereg_mr_user);
 
 /**
- * ib_alloc_mr_user() - Allocates a memory region
+ * ib_alloc_mr() - Allocates a memory region
  * @pd:            protection domain associated with the region
  * @mr_type:       memory region type
  * @max_num_sg:    maximum sg entries available for registration.
- * @udata:	   user data or null for kernel objects
  *
  * Notes:
  * Memory registeration page/sg lists must not exceed max_num_sg.
@@ -2108,8 +2137,8 @@ EXPORT_SYMBOL(ib_dereg_mr_user);
  * max_num_sg * used_page_size.
  *
  */
-struct ib_mr *ib_alloc_mr_user(struct ib_pd *pd, enum ib_mr_type mr_type,
-			       u32 max_num_sg, struct ib_udata *udata)
+struct ib_mr *ib_alloc_mr(struct ib_pd *pd, enum ib_mr_type mr_type,
+			  u32 max_num_sg)
 {
 	struct ib_mr *mr;
 
@@ -2124,25 +2153,26 @@ struct ib_mr *ib_alloc_mr_user(struct ib_pd *pd, enum ib_mr_type mr_type,
 		goto out;
 	}
 
-	mr = pd->device->ops.alloc_mr(pd, mr_type, max_num_sg, udata);
-	if (!IS_ERR(mr)) {
-		mr->device  = pd->device;
-		mr->pd      = pd;
-		mr->dm      = NULL;
-		mr->uobject = NULL;
-		atomic_inc(&pd->usecnt);
-		mr->need_inval = false;
-		mr->res.type = RDMA_RESTRACK_MR;
-		rdma_restrack_kadd(&mr->res);
-		mr->type = mr_type;
-		mr->sig_attrs = NULL;
-	}
+	mr = pd->device->ops.alloc_mr(pd, mr_type, max_num_sg);
+	if (IS_ERR(mr))
+		goto out;
+
+	mr->device = pd->device;
+	mr->pd = pd;
+	mr->dm = NULL;
+	mr->uobject = NULL;
+	atomic_inc(&pd->usecnt);
+	mr->need_inval = false;
+	mr->res.type = RDMA_RESTRACK_MR;
+	rdma_restrack_kadd(&mr->res);
+	mr->type = mr_type;
+	mr->sig_attrs = NULL;
 
 out:
 	trace_mr_alloc(pd, mr_type, max_num_sg, mr);
 	return mr;
 }
-EXPORT_SYMBOL(ib_alloc_mr_user);
+EXPORT_SYMBOL(ib_alloc_mr);
 
 /**
  * ib_alloc_mr_integrity() - Allocates an integrity memory region
@@ -2203,54 +2233,6 @@ out:
 	return mr;
 }
 EXPORT_SYMBOL(ib_alloc_mr_integrity);
-
-/* "Fast" memory regions */
-
-struct ib_fmr *ib_alloc_fmr(struct ib_pd *pd,
-			    int mr_access_flags,
-			    struct ib_fmr_attr *fmr_attr)
-{
-	struct ib_fmr *fmr;
-
-	if (!pd->device->ops.alloc_fmr)
-		return ERR_PTR(-EOPNOTSUPP);
-
-	fmr = pd->device->ops.alloc_fmr(pd, mr_access_flags, fmr_attr);
-	if (!IS_ERR(fmr)) {
-		fmr->device = pd->device;
-		fmr->pd     = pd;
-		atomic_inc(&pd->usecnt);
-	}
-
-	return fmr;
-}
-EXPORT_SYMBOL(ib_alloc_fmr);
-
-int ib_unmap_fmr(struct list_head *fmr_list)
-{
-	struct ib_fmr *fmr;
-
-	if (list_empty(fmr_list))
-		return 0;
-
-	fmr = list_entry(fmr_list->next, struct ib_fmr, list);
-	return fmr->device->ops.unmap_fmr(fmr_list);
-}
-EXPORT_SYMBOL(ib_unmap_fmr);
-
-int ib_dealloc_fmr(struct ib_fmr *fmr)
-{
-	struct ib_pd *pd;
-	int ret;
-
-	pd = fmr->pd;
-	ret = fmr->device->ops.dealloc_fmr(fmr);
-	if (!ret)
-		atomic_dec(&pd->usecnt);
-
-	return ret;
-}
-EXPORT_SYMBOL(ib_dealloc_fmr);
 
 /* Multicast groups */
 
@@ -2328,37 +2310,57 @@ int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 }
 EXPORT_SYMBOL(ib_detach_mcast);
 
-struct ib_xrcd *__ib_alloc_xrcd(struct ib_device *device,
-				struct ib_udata *udata, struct inode *inode,
-				const char *caller)
+/**
+ * ib_alloc_xrcd_user - Allocates an XRC domain.
+ * @device: The device on which to allocate the XRC domain.
+ * @inode: inode to connect XRCD
+ * @udata: Valid user data or NULL for kernel object
+ */
+struct ib_xrcd *ib_alloc_xrcd_user(struct ib_device *device,
+				   struct inode *inode, struct ib_udata *udata)
 {
 	struct ib_xrcd *xrcd;
+	int ret;
 
 	if (!device->ops.alloc_xrcd)
 		return ERR_PTR(-EOPNOTSUPP);
 
-	xrcd = device->ops.alloc_xrcd(device, udata);
-	if (!IS_ERR(xrcd)) {
-		xrcd->device = device;
-		xrcd->inode = inode;
-		atomic_set(&xrcd->usecnt, 0);
-		init_rwsem(&xrcd->tgt_qps_rwsem);
-		xa_init(&xrcd->tgt_qps);
-	}
+	xrcd = rdma_zalloc_drv_obj(device, ib_xrcd);
+	if (!xrcd)
+		return ERR_PTR(-ENOMEM);
 
+	xrcd->device = device;
+	xrcd->inode = inode;
+	atomic_set(&xrcd->usecnt, 0);
+	init_rwsem(&xrcd->tgt_qps_rwsem);
+	xa_init(&xrcd->tgt_qps);
+
+	ret = device->ops.alloc_xrcd(xrcd, udata);
+	if (ret)
+		goto err;
 	return xrcd;
+err:
+	kfree(xrcd);
+	return ERR_PTR(ret);
 }
-EXPORT_SYMBOL(__ib_alloc_xrcd);
+EXPORT_SYMBOL(ib_alloc_xrcd_user);
 
-int ib_dealloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata)
+/**
+ * ib_dealloc_xrcd_user - Deallocates an XRC domain.
+ * @xrcd: The XRC domain to deallocate.
+ * @udata: Valid user data or NULL for kernel object
+ */
+int ib_dealloc_xrcd_user(struct ib_xrcd *xrcd, struct ib_udata *udata)
 {
 	if (atomic_read(&xrcd->usecnt))
 		return -EBUSY;
 
 	WARN_ON(!xa_empty(&xrcd->tgt_qps));
-	return xrcd->device->ops.dealloc_xrcd(xrcd, udata);
+	xrcd->device->ops.dealloc_xrcd(xrcd, udata);
+	kfree(xrcd);
+	return 0;
 }
-EXPORT_SYMBOL(ib_dealloc_xrcd);
+EXPORT_SYMBOL(ib_dealloc_xrcd_user);
 
 /**
  * ib_create_wq - Creates a WQ associated with the specified protection
@@ -2440,45 +2442,6 @@ int ib_modify_wq(struct ib_wq *wq, struct ib_wq_attr *wq_attr,
 	return err;
 }
 EXPORT_SYMBOL(ib_modify_wq);
-
-/*
- * ib_create_rwq_ind_table - Creates a RQ Indirection Table.
- * @device: The device on which to create the rwq indirection table.
- * @ib_rwq_ind_table_init_attr: A list of initial attributes required to
- * create the Indirection Table.
- *
- * Note: The life time of ib_rwq_ind_table_init_attr->ind_tbl is not less
- *	than the created ib_rwq_ind_table object and the caller is responsible
- *	for its memory allocation/free.
- */
-struct ib_rwq_ind_table *ib_create_rwq_ind_table(struct ib_device *device,
-						 struct ib_rwq_ind_table_init_attr *init_attr)
-{
-	struct ib_rwq_ind_table *rwq_ind_table;
-	int i;
-	u32 table_size;
-
-	if (!device->ops.create_rwq_ind_table)
-		return ERR_PTR(-EOPNOTSUPP);
-
-	table_size = (1 << init_attr->log_ind_tbl_size);
-	rwq_ind_table = device->ops.create_rwq_ind_table(device,
-							 init_attr, NULL);
-	if (IS_ERR(rwq_ind_table))
-		return rwq_ind_table;
-
-	rwq_ind_table->ind_tbl = init_attr->ind_tbl;
-	rwq_ind_table->log_ind_tbl_size = init_attr->log_ind_tbl_size;
-	rwq_ind_table->device = device;
-	rwq_ind_table->uobject = NULL;
-	atomic_set(&rwq_ind_table->usecnt, 0);
-
-	for (i = 0; i < table_size; i++)
-		atomic_inc(&rwq_ind_table->ind_tbl[i]->usecnt);
-
-	return rwq_ind_table;
-}
-EXPORT_SYMBOL(ib_create_rwq_ind_table);
 
 /*
  * ib_destroy_rwq_ind_table - Destroys the specified Indirection Table.
@@ -2610,6 +2573,7 @@ EXPORT_SYMBOL(ib_map_mr_sg_pi);
  * @page_size:     page vector desired page size
  *
  * Constraints:
+ *
  * - The first sg element is allowed to have an offset.
  * - Each sg element must either be aligned to page_size or virtually
  *   contiguous to the previous element. In case an sg element has a
@@ -2643,10 +2607,12 @@ EXPORT_SYMBOL(ib_map_mr_sg);
  * @mr:            memory region
  * @sgl:           dma mapped scatterlist
  * @sg_nents:      number of entries in sg
- * @sg_offset_p:   IN:  start offset in bytes into sg
- *                 OUT: offset in bytes for element n of the sg of the first
+ * @sg_offset_p:   ==== =======================================================
+ *                 IN   start offset in bytes into sg
+ *                 OUT  offset in bytes for element n of the sg of the first
  *                      byte that has not been processed where n is the return
  *                      value of this function.
+ *                 ==== =======================================================
  * @set_page:      driver page assignment function pointer
  *
  * Core service helper for drivers to convert the largest

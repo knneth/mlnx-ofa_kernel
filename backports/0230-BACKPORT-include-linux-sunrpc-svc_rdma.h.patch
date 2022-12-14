@@ -1,0 +1,73 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/sunrpc/svc_rdma.h
+
+Change-Id: I4bc7c084b22a6d9eb2624257b862885c67e749ea
+---
+ include/linux/sunrpc/svc_rdma.h | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+--- a/include/linux/sunrpc/svc_rdma.h
++++ b/include/linux/sunrpc/svc_rdma.h
+@@ -42,7 +42,9 @@
+ 
+ #ifndef SVC_RDMA_H
+ #define SVC_RDMA_H
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ #include <linux/llist.h>
++#endif
+ #include <linux/sunrpc/xdr.h>
+ #include <linux/sunrpc/svcsock.h>
+ #include <linux/sunrpc/rpc_rdma.h>
+@@ -109,7 +111,12 @@ struct svcxprt_rdma {
+ 	struct list_head     sc_read_complete_q;
+ 	struct work_struct   sc_work;
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct llist_head    sc_recv_ctxts;
++#else
++	spinlock_t	     sc_recv_lock;
++	struct list_head     sc_recv_ctxts;
++#endif
+ 
+ 	atomic_t	     sc_completion_ids;
+ };
+@@ -128,19 +135,29 @@ enum {
+ #define RPCSVC_MAXPAYLOAD_RDMA	RPCSVC_MAXPAYLOAD
+ 
+ struct svc_rdma_recv_ctxt {
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct llist_node	rc_node;
++#endif
+ 	struct list_head	rc_list;
+ 	struct ib_recv_wr	rc_recv_wr;
+ 	struct ib_cqe		rc_cqe;
+ 	struct rpc_rdma_cid	rc_cid;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct ib_sge		rc_recv_sge;
+ 	void			*rc_recv_buf;
++#endif
+ 	struct xdr_buf		rc_arg;
+ 	struct xdr_stream	rc_stream;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	bool			rc_temp;
++#endif
+ 	u32			rc_byte_len;
+ 	unsigned int		rc_page_count;
+ 	unsigned int		rc_hdr_count;
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	struct ib_sge		rc_sges[1 +
++					RPCRDMA_MAX_INLINE_THRESH / PAGE_SIZE];
++#endif
+ 	u32			rc_inv_rkey;
+ 	__be32			*rc_write_list;
+ 	__be32			*rc_reply_chunk;
+@@ -174,7 +191,9 @@ extern bool svc_rdma_post_recvs(struct s
+ extern void svc_rdma_recv_ctxt_put(struct svcxprt_rdma *rdma,
+ 				   struct svc_rdma_recv_ctxt *ctxt);
+ extern void svc_rdma_flush_recv_queues(struct svcxprt_rdma *rdma);
++#ifdef HAVE_SVC_RDMA_RELEASE_RQST
+ extern void svc_rdma_release_rqst(struct svc_rqst *rqstp);
++#endif
+ extern int svc_rdma_recvfrom(struct svc_rqst *);
+ 
+ /* svc_rdma_rw.c */

@@ -1,0 +1,439 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
+
+Change-Id: I25ed69095439716168c7e9cf3a27e51348d5ec00
+---
+ net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 202 ++++++++++++++++++++++++++++++++
+ 1 file changed, 202 insertions(+)
+
+--- a/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
++++ b/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
+@@ -104,7 +104,9 @@
+ #include <linux/sunrpc/svc_rdma.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
+ 
+@@ -117,6 +119,7 @@ svc_rdma_next_recv_ctxt(struct list_head
+ 					rc_list);
+ }
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ static void svc_rdma_recv_cid_init(struct svcxprt_rdma *rdma,
+ 				   struct rpc_rdma_cid *cid)
+ {
+@@ -172,6 +175,7 @@ static void svc_rdma_recv_ctxt_destroy(s
+ 	kfree(ctxt->rc_recv_buf);
+ 	kfree(ctxt);
+ }
++#endif
+ 
+ /**
+  * svc_rdma_recv_ctxts_destroy - Release all recv_ctxt's for an xprt
+@@ -181,11 +185,17 @@ static void svc_rdma_recv_ctxt_destroy(s
+ void svc_rdma_recv_ctxts_destroy(struct svcxprt_rdma *rdma)
+ {
+ 	struct svc_rdma_recv_ctxt *ctxt;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct llist_node *node;
+ 
+ 	while ((node = llist_del_first(&rdma->sc_recv_ctxts))) {
+ 		ctxt = llist_entry(node, struct svc_rdma_recv_ctxt, rc_node);
+ 		svc_rdma_recv_ctxt_destroy(rdma, ctxt);
++#else
++	while ((ctxt = svc_rdma_next_recv_ctxt(&rdma->sc_recv_ctxts))) {
++		list_del(&ctxt->rc_list);
++		kfree(ctxt);
++#endif
+ 	}
+ }
+ 
+@@ -193,25 +203,58 @@ static struct svc_rdma_recv_ctxt *
+ svc_rdma_recv_ctxt_get(struct svcxprt_rdma *rdma)
+ {
+ 	struct svc_rdma_recv_ctxt *ctxt;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct llist_node *node;
+ 
+ 	node = llist_del_first(&rdma->sc_recv_ctxts);
+ 	if (!node)
+ 		goto out_empty;
+ 	ctxt = llist_entry(node, struct svc_rdma_recv_ctxt, rc_node);
++#else
++	spin_lock(&rdma->sc_recv_lock);
++	ctxt = svc_rdma_next_recv_ctxt(&rdma->sc_recv_ctxts);
++	if (!ctxt)
++		goto out_empty;
++	list_del(&ctxt->rc_list);
++	spin_unlock(&rdma->sc_recv_lock);
++#endif
+ 
+ out:
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	ctxt->rc_recv_wr.num_sge = 0;
++#endif
+ 	ctxt->rc_page_count = 0;
+ 	ctxt->rc_read_payload_length = 0;
+ 	return ctxt;
+ 
+ out_empty:
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	ctxt = svc_rdma_recv_ctxt_alloc(rdma);
++#else
++	spin_unlock(&rdma->sc_recv_lock);
++
++	ctxt = kmalloc(sizeof(*ctxt), GFP_KERNEL);
++#endif
+ 	if (!ctxt)
+ 		return NULL;
+ 	goto out;
+ }
+ 
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++static void svc_rdma_recv_ctxt_unmap(struct svcxprt_rdma *rdma,
++				     struct svc_rdma_recv_ctxt *ctxt)
++{
++	struct ib_device *device = rdma->sc_cm_id->device;
++	int i;
++
++	for (i = 0; i < ctxt->rc_recv_wr.num_sge; i++)
++		ib_dma_unmap_page(device,
++				  ctxt->rc_sges[i].addr,
++				  ctxt->rc_sges[i].length,
++				  DMA_FROM_DEVICE);
++}
++#endif
++
+ /**
+  * svc_rdma_recv_ctxt_put - Return recv_ctxt to free list
+  * @rdma: controlling svcxprt_rdma
+@@ -226,12 +269,19 @@ void svc_rdma_recv_ctxt_put(struct svcxp
+ 	for (i = 0; i < ctxt->rc_page_count; i++)
+ 		put_page(ctxt->rc_pages[i]);
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	if (!ctxt->rc_temp)
+ 		llist_add(&ctxt->rc_node, &rdma->sc_recv_ctxts);
+ 	else
+ 		svc_rdma_recv_ctxt_destroy(rdma, ctxt);
++#else
++	spin_lock(&rdma->sc_recv_lock);
++	list_add(&ctxt->rc_list, &rdma->sc_recv_ctxts);
++	spin_unlock(&rdma->sc_recv_lock);
++#endif
+ }
+ 
++#ifdef HAVE_SVC_RDMA_RELEASE_RQST
+ /**
+  * svc_rdma_release_rqst - Release transport-specific per-rqst resources
+  * @rqstp: svc_rqst being released
+@@ -251,24 +301,83 @@ void svc_rdma_release_rqst(struct svc_rq
+ 	if (ctxt)
+ 		svc_rdma_recv_ctxt_put(rdma, ctxt);
+ }
++#endif
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ static int __svc_rdma_post_recv(struct svcxprt_rdma *rdma,
+ 				struct svc_rdma_recv_ctxt *ctxt)
+ {
+ 	int ret;
++#else
++static int svc_rdma_post_recv(struct svcxprt_rdma *rdma)
++{
++	struct ib_device *device = rdma->sc_cm_id->device;
++	struct svc_rdma_recv_ctxt *ctxt;
++	int sge_no, buflen, ret;
++	struct page *page;
++	dma_addr_t pa;
++
++	ctxt = svc_rdma_recv_ctxt_get(rdma);
++	if (!ctxt)
++		return -ENOMEM;
++
++	buflen = 0;
++	ctxt->rc_cqe.done = svc_rdma_wc_receive;
++	for (sge_no = 0; buflen < rdma->sc_max_req_size; sge_no++) {
++		if (sge_no >= rdma->sc_max_send_sges) {
++			pr_err("svcrdma: Too many sges (%d)\n", sge_no);
++			goto err_put_ctxt;
++		}
+ 
++		page = alloc_page(GFP_KERNEL);
++		if (!page)
++			goto err_put_ctxt;
++		ctxt->rc_pages[sge_no] = page;
++		ctxt->rc_page_count++;
++
++		pa = ib_dma_map_page(device, ctxt->rc_pages[sge_no],
++				     0, PAGE_SIZE, DMA_FROM_DEVICE);
++		if (ib_dma_mapping_error(device, pa))
++			goto err_put_ctxt;
++		ctxt->rc_sges[sge_no].addr = pa;
++		ctxt->rc_sges[sge_no].length = PAGE_SIZE;
++		ctxt->rc_sges[sge_no].lkey = rdma->sc_pd->local_dma_lkey;
++		ctxt->rc_recv_wr.num_sge++;
++
++		buflen += PAGE_SIZE;
++	}
++	ctxt->rc_recv_wr.next = NULL;
++	ctxt->rc_recv_wr.sg_list = &ctxt->rc_sges[0];
++	ctxt->rc_recv_wr.wr_cqe = &ctxt->rc_cqe;
++#endif
++
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_post_recv(ctxt);
++#endif
+ 	ret = ib_post_recv(rdma->sc_qp, &ctxt->rc_recv_wr, NULL);
+ 	if (ret)
+ 		goto err_post;
+ 	return 0;
+ 
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++err_put_ctxt:
++	svc_rdma_recv_ctxt_unmap(rdma, ctxt);
++	svc_rdma_recv_ctxt_put(rdma, ctxt);
++	return -ENOMEM;
++#endif
++
+ err_post:
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	svc_rdma_recv_ctxt_unmap(rdma, ctxt);
++#endif
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_rq_post_err(rdma, ret);
++#endif
+ 	svc_rdma_recv_ctxt_put(rdma, ctxt);
+ 	return ret;
+ }
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ static int svc_rdma_post_recv(struct svcxprt_rdma *rdma)
+ {
+ 	struct svc_rdma_recv_ctxt *ctxt;
+@@ -280,6 +389,7 @@ static int svc_rdma_post_recv(struct svc
+ 		return -ENOMEM;
+ 	return __svc_rdma_post_recv(rdma, ctxt);
+ }
++#endif
+ 
+ /**
+  * svc_rdma_post_recvs - Post initial set of Recv WRs
+@@ -289,16 +399,22 @@ static int svc_rdma_post_recv(struct svc
+  */
+ bool svc_rdma_post_recvs(struct svcxprt_rdma *rdma)
+ {
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct svc_rdma_recv_ctxt *ctxt;
++#endif
+ 	unsigned int i;
+ 	int ret;
+ 
+ 	for (i = 0; i < rdma->sc_max_requests; i++) {
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 		ctxt = svc_rdma_recv_ctxt_get(rdma);
+ 		if (!ctxt)
+ 			return false;
+ 		ctxt->rc_temp = true;
+ 		ret = __svc_rdma_post_recv(rdma, ctxt);
++#else
++		ret = svc_rdma_post_recv(rdma);
++#endif
+ 		if (ret)
+ 			return false;
+ 	}
+@@ -321,8 +437,13 @@ static void svc_rdma_wc_receive(struct i
+ 
+ 	/* WARNING: Only wc->wr_cqe and wc->status are reliable */
+ 	ctxt = container_of(cqe, struct svc_rdma_recv_ctxt, rc_cqe);
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	svc_rdma_recv_ctxt_unmap(rdma, ctxt);
++#endif
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_wc_receive(wc, &ctxt->rc_cid);
++#endif
+ 	if (wc->status != IB_WC_SUCCESS)
+ 		goto flushed;
+ 
+@@ -331,9 +452,11 @@ static void svc_rdma_wc_receive(struct i
+ 
+ 	/* All wc fields are now known to be valid */
+ 	ctxt->rc_byte_len = wc->byte_len;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	ib_dma_sync_single_for_cpu(rdma->sc_pd->device,
+ 				   ctxt->rc_recv_sge.addr,
+ 				   wc->byte_len, DMA_FROM_DEVICE);
++#endif
+ 
+ 	spin_lock(&rdma->sc_rq_dto_lock);
+ 	list_add_tail(&ctxt->rc_list, &rdma->sc_rq_dto_q);
+@@ -373,6 +496,7 @@ void svc_rdma_flush_recv_queues(struct s
+ static void svc_rdma_build_arg_xdr(struct svc_rqst *rqstp,
+ 				   struct svc_rdma_recv_ctxt *ctxt)
+ {
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	struct xdr_buf *arg = &rqstp->rq_arg;
+ 
+ 	arg->head[0].iov_base = ctxt->rc_recv_buf;
+@@ -383,6 +507,58 @@ static void svc_rdma_build_arg_xdr(struc
+ 	arg->page_base = 0;
+ 	arg->buflen = ctxt->rc_byte_len;
+ 	arg->len = ctxt->rc_byte_len;
++#else
++	struct page *page;
++	int sge_no;
++	u32 len;
++
++	/* The reply path assumes the Call's transport header resides
++	 * in rqstp->rq_pages[0].
++	 */
++	page = ctxt->rc_pages[0];
++	put_page(rqstp->rq_pages[0]);
++	rqstp->rq_pages[0] = page;
++
++	/* Set up the XDR head */
++	rqstp->rq_arg.head[0].iov_base = page_address(page);
++	rqstp->rq_arg.head[0].iov_len =
++		min_t(size_t, ctxt->rc_byte_len, ctxt->rc_sges[0].length);
++	rqstp->rq_arg.len = ctxt->rc_byte_len;
++	rqstp->rq_arg.buflen = ctxt->rc_byte_len;
++
++	/* Compute bytes past head in the SGL */
++	len = ctxt->rc_byte_len - rqstp->rq_arg.head[0].iov_len;
++
++	/* If data remains, store it in the pagelist */
++	rqstp->rq_arg.page_len = len;
++	rqstp->rq_arg.page_base = 0;
++
++	sge_no = 1;
++	while (len && sge_no < ctxt->rc_recv_wr.num_sge) {
++		page = ctxt->rc_pages[sge_no];
++		put_page(rqstp->rq_pages[sge_no]);
++		rqstp->rq_pages[sge_no] = page;
++		len -= min_t(u32, len, ctxt->rc_sges[sge_no].length);
++		sge_no++;
++	}
++	ctxt->rc_hdr_count = sge_no;
++	rqstp->rq_respages = &rqstp->rq_pages[sge_no];
++	rqstp->rq_next_page = rqstp->rq_respages + 1;
++
++	/* If not all pages were used from the SGL, free the remaining ones */
++	while (sge_no < ctxt->rc_recv_wr.num_sge) {
++		page = ctxt->rc_pages[sge_no++];
++		put_page(page);
++	}
++
++	/* @ctxt's pages have all been released or moved to @rqstp->rq_pages.
++	 */
++	ctxt->rc_page_count = 0;
++
++	/* Set up tail */
++	rqstp->rq_arg.tail[0].iov_base = NULL;
++	rqstp->rq_arg.tail[0].iov_len = 0;
++#endif
+ }
+ 
+ /* This accommodates the largest possible Write chunk.
+@@ -474,7 +650,9 @@ static bool xdr_check_write_chunk(struct
+ 			return false;
+ 
+ 		xdr_decode_rdma_segment(p, &handle, &length, &offset);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_svcrdma_decode_wseg(handle, length, offset);
++#endif
+ 
+ 		total += length;
+ 	}
+@@ -568,7 +746,11 @@ static void svc_rdma_get_inv_rkey(struct
+ 		return;
+ 
+ 	inv_rkey = xdr_zero;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	p = ctxt->rc_recv_buf;
++#else
++	p = page_address(ctxt->rc_pages[0]);
++#endif
+ 	p += rpcrdma_fixed_maxsz;
+ 
+ 	/* Read list */
+@@ -631,7 +813,11 @@ static int svc_rdma_xdr_decode_req(struc
+ 	unsigned int hdr_len;
+ 
+ 	rdma_argp = rq_arg->head[0].iov_base;
++#ifdef HAVE_XDR_INIT_DECODE_RQST_ARG
+ 	xdr_init_decode(&rctxt->rc_stream, rq_arg, rdma_argp, NULL);
++#else
++	xdr_init_decode(&rctxt->rc_stream, rq_arg, rdma_argp);
++#endif
+ 
+ 	p = xdr_inline_decode(&rctxt->rc_stream,
+ 			      rpcrdma_fixed_maxsz * sizeof(*p));
+@@ -665,27 +851,39 @@ static int svc_rdma_xdr_decode_req(struc
+ 	hdr_len = xdr_stream_pos(&rctxt->rc_stream);
+ 	rq_arg->head[0].iov_len -= hdr_len;
+ 	rq_arg->len -= hdr_len;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_rqst(rctxt, rdma_argp, hdr_len);
++#endif
+ 	return hdr_len;
+ 
+ out_short:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_short_err(rctxt, rq_arg->len);
++#endif
+ 	return -EINVAL;
+ 
+ out_version:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_badvers_err(rctxt, rdma_argp);
++#endif
+ 	return -EPROTONOSUPPORT;
+ 
+ out_drop:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_drop_err(rctxt, rdma_argp);
++#endif
+ 	return 0;
+ 
+ out_proc:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_badproc_err(rctxt, rdma_argp);
++#endif
+ 	return -EINVAL;
+ 
+ out_inval:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_parse_err(rctxt, rdma_argp);
++#endif
+ 	return -EINVAL;
+ }
+ 
+@@ -803,7 +1001,9 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+ 	__be32 *p;
+ 	int ret;
+ 
++#ifdef HAVE_SVC_RDMA_RELEASE_RQST
+ 	rqstp->rq_xprt_ctxt = NULL;
++#endif
+ 
+ 	spin_lock(&rdma_xprt->sc_rq_dto_lock);
+ 	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_read_complete_q);
+@@ -827,11 +1027,13 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+ 
+ 	svc_rdma_build_arg_xdr(rqstp, ctxt);
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	/* Prevent svc_xprt_release from releasing pages in rq_pages
+ 	 * if we return 0 or an error.
+ 	 */
+ 	rqstp->rq_respages = rqstp->rq_pages;
+ 	rqstp->rq_next_page = rqstp->rq_respages;
++#endif
+ 
+ 	p = (__be32 *)rqstp->rq_arg.head[0].iov_base;
+ 	ret = svc_rdma_xdr_decode_req(&rqstp->rq_arg, ctxt);

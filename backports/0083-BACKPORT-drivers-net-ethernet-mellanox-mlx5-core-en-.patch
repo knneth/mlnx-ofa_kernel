@@ -1,0 +1,44 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
+
+Change-Id: Ibdae9d1471eef4ecbebc402d73d3e2976bfe7e52
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
+@@ -4,8 +4,17 @@
+ #ifndef __MLX5_EN_XSK_TX_H__
+ #define __MLX5_EN_XSK_TX_H__
+ 
++#ifdef HAVE_XSK_SUPPORT
++
+ #include "en.h"
++#ifdef HAVE_NDO_XSK_WAKEUP
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
++#include <net/xdp_sock.h>
++#endif
+ 
+ /* TX data path */
+ 
+@@ -13,6 +22,7 @@ int mlx5e_xsk_wakeup(struct net_device *
+ 
+ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget);
+ 
++#ifdef HAVE_NDO_XSK_WAKEUP
+ static inline void mlx5e_xsk_update_tx_wakeup(struct mlx5e_xdpsq *sq)
+ {
+ 	if (!xsk_umem_uses_need_wakeup(sq->umem))
+@@ -23,5 +33,7 @@ static inline void mlx5e_xsk_update_tx_w
+ 	else
+ 		xsk_set_tx_need_wakeup(sq->umem);
+ }
++#endif
+ 
++#endif /* HAVE_XSK_SUPPORT */
+ #endif /* __MLX5_EN_XSK_TX_H__ */

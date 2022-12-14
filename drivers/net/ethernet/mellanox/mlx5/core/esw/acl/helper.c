@@ -45,7 +45,7 @@ esw_acl_table_create(struct mlx5_eswitch *esw, u16 vport_num, int ns, int size)
 int esw_egress_acl_vlan_create(struct mlx5_eswitch *esw,
 			       struct mlx5_vport *vport,
 			       struct mlx5_flow_destination *fwd_dest,
-			       u16 vlan_id, u32 flow_action)
+			       __be16 vlan_proto, u16 vlan_id, u32 flow_action)
 {
 	struct mlx5_flow_act flow_act = {};
 	struct mlx5_flow_spec *spec;
@@ -60,7 +60,10 @@ int esw_egress_acl_vlan_create(struct mlx5_eswitch *esw,
 
 	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.cvlan_tag);
 	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.svlan_tag);
-	MLX5_SET_TO_ONES(fte_match_param, spec->match_value, outer_headers.cvlan_tag);
+	if (vlan_proto == htons(ETH_P_8021Q))
+		MLX5_SET_TO_ONES(fte_match_param, spec->match_value, outer_headers.cvlan_tag);
+	else
+		MLX5_SET_TO_ONES(fte_match_param, spec->match_value, outer_headers.svlan_tag);
 	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.first_vid);
 	MLX5_SET(fte_match_param, spec->match_value, outer_headers.first_vid, vlan_id);
 

@@ -7,6 +7,8 @@
 #ifndef _LINUX_BITFIELD_H
 #define _LINUX_BITFIELD_H
 
+#include "../../compat/config.h"
+
 #include <linux/build_bug.h>
 #include <asm/byteorder.h>
 

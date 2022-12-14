@@ -1,0 +1,252 @@
+From: Mikhael Goikhman <migo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
+
+Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
+---
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 90 ++++++++++++++++++-
+ 1 file changed, 88 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
+@@ -128,7 +128,7 @@ static inline int mlx5e_get_dscp_up(stru
+ }
+ #endif
+ 
+-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
++#if defined(CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
+ static u16 mlx5e_select_queue_assigned(struct mlx5e_priv *priv,
+ 				       struct sk_buff *skb)
+ {
+@@ -177,12 +177,23 @@ fallback:
+ 
+ static bool mlx5e_use_ptpsq(struct sk_buff *skb)
+ {
++#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
+ 	struct flow_keys fk;
++#endif
+ 
++#ifdef HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS
+ 	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
++#elif defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
++	if (!skb_flow_dissect_flow_keys(skb, &fk))
++#endif
++#ifdef HAVE_PTP_CLASSIFY_RAW
+ 		return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
+ 				ptp_classify_raw(skb) != PTP_CLASS_NONE);
++#else
++		return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588));
++#endif
+ 
++#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
+ 	if (fk.basic.n_proto == htons(ETH_P_1588))
+ 		return true;
+ 
+@@ -192,6 +203,7 @@ static bool mlx5e_use_ptpsq(struct sk_bu
+ 
+ 	return (fk.basic.ip_proto == IPPROTO_UDP &&
+ 		fk.ports.dst == htons(PTP_EV_PORT));
++#endif
+ }
+ 
+ static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb)
+@@ -214,8 +226,24 @@ return_txq:
+ 	return priv->port_ptp_tc2realtxq[up];
+ }
+ 
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev)
++#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback)
++#else
++		       void *accel_priv)
++#endif
++#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb)
++#endif
+ {
+ 	int txq_ix;
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+@@ -227,7 +255,13 @@ u16 mlx5e_select_queue(struct net_device
+ 		    mlx5e_use_ptpsq(skb))
+ 			return mlx5e_select_ptpsq(dev, skb);
+ 
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ 		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
++		txq_ix = fallback(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb);
++#endif
+ 		/* Fix netdev_pick_tx() not to choose ptp_channel txqs.
+ 		 * If they are selected, switch to regular queues.
+ 		 * Driver to select these queues only at mlx5e_select_ptpsq().
+@@ -235,7 +269,7 @@ u16 mlx5e_select_queue(struct net_device
+ 		if (unlikely(txq_ix >= priv->num_tc_x_num_ch))
+ 			txq_ix = txq_ix % priv->num_tc_x_num_ch;
+ 	} else {
+-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
++#if defined(CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
+ 		if (priv->channels.params.num_rl_txqs) {
+ 			u16 ix = mlx5e_select_queue_assigned(priv, skb);
+ 
+@@ -245,7 +279,13 @@ u16 mlx5e_select_queue(struct net_device
+ 			}
+ 		}
+ #endif
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ 		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
++		txq_ix = fallback(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb);
++#endif
+ 	}
+ 
+ 	up = 0;
+@@ -300,7 +340,16 @@ static inline u16 mlx5e_calc_min_inline(
+ 	case MLX5_INLINE_MODE_NONE:
+ 		return 0;
+ 	case MLX5_INLINE_MODE_TCP_UDP:
++#ifdef HAVE_ETH_GET_HEADLEN_3_PARAMS
+ 		hlen = eth_get_headlen(skb->dev, skb->data, skb_headlen(skb));
++#elif defined(HAVE_ETH_GET_HEADLEN_2_PARAMS)
++		hlen = eth_get_headlen(skb->data, skb_headlen(skb));
++#else
++		hlen = mlx5e_skb_l3_header_offset(skb) + sizeof(struct udphdr);
++		if (unlikely(hlen < ETH_HLEN + sizeof(struct iphdr) + sizeof(struct udphdr)))
++			hlen = MLX5E_MIN_INLINE + sizeof(struct ipv6hdr) + sizeof(struct tcphdr);
++#endif
++
+ 		if (hlen == ETH_HLEN && !skb_vlan_tag_present(skb))
+ 			hlen += VLAN_HLEN;
+ 		break;
+@@ -378,13 +427,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
+ 	u16 ihs;
+ 
+ 	if (skb->encapsulation) {
++#ifdef HAVE_SKB_INNER_TRANSPORT_OFFSET
+ 		ihs = skb_inner_transport_offset(skb) + inner_tcp_hdrlen(skb);
++#else
++		ihs = skb_inner_transport_header(skb) - skb->data + inner_tcp_hdrlen(skb);
++#endif
+ 		stats->tso_inner_packets++;
+ 		stats->tso_inner_bytes += skb->len - ihs;
+ 	} else {
++#ifdef HAVE_NETIF_F_GSO_UDP_L4 
+ 		if (skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
+ 			ihs = skb_transport_offset(skb) + sizeof(struct udphdr);
+ 		else
++#endif 
+ 			ihs = skb_transport_offset(skb) + tcp_hdrlen(skb);
+ 		stats->tso_packets++;
+ 		stats->tso_bytes += skb->len - ihs;
+@@ -603,6 +658,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+ 	}
+ 
+ 	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
++
+ 	if (send_doorbell)
+ 		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
+ }
+@@ -621,7 +677,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+ 	struct mlx5e_sq_stats *stats = sq->stats;
+ 	int num_dma;
+ 
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
+ 	stats->xmit_more += xmit_more;
++#endif
+ 
+ 	/* fill wqe */
+ 	wi   = &sq->db.wqe_info[pi];
+@@ -775,7 +833,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+ 		mlx5e_tx_mpwqe_session_start(sq, eseg);
+ 	}
+ 
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
+ 	sq->stats->xmit_more += xmit_more;
++#endif
+ 
+ 	txd.data = skb->data;
+ 	txd.len = skb->len;
+@@ -858,7 +918,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+ 			if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg)))
+ 				return NETDEV_TX_OK;
+ 
++#ifdef HAVE_NETDEV_XMIT_MORE
+ 			mlx5e_sq_xmit_mpwqe(sq, skb, &eseg, netdev_xmit_more());
++#elif defined(HAVE_SK_BUFF_XMIT_MORE)
++			mlx5e_sq_xmit_mpwqe(sq, skb, &eseg, skb->xmit_more);
++#else
++			mlx5e_sq_xmit_mpwqe(sq, skb, &eseg, false);
++#endif
+ 			return NETDEV_TX_OK;
+ 		}
+ 
+@@ -875,7 +941,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+ 	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth)))
+ 		return NETDEV_TX_OK;
+ 
++#ifdef HAVE_NETDEV_XMIT_MORE
+ 	mlx5e_sq_xmit_wqe(sq, skb, &attr, &wqe_attr, wqe, pi, netdev_xmit_more());
++#elif defined(HAVE_SK_BUFF_XMIT_MORE)
++	mlx5e_sq_xmit_wqe(sq, skb, &attr, &wqe_attr, wqe, pi, skb->xmit_more);
++#else
++	mlx5e_sq_xmit_wqe(sq, skb, &attr, &wqe_attr, wqe, pi, false);
++#endif
+ 
+ 	return NETDEV_TX_OK;
+ }
+@@ -922,7 +994,11 @@ static void mlx5e_consume_skb(struct mlx
+ 			skb_tstamp_tx(skb, &hwts);
+ 	}
+ 
++#ifdef HAVE_NAPI_CONSUME_SKB
+ 	napi_consume_skb(skb, napi_budget);
++#else
++	dev_kfree_skb(skb);
++#endif
+ }
+ 
+ static void mlx5e_tx_wi_consume_fifo_skbs(struct mlx5e_txqsq *sq, struct mlx5e_tx_wqe_info *wi,
+@@ -1133,7 +1209,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+ }
+ 
+ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
+ 		   struct mlx5_av *av, u32 dqpn, u32 dqkey, bool xmit_more)
++#else
++		   struct mlx5_av *av, u32 dqpn, u32 dqkey)
++#endif
+ {
+ 	struct mlx5e_tx_wqe_attr wqe_attr;
+ 	struct mlx5e_tx_attr attr;
+@@ -1155,7 +1235,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+ 	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
+ 	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
+ 
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
+ 	stats->xmit_more += xmit_more;
++#endif
+ 
+ 	/* fill wqe */
+ 	wi       = &sq->db.wqe_info[pi];
+@@ -1181,7 +1263,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+ 	if (unlikely(num_dma < 0))
+ 		goto err_drop;
+ 
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
+ 	mlx5e_txwqe_complete(sq, skb, &attr, &wqe_attr, num_dma, wi, cseg, xmit_more);
++#else
++	mlx5e_txwqe_complete(sq, skb, &attr, &wqe_attr, num_dma, wi, cseg, false);
++#endif
+ 
+ 	sq->dim_obj.sample.pkt_ctr  = sq->stats->packets;
+ 	sq->dim_obj.sample.byte_ctr = sq->stats->bytes;

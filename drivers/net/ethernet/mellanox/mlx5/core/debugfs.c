@@ -172,10 +172,14 @@ mlx5_cmdif_debugfs_init_ct(struct mlx5_core_dev *dev)
 		return;
 
 	ct_debugfs->root = debugfs_create_dir("ct", dev->priv.dbg_root);
-	debugfs_create_u32("offloaded", 0400, ct_debugfs->root,
-			   &ct_debugfs->stats.offloaded.counter);
-	debugfs_create_u32("rx_dropped", 0400, ct_debugfs->root,
-			   &ct_debugfs->stats.rx_dropped.counter);
+	debugfs_create_atomic_t("offloaded", 0400, ct_debugfs->root,
+				&ct_debugfs->stats.offloaded);
+	debugfs_create_atomic_t("rx_dropped", 0400, ct_debugfs->root,
+				&ct_debugfs->stats.rx_dropped);
+#if IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
+	debugfs_create_atomic_t("e2e_offloaded", 0400, ct_debugfs->root,
+				&ct_debugfs->stats.e2e_offloaded);
+#endif
 
 	dev->priv.ct_debugfs = ct_debugfs;
 #endif
@@ -202,7 +206,7 @@ void mlx5_cmdif_debugfs_init(struct mlx5_core_dev *dev)
 	cmd = &dev->priv.cmdif_debugfs;
 	*cmd = debugfs_create_dir("commands", dev->priv.dbg_root);
 
-	for (i = 0; i < ARRAY_SIZE(dev->cmd.stats); i++) {
+	for (i = 0; i < MLX5_CMD_OP_MAX; i++) {
 		stats = &dev->cmd.stats[i];
 		namep = mlx5_command_str(i);
 		if (strcmp(namep, "unknown command opcode")) {

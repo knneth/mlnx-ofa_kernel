@@ -28,8 +28,10 @@ static enum mlx5e_traffic_types fs_accel2tt(enum accel_fs_tcp_type i)
 
 static void accel_fs_tcp_set_ipv4_flow(struct mlx5_flow_spec *spec, struct sock *sk)
 {
-	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ethertype);
-	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ethertype, ETH_P_IP);
+	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_protocol);
+	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_protocol, IPPROTO_TCP);
+	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_version);
+	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_version, 4);
 	memcpy(MLX5_ADDR_OF(fte_match_param, spec->match_value,
 			    outer_headers.src_ipv4_src_ipv6.ipv4_layout.ipv4),
 	       &inet_sk(sk)->inet_daddr, 4);
@@ -42,10 +44,13 @@ static void accel_fs_tcp_set_ipv4_flow(struct mlx5_flow_spec *spec, struct sock 
 			 outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4);
 }
 
+#if IS_ENABLED(CONFIG_IPV6)
 static void accel_fs_tcp_set_ipv6_flow(struct mlx5_flow_spec *spec, struct sock *sk)
 {
-	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ethertype);
-	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ethertype, ETH_P_IPV6);
+	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_protocol);
+	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_protocol, IPPROTO_TCP);
+	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_version);
+	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_version, 6);
 	memcpy(MLX5_ADDR_OF(fte_match_param, spec->match_value,
 			    outer_headers.src_ipv4_src_ipv6.ipv6_layout.ipv6),
 	       &sk->sk_v6_daddr, 16);
@@ -59,6 +64,7 @@ static void accel_fs_tcp_set_ipv6_flow(struct mlx5_flow_spec *spec, struct sock 
 			    outer_headers.dst_ipv4_dst_ipv6.ipv6_layout.ipv6),
 	       0xff, 16);
 }
+#endif
 
 void mlx5e_accel_fs_del_sk(struct mlx5_flow_handle *rule)
 {
@@ -83,6 +89,7 @@ struct mlx5_flow_handle *mlx5e_accel_fs_add_sk(struct mlx5e_priv *priv,
 	fs_tcp = priv->fs.accel_tcp;
 
 	spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
+
 	switch (sk->sk_family) {
 	case AF_INET:
 		accel_fs_tcp_set_ipv4_flow(spec, sk);
@@ -131,6 +138,7 @@ struct mlx5_flow_handle *mlx5e_accel_fs_add_sk(struct mlx5e_priv *priv,
 	}
 
 	flow = mlx5_add_flow_rules(ft->t, spec, &flow_act, &dest, 1);
+
 	if (IS_ERR(flow))
 		netdev_err(priv->netdev, "mlx5_add_flow_rules() failed, flow is %ld\n",
 			   PTR_ERR(flow));
@@ -192,7 +200,9 @@ static int accel_fs_tcp_create_groups(struct mlx5e_flow_table *ft,
 
 	mc = MLX5_ADDR_OF(create_flow_group_in, in, match_criteria);
 	outer_headers_c = MLX5_ADDR_OF(fte_match_param, mc, outer_headers);
-	MLX5_SET_TO_ONES(fte_match_set_lyr_2_4, outer_headers_c, ethertype);
+	MLX5_SET_TO_ONES(fte_match_set_lyr_2_4, outer_headers_c, ip_protocol);
+	MLX5_SET_TO_ONES(fte_match_set_lyr_2_4, outer_headers_c, ip_version);
+
 	switch (type) {
 	case ACCEL_FS_IPV4_TCP:
 	case ACCEL_FS_IPV6_TCP:
@@ -362,6 +372,9 @@ void mlx5e_accel_fs_tcp_destroy(struct mlx5e_priv *priv)
 int mlx5e_accel_fs_tcp_create(struct mlx5e_priv *priv)
 {
 	int i, err;
+
+	if (!MLX5_CAP_FLOWTABLE_NIC_RX(priv->mdev, ft_field_support.outer_ip_version))
+		return -EOPNOTSUPP;
 
 	priv->fs.accel_tcp = kzalloc(sizeof(*priv->fs.accel_tcp), GFP_KERNEL);
 	if (!priv->fs.accel_tcp)

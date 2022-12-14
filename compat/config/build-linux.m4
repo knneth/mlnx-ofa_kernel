@@ -43,31 +43,8 @@ AC_SUBST(KMODEXT)
 # get the release version of linux
 #
 AC_DEFUN([LB_LINUX_RELEASE],
-[LINUXRELEASE=
-rm -f build/conftest.i
-AC_MSG_CHECKING([for Linux release])
-if test -s $LINUX_OBJ/include/$AUTOCONF_HDIR/utsrelease.h ; then
-	LINUXRELEASEHEADER=$AUTOCONF_HDIR/utsrelease.h
-else
-	LINUXRELEASEHEADER=linux/version.h
-fi
-LB_LINUX_TRY_MAKE([
-	#include <$LINUXRELEASEHEADER>
-],[
-	char *LINUXRELEASE;
-	LINUXRELEASE=UTS_RELEASE;
-],[
-	MLNX_KERNEL_TEST=conftest.i
-],[
-	test -s build/conftest.i
-],[
-	# LINUXRELEASE="UTS_RELEASE"
-	eval $(grep "LINUXRELEASE=" build/conftest.i)
-],[
-	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not preprocess test program.  Consult config.log for details.])
-])
-rm -f build/conftest.i
+[
+LINUXRELEASE=$(LB_LINUX_MAKE_OUTPUT([kernelrelease]))
 if test x$LINUXRELEASE = x ; then
 	AC_MSG_RESULT([unknown])
 	AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
@@ -346,6 +323,19 @@ $2
   ;
   return 0;
 }])
+
+
+#
+# LB_LINUX_MAKE_OUTPUT
+#
+# Runs a make target ($1, potentially with extra flags)
+# output goes to standard output.
+#
+AC_DEFUN([LB_LINUX_MAKE_OUTPUT],
+[
+MAKE=${MAKE:-make}
+$MAKE -s M=$PWD -C $LINUX_OBJ $1
+])
 
 #
 # LB_LINUX_COMPILE_IFELSE

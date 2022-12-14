@@ -550,17 +550,16 @@ static int tclass_compare_match(const void *ptr1, const void *ptr2)
 	return 0;
 
 }
-
 static int tclass_update_qp(struct mlx5_ib_dev *ibdev, struct mlx5_ib_qp *mqp,
-			    u8 tclass, struct mlx5_qp_context *context)
+			    u8 tclass, void *qpc)
 {
 	enum mlx5_qp_optpar optpar = MLX5_QP_OPTPAR_PRIMARY_ADDR_PATH_DSCP;
 	struct mlx5_ib_qp_base *base = &mqp->trans_qp.base;
 	u16 op = MLX5_CMD_OP_RTS2RTS_QP;
 	int err;
 
-	context->pri_path.ecn_dscp = (tclass >> 2) & 0x3f;
-	err = mlx5_core_qp_modify(ibdev, op, optpar, context, &base->mqp, 0);
+	MLX5_SET(qpc, qpc, primary_address_path.dscp, tclass >> 2);
+	err = mlx5_core_qp_modify(ibdev, op, optpar, qpc, &base->mqp, 0);
 
 	return err;
 }
@@ -568,7 +567,6 @@ static int tclass_update_qp(struct mlx5_ib_dev *ibdev, struct mlx5_ib_qp *mqp,
 static void tclass_update_qps(struct mlx5_tc_data *tcd)
 {
 	struct mlx5_ib_dev *ibdev = tcd->ibdev;
-	struct mlx5_qp_context *context;
 	struct rdma_restrack_entry *res;
 	struct rdma_restrack_root *rt;
 	struct mlx5_ib_qp *mqp;
@@ -576,12 +574,13 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 	struct ib_qp *ibqp;
 	u8 tclass;
 	int ret;
+	void *qpc;
 
 	if (!tcd->ibdev || !MLX5_CAP_GEN(ibdev->mdev, rts2rts_qp_dscp))
 		return;
 
-	context = kzalloc(sizeof(*context), GFP_KERNEL);
-	if (!context)
+	qpc = kzalloc(MLX5_ST_SZ_BYTES(qpc), GFP_KERNEL);
+	if (!qpc)
 		return;
 
 	rt = &ibdev->ib_dev.res[RDMA_RESTRACK_QP];
@@ -596,7 +595,7 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 		mqp = to_mqp(ibqp);
 
 		if (ibqp->qp_type == IB_QPT_GSI ||
-		    mqp->type == MLX5_IB_QPT_DCT)
+				mqp->type == MLX5_IB_QPT_DCT)
 			goto cont;
 
 		mutex_lock(&mqp->mutex);
@@ -611,7 +610,7 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 
 			if (tclass != mqp->tclass) {
 				ret = tclass_update_qp(ibdev, mqp, tclass,
-						       context);
+						       qpc);
 				if (!ret)
 					mqp->tclass = tclass;
 			}
@@ -622,7 +621,6 @@ cont:
 		xa_lock(&rt->xa);
 	}
 	xa_unlock(&rt->xa);
-	kfree(context);
 }
 static ssize_t traffic_class_store(struct mlx5_tc_data *tcd, struct tc_attribute *unused,
 				   const char *buf, size_t count)
@@ -848,23 +846,23 @@ enum {
 
 int mlx5_ib_mmap_dc_info_page(struct mlx5_ib_dev *dev,
                               struct vm_area_struct *vma)
-{       
+{
         struct mlx5_dc_tracer *dct;
         phys_addr_t pfn;
         int err;
-        
+
         if ((MLX5_CAP_GEN(dev->mdev, port_type) !=
              MLX5_CAP_PORT_TYPE_IB) ||
             (!mlx5_core_is_pf(dev->mdev)) ||
             (!MLX5_CAP_GEN(dev->mdev, dc_cnak_trace)))
                 return -ENOTSUPP;
-        
+
         dct = &dev->dctr;
         if (!dct->pg) {
                 mlx5_ib_err(dev, "mlx5_ib_mmap DC no page\n");
                 return -ENOMEM;
         }
-        
+
         pfn = page_to_pfn(dct->pg);
         err = remap_pfn_range(vma, vma->vm_start, pfn, dct->size, vma->vm_page_prot);
         if (err) {

@@ -37,11 +37,12 @@
 #include <linux/mlx5/nvmf.h>
 #include "srq.h"
 
-int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *qp,             
+int mlx5_ib_set_qp_offload_type(void *qpc, struct ib_qp *qp,             
 		enum ib_qp_offload_type offload_type); 
+
 int mlx5_ib_exp_set_nvmf_srq_attrs(struct mlx5_nvmf_attr *nvmf,
 	       	struct ib_srq_init_attr *init_attr);
-int mlx5_ib_set_qp_srqn(struct mlx5_qp_context *context, struct ib_qp *qp,
+int mlx5_ib_set_qp_srqn(void *qpc, struct ib_qp *qp,
 		                        u32 srqn);
 void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev);
 struct mlx5_ib_nvmf_be_ctrl {

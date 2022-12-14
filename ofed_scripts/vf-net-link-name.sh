@@ -8,6 +8,10 @@ PORT_NAME=$1
 # need the PATH for BF ARM lspci to work
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
+if [[ "$ID_NET_DRIVER" != *"mlx5"* ]]; then
+    exit 1
+fi
+
 is_bf=`lspci -s 00:00.0 2> /dev/null | grep -wq "PCI bridge: Mellanox Technologies" && echo 1 || echo 0`
 if [ $is_bf -eq 1 ]; then
 	echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/"`
@@ -15,14 +19,27 @@ if [ $is_bf -eq 1 ]; then
 fi
 
 # for pf and uplink rep fall to slot or path.
-if [ -n "$ID_NET_NAME_SLOT" ]; then
-    echo NAME="${ID_NET_NAME_SLOT%%np[[:digit:]]}"
-    exit
+udevversion=`/sbin/udevadm --version`
+skip=0
+if [ "$ID_NET_DRIVER" == "mlx5e_rep" ]; then
+    if [ "$udevversion" == "219" ] || [ "$udevversion" == "229" ]; then
+        skip=1
+    fi
 fi
 
-if [ -n "$ID_NET_NAME_PATH" ]; then
-    echo NAME="${ID_NET_NAME_PATH%%np[[:digit:]]}"
-    exit
+if [ "$skip" == "0" ]; then
+	if [ -n "$ID_NET_NAME_SLOT" ]; then
+	    NAME="${ID_NET_NAME_SLOT%%np[[:digit:]]}"
+	elif [ -n "$ID_NET_NAME_PATH" ]; then
+	    NAME="${ID_NET_NAME_PATH%%np[[:digit:]]}"
+	fi
+
+	if [ -n "$NAME" ]; then
+	    NAME=`echo $NAME | sed 's/npf.vf/_/'`
+	    NAME=`echo $NAME | sed 's/np.v/v/'`
+	    echo NAME=$NAME
+	    exit
+	fi
 fi
 
 if [ -z "$SWID" ]; then
@@ -79,12 +96,12 @@ function get_pci_name() {
 
 # get phys_switch_id by pci
 function get_pci_swid() {
-    cat /sys/bus/pci/devices/$1/net/*/phys_switch_id 2>/dev/null
+    cat /sys/bus/pci/devices/$1/net/*/phys_switch_id | head -1 2>/dev/null
 }
 
 # get phys_port_name by pci
 function get_pci_port_name() {
-    cat /sys/bus/pci/devices/$1/net/*/phys_port_name 2>/dev/null
+    cat /sys/bus/pci/devices/$1/net/*/phys_port_name | head -1 2>/dev/null
 }
 
 # for vf rep get parent slot/path.
@@ -102,7 +119,7 @@ for cnt in {1..2}; do
         _portname=`get_pci_port_name $pci`
         if [ -z $_portname ]; then
             # no uplink rep so no phys port name
-            _portname=$parent_phys_port_name
+            continue
         fi
         if [ "$_swid" = "$SWID" ] && [ "$_portname" = "$parent_phys_port_name" ]
         then

@@ -71,10 +71,20 @@ ACTION=$1
 shift
 
 #########################################################################
+is_serial()
+{
+	if [ "$CONSOLETYPE" = 'serial' ]; then
+		return 0
+	fi
+	case `tty` in ttyS0)
+		return 0
+		;;
+	esac
+	return 1
+}
+
 # Get a sane screen width
 [ -z "${COLUMNS:-}" ] && COLUMNS=80
-
-[ -z "${CONSOLETYPE:-}" ] && [ -x /sbin/consoletype ] && CONSOLETYPE="`/sbin/consoletype`"
 
 # Read in our configuration
 if [ -z "${BOOTUP:-}" ]; then
@@ -92,7 +102,7 @@ if [ -z "${BOOTUP:-}" ]; then
         SETCOLOR_NORMAL="echo -en \\033[0;39m"
         LOGLEVEL=1
     fi
-    if [ "$CONSOLETYPE" = "serial" ]; then
+    if  is_serial; then
         BOOTUP=serial
         MOVE_TO_COL=
         SETCOLOR_SUCCESS=

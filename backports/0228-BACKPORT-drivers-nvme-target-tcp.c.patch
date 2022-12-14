@@ -1,0 +1,96 @@
+From: Tom Wu <tomwu@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/tcp.c
+
+Signed-off-by: Tom Wu <tomwu@mellanox.com>
+---
+ drivers/nvme/target/tcp.c | 40 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+--- a/drivers/nvme/target/tcp.c
++++ b/drivers/nvme/target/tcp.c
+@@ -3,6 +3,9 @@
+  * NVMe over Fabrics TCP target.
+  * Copyright (c) 2018 Lightbits Labs. All rights reserved.
+  */
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -1439,14 +1442,27 @@ static int nvmet_tcp_set_queue_sock(stru
+ 	struct socket *sock = queue->sock;
+ 	struct inet_sock *inet = inet_sk(sock->sk);
+ 	int ret;
++#ifndef HAVE_KERNEL_GETSOCKNAME_2_PARAMS
++	int len;
++#endif
+ 
++#ifdef HAVE_KERNEL_GETSOCKNAME_2_PARAMS
+ 	ret = kernel_getsockname(sock,
+ 		(struct sockaddr *)&queue->sockaddr);
++#else
++	ret = kernel_getsockname(sock,
++		(struct sockaddr *)&queue->sockaddr, &len);
++#endif
+ 	if (ret < 0)
+ 		return ret;
+ 
++#ifdef HAVE_KERNEL_GETSOCKNAME_2_PARAMS
+ 	ret = kernel_getpeername(sock,
+ 		(struct sockaddr *)&queue->sockaddr_peer);
++#else
++	ret = kernel_getpeername(sock,
++		(struct sockaddr *)&queue->sockaddr_peer, &len);
++#endif
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -1461,8 +1477,19 @@ static int nvmet_tcp_set_queue_sock(stru
+ 		sock_set_priority(sock->sk, so_priority);
+ 
+ 	/* Set socket type of service */
++#ifdef HAVE_IP_SOCK_SET_TOS
+ 	if (inet->rcv_tos > 0)
+ 		ip_sock_set_tos(sock->sk, inet->rcv_tos);
++#else
++	if (inet->rcv_tos > 0) {
++		int tos = inet->rcv_tos;
++
++		ret = kernel_setsockopt(sock, SOL_IP, IP_TOS,
++			(char *)&tos, sizeof(tos));
++		if (ret)
++			return ret;
++	}
++#endif
+ 
+ 	write_lock_bh(&sock->sk->sk_callback_lock);
+ 	sock->sk->sk_user_data = queue;
+@@ -1584,6 +1611,9 @@ static int nvmet_tcp_add_port(struct nvm
+ 	struct nvmet_tcp_port *port;
+ 	__kernel_sa_family_t af;
+ 	int ret;
++#ifndef HAVE_TCP_SOCK_SET_NODELAY
++	int opt;
++#endif
+ 
+ 	port = kzalloc(sizeof(*port), GFP_KERNEL);
+ 	if (!port)
+@@ -1628,7 +1658,17 @@ static int nvmet_tcp_add_port(struct nvm
+ 	port->data_ready = port->sock->sk->sk_data_ready;
+ 	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
+ 	sock_set_reuseaddr(port->sock->sk);
++#ifdef HAVE_TCP_SOCK_SET_NODELAY
+ 	tcp_sock_set_nodelay(port->sock->sk);
++#else
++	opt = 1;
++	ret = kernel_setsockopt(port->sock, IPPROTO_TCP,
++			TCP_NODELAY, (char *)&opt, sizeof(opt));
++	if (ret) {
++		pr_err("failed to set TCP_NODELAY sock opt %d\n", ret);
++		goto err_sock;
++	}
++#endif
+ 	if (so_priority > 0)
+ 		sock_set_priority(port->sock->sk, so_priority);
+ 

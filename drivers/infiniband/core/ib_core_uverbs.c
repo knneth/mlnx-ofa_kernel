@@ -8,6 +8,10 @@
 #include "uverbs.h"
 #include "core_priv.h"
 
+#ifndef pgprot_decrypted
+#define pgprot_decrypted(prot)	(prot)
+#endif
+
 /**
  * rdma_umap_priv_init() - Initialize the private data of a vma
  *
@@ -87,6 +91,7 @@ int rdma_user_mmap_io(struct ib_ucontext *ucontext, struct vm_area_struct *vma,
 	if (!priv)
 		return -ENOMEM;
 
+	prot = pgprot_decrypted(prot);
 	vma->vm_page_prot = prot;
 	if (io_remap_pfn_range(vma, vma->vm_start, pfn, size, prot)) {
 		kfree(priv);

@@ -198,7 +198,7 @@ static int mlx5_create_lag(struct mlx5_lag *ldev,
 		MLX5_SET(destroy_lag_in, in, opcode, MLX5_CMD_OP_DESTROY_LAG);
 		if (mlx5_cmd_exec_in(dev0, destroy_lag, in))
 			mlx5_core_err(dev0,
-				      "Failed to deactivate RoCE LAG; driver restart required\n");
+					"Failed to deactivate RoCE LAG; driver restart required\n");
 	}
 
 	return err;
@@ -378,9 +378,9 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 			mlx5_add_dev_by_protocol(ldev->pf[MLX5_LAG_P1].dev,
 						 MLX5_INTERFACE_PROTOCOL_IB);
 
-			err = esw_offloads_load_all_reps(ldev->pf[MLX5_LAG_P1].dev->priv.eswitch);
+			err = esw_offloads_reload_reps(ldev->pf[MLX5_LAG_P1].dev->priv.eswitch);
 			if (!err)
-				err = esw_offloads_load_all_reps(ldev->pf[MLX5_LAG_P2].dev->priv.eswitch);
+				err = esw_offloads_reload_reps(ldev->pf[MLX5_LAG_P2].dev->priv.eswitch);
 
 			if (err) {
 				mlx5_remove_dev_by_protocol(ldev->pf[MLX5_LAG_P1].dev,
@@ -439,7 +439,7 @@ static void mlx5_do_bond_work(struct work_struct *work)
 	if (!status) {
 queue:
 		/* 1 sec delay. */
-		mlx5_queue_bond_work(ldev, HZ/2);
+		mlx5_queue_bond_work(ldev, HZ);
 		return;
 	}
 	if (ldev->esw_updating) {
@@ -651,7 +651,7 @@ static void mlx5_lag_dev_add_pf(struct mlx5_lag *ldev,
 	ldev->tracker.netdev_state[fn].tx_enabled = 0;
 	spin_unlock(&lag_lock);
 }
-
+ 
 static void mlx5_lag_dev_remove_mdev(struct mlx5_lag *ldev,
 				     struct mlx5_core_dev *dev)
 {
@@ -667,6 +667,7 @@ static void mlx5_lag_dev_remove_mdev(struct mlx5_lag *ldev,
 	spin_lock(&lag_lock);
 	ldev->pf[i].dev = NULL;
 	dev->priv.lag = NULL;
+
 	spin_unlock(&lag_lock);
 }
 
@@ -683,6 +684,7 @@ static void mlx5_lag_dev_remove_pf(struct mlx5_lag *ldev,
 		return;
 
 	spin_lock(&lag_lock);
+
 	ldev->pf[i].netdev = NULL;
 	spin_unlock(&lag_lock);
 }
@@ -913,6 +915,7 @@ EXPORT_SYMBOL(mlx5_lag_is_active);
 
 bool mlx5_lag_is_master(struct mlx5_core_dev *dev)
 {
+
 #ifndef MLX_LAG_SUPPORTED
 	return false;
 #else
@@ -1161,6 +1164,13 @@ unlock:
 }
 
 EXPORT_SYMBOL(mlx5_lag_get_peer_mdev);
+static int mlx5_cmd_modify_cong_params(struct mlx5_core_dev *dev,
+				       void *in, int in_size)
+{
+	u32 out[MLX5_ST_SZ_DW(modify_cong_params_out)] = { };
+
+	return mlx5_cmd_exec(dev, in, in_size, out, sizeof(out));
+}
 
 int mlx5_lag_modify_cong_params(struct mlx5_core_dev *dev,
 				void *in, int in_size)
@@ -1184,7 +1194,7 @@ int mlx5_lag_modify_cong_params(struct mlx5_core_dev *dev,
 	spin_unlock(&lag_lock);
 
 	for (i = 0; i < num_ports; i++) {
-		ret = mlx5_cmd_exec_in(mdev[i], modify_cong_params, in);
+		ret = mlx5_cmd_modify_cong_params(mdev[i], in, in_size);
 		if (ret)
 			goto unlock;
 	}

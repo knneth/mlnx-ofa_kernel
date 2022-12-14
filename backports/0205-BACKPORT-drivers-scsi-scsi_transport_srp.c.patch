@@ -1,0 +1,54 @@
+From: Sergey Gorenko <sergeygo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/scsi/scsi_transport_srp.c
+
+Change-Id: I5f588b8efea87513da045124e0db1651b0878685
+---
+ drivers/scsi/scsi_transport_srp.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/scsi/scsi_transport_srp.c
++++ b/drivers/scsi/scsi_transport_srp.c
+@@ -562,12 +562,21 @@ int srp_reconnect_rport(struct srp_rport
+ 		 * invoking scsi_target_unblock() won't change the state of
+ 		 * these devices into running so do that explicitly.
+ 		 */
++#ifdef HAVE_SCSI_DEVICE_STATE_MUTEX
+ 		shost_for_each_device(sdev, shost) {
+ 			mutex_lock(&sdev->state_mutex);
++#else
++		spin_lock_irq(shost->host_lock);
++		__shost_for_each_device(sdev, shost)
++#endif
+ 			if (sdev->sdev_state == SDEV_OFFLINE)
+ 				sdev->sdev_state = SDEV_RUNNING;
++#ifdef HAVE_SCSI_DEVICE_STATE_MUTEX
+ 			mutex_unlock(&sdev->state_mutex);
+ 		}
++#else
++		spin_unlock_irq(shost->host_lock);
++#endif
+ 	} else if (rport->state == SRP_RPORT_RUNNING) {
+ 		/*
+ 		 * srp_reconnect_rport() has been invoked with fast_io_fail
+@@ -609,7 +618,11 @@ enum blk_eh_timer_return srp_timed_out(s
+ 	return rport && rport->fast_io_fail_tmo < 0 &&
+ 		rport->dev_loss_tmo < 0 &&
+ 		i->f->reset_timer_if_blocked && scsi_device_blocked(sdev) ?
++#ifdef HAVE_BLK_EH_DONE
+ 		BLK_EH_RESET_TIMER : BLK_EH_DONE;
++#else
++		BLK_EH_RESET_TIMER : BLK_EH_NOT_HANDLED;
++#endif
+ }
+ EXPORT_SYMBOL(srp_timed_out);
+ 
+@@ -893,6 +906,9 @@ static void __exit srp_transport_exit(vo
+ MODULE_AUTHOR("FUJITA Tomonori");
+ MODULE_DESCRIPTION("SRP Transport Attributes");
+ MODULE_LICENSE("GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ module_init(srp_transport_init);
+ module_exit(srp_transport_exit);

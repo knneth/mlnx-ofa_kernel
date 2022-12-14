@@ -1,0 +1,56 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+
+Change-Id: I8a00a7204ff09246e6b3d124ae8cfe554f510b11
+---
+ .../ethernet/mellanox/mlx5/core/en/xsk/tx.c    | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+@@ -1,11 +1,17 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifdef HAVE_XSK_SUPPORT
++
+ #include "tx.h"
+ #include "umem.h"
+ #include "en/xdp.h"
+ #include "en/params.h"
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
+ 
+ int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags)
+ {
+@@ -96,11 +102,21 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			break;
+ 		}
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xdptxd.dma_addr = xsk_buff_raw_get_dma(umem, desc.addr);
+ 		xdptxd.data = xsk_buff_raw_get_data(umem, desc.addr);
++#else
++		xdptxd.dma_addr = xdp_umem_get_dma(umem, desc.addr);
++		xdptxd.data = xdp_umem_get_data(umem, desc.addr);
++#endif
+ 		xdptxd.len = desc.len;
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xsk_buff_raw_dma_sync_for_device(umem, xdptxd.dma_addr, xdptxd.len);
++#else
++		dma_sync_single_for_device(sq->pdev, xdptxd.dma_addr,
++					   xdptxd.len, DMA_BIDIRECTIONAL);
++#endif
+ 
+ 		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
+ 				      mlx5e_xmit_xdp_frame, sq, &xdptxd, &xdpi, check_result);
+@@ -124,3 +140,5 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 
+ 	return !(budget && work_done);
+ }
++
++#endif /* HAVE_XSK_SUPPORT */

@@ -1,0 +1,105 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+
+Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
+---
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 50 ++++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+@@ -100,7 +100,11 @@ static int ipoib_set_ring_param(struct n
+ 		priv_current_flags = priv->flags;
+ 		dev_current_flags = dev->flags;
+ 
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 		dev_change_flags(dev, dev->flags & ~IFF_UP, NULL);
++#else
++		dev_change_flags(dev, dev->flags & ~IFF_UP);
++#endif
+ 		priv->rn_ops->ndo_uninit(dev);
+ 
+ 		do {
+@@ -136,7 +140,11 @@ static int ipoib_set_ring_param(struct n
+ 				dev->name, new_recvq_size, new_sendq_size);
+ 
+ 		if (dev_current_flags & IFF_UP)
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 			dev_change_flags(dev, dev_current_flags, NULL);
++#else
++			dev_change_flags(dev, dev_current_flags);
++#endif
+ 	}
+ 
+ 	return 0;
+@@ -208,6 +216,39 @@ static int ipoib_set_coalesce(struct net
+ 
+ 	return 0;
+ }
++
++#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
++static int ipoib_get_settings(struct net_device *dev, struct ethtool_cmd *ecmd)
++{
++	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++	struct ib_port_attr attr;
++	char *speed = "";
++	int rate;/* in deci-Gb/sec */
++	int ret;
++
++	ret = ib_query_port(priv->ca, priv->port, &attr);
++	if (ret)
++		return ret;
++
++	ecmd->duplex = DUPLEX_FULL;
++	ecmd->autoneg = AUTONEG_DISABLE;
++	ecmd->phy_address = 255;
++	ecmd->port = PORT_OTHER;/* till define IB port type */
++
++	ib_active_speed_enum_to_rate(attr.active_speed,
++			&rate,
++			&speed);
++
++	rate *= ib_width_enum_to_int(attr.active_width);
++	if (rate < 0)
++		rate = -1;
++
++	ethtool_cmd_speed_set(ecmd, rate * 100);
++
++	return 0;
++}
++#endif
++
+ static void ipoib_get_ethtool_stats(struct net_device *dev,
+ 				    struct ethtool_stats __always_unused *stats,
+ 				    u64 *data)
+@@ -270,6 +311,7 @@ static inline int ib_speed_enum_to_int(i
+ 	return SPEED_UNKNOWN;
+ }
+ 
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ static int ipoib_get_link_ksettings(struct net_device *netdev,
+ 				    struct ethtool_link_ksettings *cmd)
+ {
+@@ -307,14 +349,22 @@ static int ipoib_get_link_ksettings(stru
+ 
+ 	return 0;
+ }
++#endif
+ 
+ static const struct ethtool_ops ipoib_ethtool_ops = {
++#ifdef HAVE_SUPPORTED_COALESCE_PARAM
+ 	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS |
+ 				     ETHTOOL_COALESCE_RX_MAX_FRAMES,
++#endif
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ 	.get_link_ksettings	= ipoib_get_link_ksettings,
++#endif
+ 	.get_drvinfo		= ipoib_get_drvinfo,
+ 	.get_coalesce		= ipoib_get_coalesce,
+ 	.set_coalesce		= ipoib_set_coalesce,
++#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
++	.get_settings           = ipoib_get_settings,
++#endif
+ 	.get_strings		= ipoib_get_strings,
+ 	.get_ethtool_stats	= ipoib_get_ethtool_stats,
+ 	.get_sset_count		= ipoib_get_sset_count,

@@ -67,6 +67,12 @@ enum {
 };
 #endif
 
+#ifndef HAVE_FLOW_DISSECTOR_KEY_MPLS
+enum {
+	FLOW_DISSECTOR_KEY_MPLS = FLOW_DISSECTOR_KEY_MAX, /* struct flow_dissector_key_ip */
+};
+#endif
+
 #ifndef HAVE_FLOW_DISSECTOR_KEY_ENC_OPTS
 #define FLOW_DIS_TUN_OPTS_MAX 255
 /**

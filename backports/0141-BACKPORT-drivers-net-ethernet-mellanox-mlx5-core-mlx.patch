@@ -1,0 +1,58 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
+
+Change-Id: I82d9ed737dd0e0e0d3825591b68cae354e50a116
+---
+ .../ethernet/mellanox/mlx5/core/mlx5_core.h   | 27 ++++++++++++++-----
+ 1 file changed, 20 insertions(+), 7 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
+@@ -308,11 +308,6 @@ void mlx5_events_stop(struct mlx5_core_d
+ void mlx5_lag_enable(struct mlx5_core_dev *dev, struct mlx5_lag *ldev);
+ struct mlx5_lag *mlx5_lag_disable(struct mlx5_core_dev *dev);
+ 
+-int esw_offloads_reload_reps(struct mlx5_eswitch *esw);
+-int esw_offloads_config_single_fdb(struct mlx5_eswitch *master_esw,
+-				   struct mlx5_eswitch *slave_esw);
+-void esw_offloads_destroy_single_fdb(struct mlx5_eswitch *master_esw,
+-				     struct mlx5_eswitch *slave_esw);
+ struct mlx5_vport *mlx5_eswitch_get_vport(struct mlx5_eswitch *esw,
+ 					  u16 vport_num);
+ struct mlx5_flow_root_namespace *find_root(struct fs_node *node);
+@@ -349,8 +344,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
+ 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
+ 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
+ 
+-int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw,
+-			struct netlink_ext_ack *extack);
++int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw
++#ifdef HAVE_NETLINK_EXT_ACK
++			, struct netlink_ext_ack *extack
++#endif
++);
+ int mlx5_fw_version_query(struct mlx5_core_dev *dev,
+ 			  u32 *running_ver, u32 *stored_ver);
+ 
+@@ -444,6 +442,21 @@ enum {
+ 	MLX5_NIC_IFC_SW_RESET		= 7
+ };
+ 
++#ifdef CONFIG_MLX5_ESWITCH
++int esw_offloads_reload_reps(struct mlx5_eswitch *esw);
++int esw_offloads_config_single_fdb(struct mlx5_eswitch *master_esw,
++				   struct mlx5_eswitch *slave_esw);
++void esw_offloads_destroy_single_fdb(struct mlx5_eswitch *master_esw,
++				     struct mlx5_eswitch *slave_esw);
++#else
++static inline int esw_offloads_reload_reps(struct mlx5_eswitch *esw) { return 0; }
++static inline int esw_offloads_config_single_fdb(struct mlx5_eswitch *master_esw,
++				    		 struct mlx5_eswitch *slave_esw) { return 0; }
++static inline void esw_offloads_destroy_single_fdb(struct mlx5_eswitch *master_esw,
++                                		   struct mlx5_eswitch *slave_esw) { return;  }
++
++#endif
++
+ u8 mlx5_get_nic_state(struct mlx5_core_dev *dev);
+ void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state);
+ 

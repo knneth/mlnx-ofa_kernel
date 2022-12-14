@@ -1,42 +1,95 @@
-From: Mikhael Goikhman <migo@mellanox.com>
+From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 
-Change-Id: I65bd65ca491e16cc5126c4e845e2c36c0ec3f955
+Change-Id: I7745efac55d71c1e75acceb63be35a777c4d8ca2
 ---
- .../ethernet/mellanox/mlx5/core/en_accel/ktls.h  | 16 ++++++++++++----
- 1 file changed, 12 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ipsec.c       | 26 +++++++++++++++++++
+ 1 file changed, 26 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
-@@ -6,18 +6,26 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
+@@ -267,6 +267,12 @@ initialize_lifetime_limit(struct mlx5e_i
+ 	if (MLX5_CAP_GEN(priv->mdev, fpga))
+ 		return;
  
- #include "en.h"
- 
--#ifdef CONFIG_MLX5_EN_TLS
-+#if defined CONFIG_MLX5_EN_TLS && defined HAVE_KTLS_STRUCTS
- 
- void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
--int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
--void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
--int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
-+
- #else
- 
- static inline void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
- {
- }
- 
++#ifndef HAVE_XFRM_STATE_EXPIRE
++	attrs->soft_packet_limit = IPSEC_NO_LIMIT;
++	attrs->hard_packet_limit = IPSEC_NO_LIMIT;
++	return;
 +#endif
 +
-+#ifdef HAVE_KTLS_RX_SUPPORT
-+
-+int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
-+void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
-+int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
-+
-+#else
-+
- static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
+ 	hard_limit = x->lft.hard_packet_limit;
+ 	soft_limit = (x->lft.soft_packet_limit == IPSEC_NO_LIMIT)
+ 			? 0 : x->lft.soft_packet_limit;
+@@ -401,7 +407,11 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struc
+ 
+ static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
  {
- 	return 0;
++#ifdef HAVE_NET_DEVICE_REAL_DEV
+ 	struct net_device *netdev = x->xso.real_dev;
++#else
++	struct net_device *netdev = x->xso.dev;
++#endif
+ 	struct mlx5_core_dev *mdev;
+ 	struct mlx5_eswitch *esw;
+ 	struct mlx5e_priv *priv;
+@@ -538,7 +548,11 @@ static void mlx5e_xfrm_fs_del_rule(struc
+ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
+ {
+ 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
++#ifdef HAVE_NET_DEVICE_REAL_DEV
+ 	struct net_device *netdev = x->xso.real_dev;
++#else
++	struct net_device *netdev = x->xso.dev;
++#endif
+ 	struct mlx5_accel_esp_xfrm_attrs attrs;
+ 	struct mlx5e_priv *priv;
+ 	unsigned int sa_handle;
+@@ -735,6 +749,7 @@ struct mlx5e_ipsec_modify_state_work {
+ 	struct mlx5e_ipsec_sa_entry	*sa_entry;
+ };
+ 
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ static void _update_xfrm_state(struct work_struct *work)
+ {
+ 	int ret;
+@@ -774,13 +789,16 @@ static void mlx5e_xfrm_advance_esn_state
+ 	INIT_WORK(&modify_work->work, _update_xfrm_state);
+ 	WARN_ON(!queue_work(sa_entry->ipsec->wq, &modify_work->work));
+ }
++#endif
+ 
+ static const struct xfrmdev_ops mlx5e_ipsec_xfrmdev_ops = {
+ 	.xdo_dev_state_add	= mlx5e_xfrm_add_state,
+ 	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
+ 	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
+ 	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ 	.xdo_dev_state_advance_esn = mlx5e_xfrm_advance_esn_state,
++#endif
+ };
+ 
+ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)
+@@ -888,6 +906,9 @@ static void _mlx5e_ipsec_async_event(str
+ 
+ 	/* Life time event */
+ 	if (!hard_cnt) { /* Notify hard lifetime to xfrm stack */
++#ifdef HAVE_XFRM_STATE_EXPIRE
++ 		xfrm_state_expire(xs, 1);
++#endif
+ 		goto out_xs_state;
+ 	}
+ 
+@@ -896,6 +917,11 @@ static void _mlx5e_ipsec_async_event(str
+ 	 */
+ 	if (lft->round_soft) {
+ 		lft->round_soft--;
++
++#ifdef HAVE_XFRM_STATE_EXPIRE
++ 		if (!lft->round_soft)
++ 			xfrm_state_expire(xs, 0);
++#endif
+ 	}
+ 
+ 	if (!lft->is_simulated) /* hard_limit < IPSEC_HW_LIMIT */

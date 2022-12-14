@@ -6,9 +6,4 @@
 
 #include_next <linux/ratelimit.h>
 
-#ifndef HAVE_PR_DEBUG_RATELIMITED
-#define pr_debug_ratelimited printk
-#define pr_warn_ratelimited printk
-#endif
-
 #endif	/* _COMPAT_LINUX_RATELIMIT_H */

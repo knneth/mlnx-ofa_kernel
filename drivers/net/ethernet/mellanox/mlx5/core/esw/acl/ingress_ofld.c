@@ -64,17 +64,20 @@ static int esw_acl_ingress_mod_metadata_create(struct mlx5_eswitch *esw,
 {
 	u8 action[MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)] = {};
 	struct mlx5_flow_act flow_act = {};
-	struct mlx5_flow_spec *spec;
 	int err = 0;
+	u32 key;
 
-	spec = kzalloc(sizeof(*spec), GFP_KERNEL);
-	if (!spec)
-		return -ENOMEM;
+	key = mlx5_eswitch_get_vport_metadata_for_match(esw, vport->vport);
+	key >>= ESW_SOURCE_PORT_METADATA_OFFSET;
 
 	MLX5_SET(set_action_in, action, action_type, MLX5_ACTION_TYPE_SET);
-	MLX5_SET(set_action_in, action, field, MLX5_ACTION_IN_FIELD_METADATA_REG_C_0);
-	MLX5_SET(set_action_in, action, data,
-		 mlx5_eswitch_get_vport_metadata_for_match(esw, vport->vport));
+	MLX5_SET(set_action_in, action, field,
+		 MLX5_ACTION_IN_FIELD_METADATA_REG_C_0);
+	MLX5_SET(set_action_in, action, data, key);
+	MLX5_SET(set_action_in, action, offset,
+		 ESW_SOURCE_PORT_METADATA_OFFSET);
+	MLX5_SET(set_action_in, action, length,
+		 ESW_SOURCE_PORT_METADATA_BITS);
 
 	vport->ingress.offloads.modify_metadata =
 		mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_ESW_INGRESS,
@@ -84,14 +87,14 @@ static int esw_acl_ingress_mod_metadata_create(struct mlx5_eswitch *esw,
 		esw_warn(esw->dev,
 			 "failed to alloc modify header for vport %d ingress acl (%d)\n",
 			 vport->vport, err);
-		goto out_spec;
+		return err;
 	}
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_MOD_HDR | MLX5_FLOW_CONTEXT_ACTION_ALLOW;
 	flow_act.modify_hdr = vport->ingress.offloads.modify_metadata;
 	vport->ingress.offloads.modify_metadata_rule =
 				mlx5_add_flow_rules(vport->ingress.acl,
-						    spec, &flow_act, NULL, 0);
+						    NULL, &flow_act, NULL, 0);
 	if (IS_ERR(vport->ingress.offloads.modify_metadata_rule)) {
 		err = PTR_ERR(vport->ingress.offloads.modify_metadata_rule);
 		esw_warn(esw->dev,
@@ -100,9 +103,6 @@ static int esw_acl_ingress_mod_metadata_create(struct mlx5_eswitch *esw,
 		mlx5_modify_header_dealloc(esw->dev, vport->ingress.offloads.modify_metadata);
 		vport->ingress.offloads.modify_metadata_rule = NULL;
 	}
-
-out_spec:
-	kfree(spec);
 	return err;
 }
 

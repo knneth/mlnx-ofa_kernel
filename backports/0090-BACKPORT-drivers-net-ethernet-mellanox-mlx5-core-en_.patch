@@ -1,81 +1,34 @@
-From: Mikhael Goikhman <migo@mellanox.com>
+From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 
-Change-Id: I753695d2e078b175d4667ac64d6a0a1c224b23aa
+Change-Id: I8343c4095bda800d23399ec77fab139dd56a3bf7
 ---
- .../mellanox/mlx5/core/en_accel/tls_rxtx.c    | 20 +++++++++++++++++--
- 1 file changed, 18 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
-@@ -31,6 +31,8 @@
-  *
-  */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2019 Mellanox Technologies.
  
-+#ifdef HAVE_UAPI_LINUX_TLS_H
++#ifdef HAVE_KTLS_STRUCTS
 +
- #include "en_accel/tls.h"
- #include "en_accel/tls_rxtx.h"
- #include "accel/accel.h"
-@@ -309,6 +311,7 @@ void mlx5e_tls_handle_tx_wqe(struct mlx5
- 	cseg->tis_tir_num = cpu_to_be32(state->tls_tisn << 8);
- }
+ #include "en_accel/ktls_txrx.h"
+ #include "en_accel/ktls_utils.h"
  
-+#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_REQUEST
- static int tls_update_resync_sn(struct net_device *netdev,
- 				struct sk_buff *skb,
- 				struct mlx5e_tls_metadata *mdata)
-@@ -332,11 +335,17 @@ static int tls_update_resync_sn(struct n
- #if IS_ENABLED(CONFIG_IPV6)
- 	} else {
- 		struct ipv6hdr *ipv6h = (struct ipv6hdr *)iph;
--
-+#ifdef HAVE___INET6_LOOKUP_ESTABLISHED_HAS_7_PARAMS
- 		sk = __inet6_lookup_established(dev_net(netdev), &tcp_hashinfo,
- 						&ipv6h->saddr, th->source,
- 						&ipv6h->daddr, ntohs(th->dest),
--						netdev->ifindex, 0);
-+						netdev->ifindex);
-+#else
-+		sk = __inet6_lookup_established(dev_net(netdev), &tcp_hashinfo,
-+				&ipv6h->saddr, th->source,
-+				&ipv6h->daddr, ntohs(th->dest),
-+				netdev->ifindex, 0);
-+#endif
- #endif
- 	}
- 	if (!sk || sk->sk_state == TCP_TIME_WAIT) {
-@@ -354,6 +363,7 @@ static int tls_update_resync_sn(struct n
- out:
- 	return 0;
- }
-+#endif
- 
- /* FPGA tls rx handler */
- void mlx5e_tls_handle_rx_skb_metadata(struct mlx5e_rq *rq, struct sk_buff *skb,
-@@ -365,14 +375,18 @@ void mlx5e_tls_handle_rx_skb_metadata(st
- 	/* Use the metadata */
- 	mdata = (struct mlx5e_tls_metadata *)(skb->data + ETH_HLEN);
- 	switch (mdata->content.recv.syndrome) {
-+#ifdef HAVE_SK_BUFF_DECRYPTED
- 	case SYNDROM_DECRYPTED:
- 		skb->decrypted = 1;
- 		break;
-+#endif
-+#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_REQUEST
- 	case SYNDROM_RESYNC_REQUEST:
- 		tls_update_resync_sn(rq->netdev, skb, mdata);
- 		priv = netdev_priv(rq->netdev);
- 		atomic64_inc(&priv->tls->sw_stats.rx_tls_resync_request);
- 		break;
-+#endif
- 	case SYNDROM_AUTH_FAILED:
- 		/* Authentication failure will be observed and verified by kTLS */
- 		priv = netdev_priv(rq->netdev);
-@@ -401,3 +415,5 @@ u16 mlx5e_tls_get_stop_room(struct mlx5e
- 	/* Resync SKB. */
- 	return mlx5e_stop_room_for_wqe(MLX5_SEND_WQE_MAX_WQEBBS);
+@@ -468,6 +470,7 @@ bool mlx5e_ktls_handle_tx_skb(struct tls
+ 				goto out;
+ 			WARN_ON_ONCE(1);
+ 			fallthrough;
++
+ 		case MLX5E_KTLS_SYNC_FAIL:
+ 			goto err_out;
+ 		}
+@@ -487,3 +490,5 @@ err_out:
+ 	dev_kfree_skb_any(skb);
+ 	return false;
  }
 +
 +#endif

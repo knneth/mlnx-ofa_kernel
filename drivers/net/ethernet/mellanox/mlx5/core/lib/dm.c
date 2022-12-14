@@ -24,7 +24,7 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 	bool support_v2;
 
 	if (!(MLX5_CAP_GEN_64(dev, general_obj_types) & MLX5_GENERAL_OBJ_TYPES_CAP_SW_ICM))
-		return 0;
+		return NULL;
 
 	dm = kzalloc(sizeof(*dm), GFP_KERNEL);
 	if (!dm)
@@ -181,9 +181,7 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
 	align_mask = BIT(log_alignment - MLX5_LOG_SW_ICM_BLOCK_SIZE(dev)) - 1;
 
 	spin_lock(&dm->lock);
-	block_idx = bitmap_find_next_zero_area(block_map,
-					       max_blocks,
-					       0,
+	block_idx = bitmap_find_next_zero_area(block_map, max_blocks, 0,
 					       num_blocks, align_mask);
 
 	if (block_idx < max_blocks)

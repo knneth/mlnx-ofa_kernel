@@ -506,19 +506,17 @@ static int fill_res_qp_entry(struct sk_buff *msg, bool has_cap_net_admin,
 
 	ret = nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_LQPN, qp->qp_num);
 	if (ret)
-		goto err;
+		return -EMSGSIZE;
 
 	if (!rdma_is_kernel_res(res) &&
 	    nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_PDN, qp->pd->res.id))
-		goto err;
+		return -EMSGSIZE;
 
 	ret = fill_res_name_pid(msg, res);
 	if (ret)
-		goto err;
+		return -EMSGSIZE;
 
 	return fill_res_qp_entry_query(msg, res, dev, qp);
-
-err:	return -EMSGSIZE;
 }
 
 static int fill_res_qp_raw_entry(struct sk_buff *msg, bool has_cap_net_admin,
@@ -593,33 +591,31 @@ static int fill_res_cq_entry(struct sk_buff *msg, bool has_cap_net_admin,
 	struct ib_device *dev = cq->device;
 
 	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_CQE, cq->cqe))
-		goto err;
+		return -EMSGSIZE;
 	if (nla_put_u64_64bit(msg, RDMA_NLDEV_ATTR_RES_USECNT,
 			      atomic_read(&cq->usecnt), RDMA_NLDEV_ATTR_PAD))
-		goto err;
+		return -EMSGSIZE;
 
 	/* Poll context is only valid for kernel CQs */
 	if (rdma_is_kernel_res(res) &&
 	    nla_put_u8(msg, RDMA_NLDEV_ATTR_RES_POLL_CTX, cq->poll_ctx))
-		goto err;
+		return -EMSGSIZE;
 
 	if (nla_put_u8(msg, RDMA_NLDEV_ATTR_DEV_DIM, (cq->dim != NULL)))
-		goto err;
+		return -EMSGSIZE;
 
 	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_CQN, res->id))
-		goto err;
+		return -EMSGSIZE;
 	if (!rdma_is_kernel_res(res) &&
 	    nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_CTXN,
 			cq->uobject->uevent.uobject.context->res.id))
-		goto err;
+		return -EMSGSIZE;
 
 	if (fill_res_name_pid(msg, res))
-		goto err;
+		return -EMSGSIZE;
 
 	return (dev->ops.fill_res_cq_entry) ?
 		dev->ops.fill_res_cq_entry(msg, cq) : 0;
-
-err:	return -EMSGSIZE;
 }
 
 static int fill_res_cq_raw_entry(struct sk_buff *msg, bool has_cap_net_admin,
@@ -641,29 +637,28 @@ static int fill_res_mr_entry(struct sk_buff *msg, bool has_cap_net_admin,
 
 	if (has_cap_net_admin) {
 		if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_RKEY, mr->rkey))
-			goto err;
+			return -EMSGSIZE;
 		if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_LKEY, mr->lkey))
-			goto err;
+			return -EMSGSIZE;
 	}
 
 	if (nla_put_u64_64bit(msg, RDMA_NLDEV_ATTR_RES_MRLEN, mr->length,
 			      RDMA_NLDEV_ATTR_PAD))
-		goto err;
+		return -EMSGSIZE;
 
 	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_MRN, res->id))
-		goto err;
+		return -EMSGSIZE;
 
 	if (!rdma_is_kernel_res(res) &&
 	    nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_PDN, mr->pd->res.id))
-		goto err;
+		return -EMSGSIZE;
 
 	if (fill_res_name_pid(msg, res))
-		goto err;
+		return -EMSGSIZE;
 
 	return (dev->ops.fill_res_mr_entry) ?
-		dev->ops.fill_res_mr_entry(msg, mr) : 0;
-
-err:	return -EMSGSIZE;
+		       dev->ops.fill_res_mr_entry(msg, mr) :
+		       0;
 }
 
 static int fill_res_mr_raw_entry(struct sk_buff *msg, bool has_cap_net_admin,
@@ -716,10 +711,15 @@ static int fill_stat_counter_mode(struct sk_buff *msg,
 	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_STAT_MODE, m->mode))
 		return -EMSGSIZE;
 
-	if (m->mode == RDMA_COUNTER_MODE_AUTO)
+	if (m->mode == RDMA_COUNTER_MODE_AUTO) {
 		if ((m->mask & RDMA_COUNTER_MASK_QP_TYPE) &&
 		    nla_put_u8(msg, RDMA_NLDEV_ATTR_RES_TYPE, m->param.qp_type))
 			return -EMSGSIZE;
+
+		if ((m->mask & RDMA_COUNTER_MASK_PID) &&
+		    fill_res_name_pid(msg, &counter->res))
+			return -EMSGSIZE;
+	}
 
 	return 0;
 }
@@ -759,9 +759,6 @@ static int fill_stat_counter_qps(struct sk_buff *msg,
 	xa_lock(&rt->xa);
 	xa_for_each(&rt->xa, id, res) {
 		qp = container_of(res, struct ib_qp, res);
-		if (qp->qp_type == IB_QPT_RAW_PACKET && !capable(CAP_NET_RAW))
-			continue;
-
 		if (!qp->counter || (qp->counter->id != counter->id))
 			continue;
 
@@ -860,7 +857,6 @@ static int fill_res_counter_entry(struct sk_buff *msg, bool has_cap_net_admin,
 
 	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_PORT_INDEX, counter->port) ||
 	    nla_put_u32(msg, RDMA_NLDEV_ATTR_STAT_COUNTER_ID, counter->id) ||
-	    fill_res_name_pid(msg, &counter->res) ||
 	    fill_stat_counter_mode(msg, counter) ||
 	    fill_stat_counter_qps(msg, counter) ||
 	    fill_stat_counter_hwcounters(msg, counter))

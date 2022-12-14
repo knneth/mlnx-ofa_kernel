@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/fs.h
+
+Change-Id: Id4e74044d2044ca9695adb0aba9ed209b0d35772
+---
+ include/linux/mlx5/fs.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/include/linux/mlx5/fs.h
++++ b/include/linux/mlx5/fs.h
+@@ -35,6 +35,7 @@
+ 
+ #include <linux/mlx5/driver.h>
+ #include <linux/mlx5/mlx5_ifc.h>
++#include <linux/hashtable.h>
+ 
+ #define MLX5_FS_DEFAULT_FLOW_TAG 0x0
+ 

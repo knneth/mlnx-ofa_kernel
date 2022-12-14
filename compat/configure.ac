@@ -46,9 +46,44 @@ sed -i '/\<PACKAGE_VERSION\>/d' $PWD/config.h
 sed -i '/\<VERSION\>/d' $PWD/config.h
 
 #
-echo '' >> $PWD/config.h
-echo '/* Make sure LINUX_BACKPORT macro is defined for all external users */' >> $PWD/config.h
-echo '#ifndef LINUX_BACKPORT' >> $PWD/config.h
-echo '#define LINUX_BACKPORT(__sym) backport_ ##__sym' >> $PWD/config.h
-echo '#endif' >> $PWD/config.h
-echo '' >> $PWD/config.h
+cat << 'END_CONFIG' >> $PWD/config.h
+
+/* Make sure LINUX_BACKPORT macro is defined for all external users */
+#ifndef LINUX_BACKPORT
+#define LINUX_BACKPORT(__sym) backport_ ##__sym
+#endif
+
+/* Define HAVE_DEVLINK_HEALTH_REPORT_SUPPORT from other flags */
+#if defined(HAVE_DEVLINK_HEALTH_REPORT_BASE_SUPPORT) && \
+    (defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS) || \
+     defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS))
+#define HAVE_DEVLINK_HEALTH_REPORT_SUPPORT 1
+#endif
+
+/* Define HAVE_KTLS_RX_SUPPORT from other flags */
+#if defined(HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST) || \
+    defined(HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START)
+#define HAVE_KTLS_RX_SUPPORT 1
+#endif
+
+/* Define HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT from other flags */
+#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_5_PARAMS) || \
+    defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS) || \
+    defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS)
+#define HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT 1
+#endif
+
+/* Define HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET from other flags */
+#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET_4_PARAMS) || \
+    defined(HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET_2_PARAMS)
+#define HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET 1
+#endif
+
+/* Define HAVE_XSK_SUPPORT from other flags */
+#if (defined(HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS) || \
+    defined(HAVE_XSK_BUFF_ALLOC)) && \
+    !defined(HAVE_XSK_BUFF_ALLOC_GET_XSK_BUFF_POOL)
+#define HAVE_XSK_SUPPORT 1
+#endif
+
+END_CONFIG

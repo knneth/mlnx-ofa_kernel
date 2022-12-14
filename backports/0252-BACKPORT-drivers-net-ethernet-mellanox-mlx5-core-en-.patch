@@ -1,0 +1,20 @@
+From: Eran Ben Elisha <eranbe@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+
+Change-Id: I49561be716edd0958af7399efac7257fc6ec4955
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+@@ -30,6 +30,9 @@ struct mlx5e_port_ptp {
+ 	/* data path - accessed per napi poll */
+ 	struct irq_desc *irq_desc;
+ 	struct mlx5e_ch_stats     *stats;
++#ifndef HAVE_NAPI_STATE_MISSED
++	unsigned long              flags;
++#endif
+ 
+ 	/* control */
+ 	struct mlx5e_priv         *priv;

@@ -365,4 +365,21 @@ flow_cls_offload_flow_rule1(struct flow_cls_offload1 *flow_cmd)
 #define flow_cls_offload_flow_rule1 flow_cls_offload_flow_rule
 #endif /* CONFIG_COMPAT_CLS_FLOWER_4_18_MOD */
 
+#ifndef HAVE_FLOW_INDR_BLOCK_CB_ALLOC
+#define flow_indr_block_cb_remove flow_block_cb_remove
+#endif
+
+#ifndef HAVE_FLOW_BLOCK_CB
+struct flow_block_cb {
+	struct list_head        driver_list;
+	struct list_head        list;
+	flow_setup_cb_t         *cb;
+	void                    *cb_ident;
+	void                    *cb_priv;
+	void                    (*release)(void *cb_priv);
+	unsigned int            refcnt;
+};
+#endif
+
+
 #endif /* _NET_FLOW_OFFLOAD_H */

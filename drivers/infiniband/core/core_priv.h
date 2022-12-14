@@ -414,5 +414,7 @@ void rdma_umap_priv_init(struct rdma_umap_priv *priv,
 			 struct vm_area_struct *vma,
 			 struct rdma_user_mmap_entry *entry);
 
+void ib_cq_pool_cleanup(struct ib_device *dev);
+
 bool rdma_check_gid_user_access(const struct ib_gid_attr *attr);
 #endif /* _CORE_PRIV_H */

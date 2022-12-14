@@ -1,4 +1,4 @@
-#if !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC))
+#if !(IS_ENABLED(CONFIG_XZ_DEC))
 
 /*
  * XZ decoder module information
@@ -36,4 +36,4 @@ MODULE_AUTHOR("Lasse Collin <lasse.collin@tukaani.org> and Igor Pavlov");
 MODULE_INFO(retpoline, "Y");
 #endif
 
-#endif /* !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)) */
+#endif /* !(IS_ENABLED(CONFIG_XZ_DEC)) */

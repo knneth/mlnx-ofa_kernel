@@ -218,6 +218,9 @@ static int __mlx5e_add_vlan_rule(struct mlx5e_priv *priv,
 		break;
 	}
 
+	if (WARN_ONCE(*rule_p, "VLAN rule already exists type %d", rule_type))
+		return 0;
+
 	*rule_p = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 
 	if (IS_ERR(*rule_p)) {
@@ -404,8 +407,7 @@ static void mlx5e_add_vlan_rules(struct mlx5e_priv *priv)
 	for_each_set_bit(i, priv->fs.vlan.active_svlans, VLAN_N_VID)
 		mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_STAG_VID, i);
 
-	if (priv->fs.vlan.cvlan_filter_disabled &&
-	    !(priv->netdev->flags & IFF_PROMISC))
+	if (priv->fs.vlan.cvlan_filter_disabled)
 		mlx5e_add_any_vid_rules(priv);
 }
 
@@ -422,8 +424,12 @@ static void mlx5e_del_vlan_rules(struct mlx5e_priv *priv)
 	for_each_set_bit(i, priv->fs.vlan.active_svlans, VLAN_N_VID)
 		mlx5e_del_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_STAG_VID, i);
 
-	if (priv->fs.vlan.cvlan_filter_disabled &&
-	    !(priv->netdev->flags & IFF_PROMISC))
+	WARN_ON_ONCE(!(test_bit(MLX5E_STATE_DESTROYING, &priv->state)));
+
+	/* must be called after DESTROY bit is set and
+	 * set_rx_mode is called and flushed
+	 */
+	if (priv->fs.vlan.cvlan_filter_disabled)
 		mlx5e_del_any_vid_rules(priv);
 }
 
@@ -1252,7 +1258,7 @@ int mlx5e_ttc_fwd_default_dest(struct mlx5e_priv *priv, enum mlx5e_traffic_types
 {
 	struct mlx5_flow_destination dest = mlx5e_ttc_get_default_dest(priv, type);
 
-	return mlx5_modify_rule_destination(priv->fs.ttc.rules[type].rule, &dest, NULL);
+	return mlx5e_ttc_fwd_dest(priv, type, &dest);
 }
 
 static void mlx5e_del_l2_flow_rule(struct mlx5e_priv *priv,

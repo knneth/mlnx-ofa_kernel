@@ -34,14 +34,14 @@
 #include <linux/mlx5/qp.h>
 #include <rdma/ib_verbs_nvmf.h>
 
-int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *qp,
+int mlx5_ib_set_qp_offload_type(void *qpc, struct ib_qp *qp,
 		enum ib_qp_offload_type offload_type)
 {
 	switch (offload_type) {
 		case IB_QP_OFFLOAD_NVMF:
 			if (qp->srq &&
 					qp->srq->srq_type == IB_EXP_SRQT_NVMF) {
-				context->flags |= cpu_to_be32(MLX5_QPC_OFFLOAD_TYPE_NVMF << 4);
+				MLX5_SET(qpc, qpc, offload_type, MLX5_QPC_OFFLOAD_TYPE_NVMF);
 				break;
 			}
 			/* Fall through */
@@ -52,7 +52,7 @@ int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *q
 	return 0;
 }
 
-int mlx5_ib_set_qp_srqn(struct mlx5_qp_context *context, struct ib_qp *qp,
+int mlx5_ib_set_qp_srqn(void *qpc, struct ib_qp *qp,
 			u32 srqn)
 {
 	struct mlx5_ib_dev *dev = to_mdev(qp->device);
@@ -69,7 +69,7 @@ int mlx5_ib_set_qp_srqn(struct mlx5_qp_context *context, struct ib_qp *qp,
 		return -EINVAL;
 
 	qp->srq = &to_mibsrq(msrq)->ibsrq;
-	context->rq_type_srqn |= cpu_to_be32(srqn & 0xffffff);
+	MLX5_SET(qpc, qpc, srqn_rmpn_xrqn, srqn);
 
 	return 0;
 }

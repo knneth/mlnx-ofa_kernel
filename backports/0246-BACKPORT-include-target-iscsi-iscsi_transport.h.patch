@@ -1,0 +1,20 @@
+From: Sergey Gorenko <sergeygo@nvidia.com>
+Subject: [PATCH] BACKPORT: include/target/iscsi/iscsi_transport.h
+
+Change-Id: I46474e4a58f7963ddcf44944978a640ed4b990a7
+---
+ include/target/iscsi/iscsi_transport.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/include/target/iscsi/iscsi_transport.h
++++ b/include/target/iscsi/iscsi_transport.h
+@@ -21,7 +21,9 @@ struct iscsit_transport {
+ 	int (*iscsit_setup_np)(struct iscsi_np *, struct __kernel_sockaddr_storage *);
+ 	int (*iscsit_accept_np)(struct iscsi_np *, struct iscsi_conn *);
+ 	void (*iscsit_free_np)(struct iscsi_np *);
++#ifdef CONFIG_COMPAT_ISCSIT_WAIT_CONN
+ 	void (*iscsit_wait_conn)(struct iscsi_conn *);
++#endif
+ 	void (*iscsit_free_conn)(struct iscsi_conn *);
+ 	int (*iscsit_get_login_rx)(struct iscsi_conn *, struct iscsi_login *);
+ 	int (*iscsit_put_login_tx)(struct iscsi_conn *, struct iscsi_login *, u32);

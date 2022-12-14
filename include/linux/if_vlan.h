@@ -15,13 +15,6 @@
 #define skb_vlan_tag_get_prio(__skb)   ((__skb)->vlan_tci & VLAN_PRIO_MASK)
 #endif/*skb_vlan_tag_get_prio*/
 
-#ifndef HAVE_IS_VLAN_DEV
-static inline int is_vlan_dev(struct net_device *dev)
-{
-	return dev->priv_flags & IFF_802_1Q_VLAN;
-}
-#endif
-
 #ifndef ETH_P_8021AD
 #define ETH_P_8021AD    0x88A8          /* 802.1ad Service VLAN         */
 #endif

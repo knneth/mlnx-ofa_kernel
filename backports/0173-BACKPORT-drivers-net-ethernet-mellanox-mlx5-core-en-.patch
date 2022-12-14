@@ -1,0 +1,20 @@
+From: Jianbo Liu <jianbol@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+
+Change-Id: I96fdac0596f44cff9bf81a023a7a0fc82c481167
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+@@ -8,7 +8,9 @@
+ #include <linux/mlx5/fs.h>
+ #include <net/tc_act/tc_ct.h>
+ 
++#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
+ #include "en.h"
++#endif
+ 
+ #define MLX5_CT_STATE_ESTABLISHED_BIT BIT(1)
+ #define MLX5_CT_STATE_TRK_BIT BIT(2)

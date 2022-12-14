@@ -32,6 +32,7 @@
 
 #include "en.h"
 #include "en/port.h"
+#include "en/params.h"
 #include "en/xsk/umem.h"
 #include "lib/clock.h"
 #include "en_rep.h"
@@ -195,6 +196,24 @@ void mlx5e_build_ptys2ethtool_map(void)
 				       ETHTOOL_LINK_MODE_200000baseLR4_ER4_FR4_Full_BIT,
 				       ETHTOOL_LINK_MODE_200000baseDR4_Full_BIT,
 				       ETHTOOL_LINK_MODE_200000baseCR4_Full_BIT);
+	MLX5_BUILD_PTYS2ETHTOOL_CONFIG(MLX5E_100GAUI_1_100GBASE_CR_KR, ext,
+				       ETHTOOL_LINK_MODE_100000baseKR_Full_BIT,
+				       ETHTOOL_LINK_MODE_100000baseSR_Full_BIT,
+				       ETHTOOL_LINK_MODE_100000baseLR_ER_FR_Full_BIT,
+				       ETHTOOL_LINK_MODE_100000baseDR_Full_BIT,
+				       ETHTOOL_LINK_MODE_100000baseCR_Full_BIT);
+	MLX5_BUILD_PTYS2ETHTOOL_CONFIG(MLX5E_200GAUI_2_200GBASE_CR2_KR2, ext,
+				       ETHTOOL_LINK_MODE_200000baseKR2_Full_BIT,
+				       ETHTOOL_LINK_MODE_200000baseSR2_Full_BIT,
+				       ETHTOOL_LINK_MODE_200000baseLR2_ER2_FR2_Full_BIT,
+				       ETHTOOL_LINK_MODE_200000baseDR2_Full_BIT,
+				       ETHTOOL_LINK_MODE_200000baseCR2_Full_BIT);
+	MLX5_BUILD_PTYS2ETHTOOL_CONFIG(MLX5E_400GAUI_4_400GBASE_CR4_KR4, ext,
+				       ETHTOOL_LINK_MODE_400000baseKR4_Full_BIT,
+				       ETHTOOL_LINK_MODE_400000baseSR4_Full_BIT,
+				       ETHTOOL_LINK_MODE_400000baseLR4_ER4_FR4_Full_BIT,
+				       ETHTOOL_LINK_MODE_400000baseDR4_Full_BIT,
+				       ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT);
 }
 
 static void mlx5e_ethtool_get_speed_arr(struct mlx5_core_dev *mdev,
@@ -226,7 +245,7 @@ int mlx5e_ethtool_get_sset_count(struct mlx5e_priv *priv, int sset)
 		return MLX5E_NUM_PFLAGS;
 	case ETH_SS_TEST:
 		return mlx5e_self_test_num(priv);
-	/* fallthrough */
+		fallthrough;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -353,6 +372,10 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 	new_channels.params.log_rq_mtu_frames = log_rq_size;
 	new_channels.params.log_sq_size = log_sq_size;
 
+	err = mlx5e_validate_params(priv, &new_channels.params);
+	if (err)
+		goto unlock;
+
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		priv->channels.params = new_channels.params;
 		goto unlock;
@@ -470,7 +493,7 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		*cur_params = new_channels.params;
-		mlx5e_num_channels_changed(priv);
+		err = mlx5e_num_channels_changed(priv);
 		goto out;
 	}
 
@@ -826,6 +849,7 @@ static void ptys2ethtool_supported_advertised_port(struct ethtool_link_ksettings
 
 static void get_speed_duplex(struct net_device *netdev,
 			     u32 eth_proto_oper, bool force_legacy,
+			     u16 data_rate_oper,
 			     struct ethtool_link_ksettings *link_ksettings)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
@@ -837,7 +861,10 @@ static void get_speed_duplex(struct net_device *netdev,
 
 	speed = mlx5e_port_ptys2speed(priv->mdev, eth_proto_oper, force_legacy);
 	if (!speed) {
-		speed = SPEED_UNKNOWN;
+		if (data_rate_oper)
+			speed = 100 * data_rate_oper;
+		else
+			speed = SPEED_UNKNOWN;
 		goto out;
 	}
 
@@ -926,17 +953,18 @@ int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
 				     struct ethtool_link_ksettings *link_ksettings)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
-	u32 out[MLX5_ST_SZ_DW(ptys_reg)] = {0};
+	u32 out[MLX5_ST_SZ_DW(ptys_reg)] = {};
+	u32 eth_proto_admin;
+	u8 an_disable_admin;
+	u16 data_rate_oper;
+	u32 eth_proto_oper;
+	u32 eth_proto_cap;
+	u8 connector_type;
 	u32 rx_pause = 0;
 	u32 tx_pause = 0;
-	u32 eth_proto_cap;
-	u32 eth_proto_admin;
 	u32 eth_proto_lp;
-	u32 eth_proto_oper;
-	u8 an_disable_admin;
-	u8 an_status;
-	u8 connector_type;
 	bool admin_ext;
+	u8 an_status;
 	bool ext;
 	int err;
 
@@ -970,6 +998,7 @@ int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
 	an_disable_admin    = MLX5_GET(ptys_reg, out, an_disable_admin);
 	an_status	    = MLX5_GET(ptys_reg, out, an_status);
 	connector_type	    = MLX5_GET(ptys_reg, out, connector_type);
+	data_rate_oper	    = MLX5_GET(ptys_reg, out, data_rate_oper);
 
 	mlx5_query_port_pause(mdev, &rx_pause, &tx_pause);
 
@@ -980,7 +1009,7 @@ int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
 	get_advertising(eth_proto_admin, tx_pause, rx_pause, link_ksettings,
 			admin_ext);
 	get_speed_duplex(priv->netdev, eth_proto_oper, !admin_ext,
-			 link_ksettings);
+			 data_rate_oper, link_ksettings);
 
 	eth_proto_oper = eth_proto_oper ? eth_proto_oper : eth_proto_cap;
 
@@ -1044,7 +1073,8 @@ static u32 mlx5e_ethtool2ptys_ext_adver_link(const unsigned long *link_modes)
 	unsigned long modes[2];
 
 	for (i = 0; i < MLX5E_EXT_LINK_MODES_NUMBER; ++i) {
-		if (*ptys2ext_ethtool_table[i].advertised == 0)
+		if (ptys2ext_ethtool_table[i].advertised[0] == 0 &&
+		    ptys2ext_ethtool_table[i].advertised[1] == 0)
 			continue;
 		memset(modes, 0, sizeof(modes));
 		bitmap_and(modes, ptys2ext_ethtool_table[i].advertised,
@@ -1666,22 +1696,23 @@ static int mlx5e_get_module_info(struct net_device *netdev,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *dev = priv->mdev;
-	enum mlx5_module_id module_id;
-	u8 revision_id;
-	int err;
+	int size_read = 0;
+	u8 data[4] = {0};
 
-	err = mlx5_query_module_id(dev, &module_id, &revision_id);
-	if (err)
+	size_read = mlx5_query_module_eeprom(dev, 0, 2, data);
+	if (size_read < 2)
 		return -EIO;
 
-	switch (module_id) {
+	/* data[0] = identifier byte */
+	switch (data[0]) {
 	case MLX5_MODULE_ID_QSFP:
 		modinfo->type       = ETH_MODULE_SFF_8436;
 		modinfo->eeprom_len = ETH_MODULE_SFF_8436_MAX_LEN;
 		break;
 	case MLX5_MODULE_ID_QSFP_PLUS:
 	case MLX5_MODULE_ID_QSFP28:
-		if (module_id == MLX5_MODULE_ID_QSFP28 || revision_id >= 0x3) {
+		/* data[1] = revision id */
+		if (data[0] == MLX5_MODULE_ID_QSFP28 || data[1] >= 0x3) {
 			modinfo->type       = ETH_MODULE_SFF_8636;
 			modinfo->eeprom_len = ETH_MODULE_SFF_8636_MAX_LEN;
 		} else {
@@ -1695,7 +1726,7 @@ static int mlx5e_get_module_info(struct net_device *netdev,
 		break;
 	default:
 		netdev_err(priv->netdev, "%s: cable type not recognized:0x%x\n",
-			   __func__, module_id);
+			   __func__, data[0]);
 		return -EINVAL;
 	}
 
@@ -1708,9 +1739,7 @@ static int mlx5e_get_module_eeprom(struct net_device *netdev,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *mdev = priv->mdev;
-	enum mlx5_module_id module_id;
 	int offset = ee->offset;
-	u8 revision_id;
 	int size_read;
 	int i = 0;
 
@@ -1719,12 +1748,9 @@ static int mlx5e_get_module_eeprom(struct net_device *netdev,
 
 	memset(data, 0, ee->len);
 
-	if (mlx5_query_module_id(mdev, &module_id, &revision_id))
-		return -EIO;
-
 	while (i < ee->len) {
 		size_read = mlx5_query_module_eeprom(mdev, offset, ee->len - i,
-						     data + i, module_id);
+						     data + i);
 
 		if (!size_read)
 			/* Done reading */
@@ -1876,7 +1902,7 @@ int mlx5e_modify_tx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 		return 0;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL ,NULL);
 	if (err)
 		return err;
 
@@ -1978,7 +2004,7 @@ static int set_pflag_per_channel_stats(struct net_device *netdev, bool enable)
 	return 0;
 }
 
-static int set_pflag_xdp_tx_mpwqe(struct net_device *netdev, bool enable)
+static int set_pflag_tx_mpwqe_common(struct net_device *netdev, u32 flag, bool enable)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *mdev = priv->mdev;
@@ -1990,7 +2016,7 @@ static int set_pflag_xdp_tx_mpwqe(struct net_device *netdev, bool enable)
 
 	new_channels.params = priv->channels.params;
 
-	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_XDP_TX_MPWQE, enable);
+	MLX5E_SET_PFLAG(&new_channels.params, flag, enable);
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		priv->channels.params = new_channels.params;
@@ -1999,6 +2025,16 @@ static int set_pflag_xdp_tx_mpwqe(struct net_device *netdev, bool enable)
 
 	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
 	return err;
+}
+
+static int set_pflag_xdp_tx_mpwqe(struct net_device *netdev, bool enable)
+{
+	return set_pflag_tx_mpwqe_common(netdev, MLX5E_PFLAG_XDP_TX_MPWQE, enable);
+}
+
+static int set_pflag_skb_tx_mpwqe(struct net_device *netdev, bool enable)
+{
+	return set_pflag_tx_mpwqe_common(netdev, MLX5E_PFLAG_SKB_TX_MPWQE, enable);
 }
 
 static int set_pflag_dropless_rq(struct net_device *netdev,
@@ -2081,6 +2117,38 @@ static int set_pflag_skb_xmit_more(struct net_device *netdev, bool enable)
 	return err;
 }
 
+static int set_pflag_tx_port_ts(struct net_device *netdev, bool enable)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	struct mlx5e_channels new_channels = {};
+	int err;
+
+	if (!MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
+		return -EOPNOTSUPP;
+
+	new_channels.params = priv->channels.params;
+	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_TX_PORT_TS, enable);
+	/* No need to verify SQ stop room as
+	 * ptpsq.txqsq.stop_room <= generic_sq->stop_room, and both
+	 * has the same log_sq_size.
+	 */
+
+	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
+		priv->channels.params = new_channels.params;
+		err = mlx5e_num_channels_changed(priv);
+		goto out;
+	}
+
+	err = mlx5e_safe_switch_channels(priv, &new_channels,
+					 mlx5e_num_channels_changed_ctx, NULL);
+out:
+	if (!err)
+		priv->port_ptp_opened = true;
+
+	return err;
+}
+
 static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS] = {
 	{ "rx_cqe_moder",        set_pflag_rx_cqe_based_moder },
 	{ "tx_cqe_moder",        set_pflag_tx_cqe_based_moder },
@@ -2089,10 +2157,12 @@ static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS] = {
 	{ "rx_striding_rq",      set_pflag_rx_striding_rq },
 	{ "rx_no_csum_complete", set_pflag_rx_no_csum_complete },
 	{ "xdp_tx_mpwqe",        set_pflag_xdp_tx_mpwqe },
+	{ "skb_tx_mpwqe",        set_pflag_skb_tx_mpwqe },
 	{ "dropless_rq",	 set_pflag_dropless_rq},
 	{ "per_channel_stats",	 set_pflag_per_channel_stats},
 	{ "tx_xdp_hw_checksum",  set_pflag_tx_xdp_hw_checksum},
 	{ "skb_xmit_more",       set_pflag_skb_xmit_more},
+	{ "tx_port_ts",          set_pflag_tx_port_ts },
 };
 
 static int mlx5e_handle_pflag(struct net_device *netdev,

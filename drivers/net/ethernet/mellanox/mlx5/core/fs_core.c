@@ -41,7 +41,6 @@
 #include "diag/fs_tracepoint.h"
 #include "accel/ipsec.h"
 #include "fpga/ipsec.h"
-#include "eswitch.h"
 
 #define INIT_TREE_NODE_ARRAY_SIZE(...)	(sizeof((struct init_tree_node[]){__VA_ARGS__}) /\
 					 sizeof(struct init_tree_node))
@@ -677,7 +676,7 @@ static struct fs_fte *alloc_fte(struct mlx5_flow_table *ft,
 	fte->action = *flow_act;
 	fte->flow_context = spec->flow_context;
 
-	tree_init_node(&fte->node, NULL, del_sw_fte);
+	tree_init_node(&fte->node, del_hw_fte, del_sw_fte);
 
 	return fte;
 }
@@ -875,18 +874,15 @@ static int connect_fts_in_prio(struct mlx5_core_dev *dev,
 {
 	struct mlx5_flow_root_namespace *root = find_root(&prio->node);
 	struct mlx5_flow_table *iter;
-	int i = 0;
 	int err;
 
 	fs_for_each_ft(iter, prio) {
-		i++;
 		err = root->cmds->modify_flow_table(root, iter, ft);
 		if (err) {
-			mlx5_core_warn(dev, "Failed to modify flow table %d\n",
-				       iter->id);
+			mlx5_core_err(dev,
+				      "Failed to modify flow table id %d, type %d, err %d\n",
+				      iter->id, iter->type, err);
 			/* The driver is out of sync with the FW */
-			if (i > 1)
-				WARN_ON(true);
 			return err;
 		}
 	}
@@ -1391,7 +1387,7 @@ add_rule_fte(struct fs_fte *fte,
 
 	fte->node.active = true;
 	fte->status |= FS_FTE_STATUS_EXISTING;
-	atomic_inc(&fte->node.version);
+	atomic_inc(&fg->node.version);
 
 out:
 	return handle;
@@ -1508,7 +1504,9 @@ static bool mlx5_flow_dests_cmp(struct mlx5_flow_destination *d1,
 		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_TIR &&
 		     d1->tir_num == d2->tir_num) ||
 		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM &&
-		     d1->ft_num == d2->ft_num))
+		     d1->ft_num == d2->ft_num) ||
+		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_FLOW_SAMPLER &&
+		     d1->sampler_id == d2->sampler_id))
 			return true;
 	}
 
@@ -1648,28 +1646,19 @@ struct match_list {
 	struct mlx5_flow_group *g;
 };
 
-struct match_list_head {
-	struct list_head  list;
-	struct match_list first;
-};
-
-static void free_match_list(struct match_list_head *head, bool ft_locked)
+static void free_match_list(struct match_list *head, bool ft_locked)
 {
-	if (!list_empty(&head->list)) {
-		struct match_list *iter, *match_tmp;
+	struct match_list *iter, *match_tmp;
 
-		list_del(&head->first.list);
-		tree_put_node(&head->first.g->node, ft_locked);
-		list_for_each_entry_safe(iter, match_tmp, &head->list,
-					 list) {
-			tree_put_node(&iter->g->node, ft_locked);
-			list_del(&iter->list);
-			kfree(iter);
-		}
+	list_for_each_entry_safe(iter, match_tmp, &head->list,
+				 list) {
+		tree_put_node(&iter->g->node, ft_locked);
+		list_del(&iter->list);
+		kfree(iter);
 	}
 }
 
-static int build_match_list(struct match_list_head *match_head,
+static int build_match_list(struct match_list *match_head,
 			    struct mlx5_flow_table *ft,
 			    const struct mlx5_flow_spec *spec,
 			    bool ft_locked)
@@ -1686,24 +1675,14 @@ static int build_match_list(struct match_list_head *match_head,
 	rhl_for_each_entry_rcu(g, tmp, list, hash) {
 		struct match_list *curr_match;
 
-		if (likely(list_empty(&match_head->list))) {
-			if (!tree_get_node(&g->node))
-				continue;
-			match_head->first.g = g;
-			list_add_tail(&match_head->first.list,
-				      &match_head->list);
+		if (unlikely(!tree_get_node(&g->node)))
 			continue;
-		}
 
 		curr_match = kmalloc(sizeof(*curr_match), GFP_ATOMIC);
 		if (!curr_match) {
 			free_match_list(match_head, ft_locked);
 			err = -ENOMEM;
 			goto out;
-		}
-		if (!tree_get_node(&g->node)) {
-			kfree(curr_match);
-			continue;
 		}
 		curr_match->g = g;
 		list_add_tail(&curr_match->list, &match_head->list);
@@ -1770,7 +1749,7 @@ try_add_to_existing_fg(struct mlx5_flow_table *ft,
 	struct match_list *iter;
 	bool take_write = false;
 	struct fs_fte *fte;
-	u64  version;
+	u64  version = 0;
 	bool try_again = false;
 	int err;
 
@@ -1779,10 +1758,12 @@ try_add_to_existing_fg(struct mlx5_flow_table *ft,
 		return  ERR_PTR(-ENOMEM);
 
 search_again_locked:
-	version = matched_fgs_get_version(match_head);
 	if (flow_act->flags & FLOW_ACT_NO_APPEND)
 		goto skip_search;
-	/* Try to find a fg that already contains a matching fte */
+	version = matched_fgs_get_version(match_head);
+	/* Try to find an fte with identical match value and attempt update its
+	 * action.
+	 */
 	list_for_each_entry(iter, match_head, list) {
 		struct fs_fte *fte_tmp;
 
@@ -1810,10 +1791,12 @@ skip_search:
 		goto out;
 	}
 
-	/* Check the fgs version, for case the new FTE with the
-	 * same values was added while the fgs weren't locked
+	/* Check the fgs version. If version have changed it could be that an
+	 * FTE with the same match value was added while the fgs weren't
+	 * locked.
 	 */
-	if (version != matched_fgs_get_version(match_head)) {
+	if (!(flow_act->flags & FLOW_ACT_NO_APPEND) &&
+	    version != matched_fgs_get_version(match_head)) {
 		take_write = true;
 		goto search_again_locked;
 	}
@@ -1821,12 +1804,13 @@ skip_search:
 	list_for_each_entry(iter, match_head, list) {
 		g = iter->g;
 
+		nested_down_write_ref_node(&g->node, FS_LOCK_PARENT);
+
 		if (!g->node.active) {
 			try_again = true;
+			up_write_ref_node(&g->node, false);
 			continue;
 		}
-
-		nested_down_write_ref_node(&g->node, FS_LOCK_PARENT);
 
 		err = insert_fte(g, fte);
 		if (err) {
@@ -1841,7 +1825,6 @@ skip_search:
 		up_write_ref_node(&g->node, false);
 		rule = add_rule_fg(g, spec, flow_act, dest, dest_num, fte);
 		up_write_ref_node(&fte->node, false);
-		tree_put_node(&fte->node, false);
 		return rule;
 	}
 	if (try_again)
@@ -1863,9 +1846,9 @@ _mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 
 {
 	struct mlx5_flow_steering *steering = get_steering(&ft->node);
-	struct mlx5_flow_group *g;
 	struct mlx5_flow_handle *rule;
-	struct match_list_head match_head;
+	struct match_list match_head;
+	struct mlx5_flow_group *g;
 	bool take_write = false;
 	struct fs_fte *fte;
 	int version;
@@ -1943,7 +1926,6 @@ search_again_locked:
 	up_write_ref_node(&g->node, false);
 	rule = add_rule_fg(g, spec, flow_act, dest, dest_num, fte);
 	up_write_ref_node(&fte->node, false);
-	tree_put_node(&fte->node, false);
 	tree_put_node(&g->node, false);
 	return rule;
 
@@ -2048,12 +2030,15 @@ void mlx5_del_flow_rules(struct mlx5_flow_handle *handle)
 	down_write_ref_node(&fte->node, false);
 	for (i = handle->num_rules - 1; i >= 0; i--)
 		tree_remove_node(&handle->rule[i]->node, true);
-	if (fte->modify_mask && fte->dests_size) {
-		modify_fte(fte);
+	if (fte->dests_size) {
+		if (fte->modify_mask)
+			modify_fte(fte);
 		up_write_ref_node(&fte->node, false);
-	} else {
+	} else if (list_empty(&fte->node.children)) {
 		del_hw_fte(&fte->node);
-		up_write(&fte->node.lock);
+		/* Avoid double call to del_hw_fte */
+		fte->node.del_hw_func = NULL;
+		up_write_ref_node(&fte->node, false);
 		tree_put_node(&fte->node, false);
 	}
 	kfree(handle);
@@ -2828,6 +2813,12 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 		goto out_err;
 	}
 
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_E2E_CACHE, 2);
+	if (IS_ERR(maj_prio)) {
+		err = PTR_ERR(maj_prio);
+		goto out_err;
+	}
+
 	err = create_fdb_fast_path(steering);
 	if (err)
 		goto out_err;
@@ -3070,7 +3061,8 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 			goto err;
 	}
 
-	if (MLX5_IPSEC_DEV(dev) || MLX5_CAP_FLOWTABLE_NIC_TX(dev, ft_support)) {
+	if (mlx5_fpga_ipsec_device_caps(steering->dev) & MLX5_ACCEL_IPSEC_CAP_DEVICE ||
+	    MLX5_CAP_FLOWTABLE_NIC_TX(dev, ft_support)) {
 		err = init_egress_root_ns(steering);
 		if (err)
 			goto err;

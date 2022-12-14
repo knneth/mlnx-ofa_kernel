@@ -1,0 +1,32 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mdev.h
+
+Change-Id: I66eb89bd832c1f607a2c30917023012c5adb8619
+---
+ include/linux/mdev.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/linux/mdev.h
++++ b/include/linux/mdev.h
+@@ -7,9 +7,16 @@
+  *             Kirti Wankhede <kwankhede@nvidia.com>
+  */
+ 
++#ifndef CONFIG_MLNX_VFIO_MDEV
++#if defined(CONFIG_VFIO_MDEV) || defined(CONFIG_VFIO_MDEV_MODULE)
++#include_next <linux/mdev.h>
++#endif
++#else
+ #ifndef MDEV_H
+ #define MDEV_H
+ 
++#include <linux/uuid.h>
++
+ struct mdev_device;
+ 
+ /*
+@@ -146,3 +153,4 @@ struct device *mdev_dev(struct mdev_devi
+ struct mdev_device *mdev_from_dev(struct device *dev);
+ 
+ #endif /* MDEV_H */
++#endif /* CONFIG_MLNX_VFIO_MDEV */

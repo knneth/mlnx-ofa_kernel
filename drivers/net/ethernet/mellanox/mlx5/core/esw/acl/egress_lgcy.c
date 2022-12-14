@@ -120,9 +120,9 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 	bool need_acl_table = vport->info.vlan || vport->info.qos ||
 			      need_vlan_filter;
 	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
+	struct mlx5_acl_vlan *trunk_vlan_rule;
 	struct mlx5_flow_destination drop_ctr_dst = {};
 	struct mlx5_flow_destination *dst = NULL;
-	struct mlx5_acl_vlan *trunk_vlan_rule;
 	struct mlx5_fc *drop_counter = NULL;
 	struct mlx5_flow_act flow_act = {};
 	/* The egress acl table contains 3 groups:
@@ -142,15 +142,11 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 	if (!need_acl_table)
 		return 0;
 
-	if (!IS_ERR_OR_NULL(vport->egress.acl))
-		return 0;
-
 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
 
-	if (!mlx5_esw_is_manager_vport(esw->dev, vport->vport) &&
-	    MLX5_CAP_ESW_EGRESS_ACL(esw->dev, flow_counter)) {
+	if (MLX5_CAP_ESW_EGRESS_ACL(esw->dev, flow_counter)) {
 		drop_counter = mlx5_fc_create(esw->dev, false);
 		if (IS_ERR(drop_counter))
 			esw_warn(esw->dev,
@@ -198,10 +194,11 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 	/* VST rule */
 	if (vport->info.vlan || vport->info.qos) {
 		int actions_flag = MLX5_FLOW_CONTEXT_ACTION_ALLOW;
+
 		if (vst_mode == ESW_VST_MODE_STEERING)
 			actions_flag |= MLX5_FLOW_CONTEXT_ACTION_VLAN_POP;
-		err = esw_egress_acl_vlan_create(esw, vport, NULL, vport->info.vlan,
-						 actions_flag);
+		err = esw_egress_acl_vlan_create(esw, vport, NULL, vport->info.vlan_proto,
+						 vport->info.vlan, actions_flag);
 		if (err)
 			goto out;
 	}
@@ -234,7 +231,6 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 		list_add(&trunk_vlan_rule->list, &vport->egress.legacy.allow_vlans_rules);
 	}
 
-	/* Drop others rule (star rule) */
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_DROP;
 
 	/* Attach egress drop flow counter */
@@ -254,12 +250,13 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 			 "vport[%d] configure egress drop rule failed, err(%d)\n",
 			 vport->vport, err);
 		vport->egress.legacy.drop_rule = NULL;
+		goto out;
 	}
 
+	return err;
+
 out:
-	if (err)
-		esw_acl_egress_lgcy_cleanup(esw, vport);
-	kvfree(spec);
+	esw_acl_egress_lgcy_cleanup(esw, vport);
 	return err;
 }
 

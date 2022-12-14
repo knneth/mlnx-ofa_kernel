@@ -142,7 +142,6 @@ static u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts)
 		req->error_loc = offsetof(struct nvme_rw_command, nsid);
 		break;
 	case BLK_STS_IOERR:
-		/* fallthru */
 	default:
 		status = NVME_SC_INTERNAL | NVME_SC_DNR;
 		req->error_loc = offsetof(struct nvme_common_command, opcode);
@@ -337,7 +336,7 @@ static void nvmet_bdev_execute_flush(struct nvmet_req *req)
 
 u16 nvmet_bdev_flush(struct nvmet_req *req)
 {
-	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL, NULL))
+	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL))
 		return NVME_SC_INTERNAL | NVME_SC_DNR;
 	return 0;
 }

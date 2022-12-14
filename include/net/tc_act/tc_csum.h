@@ -3,7 +3,6 @@
 
 #include "../../../compat/config.h"
 
-#ifdef HAVE_TCA_CSUM_UPDATE_FLAG_IPV4HDR
 #include <linux/tc_act/tc_csum.h>
 #include_next <net/tc_act/tc_csum.h>
 
@@ -31,7 +30,5 @@ static inline u32 tcf_csum_update_flags(const struct tc_action *a)
 	return to_csum(a)->update_flags;
 }
 #endif /* HAVE_IS_TCF_CSUM */
-
-#endif /* HAVE_TCA_CSUM_UPDATE_FLAG_IPV4HDR */
 
 #endif /* _COMPAT_NET_TC_ACT_TC_CSUM_H */

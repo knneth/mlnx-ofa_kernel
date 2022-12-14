@@ -481,7 +481,7 @@ static int create_xrq_cmd(struct mlx5_ib_dev *dev, struct mlx5_core_srq *srq,
 static int destroy_xrq_cmd(struct mlx5_ib_dev *dev, struct mlx5_core_srq *srq)
 {
 	u32 in[MLX5_ST_SZ_DW(destroy_xrq_in)] = {};
-	
+
 	MLX5_SET(destroy_xrq_in, in, opcode, MLX5_CMD_OP_DESTROY_XRQ);
 	MLX5_SET(destroy_xrq_in, in, xrqn, srq->srqn);
 	MLX5_SET(destroy_xrq_in, in, uid, srq->uid);
@@ -676,13 +676,13 @@ static int srq_event_notifier(struct notifier_block *nb,
 
 	if (type != MLX5_EVENT_TYPE_SRQ_CATAS_ERROR &&
 	    type != MLX5_EVENT_TYPE_SRQ_RQ_LIMIT &&
-	    type != MLX5_XRQ_ERROR_TYPE_QP_ERROR)
+	    type != MLX5_EVENT_TYPE_XRQ_ERROR)
 		return NOTIFY_DONE;
 
 	table = container_of(nb, struct mlx5_srq_table, nb);
 
 	eqe = data;
-	if (type == MLX5_XRQ_ERROR_TYPE_QP_ERROR) {
+	if (type == MLX5_EVENT_TYPE_XRQ_ERROR) {
 		u8 error_type;
 
 		error_type = be32_to_cpu(eqe->data.xrq.type_xrqn) >> 24;
@@ -705,7 +705,7 @@ static int srq_event_notifier(struct notifier_block *nb,
 	if (!srq)
 		return NOTIFY_OK;
 
-	if (type == MLX5_XRQ_ERROR_TYPE_QP_ERROR) {
+	if (type == MLX5_EVENT_TYPE_XRQ_ERROR) {
 		spin_lock(&srq->lock);
 		list_for_each_entry(ctrl, &srq->ctrl_list, entry) {
 			if (ctrl->id == qpn_id_handle) {
@@ -716,7 +716,7 @@ static int srq_event_notifier(struct notifier_block *nb,
 		spin_unlock(&srq->lock);
 
 		if (found)
-			ctrl->event(ctrl, type,
+			ctrl->event(ctrl, type, eqe->sub_type,
 				    MLX5_XRQ_ERROR_TYPE_BACKEND_CONTROLLER_ERROR);
 
 		if (refcount_dec_and_test(&srq->common.refcount))

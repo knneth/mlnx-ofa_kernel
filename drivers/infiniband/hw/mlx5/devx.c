@@ -17,6 +17,7 @@
 #include <linux/mlx5/fs.h>
 #include "mlx5_ib.h"
 #include "ib_rep.h"
+#include "devx.h"
 #include "qp.h"
 #include <linux/xarray.h>
 
@@ -92,22 +93,6 @@ struct devx_async_event_file {
 	u8 is_destroyed:1;
 };
 
-#define MLX5_MAX_DESTROY_INBOX_SIZE_DW MLX5_ST_SZ_DW(delete_fte_in)
-struct devx_obj {
-	struct mlx5_ib_dev	*ib_dev;
-	u64			obj_id;
-	u32			dinlen; /* destroy inbox length */
-	u32			dinbox[MLX5_MAX_DESTROY_INBOX_SIZE_DW];
-	u32			flags;
-	union {
-		struct mlx5_ib_devx_mr	devx_mr;
-		struct mlx5_core_dct	core_dct;
-		struct mlx5_core_cq	core_cq;
-		u32			flow_counter_bulk_size;
-	};
-	struct list_head event_sub; /* holds devx_event_subscription entries */
-};
-
 struct devx_umem {
 	struct mlx5_core_dev		*mdev;
 	struct ib_umem			*umem;
@@ -172,48 +157,6 @@ void mlx5_ib_devx_destroy(struct mlx5_ib_dev *dev, u16 uid)
 	MLX5_SET(destroy_uctx_in, in, uid, uid);
 
 	mlx5_cmd_exec(dev->mdev, in, sizeof(in), out, sizeof(out));
-}
-
-bool mlx5_ib_devx_is_flow_dest(void *obj, int *dest_id, int *dest_type)
-{
-	struct devx_obj *devx_obj = obj;
-	u16 opcode = MLX5_GET(general_obj_in_cmd_hdr, devx_obj->dinbox, opcode);
-
-	switch (opcode) {
-	case MLX5_CMD_OP_DESTROY_TIR:
-		*dest_type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-		*dest_id = MLX5_GET(general_obj_in_cmd_hdr, devx_obj->dinbox,
-				    obj_id);
-		return true;
-
-	case MLX5_CMD_OP_DESTROY_FLOW_TABLE:
-		*dest_type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
-		*dest_id = MLX5_GET(destroy_flow_table_in, devx_obj->dinbox,
-				    table_id);
-		return true;
-	default:
-		return false;
-	}
-}
-
-bool mlx5_ib_devx_is_flow_counter(void *obj, u32 offset, u32 *counter_id)
-{
-	struct devx_obj *devx_obj = obj;
-	u16 opcode = MLX5_GET(general_obj_in_cmd_hdr, devx_obj->dinbox, opcode);
-
-	if (opcode == MLX5_CMD_OP_DEALLOC_FLOW_COUNTER) {
-
-		if (offset && offset >= devx_obj->flow_counter_bulk_size)
-			return false;
-
-		*counter_id = MLX5_GET(dealloc_flow_counter_in,
-				       devx_obj->dinbox,
-				       flow_counter_id);
-		*counter_id += offset;
-		return true;
-	}
-
-	return false;
 }
 
 static bool is_legacy_unaffiliated_event_num(u16 event_num)
@@ -1011,6 +954,7 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 				       u64 *comp_mask)
 {
 	u32 out[MLX5_ST_SZ_DW(query_esw_vport_context_out)] = {};
+	u32 in[MLX5_ST_SZ_DW(query_esw_vport_context_in)] = {};
 	u64 icm_rx;
 	u64 icm_tx;
 	int err;
@@ -1020,10 +964,14 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 		icm_rx = MLX5_CAP_ESW_FLOWTABLE_64(mdev, sw_steering_uplink_icm_address_rx);
 		icm_tx = MLX5_CAP_ESW_FLOWTABLE_64(mdev, sw_steering_uplink_icm_address_tx);
 	} else {
-		err = mlx5_eswitch_query_esw_vport_context(mdev,
-							   vport_num,
-							   !mlx5_ib_eswitch_is_manager_vport(mdev->priv.eswitch, vport_num),
-							   out, sizeof(out));
+		MLX5_SET(query_esw_vport_context_in, in, opcode,
+				MLX5_CMD_OP_QUERY_ESW_VPORT_CONTEXT);
+		MLX5_SET(query_esw_vport_context_in, in, vport_number,
+			 vport_num);
+		MLX5_SET(query_esw_vport_context_in, in, other_vport, true);
+
+		err = mlx5_cmd_exec_inout(mdev, query_esw_vport_context, in, out);
+
 		if (err)
 			return err;
 
@@ -2416,14 +2364,12 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_UMEM_REG)(
 	obj->mdev = dev->mdev;
 	uobj->object = obj;
 	devx_obj_build_destroy_cmd(cmd.in, cmd.out, obj->dinbox, &obj->dinlen, &obj_id);
-	err = uverbs_copy_to(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_OUT_ID, &obj_id, sizeof(obj_id));
-	if (err)
-		goto err_umem_destroy;
+	uverbs_finalize_uobj_create(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_HANDLE);
 
-	return 0;
+	err = uverbs_copy_to(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_OUT_ID, &obj_id,
+			     sizeof(obj_id));
+	return err;
 
-err_umem_destroy:
-	mlx5_cmd_exec(obj->mdev, obj->dinbox, obj->dinlen, cmd.out, sizeof(cmd.out));
 err_umem_release:
 	ib_umem_release(obj->umem);
 err_obj_free:
@@ -2615,17 +2561,24 @@ static int devx_event_notifier(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
-void mlx5_ib_devx_init_event_table(struct mlx5_ib_dev *dev)
+int mlx5_ib_devx_init(struct mlx5_ib_dev *dev)
 {
 	struct mlx5_devx_event_table *table = &dev->devx_event_table;
+	int uid;
 
-	xa_init(&table->event_xa);
-	mutex_init(&table->event_xa_lock);
-	MLX5_NB_INIT(&table->devx_nb, devx_event_notifier, NOTIFY_ANY);
-	mlx5_eq_notifier_register(dev->mdev, &table->devx_nb);
+	uid = mlx5_ib_devx_create(dev, false);
+	if (uid > 0) {
+		dev->devx_whitelist_uid = uid;
+		xa_init(&table->event_xa);
+		mutex_init(&table->event_xa_lock);
+		MLX5_NB_INIT(&table->devx_nb, devx_event_notifier, NOTIFY_ANY);
+		mlx5_eq_notifier_register(dev->mdev, &table->devx_nb);
+	}
+
+	return 0;
 }
 
-void mlx5_ib_devx_cleanup_event_table(struct mlx5_ib_dev *dev)
+void mlx5_ib_devx_cleanup(struct mlx5_ib_dev *dev)
 {
 	struct mlx5_devx_event_table *table = &dev->devx_event_table;
 	struct devx_event_subscription *sub, *tmp;
@@ -2633,17 +2586,21 @@ void mlx5_ib_devx_cleanup_event_table(struct mlx5_ib_dev *dev)
 	void *entry;
 	unsigned long id;
 
-	mlx5_eq_notifier_unregister(dev->mdev, &table->devx_nb);
-	mutex_lock(&dev->devx_event_table.event_xa_lock);
-	xa_for_each(&table->event_xa, id, entry) {
-		event = entry;
-		list_for_each_entry_safe(sub, tmp, &event->unaffiliated_list,
-					 xa_list)
-			devx_cleanup_subscription(dev, sub);
-		kfree(entry);
+	if (dev->devx_whitelist_uid) {
+		mlx5_eq_notifier_unregister(dev->mdev, &table->devx_nb);
+		mutex_lock(&dev->devx_event_table.event_xa_lock);
+		xa_for_each(&table->event_xa, id, entry) {
+			event = entry;
+			list_for_each_entry_safe(
+				sub, tmp, &event->unaffiliated_list, xa_list)
+				devx_cleanup_subscription(dev, sub);
+			kfree(entry);
+		}
+		mutex_unlock(&dev->devx_event_table.event_xa_lock);
+		xa_destroy(&table->event_xa);
+
+		mlx5_ib_devx_destroy(dev, dev->devx_whitelist_uid);
 	}
-	mutex_unlock(&dev->devx_event_table.event_xa_lock);
-	xa_destroy(&table->event_xa);
 }
 
 static ssize_t devx_async_cmd_event_read(struct file *filp, char __user *buf,
@@ -2732,7 +2689,7 @@ static ssize_t devx_async_event_read(struct file *filp, char __user *buf,
 {
 	struct devx_async_event_file *ev_file = filp->private_data;
 	struct devx_event_subscription *event_sub;
-	struct devx_async_event_data *uninitialized_var(event);
+	struct devx_async_event_data *event;
 	int ret = 0;
 	size_t eventsz;
 	bool omit_data;

@@ -40,14 +40,14 @@ static u64 qp_allowed_event_types(void)
 	u64 mask;
 
 	mask = BIT(MLX5_EVENT_TYPE_PATH_MIG) |
-	       BIT(MLX5_EVENT_TYPE_COMM_EST) |
-	       BIT(MLX5_EVENT_TYPE_SQ_DRAINED) |
-	       BIT(MLX5_EVENT_TYPE_SRQ_LAST_WQE) |
-	       BIT(MLX5_EVENT_TYPE_WQ_CATAS_ERROR) |
-	       BIT(MLX5_EVENT_TYPE_PATH_MIG_FAILED) |
-	       BIT(MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR) |
-	       BIT(MLX5_EVENT_TYPE_WQ_ACCESS_ERROR) |
-	       BIT(MLX5_EVENT_TYPE_XRQ_ERROR);
+		BIT(MLX5_EVENT_TYPE_COMM_EST) |
+		BIT(MLX5_EVENT_TYPE_SQ_DRAINED) |
+		BIT(MLX5_EVENT_TYPE_SRQ_LAST_WQE) |
+		BIT(MLX5_EVENT_TYPE_WQ_CATAS_ERROR) |
+		BIT(MLX5_EVENT_TYPE_PATH_MIG_FAILED) |
+		BIT(MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR) |
+		BIT(MLX5_EVENT_TYPE_WQ_ACCESS_ERROR) |
+		BIT(MLX5_EVENT_TYPE_XRQ_ERROR);
 
 	return mask;
 }
@@ -459,7 +459,7 @@ static int modify_qp_mbox_alloc(struct mlx5_core_dev *dev, u16 opcode, int qpn,
 		if (MBOX_ALLOC(mbox, sqd2rts_qp))
 			return -ENOMEM;
 		MOD_QP_IN_SET_QPC(sqd2rts_qp, mbox->in, opcode, qpn,
-				  opt_param_mask, qpc, uid);
+				opt_param_mask, qpc, uid);
 		break;
 	case MLX5_CMD_OP_INIT2INIT_QP:
 		if (MBOX_ALLOC(mbox, init2init_qp))

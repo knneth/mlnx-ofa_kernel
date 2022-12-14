@@ -1,0 +1,202 @@
+From: Nitzan Carmi <nitzanc@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
+
+Change-Id: If701240f541a182094f52a8f0719133554c86d00
+---
+ drivers/nvme/target/core.c | 99 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 98 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/target/core.c
++++ b/drivers/nvme/target/core.c
+@@ -88,8 +88,13 @@ inline u16 errno_to_nvme_status(struct n
+ static struct nvmet_subsys *nvmet_find_get_subsys(struct nvmet_port *port,
+ 		const char *subsysnqn);
+ 
++#ifdef CONFIG_COMPAT_SCATTERLIST_SG_PCOPY_TO_BUFFER
+ u16 nvmet_copy_to_sgl(struct nvmet_req *req, off_t off, const void *buf,
+ 		size_t len)
++#else
++u16 nvmet_copy_to_sgl(struct nvmet_req *req, off_t off, void *buf,
++		size_t len)
++#endif
+ {
+ 	if (sg_pcopy_from_buffer(req->sg, req->sg_cnt, buf, len, off) != len) {
+ 		req->error_loc = offsetof(struct nvme_common_command, dptr);
+@@ -558,7 +563,9 @@ void nvmet_put_namespace(struct nvmet_ns
+ static void nvmet_ns_dev_disable(struct nvmet_ns *ns)
+ {
+ 	nvmet_bdev_ns_disable(ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ 	nvmet_file_ns_disable(ns);
++#endif
+ }
+ 
+ static int nvmet_p2pmem_ns_enable(struct nvmet_ns *ns)
+@@ -650,8 +657,10 @@ void nvmet_ns_revalidate(struct nvmet_ns
+ 
+ 	if (ns->bdev)
+ 		nvmet_bdev_ns_revalidate(ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ 	else
+ 		nvmet_file_ns_revalidate(ns);
++#endif
+ 
+ 	if (oldsize != ns->size)
+ 		nvmet_ns_changed(ns->subsys, ns->nsid);
+@@ -709,8 +718,10 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+ 		goto out_unlock;
+ 
+ 	ret = nvmet_bdev_ns_enable(ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ 	if (ret == -ENOTBLK)
+ 		ret = nvmet_file_ns_enable(ns);
++#endif
+ 	if (ret)
+ 		goto out_unlock;
+ 
+@@ -1061,9 +1072,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+ 		return ret;
+ 	}
+ 
++#ifdef HAVE_FS_HAS_KIOCB
+ 	if (req->ns->file)
+ 		return nvmet_file_parse_io_cmd(req);
+ 	else
++#endif
+ 		return nvmet_bdev_parse_io_cmd(req);
+ }
+ 
+@@ -1207,26 +1220,99 @@ static bool nvmet_req_find_p2p_dev(struc
+ 	return false;
+ }
+ 
++#ifndef HAVE_SGL_FREE
++static void nvmet_free_sgl(struct scatterlist *sgl, unsigned int nents)
++{
++	struct scatterlist *sg;
++	int count;
++
++	if (!sgl || !nents)
++		return;
++
++	for_each_sg(sgl, sg, nents, count)
++		__free_page(sg_page(sg));
++	kfree(sgl);
++}
++#endif
++
++#ifndef HAVE_SGL_ALLOC
++static int nvmet_alloc_sgl(struct scatterlist **sgl, unsigned int *nents,
++               u32 length)
++{
++	struct scatterlist *sg;
++	struct page *page;
++	unsigned int nent;
++	int i = 0;
++
++	nent = DIV_ROUND_UP(length, PAGE_SIZE);
++	sg = kmalloc_array(nent, sizeof(struct scatterlist), GFP_KERNEL);
++	if (!sg)
++		goto out;
++
++	sg_init_table(sg, nent);
++
++	while (length) {
++		u32 page_len = min_t(u32, length, PAGE_SIZE);
++
++	        page = alloc_page(GFP_KERNEL);
++		if (!page)
++	                goto out_free_pages;
++
++	        sg_set_page(&sg[i], page, page_len, 0);
++		length -= page_len;
++		i++;
++	}
++	*sgl = sg;
++	*nents = nent;
++	return 0;
++
++out_free_pages:
++	while (i > 0) {
++		i--;
++		__free_page(sg_page(&sg[i]));
++	}
++	kfree(sg);
++out:
++	return NVME_SC_INTERNAL;
++}
++#endif
++
+ int nvmet_req_alloc_sgls(struct nvmet_req *req)
+ {
+ 	if (nvmet_req_find_p2p_dev(req) && !nvmet_req_alloc_p2pmem_sgls(req))
+ 		return 0;
+ 
++#ifdef HAVE_SGL_ALLOC
+ 	req->sg = sgl_alloc(nvmet_data_transfer_len(req), GFP_KERNEL,
+ 			    &req->sg_cnt);
+ 	if (unlikely(!req->sg))
+ 		goto out;
++#else
++	if (nvmet_alloc_sgl(&req->sg, &req->sg_cnt,
++			    nvmet_data_transfer_len(req)))
++		goto out;
++#endif
+ 
+ 	if (req->metadata_len) {
++#ifdef HAVE_SGL_ALLOC
+ 		req->metadata_sg = sgl_alloc(req->metadata_len, GFP_KERNEL,
+ 					     &req->metadata_sg_cnt);
+ 		if (unlikely(!req->metadata_sg))
+ 			goto out_free;
++#else
++		if (nvmet_alloc_sgl(&req->metadata_sg, &req->metadata_sg_cnt,
++				    req->metadata_len))
++			goto out_free;
++#endif
+ 	}
+ 
+ 	return 0;
+ out_free:
++#ifdef HAVE_SGL_FREE
+ 	sgl_free(req->sg);
++#else
++	nvmet_free_sgl(req->sg, req->sg_cnt);
++#endif
+ out:
+ 	return -ENOMEM;
+ }
+@@ -1239,9 +1325,15 @@ void nvmet_req_free_sgls(struct nvmet_re
+ 		if (req->metadata_sg)
+ 			pci_p2pmem_free_sgl(req->p2p_dev, req->metadata_sg);
+ 	} else {
++#ifdef HAVE_SGL_FREE
+ 		sgl_free(req->sg);
+ 		if (req->metadata_sg)
+ 			sgl_free(req->metadata_sg);
++#else
++		nvmet_free_sgl(req->sg, req->sg_cnt);
++		if (req->metadata_sg)
++			nvmet_free_sgl(req->metadata_sg, req->metadata_sg_cnt);
++#endif
+ 	}
+ 
+ 	req->sg = NULL;
+@@ -1721,7 +1813,9 @@ static void nvmet_subsys_free(struct kre
+ 	nvmet_passthru_subsys_free(subsys);
+ 
+ 	kfree(subsys->subsysnqn);
+-	kfree_rcu(subsys->model, rcuhead);
++	// Old kfree_rcu() doesn't check for NULL pointers
++	if (subsys->model)
++		kfree_rcu(subsys->model, rcuhead);
+ 	kfree(subsys);
+ }
+ 
+@@ -1785,3 +1879,6 @@ module_init(nvmet_init);
+ module_exit(nvmet_exit);
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif

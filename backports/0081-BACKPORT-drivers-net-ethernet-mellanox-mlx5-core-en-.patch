@@ -1,47 +1,36 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
 
-Change-Id: I4708ae9d60d10efdbc81a5fc06d6ff3ba524aa4b
+Change-Id: Ib51e56da42fde827d6ca0041412b892b2f369e90
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 10 +++++++++-
- 1 file changed, 9 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
-@@ -32,6 +32,7 @@
- #ifndef __MLX5_EN_XDP_H__
- #define __MLX5_EN_XDP_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
  
-+#ifdef HAVE_XDP_BUFF
- #include "en.h"
++#ifdef HAVE_XSK_SUPPORT
++
+ #include "setup.h"
+ #include "en/params.h"
  #include "en/txrx.h"
- 
-@@ -67,8 +68,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
- void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
- void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw);
- void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq);
-+#ifdef HAVE_NDO_XDP_XMIT
-+#ifndef HAVE_NDO_XDP_FLUSH
- int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
- 		   u32 flags);
-+#else
-+int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp);
-+void mlx5e_xdp_flush(struct net_device *dev);
-+#endif
+@@ -56,6 +58,9 @@ int mlx5e_open_xsk(struct mlx5e_priv *pr
+ 	ccp.ch_stats = c->stats;
+ 	ccp.node = cpu_to_node(c->cpu);
+ 	ccp.ix = c->ix;
++#ifndef HAVE_NAPI_STATE_MISSED
++	ccp.ch_flags = &c->flags;
 +#endif
  
- static inline void mlx5e_xdp_tx_enable(struct mlx5e_priv *priv)
- {
-@@ -105,7 +113,6 @@ static inline void mlx5e_xmit_xdp_doorbe
- 		sq->doorbell_cseg = NULL;
+ 	if (!mlx5e_validate_xsk_param(params, xsk, priv->mdev))
+ 		return -EINVAL;
+@@ -210,3 +215,5 @@ void mlx5e_xsk_redirect_rqts_to_drop(str
+ 		mlx5e_xsk_redirect_rqt_to_drop(priv, i);
  	}
  }
--
- /* Enable inline WQEs to shift some load from a congested HCA (HW) to
-  * a less congested cpu (SW).
-  */
-@@ -187,3 +194,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
- 	return fifo->xi[(*fifo->cc)++ & fifo->mask];
- }
- #endif
-+#endif
++
++#endif /* HAVE_XSK_SUPPORT */

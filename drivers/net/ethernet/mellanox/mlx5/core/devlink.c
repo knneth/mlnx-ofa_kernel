@@ -6,13 +6,6 @@
 #include "mlx5_core.h"
 #include "fs_core.h"
 #include "eswitch.h"
-#include "meddev/sf.h"
-
-static unsigned int esw_offloads_num_big_groups = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
-module_param_named(num_of_groups, esw_offloads_num_big_groups,
-		   uint, 0644);
-MODULE_PARM_DESC(num_of_groups,
-		 "Eswitch offloads number of big groups in FDB table. Valid range 1 - 1024. Default 4");
 
 static int mlx5_devlink_flash_update(struct devlink *devlink,
 				     const char *file_name,
@@ -110,7 +103,8 @@ static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
 	}
 #endif
 
-	return mlx5_unload_one(dev, false);
+	mlx5_unload_one(dev, false);
+	return 0;
 }
 
 static int mlx5_devlink_reload_up(struct devlink *devlink,
@@ -129,8 +123,8 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
-	.eswitch_ipsec_mode_set = mlx5_devlink_eswitch_ipsec_mode_set,
-	.eswitch_ipsec_mode_get = mlx5_devlink_eswitch_ipsec_mode_get,
+	.port_function_hw_addr_get = mlx5_devlink_port_function_hw_addr_get,
+	.port_function_hw_addr_set = mlx5_devlink_port_function_hw_addr_set,
 #endif
 	.flash_update = mlx5_devlink_flash_update,
 	.info_get = mlx5_devlink_info_get,
@@ -242,7 +236,23 @@ static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id
 
 	return 0;
 }
+
+#if IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
+static int mlx5_devlink_e2e_cache_size_validate(struct devlink *devlink, u32 id,
+						union devlink_param_value val,
+						struct netlink_ext_ack *extack)
+{
+	int size = val.vu32;
+
+	if (size < 0) {
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported e2e cache size");
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
 #endif
+#endif /* CONFIG_MLX5_ESWITCH */
 
 static const struct devlink_param mlx5_devlink_params[] = {
 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
@@ -258,7 +268,14 @@ static const struct devlink_param mlx5_devlink_params[] = {
 			     BIT(DEVLINK_PARAM_CMODE_DRIVERINIT),
 			     NULL, NULL,
 			     mlx5_devlink_large_group_num_validate),
+#if IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_ESW_E2E_CACHE_SIZE,
+			     "e2e_cache_size", DEVLINK_PARAM_TYPE_U32,
+			     BIT(DEVLINK_PARAM_CMODE_DRIVERINIT),
+			     NULL, NULL,
+			     mlx5_devlink_e2e_cache_size_validate),
 #endif
+#endif /* CONFIG_MLX5_ESWITCH */
 };
 
 static void mlx5_devlink_set_params_init_values(struct devlink *devlink)
@@ -280,9 +297,14 @@ static void mlx5_devlink_set_params_init_values(struct devlink *devlink)
 					   value);
 
 #ifdef CONFIG_MLX5_ESWITCH
-	value.vu32 = esw_offloads_num_big_groups;
+	value.vu32 = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
 	devlink_param_driverinit_value_set(devlink,
 					   MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
+					   value);
+
+	value.vu32 = ESW_DEFAULT_E2E_CACHE_SIZE;
+	devlink_param_driverinit_value_set(devlink,
+					   MLX5_DEVLINK_PARAM_ID_ESW_E2E_CACHE_SIZE,
 					   value);
 #endif
 }
@@ -301,7 +323,6 @@ int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
 		goto params_reg_err;
 	mlx5_devlink_set_params_init_values(devlink);
 	devlink_params_publish(devlink);
-	devlink_reload_enable(devlink);
 	return 0;
 
 params_reg_err:
@@ -311,9 +332,7 @@ params_reg_err:
 
 void mlx5_devlink_unregister(struct devlink *devlink)
 {
-	devlink_reload_disable(devlink);
 	devlink_params_unregister(devlink, mlx5_devlink_params,
 				  ARRAY_SIZE(mlx5_devlink_params));
 	devlink_unregister(devlink);
 }
-

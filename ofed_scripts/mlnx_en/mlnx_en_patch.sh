@@ -330,6 +330,7 @@ if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 		if ! check_kerver_list $KVERSION $CLS_ACT_SUPPORTED_KVERSION_LIST; then
 			CONFIG_MLX5_CLS_ACT=
 			CONFIG_MLX5_TC_CT=
+			CONFIG_MLX5_TC_SAMPLE=
 			CONFIG_MLX5_SW_STEERING=
 			echo "Warning: CONFIG_MLX5_CLS_ACT requires kernel version ${CLS_ACT_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 		fi

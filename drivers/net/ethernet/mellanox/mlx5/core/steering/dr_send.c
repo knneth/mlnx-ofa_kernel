@@ -196,7 +196,7 @@ static struct mlx5dr_qp *dr_create_rc_qp(struct mlx5_core_dev *mdev,
 	MLX5_SET(create_qp_in, in, opcode, MLX5_CMD_OP_CREATE_QP);
 	err = mlx5_cmd_exec(mdev, in, inlen, out, sizeof(out));
 	dr_qp->qpn = MLX5_GET(create_qp_out, out, qpn);
-	kfree(in);
+	kvfree(in);
 	if (err)
 		goto err_in;
 	dr_qp->uar = attr->uar;
@@ -496,7 +496,7 @@ static int dr_postsend_icm_data(struct mlx5dr_domain *dmn,
 				struct postsend_info *send_info)
 {
 	struct mlx5dr_send_ring *send_ring = dmn->send_ring;
-	int ret = 0;
+	int ret;
 
 	if (unlikely(dmn->mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR ||
 		     send_ring->err_state)) {
@@ -892,6 +892,12 @@ static int dr_prepare_qp_to_rts(struct mlx5dr_domain *dmn)
 	return 0;
 }
 
+static void dr_cq_complete(struct mlx5_core_cq *mcq,
+			   struct mlx5_eqe *eqe)
+{
+	pr_err("CQ completion CQ: #%u\n", mcq->cqn);
+}
+
 static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 				      struct mlx5_uars_page *uar,
 				      size_t ncqe)
@@ -952,6 +958,8 @@ static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 	pas = (__be64 *)MLX5_ADDR_OF(create_cq_in, in, pas);
 	mlx5_fill_page_frag_array(&cq->wq_ctrl.buf, pas);
 
+	cq->mcq.comp  = dr_cq_complete;
+
 	err = mlx5_core_create_cq(mdev, &cq->mcq, in, inlen, out, sizeof(out));
 	kvfree(in);
 
@@ -962,7 +970,12 @@ static struct mlx5dr_cq *dr_create_cq(struct mlx5_core_dev *mdev,
 	cq->mcq.set_ci_db = cq->wq_ctrl.db.db;
 	cq->mcq.arm_db = cq->wq_ctrl.db.db + 1;
 	*cq->mcq.set_ci_db = 0;
-	*cq->mcq.arm_db = 0;
+
+	/* set no-zero value, in order to avoid the HW to run db-recovery on
+	 * CQ that used in polling mode.
+	 */
+	*cq->mcq.arm_db = cpu_to_be32(2 << 28);
+
 	cq->mcq.vector = 0;
 	cq->mcq.irqn = irqn;
 	cq->mcq.uar = uar;

@@ -1,0 +1,82 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
+
+Change-Id: I50254fc0adce37782ab6dfa0809b35c102998390
+---
+ drivers/infiniband/ulp/ipoib/ipoib_cm.c | 37 ++++++++++++++++++++-----
+ 1 file changed, 30 insertions(+), 7 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_cm.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+@@ -39,7 +39,9 @@
+ #include <linux/vmalloc.h>
+ #include <linux/moduleparam.h>
+ #include <linux/sched/signal.h>
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ #include <linux/sched/mm.h>
++#endif
+ 
+ #include "ipoib.h"
+ 
+@@ -1079,7 +1081,11 @@ static struct ib_qp *ipoib_cm_create_tx_
+ 		.sq_sig_type		= IB_SIGNAL_ALL_WR,
+ 		.qp_type		= IB_QPT_RC,
+ 		.qp_context		= tx,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 		.create_flags		= 0
++#else
++		.create_flags		= IB_QP_CREATE_USE_GFP_NOIO
++#endif
+ 	};
+ 	struct ib_qp *tx_qp;
+ 
+@@ -1088,6 +1094,12 @@ static struct ib_qp *ipoib_cm_create_tx_
+ 					      MAX_SKB_FRAGS + 1);
+ 
+ 	tx_qp = ib_create_qp(priv->pd, &attr);
++#ifndef HAVE_MEMALLOC_NOIO_SAVE
++	if (PTR_ERR(tx_qp) == -EINVAL) {
++		attr.create_flags &= ~IB_QP_CREATE_USE_GFP_NOIO;
++		tx_qp = ib_create_qp(priv->pd, &attr);
++	}
++#endif
+ 	tx->max_send_sge = attr.cap.max_send_sge;
+ 	return tx_qp;
+ }
+@@ -1158,19 +1170,30 @@ static int ipoib_cm_tx_init(struct ipoib
+ 			    struct sa_path_rec *pathrec)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(p->dev);
+-	unsigned int noio_flag;
+-	int ret;
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
++       unsigned int noio_flag;
++#endif
++       int ret;
+ 
+-	noio_flag = memalloc_noio_save();
+-	p->tx_ring = vzalloc(array_size(priv->sendq_size, sizeof(*p->tx_ring)));
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
++       noio_flag = memalloc_noio_save();
++       p->tx_ring = vzalloc(array_size(priv->sendq_size, sizeof(*p->tx_ring)));
++#else
++	p->tx_ring = __vmalloc(priv->sendq_size * sizeof(*p->tx_ring),
++			       GFP_NOIO, PAGE_KERNEL);
++#endif
+ 	if (!p->tx_ring) {
+-		memalloc_noio_restore(noio_flag);
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
++	       	memalloc_noio_restore(noio_flag);
++#endif
+ 		ret = -ENOMEM;
+ 		goto err_tx;
+ 	}
+ 
+ 	p->qp = ipoib_cm_create_tx_qp(p->dev, p);
+-	memalloc_noio_restore(noio_flag);
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
++       memalloc_noio_restore(noio_flag);
++#endif
+ 	if (IS_ERR(p->qp)) {
+ 		ret = PTR_ERR(p->qp);
+ 		ipoib_warn(priv, "failed to create tx qp: %d\n", ret);

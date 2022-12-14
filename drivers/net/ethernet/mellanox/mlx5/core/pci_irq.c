@@ -122,13 +122,30 @@ static int request_irqs(struct mlx5_core_dev *dev, int nvec)
 	return 0;
 
 err_request_irq:
-	for (; i >= 0; i--) {
+	while (i--) {
 		struct mlx5_irq *irq = mlx5_irq_get(dev, i);
 		int irqn = pci_irq_vector(dev->pdev, i);
 
 		free_irq(irqn, &irq->nh);
 	}
 	return  err;
+}
+
+void mlx5_irq_rename(struct mlx5_core_dev *dev, int vecidx,
+		     const char *name)
+{
+	char *dst_name = mlx5_irq_get(dev, vecidx)->name;
+
+	if (!name) {
+		char default_name[MLX5_MAX_IRQ_NAME];
+
+		irq_set_name(default_name, vecidx);
+		snprintf(dst_name, MLX5_MAX_IRQ_NAME,
+			 "%s@pci:%s", default_name, pci_name(dev->pdev));
+	} else {
+		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
+			 vecidx - MLX5_IRQ_VEC_COMP_BASE);
+	}
 }
 
 static void irq_clear_rmap(struct mlx5_core_dev *dev)

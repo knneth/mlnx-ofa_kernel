@@ -589,6 +589,9 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 						 dst->dest_attr.vport.pkt_reformat->id);
 				}
 				break;
+			case MLX5_FLOW_DESTINATION_TYPE_FLOW_SAMPLER:
+				id = dst->dest_attr.sampler_id;
+				break;
 			default:
 				id = dst->dest_attr.tir_num;
 			}
@@ -628,7 +631,6 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 		MLX5_SET(flow_context, in_flow_context, flow_counter_list_size,
 			 list_size);
 	}
-
 
 	err = mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));
 err_out:

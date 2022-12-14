@@ -1,4 +1,4 @@
-#if !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC))
+#if !(IS_ENABLED(CONFIG_XZ_DEC))
 
 /*
  * Branch/Call/Jump (BCJ) filter decoders
@@ -575,4 +575,4 @@ XZ_EXTERN enum xz_ret xz_dec_bcj_reset(struct xz_dec_bcj *s, uint8_t id)
 
 #endif
 
-#endif /* !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)) */
+#endif /* !(IS_ENABLED(CONFIG_XZ_DEC)) */

@@ -78,7 +78,7 @@ static int dump_rq_info(struct mlx5e_rq *rq, void *buffer)
 	rqd->wqe_stride = rq->wqe.wq.fbc.log_stride;
 	rqd->size = rq->wqe.wq.fbc.sz_m1 + 1;
 	rqd->wqe_num = ((rq->wqe.wq.fbc.sz_m1 + 1) << rq->wqe.wq.fbc.log_stride);
-	rqd->group_id = rq->channel->ix;
+	rqd->group_id = rq->ix;
 
 	return sizeof(*rqd);
 }
@@ -94,12 +94,12 @@ static int dump_sq_info(struct mlx5e_txqsq *sq, void *buffer)
 	sqd->wqe_stride = sq->wq.fbc.log_stride;
 	sqd->size = sq->wq.fbc.sz_m1 + 1;
 	sqd->wqe_num = ((sq->wq.fbc.sz_m1 + 1) << sq->wq.fbc.log_stride);
-	sqd->group_id = sq->channel->ix;
+	sqd->group_id = sq->ch_ix;
 
 	return sizeof(*sqd);
 }
 
-static int dump_cq_info(struct mlx5e_cq *cq, void *buffer)
+static int dump_cq_info(struct mlx5e_cq *cq, void *buffer, int ix)
 {
 	struct mlx5_diag_wq *cqd = (struct mlx5_diag_wq *)buffer;
 	struct mlx5_cqwq *wq = &cq->wq;
@@ -111,7 +111,7 @@ static int dump_cq_info(struct mlx5e_cq *cq, void *buffer)
 	cqd->wqe_stride = wq->fbc.log_stride;
 	cqd->size = wq->fbc.sz_m1 + 1;
 	cqd->wqe_num = cqd->size;
-	cqd->group_id = cq->channel->ix;
+	cqd->group_id = ix;
 
 	return sizeof(*cqd);
 }
@@ -122,7 +122,6 @@ static int dump_eq_info(struct mlx5_eq_comp *eq, void *buffer)
 
 	eqd->type = MLX5_DIAG_EQ;
 	eqd->ci = eq->core.cons_index;
-	eqd->size = eq->core.size;
 	eqd->irqn = eq->core.irqn;
 	eqd->eqn = eq->core.eqn;
 	eqd->nent = eq->core.nent;
@@ -149,7 +148,8 @@ static void dump_channel_info(struct mlx5e_channel *c,
 		/* Dump SQ CQ */
 		dump_blk = DIAG_GET_NEXT_BLK(dump_hdr);
 		dump_blk->type = MLX5_DIAG_CQ;
-		dump_blk->length = dump_cq_info(&c->sq[i].cq, &dump_blk->data);
+		dump_blk->length = dump_cq_info(&c->sq[i].cq, &dump_blk->data,
+						c->sq[i].ch_ix);
 		dump_hdr->total_length += DIAG_BLK_SZ(dump_blk->length);
 		dump_hdr->num_blocks++;
 	}
@@ -164,7 +164,7 @@ static void dump_channel_info(struct mlx5e_channel *c,
 	/* Dump RQ CQ */
 	dump_blk = DIAG_GET_NEXT_BLK(dump_hdr);
 	dump_blk->type = MLX5_DIAG_CQ;
-	dump_blk->length = dump_cq_info(&c->rq.cq, &dump_blk->data);
+	dump_blk->length = dump_cq_info(&c->rq.cq, &dump_blk->data, c->rq.ix);
 	dump_hdr->total_length += DIAG_BLK_SZ(dump_blk->length);
 	dump_hdr->num_blocks++;
 

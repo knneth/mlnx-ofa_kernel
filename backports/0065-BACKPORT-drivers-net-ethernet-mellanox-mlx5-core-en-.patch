@@ -1,0 +1,83 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+
+Change-Id: Icc37a88fad679f7338384befc5406ca87137762c
+---
+ .../ethernet/mellanox/mlx5/core/en/params.c   | 24 ++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+@@ -5,24 +5,36 @@
+ #include "en/txrx.h"
+ #include "en_accel/tls_rxtx.h"
+ 
++#ifdef HAVE_XDP_BUFF
+ static inline bool mlx5e_rx_is_xdp(struct mlx5e_params *params,
+ 				   struct mlx5e_xsk_param *xsk)
+ {
+ 	return params->xdp_prog || xsk;
+ }
++#endif
+ 
+ u16 mlx5e_get_linear_rq_headroom(struct mlx5e_params *params,
+ 				 struct mlx5e_xsk_param *xsk)
+ {
+ 	u16 headroom;
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 	if (xsk)
+ 		return xsk->headroom;
++#endif
+ 
+ 	headroom = NET_IP_ALIGN;
++#ifdef HAVE_XDP_BUFF
+ 	if (mlx5e_rx_is_xdp(params, xsk))
++	{
+ 		headroom += XDP_PACKET_HEADROOM;
++#ifndef HAVE_XSK_BUFF_ALLOC
++		if (xsk)
++			headroom += xsk->headroom;
++#endif
++	}
+ 	else
++#endif
+ 		headroom += MLX5_RX_HEADROOM;
+ 
+ 	return headroom;
+@@ -32,7 +44,11 @@ u32 mlx5e_rx_get_min_frag_sz(struct mlx5
+ 			     struct mlx5e_xsk_param *xsk)
+ {
+ 	u32 hw_mtu = MLX5E_SW2HW_MTU(params, params->sw_mtu);
++#ifdef HAVE_XDP_BUFF
+ 	u16 linear_rq_headroom = mlx5e_get_linear_rq_headroom(params, xsk);
++#else
++	u16 linear_rq_headroom = MLX5_RX_HEADROOM;
++#endif
+ 
+ 	return linear_rq_headroom + hw_mtu;
+ }
+@@ -55,8 +71,10 @@ u32 mlx5e_rx_get_linear_frag_sz(struct m
+ 	 * The latter is important, because frames may come in a random order,
+ 	 * and we will have trouble assemblying a real page of multiple frames.
+ 	 */
++#ifdef HAVE_XDP_BUFF
+ 	if (mlx5e_rx_is_xdp(params, xsk))
+ 		frag_sz = max_t(u32, frag_sz, PAGE_SIZE);
++#endif
+ 
+ 	/* Even if we can go with a smaller fragment size, we must not put
+ 	 * multiple packets into a single frame.
+@@ -84,7 +102,11 @@ bool mlx5e_rx_is_linear_skb(struct mlx5e
+ 	u32 linear_frag_sz = max(mlx5e_rx_get_linear_frag_sz(params, xsk),
+ 				 mlx5e_rx_get_linear_frag_sz(params, NULL));
+ 
+-	return !params->lro_en && linear_frag_sz <= PAGE_SIZE;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	return !IS_HW_LRO(params) && linear_frag_sz <= PAGE_SIZE;
++#else
++       return !params->lro_en && linear_frag_sz <= PAGE_SIZE;
++#endif
+ }
+ 
+ #define MLX5_MAX_MPWQE_LOG_WQE_STRIDE_SZ ((BIT(__mlx5_bit_sz(wq, log_wqe_stride_size)) - 1) + \

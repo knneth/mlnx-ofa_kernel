@@ -1,0 +1,24 @@
+From: Israel Rukshin <israelr@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
+
+Change-Id: I26b92a157e90d7a2b2a2cbc2221d224f179c0a07
+---
+ drivers/nvme/host/zns.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/nvme/host/zns.c
++++ b/drivers/nvme/host/zns.c
+@@ -3,6 +3,8 @@
+  * Copyright (C) 2020 Western Digital Corporation or its affiliates.
+  */
+ 
++#ifdef HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES
++
+ #include <linux/blkdev.h>
+ #include <linux/vmalloc.h>
+ #include "nvme.h"
+@@ -254,3 +256,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
+ 
+ 	return BLK_STS_OK;
+ }
++#endif /* HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES */

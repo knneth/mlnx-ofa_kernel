@@ -1,0 +1,95 @@
+From: Eran Ben Elisha <eranbe@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+
+Change-Id: I353c3bed6eaad496cd7667bbbce5d92b933b02b6
+---
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 34 +++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+@@ -25,10 +25,19 @@ static void mlx5e_skb_cb_hwtstamp_tx(str
+ 				     struct mlx5e_ptp_cq_stats *cq_stats)
+ {
+ 	struct skb_shared_hwtstamps hwts = {};
++#ifndef HAVE_KTIME_UNION_TV64
+ 	ktime_t diff;
++#else
++	s64 diff;
++#endif
+ 
++#ifndef HAVE_KTIME_UNION_TV64
+ 	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp -
+ 		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp);
++#else
++	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp.tv64 -
++		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp.tv64);
++#endif
+ 
+ 	/* Maximal allowed diff is 1 / 128 second */
+ 	if (diff > (NSEC_PER_SEC >> 7)) {
+@@ -57,8 +66,13 @@ void mlx5e_skb_cb_hwtstamp_handler(struc
+ 	/* If both CQEs arrive, check and report the port tstamp, and clear skb cb as
+ 	 * skb soon to be released.
+ 	 */
++#ifndef HAVE_KTIME_UNION_TV64
+ 	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp ||
+ 	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp)
++#else
++	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp.tv64 ||
++	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp.tv64)
++#endif
+ 		return;
+ 
+ 	mlx5e_skb_cb_hwtstamp_tx(skb, cq_stats);
+@@ -83,7 +97,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
+ 	ptpsq->cq_stats->cqe++;
+ 
+ out:
++#ifdef HAVE_NAPI_CONSUME_SKB
+ 	napi_consume_skb(skb, budget);
++#else
++	dev_kfree_skb(skb);
++#endif
+ }
+ 
+ static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int budget)
+@@ -126,6 +144,9 @@ static int mlx5e_ptp_napi_poll(struct na
+ 	rcu_read_lock();
+ 
+ 	ch_stats->poll++;
++#ifndef HAVE_NAPI_STATE_MISSED
++	clear_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags);
++#endif
+ 
+ 	for (i = 0; i < c->num_tc; i++) {
+ 		busy |= mlx5e_poll_tx_cq(&c->ptpsq[i].txqsq.cq, budget);
+@@ -137,8 +158,18 @@ static int mlx5e_ptp_napi_poll(struct na
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_NAPI_STATE_MISSED
+ 	if (unlikely(!napi_complete_done(napi, work_done)))
+ 		goto out;
++#else
++	napi_complete_done(napi, work_done);
++
++	/* avoid losing completion event during/after polling cqs */
++	if (test_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags)) {
++		napi_schedule(napi);
++		goto out;
++	}
++#endif
+ 
+ 	ch_stats->arm++;
+ 
+@@ -340,6 +371,9 @@ static int mlx5e_ptp_open_cqs(struct mlx
+ 	ccp.ch_stats = c->stats;
+ 	ccp.napi     = &c->napi;
+ 	ccp.ix       = c->ix;
++#ifndef HAVE_NAPI_STATE_MISSED
++	ccp.ch_flags = &c->flags;
++#endif
+ 
+ 	cq_param = &cparams->txq_sq_param.cqp;
+ 

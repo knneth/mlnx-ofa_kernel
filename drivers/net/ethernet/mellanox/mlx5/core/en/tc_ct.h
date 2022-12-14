@@ -10,6 +10,11 @@
 
 #include "en.h"
 
+#define MLX5_CT_STATE_ESTABLISHED_BIT BIT(1)
+#define MLX5_CT_STATE_TRK_BIT BIT(2)
+#define MLX5_CT_STATE_NAT_BIT BIT(3)
+#define MLX5_CT_STATE_NEW_BIT BIT(4)
+
 struct mlx5_flow_attr;
 struct mlx5e_tc_mod_hdr_acts;
 struct mlx5_rep_uplink_priv;
@@ -28,6 +33,7 @@ struct mlx5_ct_attr {
 	struct mlx5_ct_flow *ct_flow;
 	struct nf_flowtable *nf_ft;
 	u32 ct_labels_id;
+	u32 ct_state;
 };
 
 #define zone_to_reg_ct {\
@@ -88,15 +94,14 @@ struct mlx5_ct_attr {
 #define REG_MAPPING_MOFFSET(reg) (mlx5e_tc_attr_to_reg_mappings[reg].moffset)
 #define REG_MAPPING_SHIFT(reg) (REG_MAPPING_MOFFSET(reg) * 8)
 #define REG_MAPPING_MASK(reg) GENMASK((REG_MAPPING_MLEN(reg) * 8) - 1, 0)
-#define ZONE_RESTORE_BITS (REG_MAPPING_MLEN(ZONE_RESTORE_TO_REG) * 8)
-#define ZONE_RESTORE_MAX GENMASK(ZONE_RESTORE_BITS - 1, 0)
 
 #if IS_ENABLED(CONFIG_MLX5_TC_CT)
 
 struct mlx5_tc_ct_priv *
 mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 		struct mod_hdr_tbl *mod_hdr,
-		enum mlx5_flow_namespace_type ns_type);
+		enum mlx5_flow_namespace_type ns_type,
+		struct idr *fte_ids);
 void
 mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv);
 
@@ -138,7 +143,8 @@ mlx5e_tc_ct_restore_flow(struct mlx5_tc_ct_priv *ct_priv,
 static inline struct mlx5_tc_ct_priv *
 mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 		struct mod_hdr_tbl *mod_hdr,
-		enum mlx5_flow_namespace_type ns_type)
+		enum mlx5_flow_namespace_type ns_type,
+		struct idr *fte_ids)
 {
 	return NULL;
 }

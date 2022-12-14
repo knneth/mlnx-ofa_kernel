@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: include/trace/events/ib_umad.h
+
+Change-Id: I91c1c5578e7e77d27494d3c188c34639ff5bae7a
+---
+ include/trace/events/ib_umad.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/include/trace/events/ib_umad.h
++++ b/include/trace/events/ib_umad.h
+@@ -4,6 +4,7 @@
+  * Copyright (c) 2018 Intel Corporation.  All rights reserved.
+  *
+  */
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 
+ #undef TRACE_SYSTEM
+ #define TRACE_SYSTEM ib_umad
+@@ -124,3 +125,4 @@ DEFINE_EVENT(ib_umad_template, ib_umad_r
+ #endif /* _TRACE_IB_UMAD_H */
+ 
+ #include <trace/define_trace.h>
++#endif

@@ -66,13 +66,13 @@ static int rx_err_add_rule(struct mlx5e_priv *priv,
 	if (!spec)
 		return -ENOMEM;
 
-	/* Action to copy 7 bit ipsec_syndrome to regB[0:6] */
+	/* Action to copy 7 bit ipsec_syndrome to regB[24:30] */
 	MLX5_SET(copy_action_in, action, action_type, MLX5_ACTION_TYPE_COPY);
 	MLX5_SET(copy_action_in, action, src_field, MLX5_ACTION_IN_FIELD_IPSEC_SYNDROME);
 	MLX5_SET(copy_action_in, action, src_offset, 0);
 	MLX5_SET(copy_action_in, action, length, 7);
 	MLX5_SET(copy_action_in, action, dst_field, MLX5_ACTION_IN_FIELD_METADATA_REG_B);
-	MLX5_SET(copy_action_in, action, dst_offset, 0);
+	MLX5_SET(copy_action_in, action, dst_offset, 24);
 
 	modify_hdr = mlx5_modify_header_alloc(mdev, MLX5_FLOW_NAMESPACE_KERNEL,
 					      1, action);
@@ -402,6 +402,33 @@ out:
 	mutex_unlock(&tx_fs->mutex);
 }
 
+
+static void setup_udp_match(struct mlx5_accel_esp_xfrm_attrs *attrs, struct mlx5_flow_spec *spec)
+{
+	if (attrs->upspec.proto == IPPROTO_UDP) {
+		spec->match_criteria_enable |= MLX5_MATCH_OUTER_HEADERS;
+		MLX5_SET(fte_match_set_lyr_2_4, spec->match_criteria, udp_dport,
+			 attrs->upspec.dport_mask);
+		MLX5_SET(fte_match_set_lyr_2_4, spec->match_value, udp_dport, attrs->upspec.dport);
+		MLX5_SET_TO_ONES(fte_match_set_lyr_2_4, spec->match_criteria, ip_protocol);
+		MLX5_SET(fte_match_set_lyr_2_4, spec->match_value, ip_protocol, IPPROTO_UDP);
+	}
+}
+
+static void setup_esp_match(struct mlx5_accel_esp_xfrm_attrs *attrs, struct mlx5_flow_spec *spec)
+{
+	spec->match_criteria_enable |= MLX5_MATCH_MISC_PARAMETERS;
+
+	/* ESP protocol */
+	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_protocol);
+	MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_protocol, IPPROTO_ESP);
+
+	/* SPI number */
+	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, misc_parameters.outer_esp_spi);
+	MLX5_SET(fte_match_param, spec->match_value, misc_parameters.outer_esp_spi,
+		 be32_to_cpu(attrs->spi));
+}
+
 static void setup_fte_common(struct mlx5_accel_esp_xfrm_attrs *attrs,
 			     u32 ipsec_obj_id,
 			     struct mlx5_flow_spec *spec,
@@ -418,17 +445,6 @@ static void setup_fte_common(struct mlx5_accel_esp_xfrm_attrs *attrs,
 	/* Non fragmented */
 	MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.frag);
 	MLX5_SET(fte_match_param, spec->match_value, outer_headers.frag, 0);
-	if (!(attrs->flags & MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD)) {
-		spec->match_criteria_enable |= MLX5_MATCH_MISC_PARAMETERS;
-		/* ESP header */
-		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.ip_protocol);
-		MLX5_SET(fte_match_param, spec->match_value, outer_headers.ip_protocol, IPPROTO_ESP);
-
-		/* SPI number */
-		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, misc_parameters.outer_esp_spi);
-		MLX5_SET(fte_match_param, spec->match_value, misc_parameters.outer_esp_spi,
-			 be32_to_cpu(attrs->spi));
-	}
 
 	if (ip_version == 4) {
 		memcpy(MLX5_ADDR_OF(fte_match_param, spec->match_value,
@@ -483,6 +499,7 @@ static int rx_add_rule_full(struct mlx5e_priv *priv,
 		goto ipsec_ref_err;
 
 	setup_fte_common(attrs, ipsec_obj_id, spec, &flow_act);
+	setup_esp_match(attrs, spec);
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_IPSEC_DECRYPT;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 	dest.ft = mlx5_esw_ipsec_get_table(esw, MLX5_ESW_IPSEC_FT_RX_DECAP);
@@ -537,14 +554,15 @@ static int rx_add_rule(struct mlx5e_priv *priv,
 	}
 
 	setup_fte_common(attrs, ipsec_obj_id, spec, &flow_act);
+	setup_esp_match(attrs, spec);
 
-	/* Set 1  bit ipsec marker */
-	/* Set 24 bit ipsec_obj_id */
+	/* Set bit[31] ipsec marker */
+	/* Set bit[23-0] ipsec_obj_id */
 	MLX5_SET(set_action_in, action, action_type, MLX5_ACTION_TYPE_SET);
 	MLX5_SET(set_action_in, action, field, MLX5_ACTION_IN_FIELD_METADATA_REG_B);
-	MLX5_SET(set_action_in, action, data, (ipsec_obj_id << 1) | 0x1);
-	MLX5_SET(set_action_in, action, offset, 7);
-	MLX5_SET(set_action_in, action, length, 25);
+	MLX5_SET(set_action_in, action, data, (ipsec_obj_id | BIT(31)));
+	MLX5_SET(set_action_in, action, offset, 0);
+	MLX5_SET(set_action_in, action, length, 32);
 
 	modify_hdr = mlx5_modify_header_alloc(priv->mdev, MLX5_FLOW_NAMESPACE_KERNEL,
 					      1, action);
@@ -619,6 +637,7 @@ static int tx_add_rule_full(struct mlx5e_priv *priv,
 		goto ipsec_ref_err;
 
 	setup_fte_common(attrs, ipsec_obj_id, spec, &flow_act);
+	setup_udp_match(attrs, spec);
 
 	/* IPsec Tx table1 FW rule */
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_IPSEC_ENCRYPT
@@ -637,8 +656,8 @@ static int tx_add_rule_full(struct mlx5e_priv *priv,
 	}
 	ipsec_rule->pkt_reformat = flow_act.pkt_reformat;
 
-	dest.type = MLX5_FLOW_DESTINATION_TYPE_VPORT;
-	dest.vport.num = MLX5_VPORT_UPLINK;
+	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
+	dest.ft = mlx5_esw_ipsec_get_table(mdev->priv.eswitch, MLX5_ESW_IPSEC_FT_TX_CHK);
 	flow_act.ipsec_obj_id = ipsec_obj_id;
 	rule = mlx5_add_flow_rules(mlx5_esw_ipsec_get_table(esw, MLX5_ESW_IPSEC_FT_TX_CRYPTO), spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
@@ -686,6 +705,7 @@ static int tx_add_rule(struct mlx5e_priv *priv,
 	}
 
 	setup_fte_common(attrs, ipsec_obj_id, spec, &flow_act);
+	setup_esp_match(attrs, spec);
 
 	/* Add IPsec indicator in metadata_reg_a */
 	spec->match_criteria_enable |= MLX5_MATCH_MISC_PARAMETERS_2;

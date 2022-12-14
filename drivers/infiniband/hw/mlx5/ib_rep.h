@@ -9,9 +9,9 @@
 #include <linux/mlx5/eswitch.h>
 #include "mlx5_ib.h"
 
-#ifdef CONFIG_MLX5_ESWITCH
 extern const struct mlx5_ib_profile raw_eth_profile;
 
+#ifdef CONFIG_MLX5_ESWITCH
 u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw);
 struct mlx5_ib_dev *mlx5_ib_get_rep_ibdev(struct mlx5_eswitch *esw,
 					  u16 vport_num);
@@ -29,7 +29,6 @@ u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw);
 u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 		                                 u16 vport);
 u32 mlx5_ib_eswitch_get_vport_metadata_mask(void);
-bool mlx5_ib_eswitch_is_manager_vport(struct mlx5_eswitch *esw, u16 vport);
 #else /* CONFIG_MLX5_ESWITCH */
 static inline u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw)
 {
@@ -71,12 +70,6 @@ struct net_device *mlx5_ib_get_rep_netdev(struct mlx5_eswitch *esw,
 					  u16 vport_num)
 {
 	return NULL;
-}
-
-static inline
-bool mlx5_ib_eswitch_is_manager_vport(struct mlx5_eswitch *esw, u16 vport)
-{
-	return false;
 }
 
 static inline

@@ -1,0 +1,29 @@
+From: Jianbo Liu <jianbol@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+
+Change-Id: I59d30ae1e6d7fc4a0a915832a92fdf6b94d0b8a1
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+@@ -10,6 +10,7 @@
+ #include <linux/notifier.h>
+ #include <net/netevent.h>
+ #include <net/arp.h>
++#include <net/addrconf.h>
+ #include "neigh.h"
+ #include "tc.h"
+ #include "en_rep.h"
+@@ -151,7 +152,9 @@ static void mlx5e_rep_neigh_update(struc
+ 
+ 	neigh_connected = (nud_state & NUD_VALID) && !dead;
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_rep_neigh_update(nhe, ha, neigh_connected);
++#endif
+ 
+ 	if (!same_dev)
+ 		goto out;

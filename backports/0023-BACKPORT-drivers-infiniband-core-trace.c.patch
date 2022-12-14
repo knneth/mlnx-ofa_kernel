@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/trace.c
+
+Change-Id: I4a2e326e3ae505ced5b8d57711484a0b911b6b57
+---
+ drivers/infiniband/core/trace.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/infiniband/core/trace.c
++++ b/drivers/infiniband/core/trace.c
+@@ -7,6 +7,8 @@
+  * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+  */
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER 
+ #define CREATE_TRACE_POINTS
+ 
+ #include <trace/events/rdma_core.h>
++#endif

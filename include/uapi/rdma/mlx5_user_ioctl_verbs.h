@@ -78,6 +78,12 @@ struct mlx5_ib_uapi_devx_async_event_hdr {
 enum mlx5_ib_uapi_pp_alloc_flags {
 	MLX5_IB_UAPI_PP_ALLOC_FLAGS_DEDICATED_INDEX = 1 << 0,
 };
+
+enum mlx5_ib_uapi_uar_alloc_type {
+	MLX5_IB_UAPI_UAR_ALLOC_TYPE_BF = 0x0,
+	MLX5_IB_UAPI_UAR_ALLOC_TYPE_NC = 0x1,
+};
+
 enum mlx5_ib_uapi_devx_query_port_comp_mask {
        MLX5_IB_UAPI_QUERY_PORT_VPORT = BIT(0),
        MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID = BIT(1),
@@ -91,6 +97,6 @@ struct mlx5_ib_uapi_devx_reg_32 {
        __u32 value;
        __u32 mask;
 };
-
+ 
 #endif
 

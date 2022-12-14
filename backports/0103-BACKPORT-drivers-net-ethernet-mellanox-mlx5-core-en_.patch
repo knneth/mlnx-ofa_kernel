@@ -1,179 +1,38 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 
-Change-Id: I62fb53499a39acc770f5600c1d5e612fa912b0b6
+Change-Id: I42a6a76048df33c7465eec43d7af3d06669b0be8
 ---
- .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 45 +++++++++++++++++--
- 1 file changed, 41 insertions(+), 4 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
-@@ -32,13 +32,16 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+@@ -118,14 +118,14 @@ static struct sk_buff *mlx5e_test_get_ud
+ 	skb_reserve(skb, NET_IP_ALIGN);
  
- #include <linux/device.h>
- #include <linux/netdevice.h>
-+#include <linux/dcbnl.h>
- #include "en.h"
- #include "en_ecn.h"
- #include "en_tc.h"
- #include "eswitch.h"
-+#ifdef HAVE_IEEE_DCBNL_ETS
- #ifdef CONFIG_MLX5_CORE_EN_DCB
- #include "en/port_buffer.h"
- #endif
-+#endif
+ 	/*  Reserve for ethernet and IP header  */
+-	ethh = skb_push(skb, ETH_HLEN);
++	ethh = (struct ethhdr *)skb_push(skb, ETH_HLEN);
+ 	skb_reset_mac_header(skb);
  
- #define MLX5E_SKPRIOS_NUM   16
- #define MLX5E_GBPS_TO_KBPS 1000000
-@@ -54,6 +57,7 @@ struct netdev_queue_attribute {
- };
- #endif
+ 	skb_set_network_header(skb, skb->len);
+-	iph = skb_put(skb, sizeof(struct iphdr));
++	iph = (struct iphdr *)skb_put(skb, sizeof(struct iphdr));
  
-+#if defined(HAVE_NETDEV_GET_NUM_TC) && defined(HAVE_NETDEV_SET_NUM_TC)
- static ssize_t mlx5e_show_tc_num(struct device *device,
- 				 struct device_attribute *attr,
- 				 char *buf)
-@@ -72,7 +76,9 @@ static ssize_t mlx5e_store_tc_num(struct
- {
- 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
- 	struct net_device *netdev = priv->netdev;
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
- 	struct tc_mqprio_qopt mqprio = { 0 };
-+#endif
- 	int tc_num;
- 	int err = 0;
+ 	skb_set_transport_header(skb, skb->len);
+-	udph = skb_put(skb, sizeof(struct udphdr));
++	udph = (struct udphdr *)skb_put(skb, sizeof(struct udphdr));
  
-@@ -85,12 +91,17 @@ static ssize_t mlx5e_store_tc_num(struct
- 		return -EINVAL;
+ 	/* Fill ETH header */
+ 	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
+@@ -154,7 +154,7 @@ static struct sk_buff *mlx5e_test_get_ud
+ 	ip_send_check(iph);
  
- 	rtnl_lock();
--	netdev_set_num_tc(netdev, tc_num);
--	mqprio.num_tc = tc_num;
--	mlx5e_setup_tc_mqprio(priv, &mqprio);
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+       netdev_set_num_tc(netdev, tc_num);
-+       mqprio.num_tc = tc_num;
-+       mlx5e_setup_tc_mqprio(priv, &mqprio);
-+#else
-+	mlx5e_setup_tc(netdev, tc_num);
-+#endif
- 	rtnl_unlock();
- 	return count;
- }
-+#endif
+ 	/* Fill test header and data */
+-	mlxh = skb_put(skb, sizeof(*mlxh));
++	mlxh = (struct mlx5ehdr *)skb_put(skb, sizeof(*mlxh));
+ 	mlxh->version = 0;
+ 	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
  
- static  ssize_t mlx5e_show_maxrate(struct device *device,
- 				   struct device_attribute *attr,
-@@ -199,8 +210,10 @@ out:
- 
- static DEVICE_ATTR(maxrate, S_IRUGO | S_IWUSR,
- 		   mlx5e_show_maxrate, mlx5e_store_maxrate);
-+#if defined(HAVE_NETDEV_GET_NUM_TC) && defined(HAVE_NETDEV_SET_NUM_TC)
- static DEVICE_ATTR(tc_num, S_IRUGO | S_IWUSR,
- 		   mlx5e_show_tc_num, mlx5e_store_tc_num);
-+#endif
- 
- static ssize_t mlx5e_show_lro_timeout(struct device *device,
- 				      struct device_attribute *attr,
-@@ -773,6 +786,7 @@ static void mlx5e_remove_attributes(stru
- 	}
- }
- 
-+#ifdef HAVE_IEEE_DCBNL_ETS
- #ifdef CONFIG_MLX5_CORE_EN_DCB
- static ssize_t mlx5e_show_prio2buffer(struct device *device,
- 				      struct device_attribute *attr,
-@@ -915,7 +929,9 @@ static ssize_t mlx5e_store_buffer_size(s
- 	return count;
- }
- #endif
-+#endif
- 
-+#ifdef HAVE_IEEE_DCBNL_ETS
- #ifdef CONFIG_MLX5_CORE_EN_DCB
- static DEVICE_ATTR(buffer_size, S_IRUGO | S_IWUSR,
- 		   mlx5e_show_buffer_size,
-@@ -925,6 +941,7 @@ static DEVICE_ATTR(prio2buffer, S_IRUGO
- 		   mlx5e_show_prio2buffer,
- 		   mlx5e_store_prio2buffer);
- #endif
-+#endif
- 
- #ifdef CONFIG_MLX5_ESWITCH
- static DEVICE_ATTR(vf_roce, S_IRUGO | S_IWUSR,
-@@ -956,10 +973,22 @@ static ssize_t mlx5e_store_force_local_l
- 	struct mlx5_core_dev *mdev = priv->mdev;
- 	bool disable;
- 	int err;
-+#ifndef HAVE_KSTRTOBOOL
-+	int udata;
-+
-+	err = sscanf(buf, "%d", &udata);
-+	if (err != 1)
-+		return -EINVAL;
-+
-+	if (udata >> 1)
-+		return -EINVAL;
- 
-+	disable = udata ? true : false;
-+#else
- 	err = kstrtobool(buf, &disable);
- 	if (err)
- 		return -EINVAL;
-+#endif
- 
- 	if (mdev->local_lb.user_force_disable != disable) {
- 		mdev->local_lb.user_force_disable = disable;
-@@ -992,7 +1021,9 @@ static struct attribute *mlx5e_debug_gro
- };
- 
- static struct attribute *mlx5e_qos_attrs[] = {
-+#if defined(HAVE_NETDEV_GET_NUM_TC) && defined(HAVE_NETDEV_SET_NUM_TC)
- 	&dev_attr_tc_num.attr,
-+#endif
- 	&dev_attr_maxrate.attr,
- 	NULL,
- };
-@@ -1043,6 +1074,7 @@ static int update_qos_sysfs(struct net_d
- {
- 	int err = 0;
- 
-+#ifdef HAVE_IEEE_DCBNL_ETS
- #ifdef CONFIG_MLX5_CORE_EN_DCB
- 	if (MLX5_BUFFER_SUPPORTED(mdev)) {
- 		err = sysfs_add_file_to_group(&dev->dev.kobj,
-@@ -1053,6 +1085,7 @@ static int update_qos_sysfs(struct net_d
- 					      "qos");
- 	}
- #endif
-+#endif
- 
- 	return err;
- }
-@@ -1406,6 +1439,8 @@ int mlx5e_sysfs_create(struct net_device
- 	if (err)
- 		goto remove_phy_stat_group;
- 
-+	mlx5_eswitch_compat_sysfs_init(dev);
-+
- 	return 0;
- 
- remove_phy_stat_group:
-@@ -1439,6 +1474,8 @@ void mlx5e_sysfs_remove(struct net_devic
- 	if (!priv->ecn_root_kobj)
- 		return;
- 
-+	mlx5_eswitch_compat_sysfs_cleanup(dev);
-+
- 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
- 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
- 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
-@@ -1454,7 +1491,7 @@ void mlx5e_sysfs_remove(struct net_devic
- 	priv->ecn_root_kobj = NULL;
- }
- 
--#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-+#if defined(CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
- enum {
- 	ATTR_DST_IP,
- 	ATTR_DST_PORT,

@@ -48,7 +48,7 @@ int mlx5_accel_ipsec_counters_read(struct mlx5_core_dev *mdev, u64 *counters,
 
 void *mlx5_accel_esp_create_hw_context(struct mlx5_core_dev *mdev,
 				       struct mlx5_accel_esp_xfrm *xfrm,
-				       u32 *sa_handle);
+				       u32 pdn, u32 *sa_handle);
 void mlx5_accel_esp_free_hw_context(struct mlx5_core_dev *mdev, void *context);
 
 void mlx5_accel_ipsec_init(struct mlx5_core_dev *mdev);
@@ -61,7 +61,7 @@ struct mlx5_accel_ipsec_ops {
 	void* (*create_hw_context)(struct mlx5_core_dev *mdev,
 				   struct mlx5_accel_esp_xfrm *xfrm,
 				   const __be32 saddr[4], const __be32 daddr[4],
-				   const __be32 spi, bool is_ipv6, u32 *sa_handle);
+				   const __be32 spi, bool is_ipv6, u32 pdn, u32 *sa_handle);
 	void (*free_hw_context)(void *context);
 	int (*init)(struct mlx5_core_dev *mdev);
 	void (*cleanup)(struct mlx5_core_dev *mdev);
@@ -80,7 +80,7 @@ struct mlx5_accel_ipsec_ops {
 static inline void *
 mlx5_accel_esp_create_hw_context(struct mlx5_core_dev *mdev,
 				 struct mlx5_accel_esp_xfrm *xfrm,
-				 u32 *sa_handle)
+				 u32 pdn, u32 *sa_handle)
 {
 	return NULL;
 }

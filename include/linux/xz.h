@@ -4,7 +4,7 @@
 #include "../../compat/config.h"
 #include <linux/kconfig.h>
 
-#if defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)
+#if IS_ENABLED(CONFIG_XZ_DEC)
 #include_next <linux/xz.h>
 #else
 

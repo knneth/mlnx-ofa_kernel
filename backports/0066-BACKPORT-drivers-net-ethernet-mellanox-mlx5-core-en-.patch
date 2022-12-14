@@ -1,61 +1,39 @@
-From: Mikhael Goikhman <migo@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 
-Change-Id: I5c4d8be7275b8dd3e9aa817afd833df0a89af687
+Change-Id: I8e303e335b62fec3ed8766e29b8ec11d5a85762e
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-@@ -30,7 +30,9 @@ struct mlx5e_tc_table {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+@@ -31,6 +31,7 @@
+  */
+ #include "port_buffer.h"
  
- 	struct rhashtable               ht;
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
+ 			    struct mlx5e_port_buffer *port_buffer)
+ {
+@@ -279,7 +280,14 @@ int mlx5e_port_manual_buffer_config(stru
+ 	int i;
  
-+#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
- 	struct mod_hdr_tbl mod_hdr;
+ 	mlx5e_dbg(HW, priv, "%s: change=%x\n", __func__, change);
++#if defined(HAVE_NET_DEVICE_MIN_MAX_MTU)
+ 	max_mtu = max_t(unsigned int, priv->netdev->max_mtu, MINIMUM_MAX_MTU);
++#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
++	max_mtu = max_t(unsigned int, priv->netdev->extended->min_mtu, MINIMUM_MAX_MTU);
++#else
++	max_mtu = mtu;
 +#endif
- 	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
- 	DECLARE_HASHTABLE(hairpin_tbl, 16);
- 	struct kobject *hp_config;
-@@ -63,9 +65,13 @@ struct mlx5e_l2_rule {
- struct mlx5e_vlan_table {
- 	struct mlx5e_flow_table		ft;
- 	DECLARE_BITMAP(active_cvlans, VLAN_N_VID);
-+#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
- 	DECLARE_BITMAP(active_svlans, VLAN_N_VID);
-+#endif
- 	struct mlx5_flow_handle	*active_cvlans_rule[VLAN_N_VID];
-+#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
- 	struct mlx5_flow_handle	*active_svlans_rule[VLAN_N_VID];
-+#endif
- 	struct mlx5_flow_handle	*untagged_rule;
- 	struct mlx5_flow_handle	*any_cvlan_rule;
- 	struct mlx5_flow_handle	*any_svlan_rule;
-@@ -207,6 +213,7 @@ static inline int mlx5e_ethtool_get_rxnf
- #endif /* CONFIG_MLX5_EN_RXNFC */
++
  
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- #define ARFS_HASH_SHIFT BITS_PER_BYTE
- #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
+ 	err = mlx5e_port_query_buffer(priv, &port_buffer);
+ 	if (err)
+@@ -360,3 +368,4 @@ int mlx5e_port_manual_buffer_config(stru
  
-@@ -245,6 +252,7 @@ static inline void mlx5e_arfs_destroy_ta
- static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
- static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
- #endif
+ 	return err;
+ }
 +#endif
- 
- #ifdef CONFIG_MLX5_EN_TLS
- struct mlx5e_accel_fs_tcp;
-@@ -262,8 +270,10 @@ struct mlx5e_flow_steering {
- 	struct mlx5e_ttc_table          ttc;
- 	struct mlx5e_ttc_table          inner_ttc;
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- 	struct mlx5e_arfs_tables        arfs;
- #endif
-+#endif
- #ifdef CONFIG_MLX5_EN_TLS
- 	struct mlx5e_accel_fs_tcp      *accel_tcp;
- #endif

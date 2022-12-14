@@ -1,3 +1,5 @@
+#include "../../../compat/config.h"
+
 #ifdef CONFIG_COMPAT_KERNEL_CT
 #include_next <net/netfilter/nf_flow_table.h>
 #endif

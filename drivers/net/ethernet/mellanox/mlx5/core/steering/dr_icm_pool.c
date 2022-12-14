@@ -282,7 +282,6 @@ dr_icm_pool_mr_create(struct mlx5dr_icm_pool *pool)
 
 	icm_mr->dmn = pool->dmn;
 
-	/* 2^log_biggest_table * entry-size */
 	icm_mr->dm.length = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
 							       pool->icm_type);
 
@@ -329,7 +328,8 @@ dr_icm_pool_mr_create(struct mlx5dr_icm_pool *pool)
 	icm_mr->icm_start_addr = icm_mr->dm.addr;
 
 	if (icm_mr->icm_start_addr & (BIT(log_align_base) - 1)) {
-		mlx5dr_err(pool->dmn, "Failed to get aligned ICM memory\n");
+		mlx5dr_err(pool->dmn, "Failed to get Aligned ICM mem (asked: %zu)\n",
+			   log_align_base);
 		goto free_mkey;
 	}
 

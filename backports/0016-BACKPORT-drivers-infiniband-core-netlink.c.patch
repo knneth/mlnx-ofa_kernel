@@ -1,0 +1,140 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
+
+Change-Id: Ic3ebf419a16b8185c799bd6fb213f756919f976f
+---
+ drivers/infiniband/core/netlink.c | 51 ++++++++++++++++++++++++++-----
+ 1 file changed, 44 insertions(+), 7 deletions(-)
+
+--- a/drivers/infiniband/core/netlink.c
++++ b/drivers/infiniband/core/netlink.c
+@@ -45,6 +45,8 @@
+ #include <linux/module.h>
+ #include "core_priv.h"
+ 
++
++
+ static struct {
+ 	const struct rdma_nl_cbs *cb_table;
+ 	/* Synchronizes between ongoing netlink commands and netlink client
+@@ -119,7 +121,12 @@ void rdma_nl_register(unsigned int index
+ 		return;
+ 
+ 	/* Pairs with the READ_ONCE in is_nl_valid() */
++#ifdef HAVE_SMP_LOAD_ACQUIRE
+ 	smp_store_release(&rdma_nl_types[index].cb_table, cb_table);
++#else
++	smp_wmb();
++        rdma_nl_types[index].cb_table = cb_table;
++#endif
+ }
+ EXPORT_SYMBOL(rdma_nl_register);
+ 
+@@ -152,8 +159,12 @@ int ibnl_put_attr(struct sk_buff *skb, s
+ }
+ EXPORT_SYMBOL(ibnl_put_attr);
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ static int rdma_nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 			   struct netlink_ext_ack *extack)
++#else
++static int rdma_nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
++#endif
+ {
+ 	int type = nlh->nlmsg_type;
+ 	unsigned int index = RDMA_NL_GET_CLIENT(type);
+@@ -170,7 +181,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 		goto done;
+ 
+ 	if ((cb_table[op].flags & RDMA_NL_ADMIN_PERM) &&
+-	    !netlink_capable(skb, CAP_NET_ADMIN)) {
++#ifdef HAVE_NETLINK_CAPABLE
++           !netlink_capable(skb, CAP_NET_ADMIN)) {
++#else
++	    sock_net(skb->sk) != &init_net) {
++#endif
+ 		err = -EPERM;
+ 		goto done;
+ 	}
+@@ -181,7 +196,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 	 */
+ 	if (index == RDMA_NL_LS) {
+ 		if (cb_table[op].doit)
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			err = cb_table[op].doit(skb, nlh, extack);
++#else
++			err = cb_table[op].doit(skb, nlh);
++#endif
+ 		goto done;
+ 	}
+ 	/* FIXME: Convert IWCM to properly handle doit callbacks */
+@@ -195,7 +214,11 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 	}
+ 
+ 	if (cb_table[op].doit)
+-		err = cb_table[op].doit(skb, nlh, extack);
++#ifdef HAVE_NETLINK_EXT_ACK
++       	err = cb_table[op].doit(skb, nlh, extack);
++#else
++       	err = cb_table[op].doit(skb, nlh);
++#endif
+ done:
+ 	up_read(&rdma_nl_types[index].sem);
+ 	return err;
+@@ -208,10 +231,16 @@ done:
+  * for that consumer only.
+  */
+ static int rdma_nl_rcv_skb(struct sk_buff *skb, int (*cb)(struct sk_buff *,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 						   struct nlmsghdr *,
+ 						   struct netlink_ext_ack *))
++#else
++						   struct nlmsghdr *))
++#endif
+ {
++#ifdef HAVE_NETLINK_EXT_ACK
+ 	struct netlink_ext_ack extack = {};
++#endif
+ 	struct nlmsghdr *nlh;
+ 	int err;
+ 
+@@ -239,13 +268,21 @@ static int rdma_nl_rcv_skb(struct sk_buf
+ 		if (nlh->nlmsg_type < NLMSG_MIN_TYPE)
+ 			goto ack;
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		err = cb(skb, nlh, &extack);
++#else
++		err = cb(skb, nlh);
++#endif
+ 		if (err == -EINTR)
+ 			goto skip;
+ 
+ ack:
+ 		if (nlh->nlmsg_flags & NLM_F_ACK || err)
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			netlink_ack(skb, nlh, err, &extack);
++#else
++			netlink_ack(skb, nlh, err);
++#endif
+ 
+ skip:
+ 		msglen = NLMSG_ALIGN(nlh->nlmsg_len);
+@@ -312,12 +349,12 @@ void rdma_nl_exit(void)
+ int rdma_nl_net_init(struct rdma_dev_net *rnet)
+ {
+ 	struct net *net = read_pnet(&rnet->net);
+-	struct netlink_kernel_cfg cfg = {
+-		.input	= rdma_nl_rcv,
+-	};
+-	struct sock *nls;
++       struct netlink_kernel_cfg cfg = {
++       	.input	= rdma_nl_rcv,
++       };
++       struct sock *nls;
+ 
+-	nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
++       nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
+ 	if (!nls)
+ 		return -ENOMEM;
+ 

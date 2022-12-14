@@ -1,0 +1,234 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/meddev/sf.c
+
+Change-Id: Ic0005d80a210c47f2585b635782f4c4ef17bdac0
+---
+ .../ethernet/mellanox/mlx5/core/meddev/sf.c   | 96 ++++++++++++++++---
+ 1 file changed, 85 insertions(+), 11 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/meddev/sf.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/meddev/sf.c
+@@ -10,6 +10,9 @@
+ #include "sf.h"
+ #include "mlx5_core.h"
+ #include "devlink.h"
++#ifdef HAVE_DMA_MAPS_OPS_H
++#include <linux/dma-map-ops.h>
++#endif
+ 
+ static int
+ mlx5_cmd_query_sf_partitions(struct mlx5_core_dev *mdev, u32 *out, int outlen)
+@@ -185,7 +188,12 @@ void mlx5_sf_free(struct mlx5_core_dev *
+ 
+ static void *mlx5_sf_dma_alloc(struct device *dev, size_t size,
+ 			       dma_addr_t *dma_handle, gfp_t gfp,
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			       struct dma_attrs *attrs)
++#else
+ 			       unsigned long attrs)
++#endif
++
+ {
+ 	return dma_alloc_attrs(dev->parent, size, dma_handle, gfp, attrs);
+ }
+@@ -193,7 +201,11 @@ static void *mlx5_sf_dma_alloc(struct de
+ static void
+ mlx5_sf_dma_free(struct device *dev, size_t size,
+ 		 void *vaddr, dma_addr_t dma_handle,
+-		 unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			       struct dma_attrs *attrs)
++#else
++			       unsigned long attrs)
++#endif
+ {
+ 	dma_free_attrs(dev->parent, size, vaddr, dma_handle, attrs);
+ }
+@@ -201,7 +213,11 @@ mlx5_sf_dma_free(struct device *dev, siz
+ static int
+ mlx5_sf_dma_mmap(struct device *dev, struct vm_area_struct *vma,
+ 		 void *cpu_addr, dma_addr_t dma_addr, size_t size,
+-		 unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			       struct dma_attrs *attrs)
++#else
++			       unsigned long attrs)
++#endif
+ {
+ 	return dma_mmap_attrs(dev->parent, vma, cpu_addr,
+ 			      dma_addr, size, attrs);
+@@ -210,7 +226,11 @@ mlx5_sf_dma_mmap(struct device *dev, str
+ static int
+ mlx5_sf_dma_get_sgtable(struct device *dev, struct sg_table *sgt,
+ 			void *cpu_addr, dma_addr_t dma_addr, size_t size,
+-			unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			       struct dma_attrs *attrs)
++#else
++			       unsigned long attrs)
++#endif
+ {
+ 	return dma_get_sgtable_attrs(dev->parent, sgt, cpu_addr,
+ 				     dma_addr, size, attrs);
+@@ -220,49 +240,83 @@ static dma_addr_t
+ mlx5_sf_dma_map_page(struct device *dev, struct page *page,
+ 		     unsigned long offset, size_t size,
+ 		     enum dma_data_direction dir,
+-		     unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			       struct dma_attrs *attrs)
++#else
++			       unsigned long attrs)
++#endif
+ {
++#ifdef HAVE_DMA_MAP_PAGE_ATTRS
+ 	return dma_map_page_attrs(dev->parent, page, offset, size, dir, attrs);
++#else
++	return dma_map_page(dev->parent, page, offset, size, dir);
++#endif
+ }
+ 
+ static void
+ mlx5_sf_dma_unmap_page(struct device *dev, dma_addr_t dma_handle,
+ 		       size_t size, enum dma_data_direction dir,
+-		       unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			       struct dma_attrs *attrs)
++#else
++			       unsigned long attrs)
++#endif
+ {
++#ifdef HAVE_DMA_MAP_PAGE_ATTRS
+ 	dma_unmap_page_attrs(dev->parent, dma_handle, size, dir, attrs);
++#else
++	dma_unmap_page(dev->parent, dma_handle, size, dir);
++#endif
+ }
+ 
+ static int
+ mlx5_sf_dma_map_sg(struct device *dev, struct scatterlist *sg,
+ 		   int nents, enum dma_data_direction dir,
+-		   unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++		       struct dma_attrs *attrs)
++#else
++		       unsigned long attrs)
++#endif
+ {
+ 	return dma_map_sg_attrs(dev->parent, sg, nents, dir, attrs);
+ }
+ 
+ static void
+ mlx5_sf_dma_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
+-		     enum dma_data_direction dir, unsigned long attrs)
++#ifdef HAVE_STRUCT_DMA_ATTRS
++			 enum dma_data_direction dir, struct dma_attrs *attrs)
++#else
++			 enum dma_data_direction dir, unsigned long attrs)
++#endif
+ {
+ 	dma_unmap_sg_attrs(dev->parent, sg, nents, dir, attrs);
+ }
+ 
++#ifdef HAVE_DMA_MAP_OPS_MAP_RESOURCE
+ static dma_addr_t
+ mlx5_sf_dma_map_resource(struct device *dev, phys_addr_t phys_addr,
+-			 size_t size, enum dma_data_direction dir,
+-			 unsigned long attrs)
++		size_t size, enum dma_data_direction dir,
++#ifdef HAVE_NDO_UNMAP_RESOURCE_GET_LONG_ATTRS
++		unsigned long attrs)
++#else
++	struct dma_attrs *attrs)
++#endif
+ {
+ 	return dma_map_resource(dev->parent, phys_addr, size, dir, attrs);
+ }
+ 
+ static void
+ mlx5_sf_dma_unmap_resource(struct device *dev, dma_addr_t dma_handle,
+-			   size_t size, enum dma_data_direction dir,
+-			   unsigned long attrs)
++		size_t size, enum dma_data_direction dir,
++#ifdef HAVE_NDO_UNMAP_RESOURCE_GET_LONG_ATTRS
++		unsigned long attrs)
++#else
++	struct dma_attrs *attrs)
++#endif
+ {
+ 	dma_unmap_resource(dev->parent, dma_handle, size, dir, attrs);
+ }
++#endif
+ 
+ static void
+ mlx5_sf_dma_sync_single_for_cpu(struct device *dev,
+@@ -296,14 +350,20 @@ mlx5_sf_dma_sync_sg_for_device(struct de
+ 	dma_sync_sg_for_device(dev->parent, sg, nents, dir);
+ }
+ 
++#ifdef HAVE_DMA_MAP_OPS_CACHE_SYNC
+ static void
+ mlx5_sf_dma_cache_sync(struct device *dev, void *vaddr, size_t size,
+ 		       enum dma_data_direction dir)
+ {
+ 	dma_cache_sync(dev->parent, vaddr, size, dir);
+ }
++#endif
+ 
++#ifdef HAVE_DEVICE_DMA_OPS
+ static const struct dma_map_ops mlx5_sf_dma_ops = {
++#else
++	static struct dma_map_ops mlx5_sf_dma_ops = {
++#endif
+ 	.alloc = mlx5_sf_dma_alloc,
+ 	.free = mlx5_sf_dma_free,
+ 	.mmap = mlx5_sf_dma_mmap,
+@@ -312,20 +372,32 @@ static const struct dma_map_ops mlx5_sf_
+ 	.unmap_page = mlx5_sf_dma_unmap_page,
+ 	.map_sg = mlx5_sf_dma_map_sg,
+ 	.unmap_sg = mlx5_sf_dma_unmap_sg,
++#ifdef HAVE_DMA_MAP_OPS_MAP_RESOURCE
+ 	.map_resource = mlx5_sf_dma_map_resource,
+ 	.unmap_resource = mlx5_sf_dma_unmap_resource,
++#endif
+ 	.sync_single_for_cpu = mlx5_sf_dma_sync_single_for_cpu,
+ 	.sync_sg_for_cpu = mlx5_sf_dma_sync_sg_for_cpu,
+ 	.sync_sg_for_device = mlx5_sf_dma_sync_sg_for_device,
+ 	.sync_single_for_device = mlx5_sf_dma_sync_single_for_device,
++#ifdef HAVE_DMA_MAP_OPS_CACHE_SYNC
+ 	.cache_sync = mlx5_sf_dma_cache_sync,
++#endif
+ };
+ 
+ static void set_dma_params(struct mlx5_core_dev *coredev, struct device *dev)
+ {
+ 	struct pci_dev *pdev = coredev->pdev;
+ 
++#ifdef HAVE_DEVICE_DMA_OPS
+ 	dev->dma_ops = &mlx5_sf_dma_ops;
++#else
++#ifdef HAVE_SET_DMA_OPS
++	set_dma_ops(dev, &mlx5_sf_dma_ops);
++#else
++	dev->archdata.dma_ops = &mlx5_sf_dma_ops;
++#endif
++#endif
+ 	dev->dma_mask = pdev->dev.dma_mask;
+ 	dev->dma_parms = pdev->dev.dma_parms;
+ 	dma_set_coherent_mask(dev, pdev->dev.coherent_dma_mask);
+@@ -547,6 +619,7 @@ int mlx5_sf_get_mac(struct mlx5_sf *sf,
+ 	return ret;
+ }
+ 
++#ifdef CONFIG_MLX5_ESWITCH
+ struct net_device *mlx5_sf_get_netdev(struct mlx5_sf *sf)
+ {
+ 	struct mlx5_core_dev *parent_dev = sf->parent_dev;
+@@ -565,6 +638,7 @@ struct net_device *mlx5_sf_get_netdev(st
+ 	dev_hold(ndev);
+ 	return ndev;
+ }
++#endif
+ 
+ static int mlx5_cmd_set_sf_partitions(struct mlx5_core_dev *mdev, int n,
+ 				      u8 *parts)

@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib.h
+
+Change-Id: I26060b1cb7ac31a9befb67e583835a2e18819cf2
+---
+ drivers/infiniband/ulp/ipoib/ipoib.h | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib.h
++++ b/drivers/infiniband/ulp/ipoib/ipoib.h
+@@ -42,6 +42,7 @@
+ #include <linux/kref.h>
+ #include <linux/if_infiniband.h>
+ #include <linux/mutex.h>
++#include <linux/ratelimit.h>
+ 
+ #include <net/neighbour.h>
+ #include <net/sch_generic.h>
+@@ -52,6 +53,9 @@
+ #include <rdma/ib_pack.h>
+ #include <rdma/ib_sa.h>
+ #include <linux/sched.h>
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++#include <linux/inet_lro.h>
++#endif
+ /* constants */
+ 
+ enum ipoib_flush_level {
+@@ -117,8 +121,19 @@ enum {
+ 	IPOIB_NON_CHILD		  = 0,
+ 	IPOIB_LEGACY_CHILD	  = 1,
+ 	IPOIB_RTNL_CHILD	  = 2,
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	IPOIB_MAX_LRO_DESCRIPTORS = 8,
++	IPOIB_LRO_MAX_AGGR      = 64,
++#endif
+ };
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++struct ipoib_lro {
++	struct net_lro_mgr lro_mgr;
++	struct net_lro_desc lro_desc[IPOIB_MAX_LRO_DESCRIPTORS];
++};
++#endif
++
+ #define	IPOIB_OP_RECV   (1ul << 31)
+ #ifdef CONFIG_INFINIBAND_IPOIB_CM
+ #define	IPOIB_OP_CM     (1ul << 30)
+@@ -429,6 +444,12 @@ struct ipoib_dev_priv {
+ 	unsigned int max_send_sge;
+ 	bool sm_fullmember_sendonly_support;
+ 	const struct net_device_ops	*rn_ops;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct ipoib_lro lro;
++#endif
++#ifndef HAVE_NDO_GET_STATS64
++	struct net_device_stats ret_stats;
++#endif
+ };
+ 
+ struct ipoib_ah {
+@@ -867,5 +888,6 @@ extern int ipoib_debug_level;
+ #endif /* CONFIG_INFINIBAND_IPOIB_DEBUG_DATA */
+ 
+ #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
++extern int ipoib_enhanced_enabled;
+ 
+ #endif /* _IPOIB_H */

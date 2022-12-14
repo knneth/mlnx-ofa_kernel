@@ -1,4 +1,4 @@
-#if !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC))
+#if !(IS_ENABLED(CONFIG_XZ_DEC))
 
 /*
  * LZMA2 decoder
@@ -1176,4 +1176,4 @@ XZ_EXTERN void xz_dec_lzma2_end(struct xz_dec_lzma2 *s)
 	kfree(s);
 }
 
-#endif /* !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)) */
+#endif /* !(IS_ENABLED(CONFIG_XZ_DEC)) */

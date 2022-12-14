@@ -6,16 +6,21 @@
 #include_next <net/pkt_cls.h>
 #include <net/tc_act/tc_tunnel_key.h>
 
+#if !IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
+#define FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS_E2E 0xFFFFFFFF
+#endif
+
 #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
 #define HAVE_FLOWER_MULTI_MASK 1
 #include <uapi/linux/pkt_cls.h>
-
 
 #if !defined(CONFIG_NET_SCHED_NEW) && !defined(CONFIG_COMPAT_KERNEL_4_14)
 enum tc_fl_command {
 	TC_CLSFLOWER_REPLACE,
 	TC_CLSFLOWER_DESTROY,
 	TC_CLSFLOWER_STATS,
+	TC_CLSFLOWER_TMPLT_CREATE,
+	TC_CLSFLOWER_TMPLT_DESTROY,
 };
 
 struct tc_cls_flower_offload {
@@ -141,6 +146,8 @@ enum tc_fl_command {
 	TC_CLSFLOWER_REPLACE,
 	TC_CLSFLOWER_DESTROY,
 	TC_CLSFLOWER_STATS,
+	TC_CLSFLOWER_TMPLT_CREATE,
+	TC_CLSFLOWER_TMPLT_DESTROY,
 };
 
 struct tc_cls_flower_offload {

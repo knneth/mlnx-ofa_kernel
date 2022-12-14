@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 # Retpoline support: check if this is the right architecture and that
 # the kernel does not support it already.
 # Alternatively, if we are called from the main mlnx-ofa build system,

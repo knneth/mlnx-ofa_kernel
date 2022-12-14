@@ -42,6 +42,20 @@
 #include "en_accel/ipsec_rxtx.h"
 #include "en_accel/ipsec_fs.h"
 #include "eswitch.h"
+#include "en/aso.h"
+#include "../esw/ipsec.h"
+
+#ifndef XFRM_OFFLOAD_FULL
+#define XFRM_OFFLOAD_FULL 4
+#endif
+
+struct mlx5e_ipsec_async_work {
+	struct delayed_work dwork;
+	struct mlx5e_priv *priv;
+	u32 obj_id;
+};
+
+static void _mlx5e_ipsec_async_event(struct work_struct *work);
 
 static struct mlx5e_ipsec_sa_entry *to_ipsec_sa_entry(struct xfrm_state *x)
 {
@@ -97,6 +111,7 @@ int mlx5e_ipsec_sadb_rx_lookup_rev(struct mlx5e_ipsec *ipsec,
 				   struct ethtool_rx_flow_spec *fs, u32 *handle)
 {
 	struct mlx5e_ipsec_sa_entry *sa_entry;
+	int ret = -ENOENT;
 	unsigned int temp;
 
 	if (((fs->flow_type & ~(FLOW_EXT | FLOW_MAC_EXT)) != ESP_V4_FLOW) &&
@@ -107,15 +122,17 @@ int mlx5e_ipsec_sadb_rx_lookup_rev(struct mlx5e_ipsec *ipsec,
 	hash_for_each_rcu(ipsec->sadb_rx, temp, sa_entry, hlist)
 		if (mlx5e_ipsec_sa_fs_equal(sa_entry, fs)) {
 			*handle = sa_entry->handle;
-			return 0;
+			ret = 0;
+			break;
 		}
 	rcu_read_unlock();
 
-	return -ENOENT;
+	return ret;
 }
 
-static int mlx5e_ipsec_sadb_rx_add(struct mlx5e_ipsec_sa_entry *sa_entry,
-				   unsigned int handle)
+
+static int  mlx5e_ipsec_sadb_rx_add(struct mlx5e_ipsec_sa_entry *sa_entry,
+				    unsigned int handle)
 {
 	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
 	struct mlx5e_ipsec_sa_entry *_sa_entry;
@@ -128,6 +145,7 @@ static int mlx5e_ipsec_sadb_rx_add(struct mlx5e_ipsec_sa_entry *sa_entry,
 			return  -EEXIST;
 		}
 	rcu_read_unlock();
+
 	spin_lock_irqsave(&ipsec->sadb_rx_lock, flags);
 	sa_entry->handle = handle;
 	hash_add_rcu(ipsec->sadb_rx, &sa_entry->hlist, sa_entry->handle);
@@ -144,6 +162,57 @@ static void mlx5e_ipsec_sadb_rx_del(struct mlx5e_ipsec_sa_entry *sa_entry)
 	spin_lock_irqsave(&ipsec->sadb_rx_lock, flags);
 	hash_del_rcu(&sa_entry->hlist);
 	spin_unlock_irqrestore(&ipsec->sadb_rx_lock, flags);
+}
+
+struct xfrm_state *mlx5e_ipsec_sadb_tx_lookup(struct mlx5e_ipsec *ipsec,
+					      unsigned int handle)
+{
+	struct mlx5e_ipsec_sa_entry *sa_entry;
+	struct xfrm_state *ret = NULL;
+
+	rcu_read_lock();
+	hash_for_each_possible_rcu(ipsec->sadb_tx, sa_entry, hlist, handle)
+		if (sa_entry->handle == handle) {
+			ret = sa_entry->x;
+			xfrm_state_hold(ret);
+			break;
+		}
+	rcu_read_unlock();
+
+	return ret;
+}
+
+static int  mlx5e_ipsec_sadb_tx_add(struct mlx5e_ipsec_sa_entry *sa_entry,
+				    unsigned int handle)
+{
+	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
+	struct mlx5e_ipsec_sa_entry *_sa_entry;
+	unsigned long flags;
+
+	rcu_read_lock();
+	hash_for_each_possible_rcu(ipsec->sadb_tx, _sa_entry, hlist, handle)
+		if (_sa_entry->handle == handle) {
+			rcu_read_unlock();
+			return  -EEXIST;
+		}
+	rcu_read_unlock();
+
+	spin_lock_irqsave(&ipsec->sadb_tx_lock, flags);
+	sa_entry->handle = handle;
+	hash_add_rcu(ipsec->sadb_tx, &sa_entry->hlist, sa_entry->handle);
+	spin_unlock_irqrestore(&ipsec->sadb_tx_lock, flags);
+
+	return 0;
+}
+
+static void mlx5e_ipsec_sadb_tx_del(struct mlx5e_ipsec_sa_entry *sa_entry)
+{
+	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
+	unsigned long flags;
+
+	spin_lock_irqsave(&ipsec->sadb_tx_lock, flags);
+	hash_del_rcu(&sa_entry->hlist);
+	spin_unlock_irqrestore(&ipsec->sadb_tx_lock, flags);
 }
 
 static bool mlx5e_ipsec_update_esn_state(struct mlx5e_ipsec_sa_entry *sa_entry)
@@ -183,6 +252,78 @@ static bool mlx5e_ipsec_update_esn_state(struct mlx5e_ipsec_sa_entry *sa_entry)
 }
 
 static void
+initialize_lifetime_limit(struct mlx5e_ipsec_sa_entry *sa_entry,
+			  struct mlx5_accel_esp_xfrm_attrs *attrs)
+{
+	struct mlx5e_ipsec_state_lft *lft = &sa_entry->lft;
+	struct xfrm_state *x = sa_entry->x;
+	u64 soft_limit, hard_limit;
+	struct net_device *netdev;
+	struct mlx5e_priv *priv;
+
+	netdev = x->xso.dev;
+	priv = netdev_priv(netdev);
+
+	if (MLX5_CAP_GEN(priv->mdev, fpga))
+		return;
+
+	hard_limit = x->lft.hard_packet_limit;
+	soft_limit = (x->lft.soft_packet_limit == IPSEC_NO_LIMIT)
+			? 0 : x->lft.soft_packet_limit;
+	if (!(x->xso.flags & XFRM_OFFLOAD_FULL) ||
+	    (hard_limit <= soft_limit) ||
+	    (hard_limit == IPSEC_NO_LIMIT)) {
+		attrs->soft_packet_limit = IPSEC_NO_LIMIT;
+		attrs->hard_packet_limit = IPSEC_NO_LIMIT;
+
+		if ((hard_limit <= soft_limit) && hard_limit)
+			netdev_warn(priv->netdev,
+				    "hard limit=%lld must be bigger than soft limit=%lld\n",
+				    hard_limit, soft_limit);
+		return;
+	}
+
+	/* We have three possible scenarios:
+	 * 1: soft and hard less than 32 bit
+	 * 2: soft less than 32 bit, hard greater than 32 bit
+	 * 3: soft and hard greater than 32 bit
+	 */
+	if (hard_limit < IPSEC_HW_LIMIT) {
+		/* Case 1: we have one round of hard and one round of soft */
+		lft->round_hard = 1;
+		lft->round_soft = soft_limit ? 1 : 0;
+		lft->is_simulated = false;
+
+		/* xfrm user set soft limit is 2 and hard limit is 9 meaning u raise soft event
+		 * after 2 packet and hard event after 9 packets. It means for hard limit you
+		 * set counter to 9. For soft limit you have to set the comparator to 7 so that
+		 * you get the soft event after 2 packet
+		 */
+		attrs->soft_packet_limit = soft_limit ? hard_limit - soft_limit : 0;;
+		attrs->hard_packet_limit = hard_limit;
+		return;
+	}
+
+	/* Case 2 and 3:
+	 * Each interrupt (round) counts 2^31 packets. How it works is:
+	 *   Soft limit (comparator) is set 2^31. At soft event, counter is < 2^31
+	 *   and counter's bit(31) is set for another round of counting.
+	 * If round hard is not divisible by 2^31, the first round is for counting
+	 * the round hard's modulo of 2^31.
+	 */
+	lft->is_simulated = true;
+
+	/* To distinguish betwen no soft limit and soft limit,
+	 * we notify soft when round_soft == 1. Therefore + 1 to the division result
+	 */
+	lft->round_soft = (soft_limit) ? (soft_limit >> IPSEC_SW_LIMIT_BIT) + 1 : 0;
+	lft->round_hard = hard_limit >> IPSEC_SW_LIMIT_BIT;
+
+	attrs->hard_packet_limit = IPSEC_SW_LIMIT + (hard_limit & IPSEC_SW_MASK);
+	attrs->soft_packet_limit = IPSEC_SW_LIMIT;
+}
+
+static void
 mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 				   struct mlx5_accel_esp_xfrm_attrs *attrs)
 {
@@ -219,6 +360,7 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 		attrs->esn = sa_entry->esn_state.esn;
 		if (sa_entry->esn_state.overlap)
 			attrs->flags |= MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP;
+		attrs->replay_window = x->replay_esn->replay_window;
 	}
 
 	/* rx handle */
@@ -236,26 +378,30 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 			MLX5_ACCEL_ESP_FLAGS_TRANSPORT :
 			MLX5_ACCEL_ESP_FLAGS_TUNNEL;
 
-/* Valid till stack changes accepted */
-#define XFRM_OFFLOAD_FULL 4
 	if (x->xso.flags & XFRM_OFFLOAD_FULL)
 		attrs->flags |= MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD;
 
 	/* spi */
 	attrs->spi = x->id.spi;
 
-	/* source , destination ips */
+	/* source , destination ips and udp dport */
 	memcpy(&attrs->saddr, x->props.saddr.a6, sizeof(attrs->saddr));
 	memcpy(&attrs->daddr, x->id.daddr.a6, sizeof(attrs->daddr));
+	attrs->upspec.dport = ntohs(x->sel.dport);
+	attrs->upspec.dport_mask = ntohs(x->sel.dport_mask);
+	attrs->upspec.proto = x->sel.proto;
 	attrs->is_ipv6 = (x->props.family != AF_INET);
 
 	/* authentication tag length */
 	attrs->aulen = crypto_aead_authsize(aead);
+
+	/* lifetime limit for full offload */
+	initialize_lifetime_limit(sa_entry, attrs);
 }
 
 static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
 {
-	struct net_device *netdev = x->xso.dev;
+	struct net_device *netdev = x->xso.real_dev;
 	struct mlx5_core_dev *mdev;
 	struct mlx5_eswitch *esw;
 	struct mlx5e_priv *priv;
@@ -353,6 +499,18 @@ static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
 			return -EINVAL;
 		}
 	}
+
+	if ((x->xso.flags & XFRM_OFFLOAD_FULL) &&
+	    ((x->lft.hard_byte_limit != XFRM_INF) ||
+	     (x->lft.soft_byte_limit != XFRM_INF))) {
+		netdev_info(netdev, "full offload state does not support:\n\
+				x->lft.hard_byte_limit=0x%llx,\n\
+				x->lft.soft_byte_limit=0x%llx,\n",
+				x->lft.hard_byte_limit,
+				x->lft.soft_byte_limit);
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -380,10 +538,11 @@ static void mlx5e_xfrm_fs_del_rule(struct mlx5e_priv *priv,
 static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 {
 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
-	struct net_device *netdev = x->xso.dev;
+	struct net_device *netdev = x->xso.real_dev;
 	struct mlx5_accel_esp_xfrm_attrs attrs;
 	struct mlx5e_priv *priv;
 	unsigned int sa_handle;
+	u32 pdn;
 	int err;
 
 	priv = netdev_priv(netdev);
@@ -415,9 +574,11 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	}
 
 	/* create hw context */
+	pdn = priv->ipsec->aso ? priv->ipsec->aso->pdn : 0;
 	sa_entry->hw_context =
 			mlx5_accel_esp_create_hw_context(priv->mdev,
 							 sa_entry->xfrm,
+							 pdn,
 							 &sa_handle);
 	if (IS_ERR(sa_entry->hw_context)) {
 		err = PTR_ERR(sa_entry->hw_context);
@@ -429,14 +590,14 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	if (err)
 		goto err_hw_ctx;
 
-	/* Add the SA to handle processed incoming packets before the add SA
-	 * completion was received
-	 */
 	if (x->xso.flags & XFRM_OFFLOAD_INBOUND) {
 		err = mlx5e_ipsec_sadb_rx_add(sa_entry, sa_handle);
 		if (err)
 			goto err_add_rule;
 	} else {
+		err = mlx5e_ipsec_sadb_tx_add(sa_entry, sa_handle);
+		if (err)
+			goto err_add_rule;
 		sa_entry->set_iv_op = (x->props.flags & XFRM_STATE_ESN) ?
 				mlx5e_ipsec_set_iv_esn : mlx5e_ipsec_set_iv;
 	}
@@ -466,6 +627,8 @@ static void mlx5e_xfrm_del_state(struct xfrm_state *x)
 
 	if (x->xso.flags & XFRM_OFFLOAD_INBOUND)
 		mlx5e_ipsec_sadb_rx_del(sa_entry);
+	else
+		mlx5e_ipsec_sadb_tx_del(sa_entry);
 }
 
 static void mlx5e_xfrm_free_state(struct xfrm_state *x)
@@ -489,6 +652,7 @@ static void mlx5e_xfrm_free_state(struct xfrm_state *x)
 int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 {
 	struct mlx5e_ipsec *ipsec = NULL;
+	int err;
 
 	if (!MLX5_IPSEC_DEV(priv->mdev)) {
 		netdev_dbg(priv->netdev, "Not an IPSec offload device\n");
@@ -501,6 +665,8 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 
 	hash_init(ipsec->sadb_rx);
 	spin_lock_init(&ipsec->sadb_rx_lock);
+	hash_init(ipsec->sadb_tx);
+	spin_lock_init(&ipsec->sadb_tx_lock);
 	ida_init(&ipsec->halloc);
 	ipsec->en_priv = priv;
 	ipsec->en_priv->ipsec = ipsec;
@@ -509,13 +675,26 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 	ipsec->wq = alloc_ordered_workqueue("mlx5e_ipsec: %s", 0,
 					    priv->netdev->name);
 	if (!ipsec->wq) {
-		kfree(ipsec);
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto out_wq;
 	}
 
-	mlx5e_accel_ipsec_fs_init(priv);
+	err = mlx5e_accel_ipsec_fs_init(priv);
+	if (err)
+		goto out_fs;
+
+	if (mlx5_is_ipsec_full_offload(priv))
+		mlx5e_aso_setup(priv);
+
 	netdev_dbg(priv->netdev, "IPSec attached to netdevice\n");
 	return 0;
+
+out_fs:
+	destroy_workqueue(ipsec->wq);
+out_wq:
+	ida_destroy(&ipsec->halloc);
+	kfree(ipsec);
+	return err;
 }
 
 void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
@@ -525,10 +704,11 @@ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
 	if (!ipsec)
 		return;
 
-	mlx5e_accel_ipsec_fs_cleanup(priv);
-	drain_workqueue(ipsec->wq);
-	destroy_workqueue(ipsec->wq);
+	if (mlx5_is_ipsec_full_offload(priv))
+		mlx5e_aso_cleanup(priv);
 
+	mlx5e_accel_ipsec_fs_cleanup(priv);
+	destroy_workqueue(ipsec->wq);
 	ida_destroy(&ipsec->halloc);
 	kfree(ipsec);
 	priv->ipsec = NULL;
@@ -640,4 +820,139 @@ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)
 	netdev->features |= NETIF_F_GSO_ESP;
 	netdev->hw_features |= NETIF_F_GSO_ESP;
 	netdev->hw_enc_features |= NETIF_F_GSO_ESP;
+}
+
+static void update_esn_full_offload(struct mlx5e_priv *priv,
+				    struct mlx5e_ipsec_sa_entry *sa_entry,
+				    u32 obj_id, u32 mode_param)
+{
+	struct mlx5_accel_esp_xfrm_attrs attrs = {};
+
+	if (mode_param < MLX5E_IPSEC_ESN_SCOPE_MID) {
+		sa_entry->esn_state.esn++;
+		sa_entry->esn_state.overlap = 0;
+	} else {
+		sa_entry->esn_state.overlap = 1;
+	}
+
+	mlx5e_ipsec_build_accel_xfrm_attrs(sa_entry, &attrs);
+	mlx5_accel_esp_modify_xfrm(sa_entry->xfrm, &attrs);
+	mlx5e_ipsec_aso_set(priv, obj_id, ARM_ESN_EVENT, 0, NULL, NULL, NULL, NULL);
+}
+
+static void _mlx5e_ipsec_async_event(struct work_struct *work)
+{
+	struct mlx5e_ipsec_async_work *async_work;
+	struct mlx5e_ipsec_sa_entry *sa_entry;
+	struct mlx5e_ipsec_state_lft *lft;
+	u32 hard_cnt, soft_cnt, old_cnt;
+	struct delayed_work *dwork;
+	struct mlx5e_priv *priv;
+	struct xfrm_state *xs;
+	u32 mode_param;
+	u8 event_arm;
+	u32 obj_id;
+	int err;
+
+	/* Look up xfrm_state from obj_id */
+	dwork = to_delayed_work(work);
+	async_work = container_of(dwork, struct mlx5e_ipsec_async_work, dwork);
+	priv = async_work->priv;
+	obj_id = async_work->obj_id;
+
+	xs = mlx5e_ipsec_sadb_tx_lookup(priv->ipsec, obj_id);
+	if (!xs) {
+		xs = mlx5e_ipsec_sadb_rx_lookup(priv->ipsec, obj_id);
+		if (!xs)
+			goto out_async_work;
+	}
+
+	sa_entry = to_ipsec_sa_entry(xs);
+	if (!sa_entry)
+		goto out_xs_state;
+
+	lft = &sa_entry->lft;
+
+	/* Query IPsec ASO context */
+	if (mlx5e_ipsec_aso_query(priv, obj_id, &hard_cnt, &soft_cnt, &event_arm, &mode_param))
+		goto out_xs_state;
+
+	/* Check ESN event */
+	if (sa_entry->esn_state.trigger && !(event_arm & MLX5_ASO_ESN_ARM))
+		update_esn_full_offload(priv, sa_entry, obj_id, mode_param);
+
+	/* Check life time event */
+	if (hard_cnt > soft_cnt ||
+	    (!hard_cnt && !(event_arm & MLX5_ASO_REMOVE_FLOW_ENABLE)))
+		goto out_xs_state;
+
+	/* Life time event */
+	if (!hard_cnt) { /* Notify hard lifetime to xfrm stack */
+		goto out_xs_state;
+	}
+
+	/* 0: no more soft
+	 * 1: notify soft
+	 */
+	if (lft->round_soft) {
+		lft->round_soft--;
+	}
+
+	if (!lft->is_simulated) /* hard_limit < IPSEC_HW_LIMIT */
+		goto out_xs_state;
+
+	/* Simulated case */
+	if (hard_cnt < IPSEC_SW_LIMIT) {
+		lft->round_hard--;
+		if (!lft->round_hard) /* already in last round, no need to set bit(31) */
+			goto out_xs_state;
+	}
+
+	/* Update ASO context */
+	old_cnt = hard_cnt;
+
+	if (soft_cnt != IPSEC_SW_LIMIT)
+		err = mlx5e_ipsec_aso_set(priv, obj_id,
+					  SET_SOFT | ARM_SOFT | SET_CNT_BIT31,
+					  IPSEC_SW_LIMIT, &hard_cnt, &soft_cnt, NULL, NULL);
+	else
+		err = mlx5e_ipsec_aso_set(priv, obj_id,
+					  ARM_SOFT | SET_CNT_BIT31,
+					  0, &hard_cnt, &soft_cnt, NULL, NULL);
+
+	/* when soft_cnt == IPSEC_SW_LIMIT, soft event can happen
+	 *   case 1: hard_cnt goes down from IPSEC_SW_LIMIT to IPSEC_SW_LIMIT - 1. In this case,
+	 *   we need one extra round of soft event.
+	 *   case 2: hard_count goes down from (IPSEC_SW_LIMIT + a) to IPSEC_SW_LIMIT
+	 */
+	if (old_cnt == IPSEC_SW_LIMIT) {
+		if (hard_cnt > old_cnt)
+			lft->round_hard--;
+		else if (lft->round_soft)
+			lft->round_soft++;
+	}
+
+out_xs_state:
+	xfrm_state_put(xs);
+
+out_async_work:
+	kfree(async_work);
+}
+
+int mlx5e_ipsec_async_event(struct mlx5e_priv *priv, u32 obj_id)
+{
+	struct mlx5e_ipsec_async_work *async_work;
+
+	async_work = kzalloc(sizeof(*async_work), GFP_ATOMIC);
+	if (!async_work)
+		return NOTIFY_DONE;
+
+	async_work->priv = priv;
+	async_work->obj_id = obj_id;
+
+	INIT_DELAYED_WORK(&async_work->dwork, _mlx5e_ipsec_async_event);
+
+	WARN_ON(!queue_delayed_work(priv->ipsec->wq, &async_work->dwork, 0));
+
+	return NOTIFY_OK;
 }

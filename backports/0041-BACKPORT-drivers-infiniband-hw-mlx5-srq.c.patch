@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/srq.c
+
+Change-Id: I685a9b7e98dd229a1fbff1222a2883dc0dcc6180
+---
+ drivers/infiniband/hw/mlx5/srq.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/srq.c
++++ b/drivers/infiniband/hw/mlx5/srq.c
+@@ -80,7 +80,11 @@ static int create_srq_user(struct ib_pd
+ 
+ 	srq->wq_sig = !!(ucmd.flags & MLX5_SRQ_FLAG_SIGNATURE);
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	srq->umem = ib_umem_get_peer(pd->device, ucmd.buf_addr, buf_size, 0, 0);
++#else
++	srq->umem = ib_umem_get_peer(udata, ucmd.buf_addr, buf_size, 0, 0);
++#endif
+ 	if (IS_ERR(srq->umem)) {
+ 		mlx5_ib_dbg(dev, "failed umem get, size %d\n", buf_size);
+ 		err = PTR_ERR(srq->umem);

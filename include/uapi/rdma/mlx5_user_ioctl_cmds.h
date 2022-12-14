@@ -143,6 +143,23 @@ enum mlx5_ib_var_obj_methods {
 	MLX5_IB_METHOD_VAR_OBJ_DESTROY,
 };
 
+enum mlx5_ib_uar_alloc_attrs {
+	MLX5_IB_ATTR_UAR_OBJ_ALLOC_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+	MLX5_IB_ATTR_UAR_OBJ_ALLOC_TYPE,
+	MLX5_IB_ATTR_UAR_OBJ_ALLOC_MMAP_OFFSET,
+	MLX5_IB_ATTR_UAR_OBJ_ALLOC_MMAP_LENGTH,
+	MLX5_IB_ATTR_UAR_OBJ_ALLOC_PAGE_ID,
+};
+
+enum mlx5_ib_uar_obj_destroy_attrs {
+	MLX5_IB_ATTR_UAR_OBJ_DESTROY_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+};
+
+enum mlx5_ib_uar_obj_methods {
+	MLX5_IB_METHOD_UAR_OBJ_ALLOC = (1U << UVERBS_ID_NS_SHIFT),
+	MLX5_IB_METHOD_UAR_OBJ_DESTROY,
+};
+
 enum mlx5_ib_devx_umem_reg_attrs {
 	MLX5_IB_ATTR_DEVX_UMEM_REG_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_ATTR_DEVX_UMEM_REG_ADDR,
@@ -202,6 +219,7 @@ enum mlx5_ib_objects {
 	MLX5_IB_OBJECT_DEVX_ASYNC_EVENT_FD,
 	MLX5_IB_OBJECT_VAR,
 	MLX5_IB_OBJECT_PP,
+	MLX5_IB_OBJECT_UAR,
 };
 
 enum mlx5_ib_flow_matcher_create_attrs {
@@ -220,6 +238,10 @@ enum mlx5_ib_flow_matcher_destroy_attrs {
 enum mlx5_ib_flow_matcher_methods {
 	MLX5_IB_METHOD_FLOW_MATCHER_CREATE = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_METHOD_FLOW_MATCHER_DESTROY,
+};
+
+enum mlx5_ib_device_query_context_attrs {
+	MLX5_IB_ATTR_QUERY_CONTEXT_RESP_UCTX = (1U << UVERBS_ID_NS_SHIFT),
 };
 
 #define MLX5_IB_DW_MATCH_PARAM 0x80
@@ -253,7 +275,7 @@ enum mlx5_ib_create_flow_attrs {
 	MLX5_IB_ATTR_CREATE_FLOW_FLAGS,
 };
 
-enum mlx5_ib_destoy_flow_attrs {
+enum mlx5_ib_destroy_flow_attrs {
 	MLX5_IB_ATTR_DESTROY_FLOW_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
 };
 
@@ -278,6 +300,16 @@ enum mlx5_ib_create_flow_action_create_packet_reformat_attrs {
 	MLX5_IB_ATTR_CREATE_PACKET_REFORMAT_TYPE,
 	MLX5_IB_ATTR_CREATE_PACKET_REFORMAT_FT_TYPE,
 	MLX5_IB_ATTR_CREATE_PACKET_REFORMAT_DATA_BUF,
+};
+
+enum mlx5_ib_query_pd_attrs {
+	MLX5_IB_ATTR_QUERY_PD_HANDLE = (1U << UVERBS_ID_NS_SHIFT),
+	MLX5_IB_ATTR_QUERY_PD_RESP_PDN,
+};
+
+enum mlx5_ib_pd_methods {
+	MLX5_IB_METHOD_PD_QUERY = (1U << UVERBS_ID_NS_SHIFT),
+
 };
 
 #endif

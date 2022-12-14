@@ -135,6 +135,74 @@ static int mlx5_meddev_remove(struct mdev_device *meddev)
 }
 
 static ssize_t
+roce_disable_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	bool val;
+	int ret;
+
+	ret = mlx5_sf_hca_cap_roce_get(sf, &val);
+	if (ret)
+		return ret;
+
+	return sprintf(buf, "%d\n", val);
+}
+
+static ssize_t
+roce_disable_store(struct device *dev, struct device_attribute *attr,
+		   const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	int ret;
+	bool val;
+
+	ret = kstrtobool(buf, &val);
+	if (ret)
+		return -EINVAL;
+
+	ret = mlx5_sf_hca_cap_roce_set(sf, val);
+	return ret ? ret : len;
+}
+static DEVICE_ATTR_RW(roce_disable);
+
+static ssize_t
+uc_list_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	u32 val;
+	int ret;
+
+	ret = mlx5_sf_hca_cap_uc_list_get(sf, &val);
+	if (ret)
+		return ret;
+
+	return sprintf(buf, "%u\n", val);
+}
+
+static ssize_t
+uc_list_store(struct device *dev, struct device_attribute *attr,
+	      const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	u32 val;
+	int ret;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	if (val > 32)
+		return -EINVAL;
+
+	ret = mlx5_sf_hca_cap_uc_list_set(sf, val);
+	return ret ? ret : len;
+}
+static DEVICE_ATTR_RW(uc_list);
+
+static ssize_t
 mac_addr_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct mdev_device *meddev = mdev_from_dev(dev);
@@ -192,9 +260,41 @@ netdev_show(struct device *dev, struct device_attribute *attr, char *buf)
 }
 static DEVICE_ATTR_RO(netdev);
 
+static ssize_t
+disable_en_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+
+	return sprintf(buf, "%d\n", !!sf->disable_en);
+}
+
+static ssize_t
+disable_en_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t len)
+{
+	struct mdev_device *meddev = mdev_from_dev(dev);
+	struct mlx5_sf *sf = mdev_get_drvdata(meddev);
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	if (val < 0 && val > 1)
+		return -EINVAL;
+
+	sf->disable_en = val;
+
+	return len;
+}
+static DEVICE_ATTR_RW(disable_en);
+
 static struct attribute *mlx5_meddev_dev_attrs[] = {
 	&dev_attr_mac_addr.attr,
 	&dev_attr_netdev.attr,
+	&dev_attr_disable_en.attr,
+	&dev_attr_roce_disable.attr,
+	&dev_attr_uc_list.attr,
 	NULL,
 };
 

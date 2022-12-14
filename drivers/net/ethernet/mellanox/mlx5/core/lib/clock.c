@@ -67,6 +67,8 @@ enum {
 	MLX5_MTPPS_FS_TIME_STAMP		= BIT(0x4),
 	MLX5_MTPPS_FS_OUT_PULSE_DURATION	= BIT(0x5),
 	MLX5_MTPPS_FS_ENH_OUT_PER_ADJ		= BIT(0x7),
+	MLX5_MTPPS_FS_NPPS_PERIOD               = BIT(0x9),
+	MLX5_MTPPS_FS_OUT_PULSE_DURATION_NS     = BIT(0xa),
 };
 
 enum {
@@ -490,6 +492,64 @@ static u64 perout_conf_real_time(s64 sec, u32 nsec)
 	return (u64)nsec | (u64)sec << 32;
 }
 
+static int
+perout_conf_no_npps(struct mlx5_core_dev *mdev, struct ptp_clock_request *rq,
+		    u32 *field_select, u64 *time_stamp, bool real_time)
+{
+	struct ptp_clock_time *start;
+	struct timespec64 ts;
+	s64 ns;
+
+	ts.tv_nsec = rq->perout.period.nsec;
+	ts.tv_sec = rq->perout.period.sec;
+	ns = timespec64_to_ns(&ts);
+
+	if ((ns >> 1) != 500000000LL)
+		return -EINVAL;
+
+	start = &rq->perout.start;
+
+	*time_stamp = real_time ?
+		      perout_conf_real_time(start->sec, start->nsec) :
+		      perout_conf_internal_timer(mdev, start->sec, start->nsec);
+	*field_select |= MLX5_MTPPS_FS_TIME_STAMP;
+
+	return 0;
+}
+
+static int
+perout_conf_npps_real_time(struct ptp_clock_request *rq, u32 *field_select,
+			   u32 *out_pulse_duration_ns, u64 *npps_period,
+			   u64 *time_stamp)
+{
+	u32 tmp_out_pulse_duration_ns;
+	struct timespec64 ts;
+	u64 npps_ns;
+
+	/* out_pulse_duration_ns should be up to 10% of the pulse period */
+	ts.tv_sec = rq->perout.period.sec;
+	ts.tv_nsec = rq->perout.period.nsec;
+	npps_ns = timespec64_to_ns(&ts);
+	tmp_out_pulse_duration_ns = npps_ns;
+	do_div(tmp_out_pulse_duration_ns, 10);
+
+	/* out_pulse_duration_ns is 30b, and greater than zero */
+	tmp_out_pulse_duration_ns &= 0x3fffffff;
+	if (!tmp_out_pulse_duration_ns)
+		tmp_out_pulse_duration_ns = 1;
+
+	*time_stamp = perout_conf_real_time(rq->perout.start.sec,
+					    rq->perout.start.nsec);
+	*npps_period = perout_conf_real_time(rq->perout.period.sec,
+					     rq->perout.period.nsec);
+	*out_pulse_duration_ns = tmp_out_pulse_duration_ns;
+	*field_select |= MLX5_MTPPS_FS_TIME_STAMP |
+			 MLX5_MTPPS_FS_NPPS_PERIOD |
+			 MLX5_MTPPS_FS_OUT_PULSE_DURATION_NS;
+
+	return 0;
+}
+
 static int mlx5_perout_configure(struct ptp_clock_info *ptp,
 				 struct ptp_clock_request *rq,
 				 int on)
@@ -499,14 +559,14 @@ static int mlx5_perout_configure(struct ptp_clock_info *ptp,
 	struct mlx5_core_dev *mdev =
 			container_of(clock, struct mlx5_core_dev, clock);
 	u32 in[MLX5_ST_SZ_DW(mtpps_reg)] = {0};
-	struct timespec64 ts;
+	u32 out_pulse_duration_ns = 0;
 	u32 field_select = 0;
+	u64 npps_period = 0;
 	u64 time_stamp = 0;
 	u8 pin_mode = 0;
 	u8 pattern = 0;
 	int pin = -1;
 	int err = 0;
-	s64 ns;
 
 	if (!MLX5_PPS_CAP(mdev))
 		return -EOPNOTSUPP;
@@ -523,35 +583,27 @@ static int mlx5_perout_configure(struct ptp_clock_info *ptp,
 	if (pin < 0)
 		return -EBUSY;
 
-	if (on) {
-		u32 nsec;
-		s64 sec;
+	field_select = MLX5_MTPPS_FS_ENABLE;
 
+	if (on) {
 		pin_mode = MLX5_PIN_MODE_OUT;
 		pattern = MLX5_OUT_PATTERN_PERIODIC;
-		ts.tv_sec = rq->perout.period.sec;
-		ts.tv_nsec = rq->perout.period.nsec;
-		ns = timespec64_to_ns(&ts);
+		field_select |= MLX5_MTPPS_FS_PIN_MODE |
+				MLX5_MTPPS_FS_PATTERN;
 
-		if ((ns >> 1) != 500000000LL)
+		if (REAL_TIME_MODE(clock) && rq->perout.start.sec > U32_MAX)
 			return -EINVAL;
 
-		nsec = rq->perout.start.nsec;
-		sec = rq->perout.start.sec;
-
-		if (REAL_TIME_MODE(clock) && sec > U32_MAX)
-			return -EINVAL;
-
-		time_stamp = REAL_TIME_MODE(clock) ?
-			     perout_conf_real_time(sec, nsec) :
-			     perout_conf_internal_timer(mdev, sec, nsec);
-
-		field_select = MLX5_MTPPS_FS_PIN_MODE |
-			       MLX5_MTPPS_FS_PATTERN |
-			       MLX5_MTPPS_FS_ENABLE |
-			       MLX5_MTPPS_FS_TIME_STAMP;
-	} else {
-		field_select = MLX5_MTPPS_FS_ENABLE;
+		if (REAL_TIME_MODE(clock) &&
+		    MLX5_CAP_MCAM_FEATURE(mdev, npps_period) &&
+		    MLX5_CAP_MCAM_FEATURE(mdev, out_pulse_duration_ns))
+			err = perout_conf_npps_real_time(rq, &field_select, &out_pulse_duration_ns,
+							 &npps_period, &time_stamp);
+		else
+			err = perout_conf_no_npps(mdev, rq, &field_select, &time_stamp,
+						  REAL_TIME_MODE(clock));
+		if (err)
+			return err;
 	}
 
 	MLX5_SET(mtpps_reg, in, pin, pin);
@@ -560,10 +612,16 @@ static int mlx5_perout_configure(struct ptp_clock_info *ptp,
 	MLX5_SET(mtpps_reg, in, enable, on);
 	MLX5_SET64(mtpps_reg, in, time_stamp, time_stamp);
 	MLX5_SET(mtpps_reg, in, field_select, field_select);
+	MLX5_SET64(mtpps_reg, in, npps_period, npps_period);
+	MLX5_SET(mtpps_reg, in, out_pulse_duration_ns, out_pulse_duration_ns);
 
 	err = mlx5_set_mtpps(mdev, in, sizeof(in));
 	if (err)
 		return err;
+
+	/* When using npps, mtppse configuration can be skipped */
+	if (npps_period)
+		return 0;
 
 	return mlx5_set_mtppse(mdev, pin, 0,
 			       MLX5_EVENT_MODE_REPETETIVE & on);
@@ -641,23 +699,6 @@ static const struct ptp_clock_info mlx5_ptp_clock_info = {
 	.verify		= NULL,
 };
 
-static const struct ptp_clock_info mlx5_ptp_real_time_clock_info = {
-	.owner		= THIS_MODULE,
-	.name		= "mlx5_ptp_rt",
-	.max_adj	= 100000000,
-	.n_alarm	= 0,
-	.n_ext_ts	= 0,
-	.n_per_out	= 0,
-	.n_pins		= 0,
-	.pps		= 0,
-	.adjfine	= mlx5_ptp_real_time_adjfine,
-	.adjtime	= mlx5_ptp_real_time_adjtime,
-	.gettimex64	= mlx5_ptp_real_time_gettimex64,
-	.settime64	= mlx5_ptp_real_time_settime,
-	.enable		= NULL,
-	.verify		= NULL,
-};
-
 static int mlx5_query_mtpps_pin_mode(struct mlx5_core_dev *mdev, u8 pin,
 				     u32 *mtpps, u32 mtpps_size)
 {
@@ -689,6 +730,23 @@ static int mlx5_get_pps_pin_mode(struct mlx5_clock *clock, u8 pin)
 
 	return PTP_PF_NONE;
 }
+
+static const struct ptp_clock_info mlx5_ptp_real_time_clock_info = {
+	.owner		= THIS_MODULE,
+	.name		= "mlx5_ptp_rt",
+	.max_adj	= 100000000,
+	.n_alarm	= 0,
+	.n_ext_ts	= 0,
+	.n_per_out	= 0,
+	.n_pins		= 0,
+	.pps		= 0,
+	.adjfine	= mlx5_ptp_real_time_adjfine,
+	.adjtime	= mlx5_ptp_real_time_adjtime,
+	.gettimex64	= mlx5_ptp_real_time_gettimex64,
+	.settime64	= mlx5_ptp_real_time_settime,
+	.enable		= NULL,
+	.verify		= NULL,
+};
 
 static int mlx5_init_pin_config(struct mlx5_clock *clock)
 {
@@ -765,7 +823,7 @@ static u64 pps_perout_real_time(struct mlx5_clock *clock)
 	mlx5_ptp_real_time_gettimex64(&clock->ptp_info, &ts, NULL);
 	ts_next_sec(&ts);
 
-	return timespec64_to_ns(&ts);
+	return perout_conf_real_time(ts.tv_sec, ts.tv_nsec);
 }
 
 static int mlx5_pps_event(struct notifier_block *nb,

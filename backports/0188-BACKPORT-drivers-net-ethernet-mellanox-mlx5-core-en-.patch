@@ -1,0 +1,57 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+
+Change-Id: Ibbb86cc81195553ade96747f89dd435f9b97893b
+---
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+@@ -4,9 +4,11 @@
+ #include "en_rep.h"
+ #include "en/devlink.h"
+ 
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
+ int mlx5e_devlink_port_register(struct mlx5e_priv *priv)
+ {
+ 	struct devlink *devlink = priv_to_devlink(priv->mdev);
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
+ 	struct devlink_port_attrs attrs = {};
+ 
+ 	if (mlx5_core_is_pf(priv->mdev)) {
+@@ -18,6 +20,28 @@ int mlx5e_devlink_port_register(struct m
+ 
+ 	devlink_port_attrs_set(&priv->dl_port, &attrs);
+ 
++#else
++	if (mlx5_core_is_pf(priv->mdev))
++		devlink_port_attrs_set(&priv->dl_port,
++				DEVLINK_PORT_FLAVOUR_PHYSICAL,
++				PCI_FUNC(priv->mdev->pdev->devfn),
++				false, 0
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++				,NULL, 0);
++#else
++	);
++#endif
++	else
++		devlink_port_attrs_set(&priv->dl_port,
++				DEVLINK_PORT_FLAVOUR_VIRTUAL,
++				0, false , 0
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++				,NULL, 0);
++#else
++	);
++#endif
++
++#endif
+ 	return devlink_port_register(devlink, &priv->dl_port, 1);
+ }
+ 
+@@ -44,3 +68,4 @@ struct devlink_port *mlx5e_get_devlink_p
+ 
+ 	return &priv->dl_port;
+ }
++#endif

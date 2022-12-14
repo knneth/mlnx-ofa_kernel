@@ -80,13 +80,13 @@ struct ib_mad_private {
 	struct ib_mad_private_header header;
 	size_t mad_size;
 	struct ib_grh grh;
-	u8 mad[0];
+	u8 mad[];
 } __packed;
 
 struct ib_rmpp_segment {
 	struct list_head list;
 	u32 num;
-	u8 data[0];
+	u8 data[];
 };
 
 struct ib_mad_agent_private {
@@ -104,12 +104,21 @@ struct ib_mad_agent_private {
 	struct work_struct local_work;
 	struct list_head rmpp_list;
 
-	atomic_t refcount;
+	refcount_t refcount;
 	int send_list_closed;
 	union {
 		struct completion comp;
 		struct rcu_head rcu;
 	};
+};
+
+struct ib_mad_snoop_private {
+	struct ib_mad_agent agent;
+	struct ib_mad_qp_info *qp_info;
+	int snoop_index;
+	int mad_snoop_flags;
+	atomic_t refcount;
+	struct completion comp;
 };
 
 /* Structure for timeout-fifo entry */
@@ -198,6 +207,10 @@ struct ib_mad_qp_info {
 	struct ib_mad_queue send_queue;
 	struct ib_mad_queue recv_queue;
 	struct list_head overflow_list;
+	spinlock_t snoop_lock;
+	struct ib_mad_snoop_private **snoop_table;
+	int snoop_table_size;
+	atomic_t snoop_count;
 };
 
 struct smp_window {

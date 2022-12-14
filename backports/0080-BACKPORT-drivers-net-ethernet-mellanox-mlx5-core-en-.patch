@@ -1,380 +1,64 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
 
-Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
+Change-Id: I8472530f3805ca75d05238609290d66a0e02377f
 ---
- .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 201 +++++++++++++++---
- 1 file changed, 177 insertions(+), 24 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/xsk/rx.h   | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
-@@ -30,9 +30,14 @@
-  * SOFTWARE.
-  */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+@@ -4,11 +4,27 @@
+ #ifndef __MLX5_EN_XSK_RX_H__
+ #define __MLX5_EN_XSK_RX_H__
  
-+#ifdef HAVE_XDP_BUFF
- #include <linux/bpf_trace.h>
-+#ifdef HAVE_NET_PAGE_POOL_H
- #include <net/page_pool.h>
-+#endif
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- #include <net/xdp_sock.h>
-+#endif
- #include "en/xdp.h"
- #include "en/params.h"
- 
-@@ -65,13 +70,17 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
- 	struct xdp_frame *xdpf;
- 	dma_addr_t dma_addr;
- 
-+#ifdef HAVE_XDP_CONVERT_BUFF_TO_FRAME
-+	xdpf = xdp_convert_buff_to_frame(xdp);
++#ifdef HAVE_XSK_SUPPORT
++
+ #include "en.h"
++#ifdef HAVE_NDO_XSK_WAKEUP
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
 +#else
- 	xdpf = convert_to_xdp_frame(xdp);
++#include <net/xdp_sock.h>
 +#endif
- 	if (unlikely(!xdpf))
- 		return false;
++#endif
  
- 	xdptxd.data = xdpf->data;
- 	xdptxd.len  = xdpf->len;
--
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 	if (xdp->rxq->mem.type == MEM_TYPE_ZERO_COPY) {
- 		/* The xdp_buff was in the UMEM and was copied into a newly
- 		 * allocated page. The UMEM page was returned via the ZCA, and
-@@ -97,7 +106,9 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
- 		xdptxd.dma_addr     = dma_addr;
- 		xdpi.frame.xdpf     = xdpf;
- 		xdpi.frame.dma_addr = dma_addr;
--	} else {
-+	} else
+ /* RX data path */
+ 
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count);
++int mlx5e_xsk_page_alloc_umem(struct mlx5e_rq *rq,
++			      struct mlx5e_dma_info *dma_info);
++void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
++			    struct mlx5e_dma_info *dma_info);
++void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle);
 +#endif
-+	{	
- 		/* Driver assumes that convert_to_xdp_frame returns an xdp_frame
- 		 * that points to the same memory region as the original
- 		 * xdp_buff. It allows to map the memory only once and to use
-@@ -123,31 +134,50 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
- 		      void *va, u16 *rx_headroom, u32 *len, bool xsk)
+ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
+ 						    struct mlx5e_mpw_info *wi,
+ 						    u16 cqe_bcnt,
+@@ -19,6 +35,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 					      struct mlx5e_wqe_frag_info *wi,
+ 					      u32 cqe_bcnt);
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ static inline int mlx5e_xsk_page_alloc_umem(struct mlx5e_rq *rq,
+ 					    struct mlx5e_dma_info *dma_info)
  {
- 	struct bpf_prog *prog = READ_ONCE(rq->xdp_prog);
-+#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
- 	struct xdp_umem *umem = rq->umem;
-+#endif
- 	struct xdp_buff xdp;
- 	u32 act;
-+#ifdef HAVE_XDP_REDIRECT
- 	int err;
-+#endif
+@@ -35,7 +52,9 @@ static inline int mlx5e_xsk_page_alloc_u
  
- 	if (!prog)
- 		return false;
- 
- 	xdp.data = va + *rx_headroom;
--	xdp_set_data_meta_invalid(&xdp);
--	xdp.data_end = xdp.data + *len;
--	xdp.data_hard_start = va;
--	if (xsk)
--		xdp.handle = di->xsk.handle;
--	xdp.rxq = &rq->xdp_rxq;
-+#ifdef HAVE_XDP_SET_DATA_META_INVALID
-+       xdp_set_data_meta_invalid(&xdp);
-+#endif
-+       xdp.data_end = xdp.data + *len;
-+#ifdef HAVE_XDP_BUFF_DATA_HARD_START
-+       xdp.data_hard_start = va;
-+#endif
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
-+       if (xsk)
-+	       xdp.handle = di->xsk.handle;
-+#endif
-+#ifdef HAVE_NET_XDP_H
-+       xdp.rxq = &rq->xdp_rxq;
-+#endif
- 
- 	act = bpf_prog_run_xdp(prog, &xdp);
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 	if (xsk) {
-+#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
- 		u64 off = xdp.data - xdp.data_hard_start;
--
- 		xdp.handle = xsk_umem_adjust_offset(umem, xdp.handle, off);
-+#else
-+		*rx_headroom = xdp.data - xdp.data_hard_start;
-+#endif
- 	}
-+#endif
- 	switch (act) {
- 	case XDP_PASS:
-+#ifdef HAVE_XDP_BUFF_DATA_HARD_START
- 		*rx_headroom = xdp.data - xdp.data_hard_start;
-+#endif
- 		*len = xdp.data_end - xdp.data;
- 		return false;
- 	case XDP_TX:
-@@ -155,27 +185,37 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
- 			goto xdp_abort;
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
- 		return true;
-+#ifdef HAVE_XDP_REDIRECT
- 	case XDP_REDIRECT:
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 		if (xdp.rxq->mem.type != MEM_TYPE_ZERO_COPY) {
-+#endif
- 			page_ref_sub(di->page, di->refcnt_bias);
- 			di->refcnt_bias = 0;
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 		}
-+#endif
- 		/* When XDP enabled then page-refcnt==1 here */
- 		err = xdp_do_redirect(rq->netdev, &xdp, prog);
- 		if (unlikely(err))
- 			goto xdp_abort;
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
- 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 		if (xdp.rxq->mem.type != MEM_TYPE_ZERO_COPY)
-+#endif
- 			mlx5e_page_dma_unmap(rq, di);
- 		rq->stats->xdp_redirect++;
- 		return true;
-+#endif
- 	default:
- 		bpf_warn_invalid_xdp_action(act);
- 		/* fall through */
- 	case XDP_ABORTED:
- xdp_abort:
-+#if defined(HAVE_TRACE_XDP_EXCEPTION) && !defined(MLX_DISABLE_TRACEPOINTS)
- 		trace_xdp_exception(rq->netdev, prog, act);
-+#endif
- 		/* fall through */
- 	case XDP_DROP:
- 		rq->stats->xdp_drop++;
-@@ -388,7 +428,9 @@ static bool mlx5e_xmit_xdp_frame(struct
- 
- static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
- 				  struct mlx5e_xdp_wqe_info *wi,
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 				  u32 *xsk_frames,
-+#endif
- 				  bool recycle)
- {
- 	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
-@@ -402,16 +444,23 @@ static void mlx5e_free_xdpsq_desc(struct
- 			/* XDP_TX from the XSK RQ and XDP_REDIRECT */
- 			dma_unmap_single(sq->pdev, xdpi.frame.dma_addr,
- 					 xdpi.frame.xdpf->len, DMA_TO_DEVICE);
-+#ifdef HAVE_XDP_FRAME
- 			xdp_return_frame(xdpi.frame.xdpf);
-+#else
-+			/* Assumes order0 page*/
-+			put_page(virt_to_page(xdpi.frame.xdpf->data));
-+#endif
- 			break;
- 		case MLX5E_XDP_XMIT_MODE_PAGE:
- 			/* XDP_TX from the regular RQ */
- 			mlx5e_page_release_dynamic(xdpi.page.rq, &xdpi.page.di, recycle);
- 			break;
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 		case MLX5E_XDP_XMIT_MODE_XSK:
- 			/* AF_XDP send */
- 			(*xsk_frames)++;
- 			break;
-+#endif
- 		default:
- 			WARN_ON_ONCE(true);
- 		}
-@@ -422,7 +471,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
- {
- 	struct mlx5e_xdpsq *sq;
- 	struct mlx5_cqe64 *cqe;
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 	u32 xsk_frames = 0;
-+#endif
- 	u16 sqcc;
- 	int i;
- 
-@@ -459,7 +510,11 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
- 
- 			sqcc += wi->num_wqebbs;
- 
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 			mlx5e_free_xdpsq_desc(sq, wi, &xsk_frames, true);
-+#else
-+			mlx5e_free_xdpsq_desc(sq, wi, true);
-+#endif
- 		} while (!last_wqe);
- 
- 		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -470,10 +525,10 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
- 					     (struct mlx5_err_cqe *)cqe);
- 		}
- 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
--
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 	if (xsk_frames)
- 		xsk_umem_complete_tx(sq->umem, xsk_frames);
--
-+#endif
- 	sq->stats->cqes += i;
- 
- 	mlx5_cqwq_update_db_record(&cq->wq);
-@@ -487,7 +542,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
- 
- void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
- {
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 	u32 xsk_frames = 0;
-+#endif
- 
- 	while (sq->cc != sq->pc) {
- 		struct mlx5e_xdp_wqe_info *wi;
-@@ -498,13 +555,45 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
- 
- 		sq->cc += wi->num_wqebbs;
- 
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 		mlx5e_free_xdpsq_desc(sq, wi, &xsk_frames, false);
-+#else
-+		mlx5e_free_xdpsq_desc(sq, wi, false);
-+#endif
- 	}
- 
-+#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
- 	if (xsk_frames)
- 		xsk_umem_complete_tx(sq->umem, xsk_frames);
-+#endif
-+}
-+
-+void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq)
-+{
-+	struct mlx5e_xdpsq *xdpsq = rq->xdpsq;
-+
-+	if (xdpsq->mpwqe.wqe)
-+		mlx5e_xdp_mpwqe_complete(xdpsq);
-+
-+	mlx5e_xmit_xdp_doorbell(xdpsq);
-+#ifdef HAVE_XDP_REDIRECT
-+	if (test_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags)) {
-+		xdp_do_flush_map();
-+		__clear_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
-+	}
-+#endif
-+}
-+
-+void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw)
-+{
-+	sq->xmit_xdp_frame_check = is_mpw ?
-+		mlx5e_xmit_xdp_frame_check_mpwqe : mlx5e_xmit_xdp_frame_check;
-+	sq->xmit_xdp_frame = is_mpw ?
-+		mlx5e_xmit_xdp_frame_mpwqe : mlx5e_xmit_xdp_frame;
- }
- 
-+#ifdef HAVE_NDO_XDP_XMIT
-+#ifndef HAVE_NDO_XDP_FLUSH
- int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
- 		   u32 flags)
- {
-@@ -565,26 +654,90 @@ int mlx5e_xdp_xmit(struct net_device *de
- 	return n - drops;
- }
- 
--void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq)
-+#else
-+int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp)
- {
--	struct mlx5e_xdpsq *xdpsq = rq->xdpsq;
-+	struct mlx5e_priv *priv = netdev_priv(dev);
-+	struct mlx5e_xdp_xmit_data xdptxd;
-+	struct mlx5e_xdp_info xdpi;
-+	struct xdp_frame *xdpf;
-+	struct mlx5e_xdpsq *sq;
-+	int sq_num;
-+	int err = 0;
-+ 
-+	/* this flag is sufficient, no need to test internal sq state */
-+	if (unlikely(!mlx5e_xdp_tx_is_enabled(priv)))
-+		return -ENETDOWN;
- 
--	if (xdpsq->mpwqe.wqe)
--		mlx5e_xdp_mpwqe_complete(xdpsq);
-+	sq_num = smp_processor_id();
- 
--	mlx5e_xmit_xdp_doorbell(xdpsq);
-+	if (unlikely(sq_num >= priv->channels.num))
-+		return -ENXIO;
- 
--	if (test_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags)) {
--		xdp_do_flush_map();
--		__clear_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
-+	sq = &priv->channels.c[sq_num]->xdpsq;
-+
-+	xdpf = convert_to_xdp_frame(xdp);
-+
-+	if (unlikely(!xdpf))
-+		return -EINVAL;
-+
-+	xdptxd.data = xdpf->data;
-+	xdptxd.len  = xdpf->len;
-+
-+	xdptxd.dma_addr = dma_map_single(sq->pdev, xdptxd.data,
-+					 xdptxd.len, DMA_TO_DEVICE);
-+
-+	if (unlikely(dma_mapping_error(sq->pdev, xdptxd.dma_addr))) {
-+		err = -ENOMEM;
-+		goto err_release_page;
- 	}
-+
-+	xdpi.mode = MLX5E_XDP_XMIT_MODE_FRAME;
-+	xdpi.frame.xdpf = xdpf;
-+	xdpi.frame.dma_addr = xdptxd.dma_addr;
-+
-+	if (unlikely(!sq->xmit_xdp_frame(sq, &xdptxd, &xdpi, 0))) {
-+		dma_unmap_single(sq->pdev, xdptxd.dma_addr,
-+				 xdptxd.len, DMA_TO_DEVICE);
-+		err = -ENOSPC;
-+		goto err_release_page;
-+	}
-+
-+	return 0;
-+
-+err_release_page:
-+#ifdef HAVE_XDP_FRAME
-+	xdp_return_frame_rx_napi(xdpf);
-+#else
-+	/* Assumes order0 page */
-+	put_page(virt_to_page(xdpf->data));
-+#endif
-+
-+	return err;
- }
- 
--void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw)
-+void mlx5e_xdp_flush(struct net_device *dev)
- {
--	sq->xmit_xdp_frame_check = is_mpw ?
--		mlx5e_xmit_xdp_frame_check_mpwqe : mlx5e_xmit_xdp_frame_check;
--	sq->xmit_xdp_frame = is_mpw ?
--		mlx5e_xmit_xdp_frame_mpwqe : mlx5e_xmit_xdp_frame;
-+	struct mlx5e_priv *priv = netdev_priv(dev);
-+	struct mlx5e_xdpsq *sq;
-+	int sq_num;
-+
-+	/* this flag is sufficient, no need to test internal sq state */
-+	if (unlikely(!mlx5e_xdp_tx_is_enabled(priv)))
-+		return;
-+
-+	sq_num = smp_processor_id();
-+
-+	if (unlikely(sq_num >= priv->channels.num))
-+		return;
-+
-+	sq = &priv->channels.c[sq_num]->xdpsq;
-+
-+	if (sq->mpwqe.wqe)
-+		mlx5e_xdp_mpwqe_complete(sq);
-+	mlx5e_xmit_xdp_doorbell(sq);
+ 	return 0;
  }
 +#endif
-+#endif
+ 
++#ifdef HAVE_NDO_XSK_WAKEUP
+ static inline bool mlx5e_xsk_update_rx_wakeup(struct mlx5e_rq *rq, bool alloc_err)
+ {
+ 	if (!xsk_umem_uses_need_wakeup(rq->umem))
+@@ -48,5 +67,7 @@ static inline bool mlx5e_xsk_update_rx_w
+ 
+ 	return false;
+ }
 +#endif
  
++#endif /* HAVE_XSK_SUPPORT */
+ #endif /* __MLX5_EN_XSK_RX_H__ */

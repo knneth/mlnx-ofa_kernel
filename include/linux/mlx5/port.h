@@ -104,8 +104,11 @@ enum mlx5e_ext_link_mode {
 	MLX5E_50GAUI_1_LAUI_1_50GBASE_CR_KR	= 8,
 	MLX5E_CAUI_4_100GBASE_CR4_KR4		= 9,
 	MLX5E_100GAUI_2_100GBASE_CR2_KR2	= 10,
+	MLX5E_100GAUI_1_100GBASE_CR_KR		= 11,
 	MLX5E_200GAUI_4_200GBASE_CR4_KR4	= 12,
+	MLX5E_200GAUI_2_200GBASE_CR2_KR2	= 13,
 	MLX5E_400GAUI_8				= 15,
+	MLX5E_400GAUI_4_400GBASE_CR4_KR4	= 16,
 	MLX5E_EXT_LINK_MODES_NUMBER,
 };
 
@@ -204,11 +207,7 @@ void mlx5_query_port_fcs(struct mlx5_core_dev *mdev, bool *supported,
 
 int mlx5_query_module_num(struct mlx5_core_dev *dev, int *module_num);
 int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
-			     u16 offset, u16 size, u8 *data,
-			     enum mlx5_module_id module_id);
-int mlx5_query_module_id(struct mlx5_core_dev *dev,
-			 enum mlx5_module_id *module_id,
-			 u8 *revision_id);
+			     u16 offset, u16 size, u8 *data);
 
 int mlx5_query_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *out);
 int mlx5_set_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *in);

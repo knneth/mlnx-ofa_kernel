@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ud_header.c
+
+Change-Id: Ibaca99586c0d35e44a92ef8532bf61f84f531bbf
+---
+ drivers/infiniband/core/ud_header.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/ud_header.c
++++ b/drivers/infiniband/core/ud_header.c
+@@ -34,7 +34,7 @@
+ #include <linux/errno.h>
+ #include <linux/string.h>
+ #include <linux/export.h>
+-#include <linux/if_ether.h>
++#include <uapi/linux/if_ether.h>
+ #include <linux/ip.h>
+ 
+ #include <rdma/ib_pack.h>

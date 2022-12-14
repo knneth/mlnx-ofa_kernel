@@ -19,10 +19,6 @@
 #define NETIF_F_HW_VLAN_CTAG_FILTER NETIF_F_HW_VLAN_FILTER
 #endif
 
-#ifndef HAVE_PRANDOM_U32
-#define prandom_u32() random32()
-#endif
-
 #ifndef NETIF_F_GSO_UDP_TUNNEL
 #define NETIF_F_GSO_UDP_TUNNEL (1 << 25)
 #endif

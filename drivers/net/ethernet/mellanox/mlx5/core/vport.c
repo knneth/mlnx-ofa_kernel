@@ -111,7 +111,7 @@ void mlx5_query_min_inline(struct mlx5_core_dev *mdev,
 	case MLX5_CAP_INLINE_MODE_VPORT_CONTEXT:
 		if (!mlx5_query_nic_vport_min_inline(mdev, 0, min_inline_mode))
 			break;
-		/* fall through */
+		fallthrough;
 	case MLX5_CAP_INLINE_MODE_L2:
 		*min_inline_mode = MLX5_INLINE_MODE_L2;
 		break;
@@ -174,7 +174,7 @@ int mlx5_query_mac_address(struct mlx5_core_dev *mdev, u8 *addr)
 EXPORT_SYMBOL_GPL(mlx5_query_mac_address);
 
 int mlx5_modify_nic_vport_mac_address(struct mlx5_core_dev *mdev,
-				      u16 vport, u8 *addr)
+				      u16 vport, const u8 *addr)
 {
 	void *in;
 	int inlen = MLX5_ST_SZ_BYTES(modify_nic_vport_context_in);
@@ -1218,3 +1218,15 @@ u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev)
 		mlx5_eswitch_max_sfs(dev);
 }
 EXPORT_SYMBOL_GPL(mlx5_eswitch_get_total_vports);
+
+int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out)
+{
+	u16 opmod = (MLX5_CAP_GENERAL << 1) | (HCA_CAP_OPMOD_GET_MAX & 0x01);
+	u8 in[MLX5_ST_SZ_BYTES(query_hca_cap_in)] = {};
+
+	MLX5_SET(query_hca_cap_in, in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
+	MLX5_SET(query_hca_cap_in, in, op_mod, opmod);
+	MLX5_SET(query_hca_cap_in, in, function_id, function_id);
+	MLX5_SET(query_hca_cap_in, in, other_function, true);
+	return mlx5_cmd_exec_inout(dev, query_hca_cap, in, out);
+}

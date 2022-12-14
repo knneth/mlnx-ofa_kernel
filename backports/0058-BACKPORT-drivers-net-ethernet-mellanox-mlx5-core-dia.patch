@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.c
+
+Change-Id: Idff101557e1f13628878ad64db47c15890eb915f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.c
+@@ -30,6 +30,8 @@
+  * SOFTWARE.
+  */
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
++
+ #define CREATE_TRACE_POINTS
+ 
+ #include "fs_tracepoint.h"
+@@ -271,3 +273,4 @@ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_fte
+ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_add_rule);
+ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_rule);
+ 
++#endif /* MLX_DISABLE_TRACEPOINTS */

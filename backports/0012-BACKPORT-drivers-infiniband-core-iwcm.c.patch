@@ -1,0 +1,77 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
+
+Change-Id: I8889def628829570debb40149d492fab8a8b25b8
+---
+ drivers/infiniband/core/iwcm.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/drivers/infiniband/core/iwcm.c
++++ b/drivers/infiniband/core/iwcm.c
+@@ -58,6 +58,9 @@
+ MODULE_AUTHOR("Tom Tucker");
+ MODULE_DESCRIPTION("iWARP CM");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ static const char * const iwcm_rej_reason_strs[] = {
+ 	[ECONNRESET]			= "reset by remote host",
+@@ -102,6 +105,7 @@ struct iwcm_work {
+ 
+ static unsigned int default_backlog = 256;
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ static struct ctl_table_header *iwcm_ctl_table_hdr;
+ static struct ctl_table iwcm_ctl_table[] = {
+ 	{
+@@ -113,6 +117,7 @@ static struct ctl_table iwcm_ctl_table[]
+ 	},
+ 	{ }
+ };
++#endif
+ 
+ /*
+  * The following services provide a mechanism for pre-allocating iwcm_work
+@@ -481,6 +486,7 @@ static void iw_cm_check_wildcard(struct
+ 			cm4_outaddr->sin_addr = cm4_addr->sin_addr;
+ 		}
+ 	} else {
++#if IS_ENABLED(CONFIG_IPV6)
+ 		struct sockaddr_in6 *pm6_addr = (struct sockaddr_in6 *)pm_addr;
+ 
+ 		if (ipv6_addr_type(&pm6_addr->sin6_addr) == IPV6_ADDR_ANY) {
+@@ -491,6 +497,7 @@ static void iw_cm_check_wildcard(struct
+ 
+ 			cm6_outaddr->sin6_addr = cm6_addr->sin6_addr;
+ 		}
++#endif
+ 	}
+ }
+ 
+@@ -1194,6 +1201,7 @@ static int __init iw_cm_init(void)
+ 	if (!iwcm_wq)
+ 		return -ENOMEM;
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ 	iwcm_ctl_table_hdr = register_net_sysctl(&init_net, "net/iw_cm",
+ 						 iwcm_ctl_table);
+ 	if (!iwcm_ctl_table_hdr) {
+@@ -1201,13 +1209,16 @@ static int __init iw_cm_init(void)
+ 		destroy_workqueue(iwcm_wq);
+ 		return -ENOMEM;
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+ 
+ static void __exit iw_cm_cleanup(void)
+ {
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ 	unregister_net_sysctl_table(iwcm_ctl_table_hdr);
++#endif
+ 	destroy_workqueue(iwcm_wq);
+ 	rdma_nl_unregister(RDMA_NL_IWCM);
+ 	iwpm_exit(RDMA_NL_IWCM);

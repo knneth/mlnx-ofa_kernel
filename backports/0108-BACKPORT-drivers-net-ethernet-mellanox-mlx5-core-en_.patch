@@ -1,0 +1,55 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+
+Change-Id: I7bad1f83e1e9e4410d7a0f71c90fe002bd52c169
+---
+ .../net/ethernet/mellanox/mlx5/core/en_tc.h   | 31 +++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+@@ -286,6 +286,17 @@ void mlx5e_tc_set_ethertype(struct mlx5_
+ 			    struct flow_match_basic *match, bool outer,
+ 			    void *headers_c, void *headers_v);
+ 
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++int mlx5e_setup_tc_block(struct net_device *dev, struct tc_block_offload *f);
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++			      struct flow_cls_offload *cls_flower,
++			      unsigned long flags);
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
++#endif /* HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE || HAVE_NDO_SETUP_TC_RH_EXTENDED */
++
+ int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
+ void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
+ 
+@@ -454,6 +465,26 @@ mlx5e_setup_tc_block_cb(enum tc_setup_ty
+ { return -EOPNOTSUPP; }
+ static inline int mlx5e_setup_tc_e2e_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+ { return -EOPNOTSUPP; }
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_block(struct net_device *dev,
++				       struct tc_block_offload *f)
++{
++	return -EOPNOTSUPP;
++}
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++					    struct flow_cls_offload *cls_flower,
++					    unsigned long flags)
++{
++	return -EOPNOTSUPP;
++}
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
++#endif /* HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE || HAVE_NDO_SETUP_TC_RH_EXTENDED */
++
++
+ #endif
+ 
++
+ #endif /* __MLX5_EN_TC_H__ */

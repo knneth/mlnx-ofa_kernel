@@ -13,6 +13,7 @@ struct mlx5_sf {
 	struct mlx5_core_dev *parent_dev;
 	phys_addr_t bar_base_addr;
 	u16 idx;	/* Index allocated by the SF table bitmap */
+	bool disable_en;
 };
 
 struct mlx5_sf_table {
@@ -21,7 +22,7 @@ struct mlx5_sf_table {
 	struct mutex lock;
 	unsigned long *sf_id_bitmap;
 	u16 max_sfs;
-	u16 log_sf_bar_size;
+	u32 sf_bar_length;
 };
 
 static inline bool mlx5_core_is_sf_supported(const struct mlx5_core_dev *dev)
@@ -47,16 +48,15 @@ mlx5_sf_alloc(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
 	      struct device *dev);
 void mlx5_sf_free(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
 		  struct mlx5_sf *sf);
+int mlx5_sf_load(struct mlx5_sf *sf);
+void mlx5_sf_unload(struct mlx5_sf *sf);
 u16 mlx5_core_max_sfs(const struct mlx5_core_dev *dev,
 		      struct mlx5_sf_table *sf_table);
 u16 mlx5_get_free_sfs(struct mlx5_core_dev *dev,
 		      struct mlx5_sf_table *sf_table);
 int mlx5_sf_set_max_sfs(struct mlx5_core_dev *dev,
 			struct mlx5_sf_table *sf_table, u16 new_max_sfs);
-
-int mlx5_sf_load(struct mlx5_sf *sf);
-void mlx5_sf_unload(struct mlx5_sf *sf);
-
+u16 mlx5_sf_vport_to_id(const struct mlx5_core_dev *coredev, u16 vport_num);
 static inline struct mlx5_core_dev *
 mlx5_sf_get_parent_dev(struct mlx5_core_dev *dev)
 {
@@ -66,11 +66,9 @@ mlx5_sf_get_parent_dev(struct mlx5_core_dev *dev)
 	return sf->parent_dev;
 }
 
-u16 mlx5_sf_vport_to_id(const struct mlx5_core_dev *coredev, u16 vport_num);
-
 #else
 static inline u16 mlx5_core_max_sfs(const struct mlx5_core_dev *dev,
-				    struct mlx5_sf_table *sf_table)
+				    const struct mlx5_sf_table *sf_table)
 {
 	return 0;
 }

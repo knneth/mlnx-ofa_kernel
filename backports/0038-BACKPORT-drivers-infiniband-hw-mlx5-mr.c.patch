@@ -1,0 +1,234 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
+
+Change-Id: Ia6bb2393f4deb0372125da3a2076fbe15eafea13
+---
+ drivers/infiniband/hw/mlx5/mr.c | 78 +++++++++++++++++++++++++++++++--
+ 1 file changed, 74 insertions(+), 4 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/mr.c
++++ b/drivers/infiniband/hw/mlx5/mr.c
+@@ -38,6 +38,9 @@
+ #include <linux/delay.h>
+ #include <linux/device.h>
+ #include <linux/sysfs.h>
++#ifndef ARCH_KMALLOC_MINALIGN
++#include <linux/crypto.h>
++#endif
+ #include <rdma/ib_umem.h>
+ #include <rdma/ib_umem_odp.h>
+ #include <rdma/ib_verbs.h>
+@@ -559,9 +562,17 @@ static void clean_keys(struct mlx5_ib_de
+ 	}
+ }
+ 
++#ifdef HAVE_TIMER_SETUP
+ static void delay_time_func(struct timer_list *t)
++#else
++static void delay_time_func(unsigned long ctx)
++#endif
+ {
++#ifdef HAVE_TIMER_SETUP
+ 	struct mlx5_ib_dev *dev = from_timer(dev, t, delay_timer);
++#else
++	struct mlx5_ib_dev *dev = (struct mlx5_ib_dev *)ctx;
++#endif
+ 
+ 	WRITE_ONCE(dev->fill_delay, 0);
+ }
+@@ -581,7 +592,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
+ 	}
+ 
+ 	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
+-	timer_setup(&dev->delay_timer, delay_time_func, 0);
++#ifdef HAVE_TIMER_SETUP
++       timer_setup(&dev->delay_timer, delay_time_func, 0);
++#else
++	setup_timer(&dev->delay_timer, delay_time_func, (unsigned long)dev);
++#endif
+ 	for (i = 0; i < MAX_MR_CACHE_ENTRIES; i++) {
+ 		ent = &cache->ent[i];
+ 		INIT_LIST_HEAD(&ent->head);
+@@ -738,19 +753,31 @@ static int mr_cache_max_order(struct mlx
+ 	return MLX5_MAX_UMR_SHIFT;
+ }
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ static int mr_umem_get(struct mlx5_ib_dev *dev, u64 start, u64 length,
+ 		       int access_flags, struct ib_umem **umem, int *npages,
+ 		       int *page_shift, int *ncont, int *order, bool allow_peer)
++#else
++static int mr_umem_get(struct mlx5_ib_dev *dev, struct ib_udata *udata,
++		       u64 start, u64 length, int access_flags,
++		       struct ib_umem **umem, int *npages, int *page_shift,
++		       int *ncont, int *order, bool allow_peer)
++#endif
+ {
+ 	struct ib_umem *u;
+ 
+ 	*umem = NULL;
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (access_flags & IB_ACCESS_ON_DEMAND) {
+ 		struct ib_umem_odp *odp;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		odp = ib_umem_odp_get(&dev->ib_dev, start, length, access_flags,
+ 				      &mlx5_mn_ops);
++#else
++		odp = ib_umem_odp_get(udata, start, length, access_flags);
++#endif
+ 		if (IS_ERR(odp)) {
+ 			mlx5_ib_dbg(dev, "umem get failed (%ld)\n",
+ 				    PTR_ERR(odp));
+@@ -764,14 +791,27 @@ static int mr_umem_get(struct mlx5_ib_de
+ 		*npages = *ncont << (*page_shift - PAGE_SHIFT);
+ 		if (order)
+ 			*order = ilog2(roundup_pow_of_two(*ncont));
+-	} else {
++	} else 
++#endif
++	{
+ 		if (allow_peer)
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 			u = ib_umem_get_peer(&dev->ib_dev, start, length,
+ 					     access_flags,
+ 					     IB_PEER_MEM_INVAL_SUPP);
+-		else
+-			u = ib_umem_get(&dev->ib_dev, start, length,
++#else
++			u = ib_umem_get_peer(udata, start, length,
++					     access_flags,
++					     IB_PEER_MEM_INVAL_SUPP);
++#endif
++ 		else
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
++ 			u = ib_umem_get(&dev->ib_dev, start, length,
++ 					access_flags);
++#else
++			u = ib_umem_get(udata, start, length,
+ 					access_flags);
++#endif
+ 		if (IS_ERR(u)) {
+ 			mlx5_ib_dbg(dev, "umem get failed (%ld)\n", PTR_ERR(u));
+ 			return PTR_ERR(u);
+@@ -950,6 +990,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+ 		goto free_xlt;
+ 	}
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (mr->umem->is_odp) {
+ 		if (!(flags & MLX5_IB_UPD_XLT_INDIRECT)) {
+ 			struct ib_umem_odp *odp = to_ib_umem_odp(mr->umem);
+@@ -958,6 +999,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+ 			pages_to_map = min_t(size_t, pages_to_map, max_pages);
+ 		}
+ 	}
++#endif
+ 
+ 	sg.addr = dma;
+ 	sg.lkey = dev->umrc.pd->local_dma_lkey;
+@@ -1269,7 +1311,11 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+ 		return &mr->ibmr;
+ 	}
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	err = mr_umem_get(dev, start, length, access_flags, &umem,
++#else
++	err = mr_umem_get(dev, udata, start, length, access_flags, &umem,
++#endif
+        		  &npages, &page_shift, &ncont, &order, true);
+ 
+ 	if (err < 0)
+@@ -1333,6 +1379,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+ 		/* After this point the MR can be invalidated */
+ 	}
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (is_odp_mr(mr)) {
+ 		to_ib_umem_odp(mr->umem)->private = mr;
+ 		init_waitqueue_head(&mr->q_deferred_work);
+@@ -1345,6 +1392,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+ 			return ERR_PTR(err);
+ 		}
+ 	}
++#endif
+ 
+ 	return &mr->ibmr;
+ error:
+@@ -1449,7 +1497,11 @@ int mlx5_ib_rereg_user_mr(struct ib_mr *
+ 		flags |= IB_MR_REREG_TRANS;
+ 		ib_umem_release(mr->umem);
+ 		mr->umem = NULL;
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		err = mr_umem_get(dev, addr, len, access_flags, &mr->umem,
++#else
++		err = mr_umem_get(dev, udata, addr, len, access_flags, &mr->umem,
++#endif
+ 				  &npages, &page_shift, &ncont, &order, false);
+ 		if (err)
+ 			goto err;
+@@ -1522,7 +1574,11 @@ mlx5_alloc_priv_descs(struct ib_device *
+ 	int add_size;
+ 	int ret;
+ 
++#ifdef ARCH_KMALLOC_MINALIGN
+ 	add_size = max_t(int, MLX5_UMR_ALIGN - ARCH_KMALLOC_MINALIGN, 0);
++#else
++	add_size = max_t(int, MLX5_UMR_ALIGN - CRYPTO_MINALIGN, 0);
++#endif
+ 
+ 	mr->descs_alloc = kzalloc(size + add_size, GFP_KERNEL);
+ 	if (!mr->descs_alloc)
+@@ -1586,10 +1642,14 @@ static void dereg_mr(struct mlx5_ib_dev
+ 	struct ib_umem *umem = mr->umem;
+ 
+ 	/* Stop all DMA */
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (is_odp_mr(mr))
+ 		mlx5_ib_fence_odp_mr(mr);
+ 	else
+ 		clean_mr(dev, mr);
++#else
++	clean_mr(dev, mr);
++#endif
+ 
+ 	if (mr->cache_ent)
+ 		mlx5_mr_cache_free(dev, mr);
+@@ -1610,10 +1670,12 @@ int mlx5_ib_dereg_mr(struct ib_mr *ibmr,
+ 		dereg_mr(to_mdev(mmr->klm_mr->ibmr.device), mmr->klm_mr);
+ 	}
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (is_odp_mr(mmr) && to_ib_umem_odp(mmr->umem)->is_implicit_odp) {
+ 		mlx5_ib_free_implicit_mr(mmr);
+ 		return 0;
+ 	}
++#endif
+ 
+ 	dereg_mr(to_mdev(ibmr->device), mmr);
+ 
+@@ -2525,7 +2587,11 @@ static ssize_t order_attr_store(struct k
+ 	return oa->store(co, oa, buf, size);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops order_sysfs_ops = {
++#else
++static struct sysfs_ops order_sysfs_ops = {
++#endif
+ 	.show = order_attr_show,
+ 	.store = order_attr_store,
+ };
+@@ -2663,7 +2729,11 @@ static ssize_t cache_attr_store(struct k
+ 	return ca->store(dev, buf, size);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops cache_sysfs_ops = {
++#else
++static struct sysfs_ops cache_sysfs_ops = {
++#endif
+ 	.show = cache_attr_show,
+ 	.store = cache_attr_store,
+ };

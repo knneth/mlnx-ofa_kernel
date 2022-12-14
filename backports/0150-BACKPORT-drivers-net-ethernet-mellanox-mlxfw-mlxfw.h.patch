@@ -1,0 +1,78 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
+
+Change-Id: I722270f579c1a293d247d2e17840221899e11ce2
+---
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw.h | 29 +++++++++++++++++----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
++++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
+@@ -13,23 +13,29 @@ struct mlxfw_dev {
+ 	const struct mlxfw_dev_ops *ops;
+ 	const char *psid;
+ 	u16 psid_size;
++#ifdef HAVE_DEVLINK_H
+ 	struct devlink *devlink;
++#endif
+ };
+ 
++#ifdef HAVE_DEVLINK_H
+ static inline
+ struct device *mlxfw_dev_dev(struct mlxfw_dev *mlxfw_dev)
+ {
+ 	return mlxfw_dev->devlink->dev;
+ }
++#endif
+ 
+ #define MLXFW_PRFX "mlxfw: "
+ 
++#ifdef HAVE_DEVLINK_H
+ #define mlxfw_info(mlxfw_dev, fmt, ...) \
+ 	dev_info(mlxfw_dev_dev(mlxfw_dev), MLXFW_PRFX fmt, ## __VA_ARGS__)
+ #define mlxfw_err(mlxfw_dev, fmt, ...) \
+ 	dev_err(mlxfw_dev_dev(mlxfw_dev), MLXFW_PRFX fmt, ## __VA_ARGS__)
+ #define mlxfw_dbg(mlxfw_dev, fmt, ...) \
+ 	dev_dbg(mlxfw_dev_dev(mlxfw_dev), MLXFW_PRFX fmt, ## __VA_ARGS__)
++#endif
+ 
+ enum mlxfw_fsm_state {
+ 	MLXFW_FSM_STATE_IDLE,
+@@ -96,19 +102,32 @@ struct mlxfw_dev_ops {
+ 	void (*fsm_cancel)(struct mlxfw_dev *mlxfw_dev, u32 fwhandle);
+ 
+ 	void (*fsm_release)(struct mlxfw_dev *mlxfw_dev, u32 fwhandle);
++
++#ifndef HAVE_DEVLINK_FLASH_UPDATE_STATUS_NOTIFY
++	void (*status_notify)(struct mlxfw_dev *mlxfw_dev,
++			const char *msg, const char *comp_name,
++			u32 done_bytes, u32 total_bytes);
++#endif
++
+ };
+ 
+ #if IS_REACHABLE(CONFIG_MLXFW)
+ int mlxfw_firmware_flash(struct mlxfw_dev *mlxfw_dev,
+-			 const struct firmware *firmware,
+-			 struct netlink_ext_ack *extack);
++                         const struct firmware *firmware
++#ifdef HAVE_NETLINK_EXT_ACK
++                         , struct netlink_ext_ack *extack
++#endif
++                         );
+ #else
+ static inline
+ int mlxfw_firmware_flash(struct mlxfw_dev *mlxfw_dev,
+-			 const struct firmware *firmware,
+-			 struct netlink_ext_ack *extack)
++                         const struct firmware *firmware
++#ifdef HAVE_NETLINK_EXT_ACK
++                         , struct netlink_ext_ack *extack
++#endif
++                         )
+ {
+-	return -EOPNOTSUPP;
++        return -EOPNOTSUPP;
+ }
+ #endif
+ 

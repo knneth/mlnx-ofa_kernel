@@ -1,0 +1,20 @@
+From: Feras Daoud <ferasda@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/lag.h
+
+Change-Id: I83116f954e1807be68853dd9701499a6d33b9abc
+---
+ include/rdma/lag.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/include/rdma/lag.h
++++ b/include/rdma/lag.h
+@@ -6,7 +6,9 @@
+ #ifndef _RDMA_LAG_H_
+ #define _RDMA_LAG_H_
+ 
++#ifdef HAVE_NET_LAG_H
+ #include <net/lag.h>
++#endif
+ 
+ struct ib_device;
+ struct rdma_ah_attr;

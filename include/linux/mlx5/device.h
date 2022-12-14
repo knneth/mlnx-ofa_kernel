@@ -276,7 +276,9 @@ enum {
 	MLX5_MKEY_MASK_RW		= 1ull << 20,
 	MLX5_MKEY_MASK_A		= 1ull << 21,
 	MLX5_MKEY_MASK_SMALL_FENCE	= 1ull << 23,
-	MLX5_MKEY_MASK_FREE		= 1ull << 29,
+	MLX5_MKEY_MASK_RELAXED_ORDERING_WRITE	= 1ull << 25,
+	MLX5_MKEY_MASK_FREE			= 1ull << 29,
+	MLX5_MKEY_MASK_RELAXED_ORDERING_READ	= 1ull << 47,
 };
 
 enum {
@@ -306,6 +308,11 @@ enum mlx5_xrq_error_type {
 	MLX5_XRQ_ERROR_TYPE_BACKEND_CONTROLLER_ERROR    = 0x1,
 };
 
+enum {
+	MLX5_XRQ_SUBTYPE_BACKEND_CONTROLLER_PCI_ERROR = 1,
+	MLX5_XRQ_SUBTYPE_BACKEND_CONTROLLER_TO_ERROR  = 2,
+};
+
 /* mlx5 components can subscribe to any one of these events via
  * mlx5_eq_notifier_register API.
  */
@@ -327,6 +334,7 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR = 0x10,
 	MLX5_EVENT_TYPE_WQ_ACCESS_ERROR	   = 0x11,
 	MLX5_EVENT_TYPE_SRQ_CATAS_ERROR	   = 0x12,
+	MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT	= 0x27,
 
 	MLX5_EVENT_TYPE_INTERNAL_ERROR	   = 0x08,
 	MLX5_EVENT_TYPE_PORT_CHANGE	   = 0x09,
@@ -353,8 +361,6 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_DCT_DRAINED        = 0x1c,
 	MLX5_EVENT_TYPE_DCT_KEY_VIOLATION  = 0x1d,
 
-	MLX5_EVENT_TYPE_XRQ_ERRO	   = 0x18,
-
 	MLX5_EVENT_TYPE_FPGA_ERROR         = 0x20,
 	MLX5_EVENT_TYPE_FPGA_QP_ERROR      = 0x21,
 
@@ -371,6 +377,8 @@ enum {
 enum {
 	MLX5_GENERAL_SUBTYPE_DELAY_DROP_TIMEOUT = 0x1,
 	MLX5_GENERAL_SUBTYPE_PCI_POWER_CHANGE_EVENT = 0x5,
+	MLX5_GENERAL_SUBTYPE_FW_LIVE_PATCH_EVENT = 0x7,
+	MLX5_GENERAL_SUBTYPE_PCI_SYNC_FOR_FW_UPDATE_EVENT = 0x8,
 };
 
 enum {
@@ -453,6 +461,7 @@ enum {
 	MLX5_OPCODE_UMR			= 0x25,
 
 	MLX5_OPCODE_FLOW_TBL_ACCESS	= 0x2c,
+	MLX5_OPCODE_ACCESS_ASO		= 0x2d,
 };
 
 enum {
@@ -717,6 +726,25 @@ struct mlx5_eqe_temp_warning {
 	__be64 sensor_warning_lsb;
 } __packed;
 
+struct mlx5_eqe_obj_change {
+	u8	rsvd0[2];
+	__be16	obj_type;
+	__be32	obj_id;
+} __packed;
+
+#define SYNC_RST_STATE_MASK    0xf
+
+enum sync_rst_state_type {
+	MLX5_SYNC_RST_STATE_RESET_REQUEST	= 0x0,
+	MLX5_SYNC_RST_STATE_RESET_NOW		= 0x1,
+	MLX5_SYNC_RST_STATE_RESET_ABORT		= 0x2,
+};
+
+struct mlx5_eqe_sync_fw_update {
+	u8 reserved_at_0[3];
+	u8 sync_rst_state;
+};
+
 union ev_data {
 	__be32				raw[7];
 	struct mlx5_eqe_cmd		cmd;
@@ -736,6 +764,8 @@ union ev_data {
 	struct mlx5_eqe_dct             dct;
 	struct mlx5_eqe_temp_warning	temp_warning;
 	struct mlx5_eqe_xrq_err		xrq_err;
+	struct mlx5_eqe_sync_fw_update	sync_fw_update;
+	struct mlx5_eqe_obj_change	obj_change;
 } __packed;
 
 struct mlx5_eqe {
@@ -817,7 +847,7 @@ struct mlx5_mini_cqe8 {
 		__be32 rx_hash_result;
 		struct {
 			__be16 checksum;
-			__be16 rsvd;
+			__be16 stridx;
 		};
 		struct {
 			__be16 wqe_counter;
@@ -837,6 +867,7 @@ enum {
 
 enum {
 	MLX5_CQE_FORMAT_CSUM = 0x1,
+	MLX5_CQE_FORMAT_CSUM_STRIDX = 0x3,
 };
 
 #define MLX5_MINI_CQE_ARRAY_SIZE 8
@@ -1010,7 +1041,6 @@ enum {
 	MLX5_MKEY_REMOTE_INVAL	= 1 << 24,
 	MLX5_MKEY_FLAG_SYNC_UMR = 1 << 29,
 	MLX5_MKEY_BSF_EN	= 1 << 30,
-	MLX5_MKEY_LEN64		= 1 << 31,
 };
 
 struct mlx5_mkey_seg {
@@ -1332,9 +1362,6 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_NVMF(mdev, cap)\
 	MLX5_GET(nvmf_cap, mdev->caps.hca_cur[MLX5_CAP_NVMF], cap)
 
-#define MLX5_CAP_IPSEC(mdev, cap)\
-	MLX5_GET(ipsec_cap, (mdev)->caps.hca_cur[MLX5_CAP_IPSEC], cap)
-
 #define MLX5_CAP_PCAM_FEATURE(mdev, fld) \
 	MLX5_GET(pcam_reg, (mdev)->caps.pcam, feature_cap_mask.enhanced_features.fld)
 
@@ -1384,12 +1411,15 @@ enum mlx5_qcam_feature_groups {
 	MLX5_ADDR_OF(device_event_cap, (mdev)->caps.hca_cur[MLX5_CAP_DEV_EVENT], cap)
 
 #define MLX5_CAP_DEV_VDPA_EMULATION(mdev, cap)\
-	MLX5_GET(device_virtio_emulation_cap, \
+	MLX5_GET(virtio_emulation_cap, \
 		(mdev)->caps.hca_cur[MLX5_CAP_VDPA_EMULATION], cap)
 
 #define MLX5_CAP64_DEV_VDPA_EMULATION(mdev, cap)\
-	MLX5_GET64(device_virtio_emulation_cap, \
+	MLX5_GET64(virtio_emulation_cap, \
 		(mdev)->caps.hca_cur[MLX5_CAP_VDPA_EMULATION], cap)
+
+#define MLX5_CAP_IPSEC(mdev, cap)\
+	MLX5_GET(ipsec_cap, (mdev)->caps.hca_cur[MLX5_CAP_IPSEC], cap)
 
 enum {
 	MLX5_CMD_STAT_OK			= 0x0,

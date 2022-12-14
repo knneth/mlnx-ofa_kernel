@@ -1,0 +1,564 @@
+// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+// // Copyright (c) 2020 Mellanox Technologies.
+
+#include "aso.h"
+
+#define MLX5E_ASO_WQEBBS \
+	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe), MLX5_SEND_WQE_BB))
+#define MLX5E_ASO_WQEBBS_DATA \
+	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe_data), MLX5_SEND_WQE_BB))
+#define ASO_OPC_MOD_IPSEC_SHIFTED (MLX5_ACCESS_ASO_OPC_MOD_IPSEC << MLX5_WQE_CTRL_WQE_OPC_MOD_SHIFT)
+#define ASO_CTRL_READ_EN BIT(0)
+
+enum {
+	MLX5_ACCESS_ASO_OPC_MOD_IPSEC,
+};
+
+static int mlx5e_aso_reg_mr(struct mlx5e_priv *priv)
+{
+	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
+	size_t size = MLX5_ST_SZ_BYTES(ipsec_aso);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	struct device *dma_device;
+	dma_addr_t dma_addr;
+	int err;
+
+	dma_device = &mdev->pdev->dev;
+	aso->ctx = kzalloc(size, GFP_KERNEL);
+	if (!aso->ctx)
+		return -ENOMEM;
+
+	err = mlx5_core_alloc_pd(mdev, &aso->pdn);
+	if (err) {
+		mlx5_core_err(mdev, "alloc pd failed, %d\n", err);
+		goto out_pd;
+	}
+
+	dma_addr = dma_map_single(dma_device, aso->ctx, size, DMA_BIDIRECTIONAL);
+	err = dma_mapping_error(dma_device, dma_addr);
+	if (err) {
+		mlx5_core_warn(mdev, "Can't dma ipsec_aso\n");
+		goto out_dma;
+	}
+
+	err = mlx5e_create_mkey(mdev, aso->pdn, &aso->mkey);
+	if (err) {
+		mlx5_core_warn(mdev, "Can't create mkey\n");
+		goto out_mkey;
+	}
+
+	aso->dma_addr = dma_addr;
+	aso->size = size;
+
+	return 0;
+
+out_mkey:
+	dma_unmap_single(dma_device, dma_addr, size, DMA_BIDIRECTIONAL);
+
+out_dma:
+	mlx5_core_dealloc_pd(mdev, aso->pdn);
+out_pd:
+	kfree(aso->ctx);
+	aso->ctx = NULL;
+	return err;
+}
+
+static void mlx5e_aso_dereg_mr(struct mlx5e_priv *priv)
+{
+	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
+
+	if (!aso->ctx)
+		return;
+
+	mlx5_core_destroy_mkey(priv->mdev, &aso->mkey);
+	dma_unmap_single(&priv->mdev->pdev->dev, aso->dma_addr, aso->size, DMA_BIDIRECTIONAL);
+	mlx5_core_dealloc_pd(priv->mdev, aso->pdn);
+	kfree(aso->ctx);
+	aso->ctx = NULL;
+}
+
+static void mlx5e_build_aso_wqe(struct mlx5e_ipsec_aso *aso,
+				struct mlx5e_asosq *sq,
+				struct mlx5e_aso_wqe *wqe,
+				u32 ipsec_obj_id,
+				struct mlx5e_aso_ctrl_param *param)
+{
+	struct mlx5_wqe_aso_ctrl_seg *aso_ctrl = &wqe->aso_ctrl;
+	struct mlx5_wqe_ctrl_seg *cseg = &wqe->ctrl;
+	u8 ds_cnt;
+
+	ds_cnt = DIV_ROUND_UP(sizeof(*wqe), MLX5_SEND_WQE_DS);
+	cseg->opmod_idx_opcode = cpu_to_be32(ASO_OPC_MOD_IPSEC_SHIFTED |
+					     (sq->pc << MLX5_WQE_CTRL_WQE_INDEX_SHIFT) |
+					     MLX5_OPCODE_ACCESS_ASO);
+	cseg->qpn_ds     = cpu_to_be32((sq->sqn << MLX5_WQE_CTRL_QPN_SHIFT) | ds_cnt);
+	cseg->fm_ce_se   = MLX5_WQE_CTRL_CQ_UPDATE;
+	cseg->general_id = cpu_to_be32(ipsec_obj_id);
+
+	memset(aso_ctrl, 0, sizeof(*aso_ctrl));
+	aso_ctrl->va_l  = cpu_to_be32(aso->dma_addr | ASO_CTRL_READ_EN);
+	aso_ctrl->va_h  = cpu_to_be32(aso->dma_addr >> 32);
+	aso_ctrl->l_key = cpu_to_be32(aso->mkey.key);
+
+	if (param) {
+		aso_ctrl->data_mask_mode = param->data_mask_mode << 6;
+		aso_ctrl->condition_1_0_operand = param->condition_1_operand | param->condition_0_operand << 4;
+		aso_ctrl->condition_1_0_offset = param->condition_1_offset | param->condition_0_offset << 4;
+		aso_ctrl->data_offset_condition_operand = param->data_offset | param->condition_operand << 6;
+		aso_ctrl->condition_0_data = cpu_to_be32(param->condition_0_data);
+		aso_ctrl->condition_0_mask = cpu_to_be32(param->condition_0_mask);
+		aso_ctrl->condition_1_data = cpu_to_be32(param->condition_1_data);
+		aso_ctrl->condition_1_mask = cpu_to_be32(param->condition_1_mask);
+		aso_ctrl->bitwise_data = cpu_to_be64(param->bitwise_data);
+		aso_ctrl->data_mask = cpu_to_be64(param->data_mask);
+	}
+}
+
+static int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
+{
+	struct mlx5e_asosq *sq = container_of(cq, struct mlx5e_asosq, cq);
+	struct mlx5_cqe64 *cqe;
+	int i, err;
+	u16 sqcc;
+
+	err = 0;
+
+	if (unlikely(!test_bit(MLX5E_SQ_STATE_ENABLED, &sq->state)))
+		return -EIO;
+
+	cqe = mlx5_cqwq_get_cqe(&cq->wq);
+
+	if (likely(!cqe)) {
+		/* Per Chip Design, if context is not in ICM cache, it will take 0.5us to read the context.
+		 * We measure the total time in FW from doorbell ring until cqe update is 980us.
+		 * So put 2us is sufficient.
+		 */
+		usleep_range(20, 50); /* WA for RM 2323775 */
+		cqe = mlx5_cqwq_get_cqe(&cq->wq);
+		if (!cqe) {
+			mlx5_core_err(cq->mdev, "No ASO completion\n");
+			return -EIO;
+		}
+	}
+
+	/* sq->cc must be updated only after mlx5_cqwq_update_db_record(),
+	 * otherwise a cq overrun may occur
+	 */
+	sqcc = sq->cc;
+
+	i = 0;
+	do {
+		u16 wqe_counter;
+		bool last_wqe;
+
+		mlx5_cqwq_pop(&cq->wq);
+
+		wqe_counter = be16_to_cpu(cqe->wqe_counter);
+
+		do {
+			struct mlx5e_aso_wqe_info *wi;
+			u16 ci;
+
+			last_wqe = (sqcc == wqe_counter);
+
+			ci = mlx5_wq_cyc_ctr2ix(&sq->wq, sqcc);
+			wi = &sq->db.aso_wqe[ci];
+
+			if (last_wqe && unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
+				struct mlx5_err_cqe *err_cqe;
+
+				mlx5_core_err(cq->mdev, "Bad OP in ASOSQ CQE: 0x%x\n",
+					      get_cqe_opcode(cqe));
+
+				err_cqe = (struct mlx5_err_cqe *)cqe;
+				mlx5_core_err(cq->mdev, "vendor_err_synd=%x\n", err_cqe->vendor_err_synd);
+				mlx5_core_err(cq->mdev, "syndrome=%x\n", err_cqe->syndrome);
+				print_hex_dump(KERN_WARNING, "", DUMP_PREFIX_OFFSET, 16, 1, err_cqe,
+					       sizeof(*err_cqe), false);
+				err = -EIO;
+				break;
+			}
+
+			if (likely(wi->opcode == MLX5_OPCODE_NOP)) {
+				sqcc++;
+			} else if (likely(wi->opcode == MLX5_OPCODE_ACCESS_ASO)) {
+				if (wi->with_data)
+					sqcc += MLX5E_ASO_WQEBBS_DATA;
+				else
+					sqcc += MLX5E_ASO_WQEBBS;
+			} else {
+				mlx5_core_err(cq->mdev,
+					      "Bad OPCODE in ASOSQ WQE info: 0x%x\n",
+					      wi->opcode);
+				err = -EIO;
+				break;
+			}
+		} while (!last_wqe);
+	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
+
+	sq->cc = sqcc;
+
+	mlx5_cqwq_update_db_record(&cq->wq);
+	return err;
+}
+
+static void mlx5e_fill_asosq_frag_edge(struct mlx5e_asosq *sq,  struct mlx5_wq_cyc *wq,
+				       u16 pi, u16 nnops)
+{
+	struct mlx5e_aso_wqe_info *edge_wi, *wi = &sq->db.aso_wqe[pi];
+
+	edge_wi = wi + nnops;
+
+	/* fill sq frag edge with nops to avoid wqe wrapping two pages */
+	for (; wi < edge_wi; wi++) {
+		wi->opcode = MLX5_OPCODE_NOP;
+		mlx5e_post_nop(wq, sq->sqn, &sq->pc);
+	}
+}
+
+static int mlx5e_aso_send_ipsec_aso(struct mlx5e_priv *priv, u32 ipsec_obj_id,
+				    struct mlx5e_aso_ctrl_param *param,
+				    u32 *hard_cnt, u32 *soft_cnt,
+				    u8 *event_arm, u32 *mode_param)
+{
+	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
+	struct mlx5e_asosq *sq = &aso->sq;
+	struct mlx5_wq_cyc *wq = &sq->wq;
+	struct mlx5e_aso_wqe *aso_wqe;
+	u16 pi, contig_wqebbs_room;
+	int err = 0;
+
+	memset(aso->ctx, 0, aso->size);
+
+	pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
+	contig_wqebbs_room = mlx5_wq_cyc_get_contig_wqebbs(wq, pi);
+
+	if (unlikely(contig_wqebbs_room < MLX5E_ASO_WQEBBS)) {
+		mlx5e_fill_asosq_frag_edge(sq, wq, pi, contig_wqebbs_room);
+		pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
+	}
+
+	aso_wqe = mlx5_wq_cyc_get_wqe(wq, pi);
+
+	/* read enable always set */
+	mlx5e_build_aso_wqe(aso, sq, aso_wqe, ipsec_obj_id, param);
+
+	sq->db.aso_wqe[pi].opcode = MLX5_OPCODE_ACCESS_ASO;
+	sq->db.aso_wqe[pi].with_data = false;
+	sq->pc += MLX5E_ASO_WQEBBS;
+	sq->doorbell_cseg = &aso_wqe->ctrl;
+
+	mlx5e_notify_hw(&sq->wq, sq->pc, sq->uar_map, sq->doorbell_cseg);
+
+	WRITE_ONCE(sq->doorbell_cseg, NULL); /* Ensure doorbell is written on uar_page before poll_cq */
+
+	err = mlx5e_poll_aso_cq(&sq->cq);
+	if (err)
+		return err;
+
+	if (hard_cnt)
+		*hard_cnt = MLX5_GET(ipsec_aso, aso->ctx, remove_flow_pkt_cnt);
+	if (soft_cnt)
+		*soft_cnt = MLX5_GET(ipsec_aso, aso->ctx, remove_flow_soft_lft);
+
+	if (event_arm) {
+		*event_arm = 0;
+		if (MLX5_GET(ipsec_aso, aso->ctx, esn_event_arm))
+			*event_arm |= MLX5_ASO_ESN_ARM;
+		if (MLX5_GET(ipsec_aso, aso->ctx, soft_lft_arm))
+			*event_arm |= MLX5_ASO_SOFT_ARM;
+		if (MLX5_GET(ipsec_aso, aso->ctx, hard_lft_arm))
+			*event_arm |= MLX5_ASO_HARD_ARM;
+		if (MLX5_GET(ipsec_aso, aso->ctx, remove_flow_enable))
+			*event_arm |= MLX5_ASO_REMOVE_FLOW_ENABLE;
+	}
+
+	if (mode_param)
+		*mode_param = MLX5_GET(ipsec_aso, aso->ctx, mode_parameter);
+
+	return err;
+}
+
+#define UPPER32_MASK GENMASK_ULL(63, 32)
+
+int mlx5e_ipsec_aso_query(struct mlx5e_priv *priv, u32 obj_id,
+			  u32 *hard_cnt, u32 *soft_cnt,
+			  u8 *event_arm, u32 *mode_param)
+{
+	return mlx5e_aso_send_ipsec_aso(priv, obj_id, NULL, hard_cnt, soft_cnt,
+					event_arm, mode_param);
+}
+
+int mlx5e_ipsec_aso_set(struct mlx5e_priv *priv, u32 obj_id, u8 flags,
+			u32 comparator, u32 *hard_cnt, u32 *soft_cnt,
+			u8 *event_arm, u32 *mode_param)
+{
+	struct mlx5e_aso_ctrl_param param = {};
+	int err = 0;
+
+	if (!flags)
+		return -EINVAL;
+
+	param.data_mask_mode = ASO_DATA_MASK_MODE_BITWISE_64BIT;
+	param.condition_0_operand = ALWAYS_TRUE;
+	param.condition_1_operand = ALWAYS_TRUE;
+
+	if (flags & ARM_ESN_EVENT) {
+		param.data_offset = MLX5_IPSEC_ASO_REMOVE_FLOW_PKT_CNT_OFFSET;
+		param.bitwise_data = BIT(22) << 32;
+		param.data_mask = param.bitwise_data;
+		return mlx5e_aso_send_ipsec_aso(priv, obj_id, &param, NULL, NULL, NULL, NULL);
+	}
+
+	if (flags & SET_SOFT) {
+		param.data_offset = MLX5_IPSEC_ASO_REMOVE_FLOW_SOFT_LFT_OFFSET;
+		param.bitwise_data = (u64)(comparator) << 32;
+		param.data_mask = UPPER32_MASK;
+		err = mlx5e_aso_send_ipsec_aso(priv, obj_id, &param, hard_cnt, soft_cnt,
+					       NULL, NULL);
+		if (flags == SET_SOFT)
+			return err;
+	}
+
+	/* For ASO_WQE big Endian format,
+	 * ARM_SOFT is BIT(25 + 32)
+	 * SET COUNTER BIT 31 is BIT(31)
+	 */
+	param.data_offset = MLX5_IPSEC_ASO_REMOVE_FLOW_PKT_CNT_OFFSET;
+
+	if (flags & SET_CNT_BIT31)
+		param.bitwise_data = IPSEC_SW_LIMIT;
+	if (flags & ARM_SOFT)
+		param.bitwise_data |= BIT(25 + 32);
+	if (flags & CLEAR_SOFT)
+		param.bitwise_data &= ~(BIT(25 + 32));
+
+	param.data_mask = param.bitwise_data;
+	return mlx5e_aso_send_ipsec_aso(priv, obj_id, &param, hard_cnt, soft_cnt, NULL, NULL);
+}
+
+static void mlx5e_aso_build_cq_param(struct mlx5e_priv *priv,
+				     struct mlx5e_cq_param *param)
+{
+	void *cqc = param->cqc;
+
+	MLX5_SET(cqc, cqc, log_cq_size, 1);
+
+	mlx5e_build_common_cq_param(priv, param);
+	param->cq_period_mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
+}
+
+static void mlx5e_build_sq_param_common_aso(struct mlx5e_priv *priv,
+					    struct mlx5e_sq_param *param)
+{
+	void *sqc = param->sqc;
+	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
+
+	MLX5_SET(wq, wq, log_wq_stride, ilog2(MLX5_SEND_WQE_BB));
+
+	MLX5_SET(wq, wq, pd, priv->ipsec->aso->pdn);
+	param->wq.buf_numa_node = dev_to_node(priv->mdev->device);
+}
+
+static void mlx5e_build_asosq_param(struct mlx5e_priv *priv,
+				    struct mlx5e_sq_param *param)
+{
+	void *sqc = param->sqc;
+	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
+
+	mlx5e_build_sq_param_common_aso(priv, param);
+	MLX5_SET(wq, wq, log_wq_sz, MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE);
+}
+
+static void mlx5e_aso_build_param(struct mlx5e_priv *priv, struct mlx5e_ipsec_aso *aso)
+{
+	mlx5e_aso_build_cq_param(priv, &aso->cq_param);
+
+	aso->cpu = cpumask_first(mlx5_comp_irq_get_affinity_mask(priv->mdev, 0));
+	mlx5e_build_asosq_param(priv, &aso->sq_param);
+}
+
+static int mlx5e_alloc_asosq_db(struct mlx5e_asosq *sq, int numa)
+{
+	int wq_sz = mlx5_wq_cyc_get_size(&sq->wq);
+
+	sq->db.aso_wqe = kvzalloc_node(array_size(wq_sz,
+						  sizeof(*sq->db.aso_wqe)),
+				       GFP_KERNEL, numa);
+	if (!sq->db.aso_wqe)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static int mlx5e_alloc_asosq(struct mlx5e_priv *priv)
+{
+	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
+	struct mlx5e_sq_param *param = &aso->sq_param;
+	struct mlx5_core_dev *mdev = priv->mdev;
+	struct mlx5e_asosq *sq = &aso->sq;
+	struct mlx5_wq_cyc *wq = &sq->wq;
+	void *sqc_wq;
+	int err;
+
+	sqc_wq = MLX5_ADDR_OF(sqc, param->sqc, wq);
+	sq->uar_map = mdev->mlx5e_res.bfreg.map;
+
+	param->wq.db_numa_node = cpu_to_node(aso->cpu);
+	err = mlx5_wq_cyc_create(mdev, &param->wq, sqc_wq, wq, &sq->wq_ctrl);
+	if (err)
+		return err;
+	wq->db = &wq->db[MLX5_SND_DBR];
+
+	err = mlx5e_alloc_asosq_db(sq, cpu_to_node(aso->cpu));
+	if (err)
+		mlx5_wq_destroy(&sq->wq_ctrl);
+
+	return err;
+}
+
+static void mlx5e_free_asosq_db(struct mlx5e_asosq *sq)
+{
+	kvfree(sq->db.aso_wqe);
+}
+
+static void mlx5e_free_asosq(struct mlx5e_asosq *sq)
+{
+	mlx5e_free_asosq_db(sq);
+	mlx5_wq_destroy(&sq->wq_ctrl);
+}
+
+static int mlx5e_open_asosq(struct mlx5e_priv *priv)
+{
+	struct mlx5e_ipsec_aso *aso = priv->ipsec->aso;
+	struct mlx5e_sq_param *param = &aso->sq_param;
+	struct mlx5e_create_sq_param csp = {};
+	struct mlx5e_asosq *sq = &aso->sq;
+	int err;
+
+	err = mlx5e_alloc_asosq(priv);
+	if (err)
+		return err;
+
+	csp.cqn             = sq->cq.mcq.cqn;
+	csp.wq_ctrl         = &sq->wq_ctrl;
+	csp.min_inline_mode = MLX5_INLINE_MODE_NONE;
+	err = mlx5e_create_sq_rdy(priv->mdev, param, &csp, &sq->sqn);
+	if (err) {
+		mlx5_core_err(priv->mdev, "fail to open aso sq err=%d\n", err);
+		goto err_free_asosq;
+	}
+
+	set_bit(MLX5E_SQ_STATE_ENABLED, &sq->state);
+
+	return 0;
+
+err_free_asosq:
+	mlx5e_free_asosq(sq);
+
+	return err;
+}
+
+static void mlx5e_close_asosq(struct mlx5e_priv *priv)
+{
+	struct mlx5e_asosq *sq = &priv->ipsec->aso->sq;
+
+	clear_bit(MLX5E_SQ_STATE_ENABLED, &sq->state);
+	mlx5e_destroy_sq(priv->mdev, sq->sqn);
+	mlx5e_free_asosq(sq);
+}
+
+static int mlx5e_aso_alloc_cq(struct mlx5e_priv *priv,
+			      struct mlx5e_cq_param *param,
+			      struct mlx5e_cq *cq, int cpu)
+{
+	int err;
+
+	param->wq.buf_numa_node = cpu_to_node(cpu);
+	param->wq.db_numa_node  = cpu_to_node(cpu);
+	param->eq_ix = 0; /* Use first completion vector */
+
+	err = mlx5e_alloc_cq_common(priv, param, cq);
+
+	/* no interrupt for aso cq */
+	cq->napi    = NULL;
+
+	return err;
+}
+
+static
+int mlx5e_aso_open_cq(struct mlx5e_priv *priv,
+		      struct mlx5e_cq_param *param,
+		      struct mlx5e_cq *cq, int cpu)
+{
+	struct mlx5_core_dev *mdev = priv->mdev;
+	int err;
+
+	err = mlx5e_aso_alloc_cq(priv, param, cq, cpu);
+	if (err) {
+		mlx5_core_err(mdev, "fail to allocate aso cq err=%d\n", err);
+		return err;
+	}
+
+	cq->no_arm = true;
+	err = mlx5e_create_cq(cq, param);
+	if (err) {
+		mlx5_core_err(mdev, "fail to create aso cq err=%d\n", err);
+		goto err_free_cq;
+	}
+
+	return 0;
+
+err_free_cq:
+	mlx5e_free_cq(cq);
+	return err;
+}
+
+void mlx5e_aso_setup(struct mlx5e_priv *priv)
+{
+	struct mlx5e_ipsec_aso *aso;
+	int err;
+
+	if (priv->ipsec->aso)
+		return;
+
+	priv->ipsec->aso = kzalloc(sizeof(*aso), GFP_KERNEL);
+	if (!priv->ipsec->aso)
+		return;
+
+	aso = priv->ipsec->aso;
+	err = mlx5e_aso_reg_mr(priv);
+	if (err)
+		goto err_mr;
+
+	mlx5e_aso_build_param(priv, aso);
+	err = mlx5e_aso_open_cq(priv, &aso->cq_param, &aso->sq.cq, aso->cpu);
+	if (err)
+		goto err_cq;
+
+	err = mlx5e_open_asosq(priv);
+	if (err)
+		goto err_sq;
+
+	return;
+
+err_sq:
+	mlx5e_close_cq(&aso->sq.cq);
+err_cq:
+	mlx5e_aso_dereg_mr(priv);
+err_mr:
+	kfree(priv->ipsec->aso);
+	priv->ipsec->aso = NULL;
+}
+
+void mlx5e_aso_cleanup(struct mlx5e_priv *priv)
+{
+	if (!priv->ipsec->aso)
+		return;
+
+	mlx5e_close_asosq(priv);
+	mlx5e_close_cq(&priv->ipsec->aso->sq.cq);
+	mlx5e_aso_dereg_mr(priv);
+	kfree(priv->ipsec->aso);
+	priv->ipsec->aso = NULL;
+}

@@ -1,0 +1,36 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.h
+
+Change-Id: Ib17d249a641a4c433c113596193abfaf7534e7db
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fpga/tls.h
+@@ -31,12 +31,19 @@
+  *
+  */
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
++
+ #ifndef __MLX5_FPGA_TLS_H__
+ #define __MLX5_FPGA_TLS_H__
+ 
+ #include <linux/mlx5/driver.h>
+ 
++#ifdef HAVE_NET_TLS_H
+ #include <net/tls.h>
++#else
++#include <uapi/linux/tls.h>
++#endif
++
+ #include "fpga/core.h"
+ 
+ struct mlx5_fpga_tls {
+@@ -72,3 +79,5 @@ int mlx5_fpga_tls_resync_rx(struct mlx5_
+ 			    u32 seq, __be64 rcd_sn);
+ 
+ #endif /* __MLX5_FPGA_TLS_H__ */
++
++#endif /* HAVE_UAPI_LINUX_TLS_H */

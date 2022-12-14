@@ -1,117 +1,81 @@
-From: Mikhael Goikhman <migo@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
 
-Change-Id: Ib3f1fd7e2171851e05ab553930f2dec02d050a82
+Change-Id: Id1d7230d8f116fb1c1bc1090e12291166687f80b
 ---
- .../ethernet/mellanox/mlx5/core/en_dcbnl.c    | 30 ++++++++++++++++++-
- 1 file changed, 29 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/tls_rxtx.c    | 20 +++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
-@@ -53,6 +53,8 @@ enum {
- 				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
- 				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.c
+@@ -31,6 +31,8 @@
+  *
+  */
  
-+#ifdef HAVE_IEEE_DCBNL_ETS
-+#ifdef CONFIG_MLX5_CORE_EN_DCB
- static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
- static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
- 
-@@ -535,6 +537,7 @@ fw_err:
- 	return err;
- }
- 
-+#ifdef HAVE_IEEE_GET_SET_MAXRATE
- static int mlx5e_dcbnl_ieee_getmaxrate(struct net_device *netdev,
- 				       struct ieee_maxrate *maxrate)
- {
-@@ -607,6 +610,7 @@ static int mlx5e_dcbnl_ieee_setmaxrate(s
- 
- 	return mlx5_modify_port_ets_rate_limit(mdev, max_bw_value, max_bw_unit);
- }
-+#endif
- 
- static u8 mlx5e_dcbnl_setall(struct net_device *netdev)
- {
-@@ -854,8 +858,13 @@ static u8 mlx5e_dcbnl_getcap(struct net_
- 	return rval;
- }
- 
-+#ifdef HAVE_DCBNL_RTNL_OPS_GETNUMTCS_RET_INT
- static int mlx5e_dcbnl_getnumtcs(struct net_device *netdev,
- 				 int tcs_id, u8 *num)
-+#else
-+static u8 mlx5e_dcbnl_getnumtcs(struct net_device *netdev,
-+				int tcs_id, u8 *num)
-+#endif
- {
- 	struct mlx5e_priv *priv = netdev_priv(netdev);
- 	struct mlx5_core_dev *mdev = priv->mdev;
-@@ -893,6 +902,7 @@ static void mlx5e_dcbnl_setpfcstate(stru
- 	cee_cfg->pfc_enable = state;
- }
- 
-+#ifdef HAVE_DCBNL_GETBUFFER
- static int mlx5e_dcbnl_getbuffer(struct net_device *dev,
- 				 struct dcbnl_buffer *dcb_buffer)
- {
-@@ -976,20 +986,29 @@ static int mlx5e_dcbnl_setbuffer(struct
- 					      buffer_size, prio2buffer);
- 	return err;
- }
-+#endif
- 
-+#ifdef CONFIG_COMPAT_IS_DCBNL_OPS_CONST
- const struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
-+#else
-+struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
-+#endif
- 	.ieee_getets	= mlx5e_dcbnl_ieee_getets,
- 	.ieee_setets	= mlx5e_dcbnl_ieee_setets,
-+#ifdef HAVE_IEEE_GET_SET_MAXRATE
- 	.ieee_getmaxrate = mlx5e_dcbnl_ieee_getmaxrate,
- 	.ieee_setmaxrate = mlx5e_dcbnl_ieee_setmaxrate,
-+#endif
- 	.ieee_getpfc	= mlx5e_dcbnl_ieee_getpfc,
- 	.ieee_setpfc	= mlx5e_dcbnl_ieee_setpfc,
- 	.ieee_setapp    = mlx5e_dcbnl_ieee_setapp,
- 	.ieee_delapp    = mlx5e_dcbnl_ieee_delapp,
- 	.getdcbx	= mlx5e_dcbnl_getdcbx,
- 	.setdcbx	= mlx5e_dcbnl_setdcbx,
-+#ifdef HAVE_DCBNL_GETBUFFER
- 	.dcbnl_getbuffer = mlx5e_dcbnl_getbuffer,
- 	.dcbnl_setbuffer = mlx5e_dcbnl_setbuffer,
-+#endif
- 
- /* CEE interfaces */
- 	.setall         = mlx5e_dcbnl_setall,
-@@ -1123,7 +1142,9 @@ static int mlx5e_update_trust_state_hw(s
- 
- static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
- {
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
- 	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
-+#endif
- 	struct mlx5e_channels new_channels = {};
- 	bool reset_channels = true;
- 	int err = 0;
-@@ -1155,7 +1176,12 @@ static int mlx5e_set_trust_state(struct
- 
- 	/* In DSCP trust state, we need 8 send queues per channel */
- 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
--		mlx5e_setup_tc_mqprio(priv, &mqprio);
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+                mlx5e_setup_tc_mqprio(priv, &mqprio);
-+#else
-+                mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);
-+#endif
++#ifdef HAVE_UAPI_LINUX_TLS_H
 +
- 
- 	return err;
+ #include "en_accel/tls.h"
+ #include "en_accel/tls_rxtx.h"
+ #include "accel/accel.h"
+@@ -307,6 +309,7 @@ void mlx5e_tls_handle_tx_wqe(struct mlx5
+ 	cseg->tis_tir_num = cpu_to_be32(state->tls_tisn << 8);
  }
-@@ -1240,3 +1266,5 @@ void mlx5e_dcbnl_initialize(struct mlx5e
  
- 	mlx5e_ets_init(priv);
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_REQUEST
+ static int tls_update_resync_sn(struct net_device *netdev,
+ 				struct sk_buff *skb,
+ 				struct mlx5e_tls_metadata *mdata)
+@@ -330,11 +333,17 @@ static int tls_update_resync_sn(struct n
+ #if IS_ENABLED(CONFIG_IPV6)
+ 	} else {
+ 		struct ipv6hdr *ipv6h = (struct ipv6hdr *)iph;
+-
++#ifdef HAVE___INET6_LOOKUP_ESTABLISHED_HAS_7_PARAMS
+ 		sk = __inet6_lookup_established(dev_net(netdev), &tcp_hashinfo,
+ 						&ipv6h->saddr, th->source,
+ 						&ipv6h->daddr, ntohs(th->dest),
+-						netdev->ifindex, 0);
++						netdev->ifindex);
++#else
++		sk = __inet6_lookup_established(dev_net(netdev), &tcp_hashinfo,
++				&ipv6h->saddr, th->source,
++				&ipv6h->daddr, ntohs(th->dest),
++				netdev->ifindex, 0);
++#endif
+ #endif
+ 	}
+ 	if (!sk || sk->sk_state == TCP_TIME_WAIT) {
+@@ -352,6 +361,7 @@ static int tls_update_resync_sn(struct n
+ out:
+ 	return 0;
  }
 +#endif
+ 
+ /* FPGA tls rx handler */
+ void mlx5e_tls_handle_rx_skb_metadata(struct mlx5e_rq *rq, struct sk_buff *skb,
+@@ -363,14 +373,18 @@ void mlx5e_tls_handle_rx_skb_metadata(st
+ 	/* Use the metadata */
+ 	mdata = (struct mlx5e_tls_metadata *)(skb->data + ETH_HLEN);
+ 	switch (mdata->content.recv.syndrome) {
++#ifdef HAVE_SK_BUFF_DECRYPTED
+ 	case SYNDROM_DECRYPTED:
+ 		skb->decrypted = 1;
+ 		break;
++#endif
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_REQUEST
+ 	case SYNDROM_RESYNC_REQUEST:
+ 		tls_update_resync_sn(rq->netdev, skb, mdata);
+ 		priv = netdev_priv(rq->netdev);
+ 		atomic64_inc(&priv->tls->sw_stats.rx_tls_resync_request);
+ 		break;
++#endif
+ 	case SYNDROM_AUTH_FAILED:
+ 		/* Authentication failure will be observed and verified by kTLS */
+ 		priv = netdev_priv(rq->netdev);
+@@ -397,3 +411,5 @@ u16 mlx5e_tls_get_stop_room(struct mlx5_
+ 	/* Resync SKB. */
+ 	return mlx5e_stop_room_for_wqe(MLX5_SEND_WQE_MAX_WQEBBS);
+ }
++
 +#endif

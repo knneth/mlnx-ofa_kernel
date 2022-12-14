@@ -728,7 +728,8 @@ static ssize_t trunk_show(struct mlx5_sriov_vf *g,
 	mutex_lock(&esw->state_lock);
 	if (!!bitmap_weight(vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID)) {
 		ret += _sprintf(ret, buf, "Allowed 802.1Q VLANs:");
-		for_each_set_bit(vlan_id, vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID)
+		for_each_set_bit(vlan_id, vport->info.vlan_trunk_8021q_bitmap,
+				 VLAN_N_VID)
 			ret += _sprintf(ret, buf, " %d", vlan_id);
 		ret += _sprintf(ret, buf, "\n");
 	}
@@ -794,8 +795,8 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "MaxTxRate  : %d\n", ivi->max_rate);
 	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
 	p += _sprintf(p, buf, "VGT+       : %s\n",
-		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap, VLAN_N_VID) ?
-		      "ON" : "OFF");
+		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
+				      VLAN_N_VID) ? "ON" : "OFF");
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -840,9 +841,7 @@ static ssize_t config_group_store(struct mlx5_vgroup *g,
 static ssize_t stats_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 			  char *buf)
 {
-#ifndef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
 	struct ifla_vf_stats_backport ifi_backport;
-#endif
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_vport *vport = mlx5_eswitch_get_vport(dev->priv.eswitch, g->vf + 1);
 	struct ifla_vf_stats ifi;
@@ -854,11 +853,9 @@ static ssize_t stats_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	if (err)
 		return -EINVAL;
 
-#ifndef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
 	err = mlx5_eswitch_get_vport_stats_backport(dev->priv.eswitch, g->vf + 1, &ifi_backport);
 	if (err)
 		return -EINVAL;
-#endif
 	err = mlx5_eswitch_query_vport_drop_stats(dev, vport, &stats);
 	if (err)
 		return -EINVAL;
@@ -870,13 +867,8 @@ static ssize_t stats_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "rx_bytes      : %llu\n", ifi.rx_bytes);
 	p += _sprintf(p, buf, "rx_broadcast  : %llu\n", ifi.broadcast);
 	p += _sprintf(p, buf, "rx_multicast  : %llu\n", ifi.multicast);
-#ifdef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
-	p += _sprintf(p, buf, "tx_broadcast  : %llu\n", ifi.tx_broadcast);
-	p += _sprintf(p, buf, "tx_multicast  : %llu\n", ifi.tx_multicast);
-#else
 	p += _sprintf(p, buf, "tx_broadcast  : %llu\n", ifi_backport.tx_broadcast);
 	p += _sprintf(p, buf, "tx_multicast  : %llu\n", ifi_backport.tx_multicast);
-#endif
 	p += _sprintf(p, buf, "rx_dropped    : %llu\n", stats.rx_dropped);
 
 	return (ssize_t)(p - buf);
@@ -1171,6 +1163,7 @@ void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs)
 		kobject_put(&tmp->kobj);
 	}
 #endif
+
 	for (vf = 0; vf < num_vfs; vf++) {
 		tmp = &sriov->vfs[vf];
 		kobject_put(&tmp->kobj);

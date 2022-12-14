@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
+
+Change-Id: Icfab4d409722d7b2f2b57b1d1df69298973dc387
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
+@@ -135,6 +135,7 @@ int mlx5_mpfs_add_mac(struct mlx5_core_d
+ 	struct l2table_node *l2addr;
+ 	int err = 0;
+ 	u32 index;
++	COMPAT_HL_NODE
+ 
+ 	if (!MLX5_ESWITCH_MANAGER(dev))
+ 		return 0;
+@@ -182,6 +183,7 @@ int mlx5_mpfs_del_mac(struct mlx5_core_d
+ 	struct l2table_node *l2addr;
+ 	int err = 0;
+ 	u32 index;
++	COMPAT_HL_NODE
+ 
+ 	if (!MLX5_ESWITCH_MANAGER(dev))
+ 		return 0;

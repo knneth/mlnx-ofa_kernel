@@ -1,0 +1,491 @@
+From: Sergey Gorenko <sergeygo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
+
+Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
+---
+ drivers/infiniband/ulp/isert/ib_isert.c | 167 +++++++++++++++++++++++-
+ 1 file changed, 164 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/ulp/isert/ib_isert.c
++++ b/drivers/infiniband/ulp/isert/ib_isert.c
+@@ -75,8 +75,12 @@ static int isert_sg_tablesize_set(const
+ static inline bool
+ isert_prot_cmd(struct isert_conn *conn, struct se_cmd *cmd)
+ {
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	return (conn->pi_support &&
+ 		cmd->prot_op != TARGET_PROT_NORMAL);
++#else
++	return false;
++#endif
+ }
+ 
+ 
+@@ -422,11 +426,14 @@ static int
+ isert_connect_request(struct rdma_cm_id *cma_id, struct rdma_cm_event *event)
+ {
+ 	struct isert_np *isert_np = cma_id->context;
++#ifdef HAVE_ISCSI_NP_ENABLED
+ 	struct iscsi_np *np = isert_np->np;
++#endif
+ 	struct isert_conn *isert_conn;
+ 	struct isert_device *device;
+ 	int ret = 0;
+ 
++#ifdef HAVE_ISCSI_NP_ENABLED
+ 	spin_lock_bh(&np->np_thread_lock);
+ 	if (!np->enabled) {
+ 		spin_unlock_bh(&np->np_thread_lock);
+@@ -434,6 +441,7 @@ isert_connect_request(struct rdma_cm_id
+ 		return rdma_reject(cma_id, NULL, 0, IB_CM_REJ_CONSUMER_DEFINED);
+ 	}
+ 	spin_unlock_bh(&np->np_thread_lock);
++#endif
+ 
+ 	isert_dbg("cma_id: %p, portal: %p\n",
+ 		 cma_id, cma_id->context);
+@@ -1044,7 +1052,11 @@ static struct iscsi_cmd
+ 	struct isert_cmd *isert_cmd;
+ 	struct iscsi_cmd *cmd;
+ 
++#ifndef ISCSIT_ALLOCATE_CMD_ARG_2_IS_GFP_T
+ 	cmd = iscsit_allocate_cmd(conn, TASK_INTERRUPTIBLE);
++#else
++	cmd = iscsit_allocate_cmd(conn, GFP_KERNEL);
++#endif
+ 	if (!cmd) {
+ 		isert_err("Unable to allocate iscsi_cmd + isert_cmd\n");
+ 		return NULL;
+@@ -1077,8 +1089,14 @@ isert_handle_scsi_cmd(struct isert_conn
+ 	unsol_data = cmd->unsolicited_data;
+ 	data_len = cmd->se_cmd.data_length;
+ 
++#ifdef HAVE_SE_CMD_TRANSPORT_COMPLETE_CALLBACK_HAS_THREE_PARAM
+ 	if (imm_data && imm_data_len == data_len)
+ 		cmd->se_cmd.se_cmd_flags |= SCF_PASSTHROUGH_SG_TO_MEM_NOALLOC;
++#else
++	if (imm_data && imm_data_len == data_len &&
++            !(cmd->se_cmd.se_cmd_flags & SCF_COMPARE_AND_WRITE))
++		cmd->se_cmd.se_cmd_flags |= SCF_PASSTHROUGH_SG_TO_MEM_NOALLOC;
++#endif
+ 	rc = iscsit_process_scsi_cmd(conn, cmd, hdr);
+ 	if (rc < 0) {
+ 		return 0;
+@@ -1090,7 +1108,12 @@ isert_handle_scsi_cmd(struct isert_conn
+ 	if (!imm_data)
+ 		return 0;
+ 
++#ifdef HAVE_SE_CMD_TRANSPORT_COMPLETE_CALLBACK_HAS_THREE_PARAM
+ 	if (imm_data_len != data_len) {
++#else
++	if (imm_data_len != data_len ||
++            (cmd->se_cmd.se_cmd_flags & SCF_COMPARE_AND_WRITE)) {
++#endif
+ 		sg_nents = max(1UL, DIV_ROUND_UP(imm_data_len, PAGE_SIZE));
+ 		sg_copy_from_buffer(cmd->se_cmd.t_data_sg, sg_nents,
+ 				    isert_get_data(rx_desc), imm_data_len);
+@@ -1119,9 +1142,17 @@ sequence_cmd:
+ 	rc = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
+ 
+ 	if (!rc && dump_payload == false && unsol_data)
++#ifdef HAVE_ISCSIT_SET_UNSOLICITED_DATAOUT
+ 		iscsit_set_unsolicited_dataout(cmd);
++#else
++		iscsit_set_unsoliticed_dataout(cmd);
++#endif
+ 	else if (dump_payload && imm_data)
++#ifdef HAVE_TARGET_PUT_SESS_CMD_HAS_1_PARAM
+ 		target_put_sess_cmd(&cmd->se_cmd);
++#else
++		target_put_sess_cmd(conn->sess->se_sess, &cmd->se_cmd);
++#endif
+ 
+ 	return 0;
+ }
+@@ -1300,10 +1331,14 @@ isert_rx_opcode(struct isert_conn *isert
+ 		ret = iscsit_handle_logout_cmd(conn, cmd, (unsigned char *)hdr);
+ 		break;
+ 	case ISCSI_OP_TEXT:
++#ifdef HAVE_ISCSIT_FIND_CMD_FROM_ITT
+ 		if (be32_to_cpu(hdr->ttt) != 0xFFFFFFFF)
+ 			cmd = iscsit_find_cmd_from_itt(conn, hdr->itt);
+ 		else
+ 			cmd = isert_allocate_cmd(conn, rx_desc);
++#else
++		cmd = isert_allocate_cmd(conn, rx_desc);
++#endif /* HAVE_ISCSIT_FIND_CMD_FROM_ITT */
+ 
+ 		if (!cmd)
+ 			break;
+@@ -1432,6 +1467,7 @@ isert_rdma_rw_ctx_destroy(struct isert_c
+ 	if (!cmd->rw.nr_ops)
+ 		return;
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	if (isert_prot_cmd(conn, se_cmd)) {
+ 		rdma_rw_ctx_destroy_signature(&cmd->rw, conn->qp,
+ 				conn->cm_id->port_num, se_cmd->t_data_sg,
+@@ -1441,6 +1477,10 @@ isert_rdma_rw_ctx_destroy(struct isert_c
+ 		rdma_rw_ctx_destroy(&cmd->rw, conn->qp, conn->cm_id->port_num,
+ 				se_cmd->t_data_sg, se_cmd->t_data_nents, dir);
+ 	}
++#else
++	rdma_rw_ctx_destroy(&cmd->rw, conn->qp, conn->cm_id->port_num,
++			se_cmd->t_data_sg, se_cmd->t_data_nents, dir);
++#endif
+ 
+ 	cmd->rw.nr_ops = 0;
+ }
+@@ -1473,8 +1513,11 @@ isert_put_cmd(struct isert_cmd *isert_cm
+ 			if (comp_err &&
+ 			    cmd->se_cmd.t_state == TRANSPORT_WRITE_PENDING) {
+ 				struct se_cmd *se_cmd = &cmd->se_cmd;
+-
++#ifdef HAVE_TARGET_PUT_SESS_CMD_HAS_1_PARAM
+ 				target_put_sess_cmd(se_cmd);
++#else
++				target_put_sess_cmd(se_cmd->se_sess, se_cmd);
++#endif
+ 			}
+ 		}
+ 
+@@ -1546,6 +1589,7 @@ isert_completion_put(struct iser_tx_desc
+ 	isert_put_cmd(isert_cmd, comp_err);
+ }
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ static int
+ isert_check_pi_status(struct se_cmd *se_cmd, struct ib_mr *sig_mr)
+ {
+@@ -1589,6 +1633,7 @@ isert_check_pi_status(struct se_cmd *se_
+ fail_mr_status:
+ 	return ret;
+ }
++#endif
+ 
+ static void
+ isert_rdma_write_done(struct ib_cq *cq, struct ib_wc *wc)
+@@ -1597,8 +1642,10 @@ isert_rdma_write_done(struct ib_cq *cq,
+ 	struct isert_device *device = isert_conn->device;
+ 	struct iser_tx_desc *desc = cqe_to_tx_desc(wc->wr_cqe);
+ 	struct isert_cmd *isert_cmd = tx_desc_to_cmd(desc);
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	struct se_cmd *cmd = &isert_cmd->iscsi_cmd->se_cmd;
+ 	int ret = 0;
++#endif
+ 
+ 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
+ 		isert_print_wc(wc, "rdma write");
+@@ -1610,6 +1657,7 @@ isert_rdma_write_done(struct ib_cq *cq,
+ 
+ 	isert_dbg("Cmd %p\n", isert_cmd);
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	ret = isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
+ 	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
+ 
+@@ -1630,6 +1678,10 @@ isert_rdma_write_done(struct ib_cq *cq,
+ 		if (ret)
+ 			pr_warn_ratelimited("isert_put_response() ret: %d\n", ret);
+ 	}
++#else
++	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
++	isert_put_response(isert_conn->conn, isert_cmd->iscsi_cmd);
++#endif
+ }
+ 
+ static void
+@@ -1641,7 +1693,9 @@ isert_rdma_read_done(struct ib_cq *cq, s
+ 	struct isert_cmd *isert_cmd = tx_desc_to_cmd(desc);
+ 	struct iscsi_cmd *cmd = isert_cmd->iscsi_cmd;
+ 	struct se_cmd *se_cmd = &cmd->se_cmd;
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	int ret = 0;
++#endif
+ 
+ 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
+ 		isert_print_wc(wc, "rdma read");
+@@ -1655,8 +1709,10 @@ isert_rdma_read_done(struct ib_cq *cq, s
+ 
+ 	iscsit_stop_dataout_timer(cmd);
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	if (isert_prot_cmd(isert_conn, se_cmd))
+ 		ret = isert_check_pi_status(se_cmd, isert_cmd->rw.reg->mr);
++#endif
+ 	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
+ 	cmd->write_data_done = 0;
+ 
+@@ -1671,9 +1727,11 @@ isert_rdma_read_done(struct ib_cq *cq, s
+ 	 * se_cmd->cmd_kref reference after T10-PI error, and handle
+ 	 * any non-zero ->queue_status() callback error retries.
+ 	 */
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	if (ret)
+ 		transport_generic_request_failure(se_cmd, se_cmd->pi_err);
+ 	else
++#endif
+ 		target_execute_cmd(se_cmd);
+ }
+ 
+@@ -1731,10 +1789,13 @@ isert_send_done(struct ib_cq *cq, struct
+ 	struct ib_device *ib_dev = isert_conn->cm_id->device;
+ 	struct iser_tx_desc *tx_desc = cqe_to_tx_desc(wc->wr_cqe);
+ 	struct isert_cmd *isert_cmd = tx_desc_to_cmd(tx_desc);
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	struct se_cmd *cmd = &isert_cmd->iscsi_cmd->se_cmd;
++#endif
+ 
+ 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
+ 		isert_print_wc(wc, "send");
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 		if (wc->status == IB_WC_SIG_PIPELINE_CANCELED) {
+ 			isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
+ 			isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
+@@ -1747,19 +1808,24 @@ isert_send_done(struct ib_cq *cq, struct
+ 			kref_get(&cmd->cmd_kref);
+ 			transport_generic_request_failure(cmd, cmd->pi_err);
+ 		} else {
++#endif
+ 			if (wc->status != IB_WC_WR_FLUSH_ERR)
+ 				iscsit_cause_connection_reinstatement(
+ 					isert_conn->conn, 0);
+ 			isert_completion_put(tx_desc, isert_cmd, ib_dev, true);
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 		}
++#endif
+ 		return;
+ 	}
+ 
+ 	isert_dbg("Cmd %p\n", isert_cmd);
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	/* To reuse the signature MR later, we need to mark it as checked. */
+ 	if (isert_cmd->send_sig_pipelined)
+ 		isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
++#endif
+ 
+ 	switch (isert_cmd->iscsi_cmd->i_state) {
+ 	case ISTATE_SEND_TASKMGTRSP:
+@@ -1864,27 +1930,40 @@ isert_aborted_task(struct iscsi_conn *co
+ 	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
+ }
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ static enum target_prot_op
+ isert_get_sup_prot_ops(struct iscsi_conn *conn)
+ {
+ 	struct isert_conn *isert_conn = conn->context;
+ 	struct isert_device *device = isert_conn->device;
+-
++/*
++ * In older versions of the kernel conn->tpg->tpg_attrib.t10_pi is not
++ * initialized before calling this function. And there is no option to
++ * test it in rdma.m4 because the behavior is hide in the iscsi_target_mod
++ * module. See the commit 23a548ee656c ("iscsi,iser-target: Expose
++ * supported protection ops according to t10_pi") in the upstream kernel.
++ */
++#if defined(CONFIG_COMPAT_RHEL_7_2) \
++    || (LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0))
+ 	if (conn->tpg->tpg_attrib.t10_pi) {
++#endif
+ 		if (device->pi_capable) {
+ 			isert_info("conn %p PI offload enabled\n", isert_conn);
+ 			isert_conn->pi_support = true;
+ 			isert_conn->sig_pipeline = device->sig_pipeline;
+ 			return TARGET_PROT_ALL;
+ 		}
++#if defined(CONFIG_COMPAT_RHEL_7_2) \
++    || (LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0))
+ 	}
+-
++#endif
+ 	isert_info("conn %p PI offload disabled\n", isert_conn);
+ 	isert_conn->pi_support = false;
+ 	isert_conn->sig_pipeline = false;
+ 
+ 	return TARGET_PROT_NORMAL;
+ }
++#endif
+ 
+ static int
+ isert_put_nopin(struct iscsi_cmd *cmd, struct iscsi_conn *conn,
+@@ -2020,6 +2099,7 @@ isert_put_text_rsp(struct iscsi_cmd *cmd
+ 	return isert_post_response(isert_conn, isert_cmd);
+ }
+ 
++#ifdef HAVE_SE_CMD_HAS_PROT_CHECKS
+ static inline void
+ isert_set_dif_domain(struct se_cmd *se_cmd, struct ib_sig_domain *domain)
+ {
+@@ -2075,6 +2155,7 @@ isert_set_sig_attrs(struct se_cmd *se_cm
+ 
+ 	return 0;
+ }
++#endif
+ 
+ static int
+ isert_rdma_rw_ctx_post(struct isert_cmd *cmd, struct isert_conn *conn,
+@@ -2100,6 +2181,7 @@ isert_rdma_rw_ctx_post(struct isert_cmd
+ 		offset = 0;
+ 	}
+ 
++#ifdef HAVE_SE_CMD_HAS_PROT_CHECKS
+ 	if (isert_prot_cmd(conn, se_cmd)) {
+ 		struct ib_sig_attrs sig_attrs;
+ 
+@@ -2117,6 +2199,11 @@ isert_rdma_rw_ctx_post(struct isert_cmd
+ 				se_cmd->t_data_sg, se_cmd->t_data_nents,
+ 				offset, addr, rkey, dir);
+ 	}
++#else
++	ret = rdma_rw_ctx_init(&cmd->rw, conn->qp, port_num, se_cmd->t_data_sg,
++			       se_cmd->t_data_nents, offset, addr, rkey, dir);
++
++#endif
+ 
+ 	if (ret < 0) {
+ 		isert_err("Cmd: %p failed to prepare RDMA res\n", cmd);
+@@ -2424,11 +2511,47 @@ isert_set_conn_info(struct iscsi_np *np,
+ {
+ 	struct rdma_cm_id *cm_id = isert_conn->cm_id;
+ 	struct rdma_route *cm_route = &cm_id->route;
++#ifndef HAVE_ISCSI_CONN_LOGIN_SOCKADDR
++	struct sockaddr_in *sock_in;
++	struct sockaddr_in6 *sock_in6;
++#endif
+ 
+ 	conn->login_family = np->np_sockaddr.ss_family;
+ 
++#ifdef HAVE_ISCSI_CONN_LOGIN_SOCKADDR
+ 	conn->login_sockaddr = cm_route->addr.dst_addr;
+ 	conn->local_sockaddr = cm_route->addr.src_addr;
++#else
++	if (np->np_sockaddr.ss_family == AF_INET6) {
++		sock_in6 = (struct sockaddr_in6 *)&cm_route->addr.dst_addr;
++		snprintf(conn->login_ip, sizeof(conn->login_ip), "%pI6c",
++		         &sock_in6->sin6_addr.in6_u);
++		conn->login_port = ntohs(sock_in6->sin6_port);
++
++		sock_in6 = (struct sockaddr_in6 *)&cm_route->addr.src_addr;
++#ifdef HAVE_ISCSI_CONN_LOCAL_SOCKADDR
++		memcpy(&conn->local_sockaddr , &sock_in6, sizeof(sock_in6));
++#else
++		snprintf(conn->local_ip, sizeof(conn->local_ip), "%pI6c",
++		         &sock_in6->sin6_addr.in6_u);
++		conn->local_port = ntohs(sock_in6->sin6_port);
++#endif /* HAVE_ISCSI_CONN_LOCAL_SOCKADDR */
++	} else {
++		sock_in = (struct sockaddr_in *)&cm_route->addr.dst_addr;
++		sprintf(conn->login_ip, "%pI4",
++		        &sock_in->sin_addr.s_addr);
++		conn->login_port = ntohs(sock_in->sin_port);
++
++		sock_in = (struct sockaddr_in *)&cm_route->addr.src_addr;
++#ifdef HAVE_ISCSI_CONN_LOCAL_SOCKADDR
++		memcpy(&conn->local_sockaddr , &sock_in, sizeof(sock_in));
++#else
++		sprintf(conn->local_ip, "%pI4",
++		        &sock_in->sin_addr.s_addr);
++		conn->local_port = ntohs(sock_in->sin_port);
++#endif /* HAVE_ISCSI_CONN_LOCAL_SOCKADDR */
++	}
++#endif /* HAVE_ISCSI_CONN_LOGIN_SOCKADDR */
+ }
+ 
+ static int
+@@ -2597,6 +2720,7 @@ isert_put_unsol_pending_cmds(struct iscs
+ 	}
+ }
+ 
++#ifdef CONFIG_COMPAT_ISCSIT_WAIT_CONN
+ static void isert_wait_conn(struct iscsi_conn *conn)
+ {
+ 	struct isert_conn *isert_conn = conn->context;
+@@ -2614,15 +2738,40 @@ static void isert_wait_conn(struct iscsi
+ 
+ 	queue_work(isert_release_wq, &isert_conn->release_work);
+ }
++#endif
+ 
+ static void isert_free_conn(struct iscsi_conn *conn)
+ {
+ 	struct isert_conn *isert_conn = conn->context;
+ 
++#ifndef CONFIG_COMPAT_ISCSIT_WAIT_CONN
++	mutex_lock(&isert_conn->mutex);
++	if (isert_conn->state == ISER_CONN_INIT) {
++		mutex_unlock(&isert_conn->mutex);
++		goto out;
++	}
++	isert_conn_terminate(isert_conn);
++	mutex_unlock(&isert_conn->mutex);
++
++	/*
++	 * Only drain qp if the isert_conn made it
++	 * into full feature phase..
++	 */
++	if (isert_conn->state == ISER_CONN_FULL_FEATURE) {
++		ib_drain_qp(isert_conn->qp);
++		isert_put_unsol_pending_cmds(conn);
++		isert_wait4cmds(conn);
++		isert_wait4logout(isert_conn);
++	}
++	queue_work(isert_release_wq, &isert_conn->release_work);
++out:
++#else
+ 	ib_drain_qp(isert_conn->qp);
++#endif
+ 	isert_put_conn(isert_conn);
+ }
+ 
++#ifdef HAVE_ISCSIT_TRANSPORT_ISCSIT_GET_RX_PDU
+ static void isert_get_rx_pdu(struct iscsi_conn *conn)
+ {
+ 	struct completion comp;
+@@ -2631,17 +2780,22 @@ static void isert_get_rx_pdu(struct iscs
+ 
+ 	wait_for_completion_interruptible(&comp);
+ }
++#endif
+ 
+ static struct iscsit_transport iser_target_transport = {
+ 	.name			= "IB/iSER",
+ 	.transport_type		= ISCSI_INFINIBAND,
++#ifdef HAVE_ISCSIT_TRANSPORT_RDMA_SHUTDOWN
+ 	.rdma_shutdown		= true,
++#endif
+ 	.priv_size		= sizeof(struct isert_cmd),
+ 	.owner			= THIS_MODULE,
+ 	.iscsit_setup_np	= isert_setup_np,
+ 	.iscsit_accept_np	= isert_accept_np,
+ 	.iscsit_free_np		= isert_free_np,
++#ifdef CONFIG_COMPAT_ISCSIT_WAIT_CONN
+ 	.iscsit_wait_conn	= isert_wait_conn,
++#endif
+ 	.iscsit_free_conn	= isert_free_conn,
+ 	.iscsit_get_login_rx	= isert_get_login_rx,
+ 	.iscsit_put_login_tx	= isert_put_login_tx,
+@@ -2651,8 +2805,12 @@ static struct iscsit_transport iser_targ
+ 	.iscsit_queue_data_in	= isert_put_datain,
+ 	.iscsit_queue_status	= isert_put_response,
+ 	.iscsit_aborted_task	= isert_aborted_task,
++#ifdef HAVE_ISCSIT_TRANSPORT_ISCSIT_GET_RX_PDU
+ 	.iscsit_get_rx_pdu	= isert_get_rx_pdu,
++#endif
++#ifdef HAVE_ISCSIT_TRANSPORT_HAS_GET_SUP_PROT_OPS
+ 	.iscsit_get_sup_prot_ops = isert_get_sup_prot_ops,
++#endif
+ };
+ 
+ static int __init isert_init(void)
+@@ -2697,6 +2855,9 @@ static void __exit isert_exit(void)
+ MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
+ MODULE_AUTHOR("nab@Linux-iSCSI.org");
+ MODULE_LICENSE("GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ module_init(isert_init);
+ module_exit(isert_exit);

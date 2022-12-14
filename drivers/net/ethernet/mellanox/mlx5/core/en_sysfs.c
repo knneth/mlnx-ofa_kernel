@@ -1213,11 +1213,13 @@ static ssize_t prio_hp_num_store(struct device *device, struct device_attribute 
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	struct mlx5e_tc_table *tc = &priv->fs.tc;
+	struct net_device *peer_dev;
+	char ifname[IFNAMSIZ];
 	int num_hp;
 	int err;
 
-	err = sscanf(buf, "%d", &num_hp);
-	if (err != 1)
+	err = sscanf(buf, "%d %15s", &num_hp, ifname);
+	if (err != 2)
 		return -EINVAL;
 
 	if (num_hp < 0 || num_hp > MLX5E_MAX_HP_PRIO)
@@ -1226,8 +1228,12 @@ static ssize_t prio_hp_num_store(struct device *device, struct device_attribute 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
 
+	peer_dev = __dev_get_by_name(dev_net(priv->netdev), ifname);
+	if (!peer_dev)
+		return -EINVAL;
+
 	if (num_hp && !tc->num_prio_hp) {
-		err = mlx5e_prio_hairpin_mode_enable(priv, num_hp);
+		err = mlx5e_prio_hairpin_mode_enable(priv, num_hp, peer_dev);
 		if (err)
 			goto err_config;
 	} else if (!num_hp && tc->num_prio_hp) {
@@ -1406,6 +1412,8 @@ int mlx5e_sysfs_create(struct net_device *dev)
 	if (err)
 		goto remove_phy_stat_group;
 
+	mlx5_eswitch_compat_sysfs_init(dev);
+
 	return 0;
 
 remove_phy_stat_group:
@@ -1438,6 +1446,8 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 
 	if (!priv->ecn_root_kobj)
 		return;
+
+	mlx5_eswitch_compat_sysfs_cleanup(dev);
 
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);

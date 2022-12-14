@@ -216,6 +216,26 @@ struct mlx5_wqe_ctrl_seg {
 	};
 };
 
+struct mlx5_wqe_aso_ctrl_seg {
+	__be32  va_h;
+	__be32  va_l; /* include read_enable */
+	__be32  l_key;
+	u8      data_mask_mode;
+	u8      condition_1_0_operand;
+	u8      condition_1_0_offset;
+	u8      data_offset_condition_operand;
+	__be32  condition_0_data;
+	__be32  condition_0_mask;
+	__be32  condition_1_data;
+	__be32  condition_1_mask;
+	__be64  bitwise_data;
+	__be64  data_mask;
+};
+
+struct mlx5_wqe_aso_data_seg {
+	__be32  bytewise_data[16];
+};
+
 enum {
 	MLX5_MLX_FLAG_MASK_VL15 = 0x40,
 	MLX5_MLX_FLAG_MASK_SLR  = 0x20,
@@ -238,6 +258,7 @@ struct mlx5_mlx_seg {
 #define MLX5_WQE_CTRL_OPCODE_MASK 0xff
 #define MLX5_WQE_CTRL_WQE_INDEX_MASK 0x00ffff00
 #define MLX5_WQE_CTRL_WQE_INDEX_SHIFT 8
+#define MLX5_WQE_CTRL_WQE_OPC_MOD_SHIFT 24
 
 enum {
 	MLX5_ETH_WQE_L3_INNER_CSUM      = 1 << 4,
@@ -432,7 +453,7 @@ struct mlx5_wqe_signature_seg {
 
 struct mlx5_wqe_inline_seg {
 	__be32	byte_count;
-	__be32	data[0];
+	__be32	data[];
 };
 
 enum mlx5_sig_type {
@@ -525,72 +546,6 @@ struct mlx5_core_qp {
 struct mlx5_core_dct {
 	struct mlx5_core_qp	mqp;
 	struct completion	drained;
-};
-
-struct mlx5_qp_path {
-	u8			fl_free_ar;
-	u8			rsvd3;
-	__be16			pkey_index;
-	u8			rsvd0;
-	u8			grh_mlid;
-	__be16			rlid;
-	u8			ackto_lt;
-	u8			mgid_index;
-	u8			static_rate;
-	u8			hop_limit;
-	__be32			tclass_flowlabel;
-	union {
-		u8		rgid[16];
-		u8		rip[16];
-	};
-	u8			f_dscp_ecn_prio;
-	u8			ecn_dscp;
-	__be16			udp_sport;
-	u8			dci_cfi_prio_sl;
-	u8			port;
-	u8			rmac[6];
-};
-
-/* FIXME: use mlx5_ifc.h qpc */
-struct mlx5_qp_context {
-	__be32			flags;
-	__be32			flags_pd;
-	u8			mtu_msgmax;
-	u8			rq_size_stride;
-	__be16			sq_crq_size;
-	__be32			qp_counter_set_usr_page;
-	__be32			wire_qpn;
-	__be32			log_pg_sz_remote_qpn;
-	struct			mlx5_qp_path pri_path;
-	struct			mlx5_qp_path alt_path;
-	__be32			params1;
-	u8			reserved2[4];
-	__be32			next_send_psn;
-	__be32			cqn_send;
-	__be32			deth_sqpn;
-	u8			reserved3[4];
-	__be32			last_acked_psn;
-	__be32			ssn;
-	__be32			params2;
-	__be32			rnr_nextrecvpsn;
-	__be32			xrcd;
-	__be32			cqn_recv;
-	__be64			db_rec_addr;
-	__be32			qkey;
-	__be32			rq_type_srqn;
-	__be32			rmsn;
-	__be16			hw_sq_wqe_counter;
-	__be16			sw_sq_wqe_counter;
-	__be16			hw_rcyclic_byte_counter;
-	__be16			hw_rq_counter;
-	__be16			sw_rcyclic_byte_counter;
-	__be16			sw_rq_counter;
-	u8			rsvd0[5];
-	u8			cgs;
-	u8			cs_req;
-	u8			cs_res;
-	__be64			dc_access_key;
-	u8			rsvd1[24];
 };
 
 int mlx5_debug_qp_add(struct mlx5_core_dev *dev, struct mlx5_core_qp *qp);

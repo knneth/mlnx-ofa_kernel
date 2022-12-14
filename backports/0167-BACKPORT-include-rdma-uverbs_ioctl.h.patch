@@ -1,0 +1,52 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/uverbs_ioctl.h
+
+Change-Id: Ie554cba3d84077682a26c4e38e9b30775f059858
+---
+ include/rdma/uverbs_ioctl.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/include/rdma/uverbs_ioctl.h
++++ b/include/rdma/uverbs_ioctl.h
+@@ -11,6 +11,8 @@
+ #include <rdma/rdma_user_ioctl.h>
+ #include <rdma/ib_user_ioctl_verbs.h>
+ #include <rdma/ib_user_ioctl_cmds.h>
++#include <linux/vfio.h>
++
+ 
+ /*
+  * =======================================
+@@ -123,6 +125,7 @@ struct uverbs_attr_spec {
+  * ie the WRITE path is treated as a special method type in the ioctl
+  * framework.
+  */
++
+ enum uapi_radix_data {
+ 	UVERBS_API_NS_FLAG = 1U << UVERBS_ID_NS_SHIFT,
+ 
+@@ -353,6 +356,12 @@ struct uapi_definition {
+ 	};
+ };
+ 
++#ifdef offsetofend
++#undef offsetofend
++#define offsetofend(TYPE, MEMBER) \
++	       (offsetof(TYPE, MEMBER)     + sizeof(((TYPE *)0)->MEMBER))
++#endif
++
+ /* Define things connected to object_id */
+ #define DECLARE_UVERBS_OBJECT(_object_id, ...)                                 \
+ 	{                                                                      \
+@@ -862,6 +871,11 @@ int uverbs_get_flags32(u32 *to, const st
+ 		       size_t idx, u64 allowed_bits);
+ int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle, size_t idx,
+ 		   const void *from, size_t size);
++
++#ifndef __malloc
++#define __malloc
++#endif
++
+ __malloc void *_uverbs_alloc(struct uverbs_attr_bundle *bundle, size_t size,
+ 			     gfp_t flags);
+ 

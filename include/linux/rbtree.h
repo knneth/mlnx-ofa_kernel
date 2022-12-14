@@ -14,13 +14,6 @@
 #define RB_ROOT_CACHED RB_ROOT
 #endif
 
-#ifndef HAVE_RB_FIRST_POSTORDER
-#define rb_first_postorder LINUX_BACKPORT(rb_first_postorder)
-extern struct rb_node *rb_first_postorder(const struct rb_root *);
-#define rb_next_postorder LINUX_BACKPORT(rb_next_postorder)
-extern struct rb_node *rb_next_postorder(const struct rb_node *);
-#endif
-
 #ifndef rb_entry_safe
 #define rb_entry_safe(ptr, type, member) \
 	({ typeof(ptr) ____ptr = (ptr); \

@@ -1,0 +1,205 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
+
+Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
+---
+ .../net/ethernet/mellanox/mlx5/core/fs_core.c | 66 +++++++++++++++++--
+ 1 file changed, 61 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
+@@ -244,15 +244,27 @@ enum fs_i_lock_class {
+ };
+ 
+ static const struct rhashtable_params rhash_fte = {
+-	.key_len = sizeof_field(struct fs_fte, val),
++#ifndef FIELD_SIZEOF
++        .key_len = sizeof_field(struct fs_fte, val),
++#else
++        .key_len = FIELD_SIZEOF(struct fs_fte, val),
++#endif
+ 	.key_offset = offsetof(struct fs_fte, val),
+ 	.head_offset = offsetof(struct fs_fte, hash),
+ 	.automatic_shrinking = true,
+ 	.min_size = 1,
+ };
+ 
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++static const struct bp_rhashtable_params rhash_fg = {
++#else
+ static const struct rhashtable_params rhash_fg = {
+-	.key_len = sizeof_field(struct mlx5_flow_group, mask),
++#endif
++#ifndef FIELD_SIZEOF
++        .key_len = sizeof_field(struct mlx5_flow_group, mask),
++#else
++        .key_len = FIELD_SIZEOF(struct mlx5_flow_group, mask),
++#endif
+ 	.key_offset = offsetof(struct mlx5_flow_group, mask),
+ 	.head_offset = offsetof(struct mlx5_flow_group, hash),
+ 	.automatic_shrinking = true,
+@@ -466,7 +478,9 @@ static void del_hw_flow_table(struct fs_
+ 	fs_get_obj(ft, node);
+ 	dev = get_dev(&ft->node);
+ 	root = find_root(&ft->node);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_ft(ft);
++#endif
+ 
+ 	if (node->active) {
+ 		err = root->cmds->destroy_flow_table(root, ft);
+@@ -482,7 +496,11 @@ static void del_sw_flow_table(struct fs_
+ 
+ 	fs_get_obj(ft, node);
+ 
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	bp_rhltable_destroy(&ft->fgs_hash);
++#else
+ 	rhltable_destroy(&ft->fgs_hash);
++#endif
+ 	if (ft->node.parent) {
+ 		fs_get_obj(prio, ft->node.parent);
+ 		prio->num_ft--;
+@@ -518,7 +536,9 @@ static void del_sw_hw_rule(struct fs_nod
+ 
+ 	fs_get_obj(rule, node);
+ 	fs_get_obj(fte, rule->node.parent);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_rule(rule);
++#endif
+ 	if (is_fwd_next_action(rule->sw_action)) {
+ 		mutex_lock(&rule->dest_attr.ft->lock);
+ 		list_del(&rule->next_ft);
+@@ -563,7 +583,9 @@ static void del_hw_fte(struct fs_node *n
+ 	fs_get_obj(fg, fte->node.parent);
+ 	fs_get_obj(ft, fg->node.parent);
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_fte(fte);
++#endif
+ 	dev = get_dev(&ft->node);
+ 	root = find_root(&ft->node);
+ 	if (node->active) {
+@@ -604,7 +626,9 @@ static void del_hw_flow_group(struct fs_
+ 	fs_get_obj(fg, node);
+ 	fs_get_obj(ft, fg->node.parent);
+ 	dev = get_dev(&ft->node);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_fg(fg);
++#endif
+ 
+ 	root = find_root(&ft->node);
+ 	if (fg->node.active && root->cmds->destroy_flow_group(root, ft, fg))
+@@ -628,7 +652,11 @@ static void del_sw_flow_group(struct fs_
+ 	    fg->max_ftes == ft->autogroup.group_size &&
+ 	    fg->start_index < ft->autogroup.max_fte)
+ 		ft->autogroup.num_groups--;
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	err = bp_rhltable_remove(&ft->fgs_hash,
++#else
+ 	err = rhltable_remove(&ft->fgs_hash,
++#endif
+ 			      &fg->hash,
+ 			      rhash_fg);
+ 	WARN_ON(err);
+@@ -735,7 +763,11 @@ static struct mlx5_flow_group *alloc_ins
+ 		return fg;
+ 
+ 	/* initialize refcnt, add to parent list */
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	ret = bp_rhltable_insert(&ft->fgs_hash,
++#else
+ 	ret = rhltable_insert(&ft->fgs_hash,
++#endif
+ 			      &fg->hash,
+ 			      rhash_fg);
+ 	if (ret) {
+@@ -764,7 +796,11 @@ static struct mlx5_flow_table *alloc_flo
+ 	if (!ft)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	ret = bp_rhltable_init(&ft->fgs_hash, &rhash_fg);
++#else
+ 	ret = rhltable_init(&ft->fgs_hash, &rhash_fg);
++#endif
+ 	if (ret) {
+ 		kfree(ft);
+ 		return ERR_PTR(ret);
+@@ -1142,7 +1178,9 @@ static struct mlx5_flow_table *__mlx5_cr
+ 	fs_prio->num_ft++;
+ 	up_write_ref_node(&fs_prio->node, false);
+ 	mutex_unlock(&root->chain_lock);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_add_ft(ft);
++#endif
+ 	return ft;
+ destroy_ft:
+ 	root->cmds->destroy_flow_table(root, ft);
+@@ -1244,7 +1282,9 @@ struct mlx5_flow_group *mlx5_create_flow
+ 		tree_put_node(&fg->node, false);
+ 		return ERR_PTR(err);
+ 	}
+-	trace_mlx5_fs_add_fg(fg);
++#ifndef MLX_DISABLE_TRACEPOINTS
++       trace_mlx5_fs_add_fg(fg);
++#endif
+ 	fg->node.active = true;
+ 
+ 	return fg;
+@@ -1480,7 +1520,9 @@ static int create_auto_flow_group(struct
+ 	err = root->cmds->create_flow_group(root, ft, in, fg);
+ 	if (!err) {
+ 		fg->node.active = true;
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 		trace_mlx5_fs_add_fg(fg);
++#endif
+ 	}
+ 
+ 	kvfree(in);
+@@ -1593,12 +1635,16 @@ static struct mlx5_flow_handle *add_rule
+ 		fte->action.action = old_action;
+ 		return handle;
+ 	}
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_set_fte(fte, false);
++#endif
+ 
+ 	for (i = 0; i < handle->num_rules; i++) {
+ 		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
+ 			tree_add_node(&handle->rule[i]->node, &fte->node);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 			trace_mlx5_fs_add_rule(handle->rule[i]);
++#endif
+ 		}
+ 	}
+ 	return handle;
+@@ -1663,16 +1709,26 @@ static int build_match_list(struct match
+ 			    const struct mlx5_flow_spec *spec,
+ 			    bool ft_locked)
+ {
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	struct bp_rhlist_head *tmp, *list;
++#else
+ 	struct rhlist_head *tmp, *list;
++#endif
+ 	struct mlx5_flow_group *g;
+ 	int err = 0;
+ 
+ 	rcu_read_lock();
+ 	INIT_LIST_HEAD(&match_head->list);
+ 	/* Collect all fgs which has a matching match_criteria */
+-	list = rhltable_lookup(&ft->fgs_hash, spec, rhash_fg);
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	list = bp_rhltable_lookup(&ft->fgs_hash, spec, rhash_fg);
+ 	/* RCU is atomic, we can't execute FW commands here */
+-	rhl_for_each_entry_rcu(g, tmp, list, hash) {
++	bp_rhl_for_each_entry_rcu(g, tmp, list, hash) {
++#else
++       list = rhltable_lookup(&ft->fgs_hash, spec, rhash_fg);
++       /* RCU is atomic, we can't execute FW commands here */
++       rhl_for_each_entry_rcu(g, tmp, list, hash) {
++#endif
+ 		struct match_list *curr_match;
+ 
+ 		if (unlikely(!tree_get_node(&g->node)))

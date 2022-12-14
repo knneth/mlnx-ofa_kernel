@@ -235,8 +235,3 @@ struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 	return mlx5_eswitch_add_send_to_vport_rule(esw, esw, rep,
 						   sq->base.mqp.qpn);
 }
-
-bool mlx5_ib_eswitch_is_manager_vport(struct mlx5_eswitch *esw, u16 vport)
-{
-	return mlx5_eswitch_is_manager_vport(esw, vport);
-}

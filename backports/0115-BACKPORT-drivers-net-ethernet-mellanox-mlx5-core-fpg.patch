@@ -1,0 +1,44 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fpga/conn.c
+
+Change-Id: I940dd77ce895ea9faf9d746e8ed033a2c28b12ff
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fpga/conn.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fpga/conn.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fpga/conn.c
+@@ -122,7 +122,12 @@ static int mlx5_fpga_conn_post_recv(stru
+ 	conn->qp.rq.bufs[ix] = buf;
+ 
+ 	/* Make sure that descriptors are written before doorbell record. */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
++
+ 	*conn->qp.wq.rq.db = cpu_to_be32(conn->qp.rq.pc & 0xffff);
+ out:
+ 	return err;
+@@ -131,7 +136,12 @@ out:
+ static void mlx5_fpga_conn_notify_hw(struct mlx5_fpga_conn *conn, void *wqe)
+ {
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
++
+ 	*conn->qp.wq.sq.db = cpu_to_be32(conn->qp.sq.pc);
+ 	/* Make sure that doorbell record is visible before ringing */
+ 	wmb();
+@@ -340,6 +350,7 @@ static void mlx5_fpga_conn_handle_cqe(st
+ 	case MLX5_CQE_REQ_ERR:
+ 		status = ((struct mlx5_err_cqe *)cqe)->syndrome;
+ 		fallthrough;
++
+ 	case MLX5_CQE_REQ:
+ 		mlx5_fpga_conn_sq_cqe(conn, cqe, status);
+ 		break;

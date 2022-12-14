@@ -734,6 +734,8 @@ static int dr_rule_handle_action_stes(struct mlx5dr_rule *rule,
 							  send_ste_list, false);
 	}
 
+	last_ste->next_htbl = NULL;
+
 	return 0;
 
 err_exit:
@@ -1029,37 +1031,28 @@ static enum mlx5dr_ipv dr_rule_get_ipv(struct mlx5dr_match_spec *spec)
 static bool dr_rule_skip(struct mlx5dr_domain *dmn,
 			 enum mlx5dr_ste_entry_type ste_type,
 			 struct mlx5dr_match_param *mask,
-			 struct mlx5dr_match_param *value)
+			 struct mlx5dr_match_param *value,
+			 u32 flow_source)
 {
+	bool rx = ste_type == MLX5DR_STE_TYPE_RX;
+
 	if (dmn->type != MLX5DR_DOMAIN_TYPE_FDB)
 		return false;
 
 	if (mask->misc.source_port) {
-		if (ste_type == MLX5DR_STE_TYPE_RX)
-			if (value->misc.source_port != WIRE_PORT)
-				return true;
+		if (rx && value->misc.source_port != WIRE_PORT)
+			return true;
 
-		if (ste_type == MLX5DR_STE_TYPE_TX)
-			if (value->misc.source_port == WIRE_PORT)
-				return true;
+		if (!rx && value->misc.source_port == WIRE_PORT)
+			return true;
 	}
 
-	/* Metadata C can be used to describe the source vport */
-	if (mask->misc2.metadata_reg_c_0) {
-		struct mlx5_eswitch *esw = dmn->mdev->priv.eswitch;
-		u32 wire_match_id =
-			mlx5_eswitch_get_vport_metadata_for_match(esw,
-								  WIRE_PORT);
-		if (ste_type == MLX5DR_STE_TYPE_RX)
-			if ((value->misc2.metadata_reg_c_0 &
-			     mask->misc2.metadata_reg_c_0) != wire_match_id)
-				return true;
+	if (rx && flow_source == MLX5_FLOW_CONTEXT_FLOW_SOURCE_LOCAL_VPORT)
+		return true;
 
-		if (ste_type == MLX5DR_STE_TYPE_TX)
-			if ((value->misc2.metadata_reg_c_0 &
-			     mask->misc2.metadata_reg_c_0) == wire_match_id)
-				return true;
-	}
+	if (!rx && flow_source == MLX5_FLOW_CONTEXT_FLOW_SOURCE_UPLINK)
+		return true;
+
 	return false;
 }
 
@@ -1086,8 +1079,13 @@ dr_rule_create_rule_nic(struct mlx5dr_rule *rule,
 	nic_matcher = nic_rule->nic_matcher;
 	nic_dmn = nic_matcher->nic_tbl->nic_dmn;
 
-	if (dr_rule_skip(dmn, nic_dmn->ste_type, &matcher->mask, param))
+	if (dr_rule_skip(dmn, nic_dmn->ste_type, &matcher->mask, param,
+			 rule->flow_source))
 		return 0;
+
+	hw_ste_arr = kzalloc(DR_RULE_MAX_STE_CHAIN * DR_STE_SIZE, GFP_KERNEL);
+	if (!hw_ste_arr)
+		return -ENOMEM;
 
 	mlx5dr_domain_nic_lock(nic_dmn);
 
@@ -1096,13 +1094,7 @@ dr_rule_create_rule_nic(struct mlx5dr_rule *rule,
 					     dr_rule_get_ipv(&param->outer),
 					     dr_rule_get_ipv(&param->inner));
 	if (ret)
-		goto out_err;
-
-	hw_ste_arr = kzalloc(DR_RULE_MAX_STE_CHAIN * DR_STE_SIZE, GFP_KERNEL);
-	if (!hw_ste_arr) {
-		ret = -ENOMEM;
-		goto out_err;
-	}
+		goto free_hw_ste;
 
 	/* Set the tag values inside the ste array */
 	ret = mlx5dr_ste_build_ste_arr(matcher, nic_matcher, param, hw_ste_arr);
@@ -1117,7 +1109,6 @@ dr_rule_create_rule_nic(struct mlx5dr_rule *rule,
 		goto free_hw_ste;
 
 	cur_htbl = nic_matcher->s_htbl;
-
 
 	/* Go over the array of STEs, and build dr_ste accordingly.
 	 * The loop is over only the builders which are equal or less to the
@@ -1177,9 +1168,8 @@ free_rule:
 		kfree(ste_info);
 	}
 free_hw_ste:
-	kfree(hw_ste_arr);
-out_err:
 	mlx5dr_domain_nic_unlock(nic_dmn);
+	kfree(hw_ste_arr);
 	return ret;
 }
 
@@ -1218,7 +1208,8 @@ static struct mlx5dr_rule *
 dr_rule_create_rule(struct mlx5dr_matcher *matcher,
 		    struct mlx5dr_match_parameters *value,
 		    size_t num_actions,
-		    struct mlx5dr_action *actions[])
+		    struct mlx5dr_action *actions[],
+		    u32 flow_source)
 {
 	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
 	struct mlx5dr_match_param param = {};
@@ -1233,6 +1224,7 @@ dr_rule_create_rule(struct mlx5dr_matcher *matcher,
 		return NULL;
 
 	rule->matcher = matcher;
+	rule->flow_source = flow_source;
 	INIT_LIST_HEAD(&rule->rule_actions_list);
 	INIT_LIST_HEAD(&rule->rule_list);
 
@@ -1282,13 +1274,15 @@ free_rule:
 struct mlx5dr_rule *mlx5dr_rule_create(struct mlx5dr_matcher *matcher,
 				       struct mlx5dr_match_parameters *value,
 				       size_t num_actions,
-				       struct mlx5dr_action *actions[])
+				       struct mlx5dr_action *actions[],
+				       u32 flow_source)
 {
 	struct mlx5dr_rule *rule;
 
 	refcount_inc(&matcher->refcount);
 
-	rule = dr_rule_create_rule(matcher, value, num_actions, actions);
+	rule = dr_rule_create_rule(matcher, value, num_actions, actions,
+				   flow_source);
 	if (!rule)
 		refcount_dec(&matcher->refcount);
 

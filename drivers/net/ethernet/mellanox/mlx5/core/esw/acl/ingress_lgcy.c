@@ -16,7 +16,8 @@ static void esw_acl_ingress_lgcy_rules_destroy(struct mlx5_vport *vport)
 	}
 
 	list_for_each_entry_safe(trunk_vlan_rule, tmp,
-				 &vport->ingress.legacy.allow_vlans_rules, list) {
+				 &vport->ingress.legacy.allow_vlans_rules,
+				 list) {
 		mlx5_del_flow_rules(trunk_vlan_rule->acl_vlan_rule);
 		list_del(&trunk_vlan_rule->list);
 		kfree(trunk_vlan_rule);
@@ -84,7 +85,8 @@ static int esw_acl_ingress_lgcy_groups_create(struct mlx5_eswitch *esw,
 		goto drop_grp;
 
 	memset(flow_group_in, 0, inlen);
-	MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
+	MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable,
+		 MLX5_MATCH_OUTER_HEADERS);
 	if (vport->info.spoofchk) {
 		MLX5_SET_TO_ONES(fte_match_param, match_criteria, outer_headers.smac_47_16);
 		MLX5_SET_TO_ONES(fte_match_param, match_criteria, outer_headers.smac_15_0);
@@ -170,7 +172,7 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 	 *      1 drop rule from the last group):
 	 * 1)Allow untagged traffic with smac=original mac.
 	 * 2)Allow untagged traffic.
-	 * 3)Allow traffic with smac=original mac.
+	 * 3)Allow tagged traffic with smac=original mac.
 	 * 4)Drop all other traffic.
 	 */
 	int table_size = need_vlan_filter ? 8192 : 4;
@@ -186,8 +188,8 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 		return -EPERM;
 	}
 
-	need_acl_table = vport->info.vlan || vport->info.qos || vport->info.spoofchk
-			|| need_vlan_filter;
+	need_acl_table = vport->info.vlan || vport->info.qos ||
+			 vport->info.spoofchk || need_vlan_filter;
 
 	esw_acl_ingress_lgcy_rules_destroy(vport);
 
@@ -195,13 +197,14 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 	if (!need_acl_table)
 		return 0;
 
-	if (!mlx5_esw_is_manager_vport(esw->dev, vport->vport) &&
-	    MLX5_CAP_ESW_INGRESS_ACL(esw->dev, flow_counter)) {
+	if (MLX5_CAP_ESW_INGRESS_ACL(esw->dev, flow_counter)) {
 		counter = mlx5_fc_create(esw->dev, false);
-		if (IS_ERR(counter))
+		if (IS_ERR(counter)) {
 			esw_warn(esw->dev,
 				 "vport[%d] configure ingress drop rule counter failed\n",
 				 vport->vport);
+			counter = NULL;
+		}
 		vport->ingress.legacy.drop_counter = counter;
 	}
 
@@ -219,8 +222,8 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 		goto out;
 
 	esw_debug(esw->dev,
-		  "vport[%d] configure ingress rules, vlan(%d) qos(%d)\n",
-		  vport->vport, vport->info.vlan, vport->info.qos);
+		  "vport[%d] configure ingress rules, vlan(%d) qos(%d) vst_mode (%d)\n",
+		  vport->vport, vport->info.vlan, vport->info.qos, vst_mode);
 
 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec) {
@@ -257,7 +260,8 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 
 	/* Allow untagged */
 	if (!need_vlan_filter ||
-	    (need_vlan_filter && test_bit(0, vport->info.vlan_trunk_8021q_bitmap))) {
+	    (need_vlan_filter &&
+	     test_bit(0, vport->info.vlan_trunk_8021q_bitmap))) {
 		vport->ingress.legacy.allow_untagged_rule =
 			mlx5_add_flow_rules(vport->ingress.acl, spec,
 					    &flow_act, NULL, 0);
@@ -289,10 +293,11 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 			goto out;
 		}
 
-		MLX5_SET(fte_match_param, spec->match_value, outer_headers.first_vid,
-			 vlan_id);
+		MLX5_SET(fte_match_param,
+			 spec->match_value, outer_headers.first_vid, vlan_id);
 		trunk_vlan_rule->acl_vlan_rule =
-			mlx5_add_flow_rules(vport->ingress.acl, spec, &flow_act, NULL, 0);
+			mlx5_add_flow_rules(vport->ingress.acl,
+					    spec, &flow_act, NULL, 0);
 		if (IS_ERR(trunk_vlan_rule->acl_vlan_rule)) {
 			err = PTR_ERR(trunk_vlan_rule->acl_vlan_rule);
 			esw_warn(esw->dev,
@@ -301,7 +306,8 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 			trunk_vlan_rule->acl_vlan_rule = NULL;
 			goto out;
 		}
-		list_add(&trunk_vlan_rule->list, &vport->ingress.legacy.allow_vlans_rules);
+		list_add(&trunk_vlan_rule->list,
+			 &vport->ingress.legacy.allow_vlans_rules);
 	}
 
 drop_rule:
@@ -318,7 +324,7 @@ drop_rule:
 		dest_num++;
 	}
 	vport->ingress.legacy.drop_rule =
-		mlx5_add_flow_rules(vport->ingress.acl, spec,
+		mlx5_add_flow_rules(vport->ingress.acl, NULL,
 				    &flow_act, dst, dest_num);
 	if (IS_ERR(vport->ingress.legacy.drop_rule)) {
 		err = PTR_ERR(vport->ingress.legacy.drop_rule);

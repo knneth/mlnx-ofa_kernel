@@ -107,6 +107,7 @@ enum dr_dump_rec_type {
 	DR_DUMP_REC_TYPE_ACTION_DEVX_TIR = 3411,
 	DR_DUMP_REC_TYPE_ACTION_PUSH_VLAN = 3412,
 	DR_DUMP_REC_TYPE_ACTION_POP_VLAN = 3413,
+	DR_DUMP_REC_TYPE_ACTION_SAMPLER = 3415,
 };
 
 static u64 dr_dump_icm_to_idx(u64 icm_addr)
@@ -164,9 +165,10 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 			       action->flow_tag);
 		break;
 	case DR_ACTION_TYP_MODIFY_HDR:
-		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
+		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,%d\n",
 			       DR_DUMP_REC_TYPE_ACTION_MODIFY_HDR, action_id,
-			       rule_id, action->rewrite.index);
+			       rule_id, action->rewrite.index,
+			       action->rewrite.single_action_opt);
 		break;
 	case DR_ACTION_TYP_VPORT:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
@@ -192,6 +194,15 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_ENCAP_L3, action_id,
 			       rule_id, action->reformat.reformat_id);
+		break;
+	case DR_ACTION_TYP_SAMPLER:
+		ret = snprintf(tmp_buf, BUF_SIZE,
+			       "%d,0x%llx,0x%llx,0x%llx,0x%x,0x%x,0x%llx,0x%llx\n",
+			       DR_DUMP_REC_TYPE_ACTION_SAMPLER, action_id,
+			       rule_id, 0xFFFFFFFFULL, -1,
+			       action->sampler.sampler_id,
+			       action->sampler.rx_icm_addr,
+			       action->sampler.tx_icm_addr);
 		break;
 	case DR_ACTION_TYP_POP_VLAN:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx\n",

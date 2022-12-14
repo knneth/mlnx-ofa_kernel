@@ -1,49 +1,26 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
 
-Change-Id: I6ffa084e8f86a9c50969ce608258d76132c08c2e
+Change-Id: I9d53b9e1ef94cf5774f8df3ca8017ba4d822f49a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h | 7 ++++++-
- 1 file changed, 6 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
-@@ -4,6 +4,8 @@
- #ifndef __MLX5_EN_TC_TUNNEL_H__
- #define __MLX5_EN_TC_TUNNEL_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2018 Mellanox Technologies. */
  
 +#ifdef HAVE_TCF_TUNNEL_INFO
 +
- #include <linux/netdevice.h>
- #include <linux/mlx5/fs.h>
- #include <net/pkt_cls.h>
-@@ -28,6 +30,7 @@ struct mlx5e_tc_tunnel {
- 			       struct mlx5e_priv *priv,
- 			       struct mlx5e_encap_entry *e,
- 			       struct netlink_ext_ack *extack);
-+
- 	int (*generate_ip_tun_hdr)(char buf[],
- 				   __u8 *ip_proto,
- 				   struct mlx5e_encap_entry *e);
-@@ -36,6 +39,7 @@ struct mlx5e_tc_tunnel {
- 			       struct flow_cls_offload *f,
- 			       void *headers_c,
- 			       void *headers_v);
-+
- 	int (*parse_tunnel)(struct mlx5e_priv *priv,
- 			    struct mlx5_flow_spec *spec,
- 			    struct flow_cls_offload *f,
-@@ -65,7 +69,7 @@ int mlx5e_tc_tun_create_header_ipv6(stru
- #else
- static inline int
- mlx5e_tc_tun_create_header_ipv6(struct mlx5e_priv *priv,
--				struct net_device *mirred_dev,
-+struct net_device *mirred_dev,
- 				struct mlx5e_encap_entry *e) { return -EOPNOTSUPP; }
- #endif
+ #include <net/gre.h>
+ #include "en/tc_tun.h"
  
-@@ -85,3 +89,4 @@ int mlx5e_tc_tun_parse_udp_ports(struct
- 				 void *headers_v);
- 
- #endif //__MLX5_EN_TC_TUNNEL_H__
-+#endif
+@@ -95,3 +97,5 @@ struct mlx5e_tc_tunnel gre_tunnel = {
+ 	.parse_udp_ports      = NULL,
+ 	.parse_tunnel         = mlx5e_tc_tun_parse_gretap,
+ };
++
++#endif /* HAVE_TCF_TUNNEL_INFO */

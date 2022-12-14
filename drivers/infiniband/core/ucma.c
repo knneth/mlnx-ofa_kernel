@@ -794,7 +794,7 @@ static void ucma_copy_ib_route(struct rdma_ucm_query_route_resp *resp,
 	case 2:
 		ib_copy_path_rec_to_user(&resp->ib_route[1],
 					 &route->path_rec[1]);
-		/* fall through */
+		fallthrough;
 	case 1:
 		ib_copy_path_rec_to_user(&resp->ib_route[0],
 					 &route->path_rec[0]);
@@ -820,7 +820,7 @@ static void ucma_copy_iboe_route(struct rdma_ucm_query_route_resp *resp,
 	case 2:
 		ib_copy_path_rec_to_user(&resp->ib_route[1],
 					 &route->path_rec[1]);
-		/* fall through */
+		fallthrough;
 	case 1:
 		ib_copy_path_rec_to_user(&resp->ib_route[0],
 					 &route->path_rec[0]);
@@ -850,7 +850,7 @@ static ssize_t ucma_query_route(struct ucma_file *file,
 	struct sockaddr *addr;
 	int ret = 0;
 
-	if (out_len < sizeof(resp))
+	if (out_len < offsetof(struct rdma_ucm_query_route_resp, ibdev_index))
 		return -ENOSPC;
 
 	if (copy_from_user(&cmd, inbuf, sizeof(cmd)))
@@ -874,6 +874,7 @@ static ssize_t ucma_query_route(struct ucma_file *file,
 		goto out;
 
 	resp.node_guid = (__force __u64) ctx->cm_id->device->node_guid;
+	resp.ibdev_index = ctx->cm_id->device->index;
 	resp.port_num = ctx->cm_id->port_num;
 
 	if (rdma_cap_ib_sa(ctx->cm_id->device, ctx->cm_id->port_num))
@@ -885,8 +886,8 @@ static ssize_t ucma_query_route(struct ucma_file *file,
 
 out:
 	mutex_unlock(&ctx->mutex);
-	if (copy_to_user(u64_to_user_ptr(cmd.response),
-			 &resp, sizeof(resp)))
+	if (copy_to_user(u64_to_user_ptr(cmd.response), &resp,
+			 min_t(size_t, out_len, sizeof(resp))))
 		ret = -EFAULT;
 
 	ucma_put_ctx(ctx);
@@ -900,6 +901,7 @@ static void ucma_query_device_addr(struct rdma_cm_id *cm_id,
 		return;
 
 	resp->node_guid = (__force __u64) cm_id->device->node_guid;
+	resp->ibdev_index = cm_id->device->index;
 	resp->port_num = cm_id->port_num;
 	resp->pkey = (__force __u16) cpu_to_be16(
 		     ib_addr_get_pkey(&cm_id->route.addr.dev_addr));
@@ -912,7 +914,7 @@ static ssize_t ucma_query_addr(struct ucma_context *ctx,
 	struct sockaddr *addr;
 	int ret = 0;
 
-	if (out_len < sizeof(resp))
+	if (out_len < offsetof(struct rdma_ucm_query_addr_resp, ibdev_index))
 		return -ENOSPC;
 
 	memset(&resp, 0, sizeof resp);
@@ -927,7 +929,7 @@ static ssize_t ucma_query_addr(struct ucma_context *ctx,
 
 	ucma_query_device_addr(ctx->cm_id, &resp);
 
-	if (copy_to_user(response, &resp, sizeof(resp)))
+	if (copy_to_user(response, &resp, min_t(size_t, out_len, sizeof(resp))))
 		ret = -EFAULT;
 
 	return ret;
@@ -979,7 +981,7 @@ static ssize_t ucma_query_gid(struct ucma_context *ctx,
 	struct sockaddr_ib *addr;
 	int ret = 0;
 
-	if (out_len < sizeof(resp))
+	if (out_len < offsetof(struct rdma_ucm_query_addr_resp, ibdev_index))
 		return -ENOSPC;
 
 	memset(&resp, 0, sizeof resp);
@@ -1012,7 +1014,7 @@ static ssize_t ucma_query_gid(struct ucma_context *ctx,
 						    &ctx->cm_id->route.addr.dst_addr);
 	}
 
-	if (copy_to_user(response, &resp, sizeof(resp)))
+	if (copy_to_user(response, &resp, min_t(size_t, out_len, sizeof(resp))))
 		ret = -EFAULT;
 
 	return ret;
@@ -1068,7 +1070,7 @@ static void ucma_copy_conn_param(struct rdma_cm_id *id,
 	dst->retry_count = src->retry_count;
 	dst->rnr_retry_count = src->rnr_retry_count;
 	dst->srq = src->srq;
-	dst->qp_num = src->qp_num;
+	dst->qp_num = src->qp_num & 0xFFFFFF;
 	dst->qkey = (id->route.addr.src_addr.ss_family == AF_IB) ? src->qkey : 0;
 }
 

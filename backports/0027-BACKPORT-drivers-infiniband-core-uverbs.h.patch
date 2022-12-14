@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs.h
 
-Change-Id: Ie23f3c7b253d5a710826b071b8945e096cfdbb0f
+Change-Id: Ia8a5104e09385febf90562d12867a09b505e0594
 ---
  drivers/infiniband/core/uverbs.h | 1 -
  1 file changed, 1 deletion(-)

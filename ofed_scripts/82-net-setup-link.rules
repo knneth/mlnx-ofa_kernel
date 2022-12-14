@@ -1,10 +1,10 @@
 SUBSYSTEM=="net", ACTION=="add", ATTR{phys_switch_id}!="", ATTR{phys_port_name}!="", \
         IMPORT{program}="/etc/infiniband/vf-net-link-name.sh $attr{phys_port_name} $attr{phys_switch_id}" \
-        NAME="$env{NAME}", RUN+="/sbin/ethtool -L $env{NAME} combined 4", GOTO="net_setup_skip_link_name"
+        NAME="$env{NAME}", RUN+="/lib/udev/mlnx_bf_udev $env{NAME}", GOTO="net_setup_skip_link_name"
 
 
 SUBSYSTEM=="net", ACTION=="add", ATTR{phys_port_name}!="", \
         IMPORT{program}="/etc/infiniband/vf-net-link-name.sh $attr{phys_port_name}" \
-        NAME="$env{NAME}", RUN+="/sbin/ethtool -L $env{NAME} combined 4"
+        NAME="$env{NAME}", RUN+="/lib/udev/mlnx_bf_udev $env{NAME}"
 
 LABEL="net_setup_skip_link_name"

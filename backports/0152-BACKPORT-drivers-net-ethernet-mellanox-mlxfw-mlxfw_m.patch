@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
+
+Change-Id: I5ea2ca48a38a62e7f16a90c0fcb284b4b751aba8
+---
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
++++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
+@@ -7,6 +7,7 @@
+ #define pr_fmt(fmt) "mlxfw_mfa2: " fmt
+ 
+ #include <linux/kernel.h>
++#include <linux/printk.h>
+ #include <linux/module.h>
+ #include <linux/netlink.h>
+ #include <linux/vmalloc.h>

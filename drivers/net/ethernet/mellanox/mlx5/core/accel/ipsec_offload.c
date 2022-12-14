@@ -13,6 +13,8 @@ struct mlx5_ipsec_sa_ctx {
 	struct rhash_head hash;
 	u32 enc_key_id;
 	u32 ipsec_obj_id;
+	__u64 soft_packet_limit;
+	__u64 hard_packet_limit;
 	/* hw ctx */
 	struct mlx5_core_dev *dev;
 	struct mlx5_ipsec_esp_xfrm *mxfrm;
@@ -45,7 +47,7 @@ static u32 mlx5_ipsec_offload_device_caps(struct mlx5_core_dev *mdev)
 		caps |= MLX5_ACCEL_IPSEC_CAP_TX_IV_IS_ESN;
 	}
 
-	if (MLX5_CAP_IPSEC(mdev, ipsec_crypto_offload))
+	if (MLX5_CAP_IPSEC(mdev, ipsec_full_offload))
 		caps |= MLX5_ACCEL_IPSEC_CAP_FULL_OFFLOAD;
 
 	/* We can accommodate up to 2^24 different IPsec objects
@@ -133,11 +135,14 @@ struct mlx5_ipsec_obj_attrs {
 	u32 accel_flags;
 	u32 esn_msb;
 	u32 enc_key_id;
+	__u64 soft_packet_limit;
+	__u64 hard_packet_limit;
+	__u32 replay_window;
 };
 
 static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 				 struct mlx5_ipsec_obj_attrs *attrs,
-				 bool tx_flow,
+				 bool tx_flow, u32 pdn,
 				 u32 *ipsec_id)
 {
 	const struct aes_gcm_keymat *aes_gcm = attrs->aes_gcm;
@@ -147,6 +152,7 @@ static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 	int err;
 
 	obj = MLX5_ADDR_OF(create_ipsec_obj_in, in, ipsec_object);
+	aso_ctx = MLX5_ADDR_OF(ipsec_obj, obj, ipsec_aso);
 
 	/* salt and seq_iv */
 	salt_p = MLX5_ADDR_OF(ipsec_obj, obj, salt);
@@ -170,12 +176,41 @@ static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 	}
 	salt_iv_p = MLX5_ADDR_OF(ipsec_obj, obj, implicit_iv);
 	memcpy(salt_iv_p, &aes_gcm->seq_iv, sizeof(aes_gcm->seq_iv));
+
 	/* esn */
 	if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_ESN_TRIGGERED) {
 		MLX5_SET(ipsec_obj, obj, esn_en, 1);
-		MLX5_SET(ipsec_obj, obj, esn_msb, htonl(attrs->esn_msb));
+		MLX5_SET(ipsec_obj, obj, esn_msb, attrs->esn_msb);
 		if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP)
 			MLX5_SET(ipsec_obj, obj, esn_overlap, 1);
+
+		if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD) {
+			MLX5_SET(ipsec_aso, aso_ctx, esn_event_arm, 1);
+
+			if (!tx_flow) {
+				u8 window_sz;
+
+				switch (attrs->replay_window) {
+				case 256:
+					window_sz = MLX5_IPSEC_ASO_REPLAY_WIN_256_BIT;
+					break;
+				case 128:
+					window_sz = MLX5_IPSEC_ASO_REPLAY_WIN_128_BIT;
+					break;
+				case 64:
+					window_sz = MLX5_IPSEC_ASO_REPLAY_WIN_64_BIT;
+					break;
+				case 32:
+					window_sz = MLX5_IPSEC_ASO_REPLAY_WIN_32_BIT;
+					break;
+				default:
+					return -EINVAL;
+				}
+
+				MLX5_SET(ipsec_aso, aso_ctx, window_sz, window_sz);
+				MLX5_SET(ipsec_aso, aso_ctx, mode, MLX5_IPSEC_ASO_REPLAY_PROTECTION);
+			}
+		}
 	}
 
 	MLX5_SET(ipsec_obj, obj, dekn, attrs->enc_key_id);
@@ -186,13 +221,27 @@ static int mlx5_create_ipsec_obj(struct mlx5_core_dev *mdev,
 	MLX5_SET(general_obj_in_cmd_hdr, in, obj_type,
 		 MLX5_GENERAL_OBJECT_TYPES_IPSEC);
 
-	/* ASO context */
+	/* Full offload */
 	if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD) {
 		MLX5_SET(ipsec_obj, obj, full_offload, 1);
-		aso_ctx = MLX5_ADDR_OF(ipsec_obj, obj, ipsec_aso);
+		MLX5_SET(ipsec_obj, obj, ipsec_aso_access_pd, pdn);
+		MLX5_SET(ipsec_obj, obj, aso_return_reg, MLX5_IPSEC_ASO_REG_C_4_5);
 		MLX5_SET(ipsec_aso, aso_ctx, valid, 1);
 		if (tx_flow)
 			MLX5_SET(ipsec_aso, aso_ctx, mode, MLX5_IPSEC_ASO_INC_SN);
+
+		/* hard and soft packet limit */
+		if (attrs->soft_packet_limit != IPSEC_NO_LIMIT) {
+			MLX5_SET(ipsec_aso, aso_ctx, remove_flow_soft_lft, (u32)attrs->soft_packet_limit);
+			MLX5_SET(ipsec_aso, aso_ctx, soft_lft_arm, 1);
+			MLX5_SET(ipsec_aso, aso_ctx, remove_flow_enable, 1);
+		}
+
+		if (attrs->hard_packet_limit != IPSEC_NO_LIMIT) {
+			MLX5_SET(ipsec_aso, aso_ctx, remove_flow_pkt_cnt, (u32)attrs->hard_packet_limit);
+			MLX5_SET(ipsec_aso, aso_ctx, hard_lft_arm, 1);
+			MLX5_SET(ipsec_aso, aso_ctx, remove_flow_enable, 1);
+		}
 	}
 
 	err = mlx5_cmd_exec(mdev, in, sizeof(in), out, sizeof(out));
@@ -219,7 +268,8 @@ static void mlx5_destroy_ipsec_obj(struct mlx5_core_dev *mdev, u32 ipsec_id)
 static void *mlx5_ipsec_offload_create_sa_ctx(struct mlx5_core_dev *mdev,
 					      struct mlx5_accel_esp_xfrm *accel_xfrm,
 					      const __be32 saddr[4], const __be32 daddr[4],
-					      const __be32 spi, bool is_ipv6, u32 *hw_handle)
+					      const __be32 spi, bool is_ipv6, u32 pdn,
+					      u32 *hw_handle)
 {
 	struct mlx5_accel_esp_xfrm_attrs *xfrm_attrs = &accel_xfrm->attrs;
 	struct aes_gcm_keymat *aes_gcm = &xfrm_attrs->keymat.aes_gcm;
@@ -251,11 +301,15 @@ static void *mlx5_ipsec_offload_create_sa_ctx(struct mlx5_core_dev *mdev,
 
 	ipsec_attrs.aes_gcm = aes_gcm;
 	ipsec_attrs.accel_flags = accel_xfrm->attrs.flags;
-	ipsec_attrs.esn_msb = htonl(accel_xfrm->attrs.esn);
+	ipsec_attrs.esn_msb = accel_xfrm->attrs.esn;
 	ipsec_attrs.enc_key_id = sa_ctx->enc_key_id;
+	ipsec_attrs.soft_packet_limit = accel_xfrm->attrs.soft_packet_limit;
+	ipsec_attrs.hard_packet_limit = accel_xfrm->attrs.hard_packet_limit;
+	ipsec_attrs.replay_window = accel_xfrm->attrs.replay_window;
+
 	err = mlx5_create_ipsec_obj(mdev, &ipsec_attrs,
 				    accel_xfrm->attrs.action & MLX5_ACCEL_ESP_ACTION_ENCRYPT,
-				    &sa_ctx->ipsec_obj_id);
+				    pdn, &sa_ctx->ipsec_obj_id);
 	if (err) {
 		mlx5_core_dbg(mdev, "Failed to create IPsec object (err = %d)\n", err);
 		goto err_enc_key;
@@ -331,6 +385,8 @@ static int mlx5_modify_ipsec_obj(struct mlx5_core_dev *mdev,
 		return -EOPNOTSUPP;
 
 	obj = MLX5_ADDR_OF(modify_ipsec_obj_in, in, ipsec_object);
+	MLX5_SET64(ipsec_obj, obj, modify_field_select,
+		   MLX5_MODIFY_IPSEC_BITMASK_ESN_OVERLAP | MLX5_MODIFY_IPSEC_BITMASK_ESN_MSB);
 	MLX5_SET(ipsec_obj, obj, esn_msb, attrs->esn_msb);
 	if (attrs->accel_flags & MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP)
 		MLX5_SET(ipsec_obj, obj, esn_overlap, 1);
@@ -380,7 +436,7 @@ change_sw_xfrm_attrs:
 	return err;
 }
 
-const struct mlx5_accel_ipsec_ops ipsec_offload_ops = {
+static const struct mlx5_accel_ipsec_ops ipsec_offload_ops = {
 	.device_caps = mlx5_ipsec_offload_device_caps,
 	.create_hw_context = mlx5_ipsec_offload_create_sa_ctx,
 	.free_hw_context = mlx5_ipsec_offload_delete_sa_ctx,

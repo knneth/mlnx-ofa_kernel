@@ -1,0 +1,24 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/nvme-fc-driver.h
+
+Change-Id: I6496a406e7a9490fff69006a60be43d5e2dc48f4
+---
+ include/linux/nvme-fc-driver.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/include/linux/nvme-fc-driver.h
++++ b/include/linux/nvme-fc-driver.h
+@@ -19,6 +19,13 @@
+  * ***********************************************************
+  */
+ 
++#ifndef HAVE_SCSI_TRANSPORT_FC_FC_PORT_ROLE_NVME_TARGET
++/* FC Port role bitmask - can merge with FC Port Roles in fc transport */
++#define FC_PORT_ROLE_NVME_INITIATOR    0x10
++#define FC_PORT_ROLE_NVME_TARGET       0x20
++#define FC_PORT_ROLE_NVME_DISCOVERY    0x40
++#endif
++
+ /**
+  * struct nvmefc_ls_req - Request structure passed from the transport
+  *            to the LLDD to perform a NVME-FC LS request and obtain

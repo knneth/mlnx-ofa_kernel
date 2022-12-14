@@ -1,6 +1,8 @@
 #ifndef _NF_FLOW_TABLE_H
 #define _NF_FLOW_TABLE_H
 
+#include "../../../compat/config.h"
+
 #include <linux/in.h>
 #include <linux/in6.h>
 #include <linux/netdevice.h>
@@ -20,16 +22,6 @@ enum flow_offload_tuple_dir;
 
 struct flow_block {
 	struct list_head cb_list;
-};
-
-struct flow_block_cb {
-	struct list_head        driver_list;
-	struct list_head        list;
-	flow_setup_cb_t         *cb;
-	void                    *cb_ident;
-	void                    *cb_priv;
-	void                    (*release)(void *cb_priv);
-	unsigned int            refcnt;
 };
 
 struct flow_block_cb *flow_block_cb_lookup(struct flow_block *block,

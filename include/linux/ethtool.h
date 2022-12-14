@@ -150,7 +150,27 @@ struct ethtool_fecparam {
 #define ETHTOOL_LINK_MODE_400000baseLR8_ER8_FR8_Full_BIT 71
 #define ETHTOOL_LINK_MODE_400000baseDR8_Full_BIT 72
 #define ETHTOOL_LINK_MODE_400000baseCR8_Full_BIT 73
+/* must be last entry */
 #define ETHTOOL_LINK_MODE_FEC_LLRS_BIT 74
+#endif
+
+#ifndef ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT
+#define ETHTOOL_LINK_MODE_FEC_LLRS_BIT                    74
+#define ETHTOOL_LINK_MODE_100000baseKR_Full_BIT           75
+#define ETHTOOL_LINK_MODE_100000baseSR_Full_BIT           76
+#define ETHTOOL_LINK_MODE_100000baseLR_ER_FR_Full_BIT     77
+#define ETHTOOL_LINK_MODE_100000baseCR_Full_BIT           78
+#define ETHTOOL_LINK_MODE_100000baseDR_Full_BIT           79
+#define ETHTOOL_LINK_MODE_200000baseKR2_Full_BIT          80
+#define ETHTOOL_LINK_MODE_200000baseSR2_Full_BIT          81
+#define ETHTOOL_LINK_MODE_200000baseLR2_ER2_FR2_Full_BIT  82
+#define ETHTOOL_LINK_MODE_200000baseDR2_Full_BIT          83
+#define ETHTOOL_LINK_MODE_200000baseCR2_Full_BIT          84
+#define ETHTOOL_LINK_MODE_400000baseKR4_Full_BIT          85
+#define ETHTOOL_LINK_MODE_400000baseSR4_Full_BIT          86
+#define ETHTOOL_LINK_MODE_400000baseLR4_ER4_FR4_Full_BIT  87
+#define ETHTOOL_LINK_MODE_400000baseDR4_Full_BIT          88
+#define ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT          89
 #endif
 
 #define SUPPORTED_100000baseCR4_Full 0

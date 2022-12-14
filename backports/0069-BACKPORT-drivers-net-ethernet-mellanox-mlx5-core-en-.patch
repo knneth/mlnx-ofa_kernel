@@ -1,75 +1,83 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
-Change-Id: I333992f317e4ee4a5bba76b3710ecfa96635637d
+Change-Id: Iffe15b04b16d16a3c89c77cdb73ea5b2af91a273
 ---
- .../ethernet/mellanox/mlx5/core/en/params.c   | 19 +++++++++++++++++--
- 1 file changed, 17 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.h   | 52 +++++++++++++++++--
+ 1 file changed, 48 insertions(+), 4 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
-@@ -3,22 +3,27 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+@@ -33,14 +33,39 @@ int mlx5e_rep_encap_entry_attach(struct
+ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
+ 				  struct mlx5e_encap_entry *e);
  
- #include "en/params.h"
- 
-+#ifdef HAVE_XDP_BUFF
- static inline bool mlx5e_rx_is_xdp(struct mlx5e_params *params,
- 				   struct mlx5e_xsk_param *xsk)
- {
- 	return params->xdp_prog || xsk;
- }
-+#endif
- 
- u16 mlx5e_get_linear_rq_headroom(struct mlx5e_params *params,
- 				 struct mlx5e_xsk_param *xsk)
- {
- 	u16 headroom = NET_IP_ALIGN;
- 
-+#ifdef HAVE_XDP_BUFF
- 	if (mlx5e_rx_is_xdp(params, xsk)) {
- 		headroom += XDP_PACKET_HEADROOM;
- 		if (xsk)
- 			headroom += xsk->headroom;
--	} else {
-+	} else 
-+#endif
-+	{
- 		headroom += MLX5_RX_HEADROOM;
- 	}
- 
-@@ -29,7 +34,11 @@ u32 mlx5e_rx_get_min_frag_sz(struct mlx5
- 			     struct mlx5e_xsk_param *xsk)
- {
- 	u32 hw_mtu = MLX5E_SW2HW_MTU(params, params->sw_mtu);
-+#ifdef HAVE_XDP_BUFF
- 	u16 linear_rq_headroom = mlx5e_get_linear_rq_headroom(params, xsk);
++#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		       void *type_data);
+-
 +#else
-+	u16 linear_rq_headroom = MLX5_RX_HEADROOM;
-+#endif
- 
- 	return linear_rq_headroom + hw_mtu;
- }
-@@ -52,8 +61,10 @@ u32 mlx5e_rx_get_linear_frag_sz(struct m
- 	 * The latter is important, because frames may come in a random order,
- 	 * and we will have trouble assemblying a real page of multiple frames.
- 	 */
-+#ifdef HAVE_XDP_BUFF
- 	if (mlx5e_rx_is_xdp(params, xsk))
- 		frag_sz = max_t(u32, frag_sz, PAGE_SIZE);
-+#endif
- 
- 	/* Even if we can go with a smaller fragment size, we must not put
- 	 * multiple packets into a single frame.
-@@ -81,7 +92,11 @@ bool mlx5e_rx_is_linear_skb(struct mlx5e
- 	u32 linear_frag_sz = max(mlx5e_rx_get_linear_frag_sz(params, xsk),
- 				 mlx5e_rx_get_linear_frag_sz(params, NULL));
- 
--	return !params->lro_en && linear_frag_sz <= PAGE_SIZE;
-+#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
-+	return !IS_HW_LRO(params) && linear_frag_sz <= PAGE_SIZE;
++int mlx5e_rep_setup_tc(struct net_device *dev, u32 handle,
++#ifdef HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX
++		       u32 chain_index, __be16 proto,
 +#else
-+       return !params->lro_en && linear_frag_sz <= PAGE_SIZE;
++		       __be16 proto,
 +#endif
- }
++		       struct tc_to_netdev *tc);
++#endif
++#endif
++
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
++#endif
+ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
+ 			     struct sk_buff *skb,
+ 			     struct mlx5e_tc_update_priv *tc_priv);
+ void mlx5_rep_tc_post_napi_receive(struct mlx5e_tc_update_priv *tc_priv);
  
- #define MLX5_MAX_MPWQE_LOG_WQE_STRIDE_SZ ((BIT(__mlx5_bit_sz(wq, log_wqe_stride_size)) - 1) + \
++#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
++#ifdef HAVE_TC_BLOCK_OFFLOAD
++int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
++				void *cb_priv);
++#else
++int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
++			  void *cb_priv);
++#endif
++#endif
++
+ #else /* CONFIG_MLX5_CLS_ACT */
+ 
+ struct mlx5e_rep_priv;
+@@ -62,9 +87,28 @@ mlx5e_rep_tc_disable(struct mlx5e_priv *
+ static inline int
+ mlx5e_rep_tc_event_port_affinity(struct mlx5e_priv *priv) { return NOTIFY_DONE; }
+ 
+-static inline int
+-mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+-		   void *type_data) { return -EOPNOTSUPP; }
++#if defined(HAVE_TC_FLOWER_OFFLOAD)
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++static inline int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
++				     void *type_data)
++#else
++static inline int mlx5e_rep_setup_tc(struct net_device *dev, u32 handle,
++#ifdef HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX
++				     u32 chain_index, __be16 proto,
++#else
++				     __be16 proto,
++#endif
++				     struct tc_to_netdev *tc)
++#endif
++{
++	return -EOPNOTSUPP;
++}
++#endif
++
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
++static inline void
++mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv) {}
++#endif
+ 
+ struct mlx5e_tc_update_priv;
+ static inline bool

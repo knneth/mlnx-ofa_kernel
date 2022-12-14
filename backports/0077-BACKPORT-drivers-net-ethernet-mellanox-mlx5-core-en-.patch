@@ -1,26 +1,74 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+From: Mikhael Goikhman <migo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
-Change-Id: I31a5d6e6f42bf2dc67bb5069f949caff98a413e0
+Change-Id: I26f2b3b638f96f0010c1f0d8677c4de0edfdccbc
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 32 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -29,7 +29,7 @@
+ enum mlx5e_icosq_wqe_type {
+ 	MLX5E_ICOSQ_WQE_NOP,
+ 	MLX5E_ICOSQ_WQE_UMR_RX,
+-#ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_KTLS_RX_SUPPORT
+ 	MLX5E_ICOSQ_WQE_UMR_TLS,
+ 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
+ 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
+@@ -55,8 +55,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
+ void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
  
-+#ifdef HAVE_TCF_TUNNEL_INFO
+ /* TX */
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
 +
- #include <net/gre.h>
- #include "en/tc_tun.h"
++#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
++#else
++		       void *accel_priv);
++#endif
++#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb);
++#endif
++
+ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev);
+ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget);
+ void mlx5e_free_txqsq_descs(struct mlx5e_txqsq *sq);
+@@ -215,7 +234,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+ {
+ 	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
  
-@@ -93,3 +95,5 @@ struct mlx5e_tc_tunnel gre_tunnel = {
- 	.parse_udp_ports      = NULL,
- 	.parse_tunnel         = mlx5e_tc_tun_parse_gretap,
- };
+ 	*wq->db = cpu_to_be32(pc);
+ 
+@@ -411,8 +434,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+ 	case IPPROTO_UDP:
+ 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 		fallthrough;
 +
-+#endif /* HAVE_TCF_TUNNEL_INFO */
+ 	case IPPROTO_TCP:
+-		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#ifdef HAVE_SKB_INNER_TRANSPORT_OFFSET
++       	eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#else
++		eseg->swp_inner_l4_offset = (skb_inner_transport_header(skb)  - skb->data) / 2;
++#endif /*HAVE_SKB_INNER_TRANSPORT_OFFSET*/
+ 		break;
+ 	}
+ }

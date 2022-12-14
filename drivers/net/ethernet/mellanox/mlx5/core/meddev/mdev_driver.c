@@ -8,7 +8,27 @@
 #include "mlx5_core.h"
 #include "meddev/sf.h"
 
-static const struct devlink_ops sf_devlink_ops = {};
+static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
+				    struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	mlx5_unload_one(dev, false);
+	return 0;
+}
+
+static int mlx5_devlink_reload_up(struct devlink *devlink,
+				  struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	return mlx5_load_one(dev, false);
+}
+
+static const struct devlink_ops sf_devlink_ops = {
+	.reload_down = mlx5_devlink_reload_down,
+	.reload_up = mlx5_devlink_reload_up,
+};
 
 static int mlx5_meddev_probe(struct device *dev)
 {
@@ -28,6 +48,7 @@ static int mlx5_meddev_probe(struct device *dev)
 	coredev->bar_addr = sf->bar_base_addr;
 	coredev->iseg_base = sf->bar_base_addr;
 	coredev->coredev_type = MLX5_COREDEV_SF;
+	coredev->disable_en = sf->disable_en;
 
 	sf->dev = coredev;
 	ret = mlx5_sf_load(sf);

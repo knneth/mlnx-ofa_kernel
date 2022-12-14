@@ -1,0 +1,164 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
+
+Change-Id: I4dbb7a15d50ae534cf9c2e2942d372ae2b7b22c7
+---
+ drivers/net/ethernet/mellanox/mlx5/core/main.c | 28 ++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
+@@ -77,8 +77,10 @@
+ #include "lib/hv_vhca.h"
+ #include "diag/rsc_dump.h"
+ #ifdef CONFIG_PPC
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ #include <asm/pnv-pci.h>
+ #endif
++#endif
+ #include "diag/diag_cnt.h"
+ 
+ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
+@@ -284,9 +286,11 @@ static struct mlx5_profile profile[] = {
+ #define FW_INIT_WARN_MESSAGE_INTERVAL	20000
+ 
+ #ifdef CONFIG_PPC
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ static void mlx5_as_notify_init(struct mlx5_core_dev *dev);
+ static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev);
+ #endif
++#endif
+ 
+ static int fw_initializing(struct mlx5_core_dev *dev)
+ {
+@@ -953,8 +957,10 @@ static ssize_t mlx5_roce_enable_set_enab
+ {
+ 	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
+ 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 	union devlink_param_value value;
++#endif
+ 	int ret;
+ 	bool val;
+ 
+@@ -967,10 +973,12 @@ static ssize_t mlx5_roce_enable_set_enab
+ 
+ 	mutex_lock(&dev->roce.state_lock);
+ 	dev->roce.enabled = val;
++#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
+ 	value.vbool = val;
+ 	devlink_param_driverinit_value_set(devlink,
+ 					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+ 					   value);
++#endif
+ 	mlx5_reload_interface(dev, MLX5_INTERFACE_PROTOCOL_IB);
+ 	mutex_unlock(&dev->roce.state_lock);
+ 
+@@ -1349,9 +1357,11 @@ static int mlx5_load(struct mlx5_core_de
+ 	mlx5_events_start(dev);
+ 
+ #ifdef CONFIG_PPC
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	/* Treat as_notify as best effort feature */
+ 	mlx5_as_notify_init(dev);
+ #endif
++#endif
+ 
+ 	mlx5_pagealloc_start(dev);
+ 
+@@ -1390,12 +1400,13 @@ static int mlx5_load(struct mlx5_core_de
+ 
+ 	mlx5_accel_ipsec_init(dev);
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	err = mlx5_accel_tls_init(dev);
+ 	if (err) {
+ 		mlx5_core_err(dev, "TLS device start failed %d\n", err);
+ 		goto err_tls_start;
+ 	}
+-
++#endif
+ 	err = mlx5_init_fs(dev);
+ 	if (err) {
+ 		mlx5_core_err(dev, "Failed to init flow steering\n");
+@@ -1427,8 +1438,10 @@ err_sriov:
+ err_ec:
+ 	mlx5_cleanup_fs(dev);
+ err_fs:
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
+ err_tls_start:
++#endif
+ 	mlx5_accel_ipsec_cleanup(dev);
+ 	mlx5_fpga_device_stop(dev);
+ err_fpga_start:
+@@ -1443,8 +1456,10 @@ err_eq_table:
+ 	mlx5_irq_table_destroy(dev);
+ err_irq_table:
+ #ifdef CONFIG_PPC
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	mlx5_as_notify_cleanup(dev);
+ #endif
++#endif
+ 	mlx5_pagealloc_stop(dev);
+ 	mlx5_events_stop(dev);
+ 	mlx5_put_uars_page(dev, dev->priv.uar);
+@@ -1459,7 +1474,9 @@ static void mlx5_unload(struct mlx5_core
+ 	mlx5_ec_cleanup(dev);
+ 	mlx5_cleanup_fs(dev);
+ 	mlx5_accel_ipsec_cleanup(dev);
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
++#endif
+ 	mlx5_fpga_device_stop(dev);
+ 	mlx5_rsc_dump_cleanup(dev);
+ 	mlx5_hv_vhca_cleanup(dev->hv_vhca);
+@@ -1468,8 +1485,10 @@ static void mlx5_unload(struct mlx5_core
+ 	mlx5_eq_table_destroy(dev);
+ 	mlx5_irq_table_destroy(dev);
+ #ifdef CONFIG_PPC
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	mlx5_as_notify_cleanup(dev);
+ #endif
++#endif
+ 	mlx5_pagealloc_stop(dev);
+ 	mlx5_events_stop(dev);
+ 	mlx5_put_uars_page(dev, dev->priv.uar);
+@@ -1690,6 +1709,7 @@ void mlx5_mdev_uninit(struct mlx5_core_d
+ }
+ 
+ #ifdef CONFIG_PPC
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
+ {
+ 	struct pci_dev *pdev = dev->pdev;
+@@ -1730,6 +1750,7 @@ static void mlx5_as_notify_init(struct m
+ 
+ static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
+ #endif
++#endif
+ 
+ #define MLX5_IB_MOD "mlx5_ib"
+ static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
+@@ -1800,7 +1821,9 @@ static int init_one(struct pci_dev *pdev
+ 		dev_err(&pdev->dev, "mlx5_crdump_enable failed with error code %d\n", err);
+ 
+ 	pci_save_state(pdev);
++#ifdef HAVE_DEVLINK_RELOAD_ENABLE
+ 	devlink_reload_enable(devlink);
++#endif
+ 	return 0;
+ 
+ err_load_one:
+@@ -1832,8 +1855,9 @@ static void remove_one(struct pci_dev *p
+ 	if (priv->steering->mode == MLX5_FLOW_STEERING_MODE_DMFS &&
+ 	    mlx5_try_fast_unload(dev))
+ 		dev_dbg(&dev->pdev->dev, "mlx5_try_fast_unload failed\n");
+-
++#ifdef HAVE_DEVLINK_RELOAD_DISABLE
+ 	devlink_reload_disable(devlink);
++#endif
+ 	mlx5_crdump_disable(dev);
+ 	mlx5_drain_health_wq(dev);
+ 	mlx5_unload_one(dev, true);

@@ -41,6 +41,8 @@
 #include "lib/port_tun.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
+extern const struct mlx5e_rx_handlers mlx5e_rx_handlers_rep;
+
 struct mlx5e_neigh_update_table {
 	struct rhashtable       neigh_ht;
 	/* Save the neigh hash entries in a list in addition to the hash table
@@ -69,13 +71,8 @@ struct mlx5_rep_uplink_priv {
 	 * tc_indr_block_cb_priv_list is used to lookup indirect callback
 	 * private data
 	 *
-	 * netdevice_nb is the netdev events notifier - used to register
-	 * tunnel devices for block events
-	 *
 	 */
 	struct list_head	    tc_indr_block_priv_list;
-	struct notifier_block	    netdevice_nb;
-	struct netdev_net_notifier  netdevice_nn;
 
 	struct mlx5_tun_entropy tun_entropy;
 
@@ -84,12 +81,16 @@ struct mlx5_rep_uplink_priv {
 	struct list_head            unready_flows;
 	struct work_struct          reoffload_flows_work;
 
+	struct notifier_block fib_nb;
+
 	/* maps tun_info to a unique id*/
 	struct mapping_ctx *tunnel_mapping;
 	/* maps tun_enc_opts to a unique id*/
 	struct mapping_ctx *tunnel_enc_opts_mapping;
 
+	struct idr fte_ids;
 	struct mlx5_tc_ct_priv *ct_priv;
+	struct mlx5_tc_psample *tc_psample;
 
 	/* support eswitch vports bonding */
 	struct mlx5e_rep_bond *bond;
@@ -114,7 +115,6 @@ struct mlx5e_rep_priv *mlx5e_rep_to_rep_priv(struct mlx5_eswitch_rep *rep)
 }
 
 struct mlx5e_neigh {
-	struct net_device *dev;
 	union {
 		__be32	v4;
 		struct in6_addr v6;
@@ -126,6 +126,7 @@ struct mlx5e_neigh_hash_entry {
 	struct rhash_head rhash_node;
 	struct mlx5e_neigh m_neigh;
 	struct mlx5e_priv *priv;
+	struct net_device *dev;
 
 	/* Save the neigh hash entry in a list on the representor in
 	 * addition to the hash table. In order to iterate easily over the
@@ -137,12 +138,6 @@ struct mlx5e_neigh_hash_entry {
 	spinlock_t encap_list_lock;
 	/* encap list sharing the same neigh */
 	struct list_head encap_list;
-
-	/* valid only when the neigh reference is taken during
-	 * neigh_update_work workqueue callback.
-	 */
-	struct neighbour *n;
-	struct work_struct neigh_update_work;
 
 	/* neigh hash entry can be deleted only when the refcount is zero.
 	 * refcount is needed to avoid neigh hash entry removal by TC, while
@@ -162,6 +157,23 @@ struct mlx5e_neigh_hash_entry {
 enum {
 	/* set when the encap entry is successfully offloaded into HW */
 	MLX5_ENCAP_ENTRY_VALID     = BIT(0),
+	MLX5_REFORMAT_DECAP        = BIT(1),
+	MLX5_ENCAP_ENTRY_NO_ROUTE  = BIT(2),
+};
+
+struct mlx5e_decap_key {
+	struct ethhdr key;
+};
+
+struct mlx5e_decap_entry {
+	struct mlx5e_decap_key key;
+	struct list_head flows;
+	struct hlist_node hlist;
+	refcount_t refcnt;
+	struct completion res_ready;
+	int compl_result;
+	struct mlx5_pkt_reformat *pkt_reformat;
+	struct rcu_head rcu;
 };
 
 struct encap_id_entry {
@@ -176,17 +188,18 @@ struct mlx5e_encap_entry {
 	struct list_head encap_list;
 	/* dealloc invalid encap_ids only when freeing mlx5e_encap_entry */
 	struct list_head encap_id_list;
-	struct mlx5e_neigh m_neigh;
 	/* a node of the eswitch encap hash table which keeping all the encap
 	 * entries
 	 */
 	struct hlist_node encap_hlist;
 	struct list_head flows;
+	struct list_head route_list;
 	struct mlx5_pkt_reformat *pkt_reformat;
 	const struct ip_tunnel_info *tun_info;
 	unsigned char h_dest[ETH_ALEN];	/* destination eth addr	*/
 
 	struct net_device *out_dev;
+	int route_dev_ifindex;
 	struct net_device *route_dev;
 	struct mlx5e_tc_tunnel *tunnel;
 	int reformat_type;
@@ -206,11 +219,28 @@ struct mlx5e_rep_sq {
 	struct list_head	 list;
 };
 
+struct mlx5e_route_key {
+	int ip_version;
+	union {
+		__be32 v4;
+		struct in6_addr v6;
+	} endpoint_ip;
+};
+
+struct mlx5e_route_entry {
+	struct mlx5e_route_key key;
+	struct list_head encap_entries;
+	struct list_head decap_flows;
+	bool valid;
+	struct hlist_node hlist;
+	refcount_t refcnt;
+	int tunnel_dev_index;
+	struct rcu_head rcu;
+};
+
 void mlx5e_rep_register_vport_reps(struct mlx5_core_dev *mdev,
 				   struct mlx5e_priv *priv);
 void mlx5e_rep_unregister_vport_reps(struct mlx5_core_dev *mdev);
-bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv);
-
 int mlx5e_rep_bond_init(struct mlx5e_rep_priv *rpriv);
 void mlx5e_rep_bond_cleanup(struct mlx5e_rep_priv *rpriv);
 int mlx5e_rep_bond_enslave(struct mlx5_eswitch *esw, struct net_device *netdev,
@@ -220,17 +250,14 @@ void mlx5e_rep_bond_unslave(struct mlx5_eswitch *esw,
 			    const struct net_device *lag_dev);
 int mlx5e_rep_bond_update(struct mlx5e_priv *priv, bool cleanup);
 
+bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv);
+
 bool mlx5e_rep_has_offload_stats(const struct net_device *dev, int attr_id);
 int mlx5e_rep_get_offload_stats(int attr_id, const struct net_device *dev,
 				void *sp);
 
 int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv);
 void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv);
-
-void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			     bool xmit_more);
-void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq,
-				   struct mlx5_cqe64 *cqe, bool xmit_more);
 
 void mlx5e_rep_queue_neigh_stats_work(struct mlx5e_priv *priv);
 
@@ -246,9 +273,7 @@ struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev);
 
 #else /* CONFIG_MLX5_ESWITCH */
 static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
-static inline bool mlx5e_eswitch_vf_rep(struct net_device *netdev) { return false; }
 static inline int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv) { return 0; }
-static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
 static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,
 					       int attr_id) { return false; }
 static inline int mlx5e_rep_get_offload_stats(int attr_id,
@@ -257,6 +282,8 @@ static inline int mlx5e_rep_get_offload_stats(int attr_id,
 static inline void mlx5e_rep_register_vport_reps(struct mlx5_core_dev *mdev,
 						 struct mlx5e_priv *priv) {}
 static inline void mlx5e_rep_unregister_vport_reps(struct mlx5_core_dev *mdev) {}
+static inline bool mlx5e_eswitch_vf_rep(struct net_device *netdev) { return false; }
+static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
 static inline struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev)
 { return NULL; }
 

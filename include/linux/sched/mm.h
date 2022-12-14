@@ -7,9 +7,7 @@
 #include_next <linux/sched/mm.h>
 #endif
 
-#ifdef HAVE_SCHED_H
 #include_next <linux/sched.h>
-#endif
 
 #ifndef HAVE_MMGET_NOT_ZERO
 #ifndef HAVE_SCHED_MMGET_NOT_ZERO

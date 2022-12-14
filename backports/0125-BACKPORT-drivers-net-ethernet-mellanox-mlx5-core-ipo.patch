@@ -1,0 +1,88 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
+
+Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
+---
+ .../mellanox/mlx5/core/ipoib/ethtool.c        | 45 +++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
+@@ -206,6 +206,7 @@ static int mlx5i_get_speed_settings(u16
+ 	return rate * width;
+ }
+ 
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ static int mlx5i_get_link_ksettings(struct net_device *netdev,
+ 				    struct ethtool_link_ksettings *link_ksettings)
+ {
+@@ -233,11 +234,43 @@ static int mlx5i_get_link_ksettings(stru
+ 
+ 	return 0;
+ }
++#endif
++
++#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
++static int mlx5i_get_settings(struct net_device *netdev,
++			      struct ethtool_cmd *ecmd)
++{
++	u16 ib_link_width_oper;
++	u16 ib_proto_oper;
++	int speed, ret;
++
++	ret = mlx5i_get_port_settings(netdev,
++				      &ib_link_width_oper,
++				      &ib_proto_oper);
++	if (ret)
++		return ret;
++
++	speed = mlx5i_get_speed_settings(ib_link_width_oper, ib_proto_oper);
++	if (speed < 0)
++		return -EINVAL;
++
++	ecmd->duplex = DUPLEX_FULL;
++	ecmd->port = PORT_OTHER;// FIXME: till define IB port type 
++	ecmd->phy_address = 255;
++	ecmd->autoneg = AUTONEG_DISABLE;
++
++	ethtool_cmd_speed_set(ecmd, speed);
++
++	return 0;
++}
++#endif
+ 
+ const struct ethtool_ops mlx5i_ethtool_ops = {
++#ifdef HAVE_SUPPORTED_COALESCE_PARAM
+ 	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
+ 				     ETHTOOL_COALESCE_MAX_FRAMES |
+ 				     ETHTOOL_COALESCE_USE_ADAPTIVE,
++#endif
+ 	.get_drvinfo        = mlx5i_get_drvinfo,
+ 	.get_strings        = mlx5i_get_strings,
+ 	.get_sset_count     = mlx5i_get_sset_count,
+@@ -250,7 +283,12 @@ const struct ethtool_ops mlx5i_ethtool_o
+ 	.get_coalesce       = mlx5i_get_coalesce,
+ 	.set_coalesce       = mlx5i_set_coalesce,
+ 	.get_ts_info        = mlx5i_get_ts_info,
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ 	.get_link_ksettings = mlx5i_get_link_ksettings,
++#endif
++#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
++	.get_settings       = mlx5i_get_settings,
++#endif
+ 	.get_link           = ethtool_op_get_link,
+ };
+ 
+@@ -258,4 +296,11 @@ const struct ethtool_ops mlx5i_pkey_etht
+ 	.get_drvinfo        = mlx5i_get_drvinfo,
+ 	.get_link           = ethtool_op_get_link,
+ 	.get_ts_info        = mlx5i_get_ts_info,
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
++	.get_link_ksettings = mlx5i_get_link_ksettings,
++#endif
++#ifdef HAVE_ETHTOOL_GET_SET_SETTINGS
++	.get_settings	    = mlx5i_get_settings,
++#endif
+ };
++

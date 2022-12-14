@@ -47,8 +47,8 @@ from optparse 					import OptionParser
 from threading import Timer
 
 VERSION_MAJOR					= "5"
-VERSION_MINOR					= "1"
-VERSION_BUILD					= "3"
+VERSION_MINOR					= "2"
+VERSION_BUILD					= "0"
 
 INDENT						= 1
 NA						= "N/A"
@@ -341,13 +341,8 @@ class OS:
 	RH8_0				= "RHEL8.0"
 	RH8_1				= "RHEL8.1"
 	RH8_2				= "RHEL8.2"
-	SLES11_3			= "SLES11SP3"
-	SLES11_4			= "SLES11SP4"
-	SLES12_3			= "SLES12SP3"
-	SLES12_4			= "SLES12SP4"
-	SLES12_5			= "SLES12SP5"
-	SLES15_0			= "SLES15SP0"
-	SLES15_1			= "SLES15SP1"
+	SLES11				= "SLES11"
+	SLES12				= "SLES12"
 	UBUNTU14_04			= "Ubuntu14.04"
 	UBUNTU16_04			= "Ubuntu16.04"
 	UBUNTU18_04			= "Ubuntu18.04"
@@ -366,14 +361,14 @@ class OS:
 		CENTOS7_7, CENTOS8_0, CENTOS8_1, DEBIAN8_9, DEBIAN8_11, DEBIAN9_6,
 		DEBIAN9_9, DEBIAN9_11, DEBIAN10_0, EULEROS2_0_3, EULEROS2_0_8, FEDORA30, OL6_10,
 		OL7_4, OL7_7, OL7_8, OL8_0, OL8_1, RH6_3, RH6_10, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6,
-		RH7_7, RH7_8, RH8_0, RH8_1, SLES11_3, SLES11_4, SLES12_3, SLES12_4, SLES12_5,
-		SLES15_0, SLES15_1, UBUNTU14_04, UBUNTU16_04, UBUNTU18_04, UBUNTU19_04, UBUNTU19_10
+		RH7_7, RH7_8, RH8_0, RH8_1, SLES11, SLES12, UBUNTU14_04, UBUNTU16_04,
+                UBUNTU18_04, UBUNTU19_04, UBUNTU19_10
 		]
 	SYSTEMCTL_ACCESS_OS = [
 		CENTOS7_2, CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6, CENTOS7_7, CENTOS8_0,
 		CENTOS8_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6, RH7_7, RH7_8, RH8_0, RH8_1, RH8_2
 		]
-	SUSE = [SLES11_3, SLES11_4, SLES12_3, SLES12_4, SLES12_5, SLES15_0, SLES15_1]
+	SUSE = [SLES11, SLES12]
 	PPC_DEVICE_NEW_FORMAT_OS = [
 		CENTOS7_2, CENTOS7_3, CENTOS7_4, CENTOS7_5, CENTOS7_6, CENTOS7_7, CENTOS8_0,
 		CENTOS8_1, RH7_2, RH7_3, RH7_4, RH7_5, RH7_6, RH7_7, RH7_8, RH8_0, RH8_1, RH8_2,
@@ -436,7 +431,7 @@ class OS:
 					return OS.FEDORA30
 			if 'suse' in linux_dist:
 				if os_version == '11':
-					return OS.SLES11_3
+					return OS.SLES11
 				if os_version == '12':
 					return OS.SLES12
 			if linux_dist == 'ubuntu':
@@ -2310,6 +2305,7 @@ class PciDeviceInfo:
 		self.numa_aware_core_list	= NA
 		self.pci_max_payload		= NA
 		self.pci_max_read_request	= NA
+		self.pci_relaxed_ordering	= NA
 
 	def __str__ (self):
 		global INDENT
@@ -2350,10 +2346,13 @@ class PciDeviceInfo:
 			print(pci_width_compatible_to_cpu_suggestion)
 		actual_pci_speed_ok = self.actual_pci_speed == self.pci_speed_capabilities
 		actual_pci_speed_status = (status_warning_string(), status_ok_string())[actual_pci_speed_ok]
+		pci_relaxed_ordering_ok = self.pci_relaxed_ordering == "+"
+		pci_relaxed_ordering_status = (status_warning_string(), status_ok_string())[pci_relaxed_ordering_ok]
 		pci_speed_suggestion = (" >>> PCI width status is below PCI capabilities. Check PCI configuration in BIOS.", "")[actual_pci_speed_ok]
 		print("%s: PCI Speed %sGT/s"%(actual_pci_speed_status, self.actual_pci_speed) + pci_speed_suggestion)
 		print("PCI Max Payload Size %s"%self.pci_max_payload)
 		print("PCI Max Read Request %s"%self.pci_max_read_request)
+		print("%s: PCI Relaxed Ordering %s"%(pci_relaxed_ordering_status,self.pci_relaxed_ordering))
 		print("Local CPUs list %s"%self.closest_core_list)
 		for interface in self.interfaces:
 			print("")
@@ -2377,6 +2376,7 @@ class PciDeviceInfo:
 		pci_speed_pattern		= re.compile("Speed \d+")
 		pci_max_payload_pattern		= re.compile("MaxPayload \d+")
 		pci_max_read_request_pattern	= re.compile("MaxReadReq \d+")
+		pci_relaxed_ordering_pettern	= re.compile("RlxdOrd[+-]")
 		for parameter in pci_device_parameters.split('\n'):
 			if "LnkSta:" in parameter:
 				match = pci_width_pattern.search(parameter)
@@ -2400,6 +2400,10 @@ class PciDeviceInfo:
 				match = pci_max_read_request_pattern.search(parameter)
 				if match:
 					self.pci_max_read_request = int(match.group(0).split(" ")[1])
+			if "RlxdOrd" in parameter:
+				match = pci_relaxed_ordering_pettern.search(parameter)
+				if match:
+					self.pci_relaxed_ordering = match.group(0)[-1]
 
 	def set_rdma_device_info(self, node_info):
 		""" set RDMA device information
@@ -2651,9 +2655,10 @@ class PciDeviceInfo:
 		return power8_ht_aware_core_list
 
 	def set_numa_aware_core_list(self, node_info):
-		""" buid numa aware core list for device while taking the CPU vendor into consideration.
-		    For Intel systems: buid list that contain: [ numa cores , non numa cores ]
-		    For PPC (IBM) systems: buid list that contain: [ numa cores ]
+		""" build numa aware core list for device while taking the CPU vendor into consideration.
+			For Intel systems: buid list that contain: [ numa cores , non numa cores ]
+			For PPC (IBM) systems: If numa cores exist, buid list that contain: [ numa cores ]
+			                       else build list that contain: [ non numa cores ]
 		"""
 		non_numa_cores = []
 		for numa in node_info.cpu.sockets_cores.keys():
@@ -2689,6 +2694,9 @@ class PciDeviceInfo:
 
 		if node_info.cpu.vendor != CPUVendor.IBM and self.numa != -1:
 			numa_aware_cores += non_numa_cores
+		if node_info.cpu.vendor == CPUVendor.IBM and not numa_aware_cores:
+			numa_aware_cores = non_numa_cores
+
 		self.numa_aware_core_list = numa_aware_cores
 
 	def set_wanted_affinity_hint_like(self, node_info):
@@ -2698,6 +2706,10 @@ class PciDeviceInfo:
 			core_list_for_irq_affinity_hints = self.numa_aware_core_list
 		else:
 			core_list_for_irq_affinity_hints = self.create_power8_ht_aware_core_list(node_info)
+
+		if not core_list_for_irq_affinity_hints:
+			logging.warning("Can't set wanted affinity hints")
+			return
 
 		irq_index = 0
 		for interface in self.interfaces:
@@ -2716,6 +2728,10 @@ class PciDeviceInfo:
 			core_list_for_irq_affinity_hints = self.numa_aware_core_list
 		else:
 			core_list_for_irq_affinity_hints = self.create_power8_ht_aware_core_list(node_info)
+
+		if not core_list_for_irq_affinity_hints:
+			logging.warning("Can't set affinity to first local core")
+			return
 
 		for interface in self.interfaces:
 			if interface.status == InterfaceInfo.DOWN:

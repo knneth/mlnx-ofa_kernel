@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/rdma_netlink.h
+
+Change-Id: I165f920794651ef8ebebfa3556fafb0d2c7ef5b7
+---
+ include/rdma/rdma_netlink.h | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+--- a/include/rdma/rdma_netlink.h
++++ b/include/rdma/rdma_netlink.h
+@@ -13,8 +13,12 @@ enum {
+ };
+ 
+ struct rdma_nl_cbs {
+-	int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh,
+-		    struct netlink_ext_ack *extack);
++#ifdef HAVE_NETLINK_EXT_ACK
++        int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh,
++                        struct netlink_ext_ack *extack);
++#else
++        int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh);
++#endif
+ 	int (*dump)(struct sk_buff *skb, struct netlink_callback *nlcb);
+ 	u8 flags;
+ };

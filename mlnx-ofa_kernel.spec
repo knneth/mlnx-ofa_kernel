@@ -40,16 +40,17 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-# Force python3 on RHEL8, fedora3x and similar:
+# Force python3 on RHEL8, fedora3x, SLES15 and similar:
 %global RHEL8 0%{?rhel} >= 8
 %global FEDORA3X 0%{?fedora} >= 30
-%global PYTHON3 %{RHEL8} || %{FEDORA3X}
+%global SLES15 0%{?suse_version} >= 1500
+%global PYTHON3 %{RHEL8} || %{FEDORA3X} || %{SLES15}
 
 # Workaround: To be removed when mlnx_tune has python3 support:
 # mlnx_tune is a python2 script. Avoid generating dependencies
 # from it in some distributions to avoid dragging in a python2
 # dependency
-%if (!%{KMP}) && %{RHEL8}
+%if %{PYTHON3}
 %global __requires_exclude_from mlnx_tune
 %endif
 
@@ -75,8 +76,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.1}
-%{!?_release: %global _release OFED.5.1.2.5.8.1}
+%{!?_version: %global _version 5.2}
+%{!?_release: %global _release OFED.5.2.1.0.4.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -84,7 +85,7 @@
 %global non_kmp_pname %{_name}-modules
 
 %if %{PYTHON3}
-%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=python3
+%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=%{_bindir}/python3
 %else
 %global mlnx_python_env    :
 %endif
@@ -131,7 +132,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.5.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.2-1.0.4.tgz
 
 
 # build KMP rpms?
@@ -187,7 +188,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.5.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.2-1.0.4.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -220,7 +221,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.5.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.2-1.0.4.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -325,7 +326,6 @@ for flavor in %flavors_to_build; do
 	make install_modules KERNELRELEASE=$KVERSION
 	# install script and configuration files
 	make install_scripts
-	mkdir -p %{buildroot}/$PREFIX/src/$NAME/$flavor
 	mkdir -p %{_builddir}/src/$NAME/$flavor
 	cp -ar include/ %{_builddir}/src/$NAME/$flavor
 	cp -ar config* %{_builddir}/src/$NAME/$flavor
@@ -669,6 +669,7 @@ fi
 /sbin/sysctl_perf_tuning
 /sbin/mlnx_bf_configure
 /sbin/mlnx-sf
+/lib/udev/mlnx_bf_udev
 /usr/sbin/show_gids
 /usr/sbin/compat_gid_gen
 /usr/sbin/cma_roce_mode

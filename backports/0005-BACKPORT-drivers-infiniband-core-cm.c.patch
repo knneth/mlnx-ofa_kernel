@@ -1,0 +1,32 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
+
+Change-Id: I694c0a609e5e779453815bdbecb68203a9e2e0c6
+---
+ drivers/infiniband/core/cm.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/drivers/infiniband/core/cm.c
++++ b/drivers/infiniband/core/cm.c
+@@ -31,6 +31,9 @@
+ MODULE_AUTHOR("Sean Hefty");
+ MODULE_DESCRIPTION("InfiniBand CM");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ static const char * const ibcm_rej_reason_strs[] = {
+ 	[IB_CM_REJ_NO_QP]			= "no QP",
+@@ -4293,7 +4296,11 @@ static ssize_t cm_show_counter(struct ko
+ 		       atomic_long_read(&group->counter[cm_attr->index]));
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops cm_counter_ops = {
++#else
++static struct sysfs_ops cm_counter_ops = {
++#endif
+ 	.show = cm_show_counter
+ };
+ 

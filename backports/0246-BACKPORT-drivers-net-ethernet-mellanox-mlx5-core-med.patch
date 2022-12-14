@@ -1,0 +1,55 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev_driver.c
+
+Change-Id: I5f675e8d7436a078a254ab4801130516ad59e54c
+---
+ .../mellanox/mlx5/core/meddev/mdev_driver.c   | 20 +++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev_driver.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/meddev/mdev_driver.c
+@@ -8,8 +8,16 @@
+ #include "mlx5_core.h"
+ #include "meddev/sf.h"
+ 
+-static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
+-				    struct netlink_ext_ack *extack)
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
++static int mlx5_devlink_reload_down(struct devlink *devlink,
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++			     bool netns_change,
++			     enum devlink_reload_action action,
++			     enum devlink_reload_limit limit,
++#elif defined(HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS)
++			     bool netns_change,
++#endif
++   			     struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 
+@@ -18,16 +26,24 @@ static int mlx5_devlink_reload_down(stru
+ }
+ 
+ static int mlx5_devlink_reload_up(struct devlink *devlink,
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
++				  enum devlink_reload_action action,
++				  enum devlink_reload_limit limit,
++				  u32 *actions_performed,
++#endif
+ 				  struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 
+ 	return mlx5_load_one(dev, false);
+ }
++#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
+ 
+ static const struct devlink_ops sf_devlink_ops = {
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
+ 	.reload_down = mlx5_devlink_reload_down,
+ 	.reload_up = mlx5_devlink_reload_up,
++#endif /* HAVE_DEVLINK_HAS_RELOAD_UP_DOWN */
+ };
+ 
+ static int mlx5_meddev_probe(struct device *dev)

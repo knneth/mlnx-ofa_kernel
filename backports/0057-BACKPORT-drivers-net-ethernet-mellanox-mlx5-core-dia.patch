@@ -1,0 +1,88 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
+
+Change-Id: I1a07a113c4849942b15b864a1b7937d8ebbbfc28
+---
+ .../mlx5/core/diag/en_tc_tracepoint.h         | 28 +++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
+@@ -1,6 +1,7 @@
+ /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ #undef TRACE_SYSTEM
+ #define TRACE_SYSTEM mlx5
+ 
+@@ -27,10 +28,18 @@ DECLARE_EVENT_CLASS(mlx5e_flower_templat
+ 		    TP_ARGS(f),
+ 		    TP_STRUCT__entry(__field(void *, cookie)
+ 				     __field(unsigned int, num)
++#ifdef HAVE_TC_SETUP_FLOW_ACTION
+ 				     __dynamic_array(int, ids, f->rule ?
+ 					     f->rule->action.num_entries : 0)
++#else
++				     __dynamic_array(int, ids,
++					     tcf_exts_num_actions(f->exts))
++				     __dynamic_array(char, actions,
++					     tcf_exts_num_actions(f->exts) * sizeof(struct flow_action_entry))
++#endif
+ 				     ),
+ 		    TP_fast_assign(__entry->cookie = (void *)f->cookie;
++#ifdef HAVE_TC_SETUP_FLOW_ACTION
+ 			__entry->num = (f->rule ?
+ 				f->rule->action.num_entries : 0);
+ 			if (__entry->num)
+@@ -38,6 +47,15 @@ DECLARE_EVENT_CLASS(mlx5e_flower_templat
+ 						 f->rule->action.entries,
+ 						 f->rule->action.num_entries);
+ 			),
++#else
++			__entry->num = tcf_exts_num_actions(f->exts);
++			tc_setup_flow_action(__get_dynamic_array(actions), f->exts);
++			if (__entry->num)
++				put_ids_to_array(__get_dynamic_array(ids),
++						 __get_dynamic_array(actions),
++						 __entry->num);
++			),
++#endif
+ 		    TP_printk("cookie=%p actions= %s\n",
+ 			      __entry->cookie, __entry->num ?
+ 				      __parse_action(__get_dynamic_array(ids),
+@@ -59,19 +77,27 @@ TRACE_EVENT(mlx5e_stats_flower,
+ 	    TP_PROTO(const struct flow_cls_offload *f),
+ 	    TP_ARGS(f),
+ 	    TP_STRUCT__entry(__field(void *, cookie)
++#ifdef HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
+ 			     __field(u64, bytes)
+ 			     __field(u64, packets)
+ 			     __field(u64, lastused)
++#endif
+ 			     ),
+ 	    TP_fast_assign(__entry->cookie = (void *)f->cookie;
++#ifdef HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
+ 		__entry->bytes = f->stats.bytes;
+ 		__entry->packets = f->stats.pkts;
+ 		__entry->lastused = f->stats.lastused;
++#endif
+ 		),
++#ifdef HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
+ 	    TP_printk("cookie=%p bytes=%llu packets=%llu lastused=%llu\n",
+ 		      __entry->cookie, __entry->bytes,
+ 		      __entry->packets, __entry->lastused
+ 		      )
++#else
++		    TP_printk("cookie=%p\n", __entry->cookie)
++#endif
+ );
+ 
+ TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
+@@ -112,3 +138,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+ #undef TRACE_INCLUDE_FILE
+ #define TRACE_INCLUDE_FILE en_tc_tracepoint
+ #include <trace/define_trace.h>
++
++#endif

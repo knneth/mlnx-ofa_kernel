@@ -48,7 +48,7 @@ void mlx5_accel_ipsec_init(struct mlx5_core_dev *mdev)
 		     mlx5_fpga_ipsec_ops(mdev);
 
 	if (!ipsec_ops || !ipsec_ops->init) {
-		mlx5_core_warn_once(mdev, "IPsec ops is not supported\n");
+		mlx5_core_dbg(mdev, "IPsec ops is not supported\n");
 		return;
 	}
 
@@ -105,7 +105,7 @@ int mlx5_accel_ipsec_counters_read(struct mlx5_core_dev *mdev, u64 *counters,
 
 void *mlx5_accel_esp_create_hw_context(struct mlx5_core_dev *mdev,
 				       struct mlx5_accel_esp_xfrm *xfrm,
-				       u32 *sa_handle)
+				       u32 pdn, u32 *sa_handle)
 {
 	const struct mlx5_accel_ipsec_ops *ipsec_ops = mdev->ipsec_ops;
 	__be32 saddr[4] = {}, daddr[4] = {};
@@ -122,7 +122,7 @@ void *mlx5_accel_esp_create_hw_context(struct mlx5_core_dev *mdev,
 	}
 
 	return ipsec_ops->create_hw_context(mdev, xfrm, saddr, daddr, xfrm->attrs.spi,
-					    xfrm->attrs.is_ipv6, sa_handle);
+					    xfrm->attrs.is_ipv6, pdn, sa_handle);
 }
 
 void mlx5_accel_esp_free_hw_context(struct mlx5_core_dev *mdev, void *context)

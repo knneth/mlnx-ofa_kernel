@@ -198,7 +198,7 @@ static void dma_fence_odp_mr(struct mlx5_ib_mr *mr)
 	odp->private = NULL;
 	mutex_unlock(&odp->umem_mutex);
 
-	if (!mr->allocated_from_cache) {
+	if (!mr->cache_ent) {
 		mlx5_core_destroy_mkey(mr->dev->mdev, &mr->mmkey);
 		WARN_ON(mr->descs);
 	}
@@ -1772,8 +1772,10 @@ static void mlx5_ib_prefetch_mr_work(struct work_struct *w)
 	int ret;
 	u32 i;
 
+	/* We rely on IB/core that work is executed if we have num_sge != 0 only. */
 	WARN_ON(!work->num_sge);
 	dev = work->frags[0].mr->dev;
+	/* SRCU should be held when calling to mlx5_odp_populate_xlt() */
 	srcu_key = srcu_read_lock(&dev->odp_srcu);
 	for (i = 0; i < work->num_sge; ++i) {
 		ret = pagefault_mr(work->frags[i].mr, work->frags[i].io_virt,

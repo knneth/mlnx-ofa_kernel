@@ -36,6 +36,7 @@ static struct mlx5_nb events_nbs_ref[] = {
 	/* Events to be forwarded (as is) to mlx5 core interfaces (mlx5e/mlx5_ib) */
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_PORT_CHANGE },
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_GENERAL_EVENT },
+	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT },
 	/* QP/WQ resource events to forward */
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_DCT_DRAINED },
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_PATH_MIG },
@@ -131,6 +132,8 @@ static const char *eqe_type_str(u8 type)
 		return "MLX5_EVENT_TYPE_DEVICE_TRACER";
 	case MLX5_EVENT_TYPE_XRQ_ERROR:
 		return "MLX5_EVENT_TYPE_XRQ_ERROR";
+	case MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT:
+		return "MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT";
 	default:
 		return "Unrecognized event";
 	}

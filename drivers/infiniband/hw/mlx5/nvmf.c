@@ -38,7 +38,6 @@
 #include <rdma/ib_verbs_nvmf.h>
 #include <linux/mlx5/nvmf.h>
 #include <linux/mlx5/qp.h>
-
 #include "mlx5_ib.h"
 
 void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev)
@@ -115,7 +114,7 @@ static void set_nvmf_backend_ctrl_attrs(struct ib_nvmf_backend_ctrl_init_attr *a
 }
 
 static void mlx5_ib_nvmf_backend_ctrl_event(struct mlx5_core_nvmf_be_ctrl *ctrl,
-					    int event_type,
+					    int event_type, int event_subtype,
 					    int error_type)
 {
 	struct ib_nvmf_ctrl *ibctrl = &to_mibctrl(ctrl)->ibctrl;
@@ -127,21 +126,34 @@ static void mlx5_ib_nvmf_backend_ctrl_event(struct mlx5_core_nvmf_be_ctrl *ctrl,
 		return;
 	}
 
-	if (ibctrl->event_handler) {
-		event.device = ibctrl->srq->device;
-		switch (error_type) {
-		case MLX5_XRQ_ERROR_TYPE_BACKEND_CONTROLLER_ERROR:
-			event.event = IB_EXP_EVENT_XRQ_NVMF_BACKEND_CTRL_ERR;
+	if (!ibctrl->event_handler)
+		return;
+
+	event.device = ibctrl->srq->device;
+	switch (error_type) {
+	case MLX5_XRQ_ERROR_TYPE_BACKEND_CONTROLLER_ERROR:
+		switch (event_subtype) {
+		case MLX5_XRQ_SUBTYPE_BACKEND_CONTROLLER_PCI_ERROR:
+			event.event = IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR;
+			break;
+		case MLX5_XRQ_SUBTYPE_BACKEND_CONTROLLER_TO_ERROR:
+			event.event = IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR;
 			break;
 		default:
 			mlx5_ib_warn(dev,
-				     "Unexpected event error type %d on CTRL %06x\n",
-				     error_type, ibctrl->id);
+				     "Unexpected event subtype %d on CTRL %06x\n",
+				     event_subtype, ibctrl->id);
 			return;
 		}
-
-		ibctrl->event_handler(&event, ibctrl->be_context);
+		break;
+	default:
+		mlx5_ib_warn(dev,
+			     "Unexpected event error type %d on CTRL %06x\n",
+			     error_type, ibctrl->id);
+		return;
 	}
+
+	ibctrl->event_handler(&event, ibctrl->be_context);
 }
 
 struct ib_nvmf_ctrl *mlx5_ib_create_nvmf_backend_ctrl(struct ib_srq *srq,

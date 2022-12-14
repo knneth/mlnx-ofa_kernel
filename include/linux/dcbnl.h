@@ -51,15 +51,4 @@ struct ieee_qcn_stats {
 #define IEEE_8021QAZ_APP_SEL_DSCP	5
 #endif
 
-#ifndef HAVE_STRUCT_IEEE_PFC
-struct ieee_pfc {
-	__u8	pfc_cap;
-	__u8	pfc_en;
-	__u8	mbc;
-	__u16	delay;
-	__u64	requests[IEEE_8021QAZ_MAX_TCS];
-	__u64	indications[IEEE_8021QAZ_MAX_TCS];
-};
-#endif
-
 #endif /* LINUX_DCBNL_H */

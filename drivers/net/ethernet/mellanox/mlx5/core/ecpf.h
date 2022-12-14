@@ -19,6 +19,9 @@ void mlx5_ec_cleanup(struct mlx5_core_dev *dev);
 void mlx5_smartnic_sysfs_init(struct net_device *dev);
 void mlx5_smartnic_sysfs_cleanup(struct net_device *dev);
 
+int mlx5_cmd_host_pf_enable_hca(struct mlx5_core_dev *dev);
+int mlx5_cmd_host_pf_disable_hca(struct mlx5_core_dev *dev);
+
 #else  /* CONFIG_MLX5_ESWITCH */
 
 static inline bool

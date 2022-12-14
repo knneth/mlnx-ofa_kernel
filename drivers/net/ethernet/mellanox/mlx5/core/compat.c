@@ -15,8 +15,8 @@ bool mlx5_is_roce_enabled(struct mlx5_core_dev *dev)
 	union devlink_param_value val;
 
 	devlink_param_driverinit_value_get(devlink,
-					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
-					&val);
+			DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+			&val);
 	return val.vbool;
 #else
 	return dev->roce.enabled && MLX5_CAP_GEN(dev, roce);

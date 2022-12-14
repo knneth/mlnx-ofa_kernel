@@ -1,4 +1,4 @@
-#if !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC))
+#if !(IS_ENABLED(CONFIG_XZ_DEC))
 
 /*
  * .xz Stream decoder
@@ -822,4 +822,4 @@ XZ_EXTERN void xz_dec_end(struct xz_dec *s)
 	}
 }
 
-#endif /* !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)) */
+#endif /* !(IS_ENABLED(CONFIG_XZ_DEC)) */

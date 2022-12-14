@@ -6,6 +6,10 @@
 
 #include_next <linux/netdevice.h>
 
+#if !IS_ENABLED(CONFIG_NET_CLS_E2E_CACHE)
+#define TC_SETUP_E2E_BLOCK 0xFFFF
+#endif
+
 #undef alloc_netdev
 #define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
 	        alloc_netdev_mqs(sizeof_priv, name, name_assign_type, setup, 1, 1)
@@ -20,23 +24,10 @@
     ( (netdev)->ethtool_ops = (ops) )
 #endif
 
-#if !defined(HAVE_NETDEV_EXTENDED_HW_FEATURES)     && \
-    !defined(HAVE_NETDEV_OPS_EXT_NDO_FIX_FEATURES) && \
-    !defined(HAVE_NETDEV_OPS_EXT_NDO_SET_FEATURES) && \
-    !defined(HAVE_NDO_SET_FEATURES)
-#define LEGACY_ETHTOOL_OPS
-#endif
-
 #ifndef NETDEV_BONDING_INFO
 #define NETDEV_BONDING_INFO     0x0019
 #endif
 
-
-#ifndef HAVE_NETDEV_MASTER_UPPER_DEV_GET_RCU
-#define netdev_master_upper_dev_get_rcu(x) (x)->master
-#define netdev_master_upper_dev_get(x) \
-	netdev_master_upper_dev_get_rcu(x)
-#else
 static inline int netdev_set_master(struct net_device *dev,
 				    struct net_device *master)
 {
@@ -57,19 +48,6 @@ static inline int netdev_set_master(struct net_device *dev,
 	}
 	return rc;
 }
-#endif
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
-#ifdef HAVE_ALLOC_ETHERDEV_MQ
-#ifndef HAVE_NETIF_SET_REAL_NUM_TX_QUEUES
-static inline void netif_set_real_num_tx_queues(struct net_device *netdev,
-						unsigned int txq)
-{
-	netdev->real_num_tx_queues = txq;
-}
-#endif
-#endif
-#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18) */
 
 #ifndef HAVE_NETDEV_RSS_KEY_FILL
 static inline void netdev_rss_key_fill(void *addr, size_t len)
@@ -119,28 +97,12 @@ static inline void netif_trans_update(struct net_device *dev)
 			max_t(unsigned int, txqs, rxqs))
 #endif
 
-
-#ifndef HAVE_NETIF_IS_BOND_MASTER
-#define netif_is_bond_master LINUX_BACKPORT(netif_is_bond_master)
-static inline bool netif_is_bond_master(struct net_device *dev)
-{
-	return dev->flags & IFF_MASTER && dev->priv_flags & IFF_BONDING;
-}
-#endif
-
 #ifndef HAVE_SELECT_QUEUE_FALLBACK_T
 #define fallback(dev, skb) __netdev_pick_tx(dev, skb)
 #endif
 
 #ifndef HAVE_NAPI_SCHEDULE_IRQOFF
 #define napi_schedule_irqoff(napi) napi_schedule(napi)
-#endif
-
-#ifndef HAVE_DEV_UC_DEL
-#define dev_uc_del(netdev, mac) dev_unicast_delete(netdev, mac)
-#endif
-#ifndef HAVE_DEV_MC_DEL
-#define dev_mc_del(netdev, mac) dev_mc_delete(netdev, mac, netdev->addr_len, true)
 #endif
 
 #ifdef HAVE_REGISTER_NETDEVICE_NOTIFIER_RH
@@ -240,26 +202,6 @@ struct netdev_lag_upper_info {
 
 #if IS_ENABLED(CONFIG_VXLAN) && (defined(HAVE_NDO_ADD_VXLAN_PORT) || defined(HAVE_NDO_UDP_TUNNEL_ADD))
 #define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
-#endif
-
-#if (defined(HAVE_NDO_GET_STATS64) && !defined(HAVE_NETDEV_STATS_TO_STATS64))
-static inline void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
-					   const struct net_device_stats *netdev_stats)
-{
-#if BITS_PER_LONG == 64
-	BUILD_BUG_ON(sizeof(*stats64) != sizeof(*netdev_stats));
-	memcpy(stats64, netdev_stats, sizeof(*stats64));
-#else
-	size_t i, n = sizeof(*stats64) / sizeof(u64);
-	const unsigned long *src = (const unsigned long *)netdev_stats;
-	u64 *dst = (u64 *)stats64;
-
-	BUILD_BUG_ON(sizeof(*netdev_stats) / sizeof(unsigned long) !=
-		     sizeof(*stats64) / sizeof(u64));
-	for (i = 0; i < n; i++)
-		dst[i] = src[i];
-#endif
-}
 #endif
 
 #ifdef HAVE_NETDEV_XDP
@@ -391,4 +333,39 @@ static inline bool netif_device_present_const(const struct net_device *dev)
 {
 	return test_bit(__LINK_STATE_PRESENT, &dev->state);
 }
+
+#ifndef HAVE_NET_PREFETCH
+static inline void net_prefetch(void *p)
+{
+       prefetch(p);
+#if L1_CACHE_BYTES < 128
+       prefetch((u8 *)p + L1_CACHE_BYTES);
+#endif
+}
+
+static inline void net_prefetchw(void *p)
+{
+       prefetchw(p);
+#if L1_CACHE_BYTES < 128
+       prefetchw((u8 *)p + L1_CACHE_BYTES);
+#endif
+}
+#endif /* HAVE_NET_PREFETCH */
+
+#ifndef HAVE___NETDEV_TX_SENT_QUEUE
+static inline bool __netdev_tx_sent_queue(struct netdev_queue *dev_queue,
+					  unsigned int bytes,
+					  bool xmit_more)
+{
+	if (xmit_more) {
+#ifdef CONFIG_BQL
+		dql_queued(&dev_queue->dql, bytes);
+#endif
+		return netif_tx_queue_stopped(dev_queue);
+	}
+	netdev_tx_sent_queue(dev_queue, bytes);
+	return true;
+}
+#endif /* HAVE___NETDEV_TX_SENT_QUEUE */
+
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

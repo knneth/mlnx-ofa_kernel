@@ -34,7 +34,6 @@
 #define __LIB_MLX5_H__
 
 #include "mlx5_core.h"
-#include "devlink.h"
 
 void mlx5_init_reserved_gids(struct mlx5_core_dev *dev);
 void mlx5_cleanup_reserved_gids(struct mlx5_core_dev *dev);
@@ -90,10 +89,5 @@ int mlx5_create_encryption_key(struct mlx5_core_dev *mdev,
 			       void *key, u32 sz_bytes,
 			       u32 key_type, u32 *p_key_id);
 void mlx5_destroy_encryption_key(struct mlx5_core_dev *mdev, u32 key_id);
-
-static inline struct net *mlx5_core_net(struct mlx5_core_dev *dev)
-{
-	return devlink_net(priv_to_devlink(dev));
-}
 
 #endif

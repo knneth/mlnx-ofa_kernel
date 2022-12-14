@@ -21,6 +21,9 @@
 #include <net/tc_act/tc_csum.h>
 #include <net/tc_act/tc_skbedit.h>
 #include <net/tc_act/tc_tunnel_key.h>
+#ifdef HAVE_NET_PSAMPLE_H
+#include <net/tc_act/tc_sample.h>
+#endif
 #ifdef HAVE_IS_TCF_POLICE
 #include <net/tc_act/tc_police.h>
 #endif
@@ -161,6 +164,15 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 			entry->ct.action = tcf_ct_action(act);
 			entry->ct.zone = tcf_ct_zone(act);
 			entry->ct.flow_table = tcf_ct_ft(act);
+#endif
+#ifdef HAVE_NET_PSAMPLE_H
+		} else if (is_tcf_sample(act)) {
+			entry->id = FLOW_ACTION_SAMPLE;
+			entry->sample.trunc_size = tcf_sample_trunc_size(act);
+			entry->sample.truncate = tcf_sample_truncate(act);
+			entry->sample.rate = tcf_sample_rate(act);
+			entry->sample.psample_group =
+				tcf_sample_psample_group(act);
 #endif
 		} else {
 			goto err_out;

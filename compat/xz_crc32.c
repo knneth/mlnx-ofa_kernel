@@ -1,4 +1,4 @@
-#if !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC))
+#if !(IS_ENABLED(CONFIG_XZ_DEC))
 
 /*
  * CRC32 using the polynomial from IEEE-802.3
@@ -63,4 +63,4 @@ XZ_EXTERN uint32_t xz_crc32(const uint8_t *buf, size_t size, uint32_t crc)
 	return ~crc;
 }
 
-#endif /* !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)) */
+#endif /* !(IS_ENABLED(CONFIG_XZ_DEC)) */

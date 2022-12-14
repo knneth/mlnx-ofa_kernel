@@ -25,17 +25,3 @@ int ip6_dst_hoplimit(struct dst_entry *dst)
 EXPORT_SYMBOL(ip6_dst_hoplimit);
 #endif
 #endif
-
-#ifndef HAVE_IP4_DST_HOPLIMIT
-#define ip4_dst_hoplimit  LINUX_BACKPORT(ip4_dst_hoplimit)
-int ip4_dst_hoplimit(const struct dst_entry *dst)
-{
-	int hoplimit = dst_metric(dst, RTAX_HOPLIMIT);
-
-	if (hoplimit <= 0)
-		hoplimit =  IPDEFTTL;
-
-	 return hoplimit;
-}
-EXPORT_SYMBOL(ip4_dst_hoplimit);
-#endif

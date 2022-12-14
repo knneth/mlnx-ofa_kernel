@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
+
+Change-Id: Iea3a42deb64279fc5c8af1c500a3ea508dd01902
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
+@@ -18,7 +18,7 @@ int mlx5_geneve_tlv_option_add(struct ml
+ void mlx5_geneve_tlv_option_del(struct mlx5_geneve *geneve);
+ 
+ #else /* CONFIG_MLX5_ESWITCH */
+-
++struct geneve_opt;
+ static inline struct mlx5_geneve
+ *mlx5_geneve_create(struct mlx5_core_dev *mdev) { return NULL; }
+ static inline void

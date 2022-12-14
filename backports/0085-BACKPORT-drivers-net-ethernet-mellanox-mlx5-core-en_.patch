@@ -1,90 +1,22 @@
-From: Mikhael Goikhman <migo@mellanox.com>
+From: Valentine Fatiev <valentinef@mellanox.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 
-Change-Id: If7b33be5a45500d73356c03bd3dcb9efb16ebf06
+Change-Id: I91dde743b43695b60debf2ce492ded6f420bed71
 ---
- .../mellanox/mlx5/core/en_accel/ktls.c        | 22 +++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h | 2 ++
+ 1 file changed, 2 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- // Copyright (c) 2019 Mellanox Technologies.
- 
-+#ifdef HAVE_KTLS_STRUCTS
-+
- #include "en.h"
- #include "en_accel/ktls.h"
- #include "en_accel/ktls_utils.h"
-@@ -21,7 +23,11 @@ static int mlx5e_ktls_add(struct net_dev
- 	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
- 		err = mlx5e_ktls_add_tx(netdev, sk, crypto_info, start_offload_tcp_sn);
- 	else
-+#ifdef HAVE_KTLS_RX_SUPPORT
- 		err = mlx5e_ktls_add_rx(netdev, sk, crypto_info, start_offload_tcp_sn);
-+#else
-+		err = -EOPNOTSUPP;
-+#endif
- 
- 	return err;
- }
-@@ -32,10 +38,13 @@ static void mlx5e_ktls_del(struct net_de
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+@@ -117,8 +117,10 @@ static inline bool mlx5e_accel_tx_begin(
+ 					struct sk_buff *skb,
+ 					struct mlx5e_accel_tx_state *state)
  {
- 	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
- 		mlx5e_ktls_del_tx(netdev, tls_ctx);
-+#ifdef HAVE_KTLS_RX_SUPPORT
- 	else
- 		mlx5e_ktls_del_rx(netdev, tls_ctx);
-+#endif
- }
- 
-+#ifdef HAVE_TLSDEV_OPS_HAS_TLS_DEV_RESYNC
- static int mlx5e_ktls_resync(struct net_device *netdev,
- 			     struct sock *sk, u32 seq, u8 *rcd_sn,
- 			     enum tls_offload_ctx_dir direction)
-@@ -43,13 +52,20 @@ static int mlx5e_ktls_resync(struct net_
- 	if (unlikely(direction != TLS_OFFLOAD_CTX_DIR_RX))
- 		return -EINVAL;
- 
-+#ifdef HAVE_KTLS_RX_SUPPORT
- 	return mlx5e_ktls_rx_resync(netdev, sk, seq, rcd_sn);
-+#else
-+	return -EOPNOTSUPP;
-+#endif
- }
++#ifdef HAVE_NETIF_F_GSO_UDP_L4
+ 	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
+ 		mlx5e_udp_gso_handle_tx_skb(skb);
 +#endif
  
- static const struct tlsdev_ops mlx5e_ktls_ops = {
- 	.tls_dev_add = mlx5e_ktls_add,
- 	.tls_dev_del = mlx5e_ktls_del,
-+#ifdef HAVE_TLSDEV_OPS_HAS_TLS_DEV_RESYNC
- 	.tls_dev_resync = mlx5e_ktls_resync,
-+#endif
- };
- 
- void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
-@@ -65,12 +81,15 @@ void mlx5e_ktls_build_netdev(struct mlx5
- 		netdev->features    |= NETIF_F_HW_TLS_TX;
- 	}
- 
-+#ifdef HAVE_KTLS_RX_SUPPORT
- 	if (mlx5_accel_is_ktls_rx(mdev))
- 		netdev->hw_features |= NETIF_F_HW_TLS_RX;
-+#endif
- 
- 	netdev->tlsdev_ops = &mlx5e_ktls_ops;
- }
- 
-+#ifdef HAVE_KTLS_RX_SUPPORT
- int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable)
- {
- 	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -101,3 +120,6 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_
- 	if (priv->netdev->features & NETIF_F_HW_TLS_RX)
- 		mlx5e_accel_fs_tcp_destroy(priv);
- }
-+#endif /* HAVE_KTLS_RX_SUPPORT */
-+
-+#endif
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	if (test_bit(MLX5E_SQ_STATE_TLS, &sq->state)) {

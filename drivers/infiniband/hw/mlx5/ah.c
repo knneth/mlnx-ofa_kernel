@@ -82,8 +82,10 @@ static void create_ib_ah(struct mlx5_ib_dev *dev, struct mlx5_ib_ah *ah,
 			tmp_hop_limit = IPV6_DEFAULT_HOPLIMIT;
 		else
 			tmp_hop_limit = ah_attr->grh.hop_limit;
+
 		ah->av.hop_limit = (dev->ttld[ah_attr->port_num - 1].val) ?
 			dev->ttld[ah_attr->port_num - 1].val : tmp_hop_limit;
+
 		memcpy(ah->av.rmac, ah_attr->roce.dmac,
 		       sizeof(ah_attr->roce.dmac));
 		ah->av.udp_sport = mlx5_ah_get_udp_sport(dev, ah_attr);
@@ -100,6 +102,7 @@ static void create_ib_ah(struct mlx5_ib_dev *dev, struct mlx5_ib_ah *ah,
 
 int mlx5_ib_create_ah(struct ib_ah *ibah, struct rdma_ah_init_attr *init_attr,
 		      struct ib_udata *udata)
+
 {
 	struct rdma_ah_attr *ah_attr = init_attr->ah_attr;
 	struct mlx5_ib_ah *ah = to_mah(ibah);

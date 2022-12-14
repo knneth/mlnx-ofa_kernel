@@ -64,7 +64,7 @@ static int esw_acl_egress_ofld_rules_create(struct mlx5_eswitch *esw,
 			  MLX5_FLOW_CONTEXT_ACTION_ALLOW;
 
 		/* prio tag vlan rule - pop it so vport receives untagged packets */
-		err = esw_egress_acl_vlan_create(esw, vport, fwd_dest, 0, action);
+		err = esw_egress_acl_vlan_create(esw, vport, fwd_dest, vport->info.vlan_proto, 0, action);
 		if (err)
 			goto prio_err;
 	}
@@ -86,11 +86,11 @@ prio_err:
 static void esw_acl_egress_ofld_rules_destroy(struct mlx5_vport *vport)
 {
 	esw_acl_egress_vlan_destroy(vport);
-	if (!IS_ERR_OR_NULL(vport->egress.offloads.bounce_rule)) {
+	esw_acl_egress_ofld_fwd2vport_destroy(vport);
+	if (vport->egress.offloads.bounce_rule) {
 		mlx5_del_flow_rules(vport->egress.offloads.bounce_rule);
 		vport->egress.offloads.bounce_rule = NULL;
 	}
-	esw_acl_egress_ofld_fwd2vport_destroy(vport);
 }
 
 static int esw_acl_egress_ofld_groups_create(struct mlx5_eswitch *esw,
