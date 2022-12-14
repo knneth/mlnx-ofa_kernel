@@ -175,10 +175,6 @@ get-modules()
 			modules="$modules \
 				drivers/net/ethernet/mellanox/mlxfw/mlxfw"
 			;;
-			--with-mlxdevm-mod )
-			modules="$modules \
-				net/mlxdevm/mlxdevm"
-			;;
 			*)
 			;;
 		esac
@@ -187,6 +183,10 @@ get-modules()
 	# >= 5.11.0 (see generate_dkms_conf)
 	modules="$modules \
 		drivers/base/auxiliary"
+
+	# The mlxdev module is used starting from kernel >= 4.15 (see generate_dkms_conf)
+	modules="$modules \
+		net/mlxdevm/mlxdevm"
 
 	echo $modules
 }

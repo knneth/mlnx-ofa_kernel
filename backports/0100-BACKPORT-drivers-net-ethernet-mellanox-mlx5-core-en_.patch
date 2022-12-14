@@ -91,7 +91,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
  	return (rep->vport == MLX5_VPORT_UPLINK);
  }
  
-+#if defined(NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE) || defined(HAVE_NDO_HAS_OFFLOAD_STATS_EXTENDED)
++#if defined(HAVE_NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE) || defined(HAVE_NDO_HAS_OFFLOAD_STATS_EXTENDED)
  bool mlx5e_rep_has_offload_stats(const struct net_device *dev, int attr_id)
  {
  	switch (attr_id) {
@@ -242,7 +242,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
 +#else
 +	.ndo_get_stats           = mlx5e_rep_get_stats,
 +#endif
-+#ifdef NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
++#ifdef HAVE_NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
  	.ndo_has_offload_stats	 = mlx5e_rep_has_offload_stats,
 +#elif defined(HAVE_NDO_HAS_OFFLOAD_STATS_EXTENDED)
 +	.extended.ndo_has_offload_stats   = mlx5e_rep_has_offload_stats,
@@ -291,7 +291,7 @@ Change-Id: I233ebadfe74b0b5765c549acaf53cff64800cdc1
 +#else
 +	.ndo_get_stats           = mlx5e_rep_get_stats,
 +#endif
-+#ifdef NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
++#ifdef HAVE_NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
 +	.ndo_has_offload_stats   = mlx5e_rep_has_offload_stats,
 +#elif defined(HAVE_NDO_HAS_OFFLOAD_STATS_EXTENDED)
 +	.extended.ndo_has_offload_stats   = mlx5e_rep_has_offload_stats,

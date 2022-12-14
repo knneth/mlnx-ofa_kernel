@@ -72,7 +72,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  static void ipoib_get_ethtool_stats(struct net_device *dev,
  				    struct ethtool_stats __always_unused *stats,
  				    u64 *data)
-@@ -270,6 +311,7 @@ static inline int ib_speed_enum_to_int(i
+@@ -274,6 +315,7 @@ static inline int ib_speed_enum_to_int(i
  	return SPEED_UNKNOWN;
  }
  
@@ -80,7 +80,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  static int ipoib_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *cmd)
  {
-@@ -307,14 +349,22 @@ static int ipoib_get_link_ksettings(stru
+@@ -311,14 +353,22 @@ static int ipoib_get_link_ksettings(stru
  
  	return 0;
  }

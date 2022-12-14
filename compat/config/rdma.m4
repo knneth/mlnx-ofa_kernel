@@ -1522,36 +1522,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if dev_open has 2 parameters])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-	],[
-		int s = dev_open(NULL, NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(DEV_OPEN_HAS_2_PARAMS, 1,
-			  [dev_open has 2 parameters])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if napi_gro_flush has 2 parameters])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-	],[
-		napi_gro_flush(NULL, 0);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NAPI_GRO_FLUSH_2_PARAMS, 1,
-			  [napi_gro_flush has 2 parameters])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if netdev_master_upper_dev_link gets 4 parameters])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -1561,7 +1531,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS, 1,
 			  [netdev_master_upper_dev_link gets 4 parameters])
 	],[
 		AC_MSG_RESULT(no)
@@ -2325,23 +2295,8 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAS_GFPFLAGES_ALLOW_BLOCKING, 1,
+		MLNX_AC_DEFINE(HAVE_GFPFLAGES_ALLOW_BLOCKING, 1,
 			  [gfpflags_allow_blocking is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if gfp.h has __alloc_pages_node])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/gfp.h>
-	],[
-		__alloc_pages_node(0, 0, 0);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAS_ALLOC_PAGES_NODE, 1,
-			  [__alloc_pages_node is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -2355,7 +2310,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAS_GFP_DIRECT_RECLAIM, 1,
+		MLNX_AC_DEFINE(HAVE_GFP_DIRECT_RECLAIM, 1,
 			  [__GFP_DIRECT_RECLAIM is defined])
 	],[
 		AC_MSG_RESULT(no)
@@ -2721,7 +2676,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(SECPATH_SET_RETURN_POINTER, 1,
+		MLNX_AC_DEFINE(HAVE_SECPATH_SET_RETURN_POINTER, 1,
 			  [if secpath_set returns struct sec_path *])
 	],[
 		AC_MSG_RESULT(no)
@@ -2835,7 +2790,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK, 1,
+		MLNX_AC_DEFINE(HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK, 1,
 			  [ndo_select_queue has 3 params with no fallback])
 	],[
 		AC_MSG_RESULT(no)
@@ -2858,7 +2813,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV, 1,
+		MLNX_AC_DEFINE(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV, 1,
 			  [ndo_select_queue has accel_priv])
 	],[
 		AC_MSG_RESULT(no)
@@ -2884,80 +2839,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_SELECT_QUEUE_NET_DEVICE, 1,
 			  [ndo_select_queue has a second net_device parameter])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if setapp returns int])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-		#include <net/dcbnl.h>
-
-		static int mlx4_en_dcbnl_setapp(struct net_device *netdev, u8 idtype,
-						u16 id, u8 up)
-		{
-			return 0;
-		}
-
-	],[
-		struct dcbnl_rtnl_ops mlx4_en_dcbnl_ops = {
-			.setapp		= mlx4_en_dcbnl_setapp,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_SETAPP_RETURNS_INT, 1,
-			  [if setapp returns int])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if getapp returns int])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-		#include <net/dcbnl.h>
-
-		static int mlx4_en_dcbnl_getapp(struct net_device *netdev, u8 idtype,
-						u16 id)
-		{
-			return 0;
-		}
-	],[
-		struct dcbnl_rtnl_ops mlx4_en_dcbnl_ops = {
-			.getapp		= mlx4_en_dcbnl_getapp,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_GETAPP_RETURNS_INT, 1,
-			  [if getapp returns int])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if getnumtcs returns int])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-		#include <net/dcbnl.h>
-
-		static int mlx4_en_dcbnl_getnumtcs(struct net_device *netdev, int tcid, u8 *num)
-
-		{
-			return 0;
-		}
-
-	],[
-		struct dcbnl_rtnl_ops mlx4_en_dcbnl_ops = {
-			.getnumtcs	= mlx4_en_dcbnl_getnumtcs,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_GETNUMTCS_RETURNS_INT, 1,
-			  [if getnumtcs returns int])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -7501,22 +7382,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if argument 2 of iscsit_allocate_cmd is gfp_t])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <target/iscsi/iscsi_transport.h>
-	],[
-		gfp_t mask;
-		iscsit_allocate_cmd(NULL, mask);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(ISCSIT_ALLOCATE_CMD_ARG_2_IS_GFP_T, 1,
-			  [argument 2 of iscsit_allocate_cmd is gfp_t])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if blk_queue_virt_boundary exist])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
@@ -8114,6 +7979,19 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_CGROUP_RDMA_H, 1,
 			  [linux/cgroup_rdma exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if __cgroup_bpf_run_filter_sysctl have 7 parameters])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bpf-cgroup.h>
+	],[
+		return __cgroup_bpf_run_filter_sysctl(NULL, NULL, 0, NULL, NULL, NULL, 0);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS, 1,
+			[__cgroup_bpf_run_filter_sysctl have 7 parameters])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8742,7 +8620,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE, 1,
+		MLNX_AC_DEFINE(HAVE_NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE, 1,
 			  [ndo_has_offload_stats gets net_device])
 	],[
 		AC_MSG_RESULT(no)
@@ -9090,30 +8968,8 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(CONFIGFS_DROP_LINK_RETURNS_INT, 1,
+		MLNX_AC_DEFINE(HAVE_CONFIGFS_DROP_LINK_RETURNS_INT, 1,
 			  [if configfs_item_operations drop_link returns int])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if argument 3 of config_group_init_type_name should const])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/configfs.h>
-
-		static const struct config_item_type cma_port_group_type = {
-			.ct_attrs	= cma_configfs_attributes,
-		};
-
-	],[
-		config_group_init_type_name(NULL,
-					    NULL,
-					    &cma_port_group_type);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(CONFIG_GROUP_INIT_TYPE_NAME_PARAM_3_IS_CONST, 1,
-			[argument 3 of config_group_init_type_name should const])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -10634,7 +10490,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(VFS_GETATTR_HAS_4_PARAMS, 1,
+		MLNX_AC_DEFINE(HAVE_VFS_GETATTR_HAS_4_PARAMS, 1,
 			[vfs_getattr has 4 params])
 	],[
 		AC_MSG_RESULT(no)
@@ -11120,22 +10976,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if ndo_add_slave has 3 parameters])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-	],[
-		struct net_device_ops ndops;
-		ndops.ndo_add_slave(NULL, NULL, NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NDO_ADD_SLAVE_3_PARAMS, 1,
-			  [ndo_add_slave has 3 parameters])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if netdev_master_upper_dev_link gets 5 parameters])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -11145,7 +10985,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS, 1,
 			[netdev_master_upper_dev_link gets 5 parameters])
 	],[
 		AC_MSG_RESULT(no)

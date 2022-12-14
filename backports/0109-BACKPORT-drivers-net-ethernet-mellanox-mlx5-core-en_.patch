@@ -53,10 +53,10 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  	return selq->num_regular_queues + up;
  }
  
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
  		       struct net_device *sb_dev)
-+#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 +#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
 +#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
@@ -68,7 +68,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
 +#else
 +		       void *accel_priv)
 +#endif
-+#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
@@ -78,7 +78,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  		if (unlikely(mlx5e_use_ptpsq(skb)))
  			return mlx5e_select_ptpsq(dev, skb, selq);
  
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		txq_ix = netdev_pick_tx(dev, skb, NULL);
 +#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
 +		txq_ix = fallback(dev, skb, NULL);
@@ -101,7 +101,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  			}
  		}
  #endif
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		txq_ix = netdev_pick_tx(dev, skb, NULL);
 +#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
 +		txq_ix = fallback(dev, skb, NULL);

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
 
 Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
 ---
- drivers/infiniband/ulp/isert/ib_isert.c | 179 +++++++++++++++++++++++-
- 1 file changed, 176 insertions(+), 3 deletions(-)
+ drivers/infiniband/ulp/isert/ib_isert.c | 177 +++++++++++++++++++++++-
+ 1 file changed, 173 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/ulp/isert/ib_isert.c
 +++ b/drivers/infiniband/ulp/isert/ib_isert.c
@@ -44,19 +44,16 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	isert_dbg("cma_id: %p, portal: %p\n",
  		 cma_id, cma_id->context);
-@@ -1044,7 +1052,11 @@ static struct iscsi_cmd
+@@ -1044,7 +1052,7 @@ static struct iscsi_cmd
  	struct isert_cmd *isert_cmd;
  	struct iscsi_cmd *cmd;
  
-+#ifndef ISCSIT_ALLOCATE_CMD_ARG_2_IS_GFP_T
- 	cmd = iscsit_allocate_cmd(conn, TASK_INTERRUPTIBLE);
-+#else
+-	cmd = iscsit_allocate_cmd(conn, TASK_INTERRUPTIBLE);
 +	cmd = iscsit_allocate_cmd(conn, GFP_KERNEL);
-+#endif
  	if (!cmd) {
  		isert_err("Unable to allocate iscsi_cmd + isert_cmd\n");
  		return NULL;
-@@ -1077,8 +1089,14 @@ isert_handle_scsi_cmd(struct isert_conn
+@@ -1077,8 +1085,14 @@ isert_handle_scsi_cmd(struct isert_conn
  	unsol_data = cmd->unsolicited_data;
  	data_len = cmd->se_cmd.data_length;
  
@@ -71,7 +68,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  	rc = iscsit_process_scsi_cmd(conn, cmd, hdr);
  	if (rc < 0) {
  		return 0;
-@@ -1090,7 +1108,12 @@ isert_handle_scsi_cmd(struct isert_conn
+@@ -1090,7 +1104,12 @@ isert_handle_scsi_cmd(struct isert_conn
  	if (!imm_data)
  		return 0;
  
@@ -84,7 +81,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  		sg_nents = max(1UL, DIV_ROUND_UP(imm_data_len, PAGE_SIZE));
  		sg_copy_from_buffer(cmd->se_cmd.t_data_sg, sg_nents,
  				    isert_get_data(rx_desc), imm_data_len);
-@@ -1119,9 +1142,17 @@ sequence_cmd:
+@@ -1119,9 +1138,17 @@ sequence_cmd:
  	rc = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
  
  	if (!rc && dump_payload == false && unsol_data)
@@ -102,7 +99,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	return 0;
  }
-@@ -1300,10 +1331,14 @@ isert_rx_opcode(struct isert_conn *isert
+@@ -1300,10 +1327,14 @@ isert_rx_opcode(struct isert_conn *isert
  		ret = iscsit_handle_logout_cmd(conn, cmd, (unsigned char *)hdr);
  		break;
  	case ISCSI_OP_TEXT:
@@ -117,7 +114,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  		if (!cmd)
  			break;
-@@ -1432,6 +1467,7 @@ isert_rdma_rw_ctx_destroy(struct isert_c
+@@ -1432,6 +1463,7 @@ isert_rdma_rw_ctx_destroy(struct isert_c
  	if (!cmd->rw.nr_ops)
  		return;
  
@@ -125,7 +122,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  	if (isert_prot_cmd(conn, se_cmd)) {
  		rdma_rw_ctx_destroy_signature(&cmd->rw, conn->qp,
  				conn->cm_id->port_num, se_cmd->t_data_sg,
-@@ -1441,6 +1477,10 @@ isert_rdma_rw_ctx_destroy(struct isert_c
+@@ -1441,6 +1473,10 @@ isert_rdma_rw_ctx_destroy(struct isert_c
  		rdma_rw_ctx_destroy(&cmd->rw, conn->qp, conn->cm_id->port_num,
  				se_cmd->t_data_sg, se_cmd->t_data_nents, dir);
  	}
@@ -136,7 +133,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	cmd->rw.nr_ops = 0;
  }
-@@ -1473,8 +1513,11 @@ isert_put_cmd(struct isert_cmd *isert_cm
+@@ -1473,8 +1509,11 @@ isert_put_cmd(struct isert_cmd *isert_cm
  			if (comp_err &&
  			    cmd->se_cmd.t_state == TRANSPORT_WRITE_PENDING) {
  				struct se_cmd *se_cmd = &cmd->se_cmd;
@@ -149,7 +146,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  			}
  		}
  
-@@ -1546,6 +1589,7 @@ isert_completion_put(struct iser_tx_desc
+@@ -1546,6 +1585,7 @@ isert_completion_put(struct iser_tx_desc
  	isert_put_cmd(isert_cmd, comp_err);
  }
  
@@ -157,7 +154,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  static int
  isert_check_pi_status(struct se_cmd *se_cmd, struct ib_mr *sig_mr)
  {
-@@ -1575,12 +1619,20 @@ isert_check_pi_status(struct se_cmd *se_
+@@ -1575,12 +1615,20 @@ isert_check_pi_status(struct se_cmd *se_
  		}
  		sec_offset_err = mr_status.sig_err.sig_err_offset;
  		do_div(sec_offset_err, block_size);
@@ -178,7 +175,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  			  mr_status.sig_err.expected,
  			  mr_status.sig_err.actual);
  		ret = 1;
-@@ -1589,6 +1641,7 @@ isert_check_pi_status(struct se_cmd *se_
+@@ -1589,6 +1637,7 @@ isert_check_pi_status(struct se_cmd *se_
  fail_mr_status:
  	return ret;
  }
@@ -186,7 +183,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  static void
  isert_rdma_write_done(struct ib_cq *cq, struct ib_wc *wc)
-@@ -1597,8 +1650,10 @@ isert_rdma_write_done(struct ib_cq *cq,
+@@ -1597,8 +1646,10 @@ isert_rdma_write_done(struct ib_cq *cq,
  	struct isert_device *device = isert_conn->device;
  	struct iser_tx_desc *desc = cqe_to_tx_desc(wc->wr_cqe);
  	struct isert_cmd *isert_cmd = tx_desc_to_cmd(desc);
@@ -197,7 +194,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	if (unlikely(wc->status != IB_WC_SUCCESS)) {
  		isert_print_wc(wc, "rdma write");
-@@ -1610,6 +1665,7 @@ isert_rdma_write_done(struct ib_cq *cq,
+@@ -1610,6 +1661,7 @@ isert_rdma_write_done(struct ib_cq *cq,
  
  	isert_dbg("Cmd %p\n", isert_cmd);
  
@@ -205,7 +202,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  	ret = isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
  	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
  
-@@ -1630,6 +1686,10 @@ isert_rdma_write_done(struct ib_cq *cq,
+@@ -1630,6 +1682,10 @@ isert_rdma_write_done(struct ib_cq *cq,
  		if (ret)
  			pr_warn_ratelimited("isert_put_response() ret: %d\n", ret);
  	}
@@ -216,7 +213,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  }
  
  static void
-@@ -1641,7 +1701,9 @@ isert_rdma_read_done(struct ib_cq *cq, s
+@@ -1641,7 +1697,9 @@ isert_rdma_read_done(struct ib_cq *cq, s
  	struct isert_cmd *isert_cmd = tx_desc_to_cmd(desc);
  	struct iscsi_cmd *cmd = isert_cmd->iscsi_cmd;
  	struct se_cmd *se_cmd = &cmd->se_cmd;
@@ -226,7 +223,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	if (unlikely(wc->status != IB_WC_SUCCESS)) {
  		isert_print_wc(wc, "rdma read");
-@@ -1655,8 +1717,10 @@ isert_rdma_read_done(struct ib_cq *cq, s
+@@ -1655,8 +1713,10 @@ isert_rdma_read_done(struct ib_cq *cq, s
  
  	iscsit_stop_dataout_timer(cmd);
  
@@ -237,7 +234,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
  	cmd->write_data_done = 0;
  
-@@ -1671,9 +1735,11 @@ isert_rdma_read_done(struct ib_cq *cq, s
+@@ -1671,9 +1731,11 @@ isert_rdma_read_done(struct ib_cq *cq, s
  	 * se_cmd->cmd_kref reference after T10-PI error, and handle
  	 * any non-zero ->queue_status() callback error retries.
  	 */
@@ -249,7 +246,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  		target_execute_cmd(se_cmd);
  }
  
-@@ -1731,10 +1797,13 @@ isert_send_done(struct ib_cq *cq, struct
+@@ -1731,10 +1793,13 @@ isert_send_done(struct ib_cq *cq, struct
  	struct ib_device *ib_dev = isert_conn->cm_id->device;
  	struct iser_tx_desc *tx_desc = cqe_to_tx_desc(wc->wr_cqe);
  	struct isert_cmd *isert_cmd = tx_desc_to_cmd(tx_desc);
@@ -263,7 +260,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  		if (wc->status == IB_WC_SIG_PIPELINE_CANCELED) {
  			isert_check_pi_status(cmd, isert_cmd->rw.reg->mr);
  			isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
-@@ -1747,19 +1816,24 @@ isert_send_done(struct ib_cq *cq, struct
+@@ -1747,19 +1812,24 @@ isert_send_done(struct ib_cq *cq, struct
  			kref_get(&cmd->cmd_kref);
  			transport_generic_request_failure(cmd, cmd->pi_err);
  		} else {
@@ -288,7 +285,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	switch (isert_cmd->iscsi_cmd->i_state) {
  	case ISTATE_SEND_TASKMGTRSP:
-@@ -1864,27 +1938,40 @@ isert_aborted_task(struct iscsi_conn *co
+@@ -1864,27 +1934,40 @@ isert_aborted_task(struct iscsi_conn *co
  	isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
  }
  
@@ -331,7 +328,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  static int
  isert_put_nopin(struct iscsi_cmd *cmd, struct iscsi_conn *conn,
-@@ -2020,6 +2107,7 @@ isert_put_text_rsp(struct iscsi_cmd *cmd
+@@ -2020,6 +2103,7 @@ isert_put_text_rsp(struct iscsi_cmd *cmd
  	return isert_post_response(isert_conn, isert_cmd);
  }
  
@@ -339,7 +336,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  static inline void
  isert_set_dif_domain(struct se_cmd *se_cmd, struct ib_sig_domain *domain)
  {
-@@ -2075,6 +2163,7 @@ isert_set_sig_attrs(struct se_cmd *se_cm
+@@ -2075,6 +2159,7 @@ isert_set_sig_attrs(struct se_cmd *se_cm
  
  	return 0;
  }
@@ -347,7 +344,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  static int
  isert_rdma_rw_ctx_post(struct isert_cmd *cmd, struct isert_conn *conn,
-@@ -2100,6 +2189,7 @@ isert_rdma_rw_ctx_post(struct isert_cmd
+@@ -2100,6 +2185,7 @@ isert_rdma_rw_ctx_post(struct isert_cmd
  		offset = 0;
  	}
  
@@ -355,7 +352,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  	if (isert_prot_cmd(conn, se_cmd)) {
  		struct ib_sig_attrs sig_attrs;
  
-@@ -2117,6 +2207,11 @@ isert_rdma_rw_ctx_post(struct isert_cmd
+@@ -2117,6 +2203,11 @@ isert_rdma_rw_ctx_post(struct isert_cmd
  				se_cmd->t_data_sg, se_cmd->t_data_nents,
  				offset, addr, rkey, dir);
  	}
@@ -367,7 +364,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  
  	if (ret < 0) {
  		isert_err("Cmd: %p failed to prepare RDMA res\n", cmd);
-@@ -2424,11 +2519,47 @@ isert_set_conn_info(struct iscsi_np *np,
+@@ -2424,11 +2515,47 @@ isert_set_conn_info(struct iscsi_np *np,
  {
  	struct rdma_cm_id *cm_id = isert_conn->cm_id;
  	struct rdma_route *cm_route = &cm_id->route;
@@ -415,7 +412,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  }
  
  static int
-@@ -2557,7 +2688,11 @@ isert_wait4cmds(struct iscsi_conn *conn)
+@@ -2557,7 +2684,11 @@ isert_wait4cmds(struct iscsi_conn *conn)
  	isert_info("iscsi_conn %p\n", conn);
  
  	if (conn->sess) {
@@ -427,7 +424,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  		target_wait_for_sess_cmds(conn->sess->se_sess);
  	}
  }
-@@ -2597,6 +2732,7 @@ isert_put_unsol_pending_cmds(struct iscs
+@@ -2597,6 +2728,7 @@ isert_put_unsol_pending_cmds(struct iscs
  	}
  }
  
@@ -435,7 +432,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  static void isert_wait_conn(struct iscsi_conn *conn)
  {
  	struct isert_conn *isert_conn = conn->context;
-@@ -2614,15 +2750,40 @@ static void isert_wait_conn(struct iscsi
+@@ -2614,15 +2746,40 @@ static void isert_wait_conn(struct iscsi
  
  	queue_work(isert_release_wq, &isert_conn->release_work);
  }
@@ -476,7 +473,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  static void isert_get_rx_pdu(struct iscsi_conn *conn)
  {
  	struct completion comp;
-@@ -2631,17 +2792,22 @@ static void isert_get_rx_pdu(struct iscs
+@@ -2631,17 +2788,22 @@ static void isert_get_rx_pdu(struct iscs
  
  	wait_for_completion_interruptible(&comp);
  }
@@ -499,7 +496,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  	.iscsit_free_conn	= isert_free_conn,
  	.iscsit_get_login_rx	= isert_get_login_rx,
  	.iscsit_put_login_tx	= isert_put_login_tx,
-@@ -2651,8 +2817,12 @@ static struct iscsit_transport iser_targ
+@@ -2651,8 +2813,12 @@ static struct iscsit_transport iser_targ
  	.iscsit_queue_data_in	= isert_put_datain,
  	.iscsit_queue_status	= isert_put_response,
  	.iscsit_aborted_task	= isert_aborted_task,
@@ -512,7 +509,7 @@ Change-Id: I5997eda56d549d26f6d7a523aa74af0fb1ea5fec
  };
  
  static int __init isert_init(void)
-@@ -2697,6 +2867,9 @@ static void __exit isert_exit(void)
+@@ -2697,6 +2863,9 @@ static void __exit isert_exit(void)
  MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
  MODULE_AUTHOR("nab@Linux-iSCSI.org");
  MODULE_LICENSE("GPL");

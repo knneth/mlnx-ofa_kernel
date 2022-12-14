@@ -13,11 +13,11 @@
 #endif
 
 
-#ifndef HAS_GFP_DIRECT_RECLAIM
+#ifndef HAVE_GFP_DIRECT_RECLAIM
 #define ___GFP_DIRECT_RECLAIM	0x400u
 #define __GFP_DIRECT_RECLAIM	((__force gfp_t)___GFP_DIRECT_RECLAIM) /* Caller can reclaim */
 #endif
-#ifndef HAS_GFPFLAGES_ALLOW_BLOCKING
+#ifndef HAVE_GFPFLAGES_ALLOW_BLOCKING
 static inline bool gfpflags_allow_blocking(const gfp_t gfp_flags)
 {
 	return !!(gfp_flags & __GFP_DIRECT_RECLAIM);

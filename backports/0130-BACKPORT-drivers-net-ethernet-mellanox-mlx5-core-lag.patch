@@ -1,9 +1,10 @@
 From: Valentine Fatiev <valentinef@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag_mp.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag_mp.c
 
 Change-Id: I7912b95adc9feb1400dc58161b4fb257919a4017
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lag/lag_mp.c | 76 +++++++++++++++++++++++-
+ .../ethernet/mellanox/mlx5/core/lag/lag_mp.c  | 76 ++++++++++++++++++-
  1 file changed, 73 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_mp.c

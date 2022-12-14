@@ -171,7 +171,7 @@ int mlx5_query_port_link_width_oper(struct mlx5_core_dev *dev,
 EXPORT_SYMBOL_GPL(mlx5_query_port_link_width_oper);
 
 int mlx5_query_port_ib_proto_oper(struct mlx5_core_dev *dev,
-				  u8 *proto_oper, u8 local_port)
+				  u16 *proto_oper, u8 local_port)
 {
 	u32 out[MLX5_ST_SZ_DW(ptys_reg)];
 	int err;

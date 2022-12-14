@@ -43,11 +43,11 @@ Change-Id: Id55611d303c248018d2c88d76e7ea719247f67fb
 -	struct mlx5e_ipsec_metadata *mdata;
 +	struct mlx5e_ipsec_metadata *mdata = NULL;
  	struct xfrm_state *x;
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	struct sec_path *sp;
 +#endif
  
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	sp = skb_sec_path(skb);
  	if (unlikely(sp->len != 1)) {
 +#else
@@ -60,12 +60,12 @@ Change-Id: Id55611d303c248018d2c88d76e7ea719247f67fb
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct xfrm_offload *xo;
  	struct xfrm_state *xs;
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	struct sec_path *sp;
 +#endif
  	u32 sa_handle;
  
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	sp = secpath_set(skb);
  	if (unlikely(!sp)) {
 +#else
@@ -79,7 +79,7 @@ Change-Id: Id55611d303c248018d2c88d76e7ea719247f67fb
  		return NULL;
  	}
  
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	sp = skb_sec_path(skb);
  	sp->xvec[sp->len++] = xs;
  	sp->olen++;
@@ -94,14 +94,14 @@ Change-Id: Id55611d303c248018d2c88d76e7ea719247f67fb
  	struct mlx5e_priv *priv;
  	struct xfrm_offload *xo;
  	struct xfrm_state *xs;
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	struct sec_path *sp;
 +#endif
  	u32  sa_handle;
  
  	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
  	priv = netdev_priv(netdev);
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	sp = secpath_set(skb);
  	if (unlikely(!sp)) {
 +#else
@@ -115,7 +115,7 @@ Change-Id: Id55611d303c248018d2c88d76e7ea719247f67fb
  		return;
  	}
  
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	sp = skb_sec_path(skb);
  	sp->xvec[sp->len++] = xs;
  	sp->olen++;
@@ -130,12 +130,12 @@ Change-Id: Id55611d303c248018d2c88d76e7ea719247f67fb
  bool mlx5e_ipsec_feature_check(struct sk_buff *skb, struct net_device *netdev,
  			       netdev_features_t features)
  {
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	struct sec_path *sp = skb_sec_path(skb);
 +#endif
  	struct xfrm_state *x;
  
-+#ifdef SECPATH_SET_RETURN_POINTER
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
  	if (sp && sp->len) {
  		x = sp->xvec[0];
 +#else

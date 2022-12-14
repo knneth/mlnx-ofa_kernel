@@ -9,7 +9,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
-@@ -206,6 +206,7 @@ static int mlx5i_get_speed_settings(u16
+@@ -208,6 +208,7 @@ static int mlx5i_get_speed_settings(u16
  	return rate * width;
  }
  
@@ -17,7 +17,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  static int mlx5i_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *link_ksettings)
  {
-@@ -233,11 +234,43 @@ static int mlx5i_get_link_ksettings(stru
+@@ -235,11 +236,43 @@ static int mlx5i_get_link_ksettings(stru
  
  	return 0;
  }
@@ -61,7 +61,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
  	.get_sset_count     = mlx5i_get_sset_count,
-@@ -250,7 +283,12 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -252,7 +285,12 @@ const struct ethtool_ops mlx5i_ethtool_o
  	.get_coalesce       = mlx5i_get_coalesce,
  	.set_coalesce       = mlx5i_set_coalesce,
  	.get_ts_info        = mlx5i_get_ts_info,
@@ -74,7 +74,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  	.get_link           = ethtool_op_get_link,
  };
  
-@@ -258,4 +296,11 @@ const struct ethtool_ops mlx5i_pkey_etht
+@@ -260,4 +298,11 @@ const struct ethtool_ops mlx5i_pkey_etht
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_link           = ethtool_op_get_link,
  	.get_ts_info        = mlx5i_get_ts_info,

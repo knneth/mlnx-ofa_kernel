@@ -8,7 +8,33 @@ Change-Id: Ic35ca1fe7f835f815e913e5be5c2dd84d3fcf0ba
 
 --- a/net/sunrpc/xprtrdma/svc_rdma.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma.c
-@@ -231,6 +231,9 @@ void svc_rdma_cleanup(void)
+@@ -80,7 +80,11 @@ atomic_t rdma_stat_sq_prod;
+  * current value.
+  */
+ static int read_reset_stat(struct ctl_table *table, int write,
++#ifdef HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS
+ 			   void *buffer, size_t *lenp, loff_t *ppos)
++#else
++			   void __user *buffer, size_t *lenp, loff_t *ppos)
++#endif
+ {
+ 	atomic_t *stat = (atomic_t *)table->data;
+ 
+@@ -102,8 +106,13 @@ static int read_reset_stat(struct ctl_ta
+ 		len -= *ppos;
+ 		if (len > *lenp)
+ 			len = *lenp;
++#ifdef HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS
+ 		if (len)
+ 			memcpy(buffer, str_buf, len);
++#else
++		if (len && copy_to_user(buffer, str_buf, len))
++			return -EFAULT;
++#endif
+ 		*lenp = len;
+ 		*ppos += len;
+ 	}
+@@ -231,6 +240,9 @@ void svc_rdma_cleanup(void)
  		unregister_sysctl_table(svcrdma_table_header);
  		svcrdma_table_header = NULL;
  	}
@@ -18,7 +44,7 @@ Change-Id: Ic35ca1fe7f835f815e913e5be5c2dd84d3fcf0ba
  	svc_unreg_xprt_class(&svc_rdma_class);
  }
  
-@@ -248,5 +251,8 @@ int svc_rdma_init(void)
+@@ -248,5 +260,8 @@ int svc_rdma_init(void)
  
  	/* Register RDMA with the SVC transport switch */
  	svc_reg_xprt_class(&svc_rdma_class);

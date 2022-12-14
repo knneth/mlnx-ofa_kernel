@@ -136,7 +136,7 @@ int mlx5_query_port_ptys(struct mlx5_core_dev *dev, u32 *ptys,
 int mlx5_query_port_link_width_oper(struct mlx5_core_dev *dev,
 				    u8 *link_width_oper, u8 local_port);
 int mlx5_query_port_ib_proto_oper(struct mlx5_core_dev *dev,
-				  u8 *proto_oper, u8 local_port);
+				  u16 *proto_oper, u8 local_port);
 void mlx5_toggle_port_link(struct mlx5_core_dev *dev);
 int mlx5_set_port_admin_status(struct mlx5_core_dev *dev,
 			       enum mlx5_port_status status);

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 
 Change-Id: I6c68222a90422f14ba577dd872ade7f7dd9e25fd
 ---
- drivers/net/ethernet/mellanox/mlx5/core/main.c | 31 +++++++++++++++++++++++++-
+ .../net/ethernet/mellanox/mlx5/core/main.c    | 31 ++++++++++++++++++-
  1 file changed, 30 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
