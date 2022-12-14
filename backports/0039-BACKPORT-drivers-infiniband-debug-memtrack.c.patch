@@ -1,0 +1,38 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/debug/memtrack.c
+
+Change-Id: I6a70b705714c8667494e085fd525d329efe00180
+---
+ drivers/infiniband/debug/memtrack.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/infiniband/debug/memtrack.c
++++ b/drivers/infiniband/debug/memtrack.c
+@@ -1124,9 +1124,15 @@ static ssize_t memtrack_read(struct file
+ 	}
+ }
+ 
++#ifdef HAVE_PROC_OPS_STRUCT 
+ static const struct proc_ops memtrack_proc_ops = {
+ 	.proc_read = memtrack_read,
+ };
++#else
++static const struct file_operations memtrack_proc_fops = {
++        .read = memtrack_read,
++};
++#endif
+ 
+ static const char *memtrack_proc_entry_name = "mt_memtrack";
+ 
+@@ -1145,7 +1151,11 @@ static int create_procfs_tree(void)
+ 
+ 	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
+ 		if (bit_mask & track_mask) {
++#ifdef HAVE_PROC_OPS_STRUCT 
+ 			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_ops, NULL);
++#else
++			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_fops, NULL);
++#endif
+ 			if (!proc_ent) {
+ 				printk(KERN_INFO "Warning: Cannot create /proc/%s/%s\n",
+ 				       memtrack_proc_entry_name, rsc_names[i]);

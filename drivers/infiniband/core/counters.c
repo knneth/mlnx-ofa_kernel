@@ -106,6 +106,38 @@ static int __rdma_counter_bind_qp(struct rdma_counter *counter,
 	return ret;
 }
 
+int rdma_counter_modify(struct ib_device *dev, u32 port,
+			unsigned int index, bool enable)
+{
+	struct rdma_hw_stats *stats;
+	int ret = 0;
+
+	if (!dev->ops.modify_hw_stat)
+		return -EOPNOTSUPP;
+
+	stats = ib_get_hw_stats_port(dev, port);
+	if (!stats || index >= stats->num_counters ||
+	    !(stats->descs[index].flags & IB_STAT_FLAG_OPTIONAL))
+		return -EINVAL;
+
+	mutex_lock(&stats->lock);
+
+	if (enable != test_bit(index, stats->is_disabled))
+		goto out;
+
+	ret = dev->ops.modify_hw_stat(dev, port, index, enable);
+	if (ret)
+		goto out;
+
+	if (enable)
+		clear_bit(index, stats->is_disabled);
+	else
+		set_bit(index, stats->is_disabled);
+out:
+	mutex_unlock(&stats->lock);
+	return ret;
+}
+
 static struct rdma_counter *alloc_and_bind(struct ib_device *dev, u32 port,
 					   struct ib_qp *qp,
 					   enum rdma_nl_counter_mode mode)
@@ -204,38 +236,6 @@ static bool auto_mode_match(struct ib_qp *qp, struct rdma_counter *counter,
 			  task_pid_nr(qp->res.task));
 
 	return match;
-}
-
-int rdma_counter_modify(struct ib_device *dev, u32 port,
-			unsigned int index, bool enable)
-{
-	struct rdma_hw_stats *stats;
-	int ret = 0;
-
-	if (!dev->ops.modify_hw_stat)
-		return -EOPNOTSUPP;
-
-	stats = dev->port_data ? dev->port_data[port].hw_stats : NULL;
-	if (!stats || index >= stats->num_counters ||
-	    !(stats->descs[index].flags & IB_STAT_FLAG_OPTIONAL))
-		return -EINVAL;
-
-	mutex_lock(&stats->lock);
-
-	if (enable != test_bit(index, stats->is_disabled))
-		goto out;
-
-	ret = dev->ops.modify_hw_stat(dev, port, index, enable);
-	if (ret)
-		goto out;
-
-	if (enable)
-		clear_bit(index, stats->is_disabled);
-	else
-		set_bit(index, stats->is_disabled);
-out:
-	mutex_unlock(&stats->lock);
-	return ret;
 }
 
 static int __rdma_counter_unbind_qp(struct ib_qp *qp)
@@ -637,10 +637,10 @@ void rdma_counter_init(struct ib_device *dev)
 		port_counter->mode.mode = RDMA_COUNTER_MODE_NONE;
 		mutex_init(&port_counter->lock);
 
-		if (!dev->ops.alloc_hw_stats)
+		if (!dev->ops.alloc_hw_port_stats)
 			continue;
 
-		port_counter->hstats = dev->ops.alloc_hw_stats(dev, port);
+		port_counter->hstats = dev->ops.alloc_hw_port_stats(dev, port);
 		if (!port_counter->hstats)
 			goto fail;
 	}

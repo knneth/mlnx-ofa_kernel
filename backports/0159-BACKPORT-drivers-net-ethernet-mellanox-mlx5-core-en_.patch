@@ -1,43 +1,177 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 
-Change-Id: I4c53b09d570fa0a66cd4823d7836c5a44c291bdd
+Change-Id: I41ec889c63f3d34ab5e16ec8c1c5482a81d2c95f
 ---
- .../ethernet/mellanox/mlx5/core/en_accel/en_accel.h  | 12 +++++++++++-
- 1 file changed, 11 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en_txrx.c | 53 +++++++++++++++++--
+ 1 file changed, 50 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-@@ -119,8 +119,10 @@ static inline bool mlx5e_accel_tx_begin(
- 					struct sk_buff *skb,
- 					struct mlx5e_accel_tx_state *state)
- {
-+#ifdef HAVE_NETIF_F_GSO_UDP_L4
- 	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
- 		mlx5e_udp_gso_handle_tx_skb(skb);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+@@ -34,7 +34,9 @@
+ #include "en.h"
+ #include "en/txrx.h"
+ #include "en/xdp.h"
++#ifdef HAVE_NDO_XSK_WAKEUP
+ #include "en/xsk/rx.h"
 +#endif
+ #include "en/xsk/tx.h"
+ #include "en_accel/ktls_txrx.h"
+ #include "en/txrx.h"
+@@ -90,8 +92,10 @@ void mlx5e_trigger_irq(struct mlx5e_icos
+ 	mlx5e_notify_hw(wq, sq->pc, sq->uar_map, &nopwqe->ctrl);
+ }
  
- #ifdef CONFIG_MLX5_EN_TLS
- 	/* May send SKBs and WQEs. */
-@@ -164,11 +166,19 @@ static inline unsigned int mlx5e_accel_t
- 
- static inline bool mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
- 				       struct sk_buff *skb,
--				       struct mlx5_wqe_eth_seg *eseg, u16 ihs)
-+				       struct mlx5_wqe_eth_seg *eseg,
-+#if !defined(HAVE_XFRM_OFFLOAD_INNER_IPPROTO) && defined(CONFIG_MLX5_EN_IPSEC)
-+				       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
-+#endif
-+				       u16 ihs)
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskrq)
  {
- #ifdef CONFIG_MLX5_EN_IPSEC
- 	if (xfrm_offload(skb))
-+#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
- 		mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
++#ifdef HAVE_NDO_XSK_WAKEUP
+ 	bool busy_xsk = false, xsk_rx_alloc_err;
+ 
+ 	/* Handle the race between the application querying need_wakeup and the
+@@ -112,34 +116,52 @@ static bool mlx5e_napi_xsk_post(struct m
+ 					   mlx5e_post_rx_wqes,
+ 					   xskrq);
+ 	busy_xsk |= mlx5e_xsk_update_rx_wakeup(xskrq, xsk_rx_alloc_err);
 +#else
-+		mlx5e_ipsec_tx_build_eseg(priv, skb, ipsec_st, eseg);
++	bool busy_xsk = false;
++
++	busy_xsk |= mlx5e_xsk_tx(xsksq, MLX5E_TX_XSK_POLL_BUDGET);
++	busy_xsk |= xskrq->post_wqes(xskrq);
 +#endif
- #endif
  
- #if IS_ENABLED(CONFIG_GENEVE)
+ 	return busy_xsk;
+ }
++#endif
+ 
+ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
+ {
+ 	struct mlx5e_channel *c = container_of(napi, struct mlx5e_channel,
+ 					       napi);
+ 	struct mlx5e_ch_stats *ch_stats = c->stats;
+-	struct mlx5e_xdpsq *xsksq = &c->xsksq;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
++       struct mlx5e_xdpsq *xsksq = &c->xsksq;
++       struct mlx5e_rq *xskrq = &c->xskrq;
++#endif
+ 	struct mlx5e_txqsq __rcu **qos_sqs;
+-	struct mlx5e_rq *xskrq = &c->xskrq;
+ 	struct mlx5e_rq *rq = &c->rq;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	bool aff_change = false;
+ 	bool busy_xsk = false;
++#endif
+ 	bool busy = false;
+ 	int work_done = 0;
+-	u16 qos_sqs_size;
++	u16 qos_sqs_size = 0;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	bool xsk_open;
++#endif
+ 	int i;
+ 
+ 	rcu_read_lock();
+ 
+ 	qos_sqs = rcu_dereference(c->qos_sqs);
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	xsk_open = test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
++#endif
+ 
+ 	ch_stats->poll++;
++#ifndef HAVE_NAPI_STATE_MISSED
++	clear_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags);
++#endif
+ 
+ 	for (i = 0; i < c->num_tc; i++)
+ 		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
+@@ -156,14 +178,18 @@ int mlx5e_napi_poll(struct napi_struct *
+ 		}
+ 	}
+ 
++#ifdef HAVE_XDP_SUPPORT
+ 	busy |= mlx5e_poll_xdpsq_cq(&c->xdpsq.cq);
+ 
+ 	if (c->xdp)
+ 		busy |= mlx5e_poll_xdpsq_cq(&c->rq_xdpsq.cq);
++#endif
+ 
+ 	if (likely(budget)) { /* budget=0 means: don't poll rx rings */
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 		if (xsk_open)
+ 			work_done = mlx5e_poll_rx_cq(&xskrq->cq, budget);
++#endif
+ 
+ 		if (likely(budget - work_done))
+ 			work_done += mlx5e_poll_rx_cq(&rq->cq, budget - work_done);
+@@ -186,12 +212,14 @@ int mlx5e_napi_poll(struct napi_struct *
+ 				mlx5e_post_rx_mpwqes,
+ 				mlx5e_post_rx_wqes,
+ 				rq);
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk_open) {
+ 		busy |= mlx5e_poll_xdpsq_cq(&xsksq->cq);
+ 		busy_xsk |= mlx5e_napi_xsk_post(xsksq, xskrq);
+ 	}
+ 
+ 	busy |= busy_xsk;
++#endif
+ 
+ 	if (busy) {
+ 		if (likely(mlx5e_channel_no_affinity_change(c))) {
+@@ -199,13 +227,25 @@ int mlx5e_napi_poll(struct napi_struct *
+ 			goto out;
+ 		}
+ 		ch_stats->aff_change++;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 		aff_change = true;
++#endif
+ 		if (budget && work_done == budget)
+ 			work_done--;
+ 	}
+ 
++#ifdef HAVE_NAPI_STATE_MISSED
+ 	if (unlikely(!napi_complete_done(napi, work_done)))
+ 		goto out;
++#else
++ 	napi_complete_done(napi, work_done);
++ 
++	/* avoid losing completion event during/after polling cqs */
++	if (test_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags)) {
++		napi_schedule(napi);
++		goto out;
++	}
++#endif
+ 
+ 	ch_stats->arm++;
+ 
+@@ -227,8 +267,11 @@ int mlx5e_napi_poll(struct napi_struct *
+ 	mlx5e_rx_dim_cq_rearm(c->priv, rq);
+ 	mlx5e_cq_arm(&c->icosq.cq);
+ 	mlx5e_cq_arm(&c->async_icosq.cq);
++#ifdef HAVE_XDP_SUPPORT
+ 	mlx5e_cq_arm(&c->xdpsq.cq);
++#endif
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk_open) {
+ 		mlx5e_rx_dim_cq_rearm(c->priv, xskrq);
+ 		mlx5e_cq_arm(&xsksq->cq);
+@@ -238,6 +281,7 @@ int mlx5e_napi_poll(struct napi_struct *
+ 		mlx5e_trigger_irq(&c->icosq);
+ 		ch_stats->force_irq++;
+ 	}
++#endif
+ 
+ out:
+ 	rcu_read_unlock();
+@@ -249,6 +293,9 @@ void mlx5e_completion_event(struct mlx5_
+ {
+ 	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);
+ 
++#ifndef HAVE_NAPI_STATE_MISSED
++	set_bit(MLX5E_CHANNEL_NAPI_SCHED, cq->ch_flags);
++#endif
+ 	napi_schedule(cq->napi);
+ 	cq->event_ctr++;
+ 	cq->ch_stats->events++;

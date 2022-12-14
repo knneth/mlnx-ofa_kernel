@@ -16,9 +16,8 @@
 #define prios_ht(chains) ((chains)->prios_ht)
 #define tc_default_ft(chains) ((chains)->tc_default_ft)
 #define tc_end_ft(chains) ((chains)->tc_end_ft)
-#define ns_to_chains_fs_prio(ns) ((ns) == MLX5_FLOW_NAMESPACE_FDB_KERNEL ? \
+#define ns_to_chains_fs_prio(ns) ((ns) == MLX5_FLOW_NAMESPACE_FDB ? \
 				  FDB_TC_OFFLOAD : MLX5E_TC_PRIO)
-
 #define FT_TBL_SZ (64 * 1024)
 
 struct mlx5_fs_chains {
@@ -180,7 +179,7 @@ mlx5_chains_create_table(struct mlx5_fs_chains *chains,
 	    (chain == 0 && prio == 1 && level == 0)) {
 		ft_attr.level = level;
 		ft_attr.prio = prio - 1;
-		ns = (chains->ns == MLX5_FLOW_NAMESPACE_FDB_KERNEL) ?
+		ns = (chains->ns == MLX5_FLOW_NAMESPACE_FDB) ?
 			mlx5_get_fdb_sub_ns(chains->dev, chain) :
 			mlx5_get_flow_namespace(chains->dev, chains->ns);
 	} else {
@@ -242,7 +241,7 @@ create_chain_restore(struct fs_chain *chain)
 
 	chain->id = index;
 
-	if (chains->ns == MLX5_FLOW_NAMESPACE_FDB_KERNEL) {
+	if (chains->ns == MLX5_FLOW_NAMESPACE_FDB) {
 		chain_to_reg = CHAIN_TO_REG;
 		chain->restore_rule = esw_add_restore_rule(esw, chain->id);
 		if (IS_ERR(chain->restore_rule)) {

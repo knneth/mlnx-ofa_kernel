@@ -30,6 +30,7 @@
  * SOFTWARE.
  */
 
+#include <linux/etherdevice.h>
 #include <linux/module.h>
 #include <rdma/ib_umem.h>
 #include <rdma/ib_cache.h>
@@ -1322,69 +1323,79 @@ static void destroy_flow_rule_vport_sq(struct mlx5_ib_sq *sq)
 	sq->flow_rule = NULL;
 }
 
-static int get_rq_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq)
+static bool fr_supported(int ts_cap)
 {
-	bool fr_supported =
-		MLX5_CAP_GEN(dev->mdev, rq_ts_format) ==
-			MLX5_RQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
-		MLX5_CAP_GEN(dev->mdev, rq_ts_format) ==
-			MLX5_RQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
+	return ts_cap == MLX5_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
+	       ts_cap == MLX5_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
+}
 
-	if (send_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION) {
-		if (!fr_supported) {
-			mlx5_ib_dbg(dev, "Free running TS format is not supported\n");
+static int get_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *cq,
+			 bool fr_sup, bool rt_sup)
+{
+	if (cq->private_flags & MLX5_IB_CQ_PR_FLAGS_REAL_TIME_TS) {
+		if (!rt_sup) {
+			mlx5_ib_dbg(dev,
+				    "Real time TS format is not supported\n");
 			return -EOPNOTSUPP;
 		}
-		return MLX5_RQC_TIMESTAMP_FORMAT_FREE_RUNNING;
+		return MLX5_TIMESTAMP_FORMAT_REAL_TIME;
 	}
-	return fr_supported ? MLX5_RQC_TIMESTAMP_FORMAT_FREE_RUNNING :
-			      MLX5_RQC_TIMESTAMP_FORMAT_DEFAULT;
+	if (cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION) {
+		if (!fr_sup) {
+			mlx5_ib_dbg(dev,
+				    "Free running TS format is not supported\n");
+			return -EOPNOTSUPP;
+		}
+		return MLX5_TIMESTAMP_FORMAT_FREE_RUNNING;
+	}
+	return fr_sup ? MLX5_TIMESTAMP_FORMAT_FREE_RUNNING :
+			MLX5_TIMESTAMP_FORMAT_DEFAULT;
+}
+
+static int get_rq_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *recv_cq)
+{
+	u8 ts_cap = MLX5_CAP_GEN(dev->mdev, rq_ts_format);
+
+	return get_ts_format(dev, recv_cq, fr_supported(ts_cap),
+			     rt_supported(ts_cap));
 }
 
 static int get_sq_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq)
 {
-	bool fr_supported =
-		MLX5_CAP_GEN(dev->mdev, sq_ts_format) ==
-			MLX5_SQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
-		MLX5_CAP_GEN(dev->mdev, sq_ts_format) ==
-			MLX5_SQ_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
+	u8 ts_cap = MLX5_CAP_GEN(dev->mdev, sq_ts_format);
 
-	if (send_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION) {
-		if (!fr_supported) {
-			mlx5_ib_dbg(dev, "Free running TS format is not supported\n");
-			return -EOPNOTSUPP;
-		}
-		return MLX5_SQC_TIMESTAMP_FORMAT_FREE_RUNNING;
-	}
-	return fr_supported ? MLX5_SQC_TIMESTAMP_FORMAT_FREE_RUNNING :
-			      MLX5_SQC_TIMESTAMP_FORMAT_DEFAULT;
+	return get_ts_format(dev, send_cq, fr_supported(ts_cap),
+			     rt_supported(ts_cap));
 }
 
 static int get_qp_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq,
 			    struct mlx5_ib_cq *recv_cq)
 {
-	bool fr_supported =
-		MLX5_CAP_ROCE(dev->mdev, qp_ts_format) ==
-			MLX5_QP_TIMESTAMP_FORMAT_CAP_FREE_RUNNING ||
-		MLX5_CAP_ROCE(dev->mdev, qp_ts_format) ==
-			MLX5_QP_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
-	int ts_format = fr_supported ? MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING :
-				       MLX5_QPC_TIMESTAMP_FORMAT_DEFAULT;
+	u8 ts_cap = MLX5_CAP_ROCE(dev->mdev, qp_ts_format);
+	bool fr_sup = fr_supported(ts_cap);
+	bool rt_sup = rt_supported(ts_cap);
+	u8 default_ts = fr_sup ? MLX5_TIMESTAMP_FORMAT_FREE_RUNNING :
+				 MLX5_TIMESTAMP_FORMAT_DEFAULT;
+	int send_ts_format =
+		send_cq ? get_ts_format(dev, send_cq, fr_sup, rt_sup) :
+			  default_ts;
+	int recv_ts_format =
+		recv_cq ? get_ts_format(dev, recv_cq, fr_sup, rt_sup) :
+			  default_ts;
 
-	if (recv_cq &&
-	    recv_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION)
-		ts_format = MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING;
+	if (send_ts_format < 0 || recv_ts_format < 0)
+		return -EOPNOTSUPP;
 
-	if (send_cq &&
-	    send_cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION)
-		ts_format = MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING;
-
-	if (ts_format == MLX5_QPC_TIMESTAMP_FORMAT_FREE_RUNNING &&
-	    !fr_supported) {
-		mlx5_ib_dbg(dev, "Free running TS format is not supported\n");
+	if (send_ts_format != MLX5_TIMESTAMP_FORMAT_DEFAULT &&
+	    recv_ts_format != MLX5_TIMESTAMP_FORMAT_DEFAULT &&
+	    send_ts_format != recv_ts_format) {
+		mlx5_ib_dbg(
+			dev,
+			"The send ts_format does not match the receive ts_format\n");
 		return -EOPNOTSUPP;
 	}
-	return ts_format;
+
+	return send_ts_format == default_ts ? recv_ts_format : send_ts_format;
 }
 
 static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
@@ -2812,7 +2823,6 @@ static int create_dct(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	}
 
 	qp->state = IB_QPS_RESET;
-	rdma_restrack_no_track(&qp->ibqp.res);
 	return 0;
 }
 
@@ -3153,6 +3163,7 @@ static int create_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	switch (qp->type) {
 	case MLX5_IB_QPT_DCT:
 		err = create_dct(dev, pd, qp, params);
+		rdma_restrack_no_track(&qp->ibqp.res);
 		break;
 	case MLX5_IB_QPT_DCI:
 		err = create_dci(dev, pd, qp, params);
@@ -3163,6 +3174,10 @@ static int create_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	case IB_QPT_GSI:
 		err = mlx5_ib_create_gsi(pd, qp, params->attr);
 		break;
+	case MLX5_IB_QPT_HW_GSI:
+	case MLX5_IB_QPT_REG_UMR:
+		rdma_restrack_no_track(&qp->ibqp.res);
+		fallthrough;
 	default:
 		if (params->udata)
 			err = create_user_qp(dev, pd, qp, params);
@@ -3251,7 +3266,6 @@ static int mlx5_ib_destroy_dct(struct mlx5_ib_qp *mqp)
 	}
 
 	kfree(mqp->dct.in);
-	kfree(mqp);
 	return 0;
 }
 
@@ -3289,25 +3303,23 @@ static int check_ucmd_data(struct mlx5_ib_dev *dev,
 	return ret ? 0 : -EINVAL;
 }
 
-struct ib_qp *mlx5_ib_create_qp(struct ib_pd *pd, struct ib_qp_init_attr *attr,
-				struct ib_udata *udata)
+int mlx5_ib_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
+		      struct ib_udata *udata)
 {
 	struct mlx5_create_qp_params params = {};
-	struct mlx5_ib_dev *dev;
-	struct mlx5_ib_qp *qp;
+	struct mlx5_ib_dev *dev = to_mdev(ibqp->device);
+	struct mlx5_ib_qp *qp = to_mqp(ibqp);
+	struct ib_pd *pd = ibqp->pd;
 	enum ib_qp_type type;
 	int err;
 
-	dev = pd ? to_mdev(pd->device) :
-		   to_mdev(to_mxrcd(attr->xrcd)->ibxrcd.device);
-
 	err = check_qp_type(dev, attr, &type);
 	if (err)
-		return ERR_PTR(err);
+		return err;
 
 	err = check_valid_flow(dev, pd, attr, udata);
 	if (err)
-		return ERR_PTR(err);
+		return err;
 
 	params.udata = udata;
 	params.uidx = MLX5_IB_DEFAULT_UIDX;
@@ -3317,25 +3329,19 @@ struct ib_qp *mlx5_ib_create_qp(struct ib_pd *pd, struct ib_qp_init_attr *attr,
 	if (udata) {
 		err = process_udata_size(dev, &params);
 		if (err)
-			return ERR_PTR(err);
+			return err;
 
 		err = check_ucmd_data(dev, &params);
 		if (err)
-			return ERR_PTR(err);
+			return err;
 
 		params.ucmd = kzalloc(params.ucmd_size, GFP_KERNEL);
 		if (!params.ucmd)
-			return ERR_PTR(-ENOMEM);
+			return -ENOMEM;
 
 		err = ib_copy_from_udata(params.ucmd, udata, params.inlen);
 		if (err)
 			goto free_ucmd;
-	}
-
-	qp = kzalloc(sizeof(*qp), GFP_KERNEL);
-	if (!qp) {
-		err = -ENOMEM;
-		goto free_ucmd;
 	}
 
 	mutex_init(&qp->mutex);
@@ -3343,23 +3349,23 @@ struct ib_qp *mlx5_ib_create_qp(struct ib_pd *pd, struct ib_qp_init_attr *attr,
 	if (udata) {
 		err = process_vendor_flags(dev, qp, params.ucmd, attr);
 		if (err)
-			goto free_qp;
+			goto free_ucmd;
 
 		err = get_qp_uidx(qp, &params);
 		if (err)
-			goto free_qp;
+			goto free_ucmd;
 	}
 	err = process_create_flags(dev, qp, attr);
 	if (err)
-		goto free_qp;
+		goto free_ucmd;
 
 	err = check_qp_attr(dev, qp, attr);
 	if (err)
-		goto free_qp;
+		goto free_ucmd;
 
 	err = create_qp(dev, pd, qp, &params);
 	if (err)
-		goto free_qp;
+		goto free_ucmd;
 
 	kfree(params.ucmd);
 	params.ucmd = NULL;
@@ -3374,7 +3380,7 @@ struct ib_qp *mlx5_ib_create_qp(struct ib_pd *pd, struct ib_qp_init_attr *attr,
 	if (err)
 		goto destroy_qp;
 
-	return &qp->ibqp;
+	return 0;
 
 destroy_qp:
 	switch (qp->type) {
@@ -3385,22 +3391,12 @@ destroy_qp:
 		mlx5_ib_destroy_gsi(qp);
 		break;
 	default:
-		/*
-		 * These lines below are temp solution till QP allocation
-		 * will be moved to be under IB/core responsiblity.
-		 */
-		qp->ibqp.send_cq = attr->send_cq;
-		qp->ibqp.recv_cq = attr->recv_cq;
-		qp->ibqp.pd = pd;
 		destroy_qp_common(dev, qp, udata);
 	}
 
-	qp = NULL;
-free_qp:
-	kfree(qp);
 free_ucmd:
 	kfree(params.ucmd);
-	return ERR_PTR(err);
+	return err;
 }
 
 int mlx5_ib_destroy_qp(struct ib_qp *qp, struct ib_udata *udata)
@@ -3408,16 +3404,13 @@ int mlx5_ib_destroy_qp(struct ib_qp *qp, struct ib_udata *udata)
 	struct mlx5_ib_dev *dev = to_mdev(qp->device);
 	struct mlx5_ib_qp *mqp = to_mqp(qp);
 
-	if (unlikely(qp->qp_type == IB_QPT_GSI))
+	if (mqp->type == IB_QPT_GSI)
 		return mlx5_ib_destroy_gsi(mqp);
 
 	if (mqp->type == MLX5_IB_QPT_DCT)
 		return mlx5_ib_destroy_dct(mqp);
 
 	destroy_qp_common(dev, mqp, udata);
-
-	kfree(mqp);
-
 	return 0;
 }
 
@@ -3447,7 +3440,7 @@ static int set_qpc_atomic_flags(struct mlx5_ib_qp *qp,
 	if (access_flags & IB_ACCESS_REMOTE_ATOMIC) {
 		int atomic_mode;
 
-		atomic_mode = get_atomic_mode(dev, qp->ibqp.qp_type);
+		atomic_mode = get_atomic_mode(dev, qp->type);
 		if (atomic_mode < 0)
 			return -EOPNOTSUPP;
 
@@ -3649,10 +3642,10 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 
 		ether_addr_copy(MLX5_ADDR_OF(ads, path, rmac_47_32),
 				ah->roce.dmac);
-		if ((qp->ibqp.qp_type == IB_QPT_RC ||
-		     qp->ibqp.qp_type == IB_QPT_UC ||
-		     qp->ibqp.qp_type == IB_QPT_XRC_INI ||
-		     qp->ibqp.qp_type == IB_QPT_XRC_TGT) &&
+		if ((qp->type == IB_QPT_RC ||
+		     qp->type == IB_QPT_UC ||
+		     qp->type == IB_QPT_XRC_INI ||
+		     qp->type == IB_QPT_XRC_TGT) &&
 		    (grh->sgid_attr->gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP) &&
 		    (attr_mask & IB_QP_DEST_QPN))
 			mlx5_set_path_udp_sport(path, ah,
@@ -3679,7 +3672,7 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 		MLX5_SET(ads, path, ack_timeout,
 			 alt ? attr->alt_timeout : attr->timeout);
 
-	if ((qp->ibqp.qp_type == IB_QPT_RAW_PACKET) && qp->sq.wqe_cnt)
+	if ((qp->type == IB_QPT_RAW_PACKET) && qp->sq.wqe_cnt)
 		return modify_raw_packet_eth_prio(dev->mdev,
 						  &qp->raw_packet_qp.sq,
 						  sl & 0xf, qp->ibqp.pd);
@@ -3794,13 +3787,13 @@ static enum mlx5_qp_optpar opt_mask[MLX5_QP_NUM_STATE][MLX5_QP_NUM_STATE][MLX5_Q
 	},
 	[MLX5_QP_STATE_SQD] = {
 		[MLX5_QP_STATE_RTS] = {
-			[MLX5_QP_ST_UD]	 = MLX5_QP_OPTPAR_Q_KEY,
+			[MLX5_QP_ST_UD] = MLX5_QP_OPTPAR_Q_KEY,
 			[MLX5_QP_ST_MLX] = MLX5_QP_OPTPAR_Q_KEY,
-			[MLX5_QP_ST_UC]  = MLX5_QP_OPTPAR_RWE,
-			[MLX5_QP_ST_RC]  = MLX5_QP_OPTPAR_RNR_TIMEOUT	|
-					   MLX5_QP_OPTPAR_RWE		|
-					   MLX5_QP_OPTPAR_RAE		|
-					   MLX5_QP_OPTPAR_RRE,
+			[MLX5_QP_ST_UC] = MLX5_QP_OPTPAR_RWE,
+			[MLX5_QP_ST_RC] = MLX5_QP_OPTPAR_RNR_TIMEOUT	|
+					  MLX5_QP_OPTPAR_RWE		|
+					  MLX5_QP_OPTPAR_RAE		|
+					  MLX5_QP_OPTPAR_RRE,
 		},
 	},
 };
@@ -4266,12 +4259,12 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 	    MLX5_CAP_GEN(dev->mdev, init2_lag_tx_port_affinity))
 		optpar |= MLX5_QP_OPTPAR_LAG_TX_AFF;
 
-	if (is_sqp(ibqp->qp_type)) {
+	if (is_sqp(qp->type)) {
 		MLX5_SET(qpc, qpc, mtu, IB_MTU_256);
 		MLX5_SET(qpc, qpc, log_msg_max, 8);
-	} else if ((ibqp->qp_type == IB_QPT_UD &&
+	} else if ((qp->type == IB_QPT_UD &&
 		    !(qp->flags & IB_QP_CREATE_SOURCE_QPN)) ||
-		   ibqp->qp_type == MLX5_IB_QPT_REG_UMR) {
+		   qp->type == MLX5_IB_QPT_REG_UMR) {
 		MLX5_SET(qpc, qpc, mtu, IB_MTU_4096);
 		MLX5_SET(qpc, qpc, log_msg_max, 12);
 	} else if (attr_mask & IB_QP_PATH_MTU) {
@@ -4297,7 +4290,7 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 
 	/* todo implement counter_index functionality */
 
-	if (is_sqp(ibqp->qp_type))
+	if (is_sqp(qp->type))
 		MLX5_SET(ads, pri_path, vhca_port_num, qp->port);
 
 	if (attr_mask & IB_QP_PORT)
@@ -4325,7 +4318,7 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 			goto out;
 	}
 
-	get_cqs(qp->ibqp.qp_type, qp->ibqp.send_cq, qp->ibqp.recv_cq,
+	get_cqs(qp->type, qp->ibqp.send_cq, qp->ibqp.recv_cq,
 		&send_cq, &recv_cq);
 
 	MLX5_SET(qpc, qpc, pd, pd ? pd->pdn : to_mpd(dev->devr.p0)->pdn);
@@ -4422,7 +4415,7 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 			goto out;
 	}
 
-	if (qp->ibqp.qp_type == IB_QPT_RAW_PACKET ||
+	if (qp->type == IB_QPT_RAW_PACKET ||
 	    qp->flags & IB_QP_CREATE_SOURCE_QPN) {
 		struct mlx5_modify_raw_qp_param raw_qp_param = {};
 
@@ -4495,7 +4488,7 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 	 * entries and reinitialize the QP.
 	 */
 	if (new_state == IB_QPS_RESET &&
-	    !ibqp->uobject && ibqp->qp_type != IB_QPT_XRC_TGT) {
+	    !ibqp->uobject && qp->type != IB_QPT_XRC_TGT) {
 		mlx5_ib_cq_clean(recv_cq, base->mqp.qpn,
 				 ibqp->srq ? to_msrq(ibqp->srq) : NULL);
 		if (send_cq != recv_cq)
@@ -4684,6 +4677,7 @@ static int mlx5_ib_modify_dct(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		tmp_hop_limit = (dev->ttld[port - 1].val) ?
 			dev->ttld[port - 1].val : tmp_hop_limit;
 		MLX5_SET(dctc, dctc, hop_limit, tmp_hop_limit);
+
 		if (rdma_protocol_roce(ibqp->device, port))
 			MLX5_SET(dctc, dctc, eth_prio, attr->ah_attr.sl & 0x7);
 
@@ -4711,13 +4705,12 @@ static int mlx5_ib_modify_dct(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 }
 
 static bool mlx5_ib_modify_qp_allowed(struct mlx5_ib_dev *dev,
-				      struct mlx5_ib_qp *qp,
-				      enum ib_qp_type qp_type)
+				      struct mlx5_ib_qp *qp)
 {
 	if (dev->profile != &raw_eth_profile)
 		return true;
 
-	if (qp_type == IB_QPT_RAW_PACKET || qp_type == MLX5_IB_QPT_REG_UMR)
+	if (qp->type == IB_QPT_RAW_PACKET || qp->type == MLX5_IB_QPT_REG_UMR)
 		return true;
 
 	/* Internal QP used for wc testing, with NOPs in wq */
@@ -4737,6 +4730,40 @@ static int ignored_ts_check(enum ib_qp_type qp_type)
 	return 0;
 }
 
+static int validate_rd_atomic(struct mlx5_ib_dev *dev, struct ib_qp_attr *attr,
+			      int attr_mask, enum ib_qp_type qp_type)
+{
+	int log_max_ra_res;
+	int log_max_ra_req;
+
+	if (qp_type == MLX5_IB_QPT_DCI) {
+		log_max_ra_res = 1 << MLX5_CAP_GEN(dev->mdev,
+						   log_max_ra_res_dc);
+		log_max_ra_req = 1 << MLX5_CAP_GEN(dev->mdev,
+						   log_max_ra_req_dc);
+	} else {
+		log_max_ra_res = 1 << MLX5_CAP_GEN(dev->mdev,
+						   log_max_ra_res_qp);
+		log_max_ra_req = 1 << MLX5_CAP_GEN(dev->mdev,
+						   log_max_ra_req_qp);
+	}
+
+	if (attr_mask & IB_QP_MAX_QP_RD_ATOMIC &&
+	    attr->max_rd_atomic > log_max_ra_res) {
+		mlx5_ib_dbg(dev, "invalid max_rd_atomic value %d\n",
+			    attr->max_rd_atomic);
+		return false;
+	}
+
+	if (attr_mask & IB_QP_MAX_DEST_RD_ATOMIC &&
+	    attr->max_dest_rd_atomic > log_max_ra_req) {
+		mlx5_ib_dbg(dev, "invalid max_dest_rd_atomic value %d\n",
+			    attr->max_dest_rd_atomic);
+		return false;
+	}
+	return true;
+}
+
 int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata)
 {
@@ -4748,7 +4775,7 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	enum ib_qp_state cur_state, new_state;
 	int err = -EINVAL;
 
-	if (!mlx5_ib_modify_qp_allowed(dev, qp, ibqp->qp_type))
+	if (!mlx5_ib_modify_qp_allowed(dev, qp))
 		return -EOPNOTSUPP;
 
 	if (attr_mask & ~(IB_QP_ATTR_STANDARD_BITS | IB_QP_RATE_LIMIT |
@@ -4778,11 +4805,10 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 
 	}
 
-	if (unlikely(ibqp->qp_type == IB_QPT_GSI))
+	if (qp->type == IB_QPT_GSI)
 		return mlx5_ib_gsi_modify_qp(ibqp, attr, attr_mask);
 
-	qp_type = (unlikely(ibqp->qp_type == MLX5_IB_QPT_HW_GSI)) ? IB_QPT_GSI :
-								    qp->type;
+	qp_type = (qp->type == MLX5_IB_QPT_HW_GSI) ? IB_QPT_GSI : qp->type;
 
 	if (qp_type == MLX5_IB_QPT_DCT)
 		return mlx5_ib_modify_dct(ibqp, attr, attr_mask, &ucmd, udata);
@@ -4802,7 +4828,7 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		   !ib_modify_qp_is_ok(cur_state, new_state, qp_type,
 				       attr_mask)) {
 		mlx5_ib_dbg(dev, "invalid QP state transition from %d to %d, qp_type %d, attr_mask 0x%x\n",
-			    cur_state, new_state, ibqp->qp_type, attr_mask);
+			    cur_state, new_state, qp->type, attr_mask);
 		goto out;
 	} else if (qp_type == MLX5_IB_QPT_DCI &&
 		   !modify_dci_qp_is_ok(cur_state, new_state, attr_mask)) {
@@ -4825,21 +4851,8 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		goto out;
 	}
 
-	if (attr_mask & IB_QP_MAX_QP_RD_ATOMIC &&
-	    attr->max_rd_atomic >
-	    (1 << MLX5_CAP_GEN(dev->mdev, log_max_ra_res_qp))) {
-		mlx5_ib_dbg(dev, "invalid max_rd_atomic value %d\n",
-			    attr->max_rd_atomic);
+	if (!validate_rd_atomic(dev, attr, attr_mask, qp_type))
 		goto out;
-	}
-
-	if (attr_mask & IB_QP_MAX_DEST_RD_ATOMIC &&
-	    attr->max_dest_rd_atomic >
-	    (1 << MLX5_CAP_GEN(dev->mdev, log_max_ra_req_qp))) {
-		mlx5_ib_dbg(dev, "invalid max_dest_rd_atomic value %d\n",
-			    attr->max_dest_rd_atomic);
-		goto out;
-	}
 
 	if (cur_state == new_state && cur_state == IB_QPS_RESET) {
 		err = 0;
@@ -5075,9 +5088,8 @@ static int query_qp_attr(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	pri_path = MLX5_ADDR_OF(qpc, qpc, primary_address_path);
 	alt_path = MLX5_ADDR_OF(qpc, qpc, secondary_address_path);
 
-	if (qp->ibqp.qp_type == IB_QPT_RC || qp->ibqp.qp_type == IB_QPT_UC ||
-	    qp->ibqp.qp_type == IB_QPT_XRC_INI ||
-	    qp->ibqp.qp_type == IB_QPT_XRC_TGT) {
+	if (qp->type == IB_QPT_RC || qp->type == IB_QPT_UC ||
+	    qp->type == IB_QPT_XRC_INI || qp->type == IB_QPT_XRC_TGT) {
 		to_rdma_ah_attr(dev, &qp_attr->ah_attr, pri_path);
 		to_rdma_ah_attr(dev, &qp_attr->alt_ah_attr, alt_path);
 		qp_attr->alt_pkey_index = MLX5_GET(ads, alt_path, pkey_index);
@@ -5170,7 +5182,7 @@ int mlx5_ib_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr,
 	if (ibqp->rwq_ind_tbl)
 		return -ENOSYS;
 
-	if (unlikely(ibqp->qp_type == IB_QPT_GSI))
+	if (qp->type == IB_QPT_GSI)
 		return mlx5_ib_gsi_query_qp(ibqp, qp_attr, qp_attr_mask,
 					    qp_init_attr);
 
@@ -5184,7 +5196,7 @@ int mlx5_ib_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr,
 
 	mutex_lock(&qp->mutex);
 
-	if (qp->ibqp.qp_type == IB_QPT_RAW_PACKET ||
+	if (qp->type == IB_QPT_RAW_PACKET ||
 	    qp->flags & IB_QP_CREATE_SOURCE_QPN) {
 		err = query_raw_packet_qp_state(dev, qp, &raw_packet_qp_state);
 		if (err)
@@ -5211,7 +5223,7 @@ int mlx5_ib_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr,
 		qp_attr->cap.max_send_sge = 0;
 	}
 
-	qp_init_attr->qp_type = ibqp->qp_type;
+	qp_init_attr->qp_type = qp->type;
 	qp_init_attr->recv_cq = ibqp->recv_cq;
 	qp_init_attr->send_cq = ibqp->send_cq;
 	qp_init_attr->srq = ibqp->srq;

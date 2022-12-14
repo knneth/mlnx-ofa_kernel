@@ -1,0 +1,82 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.h
+
+Change-Id: Ia7e8f94d14cd6d93e4514bae5533de32b408fd81
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.h | 40 ++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+--- a/drivers/infiniband/ulp/iser/iscsi_iser.h
++++ b/drivers/infiniband/ulp/iser/iscsi_iser.h
+@@ -59,6 +59,7 @@
+ #include <linux/mutex.h>
+ #include <linux/mempool.h>
+ #include <linux/uio.h>
++#include <linux/sizes.h>
+ 
+ #include <linux/socket.h>
+ #include <linux/in.h>
+@@ -67,10 +68,42 @@
+ #include <rdma/ib_verbs.h>
+ #include <rdma/rdma_cm.h>
+ 
++#if defined(CONFIG_COMPAT_RHEL_7_3) || defined(CONFIG_COMPAT_RHEL_7_2)
++#undef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++#endif
++
++#if defined(HAVE_BLK_QUEUE_VIRT_BOUNDARY) &&		\
++	!defined(HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK)
++#define USE_SLAVE_ALLOC_HANDLER 1
++#endif
++
++#if defined(HAVE_BLK_QUEUE_VIRT_BOUNDARY) ||		\
++	defined(HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK)
++#define HAVE_VIRT_BOUNDARY 1
++#endif
++
+ #define DRV_NAME	"iser"
+ #define PFX		DRV_NAME ": "
+ #define DRV_VER		"1.6"
+ 
++#ifndef HAVE_SCSI_TRANSFER_LENGTH
++static inline unsigned scsi_transfer_length(struct scsi_cmnd *scmd)
++{
++	unsigned int xfer_len = scsi_bufflen(scmd);
++	unsigned int prot_op = scsi_get_prot_op(scmd);
++	unsigned int sector_size = scmd->device->sector_size;
++
++	switch (prot_op) {
++	case SCSI_PROT_NORMAL:
++	case SCSI_PROT_WRITE_STRIP:
++	case SCSI_PROT_READ_INSERT:
++		return xfer_len;
++	}
++
++	return xfer_len + (xfer_len >> ilog2(sector_size)) * 8;
++}
++#endif
++
+ #define iser_dbg(fmt, arg...)				 \
+ 	do {						 \
+ 		if (unlikely(iser_debug_level > 2))	 \
+@@ -198,6 +231,10 @@ struct iser_data_buf {
+ 	int                size;
+ 	unsigned long      data_len;
+ 	int                dma_nents;
++#ifndef HAVE_VIRT_BOUNDARY
++	struct scatterlist *orig_sg;
++	unsigned int       orig_size;
++#endif
+ };
+ 
+ /* fwd declarations */
+@@ -478,6 +515,9 @@ struct iser_global {
+ extern struct iser_global ig;
+ extern int iser_debug_level;
+ extern bool iser_pi_enable;
++#ifndef HAVE_SCSI_CMND_PROT_FLAGS
++extern int iser_pi_guard;
++#endif
+ extern unsigned int iser_max_sectors;
+ extern bool iser_always_reg;
+ 

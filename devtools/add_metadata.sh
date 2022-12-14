@@ -217,6 +217,25 @@ get_general_from_csv()
 	echo $(echo "$line" | sed -r -e 's/.*;\s*general=\s*//' -e 's/;.*//')
 }
 
+get_line_from_ref()
+{
+	local uniqID=$1; shift
+	local ref_db=$1; shift
+	local subject=$1; shift
+	local line=""
+
+	if [ "X$changeid_map" != "X" ]; then
+		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
+		line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)
+	else
+		line=$(grep --no-filename -wr -- "subject=$subject;" ${ref_db}/*csv 2>/dev/null | tail -1)
+	fi
+	if [ "X$line" == "X" ]; then
+		return
+	fi
+	echo "$line"
+}
+
 map_id_new_to_old()
 {
 	local newid=$1; shift
@@ -245,10 +264,7 @@ get_feature_from_ref()
 	local ref_db=$1; shift
 	local subject=$1; shift
 
-	if [ "X$changeid_map" != "X" ]; then
-		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
-	fi
-	local line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)
+	local line=$(get_line_from_ref "$uniqID" "$ref_db" "$subject")
 	if [ "X$line" == "X" ]; then
 		echo ""
 		return
@@ -262,10 +278,7 @@ get_upstream_status_from_ref()
 	local ref_db=$1; shift
 	local subject=$1; shift
 
-	if [ "X$changeid_map" != "X" ]; then
-		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
-	fi
-	local line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)
+	local line=$(get_line_from_ref "$uniqID" "$ref_db" "$subject")
 	if [ "X$line" == "X" ]; then
 		echo ""
 		return
@@ -283,10 +296,7 @@ get_general_from_ref()
 	local ref_db=$1; shift
 	local subject=$1; shift
 
-	if [ "X$changeid_map" != "X" ]; then
-		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
-	fi
-	local line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)
+	local line=$(get_line_from_ref "$uniqID" "$ref_db" "$subject")
 	if [ "X$line" == "X" ]; then
 		echo ""
 		return
@@ -404,9 +414,7 @@ do
 		if [ "X$upstream" == "X" ]; then
 			upstream=$(get_upstream_status_from_ref "$uniqID" "$ref_db" "$subject")
 		fi
-		if [ "X$upstream" == "Xaccepted" ]; then
-			general=$(get_general_from_ref "$uniqID" "$ref_db" "$subject")
-		fi
+		general=$(get_general_from_ref "$uniqID" "$ref_db" "$subject")
 	fi
 
 	if [ "X$feature" == "X" ]; then

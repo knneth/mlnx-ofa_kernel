@@ -25,6 +25,7 @@
 
 #include <rdma/ib_cache.h>
 #include <rdma/ib_cm.h>
+#include <rdma/ib_sysfs.h>
 #include "cm_msgs.h"
 #include "core_priv.h"
 #include "cm_trace.h"
@@ -148,60 +149,17 @@ enum {
 	CM_COUNTER_GROUPS
 };
 
-static char const counter_group_names[CM_COUNTER_GROUPS]
-				     [sizeof("cm_rx_duplicates")] = {
-	"cm_tx_msgs", "cm_tx_retries",
-	"cm_rx_msgs", "cm_rx_duplicates"
-};
-
-struct cm_counter_group {
-	struct kobject obj;
-	atomic_long_t counter[CM_ATTR_COUNT];
-};
-
 struct cm_counter_attribute {
-	struct attribute attr;
-	int index;
-};
-
-#define CM_COUNTER_ATTR(_name, _index) \
-struct cm_counter_attribute cm_##_name##_counter_attr = { \
-	.attr = { .name = __stringify(_name), .mode = 0444 }, \
-	.index = _index \
-}
-
-static CM_COUNTER_ATTR(req, CM_REQ_COUNTER);
-static CM_COUNTER_ATTR(mra, CM_MRA_COUNTER);
-static CM_COUNTER_ATTR(rej, CM_REJ_COUNTER);
-static CM_COUNTER_ATTR(rep, CM_REP_COUNTER);
-static CM_COUNTER_ATTR(rtu, CM_RTU_COUNTER);
-static CM_COUNTER_ATTR(dreq, CM_DREQ_COUNTER);
-static CM_COUNTER_ATTR(drep, CM_DREP_COUNTER);
-static CM_COUNTER_ATTR(sidr_req, CM_SIDR_REQ_COUNTER);
-static CM_COUNTER_ATTR(sidr_rep, CM_SIDR_REP_COUNTER);
-static CM_COUNTER_ATTR(lap, CM_LAP_COUNTER);
-static CM_COUNTER_ATTR(apr, CM_APR_COUNTER);
-
-static struct attribute *cm_counter_default_attrs[] = {
-	&cm_req_counter_attr.attr,
-	&cm_mra_counter_attr.attr,
-	&cm_rej_counter_attr.attr,
-	&cm_rep_counter_attr.attr,
-	&cm_rtu_counter_attr.attr,
-	&cm_dreq_counter_attr.attr,
-	&cm_drep_counter_attr.attr,
-	&cm_sidr_req_counter_attr.attr,
-	&cm_sidr_rep_counter_attr.attr,
-	&cm_lap_counter_attr.attr,
-	&cm_apr_counter_attr.attr,
-	NULL
+	struct ib_port_attribute attr;
+	unsigned short group;
+	unsigned short index;
 };
 
 struct cm_port {
 	struct cm_device *cm_dev;
 	struct ib_mad_agent *mad_agent;
 	u32 port_num;
-	struct cm_counter_group counter_group[CM_COUNTER_GROUPS];
+	atomic_long_t counters[CM_COUNTER_GROUPS][CM_ATTR_COUNT];
 };
 
 struct cm_device {
@@ -216,7 +174,6 @@ struct cm_device {
 
 struct cm_av {
 	struct cm_port *port;
-	union ib_gid dgid;
 	struct rdma_ah_attr ah_attr;
 	u16 pkey_index;
 	u8 timeout;
@@ -249,6 +206,7 @@ struct cm_id_private {
 
 	struct rb_node service_node;
 	struct rb_node sidr_id_node;
+	u32 sidr_slid;
 	spinlock_t lock;	/* Do not acquire inside cm.lock */
 	struct completion comp;
 	refcount_t refcount;
@@ -827,7 +785,6 @@ cm_insert_remote_sidr(struct cm_id_private *cm_id_priv)
 	struct rb_node **link = &cm.remote_sidr_table.rb_node;
 	struct rb_node *parent = NULL;
 	struct cm_id_private *cur_cm_id_priv;
-	union ib_gid *port_gid = &cm_id_priv->av.dgid;
 	__be32 remote_id = cm_id_priv->id.remote_id;
 
 	while (*link) {
@@ -839,12 +796,9 @@ cm_insert_remote_sidr(struct cm_id_private *cm_id_priv)
 		else if (be32_gt(remote_id, cur_cm_id_priv->id.remote_id))
 			link = &(*link)->rb_right;
 		else {
-			int cmp;
-			cmp = memcmp(port_gid, &cur_cm_id_priv->av.dgid,
-				     sizeof *port_gid);
-			if (cmp < 0)
+			if (cur_cm_id_priv->sidr_slid < cm_id_priv->sidr_slid)
 				link = &(*link)->rb_left;
-			else if (cmp > 0)
+			else if (cur_cm_id_priv->sidr_slid > cm_id_priv->sidr_slid)
 				link = &(*link)->rb_right;
 			else
 				return cur_cm_id_priv;
@@ -1298,8 +1252,10 @@ struct ib_cm_id *ib_cm_insert_listen(struct ib_device *device,
 		return ERR_CAST(cm_id_priv);
 
 	err = cm_init_listen(cm_id_priv, service_id, 0);
-	if (err)
+	if (err) {
+		ib_destroy_cm_id(&cm_id_priv->id);
 		return ERR_PTR(err);
+	}
 
 	spin_lock_irq(&cm_id_priv->lock);
 	listen_id_priv = cm_insert_listen(cm_id_priv, cm_handler);
@@ -1791,7 +1747,7 @@ static u16 cm_get_bth_pkey(struct cm_work *work)
 
 	ret = ib_get_cached_pkey(ib_dev, port_num, pkey_index, &pkey);
 	if (ret) {
-		dev_warn_ratelimited(&ib_dev->dev, "ib_cm: Couldn't retrieve pkey for incoming request (port %d, pkey index %d). %d\n",
+		dev_warn_ratelimited(&ib_dev->dev, "ib_cm: Couldn't retrieve pkey for incoming request (port %u, pkey index %u). %d\n",
 				     port_num, pkey_index, ret);
 		return 0;
 	}
@@ -1968,8 +1924,8 @@ static void cm_dup_req_handler(struct cm_work *work,
 	struct ib_mad_send_buf *msg = NULL;
 	int ret;
 
-	atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-			counter[CM_REQ_COUNTER]);
+	atomic_long_inc(
+		&work->port->counters[CM_RECV_DUPLICATES][CM_REQ_COUNTER]);
 
 	/* Quick state check to discard duplicate REQs. */
 	spin_lock_irq(&cm_id_priv->lock);
@@ -2467,8 +2423,8 @@ static void cm_dup_rep_handler(struct cm_work *work)
 	if (!cm_id_priv)
 		return;
 
-	atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-			counter[CM_REP_COUNTER]);
+	atomic_long_inc(
+		&work->port->counters[CM_RECV_DUPLICATES][CM_REP_COUNTER]);
 	ret = cm_alloc_response_msg(work->port, work->mad_recv_wc, &msg);
 	if (ret)
 		goto deref;
@@ -2645,8 +2601,8 @@ static int cm_rtu_handler(struct cm_work *work)
 	if (cm_id_priv->id.state != IB_CM_REP_SENT &&
 	    cm_id_priv->id.state != IB_CM_MRA_REP_RCVD) {
 		spin_unlock_irq(&cm_id_priv->lock);
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_RTU_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_RTU_COUNTER]);
 		goto out;
 	}
 	cm_id_priv->id.state = IB_CM_ESTABLISHED;
@@ -2850,8 +2806,8 @@ static int cm_dreq_handler(struct cm_work *work)
 		cpu_to_be32(IBA_GET(CM_DREQ_REMOTE_COMM_ID, dreq_msg)),
 		cpu_to_be32(IBA_GET(CM_DREQ_LOCAL_COMM_ID, dreq_msg)));
 	if (!cm_id_priv) {
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_DREQ_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_DREQ_COUNTER]);
 		cm_issue_drep(work->port, work->mad_recv_wc);
 		trace_icm_no_priv_err(
 			IBA_GET(CM_DREQ_LOCAL_COMM_ID, dreq_msg),
@@ -2879,8 +2835,8 @@ static int cm_dreq_handler(struct cm_work *work)
 			ib_cancel_mad(cm_id_priv->msg);
 		break;
 	case IB_CM_TIMEWAIT:
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_DREQ_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_DREQ_COUNTER]);
 		msg = cm_alloc_response_msg_no_ah(work->port, work->mad_recv_wc);
 		if (IS_ERR(msg))
 			goto unlock;
@@ -2895,8 +2851,8 @@ static int cm_dreq_handler(struct cm_work *work)
 			cm_free_response_msg(msg);
 		goto deref;
 	case IB_CM_DREQ_RCVD:
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_DREQ_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_DREQ_COUNTER]);
 		goto unlock;
 	default:
 		trace_icm_dreq_unknown_err(&cm_id_priv->id);
@@ -3247,17 +3203,17 @@ static int cm_mra_handler(struct cm_work *work)
 		    cm_id_priv->id.lap_state != IB_CM_LAP_SENT ||
 		    ib_modify_mad(cm_id_priv->msg, timeout)) {
 			if (cm_id_priv->id.lap_state == IB_CM_MRA_LAP_RCVD)
-				atomic_long_inc(&work->port->
-						counter_group[CM_RECV_DUPLICATES].
-						counter[CM_MRA_COUNTER]);
+				atomic_long_inc(
+					&work->port->counters[CM_RECV_DUPLICATES]
+							     [CM_MRA_COUNTER]);
 			goto out;
 		}
 		cm_id_priv->id.lap_state = IB_CM_MRA_LAP_RCVD;
 		break;
 	case IB_CM_MRA_REQ_RCVD:
 	case IB_CM_MRA_REP_RCVD:
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_MRA_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_MRA_COUNTER]);
 		fallthrough;
 	default:
 		trace_icm_mra_unknown_err(&cm_id_priv->id);
@@ -3383,8 +3339,8 @@ static int cm_lap_handler(struct cm_work *work)
 	case IB_CM_LAP_IDLE:
 		break;
 	case IB_CM_MRA_LAP_SENT:
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_LAP_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_LAP_COUNTER]);
 		msg = cm_alloc_response_msg_no_ah(work->port, work->mad_recv_wc);
 		if (IS_ERR(msg))
 			goto unlock;
@@ -3401,8 +3357,8 @@ static int cm_lap_handler(struct cm_work *work)
 			cm_free_response_msg(msg);
 		goto deref;
 	case IB_CM_LAP_RCVD:
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_LAP_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_LAP_COUNTER]);
 		goto unlock;
 	default:
 		goto unlock;
@@ -3609,8 +3565,7 @@ static int cm_sidr_req_handler(struct cm_work *work)
 	cm_id_priv->tid = sidr_req_msg->hdr.tid;
 
 	wc = work->mad_recv_wc->wc;
-	cm_id_priv->av.dgid.global.subnet_prefix = cpu_to_be64(wc->slid);
-	cm_id_priv->av.dgid.global.interface_id = 0;
+	cm_id_priv->sidr_slid = wc->slid;
 	ret = cm_init_av_for_response(work->port, work->mad_recv_wc->wc,
 				      work->mad_recv_wc->recv_buf.grh,
 				      &cm_id_priv->av);
@@ -3621,8 +3576,8 @@ static int cm_sidr_req_handler(struct cm_work *work)
 	listen_cm_id_priv = cm_insert_remote_sidr(cm_id_priv);
 	if (listen_cm_id_priv) {
 		spin_unlock_irq(&cm.lock);
-		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
-				counter[CM_SIDR_REQ_COUNTER]);
+		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+						     [CM_SIDR_REQ_COUNTER]);
 		goto out; /* Duplicate message. */
 	}
 	cm_id_priv->id.state = IB_CM_SIDR_REQ_RCVD;
@@ -3871,12 +3826,10 @@ static void cm_send_handler(struct ib_mad_agent *mad_agent,
 	if (!cm_id_priv && (attr_index != CM_REJ_COUNTER))
 		msg->retries = 1;
 
-	atomic_long_add(1 + msg->retries,
-			&port->counter_group[CM_XMIT].counter[attr_index]);
+	atomic_long_add(1 + msg->retries, &port->counters[CM_XMIT][attr_index]);
 	if (msg->retries)
 		atomic_long_add(msg->retries,
-				&port->counter_group[CM_XMIT_RETRIES].
-				counter[attr_index]);
+				&port->counters[CM_XMIT_RETRIES][attr_index]);
 
 	if (cm_id_priv)
 		cm_process_send_error(cm_id_priv, msg, state,
@@ -4097,8 +4050,7 @@ static void cm_recv_handler(struct ib_mad_agent *mad_agent,
 	}
 
 	attr_id = be16_to_cpu(mad_recv_wc->recv_buf.mad->mad_hdr.attr_id);
-	atomic_long_inc(&port->counter_group[CM_RECV].
-			counter[attr_id - CM_ATTR_ID_OFFSET]);
+	atomic_long_inc(&port->counters[CM_RECV][attr_id - CM_ATTR_ID_OFFSET]);
 
 	work = kmalloc(struct_size(work, path, paths), GFP_KERNEL);
 	if (!work) {
@@ -4300,59 +4252,74 @@ int ib_cm_init_qp_attr(struct ib_cm_id *cm_id,
 }
 EXPORT_SYMBOL(ib_cm_init_qp_attr);
 
-static ssize_t cm_show_counter(struct kobject *obj, struct attribute *attr,
-			       char *buf)
+static ssize_t cm_show_counter(struct ib_device *ibdev, u32 port_num,
+			       struct ib_port_attribute *attr, char *buf)
 {
-	struct cm_counter_group *group;
-	struct cm_counter_attribute *cm_attr;
+	struct cm_counter_attribute *cm_attr =
+		container_of(attr, struct cm_counter_attribute, attr);
+	struct cm_device *cm_dev = ib_get_client_data(ibdev, &cm_client);
 
-	group = container_of(obj, struct cm_counter_group, obj);
-	cm_attr = container_of(attr, struct cm_counter_attribute, attr);
+	if (WARN_ON(!cm_dev))
+		return -EINVAL;
 
-	return sysfs_emit(buf, "%ld\n",
-			  atomic_long_read(&group->counter[cm_attr->index]));
+	return sysfs_emit(
+		buf, "%ld\n",
+		atomic_long_read(
+			&cm_dev->port[port_num - 1]
+				 ->counters[cm_attr->group][cm_attr->index]));
 }
 
-static const struct sysfs_ops cm_counter_ops = {
-	.show = cm_show_counter
-};
-
-static struct kobj_type cm_counter_obj_type = {
-	.sysfs_ops = &cm_counter_ops,
-	.default_attrs = cm_counter_default_attrs
-};
-
-static int cm_create_port_fs(struct cm_port *port)
-{
-	int i, ret;
-
-	for (i = 0; i < CM_COUNTER_GROUPS; i++) {
-		ret = ib_port_register_module_stat(port->cm_dev->ib_device,
-						   port->port_num,
-						   &port->counter_group[i].obj,
-						   &cm_counter_obj_type,
-						   counter_group_names[i]);
-		if (ret)
-			goto error;
+#define CM_COUNTER_ATTR(_name, _group, _index)                                 \
+	{                                                                      \
+		.attr = __ATTR(_name, 0444, cm_show_counter, NULL),            \
+		.group = _group, .index = _index                               \
 	}
 
-	return 0;
+#define CM_COUNTER_GROUP(_group, _name)                                        \
+	static struct cm_counter_attribute cm_counter_attr_##_group[] = {      \
+		CM_COUNTER_ATTR(req, _group, CM_REQ_COUNTER),                  \
+		CM_COUNTER_ATTR(mra, _group, CM_MRA_COUNTER),                  \
+		CM_COUNTER_ATTR(rej, _group, CM_REJ_COUNTER),                  \
+		CM_COUNTER_ATTR(rep, _group, CM_REP_COUNTER),                  \
+		CM_COUNTER_ATTR(rtu, _group, CM_RTU_COUNTER),                  \
+		CM_COUNTER_ATTR(dreq, _group, CM_DREQ_COUNTER),                \
+		CM_COUNTER_ATTR(drep, _group, CM_DREP_COUNTER),                \
+		CM_COUNTER_ATTR(sidr_req, _group, CM_SIDR_REQ_COUNTER),        \
+		CM_COUNTER_ATTR(sidr_rep, _group, CM_SIDR_REP_COUNTER),        \
+		CM_COUNTER_ATTR(lap, _group, CM_LAP_COUNTER),                  \
+		CM_COUNTER_ATTR(apr, _group, CM_APR_COUNTER),                  \
+	};                                                                     \
+	static struct attribute *cm_counter_attrs_##_group[] = {               \
+		&cm_counter_attr_##_group[0].attr.attr,                        \
+		&cm_counter_attr_##_group[1].attr.attr,                        \
+		&cm_counter_attr_##_group[2].attr.attr,                        \
+		&cm_counter_attr_##_group[3].attr.attr,                        \
+		&cm_counter_attr_##_group[4].attr.attr,                        \
+		&cm_counter_attr_##_group[5].attr.attr,                        \
+		&cm_counter_attr_##_group[6].attr.attr,                        \
+		&cm_counter_attr_##_group[7].attr.attr,                        \
+		&cm_counter_attr_##_group[8].attr.attr,                        \
+		&cm_counter_attr_##_group[9].attr.attr,                        \
+		&cm_counter_attr_##_group[10].attr.attr,                       \
+		NULL,                                                          \
+	};                                                                     \
+	static const struct attribute_group cm_counter_group_##_group = {      \
+		.name = _name,                                                 \
+		.attrs = cm_counter_attrs_##_group,                            \
+	};
 
-error:
-	while (i--)
-		ib_port_unregister_module_stat(&port->counter_group[i].obj);
-	return ret;
+CM_COUNTER_GROUP(CM_XMIT, "cm_tx_msgs")
+CM_COUNTER_GROUP(CM_XMIT_RETRIES, "cm_tx_retries")
+CM_COUNTER_GROUP(CM_RECV, "cm_rx_msgs")
+CM_COUNTER_GROUP(CM_RECV_DUPLICATES, "cm_rx_duplicates")
 
-}
-
-static void cm_remove_port_fs(struct cm_port *port)
-{
-	int i;
-
-	for (i = 0; i < CM_COUNTER_GROUPS; i++)
-		ib_port_unregister_module_stat(&port->counter_group[i].obj);
-
-}
+static const struct attribute_group *cm_counter_groups[] = {
+	&cm_counter_group_CM_XMIT,
+	&cm_counter_group_CM_XMIT_RETRIES,
+	&cm_counter_group_CM_RECV,
+	&cm_counter_group_CM_RECV_DUPLICATES,
+	NULL,
+};
 
 static int cm_add_one(struct ib_device *ib_device)
 {
@@ -4381,6 +4348,8 @@ static int cm_add_one(struct ib_device *ib_device)
 	cm_dev->ack_delay = ib_device->attrs.local_ca_ack_delay;
 	cm_dev->going_down = 0;
 
+	ib_set_client_data(ib_device, &cm_client, cm_dev);
+
 	set_bit(IB_MGMT_METHOD_SEND, reg_req.method_mask);
 	rdma_for_each_port (ib_device, i) {
 		if (!rdma_cap_ib_cm(ib_device, i))
@@ -4396,7 +4365,8 @@ static int cm_add_one(struct ib_device *ib_device)
 		port->cm_dev = cm_dev;
 		port->port_num = i;
 
-		ret = cm_create_port_fs(port);
+		ret = ib_port_register_client_groups(ib_device, i,
+						     cm_counter_groups);
 		if (ret)
 			goto error1;
 
@@ -4425,8 +4395,6 @@ static int cm_add_one(struct ib_device *ib_device)
 		goto free;
 	}
 
-	ib_set_client_data(ib_device, &cm_client, cm_dev);
-
 	write_lock_irqsave(&cm.device_lock, flags);
 	list_add_tail(&cm_dev->list, &cm.device_list);
 	write_unlock_irqrestore(&cm.device_lock, flags);
@@ -4435,7 +4403,7 @@ static int cm_add_one(struct ib_device *ib_device)
 error3:
 	ib_unregister_mad_agent(port->mad_agent);
 error2:
-	cm_remove_port_fs(port);
+	ib_port_unregister_client_groups(ib_device, i, cm_counter_groups);
 error1:
 	port_modify.set_port_cap_mask = 0;
 	port_modify.clr_port_cap_mask = IB_PORT_CM_SUP;
@@ -4446,7 +4414,8 @@ error1:
 		port = cm_dev->port[i-1];
 		ib_modify_port(ib_device, port->port_num, 0, &port_modify);
 		ib_unregister_mad_agent(port->mad_agent);
-		cm_remove_port_fs(port);
+		ib_port_unregister_client_groups(ib_device, i,
+						 cm_counter_groups);
 	}
 free:
 	cm_device_put(cm_dev);
@@ -4494,7 +4463,8 @@ static void cm_remove_one(struct ib_device *ib_device, void *client_data)
 		port->mad_agent = NULL;
 		spin_unlock(&cm_dev->mad_agent_lock);
 		ib_unregister_mad_agent(mad_agent);
-		cm_remove_port_fs(port);
+		ib_port_unregister_client_groups(ib_device, i,
+						 cm_counter_groups);
 	}
 
 	cm_device_put(cm_dev);

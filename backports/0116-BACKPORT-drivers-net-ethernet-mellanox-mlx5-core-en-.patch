@@ -1,0 +1,74 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+
+Change-Id: I26abe6ad6a2b2b07cc594ff716334b85bb6fe11d
+---
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 32 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -38,7 +38,7 @@ enum mlx5e_icosq_wqe_type {
+ 	MLX5E_ICOSQ_WQE_NOP,
+ 	MLX5E_ICOSQ_WQE_UMR_RX,
+ 	MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR,
+-#ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_KTLS_RX_SUPPORT
+ 	MLX5E_ICOSQ_WQE_UMR_TLS,
+ 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
+ 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
+@@ -70,8 +70,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
+ void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
+ 
+ /* TX */
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
++
++#elif defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
++#else
++		       void *accel_priv);
++#endif
++#else /* HAVE_SELECT_QUEUE_FALLBACK_T */
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb);
++#endif
++
+ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev);
+ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget);
+ void mlx5e_free_txqsq_descs(struct mlx5e_txqsq *sq);
+@@ -235,7 +254,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+ {
+ 	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
+ 
+ 	*wq->db = cpu_to_be32(pc);
+ 
+@@ -427,8 +450,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+ 	case IPPROTO_UDP:
+ 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 		fallthrough;
++
+ 	case IPPROTO_TCP:
+-		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#ifdef HAVE_SKB_INNER_TRANSPORT_OFFSET
++       	eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#else
++		eseg->swp_inner_l4_offset = (skb_inner_transport_header(skb)  - skb->data) / 2;
++#endif /*HAVE_SKB_INNER_TRANSPORT_OFFSET*/
+ 		break;
+ 	}
+ }

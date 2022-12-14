@@ -1,0 +1,209 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
+
+Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
+---
+ drivers/infiniband/core/uverbs_main.c | 68 +++++++++++++++++++++++++--
+ 1 file changed, 64 insertions(+), 4 deletions(-)
+
+--- a/drivers/infiniband/core/uverbs_main.c
++++ b/drivers/infiniband/core/uverbs_main.c
+@@ -60,6 +60,9 @@
+ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("InfiniBand userspace verbs access");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ enum {
+ 	IB_UVERBS_MAJOR       = 231,
+@@ -74,7 +77,11 @@ enum {
+ static dev_t dynamic_uverbs_dev;
+ static struct class *uverbs_class;
+ 
++#ifndef HAVE_IDA_ALLOC_MAX
++static DECLARE_BITMAP(dev_map, IB_UVERBS_MAX_DEVICES);
++#else
+ static DEFINE_IDA(uverbs_ida);
++#endif
+ static int ib_uverbs_add_one(struct ib_device *device);
+ static void ib_uverbs_remove_one(struct ib_device *device, void *client_data);
+ 
+@@ -90,7 +97,6 @@ struct ib_ucontext *ib_uverbs_get_uconte
+ 	 * get_context, we get NULL or valid ucontext.
+ 	 */
+ 	struct ib_ucontext *ucontext = smp_load_acquire(&ufile->ucontext);
+-
+ 	if (!srcu_dereference(ufile->device->ib_dev,
+ 			      &ufile->device->disassociate_srcu))
+ 		return ERR_PTR(-EIO);
+@@ -522,8 +528,14 @@ static ssize_t verify_hdr(struct ib_uver
+ 			if (hdr->out_words * 8 < method_elm->resp_size)
+ 				return -ENOSPC;
+ 
++#ifdef HAVE_ACCESS_OK_HAS_3_PARAMS 
++ 			if (!access_ok(VERIFY_WRITE,
++ 				       u64_to_user_ptr(ex_hdr->response),
++ 				       (hdr->out_words + ex_hdr->provider_out_words) * 8))
++#else
+ 			if (!access_ok(u64_to_user_ptr(ex_hdr->response),
+ 				       (hdr->out_words + ex_hdr->provider_out_words) * 8))
++#endif
+ 				return -EFAULT;
+ 		} else {
+ 			if (hdr->out_words || ex_hdr->provider_out_words)
+@@ -766,11 +778,20 @@ static void rdma_umap_close(struct vm_ar
+  * Once the zap_vma_ptes has been called touches to the VMA will come here and
+  * we return a dummy writable zero page for all the pfns.
+  */
++#ifdef HAVE_VM_FAULT_T
++#ifdef HAVE_VM_OPERATIONS_STRUCT_HAS_FAULT
+ static vm_fault_t rdma_umap_fault(struct vm_fault *vmf)
++#else
++static int rdma_umap_fault(struct vm_fault *vmf)
++#endif/*HAVE_VM_OPERATIONS_STRUCT_HAS_FAULT*/
+ {
+ 	struct ib_uverbs_file *ufile = vmf->vma->vm_file->private_data;
+ 	struct rdma_umap_priv *priv = vmf->vma->vm_private_data;
++#ifdef HAVE_VM_OPERATIONS_STRUCT_HAS_FAULT
+ 	vm_fault_t ret = 0;
++#else
++	int ret = 0;
++#endif
+ 
+ 	if (!priv)
+ 		return VM_FAULT_SIGBUS;
+@@ -801,11 +822,13 @@ static vm_fault_t rdma_umap_fault(struct
+ 
+ 	return ret;
+ }
+-
++#endif
+ static const struct vm_operations_struct rdma_umap_ops = {
+ 	.open = rdma_umap_open,
+ 	.close = rdma_umap_close,
++#ifdef HAVE_VM_FAULT_T
+ 	.fault = rdma_umap_fault,
++#endif
+ };
+ 
+ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
+@@ -847,7 +870,11 @@ void uverbs_user_mmap_disassociate(struc
+ 		 * at a time to get the lock ordering right. Typically there
+ 		 * will only be one mm, so no big deal.
+ 		 */
++#ifdef HAVE_MMAP_READ_LOCK
+ 		mmap_read_lock(mm);
++#else
++		down_read(&mm->mmap_sem);
++#endif
+ 		mutex_lock(&ufile->umap_lock);
+ 		list_for_each_entry_safe (priv, next_priv, &ufile->umaps,
+ 					  list) {
+@@ -864,9 +891,18 @@ void uverbs_user_mmap_disassociate(struc
+ 				rdma_user_mmap_entry_put(priv->entry);
+ 				priv->entry = NULL;
+ 			}
++#ifndef HAVE_VM_FAULT_T
++			vma->vm_flags &= ~(VM_SHARED | VM_MAYSHARE);
++			vma->vm_ops = NULL;
++			kfree(priv);
++#endif
+ 		}
+ 		mutex_unlock(&ufile->umap_lock);
+-		mmap_read_unlock(mm);
++#ifdef HAVE_MMAP_READ_LOCK
++       	mmap_read_unlock(mm);
++#else
++		up_read(&mm->mmap_sem);
++#endif
+ 		mmput(mm);
+ 	}
+ }
+@@ -947,7 +983,11 @@ static int ib_uverbs_open(struct inode *
+ 
+ 	setup_ufile_idr_uobject(file);
+ 
++#ifdef HAVE_STREAM_OPEN
+ 	return stream_open(inode, filp);
++#else
++	return nonseekable_open(inode, filp);
++#endif
+ 
+ err_module:
+ 	module_put(ib_dev->ops.owner);
+@@ -1133,13 +1173,21 @@ static int ib_uverbs_add_one(struct ib_d
+ 	rcu_assign_pointer(uverbs_dev->ib_dev, device);
+ 	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
+ 
++#ifdef HAVE_IDA_ALLOC_MAX
+ 	devnum = ida_alloc_max(&uverbs_ida, IB_UVERBS_MAX_DEVICES - 1,
+ 			       GFP_KERNEL);
+ 	if (devnum < 0) {
++#else
++	devnum = find_first_zero_bit(dev_map, IB_UVERBS_MAX_DEVICES);
++	if (devnum >= IB_UVERBS_MAX_DEVICES) {
++#endif
+ 		ret = -ENOMEM;
+ 		goto err;
+ 	}
+ 	uverbs_dev->devnum = devnum;
++#ifndef HAVE_IDA_ALLOC_MAX
++	set_bit(devnum, dev_map);
++#endif
+ 	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
+ 		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
+ 	else
+@@ -1164,7 +1212,11 @@ static int ib_uverbs_add_one(struct ib_d
+ 	return 0;
+ 
+ err_uapi:
++#ifndef HAVE_IDA_ALLOC_MAX
++	clear_bit(devnum, dev_map);
++#else
+ 	ida_free(&uverbs_ida, devnum);
++#endif
+ err:
+ 	if (refcount_dec_and_test(&uverbs_dev->refcount))
+ 		ib_uverbs_comp_dev(uverbs_dev);
+@@ -1197,7 +1249,6 @@ static void ib_uverbs_free_hw_resources(
+ 
+ 		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
+ 		kref_put(&file->ref, ib_uverbs_release_file);
+-
+ 		mutex_lock(&uverbs_dev->lists_mutex);
+ 	}
+ 	mutex_unlock(&uverbs_dev->lists_mutex);
+@@ -1211,7 +1262,11 @@ static void ib_uverbs_remove_one(struct
+ 	int wait_clients = 1;
+ 
+ 	cdev_device_del(&uverbs_dev->cdev, &uverbs_dev->dev);
++#ifndef HAVE_IDA_ALLOC_MAX
++	clear_bit(uverbs_dev->devnum, dev_map);
++#else
+ 	ida_free(&uverbs_ida, uverbs_dev->devnum);
++#endif
+ 
+ 	if (device->ops.disassociate_ucontext) {
+ 		/* We disassociate HW resources and immediately return.
+@@ -1274,6 +1329,7 @@ static int __init ib_uverbs_init(void)
+ 	uverbs_class->devnode = uverbs_devnode;
+ 
+ 	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
++
+ 	if (ret) {
+ 		pr_err("user_verbs: couldn't create abi_version attribute\n");
+ 		goto out_class;
+@@ -1310,7 +1366,11 @@ static void __exit ib_uverbs_cleanup(voi
+ 				 IB_UVERBS_NUM_FIXED_MINOR);
+ 	unregister_chrdev_region(dynamic_uverbs_dev,
+ 				 IB_UVERBS_NUM_DYNAMIC_MINOR);
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 	mmu_notifier_synchronize();
++#endif
++#endif
+ }
+ 
+ module_init(ib_uverbs_init);

@@ -172,9 +172,9 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	struct mlx5_flow_destination dest[2];
 	struct mlx5_modify_hdr *modify_hdr;
 	struct mlx5_flow_act flow_act = {};
+	struct mlx5_flow_spec *spec;
 	struct mlx5_flow_handle *rule;
 	struct mlx5_fc *flow_counter;
-	struct mlx5_flow_spec *spec;
 	struct mlx5_flow_table *ft;
 	struct mlx5_flow_group *g;
 	u32 *flow_group_in;
@@ -214,8 +214,8 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 
 	/* Rx Table 1 - default forward rule */
 	memset(dest, 0, 2 * sizeof(struct mlx5_flow_destination));
-	memset(&flow_act, 0, sizeof(flow_act));
 	memset(spec, 0, sizeof(*spec));
+	memset(&flow_act, 0, sizeof(flow_act));
 	flow_act.flags = FLOW_ACT_NO_APPEND;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
@@ -260,7 +260,6 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	esw_ipsec_decap_miss_rule_counter(esw) = flow_counter;
 
 	memset(dest, 0, 2 * sizeof(struct mlx5_flow_destination));
-	memset(spec, 0, sizeof(*spec));
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_DROP | MLX5_FLOW_CONTEXT_ACTION_COUNT;
 	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
 	dest[0].counter_id = mlx5_fc_id(esw_ipsec_decap_miss_rule_counter(esw));
@@ -284,10 +283,10 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 
 	MLX5_SET(set_action_in, action, action_type, MLX5_ACTION_TYPE_SET);
 	MLX5_SET(set_action_in, action, field, MLX5_ACTION_IN_FIELD_METADATA_REG_C_1);
-	MLX5_SET(set_action_in, action, data, BIT(31));
-	MLX5_SET(set_action_in, action, offset, 0);
-	MLX5_SET(set_action_in, action, length, 32);
-	modify_hdr = mlx5_modify_header_alloc(mdev, MLX5_FLOW_NAMESPACE_FDB_KERNEL, 1, action);
+	MLX5_SET(set_action_in, action, data, 1);
+	MLX5_SET(set_action_in, action, offset, 31);
+	MLX5_SET(set_action_in, action, length, 1);
+	modify_hdr = mlx5_modify_header_alloc(mdev, MLX5_FLOW_NAMESPACE_FDB, 1, action);
 	if (IS_ERR(modify_hdr)) {
 		err = PTR_ERR(modify_hdr);
 		esw_warn(esw->dev, "fail to alloc ipsec decap set modify_header_id err=%d\n", err);
@@ -295,13 +294,15 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	}
 	esw_ipsec_decap_modify_hdr(esw) = modify_hdr;
 
+	/* Rx Table 2 - check ipsec_syndrome and aso_return_reg (set to REG_C_5) */
 	memset(dest, 0, 2 * sizeof(struct mlx5_flow_destination));
 	memset(spec, 0, sizeof(*spec));
 	memset(&flow_act, 0, sizeof(flow_act));
+
 	memset(&reformat_params, 0, sizeof(reformat_params));
 	reformat_params.type = MLX5_REFORMAT_TYPE_DEL_ESP_TRANSPORT;
 	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, &reformat_params,
-							   MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+							   MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(flow_act.pkt_reformat)) {
 		err = PTR_ERR(flow_act.pkt_reformat);
 		esw_warn(esw->dev, "Failed to allocate delete esp reformat, err=%d\n", err);
@@ -708,7 +709,7 @@ int mlx5_esw_ipsec_create(struct mlx5_eswitch *esw)
 		return -ENOMEM;
 
 	esw_ipsec_priv(esw) = ipsec_priv;
-	ns = mlx5_get_flow_namespace(esw->dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+	ns = mlx5_get_flow_namespace(esw->dev, MLX5_FLOW_NAMESPACE_FDB);
 	err = esw_offloads_ipsec_tables_rx_create(ns, esw);
 	if (err) {
 		esw_warn(esw->dev, "Failed to create IPsec Rx offloads FDB Tables err %d\n", err);
@@ -771,8 +772,8 @@ void mlx5_esw_ipsec_full_offload_get_stats(struct mlx5_eswitch *esw, void *ipsec
 
 	if (!esw_ipsec_decap_rule_counter(esw) ||
 	    !esw_ipsec_decap_miss_rule_counter(esw) ||
-	    !esw_ipsec_tx_chk_counter(esw) ||
-	    !esw_ipsec_tx_chk_drop_counter(esw))
+	    !esw_ipsec_tx_chk_drop_counter(esw) ||
+	    !esw_ipsec_tx_chk_counter(esw))
 		return;
 
 	mlx5_fc_query(esw->dev, esw_ipsec_decap_rule_counter(esw),

@@ -59,6 +59,8 @@
 
 #define MLX5_ADEV_NAME "mlx5_core"
 
+#define MLX5_IRQ_EQ_CTRL (U8_MAX)
+
 enum {
 	MLX5_BOARD_ID_LEN = 64,
 };
@@ -132,6 +134,7 @@ enum {
 	MLX5_REG_MCIA		 = 0x9014,
 	MLX5_REG_MFRL		 = 0x9028,
 	MLX5_REG_MLCR		 = 0x902b,
+	MLX5_REG_MRTC		 = 0x902d,
 	MLX5_REG_MTRC_CAP	 = 0x9040,
 	MLX5_REG_MTRC_CONF	 = 0x9041,
 	MLX5_REG_MTRC_STDB	 = 0x9042,
@@ -393,22 +396,6 @@ struct mlx5_core_sig_ctx {
 	u32			sigerr_count;
 };
 
-enum {
-	MLX5_MKEY_MR = 1,
-	MLX5_MKEY_MW,
-	MLX5_MKEY_INDIRECT_DEVX,
-};
-
-struct mlx5_core_mkey {
-	u64			iova;
-	u64			size;
-	u32			key;
-	u32			pd;
-	u32			type;
-	struct wait_queue_head wait;
-	refcount_t usecount;
-};
-
 #define MLX5_24BIT_MASK		((1 << 24) - 1)
 
 enum mlx5_res_type {
@@ -484,12 +471,13 @@ struct mlx5_core_health {
 	spinlock_t			wq_lock;
 	struct workqueue_struct	       *wq;
 	unsigned long			flags;
+	struct mlx5_fw_crdump		*crdump;
+	struct mlx5_health_recoveries	recoveries;
 	struct work_struct		fatal_report_work;
 	struct work_struct		report_work;
 	struct devlink_health_reporter *fw_reporter;
 	struct devlink_health_reporter *fw_fatal_reporter;
-	struct mlx5_fw_crdump		*crdump;
-	struct mlx5_health_recoveries	recoveries;
+	struct delayed_work		update_fw_log_ts_work;
 };
 
 struct mlx5_qp_table {
@@ -582,6 +570,10 @@ struct mlx5_fc_stats {
 	unsigned long next_query;
 	unsigned long sampling_interval; /* jiffies */
 	u32 *bulk_query_out;
+	int bulk_query_len;
+	size_t num_counters;
+	bool bulk_query_alloc_failed;
+	unsigned long next_bulk_query_alloc;
 	struct mlx5_fc_pool fc_pool;
 };
 
@@ -709,7 +701,7 @@ struct mlx5_priv {
 	struct mlx5_debugfs_entries dbg;
 
 	/* start: alloc staff */
-	/* protect buffer alocation according to numa node */
+	/* protect buffer allocation according to numa node */
 	struct mutex            alloc_mutex;
 	int                     numa_node;
 
@@ -751,7 +743,6 @@ struct mlx5_priv {
 	struct mlx5_sf_hw_table *sf_hw_table;
 	struct mlx5_sf_table *sf_table;
 #endif
-	cpumask_var_t available_cpus;
 };
 
 enum mlx5_device_state {
@@ -836,13 +827,11 @@ struct mlx5e_resources {
 	struct mlx5e_hw_objs {
 		u32                        pdn;
 		struct mlx5_td             td;
-		struct mlx5_core_mkey      mkey;
+		u32			   mkey;
 		struct mlx5_sq_bfreg       bfreg;
 	} hw_objs;
 	struct devlink_port dl_port;
 	struct net_device *uplink_netdev;
-	u32                        max_rl_queues;
-
 	struct {
 		bool ct_action_on_nat_conns;
 		bool ct_labels_mapping;
@@ -938,6 +927,11 @@ struct mlx5_profile {
 	} mr_cache[MAX_MR_CACHE_ENTRIES];
 };
 
+struct mlx5_hca_cap {
+	u32 cur[MLX5_UN_SZ_DW(hca_cap_union)];
+	u32 max[MLX5_UN_SZ_DW(hca_cap_union)];
+};
+
 struct mlx5_diag_cnt_id {
 	u16                     id;
 	bool                    enabled;
@@ -957,11 +951,6 @@ struct mlx5_diag_cnt {
 struct mlx5_local_lb {
 	bool user_force_disable;
 	bool driver_state;
-};
-
-struct mlx5_hca_cap {
-	u32 cur[MLX5_UN_SZ_DW(hca_cap_union)];
-	u32 max[MLX5_UN_SZ_DW(hca_cap_union)];
 };
 
 struct mlx5_core_dev {
@@ -1196,17 +1185,6 @@ mlx5_frag_buf_get_idx_last_contig_stride(struct mlx5_frag_buf_ctrl *fbc, u32 ix)
 	return min_t(u32, last_frag_stride_idx - fbc->strides_offset, fbc->sz_m1);
 }
 
-static inline int
-mlx5_get_dev_index(struct mlx5_core_dev *dev)
-{
-	int idx = MLX5_CAP_GEN(dev, native_port_num);
-
-	if (idx >= 1 && idx <= MLX5_MAX_PORTS)
-		return idx - 1;
-	else
-		return PCI_FUNC(dev->pdev->devfn);
-}
-
 enum {
 	CMD_ALLOWED_OPCODE_ALL,
 };
@@ -1267,8 +1245,6 @@ int mlx5_core_other_function_get_caps(struct mlx5_core_dev *dev,
 int mlx5_core_other_function_set_caps(struct mlx5_core_dev *dev,
 				      const void *hca_cap_on_behalf,
 				      u16 function_id);
-int mlx5_cmd_alloc_uar(struct mlx5_core_dev *dev, u32 *uarn);
-int mlx5_cmd_free_uar(struct mlx5_core_dev *dev, u32 uarn);
 void mlx5_health_flush(struct mlx5_core_dev *dev);
 void mlx5_health_cleanup(struct mlx5_core_dev *dev);
 int mlx5_health_init(struct mlx5_core_dev *dev);
@@ -1286,13 +1262,11 @@ struct mlx5_cmd_mailbox *mlx5_alloc_cmd_mailbox_chain(struct mlx5_core_dev *dev,
 						      gfp_t flags, int npages);
 void mlx5_free_cmd_mailbox_chain(struct mlx5_core_dev *dev,
 				 struct mlx5_cmd_mailbox *head);
-int mlx5_core_create_mkey(struct mlx5_core_dev *dev,
-			  struct mlx5_core_mkey *mkey,
-			  u32 *in, int inlen);
-int mlx5_core_destroy_mkey(struct mlx5_core_dev *dev,
-			   struct mlx5_core_mkey *mkey);
-int mlx5_core_query_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mkey *mkey,
-			 u32 *out, int outlen);
+int mlx5_core_create_mkey(struct mlx5_core_dev *dev, u32 *mkey, u32 *in,
+			  int inlen);
+int mlx5_core_destroy_mkey(struct mlx5_core_dev *dev, u32 mkey);
+int mlx5_core_query_mkey(struct mlx5_core_dev *dev, u32 mkey, u32 *out,
+			 int outlen);
 int mlx5_core_alloc_pd(struct mlx5_core_dev *dev, u32 *pdn);
 int mlx5_core_dealloc_pd(struct mlx5_core_dev *dev, u32 pdn);
 int mlx5_pagealloc_init(struct mlx5_core_dev *dev);
@@ -1382,7 +1356,7 @@ static inline u8 mlx5_mkey_variant(u32 mkey)
 }
 
 /* Async-atomic event notifier used by mlx5 core to forward FW
- * evetns recived from event queue to mlx5 consumers.
+ * evetns received from event queue to mlx5 consumers.
  * Optimise event queue dipatching.
  */
 int mlx5_notifier_register(struct mlx5_core_dev *dev, struct notifier_block *nb);
@@ -1408,6 +1382,7 @@ int mlx5_cmd_destroy_vport_lag(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_roce(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_sriov(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_active(struct mlx5_core_dev *dev);
+bool mlx5_lag_mode_is_hash(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_master(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_shared_fdb(struct mlx5_core_dev *dev);
 struct net_device *mlx5_lag_get_roce_netdev(struct mlx5_core_dev *dev);
@@ -1517,6 +1492,16 @@ static inline int mlx5_core_native_port_num(struct mlx5_core_dev *dev)
 	return MLX5_CAP_GEN(dev, native_port_num);
 }
 
+static inline int mlx5_get_dev_index(struct mlx5_core_dev *dev)
+{
+	int idx = MLX5_CAP_GEN(dev, native_port_num);
+
+	if (idx >= 1 && idx <= MLX5_MAX_PORTS)
+		return idx - 1;
+	else
+		return PCI_FUNC(dev->pdev->devfn);
+}
+
 enum {
 	MLX5_TRIGGERED_CMD_COMP = (u64)1 << 32,
 };
@@ -1525,11 +1510,12 @@ static inline bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev)
 {
 	struct devlink *devlink = priv_to_devlink(dev);
 	union devlink_param_value val;
+	int err;
 
-	devlink_param_driverinit_value_get(devlink,
-					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
-					   &val);
-	return val.vbool;
+	err = devlink_param_driverinit_value_get(devlink,
+						 DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
+						 &val);
+	return err ? MLX5_CAP_GEN(dev, roce) : val.vbool;
 }
 
 /* MLX5 Diagnostics */

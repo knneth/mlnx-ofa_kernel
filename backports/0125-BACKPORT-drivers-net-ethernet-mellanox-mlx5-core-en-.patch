@@ -1,0 +1,97 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+
+Change-Id: I3219dc8abed31bfe1e34c25c5f6a2e3ce80bbb1a
+---
+ .../ethernet/mellanox/mlx5/core/en/xsk/tx.c   | 38 +++++++++++++++++--
+ 1 file changed, 35 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+@@ -1,13 +1,22 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "tx.h"
+ #include "pool.h"
+ #include "en/xdp.h"
+ #include "en/params.h"
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
+-
+-int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags)
++#else
++#include <net/xdp_sock.h>
++#endif
++
++int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid
++#ifdef HAVE_NDO_XSK_WAKEUP
++		     , u32 flags
++#endif
++		     )
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 	struct mlx5e_params *params = &priv->channels.params;
+@@ -66,7 +75,11 @@ static void mlx5e_xsk_tx_post_err(struct
+ 
+ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	struct xsk_buff_pool *pool = sq->xsk_pool;
++#else
++	struct xdp_umem *pool = sq->umem;
++#endif
+ 	struct mlx5e_xmit_data xdptxd;
+ 	struct mlx5e_xdp_info xdpi;
+ 	bool work_done = true;
+@@ -86,8 +99,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			work_done = false;
+ 			break;
+ 		}
+-
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		if (!xsk_tx_peek_desc(pool, &desc)) {
++#else
++		if (!xsk_umem_consume_tx(pool, &desc)) {
++#endif
+ 			/* TX will get stuck until something wakes it up by
+ 			 * triggering NAPI. Currently it's expected that the
+ 			 * application calls sendto() if there are consumed, but
+@@ -96,11 +112,22 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			break;
+ 		}
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xdptxd.dma_addr = xsk_buff_raw_get_dma(pool, desc.addr);
+ 		xdptxd.data = xsk_buff_raw_get_data(pool, desc.addr);
++#else
++		xdptxd.dma_addr = xdp_umem_get_dma(pool, desc.addr);
++		xdptxd.data = xdp_umem_get_data(pool, desc.addr);
++#endif
+ 		xdptxd.len = desc.len;
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xsk_buff_raw_dma_sync_for_device(pool, xdptxd.dma_addr, xdptxd.len);
++#else
++		dma_sync_single_for_device(sq->pdev, xdptxd.dma_addr,
++					   xdptxd.len, DMA_BIDIRECTIONAL);
++
++#endif
+ 
+ 		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
+ 				      mlx5e_xmit_xdp_frame, sq, &xdptxd, &xdpi, check_result);
+@@ -119,8 +146,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			mlx5e_xdp_mpwqe_complete(sq);
+ 		mlx5e_xmit_xdp_doorbell(sq);
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_tx_release(pool);
++#else
++		xsk_umem_consume_tx_done(pool);
++#endif
+ 	}
+ 
+ 	return !(budget && work_done);
+ }
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

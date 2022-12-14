@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/rdma_netlink.h
+
+Change-Id: If34a02e37016c569e3f3624c8992938a32c80764
+---
+ include/rdma/rdma_netlink.h | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+--- a/include/rdma/rdma_netlink.h
++++ b/include/rdma/rdma_netlink.h
+@@ -3,6 +3,8 @@
+ #ifndef _RDMA_NETLINK_H
+ #define _RDMA_NETLINK_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/netlink.h>
+ #include <uapi/rdma/rdma_netlink.h>
+ 
+@@ -13,8 +15,12 @@ enum {
+ };
+ 
+ struct rdma_nl_cbs {
+-	int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh,
+-		    struct netlink_ext_ack *extack);
++#ifdef HAVE_NETLINK_EXT_ACK
++        int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh,
++                        struct netlink_ext_ack *extack);
++#else
++        int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh);
++#endif
+ 	int (*dump)(struct sk_buff *skb, struct netlink_callback *nlcb);
+ 	u8 flags;
+ };

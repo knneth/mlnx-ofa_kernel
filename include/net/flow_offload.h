@@ -313,7 +313,13 @@ void flow_rule_match_meta(const struct flow_rule *rule,
 #endif /* HAVE_FLOW_ACTION_POLICE */
 #define FLOW_ACTION_CT (FLOW_ACTION_POLICE + 1)
 #endif /* HAVE_FLOW_ACTION_CT */
+#ifdef HAVE_FLOW_ACTION_MPLS 
+#define NUM_FLOW_ACTIONS (FLOW_ACTION_MPLS_MANGLE + 1)
+#elif defined(HAVE_FLOW_ACTION_CT_METADATA)
+#define NUM_FLOW_ACTIONS (FLOW_ACTION_CT_METADATA + 1)
+#else
 #define NUM_FLOW_ACTIONS (FLOW_ACTION_CT + 1)
+#endif
 #endif /* HAVE_NUM_FLOW_ACTIONS */
 
 #ifndef HAVE_TC_SETUP_FLOW_ACTION

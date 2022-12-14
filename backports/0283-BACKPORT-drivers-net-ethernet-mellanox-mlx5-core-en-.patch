@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
+
+Change-Id: I46ac9d85e57188b9062a65261f637aa22e2a9250
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/rss.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
+@@ -327,7 +327,11 @@ err_out:
+ 
+ int mlx5e_rss_cleanup(struct mlx5e_rss *rss)
+ {
++#ifdef HAVE_REFCOUNT_DEC_IF_ONE
+ 	if (!refcount_dec_if_one(&rss->refcnt))
++#else
++	if (atomic_cmpxchg(&rss->refcnt, 1, 0) != 1)
++#endif
+ 		return -EBUSY;
+ 
+ 	mlx5e_rss_destroy_tirs(rss, false);

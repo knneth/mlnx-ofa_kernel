@@ -670,7 +670,7 @@ static void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 	if (action_type_set[DR_ACTION_TYP_ASO_FLOW_METER]) {
 		if (action_sz < DR_STE_ACTION_DOUBLE_SZ) {
 			dr_ste_v1_arr_init_next_match(&last_ste, added_stes, attr->gvmi);
-			action = MLX5_ADDR_OF(ste_mask_and_match_v1, last_ste, action);
+			action = MLX5_ADDR_OF(ste_mask_and_match, last_ste, action);
 			action_sz = DR_STE_ACTION_TRIPLE_SZ;
 		}
 		dr_ste_v1_set_aso_flow_meter(action,
@@ -696,7 +696,6 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 	u8 *action = MLX5_ADDR_OF(ste_match_bwc_v1, last_ste, action);
 	u8 action_sz = DR_STE_ACTION_DOUBLE_SZ;
 	bool allow_modify_hdr = true;
-	bool allow_encap = true;
 	bool allow_ctr = true;
 
 	if (action_type_set[DR_ACTION_TYP_TNL_L3_TO_L2]) {
@@ -708,14 +707,12 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 		allow_modify_hdr = false;
-		allow_encap = false;
 		allow_ctr = false;
 	} else if (action_type_set[DR_ACTION_TYP_TNL_L2_TO_L2]) {
 		dr_ste_v1_set_rx_decap(last_ste, action);
 		action_sz -= DR_STE_ACTION_SINGLE_SZ;
 		action += DR_STE_ACTION_SINGLE_SZ;
 		allow_modify_hdr = false;
-		allow_encap = false;
 		allow_ctr = false;
 	}
 
@@ -743,7 +740,6 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 		dr_ste_v1_set_pop_vlan(last_ste, action, attr->vlans.count);
 		action_sz -= DR_STE_ACTION_SINGLE_SZ;
 		action += DR_STE_ACTION_SINGLE_SZ;
-		allow_encap = false;
 		allow_ctr = false;
 
 		/* Check if vlan_pop and modify_hdr on same STE is supported */
@@ -767,7 +763,6 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 							  attr->single_modify_action);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
-		allow_encap = false;
 	}
 
 	if (action_type_set[DR_ACTION_TYP_PUSH_VLAN]) {
@@ -787,7 +782,6 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 						attr->vlans.headers[i]);
 			action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 			action += DR_STE_ACTION_DOUBLE_SZ;
-			allow_encap = false;
 		}
 	}
 
@@ -802,7 +796,6 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 			allow_modify_hdr = true;
 		}
 		dr_ste_v1_set_counter_id(last_ste, attr->ctr_id);
-		allow_encap = false;
 		allow_ctr = false;
 	}
 
@@ -837,7 +830,7 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 		allow_modify_hdr = false;
 	} else if (action_type_set[DR_ACTION_TYP_INSERT_HDR]) {
 		/* Modify header, decap, and encap must use different STEs */
-		if (!allow_encap || action_sz < DR_STE_ACTION_DOUBLE_SZ) {
+		if (!allow_modify_hdr || action_sz < DR_STE_ACTION_DOUBLE_SZ) {
 			dr_ste_v1_arr_init_next_match(&last_ste, added_stes, attr->gvmi);
 			action = MLX5_ADDR_OF(ste_mask_and_match_v1, last_ste, action);
 			action_sz = DR_STE_ACTION_TRIPLE_SZ;
@@ -849,7 +842,6 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 					 attr->reformat.size);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
-		allow_encap = false;
 		allow_modify_hdr = false;
 	} else if (action_type_set[DR_ACTION_TYP_REMOVE_HDR]) {
 		if (action_sz < DR_STE_ACTION_SINGLE_SZ) {
@@ -870,7 +862,7 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 	if (action_type_set[DR_ACTION_TYP_ASO_FLOW_METER]) {
 		if (action_sz < DR_STE_ACTION_DOUBLE_SZ) {
 			dr_ste_v1_arr_init_next_match(&last_ste, added_stes, attr->gvmi);
-			action = MLX5_ADDR_OF(ste_mask_and_match_v1, last_ste, action);
+			action = MLX5_ADDR_OF(ste_mask_and_match, last_ste, action);
 			action_sz = DR_STE_ACTION_TRIPLE_SZ;
 		}
 		dr_ste_v1_set_aso_flow_meter(action,
@@ -1807,8 +1799,8 @@ static int dr_ste_v1_build_tnl_header_0_1_tag(struct mlx5dr_match_param *value,
 {
 	struct mlx5dr_match_misc5 *misc5 = &value->misc5;
 
-	DR_STE_SET_TAG(tunnel_header_v1, tag, tunnel_header_0, misc5, tunnel_header_0);
-	DR_STE_SET_TAG(tunnel_header_v1, tag, tunnel_header_1, misc5, tunnel_header_1);
+	DR_STE_SET_TAG(tunnel_header, tag, tunnel_header_0, misc5, tunnel_header_0);
+	DR_STE_SET_TAG(tunnel_header, tag, tunnel_header_1, misc5, tunnel_header_1);
 
 	return 0;
 }
@@ -1887,7 +1879,7 @@ static int dr_ste_v1_build_src_gvmi_qpn_tag(struct mlx5dr_match_param *value,
 	struct mlx5dr_match_misc *misc = &value->misc;
 	struct mlx5dr_cmd_vport_cap *vport_cap;
 	struct mlx5dr_domain *dmn = sb->dmn;
-	struct mlx5dr_cmd_caps *caps;
+	struct mlx5dr_domain *vport_dmn;
 	u8 *bit_mask = sb->bit_mask;
 
 	DR_STE_SET_TAG(src_gvmi_qp_v1, tag, source_qp, misc, source_sqn);
@@ -1895,22 +1887,22 @@ static int dr_ste_v1_build_src_gvmi_qpn_tag(struct mlx5dr_match_param *value,
 	if (sb->vhca_id_valid) {
 		/* Find port GVMI based on the eswitch_owner_vhca_id */
 		if (misc->source_eswitch_owner_vhca_id == dmn->info.caps.gvmi)
-			caps = &dmn->info.caps;
+			vport_dmn = dmn;
 		else if (dmn->peer_dmn && (misc->source_eswitch_owner_vhca_id ==
 					   dmn->peer_dmn->info.caps.gvmi))
-			caps = &dmn->peer_dmn->info.caps;
+			vport_dmn = dmn->peer_dmn;
 		else
 			return -EINVAL;
 
-		 misc->source_eswitch_owner_vhca_id = 0;
+		misc->source_eswitch_owner_vhca_id = 0;
 	} else {
-		caps = &dmn->info.caps;
+		vport_dmn = dmn;
 	}
 
 	if (!MLX5_GET(ste_src_gvmi_qp_v1, bit_mask, source_gvmi))
 		return 0;
 
-	vport_cap = mlx5dr_get_vport_cap(caps, misc->source_port);
+	vport_cap = mlx5dr_domain_get_vport_cap(vport_dmn, misc->source_port);
 	if (!vport_cap) {
 		mlx5dr_err(dmn, "Vport 0x%x is disabled or invalid\n",
 			   misc->source_port);
@@ -2035,12 +2027,11 @@ dr_ste_v1_build_flex_parser_tnl_geneve_tlv_opt_exist_tag(struct mlx5dr_match_par
 							 struct mlx5dr_ste_build *sb,
 							 uint8_t *tag)
 {
-	uint8_t parser_id = sb->caps->flex_parser_id_geneve_tlv_option_0;
+	u8 parser_id = sb->caps->flex_parser_id_geneve_tlv_option_0;
 	struct mlx5dr_match_misc *misc = &value->misc;
 
 	if (misc->geneve_tlv_option_0_exist) {
-		MLX5_SET(ste_flex_parser_ok, tag, flex_parsers_ok,
-			 1 << parser_id);
+		MLX5_SET(ste_flex_parser_ok, tag, flex_parsers_ok, 1 << parser_id);
 		misc->geneve_tlv_option_0_exist = 0;
 	}
 
@@ -2447,6 +2438,7 @@ static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	.build_tnl_vxlan_gpe_init	= &dr_ste_v1_build_flex_parser_tnl_vxlan_gpe_init,
 	.build_tnl_geneve_init		= &dr_ste_v1_build_flex_parser_tnl_geneve_init,
 	.build_tnl_geneve_tlv_opt_init	= &dr_ste_v1_build_flex_parser_tnl_geneve_tlv_opt_init,
+	.build_tnl_geneve_tlv_opt_exist_init = &dr_ste_v1_build_flex_parser_tnl_geneve_tlv_opt_exist_init,
 	.build_register_0_init		= &dr_ste_v1_build_register_0_init,
 	.build_register_1_init		= &dr_ste_v1_build_register_1_init,
 	.build_src_gvmi_qpn_init	= &dr_ste_v1_build_src_gvmi_qpn_init,
@@ -2456,7 +2448,6 @@ static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	.build_tnl_header_0_1_init	= &dr_ste_v1_build_tnl_header_0_1_init,
 	.build_tnl_gtpu_flex_parser_0_init = &dr_ste_v1_build_tnl_gtpu_flex_parser_0_init,
 	.build_tnl_gtpu_flex_parser_1_init = &dr_ste_v1_build_tnl_gtpu_flex_parser_1_init,
-	.build_tnl_geneve_tlv_opt_exist_init = &dr_ste_v1_build_flex_parser_tnl_geneve_tlv_opt_exist_init,
 
 	/* Getters and Setters */
 	.ste_init			= &dr_ste_v1_init,

@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
+
+Change-Id: I96593219c6a7afbae6d87b4bd2cce7437475c981
+---
+ drivers/net/ethernet/mellanox/mlx5/core/port.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/port.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/port.c
+@@ -442,6 +442,7 @@ int mlx5_query_module_eeprom(struct mlx5
+ }
+ EXPORT_SYMBOL_GPL(mlx5_query_module_eeprom);
+ 
++#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
+ int mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
+ 				     struct mlx5_module_eeprom_query_params *params,
+ 				     u8 *data)
+@@ -484,6 +485,7 @@ int mlx5_query_module_eeprom_by_page(str
+ 	return mlx5_query_mcia(dev, params, data);
+ }
+ EXPORT_SYMBOL_GPL(mlx5_query_module_eeprom_by_page);
++#endif
+ 
+ static int mlx5_query_port_pvlc(struct mlx5_core_dev *dev, u32 *pvlc,
+ 				int pvlc_size,  u8 local_port)

@@ -325,6 +325,8 @@ static ssize_t vport_state_store(struct kobject *kobj,
 	struct mlx5_smart_nic_vport *tmp =
 		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
 	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, tmp->vport);
+	int opmod = MLX5_VPORT_STATE_OP_MOD_ESW_VPORT;
 	enum port_state_policy policy;
 	int err;
 
@@ -332,7 +334,25 @@ static ssize_t vport_state_store(struct kobject *kobj,
 	if (err)
 		return err;
 
-	err = mlx5_eswitch_set_vport_state(esw, tmp->vport, policy);
+	if (!mlx5_esw_allowed(esw))
+		return -EPERM;
+	if (IS_ERR(evport))
+		return PTR_ERR(evport);
+
+	mutex_lock(&esw->state_lock);
+
+	err = mlx5_modify_vport_admin_state(esw->dev, opmod,
+					    tmp->vport, 1, policy);
+	if (err) {
+		mlx5_core_warn(esw->dev, "Failed to set vport %d link state, opmod = %d, err = %d",
+			       tmp->vport, opmod, err);
+		goto unlock;
+	}
+
+	evport->info.link_state = policy;
+
+unlock:
+	mutex_unlock(&esw->state_lock);
 	return err ? err : count;
 }
 

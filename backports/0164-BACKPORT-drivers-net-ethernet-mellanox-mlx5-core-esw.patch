@@ -1,0 +1,107 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+
+Change-Id: I5c5eb70c94659b115ea0c99514fa343c43676712
+---
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 25 +++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+@@ -981,7 +981,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
+ 			  enum mlx5_eswitch_vport_event enabled_events)
+ {
+ 	struct mlx5_vport *vport;
+-	int ret;
++	int ret = 0;
+ 
+ 	vport = mlx5_eswitch_get_vport(esw, vport_num);
+ 	if (IS_ERR(vport))
+@@ -1544,10 +1544,16 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+ 
+ void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw, bool clear_vf)
+ {
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	struct devlink *devlink = priv_to_devlink(esw->dev);
++#endif
+ 	int old_mode;
+ 
++#ifdef HAVE_LOCKUP_ASSERT_HELD_WRITE
+ 	lockdep_assert_held_write(&esw->mode_lock);
++#else
++	lockdep_assert_held(&esw->mode_lock);
++#endif
+ 
+ 	if (esw->mode == MLX5_ESWITCH_NONE)
+ 		return;
+@@ -1574,8 +1580,9 @@ void mlx5_eswitch_disable_locked(struct
+ 
+ 	if (old_mode == MLX5_ESWITCH_OFFLOADS)
+ 		mlx5_rescan_drivers(esw->dev);
+-
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	devlink_rate_nodes_destroy(devlink);
++#endif
+ 
+ #if IS_ENABLED(CONFIG_MLXDEVM)
+ 	mlx5_devm_rate_nodes_destroy(esw->dev);
+@@ -1897,7 +1904,10 @@ int mlx5_eswitch_init(struct mlx5_core_d
+ 	ida_init(&esw->offloads.vport_metadata_ida);
+ 	xa_init_flags(&esw->offloads.vhca_map, XA_FLAGS_ALLOC);
+ 	mutex_init(&esw->state_lock);
++#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
+ 	lockdep_register_key(&esw->mode_lock_key);
++// TODO: VALENTINE MARK B HELP #else
++#endif
+ 	init_rwsem(&esw->mode_lock);
+ 	lockdep_set_class(&esw->mode_lock, &esw->mode_lock_key);
+ 	refcount_set(&esw->qos.refcnt, 0);
+@@ -1980,7 +1990,10 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+ 	esw->dev->priv.eswitch = NULL;
+ 	destroy_workqueue(esw->work_queue);
+ 	WARN_ON(refcount_read(&esw->qos.refcnt));
++#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
+ 	lockdep_unregister_key(&esw->mode_lock_key);
++// TODO: VALENTINE MARK B HELP #else
++#endif
+ 	mutex_destroy(&esw->state_lock);
+ 	WARN_ON(!xa_empty(&esw->offloads.vhca_map));
+ 	xa_destroy(&esw->offloads.vhca_map);
+@@ -2358,9 +2371,13 @@ int mlx5_eswitch_get_vport_config(struct
+ 	ivi->linkstate = evport->info.link_state;
+ 	ivi->vlan = evport->info.vlan;
+ 	ivi->qos = evport->info.qos;
++#ifdef HAVE_VF_VLAN_PROTO
+ 	ivi->vlan_proto = evport->info.vlan_proto;
++#endif
+ 	ivi->spoofchk = evport->info.spoofchk;
++#ifdef HAVE_VF_INFO_TRUST
+ 	ivi->trusted = evport->info.trusted;
++#endif
+ 	if (evport->qos.enabled) {
+ 		ivi->min_tx_rate = evport->qos.min_rate;
+ 		ivi->max_tx_rate = evport->qos.max_rate;
+@@ -2422,7 +2439,9 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
+ 	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
+ 	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	struct mlx5_vport_drop_stats stats = {};
++#endif
+ 	int err = 0;
+ 	u32 *out;
+ 
+@@ -2482,11 +2501,13 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	vf_stats->broadcast =
+ 		MLX5_GET_CTR(out, received_eth_broadcast.packets);
+ 
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	err = mlx5_esw_query_vport_drop_stats(esw->dev, vport, &stats);
+ 	if (err)
+ 		goto free_out;
+ 	vf_stats->rx_dropped = stats.rx_dropped;
+ 	vf_stats->tx_dropped = stats.tx_dropped;
++#endif
+ 
+ free_out:
+ 	kvfree(out);

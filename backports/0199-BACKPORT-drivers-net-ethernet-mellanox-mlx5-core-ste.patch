@@ -1,0 +1,35 @@
+From: Yevgeny Kliteynik <kliteyn@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
+
+Change-Id: Iff8ba4ae191f1c44a80953dad5bb8b9c78bcf701
+---
+ .../mellanox/mlx5/core/steering/dr_icm_pool.c   | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
+@@ -3,6 +3,23 @@
+ 
+ #include "dr_types.h"
+ 
++/* Define local implementation of kvfree to replace compat
++ * layer implementation, so that memtrack will see the calling
++ * function directly - otherwise it is hidden by compat's
++ * "backport_kvfree" function in the stack.
++ * Unfortunately, compat's backport_kvfree is defined even in
++ * some kernels that do have kvfree.
++ */
++#ifdef kvfree
++#undef kvfree
++#endif
++#define kvfree(p)	{ if (is_vmalloc_addr(p)) vfree(p); else kfree(p); }
++
++#ifdef backport_kvfree
++#undef backport_kvfree
++#endif
++#define backport_kvfree	kvfree
++
+ #define DR_ICM_MODIFY_HDR_ALIGN_BASE 64
+ #define DR_ICM_MODIFY_HDR_GRANULARITY_4K 12
+ #define DR_ICM_POOL_HOT_MEMORY_FRACTION 4

@@ -1,0 +1,58 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
+
+Change-Id: I62711b8ce18981a6b191649e805d4a7f914099ba
+---
+ drivers/infiniband/core/uverbs_cmd.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/uverbs_cmd.c
++++ b/drivers/infiniband/core/uverbs_cmd.c
+@@ -217,6 +217,10 @@ int ib_alloc_ucontext(struct uverbs_attr
+ 	ucontext = rdma_zalloc_drv_obj(ib_dev, ib_ucontext);
+ 	if (!ucontext)
+ 		return -ENOMEM;
++#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
++	mutex_init(&ucontext->per_mm_list_lock);
++	INIT_LIST_HEAD(&ucontext->per_mm_list);
++#endif
+ 
+ 	ucontext->device = ib_dev;
+ 	ucontext->ufile = ufile;
+@@ -242,10 +246,12 @@ int ib_init_ucontext(struct uverbs_attr_
+ 		goto err;
+ 	}
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ret = ib_rdmacg_try_charge(&ucontext->cg_obj, ucontext->device,
+ 				   RDMACG_RESOURCE_HCA_HANDLE);
+ 	if (ret)
+ 		goto err;
++#endif
+ 
+ 	ret = ucontext->device->ops.alloc_ucontext(ucontext,
+ 						   &attrs->driver_udata);
+@@ -265,8 +271,10 @@ int ib_init_ucontext(struct uverbs_attr_
+ 	return 0;
+ 
+ err_uncharge:
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&ucontext->cg_obj, ucontext->device,
+ 			   RDMACG_RESOURCE_HCA_HANDLE);
++#endif
+ err:
+ 	mutex_unlock(&file->ucontext_lock);
+ 	up_read(&file->hw_destroy_rwsem);
+@@ -3357,7 +3365,11 @@ static int __uverbs_create_xsrq(struct u
+ 	struct ib_srq                   *srq;
+ 	struct ib_srq_init_attr          attr;
+ 	int ret;
+-	struct ib_uobject *xrcd_uobj;
++#ifndef uninitialized_var
++	struct ib_uobject               *xrcd_uobj;
++#else
++	struct ib_uobject               *uninitialized_var(xrcd_uobj);
++#endif
+ 	struct ib_device *ib_dev;
+ 
+ 	obj = (struct ib_usrq_object *)uobj_alloc(UVERBS_OBJECT_SRQ, attrs,

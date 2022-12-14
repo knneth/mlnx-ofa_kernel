@@ -1149,7 +1149,8 @@ static int mlx5e_update_trust_state_hw(struct mlx5e_priv *priv, void *context)
 
 static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 {
-	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
+	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC,
+						.mode = TC_MQPRIO_MODE_DCB};
 	struct mlx5e_params new_params;
 	bool reset = true;
 	int err;
@@ -1171,8 +1172,16 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 	mutex_unlock(&priv->state_lock);
 
 	/* In DSCP trust state, we need 8 send queues per channel */
-	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
+		mutex_lock(&priv->state_lock);
 		mlx5e_setup_tc_mqprio(priv, &mqprio);
+		mutex_unlock(&priv->state_lock);
+	} else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP) {
+		mutex_lock(&priv->state_lock);
+		mqprio.qopt.num_tc = priv->pcp_tc_num;
+		mlx5e_setup_tc_mqprio(priv, &mqprio);
+		mutex_unlock(&priv->state_lock);
+	}
 
 	return err;
 }
@@ -1194,7 +1203,7 @@ static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
 	struct mlx5_core_dev *mdev = priv->mdev;
 	int err;
 	u8 trust_state;
-	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
+	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
 	const bool take_rtnl = priv->netdev->reg_state == NETREG_REGISTERED;
 
 	if (!MLX5_DSCP_SUPPORTED(mdev)) {
@@ -1206,6 +1215,16 @@ static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
 	if (err)
 		return err;
 	WRITE_ONCE(priv->dcbx_dp.trust_state, trust_state);
+
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP && priv->dcbx.dscp_app_cnt) {
+		/*
+		 * Align the driver state with the register state.
+		 * Temporary state change is required to enable the app list reset.
+		 */
+		priv->dcbx_dp.trust_state = MLX5_QPTS_TRUST_DSCP;
+		mlx5e_dcbnl_delete_app(priv);
+		priv->dcbx_dp.trust_state = MLX5_QPTS_TRUST_PCP;
+	}
 
 	mlx5e_params_calc_trust_tx_min_inline_mode(priv->mdev, &priv->channels.params,
 						   priv->dcbx_dp.trust_state);

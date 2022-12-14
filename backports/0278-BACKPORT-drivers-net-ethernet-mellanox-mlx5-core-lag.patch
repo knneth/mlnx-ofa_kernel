@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+
+Change-Id: Ibcc893ccff6a13435e24c761e1c4c426ec118095
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. */
+ 
++#ifdef HAVE_INFO_HASH_TYPE
+ #include <linux/netdevice.h>
+ #include "lag.h"
+ 
+@@ -268,12 +269,14 @@ static int mlx5_lag_set_definer(u32 *mat
+ 		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
+ 				 outer_smac_15_0);
+ 
++#ifdef HAVE_NETDEV_LAG_HASH_VLAN_SRCMAC
+ 		if (hash == NETDEV_LAG_HASH_VLAN_SRCMAC) {
+ 			MLX5_SET_TO_ONES(match_definer_format_0,
+ 					 match_definer_mask,
+ 					 outer_first_vlan_vid);
+ 			break;
+ 		}
++#endif
+ 
+ 		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
+ 				 outer_ethertype);
+@@ -639,3 +642,4 @@ void mlx5_lag_port_sel_destroy(struct ml
+ 	mlx5_lag_destroy_definers(ldev);
+ 	memset(port_sel, 0, sizeof(*port_sel));
+ }
++#endif

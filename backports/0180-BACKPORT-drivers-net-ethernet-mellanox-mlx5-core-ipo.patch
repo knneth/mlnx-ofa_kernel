@@ -1,0 +1,33 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+
+Change-Id: Ic8ef4ce10a479d0772d212a8337a4fcc620caeed
+---
+ .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h  | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+@@ -114,8 +114,20 @@ struct mlx5i_tx_wqe {
+ 	((struct mlx5i_tx_wqe *)mlx5e_fetch_wqe(&(sq)->wq, pi, sizeof(struct mlx5i_tx_wqe)))
+ 
+ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+-		   struct mlx5_av *av, u32 dqpn, u32 dqkey, bool xmit_more);
++		   struct mlx5_av *av, u32 dqpn, u32 dqkey
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
++		   , bool xmit_more);
++#else
++		   );
++#endif
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
+ void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
++#elif defined(HAVE_NDO_GET_STATS64)
++struct rtnl_link_stats64 * mlx5i_get_stats(struct net_device *dev,
++					   struct rtnl_link_stats64 *stats);
++#else
++struct net_device_stats * mlx5i_get_stats(struct net_device *dev);
++#endif
+ 
+ #endif /* CONFIG_MLX5_CORE_IPOIB */
+ #endif /* __MLX5E_IPOB_H__ */

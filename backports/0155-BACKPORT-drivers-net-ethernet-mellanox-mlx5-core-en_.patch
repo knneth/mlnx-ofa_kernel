@@ -1,0 +1,92 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+
+Change-Id: Ib86105a2b804f1b91889f451e1108514e9bdd4d0
+---
+ .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 36 ++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+@@ -32,6 +32,7 @@
+ 
+ #include <linux/device.h>
+ #include <linux/netdevice.h>
++#include <linux/dcbnl.h>
+ #include "en.h"
+ #include "en_tc.h"
+ #include "eswitch.h"
+@@ -63,7 +64,13 @@ static ssize_t mlx5e_store_tc_num(struct
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+ 	struct net_device *netdev = priv->netdev;
+-	struct tc_mqprio_qopt_offload mqprio = { 0 };
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
++	struct tc_mqprio_qopt_offload mqprio = {{ 0 }};
++#else
++	struct tc_mqprio_qopt mqprio = { 0 };
++#endif
++#endif
+ 	int tc_num;
+ 	int err = 0;
+ 
+@@ -76,9 +83,17 @@ static ssize_t mlx5e_store_tc_num(struct
+ 		return -EINVAL;
+ 
+ 	rtnl_lock();
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ 	netdev_set_num_tc(netdev, tc_num);
++#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
+ 	mqprio.qopt.num_tc = tc_num;
++#else
++	mqprio.num_tc = tc_num;
++#endif
+ 	mlx5e_setup_tc_mqprio(priv, &mqprio);
++#else
++	mlx5e_setup_tc(netdev, tc_num);
++#endif
+ 	rtnl_unlock();
+ 	return count;
+ }
+@@ -956,10 +971,22 @@ static ssize_t mlx5e_store_force_local_l
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+ 	bool disable;
+ 	int err;
++#ifndef HAVE_KSTRTOBOOL
++	int udata;
+ 
++	err = sscanf(buf, "%d", &udata);
++	if (err != 1)
++		return -EINVAL;
++
++	if (udata >> 1)
++		return -EINVAL;
++
++	disable = udata ? true : false;
++#else
+ 	err = kstrtobool(buf, &disable);
+ 	if (err)
+ 		return -EINVAL;
++#endif
+ 
+ 	if (mdev->local_lb.user_force_disable != disable) {
+ 		mdev->local_lb.user_force_disable = disable;
+@@ -1239,10 +1266,17 @@ static struct attribute *prio_hp_attrs[]
+ 	&prio_hp_attr_rate.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(prio_hp);
++#endif
+ 
+ static struct kobj_type prio_hp_sysfs = {
+ 	.sysfs_ops     = &prio_hp_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = prio_hp_groups
++#else
+ 	.default_attrs = prio_hp_attrs
++#endif
+ };
+ 
+ int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)

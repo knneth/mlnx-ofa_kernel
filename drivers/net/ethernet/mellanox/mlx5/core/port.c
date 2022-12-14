@@ -929,15 +929,15 @@ static int mlx5_query_pddr(struct mlx5_core_dev *mdev,
 }
 
 int mlx5_query_pddr_troubleshooting_info(struct mlx5_core_dev *mdev,
-					 u16 *monitor_opcode,
-					 u8 *status_message)
+		u16 *monitor_opcode,
+		u8 *status_message)
 {
 	int outlen = MLX5_ST_SZ_BYTES(pddr_reg);
 	u32 out[MLX5_ST_SZ_DW(pddr_reg)] = {0};
 	int err;
 
 	err = mlx5_query_pddr(mdev, MLX5_PDDR_TROUBLESHOOTING_INFO_PAGE,
-			      out, outlen);
+			out, outlen);
 	if (err)
 		return err;
 

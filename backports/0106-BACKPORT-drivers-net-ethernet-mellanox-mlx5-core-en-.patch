@@ -1,0 +1,36 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+
+Change-Id: I81ac7dbd60cee74349caa353786e0608582a66b6
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+@@ -8,13 +8,16 @@
+ #include <linux/mlx5/fs.h>
+ #include <net/tc_act/tc_ct.h>
+ 
++#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
+ #include "en.h"
++#endif
+ 
+ struct mlx5_flow_attr;
+ struct mlx5e_tc_mod_hdr_acts;
+ struct mlx5_rep_uplink_priv;
+ struct mlx5e_tc_flow;
+ struct mlx5e_priv;
++struct mlx5e_post_act;
+ 
+ struct mlx5_fs_chains;
+ struct mlx5_tc_ct_priv;
+@@ -147,6 +150,8 @@ mlx5_tc_ct_set_ct_clear_regs(struct mlx5
+ 
+ #else /* CONFIG_MLX5_TC_CT */
+ 
++#include <net/flow_offload.h>
++
+ static inline struct mlx5_tc_ct_priv *
+ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
+ 		struct mod_hdr_tbl *mod_hdr,

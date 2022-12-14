@@ -2,7 +2,7 @@
 /* Copyright (c) 2021 Mellanox Technologies. */
 
 #include "eswitch.h"
-#include "en/flow_meter.h"
+#include "en/tc/meter.h"
 #include "esw/acl/helper.h"
 
 enum {
@@ -56,7 +56,7 @@ esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
 	if (meter->meter_hndl) {
 		mlx5e_free_flow_meter(vport->dev, meter->meter_hndl);
 		meter->meter_hndl = NULL;
-	}
+ 	}
 
 	if (meter->meter_tbl) {
 		mlx5_destroy_flow_table(meter->meter_tbl);
@@ -207,7 +207,7 @@ int
 esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 			    int rx_tx, int xps, u64 rate, u64 burst)
 {
-	struct mlx5_meter_handle *meter_hndl;
+	struct mlx5e_flow_meter_handle *meter_hndl;
 	struct mlx5_flow_meter_params params;
 	int ns, prio;
 	int err;
@@ -225,7 +225,7 @@ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 		if (IS_ERR(meter_hndl))
 			return PTR_ERR(meter_hndl);
 		meter->meter_hndl = meter_hndl;
-	}
+ 	}
 
 	params.mode = xps;
 	params.rate = rate;
@@ -367,7 +367,6 @@ mlx5_eswitch_set_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 {
 	struct vport_meter *meter;
 	struct mlx5_vport *vport;
-
 	int err;
 
 	if (esw->mode != MLX5_ESWITCH_OFFLOADS)
@@ -377,14 +376,16 @@ mlx5_eswitch_set_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 	if (IS_ERR_OR_NULL(vport))
 		return -EINVAL;
 
-	meter = esw_acl_get_meter(vport, rx_tx, xps);
-	if (!meter)
-		return -EOPNOTSUPP;
-
 	if (rx_tx == MLX5_RATE_LIMIT_TX)
 		mutex_lock(&vport->ingress.offloads.vf_meter_lock);
 	else
 		mutex_lock(&vport->egress.offloads.vf_meter_lock);
+
+	meter = esw_acl_get_meter(vport, rx_tx, xps);
+	if (!meter) {
+		err = -EOPNOTSUPP;
+		goto unlock;
+	}
 
 	switch (data_type) {
 	case MLX5_RATE_LIMIT_DATA_RATE:
@@ -399,6 +400,7 @@ mlx5_eswitch_set_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 		err = -EINVAL;
 	}
 
+unlock:
 	if (rx_tx == MLX5_RATE_LIMIT_TX)
 		mutex_unlock(&vport->ingress.offloads.vf_meter_lock);
 	else
@@ -414,6 +416,7 @@ mlx5_eswitch_get_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 	struct vport_meter *meter;
 	struct mlx5_vport *vport;
 	u64 bytes, packets;
+	int err = 0;
 
 	if (esw->mode != MLX5_ESWITCH_OFFLOADS)
 		return -EOPNOTSUPP;
@@ -428,8 +431,10 @@ mlx5_eswitch_get_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 		mutex_lock(&vport->egress.offloads.vf_meter_lock);
 
 	meter = esw_acl_get_meter(vport, rx_tx, xps);
-	if (!meter)
-		return -EOPNOTSUPP;
+	if (!meter) {
+		err = -EOPNOTSUPP;
+		goto unlock;
+	}
 
 	switch (data_type) {
 	case MLX5_RATE_LIMIT_DATA_RATE:
@@ -459,13 +464,14 @@ mlx5_eswitch_get_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 		*data += meter->bytes_dropped;
 		break;
 	default:
-		return -EINVAL;
+		err = -EINVAL;
 	}
 
+unlock:
 	if (rx_tx == MLX5_RATE_LIMIT_TX)
 		mutex_unlock(&vport->ingress.offloads.vf_meter_lock);
 	else
 		mutex_unlock(&vport->egress.offloads.vf_meter_lock);
 
-	return 0;
+	return err;
 }

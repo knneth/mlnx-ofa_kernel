@@ -1,0 +1,120 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+
+Change-Id: I07904c6d8990c67268169da0222f8bd1f0268de3
+---
+ .../ethernet/mellanox/mlx5/core/sriov_sysfs.c | 42 +++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+@@ -1160,6 +1160,9 @@ static struct attribute *vf_eth_attrs[]
+ 	&vf_attr_group.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(vf_eth);
++#endif
+ 
+ static struct attribute *vf_group_attrs[] = {
+ 	&vf_group_attr_max_tx_rate.attr,
+@@ -1167,26 +1170,44 @@ static struct attribute *vf_group_attrs[
+ 	&vf_group_attr_config.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(vf_group);
++#endif
+ 
+ static struct attribute *vf_paging_attrs[] = {
+ 	&vf_attr_page_limit.attr,
+ 	&vf_attr_num_pages.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(vf_paging);
++#endif
+ 
+ static struct kobj_type vf_type_eth = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = vf_eth_groups
++#else
+ 	.default_attrs = vf_eth_attrs
++#endif
+ };
+ 
+ static struct kobj_type vf_paging = {
+ 	.sysfs_ops     = &vf_paging_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = vf_paging_groups
++#else
+ 	.default_attrs = vf_paging_attrs
++#endif
+ };
+ 
+ static struct kobj_type vf_group = {
+ 	.sysfs_ops     = &vf_group_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = vf_group_groups
++#else
+ 	.default_attrs = vf_group_attrs
++#endif
+ };
+ 
+ static struct vf_attributes pf_attr_min_pf_tx_rate = \
+@@ -1196,10 +1217,17 @@ static struct attribute *pf_eth_attrs[]
+ 	&pf_attr_min_pf_tx_rate.attr,
+ 	NULL,
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(pf_eth);
++#endif
+ 
+ static struct kobj_type pf_type_eth = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = pf_eth_groups
++#else
+ 	.default_attrs = pf_eth_attrs
++#endif
+ };
+ 
+ VF_ATTR(rate);
+@@ -1214,10 +1242,17 @@ static struct attribute *vf_meters_eth_a
+ 	&vf_attr_packets_dropped.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(vf_meters_eth);
++#endif
+ 
+ static struct kobj_type vf_meters_type_eth = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = vf_meters_eth_groups
++#else
+ 	.default_attrs = vf_meters_eth_attrs
++#endif
+ };
+ #endif /* CONFIG_MLX5_ESWITCH */
+ 
+@@ -1227,10 +1262,17 @@ static struct attribute *vf_ib_attrs[] =
+ 	&vf_attr_policy.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(vf_ib);
++#endif
+ 
+ static struct kobj_type vf_type_ib = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = vf_ib_groups
++#else
+ 	.default_attrs = vf_ib_attrs
++#endif
+ };
+ 
+ static struct device_attribute *mlx5_class_attributes[] = {

@@ -1,0 +1,83 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
+
+Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
+---
+ .../mellanox/mlx5/core/en_accel/tls.h         | 32 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
+@@ -61,7 +61,11 @@ struct mlx5e_tls {
+ };
+ 
+ struct mlx5e_tls_offload_context_tx {
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
+ 	struct tls_offload_context_tx base;
++#else
++	struct tls_offload_context base;
++#endif
+ 	u32 expected_seq;
+ 	__be32 swid;
+ };
+@@ -70,14 +74,27 @@ static inline struct mlx5e_tls_offload_c
+ mlx5e_get_tls_tx_context(struct tls_context *tls_ctx)
+ {
+ 	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_tx) >
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
+ 		     TLS_OFFLOAD_CONTEXT_SIZE_TX);
+-	return container_of(tls_offload_ctx_tx(tls_ctx),
++#else
++		     TLS_OFFLOAD_CONTEXT_SIZE);
++#endif
++	return container_of(
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
++			    tls_offload_ctx_tx(tls_ctx),
++#else
++			    tls_offload_ctx(tls_ctx),
++#endif
+ 			    struct mlx5e_tls_offload_context_tx,
+ 			    base);
+ }
+ 
+ struct mlx5e_tls_offload_context_rx {
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
+ 	struct tls_offload_context_rx base;
++#else
++	struct tls_offload_context base;
++#endif
+ 	__be32 handle;
+ };
+ 
+@@ -85,8 +102,17 @@ static inline struct mlx5e_tls_offload_c
+ mlx5e_get_tls_rx_context(struct tls_context *tls_ctx)
+ {
+ 	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_rx) >
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
+ 		     TLS_OFFLOAD_CONTEXT_SIZE_RX);
+-	return container_of(tls_offload_ctx_rx(tls_ctx),
++#else
++		     TLS_OFFLOAD_CONTEXT_SIZE);
++#endif
++	return container_of(
++#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
++			    tls_offload_ctx_rx(tls_ctx),
++#else
++			    tls_offload_ctx(tls_ctx),
++#endif
+ 			    struct mlx5e_tls_offload_context_rx,
+ 			    base);
+ }
+@@ -114,9 +140,11 @@ static inline bool mlx5e_accel_is_tls_de
+ 
+ static inline void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	if (!is_kdump_kernel() &&
+ 	    mlx5_accel_is_ktls_device(priv->mdev))
+ 		mlx5e_ktls_build_netdev(priv);
++#endif
+ }
+ 
+ static inline bool mlx5e_is_tls_on(struct mlx5e_priv *priv) { return false; }

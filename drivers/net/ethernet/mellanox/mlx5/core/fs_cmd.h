@@ -38,7 +38,7 @@
 struct mlx5_flow_cmds {
 	int (*create_flow_table)(struct mlx5_flow_root_namespace *ns,
 				 struct mlx5_flow_table *ft,
-				 unsigned int size,
+				 struct mlx5_flow_table_attr *ft_attr,
 				 struct mlx5_flow_table *next_ft);
 	int (*destroy_flow_table)(struct mlx5_flow_root_namespace *ns,
 				  struct mlx5_flow_table *ft);
@@ -97,9 +97,6 @@ struct mlx5_flow_cmds {
 
 	int (*create_ns)(struct mlx5_flow_root_namespace *ns);
 	int (*destroy_ns)(struct mlx5_flow_root_namespace *ns);
-
-	int (*vport_enable)(struct mlx5_flow_root_namespace *ns, int vport);
-	void (*vport_disable)(struct mlx5_flow_root_namespace *ns, int vport);
 	int (*create_match_definer)(struct mlx5_flow_root_namespace *ns,
 				    u16 format_id, u32 *match_mask);
 	int (*destroy_match_definer)(struct mlx5_flow_root_namespace *ns,
@@ -112,7 +109,7 @@ int mlx5_cmd_fc_bulk_alloc(struct mlx5_core_dev *dev,
 			   u32 *id);
 int mlx5_cmd_fc_free(struct mlx5_core_dev *dev, u32 id);
 int mlx5_cmd_fc_query(struct mlx5_core_dev *dev, u32 id,
-		      u64 *packets, u64 *bytes);
+		      u64 *packets, u64 *bytes, bool clear);
 
 int mlx5_cmd_fc_get_bulk_query_out_len(int bulk_len);
 int mlx5_cmd_fc_bulk_query(struct mlx5_core_dev *dev, u32 base_id, int bulk_len,

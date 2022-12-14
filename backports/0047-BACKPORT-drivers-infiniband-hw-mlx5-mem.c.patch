@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mem.c
+
+Change-Id: I89a447f5220cf140305aa19e8e51fe3e19cee63f
+---
+ drivers/infiniband/hw/mlx5/mem.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/mem.c
++++ b/drivers/infiniband/hw/mlx5/mem.c
+@@ -220,7 +220,11 @@ int mlx5_ib_test_wc(struct mlx5_ib_dev *
+ 	if (!dev->mdev->roce.roce_en &&
+ 	    port_type_cap == MLX5_CAP_PORT_TYPE_ETH) {
+ 		if (mlx5_core_is_pf(dev->mdev))
++#ifdef arch_can_pci_mmap_wc
+ 			dev->wc_support = arch_can_pci_mmap_wc();
++#else
++			dev->wc_support = true;
++#endif
+ 		return 0;
+ 	}
+ 

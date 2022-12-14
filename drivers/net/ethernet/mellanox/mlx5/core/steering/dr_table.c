@@ -3,9 +3,9 @@
 
 #include "dr_types.h"
 
-int dr_table_set_miss_action_nic(struct mlx5dr_domain *dmn,
-				 struct mlx5dr_table_rx_tx *nic_tbl,
-				 struct mlx5dr_action *action)
+static int dr_table_set_miss_action_nic(struct mlx5dr_domain *dmn,
+					struct mlx5dr_table_rx_tx *nic_tbl,
+					struct mlx5dr_action *action)
 {
 	struct mlx5dr_matcher_rx_tx *last_nic_matcher = NULL;
 	struct mlx5dr_htbl_connect_info info;
@@ -214,7 +214,7 @@ static int dr_table_destroy_sw_owned_tbl(struct mlx5dr_table *tbl)
 					     tbl->table_type);
 }
 
-static int dr_table_create_sw_owned_tbl(struct mlx5dr_table *tbl)
+static int dr_table_create_sw_owned_tbl(struct mlx5dr_table *tbl, u16 uid)
 {
 	bool en_encap = !!(tbl->flags & MLX5_FLOW_TABLE_TUNNEL_EN_REFORMAT);
 	bool en_decap = !!(tbl->flags & MLX5_FLOW_TABLE_TUNNEL_EN_DECAP);
@@ -236,6 +236,7 @@ static int dr_table_create_sw_owned_tbl(struct mlx5dr_table *tbl)
 	ft_attr.sw_owner = true;
 	ft_attr.decap_en = en_decap;
 	ft_attr.reformat_en = en_encap;
+	ft_attr.uid = uid;
 
 	ret = mlx5dr_cmd_create_flow_table(tbl->dmn->mdev, &ft_attr,
 					   NULL, &tbl->table_id);
@@ -243,7 +244,8 @@ static int dr_table_create_sw_owned_tbl(struct mlx5dr_table *tbl)
 	return ret;
 }
 
-struct mlx5dr_table *mlx5dr_table_create(struct mlx5dr_domain *dmn, u32 level, u32 flags)
+struct mlx5dr_table *mlx5dr_table_create(struct mlx5dr_domain *dmn, u32 level,
+					 u32 flags, u16 uid)
 {
 	struct mlx5dr_table *tbl;
 	int ret;
@@ -263,16 +265,12 @@ struct mlx5dr_table *mlx5dr_table_create(struct mlx5dr_domain *dmn, u32 level, u
 	if (ret)
 		goto free_tbl;
 
-	ret = dr_table_create_sw_owned_tbl(tbl);
+	ret = dr_table_create_sw_owned_tbl(tbl, uid);
 	if (ret)
 		goto uninit_tbl;
 
-	INIT_LIST_HEAD(&tbl->list_node);
-
-	mutex_lock(&tbl->dmn->dbg_mutex);
-	list_add_tail(&tbl->list_node, &dmn->tbl_list);
-	mutex_unlock(&tbl->dmn->dbg_mutex);
-
+	INIT_LIST_HEAD(&tbl->dbg_node);
+	mlx5dr_dbg_tbl_add(tbl);
 	return tbl;
 
 uninit_tbl:
@@ -291,10 +289,7 @@ int mlx5dr_table_destroy(struct mlx5dr_table *tbl)
 	if (WARN_ON_ONCE(refcount_read(&tbl->refcount) > 1))
 		return -EBUSY;
 
-	mutex_lock(&tbl->dmn->dbg_mutex);
-	list_del(&tbl->list_node);
-	mutex_unlock(&tbl->dmn->dbg_mutex);
-
+	mlx5dr_dbg_tbl_del(tbl);
 	ret = dr_table_destroy_sw_owned_tbl(tbl);
 	if (ret)
 		mlx5dr_err(tbl->dmn, "Failed to destoy sw owned table\n");

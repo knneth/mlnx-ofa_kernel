@@ -1,0 +1,42 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
+
+Change-Id: I1137d2693979322aa87544ed0c5b05b0118d4f1a
+---
+ drivers/infiniband/hw/mlx5/devx.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/devx.c
++++ b/drivers/infiniband/hw/mlx5/devx.c
+@@ -19,6 +19,7 @@
+ #include "ib_rep.h"
+ #include "devx.h"
+ #include "qp.h"
++#include <linux/eventfd.h>
+ #include <linux/xarray.h>
+ 
+ #define UVERBS_MODULE_NAME mlx5_ib
+@@ -2378,7 +2379,11 @@ static int devx_umem_get(struct mlx5_ib_
+ 	if (err)
+ 		return err;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	obj->umem = ib_umem_get_peer(&dev->ib_dev, addr, size, access, 0);
++#else
++	obj->umem = ib_umem_get_peer(&attrs->driver_udata, addr, size, access, 0);
++#endif
+ 	if (IS_ERR(obj->umem))
+ 		return PTR_ERR(obj->umem);
+ 	return 0;
+@@ -2841,7 +2846,11 @@ static ssize_t devx_async_event_read(str
+ {
+ 	struct devx_async_event_file *ev_file = filp->private_data;
+ 	struct devx_event_subscription *event_sub;
++#ifndef uninitialized_var
+ 	struct devx_async_event_data *event;
++#else
++	struct devx_async_event_data *uninitialized_var(event);
++#endif
+ 	int ret = 0;
+ 	size_t eventsz;
+ 	bool omit_data;

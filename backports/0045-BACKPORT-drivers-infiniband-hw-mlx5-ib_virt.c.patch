@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/ib_virt.c
+
+Change-Id: I705c86c80cdb9b43c17d667400d92e1b4181eb10
+---
+ drivers/infiniband/hw/mlx5/ib_virt.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/ib_virt.c
++++ b/drivers/infiniband/hw/mlx5/ib_virt.c
+@@ -149,6 +149,7 @@ ex:
+ 	return err;
+ }
+ 
++#ifdef HAVE_IFLA_VF_IB_NODE_PORT_GUID
+ static int set_vf_node_guid(struct ib_device *device, int vf, u32 port,
+ 			    u64 guid)
+ {
+@@ -223,3 +224,6 @@ int mlx5_ib_get_vf_guid(struct ib_device
+ 
+ 	return 0;
+ }
++
++#endif
++

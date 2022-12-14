@@ -1,0 +1,27 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+
+Change-Id: Id914c6cae530e6b475b09ad1efbe56548f396b08
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+@@ -12,6 +12,7 @@ tc_act_can_offload_sample(struct mlx5e_t
+ 			  int act_index,
+ 			  struct mlx5_flow_attr *attr)
+ {
++#ifdef CONFIG_COMPAT_KERNEL_CT
+ 	struct netlink_ext_ack *extack = parse_state->extack;
+ 	bool ct_nat;
+ 
+@@ -21,6 +22,7 @@ tc_act_can_offload_sample(struct mlx5e_t
+ 		NL_SET_ERR_MSG_MOD(extack, "Sample action with CT NAT is not supported");
+ 		return false;
+ 	}
++#endif
+ 
+ 	return true;
+ }

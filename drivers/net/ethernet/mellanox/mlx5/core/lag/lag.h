@@ -5,11 +5,10 @@
 #define __MLX5_LAG_H__
 
 #include <linux/debugfs.h>
-
 #define MLX5_LAG_MAX_HASH_BUCKETS 16
 #include "mlx5_core.h"
-#include "lag_mp.h"
-#include "lag_fs.h"
+#include "mp.h"
+#include "port_sel.h"
 
 enum {
 	MLX5_LAG_P1,
@@ -44,10 +43,10 @@ struct lag_func {
 
 /* Used for collection of netdev event info. */
 struct lag_tracker {
-	enum   netdev_lag_hash			hash_type;
 	enum   netdev_lag_tx_type           tx_type;
 	struct netdev_lag_lower_state_info  netdev_state[MLX5_MAX_PORTS];
 	unsigned int is_bonded:1;
+	enum netdev_lag_hash hash_type;
 	unsigned int has_inactive:1;
 };
 
@@ -68,7 +67,7 @@ struct mlx5_lag {
 	struct delayed_work       bond_work;
 	struct notifier_block     nb;
 	struct lag_mp             lag_mp;
-	struct mlx5_lag_steering  steering;
+	struct mlx5_lag_port_sel  port_sel;
 	/* Protect lag fields/state changes */
 	struct mutex		  lock;
 };

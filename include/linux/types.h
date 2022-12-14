@@ -16,6 +16,10 @@ typedef u64 cycle_t;
 typedef unsigned __bitwise __poll_t;
 #endif
 
+#ifndef HAVE_TYPE_RCU_CALLBACK_T
+typedef void (*rcu_callback_t)(struct rcu_head *head);
+#endif
+
 #ifndef __aligned_u64
 #define __aligned_u64 __u64 __attribute__((aligned(8)))
 #endif

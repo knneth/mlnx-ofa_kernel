@@ -75,7 +75,7 @@ static void
 mlx5_esw_bridge_fdb_offload_notify(struct net_device *dev, const unsigned char *addr, u16 vid,
 				   unsigned long val)
 {
-	struct switchdev_notifier_fdb_info send_info;
+	struct switchdev_notifier_fdb_info send_info = {};
 
 	send_info.addr = addr;
 	send_info.vid = vid;
@@ -109,8 +109,7 @@ mlx5_esw_bridge_pkt_reformat_vlan_pop_create(struct mlx5_eswitch *esw)
 	reformat_params.param_0 = MLX5_REFORMAT_CONTEXT_ANCHOR_MAC_START;
 	reformat_params.param_1 = offsetof(struct vlan_ethhdr, h_vlan_proto);
 	reformat_params.size = sizeof(struct vlan_hdr);
-	return mlx5_packet_reformat_alloc(esw->dev, &reformat_params,
-					  MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+	return mlx5_packet_reformat_alloc(esw->dev, &reformat_params, MLX5_FLOW_NAMESPACE_FDB);
 }
 
 static struct mlx5_flow_table *
@@ -121,7 +120,7 @@ mlx5_esw_bridge_table_create(int max_fte, u32 level, struct mlx5_eswitch *esw)
 	struct mlx5_flow_namespace *ns;
 	struct mlx5_flow_table *fdb;
 
-	ns = mlx5_get_flow_namespace(dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+	ns = mlx5_get_flow_namespace(dev, MLX5_FLOW_NAMESPACE_FDB);
 	if (!ns) {
 		esw_warn(dev, "Failed to get FDB namespace\n");
 		return ERR_PTR(-ENOENT);
@@ -936,7 +935,7 @@ mlx5_esw_bridge_vlan_push_create(struct mlx5_esw_bridge_vlan *vlan, struct mlx5_
 	reformat_params.data = &vlan_hdr;
 	pkt_reformat = mlx5_packet_reformat_alloc(esw->dev,
 						  &reformat_params,
-						  MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+						  MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(pkt_reformat)) {
 		esw_warn(esw->dev, "Failed to alloc packet reformat INSERT_HEADER (err=%ld)\n",
 			 PTR_ERR(pkt_reformat));
@@ -994,7 +993,7 @@ mlx5_esw_bridge_vlan_push_mark_create(struct mlx5_esw_bridge_vlan *vlan, struct 
 	MLX5_SET(set_action_in, action, length, ESW_TUN_OPTS_BITS + ESW_TUN_ID_BITS);
 	MLX5_SET(set_action_in, action, data, ESW_TUN_BRIDGE_INGRESS_PUSH_VLAN);
 
-	pkt_mod_hdr = mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL, 1, action);
+	pkt_mod_hdr = mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_FDB, 1, action);
 	if (IS_ERR(pkt_mod_hdr))
 		return PTR_ERR(pkt_mod_hdr);
 

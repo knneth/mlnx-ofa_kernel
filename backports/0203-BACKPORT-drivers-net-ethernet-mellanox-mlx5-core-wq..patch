@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/wq.h
+
+Change-Id: I50f3e5639722d17186cf8a676760a165ce567b8c
+---
+ drivers/net/ethernet/mellanox/mlx5/core/wq.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/wq.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/wq.h
+@@ -238,7 +238,11 @@ static inline struct mlx5_cqe64 *mlx5_cq
+ 		return NULL;
+ 
+ 	/* ensure cqe content is read after cqe ownership bit */
++#ifdef dma_rmb
+ 	dma_rmb();
++#else
++	rmb();
++#endif
+ 
+ 	return cqe;
+ }

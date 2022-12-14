@@ -1,0 +1,29 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
+
+Change-Id: I8e388cead9d6c7f44df7687d910777cc46799571
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
+@@ -19,6 +19,7 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+ 		   struct mlx5e_priv *priv,
+ 		   struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_PTYPE
+ 	struct netlink_ext_ack *extack = parse_state->extack;
+ 
+ 	if (act->ptype != PACKET_HOST) {
+@@ -28,6 +29,9 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+ 
+ 	parse_state->ptype_host = true;
+ 	return 0;
++#else
++	return -EOPNOTSUPP;
++#endif
+ }
+ 
+ struct mlx5e_tc_act mlx5e_tc_act_ptype = {

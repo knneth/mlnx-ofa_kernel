@@ -1,0 +1,25 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+
+Change-Id: I016e1d421dc93bbb23bc917502c8472a49aa27b4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+@@ -133,10 +133,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
+ 	struct flow_action_entry vlan_act = {
+ 		.id = FLOW_ACTION_VLAN_POP,
+ 	};
+-	int nest_level, err = 0;
++	int nest_level = 1, err = 0;
+ 
++#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
+ 	nest_level = attr->parse_attr->filter_dev->lower_level -
+ 						priv->netdev->lower_level;
++#endif
+ 	while (nest_level--) {
+ 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
+ 					   extack);

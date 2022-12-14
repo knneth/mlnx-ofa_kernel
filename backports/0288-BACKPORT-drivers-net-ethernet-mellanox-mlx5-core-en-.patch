@@ -1,0 +1,43 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/police.c
+
+Change-Id: Ibdb8fde20dd1828c60a8b1ca8db1a52648b68754
+---
+ .../net/ethernet/mellanox/mlx5/core/en/tc/act/police.c    | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/police.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/police.c
+@@ -22,16 +22,21 @@ tc_act_parse_police(struct mlx5e_tc_act_
+ 	struct mlx5_flow_meter_params *params;
+ 
+ 	params = &attr->meter_attr.params;
++#ifdef HAVE_FLOW_ACTION_POLICE_RATE_BYTES_PS
++#ifdef HAVE_FLOW_ACTION_HW_INDEX
+ 	params->index = act->hw_index;
++#endif
+ 	if (act->police.rate_bytes_ps) {
+ 		params->mode = MLX5_RATE_LIMIT_BPS;
+ 		/* change rate to bits per second */
+ 		params->rate = act->police.rate_bytes_ps << 3;
+ 		params->burst = act->police.burst;
++#ifdef HAVE_FLOW_ACTION_POLICE_RATE_PKT_PS
+ 	} else if (act->police.rate_pkt_ps) {
+ 		params->mode = MLX5_RATE_LIMIT_PPS;
+ 		params->rate = act->police.rate_pkt_ps;
+ 		params->burst = act->police.burst_pkt;
++#endif
+ 	} else {
+ 		return -EOPNOTSUPP;
+ 	}
+@@ -40,6 +45,9 @@ tc_act_parse_police(struct mlx5e_tc_act_
+ 	attr->exe_aso_type = MLX5_EXE_ASO_FLOW_METER;
+ 
+ 	return 0;
++#else
++	return -EOPNOTSUPP;
++#endif
+ }
+ 
+ static bool

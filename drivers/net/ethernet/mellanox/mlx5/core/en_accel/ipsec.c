@@ -376,11 +376,11 @@ static void
 mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 				   struct mlx5_accel_esp_xfrm_attrs *attrs)
 {
-	struct aes_gcm_keymat *aes_gcm = &attrs->keymat.aes_gcm;
-	unsigned int crypto_data_len, key_len;
 	struct xfrm_state *x = sa_entry->x;
+	struct aes_gcm_keymat *aes_gcm = &attrs->keymat.aes_gcm;
 	struct aead_geniv_ctx *geniv_ctx;
 	struct crypto_aead *aead;
+	unsigned int crypto_data_len, key_len;
 	int ivsize;
 
 	memset(attrs, 0, sizeof(*attrs));
@@ -445,6 +445,7 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 
 	/* authentication tag length */
 	attrs->aulen = crypto_aead_authsize(aead);
+
 	/* lifetime limit for full offload */
 	initialize_lifetime_limit(sa_entry, attrs);
 }
@@ -624,7 +625,7 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	}
 
 	/* create hw context */
-	pdn = priv->ipsec->ipsec_aso ? priv->ipsec->ipsec_aso->aso->pdn : 0;
+	pdn = priv->ipsec->aso ? priv->ipsec->aso->pdn : 0;
 	sa_entry->hw_context =
 			mlx5_accel_esp_create_hw_context(priv->mdev,
 							 sa_entry->xfrm,
@@ -753,7 +754,6 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 	hash_init(ipsec->sadb_tx);
 	spin_lock_init(&ipsec->sadb_tx_lock);
 	ipsec->en_priv = priv;
-	ipsec->en_priv->ipsec = ipsec;
 	ipsec->no_trailer = !!(mlx5_accel_ipsec_device_caps(priv->mdev) &
 			       MLX5_ACCEL_IPSEC_CAP_RX_NO_TRAILER);
 	ipsec->wq = alloc_ordered_workqueue("mlx5e_ipsec: %s", 0,
@@ -763,11 +763,11 @@ int mlx5e_ipsec_init(struct mlx5e_priv *priv)
 		return -ENOMEM;
 	}
 
+	priv->ipsec = ipsec;
 	if (mlx5_is_ipsec_full_offload(priv))
-		mlx5e_ipsec_aso_setup(priv);
+		priv->ipsec->aso = mlx5e_aso_setup(priv, MLX5_ST_SZ_BYTES(ipsec_aso));
 	else
 		mlx5e_accel_ipsec_fs_init(priv);
-
 	netdev_dbg(priv->netdev, "IPSec attached to netdevice\n");
 	return 0;
 }
@@ -779,8 +779,10 @@ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
 	if (!ipsec)
 		return;
 
-	mlx5e_ipsec_aso_cleanup(priv);
-	priv->ipsec->ipsec_aso = NULL;
+	if (priv->ipsec->aso) {
+		mlx5e_aso_cleanup(priv, priv->ipsec->aso);
+		priv->ipsec->aso = NULL;
+	}
 
 	mlx5e_accel_ipsec_fs_cleanup(priv);
 	destroy_workqueue(ipsec->wq);

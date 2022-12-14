@@ -59,7 +59,9 @@ static const struct ipoib_stats ipoib_gstrings_stats[] = {
 #define IPOIB_GLOBAL_STATS_LEN	ARRAY_SIZE(ipoib_gstrings_stats)
 
 static int ipoib_set_ring_param(struct net_device *dev,
-				struct ethtool_ringparam *ringparam)
+				struct ethtool_ringparam *ringparam,
+				struct kernel_ethtool_ringparam *kernel_param,
+				struct netlink_ext_ack *extack)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	unsigned int new_recvq_size, new_sendq_size;
@@ -143,7 +145,9 @@ static int ipoib_set_ring_param(struct net_device *dev,
 }
 
 static void ipoib_get_ring_param(struct net_device *dev,
-				 struct ethtool_ringparam *ringparam)
+				 struct ethtool_ringparam *ringparam,
+				 struct kernel_ethtool_ringparam *kernel_param,
+				 struct netlink_ext_ack *extack)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
@@ -171,7 +175,9 @@ static void ipoib_get_drvinfo(struct net_device *netdev,
 }
 
 static int ipoib_get_coalesce(struct net_device *dev,
-			      struct ethtool_coalesce *coal)
+			      struct ethtool_coalesce *coal,
+			      struct kernel_ethtool_coalesce *kernel_coal,
+			      struct netlink_ext_ack *extack)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
@@ -182,7 +188,9 @@ static int ipoib_get_coalesce(struct net_device *dev,
 }
 
 static int ipoib_set_coalesce(struct net_device *dev,
-			      struct ethtool_coalesce *coal)
+			      struct ethtool_coalesce *coal,
+			      struct kernel_ethtool_coalesce *kernel_coal,
+			      struct netlink_ext_ack *extack)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int ret;

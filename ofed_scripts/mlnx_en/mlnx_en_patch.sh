@@ -94,6 +94,11 @@ check_kerver()
         return 0
 }
 
+support_only_base()
+{
+	[ "X$OFED_BASE_KVERSION" == "X$1" ]
+}
+
 check_kerver_rh()
 {
 	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 1062 ? 0 : 1)'
@@ -214,6 +219,10 @@ function check_autofconf {
 }
 
 main() {
+
+# block RHEL supports
+OFED_BASE_KVERSION="5.17.0"
+MIN_KVERSION="3.10"
 
 CLS_ACT_SUPPORTED_KVERSION="4.12.0"
 CLS_ACT_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127"
@@ -374,7 +383,7 @@ case "$ARCH" in i386 | x86_64)
 esac
 
 if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh ${KVERSION}; then
+	if (! check_kerver_rh ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVERSION}; then
 		if ! check_kerver_list $KVERSION $CLS_ACT_SUPPORTED_KVERSION_LIST; then
 			CONFIG_MLX5_CLS_ACT=
 			CONFIG_MLX5_TC_CT=
@@ -388,7 +397,7 @@ fi
 
 
 if ! check_kerver ${KVERSION} ${BRIDGE_SUPPORTED_KVERSION}; then
-	if ! check_kerver_rh_bridge ${KVERSION}; then
+	if (! check_kerver_rh_bridge ${KVERSION}) || support_only_base ${BRIDGE_SUPPORTED_KVERSION}; then
 			CONFIG_MLX5_BRIDGE=
 			echo "Warning: CONFIG_MLX5_BRIDGE requires kernel version ${BRIDGE_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 	fi

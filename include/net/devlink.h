@@ -6,6 +6,10 @@
 #ifdef HAVE_DEVLINK_H
 #include_next <net/devlink.h>
 
+#ifndef DEVLINK_INFO_VERSION_GENERIC_FW
+#define DEVLINK_INFO_VERSION_GENERIC_FW         "fw"
+#endif
+
 #ifndef HAVE_DEVLINK_PARAM_GENERIC_ID_MAX
 enum devlink_param_generic_id {
 	DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,

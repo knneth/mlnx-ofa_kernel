@@ -2,7 +2,6 @@
 /* Copyright (c) 2019 Mellanox Technologies. */
 
 #include "dr_types.h"
-#include "eswitch.h"
 
 int mlx5dr_cmd_query_esw_vport_context(struct mlx5_core_dev *mdev,
 				       bool other_vport,
@@ -133,13 +132,6 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 
 	caps->isolate_vl_tc = MLX5_CAP_GEN(mdev, isolate_vl_tc_new);
 
-	/* geneve_tlv_option_0_exist is the indication for STE support for
-	 * lookup type flex_parser_ok.
-	 */
-	caps->flex_parser_ok_bits_supp =
-		MLX5_CAP_FLOWTABLE(mdev,
-				   flow_table_properties_nic_receive.ft_field_support.geneve_tlv_option_0_exist);
-
 	caps->support_modify_argument = MLX5_CAP_GEN_64(mdev, general_obj_types) &
 					MLX5_GENERAL_OBJ_TYPES_CAP_HEADER_MODIFY_ARGUMENT;
 
@@ -149,6 +141,13 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 		caps->log_header_modify_argument_max_alloc =
 			MLX5_CAP_GEN(mdev, log_header_modify_argument_max_alloc);
 	}
+
+	/* geneve_tlv_option_0_exist is the indication of
+	 * STE support for lookup type flex_parser_ok
+	 */
+	caps->flex_parser_ok_bits_supp =
+		MLX5_CAP_FLOWTABLE(mdev,
+				   flow_table_properties_nic_receive.ft_field_support.geneve_tlv_option_0_exist);
 
 	if (caps->flex_protocols & MLX5_FLEX_PARSER_ICMP_V4_ENABLED) {
 		caps->flex_parser_id_icmp_dw0 = MLX5_CAP_GEN(mdev, flex_parser_id_icmp_dw0);
@@ -190,9 +189,6 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 		caps->flex_parser_id_gtpu_first_ext_dw_0 =
 			MLX5_CAP_GEN(mdev, flex_parser_id_gtpu_first_ext_dw_0);
 
-	caps->max_reformat_insert_size = MLX5_CAP_GEN_2(mdev, max_reformat_insert_size);
-	caps->max_reformat_insert_offset = MLX5_CAP_GEN_2(mdev, max_reformat_insert_offset);
-
 	caps->nic_rx_drop_address =
 		MLX5_CAP64_FLOWTABLE(mdev, sw_steering_nic_rx_action_drop_icm_address);
 	caps->nic_tx_drop_address =
@@ -221,23 +217,7 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 
 	caps->roce_min_src_udp = MLX5_CAP_ROCE(mdev, r_roce_min_src_udp_port);
 
-	/* Get the first SF range */
-	caps->sf_vports_base1 = mlx5_eswitch_sf_vport_base_id(mdev);
-	caps->num_sf_vports_base1 = mlx5_sf_max_functions(mdev);
-
-	caps->host_funcs_enabled = mlx5_esw_host_functions_enabled(mdev);
-	if (caps->host_funcs_enabled) {
-		/* Get the second SF range */
-		mlx5_esw_sf_max_hpf_functions(mdev,
-					      &caps->num_sf_vports_base2,
-					      &caps->sf_vports_base2);
-
-		caps->num_vf_vports = mlx5_core_max_vfs(mdev);
-		caps->num_pf_vf_vports = caps->num_vf_vports + 1;
-	}
-
 	caps->is_ecpf = mlx5_core_is_ecpf_esw_manager(mdev);
-	caps->num_nic_vports = caps->num_pf_vf_vports + caps->is_ecpf;
 
 	return 0;
 }
@@ -323,7 +303,7 @@ int mlx5dr_cmd_set_fte_modify_and_vport(struct mlx5_core_dev *mdev,
 					u32 table_id,
 					u32 group_id,
 					u32 modify_header_id,
-					u32 vport_id)
+					u16 vport)
 {
 	u32 out[MLX5_ST_SZ_DW(set_fte_out)] = {};
 	void *in_flow_context;
@@ -354,7 +334,7 @@ int mlx5dr_cmd_set_fte_modify_and_vport(struct mlx5_core_dev *mdev,
 	in_dests = MLX5_ADDR_OF(flow_context, in_flow_context, destination);
 	MLX5_SET(dest_format_struct, in_dests, destination_type,
 		 MLX5_FLOW_DESTINATION_TYPE_VPORT);
-	MLX5_SET(dest_format_struct, in_dests, destination_id, vport_id);
+	MLX5_SET(dest_format_struct, in_dests, destination_id, vport);
 
 	err = mlx5_cmd_exec(mdev, in, inlen, out, sizeof(out));
 	kvfree(in);
@@ -481,6 +461,7 @@ int mlx5dr_cmd_create_flow_table(struct mlx5_core_dev *mdev,
 
 	MLX5_SET(create_flow_table_in, in, opcode, MLX5_CMD_OP_CREATE_FLOW_TABLE);
 	MLX5_SET(create_flow_table_in, in, table_type, attr->table_type);
+	MLX5_SET(create_flow_table_in, in, uid, attr->uid);
 
 	ft_mdev = MLX5_ADDR_OF(create_flow_table_in, in, flow_table_context);
 	MLX5_SET(flow_table_context, ft_mdev, termination_table, attr->term_tbl);
@@ -572,7 +553,8 @@ int mlx5dr_cmd_create_reformat_ctx(struct mlx5_core_dev *mdev,
 	MLX5_SET(packet_reformat_context_in, prctx, reformat_param_0, reformat_param_0);
 	MLX5_SET(packet_reformat_context_in, prctx, reformat_param_1, reformat_param_1);
 	MLX5_SET(packet_reformat_context_in, prctx, reformat_data_size, reformat_size);
-	memcpy(pdata, reformat_data, reformat_size);
+	if (reformat_data && reformat_size)
+		memcpy(pdata, reformat_data, reformat_size);
 
 	err = mlx5_cmd_exec(mdev, in, inlen, out, sizeof(out));
 	if (err)

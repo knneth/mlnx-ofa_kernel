@@ -13,5 +13,6 @@ mlx5_rep_set_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_pr
 			u16 vport, u64 rate, u64 burst);
 int mlx5_rep_get_miss_meter_data(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv,
 				 int data_type, u64 *data);
+int mlx5_rep_clear_miss_meter_data(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv);
 
 #endif

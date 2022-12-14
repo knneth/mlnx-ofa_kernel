@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
+
+Change-Id: I9e8a466a3b051b4f56e331fc326735a8a50d9a88
+---
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
++++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
+@@ -7,6 +7,7 @@
+ #define pr_fmt(fmt) "mlxfw_mfa2: " fmt
+ 
+ #include <linux/kernel.h>
++#include <linux/printk.h>
+ #include <linux/module.h>
+ #include <linux/netlink.h>
+ #include <linux/vmalloc.h>

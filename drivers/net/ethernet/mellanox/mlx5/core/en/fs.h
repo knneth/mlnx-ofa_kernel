@@ -13,6 +13,7 @@ enum {
 	MLX5E_TC_FT_LEVEL = 0,
 	MLX5E_TC_HP_OOB_CNT_LEVEL,
 	MLX5E_TC_TTC_FT_LEVEL,
+	MLX5E_TC_MISS_LEVEL,
 };
 
 struct mlx5_prio_hp {
@@ -58,6 +59,7 @@ struct mlx5e_tc_table {
 	 */
 	struct mutex			t_lock;
 	struct mlx5_flow_table		*t;
+	struct mlx5_flow_table		*miss_t;
 	struct mlx5_fs_chains           *chains;
 	struct mlx5e_post_act		*post_act;
 
@@ -65,7 +67,7 @@ struct mlx5e_tc_table {
 
 	struct mod_hdr_tbl mod_hdr;
 	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
-	DECLARE_HASHTABLE(hairpin_tbl, 8);
+	DECLARE_HASHTABLE(hairpin_tbl, 16);
 	struct kobject *hp_config;
 	struct mlx5_prio_hp *prio_hp;
 	struct mlx5e_priv *prio_hp_ppriv;
@@ -120,12 +122,6 @@ struct mlx5e_l2_table {
 
 #define MLX5E_NUM_INDIR_TIRS (MLX5_NUM_TT - 1)
 
-struct mlx5e_tirc_config {
-	u8 l3_prot_type;
-	u8 l4_prot_type;
-	u32 rx_hash_fields;
-};
-
 #define MLX5_HASH_IP		(MLX5_HASH_FIELD_SEL_SRC_IP   |\
 				 MLX5_HASH_FIELD_SEL_DST_IP)
 #define MLX5_HASH_IP_L4PORTS	(MLX5_HASH_FIELD_SEL_SRC_IP   |\
@@ -157,6 +153,8 @@ enum {
 #endif
 };
 
+struct mlx5e_priv;
+
 #ifdef CONFIG_MLX5_EN_RXNFC
 
 struct mlx5e_ethtool_table {
@@ -176,15 +174,15 @@ struct mlx5e_ethtool_steering {
 
 void mlx5e_ethtool_init_steering(struct mlx5e_priv *priv);
 void mlx5e_ethtool_cleanup_steering(struct mlx5e_priv *priv);
-int mlx5e_ethtool_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd);
-int mlx5e_ethtool_get_rxnfc(struct net_device *dev,
+int mlx5e_ethtool_set_rxnfc(struct mlx5e_priv *priv, struct ethtool_rxnfc *cmd);
+int mlx5e_ethtool_get_rxnfc(struct mlx5e_priv *priv,
 			    struct ethtool_rxnfc *info, u32 *rule_locs);
 #else
 static inline void mlx5e_ethtool_init_steering(struct mlx5e_priv *priv)    { }
 static inline void mlx5e_ethtool_cleanup_steering(struct mlx5e_priv *priv) { }
-static inline int mlx5e_ethtool_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
+static inline int mlx5e_ethtool_set_rxnfc(struct mlx5e_priv *priv, struct ethtool_rxnfc *cmd)
 { return -EOPNOTSUPP; }
-static inline int mlx5e_ethtool_get_rxnfc(struct net_device *dev,
+static inline int mlx5e_ethtool_get_rxnfc(struct mlx5e_priv *priv,
 					  struct ethtool_rxnfc *info, u32 *rule_locs)
 { return -EOPNOTSUPP; }
 #endif /* CONFIG_MLX5_EN_RXNFC */
@@ -239,9 +237,10 @@ struct mlx5e_flow_steering {
 void mlx5e_set_ttc_params(struct mlx5e_priv *priv,
 			  struct ttc_params *ttc_params, bool tunnel);
 
-void mlx5e_destroy_flow_table(struct mlx5e_flow_table *ft);
 void mlx5e_destroy_ttc_table(struct mlx5e_priv *priv);
 int mlx5e_create_ttc_table(struct mlx5e_priv *priv);
+
+void mlx5e_destroy_flow_table(struct mlx5e_flow_table *ft);
 
 void mlx5e_enable_cvlan_filter(struct mlx5e_priv *priv);
 void mlx5e_disable_cvlan_filter(struct mlx5e_priv *priv);

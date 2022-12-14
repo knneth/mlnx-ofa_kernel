@@ -47,106 +47,48 @@ static void dr_domain_destroy_modify_header_resources(struct mlx5dr_domain *dmn)
 	mlx5dr_arg_pool_mngr_destroy(dmn->modify_header_arg_pool_mngr);
 }
 
-static int dr_domain_init_cache(struct mlx5dr_domain *dmn)
+static void dr_domain_init_csum_recalc_fts(struct mlx5dr_domain *dmn)
 {
 	/* Per vport cached FW FT for checksum recalculation, this
-	 * recalculation is needed due to a HW bug.
+	 * recalculation is needed due to a HW bug in STEv0.
 	 */
-	dmn->cache.recalc_cs_ft = kcalloc(dmn->info.caps.num_nic_vports,
-					  sizeof(dmn->cache.recalc_cs_ft[0]),
-					  GFP_KERNEL);
-	if (!dmn->cache.recalc_cs_ft)
-		return -ENOMEM;
-
-	if (dmn->info.caps.num_sf_vports_base1) {
-		dmn->cache.recalc_cs_ft_sf1 =
-			kcalloc(dmn->info.caps.num_sf_vports_base1,
-				sizeof(dmn->cache.recalc_cs_ft_sf1[0]),
-				GFP_KERNEL);
-		if (!dmn->cache.recalc_cs_ft_sf1)
-			goto err_free_cs_ft;
-	}
-
-	if (dmn->info.caps.num_sf_vports_base2) {
-		dmn->cache.recalc_cs_ft_sf2 =
-			kcalloc(dmn->info.caps.num_sf_vports_base2,
-				sizeof(dmn->cache.recalc_cs_ft_sf2[0]),
-				GFP_KERNEL);
-		if (!dmn->cache.recalc_cs_ft_sf2)
-			goto err_free_cs_ft_sf1;
-	}
-
-	return 0;
-
-err_free_cs_ft_sf1:
-	kfree(dmn->cache.recalc_cs_ft_sf1);
-err_free_cs_ft:
-	kfree(dmn->cache.recalc_cs_ft);
-	return -ENOMEM;
+	xa_init(&dmn->csum_fts_xa);
 }
 
-static void dr_domain_uninit_cache(struct mlx5dr_domain *dmn)
+static void dr_domain_uninit_csum_recalc_fts(struct mlx5dr_domain *dmn)
 {
-	int i;
+	struct mlx5dr_fw_recalc_cs_ft *recalc_cs_ft;
+	unsigned long i;
 
-	for (i = 0; i < dmn->info.caps.num_nic_vports; i++) {
-		if (dmn->cache.recalc_cs_ft[i])
-			mlx5dr_fw_destroy_recalc_cs_ft(dmn,
-						       dmn->cache.recalc_cs_ft[i]);
+	xa_for_each(&dmn->csum_fts_xa, i, recalc_cs_ft) {
+		if (recalc_cs_ft)
+			mlx5dr_fw_destroy_recalc_cs_ft(dmn, recalc_cs_ft);
 	}
 
-	for (i = 0; i < dmn->info.caps.num_sf_vports_base1; i++) {
-		if (dmn->cache.recalc_cs_ft_sf1[i])
-			mlx5dr_fw_destroy_recalc_cs_ft(dmn,
-						       dmn->cache.recalc_cs_ft_sf1[i]);
-	}
-
-	for (i = 0; i < dmn->info.caps.num_sf_vports_base2; i++) {
-		if (dmn->cache.recalc_cs_ft_sf2[i])
-			mlx5dr_fw_destroy_recalc_cs_ft(dmn,
-						       dmn->cache.recalc_cs_ft_sf2[i]);
-	}
-
-	kfree(dmn->cache.recalc_cs_ft);
-	kfree(dmn->cache.recalc_cs_ft_sf1);
-	kfree(dmn->cache.recalc_cs_ft_sf2);
+	xa_destroy(&dmn->csum_fts_xa);
 }
 
-struct mlx5dr_fw_recalc_cs_ft **
-dr_domain_cache_get_recalc_cs_ft(struct mlx5dr_domain *dmn, u32 vport)
+int mlx5dr_domain_get_recalc_cs_ft_addr(struct mlx5dr_domain *dmn,
+					u16 vport_num,
+					u64 *rx_icm_addr)
 {
-	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
+	struct mlx5dr_fw_recalc_cs_ft *recalc_cs_ft;
+	int ret;
 
-	if (caps->pf_vf_vports_caps && vport < caps->num_pf_vf_vports)
-		return &dmn->cache.recalc_cs_ft[vport];
-
-	if (caps->sf_vports_caps1 && mlx5dr_is_sf_vport_range1(caps, vport))
-		return &dmn->cache.recalc_cs_ft_sf1[mlx5dr_sf_vport_to_idx_range1(caps, vport)];
-
-	if (caps->sf_vports_caps2 && mlx5dr_is_sf_vport_range2(caps, vport))
-		return &dmn->cache.recalc_cs_ft_sf2[mlx5dr_sf_vport_to_idx_range2(caps, vport)];
-
-	return NULL;
-}
-
-int mlx5dr_domain_cache_get_recalc_cs_ft_addr(struct mlx5dr_domain *dmn,
-					      u32 vport_num,
-					      u64 *rx_icm_addr)
-{
-	struct mlx5dr_fw_recalc_cs_ft **recalc_cs_ft;
-
-	recalc_cs_ft = dr_domain_cache_get_recalc_cs_ft(dmn, vport_num);
-	if (!recalc_cs_ft)
-		return -EINVAL;
-
-	if (!*recalc_cs_ft) {
-		/* Table not in cache, need to allocate a new one */
-		*recalc_cs_ft = mlx5dr_fw_create_recalc_cs_ft(dmn, vport_num);
-		if (!(*recalc_cs_ft))
+	recalc_cs_ft = xa_load(&dmn->csum_fts_xa, vport_num);
+	if (!recalc_cs_ft) {
+		/* Table hasn't been created yet */
+		recalc_cs_ft = mlx5dr_fw_create_recalc_cs_ft(dmn, vport_num);
+		if (!recalc_cs_ft)
 			return -EINVAL;
+
+		ret = xa_err(xa_store(&dmn->csum_fts_xa, vport_num,
+				      recalc_cs_ft, GFP_KERNEL));
+		if (ret)
+			return ret;
 	}
 
-	*rx_icm_addr = (*recalc_cs_ft)->rx_icm_addr;
+	*rx_icm_addr = recalc_cs_ft->rx_icm_addr;
 
 	return 0;
 }
@@ -178,6 +120,79 @@ static bool dr_domain_is_supp_sw_steering(struct mlx5dr_domain *dmn)
 	}
 }
 
+static int dr_domain_init_mem_resources(struct mlx5dr_domain *dmn)
+{
+	int ret;
+
+	dmn->chunks_kmem_cache = kmem_cache_create("mlx5_dr_chunks",
+						   sizeof(struct mlx5dr_icm_chunk), 0,
+						   SLAB_HWCACHE_ALIGN, NULL);
+	if (!dmn->chunks_kmem_cache) {
+		mlx5dr_err(dmn, "Couldn't create chunks kmem_cache\n");
+		return -ENOMEM;
+	}
+
+	dmn->htbls_kmem_cache = kmem_cache_create("mlx5_dr_htbls",
+						  sizeof(struct mlx5dr_ste_htbl), 0,
+						  SLAB_HWCACHE_ALIGN, NULL);
+	if (!dmn->htbls_kmem_cache) {
+		mlx5dr_err(dmn, "Couldn't create hash tables kmem_cache\n");
+		ret = -ENOMEM;
+		goto free_chunks_kmem_cache;
+	}
+
+	dmn->ste_icm_pool = mlx5dr_icm_pool_create(dmn, DR_ICM_TYPE_STE);
+	if (!dmn->ste_icm_pool) {
+		mlx5dr_err(dmn, "Couldn't get icm memory\n");
+		ret = -ENOMEM;
+		goto free_htbls_kmem_cache;
+	}
+
+	dmn->action_icm_pool = mlx5dr_icm_pool_create(dmn, DR_ICM_TYPE_MODIFY_ACTION);
+	if (!dmn->action_icm_pool) {
+		mlx5dr_err(dmn, "Couldn't get action icm memory\n");
+		ret = -ENOMEM;
+		goto free_ste_icm_pool;
+	}
+
+	ret = mlx5dr_send_info_pool_create(dmn);
+	if (ret) {
+		mlx5dr_err(dmn, "Couldn't create send info pool\n");
+		goto free_action_icm_pool;
+	}
+
+	ret = dr_domain_init_modify_header_resources(dmn);
+	if (ret) {
+		mlx5dr_err(dmn, "Couldn't create modify-header-resources\n");
+		goto free_send_info_pool;
+	}
+
+	return 0;
+
+free_send_info_pool:
+	mlx5dr_send_info_pool_destroy(dmn);
+free_action_icm_pool:
+	mlx5dr_icm_pool_destroy(dmn->action_icm_pool);
+free_ste_icm_pool:
+	mlx5dr_icm_pool_destroy(dmn->ste_icm_pool);
+free_htbls_kmem_cache:
+	kmem_cache_destroy(dmn->htbls_kmem_cache);
+free_chunks_kmem_cache:
+	kmem_cache_destroy(dmn->chunks_kmem_cache);
+
+	return ret;
+}
+
+static void dr_domain_uninit_mem_resources(struct mlx5dr_domain *dmn)
+{
+	dr_domain_destroy_modify_header_resources(dmn);
+	mlx5dr_send_info_pool_destroy(dmn);
+	mlx5dr_icm_pool_destroy(dmn->action_icm_pool);
+	mlx5dr_icm_pool_destroy(dmn->ste_icm_pool);
+	kmem_cache_destroy(dmn->htbls_kmem_cache);
+	kmem_cache_destroy(dmn->chunks_kmem_cache);
+}
+
 static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 {
 	int ret;
@@ -201,40 +216,22 @@ static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 		goto clean_pd;
 	}
 
-	dmn->ste_icm_pool = mlx5dr_icm_pool_create(dmn, DR_ICM_TYPE_STE);
-	if (!dmn->ste_icm_pool) {
-		mlx5dr_err(dmn, "Couldn't get icm memory\n");
-		ret = -ENOMEM;
+	ret = dr_domain_init_mem_resources(dmn);
+	if (ret) {
+		mlx5dr_err(dmn, "Couldn't create domain memory resources\n");
 		goto clean_uar;
-	}
-
-	dmn->action_icm_pool = mlx5dr_icm_pool_create(dmn, DR_ICM_TYPE_MODIFY_ACTION);
-	if (!dmn->action_icm_pool) {
-		mlx5dr_err(dmn, "Couldn't get action icm memory\n");
-		ret = -ENOMEM;
-		goto free_ste_icm_pool;
 	}
 
 	ret = mlx5dr_send_ring_alloc(dmn);
 	if (ret) {
 		mlx5dr_err(dmn, "Couldn't create send-ring\n");
-		goto free_action_icm_pool;
-	}
-
-	ret = dr_domain_init_modify_header_resources(dmn);
-	if (ret) {
-		mlx5dr_err(dmn, "Couldn't create modify-header-resources\n");
-		goto free_send_ring;
+		goto clean_mem_resources;
 	}
 
 	return 0;
 
-free_send_ring:
-	mlx5dr_send_ring_free(dmn, dmn->send_ring);
-free_action_icm_pool:
-	mlx5dr_icm_pool_destroy(dmn->action_icm_pool);
-free_ste_icm_pool:
-	mlx5dr_icm_pool_destroy(dmn->ste_icm_pool);
+clean_mem_resources:
+	dr_domain_uninit_mem_resources(dmn);
 clean_uar:
 	mlx5_put_uars_page(dmn->mdev, dmn->uar);
 clean_pd:
@@ -246,32 +243,33 @@ clean_pd:
 static void dr_domain_uninit_resources(struct mlx5dr_domain *dmn)
 {
 	mlx5dr_send_ring_free(dmn, dmn->send_ring);
-	dr_domain_destroy_modify_header_resources(dmn);
-	mlx5dr_icm_pool_destroy(dmn->action_icm_pool);
-	mlx5dr_icm_pool_destroy(dmn->ste_icm_pool);
+	dr_domain_uninit_mem_resources(dmn);
 	mlx5_put_uars_page(dmn->mdev, dmn->uar);
 	mlx5_core_dealloc_pd(dmn->mdev, dmn->pdn);
 }
 
+static void dr_domain_fill_uplink_caps(struct mlx5dr_domain *dmn,
+				       struct mlx5dr_cmd_vport_cap *uplink_vport)
+{
+	struct mlx5dr_esw_caps *esw_caps = &dmn->info.caps.esw_caps;
+
+	uplink_vport->num = MLX5_VPORT_UPLINK;
+	uplink_vport->icm_address_rx = esw_caps->uplink_icm_address_rx;
+	uplink_vport->icm_address_tx = esw_caps->uplink_icm_address_tx;
+	uplink_vport->vport_gvmi = 0;
+	uplink_vport->vhca_gvmi = dmn->info.caps.gvmi;
+}
+
 static int dr_domain_query_vport(struct mlx5dr_domain *dmn,
 				 u16 vport_number,
+				 bool other_vport,
 				 struct mlx5dr_cmd_vport_cap *vport_caps)
 {
-	bool other_vport;
-	u16 cmd_vport;
 	int ret;
-
-	if (dmn->info.caps.is_ecpf) {
-		other_vport = vport_number != ECPF_PORT;
-		cmd_vport = vport_number == ECPF_PORT ? 0 : vport_number;
-	} else {
-		other_vport = !!vport_number;
-		cmd_vport = vport_number;
-	}
 
 	ret = mlx5dr_cmd_query_esw_vport_context(dmn->mdev,
 						 other_vport,
-						 cmd_vport,
+						 vport_number,
 						 &vport_caps->icm_address_rx,
 						 &vport_caps->icm_address_tx);
 	if (ret)
@@ -279,7 +277,7 @@ static int dr_domain_query_vport(struct mlx5dr_domain *dmn,
 
 	ret = mlx5dr_cmd_query_gvmi(dmn->mdev,
 				    other_vport,
-				    cmd_vport,
+				    vport_number,
 				    &vport_caps->vport_gvmi);
 	if (ret)
 		return ret;
@@ -290,79 +288,87 @@ static int dr_domain_query_vport(struct mlx5dr_domain *dmn,
 	return 0;
 }
 
-int mlx5dr_domain_vport_enable(struct mlx5dr_domain *dmn, u32 vport)
+static int dr_domain_query_esw_mngr(struct mlx5dr_domain *dmn)
 {
-	struct mlx5dr_cmd_vport_cap *vport_caps;
-	int ret;
-
-	vport_caps = mlx5dr_get_vport_cap(&dmn->info.caps, vport);
-	if (!vport_caps)
-		return -EINVAL;
-
-	ret = dr_domain_query_vport(dmn, vport, vport_caps);
-	if (ret)
-		return ret;
-
-	vport_caps->flags |= MLX5DR_CMD_VPORT_FLAG_ENABLED;
-	return 0;
-}
-
-void mlx5dr_domain_vport_disable(struct mlx5dr_domain *dmn, u32 vport)
-{
-	struct mlx5dr_cmd_vport_cap *vport_caps;
-
-	vport_caps = mlx5dr_get_vport_cap(&dmn->info.caps, vport);
-	if (!vport_caps)
-		return;
-
-	vport_caps->flags &= ~MLX5DR_CMD_VPORT_FLAG_ENABLED;
+	return dr_domain_query_vport(dmn, 0, false,
+				     &dmn->info.caps.vports.esw_manager_caps);
 }
 
 static void dr_domain_query_uplink(struct mlx5dr_domain *dmn)
 {
-	struct mlx5dr_esw_caps *esw_caps = &dmn->info.caps.esw_caps;
-	struct mlx5dr_cmd_vport_cap *wire_vport =
-		&dmn->info.caps.uplink_vport_caps;
-
-	wire_vport->num = WIRE_PORT;
-	wire_vport->icm_address_rx = esw_caps->uplink_icm_address_rx;
-	wire_vport->icm_address_tx = esw_caps->uplink_icm_address_tx;
-	wire_vport->vport_gvmi = 0;
-	wire_vport->vhca_gvmi = dmn->info.caps.gvmi;
-	wire_vport->flags |= MLX5DR_CMD_VPORT_FLAG_ENABLED;
+	dr_domain_fill_uplink_caps(dmn, &dmn->info.caps.vports.uplink_caps);
 }
 
-static int dr_domain_query_vports(struct mlx5dr_domain *dmn)
+static struct mlx5dr_cmd_vport_cap *
+dr_domain_add_vport_cap(struct mlx5dr_domain *dmn, u16 vport)
 {
 	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
+	struct mlx5dr_cmd_vport_cap *vport_caps;
 	int ret;
-	int vf;
 
-	if (dmn->info.caps.is_ecpf) {
-		ret = mlx5dr_domain_vport_enable(dmn, ECPF_PORT);
-		if (ret)
-			return ret;
+	vport_caps = kvzalloc(sizeof(*vport_caps), GFP_KERNEL);
+	if (!vport_caps)
+		return NULL;
+
+	ret = dr_domain_query_vport(dmn, vport, true, vport_caps);
+	if (ret) {
+		kvfree(vport_caps);
+		return NULL;
 	}
 
-	if (caps->host_funcs_enabled) {
-		ret = mlx5dr_domain_vport_enable(dmn, 0);
-		if (ret)
-			return ret;
-
-		/* Query vf vports */
-		for (vf = 0; vf < caps->num_vf_vports; vf++) {
-			int vport = vf + 1;
-
-			ret = mlx5dr_domain_vport_enable(dmn, vport);
-			if (ret)
-				return ret;
-		}
+	ret = xa_insert(&caps->vports.vports_caps_xa, vport,
+			vport_caps, GFP_KERNEL);
+	if (ret) {
+		mlx5dr_dbg(dmn, "Couldn't insert new vport into xarray (%d)\n", ret);
+		kvfree(vport_caps);
+		return ERR_PTR(ret);
 	}
-	/* Sf vports cannot be queried before sf was enabled */
 
-	dr_domain_query_uplink(dmn);
+	return vport_caps;
+}
 
-	return 0;
+static bool dr_domain_is_esw_mgr_vport(struct mlx5dr_domain *dmn, u16 vport)
+{
+	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
+
+	return (caps->is_ecpf && vport == MLX5_VPORT_ECPF) ||
+	       (!caps->is_ecpf && vport == 0);
+}
+
+struct mlx5dr_cmd_vport_cap *
+mlx5dr_domain_get_vport_cap(struct mlx5dr_domain *dmn, u16 vport)
+{
+	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
+	struct mlx5dr_cmd_vport_cap *vport_caps;
+
+	if (dr_domain_is_esw_mgr_vport(dmn, vport))
+		return &caps->vports.esw_manager_caps;
+
+	if (vport == MLX5_VPORT_UPLINK)
+		return &caps->vports.uplink_caps;
+
+vport_load:
+	vport_caps = xa_load(&caps->vports.vports_caps_xa, vport);
+	if (vport_caps)
+		return vport_caps;
+
+	vport_caps = dr_domain_add_vport_cap(dmn, vport);
+	if (PTR_ERR(vport_caps) == -EBUSY)
+		/* caps were already stored by another thread */
+		goto vport_load;
+
+	return vport_caps;
+}
+
+static void dr_domain_clear_vports(struct mlx5dr_domain *dmn)
+{
+	struct mlx5dr_cmd_vport_cap *vport_caps;
+	unsigned long i;
+
+	xa_for_each(&dmn->info.caps.vports.vports_caps_xa, i, vport_caps) {
+		vport_caps = xa_erase(&dmn->info.caps.vports.vports_caps_xa, i);
+		kvfree(vport_caps);
+	}
 }
 
 static int dr_domain_query_fdb_caps(struct mlx5_core_dev *mdev,
@@ -382,54 +388,25 @@ static int dr_domain_query_fdb_caps(struct mlx5_core_dev *mdev,
 	dmn->info.caps.esw_rx_drop_address = dmn->info.caps.esw_caps.drop_icm_address_rx;
 	dmn->info.caps.esw_tx_drop_address = dmn->info.caps.esw_caps.drop_icm_address_tx;
 
-	dmn->info.caps.pf_vf_vports_caps =
-		kcalloc(dmn->info.caps.num_pf_vf_vports,
-			sizeof(dmn->info.caps.pf_vf_vports_caps[0]),
-			GFP_KERNEL);
+	xa_init(&dmn->info.caps.vports.vports_caps_xa);
 
-	if (!dmn->info.caps.pf_vf_vports_caps)
-		return -ENOMEM;
+	/* Query eswitch manager and uplink vports only. Rest of the
+	 * vports (vport 0, VFs and SFs) will be queried dynamically.
+	 */
 
-	ret = dr_domain_query_vports(dmn);
+	ret = dr_domain_query_esw_mngr(dmn);
 	if (ret) {
-		mlx5dr_err(dmn, "Failed to query vports caps (err: %d)", ret);
-		goto free_vports_caps;
+		mlx5dr_err(dmn, "Failed to query eswitch manager vport caps (err: %d)", ret);
+		goto free_vports_caps_xa;
 	}
 
-	if (dmn->info.caps.num_sf_vports_base1 > 0) {
-		dmn->info.caps.sf_vports_caps1 =
-			kvzalloc(dmn->info.caps.num_sf_vports_base1 *
-				 sizeof(*dmn->info.caps.sf_vports_caps1),
-				 GFP_KERNEL);
-
-		if (!dmn->info.caps.sf_vports_caps1) {
-			ret = -ENOMEM;
-			goto free_vports_caps;
-		}
-	}
-
-	if (dmn->info.caps.num_sf_vports_base2 > 0) {
-		dmn->info.caps.sf_vports_caps2 =
-			kvzalloc(dmn->info.caps.num_sf_vports_base2 *
-				 sizeof(*dmn->info.caps.sf_vports_caps2),
-				 GFP_KERNEL);
-
-		if (!dmn->info.caps.sf_vports_caps2) {
-			ret = -ENOMEM;
-			goto free_sf_range1_vports_caps;
-		}
-	}
+	dr_domain_query_uplink(dmn);
 
 	return 0;
 
-free_sf_range1_vports_caps:
-	if (dmn->info.caps.num_sf_vports_base1) {
-		kvfree(dmn->info.caps.sf_vports_caps1);
-		dmn->info.caps.sf_vports_caps1 = NULL;
-	}
-free_vports_caps:
-	kfree(dmn->info.caps.pf_vf_vports_caps);
-	dmn->info.caps.pf_vf_vports_caps = NULL;
+free_vports_caps_xa:
+	xa_destroy(&dmn->info.caps.vports.vports_caps_xa);
+
 	return ret;
 }
 
@@ -469,7 +446,7 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 	case MLX5DR_DOMAIN_TYPE_FDB:
 		dmn->info.rx.type = DR_DOMAIN_NIC_TYPE_RX;
 		dmn->info.tx.type = DR_DOMAIN_NIC_TYPE_TX;
-		vport_cap = &dmn->info.caps.esw_manager_vport_caps;
+		vport_cap = &dmn->info.caps.vports.esw_manager_caps;
 
 		dmn->info.tx.default_icm_addr = vport_cap->icm_address_tx;
 		dmn->info.rx.default_icm_addr = vport_cap->icm_address_rx;
@@ -488,12 +465,8 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 
 static void dr_domain_caps_uninit(struct mlx5dr_domain *dmn)
 {
-	kfree(dmn->info.caps.pf_vf_vports_caps);
-	dmn->info.caps.pf_vf_vports_caps = NULL;
-	if (dmn->info.caps.num_sf_vports_base1)
-		kvfree(dmn->info.caps.sf_vports_caps1);
-	if (dmn->info.caps.num_sf_vports_base2)
-		kvfree(dmn->info.caps.sf_vports_caps2);
+	dr_domain_clear_vports(dmn);
+	xa_destroy(&dmn->info.caps.vports.vports_caps_xa);
 }
 
 struct mlx5dr_domain *
@@ -514,7 +487,6 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 	refcount_set(&dmn->refcount, 1);
 	mutex_init(&dmn->info.rx.mutex);
 	mutex_init(&dmn->info.tx.mutex);
-	mutex_init(&dmn->dbg_mutex);
 	mutex_init(&dmn->modify_hdr_mutex);
 
 	if (dr_domain_caps_init(mdev, dmn)) {
@@ -541,27 +513,12 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 		goto uninit_caps;
 	}
 
-	ret = dr_domain_init_cache(dmn);
-	if (ret) {
-		mlx5dr_err(dmn, "Failed initialize domain cache\n");
-		goto uninit_resourses;
-	}
-
-	ret = mlx5dr_dbg_init_dump(dmn);
-	if (ret) {
-		mlx5dr_err(dmn, "Failed initialize domain dump tool\n");
-		goto uninit_cache;
-	}
-
-	INIT_LIST_HEAD(&dmn->tbl_list);
+	dr_domain_init_csum_recalc_fts(dmn);
+	mlx5dr_dbg_init_dump(dmn);
 	INIT_LIST_HEAD(&dmn->modify_hdr_list);
 
 	return dmn;
 
-uninit_cache:
-	dr_domain_uninit_cache(dmn);
-uninit_resourses:
-	dr_domain_uninit_resources(dmn);
 uninit_caps:
 	dr_domain_caps_uninit(dmn);
 free_domain:
@@ -600,13 +557,12 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 
 	/* make sure resources are not used by the hardware */
 	mlx5dr_cmd_sync_steering(dmn->mdev);
-	mlx5dr_dbg_cleanup_dump(dmn);
-	dr_domain_uninit_cache(dmn);
+	mlx5dr_dbg_uninit_dump(dmn);
+	dr_domain_uninit_csum_recalc_fts(dmn);
 	dr_domain_uninit_resources(dmn);
 	dr_domain_caps_uninit(dmn);
 	mutex_destroy(&dmn->info.tx.mutex);
 	mutex_destroy(&dmn->info.rx.mutex);
-	mutex_destroy(&dmn->dbg_mutex);
 	mutex_destroy(&dmn->modify_hdr_mutex);
 	kfree(dmn);
 	return 0;

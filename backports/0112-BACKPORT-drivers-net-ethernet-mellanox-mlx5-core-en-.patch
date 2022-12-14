@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+
+Change-Id: I5a4e8ba9a095fe7e3c035d7edc52b8e794f60f9b
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2018 Mellanox Technologies. */
+ 
++#if defined(HAVE_NET_BAREUDP_H) && defined(HAVE_FLOW_DISSECTOR_MPLS_LSE)
++
+ #include <net/bareudp.h>
+ #include <net/mpls.h>
+ #include "en/tc_tun.h"
+@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
+ 	.parse_tunnel         = parse_tunnel,
+ 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
+ };
++#endif /* HAVE_NET_BAREUDP_H */

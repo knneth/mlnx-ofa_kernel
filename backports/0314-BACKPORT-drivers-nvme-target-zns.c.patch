@@ -1,0 +1,111 @@
+From: Israel Rukshin <israelr@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
+
+Change-Id: I558493b5af6b4ceb8c3e33405d9dbe7c73ecedf9
+---
+ drivers/nvme/target/zns.c | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+--- a/drivers/nvme/target/zns.c
++++ b/drivers/nvme/target/zns.c
+@@ -3,11 +3,15 @@
+  * NVMe ZNS-ZBD command implementation.
+  * Copyright (C) 2021 Western Digital Corporation or its affiliates.
+  */
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/nvme.h>
+ #include <linux/blkdev.h>
+ #include "nvmet.h"
+ 
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ /*
+  * We set the Memory Page Size Minimum (MPSMIN) for target controller to 0
+  * which gets added by 12 in the nvme_enable_ctrl() which results in 2^12 = 4k
+@@ -380,6 +384,23 @@ static int zmgmt_send_scan_cb(struct blk
+ 	return 0;
+ }
+ 
++#ifndef HAVE_BLK_NEXT_BIO_3_PARAMS
++#ifndef HAVE_BIO_INIT_5_PARAMS
++static struct bio *blk_next_bio(struct bio *bio,
++				unsigned int nr_pages, gfp_t gfp)
++{
++	struct bio *new = bio_alloc(gfp, nr_pages);
++
++	if (bio) {
++		bio_chain(bio, new);
++		submit_bio(bio);
++	}
++
++	return new;
++}
++#endif
++#endif
++
+ static u16 nvmet_bdev_zone_mgmt_emulate_all(struct nvmet_req *req)
+ {
+ 	struct block_device *bdev = req->ns->bdev;
+@@ -412,10 +433,17 @@ static u16 nvmet_bdev_zone_mgmt_emulate_
+ 
+ 	while (sector < get_capacity(bdev->bd_disk)) {
+ 		if (test_bit(blk_queue_zone_no(q, sector), d.zbitmap)) {
++#ifdef HAVE_BIO_INIT_5_PARAMS
++			bio = blk_next_bio(bio, bdev, 0,
++				zsa_req_op(req->cmd->zms.zsa) | REQ_SYNC,
++				GFP_KERNEL);
++			bio->bi_iter.bi_sector = sector;
++#else
+ 			bio = blk_next_bio(bio, 0, GFP_KERNEL);
+ 			bio->bi_opf = zsa_req_op(req->cmd->zms.zsa) | REQ_SYNC;
+ 			bio->bi_iter.bi_sector = sector;
+ 			bio_set_dev(bio, bdev);
++#endif
+ 			/* This may take a while, so be nice to others */
+ 			cond_resched();
+ 		}
+@@ -522,6 +550,9 @@ static void nvmet_bdev_zone_append_bio_d
+ void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
+ {
+ 	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->rw.slba);
++#ifdef HAVE_BIO_INIT_5_PARAMS
++	const unsigned int op = REQ_OP_ZONE_APPEND | REQ_SYNC | REQ_IDLE;
++#endif
+ 	u16 status = NVME_SC_SUCCESS;
+ 	unsigned int total_len = 0;
+ 	struct scatterlist *sg;
+@@ -551,14 +582,27 @@ void nvmet_bdev_execute_zone_append(stru
+ 
+ 	if (nvmet_use_inline_bvec(req)) {
+ 		bio = &req->z.inline_bio;
++#ifdef HAVE_BIO_INIT_5_PARAMS
++		bio_init(bio, req->ns->bdev, req->inline_bvec,
++			 ARRAY_SIZE(req->inline_bvec), op);
++#else
+ 		bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#endif
+ 	} else {
++#ifdef HAVE_BIO_INIT_5_PARAMS
++		bio = bio_alloc(req->ns->bdev, req->sg_cnt, op, GFP_KERNEL);
++#else
+ 		bio = bio_alloc(GFP_KERNEL, req->sg_cnt);
++#endif
+ 	}
+ 
++#ifndef HAVE_BIO_INIT_5_PARAMS
+ 	bio->bi_opf = REQ_OP_ZONE_APPEND | REQ_SYNC | REQ_IDLE;
++#endif
+ 	bio->bi_end_io = nvmet_bdev_zone_append_bio_done;
++#ifndef HAVE_BIO_INIT_5_PARAMS
+ 	bio_set_dev(bio, req->ns->bdev);
++#endif
+ 	bio->bi_iter.bi_sector = sect;
+ 	bio->bi_private = req;
+ 	if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
+@@ -610,3 +654,4 @@ u16 nvmet_bdev_zns_parse_io_cmd(struct n
+ 		return nvmet_bdev_parse_io_cmd(req);
+ 	}
+ }
++#endif /* HAVE_BIO_ADD_ZONE_APPEND_PAGE */

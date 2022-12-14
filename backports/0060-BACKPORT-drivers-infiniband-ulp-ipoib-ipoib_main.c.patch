@@ -1,0 +1,773 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
+
+Change-Id: Icd772e7f5a73b8d1819c95f06813958fc04cf988
+---
+ drivers/infiniband/ulp/ipoib/ipoib_main.c | 365 ++++++++++++++++++++--
+ 1 file changed, 335 insertions(+), 30 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_main.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_main.c
+@@ -56,6 +56,9 @@
+ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("IP-over-InfiniBand net driver");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ int ipoib_sendq_size __read_mostly = IPOIB_TX_RING_SIZE;
+ int ipoib_recvq_size __read_mostly = IPOIB_RX_RING_SIZE;
+@@ -101,7 +104,9 @@ static struct net_device *ipoib_get_net_
+ 		struct ib_device *dev, u32 port, u16 pkey,
+ 		const union ib_gid *gid, const struct sockaddr *addr,
+ 		void *client_data);
++#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)
+ static int ipoib_set_mac(struct net_device *dev, void *addr);
++#endif
+ static int ipoib_ioctl(struct net_device *dev, struct ifreq *ifr,
+ 		       int cmd);
+ 
+@@ -116,8 +121,12 @@ static struct ib_client ipoib_client = {
+ static int ipoib_netdev_event(struct notifier_block *this,
+ 			      unsigned long event, void *ptr)
+ {
++#ifdef HAVE_NETDEV_NOTIFIER_INFO
+ 	struct netdev_notifier_info *ni = ptr;
+ 	struct net_device *dev = ni->dev;
++#else
++	struct net_device *dev = ptr;
++#endif
+ 
+ 	if (dev->netdev_ops->ndo_open != ipoib_open)
+ 		return NOTIFY_DONE;
+@@ -169,7 +178,11 @@ int ipoib_open(struct net_device *dev)
+ 			if (flags & IFF_UP)
+ 				continue;
+ 
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 			dev_change_flags(cpriv->dev, flags | IFF_UP, NULL);
++#else
++			dev_change_flags(cpriv->dev, flags | IFF_UP);
++#endif
+ 		}
+ 		up_read(&priv->vlan_rwsem);
+ 	} else if (priv->parent) {
+@@ -214,7 +227,11 @@ static int ipoib_stop(struct net_device
+ 			if (!(flags & IFF_UP))
+ 				continue;
+ 
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 			dev_change_flags(cpriv->dev, flags & ~IFF_UP, NULL);
++#else
++			dev_change_flags(cpriv->dev, flags & ~IFF_UP);
++#endif
+ 		}
+ 		up_read(&priv->vlan_rwsem);
+ 	}
+@@ -265,14 +282,21 @@ static int ipoib_change_mtu(struct net_d
+ 				"link layer MTU - 4 (%u)\n", priv->mcast_mtu);
+ 
+ 	new_mtu = min(priv->mcast_mtu, priv->admin_mtu);
+-
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	if (priv->rn_ops->extended.ndo_change_mtu) {
++#else
+ 	if (priv->rn_ops->ndo_change_mtu) {
++#endif
+ 		bool carrier_status = netif_carrier_ok(dev);
+ 
+ 		netif_carrier_off(dev);
+ 
+ 		/* notify lower level on the real mtu */
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++		ret = priv->rn_ops->extended.ndo_change_mtu(dev, new_mtu);
++#else
+ 		ret = priv->rn_ops->ndo_change_mtu(dev, new_mtu);
++#endif
+ 
+ 		if (carrier_status)
+ 			netif_carrier_on(dev);
+@@ -283,15 +307,42 @@ static int ipoib_change_mtu(struct net_d
+ 	return ret;
+ }
+ 
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
+ static void ipoib_get_stats(struct net_device *dev,
+ 			    struct rtnl_link_stats64 *stats)
++#elif defined(HAVE_NDO_GET_STATS64)
++static struct rtnl_link_stats64 * ipoib_get_stats(struct net_device *dev,
++						  struct rtnl_link_stats64 *stats)
++#else
++static struct net_device_stats *  ipoib_get_stats(struct net_device *dev)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 
++#if !defined(HAVE_NDO_GET_STATS64) && !defined(HAVE_NDO_GET_STATS64_RET_VOID)
++	struct net_device_stats *stats = &priv->ret_stats;
++#endif
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
+ 	if (priv->rn_ops->ndo_get_stats64)
+ 		priv->rn_ops->ndo_get_stats64(dev, stats);
+ 	else
+ 		netdev_stats_to_stats64(stats, &dev->stats);
++#elif defined(HAVE_NDO_GET_STATS64)
++	if (priv->rn_ops->ndo_get_stats64) {
++		return priv->rn_ops->ndo_get_stats64(dev, stats);
++	} else {
++		netdev_stats_to_stats64(stats,
++					&dev->stats);
++	return stats;
++	}
++#else
++	if (priv->rn_ops->ndo_get_stats) {
++		return priv->rn_ops->ndo_get_stats(dev);
++		} else {
++			memcpy(stats, &dev->stats, sizeof(priv->ret_stats));
++			return stats;
++		}
++#endif
+ }
+ 
+ /* Called with an RCU read lock taken */
+@@ -310,9 +361,21 @@ static bool ipoib_is_dev_match_addr_rcu(
+ 		if (!in_dev)
+ 			return false;
+ 
++#ifdef HAVE_INET_CONFIRM_ADDR_EXPORTED
++#ifdef HAVE_INET_CONFIRM_ADDR_5_PARAMS
+ 		ret_addr = inet_confirm_addr(net, in_dev, 0,
+ 					     addr_in->sin_addr.s_addr,
+ 					     RT_SCOPE_HOST);
++#else
++		ret_addr = inet_confirm_addr(in_dev, 0,
++					     addr_in->sin_addr.s_addr,
++					     RT_SCOPE_HOST);
++#endif
++#else
++		ret_addr = confirm_addr_indev(in_dev, 0,
++					      addr_in->sin_addr.s_addr,
++					      RT_SCOPE_HOST);
++#endif
+ 		in_dev_put(in_dev);
+ 		if (ret_addr)
+ 			return true;
+@@ -357,10 +420,19 @@ struct ipoib_walk_data {
+ 	struct net_device *result;
+ };
+ 
++#ifdef HAVE_NETDEV_WALK_ALL_UPPER_DEV_RCU
+ static int ipoib_upper_walk(struct net_device *upper,
+-			    struct netdev_nested_priv *priv)
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++				struct netdev_nested_priv *priv)
++#else
++				void *_data)
++#endif
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct ipoib_walk_data *data = (struct ipoib_walk_data *)priv->data;
++#else
++	struct ipoib_walk_data *data = _data;
++#endif
+ 	int ret = 0;
+ 
+ 	if (ipoib_is_dev_match_addr_rcu(data->addr, upper)) {
+@@ -371,6 +443,7 @@ static int ipoib_upper_walk(struct net_d
+ 
+ 	return ret;
+ }
++#endif
+ 
+ /**
+  * ipoib_get_net_dev_match_addr - Find a net_device matching
+@@ -385,12 +458,19 @@ static int ipoib_upper_walk(struct net_d
+ static struct net_device *ipoib_get_net_dev_match_addr(
+ 		const struct sockaddr *addr, struct net_device *dev)
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct netdev_nested_priv priv;
++#endif
+ 	struct ipoib_walk_data data = {
+ 		.addr = addr,
+ 	};
++#ifndef HAVE_NETDEV_WALK_ALL_UPPER_DEV_RCU
++	struct net_device *upper;
++#endif
+ 
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	priv.data = (void *)&data;
++#endif
+ 	rcu_read_lock();
+ 	if (ipoib_is_dev_match_addr_rcu(addr, dev)) {
+ 		dev_hold(dev);
+@@ -398,7 +478,23 @@ static struct net_device *ipoib_get_net_
+ 		goto out;
+ 	}
+ 
+-	netdev_walk_all_upper_dev_rcu(dev, ipoib_upper_walk, &priv);
++#ifdef HAVE_NETDEV_WALK_ALL_UPPER_DEV_RCU
++	netdev_walk_all_upper_dev_rcu(dev, ipoib_upper_walk, 
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++					&priv);
++#else
++					&data);
++#endif
++#else
++	for_each_netdev(&init_net, upper) {
++                if (ipoib_is_dev_match_addr_rcu(addr, upper)) {
++                        dev_hold(upper);
++                        data.result = upper;
++                        break;
++                }
++        }
++#endif
++
+ out:
+ 	rcu_read_unlock();
+ 	return data.result;
+@@ -727,7 +823,7 @@ static void push_pseudo_header(struct sk
+ {
+ 	struct ipoib_pseudo_header *phdr;
+ 
+-	phdr = skb_push(skb, sizeof(*phdr));
++	phdr = (struct ipoib_pseudo_header *)skb_push(skb, sizeof(*phdr));
+ 	memcpy(phdr->hwaddr, daddr, INFINIBAND_ALEN);
+ }
+ 
+@@ -1284,15 +1380,21 @@ unref:
+ 	return NETDEV_TX_OK;
+ }
+ 
+-static void ipoib_timeout(struct net_device *dev, unsigned int txqueue)
++#ifdef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
++	static void ipoib_timeout(struct net_device *dev, unsigned int txqueue)
++#else
++	static void ipoib_timeout(struct net_device *dev)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++#ifdef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
+ 	struct rdma_netdev *rn = netdev_priv(dev);
+ 
+ 	if (rn->tx_timeout) {
+ 		rn->tx_timeout(dev, txqueue);
+ 		return;
+ 	}
++#endif
+ 	ipoib_warn(priv, "transmit timeout: latency %d msecs\n",
+ 		   jiffies_to_msecs(jiffies - dev_trans_start(dev)));
+ 	ipoib_warn(priv,
+@@ -1339,7 +1441,13 @@ static int ipoib_hard_header(struct sk_b
+ {
+ 	struct ipoib_header *header;
+ 
+-	header = skb_push(skb, sizeof(*header));
++	if (unlikely(dev->hard_header_len != IPOIB_HARD_LEN)) {
++		printk_once(KERN_DEBUG "%s: dropping packet, incorrect header length %u\n",
++			    dev->name, dev->hard_header_len);
++		return -EINVAL;
++	}
++
++	header = (struct ipoib_header *)skb_push(skb, sizeof *header);
+ 
+ 	header->proto = htons(type);
+ 	header->reserved = 0;
+@@ -1378,6 +1486,69 @@ static int ipoib_get_iflink(const struct
+ 	return priv->parent->ifindex;
+ }
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++static int get_skb_hdr(struct sk_buff *skb, void **iphdr,
++		       void **tcph, u64 *hdr_flags, void *priv)
++{
++	unsigned int ip_len;
++	struct iphdr *iph;
++
++	if (unlikely(skb->protocol != htons(ETH_P_IP)))
++		return -1;
++
++	/*
++	* In the future we may add an else clause that verifies the
++	* checksum and allows devices which do not calculate checksum
++	* to use LRO.
++	*/
++	if (unlikely(skb->ip_summed != CHECKSUM_UNNECESSARY))
++		return -1;
++
++	/* Check for non-TCP packet */
++	skb_reset_network_header(skb);
++	iph = ip_hdr(skb);
++	if (iph->protocol != IPPROTO_TCP)
++		return -1;
++
++	ip_len = ip_hdrlen(skb);
++	skb_set_transport_header(skb, ip_len);
++	*tcph = tcp_hdr(skb);
++
++	/* check if IP header and TCP header are complete */
++	if (ntohs(iph->tot_len) < ip_len + tcp_hdrlen(skb))
++		return -1;
++
++	*hdr_flags = LRO_IPV4 | LRO_TCP;
++	*iphdr = iph;
++
++	return 0;
++}
++
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++static void ipoib_lro_setup(struct ipoib_dev_priv *priv)
++{
++	priv->lro.lro_mgr.max_aggr		= IPOIB_LRO_MAX_AGGR;
++	priv->lro.lro_mgr.max_desc		= IPOIB_MAX_LRO_DESCRIPTORS;
++	priv->lro.lro_mgr.lro_arr		= priv->lro.lro_desc;
++	priv->lro.lro_mgr.get_skb_header	= get_skb_hdr;
++	priv->lro.lro_mgr.features		= LRO_F_NAPI;
++	priv->lro.lro_mgr.dev			= priv->dev;
++	priv->lro.lro_mgr.ip_summed_aggr	= CHECKSUM_UNNECESSARY;
++}
++#endif
++
++void set_lro_features_bit(struct ipoib_dev_priv *priv)
++{
++	u64 hw_support_lro = 0;
++	hw_support_lro = priv->dev->hw_features & NETIF_F_RXCSUM;
++	if (hw_support_lro) {
++		priv->dev->features |= NETIF_F_LRO;
++		priv->dev->hw_features |= NETIF_F_LRO;
++		priv->dev->wanted_features |= NETIF_F_LRO;
++	}
++}
++#endif
++
+ static u32 ipoib_addr_hash(struct ipoib_neigh_hash *htbl, u8 *daddr)
+ {
+ 	/*
+@@ -1830,7 +2001,9 @@ static void ipoib_dev_uninit_default(str
+ static int ipoib_dev_init_default(struct net_device *dev)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++#ifdef HAVE_DEV_ADDR_MOD
+ 	u8 addr_mod[3];
++#endif
+ 
+ 	ipoib_napi_add(dev);
+ 
+@@ -1841,6 +2014,10 @@ static int ipoib_dev_init_default(struct
+ 	if (!priv->rx_ring)
+ 		goto out;
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	ipoib_lro_setup(priv);
++#endif
++
+ 	priv->tx_ring = vzalloc(array_size(priv->sendq_size,
+ 					   sizeof(*priv->tx_ring)));
+ 	if (!priv->tx_ring) {
+@@ -1858,10 +2035,16 @@ static int ipoib_dev_init_default(struct
+ 	}
+ 
+ 	/* after qp created set dev address */
++#ifdef HAVE_DEV_ADDR_MOD
+ 	addr_mod[0] = (priv->qp->qp_num >> 16) & 0xff;
+ 	addr_mod[1] = (priv->qp->qp_num >>  8) & 0xff;
+ 	addr_mod[2] = (priv->qp->qp_num) & 0xff;
+ 	dev_addr_mod(priv->dev, 1, addr_mod, sizeof(addr_mod));
++#else
++	priv->dev->dev_addr[1] = (priv->qp->qp_num >> 16) & 0xff;
++	priv->dev->dev_addr[2] = (priv->qp->qp_num >>  8) & 0xff;
++	priv->dev->dev_addr[3] = (priv->qp->qp_num) & 0xff;
++#endif
+ 
+ 	return 0;
+ 
+@@ -1881,10 +2064,17 @@ static int ipoib_ioctl(struct net_device
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 
++#ifdef HAVE_NDO_ETH_IOCTL
+ 	if (!priv->rn_ops->ndo_eth_ioctl)
+ 		return -EOPNOTSUPP;
+ 
+ 	return priv->rn_ops->ndo_eth_ioctl(dev, ifr, cmd);
++#else 
++	if (!priv->rn_ops->ndo_do_ioctl)
++		return -EOPNOTSUPP;
++
++	return priv->rn_ops->ndo_do_ioctl(dev, ifr, cmd);
++#endif
+ }
+ 
+ static int ipoib_dev_init(struct net_device *dev)
+@@ -1968,7 +2158,11 @@ static void ipoib_parent_unregister_pre(
+ 	 * running ensures the it will not add more work.
+ 	 */
+ 	rtnl_lock();
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 	dev_change_flags(priv->dev, priv->dev->flags & ~IFF_UP, NULL);
++#else
++	dev_change_flags(priv->dev, priv->dev->flags & ~IFF_UP);
++#endif
+ 	rtnl_unlock();
+ 
+ 	/* ipoib_event() cannot be running once this returns */
+@@ -1986,12 +2180,12 @@ static void ipoib_set_dev_features(struc
+ 	priv->hca_caps = priv->ca->attrs.device_cap_flags;
+ 
+ 	if (priv->hca_caps & IB_DEVICE_UD_IP_CSUM) {
+-		priv->dev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_RXCSUM;
++       	priv->dev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_RXCSUM;
+ 
+-		if (priv->hca_caps & IB_DEVICE_UD_TSO)
+-			priv->dev->hw_features |= NETIF_F_TSO;
++       	if (priv->hca_caps & IB_DEVICE_UD_TSO)
++       		priv->dev->hw_features |= NETIF_F_TSO;
+ 
+-		priv->dev->features |= priv->dev->hw_features;
++       	priv->dev->features |= priv->dev->hw_features;
+ 	}
+ }
+ 
+@@ -2022,13 +2216,19 @@ static int ipoib_parent_init(struct net_
+ 			priv->ca->name, priv->port, result);
+ 		return result;
+ 	}
++#ifdef HAVE_DEV_ADDR_MOD
+ 	dev_addr_mod(priv->dev, 4, priv->local_gid.raw, sizeof(union ib_gid));
++#else
++	memcpy(priv->dev->dev_addr + 4, priv->local_gid.raw,
++	       sizeof(union ib_gid));
++#endif
+ 
+ 	SET_NETDEV_DEV(priv->dev, priv->ca->dev.parent);
+ 	priv->dev->dev_port = priv->port - 1;
+ 	/* Let's set this one too for backwards compatibility. */
+ 	priv->dev->dev_id = priv->port - 1;
+ 
++
+ 	return 0;
+ }
+ 
+@@ -2043,8 +2243,13 @@ static void ipoib_child_init(struct net_
+ 		memcpy(&priv->local_gid, priv->dev->dev_addr + 4,
+ 		       sizeof(priv->local_gid));
+ 	else {
++#ifdef HAVE_DEV_ADDR_MOD
+ 		__dev_addr_set(priv->dev, ppriv->dev->dev_addr,
+ 			       INFINIBAND_ALEN);
++#else
++		memcpy(priv->dev->dev_addr, ppriv->dev->dev_addr,
++		       INFINIBAND_ALEN);
++#endif
+ 		memcpy(&priv->local_gid, &ppriv->local_gid,
+ 		       sizeof(priv->local_gid));
+ 	}
+@@ -2072,7 +2277,9 @@ static int ipoib_ndo_init(struct net_dev
+ 	ndev->mtu = IPOIB_UD_MTU(priv->max_ib_mtu);
+ 	priv->mcast_mtu = priv->admin_mtu = ndev->mtu;
+ 	rn->mtu = priv->mcast_mtu;
+-	ndev->max_mtu = IPOIB_CM_MTU;
++#ifdef HAVE_NET_DEVICE_MIN_MAX_MTU
++       ndev->max_mtu = IPOIB_CM_MTU;
++#endif
+ 
+ 	ndev->neigh_priv_len = sizeof(struct ipoib_neigh);
+ 
+@@ -2118,6 +2325,7 @@ static void ipoib_ndo_uninit(struct net_
+ 	 * ipoib_remove_one guarantees the children are removed before the
+ 	 * parent, and that is the only place where a parent can be removed.
+ 	 */
++#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+ 	WARN_ON(!list_empty(&priv->child_intfs));
+ 
+ 	if (priv->parent) {
+@@ -2127,6 +2335,7 @@ static void ipoib_ndo_uninit(struct net_
+ 		list_del(&priv->list);
+ 		up_write(&ppriv->vlan_rwsem);
+ 	}
++#endif
+ 
+ 	ipoib_neigh_hash_uninit(dev);
+ 
+@@ -2167,6 +2376,7 @@ static int ipoib_get_vf_config(struct ne
+ 	return 0;
+ }
+ 
++#ifdef HAVE_NDO_SET_VF_GUID
+ static int ipoib_set_vf_guid(struct net_device *dev, int vf, u64 guid, int type)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+@@ -2176,7 +2386,9 @@ static int ipoib_set_vf_guid(struct net_
+ 
+ 	return ib_set_vf_guid(priv->ca, vf, priv->port, guid, type);
+ }
++#endif
+ 
++#ifdef HAVE_NDO_GET_VF_GUID
+ static int ipoib_get_vf_guid(struct net_device *dev, int vf,
+ 			     struct ifla_vf_guid *node_guid,
+ 			     struct ifla_vf_guid *port_guid)
+@@ -2185,7 +2397,9 @@ static int ipoib_get_vf_guid(struct net_
+ 
+ 	return ib_get_vf_guid(priv->ca, vf, priv->port, node_guid, port_guid);
+ }
++#endif
+ 
++#ifdef HAVE_NDO_GET_VF_STATS
+ static int ipoib_get_vf_stats(struct net_device *dev, int vf,
+ 			      struct ifla_vf_stats *vf_stats)
+ {
+@@ -2193,6 +2407,7 @@ static int ipoib_get_vf_stats(struct net
+ 
+ 	return ib_get_vf_stats(priv->ca, vf, priv->port, vf_stats);
+ }
++#endif
+ 
+ static int ipoib_set_vf_local_mac(struct net_device *dev, void *addr)
+ {
+@@ -2218,20 +2433,45 @@ static const struct net_device_ops ipoib
+ 	.ndo_uninit		 = ipoib_ndo_uninit,
+ 	.ndo_open		 = ipoib_open,
+ 	.ndo_stop		 = ipoib_stop,
+-	.ndo_change_mtu		 = ipoib_change_mtu,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = ipoib_change_mtu,
++#else
++       .ndo_change_mtu		 = ipoib_change_mtu,
++#endif
+ 	.ndo_fix_features	 = ipoib_fix_features,
+ 	.ndo_start_xmit		 = ipoib_start_xmit,
+ 	.ndo_tx_timeout		 = ipoib_timeout,
+ 	.ndo_set_rx_mode	 = ipoib_set_mcast_list,
+-	.ndo_get_iflink		 = ipoib_get_iflink,
+-	.ndo_set_vf_link_state	 = ipoib_set_vf_link_state,
+-	.ndo_get_vf_config	 = ipoib_get_vf_config,
+-	.ndo_get_vf_stats	 = ipoib_get_vf_stats,
+-	.ndo_get_vf_guid	 = ipoib_get_vf_guid,
+-	.ndo_set_vf_guid	 = ipoib_set_vf_guid,
+-	.ndo_set_mac_address	 = ipoib_set_mac,
+-	.ndo_get_stats64	 = ipoib_get_stats,
+-	.ndo_eth_ioctl		 = ipoib_ioctl,
++       .ndo_get_iflink		 = ipoib_get_iflink,
++       .ndo_set_vf_link_state	 = ipoib_set_vf_link_state,
++       .ndo_get_vf_config	 = ipoib_get_vf_config,
++#ifdef HAVE_NDO_GET_VF_STATS
++       .ndo_get_vf_stats	 = ipoib_get_vf_stats,
++#endif
++#ifdef HAVE_NDO_GET_VF_GUID
++       .ndo_get_vf_guid         = ipoib_get_vf_guid,
++#endif
++#ifdef HAVE_NDO_SET_VF_GUID
++       .ndo_set_vf_guid	 = ipoib_set_vf_guid,
++#endif
++#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)
++       .ndo_set_mac_address	 = ipoib_set_mac,
++#endif
++#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
++       .ndo_get_stats64	 = ipoib_get_stats,
++#else
++	.ndo_get_stats           = ipoib_get_stats,
++#endif
++
++#ifdef HAVE_NDO_ETH_IOCTL
++	.ndo_eth_ioctl            = ipoib_ioctl,
++#else
++	.ndo_do_ioctl		  = ipoib_ioctl,
++#endif
++
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
++#endif
+ };
+ 
+ static const struct net_device_ops ipoib_netdev_ops_vf = {
+@@ -2239,15 +2479,32 @@ static const struct net_device_ops ipoib
+ 	.ndo_uninit		 = ipoib_ndo_uninit,
+ 	.ndo_open		 = ipoib_open,
+ 	.ndo_stop		 = ipoib_stop,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = ipoib_change_mtu,
++#else
+ 	.ndo_change_mtu		 = ipoib_change_mtu,
++#endif
+ 	.ndo_fix_features	 = ipoib_fix_features,
+ 	.ndo_start_xmit	 	 = ipoib_start_xmit,
+ 	.ndo_tx_timeout		 = ipoib_timeout,
+ 	.ndo_set_rx_mode	 = ipoib_set_mcast_list,
+ 	.ndo_get_iflink		 = ipoib_get_iflink,
+ 	.ndo_set_mac_address	 = ipoib_set_vf_local_mac,
++#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
+ 	.ndo_get_stats64	 = ipoib_get_stats,
+-	.ndo_eth_ioctl		 = ipoib_ioctl,
++#else
++	.ndo_get_stats           = ipoib_get_stats,
++#endif
++
++#ifdef HAVE_NDO_ETH_IOCTL
++	.ndo_eth_ioctl            = ipoib_ioctl,
++#else
++	.ndo_do_ioctl		  = ipoib_ioctl,
++#endif
++
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
++#endif
+ };
+ 
+ static const struct net_device_ops ipoib_netdev_default_pf = {
+@@ -2274,7 +2531,7 @@ void ipoib_setup_common(struct net_devic
+ 	dev->tx_queue_len	 = ipoib_sendq_size * 2;
+ 	dev->features		 = (NETIF_F_VLAN_CHALLENGED	|
+ 				    NETIF_F_HIGHDMA);
+-	netif_keep_dst(dev);
++       netif_keep_dst(dev);
+ 
+ 	memcpy(dev->broadcast, ipv4_bcast_addr, INFINIBAND_ALEN);
+ 
+@@ -2283,7 +2540,9 @@ void ipoib_setup_common(struct net_devic
+ 	 * consistently to unify all the various unregister paths, including
+ 	 * those connected to rtnl_link_ops which require it.
+ 	 */
++#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+ 	dev->needs_free_netdev = true;
++#endif
+ }
+ 
+ static void ipoib_build_priv(struct net_device *dev)
+@@ -2370,9 +2629,10 @@ int ipoib_intf_init(struct ib_device *hc
+ 	 * being set, so we force it to NULL here and handle manually until it
+ 	 * is safe to turn on.
+ 	 */
++#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+ 	priv->next_priv_destructor = dev->priv_destructor;
+ 	dev->priv_destructor = NULL;
+-
++#endif
+ 	ipoib_build_priv(dev);
+ 
+ 	return 0;
+@@ -2410,7 +2670,7 @@ void ipoib_intf_free(struct net_device *
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	struct rdma_netdev *rn = netdev_priv(dev);
+-
++#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+ 	dev->priv_destructor = priv->next_priv_destructor;
+ 	if (dev->priv_destructor)
+ 		dev->priv_destructor(dev);
+@@ -2420,7 +2680,7 @@ void ipoib_intf_free(struct net_device *
+ 	 * attempt to call priv_destructor twice, prevent that from happening.
+ 	 */
+ 	dev->priv_destructor = NULL;
+-
++#endif
+ 	/* unregister/destroy is very complicated. Make bugs more obvious. */
+ 	rn->clnt_priv = NULL;
+ 
+@@ -2485,7 +2745,11 @@ static void set_base_guid(struct ipoib_d
+ 	memcpy(&priv->local_gid.global.interface_id,
+ 	       &gid->global.interface_id,
+ 	       sizeof(gid->global.interface_id));
++#ifdef HAVE_DEV_ADDR_MOD
+ 	dev_addr_mod(netdev, 4, (u8 *)&priv->local_gid, sizeof(priv->local_gid));
++#else
++	memcpy(netdev->dev_addr + 4, &priv->local_gid, sizeof(priv->local_gid));
++#endif
+ 	clear_bit(IPOIB_FLAG_DEV_ADDR_SET, &priv->flags);
+ 
+ 	netif_addr_unlock_bh(netdev);
+@@ -2498,6 +2762,7 @@ static void set_base_guid(struct ipoib_d
+ 	}
+ }
+ 
++#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)
+ static int ipoib_check_lladdr(struct net_device *dev,
+ 			      struct sockaddr_storage *ss)
+ {
+@@ -2523,7 +2788,7 @@ static int ipoib_set_mac(struct net_devi
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	struct sockaddr_storage *ss = addr;
+-	int ret;
++	int ret = 0;
+ 
+ 	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
+ 		return -EBUSY;
+@@ -2538,6 +2803,7 @@ static int ipoib_set_mac(struct net_devi
+ 
+ 	return 0;
+ }
++#endif
+ 
+ static ssize_t ipoib_set_mac_using_sysfs(struct device *dev,
+ 					 struct device_attribute *attr,
+@@ -2686,14 +2952,22 @@ static struct net_device *ipoib_add_port
+ 		if (!rc && ops->priv_size < params.sizeof_priv)
+ 			ops->priv_size = params.sizeof_priv;
+ 	}
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	/* force lro on the dev->features, because the function
++	 * register_netdev disable it according to our private lro
++	 */
++	set_lro_features_bit(priv);
++#endif
++
+ 	/*
+ 	 * We cannot set priv_destructor before register_netdev because we
+ 	 * need priv to be always valid during the error flow to execute
+ 	 * ipoib_parent_unregister_pre(). Instead handle it manually and only
+ 	 * enter priv_destructor mode once we are completely registered.
+ 	 */
++#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
+ 	ndev->priv_destructor = ipoib_intf_free;
+-
++#endif
+ 	if (ipoib_intercept_dev_id_attr(ndev))
+ 		goto sysfs_failed;
+ 	if (ipoib_cm_add_mode_attr(ndev))
+@@ -2764,11 +3038,42 @@ static void ipoib_remove_one(struct ib_d
+ 
+ 		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
+ 					 list)
+-			unregister_netdevice_queue(cpriv->dev, &head);
++#ifdef HAVE_NET_DEVICE_HAS_CLOSE_LIST
++#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
++			if (cpriv->dev->reg_state == NETREG_REGISTERED) 
++#endif
++				unregister_netdevice_queue(cpriv->dev, &head);
+ 		unregister_netdevice_queue(priv->dev, &head);
++#else
++#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
++			if (cpriv->dev->reg_state == NETREG_REGISTERED) 
++#endif
++				unregister_netdevice(cpriv->dev);
++		unregister_netdevice(priv->dev);
++#endif
++#ifdef HAVE_NET_DEVICE_HAS_CLOSE_LIST
+ 		unregister_netdevice_many(&head);
+-
++#endif
+ 		rtnl_unlock();
++#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
++		/* Free parent resources after rtnl_unlock to
++		 * avoid ipoib_get_iflink panic.
++		 */
++		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
++					 list)
++		{
++			down_write(&priv->vlan_rwsem);
++			list_del(&cpriv->list);
++			up_write(&priv->vlan_rwsem);
++			rdma_uninit_netdev(cpriv->ca, cpriv->dev, cpriv->port,
++					   RDMA_NETDEV_IPOIB, !ipoib_enhanced_enabled);
++			ipoib_intf_free(cpriv->dev);
++		}
++
++		rdma_uninit_netdev(priv->ca, priv->dev, priv->port,
++				   RDMA_NETDEV_IPOIB, !ipoib_enhanced_enabled);
++		ipoib_intf_free(priv->dev);
++#endif
+ 	}
+ 
+ 	kfree(dev_list);

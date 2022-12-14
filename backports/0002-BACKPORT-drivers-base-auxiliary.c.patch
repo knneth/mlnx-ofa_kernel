@@ -1,0 +1,125 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
+
+Change-Id: I33fdc1295e95f46a582590e310a0eb0365e6ddfc
+---
+ drivers/base/auxiliary.c | 64 ++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 61 insertions(+), 3 deletions(-)
+
+--- a/drivers/base/auxiliary.c
++++ b/drivers/base/auxiliary.c
+@@ -19,7 +19,10 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/string.h>
+ #include <linux/auxiliary_bus.h>
++#include <linux/acpi.h>
++#ifdef CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT
+ #include "base.h"
++#endif
+ 
+ /**
+  * DOC: PURPOSE
+@@ -211,27 +214,53 @@ static int auxiliary_bus_probe(struct de
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+ 	int ret;
+ 
++#ifdef HAVE_DEV_PM_DOMAIN_ATTACH
+ 	ret = dev_pm_domain_attach(dev, true);
++
++	/* In case of old kernels 4.17 and below do nothing in case of
++	 * failure of ENODEV */
++	if (ret == -ENODEV)
++		ret = 0;
++
+ 	if (ret) {
+ 		dev_warn(dev, "Failed to attach to PM Domain : %d\n", ret);
+ 		return ret;
+ 	}
++#else
++	acpi_dev_pm_attach(dev, true);
++#endif
+ 
+ 	ret = auxdrv->probe(auxdev, auxiliary_match_id(auxdrv->id_table, auxdev));
+ 	if (ret)
++#ifdef HAVE_DEV_PM_DOMAIN_ATTACH
+ 		dev_pm_domain_detach(dev, true);
++#else
++		acpi_dev_pm_detach(dev, true);
++#endif
+ 
+ 	return ret;
+ }
+ 
++#ifdef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
+ static void auxiliary_bus_remove(struct device *dev)
++#else
++static int auxiliary_bus_remove(struct device *dev)
++#endif
+ {
+ 	struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+ 
+ 	if (auxdrv->remove)
+ 		auxdrv->remove(auxdev);
++#ifdef HAVE_DEV_PM_DOMAIN_ATTACH
+ 	dev_pm_domain_detach(dev, true);
++#else
++	acpi_dev_pm_detach(dev, true);
++#endif
++
++#ifndef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
++	return 0;
++#endif
+ }
+ 
+ static void auxiliary_bus_shutdown(struct device *dev)
+@@ -353,9 +382,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
+  * if it does.  If the callback returns non-zero, this function will
+  * return to the caller and not iterate over any more devices.
+  */
+-struct auxiliary_device *auxiliary_find_device(struct device *start,
+-					       const void *data,
+-					       int (*match)(struct device *dev, const void *data))
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
++struct auxiliary_device *
++auxiliary_find_device(struct device *start,
++		      const void *data,
++		      int (*match)(struct device *dev, const void *data))
++#else
++struct auxiliary_device *
++auxiliary_find_device(struct device *start,
++		      void *data,
++		      int (*match)(struct device *dev, void *data))
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct device *dev;
+ 
+@@ -417,7 +454,28 @@ void auxiliary_driver_unregister(struct
+ }
+ EXPORT_SYMBOL_GPL(auxiliary_driver_unregister);
+ 
++#ifdef CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT
+ void __init auxiliary_bus_init(void)
+ {
+ 	WARN_ON(bus_register(&auxiliary_bus_type));
+ }
++#else
++static int __init auxiliary_bus_init(void)
++{
++	return bus_register(&auxiliary_bus_type);
++}
++
++static void __exit auxiliary_bus_exit(void)
++{
++	bus_unregister(&auxiliary_bus_type);
++}
++
++module_init(auxiliary_bus_init);
++module_exit(auxiliary_bus_exit);
++
++MODULE_LICENSE("GPL v2");
++MODULE_DESCRIPTION("Auxiliary Bus");
++MODULE_INFO(supported, "external");
++MODULE_AUTHOR("David Ertman <david.m.ertman@intel.com>");
++MODULE_AUTHOR("Kiran Patil <kiran.patil@intel.com>");
++#endif

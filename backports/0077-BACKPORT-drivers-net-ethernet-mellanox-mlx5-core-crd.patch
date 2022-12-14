@@ -1,0 +1,54 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/crdump.c
+
+Change-Id: Ia5d7cee3cd0eacf2f03ac73279e5995aa402aa5a
+---
+ .../net/ethernet/mellanox/mlx5/core/crdump.c   | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
+@@ -163,17 +163,31 @@ static int mlx5_crdump_open(struct inode
+ 		return ret;
+ 
+ 	seq = file->private_data;
++#ifdef HAVE_PDE_DATA
+ 	seq->private = pde_data(inode);
++#else
++	seq->private = PDE_DATA(inode);
++#endif
+ 
+ 	return 0;
+ }
+ 
++#ifdef HAVE_PROC_OPS_STRUCT
+ static const struct proc_ops  mlx5_crdump_ops = {
+ 	.proc_open    = mlx5_crdump_open,
+ 	.proc_read    = seq_read,
+ 	.proc_lseek  = seq_lseek,
+ 	.proc_release = seq_release
+ };
++#else
++static const struct file_operations mlx5_crdump_fops = {
++        .owner   = THIS_MODULE,
++        .open    = mlx5_crdump_open,
++        .read    = seq_read,
++        .llseek  = seq_lseek,
++        .release = seq_release
++};
++#endif
+ 
+ int mlx5_cr_protected_capture(struct mlx5_core_dev *dev)
+ {
+@@ -291,7 +305,11 @@ int mlx5_crdump_init(struct mlx5_core_de
+ 
+ 	if (mlx5_crdump_dir)
+ 		if (!proc_create_data(pci_name(dev->pdev), S_IRUGO,
++#ifdef HAVE_PROC_OPS_STRUCT
+ 				      mlx5_crdump_dir, &mlx5_crdump_ops,
++#else
++				      mlx5_crdump_dir, &mlx5_crdump_fops,
++#endif
+ 				      crdump)) {
+ 			pr_warn("failed creating proc file\n");
+ 			goto clean_mem;

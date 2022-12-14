@@ -93,7 +93,7 @@ mlx5_esw_vporttbl_get(struct mlx5_eswitch *esw, struct mlx5_vport_tbl_attr *attr
 		goto err_alloc;
 	}
 
-	ns = mlx5_get_flow_namespace(dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+	ns = mlx5_get_flow_namespace(dev, MLX5_FLOW_NAMESPACE_FDB);
 	if (!ns) {
 		esw_warn(dev, "Failed to get FDB namespace\n");
 		fdb = ERR_PTR(-ENOENT);

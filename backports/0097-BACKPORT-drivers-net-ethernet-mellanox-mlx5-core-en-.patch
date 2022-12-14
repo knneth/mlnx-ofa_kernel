@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+
+Change-Id: Ie0501083e42f564e285aa9311c4fac5739d1d26f
+---
+ .../net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+@@ -3,8 +3,10 @@
+ 
+ #include <linux/netdevice.h>
+ #include <linux/list.h>
++#include <net/bonding.h>
++#ifdef HAVE_NET_LAG_H
+ #include <net/lag.h>
+-
++#endif
+ #include "mlx5_core.h"
+ #include "eswitch.h"
+ #include "esw/acl/ofld.h"
+@@ -193,9 +195,11 @@ static void mlx5e_rep_changelowerstate_e
+ 	struct mlx5e_rep_priv *rpriv;
+ 	struct net_device *lag_dev;
+ 	struct mlx5e_priv *priv;
++#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
+ 	struct list_head *iter;
+ 	struct net_device *dev;
+ 	u16 acl_vport_num;
++#endif
+ 	u16 fwd_vport_num;
+ 	int err;
+ 
+@@ -212,9 +216,12 @@ static void mlx5e_rep_changelowerstate_e
+ 	if (!lag_dev)
+ 		return;
+ 
++#ifdef HAVE_NET_LAG_PORT_DEV_TXABLE
+ 	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
+ 		   lag_dev->name, fwd_vport_num, net_lag_port_dev_txable(netdev));
++#endif
+ 
++#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
+ 	/* Point everyone's egress acl to the vport of the active representor */
+ 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
+ 		priv = netdev_priv(dev);
+@@ -235,6 +242,7 @@ static void mlx5e_rep_changelowerstate_e
+ 					    acl_vport_num, err);
+ 		}
+ 	}
++#endif
+ 
+ 	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
+ 	 * rx_rule with new destination as active vport's root_ft
+@@ -315,6 +323,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
+ 	if (!mlx5_esw_acl_egress_fwd2vport_supported(priv->mdev->priv.eswitch))
+ 		goto out;
+ 
++#ifndef HAVE_NETDEV_FOR_EACH_LOWER_DEV
++	netdev_err(netdev, "VF representors bonding is NOT supported\n");
++	goto out;
++#endif
++
+ 	uplink_priv->bond = kvzalloc(sizeof(*uplink_priv->bond), GFP_KERNEL);
+ 	if (!uplink_priv->bond) {
+ 		ret = -ENOMEM;

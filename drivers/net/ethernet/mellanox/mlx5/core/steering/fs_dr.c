@@ -2,7 +2,6 @@
 /* Copyright (c) 2019 Mellanox Technologies */
 
 #include <linux/mlx5/vport.h>
-#include "lag/lag.h"
 #include "mlx5_core.h"
 #include "fs_core.h"
 #include "fs_cmd.h"
@@ -45,11 +44,10 @@ static int set_miss_action(struct mlx5_flow_root_namespace *ns,
 	err = mlx5dr_table_set_miss_action(ft->fs_dr_table.dr_table, action);
 	if (err && action) {
 		err = mlx5dr_action_destroy(action);
-		if (err) {
-			action = NULL;
-			mlx5_core_err(ns->dev, "Failed to destroy action (%d)\n",
-				      err);
-		}
+		if (err)
+			mlx5_core_err(ns->dev,
+				      "Failed to destroy action (%d)\n", err);
+		action = NULL;
 	}
 	ft->fs_dr_table.miss_action = action;
 	if (old_miss_action) {
@@ -64,7 +62,7 @@ static int set_miss_action(struct mlx5_flow_root_namespace *ns,
 
 static int mlx5_cmd_dr_create_flow_table(struct mlx5_flow_root_namespace *ns,
 					 struct mlx5_flow_table *ft,
-					 unsigned int size,
+					 struct mlx5_flow_table_attr *ft_attr,
 					 struct mlx5_flow_table *next_ft)
 {
 	struct mlx5dr_table *tbl;
@@ -73,7 +71,7 @@ static int mlx5_cmd_dr_create_flow_table(struct mlx5_flow_root_namespace *ns,
 
 	if (mlx5_dr_is_fw_table(ft->flags))
 		return mlx5_fs_cmd_get_fw_cmds()->create_flow_table(ns, ft,
-								    size,
+								    ft_attr,
 								    next_ft);
 	flags = ft->flags;
 	/* turn off encap/decap if not supported for sw-str by fw */
@@ -81,7 +79,8 @@ static int mlx5_cmd_dr_create_flow_table(struct mlx5_flow_root_namespace *ns,
 		flags = ft->flags & ~(MLX5_FLOW_TABLE_TUNNEL_EN_REFORMAT |
 				      MLX5_FLOW_TABLE_TUNNEL_EN_DECAP);
 
-	tbl = mlx5dr_table_create(ns->fs_dr_domain.dr_domain, ft->level, flags);
+	tbl = mlx5dr_table_create(ns->fs_dr_domain.dr_domain, ft->level, flags,
+				  ft_attr->uid);
 	if (!tbl) {
 		mlx5_core_err(ns->dev, "Failed creating dr flow_table\n");
 		return -EINVAL;
@@ -429,13 +428,6 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 				term_actions[num_term_actions++].dest = tmp_action;
 				break;
 			case MLX5_FLOW_DESTINATION_TYPE_UPLINK:
-				if (!mlx5_lag_mpesw_is_activated(dev->priv.eswitch)) {
-					mlx5_core_err(dev,
-						      "UPLINK dest type is supported only in multiport eswitch LAG mode\n");
-					err = -EINVAL;
-					goto free_actions;
-				}
-				fallthrough;
 			case MLX5_FLOW_DESTINATION_TYPE_VPORT:
 				tmp_action = type == MLX5_FLOW_DESTINATION_TYPE_VPORT ?
 					     create_vport_action(domain, dst) :
@@ -511,19 +503,18 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 	}
 
 	if (fte->action.action & MLX5_FLOW_CONTEXT_ACTION_EXECUTE_ASO) {
-		struct mlx5_exe_aso *aso;
-
 		if (fte->action.exe_aso.type != MLX5_EXE_ASO_FLOW_METER) {
 			err = -EOPNOTSUPP;
 			goto free_actions;
 		}
 
-		aso = &fte->action.exe_aso;
-		tmp_action = mlx5dr_action_create_aso_flow_meter(domain,
-								 aso->object_id,
-								 aso->return_reg_id,
-								 aso->flow_meter.init_color,
-								 aso->flow_meter.meter_idx);
+		tmp_action =
+			mlx5dr_action_create_aso(domain,
+						 fte->action.exe_aso.object_id,
+						 fte->action.exe_aso.return_reg_id,
+						 fte->action.exe_aso.type,
+						 fte->action.exe_aso.flow_meter.init_color,
+						 fte->action.exe_aso.flow_meter.meter_idx);
 		if (!tmp_action) {
 			err = -ENOMEM;
 			goto free_actions;
@@ -693,6 +684,19 @@ static void mlx5_cmd_dr_modify_header_dealloc(struct mlx5_flow_root_namespace *n
 	mlx5dr_action_destroy(modify_hdr->action.dr_action);
 }
 
+static int
+mlx5_cmd_dr_destroy_match_definer(struct mlx5_flow_root_namespace *ns,
+				  int definer_id)
+{
+	return -EOPNOTSUPP;
+}
+
+static int mlx5_cmd_dr_create_match_definer(struct mlx5_flow_root_namespace *ns,
+					    u16 format_id, u32 *match_mask)
+{
+	return -EOPNOTSUPP;
+}
+
 static int mlx5_cmd_dr_delete_fte(struct mlx5_flow_root_namespace *ns,
 				  struct mlx5_flow_table *ft,
 				  struct fs_fte *fte)
@@ -747,19 +751,6 @@ restore_fte:
 	return ret;
 }
 
-static int
-mlx5_cmd_dr_destroy_match_definer(struct mlx5_flow_root_namespace *ns,
-				  int definer_id)
-{
-	return -EOPNOTSUPP;
-}
-
-static int mlx5_cmd_dr_create_match_definer(struct mlx5_flow_root_namespace *ns,
-					    u16 format_id, u32 *match_mask)
-{
-	return -EOPNOTSUPP;
-}
-
 static int mlx5_cmd_dr_set_peer(struct mlx5_flow_root_namespace *ns,
 				struct mlx5_flow_root_namespace *peer_ns)
 {
@@ -794,18 +785,6 @@ bool mlx5_fs_dr_is_supported(struct mlx5_core_dev *dev)
 	return mlx5dr_is_supported(dev);
 }
 
-static int mlx5_cmd_dr_vport_enable(struct mlx5_flow_root_namespace *ns,
-				    int vport)
-{
-	return mlx5dr_domain_vport_enable(ns->fs_dr_domain.dr_domain, vport);
-}
-
-static void mlx5_cmd_dr_vport_disable(struct mlx5_flow_root_namespace *ns,
-				      int vport)
-{
-	mlx5dr_domain_vport_disable(ns->fs_dr_domain.dr_domain, vport);
-}
-
 static const struct mlx5_flow_cmds mlx5_flow_cmds_dr = {
 	.create_flow_table = mlx5_cmd_dr_create_flow_table,
 	.destroy_flow_table = mlx5_cmd_dr_destroy_flow_table,
@@ -825,8 +804,6 @@ static const struct mlx5_flow_cmds mlx5_flow_cmds_dr = {
 	.set_peer = mlx5_cmd_dr_set_peer,
 	.create_ns = mlx5_cmd_dr_create_ns,
 	.destroy_ns = mlx5_cmd_dr_destroy_ns,
-	.vport_enable = mlx5_cmd_dr_vport_enable,
-	.vport_disable = mlx5_cmd_dr_vport_disable,
 };
 
 const struct mlx5_flow_cmds *mlx5_fs_cmd_get_dr_cmds(void)

@@ -1,0 +1,100 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
+
+Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
+---
+ .../mellanox/mlx5/core/en_accel/ktls_rx.c     | 22 ++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2019 Mellanox Technologies.
+ 
++#ifdef HAVE_KTLS_RX_SUPPORT
++
+ #include <net/inet6_hashtables.h>
+ #include "en_accel/en_accel.h"
+ #include "en_accel/tls.h"
+@@ -34,7 +36,9 @@ enum {
+ };
+ 
+ struct mlx5e_ktls_rx_resync_ctx {
++#ifdef HAVE_TLS_OFFLOAD_RESYNC_ASYNC_STRUCT
+ 	struct tls_offload_resync_async core;
++#endif
+ 	struct work_struct work;
+ 	struct mlx5e_priv *priv;
+ 	refcount_t refcnt;
+@@ -405,7 +409,9 @@ void mlx5e_ktls_handle_get_psv_completio
+ 	struct mlx5e_ktls_rx_resync_ctx *resync;
+ 	u8 tracker_state, auth_state, *ctx;
+ 	struct device *dev;
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+ 	u32 hw_seq;
++#endif
+ 
+ 	priv_rx = buf->priv_rx;
+ 	resync = &priv_rx->resync;
+@@ -425,9 +431,14 @@ void mlx5e_ktls_handle_get_psv_completio
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+ 	hw_seq = MLX5_GET(tls_progress_params, ctx, hw_resync_tcp_sn);
+ 	tls_offload_rx_resync_async_request_end(priv_rx->sk, cpu_to_be32(hw_seq));
+ 	priv_rx->rq_stats->tls_resync_req_end++;
++#else
++	tls_offload_rx_force_resync_request(priv_rx->sk);
++#endif
++
+ out:
+ 	mlx5e_ktls_priv_rx_put(priv_rx);
+ 	dma_unmap_single(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE, DMA_FROM_DEVICE);
+@@ -463,10 +474,12 @@ static void resync_update_sn(struct mlx5
+ 	struct ethhdr *eth = (struct ethhdr *)(skb->data);
+ 	struct net_device *netdev = rq->netdev;
+ 	struct sock *sk = NULL;
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+ 	unsigned int datalen;
++	__be32 seq;
++#endif
+ 	struct iphdr *iph;
+ 	struct tcphdr *th;
+-	__be32 seq;
+ 	int depth = 0;
+ 
+ 	__vlan_get_protocol(skb, eth->h_proto, &depth);
+@@ -504,10 +517,14 @@ static void resync_update_sn(struct mlx5
+ 	if (unlikely(!resync_queue_get_psv(sk)))
+ 		goto unref;
+ 
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+ 	seq = th->seq;
+ 	datalen = skb->len - depth;
+ 	tls_offload_rx_resync_async_request_start(sk, seq, datalen);
+ 	rq->stats->tls_resync_req_start++;
++#else
++	tls_offload_rx_force_resync_request(sk);
++#endif
+ 
+ unref:
+ 	sock_gen_put(sk);
+@@ -624,8 +641,10 @@ int mlx5e_ktls_add_rx(struct net_device
+ 	accel_rule_init(&priv_rx->rule, priv);
+ 	resync = &priv_rx->resync;
+ 	resync_init(resync, priv);
++#ifdef HAVE_TLS_OFFLOAD_RESYNC_ASYNC_STRUCT
+ 	tls_offload_ctx_rx(tls_ctx)->resync_async = &resync->core;
+ 	tls_offload_rx_resync_set_type(sk, TLS_OFFLOAD_SYNC_TYPE_DRIVER_REQ_ASYNC);
++#endif
+ 
+ 	err = post_rx_param_wqes(priv->channels.c[rxq], priv_rx, start_offload_tcp_sn);
+ 	if (err)
+@@ -745,3 +764,4 @@ bool mlx5e_ktls_rx_handle_resync_list(st
+ 
+ 	return i == budget;
+ }
++#endif /* HAVE_KTLS_RX_SUPPORT */

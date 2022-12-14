@@ -79,19 +79,40 @@ void mlx5e_skb_cb_hwtstamp_handler(struct sk_buff *skb, int hwtstamp_type,
 	memset(skb->cb, 0, sizeof(struct mlx5e_skb_cb_hwtstamp));
 }
 
+#define MLX5E_PTP_WQE_CTR_MASK(val) ((val) & ptpsq->ts_cqe_ctr_mask)
 static void mlx5e_ptp_handle_ts_cqe(struct mlx5e_ptpsq *ptpsq,
 				    struct mlx5_cqe64 *cqe,
 				    int budget)
 {
-	struct sk_buff *skb = mlx5e_skb_fifo_pop(&ptpsq->skb_fifo);
-	struct mlx5e_txqsq *sq = &ptpsq->txqsq;
+	struct mlx5e_txqsq *sq;
+	struct sk_buff *skb;
 	ktime_t hwtstamp;
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
+		skb = mlx5e_skb_fifo_pop(&ptpsq->skb_fifo);
 		ptpsq->cq_stats->err_cqe++;
 		goto out;
 	}
 
+	sq = &ptpsq->txqsq;
+	if (MLX5_CAP_GEN_2(sq->mdev, ts_cqe_metadata_size2wqe_counter)) {
+		u16 ts_cqe_counter = MLX5E_PTP_WQE_CTR_MASK(be16_to_cpu(cqe->wqe_counter));
+		u16 skb_fifo_cc_masked = MLX5E_PTP_WQE_CTR_MASK(ptpsq->skb_fifo_cc);
+
+		if (skb_fifo_cc_masked != ts_cqe_counter) {
+			ptpsq->cq_stats->resync_event++;
+			do {
+				struct skb_shared_hwtstamps hwts = {};
+
+				skb = mlx5e_skb_fifo_pop(&ptpsq->skb_fifo);
+				hwts.hwtstamp = mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp;
+				skb_tstamp_tx(skb, &hwts);
+				ptpsq->cq_stats->resync_cqe++;
+				skb_fifo_cc_masked = MLX5E_PTP_WQE_CTR_MASK(ptpsq->skb_fifo_cc);
+			} while (skb_fifo_cc_masked != ts_cqe_counter);
+		}
+	}
+	skb = mlx5e_skb_fifo_pop(&ptpsq->skb_fifo);
 	hwtstamp = mlx5e_cqe_ts_to_ns(sq->ptp_cyc2time, sq->clock, get_cqe_ts(cqe));
 	mlx5e_skb_cb_hwtstamp_handler(skb, MLX5E_SKB_CB_PORT_HWTSTAMP,
 				      hwtstamp, ptpsq->cq_stats);
@@ -214,6 +235,10 @@ static int mlx5e_ptp_alloc_txqsq(struct mlx5e_ptp *c, int txq_ix,
 	sq->stop_room = param->stop_room;
 	sq->ptp_cyc2time = mlx5_sq_ts_translator(mdev);
 
+	if (MLX5_CAP_GEN_2(mdev, ts_cqe_metadata_size2wqe_counter))
+		ptpsq->ts_cqe_ctr_mask =
+			(1 << MLX5_CAP_GEN_2(mdev, ts_cqe_metadata_size2wqe_counter)) - 1;
+
 	node = dev_to_node(mlx5_core_dma_dev(mdev));
 
 	param->wq.db_numa_node = node;
@@ -324,13 +349,14 @@ static int mlx5e_ptp_open_txqsqs(struct mlx5e_ptp *c,
 				 struct mlx5e_ptp_params *cparams)
 {
 	struct mlx5e_params *params = &cparams->params;
+	u8 num_tc = mlx5e_get_dcb_num_tc(params);
 	int ix_base;
 	int err;
 	int tc;
 
-	ix_base = params->num_tc * params->num_channels;
+	ix_base = num_tc * params->num_channels;
 
-	for (tc = 0; tc < params->num_tc; tc++) {
+	for (tc = 0; tc < num_tc; tc++) {
 		int txq_ix = ix_base + tc;
 
 		err = mlx5e_ptp_open_txqsq(c, c->priv->tisn[c->lag_port][tc], txq_ix,
@@ -363,8 +389,11 @@ static int mlx5e_ptp_open_tx_cqs(struct mlx5e_ptp *c,
 	struct mlx5e_create_cq_param ccp = {};
 	struct dim_cq_moder ptp_moder = {};
 	struct mlx5e_cq_param *cq_param;
+	u8 num_tc;
 	int err;
 	int tc;
+
+	num_tc = mlx5e_get_dcb_num_tc(params);
 
 	ccp.node     = dev_to_node(mlx5_core_dma_dev(c->mdev));
 	ccp.ch_stats = c->stats;
@@ -373,7 +402,7 @@ static int mlx5e_ptp_open_tx_cqs(struct mlx5e_ptp *c,
 
 	cq_param = &cparams->txq_sq_param.cqp;
 
-	for (tc = 0; tc < params->num_tc; tc++) {
+	for (tc = 0; tc < num_tc; tc++) {
 		struct mlx5e_cq *cq = &c->ptpsq[tc].txqsq.cq;
 
 		err = mlx5e_open_cq(c->priv, ptp_moder, cq_param, &ccp, cq);
@@ -381,7 +410,7 @@ static int mlx5e_ptp_open_tx_cqs(struct mlx5e_ptp *c,
 			goto out_err_txqsq_cq;
 	}
 
-	for (tc = 0; tc < params->num_tc; tc++) {
+	for (tc = 0; tc < num_tc; tc++) {
 		struct mlx5e_cq *cq = &c->ptpsq[tc].ts_cq;
 		struct mlx5e_ptpsq *ptpsq = &c->ptpsq[tc];
 
@@ -397,7 +426,7 @@ static int mlx5e_ptp_open_tx_cqs(struct mlx5e_ptp *c,
 out_err_ts_cq:
 	for (--tc; tc >= 0; tc--)
 		mlx5e_close_cq(&c->ptpsq[tc].ts_cq);
-	tc = params->num_tc;
+	tc = num_tc;
 out_err_txqsq_cq:
 	for (--tc; tc >= 0; tc--)
 		mlx5e_close_cq(&c->ptpsq[tc].txqsq.cq);
@@ -502,15 +531,18 @@ static void mlx5e_ptp_build_params(struct mlx5e_ptp *c,
 	params->num_channels = orig->num_channels;
 	params->hard_mtu = orig->hard_mtu;
 	params->sw_mtu = orig->sw_mtu;
-	params->num_tc = orig->num_tc;
+	params->mqprio = orig->mqprio;
 
 	/* SQ */
 	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
 		params->log_sq_size = orig->log_sq_size;
 		mlx5e_ptp_build_sq_param(c->mdev, params, &cparams->txq_sq_param);
 	}
-	if (test_bit(MLX5E_PTP_STATE_RX, c->state))
+	/* RQ */
+	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
+		params->vlan_strip_disable = orig->vlan_strip_disable;
 		mlx5e_ptp_build_rq_param(c->mdev, c->netdev, c->priv->q_counter, cparams);
+	}
 }
 
 static int mlx5e_ptp_open_queues(struct mlx5e_ptp *c,
@@ -584,9 +616,9 @@ static void mlx5e_ptp_rx_unset_fs(struct mlx5e_priv *priv)
 
 static int mlx5e_ptp_rx_set_fs(struct mlx5e_priv *priv)
 {
+	u32 tirn = mlx5e_rx_res_get_tirn_ptp(priv->rx_res);
 	struct mlx5e_ptp_fs *ptp_fs = priv->fs.ptp_fs;
 	struct mlx5_flow_handle *rule;
-	u32 tirn = priv->ptp_tir.tirn;
 	int err;
 
 	if (ptp_fs->valid)
@@ -658,8 +690,8 @@ int mlx5e_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->tstamp   = &priv->tstamp;
 	c->pdev     = mlx5_core_dma_dev(priv->mdev);
 	c->netdev   = priv->netdev;
-	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey.key);
-	c->num_tc   = params->num_tc;
+	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey);
+	c->num_tc   = mlx5e_get_dcb_num_tc(params);
 	c->stats    = &priv->ptp_stats.ch;
 	c->lag_port = lag_port;
 
@@ -718,6 +750,7 @@ void mlx5e_ptp_start_channel(struct mlx5e_ptp *c)
 	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
 		mlx5e_ptp_rx_set_fs(c->priv);
 		mlx5e_activate_rq(&c->rq);
+		mlx5e_trigger_napi_sched(&c->napi);
 	}
 }
 
@@ -756,7 +789,7 @@ int mlx5e_ptp_alloc_rx_fs(struct mlx5e_priv *priv)
 {
 	struct mlx5e_ptp_fs *ptp_fs;
 
-	if (!priv->profile->rx_ptp_support)
+	if (!mlx5e_profile_feature_cap(priv->profile, PTP_RX))
 		return 0;
 
 	ptp_fs = kzalloc(sizeof(*ptp_fs), GFP_KERNEL);
@@ -771,7 +804,7 @@ void mlx5e_ptp_free_rx_fs(struct mlx5e_priv *priv)
 {
 	struct mlx5e_ptp_fs *ptp_fs = priv->fs.ptp_fs;
 
-	if (!priv->profile->rx_ptp_support)
+	if (!mlx5e_profile_feature_cap(priv->profile, PTP_RX))
 		return;
 
 	mlx5e_ptp_rx_unset_fs(priv);
@@ -782,7 +815,7 @@ int mlx5e_ptp_rx_manage_fs(struct mlx5e_priv *priv, bool set)
 {
 	struct mlx5e_ptp *c = priv->channels.ptp;
 
-	if (!priv->profile->rx_ptp_support)
+	if (!mlx5e_profile_feature_cap(priv->profile, PTP_RX))
 		return 0;
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state))

@@ -14,6 +14,7 @@
 #include "fs_core.h"
 #include "esw/indir_table.h"
 #include "lib/fs_chains.h"
+#include "en/mod_hdr.h"
 
 #define MLX5_ESW_INDIR_TABLE_SIZE 128
 #define MLX5_ESW_INDIR_TABLE_RECIRC_IDX_MAX (MLX5_ESW_INDIR_TABLE_SIZE - 2)
@@ -85,7 +86,7 @@ mlx5_esw_indir_table_needed(struct mlx5_eswitch *esw,
 		mlx5_eswitch_is_vf_vport(esw, vport_num) &&
 		esw->dev == dest_mdev &&
 		attr->ip_version &&
-		attr->flags & MLX5_ESW_ATTR_FLAG_SRC_REWRITE;
+		attr->flags & MLX5_ATTR_FLAG_SRC_REWRITE;
 }
 
 u16
@@ -195,17 +196,17 @@ static int mlx5_esw_indir_table_rule_get(struct mlx5_eswitch *esw,
 
 	/* Modify flow source to recirculate packet */
 	data = mlx5_eswitch_get_vport_metadata_for_set(esw, esw_attr->rx_tun_attr->decap_vport);
-	err = mlx5e_tc_match_to_reg_set(esw->dev, &mod_acts, MLX5_FLOW_NAMESPACE_FDB_KERNEL,
+	err = mlx5e_tc_match_to_reg_set(esw->dev, &mod_acts, MLX5_FLOW_NAMESPACE_FDB,
 					VPORT_TO_REG, data);
 	if (err)
 		goto err_mod_hdr_regc0;
 
-	err = mlx5e_tc_match_to_reg_set(esw->dev, &mod_acts, MLX5_FLOW_NAMESPACE_FDB_KERNEL,
+	err = mlx5e_tc_match_to_reg_set(esw->dev, &mod_acts, MLX5_FLOW_NAMESPACE_FDB,
 					TUNNEL_TO_REG, ESW_TUN_SLOW_TABLE_GOTO_VPORT);
 	if (err)
 		goto err_mod_hdr_regc1;
 
-	flow_act.modify_hdr = mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL,
+	flow_act.modify_hdr = mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_FDB,
 						       mod_acts.num_actions, mod_acts.actions);
 	if (IS_ERR(flow_act.modify_hdr)) {
 		err = PTR_ERR(flow_act.modify_hdr);
@@ -226,7 +227,7 @@ static int mlx5_esw_indir_table_rule_get(struct mlx5_eswitch *esw,
 		goto err_handle;
 	}
 
-	dealloc_mod_hdr_actions(&mod_acts);
+	mlx5e_mod_hdr_dealloc(&mod_acts);
 	rule->handle = handle;
 	rule->vni = esw_attr->rx_tun_attr->vni;
 	rule->mh = flow_act.modify_hdr;
@@ -243,7 +244,7 @@ err_table:
 	mlx5_modify_header_dealloc(esw->dev, flow_act.modify_hdr);
 err_mod_hdr_alloc:
 err_mod_hdr_regc1:
-	dealloc_mod_hdr_actions(&mod_acts);
+	mlx5e_mod_hdr_dealloc(&mod_acts);
 err_mod_hdr_regc0:
 err_ethertype:
 	kfree(rule);
@@ -387,7 +388,7 @@ mlx5_esw_indir_table_entry_create(struct mlx5_eswitch *esw, struct mlx5_flow_att
 	struct mlx5_flow_table *ft;
 	int err = 0;
 
-	root_ns = mlx5_get_flow_namespace(esw->dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+	root_ns = mlx5_get_flow_namespace(esw->dev, MLX5_FLOW_NAMESPACE_FDB);
 	if (!root_ns)
 		return ERR_PTR(-ENOENT);
 

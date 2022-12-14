@@ -1,0 +1,104 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
+
+Change-Id: Ife723b66e530461be468b12b3192b71145e2a655
+---
+ drivers/infiniband/core/ucma.c | 23 ++++++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/ucma.c
++++ b/drivers/infiniband/core/ucma.c
+@@ -43,9 +43,10 @@
+ #include <linux/sysctl.h>
+ #include <linux/module.h>
+ #include <linux/nsproxy.h>
+-
++#ifdef HAVE_ARRAY_INDEX_NOSPEC
+ #include <linux/nospec.h>
+-
++#endif
++#include <linux/vfio.h>
+ #include <rdma/rdma_user_cm.h>
+ #include <rdma/ib_marshall.h>
+ #include <rdma/rdma_cm.h>
+@@ -59,9 +60,13 @@
+ MODULE_AUTHOR("Sean Hefty");
+ MODULE_DESCRIPTION("RDMA Userspace Connection Manager Access");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ static unsigned int max_backlog = 1024;
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ static struct ctl_table_header *ucma_ctl_table_hdr;
+ static struct ctl_table ucma_ctl_table[] = {
+ 	{
+@@ -73,6 +78,7 @@ static struct ctl_table ucma_ctl_table[]
+ 	},
+ 	{ }
+ };
++#endif
+ 
+ struct ucma_file {
+ 	struct mutex		mut;
+@@ -1733,8 +1739,9 @@ static ssize_t ucma_write(struct file *f
+ 
+ 	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
+ 		return -EINVAL;
++#ifdef HAVE_ARRAY_INDEX_NOSPEC
+ 	hdr.cmd = array_index_nospec(hdr.cmd, ARRAY_SIZE(ucma_cmd_table));
+-
++#endif
+ 	if (hdr.in + sizeof(hdr) > len)
+ 		return -EINVAL;
+ 
+@@ -1785,7 +1792,11 @@ static int ucma_open(struct inode *inode
+ 	filp->private_data = file;
+ 	file->filp = filp;
+ 
++#ifdef HAVE_STREAM_OPEN
+ 	return stream_open(inode, filp);
++#else
++	return nonseekable_open(inode, filp);
++#endif
+ }
+ 
+ static int ucma_close(struct inode *inode, struct file *filp)
+@@ -1863,12 +1874,14 @@ static int __init ucma_init(void)
+ 		goto err1;
+ 	}
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ 	ucma_ctl_table_hdr = register_net_sysctl(&init_net, "net/rdma_ucm", ucma_ctl_table);
+ 	if (!ucma_ctl_table_hdr) {
+ 		pr_err("rdma_ucm: couldn't register sysctl paths\n");
+ 		ret = -ENOMEM;
+ 		goto err2;
+ 	}
++#endif
+ 
+ 	ret = ib_register_client(&rdma_cma_client);
+ 	if (ret)
+@@ -1877,8 +1890,10 @@ static int __init ucma_init(void)
+ 	return 0;
+ err3:
+ 	unregister_net_sysctl_table(ucma_ctl_table_hdr);
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ err2:
+ 	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
++#endif
+ err1:
+ 	misc_deregister(&ucma_misc);
+ 	return ret;
+@@ -1887,7 +1902,9 @@ err1:
+ static void __exit ucma_cleanup(void)
+ {
+ 	ib_unregister_client(&rdma_cma_client);
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ 	unregister_net_sysctl_table(ucma_ctl_table_hdr);
++#endif
+ 	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
+ 	misc_deregister(&ucma_misc);
+ }

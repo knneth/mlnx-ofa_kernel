@@ -38,6 +38,7 @@
 #include "en/txrx.h"
 #include "ipoib/ipoib.h"
 #include "en_accel/en_accel.h"
+#include "en_accel/ipsec_rxtx.h"
 #include "en/ptp.h"
 
 static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
@@ -164,53 +165,6 @@ static int mlx5e_select_htb_queue(struct mlx5e_priv *priv, struct sk_buff *skb)
 	return mlx5e_get_txq_by_classid(priv, classid);
 }
 
-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-static u16 mlx5e_select_queue_assigned(struct mlx5e_priv *priv,
-				       struct sk_buff *skb)
-{
-	struct mlx5e_sq_flow_map *flow_map;
-	int sk_ix = sk_tx_queue_get(skb->sk);
-	u32 key_all, key_dip, key_dport;
-	u16 dport;
-	u32 dip;
-
-	if (sk_ix >= priv->channels.params.num_channels)
-		return sk_ix;
-
-	if (vlan_get_protocol(skb) == htons(ETH_P_IP)) {
-		dip = ip_hdr(skb)->daddr;
-		if (ip_hdr(skb)->protocol == IPPROTO_UDP ||
-		    ip_hdr(skb)->protocol == IPPROTO_TCP)
-			dport = udp_hdr(skb)->dest;
-		else
-			goto fallback;
-	} else {
-		goto fallback;
-	}
-
-	key_all = dip ^ dport;
-	hash_for_each_possible_rcu(priv->flow_map_hash, flow_map,
-				   hlist, key_all)
-		if (flow_map->dst_ip == dip && flow_map->dst_port == dport)
-			return flow_map->queue_index;
-
-	key_dip = dip;
-	hash_for_each_possible_rcu(priv->flow_map_hash, flow_map,
-				   hlist, key_dip)
-		if (flow_map->dst_ip == dip)
-			return flow_map->queue_index;
-
-	key_dport = dport;
-	hash_for_each_possible_rcu(priv->flow_map_hash, flow_map,
-				   hlist, key_dport)
-		if (flow_map->dst_port == dport)
-			return flow_map->queue_index;
-
-fallback:
-	return 0;
-}
-#endif
-
 u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 		       struct net_device *sb_dev)
 {
@@ -219,14 +173,12 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 	int txq_ix, up;
 
 	selq = rcu_dereference_bh(priv->selq);
-
 	/* This is a workaround needed only for the mlx5e_netdev_change_profile
 	 * flow that zeroes out the whole priv without unregistering the netdev
 	 * and without preventing ndo_select_queue from being called.
 	 */
 	if (unlikely(!selq))
 		return 0;
-
 	if (unlikely(selq->is_ptp || selq->is_htb)) {
 		if (unlikely(selq->is_htb)) {
 			txq_ix = mlx5e_select_htb_queue(priv, skb);
@@ -247,16 +199,6 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 		if (unlikely(txq_ix >= selq->num_regular_queues))
 			txq_ix %= selq->num_regular_queues;
 	} else {
-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-		if (priv->channels.params.num_rl_txqs) {
-			u16 ix = mlx5e_select_queue_assigned(priv, skb);
-
-			if (ix) {
-				sk_tx_queue_set(skb->sk, ix);
-				return ix;
-			}
-		}
-#endif
 		txq_ix = netdev_pick_tx(dev, skb, NULL);
 	}
 
@@ -324,38 +266,19 @@ static inline void mlx5e_insert_vlan(void *start, struct sk_buff *skb, u16 ihs)
 	int cpy1_sz = 2 * ETH_ALEN;
 	int cpy2_sz = ihs - cpy1_sz;
 
-	memcpy(vhdr, skb->data, cpy1_sz);
+	memcpy(&vhdr->addrs, skb->data, cpy1_sz);
 	vhdr->h_vlan_proto = skb->vlan_proto;
 	vhdr->h_vlan_TCI = cpu_to_be16(skb_vlan_tag_get(skb));
 	memcpy(&vhdr->h_vlan_encapsulated_proto, skb->data + cpy1_sz, cpy2_sz);
 }
-
-#ifdef CONFIG_MLX5_EN_IPSEC
-/* If packet is not IP's CHECKSUM_PARTIAL (e.g. icmd packet),
- * need to set L3 checksum flag for IPsec
- */
-static void ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
-					struct mlx5_wqe_eth_seg *eseg)
-{
-	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
-	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
-		eseg->cs_flags |= MLX5_ETH_WQE_L4_CSUM;
-		sq->stats->csum_partial_inner++;
-	}
-}
-#endif
 
 static inline void
 mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 			    struct mlx5e_accel_tx_state *accel,
 			    struct mlx5_wqe_eth_seg *eseg)
 {
-#ifdef CONFIG_MLX5_EN_IPSEC
-	if (unlikely(mlx5e_ipsec_eseg_meta(eseg))) {
-		ipsec_txwqe_build_eseg_csum(sq, skb, eseg);
+	if (unlikely(mlx5e_ipsec_txwqe_build_eseg_csum(sq, skb, eseg)))
 		return;
-	}
-#endif
 
 	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
 		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
@@ -823,16 +746,23 @@ void mlx5e_tx_mpwqe_ensure_complete(struct mlx5e_txqsq *sq)
 		mlx5e_tx_mpwqe_session_complete(sq);
 }
 
-static bool mlx5e_txwqe_build_eseg(struct mlx5e_priv *priv, struct mlx5e_txqsq *sq,
+static void mlx5e_cqe_ts_id_eseg(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+				 struct mlx5_wqe_eth_seg *eseg)
+{
+	if (MLX5_CAP_GEN_2(sq->mdev, ts_cqe_metadata_size2wqe_counter) &&
+	    unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+		eseg->flow_table_metadata = cpu_to_be32(sq->ptpsq->skb_fifo_pc &
+							sq->ptpsq->ts_cqe_ctr_mask);
+}
+
+static void mlx5e_txwqe_build_eseg(struct mlx5e_priv *priv, struct mlx5e_txqsq *sq,
 				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
 				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
 {
-	if (unlikely(!mlx5e_accel_tx_eseg(priv, skb, eseg, ihs)))
-		return false;
-
+	mlx5e_accel_tx_eseg(priv, skb, eseg, ihs);
 	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
-
-	return true;
+	if (unlikely(sq->ptpsq))
+		mlx5e_cqe_ts_id_eseg(sq, skb, eseg);
 }
 
 netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
@@ -868,10 +798,7 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
 		if (mlx5e_tx_skb_supports_mpwqe(skb, &attr)) {
 			struct mlx5_wqe_eth_seg eseg = {};
 
-			if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg,
-							     attr.ihs)))
-				return NETDEV_TX_OK;
-
+			mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg, attr.ihs);
 			mlx5e_sq_xmit_mpwqe(sq, skb, &eseg, netdev_xmit_more());
 			return NETDEV_TX_OK;
 		}
@@ -886,9 +813,7 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* May update the WQE, but may not post other WQEs. */
 	mlx5e_accel_tx_finish(sq, wqe, &accel,
 			      (struct mlx5_wqe_inline_seg *)(wqe->data + wqe_attr.ds_cnt_inl));
-	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs)))
-		return NETDEV_TX_OK;
-
+	mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs);
 	mlx5e_sq_xmit_wqe(sq, skb, &attr, &wqe_attr, wqe, pi, netdev_xmit_more());
 
 	return NETDEV_TX_OK;

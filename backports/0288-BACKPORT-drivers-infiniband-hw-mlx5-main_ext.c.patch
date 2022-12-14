@@ -1,0 +1,81 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main_ext.c
+
+Change-Id: I92aec53ed425a70f21f7dbe5035d7cc08653dd88
+---
+ drivers/infiniband/hw/mlx5/main_ext.c | 29 ++++++++++++++++++++++++---
+ 1 file changed, 26 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/main_ext.c
++++ b/drivers/infiniband/hw/mlx5/main_ext.c
+@@ -73,6 +73,9 @@ static struct attribute *ttl_attrs[] = {
+ 	&ttl_attr_ttl.attr,
+ 	NULL
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(ttl);
++#endif
+ 
+ static ssize_t ttl_attr_show(struct kobject *kobj,
+ 			    struct attribute *attr, char *buf)
+@@ -99,7 +102,11 @@ static const struct sysfs_ops ttl_sysfs_
+ 
+ static struct kobj_type ttl_type = {
+ 	.sysfs_ops     = &ttl_sysfs_ops,
+-	.default_attrs = ttl_attrs
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++       .default_groups = ttl_groups
++#else
++       .default_attrs = ttl_attrs
++#endif
+ };
+ 
+ int init_ttl_sysfs(struct mlx5_ib_dev *dev)
+@@ -679,6 +686,10 @@ static struct attribute *tc_attrs[] = {
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(tc);
++#endif
++
+ static ssize_t tc_attr_show(struct kobject *kobj,
+ 			    struct attribute *attr, char *buf)
+ {
+@@ -710,7 +721,11 @@ static const struct sysfs_ops tc_sysfs_o
+ 
+ static struct kobj_type tc_type = {
+ 	.sysfs_ops     = &tc_sysfs_ops,
+-	.default_attrs = tc_attrs
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++       .default_groups = tc_groups
++#else
++       .default_attrs = tc_attrs
++#endif
+ };
+ 
+ int init_tc_sysfs(struct mlx5_ib_dev *dev)
+@@ -1379,6 +1394,10 @@ static struct attribute *dc_attrs[] = {
+         NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(dc);
++#endif
++
+ static ssize_t dc_attr_show(struct kobject *kobj,
+                             struct attribute *attr, char *buf)
+ {
+@@ -1410,7 +1429,11 @@ static const struct sysfs_ops dc_sysfs_o
+ 
+ static struct kobj_type dc_type = {
+         .sysfs_ops     = &dc_sysfs_ops,
+-        .default_attrs = dc_attrs
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = dc_groups
++#else
++	.default_attrs = dc_attrs
++#endif
+ };
+ 
+ static int init_sysfs(struct mlx5_ib_dev *dev)

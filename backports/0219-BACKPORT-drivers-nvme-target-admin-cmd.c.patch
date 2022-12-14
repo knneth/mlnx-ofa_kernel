@@ -1,0 +1,159 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/admin-cmd.c
+
+Change-Id: Ibe53a661b98013094406ad6e7b60809621049c58
+---
+ drivers/nvme/target/admin-cmd.c | 40 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+--- a/drivers/nvme/target/admin-cmd.c
++++ b/drivers/nvme/target/admin-cmd.c
+@@ -9,7 +9,9 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/rculist.h>
++#ifdef HAVE_PART_STAT_H
+ #include <linux/part_stat.h>
++#endif
+ 
+ #include <generated/utsrelease.h>
+ #include <asm/unaligned.h>
+@@ -88,12 +90,21 @@ static u16 nvmet_get_smart_log_nsid(stru
+ 	if (!req->ns->bdev)
+ 		return NVME_SC_SUCCESS;
+ 
++#ifdef HAVE_REQUEST_BDEV
+ 	host_reads = part_stat_read(req->ns->bdev, ios[READ]);
+ 	data_units_read =
+ 		DIV_ROUND_UP(part_stat_read(req->ns->bdev, sectors[READ]), 1000);
+ 	host_writes = part_stat_read(req->ns->bdev, ios[WRITE]);
+ 	data_units_written =
+ 		DIV_ROUND_UP(part_stat_read(req->ns->bdev, sectors[WRITE]), 1000);
++#else
++	host_reads = part_stat_read(req->ns->bdev->bd_part, ios[READ]);
++	data_units_read = DIV_ROUND_UP(part_stat_read(req->ns->bdev->bd_part,
++		sectors[READ]), 1000);
++	host_writes = part_stat_read(req->ns->bdev->bd_part, ios[WRITE]);
++	data_units_written = DIV_ROUND_UP(part_stat_read(req->ns->bdev->bd_part,
++		sectors[WRITE]), 1000);
++#endif
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+ 	put_unaligned_le64(data_units_read, &slog->data_units_read[0]);
+@@ -117,12 +128,21 @@ static u16 nvmet_get_smart_log_all(struc
+ 		/* we don't have the right data for file backed ns */
+ 		if (!ns->bdev)
+ 			continue;
++#ifdef HAVE_REQUEST_BDEV
+ 		host_reads += part_stat_read(ns->bdev, ios[READ]);
+ 		data_units_read += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev, sectors[READ]), 1000);
+ 		host_writes += part_stat_read(ns->bdev, ios[WRITE]);
+ 		data_units_written += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev, sectors[WRITE]), 1000);
++#else
++		host_reads += part_stat_read(ns->bdev->bd_part, ios[READ]);
++		data_units_read += DIV_ROUND_UP(
++			part_stat_read(ns->bdev->bd_part, sectors[READ]), 1000);
++		host_writes += part_stat_read(ns->bdev->bd_part, ios[WRITE]);
++		data_units_written += DIV_ROUND_UP(
++			part_stat_read(ns->bdev->bd_part, sectors[WRITE]), 1000);
++#endif
+ 	}
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+@@ -267,7 +287,11 @@ static u32 nvmet_format_ana_group(struct
+ 	desc->chgcnt = cpu_to_le64(nvmet_ana_chgcnt);
+ 	desc->state = req->port->ana_state[grpid];
+ 	memset(desc->rsvd17, 0, sizeof(desc->rsvd17));
++#ifdef struct_size
+ 	return struct_size(desc, nsids, count);
++#else
++	return sizeof(struct nvme_ana_group_desc) + count * sizeof(__le32);
++#endif
+ }
+ 
+ static void nvmet_execute_get_log_page_ana(struct nvmet_req *req)
+@@ -345,8 +369,10 @@ static void nvmet_execute_get_log_page(s
+ 	nvmet_req_complete(req, NVME_SC_INVALID_FIELD | NVME_SC_DNR);
+ }
+ 
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ static bool nvmet_is_write_zeroes(struct nvmet_ctrl *ctrl)
+ {
++#ifdef HAVE_BDEV_WRITE_ZEROES_SECTORS
+ 	struct nvmet_ns *ns;
+ 	unsigned long idx;
+ 
+@@ -354,7 +380,11 @@ static bool nvmet_is_write_zeroes(struct
+ 		if (!bdev_write_zeroes_sectors(ns->bdev))
+ 			return false;
+ 	return true;
++#else
++	return false;
++#endif
+ }
++#endif
+ 
+ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
+ {
+@@ -453,11 +483,15 @@ static void nvmet_execute_identify_ctrl(
+ 
+ 	id->nn = cpu_to_le32(NVMET_MAX_NAMESPACES);
+ 	id->mnan = cpu_to_le32(NVMET_MAX_NAMESPACES);
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ 	if (!req->port->offload || nvmet_is_write_zeroes(ctrl))
+ 		id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM |
+ 				NVME_CTRL_ONCS_WRITE_ZEROES);
+ 	else
+ 		id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM);
++#else
++	id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM);
++#endif
+ 
+ 	/* XXX: don't report vwc if the underlying device is write through */
+ 	id->vwc = NVME_CTRL_VWC_PRESENT;
+@@ -720,6 +754,7 @@ static void nvmet_execute_identify(struc
+ 		}
+ 		break;
+ 	case NVME_ID_CNS_CS_NS:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED)) {
+ 			switch (req->cmd->identify.csi) {
+ 			case NVME_CSI_ZNS:
+@@ -728,6 +763,7 @@ static void nvmet_execute_identify(struc
+ 				break;
+ 			}
+ 		}
++#endif
+ 		break;
+ 	case NVME_ID_CNS_CTRL:
+ 		switch (req->cmd->identify.csi) {
+@@ -736,6 +772,7 @@ static void nvmet_execute_identify(struc
+ 		}
+ 		break;
+ 	case NVME_ID_CNS_CS_CTRL:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED)) {
+ 			switch (req->cmd->identify.csi) {
+ 			case NVME_CSI_ZNS:
+@@ -744,6 +781,7 @@ static void nvmet_execute_identify(struc
+ 				break;
+ 			}
+ 		}
++#endif
+ 		break;
+ 	case NVME_ID_CNS_NS_ACTIVE_LIST:
+ 		switch (req->cmd->identify.csi) {
+@@ -781,9 +819,11 @@ static u16 nvmet_write_protect_flush_syn
+ {
+ 	u16 status;
+ 
++#ifdef HAVE_FS_HAS_KIOCB
+ 	if (req->ns->file)
+ 		status = nvmet_file_flush(req);
+ 	else
++#endif
+ 		status = nvmet_bdev_flush(req);
+ 
+ 	if (status)

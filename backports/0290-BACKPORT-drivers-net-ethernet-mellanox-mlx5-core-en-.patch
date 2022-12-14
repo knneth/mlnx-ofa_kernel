@@ -1,0 +1,51 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+
+Change-Id: I6ff49cb68993aae0de8fa24213d3c6dc96280746
+---
+ .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+@@ -241,6 +241,9 @@ static struct attribute *rep_attrs[] = {
+ 	&attr_miss_rl_stats_clr.attr,
+ 	NULL,
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(rep);
++#endif
+ 
+ static const struct sysfs_ops rep_sysfs_ops = {
+ 	.show   = rep_attr_show,
+@@ -249,7 +252,11 @@ static const struct sysfs_ops rep_sysfs_
+ 
+ static struct kobj_type rep_type = {
+ 	.sysfs_ops     = &rep_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = rep_groups
++#else
+ 	.default_attrs = rep_attrs
++#endif
+ };
+ 
+ static struct attribute *rep_paging_attrs[] = {
+@@ -257,10 +264,17 @@ static struct attribute *rep_paging_attr
+ 	&attr_num_pages.attr,
+ 	NULL,
+ };
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(rep_paging);
++#endif
+ 
+ static struct kobj_type rep_paging = {
+ 	.sysfs_ops     = &rep_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++	.default_groups = rep_paging_groups
++#else
+ 	.default_attrs = rep_paging_attrs
++#endif
+ };
+ 
+ void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)

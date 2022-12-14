@@ -1,0 +1,58 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+
+Change-Id: Ieaa56b510a910bc02a74ae6eeb82717427f9605c
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+@@ -6,6 +6,7 @@
+ 
+ #include "mod_hdr.h"
+ #include "lib/fs_ttc.h"
++#include <linux/rhashtable.h>
+ 
+ struct mlx5e_post_act;
+ 
+@@ -188,6 +189,7 @@ static inline int mlx5e_ethtool_get_rxnf
+ #endif /* CONFIG_MLX5_EN_RXNFC */
+ 
+ #ifdef CONFIG_MLX5_EN_ARFS
++#ifndef HAVE_NET_FLOW_KEYS_H
+ struct mlx5e_arfs_tables;
+ 
+ int mlx5e_arfs_create_tables(struct mlx5e_priv *priv);
+@@ -202,6 +204,7 @@ static inline void mlx5e_arfs_destroy_ta
+ static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
+ static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
+ #endif
++#endif
+ 
+ #ifdef CONFIG_MLX5_EN_TLS
+ struct mlx5e_accel_fs_tcp;
+@@ -224,8 +227,10 @@ struct mlx5e_flow_steering {
+ 	struct mlx5_ttc_table           *ttc;
+ 	struct mlx5_ttc_table           *inner_ttc;
+ #ifdef CONFIG_MLX5_EN_ARFS
++#ifndef HAVE_NET_FLOW_KEYS_H
+ 	struct mlx5e_arfs_tables       *arfs;
+ #endif
++#endif
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	struct mlx5e_accel_fs_tcp      *accel_tcp;
+ #endif
+@@ -251,10 +256,12 @@ void mlx5e_destroy_flow_steering(struct
+ int mlx5e_fs_init(struct mlx5e_priv *priv);
+ void mlx5e_fs_cleanup(struct mlx5e_priv *priv);
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5e_add_vlan_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
+ void mlx5e_remove_vlan_trap(struct mlx5e_priv *priv);
+ int mlx5e_add_mac_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
+ void mlx5e_remove_mac_trap(struct mlx5e_priv *priv);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ #endif /* __MLX5E_FLOW_STEER_H__ */
+ 

@@ -42,8 +42,8 @@ static const char * const action_type_to_str[] = {
 	[DR_ACTION_TYP_PUSH_VLAN] = "DR_ACTION_TYP_PUSH_VLAN",
 	[DR_ACTION_TYP_SAMPLER] = "DR_ACTION_TYP_SAMPLER",
 	[DR_ACTION_TYP_INSERT_HDR] = "DR_ACTION_TYP_INSERT_HDR",
-	[DR_ACTION_TYP_REMOVE_HDR] = "DR_ACTION_TYP_REMOVE_HDR",
 	[DR_ACTION_TYP_ASO_FLOW_METER] = "DR_ACTION_TYP_ASO_FLOW_METER",
+	[DR_ACTION_TYP_REMOVE_HDR] = "DR_ACTION_TYP_REMOVE_HDR",
 	[DR_ACTION_TYP_MAX] = "DR_ACTION_UNKNOWN",
 };
 
@@ -185,6 +185,7 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 			[DR_ACTION_TYP_FT]		= DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_SAMPLER]		= DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_CTR]		= DR_ACTION_STATE_DECAP,
+			[DR_ACTION_TYP_ASO_FLOW_METER]	= DR_ACTION_STATE_ASO,
 		},
 		[DR_ACTION_STATE_ENCAP] = {
 			[DR_ACTION_TYP_DROP]		= DR_ACTION_STATE_TERM,
@@ -244,9 +245,10 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 		[DR_ACTION_STATE_ASO] = {
 			[DR_ACTION_TYP_L2_TO_TNL_L2]    = DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_L2_TO_TNL_L3]    = DR_ACTION_STATE_ENCAP,
+			[DR_ACTION_TYP_VPORT]           = DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_MODIFY_HDR]      = DR_ACTION_STATE_MODIFY_HDR,
-			[DR_ACTION_TYP_PUSH_VLAN]	= DR_ACTION_STATE_PUSH_VLAN,
-			[DR_ACTION_TYP_POP_VLAN]	= DR_ACTION_STATE_POP_VLAN,
+			[DR_ACTION_TYP_PUSH_VLAN]       = DR_ACTION_STATE_PUSH_VLAN,
+			[DR_ACTION_TYP_POP_VLAN]        = DR_ACTION_STATE_POP_VLAN,
 			[DR_ACTION_TYP_CTR]             = DR_ACTION_STATE_ASO,
 			[DR_ACTION_TYP_DROP]            = DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_FT]              = DR_ACTION_STATE_TERM,
@@ -383,6 +385,7 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 			[DR_ACTION_TYP_CTR]		= DR_ACTION_STATE_DECAP,
 			[DR_ACTION_TYP_VPORT]		= DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_SAMPLER]		= DR_ACTION_STATE_TERM,
+			[DR_ACTION_TYP_ASO_FLOW_METER]  = DR_ACTION_STATE_ASO,
 		},
 		[DR_ACTION_STATE_ENCAP] = {
 			[DR_ACTION_TYP_DROP]		= DR_ACTION_STATE_TERM,
@@ -390,7 +393,7 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 			[DR_ACTION_TYP_CTR]		= DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_SAMPLER]		= DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_VPORT]		= DR_ACTION_STATE_TERM,
-			[DR_ACTION_TYP_ASO_FLOW_METER]	= DR_ACTION_STATE_ASO,
+			[DR_ACTION_TYP_ASO_FLOW_METER]  = DR_ACTION_STATE_ASO,
 		},
 		[DR_ACTION_STATE_MODIFY_HDR] = {
 			[DR_ACTION_TYP_DROP]		= DR_ACTION_STATE_TERM,
@@ -415,7 +418,7 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 			[DR_ACTION_TYP_L2_TO_TNL_L3]	= DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_INSERT_HDR]	= DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_VPORT]		= DR_ACTION_STATE_TERM,
-			[DR_ACTION_TYP_ASO_FLOW_METER]	= DR_ACTION_STATE_ASO,
+			[DR_ACTION_TYP_ASO_FLOW_METER]  = DR_ACTION_STATE_ASO,
 		},
 		[DR_ACTION_STATE_PUSH_VLAN] = {
 			[DR_ACTION_TYP_DROP]		= DR_ACTION_STATE_TERM,
@@ -442,14 +445,13 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 			[DR_ACTION_TYP_PUSH_VLAN]	= DR_ACTION_STATE_PUSH_VLAN,
 			[DR_ACTION_TYP_POP_VLAN]	= DR_ACTION_STATE_POP_VLAN,
 			[DR_ACTION_TYP_VPORT]		= DR_ACTION_STATE_TERM,
-			[DR_ACTION_TYP_ASO_FLOW_METER]	= DR_ACTION_STATE_ASO,
+			[DR_ACTION_TYP_ASO_FLOW_METER]  = DR_ACTION_STATE_ASO,
 		},
 		[DR_ACTION_STATE_ASO] = {
 			[DR_ACTION_TYP_L2_TO_TNL_L2]    = DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_L2_TO_TNL_L3]    = DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_MODIFY_HDR]      = DR_ACTION_STATE_MODIFY_HDR,
-			[DR_ACTION_TYP_PUSH_VLAN]	= DR_ACTION_STATE_PUSH_VLAN,
-			[DR_ACTION_TYP_POP_VLAN]	= DR_ACTION_STATE_POP_VLAN,
+			[DR_ACTION_TYP_PUSH_VLAN]       = DR_ACTION_STATE_PUSH_VLAN,
 			[DR_ACTION_TYP_DROP]		= DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_FT]		= DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_VPORT]           = DR_ACTION_STATE_TERM,
@@ -575,9 +577,9 @@ static int dr_action_handle_cs_recalc(struct mlx5dr_domain *dmn,
 		/* If destination is vport we will get the FW flow table
 		 * that recalculates the CS and forwards to the vport.
 		 */
-		ret = mlx5dr_domain_cache_get_recalc_cs_ft_addr(dest_action->vport->dmn,
-								dest_action->vport->caps->num,
-								final_icm_addr);
+		ret = mlx5dr_domain_get_recalc_cs_ft_addr(dest_action->vport->dmn,
+							  dest_action->vport->caps->num,
+							  final_icm_addr);
 		if (ret) {
 			mlx5dr_err(dmn, "Failed to get FW cs recalc flow table\n");
 			return ret;
@@ -955,6 +957,7 @@ mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 	struct mlx5dr_action *action;
 	bool reformat_req = false;
 	u32 num_of_ref = 0;
+	u32 ref_act_cnt;
 	int ret;
 	int i;
 
@@ -963,11 +966,14 @@ mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 		return NULL;
 	}
 
-	hw_dests = kzalloc(sizeof(*hw_dests) * num_of_dests, GFP_KERNEL);
+	hw_dests = kcalloc(num_of_dests, sizeof(*hw_dests), GFP_KERNEL);
 	if (!hw_dests)
 		return NULL;
 
-	ref_actions = kzalloc(sizeof(*ref_actions) * num_of_dests * 2, GFP_KERNEL);
+	if (unlikely(check_mul_overflow(num_of_dests, 2u, &ref_act_cnt)))
+		goto free_hw_dests;
+
+	ref_actions = kcalloc(ref_act_cnt, sizeof(*ref_actions), GFP_KERNEL);
 	if (!ref_actions)
 		goto free_hw_dests;
 
@@ -1222,7 +1228,7 @@ dr_action_create_reformat_action(struct mlx5dr_domain *dmn,
 
 		action->rewrite->data = hw_actions;
 		action->rewrite->dmn = dmn;
-
+ 
 		ret = mlx5dr_ste_alloc_modify_hdr(action);
 		if (ret) {
 			mlx5dr_dbg(dmn, "Failed prepare reformat data\n");
@@ -1850,7 +1856,7 @@ dec_ref:
 
 struct mlx5dr_action *
 mlx5dr_action_create_dest_vport(struct mlx5dr_domain *dmn,
-				u32 vport, u8 vhca_id_valid,
+				u16 vport, u8 vhca_id_valid,
 				u16 vhca_id)
 {
 	struct mlx5dr_cmd_vport_cap *vport_cap;
@@ -1870,10 +1876,10 @@ mlx5dr_action_create_dest_vport(struct mlx5dr_domain *dmn,
 		return NULL;
 	}
 
-	vport_cap = mlx5dr_get_vport_cap(&vport_dmn->info.caps, vport);
-	if (!vport_cap || !mlx5dr_is_vport_enabled(vport_cap)) {
+	vport_cap = mlx5dr_domain_get_vport_cap(vport_dmn, vport);
+	if (!vport_cap) {
 		mlx5dr_err(dmn,
-			   "Failed to get vport 0x%x caps or vport disabled\n",
+			   "Failed to get vport 0x%x caps - vport is disabled or invalid\n",
 			   vport);
 		return NULL;
 	}
@@ -1909,6 +1915,34 @@ mlx5dr_action_create_aso_flow_meter(struct mlx5dr_domain *dmn,
 
 	action->aso->obj_id = obj_id;
 	action->aso->offset = meter_idx;
+	action->aso->dest_reg_id = dest_reg_id;
+	action->aso->init_color = init_color;
+	action->aso->dmn = dmn;
+
+	refcount_inc(&dmn->refcount);
+
+	return action;
+}
+
+struct mlx5dr_action *
+mlx5dr_action_create_aso(struct mlx5dr_domain *dmn, u32 obj_id,
+			 u8 dest_reg_id, u8 aso_type,
+			 u8 init_color, u8 meter_id)
+{
+	struct mlx5dr_action *action;
+
+	if (aso_type != MLX5_EXE_ASO_FLOW_METER)
+		return NULL;
+
+	if (init_color > MLX5_FLOW_METER_COLOR_UNDEFINED)
+		return NULL;
+
+	action = dr_action_create_generic(DR_ACTION_TYP_ASO_FLOW_METER);
+	if (!action)
+		return NULL;
+
+	action->aso->obj_id = obj_id;
+	action->aso->offset = meter_id;
 	action->aso->dest_reg_id = dest_reg_id;
 	action->aso->init_color = init_color;
 	action->aso->dmn = dmn;

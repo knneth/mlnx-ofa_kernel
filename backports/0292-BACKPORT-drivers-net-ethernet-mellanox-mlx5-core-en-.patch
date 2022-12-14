@@ -1,0 +1,24 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+
+Change-Id: I2219dc3f634ffa1d1e0c7ff643bc155fbc55b555
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+@@ -120,10 +120,12 @@ tc_act_can_offload_mirred(struct mlx5e_t
+ 		return false;
+ 	}
+ 
++#ifdef HAVE_NETIF_IS_BAREDUDP
+ 	if (parse_state->mpls_push && !netif_is_bareudp(out_dev)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "mpls is supported only through a bareudp device");
+ 		return false;
+ 	}
++#endif
+ 
+ 	if (mlx5e_is_ft_flow(flow) && out_dev == priv->netdev) {
+ 		/* Ignore forward to self rules generated

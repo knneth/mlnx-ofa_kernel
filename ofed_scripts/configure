@@ -433,41 +433,48 @@ CONFIG_ENABLE_XDP="y"
 
 # should be unset once backport finished 
 # block RHEL supports
-BACKPORTS_IN_PROGRESS="1"
-OFED_BASE_KVERSION="5.13.0"
+OFED_BASE_KVERSION="5.17.0"
+MIN_KVERSION="3.10"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.12.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.8.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="3.10.0"
 ISERT_SUPPORTED_KVERSION="3.10.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 SRP_SUPPORTED_KVERSION="3.10.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 GDS_SUPPORTED_KVERSION="4.15.0"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.12.0"
+#CLS_ACT_SUPPORTED_KVERSION="5.17.0"
 CLS_ACT_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="5.18"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="5.19"
+
+#ODP
+ODP_SUPPORTED_KVERSION="3.10.0"
+
+#mlxdevm
+MLXDEVM_SUPPORTED_KVERSION="4.15.0"
 
 RETPOLINE_MINIMAL_VERSION="4.15.0"
 KVERSION=${KVERSION:-$(uname -r)}
@@ -1184,11 +1191,6 @@ main()
 
         done
 
-#Set default values
-MIN_KVERSION="2.6.16"
-SRP_1_5_3_SUPPORTED_KVERSION="3.7.0"
-ODP_SUPPORTED_KVERSION="3.10.0"
-MLXDEVM_SUPPORTED_KVERSION="4.15.0"
 MODULES_DIR=${MODULES_DIR:-/lib/modules/${KVERSION}/updates}
 
 if [ ! -z "$LINUX_SRC" ]; then
@@ -1252,7 +1254,7 @@ if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 fi
 
 if ! check_kerver ${KVERSION} ${BRIDGE_SUPPORTED_KVERSION}; then
-	if (! check_kerver_rh_bridge ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVEBRIDGE_SUPPORTED_KVERSION}; then
+	if (! check_kerver_rh_bridge ${KVERSION}) || support_only_base ${BRIDGE_SUPPORTED_KVERSION}; then
                         CONFIG_MLX5_BRIDGE=
 			echo "Warning: CONFIG_MLX5_BRIDGE requires kernel version ${BRIDGE_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 	fi
@@ -1639,25 +1641,6 @@ if [ ! -e backports_applied ]; then
 		ex ${CWD}/ofed_scripts/ofed_patch.sh --with-patchdir=backports${CONFIG_COMPAT_VERSION} ${ofed_patch_params}
 	fi
 fi
-
-#check if for current kernel version should be used srp code from 1.5.3
-#if ! check_kerver ${KVERSION} ${SRP_1_5_3_SUPPORTED_KVERSION}; then
-#    echo "Kernel version ${KVERSION} is less then basic kernel ${SRP_1_5_3_SUPPORTED_KVERSION}."
-#    echo "Will be used srp code from mofed 1.5.3. Create symbolic link."
-#    echo "Original srp code will be moved to srp_2.0"
-#    SRP_WORK_DIR="srp_1.5.3"
-#    SRP_MV_DIR="srp_2.0"
-#    # check if symbolic link exist - remove it and build a new one
-#    # check if stmbolic link exist. If exist - remove it
-#    SRP_LINK_WORK_DIR="${CWD}/drivers/infiniband/ulp/${SRP_WORK_DIR}"
-#    SRP_MV_DIR="${CWD}/drivers/infiniband/ulp/${SRP_MV_DIR}"
-#    SRP_WORK_DIR="${CWD}/drivers/infiniband/ulp/srp"
-#    [ -L "$SRP_WORK_DIR" ] && { echo "Unlink ${SRP_WORK_DIR}"; unlink "$SRP_WORK_DIR"; }
-#    # mv original srp code to srp_2.0 directory
-#    [ -d "$SRP_WORK_DIR" ] && { echo "Move ${SRP_WORK_DIR} to ${SRP_MV_DIR}"; mv ${SRP_WORK_DIR} ${SRP_MV_DIR}; }
-#    # create apropriate symbolic link
-#    ln -s ${SRP_LINK_WORK_DIR} ${SRP_WORK_DIR}
-#fi
 
 # Create configure.mk
 /bin/rm -f ${CWD}/${CONFIG}

@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c
+
+Change-Id: I1be01efd6f1321f6a35919073c062237433caad2
+---
+ .../ethernet/mellanox/mlx5/core/lag/debugfs.c    | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c
+@@ -147,6 +147,22 @@ static int members_show(struct seq_file
+ 	return 0;
+ }
+ 
++#ifndef DEFINE_SHOW_ATTRIBUTE
++#define DEFINE_SHOW_ATTRIBUTE(__name)                                   \
++static int __name ## _open(struct inode *inode, struct file *file)      \
++{                                                                       \
++        return single_open(file, __name ## _show, inode->i_private);    \
++}                                                                       \
++                                                                        \
++static const struct file_operations __name ## _fops = {                 \
++        .owner          = THIS_MODULE,                                  \
++        .open           = __name ## _open,                              \
++        .read           = seq_read,                                     \
++        .llseek         = seq_lseek,                                    \
++        .release        = single_release,                               \
++}
++#endif
++
+ DEFINE_SHOW_ATTRIBUTE(type);
+ DEFINE_SHOW_ATTRIBUTE(port_sel_mode);
+ DEFINE_SHOW_ATTRIBUTE(state);

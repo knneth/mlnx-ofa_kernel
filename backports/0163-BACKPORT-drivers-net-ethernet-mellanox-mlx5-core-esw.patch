@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
+
+Change-Id: Iaa449638ca709082a9f9e895c1e8bdad1ba274ea
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2020 Mellanox Technologies.
+ 
++#ifdef CONFIG_MLX5_ESWITCH
+ #include <linux/mlx5/driver.h>
+ #include <linux/mlx5/mlx5_ifc.h>
+ #include <linux/mlx5/fs.h>
+@@ -788,3 +789,4 @@ void mlx5_esw_ipsec_full_offload_get_sta
+ 	mlx5_fc_query(esw->dev, esw_ipsec_tx_chk_drop_counter(esw),
+ 		      &stats->ipsec_full_tx_pkts_drop, &stats->ipsec_full_tx_bytes_drop);
+ }
++#endif

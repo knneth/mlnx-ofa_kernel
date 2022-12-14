@@ -7,7 +7,6 @@
 #include <net/pkt_cls.h>
 #include <linux/mlx5/fs.h>
 #include <net/tc_act/tc_ct.h>
-#include <net/flow_offload.h>
 
 #include "en.h"
 
@@ -24,43 +23,6 @@ struct mlx5_ct_flow;
 struct nf_flowtable;
 struct flow_action_entry;
 struct netlink_ext_ack;
-
-struct mlx5_ct_fs {
-	const struct net_device *netdev;
-	struct mlx5_core_dev *dev;
-	struct mlx5_flow_table *ct;
-	struct mlx5_flow_table *ct_nat;
-	struct mlx5_flow_table *post_ct;
-
-	/* private data */
-	char priv_data[];
-};
-
-struct mlx5_ct_fs_counter {
-	struct mlx5_fc *counter;
-};
-
-struct mlx5_ct_fs_ops {
-	struct mlx5_ct_fs_counter *(*ct_counter_create)(struct mlx5_ct_fs *fs);
-	void (*ct_counter_destroy)(struct mlx5_ct_fs *fs, struct mlx5_ct_fs_counter *counter);
-	int (*ct_rule_add)(struct mlx5_ct_fs *fs, void *conn_priv, struct mlx5_flow_spec *spec,
-			   struct mlx5_flow_attr *attr, struct mlx5_ct_fs_counter *counter,
-			   struct flow_rule *rule);
-	void (*ct_rule_del)(struct mlx5_ct_fs *fs, void *conn_priv, struct mlx5_flow_attr *attr);
-	int (*init)(struct mlx5_ct_fs *fs);
-	void (*destroy)(struct mlx5_ct_fs *fs);
-
-	size_t conn_priv_size;
-	int priv_size;
-};
-
-static inline void *mlx5_ct_fs_priv(struct mlx5_ct_fs *fs)
-{
-	return &fs->priv_data;
-}
-
-struct mlx5_ct_fs_ops *mlx5_ct_fs_dmfs_ops_get(void);
-struct mlx5_ct_fs_ops *mlx5_ct_fs_smfs_ops_get(void);
 
 struct mlx5_ct_attr {
 	u16 zone;
@@ -115,7 +77,7 @@ struct mlx5_ct_attr {
 #define zone_restore_to_reg_ct {\
 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_1,\
 	.moffset = 0,\
-	.mlen = ESW_ZONE_ID_BITS ,\
+	.mlen = ESW_ZONE_ID_BITS,\
 	.soffset = MLX5_BYTE_OFF(fte_match_param,\
 				 misc_parameters_2.metadata_reg_c_1),\
 }
@@ -126,10 +88,6 @@ struct mlx5_ct_attr {
 	.mlen = ESW_ZONE_ID_BITS,\
 }
 
-#define REG_MAPPING_MLEN(reg) (mlx5e_tc_attr_to_reg_mappings[reg].mlen)
-#define REG_MAPPING_MOFFSET(reg) (mlx5e_tc_attr_to_reg_mappings[reg].moffset)
-#define REG_MAPPING_SHIFT(reg) (REG_MAPPING_MOFFSET(reg) * 8)
-#define REG_MAPPING_MASK(reg) GENMASK((REG_MAPPING_MLEN(reg) * 8) - 1, 0)
 #define MLX5_CT_ZONE_BITS (mlx5e_tc_attr_to_reg_mappings[ZONE_TO_REG].mlen)
 #define MLX5_CT_ZONE_MASK GENMASK(MLX5_CT_ZONE_BITS - 1, 0)
 
@@ -144,7 +102,7 @@ void
 mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv);
 
 void
-mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr);
+mlx5_tc_ct_match_del(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr);
 
 int
 mlx5_tc_ct_match_add(struct mlx5_tc_ct_priv *priv,
@@ -162,22 +120,16 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_ct_priv *priv,
 
 struct mlx5_flow_handle *
 mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *priv,
-			struct mlx5e_tc_flow *flow,
 			struct mlx5_flow_spec *spec,
 			struct mlx5_flow_attr *attr,
 			struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts);
 void
 mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *priv,
-		       struct mlx5e_tc_flow *flow,
 		       struct mlx5_flow_attr *attr);
 
 bool
 mlx5e_tc_ct_restore_flow(struct mlx5_tc_ct_priv *ct_priv,
 			 struct sk_buff *skb, u8 zone_restore_id);
-
-int
-mlx5_tc_ct_set_ct_clear_regs(struct mlx5_tc_ct_priv *priv,
-			     struct mlx5e_tc_mod_hdr_acts *mod_acts);
 
 u32
 mlx5_tc_ct_max_offloaded_conns_get(struct mlx5_core_dev *dev);
@@ -188,6 +140,10 @@ bool
 mlx5_tc_ct_labels_mapping_get(struct mlx5_core_dev *dev);
 void
 mlx5_tc_ct_lables_mapping_set(struct mlx5_core_dev *dev, bool enable);
+
+int
+mlx5_tc_ct_set_ct_clear_regs(struct mlx5_tc_ct_priv *priv,
+			     struct mlx5e_tc_mod_hdr_acts *mod_acts);
 
 #else /* CONFIG_MLX5_TC_CT */
 
@@ -206,7 +162,7 @@ mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv)
 }
 
 static inline void
-mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr) {}
+mlx5_tc_ct_match_del(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr) {}
 
 static inline int
 mlx5_tc_ct_match_add(struct mlx5_tc_ct_priv *priv,
@@ -250,7 +206,6 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_ct_priv *priv,
 
 static inline struct mlx5_flow_handle *
 mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *priv,
-			struct mlx5e_tc_flow *flow,
 			struct mlx5_flow_spec *spec,
 			struct mlx5_flow_attr *attr,
 			struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts)
@@ -260,7 +215,6 @@ mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *priv,
 
 static inline void
 mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *priv,
-		       struct mlx5e_tc_flow *flow,
 		       struct mlx5_flow_attr *attr)
 {
 }

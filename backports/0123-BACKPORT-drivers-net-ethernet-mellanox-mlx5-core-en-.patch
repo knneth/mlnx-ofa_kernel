@@ -1,0 +1,84 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+
+Change-Id: I42c8c6bc9d01f8c284486f1169bff96d7623a9ba
+---
+ .../mellanox/mlx5/core/en/xsk/setup.c         | 28 +++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "setup.h"
+ #include "en/params.h"
+ #include "en/txrx.h"
+@@ -48,7 +49,11 @@ static void mlx5e_build_xsk_cparam(struc
+ 
+ static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
+ 			     struct mlx5e_params *params,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 			     struct xsk_buff_pool *pool,
++#else
++			     struct xdp_umem *umem,
++#endif
+ 			     struct mlx5e_xsk_param *xsk,
+ 			     struct mlx5e_rq *rq)
+ {
+@@ -68,7 +73,11 @@ static int mlx5e_init_xsk_rq(struct mlx5
+ 	rq->mdev         = mdev;
+ 	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+ 	rq->xdpsq        = &c->rq_xdpsq;
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	rq->xsk_pool     = pool;
++#else
++	rq->umem     	 = umem;
++#endif
+ 	rq->stats        = &c->priv->channel_stats[c->ix]->xskrq;
+ 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
+ 	rq_xdp_ix        = c->ix + params->num_channels * MLX5E_RQ_GROUP_XSK;
+@@ -76,11 +85,20 @@ static int mlx5e_init_xsk_rq(struct mlx5
+ 	if (err)
+ 		return err;
+ 
++#ifdef HAVE_XDP_RXQ_INFO_REG_4_PARAMS
+ 	return  xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix, 0);
++#else
++	return  xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix);
++#endif
+ }
+ 
+ static int mlx5e_open_xsk_rq(struct mlx5e_channel *c, struct mlx5e_params *params,
+-			     struct mlx5e_rq_param *rq_params, struct xsk_buff_pool *pool,
++			     struct mlx5e_rq_param *rq_params,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++			     struct xsk_buff_pool *pool,
++#else
++			     struct xdp_umem *pool,
++#endif
+ 			     struct mlx5e_create_cq_param *ccp, struct mlx5e_xsk_param *xsk)
+ {
+ 	int err;
+@@ -93,7 +111,12 @@ static int mlx5e_open_xsk_rq(struct mlx5
+ }
+ 
+ int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
+-		   struct mlx5e_xsk_param *xsk, struct xsk_buff_pool *pool,
++		   struct mlx5e_xsk_param *xsk,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++		   struct xsk_buff_pool *pool,
++#else
++		   struct xdp_umem *pool,
++#endif
+ 		   struct mlx5e_channel *c)
+ {
+ 	struct mlx5e_channel_param *cparam;
+@@ -183,3 +206,4 @@ void mlx5e_deactivate_xsk(struct mlx5e_c
+ 	mlx5e_reporter_icosq_resume_recovery(c);
+ 	synchronize_net(); /* Sync with NAPI to prevent mlx5e_post_rx_wqes. */
+ }
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

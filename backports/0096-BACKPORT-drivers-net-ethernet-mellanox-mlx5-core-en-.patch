@@ -1,0 +1,84 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+
+Change-Id: I9061aac2497f2640e56edfa873dd18d5785740f7
+---
+ .../net/ethernet/mellanox/mlx5/core/en/qos.c  | 25 ++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+@@ -5,6 +5,7 @@
+ #include "en.h"
+ #include "params.h"
+ #include "../qos.h"
++#include <net/sch_generic.h>
+ 
+ #define BYTES_IN_MBIT 125000
+ 
+@@ -497,7 +498,7 @@ static void mlx5e_qos_deactivate_all_que
+ int mlx5e_htb_root_add(struct mlx5e_priv *priv, u16 htb_maj_id, u16 htb_defcls,
+ 		       struct netlink_ext_ack *extack)
+ {
+-	struct mlx5e_select_queue_params *selq;
++	struct mlx5e_select_queue_params *selq = NULL;
+ 	struct mlx5e_qos_node *root;
+ 	bool opened;
+ 	int err;
+@@ -808,8 +809,13 @@ static void mlx5e_reset_qdisc(struct net
+ 	spin_unlock_bh(qdisc_lock(qdisc));
+ }
+ 
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ int mlx5e_htb_leaf_del(struct mlx5e_priv *priv, u16 *classid,
+ 		       struct netlink_ext_ack *extack)
++#else
++int mlx5e_htb_leaf_del(struct mlx5e_priv *priv, u16 classid, u16 *old_qid,
++		       u16 *new_qid, struct netlink_ext_ack *extack)
++#endif
+ {
+ 	struct mlx5e_qos_node *node;
+ 	struct netdev_queue *txq;
+@@ -817,9 +823,17 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
+ 	bool opened;
+ 	int err;
+ 
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID /*will be base code next rebase*/
+ 	qos_dbg(priv->mdev, "TC_HTB_LEAF_DEL classid %04x\n", *classid);
+ 
+ 	node = mlx5e_sw_node_find(priv, *classid);
++#else
++	qos_dbg(priv->mdev, "TC_HTB_LEAF_DEL classid %04x\n", classid);
++
++	*old_qid = *new_qid = 0;
++
++	node = mlx5e_sw_node_find(priv, classid);
++#endif
+ 	if (!node)
+ 		return -ENOENT;
+ 
+@@ -837,7 +851,11 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
+ 	err = mlx5_qos_destroy_node(priv->mdev, node->hw_id);
+ 	if (err) /* Not fatal. */
+ 		qos_warn(priv->mdev, "Failed to destroy leaf node %u (class %04x), err = %d\n",
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ 			 node->hw_id, *classid, err);
++#else
++			 node->hw_id, classid, err);
++#endif
+ 
+ 	mlx5e_sw_node_delete(priv, node);
+ 
+@@ -899,7 +917,12 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
+ 	if (opened)
+ 		mlx5e_reactivate_qos_sq(priv, moved_qid, txq);
+ 
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ 	*classid = node->classid;
++#else
++	*old_qid = mlx5e_qid_from_qos(&priv->channels, moved_qid);
++	*new_qid = mlx5e_qid_from_qos(&priv->channels, qid);
++#endif
+ 	return 0;
+ }
+ 

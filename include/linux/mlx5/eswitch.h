@@ -196,17 +196,16 @@ static inline u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev)
 	return 0;
 }
 
-static bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw,
-					  u16 vport_num)
-{
-	return false;
-}
-
 static inline struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw)
 {
 	return NULL;
 }
 
+static bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw,
+					  u16 vport_num)
+{
+	return false;
+}
 #endif /* CONFIG_MLX5_ESWITCH */
 
 static inline bool is_mdev_switchdev_mode(struct mlx5_core_dev *dev)

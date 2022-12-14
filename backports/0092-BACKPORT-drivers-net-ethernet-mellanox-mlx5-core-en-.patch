@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+
+Change-Id: I68792188369355fce76ff40844e600b15cd734e4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+@@ -31,6 +31,7 @@
+  */
+ #include "port_buffer.h"
+ 
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
+ 			    struct mlx5e_port_buffer *port_buffer)
+ {
+@@ -279,7 +280,14 @@ int mlx5e_port_manual_buffer_config(stru
+ 	int i;
+ 
+ 	mlx5e_dbg(HW, priv, "%s: change=%x\n", __func__, change);
++#if defined(HAVE_NET_DEVICE_MIN_MAX_MTU)
+ 	max_mtu = max_t(unsigned int, priv->netdev->max_mtu, MINIMUM_MAX_MTU);
++#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
++	max_mtu = max_t(unsigned int, priv->netdev->extended->min_mtu, MINIMUM_MAX_MTU);
++#else
++	max_mtu = mtu;
++#endif
++
+ 
+ 	err = mlx5e_port_query_buffer(priv, &port_buffer);
+ 	if (err)
+@@ -360,3 +368,4 @@ int mlx5e_port_manual_buffer_config(stru
+ 
+ 	return err;
+ }
++#endif

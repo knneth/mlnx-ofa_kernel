@@ -3,7 +3,7 @@
 
 #include "en_rep.h"
 #include "eswitch.h"
-#include "en/flow_meter.h"
+#include "en/tc/meter.h"
 
 void
 mlx5_rep_destroy_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv)
@@ -128,7 +128,7 @@ mlx5_rep_set_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_pr
 			u16 vport, u64 rate, u64 burst)
 {
 	struct rep_meter *meter = &rep_priv->rep_meter;
-	struct mlx5_meter_handle *meter_hndl;
+	struct mlx5e_flow_meter_handle *meter_hndl;
 	struct mlx5_flow_meter_params params;
 	int err;
 
@@ -192,6 +192,20 @@ int mlx5_rep_get_miss_meter_data(struct mlx5_core_dev *dev, struct mlx5e_rep_pri
 	} else {
 		return -EINVAL;
 	}
+
+	return 0;
+}
+
+int mlx5_rep_clear_miss_meter_data(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv)
+{
+	struct rep_meter *meter = &rep_priv->rep_meter;
+	u64 bytes = 0, packets = 0;
+
+	if (meter->drop_counter)
+		mlx5_fc_query_and_clear(dev, meter->drop_counter, &packets, &bytes);
+
+	meter->packets_dropped = 0;
+	meter->bytes_dropped = 0;
 
 	return 0;
 }

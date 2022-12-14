@@ -29,7 +29,6 @@ include/linux/nvme.h
 include/linux/nvme-rdma.h
 include/linux/nvme-fc-driver.h
 include/linux/nvme-fc.h
-include/linux/lightnvm.h
 include/linux/sunrpc/svc_rdma.h
 include/linux/sunrpc/xprtrdma.h
 include/linux/nospec.h
@@ -46,3 +45,4 @@ include/linux/auxiliary_bus.h
 include/linux/mod_devicetable.h
 include/linux/bitfield.h
 include/linux/sunrpc/svc_rdma_pcl.h
+include/trace/events/sunrpc_base.h

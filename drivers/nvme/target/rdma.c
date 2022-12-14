@@ -8,6 +8,7 @@
 #endif
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/atomic.h>
+#include <linux/blk-integrity.h>
 #include <linux/ctype.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -1324,7 +1325,7 @@ out_err:
 
 static int nvmet_rdma_create_queue_ib(struct nvmet_rdma_queue *queue)
 {
-	struct ib_qp_init_attr qp_attr;
+	struct ib_qp_init_attr qp_attr = { };
 	struct nvmet_rdma_device *ndev = queue->dev;
 	int nr_cqe, ret, i, factor;
 
@@ -1351,7 +1352,6 @@ static int nvmet_rdma_create_queue_ib(struct nvmet_rdma_queue *queue)
 		goto err_destroy_xrq;
 	}
 
-	memset(&qp_attr, 0, sizeof(qp_attr));
 	qp_attr.qp_context = queue;
 	qp_attr.event_handler = nvmet_rdma_qp_event;
 	qp_attr.send_cq = queue->cq;
@@ -1921,6 +1921,7 @@ static void nvmet_rdma_disable_port(struct nvmet_rdma_port *port)
 		nvmet_rdma_destroy_xrqs(nport);
 
  	port->cm_id = NULL;
+
 	if (cm_id)
 		rdma_destroy_id(cm_id);
 
@@ -2095,6 +2096,11 @@ static u8 nvmet_rdma_get_mdts(const struct nvmet_ctrl *ctrl)
 	return NVMET_RDMA_MAX_MDTS;
 }
 
+static u16 nvmet_rdma_get_max_queue_size(const struct nvmet_ctrl *ctrl)
+{
+	return NVME_RDMA_MAX_QUEUE_SIZE;
+}
+
 static bool nvmet_rdma_is_port_active(struct nvmet_port *nport)
 {
 	struct nvmet_rdma_port *port = nport->priv;
@@ -2110,14 +2116,9 @@ static const struct nvmet_fabrics_ops nvmet_rdma_ops = {
 	.add_port		= nvmet_rdma_add_port,
 	.is_port_active         = nvmet_rdma_is_port_active,
 	.remove_port		= nvmet_rdma_remove_port,
-	.queue_response		= nvmet_rdma_queue_response,
-	.delete_ctrl		= nvmet_rdma_delete_ctrl,
-	.disc_traddr		= nvmet_rdma_disc_port_addr,
-	.get_mdts		= nvmet_rdma_get_mdts,
 	.peer_to_peer_capable	= nvmet_rdma_peer_to_peer_capable,
 	.install_queue		= nvmet_rdma_install_offload_queue,
 	.create_offload_ctrl	= nvmet_rdma_create_offload_ctrl,
-	.destroy_offload_ctrl	= nvmet_rdma_destroy_offload_ctrl,
 	.enable_offload_ns	= nvmet_rdma_enable_offload_ns,
 	.disable_offload_ns	= nvmet_rdma_disable_offload_ns,
 	.peer_to_peer_sqe_inline_size = nvmet_rdma_peer_to_peer_sqe_inline_size,
@@ -2133,6 +2134,12 @@ static const struct nvmet_fabrics_ops nvmet_rdma_ops = {
 	.offload_ns_backend_error_cmds	= nvmet_rdma_offload_ns_backend_error_cmds,
 	.offload_query_counters = nvmet_rdma_offload_query_counters,
 	.check_subsys_match_offload_port = nvmet_rdma_check_subsys_match_offload_port,
+	.destroy_offload_ctrl	= nvmet_rdma_destroy_offload_ctrl,
+	.queue_response		= nvmet_rdma_queue_response,
+	.delete_ctrl		= nvmet_rdma_delete_ctrl,
+	.disc_traddr		= nvmet_rdma_disc_port_addr,
+	.get_mdts		= nvmet_rdma_get_mdts,
+	.get_max_queue_size	= nvmet_rdma_get_max_queue_size,
 };
 
 static int nvmet_rdma_add_one(struct ib_device *ib_device)

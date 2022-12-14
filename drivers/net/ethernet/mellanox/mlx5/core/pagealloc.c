@@ -38,10 +38,10 @@
 #include <linux/xarray.h>
 #include "mlx5_core.h"
 #include "lib/eq.h"
+#include "lib/tout.h"
 #ifdef CONFIG_MLX5_ESWITCH
 #include "eswitch.h"
 #endif
-#include "lib/tout.h"
 
 enum {
 	MLX5_PAGES_CANT_GIVE	= 0,

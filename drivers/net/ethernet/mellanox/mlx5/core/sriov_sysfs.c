@@ -37,12 +37,12 @@
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/port.h>
 #include "mlx5_core.h"
-#ifdef CONFIG_MLX5_ESWITCH
 #include "eswitch.h"
+#ifdef CONFIG_MLX5_ESWITCH
 #include "esw/vf_meter.h"
-#include "esw/legacy.h"
 #include "esw/qos.h"
 #endif
+#include "esw/legacy.h"
 
 struct vf_attributes {
 	struct attribute attr;
@@ -844,6 +844,7 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "VGT+       : %s\n",
 		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
 				      VLAN_N_VID) ? "ON" : "OFF");
+	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -1107,14 +1108,14 @@ static const struct sysfs_ops vf_sysfs_ops = {
 	.store = vf_attr_store,
 };
 
-static const struct sysfs_ops vf_group_sysfs_ops = {
-	.show = vf_group_attr_show,
-	.store = vf_group_attr_store,
-};
-
 static const struct sysfs_ops vf_paging_ops = {
 	.show = vf_paging_attr_show,
 	.store = vf_paging_attr_store,
+};
+
+static const struct sysfs_ops vf_group_sysfs_ops = {
+	.show = vf_group_attr_show,
+	.store = vf_group_attr_store,
 };
 
 #define VF_RATE_GROUP_ATTR(_name) struct vf_group_attributes vf_group_attr_##_name = \
@@ -1132,16 +1133,16 @@ VF_ATTR(vlan);
 VF_ATTR(link_state);
 VF_ATTR(spoofcheck);
 VF_ATTR(trust);
+VF_ATTR(page_limit);
+VF_ATTR(num_pages);
 VF_ATTR(max_tx_rate);
 VF_ATTR(min_tx_rate);
 VF_ATTR(config);
 VF_ATTR(trunk);
 VF_ATTR(stats);
 VF_ATTR(group);
-VF_ATTR(page_limit);
-VF_ATTR(num_pages);
-VF_RATE_GROUP_ATTR(max_tx_rate);
 VF_RATE_GROUP_ATTR(min_tx_rate);
+VF_RATE_GROUP_ATTR(max_tx_rate);
 VF_RATE_GROUP_ATTR(config);
 
 static struct attribute *vf_eth_attrs[] = {
@@ -1178,14 +1179,14 @@ static struct kobj_type vf_type_eth = {
 	.default_attrs = vf_eth_attrs
 };
 
-static struct kobj_type vf_group = {
-	.sysfs_ops     = &vf_group_sysfs_ops,
-	.default_attrs = vf_group_attrs
-};
-
 static struct kobj_type vf_paging = {
 	.sysfs_ops     = &vf_paging_ops,
 	.default_attrs = vf_paging_attrs
+};
+
+static struct kobj_type vf_group = {
+	.sysfs_ops     = &vf_group_sysfs_ops,
+	.default_attrs = vf_group_attrs
 };
 
 static struct vf_attributes pf_attr_min_pf_tx_rate = \
@@ -1318,6 +1319,7 @@ void mlx5_destroy_vf_group_sysfs(struct mlx5_core_dev *dev,
 	kobject_put(group_kobj);
 #endif
 }
+
 
 #ifdef CONFIG_MLX5_ESWITCH
 static void mlx5_destroy_vfs_sysfs_meters(struct mlx5_core_dev *dev, int num_vfs)

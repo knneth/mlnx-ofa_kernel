@@ -1,0 +1,47 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/counters.c
+
+Change-Id: I3b1ff54bb1f1e37d29316978f6670261a727df91
+---
+ drivers/infiniband/core/counters.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/counters.c
++++ b/drivers/infiniband/core/counters.c
+@@ -40,8 +40,12 @@ static int __counter_set_mode(struct rdm
+  *
+  */
+ int rdma_counter_set_auto_mode(struct ib_device *dev, u32 port,
+-			       enum rdma_nl_counter_mask mask,
+-			       struct netlink_ext_ack *extack)
++			       enum rdma_nl_counter_mask mask
++#ifdef HAVE_NETLINK_EXT_ACK
++			       , struct netlink_ext_ack *extack)
++#else
++                               )
++#endif
+ {
+ 	struct rdma_port_counter *port_counter;
+ 	enum rdma_nl_counter_mode mode;
+@@ -63,15 +67,20 @@ int rdma_counter_set_auto_mode(struct ib
+ 		ret = 0;
+ 		goto out;
+ 	}
+-
+ 	ret = __counter_set_mode(port_counter, mode, mask);
+ 
+ out:
+ 	mutex_unlock(&port_counter->lock);
+ 	if (ret == -EBUSY)
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		NL_SET_ERR_MSG(
+ 			extack,
+ 			"Modifying auto mode is not allowed when there is a bound QP");
++#else
++		netdev_warn(ib_device_get_netdev(dev, port),
++                            "Modifying auto mode is not allowed when there is a bound QP\n");
++
++#endif
+ 	return ret;
+ }
+ 

@@ -1,0 +1,119 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+
+Change-Id: Ib267b896da7d29a1bb21025fb461b073957cb322
+---
+ .../ethernet/mellanox/mlx5/core/en_debugfs.c  | 53 +++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+@@ -35,6 +35,7 @@
+ #include "en.h"
+ #include "en/rx_res.h"
+ #include "en/rss.h"
++#include "linux/namei.h"
+ 
+ /* For non-default namespaces, add suffix in format "@<pci_id>" */
+ /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
+@@ -79,6 +80,37 @@ static void mlx5e_create_channel_debugfs
+ 			   &channel->rq.cq.mcq.cqn);
+ }
+ 
++#ifndef HAVE_DEBUGFS_LOOKUP
++struct dentry *mlx5e_debugfs_lookup(const char *name, struct dentry *parent)
++{
++	struct dentry *dentry;
++
++	if (IS_ERR(parent))
++		return NULL;
++
++#ifdef HAVE_INODE_LOCK
++	inode_lock(d_inode(parent));
++#else
++	mutex_lock(&(parent->d_inode)->i_mutex);
++#endif
++	dentry = lookup_one_len(name, parent, strlen(name));
++#ifdef HAVE_INODE_LOCK
++	inode_unlock(d_inode(parent));
++#else
++	mutex_unlock(&(parent->d_inode)->i_mutex);
++#endif
++
++	if (IS_ERR(dentry))
++		return NULL;
++	if (dentry->d_inode == NULL) {
++		dput(dentry);
++		return NULL;
++	}
++	return dentry;
++}
++#endif
++
++
+ struct rx_res_debugfs {
+ 	struct mlx5e_rx_res *rx_res;
+ 	int i;
+@@ -100,8 +132,13 @@ static int get_tir_indir(void *data, u64
+ 	return 0;
+ }
+ 
++#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
+ DEFINE_DEBUGFS_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
+ DEFINE_DEBUGFS_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
++#else
++DEFINE_SIMPLE_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
++DEFINE_SIMPLE_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
++#endif
+ 
+ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
+ {
+@@ -147,7 +184,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
+ 
+ 		rx_res_dbg->i = i;
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
++#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
+ 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
++#else
++		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
++#endif
+ 	}
+ 
+ 	for (i = 0; i < priv->max_nch; i++) {
+@@ -155,7 +196,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
+ 
+ 		rx_res_dbg->i = i;
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
++#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
+ 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
++#else
++		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
++#endif
+ 	}
+ 
+ 	for (i = 0; i < priv->channels.num; i++)
+@@ -171,7 +216,11 @@ void mlx5e_debugs_free_recursive_private
+ 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
+ 
++#ifdef HAVE_DEBUGFS_LOOKUP
+ 		dent = debugfs_lookup(name, priv->dfs_root);
++#else
++		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++#endif
+ 		if (dent && dent->d_inode && dent->d_inode->i_private)
+ 			kvfree(dent->d_inode->i_private);
+ 	}
+@@ -179,7 +228,11 @@ void mlx5e_debugs_free_recursive_private
+ 	for (i = 0; i < priv->max_nch; i++) {
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
+ 
++#ifdef HAVE_DEBUGFS_LOOKUP
+ 		dent = debugfs_lookup(name, priv->dfs_root);
++#else
++		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++#endif
+ 		if (dent && dent->d_inode && dent->d_inode->i_private)
+ 			kvfree(dent->d_inode->i_private);
+ 	}

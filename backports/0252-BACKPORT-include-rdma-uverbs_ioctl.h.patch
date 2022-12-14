@@ -1,0 +1,41 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/uverbs_ioctl.h
+
+Change-Id: I64c7f7b5fddf874bda30f13c2760d08cb0fe0449
+---
+ include/rdma/uverbs_ioctl.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/include/rdma/uverbs_ioctl.h
++++ b/include/rdma/uverbs_ioctl.h
+@@ -11,6 +11,10 @@
+ #include <rdma/rdma_user_ioctl.h>
+ #include <rdma/ib_user_ioctl_verbs.h>
+ #include <rdma/ib_user_ioctl_cmds.h>
++#if defined(CONFIG_COMPAT_RHEL_7_2)
++#include <linux/vfio.h>
++#endif
++
+ 
+ /*
+  * =======================================
+@@ -123,6 +127,7 @@ struct uverbs_attr_spec {
+  * ie the WRITE path is treated as a special method type in the ioctl
+  * framework.
+  */
++
+ enum uapi_radix_data {
+ 	UVERBS_API_NS_FLAG = 1U << UVERBS_ID_NS_SHIFT,
+ 
+@@ -865,6 +870,11 @@ int uverbs_get_flags32(u32 *to, const st
+ 		       size_t idx, u64 allowed_bits);
+ int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle, size_t idx,
+ 		   const void *from, size_t size);
++
++#ifndef __malloc
++#define __malloc
++#endif
++
+ __malloc void *_uverbs_alloc(struct uverbs_attr_bundle *bundle, size_t size,
+ 			     gfp_t flags);
+ 

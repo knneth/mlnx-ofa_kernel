@@ -1,0 +1,98 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+
+Change-Id: I9d7c3152268794515b9e240f96b4323bbc631357
+---
+ .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 25 ++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2018 Mellanox Technologies. */
+ 
++#ifdef HAVE_TCF_TUNNEL_INFO
++
+ #include <net/vxlan.h>
+ #include "lib/vxlan.h"
+ #include "en/tc_tun.h"
+@@ -17,9 +19,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
+ 
+ static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
+ 					      struct flow_cls_offload *f)
++
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+-	struct netlink_ext_ack *extack = f->common.extack;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++       struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_ports enc_ports;
+ 
+ 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS))
+@@ -31,8 +36,10 @@ static int mlx5e_tc_tun_check_udp_dport_
+ 
+ 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan,
+ 				    be16_to_cpu(enc_ports.key->dst))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matched UDP dst port is not registered as a VXLAN port");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "UDP port %d is not registered as a VXLAN port\n",
+ 			    be16_to_cpu(enc_ports.key->dst));
+@@ -67,8 +74,10 @@ static int mlx5e_tc_tun_init_encap_attr_
+ 	e->tunnel = &vxlan_tunnel;
+ 
+ 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "vxlan udp dport was not registered with the HW");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "%d isn't an offloaded vxlan udp dport\n",
+ 			    dst_port);
+@@ -105,7 +114,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+ 				    void *headers_v)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_enc_keyid enc_keyid;
+ 	void *misc_c, *misc_v;
+ 
+@@ -124,8 +135,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+ 
+ 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
+ 					ft_field_support.outer_vxlan_vni)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matching on VXLAN VNI is not supported");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "Matching on VXLAN VNI is not supported\n");
+ 		return -EOPNOTSUPP;
+@@ -145,6 +158,15 @@ static int mlx5e_tc_tun_get_remote_ifind
+ {
+ 	const struct vxlan_dev *vxlan = netdev_priv(mirred_dev);
+ 	const struct vxlan_rdst *dst = &vxlan->default_dst;
++	int i;
++
++	for (i = 0; i < 5; i++) {
++		if ((int) dst->remote_ifindex >= 0)
++			break;
++		msleep(1);
++	}
++	if ((int) dst->remote_ifindex < 0)
++		return 0;
+ 
+ 	return dst->remote_ifindex;
+ }
+@@ -161,3 +183,4 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
+ 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
+ 	.get_remote_ifindex   = mlx5e_tc_tun_get_remote_ifindex,
+ };
++#endif /* HAVE_TCF_TUNNEL_INFO */

@@ -1,0 +1,274 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
+
+Change-Id: I1906ac0f05e40695f34e8f65bec74d3a7b54dbe8
+---
+ .../ethernet/mellanox/mlx5/core/en/xsk/pool.c | 152 +++++++++++++++++-
+ 1 file changed, 146 insertions(+), 6 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
+@@ -1,31 +1,90 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019-2020, Mellanox Technologies inc. All rights reserved. */
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
+ #include "pool.h"
+ #include "setup.h"
+ #include "en/params.h"
+ 
+ static int mlx5e_xsk_map_pool(struct mlx5e_priv *priv,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 			      struct xsk_buff_pool *pool)
++#else
++			      struct xdp_umem *umem)
++#endif
+ {
+ 	struct device *dev = mlx5_core_dma_dev(priv->mdev);
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	return xsk_pool_dma_map(pool, dev, DMA_ATTR_SKIP_CPU_SYNC);
++#elif defined(HAVE_XSK_BUFF_ALLOC)
++	return xsk_buff_dma_map(umem, dev, 0);
++#else
++       u32 i;
++
++       for (i = 0; i < umem->npgs; i++) {
++              dma_addr_t dma = dma_map_page(dev, umem->pgs[i], 0, PAGE_SIZE,
++                                         DMA_BIDIRECTIONAL);
++
++              if (unlikely(dma_mapping_error(dev, dma)))
++                     goto err_unmap;
++              umem->pages[i].dma = dma;
++       }
++
++       return 0;
++
++err_unmap:
++       while (i--) {
++              dma_unmap_page(dev, umem->pages[i].dma, PAGE_SIZE,
++                            DMA_BIDIRECTIONAL);
++              umem->pages[i].dma = 0;
++       }
++
++       return -ENOMEM;
++#endif /* HAVE_NETDEV_BPF_XSK_BUFF_POOL */
+ }
+ 
+ static void mlx5e_xsk_unmap_pool(struct mlx5e_priv *priv,
+-				 struct xsk_buff_pool *pool)
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++			         struct xsk_buff_pool *pool)
++#else
++			         struct xdp_umem *umem)
++#endif
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	return xsk_pool_dma_unmap(pool, DMA_ATTR_SKIP_CPU_SYNC);
++#elif defined(HAVE_XSK_BUFF_ALLOC)
++	return xsk_buff_dma_unmap(umem, 0);
++#else
++       struct device *dev = priv->mdev->device;
++       u32 i;
++
++       for (i = 0; i < umem->npgs; i++) {
++              dma_unmap_page(dev, umem->pages[i].dma, PAGE_SIZE,
++                            DMA_BIDIRECTIONAL);
++              umem->pages[i].dma = 0;
++       }
++#endif
+ }
+ 
+ static int mlx5e_xsk_get_pools(struct mlx5e_xsk *xsk)
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	if (!xsk->pools) {
+ 		xsk->pools = kcalloc(MLX5E_MAX_NUM_CHANNELS,
+ 				     sizeof(*xsk->pools), GFP_KERNEL);
+ 		if (unlikely(!xsk->pools))
++#else
++	if (!xsk->umems) {
++		xsk->umems = kcalloc(MLX5E_MAX_NUM_CHANNELS,
++				     sizeof(*xsk->umems), GFP_KERNEL);
++		if (unlikely(!xsk->umems))
++#endif
+ 			return -ENOMEM;
+ 	}
+ 
+@@ -38,44 +97,93 @@ static int mlx5e_xsk_get_pools(struct ml
+ static void mlx5e_xsk_put_pools(struct mlx5e_xsk *xsk)
+ {
+ 	if (!--xsk->refcnt) {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		kfree(xsk->pools);
+ 		xsk->pools = NULL;
++#else
++		kfree(xsk->umems);
++		xsk->umems = NULL;
++#endif
+ 	}
+ }
+ 
+-static int mlx5e_xsk_add_pool(struct mlx5e_xsk *xsk, struct xsk_buff_pool *pool, u16 ix)
++static int mlx5e_xsk_add_pool(struct mlx5e_xsk *xsk,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++			         struct xsk_buff_pool *pool,
++#else
++			         struct xdp_umem *pool,
++#endif
++				 u16 ix)
+ {
+ 	int err;
+ 
+ 	err = mlx5e_xsk_get_pools(xsk);
++
+ 	if (unlikely(err))
+ 		return err;
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	xsk->pools[ix] = pool;
++#else
++	xsk->umems[ix] = pool;
++#endif
+ 	return 0;
+ }
+ 
+ static void mlx5e_xsk_remove_pool(struct mlx5e_xsk *xsk, u16 ix)
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	xsk->pools[ix] = NULL;
++#else
++	xsk->umems[ix] = NULL;
++#endif
+ 
+ 	mlx5e_xsk_put_pools(xsk);
+ }
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ static bool mlx5e_xsk_is_pool_sane(struct xsk_buff_pool *pool)
++#else
++static bool mlx5e_xsk_is_pool_sane(struct xdp_umem *umem)
++#endif
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	return xsk_pool_get_headroom(pool) <= 0xffff &&
+ 		xsk_pool_get_chunk_size(pool) <= 0xffff;
++#elif defined(HAVE_XSK_BUFF_ALLOC)
++	return xsk_umem_get_headroom(umem) <= 0xffff &&
++		xsk_umem_get_chunk_size(umem) <= 0xffff;
++#else
++	return umem->headroom <= 0xffff &&
++		umem->chunk_size_nohr <= 0xffff;
++#endif
+ }
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk)
++#else
++void mlx5e_build_xsk_param(struct xdp_umem *umem, struct mlx5e_xsk_param *xsk)
++#endif
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	xsk->headroom = xsk_pool_get_headroom(pool);
+ 	xsk->chunk_size = xsk_pool_get_chunk_size(pool);
++#elif defined(HAVE_XSK_BUFF_ALLOC)
++	xsk->headroom = xsk_umem_get_headroom(umem);
++	xsk->chunk_size = xsk_umem_get_chunk_size(umem);
++#else
++	xsk->headroom = umem->headroom;
++	xsk->chunk_size = umem->chunk_size_nohr + umem->headroom;
++#endif
+ }
+ 
+ static int mlx5e_xsk_enable_locked(struct mlx5e_priv *priv,
+-				   struct xsk_buff_pool *pool, u16 ix)
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++				   struct xsk_buff_pool *pool,
++#else
++				   struct xdp_umem *pool,
++#endif
++				   u16 ix)
+ {
+ 	struct mlx5e_params *params = &priv->channels.params;
+ 	struct mlx5e_xsk_param xsk;
+@@ -89,10 +197,12 @@ static int mlx5e_xsk_enable_locked(struc
+ 		return -EINVAL;
+ 
+ 	err = mlx5e_xsk_map_pool(priv, pool);
++
+ 	if (unlikely(err))
+ 		return err;
+ 
+ 	err = mlx5e_xsk_add_pool(&priv->xsk, pool, ix);
++
+ 	if (unlikely(err))
+ 		goto err_unmap_pool;
+ 
+@@ -156,7 +266,11 @@ validate_closed:
+ 
+ static int mlx5e_xsk_disable_locked(struct mlx5e_priv *priv, u16 ix)
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	struct xsk_buff_pool *pool = mlx5e_xsk_get_pool(&priv->channels.params,
++#else
++	struct xdp_umem *pool = mlx5e_xsk_get_pool(&priv->channels.params,
++#endif
+ 						   &priv->xsk, ix);
+ 	struct mlx5e_channel *c;
+ 
+@@ -183,8 +297,13 @@ remove_pool:
+ 	return 0;
+ }
+ 
+-static int mlx5e_xsk_enable_pool(struct mlx5e_priv *priv, struct xsk_buff_pool *pool,
+-				 u16 ix)
++static int mlx5e_xsk_enable_pool(struct mlx5e_priv *priv,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++				   struct xsk_buff_pool *pool,
++#else
++				   struct xdp_umem *pool,
++#endif
++				   u16 ix)
+ {
+ 	int err;
+ 
+@@ -206,7 +325,13 @@ static int mlx5e_xsk_disable_pool(struct
+ 	return err;
+ }
+ 
+-int mlx5e_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool, u16 qid)
++int mlx5e_xsk_setup_pool(struct net_device *dev,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++			 struct xsk_buff_pool *pool,
++#else
++			 struct xdp_umem *pool,
++#endif
++			 u16 qid)
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 	struct mlx5e_params *params = &priv->channels.params;
+@@ -218,3 +343,18 @@ int mlx5e_xsk_setup_pool(struct net_devi
+ 	return pool ? mlx5e_xsk_enable_pool(priv, pool, ix) :
+ 		      mlx5e_xsk_disable_pool(priv, ix);
+ }
++
++#ifndef HAVE_XSK_BUFF_ALLOC
++int mlx5e_xsk_resize_reuseq(struct xdp_umem *umem, u32 nentries)
++{
++       struct xdp_umem_fq_reuse *reuseq;
++
++       reuseq = xsk_reuseq_prepare(nentries);
++       if (unlikely(!reuseq))
++              return -ENOMEM;
++       xsk_reuseq_free(xsk_reuseq_swap(umem, reuseq));
++
++       return 0;
++}
++#endif
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

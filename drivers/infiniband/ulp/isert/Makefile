@@ -5,6 +5,8 @@ obj-$(CONFIG_INFINIBAND_ISERT_DUMMY) += ib_isert.o
 
 ifeq ($(CONFIG_INFINIBAND_ISERT_DUMMY),m)
 ib_isert-y := ib_isert_dummy.o
+else ifeq ($(CONFIG_ISCSI_TARGET),)
+ib_isert-y := ib_isert_dummy.o
 endif
 
 # Retpoline support: check if this is the right architecture and that

@@ -1,0 +1,27 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
+
+Change-Id: I15a767cb5b4d1b58c299df416f76746a2bde13db
+---
+ .../net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h   | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
+@@ -11,6 +11,7 @@
+ #include <linux/mlx5/driver.h>
+ #include "sf/vhca_event.h"
+ 
++#if defined(HAVE_TRACE_EVENTS_H) && !defined(MLX_DISABLE_TRACEPOINTS)
+ TRACE_EVENT(mlx5_sf_vhca_event,
+ 	    TP_PROTO(const struct mlx5_core_dev *dev,
+ 		     const struct mlx5_vhca_state_event *event),
+@@ -29,6 +30,7 @@ TRACE_EVENT(mlx5_sf_vhca_event,
+ 		      __get_str(devname), __entry->hw_fn_id,
+ 		      __entry->sfnum, __entry->vhca_state)
+ );
++#endif /* defined(HAVE_TRACE_EVENTS_H) && !defined(MLX_DISABLE_TRACEPOINTS) */
+ 
+ #endif /* _MLX5_SF_VHCA_TP_ */
+ 

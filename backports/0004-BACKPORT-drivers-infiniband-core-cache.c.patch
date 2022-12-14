@@ -1,0 +1,72 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
+
+Change-Id: I8f608b1a88ee9c8e551139ee6feb4a624a59527e
+---
+ drivers/infiniband/core/cache.c | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/cache.c
++++ b/drivers/infiniband/core/cache.c
+@@ -1401,10 +1401,19 @@ struct net_device *rdma_read_gid_attr_nd
+ }
+ EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
+ 
++#ifdef HAVE_NETDEV_WALK_ALL_LOWER_DEV_RCU
+ static int get_lower_dev_vlan(struct net_device *lower_dev,
+-			      struct netdev_nested_priv *priv)
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++				struct netdev_nested_priv *priv)
++#else
++				void *data)
++#endif
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	u16 *vlan_id = (u16 *)priv->data;
++#else
++	u16 *vlan_id = data;
++#endif
+ 
+ 	if (is_vlan_dev(lower_dev))
+ 		*vlan_id = vlan_dev_vlan_id(lower_dev);
+@@ -1414,6 +1423,7 @@ static int get_lower_dev_vlan(struct net
+ 	 */
+ 	return 1;
+ }
++#endif
+ 
+ /**
+  * rdma_read_gid_l2_fields - Read the vlan ID and source MAC address
+@@ -1430,9 +1440,11 @@ static int get_lower_dev_vlan(struct net
+ int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
+ 			    u16 *vlan_id, u8 *smac)
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct netdev_nested_priv priv = {
+ 		.data = (void *)vlan_id,
+ 	};
++#endif
+ 	struct net_device *ndev;
+ 
+ 	rcu_read_lock();
+@@ -1448,12 +1460,19 @@ int rdma_read_gid_l2_fields(const struct
+ 		if (is_vlan_dev(ndev)) {
+ 			*vlan_id = vlan_dev_vlan_id(ndev);
+ 		} else {
++#ifdef HAVE_NETDEV_WALK_ALL_LOWER_DEV_RCU
+ 			/* If the netdev is upper device and if it's lower
+ 			 * device is vlan device, consider vlan id of the
+ 			 * the lower vlan device for this gid entry.
+ 			 */
+ 			netdev_walk_all_lower_dev_rcu(attr->ndev,
+-					get_lower_dev_vlan, &priv);
++					get_lower_dev_vlan, 
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++					&priv);
++#else
++					vlan_id);
++#endif
++#endif
+ 		}
+ 	}
+ 	rcu_read_unlock();

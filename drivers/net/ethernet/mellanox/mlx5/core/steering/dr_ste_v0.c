@@ -9,9 +9,9 @@
 #define DR_STE_ENABLE_FLOW_TAG	BIT(31)
 
 enum dr_ste_v0_entry_type {
-	DR_STE_TYPE_TX		= 1,
-	DR_STE_TYPE_RX		= 2,
-	DR_STE_TYPE_MODIFY_PKT	= 6,
+	DR_STE_TYPE_TX          = 1,
+	DR_STE_TYPE_RX          = 2,
+	DR_STE_TYPE_MODIFY_PKT  = 6,
 };
 
 enum dr_ste_v0_action_tunl {
@@ -1649,7 +1649,7 @@ dr_ste_v0_build_src_gvmi_qpn_tag(struct mlx5dr_match_param *value,
 	struct mlx5dr_match_misc *misc = &value->misc;
 	struct mlx5dr_cmd_vport_cap *vport_cap;
 	struct mlx5dr_domain *dmn = sb->dmn;
-	struct mlx5dr_cmd_caps *caps;
+	struct mlx5dr_domain *vport_dmn;
 	u8 *bit_mask = sb->bit_mask;
 	bool source_gvmi_set;
 
@@ -1658,23 +1658,24 @@ dr_ste_v0_build_src_gvmi_qpn_tag(struct mlx5dr_match_param *value,
 	if (sb->vhca_id_valid) {
 		/* Find port GVMI based on the eswitch_owner_vhca_id */
 		if (misc->source_eswitch_owner_vhca_id == dmn->info.caps.gvmi)
-			caps = &dmn->info.caps;
+			vport_dmn = dmn;
 		else if (dmn->peer_dmn && (misc->source_eswitch_owner_vhca_id ==
 					   dmn->peer_dmn->info.caps.gvmi))
-			caps = &dmn->peer_dmn->info.caps;
+			vport_dmn = dmn->peer_dmn;
 		else
 			return -EINVAL;
 
 		misc->source_eswitch_owner_vhca_id = 0;
 	} else {
-		caps = &dmn->info.caps;
+		vport_dmn = dmn;
 	}
 
 	source_gvmi_set = MLX5_GET(ste_src_gvmi_qp, bit_mask, source_gvmi);
 	if (source_gvmi_set) {
-		vport_cap = mlx5dr_get_vport_cap(caps, misc->source_port);
-		if (!vport_cap || !mlx5dr_is_vport_enabled(vport_cap)) {
-			mlx5dr_err(dmn, "Vport 0x%x is invalid\n",
+		vport_cap = mlx5dr_domain_get_vport_cap(vport_dmn,
+							misc->source_port);
+		if (!vport_cap) {
+			mlx5dr_err(dmn, "Vport 0x%x is disabled or invalid\n",
 				   misc->source_port);
 			return -EINVAL;
 		}
@@ -1797,7 +1798,7 @@ dr_ste_v0_build_flex_parser_tnl_geneve_tlv_opt_init(struct mlx5dr_ste_build *sb,
 
 static int dr_ste_v0_build_flex_parser_tnl_gtpu_tag(struct mlx5dr_match_param *value,
 						    struct mlx5dr_ste_build *sb,
-						    uint8_t *tag)
+						    u8 *tag)
 {
 	struct mlx5dr_match_misc3 *misc3 = &value->misc3;
 
@@ -1827,7 +1828,7 @@ static void dr_ste_v0_build_flex_parser_tnl_gtpu_init(struct mlx5dr_ste_build *s
 static int
 dr_ste_v0_build_tnl_gtpu_flex_parser_0_tag(struct mlx5dr_match_param *value,
 					   struct mlx5dr_ste_build *sb,
-					   uint8_t *tag)
+					   u8 *tag)
 {
 	if (dr_is_flex_parser_0_id(sb->caps->flex_parser_id_gtpu_dw_0))
 		DR_STE_SET_FLEX_PARSER_FIELD(tag, gtpu_dw_0, sb->caps, &value->misc3);
@@ -1854,7 +1855,7 @@ dr_ste_v0_build_tnl_gtpu_flex_parser_0_init(struct mlx5dr_ste_build *sb,
 static int
 dr_ste_v0_build_tnl_gtpu_flex_parser_1_tag(struct mlx5dr_match_param *value,
 					   struct mlx5dr_ste_build *sb,
-					   uint8_t *tag)
+					   u8 *tag)
 {
 	if (dr_is_flex_parser_1_id(sb->caps->flex_parser_id_gtpu_dw_0))
 		DR_STE_SET_FLEX_PARSER_FIELD(tag, gtpu_dw_0, sb->caps, &value->misc3);
@@ -1878,20 +1879,41 @@ dr_ste_v0_build_tnl_gtpu_flex_parser_1_init(struct mlx5dr_ste_build *sb,
 	sb->ste_build_tag_func = &dr_ste_v0_build_tnl_gtpu_flex_parser_1_tag;
 }
 
+static int dr_ste_v0_build_tnl_header_0_1_tag(struct mlx5dr_match_param *value,
+					      struct mlx5dr_ste_build *sb,
+					      uint8_t *tag)
+{
+	struct mlx5dr_match_misc5 *misc5 = &value->misc5;
+
+	DR_STE_SET_TAG(tunnel_header, tag, tunnel_header_0, misc5, tunnel_header_0);
+	DR_STE_SET_TAG(tunnel_header, tag, tunnel_header_1, misc5, tunnel_header_1);
+
+	return 0;
+}
+
+static void dr_ste_v0_build_tnl_header_0_1_init(struct mlx5dr_ste_build *sb,
+						struct mlx5dr_match_param *mask)
+{
+	sb->lu_type = DR_STE_V0_LU_TYPE_TUNNEL_HEADER;
+	dr_ste_v0_build_tnl_header_0_1_tag(mask, sb, sb->bit_mask);
+	sb->byte_mask = mlx5dr_ste_conv_bit_to_byte_mask(sb->bit_mask);
+	sb->ste_build_tag_func = &dr_ste_v0_build_tnl_header_0_1_tag;
+}
+
 static int
 dr_ste_v0_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
-				 u32 chunck_size)
+		u32 chunck_size)
 {
 	int ret;
 
 	action->rewrite->chunk =
 		mlx5dr_icm_alloc_chunk(action->rewrite->dmn->action_icm_pool,
-				       chunck_size);
+				chunck_size);
 	if (!action->rewrite->chunk)
 		return -ENOMEM;
 
 	action->rewrite->index = (mlx5dr_icm_pool_get_chunk_icm_addr(action->rewrite->chunk) -
-		action->rewrite->dmn->info.caps.hdr_modify_icm_addr) /
+			action->rewrite->dmn->info.caps.hdr_modify_icm_addr) /
 		MLX5DR_ACTION_CACHE_LINE_SIZE;
 
 	ret = mlx5dr_send_postsend_action(action->rewrite->dmn, action);
@@ -1908,28 +1930,7 @@ free_chunk:
 static void dr_ste_v0_dealloc_modify_hdr_chunk(struct mlx5dr_action *action)
 {
 	mlx5dr_icm_free_chunk(action->rewrite->chunk);
-	kfree(action->rewrite->data);
-}
-
-static int dr_ste_v0_build_tnl_header_0_1_tag(struct mlx5dr_match_param *value,
-					      struct mlx5dr_ste_build *sb,
-					      uint8_t *tag)
-{
-	struct mlx5dr_match_misc5 *misc5 = &value->misc5;
-
-	DR_STE_SET_TAG(tunnel_header, tag, tunnel_header_dw0, misc5, tunnel_header_0);
-	DR_STE_SET_TAG(tunnel_header, tag, tunnel_header_dw1, misc5, tunnel_header_1);
-
-	return 0;
-}
-
-static void dr_ste_v0_build_tnl_header_0_1_init(struct mlx5dr_ste_build *sb,
-						struct mlx5dr_match_param *mask)
-{
-	sb->lu_type = DR_STE_V0_LU_TYPE_TUNNEL_HEADER;
-	dr_ste_v0_build_tnl_header_0_1_tag(mask, sb, sb->bit_mask);
-	sb->byte_mask = mlx5dr_ste_conv_bit_to_byte_mask(sb->bit_mask);
-	sb->ste_build_tag_func = &dr_ste_v0_build_tnl_header_0_1_tag;
+		        kfree(action->rewrite->data);
 }
 
 static struct mlx5dr_ste_ctx ste_ctx_v0 = {

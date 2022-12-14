@@ -1,0 +1,71 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
+
+Change-Id: I37abfa7b94db542b09fe81c1c2836eedc5af4013
+---
+ .../net/ethernet/mellanox/mlx5/core/lib/gid.c | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
+@@ -45,9 +45,25 @@ void mlx5_init_reserved_gids(struct mlx5
+ 	dev->roce.reserved_gids.count = 0;
+ }
+ 
++#if !defined(HAVE_IDA_IS_EMPTY) && !defined(HAVE_IDR_IS_EMPTY)
++static int idr_has_entry(int id, void *p, void *data)
++{
++	return 1;
++}
++
++bool idr_is_empty(struct idr *idp)
++{
++	return !idr_for_each(idp, idr_has_entry, NULL);
++}
++#endif
++
+ void mlx5_cleanup_reserved_gids(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_IDA_IS_EMPTY
+ 	WARN_ON(!ida_is_empty(&dev->roce.reserved_gids.ida));
++#else
++	WARN_ON(!idr_is_empty(&dev->roce.reserved_gids.ida.idr));
++#endif
+ 	dev->roce.reserved_gids.start = 0;
+ 	dev->roce.reserved_gids.count = 0;
+ 	ida_destroy(&dev->roce.reserved_gids.ida);
+@@ -88,12 +104,22 @@ void mlx5_core_unreserve_gids(struct mlx
+ int mlx5_core_reserved_gid_alloc(struct mlx5_core_dev *dev, int *gid_index)
+ {
+ 	int end = dev->roce.reserved_gids.start +
++#ifdef HAVE_IDA_ALLOC_RANGE
+ 		  dev->roce.reserved_gids.count - 1;
++#else
++		  dev->roce.reserved_gids.count;
++#endif
+ 	int index = 0;
+ 
++#ifdef HAVE_IDA_ALLOC_RANGE
+ 	index = ida_alloc_range(&dev->roce.reserved_gids.ida,
+ 				dev->roce.reserved_gids.start, end,
+ 				GFP_KERNEL);
++#else
++	index = ida_simple_get(&dev->roce.reserved_gids.ida,
++			       dev->roce.reserved_gids.start, end,
++			       GFP_KERNEL);
++#endif
+ 	if (index < 0)
+ 		return index;
+ 
+@@ -105,7 +131,11 @@ int mlx5_core_reserved_gid_alloc(struct
+ void mlx5_core_reserved_gid_free(struct mlx5_core_dev *dev, int gid_index)
+ {
+ 	mlx5_core_dbg(dev, "Freeing reserved GID %u\n", gid_index);
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&dev->roce.reserved_gids.ida, gid_index);
++#else
++	ida_simple_remove(&dev->roce.reserved_gids.ida, gid_index);
++#endif
+ }
+ 
+ unsigned int mlx5_core_reserved_gids_count(struct mlx5_core_dev *dev)

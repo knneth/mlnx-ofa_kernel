@@ -1,90 +1,187 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.c
 
-Change-Id: Ia119b567384f2c6a711baeafa973dca4fa310c69
+Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/rx.h   | 41 +++++++++++++++++--
- 1 file changed, 38 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/params.c   | 58 ++++++++++++++++---
+ 1 file changed, 49 insertions(+), 9 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
-@@ -4,11 +4,25 @@
- #ifndef __MLX5_EN_XSK_RX_H__
- #define __MLX5_EN_XSK_RX_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+@@ -7,26 +7,40 @@
+ #include "en_accel/en_accel.h"
+ #include "accel/ipsec.h"
+ #include "fpga/ipsec.h"
++#include "en_accel/tls.h"
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
-+
- #include "en.h"
-+#ifdef HAVE_NDO_XSK_WAKEUP
-+#ifdef HAVE_XDP_SOCK_DRV_H
- #include <net/xdp_sock_drv.h>
-+#else
-+#include <net/xdp_sock.h>
-+#endif
++#ifdef HAVE_XDP_SUPPORT
+ static bool mlx5e_rx_is_xdp(struct mlx5e_params *params,
+ 			    struct mlx5e_xsk_param *xsk)
+ {
+ 	return params->xdp_prog || xsk;
+ }
 +#endif
  
- /* RX data path */
- 
-+#ifndef HAVE_XSK_BUFF_ALLOC
-+bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count);
-+void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
-+			    struct mlx5e_dma_info *dma_info);
-+void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle);
-+#endif
- struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
- 						    struct mlx5e_mpw_info *wi,
- 						    u16 cqe_bcnt,
-@@ -19,10 +33,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
- 					      struct mlx5e_wqe_frag_info *wi,
- 					      u32 cqe_bcnt);
+ u16 mlx5e_get_linear_rq_headroom(struct mlx5e_params *params,
+ 				 struct mlx5e_xsk_param *xsk)
+ {
+-	u16 headroom;
++	u16 headroom = 0;
  
 +#ifdef HAVE_XSK_BUFF_ALLOC
- static inline int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq,
- 					    struct mlx5e_dma_info *dma_info)
- {
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	dma_info->xsk = xsk_buff_alloc(rq->xsk_pool);
-+#else
-+	dma_info->xsk = xsk_buff_alloc(rq->umem);
+ 	if (xsk)
+ 		return xsk->headroom;
+-
 +#endif
+ 	headroom = NET_IP_ALIGN;
+-	if (mlx5e_rx_is_xdp(params, xsk))
 +
- 	if (!dma_info->xsk)
- 		return -ENOMEM;
++#ifdef HAVE_XDP_SUPPORT
++	if (mlx5e_rx_is_xdp(params, xsk)) {
+ 		headroom += XDP_PACKET_HEADROOM;
+-	else
++#ifndef HAVE_XSK_BUFF_ALLOC
++		if (xsk)
++			headroom += xsk->headroom;
++#endif
++	} else {
++#endif /* HAVE_XDP_SUPPORT */
+ 		headroom += MLX5_RX_HEADROOM;
++#ifdef HAVE_XDP_SUPPORT
++	}
++#endif
  
-@@ -35,18 +55,33 @@ static inline int mlx5e_xsk_page_alloc_p
- 
- 	return 0;
+ 	return headroom;
  }
-+#else
-+int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq,
-+			      struct mlx5e_dma_info *dma_info);
-+#endif /* HAVE_XSK_BUFF_ALLOC */
- 
-+#ifdef HAVE_NDO_XSK_WAKEUP
- static inline bool mlx5e_xsk_update_rx_wakeup(struct mlx5e_rq *rq, bool alloc_err)
- {
--	if (!xsk_uses_need_wakeup(rq->xsk_pool))
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+	struct xsk_buff_pool *xsk_pool = rq->xsk_pool;
-+
-+	if (!xsk_uses_need_wakeup(xsk_pool))
-+#else
-+	struct xdp_umem *xsk_pool = rq->umem;
-+
-+	if (!xsk_umem_uses_need_wakeup(xsk_pool))
+@@ -58,8 +72,10 @@ static u32 mlx5e_rx_get_linear_frag_sz(s
+ 	 * The latter is important, because frames may come in a random order,
+ 	 * and we will have trouble assemblying a real page of multiple frames.
+ 	 */
++#ifdef HAVE_XDP_SUPPORT
+ 	if (mlx5e_rx_is_xdp(params, xsk))
+ 		frag_sz = max_t(u32, frag_sz, PAGE_SIZE);
 +#endif
- 		return alloc_err;
  
- 	if (unlikely(alloc_err))
--		xsk_set_rx_need_wakeup(rq->xsk_pool);
-+		xsk_set_rx_need_wakeup(xsk_pool);
- 	else
--		xsk_clear_rx_need_wakeup(rq->xsk_pool);
-+		xsk_clear_rx_need_wakeup(xsk_pool);
+ 	/* Even if we can go with a smaller fragment size, we must not put
+ 	 * multiple packets into a single frame.
+@@ -87,8 +103,12 @@ bool mlx5e_rx_is_linear_skb(struct mlx5e
+ 	u32 linear_frag_sz = max(mlx5e_rx_get_linear_frag_sz(params, xsk),
+ 				 mlx5e_rx_get_linear_frag_sz(params, NULL));
  
- 	return false;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	return !IS_HW_LRO(params) && linear_frag_sz <= PAGE_SIZE;
++#else
+ 	return params->packet_merge.type == MLX5E_PACKET_MERGE_NONE &&
+ 		linear_frag_sz <= PAGE_SIZE;
++#endif
+ }
+ 
+ bool mlx5e_verify_rx_mpwqe_strides(struct mlx5_core_dev *mdev,
+@@ -320,7 +340,7 @@ bool mlx5e_striding_rq_possible(struct m
+ 
+ 	if (mlx5_fpga_is_ipsec_device(mdev))
+ 		return false;
+-
++#ifdef HAVE_XDP_SUPPORT
+ 	if (params->xdp_prog) {
+ 		/* XSK params are not considered here. If striding RQ is in use,
+ 		 * and an XSK is being opened, mlx5e_rx_mpwqe_is_linear_skb will
+@@ -329,7 +349,7 @@ bool mlx5e_striding_rq_possible(struct m
+ 		if (!mlx5e_rx_mpwqe_is_linear_skb(mdev, params, NULL))
+ 			return false;
+ 	}
+-
++#endif
+ 	return true;
+ }
+ 
+@@ -385,6 +405,9 @@ void mlx5e_build_create_cq_param(struct
+ 		.ch_stats = c->stats,
+ 		.node = cpu_to_node(c->cpu),
+ 		.ix = c->ix,
++#ifndef HAVE_NAPI_STATE_MISSED
++		.ch_flags = &c->flags,
++#endif
+ 	};
+ }
+ 
+@@ -530,11 +553,18 @@ void mlx5e_build_aso_cq_param(struct mlx
+ 
+ static u8 rq_end_pad_mode(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
+ {
+-	bool lro_en = params->packet_merge.type == MLX5E_PACKET_MERGE_LRO;
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 	bool ro = pcie_relaxed_ordering_enabled(mdev->pdev) &&
+ 		MLX5_CAP_GEN(mdev, relaxed_ordering_write);
+-
+-	return ro && lro_en ?
++#else
++	bool ro = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
++#endif
++
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	return ro && IS_HW_LRO(params)?
++#else
++	return ro && (params->packet_merge.type == MLX5E_PACKET_MERGE_LRO) ?
++#endif
+ 		MLX5_WQ_END_PAD_MODE_NONE : MLX5_WQ_END_PAD_MODE_ALIGN;
+ }
+ 
+@@ -767,8 +797,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+ 	 * doesn't affect its return value, as long as params->xdp_prog != NULL,
+ 	 * so we can just multiply by 2.
+ 	 */
++#ifdef HAVE_XDP_SUPPORT
+ 	if (params->xdp_prog)
+ 		wqebbs *= 2;
++#endif
+ 
+ 	if (params->packet_merge.type == MLX5E_PACKET_MERGE_SHAMPO)
+ 		wqebbs += mlx5e_shampo_icosq_sz(mdev, params, rqp);
+@@ -778,8 +810,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+ 
+ static u8 mlx5e_build_async_icosq_log_wq_sz(struct mlx5_core_dev *mdev)
+ {
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	if (mlx5e_accel_is_ktls_rx(mdev))
+ 		return MLX5E_PARAMS_DEFAULT_LOG_SQ_SIZE;
++#endif
+ 
+ 	return MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
+ }
+@@ -807,14 +841,17 @@ static void mlx5e_build_async_icosq_para
+ 
+ 	mlx5e_build_sq_param_common(mdev, param);
+ 	param->stop_room = mlx5e_stop_room_for_wqe(1); /* for XSK NOP */
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	param->is_tls = mlx5e_accel_is_ktls_rx(mdev);
+ 	if (param->is_tls)
+ 		param->stop_room += mlx5e_stop_room_for_wqe(1); /* for TLS RX resync NOP */
++#endif
+ 	MLX5_SET(sqc, sqc, reg_umr, MLX5_CAP_ETH(mdev, reg_umr_sq));
+ 	MLX5_SET(wq, wq, log_wq_sz, log_wq_size);
+ 	mlx5e_build_ico_cq_param(mdev, log_wq_size, &param->cqp);
+ }
+ 
++#ifdef HAVE_XDP_SUPPORT
+ void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
+ 			     struct mlx5e_params *params,
+ 			     struct mlx5e_sq_param *param)
+@@ -827,6 +864,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
+ 	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
+ 	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
  }
 +#endif
  
-+#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
- #endif /* __MLX5_EN_XSK_RX_H__ */
+ int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
+ 			      struct mlx5e_params *params,
+@@ -844,7 +882,9 @@ int mlx5e_build_channel_param(struct mlx
+ 	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
+ 
+ 	mlx5e_build_sq_param(mdev, params, &cparam->txq_sq);
++#ifdef HAVE_XDP_SUPPORT
+ 	mlx5e_build_xdpsq_param(mdev, params, &cparam->xdp_sq);
++#endif
+ 	mlx5e_build_icosq_param(mdev, icosq_log_wq_sz, &cparam->icosq);
+ 	mlx5e_build_async_icosq_param(mdev, async_icosq_log_wq_sz, &cparam->async_icosq);
+ 

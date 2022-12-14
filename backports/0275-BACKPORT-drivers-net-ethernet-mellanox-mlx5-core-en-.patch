@@ -1,0 +1,33 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
+
+Change-Id: Idfcb728a5a2940144a03b8bf9b1ae3b81d6f552b
+---
+ .../net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c   | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
+@@ -1,12 +1,21 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ #include "post_meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
+ 
++
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #define MLX5_PACKET_COLOR_BITS MLX5_REG_MAPPING_MBITS(PACKET_COLOR_TO_REG)
+ #define MLX5_PACKET_COLOR_MASK MLX5_REG_MAPPING_MASK(PACKET_COLOR_TO_REG)
++#endif
+ 
+ struct mlx5e_post_meter_priv {
+ 	struct mlx5_flow_table *ft;

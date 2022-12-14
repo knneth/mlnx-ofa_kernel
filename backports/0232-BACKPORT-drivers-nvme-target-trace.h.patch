@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/trace.h
+
+Change-Id: I0d2c17701dad010487b8c45e5e17893737b9eefb
+---
+ drivers/nvme/target/trace.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/target/trace.h
++++ b/drivers/nvme/target/trace.h
+@@ -53,8 +53,8 @@ static inline void __assign_req_name(cha
+ 		return;
+ 	}
+ 
+-	strncpy(name, req->ns->device_path,
+-		min_t(size_t, DISK_NAME_LEN, strlen(req->ns->device_path)));
++	// XXX Fix RH 8 compilation warning
++	strncpy(name, req->ns->device_path, DISK_NAME_LEN);
+ }
+ #endif
+ 

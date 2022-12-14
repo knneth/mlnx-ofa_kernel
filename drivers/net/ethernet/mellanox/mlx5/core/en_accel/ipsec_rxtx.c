@@ -143,7 +143,6 @@ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
 	 *
 	 * Transport Mode:
 	 * SWP:      OutL3       OutL4
-	 *           InL3
 	 * Pkt: MAC  IP     ESP  L4
 	 *
 	 * Tunnel(VXLAN TCP/UDP) over Transport Mode
@@ -162,8 +161,54 @@ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
 		if (xo->proto == IPPROTO_IPV6)
 			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L3_IPV6;
 
+		switch (xo->inner_ipproto) {
+		case IPPROTO_UDP:
+			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+			fallthrough;
+		case IPPROTO_TCP:
+			/* IP | ESP | IP | [TCP | UDP] */
+			eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
+			break;
+		default:
+			break;
+		}
 		return;
 	}
+
+	/* Transport mode */
+	if (mode != XFRM_MODE_TRANSPORT)
+		return;
+
+	if (!xo->inner_ipproto) {
+		switch (xo->proto) {
+		case IPPROTO_UDP:
+			eseg->swp_flags |= MLX5_ETH_WQE_SWP_OUTER_L4_UDP;
+			fallthrough;
+		case IPPROTO_TCP:
+			/* IP | ESP | TCP */
+			eseg->swp_outer_l4_offset = skb_inner_transport_offset(skb) / 2;
+			break;
+		default:
+			break;
+		}
+	} else {
+		/* Tunnel(VXLAN TCP/UDP) over Transport Mode */
+		switch (xo->inner_ipproto) {
+		case IPPROTO_UDP:
+			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+			fallthrough;
+		case IPPROTO_TCP:
+			eseg->swp_inner_l3_offset = skb_inner_network_offset(skb) / 2;
+			eseg->swp_inner_l4_offset =
+				(skb->csum_start + skb->head - skb->data) / 2;
+			if (inner_ip_hdr(skb)->version == 6)
+				eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L3_IPV6;
+			break;
+		default:
+			break;
+		}
+	}
+
 }
 
 void mlx5e_ipsec_set_iv_esn(struct sk_buff *skb, struct xfrm_state *x,
@@ -568,8 +613,8 @@ int mlx5e_ipsec_set_flow_attrs(struct mlx5e_priv *priv, u32 *match_c, u32 *match
 	if (err)
 		return err;
 
-	mdata_c = (void *)MLX5_ADDR_OF(fte_match_set_misc, misc_param_c, outer_emd_tag_data_0);
-	mdata_v = (void *)MLX5_ADDR_OF(fte_match_set_misc, misc_param_v, outer_emd_tag_data_0);
+	mdata_c = (void *)MLX5_ADDR_OF(fte_match_set_misc, misc_param_c, outer_emd_tag_data);
+	mdata_v = (void *)MLX5_ADDR_OF(fte_match_set_misc, misc_param_v, outer_emd_tag_data);
 
 	MLX5_SET(fte_match_set_misc, misc_param_c, outer_emd_tag, 1);
 	mdata_c->content.rx.sa_handle = 0xFFFFFFFF;

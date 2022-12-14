@@ -199,6 +199,13 @@ cat << 'END_CONFIG' >> $PWD/config.h
 #undef HAVE_XDP_RXQ_INFO_REG_MEM_MODEL
 #endif
 
+/* Define HAVE_SHAMPO_SUPPORT from other flags */
+#if defined(HAVE_NET_PAGE_POOL_H)
+#define HAVE_SHAMPO_SUPPORT 1
+#else
+#undef HAVE_SHAMPO_SUPPORT
+#endif
+
 /* Add new assembled defines ABOVE this note.
  * Newly added defines must contain #define else #undef
  * Please use existing defines as an example.

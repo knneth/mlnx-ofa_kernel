@@ -172,6 +172,11 @@ unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
 #define flow_block_offload tc_block_offload
 #define __flow_indr_block_cb_register __tc_indr_block_cb_register
 #define __flow_indr_block_cb_unregister __tc_indr_block_cb_unregister
+
+#ifndef HAVE_ENUM_FLOW_BLOCK_BINDER_TYPE
+#define flow_block_binder_type tcf_block_binder_type
+#endif
+
 #endif /* HAVE_TC_FLOWER_OFFLOAD */
 
 #ifdef HAVE___TC_INDR_BLOCK_CB_REGISTER

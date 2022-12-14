@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+
+Change-Id: I3712d9e16846f659e7a9469badaee7a7f6df072e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+@@ -38,7 +38,11 @@
+ 
+ void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc)
+ {
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 	bool ro_pci_enable = pcie_relaxed_ordering_enabled(mdev->pdev);
++#else
++	bool ro_pci_enable = true;
++#endif
+ 	bool ro_write = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
+ 	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read);
+ 

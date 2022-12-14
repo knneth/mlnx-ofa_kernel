@@ -19,6 +19,7 @@ enum mlx5_traffic_types {
 	MLX5_TT_IPV6,
 	MLX5_TT_ANY,
 	MLX5_NUM_TT,
+	MLX5_NUM_INDIR_TIRS = MLX5_TT_ANY,
 };
 
 enum mlx5_tunnel_types {
@@ -42,15 +43,11 @@ struct ttc_params {
 	struct mlx5_flow_namespace *ns;
 	struct mlx5_flow_table_attr ft_attr;
 	struct mlx5_flow_destination dests[MLX5_NUM_TT];
-	DECLARE_BITMAP(dests_valid, MLX5_NUM_TT);
+	DECLARE_BITMAP(ignore_dests, MLX5_NUM_TT);
 	bool   inner_ttc;
+	DECLARE_BITMAP(ignore_tunnel_dests, MLX5_NUM_TUNNEL_TT);
 	struct mlx5_flow_destination tunnel_dests[MLX5_NUM_TUNNEL_TT];
-	DECLARE_BITMAP(tunnel_dests_valid, MLX5_NUM_TUNNEL_TT);
 };
-
-u8 mlx5_get_proto_by_tunnel_type(enum mlx5_tunnel_types tt);
-
-bool mlx5_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type);
 
 struct mlx5_flow_table *mlx5_get_ttc_flow_table(struct mlx5_ttc_table *ttc);
 
@@ -69,7 +66,7 @@ mlx5_ttc_get_default_dest(struct mlx5_ttc_table *ttc,
 int mlx5_ttc_fwd_default_dest(struct mlx5_ttc_table *ttc,
 			      enum mlx5_traffic_types type);
 
-bool mlx5e_any_tunnel_proto_supported(struct mlx5_core_dev *mdev);
 bool mlx5_tunnel_inner_ft_supported(struct mlx5_core_dev *mdev);
+u8 mlx5_get_proto_by_tunnel_type(enum mlx5_tunnel_types tt);
 
 #endif /* __MLX5_FS_TTC_H__ */

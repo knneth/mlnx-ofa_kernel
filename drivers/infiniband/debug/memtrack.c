@@ -797,10 +797,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"tcf_exts_init",
 		"tcf_hashinfo_init",
 		/* sw steering functions */
-		"dr_icm_chunk_ste_init",
 		"dr_icm_chunk_create",
-		/* switchdev header rewrite */
-		"alloc_mod_hdr_actions",
 		/* release order0 pages, for old kernels only */
 		"mlx5e_free_xdpsq_desc",
 		/* kTLS resync dump */
@@ -838,10 +835,7 @@ int is_non_trackable_free_func(const char *func_name)
 {
 	static const char * const str_cmp_arr[] = {
 		/* sw steering functions */
-		"dr_icm_chunk_ste_cleanup",
-		"dr_icm_chunk_destroy",
-		/* switchdev header rewrite */
-		"dealloc_mod_hdr_actions",
+		"mlx5dr_icm_free_chunk",
 		/* external function in mdev module */
 		"create_store",
 		/* functions in mlxdevm.c uses memory allocated by nla_strdup */

@@ -1,0 +1,35 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
+
+Change-Id: I42338bb33017512646c4cea493a67ac204ef45f3
+---
+ include/trace/events/rpcrdma.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/trace/events/rpcrdma.h
++++ b/include/trace/events/rpcrdma.h
+@@ -10,6 +10,8 @@
+ #if !defined(_TRACE_RPCRDMA_H) || defined(TRACE_HEADER_MULTI_READ)
+ #define _TRACE_RPCRDMA_H
+ 
++#include "../../../compat/config.h"
++
+ #include <linux/scatterlist.h>
+ #include <linux/sunrpc/rpc_rdma_cid.h>
+ #include <linux/tracepoint.h>
+@@ -1674,6 +1676,7 @@ TRACE_EVENT(svcrdma_encode_wseg,
+ 	)
+ );
+ 
++#ifdef HAVE_SVC_RDMA_PCL
+ TRACE_EVENT(svcrdma_decode_rseg,
+ 	TP_PROTO(
+ 		const struct rpc_rdma_cid *cid,
+@@ -1746,6 +1749,7 @@ TRACE_EVENT(svcrdma_decode_wseg,
+ 		(unsigned long long)__entry->offset, __entry->handle
+ 	)
+ );
++#endif
+ 
+ DECLARE_EVENT_CLASS(svcrdma_error_event,
+ 	TP_PROTO(

@@ -6,9 +6,9 @@
 #include "sf.h"
 #include "mlx5_ifc_vhca_event.h"
 #include "ecpf.h"
-#include "vhca_event.h"
 #include "mlx5_core.h"
 #include "eswitch.h"
+#include "diag/sf_tracepoint.h"
 
 struct mlx5_sf_hw {
 	u32 usr_sfnum;
@@ -74,26 +74,29 @@ static int mlx5_sf_hw_table_id_alloc(struct mlx5_sf_hw_table *table, u32 control
 				     u32 usr_sfnum)
 {
 	struct mlx5_sf_hwc_table *hwc;
+	int free_idx = -1;
 	int i;
 
 	hwc = mlx5_sf_controller_to_hwc(table->dev, controller);
 	if (!hwc->sfs)
 		return -ENOSPC;
 
-	/* Check if sf with same sfnum already exists or not. */
 	for (i = 0; i < hwc->max_fn; i++) {
+		if (!hwc->sfs[i].allocated && free_idx == -1) {
+			free_idx = i;
+			continue;
+		}
+
 		if (hwc->sfs[i].allocated && hwc->sfs[i].usr_sfnum == usr_sfnum)
 			return -EEXIST;
 	}
-	/* Find the free entry and allocate the entry from the array */
-	for (i = 0; i < hwc->max_fn; i++) {
-		if (!hwc->sfs[i].allocated) {
-			hwc->sfs[i].usr_sfnum = usr_sfnum;
-			hwc->sfs[i].allocated = true;
-			return i;
-		}
-	}
-	return -ENOSPC;
+
+	if (free_idx == -1)
+		return -ENOSPC;
+
+	hwc->sfs[free_idx].usr_sfnum = usr_sfnum;
+	hwc->sfs[free_idx].allocated = true;
+	return free_idx;
 }
 
 static void mlx5_sf_hw_table_id_free(struct mlx5_sf_hw_table *table, u32 controller, int id)
@@ -140,6 +143,7 @@ int mlx5_sf_hw_table_sf_alloc(struct mlx5_core_dev *dev, u32 controller, u32 usr
 			goto vhca_err;
 	}
 
+	trace_mlx5_sf_hwc_alloc(dev, controller, hw_fn_id, usr_sfnum);
 	mutex_unlock(&table->table_lock);
 	return sw_id;
 
@@ -170,6 +174,7 @@ static void mlx5_sf_hw_table_hwc_sf_free(struct mlx5_core_dev *dev,
 	mlx5_cmd_dealloc_sf(dev, hwc->start_fn_id + idx);
 	hwc->sfs[idx].allocated = false;
 	hwc->sfs[idx].pending_delete = false;
+	trace_mlx5_sf_hwc_free(dev, hwc->start_fn_id + idx);
 }
 
 void mlx5_sf_hw_table_sf_deferred_free(struct mlx5_core_dev *dev, u32 controller, u16 id)
@@ -193,6 +198,7 @@ void mlx5_sf_hw_table_sf_deferred_free(struct mlx5_core_dev *dev, u32 controller
 		hwc->sfs[id].allocated = false;
 	} else {
 		hwc->sfs[id].pending_delete = true;
+		trace_mlx5_sf_hwc_deferred_free(dev, hw_fn_id);
 	}
 err:
 	mutex_unlock(&table->table_lock);
@@ -241,7 +247,7 @@ int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_sf_hw_table *table;
 	u16 max_ext_fn = 0;
-	u16 ext_base_id;
+	u16 ext_base_id = 0;
 	u16 max_fn = 0;
 	u16 base_id;
 	int err;

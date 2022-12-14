@@ -116,7 +116,7 @@
 #define KERNEL_MIN_LEVEL (KERNEL_NIC_PRIO_NUM_LEVELS + 1)
 
 #define KERNEL_NIC_TC_NUM_PRIOS  1
-#define KERNEL_NIC_TC_NUM_LEVELS 3
+#define KERNEL_NIC_TC_NUM_LEVELS 4
 
 #define ANCHOR_NUM_LEVELS 1
 #define ANCHOR_NUM_PRIOS 1
@@ -1157,7 +1157,7 @@ static struct mlx5_flow_table *__mlx5_create_flow_table(struct mlx5_flow_namespa
 			      find_next_chained_ft(fs_prio);
 	ft->def_miss_action = ns->def_miss_action;
 	ft->ns = ns;
-	err = root->cmds->create_flow_table(root, ft, ft_attr->max_fte, next_ft);
+	err = root->cmds->create_flow_table(root, ft, ft_attr, next_ft);
 	if (err)
 		goto free_ft;
 
@@ -1196,6 +1196,12 @@ struct mlx5_flow_table *mlx5_create_flow_table(struct mlx5_flow_namespace *ns,
 	return __mlx5_create_flow_table(ns, ft_attr, FS_FT_OP_MOD_NORMAL, 0);
 }
 EXPORT_SYMBOL(mlx5_create_flow_table);
+
+u32 mlx5_flow_table_id(struct mlx5_flow_table *ft)
+{
+	return ft->id;
+}
+EXPORT_SYMBOL(mlx5_flow_table_id);
 
 struct mlx5_flow_table *
 mlx5_create_vport_flow_table(struct mlx5_flow_namespace *ns,
@@ -1318,30 +1324,6 @@ struct mlx5_flow_group *mlx5_create_flow_group(struct mlx5_flow_table *ft,
 	return fg;
 }
 EXPORT_SYMBOL(mlx5_create_flow_group);
-
-struct mlx5_flow_group *
-mlx5_create_hash_flow_group(struct mlx5_flow_table *ft,
-			    struct mlx5_flow_definer *definer,
-			    int start_flow_index, int num_entries)
-{
-	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
-	struct mlx5_flow_group *fg;
-	u32 *in;
-
-	in = kvzalloc(inlen, GFP_KERNEL);
-	if (!in)
-		return ERR_PTR(-ENOMEM);
-
-	MLX5_SET(create_flow_group_in, in, match_definer_id, definer->id);
-	MLX5_SET(create_flow_group_in, in, start_flow_index, start_flow_index);
-	MLX5_SET(create_flow_group_in, in, end_flow_index, num_entries - 1);
-	MLX5_SET(create_flow_group_in, in, group_type,
-		 MLX5_CREATE_FLOW_GROUP_IN_GROUP_TYPE_HASH_SPLIT);
-
-	fg = mlx5_create_flow_group(ft, in);
-	kvfree(in);
-	return fg;
-}
 
 static struct mlx5_flow_rule *alloc_rule(struct mlx5_flow_destination *dest)
 {
@@ -1619,9 +1601,22 @@ static struct mlx5_flow_rule *find_flow_rule(struct fs_fte *fte,
 	return NULL;
 }
 
-static bool check_conflicting_actions(u32 action1, u32 action2)
+static bool check_conflicting_actions_vlan(const struct mlx5_fs_vlan *vlan0,
+					   const struct mlx5_fs_vlan *vlan1)
 {
-	u32 xored_actions = action1 ^ action2;
+	return vlan0->ethtype != vlan1->ethtype ||
+	       vlan0->vid != vlan1->vid ||
+	       vlan0->prio != vlan1->prio;
+}
+
+static bool check_conflicting_actions(const struct mlx5_flow_act *act1,
+				      const struct mlx5_flow_act *act2)
+{
+	u32 action1 = act1->action;
+	u32 action2 = act2->action;
+	u32 xored_actions;
+
+	xored_actions = action1 ^ action2;
 
 	/* if one rule only wants to count, it's ok */
 	if (action1 == MLX5_FLOW_CONTEXT_ACTION_COUNT ||
@@ -1638,6 +1633,22 @@ static bool check_conflicting_actions(u32 action1, u32 action2)
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH_2))
 		return true;
 
+	if (action1 & MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT &&
+	    act1->pkt_reformat != act2->pkt_reformat)
+		return true;
+
+	if (action1 & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR &&
+	    act1->modify_hdr != act2->modify_hdr)
+		return true;
+
+	if (action1 & MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH &&
+	    check_conflicting_actions_vlan(&act1->vlan[0], &act2->vlan[0]))
+		return true;
+
+	if (action1 & MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH_2 &&
+	    check_conflicting_actions_vlan(&act1->vlan[1], &act2->vlan[1]))
+		return true;
+
 	return false;
 }
 
@@ -1645,7 +1656,7 @@ static int check_conflicting_ftes(struct fs_fte *fte,
 				  const struct mlx5_flow_context *flow_context,
 				  const struct mlx5_flow_act *flow_act)
 {
-	if (check_conflicting_actions(flow_act->action, fte->action.action)) {
+	if (check_conflicting_actions(flow_act, &fte->action)) {
 		mlx5_core_warn(get_dev(&fte->node),
 			       "Found two FTEs with conflicting actions\n");
 		return -EEXIST;
@@ -2311,7 +2322,7 @@ struct mlx5_flow_namespace *mlx5_get_flow_namespace(struct mlx5_core_dev *dev,
 		return NULL;
 
 	switch (type) {
-	case MLX5_FLOW_NAMESPACE_FDB_KERNEL:
+	case MLX5_FLOW_NAMESPACE_FDB:
 		if (steering->fdb_root_ns)
 			return &steering->fdb_root_ns->ns;
 		return NULL;
@@ -2634,7 +2645,7 @@ static void set_prio_attrs_in_prio(struct fs_prio *prio, int acc_level)
 		acc_level_ns = set_prio_attrs_in_ns(ns, acc_level);
 
 		/* If this a prio with chains, and we can jump from one chain
-		 * (namepsace) to another, so we accumulate the levels
+		 * (namespace) to another, so we accumulate the levels
 		 */
 		if (prio->node.type == FS_TYPE_PRIO_CHAINS)
 			acc_level = acc_level_ns;
@@ -2957,7 +2968,7 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 	if (err)
 		goto out_err;
 
-	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_CRYPTO_INGRESS, 3);
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_CRYPTO_INGRESS, 2);
 	if (IS_ERR(maj_prio)) {
 		err = PTR_ERR(maj_prio);
 		goto out_err;
@@ -3172,8 +3183,8 @@ cleanup:
 int mlx5_init_fs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_flow_steering *steering;
-	char *ftes_cache_name = NULL;
-	char *fgs_cache_name = NULL;
+	char *ftes_cache_name;
+	char *fgs_cache_name;
 	int err = 0;
 
 	err = mlx5_init_fc_stats(dev);
@@ -3189,7 +3200,7 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 		err = -ENOMEM;
 		goto err;
 	}
-
+	
 	ftes_cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
 	fgs_cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
 	if (!ftes_cache_name || !fgs_cache_name) {
@@ -3201,9 +3212,9 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 	dev->priv.steering = steering;
 
 	if (mlx5_fs_dr_is_supported(dev))
-		steering->mode = DEVLINK_ESWITCH_STEERING_MODE_SMFS;
+		steering->mode = MLX5_FLOW_STEERING_MODE_SMFS;
 	else
-		steering->mode = DEVLINK_ESWITCH_STEERING_MODE_DMFS;
+		steering->mode = MLX5_FLOW_STEERING_MODE_DMFS;
 
 	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev_name(dev->device));
 	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev_name(dev->device));
@@ -3462,6 +3473,11 @@ void mlx5_packet_reformat_dealloc(struct mlx5_core_dev *dev,
 }
 EXPORT_SYMBOL(mlx5_packet_reformat_dealloc);
 
+int mlx5_get_match_definer_id(struct mlx5_flow_definer *definer)
+{
+	return definer->id;
+}
+
 struct mlx5_flow_definer *
 mlx5_create_match_definer(struct mlx5_core_dev *dev,
 			  enum mlx5_flow_namespace_type ns_type, u16 format_id,
@@ -3556,18 +3572,4 @@ int mlx5_flow_namespace_set_mode(struct mlx5_flow_namespace *ns,
 	root->mode = mode;
 
 	return 0;
-}
-
-int mlx5_flow_vport_enable(struct mlx5_core_dev *dev, int vport)
-{
-	struct mlx5_flow_root_namespace *root = dev->priv.steering->fdb_root_ns;
-
-	return root->cmds->vport_enable(root, vport);
-}
-
-void mlx5_flow_vport_disable(struct mlx5_core_dev *dev, int vport)
-{
-	struct mlx5_flow_root_namespace *root = dev->priv.steering->fdb_root_ns;
-
-	root->cmds->vport_disable(root, vport);
 }

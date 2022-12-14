@@ -1,0 +1,150 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/ioctl.c
+
+Change-Id: Iec372d7c3a75a0c7c90896d43ef4a5caf927c42f
+---
+ drivers/nvme/host/ioctl.c | 53 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 51 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/host/ioctl.c
++++ b/drivers/nvme/host/ioctl.c
+@@ -14,8 +14,10 @@
+  */
+ static void __user *nvme_to_user_ptr(uintptr_t ptrval)
+ {
++#if defined(HAVE_IN_COMPAT_SYSCALL) && defined(HAVE_COMPAT_UPTR_T)
+ 	if (in_compat_syscall())
+ 		ptrval = (compat_uptr_t)ptrval;
++#endif
+ 	return (void __user *)ptrval;
+ }
+ 
+@@ -39,9 +41,10 @@ static void *nvme_add_user_metadata(stru
+ 		ret = PTR_ERR(bip);
+ 		goto out_free_meta;
+ 	}
+-
++#ifdef HAVE_BIO_INTEGRITY_PYLD_BIP_ITER
+ 	bip->bip_iter.bi_size = len;
+ 	bip->bip_iter.bi_sector = seed;
++#endif
+ 	ret = bio_integrity_add_page(bio, virt_to_page(buf), len,
+ 			offset_in_page(buf));
+ 	if (ret == len)
+@@ -60,13 +63,21 @@ static int nvme_submit_user_cmd(struct r
+ {
+ 	bool write = nvme_is_write(cmd);
+ 	struct nvme_ns *ns = q->queuedata;
++#ifdef HAVE_ENUM_BIO_REMAPPED
+ 	struct block_device *bdev = ns ? ns->disk->part0 : NULL;
++#else
++	struct gendisk *disk = ns ? ns->disk : NULL;
++#endif
+ 	struct request *req;
+ 	struct bio *bio = NULL;
+ 	void *meta = NULL;
+ 	int ret;
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	req = nvme_alloc_request(q, cmd, 0);
++#else
++	req = nvme_alloc_request(q, cmd, GFP_KERNEL, false);
++#endif
+ 	if (IS_ERR(req))
+ 		return PTR_ERR(req);
+ 
+@@ -80,30 +91,62 @@ static int nvme_submit_user_cmd(struct r
+ 		if (ret)
+ 			goto out;
+ 		bio = req->bio;
++#ifdef HAVE_BIO_BI_DISK
++		bio->bi_disk = disk;
++		if (disk && meta_buffer && meta_len) {
++#elif defined HAVE_ENUM_BIO_REMAPPED
+ 		if (bdev)
+ 			bio_set_dev(bio, bdev);
+ 		if (bdev && meta_buffer && meta_len) {
++#else
++		if (disk) {
++			bio->bi_bdev = bdget_disk(disk, 0);
++			if (!bio->bi_bdev) {
++				ret = -ENODEV;
++				goto out_unmap;
++			}
++		}
++		if (disk && meta_buffer && meta_len) {
++#endif
+ 			meta = nvme_add_user_metadata(bio, meta_buffer, meta_len,
+ 					meta_seed, write);
+ 			if (IS_ERR(meta)) {
+ 				ret = PTR_ERR(meta);
+ 				goto out_unmap;
+ 			}
++#ifdef HAVE_BLK_TYPES_REQ_INTEGRITY
+ 			req->cmd_flags |= REQ_INTEGRITY;
++#endif
+ 		}
+ 	}
+ 
++#if defined(HAVE_BLK_EXECUTE_RQ_2_PARAM) || defined(HAVE_BLK_EXECUTE_RQ_3_PARAM)
+ 	ret = nvme_execute_passthru_rq(req);
+ 	if (result)
+ 		*result = le64_to_cpu(nvme_req(req)->result.u64);
++#else
++	nvme_execute_passthru_rq(req);
++	if (nvme_req(req)->flags & NVME_REQ_CANCELLED)
++		ret = -EINTR;
++	else
++		ret = nvme_req(req)->status;
++#endif
+ 	if (meta && !ret && !write) {
+ 		if (copy_to_user(meta_buffer, meta, meta_len))
+ 			ret = -EFAULT;
+ 	}
+ 	kfree(meta);
+  out_unmap:
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
+ 	if (bio)
+ 		blk_rq_unmap_user(bio);
++#else
++	if (bio) {
++		if (disk && bio->bi_bdev)
++			bdput(bio->bi_bdev);
++		blk_rq_unmap_user(bio);
++	}
++#endif
+  out:
+ 	blk_mq_free_request(req);
+ 	return ret;
+@@ -193,7 +236,7 @@ static int nvme_user_cmd(struct nvme_ctr
+ 	struct nvme_passthru_cmd cmd;
+ 	struct nvme_command c;
+ 	unsigned timeout = 0;
+-	u64 result;
++	u64 result = 0;
+ 	int status;
+ 
+ 	if (!capable(CAP_SYS_ADMIN))
+@@ -284,8 +327,10 @@ static bool is_ctrl_ioctl(unsigned int c
+ {
+ 	if (cmd == NVME_IOCTL_ADMIN_CMD || cmd == NVME_IOCTL_ADMIN64_CMD)
+ 		return true;
++#ifdef HAVE_LINUX_SED_OPAL_H
+ 	if (is_sed_ioctl(cmd))
+ 		return true;
++#endif
+ 	return false;
+ }
+ 
+@@ -298,7 +343,11 @@ static int nvme_ctrl_ioctl(struct nvme_c
+ 	case NVME_IOCTL_ADMIN64_CMD:
+ 		return nvme_user_cmd64(ctrl, NULL, argp);
+ 	default:
++#ifdef HAVE_LINUX_SED_OPAL_H
+ 		return sed_ioctl(ctrl->opal_dev, cmd, argp);
++#else
++		return 0;
++#endif
+ 	}
+ }
+ 

@@ -70,8 +70,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.6}
-%{!?_release: %global _release OFED.5.6.2.0.9.1}
+%{!?_version: %global _version 5.7}
+%{!?_release: %global _release OFED.5.7.1.0.2.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -113,7 +113,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.6-2.0.9.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.7-1.0.2.tgz
 
 
 # build KMP rpms?
@@ -153,7 +153,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.6-2.0.9.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.7-1.0.2.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -184,7 +184,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.6-2.0.9.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.7-1.0.2.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -458,7 +458,7 @@ if [ $1 -eq 1 ]; then # 1 : This package is being installed
 #############################################################################################################
 is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
 is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || -f /etc/UnionTech-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
+if [[ -f /etc/redhat-release || -f /etc/rocks-release || -f /etc/UnionTech-release || -f /etc/ctyunos-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
         /sbin/chkconfig openibd off >/dev/null 2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/chkconfig --del openibd >/dev/null 2>&1 || true

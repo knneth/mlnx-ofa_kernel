@@ -174,14 +174,17 @@ static int nvme_zone_parse_entry(struct nvme_ns *ns,
 	return cb(&zone, idx, data);
 }
 
-static int nvme_ns_report_zones(struct nvme_ns *ns, sector_t sector,
-			unsigned int nr_zones, report_zones_cb cb, void *data)
+int nvme_ns_report_zones(struct nvme_ns *ns, sector_t sector,
+		unsigned int nr_zones, report_zones_cb cb, void *data)
 {
 	struct nvme_zone_report *report;
 	struct nvme_command c = { };
 	int ret, zone_idx = 0;
 	unsigned int nz, i;
 	size_t buflen;
+
+	if (ns->head->ids.csi != NVME_CSI_ZNS)
+		return -EINVAL;
 
 	report = nvme_zns_alloc_report_buffer(ns, nr_zones, &buflen);
 	if (!report)
@@ -230,29 +233,11 @@ out_free:
 	return ret;
 }
 
-int nvme_report_zones(struct gendisk *disk, sector_t sector,
-		      unsigned int nr_zones, report_zones_cb cb, void *data)
-{
-	struct nvme_ns_head *head = NULL;
-	struct nvme_ns *ns;
-	int srcu_idx, ret;
-
-	ns = nvme_get_ns_from_disk(disk, &head, &srcu_idx);
-	if (unlikely(!ns))
-		return -EWOULDBLOCK;
-
-	if (ns->head->ids.csi == NVME_CSI_ZNS)
-		ret = nvme_ns_report_zones(ns, sector, nr_zones, cb, data);
-	else
-		ret = -EINVAL;
-	nvme_put_ns_from_disk(head, srcu_idx);
-
-	return ret;
-}
-
 blk_status_t nvme_setup_zone_mgmt_send(struct nvme_ns *ns, struct request *req,
 		struct nvme_command *c, enum nvme_zone_mgmt_action action)
 {
+	memset(c, 0, sizeof(*c));
+
 	c->zms.opcode = nvme_cmd_zone_mgmt_send;
 	c->zms.nsid = cpu_to_le32(ns->head->ns_id);
 	c->zms.slba = cpu_to_le64(nvme_sect_to_lba(ns, blk_rq_pos(req)));

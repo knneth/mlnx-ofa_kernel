@@ -163,7 +163,7 @@ static int mlx5_crdump_open(struct inode *inode, struct file *file)
 		return ret;
 
 	seq = file->private_data;
-	seq->private = PDE_DATA(inode);
+	seq->private = pde_data(inode);
 
 	return 0;
 }

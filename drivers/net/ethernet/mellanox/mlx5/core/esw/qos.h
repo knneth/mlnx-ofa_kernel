@@ -8,6 +8,7 @@
 
 #define MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID 255
 #define MLX5_ESW_QOS_NON_SYSFS_GROUP (MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID + 1)
+#include "net/mlxdevm.h"
 
 struct mlx5_esw_rate_group {
 	struct mlx5_core_dev *dev;

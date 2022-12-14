@@ -525,14 +525,6 @@ struct mlx5_ifc_ste_flex_parser_tnl_gtpu_bits {
 };
 
 struct mlx5_ifc_ste_tunnel_header_bits {
-	u8	   tunnel_header_dw0[0x20];
-
-	u8	   tunnel_header_dw1[0x20];
-
-	u8	   reserved_at_40[0x40];
-};
-
-struct mlx5_ifc_ste_tunnel_header_v1_bits {
 	u8	   tunnel_header_0[0x20];
 
 	u8	   tunnel_header_1[0x20];
@@ -575,27 +567,6 @@ struct mlx5_ifc_ste_double_action_set_bits {
 	u8         destination_length[0x6];
 
 	u8         inline_data[0x20];
-};
-
-struct mlx5_ifc_ste_double_action_insert_with_inline_bits {
-	u8         action_id[0x8];
-	u8         reserved_at_8[0x2];
-	u8         start_anchor[0x6];
-	u8         start_offset[0x7];
-	u8         reserved_at_17[0x9];
-
-	u8         inline_data[0x20];
-};
-
-struct mlx5_ifc_ste_double_action_insert_with_ptr_bits {
-	u8         action_id[0x8];
-	u8         reserved_at_8[0x2];
-	u8         start_anchor[0x6];
-	u8         start_offset[0x7];
-	u8         size[0x6];
-	u8         attributes[0x3];
-
-	u8         pointer[0x20];
 };
 
 struct mlx5_ifc_ste_double_action_accelerated_modify_action_list_bits {

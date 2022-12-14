@@ -28,9 +28,7 @@ struct ib_umem {
 	/* Placing at the end of the bitfield list is ABI preserving on LE */
 	u32 is_peer : 1;
 	struct work_struct	work;
-	struct sg_table sg_head;
-	int             nmap;
-	unsigned int    sg_nents;
+	struct sg_append_table sgt_append;
 };
 
 struct ib_umem_dmabuf {
@@ -42,6 +40,7 @@ struct ib_umem_dmabuf {
 	unsigned long first_sg_offset;
 	unsigned long last_sg_trim;
 	void *private;
+	u8 pinned : 1;
 };
 
 static inline struct ib_umem_dmabuf *to_ib_umem_dmabuf(struct ib_umem *umem)
@@ -64,7 +63,7 @@ static inline int ib_umem_offset(struct ib_umem *umem)
 static inline unsigned long ib_umem_dma_offset(struct ib_umem *umem,
 					       unsigned long pgsz)
 {
-	return (sg_dma_address(umem->sg_head.sgl) + ib_umem_offset(umem)) &
+	return (sg_dma_address(umem->sgt_append.sgt.sgl) + ib_umem_offset(umem)) &
 	       (pgsz - 1);
 }
 
@@ -85,7 +84,8 @@ static inline void __rdma_umem_block_iter_start(struct ib_block_iter *biter,
 						struct ib_umem *umem,
 						unsigned long pgsz)
 {
-	__rdma_block_iter_start(biter, umem->sg_head.sgl, umem->nmap, pgsz);
+	__rdma_block_iter_start(biter, umem->sgt_append.sgt.sgl,
+				umem->sgt_append.sgt.nents, pgsz);
 }
 
 /**
@@ -136,7 +136,7 @@ static inline unsigned long ib_umem_find_best_pgoff(struct ib_umem *umem,
 						    unsigned long pgsz_bitmap,
 						    u64 pgoff_bitmask)
 {
-	struct scatterlist *sg = umem->sg_head.sgl;
+	struct scatterlist *sg = umem->sgt_append.sgt.sgl;
 	dma_addr_t dma_addr;
 
 	dma_addr = sg_dma_address(sg) + (umem->address & ~PAGE_MASK);
@@ -148,6 +148,10 @@ struct ib_umem_dmabuf *ib_umem_dmabuf_get(struct ib_device *device,
 					  unsigned long offset, size_t size,
 					  int fd, int access,
 					  const struct dma_buf_attach_ops *ops);
+struct ib_umem_dmabuf *ib_umem_dmabuf_get_pinned(struct ib_device *device,
+						 unsigned long offset,
+						 size_t size, int fd,
+						 int access);
 int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf);
 void ib_umem_dmabuf_unmap_pages(struct ib_umem_dmabuf *umem_dmabuf);
 void ib_umem_dmabuf_release(struct ib_umem_dmabuf *umem_dmabuf);
@@ -192,6 +196,12 @@ struct ib_umem_dmabuf *ib_umem_dmabuf_get(struct ib_device *device,
 					  size_t size, int fd,
 					  int access,
 					  struct dma_buf_attach_ops *ops)
+{
+	return ERR_PTR(-EOPNOTSUPP);
+}
+static inline struct ib_umem_dmabuf *
+ib_umem_dmabuf_get_pinned(struct ib_device *device, unsigned long offset,
+			  size_t size, int fd, int access)
 {
 	return ERR_PTR(-EOPNOTSUPP);
 }

@@ -4,9 +4,14 @@
  * Copyright (C) 2004 - 2009 Ivo van Doorn <IvDoorn@gmail.com>
  */
 
-#ifndef _LINUX_BITFIELD_H
-#define _LINUX_BITFIELD_H
+#ifndef _COMPAT_LINUX_BITFIELD_H
+#define _COMAPAT_LINUX_BITFIELD_H
 
+#include "../../compat/config.h"
+
+#ifdef HAVE_BITFIELD_H
+#include_next <linux/bitfield.h>
+#else
 #include <linux/build_bug.h>
 #include <asm/byteorder.h>
 
@@ -156,4 +161,5 @@ __MAKE_OP(64)
 #undef __MAKE_OP
 #undef ____MAKE_OP
 
-#endif
+#endif /* HAVE_BITFIELD_H */
+#endif /* _COMPAT_LINUX_BITFIELD_H */

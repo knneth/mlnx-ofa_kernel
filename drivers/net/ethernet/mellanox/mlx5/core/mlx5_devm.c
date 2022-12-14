@@ -138,9 +138,10 @@ int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
 
 	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
+	devport.devlink = devlink;
 	devport.index = port->index;
 
-	ret = mlx5_devlink_sf_port_fn_state_get(devlink, &devport, &dl_state, &dl_opstate, extack);
+	ret = mlx5_devlink_sf_port_fn_state_get(&devport, &dl_state, &dl_opstate, extack);
 	if (!ret) {
 		*state = devlink_to_mlxdevm_state(dl_state);
 		*opstate = devlink_to_mlxdevm_opstate(dl_opstate);
@@ -158,9 +159,10 @@ int mlx5_devm_sf_port_fn_state_set(struct mlxdevm_port *port,
 
 	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
+	devport.devlink = devlink;
 	devport.index = port->index;
 	dl_state = mlxdevm_to_devlink_state(state);
-	return mlx5_devlink_sf_port_fn_state_set(devlink, &devport, dl_state, extack);
+	return mlx5_devlink_sf_port_fn_state_set(&devport, dl_state, extack);
 }
 
 int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
@@ -174,8 +176,9 @@ int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 	memset(&devport, 0, sizeof(devport));
 	devport.devlink = devlink;
 	devport.index = port->index;
-	return mlx5_devlink_port_function_hw_addr_get(devlink, &devport,
-						      hw_addr, hw_addr_len, extack);
+
+	return mlx5_devlink_port_function_hw_addr_get(&devport, hw_addr,
+						      hw_addr_len, extack);
 }
 
 int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
@@ -203,7 +206,7 @@ int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
 	memset(&devport, 0, sizeof(devport));
 	devport.devlink = devlink;
 	devport.index = port->index;
-	return mlx5_devlink_port_function_hw_addr_set(devlink, &devport, hw_addr,
+	return mlx5_devlink_port_function_hw_addr_set(&devport, hw_addr,
 						      hw_addr_len, extack);
 }
 
@@ -217,10 +220,8 @@ int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
 	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
-	return mlx5_devlink_port_function_trust_set(devlink,
-						    &devport,
-						    trusted,
-						    extack);
+	return mlx5_devlink_port_function_trust_set(devlink, &devport,
+						    trusted, extack);
 }
 
 static
@@ -353,6 +354,9 @@ static struct mlx5_esw_rate_group *
 esw_qos_find_devm_group(struct mlx5_eswitch *esw, const char *group)
 {
 	struct mlx5_esw_rate_group *tmp;
+
+	if (!refcount_read(&esw->qos.refcnt))
+		return NULL;
 
 	list_for_each_entry(tmp, &esw->qos.groups, list) {
 		if (tmp->devm.name && !strcmp(tmp->devm.name, group))
@@ -494,7 +498,7 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 				     const char *group_name,
 				     struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_rate_group *curr_group, *new_group;
 	struct mlx5_eswitch *esw;
 	struct mlx5_vport *vport;
 	int err;
@@ -503,14 +507,26 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 	if (err)
 		return err;
 
-	if (!strlen(group_name))
-		return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch,
-						       vport, NULL, extack);
+	curr_group = vport->qos.group;
+	if (!strlen(group_name)) {
+		err = mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch,
+						      vport, NULL, extack);
+		if (!err && curr_group && curr_group->devm.name)
+			curr_group->num_vports--;
+		return err;
+	}
 
-	group = esw_qos_find_devm_group(esw, group_name);
-	if (!group)
+	new_group = esw_qos_find_devm_group(esw, group_name);
+	if (!new_group)
 		return -EINVAL;
-	return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, group, extack);
+
+	err = mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, new_group, extack);
+	if (!err) {
+		new_group->num_vports++;
+		if (curr_group && curr_group->devm.name)
+			curr_group->num_vports--;
+	}
+	return err;
 }
 
 int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
@@ -541,7 +557,8 @@ int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group
 	mutex_lock(&esw->state_lock);
 	group = esw_qos_find_devm_group(esw, group_name);
 	if (!group) {
-		err = -EINVAL;
+		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
+		err = -ENODEV;
 		goto unlock;
 	}
 	err = esw_qos_set_group_min_rate(esw, group, tx_share, extack);
@@ -568,7 +585,8 @@ int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group_n
 	mutex_lock(&esw->state_lock);
 	group = esw_qos_find_devm_group(esw, group_name);
 	if (!group) {
-		err = -EINVAL;
+		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
+		err = -ENODEV;
 		goto unlock;
 	}
 	err = esw_qos_set_group_max_rate(esw, group, tx_max, extack);
@@ -634,7 +652,13 @@ int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
 
 	group = esw_qos_find_devm_group(esw, group_name);
 	if (!group) {
-		err = -EINVAL;
+		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
+		err = -ENODEV;
+		goto unlock;
+	}
+	if (group->num_vports) {
+		err = -EBUSY;
+		NL_SET_ERR_MSG_MOD(extack, "Node has children. Cannot delete node.");
 		goto unlock;
 	}
 	mlxdevm_rate_group_unregister(devm_dev,
@@ -644,57 +668,6 @@ int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
 unlock:
 	mutex_unlock(&esw->state_lock);
 	return err;
-}
-
-static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
-					   union mlxdevm_param_value val,
-					   struct netlink_ext_ack *extack)
-{
-	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
-	u16 *arr = val.vu16arr.data;
-	int max_eqs_sf;
-	int i;
-
-	if (!mlx5_have_dedicated_irqs(dev)) {
-		NL_SET_ERR_MSG_MOD(extack, "SF doesn’t have dedicated IRQs");
-		return -EOPNOTSUPP;
-	}
-	for (i = 0; i < val.vu16arr.array_len; i++) {
-		if (arr[i] > nr_cpu_ids)
-			return -ERANGE;
-		if (!cpu_online(arr[i])) {
-			NL_SET_ERR_MSG_MOD(extack, "Some CPUs aren't online");
-			return -EINVAL;
-		}
-	}
-	max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
-			   mlx5_irq_table_get_sfs_comp_vec(mlx5_irq_table_get(dev)));
-	if (i > max_eqs_sf) {
-		NL_SET_ERR_MSG_MOD(extack, "SF doesn't have enught IRQs");
-		return -EINVAL;
-	}
-	return 0;
-}
-
-void mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev)
-{
-	struct mlx5_devm_device *mdevn_dev = mlx5_devm_device_get(dev);
-	union mlxdevm_param_value val;
-	u16 *arr = val.vu16arr.data;
-	int err;
-	int i;
-
-	cpumask_clear(dev->priv.available_cpus);
-	err = mlxdevm_param_driverinit_value_get(&mdevn_dev->device,
-						 MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
-						 &val);
-	if (err)
-		goto err;
-	for (i = 0; i < val.vu16arr.array_len; i++)
-		cpumask_set_cpu(arr[i], dev->priv.available_cpus);
-	return;
-err:
-	mlx5_core_dbg(dev, "mlxdevm can't get param cpu_affinity. use default policy\n");
 }
 
 static const struct mlxdevm_ops mlx5_devm_ops = {
@@ -720,6 +693,61 @@ static const struct mlxdevm_ops mlx5_devm_ops = {
 #endif
 };
 
+static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
+					   union mlxdevm_param_value val,
+					   struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
+	u16 *arr = val.vu16arr.data;
+	int max_eqs_sf;
+	int i;
+
+	if (!mlx5_irq_table_have_dedicated_sfs_irqs(mlx5_irq_table_get(dev))) {
+		NL_SET_ERR_MSG_MOD(extack, "SF doesn’t have dedicated IRQs");
+		return -EOPNOTSUPP;
+	}
+
+	for (i = 0; i < val.vu16arr.array_len; i++) {
+		if (arr[i] > nr_cpu_ids || arr[i] >= num_present_cpus()) {
+			NL_SET_ERR_MSG_MOD(extack, "Some CPUs aren't present");
+			return -ERANGE;
+		}
+		if (!cpu_online(arr[i])) {
+			NL_SET_ERR_MSG_MOD(extack, "Some CPUs aren't online");
+			return -EINVAL;
+		}
+	}
+
+	max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
+			   mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev)));
+	if (i > max_eqs_sf) {
+		NL_SET_ERR_MSG_MOD(extack, "SF doesn't have enught IRQs");
+		return -EINVAL;
+	}
+	return 0;
+}
+
+int mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask)
+{
+	struct mlx5_devm_device *mdevn_dev = mlx5_devm_device_get(dev);
+	union mlxdevm_param_value val;
+	u16 *arr = val.vu16arr.data;
+	int err;
+	int i;
+
+	err = mlxdevm_param_driverinit_value_get(&mdevn_dev->device,
+						 MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
+						 &val);
+	if (err)
+		goto err;
+	for (i = 0; i < val.vu16arr.array_len; i++)
+		cpumask_set_cpu(arr[i], mask);
+	return 0;
+err:
+	mlx5_core_dbg(dev, "mlxdevm can't get param cpu_affinity. use default policy\n");
+	return err;
+}
+
 static const struct mlxdevm_param mlx5_devm_params[] = {
 	MLXDEVM_PARAM_DRIVER(MLX5_DEVM_PARAM_ID_CPU_AFFINITY, "cpu_affinity",
 			     MLXDEVM_PARAM_TYPE_ARRAY_U16,
@@ -732,16 +760,23 @@ static void mlx5_devm_set_params_init_values(struct mlxdevm *devm)
 	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
 	union mlxdevm_param_value value;
 	u16 *arr = value.vu16arr.data;
+	cpumask_var_t dev_mask;
 	int i = 0;
 	int cpu;
 
+	if (!zalloc_cpumask_var(&dev_mask, GFP_KERNEL))
+		        return;
+
+	mlx5_core_affinity_get(dev, dev_mask);
+
 	memset(value.vu16arr.data, 0, sizeof(value.vu16arr.data));
-	for_each_cpu(cpu, dev->priv.available_cpus) {
+	for_each_cpu(cpu, dev_mask) {
 		arr[i] = cpu;
 		i++;
 	}
 	value.vu16arr.array_len = i;
 	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_CPU_AFFINITY, value);
+	free_cpumask_var(dev_mask);
 }
 
 void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
@@ -750,6 +785,7 @@ void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
 
 	if (!mlx5_core_is_sf(dev))
 		return;
+
 	mlx5_devm_set_params_init_values(&mdevm_dev->device);
 	mlxdevm_params_publish(&mdevm_dev->device);
 }
@@ -780,6 +816,7 @@ int mlx5_devm_register(struct mlx5_core_dev *dev)
 					      ARRAY_SIZE(mlx5_devm_params));
 	if (err)
 		goto params_reg_err;
+
 	return 0;
 
 params_reg_err:
@@ -803,6 +840,7 @@ void mlx5_devm_unregister(struct mlx5_core_dev *dev)
 	if (mlx5_core_is_sf(dev))
 		mlxdevm_params_unregister(&mdevm->device, mlx5_devm_params,
 					  ARRAY_SIZE(mlx5_devm_params));
+
 	mlxdevm_unregister(&mdevm->device);
 
 	mutex_lock(&mlx5_mlxdevm_mutex);

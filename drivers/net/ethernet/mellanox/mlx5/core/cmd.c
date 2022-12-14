@@ -945,7 +945,7 @@ static void cb_timeout_handler(struct work_struct *work)
 	ent->ret = -ETIMEDOUT;
 	mlx5_core_warn(dev, "cmd[%d]: %s(0x%x) Async, timeout. Will cause a leak of a command resource\n",
 		       ent->idx, mlx5_command_str(msg_to_opcode(ent->in)), msg_to_opcode(ent->in));
-	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
+	mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
 
 out:
 	cmd_ent_put(ent); /* for the cmd_ent_get() took on schedule delayed work */
@@ -1041,7 +1041,7 @@ static void cmd_work_handler(struct work_struct *work)
 	/* Skip sending command to fw if internal error */
 	if (mlx5_cmd_is_down(dev) || !opcode_allowed(&dev->cmd, ent->op)) {
 		ent->ret = -ENXIO;
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
+		mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
 		return;
 	}
 
@@ -1054,7 +1054,7 @@ static void cmd_work_handler(struct work_struct *work)
 		poll_timeout(ent);
 		/* make sure we read the descriptor after ownership is SW */
 		rmb();
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, ent->ret == -ETIMEDOUT ?
+		mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, ent->ret == -ETIMEDOUT ?
 				      MLX5_CMD_COMP_TYPE_FORCED : MLX5_CMD_COMP_TYPE_POLLING);
 	}
 }
@@ -1140,7 +1140,7 @@ static void wait_func_handle_exec_timeout(struct mlx5_core_dev *dev,
 		       mlx5_command_str(msg_to_opcode(ent->in)), msg_to_opcode(ent->in));
 
 	ent->ret = -ETIMEDOUT;
-	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
+	mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, true);
 }
 
 static int wait_func(struct mlx5_core_dev *dev, struct mlx5_cmd_work_ent *ent)
@@ -2221,7 +2221,7 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 		return -EINVAL;
 	}
 
-	cmd->stats = kvzalloc(MLX5_CMD_OP_MAX * sizeof(*cmd->stats), GFP_KERNEL);
+	cmd->stats = kvcalloc(MLX5_CMD_OP_MAX, sizeof(*cmd->stats), GFP_KERNEL);
 	if (!cmd->stats)
 		return -ENOMEM;
 

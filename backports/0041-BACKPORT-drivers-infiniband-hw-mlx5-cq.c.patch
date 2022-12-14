@@ -1,0 +1,79 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
+
+Change-Id: Ib7ab6c9a7ce534a3a5dcf192e43e46087792c1ca
+---
+ drivers/infiniband/hw/mlx5/cq.c | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/cq.c
++++ b/drivers/infiniband/hw/mlx5/cq.c
+@@ -747,9 +747,16 @@ static int create_cq_user(struct mlx5_ib
+ 
+ 	*cqe_size = ucmd.cqe_size;
+ 
+-	cq->buf.umem = ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
++	cq->buf.umem = 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
++		ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 					entries * ucmd.cqe_size,
+ 					IB_ACCESS_LOCAL_WRITE, 0);
++#else
++		ib_umem_get_peer(udata, ucmd.buf_addr,
++				 entries * ucmd.cqe_size,
++				 IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(cq->buf.umem)) {
+ 		err = PTR_ERR(cq->buf.umem);
+ 		return err;
+@@ -763,7 +770,7 @@ static int create_cq_user(struct mlx5_ib
+ 		goto err_umem;
+ 	}
+ 
+-	err = mlx5_ib_db_map_user(context, ucmd.db_addr, &cq->db);
++	err = mlx5_ib_db_map_user(context, udata, ucmd.db_addr, &cq->db);
+ 	if (err)
+ 		goto err_umem;
+ 
+@@ -952,8 +959,13 @@ int mlx5_ib_create_cq(struct ib_cq *ibcq
+ 	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+ 	struct mlx5_ib_cq *cq = to_mcq(ibcq);
+ 	u32 out[MLX5_ST_SZ_DW(create_cq_out)];
++#ifndef uninitialized_var
+ 	int index;
+ 	int inlen;
++#else
++	int uninitialized_var(index);
++	int uninitialized_var(inlen);
++#endif
+ 	u32 *cqb = NULL;
+ 	void *cqc;
+ 	int cqe_size;
+@@ -1170,9 +1182,15 @@ static int resize_user(struct mlx5_ib_de
+ 	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem = ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 				(size_t)ucmd.cqe_size * entries,
+ 				IB_ACCESS_LOCAL_WRITE, 0);
++#else
++	umem = ib_umem_get_peer(udata, ucmd.buf_addr,
++				(size_t)ucmd.cqe_size * entries,
++				IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(umem)) {
+ 		err = PTR_ERR(umem);
+ 		return err;
+@@ -1273,7 +1291,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
+ 	unsigned int page_offset_quantized = 0;
+ 	unsigned int page_shift;
+ 	int inlen;
++#ifndef uninitialized_var
+ 	int cqe_size;
++#else
++	int uninitialized_var(cqe_size);
++#endif
+ 	unsigned long flags;
+ 
+ 	if (!MLX5_CAP_GEN(dev->mdev, cq_resize)) {

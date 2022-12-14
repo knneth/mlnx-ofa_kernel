@@ -563,7 +563,6 @@ static int dr_matcher_set_ste_builders(struct mlx5dr_matcher *matcher,
 			mlx5dr_ste_build_tnl_mpls_over_gre(ste_ctx, &sb[idx++],
 							   &mask, &dmn->info.caps,
 							   inner, rx);
-
 		else if (dr_mask_is_tnl_mpls_over_udp(&mask, dmn))
 			mlx5dr_ste_build_tnl_mpls_over_udp(ste_ctx, &sb[idx++],
 							   &mask, &dmn->info.caps,
@@ -786,13 +785,6 @@ int mlx5dr_matcher_add_to_tbl_nic(struct mlx5dr_domain *dmn,
 	return ret;
 }
 
-static void dr_matcher_add_to_dbg_list(struct mlx5dr_matcher *matcher)
-{
-	mutex_lock(&matcher->tbl->dmn->dbg_mutex);
-	list_add(&matcher->list_node, &matcher->tbl->matcher_list);
-	mutex_unlock(&matcher->tbl->dmn->dbg_mutex);
-}
-
 static void dr_matcher_uninit_nic(struct mlx5dr_matcher_rx_tx *nic_matcher)
 {
 	mlx5dr_htbl_put(nic_matcher->s_htbl);
@@ -902,12 +894,12 @@ uninit_nic_rx:
 	return ret;
 }
 
-static int dr_matcher_init(struct mlx5dr_matcher *matcher,
-			   struct mlx5dr_match_parameters *mask)
+static int dr_matcher_copy_param(struct mlx5dr_matcher *matcher,
+				 struct mlx5dr_match_parameters *mask)
 {
-	struct mlx5dr_table *tbl = matcher->tbl;
-	struct mlx5dr_domain *dmn = tbl->dmn;
-	int ret;
+	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
+	struct mlx5dr_match_parameters consumed_mask;
+	int i, ret = 0;
 
 	if (matcher->match_criteria >= DR_MATCHER_CRITERIA_MAX) {
 		mlx5dr_err(dmn, "Invalid match criteria attribute\n");
@@ -919,9 +911,43 @@ static int dr_matcher_init(struct mlx5dr_matcher *matcher,
 			mlx5dr_err(dmn, "Invalid match size attribute\n");
 			return -EINVAL;
 		}
+
+		consumed_mask.match_buf = kzalloc(mask->match_sz, GFP_KERNEL);
+		if (!consumed_mask.match_buf)
+			return -ENOMEM;
+
+		consumed_mask.match_sz = mask->match_sz;
+		memcpy(consumed_mask.match_buf, mask->match_buf, mask->match_sz);
 		mlx5dr_ste_copy_param(matcher->match_criteria,
-				      &matcher->mask, mask);
+				      &matcher->mask, &consumed_mask, true);
+
+		/* Check that all mask data was consumed */
+		for (i = 0; i < consumed_mask.match_sz; i++) {
+			if (!((u8 *)consumed_mask.match_buf)[i])
+				continue;
+
+			mlx5dr_dbg(dmn,
+				   "Match param mask contains unsupported parameters\n");
+			ret = -EOPNOTSUPP;
+			break;
+		}
+
+		kfree(consumed_mask.match_buf);
 	}
+
+	return ret;
+}
+
+static int dr_matcher_init(struct mlx5dr_matcher *matcher,
+			   struct mlx5dr_match_parameters *mask)
+{
+	struct mlx5dr_table *tbl = matcher->tbl;
+	struct mlx5dr_domain *dmn = tbl->dmn;
+	int ret;
+
+	ret = dr_matcher_copy_param(matcher, mask);
+	if (ret)
+		return ret;
 
 	switch (dmn->type) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
@@ -939,10 +965,24 @@ static int dr_matcher_init(struct mlx5dr_matcher *matcher,
 		break;
 	default:
 		WARN_ON(true);
-		return -EINVAL;
+		ret = -EINVAL;
 	}
 
 	return ret;
+}
+
+static void dr_matcher_add_to_dbg_list(struct mlx5dr_matcher *matcher)
+{
+	mutex_lock(&matcher->tbl->dmn->dump_info.dbg_mutex);
+	list_add(&matcher->list_node, &matcher->tbl->matcher_list);
+	mutex_unlock(&matcher->tbl->dmn->dump_info.dbg_mutex);
+}
+
+static void dr_matcher_remove_from_dbg_list(struct mlx5dr_matcher *matcher)
+{
+	mutex_lock(&matcher->tbl->dmn->dump_info.dbg_mutex);
+	list_del(&matcher->list_node);
+	mutex_unlock(&matcher->tbl->dmn->dump_info.dbg_mutex);
 }
 
 struct mlx5dr_matcher *
@@ -965,7 +1005,7 @@ mlx5dr_matcher_create(struct mlx5dr_table *tbl,
 	matcher->match_criteria = match_criteria_enable;
 	refcount_set(&matcher->refcount, 1);
 	INIT_LIST_HEAD(&matcher->list_node);
-	INIT_LIST_HEAD(&matcher->rule_list);
+	INIT_LIST_HEAD(&matcher->dbg_rule_list);
 
 	mlx5dr_domain_lock(tbl->dmn);
 
@@ -1046,13 +1086,6 @@ int mlx5dr_matcher_remove_from_tbl_nic(struct mlx5dr_domain *dmn,
 
 	list_del_init(&nic_matcher->list_node);
 	return 0;
-}
-
-void dr_matcher_remove_from_dbg_list(struct mlx5dr_matcher *matcher)
-{
-	mutex_lock(&matcher->tbl->dmn->dbg_mutex);
-	list_del(&matcher->list_node);
-	mutex_unlock(&matcher->tbl->dmn->dbg_mutex);
 }
 
 int mlx5dr_matcher_destroy(struct mlx5dr_matcher *matcher)

@@ -50,12 +50,9 @@ int mlx5dr_domain_sync(struct mlx5dr_domain *domain, u32 flags);
 void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 			    struct mlx5dr_domain *peer_dmn);
 
-int mlx5dr_domain_vport_enable(struct mlx5dr_domain *dmn, u32 vport);
-
-void mlx5dr_domain_vport_disable(struct mlx5dr_domain *dmn, u32 vport);
-
 struct mlx5dr_table *
-mlx5dr_table_create(struct mlx5dr_domain *domain, u32 level, u32 flags);
+mlx5dr_table_create(struct mlx5dr_domain *domain, u32 level, u32 flags,
+		    u16 uid);
 
 struct mlx5dr_table *
 mlx5dr_table_get_from_fs_ft(struct mlx5_flow_table *ft);
@@ -96,7 +93,7 @@ mlx5dr_action_create_dest_flow_fw_table(struct mlx5dr_domain *domain,
 
 struct mlx5dr_action *
 mlx5dr_action_create_dest_vport(struct mlx5dr_domain *domain,
-				u32 vport, u8 vhca_id_valid,
+				u16 vport, u8 vhca_id_valid,
 				u16 vhca_id);
 
 struct mlx5dr_action *
@@ -138,19 +135,20 @@ mlx5dr_action_create_push_vlan(struct mlx5dr_domain *domain, __be32 vlan_hdr);
 u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action);
 
 struct mlx5dr_action *
-mlx5dr_action_create_aso_flow_meter(struct mlx5dr_domain *dmn,
-				    u32 obj_id,
-				    u8 return_reg_id,
-				    u8 init_color,
-				    u8 meter_idx);
+mlx5dr_action_create_aso(struct mlx5dr_domain *dmn,
+			 u32 obj_id,
+			 u8 return_reg_id,
+			 u8 aso_type,
+			 u8 init_color,
+			 u8 meter_id);
 
 int mlx5dr_action_destroy(struct mlx5dr_action *action);
 
 static inline bool
 mlx5dr_is_supported(struct mlx5_core_dev *dev)
 {
-	return  MLX5_CAP_GEN(dev, roce) &&
-		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner) ||
+	return MLX5_CAP_GEN(dev, roce) &&
+	       (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner) ||
 		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) &&
 		 (MLX5_CAP_GEN(dev, steering_format_version) <=
 		  MLX5_STEERING_FORMAT_CONNECTX_7)));
@@ -168,15 +166,8 @@ struct mlx5dr_icm_buddy_mem {
 	struct mlx5dr_icm_mr	*icm_mr;
 	struct mlx5dr_icm_pool	*pool;
 
-	/* This is the list of used chunks. HW may be accessing this memory */
-	struct list_head	used_list;
+	/* Amount of memory in used chunks - HW may be accessing this memory */
 	u64			used_memory;
-
-	/* Hardware may be accessing this memory but at some future,
-	 * undetermined time, it might cease to do so.
-	 * sync_ste command sets them free.
-	 */
-	struct list_head	hot_list;
 
 	/* Memory optimisation */
 	struct mlx5dr_ste	*ste_arr;
@@ -192,8 +183,5 @@ int mlx5dr_buddy_alloc_mem(struct mlx5dr_icm_buddy_mem *buddy,
 			   unsigned int *segment);
 void mlx5dr_buddy_free_mem(struct mlx5dr_icm_buddy_mem *buddy,
 			   unsigned int seg, unsigned int order);
-
-int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn);
-void mlx5dr_dbg_cleanup_dump(struct mlx5dr_domain *dmn);
 
 #endif /* _MLX5DR_H_ */

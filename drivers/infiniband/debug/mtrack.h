@@ -188,6 +188,25 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#define krealloc(p, new_size, flags) ({	\
+	void *__memtrack_addr = NULL;	\
+	void *__old_addr = (void *)p;   \
+					\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "krealloc", __func__, __LINE__))		\
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "krealloc");\
+	else {												\
+		if (IS_VALID_ADDR(__old_addr) &&			                                        \
+			!is_non_trackable_alloc_func(__func__)) {				\
+			memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__old_addr), 0UL, 0, __FILE__, __LINE__); \
+		}												\
+		__memtrack_addr = krealloc(p, new_size, flags);						\
+	}												\
+	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {			\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), new_size, 0UL, 0, __FILE__, __LINE__, flags);\
+	}												\
+	__memtrack_addr;										\
+})
+
 #define kvmalloc(sz, flgs) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -298,8 +317,9 @@ static inline void iounmap(void *addr)
               kvfree_call_rcu(head, (rcu_callback_t)(unsigned long)(offset)); \
        } while (0)
 #endif /* !defined(__kvfree_rcu) && !defined(kfree_rcu) */
+
 #ifdef __kvfree_rcu
-#define kfree_rcu(addr, rcu_head) ({								\
+#define kfree_rcu_2(addr, rcu_head) ({								\
 	void *__memtrack_addr = (void *)addr;					\
 										\
 	if (IS_VALID_ADDR(__memtrack_addr) &&					\
@@ -308,8 +328,16 @@ static inline void iounmap(void *addr)
 	}									\
 	__kvfree_rcu(&((addr)->rcu_head), offsetof(typeof(*(addr)), rcu_head));					\
 })
+
+#define __kvfree_rcu_1(ptr)                                   	\
+do {                                                            \
+        typeof(ptr) ___p = (ptr);                               \
+                                                                \
+        if (___p)                                               \
+                kvfree_call_rcu(NULL, (rcu_callback_t) (___p)); \
+} while (0)
 #else
-#define kfree_rcu(addr, rcu_head) ({								\
+#define kfree_rcu_2(addr, rcu_head) ({								\
 	void *__memtrack_addr = (void *)addr;					\
 										\
 	if (IS_VALID_ADDR(__memtrack_addr) &&					\
@@ -318,7 +346,36 @@ static inline void iounmap(void *addr)
 	}									\
 	__kfree_rcu(&((addr)->rcu_head), offsetof(typeof(*(addr)), rcu_head));					\
 })
-#endif
+
+#define __kvfree_rcu_1(ptr)                                   	\
+do {                                                            \
+        typeof(ptr) ___p = (ptr);                               \
+                                                                \
+        if (___p)                                               \
+                kfree_call_rcu(NULL, (rcu_callback_t) (___p)); \
+} while (0)
+#endif /* __kvfree_rcu */
+
+/* commit 1835f475e351 ("rcu: Introduce single argument kvfree_rcu() interface") */
+#undef kvfree_rcu_arg_1
+#undef kvfree_rcu_arg_2
+
+#define kvfree_rcu_arg_1(ptr) ({ 						\
+	void *__memtrack_addr = (void *)ptr;					\
+										\
+	if (IS_VALID_ADDR(__memtrack_addr) &&					\
+	    !is_non_trackable_free_func(__func__)) {				\
+		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
+	}									\
+	__kvfree_rcu_1(ptr);					\
+})
+
+#define kfree_rcu(ptr, rhf...) kvfree_rcu(ptr, ## rhf)
+#define kvfree_rcu(...) KVFREE_GET_MACRO(__VA_ARGS__,           \
+        kvfree_rcu_arg_2, kvfree_rcu_arg_1)(__VA_ARGS__)
+
+#define KVFREE_GET_MACRO(_1, _2, NAME, ...) NAME
+#define kvfree_rcu_arg_2(ptr, rhf) kfree_rcu_2(ptr, rhf)
 #endif /* CONFIG_COMPAT_RCU */
 
 #define vmalloc(size) ({							\
@@ -367,6 +424,7 @@ static inline void iounmap(void *addr)
 #endif
 
 #ifndef __vmalloc
+#ifdef HAVE_VMALLOC_3_PARAM
 #define __vmalloc(size, mask, prot) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -381,6 +439,22 @@ static inline void iounmap(void *addr)
 	}									\
 	__memtrack_addr;							\
 })
+#else
+#define __vmalloc(size, mask) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "__vmalloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "__vmalloc"); \
+	else									\
+		__memtrack_addr = __vmalloc(size, mask);			\
+	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
+		if (memtrack_randomize_mem())					\
+			memset(__memtrack_addr, 0x5A, size);			\
+	}									\
+	__memtrack_addr;							\
+})
+#endif
 #endif
 
 #define vmalloc_node(size, node) ({						\

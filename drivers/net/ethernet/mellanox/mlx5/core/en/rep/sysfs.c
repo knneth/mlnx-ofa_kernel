@@ -115,6 +115,31 @@ static ssize_t miss_rl_dropped_bytes_show(struct kobject *kobj,
 	return miss_rl_dropped_show_common(kobj, MLX5_RATE_LIMIT_DATA_BYTES_DROPPED, buf);
 }
 
+static ssize_t miss_rl_stats_clr_store(struct kobject *kobj,
+				       struct kobj_attribute *attr,
+				       const char *buf,
+				       size_t count)
+{
+	struct mlx5_rep_sysfs *tmp =
+		container_of(kobj, struct mlx5_rep_sysfs, kobj);
+	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5e_rep_priv *rep_priv;
+	struct mlx5_eswitch_rep *rep;
+	int clr_set;
+	int err;
+
+	err = sscanf(buf, "%d", &clr_set);
+	if (err != 1 || clr_set != 1)
+		return -EINVAL;
+
+	rep = mlx5_eswitch_vport_rep(esw, tmp->vport);
+	rep_priv = mlx5e_rep_to_rep_priv(rep);
+
+	err = mlx5_rep_clear_miss_meter_data(esw->dev, rep_priv);
+
+	return err ? err : count;
+}
+
 static ssize_t page_limit_show(struct kobject *kobj,
 			       struct kobj_attribute *attr,
 			       char *buf)
@@ -190,6 +215,12 @@ static struct kobj_attribute attr_miss_rl_dropped_bytes = {
 	.show = miss_rl_dropped_bytes_show,
 };
 
+static struct kobj_attribute attr_miss_rl_stats_clr = {
+	.attr = {.name = "miss_rl_stats_clr",
+		 .mode = 0200 },
+	.store = miss_rl_stats_clr_store,
+};
+
 static struct kobj_attribute attr_page_limit = {
 	.attr = {.name = "page_limit",
 		 .mode = 0644 },
@@ -207,6 +238,7 @@ static struct attribute *rep_attrs[] = {
 	&attr_miss_rl_cfg.attr,
 	&attr_miss_rl_dropped_packets.attr,
 	&attr_miss_rl_dropped_bytes.attr,
+	&attr_miss_rl_stats_clr.attr,
 	NULL,
 };
 

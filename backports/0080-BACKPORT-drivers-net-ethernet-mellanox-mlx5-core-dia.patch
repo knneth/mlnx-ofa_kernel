@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c
+
+Change-Id: I26b98a23aeb7fc470e8439414f4a528960cccb2e
+---
+ .../net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c    | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ #define CREATE_TRACE_POINTS
+ #include "en_tc_tracepoint.h"
+ 
+@@ -56,3 +57,5 @@ const char *parse_action(struct trace_se
+ 	trace_seq_putc(p, 0);
+ 	return ret;
+ }
++
++#endif

@@ -103,7 +103,6 @@ static void esw_acl_egress_lgcy_groups_destroy(struct mlx5_vport *vport)
 		mlx5_destroy_flow_group(vport->egress.legacy.drop_grp);
 		vport->egress.legacy.drop_grp = NULL;
 	}
-
 	esw_acl_egress_vlan_grp_destroy(vport);
 
 	if (!IS_ERR_OR_NULL(vport->egress.legacy.allow_untagged_grp)) {

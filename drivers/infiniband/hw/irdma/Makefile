@@ -1,3 +1,3 @@
-obj-m += irdma.o
+obj-$(CONFIG_INFINIBAND_IRDMA) += irdma.o
 
-irdma-y := main.o
+irdma-objs := irdma_dummy.o

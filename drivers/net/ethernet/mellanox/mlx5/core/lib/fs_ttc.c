@@ -110,7 +110,7 @@ static struct mlx5_etype_proto ttc_rules[] = {
 	},
 };
 
-struct mlx5_etype_proto ttc_tunnel_rules[] = {
+static struct mlx5_etype_proto ttc_tunnel_rules[] = {
 	[MLX5_TT_IPV4_GRE] = {
 		.etype = ETH_P_IP,
 		.proto = IPPROTO_GRE,
@@ -143,7 +143,8 @@ u8 mlx5_get_proto_by_tunnel_type(enum mlx5_tunnel_types tt)
 	return ttc_tunnel_rules[tt].proto;
 }
 
-bool mlx5_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type)
+static bool mlx5_tunnel_proto_supported_rx(struct mlx5_core_dev *mdev,
+					   u8 proto_type)
 {
 	switch (proto_type) {
 	case IPPROTO_GRE:
@@ -157,12 +158,13 @@ bool mlx5_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type)
 	}
 }
 
-bool mlx5e_any_tunnel_proto_supported(struct mlx5_core_dev *mdev)
+static bool mlx5_tunnel_any_rx_proto_supported(struct mlx5_core_dev *mdev)
 {
 	int tt;
 
 	for (tt = 0; tt < MLX5_NUM_TUNNEL_TT; tt++) {
-		if (mlx5_tunnel_proto_supported(mdev, ttc_tunnel_rules[tt].proto))
+		if (mlx5_tunnel_proto_supported_rx(mdev,
+						   ttc_tunnel_rules[tt].proto))
 			return true;
 	}
 	return false;
@@ -170,8 +172,9 @@ bool mlx5e_any_tunnel_proto_supported(struct mlx5_core_dev *mdev)
 
 bool mlx5_tunnel_inner_ft_supported(struct mlx5_core_dev *mdev)
 {
-	return (mlx5e_any_tunnel_proto_supported(mdev) &&
-		MLX5_CAP_FLOWTABLE_NIC_RX(mdev, ft_field_support.inner_ip_version));
+	return (mlx5_tunnel_any_rx_proto_supported(mdev) &&
+		MLX5_CAP_FLOWTABLE_NIC_RX(mdev,
+					  ft_field_support.inner_ip_version));
 }
 
 static u8 mlx5_etype_to_ipv(u16 ethertype)
@@ -241,11 +244,10 @@ static int mlx5_generate_ttc_table_rules(struct mlx5_core_dev *dev,
 
 	ft = ttc->t;
 	rules = ttc->rules;
-
 	for (tt = 0; tt < MLX5_NUM_TT; tt++) {
 		struct mlx5_ttc_rule *rule = &rules[tt];
 
-		if (!test_bit(tt, params->dests_valid))
+		if (test_bit(tt, params->ignore_dests))
 			continue;
 		rule->rule = mlx5_generate_ttc_rule(dev, ft, &params->dests[tt],
 						    ttc_rules[tt].etype,
@@ -263,10 +265,10 @@ static int mlx5_generate_ttc_table_rules(struct mlx5_core_dev *dev,
 
 	trules    = ttc->tunnel_rules;
 	for (tt = 0; tt < MLX5_NUM_TUNNEL_TT; tt++) {
-		if (!mlx5_tunnel_proto_supported(dev,
-						 ttc_tunnel_rules[tt].proto))
+		if (!mlx5_tunnel_proto_supported_rx(dev,
+						    ttc_tunnel_rules[tt].proto))
 			continue;
-		if (!test_bit(tt, params->tunnel_dests_valid))
+		if (test_bit(tt, params->ignore_tunnel_dests))
 			continue;
 		trules[tt] = mlx5_generate_ttc_rule(dev, ft,
 						    &params->tunnel_dests[tt],
@@ -406,7 +408,7 @@ static int mlx5_generate_inner_ttc_table_rules(struct mlx5_core_dev *dev,
 	for (tt = 0; tt < MLX5_NUM_TT; tt++) {
 		struct mlx5_ttc_rule *rule = &rules[tt];
 
-		if (!test_bit(tt, params->dests_valid))
+		if (test_bit(tt, params->ignore_dests))
 			continue;
 		rule->rule = mlx5_generate_inner_ttc_rule(dev, ft,
 							  &params->dests[tt],
@@ -512,15 +514,15 @@ struct mlx5_ttc_table *mlx5_create_inner_ttc_table(struct mlx5_core_dev *dev,
 
 	err = mlx5_create_inner_ttc_table_groups(ttc);
 	if (err)
-		goto destroy_ttc;
+		goto destroy_ft;
 
 	err = mlx5_generate_inner_ttc_table_rules(dev, params, ttc);
 	if (err)
-		goto destroy_ttc;
+		goto destroy_ft;
 
 	return ttc;
 
-destroy_ttc:
+destroy_ft:
 	mlx5_destroy_ttc_table(ttc);
 	return ERR_PTR(err);
 }
@@ -565,14 +567,15 @@ struct mlx5_ttc_table *mlx5_create_ttc_table(struct mlx5_core_dev *dev,
 
 	err = mlx5_create_ttc_table_groups(ttc, match_ipv_outer);
 	if (err)
-		goto destroy_ttc;
+		goto destroy_ft;
 
 	err = mlx5_generate_ttc_table_rules(dev, params, ttc);
 	if (err)
-		goto destroy_ttc;
+		goto destroy_ft;
 
 	return ttc;
-destroy_ttc:
+
+destroy_ft:
 	mlx5_destroy_ttc_table(ttc);
 	return ERR_PTR(err);
 }

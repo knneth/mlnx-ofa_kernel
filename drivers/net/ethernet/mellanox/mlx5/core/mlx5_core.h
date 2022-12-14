@@ -42,7 +42,7 @@
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
 
-#define DRIVER_VERSION	"5.6-2.0.9"
+#define DRIVER_VERSION	"5.7-1.0.2"
 
 extern uint mlx5_core_debug_mask;
 
@@ -98,6 +98,30 @@ do {								\
 			     "%s:%d:(pid %d): " format,		\
 			     __func__, __LINE__, current->pid,	\
 			     ##__VA_ARGS__)
+
+static inline void mlx5_printk(struct mlx5_core_dev *dev, int level, const char *format, ...)
+{
+	struct device *device = dev->device;
+	struct va_format vaf;
+	va_list args;
+
+	if (WARN_ONCE(level < LOGLEVEL_EMERG || level > LOGLEVEL_DEBUG,
+		      "Level %d is out of range, set to default level\n", level))
+		level = LOGLEVEL_DEFAULT;
+
+	va_start(args, format);
+	vaf.fmt = format;
+	vaf.va = &args;
+
+	dev_printk_emit(level, device, "%s %s: %pV", dev_driver_string(device), dev_name(device),
+			&vaf);
+	va_end(args);
+}
+
+#define mlx5_log(__dev, level, format, ...)			\
+	mlx5_printk(__dev, level, "%s:%d:(pid %d): " format,	\
+		    __func__, __LINE__, current->pid,		\
+		    ##__VA_ARGS__)
 
 static inline struct device *mlx5_core_dma_dev(struct mlx5_core_dev *dev)
 {
@@ -267,7 +291,6 @@ int mlx5_query_mcam_reg(struct mlx5_core_dev *dev, u32 *mcap, u8 feature_group,
 			u8 access_reg_group);
 int mlx5_query_qcam_reg(struct mlx5_core_dev *mdev, u32 *qcam,
 			u8 feature_group, u8 access_reg_group);
-
 int mlx5_query_pddr_troubleshooting_info(struct mlx5_core_dev *mdev,
 					 u16 *monitor_opcode,
 					 u8 *status_message);
@@ -385,11 +408,6 @@ int mlx5_cr_protected_capture(struct mlx5_core_dev *dev);
 #define MLX5_CORE_PROC "driver/mlx5_core"
 #define MLX5_CORE_PROC_CRDUMP "crdump"
 extern struct proc_dir_entry *mlx5_crdump_dir;
-#define MLX5_CORE_PROC_SMFS_DUMP "smfs_dump"
-extern struct proc_dir_entry *mlx5_smfs_dump_dir;
-#define MLX5_CORE_PROC_SMFS_FDB_DUMP "fdb"
-extern struct proc_dir_entry *mlx5_smfs_fdb_dump_dir;
-
 int mlx5_crdump_init(struct mlx5_core_dev *dev);
 void mlx5_crdump_cleanup(struct mlx5_core_dev *dev);
 int mlx5_fill_cr_dump(struct mlx5_core_dev *dev);
@@ -455,6 +473,11 @@ static inline u32 mlx5_sriov_get_vf_total_msix(struct pci_dev *pdev)
 	return MLX5_CAP_GEN_MAX(dev, num_total_dynamic_vf_msix);
 }
 
+bool mlx5_eth_supported(struct mlx5_core_dev *dev);
+bool mlx5_rdma_supported(struct mlx5_core_dev *dev);
+bool mlx5_vnet_supported(struct mlx5_core_dev *dev);
 bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev);
+
+void mlx5_core_affinity_get(struct mlx5_core_dev *dev, struct cpumask *dev_mask);
 
 #endif /* __MLX5_CORE_H__ */

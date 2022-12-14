@@ -71,12 +71,12 @@ struct mlx5e_l2_hash_node {
 	bool   mpfs;
 };
 
-static inline int mlx5e_hash_l2(u8 *addr)
+static inline int mlx5e_hash_l2(const u8 *addr)
 {
 	return addr[5];
 }
 
-static void mlx5e_add_l2_to_hash(struct hlist_head *hash, u8 *addr)
+static void mlx5e_add_l2_to_hash(struct hlist_head *hash, const u8 *addr)
 {
 	struct mlx5e_l2_hash_node *hn;
 	int ix = mlx5e_hash_l2(addr);
@@ -870,14 +870,15 @@ static void mlx5e_set_inner_ttc_params(struct mlx5e_priv *priv,
 		ttc_params->dests[tt].type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 		ttc_params->dests[tt].tir_num =
 			tt == MLX5_TT_ANY ?
-			priv->direct_tir[0].tirn :
-			priv->inner_indir_tir[tt].tirn;
-		set_bit(tt, ttc_params->dests_valid);
+				mlx5e_rx_res_get_tirn_direct(priv->rx_res, 0) :
+				mlx5e_rx_res_get_tirn_rss_inner(priv->rx_res,
+								tt);
 	}
 }
 
 void mlx5e_set_ttc_params(struct mlx5e_priv *priv,
 			  struct ttc_params *ttc_params, bool tunnel)
+
 {
 	struct mlx5_flow_table_attr *ft_attr = &ttc_params->ft_attr;
 	int tt;
@@ -892,9 +893,8 @@ void mlx5e_set_ttc_params(struct mlx5e_priv *priv,
 		ttc_params->dests[tt].type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 		ttc_params->dests[tt].tir_num =
 			tt == MLX5_TT_ANY ?
-			priv->direct_tir[0].tirn :
-			priv->indir_tir[tt].tirn;
-		set_bit(tt, ttc_params->dests_valid);
+				mlx5e_rx_res_get_tirn_direct(priv->rx_res, 0) :
+				mlx5e_rx_res_get_tirn_rss(priv->rx_res, tt);
 	}
 
 	ttc_params->inner_ttc = tunnel;
@@ -906,7 +906,6 @@ void mlx5e_set_ttc_params(struct mlx5e_priv *priv,
 			MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 		ttc_params->tunnel_dests[tt].ft =
 			mlx5_get_ttc_flow_table(priv->fs.inner_ttc);
-		set_bit(tt, ttc_params->tunnel_dests_valid);
 	}
 }
 

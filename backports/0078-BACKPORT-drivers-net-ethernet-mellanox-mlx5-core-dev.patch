@@ -1,0 +1,162 @@
+From: Maher Sanalla <msanalla@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dev.c
+
+Change-Id: Iaf4527dc09607aa9451d4346686d2e0d34b4e51a
+---
+ drivers/net/ethernet/mellanox/mlx5/core/dev.c | 53 +++++++++++++++++--
+ 1 file changed, 49 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
+@@ -109,8 +109,10 @@ bool mlx5_eth_supported(struct mlx5_core
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static bool is_eth_enabled(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_DEVLINK_PARAM_REGISTER
+ 	union devlink_param_value val;
+ 	int err;
+ 
+@@ -118,7 +120,11 @@ static bool is_eth_enabled(struct mlx5_c
+ 						 DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
+ 						 &val);
+ 	return err ? false : val.vbool;
++#else
++	return true;
++#endif
+ }
++#endif
+ 
+ bool mlx5_vnet_supported(struct mlx5_core_dev *dev)
+ {
+@@ -142,6 +148,7 @@ bool mlx5_vnet_supported(struct mlx5_cor
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static bool is_vnet_enabled(struct mlx5_core_dev *dev)
+ {
+ 	union devlink_param_value val;
+@@ -152,6 +159,7 @@ static bool is_vnet_enabled(struct mlx5_
+ 						 &val);
+ 	return err ? false : val.vbool;
+ }
++#endif
+ 
+ static bool is_ib_rep_supported(struct mlx5_core_dev *dev)
+ {
+@@ -213,6 +221,7 @@ bool mlx5_rdma_supported(struct mlx5_cor
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static bool is_ib_enabled(struct mlx5_core_dev *dev)
+ {
+ 	union devlink_param_value val;
+@@ -223,6 +232,7 @@ static bool is_ib_enabled(struct mlx5_co
+ 						 &val);
+ 	return err ? false : val.vbool;
+ }
++#endif
+ 
+ enum {
+ 	MLX5_INTERFACE_PROTOCOL_ETH,
+@@ -242,13 +252,22 @@ static const struct mlx5_adev_device {
+ } mlx5_adev_devices[] = {
+ 	[MLX5_INTERFACE_PROTOCOL_VNET] = { .suffix = "vnet",
+ 					   .is_supported = &mlx5_vnet_supported,
+-					   .is_enabled = &is_vnet_enabled },
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
++					   .is_enabled = &is_vnet_enabled 
++#endif
++					 },
+ 	[MLX5_INTERFACE_PROTOCOL_IB] = { .suffix = "rdma",
+ 					 .is_supported = &mlx5_rdma_supported,
+-					 .is_enabled = &is_ib_enabled },
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
++					 .is_enabled = &is_ib_enabled 
++#endif
++				       },
+ 	[MLX5_INTERFACE_PROTOCOL_ETH] = { .suffix = "eth",
+ 					  .is_supported = &mlx5_eth_supported,
+-					  .is_enabled = &is_eth_enabled },
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
++					  .is_enabled = &is_eth_enabled 
++#endif
++					},
+ 	[MLX5_INTERFACE_PROTOCOL_ETH_REP] = { .suffix = "eth-rep",
+ 					   .is_supported = &is_eth_rep_supported },
+ 	[MLX5_INTERFACE_PROTOCOL_IB_REP] = { .suffix = "rdma-rep",
+@@ -259,12 +278,20 @@ static const struct mlx5_adev_device {
+ 
+ int mlx5_adev_idx_alloc(void)
+ {
++#ifdef HAVE_IDA_ALLOC
+ 	return ida_alloc(&mlx5_adev_ida, GFP_KERNEL);
++#else
++	return ida_simple_get(&mlx5_adev_ida,0, 0, GFP_KERNEL);
++#endif
+ }
+ 
+ void mlx5_adev_idx_free(int idx)
+ {
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&mlx5_adev_ida, idx);
++#else
++	ida_simple_remove(&mlx5_adev_ida, idx);
++#endif
+ }
+ 
+ int mlx5_adev_init(struct mlx5_core_dev *dev)
+@@ -585,7 +612,11 @@ static struct mlx5_core_dev *is_mlx5_cor
+ 	return (struct mlx5_core_dev *)pci_get_drvdata(pdev);
+ }
+ 
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
+ static int next_phys_dev(struct device *dev, const void *data)
++#else
++static int next_phys_dev(struct device *dev, void *data)
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct mlx5_core_dev *mdev = is_mlx5_core_dev(dev, (struct mlx5_core_dev *)data);
+ 
+@@ -595,7 +626,11 @@ static int next_phys_dev(struct device *
+ 	return _next_phys_dev(mdev, data);
+ }
+ 
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
+ static int next_phys_dev_lag(struct device *dev, const void *data)
++#else
++static int next_phys_dev_lag(struct device *dev, void *data)
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct mlx5_core_dev *mdev = is_mlx5_core_dev(dev, (struct mlx5_core_dev *)data);
+ 
+@@ -611,14 +646,24 @@ static int next_phys_dev_lag(struct devi
+ 	return _next_phys_dev(mdev, data);
+ }
+ 
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
+ static struct device *pci_find_dev(void *data,
+ 				   int (*match)(struct device *dev, const void *data))
++#else
++static struct device *pci_find_dev(void *data,
++				   int (*match)(struct device *dev, void *data))
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	return bus_find_device(&pci_bus_type, NULL, data, match);
+ }
+ 
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
++struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
++ 					int (*match)(struct device *dev, const void *data))
++#else
+ struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
+-					int (*match)(struct device *dev, const void *data))
++					int (*match)(struct device *dev, void *data))
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct device *next;
+ 	if (!mlx5_core_is_pf(dev))

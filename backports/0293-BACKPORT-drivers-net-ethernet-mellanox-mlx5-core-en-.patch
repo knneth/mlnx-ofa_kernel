@@ -1,0 +1,64 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+
+Change-Id: If80666e1d5e2386678bea7b563f1026c7ab69c81
+---
+ .../net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c   | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+@@ -11,6 +11,7 @@ tc_act_can_offload_mpls_push(struct mlx5
+ 			     int act_index,
+ 			     struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	struct netlink_ext_ack *extack = parse_state->extack;
+ 	struct mlx5e_priv *priv = parse_state->flow->priv;
+ 
+@@ -21,16 +22,21 @@ tc_act_can_offload_mpls_push(struct mlx5
+ 	}
+ 
+ 	return true;
++#else
++	return false;
++#endif
+ }
+ 
+ static void
+ copy_mpls_info(struct mlx5e_mpls_info *mpls_info,
+ 	       const struct flow_action_entry *act)
+ {
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	mpls_info->label = act->mpls_push.label;
+ 	mpls_info->tc = act->mpls_push.tc;
+ 	mpls_info->bos = act->mpls_push.bos;
+ 	mpls_info->ttl = act->mpls_push.ttl;
++#endif
+ }
+ 
+ static int
+@@ -66,10 +72,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e
+ 		return false;
+ 	}
+ 
++#ifdef HAVE_NETIF_IS_BAREDUDP
+ 	if (!netif_is_bareudp(filter_dev)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "mpls pop supported only on bareudp devices");
+ 		return false;
+ 	}
++#endif
+ 
+ 	return true;
+ }
+@@ -80,7 +88,9 @@ tc_act_parse_mpls_pop(struct mlx5e_tc_ac
+ 		      struct mlx5e_priv *priv,
+ 		      struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	attr->parse_attr->eth.h_proto = act->mpls_pop.proto;
++#endif
+ 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
+ 	flow_flag_set(parse_state->flow, L3_TO_L2_DECAP);
+ 

@@ -1,0 +1,98 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/health.c
+
+Change-Id: I6c78bae61517f0a8c65de7357947e32a1313ad33
+---
+ .../ethernet/mellanox/mlx5/core/en/health.c   | 32 ++++++++++++++++++-
+ 1 file changed, 31 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.c
+@@ -5,6 +5,7 @@
+ #include "lib/eq.h"
+ #include "lib/mlx5.h"
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ int mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name)
+ {
+ 	int err;
+@@ -134,6 +135,7 @@ int mlx5e_health_eq_diag_fmsg(struct mlx
+ 
+ 	return mlx5e_health_fmsg_named_obj_nest_end(fmsg);
+ }
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ void mlx5e_health_create_reporters(struct mlx5e_priv *priv)
+ {
+@@ -149,12 +151,14 @@ void mlx5e_health_destroy_reporters(stru
+ 
+ void mlx5e_health_channels_update(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_STATE_UPDATE
+ 	if (priv->tx_reporter)
+ 		devlink_health_reporter_state_update(priv->tx_reporter,
+ 						     DEVLINK_HEALTH_REPORTER_STATE_HEALTHY);
+ 	if (priv->rx_reporter)
+ 		devlink_health_reporter_state_update(priv->rx_reporter,
+ 						     DEVLINK_HEALTH_REPORTER_STATE_HEALTHY);
++#endif /* HAVE_DEVLINK_HEALTH_REPORTER_STATE_UPDATE */
+ }
+ 
+ int mlx5e_health_sq_to_ready(struct mlx5_core_dev *mdev, struct net_device *dev, u32 sqn)
+@@ -231,9 +235,24 @@ int mlx5e_health_report(struct mlx5e_pri
+ 	if (!reporter)
+ 		return err_ctx->recover(err_ctx->ctx);
+ 
+-	return devlink_health_report(reporter, err_str, err_ctx);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++       return devlink_health_report(reporter, err_str, err_ctx);
++#else
++	return 0;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ }
+ 
++#ifndef HAVE_DEVLINK_FMSG_BINARY_PUT
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++ static int devlink_fmsg_binary_put(struct devlink_fmsg *fmsg, const void *value,
++ 				   u16 value_len)
++ {
++ 	return -EOPNOTSUPP;
++ }
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
++#endif
++
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ #define MLX5_HEALTH_DEVLINK_MAX_SIZE 1024
+ static int mlx5e_health_rsc_fmsg_binary(struct devlink_fmsg *fmsg,
+ 					const void *value, u32 value_len)
+@@ -271,7 +290,11 @@ int mlx5e_health_rsc_fmsg_dump(struct ml
+ 	if (!page)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_DEVLINK_FMSG_BINARY_PAIR_NEST_START
+ 	err = devlink_fmsg_binary_pair_nest_start(fmsg, "data");
++#else
++	err = devlink_fmsg_arr_pair_nest_start(fmsg, "data");
++#endif
+ 	if (err)
+ 		goto free_page;
+ 
+@@ -296,7 +319,12 @@ int mlx5e_health_rsc_fmsg_dump(struct ml
+ 
+ destroy_cmd:
+ 	mlx5_rsc_dump_cmd_destroy(cmd);
++#ifdef HAVE_DEVLINK_FMSG_BINARY_PAIR_NEST_START
+ 	end_err = devlink_fmsg_binary_pair_nest_end(fmsg);
++#else
++	end_err = devlink_fmsg_arr_pair_nest_end(fmsg);
++#endif
++
+ 	if (end_err)
+ 		err = end_err;
+ free_page:
+@@ -337,3 +365,5 @@ int mlx5e_health_queue_dump(struct mlx5e
+ 
+ 	return devlink_fmsg_obj_nest_end(fmsg);
+ }
++
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */

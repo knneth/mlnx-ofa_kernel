@@ -1,0 +1,93 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
+
+Change-Id: Ie1b1fbc2aa6d8bc4cc8d9867510a2c68f7f6ac26
+---
+ drivers/infiniband/core/core_priv.h | 42 +++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+--- a/drivers/infiniband/core/core_priv.h
++++ b/drivers/infiniband/core/core_priv.h
+@@ -40,6 +40,7 @@
+ #include <net/netns/generic.h>
+ 
+ #include <rdma/ib_verbs.h>
++#include <rdma/ib_addr.h>
+ #include <rdma/opa_addr.h>
+ #include <rdma/ib_mad.h>
+ #include <rdma/restrack.h>
+@@ -150,6 +151,7 @@ void ib_cache_cleanup_one(struct ib_devi
+ void ib_cache_release_one(struct ib_device *device);
+ void ib_dispatch_event_clients(struct ib_event *event);
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ #ifdef CONFIG_CGROUP_RDMA
+ void ib_device_register_rdmacg(struct ib_device *device);
+ void ib_device_unregister_rdmacg(struct ib_device *device);
+@@ -183,11 +185,39 @@ static inline void ib_rdmacg_uncharge(st
+ {
+ }
+ #endif
++#endif /* HAVE_CGROUP_RDMA_H */
+ 
+ static inline bool rdma_is_upper_dev_rcu(struct net_device *dev,
+ 					 struct net_device *upper)
+ {
++#if defined(HAVE_NETDEV_HAS_UPPER_DEV_ALL_RCU)
+ 	return netdev_has_upper_dev_all_rcu(dev, upper);
++#elif defined(HAVE_NETDEV_FOR_EACH_ALL_UPPER_DEV_RCU)
++	struct net_device *_upper = NULL;
++	struct list_head *iter;
++
++	netdev_for_each_all_upper_dev_rcu(dev, _upper, iter)
++		if (_upper == upper)
++			break;
++
++	return _upper == upper;
++#else
++	struct net_device *rdev_upper;
++	struct net_device *master;
++	bool ret;
++
++	if (!upper || !dev)
++	        ret = false;
++
++	rdev_upper = rdma_vlan_dev_real_dev(upper);
++	master = netdev_master_upper_dev_get_rcu(dev);
++
++	ret = (upper == master) ||
++	      (rdev_upper && (rdev_upper == master)) ||
++	      (rdev_upper == dev);
++
++	return ret;
++#endif
+ }
+ 
+ int addr_init(void);
+@@ -203,14 +233,26 @@ void rdma_nl_init(void);
+ void rdma_nl_exit(void);
+ 
+ int ib_nl_handle_resolve_resp(struct sk_buff *skb,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			      struct nlmsghdr *nlh,
+ 			      struct netlink_ext_ack *extack);
++#else
++			      struct nlmsghdr *nlh);
++#endif
+ int ib_nl_handle_set_timeout(struct sk_buff *skb,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			     struct nlmsghdr *nlh,
+ 			     struct netlink_ext_ack *extack);
++#else
++			     struct nlmsghdr *nlh);
++#endif
+ int ib_nl_handle_ip_res_resp(struct sk_buff *skb,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			     struct nlmsghdr *nlh,
+ 			     struct netlink_ext_ack *extack);
++#else
++			     struct nlmsghdr *nlh);
++#endif
+ 
+ void ib_get_cached_subnet_prefix(struct ib_device *device,
+ 				u32 port_num,

@@ -1,0 +1,163 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/peer_mem.c
+
+Change-Id: I558f4e0e855687c2a9adcb6de60f43a6b5d42583
+---
+ drivers/infiniband/core/peer_mem.c | 66 +++++++++++++++++++++++++++++-
+ 1 file changed, 64 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/peer_mem.c
++++ b/drivers/infiniband/core/peer_mem.c
+@@ -6,6 +6,7 @@
+ #include <rdma/ib_verbs.h>
+ #include <rdma/ib_umem.h>
+ #include <linux/sched/mm.h>
++#include <rdma/uverbs_ioctl.h>
+ #include "ib_peer_mem.h"
+ 
+ static DEFINE_MUTEX(peer_memory_mutex);
+@@ -331,21 +332,41 @@ static void ib_unmap_peer_client(struct
+ 		}
+ 
+ 		if (to_state == UMEM_PEER_UNMAPPED) {
++#ifdef HAVE_SG_APPEND_TABLE
+ 			peer_mem->dma_unmap(&umem_p->umem.sgt_append.sgt,
++#else
++			peer_mem->dma_unmap(&umem_p->umem.sg_head,
++#endif
+ 					    umem_p->peer_client_context,
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 					    umem_p->umem.ibdev->dma_device);
++#else
++					    umem_p->umem.context->device->dma_device);
++#endif
++#ifdef HAVE_SG_APPEND_TABLE
+ 			peer_mem->put_pages(&umem_p->umem.sgt_append.sgt,
++#else
++			peer_mem->put_pages(&umem_p->umem.sg_head,
++#endif
+ 					    umem_p->peer_client_context);
+ 		}
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 		memset(&umem->sgt_append.sgt, 0, sizeof(umem->sgt_append.sgt));
++#else
++		memset(&umem->sg_head, 0, sizeof(umem->sg_head));
++#endif
+ 		atomic64_inc(&ib_peer_client->stats.num_dealloc_mrs);
+ 	}
+ 
+ 	if ((cur_state == UMEM_PEER_MAPPED && to_state == UMEM_PEER_UNMAPPED) ||
+ 	    (cur_state == UMEM_PEER_INVALIDATED &&
+ 	     to_state == UMEM_PEER_UNMAPPED)) {
++#ifdef HAVE_SG_APPEND_TABLE
+ 		atomic64_add(umem->sgt_append.sgt.nents,
++#else
++		atomic64_add(umem->sg_head.nents,
++#endif
+ 			     &ib_peer_client->stats.num_dereg_pages);
+ 		atomic64_add(umem->length,
+ 			     &ib_peer_client->stats.num_dereg_bytes);
+@@ -517,8 +538,11 @@ static void fix_peer_sgls(struct ib_umem
+ 	struct ib_umem *umem = &umem_p->umem;
+ 	struct scatterlist *sg;
+ 	int i;
+-
++#ifdef HAVE_SG_APPEND_TABLE
+ 	for_each_sgtable_dma_sg(&umem->sgt_append.sgt, sg, i) {
++#else
++	for_each_sg(umem_p->umem.sg_head.sgl, sg, umem_p->umem.nmap, i) {
++#endif
+ 		if (i == 0) {
+ 			unsigned long offset;
+ 
+@@ -534,7 +558,11 @@ static void fix_peer_sgls(struct ib_umem
+ 			sg->length -= offset;
+ 		}
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 		if (i == umem_p->umem.sgt_append.sgt.nents - 1) {
++#else
++		if (i == umem_p->umem.nmap - 1) {
++#endif
+ 			unsigned long trim;
+ 
+ 			umem_p->last_sg = sg;
+@@ -573,7 +601,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 
+ 	kref_init(&umem_p->kref);
+ 	umem_p->umem = *old_umem;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	memset(&umem_p->umem.sgt_append.sgt, 0, sizeof(umem_p->umem.sgt_append.sgt));
++#else
++	memset(&umem_p->umem.sg_head, 0, sizeof(umem_p->umem.sg_head));
++#endif
+ 	umem_p->umem.is_peer = 1;
+ 	umem_p->ib_peer_client = ib_peer_client;
+ 	umem_p->peer_client_context = peer_client_context;
+@@ -605,10 +637,22 @@ struct ib_umem *ib_peer_umem_get(struct
+ 	if (ret)
+ 		goto err_xa;
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sgt_append.sgt,
++#else
++	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sg_head,
++#endif
+ 						peer_client_context,
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 						umem_p->umem.ibdev->dma_device,
++#else
++						umem_p->umem.context->device->dma_device,
++#endif
++#ifdef HAVE_SG_APPEND_TABLE
+ 						0, &umem_p->umem.sgt_append.sgt.nents);
++#else
++						0, &umem_p->umem.nmap);
++#endif
+ 	if (ret)
+ 		goto err_pages;
+ 
+@@ -618,7 +662,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 		fix_peer_sgls(umem_p, peer_page_size);
+ 
+ 	umem_p->mapped_state = UMEM_PEER_MAPPED;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	atomic64_add(umem_p->umem.sgt_append.sgt.nents, &ib_peer_client->stats.num_reg_pages);
++#else
++	atomic64_add(umem_p->umem.nmap, &ib_peer_client->stats.num_reg_pages);
++#endif
+ 	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
+ 	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
+ 
+@@ -639,7 +687,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 	return &umem_p->umem;
+ 
+ err_pages:
++#ifdef HAVE_SG_APPEND_TABLE
+ 	ib_peer_client->peer_mem->put_pages(&umem_p->umem.sgt_append.sgt,
++#else
++	ib_peer_client->peer_mem->put_pages(&umem_p->umem.sg_head,
++#endif
+ 					    umem_p->peer_client_context);
+ err_xa:
+ 	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
+@@ -672,7 +724,17 @@ void ib_peer_umem_release(struct ib_umem
+ 	umem_p->ib_peer_client = NULL;
+ 
+ 	/* Must match ib_umem_release() */
+-	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
++#ifdef HAVE_ATOMIC_PINNED_VM
++ 	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
++#else
++	down_write(&umem->owning_mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
++	umem->owning_mm->pinned_vm -= ib_umem_num_pages(umem);
++#else
++	umem->owning_mm->locked_vm -= ib_umem_num_pages(umem);
++#endif /* HAVE_PINNED_VM */
++	up_write(&umem->owning_mm->mmap_sem);
++#endif /*HAVE_ATOMIC_PINNED_VM*/
+ 	mmdrop(umem->owning_mm);
+ 
+ 	kref_put(&umem_p->kref, ib_peer_umem_kref_release);

@@ -15,4 +15,41 @@
 })
 #endif
 
+#ifndef kvfree_rcu_arg_1
+
+#undef kfree_rcu
+#ifdef HAVE_KVFREE_CALL_RCU
+#undef kvfree_rcu
+#else
+#define kvfree_call_rcu kfree_call_rcu
+#endif
+#define kfree_rcu(ptr, rhf...) kvfree_rcu(ptr, ## rhf)
+
+#define __is_kvfree_rcu_offset(offset) ((offset) < 4096)
+
+#define kvfree_rcu(...) KVFREE_GET_MACRO(__VA_ARGS__,		\
+	kvfree_rcu_arg_2, kvfree_rcu_arg_1)(__VA_ARGS__)
+
+#define KVFREE_GET_MACRO(_1, _2, NAME, ...) NAME
+#define kvfree_rcu_arg_2(ptr, rhf)					\
+do {									\
+	typeof (ptr) ___p = (ptr);					\
+									\
+	if (___p) {									\
+		BUILD_BUG_ON(!__is_kvfree_rcu_offset(offsetof(typeof(*(ptr)), rhf)));	\
+		kvfree_call_rcu(&((___p)->rhf), (rcu_callback_t)(unsigned long)		\
+			(offsetof(typeof(*(ptr)), rhf)));				\
+	}										\
+} while (0)
+
+#define kvfree_rcu_arg_1(ptr)					\
+do {								\
+	typeof(ptr) ___p = (ptr);				\
+								\
+	if (___p)						\
+		kvfree_call_rcu(NULL, (rcu_callback_t) (___p));	\
+} while (0)
+
+#endif /* kvfree_rcu_arg_1 */
+
 #endif /* _COMPAT_LINUX_RCUPDATE_H */

@@ -1,0 +1,176 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
+
+Change-Id: I69be9043b58bbb7388e2c593e7a0c25beebc769d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 52 +++++++++++++++++++-
+ 1 file changed, 50 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
+@@ -44,7 +44,9 @@ enum {
+ 	MLX5_EQ_POLLING_BUDGET	= 128,
+ };
+ 
++#ifdef HAVE_STATIC_ASSERT
+ static_assert(MLX5_EQ_POLLING_BUDGET <= MLX5_NUM_SPARE_EQE);
++#endif
+ 
+ struct mlx5_eq_table {
+ 	struct list_head        comp_eqs_list;
+@@ -125,7 +127,11 @@ static int mlx5_eq_comp_int(struct notif
+ 		/* Make sure we read EQ entry contents after we've
+ 		 * checked the ownership bit.
+ 		 */
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
+ 		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
+ 
+@@ -204,7 +210,7 @@ static int mlx5_eq_async_int(struct noti
+ 	struct mlx5_eq_table *eqt;
+ 	struct mlx5_core_dev *dev;
+ 	struct mlx5_eqe *eqe;
+-	unsigned long flags;
++	unsigned long flags = 0;
+ 	int num_eqes = 0;
+ 	bool recovery;
+ 
+@@ -223,7 +229,11 @@ static int mlx5_eq_async_int(struct noti
+ 		 * Make sure we read EQ entry contents after we've
+ 		 * checked the ownership bit.
+ 		 */
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 
+ 		atomic_notifier_call_chain(&eqt->nh[eqe->type], eqe->type, eqe);
+ 		atomic_notifier_call_chain(&eqt->nh[MLX5_EVENT_TYPE_NOTIFY_ANY], eqe->type, eqe);
+@@ -338,7 +348,11 @@ create_map_eq(struct mlx5_core_dev *dev,
+ 
+ 	eq->vecidx = vecidx;
+ 	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
+-	eq->irqn = pci_irq_vector(dev->pdev, vecidx);
++#ifdef HAVE_PCI_IRQ_API
++       eq->irqn = pci_irq_vector(dev->pdev, vecidx);
++#else
++	eq->irqn = mlx5_get_msix_vec(dev, vecidx);
++#endif
+ 	eq->dev = dev;
+ 	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
+ 
+@@ -683,6 +697,7 @@ static void cleanup_async_eq(struct mlx5
+ 			      name, err);
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE  
+ static u16 async_eq_depth_devlink_param_get(struct mlx5_core_dev *dev)
+ {
+ 	struct devlink *devlink = priv_to_devlink(dev);
+@@ -697,6 +712,8 @@ static u16 async_eq_depth_devlink_param_
+ 	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
+ 	return MLX5_NUM_ASYNC_EQE;
+ }
++#endif
++
+ static int create_async_eqs(struct mlx5_core_dev *dev)
+ {
+ 	struct mlx5_eq_table *table = dev->priv.eq_table;
+@@ -728,7 +745,11 @@ static int create_async_eqs(struct mlx5_
+ 
+ 	param = (struct mlx5_eq_param) {
+ 		.irq = table->ctrl_irq,
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE  
+ 		.nent = async_eq_depth_devlink_param_get(dev),
++#else
++		.nent = MLX5_NUM_ASYNC_EQE,
++#endif
+ 	};
+ 
+ 	if (mlx5_core_is_sf(dev) && dev->async_eq_depth)
+@@ -848,7 +869,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+ 	 * checked the ownership bit.
+ 	 */
+ 	if (eqe)
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 
+ 	return eqe;
+ }
+@@ -957,6 +982,7 @@ static void destroy_comp_eqs(struct mlx5
+ 	comp_irqs_release(dev);
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE
+ static u16 comp_eq_depth_devlink_param_get(struct mlx5_core_dev *dev)
+ {
+ 	struct devlink *devlink = priv_to_devlink(dev);
+@@ -971,6 +997,7 @@ static u16 comp_eq_depth_devlink_param_g
+ 	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
+ 	return MLX5_COMP_EQ_SIZE;
+ }
++#endif
+ 
+ static int create_comp_eqs(struct mlx5_core_dev *dev)
+ {
+@@ -985,7 +1012,11 @@ static int create_comp_eqs(struct mlx5_c
+ 	if (ncomp_eqs < 0)
+ 		return ncomp_eqs;
+ 	INIT_LIST_HEAD(&table->comp_eqs_list);
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE
+ 	nent = comp_eq_depth_devlink_param_get(dev);
++#else
++	nent = MLX5_COMP_EQ_SIZE;
++#endif
+ 
+ 	/* if user specified completion eq depth, honor that */
+ 	if (mlx5_core_is_sf(dev) && dev->cmpl_eq_depth)
+@@ -1003,7 +1034,12 @@ static int create_comp_eqs(struct mlx5_c
+ 		INIT_LIST_HEAD(&eq->tasklet_ctx.list);
+ 		INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
+ 		spin_lock_init(&eq->tasklet_ctx.lock);
++#ifdef HAVE_TASKLET_SETUP
+ 		tasklet_setup(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb);
++#else
++		tasklet_init(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb,
++				(unsigned long)&eq->tasklet_ctx);
++#endif
+ 
+ 		eq->irq_nb.notifier_call = mlx5_eq_comp_int;
+ 		param = (struct mlx5_eq_param) {
+@@ -1138,8 +1174,13 @@ static int set_rmap(struct mlx5_core_dev
+ 	}
+ 
+ 	for (vecidx = 0; vecidx < eq_table->num_comp_eqs; vecidx++) {
++#ifdef HAVE_PCI_IRQ_API
+ 		err = irq_cpu_rmap_add(eq_table->rmap,
+ 				       pci_irq_vector(mdev->pdev, vecidx));
++#else
++		err = irq_cpu_rmap_add(eq_table->rmap,
++				       mdev->priv.msix_arr[vecidx].vector);
++#endif
+ 		if (err) {
+ 			mlx5_core_err(mdev, "irq_cpu_rmap_add failed. err %d",
+ 				      err);
+@@ -1155,6 +1196,13 @@ err_out:
+ 	return err;
+ }
+ 
++#ifndef HAVE_PCI_IRQ_API
++u32 mlx5_get_msix_vec(struct mlx5_core_dev *dev, int vecidx)
++{
++	return dev->priv.msix_arr[vecidx].vector;
++}
++#endif
++
+ /* This function should only be called after mlx5_cmd_force_teardown_hca */
+ void mlx5_core_eq_free_irqs(struct mlx5_core_dev *dev)
+ {

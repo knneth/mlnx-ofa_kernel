@@ -1,13 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
-/* Copyright (c) 2021 Mellanox Technologies Ltd */
+// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+/* Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
 
 #include "eswitch.h"
 #include "esw/qos.h"
 #include "en/port.h"
 #define CREATE_TRACE_POINTS
 #include "diag/qos_tracepoint.h"
-
-#define MLX5_DEVM_GROUP_ID 0xFFFF
 
 /* Minimum supported BW share value by the HW is 1 Mbit/sec */
 #define MLX5_MIN_BW_SHARE 1
@@ -236,6 +234,9 @@ int esw_qos_set_vport_min_rate(struct mlx5_eswitch *esw, struct mlx5_vport *evpo
 		return -EOPNOTSUPP;
 	if (min_rate == evport->qos.min_rate)
 		return 0;
+	if (!evport->enabled) {
+		return -EPERM;
+	}
 
 	previous_min_rate = evport->qos.min_rate;
 	evport->qos.min_rate = min_rate;
@@ -452,7 +453,7 @@ static int esw_qos_vport_update_group(struct mlx5_eswitch *esw,
 		return err;
 
 	/* Recalculate bw share weights of old and new groups */
-	if (vport->qos.bw_share) {
+	if (vport->qos.bw_share || new_group->bw_share) {
 		esw_qos_normalize_vports_min_rate(esw, curr_group, extack);
 		esw_qos_normalize_vports_min_rate(esw, new_group, extack);
 	}
@@ -508,10 +509,9 @@ __esw_qos_create_rate_group(struct mlx5_eswitch *esw, u32 group_id,
 
 err_min_rate:
 	list_del(&group->list);
-	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
-						  SCHEDULING_HIERARCHY_E_SWITCH,
-						  group->tsar_ix);
-	if (err)
+	if (mlx5_destroy_scheduling_element_cmd(esw->dev,
+						SCHEDULING_HIERARCHY_E_SWITCH,
+						group->tsar_ix))
 		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy TSAR for group failed");
 	if (group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
 		mlx5_destroy_vf_group_sysfs(esw->dev, &group->kobj);
@@ -638,10 +638,10 @@ static int esw_qos_create(struct mlx5_eswitch *esw, struct netlink_ext_ack *exta
 		if (IS_ERR(esw->qos.group0)) {
 			esw_warn(dev, "E-Switch create rate group 0 failed (%ld)\n",
 				 PTR_ERR(esw->qos.group0));
+			err = PTR_ERR(esw->qos.group0);
 			goto err_group0;
 		}
 	}
-
 	refcount_set(&esw->qos.refcnt, 1);
 
 	return 0;
@@ -703,7 +703,6 @@ int esw_qos_vport_enable(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 	int err;
 
 	lockdep_assert_held(&esw->state_lock);
-
 	if (vport->qos.enabled)
 		return 0;
 
@@ -714,7 +713,6 @@ int esw_qos_vport_enable(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 	vport->qos.group = esw->qos.group0;
 
 	err = esw_qos_vport_create_sched_element(esw, vport, max_rate, bw_share);
-
 	if (err)
 		goto err_out;
 
@@ -725,7 +723,7 @@ int esw_qos_vport_enable(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 
 err_out:
 	esw_qos_put(esw);
- 
+
 	return err;
 }
 

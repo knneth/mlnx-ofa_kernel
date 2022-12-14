@@ -217,7 +217,7 @@ static __be64 sig_mkey_mask(void)
 static void set_reg_umr_seg(struct mlx5_wqe_umr_ctrl_seg *umr,
 			    struct mlx5_ib_mr *mr, u8 flags, bool atomic)
 {
-	int size = (mr->ndescs + mr->meta_ndescs) * mr->desc_size;
+	int size = (mr->mmkey.ndescs + mr->meta_ndescs) * mr->desc_size;
 
 	memset(umr, 0, sizeof(*umr));
 
@@ -374,7 +374,7 @@ static void set_reg_mkey_seg(struct mlx5_mkey_seg *seg,
 			     struct mlx5_ib_mr *mr,
 			     u32 key, int access)
 {
-	int ndescs = ALIGN(mr->ndescs + mr->meta_ndescs, 8) >> 1;
+	int ndescs = ALIGN(mr->mmkey.ndescs + mr->meta_ndescs, 8) >> 1;
 
 	memset(seg, 0, sizeof(*seg));
 
@@ -439,7 +439,7 @@ static void set_reg_data_seg(struct mlx5_wqe_data_seg *dseg,
 			     struct mlx5_ib_mr *mr,
 			     struct mlx5_ib_pd *pd)
 {
-	int bcount = mr->desc_size * (mr->ndescs + mr->meta_ndescs);
+	int bcount = mr->desc_size * (mr->mmkey.ndescs + mr->meta_ndescs);
 
 	dseg->addr = cpu_to_be64(mr->desc_map);
 	dseg->byte_count = cpu_to_be32(ALIGN(bcount, 64));
@@ -861,7 +861,7 @@ static int set_reg_wr(struct mlx5_ib_qp *qp,
 	struct mlx5_ib_mr *mr = to_mmr(wr->mr);
 	struct mlx5_ib_pd *pd = to_mpd(qp->ibqp.pd);
 	struct mlx5_ib_dev *dev = to_mdev(pd->ibpd.device);
-	int mr_list_size = (mr->ndescs + mr->meta_ndescs) * mr->desc_size;
+	int mr_list_size = (mr->mmkey.ndescs + mr->meta_ndescs) * mr->desc_size;
 	bool umr_inline = mr_list_size <= MLX5_IB_SQ_UMR_INLINE_THRESHOLD;
 	bool atomic = wr->access & IB_ACCESS_REMOTE_ATOMIC;
 	u8 flags = 0;
@@ -1111,7 +1111,7 @@ static int handle_reg_mr_integrity(struct mlx5_ib_dev *dev,
 		memset(&pa_pi_mr, 0, sizeof(struct mlx5_ib_mr));
 		/* No UMR, use local_dma_lkey */
 		pa_pi_mr.ibmr.lkey = mr->ibmr.pd->local_dma_lkey;
-		pa_pi_mr.ndescs = mr->ndescs;
+		pa_pi_mr.mmkey.ndescs = mr->mmkey.ndescs;
 		pa_pi_mr.data_length = mr->data_length;
 		pa_pi_mr.data_iova = mr->data_iova;
 		if (mr->meta_ndescs) {
@@ -1281,7 +1281,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, const struct ib_send_wr *wr,
 	struct mlx5_wqe_ctrl_seg *ctrl = NULL;  /* compiler warning */
 	struct mlx5_ib_dev *dev = to_mdev(ibqp->device);
 	struct mlx5_core_dev *mdev = dev->mdev;
-	struct mlx5_ib_qp *qp;
+	struct mlx5_ib_qp *qp = to_mqp(ibqp);
 	struct mlx5_wqe_xrc_seg *xrc;
 	struct mlx5_bf *bf;
 	void *cur_edge;
@@ -1302,10 +1302,9 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, const struct ib_send_wr *wr,
 		return -EIO;
 	}
 
-	if (unlikely(ibqp->qp_type == IB_QPT_GSI))
+	if (qp->type == IB_QPT_GSI)
 		return mlx5_ib_gsi_post_send(ibqp, wr, bad_wr);
 
-	qp = to_mqp(ibqp);
 	bf = &qp->bf;
 
 	spin_lock_irqsave(&qp->sq.lock, flags);
@@ -1339,7 +1338,9 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, const struct ib_send_wr *wr,
 		    wr->opcode == IB_WR_REG_MR_INTEGRITY) {
 			fence = dev->umr_fence;
 			next_fence = MLX5_FENCE_MODE_INITIATOR_SMALL;
-		} else  {
+		} else if (qp->type == MLX5_IB_QPT_REG_UMR) {
+			fence = MLX5_FENCE_MODE_INITIATOR_SMALL;
+		} else {
 			if (wr->send_flags & IB_SEND_FENCE) {
 				if (qp->next_fence)
 					fence = MLX5_FENCE_MODE_SMALL_AND_FENCE;
@@ -1364,7 +1365,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, const struct ib_send_wr *wr,
 			qp->sq.wr_data[idx] = MLX5_IB_WR_SIG_PIPED;
 		}
 
-		switch (ibqp->qp_type) {
+		switch (qp->type) {
 		case IB_QPT_XRC_INI:
 			xrc = seg;
 			seg += sizeof(*xrc);
@@ -1493,7 +1494,7 @@ int mlx5_ib_post_recv(struct ib_qp *ibqp, const struct ib_recv_wr *wr,
 		return -EIO;
 	}
 
-	if (unlikely(ibqp->qp_type == IB_QPT_GSI))
+	if (qp->type == IB_QPT_GSI)
 		return mlx5_ib_gsi_post_recv(ibqp, wr, bad_wr);
 
 	spin_lock_irqsave(&qp->rq.lock, flags);

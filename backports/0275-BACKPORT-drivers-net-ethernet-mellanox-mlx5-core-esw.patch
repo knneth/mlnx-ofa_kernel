@@ -1,0 +1,25 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.h
+
+Change-Id: I4fa99c39e973f9d98e30be1c9ef68e7ffda33fe8
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.h
+@@ -27,10 +27,14 @@ void mlx5_esw_ipsec_release(struct mlx5_
+ void mlx5_esw_ipsec_full_offload_get_stats(struct mlx5_eswitch *esw, void *ipsec_stats);
+ static inline int mlx5_is_ipsec_full_offload(struct mlx5e_priv *priv)
+ {
++#ifdef CONFIG_MLX5_ESWITCH
+ 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+ 
+ 	return esw && (mlx5_eswitch_mode(priv->mdev) == MLX5_ESWITCH_OFFLOADS) &&
+ 		(esw->offloads.ipsec == DEVLINK_ESWITCH_IPSEC_MODE_FULL);
++#else
++	return 0;
++#endif
+ }
+ 
+ #else /* CONFIG_MLX5_EN_IPSEC */

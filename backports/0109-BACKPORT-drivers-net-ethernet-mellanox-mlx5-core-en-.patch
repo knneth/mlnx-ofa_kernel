@@ -1,0 +1,291 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
+
+Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
+---
+ .../mellanox/mlx5/core/en/tc_tun_encap.c      | 53 +++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
+@@ -1,14 +1,20 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2021 Mellanox Technologies. */
+ 
++#include <net/arp.h>
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ #include <net/fib_notifier.h>
++#endif
++#ifdef HAVE_FIB_INFO_NH
+ #include <net/nexthop.h>
++#endif
+ #include "tc_tun_encap.h"
+ #include "en_tc.h"
+ #include "tc_tun.h"
+ #include "rep/tc.h"
+ #include "diag/en_tc_tracepoint.h"
+ 
++#ifdef HAVE_TCF_TUNNEL_INFO
+ enum {
+ 	MLX5E_ROUTE_ENTRY_VALID     = BIT(0),
+ };
+@@ -288,6 +294,7 @@ void mlx5e_take_all_encap_flows(struct m
+ /* Takes reference to all flows attached to route and adds the flows to
+  * flow_list using 'tmp_list' list_head in mlx5e_tc_flow.
+  */
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ static void mlx5e_take_all_route_decap_flows(struct mlx5e_route_entry *r,
+ 					     struct list_head *flow_list)
+ {
+@@ -296,6 +303,7 @@ static void mlx5e_take_all_route_decap_f
+ 	list_for_each_entry(flow, &r->decap_flows, decap_routes)
+ 		mlx5e_take_tmp_flow(flow, flow_list, 0);
+ }
++#endif
+ 
+ typedef bool (match_cb)(struct mlx5e_encap_entry *);
+ 
+@@ -383,9 +391,11 @@ void mlx5e_tc_update_neigh_used_value(st
+ 	if (m_neigh->family == AF_INET)
+ 		tbl = &arp_tbl;
+ #if IS_ENABLED(CONFIG_IPV6)
++#if defined(HAVE_IPV6_STUBS_H)
+ 	else if (m_neigh->family == AF_INET6)
+ 		tbl = ipv6_stub->nd_tbl;
+ #endif
++#endif
+ 	else
+ 		return;
+ 
+@@ -426,7 +436,9 @@ void mlx5e_tc_update_neigh_used_value(st
+ 		}
+ 	}
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_tc_update_neigh_used_value(nhe, neigh_used);
++#endif
+ 
+ 	if (neigh_used) {
+ 		nhe->reported_lastuse = jiffies;
+@@ -695,6 +707,7 @@ out:
+ 	return err;
+ }
+ 
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ static int mlx5e_update_vf_tunnel(struct mlx5_eswitch *esw,
+ 				  struct mlx5_esw_flow_attr *attr,
+ 				  struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts,
+@@ -729,6 +742,7 @@ out:
+ 		dev_put(route_dev);
+ 	return err;
+ }
++#endif
+ 
+ static unsigned int mlx5e_route_tbl_get_last_update(struct mlx5e_priv *priv)
+ {
+@@ -1008,6 +1022,7 @@ static void mlx5e_route_dealloc(struct m
+ 	kfree_rcu(r, rcu);
+ }
+ 
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ static void mlx5e_route_put(struct mlx5e_priv *priv, struct mlx5e_route_entry *r)
+ {
+ 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+@@ -1020,6 +1035,7 @@ static void mlx5e_route_put(struct mlx5e
+ 
+ 	mlx5e_route_dealloc(priv, r);
+ }
++#endif
+ 
+ static void mlx5e_route_put_locked(struct mlx5e_priv *priv, struct mlx5e_route_entry *r)
+ {
+@@ -1097,6 +1113,7 @@ mlx5e_route_get_create(struct mlx5e_priv
+ 	return r;
+ }
+ 
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ static struct mlx5e_route_entry *
+ mlx5e_route_lookup_for_update(struct mlx5e_tc_tun_encap *encap, struct mlx5e_route_key *key)
+ {
+@@ -1159,6 +1176,7 @@ mlx5e_route_enqueue_update(struct mlx5e_
+ 
+ 	return 0;
+ }
++#endif
+ 
+ int mlx5e_attach_decap_route(struct mlx5e_priv *priv,
+ 			     struct mlx5e_tc_flow *flow)
+@@ -1199,6 +1217,7 @@ int mlx5e_attach_decap_route(struct mlx5
+ 	/* Routing changed concurrently. FIB event handler might have missed new
+ 	 * entry, schedule update.
+ 	 */
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ 	if (tbl_time_before != tbl_time_after) {
+ 		err = mlx5e_route_enqueue_update(priv, r, FIB_EVENT_ENTRY_REPLACE);
+ 		if (err) {
+@@ -1206,6 +1225,7 @@ int mlx5e_attach_decap_route(struct mlx5
+ 			goto out;
+ 		}
+ 	}
++#endif
+ 
+ 	flow->decap_route = r;
+ 	list_add(&flow->decap_routes, &r->decap_flows);
+@@ -1261,6 +1281,7 @@ static int mlx5e_attach_encap_route(stru
+ 	/* Routing changed concurrently. FIB event handler might have missed new
+ 	 * entry, schedule update.
+ 	 */
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ 	if (tbl_time_before != tbl_time_after) {
+ 		err = mlx5e_route_enqueue_update(priv, r, FIB_EVENT_ENTRY_REPLACE);
+ 		if (err) {
+@@ -1268,6 +1289,7 @@ static int mlx5e_attach_encap_route(stru
+ 			return err;
+ 		}
+ 	}
++#endif
+ 
+ 	flow->encap_routes[out_index].r = r;
+ 	if (new_encap_entry)
+@@ -1325,6 +1347,7 @@ static void mlx5e_detach_encap_route(str
+ 	mlx5e_route_dealloc(priv, r);
+ }
+ 
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ static void mlx5e_invalidate_encap(struct mlx5e_priv *priv,
+ 				   struct mlx5e_encap_entry *e,
+ 				   struct list_head *encap_flows)
+@@ -1596,7 +1619,9 @@ out:
+ 	dev_put(event_data->ul_dev);
+ 	kfree(event_data);
+ }
++#endif
+ 
++#ifdef HAVE_FIB_NOTIFIER_INFO_HAS_FAMILY
+ static struct mlx5e_tc_fib_event_data *
+ mlx5e_init_fib_work_ipv4(struct mlx5e_priv *priv,
+ 			 struct net_device *ul_dev,
+@@ -1608,15 +1633,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
+ 	struct mlx5e_tc_fib_event_data *fib_work;
+ 	struct mlx5e_route_entry *r;
+ 	struct mlx5e_route_key key;
++#ifdef HAVE_FIB_INFO_NH
+ 	struct net_device *fib_dev;
++#endif
+ 
+ 	fen_info = container_of(info, struct fib_entry_notifier_info, info);
++#ifdef HAVE_FIB_INFO_NH
+ 	if (fen_info->fi->nh)
+ 		return NULL;
+ 	fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
+ 	if (!fib_dev || fib_dev->netdev_ops != &mlx5e_netdev_ops ||
+ 	    fen_info->dst_len != 32)
+ 		return NULL;
++#endif
+ 
+ 	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
+ 	if (!fib_work)
+@@ -1649,24 +1678,31 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+ 			 unsigned long event,
+ 			 struct fib_notifier_info *info)
+ {
++#ifdef HAVE_FIB6_ENTRY_NOTIFIER_INFO
+ 	struct fib6_entry_notifier_info *fen_info;
+ 	struct mlx5e_tc_fib_event_data *fib_work;
+ 	struct mlx5e_route_entry *r;
+ 	struct mlx5e_route_key key;
++#ifdef HAVE_FIB6_INFO_NH_DEV
+ 	struct net_device *fib_dev;
++#endif
+ 
+ 	fen_info = container_of(info, struct fib6_entry_notifier_info, info);
++#ifdef HAVE_FIB6_INFO_NH_DEV
+ 	fib_dev = fib6_info_nh_dev(fen_info->rt);
+ 	if (fib_dev->netdev_ops != &mlx5e_netdev_ops ||
+ 	    fen_info->rt->fib6_dst.plen != 128)
+ 		return NULL;
++#endif
+ 
+ 	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
+ 	if (!fib_work)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#ifdef HAVE_FIB6_INFO_IN_FIB6_ENTRY_NOTIFIER_INFO
+ 	memcpy(&key.endpoint_ip.v6, &fen_info->rt->fib6_dst.addr,
+ 	       sizeof(fen_info->rt->fib6_dst.addr));
++#endif
+ 	key.ip_version = 6;
+ 
+ 	/* Can't fail after this point because releasing reference to r
+@@ -1683,11 +1719,14 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+ 
+ out:
+ 	kfree(fib_work);
++#endif
+ 	return NULL;
+ }
++#endif
+ 
+ static int mlx5e_tc_tun_fib_event(struct notifier_block *nb, unsigned long event, void *ptr)
+ {
++#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
+ 	struct mlx5e_tc_fib_event_data *fib_work;
+ 	struct fib_notifier_info *info = ptr;
+ 	struct mlx5e_tc_tun_encap *encap;
+@@ -1702,17 +1741,21 @@ static int mlx5e_tc_tun_fib_event(struct
+ 	switch (event) {
+ 	case FIB_EVENT_ENTRY_REPLACE:
+ 	case FIB_EVENT_ENTRY_DEL:
++#ifdef HAVE_FIB_NOTIFIER_INFO_HAS_FAMILY
+ 		if (info->family == AF_INET)
+ 			fib_work = mlx5e_init_fib_work_ipv4(priv, ul_dev, encap, event, info);
+ 		else if (info->family == AF_INET6)
+ 			fib_work = mlx5e_init_fib_work_ipv6(priv, ul_dev, encap, event, info);
+ 		else
+ 			return NOTIFY_DONE;
++#endif
+ 
+ 		if (!IS_ERR_OR_NULL(fib_work)) {
+ 			queue_work(priv->wq, &fib_work->work);
+ 		} else if (IS_ERR(fib_work)) {
++#ifdef HAVE_NETDEV_NOTIFIER_INFO_EXTACK
+ 			NL_SET_ERR_MSG_MOD(info->extack, "Failed to init fib work");
++#endif
+ 			mlx5_core_warn(priv->mdev, "Failed to init fib work, %ld\n",
+ 				       PTR_ERR(fib_work));
+ 		}
+@@ -1721,6 +1764,7 @@ static int mlx5e_tc_tun_fib_event(struct
+ 	default:
+ 		return NOTIFY_DONE;
+ 	}
++#endif
+ 
+ 	return NOTIFY_DONE;
+ }
+@@ -1738,8 +1782,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
+ 	encap->fib_nb.notifier_call = mlx5e_tc_tun_fib_event;
+ 	spin_lock_init(&encap->route_lock);
+ 	hash_init(encap->route_tbl);
++#if defined(HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS)
+ 	err = register_fib_notifier(dev_net(priv->netdev), &encap->fib_nb,
+ 				    NULL, NULL);
++#else
++	err = register_fib_notifier(&encap->fib_nb, NULL);
++#endif
+ 	if (err) {
+ 		kvfree(encap);
+ 		return ERR_PTR(err);
+@@ -1753,7 +1801,12 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
+ 	if (!encap)
+ 		return;
+ 
++#if defined(HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS)
+ 	unregister_fib_notifier(dev_net(encap->priv->netdev), &encap->fib_nb);
++#else
++	unregister_fib_notifier(&encap->fib_nb);
++#endif
+ 	flush_workqueue(encap->priv->wq); /* flush fib event works */
+ 	kvfree(encap);
+ }
++#endif /* HAVE_TCF_TUNNEL_INFO */

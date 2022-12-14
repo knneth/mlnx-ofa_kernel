@@ -1,0 +1,47 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/doorbell.c
+
+Change-Id: I86d3dec149fe44a03858c3c3d1246109799899d8
+---
+ drivers/infiniband/hw/mlx5/doorbell.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/hw/mlx5/doorbell.c
++++ b/drivers/infiniband/hw/mlx5/doorbell.c
+@@ -45,7 +45,8 @@ struct mlx5_ib_user_db_page {
+ 	struct mm_struct	*mm;
+ };
+ 
+-int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context, unsigned long virt,
++int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context,
++			struct ib_udata *udata, unsigned long virt,
+ 			struct mlx5_db *db)
+ {
+ 	struct mlx5_ib_user_db_page *page;
+@@ -67,8 +68,13 @@ int mlx5_ib_db_map_user(struct mlx5_ib_u
+ 	page->user_virt = (virt & PAGE_MASK);
+ 	page->refcnt    = 0;
+ 	page->umem =
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		ib_umem_get_peer(context->ibucontext.device, virt & PAGE_MASK,
+ 				 PAGE_SIZE, 0, 0);
++#else
++		ib_umem_get_peer(udata, virt & PAGE_MASK,
++				      PAGE_SIZE, 0, 0);
++#endif
+ 	if (IS_ERR(page->umem)) {
+ 		err = PTR_ERR(page->umem);
+ 		kfree(page);
+@@ -80,8 +86,12 @@ int mlx5_ib_db_map_user(struct mlx5_ib_u
+ 	list_add(&page->list, &context->db_page_list);
+ 
+ found:
++#ifdef HAVE_SG_APPEND_TABLE
+ 	db->dma = sg_dma_address(page->umem->sgt_append.sgt.sgl) +
+ 		  (virt & ~PAGE_MASK);
++#else
++	db->dma = sg_dma_address(page->umem->sg_head.sgl) + (virt & ~PAGE_MASK);
++#endif
+ 	db->u.user_page = page;
+ 	++page->refcnt;
+ 

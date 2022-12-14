@@ -1,0 +1,133 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/verbs.c
+
+Change-Id: Ie3c069ffd673e868e8127d0ecf06dc9c02baaf0f
+---
+ drivers/infiniband/core/verbs.c | 46 +++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+--- a/drivers/infiniband/core/verbs.c
++++ b/drivers/infiniband/core/verbs.c
+@@ -53,7 +53,9 @@
+ #include <rdma/lag.h>
+ 
+ #include "core_priv.h"
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ #include <trace/events/rdma_core.h>
++#endif
+ 
+ static int ib_resolve_eth_dmac(struct ib_device *device,
+ 			       struct rdma_ah_attr *ah_attr);
+@@ -1913,7 +1915,11 @@ int ib_get_eth_speed(struct ib_device *d
+ 	int rc;
+ 	u32 netdev_speed;
+ 	struct net_device *netdev;
++#ifdef HAVE___ETHTOOL_GET_LINK_KSETTINGS
+ 	struct ethtool_link_ksettings lksettings;
++#else
++	struct ethtool_cmd lksettings;
++#endif
+ 
+ 	if (rdma_port_get_link_layer(dev, port_num) != IB_LINK_LAYER_ETHERNET)
+ 		return -EINVAL;
+@@ -1923,13 +1929,22 @@ int ib_get_eth_speed(struct ib_device *d
+ 		return -ENODEV;
+ 
+ 	rtnl_lock();
++#ifdef HAVE___ETHTOOL_GET_LINK_KSETTINGS
+ 	rc = __ethtool_get_link_ksettings(netdev, &lksettings);
++#else
++	rc = __ethtool_get_settings(netdev, &lksettings);
++#endif
+ 	rtnl_unlock();
+ 
+ 	dev_put(netdev);
+ 
++#ifdef HAVE___ETHTOOL_GET_LINK_KSETTINGS
+ 	if (!rc && lksettings.base.speed != (u32)SPEED_UNKNOWN) {
+ 		netdev_speed = lksettings.base.speed;
++#else
++	if (!rc) {
++		netdev_speed = ethtool_cmd_speed(&lksettings);
++#endif
+ 	} else {
+ 		netdev_speed = SPEED_1000;
+ 		pr_warn("%s speed is unknown, defaulting to %u\n", netdev->name,
+@@ -2209,7 +2224,9 @@ int ib_dereg_mr_user(struct ib_mr *mr, s
+ 	struct ib_sig_attrs *sig_attrs = mr->sig_attrs;
+ 	int ret;
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_mr_dereg(mr);
++#endif
+ 	rdma_restrack_del(&mr->res);
+ 	ret = mr->device->ops.dereg_mr(mr, udata);
+ 	if (!ret) {
+@@ -2268,7 +2285,9 @@ struct ib_mr *ib_alloc_mr(struct ib_pd *
+ 	rdma_restrack_parent_name(&mr->res, &pd->res);
+ 	rdma_restrack_add(&mr->res);
+ out:
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_mr_alloc(pd, mr_type, max_num_sg, mr);
++#endif
+ 	return mr;
+ }
+ EXPORT_SYMBOL(ib_alloc_mr);
+@@ -2329,7 +2348,9 @@ struct ib_mr *ib_alloc_mr_integrity(stru
+ 	rdma_restrack_parent_name(&mr->res, &pd->res);
+ 	rdma_restrack_add(&mr->res);
+ out:
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_mr_integ_alloc(pd, max_num_data_sg, max_num_meta_sg, mr);
++#endif
+ 	return mr;
+ }
+ EXPORT_SYMBOL(ib_alloc_mr_integrity);
+@@ -2865,7 +2886,9 @@ void ib_drain_sq(struct ib_qp *qp)
+ 		qp->device->ops.drain_sq(qp);
+ 	else
+ 		__ib_drain_sq(qp);
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_drain_complete(qp->send_cq);
++#endif
+ }
+ EXPORT_SYMBOL(ib_drain_sq);
+ 
+@@ -2894,7 +2917,9 @@ void ib_drain_rq(struct ib_qp *qp)
+ 		qp->device->ops.drain_rq(qp);
+ 	else
+ 		__ib_drain_rq(qp);
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_drain_complete(qp->recv_cq);
++#endif
+ }
+ EXPORT_SYMBOL(ib_drain_rq);
+ 
+@@ -3005,6 +3030,27 @@ bool __rdma_block_iter_next(struct ib_bl
+ }
+ EXPORT_SYMBOL(__rdma_block_iter_next);
+ 
++#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
++int rdma_uninit_netdev(struct ib_device *device, struct net_device *netdev,
++		       u8 port_num, enum rdma_netdev_t type, int force_fail)
++{
++	struct rdma_netdev_alloc_params params;
++	int rc;
++
++	if (!device->ops.rdma_netdev_get_params || force_fail)
++		return -EOPNOTSUPP;
++
++	rc = device->ops.rdma_netdev_get_params(device, port_num, type, &params);
++	if (rc)
++		return rc;
++
++	params.uninitialize_rdma_netdev(netdev);
++
++	return rc;
++}
++EXPORT_SYMBOL(rdma_uninit_netdev);
++#endif
++
+ /**
+  * rdma_alloc_hw_stats_struct - Helper function to allocate dynamic struct
+  *   for the drivers.

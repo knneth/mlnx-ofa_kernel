@@ -1,0 +1,116 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/qp.c
+
+Change-Id: I4f8290773fff6c89b3b80655e052f86253332b8c
+---
+ drivers/infiniband/hw/mlx5/qp.c | 37 +++++++++++++++++++++++++++------
+ 1 file changed, 31 insertions(+), 6 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/qp.c
++++ b/drivers/infiniband/hw/mlx5/qp.c
+@@ -952,8 +952,14 @@ static int create_user_rq(struct mlx5_ib
+ 	if (!ucmd->buf_addr)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	rwq->umem = ib_umem_get_peer(&dev->ib_dev, ucmd->buf_addr,
+ 				     rwq->buf_size, 0, 0);
++#else
++	rwq->umem = ib_umem_get_peer(udata, ucmd->buf_addr,
++   				     rwq->buf_size, 0, 0);
++#endif
++
+ 	if (IS_ERR(rwq->umem)) {
+ 		mlx5_ib_dbg(dev, "umem_get failed\n");
+ 		err = PTR_ERR(rwq->umem);
+@@ -981,7 +987,7 @@ static int create_user_rq(struct mlx5_ib
+ 		ib_umem_num_pages(rwq->umem), page_size, rwq->rq_num_pas,
+ 		offset);
+ 
+-	err = mlx5_ib_db_map_user(ucontext, ucmd->db_addr, &rwq->db);
++	err = mlx5_ib_db_map_user(ucontext, udata, ucmd->db_addr, &rwq->db);
+ 	if (err) {
+ 		mlx5_ib_dbg(dev, "map failed\n");
+ 		goto err_umem;
+@@ -1064,8 +1070,13 @@ static int _create_user_qp(struct mlx5_i
+ 	if (ucmd->buf_addr && ubuffer->buf_size) {
+ 		ubuffer->buf_addr = ucmd->buf_addr;
+ 		ubuffer->umem =
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 			ib_umem_get_peer(&dev->ib_dev, ubuffer->buf_addr,
+ 					 ubuffer->buf_size, 0, 0);
++#else
++			ib_umem_get_peer(udata, ubuffer->buf_addr,
++					 ubuffer->buf_size, 0, 0);
++#endif
+ 		if (IS_ERR(ubuffer->umem)) {
+ 			err = PTR_ERR(ubuffer->umem);
+ 			goto err_bfreg;
+@@ -1108,7 +1119,7 @@ static int _create_user_qp(struct mlx5_i
+ 		resp->bfreg_index = MLX5_IB_INVALID_BFREG;
+ 	qp->bfregn = bfregn;
+ 
+-	err = mlx5_ib_db_map_user(context, ucmd->db_addr, &qp->db);
++	err = mlx5_ib_db_map_user(context, udata, ucmd->db_addr, &qp->db);
+ 	if (err) {
+ 		mlx5_ib_dbg(dev, "map failed\n");
+ 		goto err_free;
+@@ -1419,8 +1430,13 @@ static int create_raw_packet_qp_sq(struc
+ 	if (ts_format < 0)
+ 		return ts_format;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	sq->ubuffer.umem = ib_umem_get_peer(&dev->ib_dev, ubuffer->buf_addr,
+ 				       ubuffer->buf_size, 0, 0);
++#else
++	sq->ubuffer.umem = ib_umem_get_peer(udata, ubuffer->buf_addr,
++				       	    ubuffer->buf_size, 0, 0);
++#endif
+ 	if (IS_ERR(sq->ubuffer.umem))
+ 		return PTR_ERR(sq->ubuffer.umem);
+ 	page_size = mlx5_umem_find_best_quantized_pgoff(
+@@ -2145,10 +2161,10 @@ static int create_dci(struct mlx5_ib_dev
+ 	struct mlx5_ib_cq *recv_cq;
+ 	unsigned long flags;
+ 	struct mlx5_ib_qp_base *base;
+-	int ts_format;
++	int ts_format = 0;
+ 	int mlx5_st;
+ 	void *qpc;
+-	u32 *in;
++	u32 *in = NULL;
+ 	int err;
+ 
+ 	spin_lock_init(&qp->sq.lock);
+@@ -2306,10 +2322,10 @@ static int create_user_qp(struct mlx5_ib
+ 	struct mlx5_ib_cq *recv_cq;
+ 	unsigned long flags;
+ 	struct mlx5_ib_qp_base *base;
+-	int ts_format;
++	int ts_format = 0;
+ 	int mlx5_st;
+ 	void *qpc;
+-	u32 *in;
++	u32 *in = NULL;
+ 	int err;
+ 
+ 	spin_lock_init(&qp->sq.lock);
+@@ -5826,9 +5842,18 @@ static void handle_drain_completion(stru
+ 		if (triggered) {
+ 			/* Wait for any scheduled/running task to be ended */
+ 			switch (cq->poll_ctx) {
++#if IS_ENABLED(CONFIG_IRQ_POLL) || !defined(HAVE_IRQ_POLL_H)
+ 			case IB_POLL_SOFTIRQ:
++#if defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL)
+ 				irq_poll_disable(&cq->iop);
+ 				irq_poll_enable(&cq->iop);
++#endif
++#else
++				blk_iopoll_disable(&cq->iop);
++				blk_iopoll_enable(&cq->iop);
++#endif
++#endif
+ 				break;
+ 			case IB_POLL_WORKQUEUE:
+ 				cancel_work_sync(&cq->work);

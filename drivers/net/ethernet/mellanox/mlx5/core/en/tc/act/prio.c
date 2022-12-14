@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+// Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+#include "act.h"
+#include "en/tc_priv.h"
+
+struct pedit_headers_action;
+
+static bool
+tc_act_can_offload_prio(struct mlx5e_tc_act_parse_state *parse_state,
+			const struct flow_action_entry *act,
+			int act_index,
+			struct mlx5_flow_attr *attr)
+{
+	if (act->priority > parse_state->flow->priv->fs.tc.num_prio_hp) {
+		NL_SET_ERR_MSG_MOD(parse_state->extack, "Skb priority value is out of range");
+		return false;
+	}
+
+	return true;
+}
+
+static int
+tc_act_parse_prio(struct mlx5e_tc_act_parse_state *parse_state,
+			 const struct flow_action_entry *act,
+			 struct mlx5e_priv *priv,
+			 struct mlx5_flow_attr *attr)
+{
+	attr->nic_attr->user_prio = act->priority;
+	attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
+
+	return 0;
+}
+
+struct mlx5e_tc_act mlx5e_tc_act_prio = {
+	.can_offload = tc_act_can_offload_prio,
+	.parse_action = tc_act_parse_prio,
+};

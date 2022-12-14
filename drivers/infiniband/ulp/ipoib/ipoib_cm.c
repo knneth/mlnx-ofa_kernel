@@ -1550,7 +1550,7 @@ static void ipoib_cm_stale_task(struct work_struct *work)
 	spin_unlock_irq(&priv->lock);
 }
 
-static ssize_t show_mode(struct device *d, struct device_attribute *attr,
+static ssize_t mode_show(struct device *d, struct device_attribute *attr,
 			 char *buf)
 {
 	struct net_device *dev = to_net_dev(d);
@@ -1562,8 +1562,8 @@ static ssize_t show_mode(struct device *d, struct device_attribute *attr,
 		return sysfs_emit(buf, "datagram\n");
 }
 
-static ssize_t set_mode(struct device *d, struct device_attribute *attr,
-			const char *buf, size_t count)
+static ssize_t mode_store(struct device *d, struct device_attribute *attr,
+			  const char *buf, size_t count)
 {
 	struct net_device *dev = to_net_dev(d);
 	int ret;
@@ -1589,7 +1589,7 @@ static ssize_t set_mode(struct device *d, struct device_attribute *attr,
 	return (!ret || ret == -EBUSY) ? count : ret;
 }
 
-static DEVICE_ATTR(mode, S_IWUSR | S_IRUGO, show_mode, set_mode);
+static DEVICE_ATTR_RW(mode);
 
 int ipoib_cm_add_mode_attr(struct net_device *dev)
 {
@@ -1630,6 +1630,7 @@ int ipoib_cm_dev_init(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int max_srq_sge, i;
+	u8 addr;
 
 	INIT_LIST_HEAD(&priv->cm.passive_ids);
 	INIT_LIST_HEAD(&priv->cm.reap_list);
@@ -1683,7 +1684,8 @@ int ipoib_cm_dev_init(struct net_device *dev)
 		}
 	}
 
-	priv->dev->dev_addr[0] = IPOIB_FLAGS_RC;
+	addr = IPOIB_FLAGS_RC;
+	dev_addr_mod(dev, 0, &addr, 1);
 	return 0;
 }
 

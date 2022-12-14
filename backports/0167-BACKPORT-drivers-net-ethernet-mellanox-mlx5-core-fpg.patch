@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
+
+Change-Id: I88357d11fbf3fe40c53c5044c7c0ace5019bb942
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fpga/core.h
+@@ -59,7 +59,9 @@ struct mlx5_fpga_device {
+ 	} conn_res;
+ 
+ 	struct mlx5_fpga_ipsec *ipsec;
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	struct mlx5_fpga_tls *tls;
++#endif
+ };
+ 
+ #define mlx5_fpga_dbg(__adev, format, ...) \

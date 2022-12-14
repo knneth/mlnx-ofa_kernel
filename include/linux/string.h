@@ -37,6 +37,16 @@ static inline void memcpy_and_pad(void *dest, size_t dest_len,
 }
 #endif
 
+#ifndef memset_after
+#define memset_after(obj, v, member)					\
+({									\
+	u8 *__ptr = (u8 *)(obj);					\
+	typeof(v) __val = (v);						\
+	memset(__ptr + offsetofend(typeof(*(obj)), member), __val,	\
+	       sizeof(*(obj)) - offsetofend(typeof(*(obj)), member));	\
+})
+#endif
+
 #ifndef HAVE_KSTRTOBOOL
 int kstrtobool(const char *s, bool *res);
 #endif

@@ -1,0 +1,41 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/scsi/scsi_priv.h
+
+Change-Id: I6ed55ccec6559a8d38a9e263e6774b5cb1ae6a40
+---
+ drivers/scsi/scsi_priv.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/scsi/scsi_priv.h
++++ b/drivers/scsi/scsi_priv.h
+@@ -4,7 +4,9 @@
+ 
+ #include <linux/device.h>
+ #include <scsi/scsi_device.h>
++#ifdef HAVE_SCSI_DEVICE_BUDGET_MAP
+ #include <linux/sbitmap.h>
++#endif
+ 
+ struct bsg_device;
+ struct request_queue;
+@@ -181,7 +183,9 @@ static inline void scsi_dh_release_devic
+ 
+ struct bsg_device *scsi_bsg_register_queue(struct scsi_device *sdev);
+ 
++#ifdef HAVE_SCSI_DEVICE_BUDGET_MAP
+ extern int scsi_device_max_queue_depth(struct scsi_device *sdev);
++#endif
+ 
+ /* 
+  * internal scsi timeout functions: for use by mid-layer and transport
+@@ -189,5 +193,10 @@ extern int scsi_device_max_queue_depth(s
+  */
+ 
+ #define SCSI_DEVICE_BLOCK_MAX_TIMEOUT	600	/* units in seconds */
++#ifndef HAVE_SCSI_DEVICE_SCSI_INTERNAL_DEVICE_BLOCK
++extern int scsi_internal_device_block(struct scsi_device *sdev);
++extern int scsi_internal_device_unblock(struct scsi_device *sdev,
++					enum scsi_device_state new_state);
++#endif
+ 
+ #endif /* _SCSI_PRIV_H */

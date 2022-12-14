@@ -1938,6 +1938,7 @@ static int nldev_stat_set_mode_doit(struct sk_buff *msg,
 		ret = -EMSGSIZE;
 		goto err_fill;
 	}
+
 	return 0;
 
 err_fill:
@@ -1950,14 +1951,12 @@ static int nldev_stat_set_counter_dynamic_doit(struct nlattr *tb[],
 					       u32 port)
 {
 	struct rdma_hw_stats *stats;
-	int rem, i, index, ret = 0;
 	struct nlattr *entry_attr;
 	unsigned long *target;
+	int rem, i, ret = 0;
+	u32 index;
 
-	if (!rdma_is_port_valid(device, port))
-		return -EINVAL;
-
-	stats = device->port_data ? device->port_data[port].hw_stats : NULL;
+	stats = ib_get_hw_stats_port(device, port);
 	if (!stats)
 		return -EINVAL;
 
@@ -2033,7 +2032,6 @@ static int nldev_stat_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
 					 RDMA_NLDEV_CMD_STAT_SET),
 			0, 0);
-
 	if (fill_nldev_handle(msg, device) ||
 	    nla_put_u32(msg, RDMA_NLDEV_ATTR_PORT_INDEX, port)) {
 		ret = -EMSGSIZE;
@@ -2150,13 +2148,14 @@ static int stat_get_doit_default_counter(struct sk_buff *skb,
 	if (!device)
 		return -EINVAL;
 
-	if (!device->ops.alloc_hw_stats || !device->ops.get_hw_stats) {
+	if (!device->ops.alloc_hw_port_stats || !device->ops.get_hw_stats) {
 		ret = -EINVAL;
 		goto err;
 	}
 
 	port = nla_get_u32(tb[RDMA_NLDEV_ATTR_PORT_INDEX]);
-	if (!rdma_is_port_valid(device, port)) {
+	stats = ib_get_hw_stats_port(device, port);
+	if (!stats) {
 		ret = -EINVAL;
 		goto err;
 	}
@@ -2178,11 +2177,6 @@ static int stat_get_doit_default_counter(struct sk_buff *skb,
 		goto err_msg;
 	}
 
-	stats = device->port_data ? device->port_data[port].hw_stats : NULL;
-	if (stats == NULL) {
-		ret = -EINVAL;
-		goto err_msg;
-	}
 	mutex_lock(&stats->lock);
 
 	num_cnts = device->ops.get_hw_stats(device, stats, port, 0);
@@ -2199,9 +2193,11 @@ static int stat_get_doit_default_counter(struct sk_buff *skb,
 	for (i = 0; i < num_cnts; i++) {
 		if (test_bit(i, stats->is_disabled))
 			continue;
+
 		v = stats->value[i] +
 			rdma_counter_get_hwstat_value(device, port, i);
-		if (rdma_nl_stat_hwcounter_entry(msg, stats->descs[i].name, v)) {
+		if (rdma_nl_stat_hwcounter_entry(msg,
+						 stats->descs[i].name, v)) {
 			ret = -EMSGSIZE;
 			goto err_table;
 		}
@@ -2377,7 +2373,7 @@ static int nldev_stat_get_counter_status_doit(struct sk_buff *skb,
 		goto err;
 	}
 
-	stats = device->port_data ? device->port_data[port].hw_stats : NULL;
+	stats = ib_get_hw_stats_port(device, port);
 	if (!stats) {
 		ret = -EINVAL;
 		goto err;

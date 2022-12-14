@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib.h
+
+Change-Id: I616ca2ce21066e92d8473b8827824b21b2464897
+---
+ include/rdma/ib.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+--- a/include/rdma/ib.h
++++ b/include/rdma/ib.h
+@@ -75,7 +75,8 @@ struct sockaddr_ib {
+  */
+ static inline bool ib_safe_file_access(struct file *filp)
+ {
+-	return filp->f_cred == current_cred() && !uaccess_kernel();
++	/* BACKPORT as a result of upstram commit 967747bbc084b93b54e66f9047d342232314cd25 */
++	return filp->f_cred == current_cred();
+ }
+ 
+ #endif /* _RDMA_IB_H */

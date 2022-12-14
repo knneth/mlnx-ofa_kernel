@@ -1,0 +1,37 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+
+Change-Id: I73edb5d1431307e4a705b0db40e5283f51aa8246
+---
+ .../net/ethernet/mellanox/mlx5/core/sf/dev/driver.c    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+@@ -55,7 +55,12 @@ static int mlx5_sf_dev_probe(struct auxi
+ 		mlx5_core_warn(mdev, "mlx5_init_one err=%d\n", err);
+ 		goto init_one_err;
+ 	}
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ 	devlink_register(devlink);
++#endif
++#if defined(HAVE_DEVLINK_RELOAD_ENABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
++	devlink_reload_enable(devlink);
++#endif
+ 	return 0;
+ 
+ init_one_err:
+@@ -73,7 +78,12 @@ static void mlx5_sf_dev_remove(struct au
+ 	struct devlink *devlink = priv_to_devlink(sf_dev->mdev);
+ 
+ 	set_bit(MLX5_INTERFACE_STATE_TEARDOWN, &sf_dev->mdev->intf_state);
++#if defined(HAVE_DEVLINK_RELOAD_DISABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
++	devlink_reload_disable(devlink);
++#endif
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ 	devlink_unregister(devlink);
++#endif
+ 	mlx5_uninit_one(sf_dev->mdev);
+ 
+ 	/* health work might still be active, and it needs pci bar in

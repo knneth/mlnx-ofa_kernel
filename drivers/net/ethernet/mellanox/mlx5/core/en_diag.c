@@ -220,7 +220,7 @@ int mlx5e_get_dump_flag(struct net_device *netdev, struct ethtool_dump *dump)
 	if (dump->flag & MLX5_DIAG_FLAG_CHANNELS &&
 	    test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		u32 nch = priv->channels.num;
-		u32 ntc = priv->channels.params.num_tc;
+		u32 ntc = priv->channels.params.mqprio.num_tc;
 
 		extra_len +=
 			nch * ntc * DIAG_BLK_SZ(sizeof(struct mlx5_diag_wq)) + /* SQs     */

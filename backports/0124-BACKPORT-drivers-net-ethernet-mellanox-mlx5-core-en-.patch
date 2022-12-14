@@ -1,0 +1,37 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h
+
+Change-Id: I5c6b2e7b95848317cbaecd65b51378c0ae8b9e16
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h
+@@ -4,6 +4,7 @@
+ #ifndef __MLX5_EN_XSK_SETUP_H__
+ #define __MLX5_EN_XSK_SETUP_H__
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "en.h"
+ 
+ struct mlx5e_xsk_param;
+@@ -12,10 +13,16 @@ bool mlx5e_validate_xsk_param(struct mlx
+ 			      struct mlx5e_xsk_param *xsk,
+ 			      struct mlx5_core_dev *mdev);
+ int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
+-		   struct mlx5e_xsk_param *xsk, struct xsk_buff_pool *pool,
++		   struct mlx5e_xsk_param *xsk,
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++		   struct xsk_buff_pool *pool,
++#else
++		   struct xdp_umem *umem,
++#endif
+ 		   struct mlx5e_channel *c);
+ void mlx5e_close_xsk(struct mlx5e_channel *c);
+ void mlx5e_activate_xsk(struct mlx5e_channel *c);
+ void mlx5e_deactivate_xsk(struct mlx5e_channel *c);
+ 
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ #endif /* __MLX5_EN_XSK_SETUP_H__ */

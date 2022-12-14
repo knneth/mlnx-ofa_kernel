@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+
+Change-Id: I1f4e597f174680c0b1daa712b39ef302f3fada94
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+@@ -80,7 +80,11 @@ mlx5_esw_bridge_fdb_offload_notify(struc
+ 	send_info.addr = addr;
+ 	send_info.vid = vid;
+ 	send_info.offloaded = true;
++#ifdef HAVE_CALL_SWITCHDEV_NOTIFIERS_4_PARAMS
+ 	call_switchdev_notifiers(val, dev, &send_info.info, NULL);
++#else
++	call_switchdev_notifiers(val, dev, &send_info.info);
++#endif
+ }
+ 
+ static void

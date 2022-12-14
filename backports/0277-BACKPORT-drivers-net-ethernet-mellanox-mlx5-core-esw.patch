@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+
+Change-Id: Ib3175f39254faa004772929db4998fc63d21b05a
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+@@ -1113,7 +1113,7 @@ int mlx5_esw_devlink_rate_parent_set(str
+ 	return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, group, extack);
+ }
+ 
+-#endif
++#endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS  */
+ 
+ int mlx5_esw_qos_vport_update_group(struct mlx5_eswitch *esw,
+ 				    struct mlx5_vport *vport,

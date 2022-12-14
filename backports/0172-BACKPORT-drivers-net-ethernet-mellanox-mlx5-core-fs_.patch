@@ -1,0 +1,43 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+
+Change-Id: Idde35652fafb9a1b8cc30c14d741271cddb46cfc
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fs_core.h | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+@@ -37,7 +37,7 @@
+ #include <linux/mlx5/fs.h>
+ #include <linux/rhashtable.h>
+ #include <linux/llist.h>
+-#include <steering/fs_dr.h>
++#include "steering/fs_dr.h"
+ 
+ #define FDB_TC_MAX_CHAIN 3
+ #define FDB_FT_CHAIN (FDB_TC_MAX_CHAIN + 1)
+@@ -195,7 +195,11 @@ struct mlx5_flow_table {
+ 	/* FWD rules that point on this flow table */
+ 	struct list_head		fwd_rules;
+ 	u32				flags;
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	struct bp_rhltable              fgs_hash;
++#else
+ 	struct rhltable			fgs_hash;
++#endif
+ 	enum mlx5_flow_table_miss_action def_miss_action;
+ 	struct mlx5_flow_namespace	*ns;
+ };
+@@ -263,7 +267,11 @@ struct mlx5_flow_group {
+ 	struct ida			fte_allocator;
+ 	u32				id;
+ 	struct rhashtable		ftes_hash;
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	struct bp_rhlist_head		hash;
++#else
+ 	struct rhlist_head		hash;
++#endif
+ };
+ 
+ struct mlx5_flow_root_namespace {

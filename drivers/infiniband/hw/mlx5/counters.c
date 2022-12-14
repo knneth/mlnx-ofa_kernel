@@ -199,17 +199,20 @@ static struct rdma_hw_stats *do_alloc_stats(const struct mlx5_ib_counters *cnts)
 	return stats;
 }
 
-static struct rdma_hw_stats *mlx5_ib_alloc_hw_stats(struct ib_device *ibdev,
-						    u32 port_num)
+static struct rdma_hw_stats *
+mlx5_ib_alloc_hw_device_stats(struct ib_device *ibdev)
 {
 	struct mlx5_ib_dev *dev = to_mdev(ibdev);
-	const struct mlx5_ib_counters *cnts;
-	bool is_switchdev = is_mdev_switchdev_mode(dev->mdev);
+	const struct mlx5_ib_counters *cnts = &dev->port[0].cnts;
 
-	if ((is_switchdev && port_num) || (!is_switchdev && !port_num))
-		return NULL;
+	return do_alloc_stats(cnts);
+}
 
-	cnts = get_counters(dev, port_num - 1);
+static struct rdma_hw_stats *
+mlx5_ib_alloc_hw_port_stats(struct ib_device *ibdev, u32 port_num)
+{
+	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+	const struct mlx5_ib_counters *cnts = &dev->port[port_num - 1].cnts;
 
 	return do_alloc_stats(cnts);
 }
@@ -876,7 +879,7 @@ static int mlx5_ib_modify_stat(struct ib_device *device, u32 port,
 }
 
 static const struct ib_device_ops hw_stats_ops = {
-	.alloc_hw_stats = mlx5_ib_alloc_hw_stats,
+	.alloc_hw_port_stats = mlx5_ib_alloc_hw_port_stats,
 	.get_hw_stats = mlx5_ib_get_hw_stats,
 	.counter_bind_qp = mlx5_ib_counter_bind_qp,
 	.counter_unbind_qp = mlx5_ib_counter_unbind_qp,
@@ -885,6 +888,16 @@ static const struct ib_device_ops hw_stats_ops = {
 	.counter_update_stats = mlx5_ib_counter_update_stats,
 	.modify_hw_stat = IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS) ?
 			  mlx5_ib_modify_stat : NULL,
+};
+
+static const struct ib_device_ops hw_switchdev_stats_ops = {
+	.alloc_hw_device_stats = mlx5_ib_alloc_hw_device_stats,
+	.get_hw_stats = mlx5_ib_get_hw_stats,
+	.counter_bind_qp = mlx5_ib_counter_bind_qp,
+	.counter_unbind_qp = mlx5_ib_counter_unbind_qp,
+	.counter_dealloc = mlx5_ib_counter_dealloc,
+	.counter_alloc_stats = mlx5_ib_counter_alloc_stats,
+	.counter_update_stats = mlx5_ib_counter_update_stats,
 };
 
 static const struct ib_device_ops counters_ops = {
@@ -902,7 +915,10 @@ int mlx5_ib_counters_init(struct mlx5_ib_dev *dev)
 	if (!MLX5_CAP_GEN(dev->mdev, max_qp_cnt))
 		return 0;
 
-	ib_set_device_ops(&dev->ib_dev, &hw_stats_ops);
+	if (is_mdev_switchdev_mode(dev->mdev))
+		ib_set_device_ops(&dev->ib_dev, &hw_switchdev_stats_ops);
+	else
+		ib_set_device_ops(&dev->ib_dev, &hw_stats_ops);
 	return mlx5_ib_alloc_counters(dev);
 }
 

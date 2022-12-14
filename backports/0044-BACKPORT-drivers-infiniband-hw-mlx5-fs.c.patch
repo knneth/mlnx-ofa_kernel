@@ -1,0 +1,45 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/fs.c
+
+Change-Id: I43e90ca3d2e90fee7f610dc24a2cc70ae83e189e
+---
+ drivers/infiniband/hw/mlx5/fs.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/fs.c
++++ b/drivers/infiniband/hw/mlx5/fs.c
+@@ -18,6 +18,7 @@
+ #include <linux/mlx5/accel.h>
+ #include <linux/mlx5/eswitch.h>
+ #include <net/inet_ecn.h>
++#include <linux/etherdevice.h>
+ #include "mlx5_ib.h"
+ #include "counters.h"
+ #include "devx.h"
+@@ -747,7 +748,7 @@ static struct mlx5_ib_flow_prio *get_flo
+ 	int max_table_size;
+ 	int num_entries;
+ 	int num_groups;
+-	bool esw_encap;
++	bool esw_encap = false;
+ 	u32 flags = 0;
+ 	int priority;
+ 
+@@ -1449,7 +1450,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+ 	struct mlx5_flow_namespace *ns = NULL;
+ 	struct mlx5_ib_flow_prio *prio = NULL;
+ 	int max_table_size = 0;
+-	bool esw_encap;
++	bool esw_encap = false;
+ 	u32 flags = 0;
+ 	int priority;
+ 
+@@ -2083,7 +2084,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+ 	struct mlx5_flow_context flow_context = {.flow_tag =
+ 		MLX5_FS_DEFAULT_FLOW_TAG};
+ 	u32 *offset_attr, offset = 0, counter_id = 0;
+-	int dest_id, dest_type = -1, inlen, len, ret, i;
++	int dest_id = -1, dest_type = -1, inlen, len, ret, i;
+ 	struct mlx5_ib_flow_handler *flow_handler;
+ 	struct mlx5_ib_flow_matcher *fs_matcher;
+ 	struct ib_uobject **arr_flow_actions;

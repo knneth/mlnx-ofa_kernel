@@ -3,11 +3,12 @@
 
 #include "../../../compat/config.h"
 
+#ifdef CONFIG_COMPAT_KERNEL_4_14
+#include_next <uapi/linux/pkt_cls.h>
+#else
 #ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
 #include_next <uapi/linux/pkt_cls.h>
 #endif
-
-#if !defined(CONFIG_COMPAT_KERNEL_4_14)
 
 #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
 

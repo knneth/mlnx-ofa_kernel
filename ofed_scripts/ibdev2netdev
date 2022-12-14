@@ -199,6 +199,10 @@ function find_matching_ndev_for_gid()
 			ib_ndev_name=${ib_ndev_name#*:}
 
 			if [ $gid_without_colon == $ib_addr ]; then
+				# skip zero (i.e., undefined) gids
+				if [ "x$gid_without_colon" == "x0000000000000000" ]; then
+					continue
+				fi
 				echo -n $ib_ndev_name
 				break
 			fi

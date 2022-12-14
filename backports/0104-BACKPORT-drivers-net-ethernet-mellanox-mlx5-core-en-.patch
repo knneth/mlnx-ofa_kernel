@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+
+Change-Id: I3ec3bd68afda1ff91686fd3a4ff76e6a2ab81023
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+@@ -4,7 +4,7 @@
+ #ifndef __MLX5_EN_TC_SAMPLE_H__
+ #define __MLX5_EN_TC_SAMPLE_H__
+ 
+-#include "eswitch.h"
++#include "../../eswitch.h"
+ 
+ struct mlx5_flow_attr;
+ struct mlx5e_tc_psample;

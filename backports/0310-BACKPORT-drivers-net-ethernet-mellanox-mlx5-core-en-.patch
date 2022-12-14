@@ -1,0 +1,46 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+
+Change-Id: I5b9613b9cacf967d5848afa618f1625181436b4e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+@@ -11,7 +11,11 @@ tc_act_can_offload_ct(struct mlx5e_tc_ac
+ 		      int act_index,
+ 		      struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	bool clear_action = act->ct.action & TCA_CT_ACT_CLEAR;
++#else
++	bool clear_action = false;
++#endif
+ 	struct netlink_ext_ack *extack = parse_state->extack;
+ 
+ 	if (flow_flag_test(parse_state->flow, SAMPLE)) {
+@@ -34,7 +38,11 @@ tc_act_parse_ct(struct mlx5e_tc_act_pars
+ 		struct mlx5e_priv *priv,
+ 		struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	bool clear_action = act->ct.action & TCA_CT_ACT_CLEAR;
++#else
++	bool clear_action = false;
++#endif
+ 	int err;
+ 
+ 	/* It's redundant to do ct clear more than once. */
+@@ -93,8 +101,10 @@ tc_act_is_multi_table_act_ct(struct mlx5
+ 			     const struct flow_action_entry *act,
+ 			     struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	if (act->ct.action & TCA_CT_ACT_CLEAR)
+ 		return false;
++#endif
+ 
+ 	return true;
+ }

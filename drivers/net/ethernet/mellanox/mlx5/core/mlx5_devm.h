@@ -24,7 +24,7 @@ struct mlx5_devm_device *mlx5_devm_device_get(struct mlx5_core_dev *dev);
 int mlx5_devm_register(struct mlx5_core_dev *dev);
 void mlx5_devm_unregister(struct mlx5_core_dev *dev);
 void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev);
-void mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev);
+int mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask);
 void mlx5_devm_params_publish(struct mlx5_core_dev *dev);
 
 #else
@@ -37,8 +37,10 @@ static inline void mlx5_devm_unregister(struct mlx5_core_dev *dev)
 {
 }
 
-static inline void mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev)
+static inline int
+mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask)
 {
+	return 0;
 }
 
 static inline void mlx5_devm_params_publish(struct mlx5_core_dev *dev)

@@ -16,6 +16,7 @@ struct mlx5_sf_dev {
 	struct mlx5_core_dev *mdev;
 	phys_addr_t bar_base_addr;
 	u32 sfnum;
+	u16 fn_id;
 
 #ifdef CONFIG_MLX5_SF_CFG
 	u32 cmpl_eq_depth;

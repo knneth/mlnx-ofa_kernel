@@ -264,6 +264,12 @@ struct mlx5_ib_flow_matcher {
 	u8			match_criteria_enable;
 };
 
+struct mlx5_ib_steering_anchor {
+	struct mlx5_ib_flow_prio *ft_prio;
+	struct mlx5_ib_dev *dev;
+	atomic_t usecnt;
+};
+
 struct mlx5_ib_pp {
 	u16 index;
 	struct mlx5_core_dev *mdev;
@@ -530,11 +536,10 @@ struct mlx5_ib_qp {
 	/*
 	 * IB/core doesn't store low-level QP types, so
 	 * store both MLX and IBTA types in the field below.
-	 * IB_QPT_DRIVER will be break to DCI/DCT subtypes.
 	 */
 	enum ib_qp_type		type;
-	struct rdma_ah_attr  ah;
-	u8                   tclass;
+	struct rdma_ah_attr  	ah;
+	u8                   	tclass;
 	/* A flag to indicate if there's a new counter is configured
 	 * but not take effective
 	 */
@@ -570,6 +575,7 @@ static inline const struct mlx5_umr_wr *umr_wr(const struct ib_send_wr *wr)
 
 enum mlx5_ib_cq_pr_flags {
 	MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD	= 1 << 0,
+	MLX5_IB_CQ_PR_FLAGS_REAL_TIME_TS = 1 << 1,
 };
 
 struct mlx5_ib_cq {
@@ -640,6 +646,20 @@ struct mlx5_user_mmap_entry {
 	u32 page_idx;
 };
 
+enum mlx5_mkey_type {
+	MLX5_MKEY_MR = 1,
+	MLX5_MKEY_MW,
+	MLX5_MKEY_INDIRECT_DEVX,
+};
+
+struct mlx5_ib_mkey {
+	u32 key;
+	enum mlx5_mkey_type type;
+	unsigned int ndescs;
+	struct wait_queue_head wait;
+	refcount_t usecount;
+};
+
 #define MLX5_IB_MTT_PRESENT (MLX5_IB_MTT_READ | MLX5_IB_MTT_WRITE)
 
 #define MLX5_IB_DM_MEMIC_ALLOWED_ACCESS (IB_ACCESS_LOCAL_WRITE   |\
@@ -658,13 +678,13 @@ struct mlx5_user_mmap_entry {
 
 struct mlx5_ib_mr {
 	struct ib_mr ibmr;
-	struct mlx5_core_mkey mmkey;
+	struct mlx5_ib_mkey mmkey;
 
 	/* User MR data */
 	struct mlx5_cache_ent *cache_ent;
+	/* Everything after cache_ent is zero'd when MR allocated */
 	struct ib_umem *umem;
 
-	/* This is zero'd when the MR is allocated */
 	struct {
 		/* Used only while the MR is in the cache */
 		struct {
@@ -680,7 +700,6 @@ struct mlx5_ib_mr {
 			void *descs_alloc;
 			dma_addr_t desc_map;
 			int max_descs;
-			int ndescs;
 			int desc_size;
 			int access_mode;
 
@@ -717,7 +736,7 @@ struct mlx5_ib_mr {
 /* Zero the fields in the mr that are variant depending on usage */
 static inline void mlx5_clear_mr(struct mlx5_ib_mr *mr)
 {
-	memset(mr->out, 0, sizeof(*mr) - offsetof(struct mlx5_ib_mr, out));
+	memset_after(mr, 0, cache_ent);
 }
 
 static inline bool is_odp_mr(struct mlx5_ib_mr *mr)
@@ -734,13 +753,7 @@ static inline bool is_dmabuf_mr(struct mlx5_ib_mr *mr)
 
 struct mlx5_ib_mw {
 	struct ib_mw		ibmw;
-	struct mlx5_core_mkey	mmkey;
-	int			ndescs;
-};
-
-struct mlx5_ib_devx_mr {
-	struct mlx5_core_mkey	mmkey;
-	int			ndescs;
+	struct mlx5_ib_mkey	mmkey;
 };
 
 struct mlx5_ib_umr_context {
@@ -749,13 +762,23 @@ struct mlx5_ib_umr_context {
 	struct completion	done;
 };
 
+enum {
+	MLX5_UMR_STATE_ACTIVE,
+	MLX5_UMR_STATE_RECOVER,
+	MLX5_UMR_STATE_ERR,
+};
+
 struct umr_common {
 	struct ib_pd	*pd;
 	struct ib_cq	*cq;
 	struct ib_qp	*qp;
-	/* control access to UMR QP
+	/* Protects from UMR QP overflow
 	 */
 	struct semaphore	sem;
+	/* Protects from using UMR while the UMR is not active
+	 */
+	struct mutex lock;
+	unsigned int state;
 };
 
 struct cache_order {
@@ -824,8 +847,6 @@ struct mlx5_ib_resources {
 	struct ib_srq	*s0;
 	struct ib_srq	*s1;
 	struct mlx5_ib_port_resources ports[2];
-	/* Protects changes to the port resources */
-	struct mutex	mutex;
 };
 
 #define MAX_OPFC_RULES 2
@@ -1279,9 +1300,8 @@ int mlx5_ib_post_srq_recv(struct ib_srq *ibsrq, const struct ib_recv_wr *wr,
 			  const struct ib_recv_wr **bad_wr);
 int mlx5_ib_enable_lb(struct mlx5_ib_dev *dev, bool td, bool qp);
 void mlx5_ib_disable_lb(struct mlx5_ib_dev *dev, bool td, bool qp);
-struct ib_qp *mlx5_ib_create_qp(struct ib_pd *pd,
-				struct ib_qp_init_attr *init_attr,
-				struct ib_udata *udata);
+int mlx5_ib_create_qp(struct ib_qp *qp, struct ib_qp_init_attr *init_attr,
+		      struct ib_udata *udata);
 int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata);
 int mlx5_ib_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr, int qp_attr_mask,
@@ -1388,6 +1408,7 @@ int mlx5_ib_destroy_rwq_ind_table(struct ib_rwq_ind_table *wq_ind_table);
 struct ib_mr *mlx5_ib_reg_dm_mr(struct ib_pd *pd, struct ib_dm *dm,
 				struct ib_dm_mr_attr *attr,
 				struct uverbs_attr_bundle *attrs);
+int mlx5r_umr_recover(struct mlx5_ib_dev *dev);
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
 int mlx5_ib_odp_init_one(struct mlx5_ib_dev *ibdev);
@@ -1492,14 +1513,6 @@ extern const struct uapi_definition mlx5_ib_devx_defs[];
 extern const struct uapi_definition mlx5_ib_flow_defs[];
 extern const struct uapi_definition mlx5_ib_qos_defs[];
 extern const struct uapi_definition mlx5_ib_std_types_defs[];
-
-static inline void init_query_mad(struct ib_smp *mad)
-{
-	mad->base_version  = 1;
-	mad->mgmt_class    = IB_MGMT_CLASS_SUBN_LID_ROUTED;
-	mad->class_version = 1;
-	mad->method	   = IB_MGMT_METHOD_GET;
-}
 
 static inline int is_qp1(enum ib_qp_type qp_type)
 {
@@ -1644,7 +1657,7 @@ static inline bool mlx5_ib_can_reconfig_with_umr(struct mlx5_ib_dev *dev,
 }
 
 static inline int mlx5r_store_odp_mkey(struct mlx5_ib_dev *dev,
-				       struct mlx5_core_mkey *mmkey)
+				       struct mlx5_ib_mkey *mmkey)
 {
 	refcount_set(&mmkey->usecount, 1);
 
@@ -1653,14 +1666,14 @@ static inline int mlx5r_store_odp_mkey(struct mlx5_ib_dev *dev,
 }
 
 /* deref an mkey that can participate in ODP flow */
-static inline void mlx5r_deref_odp_mkey(struct mlx5_core_mkey *mmkey)
+static inline void mlx5r_deref_odp_mkey(struct mlx5_ib_mkey *mmkey)
 {
 	if (refcount_dec_and_test(&mmkey->usecount))
 		wake_up(&mmkey->wait);
 }
 
 /* deref an mkey that can participate in ODP flow and wait for relese */
-static inline void mlx5r_deref_wait_odp_mkey(struct mlx5_core_mkey *mmkey)
+static inline void mlx5r_deref_wait_odp_mkey(struct mlx5_ib_mkey *mmkey)
 {
 	mlx5r_deref_odp_mkey(mmkey);
 	wait_event(mmkey->wait, refcount_read(&mmkey->usecount) == 0);
@@ -1670,8 +1683,19 @@ int mlx5_ib_test_wc(struct mlx5_ib_dev *dev);
 
 static inline bool mlx5_ib_lag_should_assign_affinity(struct mlx5_ib_dev *dev)
 {
+	if (dev->lag_active &&
+	    mlx5_lag_mode_is_hash(dev->mdev) &&
+	    MLX5_CAP_PORT_SELECTION(dev->mdev, port_select_flow_table_bypass))
+		return 0;
+
 	return dev->lag_active ||
 		(MLX5_CAP_GEN(dev->mdev, num_lag_ports) > 1 &&
 		 MLX5_CAP_GEN(dev->mdev, lag_tx_port_affinity));
+}
+
+static inline bool rt_supported(int ts_cap)
+{
+	return ts_cap == MLX5_TIMESTAMP_FORMAT_CAP_REAL_TIME ||
+	       ts_cap == MLX5_TIMESTAMP_FORMAT_CAP_FREE_RUNNING_AND_REAL_TIME;
 }
 #endif /* MLX5_IB_H */

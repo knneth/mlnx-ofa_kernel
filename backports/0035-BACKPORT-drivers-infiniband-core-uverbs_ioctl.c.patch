@@ -1,0 +1,40 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_ioctl.c
+
+Change-Id: Idfd9543249daa36c3d547506ea9f022ac2f58600
+---
+ drivers/infiniband/core/uverbs_ioctl.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/uverbs_ioctl.c
++++ b/drivers/infiniband/core/uverbs_ioctl.c
+@@ -128,7 +128,11 @@ __malloc void *_uverbs_alloc(struct uver
+ 	res = (void *)pbundle->internal_buffer + pbundle->internal_used;
+ 	pbundle->internal_used =
+ 		ALIGN(new_used, sizeof(*pbundle->internal_buffer));
++#ifdef HAVE_WANT_INIT_ON_ALLOC
+ 	if (want_init_on_alloc(flags))
++#else
++	if (flags & __GFP_ZERO)    
++#endif 
+ 		memset(res, 0, size);
+ 	return res;
+ }
+@@ -553,11 +557,16 @@ static int ib_uverbs_cmd_verbs(struct ib
+ 
+ 	if (unlikely(hdr->driver_id != uapi->driver_id))
+ 		return -EINVAL;
+-
++#ifdef HAVE_RADIX_TREE_ITER_LOOKUP
+ 	slot = radix_tree_iter_lookup(
+ 		&uapi->radix, &attrs_iter,
+ 		uapi_key_obj(hdr->object_id) |
+ 			uapi_key_ioctl_method(hdr->method_id));
++#else
++	radix_tree_iter_init(&attrs_iter,  uapi_key_obj(hdr->object_id) |
++					uapi_key_ioctl_method(hdr->method_id));
++	slot = radix_tree_next_chunk(&uapi->radix, &attrs_iter, RADIX_TREE_ITER_CONTIG);
++#endif
+ 	if (unlikely(!slot))
+ 		return -EPROTONOSUPPORT;
+ 	method_elm = rcu_dereference_protected(*slot, true);

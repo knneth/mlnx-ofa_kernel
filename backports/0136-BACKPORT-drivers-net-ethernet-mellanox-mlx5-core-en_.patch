@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+
+Change-Id: I8dd3f3086a4a2b0d83777d16b25d0104ac9c64c3
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2019 Mellanox Technologies.
+ 
++#ifdef HAVE_KTLS_STRUCTS
++
+ #include "en_accel/tls.h"
+ #include "en_accel/ktls_txrx.h"
+ #include "en_accel/ktls_utils.h"
+@@ -475,6 +477,7 @@ bool mlx5e_ktls_handle_tx_skb(struct tls
+ 				goto out;
+ 			WARN_ON_ONCE(1);
+ 			fallthrough;
++
+ 		case MLX5E_KTLS_SYNC_FAIL:
+ 			goto err_out;
+ 		}
+@@ -494,3 +497,5 @@ err_out:
+ 	dev_kfree_skb_any(skb);
+ 	return false;
+ }
++
++#endif

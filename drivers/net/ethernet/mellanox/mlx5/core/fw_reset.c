@@ -434,7 +434,7 @@ static int mlx5_reset_pci_topology(struct mlx5_core_dev *dev,
 		mlx5_core_info(dev, "PCIe topology is ready\n");
 	} else {
 		mlx5_core_err(dev, "PCIe topology is not ready after %lu ms\n",
-			      msecs_to_jiffies(mlx5_tout_ms(dev, PCI_TOGGLE)));
+				msecs_to_jiffies(mlx5_tout_ms(dev, PCI_TOGGLE)));
 		return -ETIMEDOUT;
 	}
 	return 0;

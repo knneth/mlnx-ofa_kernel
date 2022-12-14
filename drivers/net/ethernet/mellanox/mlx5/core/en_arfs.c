@@ -192,7 +192,6 @@ static int arfs_add_default_rule(struct mlx5e_priv *priv,
 				 enum arfs_type type)
 {
 	struct arfs_table *arfs_t = &priv->fs.arfs->arfs_tables[type];
-	struct mlx5e_tir *tir = priv->indir_tir;
 	struct mlx5_flow_destination dest = {};
 	MLX5_DECLARE_FLOW_ACT(flow_act);
 	enum mlx5_traffic_types tt;
@@ -206,10 +205,10 @@ static int arfs_add_default_rule(struct mlx5e_priv *priv,
 		return -EINVAL;
 	}
 
-	/* FIXME: Must use mlx5e_ttc_get_default_dest(),
+	/* FIXME: Must use mlx5_ttc_get_default_dest(),
 	 * but can't since TTC default is not setup yet !
 	 */
-	dest.tir_num = tir[tt].tirn;
+	dest.tir_num = mlx5e_rx_res_get_tirn_rss(priv->rx_res, tt);
 	arfs_t->default_rule = mlx5_add_flow_rules(arfs_t->ft.t, NULL,
 						   &flow_act,
 						   &dest, 1);
@@ -553,11 +552,11 @@ static struct mlx5_flow_handle *arfs_add_rule(struct mlx5e_priv *priv,
 		       16);
 	}
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	dest.tir_num = priv->direct_tir[arfs_rule->rxq].tirn;
+	dest.tir_num = mlx5e_rx_res_get_tirn_direct(priv->rx_res, arfs_rule->rxq);
 	rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
-		priv->channel_stats[arfs_rule->rxq].rq.arfs_err++;
+		priv->channel_stats[arfs_rule->rxq]->rq.arfs_err++;
 		mlx5e_dbg(HW, priv,
 			  "%s: add rule(filter id=%d, rq idx=%d, ip proto=0x%x) failed,err=%d\n",
 			  __func__, arfs_rule->filter_id, arfs_rule->rxq,
@@ -576,7 +575,7 @@ static void arfs_modify_rule_rq(struct mlx5e_priv *priv,
 	int err = 0;
 
 	dst.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	dst.tir_num = priv->direct_tir[rxq].tirn;
+	dst.tir_num = mlx5e_rx_res_get_tirn_direct(priv->rx_res, rxq);
 	err =  mlx5_modify_rule_destination(rule, &dst, NULL);
 	if (err)
 		netdev_warn(priv->netdev,

@@ -228,7 +228,7 @@ static void handle_responder(struct ib_wc *wc, struct mlx5_cqe64 *cqe,
 	wc->dlid_path_bits = cqe->ml_path;
 	g = (be32_to_cpu(cqe->flags_rqpn) >> 28) & 3;
 	wc->wc_flags |= g ? IB_WC_GRH : 0;
-	if (unlikely(is_qp1(qp->ibqp.qp_type))) {
+	if (is_qp1(qp->type)) {
 		u16 pkey = be32_to_cpu(cqe->pkey) & 0xffff;
 
 		ib_find_cached_pkey(&dev->ib_dev, qp->port, pkey,
@@ -329,8 +329,11 @@ static void mlx5_handle_error_cqe(struct mlx5_ib_dev *dev,
 	}
 
 	wc->vendor_err = cqe->vendor_err_synd;
-	if (dump)
+	if (dump) {
+		mlx5_ib_warn(dev, "WC error: %d, Message: %s\n", wc->status,
+			     ib_wc_status_msg(wc->status));
 		dump_cqe(dev, cqe);
+	}
 }
 
 static void handle_atomics(struct mlx5_ib_qp *qp, struct mlx5_cqe64 *cqe64,
@@ -525,6 +528,10 @@ repoll:
 			    "Requestor" : "Responder", cq->mcq.cqn);
 		mlx5_ib_dbg(dev, "syndrome 0x%x, vendor syndrome 0x%x\n",
 			    err_cqe->syndrome, err_cqe->vendor_err_synd);
+		if (wc->status != IB_WC_WR_FLUSH_ERR &&
+		    (*cur_qp)->type == MLX5_IB_QPT_REG_UMR)
+			dev->umrc.state = MLX5_UMR_STATE_RECOVER;
+
 		if (opcode == MLX5_CQE_REQ_ERR) {
 			wq = &(*cur_qp)->sq;
 			wqe_ctr = be16_to_cpu(cqe64->wqe_counter);
@@ -730,7 +737,8 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 		return -EFAULT;
 
 	if ((ucmd.flags & ~(MLX5_IB_CREATE_CQ_FLAGS_CQE_128B_PAD |
-			    MLX5_IB_CREATE_CQ_FLAGS_UAR_PAGE_INDEX)))
+			    MLX5_IB_CREATE_CQ_FLAGS_UAR_PAGE_INDEX |
+			    MLX5_IB_CREATE_CQ_FLAGS_REAL_TIME_TS)))
 		return -EINVAL;
 
 	if ((ucmd.cqe_size != 64 && ucmd.cqe_size != 128) ||
@@ -830,6 +838,9 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 
 		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD;
 	}
+
+	if (ucmd.flags & MLX5_IB_CREATE_CQ_FLAGS_REAL_TIME_TS)
+		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_REAL_TIME_TS;
 
 	MLX5_SET(create_cq_in, *cqb, uid, context->devx_uid);
 	return 0;

@@ -1,0 +1,98 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.c
+
+Change-Id: Ibfbff98b93739dd1e467b78d0247fd74a5188a76
+---
+ .../mellanox/mlx5/core/en/tc/act/act.c        | 31 +++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.c
+@@ -14,8 +14,10 @@ static struct mlx5e_tc_act *tc_acts_fdb[
+ 	&mlx5e_tc_act_goto,
+ 	&mlx5e_tc_act_mirred,
+ 	&mlx5e_tc_act_mirred,
++#ifdef HAVE_FLOW_ACTION_REDIRECT_INGRESS
+ 	&mlx5e_tc_act_redirect_ingress,
+ 	NULL, /* FLOW_ACTION_MIRRED_INGRESS, */
++#endif
+ 	&mlx5e_tc_act_vlan,
+ 	&mlx5e_tc_act_vlan,
+ 	&mlx5e_tc_act_vlan_mangle,
+@@ -25,16 +27,26 @@ static struct mlx5e_tc_act *tc_acts_fdb[
+ 	&mlx5e_tc_act_pedit,
+ 	&mlx5e_tc_act_csum,
+ 	NULL, /* FLOW_ACTION_MARK, */
++#ifdef HAVE_FLOW_ACTION_PTYPE
+ 	&mlx5e_tc_act_ptype,
++#endif
++#ifdef HAVE_FLOW_ACTION_PRIORITY
+ 	&mlx5e_tc_act_prio,
++#endif
+ 	NULL, /* FLOW_ACTION_WAKE, */
+ 	NULL, /* FLOW_ACTION_QUEUE, */
+ 	&mlx5e_tc_act_sample,
+ 	&mlx5e_tc_act_police,
++#ifdef HAVE_FLOW_ACTION_CT
+ 	&mlx5e_tc_act_ct,
++#endif
++#ifdef HAVE_FLOW_ACTION_CT_METADATA
+ 	NULL, /* FLOW_ACTION_CT_METADATA, */
++#endif
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	&mlx5e_tc_act_mpls_push,
+ 	&mlx5e_tc_act_mpls_pop,
++#endif
+ };
+ 
+ /* Must be aligned with enum flow_action_id. */
+@@ -44,8 +56,10 @@ static struct mlx5e_tc_act *tc_acts_nic[
+ 	NULL, /* FLOW_ACTION_TRAP, */
+ 	&mlx5e_tc_act_goto,
+ 	&mlx5e_tc_act_mirred_nic,
++#ifdef HAVE_FLOW_ACTION_REDIRECT_INGRESS
+ 	NULL, /* FLOW_ACTION_MIRRED, */
+ 	NULL, /* FLOW_ACTION_REDIRECT_INGRESS, */
++#endif
+ 	NULL, /* FLOW_ACTION_MIRRED_INGRESS, */
+ 	NULL, /* FLOW_ACTION_VLAN_PUSH, */
+ 	NULL, /* FLOW_ACTION_VLAN_POP, */
+@@ -56,13 +70,19 @@ static struct mlx5e_tc_act *tc_acts_nic[
+ 	&mlx5e_tc_act_pedit,
+ 	&mlx5e_tc_act_csum,
+ 	&mlx5e_tc_act_mark,
++#ifdef HAVE_FLOW_ACTION_PTYPE
+ 	NULL, /* FLOW_ACTION_PTYPE, */
++#endif
++#ifdef HAVE_FLOW_ACTION_PRIORITY
+ 	NULL, /* FLOW_ACTION_PRIORITY, */
++#endif
+ 	NULL, /* FLOW_ACTION_WAKE, */
+ 	NULL, /* FLOW_ACTION_QUEUE, */
+ 	NULL, /* FLOW_ACTION_SAMPLE, */
+ 	NULL, /* FLOW_ACTION_POLICE, */
++#ifdef HAVE_FLOW_ACTION_CT
+ 	&mlx5e_tc_act_ct,
++#endif
+ };
+ 
+ /**
+@@ -76,6 +96,17 @@ mlx5e_tc_act_get(enum flow_action_id act
+ {
+ 	struct mlx5e_tc_act **tc_acts;
+ 
++#ifdef HAVE_FLOW_ACTION_PRIORITY
++	/* WA for BF kernel 5.4 where flow_action_id order is wrong, FLOW_ACTION_PRIORITY is
++	 * defined after FLOW_ACTION_MPLS_MANGLE
++	 */
++	if (FLOW_ACTION_PRIORITY > FLOW_ACTION_WAKE) {
++		if (act_id >= FLOW_ACTION_WAKE && act_id != FLOW_ACTION_PRIORITY)
++			act_id++;
++		else if (act_id == FLOW_ACTION_PRIORITY)
++			act_id = FLOW_ACTION_WAKE;
++	}
++#endif
+ 	tc_acts = ns_type == MLX5_FLOW_NAMESPACE_FDB ? tc_acts_fdb : tc_acts_nic;
+ 
+ 	return tc_acts[act_id];

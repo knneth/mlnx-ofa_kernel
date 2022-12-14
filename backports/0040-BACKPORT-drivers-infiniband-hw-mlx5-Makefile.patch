@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/Makefile
+
+Change-Id: I3f0d982a2bb55b6f102100645d11bda16005e935
+---
+ drivers/infiniband/hw/mlx5/Makefile | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/Makefile
++++ b/drivers/infiniband/hw/mlx5/Makefile
+@@ -27,7 +27,11 @@ mlx5_ib-y := ah.o \
+ 
+ mlx5_ib-$(CONFIG_INFINIBAND_ON_DEMAND_PAGING) += odp.o
+ mlx5_ib-$(CONFIG_MLX5_ESWITCH) += ib_rep.o
+-mlx5_ib-$(CONFIG_INFINIBAND_USER_ACCESS) += devx.o \
+-					    fs.o \
+-					    qos.o \
+-					    std_types.o
++
++ifneq ($(CONFIG_INFINIBAND_USER_ACCESS),)
++	mlx5_ib-y += devx.o \
++		fs.o \
++		qos.o \
++		std_types.o
++endif
++

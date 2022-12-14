@@ -1,0 +1,216 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
+
+Change-Id: I6b43de15432b5c21f81cf816d69a2cff5ad9836b
+---
+ .../mellanox/mlx5/core/en/reporter_rx.c       | 88 ++++++++++++++-----
+ 1 file changed, 68 insertions(+), 20 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
+@@ -8,6 +8,7 @@
+ #include "ptp.h"
+ #include "lib/tout.h"
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static int mlx5e_query_rq_state(struct mlx5_core_dev *dev, u32 rqn, u8 *state)
+ {
+ 	int outlen = MLX5_ST_SZ_BYTES(query_rq_out);
+@@ -30,6 +31,7 @@ out:
+ 	kvfree(out);
+ 	return err;
+ }
++#endif
+ 
+ static int mlx5e_wait_for_icosq_flush(struct mlx5e_icosq *icosq)
+ {
+@@ -76,8 +78,10 @@ static int mlx5e_rx_reporter_err_icosq_c
+ 
+ 	/* mlx5e_close_rq cancels this work before RQ and ICOSQ are killed. */
+ 	rq = &icosq->channel->rq;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (test_bit(MLX5E_RQ_STATE_ENABLED, &icosq->channel->xskrq.state))
+ 		xskrq = &icosq->channel->xskrq;
++#endif
+ 	mdev = icosq->channel->mdev;
+ 	dev = icosq->channel->netdev;
+ 	err = mlx5_core_query_sq_state(mdev, icosq->sqn, &state);
+@@ -197,22 +201,7 @@ static int mlx5e_rx_reporter_timeout_rec
+ 	return err;
+ }
+ 
+-static int mlx5e_rx_reporter_recover_from_ctx(struct mlx5e_err_ctx *err_ctx)
+-{
+-	return err_ctx->recover(err_ctx->ctx);
+-}
+-
+-static int mlx5e_rx_reporter_recover(struct devlink_health_reporter *reporter,
+-				     void *context,
+-				     struct netlink_ext_ack *extack)
+-{
+-	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
+-	struct mlx5e_err_ctx *err_ctx = context;
+-
+-	return err_ctx ? mlx5e_rx_reporter_recover_from_ctx(err_ctx) :
+-			 mlx5e_health_recover_channels(priv);
+-}
+-
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static int mlx5e_reporter_icosq_diagnose(struct mlx5e_icosq *icosq, u8 hw_state,
+ 					 struct devlink_fmsg *fmsg)
+ {
+@@ -332,6 +321,25 @@ mlx5e_rx_reporter_build_diagnose_output_
+ 	return 0;
+ }
+ 
++static int mlx5e_rx_reporter_recover_from_ctx(struct mlx5e_err_ctx *err_ctx)
++{
++	return err_ctx->recover(err_ctx->ctx);
++}
++
++static int mlx5e_rx_reporter_recover(struct devlink_health_reporter *reporter,
++				     void *context
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++				     , struct netlink_ext_ack *extack
++#endif
++				     )
++{
++	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
++	struct mlx5e_err_ctx *err_ctx = context;
++
++	return err_ctx ? mlx5e_rx_reporter_recover_from_ctx(err_ctx) :
++			 mlx5e_health_recover_channels(priv);
++}
++
+ static int mlx5e_rx_reporter_build_diagnose_output(struct mlx5e_rq *rq,
+ 						   struct devlink_fmsg *fmsg)
+ {
+@@ -465,8 +473,11 @@ static int mlx5e_rx_reporter_build_diagn
+ }
+ 
+ static int mlx5e_rx_reporter_diagnose(struct devlink_health_reporter *reporter,
+-				      struct devlink_fmsg *fmsg,
+-				      struct netlink_ext_ack *extack)
++				      struct devlink_fmsg *fmsg
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++				     , struct netlink_ext_ack *extack
++#endif
++				     )
+ {
+ 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
+ 	struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
+@@ -679,8 +690,11 @@ static int mlx5e_rx_reporter_dump_from_c
+ }
+ 
+ static int mlx5e_rx_reporter_dump(struct devlink_health_reporter *reporter,
+-				  struct devlink_fmsg *fmsg, void *context,
+-				  struct netlink_ext_ack *extack)
++				  struct devlink_fmsg *fmsg, void *context
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++                                  , struct netlink_ext_ack *extack
++#endif
++                                 )
+ {
+ 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
+ 	struct mlx5e_err_ctx *err_ctx = context;
+@@ -689,6 +703,8 @@ static int mlx5e_rx_reporter_dump(struct
+ 			 mlx5e_rx_reporter_dump_all_rqs(priv, fmsg);
+ }
+ 
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
++
+ void mlx5e_reporter_rx_timeout(struct mlx5e_rq *rq)
+ {
+ 	char icosq_str[MLX5E_REPORTER_PER_Q_MAX_LEN] = {};
+@@ -699,7 +715,9 @@ void mlx5e_reporter_rx_timeout(struct ml
+ 
+ 	err_ctx.ctx = rq;
+ 	err_ctx.recover = mlx5e_rx_reporter_timeout_recover;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	err_ctx.dump = mlx5e_rx_reporter_dump_rq;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ 	if (icosq)
+ 		snprintf(icosq_str, sizeof(icosq_str), "ICOSQ: 0x%x, ", icosq->sqn);
+@@ -718,7 +736,9 @@ void mlx5e_reporter_rq_cqe_err(struct ml
+ 
+ 	err_ctx.ctx = rq;
+ 	err_ctx.recover = mlx5e_rx_reporter_err_rq_cqe_recover;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	err_ctx.dump = mlx5e_rx_reporter_dump_rq;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	snprintf(err_str, sizeof(err_str), "ERR CQE on RQ: 0x%x", rq->rqn);
+ 
+ 	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
+@@ -732,7 +752,9 @@ void mlx5e_reporter_icosq_cqe_err(struct
+ 
+ 	err_ctx.ctx = icosq;
+ 	err_ctx.recover = mlx5e_rx_reporter_err_icosq_cqe_recover;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	err_ctx.dump = mlx5e_rx_reporter_dump_icosq;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	snprintf(err_str, sizeof(err_str), "ERR CQE on ICOSQ: 0x%x", icosq->sqn);
+ 
+ 	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
+@@ -748,6 +770,7 @@ void mlx5e_reporter_icosq_resume_recover
+ 	mutex_unlock(&c->icosq_recovery_lock);
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static const struct devlink_health_reporter_ops mlx5_rx_reporter_ops = {
+ 	.name = "rx",
+ 	.recover = mlx5e_rx_reporter_recover,
+@@ -756,20 +779,39 @@ static const struct devlink_health_repor
+ };
+ 
+ #define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ void mlx5e_reporter_rx_create(struct mlx5e_priv *priv)
+ {
++#ifndef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++	priv->rx_reporter = NULL;
++#else
++#ifndef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
++	struct devlink *devlink = priv_to_devlink(priv->mdev);
++#endif
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE 
+ 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
++#endif
+ 	struct devlink_health_reporter *reporter;
+ 
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE 
+ 	reporter = devlink_port_health_reporter_create(dl_port, &mlx5_rx_reporter_ops,
+ 						       MLX5E_REPORTER_RX_GRACEFUL_PERIOD, priv);
++#else
++	reporter = devlink_health_reporter_create(devlink,
++							&mlx5_rx_reporter_ops,
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
++							MLX5E_REPORTER_RX_GRACEFUL_PERIOD,
++#endif
++							true, priv);
++#endif
+ 	if (IS_ERR(reporter)) {
+ 		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %ld\n",
+ 			    PTR_ERR(reporter));
+ 		return;
+ 	}
+ 	priv->rx_reporter = reporter;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ }
+ 
+ void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
+@@ -777,6 +819,12 @@ void mlx5e_reporter_rx_destroy(struct ml
+ 	if (!priv->rx_reporter)
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
+ 	devlink_port_health_reporter_destroy(priv->rx_reporter);
++#else
++	devlink_health_reporter_destroy(priv->rx_reporter);
++#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE  */
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	priv->rx_reporter = NULL;
+ }

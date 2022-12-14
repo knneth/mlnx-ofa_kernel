@@ -68,7 +68,7 @@ mlx5_eswitch_termtbl_create(struct mlx5_core_dev *dev,
 	struct mlx5_flow_namespace *root_ns;
 	int err, err2;
 
-	root_ns = mlx5_get_flow_namespace(dev, MLX5_FLOW_NAMESPACE_FDB_KERNEL);
+	root_ns = mlx5_get_flow_namespace(dev, MLX5_FLOW_NAMESPACE_FDB);
 	if (!root_ns) {
 		esw_warn(dev, "Failed to get FDB flow namespace\n");
 		return -EOPNOTSUPP;
@@ -220,8 +220,8 @@ mlx5_eswitch_termtbl_required(struct mlx5_eswitch *esw,
 
 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, termination_table) ||
 	    !MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ignore_flow_level) ||
-	    mlx5_esw_attr_flags_skip(attr->flags) ||
-	    (!mlx5_eswitch_offload_is_uplink_port(esw, spec) && !attr->esw_attr->int_port))
+	    mlx5e_tc_attr_flags_skip(attr->flags) ||
+	    (!mlx5_eswitch_offload_is_uplink_port(esw, spec) && !esw_attr->int_port))
 		return false;
 
 	/* push vlan on RX */

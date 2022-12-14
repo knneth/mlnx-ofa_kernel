@@ -1,0 +1,106 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
+
+Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
+---
+ drivers/nvme/host/fabrics.c | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+--- a/drivers/nvme/host/fabrics.c
++++ b/drivers/nvme/host/fabrics.c
+@@ -156,8 +156,13 @@ int nvmf_reg_read32(struct nvme_ctrl *ct
+ 	cmd.prop_get.fctype = nvme_fabrics_type_property_get;
+ 	cmd.prop_get.offset = cpu_to_le32(off);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0, 0,
+ 			NVME_QID_ANY, 0, 0);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0, 0,
++			NVME_QID_ANY, 0, GFP_KERNEL, false, false);
++#endif
+ 
+ 	if (ret >= 0)
+ 		*val = le64_to_cpu(res.u64);
+@@ -202,8 +207,13 @@ int nvmf_reg_read64(struct nvme_ctrl *ct
+ 	cmd.prop_get.attrib = 1;
+ 	cmd.prop_get.offset = cpu_to_le32(off);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0, 0,
+ 			NVME_QID_ANY, 0, 0);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0, 0,
++			NVME_QID_ANY, 0, GFP_KERNEL, false, false);
++#endif
+ 
+ 	if (ret >= 0)
+ 		*val = le64_to_cpu(res.u64);
+@@ -247,8 +257,13 @@ int nvmf_reg_write32(struct nvme_ctrl *c
+ 	cmd.prop_set.offset = cpu_to_le32(off);
+ 	cmd.prop_set.value = cpu_to_le64(val);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, NULL, NULL, 0, 0,
+ 			NVME_QID_ANY, 0, 0);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, NULL, NULL, 0, 0,
++			NVME_QID_ANY, 0, GFP_KERNEL, false, false);
++#endif
+ 	if (unlikely(ret))
+ 		dev_err(ctrl->device,
+ 			"Property Set error: %d, offset %#x\n",
+@@ -392,9 +407,15 @@ int nvmf_connect_admin_queue(struct nvme
+ 	strncpy(data->subsysnqn, ctrl->opts->subsysnqn, NVMF_NQN_SIZE);
+ 	strncpy(data->hostnqn, ctrl->opts->host->nqn, NVMF_NQN_SIZE);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res,
+ 			data, sizeof(*data), 0, NVME_QID_ANY, 1,
+ 			BLK_MQ_REQ_RESERVED | BLK_MQ_REQ_NOWAIT);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res,
++			data, sizeof(*data), 0, NVME_QID_ANY, 1,
++			GFP_ATOMIC, true, false);
++#endif
+ 	if (ret) {
+ 		nvmf_log_connect_error(ctrl, ret, le32_to_cpu(res.u32),
+ 				       &cmd, data);
+@@ -453,9 +474,15 @@ int nvmf_connect_io_queue(struct nvme_ct
+ 	strncpy(data->subsysnqn, ctrl->opts->subsysnqn, NVMF_NQN_SIZE);
+ 	strncpy(data->hostnqn, ctrl->opts->host->nqn, NVMF_NQN_SIZE);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->connect_q, &cmd, &res,
+ 			data, sizeof(*data), 0, qid, 1,
+ 			BLK_MQ_REQ_RESERVED | BLK_MQ_REQ_NOWAIT);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->connect_q, &cmd, &res,
++			data, sizeof(*data), 0, qid, 1,
++			GFP_ATOMIC, true, false);
++#endif
+ 	if (ret) {
+ 		nvmf_log_connect_error(ctrl, ret, le32_to_cpu(res.u32),
+ 				       &cmd, data);
+@@ -567,7 +594,11 @@ static int nvmf_parse_options(struct nvm
+ 
+ 	/* Set defaults */
+ 	opts->queue_size = NVMF_DEF_QUEUE_SIZE;
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HCTX
+ 	opts->nr_io_queues = num_online_cpus();
++#else
++	opts->nr_io_queues = 1;
++#endif
+ 	opts->reconnect_delay = NVMF_DEF_RECONNECT_DELAY;
+ 	opts->kato = 0;
+ 	opts->duplicate_connect = false;
+@@ -1200,6 +1231,9 @@ static void __exit nvmf_exit(void)
+ }
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ module_init(nvmf_init);
+ module_exit(nvmf_exit);
