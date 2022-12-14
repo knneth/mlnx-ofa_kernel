@@ -459,7 +459,7 @@ static int diag_cnt_debugfs_init(struct mlx5_core_dev *dev)
 	struct mlx5_diag_cnt *diag_cnt = &dev->diag_cnt;
 	struct dentry *entry = NULL;
 
-	diag_cnt->debugfs = debugfs_create_dir("diag_cnt", dev->priv.dbg_root);
+	diag_cnt->debugfs = debugfs_create_dir("diag_cnt", dev->priv.dbg.dbg_root);
 
 	if (!diag_cnt->debugfs)
 		return -ENOMEM;
@@ -711,7 +711,7 @@ void mlx5_diag_cnt_init(struct mlx5_core_dev *dev)
 		return;
 
 	/* Create debugfs */
-	if (!dev->priv.dbg_root)
+	if (!dev->priv.dbg.dbg_root)
 		return;
 
 	err = diag_cnt_debugfs_init(dev);

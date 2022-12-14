@@ -51,10 +51,6 @@
 #include "nvfs_rpc_rdma.h"
 #endif
 
-#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
-# define RPCDBG_FACILITY	RPCDBG_TRANS
-#endif
-
 static void frwr_cid_init(struct rpcrdma_ep *ep,
 			  struct rpcrdma_mr *mr)
 {
@@ -213,10 +209,8 @@ int frwr_query_device(struct rpcrdma_ep *ep, const struct ib_device *device)
 	ep->re_attr.cap.max_recv_sge = 1;
 
 	ep->re_mrtype = IB_MR_TYPE_MEM_REG;
-#ifndef CONFIG_GPU_DIRECT_STORAGE
 	if (attrs->device_cap_flags & IB_DEVICE_SG_GAPS_REG)
 		ep->re_mrtype = IB_MR_TYPE_SG_GAPS;
-#endif
 
 	/* Quirk: Some devices advertise a large max_fast_reg_page_list_len
 	 * capability, but perform optimally when the MRs are not larger

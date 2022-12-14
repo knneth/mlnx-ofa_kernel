@@ -2,12 +2,13 @@
 /* Copyright (c) 2019 Mellanox Technologies. */
 
 #include <linux/mlx5/eswitch.h>
+#include <linux/err.h>
 #include "dr_types.h"
 
 #define DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, dmn_type)	\
 	((dmn)->info.caps.dmn_type##_sw_owner ||	\
 	 ((dmn)->info.caps.dmn_type##_sw_owner_v2 &&	\
-	  (dmn)->info.caps.sw_format_ver <= MLX5_STEERING_FORMAT_CONNECTX_6DX))
+	  (dmn)->info.caps.sw_format_ver <= MLX5_STEERING_FORMAT_CONNECTX_7))
 
 static bool dr_domain_is_support_modify_hdr_cache(struct mlx5dr_domain *dmn)
 {
@@ -152,7 +153,7 @@ int mlx5dr_domain_cache_get_recalc_cs_ft_addr(struct mlx5dr_domain *dmn,
 
 static bool dr_domain_check_hw_basic_requirement_caps(struct mlx5dr_domain *dmn)
 {
-	if (dmn->info.caps.sw_format_ver == MLX5_STEERING_FORMAT_CONNECTX_6DX &&
+	if (dmn->info.caps.sw_format_ver >= MLX5_STEERING_FORMAT_CONNECTX_6DX &&
 	    !dr_domain_is_support_modify_hdr_cache(dmn)) {
 		return false;
 	}
@@ -167,19 +168,14 @@ static bool dr_domain_is_supp_sw_steering(struct mlx5dr_domain *dmn)
 
 	switch (dmn->type) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
-		if (!dmn->info.caps.rx_sw_owner && !dmn->info.caps.rx_sw_owner_v2)
-			return false;
-		break;
+		return DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, rx);
 	case MLX5DR_DOMAIN_TYPE_NIC_TX:
-		if (!dmn->info.caps.tx_sw_owner && !dmn->info.caps.tx_sw_owner_v2)
-			return false;
-		break;
+		return DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, tx);
 	case MLX5DR_DOMAIN_TYPE_FDB:
-		if (!dmn->info.caps.fdb_sw_owner && !dmn->info.caps.fdb_sw_owner_v2)
-			return false;
-		break;
+		return DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, fdb);
+	default:
+		return false;
 	}
-	return true;
 }
 
 static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
@@ -199,9 +195,9 @@ static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 	}
 
 	dmn->uar = mlx5_get_uars_page(dmn->mdev);
-	if (!dmn->uar) {
+	if (IS_ERR(dmn->uar)) {
 		mlx5dr_err(dmn, "Couldn't allocate UAR\n");
-		ret = -ENOMEM;
+		ret = PTR_ERR(dmn->uar);
 		goto clean_pd;
 	}
 

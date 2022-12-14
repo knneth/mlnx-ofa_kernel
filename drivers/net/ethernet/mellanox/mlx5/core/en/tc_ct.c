@@ -14,6 +14,7 @@
 #include <linux/workqueue.h>
 #include <linux/refcount.h>
 #include <linux/xarray.h>
+#include <linux/if_macvlan.h>
 
 #include "lib/fs_chains.h"
 #include "en/tc_ct.h"
@@ -26,7 +27,7 @@
 #include "en_rep.h"
 #include "fs_core.h"
 
-#define MLX5_CT_ZONE_BITS (mlx5e_tc_attr_to_reg_mappings[ZONE_TO_REG].mlen * 8)
+#define MLX5_CT_ZONE_BITS (mlx5e_tc_attr_to_reg_mappings[ZONE_TO_REG].mlen)
 #define MLX5_CT_ZONE_MASK GENMASK(MLX5_CT_ZONE_BITS - 1, 0)
 #define MLX5_CT_STATE_ESTABLISHED_BIT BIT(1)
 #define MLX5_CT_STATE_TRK_BIT BIT(2)
@@ -35,7 +36,7 @@
 #define MLX5_CT_STATE_RELATED_BIT BIT(5)
 #define MLX5_CT_STATE_INVALID_BIT BIT(6)
 
-#define MLX5_CT_LABELS_BITS (mlx5e_tc_attr_to_reg_mappings[LABELS_TO_REG].mlen * 8)
+#define MLX5_CT_LABELS_BITS (mlx5e_tc_attr_to_reg_mappings[LABELS_TO_REG].mlen)
 #define MLX5_CT_LABELS_MASK GENMASK(MLX5_CT_LABELS_BITS - 1, 0)
 
 #define ct_dbg(fmt, args...)\
@@ -390,7 +391,33 @@ mlx5_tc_ct_rule_to_tuple_nat(struct mlx5_ct_tuple *tuple,
 }
 
 static int
-mlx5_tc_ct_set_tuple_match(struct mlx5e_priv *priv, struct mlx5_flow_spec *spec,
+mlx5_tc_ct_get_flow_source_match(struct mlx5_tc_ct_priv *ct_priv,
+				 struct net_device *ndev)
+{
+	struct mlx5e_priv *other_priv = netdev_priv(ndev);
+	struct mlx5_core_dev *mdev = ct_priv->dev;
+	bool vf_rep, uplink_rep;
+
+	vf_rep = mlx5e_eswitch_vf_rep(ndev) && mlx5_same_hw_devs(mdev, other_priv->mdev);
+	uplink_rep = mlx5e_eswitch_uplink_rep(ndev) && mlx5_same_hw_devs(mdev, other_priv->mdev);
+
+	if (vf_rep)
+		return MLX5_FLOW_CONTEXT_FLOW_SOURCE_LOCAL_VPORT;
+	if (uplink_rep)
+		return MLX5_FLOW_CONTEXT_FLOW_SOURCE_UPLINK;
+	if (is_vlan_dev(ndev))
+		return mlx5_tc_ct_get_flow_source_match(ct_priv, vlan_dev_real_dev(ndev));
+	if (netif_is_macvlan(ndev))
+		return mlx5_tc_ct_get_flow_source_match(ct_priv, macvlan_dev_real_dev(ndev));
+	if (mlx5e_get_tc_tun(ndev) || netif_is_lag_master(ndev))
+		return MLX5_FLOW_CONTEXT_FLOW_SOURCE_UPLINK;
+
+	return MLX5_FLOW_CONTEXT_FLOW_SOURCE_ANY_VPORT;
+}
+
+static int
+mlx5_tc_ct_set_tuple_match(struct mlx5_tc_ct_priv *ct_priv,
+			   struct mlx5_flow_spec *spec,
 			   struct flow_rule *rule)
 {
 	void *headers_c = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
@@ -405,8 +432,7 @@ mlx5_tc_ct_set_tuple_match(struct mlx5e_priv *priv, struct mlx5_flow_spec *spec,
 
 		flow_rule_match_basic(rule, &match);
 
-		mlx5e_tc_set_ethertype(priv->mdev, &match, true, headers_c,
-				       headers_v);
+		mlx5e_tc_set_ethertype(ct_priv->dev, &match, true, headers_c, headers_v);
 		MLX5_SET(fte_match_set_lyr_2_4, headers_c, ip_protocol,
 			 match.mask->ip_proto);
 		MLX5_SET(fte_match_set_lyr_2_4, headers_v, ip_protocol,
@@ -500,6 +526,24 @@ mlx5_tc_ct_set_tuple_match(struct mlx5e_priv *priv, struct mlx5_flow_spec *spec,
 			 ntohs(match.mask->flags));
 		MLX5_SET(fte_match_set_lyr_2_4, headers_v, tcp_flags,
 			 ntohs(match.key->flags));
+	}
+
+	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_META)) {
+		struct flow_match_meta match;
+
+		flow_rule_match_meta(rule, &match);
+
+		if (match.key->ingress_ifindex & match.mask->ingress_ifindex) {
+			struct net_device *dev;
+
+			dev = dev_get_by_index(&init_net, match.key->ingress_ifindex);
+			if (dev && MLX5_CAP_ESW_FLOWTABLE(ct_priv->dev, flow_source))
+				spec->flow_context.flow_source =
+					mlx5_tc_ct_get_flow_source_match(ct_priv, dev);
+
+			if (dev)
+				dev_put(dev);
+		}
 	}
 
 	return 0;
@@ -610,6 +654,12 @@ mlx5_tc_ct_entry_set_registers(struct mlx5_tc_ct_priv *ct_priv,
 			return err;
 	}
 	return 0;
+}
+
+int mlx5_tc_ct_set_ct_clear_regs(struct mlx5_tc_ct_priv *priv,
+				 struct mlx5e_tc_mod_hdr_acts *mod_acts)
+{
+	return mlx5_tc_ct_entry_set_registers(priv, mod_acts, 0, 0, 0, 0);
 }
 
 static int
@@ -855,7 +905,7 @@ mlx5_tc_ct_entry_add_rule(struct mlx5_tc_ct_priv *ct_priv,
 	if (ct_priv->ns_type == MLX5_FLOW_NAMESPACE_FDB_KERNEL)
 		attr->esw_attr->in_mdev = priv->mdev;
 
-	mlx5_tc_ct_set_tuple_match(netdev_priv(ct_priv->netdev), spec, flow_rule);
+	mlx5_tc_ct_set_tuple_match(ct_priv, spec, flow_rule);
 	mlx5e_tc_match_to_reg_match(spec, ZONE_TO_REG, entry->tuple.zone, MLX5_CT_ZONE_MASK);
 
 	err = fs_ops->ct_rule_add(fs, conn_priv_data, spec, attr, entry->counter->fs_counter,
@@ -1461,6 +1511,7 @@ mlx5_tc_ct_match_add(struct mlx5_tc_ct_priv *priv,
 int
 mlx5_tc_ct_parse_action(struct mlx5_tc_ct_priv *priv,
 			struct mlx5_flow_attr *attr,
+			struct mlx5e_tc_mod_hdr_acts *mod_acts,
 			const struct flow_action_entry *act,
 			struct netlink_ext_ack *extack)
 {
@@ -2025,12 +2076,6 @@ __mlx5_tc_ct_flow_offload_clear(struct mlx5_tc_ct_priv *ct_priv,
 	memcpy(pre_ct_attr, attr, attr_sz);
 
 	if (!attr->ct_attr.clear_mod_acts_set) {
-		err = mlx5_tc_ct_entry_set_registers(ct_priv, mod_acts, 0, 0, 0, 0);
-		if (err) {
-			ct_dbg("Failed to set register for ct clear");
-			goto err_set_registers;
-		}
-
 		attr->ct_attr.clear_mod_acts_set = true;
 	}
 
@@ -2040,11 +2085,10 @@ __mlx5_tc_ct_flow_offload_clear(struct mlx5_tc_ct_priv *ct_priv,
 	if (IS_ERR(mod_hdr)) {
 		err = PTR_ERR(mod_hdr);
 		ct_dbg("Failed to add create ct clear mod hdr");
-		goto err_set_registers;
+		goto err_mod_hdr;
 	}
 
 	pre_ct_attr->modify_hdr = mod_hdr;
-	pre_ct_attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
 
 	rule = mlx5_tc_rule_insert(priv, orig_spec, pre_ct_attr);
 	if (IS_ERR(rule)) {
@@ -2060,7 +2104,7 @@ __mlx5_tc_ct_flow_offload_clear(struct mlx5_tc_ct_priv *ct_priv,
 
 err_insert:
 	mlx5_modify_header_dealloc(priv->mdev, mod_hdr);
-err_set_registers:
+err_mod_hdr:
 	netdev_warn(priv->netdev,
 		    "Failed to offload ct clear flow, err %d\n", err);
 	kfree(pre_ct_attr);

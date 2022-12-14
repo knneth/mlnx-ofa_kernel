@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
 
 Change-Id: Ica3d0ce8891709d2b111dc88aff0b15fdcc102a2
 ---
- drivers/infiniband/ulp/ipoib/ipoib_cm.c | 37 ++++++++++++++++++++-----
- 1 file changed, 30 insertions(+), 7 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_cm.c | 45 +++++++++++++++++++++----
+ 1 file changed, 38 insertions(+), 7 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_cm.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_cm.c
@@ -80,3 +80,26 @@ Change-Id: Ica3d0ce8891709d2b111dc88aff0b15fdcc102a2
  	if (IS_ERR(p->qp)) {
  		ret = PTR_ERR(p->qp);
  		ipoib_warn(priv, "failed to create tx qp: %d\n", ret);
+@@ -1630,6 +1653,9 @@ int ipoib_cm_dev_init(struct net_device
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	int max_srq_sge, i;
++#ifdef HAVE_DEV_ADDR_MOD
++	u8 addr;
++#endif
+ 
+ 	INIT_LIST_HEAD(&priv->cm.passive_ids);
+ 	INIT_LIST_HEAD(&priv->cm.reap_list);
+@@ -1683,7 +1709,12 @@ int ipoib_cm_dev_init(struct net_device
+ 		}
+ 	}
+ 
++#ifdef HAVE_DEV_ADDR_MOD
++	addr = IPOIB_FLAGS_RC;
++	dev_addr_mod(dev, 0, &addr, 1);
++#else
+ 	priv->dev->dev_addr[0] = IPOIB_FLAGS_RC;
++#endif
+ 	return 0;
+ }
+ 

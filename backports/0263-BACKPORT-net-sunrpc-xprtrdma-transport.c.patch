@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
 
 Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
 ---
- net/sunrpc/xprtrdma/transport.c | 127 +++++++++++++++++++++++++++++++-
- 1 file changed, 125 insertions(+), 2 deletions(-)
+ net/sunrpc/xprtrdma/transport.c | 132 +++++++++++++++++++++++++++++++-
+ 1 file changed, 130 insertions(+), 2 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/transport.c
 +++ b/net/sunrpc/xprtrdma/transport.c
-@@ -58,7 +58,9 @@
+@@ -58,8 +58,15 @@
  #include <linux/sunrpc/svc_rdma.h>
  
  #include "xprt_rdma.h"
@@ -16,9 +16,15 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  #include <trace/events/rpcrdma.h>
 +#endif
  
- #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
- # define RPCDBG_FACILITY	RPCDBG_TRANS
-@@ -84,6 +86,9 @@ static unsigned int max_padding = PAGE_S
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
+ /*
+  * tunables
+  */
+@@ -80,6 +87,9 @@ static unsigned int max_padding = PAGE_S
  static unsigned int min_memreg = RPCRDMA_BOUNCEBUFFERS;
  static unsigned int max_memreg = RPCRDMA_LAST - 1;
  static unsigned int dummy;
@@ -28,7 +34,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  
  static struct ctl_table_header *sunrpc_table_header;
  
-@@ -121,7 +126,11 @@ static struct ctl_table xr_tunables_tabl
+@@ -117,7 +127,11 @@ static struct ctl_table xr_tunables_tabl
  		.maxlen		= sizeof(unsigned int),
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec_minmax,
@@ -40,7 +46,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  		.extra2		= &max_padding,
  	},
  	{
-@@ -154,7 +163,11 @@ static struct ctl_table sunrpc_table[] =
+@@ -150,7 +164,11 @@ static struct ctl_table sunrpc_table[] =
  
  #endif
  
@@ -52,7 +58,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  
  static void
  xprt_rdma_format_addresses4(struct rpc_xprt *xprt, struct sockaddr *sap)
-@@ -272,7 +285,9 @@ xprt_rdma_inject_disconnect(struct rpc_x
+@@ -268,7 +286,9 @@ xprt_rdma_inject_disconnect(struct rpc_x
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  
@@ -62,7 +68,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	rdma_disconnect(r_xprt->rx_ep->re_id);
  }
  
-@@ -324,16 +339,24 @@ xprt_setup_rdma(struct xprt_create *args
+@@ -320,16 +340,24 @@ xprt_setup_rdma(struct xprt_create *args
  	if (!try_module_get(THIS_MODULE))
  		return ERR_PTR(-EIO);
  
@@ -87,7 +93,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	xprt->bind_timeout = RPCRDMA_BIND_TO;
  	xprt->reestablish_timeout = RPCRDMA_INIT_REEST_TO;
  	xprt->idle_timeout = RPCRDMA_IDLE_DISC_TO;
-@@ -436,6 +459,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, s
+@@ -432,6 +460,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, s
  	xprt_force_disconnect(xprt);
  }
  
@@ -95,7 +101,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  /**
   * xprt_rdma_set_connect_timeout - set timeouts for establishing a connection
   * @xprt: controlling transport instance
-@@ -449,7 +473,9 @@ static void xprt_rdma_set_connect_timeou
+@@ -445,7 +474,9 @@ static void xprt_rdma_set_connect_timeou
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  
@@ -105,7 +111,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  
  	spin_lock(&xprt->transport_lock);
  
-@@ -473,6 +499,7 @@ static void xprt_rdma_set_connect_timeou
+@@ -469,6 +500,7 @@ static void xprt_rdma_set_connect_timeou
  
  	spin_unlock(&xprt->transport_lock);
  }
@@ -113,7 +119,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  
  /**
   * xprt_rdma_connect - schedule an attempt to reconnect
-@@ -485,6 +512,7 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
+@@ -481,6 +513,7 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  	struct rpcrdma_ep *ep = r_xprt->rx_ep;
@@ -121,7 +127,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	unsigned long delay;
  
  	delay = 0;
-@@ -492,11 +520,32 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
+@@ -488,11 +521,32 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
  		delay = xprt_reconnect_delay(xprt);
  		xprt_reconnect_backoff(xprt, RPCRDMA_INIT_REEST_TO);
  	}
@@ -155,7 +161,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  /**
   * xprt_rdma_alloc_slot - allocate an rpc_rqst
   * @xprt: controlling RPC transport
-@@ -521,7 +570,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xp
+@@ -517,7 +571,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xp
  
  out_sleep:
  	task->tk_status = -EAGAIN;
@@ -168,7 +174,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  }
  
  /**
-@@ -536,12 +590,20 @@ xprt_rdma_free_slot(struct rpc_xprt *xpr
+@@ -532,12 +591,20 @@ xprt_rdma_free_slot(struct rpc_xprt *xpr
  	struct rpcrdma_xprt *r_xprt =
  		container_of(xprt, struct rpcrdma_xprt, rx_xprt);
  
@@ -189,7 +195,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  
  static bool rpcrdma_check_regbuf(struct rpcrdma_xprt *r_xprt,
  				 struct rpcrdma_regbuf *rb, size_t size,
-@@ -569,9 +631,19 @@ xprt_rdma_allocate(struct rpc_task *task
+@@ -565,9 +632,19 @@ xprt_rdma_allocate(struct rpc_task *task
  {
  	struct rpc_rqst *rqst = task->tk_rqstp;
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(rqst->rq_xprt);
@@ -209,7 +215,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	flags = RPCRDMA_DEF_GFP;
  	if (RPC_IS_SWAPPER(task))
  		flags = __GFP_MEMALLOC | GFP_NOWAIT | __GFP_NOWARN;
-@@ -583,11 +655,19 @@ xprt_rdma_allocate(struct rpc_task *task
+@@ -579,11 +656,19 @@ xprt_rdma_allocate(struct rpc_task *task
  				  flags))
  		goto out_fail;
  
@@ -229,7 +235,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	return -ENOMEM;
  }
  
-@@ -601,13 +681,25 @@ static void
+@@ -597,13 +682,25 @@ static void
  xprt_rdma_free(struct rpc_task *task)
  {
  	struct rpc_rqst *rqst = task->tk_rqstp;
@@ -255,7 +261,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	/* XXX: If the RPC is completing because of a signal and
  	 * not because a reply was received, we ought to ensure
  	 * that the Send completion has fired, so that memory
-@@ -632,8 +724,14 @@ xprt_rdma_free(struct rpc_task *task)
+@@ -628,8 +725,14 @@ xprt_rdma_free(struct rpc_task *task)
   *		Do not try to send this message again.
   */
  static int
@@ -270,7 +276,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	struct rpc_xprt *xprt = rqst->rq_xprt;
  	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
-@@ -647,8 +745,10 @@ xprt_rdma_send_request(struct rpc_rqst *
+@@ -643,8 +746,10 @@ xprt_rdma_send_request(struct rpc_rqst *
  	if (!xprt_connected(xprt))
  		return -ENOTCONN;
  
@@ -281,7 +287,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  
  	rc = rpcrdma_marshal_req(r_xprt, rqst);
  	if (rc < 0)
-@@ -664,11 +764,13 @@ xprt_rdma_send_request(struct rpc_rqst *
+@@ -660,11 +765,13 @@ xprt_rdma_send_request(struct rpc_rqst *
  
  	rqst->rq_xmit_bytes_sent += rqst->rq_snd_buf.len;
  
@@ -295,7 +301,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	return 0;
  
  failed_marshal:
-@@ -734,14 +836,26 @@ xprt_rdma_disable_swap(struct rpc_xprt *
+@@ -730,14 +837,26 @@ xprt_rdma_disable_swap(struct rpc_xprt *
  /*
   * Plumbing for rpc transport switch and kernel module
   */
@@ -323,7 +329,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	.timer			= xprt_rdma_timer,
  	.rpcbind		= rpcb_getport_async,	/* sunrpc/rpcb_clnt.c */
  	.set_port		= xprt_rdma_set_port,
-@@ -751,15 +865,22 @@ static const struct rpc_xprt_ops xprt_rd
+@@ -747,15 +866,22 @@ static const struct rpc_xprt_ops xprt_rd
  	.send_request		= xprt_rdma_send_request,
  	.close			= xprt_rdma_close,
  	.destroy		= xprt_rdma_destroy,
@@ -346,7 +352,7 @@ Change-Id: I5d4cbf18467a7e911302f7f3472c224df468a983
  	.bc_free_rqst		= xprt_rdma_bc_free_rqst,
  	.bc_destroy		= xprt_rdma_bc_destroy,
  #endif
-@@ -771,7 +892,9 @@ static struct xprt_class xprt_rdma = {
+@@ -767,7 +893,9 @@ static struct xprt_class xprt_rdma = {
  	.owner			= THIS_MODULE,
  	.ident			= XPRT_TRANSPORT_RDMA,
  	.setup			= xprt_setup_rdma,

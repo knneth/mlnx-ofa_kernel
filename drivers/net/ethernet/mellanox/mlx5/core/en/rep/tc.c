@@ -261,14 +261,14 @@ int mlx5e_rep_tc_init(struct mlx5e_rep_priv *rpriv)
 	INIT_LIST_HEAD(&uplink_priv->unready_flows);
 
 	/* init shared tc flow table */
-	err = mlx5e_tc_esw_init(&uplink_priv->tc_ht);
+	err = mlx5e_tc_esw_init(uplink_priv);
 	return err;
 }
 
 void mlx5e_rep_tc_cleanup(struct mlx5e_rep_priv *rpriv)
 {
 	/* delete shared tc flow table */
-	mlx5e_tc_esw_cleanup(&rpriv->uplink_priv.tc_ht);
+	mlx5e_tc_esw_cleanup(&rpriv->uplink_priv);
 	mutex_destroy(&rpriv->uplink_priv.unready_flows_lock);
 }
 
@@ -554,7 +554,7 @@ static bool mlx5e_restore_tunnel(struct mlx5e_priv *priv, struct sk_buff *skb,
 	int err;
 
 	enc_opts_id = tunnel_id & ENC_OPTS_BITS_MASK;
-	tun_id = (tunnel_id >> ENC_OPTS_BITS) & TUNNEL_INFO_BITS_MASK;
+	tun_id = tunnel_id >> ENC_OPTS_BITS;
 
 	if (!tun_id)
 		return true;
@@ -634,8 +634,8 @@ static bool mlx5e_restore_skb_chain(struct sk_buff *skb, u32 chain, u32 reg_c1,
 				    struct mlx5e_tc_update_priv *tc_priv)
 {
 	struct mlx5e_priv *priv = netdev_priv(skb->dev);
-	struct mlx5_eswitch *esw;
-	u32 tunnel_id = reg_c1 >> ESW_TUN_OFFSET;
+	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+	u32 tunnel_id = (reg_c1 >> ESW_TUN_OFFSET) & TUNNEL_ID_MASK;
 
 #if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
 	if (chain) {
@@ -651,7 +651,6 @@ static bool mlx5e_restore_skb_chain(struct sk_buff *skb, u32 chain, u32 reg_c1,
 		}
 		tc_skb_ext->chain = chain;
 		zone_restore_id = reg_c1 & ESW_ZONE_ID_MASK;
-		esw = priv->mdev->priv.eswitch;
 		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
 		uplink_priv = &uplink_rpriv->uplink_priv;
 		if (!mlx5e_tc_ct_restore_flow(uplink_priv->ct_priv, skb,
@@ -762,7 +761,7 @@ bool mlx5e_rep_tc_update_skb(struct mlx5_cqe64 *cqe,
 	skb->mark = 0;
 
 	reg_c1 = be32_to_cpu(cqe->ft_metadata);
-	tunnel_id = reg_c1 >> ESW_TUN_OFFSET;
+	tunnel_id = (reg_c1 >> ESW_TUN_OFFSET) & TUNNEL_ID_MASK;
 
 	priv = netdev_priv(skb->dev);
 	esw = priv->mdev->priv.eswitch;

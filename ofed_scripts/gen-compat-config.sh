@@ -783,3 +783,7 @@ fi
 if (look_exists_reg "define.*GENMASK\(.*U32" include/linux/bitops.h); then
 	set_config  CONFIG_COMPAT_GENMASK_32_BIT  y
 fi
+
+if (look_exists "vfio_notify_iova_map" include/linux/vfio.h); then
+	set_config CONFIG_COMPAT_NVME_SNAP_VFIO_PCI m
+fi

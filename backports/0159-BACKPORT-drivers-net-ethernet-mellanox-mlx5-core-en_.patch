@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I4c53b09d570fa0a66cd4823d7836c5a44c291bdd
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h | 2 ++
- 1 file changed, 2 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en_accel/en_accel.h  | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
@@ -20,3 +20,24 @@ Change-Id: I4c53b09d570fa0a66cd4823d7836c5a44c291bdd
  
  #ifdef CONFIG_MLX5_EN_TLS
  	/* May send SKBs and WQEs. */
+@@ -164,11 +166,19 @@ static inline unsigned int mlx5e_accel_t
+ 
+ static inline bool mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
+ 				       struct sk_buff *skb,
+-				       struct mlx5_wqe_eth_seg *eseg, u16 ihs)
++				       struct mlx5_wqe_eth_seg *eseg,
++#if !defined(HAVE_XFRM_OFFLOAD_INNER_IPPROTO) && defined(CONFIG_MLX5_EN_IPSEC)
++				       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
++				       u16 ihs)
+ {
+ #ifdef CONFIG_MLX5_EN_IPSEC
+ 	if (xfrm_offload(skb))
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
+ 		mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
++#else
++		mlx5e_ipsec_tx_build_eseg(priv, skb, ipsec_st, eseg);
++#endif
+ #endif
+ 
+ #if IS_ENABLED(CONFIG_GENEVE)

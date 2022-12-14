@@ -4,6 +4,9 @@
 #ifndef __MLX5_LAG_H__
 #define __MLX5_LAG_H__
 
+#include <linux/debugfs.h>
+
+#define MLX5_LAG_MAX_HASH_BUCKETS 16
 #include "mlx5_core.h"
 #include "lag_mp.h"
 #include "lag_fs.h"
@@ -36,6 +39,7 @@ struct lag_func {
 	struct mlx5_core_dev *dev;
 	struct net_device    *netdev;
 	enum mlx5_lag_user_pref user_mode;
+	bool has_drop;
 };
 
 /* Used for collection of netdev event info. */
@@ -44,6 +48,7 @@ struct lag_tracker {
 	enum   netdev_lag_tx_type           tx_type;
 	struct netdev_lag_lower_state_info  netdev_state[MLX5_MAX_PORTS];
 	unsigned int is_bonded:1;
+	unsigned int has_inactive:1;
 };
 
 /* LAG data of a ConnectX card.
@@ -51,9 +56,11 @@ struct lag_tracker {
  */
 struct mlx5_lag {
 	u8                        flags;
+	u8			  ports;
+	u8			  buckets;
 	int			  mode_changes_in_progress;
 	bool			  shared_fdb;
-	u8                        v2p_map[MLX5_MAX_PORTS];
+	u8			  v2p_map[MLX5_MAX_PORTS * MLX5_LAG_MAX_HASH_BUCKETS];
 	struct kref               ref;
 	struct lag_func           pf[MLX5_MAX_PORTS];
 	struct lag_tracker        tracker;
@@ -62,13 +69,16 @@ struct mlx5_lag {
 	struct notifier_block     nb;
 	struct lag_mp             lag_mp;
 	struct mlx5_lag_steering  steering;
+	/* Protect lag fields/state changes */
+	struct mutex		  lock;
 };
 
 static inline bool mlx5_lag_is_supported(struct mlx5_core_dev *dev)
 {
 	if (!MLX5_CAP_GEN(dev, vport_group_manager) ||
 	    !MLX5_CAP_GEN(dev, lag_master) ||
-	    MLX5_CAP_GEN(dev, num_lag_ports) != MLX5_MAX_PORTS)
+	    MLX5_CAP_GEN(dev, num_lag_ports) < 2 ||
+	    MLX5_CAP_GEN(dev, num_lag_ports) > MLX5_MAX_PORTS)
 		return false;
 	return true;
 }
@@ -91,8 +101,8 @@ mlx5_lag_is_ready(struct mlx5_lag *ldev)
 	return ldev->flags & MLX5_LAG_FLAG_READY;
 }
 
-void mlx5_lag_infer_tx_affinity_mapping(struct lag_tracker *tracker, u8 *port1,
-					u8 *port2);
+void mlx5_lag_infer_tx_affinity_mapping(struct lag_tracker *tracker,
+					u8 num_ports, u8 buckets, u8 *ports);
 void mlx5_modify_lag(struct mlx5_lag *ldev,
 		     struct lag_tracker *tracker);
 int mlx5_activate_lag(struct mlx5_lag *ldev,
@@ -106,5 +116,12 @@ enum mlx5_lag_user_pref mlx5_lag_get_user_mode(struct mlx5_core_dev *dev);
 void mlx5_lag_set_user_mode(struct mlx5_core_dev *dev,
 			    enum mlx5_lag_user_pref mode);
 bool mlx5_lag_is_mpesw(struct mlx5_core_dev *dev);
+
+char *get_str_port_sel_mode(u8 flags);
+void mlx5_infer_tx_enabled(struct lag_tracker *tracker, u8 num_ports,
+			   u8 *ports, int *num_enabled);
+
+void mlx5_ldev_add_debugfs(struct mlx5_core_dev *dev);
+void mlx5_ldev_remove_debugfs(struct dentry *dbg);
 
 #endif /* __MLX5_LAG_H__ */

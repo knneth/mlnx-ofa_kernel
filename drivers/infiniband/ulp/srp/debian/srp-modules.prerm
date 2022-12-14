@@ -9,3 +9,7 @@ if [ -e $init_conf_file ] &&
 	sed -i '/\<SRP module\>/d' $init_conf_file
 	sed -i '/\<SRP_LOAD\>/d' $init_conf_file
 fi
+
+#DEBHELPER#
+
+exit 0

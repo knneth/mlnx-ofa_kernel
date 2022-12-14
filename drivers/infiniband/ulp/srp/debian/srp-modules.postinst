@@ -1,8 +1,6 @@
 #!/bin/sh
 set -e
 
-depmod -a || true
-
 # update openib.conf
 init_conf_file=/etc/infiniband/openib.conf
 if [ -e $init_conf_file ] &&
@@ -12,3 +10,7 @@ if [ -e $init_conf_file ] &&
 SRP_LOAD=no
 EOF
 fi
+
+#DEBHELPER#
+
+exit 0

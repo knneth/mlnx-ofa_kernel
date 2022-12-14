@@ -8,7 +8,7 @@ Change-Id: Ic0d49d448d7fa55c777ee3f250a4ca2748e0cc0e
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
-@@ -265,6 +265,17 @@ void mlx5e_tc_set_ethertype(struct mlx5_
+@@ -267,6 +267,17 @@ void mlx5e_tc_set_ethertype(struct mlx5_
  			    struct flow_match_basic *match, bool outer,
  			    void *headers_c, void *headers_v);
  
@@ -26,7 +26,7 @@ Change-Id: Ic0d49d448d7fa55c777ee3f250a4ca2748e0cc0e
  int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
  void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
  
-@@ -304,6 +315,23 @@ static inline void mlx5e_tc_nic_cleanup(
+@@ -308,6 +319,23 @@ static inline void mlx5e_tc_ht_cleanup(s
  static inline int
  mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
  { return -EOPNOTSUPP; }
@@ -50,7 +50,7 @@ Change-Id: Ic0d49d448d7fa55c777ee3f250a4ca2748e0cc0e
  
  #endif /* CONFIG_MLX5_CLS_ACT */
  
-@@ -329,6 +357,23 @@ static inline int  mlx5e_tc_num_filters(
+@@ -333,6 +361,23 @@ static inline int  mlx5e_tc_num_filters(
  static inline int
  mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
  { return -EOPNOTSUPP; }

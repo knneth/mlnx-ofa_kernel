@@ -338,7 +338,7 @@ static bool nvmet_is_write_zeroes(struct nvmet_ctrl *ctrl)
 	unsigned long idx;
 
 	xa_for_each(&ctrl->subsys->namespaces, idx, ns)
-		if (bdev_write_zeroes_sectors(ns->bdev))
+		if (!bdev_write_zeroes_sectors(ns->bdev))
 			return false;
 	return true;
 }
@@ -401,6 +401,9 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 	else
 		id->mdts = 0;
 
+	if (req->port->offload && req->port->offload_passthrough_sqe_rw)
+		id->ovsncs |= cpu_to_le32(NVME_OVSNCS_PASSTHROUGH_SQE_RW);
+
 	id->cntlid = cpu_to_le16(ctrl->cntlid);
 	id->ver = cpu_to_le32(ctrl->subsys->ver);
 
@@ -435,7 +438,7 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 	/* no enforcement soft-limit for maxcmd - pick arbitrary high value */
 	id->maxcmd = cpu_to_le16(NVMET_MAX_CMD);
 
-	id->nn = cpu_to_le32(ctrl->subsys->max_nsid);
+	id->nn = cpu_to_le32(NVMET_MAX_NAMESPACES);
 	id->mnan = cpu_to_le32(NVMET_MAX_NAMESPACES);
 	if (!req->port->offload || nvmet_is_write_zeroes(ctrl))
 		id->oncs = cpu_to_le16(NVME_CTRL_ONCS_DSM |

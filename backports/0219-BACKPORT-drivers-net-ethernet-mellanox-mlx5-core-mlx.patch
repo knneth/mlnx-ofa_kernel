@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 
 Change-Id: I482978c87c117386b097d98a62a2b4eb5a7b27f8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c | 10 +++++++++-
- 1 file changed, 9 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
@@ -15,7 +15,7 @@ Change-Id: I482978c87c117386b097d98a62a2b4eb5a7b27f8
  #include <linux/log2.h>
  #include "mlx5_core.h"
  #include "fs_core.h"
-@@ -176,7 +175,11 @@ int mlx5_devm_sf_port_fn_hw_addr_get(str
+@@ -174,7 +173,11 @@ int mlx5_devm_sf_port_fn_hw_addr_get(str
  	memset(&devport, 0, sizeof(devport));
  	devport.devlink = devlink;
  	devport.index = port->index;
@@ -27,7 +27,7 @@ Change-Id: I482978c87c117386b097d98a62a2b4eb5a7b27f8
  						      hw_addr, hw_addr_len, extack);
  }
  
-@@ -207,7 +210,11 @@ int mlx5_devm_sf_port_fn_hw_addr_set(str
+@@ -203,7 +206,11 @@ int mlx5_devm_sf_port_fn_hw_addr_set(str
  	memset(&devport, 0, sizeof(devport));
  	devport.devlink = devlink;
  	devport.index = port->index;
@@ -39,8 +39,3 @@ Change-Id: I482978c87c117386b097d98a62a2b4eb5a7b27f8
  						      hw_addr_len, extack);
  }
  
-@@ -609,3 +616,4 @@ void mlx5_devm_unregister(struct mlx5_co
- 	mutex_unlock(&mlx5_mlxdevm_mutex);
- 	kfree(mdevm);
- }
-+

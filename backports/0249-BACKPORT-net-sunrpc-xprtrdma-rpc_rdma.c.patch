@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/rpc_rdma.c
 
 Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
 ---
- net/sunrpc/xprtrdma/rpc_rdma.c | 175 ++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 173 insertions(+), 2 deletions(-)
+ net/sunrpc/xprtrdma/rpc_rdma.c | 180 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 178 insertions(+), 2 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/rpc_rdma.c
 +++ b/net/sunrpc/xprtrdma/rpc_rdma.c
-@@ -52,7 +52,9 @@
+@@ -52,8 +52,15 @@
  #include <linux/sunrpc/svc_rdma.h>
  
  #include "xprt_rdma.h"
@@ -16,9 +16,15 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  #include <trace/events/rpcrdma.h>
 +#endif
  
- #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
- # define RPCDBG_FACILITY	RPCDBG_TRANS
-@@ -319,11 +321,19 @@ static struct rpcrdma_mr_seg *rpcrdma_mr
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
+ /* Returns size of largest RPC-over-RDMA header in a Call message
+  *
+  * The largest Call header contains a full-size Read list and a
+@@ -315,11 +322,19 @@ static struct rpcrdma_mr_seg *rpcrdma_mr
  	}
  
  	rpcrdma_mr_push(*mr, &req->rl_registered);
@@ -38,7 +44,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	rpcrdma_mrs_refresh(r_xprt);
  	return ERR_PTR(-EAGAIN);
  }
-@@ -373,7 +383,9 @@ static int rpcrdma_encode_read_list(stru
+@@ -369,7 +384,9 @@ static int rpcrdma_encode_read_list(stru
  		if (encode_read_segment(xdr, mr, pos) < 0)
  			return -EMSGSIZE;
  
@@ -48,7 +54,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  		r_xprt->rx_stats.read_chunk_count++;
  		nsegs -= mr->mr_nents;
  	} while (nsegs);
-@@ -436,7 +448,9 @@ static int rpcrdma_encode_write_list(str
+@@ -432,7 +449,9 @@ static int rpcrdma_encode_write_list(str
  		if (encode_rdma_segment(xdr, mr) < 0)
  			return -EMSGSIZE;
  
@@ -58,7 +64,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  		r_xprt->rx_stats.write_chunk_count++;
  		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
  		nchunks++;
-@@ -502,7 +516,9 @@ static int rpcrdma_encode_reply_chunk(st
+@@ -498,7 +517,9 @@ static int rpcrdma_encode_reply_chunk(st
  		if (encode_rdma_segment(xdr, mr) < 0)
  			return -EMSGSIZE;
  
@@ -68,7 +74,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  		r_xprt->rx_stats.reply_chunk_count++;
  		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
  		nchunks++;
-@@ -624,7 +640,9 @@ static bool rpcrdma_prepare_pagelist(str
+@@ -620,7 +641,9 @@ static bool rpcrdma_prepare_pagelist(str
  	return true;
  
  out_mapping_err:
@@ -78,7 +84,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	return false;
  }
  
-@@ -652,7 +670,9 @@ static bool rpcrdma_prepare_tail_iov(str
+@@ -648,7 +671,9 @@ static bool rpcrdma_prepare_tail_iov(str
  	return true;
  
  out_mapping_err:
@@ -88,7 +94,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	return false;
  }
  
-@@ -832,7 +852,9 @@ inline int rpcrdma_prepare_send_sges(str
+@@ -828,7 +853,9 @@ inline int rpcrdma_prepare_send_sges(str
  out_unmap:
  	rpcrdma_sendctx_unmap(req->rl_sendctx);
  out_nosc:
@@ -98,7 +104,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	return ret;
  }
  
-@@ -866,15 +888,23 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -862,15 +889,23 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
  	__be32 *p;
  	int ret;
  
@@ -122,7 +128,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  
  	/* Fixed header fields */
  	ret = -EMSGSIZE;
-@@ -890,7 +920,7 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -886,7 +921,7 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
  	 * is not allowed.
  	 */
  	ddp_allowed = !test_bit(RPCAUTH_AUTH_DATATOUCH,
@@ -131,7 +137,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  
  	/*
  	 * Chunks needed for results?
-@@ -936,6 +966,14 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -932,6 +967,14 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
  		rtype = rpcrdma_areadch;
  	}
  
@@ -146,7 +152,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	/* This implementation supports the following combinations
  	 * of chunk lists in one RPC-over-RDMA Call message:
  	 *
-@@ -973,11 +1011,20 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -969,11 +1012,20 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
  	if (ret)
  		goto out_err;
  
@@ -167,7 +173,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	r_xprt->rx_stats.failed_marshal_count++;
  	frwr_reset(req);
  	return ret;
-@@ -1012,7 +1059,9 @@ void rpcrdma_reset_cwnd(struct rpcrdma_x
+@@ -1008,7 +1060,9 @@ void rpcrdma_reset_cwnd(struct rpcrdma_x
  	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
  
  	spin_lock(&xprt->transport_lock);
@@ -177,7 +183,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	__rpcrdma_update_cwnd_locked(xprt, &r_xprt->rx_buf, 1);
  	spin_unlock(&xprt->transport_lock);
  }
-@@ -1106,8 +1155,10 @@ rpcrdma_inline_fixup(struct rpc_rqst *rq
+@@ -1102,8 +1156,10 @@ rpcrdma_inline_fixup(struct rpc_rqst *rq
  		rqst->rq_private_buf.tail[0].iov_base = srcp;
  	}
  
@@ -188,7 +194,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	return fixup_copy_count;
  }
  
-@@ -1170,7 +1221,9 @@ static int decode_rdma_segment(struct xd
+@@ -1166,7 +1222,9 @@ static int decode_rdma_segment(struct xd
  		return -EIO;
  
  	xdr_decode_rdma_segment(p, &handle, length, &offset);
@@ -198,7 +204,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	return 0;
  }
  
-@@ -1323,13 +1376,19 @@ rpcrdma_decode_error(struct rpcrdma_xprt
+@@ -1319,13 +1377,19 @@ rpcrdma_decode_error(struct rpcrdma_xprt
  		p = xdr_inline_decode(xdr, 2 * sizeof(*p));
  		if (!p)
  			break;
@@ -218,7 +224,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	}
  
  	return -EIO;
-@@ -1345,16 +1404,28 @@ rpcrdma_decode_error(struct rpcrdma_xprt
+@@ -1341,16 +1405,28 @@ rpcrdma_decode_error(struct rpcrdma_xprt
   */
  void rpcrdma_unpin_rqst(struct rpcrdma_rep *rep)
  {
@@ -247,7 +253,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  }
  
  /**
-@@ -1368,7 +1439,9 @@ void rpcrdma_unpin_rqst(struct rpcrdma_r
+@@ -1364,7 +1440,9 @@ void rpcrdma_unpin_rqst(struct rpcrdma_r
  void rpcrdma_complete_rqst(struct rpcrdma_rep *rep)
  {
  	struct rpcrdma_xprt *r_xprt = rep->rr_rxprt;
@@ -257,7 +263,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	struct rpc_rqst *rqst = rep->rr_rqst;
  	int status;
  
-@@ -1389,20 +1462,39 @@ void rpcrdma_complete_rqst(struct rpcrdm
+@@ -1385,20 +1463,39 @@ void rpcrdma_complete_rqst(struct rpcrdm
  		goto out_badheader;
  
  out:
@@ -297,7 +303,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  static void rpcrdma_reply_done(struct kref *kref)
  {
  	struct rpcrdma_req *req =
-@@ -1410,6 +1502,7 @@ static void rpcrdma_reply_done(struct kr
+@@ -1406,6 +1503,7 @@ static void rpcrdma_reply_done(struct kr
  
  	rpcrdma_complete_rqst(req->rl_reply);
  }
@@ -305,7 +311,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  
  /**
   * rpcrdma_reply_handler - Process received RPC/RDMA messages
-@@ -1435,8 +1528,13 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1431,8 +1529,13 @@ void rpcrdma_reply_handler(struct rpcrdm
  		xprt->reestablish_timeout = 0;
  
  	/* Fixed transport header fields */
@@ -319,7 +325,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	p = xdr_inline_decode(&rep->rr_stream, 4 * sizeof(*p));
  	if (unlikely(!p))
  		goto out_shortreply;
-@@ -1454,12 +1552,36 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1450,12 +1553,36 @@ void rpcrdma_reply_handler(struct rpcrdm
  	/* Match incoming rpcrdma_rep to an rpcrdma_req to
  	 * get context for handling any incoming chunks.
  	 */
@@ -356,7 +362,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  
  	if (credits == 0)
  		credits = 1;	/* don't deadlock */
-@@ -1470,14 +1592,25 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1466,14 +1593,25 @@ void rpcrdma_reply_handler(struct rpcrdm
  	if (buf->rb_credits != credits)
  		rpcrdma_update_cwnd(r_xprt, credits);
  
@@ -383,7 +389,7 @@ Change-Id: I8f4bcf3e617e1f56772c75602a3265baae35066f
  	if (rep->rr_wc_flags & IB_WC_WITH_INVALIDATE)
  		frwr_reminv(rep, &req->rl_registered);
  	if (!list_empty(&req->rl_registered))
-@@ -1485,19 +1618,57 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1481,19 +1619,57 @@ void rpcrdma_reply_handler(struct rpcrdm
  		/* LocalInv completion will complete the RPC */
  	else
  		kref_put(&req->rl_kref, rpcrdma_reply_done);

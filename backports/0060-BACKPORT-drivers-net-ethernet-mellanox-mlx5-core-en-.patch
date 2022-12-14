@@ -25,7 +25,7 @@ Change-Id: Ide3dffbe5f70be9524ef827a371bdd8effd64004
  
  struct mlx5_fs_chains;
  struct mlx5_tc_ct_priv;
-@@ -186,6 +189,8 @@ mlx5_tc_ct_lables_mapping_set(struct mlx
+@@ -191,6 +194,8 @@ mlx5_tc_ct_lables_mapping_set(struct mlx
  
  #else /* CONFIG_MLX5_TC_CT */
  

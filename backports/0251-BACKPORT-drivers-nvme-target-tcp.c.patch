@@ -18,7 +18,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
  #include <linux/module.h>
  #include <linux/init.h>
-@@ -1515,14 +1518,27 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1542,14 +1545,27 @@ static int nvmet_tcp_set_queue_sock(stru
  	struct socket *sock = queue->sock;
  	struct inet_sock *inet = inet_sk(sock->sk);
  	int ret;
@@ -46,7 +46,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	if (ret < 0)
  		return ret;
  
-@@ -1537,8 +1553,19 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1564,8 +1580,19 @@ static int nvmet_tcp_set_queue_sock(stru
  		sock_set_priority(sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -66,7 +66,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  
  	ret = 0;
  	write_lock_bh(&sock->sk->sk_callback_lock);
-@@ -1667,6 +1694,9 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -1694,6 +1721,9 @@ static int nvmet_tcp_add_port(struct nvm
  	struct nvmet_tcp_port *port;
  	__kernel_sa_family_t af;
  	int ret;
@@ -76,7 +76,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  
  	port = kzalloc(sizeof(*port), GFP_KERNEL);
  	if (!port)
-@@ -1710,7 +1740,17 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -1737,7 +1767,17 @@ static int nvmet_tcp_add_port(struct nvm
  	port->data_ready = port->sock->sk->sk_data_ready;
  	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
  	sock_set_reuseaddr(port->sock->sk);

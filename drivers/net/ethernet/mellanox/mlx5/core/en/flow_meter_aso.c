@@ -6,7 +6,7 @@
 #include "flow_meter.h"
 #include "en/tc/post_act.h"
 
-#define MLX5_PACKET_COLOR_BITS (mlx5e_tc_attr_to_reg_mappings[PACKET_COLOR_TO_REG].mlen * 8)
+#define MLX5_PACKET_COLOR_BITS (mlx5e_tc_attr_to_reg_mappings[PACKET_COLOR_TO_REG].mlen)
 #define MLX5_PACKET_COLOR_MASK GENMASK(MLX5_PACKET_COLOR_BITS - 1, 0)
 
 #define START_COLOR_SHIFT 28

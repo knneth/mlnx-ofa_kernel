@@ -10,25 +10,12 @@
 enum mlx5_esw_ipsec_table_type {
 	MLX5_ESW_IPSEC_FT_RX_CRYPTO,
 	MLX5_ESW_IPSEC_FT_RX_DECAP,
-	MLX5_ESW_IPSEC_FT_RX_POL,
+	MLX5_ESW_IPSEC_FT_TX_IKE,
 	MLX5_ESW_IPSEC_FT_TX_CRYPTO,
 	MLX5_ESW_IPSEC_FT_TX_CHK,
 };
 
 #if IS_ENABLED(CONFIG_MLX5_EN_IPSEC)
-#define _GENMASK(len, ofst) GENMASK((ofst) + (len) - 1, (ofst))
-#define IPSEC_FULL_SA_HANDLE_OFFSET 0
-#define IPSEC_FULL_SA_HANDLE_BITS 24
-#define IPSEC_FULL_SA_HANDLE_MASK _GENMASK(IPSEC_FULL_SA_HANDLE_BITS, IPSEC_FULL_SA_HANDLE_OFFSET)
-#define IPSEC_FULL_ESP_REFORMAT_BITS 3
-#define IPSEC_FULL_ESP_REFORMAT_OFFSET (IPSEC_FULL_SA_HANDLE_OFFSET + IPSEC_FULL_SA_HANDLE_BITS)
-#define IPSEC_FULL_ESP_REFORMAT_MASK _GENMASK(IPSEC_FULL_ESP_REFORMAT_BITS, IPSEC_FULL_ESP_REFORMAT_OFFSET)
-
-enum {
-	ESW_IPSEC_DEL_ESP_TRANSPORT = 1,
-};
-
-u32 mlx5_esw_ipsec_get_decap_counter_id(struct mlx5_eswitch *esw);
 int mlx5_esw_ipsec_create(struct mlx5_eswitch *esw);
 void mlx5_esw_ipsec_destroy(struct mlx5_eswitch *esw);
 struct mlx5_flow_table *mlx5_esw_ipsec_get_table(struct mlx5_eswitch *esw, enum mlx5_esw_ipsec_table_type type);

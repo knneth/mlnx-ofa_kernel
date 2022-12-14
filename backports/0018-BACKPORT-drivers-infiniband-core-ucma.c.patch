@@ -43,7 +43,7 @@ Change-Id: I4ce581a06f1adbcb9da905e0f86dd44a3537ddcc
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -1721,8 +1727,9 @@ static ssize_t ucma_write(struct file *f
+@@ -1733,8 +1739,9 @@ static ssize_t ucma_write(struct file *f
  
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
@@ -54,7 +54,7 @@ Change-Id: I4ce581a06f1adbcb9da905e0f86dd44a3537ddcc
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1773,7 +1780,11 @@ static int ucma_open(struct inode *inode
+@@ -1785,7 +1792,11 @@ static int ucma_open(struct inode *inode
  	filp->private_data = file;
  	file->filp = filp;
  
@@ -66,7 +66,7 @@ Change-Id: I4ce581a06f1adbcb9da905e0f86dd44a3537ddcc
  }
  
  static int ucma_close(struct inode *inode, struct file *filp)
-@@ -1852,12 +1863,14 @@ static int __init ucma_init(void)
+@@ -1864,12 +1875,14 @@ static int __init ucma_init(void)
  		goto err1;
  	}
  
@@ -81,7 +81,7 @@ Change-Id: I4ce581a06f1adbcb9da905e0f86dd44a3537ddcc
  
  	ret = ib_register_client(&rdma_cma_client);
  	if (ret)
-@@ -1866,8 +1879,10 @@ static int __init ucma_init(void)
+@@ -1878,8 +1891,10 @@ static int __init ucma_init(void)
  	return 0;
  err3:
  	unregister_net_sysctl_table(ucma_ctl_table_hdr);
@@ -92,7 +92,7 @@ Change-Id: I4ce581a06f1adbcb9da905e0f86dd44a3537ddcc
  err1:
  	misc_deregister(&ucma_misc);
  	return ret;
-@@ -1876,7 +1891,9 @@ err1:
+@@ -1888,7 +1903,9 @@ err1:
  static void __exit ucma_cleanup(void)
  {
  	ib_unregister_client(&rdma_cma_client);

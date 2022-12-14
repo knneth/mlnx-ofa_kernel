@@ -77,7 +77,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  }
  
  bool mlx5e_verify_rx_mpwqe_strides(struct mlx5_core_dev *mdev,
-@@ -297,7 +317,7 @@ bool mlx5e_striding_rq_possible(struct m
+@@ -303,7 +323,7 @@ bool mlx5e_striding_rq_possible(struct m
  
  	if (mlx5_fpga_is_ipsec_device(mdev))
  		return false;
@@ -86,7 +86,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  	if (params->xdp_prog) {
  		/* XSK params are not considered here. If striding RQ is in use,
  		 * and an XSK is being opened, mlx5e_rx_mpwqe_is_linear_skb will
-@@ -306,7 +326,7 @@ bool mlx5e_striding_rq_possible(struct m
+@@ -312,7 +332,7 @@ bool mlx5e_striding_rq_possible(struct m
  		if (!mlx5e_rx_mpwqe_is_linear_skb(mdev, params, NULL))
  			return false;
  	}
@@ -95,7 +95,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  	return true;
  }
  
-@@ -362,6 +382,9 @@ void mlx5e_build_create_cq_param(struct
+@@ -368,6 +388,9 @@ void mlx5e_build_create_cq_param(struct
  		.ch_stats = c->stats,
  		.node = cpu_to_node(c->cpu),
  		.ix = c->ix,
@@ -105,7 +105,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  	};
  }
  
-@@ -487,10 +510,18 @@ void mlx5e_build_aso_cq_param(struct mlx
+@@ -493,10 +516,18 @@ void mlx5e_build_aso_cq_param(struct mlx
  
  static u8 rq_end_pad_mode(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
  {
@@ -125,7 +125,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  		MLX5_WQ_END_PAD_MODE_NONE : MLX5_WQ_END_PAD_MODE_ALIGN;
  }
  
-@@ -643,8 +674,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -649,8 +680,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
  
  static u8 mlx5e_build_async_icosq_log_wq_sz(struct mlx5_core_dev *mdev)
  {
@@ -136,7 +136,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  
  	return MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
  }
-@@ -672,14 +705,17 @@ static void mlx5e_build_async_icosq_para
+@@ -678,14 +711,17 @@ static void mlx5e_build_async_icosq_para
  
  	mlx5e_build_sq_param_common(mdev, param);
  	param->stop_room = mlx5e_stop_room_for_wqe(1); /* for XSK NOP */
@@ -154,7 +154,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
  			     struct mlx5e_params *params,
  			     struct mlx5e_sq_param *param)
-@@ -692,6 +728,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
+@@ -698,6 +734,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
  	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
  	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
  }
@@ -162,7 +162,7 @@ Change-Id: I7e601ead080766a33080eb48f322c1e0e52bd545
  
  void mlx5e_build_asosq_param(struct mlx5_core_dev *mdev,
  			     struct mlx5e_sq_param *param)
-@@ -719,7 +756,9 @@ int mlx5e_build_channel_param(struct mlx
+@@ -725,7 +762,9 @@ int mlx5e_build_channel_param(struct mlx
  	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
  
  	mlx5e_build_sq_param(mdev, params, &cparam->txq_sq);

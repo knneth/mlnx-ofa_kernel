@@ -74,7 +74,7 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  	unsigned long idx;
  
 @@ -341,7 +363,11 @@ static bool nvmet_is_write_zeroes(struct
- 		if (bdev_write_zeroes_sectors(ns->bdev))
+ 		if (!bdev_write_zeroes_sectors(ns->bdev))
  			return false;
  	return true;
 +#else
@@ -85,9 +85,9 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  
  static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
  {
-@@ -437,11 +463,15 @@ static void nvmet_execute_identify_ctrl(
+@@ -440,11 +466,15 @@ static void nvmet_execute_identify_ctrl(
  
- 	id->nn = cpu_to_le32(ctrl->subsys->max_nsid);
+ 	id->nn = cpu_to_le32(NVMET_MAX_NAMESPACES);
  	id->mnan = cpu_to_le32(NVMET_MAX_NAMESPACES);
 +#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
  	if (!req->port->offload || nvmet_is_write_zeroes(ctrl))
@@ -101,7 +101,7 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  
  	/* XXX: don't report vwc if the underlying device is write through */
  	id->vwc = NVME_CTRL_VWC_PRESENT;
-@@ -707,9 +737,11 @@ static u16 nvmet_write_protect_flush_syn
+@@ -710,9 +740,11 @@ static u16 nvmet_write_protect_flush_syn
  {
  	u16 status;
  

@@ -30,6 +30,9 @@
 
 #include "trace.h"
 #include "nvme.h"
+#ifdef CONFIG_COMPAT_NVME_SNAP_VFIO_PCI
+#include "passthru.h"
+#endif
 
 #ifdef CONFIG_NVFS
 #include "nvfs.h"
@@ -312,25 +315,37 @@ static int nvme_peer_init_resource(struct nvme_queue *nvmeq,
 	return ret;
 }
 
+void nvme_peer_flush_resource(struct nvme_peer_resource *resource, bool restart)
+{
+        struct nvme_queue *nvmeq = container_of(resource, struct nvme_queue,
+                                                resource);
+
+        mutex_lock(&resource->lock);
+        resource->stop_master_peer = NULL;
+        resource->dd_data = NULL;
+        mutex_unlock(&resource->lock);
+
+        if (restart) {
+                nvme_suspend_queue(nvmeq);
+                adapter_delete_sq(nvmeq->dev, nvmeq->qid);
+                adapter_delete_cq(nvmeq->dev, nvmeq->qid);
+        }
+}
+EXPORT_SYMBOL_GPL(nvme_peer_flush_resource);
+
 void nvme_peer_put_resource(struct nvme_peer_resource *resource, bool restart)
 {
 	struct nvme_queue *nvmeq = container_of(resource, struct nvme_queue,
 						resource);
 	mutex_lock(&resource->lock);
 	resource->in_use = false;
-	resource->stop_master_peer = NULL;
-	resource->dd_data = NULL;
 	mutex_unlock(&resource->lock);
 
 	// TODO: create/destroy on demand
 
 	/* Restart the queue for future usage */
-	if (restart) {
-		nvme_suspend_queue(nvmeq);
-		adapter_delete_sq(nvmeq->dev, nvmeq->qid);
-		adapter_delete_cq(nvmeq->dev, nvmeq->qid);
+	if (restart)
 		nvme_create_queue(nvmeq, nvmeq->qid, false);
-	}
 }
 EXPORT_SYMBOL_GPL(nvme_peer_put_resource);
 
@@ -3472,7 +3487,8 @@ static const struct pci_device_id nvme_id_table[] = {
 				NVME_QUIRK_DEALLOCATE_ZEROES, },
 	{ PCI_VDEVICE(INTEL, 0x0a54),	/* Intel P4500/P4600 */
 		.driver_data = NVME_QUIRK_STRIPE_SIZE |
-				NVME_QUIRK_DEALLOCATE_ZEROES, },
+				NVME_QUIRK_DEALLOCATE_ZEROES |
+				NVME_QUIRK_IGNORE_DEV_SUBNQN, },
 	{ PCI_VDEVICE(INTEL, 0x0a55),	/* Dell Express Flash P4600 */
 		.driver_data = NVME_QUIRK_STRIPE_SIZE |
 				NVME_QUIRK_DEALLOCATE_ZEROES, },
@@ -3568,6 +3584,31 @@ static struct pci_driver nvme_driver = {
 	.sriov_configure = pci_sriov_configure_simple,
 	.err_handler	= &nvme_err_handler,
 };
+
+#ifdef CONFIG_COMPAT_NVME_SNAP_VFIO_PCI
+int nvme_pdev_admin_passthru_sync(struct pci_dev *pdev,
+				  struct nvme_command *cmd, void *buffer,
+				  unsigned int bufflen, unsigned int timeout_ms)
+{
+	struct nvme_dev *dev;
+	int ret;
+
+	if (pdev->driver != &nvme_driver)
+		return -EINVAL;
+
+	dev = pci_get_drvdata(pdev);
+	if (!dev)
+		return -EINVAL;
+
+	nvme_get_ctrl(&dev->ctrl);
+	ret = nvme_admin_passthru_sync(&dev->ctrl, cmd, buffer, bufflen,
+				       timeout_ms);
+	nvme_put_ctrl(&dev->ctrl);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(nvme_pdev_admin_passthru_sync);
+#endif
 
 static int __init nvme_init(void)
 {

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/tcp.c
 
 Signed-off-by: Tom Wu <tomwu@mellanox.com>
 ---
- drivers/nvme/host/tcp.c | 89 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 89 insertions(+)
+ drivers/nvme/host/tcp.c | 93 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 93 insertions(+)
 
 --- a/drivers/nvme/host/tcp.c
 +++ b/drivers/nvme/host/tcp.c
@@ -58,7 +58,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	req->iter.iov_offset = offset;
  }
  
-@@ -1339,6 +1354,7 @@ free_icreq:
+@@ -1346,6 +1361,7 @@ free_icreq:
  	return ret;
  }
  
@@ -66,7 +66,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  static bool nvme_tcp_admin_queue(struct nvme_tcp_queue *queue)
  {
  	return nvme_tcp_queue_id(queue) == 0;
-@@ -1392,6 +1408,7 @@ static void nvme_tcp_set_queue_io_cpu(st
+@@ -1399,6 +1415,7 @@ static void nvme_tcp_set_queue_io_cpu(st
  				ctrl->io_queues[HCTX_TYPE_READ] - 1;
  	queue->io_cpu = cpumask_next_wrap(n - 1, cpu_online_mask, -1, false);
  }
@@ -74,7 +74,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  
  static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl,
  		int qid, size_t queue_size)
-@@ -1399,6 +1416,12 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1406,6 +1423,12 @@ static int nvme_tcp_alloc_queue(struct n
  	struct nvme_tcp_ctrl *ctrl = to_tcp_ctrl(nctrl);
  	struct nvme_tcp_queue *queue = &ctrl->queues[qid];
  	int ret, rcv_pdu_size;
@@ -87,7 +87,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  
  	mutex_init(&queue->queue_lock);
  	queue->ctrl = ctrl;
-@@ -1423,10 +1446,32 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1430,10 +1453,32 @@ static int nvme_tcp_alloc_queue(struct n
  	}
  
  	/* Single syn retry */
@@ -120,7 +120,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  
  	/*
  	 * Cleanup whatever is sitting in the TCP transmit queue on socket
-@@ -1439,14 +1484,34 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1446,14 +1491,34 @@ static int nvme_tcp_alloc_queue(struct n
  		sock_set_priority(queue->sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -155,7 +155,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	queue->request = NULL;
  	queue->data_remaining = 0;
  	queue->ddgst_remaining = 0;
-@@ -1615,7 +1680,9 @@ static struct blk_mq_tag_set *nvme_tcp_a
+@@ -1622,7 +1687,9 @@ static struct blk_mq_tag_set *nvme_tcp_a
  		set->driver_data = ctrl;
  		set->nr_hw_queues = nctrl->queue_count - 1;
  		set->timeout = NVME_IO_TIMEOUT;
@@ -165,7 +165,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	}
  
  	ret = blk_mq_alloc_tag_set(set);
-@@ -1723,6 +1790,7 @@ static unsigned int nvme_tcp_nr_io_queue
+@@ -1730,6 +1797,7 @@ static unsigned int nvme_tcp_nr_io_queue
  static void nvme_tcp_set_io_queues(struct nvme_ctrl *nctrl,
  		unsigned int nr_io_queues)
  {
@@ -173,7 +173,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	struct nvme_tcp_ctrl *ctrl = to_tcp_ctrl(nctrl);
  	struct nvmf_ctrl_options *opts = nctrl->opts;
  
-@@ -1753,6 +1821,7 @@ static void nvme_tcp_set_io_queues(struc
+@@ -1760,6 +1828,7 @@ static void nvme_tcp_set_io_queues(struc
  		ctrl->io_queues[HCTX_TYPE_POLL] =
  			min(opts->nr_poll_queues, nr_io_queues);
  	}
@@ -181,7 +181,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  }
  
  static int nvme_tcp_alloc_io_queues(struct nvme_ctrl *ctrl)
-@@ -2333,6 +2402,7 @@ static blk_status_t nvme_tcp_setup_cmd_p
+@@ -2341,6 +2410,7 @@ static blk_status_t nvme_tcp_setup_cmd_p
  	return 0;
  }
  
@@ -189,7 +189,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  static void nvme_tcp_commit_rqs(struct blk_mq_hw_ctx *hctx)
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
-@@ -2340,6 +2410,7 @@ static void nvme_tcp_commit_rqs(struct b
+@@ -2348,6 +2418,7 @@ static void nvme_tcp_commit_rqs(struct b
  	if (!llist_empty(&queue->req_list))
  		queue_work_on(queue->io_cpu, nvme_tcp_wq, &queue->io_work);
  }
@@ -197,7 +197,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  
  static blk_status_t nvme_tcp_queue_rq(struct blk_mq_hw_ctx *hctx,
  		const struct blk_mq_queue_data *bd)
-@@ -2367,6 +2438,7 @@ static blk_status_t nvme_tcp_queue_rq(st
+@@ -2375,6 +2446,7 @@ static blk_status_t nvme_tcp_queue_rq(st
  
  static int nvme_tcp_map_queues(struct blk_mq_tag_set *set)
  {
@@ -205,7 +205,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	struct nvme_tcp_ctrl *ctrl = set->driver_data;
  	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
  
-@@ -2406,11 +2478,19 @@ static int nvme_tcp_map_queues(struct bl
+@@ -2414,11 +2486,23 @@ static int nvme_tcp_map_queues(struct bl
  		ctrl->io_queues[HCTX_TYPE_DEFAULT],
  		ctrl->io_queues[HCTX_TYPE_READ],
  		ctrl->io_queues[HCTX_TYPE_POLL]);
@@ -220,12 +220,16 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
 +#ifdef HAVE_BLK_MQ_OPS_POLL_1_ARG
  static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx)
 +#else
++#ifdef HAVE_BLK_MQ_OPS_POLL_2_ARG
++static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx, struct io_comp_batch *iob)
++#else
 +static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx, unsigned int tag)
++#endif
 +#endif
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
  	struct sock *sk = queue->sock->sk;
-@@ -2419,23 +2499,32 @@ static int nvme_tcp_poll(struct blk_mq_h
+@@ -2427,23 +2511,32 @@ static int nvme_tcp_poll(struct blk_mq_h
  		return 0;
  
  	set_bit(NVME_TCP_Q_POLLING, &queue->flags);

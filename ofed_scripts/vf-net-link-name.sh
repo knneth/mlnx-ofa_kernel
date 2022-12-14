@@ -54,8 +54,16 @@ if [ $is_bf -eq 1 ]; then
                 exit 0
         fi
 
-        echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/"`
+        echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/;s/c[[:digit:]]\+//"`
         exit 0
+fi
+
+# Ditch stdout, use stderr as new stdout:
+if udevadm test-builtin path_id "/sys$DEVPATH" 2>&1 1>/dev/null \
+	| grep -q 'Network interface NamePolicy= disabled'
+then
+	echo "NAME=$INTERFACE"
+	exit 0
 fi
 
 # for pf and uplink rep fall to slot or path.

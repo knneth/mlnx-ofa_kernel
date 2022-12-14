@@ -3,12 +3,24 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
 
 Change-Id: I1917af54cea7b9f09b5881126ed18d7b524b2c5f
 ---
- .../net/ethernet/mellanox/mlx5/core/en_fs.c   | 30 ++++++++++++++++---
- 1 file changed, 26 insertions(+), 4 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_fs.c   | 34 +++++++++++++++----
+ 1 file changed, 28 insertions(+), 6 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
-@@ -81,8 +81,9 @@ static void mlx5e_add_l2_to_hash(struct
+@@ -71,18 +71,19 @@ struct mlx5e_l2_hash_node {
+ 	bool   mpfs;
+ };
+ 
+-static inline int mlx5e_hash_l2(u8 *addr)
++static inline int mlx5e_hash_l2(const u8 *addr)
+ {
+ 	return addr[5];
+ }
+ 
+-static void mlx5e_add_l2_to_hash(struct hlist_head *hash, u8 *addr)
++static void mlx5e_add_l2_to_hash(struct hlist_head *hash, const u8 *addr)
+ {
  	struct mlx5e_l2_hash_node *hn;
  	int ix = mlx5e_hash_l2(addr);
  	int found = 0;

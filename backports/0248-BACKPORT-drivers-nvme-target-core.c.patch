@@ -54,7 +54,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  	if (ret)
  		goto out_unlock;
  
-@@ -1080,9 +1091,10 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1086,9 +1097,10 @@ static u16 nvmet_parse_io_cmd(struct nvm
  		return ret;
  	}
  
@@ -66,7 +66,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  	return nvmet_bdev_parse_io_cmd(req);
  }
  
-@@ -1222,6 +1234,63 @@ static struct pci_dev *nvmet_req_find_p2
+@@ -1228,6 +1240,63 @@ static struct pci_dev *nvmet_req_find_p2
  	return radix_tree_lookup(&req->sq->ctrl->p2p_ns_map, req->ns->nsid);
  }
  
@@ -130,7 +130,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  int nvmet_req_alloc_sgls(struct nvmet_req *req)
  {
  	struct pci_dev *p2p_dev = nvmet_req_find_p2p_dev(req);
-@@ -1229,21 +1298,37 @@ int nvmet_req_alloc_sgls(struct nvmet_re
+@@ -1235,21 +1304,37 @@ int nvmet_req_alloc_sgls(struct nvmet_re
  	if (p2p_dev && !nvmet_req_alloc_p2pmem_sgls(p2p_dev, req))
  		return 0;
  
@@ -168,7 +168,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  out:
  	return -ENOMEM;
  }
-@@ -1257,9 +1342,15 @@ void nvmet_req_free_sgls(struct nvmet_re
+@@ -1263,9 +1348,15 @@ void nvmet_req_free_sgls(struct nvmet_re
  			pci_p2pmem_free_sgl(req->p2p_dev, req->metadata_sg);
  		req->p2p_dev = NULL;
  	} else {
@@ -184,7 +184,7 @@ Change-Id: If701240f541a182094f52a8f0719133554c86d00
  	}
  
  	req->sg = NULL;
-@@ -1807,3 +1898,6 @@ module_init(nvmet_init);
+@@ -1813,3 +1904,6 @@ module_init(nvmet_init);
  module_exit(nvmet_exit);
  
  MODULE_LICENSE("GPL v2");

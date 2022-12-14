@@ -30,6 +30,8 @@ static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 	unsigned int sqe_inline_size = __nvmet_rdma_peer_to_peer_sqe_inline_size(nvmf_caps, xrq->port);
 
 	srq_attr->ext.nvmf.type = IB_NVMF_READ_WRITE_FLUSH_OFFLOAD;
+	if (xrq->port->offload_passthrough_sqe_rw)
+		srq_attr->ext.nvmf.passthrough_sqe_rw_service_en = 1;
 	srq_attr->ext.nvmf.log_max_namespace = ilog2(nvmf_caps->max_namespace);
 	srq_attr->ext.nvmf.cmd_size = (sizeof(struct nvme_command) + sqe_inline_size) / 16;
 	srq_attr->ext.nvmf.data_offset = 0;
@@ -370,9 +372,11 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 	if (be_ctrl->ibns)
 		ib_detach_nvmf_ns(be_ctrl->ibns);
 	if (be_ctrl->ofl)
-		nvme_peer_put_resource(be_ctrl->ofl, be_ctrl->restart);
+		nvme_peer_flush_resource(be_ctrl->ofl, be_ctrl->restart);
 	if (be_ctrl->ibctrl)
 		ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
+	if (be_ctrl->ofl)
+		nvme_peer_put_resource(be_ctrl->ofl, be_ctrl->restart);
 	kref_put(&be_ctrl->xrq->ref, nvmet_rdma_destroy_xrq);
 	kfree(be_ctrl);
 }
@@ -391,7 +395,8 @@ static void nvmet_rdma_stop_master_peer(void *priv)
 {
 	struct nvmet_rdma_backend_ctrl *be_ctrl = priv;
 
-	pr_info("Stopping master peer (be_ctrl %p)\n", be_ctrl);
+	dev_info(&be_ctrl->pdev->dev,
+		 "Stopping master peer (be_ctrl %p)\n", be_ctrl);
 
 	be_ctrl->restart = false;
 	nvmet_rdma_release_be_ctrl(be_ctrl);
@@ -413,8 +418,11 @@ static void nvmet_rdma_backend_ctrl_event(struct ib_event *event, void *priv)
 	default:
 		break;
 	}
-	pr_err("received IB Backend ctrl event: %s (%d)\n",
-	       ib_event_msg(event->event), event->event);
+
+	dev_err(&be_ctrl->pdev->dev,
+		"received IB Backend ctrl event: %s (%d) be_ctrl %p id %d\n",
+		ib_event_msg(event->event), event->event, be_ctrl,
+		be_ctrl->offload_ctx.id);
 }
 
 static int nvmet_rdma_init_be_ctrl_attr(struct ib_nvmf_backend_ctrl_init_attr *attr,
@@ -549,8 +557,9 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 			NVME_PEER_MEM_LOG_PG_SZ,
 			nvmet_rdma_stop_master_peer, be_ctrl);
 	if (!be_ctrl->ofl) {
-		pr_err("Failed to get peer resource xrq=%p be_ctrl=%p\n",
-		       xrq, be_ctrl);
+		dev_err(&ns->pdev->dev,
+			"Failed to get peer resource xrq=%p be_ctrl=%p\n",
+			xrq, be_ctrl);
 		err = -ENODEV;
 		goto out_free_be_ctrl;
 	}
@@ -565,7 +574,8 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 
 	be_ctrl->ibctrl = ib_create_nvmf_backend_ctrl(xrq->ofl_srq->srq, &init_attr);
 	if (IS_ERR(be_ctrl->ibctrl)) {
-		pr_err("Failed to create nvmf backend ctrl xrq=%p\n", xrq);
+		dev_err(&ns->pdev->dev,
+			"Failed to create nvmf backend ctrl xrq=%p\n", xrq);
 		err = PTR_ERR(be_ctrl->ibctrl);
 		goto out_put_resource;
 	}
@@ -581,8 +591,9 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 				be_ctrl->ibctrl->id);
 	be_ctrl->ibns = ib_attach_nvmf_ns(be_ctrl->ibctrl, &ns_init_attr);
 	if (IS_ERR(be_ctrl->ibns)) {
-		pr_err("Failed to attach nvmf ns xrq=%p be_ctrl=%p\n",
-		       xrq, be_ctrl);
+		dev_err(&ns->pdev->dev,
+			"Failed to attach nvmf ns xrq=%p be_ctrl=%p\n",
+			xrq, be_ctrl);
 		err = PTR_ERR(be_ctrl->ibns);
 		goto out_destroy_be_ctrl;
 	}
@@ -615,6 +626,11 @@ out_detach_ns:
 out_destroy_be_ctrl:
 	ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
 out_put_resource:
+	/*
+	 * Flush the resource after destoying the backend controller is safe
+	 * here, since there is no traffic on it.
+	 */
+	nvme_peer_flush_resource(be_ctrl->ofl, true);
 	nvme_peer_put_resource(be_ctrl->ofl, true);
 out_free_be_ctrl:
 	kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
@@ -1006,8 +1022,20 @@ static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *nport)
 {
 	struct nvmet_rdma_port *port = nport->priv;
 	struct rdma_cm_id *cm_id = port->cm_id;
+	struct ib_nvmf_caps *nvmf_caps = &cm_id->device->attrs.nvmf_caps;
 
-	return cm_id->device->attrs.device_cap_flags & IB_DEVICE_NVMF_TARGET_OFFLOAD;
+	if (!(cm_id->device->attrs.device_cap_flags &
+	      IB_DEVICE_NVMF_TARGET_OFFLOAD))
+		return false;
+
+	if (!nvmf_caps->passthrough_sqe_rw_service &&
+	    nport->offload_passthrough_sqe_rw) {
+		pr_err("Offload passthrough is not supported by device %s\n",
+		       cm_id->device->name);
+		return false;
+	}
+
+	return true;
 }
 
 static bool nvmet_rdma_check_subsys_match_offload_port(struct nvmet_port *nport,

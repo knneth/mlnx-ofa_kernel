@@ -25,7 +25,7 @@ Change-Id: I5f7f5a03560deb2cc1c0a94c5952808e98091c9e
  	struct mlx5e_qos_node *root;
  	bool opened;
  	int err;
-@@ -790,8 +791,13 @@ static void mlx5e_reset_qdisc(struct net
+@@ -791,8 +792,13 @@ static void mlx5e_reset_qdisc(struct net
  	spin_unlock_bh(qdisc_lock(qdisc));
  }
  
@@ -39,7 +39,7 @@ Change-Id: I5f7f5a03560deb2cc1c0a94c5952808e98091c9e
  {
  	struct mlx5e_qos_node *node;
  	struct netdev_queue *txq;
-@@ -799,11 +805,16 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
+@@ -800,11 +806,16 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
  	bool opened;
  	int err;
  
@@ -57,7 +57,7 @@ Change-Id: I5f7f5a03560deb2cc1c0a94c5952808e98091c9e
  	if (!node)
  		return -ENOENT;
  
-@@ -821,7 +832,11 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
+@@ -822,7 +833,11 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
  	err = mlx5_qos_destroy_node(priv->mdev, node->hw_id);
  	if (err) /* Not fatal. */
  		qos_warn(priv->mdev, "Failed to destroy leaf node %u (class %04x), err = %d\n",
@@ -69,7 +69,7 @@ Change-Id: I5f7f5a03560deb2cc1c0a94c5952808e98091c9e
  
  	mlx5e_sw_node_delete(priv, node);
  
-@@ -883,8 +898,12 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
+@@ -884,8 +899,12 @@ int mlx5e_htb_leaf_del(struct mlx5e_priv
  	if (opened)
  		mlx5e_reactivate_qos_sq(priv, moved_qid, txq);
  

@@ -36,6 +36,8 @@ PURPLE="\033[35m"
 CYAN="\033[36m"
 UNDERLINE="\033[02m"
 
+QUILT="${MLNX_QUILT_REFRESH:-quilt --quiltrc -}"
+
 # Refresh patches using quilt
 patchRefresh() {
 	export QUILT_PATCHES=$1
@@ -50,8 +52,8 @@ patchRefresh() {
 			break;
 		fi
 		echo -e "${GREEN}Refresh backport patch${NORMAL}: ${BLUE}$i${NORMAL}"
-		quilt import $i
-		quilt push -f
+		$QUILT import $i
+		$QUILT push -f
 		RET=$?
 		if [[ $RET -ne 0 ]]; then
 			echo -e "${RED}Refreshing $i failed${NORMAL}, update it"
@@ -59,7 +61,7 @@ patchRefresh() {
 			echo -e "use ${CYAN}quilt refresh${NORMAL} after the files are corrected and rerun this script"
 			exit $RET
 		fi
-		QUILT_DIFF_OPTS="-p" quilt refresh -p ab --no-index --no-timestamp
+		QUILT_DIFF_OPTS="-p" $QUILT refresh -p ab --no-index --no-timestamp
 	done
 }
 

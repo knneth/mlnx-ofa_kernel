@@ -8,7 +8,7 @@ Change-Id: If523c53df9130c8a32d68b3b25fc90f827546eda
 
 --- a/include/linux/mlx5/eswitch.h
 +++ b/include/linux/mlx5/eswitch.h
-@@ -143,7 +143,6 @@ int mlx5_eswitch_query_esw_vport_context
+@@ -155,7 +155,6 @@ int mlx5_eswitch_query_esw_vport_context
  					 void *out, int outlen);
  
  #else  /* CONFIG_MLX5_ESWITCH */
@@ -16,7 +16,7 @@ Change-Id: If523c53df9130c8a32d68b3b25fc90f827546eda
  static inline u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev)
  {
  	return MLX5_ESWITCH_NONE;
-@@ -184,12 +183,6 @@ static inline u16 mlx5_eswitch_get_total
+@@ -196,12 +195,6 @@ static inline u16 mlx5_eswitch_get_total
  	return 0;
  }
  

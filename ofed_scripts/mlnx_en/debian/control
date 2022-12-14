@@ -16,7 +16,7 @@ Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 Package: mlnx-en-dkms
 Section: kernel
 Architecture: all
-Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, mlnx-en-utils,
+Depends: dkms, ${misc:Depends}, mlnx-en-utils,
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
 Description: DKMS support for mlnx-ofed kernel modules
  This package provides integration with the DKMS infrastructure for

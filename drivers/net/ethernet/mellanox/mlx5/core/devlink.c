@@ -11,6 +11,7 @@
 #include "sf/dev/dev.h"
 #include "sf/sf.h"
 #include "en/tc_ct.h"
+#include "esw/qos.h"
 
 static int mlx5_devlink_flash_update(struct devlink *devlink,
 				     struct devlink_flash_update_params *params,
@@ -95,15 +96,11 @@ static int mlx5_devlink_reload_fw_activate(struct devlink *devlink, struct netli
 	}
 
 	net_port_alive = !!(reset_type & MLX5_MFRL_REG_RESET_TYPE_NET_PORT_ALIVE);
-	err = mlx5_fw_reset_set_reset_sync(dev, net_port_alive);
+	err = mlx5_fw_reset_set_reset_sync(dev, net_port_alive, extack);
 	if (err)
-		goto out;
+		return err;
 
-	err = mlx5_fw_reset_wait_reset_done(dev);
-out:
-	if (err)
-		NL_SET_ERR_MSG_MOD(extack, "FW activate command failed");
-	return err;
+	return mlx5_fw_reset_wait_reset_done(dev);
 }
 
 static int mlx5_devlink_trigger_fw_live_patch(struct devlink *devlink,
@@ -187,13 +184,13 @@ static int mlx5_devlink_reload_up(struct devlink *devlink, enum devlink_reload_a
 	*actions_performed = BIT(action);
 	switch (action) {
 	case DEVLINK_RELOAD_ACTION_DRIVER_REINIT:
-		return mlx5_load_one(dev);
+		return mlx5_load_one(dev, false);
 	case DEVLINK_RELOAD_ACTION_FW_ACTIVATE:
 		if (limit == DEVLINK_RELOAD_LIMIT_NO_RESET)
 			break;
 		/* On fw_activate action, also driver is reloaded and reinit performed */
 		*actions_performed |= BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT);
-		return mlx5_load_one(dev);
+		return mlx5_load_one(dev, false);
 	default:
 		/* Unsupported action should not get to this function */
 		WARN_ON(1);
@@ -303,6 +300,15 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
 	.port_function_hw_addr_get = mlx5_devlink_port_function_hw_addr_get,
 	.port_function_hw_addr_set = mlx5_devlink_port_function_hw_addr_set,
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+	.rate_leaf_tx_share_set = mlx5_esw_devlink_rate_leaf_tx_share_set,
+	.rate_leaf_tx_max_set = mlx5_esw_devlink_rate_leaf_tx_max_set,
+	.rate_node_new = mlx5_esw_devlink_rate_node_new,
+	.rate_node_del = mlx5_esw_devlink_rate_node_del,
+	.rate_node_tx_share_set = mlx5_esw_devlink_rate_node_tx_share_set,
+	.rate_node_tx_max_set = mlx5_esw_devlink_rate_node_tx_max_set,
+	.rate_leaf_parent_set = mlx5_esw_devlink_rate_parent_set,
+#endif
 #endif
 
 #if !IS_ENABLED(CONFIG_MLXDEVM)
@@ -758,12 +764,12 @@ int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
 	if (err)
 		goto params_reg_err;
 	mlx5_devlink_set_params_init_values(devlink);
-	devlink_params_publish(devlink);
 
 	err = mlx5_devlink_traps_register(devlink);
 	if (err)
 		goto traps_reg_err;
 
+	devlink_params_publish(devlink);
 	return 0;
 
 traps_reg_err:
@@ -776,8 +782,8 @@ params_reg_err:
 
 void mlx5_devlink_unregister(struct devlink *devlink)
 {
-	mlx5_devlink_traps_unregister(devlink);
 	devlink_params_unpublish(devlink);
+	mlx5_devlink_traps_unregister(devlink);
 	devlink_params_unregister(devlink, mlx5_devlink_params,
 				  ARRAY_SIZE(mlx5_devlink_params));
 	devlink_unregister(devlink);

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I4d432ef88b98cfa5c3faf13939841c64380b8071
 ---
- drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/sf/dev/driver.c  | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
@@ -18,22 +18,28 @@ Change-Id: I4d432ef88b98cfa5c3faf13939841c64380b8071
  	if (!devlink)
  		return -ENOMEM;
  
-@@ -55,7 +55,9 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -55,7 +55,12 @@ static int mlx5_sf_dev_probe(struct auxi
  		mlx5_core_warn(mdev, "mlx5_init_one err=%d\n", err);
  		goto init_one_err;
  	}
-+#ifdef HAVE_DEVLINK_RELOAD_ENABLE
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS //forwardport
++	devlink_register(devlink);
++#endif
++#if defined(HAVE_DEVLINK_RELOAD_ENABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
  	devlink_reload_enable(devlink);
 +#endif
  	return 0;
  
  init_one_err:
-@@ -74,7 +76,9 @@ static void mlx5_sf_dev_remove(struct au
+@@ -74,7 +79,12 @@ static void mlx5_sf_dev_remove(struct au
  
  	set_bit(MLX5_INTERFACE_STATE_TEARDOWN, &sf_dev->mdev->intf_state);
  	devlink = priv_to_devlink(sf_dev->mdev);
-+#ifdef HAVE_DEVLINK_RELOAD_DISABLE
++#if defined(HAVE_DEVLINK_RELOAD_DISABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
  	devlink_reload_disable(devlink);
++#endif
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS //forwardport
++	devlink_unregister(devlink);
 +#endif
  	mlx5_uninit_one(sf_dev->mdev);
  

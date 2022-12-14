@@ -337,14 +337,8 @@ static inline void mlx5e_insert_vlan(void *start, struct sk_buff *skb, u16 ihs)
 static void ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 					struct mlx5_wqe_eth_seg *eseg)
 {
-	u32 inner_ipproto = 0;
-
 	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
-	if (inner_ipproto) {
-		eseg->cs_flags |= MLX5_ETH_WQE_L4_INNER_CSUM | MLX5_ETH_WQE_L3_INNER_CSUM;
-		if (likely(skb->ip_summed == CHECKSUM_PARTIAL))
-			sq->stats->csum_partial_inner++;
-	} else if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
+	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
 		eseg->cs_flags |= MLX5_ETH_WQE_L4_CSUM;
 		sq->stats->csum_partial_inner++;
 	}

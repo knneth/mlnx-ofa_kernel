@@ -7,8 +7,6 @@
 #include <linux/mlx5/driver.h>
 #include "mlx5_core.h"
 
-#ifdef CONFIG_MLX5_ESWITCH
-
 enum {
 	MLX5_ECPU_BIT_NUM = 23,
 };
@@ -22,13 +20,7 @@ int mlx5_cmd_host_pf_disable_hca(struct mlx5_core_dev *dev);
 void mlx5_smartnic_sysfs_init(struct net_device *dev);
 void mlx5_smartnic_sysfs_cleanup(struct net_device *dev);
 
-#else  /* CONFIG_MLX5_ESWITCH */
-
-static inline bool
-mlx5_read_embedded_cpu(struct mlx5_core_dev *dev) { return false; }
-static inline int mlx5_ec_init(struct mlx5_core_dev *dev) { return 0; }
-static inline void mlx5_ec_cleanup(struct mlx5_core_dev *dev) {}
-
-#endif /* CONFIG_MLX5_ESWITCH */
+int mlx5_regex_sysfs_init(struct mlx5_core_dev *dev);
+void mlx5_regex_sysfs_cleanup(struct mlx5_core_dev *dev);
 
 #endif /* __MLX5_ECPF_H__ */

@@ -63,8 +63,6 @@ static const struct counter_desc mlx5e_ipsec_hw_stats_desc_full[] = {
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_rx_bytes) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_rx_pkts_drop) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_rx_bytes_drop) },
-	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_rx_pkts_pol_drop) },
-	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_rx_bytes_pol_drop) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_tx_pkts) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_tx_bytes) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_ipsec_stats, ipsec_full_tx_pkts_drop) },

@@ -71,7 +71,7 @@ void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
 	up_write(&devm_dev->port_list_rwsem);
 
 	WARN_ON(!found);
-	mlxdevm_port_unregister(&devm_dev->device, &port->port);
+	mlxdevm_port_unregister(&port->port);
 	kfree(port);
 }
 

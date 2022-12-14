@@ -17,7 +17,7 @@ Change-Id: I722c2f770ec9612f82f44b4b1b19a0406c7b0ce1
  #include <linux/blkdev.h>
  #include <linux/vmalloc.h>
  #include "nvme.h"
-@@ -260,3 +262,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
+@@ -263,3 +265,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
  
  	return BLK_STS_OK;
  }

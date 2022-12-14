@@ -89,20 +89,19 @@ struct mlx5e_tc_attr_to_reg_mapping mlx5e_tc_attr_to_reg_mappings[] = {
 	[CHAIN_TO_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_0,
 		.moffset = 0,
-		.mlen = 2,
+		.mlen = 16,
 	},
 	[VPORT_TO_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_0,
-		.moffset = 2,
-		.mlen = 2,
+		.moffset = 16,
+		.mlen = 16,
 	},
 	[TUNNEL_TO_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_1,
-		.moffset = 1,
-		.mlen = ((ESW_TUN_OPTS_BITS + ESW_TUN_ID_BITS) / 8),
+		.moffset = 8,
+		.mlen = ESW_TUN_OPTS_BITS + ESW_TUN_ID_BITS,
 		.soffset = MLX5_BYTE_OFF(fte_match_param,
 					 misc_parameters_2.metadata_reg_c_1),
-		.excluded_bits = 1, /* Taken by IPsec */
 	},
 	[ZONE_TO_REG] = zone_to_reg_ct,
 	[ZONE_RESTORE_TO_REG] = zone_restore_to_reg_ct,
@@ -117,14 +116,14 @@ struct mlx5e_tc_attr_to_reg_mapping mlx5e_tc_attr_to_reg_mappings[] = {
 	[NIC_CHAIN_TO_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_B,
 		.moffset = 0,
-		.mlen = 2,
+		.mlen = 16,
 	},
 	[NIC_ZONE_RESTORE_TO_REG] = nic_zone_restore_to_reg_ct,
 	/* reg_c1 is not used by tc nic rules so we can overwrite it */
 	[USER_PRIO_TO_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_1,
 		.moffset = 0,
-		.mlen = 4,
+		.mlen = 32,
 		.soffset = MLX5_BYTE_OFF(fte_match_param,
 					 misc_parameters_2.metadata_reg_c_1),
 	},
@@ -132,12 +131,12 @@ struct mlx5e_tc_attr_to_reg_mapping mlx5e_tc_attr_to_reg_mappings[] = {
 	[HP_OOB_CNT_COLOR_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_B,
 		.moffset = 0,
-		.mlen = 4,
+		.mlen = 32,
 	},
 	[HP_OOB_TX_CNT_COLOR_REG] = {
 		.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_A,
 		.moffset = 0,
-		.mlen = 4,
+		.mlen = 32,
 		.soffset = MLX5_BYTE_OFF(fte_match_param,
 					 misc_parameters_2.metadata_reg_a),
 	},
@@ -157,23 +156,46 @@ static bool same_hw_devs(struct mlx5e_priv *priv, struct mlx5e_priv *peer_priv);
 void
 mlx5e_tc_match_to_reg_match(struct mlx5_flow_spec *spec,
 			    enum mlx5e_tc_attr_to_reg type,
-			    u32 data,
+			    u32 val,
 			    u32 mask)
 {
+	void *headers_c = spec->match_criteria, *headers_v = spec->match_value, *fmask, *fval;
 	int soffset = mlx5e_tc_attr_to_reg_mappings[type].soffset;
+	int moffset = mlx5e_tc_attr_to_reg_mappings[type].moffset;
 	int match_len = mlx5e_tc_attr_to_reg_mappings[type].mlen;
-	void *headers_c = spec->match_criteria;
-	void *headers_v = spec->match_value;
-	void *fmask, *fval;
+	u32 max_mask = GENMASK(match_len - 1, 0);
+	__be32 curr_mask_be, curr_val_be;
+	u32 curr_mask, curr_val;
 
 	fmask = headers_c + soffset;
 	fval = headers_v + soffset;
 
-	mask = (__force u32)(cpu_to_be32(mask)) >> (32 - (match_len * 8));
-	data = (__force u32)(cpu_to_be32(data)) >> (32 - (match_len * 8));
+	memcpy(&curr_mask_be, fmask, 4);
+	memcpy(&curr_val_be, fval, 4);
 
-	memcpy(fmask, &mask, match_len);
-	memcpy(fval, &data, match_len);
+	curr_mask = be32_to_cpu(curr_mask_be);
+	curr_val = be32_to_cpu(curr_val_be);
+
+	//move to correct offset
+	WARN_ON(mask > max_mask);
+	mask <<= moffset;
+	val <<= moffset;
+	max_mask <<= moffset;
+
+	//zero val and mask
+	curr_mask &= ~max_mask;
+	curr_val &= ~max_mask;
+
+	//add current to mask
+	curr_mask |= mask;
+	curr_val |= val;
+
+	//back to be32 and write
+	curr_mask_be = cpu_to_be32(curr_mask);
+	curr_val_be = cpu_to_be32(curr_val);
+
+	memcpy(fmask, &curr_mask_be, 4);
+	memcpy(fval, &curr_val_be, 4);
 
 	spec->match_criteria_enable |= MLX5_MATCH_MISC_PARAMETERS_2;
 }
@@ -181,23 +203,28 @@ mlx5e_tc_match_to_reg_match(struct mlx5_flow_spec *spec,
 void
 mlx5e_tc_match_to_reg_get_match(struct mlx5_flow_spec *spec,
 				enum mlx5e_tc_attr_to_reg type,
-				u32 *data,
+				u32 *val,
 				u32 *mask)
 {
+	void *headers_c = spec->match_criteria, *headers_v = spec->match_value, *fmask, *fval;
 	int soffset = mlx5e_tc_attr_to_reg_mappings[type].soffset;
+	int moffset = mlx5e_tc_attr_to_reg_mappings[type].moffset;
 	int match_len = mlx5e_tc_attr_to_reg_mappings[type].mlen;
-	void *headers_c = spec->match_criteria;
-	void *headers_v = spec->match_value;
-	void *fmask, *fval;
+	u32 max_mask = GENMASK(match_len - 1, 0);
+	__be32 curr_mask_be, curr_val_be;
+	u32 curr_mask, curr_val;
 
 	fmask = headers_c + soffset;
 	fval = headers_v + soffset;
 
-	memcpy(mask, fmask, match_len);
-	memcpy(data, fval, match_len);
+	memcpy(&curr_mask_be, fmask, 4);
+	memcpy(&curr_val_be, fval, 4);
 
-	*mask = be32_to_cpu((__force __be32)(*mask << (32 - (match_len * 8))));
-	*data = be32_to_cpu((__force __be32)(*data << (32 - (match_len * 8))));
+	curr_mask = be32_to_cpu(curr_mask_be);
+	curr_val = be32_to_cpu(curr_val_be);
+
+	*mask = (curr_mask >> moffset) & max_mask;
+	*val = (curr_val >> moffset) & max_mask;
 }
 
 int
@@ -207,7 +234,6 @@ mlx5e_tc_match_to_reg_set_and_get_id(struct mlx5_core_dev *mdev,
 				     enum mlx5e_tc_attr_to_reg type,
 				     u32 data)
 {
-	int excluded_bits = mlx5e_tc_attr_to_reg_mappings[type].excluded_bits;
 	int moffset = mlx5e_tc_attr_to_reg_mappings[type].moffset;
 	int mfield = mlx5e_tc_attr_to_reg_mappings[type].mfield;
 	int mlen = mlx5e_tc_attr_to_reg_mappings[type].mlen;
@@ -222,13 +248,13 @@ mlx5e_tc_match_to_reg_set_and_get_id(struct mlx5_core_dev *mdev,
 		 (mod_hdr_acts->num_actions * MLX5_MH_ACT_SZ);
 
 	/* Firmware has 5bit length field and 0 means 32bits */
-	if (mlen == 4)
+	if (mlen == 32)
 		mlen = 0;
 
 	MLX5_SET(set_action_in, modact, action_type, MLX5_ACTION_TYPE_SET);
 	MLX5_SET(set_action_in, modact, field, mfield);
-	MLX5_SET(set_action_in, modact, offset, moffset * 8);
-	MLX5_SET(set_action_in, modact, length, mlen * 8 - excluded_bits);
+	MLX5_SET(set_action_in, modact, offset, moffset);
+	MLX5_SET(set_action_in, modact, length, mlen);
 	MLX5_SET(set_action_in, modact, data, data);
 	err = mod_hdr_acts->num_actions;
 	mod_hdr_acts->num_actions++;
@@ -324,13 +350,13 @@ void mlx5e_tc_match_to_reg_mod_hdr_change(struct mlx5_core_dev *mdev,
 	modact = mod_hdr_acts->actions + (act_id * MLX5_MH_ACT_SZ);
 
 	/* Firmware has 5bit length field and 0 means 32bits */
-	if (mlen == 4)
+	if (mlen == 32)
 		mlen = 0;
 
 	MLX5_SET(set_action_in, modact, action_type, MLX5_ACTION_TYPE_SET);
 	MLX5_SET(set_action_in, modact, field, mfield);
-	MLX5_SET(set_action_in, modact, offset, moffset * 8);
-	MLX5_SET(set_action_in, modact, length, mlen * 8);
+	MLX5_SET(set_action_in, modact, offset, moffset);
+	MLX5_SET(set_action_in, modact, length, mlen);
 	MLX5_SET(set_action_in, modact, data, data);
 }
 
@@ -2116,23 +2142,15 @@ void mlx5e_tc_unoffload_fdb_rules(struct mlx5_eswitch *esw,
 	if (attr->esw_attr->split_count)
 		mlx5_eswitch_del_fwd_rule(esw, flow->rule[1], attr);
 
-	if (flow_flag_test(flow, CT)) {
+	if (flow_flag_test(flow, CT))
 		mlx5_tc_ct_delete_flow(get_ct_priv(flow->priv), flow, attr);
-		return;
-	}
-
-	if (flow_flag_test(flow, SAMPLE)) {
+	else if (flow_flag_test(flow, SAMPLE))
 		mlx5e_tc_sample_unoffload(get_sample_priv(flow->priv), flow->rule[0], attr);
-		return;
-	}
-
-	if (flow_flag_test(flow, METER)) {
+	else if (flow_flag_test(flow, METER))
 		mlx5e_tc_meter_unoffload(esw->dev, flow->rule[0], attr);
-		return;
-	}
-
+	else
 offload_rule_0:
-	mlx5_eswitch_del_offloaded_rule(esw, flow->rule[0], attr);
+		mlx5_eswitch_del_offloaded_rule(esw, flow->rule[0], attr);
 }
 
 struct mlx5_flow_handle *
@@ -2367,7 +2385,9 @@ mlx5e_tc_add_fdb_flow(struct mlx5e_priv *priv,
 							MLX5_FLOW_NAMESPACE_KERNEL, VPORT_TO_REG,
 							metadata);
 			if (err)
-				return err;
+				goto err_out;
+
+			attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
 		}
 
 	}
@@ -2384,21 +2404,25 @@ mlx5e_tc_add_fdb_flow(struct mlx5e_priv *priv,
 		if (attr->chain) {
 			NL_SET_ERR_MSG_MOD(extack,
 					   "Offloading internal port rule is only supported on chain 0");
-			return -EOPNOTSUPP;
+			err = -EOPNOTSUPP;
+			goto err_out;
 		}
 
 		if (attr->dest_chain) {
 			NL_SET_ERR_MSG_MOD(extack,
 					   "Internal port rule offload doesn't support goto action");
-			return -EOPNOTSUPP;
+			err = -EOPNOTSUPP;
+			goto err_out;
 		}
 
 		int_port = mlx5_esw_get_int_vport(esw, parse_attr->filter_dev,
 						  flow_flag_test(flow, EGRESS) ?
 						  MLX5_ESW_INT_VPORT_EGRESS :
 						  MLX5_ESW_INT_VPORT_INGRESS);
-		if (IS_ERR(int_port))
-			return PTR_ERR(int_port);
+		if (IS_ERR(int_port)) {
+			err = PTR_ERR(int_port);
+			goto err_out;
+		}
 
 		esw_attr->int_port = int_port;
 	}
@@ -2800,7 +2824,7 @@ err_enc_opts:
 static void mlx5e_put_flow_tunnel_id(struct mlx5e_tc_flow *flow)
 {
 	u32 enc_opts_id = flow->tunnel_id & ENC_OPTS_BITS_MASK;
-	u32 tun_id = (flow->tunnel_id >> ENC_OPTS_BITS) & TUNNEL_INFO_BITS_MASK;
+	u32 tun_id = flow->tunnel_id >> ENC_OPTS_BITS;
 	struct mlx5_rep_uplink_priv *uplink_priv;
 	struct mlx5e_rep_priv *uplink_rpriv;
 	struct mlx5_eswitch *esw;
@@ -4309,6 +4333,30 @@ static bool actions_match_supported(struct mlx5e_priv *priv,
 		}
 	}
 
+	if (!(~actions &
+	      (MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_DROP))) {
+		NL_SET_ERR_MSG_MOD(extack, "Rule cannot support forward+drop action");
+		return false;
+	}
+
+	if (!(~actions &
+	      (MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_DROP))) {
+		NL_SET_ERR_MSG_MOD(extack, "Rule cannot support forward+drop action");
+		return false;
+	}
+
+	if (!(~actions &
+	      (MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_DROP))) {
+		NL_SET_ERR_MSG_MOD(extack, "Rule cannot support forward+drop action");
+		return false;
+	}
+
+	if (actions & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR &&
+	    actions & MLX5_FLOW_CONTEXT_ACTION_DROP) {
+		NL_SET_ERR_MSG_MOD(extack, "Drop with modify header action is not supported");
+		return false;
+	}
+
 	if (actions & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR)
 		return modify_header_match_supported(priv, &parse_attr->spec,
 						     flow_action, actions,
@@ -4521,6 +4569,7 @@ static int parse_tc_nic_actions(struct mlx5e_priv *priv,
 	struct mlx5e_tc_table *tc = &priv->fs.tc;
 	struct mlx5_nic_flow_attr *nic_attr;
 	bool prio_set = false;
+	bool ct = false, ct_clear = false, clear_action;
 	u32 action = 0;
 	int err, i;
 
@@ -4614,7 +4663,20 @@ static int parse_tc_nic_actions(struct mlx5e_priv *priv,
 			attr->dest_chain = act->chain_index;
 			break;
 		case FLOW_ACTION_CT:
-			err = mlx5_tc_ct_parse_action(get_ct_priv(priv), attr, act, extack);
+			clear_action = act->ct.action & TCA_CT_ACT_CLEAR;
+
+			/* It's redundant to do ct clear more than once. */
+			if (clear_action && ct_clear)
+				continue;
+
+			if (clear_action)
+				ct_clear = true;
+			else
+				ct = true;
+
+			err = mlx5_tc_ct_parse_action(get_ct_priv(priv), attr,
+						      &parse_attr->mod_hdr_acts,
+						      act, extack);
 			if (err)
 				return err;
 
@@ -4667,6 +4729,18 @@ static int parse_tc_nic_actions(struct mlx5e_priv *priv,
 	if (attr->dest_chain && parse_attr->mirred_ifindex[0]) {
 		NL_SET_ERR_MSG(extack, "Mirroring goto chain rules isn't supported");
 		return -EOPNOTSUPP;
+	}
+
+	/* If ct action exist, we can ignore previous ct_clear actions */
+	if (!ct && ct_clear) {
+		err = mlx5_tc_ct_set_ct_clear_regs(get_ct_priv(priv),
+						   &parse_attr->mod_hdr_acts);
+		if (err) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Failed to set registers for ct clear");
+			return err;
+		}
+		attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
 	}
 
 	if (!actions_match_supported(priv, flow_action, parse_attr, flow, extack))
@@ -4982,6 +5056,7 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 	int err, i, if_count = 0;
 	bool ptype_host = false;
 	bool mpls_push = false;
+	bool ct = false, ct_clear = false, clear_action;
 	u64 acts_parsed = 0;
 
 	if (!flow_action_has_entries(flow_action))
@@ -5005,6 +5080,11 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 
 			ptype_host = true;
 
+			break;
+		case FLOW_ACTION_ACCEPT:
+			action |= MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
+				MLX5_FLOW_CONTEXT_ACTION_COUNT;
+			attr->flags |= MLX5_ESW_ATTR_FLAG_ACCEPT;
 			break;
 		case FLOW_ACTION_DROP:
 			action |= MLX5_FLOW_CONTEXT_ACTION_DROP |
@@ -5311,7 +5391,21 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 				NL_SET_ERR_MSG_MOD(extack, "Sample action with connection tracking is not supported");
 				return -EOPNOTSUPP;
 			}
-			err = mlx5_tc_ct_parse_action(get_ct_priv(priv), attr, act, extack);
+
+			clear_action = act->ct.action & TCA_CT_ACT_CLEAR;
+
+			/* It's redundant to do ct clear more than once. */
+			if (clear_action && ct_clear)
+				continue;
+
+			if (clear_action)
+				ct_clear = true;
+			else
+				ct = true;
+
+			err = mlx5_tc_ct_parse_action(get_ct_priv(priv), attr,
+						      &parse_attr->mod_hdr_acts,
+						      act, extack);
 			if (err)
 				return err;
 
@@ -5396,6 +5490,18 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 		}
 	}
 
+	/* If ct action exist, we can ignore previous ct_clear actions */
+	if (!ct && ct_clear) {
+		err = mlx5_tc_ct_set_ct_clear_regs(get_ct_priv(priv),
+						   &parse_attr->mod_hdr_acts);
+		if (err) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Failed to set registers for ct clear");
+			return err;
+		}
+		action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
+	}
+
 	attr->action = action;
 	if (!actions_match_supported(priv, flow_action, parse_attr, flow, extack))
 		return -EOPNOTSUPP;
@@ -5463,12 +5569,11 @@ static const struct rhashtable_params tc_ht_params = {
 static struct rhashtable *get_tc_ht(struct mlx5e_priv *priv,
 				    unsigned long flags)
 {
-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
-	struct mlx5e_rep_priv *uplink_rpriv;
+	struct mlx5e_rep_priv *rpriv;
 
 	if (flags & MLX5_TC_FLAG(ESW_OFFLOAD)) {
-		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
-		return &uplink_rpriv->uplink_priv.tc_ht;
+		rpriv = priv->ppriv;
+		return &rpriv->tc_ht;
 	} else /* NIC offload */
 		return &priv->fs.tc.ht;
 }
@@ -6026,7 +6131,7 @@ static int apply_police_params(struct mlx5e_priv *priv, u64 rate,
 		rate_mbps = max_t(u32, rate, 1);
 	}
 
-	err = mlx5_esw_modify_vport_rate(esw, vport_num, rate_mbps);
+	err = mlx5_esw_qos_modify_vport_rate(esw, vport_num, rate_mbps);
 	if (err)
 		NL_SET_ERR_MSG_MOD(extack, "failed applying action to hardware");
 
@@ -6080,13 +6185,7 @@ static int scan_tc_matchall_fdb_actions(struct mlx5e_priv *priv,
 int mlx5e_tc_configure_matchall(struct mlx5e_priv *priv,
 				struct tc_cls_matchall_offload *ma)
 {
-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct netlink_ext_ack *extack = ma->common.extack;
-
-	if (!mlx5_esw_qos_enabled(esw)) {
-		NL_SET_ERR_MSG_MOD(extack, "QoS is not supported on this device");
-		return -EOPNOTSUPP;
-	}
 
 	if (ma->common.prio != 1) {
 		NL_SET_ERR_MSG_MOD(extack, "only priority 1 is supported");
@@ -6310,10 +6409,27 @@ void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv)
 	mlx5_chains_destroy(tc->chains);
 }
 
-int mlx5e_tc_esw_init(struct rhashtable *tc_ht)
+int mlx5e_tc_ht_init(struct rhashtable *tc_ht)
+{
+	int err;
+
+	err = rhashtable_init(tc_ht, &tc_ht_params);
+	if (err)
+		return err;
+
+	lockdep_set_class(&tc_ht->mutex, &tc_ht_lock_key);
+
+	return 0;
+}
+
+void mlx5e_tc_ht_cleanup(struct rhashtable *tc_ht)
+{
+	rhashtable_free_and_destroy(tc_ht, _mlx5e_tc_del_flow, NULL);
+}
+
+int mlx5e_tc_esw_init(struct mlx5_rep_uplink_priv *uplink_priv)
 {
 	const size_t sz_enc_opts = sizeof(struct tunnel_match_enc_opts);
-	struct mlx5_rep_uplink_priv *uplink_priv;
 	struct mlx5e_rep_priv *rpriv;
 	struct mapping_ctx *mapping;
 	struct mlx5_eswitch *esw;
@@ -6321,7 +6437,6 @@ int mlx5e_tc_esw_init(struct rhashtable *tc_ht)
 	u64 mapping_id;
 	int err = 0;
 
-	uplink_priv = container_of(tc_ht, struct mlx5_rep_uplink_priv, tc_ht);
 	rpriv = container_of(uplink_priv, struct mlx5e_rep_priv, uplink_priv);
 	priv = netdev_priv(rpriv->netdev);
 	esw = priv->mdev->priv.eswitch;
@@ -6347,20 +6462,16 @@ int mlx5e_tc_esw_init(struct rhashtable *tc_ht)
 	}
 	uplink_priv->tunnel_mapping = mapping;
 
-	/* 0xFFF is reserved for stack devices slow path table mark */
+	/* Two last values are reserved for stack devices slow path table mark
+	 * and bridge ingress push mark.
+	 */
 	mapping = mapping_create_for_id(mapping_id, MAPPING_TYPE_TUNNEL_ENC_OPTS,
-					sz_enc_opts, ENC_OPTS_BITS_MASK - 1, true);
+					sz_enc_opts, ENC_OPTS_BITS_MASK - 2, true);
 	if (IS_ERR(mapping)) {
 		err = PTR_ERR(mapping);
 		goto err_enc_opts_mapping;
 	}
 	uplink_priv->tunnel_enc_opts_mapping = mapping;
-
-	err = rhashtable_init(tc_ht, &tc_ht_params);
-	if (err)
-		goto err_ht_init;
-
-	lockdep_set_class(&tc_ht->mutex, &tc_ht_lock_key);
 
 	uplink_priv->encap = mlx5e_tc_tun_init(priv);
 	if (IS_ERR(uplink_priv->encap)) {
@@ -6375,8 +6486,6 @@ int mlx5e_tc_esw_init(struct rhashtable *tc_ht)
 	return 0;
 
 err_register_fib_notifier:
-	rhashtable_destroy(tc_ht);
-err_ht_init:
 	mapping_destroy(uplink_priv->tunnel_enc_opts_mapping);
 err_enc_opts_mapping:
 	mapping_destroy(uplink_priv->tunnel_mapping);
@@ -6389,15 +6498,11 @@ err_tun_mapping:
 	return err;
 }
 
-void mlx5e_tc_esw_cleanup(struct rhashtable *tc_ht)
+void mlx5e_tc_esw_cleanup(struct mlx5_rep_uplink_priv *uplink_priv)
 {
-	struct mlx5_rep_uplink_priv *uplink_priv;
 	struct mlx5e_rep_priv *rpriv;
 	struct mlx5e_priv *priv;
 
-	uplink_priv = container_of(tc_ht, struct mlx5_rep_uplink_priv, tc_ht);
-
-	rhashtable_free_and_destroy(tc_ht, _mlx5e_tc_del_flow, NULL);
 	mlx5e_tc_tun_cleanup(uplink_priv->encap);
 
 	mapping_destroy(uplink_priv->tunnel_enc_opts_mapping);
@@ -6514,7 +6619,7 @@ bool mlx5e_tc_update_skb(struct mlx5_cqe64 *cqe,
 
 		tc_skb_ext->chain = chain;
 
-		zone_restore_id = (reg_b >> REG_MAPPING_SHIFT(NIC_ZONE_RESTORE_TO_REG)) &
+		zone_restore_id = (reg_b >> REG_MAPPING_MOFFSET(NIC_ZONE_RESTORE_TO_REG)) &
 			ESW_ZONE_ID_MASK;
 
 		if (!mlx5e_tc_ct_restore_flow(tc->ct, skb,

@@ -22,7 +22,7 @@ struct mlx5e_post_act_handle {
 };
 
 #define MLX5_POST_ACTION_MLEN (mlx5e_tc_attr_to_reg_mappings[FTEID_TO_REG].mlen)
-#define MLX5_POST_ACTION_MAX GENMASK(MLX5_POST_ACTION_MLEN * 8 - 1, 0)
+#define MLX5_POST_ACTION_MAX GENMASK(MLX5_POST_ACTION_MLEN - 1, 0)
 #define MLX5_POST_ACTION_MASK MLX5_POST_ACTION_MAX
 
 struct mlx5e_post_act *

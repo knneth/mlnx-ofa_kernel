@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Iee4e46f55b3af6a6b2b4c07075b2cc86199567f8
 ---
- .../mellanox/mlx5/core/esw/devlink_port.c     | 102 +++++++++++++++++-
- 1 file changed, 101 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/esw/devlink_port.c     | 105 +++++++++++++++++-
+ 1 file changed, 102 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
@@ -133,7 +133,7 @@ Change-Id: Iee4e46f55b3af6a6b2b4c07075b2cc86199567f8
  	struct mlx5_core_dev *dev = esw->dev;
  	struct devlink_port *dl_port;
  	unsigned int dl_port_index;
-@@ -98,10 +153,14 @@ int mlx5_esw_offloads_devlink_port_regis
+@@ -108,10 +163,14 @@ rate_err:
  reg_err:
  	mlx5_esw_dl_port_free(dl_port);
  	return err;
@@ -148,7 +148,7 @@ Change-Id: Iee4e46f55b3af6a6b2b4c07075b2cc86199567f8
  	struct mlx5_vport *vport;
  
  	if (!mlx5_esw_devlink_port_supported(esw, vport_num))
-@@ -113,6 +172,7 @@ void mlx5_esw_offloads_devlink_port_unre
+@@ -132,6 +191,7 @@ void mlx5_esw_offloads_devlink_port_unre
  	devlink_port_unregister(vport->dl_port);
  	mlx5_esw_dl_port_free(vport->dl_port);
  	vport->dl_port = NULL;
@@ -156,7 +156,7 @@ Change-Id: Iee4e46f55b3af6a6b2b4c07075b2cc86199567f8
  }
  
  struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u16 vport_num)
-@@ -133,9 +193,40 @@ int mlx5_esw_devlink_sf_port_register(st
+@@ -152,17 +212,51 @@ int mlx5_esw_devlink_sf_port_register(st
  int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
  				      u16 vport_num, u32 controller, u32 sfnum)
  {
@@ -167,8 +167,8 @@ Change-Id: Iee4e46f55b3af6a6b2b4c07075b2cc86199567f8
 +	struct mlx5_vport *vport;
 +	struct devlink *devlink;
 +	u16 pfnum;
-+	int err;
-+
+ 	int err;
+ 
 +	vport = mlx5_eswitch_get_vport(esw, vport_num);
 +	if (IS_ERR(vport))
 +		return PTR_ERR(vport);
@@ -187,26 +187,47 @@ Change-Id: Iee4e46f55b3af6a6b2b4c07075b2cc86199567f8
 +	err = devlink_port_register(devlink, dl_port, dl_port_index);
 +	if (err)
 +		return err;
-+
+ 
+ #ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	err = devlink_rate_leaf_create(dl_port, vport);
+ 	if (err)
+-		return err;
++		goto rate_err;
+ #endif
+ 
 +	vport->dl_port = dl_port;
 +	return 0;
++
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++rate_err:
++	devlink_port_unregister(dl_port);
++#endif
 +#else
- 
++ 
  	return -EOPNOTSUPP;
 +#endif
  }
  #endif
  
-@@ -147,5 +238,14 @@ void mlx5_esw_devlink_sf_port_unregister
+@@ -174,17 +268,22 @@ void mlx5_esw_devlink_sf_port_unregister
  #else
  void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
  {
+-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 +#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
-+	struct mlx5_vport *vport;
+ 	struct mlx5_vport *vport;
+ 
+ 	vport = mlx5_eswitch_get_vport(esw, vport_num);
+ 	if (IS_ERR(vport))
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	if (vport->dl_port->devlink_rate) {
+ 		mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
+ 		devlink_rate_leaf_destroy(vport->dl_port);
+ 	}
+ #endif
 +
-+	vport = mlx5_eswitch_get_vport(esw, vport_num);
-+	if (IS_ERR(vport))
-+		return;
 +	devlink_port_unregister(vport->dl_port);
 +	vport->dl_port = NULL;
 +#endif

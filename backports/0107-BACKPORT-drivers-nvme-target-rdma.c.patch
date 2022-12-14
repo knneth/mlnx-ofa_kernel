@@ -3,12 +3,22 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
 
 Change-Id: I095134f8d9056c60618cfd216ba02b9d746769a8
 ---
- drivers/nvme/target/rdma.c | 25 +++++++++++++++++++++++++
- 1 file changed, 25 insertions(+)
+ drivers/nvme/target/rdma.c | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
 
 --- a/drivers/nvme/target/rdma.c
 +++ b/drivers/nvme/target/rdma.c
-@@ -165,8 +165,13 @@ static int nvmet_rdma_srq_size = 1024;
+@@ -8,6 +8,9 @@
+ #endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/atomic.h>
++#ifdef HAVE_BLK_INTEGRITY_H
++#include <linux/blk-integrity.h>
++#endif
+ #include <linux/ctype.h>
+ #include <linux/delay.h>
+ #include <linux/err.h>
+@@ -165,8 +168,13 @@ static int nvmet_rdma_srq_size = 1024;
  module_param_cb(srq_size, &srq_size_ops, &nvmet_rdma_srq_size, 0644);
  MODULE_PARM_DESC(srq_size, "set Shared Receive Queue (SRQ) size, should >= 256 (default: 1024)");
  
@@ -22,7 +32,7 @@ Change-Id: I095134f8d9056c60618cfd216ba02b9d746769a8
  MODULE_PARM_DESC(offload_mem_start,
  		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
  		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");
-@@ -230,6 +235,13 @@ static int srq_size_set(const char *val,
+@@ -230,6 +238,13 @@ static int srq_size_set(const char *val,
  	return param_set_int(val, kp);
  }
  
@@ -36,7 +46,7 @@ Change-Id: I095134f8d9056c60618cfd216ba02b9d746769a8
  static int num_pages(int len)
  {
  	return 1 + (((len - 1) & PAGE_MASK) >> PAGE_SHIFT);
-@@ -637,7 +649,13 @@ static void nvmet_rdma_set_sig_domain(st
+@@ -637,7 +652,13 @@ static void nvmet_rdma_set_sig_domain(st
  {
  	domain->sig_type = IB_SIG_TYPE_T10_DIF;
  	domain->sig.dif.bg_type = IB_T10DIF_CRC;
@@ -50,7 +60,7 @@ Change-Id: I095134f8d9056c60618cfd216ba02b9d746769a8
  	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
  	if (control & NVME_RW_PRINFO_PRCHK_REF)
  		domain->sig.dif.ref_remap = true;
-@@ -2073,6 +2091,7 @@ static void nvmet_rdma_remove_port(struc
+@@ -2073,6 +2094,7 @@ static void nvmet_rdma_remove_port(struc
  static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
  		struct nvmet_port *nport, char *traddr)
  {
@@ -58,7 +68,7 @@ Change-Id: I095134f8d9056c60618cfd216ba02b9d746769a8
  	struct nvmet_rdma_port *port = nport->priv;
  	struct rdma_cm_id *cm_id = port->cm_id;
  
-@@ -2086,6 +2105,9 @@ static void nvmet_rdma_disc_port_addr(st
+@@ -2086,6 +2108,9 @@ static void nvmet_rdma_disc_port_addr(st
  	} else {
  		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
  	}
@@ -68,7 +78,7 @@ Change-Id: I095134f8d9056c60618cfd216ba02b9d746769a8
  }
  
  static u8 nvmet_rdma_get_mdts(const struct nvmet_ctrl *ctrl)
-@@ -2267,6 +2289,9 @@ module_init(nvmet_rdma_init);
+@@ -2267,6 +2292,9 @@ module_init(nvmet_rdma_init);
  module_exit(nvmet_rdma_exit);
  
  MODULE_LICENSE("GPL v2");

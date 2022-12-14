@@ -102,10 +102,10 @@ struct mlx5_esw_int_vport {
 #define MLX5_MAX_VLAN_PER_VPORT(dev) \
 	(1 << MLX5_CAP_GEN(dev, log_max_vlan_list))
 
-#define MLX5_MIN_BW_SHARE 1
+#define MLX5_MIN_BW_SHARE_2 1
 
-#define MLX5_RATE_TO_BW_SHARE(rate, divider, limit) \
-	min_t(u32, max_t(u32, DIV_ROUND_UP(rate, divider), MLX5_MIN_BW_SHARE), limit)
+#define MLX5_RATE_TO_BW_SHARE_2(rate, divider, limit) \
+	min_t(u32, max_t(u32, DIV_ROUND_UP(rate, divider), MLX5_MIN_BW_SHARE_2), limit)
 
 #define mlx5_esw_has_fwd_fdb(dev) \
 	MLX5_CAP_ESW_FLOWTABLE(dev, fdb_multi_path_to_table)
@@ -166,9 +166,12 @@ struct vport_ingress {
 		 * packet with metadata.
 		 */
 		struct mlx5_flow_group *metadata_allmatch_grp;
+		/* Optional group to add a drop all rule */
+		struct mlx5_flow_group *drop_grp;
 		struct mlx5_modify_hdr *modify_metadata;
 		struct mlx5_flow_handle *modify_metadata_rule;
 		struct mlx5_esw_ipsec_priv *esw_ipsec_priv;
+		struct mlx5_flow_handle *drop_rule;
 	} offloads;
 };
 
@@ -245,9 +248,9 @@ struct mlx5_vport {
 		bool            enabled;
 		u32             esw_tsar_ix;
 		u32             bw_share;
-		struct mlx5_vgroup *group;
 		u32 min_rate;
 		u32 max_rate;
+		struct mlx5_esw_rate_group *group;
 	} qos;
 
 	u16 vport;
@@ -339,10 +342,9 @@ struct mlx5_esw_offload {
 
 	struct mlx5_flow_table *ft_offloads;
 	struct mlx5_flow_group *vport_rx_group;
-	struct mlx5_flow_group *vport_rx_internal_group;
+	struct xarray vport_reps;
 	struct mlx5_flow_group *vport_rx_drop_group;
 	struct mlx5_flow_handle *vport_rx_drop_rule;
-	struct xarray vport_reps;
 	struct list_head peer_flows;
 	struct mutex peer_mutex;
 	struct mutex encap_tbl_lock; /* protects encap_tbl */
@@ -403,20 +405,6 @@ struct mlx5_smart_nic_sysfs {
 	struct mlx5_smart_nic_vport *vport;
 };
 
-struct mlx5_vgroup {
-	struct mlx5_core_dev *dev;
-	struct mlxdevm_rate_group devm;
-	u32		     group_id;
-	u32		     num_vports;
-	u32		     tsar_ix;
-	/* TBD: TODO: After remove group sysfs, remove these two fields and always use from devm */
-	u32		     max_rate;
-	u32		     min_rate;
-	u32		     bw_share;
-	struct		     kobject kobj;
-	struct		     list_head list;
-};
-
 struct mlx5_esw_bridge_offloads;
 
 struct mlx5_eswitch {
@@ -444,10 +432,14 @@ struct mlx5_eswitch {
 	atomic64_t user_count;
 
 	struct {
-		bool            enabled;
 		u32             root_tsar_ix;
-		struct mlx5_vgroup *group0;
-		struct list_head groups;
+		struct mlx5_esw_rate_group *group0;
+		struct list_head groups; /* Protected by esw->state_lock */
+
+		/* Protected by esw->state_lock.
+		 * Initially 0, meaning no QoS users and QoS is disabled.
+		 */
+		refcount_t refcnt;
 	} qos;
 
 	struct mlx5_esw_bridge_offloads *br_offloads;
@@ -475,8 +467,7 @@ int mlx5_esw_offloads_vport_metadata_set(struct mlx5_eswitch *esw, bool enable);
 u32 mlx5_esw_match_metadata_alloc(struct mlx5_eswitch *esw);
 void mlx5_esw_match_metadata_free(struct mlx5_eswitch *esw, u32 metadata);
 
-int mlx5_esw_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num,
-			       u32 rate_mbps);
+int mlx5_esw_qos_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num, u32 rate_mbps);
 
 /* E-Switch API */
 int mlx5_eswitch_init(struct mlx5_core_dev *dev);
@@ -503,6 +494,10 @@ int mlx5_eswitch_set_vport_trust(struct mlx5_eswitch *esw,
 				 u16 vport_num, bool setting);
 int mlx5_eswitch_set_vport_rate(struct mlx5_eswitch *esw, u16 vport,
 				u32 max_rate, u32 min_rate);
+int mlx5_esw_qos_vport_update_group(struct mlx5_eswitch *esw,
+				    struct mlx5_vport *vport,
+				    struct mlx5_esw_rate_group *group,
+				    struct netlink_ext_ack *extack);
 int mlx5_eswitch_set_vepa(struct mlx5_eswitch *esw, u8 setting);
 int mlx5_eswitch_get_vepa(struct mlx5_eswitch *esw, u8 *setting);
 int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
@@ -514,15 +509,6 @@ int mlx5_eswitch_get_vport_mac(struct mlx5_eswitch *esw,
 			       u16 vport, u8 *mac);
 int mlx5_eswitch_vport_update_group(struct mlx5_eswitch *esw, int vport_num,
 				    u32 group_id, const char *group_name);
-int mlx5_eswitch_set_vgroup_max_rate(struct mlx5_eswitch *esw,
-				     int group_id, const char *group_name,
-				     u32 max_rate);
-int mlx5_eswitch_set_vgroup_min_rate(struct mlx5_eswitch *esw,
-				     int group_id, const char *group_name,
-				     u32 min_rate);
-struct mlx5_vgroup *esw_create_vgroup(struct mlx5_eswitch *esw, u32 group_id,
-				      const char *name);
-void esw_destroy_vgroup(struct mlx5_eswitch *esw, struct mlx5_vgroup *group);
 
 struct ifla_vf_stats_backport {
 	__u64 tx_broadcast;
@@ -622,7 +608,15 @@ enum {
 	MLX5_ESW_ATTR_FLAG_NO_IN_PORT    = BIT(2),
 	MLX5_ESW_ATTR_FLAG_SRC_REWRITE   = BIT(3),
 	MLX5_ESW_ATTR_FLAG_SAMPLE        = BIT(4),
+	MLX5_ESW_ATTR_FLAG_ACCEPT        = BIT(5),
 };
+
+/* Returns true if any of the flags that require skipping further TC/NF processing are set. */
+static inline bool
+mlx5_esw_attr_flags_skip(u32 attr_flags)
+{
+	return attr_flags & (MLX5_ESW_ATTR_FLAG_SLOW_PATH | MLX5_ESW_ATTR_FLAG_ACCEPT);
+}
 
 struct mlx5_esw_flow_attr {
 	struct mlx5_eswitch_rep *in_rep;
@@ -681,22 +675,6 @@ int mlx5_devlink_port_function_hw_addr_set(struct devlink *devlink,
 					   struct devlink_port *port,
 					   const u8 *hw_addr, int hw_addr_len,
 					   struct netlink_ext_ack *extack);
-int mlx5_devlink_rate_leaf_tx_share_set(struct devlink *devlink,
-					struct devlink_port *port,
-					u64 tx_share,
-					struct netlink_ext_ack *extack);
-int mlx5_devlink_rate_leaf_tx_max_set(struct devlink *devlink,
-				      struct devlink_port *port,
-				      u64 tx_max,
-				      struct netlink_ext_ack *extack);
-int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
-				     struct devlink_port *port,
-				     const char *group,
-				     struct netlink_ext_ack *extack);
-int mlx5_devlink_rate_leaf_get(struct devlink *devlink,
-			       struct devlink_port *port,
-			       u64 *tx_max, u64 *tx_share, char **group,
-			       struct netlink_ext_ack *extack);
 int mlx5_devlink_rate_node_tx_max_set(struct devlink *devlink,
 				      const char *group, u64 tx_max,
 				      struct netlink_ext_ack *extack);
@@ -729,12 +707,6 @@ int mlx5_devlink_port_function_trust_set(struct devlink *devlink,
 int mlx5_esw_get_hca_trusted(struct mlx5_eswitch *esw,
 			     u16 vport_num,
 			     bool *trusted);
-
-
-static inline bool mlx5_esw_qos_enabled(struct mlx5_eswitch *esw)
-{
-	return esw->qos.enabled;
-}
 
 static inline bool mlx5_eswitch_vlan_actions_supported(struct mlx5_core_dev *dev,
 						       u8 vlan_depth)
@@ -771,8 +743,6 @@ static inline enum esw_vst_mode esw_get_vst_mode(struct mlx5_eswitch *esw)
 		return ESW_VST_MODE_BASIC;
 }
 
-bool mlx5_esw_lag_prereq(struct mlx5_core_dev *dev0,
-			 struct mlx5_core_dev *dev1);
 bool mlx5_esw_multipath_prereq(struct mlx5_core_dev *dev0,
 			       struct mlx5_core_dev *dev1);
 
@@ -972,7 +942,6 @@ void mlx5_esw_get(struct mlx5_core_dev *dev);
 void mlx5_esw_put(struct mlx5_core_dev *dev);
 int mlx5_esw_try_lock(struct mlx5_eswitch *esw);
 void mlx5_esw_unlock(struct mlx5_eswitch *esw);
-void mlx5_esw_lock(struct mlx5_eswitch *esw);
 
 void esw_vport_change_handle_locked(struct mlx5_vport *vport);
 
@@ -1010,7 +979,6 @@ static inline int  mlx5_eswitch_init(struct mlx5_core_dev *dev) { return 0; }
 static inline void mlx5_eswitch_cleanup(struct mlx5_eswitch *esw) {}
 static inline int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs) { return 0; }
 static inline void mlx5_eswitch_disable(struct mlx5_eswitch *esw, bool clear_vf) {}
-static inline bool mlx5_esw_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev1) { return true; }
 static inline bool mlx5_eswitch_is_funcs_handler(struct mlx5_core_dev *dev) { return false; }
 static inline
 int mlx5_eswitch_set_vport_state(struct mlx5_eswitch *esw, u16 vport, int link_state) { return 0; }

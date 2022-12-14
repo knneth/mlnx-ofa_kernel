@@ -8,13 +8,14 @@ Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux
 
 Package: mlnx-ofed-kernel-utils
 Architecture: any
-Depends: ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod, lsof
+Depends: ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod, lsof,
+ mlnx-tools (>= 5.2.0),
 Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 
 Package: mlnx-ofed-kernel-modules
 Section: kernel
 Architecture: any
-Depends: ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod, lsof, mlnx-ofed-kernel-utils
+Depends: ${misc:Depends}, mlnx-ofed-kernel-utils
 Provides: mlnx-rdma-rxe-modules
 Conflicts: mlnx-rdma-rxe-modules
 Replaces: mlnx-rdma-rxe-modules

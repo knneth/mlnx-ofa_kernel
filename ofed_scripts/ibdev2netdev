@@ -64,6 +64,11 @@ if (( $# == 1 )) && [ "$1" != "-v" ]; then
         exit -1
 fi
 
+IP="ip"
+if [ -x /opt/mellanox/iproute2/sbin/ip ]; then
+	IP="/opt/mellanox/iproute2/sbin/ip"
+fi
+
 if [ ! -d /sys/class/infiniband ]; then
 	# driver is stopped
 	exit -1
@@ -165,7 +170,7 @@ function find_matching_ndev_for_gid()
 	gid_without_prefix=${gid#"fe80:0000:0000:0000:"}
 	gid_without_colon=${gid_without_prefix//:}
 
-	ip_link_output=$(ip link show)
+	ip_link_output=$($IP link show)
 	IFS=$'\n' read -rd '' -a array <<<"$ip_link_output"
 
 	for index in "${!array[@]}"
@@ -294,7 +299,7 @@ function find_mac()
 	done
 }
 
-ifcs=$(ifconfig -a | egrep '^eth|^ib' | awk '{print $1}')
+ifcs=$($IP link | egrep '^[0-9]+: (ib|eth)' | awk '{print $2}' | tr -d :)
 
 for ifc in $ifcs; do
 	len=$(cat /sys/class/net/$ifc/addr_len)

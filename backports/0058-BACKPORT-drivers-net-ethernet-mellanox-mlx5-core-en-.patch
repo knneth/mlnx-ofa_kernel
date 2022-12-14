@@ -628,12 +628,12 @@ Change-Id: Iea9aec584f585b04d01b201c228a068f8ea644eb
  {
  	struct mlx5e_priv *priv = netdev_priv(skb->dev);
 +#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
- 	struct mlx5_eswitch *esw;
+ 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 +#endif
- 	u32 tunnel_id = reg_c1 >> ESW_TUN_OFFSET;
+ 	u32 tunnel_id = (reg_c1 >> ESW_TUN_OFFSET) & TUNNEL_ID_MASK;
  
  #if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
-@@ -661,8 +1048,10 @@ static bool mlx5e_restore_skb_chain(stru
+@@ -660,8 +1047,10 @@ static bool mlx5e_restore_skb_chain(stru
  #endif /* CONFIG_NET_TC_SKB_EXT */
  	return mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id);
  
@@ -644,7 +644,7 @@ Change-Id: Iea9aec584f585b04d01b201c228a068f8ea644eb
  
  	return false;
  }
-@@ -721,11 +1110,15 @@ static bool mlx5e_handle_int_port(struct
+@@ -720,11 +1109,15 @@ static bool mlx5e_handle_int_port(struct
  	if (type) {
  		skb_reset_network_header(skb);
  		skb_push(skb, skb->mac_len);

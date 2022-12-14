@@ -9,15 +9,15 @@ Change-Id: Ic23f3a0e9d1e172026f35ccbdc297ce192d4b0be
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
-@@ -105,6 +105,7 @@ static ssize_t vf_paging_attr_store(stru
+@@ -106,6 +106,7 @@ static ssize_t vf_paging_attr_store(stru
  	return ga->store(g, ga, buf, size);
  }
  
 +#ifdef CONFIG_MLX5_ESWITCH
  struct vf_group_attributes {
  	struct attribute attr;
- 	ssize_t (*show)(struct mlx5_vgroup *, struct vf_group_attributes *,
-@@ -191,7 +192,7 @@ static ssize_t min_tx_rate_group_store(s
+ 	ssize_t (*show)(struct mlx5_esw_rate_group *, struct vf_group_attributes *,
+@@ -192,7 +193,7 @@ static ssize_t min_tx_rate_group_store(s
  
  	return err ? err : count;
  }
@@ -26,7 +26,7 @@ Change-Id: Ic23f3a0e9d1e172026f35ccbdc297ce192d4b0be
  static ssize_t port_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
  			 char *buf)
  {
-@@ -1096,15 +1097,25 @@ static ssize_t num_vf_show(struct device
+@@ -1102,15 +1103,25 @@ static ssize_t num_vf_show(struct device
  
  static DEVICE_ATTR(mlx5_num_vfs, 0600, num_vf_show, num_vf_store);
  
@@ -52,7 +52,7 @@ Change-Id: Ic23f3a0e9d1e172026f35ccbdc297ce192d4b0be
  
  static const struct sysfs_ops vf_paging_ops = {
  	.show = vf_paging_attr_show,
-@@ -1266,7 +1277,9 @@ err_attr:
+@@ -1272,7 +1283,9 @@ err_attr:
  		sriov->groups_config = NULL;
  	}
  
@@ -62,7 +62,7 @@ Change-Id: Ic23f3a0e9d1e172026f35ccbdc297ce192d4b0be
  	kobject_put(sriov->config);
  	sriov->config = NULL;
  	return err;
-@@ -1290,10 +1303,10 @@ void mlx5_sriov_sysfs_cleanup(struct mlx
+@@ -1296,10 +1309,10 @@ void mlx5_sriov_sysfs_cleanup(struct mlx
  int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
  			       u32 group_id, struct kobject *group_kobj)
  {

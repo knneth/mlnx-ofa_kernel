@@ -9,7 +9,7 @@ Change-Id: I1e4f5e2ff95fb655c0de03493a4f551840dd6fee
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-@@ -74,7 +74,11 @@ mlx5_esw_bridge_fdb_offload_notify(struc
+@@ -80,7 +80,11 @@ mlx5_esw_bridge_fdb_offload_notify(struc
  	send_info.addr = addr;
  	send_info.vid = vid;
  	send_info.offloaded = true;

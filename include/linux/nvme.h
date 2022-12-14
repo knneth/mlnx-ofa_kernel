@@ -228,6 +228,15 @@ enum nvme_ctrl_attr {
 	NVME_CTRL_ATTR_TBKAS		= (1 << 6),
 };
 
+enum {
+	NVME_OVSNCS_PASSTHROUGH_SQE_RW	= 1 << 0,
+};
+
+enum {
+	NVME_IMMTS_UNMAP_RANGED	= 1 << 0,
+	NVME_IMMTS_UNMAP_ALL	= 1 << 1,
+};
+
 struct nvme_id_ctrl {
 	__le16			vid;
 	__le16			ssvid;
@@ -308,7 +317,11 @@ struct nvme_id_ctrl {
 	__u8			msdbd;
 	__u8			rsvd1804[244];
 	struct nvme_id_power_state	psd[32];
-	__u8			vs[1024];
+	__le32			ovsncs;
+	__u8			vs0[2];
+	__le16			immts;
+	__u8			imms;
+	__u8			vs[1015];
 };
 
 enum {

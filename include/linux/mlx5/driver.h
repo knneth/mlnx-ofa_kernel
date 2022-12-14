@@ -82,7 +82,7 @@ enum mlx5_sqp_t {
 };
 
 enum {
-	MLX5_MAX_PORTS	= 2,
+	MLX5_MAX_PORTS	= 4,
 };
 
 enum {
@@ -290,6 +290,14 @@ enum mlx5_comp_t {
 struct mlx5_cmd_stats {
 	u64		sum;
 	u64		n;
+	/* number of times command failed */
+	u64		failed;
+	/* number of times command failed on bad status returned by FW */
+	u64		failed_mbox_status;
+	/* last command failed returned errno */
+	u32		last_failed_errno;
+	/* last bad status returned by FW */
+	u8		last_failed_mbox_status;
 	struct dentry  *root;
 	/* protect command average calculations */
 	spinlock_t	lock;
@@ -620,6 +628,17 @@ struct mlx5_core_roce {
 	struct mlx5_flow_handle *allow_rule;
 };
 
+struct mlx5_regex_vport {
+	struct mlx5_core_dev *dev;
+	struct kobject kobj;
+	uint16_t vport;
+};
+
+struct mlx5_core_regex {
+	struct kobject	*kobj;
+	struct mlx5_regex_vport *vport;
+};
+
 enum {
 	MLX5_PRIV_FLAGS_DISABLE_IB_ADEV = 1 << 0,
 	MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV = 1 << 1,
@@ -651,6 +670,16 @@ enum {
 	MLX5E_CONG_PROTOCOL_NUM,
 };
 
+struct mlx5_debugfs_entries {
+	struct dentry *dbg_root;
+	struct dentry *qp_debugfs;
+	struct dentry *eq_debugfs;
+	struct dentry *cq_debugfs;
+	struct dentry *cmdif_debugfs;
+	struct dentry *pages_debugfs;
+	struct dentry *lag_debugfs;
+};
+
 struct mlx5_ft_pool;
 struct mlx5_priv {
 	/* IRQ table valid only for real pci devices PF or VF */
@@ -661,11 +690,14 @@ struct mlx5_priv {
 	struct mlx5_nb          pg_nb;
 	struct workqueue_struct *pg_wq;
 	struct xarray           page_root_xa;
-	int			fw_pages;
+	u32			fw_pages;
 	atomic_t		reg_pages;
 	struct list_head	free_list;
-	int			vfs_pages;
-	int			host_pf_pages;
+	u32			vfs_pages;
+	u32			host_pf_pages;
+	u32			fw_pages_alloc_failed;
+	u32			give_pages_dropped;
+	u32			reclaim_pages_discard;
 
 	struct mlx5_core_health health;
 	struct list_head	traps;
@@ -674,12 +706,7 @@ struct mlx5_priv {
 	struct mlx5_tc_ct_debugfs *ct_debugfs;
 	/* end: ct debug fs stuff */
 
-	/* start: qp staff */
-	struct dentry	       *qp_debugfs;
-	struct dentry	       *eq_debugfs;
-	struct dentry	       *cq_debugfs;
-	struct dentry	       *cmdif_debugfs;
-	/* end: qp staff */
+	struct mlx5_debugfs_entries dbg;
 
 	/* start: alloc staff */
 	/* protect buffer alocation according to numa node */
@@ -689,7 +716,6 @@ struct mlx5_priv {
 	struct mutex            pgdir_mutex;
 	struct list_head        pgdir_list;
 	/* end: alloc staff */
-	struct dentry	       *dbg_root;
 
 	struct list_head        ctx_list;
 	spinlock_t              ctx_lock;
@@ -708,6 +734,7 @@ struct mlx5_priv {
 	struct mlx5_devcom	*devcom;
 	struct mlx5_fw_reset	*fw_reset;
 	struct mlx5_core_roce	roce;
+	struct mlx5_core_regex	regex;
 	struct mlx5_fc_stats		fc_stats;
 	struct mlx5_rl_table            rl_table;
 	struct mlx5_ft_pool		*ft_pool;
@@ -728,8 +755,7 @@ struct mlx5_priv {
 };
 
 enum mlx5_device_state {
-	MLX5_DEVICE_STATE_UNINITIALIZED,
-	MLX5_DEVICE_STATE_UP,
+	MLX5_DEVICE_STATE_UP = 1,
 	MLX5_DEVICE_STATE_INTERNAL_ERROR,
 };
 
@@ -1202,6 +1228,8 @@ typedef void (*mlx5_async_cbk_t)(int status, struct mlx5_async_work *context);
 struct mlx5_async_work {
 	struct mlx5_async_ctx *ctx;
 	mlx5_async_cbk_t user_callback;
+	u16 opcode; /* cmd opcode */
+	void *out; /* pointer to the cmd output buffer */
 };
 
 void mlx5_cmd_init_async_ctx(struct mlx5_core_dev *dev,
@@ -1210,7 +1238,9 @@ void mlx5_cmd_cleanup_async_ctx(struct mlx5_async_ctx *ctx);
 int mlx5_cmd_exec_cb(struct mlx5_async_ctx *ctx, void *in, int in_size,
 		     void *out, int out_size, mlx5_async_cbk_t callback,
 		     struct mlx5_async_work *work);
-
+void mlx5_cmd_out_err(struct mlx5_core_dev *dev, u16 opcode, u16 op_mod, void *out);
+int mlx5_cmd_do(struct mlx5_core_dev *dev, void *in, int in_size, void *out, int out_size);
+int mlx5_cmd_check(struct mlx5_core_dev *dev, int err, void *in, void *out);
 int mlx5_cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 		  int out_size);
 
@@ -1228,7 +1258,6 @@ int mlx5_cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 
 int mlx5_cmd_exec_polling(struct mlx5_core_dev *dev, void *in, int in_size,
 			  void *out, int out_size);
-void mlx5_cmd_mbox_status(void *out, u8 *status, u32 *syndrome);
 bool mlx5_cmd_is_down(struct mlx5_core_dev *dev);
 
 int mlx5_core_query_special_contexts(struct mlx5_core_dev *dev);
@@ -1270,6 +1299,8 @@ int mlx5_pagealloc_init(struct mlx5_core_dev *dev);
 void mlx5_pagealloc_cleanup(struct mlx5_core_dev *dev);
 void mlx5_pagealloc_start(struct mlx5_core_dev *dev);
 void mlx5_pagealloc_stop(struct mlx5_core_dev *dev);
+void mlx5_pages_debugfs_init(struct mlx5_core_dev *dev);
+void mlx5_pages_debugfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_update_guids(struct mlx5_core_dev *dev);
 void mlx5_core_req_pages_handler(struct mlx5_core_dev *dev, u16 func_id,
 				 s32 npages, bool ec_function);
@@ -1285,8 +1316,12 @@ int mlx5_vector2eqn(struct mlx5_core_dev *dev, int vector, int *eqn);
 int mlx5_core_attach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 int mlx5_core_detach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 
+struct dentry *mlx5_debugfs_get_dev_root(struct mlx5_core_dev *dev);
 void mlx5_qp_debugfs_init(struct mlx5_core_dev *dev);
 void mlx5_qp_debugfs_cleanup(struct mlx5_core_dev *dev);
+int mlx5_access_reg(struct mlx5_core_dev *dev, void *data_in, int size_in,
+		    void *data_out, int size_out, u16 reg_id, int arg,
+		    int write, bool verbose);
 int mlx5_core_set_dc_cnak_trace(struct mlx5_core_dev *dev, int enable,
 				u64 addr);
 int mlx5_core_access_reg(struct mlx5_core_dev *dev, void *data_in,
@@ -1383,6 +1418,7 @@ int mlx5_lag_query_cong_counters(struct mlx5_core_dev *dev,
 				 int num_counters,
 				 size_t *offsets);
 struct mlx5_core_dev *mlx5_lag_get_peer_mdev(struct mlx5_core_dev *dev);
+u8 mlx5_lag_get_num_ports(struct mlx5_core_dev *dev);
 int mlx5_activate_mpesw_lag(struct mlx5_eswitch *esw);
 void mlx5_deactivate_mpesw_lag(struct mlx5_eswitch *esw);
 bool mlx5_lag_mpesw_is_activated(struct mlx5_eswitch *esw);

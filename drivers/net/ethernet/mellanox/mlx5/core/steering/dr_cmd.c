@@ -143,9 +143,12 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 	caps->support_modify_argument = MLX5_CAP_GEN_64(mdev, general_obj_types) &
 					MLX5_GENERAL_OBJ_TYPES_CAP_HEADER_MODIFY_ARGUMENT;
 
-	if (caps->support_modify_argument)
+	if (caps->support_modify_argument) {
 		caps->log_header_modify_argument_granularity =
 			MLX5_CAP_GEN(mdev, log_header_modify_argument_granularity);
+		caps->log_header_modify_argument_max_alloc =
+			MLX5_CAP_GEN(mdev, log_header_modify_argument_max_alloc);
+	}
 
 	if (caps->flex_protocols & MLX5_FLEX_PARSER_ICMP_V4_ENABLED) {
 		caps->flex_parser_id_icmp_dw0 = MLX5_CAP_GEN(mdev, flex_parser_id_icmp_dw0);

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/frwr_ops.c
 
 Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
 ---
- net/sunrpc/xprtrdma/frwr_ops.c | 40 ++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 38 insertions(+), 2 deletions(-)
+ net/sunrpc/xprtrdma/frwr_ops.c | 46 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 44 insertions(+), 2 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/frwr_ops.c
 +++ b/net/sunrpc/xprtrdma/frwr_ops.c
@@ -18,7 +18,20 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  
  #ifdef CONFIG_NVFS
  #define NVFS_FRWR
-@@ -67,7 +69,9 @@ static void frwr_cid_init(struct rpcrdma
+@@ -51,6 +53,12 @@
+ #include "nvfs_rpc_rdma.h"
+ #endif
+ 
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
++
+ static void frwr_cid_init(struct rpcrdma_ep *ep,
+ 			  struct rpcrdma_mr *mr)
+ {
+@@ -63,7 +71,9 @@ static void frwr_cid_init(struct rpcrdma
  static void frwr_mr_unmap(struct rpcrdma_xprt *r_xprt, struct rpcrdma_mr *mr)
  {
  	if (mr->mr_device) {
@@ -28,7 +41,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  #ifdef CONFIG_NVFS
  		if (rpcrdma_nvfs_unmap_data(mr->mr_device->dma_device,
  					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
-@@ -94,8 +98,10 @@ void frwr_mr_release(struct rpcrdma_mr *
+@@ -90,8 +100,10 @@ void frwr_mr_release(struct rpcrdma_mr *
  	frwr_mr_unmap(mr->mr_xprt, mr);
  
  	rc = ib_dereg_mr(mr->mr_ibmr);
@@ -39,7 +52,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	kfree(mr->mr_sg);
  	kfree(mr);
  }
-@@ -165,7 +171,9 @@ int frwr_mr_init(struct rpcrdma_xprt *r_
+@@ -161,7 +173,9 @@ int frwr_mr_init(struct rpcrdma_xprt *r_
  
  out_mr_err:
  	rc = PTR_ERR(frmr);
@@ -49,7 +62,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	return rc;
  
  out_list_err:
-@@ -374,16 +382,22 @@ struct rpcrdma_mr_seg *frwr_map(struct r
+@@ -368,16 +382,22 @@ struct rpcrdma_mr_seg *frwr_map(struct r
  	mr->mr_handle = ibmr->rkey;
  	mr->mr_length = ibmr->length;
  	mr->mr_offset = ibmr->iova;
@@ -72,7 +85,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	return ERR_PTR(-EIO);
  }
  
-@@ -396,11 +410,13 @@ out_mapmr_err:
+@@ -390,11 +410,13 @@ out_mapmr_err:
   */
  static void frwr_wc_fastreg(struct ib_cq *cq, struct ib_wc *wc)
  {
@@ -86,7 +99,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  
  	rpcrdma_flush_disconnect(cq->cq_context, wc);
  }
-@@ -429,7 +445,9 @@ int frwr_send(struct rpcrdma_xprt *r_xpr
+@@ -423,7 +445,9 @@ int frwr_send(struct rpcrdma_xprt *r_xpr
  	num_wrs = 1;
  	post_wr = send_wr;
  	list_for_each_entry(mr, &req->rl_registered, mr_list) {
@@ -96,7 +109,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  
  		mr->mr_cqe.done = frwr_wc_fastreg;
  		mr->mr_regwr.wr.next = post_wr;
-@@ -450,7 +468,9 @@ int frwr_send(struct rpcrdma_xprt *r_xpr
+@@ -444,7 +468,9 @@ int frwr_send(struct rpcrdma_xprt *r_xpr
  		ep->re_send_count -= num_wrs;
  	}
  
@@ -106,7 +119,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	return ib_post_send(ep->re_id->qp, post_wr, NULL);
  }
  
-@@ -467,7 +487,9 @@ void frwr_reminv(struct rpcrdma_rep *rep
+@@ -461,7 +487,9 @@ void frwr_reminv(struct rpcrdma_rep *rep
  	list_for_each_entry(mr, mrs, mr_list)
  		if (mr->mr_handle == rep->rr_inv_rkey) {
  			list_del_init(&mr->mr_list);
@@ -116,7 +129,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  			frwr_mr_put(mr);
  			break;	/* only one invalidated MR per RPC */
  		}
-@@ -491,7 +513,9 @@ static void frwr_wc_localinv(struct ib_c
+@@ -485,7 +513,9 @@ static void frwr_wc_localinv(struct ib_c
  	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -126,7 +139,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	frwr_mr_done(wc, mr);
  
  	rpcrdma_flush_disconnect(cq->cq_context, wc);
-@@ -510,7 +534,9 @@ static void frwr_wc_localinv_wake(struct
+@@ -504,7 +534,9 @@ static void frwr_wc_localinv_wake(struct
  	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -136,7 +149,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	frwr_mr_done(wc, mr);
  	complete(&mr->mr_linv_done);
  
-@@ -530,7 +556,7 @@ static void frwr_wc_localinv_wake(struct
+@@ -524,7 +556,7 @@ static void frwr_wc_localinv_wake(struct
   */
  void frwr_unmap_sync(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  {
@@ -145,7 +158,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	struct rpcrdma_ep *ep = r_xprt->rx_ep;
  	const struct ib_send_wr *bad_wr;
  	struct rpcrdma_mr *mr;
-@@ -544,7 +570,9 @@ void frwr_unmap_sync(struct rpcrdma_xprt
+@@ -538,7 +570,9 @@ void frwr_unmap_sync(struct rpcrdma_xprt
  	prev = &first;
  	while ((mr = rpcrdma_mr_pop(&req->rl_registered))) {
  
@@ -155,7 +168,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  		r_xprt->rx_stats.local_inv_needed++;
  
  		last = &mr->mr_invwr;
-@@ -586,8 +614,10 @@ void frwr_unmap_sync(struct rpcrdma_xprt
+@@ -580,8 +614,10 @@ void frwr_unmap_sync(struct rpcrdma_xprt
  	if (!rc)
  		return;
  
@@ -166,7 +179,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  }
  
  /**
-@@ -602,8 +632,10 @@ static void frwr_wc_localinv_done(struct
+@@ -596,8 +632,10 @@ static void frwr_wc_localinv_done(struct
  	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
  	struct rpcrdma_rep *rep;
  
@@ -177,7 +190,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  
  	/* Ensure that @rep is generated before the MR is released */
  	rep = mr->mr_req->rl_reply;
-@@ -631,7 +663,7 @@ static void frwr_wc_localinv_done(struct
+@@ -625,7 +663,7 @@ static void frwr_wc_localinv_done(struct
   */
  void frwr_unmap_async(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  {
@@ -186,7 +199,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  	struct rpcrdma_ep *ep = r_xprt->rx_ep;
  	struct rpcrdma_mr *mr;
  	int rc;
-@@ -642,7 +674,9 @@ void frwr_unmap_async(struct rpcrdma_xpr
+@@ -636,7 +674,9 @@ void frwr_unmap_async(struct rpcrdma_xpr
  	prev = &first;
  	while ((mr = rpcrdma_mr_pop(&req->rl_registered))) {
  
@@ -196,7 +209,7 @@ Change-Id: I7fcf7723195bd6bd6d70f011fa5622837752524d
  		r_xprt->rx_stats.local_inv_needed++;
  
  		last = &mr->mr_invwr;
-@@ -675,8 +709,10 @@ void frwr_unmap_async(struct rpcrdma_xpr
+@@ -669,8 +709,10 @@ void frwr_unmap_async(struct rpcrdma_xpr
  	if (!rc)
  		return;
  

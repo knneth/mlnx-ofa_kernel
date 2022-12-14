@@ -3,94 +3,20 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
 
 Change-Id: Ie0b5725e096ef78eca741a67b737336a686d6354
 ---
- .../net/ethernet/mellanox/mlx5/core/port.c    | 67 +++++++++++++++++++
- 1 file changed, 67 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/port.c | 2 ++
+ 1 file changed, 2 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/port.c
-@@ -354,6 +354,7 @@ static void mlx5_sfp_eeprom_params_set(u
- 	*offset -= MLX5_EEPROM_PAGE_LENGTH;
+@@ -442,6 +442,7 @@ int mlx5_query_module_eeprom(struct mlx5
  }
- 
-+#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
- static int mlx5_query_mcia(struct mlx5_core_dev *dev,
- 			   struct mlx5_module_eeprom_query_params *params, u8 *data)
- {
-@@ -427,8 +428,73 @@ int mlx5_query_module_eeprom(struct mlx5
- 
- 	return mlx5_query_mcia(dev, &query, data);
- }
-+#else
-+int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
-+			     u16 offset, u16 size, u8 *data)
-+{
-+	int module_num, status, err, page_num = 0;
-+	u32 in[MLX5_ST_SZ_DW(mcia_reg)] = {};
-+	u32 out[MLX5_ST_SZ_DW(mcia_reg)];
-+	u16 i2c_addr = 0;
-+	u8 module_id;
-+	void *ptr;
-+
-+	err = mlx5_query_module_num(dev, &module_num);
-+	if (err)
-+		return err;
-+
-+	err = mlx5_query_module_id(dev, module_num, &module_id);
-+	if (err)
-+		return err;
-+
-+	switch (module_id) {
-+	case MLX5_MODULE_ID_SFP:
-+		mlx5_sfp_eeprom_params_set(&i2c_addr, &page_num, &offset);
-+		break;
-+	case MLX5_MODULE_ID_QSFP:
-+	case MLX5_MODULE_ID_QSFP_PLUS:
-+	case MLX5_MODULE_ID_QSFP28:
-+		mlx5_qsfp_eeprom_params_set(&i2c_addr, &page_num, &offset);
-+		break;
-+	default:
-+		mlx5_core_err(dev, "Module ID not recognized: 0x%x\n", module_id);
-+		return -EINVAL;
-+	}
-+
-+	if (offset + size > MLX5_EEPROM_PAGE_LENGTH)
-+		/* Cross pages read, read until offset 256 in low page */
-+		size -= offset + size - MLX5_EEPROM_PAGE_LENGTH;
-+
-+	size = min_t(int, size, MLX5_EEPROM_MAX_BYTES);
-+
-+	MLX5_SET(mcia_reg, in, l, 0);
-+	MLX5_SET(mcia_reg, in, module, module_num);
-+	MLX5_SET(mcia_reg, in, i2c_device_address, i2c_addr);
-+	MLX5_SET(mcia_reg, in, page_number, page_num);
-+	MLX5_SET(mcia_reg, in, device_address, offset);
-+	MLX5_SET(mcia_reg, in, size, size);
-+
-+	err = mlx5_core_access_reg(dev, in, sizeof(in), out,
-+				   sizeof(out), MLX5_REG_MCIA, 0, 0);
-+	if (err)
-+		return err;
-+
-+	status = MLX5_GET(mcia_reg, out, status);
-+	if (status) {
-+		mlx5_core_err(dev, "query_mcia_reg failed: status: 0x%x\n",
-+			      status);
-+		return -EIO;
-+	}
-+
-+	ptr = MLX5_ADDR_OF(mcia_reg, out, dword_0);
-+	memcpy(data, ptr, size);
-+
-+	return size;
-+}
-+#endif
  EXPORT_SYMBOL_GPL(mlx5_query_module_eeprom);
  
 +#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
  int mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
  				     struct mlx5_module_eeprom_query_params *params,
  				     u8 *data)
-@@ -471,6 +537,7 @@ int mlx5_query_module_eeprom_by_page(str
+@@ -484,6 +485,7 @@ int mlx5_query_module_eeprom_by_page(str
  	return mlx5_query_mcia(dev, params, data);
  }
  EXPORT_SYMBOL_GPL(mlx5_query_module_eeprom_by_page);

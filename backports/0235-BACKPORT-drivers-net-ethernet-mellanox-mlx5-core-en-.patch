@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
 ---
- .../mellanox/mlx5/core/en/tc_tun_encap.c      | 65 +++++++++++++++++--
- 1 file changed, 59 insertions(+), 6 deletions(-)
+ .../mellanox/mlx5/core/en/tc_tun_encap.c      | 59 ++++++++++++++++++-
+ 1 file changed, 56 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
@@ -17,7 +17,7 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
 +#ifdef HAVE_FIB_NOTIFIER_HEADER_FILE
  #include <net/fib_notifier.h>
 +#endif
-+#ifdef HAVE_NET_NEXTHOP_H
++#ifdef HAVE_FIB_INFO_NH
  #include <net/nexthop.h>
 +#endif
  #include "tc_tun_encap.h"
@@ -166,28 +166,27 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
  static struct mlx5e_tc_fib_event_data *
  mlx5e_init_fib_work_ipv4(struct mlx5e_priv *priv,
  			 struct net_device *ul_dev,
-@@ -1576,13 +1601,17 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
+@@ -1576,15 +1601,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct mlx5e_route_entry *r;
  	struct mlx5e_route_key key;
--	struct net_device *fib_dev;
-+#if defined(HAVE_NET_NEXTHOP_H) && defined(HAVE_FIB_INFO_NH)
-+	struct net_device *fib_dev_tmp;
++#ifdef HAVE_FIB_INFO_NH
+ 	struct net_device *fib_dev;
 +#endif
  
  	fen_info = container_of(info, struct fib_entry_notifier_info, info);
--	fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
--	if (!fib_dev || fib_dev->netdev_ops != &mlx5e_netdev_ops ||
-+#if defined(HAVE_NET_NEXTHOP_H) && defined(HAVE_FIB_INFO_NH)
-+	fib_dev_tmp = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
-+	if (!fib_dev_tmp || fib_dev_tmp->netdev_ops != &mlx5e_netdev_ops ||
++#ifdef HAVE_FIB_INFO_NH
+ 	if (fen_info->fi->nh)
+ 		return NULL;
+ 	fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
+ 	if (!fib_dev || fib_dev->netdev_ops != &mlx5e_netdev_ops ||
  	    fen_info->dst_len != 32)
  		return NULL;
 +#endif
  
  	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
  	if (!fib_work)
-@@ -1615,24 +1644,31 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+@@ -1617,24 +1646,31 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
  			 unsigned long event,
  			 struct fib_notifier_info *info)
  {
@@ -222,7 +221,7 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
  	key.ip_version = 6;
  
  	/* Can't fail after this point because releasing reference to r
-@@ -1649,11 +1685,14 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+@@ -1651,11 +1687,14 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
  
  out:
  	kfree(fib_work);
@@ -237,7 +236,7 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct fib_notifier_info *info = ptr;
  	struct mlx5e_tc_tun_encap *encap;
-@@ -1668,17 +1707,21 @@ static int mlx5e_tc_tun_fib_event(struct
+@@ -1670,17 +1709,21 @@ static int mlx5e_tc_tun_fib_event(struct
  	switch (event) {
  	case FIB_EVENT_ENTRY_REPLACE:
  	case FIB_EVENT_ENTRY_DEL:
@@ -259,7 +258,7 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
  			mlx5_core_warn(priv->mdev, "Failed to init fib work, %ld\n",
  				       PTR_ERR(fib_work));
  		}
-@@ -1687,6 +1730,7 @@ static int mlx5e_tc_tun_fib_event(struct
+@@ -1689,6 +1732,7 @@ static int mlx5e_tc_tun_fib_event(struct
  	default:
  		return NOTIFY_DONE;
  	}
@@ -267,7 +266,7 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
  
  	return NOTIFY_DONE;
  }
-@@ -1704,8 +1748,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
+@@ -1706,8 +1750,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
  	encap->fib_nb.notifier_call = mlx5e_tc_tun_fib_event;
  	spin_lock_init(&encap->route_lock);
  	hash_init(encap->route_tbl);
@@ -280,7 +279,7 @@ Change-Id: Ie0e6ba25a5ee94cbb5d839295a70a4b41f36bc40
  	if (err) {
  		kvfree(encap);
  		return ERR_PTR(err);
-@@ -1719,7 +1767,12 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
+@@ -1721,7 +1769,12 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
  	if (!encap)
  		return;
  

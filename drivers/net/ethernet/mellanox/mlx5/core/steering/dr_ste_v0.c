@@ -408,6 +408,7 @@ static void dr_ste_v0_arr_init_next(u8 **last_ste,
 static void
 dr_ste_v0_set_actions_tx(struct mlx5dr_domain *dmn,
 			 u8 *action_type_set,
+			 u32 actions_caps,
 			 u8 *last_ste,
 			 struct mlx5dr_ste_actions_attr *attr,
 			 u32 *added_stes)
@@ -419,7 +420,7 @@ dr_ste_v0_set_actions_tx(struct mlx5dr_domain *dmn,
 	 * encapsulation. The reason for that is that we support
 	 * modify headers for outer headers only
 	 */
-	if (action_type_set[DR_ACTION_TYP_MODIFY_HDR]) {
+	if (action_type_set[DR_ACTION_TYP_MODIFY_HDR] && attr->modify_actions) {
 		dr_ste_v0_set_entry_type(last_ste, DR_STE_TYPE_MODIFY_PKT);
 		dr_ste_v0_set_rewrite_actions(last_ste,
 					      attr->modify_actions,
@@ -477,6 +478,7 @@ dr_ste_v0_set_actions_tx(struct mlx5dr_domain *dmn,
 static void
 dr_ste_v0_set_actions_rx(struct mlx5dr_domain *dmn,
 			 u8 *action_type_set,
+			 u32 actions_caps,
 			 u8 *last_ste,
 			 struct mlx5dr_ste_actions_attr *attr,
 			 u32 *added_stes)
@@ -511,7 +513,7 @@ dr_ste_v0_set_actions_rx(struct mlx5dr_domain *dmn,
 		}
 	}
 
-	if (action_type_set[DR_ACTION_TYP_MODIFY_HDR]) {
+	if (action_type_set[DR_ACTION_TYP_MODIFY_HDR] && attr->modify_actions) {
 		if (dr_ste_v0_get_entry_type(last_ste) == DR_STE_TYPE_MODIFY_PKT)
 			dr_ste_v0_arr_init_next(&last_ste,
 						added_stes,
@@ -1152,6 +1154,7 @@ dr_ste_v0_build_eth_l3_ipv4_misc_tag(struct mlx5dr_match_param *value,
 	struct mlx5dr_match_spec *spec = sb->inner ? &value->inner : &value->outer;
 
 	DR_STE_SET_TAG(eth_l3_ipv4_misc, tag, time_to_live, spec, ttl_hoplimit);
+	DR_STE_SET_TAG(eth_l3_ipv4_misc, tag, ihl, spec, ipv4_ihl);
 
 	return 0;
 }
@@ -1887,7 +1890,7 @@ dr_ste_v0_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
 	if (!action->rewrite->chunk)
 		return -ENOMEM;
 
-	action->rewrite->index = (action->rewrite->chunk->icm_addr -
+	action->rewrite->index = (mlx5dr_icm_pool_get_chunk_icm_addr(action->rewrite->chunk) -
 		action->rewrite->dmn->info.caps.hdr_modify_icm_addr) /
 		MLX5DR_ACTION_CACHE_LINE_SIZE;
 
@@ -1929,7 +1932,7 @@ static void dr_ste_v0_build_tnl_header_0_1_init(struct mlx5dr_ste_build *sb,
 	sb->ste_build_tag_func = &dr_ste_v0_build_tnl_header_0_1_tag;
 }
 
-struct mlx5dr_ste_ctx ste_ctx_v0 = {
+static struct mlx5dr_ste_ctx ste_ctx_v0 = {
 	/* Builders */
 	.build_eth_l2_src_dst_init	= &dr_ste_v0_build_eth_l2_src_dst_init,
 	.build_eth_l3_ipv6_src_init	= &dr_ste_v0_build_eth_l3_ipv6_src_init,
@@ -1984,3 +1987,8 @@ struct mlx5dr_ste_ctx ste_ctx_v0 = {
 	.alloc_modify_hdr_chunk		= &dr_ste_v0_alloc_modify_hdr_chunk,
 	.dealloc_modify_hdr_chunk	= &dr_ste_v0_dealloc_modify_hdr_chunk,
 };
+
+struct mlx5dr_ste_ctx *mlx5dr_ste_get_ctx_v0(void)
+{
+	return &ste_ctx_v0;
+}

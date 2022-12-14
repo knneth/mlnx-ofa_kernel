@@ -4,12 +4,24 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I3d8ffecac35a28bdaa09cd3c9b92f8c0029f7398
 ---
- .../ethernet/mellanox/mlx5/core/steering/dr_dbg.c   | 13 +++++++++++++
- 1 file changed, 13 insertions(+)
+ .../mellanox/mlx5/core/steering/dr_dbg.c        | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
-@@ -978,11 +978,20 @@ static int dr_dump_proc_release(struct i
+@@ -933,7 +933,11 @@ static void dr_dump_free_buffers_list(st
+ 
+ static int dr_dump_proc_open(struct inode *inode, struct file *file)
+ {
++#ifdef HAVE_PDE_DATA
++	struct mlx5dr_domain *dmn = pde_data(inode);
++#else
+ 	struct mlx5dr_domain *dmn = PDE_DATA(inode);
++#endif
+ 	struct dr_dump_ctx *ctx;
+ 	struct dr_buffer *buf;
+ 	int ret;
+@@ -983,11 +987,20 @@ static int dr_dump_proc_release(struct i
  	return 0;
  }
  
@@ -30,7 +42,7 @@ Change-Id: I3d8ffecac35a28bdaa09cd3c9b92f8c0029f7398
  
  int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn)
  {
-@@ -996,7 +1005,11 @@ int mlx5dr_dbg_init_dump(struct mlx5dr_d
+@@ -1001,7 +1014,11 @@ int mlx5dr_dbg_init_dump(struct mlx5dr_d
  	if (mlx5_smfs_fdb_dump_dir) {
  		proc_entry = proc_create_data(pci_name(dmn->mdev->pdev), 0444,
  					      mlx5_smfs_fdb_dump_dir,

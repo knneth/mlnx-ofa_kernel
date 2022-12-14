@@ -65,6 +65,7 @@ struct mlxdevm_port_attrs {
 
 struct mlxdevm_port {
 	struct list_head list;
+	struct mlxdevm *devm;
 	unsigned int index;
 	spinlock_t type_lock; /* Protects type and type_dev
 			       * pointer consistency.
@@ -126,8 +127,7 @@ struct mlxdevm_ops {
 	 *
 	 * Note: @extack can be NULL when port notifier queries the port function.
 	 */
-	int (*port_fn_hw_addr_get)(struct mlxdevm *dev,
-				   struct mlxdevm_port *port,
+	int (*port_fn_hw_addr_get)(struct mlxdevm_port *port,
 				   u8 *hw_addr, int *hw_addr_len,
 				   struct netlink_ext_ack *extack);
 	/**
@@ -137,13 +137,11 @@ struct mlxdevm_ops {
 	 * by the mlxdevm port. Driver should return -EOPNOTSUPP if it doesn't support port
 	 * function handling for a particular port.
 	 */
-	int (*port_fn_hw_addr_set)(struct mlxdevm *dev,
-				   struct mlxdevm_port *port,
+	int (*port_fn_hw_addr_set)(struct mlxdevm_port *port,
 				   const u8 *hw_addr, int hw_addr_len,
 				   struct netlink_ext_ack *extack);
 	/**
 	 * port_fn_state_get() - Get the state of a port function
-	 * @dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @state: Admin configured state
 	 * @opstate: Current operational state
@@ -153,15 +151,13 @@ struct mlxdevm_ops {
 	 *
 	 * Return: 0 on success, negative value otherwise.
 	 */
-	int (*port_fn_state_get)(struct mlxdevm *dev,
-				 struct mlxdevm_port *port,
+	int (*port_fn_state_get)(struct mlxdevm_port *port,
 				 enum mlxdevm_port_fn_state *state,
 				 enum mlxdevm_port_fn_opstate *opstate,
 				 struct netlink_ext_ack *extack);
 	/**
 	 * port_fn_state_set() - Set the admin state of a port function
 	 * @dev: mlxdevm instance
-	 * @port: The mlxdevm port
 	 * @state: Admin state
 	 * @extack: extack for reporting error messages
 	 *
@@ -169,13 +165,11 @@ struct mlxdevm_ops {
 	 *
 	 * Return: 0 on success, negative value otherwise.
 	 */
-	int (*port_fn_state_set)(struct mlxdevm *dev,
-				 struct mlxdevm_port *port,
+	int (*port_fn_state_set)(struct mlxdevm_port *port,
 				 enum mlxdevm_port_fn_state state,
 				 struct netlink_ext_ack *extack);
 	/**
 	 * port_fn_cap_get() - Get the state of capabilities
-	 * @devm_dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @cap: port function capabilited
 	 * @extack: extack for reporting error messages
@@ -184,13 +178,11 @@ struct mlxdevm_ops {
 	 *
 	 * Return: 0 on success, negative value otherwise.
 	 */
-	int (*port_fn_cap_get)(struct mlxdevm *devm_dev,
-			       struct mlxdevm_port *port,
+	int (*port_fn_cap_get)(struct mlxdevm_port *port,
 			       struct mlxdevm_port_fn_cap *cap,
 			       struct netlink_ext_ack *extack);
 	/**
 	 * port_fn_cap_set() - Set the state of capabilities
-	 * @devm_dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @cap: port function capabilies
 	 * @extack: extack for reporting error messages
@@ -199,40 +191,34 @@ struct mlxdevm_ops {
 	 *
 	 * Return: 0 on success, negative value otherwise.
 	 */
-	int (*port_fn_cap_set)(struct mlxdevm *devm_dev,
-			       struct mlxdevm_port *port,
+	int (*port_fn_cap_set)(struct mlxdevm_port *port,
 			       const struct mlxdevm_port_fn_cap *cap,
 			       struct netlink_ext_ack *extack);
 	/**
 	 * port_fn_trust_get() - Get the trust state of port function
-	 * @devm_dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @trusted: Query privilege state
 	 * @extack: extack for reporting error messages
 	 *
 	 * Return: 0 on success, negative value otherwise.
 	 */
-	int (*port_fn_trust_get)(struct mlxdevm *devm_dev,
-				 struct mlxdevm_port *port,
+	int (*port_fn_trust_get)(struct mlxdevm_port *port,
 				 bool *trusted,
 				 struct netlink_ext_ack *extack);
 	/**
 	 * port_fn_trust_set() - Set the trust state of port function
-	 * @devm_dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @trusted: Set privilege state
 	 * @extack: extack for reporting error messages
 	 *
 	 * Return: 0 on success, negative value otherwise.
 	 */
-	int (*port_fn_trust_set)(struct mlxdevm *devm_dev,
-				 struct mlxdevm_port *port,
+	int (*port_fn_trust_set)(struct mlxdevm_port *port,
 				 bool trusted,
 				 struct netlink_ext_ack *extack);
 
 	/**
 	 * rate_leaf_get() - Get the tx rate settings of the port function
-	 * @dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @tx_max: rate in Mbps
 	 * @tx_share: min tx rate in Mbps
@@ -241,14 +227,12 @@ struct mlxdevm_ops {
 	 *
 	 * Return: 0 on success, error value otherwise.
 	 */
-	int (*rate_leaf_get)(struct mlxdevm *dev,
-			     struct mlxdevm_port *port,
+	int (*rate_leaf_get)(struct mlxdevm_port *port,
 			     u64 *tx_max, u64 *tx_share, char **group,
 			     struct netlink_ext_ack *extack);
 
 	/**
 	 * rate_leaf_tx_max_set() - Set max tx rate of the port function
-	 * @dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @tx_max: rate in Mbps
 	 * @extack: extack for reporting error message
@@ -256,35 +240,30 @@ struct mlxdevm_ops {
 	 *
 	 * Return: 0 on success, error value otherwise.
 	 */
-	int (*rate_leaf_tx_max_set)(struct mlxdevm *dev,
-				    struct mlxdevm_port *port,
+	int (*rate_leaf_tx_max_set)(struct mlxdevm_port *port,
 				    u64 tx_max, struct netlink_ext_ack *extack);
 
 	/**
 	 * rate_leaf_tx_share_set() - Set tx_share of the port function
-	 * @dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @tx_share: min tx rate in Mbps
 	 * @extack: extack for reporting error message
 	 *
 	 * Return: 0 on success, error value otherwise.
 	 */
-	int (*rate_leaf_tx_share_set)(struct mlxdevm *dev,
-				      struct mlxdevm_port *port,
+	int (*rate_leaf_tx_share_set)(struct mlxdevm_port *port,
 				      u64 tx_share, struct netlink_ext_ack *extack);
 
 
 	/**
 	 * rate_leaf_group_set() - assign group for the port function
-	 * @dev: mlxdevm instance
 	 * @port: The mlxdevm port
 	 * @group: group name
 	 * @extack: extack for reporting error message
 	 *
 	 * Return: 0 on success, error value otherwise.
 	 */
-	int (*rate_leaf_group_set)(struct mlxdevm *dev,
-				   struct mlxdevm_port *port,
+	int (*rate_leaf_group_set)(struct mlxdevm_port *port,
 				   const char *group,
 				   struct netlink_ext_ack *extack);
 
@@ -338,7 +317,7 @@ struct mlxdevm_ops {
 };
 
 struct mlxdevm {
-	struct list_head list;
+	u32 index;
 	struct device *device;
 	const struct mlxdevm_ops *ops;
 	struct list_head port_list;
@@ -433,11 +412,12 @@ struct mlxdevm_param_item {
 	bool published;
 };
 
+void mlxdevm_rate_nodes_destroy(struct mlxdevm *dev);
 int mlxdevm_register(struct mlxdevm *dev);
 void mlxdevm_unregister(struct mlxdevm *dev);
 int mlxdevm_port_register(struct mlxdevm *dev, struct mlxdevm_port *mlxdevm_port,
 			   unsigned int port_index);
-void mlxdevm_port_unregister(struct mlxdevm *dev, struct mlxdevm_port *mlxdevm_port);
+void mlxdevm_port_unregister(struct mlxdevm_port *mlxdevm_port);
 void mlxdevm_port_type_eth_set(struct mlxdevm_port *port, struct net_device *ndev);
 void mlxdevm_port_attr_set(struct mlxdevm_port *port, struct mlxdevm_port_attrs *attrs);
 
@@ -447,6 +427,10 @@ int mlxdevm_params_register(struct mlxdevm *mlxdevm,
 void mlxdevm_params_unregister(struct mlxdevm *mlxdevm,
 			       const struct mlxdevm_param *params,
 			       size_t params_count);
+int mlxdevm_param_register(struct mlxdevm *mlxdevm,
+			   const struct mlxdevm_param *param);
+void mlxdevm_param_unregister(struct mlxdevm *mlxdevm,
+			      const struct mlxdevm_param *param);
 void mlxdevm_params_publish(struct mlxdevm *mlxdevm);
 void mlxdevm_params_unpublish(struct mlxdevm *mlxdevm);
 int mlxdevm_param_driverinit_value_get(struct mlxdevm *mlxdevm, u32 param_id,

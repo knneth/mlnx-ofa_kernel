@@ -43,6 +43,13 @@
 
 %global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
 
+# MarinerOS 1.0 sets -fPIE in the hardening cflags
+# (in the gcc specs file).
+# This seems to break only this package and not other kernel packages.
+%if "%{_vendor}" == "mariner"
+%global _hardened_cflags %{nil}
+%endif
+
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
 %global krelver %(echo -n %{KVERSION} | sed -e 's/-/_/g')
@@ -63,8 +70,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.5}
-%{!?_release: %global _release OFED.5.5.1.0.3.1}
+%{!?_version: %global _version 5.6}
+%{!?_release: %global _release OFED.5.6.1.0.3.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -106,12 +113,12 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.5-1.0.3.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.6-1.0.3.tgz
 
 
 # build KMP rpms?
 %if "%{KMP}" == "1"
-%global kernel_release() $(make -C %{1} kernelrelease | grep -v make | tail -1)
+%global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
 # prep file list for kmp rpm
 %(cat > %{_builddir}/kmp.files << EOF
 %defattr(644,root,root,755)
@@ -120,7 +127,6 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
 %endif
 EOF)
-%(echo "Requires: %{utils_pname}" > %{_builddir}/preamble)
 %(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp" >> %{_builddir}/preamble)
 %kernel_module_package -f %{_builddir}/kmp.files -p %{_builddir}/preamble -r %{_kmp_rel}
 %else # not KMP
@@ -128,13 +134,6 @@ EOF)
 %global kernel_release() %{KVERSION}
 %global flavors_to_build default
 %package -n %{non_kmp_pname}
-Requires: %{utils_pname}
-Requires: coreutils
-Requires: pciutils
-Requires: grep
-Requires: procps
-Requires: module-init-tools
-Requires: lsof
 Obsoletes: kernel-ib
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
@@ -154,7 +153,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.5-1.0.3.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.6-1.0.3.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -178,7 +177,6 @@ Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
 Requires: coreutils
-Requires: %{utils_pname}
 Requires: pciutils
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun): %{_sbindir}/update-alternatives
@@ -186,7 +184,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.5-1.0.3.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.6-1.0.3.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -460,7 +458,7 @@ if [ $1 -eq 1 ]; then # 1 : This package is being installed
 #############################################################################################################
 is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
 is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
+if [[ -f /etc/redhat-release || -f /etc/rocks-release || -f /etc/UnionTech-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
         /sbin/chkconfig openibd off >/dev/null 2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/chkconfig --del openibd >/dev/null 2>&1 || true
@@ -551,7 +549,7 @@ fi # 1 : closed
 is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
 is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
 if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
-          if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
+          if [[ -f /etc/redhat-release || -f /etc/rocks-release || -f /etc/UnionTech-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
                 /sbin/chkconfig openibd off >/dev/null 2>&1 || true
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true
@@ -636,6 +634,7 @@ update-alternatives --remove \
 
 %files -n %{utils_pname}
 %defattr(-,root,root,-)
+%doc source/ofed_scripts/82-net-setup-link.rules source/ofed_scripts/vf-net-link-name.sh
 %if "%{KMP}" == "1"
 %if %{IS_RHEL_VENDOR}
 %endif # end rh
@@ -644,7 +643,6 @@ update-alternatives --remove \
 %config(noreplace) /etc/infiniband/openib.conf
 %config(noreplace) /etc/infiniband/mlx5.conf
 /etc/infiniband/info
-/etc/infiniband/vf-net-link-name.sh
 /etc/init.d/openibd
 %if "%{WITH_SYSTEMD}" == "1"
 %{_unitdir}/openibd.service
@@ -659,7 +657,6 @@ update-alternatives --remove \
 %config(noreplace) /etc/modprobe.d/mlnx-bf.conf
 %{_sbindir}/*
 /lib/udev/rules.d/83-mlnx-sf-name.rules
-/lib/udev/rules.d/82-net-setup-link.rules
 /lib/udev/rules.d/90-ib.rules
 /bin/mlnx_interface_mgr.sh
 /bin/mlnx_conf_mgr.sh

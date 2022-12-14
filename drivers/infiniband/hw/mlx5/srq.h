@@ -21,6 +21,7 @@ enum mlx5_nvmf_offload_type {
 
 struct mlx5_nvmf_attr {
 	enum mlx5_nvmf_offload_type	type;
+	u8				passthrough_sqe_rw_service_en;
 	u8				log_max_namespace;
 	u32				cmd_unknown_namespace_cnt;
 	u32				ioccsz;

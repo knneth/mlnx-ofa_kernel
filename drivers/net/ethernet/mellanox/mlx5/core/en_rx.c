@@ -423,8 +423,8 @@ static inline int mlx5e_page_alloc_pool(struct mlx5e_rq *rq,
 	dma_info->refcnt_bias = 0;
 	page_ref_elev(dma_info);
 
-	dma_info->addr = dma_map_page(rq->pdev, dma_info->page, 0,
-				      PAGE_SIZE, rq->buff.map_dir);
+	dma_info->addr = dma_map_page_attrs(rq->pdev, dma_info->page, 0, PAGE_SIZE,
+					    rq->buff.map_dir, DMA_ATTR_SKIP_CPU_SYNC);
 	if (unlikely(dma_mapping_error(rq->pdev, dma_info->addr))) {
 		page_ref_sub(dma_info->page, dma_info->refcnt_bias);
 		page_pool_recycle_direct(rq->page_pool, dma_info->page);
@@ -446,7 +446,8 @@ static inline int mlx5e_page_alloc(struct mlx5e_rq *rq,
 
 void mlx5e_page_dma_unmap(struct mlx5e_rq *rq, struct mlx5e_dma_info *dma_info)
 {
-	dma_unmap_page(rq->pdev, dma_info->addr, PAGE_SIZE, rq->buff.map_dir);
+	dma_unmap_page_attrs(rq->pdev, dma_info->addr, PAGE_SIZE, rq->buff.map_dir,
+			     DMA_ATTR_SKIP_CPU_SYNC);
 }
 
 void mlx5e_page_release_dynamic(struct mlx5e_rq *rq,
@@ -912,8 +913,7 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq)
 	if (unlikely(rq->mpwqe.umr_in_progress > rq->mpwqe.umr_last_bulk))
 		rq->stats->congst_umr++;
 
-#define UMR_WQE_BULK (2)
-	if (likely(missing < UMR_WQE_BULK))
+	if (likely(missing < rq->mpwqe.min_wqe_bulk))
 		return false;
 
 	head = rq->mpwqe.actual_wq_head;
@@ -1162,7 +1162,8 @@ static inline void mlx5e_handle_csum(struct net_device *netdev,
 	}
 
 	/* True when explicitly set via priv flag, or XDP prog is loaded */
-	if (test_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &rq->state))
+	if (test_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &rq->state) ||
+	    get_cqe_tls_offload(cqe))
 		goto csum_unnecessary;
 
 	/* CQE csum doesn't cover padding octets in short ethernet

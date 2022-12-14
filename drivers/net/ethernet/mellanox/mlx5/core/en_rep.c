@@ -54,9 +54,11 @@
 #include "ecpf.h"
 #include "lib/mlx5.h"
 #include "lib/devcom.h"
+#include "lib/vxlan.h"
 #define CREATE_TRACE_POINTS
 #include "diag/en_rep_tracepoint.h"
 #include "en_accel/ipsec.h"
+#include "en/ptp.h"
 #include <generated/utsrelease.h>
 
 #define MLX5E_REP_SF_ENABLED_MAX_NUM_CHANNELS 4
@@ -399,12 +401,16 @@ int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv)
 	struct mlx5e_channel *c;
 	int n, tc, num_sqs = 0;
 	int err = -ENOMEM;
+	bool ptp_sq;
 	u32 *sqs;
 	int num_txqs = priv->channels.params.num_channels * priv->channels.params.num_tc;
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	num_txqs += priv->channels.params.num_rl_txqs;
 #endif
+	ptp_sq = !!(priv->channels.ptp &&
+		    MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_TX_PORT_TS));
+	num_txqs += ptp_sq ? priv->channels.ptp->num_tc : 0;
 
 	sqs = kcalloc(num_txqs, sizeof(*sqs), GFP_KERNEL);
 	if (!sqs)
@@ -418,6 +424,12 @@ int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv)
 		for (tc = 0; tc < c->num_special_sq; tc++)
 			sqs[num_sqs++] = c->special_sq[tc].sqn;
 #endif
+	}
+	if (ptp_sq) {
+		struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
+
+		for (tc = 0; tc < ptp_ch->num_tc; tc++)
+			sqs[num_sqs++] = ptp_ch->ptpsq[tc].txqsq.sqn;
 	}
 
 	err = mlx5e_sqs2vport_start(esw, rep, sqs, num_sqs);
@@ -1100,15 +1112,21 @@ static int mlx5e_init_rep_tx(struct mlx5e_priv *priv)
 		return err;
 	}
 
+	err = mlx5e_tc_ht_init(&rpriv->tc_ht);
+	if (err)
+		goto err_ht_init;
+
 	if (rpriv->rep->vport == MLX5_VPORT_UPLINK) {
 		err = mlx5e_init_uplink_rep_tx(rpriv);
 		if (err)
-			goto destroy_tises;
+			goto err_init_tx;
 	}
 
 	return 0;
 
-destroy_tises:
+err_init_tx:
+	mlx5e_tc_ht_cleanup(&rpriv->tc_ht);
+err_ht_init:
 	mlx5e_destroy_tises(priv);
 	return err;
 }
@@ -1125,6 +1143,8 @@ static void mlx5e_cleanup_rep_tx(struct mlx5e_priv *priv)
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 
 	mlx5e_destroy_tises(priv);
+
+	mlx5e_tc_ht_cleanup(&rpriv->tc_ht);
 
 	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
 		mlx5e_cleanup_uplink_rep_tx(rpriv);
@@ -1223,6 +1243,7 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 	rtnl_lock();
 	if (netif_running(netdev))
 		mlx5e_open(netdev);
+	udp_tunnel_nic_reset_ntf(priv->netdev);
 	netif_device_attach(netdev);
 	rtnl_unlock();
 }
@@ -1244,6 +1265,7 @@ static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 	mlx5_notifier_unregister(mdev, &priv->events_nb);
 	mlx5e_rep_tc_disable(priv);
 	mlx5_lag_remove_netdev(mdev, priv->netdev);
+	mlx5_vxlan_reset_to_default(mdev->vxlan);
 }
 
 static MLX5E_DEFINE_STATS_GRP(sw_rep, 0);
@@ -1276,9 +1298,11 @@ static mlx5e_stats_grp_t mlx5e_ul_rep_stats_grps[] = {
 	&MLX5E_STATS_GRP(pme),
 	&MLX5E_STATS_GRP(channels),
 	&MLX5E_STATS_GRP(per_port_buff_congest),
-#ifdef CONFIG_MLX5_IPSEC
+#ifdef CONFIG_MLX5_EN_IPSEC
+	&MLX5E_STATS_GRP(ipsec_sw),
 	&MLX5E_STATS_GRP(ipsec_hw),
 #endif
+	&MLX5E_STATS_GRP(ptp),
 };
 
 static unsigned int mlx5e_ul_rep_stats_grps_num(struct mlx5e_priv *priv)

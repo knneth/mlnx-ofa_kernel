@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/passthru.c
 Change-Id: I0baf34ae65c0dbdcb87b42af2f6bbcf549ade2b9
 Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
 ---
- drivers/nvme/target/passthru.c | 29 +++++++++++++++++++++++++++++
- 1 file changed, 29 insertions(+)
+ drivers/nvme/target/passthru.c | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
 
 --- a/drivers/nvme/target/passthru.c
 +++ b/drivers/nvme/target/passthru.c
@@ -66,7 +66,7 @@ Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
  
  	return 0;
  }
-@@ -278,8 +302,13 @@ static void nvmet_passthru_execute_cmd(s
+@@ -278,8 +302,17 @@ static void nvmet_passthru_execute_cmd(s
  		schedule_work(&req->p.work);
  	} else {
  		rq->end_io_data = req;
@@ -74,8 +74,12 @@ Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
 +		blk_execute_rq_nowait(rq->q, ns ? ns->disk : NULL, rq, 0,
 +				      nvmet_passthru_req_done);
 +#else
++#ifdef HAVE_BLK_EXECUTE_RQ_2_PARAM
++		blk_execute_rq_nowait(rq, false, nvmet_passthru_req_done);
++#else
  		blk_execute_rq_nowait(ns ? ns->disk : NULL, rq, 0,
  				      nvmet_passthru_req_done);
++#endif
 +#endif
  	}
  

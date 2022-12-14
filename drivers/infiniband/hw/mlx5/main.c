@@ -868,7 +868,12 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 					   IB_DEVICE_MEM_WINDOW_TYPE_2B;
 		props->max_mw = 1 << MLX5_CAP_GEN(mdev, log_max_mkey);
 		/* We support 'Gappy' memory registration too */
+#ifdef CONFIG_GPU_DIRECT_STORAGE
+		if (MLX5_CAP_GEN(mdev, ats) == MLX5_CAP_GEN(mdev, relaxed_ordering_read))
+			props->device_cap_flags |= IB_DEVICE_SG_GAPS_REG;
+#else
 		props->device_cap_flags |= IB_DEVICE_SG_GAPS_REG;
+#endif
 	}
 	/* IB_WR_REG_MR always requires changing the entity size with UMR */
 	if (!MLX5_CAP_GEN(dev->mdev, umr_modify_entity_size_disabled))
@@ -3078,6 +3083,7 @@ static int mlx5_eth_lag_init(struct mlx5_ib_dev *dev)
 	}
 
 	dev->flow_db->lag_demux_ft = ft;
+	dev->lag_ports = mlx5_lag_get_num_ports(mdev);
 	dev->lag_active = true;
 	return 0;
 
@@ -4269,7 +4275,7 @@ static int mlx5_ib_stage_delay_drop_init(struct mlx5_ib_dev *dev)
 	if (!mlx5_debugfs_root || dev->is_rep)
 		return 0;
 
-	root = debugfs_create_dir("delay_drop", dev->mdev->priv.dbg_root);
+	root = debugfs_create_dir("delay_drop", mlx5_debugfs_get_dev_root(dev->mdev));
 	dev->delay_drop.dir_debugfs = root;
 
 	debugfs_create_atomic_t("num_timeout_events", 0400, root,

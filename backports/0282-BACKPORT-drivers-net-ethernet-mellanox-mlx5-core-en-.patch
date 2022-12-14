@@ -24,7 +24,7 @@ Change-Id: Ia17cf74297e5a1cf225f58d68ab98b43e4be380d
 +#endif
  
 +#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #define MLX5_PACKET_COLOR_BITS (mlx5e_tc_attr_to_reg_mappings[PACKET_COLOR_TO_REG].mlen * 8)
+ #define MLX5_PACKET_COLOR_BITS (mlx5e_tc_attr_to_reg_mappings[PACKET_COLOR_TO_REG].mlen)
  #define MLX5_PACKET_COLOR_MASK GENMASK(MLX5_PACKET_COLOR_BITS - 1, 0)
 +#endif
  

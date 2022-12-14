@@ -14,6 +14,7 @@ struct ib_nvmf_srq_attr {
 
 struct ib_nvmf_init_data {
 	enum ib_nvmf_offload_type	type;
+	u8				passthrough_sqe_rw_service_en;
 	u8				log_max_namespace;
 	u32				cmd_size;
 	u8				data_offset;
@@ -29,6 +30,7 @@ struct ib_nvmf_init_data {
 struct ib_nvmf_caps {
 	u32 offload_type_dc; /* bitmap of ib_nvmf_offload_type enum */
 	u32 offload_type_rc; /* bitmap of ib_nvmf_offload_type enum */
+	u8  passthrough_sqe_rw_service;
 	u32 max_namespace;
 	u32 max_staging_buffer_sz;
 	u32 min_staging_buffer_sz;

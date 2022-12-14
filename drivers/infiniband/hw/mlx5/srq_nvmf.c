@@ -68,6 +68,9 @@ void set_nvmf_xrq_context(struct mlx5_nvmf_attr *nvmf, void *xrqc)
 			nvme_offload_context.nvmf_offload_type,
 			nvmf->type);
 	MLX5_SET(xrqc, xrqc,
+		 nvme_offload_context.passthrough_sqe_rw_service_en,
+		 nvmf->passthrough_sqe_rw_service_en);
+	MLX5_SET(xrqc, xrqc,
 			nvme_offload_context.log_max_namespace,
 			nvmf->log_max_namespace);
 	MLX5_SET(xrqc, xrqc,
@@ -138,6 +141,8 @@ int mlx5_ib_exp_set_nvmf_srq_attrs(struct mlx5_nvmf_attr *nvmf,
 		return -EINVAL;
 
 	nvmf->type = to_mlx5_nvmf_offload_type(init_attr->ext.nvmf.type);
+	nvmf->passthrough_sqe_rw_service_en =
+		init_attr->ext.nvmf.passthrough_sqe_rw_service_en;
 	nvmf->log_max_namespace = init_attr->ext.nvmf.log_max_namespace;
 	nvmf->ioccsz = init_attr->ext.nvmf.cmd_size;
 	nvmf->icdoff = init_attr->ext.nvmf.data_offset;

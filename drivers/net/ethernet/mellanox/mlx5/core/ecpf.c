@@ -551,3 +551,137 @@ void mlx5_smartnic_sysfs_cleanup(struct net_device *dev)
 	kobject_put(esw->smart_nic_sysfs.kobj);
 	esw->smart_nic_sysfs.kobj = NULL;
 }
+
+static ssize_t regex_store(struct kobject *kobj, struct kobj_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct mlx5_regex_vport *regex =
+		container_of(kobj, struct mlx5_regex_vport, kobj);
+	int err;
+
+	if (!MLX5_CAP_GEN_MAX(regex->dev, regexp_mmo_qp))
+		return -EOPNOTSUPP;
+	if (sysfs_streq(buf, "1"))
+		err = mlx5_regex_enable(regex->dev, regex->vport, 1);
+	else if (sysfs_streq(buf, "0"))
+		err = mlx5_regex_enable(regex->dev, regex->vport, 0);
+	else
+		err = -EINVAL;
+
+	return err ? err : count;
+}
+
+static ssize_t regex_show(struct kobject *kobj, struct kobj_attribute *attr,
+			  char *buf)
+{
+	return sprintf(buf, "Usage: write 1/0 to enable/disable regex\n");
+}
+
+static struct kobj_attribute attr_regex = {
+	.attr = {.name = "regex_en",
+		 .mode = 0644 },
+	.show = regex_show,
+	.store = regex_store,
+};
+
+static struct attribute *regex_attrs[] = {
+	&attr_regex.attr,
+	NULL,
+};
+
+static ssize_t regex_attr_show(struct kobject *kobj,
+			       struct attribute *attr, char *buf)
+{
+	return smart_nic_attr_show(kobj, attr, buf);
+}
+
+static ssize_t regex_attr_store(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buf, size_t count)
+{
+	return smart_nic_attr_store(kobj, attr, buf, count);
+}
+
+static const struct sysfs_ops regex_sysfs_ops = {
+	.show   = regex_attr_show,
+	.store  = regex_attr_store
+};
+
+static struct kobj_type regex_type = {
+	.sysfs_ops     = &regex_sysfs_ops,
+	.default_attrs = regex_attrs
+};
+
+int mlx5_regex_sysfs_init(struct mlx5_core_dev *dev)
+{
+	struct mlx5_core_regex *regex = &dev->priv.regex;
+	struct device *device = &dev->pdev->dev;
+	struct mlx5_regex_vport *vport;
+	u16 num_vports;
+	int i, ret = 0;
+
+	if (!mlx5_core_is_ecpf(dev))
+		return 0;
+
+	regex->kobj = kobject_create_and_add("regex", &device->kobj);
+	if (!regex->kobj)
+		return -ENOMEM;
+
+	num_vports = mlx5_core_max_vfs(dev) + 1;
+	regex->vport = kcalloc(num_vports, sizeof(struct mlx5_regex_vport),
+			       GFP_KERNEL);
+	if (!regex->vport) {
+		ret = -ENOMEM;
+		goto err_vport;
+	}
+
+	for (i = 0; i < num_vports; i++) {
+		vport = &regex->vport[i];
+		vport->dev = dev;
+		vport->vport = i;
+		if (i == 0)
+			ret = kobject_init_and_add(&vport->kobj, &regex_type,
+						   regex->kobj, "pf");
+		else
+			ret = kobject_init_and_add(&vport->kobj, &regex_type,
+						   regex->kobj, "vf%d",
+						   i - 1);
+		if (ret)
+			goto err_attr;
+	}
+
+	return 0;
+
+err_attr:
+	for (--i; i >= 0; i--)
+		kobject_put(&regex->vport[i].kobj);
+	kfree(regex->vport);
+	regex->vport = NULL;
+err_vport:
+	kobject_put(regex->kobj);
+	regex->kobj = NULL;
+	return ret;
+}
+
+void mlx5_regex_sysfs_cleanup(struct mlx5_core_dev *dev)
+{
+	struct mlx5_core_regex *regex = &dev->priv.regex;
+	struct mlx5_regex_vport *vport;
+	u16 num_vports, i;
+
+	if (!mlx5_core_is_ecpf(dev))
+		return;
+
+	num_vports = mlx5_core_max_vfs(dev) + 1;
+
+	for  (i = 0; i < num_vports; i++) {
+		vport = &regex->vport[i];
+		kobject_put(&vport->kobj);
+	}
+
+	kfree(regex->vport);
+	regex->vport = NULL;
+
+	kobject_put(regex->kobj);
+	regex->kobj = NULL;
+}

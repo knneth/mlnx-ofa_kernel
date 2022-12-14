@@ -9,9 +9,9 @@
 #define packet_color_to_reg { \
 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5, \
 	.moffset = 0, \
-	.mlen = 1, \
+	.mlen = 8, \
 	.soffset = MLX5_BYTE_OFF(fte_match_param, \
-				 misc_parameters_2.metadata_reg_c_5) + 3, \
+				 misc_parameters_2.metadata_reg_c_5), \
 }
 
 struct mlx5e_flow_meters;

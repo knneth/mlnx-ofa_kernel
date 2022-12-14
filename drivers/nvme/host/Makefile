@@ -11,6 +11,9 @@ obj-$(CONFIG_NVME_FABRICS)		+= nvme-fabrics.o
 obj-$(CONFIG_NVME_RDMA)			+= nvme-rdma.o
 obj-$(CONFIG_NVME_FC)			+= nvme-fc.o
 obj-$(CONFIG_NVME_TCP)			+= nvme-tcp.o
+ifeq ($(CONFIG_BLK_DEV_NVME),m)
+obj-$(CONFIG_COMPAT_NVME_SNAP_VFIO_PCI)	+= nvme_snap_vfio_pci.o
+endif
 
 obj-$(CONFIG_NVME_HOST_DUMMY)		+= nvme-rdma.o
 
@@ -32,6 +35,9 @@ nvme-core-$(CONFIG_NVME_HWMON)		+= hwmon.o
 nvme-y					+= pci.o
 ifeq ($(CONFIG_GPU_DIRECT_STORAGE),y)
 nvme-y					+= nvfs-dma.o
+endif
+ifeq ($(CONFIG_COMPAT_NVME_SNAP_VFIO_PCI),m)
+nvme-y					+= passthru.o
 endif
 
 nvme-fabrics-y				+= fabrics.o

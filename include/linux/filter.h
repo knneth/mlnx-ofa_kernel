@@ -56,6 +56,6 @@ struct xdp_frame *convert_to_xdp_frame(struct xdp_buff *xdp)
 	return xdp_frame;
 }
 #endif
-#endif
+#endif /* HAVE_XDP_SUPPORT */
 
 #endif /* _COMPAT_LINUX_FILTER_H */

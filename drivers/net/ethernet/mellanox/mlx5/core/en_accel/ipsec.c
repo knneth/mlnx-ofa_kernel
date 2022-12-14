@@ -377,7 +377,6 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 				   struct mlx5_accel_esp_xfrm_attrs *attrs)
 {
 	struct aes_gcm_keymat *aes_gcm = &attrs->keymat.aes_gcm;
-	struct xfrm_policy *pol = sa_entry->pol;
 	unsigned int crypto_data_len, key_len;
 	struct xfrm_state *x = sa_entry->x;
 	struct aead_geniv_ctx *geniv_ctx;
@@ -446,19 +445,8 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 
 	/* authentication tag length */
 	attrs->aulen = crypto_aead_authsize(aead);
-
 	/* lifetime limit for full offload */
 	initialize_lifetime_limit(sa_entry, attrs);
-
-	if (x->xso.flags & XFRM_OFFLOAD_FULL) {
-		struct mlx5_accel_esp_xfrm_pol *xpol = &attrs->pol;
-		struct xfrm_selector *sel = &pol->selector;
-
-		attrs->flags |= MLX5_ACCEL_ESP_FLAGS_FULL_OFFLOAD;
-		xpol->family = sel->family;
-		memcpy(&xpol->saddr, sel->saddr.a6, sizeof(xpol->saddr));
-		memcpy(&xpol->daddr, sel->daddr.a6, sizeof(xpol->daddr));
-	}
 }
 
 static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
@@ -602,8 +590,6 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
 	struct net_device *netdev = x->xso.real_dev;
 	struct mlx5_accel_esp_xfrm_attrs attrs;
-	struct xfrm_policy *pol = NULL;
-	struct xfrm_policy _pol;
 	struct mlx5e_priv *priv;
 	unsigned int sa_handle;
 	int pdn;
@@ -615,43 +601,14 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 	if (err)
 		return err;
 
-	if (x->xso.flags & XFRM_OFFLOAD_FULL) {
-		u16 family = x->props.family;
-		struct flowi fl;
-
-		fl.u.ip4.saddr = x->sel.saddr.a4;
-		fl.u.ip4.daddr = x->sel.saddr.a4;
-		switch (family) {
-		case AF_INET:
-			fl.u.ip4.saddr = x->sel.saddr.a4;
-			fl.u.ip4.daddr = x->sel.daddr.a4;
-			break;
-		case AF_INET6:
-			memcpy(&fl.u.ip6.saddr, &x->sel.saddr.a6, sizeof(x->sel.saddr.a6));
-			memcpy(&fl.u.ip6.daddr, &x->sel.daddr.a6, sizeof(x->sel.daddr.a6));
-			break;
-		}
-
-		if (!pol) {
-			struct xfrm_selector *sel = &_pol.selector;
-
-			sel->family = family;
-			memcpy(sel->daddr.a6, &x->sel.daddr.a6, sizeof(x->sel.daddr.a6));
-			memcpy(sel->saddr.a6, &x->sel.saddr.a6, sizeof(x->sel.saddr.a6));
-			netdev_dbg(netdev, "Note: offload SA without existing matching policy, enforcing policy by SA selectors\n");
-			pol = &_pol;
-		}
-	}
-
 	sa_entry = kzalloc(sizeof(*sa_entry), GFP_KERNEL);
 	if (!sa_entry) {
 		err = -ENOMEM;
-		goto err_policy;
+		goto out;
 	}
 
 	sa_entry->x = x;
 	sa_entry->ipsec = priv->ipsec;
-	sa_entry->pol = pol;
 
 	/* check esn */
 	mlx5e_ipsec_update_esn_state(sa_entry);
@@ -706,9 +663,7 @@ err_xfrm:
 	mlx5_accel_esp_destroy_xfrm(sa_entry->xfrm);
 err_sa_entry:
 	kfree(sa_entry);
-err_policy:
-	if (pol)
-		xfrm_pol_put(pol);
+
 out:
 	return err;
 }

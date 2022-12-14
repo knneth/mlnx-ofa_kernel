@@ -22,7 +22,7 @@ Change-Id: Ic19ccf194b83e21835946ea3c9450773812ec853
  #define MLX5_MAX_UC_PER_VPORT(dev) \
  	(1 << MLX5_CAP_GEN(dev, log_max_current_uc_list))
  
-@@ -651,11 +652,17 @@ struct mlx5_esw_flow_attr {
+@@ -645,11 +646,17 @@ struct mlx5_esw_flow_attr {
  	struct mlx5_pkt_reformat *decap_pkt_reformat;
  };
  
@@ -44,7 +44,7 @@ Change-Id: Ic19ccf194b83e21835946ea3c9450773812ec853
  int mlx5_devlink_eswitch_inline_mode_get(struct devlink *devlink, u8 *mode);
  
  int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
-@@ -664,20 +671,42 @@ int mlx5_eswitch_vport_get_other_hca_cap
+@@ -658,20 +665,42 @@ int mlx5_eswitch_vport_get_other_hca_cap
  					      struct mlx5_vport *vport, bool *value);
  
  int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
@@ -91,7 +91,7 @@ Change-Id: Ic19ccf194b83e21835946ea3c9450773812ec853
  					   struct devlink_port *port,
  					   const u8 *hw_addr, int hw_addr_len,
  					   struct netlink_ext_ack *extack);
-@@ -962,6 +991,10 @@ struct mlx5_esw_event_info {
+@@ -932,6 +961,10 @@ struct mlx5_esw_event_info {
  
  int mlx5_esw_event_notifier_register(struct mlx5_eswitch *esw, struct notifier_block *n);
  void mlx5_esw_event_notifier_unregister(struct mlx5_eswitch *esw, struct notifier_block *n);
@@ -102,7 +102,7 @@ Change-Id: Ic19ccf194b83e21835946ea3c9450773812ec853
  bool mlx5e_esw_offloads_pet_enabled(const struct mlx5_eswitch *esw);
  int mlx5e_esw_offloads_pet_setup(struct mlx5_eswitch *esw, struct mlx5_flow_table *ft);
  void mlx5e_esw_offloads_pet_cleanup(struct mlx5_eswitch *esw);
-@@ -1022,12 +1055,6 @@ static inline const u32 *mlx5_esw_query_
+@@ -990,12 +1023,6 @@ static inline const u32 *mlx5_esw_query_
  static inline void mlx5_esw_unlock(struct mlx5_eswitch *esw) { return; }
  static inline void mlx5_esw_lock(struct mlx5_eswitch *esw) { return; }
  
@@ -115,7 +115,7 @@ Change-Id: Ic19ccf194b83e21835946ea3c9450773812ec853
  static inline bool
  mlx5_esw_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num)
  {
-@@ -1040,10 +1067,20 @@ mlx5_esw_vport_to_devlink_port_index(con
+@@ -1008,10 +1035,20 @@ mlx5_esw_vport_to_devlink_port_index(con
  {
  	return vport_num;
  }

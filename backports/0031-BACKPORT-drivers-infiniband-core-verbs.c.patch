@@ -18,7 +18,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  
  static int ib_resolve_eth_dmac(struct ib_device *device,
  			       struct rdma_ah_attr *ah_attr);
-@@ -1839,7 +1841,11 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -1845,7 +1847,11 @@ int ib_get_eth_speed(struct ib_device *d
  	int rc;
  	u32 netdev_speed;
  	struct net_device *netdev;
@@ -30,7 +30,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  
  	if (rdma_port_get_link_layer(dev, port_num) != IB_LINK_LAYER_ETHERNET)
  		return -EINVAL;
-@@ -1849,13 +1855,22 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -1855,13 +1861,22 @@ int ib_get_eth_speed(struct ib_device *d
  		return -ENODEV;
  
  	rtnl_lock();
@@ -53,7 +53,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  	} else {
  		netdev_speed = SPEED_1000;
  		pr_warn("%s speed is unknown, defaulting to %d\n", netdev->name,
-@@ -2149,7 +2164,9 @@ int ib_dereg_mr_user(struct ib_mr *mr, s
+@@ -2155,7 +2170,9 @@ int ib_dereg_mr_user(struct ib_mr *mr, s
  	struct ib_sig_attrs *sig_attrs = mr->sig_attrs;
  	int ret;
  
@@ -63,7 +63,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  	rdma_restrack_del(&mr->res);
  	ret = mr->device->ops.dereg_mr(mr, udata);
  	if (!ret) {
-@@ -2208,7 +2225,9 @@ struct ib_mr *ib_alloc_mr(struct ib_pd *
+@@ -2214,7 +2231,9 @@ struct ib_mr *ib_alloc_mr(struct ib_pd *
  	rdma_restrack_parent_name(&mr->res, &pd->res);
  	rdma_restrack_add(&mr->res);
  out:
@@ -73,7 +73,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  	return mr;
  }
  EXPORT_SYMBOL(ib_alloc_mr);
-@@ -2269,7 +2288,9 @@ struct ib_mr *ib_alloc_mr_integrity(stru
+@@ -2275,7 +2294,9 @@ struct ib_mr *ib_alloc_mr_integrity(stru
  	rdma_restrack_parent_name(&mr->res, &pd->res);
  	rdma_restrack_add(&mr->res);
  out:
@@ -83,7 +83,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  	return mr;
  }
  EXPORT_SYMBOL(ib_alloc_mr_integrity);
-@@ -2826,7 +2847,9 @@ void ib_drain_sq(struct ib_qp *qp)
+@@ -2832,7 +2853,9 @@ void ib_drain_sq(struct ib_qp *qp)
  		qp->device->ops.drain_sq(qp);
  	else
  		__ib_drain_sq(qp);
@@ -93,7 +93,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  }
  EXPORT_SYMBOL(ib_drain_sq);
  
-@@ -2855,7 +2878,9 @@ void ib_drain_rq(struct ib_qp *qp)
+@@ -2861,7 +2884,9 @@ void ib_drain_rq(struct ib_qp *qp)
  		qp->device->ops.drain_rq(qp);
  	else
  		__ib_drain_rq(qp);
@@ -103,7 +103,7 @@ Change-Id: Ib7b09e8bca1506cb25fd9272351c399444a7a69f
  }
  EXPORT_SYMBOL(ib_drain_rq);
  
-@@ -2966,6 +2991,27 @@ bool __rdma_block_iter_next(struct ib_bl
+@@ -2972,6 +2997,27 @@ bool __rdma_block_iter_next(struct ib_bl
  }
  EXPORT_SYMBOL(__rdma_block_iter_next);
  

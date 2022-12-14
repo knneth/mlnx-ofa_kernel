@@ -158,6 +158,7 @@ struct nvmet_port {
 	u32				offload_queues;
 	u32				offload_queue_size;
 	size_t				offload_srq_size;
+	bool                            offload_passthrough_sqe_rw;
 };
 
 static inline struct nvmet_port *to_nvmet_port(struct config_item *item)

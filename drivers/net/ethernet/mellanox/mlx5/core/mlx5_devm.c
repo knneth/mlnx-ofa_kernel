@@ -12,6 +12,7 @@
 #include "mlx5_devm.h"
 #include "mlx5_esw_devm.h"
 #include "mlx5_irq.h"
+#include "esw/qos.h"
 
 static LIST_HEAD(dev_head);
 /* The mutex below protects the dev_head list */
@@ -124,8 +125,7 @@ int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 	return mlx5_devlink_sf_port_del(devlink, port_index, extack);
 }
 
-int mlx5_devm_sf_port_fn_state_get(struct mlxdevm *devm_dev,
-				   struct mlxdevm_port *port,
+int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
 				   enum mlxdevm_port_fn_state *state,
 				   enum mlxdevm_port_fn_opstate *opstate,
 				   struct netlink_ext_ack *extack)
@@ -136,7 +136,7 @@ int mlx5_devm_sf_port_fn_state_get(struct mlxdevm *devm_dev,
 	struct devlink *devlink;
 	int ret;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 
@@ -148,8 +148,7 @@ int mlx5_devm_sf_port_fn_state_get(struct mlxdevm *devm_dev,
 	return ret;
 }
 
-int mlx5_devm_sf_port_fn_state_set(struct mlxdevm *devm_dev,
-				   struct mlxdevm_port *port,
+int mlx5_devm_sf_port_fn_state_set(struct mlxdevm_port *port,
 				   enum mlxdevm_port_fn_state state,
 				   struct netlink_ext_ack *extack)
 {
@@ -157,22 +156,21 @@ int mlx5_devm_sf_port_fn_state_set(struct mlxdevm *devm_dev,
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 	dl_state = mlxdevm_to_devlink_state(state);
 	return mlx5_devlink_sf_port_fn_state_set(devlink, &devport, dl_state, extack);
 }
 
-int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm *devm_dev,
-				     struct mlxdevm_port *port,
+int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 				     u8 *hw_addr, int *hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.devlink = devlink;
 	devport.index = port->index;
@@ -180,30 +178,28 @@ int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm *devm_dev,
 						      hw_addr, hw_addr_len, extack);
 }
 
-int mlx5_devm_sf_port_function_trust_get(struct mlxdevm *devm_dev,
-					 struct mlxdevm_port *port,
+int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
 					 bool *trusted,
 					 struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 	return mlx5_devlink_port_function_trust_get(devlink, &devport,
 						    trusted, extack);
 }
 
-int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm *devm_dev,
-				     struct mlxdevm_port *port,
+int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
 				     const u8 *hw_addr, int hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.devlink = devlink;
 	devport.index = port->index;
@@ -211,15 +207,14 @@ int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm *devm_dev,
 						      hw_addr_len, extack);
 }
 
-int mlx5_devm_sf_port_function_trust_set(struct mlxdevm *devm_dev,
-					 struct mlxdevm_port *port,
+int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
 					 bool trusted,
 					 struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 	return mlx5_devlink_port_function_trust_set(devlink,
@@ -237,7 +232,7 @@ struct mlx5_core_dev *mlx5_devm_core_dev_get(struct mlxdevm *devm_dev)
 	return mlx5_devm->dev;
 }
 
-int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm *devm_dev, struct mlxdevm_port *port,
+int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 				 struct mlxdevm_port_fn_cap *cap,
 				 struct netlink_ext_ack *extack)
 {
@@ -255,12 +250,12 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm *devm_dev, struct mlxdevm_port *
 	if (!query_ctx)
 		return -ENOMEM;
 
-	parent_dev = mlx5_devm_core_dev_get(devm_dev);
+	parent_dev = mlx5_devm_core_dev_get(port->devm);
 
 	mlx5_port = container_of(port, struct mlx5_devm_port, port);
 	port_index = mlx5_port->port_index;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	ret = mlx5_sf_index_to_hw_id(devlink, &hw_fn_id, port_index, extack);
 	if (ret)
 		goto out_free;
@@ -284,7 +279,7 @@ out_free:
 	return ret;
 }
 
-int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm *devm_dev, struct mlxdevm_port *port,
+int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 				 const struct mlxdevm_port_fn_cap *cap,
 				 struct netlink_ext_ack *extack)
 {
@@ -303,12 +298,12 @@ int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm *devm_dev, struct mlxdevm_port *
 	if (!query_ctx)
 		return -ENOMEM;
 
-	parent_dev = mlx5_devm_core_dev_get(devm_dev);
+	parent_dev = mlx5_devm_core_dev_get(port->devm);
 
 	mlx5_port = container_of(port, struct mlx5_devm_port, port);
 	port_index = mlx5_port->port_index;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	ret = mlx5_sf_index_to_hw_id(devlink, &hw_fn_id, port_index, extack);
 	if (ret)
 		goto out_free;
@@ -354,15 +349,58 @@ out_free:
 	return ret;
 }
 
-int mlx5_devm_rate_leaf_get(struct mlxdevm *devm_dev,
-			    struct mlxdevm_port *port,
+static struct mlx5_esw_rate_group *
+esw_qos_find_devm_group(struct mlx5_eswitch *esw, const char *group)
+{
+	struct mlx5_esw_rate_group *tmp;
+
+	list_for_each_entry(tmp, &esw->qos.groups, list) {
+		if (tmp->devm.name && !strcmp(tmp->devm.name, group))
+			return tmp;
+	}
+
+	return NULL;
+}
+
+static
+int mlx5_devlink_rate_leaf_get(struct devlink *devlink,
+			       struct devlink_port *port,
+			       u64 *tx_max, u64 *tx_share, char **group,
+			       struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw;
+	struct mlx5_vport *vport;
+	int err;
+
+	err = mlx5_esw_get_esw_and_vport(devlink, port, &esw, &vport, extack);
+	if (err)
+		return err;
+
+	mutex_lock(&esw->state_lock);
+	if (!vport->enabled) {
+		NL_SET_ERR_MSG_MOD(extack, "Eswitch vport is disabled");
+		err = -EOPNOTSUPP;
+		goto out;
+	}
+
+	*tx_max = vport->qos.max_rate;
+	*tx_share = vport->qos.min_rate;
+	if (vport->qos.group)
+		*group = vport->qos.group->devm.name;
+
+out:
+	mutex_unlock(&esw->state_lock);
+	return err;
+}
+
+int mlx5_devm_rate_leaf_get(struct mlxdevm_port *port,
 			    u64 *tx_max, u64 *tx_share, char **group,
 			    struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 
@@ -370,79 +408,242 @@ int mlx5_devm_rate_leaf_get(struct mlxdevm *devm_dev,
 					  tx_max, tx_share, group, extack);
 }
 
-int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm *devm_dev,
-				   struct mlxdevm_port *port,
+static
+int mlx5_devlink_rate_leaf_tx_max_set(struct devlink *devlink,
+				      struct devlink_port *port,
+				      u64 tx_max,
+				      struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw;
+	struct mlx5_vport *vport;
+	int err;
+
+	err = mlx5_esw_get_esw_and_vport(devlink, port, &esw, &vport, extack);
+	if (err)
+		return err;
+
+	if (!mlx5_esw_allowed(esw))
+		return -EPERM;
+
+	mutex_lock(&esw->state_lock);
+	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
+	if (err)
+		goto unlock;
+
+	err = esw_qos_set_vport_max_rate(esw, vport, tx_max, extack);
+unlock:
+	mutex_unlock(&esw->state_lock);
+	return err;
+}
+
+int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_port *port,
 				   u64 tx_max, struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 	return mlx5_devlink_rate_leaf_tx_max_set(devlink, &devport, tx_max, extack);
 }
 
-int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm *devm_dev,
-				     struct mlxdevm_port *port,
+static
+int mlx5_devlink_rate_leaf_tx_share_set(struct devlink *devlink,
+					struct devlink_port *port,
+					u64 tx_share,
+					struct netlink_ext_ack *extack)
+{
+	struct mlx5_vport *vport;
+	struct mlx5_eswitch *esw;
+	int err;
+
+	err = mlx5_esw_get_esw_and_vport(devlink, port, &esw, &vport, extack);
+	if (err)
+		return err;
+
+	if (!mlx5_esw_allowed(esw))
+		return -EPERM;
+
+	mutex_lock(&esw->state_lock);
+	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
+	if (err)
+		goto unlock;
+
+	err = esw_qos_set_vport_min_rate(esw, vport, tx_share, extack);
+unlock:
+	mutex_unlock(&esw->state_lock);
+	return err;
+}
+
+int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm_port *port,
 				     u64 tx_share, struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 	return mlx5_devlink_rate_leaf_tx_share_set(devlink, &devport, tx_share, extack);
 }
 
-int mlx5_devm_rate_leaf_group_set(struct mlxdevm *devm_dev,
-				  struct mlxdevm_port *port,
+static
+int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
+				     struct devlink_port *port,
+				     const char *group_name,
+				     struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_rate_group *group;
+	struct mlx5_eswitch *esw;
+	struct mlx5_vport *vport;
+	int err;
+
+	err = mlx5_esw_get_esw_and_vport(devlink, port, &esw, &vport, extack);
+	if (err)
+		return err;
+
+	if (!strlen(group_name))
+		return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch,
+						       vport, NULL, extack);
+
+	group = esw_qos_find_devm_group(esw, group_name);
+	if (!group)
+		return -EINVAL;
+	return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, group, extack);
+}
+
+int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
 				  const char *group, struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
 	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(devm_dev);
+	devlink = mlxdevm_to_devlink(port->devm);
 	memset(&devport, 0, sizeof(devport));
 	devport.index = port->index;
 	return mlx5_devlink_rate_leaf_group_set(devlink, &devport, group, extack);
 }
 
-int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group,
+int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group_name,
 				     u64 tx_share, struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_rate_group *group;
+	struct mlx5_core_dev *dev;
+	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
+	int err;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
-	return mlx5_devlink_rate_node_tx_share_set(devlink, group, tx_share, extack);
+	dev = devlink_priv(devlink);
+	esw = dev->priv.eswitch;
+
+	mutex_lock(&esw->state_lock);
+	group = esw_qos_find_devm_group(esw, group_name);
+	if (!group) {
+		err = -EINVAL;
+		goto unlock;
+	}
+	err = esw_qos_set_group_min_rate(esw, group, tx_share, extack);
+	if (!err)
+		group->devm.tx_share = tx_share;
+unlock:
+	mutex_unlock(&esw->state_lock);
+	return err;
 }
 
-int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group,
+int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group_name,
 				   u64 tx_max, struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_rate_group *group;
+	struct mlx5_core_dev *dev;
+	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
+	int err;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
-	return mlx5_devlink_rate_node_tx_max_set(devlink, group, tx_max, extack);
+	dev = devlink_priv(devlink);
+	esw = dev->priv.eswitch;
+
+	mutex_lock(&esw->state_lock);
+	group = esw_qos_find_devm_group(esw, group_name);
+	if (!group) {
+		err = -EINVAL;
+		goto unlock;
+	}
+	err = esw_qos_set_group_max_rate(esw, group, tx_max, extack);
+	if (!err)
+		group->devm.tx_max = tx_max;
+unlock:
+	mutex_unlock(&esw->state_lock);
+	return err;
 }
 
-int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group,
+int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,
 			    struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_rate_group *group;
 	struct devlink *devlink;
+	struct mlx5_eswitch *esw;
+	int err = 0;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
-	return mlx5_devlink_rate_node_new(devlink, group, extack);
+
+	esw = mlx5_devlink_eswitch_get(devlink);
+	if (IS_ERR(esw))
+		return PTR_ERR(esw);
+
+	mutex_lock(&esw->state_lock);
+	if (esw->mode != MLX5_ESWITCH_OFFLOADS) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Rate node creation supported only in switchdev mode");
+		err = -EOPNOTSUPP;
+		goto unlock;
+	}
+
+	group = esw_qos_create_rate_group(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
+	if (IS_ERR(group)) {
+		err = PTR_ERR(group);
+		goto unlock;
+	}
+
+	group->devm.name = kstrdup(group_name, GFP_KERNEL);
+	err = mlxdevm_rate_group_register(devm_dev,
+					  &group->devm);
+
+unlock:
+	mutex_unlock(&esw->state_lock);
+	return err;
 }
 
-int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group,
+int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
 			    struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_rate_group *group;
+	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
+	int err;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
-	return mlx5_devlink_rate_node_del(devlink, group, extack);
+
+	esw = mlx5_devlink_eswitch_get(devlink);
+	if (IS_ERR(esw))
+		return PTR_ERR(esw);
+
+	mutex_lock(&esw->state_lock);
+
+	group = esw_qos_find_devm_group(esw, group_name);
+	if (!group) {
+		err = -EINVAL;
+		goto unlock;
+	}
+	mlxdevm_rate_group_unregister(devm_dev,
+				      &group->devm);
+	kfree(group->devm.name);
+	err = esw_qos_destroy_rate_group(esw, group, extack);
+unlock:
+	mutex_unlock(&esw->state_lock);
+	return err;
 }
 
 static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
@@ -608,4 +809,14 @@ void mlx5_devm_unregister(struct mlx5_core_dev *dev)
 	list_del(&mdevm->list);
 	mutex_unlock(&mlx5_mlxdevm_mutex);
 	kfree(mdevm);
+}
+
+void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev)
+{
+	struct mlx5_devm_device *mdevm;
+
+	mdevm = mlx5_devm_device_get(dev);
+	if (!mdevm)
+		return;
+	mlxdevm_rate_nodes_destroy(&mdevm->device);
 }

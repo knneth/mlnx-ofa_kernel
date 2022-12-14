@@ -8,7 +8,7 @@ Change-Id: Ic18327b36b63e4991216f3784c94e186b901eb34
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
-@@ -54,6 +54,22 @@ void mlx5_tout_cleanup(struct mlx5_core_
+@@ -55,6 +55,22 @@ void mlx5_tout_cleanup(struct mlx5_core_
  	kfree(dev->timeouts);
  }
  

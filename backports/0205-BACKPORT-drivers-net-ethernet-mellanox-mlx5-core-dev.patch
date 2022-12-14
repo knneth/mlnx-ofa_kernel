@@ -1,10 +1,10 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Maher Sanalla <msanalla@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dev.c
 
-Change-Id: I86a53ab04705904c9af522a639e3fea6398480eb
+Change-Id: I66ebfaefa466312a902bfc5bb33afd4051559dc4
 ---
- drivers/net/ethernet/mellanox/mlx5/core/dev.c | 12 ++++++++++++
- 1 file changed, 12 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/dev.c | 23 +++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
@@ -29,15 +29,42 @@ Change-Id: I86a53ab04705904c9af522a639e3fea6398480eb
  }
  
  int mlx5_adev_init(struct mlx5_core_dev *dev)
-@@ -496,7 +504,11 @@ static u32 mlx5_gen_pci_id(const struct
- 		     PCI_SLOT(dev->pdev->devfn));
+@@ -512,15 +520,22 @@ static int _next_phys_dev(struct mlx5_co
+ 	return 1;
  }
  
-+#ifdef HAVE_BUS_FIND_DEVICE_GET_CONST
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
  static int next_phys_dev(struct device *dev, const void *data)
 +#else
 +static int next_phys_dev(struct device *dev, void *data)
-+#endif
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
  {
  	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
  	struct mlx5_core_dev *mdev = madev->mdev;
+ 
+ 	return _next_phys_dev(mdev, data);
+ }
+-
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
+ static int next_phys_dev_lag(struct device *dev, const void *data)
++#else
++static int next_phys_dev_lag(struct device *dev, void *data)
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
+ 	struct mlx5_core_dev *mdev = madev->mdev;
+@@ -533,9 +548,13 @@ static int next_phys_dev_lag(struct devi
+ 
+ 	return _next_phys_dev(mdev, data);
+ }
+-
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
+ struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
+ 					int (*match)(struct device *dev, const void *data))
++#else
++struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
++					int (*match)(struct device *dev, void *data))
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct auxiliary_device *adev;
+ 	struct mlx5_adev *madev;

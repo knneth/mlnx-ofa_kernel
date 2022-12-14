@@ -14,12 +14,12 @@ obj-$(CONFIG_MLX5_CORE) += mlx5_core.o
 mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		health.o mcg.o cq.o alloc.o port.o mr.o pd.o \
 		transobj.o vport.o sriov.o fs_cmd.o fs_core.o pci_irq.o \
-		fs_counters.o rl.o lag/lag.o dev.o events.o wq.o lib/gid.o \
+		fs_counters.o rl.o lag/lag.o lag/debugfs.o dev.o events.o wq.o lib/gid.o \
 		lib/devcom.o lib/pci_vsc.o lib/dm.o lib/fs_ttc.o diag/fs_tracepoint.o \
 		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o \
 		fw_reset.o qos.o mst_dump.o en_diag.o sriov_sysfs.o crdump.o \
 		diag/diag_cnt.o params.o fw_exp.o eswitch_devlink_compat.o \
-		fs_ft_pool.o lib/tout.o
+		fs_ft_pool.o lib/tout.o ecpf.o
 
 mlx5_core-y += compat.o
 
@@ -57,7 +57,8 @@ mlx5_core-$(CONFIG_MLX5_TC_SAMPLE)   += en/tc/sample.o
 # Core extra
 #
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += eswitch.o eswitch_offloads.o eswitch_offloads_termtbl.o \
-				      ecpf.o rdma.o esw/legacy.o esw/vf_meter.o
+				      rdma.o esw/legacy.o esw/vf_meter.o esw/devlink_port.o \
+				      esw/vporttbl.o esw/qos.o
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += esw/acl/helper.o \
 				      esw/acl/egress_lgcy.o esw/acl/egress_ofld.o \
 				      esw/acl/ingress_lgcy.o esw/acl/ingress_ofld.o \
@@ -98,6 +99,7 @@ mlx5_core-$(CONFIG_MLX5_SW_STEERING) += steering/dr_domain.o steering/dr_table.o
 					steering/dr_icm_pool.o steering/dr_buddy.o \
 					steering/dr_ste.o steering/dr_send.o \
 					steering/dr_ste_v0.o steering/dr_ste_v1.o \
+					steering/dr_ste_v2.o \
 					steering/dr_cmd.o steering/dr_fw.o \
 					steering/dr_action.o steering/fs_dr.o \
 					steering/dr_dbg.o

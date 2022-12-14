@@ -74,25 +74,6 @@ struct aes_gcm_keymat {
 	u32   aes_key[256 / 32];
 };
 
-struct mlx5_accel_esp_xfrm_pol {
-	union {
-		__be32 a4;
-		__be32 a6[4];
-	} saddr;
-
-	union {
-		__be32 a4;
-		__be32 a6[4];
-	} daddr;
-
-	__be16  dport;
-	__be16  dport_mask;
-	__be16  sport;
-	__be16  sport_mask;
-	__u16   family;
-	__u8    proto;
-};
-
 struct mlx5_accel_esp_xfrm_attrs {
 	enum mlx5_accel_esp_action action;
 	u32   esn;
@@ -103,7 +84,6 @@ struct mlx5_accel_esp_xfrm_attrs {
 	u32   sa_handle;
 	u32   aulen;
 	enum mlx5_accel_esp_replay replay_type;
-	struct mlx5_accel_esp_xfrm_pol pol;
 	union {
 		struct {
 			u32 size;

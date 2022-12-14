@@ -73,7 +73,6 @@ static void set_mkc_access_pd_addr_fields(void *mkc, int acc, u64 start_addr,
 					  struct ib_pd *pd)
 {
 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
-	bool ro_pci_enabled = pcie_relaxed_ordering_enabled(dev->mdev->pdev);
 
 	MLX5_SET(mkc, mkc, a, !!(acc & IB_ACCESS_REMOTE_ATOMIC));
 	MLX5_SET(mkc, mkc, rw, !!(acc & IB_ACCESS_REMOTE_WRITE));
@@ -83,10 +82,10 @@ static void set_mkc_access_pd_addr_fields(void *mkc, int acc, u64 start_addr,
 
 	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
 		MLX5_SET(mkc, mkc, relaxed_ordering_write,
-			 acc & IB_ACCESS_RELAXED_ORDERING && ro_pci_enabled);
+			 !!(acc & IB_ACCESS_RELAXED_ORDERING));
 	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read))
 		MLX5_SET(mkc, mkc, relaxed_ordering_read,
-			 acc & IB_ACCESS_RELAXED_ORDERING && ro_pci_enabled);
+			 !!(acc & IB_ACCESS_RELAXED_ORDERING));
 
 	MLX5_SET(mkc, mkc, pd, to_mpd(pd)->pdn);
 	MLX5_SET(mkc, mkc, qpn, 0xffffff);
@@ -145,6 +144,19 @@ static int destroy_mkey(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr)
 	return mlx5_core_destroy_mkey(dev->mdev, &mr->mmkey);
 }
 
+static void create_mkey_warn(struct mlx5_ib_dev *dev, int status, void *out)
+{
+	if (status == -ENXIO) /* core driver is not available */
+		return;
+
+	mlx5_ib_warn(dev, "async reg mr failed. status %d\n", status);
+	if (status != -EREMOTEIO) /* driver specific failure */
+		return;
+
+	/* Failed in FW, print cmd out failure details */
+	mlx5_cmd_out_err(dev->mdev, MLX5_CMD_OP_CREATE_MKEY, 0, out);
+}
+
 static void create_mkey_callback(int status, struct mlx5_async_work *context)
 {
 	struct mlx5_ib_mr *mr =
@@ -154,14 +166,14 @@ static void create_mkey_callback(int status, struct mlx5_async_work *context)
 	unsigned long flags;
 
 	if (status) {
-		mlx5_ib_warn(dev, "async reg mr failed. status %d\n", status);
+		create_mkey_warn(dev, status, mr->out);
 		kfree(mr);
 		spin_lock_irqsave(&ent->lock, flags);
 		ent->pending--;
 		WRITE_ONCE(dev->fill_delay, 1);
 		spin_unlock_irqrestore(&ent->lock, flags);
 		mod_timer(&dev->delay_timer, jiffies + HZ);
-		goto do_complete;
+		return;
 	}
 
 	mr->mmkey.type = MLX5_MKEY_MR;
@@ -178,12 +190,6 @@ static void create_mkey_callback(int status, struct mlx5_async_work *context)
 	/* If we are doing fill_to_high_water then keep going. */
 	queue_adjust_cache_locked(ent);
 	ent->pending--;
-	spin_unlock_irqrestore(&ent->lock, flags);
-do_complete:
-	spin_lock_irqsave(&ent->lock, flags);
-	if (atomic_read(&ent->do_complete)) {
-		atomic_dec(&ent->do_complete);
-	}
 	spin_unlock_irqrestore(&ent->lock, flags);
 }
 
@@ -428,18 +434,19 @@ static void __cache_work_func(struct mlx5_cache_ent *ent)
 		spin_unlock_irq(&ent->lock);
 		dtime = (cache->last_add + (s64)cache->rel_timeout * HZ) -
 			jiffies;
-		need_delay = cache->rel_imm || (!need_resched() &&
+		need_delay = !(cache->rel_imm || (!need_resched() &&
 		    cache->rel_timeout >= 0 && !someone_adding(cache) &&
-		    dtime <= 0); 
+		    dtime <= 0));
 
 		spin_lock_irq(&ent->lock);
 		if (ent->disabled)
 			goto out;
-		if (!need_delay && cache->rel_timeout >= 0) {
+		if (need_delay && cache->rel_timeout >= 0) {
 			dtime = max_t(s64, dtime, 0);
 			dtime = min_t(s64, dtime, (MAX_MR_RELEASE_TIMEOUT * HZ));
 			cancel_delayed_work(&ent->dwork);
 			queue_delayed_work(cache->wq, &ent->dwork, dtime);
+			goto out;
 		}
 		remove_cache_mr_locked(ent);
 		queue_adjust_cache_locked(ent);
@@ -486,7 +493,6 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev,
 	spin_lock_irq(&ent->lock);
 	if (list_empty(&ent->head)) {
 		spin_unlock_irq(&ent->lock);
-		atomic_inc(&ent->do_complete);
 		mr = create_cache_mr(ent);
 		if (IS_ERR(mr))
 			return mr;
@@ -503,15 +509,30 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev,
 	return mr;
 }
 
+static u32 max_order_to_search(u32 order)
+{
+	if (order <= 3)
+		return 3;
+	if (order <= 5)
+		return 2;
+	if (order <= 10)
+		return 1;
+	return 0;
+}
+
 /* Return a MR already available in the cache */
 static struct mlx5_ib_mr *get_cache_mr(struct mlx5_cache_ent *req_ent)
 {
+	u32 max_order = max_order_to_search(req_ent->order);
 	struct mlx5_ib_dev *dev = req_ent->dev;
 	struct mlx5_ib_mr *mr = NULL;
 	struct mlx5_cache_ent *ent = req_ent;
+	int i;
 
 	/* Try larger MR pools from the cache to satisfy the allocation */
-	for (; ent != &dev->cache.ent[MR_CACHE_LAST_STD_ENTRY + 1]; ent++) {
+	for (i = 0; i <= max_order &&
+			ent != &dev->cache.ent[MR_CACHE_LAST_STD_ENTRY + 1];
+	     ent++, i++) {
 		mlx5_ib_dbg(dev, "order %u, cache index %zu\n", ent->order,
 			    ent - dev->cache.ent);
 
@@ -537,6 +558,7 @@ static void mlx5_mr_cache_free(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr)
 {
 	struct mlx5_cache_ent *ent = mr->cache_ent;
 
+	WRITE_ONCE(dev->cache.last_add, jiffies);
 	spin_lock_irq(&ent->lock);
 	list_add_tail(&mr->list, &ent->head);
 	ent->available_mrs++;
@@ -603,7 +625,6 @@ int mlx5_mr_cache_init(struct mlx5_ib_dev *dev)
 		ent->order = i + 2;
 		ent->dev = dev;
 		ent->limit = 0;
-		atomic_set(&ent->do_complete, 0);
 
 		INIT_WORK(&ent->work, cache_work_func);
 		INIT_DELAYED_WORK(&ent->dwork, delayed_cache_work_func);
@@ -690,6 +711,10 @@ struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc)
 	MLX5_SET(mkc, mkc, length64, 1);
 	set_mkc_access_pd_addr_fields(mkc, acc | IB_ACCESS_RELAXED_ORDERING, 0,
 				      pd);
+
+#ifdef CONFIG_GPU_DIRECT_STORAGE
+	MLX5_SET(mkc, mkc, ma_translation_mode, MLX5_CAP_GEN(dev->mdev, ats));
+#endif
 
 	err = mlx5_ib_create_mkey(dev, &mr->mmkey, in, inlen);
 	if (err)

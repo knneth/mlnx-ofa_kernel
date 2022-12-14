@@ -92,9 +92,19 @@ int mlx5_esw_offloads_devlink_port_register(struct mlx5_eswitch *esw, u16 vport_
 	if (err)
 		goto reg_err;
 
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+	err = devlink_rate_leaf_create(dl_port, vport);
+	if (err)
+		goto rate_err;
+#endif
+
 	vport->dl_port = dl_port;
 	return 0;
 
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+rate_err:
+	devlink_port_unregister(dl_port);
+#endif
 reg_err:
 	mlx5_esw_dl_port_free(dl_port);
 	return err;
@@ -110,6 +120,15 @@ void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_eswitch *esw, u16 vpo
 	vport = mlx5_eswitch_get_vport(esw, vport_num);
 	if (IS_ERR(vport))
 		return;
+
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+	if (vport->dl_port->devlink_rate) {
+		if (refcount_read(&esw->qos.refcnt))
+			mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
+		devlink_rate_leaf_destroy(vport->dl_port);
+	}
+#endif
+
 	devlink_port_unregister(vport->dl_port);
 	mlx5_esw_dl_port_free(vport->dl_port);
 	vport->dl_port = NULL;
@@ -133,7 +152,15 @@ int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_p
 int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
 				      u16 vport_num, u32 controller, u32 sfnum)
 {
+	int err;
+
 	devlink_port_attrs_pci_sf_set(dl_port, controller, pfnum, sfnum, !!controller);
+
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+	err = devlink_rate_leaf_create(dl_port, vport);
+	if (err)
+		return err;
+#endif
 
 	return -EOPNOTSUPP;
 }
@@ -147,5 +174,17 @@ void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num
 #else
 void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
 {
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+	struct mlx5_vport *vport;
+
+	vport = mlx5_eswitch_get_vport(esw, vport_num);
+	if (IS_ERR(vport))
+		return;
+
+	if (vport->dl_port->devlink_rate) {
+		mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
+		devlink_rate_leaf_destroy(vport->dl_port);
+	}
+#endif
 }
 #endif

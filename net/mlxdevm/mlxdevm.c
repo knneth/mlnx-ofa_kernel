@@ -8,6 +8,7 @@
 #include <linux/rtnetlink.h>
 #include <net/genetlink.h>
 #include <linux/etherdevice.h>
+#include <linux/xarray.h>
 
 #include <net/mlxdevm.h>
 #include <uapi/mlxdevm/mlxdevm_netlink.h>
@@ -27,7 +28,8 @@ MODULE_INFO(retpoline, "Y");
 MODULE_VERSION(DRV_VERSION);
 
 static DEFINE_MUTEX(mlxdevm_mutex);
-static LIST_HEAD(dev_head);
+static DEFINE_XARRAY_FLAGS(mlxdevms, XA_FLAGS_ALLOC);
+#define MLXDEVM_REGISTERED XA_MARK_1
 static struct genl_family mlxdevm_nl_family;
 
 static const struct nla_policy mlxdevm_function_nl_policy[MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1] = {
@@ -60,6 +62,7 @@ static bool dev_handle_match(const struct mlxdevm *dev,
 
 static struct mlxdevm *mlxdevm_dev_get_from_attr(struct nlattr **attrs)
 {
+	unsigned long index;
 	struct mlxdevm *dev;
 	const char *busname;
 	const char *devname;
@@ -70,7 +73,7 @@ static struct mlxdevm *mlxdevm_dev_get_from_attr(struct nlattr **attrs)
 	devname = nla_data(attrs[MLXDEVM_ATTR_DEV_NAME]);
 	busname = nla_data(attrs[MLXDEVM_ATTR_DEV_BUS_NAME]);
 
-	list_for_each_entry(dev, &dev_head, list) {
+	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		if (dev_handle_match(dev, busname, devname))
 			return dev;
 	}
@@ -86,10 +89,17 @@ static struct mlxdevm *mlxdevm_dev_get_from_attr(struct nlattr **attrs)
  */
 int mlxdevm_register(struct mlxdevm *dev)
 {
+	static u32 last_id;
+	int ret;
+
 	if (!dev->device || !dev->device->bus)
 		return -EINVAL;
 
-	INIT_LIST_HEAD(&dev->list);
+	ret = xa_alloc_cyclic(&mlxdevms, &dev->index, dev, xa_limit_31b,
+			      &last_id, GFP_KERNEL);
+	if (ret < 0)
+		return ret;
+
 	INIT_LIST_HEAD(&dev->port_list);
 	INIT_LIST_HEAD(&dev->param_list);
 	INIT_LIST_HEAD(&dev->rate_group_list);
@@ -98,7 +108,7 @@ int mlxdevm_register(struct mlxdevm *dev)
 	init_rwsem(&dev->rate_group_rwsem);
 	mutex_init(&dev->lock);
 	mutex_lock(&mlxdevm_mutex);
-	list_add_tail(&dev->list, &dev_head);
+	xa_set_mark(&mlxdevms, dev->index, MLXDEVM_REGISTERED);
 	mutex_unlock(&mlxdevm_mutex);
 	return 0;
 }
@@ -107,12 +117,13 @@ EXPORT_SYMBOL_GPL(mlxdevm_register);
 void mlxdevm_unregister(struct mlxdevm *dev)
 {
 	mutex_lock(&mlxdevm_mutex);
-	list_del(&dev->list);
+	xa_clear_mark(&mlxdevms, dev->index, MLXDEVM_REGISTERED);
 	mutex_unlock(&mlxdevm_mutex);
 	mutex_destroy(&dev->lock);
 	WARN_ON(!list_empty(&dev->rate_group_list));
 	WARN_ON(!list_empty(&dev->port_list));
 	WARN_ON(!list_empty(&dev->param_list));
+	xa_erase(&mlxdevms, dev->index);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_unregister);
 
@@ -120,6 +131,17 @@ static int mlxdevm_param_driver_verify(const struct mlxdevm_param *param)
 {
 	return 0;
 }
+
+void mlxdevm_rate_nodes_destroy(struct mlxdevm *dev)
+{
+	const struct mlxdevm_ops *ops = dev->ops;
+	struct mlxdevm_rate_group *cur, *tmp;
+
+	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list) {
+		ops->rate_node_del(dev, cur->name, NULL);
+	}
+}
+EXPORT_SYMBOL_GPL(mlxdevm_rate_nodes_destroy);
 
 static int mlxdevm_param_verify(const struct mlxdevm_param *param)
 {
@@ -354,12 +376,13 @@ static int mlxdevm_nl_cmd_param_get_dumpit(struct sk_buff *msg,
 {
 	struct mlxdevm_param_item *param_item;
 	struct mlxdevm *devm;
+	unsigned long index;
 	int start = cb->args[0];
 	int idx = 0;
 	int err = 0;
 
 	mutex_lock(&mlxdevm_mutex);
-	list_for_each_entry(devm, &dev_head, list) {
+	xa_for_each_marked(&mlxdevms, index, devm, MLXDEVM_REGISTERED) {
 		mutex_lock(&devm->lock);
 		list_for_each_entry(param_item, &devm->param_list, list) {
 			if (idx < start) {
@@ -621,102 +644,6 @@ static int mlxdevm_nl_cmd_param_set_doit(struct sk_buff *skb,
 	return err;
 }
 
-static int mlxdevm_param_register_one(struct mlxdevm *devm,
-				      unsigned int port_index,
-				      struct list_head *param_list,
-				      const struct mlxdevm_param *param,
-				      enum mlxdevm_command cmd)
-{
-	struct mlxdevm_param_item *param_item;
-
-	if (mlxdevm_param_find_by_name(param_list, param->name))
-		return -EEXIST;
-
-	if (param->supported_cmodes == BIT(MLXDEVM_PARAM_CMODE_DRIVERINIT))
-		WARN_ON(param->get || param->set);
-	else
-		WARN_ON(!param->get || !param->set);
-
-	param_item = kzalloc(sizeof(*param_item), GFP_KERNEL);
-	if (!param_item)
-		return -ENOMEM;
-	param_item->param = param;
-
-	list_add_tail(&param_item->list, param_list);
-	mlxdevm_param_notify(devm, port_index, param_item, cmd);
-	return 0;
-}
-
-static void mlxdevm_param_unregister_one(struct mlxdevm *devm,
-					 unsigned int port_index,
-					 struct list_head *param_list,
-					 const struct mlxdevm_param *param,
-					 enum mlxdevm_command cmd)
-{
-	struct mlxdevm_param_item *param_item;
-
-	param_item = mlxdevm_param_find_by_name(param_list, param->name);
-	WARN_ON(!param_item);
-	mlxdevm_param_notify(devm, port_index, param_item, cmd);
-	list_del(&param_item->list);
-	kfree(param_item);
-}
-
-static int __mlxdevm_params_register(struct mlxdevm *devm,
-				     unsigned int port_index,
-				     struct list_head *param_list,
-				     const struct mlxdevm_param *params,
-				     size_t params_count,
-				     enum mlxdevm_command reg_cmd,
-				     enum mlxdevm_command unreg_cmd)
-{
-	const struct mlxdevm_param *param = params;
-	int i;
-	int err;
-
-	mutex_lock(&devm->lock);
-	for (i = 0; i < params_count; i++, param++) {
-		err = mlxdevm_param_verify(param);
-		if (err)
-			goto rollback;
-
-		err = mlxdevm_param_register_one(devm, port_index,
-						 param_list, param, reg_cmd);
-		if (err)
-			goto rollback;
-	}
-
-	mutex_unlock(&devm->lock);
-	return 0;
-
-rollback:
-	if (!i)
-		goto unlock;
-	for (param--; i > 0; i--, param--)
-		mlxdevm_param_unregister_one(devm, port_index, param_list,
-					     param, unreg_cmd);
-unlock:
-	mutex_unlock(&devm->lock);
-	return err;
-}
-
-static void __mlxdevm_params_unregister(struct mlxdevm *devm,
-					unsigned int port_index,
-					struct list_head *param_list,
-					const struct mlxdevm_param *params,
-					size_t params_count,
-					enum mlxdevm_command cmd)
-{
-	const struct mlxdevm_param *param = params;
-	int i;
-
-	mutex_lock(&devm->lock);
-	for (i = 0; i < params_count; i++, param++)
-		mlxdevm_param_unregister_one(devm, 0, param_list, param,
-					     cmd);
-	mutex_unlock(&devm->lock);
-}
-
 /**
  *	mlxdevm_params_register - register configuration parameters
  *
@@ -730,10 +657,23 @@ int mlxdevm_params_register(struct mlxdevm *devm,
 			    const struct mlxdevm_param *params,
 			    size_t params_count)
 {
-	return __mlxdevm_params_register(devm, 0, &devm->param_list,
-					 params, params_count,
-					 MLXDEVM_CMD_PARAM_NEW,
-					 MLXDEVM_CMD_PARAM_DEL);
+	const struct mlxdevm_param *param = params;
+	int i, err;
+
+	for (i = 0; i < params_count; i++, param++) {
+		err = mlxdevm_param_register(devm, param);
+		if (err)
+			goto rollback;
+	}
+	return 0;
+
+rollback:
+	if (!i)
+		return err;
+
+	for (param--; i > 0; i--, param--)
+		mlxdevm_param_unregister(devm, param);
+	return err;
 }
 EXPORT_SYMBOL_GPL(mlxdevm_params_register);
 
@@ -747,11 +687,64 @@ void mlxdevm_params_unregister(struct mlxdevm *devm,
 			       const struct mlxdevm_param *params,
 			       size_t params_count)
 {
-	return __mlxdevm_params_unregister(devm, 0, &devm->param_list,
-					   params, params_count,
-					   MLXDEVM_CMD_PARAM_DEL);
+	const struct mlxdevm_param *param = params;
+	int i;
+
+	for (i = 0; i < params_count; i++, param++)
+		mlxdevm_param_unregister(devm, param);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_params_unregister);
+
+/**
+ *	mlxdevm_param_register - register one configuration parameter
+ *
+ *	@devm: devm device
+ *	@param: one configuration parameter
+ *
+ *	Register the configuration parameter supported by the driver.
+ *	Return: returns 0 on successful registration or error code otherwise.
+ */
+int mlxdevm_param_register(struct mlxdevm *devm,
+			   const struct mlxdevm_param *param)
+{
+	struct mlxdevm_param_item *param_item;
+
+	WARN_ON(mlxdevm_param_verify(param));
+	WARN_ON(mlxdevm_param_find_by_name(&devm->param_list, param->name));
+
+	if (param->supported_cmodes == BIT(MLXDEVM_PARAM_CMODE_DRIVERINIT))
+		WARN_ON(param->get || param->set);
+	else
+		WARN_ON(!param->get || !param->set);
+
+	param_item = kzalloc(sizeof(*param_item), GFP_KERNEL);
+	if (!param_item)
+		return -ENOMEM;
+
+	param_item->param = param;
+
+	list_add_tail(&param_item->list, &devm->param_list);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mlxdevm_param_register);
+
+/**
+ *	mlxdevm_param_unregister - unregister one configuration parameter
+ *	@devm: devm device
+ *	@param: configuration parameter to unregister
+ */
+void mlxdevm_param_unregister(struct mlxdevm *devm,
+			      const struct mlxdevm_param *param)
+{
+	struct mlxdevm_param_item *param_item;
+
+	param_item =
+		mlxdevm_param_find_by_name(&devm->param_list, param->name);
+	WARN_ON(!param_item);
+	list_del(&param_item->list);
+	kfree(param_item);
+}
+EXPORT_SYMBOL_GPL(mlxdevm_param_unregister);
 
 /**
  *	mlxdevm_params_publish - publish configuration parameters
@@ -1002,6 +995,8 @@ int mlxdevm_port_register(struct mlxdevm *dev, struct mlxdevm_port *mlxdevm_port
 	if (mlxdevm_port_index_exists(dev, port_index))
 		return -EEXIST;
 
+	WARN_ON(mlxdevm_port->devm);
+	mlxdevm_port->devm = dev;
 	mlxdevm_port->index = port_index;
 	spin_lock_init(&mlxdevm_port->type_lock);
 	down_write(&dev->port_list_rwsem);
@@ -1014,11 +1009,12 @@ EXPORT_SYMBOL_GPL(mlxdevm_port_register);
 /**
  * mlxdevm_port_unregister - Unregister mlxdevm port
  *
- * @dev: dev
  * @mlxdevm_port: mlxdevm port
  */
-void mlxdevm_port_unregister(struct mlxdevm *dev, struct mlxdevm_port *mlxdevm_port)
+void mlxdevm_port_unregister(struct mlxdevm_port *mlxdevm_port)
 {
+	struct mlxdevm *dev = mlxdevm_port->devm;
+
 	down_write(&dev->port_list_rwsem);
 	list_del(&mlxdevm_port->list);
 	up_write(&dev->port_list_rwsem);
@@ -1097,12 +1093,13 @@ static int
 mlxdevm_nl_cmd_dev_get_dumpit(struct sk_buff *msg, struct netlink_callback *cb)
 {
 	struct mlxdevm *dev;
+	unsigned long index;
 	int start = cb->args[0];
 	int idx = 0;
 	int err;
 
 	mutex_lock(&mlxdevm_mutex);
-	list_for_each_entry(dev, &dev_head, list) {
+	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		if (idx < start) {
 			idx++;
 			continue;
@@ -1143,7 +1140,7 @@ mlxdevm_nl_port_attrs_put(struct sk_buff *msg, struct mlxdevm_port *port)
 }
 
 static int
-mlxdevm_port_fn_hw_addr_fill(struct mlxdevm *dev, const struct mlxdevm_ops *ops,
+mlxdevm_port_fn_hw_addr_fill(const struct mlxdevm_ops *ops,
 			     struct mlxdevm_port *port, struct sk_buff *msg,
 			     struct netlink_ext_ack *extack, bool *msg_updated)
 {
@@ -1154,7 +1151,7 @@ mlxdevm_port_fn_hw_addr_fill(struct mlxdevm *dev, const struct mlxdevm_ops *ops,
 	if (!ops->port_fn_hw_addr_get)
 		return 0;
 
-	err = ops->port_fn_hw_addr_get(dev, port, hw_addr, &hw_addr_len, extack);
+	err = ops->port_fn_hw_addr_get(port, hw_addr, &hw_addr_len, extack);
 	if (err) {
 		if (err == -EOPNOTSUPP)
 			return 0;
@@ -1181,8 +1178,7 @@ mlxdevm_port_fn_opstate_valid(enum mlxdevm_port_fn_opstate opstate)
 	       opstate == MLXDEVM_PORT_FN_OPSTATE_ATTACHED;
 }
 
-static int mlxdevm_port_fn_trust_fill(struct mlxdevm *dev,
-				      const struct mlxdevm_ops *ops,
+static int mlxdevm_port_fn_trust_fill(const struct mlxdevm_ops *ops,
 				      struct mlxdevm_port *port,
 				      struct sk_buff *msg,
 				      struct netlink_ext_ack *extack,
@@ -1194,7 +1190,7 @@ static int mlxdevm_port_fn_trust_fill(struct mlxdevm *dev,
 	if (!ops->port_fn_trust_get)
 		return 0;
 
-	err = ops->port_fn_trust_get(dev, port, &trust, extack);
+	err = ops->port_fn_trust_get(port, &trust, extack);
 	if (err) {
 		if (err == -EOPNOTSUPP)
 			return 0;
@@ -1208,8 +1204,7 @@ static int mlxdevm_port_fn_trust_fill(struct mlxdevm *dev,
 }
 
 static int
-mlxdevm_port_fn_state_fill(struct mlxdevm *dev,
-			   const struct mlxdevm_ops *ops,
+mlxdevm_port_fn_state_fill(const struct mlxdevm_ops *ops,
 			   struct mlxdevm_port *port, struct sk_buff *msg,
 			   struct netlink_ext_ack *extack,
 			   bool *msg_updated)
@@ -1221,7 +1216,7 @@ mlxdevm_port_fn_state_fill(struct mlxdevm *dev,
 	if (!ops->port_fn_state_get)
 		return 0;
 
-	err = ops->port_fn_state_get(dev, port, &state, &opstate, extack);
+	err = ops->port_fn_state_get(port, &state, &opstate, extack);
 	if (err) {
 		if (err == -EOPNOTSUPP)
 			return 0;
@@ -1253,8 +1248,7 @@ mlxdevm_port_fn_cap_roce_valid(enum mlxdevm_port_fn_cap_roce state)
 }
 
 static int
-mlxdevm_port_fn_cap_fill(struct mlxdevm *dev,
-			 const struct mlxdevm_ops *ops,
+mlxdevm_port_fn_cap_fill(const struct mlxdevm_ops *ops,
 			 struct mlxdevm_port *port, struct sk_buff *msg,
 			 struct netlink_ext_ack *extack,
 			 bool *msg_updated)
@@ -1265,7 +1259,7 @@ mlxdevm_port_fn_cap_fill(struct mlxdevm *dev,
 	if (!ops->port_fn_cap_get)
 		return 0;
 
-	err = ops->port_fn_cap_get(dev, port, &cap, extack);
+	err = ops->port_fn_cap_get(port, &cap, extack);
 	if (err) {
 		if (err == -EOPNOTSUPP)
 			return 0;
@@ -1291,7 +1285,7 @@ mlxdevm_port_fn_cap_fill(struct mlxdevm *dev,
 }
 
 static int
-mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg, struct mlxdevm *dev,
+mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg,
 			     struct mlxdevm_port *port,
 			     struct netlink_ext_ack *extack)
 {
@@ -1300,7 +1294,7 @@ mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg, struct mlxdevm *dev,
 	bool msg_updated = false;
 	int err;
 
-	ops = dev->ops;
+	ops = port->devm->ops;
 	if (!ops)
 		return -EOPNOTSUPP;
 
@@ -1308,20 +1302,20 @@ mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg, struct mlxdevm *dev,
 	if (!fn_attr)
 		return -EMSGSIZE;
 
-	err = mlxdevm_port_fn_hw_addr_fill(dev, ops, port, msg,
+	err = mlxdevm_port_fn_hw_addr_fill(ops, port, msg,
 					   extack, &msg_updated);
 	if (err)
 		goto out;
-	err = mlxdevm_port_fn_state_fill(dev, ops, port, msg, extack,
+	err = mlxdevm_port_fn_state_fill(ops, port, msg, extack,
 					 &msg_updated);
 	if (err)
 		goto out;
 
-	err = mlxdevm_port_fn_cap_fill(dev, ops, port, msg, extack,
+	err = mlxdevm_port_fn_cap_fill(ops, port, msg, extack,
 				       &msg_updated);
 	if (err)
 		goto out;
-	err = mlxdevm_port_fn_trust_fill(dev, ops, port, msg, extack, &msg_updated);
+	err = mlxdevm_port_fn_trust_fill(ops, port, msg, extack, &msg_updated);
 out:
 	if (err || !msg_updated)
 		nla_nest_cancel(msg, fn_attr);
@@ -1330,7 +1324,7 @@ out:
 	return err;
 }
 
-static int mlxdevm_nl_port_fill(struct sk_buff *msg, struct mlxdevm *dev,
+static int mlxdevm_nl_port_fill(struct sk_buff *msg,
 				struct mlxdevm_port *port,
 				enum mlxdevm_command cmd, u32 portid,
 				u32 seq, int flags,
@@ -1342,7 +1336,7 @@ static int mlxdevm_nl_port_fill(struct sk_buff *msg, struct mlxdevm *dev,
 	if (!hdr)
 		return -EMSGSIZE;
 
-	if (mlxdevm_nl_dev_handle_fill(msg, dev))
+	if (mlxdevm_nl_dev_handle_fill(msg, port->devm))
 		goto nla_put_failure;
 	if (nla_put_u32(msg, MLXDEVM_ATTR_PORT_INDEX, port->index))
 		goto nla_put_failure;
@@ -1366,7 +1360,7 @@ static int mlxdevm_nl_port_fill(struct sk_buff *msg, struct mlxdevm *dev,
 	rtnl_unlock();
 	if (mlxdevm_nl_port_attrs_put(msg, port))
 		goto nla_put_failure;
-	if (mlxdevm_nl_port_fn_attrs_put(msg, dev, port, extack))
+	if (mlxdevm_nl_port_fn_attrs_put(msg, port, extack))
 		goto nla_put_failure;
 
 	genlmsg_end(msg, hdr);
@@ -1405,7 +1399,7 @@ mlxdevm_nl_cmd_port_get_doit(struct sk_buff *skb, struct genl_info *info)
 		goto err;
 	}
 
-	err = mlxdevm_nl_port_fill(msg, dev, port,
+	err = mlxdevm_nl_port_fill(msg, port,
 				   MLXDEVM_CMD_PORT_NEW,
 				   info->snd_portid, info->snd_seq, 0,
 				   info->extack);
@@ -1425,20 +1419,21 @@ static int mlxdevm_nl_cmd_port_get_dumpit(struct sk_buff *msg,
 					  struct netlink_callback *cb)
 {
 	struct mlxdevm *dev;
+	unsigned long index;
 	struct mlxdevm_port *port;
 	int start = cb->args[0];
 	int idx = 0;
 	int err;
 
 	mutex_lock(&mlxdevm_mutex);
-	list_for_each_entry(dev, &dev_head, list) {
+	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		down_read(&dev->port_list_rwsem);
 		list_for_each_entry(port, &dev->port_list, list) {
 			if (idx < start) {
 				idx++;
 				continue;
 			}
-			err = mlxdevm_nl_port_fill(msg, dev, port,
+			err = mlxdevm_nl_port_fill(msg, port,
 						   MLXDEVM_CMD_PORT_NEW,
 						   NETLINK_CB(cb->skb).portid,
 						   cb->nlh->nlmsg_seq,
@@ -1471,16 +1466,16 @@ static int mlxdevm_nl_rate_fill_common(struct sk_buff *msg, enum mlxdevm_rate_ty
 	return 0;
 }
 
-static int mlxdevm_nl_leaf_fill(struct sk_buff *msg, struct mlxdevm *dev,
+static int mlxdevm_nl_leaf_fill(struct sk_buff *msg,
 				struct mlxdevm_port *port,
 				enum mlxdevm_command cmd, u32 portid,
 				u32 seq, int flags,
 				struct netlink_ext_ack *extack)
 {
-	const struct mlxdevm_ops *ops = dev->ops;
+	const struct mlxdevm_ops *ops = port->devm->ops;
+	char *group = NULL;
 	u64 tx_share = 0;
 	u64 tx_max = 0;
-	char *group;
 	void *hdr;
 	int err;
 
@@ -1491,7 +1486,7 @@ static int mlxdevm_nl_leaf_fill(struct sk_buff *msg, struct mlxdevm *dev,
 	 * because this is done while holding the rate_group_rwsem. This serializes
 	 * any ongoing group destruction from the driver layer.
 	 */
-	err = ops->rate_leaf_get(dev, port, &tx_max, &tx_share, &group, extack);
+	err = ops->rate_leaf_get(port, &tx_max, &tx_share, &group, extack);
 	if (err)
 		return err;
 
@@ -1499,7 +1494,7 @@ static int mlxdevm_nl_leaf_fill(struct sk_buff *msg, struct mlxdevm *dev,
 	if (!hdr)
 		return -EMSGSIZE;
 
-	if (mlxdevm_nl_dev_handle_fill(msg, dev))
+	if (mlxdevm_nl_dev_handle_fill(msg, port->devm))
 		goto nla_put_failure;
 	if (nla_put_u32(msg, MLXDEVM_ATTR_PORT_INDEX, port->index))
 		goto nla_put_failure;
@@ -1550,43 +1545,43 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static int mlxdevm_port_fn_leaf_tx_share(struct mlxdevm *dev, struct mlxdevm_port *port,
+static int mlxdevm_port_fn_leaf_tx_share(struct mlxdevm_port *port,
 					 u64 tx_share, struct netlink_ext_ack *extack)
 {
-	const struct mlxdevm_ops *ops = dev->ops;
+	const struct mlxdevm_ops *ops = port->devm->ops;
 
 	if (!ops || !ops->rate_leaf_tx_share_set) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Function does not support leaf tx_share setting");
 		return -EOPNOTSUPP;
 	}
-	return ops->rate_leaf_tx_share_set(dev, port, tx_share, extack);
+	return ops->rate_leaf_tx_share_set(port, tx_share, extack);
 }
 
-static int mlxdevm_port_fn_leaf_tx_max(struct mlxdevm *dev, struct mlxdevm_port *port,
+static int mlxdevm_port_fn_leaf_tx_max(struct mlxdevm_port *port,
 				       u64 tx_max, struct netlink_ext_ack *extack)
 {
-	const struct mlxdevm_ops *ops = dev->ops;
+	const struct mlxdevm_ops *ops = port->devm->ops;
 
 	if (!ops || !ops->rate_leaf_tx_max_set) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Function does not support leaf tx_max setting");
 		return -EOPNOTSUPP;
 	}
-	return ops->rate_leaf_tx_max_set(dev, port, tx_max, extack);
+	return ops->rate_leaf_tx_max_set(port, tx_max, extack);
 }
 
-static int mlxdevm_port_fn_leaf_group(struct mlxdevm *dev, struct mlxdevm_port *port,
+static int mlxdevm_port_fn_leaf_group(struct mlxdevm_port *port,
 				      const char *group, struct netlink_ext_ack *extack)
 {
-	const struct mlxdevm_ops *ops = dev->ops;
+	const struct mlxdevm_ops *ops = port->devm->ops;
 
 	if (!ops || !ops->rate_leaf_group_set) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Function does not support leaf parent group setting");
 		return -EOPNOTSUPP;
 	}
-	return ops->rate_leaf_group_set(dev, port, group, extack);
+	return ops->rate_leaf_group_set(port, group, extack);
 }
 
 static int mlxdevm_port_fn_node_tx_share(struct mlxdevm *dev, const char *group,
@@ -1660,7 +1655,7 @@ static int mlxdevm_rate_leaf_get_doit_locked(struct mlxdevm *dev, struct genl_in
 	if (IS_ERR(port))
 		return PTR_ERR(port);
 
-	return mlxdevm_nl_leaf_fill(msg, dev, port,
+	return mlxdevm_nl_leaf_fill(msg, port,
 				    MLXDEVM_CMD_EXT_RATE_GET,
 				    info->snd_portid, info->snd_seq, 0,
 				    info->extack);
@@ -1725,6 +1720,7 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
 	struct mlxdevm_rate_group *group;
 	struct mlxdevm_port *port;
 	struct mlxdevm *dev;
+	unsigned long index;
 	int idx = 0;
 	int err;
 
@@ -1732,7 +1728,7 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
 		return msg->len;
 
 	mutex_lock(&mlxdevm_mutex);
-	list_for_each_entry(dev, &dev_head, list) {
+	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		down_read(&dev->rate_group_rwsem);
 		list_for_each_entry(group, &dev->rate_group_list, list) {
 			err = mlxdevm_nl_node_fill(msg, dev, group,
@@ -1750,10 +1746,10 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
 		up_read(&dev->rate_group_rwsem);
 	}
 
-	list_for_each_entry(dev, &dev_head, list) {
+	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		down_read(&dev->port_list_rwsem);
 		list_for_each_entry(port, &dev->port_list, list) {
-			err = mlxdevm_nl_leaf_fill(msg, dev, port,
+			err = mlxdevm_nl_leaf_fill(msg, port,
 						   MLXDEVM_CMD_PORT_NEW,
 						   NETLINK_CB(cb->skb).portid,
 						   cb->nlh->nlmsg_seq,
@@ -1791,14 +1787,14 @@ static int mlxdevm_cmd_rate_set_leaf(struct genl_info *info, struct mlxdevm *dev
 
 	if (info->attrs[MLXDEVM_ATTR_EXT_RATE_TX_SHARE]) {
 		rate = nla_get_u64(info->attrs[MLXDEVM_ATTR_EXT_RATE_TX_SHARE]);
-		err = mlxdevm_port_fn_leaf_tx_share(dev, port, rate, extack);
+		err = mlxdevm_port_fn_leaf_tx_share(port, rate, extack);
 		if (err)
 			goto out;
 	}
 
 	if (info->attrs[MLXDEVM_ATTR_EXT_RATE_TX_MAX]) {
 		rate = nla_get_u64(info->attrs[MLXDEVM_ATTR_EXT_RATE_TX_MAX]);
-		err = mlxdevm_port_fn_leaf_tx_max(dev, port, rate, extack);
+		err = mlxdevm_port_fn_leaf_tx_max(port, rate, extack);
 		if (err)
 			goto out;
 	}
@@ -1810,7 +1806,7 @@ static int mlxdevm_cmd_rate_set_leaf(struct genl_info *info, struct mlxdevm *dev
 			goto out;
 		}
 
-		err = mlxdevm_port_fn_leaf_group(dev, port, group, extack);
+		err = mlxdevm_port_fn_leaf_group(port, group, extack);
 		if (err)
 			goto leaf_group_err;
 	}
@@ -1991,7 +1987,7 @@ static int mlxdevm_port_new_notifiy(struct mlxdevm *dev,
 		goto out;
 	}
 
-	err = mlxdevm_nl_port_fill(msg, dev, port,
+	err = mlxdevm_nl_port_fill(msg, port,
 				   MLXDEVM_CMD_PORT_NEW, info->snd_portid,
 				   info->snd_seq, 0, NULL);
 	if (err)
@@ -2006,8 +2002,7 @@ out:
 }
 
 static int
-mlxdevm_port_fn_hw_addr_set(struct mlxdevm *dev,
-			    struct mlxdevm_port *port,
+mlxdevm_port_fn_hw_addr_set(struct mlxdevm_port *port,
 			    const struct nlattr *attr,
 			    struct netlink_ext_ack *extack)
 {
@@ -2032,18 +2027,17 @@ mlxdevm_port_fn_hw_addr_set(struct mlxdevm *dev,
 		}
 	}
 
-	ops = dev->ops;
+	ops = port->devm->ops;
 	if (!ops->port_fn_hw_addr_set) {
 		NL_SET_ERR_MSG_MOD(extack, "Port doesn't support function attributes");
 		return -EOPNOTSUPP;
 	}
 
-	return ops->port_fn_hw_addr_set(dev, port, hw_addr, hw_addr_len, extack);
+	return ops->port_fn_hw_addr_set(port, hw_addr, hw_addr_len, extack);
 }
 
 static int
-mlxdevm_port_fn_trust_set(struct mlxdevm *dev,
-			  struct mlxdevm_port *port,
+mlxdevm_port_fn_trust_set(struct mlxdevm_port *port,
 			  const struct nlattr *attr,
 			  struct netlink_ext_ack *extack)
 {
@@ -2051,17 +2045,16 @@ mlxdevm_port_fn_trust_set(struct mlxdevm *dev,
 	bool trust;
 
 	trust = nla_get_u8(attr);
-	ops = dev->ops;
+	ops = port->devm->ops;
 	if (!ops->port_fn_trust_set) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Function does not support trust setting");
 		return -EOPNOTSUPP;
 	}
-	return ops->port_fn_trust_set(dev, port, trust, extack);
+	return ops->port_fn_trust_set(port, trust, extack);
 }
 
-static int mlxdevm_port_fn_state_set(struct mlxdevm *dev,
-				     struct mlxdevm_port *port,
+static int mlxdevm_port_fn_state_set(struct mlxdevm_port *port,
 				     const struct nlattr *attr,
 				     struct netlink_ext_ack *extack)
 {
@@ -2070,23 +2063,23 @@ static int mlxdevm_port_fn_state_set(struct mlxdevm *dev,
 
 	state = nla_get_u8(attr);
 
-	ops = dev->ops;
+	ops = port->devm->ops;
 	if (!ops->port_fn_state_set) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Function does not support state setting");
 		return -EOPNOTSUPP;
 	}
-	return ops->port_fn_state_set(dev, port, state, extack);
+	return ops->port_fn_state_set(port, state, extack);
 }
 
 static int
-mlxdevm_port_fn_set(struct mlxdevm *dev, struct mlxdevm_port *port,
+mlxdevm_port_fn_set(struct mlxdevm_port *port,
 		    const struct nlattr *attr, struct netlink_ext_ack *extack)
 {
 	struct nlattr **tb;
 	int err;
 
-	if (!dev->ops)
+	if (!port->devm->ops)
 		return -EOPNOTSUPP;
 
 	tb = kcalloc(MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1, sizeof(struct nlattr *), GFP_KERNEL);
@@ -2102,14 +2095,14 @@ mlxdevm_port_fn_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 
 	attr = tb[MLXDEVM_PORT_FUNCTION_ATTR_HW_ADDR];
 	if (attr) {
-		err = mlxdevm_port_fn_hw_addr_set(dev, port, attr, extack);
+		err = mlxdevm_port_fn_hw_addr_set(port, attr, extack);
 		if (err)
 			goto out;
 	}
 
 	attr = tb[MLXDEVM_PORT_FN_ATTR_TRUST_STATE];
 	if (attr) {
-		err = mlxdevm_port_fn_trust_set(dev, port, attr, extack);
+		err = mlxdevm_port_fn_trust_set(port, attr, extack);
 		if (err)
 			return err;
 	}
@@ -2123,7 +2116,7 @@ mlxdevm_port_fn_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 			err = -EINVAL;
 			goto out;
 		}
-		err = mlxdevm_port_fn_state_set(dev, port, attr, extack);
+		err = mlxdevm_port_fn_state_set(port, attr, extack);
 	}
 
 out:
@@ -2155,7 +2148,7 @@ mlxdevm_nl_cmd_port_set_doit(struct sk_buff *skb, struct genl_info *info)
 		struct nlattr *attr = info->attrs[MLXDEVM_ATTR_PORT_FUNCTION];
 		struct netlink_ext_ack *extack = info->extack;
 
-		err = mlxdevm_port_fn_set(dev, port, attr, extack);
+		err = mlxdevm_port_fn_set(port, attr, extack);
 		if (err)
 			goto out;
 	}
@@ -2265,7 +2258,7 @@ out:
 }
 
 static int
-mlxdevm_port_fn_cap_set(struct mlxdevm *dev, struct mlxdevm_port *port,
+mlxdevm_port_fn_cap_set(struct mlxdevm_port *port,
 			const struct nlattr *attr,
 			struct netlink_ext_ack *extack)
 {
@@ -2274,7 +2267,7 @@ mlxdevm_port_fn_cap_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 	struct nlattr **tb;
 	int err;
 
-	ops = dev->ops;
+	ops = port->devm->ops;
 	if (!ops)
 		return -EOPNOTSUPP;
 
@@ -2310,7 +2303,7 @@ mlxdevm_port_fn_cap_set(struct mlxdevm *dev, struct mlxdevm_port *port,
 		cap.max_uc_list = nla_get_u32(attr);
 		cap.uc_list_cap_valid = true;
 	}
-	err = ops->port_fn_cap_set(dev, port, &cap, extack);
+	err = ops->port_fn_cap_set(port, &cap, extack);
 
 out:
 	kfree(tb);
@@ -2341,7 +2334,7 @@ mlxdevm_nl_cmd_port_fn_cap_set_doit(struct sk_buff *skb, struct genl_info *info)
 		struct nlattr *attr = info->attrs[MLXDEVM_ATTR_EXT_PORT_FN_CAP];
 		struct netlink_ext_ack *extack = info->extack;
 
-		err = mlxdevm_port_fn_cap_set(dev, port, attr, extack);
+		err = mlxdevm_port_fn_cap_set(port, attr, extack);
 		if (err)
 			goto out;
 	}

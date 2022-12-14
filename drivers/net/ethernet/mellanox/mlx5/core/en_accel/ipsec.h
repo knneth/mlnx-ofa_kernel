@@ -78,8 +78,6 @@ struct mlx5e_ipsec_stats {
 
 	u64 ipsec_full_rx_pkts;
 	u64 ipsec_full_rx_bytes;
-	u64 ipsec_full_rx_pkts_pol_drop;
-	u64 ipsec_full_rx_bytes_pol_drop;
 	u64 ipsec_full_rx_pkts_drop;
 	u64 ipsec_full_rx_bytes_drop;
 	u64 ipsec_full_tx_pkts;
@@ -115,9 +113,6 @@ struct mlx5e_ipsec_esn_state {
 
 struct mlx5e_ipsec_rule {
 	struct mlx5_flow_handle *rule;
-	struct mlx5_flow_handle *rule_cap;
-	struct mlx5_flow_handle *rule_pol;
-	struct mlx5_modify_hdr *rule_pol_mod_hdr;
 	struct mlx5_modify_hdr *set_modify_hdr;
 	struct mlx5_pkt_reformat *pkt_reformat;
 };
@@ -140,7 +135,6 @@ struct mlx5e_ipsec_sa_entry {
 	struct mlx5e_ipsec_esn_state esn_state;
 	unsigned int handle; /* Handle in SADB_RX */
 	struct xfrm_state *x;
-	struct xfrm_policy *pol;
 	struct mlx5e_ipsec *ipsec;
 	struct mlx5_accel_esp_xfrm *xfrm;
 	void *hw_context;

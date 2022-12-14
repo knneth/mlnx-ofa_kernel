@@ -7,7 +7,7 @@ echo_err()
 	echo -e "$@" 1>&2
 }
 
-regEx="(from incompatible pointer type|declared inside parameter list|is deprecated|expects argument of type|discards .const. qualifier|but argument is of type|discards qualifiers from pointer target type|discards ‘const’ qualifier|makes pointer from integer without a cast)"
+regEx="(from incompatible pointer type|declared inside parameter list|is deprecated|expects argument of type|discards .const. qualifier|but argument is of type|discards qualifiers from pointer target type|discards ‘const’ qualifier|makes pointer from integer without a cast|not in enumerated type ‘const enum flow_action_id’)"
 
 cat $log_file 1>&2
 

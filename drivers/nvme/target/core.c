@@ -828,9 +828,15 @@ void nvmet_ns_disable(struct nvmet_ns *ns)
 
 	mutex_lock(&subsys->lock);
 	if (ns->pdev) {
-		list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry) {
-			if (ctrl->offload_ctrl)
+		struct nvmet_ctrl *tmp;
+
+		list_for_each_entry_safe(ctrl, tmp, &subsys->ctrls,
+					 subsys_entry) {
+			if (ctrl->offload_ctrl) {
+				mutex_unlock(&subsys->lock);
 				ctrl->ops->disable_offload_ns(ctrl, ns);
+				mutex_lock(&subsys->lock);
+			}
 		}
 	}
 

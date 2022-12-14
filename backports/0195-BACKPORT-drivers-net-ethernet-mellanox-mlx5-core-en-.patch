@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I96b84d0dd41e230cb17307c9cecdddb9fb65c821
 ---
- .../ethernet/mellanox/mlx5/core/en/devlink.c  | 47 ++++++++++++++++++-
- 1 file changed, 45 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 39 ++++++++++++++++++-
+ 1 file changed, 37 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
@@ -75,33 +75,8 @@ Change-Id: I96b84d0dd41e230cb17307c9cecdddb9fb65c821
  	return devlink_port_register(devlink, dl_port, dl_port_index);
  }
  
-@@ -55,20 +89,29 @@ void mlx5e_devlink_port_unregister(struc
- {
- 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
+@@ -67,3 +101,4 @@ struct devlink_port *mlx5e_get_devlink_p
  
-+#ifdef HAVE_DEVLINK_PORT_HAS_REGISTERED
- 	if (dl_port->registered)
-+#endif
- 		devlink_port_unregister(dl_port);
- }
- 
- struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
- {
- 	struct mlx5e_priv *priv = netdev_priv(dev);
-+#ifdef HAVE_DEVLINK_PORT_HAS_REGISTERED
- 	struct devlink_port *port;
-+#endif
- 
- 	if (!netif_device_present(dev))
- 		return NULL;
- 
-+#ifdef HAVE_DEVLINK_PORT_HAS_REGISTERED
- 	port = mlx5e_devlink_get_dl_port(priv);
- 	if (port->registered)
- 		return port;
- 	return NULL;
-+#else
-+	return mlx5e_devlink_get_dl_port(priv);
-+#endif
+ 	return mlx5e_devlink_get_dl_port(priv);
  }
 +#endif

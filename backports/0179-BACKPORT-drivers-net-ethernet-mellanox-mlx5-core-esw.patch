@@ -3,56 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 
 Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
 ---
- .../net/ethernet/mellanox/mlx5/core/eswitch.c | 41 ++++++++++++++++++-
- 1 file changed, 39 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 30 ++++++++++++++++++-
+ 1 file changed, 29 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
-@@ -865,6 +865,7 @@ static bool element_type_supported(struc
- }
- 
- /* Vport QoS management */
-+#if IS_ENABLED(CONFIG_MLXDEVM)
- static int mlx5_devm_rate_group_register(struct mlx5_vgroup *group, const char *name)
- {
- 	int err;
-@@ -886,6 +887,7 @@ static void mlx5_devm_rate_group_unregis
- 				      &group->devm);
- 	kfree(group->devm.name);
- }
-+#endif
- 
- struct mlx5_vgroup *esw_create_vgroup(struct mlx5_eswitch *esw,
- 				      u32 group_id, const char *name)
-@@ -921,9 +923,13 @@ struct mlx5_vgroup *esw_create_vgroup(st
- 	group->tsar_ix = tsar_ix;
- 	group->dev = dev;
- 
-+#if IS_ENABLED(CONFIG_MLXDEVM)
- 	if (name)
- 		err = mlx5_devm_rate_group_register(group, name);
- 	else
-+#else
-+	if (!name)
-+#endif
- 		err = mlx5_create_vf_group_sysfs(dev, group->group_id, &group->kobj);
- 
- 	if (err)
-@@ -953,9 +959,13 @@ void esw_destroy_vgroup(struct mlx5_eswi
- 
- 	list_del(&group->list);
- 
-+#if IS_ENABLED(CONFIG_MLXDEVM)
- 	if (group->devm.name)
- 		mlx5_devm_rate_group_unregister(group);
- 	else
-+#else
-+	if (!group->devm.name)
-+#endif
- 		mlx5_destroy_vf_group_sysfs(esw->dev, &group->kobj);
- 
- 	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
-@@ -1353,7 +1363,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
+@@ -980,7 +980,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
  			  enum mlx5_eswitch_vport_event enabled_events)
  {
  	struct mlx5_vport *vport;
@@ -61,11 +17,10 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  
  	vport = mlx5_eswitch_get_vport(esw, vport_num);
  	if (IS_ERR(vport))
-@@ -1911,8 +1921,11 @@ int mlx5_eswitch_enable(struct mlx5_eswi
- void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw, bool clear_vf)
- {
+@@ -1546,7 +1546,11 @@ void mlx5_eswitch_disable_locked(struct
+ #endif
  	int old_mode;
--
+ 
 +#ifdef HAVE_LOCKUP_ASSERT_HELD_WRITE
  	lockdep_assert_held_write(&esw->mode_lock);
 +#else
@@ -74,7 +29,7 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  
  	if (esw->mode == MLX5_ESWITCH_NONE)
  		return;
-@@ -2431,7 +2444,11 @@ is_port_function_supported(struct mlx5_e
+@@ -2073,7 +2077,11 @@ is_port_function_supported(struct mlx5_e
  	       mlx5_esw_is_sf_vport(esw, vport_num);
  }
  
@@ -86,7 +41,7 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  					   struct devlink_port *port,
  					   u8 *hw_addr, int *hw_addr_len,
  					   struct netlink_ext_ack *extack)
-@@ -2441,7 +2458,11 @@ int mlx5_devlink_port_function_hw_addr_g
+@@ -2083,7 +2091,11 @@ int mlx5_devlink_port_function_hw_addr_g
  	int err = -EOPNOTSUPP;
  	u16 vport_num;
  
@@ -98,7 +53,7 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  	if (IS_ERR(esw))
  		return PTR_ERR(esw);
  
-@@ -2489,7 +2510,11 @@ mlx5_esw_set_hca_trusted(struct mlx5_esw
+@@ -2131,7 +2143,11 @@ mlx5_esw_set_hca_trusted(struct mlx5_esw
  	return mlx5_core_access_reg(esw->dev, in, sz, out, sz, MLX5_REG_TRUST_LEVEL, 0, 1);
  }
  
@@ -110,7 +65,7 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  					   struct devlink_port *port,
  					   const u8 *hw_addr, int hw_addr_len,
  					   struct netlink_ext_ack *extack)
-@@ -2499,7 +2524,11 @@ int mlx5_devlink_port_function_hw_addr_s
+@@ -2141,7 +2157,11 @@ int mlx5_devlink_port_function_hw_addr_s
  	int err = -EOPNOTSUPP;
  	u16 vport_num;
  
@@ -122,7 +77,7 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  	if (IS_ERR(esw)) {
  		NL_SET_ERR_MSG_MOD(extack, "Eswitch doesn't support set hw_addr");
  		return PTR_ERR(esw);
-@@ -2781,9 +2810,13 @@ int mlx5_eswitch_get_vport_config(struct
+@@ -2423,9 +2443,13 @@ int mlx5_eswitch_get_vport_config(struct
  	ivi->linkstate = evport->info.link_state;
  	ivi->vlan = evport->info.vlan;
  	ivi->qos = evport->info.qos;
@@ -133,10 +88,10 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
 +#ifdef HAVE_VF_INFO_TRUST
  	ivi->trusted = evport->info.trusted;
 +#endif
- 	ivi->min_tx_rate = evport->qos.min_rate;
- 	ivi->max_tx_rate = evport->qos.max_rate;
- 	mutex_unlock(&esw->state_lock);
-@@ -3235,7 +3268,9 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	if (evport->qos.enabled) {
+ 		ivi->min_tx_rate = evport->qos.min_rate;
+ 		ivi->max_tx_rate = evport->qos.max_rate;
+@@ -2487,7 +2511,9 @@ int mlx5_eswitch_get_vport_stats(struct
  	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
  	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
  	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
@@ -146,7 +101,7 @@ Change-Id: I45f3332df7a4dc203cd5f8ad5770a17653b6ed9c
  	int err = 0;
  	u32 *out;
  
-@@ -3295,11 +3330,13 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -2547,11 +2573,13 @@ int mlx5_eswitch_get_vport_stats(struct
  	vf_stats->broadcast =
  		MLX5_GET_CTR(out, received_eth_broadcast.packets);
  

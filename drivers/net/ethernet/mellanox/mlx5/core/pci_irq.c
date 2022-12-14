@@ -233,7 +233,7 @@ static void affinity_copy(struct mlx5_irq *irq, struct cpumask *affinity,
 
 	if (!irq_pool_is_sf_pool(irq->pool) && !irq->pool->comp_base &&
 	    cpumask_empty(irq->mask))
-		cpumask_set_cpu(0, irq->mask);
+		cpumask_set_cpu(cpumask_first(cpu_online_mask), irq->mask);
 }
 
 static struct mlx5_irq *irq_request(struct mlx5_irq_pool *pool, int i,
@@ -383,8 +383,8 @@ static struct mlx5_irq *irq_pool_request_affinity(struct mlx5_irq_pool *pool,
 	new_irq = irq_create(pool, affinity);
 	if (IS_ERR(new_irq)) {
 		if (!least_loaded_irq) {
-			mlx5_core_err(pool->dev, "Didn't find IRQ for cpu = %u\n",
-				      cpumask_first(affinity));
+			mlx5_core_err(pool->dev, "Didn't find a matching IRQ. err = %ld\n",
+				      PTR_ERR(new_irq));
 			least_loaded_irq = new_irq;
 			goto unlock;
 		}

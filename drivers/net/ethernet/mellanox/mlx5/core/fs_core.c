@@ -1755,6 +1755,7 @@ static void free_match_list(struct match_list *head, bool ft_locked)
 static int build_match_list(struct match_list *match_head,
 			    struct mlx5_flow_table *ft,
 			    const struct mlx5_flow_spec *spec,
+			    struct mlx5_flow_group *fg,
 			    bool ft_locked)
 {
 	struct rhlist_head *tmp, *list;
@@ -1768,6 +1769,9 @@ static int build_match_list(struct match_list *match_head,
 	/* RCU is atomic, we can't execute FW commands here */
 	rhl_for_each_entry_rcu(g, tmp, list, hash) {
 		struct match_list *curr_match;
+
+		if (fg && fg != g)
+			continue;
 
 		if (unlikely(!tree_get_node(&g->node)))
 			continue;
@@ -1954,6 +1958,9 @@ _mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 	if (!check_valid_spec(spec))
 		return ERR_PTR(-EINVAL);
 
+	if (flow_act->fg && ft->autogroup.active)
+		return ERR_PTR(-EINVAL);
+
 	for (i = 0; i < dest_num; i++) {
 		if (!dest_is_valid(&dest[i], flow_act, ft))
 			return ERR_PTR(-EINVAL);
@@ -1963,7 +1970,7 @@ search_again_locked:
 	version = atomic_read(&ft->node.version);
 
 	/* Collect all fgs which has a matching match_criteria */
-	err = build_match_list(&match_head, ft, spec, take_write);
+	err = build_match_list(&match_head, ft, spec, flow_act->fg, take_write);
 	if (!take_write) {
 		up_read_ref_node(&ft->node);
 	} else {
@@ -2140,6 +2147,8 @@ void mlx5_del_flow_rules(struct mlx5_flow_handle *handle)
 		fte->node.del_hw_func = NULL;
 		up_write_ref_node(&fte->node, false);
 		tree_put_node(&fte->node, false);
+	} else {
+		up_write_ref_node(&fte->node, false);
 	}
 	kfree(handle);
 }
@@ -2982,7 +2991,7 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 		goto out_err;
 	}
 
-	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_CRYPTO_EGRESS, 2);
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_CRYPTO_EGRESS, 3);
 	if (IS_ERR(maj_prio)) {
 		err = PTR_ERR(maj_prio);
 		goto out_err;

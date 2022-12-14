@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I1ad5999ac3385c6af41fcc2e93e737b22c3030c9
 ---
- .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 92 +++++++++++++++++--
- 1 file changed, 85 insertions(+), 7 deletions(-)
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 104 ++++++++++++++++--
+ 1 file changed, 96 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
@@ -139,6 +139,15 @@ Change-Id: I1ad5999ac3385c6af41fcc2e93e737b22c3030c9
  }
  
  int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
+@@ -219,7 +284,7 @@ void mlx5i_uninit_underlay_qp(struct mlx
+ 
+ int mlx5i_create_underlay_qp(struct mlx5e_priv *priv)
+ {
+-	unsigned char *dev_addr = priv->netdev->dev_addr;
++	const unsigned char *dev_addr = priv->netdev->dev_addr;
+ 	u32 out[MLX5_ST_SZ_DW(create_qp_out)] = {};
+ 	u32 in[MLX5_ST_SZ_DW(create_qp_in)] = {};
+ 	struct mlx5i_priv *ipriv = priv->ppriv;
 @@ -326,7 +391,9 @@ static int mlx5i_create_flow_steering(st
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
@@ -149,7 +158,29 @@ Change-Id: I1ad5999ac3385c6af41fcc2e93e737b22c3030c9
  	}
  
  	err = mlx5e_create_ttc_table(priv);
-@@ -649,7 +716,13 @@ static int mlx5i_xmit(struct net_device
+@@ -490,11 +557,21 @@ int mlx5i_dev_init(struct net_device *de
+ {
+ 	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
+ 	struct mlx5i_priv    *ipriv  = priv->ppriv;
++#ifdef HAVE_DEV_ADDR_MOD
++	u8 addr_mod[3];
++#endif
+ 
+ 	/* Set dev address using underlay QP */
++#ifdef HAVE_DEV_ADDR_MOD
++	addr_mod[0] = (ipriv->qpn >> 16) & 0xff;
++	addr_mod[1] = (ipriv->qpn >>  8) & 0xff;
++	addr_mod[2] = (ipriv->qpn) & 0xff;
++	dev_addr_mod(dev, 1, addr_mod, sizeof(addr_mod));
++#else
+ 	dev->dev_addr[1] = (ipriv->qpn >> 16) & 0xff;
+ 	dev->dev_addr[2] = (ipriv->qpn >>  8) & 0xff;
+ 	dev->dev_addr[3] = (ipriv->qpn) & 0xff;
++#endif
+ 
+ 	/* Add QPN to net-device mapping to HT */
+ 	mlx5i_pkey_add_qpn(dev, ipriv->qpn);
+@@ -649,7 +726,13 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
  
@@ -163,7 +194,7 @@ Change-Id: I1ad5999ac3385c6af41fcc2e93e737b22c3030c9
  
  	return NETDEV_TX_OK;
  }
-@@ -751,8 +824,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -751,8 +834,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -174,7 +205,7 @@ Change-Id: I1ad5999ac3385c6af41fcc2e93e737b22c3030c9
  
  	return 0;
  
-@@ -787,6 +862,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -787,6 +872,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

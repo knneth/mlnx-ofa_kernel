@@ -438,6 +438,35 @@ static ssize_t nvmet_param_offload_queue_size_store(struct config_item *item,
 
 CONFIGFS_ATTR(nvmet_, param_offload_queue_size);
 
+static ssize_t nvmet_param_offload_passthrough_sqe_rw_show(
+		struct config_item *item,
+		char *page)
+{
+	struct nvmet_port *port = to_nvmet_port(item);
+
+	return snprintf(page, PAGE_SIZE, "%d\n",
+			port->offload_passthrough_sqe_rw);
+}
+
+static ssize_t nvmet_param_offload_passthrough_sqe_rw_store(
+		struct config_item *item, const char *page, size_t count)
+{
+	struct nvmet_port *port = to_nvmet_port(item);
+	bool enable;
+
+	if (nvmet_is_port_enabled(port, __func__))
+		return -EACCES;
+
+	if (strtobool(page, &enable))
+		return -EINVAL;
+
+	port->offload_passthrough_sqe_rw = enable;
+
+	return count;
+}
+
+CONFIGFS_ATTR(nvmet_, param_offload_passthrough_sqe_rw);
+
 /*
  * Namespace structures & file operation functions below
  */
@@ -750,7 +779,7 @@ nvmet_ns_offload_cmds(struct nvmet_ns *ns, char *page,
 	u64 cmds;
 
 	mutex_lock(&subsys->lock);
-	if (subsys->offloadble && offload_cmds) {
+	if (subsys->offloadble && offload_cmds && ns->enabled) {
 		cmds = offload_cmds(ns);
 		valid = true;
 	}
@@ -907,7 +936,8 @@ nvmet_offload_ctx_stat_show(struct config_item *item, char *page)
 	struct nvmet_ns_counters counters;
 
 	mutex_lock(&subsys->lock);
-	if (subsys->offloadble && subsys->offload_query_counters) {
+	if (subsys->offloadble && subsys->offload_query_counters &&
+	    ctx->ns->enabled) {
 		subsys->offload_query_counters(ctx->ctx, &counters);
 		valid = true;
 	}
@@ -1961,6 +1991,7 @@ static struct configfs_attribute *nvmet_port_attrs[] = {
 	&nvmet_attr_param_offload_queues,
 	&nvmet_attr_param_offload_srq_size,
 	&nvmet_attr_param_offload_queue_size,
+	&nvmet_attr_param_offload_passthrough_sqe_rw,
 #ifdef CONFIG_BLK_DEV_INTEGRITY
 	&nvmet_attr_param_pi_enable,
 #endif
@@ -2111,8 +2142,10 @@ static struct configfs_subsystem nvmet_configfs_subsystem = {
 
 void nvmet_offload_ctx_configfs_del(struct nvmet_offload_ctx *ctx)
 {
-	if (d_inode(ctx->group.cg_item.ci_dentry))
+	if (d_inode(ctx->group.cg_item.ci_dentry)) {
+		pr_info("Removing offload ctx %d from configfs\n", ctx->id);
 		configfs_unregister_group(&ctx->group);
+	}
 }
 EXPORT_SYMBOL_GPL(nvmet_offload_ctx_configfs_del);
 

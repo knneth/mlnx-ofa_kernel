@@ -844,6 +844,12 @@ int is_non_trackable_free_func(const char *func_name)
 		"dealloc_mod_hdr_actions",
 		/* external function in mdev module */
 		"create_store",
+		/* functions in mlxdevm.c uses memory allocated by nla_strdup */
+		"mlxdevm_nl_cmd_rate_new_doit",
+		"mlxdevm_nl_cmd_rate_del_doit",
+		"mlxdevm_rate_node_get_doit_locked",
+		"mlxdevm_cmd_rate_set_node",
+		"mlxdevm_cmd_rate_set_leaf",
 	};
 	size_t str_cmp_arr_size = sizeof(str_cmp_arr)/sizeof(char *);
 	int i;

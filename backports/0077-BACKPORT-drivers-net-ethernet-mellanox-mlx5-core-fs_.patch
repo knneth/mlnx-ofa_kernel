@@ -1,7 +1,7 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Maher Sanalla <msanalla@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 
-Change-Id: I480bee365eb90911f478d337dbad0e233bff4c46
+Change-Id: Iecac02125c096fc8fa38fc4f785329a5c993fb63
 ---
  .../net/ethernet/mellanox/mlx5/core/fs_core.c | 83 +++++++++++++++++--
  1 file changed, 77 insertions(+), 6 deletions(-)
@@ -220,8 +220,8 @@ Change-Id: I480bee365eb90911f478d337dbad0e233bff4c46
  		}
  	}
  	return handle;
-@@ -1757,16 +1818,26 @@ static int build_match_list(struct match
- 			    const struct mlx5_flow_spec *spec,
+@@ -1758,16 +1819,26 @@ static int build_match_list(struct match
+ 			    struct mlx5_flow_group *fg,
  			    bool ft_locked)
  {
 +#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
@@ -248,4 +248,4 @@ Change-Id: I480bee365eb90911f478d337dbad0e233bff4c46
 +#endif
  		struct match_list *curr_match;
  
- 		if (unlikely(!tree_get_node(&g->node)))
+ 		if (fg && fg != g)

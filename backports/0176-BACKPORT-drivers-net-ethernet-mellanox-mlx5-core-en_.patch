@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
 Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_tx.c | 88 +++++++++++++++++++++++--
- 1 file changed, 83 insertions(+), 5 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 106 +++++++++++++++++-
+ 1 file changed, 102 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
@@ -29,10 +29,10 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  }
  #endif
  
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
  		       struct net_device *sb_dev)
-+#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 +#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
 +#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
@@ -44,7 +44,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
 +#else
 +		       void *accel_priv)
 +#endif
-+#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
@@ -54,7 +54,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  			if (unlikely(mlx5e_use_ptpsq(skb)))
  				return mlx5e_select_ptpsq(dev, skb, selq);
  
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		txq_ix = netdev_pick_tx(dev, skb, NULL);
 +#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
 +		txq_ix = fallback(dev, skb, NULL);
@@ -77,7 +77,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  			}
  		}
  #endif
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		txq_ix = netdev_pick_tx(dev, skb, NULL);
 +#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
 +		txq_ix = fallback(dev, skb, NULL);
@@ -104,22 +104,47 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  		if (hlen == ETH_HLEN && !skb_vlan_tag_present(skb))
  			hlen += VLAN_HLEN;
  		break;
-@@ -337,8 +375,12 @@ static inline void mlx5e_insert_vlan(voi
+@@ -335,10 +373,26 @@ static inline void mlx5e_insert_vlan(voi
+  * need to set L3 checksum flag for IPsec
+  */
  static void ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++					struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
  					struct mlx5_wqe_eth_seg *eseg)
  {
--	u32 inner_ipproto = 0;
--
 +#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
 +	struct xfrm_offload *xo = xfrm_offload(skb);
-+	u8 inner_ipproto = xo->inner_ipproto;
++	u32 inner_ipproto = xo->inner_ipproto;
 +#else
-+	u8 inner_ipproto = 0;
++	u8 inner_ipproto = ipsec_st->inner_ipproto;
 +#endif
++
  	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
- 	if (inner_ipproto) {
- 		eseg->cs_flags |= MLX5_ETH_WQE_L4_INNER_CSUM | MLX5_ETH_WQE_L3_INNER_CSUM;
-@@ -389,13 +431,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
+-	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
++	if (inner_ipproto) {
++		eseg->cs_flags |= MLX5_ETH_WQE_L3_INNER_CSUM;
++		if (inner_ipproto == IPPROTO_TCP || inner_ipproto == IPPROTO_UDP)
++				eseg->cs_flags |= MLX5_ETH_WQE_L4_INNER_CSUM;
++		if (likely(skb->ip_summed == CHECKSUM_PARTIAL))
++			sq->stats->csum_partial_inner++;
++	} else if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
+ 		eseg->cs_flags |= MLX5_ETH_WQE_L4_CSUM;
+ 		sq->stats->csum_partial_inner++;
+ 	}
+@@ -352,7 +406,11 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+ {
+ #ifdef CONFIG_MLX5_EN_IPSEC
+ 	if (unlikely(mlx5e_ipsec_eseg_meta(eseg))) {
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
+ 		ipsec_txwqe_build_eseg_csum(sq, skb, eseg);
++#else
++		ipsec_txwqe_build_eseg_csum(sq, skb, &accel->ipsec, eseg);
++#endif
+ 		return;
+ 	}
+ #endif
+@@ -383,13 +441,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
  	u16 ihs;
  
  	if (skb->encapsulation) {
@@ -139,7 +164,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  			ihs = skb_transport_offset(skb) + tcp_hdrlen(skb);
  		stats->tso_packets++;
  		stats->tso_bytes += skb->len - ihs;
-@@ -614,6 +662,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+@@ -608,6 +672,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
  	}
  
  	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
@@ -147,7 +172,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  	if (send_doorbell)
  		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
  }
-@@ -631,7 +680,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -625,7 +690,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
  	struct mlx5e_sq_stats *stats = sq->stats;
  	int num_dma;
  
@@ -157,7 +182,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  
  	/* fill wqe */
  	wi   = &sq->db.wqe_info[pi];
-@@ -783,7 +834,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+@@ -777,7 +844,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
  		mlx5e_tx_mpwqe_session_start(sq, eseg);
  	}
  
@@ -167,7 +192,19 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  
  	txd.data = skb->data;
  	txd.len = skb->len;
-@@ -878,7 +931,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -827,7 +896,11 @@ static bool mlx5e_txwqe_build_eseg(struc
+ 				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
+ 				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
+ {
++#if !defined(HAVE_XFRM_OFFLOAD_INNER_IPPROTO) && defined(CONFIG_MLX5_EN_IPSEC)
++	if (unlikely(!mlx5e_accel_tx_eseg(priv, skb, eseg, &accel->ipsec, ihs)))
++#else
+ 	if (unlikely(!mlx5e_accel_tx_eseg(priv, skb, eseg, ihs)))
++#endif
+ 		return false;
+ 
+ 	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
+@@ -872,7 +945,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  							     attr.ihs)))
  				return NETDEV_TX_OK;
  
@@ -181,7 +218,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  			return NETDEV_TX_OK;
  		}
  
-@@ -895,7 +954,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -889,7 +968,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs)))
  		return NETDEV_TX_OK;
  
@@ -195,7 +232,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  
  	return NETDEV_TX_OK;
  }
-@@ -942,7 +1007,11 @@ static void mlx5e_consume_skb(struct mlx
+@@ -936,7 +1021,11 @@ static void mlx5e_consume_skb(struct mlx
  			skb_tstamp_tx(skb, &hwts);
  	}
  
@@ -207,7 +244,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  }
  
  static void mlx5e_tx_wi_consume_fifo_skbs(struct mlx5e_txqsq *sq, struct mlx5e_tx_wqe_info *wi,
-@@ -1020,7 +1089,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -1014,7 +1103,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  				nbytes += wi->num_bytes;
  				continue;
  			}
@@ -215,7 +252,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  			if (unlikely(mlx5e_ktls_tx_try_handle_resync_dump_comp(sq, wi,
  									       &dma_fifo_cc)))
  				continue;
-@@ -1153,7 +1221,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -1147,7 +1235,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -227,7 +264,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -1175,7 +1247,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1169,7 +1261,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -237,7 +274,7 @@ Change-Id: I6f6670528d42427dd76e92f47ae91382da7241ca
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1201,7 +1275,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1195,7 +1289,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	if (unlikely(num_dma < 0))
  		goto err_drop;
  

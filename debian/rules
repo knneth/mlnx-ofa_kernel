@@ -150,7 +150,6 @@ ifneq ($(WITH_DKMS),1)
 endif
 
 	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/lib/udev/rules.d
-	install -m 0644 source/ofed_scripts/82-net-setup-link.rules   debian/$(putils)/lib/udev/rules.d
 	install -m 0644 source/ofed_scripts/83-mlnx-sf-name.rules   debian/$(putils)/lib/udev/rules.d
 	install -m 0644 ofed_scripts/openibd.service   debian/$(putils)/lib/systemd/system
 	install -m 0644 ofed_scripts/mlnx_interface_mgr\@.service  debian/$(putils)/etc/systemd/system
@@ -165,7 +164,6 @@ endif
 	echo 'echo'							>> debian/$(putils)/etc/infiniband/info
 	chmod 755 debian/$(putils)/etc/infiniband/info
 
-	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
 	install -m 0755 source/ofed_scripts/sf-rep-netdev-rename	debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/auxdev-sf-netdev-rename	debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
@@ -215,3 +213,6 @@ ifeq ($(WITH_MOD_SIGN),1)
 endif
 endif
 endif
+
+override_dh_compress:
+	dh_compress -X vf-net-link-name.sh

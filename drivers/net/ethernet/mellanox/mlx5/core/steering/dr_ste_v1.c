@@ -122,12 +122,12 @@ enum {
 	DR_STE_V1_ACTION_MDFY_FLD_CFG_HDR_0_1		= 0x70,
 	DR_STE_V1_ACTION_MDFY_FLD_METADATA_2_CQE	= 0x7b,
 	DR_STE_V1_ACTION_MDFY_FLD_GNRL_PURPOSE		= 0x7c,
-	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_2		= 0x8c,
-	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_3		= 0x8d,
-	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_4		= 0x8e,
-	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_5		= 0x8f,
-	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_6		= 0x90,
-	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_7		= 0x91,
+	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_2_0		= 0x8c,
+	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_2_1		= 0x8d,
+	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_1_0		= 0x8e,
+	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_1_1		= 0x8f,
+	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_0_0		= 0x90,
+	DR_STE_V1_ACTION_MDFY_FLD_REGISTER_0_1		= 0x91,
 };
 
 enum dr_ste_v1_aso_ctx_type {
@@ -228,22 +228,22 @@ static const struct mlx5dr_ste_action_modify_field dr_ste_v1_action_modify_field
 		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_METADATA_2_CQE, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_METADATA_REG_C_0] = {
-		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_6, .start = 0, .end = 31,
+		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_0_0, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_METADATA_REG_C_1] = {
-		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_7, .start = 0, .end = 31,
+		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_0_1, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_METADATA_REG_C_2] = {
-		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_4, .start = 0, .end = 31,
+		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_1_0, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_METADATA_REG_C_3] = {
-		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_5, .start = 0, .end = 31,
+		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_1_1, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_METADATA_REG_C_4] = {
-		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_2, .start = 0, .end = 31,
+		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_2_0, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_METADATA_REG_C_5] = {
-		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_3, .start = 0, .end = 31,
+		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_REGISTER_2_1, .start = 0, .end = 31,
 	},
 	[MLX5_ACTION_IN_FIELD_OUT_TCP_SEQ_NUM] = {
 		.hw_field = DR_STE_V1_ACTION_MDFY_FLD_TCP_MISC_0, .start = 0, .end = 31,
@@ -547,6 +547,7 @@ static void dr_ste_v1_arr_init_next_match(u8 **last_ste,
 
 static void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 				     u8 *action_type_set,
+				     u32 actions_caps,
 				     u8 *last_ste,
 				     struct mlx5dr_ste_actions_attr *attr,
 				     u32 *added_stes)
@@ -567,7 +568,10 @@ static void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 		dr_ste_v1_set_pop_vlan(last_ste, action, attr->vlans.count);
 		action_sz -= DR_STE_ACTION_SINGLE_SZ;
 		action += DR_STE_ACTION_SINGLE_SZ;
-		allow_modify_hdr = false;
+
+		/* Check if vlan_pop and modify_hdr on same STE is supported */
+		if (!(actions_caps & DR_STE_CTX_ACTION_CAP_POP_MDFY))
+			allow_modify_hdr = false;
 	}
 
 	if (action_type_set[DR_ACTION_TYP_CTR])
@@ -684,6 +688,7 @@ static void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 
 static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 				     u8 *action_type_set,
+				     u32 actions_caps,
 				     u8 *last_ste,
 				     struct mlx5dr_ste_actions_attr *attr,
 				     u32 *added_stes)
@@ -733,14 +738,17 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 			dr_ste_v1_arr_init_next_match(&last_ste, added_stes, attr->gvmi);
 			action = MLX5_ADDR_OF(ste_mask_and_match_v1, last_ste, action);
 			action_sz = DR_STE_ACTION_TRIPLE_SZ;
-			allow_modify_hdr = false;
-			allow_encap = false;
-			allow_ctr = false;
 		}
 
 		dr_ste_v1_set_pop_vlan(last_ste, action, attr->vlans.count);
 		action_sz -= DR_STE_ACTION_SINGLE_SZ;
 		action += DR_STE_ACTION_SINGLE_SZ;
+		allow_encap = false;
+		allow_ctr = false;
+
+		/* Check if vlan_pop and modify_hdr on same STE is supported */
+		if (!(actions_caps & DR_STE_CTX_ACTION_CAP_POP_MDFY))
+			allow_modify_hdr = false;
 	}
 
 	if (action_type_set[DR_ACTION_TYP_MODIFY_HDR]) {
@@ -792,10 +800,10 @@ static void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 			action = MLX5_ADDR_OF(ste_mask_and_match_v1, last_ste, action);
 			action_sz = DR_STE_ACTION_TRIPLE_SZ;
 			allow_modify_hdr = true;
-			allow_encap = false;
-			allow_ctr = false;
 		}
 		dr_ste_v1_set_counter_id(last_ste, attr->ctr_id);
+		allow_encap = false;
+		allow_ctr = false;
 	}
 
 	if (action_type_set[DR_ACTION_TYP_L2_TO_TNL_L2]) {
@@ -1157,8 +1165,8 @@ static void dr_ste_v1_build_eth_l2_src_or_dst_bit_mask(struct mlx5dr_match_param
 	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, first_vlan_id, mask, first_vid);
 	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, first_cfi, mask, first_cfi);
 	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, first_priority, mask, first_prio);
-	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, ip_fragmented, mask, frag); // ?
-	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, l3_ethertype, mask, ethertype); // ?
+	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, ip_fragmented, mask, frag);
+	DR_STE_SET_TAG(eth_l2_src_v1, bit_mask, l3_ethertype, mask, ethertype);
 	DR_STE_SET_ONES(eth_l2_src_v1, bit_mask, l3_type, mask, ip_version);
 
 	if (mask->svlan_tag || mask->cvlan_tag) {
@@ -1409,6 +1417,7 @@ static int dr_ste_v1_build_eth_l3_ipv4_misc_tag(struct mlx5dr_match_param *value
 	struct mlx5dr_match_spec *spec = sb->inner ? &value->inner : &value->outer;
 
 	DR_STE_SET_TAG(eth_l3_ipv4_misc_v1, tag, time_to_live, spec, ttl_hoplimit);
+	DR_STE_SET_TAG(eth_l3_ipv4_misc_v1, tag, ihl, spec, ipv4_ihl);
 
 	return 0;
 }
@@ -2358,8 +2367,10 @@ static int dr_ste_v1_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
 		action->rewrite->chunk =
 			mlx5dr_icm_alloc_chunk(dmn->modify_header_ptrn_icm_pool,
 					       chunck_size);
-		if (!action->rewrite->chunk)
+		if (!action->rewrite->chunk) {
+			ret = -ENOMEM;
 			goto put_arg;
+		}
 
 		hw_actions = (u64 *)action->rewrite->data;
 
@@ -2375,7 +2386,7 @@ static int dr_ste_v1_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
 				MLX5_SET(ste_double_action_set, &hw_actions[i], inline_data, 0);
 		}
 
-		action->rewrite->index = (action->rewrite->chunk->icm_addr -
+		action->rewrite->index = (mlx5dr_icm_pool_get_chunk_icm_addr(action->rewrite->chunk) -
 			dmn->info.caps.hdr_modify_pattern_icm_addr) /
 			MLX5DR_ACTION_CACHE_LINE_SIZE;
 
@@ -2414,7 +2425,7 @@ static void dr_ste_v1_dealloc_modify_hdr_chunk(struct mlx5dr_action *action)
 	mlx5dr_arg_put_obj(action->rewrite->dmn, action->rewrite->arg);
 }
 
-struct mlx5dr_ste_ctx ste_ctx_v1 = {
+static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	/* Builders */
 	.build_eth_l2_src_dst_init	= &dr_ste_v1_build_eth_l2_src_dst_init,
 	.build_eth_l3_ipv6_src_init	= &dr_ste_v1_build_eth_l3_ipv6_src_init,
@@ -2459,7 +2470,8 @@ struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	/* Actions */
 	.actions_caps			= DR_STE_CTX_ACTION_CAP_TX_POP |
 					  DR_STE_CTX_ACTION_CAP_RX_PUSH |
-					  DR_STE_CTX_ACTION_CAP_RX_ENCAP,
+					  DR_STE_CTX_ACTION_CAP_RX_ENCAP |
+					  DR_STE_CTX_ACTION_CAP_POP_MDFY,
 	.set_actions_rx			= &dr_ste_v1_set_actions_rx,
 	.set_actions_tx			= &dr_ste_v1_set_actions_tx,
 	.modify_field_arr_sz		= ARRAY_SIZE(dr_ste_v1_action_modify_field_arr),
@@ -2473,3 +2485,8 @@ struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	/* Send */
 	.prepare_for_postsend		= &dr_ste_v1_prepare_for_postsend,
 };
+
+struct mlx5dr_ste_ctx *mlx5dr_ste_get_ctx_v1(void)
+{
+	return &ste_ctx_v1;
+}

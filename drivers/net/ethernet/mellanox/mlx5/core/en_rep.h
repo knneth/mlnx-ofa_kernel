@@ -64,11 +64,6 @@ struct mlx5e_post_act;
 struct mlx5e_flow_meters;
 
 struct mlx5_rep_uplink_priv {
-	/* Filters DB - instantiated by the uplink representor and shared by
-	 * the uplink's VFs
-	 */
-	struct rhashtable  tc_ht;
-
 	/* indirect block callbacks are invoked on bind/unbind events
 	 * on registered higher level devices (e.g. tunnel devices)
 	 *
@@ -135,6 +130,7 @@ struct mlx5e_rep_priv {
 	struct xarray vport_rep_map;
 	struct rep_meter rep_meter;
 	struct mlx5_rep_sysfs rep_sysfs;
+	struct rhashtable tc_ht;
 };
 
 static inline

@@ -21,7 +21,7 @@ Change-Id: I70fdf8b93ffc54f9ee1cf7ec165a6f816e2c9ecd
  #include "mlx5_core.h"
  #include "eswitch.h"
  #include "esw/acl/ofld.h"
-@@ -204,9 +206,11 @@ static void mlx5e_rep_changelowerstate_e
+@@ -193,9 +195,11 @@ static void mlx5e_rep_changelowerstate_e
  	struct mlx5e_rep_priv *rpriv;
  	struct net_device *lag_dev;
  	struct mlx5e_priv *priv;
@@ -33,7 +33,7 @@ Change-Id: I70fdf8b93ffc54f9ee1cf7ec165a6f816e2c9ecd
  	u16 fwd_vport_num;
  	int err;
  
-@@ -226,9 +230,12 @@ static void mlx5e_rep_changelowerstate_e
+@@ -212,9 +216,12 @@ static void mlx5e_rep_changelowerstate_e
  	if (!lag_dev)
  		return;
  
@@ -46,7 +46,7 @@ Change-Id: I70fdf8b93ffc54f9ee1cf7ec165a6f816e2c9ecd
  	/* Point everyone's egress acl to the vport of the active representor */
  	netdev_for_each_lower_dev(lag_dev, dev, iter) {
  		priv = netdev_priv(dev);
-@@ -249,6 +256,7 @@ static void mlx5e_rep_changelowerstate_e
+@@ -235,6 +242,7 @@ static void mlx5e_rep_changelowerstate_e
  					    acl_vport_num, err);
  		}
  	}
@@ -54,7 +54,7 @@ Change-Id: I70fdf8b93ffc54f9ee1cf7ec165a6f816e2c9ecd
  
  	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
  	 * rx_rule with new destination as active vport's root_ft
-@@ -319,6 +327,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
+@@ -315,6 +323,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
  	if (!mlx5_esw_acl_egress_fwd2vport_supported(priv->mdev->priv.eswitch))
  		goto out;
  

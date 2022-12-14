@@ -21,11 +21,11 @@ Change-Id: Ib5545ac041df4c425258f4410b7a109a542ec7ea
  void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
  
  /* TX */
-+#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
  		       struct net_device *sb_dev);
 +
-+#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 +#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
@@ -38,7 +38,7 @@ Change-Id: Ib5545ac041df4c425258f4410b7a109a542ec7ea
 +#else
 +		       void *accel_priv);
 +#endif
-+#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb);
 +#endif
 +

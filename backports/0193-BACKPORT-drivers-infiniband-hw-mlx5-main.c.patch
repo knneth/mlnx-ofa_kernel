@@ -18,7 +18,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  struct mlx5_ib_event_work {
  	struct work_struct	work;
  	union {
-@@ -2041,6 +2044,12 @@ static void mlx5_ib_dealloc_ucontext(str
+@@ -2046,6 +2049,12 @@ static void mlx5_ib_dealloc_ucontext(str
  	struct mlx5_ib_dev *dev = to_mdev(ibcontext->device);
  	struct mlx5_bfreg_info *bfregi;
  
@@ -31,7 +31,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  	bfregi = &context->bfregi;
  	mlx5_ib_dealloc_transport_domain(dev, context->tdn, context->devx_uid);
  
-@@ -2095,9 +2104,11 @@ static int get_extended_index(unsigned l
+@@ -2100,9 +2109,11 @@ static int get_extended_index(unsigned l
  }
  
  
@@ -43,7 +43,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  
  static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
  {
-@@ -2341,6 +2352,7 @@ static int mlx5_ib_mmap(struct ib_uconte
+@@ -2346,6 +2357,7 @@ static int mlx5_ib_mmap(struct ib_uconte
  		if (!dev->wc_support)
  			return -EPERM;
  		fallthrough;
@@ -51,7 +51,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  	case MLX5_IB_MMAP_NC_PAGE:
  	case MLX5_IB_MMAP_REGULAR_PAGE:
  		return uar_mmap(dev, command, vma, context);
-@@ -3705,7 +3717,9 @@ static const struct uapi_definition mlx5
+@@ -3711,7 +3723,9 @@ static const struct uapi_definition mlx5
  static void mlx5_ib_stage_init_cleanup(struct mlx5_ib_dev *dev)
  {
  	mlx5_ib_cleanup_multiport_master(dev);
@@ -61,7 +61,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  	mutex_destroy(&dev->cap_mask_mutex);
  	WARN_ON(!xa_empty(&dev->sig_mrs));
  	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
-@@ -3804,7 +3818,9 @@ static const struct ib_device_ops mlx5_i
+@@ -3810,7 +3824,9 @@ static const struct ib_device_ops mlx5_i
  	.destroy_qp = mlx5_ib_destroy_qp,
  	.destroy_srq = mlx5_ib_destroy_srq,
  	.detach_mcast = mlx5_ib_mcg_detach,
@@ -71,7 +71,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  	.drain_rq = mlx5_ib_drain_rq,
  	.drain_sq = mlx5_ib_drain_sq,
  	.enable_driver = mlx5_ib_enable_driver,
-@@ -3833,7 +3849,9 @@ static const struct ib_device_ops mlx5_i
+@@ -3839,7 +3855,9 @@ static const struct ib_device_ops mlx5_i
  	.query_srq = mlx5_ib_query_srq,
  	.query_ucontext = mlx5_ib_query_ucontext,
  	.reg_user_mr = mlx5_ib_reg_user_mr,
@@ -81,7 +81,7 @@ Change-Id: I65c80b0594b4c987707da9e6ca0753dd7498a5b7
  	.req_notify_cq = mlx5_ib_arm_cq,
  	.rereg_user_mr = mlx5_ib_rereg_user_mr,
  	.resize_cq = mlx5_ib_resize_cq,
-@@ -3863,9 +3881,11 @@ static const struct ib_device_ops mlx5_i
+@@ -3869,9 +3887,11 @@ static const struct ib_device_ops mlx5_i
  
  static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {
  	.get_vf_config = mlx5_ib_get_vf_config,

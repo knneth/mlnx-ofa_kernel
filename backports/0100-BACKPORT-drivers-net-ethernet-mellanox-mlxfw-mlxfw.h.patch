@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
 
 Change-Id: I59bcbd4b50339d37cd6c64c6cb6e8aee301e887e
 ---
- drivers/net/ethernet/mellanox/mlxfw/mlxfw.h | 29 +++++++++++++++++----
- 1 file changed, 24 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw.h | 33 +++++++++++++++++----
+ 1 file changed, 28 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
 +++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
-@@ -13,23 +13,29 @@ struct mlxfw_dev {
+@@ -13,23 +13,33 @@ struct mlxfw_dev {
  	const struct mlxfw_dev_ops *ops;
  	const char *psid;
  	u16 psid_size;
@@ -21,7 +21,11 @@ Change-Id: I59bcbd4b50339d37cd6c64c6cb6e8aee301e887e
  static inline
  struct device *mlxfw_dev_dev(struct mlxfw_dev *mlxfw_dev)
  {
++#ifdef HAVE_DEVLINK_TO_DEV
++	return devlink_to_dev(mlxfw_dev->devlink);
++#else
  	return mlxfw_dev->devlink->dev;
++#endif
  }
 +#endif
  
@@ -38,7 +42,7 @@ Change-Id: I59bcbd4b50339d37cd6c64c6cb6e8aee301e887e
  
  enum mlxfw_fsm_state {
  	MLXFW_FSM_STATE_IDLE,
-@@ -96,19 +102,32 @@ struct mlxfw_dev_ops {
+@@ -96,19 +106,32 @@ struct mlxfw_dev_ops {
  	void (*fsm_cancel)(struct mlxfw_dev *mlxfw_dev, u32 fwhandle);
  
  	void (*fsm_release)(struct mlxfw_dev *mlxfw_dev, u32 fwhandle);

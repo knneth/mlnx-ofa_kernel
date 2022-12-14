@@ -35,7 +35,7 @@
 #include "nvfs.h"
 #endif
 
-#define NVME_RDMA_CONNECT_TIMEOUT_MS	3000		/* 3 second */
+#define NVME_RDMA_CM_TIMEOUT_MS		3000		/* 3 second */
 
 #define NVME_RDMA_MAX_SEGMENTS		256
 
@@ -254,12 +254,9 @@ static int nvme_rdma_wait_for_cm(struct nvme_rdma_queue *queue)
 {
 	int ret;
 
-	ret = wait_for_completion_interruptible_timeout(&queue->cm_done,
-			msecs_to_jiffies(NVME_RDMA_CONNECT_TIMEOUT_MS) + 1);
-	if (ret < 0)
+	ret = wait_for_completion_interruptible(&queue->cm_done);
+	if (ret)
 		return ret;
-	if (ret == 0)
-		return -ETIMEDOUT;
 	WARN_ON_ONCE(queue->cm_error > 0);
 	return queue->cm_error;
 }
@@ -618,7 +615,7 @@ static int nvme_rdma_alloc_queue(struct nvme_rdma_ctrl *ctrl,
 	queue->cm_error = -ETIMEDOUT;
 	ret = rdma_resolve_addr(queue->cm_id, src_addr,
 			(struct sockaddr *)&ctrl->addr,
-			NVME_RDMA_CONNECT_TIMEOUT_MS);
+			NVME_RDMA_CM_TIMEOUT_MS);
 	if (ret) {
 		dev_info(ctrl->ctrl.device,
 			"rdma_resolve_addr failed (%d).\n", ret);
@@ -1108,11 +1105,13 @@ static int nvme_rdma_setup_ctrl(struct nvme_rdma_ctrl *ctrl, bool new)
 		return ret;
 
 	if (ctrl->ctrl.icdoff) {
+		ret = -EOPNOTSUPP;
 		dev_err(ctrl->ctrl.device, "icdoff is not supported!\n");
 		goto disable_ctrl;
 	}
 
 	if (!(ctrl->ctrl.sgls & (1 << 2))) {
+		ret = -EOPNOTSUPP;
 		dev_err(ctrl->ctrl.device,
 			"Mandatory keyed sgls are not supported!\n");
 		goto disable_ctrl;
@@ -1208,6 +1207,7 @@ static void nvme_rdma_error_recovery_work(struct work_struct *work)
 			struct nvme_rdma_ctrl, err_work);
 
 	nvme_stop_keep_alive(&ctrl->ctrl);
+	flush_work(&ctrl->ctrl.async_event_work);
 	nvme_rdma_teardown_io_queues(ctrl, false);
 	nvme_start_queues(&ctrl->ctrl);
 	nvme_rdma_teardown_admin_queue(ctrl, false);
@@ -1752,7 +1752,7 @@ static struct blk_mq_tags *nvme_rdma_tagset(struct nvme_rdma_queue *queue)
 
 static void nvme_rdma_async_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct nvme_rdma_queue *queue = cq->cq_context;
+	struct nvme_rdma_queue *queue = wc->qp->qp_context;
 
 	if (unlikely(wc->status != IB_WC_SUCCESS))
 		nvme_rdma_wr_error(queue->ctrl, wc, "ASYNC");
@@ -1935,7 +1935,7 @@ static int nvme_rdma_addr_resolved(struct nvme_rdma_queue *queue)
 
 	if (ctrl->opts->tos >= 0)
 		rdma_set_service_type(queue->cm_id, ctrl->opts->tos);
-	ret = rdma_resolve_route(queue->cm_id, NVME_RDMA_CONNECT_TIMEOUT_MS);
+	ret = rdma_resolve_route(queue->cm_id, NVME_RDMA_CM_TIMEOUT_MS);
 	if (ret) {
 		dev_err(ctrl->device, "rdma_resolve_route failed (%d).\n",
 			queue->cm_error);

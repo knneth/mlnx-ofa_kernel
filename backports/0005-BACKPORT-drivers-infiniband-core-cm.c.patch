@@ -228,7 +228,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		return -EINVAL;
  	}
  
-@@ -2900,7 +2943,9 @@ static int cm_dreq_handler(struct cm_wor
+@@ -2899,7 +2942,9 @@ static int cm_dreq_handler(struct cm_wor
  				counter[CM_DREQ_COUNTER]);
  		goto unlock;
  	default:
@@ -238,7 +238,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		goto unlock;
  	}
  	cm_id_priv->id.state = IB_CM_DREQ_RCVD;
-@@ -2985,11 +3030,15 @@ static int cm_send_rej_locked(struct cm_
+@@ -2984,11 +3029,15 @@ static int cm_send_rej_locked(struct cm_
  			      state);
  		break;
  	default:
@@ -254,7 +254,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_free_msg(msg);
-@@ -3098,7 +3147,9 @@ static int cm_rej_handler(struct cm_work
+@@ -3097,7 +3146,9 @@ static int cm_rej_handler(struct cm_work
  		}
  		fallthrough;
  	default:
@@ -264,7 +264,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		spin_unlock_irq(&cm_id_priv->lock);
  		goto out;
  	}
-@@ -3154,7 +3205,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
+@@ -3153,7 +3204,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
  		}
  		fallthrough;
  	default:
@@ -274,7 +274,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = -EINVAL;
  		goto error_unlock;
  	}
-@@ -3169,7 +3222,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
+@@ -3168,7 +3221,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
  		cm_format_mra((struct cm_mra_msg *) msg->mad, cm_id_priv,
  			      msg_response, service_timeout,
  			      private_data, private_data_len);
@@ -284,7 +284,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = ib_post_send_mad(msg, NULL);
  		if (ret)
  			goto error_free_msg;
-@@ -3261,7 +3316,9 @@ static int cm_mra_handler(struct cm_work
+@@ -3260,7 +3315,9 @@ static int cm_mra_handler(struct cm_work
  				counter[CM_MRA_COUNTER]);
  		fallthrough;
  	default:
@@ -294,7 +294,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		goto out;
  	}
  
-@@ -3550,7 +3607,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id
+@@ -3549,7 +3606,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id
  	msg->timeout_ms = cm_id_priv->timeout_ms;
  	msg->context[1] = (void *)(unsigned long)IB_CM_SIDR_REQ_SENT;
  
@@ -304,7 +304,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -3713,7 +3772,9 @@ static int cm_send_sidr_rep_locked(struc
+@@ -3712,7 +3771,9 @@ static int cm_send_sidr_rep_locked(struc
  
  	cm_format_sidr_rep((struct cm_sidr_rep_msg *) msg->mad, cm_id_priv,
  			   param);
@@ -314,7 +314,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_free_msg(msg);
-@@ -3815,7 +3876,9 @@ static void cm_process_send_error(struct
+@@ -3814,7 +3875,9 @@ static void cm_process_send_error(struct
  	    wc_status == IB_WC_WR_FLUSH_ERR)
  		goto out_unlock;
  
@@ -324,7 +324,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  	switch (state) {
  	case IB_CM_REQ_SENT:
  	case IB_CM_MRA_REQ_RCVD:
-@@ -3932,7 +3995,9 @@ static void cm_work_handler(struct work_
+@@ -3931,7 +3994,9 @@ static void cm_work_handler(struct work_
  		ret = cm_timewait_handler(work);
  		break;
  	default:
@@ -334,7 +334,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = -EINVAL;
  		break;
  	}
-@@ -3967,7 +4032,9 @@ static int cm_establish(struct ib_cm_id
+@@ -3966,7 +4031,9 @@ static int cm_establish(struct ib_cm_id
  		ret = -EISCONN;
  		break;
  	default:
@@ -344,7 +344,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = -EINVAL;
  		break;
  	}
-@@ -4156,7 +4223,9 @@ static int cm_init_qp_init_attr(struct c
+@@ -4155,7 +4222,9 @@ static int cm_init_qp_init_attr(struct c
  		ret = 0;
  		break;
  	default:
@@ -354,7 +354,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = -EINVAL;
  		break;
  	}
-@@ -4205,7 +4274,9 @@ static int cm_init_qp_rtr_attr(struct cm
+@@ -4204,7 +4273,9 @@ static int cm_init_qp_rtr_attr(struct cm
  		ret = 0;
  		break;
  	default:
@@ -364,7 +364,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = -EINVAL;
  		break;
  	}
-@@ -4267,7 +4338,9 @@ static int cm_init_qp_rts_attr(struct cm
+@@ -4266,7 +4337,9 @@ static int cm_init_qp_rts_attr(struct cm
  		ret = 0;
  		break;
  	default:
@@ -374,7 +374,7 @@ Change-Id: I708f243ef441c8c7302e0680882b4376adc83a3d
  		ret = -EINVAL;
  		break;
  	}
-@@ -4314,7 +4387,11 @@ static ssize_t cm_show_counter(struct ko
+@@ -4313,7 +4386,11 @@ static ssize_t cm_show_counter(struct ko
  			  atomic_long_read(&group->counter[cm_attr->index]));
  }
  

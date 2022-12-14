@@ -94,7 +94,7 @@ Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
  	opts->reconnect_delay = NVMF_DEF_RECONNECT_DELAY;
  	opts->kato = 0;
  	opts->duplicate_connect = false;
-@@ -1176,6 +1207,9 @@ static void __exit nvmf_exit(void)
+@@ -1179,6 +1210,9 @@ static void __exit nvmf_exit(void)
  }
  
  MODULE_LICENSE("GPL v2");

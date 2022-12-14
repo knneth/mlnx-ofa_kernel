@@ -5,7 +5,7 @@
 
 #include_next <linux/rbtree.h>
 
-#if !defined(HAVE_RB_ROOT_CACHED) || defined(HAVE_INTERVAL_TREE_TAKES_RB_ROOT)
+#if (!defined(HAVE_RB_ROOT_CACHED) || defined(HAVE_INTERVAL_TREE_TAKES_RB_ROOT)) && !defined(HAVE_TIMERQUEUE_HEAD_RB_ROOT_CACHED)
 #if defined(HAVE_RB_ROOT_CACHED)
 #undef HAVE_RB_ROOT_CACHED
 #undef RB_ROOT_CACHED

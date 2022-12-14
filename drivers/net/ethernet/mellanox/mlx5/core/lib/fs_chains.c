@@ -125,6 +125,10 @@ u32 mlx5_chains_get_prio_range(struct mlx5_fs_chains *chains)
 	if (mlx5_chains_ignore_flow_level_supported(chains))
 		return UINT_MAX;
 
+	if (!chains->dev->priv.eswitch ||
+	    chains->dev->priv.eswitch->mode != MLX5_ESWITCH_OFFLOADS)
+		return 1;
+
 	/* We should get here only for eswitch case */
 	return FDB_TC_MAX_PRIO;
 }
@@ -209,7 +213,7 @@ static int
 create_chain_restore(struct fs_chain *chain)
 {
 	struct mlx5_eswitch *esw = chain->chains->dev->priv.eswitch;
-	char modact[MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)];
+	u8 modact[MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)] = {};
 	struct mlx5_fs_chains *chains = chain->chains;
 	enum mlx5e_tc_attr_to_reg chain_to_reg;
 	struct mlx5_modify_hdr *mod_hdr;
@@ -260,9 +264,10 @@ create_chain_restore(struct fs_chain *chain)
 	MLX5_SET(set_action_in, modact, field,
 		 mlx5e_tc_attr_to_reg_mappings[chain_to_reg].mfield);
 	MLX5_SET(set_action_in, modact, offset,
-		 mlx5e_tc_attr_to_reg_mappings[chain_to_reg].moffset * 8);
+		 mlx5e_tc_attr_to_reg_mappings[chain_to_reg].moffset);
 	MLX5_SET(set_action_in, modact, length,
-		 mlx5e_tc_attr_to_reg_mappings[chain_to_reg].mlen * 8);
+		 mlx5e_tc_attr_to_reg_mappings[chain_to_reg].mlen == 32 ?
+		 0 : mlx5e_tc_attr_to_reg_mappings[chain_to_reg].mlen);
 	MLX5_SET(set_action_in, modact, data, chain->id);
 	mod_hdr = mlx5_modify_header_alloc(chains->dev, chains->ns,
 					   1, modact);

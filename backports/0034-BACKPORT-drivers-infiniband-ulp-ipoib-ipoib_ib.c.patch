@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ib.c
 
 Change-Id: I084d04e3375738c48f46df75a82ab3953204b962
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ib.c | 22 +++++++++++++++++-----
- 1 file changed, 17 insertions(+), 5 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_ib.c | 36 +++++++++++++++++++++----
+ 1 file changed, 31 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ib.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ib.c
@@ -66,3 +66,48 @@ Change-Id: I084d04e3375738c48f46df75a82ab3953204b962
  		napi_complete(napi);
  		if (unlikely(ib_req_notify_cq(priv->recv_cq,
  					      IB_CQ_NEXT_COMP |
+@@ -1141,13 +1153,17 @@ static bool ipoib_dev_addr_changed_valid
+ {
+ 	union ib_gid search_gid;
+ 	union ib_gid gid0;
++#ifndef HAVE_DEV_ADDR_MOD
+ 	union ib_gid *netdev_gid;
++#endif
+ 	int err;
+ 	u16 index;
+ 	u32 port;
+ 	bool ret = false;
+ 
++#ifndef HAVE_DEV_ADDR_MOD
+ 	netdev_gid = (union ib_gid *)(priv->dev->dev_addr + 4);
++#endif
+ 	if (rdma_query_gid(priv->ca, priv->port, 0, &gid0))
+ 		return false;
+ 
+@@ -1157,7 +1173,12 @@ static bool ipoib_dev_addr_changed_valid
+ 	 * to do it later
+ 	 */
+ 	priv->local_gid.global.subnet_prefix = gid0.global.subnet_prefix;
++#ifdef HAVE_DEV_ADDR_MOD
++	dev_addr_mod(priv->dev, 4, (u8 *)&gid0.global.subnet_prefix,
++		     sizeof(gid0.global.subnet_prefix));
++#else
+ 	netdev_gid->global.subnet_prefix = gid0.global.subnet_prefix;
++#endif
+ 	search_gid.global.subnet_prefix = gid0.global.subnet_prefix;
+ 
+ 	search_gid.global.interface_id = priv->local_gid.global.interface_id;
+@@ -1219,8 +1240,13 @@ static bool ipoib_dev_addr_changed_valid
+ 			if (!test_bit(IPOIB_FLAG_DEV_ADDR_CTRL, &priv->flags)) {
+ 				memcpy(&priv->local_gid, &gid0,
+ 				       sizeof(priv->local_gid));
++#ifdef HAVE_DEV_ADDR_MOD
++				dev_addr_mod(priv->dev, 4, (u8 *)&gid0,
++					     sizeof(priv->local_gid));
++#else
+ 				memcpy(priv->dev->dev_addr + 4, &gid0,
+ 				       sizeof(priv->local_gid));
++#endif
+ 				ret = true;
+ 			}
+ 		}

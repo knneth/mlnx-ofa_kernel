@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
 ---
- .../ethernet/mellanox/mlx5/core/en_accel/ipsec.c   | 41 ++++++++++++++++++++--
- 1 file changed, 39 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_accel/ipsec.c   | 34 +++++++++++++++++++++-
+ 1 file changed, 33 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
@@ -22,7 +22,7 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  	hard_limit = x->lft.hard_packet_limit;
  	soft_limit = (x->lft.soft_packet_limit == IPSEC_NO_LIMIT)
  			? 0 : x->lft.soft_packet_limit;
-@@ -463,9 +469,15 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struc
+@@ -451,9 +457,15 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struc
  
  static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
  {
@@ -38,7 +38,7 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  	struct mlx5e_priv *priv;
  
  	priv = netdev_priv(netdev);
-@@ -543,6 +555,9 @@ static inline int mlx5e_xfrm_validate_st
+@@ -531,6 +543,9 @@ static inline int mlx5e_xfrm_validate_st
  			netdev_info(netdev, "IPsec full offload is not supported by this device.\n");
  			return -EINVAL;
  		}
@@ -48,7 +48,7 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  		esw = mdev->priv.eswitch;
  		if (!esw || esw->mode != MLX5_ESWITCH_OFFLOADS) {
  			netdev_info(netdev, "IPsec full offload allowed only in switchdev mode.\n");
-@@ -560,6 +575,7 @@ static inline int mlx5e_xfrm_validate_st
+@@ -548,6 +563,7 @@ static inline int mlx5e_xfrm_validate_st
  				    "IPsec crypto only offload is not allowed when devlink ipsec mode is full.\n");
  			return -EINVAL;
  		}
@@ -56,7 +56,7 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  	}
  
  	if ((x->xso.flags & XFRM_OFFLOAD_FULL) &&
-@@ -600,7 +616,11 @@ static void mlx5e_xfrm_fs_del_rule(struc
+@@ -588,7 +604,11 @@ static void mlx5e_xfrm_fs_del_rule(struc
  static int mlx5e_xfrm_add_state(struct xfrm_state *x)
  {
  	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
@@ -66,29 +66,9 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
 +	struct net_device *netdev = x->xso.dev;
 +#endif
  	struct mlx5_accel_esp_xfrm_attrs attrs;
- 	struct xfrm_policy *pol = NULL;
- 	struct xfrm_policy _pol;
-@@ -617,6 +637,8 @@ static int mlx5e_xfrm_add_state(struct x
- 
- 	if (x->xso.flags & XFRM_OFFLOAD_FULL) {
- 		u16 family = x->props.family;
-+#ifdef HAVE_XFRM_POLICY_LOOKUP_BYTYPE
-+		int dir = (x->xso.flags & XFRM_OFFLOAD_INBOUND) ? XFRM_POLICY_IN : XFRM_POLICY_OUT;
- 		struct flowi fl;
- 
- 		fl.u.ip4.saddr = x->sel.saddr.a4;
-@@ -631,7 +653,9 @@ static int mlx5e_xfrm_add_state(struct x
- 			memcpy(&fl.u.ip6.daddr, &x->sel.daddr.a6, sizeof(x->sel.daddr.a6));
- 			break;
- 		}
--
-+		pol = xfrm_policy_lookup_bytype(dev_net(netdev), XFRM_POLICY_TYPE_MAIN, &fl, family,
-+						dir, 0);
-+#endif
- 		if (!pol) {
- 			struct xfrm_selector *sel = &_pol.selector;
- 
-@@ -855,6 +879,7 @@ struct mlx5e_ipsec_modify_state_work {
+ 	struct mlx5e_priv *priv;
+ 	unsigned int sa_handle;
+@@ -810,6 +830,7 @@ struct mlx5e_ipsec_modify_state_work {
  	struct mlx5e_ipsec_sa_entry	*sa_entry;
  };
  
@@ -96,7 +76,7 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  static void _update_xfrm_state(struct work_struct *work)
  {
  	int ret;
-@@ -894,13 +919,16 @@ static void mlx5e_xfrm_advance_esn_state
+@@ -849,13 +870,16 @@ static void mlx5e_xfrm_advance_esn_state
  	INIT_WORK(&modify_work->work, _update_xfrm_state);
  	WARN_ON(!queue_work(sa_entry->ipsec->wq, &modify_work->work));
  }
@@ -113,14 +93,14 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  };
  
  void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)
-@@ -1007,14 +1035,23 @@ static void _mlx5e_ipsec_async_event(str
+@@ -962,14 +986,22 @@ static void _mlx5e_ipsec_async_event(str
  		goto out_xs_state;
  
  	/* Life time event */
 -	if (!hard_cnt) /* Notify hard lifetime to xfrm stack */
 +	if (!hard_cnt) { /* Notify hard lifetime to xfrm stack */
 +#ifdef HAVE_XFRM_STATE_EXPIRE
-+ 		xfrm_state_expire(xs, 1);
++		xfrm_state_expire(xs, 1);
 +#endif
  		goto out_xs_state;
 +	}
@@ -130,10 +110,9 @@ Change-Id: I3455fd06dc2ca2bdb4f408e493d804e0b918f49c
  	 */
  	if (lft->round_soft) {
  		lft->round_soft--;
-+
 +#ifdef HAVE_XFRM_STATE_EXPIRE
-+ 		if (!lft->round_soft)
-+ 			xfrm_state_expire(xs, 0);
++		if (!lft->round_soft)
++			xfrm_state_expire(xs, 0);
 +#endif
  	}
  

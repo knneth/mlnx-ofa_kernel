@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Icce25a75048956c793bab9b145922b1088210ae6
 ---
- .../ethernet/mellanox/mlx5/core/lag/lag_mp.c  | 76 ++++++++++++++++++-
- 1 file changed, 73 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/lag/lag_mp.c  | 74 ++++++++++++++++++-
+ 1 file changed, 71 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_mp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag_mp.c
@@ -145,7 +145,7 @@ Change-Id: Icce25a75048956c793bab9b145922b1088210ae6
  
  	if (ldev->flags & MLX5_LAG_FLAG_MULTI_PORT_ESW)
  		return NOTIFY_DONE;
-@@ -270,17 +320,26 @@ static int mlx5_lag_fib_event(struct not
+@@ -270,16 +320,23 @@ static int mlx5_lag_fib_event(struct not
  
  	switch (event) {
  	case FIB_EVENT_ENTRY_REPLACE:
@@ -157,11 +157,8 @@ Change-Id: Icce25a75048956c793bab9b145922b1088210ae6
  		fi = fen_info->fi;
 +#ifdef HAVE_FIB_INFO_NH
  		if (fi->nh) {
- 			NL_SET_ERR_MSG_MOD(info->extack, "IPv4 route with nexthop objects is not supported");
- 			return notifier_from_errno(-EINVAL);
+ 			return NOTIFY_DONE;
  		}
-+#endif
-+#ifdef HAVE_FIB_INFO_NH
  		fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
  		if (fib_dev != ldev->pf[MLX5_LAG_P1].netdev &&
  		    fib_dev != ldev->pf[MLX5_LAG_P2].netdev) {
@@ -172,7 +169,7 @@ Change-Id: Icce25a75048956c793bab9b145922b1088210ae6
  			return NOTIFY_DONE;
  		}
  		fib_work = mlx5_lag_init_fib_work(ldev, event);
-@@ -337,8 +396,13 @@ int mlx5_lag_mp_init(struct mlx5_lag *ld
+@@ -336,8 +393,13 @@ int mlx5_lag_mp_init(struct mlx5_lag *ld
  		return -ENOMEM;
  
  	mp->fib_nb.notifier_call = mlx5_lag_fib_event;
@@ -186,7 +183,7 @@ Change-Id: Icce25a75048956c793bab9b145922b1088210ae6
  	if (err) {
  		destroy_workqueue(mp->wq);
  		mp->fib_nb.notifier_call = NULL;
-@@ -354,8 +418,14 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
+@@ -353,8 +415,14 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
  	if (!mp->fib_nb.notifier_call)
  		return;
  

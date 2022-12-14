@@ -220,7 +220,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  				    (uintptr_t)ndev) {
  		if (rcu_access_pointer(cur->netdev) == ndev &&
  		    (driver_id == RDMA_DRIVER_UNKNOWN ||
-@@ -2684,6 +2739,9 @@ void ib_set_device_ops(struct ib_device
+@@ -2685,6 +2740,9 @@ void ib_set_device_ops(struct ib_device
  	SET_DEVICE_OP(dev_ops, get_vf_guid);
  	SET_DEVICE_OP(dev_ops, get_vf_stats);
  	SET_DEVICE_OP(dev_ops, init_port);
@@ -230,7 +230,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  	SET_DEVICE_OP(dev_ops, iw_accept);
  	SET_DEVICE_OP(dev_ops, iw_add_ref);
  	SET_DEVICE_OP(dev_ops, iw_connect);
-@@ -2787,7 +2845,14 @@ static int __init ib_core_init(void)
+@@ -2788,7 +2846,14 @@ static int __init ib_core_init(void)
  		return -ENOMEM;
  
  	ib_comp_wq = alloc_workqueue("ib-comp-wq",
@@ -246,7 +246,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  	if (!ib_comp_wq) {
  		ret = -ENOMEM;
  		goto err;
-@@ -2795,8 +2860,15 @@ static int __init ib_core_init(void)
+@@ -2796,8 +2861,15 @@ static int __init ib_core_init(void)
  
  	ib_comp_unbound_wq =
  		alloc_workqueue("ib-comp-unb-wq",
@@ -264,7 +264,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  	if (!ib_comp_unbound_wq) {
  		ret = -ENOMEM;
  		goto err_comp;
-@@ -2828,11 +2900,17 @@ static int __init ib_core_init(void)
+@@ -2829,11 +2901,17 @@ static int __init ib_core_init(void)
  		goto err_mad;
  	}
  
@@ -282,7 +282,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  
  	ret = register_pernet_device(&rdma_dev_net_ops);
  	if (ret) {
-@@ -2847,9 +2925,15 @@ static int __init ib_core_init(void)
+@@ -2848,9 +2926,15 @@ static int __init ib_core_init(void)
  	return 0;
  
  err_compat:
@@ -298,7 +298,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  err_mad:
  	ib_mad_cleanup();
  err_addr:
-@@ -2871,7 +2955,11 @@ static void __exit ib_core_cleanup(void)
+@@ -2872,7 +2956,11 @@ static void __exit ib_core_cleanup(void)
  	nldev_exit();
  	rdma_nl_unregister(RDMA_NL_LS);
  	unregister_pernet_device(&rdma_dev_net_ops);
@@ -310,7 +310,7 @@ Change-Id: Ic0baa3414c3f69dec8d1f444eca7a2453b01f7c7
  	ib_sa_cleanup();
  	ib_mad_cleanup();
  	addr_cleanup();
-@@ -2881,7 +2969,9 @@ static void __exit ib_core_cleanup(void)
+@@ -2882,7 +2970,9 @@ static void __exit ib_core_cleanup(void)
  	destroy_workqueue(ib_comp_wq);
  	/* Make sure that any pending umem accounting work is done. */
  	destroy_workqueue(ib_wq);

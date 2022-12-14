@@ -8,7 +8,7 @@ Change-Id: I08ea1b044170107574c19499e85f151d1400951d
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
-@@ -40,7 +40,11 @@ struct lag_func {
+@@ -44,7 +44,11 @@ struct lag_func {
  
  /* Used for collection of netdev event info. */
  struct lag_tracker {

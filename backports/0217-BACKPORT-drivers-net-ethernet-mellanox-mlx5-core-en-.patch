@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/pool.c | 153 +++++++++++++++++-
- 1 file changed, 146 insertions(+), 7 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/xsk/pool.c | 152 +++++++++++++++++-
+ 1 file changed, 146 insertions(+), 6 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
-@@ -1,31 +1,89 @@
+@@ -1,31 +1,90 @@
  // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
  /* Copyright (c) 2019-2020, Mellanox Technologies inc. All rights reserved. */
  
@@ -31,9 +31,9 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
 +#endif
  {
  	struct device *dev = mlx5_core_dma_dev(priv->mdev);
--
+ 
 +#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	return xsk_pool_dma_map(pool, dev, 0);
+ 	return xsk_pool_dma_map(pool, dev, DMA_ATTR_SKIP_CPU_SYNC);
 +#elif defined(HAVE_XSK_BUFF_ALLOC)
 +	return xsk_buff_dma_map(umem, dev, 0);
 +#else
@@ -70,7 +70,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
 +#endif
  {
 +#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	return xsk_pool_dma_unmap(pool, 0);
+ 	return xsk_pool_dma_unmap(pool, DMA_ATTR_SKIP_CPU_SYNC);
 +#elif defined(HAVE_XSK_BUFF_ALLOC)
 +	return xsk_buff_dma_unmap(umem, 0);
 +#else
@@ -101,7 +101,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
  			return -ENOMEM;
  	}
  
-@@ -38,44 +96,93 @@ static int mlx5e_xsk_get_pools(struct ml
+@@ -38,44 +97,93 @@ static int mlx5e_xsk_get_pools(struct ml
  static void mlx5e_xsk_put_pools(struct mlx5e_xsk *xsk)
  {
  	if (!--xsk->refcnt) {
@@ -197,7 +197,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
  {
  	struct mlx5e_params *params = &priv->channels.params;
  	struct mlx5e_xsk_param xsk;
-@@ -89,10 +196,12 @@ static int mlx5e_xsk_enable_locked(struc
+@@ -89,10 +197,12 @@ static int mlx5e_xsk_enable_locked(struc
  		return -EINVAL;
  
  	err = mlx5e_xsk_map_pool(priv, pool);
@@ -210,7 +210,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
  	if (unlikely(err))
  		goto err_unmap_pool;
  
-@@ -155,7 +264,11 @@ validate_closed:
+@@ -155,7 +265,11 @@ validate_closed:
  
  static int mlx5e_xsk_disable_locked(struct mlx5e_priv *priv, u16 ix)
  {
@@ -222,7 +222,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
  						   &priv->xsk, ix);
  	struct mlx5e_channel *c;
  
-@@ -182,8 +295,13 @@ remove_pool:
+@@ -182,8 +296,13 @@ remove_pool:
  	return 0;
  }
  
@@ -238,7 +238,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
  {
  	int err;
  
-@@ -205,7 +323,13 @@ static int mlx5e_xsk_disable_pool(struct
+@@ -205,7 +324,13 @@ static int mlx5e_xsk_disable_pool(struct
  	return err;
  }
  
@@ -253,7 +253,7 @@ Change-Id: I0da16f4a89f4ffcb38c21c68c25f9a324999a304
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	struct mlx5e_params *params = &priv->channels.params;
-@@ -217,3 +341,18 @@ int mlx5e_xsk_setup_pool(struct net_devi
+@@ -217,3 +342,18 @@ int mlx5e_xsk_setup_pool(struct net_devi
  	return pool ? mlx5e_xsk_enable_pool(priv, pool, ix) :
  		      mlx5e_xsk_disable_pool(priv, ix);
  }

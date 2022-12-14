@@ -3,24 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
 
 Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
 ---
- drivers/infiniband/ulp/isert/ib_isert.c | 127 +++++++++++++++++++++++-
- 1 file changed, 124 insertions(+), 3 deletions(-)
+ drivers/infiniband/ulp/isert/ib_isert.c | 123 +++++++++++++++++++++++-
+ 1 file changed, 120 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/isert/ib_isert.c
 +++ b/drivers/infiniband/ulp/isert/ib_isert.c
-@@ -1044,7 +1044,11 @@ static struct iscsi_cmd
- 	struct isert_cmd *isert_cmd;
- 	struct iscsi_cmd *cmd;
- 
-+#ifndef ISCSIT_ALLOCATE_CMD_ARG_2_IS_GFP_T
- 	cmd = iscsit_allocate_cmd(conn, TASK_INTERRUPTIBLE);
-+#else
-+	cmd = iscsit_allocate_cmd(conn, GFP_KERNEL);
-+#endif
- 	if (!cmd) {
- 		isert_err("Unable to allocate iscsi_cmd + isert_cmd\n");
- 		return NULL;
-@@ -1077,8 +1081,14 @@ isert_handle_scsi_cmd(struct isert_conn
+@@ -1077,8 +1077,14 @@ isert_handle_scsi_cmd(struct isert_conn
  	unsol_data = cmd->unsolicited_data;
  	data_len = cmd->se_cmd.data_length;
  
@@ -35,7 +23,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  	rc = iscsit_process_scsi_cmd(conn, cmd, hdr);
  	if (rc < 0) {
  		return 0;
-@@ -1090,7 +1100,12 @@ isert_handle_scsi_cmd(struct isert_conn
+@@ -1090,7 +1096,12 @@ isert_handle_scsi_cmd(struct isert_conn
  	if (!imm_data)
  		return 0;
  
@@ -48,7 +36,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  		sg_nents = max(1UL, DIV_ROUND_UP(imm_data_len, PAGE_SIZE));
  		sg_copy_from_buffer(cmd->se_cmd.t_data_sg, sg_nents,
  				    isert_get_data(rx_desc), imm_data_len);
-@@ -1119,9 +1134,17 @@ sequence_cmd:
+@@ -1119,9 +1130,17 @@ sequence_cmd:
  	rc = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
  
  	if (!rc && !dump_payload && unsol_data)
@@ -66,7 +54,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  
  	return 0;
  }
-@@ -1468,8 +1491,11 @@ isert_put_cmd(struct isert_cmd *isert_cm
+@@ -1468,8 +1487,11 @@ isert_put_cmd(struct isert_cmd *isert_cm
  			if (comp_err &&
  			    cmd->se_cmd.t_state == TRANSPORT_WRITE_PENDING) {
  				struct se_cmd *se_cmd = &cmd->se_cmd;
@@ -79,7 +67,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  			}
  		}
  
-@@ -1570,12 +1596,20 @@ isert_check_pi_status(struct se_cmd *se_
+@@ -1570,12 +1592,20 @@ isert_check_pi_status(struct se_cmd *se_
  		}
  		sec_offset_err = mr_status.sig_err.sig_err_offset;
  		do_div(sec_offset_err, block_size);
@@ -100,7 +88,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  			  mr_status.sig_err.expected,
  			  mr_status.sig_err.actual);
  		ret = 1;
-@@ -1862,16 +1896,27 @@ isert_get_sup_prot_ops(struct iscsi_conn
+@@ -1862,16 +1892,27 @@ isert_get_sup_prot_ops(struct iscsi_conn
  {
  	struct isert_conn *isert_conn = conn->context;
  	struct isert_device *device = isert_conn->device;
@@ -130,7 +118,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  	isert_info("conn %p PI offload disabled\n", isert_conn);
  	isert_conn->pi_support = false;
  	isert_conn->sig_pipeline = false;
-@@ -2415,11 +2460,47 @@ isert_set_conn_info(struct iscsi_np *np,
+@@ -2415,11 +2456,47 @@ isert_set_conn_info(struct iscsi_np *np,
  {
  	struct rdma_cm_id *cm_id = isert_conn->cm_id;
  	struct rdma_route *cm_route = &cm_id->route;
@@ -178,7 +166,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  }
  
  static int
-@@ -2548,7 +2629,11 @@ isert_wait4cmds(struct iscsi_conn *conn)
+@@ -2548,7 +2625,11 @@ isert_wait4cmds(struct iscsi_conn *conn)
  	isert_info("iscsi_conn %p\n", conn);
  
  	if (conn->sess) {
@@ -190,7 +178,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  		target_wait_for_sess_cmds(conn->sess->se_sess);
  	}
  }
-@@ -2588,6 +2673,7 @@ isert_put_unsol_pending_cmds(struct iscs
+@@ -2588,6 +2669,7 @@ isert_put_unsol_pending_cmds(struct iscs
  	}
  }
  
@@ -198,7 +186,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  static void isert_wait_conn(struct iscsi_conn *conn)
  {
  	struct isert_conn *isert_conn = conn->context;
-@@ -2605,15 +2691,40 @@ static void isert_wait_conn(struct iscsi
+@@ -2605,15 +2687,40 @@ static void isert_wait_conn(struct iscsi
  
  	queue_work(isert_release_wq, &isert_conn->release_work);
  }
@@ -239,7 +227,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  static void isert_get_rx_pdu(struct iscsi_conn *conn)
  {
  	struct completion comp;
-@@ -2622,17 +2733,22 @@ static void isert_get_rx_pdu(struct iscs
+@@ -2622,17 +2729,22 @@ static void isert_get_rx_pdu(struct iscs
  
  	wait_for_completion_interruptible(&comp);
  }
@@ -262,7 +250,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  	.iscsit_free_conn	= isert_free_conn,
  	.iscsit_get_login_rx	= isert_get_login_rx,
  	.iscsit_put_login_tx	= isert_put_login_tx,
-@@ -2642,7 +2758,9 @@ static struct iscsit_transport iser_targ
+@@ -2642,7 +2754,9 @@ static struct iscsit_transport iser_targ
  	.iscsit_queue_data_in	= isert_put_datain,
  	.iscsit_queue_status	= isert_put_response,
  	.iscsit_aborted_task	= isert_aborted_task,
@@ -272,7 +260,7 @@ Change-Id: Idb5e2ecc1735da1154eb6d4f927d6483382b46ad
  	.iscsit_get_sup_prot_ops = isert_get_sup_prot_ops,
  };
  
-@@ -2688,6 +2806,9 @@ static void __exit isert_exit(void)
+@@ -2688,6 +2802,9 @@ static void __exit isert_exit(void)
  MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
  MODULE_AUTHOR("nab@Linux-iSCSI.org");
  MODULE_LICENSE("GPL");

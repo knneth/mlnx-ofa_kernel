@@ -50,7 +50,7 @@ bool mlx5_lag_is_multipath(struct mlx5_core_dev *dev)
 static void mlx5_lag_set_port_affinity(struct mlx5_lag *ldev,
 				       enum mlx5_lag_port_affinity port)
 {
-	struct lag_tracker tracker;
+	struct lag_tracker tracker = {};
 
 	if (!__mlx5_lag_is_multipath(ldev))
 		return;
@@ -275,8 +275,7 @@ static int mlx5_lag_fib_event(struct notifier_block *nb,
 					info);
 		fi = fen_info->fi;
 		if (fi->nh) {
-			NL_SET_ERR_MSG_MOD(info->extack, "IPv4 route with nexthop objects is not supported");
-			return notifier_from_errno(-EINVAL);
+			return NOTIFY_DONE;
 		}
 		fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
 		if (fib_dev != ldev->pf[MLX5_LAG_P1].netdev &&

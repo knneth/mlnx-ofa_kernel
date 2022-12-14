@@ -150,7 +150,8 @@ bool mlx5_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type)
 		return MLX5_CAP_ETH(mdev, tunnel_stateless_gre);
 	case IPPROTO_IPIP:
 	case IPPROTO_IPV6:
-		return MLX5_CAP_ETH(mdev, tunnel_stateless_ip_over_ip);
+		return (MLX5_CAP_ETH(mdev, tunnel_stateless_ip_over_ip) ||
+			MLX5_CAP_ETH(mdev, tunnel_stateless_ip_over_ip_rx));
 	default:
 		return false;
 	}
@@ -405,6 +406,8 @@ static int mlx5_generate_inner_ttc_table_rules(struct mlx5_core_dev *dev,
 	for (tt = 0; tt < MLX5_NUM_TT; tt++) {
 		struct mlx5_ttc_rule *rule = &rules[tt];
 
+		if (!test_bit(tt, params->dests_valid))
+			continue;
 		rule->rule = mlx5_generate_inner_ttc_rule(dev, ft,
 							  &params->dests[tt],
 							  ttc_rules[tt].etype,

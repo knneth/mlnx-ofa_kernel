@@ -467,6 +467,14 @@ static int mlx5e_tx_reporter_dump_sq(struct mlx5e_priv *priv, struct devlink_fms
 	return mlx5e_health_fmsg_named_obj_nest_end(fmsg);
 }
 
+static int mlx5e_tx_reporter_timeout_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
+					  void *ctx)
+{
+	struct mlx5e_tx_timeout_ctx *to_ctx = ctx;
+
+	return mlx5e_tx_reporter_dump_sq(priv, fmsg, to_ctx->sq);
+}
+
 static int mlx5e_tx_reporter_dump_all_sqs(struct mlx5e_priv *priv,
 					  struct devlink_fmsg *fmsg)
 {
@@ -524,12 +532,7 @@ static int mlx5e_tx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
 					   struct mlx5e_err_ctx *err_ctx,
 					   struct devlink_fmsg *fmsg)
 {
-	struct mlx5e_txqsq *sq;
-
-	sq = err_ctx->recover == mlx5e_tx_reporter_err_cqe_recover ?
-	     err_ctx->ctx : ((struct mlx5e_tx_timeout_ctx *)(err_ctx->ctx))->sq;
-
-	return err_ctx->dump(priv, fmsg, sq);
+	return err_ctx->dump(priv, fmsg, err_ctx->ctx);
 }
 
 static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,
@@ -567,7 +570,7 @@ int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq)
 	to_ctx.sq = sq;
 	err_ctx.ctx = &to_ctx;
 	err_ctx.recover = mlx5e_tx_reporter_timeout_recover;
-	err_ctx.dump = mlx5e_tx_reporter_dump_sq;
+	err_ctx.dump = mlx5e_tx_reporter_timeout_dump;
 	snprintf(err_str, sizeof(err_str),
 		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
 		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,

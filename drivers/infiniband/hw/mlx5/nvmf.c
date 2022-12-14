@@ -81,6 +81,8 @@ void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev)
 	caps->min_cmd_size = MLX5_CAP_NVMF(mdev, min_ioccsz);
 	caps->max_cmd_size = MLX5_CAP_NVMF(mdev, max_ioccsz);
 	caps->max_data_offset = MLX5_CAP_NVMF(mdev, max_icdoff);
+	caps->passthrough_sqe_rw_service =
+		MLX5_CAP_NVMF(mdev, passthrough_sqe_rw_service);
 	/* log_min_cmd_timeout = 0 meens use default timeout from HCA */
 	if (MLX5_CAP_NVMF(mdev, log_min_cmd_timeout))
 		caps->min_cmd_timeout_us = 1 << MLX5_CAP_NVMF(mdev, log_min_cmd_timeout);

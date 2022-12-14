@@ -1,8 +1,8 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Yevgeny Kliteynik <kliteyn@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
 
-Change-Id: Ic3e9320595eba676ad855fc26bbeab94ac8c3695
+Change-Id: I14c218e00e82840da7945ea8254435c215de35da
 ---
  .../mellanox/mlx5/core/steering/dr_icm_pool.c   | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)
@@ -31,5 +31,5 @@ Change-Id: Ic3e9320595eba676ad855fc26bbeab94ac8c3695
 +#define backport_kvfree	kvfree
 +
  #define DR_ICM_MODIFY_HDR_ALIGN_BASE 64
- #define DR_ICM_SYNC_THRESHOLD_POOL (64 * 1024 * 1024)
+ #define DR_ICM_MODIFY_HDR_GRANULARITY_4K 12
  

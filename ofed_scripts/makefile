@@ -86,10 +86,6 @@ override WITH_MAKE_PARAMS += ctf-dir="$(CWD)/.ctf"
 CFLAGS += -DMLX_DISABLE_TRACEPOINTS
 endif
 
-ifneq ($(shell /usr/bin/lsb_release -s -i 2>/dev/null | grep -qiE "debian|ubuntu" 2>/dev/null && echo YES || echo ''),)
-CFLAGS += -DMLX_DISABLE_TRACEPOINTS
-endif
-
 DEPMOD  = /sbin/depmod
 INSTALL_MOD_DIR ?= $(shell ( test -f /etc/SuSE-release && echo updates ) || ( test -f /etc/SUSE-brand && echo updates ) || ( test -f /etc/fedora-release && echo updates ) || ( echo extra/mlnx-ofa_kernel ) )
 
@@ -302,7 +298,6 @@ endif
 
 	install -d $(INSTALL_MOD_PATH)/sbin
 	install -d $(INSTALL_MOD_PATH)/$(prefix)/sbin
-	install -m 0755 ofed_scripts/vf-net-link-name.sh $(INSTALL_MOD_PATH)/etc/infiniband
 	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh $(INSTALL_MOD_PATH)$(data_dir)
 
 	install -d $(INSTALL_MOD_PATH)/etc/modprobe.d
@@ -331,7 +326,6 @@ endif
 	install -m 0755 ofed_scripts/sf-rep-netdev-rename $(INSTALL_MOD_PATH)/lib/udev
 	install -m 0644 ofed_scripts/83-mlnx-sf-name.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
 	install -m 0644 ofed_scripts/90-ib.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
-	install -m 0644 ofed_scripts/82-net-setup-link.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
 
 	install -d $(INSTALL_MOD_PATH)/usr/sbin
 	install -m 0755 ofed_scripts/setup_mr_cache.sh $(INSTALL_MOD_PATH)/usr/sbin

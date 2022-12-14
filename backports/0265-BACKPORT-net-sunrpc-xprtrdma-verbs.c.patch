@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/verbs.c
 
 Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
 ---
- net/sunrpc/xprtrdma/verbs.c | 68 +++++++++++++++++++++++++++++++++++++
- 1 file changed, 68 insertions(+)
+ net/sunrpc/xprtrdma/verbs.c | 90 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 90 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/verbs.c
 +++ b/net/sunrpc/xprtrdma/verbs.c
-@@ -55,13 +55,22 @@
+@@ -55,14 +55,27 @@
  #include <linux/sunrpc/svc_rdma.h>
  #include <linux/log2.h>
  
@@ -19,7 +19,6 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
 +	RHEL_MAJOR >= 8)))
  #include <asm-generic/barrier.h>
 +#endif
-+
  #include <asm/bitops.h>
  
  #include <rdma/ib_cm.h>
@@ -29,9 +28,15 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  #include <trace/events/rpcrdma.h>
 +#endif
  
- /*
-  * Globals/Macros
-@@ -157,7 +166,9 @@ static void rpcrdma_wc_send(struct ib_cq
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
+ static int rpcrdma_sendctxs_create(struct rpcrdma_xprt *r_xprt);
+ static void rpcrdma_sendctxs_destroy(struct rpcrdma_xprt *r_xprt);
+ static void rpcrdma_sendctx_put_locked(struct rpcrdma_xprt *r_xprt,
+@@ -146,7 +159,9 @@ static void rpcrdma_wc_send(struct ib_cq
  	struct rpcrdma_xprt *r_xprt = cq->cq_context;
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -41,7 +46,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	rpcrdma_sendctx_put_locked(r_xprt, sc);
  	rpcrdma_flush_disconnect(r_xprt, wc);
  }
-@@ -176,7 +187,9 @@ static void rpcrdma_wc_receive(struct ib
+@@ -165,7 +180,9 @@ static void rpcrdma_wc_receive(struct ib
  	struct rpcrdma_xprt *r_xprt = cq->cq_context;
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -51,7 +56,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	--r_xprt->rx_ep->re_receive_count;
  	if (wc->status != IB_WC_SUCCESS)
  		goto out_flushed;
-@@ -266,7 +279,9 @@ rpcrdma_cm_event_handler(struct rdma_cm_
+@@ -255,7 +272,9 @@ rpcrdma_cm_event_handler(struct rdma_cm_
  		rpcrdma_ep_get(ep);
  		ep->re_connect_status = 1;
  		rpcrdma_update_cm_private(ep, &event->param.conn);
@@ -61,7 +66,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  		wake_up_all(&ep->re_connect_wait);
  		break;
  	case RDMA_CM_EVENT_CONNECT_ERROR:
-@@ -553,7 +568,9 @@ int rpcrdma_xprt_connect(struct rpcrdma_
+@@ -533,7 +552,9 @@ int rpcrdma_xprt_connect(struct rpcrdma_
  	rpcrdma_mrs_create(r_xprt);
  
  out:
@@ -71,7 +76,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	return rc;
  }
  
-@@ -578,7 +595,9 @@ void rpcrdma_xprt_disconnect(struct rpcr
+@@ -558,7 +579,9 @@ void rpcrdma_xprt_disconnect(struct rpcr
  
  	id = ep->re_id;
  	rc = rdma_disconnect(id);
@@ -81,7 +86,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  
  	rpcrdma_xprt_drain(r_xprt);
  	rpcrdma_reps_unmap(r_xprt);
-@@ -663,6 +682,9 @@ static int rpcrdma_sendctxs_create(struc
+@@ -643,6 +666,9 @@ static int rpcrdma_sendctxs_create(struc
  		buf->rb_sc_ctxs[i] = sc;
  	}
  
@@ -91,7 +96,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	buf->rb_sc_head = 0;
  	buf->rb_sc_tail = 0;
  	return 0;
-@@ -717,7 +739,11 @@ out_emptyq:
+@@ -697,7 +723,11 @@ out_emptyq:
  	 * completions recently. This is a sign the Send Queue is
  	 * backing up. Cause the caller to pause and try again.
  	 */
@@ -103,7 +108,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	r_xprt->rx_stats.empty_sendctx_q++;
  	return NULL;
  }
-@@ -753,7 +779,14 @@ static void rpcrdma_sendctx_put_locked(s
+@@ -733,7 +763,14 @@ static void rpcrdma_sendctx_put_locked(s
  	/* Paired with READ_ONCE */
  	smp_store_release(&buf->rb_sc_tail, next_tail);
  
@@ -118,7 +123,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  }
  
  static void
-@@ -784,7 +817,12 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *
+@@ -764,7 +801,12 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *
  	}
  
  	r_xprt->rx_stats.mrs_allocated += count;
@@ -131,7 +136,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  }
  
  static void
-@@ -796,7 +834,9 @@ rpcrdma_mr_refresh_worker(struct work_st
+@@ -776,7 +818,9 @@ rpcrdma_mr_refresh_worker(struct work_st
  						   rx_buf);
  
  	rpcrdma_mrs_create(r_xprt);
@@ -141,7 +146,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  }
  
  /**
-@@ -817,7 +857,11 @@ void rpcrdma_mrs_refresh(struct rpcrdma_
+@@ -797,7 +841,11 @@ void rpcrdma_mrs_refresh(struct rpcrdma_
  		 * workqueue in order to prevent MR allocation
  		 * from recursing into NFS during direct reclaim.
  		 */
@@ -153,7 +158,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	}
  }
  
-@@ -917,8 +961,10 @@ static int rpcrdma_reqs_setup(struct rpc
+@@ -897,8 +945,10 @@ static int rpcrdma_reqs_setup(struct rpc
  
  static void rpcrdma_req_reset(struct rpcrdma_req *req)
  {
@@ -164,7 +169,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  
  	rpcrdma_regbuf_free(req->rl_rdmabuf);
  	req->rl_rdmabuf = NULL;
-@@ -975,9 +1021,13 @@ struct rpcrdma_rep *rpcrdma_rep_create(s
+@@ -955,9 +1005,13 @@ struct rpcrdma_rep *rpcrdma_rep_create(s
  	rep->rr_recv_wr.num_sge = 1;
  	rep->rr_temp = temp;
  
@@ -178,7 +183,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	return rep;
  
  out_free_regbuf:
-@@ -988,6 +1038,7 @@ out:
+@@ -968,6 +1022,7 @@ out:
  	return NULL;
  }
  
@@ -186,7 +191,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  static void rpcrdma_rep_free(struct rpcrdma_rep *rep)
  {
  	rpcrdma_regbuf_free(rep->rr_rdmabuf);
-@@ -1004,6 +1055,14 @@ static void rpcrdma_rep_destroy(struct r
+@@ -984,6 +1039,14 @@ static void rpcrdma_rep_destroy(struct r
  
  	rpcrdma_rep_free(rep);
  }
@@ -201,7 +206,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  
  static struct rpcrdma_rep *rpcrdma_rep_get_locked(struct rpcrdma_buffer *buf)
  {
-@@ -1046,6 +1105,7 @@ static void rpcrdma_reps_destroy(struct
+@@ -1026,6 +1089,7 @@ static void rpcrdma_reps_destroy(struct
  {
  	struct rpcrdma_rep *rep;
  
@@ -209,7 +214,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	spin_lock(&buf->rb_lock);
  	while ((rep = list_first_entry_or_null(&buf->rb_all_reps,
  					       struct rpcrdma_rep,
-@@ -1058,6 +1118,10 @@ static void rpcrdma_reps_destroy(struct
+@@ -1038,6 +1102,10 @@ static void rpcrdma_reps_destroy(struct
  		spin_lock(&buf->rb_lock);
  	}
  	spin_unlock(&buf->rb_lock);
@@ -220,7 +225,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  }
  
  /**
-@@ -1075,6 +1139,9 @@ int rpcrdma_buffer_create(struct rpcrdma
+@@ -1055,6 +1123,9 @@ int rpcrdma_buffer_create(struct rpcrdma
  	spin_lock_init(&buf->rb_lock);
  	INIT_LIST_HEAD(&buf->rb_mrs);
  	INIT_LIST_HEAD(&buf->rb_all_mrs);
@@ -230,7 +235,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  	INIT_WORK(&buf->rb_refresh_worker, rpcrdma_mr_refresh_worker);
  
  	INIT_LIST_HEAD(&buf->rb_send_bufs);
-@@ -1100,6 +1167,19 @@ out:
+@@ -1080,6 +1151,19 @@ out:
  	return rc;
  }
  
@@ -250,7 +255,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  /**
   * rpcrdma_req_destroy - Destroy an rpcrdma_req object
   * @req: unused object to be destroyed
-@@ -1319,7 +1399,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
+@@ -1299,7 +1383,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
  	rb->rg_iov.addr = ib_dma_map_single(device, rdmab_data(rb),
  					    rdmab_length(rb), rb->rg_direction);
  	if (ib_dma_mapping_error(device, rdmab_addr(rb))) {
@@ -260,7 +265,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  		return false;
  	}
  
-@@ -1405,7 +1487,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+@@ -1385,7 +1471,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
  			break;
  
  		rep->rr_cid.ci_queue_id = ep->re_attr.recv_cq->res.id;
@@ -270,7 +275,7 @@ Change-Id: Iccbec6392a8d2e2e842be3406f6c9e73ffe7ee56
  		rep->rr_recv_wr.next = wr;
  		wr = &rep->rr_recv_wr;
  		--needed;
-@@ -1430,7 +1514,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+@@ -1410,7 +1498,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
  		complete(&ep->re_done);
  
  out:

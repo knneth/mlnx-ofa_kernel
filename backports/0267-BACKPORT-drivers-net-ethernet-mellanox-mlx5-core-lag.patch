@@ -18,7 +18,7 @@ Change-Id: I562fd09773eef5d3933a9a426f3fc71c7f3549af
  #include <linux/netdevice.h>
  #include "lag.h"
  
-@@ -570,3 +572,5 @@ void mlx5_lag_destroy_port_selection(str
+@@ -598,3 +600,5 @@ void mlx5_lag_destroy_port_selection(str
  	mlx5_lag_destroy_definers(ldev);
  	memset(steering, 0, sizeof(*steering));
  }

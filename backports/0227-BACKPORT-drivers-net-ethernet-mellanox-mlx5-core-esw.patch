@@ -8,7 +8,7 @@ Change-Id: Ic8587594ec1ce46e8e5a68afb6539702c2b43c53
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.h
-@@ -40,10 +40,14 @@ void mlx5_esw_ipsec_release(struct mlx5_
+@@ -27,10 +27,14 @@ void mlx5_esw_ipsec_release(struct mlx5_
  void mlx5_esw_ipsec_full_offload_get_stats(struct mlx5_eswitch *esw, void *ipsec_stats);
  static inline int mlx5_is_ipsec_full_offload(struct mlx5e_priv *priv)
  {
