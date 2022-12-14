@@ -87,4 +87,13 @@ cat << 'END_CONFIG' >> $PWD/config.h
 #define HAVE_XSK_SUPPORT 1
 #endif
 
+/* Define HAVE_SVC_FILL_WRITE_VECTOR from other flags */
+#if defined(HAVE_SVC_FILL_WRITE_VECTOR_4_PARAMS) || \
+	defined(HAVE_SVC_FILL_WRITE_VECTOR_3_PARAMS) || \
+	defined(HAVE_SVC_FILL_WRITE_VECTOR_2_PARAMS)
+#define HAVE_SVC_FILL_WRITE_VECTOR 1
+#else
+#undef HAVE_SVC_FILL_WRITE_VECTOR
+#endif
+
 END_CONFIG

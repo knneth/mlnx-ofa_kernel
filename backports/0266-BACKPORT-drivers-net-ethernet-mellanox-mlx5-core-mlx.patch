@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+
+Change-Id: Ie16fe5191ec6501029ae90f0237a14290b9f6aab
+---
+ drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+@@ -174,9 +174,13 @@ int mlx5_devm_sf_port_fn_hw_addr_get(str
+ 
+ 	devlink = mlxdevm_to_devlink(devm_dev);
+ 	memset(&devport, 0, sizeof(devport));
++	devport.devlink = devlink;
+ 	devport.index = port->index;
+-
++#ifdef HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM
++	return mlx5_devlink_port_function_hw_addr_get(&devport,
++#else
+ 	return mlx5_devlink_port_function_hw_addr_get(devlink, &devport,
++#endif
+ 						      hw_addr, hw_addr_len, extack);
+ }
+ 
+@@ -190,8 +194,13 @@ int mlx5_devm_sf_port_fn_hw_addr_set(str
+ 
+ 	devlink = mlxdevm_to_devlink(devm_dev);
+ 	memset(&devport, 0, sizeof(devport));
++	devport.devlink = devlink;
+ 	devport.index = port->index;
++#ifdef HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM
++	return mlx5_devlink_port_function_hw_addr_set(&devport, hw_addr,
++#else
+ 	return mlx5_devlink_port_function_hw_addr_set(devlink, &devport, hw_addr,
++#endif
+ 						      hw_addr_len, extack);
+ }
+ 

@@ -1,0 +1,20 @@
+From: Maher Sanalla <msanalla@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/esw/acl/ofld.h
+
+Change-Id: I9ba3ec683b902a3d065cf092df7e551d44f84664
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/acl/ofld.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/acl/ofld.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/acl/ofld.h
+@@ -29,7 +29,7 @@ int mlx5_esw_acl_ingress_vport_bond_upda
+ void mlx5_esw_acl_ingress_vport_drop_rule_destroy(struct mlx5_eswitch *esw, u16 vport_num);
+ int mlx5_esw_acl_ingress_vport_drop_rule_create(struct mlx5_eswitch *esw, u16 vport_num);
+ 
+-#else /* CONFIG_MLX5_ESWITCH */
++#elif defined(MLX_USE_LAG_COMPAT) || defined(HAVE_LAG_TX_TYPE)
+ static void
+ mlx5_esw_acl_ingress_vport_drop_rule_destroy(struct mlx5_eswitch *esw,
+ 					     u16 vport_num)

@@ -85,6 +85,7 @@ enum {
 	MAPPING_ID_TUNNEL_ENC_OPTS,
 	MAPPING_ID_LABELS,
 	MAPPING_ID_ZONE,
+	MAPPING_ID_INT_PORT,
 };
 
 struct vport_meter {
@@ -126,8 +127,12 @@ struct vport_ingress {
 		 * packet with metadata.
 		 */
 		struct mlx5_flow_group *metadata_allmatch_grp;
+		/* Optional group to add a drop all rule */
+		struct mlx5_flow_group *drop_grp;
 		struct mlx5_modify_hdr *modify_metadata;
 		struct mlx5_flow_handle *modify_metadata_rule;
+		struct mlx5_esw_ipsec_priv *esw_ipsec_priv;
+		struct mlx5_flow_handle *drop_rule;
 	} offloads;
 };
 
@@ -329,6 +334,7 @@ struct mlx5_esw_offload {
 	spinlock_t int_vports_lock; /* Protects int vports list */
 	struct list_head int_vports; /* Uses offloads.vports.lock */
 	bool int_vport_removing;
+	struct mapping_ctx *int_port_mapping;
 };
 
 /* E-Switch MC FDB table hash node */
@@ -984,8 +990,8 @@ mlx5_esw_get_int_vport(struct mlx5_eswitch *esw,
 void
 mlx5_esw_put_int_vport(struct mlx5_eswitch *esw,
 		       struct mlx5_esw_int_vport *int_vport);
-void mlx5_esw_init_int_vport(struct mlx5_eswitch *esw);
-void mlx5_esw_cleanup_int_vport(struct mlx5_eswitch *esw);
+void mlx5_init_rep_int_port_rx(struct mlx5_eswitch *esw);
+void mlx5_cleanup_rep_int_port_rx(struct mlx5_eswitch *esw);
 int mlx5_esw_offloads_devlink_port_register(struct mlx5_eswitch *esw, u16 vport_num);
 void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_eswitch *esw, u16 vport_num);
 struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u16 vport_num);

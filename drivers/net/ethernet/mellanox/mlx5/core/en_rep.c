@@ -529,7 +529,7 @@ static int mlx5e_rep_sf_get_phys_port_name(struct net_device *dev,
 	u32 controller;
 	int ret;
 
-	fn = PCI_FUNC(priv->mdev->pdev->devfn);
+	fn = mlx5_get_dev_index(priv->mdev);
 	esw = priv->mdev->priv.eswitch;
 
 	controller = mlx5_devm_sf_vport_to_controller(priv->mdev, rep->vport);
@@ -1033,7 +1033,7 @@ static int mlx5e_init_ul_rep_rx(struct mlx5e_priv *priv)
 	err = mlx5e_init_rep_rx(priv);
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 	if (!err)
-		mlx5_esw_init_int_vport(priv->mdev->priv.eswitch);
+		mlx5_init_rep_int_port_rx(priv->mdev->priv.eswitch);
 #endif
 	return err;
 }
@@ -1041,7 +1041,7 @@ static int mlx5e_init_ul_rep_rx(struct mlx5e_priv *priv)
 static void mlx5e_cleanup_ul_rep_rx(struct mlx5e_priv *priv)
 {
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
-	mlx5_esw_cleanup_int_vport(priv->mdev->priv.eswitch);
+	mlx5_cleanup_rep_int_port_rx(priv->mdev->priv.eswitch);
 #endif
 	mlx5e_cleanup_rep_rx(priv);
 	mlx5e_destroy_q_counters(priv);

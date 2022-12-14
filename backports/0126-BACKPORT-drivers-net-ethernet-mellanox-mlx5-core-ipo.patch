@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
 ---
- .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 82 +++++++++++++++++--
- 1 file changed, 77 insertions(+), 5 deletions(-)
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 86 +++++++++++++++++--
+ 1 file changed, 81 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
-@@ -46,11 +46,22 @@ static const struct mlx5e_profile *mlx5_
+@@ -46,11 +46,26 @@ static const struct mlx5e_profile *mlx5_
  static const struct net_device_ops mlx5i_netdev_ops = {
  	.ndo_open                = mlx5i_open,
  	.ndo_stop                = mlx5i_close,
@@ -30,14 +30,18 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
 +#else
 +	.extended.ndo_change_mtu          = mlx5i_change_mtu,
 +#endif
-+       .ndo_do_ioctl            = mlx5i_ioctl,
++#ifdef HAVE_NDO_ETH_IOCTL
++	.ndo_eth_ioctl            = mlx5i_ioctl,
++#else
++	.ndo_do_ioctl             = mlx5i_ioctl,
++#endif
 +#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
 +	.ndo_size = sizeof(struct net_device_ops),
 +#endif
  };
  
  /* IPoIB mlx5 netdev profile */
-@@ -68,15 +79,37 @@ static void mlx5i_build_nic_params(struc
+@@ -68,15 +83,37 @@ static void mlx5i_build_nic_params(struc
  		MLX5I_PARAMS_DEFAULT_LOG_RQ_SIZE;
  
  	params->lro_en = false;
@@ -75,7 +79,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	err = mlx5e_netdev_init(netdev, priv->profile, priv, mdev);
  	if (err)
-@@ -84,7 +117,12 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -84,7 +121,12 @@ int mlx5i_init(struct mlx5_core_dev *mde
  
  	netif_carrier_off(netdev);
  	mlx5e_set_netdev_mtu_boundaries(priv);
@@ -88,7 +92,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	mlx5e_build_nic_params(priv, NULL, netdev->mtu);
  	mlx5i_build_nic_params(mdev, &priv->channels.params);
-@@ -100,6 +138,9 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -100,6 +142,9 @@ int mlx5i_init(struct mlx5_core_dev *mde
  	netdev->hw_features    |= NETIF_F_TSO6;
  	netdev->hw_features    |= NETIF_F_RXCSUM;
  	netdev->hw_features    |= NETIF_F_RXHASH;
@@ -98,7 +102,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	netdev->netdev_ops = &mlx5i_netdev_ops;
  	netdev->ethtool_ops = &mlx5i_ethtool_ops;
-@@ -140,10 +181,20 @@ static void mlx5i_grp_sw_update_stats(st
+@@ -140,10 +185,20 @@ static void mlx5i_grp_sw_update_stats(st
  	memcpy(&priv->stats.sw, &s, sizeof(s));
  }
  
@@ -119,7 +123,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	mlx5i_grp_sw_update_stats(priv);
  
-@@ -152,6 +203,10 @@ void mlx5i_get_stats(struct net_device *
+@@ -152,6 +207,10 @@ void mlx5i_get_stats(struct net_device *
  	stats->tx_packets = sstats->tx_packets;
  	stats->tx_bytes   = sstats->tx_bytes;
  	stats->tx_dropped = sstats->tx_queue_dropped;
@@ -130,7 +134,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  }
  
  int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
-@@ -331,7 +386,9 @@ static int mlx5i_create_flow_steering(st
+@@ -331,7 +390,9 @@ static int mlx5i_create_flow_steering(st
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -140,7 +144,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  	}
  
  	err = mlx5e_create_ttc_table(priv);
-@@ -518,9 +575,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -518,9 +579,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:
@@ -154,7 +158,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -659,7 +720,13 @@ static int mlx5i_xmit(struct net_device
+@@ -659,7 +724,13 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
  
@@ -168,7 +172,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	return NETDEV_TX_OK;
  }
-@@ -756,8 +823,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -756,8 +827,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -179,7 +183,7 @@ Change-Id: Ibc8fb8d510703dfe3c8b269fdb211d65aa92a93b
  
  	return 0;
  
-@@ -791,6 +860,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -791,6 +864,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

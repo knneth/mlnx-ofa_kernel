@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en.h
 
 Change-Id: I1cd3269855ed4ead02199c2350aeea633277dd61
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en.h | 227 ++++++++++++++++++-
- 1 file changed, 216 insertions(+), 11 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en.h | 238 ++++++++++++++++++-
+ 1 file changed, 227 insertions(+), 11 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en.h
@@ -471,10 +471,24 @@ Change-Id: I1cd3269855ed4ead02199c2350aeea633277dd61
  /* ethtool helpers */
  void mlx5e_ethtool_get_drvinfo(struct mlx5e_priv *priv,
  			       struct ethtool_drvinfo *drvinfo);
-@@ -1245,22 +1392,55 @@ int mlx5e_ethtool_get_coalesce(struct ml
+@@ -1242,25 +1389,69 @@ void mlx5e_ethtool_get_channels(struct m
+ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
+ 			       struct ethtool_channels *ch);
+ int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
++#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS //forwardport
++			       struct ethtool_coalesce *coal,
++			       struct kernel_ethtool_coalesce *kernel_coal);
++#else
  			       struct ethtool_coalesce *coal);
++#endif
  int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
++#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS //forwardport
++			       struct ethtool_coalesce *coal,
++			       struct kernel_ethtool_coalesce *kernel_coal,
++			       struct netlink_ext_ack *extack);
++#else
  			       struct ethtool_coalesce *coal);
++#endif
 +#ifdef HAVE_GET_SET_LINK_KSETTINGS
  int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
  				     struct ethtool_link_ksettings *link_ksettings);
@@ -530,7 +544,7 @@ Change-Id: I1cd3269855ed4ead02199c2350aeea633277dd61
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam);
  int mlx5e_ethtool_set_pauseparam(struct mlx5e_priv *priv,
-@@ -1311,19 +1491,44 @@ void mlx5e_rx_free_page_cache(struct mlx
+@@ -1311,19 +1502,44 @@ void mlx5e_rx_free_page_cache(struct mlx
  void mlx5e_rx_dim_work(struct work_struct *work);
  void mlx5e_tx_dim_work(struct work_struct *work);
  

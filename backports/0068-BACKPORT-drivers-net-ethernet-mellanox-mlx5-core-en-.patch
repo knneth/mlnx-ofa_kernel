@@ -345,7 +345,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  static struct mlx5e_rep_indr_block_priv *
  mlx5e_rep_indr_block_priv_lookup(struct mlx5e_rep_priv *rpriv,
  				 struct net_device *netdev,
-@@ -388,6 +623,7 @@ static int mlx5e_rep_indr_setup_block_e2
+@@ -385,6 +620,7 @@ static int mlx5e_rep_indr_setup_block_e2
  	return mlx5e_rep_indr_offload(priv->netdev, type_data, priv, flags);
  }
  
@@ -353,7 +353,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  static int mlx5e_rep_indr_setup_ft_cb(enum tc_setup_type type,
  				      void *type_data, void *indr_priv)
  {
-@@ -433,7 +669,9 @@ static int mlx5e_rep_indr_setup_ft_cb(en
+@@ -430,7 +666,9 @@ static int mlx5e_rep_indr_setup_ft_cb(en
  		return -EOPNOTSUPP;
  	}
  }
@@ -363,7 +363,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  static void mlx5e_rep_indr_block_unbind(void *cb_priv)
  {
  	struct mlx5e_rep_indr_block_priv *indr_priv = cb_priv;
-@@ -441,6 +679,7 @@ static void mlx5e_rep_indr_block_unbind(
+@@ -438,6 +676,7 @@ static void mlx5e_rep_indr_block_unbind(
  	list_del(&indr_priv->list);
  	kfree(indr_priv);
  }
@@ -371,7 +371,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  
  static LIST_HEAD(mlx5e_block_cb_list);
  
-@@ -454,7 +693,11 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -451,7 +690,11 @@ mlx5e_rep_indr_setup_block(struct net_de
  {
  	struct mlx5e_priv *priv = netdev_priv(rpriv->netdev);
  	struct mlx5e_rep_indr_block_priv *indr_priv;
@@ -383,7 +383,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  
  	if (!mlx5e_tc_tun_device_to_offload(priv, netdev) &&
  	    !(is_vlan_dev(netdev) && vlan_dev_real_dev(netdev) == rpriv->netdev) &&
-@@ -467,8 +710,13 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -464,8 +707,13 @@ mlx5e_rep_indr_setup_block(struct net_de
  	     !netif_is_ovs_master(netdev)))
  		return -EOPNOTSUPP;
  
@@ -397,7 +397,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  
  	switch (f->command) {
  	case FLOW_BLOCK_BIND:
-@@ -487,10 +735,16 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -484,10 +732,16 @@ mlx5e_rep_indr_setup_block(struct net_de
  		list_add(&indr_priv->list,
  			 &rpriv->uplink_priv.tc_indr_block_priv_list);
  
@@ -414,7 +414,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  		if (IS_ERR(block_cb)) {
  			list_del(&indr_priv->list);
  			kfree(indr_priv);
-@@ -500,17 +754,42 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -497,17 +751,42 @@ mlx5e_rep_indr_setup_block(struct net_de
  		list_add_tail(&block_cb->driver_list, &mlx5e_block_cb_list);
  
  		return 0;
@@ -457,7 +457,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  		return 0;
  	default:
  		return -EOPNOTSUPP;
-@@ -519,11 +798,25 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -516,11 +795,25 @@ mlx5e_rep_indr_setup_block(struct net_de
  }
  
  static
@@ -486,7 +486,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  	int type = (int) tc_setup_type;
  
  	switch (type) {
-@@ -535,15 +828,78 @@ int mlx5e_rep_indr_setup_cb(struct net_d
+@@ -532,15 +825,78 @@ int mlx5e_rep_indr_setup_cb(struct net_d
  		return mlx5e_rep_indr_setup_block(netdev, sch, cb_priv, type_data,
  						  mlx5e_rep_indr_setup_block_e2e_cb,
  						  data, cleanup);
@@ -565,7 +565,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  int mlx5e_rep_tc_netdevice_event_register(struct mlx5e_rep_priv *rpriv)
  {
  	struct mlx5_rep_uplink_priv *uplink_priv = &rpriv->uplink_priv;
-@@ -551,14 +907,35 @@ int mlx5e_rep_tc_netdevice_event_registe
+@@ -548,14 +904,35 @@ int mlx5e_rep_tc_netdevice_event_registe
  	/* init indirect block notifications */
  	INIT_LIST_HEAD(&uplink_priv->tc_indr_block_priv_list);
  
@@ -601,7 +601,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  
  static bool mlx5e_restore_tunnel(struct mlx5e_priv *priv, struct sk_buff *skb,
  				 struct mlx5e_tc_update_priv *tc_priv,
-@@ -738,11 +1115,15 @@ static bool mlx5e_handle_int_port(struct
+@@ -735,11 +1112,15 @@ static bool mlx5e_handle_int_port(struct
  
  	if (type) {
  		skb_push_rcsum(skb, skb->mac_len);
@@ -617,7 +617,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  		err = netif_receive_skb(skb);
  	}
  
-@@ -766,6 +1147,9 @@ bool mlx5e_rep_tc_update_skb(struct mlx5
+@@ -763,6 +1144,9 @@ bool mlx5e_rep_tc_update_skb(struct mlx5
  	struct mlx5e_priv *priv;
  	u32 tunnel_id;
  	int err;
@@ -627,7 +627,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  
  	*free_skb = false;
  
-@@ -806,7 +1190,13 @@ bool mlx5e_rep_tc_update_skb(struct mlx5
+@@ -803,7 +1187,13 @@ bool mlx5e_rep_tc_update_skb(struct mlx5
  		size = sample->trunc_size ? min(sample->trunc_size, skb->len) : skb->len;
  
  		mlx5e_restore_tunnel(priv, skb, tc_priv, mapped_obj.sample.tunnel_id);

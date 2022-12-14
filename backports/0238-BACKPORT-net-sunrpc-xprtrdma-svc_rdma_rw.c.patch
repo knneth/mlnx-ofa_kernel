@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_rw.c
 
 Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
 ---
- net/sunrpc/xprtrdma/svc_rdma_rw.c | 80 +++++++++++++++++++++++++++++++++++++++
- 1 file changed, 80 insertions(+)
+ net/sunrpc/xprtrdma/svc_rdma_rw.c | 819 +++++++++++++++++++++++++++---
+ 1 file changed, 743 insertions(+), 76 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_rw.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_rw.c
@@ -56,7 +56,7 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
  
  	spin_lock(&rdma->sc_rw_ctxt_lock);
  	list_add(&ctxt->rw_list, &rdma->sc_rw_ctxts);
-@@ -131,7 +147,9 @@ static int svc_rdma_rw_ctx_init(struct s
+@@ -131,13 +147,15 @@ static int svc_rdma_rw_ctx_init(struct s
  			       0, offset, handle, direction);
  	if (unlikely(ret < 0)) {
  		svc_rdma_put_rw_ctxt(rdma, ctxt);
@@ -66,7 +66,78 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
  	}
  	return ret;
  }
-@@ -244,7 +262,9 @@ static void svc_rdma_write_done(struct i
+ 
+ /* A chunk context tracks all I/O for moving one Read or Write
+- * chunk. This is a a set of rdma_rw's that handle data movement
++ * chunk. This is a set of rdma_rw's that handle data movement
+  * for all segments of one chunk.
+  *
+  * These are small, acquired with a single allocator call, and
+@@ -150,6 +168,10 @@ struct svc_rdma_chunk_ctxt {
+ 	struct svcxprt_rdma	*cc_rdma;
+ 	struct list_head	cc_rwctxts;
+ 	int			cc_sqecount;
++#ifdef HAVE_SVC_RDMA_PCL
++	enum ib_wc_status	cc_status;
++	struct completion	cc_done;
++#endif
+ };
+ 
+ static void svc_rdma_cc_cid_init(struct svcxprt_rdma *rdma,
+@@ -190,14 +212,19 @@ static void svc_rdma_cc_release(struct s
+  *  - Stores arguments for the SGL constructor functions
+  */
+ struct svc_rdma_write_info {
++#ifdef HAVE_SVC_RDMA_PCL
++	const struct svc_rdma_chunk	*wi_chunk;
++#else
++	unsigned int		wi_nsegs;
++	__be32			*wi_segs;
++#endif
++
+ 	/* write state of this chunk */
+ 	unsigned int		wi_seg_off;
+ 	unsigned int		wi_seg_no;
+-	unsigned int		wi_nsegs;
+-	__be32			*wi_segs;
+ 
+ 	/* SGL constructor arguments */
+-	struct xdr_buf		*wi_xdr;
++	const struct xdr_buf	*wi_xdr;
+ 	unsigned char		*wi_base;
+ 	unsigned int		wi_next_off;
+ 
+@@ -205,7 +232,12 @@ struct svc_rdma_write_info {
+ };
+ 
+ static struct svc_rdma_write_info *
++#ifdef HAVE_SVC_RDMA_PCL
++svc_rdma_write_info_alloc(struct svcxprt_rdma *rdma,
++			  const struct svc_rdma_chunk *chunk)
++#else
+ svc_rdma_write_info_alloc(struct svcxprt_rdma *rdma, __be32 *chunk)
++#endif
+ {
+ 	struct svc_rdma_write_info *info;
+ 
+@@ -213,10 +245,14 @@ svc_rdma_write_info_alloc(struct svcxprt
+ 	if (!info)
+ 		return info;
+ 
+-	info->wi_seg_off = 0;
+-	info->wi_seg_no = 0;
++#ifdef HAVE_SVC_RDMA_PCL
++	info->wi_chunk = chunk;
++#else
+ 	info->wi_nsegs = be32_to_cpup(++chunk);
+ 	info->wi_segs = ++chunk;
++#endif
++	info->wi_seg_off = 0;
++	info->wi_seg_no = 0;
+ 	svc_rdma_cc_init(rdma, &info->wi_cc);
+ 	info->wi_cc.cc_cqe.done = svc_rdma_write_done;
+ 	return info;
+@@ -244,13 +280,19 @@ static void svc_rdma_write_done(struct i
  	struct svc_rdma_write_info *info =
  			container_of(cc, struct svc_rdma_write_info, wi_cc);
  
@@ -76,9 +147,43 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
  
  	atomic_add(cc->cc_sqecount, &rdma->sc_sq_avail);
  	wake_up(&rdma->sc_send_wait);
-@@ -302,7 +322,9 @@ static void svc_rdma_wc_read_done(struct
+ 
+ 	if (unlikely(wc->status != IB_WC_SUCCESS))
++#ifdef HAVE_SVC_XPRT_DEFERRED_CLOSE
++		svc_xprt_deferred_close(&rdma->sc_xprt);
++#else
+ 		set_bit(XPT_CLOSE, &rdma->sc_xprt.xpt_flags);
++#endif
+ 
+ 	svc_rdma_write_info_free(info);
+ }
+@@ -258,11 +300,16 @@ static void svc_rdma_write_done(struct i
+ /* State for pulling a Read chunk.
+  */
+ struct svc_rdma_read_info {
+-	struct svc_rdma_recv_ctxt	*ri_readctxt;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct svc_rqst			*ri_rqst;
++	unsigned int			ri_totalbytes;
++#else
+ 	unsigned int			ri_position;
++	unsigned int			ri_chunklen;
++#endif
++	struct svc_rdma_recv_ctxt	*ri_readctxt;
+ 	unsigned int			ri_pageno;
+ 	unsigned int			ri_pageoff;
+-	unsigned int			ri_chunklen;
+ 
+ 	struct svc_rdma_chunk_ctxt	ri_cc;
+ };
+@@ -299,14 +346,23 @@ static void svc_rdma_wc_read_done(struct
+ 	struct svc_rdma_chunk_ctxt *cc =
+ 			container_of(cqe, struct svc_rdma_chunk_ctxt, cc_cqe);
+ 	struct svcxprt_rdma *rdma = cc->cc_rdma;
++#ifndef HAVE_SVC_RDMA_PCL
  	struct svc_rdma_read_info *info =
  			container_of(cc, struct svc_rdma_read_info, ri_cc);
++#endif
  
 +#ifdef HAVE_TRACE_RPCRDMA_H
  	trace_svcrdma_wc_read(wc, &cc->cc_cid);
@@ -86,19 +191,45 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
  
  	atomic_add(cc->cc_sqecount, &rdma->sc_sq_avail);
  	wake_up(&rdma->sc_send_wait);
-@@ -358,21 +380,29 @@ static int svc_rdma_post_chunk_ctxt(stru
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	cc->cc_status = wc->status;
++	complete(&cc->cc_done);
++	return;
++#else
+ 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
+ 		set_bit(XPT_CLOSE, &rdma->sc_xprt.xpt_flags);
+ 		svc_rdma_recv_ctxt_put(rdma, info->ri_readctxt);
+@@ -322,6 +378,7 @@ static void svc_rdma_wc_read_done(struct
+ 	}
+ 
+ 	svc_rdma_read_info_free(info);
++#endif
+ }
+ 
+ /* This function sleeps when the transport's Send Queue is congested.
+@@ -334,7 +391,9 @@ static void svc_rdma_wc_read_done(struct
+ static int svc_rdma_post_chunk_ctxt(struct svc_rdma_chunk_ctxt *cc)
+ {
+ 	struct svcxprt_rdma *rdma = cc->cc_rdma;
++#ifndef HAVE_SVC_XPRT_DEFERRED_CLOSE
+ 	struct svc_xprt *xprt = &rdma->sc_xprt;
++#endif
+ 	struct ib_send_wr *first_wr;
+ 	const struct ib_send_wr *bad_wr;
+ 	struct list_head *tmp;
+@@ -358,22 +417,32 @@ static int svc_rdma_post_chunk_ctxt(stru
  	do {
  		if (atomic_sub_return(cc->cc_sqecount,
  				      &rdma->sc_sq_avail) > 0) {
-+#ifdef HAVE_TRACE_RPCRDMA_H
- 			trace_svcrdma_post_chunk(&cc->cc_cid, cc->cc_sqecount);
-+#endif
+-			trace_svcrdma_post_chunk(&cc->cc_cid, cc->cc_sqecount);
  			ret = ib_post_send(rdma->sc_qp, first_wr, &bad_wr);
  			if (ret)
  				break;
  			return 0;
  		}
  
++		percpu_counter_inc(&svcrdma_stat_sq_starve);
 +#ifdef HAVE_TRACE_RPCRDMA_H
  		trace_svcrdma_sq_full(rdma);
 +#endif
@@ -113,51 +244,425 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
 +#ifdef HAVE_TRACE_RPCRDMA_H
  	trace_svcrdma_sq_post_err(rdma, ret);
 +#endif
++#ifdef HAVE_SVC_XPRT_DEFERRED_CLOSE
++	svc_xprt_deferred_close(&rdma->sc_xprt);
++#else
  	set_bit(XPT_CLOSE, &xprt->xpt_flags);
++#endif
  
  	/* If even one was posted, there will be a completion. */
-@@ -471,7 +501,9 @@ svc_rdma_build_writes(struct svc_rdma_wr
+ 	if (bad_wr != first_wr)
+@@ -405,7 +474,7 @@ static void svc_rdma_pagelist_to_sg(stru
+ 				    struct svc_rdma_rw_ctxt *ctxt)
+ {
+ 	unsigned int sge_no, sge_bytes, page_off, page_no;
+-	struct xdr_buf *xdr = info->wi_xdr;
++	const struct xdr_buf *xdr = info->wi_xdr;
+ 	struct scatterlist *sg;
+ 	struct page **page;
+ 
+@@ -443,10 +512,25 @@ svc_rdma_build_writes(struct svc_rdma_wr
+ {
+ 	struct svc_rdma_chunk_ctxt *cc = &info->wi_cc;
+ 	struct svcxprt_rdma *rdma = cc->cc_rdma;
+-	struct svc_rdma_rw_ctxt *ctxt;
++#ifdef HAVE_SVC_RDMA_PCL
++	const struct svc_rdma_segment *seg;
++#else
+ 	__be32 *seg;
++#endif
++	struct svc_rdma_rw_ctxt *ctxt;
+ 	int ret;
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	do {
++		unsigned int write_len;
++		u64 offset;
++
++		seg = &info->wi_chunk->ch_segments[info->wi_seg_no];
++		if (!seg)
++			goto out_overflow;
++
++		write_len = min(remaining, seg->rs_length - info->wi_seg_off);
++#else
+ 	seg = info->wi_segs + info->wi_seg_no * rpcrdma_segment_maxsz;
+ 	do {
+ 		unsigned int write_len;
+@@ -460,23 +544,34 @@ svc_rdma_build_writes(struct svc_rdma_wr
+ 		offset += info->wi_seg_off;
+ 
+ 		write_len = min(remaining, length - info->wi_seg_off);
++#endif
++		if (!write_len)
++			goto out_overflow;
+ 		ctxt = svc_rdma_get_rw_ctxt(rdma,
+ 					    (write_len >> PAGE_SHIFT) + 2);
+ 		if (!ctxt)
+ 			return -ENOMEM;
+ 
+ 		constructor(info, write_len, ctxt);
++#ifdef HAVE_SVC_RDMA_PCL
++		offset = seg->rs_offset + info->wi_seg_off;
++		ret = svc_rdma_rw_ctx_init(rdma, ctxt, offset, seg->rs_handle,
++#else
+ 		ret = svc_rdma_rw_ctx_init(rdma, ctxt, offset, handle,
++#endif
+ 					   DMA_TO_DEVICE);
  		if (ret < 0)
  			return -EIO;
- 
-+#ifdef HAVE_TRACE_RPCRDMA_H
- 		trace_svcrdma_send_wseg(handle, write_len, offset);
-+#endif
+-
+-		trace_svcrdma_send_wseg(handle, write_len, offset);
++		percpu_counter_inc(&svcrdma_stat_write);
  
  		list_add(&ctxt->rw_list, &cc->cc_rwctxts);
  		cc->cc_sqecount += ret;
-@@ -488,8 +520,10 @@ svc_rdma_build_writes(struct svc_rdma_wr
++#ifdef HAVE_SVC_RDMA_PCL
++		if (write_len == seg->rs_length - info->wi_seg_off) {
++#else
+ 		if (write_len == length - info->wi_seg_off) {
+ 			seg += 4;
++#endif
+ 			info->wi_seg_no++;
+ 			info->wi_seg_off = 0;
+ 		} else {
+@@ -488,32 +583,53 @@ svc_rdma_build_writes(struct svc_rdma_wr
  	return 0;
  
  out_overflow:
 +#ifdef HAVE_TRACE_RPCRDMA_H
  	trace_svcrdma_small_wrch_err(rdma, remaining, info->wi_seg_no,
++#ifdef HAVE_SVC_RDMA_PCL
++				     info->wi_chunk->ch_segcount);
++#else
  				     info->wi_nsegs);
++#endif
 +#endif
  	return -E2BIG;
  }
  
-@@ -558,7 +592,9 @@ int svc_rdma_send_write_chunk(struct svc
+-/* Send one of an xdr_buf's kvecs by itself. To send a Reply
+- * chunk, the whole RPC Reply is written back to the client.
+- * This function writes either the head or tail of the xdr_buf
+- * containing the Reply.
++/**
++ * svc_rdma_iov_write - Construct RDMA Writes from an iov
++ * @info: pointer to write arguments
++ * @iov: kvec to write
++ *
++ * Returns:
++ *   On succes, returns zero
++ *   %-E2BIG if the client-provided Write chunk is too small
++ *   %-ENOMEM if a resource has been exhausted
++ *   %-EIO if an rdma-rw error occurred
+  */
+-static int svc_rdma_send_xdr_kvec(struct svc_rdma_write_info *info,
+-				  struct kvec *vec)
++static int svc_rdma_iov_write(struct svc_rdma_write_info *info,
++			      const struct kvec *iov)
+ {
+-	info->wi_base = vec->iov_base;
++	info->wi_base = iov->iov_base;
+ 	return svc_rdma_build_writes(info, svc_rdma_vec_to_sg,
+-				     vec->iov_len);
++				     iov->iov_len);
+ }
+ 
+-/* Send an xdr_buf's page list by itself. A Write chunk is just
+- * the page list. A Reply chunk is @xdr's head, page list, and
+- * tail. This function is shared between the two types of chunk.
+- */
+-static int svc_rdma_send_xdr_pagelist(struct svc_rdma_write_info *info,
+-				      struct xdr_buf *xdr,
+-				      unsigned int offset,
+-				      unsigned long length)
++/**
++ * svc_rdma_pages_write - Construct RDMA Writes from pages
++ * @info: pointer to write arguments
++ * @xdr: xdr_buf with pages to write
++ * @offset: offset into the content of @xdr
++ * @length: number of bytes to write
++ *
++ * Returns:
++ *   On succes, returns zero
++ *   %-E2BIG if the client-provided Write chunk is too small
++ *   %-ENOMEM if a resource has been exhausted
++ *   %-EIO if an rdma-rw error occurred
++ */
++static int svc_rdma_pages_write(struct svc_rdma_write_info *info,
++				const struct xdr_buf *xdr,
++				unsigned int offset,
++				unsigned long length)
+ {
+ 	info->wi_xdr = xdr;
+ 	info->wi_next_off = offset - xdr->head[0].iov_len;
+@@ -521,13 +637,51 @@ static int svc_rdma_send_xdr_pagelist(st
+ 				     length);
+ }
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++/**
++ * svc_rdma_xb_write - Construct RDMA Writes to write an xdr_buf
++ * @xdr: xdr_buf to write
++ * @data: pointer to write arguments
++ *
++ * Returns:
++ *   On succes, returns zero
++ *   %-E2BIG if the client-provided Write chunk is too small
++ *   %-ENOMEM if a resource has been exhausted
++ *   %-EIO if an rdma-rw error occurred
++ */
++static int svc_rdma_xb_write(const struct xdr_buf *xdr, void *data)
++{
++	struct svc_rdma_write_info *info = data;
++	int ret;
++
++	if (xdr->head[0].iov_len) {
++		ret = svc_rdma_iov_write(info, &xdr->head[0]);
++		if (ret < 0)
++			return ret;
++	}
++
++	if (xdr->page_len) {
++		ret = svc_rdma_pages_write(info, xdr, xdr->head[0].iov_len,
++					   xdr->page_len);
++		if (ret < 0)
++			return ret;
++	}
++
++	if (xdr->tail[0].iov_len) {
++		ret = svc_rdma_iov_write(info, &xdr->tail[0]);
++		if (ret < 0)
++			return ret;
++	}
++
++	return xdr->len;
++}
++#endif
++
+ /**
+  * svc_rdma_send_write_chunk - Write all segments in a Write chunk
+  * @rdma: controlling RDMA transport
+- * @wr_ch: Write chunk provided by client
++ * @chunk: Write chunk provided by the client
+  * @xdr: xdr_buf containing the data payload
+- * @offset: payload's byte offset in @xdr
+- * @length: size of payload, in bytes
+  *
+  * Returns a non-negative number of bytes the chunk consumed, or
+  *	%-E2BIG if the payload was larger than the Write chunk,
+@@ -536,30 +690,54 @@ static int svc_rdma_send_xdr_pagelist(st
+  *	%-ENOTCONN if posting failed (connection is lost),
+  *	%-EIO if rdma_rw initialization failed (DMA mapping, etc).
+  */
++#ifdef HAVE_SVC_RDMA_PCL
++int svc_rdma_send_write_chunk(struct svcxprt_rdma *rdma,
++			      const struct svc_rdma_chunk *chunk,
++			      const struct xdr_buf *xdr)
++#else
+ int svc_rdma_send_write_chunk(struct svcxprt_rdma *rdma, __be32 *wr_ch,
+ 			      struct xdr_buf *xdr,
+ 			      unsigned int offset, unsigned long length)
++#endif
+ {
+ 	struct svc_rdma_write_info *info;
++	struct svc_rdma_chunk_ctxt *cc;
+ 	int ret;
+ 
++#ifndef HAVE_SVC_RDMA_PCL
+ 	if (!length)
+ 		return 0;
++#endif
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	info = svc_rdma_write_info_alloc(rdma, chunk);
++#else
+ 	info = svc_rdma_write_info_alloc(rdma, wr_ch);
++#endif
+ 	if (!info)
+ 		return -ENOMEM;
++	cc = &info->wi_cc;
+ 
+-	ret = svc_rdma_send_xdr_pagelist(info, xdr, offset, length);
++#ifdef HAVE_SVC_RDMA_PCL
++	ret = svc_rdma_xb_write(xdr, info);
++	if (ret != xdr->len)
++#else
++	ret = svc_rdma_pages_write(info, xdr, offset, length);
  	if (ret < 0)
++#endif
  		goto out_err;
  
+-	ret = svc_rdma_post_chunk_ctxt(&info->wi_cc);
 +#ifdef HAVE_TRACE_RPCRDMA_H
- 	trace_svcrdma_send_write_chunk(xdr->page_len);
++	trace_svcrdma_post_write_chunk(&cc->cc_cid, cc->cc_sqecount);
 +#endif
++	ret = svc_rdma_post_chunk_ctxt(cc);
+ 	if (ret < 0)
+ 		goto out_err;
+-
+-	trace_svcrdma_send_write_chunk(xdr->page_len);
++#ifdef HAVE_SVC_RDMA_PCL
++	return xdr->len;
++#else
  	return length;
++#endif
  
  out_err:
-@@ -618,7 +654,9 @@ int svc_rdma_send_reply_chunk(struct svc
+ 	svc_rdma_write_info_free(info);
+@@ -581,62 +759,117 @@ out_err:
+  */
+ int svc_rdma_send_reply_chunk(struct svcxprt_rdma *rdma,
+ 			      const struct svc_rdma_recv_ctxt *rctxt,
++#ifdef HAVE_SVC_RDMA_PCL
++			      const struct xdr_buf *xdr)
++#else
+ 			      struct xdr_buf *xdr)
++#endif
+ {
+ 	struct svc_rdma_write_info *info;
++	struct svc_rdma_chunk_ctxt *cc;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct svc_rdma_chunk *chunk;
++	int ret;
++#else
+ 	int consumed, ret;
++#endif
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	if (pcl_is_empty(&rctxt->rc_reply_pcl))
++		return 0;
++
++	chunk = pcl_first_chunk(&rctxt->rc_reply_pcl);
++	info = svc_rdma_write_info_alloc(rdma, chunk);
++#else
+ 	info = svc_rdma_write_info_alloc(rdma, rctxt->rc_reply_chunk);
++#endif
+ 	if (!info)
+ 		return -ENOMEM;
++	cc = &info->wi_cc;
+ 
+-	ret = svc_rdma_send_xdr_kvec(info, &xdr->head[0]);
++#ifdef HAVE_SVC_RDMA_PCL
++	ret = pcl_process_nonpayloads(&rctxt->rc_write_pcl, xdr,
++				      svc_rdma_xb_write, info);
++#else
++	ret = svc_rdma_iov_write(info, &xdr->head[0]);
++#endif
+ 	if (ret < 0)
+ 		goto out_err;
++
++#ifndef HAVE_SVC_RDMA_PCL
+ 	consumed = xdr->head[0].iov_len;
+ 
+ 	/* Send the page list in the Reply chunk only if the
+ 	 * client did not provide Write chunks.
+ 	 */
+ 	if (!rctxt->rc_write_list && xdr->page_len) {
+-		ret = svc_rdma_send_xdr_pagelist(info, xdr,
+-						 xdr->head[0].iov_len,
+-						 xdr->page_len);
++		ret = svc_rdma_pages_write(info, xdr, xdr->head[0].iov_len,
++					   xdr->page_len);
+ 		if (ret < 0)
+ 			goto out_err;
+ 		consumed += xdr->page_len;
+ 	}
+ 
+ 	if (xdr->tail[0].iov_len) {
+-		ret = svc_rdma_send_xdr_kvec(info, &xdr->tail[0]);
++		ret = svc_rdma_iov_write(info, &xdr->tail[0]);
+ 		if (ret < 0)
+ 			goto out_err;
+ 		consumed += xdr->tail[0].iov_len;
+ 	}
++#endif
+ 
+-	ret = svc_rdma_post_chunk_ctxt(&info->wi_cc);
++#ifdef HAVE_TRACE_RPCRDMA_H
++	trace_svcrdma_post_reply_chunk(&cc->cc_cid, cc->cc_sqecount);
++#endif
++	ret = svc_rdma_post_chunk_ctxt(cc);
  	if (ret < 0)
  		goto out_err;
  
-+#ifdef HAVE_TRACE_RPCRDMA_H
- 	trace_svcrdma_send_reply_chunk(consumed);
-+#endif
+-	trace_svcrdma_send_reply_chunk(consumed);
++#ifdef HAVE_SVC_RDMA_PCL
++	return xdr->len;
++#else
  	return consumed;
++#endif
  
  out_err:
-@@ -680,7 +718,9 @@ static int svc_rdma_build_read_segment(s
+ 	svc_rdma_write_info_free(info);
+ 	return ret;
+ }
+ 
++/**
++ * svc_rdma_build_read_segment - Build RDMA Read WQEs to pull one RDMA segment
++ * @info: context for ongoing I/O
++ * @segment: co-ordinates of remote memory to be read
++ *
++ * Returns:
++ *   %0: the Read WR chain was constructed successfully
++ *   %-EINVAL: there were not enough rq_pages to finish
++ *   %-ENOMEM: allocating a local resources failed
++ *   %-EIO: a DMA mapping error occurred
++ */
+ static int svc_rdma_build_read_segment(struct svc_rdma_read_info *info,
++#ifdef HAVE_SVC_RDMA_PCL
++				       const struct svc_rdma_segment *segment)
++#else
+ 				       struct svc_rqst *rqstp,
+ 				       u32 rkey, u32 len, u64 offset)
++#endif
+ {
+ 	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
+ 	struct svc_rdma_chunk_ctxt *cc = &info->ri_cc;
+-	struct svc_rdma_rw_ctxt *ctxt;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct svc_rqst *rqstp = info->ri_rqst;
++	unsigned int sge_no, seg_len, len;
++#else
+ 	unsigned int sge_no, seg_len;
++#endif
++	struct svc_rdma_rw_ctxt *ctxt;
+ 	struct scatterlist *sg;
+ 	int ret;
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	len = segment->rs_length;
++#endif
+ 	sge_no = PAGE_ALIGN(info->ri_pageoff + len) >> PAGE_SHIFT;
+ 	ctxt = svc_rdma_get_rw_ctxt(cc->cc_rdma, sge_no);
+ 	if (!ctxt)
+@@ -648,8 +881,10 @@ static int svc_rdma_build_read_segment(s
+ 		seg_len = min_t(unsigned int, len,
+ 				PAGE_SIZE - info->ri_pageoff);
+ 
++#ifndef HAVE_SVC_RDMA_PCL
+ 		head->rc_arg.pages[info->ri_pageno] =
+ 			rqstp->rq_pages[info->ri_pageno];
++#endif
+ 		if (!info->ri_pageoff)
+ 			head->rc_page_count++;
+ 
+@@ -670,20 +905,56 @@ static int svc_rdma_build_read_segment(s
+ 			goto out_overrun;
+ 	}
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	ret = svc_rdma_rw_ctx_init(cc->cc_rdma, ctxt, segment->rs_offset,
++				   segment->rs_handle, DMA_FROM_DEVICE);
++#else
+ 	ret = svc_rdma_rw_ctx_init(cc->cc_rdma, ctxt, offset, rkey,
+ 				   DMA_FROM_DEVICE);
++#endif
+ 	if (ret < 0)
+ 		return -EIO;
++	percpu_counter_inc(&svcrdma_stat_read);
+ 
+ 	list_add(&ctxt->rw_list, &cc->cc_rwctxts);
+ 	cc->cc_sqecount += ret;
  	return 0;
  
  out_overrun:
@@ -167,18 +672,220 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
  	return -EINVAL;
  }
  
-@@ -705,7 +745,9 @@ static int svc_rdma_build_read_chunk(str
++#ifdef HAVE_SVC_RDMA_PCL
++/**
++ * svc_rdma_build_read_chunk - Build RDMA Read WQEs to pull one RDMA chunk
++ * @info: context for ongoing I/O
++ * @chunk: Read chunk to pull
++ *
++ * Return values:
++ *   %0: the Read WR chain was constructed successfully
++ *   %-EINVAL: there were not enough resources to finish
++ *   %-ENOMEM: allocating a local resources failed
++ *   %-EIO: a DMA mapping error occurred
++ */
++static int svc_rdma_build_read_chunk(struct svc_rdma_read_info *info,
++				     const struct svc_rdma_chunk *chunk)
++{
++	const struct svc_rdma_segment *segment;
++	int ret;
++
++	ret = -EINVAL;
++	pcl_for_each_segment(segment, chunk) {
++		ret = svc_rdma_build_read_segment(info, segment);
++		if (ret < 0)
++			break;
++		info->ri_totalbytes += segment->rs_length;
++	}
++	return ret;
++}
++#else
+ /* Walk the segments in the Read chunk starting at @p and construct
+  * RDMA Read operations to pull the chunk to the server.
+  */
+@@ -705,40 +976,224 @@ static int svc_rdma_build_read_chunk(str
  		if (ret < 0)
  			break;
  
-+#ifdef HAVE_TRACE_RPCRDMA_H
- 		trace_svcrdma_send_rseg(handle, length, offset);
-+#endif
+-		trace_svcrdma_send_rseg(handle, length, offset);
  		info->ri_chunklen += length;
  	}
+-
+ 	return ret;
+ }
++#endif
++
++#ifdef HAVE_SVC_RDMA_PCL
++/**
++ * svc_rdma_copy_inline_range - Copy part of the inline content into pages
++ * @info: context for RDMA Reads
++ * @offset: offset into the Receive buffer of region to copy
++ * @remaining: length of region to copy
++ *
++ * Take a page at a time from rqstp->rq_pages and copy the inline
++ * content from the Receive buffer into that page. Update
++ * info->ri_pageno and info->ri_pageoff so that the next RDMA Read
++ * result will land contiguously with the copied content.
++ *
++ * Return values:
++ *   %0: Inline content was successfully copied
++ *   %-EINVAL: offset or length was incorrect
++ */
++static int svc_rdma_copy_inline_range(struct svc_rdma_read_info *info,
++				      unsigned int offset,
++				      unsigned int remaining)
++{
++	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
++	unsigned char *dst, *src = head->rc_recv_buf;
++#else
++	unsigned char *dst, *src = page_address(head->rc_pages[0]);
++#endif
++	struct svc_rqst *rqstp = info->ri_rqst;
++	unsigned int page_no, numpages;
++
++	numpages = PAGE_ALIGN(info->ri_pageoff + remaining) >> PAGE_SHIFT;
++	for (page_no = 0; page_no < numpages; page_no++) {
++		unsigned int page_len;
++
++		page_len = min_t(unsigned int, remaining,
++				 PAGE_SIZE - info->ri_pageoff);
++
++#ifndef HAVE_SVC_RDMA_PCL
++		head->rc_arg.pages[info->ri_pageno] =
++			rqstp->rq_pages[info->ri_pageno];
++#endif
++		if (!info->ri_pageoff)
++		if (!info->ri_pageoff)
++			head->rc_page_count++;
++
++#ifdef HAVE_SVC_RDMA_PCL
++		dst = page_address(rqstp->rq_pages[info->ri_pageno]);
++#else
++		dst = page_address(head->rc_arg.pages[info->ri_pageno]);
++#endif
++		memcpy(dst + info->ri_pageno, src + offset, page_len);
++
++		info->ri_totalbytes += page_len;
++		info->ri_pageoff += page_len;
++		if (info->ri_pageoff == PAGE_SIZE) {
++			info->ri_pageno++;
++			info->ri_pageoff = 0;
++		}
++		remaining -= page_len;
++		offset += page_len;
++	}
++
++	return -EINVAL;
++}
  
-@@ -726,13 +768,22 @@ static int svc_rdma_build_normal_read_ch
+-/* Construct RDMA Reads to pull over a normal Read chunk. The chunk
+- * data lands in the page list of head->rc_arg.pages.
++/**
++ * svc_rdma_read_multiple_chunks - Construct RDMA Reads to pull data item Read chunks
++ * @info: context for RDMA Reads
++ *
++ * The chunk data lands in rqstp->rq_arg as a series of contiguous pages,
++ * like an incoming TCP call.
+  *
+- * Currently NFSD does not look at the head->rc_arg.tail[0] iovec.
++ * Return values:
++ *   %0: RDMA Read WQEs were successfully built
++ *   %-EINVAL: client provided too many chunks or segments,
++ *   %-ENOMEM: rdma_rw context pool was exhausted,
++ *   %-ENOTCONN: posting failed (connection is lost),
++ *   %-EIO: rdma_rw initialization failed (DMA mapping, etc).
++ */
++static noinline int svc_rdma_read_multiple_chunks(struct svc_rdma_read_info *info)
++{
++	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
++	const struct svc_rdma_pcl *pcl = &head->rc_read_pcl;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct xdr_buf *buf = &info->ri_rqst->rq_arg;
++#else
++	struct xdr_buf *buf = &head->rc_arg;
++#endif
++	struct svc_rdma_chunk *chunk, *next;
++	unsigned int start, length;
++	int ret;
++
++	start = 0;
++	chunk = pcl_first_chunk(pcl);
++	length = chunk->ch_position;
++	ret = svc_rdma_copy_inline_range(info, start, length);
++	if (ret < 0)
++		return ret;
++
++	pcl_for_each_chunk(chunk, pcl) {
++		ret = svc_rdma_build_read_chunk(info, chunk);
++		if (ret < 0)
++			return ret;
++
++		next = pcl_next_chunk(pcl, chunk);
++		if (!next)
++			break;
++
++		start += length;
++		length = next->ch_position - info->ri_totalbytes;
++		ret = svc_rdma_copy_inline_range(info, start, length);
++		if (ret < 0)
++			return ret;
++	}
++
++	start += length;
++	length = head->rc_byte_len - start;
++	ret = svc_rdma_copy_inline_range(info, start, length);
++	if (ret < 0)
++		return ret;
++
++	buf->len += info->ri_totalbytes;
++	buf->buflen += info->ri_totalbytes;
++
++#ifdef HAVE_SVC_RDMA_PCL
++	buf->head[0].iov_base = page_address(info->ri_rqst->rq_pages[0]);
++	buf->pages = &info->ri_rqst->rq_pages[1];
++#else
++	head->rc_hdr_count = 1;
++	buf->head[0].iov_base = page_address(head->rc_pages[0]);
++#endif
++	buf->head[0].iov_len = min_t(size_t, PAGE_SIZE, info->ri_totalbytes);
++	buf->page_len = info->ri_totalbytes - buf->head[0].iov_len;
++	return 0;
++}
++#endif
++
++/**
++ * svc_rdma_read_data_item - Construct RDMA Reads to pull data item Read chunks
++ * @info: context for RDMA Reads
++ *
++ * The chunk data lands in the page list of rqstp->rq_arg.pages.
++ *
++ * Currently NFSD does not look at the rqstp->rq_arg.tail[0] kvec.
+  * Therefore, XDR round-up of the Read chunk and trailing
+  * inline content must both be added at the end of the pagelist.
+- */
++ *
++ * Return values:
++ *   %0: RDMA Read WQEs were successfully built
++ *   %-EINVAL: client provided too many chunks or segments,
++ *   %-ENOMEM: rdma_rw context pool was exhausted,
++ *   %-ENOTCONN: posting failed (connection is lost),
++ *   %-EIO: rdma_rw initialization failed (DMA mapping, etc).
++ */
++#ifdef HAVE_SVC_RDMA_PCL
++static int svc_rdma_read_data_item(struct svc_rdma_read_info *info)
++#else
+ static int svc_rdma_build_normal_read_chunk(struct svc_rqst *rqstp,
+ 					    struct svc_rdma_read_info *info,
+ 					    __be32 *p)
++#endif
+ {
  	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct xdr_buf *buf = &info->ri_rqst->rq_arg;
++	struct svc_rdma_chunk *chunk;
++	unsigned int length;
++#endif
  	int ret;
  
 +#ifndef HAVE_SVC_FILL_WRITE_VECTOR
@@ -186,22 +893,200 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
 +	info->ri_pageoff = 0;
 +#endif
 +
++#ifdef HAVE_SVC_RDMA_PCL
++	chunk = pcl_first_chunk(&head->rc_read_pcl);
++	ret = svc_rdma_build_read_chunk(info, chunk);
++#else
  	ret = svc_rdma_build_read_chunk(rqstp, info, p);
++#endif
  	if (ret < 0)
  		goto out;
  
-+#ifdef HAVE_TRACE_RPCRDMA_H
- 	trace_svcrdma_send_read_chunk(info->ri_chunklen, info->ri_position);
-+#endif
- 
-+#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+-	trace_svcrdma_send_read_chunk(info->ri_chunklen, info->ri_position);
+-
++#if !defined(HAVE_SVC_RDMA_PCL) && defined(HAVE_SVC_FILL_WRITE_VECTOR)
  	head->rc_hdr_count = 0;
 +#endif
  
  	/* Split the Receive buffer between the head and tail
  	 * buffers at Read chunk's position. XDR roundup of the
-@@ -782,15 +833,23 @@ static int svc_rdma_build_pz_read_chunk(
+ 	 * chunk is not included in either the pagelist or in
+ 	 * the tail.
+ 	 */
++#ifdef HAVE_SVC_RDMA_PCL
++	buf->tail[0].iov_base = buf->head[0].iov_base + chunk->ch_position;
++	buf->tail[0].iov_len = buf->head[0].iov_len - chunk->ch_position;
++	buf->head[0].iov_len = chunk->ch_position;
++
++	/* Read chunk may need XDR roundup (see RFC 8166, s. 3.4.5.2).
++	 *
++	 * If the client already rounded up the chunk length, the
++	 * length does not change. Otherwise, the length of the page
++	 * list is increased to include XDR round-up.
++	 *
++	 * Currently these chunks always start at page offset 0,
++	 * thus the rounded-up length never crosses a page boundary.
++	 */
++	buf->pages = &info->ri_rqst->rq_pages[0];
++	length = xdr_align_size(chunk->ch_length);
++	buf->page_len = length;
++	buf->len += length;
++	buf->buflen += length;
++#else
+ 	head->rc_arg.tail[0].iov_base =
+ 		head->rc_arg.head[0].iov_base + info->ri_position;
+ 	head->rc_arg.tail[0].iov_len =
+@@ -759,38 +1214,174 @@ static int svc_rdma_build_normal_read_ch
+ 	head->rc_arg.page_len = info->ri_chunklen;
+ 	head->rc_arg.len += info->ri_chunklen;
+ 	head->rc_arg.buflen += info->ri_chunklen;
++#endif
+ 
+ out:
+ 	return ret;
+ }
+ 
+-/* Construct RDMA Reads to pull over a Position Zero Read chunk.
+- * The start of the data lands in the first page just after
+- * the Transport header, and the rest lands in the page list of
+- * head->rc_arg.pages.
++#ifdef HAVE_SVC_RDMA_PCL
++/**
++ * svc_rdma_read_chunk_range - Build RDMA Read WQEs for portion of a chunk
++ * @info: context for RDMA Reads
++ * @chunk: parsed Call chunk to pull
++ * @offset: offset of region to pull
++ * @length: length of region to pull
+  *
+- * Assumptions:
+- *	- A PZRC has an XDR-aligned length (no implicit round-up).
+- *	- There can be no trailing inline content (IOW, we assume
+- *	  a PZRC is never sent in an RDMA_MSG message, though it's
+- *	  allowed by spec).
++ * Return values:
++ *   %0: RDMA Read WQEs were successfully built
++ *   %-EINVAL: there were not enough resources to finish
++ *   %-ENOMEM: rdma_rw context pool was exhausted,
++ *   %-ENOTCONN: posting failed (connection is lost),
++ *   %-EIO: rdma_rw initialization failed (DMA mapping, etc).
++ */
++static int svc_rdma_read_chunk_range(struct svc_rdma_read_info *info,
++				     const struct svc_rdma_chunk *chunk,
++				     unsigned int offset, unsigned int length)
++{
++	const struct svc_rdma_segment *segment;
++	int ret;
++
++	ret = -EINVAL;
++	pcl_for_each_segment(segment, chunk) {
++		struct svc_rdma_segment dummy;
++
++		if (offset > segment->rs_length) {
++			offset -= segment->rs_length;
++			continue;
++		}
++
++		dummy.rs_handle = segment->rs_handle;
++		dummy.rs_length = min_t(u32, length, segment->rs_length) - offset;
++		dummy.rs_offset = segment->rs_offset + offset;
++
++		ret = svc_rdma_build_read_segment(info, &dummy);
++		if (ret < 0)
++			break;
++
++		info->ri_totalbytes += dummy.rs_length;
++		length -= dummy.rs_length;
++		offset = 0;
++	}
++	return ret;
++}
++
++/**
++ * svc_rdma_read_call_chunk - Build RDMA Read WQEs to pull a Long Message
++ * @info: context for RDMA Reads
++ *
++ * Return values:
++ *   %0: RDMA Read WQEs were successfully built
++ *   %-EINVAL: there were not enough resources to finish
++ *   %-ENOMEM: rdma_rw context pool was exhausted,
++ *   %-ENOTCONN: posting failed (connection is lost),
++ *   %-EIO: rdma_rw initialization failed (DMA mapping, etc).
+  */
++static int svc_rdma_read_call_chunk(struct svc_rdma_read_info *info)
++{
++	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
++	const struct svc_rdma_chunk *call_chunk =
++			pcl_first_chunk(&head->rc_call_pcl);
++	const struct svc_rdma_pcl *pcl = &head->rc_read_pcl;
++	struct svc_rdma_chunk *chunk, *next;
++	unsigned int start, length;
++	int ret;
++
++	if (pcl_is_empty(pcl))
++		return svc_rdma_build_read_chunk(info, call_chunk);
++
++	start = 0;
++	chunk = pcl_first_chunk(pcl);
++	length = chunk->ch_position;
++	ret = svc_rdma_read_chunk_range(info, call_chunk, start, length);
++	if (ret < 0)
++		return ret;
++
++	pcl_for_each_chunk(chunk, pcl) {
++		ret = svc_rdma_build_read_chunk(info, chunk);
++		if (ret < 0)
++			return ret;
++
++		next = pcl_next_chunk(pcl, chunk);
++		if (!next)
++			break;
++
++		start += length;
++		length = next->ch_position - info->ri_totalbytes;
++		ret = svc_rdma_read_chunk_range(info, call_chunk,
++						start, length);
++		if (ret < 0)
++			return ret;
++	}
++
++	start += length;
++	length = call_chunk->ch_length - start;
++	return svc_rdma_read_chunk_range(info, call_chunk, start, length);
++}
++#endif
++
++/**
++ * svc_rdma_read_special - Build RDMA Read WQEs to pull a Long Message
++ * @info: context for RDMA Reads
++ *
++ * The start of the data lands in the first page just after the
++ * Transport header, and the rest lands in rqstp->rq_arg.pages.
++ *
++ * Assumptions:
++ *	- A PZRC is never sent in an RDMA_MSG message, though it's
++ *	  allowed by spec.
++ *
++ * Return values:
++ *   %0: RDMA Read WQEs were successfully built
++ *   %-EINVAL: client provided too many chunks or segments,
++ *   %-ENOMEM: rdma_rw context pool was exhausted,
++ *   %-ENOTCONN: posting failed (connection is lost),
++ *   %-EIO: rdma_rw initialization failed (DMA mapping, etc).
++ */
++#ifdef HAVE_SVC_RDMA_PCL
++static noinline int svc_rdma_read_special(struct svc_rdma_read_info *info)
++#else
+ static int svc_rdma_build_pz_read_chunk(struct svc_rqst *rqstp,
+ 					struct svc_rdma_read_info *info,
+ 					__be32 *p)
++#endif
+ {
++#ifdef HAVE_SVC_RDMA_PCL
++	struct xdr_buf *buf = &info->ri_rqst->rq_arg;
++#endif
++#ifndef HAVE_SVC_RDMA_PCL
  	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
++#endif
  	int ret;
  
 +#ifndef HAVE_SVC_FILL_WRITE_VECTOR
@@ -209,25 +1094,40 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
 +	info->ri_pageoff = offset_in_page(head->rc_byte_len);
 +#endif
 +
++#ifdef HAVE_SVC_RDMA_PCL
++	ret = svc_rdma_read_call_chunk(info);
++#else
  	ret = svc_rdma_build_read_chunk(rqstp, info, p);
++#endif
  	if (ret < 0)
  		goto out;
  
-+#ifdef HAVE_TRACE_RPCRDMA_H
- 	trace_svcrdma_send_pzr(info->ri_chunklen);
-+#endif
- 
+-	trace_svcrdma_send_pzr(info->ri_chunklen);
+-
++#ifdef HAVE_SVC_RDMA_PCL
++	buf->len += info->ri_totalbytes;
++	buf->buflen += info->ri_totalbytes;
++#else
  	head->rc_arg.len += info->ri_chunklen;
  	head->rc_arg.buflen += info->ri_chunklen;
++#endif
  
 +#ifdef HAVE_SVC_FILL_WRITE_VECTOR
++#ifdef HAVE_SVC_RDMA_PCL
++	buf->head[0].iov_base = page_address(info->ri_rqst->rq_pages[0]);
++	buf->head[0].iov_len = min_t(size_t, PAGE_SIZE, info->ri_totalbytes);
++	buf->pages = &info->ri_rqst->rq_pages[1];
++	buf->page_len = info->ri_totalbytes - buf->head[0].iov_len;
++#else
  	head->rc_hdr_count = 1;
  	head->rc_arg.head[0].iov_base = page_address(head->rc_pages[0]);
  	head->rc_arg.head[0].iov_len = min_t(size_t, PAGE_SIZE,
-@@ -798,6 +857,22 @@ static int svc_rdma_build_pz_read_chunk(
+@@ -798,11 +1389,29 @@ static int svc_rdma_build_pz_read_chunk(
  
  	head->rc_arg.page_len = info->ri_chunklen -
  				head->rc_arg.head[0].iov_len;
+-
++#endif
 +#else
 +	if (head->rc_arg.buflen <= head->rc_sges[0].length) {
 +		/* Transport header and RPC message fit entirely
@@ -244,27 +1144,142 @@ Change-Id: I9288219ffc2331e8389be20dd8986156ca0d3b23
 +			info->ri_chunklen - head->rc_arg.head[0].iov_len;
 +	}
 +#endif
- 
++ 
  out:
  	return ret;
-@@ -850,6 +925,9 @@ int svc_rdma_recv_read_chunk(struct svcx
- 	 * head->rc_arg. Pages involved with RDMA Read I/O are
- 	 * transferred there.
- 	 */
+ }
+ 
++#ifndef HAVE_SVC_RDMA_PCL
+ /* Pages under I/O have been copied to head->rc_pages. Ensure they
+  * are not released by svc_xprt_release() until the I/O is complete.
+  *
+@@ -822,30 +1431,49 @@ static void svc_rdma_save_io_pages(struc
+ 	for (i = start; i < num_pages + start; i++)
+ 		rqstp->rq_pages[i] = NULL;
+ }
++#endif
+ 
+ /**
+- * svc_rdma_recv_read_chunk - Pull a Read chunk from the client
++ * svc_rdma_process_read_list - Pull list of Read chunks from the client
+  * @rdma: controlling RDMA transport
+  * @rqstp: set of pages to use as Read sink buffers
+  * @head: pages under I/O collect here
+- * @p: pointer to start of Read chunk
+  *
+- * Returns:
+- *	%0 if all needed RDMA Reads were posted successfully,
+- *	%-EINVAL if client provided too many segments,
+- *	%-ENOMEM if rdma_rw context pool was exhausted,
+- *	%-ENOTCONN if posting failed (connection is lost),
+- *	%-EIO if rdma_rw initialization failed (DMA mapping, etc).
++ * The RPC/RDMA protocol assumes that the upper layer's XDR decoders
++ * pull each Read chunk as they decode an incoming RPC message.
+  *
+- * Assumptions:
+- * - All Read segments in @p have the same Position value.
+- */
++ * On Linux, however, the server needs to have a fully-constructed RPC
++ * message in rqstp->rq_arg when there is a positive return code from
++ * ->xpo_recvfrom. So the Read list is safety-checked immediately when
++ * it is received, then here the whole Read list is pulled all at once.
++ * The ingress RPC message is fully reconstructed once all associated
++ * RDMA Reads have completed.
++ *
++ * Return values:
++ *   %1: all needed RDMA Reads were posted successfully,
++ *   %-EINVAL: client provided too many chunks or segments,
++ *   %-ENOMEM: rdma_rw context pool was exhausted,
++ *   %-ENOTCONN: posting failed (connection is lost),
++ *   %-EIO: rdma_rw initialization failed (DMA mapping, etc).
++ */
++#ifdef HAVE_SVC_RDMA_PCL
++int svc_rdma_process_read_list(struct svcxprt_rdma *rdma,
++			       struct svc_rqst *rqstp,
++			       struct svc_rdma_recv_ctxt *head)
++#else
+ int svc_rdma_recv_read_chunk(struct svcxprt_rdma *rdma, struct svc_rqst *rqstp,
+ 			     struct svc_rdma_recv_ctxt *head, __be32 *p)
++#endif
+ {
+ 	struct svc_rdma_read_info *info;
++	struct svc_rdma_chunk_ctxt *cc;
+ 	int ret;
+ 
 +#ifndef HAVE_SVC_FILL_WRITE_VECTOR
 +	head->rc_page_count = head->rc_hdr_count;
 +#endif
- 	head->rc_arg.head[0] = rqstp->rq_arg.head[0];
- 	head->rc_arg.tail[0] = rqstp->rq_arg.tail[0];
- 	head->rc_arg.pages = head->rc_pages;
-@@ -862,8 +940,10 @@ int svc_rdma_recv_read_chunk(struct svcx
++
++#ifndef HAVE_SVC_RDMA_PCL
+ 	/* The request (with page list) is constructed in
+ 	 * head->rc_arg. Pages involved with RDMA Read I/O are
+ 	 * transferred there.
+@@ -857,27 +1485,66 @@ int svc_rdma_recv_read_chunk(struct svcx
+ 	head->rc_arg.page_len = 0;
+ 	head->rc_arg.len = rqstp->rq_arg.len;
+ 	head->rc_arg.buflen = rqstp->rq_arg.buflen;
++#endif
+ 
+ 	info = svc_rdma_read_info_alloc(rdma);
  	if (!info)
  		return -ENOMEM;
++	cc = &info->ri_cc;
++#ifdef HAVE_SVC_RDMA_PCL
++	info->ri_rqst = rqstp;
++	info->ri_totalbytes = 0;
++#endif
  	info->ri_readctxt = head;
 +#ifdef HAVE_SVC_FILL_WRITE_VECTOR
  	info->ri_pageno = 0;
  	info->ri_pageoff = 0;
 +#endif
  
++#ifdef HAVE_SVC_RDMA_PCL
++	if (pcl_is_empty(&head->rc_call_pcl)) {
++		if (head->rc_read_pcl.cl_count == 1)
++			ret = svc_rdma_read_data_item(info);
++		else
++			ret = svc_rdma_read_multiple_chunks(info);
++	} else
++		ret = svc_rdma_read_special(info);
++#else
  	info->ri_position = be32_to_cpup(p + 1);
  	if (info->ri_position)
+ 		ret = svc_rdma_build_normal_read_chunk(rqstp, info, p);
+ 	else
+ 		ret = svc_rdma_build_pz_read_chunk(rqstp, info, p);
++#endif
+ 	if (ret < 0)
+ 		goto out_err;
+ 
+-	ret = svc_rdma_post_chunk_ctxt(&info->ri_cc);
++#ifdef HAVE_TRACE_RPCRDMA_H
++	trace_svcrdma_post_read_chunk(&cc->cc_cid, cc->cc_sqecount);
++#endif
++#ifdef HAVE_SVC_RDMA_PCL
++	init_completion(&cc->cc_done);
++#endif
++	ret = svc_rdma_post_chunk_ctxt(cc);
+ 	if (ret < 0)
+ 		goto out_err;
++
++#ifdef HAVE_SVC_RDMA_PCL
++	ret = 1;
++	wait_for_completion(&cc->cc_done);
++	if (cc->cc_status != IB_WC_SUCCESS)
++		ret = -EIO;
++
++	/* rq_respages starts after the last arg page */
++	rqstp->rq_respages = &rqstp->rq_pages[head->rc_page_count];
++	rqstp->rq_next_page = rqstp->rq_respages + 1;
++
++	/* Ensure svc_rdma_recv_ctxt_put() does not try to release pages */
++	head->rc_page_count = 0;
++#else
+ 	svc_rdma_save_io_pages(rqstp, 0, head->rc_page_count);
+-	return 0;
++	return 1;
++#endif
+ 
+ out_err:
+ 	svc_rdma_read_info_free(info);

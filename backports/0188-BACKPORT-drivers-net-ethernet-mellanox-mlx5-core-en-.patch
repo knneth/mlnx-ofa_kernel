@@ -56,7 +56,7 @@ Change-Id: Ibbb86cc81195553ade96747f89dd435f9b97893b
 +								     MLX5_VPORT_UPLINK);
 +		devlink_port_attrs_set(dl_port,
 +				DEVLINK_PORT_FLAVOUR_PHYSICAL,
-+				PCI_FUNC(priv->mdev->pdev->devfn),
++				mlx5_get_dev_index(priv->mdev),
 +				false, 0
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
 +				,&ppid.id[0], ppid.id_len

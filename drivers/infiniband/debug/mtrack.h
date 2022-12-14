@@ -367,13 +367,13 @@ static inline void iounmap(void *addr)
 #endif
 
 #ifndef __vmalloc
-#define __vmalloc(size, mask, prot) ({						\
+#define __vmalloc(size, mask ,args...) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "__vmalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "__vmalloc"); \
 	else									\
-		__memtrack_addr = __vmalloc(size, mask, prot);			\
+		__memtrack_addr = __vmalloc(size, mask, ##args);			\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 		if (memtrack_randomize_mem())					\

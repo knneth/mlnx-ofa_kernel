@@ -1167,6 +1167,17 @@ mlx5_frag_buf_get_idx_last_contig_stride(struct mlx5_frag_buf_ctrl *fbc, u32 ix)
 	return min_t(u32, last_frag_stride_idx - fbc->strides_offset, fbc->sz_m1);
 }
 
+static inline int
+mlx5_get_dev_index(struct mlx5_core_dev *dev)
+{
+	int idx = MLX5_CAP_GEN(dev, native_port_num);
+
+	if (idx >= 1 && idx <= MLX5_MAX_PORTS)
+		return idx - 1;
+	else
+		return PCI_FUNC(dev->pdev->devfn);
+}
+
 enum {
 	CMD_ALLOWED_OPCODE_ALL,
 };

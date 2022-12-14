@@ -2310,7 +2310,6 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	spin_lock_init(&esw->offloads.route_lock);
 	hash_init(esw->offloads.route_tbl);
 	ida_init(&esw->offloads.vport_metadata_ida);
-	spin_lock_init(&esw->offloads.int_vports_lock);
 	rhashtable_init(&esw->vhca_map_ht, &vhca_map_params);
 	mutex_init(&esw->state_lock);
 	mutex_init(&esw->mode_lock);

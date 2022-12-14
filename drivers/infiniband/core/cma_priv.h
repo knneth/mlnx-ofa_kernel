@@ -57,6 +57,7 @@ struct rdma_id_private {
 	struct hlist_node	node;
 	struct list_head	list; /* listen_any_list or cma_device.list */
 	struct list_head	listen_list; /* per device listens */
+	struct list_head        id_list_entry;
 	struct cma_device	*cma_dev;
 	struct list_head	mc_list;
 

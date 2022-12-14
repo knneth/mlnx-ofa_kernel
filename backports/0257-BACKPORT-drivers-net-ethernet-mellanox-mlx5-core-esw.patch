@@ -52,7 +52,7 @@ Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
 @@ -36,32 +47,82 @@ static struct devlink_port *mlx5_esw_dl_
  
  	mlx5_esw_get_port_parent_id(dev, &ppid);
- 	pfnum = PCI_FUNC(dev->pdev->devfn);
+ 	pfnum = mlx5_get_dev_index(dev);
 +#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET_CONTROLLER_NUM)
 +	if (external)
 +		controller_num = dev->priv.eswitch->offloads.host_number + 1;
@@ -69,7 +69,7 @@ Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
 +#else
 +		devlink_port_attrs_set(dl_port,
 +				DEVLINK_PORT_FLAVOUR_PHYSICAL,
-+				PCI_FUNC(dev->pdev->devfn),
++				mlx5_get_dev_index(dev),
 +				false, 0
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
 +				,NULL, 0
@@ -174,7 +174,7 @@ Change-Id: Ia0dda27ddf85ce1f50f8a1888a37649db7cf5e9e
 +	if (IS_ERR(vport))
 +		return PTR_ERR(vport);
 +
-+	pfnum = PCI_FUNC(dev->pdev->devfn);
++	pfnum = mlx5_get_dev_index(dev);
 +	mlx5_esw_get_port_parent_id(dev, &ppid);
 +	memcpy(dl_port->attrs.switch_id.id, &ppid.id[0], ppid.id_len);
 +	dl_port->attrs.switch_id.id_len = ppid.id_len;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 
 Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
 ---
- drivers/infiniband/ulp/iser/iscsi_iser.c | 125 ++++++++++++++++++++++-
- 1 file changed, 123 insertions(+), 2 deletions(-)
+ drivers/infiniband/ulp/iser/iscsi_iser.c | 128 ++++++++++++++++++++++-
+ 1 file changed, 126 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
@@ -232,7 +232,17 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  };
  
  static struct iscsi_transport iscsi_iser_transport = {
-@@ -1006,7 +1118,9 @@ static struct iscsi_transport iscsi_iser
+@@ -988,6 +1100,9 @@ static struct iscsi_transport iscsi_iser
+ 	/* connection management */
+ 	.create_conn            = iscsi_iser_conn_create,
+ 	.bind_conn              = iscsi_iser_conn_bind,
++#ifdef HAVE_ISCSI_CONN_UNBIND
++	.unbind_conn		= iscsi_conn_unbind,
++#endif
+ 	.destroy_conn           = iscsi_conn_teardown,
+ 	.attr_is_visible	= iser_attr_is_visible,
+ 	.set_param              = iscsi_iser_set_param,
+@@ -1006,7 +1121,9 @@ static struct iscsi_transport iscsi_iser
  	.xmit_task		= iscsi_iser_task_xmit,
  	.cleanup_task		= iscsi_iser_cleanup_task,
  	.alloc_pdu		= iscsi_iser_pdu_alloc,
@@ -242,7 +252,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  	/* recovery */
  	.session_recovery_timedout = iscsi_session_recovery_timedout,
  
-@@ -1026,6 +1140,13 @@ static int __init iser_init(void)
+@@ -1026,6 +1143,13 @@ static int __init iser_init(void)
  		return -EINVAL;
  	}
  

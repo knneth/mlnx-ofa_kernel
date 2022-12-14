@@ -3,12 +3,118 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/xprt_rdma.h
 
 Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
 ---
- net/sunrpc/xprtrdma/xprt_rdma.h | 86 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 86 insertions(+)
+ net/sunrpc/xprtrdma/xprt_rdma.h | 138 +++++++++++++++++++++++++++-----
+ 1 file changed, 116 insertions(+), 22 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/xprt_rdma.h
 +++ b/net/sunrpc/xprtrdma/xprt_rdma.h
-@@ -300,7 +300,9 @@ enum {
+@@ -53,6 +53,7 @@
+ #include <rdma/ib_verbs.h>		/* RDMA verbs api */
+ 
+ #include <linux/sunrpc/clnt.h> 		/* rpc_xprt */
++#include <linux/sunrpc/rpc_rdma_cid.h> 	/* completion IDs */
+ #include <linux/sunrpc/rpc_rdma.h> 	/* RPC/RDMA protocol */
+ #include <linux/sunrpc/xprtrdma.h> 	/* xprt parameters */
+ 
+@@ -82,6 +83,7 @@ struct rpcrdma_ep {
+ 	unsigned int		re_max_inline_recv;
+ 	int			re_async_rc;
+ 	int			re_connect_status;
++	atomic_t		re_receiving;
+ 	atomic_t		re_force_disconnect;
+ 	struct ib_qp_init_attr	re_attr;
+ 	wait_queue_head_t       re_connect_wait;
+@@ -93,11 +95,13 @@ struct rpcrdma_ep {
+ 	unsigned int		re_max_requests; /* depends on device */
+ 	unsigned int		re_inline_send;	/* negotiated */
+ 	unsigned int		re_inline_recv;	/* negotiated */
++
++	atomic_t		re_completion_ids;
+ };
+ 
+-/* Pre-allocate extra Work Requests for handling backward receives
+- * and sends. This is a fixed value because the Work Queues are
+- * allocated when the forward channel is set up, long before the
++/* Pre-allocate extra Work Requests for handling reverse-direction
++ * Receives and Sends. This is a fixed value because the Work Queues
++ * are allocated when the forward channel is set up, long before the
+  * backchannel is provisioned. This value is two times
+  * NFS4_DEF_CB_SLOT_TABLE_SIZE.
+  */
+@@ -180,6 +184,8 @@ enum {
+ 
+ struct rpcrdma_rep {
+ 	struct ib_cqe		rr_cqe;
++	struct rpc_rdma_cid	rr_cid;
++
+ 	__be32			rr_xid;
+ 	__be32			rr_vers;
+ 	__be32			rr_proc;
+@@ -211,6 +217,7 @@ enum {
+ struct rpcrdma_req;
+ struct rpcrdma_sendctx {
+ 	struct ib_cqe		sc_cqe;
++	struct rpc_rdma_cid	sc_cid;
+ 	struct rpcrdma_req	*sc_req;
+ 	unsigned int		sc_unmap_count;
+ 	struct ib_sge		sc_sges[];
+@@ -222,29 +229,28 @@ struct rpcrdma_sendctx {
+  * An external memory region is any buffer or page that is registered
+  * on the fly (ie, not pre-registered).
+  */
+-struct rpcrdma_frwr {
+-	struct ib_mr			*fr_mr;
+-	struct ib_cqe			fr_cqe;
+-	struct completion		fr_linv_done;
+-	union {
+-		struct ib_reg_wr	fr_regwr;
+-		struct ib_send_wr	fr_invwr;
+-	};
+-};
+-
+ struct rpcrdma_req;
+ struct rpcrdma_mr {
+ 	struct list_head	mr_list;
+ 	struct rpcrdma_req	*mr_req;
++
++	struct ib_mr		*mr_ibmr;
++	struct ib_device	*mr_device;
+ 	struct scatterlist	*mr_sg;
+ 	int			mr_nents;
+ 	enum dma_data_direction	mr_dir;
+-	struct rpcrdma_frwr	frwr;
++	struct ib_cqe		mr_cqe;
++	struct completion	mr_linv_done;
++	union {
++		struct ib_reg_wr	mr_regwr;
++		struct ib_send_wr	mr_invwr;
++	};
+ 	struct rpcrdma_xprt	*mr_xprt;
+ 	u32			mr_handle;
+ 	u32			mr_length;
+ 	u64			mr_offset;
+ 	struct list_head	mr_all;
++	struct rpc_rdma_cid	mr_cid;
+ };
+ 
+ /*
+@@ -275,10 +281,11 @@ enum {
+ 				  RPCRDMA_MAX_IOV_SEGS,
+ };
+ 
+-struct rpcrdma_mr_seg {		/* chunk descriptors */
+-	u32		mr_len;		/* length of chunk or segment */
+-	struct page	*mr_page;	/* owning page, if any */
+-	char		*mr_offset;	/* kva if no page, else offset */
++/* Arguments for DMA mapping and registration */
++struct rpcrdma_mr_seg {
++	u32		mr_len;		/* length of segment */
++	struct page	*mr_page;	/* underlying struct page */
++	u64		mr_offset;	/* IN: page offset, OUT: iova */
+ };
+ 
+ /* The Send SGE array is provisioned to send a maximum size
+@@ -300,7 +307,9 @@ enum {
  struct rpcrdma_buffer;
  struct rpcrdma_req {
  	struct list_head	rl_list;
@@ -18,7 +124,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  	struct rpcrdma_rep	*rl_reply;
  	struct xdr_stream	rl_stream;
  	struct xdr_buf		rl_hdrbuf;
-@@ -310,6 +312,10 @@ struct rpcrdma_req {
+@@ -310,6 +319,10 @@ struct rpcrdma_req {
  	struct rpcrdma_regbuf	*rl_sendbuf;	/* rq_snd_buf */
  	struct rpcrdma_regbuf	*rl_recvbuf;	/* rq_rcv_buf */
  
@@ -29,7 +135,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  	struct list_head	rl_all;
  	struct kref		rl_kref;
  
-@@ -318,10 +324,22 @@ struct rpcrdma_req {
+@@ -318,10 +331,22 @@ struct rpcrdma_req {
  	struct rpcrdma_mr_seg	rl_segments[RPCRDMA_MAX_SEGS];
  };
  
@@ -52,7 +158,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  }
  
  static inline void
-@@ -352,11 +370,18 @@ struct rpcrdma_buffer {
+@@ -352,11 +377,18 @@ struct rpcrdma_buffer {
  	struct list_head	rb_send_bufs;
  	struct list_head	rb_mrs;
  
@@ -71,7 +177,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  	struct list_head	rb_allreqs;
  	struct list_head	rb_all_mrs;
  	struct list_head	rb_all_reps;
-@@ -372,6 +397,38 @@ struct rpcrdma_buffer {
+@@ -372,6 +404,38 @@ struct rpcrdma_buffer {
  	struct work_struct	rb_refresh_worker;
  };
  
@@ -110,7 +216,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  /*
   * Statistics for RPCRDMA
   */
-@@ -416,7 +473,9 @@ struct rpcrdma_xprt {
+@@ -416,7 +480,9 @@ struct rpcrdma_xprt {
  	struct rpcrdma_ep	*rx_ep;
  	struct rpcrdma_buffer	rx_buf;
  	struct delayed_work	rx_connect_worker;
@@ -120,7 +226,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  	struct rpcrdma_stats	rx_stats;
  };
  
-@@ -444,6 +503,13 @@ extern int xprt_rdma_pad_optimize;
+@@ -444,6 +510,13 @@ extern int xprt_rdma_pad_optimize;
   */
  extern unsigned int xprt_rdma_memreg_strategy;
  
@@ -134,7 +240,49 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  /*
   * Endpoint calls - xprtrdma/verbs.c
   */
-@@ -560,6 +626,21 @@ static inline void rpcrdma_set_xdrlen(st
+@@ -452,7 +525,7 @@ int rpcrdma_xprt_connect(struct rpcrdma_
+ void rpcrdma_xprt_disconnect(struct rpcrdma_xprt *r_xprt);
+ 
+ int rpcrdma_post_sends(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req);
+-void rpcrdma_post_recvs(struct rpcrdma_xprt *r_xprt, bool temp);
++void rpcrdma_post_recvs(struct rpcrdma_xprt *r_xprt, int needed, bool temp);
+ 
+ /*
+  * Buffer calls - xprtrdma/verbs.c
+@@ -466,13 +539,13 @@ void rpcrdma_buffer_destroy(struct rpcrd
+ struct rpcrdma_sendctx *rpcrdma_sendctx_get_locked(struct rpcrdma_xprt *r_xprt);
+ 
+ struct rpcrdma_mr *rpcrdma_mr_get(struct rpcrdma_xprt *r_xprt);
+-void rpcrdma_mr_put(struct rpcrdma_mr *mr);
+ void rpcrdma_mrs_refresh(struct rpcrdma_xprt *r_xprt);
+ 
+ struct rpcrdma_req *rpcrdma_buffer_get(struct rpcrdma_buffer *);
+ void rpcrdma_buffer_put(struct rpcrdma_buffer *buffers,
+ 			struct rpcrdma_req *req);
+-void rpcrdma_recv_buffer_put(struct rpcrdma_rep *);
++void rpcrdma_rep_put(struct rpcrdma_buffer *buf, struct rpcrdma_rep *rep);
++void rpcrdma_reply_put(struct rpcrdma_buffer *buffers, struct rpcrdma_req *req);
+ 
+ bool rpcrdma_regbuf_realloc(struct rpcrdma_regbuf *rb, size_t size,
+ 			    gfp_t flags);
+@@ -519,7 +592,7 @@ rpcrdma_data_dir(bool writing)
+ void frwr_reset(struct rpcrdma_req *req);
+ int frwr_query_device(struct rpcrdma_ep *ep, const struct ib_device *device);
+ int frwr_mr_init(struct rpcrdma_xprt *r_xprt, struct rpcrdma_mr *mr);
+-void frwr_release_mr(struct rpcrdma_mr *mr);
++void frwr_mr_release(struct rpcrdma_mr *mr);
+ struct rpcrdma_mr_seg *frwr_map(struct rpcrdma_xprt *r_xprt,
+ 				struct rpcrdma_mr_seg *seg,
+ 				int nsegs, bool writing, __be32 xid,
+@@ -552,6 +625,7 @@ int rpcrdma_marshal_req(struct rpcrdma_x
+ void rpcrdma_set_max_header_sizes(struct rpcrdma_ep *ep);
+ void rpcrdma_reset_cwnd(struct rpcrdma_xprt *r_xprt);
+ void rpcrdma_complete_rqst(struct rpcrdma_rep *rep);
++void rpcrdma_unpin_rqst(struct rpcrdma_rep *rep);
+ void rpcrdma_reply_handler(struct rpcrdma_rep *rep);
+ 
+ static inline void rpcrdma_set_xdrlen(struct xdr_buf *xdr, size_t len)
+@@ -560,6 +634,21 @@ static inline void rpcrdma_set_xdrlen(st
  	xdr->len = len;
  }
  
@@ -156,7 +304,7 @@ Change-Id: Iff8c949a8108a64c5ecfe3195a9cb508bb6c275d
  /* RPC/RDMA module init - xprtrdma/transport.c
   */
  extern unsigned int xprt_rdma_max_inline_read;
-@@ -575,8 +656,13 @@ void xprt_rdma_cleanup(void);
+@@ -575,8 +664,13 @@ void xprt_rdma_cleanup(void);
   */
  #if defined(CONFIG_SUNRPC_BACKCHANNEL)
  int xprt_rdma_bc_setup(struct rpc_xprt *, unsigned int);

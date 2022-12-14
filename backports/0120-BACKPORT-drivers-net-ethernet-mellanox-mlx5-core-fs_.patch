@@ -1,10 +1,10 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Maher Sanalla <msanalla@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 
-Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
+Change-Id: Ia5f8a54cea2ffb1c11986ae105a55faf6bcb675d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/fs_core.c | 70 +++++++++++++++++++++--
- 1 file changed, 65 insertions(+), 5 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/fs_core.c | 72 +++++++++++++++++--
+ 1 file changed, 66 insertions(+), 6 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
@@ -183,14 +183,15 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  		}
  	}
  	return handle;
-@@ -1726,16 +1776,26 @@ static int build_match_list(struct match
- 			    const struct mlx5_flow_spec *spec,
+@@ -1727,16 +1777,26 @@ static int build_match_list(struct match
+ 			    struct mlx5_flow_group *fg,
  			    bool ft_locked)
  {
+-	struct rhlist_head *tmp, *list;
 +#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
 +	struct bp_rhlist_head *tmp, *list;
 +#else
- 	struct rhlist_head *tmp, *list;
++ 	struct rhlist_head *tmp, *list;
 +#endif
  	struct mlx5_flow_group *g;
  	int err = 0;
@@ -211,4 +212,4 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
 +#endif
  		struct match_list *curr_match;
  
- 		if (unlikely(!tree_get_node(&g->node)))
+ 		if (fg && fg != g)

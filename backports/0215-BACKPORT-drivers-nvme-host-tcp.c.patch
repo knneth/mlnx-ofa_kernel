@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/tcp.c
 
 Signed-off-by: Tom Wu <tomwu@mellanox.com>
 ---
- drivers/nvme/host/tcp.c | 83 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 83 insertions(+)
+ drivers/nvme/host/tcp.c | 87 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 87 insertions(+)
 
 --- a/drivers/nvme/host/tcp.c
 +++ b/drivers/nvme/host/tcp.c
@@ -187,7 +187,7 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
  	struct nvme_tcp_ctrl *ctrl = set->driver_data;
  	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
  
-@@ -2356,11 +2422,19 @@ static int nvme_tcp_map_queues(struct bl
+@@ -2356,11 +2422,23 @@ static int nvme_tcp_map_queues(struct bl
  		ctrl->io_queues[HCTX_TYPE_DEFAULT],
  		ctrl->io_queues[HCTX_TYPE_READ],
  		ctrl->io_queues[HCTX_TYPE_POLL]);
@@ -202,12 +202,16 @@ Signed-off-by: Tom Wu <tomwu@mellanox.com>
 +#ifdef HAVE_BLK_MQ_OPS_POLL_1_ARG
  static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx)
 +#else
++#ifdef HAVE_BLK_MQ_OPS_POLL_2_ARG
++static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx, struct io_comp_batch *iob)
++#else
 +static int nvme_tcp_poll(struct blk_mq_hw_ctx *hctx, unsigned int tag)
++#endif
 +#endif
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
  	struct sock *sk = queue->sock->sk;
-@@ -2369,23 +2443,32 @@ static int nvme_tcp_poll(struct blk_mq_h
+@@ -2369,23 +2447,32 @@ static int nvme_tcp_poll(struct blk_mq_h
  		return 0;
  
  	set_bit(NVME_TCP_Q_POLLING, &queue->flags);

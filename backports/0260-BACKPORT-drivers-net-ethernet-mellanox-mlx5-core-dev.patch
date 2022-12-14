@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 
 Change-Id: I4b8b4aa3ab5a22a26e5fcedd99c23812fb163328
 ---
- drivers/net/ethernet/mellanox/mlx5/core/devlink.h | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/devlink.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
-@@ -31,12 +31,14 @@ struct mlx5_devlink_trap {
+@@ -31,14 +31,16 @@ struct mlx5_devlink_trap {
  	struct list_head list;
  };
  
@@ -21,5 +21,8 @@ Change-Id: I4b8b4aa3ab5a22a26e5fcedd99c23812fb163328
  				  enum devlink_trap_action *action);
 +#endif
  
- struct devlink *mlx5_devlink_alloc(void);
+-struct devlink *mlx5_devlink_alloc(void);
++struct devlink *mlx5_devlink_alloc(struct device *dev);
  void mlx5_devlink_free(struct devlink *devlink);
+ int mlx5_devlink_register(struct devlink *devlink, struct device *dev);
+ void mlx5_devlink_unregister(struct devlink *devlink);

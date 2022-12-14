@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/module.c
 
 Change-Id: Icef4aa49bcef3c89bc327e8cf5c8227e4cdb9629
 ---
- net/sunrpc/xprtrdma/module.c | 2 ++
- 1 file changed, 2 insertions(+)
+ net/sunrpc/xprtrdma/module.c | 5 +++++
+ 1 file changed, 5 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/module.c
 +++ b/net/sunrpc/xprtrdma/module.c

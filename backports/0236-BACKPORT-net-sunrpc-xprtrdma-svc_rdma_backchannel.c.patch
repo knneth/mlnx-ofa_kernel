@@ -3,12 +3,19 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_backchannel.c
 
 Change-Id: I553d6e00f01c04fc4e3330c7239ff6ec00055f11
 ---
- net/sunrpc/xprtrdma/svc_rdma_backchannel.c | 56 ++++++++++++++++++++++++++++++
- 1 file changed, 56 insertions(+)
+ net/sunrpc/xprtrdma/svc_rdma_backchannel.c | 91 +++++++++++++++++++---
+ 1 file changed, 82 insertions(+), 9 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
-@@ -8,7 +8,9 @@
+@@ -2,13 +2,15 @@
+ /*
+  * Copyright (c) 2015-2018 Oracle.  All rights reserved.
+  *
+- * Support for backward direction RPCs on RPC/RDMA (server-side).
++ * Support for reverse-direction RPCs on RPC/RDMA (server-side).
+  */
+ 
  #include <linux/sunrpc/svc_rdma.h>
  
  #include "xprt_rdma.h"
@@ -40,7 +47,7 @@ Change-Id: I553d6e00f01c04fc4e3330c7239ff6ec00055f11
  	req = xprt_lookup_rqst(xprt, *rdma_resp);
  	if (!req)
  		goto out_unlock;
-@@ -38,25 +50,52 @@ void svc_rdma_handle_bc_reply(struct svc
+@@ -38,28 +50,55 @@ void svc_rdma_handle_bc_reply(struct svc
  	if (dst->iov_len < src->iov_len)
  		goto out_unlock;
  	memcpy(dst->iov_base, src->iov_base, src->iov_len);
@@ -92,8 +99,54 @@ Change-Id: I553d6e00f01c04fc4e3330c7239ff6ec00055f11
 +#endif
  }
  
- /* Send a backwards direction RPC call.
-@@ -174,8 +213,14 @@ drop_connection:
+-/* Send a backwards direction RPC call.
++/* Send a reverse-direction RPC Call.
+  *
+  * Caller holds the connection's mutex and has already marshaled
+  * the RPC/RDMA request.
+@@ -74,11 +113,22 @@ out_unlock:
+  */
+ static int svc_rdma_bc_sendto(struct svcxprt_rdma *rdma,
+ 			      struct rpc_rqst *rqst,
+-			      struct svc_rdma_send_ctxt *ctxt)
++			      struct svc_rdma_send_ctxt *sctxt)
+ {
+ 	int ret;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct svc_rdma_recv_ctxt *rctxt;
++
++	rctxt = svc_rdma_recv_ctxt_get(rdma);
++	if (!rctxt)
++		return -EIO;
++
++	ret = svc_rdma_map_reply_msg(rdma, sctxt, rctxt, &rqst->rq_snd_buf);
++	svc_rdma_recv_ctxt_put(rdma, rctxt);
++#else
+ 
+-	ret = svc_rdma_map_reply_msg(rdma, ctxt, NULL, &rqst->rq_snd_buf);
++	ret = svc_rdma_map_reply_msg(rdma, sctxt, NULL, &rqst->rq_snd_buf);
++#endif
+ 	if (ret < 0)
+ 		return -EIO;
+ 
+@@ -86,8 +136,14 @@ static int svc_rdma_bc_sendto(struct svc
+ 	 * the rq_buffer before all retransmits are complete.
+ 	 */
+ 	get_page(virt_to_page(rqst->rq_buffer));
+-	ctxt->sc_send_wr.opcode = IB_WR_SEND;
+-	return svc_rdma_send(rdma, ctxt);
++	sctxt->sc_send_wr.opcode = IB_WR_SEND;
++	ret = svc_rdma_send(rdma, sctxt);
++	if (ret < 0)
++		return ret;
++
++	ret = wait_for_completion_killable(&sctxt->sc_done);
++	svc_rdma_send_ctxt_put(rdma, sctxt);
++	return ret;
+ }
+ 
+ /* Server-side transport endpoint wants a whole page for its send
+@@ -174,8 +230,14 @@ drop_connection:
   *   %0 if the message was sent successfully
   *   %ENOTCONN if the message was not sent
   */
@@ -108,7 +161,7 @@ Change-Id: I553d6e00f01c04fc4e3330c7239ff6ec00055f11
  	struct svc_xprt *sxprt = rqst->rq_xprt->bc_xprt;
  	struct svcxprt_rdma *rdma =
  		container_of(sxprt, struct svcxprt_rdma, sc_xprt);
-@@ -204,16 +249,27 @@ xprt_rdma_bc_put(struct rpc_xprt *xprt)
+@@ -204,16 +266,27 @@ xprt_rdma_bc_put(struct rpc_xprt *xprt)
  	xprt_free(xprt);
  }
  
@@ -136,3 +189,16 @@ Change-Id: I553d6e00f01c04fc4e3330c7239ff6ec00055f11
  	.close			= xprt_rdma_bc_close,
  	.destroy		= xprt_rdma_bc_put,
  	.print_stats		= xprt_rdma_print_stats
+@@ -246,9 +319,9 @@ xprt_setup_rdma_bc(struct xprt_create *a
+ 	xprt->timeout = &xprt_rdma_bc_timeout;
+ 	xprt_set_bound(xprt);
+ 	xprt_set_connected(xprt);
+-	xprt->bind_timeout = RPCRDMA_BIND_TO;
+-	xprt->reestablish_timeout = RPCRDMA_INIT_REEST_TO;
+-	xprt->idle_timeout = RPCRDMA_IDLE_DISC_TO;
++	xprt->bind_timeout = 0;
++	xprt->reestablish_timeout = 0;
++	xprt->idle_timeout = 0;
+ 
+ 	xprt->prot = XPRT_TRANSPORT_BC_RDMA;
+ 	xprt->ops = &xprt_rdma_bc_procs;

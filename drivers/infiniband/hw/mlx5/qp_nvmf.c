@@ -44,7 +44,7 @@ int mlx5_ib_set_qp_offload_type(void *qpc, struct ib_qp *qp,
 				MLX5_SET(qpc, qpc, offload_type, MLX5_QPC_OFFLOAD_TYPE_NVMF);
 				break;
 			}
-			/* Fall through */
+			fallthrough;
 		default:
 			return -EINVAL;
 	}

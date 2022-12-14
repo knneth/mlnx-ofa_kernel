@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dev.c
 
 Change-Id: I17249f399d0baf4a33b3830e941ce798c209b460
 ---
- drivers/net/ethernet/mellanox/mlx5/core/dev.c | 12 ++++++++++++
- 1 file changed, 12 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/dev.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
@@ -29,8 +29,8 @@ Change-Id: I17249f399d0baf4a33b3830e941ce798c209b460
  }
  
  int mlx5_adev_init(struct mlx5_core_dev *dev)
-@@ -472,7 +480,11 @@ bool mlx5_same_hw_devs(struct mlx5_core_
- 	return (fsystem_guid == psystem_guid);
+@@ -482,7 +490,11 @@ static struct mlx5_core_dev *is_mlx5_cor
+ 	return (struct mlx5_core_dev *)pci_get_drvdata(pdev);
  }
  
 +#ifdef HAVE_BUS_FIND_DEVICE_GET_CONST
@@ -39,5 +39,19 @@ Change-Id: I17249f399d0baf4a33b3830e941ce798c209b460
 +static int next_phys_dev(struct device *dev, void *data)
 +#endif
  {
- 	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
- 	struct mlx5_core_dev *mdev = madev->mdev;
+ 	const struct mlx5_core_dev *curr = data;
+ 
+@@ -504,8 +516,13 @@ static int next_phys_dev(struct device *
+ 	return 1;
+ }
+ 
++#ifdef HAVE_BUS_FIND_DEVICE_GET_CONST
+ static struct device *pci_find_dev(void *data,
+ 				   int (*match)(struct device *dev, const void *data))
++#else
++static struct device *pci_find_dev(void *data,
++				   int (*match)(struct device *dev, void *data))
++#endif
+ {
+ 	return bus_find_device(&pci_bus_type, NULL, data, match);
+ }

@@ -23,7 +23,7 @@ Change-Id: I550c1e7a80d3e16381301c23217dcd5c266c10df
  	       mlx5e_eswitch_uplink_rep(netdev);
  }
  
-+#ifdef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++#ifdef HAVE_NDO_GET_DEVLINK_PORT
  struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev);
 +#else
 +static inline struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev)

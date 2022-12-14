@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
 Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 90 ++++++++++++++++++-
- 1 file changed, 88 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 128 ++++++++++++++++--
+ 1 file changed, 119 insertions(+), 9 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
@@ -128,7 +128,66 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  		if (hlen == ETH_HLEN && !skb_vlan_tag_present(skb))
  			hlen += VLAN_HLEN;
  		break;
-@@ -376,13 +425,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
+@@ -326,21 +375,36 @@ static inline void mlx5e_insert_vlan(voi
+ 	memcpy(&vhdr->h_vlan_encapsulated_proto, skb->data + cpy1_sz, cpy2_sz);
+ }
+ 
++#ifdef CONFIG_MLX5_EN_IPSEC
+ /* If packet is not IP's CHECKSUM_PARTIAL (e.g. icmd packet),
+  * need to set L3 checksum flag for IPsec
+  */
+-static void
+-ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+-			    struct mlx5_wqe_eth_seg *eseg)
++static void ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++					struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
++					struct mlx5_wqe_eth_seg *eseg)
+ {
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	struct xfrm_offload *xo = xfrm_offload(skb);
++	u32 inner_ipproto = xo->inner_ipproto;
++#else
++	u8 inner_ipproto = ipsec_st->inner_ipproto;
++#endif
++
+ 	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
+-	if (skb->encapsulation) {
++	if (inner_ipproto) {
+ 		eseg->cs_flags |= MLX5_ETH_WQE_L3_INNER_CSUM;
++		if (inner_ipproto == IPPROTO_TCP || inner_ipproto == IPPROTO_UDP)
++				eseg->cs_flags |= MLX5_ETH_WQE_L4_INNER_CSUM;
++		if (likely(skb->ip_summed == CHECKSUM_PARTIAL))
++			sq->stats->csum_partial_inner++;
++	} else if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
++		eseg->cs_flags |= MLX5_ETH_WQE_L4_CSUM;
+ 		sq->stats->csum_partial_inner++;
+-	} else {
+-		sq->stats->csum_partial++;
+ 	}
+ }
++#endif
+ 
+ static inline void
+ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+@@ -362,9 +426,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+ 		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM | MLX5_ETH_WQE_L4_CSUM;
+ 		sq->stats->csum_partial++;
+ #endif
++#ifdef CONFIG_MLX5_EN_IPSEC
+ 	} else if (unlikely(eseg->flow_table_metadata & cpu_to_be32(MLX5_ETH_WQE_FT_META_IPSEC))) {
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
+ 		ipsec_txwqe_build_eseg_csum(sq, skb, eseg);
+-
++#else
++		ipsec_txwqe_build_eseg_csum(sq, skb, &accel->ipsec, eseg);
++#endif
++#endif
+ 	} else
+ 		sq->stats->csum_none++;
+ }
+@@ -376,13 +445,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
  	u16 ihs;
  
  	if (skb->encapsulation) {
@@ -148,7 +207,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  			ihs = skb_transport_offset(skb) + tcp_hdrlen(skb);
  		stats->tso_packets++;
  		stats->tso_bytes += skb->len - ihs;
-@@ -601,6 +656,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+@@ -601,6 +676,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
  	}
  
  	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
@@ -156,7 +215,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  	if (send_doorbell)
  		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
  }
-@@ -619,7 +675,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -619,7 +695,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
  	struct mlx5e_sq_stats *stats = sq->stats;
  	int num_dma;
  
@@ -166,7 +225,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	/* fill wqe */
  	wi   = &sq->db.wqe_info[pi];
-@@ -771,7 +829,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+@@ -771,7 +849,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
  		mlx5e_tx_mpwqe_session_start(sq, eseg);
  	}
  
@@ -176,7 +235,19 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	txd.data = skb->data;
  	txd.len = skb->len;
-@@ -855,7 +915,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -821,7 +901,11 @@ static bool mlx5e_txwqe_build_eseg(struc
+ 				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
+ 				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
+ {
++#if !defined(HAVE_XFRM_OFFLOAD_INNER_IPPROTO) && defined(CONFIG_MLX5_EN_IPSEC)
++	if (unlikely(!mlx5e_accel_tx_eseg(priv, skb, eseg, &accel->ipsec, ihs)))
++#else
+ 	if (unlikely(!mlx5e_accel_tx_eseg(priv, skb, eseg, ihs)))
++#endif
+ 		return false;
+ 
+ 	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
+@@ -855,7 +939,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  							     attr.ihs)))
  				return NETDEV_TX_OK;
  
@@ -190,7 +261,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  			return NETDEV_TX_OK;
  		}
  
-@@ -872,7 +938,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -872,7 +962,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs)))
  		return NETDEV_TX_OK;
  
@@ -204,7 +275,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	return NETDEV_TX_OK;
  }
-@@ -919,7 +991,11 @@ static void mlx5e_consume_skb(struct mlx
+@@ -919,7 +1015,11 @@ static void mlx5e_consume_skb(struct mlx
  			skb_tstamp_tx(skb, &hwts);
  	}
  
@@ -216,7 +287,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  }
  
  static void mlx5e_tx_wi_consume_fifo_skbs(struct mlx5e_txqsq *sq, struct mlx5e_tx_wqe_info *wi,
-@@ -1130,7 +1206,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -1130,7 +1230,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -228,7 +299,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -1152,7 +1232,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1152,7 +1256,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -238,7 +309,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1178,7 +1260,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1178,7 +1284,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	if (unlikely(num_dma < 0))
  		goto err_drop;
  

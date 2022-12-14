@@ -22,7 +22,7 @@ int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
 	port = kzalloc(sizeof(*port), GFP_KERNEL);
 	if (!port)
 		return -ENOMEM;
-	pfnum = PCI_FUNC(dev->pdev->devfn);
+	pfnum = mlx5_get_dev_index(dev);
 	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
 	port->sfnum = sfnum;
 	port->port_index = dl_port_index;

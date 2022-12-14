@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 ---
- drivers/infiniband/core/umem.c | 296 +++++++++++++++++++++++++++++++--
- 1 file changed, 285 insertions(+), 11 deletions(-)
+ drivers/infiniband/core/umem.c | 339 +++++++++++++++++++++++++++++++--
+ 1 file changed, 327 insertions(+), 12 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
@@ -24,12 +24,14 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  #include "uverbs.h"
  #include "ib_peer_mem.h"
-@@ -55,9 +61,21 @@ static void __ib_umem_release(struct ib_
+@@ -55,10 +61,26 @@ static void __ib_umem_release(struct ib_
  
  	for_each_sg_page(umem->sg_head.sgl, &sg_iter, umem->sg_nents, 0) {
  		page = sg_page_iter_page(&sg_iter);
 +#ifdef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
  		unpin_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
+-	}
+-
 +#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS)
 +		put_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
 +#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS)
@@ -42,20 +44,24 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 +                        set_page_dirty_lock(page);
 +                put_page(page);
 +#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
- 	}
--
++	}
++#ifdef HAVE_SG_APPEND_TABLE /*BASE CODE FOR NEXT REBASE*/
++	sg_free_append_table(&umem->sgt_append);
++#else
  	sg_free_table(&umem->sg_head);
++#endif /*HAVE_SG_APPEND_TABLE*/
  }
  
-@@ -71,6 +89,7 @@ static void __ib_umem_release(struct ib_
+ /* ib_umem_add_sg_table - Add N contiguous pages to scatter table
+@@ -71,6 +93,7 @@ static void __ib_umem_release(struct ib_
   *
   * Return new end of scatterlist
   */
-+#ifndef HAVE_SG_ALLOC_TABLE_FROM_PAGES
++#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
  static struct scatterlist *ib_umem_add_sg_table(struct scatterlist *sg,
  						struct page **page_list,
  						unsigned long npages,
-@@ -127,6 +146,7 @@ static struct scatterlist *ib_umem_add_s
+@@ -127,6 +150,7 @@ static struct scatterlist *ib_umem_add_s
  
  	return sg;
  }
@@ -63,7 +69,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  /**
   * ib_umem_find_best_pgsz - Find best HW page size to use for this MR
-@@ -191,21 +211,64 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -191,21 +215,68 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -88,13 +94,17 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	unsigned long dma_attr = 0;
  	struct mm_struct *mm;
  	unsigned long npages;
++#ifdef HAVE_SG_APPEND_TABLE /*BASE CODE FOR NEXT REBASE*/
++	int pinned, ret;
++#else
  	int ret;
 -	struct scatterlist *sg;
 +	struct scatterlist *sg = NULL;
++#endif /*HAVE_SG_APPEND_TABLE*/
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
  	unsigned int gup_flags = FOLL_WRITE;
 +#endif
-+#if defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES) && (!defined(HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED) && !defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS))
++#if defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && (!defined(HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED) && !defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS))
 +	unsigned long index;
 +#endif
 +#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
@@ -129,7 +139,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -228,19 +291,40 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -228,19 +299,40 @@ struct ib_umem *__ib_umem_get(struct ib_
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
@@ -170,7 +180,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -249,55 +333,193 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -249,55 +341,226 @@ struct ib_umem *__ib_umem_get(struct ib_
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -208,7 +218,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 +#endif /* HAVE_ATOMIC_PINNED_VM */
  	cur_base = addr & PAGE_MASK;
  
-+#ifndef HAVE_SG_ALLOC_TABLE_FROM_PAGES
++#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
  	ret = sg_alloc_table(&umem->sg_head, npages, GFP_KERNEL);
  	if (ret)
  		goto vma;
@@ -221,10 +231,43 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 -	if (!umem->writable)
 -		gup_flags |= FOLL_FORCE;
 -
-+#ifndef HAVE_SG_ALLOC_TABLE_FROM_PAGES
++#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
  	sg = umem->sg_head.sgl;
 +#endif
++
++#ifdef HAVE_SG_APPEND_TABLE /*BASE CODE FOR NEXT REBASE*/
++	while (npages) {
++		cond_resched();
++		pinned = pin_user_pages_fast(cur_base,
++					  min_t(unsigned long, npages,
++						PAGE_SIZE /
++						sizeof(struct page *)),
++					  gup_flags | FOLL_LONGTERM, page_list);
++		if (pinned < 0) {
++			memcpy(&umem->sg_head.sgl, &umem->sgt_append.sgt,
++			       sizeof(umem->sgt_append.sgt));
++			ret = pinned;
++			goto umem_release;
++		}
  
++		cur_base += pinned * PAGE_SIZE;
++		npages -= pinned;
++		ret = sg_alloc_append_table_from_pages(
++			&umem->sgt_append, page_list, pinned, 0,
++			pinned << PAGE_SHIFT, ib_dma_max_seg_size(device),
++			npages, GFP_KERNEL);
++		umem->sg_nents = umem->sgt_append.sgt.nents;
++		if (ret) {
++			memcpy(&umem->sg_head.sgl, &umem->sgt_append.sgt,
++			       sizeof(umem->sgt_append.sgt));
++			unpin_user_pages_dirty_lock(page_list, pinned, 0);
++			goto umem_release;
++		}
++	}
++
++	memcpy(&umem->sg_head.sgl, &umem->sgt_append.sgt,
++	       sizeof(umem->sgt_append.sgt));
++#else /*HAVE_SG_APPEND_TABLE*/
  	while (npages) {
  		cond_resched();
 +#ifdef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
@@ -289,7 +332,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  		cur_base += ret * PAGE_SIZE;
  		npages   -= ret;
 -
-+#ifdef HAVE_SG_ALLOC_TABLE_FROM_PAGES
++#ifdef HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS
 +		sg = __sg_alloc_table_from_pages(
 +			&umem->sg_head, page_list, ret, 0, ret << PAGE_SHIFT,
 +#else
@@ -301,7 +344,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 +#else
 +			dma_get_max_seg_size(context->device->dma_device),
 +#endif
-+#ifdef HAVE_SG_ALLOC_TABLE_FROM_PAGES
++#ifdef HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS
 +			sg, npages,
 +			GFP_KERNEL);
 +		umem->sg_nents = umem->sg_head.nents;
@@ -338,10 +381,11 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
 +#endif
  	}
  
-+#ifndef HAVE_SG_ALLOC_TABLE_FROM_PAGES
++#ifndef HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS
  	sg_mark_end(sg);
+-
 +#endif
- 
++#endif /*HAVE_SG_APPEND_TABLE*/
  	if (!(access & IB_ACCESS_DISABLE_RELAXED_ORDERING))
  		dma_attr |= DMA_ATTR_WEAK_ORDERING;
  
@@ -372,7 +416,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  
  	if (!umem->nmap) {
  		pr_err("%s: failed to map scatterlist, npages=%lu\n", __func__,
-@@ -310,7 +532,11 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -310,7 +573,11 @@ struct ib_umem *__ib_umem_get(struct ib_
  	goto out;
  
  umem_release:
@@ -384,7 +428,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	/*
  	 * If the address belongs to peer memory client, then the first
  	 * call to get_user_pages will fail. In this case, try to get
-@@ -329,9 +555,24 @@ umem_release:
+@@ -329,9 +596,24 @@ umem_release:
  		ret = 0;
  		goto out;
  	}
@@ -409,7 +453,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	free_page((unsigned long) page_list);
  umem_kfree:
  	if (ret) {
-@@ -341,19 +582,36 @@ umem_kfree:
+@@ -341,19 +623,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -446,7 +490,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -365,14 +623,30 @@ void ib_umem_release(struct ib_umem *ume
+@@ -365,14 +664,30 @@ void ib_umem_release(struct ib_umem *ume
  {
  	if (!umem)
  		return;

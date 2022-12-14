@@ -33,6 +33,7 @@ struct lag_func {
 	struct mlx5_core_dev *dev;
 	struct net_device    *netdev;
 	enum mlx5_lag_user_pref user_mode;
+	bool has_drop;
 };
 
 /* Used for collection of netdev event info. */
@@ -42,6 +43,7 @@ struct lag_tracker {
 	struct netdev_lag_lower_state_info  netdev_state[MLX5_MAX_PORTS];
 	struct net_device *ndev[MLX5_MAX_PORTS];
 	unsigned int is_bonded:1;
+	unsigned int has_inactive:1;
 };
 
 /* LAG data of a ConnectX card.

@@ -45,3 +45,4 @@ include/linux/sunrpc/rpc_rdma_cid.h
 include/linux/auxiliary_bus.h
 include/linux/mod_devicetable.h
 include/linux/bitfield.h
+include/linux/sunrpc/svc_rdma_pcl.h

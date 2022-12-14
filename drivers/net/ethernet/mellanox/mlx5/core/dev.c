@@ -469,14 +469,27 @@ bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev
 	fsystem_guid = mlx5_query_nic_system_image_guid(dev);
 	psystem_guid = mlx5_query_nic_system_image_guid(peer_dev);
 
-	return (fsystem_guid == psystem_guid);
+	return (fsystem_guid && psystem_guid && fsystem_guid == psystem_guid);
+}
+
+static struct mlx5_core_dev *is_mlx5_core_dev(struct device *dev, struct mlx5_core_dev *curr)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+
+	if (dev->driver != curr->device->driver)
+		return NULL;
+
+	return (struct mlx5_core_dev *)pci_get_drvdata(pdev);
 }
 
 static int next_phys_dev(struct device *dev, const void *data)
 {
-	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
-	struct mlx5_core_dev *mdev = madev->mdev;
 	const struct mlx5_core_dev *curr = data;
+
+	struct mlx5_core_dev *mdev = is_mlx5_core_dev(dev, (struct mlx5_core_dev *)data);
+
+	if (!mdev)
+		return 0;
 
 	if (!mlx5_core_is_pf(mdev))
 		return 0;
@@ -484,28 +497,33 @@ static int next_phys_dev(struct device *dev, const void *data)
 	if (mdev == curr)
 		return 0;
 
-	if (mlx5_gen_pci_id(mdev) != mlx5_gen_pci_id(curr))
+	if (!mlx5_same_hw_devs(mdev, (struct mlx5_core_dev *)curr) &&
+	    mlx5_gen_pci_id(mdev) != mlx5_gen_pci_id(curr))
 		return 0;
 
 	return 1;
 }
 
+static struct device *pci_find_dev(void *data,
+				   int (*match)(struct device *dev, const void *data))
+{
+	return bus_find_device(&pci_bus_type, NULL, data, match);
+}
+
 /* Must be called with intf_mutex held */
 struct mlx5_core_dev *mlx5_get_next_phys_dev(struct mlx5_core_dev *dev)
 {
-	struct auxiliary_device *adev;
-	struct mlx5_adev *madev;
+	struct device *next;
 
 	if (!mlx5_core_is_pf(dev))
 		return NULL;
 
-	adev = auxiliary_find_device(NULL, dev, &next_phys_dev);
-	if (!adev)
+	next = pci_find_dev(dev, &next_phys_dev);
+	if (!next)
 		return NULL;
 
-	madev = container_of(adev, struct mlx5_adev, adev);
-	put_device(&adev->dev);
-	return madev->mdev;
+	put_device(next);
+	return (struct mlx5_core_dev *)pci_get_drvdata(to_pci_dev(next));
 }
 
 void mlx5_dev_list_lock(void)

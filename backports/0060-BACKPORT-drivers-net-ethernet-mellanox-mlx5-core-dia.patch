@@ -76,7 +76,7 @@ Change-Id: I7f6b6aaa70d15d37d9e3dd399b70f405f6f3fb33
  
  	mlx5_fw_tracer_save_trace(dev->tracer, trace_timestamp,
  				  str_frmt->lost, str_frmt->event_id, tracer->ready_string);
-@@ -823,6 +837,7 @@ static void mlx5_fw_tracer_ownership_cha
+@@ -827,6 +841,7 @@ static void mlx5_fw_tracer_ownership_cha
  	mlx5_fw_tracer_start(tracer);
  }
  
@@ -84,7 +84,7 @@ Change-Id: I7f6b6aaa70d15d37d9e3dd399b70f405f6f3fb33
  static int mlx5_fw_tracer_set_core_dump_reg(struct mlx5_core_dev *dev,
  					    u32 *in, int size_in)
  {
-@@ -925,6 +940,7 @@ unlock:
+@@ -929,6 +944,7 @@ unlock:
  	mutex_unlock(&tracer->st_arr.lock);
  	return err;
  }
@@ -92,7 +92,7 @@ Change-Id: I7f6b6aaa70d15d37d9e3dd399b70f405f6f3fb33
  
  /* Create software resources (Buffers, etc ..) */
  struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
-@@ -1148,4 +1164,6 @@ static int fw_tracer_event(struct notifi
+@@ -1151,4 +1167,6 @@ static int fw_tracer_event(struct notifi
  	return NOTIFY_OK;
  }
  

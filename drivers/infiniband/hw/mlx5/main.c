@@ -2203,18 +2203,6 @@ static int uar_mmap(struct mlx5_ib_dev *dev, enum mlx5_ib_mmap_cmd cmd,
 	case MLX5_IB_MMAP_REGULAR_PAGE:
 		/* For MLX5_IB_MMAP_REGULAR_PAGE do the best effort to get WC */
 		prot = pgprot_writecombine(vma->vm_page_prot);
-#if defined(CONFIG_ARM64)
-		/*
-		 * Fix up arm64 braindamage of using NORMAL_NC for write
-		 * combining when Device GRE exists specifically for the
-		 * purpose. Needed on ThunderX2.
-		 */
-		switch (read_cpuid_id() & MIDR_CPU_MODEL_MASK) {
-		case MIDR_CPU_MODEL(ARM_CPU_IMP_BRCM, BRCM_CPU_PART_VULCAN):
-		case MIDR_CPU_MODEL(0x43, 0x0af):  /* Cavium ThunderX2 */
-			prot = __pgprot_modify(prot, PTE_ATTRINDX_MASK, PTE_ATTRINDX(MT_DEVICE_GRE) | PTE_PXN | PTE_UXN);
-		}
-#endif
 		break;
 	case MLX5_IB_MMAP_NC_PAGE:
 		prot = pgprot_noncached(vma->vm_page_prot);

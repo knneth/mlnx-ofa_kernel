@@ -35,7 +35,7 @@ static struct devlink_port *mlx5_esw_dl_port_alloc(struct mlx5_eswitch *esw, u16
 		return NULL;
 
 	mlx5_esw_get_port_parent_id(dev, &ppid);
-	pfnum = PCI_FUNC(dev->pdev->devfn);
+	pfnum = mlx5_get_dev_index(dev);
 
 	if (vport_num == MLX5_VPORT_UPLINK) {
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
