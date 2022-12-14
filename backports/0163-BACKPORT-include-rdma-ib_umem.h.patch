@@ -61,7 +61,7 @@ Change-Id: I7ff3dcc59668efeee499eba7d92c7dd4456358f7
  				 size_t size, int access,
  				 unsigned long peer_mem_flags);
  void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-@@ -72,7 +88,11 @@ void ib_umem_activate_invalidation_notif
+@@ -73,7 +89,11 @@ void ib_umem_stop_invalidation_notifier(
  
  #include <linux/err.h>
  

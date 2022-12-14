@@ -3,26 +3,34 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/peer_mem.c
 
 Change-Id: I4036e0eb1c19124679ea5a6eae70d54805057eeb
 ---
- drivers/infiniband/core/peer_mem.c | 21 +++++++++++++++++++--
- 1 file changed, 19 insertions(+), 2 deletions(-)
+ drivers/infiniband/core/peer_mem.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/peer_mem.c
 +++ b/drivers/infiniband/core/peer_mem.c
-@@ -287,9 +287,12 @@ static void ib_unmap_peer_client(struct
- 	struct ib_umem *umem = &umem_p->umem;
- 
- 	lockdep_assert_held(&umem_p->mapping_lock);
--
- 	peer_mem->dma_unmap(&umem_p->umem.sg_head, umem_p->peer_client_context,
+@@ -6,6 +6,9 @@
+ #include <rdma/ib_umem.h>
+ #include <linux/sched/mm.h>
+ #include "ib_peer_mem.h"
++#ifdef CONFIG_COMPAT_OFFSETOFEND_IN_VFIO_H
++#include <linux/vfio.h>
++#endif
+ static DEFINE_MUTEX(peer_memory_mutex);
+ static LIST_HEAD(peer_memory_list);
+ static struct kobject *peers_kobj;
+@@ -297,7 +300,11 @@ static void ib_unmap_peer_client(struct
+ 	     to_state == UMEM_PEER_INVALIDATED)) {
+ 		if (to_state == UMEM_PEER_UNMAPPED) {
+ 			peer_mem->dma_unmap(&umem_p->umem.sg_head, umem_p->peer_client_context,
 +#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
  			    umem_p->umem.ibdev->dma_device);
 +#else
 +			    umem_p->umem.context->device->dma_device);
 +#endif
- 	peer_mem->put_pages(&umem_p->umem.sg_head, umem_p->peer_client_context);
- 	memset(&umem->sg_head, 0, sizeof(umem->sg_head));
- 
-@@ -419,7 +422,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 			peer_mem->put_pages(&umem_p->umem.sg_head, umem_p->peer_client_context);
+ 		}
+ 		memset(&umem->sg_head, 0, sizeof(umem->sg_head));
+@@ -494,7 +501,11 @@ struct ib_umem *ib_peer_umem_get(struct
  
  	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sg_head,
  						peer_client_context,
@@ -34,7 +42,7 @@ Change-Id: I4036e0eb1c19124679ea5a6eae70d54805057eeb
  						0, &umem_p->umem.nmap);
  	if (ret)
  		goto err_pages;
-@@ -477,7 +484,17 @@ void ib_peer_umem_release(struct ib_umem
+@@ -551,7 +562,17 @@ void ib_peer_umem_release(struct ib_umem
  	umem_p->ib_peer_client = NULL;
  
  	/* Must match ib_umem_release() */

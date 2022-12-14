@@ -1315,6 +1315,8 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 
 	if (IS_ERR(mr)) {
 		err = PTR_ERR(mr);
+		if (umem->is_peer)
+			ib_umem_stop_invalidation_notifier(umem);
 		goto error;
 	}
 
@@ -1601,8 +1603,18 @@ static void dereg_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr)
 	/* Stop all DMA */
 	if (is_odp_mr(mr))
 		mlx5_ib_fence_odp_mr(mr);
-	else
+	else {
+		/*
+		 * For peers, need to disable the invalidation notifier
+		 * before calling destroy_mkey().
+		 */
+		if (umem && umem->is_peer) {
+			if (mlx5_mr_cache_invalidate(mr))
+				return;
+			ib_umem_stop_invalidation_notifier(umem);
+		}
 		clean_mr(dev, mr);
+	}
 
 	if (mr->cache_ent)
 		mlx5_mr_cache_free(dev, mr);
@@ -1654,7 +1666,12 @@ static void mlx5_set_umr_free_mkey(struct ib_pd *pd, u32 *in, int ndescs,
 	MLX5_SET(mkc, mkc, umr_en, 1);
 	MLX5_SET(mkc, mkc, log_page_size, page_shift);
 #ifdef CONFIG_GPU_DIRECT_STORAGE
-	MLX5_SET(mkc, mkc, ma_translation_mode, MLX5_CAP_GEN(dev->mdev, ats));
+	if (access_mode == MLX5_MKC_ACCESS_MODE_PA ||
+	    access_mode == MLX5_MKC_ACCESS_MODE_MTT)
+		MLX5_SET(mkc, mkc, ma_translation_mode, MLX5_CAP_GEN(dev->mdev,
+								     ats));
+	else
+		pr_err_once("mlx5_ib: %s: Translation mode supported only when access_mode is MTT or PA\n", __func__);
 #endif
 }
 

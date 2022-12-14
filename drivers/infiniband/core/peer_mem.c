@@ -277,31 +277,59 @@ static void ib_put_peer_client(struct ib_peer_memory_client *ib_peer_client,
 
 static void ib_peer_umem_kref_release(struct kref *kref)
 {
-	kfree(container_of(kref, struct ib_umem_peer, kref));
+	struct ib_umem_peer *umem_p =
+		container_of(kref, struct ib_umem_peer, kref);
+
+	mutex_destroy(&umem_p->mapping_lock);
+	kfree(umem_p);
 }
 
-static void ib_unmap_peer_client(struct ib_umem_peer *umem_p)
+static void ib_unmap_peer_client(struct ib_umem_peer *umem_p,
+				 enum ib_umem_mapped_state cur_state,
+				 enum ib_umem_mapped_state to_state)
 {
 	struct ib_peer_memory_client *ib_peer_client = umem_p->ib_peer_client;
 	const struct peer_memory_client *peer_mem = ib_peer_client->peer_mem;
 	struct ib_umem *umem = &umem_p->umem;
 
-	lockdep_assert_held(&umem_p->mapping_lock);
-
-	peer_mem->dma_unmap(&umem_p->umem.sg_head, umem_p->peer_client_context,
+	if (cur_state == UMEM_PEER_MAPPED &&
+	    (to_state == UMEM_PEER_UNMAPPED ||
+	     to_state == UMEM_PEER_INVALIDATED)) {
+		if (to_state == UMEM_PEER_UNMAPPED) {
+			peer_mem->dma_unmap(&umem_p->umem.sg_head, umem_p->peer_client_context,
 			    umem_p->umem.ibdev->dma_device);
-	peer_mem->put_pages(&umem_p->umem.sg_head, umem_p->peer_client_context);
-	memset(&umem->sg_head, 0, sizeof(umem->sg_head));
+			peer_mem->put_pages(&umem_p->umem.sg_head, umem_p->peer_client_context);
+		}
+		memset(&umem->sg_head, 0, sizeof(umem->sg_head));
+		atomic64_inc(&ib_peer_client->stats.num_dealloc_mrs);
+	}
 
-	atomic64_add(umem->nmap, &ib_peer_client->stats.num_dereg_pages);
-	atomic64_add(umem->length, &ib_peer_client->stats.num_dereg_bytes);
-	atomic64_inc(&ib_peer_client->stats.num_dealloc_mrs);
+	if ((cur_state == UMEM_PEER_MAPPED && to_state == UMEM_PEER_UNMAPPED) ||
+	    (cur_state == UMEM_PEER_INVALIDATED &&
+	     to_state == UMEM_PEER_UNMAPPED)) {
+		atomic64_add(umem->nmap, &ib_peer_client->stats.num_dereg_pages);
+		atomic64_add(umem->length, &ib_peer_client->stats.num_dereg_bytes);
+	}
 
-	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
-		xa_store(&ib_peer_client->umem_xa, umem_p->xa_id, NULL,
-			 GFP_KERNEL);
-	umem_p->mapped = false;
+	umem_p->mapped_state = to_state;
 }
+
+static bool ib_peer_unmap_on_invalidate(struct ib_umem_peer *umem_p)
+{
+	const struct peer_memory_client *peer_mem =
+		umem_p->ib_peer_client->peer_mem;
+	const struct peer_memory_client_ex *peer_mem_ex;
+
+	if (peer_mem->version[IB_PEER_MEMORY_VER_MAX - 1] == 0)
+		return false;
+	peer_mem_ex = container_of(peer_mem, const struct peer_memory_client_ex,
+				   client);
+	if (peer_mem_ex->ex_size <
+	    offsetofend(struct peer_memory_client_ex, flags))
+		return false;
+	return peer_mem_ex->flags & PEER_MEM_INVALIDATE_UNMAPS;
+}
+
 
 static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context)
 {
@@ -323,16 +351,22 @@ static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context)
 	kref_get(&umem_p->kref);
 	xa_unlock(&ib_peer_client->umem_xa);
 	mutex_lock(&umem_p->mapping_lock);
-	if (umem_p->mapped) {
-		/*
-		 * At this point the invalidation_func must be !NULL as the get
-		 * flow does not unlock mapping_lock until it is set, and umems
-		 * that do not require invalidation are not in the xarray.
-		 */
+	/*
+	 * For flows that require invalidation the invalidation_func should not
+	 * be NULL while the device can be doing DMA. The mapping_lock ensures
+	 * that the device is ready to receive an invalidation before one is
+	 * triggered here.
+	 */
+	if (umem_p->mapped_state == UMEM_PEER_MAPPED &&
+	    umem_p->invalidation_func)
 		umem_p->invalidation_func(&umem_p->umem,
 					  umem_p->invalidation_private);
-		ib_unmap_peer_client(umem_p);
-	}
+	if (ib_peer_unmap_on_invalidate(umem_p))
+		ib_unmap_peer_client(umem_p, umem_p->mapped_state,
+				     UMEM_PEER_INVALIDATED);
+	else
+		ib_unmap_peer_client(umem_p, umem_p->mapped_state,
+				     UMEM_PEER_UNMAPPED);
 	mutex_unlock(&umem_p->mapping_lock);
 	kref_put(&umem_p->kref, ib_peer_umem_kref_release);
 	return 0;
@@ -361,6 +395,47 @@ void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
 	/* At this point func can be called asynchronously */
 }
 EXPORT_SYMBOL(ib_umem_activate_invalidation_notifier);
+
+/*
+ * Caller has blocked DMA and will no longer be able to handle invalidate
+ * callbacks. Callers using invalidation must call this function before calling
+ * ib_peer_umem_release(). ib_umem_activate_invalidation_notifier() is optional
+ * before doing this.
+ */
+void ib_umem_stop_invalidation_notifier(struct ib_umem *umem)
+{
+	struct ib_umem_peer *umem_p =
+		container_of(umem, struct ib_umem_peer, umem);
+	bool unmap_on_invalidate = ib_peer_unmap_on_invalidate(umem_p);
+	enum ib_umem_mapped_state cur_state;
+
+	if (umem_p->invalidation_func) {
+		mutex_lock(&umem_p->mapping_lock);
+		umem_p->invalidation_func = NULL;
+	} else if (umem_p->xa_id != PEER_NO_INVALIDATION_ID) {
+		mutex_lock(&umem_p->mapping_lock);
+	} else {
+		/*
+		 * Haven't called ib_umem_activate_invalidation_notifier() yet,
+		 * still have the lock
+		 */
+	}
+
+	if (!unmap_on_invalidate) {
+		ib_unmap_peer_client(umem_p, umem_p->mapped_state,
+				     UMEM_PEER_UNMAPPED);
+	} else {
+		/* Block ib_invalidate_peer_memory() */
+		cur_state = umem_p->mapped_state;
+		umem_p->mapped_state = UMEM_PEER_UNMAPPED;
+	}
+	mutex_unlock(&umem_p->mapping_lock);
+
+	if (unmap_on_invalidate)
+		ib_unmap_peer_client(umem_p, cur_state, UMEM_PEER_UNMAPPED);
+
+}
+EXPORT_SYMBOL(ib_umem_stop_invalidation_notifier);
 
 struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
 				 unsigned long peer_mem_flags)
@@ -424,7 +499,7 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
 	if (ret)
 		goto err_pages;
 
-	umem_p->mapped = true;
+	umem_p->mapped_state = UMEM_PEER_MAPPED;
 	atomic64_add(umem_p->umem.nmap, &ib_peer_client->stats.num_reg_pages);
 	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
 	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
@@ -461,15 +536,14 @@ void ib_peer_umem_release(struct ib_umem *umem)
 {
 	struct ib_umem_peer *umem_p =
 		container_of(umem, struct ib_umem_peer, umem);
+	/*
+	 * If ib_umem_activate_invalidation_notifier() is called then
+	 * ib_umem_stop_invalidation_notifier() must be called before release.
+	 */
+	WARN_ON(umem_p->invalidation_func);
 
-	/* invalidation_func being set indicates activate was called */
-	if (umem_p->xa_id == PEER_NO_INVALIDATION_ID ||
-	    umem_p->invalidation_func)
-		mutex_lock(&umem_p->mapping_lock);
-
-	if (umem_p->mapped)
-		ib_unmap_peer_client(umem_p);
-	mutex_unlock(&umem_p->mapping_lock);
+	/* For no invalidation cases, make sure it is unmapped */
+	ib_unmap_peer_client(umem_p, umem_p->mapped_state, UMEM_PEER_UNMAPPED);
 
 	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
 		xa_erase(&umem_p->ib_peer_client->umem_xa, umem_p->xa_id);
@@ -482,3 +556,4 @@ void ib_peer_umem_release(struct ib_umem *umem)
 
 	kref_put(&umem_p->kref, ib_peer_umem_kref_release);
 }
+
