@@ -53,17 +53,24 @@ if [ $with_mlxfw -eq 1 ]; then
 else
 	MLNX_EN_PATCH_PARAMS="$MLNX_EN_PATCH_PARAMS --without-mlxfw"
 fi
+modules="$modules drivers/base/auxiliary"
 
 i=0
 
 for module in $modules
 do
 	name=`echo ${module##*/} | sed -e "s/.ko.gz//" -e "s/.ko//"`
+	if [ "$name" = 'auxiliary' ]; then
+		echo "if [[ \$(VER \$kernelver) < \$(VER '5.11.0') ]]; then"
+	fi
 	echo BUILT_MODULE_NAME[$i]=$name
 	echo BUILT_MODULE_LOCATION[$i]=${module%*/*}
 	echo DEST_MODULE_NAME[$i]=$name
 	echo DEST_MODULE_LOCATION[$i]=/kernel/${module%*/*}
 	echo STRIP[$i]="\$STRIP_MODS"
+	if [ "$name" = 'auxiliary' ]; then
+		echo "fi"
+	fi
 	let i++
 done
 

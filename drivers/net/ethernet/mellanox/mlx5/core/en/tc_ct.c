@@ -30,9 +30,8 @@
 #define MLX5_CT_STATE_TRK_BIT BIT(2)
 #define MLX5_CT_STATE_NAT_BIT BIT(3)
 #define MLX5_CT_STATE_REPLY_BIT BIT(4)
-
-#define MLX5_CT_LABELS_BITS (mlx5e_tc_attr_to_reg_mappings[LABELS_TO_REG].mlen * 8)
-#define MLX5_CT_LABELS_MASK GENMASK(MLX5_CT_LABELS_BITS - 1, 0)
+#define MLX5_CT_STATE_RELATED_BIT BIT(5)
+#define MLX5_CT_STATE_INVALID_BIT BIT(6)
 
 #define ct_dbg(fmt, args...)\
 	netdev_dbg(ct_priv->netdev, "ct_debug: " fmt "\n", ##args)
@@ -55,7 +54,6 @@ struct mlx5_tc_ct_priv {
 	struct mlx5_flow_handle *ct_nat_miss_rule;
 	struct mutex control_lock; /* guards parallel adds/dels */
 	struct mapping_ctx *zone_mapping;
-	struct mapping_ctx *labels_mapping;
 	enum mlx5_flow_namespace_type ns_type;
 	struct mlx5_fs_chains *chains;
 	spinlock_t foo_lock; /* protects ft entries */
@@ -153,6 +151,11 @@ struct mlx5_ct_entry {
 	unsigned long flags;
 };
 
+static void
+mlx5_tc_ct_entry_destroy_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
+				 struct mlx5_flow_attr *attr,
+				 struct mlx5e_mod_hdr_handle *mh);
+
 static const struct rhashtable_params cts_ht_params = {
 	.head_offset = offsetof(struct mlx5_ct_entry, node),
 	.key_offset = offsetof(struct mlx5_ct_entry, cookie),
@@ -206,28 +209,6 @@ static bool
 mlx5_tc_ct_dup_nat_entries(struct mlx5_tc_ct_priv *ct_priv)
 {
 	return ct_priv->dev->mlx5e_res.ct.ct_action_on_nat_conns;
-}
-
-static int
-mlx5_get_label_mapping(struct mlx5_tc_ct_priv *ct_priv,
-		       u32 *labels, u32 *id)
-{
-	if (!memchr_inv(labels, 0, sizeof(u32) * 4)) {
-		*id = 0;
-		return 0;
-	}
-
-	if (mapping_add(ct_priv->labels_mapping, labels, id))
-		return -EOPNOTSUPP;
-
-	return 0;
-}
-
-static void
-mlx5_put_label_mapping(struct mlx5_tc_ct_priv *ct_priv, u32 id)
-{
-	if (id)
-		mapping_remove(ct_priv->labels_mapping, id);
 }
 
 // Must be called under rcu_read_lock()
@@ -519,9 +500,7 @@ mlx5_tc_ct_entry_del_rule(struct mlx5_tc_ct_priv *ct_priv,
 	ct_dbg("Deleting ct entry 0x%p rule in zone %d", entry, entry->tuple.zone);
 
 	mlx5_tc_rule_delete(netdev_priv(ct_priv->netdev), zone_rule->rule, attr);
-	mlx5e_mod_hdr_detach(ct_priv->dev,
-			     ct_priv->mod_hdr_tbl, zone_rule->mh);
-	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
+	mlx5_tc_ct_entry_destroy_mod_hdr(ct_priv, zone_rule->attr, zone_rule->mh);
 	kfree(attr);
 }
 
@@ -559,7 +538,7 @@ mlx5_tc_ct_entry_set_registers(struct mlx5_tc_ct_priv *ct_priv,
 			       struct mlx5e_tc_mod_hdr_acts *mod_acts,
 			       u8 ct_state,
 			       u32 mark,
-			       u32 labels_id,
+			       u32 label,
 			       u8 zone_restore_id)
 {
 	struct mlx5_core_dev *dev = ct_priv->dev;
@@ -576,7 +555,7 @@ mlx5_tc_ct_entry_set_registers(struct mlx5_tc_ct_priv *ct_priv,
 		return err;
 
 	err = mlx5e_tc_match_to_reg_set(dev, mod_acts, ct_priv->ns_type,
-					LABELS_TO_REG, labels_id);
+					LABELS_TO_REG, label);
 	if (err)
 		return err;
 
@@ -729,10 +708,13 @@ mlx5_tc_ct_entry_create_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
 	if (!meta)
 		return -EOPNOTSUPP;
 
-	err = mlx5_get_label_mapping(ct_priv, meta->ct_metadata.labels,
-				     &attr->ct_attr.ct_labels_id);
-	if (err)
+	if (meta->ct_metadata.labels[1] ||
+	    meta->ct_metadata.labels[2] ||
+	    meta->ct_metadata.labels[3]) {
+		ct_dbg("Failed to offload ct entry due to unsupported label");
 		return -EOPNOTSUPP;
+	}
+
 	if (nat) {
 		err = mlx5_tc_ct_entry_create_nat(ct_priv, flow_rule,
 						  &mod_acts);
@@ -746,28 +728,50 @@ mlx5_tc_ct_entry_create_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
 					     ct_state,
 					     meta->ct_metadata.mark,
-					     attr->ct_attr.ct_labels_id,
+					     meta->ct_metadata.labels[0],
 					     zone_restore_id);
 	if (err)
 		goto err_mapping;
 
-	*mh = mlx5e_mod_hdr_attach(ct_priv->dev,
-				   ct_priv->mod_hdr_tbl,
-				   ct_priv->ns_type,
-				   &mod_acts);
-	if (IS_ERR(*mh)) {
-		err = PTR_ERR(*mh);
-		goto err_mapping;
+	if (nat) {
+		attr->modify_hdr = mlx5_modify_header_alloc(ct_priv->dev, ct_priv->ns_type,
+							    mod_acts.num_actions,
+							    mod_acts.actions);
+		if (IS_ERR(attr->modify_hdr)) {
+			err = PTR_ERR(attr->modify_hdr);
+			goto err_mapping;
+		}
+
+		*mh = NULL;
+	} else {
+		*mh = mlx5e_mod_hdr_attach(ct_priv->dev,
+					   ct_priv->mod_hdr_tbl,
+					   ct_priv->ns_type,
+					   &mod_acts);
+		if (IS_ERR(*mh)) {
+			err = PTR_ERR(*mh);
+			goto err_mapping;
+		}
+		attr->modify_hdr = mlx5e_mod_hdr_get(*mh);
 	}
-	attr->modify_hdr = mlx5e_mod_hdr_get(*mh);
 
 	dealloc_mod_hdr_actions(&mod_acts);
 	return 0;
 
 err_mapping:
 	dealloc_mod_hdr_actions(&mod_acts);
-	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
 	return err;
+}
+
+static void
+mlx5_tc_ct_entry_destroy_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
+				 struct mlx5_flow_attr *attr,
+				 struct mlx5e_mod_hdr_handle *mh)
+{
+	if (mh)
+		mlx5e_mod_hdr_detach(ct_priv->dev, ct_priv->mod_hdr_tbl, mh);
+	else
+		mlx5_modify_header_dealloc(ct_priv->dev, attr->modify_hdr);
 }
 
 static int
@@ -831,9 +835,7 @@ mlx5_tc_ct_entry_add_rule(struct mlx5_tc_ct_priv *ct_priv,
 	return 0;
 
 err_rule:
-	mlx5e_mod_hdr_detach(ct_priv->dev,
-			     ct_priv->mod_hdr_tbl, zone_rule->mh);
-	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
+	mlx5_tc_ct_entry_destroy_mod_hdr(ct_priv, zone_rule->attr, zone_rule->mh);
 err_mod_hdr:
 	kfree(attr);
 err_attr:
@@ -1122,6 +1124,7 @@ err_rules:
 err_tuple:
 	mlx5_tc_ct_entry_remove_from_tuples(entry);
 err_tuple_nat:
+	rhashtable_remove_fast(&ft->ct_entries_ht, &entry->node, cts_ht_params);
 err_entries:
 	spin_unlock_bh(&ct_priv->foo_lock);
 err_set:
@@ -1157,7 +1160,6 @@ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
 	}
 
 	rhashtable_remove_fast(&ft->ct_entries_ht, &entry->node, cts_ht_params);
-	mlx5_tc_ct_entry_remove_from_tuples(entry);
 	rcu_read_unlock();
 	spin_unlock_bh(&ct_priv->foo_lock);
 
@@ -1276,7 +1278,8 @@ mlx5_tc_ct_add_no_trk_match(struct mlx5e_priv *priv,
 
 	mlx5e_tc_match_to_reg_get_match(spec, CTSTATE_TO_REG,
 					&ctstate, &ctstate_mask);
-	if (ctstate_mask)
+
+	if ((ctstate & ctstate_mask) == MLX5_CT_STATE_TRK_BIT)
 		return -EOPNOTSUPP;
 
 	ctstate_mask |= MLX5_CT_STATE_TRK_BIT;
@@ -1286,34 +1289,26 @@ mlx5_tc_ct_add_no_trk_match(struct mlx5e_priv *priv,
 	return 0;
 }
 
-void mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr)
-{
-	if (ct_attr->ct_labels_id)
-		mlx5_put_label_mapping(priv, ct_attr->ct_labels_id);
-}
-
 int
 mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		       struct mlx5_flow_spec *spec,
 		       struct flow_cls_offload *f,
-		       struct mlx5_ct_attr *ct_attr,
 		       struct netlink_ext_ack *extack)
 {
+	bool trk, est, untrk, unest, new, rpl, unrpl, rel, unrel, inv, uninv;
 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
-	bool trk, est, untrk, unest, new, rpl, unrpl;
 	struct flow_dissector_key_ct *mask, *key;
 	u32 ctstate = 0, ctstate_mask = 0;
 	u16 ct_state_on, ct_state_off;
 	u16 ct_state, ct_state_mask;
 	struct flow_match_ct match;
-	u32 ct_labels[4];
 
 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CT))
 		return 0;
 
 	if (!priv) {
 		NL_SET_ERR_MSG_MOD(extack,
-				   "offload of ct matching isn't available");
+				"offload of ct matching isn't available");
 		return -EOPNOTSUPP;
 	}
 
@@ -1326,11 +1321,19 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 	ct_state_mask = mask->ct_state;
 
 	if (ct_state_mask & ~(TCA_FLOWER_KEY_CT_FLAGS_TRACKED |
-			      TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED |
-			      TCA_FLOWER_KEY_CT_FLAGS_NEW |
-			      TCA_FLOWER_KEY_CT_FLAGS_REPLY)) {
+				TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED |
+				TCA_FLOWER_KEY_CT_FLAGS_NEW |
+				TCA_FLOWER_KEY_CT_FLAGS_REPLY |
+				TCA_FLOWER_KEY_CT_FLAGS_RELATED |
+				TCA_FLOWER_KEY_CT_FLAGS_INVALID)) {
 		NL_SET_ERR_MSG_MOD(extack,
-				   "only ct_state trk, est, new and rpl are supported for offload");
+				"only ct_state trk, est, new, rpl, inv and rel are supported for offload");
+		return -EOPNOTSUPP;
+	}
+
+	if (mask->ct_labels[1] || mask->ct_labels[2] || mask->ct_labels[3]) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "only lower 32bits of ct_labels are supported for offload");
 		return -EOPNOTSUPP;
 	}
 
@@ -1340,9 +1343,13 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 	new = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_NEW;
 	est = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
 	rpl = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_REPLY;
+	rel = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_RELATED;
+	inv = ct_state_on & TCA_FLOWER_KEY_CT_FLAGS_INVALID;
 	untrk = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
 	unest = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
 	unrpl = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_REPLY;
+	unrel = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_RELATED;
+	uninv = ct_state_off & TCA_FLOWER_KEY_CT_FLAGS_INVALID;
 
 	ctstate |= trk ? MLX5_CT_STATE_TRK_BIT : 0;
 	ctstate |= est ? MLX5_CT_STATE_ESTABLISHED_BIT : 0;
@@ -1350,6 +1357,20 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 	ctstate_mask |= (untrk || trk) ? MLX5_CT_STATE_TRK_BIT : 0;
 	ctstate_mask |= (unest || est) ? MLX5_CT_STATE_ESTABLISHED_BIT : 0;
 	ctstate_mask |= (unrpl || rpl) ? MLX5_CT_STATE_REPLY_BIT : 0;
+	ctstate_mask |= unrel ? MLX5_CT_STATE_RELATED_BIT : 0;
+	ctstate_mask |= uninv ? MLX5_CT_STATE_INVALID_BIT : 0;
+
+	if (rel) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "matching on ct_state +rel isn't supported");
+		return -EOPNOTSUPP;
+	}
+
+	if (inv) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "matching on ct_state +inv isn't supported");
+		return -EOPNOTSUPP;
+	}
 
 	if (new) {
 		NL_SET_ERR_MSG_MOD(extack,
@@ -1366,17 +1387,10 @@ mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 	if (mask->ct_mark)
 		mlx5e_tc_match_to_reg_match(spec, MARK_TO_REG,
 					    key->ct_mark, mask->ct_mark);
-	if (mask->ct_labels[0] || mask->ct_labels[1] || mask->ct_labels[2] ||
-	    mask->ct_labels[3]) {
-		ct_labels[0] = key->ct_labels[0] & mask->ct_labels[0];
-		ct_labels[1] = key->ct_labels[1] & mask->ct_labels[1];
-		ct_labels[2] = key->ct_labels[2] & mask->ct_labels[2];
-		ct_labels[3] = key->ct_labels[3] & mask->ct_labels[3];
-		if (mlx5_get_label_mapping(priv, ct_labels, &ct_attr->ct_labels_id))
-			return -EOPNOTSUPP;
-		mlx5e_tc_match_to_reg_match(spec, LABELS_TO_REG, ct_attr->ct_labels_id,
-					    MLX5_CT_LABELS_MASK);
-	}
+	if (mask->ct_labels[0])
+		mlx5e_tc_match_to_reg_match(spec, LABELS_TO_REG,
+					    key->ct_labels[0],
+					    mask->ct_labels[0]);
 
 	return 0;
 }
@@ -1738,7 +1752,7 @@ mlx5_tc_ct_del_ft_cb(struct mlx5_tc_ct_priv *ct_priv, struct mlx5_ct_ft *ft)
  * + tuple + zone match +
  * +--------------------+
  *      | set mark
- *      | set labels_id
+ *      | set label
  *      | set established
  *	| set zone_restore
  *      | do nat (if needed)
@@ -2221,6 +2235,7 @@ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 	struct mlx5_tc_ct_priv *ct_priv;
 	struct mlx5_core_dev *dev;
 	const char *msg;
+	u64 mapping_id;
 	int err;
 
 	dev = priv->mdev;
@@ -2236,16 +2251,13 @@ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 	if (!ct_priv)
 		goto err_alloc;
 
-	ct_priv->zone_mapping = mapping_create(sizeof(u16), 0, true);
+	mapping_id = mlx5_query_nic_system_image_guid(dev);
+
+	ct_priv->zone_mapping = mapping_create_for_id(mapping_id + MAPPING_ID_ZONE,
+						      sizeof(u16), 0, true);
 	if (IS_ERR(ct_priv->zone_mapping)) {
 		err = PTR_ERR(ct_priv->zone_mapping);
-		goto err_mapping_zone;
-	}
-
-	ct_priv->labels_mapping = mapping_create(sizeof(u32) * 4, 0, true);
-	if (IS_ERR(ct_priv->labels_mapping)) {
-		err = PTR_ERR(ct_priv->labels_mapping);
-		goto err_mapping_labels;
+		goto err_mapping;
 	}
 
 	spin_lock_init(&ct_priv->foo_lock);
@@ -2304,10 +2316,8 @@ err_post_ct_tbl:
 err_ct_nat_tbl:
 	mlx5_chains_destroy_global_table(chains, ct_priv->ct);
 err_ct_tbl:
-	mapping_destroy(ct_priv->labels_mapping);
-err_mapping_labels:
 	mapping_destroy(ct_priv->zone_mapping);
-err_mapping_zone:
+err_mapping:
 	kfree(ct_priv);
 err_alloc:
 err_support:
@@ -2330,7 +2340,6 @@ mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv)
 	mlx5_chains_destroy_global_table(chains, ct_priv->ct_nat);
 	mlx5_chains_destroy_global_table(chains, ct_priv->ct);
 	mapping_destroy(ct_priv->zone_mapping);
-	mapping_destroy(ct_priv->labels_mapping);
 
 	rhashtable_destroy(&ct_priv->ct_tuples_ht);
 	rhashtable_destroy(&ct_priv->ct_tuples_nat_ht);

@@ -1,5 +1,5 @@
-#ifndef COMPAT_NET_XDP_H
-#define COMPAT_NET_XDP_H
+#ifndef _COMPAT_NET_XDP_H
+#define _COMPAT_NET_XDP_H
 
 #include "../../compat/config.h"
 
@@ -36,5 +36,4 @@ void xdp_rxq_info_unreg(struct xdp_rxq_info *xdp_rxq)
 
 #endif
 
-#endif /* COMPAT_NET_XDP_H */
-
+#endif /* _COMPAT_NET_XDP_H */

@@ -200,7 +200,7 @@ struct netdev_lag_upper_info {
 #endif
 
 
-#if IS_ENABLED(CONFIG_VXLAN) && (defined(HAVE_NDO_ADD_VXLAN_PORT) || defined(HAVE_NDO_UDP_TUNNEL_ADD))
+#if IS_ENABLED(CONFIG_VXLAN) && (defined(HAVE_NDO_ADD_VXLAN_PORT) || defined(HAVE_NDO_UDP_TUNNEL_ADD) || defined(HAVE_UDP_TUNNEL_NIC_INFO))
 #define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
 #endif
 

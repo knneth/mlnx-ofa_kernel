@@ -55,7 +55,7 @@ Change-Id: I53e8ef5ff89f7422038c0213879ffd4496442432
  err:
  	mutex_unlock(&file->ucontext_lock);
  	up_read(&file->hw_destroy_rwsem);
-@@ -3293,7 +3306,11 @@ static int __uverbs_create_xsrq(struct u
+@@ -3347,7 +3360,11 @@ static int __uverbs_create_xsrq(struct u
  	struct ib_srq                   *srq;
  	struct ib_srq_init_attr          attr;
  	int ret;

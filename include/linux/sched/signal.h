@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_SCHED_SIGNAL_H
-#define COMPAT_LINUX_SCHED_SIGNAL_H
+#ifndef _COMPAT_LINUX_SCHED_SIGNAL_H
+#define _COMPAT_LINUX_SCHED_SIGNAL_H
 
 #include "../../../compat/config.h"
 
@@ -7,4 +7,4 @@
 #include_next <linux/sched/signal.h>
 #endif
 
-#endif /* COMPAT_LINUX_SCHED_SIGNAL_H */
+#endif /* _COMPAT_LINUX_SCHED_SIGNAL_H */

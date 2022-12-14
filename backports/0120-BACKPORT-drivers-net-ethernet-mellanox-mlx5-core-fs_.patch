@@ -8,7 +8,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
-@@ -247,15 +247,27 @@ enum fs_i_lock_class {
+@@ -248,15 +248,27 @@ enum fs_i_lock_class {
  };
  
  static const struct rhashtable_params rhash_fte = {
@@ -38,7 +38,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	.key_offset = offsetof(struct mlx5_flow_group, mask),
  	.head_offset = offsetof(struct mlx5_flow_group, hash),
  	.automatic_shrinking = true,
-@@ -469,7 +481,9 @@ static void del_hw_flow_table(struct fs_
+@@ -470,7 +482,9 @@ static void del_hw_flow_table(struct fs_
  	fs_get_obj(ft, node);
  	dev = get_dev(&ft->node);
  	root = find_root(&ft->node);
@@ -48,7 +48,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  
  	if (node->active) {
  		err = root->cmds->destroy_flow_table(root, ft);
-@@ -485,7 +499,11 @@ static void del_sw_flow_table(struct fs_
+@@ -486,7 +500,11 @@ static void del_sw_flow_table(struct fs_
  
  	fs_get_obj(ft, node);
  
@@ -60,7 +60,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	if (ft->node.parent) {
  		fs_get_obj(prio, ft->node.parent);
  		prio->num_ft--;
-@@ -521,7 +539,9 @@ static void del_sw_hw_rule(struct fs_nod
+@@ -522,7 +540,9 @@ static void del_sw_hw_rule(struct fs_nod
  
  	fs_get_obj(rule, node);
  	fs_get_obj(fte, rule->node.parent);
@@ -70,7 +70,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	if (is_fwd_next_action(rule->sw_action)) {
  		mutex_lock(&rule->dest_attr.ft->lock);
  		list_del(&rule->next_ft);
-@@ -566,7 +586,9 @@ static void del_hw_fte(struct fs_node *n
+@@ -567,7 +587,9 @@ static void del_hw_fte(struct fs_node *n
  	fs_get_obj(fg, fte->node.parent);
  	fs_get_obj(ft, fg->node.parent);
  
@@ -80,7 +80,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	dev = get_dev(&ft->node);
  	root = find_root(&ft->node);
  	if (node->active) {
-@@ -607,7 +629,9 @@ static void del_hw_flow_group(struct fs_
+@@ -608,7 +630,9 @@ static void del_hw_flow_group(struct fs_
  	fs_get_obj(fg, node);
  	fs_get_obj(ft, fg->node.parent);
  	dev = get_dev(&ft->node);
@@ -90,7 +90,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  
  	root = find_root(&ft->node);
  	if (fg->node.active && root->cmds->destroy_flow_group(root, ft, fg))
-@@ -631,7 +655,11 @@ static void del_sw_flow_group(struct fs_
+@@ -632,7 +656,11 @@ static void del_sw_flow_group(struct fs_
  	    fg->max_ftes == ft->autogroup.group_size &&
  	    fg->start_index < ft->autogroup.max_fte)
  		ft->autogroup.num_groups--;
@@ -102,7 +102,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  			      &fg->hash,
  			      rhash_fg);
  	WARN_ON(err);
-@@ -738,7 +766,11 @@ static struct mlx5_flow_group *alloc_ins
+@@ -739,7 +767,11 @@ static struct mlx5_flow_group *alloc_ins
  		return fg;
  
  	/* initialize refcnt, add to parent list */
@@ -114,7 +114,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  			      &fg->hash,
  			      rhash_fg);
  	if (ret) {
-@@ -767,7 +799,11 @@ static struct mlx5_flow_table *alloc_flo
+@@ -768,7 +800,11 @@ static struct mlx5_flow_table *alloc_flo
  	if (!ft)
  		return ERR_PTR(-ENOMEM);
  
@@ -126,7 +126,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	if (ret) {
  		kfree(ft);
  		return ERR_PTR(ret);
-@@ -1145,12 +1181,18 @@ static struct mlx5_flow_table *__mlx5_cr
+@@ -1142,12 +1178,18 @@ static struct mlx5_flow_table *__mlx5_cr
  	fs_prio->num_ft++;
  	up_write_ref_node(&fs_prio->node, false);
  	mutex_unlock(&root->chain_lock);
@@ -145,7 +145,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	kfree(ft);
  unlock_root:
  	mutex_unlock(&root->chain_lock);
-@@ -1248,7 +1290,9 @@ struct mlx5_flow_group *mlx5_create_flow
+@@ -1257,7 +1299,9 @@ struct mlx5_flow_group *mlx5_create_flow
  		tree_put_node(&fg->node, false);
  		return ERR_PTR(err);
  	}
@@ -156,7 +156,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	fg->node.active = true;
  
  	return fg;
-@@ -1484,7 +1528,9 @@ static int create_auto_flow_group(struct
+@@ -1493,7 +1537,9 @@ static int create_auto_flow_group(struct
  	err = root->cmds->create_flow_group(root, ft, in, fg);
  	if (!err) {
  		fg->node.active = true;
@@ -166,7 +166,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  	}
  
  	kvfree(in);
-@@ -1597,12 +1643,16 @@ static struct mlx5_flow_handle *add_rule
+@@ -1606,12 +1652,16 @@ static struct mlx5_flow_handle *add_rule
  		fte->action.action = old_action;
  		return handle;
  	}
@@ -183,7 +183,7 @@ Change-Id: I1ae216eddb94b964c33e4e472575144f7bc90f98
  		}
  	}
  	return handle;
-@@ -1667,16 +1717,26 @@ static int build_match_list(struct match
+@@ -1676,16 +1726,26 @@ static int build_match_list(struct match
  			    const struct mlx5_flow_spec *spec,
  			    bool ft_locked)
  {

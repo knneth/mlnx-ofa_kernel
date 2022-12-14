@@ -1,6 +1,8 @@
 #ifndef _COMPAT_LINUX_MODULE_H
 #define _COMPAT_LINUX_MODULE_H
 
+#include "../../compat/config.h"
+
 #include_next <linux/module.h>
 
 /* This is a workaround to support UEK3 kernels */

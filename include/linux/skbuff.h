@@ -26,15 +26,6 @@ static inline struct page *dev_alloc_page(void)
 			SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28))
-#define v2_6_28_skb_add_rx_frag LINUX_BACKPORT(v2_6_28_skb_add_rx_frag)
-extern void v2_6_28_skb_add_rx_frag(struct sk_buff *skb, int i, struct page *page,
-			    int off, int size);
-#define skb_add_rx_frag(skb, i, page, off, size, truesize) \
-	v2_6_28_skb_add_rx_frag(skb, i, page, off, size)
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) */
-#endif /*  LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) */
-
 #ifndef HAVE_SKB_PUT_ZERO
 #define skb_put_zero LINUX_BACKPORT(skb_put_zero)
 static inline void *skb_put_zero(struct sk_buff *skb, unsigned int len)

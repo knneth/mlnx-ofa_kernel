@@ -1,5 +1,5 @@
-#ifndef LINUX_DCBNL_H
-#define LINUX_DCBNL_H
+#ifndef _COMPAT_LINUX_DCBNL_H
+#define _COMPAT_LINUX_DCBNL_H
 
 #include "../../compat/config.h"
 
@@ -51,4 +51,4 @@ struct ieee_qcn_stats {
 #define IEEE_8021QAZ_APP_SEL_DSCP	5
 #endif
 
-#endif /* LINUX_DCBNL_H */
+#endif /* _COMPAT_LINUX_DCBNL_H */

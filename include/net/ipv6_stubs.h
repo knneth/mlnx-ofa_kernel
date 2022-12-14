@@ -1,5 +1,5 @@
-#ifndef COMPAT_IPV6_STUBS_H
-#define COMPAT_IPV6_STUBS_H 1
+#ifndef _COMPAT_NET_IPV6_STUBS_H
+#define _COMPAT_NET_IPV6_STUBS_H
 
 #include "../../compat/config.h"
 
@@ -7,4 +7,4 @@
 #include_next <net/ipv6_stubs.h>
 #endif
 
-#endif /* COMPAT_IPV6_STUBS_H */
+#endif /* _COMPAT_NET_IPV6_STUBS_H */

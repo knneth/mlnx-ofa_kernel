@@ -1,5 +1,5 @@
-#ifndef LINUX_IF_LINK_H
-#define LINUX_IF_LINK_H
+#ifndef _COMPAT_LINUX_IF_LINK_H
+#define _COMPAT_LINUX_IF_LINK_H
 
 #include "../../compat/config.h"
 
@@ -23,4 +23,4 @@ struct ifla_vf_guid {
 };
 #endif
 
-#endif /* LINUX_IF_LINK_H */
+#endif /* _COMPAT_LINUX_IF_LINK_H */

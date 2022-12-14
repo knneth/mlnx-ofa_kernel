@@ -82,10 +82,11 @@ enum dr_dump_rec_type {
 	DR_DUMP_REC_TYPE_TABLE_TX = 3102,
 
 	DR_DUMP_REC_TYPE_MATCHER = 3200,
-	DR_DUMP_REC_TYPE_MATCHER_MASK = 3201,
+	DR_DUMP_REC_TYPE_MATCHER_MASK_DEPRECATED = 3201,
 	DR_DUMP_REC_TYPE_MATCHER_RX = 3202,
 	DR_DUMP_REC_TYPE_MATCHER_TX = 3203,
 	DR_DUMP_REC_TYPE_MATCHER_BUILDER = 3204,
+	DR_DUMP_REC_TYPE_MATCHER_MASK = 3205,
 
 	DR_DUMP_REC_TYPE_RULE = 3300,
 	DR_DUMP_REC_TYPE_RULE_RX_ENTRY_V0 = 3301,
@@ -135,8 +136,8 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 {
 	struct mlx5dr_action *action = action_mem->action;
 	const u64 action_id = (u64)(uintptr_t)action;
-	int ret = 0;
 	char tmp_buf[BUF_SIZE] = {};
+	int ret = 0;
 
 	switch (action->action_type) {
 	case DR_ACTION_TYP_DROP:
@@ -144,37 +145,37 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 			       DR_DUMP_REC_TYPE_ACTION_DROP, action_id, rule_id);
 		break;
 	case DR_ACTION_TYP_FT:
-		if (action->dest_tbl.is_fw_tbl)
+		if (action->dest_tbl->is_fw_tbl)
 			ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 				       DR_DUMP_REC_TYPE_ACTION_FT, action_id,
-				       rule_id, action->dest_tbl.fw_tbl.id);
+				       rule_id, action->dest_tbl->fw_tbl.id);
 		else
 			ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 				       DR_DUMP_REC_TYPE_ACTION_FT, action_id,
-				       rule_id, action->dest_tbl.tbl->table_id);
+				       rule_id, action->dest_tbl->tbl->table_id);
 
 		break;
 	case DR_ACTION_TYP_CTR:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_CTR, action_id, rule_id,
-			       action->ctr.ctr_id +
-			       action->ctr.offeset);
+			       action->ctr->ctr_id +
+			       action->ctr->offeset);
 		break;
 	case DR_ACTION_TYP_TAG:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_TAG, action_id, rule_id,
-			       action->flow_tag);
+			       action->flow_tag->flow_tag);
 		break;
 	case DR_ACTION_TYP_MODIFY_HDR:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,%d\n",
 			       DR_DUMP_REC_TYPE_ACTION_MODIFY_HDR, action_id,
-			       rule_id, action->rewrite.index,
-			       action->rewrite.single_action_opt);
+			       rule_id, action->rewrite->index,
+			       action->rewrite->single_action_opt);
 		break;
 	case DR_ACTION_TYP_VPORT:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_VPORT, action_id, rule_id,
-			       action->vport.caps->num);
+			       action->vport->caps->num);
 		break;
 	case DR_ACTION_TYP_TNL_L2_TO_L2:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx\n",
@@ -184,26 +185,26 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 	case DR_ACTION_TYP_TNL_L3_TO_L2:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_DECAP_L3, action_id,
-			       rule_id, action->rewrite.index);
+			       rule_id, action->rewrite->index);
 		break;
 	case DR_ACTION_TYP_L2_TO_TNL_L2:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_ENCAP_L2, action_id,
-			       rule_id, action->reformat.reformat_id);
+			       rule_id, action->reformat->reformat_id);
 		break;
 	case DR_ACTION_TYP_L2_TO_TNL_L3:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_ENCAP_L3, action_id,
-			       rule_id, action->reformat.reformat_id);
+			       rule_id, action->reformat->reformat_id);
 		break;
 	case DR_ACTION_TYP_SAMPLER:
 		ret = snprintf(tmp_buf, BUF_SIZE,
 			       "%d,0x%llx,0x%llx,0x%llx,0x%x,0x%x,0x%llx,0x%llx\n",
 			       DR_DUMP_REC_TYPE_ACTION_SAMPLER, action_id,
 			       rule_id, 0xFFFFFFFFULL, -1,
-			       action->sampler.sampler_id,
-			       action->sampler.rx_icm_addr,
-			       action->sampler.tx_icm_addr);
+			       action->sampler->sampler_id,
+			       action->sampler->rx_icm_addr,
+			       action->sampler->tx_icm_addr);
 		break;
 	case DR_ACTION_TYP_POP_VLAN:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx\n",
@@ -213,14 +214,14 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 	case DR_ACTION_TYP_PUSH_VLAN:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_PUSH_VLAN, action_id,
-			       rule_id, action->push_vlan.vlan_hdr);
+			       rule_id, action->push_vlan->vlan_hdr);
 		break;
 	case DR_ACTION_TYP_INSERT_HDR:
 		ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,0x%x,0x%x\n",
 			       DR_DUMP_REC_TYPE_ACTION_INSERT_HDR, action_id,
-			       rule_id, action->reformat.reformat_id,
-			       action->reformat.reformat_param_0,
-			       action->reformat.reformat_param_1);
+			       rule_id, action->reformat->reformat_id,
+			       action->reformat->reformat_param_0,
+			       action->reformat->reformat_param_1);
 		break;
 	default:
 		return 0;
@@ -241,9 +242,9 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_ste *ste,
 		 bool is_rx, const u64 rule_id,
 		 enum mlx5_ifc_steering_format_version format_ver)
 {
+	enum dr_dump_rec_type mem_rec_type;
 	char hw_ste_dump[BUF_SIZE] = {};
 	char tmp_buf[BUF_SIZE] = {};
-	enum dr_dump_rec_type mem_rec_type;
 	int ret;
 
 	if (format_ver == MLX5_HW_CONNECTX_5) {
@@ -255,7 +256,7 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_ste *ste,
 	}
 
 	dr_dump_hex_print(hw_ste_dump, BUF_SIZE, (char *)ste->hw_ste,
-			  DR_STE_SIZE_REDUCED);
+			  ste->size);
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,%s\n",
 		       mem_rec_type,
 		       dr_dump_icm_to_idx(mlx5dr_ste_get_icm_addr(ste)),
@@ -357,9 +358,9 @@ static int
 dr_dump_matcher_mask(struct dr_dump_ctx *ctx, struct mlx5dr_match_param *mask,
 		     u8 criteria, const u64 matcher_id)
 {
+	char tmp_buf[BUF_SIZE] = {};
 	char dump[BUF_SIZE] = {};
 	int ret;
-	char tmp_buf[BUF_SIZE] = {};
 
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,",
 		       DR_DUMP_REC_TYPE_MATCHER_MASK, matcher_id);
@@ -452,15 +453,17 @@ static int
 dr_dump_matcher_builder(struct dr_dump_ctx *ctx, struct mlx5dr_ste_build *builder,
 			u32 index, bool is_rx, const u64 matcher_id)
 {
-	int ret;
+	bool is_match = builder->htbl_type == DR_STE_HTBL_TYPE_MATCH;
 	char tmp_buf[BUF_SIZE] = {};
+	int ret;
 
-	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx%d,%d,0x%x\n",
+	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx%d,%d,0x%x,%d\n",
 		       DR_DUMP_REC_TYPE_MATCHER_BUILDER,
 		       matcher_id,
 		       index,
 		       is_rx,
-		       builder->lu_type);
+		       builder->lu_type,
+		       is_match ? builder->format_id : -1);
 	if (ret < 0)
 		return ret;
 
@@ -477,8 +480,8 @@ dr_dump_matcher_rx_tx(struct dr_dump_ctx *ctx, bool is_rx,
 		      const u64 matcher_id)
 {
 	enum dr_dump_rec_type rec_type;
-	int i, ret;
 	char tmp_buf[BUF_SIZE] = {};
+	int i, ret;
 
 	rec_type = is_rx ? DR_DUMP_REC_TYPE_MATCHER_RX :
 			   DR_DUMP_REC_TYPE_MATCHER_TX;
@@ -598,8 +601,8 @@ dr_dump_table_rx_tx(struct dr_dump_ctx *ctx, bool is_rx,
 		    const u64 table_id)
 {
 	enum dr_dump_rec_type rec_type;
-	int ret;
 	char tmp_buf[BUF_SIZE] = {};
+	int ret;
 
 	rec_type = is_rx ? DR_DUMP_REC_TYPE_TABLE_RX :
 			   DR_DUMP_REC_TYPE_TABLE_TX;
@@ -622,8 +625,8 @@ static int dr_dump_table(struct dr_dump_ctx *ctx, struct mlx5dr_table *table)
 {
 	struct mlx5dr_table_rx_tx *rx = &table->rx;
 	struct mlx5dr_table_rx_tx *tx = &table->tx;
-	int ret;
 	char tmp_buf[BUF_SIZE] = {};
+	int ret;
 
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,%d,%d\n",
 		       DR_DUMP_REC_TYPE_TABLE,
@@ -691,8 +694,8 @@ static int
 dr_dump_send_ring(struct dr_dump_ctx *ctx, struct mlx5dr_send_ring *ring,
 		  const u64 domain_id)
 {
-	int ret;
 	char tmp_buf[BUF_SIZE] = {};
+	int ret;
 
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,0x%x,0x%x\n",
 		       DR_DUMP_REC_TYPE_DOMAIN_SEND_RING,
@@ -716,8 +719,8 @@ dr_dump_domain_info_flex_parser(struct dr_dump_ctx *ctx,
 				const u8 flex_parser_value,
 				const u64 domain_id)
 {
-	int ret;
 	char tmp_buf[BUF_SIZE] = {};
+	int ret;
 
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,%s,0x%x\n",
 		       DR_DUMP_REC_TYPE_DOMAIN_INFO_FLEX_PARSER,

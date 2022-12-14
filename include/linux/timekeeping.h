@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_TIMEKEEPING_H
-#define COMPAT_LINUX_TIMEKEEPING_H
+#ifndef _COMPAT_LINUX_TIMEKEEPING_H
+#define _COMPAT_LINUX_TIMEKEEPING_H
 
 #include "../../compat/config.h"
 
@@ -12,4 +12,4 @@ static inline u64 ktime_get_ns(void)
 }
 #endif /* HAVE_KTIME_TO_NS */
 
-#endif /* COMPAT_LINUX_TIMEKEEPING_H */
+#endif /* _COMPAT_LINUX_TIMEKEEPING_H */

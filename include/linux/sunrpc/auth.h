@@ -1,5 +1,5 @@
-#ifndef LINUX_AUTH_H
-#define LINUX_AUTH_H
+#ifndef _COMPAT_LINUX_SUNRPC_AUTH_H
+#define _COMPAT_LINUX_SUNRPC_AUTH_H
 
 #include "../../../compat/config.h"
 
@@ -10,4 +10,4 @@
 #define RPCAUTH_AUTH_DATATOUCH 0x00000002
 #endif
 
-#endif /* LINUX_AUTH_H */
+#endif /* _COMPAT_LINUX_SUNRPC_AUTH_H */

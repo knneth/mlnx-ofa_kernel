@@ -1,5 +1,5 @@
-#ifndef _MLNX_LINUX_BLK_TYPES_H
-#define _MLNX_LINUX_BLK_TYPES_H
+#ifndef _COMPAT_LINUX_BLK_TYPES_H
+#define _COMPAT_LINUX_BLK_TYPES_H
 
 #include "../../compat/config.h"
 
@@ -9,4 +9,4 @@
 typedef __u32 __bitwise blk_mq_req_flags_t;
 #endif
 
-#endif /* _MLNX_LINUX_BLK_TYPES_H */
+#endif /* _COMPAT_LINUX_BLK_TYPES_H */

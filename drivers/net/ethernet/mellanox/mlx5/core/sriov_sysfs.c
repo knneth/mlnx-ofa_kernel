@@ -40,6 +40,7 @@
 #include "eswitch.h"
 #ifdef CONFIG_MLX5_ESWITCH
 #include "esw/vf_meter.h"
+#include "esw/legacy.h"
 #endif
 
 struct vf_attributes {
@@ -133,7 +134,7 @@ static ssize_t max_tx_rate_group_store(struct mlx5_vgroup *g,
 	if (err != 1)
 		return -EINVAL;
 
-	err = mlx5_eswitch_set_vgroup_max_rate(esw, g->group_id, max_rate);
+	err = mlx5_eswitch_set_vgroup_max_rate(esw, g->group_id, NULL, max_rate);
 
 	return err ? err : count;
 }
@@ -159,7 +160,7 @@ static ssize_t min_tx_rate_group_store(struct mlx5_vgroup *g,
 	if (err != 1)
 		return -EINVAL;
 
-	err = mlx5_eswitch_set_vgroup_min_rate(esw, g->group_id, min_rate);
+	err = mlx5_eswitch_set_vgroup_min_rate(esw, g->group_id, NULL, min_rate);
 
 	return err ? err : count;
 }
@@ -606,12 +607,13 @@ static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 {
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	u32 max_tx_rate;
 	u32 min_tx_rate;
 	int err;
 
 	mutex_lock(&esw->state_lock);
-	min_tx_rate = esw->vports[g->vf + 1].info.min_rate;
+	min_tx_rate = evport->qos.min_rate;
 	mutex_unlock(&esw->state_lock);
 
 	err = sscanf(buf, "%u", &max_tx_rate);
@@ -647,7 +649,7 @@ static ssize_t group_store(struct mlx5_sriov_vf *g,
 	if (group_id > 255)
 		return -EINVAL;
 
-	err = mlx5_eswitch_vport_update_group(esw, g->vf + 1, group_id);
+	err = mlx5_eswitch_vport_update_group(esw, g->vf + 1, group_id, NULL);
 
 	return err ? err : count;
 }
@@ -666,12 +668,13 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 {
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	u32 min_tx_rate;
 	u32 max_tx_rate;
 	int err;
 
 	mutex_lock(&esw->state_lock);
-	max_tx_rate = esw->vports[g->vf + 1].info.max_rate;
+	max_tx_rate = evport->qos.max_rate;
 	mutex_unlock(&esw->state_lock);
 
 	err = sscanf(buf, "%u", &min_tx_rate);
@@ -697,12 +700,13 @@ static ssize_t min_pf_tx_rate_store(struct mlx5_sriov_vf *g,
 {
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	u32 min_tx_rate;
 	u32 max_tx_rate;
 	int err;
 
 	mutex_lock(&esw->state_lock);
-	max_tx_rate = esw->vports[g->vf].info.max_rate;
+	max_tx_rate = evport->qos.max_rate;
 	mutex_unlock(&esw->state_lock);
 
 	err = sscanf(buf, "%u", &min_tx_rate);
@@ -724,14 +728,14 @@ static ssize_t trunk_show(struct mlx5_sriov_vf *g,
 {
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
-	struct mlx5_vport *vport = &esw->vports[g->vf + 1];
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	u16 vlan_id = 0;
 	char *ret = buf;
 
 	mutex_lock(&esw->state_lock);
-	if (!!bitmap_weight(vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID)) {
+	if (!!bitmap_weight(evport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID)) {
 		ret += _sprintf(ret, buf, "Allowed 802.1Q VLANs:");
-		for_each_set_bit(vlan_id, vport->info.vlan_trunk_8021q_bitmap,
+		for_each_set_bit(vlan_id, evport->info.vlan_trunk_8021q_bitmap,
 				 VLAN_N_VID)
 			ret += _sprintf(ret, buf, " %d", vlan_id);
 		ret += _sprintf(ret, buf, "\n");
@@ -775,16 +779,18 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct mlx5_vport_info *ivi;
-	int vport = g->vf + 1;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	char *p = buf;
+	u32 group_id;
 
 	if (!esw && MLX5_CAP_GEN(esw->dev, vport_group_manager) && mlx5_core_is_pf(esw->dev))
 		return -EPERM;
-	if (!(vport >= 0 && vport < esw->total_vports))
-		return -EINVAL;
+
+	if (IS_ERR(evport))
+		return PTR_ERR(evport);
 
 	mutex_lock(&esw->state_lock);
-	ivi = &esw->vports[vport].info;
+	ivi = &evport->info;
 	p += _sprintf(p, buf, "VF         : %d\n", g->vf);
 	p += _sprintf(p, buf, "MAC        : %pM\n", ivi->mac);
 	p += _sprintf(p, buf, "VLAN       : %d\n", ivi->vlan);
@@ -794,9 +800,14 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "SpoofCheck : %s\n", ivi->spoofchk ? "ON" : "OFF");
 	p += _sprintf(p, buf, "Trust      : %s\n", ivi->trusted ? "ON" : "OFF");
 	p += _sprintf(p, buf, "LinkState  : %s",   policy_str(ivi->link_state));
-	p += _sprintf(p, buf, "MinTxRate  : %d\n", ivi->min_rate);
-	p += _sprintf(p, buf, "MaxTxRate  : %d\n", ivi->max_rate);
-	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
+	p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.min_rate);
+	p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.max_rate);
+
+	group_id = 0;
+	if (evport->qos.group)
+		group_id = evport->qos.group->group_id;
+	p += _sprintf(p, buf, "RateGroup  : %d\n", group_id);
+
 	p += _sprintf(p, buf, "VGT+       : %s\n",
 		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
 				      VLAN_N_VID) ? "ON" : "OFF");
@@ -859,7 +870,7 @@ static ssize_t stats_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	err = mlx5_eswitch_get_vport_stats_backport(dev->priv.eswitch, g->vf + 1, &ifi_backport);
 	if (err)
 		return -EINVAL;
-	err = mlx5_eswitch_query_vport_drop_stats(dev, vport, &stats);
+	err = mlx5_esw_query_vport_drop_stats(dev, vport, &stats);
 	if (err)
 		return -EINVAL;
 

@@ -1,5 +1,5 @@
-#ifndef COMPAT_CDEV_H
-#define COMPAT_CDEV_H
+#ifndef _COMPAT_LINUX_CDEV_H
+#define _COMPAT_LINUX_CDEV_H
 
 #include "../../compat/config.h"
 
@@ -45,4 +45,4 @@ static inline void cdev_device_del(struct cdev *cdev, struct device *dev)
 
 #endif /* HAVE_CDEV_SET_PARENT */
 
-#endif /* COMPAT_CDEV_H */
+#endif /* _COMPAT_LINUX_CDEV_H */

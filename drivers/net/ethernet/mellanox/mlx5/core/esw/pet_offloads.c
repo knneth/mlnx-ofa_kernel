@@ -30,7 +30,8 @@ bool mlx5_eswitch_pet_insert_allowed(const struct mlx5_eswitch *esw)
 
 bool mlx5e_esw_offloads_pet_supported(const struct mlx5_eswitch *esw)
 {
-	if (MLX5_CAP_GEN_2(esw->dev, max_reformat_insert_size))
+	if (MLX5_CAP_GEN_2(esw->dev, max_reformat_insert_size) &&
+	    MLX5_CAP_GEN_2(esw->dev, non_tunnel_reformat))
 		return true;
 
 	return false;
@@ -53,15 +54,14 @@ static int mlx5_pet_create_ft(struct mlx5_eswitch *esw, struct mlx5_flow_table *
 	struct mlx5_flow_namespace *ns;
 	int err;
 
-	ns = mlx5_get_flow_namespace(esw->dev, MLX5_FLOW_NAMESPACE_FDB);
+	ns = mlx5_get_flow_namespace(esw->dev, MLX5_FLOW_NAMESPACE_KERNEL);
 	if (!ns) {
 		esw_warn(esw->dev, "Failed to get FDB flow namespace\n");
 		return -EOPNOTSUPP;
 	}
 
-	ft_attr.flags = MLX5_FLOW_TABLE_TUNNEL_EN_REFORMAT;
 	ft_attr.max_fte = size;
-	ft_attr.prio = FDB_PET_PUSH_PATH;
+	ft_attr.prio = 1;
 
 	*ft = mlx5_create_flow_table(ns, &ft_attr);
 	if (IS_ERR(*ft)) {
@@ -173,7 +173,7 @@ int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(esw->dev, reformat_type,
 							   MLX5_REFORMAT_CONTEXT_ANCHOR_MAC_START,
 							   buf_offset, buf_size, reformat_buf,
-							   MLX5_FLOW_NAMESPACE_FDB);
+							   MLX5_FLOW_NAMESPACE_KERNEL);
 	if (IS_ERR(flow_act.pkt_reformat)) {
 		err = PTR_ERR(flow_act.pkt_reformat);
 		mlx5_core_err(esw->dev, "packet reformat alloc err %d\n", err);
@@ -232,7 +232,7 @@ void mlx5_pet_copy_data_ft_cleanup(struct mlx5_eswitch *esw)
 	mlx5_pet_destroy_ft(esw, esw->offloads.pet_vport_action.copy_data_to_pet_hdr.ft);
 }
 
-int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw)
+int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw, struct mlx5_flow_table *dest_ft)
 {
 	struct mlx5_flow_table *ft = esw->offloads.pet_vport_action.copy_data_to_pet_hdr.ft;
 	u8 action[MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)] = {};
@@ -257,7 +257,7 @@ int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw)
 	MLX5_SET(copy_action_in, action, dst_offset, 0);
 	MLX5_SET(copy_action_in, action, length, 16);
 
-	modify_hdr = mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_FDB,
+	modify_hdr = mlx5_modify_header_alloc(esw->dev, MLX5_FLOW_NAMESPACE_KERNEL,
 					      1, action);
 	if (IS_ERR(modify_hdr)) {
 		err = PTR_ERR(modify_hdr);
@@ -266,8 +266,8 @@ int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw)
 		goto header_alloc_fail;
 	}
 
-	dest.type = MLX5_FLOW_DESTINATION_TYPE_VPORT;
-	dest.vport.num = esw->manager_vport;
+	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
+	dest.ft = dest_ft;
 	flow_act.flags |= FLOW_ACT_IGNORE_FLOW_LEVEL;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_MOD_HDR | MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	flow_act.modify_hdr = modify_hdr;
@@ -315,7 +315,7 @@ void mlx5_pet_copy_data_rule_cleanup(struct mlx5_eswitch *esw)
  * provided ethertype. All packets going thru FDB slow path
  * will be tagged with this header.
  */
-int mlx5e_esw_offloads_pet_setup(struct mlx5_eswitch *esw)
+int mlx5e_esw_offloads_pet_setup(struct mlx5_eswitch *esw, struct mlx5_flow_table *ft)
 {
 	int err;
 
@@ -334,7 +334,7 @@ int mlx5e_esw_offloads_pet_setup(struct mlx5_eswitch *esw)
 	if (err)
 		goto err_push_hdr_rule;
 
-	err = mlx5_pet_copy_data_rule(esw);
+	err = mlx5_pet_copy_data_rule(esw, ft);
 	if (err)
 		goto err_copy_data_rule;
 

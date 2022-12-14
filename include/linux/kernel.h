@@ -1,5 +1,5 @@
-#ifndef COMPAT_KERNEL_H
-#define COMPAT_KERNEL_H
+#ifndef _COMPAT_LINUX_KERNEL_H
+#define _COMPAT_LINUX_KERNEL_H
 
 #include "../../compat/config.h"
 
@@ -67,4 +67,4 @@ static inline u32 reciprocal_scale(u32 val, u32 ep_ro)
 )
 #endif
 
-#endif /* COMPAT_KERNEL_H */
+#endif /* _COMPAT_LINUX_KERNEL_H */

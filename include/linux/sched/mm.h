@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_SCHED_MM_H
-#define COMPAT_LINUX_SCHED_MM_H
+#ifndef _COMPAT_LINUX_SCHED_MM_H
+#define _COMPAT_LINUX_SCHED_MM_H
 
 #include "../../../compat/config.h"
 
@@ -54,4 +54,5 @@ static inline bool mmget_still_valid(struct mm_struct *mm)
        return likely(!mm->core_state);
 }
 #endif
-#endif /* COMPAT_LINUX_SCHED_MM_H */
+
+#endif /* _COMPAT_LINUX_SCHED_MM_H */

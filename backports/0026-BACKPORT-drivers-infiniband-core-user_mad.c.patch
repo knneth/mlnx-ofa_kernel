@@ -1,10 +1,10 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Feras Daoud <ferasda@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/user_mad.c
 
-Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
+Change-Id: I4e450fdf99dce76ae5e7e9a36bfb2c05b30004ed
 ---
- drivers/infiniband/core/user_mad.c | 59 ++++++++++++++++++++++++++----
- 1 file changed, 51 insertions(+), 8 deletions(-)
+ drivers/infiniband/core/user_mad.c | 57 ++++++++++++++++++++++++++++++++++----
+ 1 file changed, 51 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/user_mad.c
 +++ b/drivers/infiniband/core/user_mad.c
@@ -55,20 +55,18 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  	return size;
  }
  
-@@ -521,10 +528,10 @@ static ssize_t ib_umad_write(struct file
- 	}
+@@ -527,8 +534,10 @@ static ssize_t ib_umad_write(struct file
  
  	mutex_lock(&file->mutex);
--
+ 
 +#ifndef MLX_DISABLE_TRACEPOINTS
  	trace_ib_umad_write(file, &packet->mad.hdr,
  			    (struct ib_mad_hdr *)&packet->mad.data);
--
 +#endif
+ 
  	agent = __get_agent(file, packet->mad.hdr.id);
  	if (!agent) {
- 		ret = -EINVAL;
-@@ -1009,8 +1016,11 @@ static int ib_umad_open(struct inode *in
+@@ -1014,8 +1023,11 @@ static int ib_umad_open(struct inode *in
  	filp->private_data = file;
  
  	list_add_tail(&file->port_list, &port->file_list);
@@ -81,7 +79,7 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  out:
  	mutex_unlock(&port->file_mutex);
  	return ret;
-@@ -1222,6 +1232,7 @@ static char *umad_devnode(struct device
+@@ -1227,6 +1239,7 @@ static char *umad_devnode(struct device
  	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
  }
  
@@ -89,7 +87,7 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  static ssize_t abi_version_show(struct class *class,
  				struct class_attribute *attr, char *buf)
  {
-@@ -1234,14 +1245,21 @@ static struct attribute *umad_class_attr
+@@ -1239,14 +1252,21 @@ static struct attribute *umad_class_attr
  	NULL,
  };
  ATTRIBUTE_GROUPS(umad_class);
@@ -111,7 +109,7 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  static void ib_umad_release_port(struct device *device)
  {
  	struct ib_umad_port *port = dev_get_drvdata(device);
-@@ -1271,10 +1289,19 @@ static int ib_umad_init_port(struct ib_d
+@@ -1276,10 +1296,19 @@ static int ib_umad_init_port(struct ib_d
  	dev_t base_issm;
  	int ret;
  
@@ -131,7 +129,7 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  	if (devnum >= IB_UMAD_NUM_FIXED_MINOR) {
  		base_umad = dynamic_umad_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
  		base_issm = dynamic_issm_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
-@@ -1317,7 +1344,11 @@ err_dev:
+@@ -1322,7 +1351,11 @@ err_dev:
  	cdev_device_del(&port->cdev, &port->dev);
  err_cdev:
  	put_device(&port->dev);
@@ -143,7 +141,7 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  	return ret;
  }
  
-@@ -1347,8 +1378,11 @@ static void ib_umad_kill_port(struct ib_
+@@ -1352,8 +1385,11 @@ static void ib_umad_kill_port(struct ib_
  	mutex_unlock(&port->file_mutex);
  
  	cdev_device_del(&port->sm_cdev, &port->sm_dev);
@@ -156,7 +154,7 @@ Change-Id: I61fa2a0a212408b014a724c899aedf45d55777c7
  	/* balances device_initialize() */
  	put_device(&port->sm_dev);
  	put_device(&port->dev);
-@@ -1444,6 +1478,15 @@ static int __init ib_umad_init(void)
+@@ -1449,6 +1485,15 @@ static int __init ib_umad_init(void)
  		goto out_chrdev;
  	}
  

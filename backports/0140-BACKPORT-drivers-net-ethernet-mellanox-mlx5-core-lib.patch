@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
 
 Change-Id: I9aba33cd4caa9754cc4e6cbd951d40972dcc057a
 ---
- .../ethernet/mellanox/mlx5/core/lib/vxlan.c   | 98 +++++++++++++++++--
+ .../net/ethernet/mellanox/mlx5/core/lib/vxlan.c    | 98 ++++++++++++++++++++--
  1 file changed, 91 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
@@ -153,7 +153,7 @@ Change-Id: I9aba33cd4caa9754cc4e6cbd951d40972dcc057a
  	return vxlan;
  }
  
-+#ifdef HAVE_UDP_TUNNEL_NIC_INFO
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
  void mlx5_vxlan_destroy(struct mlx5_vxlan *vxlan)
  {
  	if (!mlx5_vxlan_allowed(vxlan))

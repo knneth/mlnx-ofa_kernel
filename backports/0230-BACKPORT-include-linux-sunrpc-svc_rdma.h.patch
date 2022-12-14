@@ -3,22 +3,25 @@ Subject: [PATCH] BACKPORT: include/linux/sunrpc/svc_rdma.h
 
 Change-Id: I4bc7c084b22a6d9eb2624257b862885c67e749ea
 ---
- include/linux/sunrpc/svc_rdma.h | 19 +++++++++++++++++++
- 1 file changed, 19 insertions(+)
+ include/linux/sunrpc/svc_rdma.h | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
 
 --- a/include/linux/sunrpc/svc_rdma.h
 +++ b/include/linux/sunrpc/svc_rdma.h
-@@ -42,7 +42,9 @@
+@@ -42,7 +42,12 @@
  
  #ifndef SVC_RDMA_H
  #define SVC_RDMA_H
++
++#include "../../../compat/config.h"
++
 +#ifdef HAVE_SVC_FILL_WRITE_VECTOR
  #include <linux/llist.h>
 +#endif
  #include <linux/sunrpc/xdr.h>
  #include <linux/sunrpc/svcsock.h>
  #include <linux/sunrpc/rpc_rdma.h>
-@@ -109,7 +111,12 @@ struct svcxprt_rdma {
+@@ -109,7 +114,12 @@ struct svcxprt_rdma {
  	struct list_head     sc_read_complete_q;
  	struct work_struct   sc_work;
  
@@ -31,7 +34,7 @@ Change-Id: I4bc7c084b22a6d9eb2624257b862885c67e749ea
  
  	atomic_t	     sc_completion_ids;
  };
-@@ -128,19 +135,29 @@ enum {
+@@ -128,19 +138,29 @@ enum {
  #define RPCSVC_MAXPAYLOAD_RDMA	RPCSVC_MAXPAYLOAD
  
  struct svc_rdma_recv_ctxt {
@@ -61,7 +64,7 @@ Change-Id: I4bc7c084b22a6d9eb2624257b862885c67e749ea
  	u32			rc_inv_rkey;
  	__be32			*rc_write_list;
  	__be32			*rc_reply_chunk;
-@@ -174,7 +191,9 @@ extern bool svc_rdma_post_recvs(struct s
+@@ -174,7 +194,9 @@ extern bool svc_rdma_post_recvs(struct s
  extern void svc_rdma_recv_ctxt_put(struct svcxprt_rdma *rdma,
  				   struct svc_rdma_recv_ctxt *ctxt);
  extern void svc_rdma_flush_recv_queues(struct svcxprt_rdma *rdma);
@@ -71,3 +74,19 @@ Change-Id: I4bc7c084b22a6d9eb2624257b862885c67e749ea
  extern int svc_rdma_recvfrom(struct svc_rqst *);
  
  /* svc_rdma_rw.c */
+@@ -207,8 +229,15 @@ extern void svc_rdma_send_error_msg(stru
+ 				    struct svc_rdma_recv_ctxt *rctxt,
+ 				    int status);
+ extern int svc_rdma_sendto(struct svc_rqst *);
++#ifdef HAVE_XPO_READ_PAYLOAD
+ extern int svc_rdma_read_payload(struct svc_rqst *rqstp, unsigned int offset,
+ 				 unsigned int length);
++#endif
++
++#ifdef HAVE_XPO_RESULT_PAYLOAD
++extern int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
++				 unsigned int length);
++#endif
+ 
+ /* svc_rdma_transport.c */
+ extern struct svc_xprt_class svc_rdma_class;

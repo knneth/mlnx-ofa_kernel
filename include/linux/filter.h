@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_FILTER_H
-#define COMPAT_LINUX_FILTER_H
+#ifndef _COMPAT_LINUX_FILTER_H
+#define _COMPAT_LINUX_FILTER_H
 
 #include "../../compat/config.h"
 
@@ -58,5 +58,4 @@ struct xdp_frame *convert_to_xdp_frame(struct xdp_buff *xdp)
 #endif
 #endif
 
-#endif /* COMPAT_LINUX_FILTER_H */
-
+#endif /* _COMPAT_LINUX_FILTER_H */

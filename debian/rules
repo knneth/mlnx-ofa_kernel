@@ -20,8 +20,6 @@ WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
-PYTHON = $(shell for i in "" 3 2; do if [ -x /usr/bin/python$$i ]; then echo python$$i; break; fi; done)
-
 pname:=mlnx-ofed-kernel
 psource:=$(pname)-source
 ifeq ($(WITH_DKMS),1)
@@ -86,6 +84,7 @@ endif
 	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp -a source/fs			debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
@@ -132,11 +131,10 @@ endif
 	dh_installdirs -p$(putils)  usr/sbin
 	dh_installdirs -p$(putils)  lib/udev
 	dh_installdirs -p$(putils)  lib/systemd/system
-	dh_installdirs -p$(putils)  etc/udev/rules.d
+	dh_installdirs -p$(putils)  lib/udev/rules.d
 	dh_installdirs -p$(putils)  etc/init.d
 	dh_installdirs -p$(putils)  etc/init
 	dh_installdirs -p$(putils)  etc/systemd/system
-	dh_installdirs -p$(putils)  usr/share/doc/ib2ib
 	dh_installdirs -p$(putils)  usr/share/mlnx_ofed
 
 	cp source/ofed_scripts/openib.conf debian/$(putils)/etc/infiniband
@@ -145,8 +143,9 @@ ifneq ($(WITH_DKMS),1)
 	$(CURDIR)/ofed_scripts/install_helper $(CURDIR)/debian/$(putils)
 endif
 
-	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/etc/udev/rules.d
-	install -m 0644 source/ofed_scripts/82-net-setup-link.rules   debian/$(putils)/etc/udev/rules.d
+	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/lib/udev/rules.d
+	install -m 0644 source/ofed_scripts/82-net-setup-link.rules   debian/$(putils)/lib/udev/rules.d
+	install -m 0644 source/ofed_scripts/83-mlnx-sf-name.rules   debian/$(putils)/lib/udev/rules.d
 	install -m 0644 ofed_scripts/openibd.service   debian/$(putils)/lib/systemd/system
 	install -m 0644 ofed_scripts/mlnx_interface_mgr\@.service  debian/$(putils)/etc/systemd/system
 
@@ -161,18 +160,9 @@ endif
 	chmod 755 debian/$(putils)/etc/infiniband/info
 
 	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
-	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_configure_ct	debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_udev		debian/$(putils)/lib/udev
-	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/cma_roce_mode			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/cma_roce_tos			debian/$(putils)/usr/sbin
+	install -m 0755 source/ofed_scripts/sf-rep-netdev-rename	debian/$(putils)/lib/udev
+	install -m 0755 source/ofed_scripts/auxdev-sf-netdev-rename	debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/*affinity*			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/sbin
 	install -m 0644 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.upstart	debian/$(putils)/etc/init/openibd.conf
 	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
@@ -181,14 +171,9 @@ endif
 	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d
 	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
 	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
-	install -m 0755 source/ofed_scripts/ib2ib/ib2ib*		debian/$(putils)/usr/sbin
-	install -m 0644 source/ofed_scripts/ib2ib/README		debian/$(putils)/usr/share/doc/ib2ib
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/show_counters		debian/$(putils)/usr/sbin
 	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh		debian/$(putils)/usr/share/mlnx_ofed
-
-	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
 
 override_dh_installinit:
 

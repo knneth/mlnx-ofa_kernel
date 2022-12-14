@@ -328,6 +328,26 @@ if [ -z "$commitIDs" ]; then
 	echo "-E- Failed to get list of commit IDs." >&2
 	exit 1
 fi
+if [ ! -z "$def_ustatus" ]; then
+	case $def_ustatus in
+		NA|rejected|accepted|in_progress|ignore)
+			;; # Valid status
+		*)	echo "-E- Valid status is one of the follow options: 'NA'|'rejected'|'accepted'|'in_progress'|'ignore'"
+			exit 1
+			;;
+	esac
+fi
+if [ "X$def_ustatus" = "Xaccepted" ];then
+	if [ "X$general" = "X" ]; then
+		echo "-E- -g|--general must be used in case of status accepted"
+		exit 1
+	fi
+else
+	if [ ! -z "$general" ]; then
+		echo "-E- -g|--general can be used only in case of status accepted"
+		exit 1
+	fi
+fi
 
 echo "Getting info about commits..."
 echo ----------------------------------------------------
@@ -396,7 +416,9 @@ do
 		upstream=$def_ustatus
 	fi
 	entry="$uniqID; subject=${subject}; feature=${feature}; upstream_status=${upstream}; general=${general};"
-	general="" #remove for each iteration
+	if [ "X$ref_db" != "X" ]; then
+		general="" #remove for each iteration
+	fi
 	echo "'$entry' to metadata/${author}.csv"
 	csvfile="${WDIR}/metadata/${author}.csv"
 	if [ $dry_run -eq 0 ]; then

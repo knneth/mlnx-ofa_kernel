@@ -583,7 +583,9 @@ int mlx5dr_send_postsend_htbl(struct mlx5dr_domain *dmn,
 			      struct mlx5dr_ste_htbl *htbl,
 			      u8 *formatted_ste, u8 *mask)
 {
+	bool legacy_htbl = htbl->type == DR_STE_HTBL_TYPE_LEGACY;
 	u32 byte_size = htbl->chunk->byte_size;
+	u8 ste_sz = htbl->ste_arr->size;
 	int num_stes_per_iter;
 	int iterations;
 	u8 *data;
@@ -617,10 +619,11 @@ int mlx5dr_send_postsend_htbl(struct mlx5dr_domain *dmn,
 				/* Copy data */
 				memcpy(data + ste_off,
 				       htbl->ste_arr[ste_index + j].hw_ste,
-				       DR_STE_SIZE_REDUCED);
-				/* Copy bit_mask */
-				memcpy(data + ste_off + DR_STE_SIZE_REDUCED,
-				       mask, DR_STE_SIZE_MASK);
+				       ste_sz);
+				/* Copy bit_mask on legacy tables */
+				if (legacy_htbl)
+					memcpy(data + ste_off + ste_sz,
+					       mask, DR_STE_SIZE_MASK);
 				/* Only when we have mask we need to re-arrange the STE */
 				mlx5dr_ste_prepare_for_postsend(dmn->ste_ctx,
 								data + (j * DR_STE_SIZE),
@@ -665,10 +668,10 @@ int mlx5dr_send_postsend_formatted_htbl(struct mlx5dr_domain *dmn,
 		return ret;
 
 	if (update_hw_ste) {
-		/* Copy the reduced STE to hash table ste_arr */
+		/* Copy the STE to hash table ste_arr */
 		for (i = 0; i < num_stes; i++) {
-			copy_dst = htbl->hw_ste_arr + i * DR_STE_SIZE_REDUCED;
-			memcpy(copy_dst, ste_init_data, DR_STE_SIZE_REDUCED);
+			copy_dst = htbl->hw_ste_arr + i * htbl->ste_arr->size;
+			memcpy(copy_dst, ste_init_data, htbl->ste_arr->size);
 		}
 	}
 
@@ -708,12 +711,12 @@ int mlx5dr_send_postsend_action(struct mlx5dr_domain *dmn,
 	struct postsend_info send_info = {};
 	int ret;
 
-	send_info.write.addr = (uintptr_t)action->rewrite.data;
-	send_info.write.length = action->rewrite.num_of_actions *
+	send_info.write.addr = (uintptr_t)action->rewrite->data;
+	send_info.write.length = action->rewrite->num_of_actions *
 				 DR_MODIFY_ACTION_SIZE;
 	send_info.write.lkey = 0;
-	send_info.remote_addr = action->rewrite.chunk->mr_addr;
-	send_info.rkey = action->rewrite.chunk->rkey;
+	send_info.remote_addr = action->rewrite->chunk->mr_addr;
+	send_info.rkey = action->rewrite->chunk->rkey;
 
 	ret = dr_postsend_icm_data(dmn, &send_info);
 
@@ -727,8 +730,8 @@ int mlx5dr_send_postsend_args(struct mlx5dr_domain *dmn,
 	u64 addr;
 	int ret;
 
-	addr = (uintptr_t)action->rewrite.data;
-	data_len = action->rewrite.num_of_actions * DR_MODIFY_ACTION_SIZE;
+	addr = (uintptr_t)action->rewrite->data;
+	data_len = action->rewrite->num_of_actions * DR_MODIFY_ACTION_SIZE;
 
 	do {
 		struct postsend_info send_info = {};
@@ -739,7 +742,7 @@ int mlx5dr_send_postsend_args(struct mlx5dr_domain *dmn,
 		send_info.write.length = cur_sent;
 		send_info.write.lkey = 0;
 		send_info.remote_addr =
-			mlx5dr_arg_get_object_id(action->rewrite.arg) + iter;
+			mlx5dr_arg_get_object_id(action->rewrite->arg) + iter;
 
 		ret = dr_postsend_icm_data(dmn, &send_info);
 		if (ret)
@@ -1030,7 +1033,7 @@ static struct mlx5dr_mr *dr_reg_mr(struct mlx5_core_dev *mdev,
 	if (!mr)
 		return NULL;
 
-	dma_device = &mdev->pdev->dev;
+	dma_device = mlx5_core_dma_dev(mdev);
 	dma_addr = dma_map_single(dma_device, buf, size,
 				  DMA_BIDIRECTIONAL);
 	err = dma_mapping_error(dma_device, dma_addr);
@@ -1059,7 +1062,7 @@ static struct mlx5dr_mr *dr_reg_mr(struct mlx5_core_dev *mdev,
 static void dr_dereg_mr(struct mlx5_core_dev *mdev, struct mlx5dr_mr *mr)
 {
 	mlx5_core_destroy_mkey(mdev, &mr->mkey);
-	dma_unmap_single(&mdev->pdev->dev, mr->dma_addr, mr->size,
+	dma_unmap_single(mlx5_core_dma_dev(mdev), mr->dma_addr, mr->size,
 			 DMA_BIDIRECTIONAL);
 	kfree(mr);
 }

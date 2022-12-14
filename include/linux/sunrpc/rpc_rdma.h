@@ -1,5 +1,5 @@
-#ifndef LINUX_RPC_RDMA_H
-#define LINUX_RPC_RDMA_H
+#ifndef _COMPAT_LINUX_SUNRPC_RPC_RDMA_H
+#define _COMPAT_LINUX_SUNRPC_RPC_RDMA_H
 
 #include "../../../compat/config.h"
 
@@ -188,4 +188,4 @@ enum {
 };
 #endif
 
-#endif /* LINUX_RPC_RDMA_H */
+#endif /* _COMPAT_LINUX_SUNRPC_RPC_RDMA_H */

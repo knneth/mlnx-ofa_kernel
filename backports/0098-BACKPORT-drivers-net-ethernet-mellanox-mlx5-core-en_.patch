@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
 
 Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
 ---
- .../net/ethernet/mellanox/mlx5/core/en_fs.c   | 24 +++++++++++++++----
- 1 file changed, 20 insertions(+), 4 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_fs.c   | 30 ++++++++++++++++---
+ 1 file changed, 26 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
-@@ -80,8 +80,9 @@ static void mlx5e_add_l2_to_hash(struct
+@@ -79,8 +79,9 @@ static void mlx5e_add_l2_to_hash(struct
  	struct mlx5e_l2_hash_node *hn;
  	int ix = mlx5e_hash_l2(addr);
  	int found = 0;
@@ -19,7 +19,25 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  		if (ether_addr_equal_64bits(hn->ai.addr, addr)) {
  			found = 1;
  			break;
-@@ -333,6 +334,15 @@ static int mlx5e_vlan_rx_add_cvid(struct
+@@ -306,6 +307,8 @@ static int mlx5e_add_any_vid_rules(struc
+ 	return mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_ANY_STAG_VID, 0);
+ }
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
++
+ static struct mlx5_flow_handle *
+ mlx5e_add_trap_rule(struct mlx5_flow_table *ft, int trap_id, int tir_num)
+ {
+@@ -379,6 +382,8 @@ void mlx5e_remove_mac_trap(struct mlx5e_
+ 	}
+ }
+ 
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
++
+ void mlx5e_enable_cvlan_filter(struct mlx5e_priv *priv)
+ {
+ 	if (!priv->fs.vlan->cvlan_filter_disabled)
+@@ -405,6 +410,15 @@ static int mlx5e_vlan_rx_add_cvid(struct
  {
  	int err;
  
@@ -35,7 +53,7 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  	set_bit(vid, priv->fs.vlan->active_cvlans);
  
  	err = mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_CTAG_VID, vid);
-@@ -360,7 +370,8 @@ static int mlx5e_vlan_rx_add_svid(struct
+@@ -432,7 +446,8 @@ static int mlx5e_vlan_rx_add_svid(struct
  	return err;
  }
  
@@ -45,7 +63,7 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  
-@@ -375,7 +386,8 @@ int mlx5e_vlan_rx_add_vid(struct net_dev
+@@ -447,7 +462,8 @@ int mlx5e_vlan_rx_add_vid(struct net_dev
  	return -EOPNOTSUPP;
  }
  
@@ -55,7 +73,17 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  
-@@ -435,7 +447,7 @@ static void mlx5e_del_vlan_rules(struct
+@@ -498,7 +514,9 @@ static void mlx5e_del_vlan_rules(struct
+ 
+ 	WARN_ON_ONCE(!(test_bit(MLX5E_STATE_DESTROYING, &priv->state)));
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ 	mlx5e_remove_vlan_trap(priv);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ 	/* must be called after DESTROY bit is set and
+ 	 * set_rx_mode is called and flushed
+@@ -509,7 +527,7 @@ static void mlx5e_del_vlan_rules(struct
  
  #define mlx5e_for_each_hash_node(hn, tmp, hash, i) \
  	for (i = 0; i < MLX5E_L2_ADDR_HASH_SIZE; i++) \
@@ -64,7 +92,7 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  
  static void mlx5e_execute_l2_action(struct mlx5e_priv *priv,
  				    struct mlx5e_l2_hash_node *hn)
-@@ -498,6 +510,7 @@ static void mlx5e_fill_addr_array(struct
+@@ -572,6 +590,7 @@ static void mlx5e_fill_addr_array(struct
  	struct hlist_node *tmp;
  	int i = 0;
  	int hi;
@@ -72,7 +100,7 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  
  	addr_list = is_uc ? priv->fs.l2.netdev_uc : priv->fs.l2.netdev_mc;
  
-@@ -527,6 +540,7 @@ static void mlx5e_vport_context_update_a
+@@ -601,6 +620,7 @@ static void mlx5e_vport_context_update_a
  	int size;
  	int err;
  	int hi;
@@ -80,7 +108,7 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  
  	size = is_uc ? 0 : (priv->fs.l2.broadcast_enabled ? 1 : 0);
  	max_size = is_uc ?
-@@ -578,6 +592,7 @@ static void mlx5e_apply_netdev_addr(stru
+@@ -652,6 +672,7 @@ static void mlx5e_apply_netdev_addr(stru
  	struct mlx5e_l2_hash_node *hn;
  	struct hlist_node *tmp;
  	int i;
@@ -88,7 +116,7 @@ Change-Id: Ie12a73ec691888bf038751d2af04efa1de3bad75
  
  	mlx5e_for_each_hash_node(hn, tmp, priv->fs.l2.netdev_uc, i)
  		mlx5e_execute_l2_action(priv, hn);
-@@ -591,6 +606,7 @@ static void mlx5e_handle_netdev_addr(str
+@@ -665,6 +686,7 @@ static void mlx5e_handle_netdev_addr(str
  	struct mlx5e_l2_hash_node *hn;
  	struct hlist_node *tmp;
  	int i;

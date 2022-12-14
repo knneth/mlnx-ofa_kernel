@@ -1,6 +1,8 @@
 #ifndef _COMPAT_LINUX_SDT_H_
 #define _COMPAT_LINUX_SDT_H_
 
+#include "../../compat/config.h"
+
 #include_next <linux/sdt.h>
 
 #ifdef DTRACE_PROBE

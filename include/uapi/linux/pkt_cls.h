@@ -1,5 +1,5 @@
-#ifndef _COMPAT_UAPI_PKT_CLS_H
-#define _COMPAT_UAPI_PKT_CLS_H 1
+#ifndef _COMPAT_UAPI_LINUX_PKT_CLS_H
+#define _COMPAT_UAPI_LINUX_PKT_CLS_H
 
 #include "../../../compat/config.h"
 
@@ -288,4 +288,4 @@ enum {
 };
 #endif /* CONFIG_COMPAT_CLS_FLOWER_4_18_MOD */
 
-#endif /* _COMPAT_UAPI_PKT_CLS_H */
+#endif /* _COMPAT_UAPI_LINUX_PKT_CLS_H */

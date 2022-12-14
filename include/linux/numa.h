@@ -2,7 +2,6 @@
 #define _COMPAT_LINUX_NUMA_H
 
 #include "../../compat/config.h"
-#include <linux/version.h>
 
 #include_next <linux/numa.h>
 

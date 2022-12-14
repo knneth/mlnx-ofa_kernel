@@ -1,5 +1,5 @@
-#ifndef _MLNX_LINUX_TRACE_SEQ_H
-#define _MLNX_LINUX_TRACE_SEQ_H
+#ifndef _COMPAT_LINUX_TRACE_SEQ_H
+#define _COMPAT_LINUX_TRACE_SEQ_H
 
 #include "../../compat/config.h"
 
@@ -22,4 +22,4 @@ trace_seq_buffer_ptr(struct trace_seq *s)
 }
 #endif
 
-#endif /* _MLNX_LINUX_TRACE_SEQ_H */
+#endif /* _COMPAT_LINUX_TRACE_SEQ_H */

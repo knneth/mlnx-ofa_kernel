@@ -1,5 +1,5 @@
-#ifndef LINUX_PTP_CLOCK_KERNEL_H
-#define LINUX_PTP_CLOCK_KERNEL_H 1
+#ifndef _COMPAT_LINUX_PTP_CLOCK_KERNEL_H
+#define _COMPAT_LINUX_PTP_CLOCK_KERNEL_H
 
 #include "../../compat/config.h"
 
@@ -7,4 +7,4 @@
 #include_next <linux/ptp_clock_kernel.h>
 #endif
 
-#endif	/* LINUX_PTP_CLOCK_KERNEL_H */
+#endif /* _COMPAT_LINUX_PTP_CLOCK_KERNEL_H */

@@ -174,7 +174,7 @@ static int mlx5e_ptp_alloc_txqsq(struct mlx5e_port_ptp *c, int txq_ix,
 	sq->mdev      = mdev;
 	sq->ch_ix     = c->ix;
 	sq->txq_ix    = txq_ix;
-	sq->uar_map   = mdev->mlx5e_res.bfreg.map;
+	sq->uar_map   = mdev->mlx5e_res.hw_objs.bfreg.map;
 	sq->min_inline_mode = params->tx_min_inline_mode;
 	sq->hw_mtu    = MLX5E_SW2HW_MTU(params, params->sw_mtu);
 	sq->stats     = &c->priv->port_ptp_stats.sq[tc];
@@ -431,16 +431,13 @@ static int mlx5e_ptp_open_queues(struct mlx5e_port_ptp *c,
 	if (err)
 		return err;
 
-	napi_enable(&c->napi);
-
 	err = mlx5e_ptp_open_txqsqs(c, cparams);
 	if (err)
-		goto disable_napi;
+		goto close_cqs;
 
 	return 0;
 
-disable_napi:
-	napi_disable(&c->napi);
+close_cqs:
 	mlx5e_ptp_close_cqs(c);
 
 	return err;
@@ -449,7 +446,6 @@ disable_napi:
 static void mlx5e_ptp_close_queues(struct mlx5e_port_ptp *c)
 {
 	mlx5e_ptp_close_txqsqs(c);
-	napi_disable(&c->napi);
 	mlx5e_ptp_close_cqs(c);
 }
 
@@ -479,7 +475,7 @@ int mlx5e_port_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->ix       = 0;
 	c->pdev     = mlx5_core_dma_dev(priv->mdev);
 	c->netdev   = priv->netdev;
-	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.mkey.key);
+	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey.key);
 	c->num_tc   = params->num_tc;
 	c->stats    = &priv->port_ptp_stats.ch;
 	c->aff_mask = irq_get_affinity_mask(irq);
@@ -519,6 +515,8 @@ void mlx5e_ptp_activate_channel(struct mlx5e_port_ptp *c)
 {
 	int tc;
 
+	napi_enable(&c->napi);
+
 	for (tc = 0; tc < c->num_tc; tc++)
 		mlx5e_activate_txqsq(&c->ptpsq[tc].txqsq);
 }
@@ -529,4 +527,6 @@ void mlx5e_ptp_deactivate_channel(struct mlx5e_port_ptp *c)
 
 	for (tc = 0; tc < c->num_tc; tc++)
 		mlx5e_deactivate_txqsq(&c->ptpsq[tc].txqsq);
+
+	napi_disable(&c->napi);
 }

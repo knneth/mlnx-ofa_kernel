@@ -739,7 +739,7 @@ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv)
 	if (!ipsec)
 		return;
 
-	if (mlx5_is_ipsec_full_offload(priv)) {
+	if (priv->ipsec->aso) {
 		mlx5e_aso_cleanup(priv, priv->ipsec->aso);
 		priv->ipsec->aso = NULL;
 	}

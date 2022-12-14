@@ -1,5 +1,5 @@
-#ifndef COMPAT_SCSI_SCSI_DEVICE_H
-#define COMPAT_SCSI_SCSI_DEVICE_H
+#ifndef _COMPAT_SCSI_SCSI_DEVICE_H
+#define _COMPAT_SCSI_SCSI_DEVICE_H
 
 #include "../../compat/config.h"
 
@@ -17,4 +17,4 @@ enum scsi_scan_mode {
 	typedef unsigned int __bitwise blist_flags_t;
 #endif
 
-#endif	/* COMPAT_SCSI_SCSI_DEVICE_H */
+#endif /* _COMPAT_SCSI_SCSI_DEVICE_H */

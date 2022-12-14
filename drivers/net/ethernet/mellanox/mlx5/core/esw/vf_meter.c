@@ -91,7 +91,7 @@ esw_acl_create_meter(struct mlx5_vport *vport, struct vport_meter *meter,
 		return -ENOMEM;
 	}
 
-	tbl = esw_acl_table_create(vport->dev->priv.eswitch, vport->vport,
+	tbl = esw_acl_table_create(vport->dev->priv.eswitch, vport,
 				   ns, prio, 1);
 	if (IS_ERR(tbl)) {
 		err = PTR_ERR(tbl);
@@ -122,7 +122,7 @@ esw_acl_create_meter(struct mlx5_vport *vport, struct vport_meter *meter,
 	}
 	meter->meter_rule = rule;
 
-	tbl = esw_acl_table_create(vport->dev->priv.eswitch, vport->vport,
+	tbl = esw_acl_table_create(vport->dev->priv.eswitch, vport,
 				   ns, prio + 1, 2);
 	if (IS_ERR(tbl)) {
 		err = PTR_ERR(tbl);
@@ -204,7 +204,7 @@ esw_acl_get_meter(struct mlx5_vport *vport, int rx_tx, int xps)
 
 int
 esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
-			    int rx_tx, int xps, int rate, int burst)
+			    int rx_tx, int xps, u64 rate, u64 burst)
 {
 	struct mlx5e_flow_meter_aso_obj *meter_obj;
 	int obj_id, idx;
@@ -256,9 +256,11 @@ update:
 	return 0;
 
 check_and_free_meter_aso:
-	if (!meter->meter_tbl)
+	if (!meter->meter_tbl) {
 		mlx5e_free_flow_meter(vport->dev, meter->meter_obj,
 				      meter->meter_obj_id, meter->meter_idx);
+		meter->meter_obj = NULL;
+	}
 	return err;
 }
 
@@ -266,7 +268,8 @@ void
 esw_vf_meter_destroy_meters(struct mlx5_eswitch *esw)
 {
 	struct mlx5_vport *vport;
-	int i, j;
+	int j;
+	unsigned long i;
 
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
 		for (j = MLX5_RATE_LIMIT_BPS; j <= MLX5_RATE_LIMIT_PPS; j++) {
@@ -283,7 +286,8 @@ esw_vf_meter_create_meters(struct mlx5_eswitch *esw)
 {
 	struct vport_meter *meter;
 	struct mlx5_vport *vport;
-	int i, j;
+	int j;
+	unsigned long i;
 
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
 		for (j = MLX5_RATE_LIMIT_BPS; j <= MLX5_RATE_LIMIT_PPS; j++) {
@@ -349,7 +353,7 @@ void
 esw_vf_meter_destroy_all(struct mlx5_eswitch *esw)
 {
 	struct mlx5_vport *vport;
-	int i;
+	unsigned long i;
 
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
 		esw_vf_meter_egress_destroy(vport);

@@ -16,7 +16,7 @@ Change-Id: Ib17daa6d168451c91ce44d2e063166d37a4b14ed
  #include <linux/module.h>
  #include <rdma/ib_umem.h>
  #include <rdma/ib_cache.h>
-@@ -928,7 +929,11 @@ static int mlx5_ib_umem_get(struct mlx5_
+@@ -929,7 +930,11 @@ static int mlx5_ib_umem_get(struct mlx5_
  {
  	int err;
  
@@ -28,7 +28,7 @@ Change-Id: Ib17daa6d168451c91ce44d2e063166d37a4b14ed
  	if (IS_ERR(*umem)) {
  		mlx5_ib_dbg(dev, "umem_get failed\n");
  		return PTR_ERR(*umem);
-@@ -985,7 +990,11 @@ static int create_user_rq(struct mlx5_ib
+@@ -986,7 +991,11 @@ static int create_user_rq(struct mlx5_ib
  	if (!ucmd->buf_addr)
  		return -EINVAL;
  
@@ -40,7 +40,7 @@ Change-Id: Ib17daa6d168451c91ce44d2e063166d37a4b14ed
  	if (IS_ERR(rwq->umem)) {
  		mlx5_ib_dbg(dev, "umem_get failed\n");
  		err = PTR_ERR(rwq->umem);
-@@ -2372,7 +2381,7 @@ static int create_kernel_qp(struct mlx5_
+@@ -2373,7 +2382,7 @@ static int create_kernel_qp(struct mlx5_
  	struct mlx5_ib_qp_base *base;
  	int mlx5_st;
  	void *qpc;
@@ -49,7 +49,7 @@ Change-Id: Ib17daa6d168451c91ce44d2e063166d37a4b14ed
  	int err;
  
  	spin_lock_init(&qp->sq.lock);
-@@ -5657,9 +5666,18 @@ static void handle_drain_completion(stru
+@@ -5651,9 +5660,18 @@ static void handle_drain_completion(stru
  		if (triggered) {
  			/* Wait for any scheduled/running task to be ended */
  			switch (cq->poll_ctx) {

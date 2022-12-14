@@ -287,6 +287,17 @@ static inline void iounmap(void *addr)
 #ifdef kfree_rcu
 	#undef kfree_rcu
 #endif
+#if !defined(__kvfree_rcu) && !defined(__kfree_rcu)
+/*
+ * Removed __kvfree_rcu macro upstream v5.12
+ * commit 5ea5d1ed572c ("rcu: Eliminate the __kvfree_rcu() macro")
+ */
+#define __kvfree_rcu(head, offset) \
+       do { \
+              BUILD_BUG_ON(!__is_kvfree_rcu_offset(offset)); \
+              kvfree_call_rcu(head, (rcu_callback_t)(unsigned long)(offset)); \
+       } while (0)
+#endif /* !defined(__kvfree_rcu) && !defined(kfree_rcu) */
 #ifdef __kvfree_rcu
 #define kfree_rcu(addr, rcu_head) ({								\
 	void *__memtrack_addr = (void *)addr;					\

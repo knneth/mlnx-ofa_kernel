@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/configfs.c
 
 Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
 ---
- drivers/nvme/target/configfs.c | 87 +++++++++++++++++++++++++++++++++---------
- 1 file changed, 69 insertions(+), 18 deletions(-)
+ drivers/nvme/target/configfs.c | 91 +++++++++++++++++++++++++++++++++---------
+ 1 file changed, 72 insertions(+), 19 deletions(-)
 
 --- a/drivers/nvme/target/configfs.c
 +++ b/drivers/nvme/target/configfs.c
@@ -187,7 +187,18 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	if (!new_model_number)
  		return -ENOMEM;
  
-@@ -1421,6 +1466,7 @@ static ssize_t nvmet_subsys_attr_model_s
+@@ -1413,7 +1458,9 @@ static ssize_t nvmet_subsys_attr_model_s
+ 	mutex_unlock(&subsys->lock);
+ 	up_write(&nvmet_config_sem);
+ 
+-	kfree_rcu(new_model, rcuhead);
++	// Old kfree_rcu() doesn't check for NULL pointers
++	if (new_model)
++		kfree_rcu(new_model, rcuhead);
+ 	kfree(new_model_number);
+ 
+ 	return count;
+@@ -1421,6 +1468,7 @@ static ssize_t nvmet_subsys_attr_model_s
  CONFIGFS_ATTR(nvmet_subsys_, attr_model);
  
  #ifdef CONFIG_BLK_DEV_INTEGRITY
@@ -195,7 +206,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  static ssize_t nvmet_subsys_attr_pi_enable_show(struct config_item *item,
  						char *page)
  {
-@@ -1441,6 +1487,7 @@ static ssize_t nvmet_subsys_attr_pi_enab
+@@ -1441,6 +1489,7 @@ static ssize_t nvmet_subsys_attr_pi_enab
  }
  CONFIGFS_ATTR(nvmet_subsys_, attr_pi_enable);
  #endif
@@ -203,7 +214,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
   
  static ssize_t
  nvmet_subsys_attr_offload_subsys_unknown_ns_cmds_show(struct config_item *item,
-@@ -1539,9 +1586,11 @@ static struct configfs_attribute *nvmet_
+@@ -1539,9 +1588,11 @@ static struct configfs_attribute *nvmet_
  	&nvmet_subsys_attr_attr_cntlid_min,
  	&nvmet_subsys_attr_attr_cntlid_max,
  	&nvmet_subsys_attr_attr_model,
@@ -215,7 +226,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	&nvmet_subsys_attr_attr_offload,
  	&nvmet_subsys_attr_attr_offload_subsys_unknown_ns_cmds,
  	NULL,
-@@ -1562,7 +1611,7 @@ static struct configfs_item_operations n
+@@ -1562,7 +1613,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_subsys_release,
  };
  
@@ -224,7 +235,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_subsys_item_ops,
  	.ct_attrs		= nvmet_subsys_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -1602,7 +1651,7 @@ static struct configfs_group_operations
+@@ -1602,7 +1653,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_subsys_make,
  };
  
@@ -233,7 +244,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_subsystems_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1670,7 +1719,7 @@ static struct configfs_item_operations n
+@@ -1670,7 +1721,7 @@ static struct configfs_item_operations n
  	.release	= nvmet_referral_release,
  };
  
@@ -242,7 +253,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner	= THIS_MODULE,
  	.ct_attrs	= nvmet_referral_attrs,
  	.ct_item_ops	= &nvmet_referral_item_ops,
-@@ -1696,7 +1745,7 @@ static struct configfs_group_operations
+@@ -1696,7 +1747,7 @@ static struct configfs_group_operations
  	.disconnect_notify	= nvmet_referral_notify,
  };
  
@@ -251,7 +262,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_owner	= THIS_MODULE,
  	.ct_group_ops	= &nvmet_referral_group_ops,
  };
-@@ -1775,7 +1824,7 @@ static struct configfs_item_operations n
+@@ -1775,7 +1826,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_ana_group_release,
  };
  
@@ -260,7 +271,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_ana_group_item_ops,
  	.ct_attrs		= nvmet_ana_group_attrs,
  	.ct_owner		= THIS_MODULE,
-@@ -1820,7 +1869,7 @@ static struct configfs_group_operations
+@@ -1820,7 +1871,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ana_groups_make_group,
  };
  
@@ -269,7 +280,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_ana_groups_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1850,8 +1899,10 @@ static struct configfs_attribute *nvmet_
+@@ -1850,8 +1901,10 @@ static struct configfs_attribute *nvmet_
  	&nvmet_attr_param_offload_srq_size,
  	&nvmet_attr_param_offload_queue_size,
  #ifdef CONFIG_BLK_DEV_INTEGRITY
@@ -280,7 +291,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	NULL,
  };
  
-@@ -1859,7 +1910,7 @@ static struct configfs_item_operations n
+@@ -1859,7 +1912,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_port_release,
  };
  
@@ -289,7 +300,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_attrs		= nvmet_port_attrs,
  	.ct_item_ops		= &nvmet_port_item_ops,
  	.ct_owner		= THIS_MODULE,
-@@ -1935,7 +1986,7 @@ static struct configfs_group_operations
+@@ -1935,7 +1988,7 @@ static struct configfs_group_operations
  	.make_group		= nvmet_ports_make,
  };
  
@@ -298,7 +309,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_group_ops		= &nvmet_ports_group_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1954,7 +2005,7 @@ static struct configfs_item_operations n
+@@ -1954,7 +2007,7 @@ static struct configfs_item_operations n
  	.release		= nvmet_host_release,
  };
  
@@ -307,7 +318,7 @@ Change-Id: Ib7c7bac2116adfe203db3161049cb996d2f5e752
  	.ct_item_ops		= &nvmet_host_item_ops,
  	.ct_owner		= THIS_MODULE,
  };
-@@ -1977,14 +2028,14 @@ static struct configfs_group_operations
+@@ -1977,14 +2030,14 @@ static struct configfs_group_operations
  	.make_group		= nvmet_hosts_make_group,
  };
  

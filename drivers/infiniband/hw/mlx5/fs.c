@@ -1201,12 +1201,11 @@ static struct ib_flow *mlx5_ib_create_flow(struct ib_qp *qp,
 	}
 
 	if (domain != IB_FLOW_DOMAIN_USER ||
-	    flow_attr->port > dev->num_ports ||
-	    (flow_attr->flags & ~(IB_FLOW_ATTR_FLAGS_DONT_TRAP |
-				  IB_FLOW_ATTR_FLAGS_EGRESS))) {
+	    (flow_attr->flags &
+	     ~(IB_FLOW_ATTR_FLAGS_DONT_TRAP | IB_FLOW_ATTR_FLAGS_EGRESS))) {
 		err = -EINVAL;
 		goto free_ucmd;
-	}
+        }
 
 	if (is_egress &&
 	    (flow_attr->type == IB_FLOW_ATTR_ALL_DEFAULT ||

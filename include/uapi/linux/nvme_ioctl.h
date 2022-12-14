@@ -18,7 +18,7 @@
 #include "../../../compat/config.h"
 
 #ifdef HAVE_UAPI_LINUX_NVME_IOCTL_H
-#include_next <linux/nvme_ioctl.h>
+#include_next <uapi/linux/nvme_ioctl.h>
 #ifndef HAVE_UAPI_LINUX_NVME_IOCTL_RESCAN
 #define NVME_IOCTL_RESCAN	_IO('N', 0x46)
 #endif

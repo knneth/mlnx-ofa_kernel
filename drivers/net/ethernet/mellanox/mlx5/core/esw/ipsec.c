@@ -628,6 +628,9 @@ void mlx5_esw_ipsec_full_offload_get_stats(struct mlx5_eswitch *esw, void *ipsec
 	stats->ipsec_full_tx_pkts_drop = 0;
 	stats->ipsec_full_tx_bytes_drop = 0;
 
+	if (!esw || !esw_ipsec_priv(esw))
+		return;
+
 	if (!esw_ipsec_decap_rule_counter(esw) ||
 	    !esw_ipsec_decap_miss_rule_counter(esw) ||
 	    !esw_ipsec_tx_chk_counter(esw) ||

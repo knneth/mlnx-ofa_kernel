@@ -1,10 +1,10 @@
-From: Mikhael Goikhman <migo@nvidia.com>
+From: Shay Drory <shayd@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_main.c
 
-Change-Id: I12895683510e94925fc328f86a0be312a6938df6
+Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
 ---
- .../net/ethernet/mellanox/mlx5/core/en_main.c | 1204 ++++++++++++++++-
- 1 file changed, 1136 insertions(+), 68 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_main.c | 1212 ++++++++++++++++-
+ 1 file changed, 1137 insertions(+), 75 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
@@ -48,15 +48,15 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  #include "lib/clock.h"
  #include "en/port.h"
  #include "en/xdp.h"
-@@ -67,6 +82,7 @@
- #include "lib/mlx5.h"
+@@ -68,6 +83,7 @@
  #include "en/ptp.h"
+ #include "en/trap.h"
  #include "fpga/ipsec.h"
 +#include "compat.h"
  
  bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev)
  {
-@@ -111,16 +127,17 @@ bool mlx5e_striding_rq_possible(struct m
+@@ -112,16 +128,17 @@ bool mlx5e_striding_rq_possible(struct m
  	if (mlx5_fpga_is_ipsec_device(mdev))
  		return false;
  
@@ -84,7 +84,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
-@@ -411,7 +428,7 @@ static void mlx5e_rx_cache_reduce_clean_
+@@ -437,7 +454,7 @@ static void mlx5e_rx_cache_reduce_clean_
  		return;
  
  	for (i = 0; i < reduce->npages; i++)
@@ -93,7 +93,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	clear_bit(MLX5E_RQ_STATE_CACHE_REDUCE_PENDING, &rq->state);
  }
-@@ -518,12 +535,23 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -543,12 +560,23 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  			  struct mlx5e_rq_param *rqp,
  			  struct mlx5e_rq *rq)
  {
@@ -117,7 +117,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	u32 cache_init_sz;
  	int wq_sz;
  	int err;
-@@ -542,7 +570,9 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -567,7 +595,9 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  	rq->ix      = c->ix;
  	rq->mdev    = mdev;
  	rq->hw_mtu  = MLX5E_SW2HW_MTU(params, params->sw_mtu);
@@ -127,7 +127,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	rq->umem    = umem;
  	rq->ptp_cyc2time = mlx5_is_real_time_rq(mdev) ?
  			   mlx5_real_time_cyc2time :
-@@ -554,20 +584,51 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -579,20 +609,51 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  		rq->stats = &c->priv->channel_stats[c->ix].rq;
  	INIT_WORK(&rq->recover_work, mlx5e_rq_err_cqe_work);
  
@@ -179,7 +179,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	switch (rq->wq_type) {
  	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
-@@ -584,10 +645,20 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -609,10 +670,20 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  
  		wq_sz = mlx5_wq_ll_get_size(&rq->mpwqe.wq);
  
@@ -200,7 +200,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  		rq->mpwqe.log_stride_sz = mlx5e_mpwqe_get_log_stride_size(mdev, params, xsk);
  		rq->mpwqe.num_strides =
-@@ -614,6 +685,13 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -639,6 +710,13 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  
  		wq_sz = mlx5_wq_cyc_get_size(&rq->wqe.wq);
  
@@ -214,7 +214,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		cache_init_sz = wq_sz;
  		rq->wqe.info = rqp->frags_info;
  		rq->buff.frame0_sz = rq->wqe.info.arr[0].frag_stride;
-@@ -633,21 +711,42 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -658,21 +736,42 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  
  		rq->mkey_be = c->mkey_be;
  	}
@@ -258,7 +258,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		/* Create a page_pool and register it with rxq */
  		pp_params.order     = 0;
  		pp_params.flags     = 0; /* No-internal DMA mapping in page_pool */
-@@ -667,9 +766,18 @@ static int mlx5e_alloc_rq(struct mlx5e_c
+@@ -692,9 +791,18 @@ static int mlx5e_alloc_rq(struct mlx5e_c
  			rq->page_pool = NULL;
  			goto err_free_by_rq_type;
  		}
@@ -277,7 +277,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (err)
  		goto err_free_by_rq_type;
  
-@@ -735,22 +843,30 @@ err_rq_frags:
+@@ -760,22 +868,30 @@ err_rq_frags:
  
  err_rq_wq_destroy:
  	mlx5_wq_destroy(&rq->wq_ctrl);
@@ -308,7 +308,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	if (rq->page_cache.page_cache)
  		mlx5e_rx_free_page_cache(rq);
-@@ -765,9 +881,13 @@ static void mlx5e_free_rq(struct mlx5e_r
+@@ -790,9 +906,13 @@ static void mlx5e_free_rq(struct mlx5e_r
  		kvfree(rq->wqe.frags);
  		mlx5e_free_di_list(rq);
  	}
@@ -324,7 +324,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5_wq_destroy(&rq->wq_ctrl);
  }
  
-@@ -1002,6 +1122,60 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
+@@ -1027,6 +1147,59 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
  
  }
  
@@ -381,11 +381,10 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +}
 +#endif
 +
-+
  int mlx5e_open_rq(struct mlx5e_channel *c, struct mlx5e_params *params,
  		  struct mlx5e_rq_param *param, struct mlx5e_xsk_param *xsk,
  		  struct xdp_umem *umem, struct mlx5e_create_cq_param *ccp,
-@@ -1034,12 +1208,18 @@ int mlx5e_open_rq(struct mlx5e_channel *
+@@ -1059,12 +1232,18 @@ int mlx5e_open_rq(struct mlx5e_channel *
  		mlx5_core_warn(c->mdev, "Failed to enable delay drop err=%d\n",
  			       err);
  
@@ -404,7 +403,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	if (MLX5_CAP_ETH(c->mdev, cqe_checksum_full))
  		__set_bit(MLX5E_RQ_STATE_CSUM_FULL, &c->rq.state);
-@@ -1051,7 +1231,11 @@ int mlx5e_open_rq(struct mlx5e_channel *
+@@ -1076,7 +1255,11 @@ int mlx5e_open_rq(struct mlx5e_channel *
  	 * XDP programs might manipulate packets which will render
  	 * skb->checksum incorrect.
  	 */
@@ -416,7 +415,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		__set_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &c->rq.state);
  
  	/* For CQE compression on striding RQ, use stride index provided by
-@@ -1102,6 +1286,7 @@ void mlx5e_close_rq(struct mlx5e_channel
+@@ -1127,6 +1310,7 @@ void mlx5e_close_rq(struct mlx5e_channel
  	memset(rq, 0, sizeof(*rq));
  }
  
@@ -424,7 +423,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static void mlx5e_free_xdpsq_db(struct mlx5e_xdpsq *sq)
  {
  	kvfree(sq->db.xdpi_fifo.xi);
-@@ -1149,8 +1334,12 @@ static int mlx5e_alloc_xdpsq(struct mlx5
+@@ -1174,8 +1358,12 @@ static int mlx5e_alloc_xdpsq(struct mlx5
  			     struct mlx5e_params *params,
  			     struct xdp_umem *umem,
  			     struct mlx5e_sq_param *param,
@@ -437,7 +436,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  {
  	void *sqc_wq               = MLX5_ADDR_OF(sqc, param->sqc, wq);
  	struct mlx5_core_dev *mdev = c->mdev;
-@@ -1165,11 +1354,15 @@ static int mlx5e_alloc_xdpsq(struct mlx5
+@@ -1190,11 +1378,15 @@ static int mlx5e_alloc_xdpsq(struct mlx5
  	sq->hw_mtu    = MLX5E_SW2HW_MTU(params, params->sw_mtu);
  	sq->umem      = umem;
  
@@ -458,7 +457,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	param->wq.db_numa_node = cpu_to_node(c->cpu);
  	err = mlx5_wq_cyc_create(mdev, &param->wq, sqc_wq, wq, &sq->wq_ctrl);
-@@ -1194,6 +1387,7 @@ static void mlx5e_free_xdpsq(struct mlx5
+@@ -1219,6 +1411,7 @@ static void mlx5e_free_xdpsq(struct mlx5
  	mlx5e_free_xdpsq_db(sq);
  	mlx5_wq_destroy(&sq->wq_ctrl);
  }
@@ -466,7 +465,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static void mlx5e_free_icosq_db(struct mlx5e_icosq *sq)
  {
-@@ -1326,8 +1520,10 @@ static int mlx5e_alloc_txqsq(struct mlx5
+@@ -1352,8 +1545,10 @@ static int mlx5e_alloc_txqsq(struct mlx5
  		set_bit(MLX5E_SQ_STATE_VLAN_NEED_L2_INLINE, &sq->state);
  	if (MLX5_IPSEC_DEV(c->priv->mdev))
  		set_bit(MLX5E_SQ_STATE_IPSEC, &sq->state);
@@ -477,7 +476,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (param->is_mpw)
  		set_bit(MLX5E_SQ_STATE_MPWQE, &sq->state);
  	sq->stop_room = param->stop_room;
-@@ -1624,14 +1820,24 @@ void mlx5e_close_icosq(struct mlx5e_icos
+@@ -1650,14 +1845,24 @@ void mlx5e_close_icosq(struct mlx5e_icos
  	mlx5e_free_icosq(sq);
  }
  
@@ -503,7 +502,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (err)
  		return err;
  
-@@ -1701,6 +1907,8 @@ void mlx5e_close_xdpsq(struct mlx5e_xdps
+@@ -1729,6 +1934,8 @@ void mlx5e_close_xdpsq(struct mlx5e_xdps
  	mlx5e_free_xdpsq(sq);
  }
  
@@ -512,7 +511,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  int mlx5e_alloc_cq_common(struct mlx5e_priv *priv,
  			  struct mlx5e_cq_param *param,
  			  struct mlx5e_cq *cq)
-@@ -1759,6 +1967,9 @@ static int mlx5e_alloc_cq(struct mlx5e_p
+@@ -1787,6 +1994,9 @@ static int mlx5e_alloc_cq(struct mlx5e_p
  
  	cq->napi     = ccp->napi;
  	cq->ch_stats = ccp->ch_stats;
@@ -522,7 +521,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	return err;
  }
-@@ -1869,6 +2080,9 @@ static int mlx5e_open_tx_cqs(struct mlx5
+@@ -1897,6 +2107,9 @@ static int mlx5e_open_tx_cqs(struct mlx5
  	ccp.ch_stats = c->stats;
  	ccp.node = cpu_to_node(c->cpu);
  	ccp.ix = c->ix;
@@ -532,7 +531,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	for (tc = 0; tc < c->num_tc; tc++) {
  		err = mlx5e_open_cq(c->priv, params->tx_cq_moderation, &cparam->txq_sq.cqp,
-@@ -2034,6 +2248,7 @@ static int mlx5e_set_sq_maxrate(struct n
+@@ -2062,6 +2275,7 @@ static int mlx5e_set_sq_maxrate(struct n
  	return 0;
  }
  
@@ -540,7 +539,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static int mlx5e_set_tx_maxrate(struct net_device *dev, int index, u32 rate)
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
-@@ -2064,6 +2279,7 @@ static int mlx5e_set_tx_maxrate(struct n
+@@ -2092,6 +2306,7 @@ static int mlx5e_set_tx_maxrate(struct n
  
  	return err;
  }
@@ -548,7 +547,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static int mlx5e_open_queues(struct mlx5e_channel *c,
  			     struct mlx5e_params *params,
-@@ -2077,11 +2293,16 @@ static int mlx5e_open_queues(struct mlx5
+@@ -2105,11 +2320,16 @@ static int mlx5e_open_queues(struct mlx5
  	ccp.ch_stats = c->stats;
  	ccp.node = cpu_to_node(c->cpu);
  	ccp.ix = c->ix;
@@ -565,7 +564,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	err = mlx5e_open_cq(c->priv, icocq_moder, &cparam->icosq.cqp, &ccp,
  			    &c->icosq.cq);
-@@ -2092,23 +2313,29 @@ static int mlx5e_open_queues(struct mlx5
+@@ -2120,22 +2340,28 @@ static int mlx5e_open_queues(struct mlx5
  	if (err)
  		goto err_close_icosq_cq;
  
@@ -583,19 +582,18 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		goto err_close_xdp_tx_cqs;
 +#endif
  
- 	napi_enable(&c->napi);
  
 +#if defined HAVE_XSK_SUPPORT || defined HAVE_KTLS_RX_SUPPORT
  	spin_lock_init(&c->async_icosq_lock);
  
  	err = mlx5e_open_icosq(c, params, &cparam->async_icosq, &c->async_icosq);
  	if (err)
- 		goto err_disable_napi;
+ 		goto err_close_xdpsq_cq;
 +#endif
  
  	err = mlx5e_open_icosq(c, params, &cparam->icosq, &c->icosq);
  	if (err)
-@@ -2118,76 +2345,108 @@ static int mlx5e_open_queues(struct mlx5
+@@ -2145,73 +2371,106 @@ static int mlx5e_open_queues(struct mlx5
  	if (err)
  		goto err_close_icosq;
  
@@ -645,17 +643,15 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#if defined HAVE_XSK_SUPPORT || defined HAVE_KTLS_RX_SUPPORT
  	mlx5e_close_icosq(&c->async_icosq);
  
- err_disable_napi:
+ err_close_xdpsq_cq:
 +#endif
- 	napi_disable(&c->napi);
- 
++
 +#ifdef HAVE_XDP_BUFF
  	if (c->xdp)
  		mlx5e_close_cq(&c->rq_xdpsq.cq);
--
+ 
  err_close_xdp_tx_cqs:
 +#endif
-+
 +#ifdef HAVE_XDP_REDIRECT
  	mlx5e_close_cq(&c->xdpsq.cq);
  
@@ -676,36 +672,48 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static void mlx5e_close_queues(struct mlx5e_channel *c)
  {
+-	mlx5e_close_xdpsq(&c->xdpsq);
+-	if (c->xdp)
+-		mlx5e_close_xdpsq(&c->rq_xdpsq);
+-	mlx5e_close_rq(c, &c->rq);
+-	mlx5e_close_sqs(c);
+-	mlx5e_close_icosq(&c->icosq);
+-	mlx5e_close_icosq(&c->async_icosq);
+-	if (c->xdp)
+-		mlx5e_close_cq(&c->rq_xdpsq.cq);
+-	mlx5e_close_cq(&c->xdpsq.cq);
+-	mlx5e_close_tx_cqs(c);
+-	mlx5e_close_cq(&c->icosq.cq);
+-	mlx5e_close_cq(&c->async_icosq.cq);
 +#ifdef HAVE_XDP_REDIRECT
- 	mlx5e_close_xdpsq(&c->xdpsq);
++       mlx5e_close_xdpsq(&c->xdpsq);
 +#endif
- 	mlx5e_close_rq(c, &c->rq);
 +#ifdef HAVE_XDP_BUFF
- 	if (c->xdp)
- 		mlx5e_close_xdpsq(&c->rq_xdpsq);
++       if (c->xdp)
++	       mlx5e_close_xdpsq(&c->rq_xdpsq);
 +#endif
- 	mlx5e_close_sqs(c);
- 	mlx5e_close_icosq(&c->icosq);
++       mlx5e_close_rq(c, &c->rq);
++       mlx5e_close_sqs(c);
++       mlx5e_close_icosq(&c->icosq);
 +#if defined HAVE_XSK_SUPPORT || defined HAVE_KTLS_RX_SUPPORT
- 	mlx5e_close_icosq(&c->async_icosq);
++       mlx5e_close_icosq(&c->async_icosq);
 +#endif
- 	napi_disable(&c->napi);
 +#ifdef HAVE_XDP_BUFF
- 	if (c->xdp)
- 		mlx5e_close_cq(&c->rq_xdpsq.cq);
++       if (c->xdp)
++       	mlx5e_close_cq(&c->rq_xdpsq.cq);
 +#endif
 +#ifdef HAVE_XDP_REDIRECT
- 	mlx5e_close_cq(&c->xdpsq.cq);
++       mlx5e_close_cq(&c->xdpsq.cq);
 +#endif
- 	mlx5e_close_tx_cqs(c);
- 	mlx5e_close_cq(&c->icosq.cq);
++       mlx5e_close_tx_cqs(c);
++       mlx5e_close_cq(&c->icosq.cq);
 +#if defined HAVE_XSK_SUPPORT || defined HAVE_KTLS_RX_SUPPORT
- 	mlx5e_close_cq(&c->async_icosq.cq);
++       mlx5e_close_cq(&c->async_icosq.cq);
 +#endif
  }
  
  static u8 mlx5e_enumerate_lag_port(struct mlx5_core_dev *mdev, int ix)
-@@ -2204,7 +2463,9 @@ static int mlx5e_open_channel(struct mlx
+@@ -2228,7 +2487,9 @@ static int mlx5e_open_channel(struct mlx
  			      struct mlx5e_channel **cp)
  {
  	struct net_device *netdev = priv->netdev;
@@ -715,7 +723,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	const struct cpumask *aff;
  	struct mlx5e_channel *c;
  	unsigned int irq;
-@@ -2216,7 +2477,15 @@ static int mlx5e_open_channel(struct mlx
+@@ -2240,7 +2501,15 @@ static int mlx5e_open_channel(struct mlx
  	if (err)
  		return err;
  
@@ -731,9 +739,9 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	cpu = cpumask_first(aff);
  
  	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, cpu_to_node(cpu));
-@@ -2232,9 +2501,11 @@ static int mlx5e_open_channel(struct mlx
+@@ -2256,9 +2525,11 @@ static int mlx5e_open_channel(struct mlx
  	c->netdev   = priv->netdev;
- 	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.mkey.key);
+ 	c->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey.key);
  	c->num_tc   = params->num_tc;
 +#ifdef HAVE_XDP_BUFF
  	c->xdp      = !!params->xdp_prog;
@@ -744,7 +752,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	c->lag_port = mlx5e_enumerate_lag_port(priv->mdev, ix);
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	c->num_special_sq = params->num_rl_txqs / params->num_channels +
-@@ -2261,19 +2532,23 @@ no_special_sq:
+@@ -2285,19 +2556,23 @@ no_special_sq:
  	if (unlikely(err))
  		goto err_napi_del;
  
@@ -768,18 +776,20 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  err_napi_del:
  	netif_napi_del(&c->napi);
-@@ -2293,8 +2568,10 @@ static void mlx5e_rq_channel_activate(st
+@@ -2317,8 +2592,10 @@ static void mlx5e_rq_channel_activate(st
  
  	mlx5e_activate_rq(&c->rq);
  
+-	if (test_bit(MLX5E_CHANNEL_STATE_XSK, c->state))
+-		mlx5e_activate_xsk(c);
 +#ifdef HAVE_XSK_SUPPORT
- 	if (test_bit(MLX5E_CHANNEL_STATE_XSK, c->state))
- 		mlx5e_activate_xsk(c);
++       if (test_bit(MLX5E_CHANNEL_STATE_XSK, c->state))
++       	mlx5e_activate_xsk(c);
 +#endif
  }
  
  static void mlx5e_activate_channel(struct mlx5e_channel *c)
-@@ -2308,7 +2585,9 @@ static void mlx5e_activate_channel(struc
+@@ -2334,7 +2611,9 @@ static void mlx5e_activate_channel(struc
  		mlx5e_activate_txqsq(&c->special_sq[tc]);
  #endif
  	mlx5e_activate_icosq(&c->icosq);
@@ -787,9 +797,9 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_activate_icosq(&c->async_icosq);
 +#endif
  	mlx5e_rq_channel_activate(c);
- 	mlx5_rename_comp_eq(c->priv->mdev, c->ix, c->priv->netdev->name);
- }
-@@ -2318,8 +2597,10 @@ static void mlx5e_rq_channel_deactivate(
+ 	if (!mlx5_core_is_sf(c->priv->mdev))
+ 		mlx5_rename_comp_eq(c->priv->mdev, c->ix, c->priv->netdev->name);
+@@ -2345,8 +2624,10 @@ static void mlx5e_rq_channel_deactivate(
  	if (c->priv->shared_rq)
  		return;
  
@@ -800,9 +810,9 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	mlx5e_deactivate_rq(&c->rq);
  }
-@@ -2330,7 +2611,9 @@ static void mlx5e_deactivate_channel(str
- 
- 	mlx5_rename_comp_eq(c->priv->mdev, c->ix, NULL);
+@@ -2358,7 +2639,9 @@ static void mlx5e_deactivate_channel(str
+ 	if (!mlx5_core_is_sf(c->priv->mdev))
+ 		mlx5_rename_comp_eq(c->priv->mdev, c->ix, NULL);
  	mlx5e_rq_channel_deactivate(c);
 +#if defined HAVE_XSK_SUPPORT || defined HAVE_KTLS_RX_SUPPORT
  	mlx5e_deactivate_icosq(&c->async_icosq);
@@ -810,7 +820,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_deactivate_icosq(&c->icosq);
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	for (tc = 0; tc < c->num_special_sq; tc++)
-@@ -2342,8 +2625,10 @@ static void mlx5e_deactivate_channel(str
+@@ -2372,8 +2655,10 @@ static void mlx5e_deactivate_channel(str
  
  static void mlx5e_close_channel(struct mlx5e_channel *c)
  {
@@ -821,7 +831,16 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_close_queues(c);
  	netif_napi_del(&c->napi);
  
-@@ -2603,6 +2888,7 @@ void mlx5e_build_icosq_param(struct mlx5
+@@ -2644,13 +2929,16 @@ static void mlx5e_build_async_icosq_para
+ 	mlx5e_build_sq_param_common(priv, param);
+ 
+ 	/* async_icosq is used by XSK only if xdp_prog is active */
++#ifdef HAVE_XDP_BUFF
+ 	if (params->xdp_prog)
+ 		param->stop_room = mlx5e_stop_room_for_wqe(1); /* for XSK NOP */
++#endif
+ 	MLX5_SET(sqc, sqc, reg_umr, MLX5_CAP_ETH(priv->mdev, reg_umr_sq));
+ 	MLX5_SET(wq, wq, log_wq_sz, log_wq_size);
  	mlx5e_build_ico_cq_param(priv, log_wq_size, &param->cqp);
  }
  
@@ -829,7 +848,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  void mlx5e_build_xdpsq_param(struct mlx5e_priv *priv,
  			     struct mlx5e_params *params,
  			     struct mlx5e_sq_param *param)
-@@ -2615,6 +2901,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
+@@ -2663,6 +2951,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
  	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
  	mlx5e_build_tx_cq_param(priv, params, &param->cqp);
  }
@@ -837,7 +856,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static u8 mlx5e_build_icosq_log_wq_sz(struct mlx5e_params *params,
  				      struct mlx5e_rq_param *rqp)
-@@ -2630,9 +2917,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -2679,9 +2968,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
  
  static u8 mlx5e_build_async_icosq_log_wq_sz(struct net_device *netdev)
  {
@@ -849,7 +868,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	return MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
  }
  
-@@ -2648,12 +2936,14 @@ static void mlx5e_build_channel_param(st
+@@ -2697,12 +2987,14 @@ static void mlx5e_build_channel_param(st
  	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(priv->netdev);
  
  	mlx5e_build_sq_param(priv, params, &cparam->txq_sq);
@@ -857,7 +876,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_build_xdpsq_param(priv, params, &cparam->xdp_sq);
 +#endif
  	mlx5e_build_icosq_param(priv, icosq_log_wq_sz, &cparam->icosq);
- 	mlx5e_build_icosq_param(priv, async_icosq_log_wq_sz, &cparam->async_icosq);
+ 	mlx5e_build_async_icosq_param(priv, params, async_icosq_log_wq_sz, &cparam->async_icosq);
  }
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
@@ -865,7 +884,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static void mlx5e_rl_cleanup(struct mlx5e_priv *priv)
  {
  	mlx5e_rl_remove_sysfs(priv);
-@@ -2696,8 +2986,10 @@ int mlx5e_open_channels(struct mlx5e_pri
+@@ -2745,8 +3037,10 @@ int mlx5e_open_channels(struct mlx5e_pri
  	for (i = 0; i < chs->num; i++) {
  		struct xdp_umem *umem = NULL;
  
@@ -876,7 +895,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  		err = mlx5e_open_channel(priv, i, &chs->params, cparam, umem, &chs->c[i]);
  		if (err)
-@@ -2861,9 +3153,13 @@ void mlx5e_destroy_direct_rqts(struct ml
+@@ -2912,9 +3206,13 @@ void mlx5e_destroy_direct_rqts(struct ml
  
  static int mlx5e_rx_hash_fn(int hfunc)
  {
@@ -890,7 +909,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  int mlx5e_bits_invert(unsigned long a, int size)
-@@ -2888,7 +3184,9 @@ static void mlx5e_fill_rqt_rqns(struct m
+@@ -2939,7 +3237,9 @@ static void mlx5e_fill_rqt_rqns(struct m
  		if (rrp.is_rss) {
  			int ix = i;
  
@@ -900,7 +919,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  				ix = mlx5e_bits_invert(i, ilog2(sz));
  
  			ix = priv->rss_params.indirection_rqt[ix];
-@@ -3044,7 +3342,11 @@ struct mlx5e_tirc_config mlx5e_tirc_get_
+@@ -3095,7 +3395,11 @@ struct mlx5e_tirc_config mlx5e_tirc_get_
  
  static void mlx5e_build_tir_ctx_lro(struct mlx5e_params *params, void *tirc)
  {
@@ -912,7 +931,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		return;
  
  #define ROUGH_MAX_L2_L3_HDR_SZ 256
-@@ -3065,6 +3367,7 @@ void mlx5e_build_indir_tir_ctx_hash(stru
+@@ -3116,6 +3420,7 @@ void mlx5e_build_indir_tir_ctx_hash(stru
  			     MLX5_ADDR_OF(tirc, tirc, rx_hash_field_selector_outer);
  
  	MLX5_SET(tirc, tirc, rx_hash_fn, mlx5e_rx_hash_fn(rss_params->hfunc));
@@ -920,7 +939,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (rss_params->hfunc == ETH_RSS_HASH_TOP) {
  		void *rss_key = MLX5_ADDR_OF(tirc, tirc,
  					     rx_hash_toeplitz_key);
-@@ -3074,6 +3377,7 @@ void mlx5e_build_indir_tir_ctx_hash(stru
+@@ -3125,6 +3430,7 @@ void mlx5e_build_indir_tir_ctx_hash(stru
  		MLX5_SET(tirc, tirc, rx_hash_symmetric, 1);
  		memcpy(rss_key, rss_params->toeplitz_hash_key, len);
  	}
@@ -928,7 +947,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	MLX5_SET(rx_hash_field_select, hfso, l3_prot_type,
  		 ttconfig->l3_prot_type);
  	MLX5_SET(rx_hash_field_select, hfso, l4_prot_type,
-@@ -3161,7 +3465,7 @@ free_in:
+@@ -3212,7 +3518,7 @@ free_in:
  	return err;
  }
  
@@ -937,7 +956,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static int mlx5e_set_mtu(struct mlx5_core_dev *mdev,
  			 struct mlx5e_params *params, u16 mtu)
-@@ -3216,10 +3520,14 @@ MLX5E_DEFINE_PREACTIVATE_WRAPPER_CTX(mlx
+@@ -3267,10 +3573,14 @@ MLX5E_DEFINE_PREACTIVATE_WRAPPER_CTX(mlx
  
  void mlx5e_set_netdev_mtu_boundaries(struct mlx5e_priv *priv)
  {
@@ -952,7 +971,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	/* MTU range: 68 - hw-specific max */
  	netdev->min_mtu = ETH_MIN_MTU;
-@@ -3227,6 +3535,12 @@ void mlx5e_set_netdev_mtu_boundaries(str
+@@ -3278,6 +3588,12 @@ void mlx5e_set_netdev_mtu_boundaries(str
  	mlx5_query_port_max_mtu(mdev, &max_mtu, 1);
  	netdev->max_mtu = min_t(unsigned int, MLX5E_HW2SW_MTU(params, max_mtu),
  				ETH_MAX_MTU);
@@ -965,7 +984,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  static void mlx5e_netdev_set_tcs(struct mlx5e_priv *priv, u16 nch, u8 ntc)
-@@ -3253,6 +3567,9 @@ static int mlx5e_update_netdev_queues(st
+@@ -3304,6 +3620,9 @@ static int mlx5e_update_netdev_queues(st
  	int num_txqs, num_rxqs, nch, ntc;
  	int old_num_txqs, old_ntc;
  	int err;
@@ -975,7 +994,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	old_num_txqs = netdev->real_num_tx_queues;
  	old_ntc = netdev->num_tc;
-@@ -3264,6 +3581,10 @@ static int mlx5e_update_netdev_queues(st
+@@ -3315,6 +3634,10 @@ static int mlx5e_update_netdev_queues(st
  		num_txqs += ntc;
  	num_rxqs = nch * priv->profile->rq_groups;
  
@@ -986,7 +1005,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	num_txqs += priv->channels.params.num_rl_txqs;
  #endif
-@@ -3280,6 +3601,10 @@ static int mlx5e_update_netdev_queues(st
+@@ -3331,6 +3654,10 @@ static int mlx5e_update_netdev_queues(st
  		netdev_warn(netdev, "netif_set_real_num_rx_queues failed, %d\n", err);
  		goto err_txqs;
  	}
@@ -997,7 +1016,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	return 0;
  
-@@ -3328,7 +3653,9 @@ int mlx5e_num_channels_changed(struct ml
+@@ -3379,7 +3706,9 @@ int mlx5e_num_channels_changed(struct ml
  
  	mlx5e_set_default_xps_cpumasks(priv, &priv->channels.params);
  
@@ -1007,7 +1026,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		mlx5e_build_default_indir_rqt(priv->rss_params.indirection_rqt,
  					      MLX5E_INDIR_RQT_SIZE, count);
  
-@@ -3388,7 +3715,9 @@ static void mlx5e_priv_channels_activate
+@@ -3438,7 +3767,9 @@ static void mlx5e_priv_channels_activate
  	mlx5e_wait_channels_min_rx_wqes(&priv->channels);
  	mlx5e_redirect_rqts_to_channels(priv, &priv->channels);
  
@@ -1016,18 +1035,18 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#endif
  }
  
- void mlx5e_activate_priv_channels(struct mlx5e_priv *priv)
-@@ -3396,7 +3725,9 @@ void mlx5e_activate_priv_channels(struct
- 	mlx5e_update_num_tc_x_num_ch(priv);
+ void mlx5e_build_selq(struct mlx5e_select_queue_params *selq,
+@@ -3463,7 +3794,9 @@ void mlx5e_activate_priv_channels(struct
+ {
  	mlx5e_build_txq_maps(priv);
  	mlx5e_activate_channels(&priv->channels);
 +#ifdef HAVE_XDP_BUFF
  	mlx5e_xdp_tx_enable(priv);
 +#endif
- 	netif_tx_start_all_queues(priv->netdev);
  
- 	if (mlx5e_is_vport_rep(priv))
-@@ -3410,7 +3741,9 @@ static void mlx5e_deactivate_priv_channe
+ 	/* dev_watchdog() wants all TX queues to be started when the carrier is
+ 	 * OK, including the ones in range real_num_tx_queues..num_tx_queues-1.
+@@ -3482,7 +3815,9 @@ static void mlx5e_deactivate_priv_channe
  	if (priv->shared_rq)
  		return;
  
@@ -1037,17 +1056,17 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	mlx5e_redirect_rqts_to_drop(priv);
  }
-@@ -3427,7 +3760,9 @@ void mlx5e_deactivate_priv_channels(stru
+@@ -3501,7 +3836,9 @@ void mlx5e_deactivate_priv_channels(stru
  	 */
- 	netif_tx_stop_all_queues(priv->netdev);
  	netif_tx_disable(priv->netdev);
+ 
 +#ifdef HAVE_XDP_BUFF
  	mlx5e_xdp_tx_disable(priv);
 +#endif
  	mlx5e_deactivate_channels(&priv->channels);
  }
  
-@@ -3444,7 +3779,7 @@ static int mlx5e_switch_priv_channels(st
+@@ -3519,7 +3856,7 @@ static int mlx5e_switch_priv_channels(st
  	carrier_ok = netif_carrier_ok(netdev);
  	netif_carrier_off(netdev);
  
@@ -1056,8 +1075,8 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_rl_cleanup(priv);
  #endif
  	mlx5e_deactivate_priv_channels(priv);
-@@ -3472,7 +3807,7 @@ static int mlx5e_switch_priv_channels(st
- 	priv->profile->update_rx(priv);
+@@ -3548,7 +3885,7 @@ static int mlx5e_switch_priv_channels(st
+ 	mlx5e_replace_selq(priv, selq);
  out:
  	mlx5e_activate_priv_channels(priv);
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
@@ -1065,8 +1084,8 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_rl_init(priv, priv->channels.params);
  #endif
  
-@@ -3539,7 +3874,7 @@ int mlx5e_open_locked(struct net_device
- 	priv->profile->update_rx(priv);
+@@ -3637,7 +3974,7 @@ int mlx5e_open_locked(struct net_device
+ 	mlx5e_replace_selq(priv, selq);
  	mlx5e_activate_priv_channels(priv);
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
@@ -1074,7 +1093,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_rl_init(priv, priv->channels.params);
  #endif
  
-@@ -3583,7 +3918,7 @@ int mlx5e_close_locked(struct net_device
+@@ -3684,7 +4021,7 @@ int mlx5e_close_locked(struct net_device
  
  	netif_carrier_off(priv->netdev);
  	mlx5e_destroy_debugfs(priv);
@@ -1083,7 +1102,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	mlx5e_rl_cleanup(priv);
  #endif
  	mlx5e_deactivate_priv_channels(priv);
-@@ -3628,8 +3963,10 @@ static int mlx5e_alloc_drop_rq(struct ml
+@@ -3729,8 +4066,10 @@ static int mlx5e_alloc_drop_rq(struct ml
  	if (err)
  		return err;
  
@@ -1094,7 +1113,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	rq->mdev = mdev;
  
-@@ -3944,7 +4281,10 @@ static int mlx5e_modify_channels_scatter
+@@ -4045,7 +4384,10 @@ static int mlx5e_modify_channels_scatter
  	return 0;
  }
  
@@ -1106,7 +1125,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  {
  	int err = 0;
  	int i;
-@@ -3958,14 +4298,24 @@ static int mlx5e_modify_channels_vsd(str
+@@ -4059,14 +4401,24 @@ static int mlx5e_modify_channels_vsd(str
  	return 0;
  }
  
@@ -1131,7 +1150,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	if (tc && tc != MLX5E_MAX_NUM_TC)
  		return -EINVAL;
-@@ -3997,42 +4347,132 @@ out:
+@@ -4098,42 +4450,132 @@ out:
  	return err;
  }
  
@@ -1264,7 +1283,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  void mlx5e_fold_sw_stats64(struct mlx5e_priv *priv, struct rtnl_link_stats64 *s)
  {
-@@ -4058,14 +4498,26 @@ void mlx5e_fold_sw_stats64(struct mlx5e_
+@@ -4168,14 +4610,26 @@ void mlx5e_fold_sw_stats64(struct mlx5e_
  	}
  }
  
@@ -1293,7 +1312,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	/* In switchdev mode, monitor counters doesn't monitor
  	 * rx/tx stats of 802_3. The update stats mechanism
-@@ -4099,6 +4551,10 @@ mlx5e_get_stats(struct net_device *dev,
+@@ -4216,6 +4670,10 @@ mlx5e_get_stats(struct net_device *dev,
  	stats->rx_errors = stats->rx_length_errors + stats->rx_crc_errors +
  			   stats->rx_frame_errors;
  	stats->tx_errors = stats->tx_aborted_errors + stats->tx_carrier_errors;
@@ -1304,7 +1323,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  static void mlx5e_nic_set_rx_mode(struct mlx5e_priv *priv)
-@@ -4162,11 +4618,6 @@ static int set_feature_lro(struct net_de
+@@ -4279,11 +4737,6 @@ static int set_feature_lro(struct net_de
  	}
  
  	cur_params = &priv->channels.params;
@@ -1316,7 +1335,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	reset = test_bit(MLX5E_STATE_OPENED, &priv->state);
  
-@@ -4179,6 +4630,17 @@ static int set_feature_lro(struct net_de
+@@ -4296,6 +4749,17 @@ static int set_feature_lro(struct net_de
  			reset = false;
  	}
  
@@ -1334,7 +1353,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (!reset) {
  		struct mlx5e_params old_params;
  
-@@ -4191,7 +4653,7 @@ static int set_feature_lro(struct net_de
+@@ -4308,7 +4772,7 @@ static int set_feature_lro(struct net_de
  	}
  
  	err = mlx5e_safe_switch_channels(priv, &new_channels,
@@ -1343,7 +1362,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  out:
  	mutex_unlock(&priv->state_lock);
  	return err;
-@@ -4209,6 +4671,7 @@ static int set_feature_cvlan_filter(stru
+@@ -4326,6 +4790,7 @@ static int set_feature_cvlan_filter(stru
  	return 0;
  }
  
@@ -1351,7 +1370,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
  static int set_feature_tc_num_filters(struct net_device *netdev, bool enable)
  {
-@@ -4223,6 +4686,7 @@ static int set_feature_tc_num_filters(st
+@@ -4340,6 +4805,7 @@ static int set_feature_tc_num_filters(st
  	return 0;
  }
  #endif
@@ -1359,7 +1378,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static int set_feature_rx_all(struct net_device *netdev, bool enable)
  {
-@@ -4271,6 +4735,7 @@ unlock:
+@@ -4388,6 +4854,7 @@ unlock:
  }
  
  #ifdef CONFIG_MLX5_EN_ARFS
@@ -1367,7 +1386,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static int set_feature_arfs(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -4284,6 +4749,7 @@ static int set_feature_arfs(struct net_d
+@@ -4401,6 +4868,7 @@ static int set_feature_arfs(struct net_d
  	return err;
  }
  #endif
@@ -1375,7 +1394,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static int mlx5e_handle_feature(struct net_device *netdev,
  				netdev_features_t *features,
-@@ -4309,7 +4775,8 @@ static int mlx5e_handle_feature(struct n
+@@ -4426,7 +4894,8 @@ static int mlx5e_handle_feature(struct n
  	return 0;
  }
  
@@ -1385,7 +1404,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  {
  	netdev_features_t oper_features = netdev->features;
  	int err = 0;
-@@ -4320,16 +4787,22 @@ int mlx5e_set_features(struct net_device
+@@ -4437,16 +4906,22 @@ int mlx5e_set_features(struct net_device
  	err |= MLX5E_HANDLE_FEATURE(NETIF_F_LRO, set_feature_lro);
  	err |= MLX5E_HANDLE_FEATURE(NETIF_F_HW_VLAN_CTAG_FILTER,
  				    set_feature_cvlan_filter);
@@ -1408,7 +1427,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	if (err) {
  		netdev->features = oper_features;
-@@ -4356,7 +4829,11 @@ static netdev_features_t mlx5e_fix_featu
+@@ -4473,7 +4948,11 @@ static netdev_features_t mlx5e_fix_featu
  			netdev_warn(netdev, "Dropping C-tag vlan stripping offload due to S-tag vlan\n");
  	}
  
@@ -1421,7 +1440,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		if (features & NETIF_F_LRO) {
  			netdev_warn(netdev, "Disabling LRO, not supported in legacy RQ\n");
  			features &= ~NETIF_F_LRO;
-@@ -4375,22 +4852,27 @@ static netdev_features_t mlx5e_fix_featu
+@@ -4492,17 +4971,22 @@ static netdev_features_t mlx5e_fix_featu
  			netdev_warn(netdev, "Dropping LRO feature since RX-FCS is requested\n");
  			features &= ~NETIF_F_LRO;
  		}
@@ -1440,6 +1459,16 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	}
 +#endif
  
++#ifdef HAVE_NETIF_F_HW_TLS_RX 
+ 	if (mlx5e_is_uplink_rep(priv)) {
+ 		features &= ~NETIF_F_HW_TLS_RX;
+ 		if (netdev->features & NETIF_F_HW_TLS_RX)
+@@ -4512,12 +4996,14 @@ static netdev_features_t mlx5e_fix_featu
+ 		if (netdev->features & NETIF_F_HW_TLS_TX)
+ 			netdev_warn(netdev, "Disabling hw_tls_tx, not supported in switchdev mode\n");
+ 	}
++#endif
+ 
  	mutex_unlock(&priv->state_lock);
  
  	return features;
@@ -1449,7 +1478,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static bool mlx5e_xsk_validate_mtu(struct net_device *netdev,
  				   struct mlx5e_channels *chs,
  				   struct mlx5e_params *new_params,
-@@ -4427,6 +4909,7 @@ static bool mlx5e_xsk_validate_mtu(struc
+@@ -4554,6 +5040,7 @@ static bool mlx5e_xsk_validate_mtu(struc
  
  	return true;
  }
@@ -1457,7 +1486,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  int mlx5e_change_mtu(struct net_device *netdev, int new_mtu,
  		     mlx5e_fp_preactivate preactivate)
-@@ -4434,14 +4917,36 @@ int mlx5e_change_mtu(struct net_device *
+@@ -4561,14 +5048,36 @@ int mlx5e_change_mtu(struct net_device *
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct mlx5e_channels new_channels = {};
  	struct mlx5e_params *params;
@@ -1494,7 +1523,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	reset = reset && test_bit(MLX5E_STATE_OPENED, &priv->state);
  
  	new_channels.params = *params;
-@@ -4450,6 +4955,7 @@ int mlx5e_change_mtu(struct net_device *
+@@ -4577,6 +5086,7 @@ int mlx5e_change_mtu(struct net_device *
  	if (err)
  		goto out;
  
@@ -1502,7 +1531,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (params->xdp_prog &&
  	    !mlx5e_rx_is_linear_skb(&new_channels.params, NULL)) {
  		netdev_err(netdev, "MTU(%d) > %d is not allowed while XDP enabled\n",
-@@ -4457,13 +4963,15 @@ int mlx5e_change_mtu(struct net_device *
+@@ -4584,13 +5094,15 @@ int mlx5e_change_mtu(struct net_device *
  		err = -EINVAL;
  		goto out;
  	}
@@ -1519,7 +1548,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	if (params->rq_wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ) {
  		bool is_linear = mlx5e_rx_mpwqe_is_linear_skb(priv->mdev,
-@@ -4510,8 +5018,13 @@ static int mlx5e_change_nic_mtu(struct n
+@@ -4637,8 +5149,13 @@ static int mlx5e_change_nic_mtu(struct n
  	return mlx5e_change_mtu(netdev, new_mtu, mlx5e_set_dev_port_mtu_ctx);
  }
  
@@ -1533,7 +1562,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	struct hwtstamp_config config;
  	int err;
  
-@@ -4572,13 +5085,13 @@ int mlx5e_hwstamp_set(struct mlx5e_priv
+@@ -4699,13 +5216,13 @@ int mlx5e_hwstamp_set(struct mlx5e_priv
  	memcpy(&priv->tstamp, &config, sizeof(config));
  	mutex_unlock(&priv->state_lock);
  
@@ -1548,7 +1577,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  int mlx5e_hwstamp_get(struct mlx5e_priv *priv, struct ifreq *ifr)
  {
  	struct hwtstamp_config *cfg = &priv->tstamp;
-@@ -4588,6 +5101,7 @@ int mlx5e_hwstamp_get(struct mlx5e_priv
+@@ -4715,6 +5232,7 @@ int mlx5e_hwstamp_get(struct mlx5e_priv
  
  	return copy_to_user(ifr->ifr_data, cfg, sizeof(*cfg)) ? -EFAULT : 0;
  }
@@ -1556,7 +1585,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static int mlx5e_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
  {
-@@ -4595,9 +5109,13 @@ static int mlx5e_ioctl(struct net_device
+@@ -4722,9 +5240,13 @@ static int mlx5e_ioctl(struct net_device
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:
@@ -1570,7 +1599,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -4612,15 +5130,24 @@ int mlx5e_set_vf_mac(struct net_device *
+@@ -4739,15 +5261,24 @@ int mlx5e_set_vf_mac(struct net_device *
  	return mlx5_eswitch_set_vport_mac(mdev->priv.eswitch, vf + 1, mac);
  }
  
@@ -1595,7 +1624,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  #ifdef HAVE_NETDEV_OPS_NDO_SET_VF_TRUNK_RANGE
  static int mlx5e_add_vf_vlan_trunk_range(struct net_device *dev, int vf,
-@@ -4660,6 +5187,7 @@ static int mlx5e_set_vf_spoofchk(struct
+@@ -4787,6 +5318,7 @@ static int mlx5e_set_vf_spoofchk(struct
  	return mlx5_eswitch_set_vport_spoofchk(mdev->priv.eswitch, vf + 1, setting);
  }
  
@@ -1603,7 +1632,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static int mlx5e_set_vf_trust(struct net_device *dev, int vf, bool setting)
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
-@@ -4667,15 +5195,52 @@ static int mlx5e_set_vf_trust(struct net
+@@ -4794,15 +5326,52 @@ static int mlx5e_set_vf_trust(struct net
  
  	return mlx5_eswitch_set_vport_trust(mdev->priv.eswitch, vf + 1, setting);
  }
@@ -1622,13 +1651,13 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#ifndef HAVE_VF_TX_RATE_LIMITS
 +	struct mlx5_eswitch *esw = mdev->priv.eswitch;
 +	int min_tx_rate;
-+
+ 
 +	if (!esw || !MLX5_CAP_GEN(esw->dev, vport_group_manager) ||
 +	    MLX5_CAP_GEN(esw->dev, port_type) != MLX5_CAP_PORT_TYPE_ETH)
 +		return -EPERM;
 +	if (vport < 0 || vport >= esw->total_vports)
 +		return -EINVAL;
- 
++
 +	mutex_lock(&esw->state_lock);
 +	min_tx_rate = esw->vports[vport].info.min_rate;
 +	mutex_unlock(&esw->state_lock);
@@ -1656,7 +1685,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  }
  
  static int mlx5_vport_link2ifla(u8 esw_link)
-@@ -4730,6 +5295,7 @@ int mlx5e_get_vf_config(struct net_devic
+@@ -4857,6 +5426,7 @@ int mlx5e_get_vf_config(struct net_devic
  	return 0;
  }
  
@@ -1664,7 +1693,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  int mlx5e_get_vf_stats(struct net_device *dev,
  		       int vf, struct ifla_vf_stats *vf_stats)
  {
-@@ -4739,7 +5305,9 @@ int mlx5e_get_vf_stats(struct net_device
+@@ -4866,7 +5436,9 @@ int mlx5e_get_vf_stats(struct net_device
  	return mlx5_eswitch_get_vport_stats(mdev->priv.eswitch, vf + 1,
  					    vf_stats);
  }
@@ -1674,7 +1703,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static bool
  mlx5e_has_offload_stats(const struct net_device *dev, int attr_id)
  {
-@@ -4753,7 +5321,9 @@ mlx5e_has_offload_stats(const struct net
+@@ -4880,7 +5452,9 @@ mlx5e_has_offload_stats(const struct net
  
  	return mlx5e_rep_has_offload_stats(dev, attr_id);
  }
@@ -1684,7 +1713,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static int
  mlx5e_get_offload_stats(int attr_id, const struct net_device *dev,
  			void *sp)
-@@ -4766,7 +5336,112 @@ mlx5e_get_offload_stats(int attr_id, con
+@@ -4893,7 +5467,114 @@ mlx5e_get_offload_stats(int attr_id, con
  	return mlx5e_rep_get_offload_stats(attr_id, dev, sp);
  }
  #endif
@@ -1696,7 +1725,8 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +	struct mlx5e_priv       *priv;
 +	u16                     port;
 +};
- 
++
++#if defined(HAVE_NDO_UDP_TUNNEL_ADD) || defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED) || defined(HAVE_NDO_ADD_VXLAN_PORT)
 +static void mlx5e_vxlan_add_work(struct work_struct *work)
 +{
 +	struct mlx5e_vxlan_work *vxlan_work =
@@ -1741,6 +1771,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +	vxlan_work->port = port;
 +	queue_work(priv->wq, &vxlan_work->work);
 +}
++#endif
 +
 +#if defined(HAVE_NDO_UDP_TUNNEL_ADD) || defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED)
 +void mlx5e_add_vxlan_port(struct net_device *netdev, struct udp_tunnel_info *ti)
@@ -1787,7 +1818,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +
 +	if (!mlx5_vxlan_allowed(priv->mdev->vxlan))
 +		return;
-+
+ 
 +	mlx5e_vxlan_queue_work(priv, be16_to_cpu(port), 0);
 +}
 +#endif
@@ -1797,7 +1828,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static bool mlx5e_gre_tunnel_inner_proto_offload_supported(struct mlx5_core_dev *mdev,
  							   struct sk_buff *skb)
  {
-@@ -4787,9 +5462,13 @@ static netdev_features_t mlx5e_tunnel_fe
+@@ -4914,9 +5595,13 @@ static netdev_features_t mlx5e_tunnel_fe
  						     netdev_features_t features)
  {
  	unsigned int offset = 0;
@@ -1811,7 +1842,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	switch (vlan_get_protocol(skb)) {
  	case htons(ETH_P_IP):
-@@ -4812,6 +5491,7 @@ static netdev_features_t mlx5e_tunnel_fe
+@@ -4939,6 +5624,7 @@ static netdev_features_t mlx5e_tunnel_fe
  		if (mlx5e_tunnel_proto_supported(priv->mdev, IPPROTO_IPIP))
  			return features;
  		break;
@@ -1819,7 +1850,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	case IPPROTO_UDP:
  		udph = udp_hdr(skb);
  		port = be16_to_cpu(udph->dest);
-@@ -4819,6 +5499,7 @@ static netdev_features_t mlx5e_tunnel_fe
+@@ -4946,6 +5632,7 @@ static netdev_features_t mlx5e_tunnel_fe
  		/* Verify if UDP port is being offloaded by HW */
  		if (mlx5_vxlan_lookup_port(priv->mdev->vxlan, port))
  			return features;
@@ -1827,7 +1858,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  #if IS_ENABLED(CONFIG_GENEVE)
  		/* Support Geneve offload for default UDP port */
-@@ -4838,8 +5519,14 @@ netdev_features_t mlx5e_features_check(s
+@@ -4965,8 +5652,14 @@ netdev_features_t mlx5e_features_check(s
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  
@@ -1842,7 +1873,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  #ifdef CONFIG_MLX5_EN_IPSEC
  	if (mlx5e_ipsec_feature_check(skb, netdev, features))
-@@ -4853,6 +5540,30 @@ netdev_features_t mlx5e_features_check(s
+@@ -4980,6 +5673,30 @@ netdev_features_t mlx5e_features_check(s
  
  	return features;
  }
@@ -1873,7 +1904,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static void mlx5e_tx_timeout_work(struct work_struct *work)
  {
-@@ -4885,7 +5596,11 @@ unlock:
+@@ -5015,7 +5732,11 @@ unlock:
  	rtnl_unlock();
  }
  
@@ -1885,7 +1916,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  
-@@ -4893,6 +5608,7 @@ static void mlx5e_tx_timeout(struct net_
+@@ -5023,6 +5744,7 @@ static void mlx5e_tx_timeout(struct net_
  	queue_work(priv->wq, &priv->tx_timeout_work);
  }
  
@@ -1893,7 +1924,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static int mlx5e_xdp_allowed(struct mlx5e_priv *priv, struct bpf_prog *prog)
  {
  	struct net_device *netdev = priv->netdev;
-@@ -4954,12 +5670,20 @@ static int mlx5e_xdp_set(struct net_devi
+@@ -5085,12 +5807,20 @@ static int mlx5e_xdp_set(struct net_devi
  	/* no need for full reset when exchanging programs */
  	reset = (!priv->channels.params.xdp_prog || !prog);
  
@@ -1916,18 +1947,28 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	if (was_opened && reset) {
  		struct mlx5e_channels new_channels = {};
  
-@@ -4994,8 +5718,10 @@ static int mlx5e_xdp_set(struct net_devi
+@@ -5125,10 +5855,20 @@ static int mlx5e_xdp_set(struct net_devi
  		struct mlx5e_channel *c = priv->channels.c[i];
  
  		mlx5e_rq_replace_xdp_prog(&c->rq, prog);
 +#ifdef HAVE_XSK_SUPPORT
- 		if (test_bit(MLX5E_CHANNEL_STATE_XSK, c->state))
+ 		if (test_bit(MLX5E_CHANNEL_STATE_XSK, c->state)) {
++#ifndef HAVE_BPF_PROG_ADD_RET_STRUCT
+ 			bpf_prog_inc(prog);
++#else
++			prog = bpf_prog_inc(prog);
++			if (IS_ERR(prog)) {
++				err = PTR_ERR(prog);
++				goto unlock;
++			}
++#endif
  			mlx5e_rq_replace_xdp_prog(&c->xskrq, prog);
+ 		}
 +#endif
  	}
  
  unlock:
-@@ -5003,23 +5729,76 @@ unlock:
+@@ -5136,23 +5876,76 @@ unlock:
  	return err;
  }
  
@@ -2011,7 +2052,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	struct mlx5_core_dev *mdev = priv->mdev;
-@@ -5030,13 +5809,38 @@ static int mlx5e_bridge_getlink(struct s
+@@ -5163,13 +5956,38 @@ static int mlx5e_bridge_getlink(struct s
  	if (err)
  		return err;
  	mode = setting ? BRIDGE_MODE_VEPA : BRIDGE_MODE_VEB;
@@ -2053,7 +2094,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	struct mlx5_core_dev *mdev = priv->mdev;
-@@ -5071,56 +5875,225 @@ static int mlx5e_bridge_setlink(struct n
+@@ -5204,40 +6022,177 @@ static int mlx5e_bridge_setlink(struct n
  }
  #endif
  
@@ -2073,7 +2114,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +		return mlx5e_rep_get_phys_port_name(dev, buf, len);
 +
 +	/* Only rename ecpf, don't rename non-smartnic PF/VF/SF */
-+	if (!mlx5_core_is_pf(priv->mdev) ||
++	if (!mlx5_core_is_pf(priv->mdev) &&
 +	    !mlx5_core_is_ecpf(priv->mdev))
 +		return -EOPNOTSUPP;
 +
@@ -2094,7 +2135,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +int
 +#endif
 +mlx5e_get_port_parent_id(struct net_device *dev,
-+		         struct netdev_phys_item_id *ppid)
++			 struct netdev_phys_item_id *ppid)
 +{
 +	struct mlx5e_priv *priv = netdev_priv(dev);
 +
@@ -2102,7 +2143,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
 +		return -EOPNOTSUPP;
 +#else
-+		return;
++	return;
 +#endif
 +
 +	if (!mlx5e_is_uplink_rep(priv))
@@ -2131,12 +2172,12 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#else
 +#ifdef HAVE_NDO_SETUP_TC
 +#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
-+	.ndo_setup_tc            = mlx5e_setup_tc,
+ 	.ndo_setup_tc            = mlx5e_setup_tc,
 +#else
 +#if defined(HAVE_NDO_SETUP_TC_4_PARAMS) || defined(HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX)
-+	.ndo_setup_tc            = mlx5e_ndo_setup_tc,
++	.ndo_setup_tc		 = mlx5e_ndo_setup_tc,
 +#else
- 	.ndo_setup_tc            = mlx5e_setup_tc,
++	.ndo_setup_tc		 = mlx5e_setup_tc,
 +#endif
 +#endif
 +#endif
@@ -2145,7 +2186,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
  	.ndo_get_stats64         = mlx5e_get_stats,
 +#else
-+	.ndo_get_stats           = mlx5e_get_stats,
++	.ndo_get_stats		 = mlx5e_get_stats,
 +#endif
  	.ndo_set_rx_mode         = mlx5e_set_rx_mode,
  	.ndo_set_mac_address     = mlx5e_set_mac,
@@ -2166,28 +2207,28 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#endif
 +
 +#ifdef HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
-+#ifdef HAVE_UDP_TUNNEL_NIC_INFO
++#if defined(HAVE_UDP_TUNNEL_NIC_INFO) && defined(HAVE_NDO_UDP_TUNNEL_ADD)
  	.ndo_udp_tunnel_add      = udp_tunnel_nic_add_port,
  	.ndo_udp_tunnel_del      = udp_tunnel_nic_del_port,
-+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD) 
-+	.ndo_udp_tunnel_add      = mlx5e_add_vxlan_port,
-+	.ndo_udp_tunnel_del      = mlx5e_del_vxlan_port,
-+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED)
-+	.extended.ndo_udp_tunnel_add      = mlx5e_add_vxlan_port,
-+	.extended.ndo_udp_tunnel_del      = mlx5e_del_vxlan_port,
-+#endif /* HAVE_UDP_TUNNEL_NIC_INFO */
-+#elif defined(HAVE_NDO_ADD_VXLAN_PORT)
-+	.ndo_add_vxlan_port      = mlx5e_add_vxlan_port,
-+	.ndo_del_vxlan_port      = mlx5e_del_vxlan_port,
-+#endif
-+#ifdef HAVE_NETDEV_FEATURES_T
++#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)                          
++	.ndo_udp_tunnel_add      = mlx5e_add_vxlan_port,         
++	.ndo_udp_tunnel_del      = mlx5e_del_vxlan_port,         
++#elif defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED)                 
++	.extended.ndo_udp_tunnel_add	  = mlx5e_add_vxlan_port,
++	.extended.ndo_udp_tunnel_del	  = mlx5e_del_vxlan_port,
++#endif /* HAVE_UDP_TUNNEL_NIC_INFO */                           
++#elif defined(HAVE_NDO_ADD_VXLAN_PORT)                          
++	.ndo_add_vxlan_port	 = mlx5e_add_vxlan_port,         
++	.ndo_del_vxlan_port	 = mlx5e_del_vxlan_port,         
++#endif                                                          
++#ifdef HAVE_NETDEV_FEATURES_T                                   
  	.ndo_features_check      = mlx5e_features_check,
 +#elif defined(HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON) && defined(HAVE_VXLAN_GSO_CHECK)
-+	.ndo_gso_check           = mlx5e_gso_check,
++	.ndo_gso_check		 = mlx5e_gso_check,
 +#endif
  	.ndo_tx_timeout          = mlx5e_tx_timeout,
 +#ifdef HAVE_NDO_XDP_EXTENDED
-+	.extended.ndo_xdp        = mlx5e_xdp,
++	.extended.ndo_xdp	 = mlx5e_xdp,
 +#elif defined(HAVE_XDP_BUFF)
  	.ndo_bpf		 = mlx5e_xdp,
 +#endif
@@ -2195,7 +2236,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	.ndo_xdp_xmit            = mlx5e_xdp_xmit,
 +#endif
 +#ifdef HAVE_NDO_XDP_FLUSH
-+	.ndo_xdp_flush           = mlx5e_xdp_flush,
++	.ndo_xdp_flush		 = mlx5e_xdp_flush,
 +#endif
 +#if defined(HAVE_NDO_XSK_WAKEUP) && defined (HAVE_XSK_SUPPORT)
  	.ndo_xsk_wakeup          = mlx5e_xsk_wakeup,
@@ -2207,7 +2248,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#endif
 +#ifndef HAVE_NETPOLL_POLL_DEV_EXPORTED
 +#ifdef CONFIG_NET_POLL_CONTROLLER
-+	.ndo_poll_controller     = mlx5e_netpoll,
++	.ndo_poll_controller	 = mlx5e_netpoll,
 +#endif
 +#endif
 +#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
@@ -2232,9 +2273,9 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	/* these ndo's are not upstream yet */
  #ifdef HAVE_NETDEV_OPS_NDO_SET_VF_TRUNK_RANGE
  	.ndo_add_vf_vlan_trunk_range = mlx5e_add_vf_vlan_trunk_range,
- 	.ndo_del_vf_vlan_trunk_range = mlx5e_del_vf_vlan_trunk_range,
+@@ -5245,15 +6200,47 @@ const struct net_device_ops mlx5e_netdev
  #endif
--
+ 
  	.ndo_set_vf_spoofchk     = mlx5e_set_vf_spoofchk,
 +#ifdef HAVE_NETDEV_OPS_NDO_SET_VF_TRUST
  	.ndo_set_vf_trust        = mlx5e_set_vf_trust,
@@ -2244,46 +2285,45 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +#ifdef HAVE_VF_TX_RATE_LIMITS
  	.ndo_set_vf_rate         = mlx5e_set_vf_rate,
 +#else
-+	.ndo_set_vf_tx_rate      = mlx5e_set_vf_rate,
++	.ndo_set_vf_tx_rate	 = mlx5e_set_vf_rate,
 +#endif
-+
 +
  	.ndo_get_vf_config       = mlx5e_get_vf_config,
  	.ndo_set_vf_link_state   = mlx5e_set_vf_link_state,
  	.ndo_get_vf_stats        = mlx5e_get_vf_stats,
 -	.ndo_has_offload_stats   = mlx5e_has_offload_stats,
 -	.ndo_get_offload_stats   = mlx5e_get_offload_stats,
-+ 	.ndo_set_vf_link_state   = mlx5e_set_vf_link_state,
++	.ndo_set_vf_link_state	 = mlx5e_set_vf_link_state,
 +#ifdef HAVE_NDO_GET_VF_STATS
-+ 	.ndo_get_vf_stats        = mlx5e_get_vf_stats,
++	.ndo_get_vf_stats	= mlx5e_get_vf_stats,
  #endif
 +#ifdef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
  	.ndo_get_devlink_port    = mlx5e_get_devlink_port,
 +#else
 +#ifdef HAVE_NDO_GET_PHYS_PORT_NAME
-+        .ndo_get_phys_port_name  = mlx5e_get_phys_port_name,
++	.ndo_get_phys_port_name  = mlx5e_get_phys_port_name,
 +#elif defined(HAVE_NDO_GET_PHYS_PORT_NAME_EXTENDED)
-+        .extended.ndo_get_phys_port_name = mlx5e_get_phys_port_name,
++	.extended.ndo_get_phys_port_name = mlx5e_get_phys_port_name,
 +#endif
 +#ifdef HAVE_NDO_GET_PORT_PARENT_ID
 +	.ndo_get_port_parent_id  = mlx5e_get_port_parent_id,
 +#endif
 +#endif
 +#ifdef NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
-+	.ndo_has_offload_stats	 = mlx5e_has_offload_stats,
++	.ndo_has_offload_stats   = mlx5e_has_offload_stats,         
 +#elif defined(HAVE_NDO_HAS_OFFLOAD_STATS_EXTENDED)
 +	.extended.ndo_has_offload_stats   = mlx5e_has_offload_stats,
 +#endif
 +#ifdef HAVE_NDO_GET_OFFLOAD_STATS
-+	.ndo_get_offload_stats	 = mlx5e_get_offload_stats,
++	.ndo_get_offload_stats   = mlx5e_get_offload_stats,
 +#elif defined(HAVE_NDO_GET_OFFLOAD_STATS_EXTENDED)
 +	.extended.ndo_get_offload_stats   = mlx5e_get_offload_stats,
 +#endif
 +#endif /* CONFIG_MLX5_ESWITCH */
  };
  
- static int mlx5e_check_required_hca_cap(struct mlx5_core_dev *mdev)
-@@ -5283,7 +6256,9 @@ void mlx5e_build_rss_params(struct mlx5e
+ void mlx5e_build_default_indir_rqt(u32 *indirection_rqt, int len,
+@@ -5391,7 +6378,9 @@ void mlx5e_build_rss_params(struct mlx5e
  {
  	enum mlx5e_traffic_types tt;
  
@@ -2293,7 +2333,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	netdev_rss_key_fill(rss_params->toeplitz_hash_key,
  			    sizeof(rss_params->toeplitz_hash_key));
  	mlx5e_build_default_indir_rqt(rss_params->indirection_rqt,
-@@ -5328,8 +6303,10 @@ void mlx5e_build_nic_params(struct mlx5e
+@@ -5437,8 +6426,10 @@ void mlx5e_build_nic_params(struct mlx5e
  			MLX5_CAP_ETH(mdev, enhanced_multi_pkt_send_wqe));
  
  	/* XDP SQ */
@@ -2304,7 +2344,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	/* set CQE compression */
  	params->rx_cqe_compress_def = false;
-@@ -5357,6 +6334,11 @@ void mlx5e_build_nic_params(struct mlx5e
+@@ -5466,6 +6457,11 @@ void mlx5e_build_nic_params(struct mlx5e
  	rx_cq_period_mode = MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) ?
  			MLX5_CQ_PERIOD_MODE_START_FROM_CQE :
  			MLX5_CQ_PERIOD_MODE_START_FROM_EQE;
@@ -2316,7 +2356,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	params->rx_dim_enabled = MLX5_CAP_GEN(mdev, cq_moderation);
  	params->tx_dim_enabled = MLX5_CAP_GEN(mdev, cq_moderation);
  	mlx5e_set_rx_cq_mode_params(params, rx_cq_period_mode);
-@@ -5398,6 +6380,7 @@ static void mlx5e_set_netdev_dev_addr(st
+@@ -5507,6 +6503,7 @@ static void mlx5e_set_netdev_dev_addr(st
  	}
  }
  
@@ -2324,7 +2364,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  static int mlx5e_vxlan_set_port(struct net_device *netdev, unsigned int table,
  				unsigned int entry, struct udp_tunnel_info *ti)
  {
-@@ -5430,6 +6413,13 @@ void mlx5e_vxlan_set_netdev_info(struct
+@@ -5539,6 +6536,13 @@ void mlx5e_vxlan_set_netdev_info(struct
  
  	priv->netdev->udp_tunnel_nic_info = &priv->nic_info;
  }
@@ -2338,7 +2378,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  static void mlx5e_build_nic_netdev(struct net_device *netdev)
  {
-@@ -5444,6 +6434,9 @@ static void mlx5e_build_nic_netdev(struc
+@@ -5553,6 +6557,9 @@ static void mlx5e_build_nic_netdev(struc
  
  	mlx5e_dcbnl_build_netdev(netdev);
  
@@ -2348,7 +2388,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	netdev->watchdog_timeo    = 15 * HZ;
  
  	netdev->ethtool_ops	  = &mlx5e_ethtool_ops;
-@@ -5474,46 +6467,81 @@ static void mlx5e_build_nic_netdev(struc
+@@ -5583,40 +6590,56 @@ static void mlx5e_build_nic_netdev(struc
  	netdev->hw_features      |= NETIF_F_HW_VLAN_CTAG_FILTER;
  	netdev->hw_features      |= NETIF_F_HW_VLAN_STAG_TX;
  
@@ -2362,57 +2402,26 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		netdev->hw_enc_features |= NETIF_F_HW_CSUM;
  		netdev->hw_enc_features |= NETIF_F_TSO;
  		netdev->hw_enc_features |= NETIF_F_TSO6;
--		netdev->hw_enc_features |= NETIF_F_GSO_PARTIAL;
--	}
 +#ifdef HAVE_NETIF_F_GSO_PARTIAL
-+	       	netdev->hw_enc_features |= NETIF_F_GSO_PARTIAL;
+ 		netdev->hw_enc_features |= NETIF_F_GSO_PARTIAL;
+-	}
 +#endif
 +       }
 +#endif
  
 +#ifdef HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
  	if (mlx5_vxlan_allowed(mdev->vxlan) || mlx5_geneve_tx_allowed(mdev)) {
- 		netdev->hw_features     |= NETIF_F_GSO_UDP_TUNNEL |
-+#ifdef HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM
- 					   NETIF_F_GSO_UDP_TUNNEL_CSUM;
-+#else
-+					   0;
-+#endif
-+
- 		netdev->hw_enc_features |= NETIF_F_GSO_UDP_TUNNEL |
-+#ifdef HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM
- 					   NETIF_F_GSO_UDP_TUNNEL_CSUM;
-+#else
-+					   0;
-+#endif
-+#ifdef HAVE_NETIF_F_GSO_PARTIAL
- 		netdev->gso_partial_features = NETIF_F_GSO_UDP_TUNNEL_CSUM;
-+#endif
- 		netdev->vlan_features |= NETIF_F_GSO_UDP_TUNNEL |
-+#ifdef HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM
- 					 NETIF_F_GSO_UDP_TUNNEL_CSUM;
-+#else
-+					   0;
-+#endif
+ 		netdev->hw_features     |= NETIF_F_GSO_UDP_TUNNEL;
+ 		netdev->hw_enc_features |= NETIF_F_GSO_UDP_TUNNEL;
+ 		netdev->vlan_features |= NETIF_F_GSO_UDP_TUNNEL;
  	}
+-
 +#endif
- 
  	if (mlx5e_tunnel_proto_supported(mdev, IPPROTO_GRE)) {
--		netdev->hw_features     |= NETIF_F_GSO_GRE |
--					   NETIF_F_GSO_GRE_CSUM;
--		netdev->hw_enc_features |= NETIF_F_GSO_GRE |
--					   NETIF_F_GSO_GRE_CSUM;
--		netdev->gso_partial_features |= NETIF_F_GSO_GRE |
--						NETIF_F_GSO_GRE_CSUM;
-+#ifdef HAVE_NETIF_F_GSO_GRE_CSUM
-+       	netdev->hw_features     |= NETIF_F_GSO_GRE |
-+       				   NETIF_F_GSO_GRE_CSUM;
-+       	netdev->hw_enc_features |= NETIF_F_GSO_GRE |
-+       				   NETIF_F_GSO_GRE_CSUM;
-+#endif
+ 		netdev->hw_features     |= NETIF_F_GSO_GRE;
+ 		netdev->hw_enc_features |= NETIF_F_GSO_GRE;
 +#ifdef HAVE_NETIF_F_GSO_PARTIAL
-+       	netdev->gso_partial_features |= NETIF_F_GSO_GRE |
-+       					NETIF_F_GSO_GRE_CSUM;
+ 		netdev->gso_partial_features |= NETIF_F_GSO_GRE;
 +#endif
  	}
  
@@ -2435,11 +2444,12 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	netdev->gso_partial_features             |= NETIF_F_GSO_UDP_L4;
  	netdev->hw_features                      |= NETIF_F_GSO_UDP_L4;
  	netdev->features                         |= NETIF_F_GSO_UDP_L4;
+-
 +#endif
- 
  	mlx5_query_port_fcs(mdev, &fcs_supported, &fcs_enabled);
  
-@@ -5540,10 +6568,17 @@ static void mlx5e_build_nic_netdev(struc
+ 	if (fcs_supported)
+@@ -5642,10 +6665,17 @@ static void mlx5e_build_nic_netdev(struc
  		netdev->hw_features      |= NETIF_F_HW_TC;
  #endif
  #ifdef CONFIG_MLX5_EN_ARFS
@@ -2457,7 +2467,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	netdev->features         |= NETIF_F_HIGHDMA;
  	netdev->features         |= NETIF_F_HW_VLAN_STAG_FILTER;
  
-@@ -5599,7 +6634,9 @@ static int mlx5e_nic_init(struct mlx5_co
+@@ -5701,7 +6731,9 @@ static int mlx5e_nic_init(struct mlx5_co
  	int err;
  
  	mlx5e_build_nic_params(priv, &priv->xsk, netdev->mtu);
@@ -2467,30 +2477,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	mlx5e_init_delay_drop(priv, &priv->channels.params);
  
-@@ -5612,9 +6649,12 @@ static int mlx5e_nic_init(struct mlx5_co
- 	if (err)
- 		mlx5_core_err(mdev, "TLS initialization failed, %d\n", err);
- 	
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
-+
- 	err = mlx5e_devlink_port_register(priv);
- 	if (err)
- 		mlx5_core_err(mdev, "mlx5e_devlink_port_register failed, %d\n", err);
-+#endif
- 	mlx5e_health_create_reporters(priv);
- 
- 	return 0;
-@@ -5623,7 +6663,9 @@ static int mlx5e_nic_init(struct mlx5_co
- static void mlx5e_nic_cleanup(struct mlx5e_priv *priv)
- {
- 	mlx5e_health_destroy_reporters(priv);
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
- 	mlx5e_devlink_port_unregister(priv);
-+#endif
- 	mlx5e_tls_cleanup(priv);
- 	mlx5e_ipsec_cleanup(priv);
- }
-@@ -5744,6 +6786,9 @@ static void mlx5e_nic_enable(struct mlx5
+@@ -5842,6 +6874,9 @@ static void mlx5e_nic_enable(struct mlx5
  {
  	struct net_device *netdev = priv->netdev;
  	struct mlx5_core_dev *mdev = priv->mdev;
@@ -2500,7 +2487,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	mlx5e_init_l2_addr(priv);
  
-@@ -5751,11 +6796,20 @@ static void mlx5e_nic_enable(struct mlx5
+@@ -5849,11 +6884,20 @@ static void mlx5e_nic_enable(struct mlx5
  	if (!netif_running(netdev))
  		mlx5e_modify_admin_state(mdev, MLX5_PORT_DOWN);
  
@@ -2519,9 +2506,9 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
 +		memcpy(netdev->perm_addr, netdev->dev_addr, netdev->addr_len);
 +
  	mlx5e_enable_async_events(priv);
+ 	mlx5e_enable_blocking_events(priv);
  	if (mlx5e_monitor_counter_supported(priv))
- 		mlx5e_monitor_counter_init(priv);
-@@ -5771,7 +6825,9 @@ static void mlx5e_nic_enable(struct mlx5
+@@ -5869,7 +6913,9 @@ static void mlx5e_nic_enable(struct mlx5
  	rtnl_lock();
  	if (netif_running(netdev))
  		mlx5e_open(netdev);
@@ -2531,17 +2518,17 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	netif_device_attach(netdev);
  	rtnl_unlock();
  }
-@@ -5800,7 +6856,9 @@ static void mlx5e_nic_disable(struct mlx
- 
+@@ -5901,7 +6947,9 @@ static void mlx5e_nic_disable(struct mlx
+ 	}
  	mlx5e_disable_async_events(priv);
  	mlx5_lag_remove(mdev, true);
-+#if defined(HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON) && defined(HAVE_UDP_TUNNEL_NIC_INFO)
++#if defined(HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON) && defined(HAVE_DEVLINK_HAS_RELOAD_UP_DOWN)
  	mlx5_vxlan_reset_to_default(mdev->vxlan);
 +#endif
  }
  
  int mlx5e_update_nic_rx(struct mlx5e_priv *priv)
-@@ -6038,7 +7096,9 @@ int mlx5e_attach_netdev(struct mlx5e_pri
+@@ -6148,7 +7196,9 @@ int mlx5e_attach_netdev(struct mlx5e_pri
  		/* Reducing the number of channels - RXFH has to be reset, and
  		 * mlx5e_num_channels_changed below will build the RQT.
  		 */
@@ -2551,18 +2538,21 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  		priv->channels.params.num_channels = max_nch;
  	}
  	/* 1. Set the real number of queues in the kernel the first time.
-@@ -6172,8 +7232,10 @@ void mlx5e_netdev_attach_nic_profile(str
- 	int err;
+@@ -6361,11 +7411,13 @@ static int mlx5e_probe(struct auxiliary_
+ 	priv->profile = profile;
+ 	priv->ppriv = NULL;
  
- 	err = mlx5e_netdev_change_profile(priv, &mlx5e_nic_profile, NULL);
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
- 	if (!err)
- 		mlx5e_devlink_port_type_eth_set(priv);
+ 	err = mlx5e_devlink_port_register(priv);
+ 	if (err) {
+ 		mlx5_core_err(mdev, "mlx5e_devlink_port_register failed, %d\n", err);
+ 		goto err_devlink_cleanup;
+ 	}
 +#endif
- }
  
- void mlx5e_destroy_netdev(struct mlx5e_priv *priv)
-@@ -6266,13 +7328,17 @@ static void *mlx5e_add(struct mlx5_core_
+ 	err = profile->init(mdev, netdev);
+ 	if (err) {
+@@ -6379,13 +7431,17 @@ static int mlx5e_probe(struct auxiliary_
  		goto err_profile_cleanup;
  	}
  
@@ -2571,7 +2561,7 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  	err = register_netdev(netdev);
  	if (err) {
  		mlx5_core_err(mdev, "register_netdev failed, %d\n", err);
- 		goto err_detach;
+ 		goto err_resume;
  	}
  
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
@@ -2580,13 +2570,34 @@ Change-Id: I12895683510e94925fc328f86a0be312a6938df6
  
  	err = mlx5e_sysfs_create(netdev);
  	if (err)
-@@ -6323,7 +7389,9 @@ static struct mlx5_interface mlx5e_inter
- void mlx5e_init(void)
- {
+@@ -6402,8 +7458,10 @@ err_resume:
+ 	mlx5e_suspend(adev, state);
+ err_profile_cleanup:
+ 	profile->cleanup(priv);
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
+ err_devlink_cleanup:
+ 	mlx5e_devlink_port_unregister(priv);
++#endif
+ err_destroy_netdev:
+ 	mlx5e_destroy_netdev(priv);
+ 	return err;
+@@ -6419,7 +7477,9 @@ static void mlx5e_remove(struct auxiliar
+ 	unregister_netdev(priv->netdev);
+ 	mlx5e_suspend(adev, state);
+ 	priv->profile->cleanup(priv);
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
+ 	mlx5e_devlink_port_unregister(priv);
++#endif
+ 	mlx5e_destroy_netdev(priv);
+ }
+ 
+@@ -6444,7 +7504,9 @@ int mlx5e_init(void)
+ 	int ret;
+ 
  	mlx5e_ipsec_build_inverse_table();
 +#ifdef __ETHTOOL_DECLARE_LINK_MODE_MASK
  	mlx5e_build_ptys2ethtool_map();
 +#endif
- 	mlx5_register_interface(&mlx5e_interface);
- }
- 
+ 	ret = auxiliary_driver_register(&mlx5e_driver);
+ 	if (ret)
+ 		return ret;

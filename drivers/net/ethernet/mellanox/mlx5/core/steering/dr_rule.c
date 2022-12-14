@@ -47,6 +47,7 @@ dr_rule_create_collision_htbl(struct mlx5dr_matcher *matcher,
 	/* Create new table for miss entry */
 	new_htbl = mlx5dr_ste_htbl_alloc(dmn->ste_icm_pool,
 					 DR_CHUNK_SIZE_1,
+					 nic_matcher->ste_builder->htbl_type,
 					 MLX5DR_STE_LU_TYPE_DONT_CARE,
 					 0);
 	if (!new_htbl) {
@@ -111,7 +112,7 @@ dr_rule_handle_one_ste_in_update_list(struct mlx5dr_ste_send_info *ste_info,
 	if (ste_info->size == DR_STE_SIZE_CTRL)
 		memcpy(ste_info->ste->hw_ste, ste_info->data, DR_STE_SIZE_CTRL);
 	else
-		memcpy(ste_info->ste->hw_ste, ste_info->data, DR_STE_SIZE_REDUCED);
+		memcpy(ste_info->ste->hw_ste, ste_info->data, ste_info->ste->size);
 
 	ret = mlx5dr_send_postsend_ste(dmn, ste_info->ste, ste_info->data,
 				       ste_info->size, ste_info->offset);
@@ -152,7 +153,9 @@ static int dr_rule_send_update_list(struct list_head *send_ste_list,
 }
 
 static struct mlx5dr_ste *
-dr_rule_find_ste_in_miss_list(struct list_head *miss_list, u8 *hw_ste)
+dr_rule_find_ste_in_miss_list(struct list_head *miss_list,
+			      u8 *hw_ste,
+			      u8 tag_size)
 {
 	struct mlx5dr_ste *ste;
 
@@ -161,7 +164,8 @@ dr_rule_find_ste_in_miss_list(struct list_head *miss_list, u8 *hw_ste)
 
 	/* Check if hw_ste is present in the list */
 	list_for_each_entry(ste, miss_list, miss_list_node) {
-		if (mlx5dr_ste_equal_tag(ste->hw_ste, hw_ste))
+		if (mlx5dr_ste_equal_tag(ste->hw_ste,
+					 hw_ste, tag_size))
 			return ste;
 	}
 
@@ -236,16 +240,18 @@ dr_rule_rehash_copy_ste(struct mlx5dr_matcher *matcher,
 	struct mlx5dr_ste_send_info *ste_info;
 	bool use_update_list = false;
 	u8 hw_ste[DR_STE_SIZE] = {};
+	struct mlx5dr_ste_build *sb;
 	struct mlx5dr_ste *new_ste;
 	int new_idx;
 	u8 sb_idx;
 
 	/* Copy STE mask from the matcher */
 	sb_idx = cur_ste->ste_chain_location - 1;
-	mlx5dr_ste_set_bit_mask(hw_ste, nic_matcher->ste_builder[sb_idx].bit_mask);
+	sb = &nic_matcher->ste_builder[sb_idx];
 
-	/* Copy STE control and tag */
-	memcpy(hw_ste, cur_ste->hw_ste, DR_STE_SIZE_REDUCED);
+	/* Copy STE control, tag and mask on legacy STE */
+	memcpy(hw_ste, cur_ste->hw_ste, cur_ste->size);
+	mlx5dr_ste_set_bit_mask(hw_ste, sb);
 	mlx5dr_ste_set_miss_addr(dmn->ste_ctx, hw_ste,
 				 nic_matcher->e_anchor->chunk->icm_addr);
 
@@ -271,7 +277,7 @@ dr_rule_rehash_copy_ste(struct mlx5dr_matcher *matcher,
 		use_update_list = true;
 	}
 
-	memcpy(new_ste->hw_ste, hw_ste, DR_STE_SIZE_REDUCED);
+	memcpy(new_ste->hw_ste, hw_ste, new_ste->size);
 
 	new_htbl->ctrl.num_of_valid_entries++;
 
@@ -380,6 +386,7 @@ dr_rule_rehash_htbl(struct mlx5dr_rule *rule,
 	LIST_HEAD(rehash_table_send_list);
 	struct mlx5dr_ste *ste_to_update;
 	struct mlx5dr_ste_htbl *new_htbl;
+	u8 *mask = NULL;
 	int err;
 
 	nic_matcher = nic_rule->nic_matcher;
@@ -391,6 +398,7 @@ dr_rule_rehash_htbl(struct mlx5dr_rule *rule,
 
 	new_htbl = mlx5dr_ste_htbl_alloc(dmn->ste_icm_pool,
 					 new_size,
+					 cur_htbl->type,
 					 cur_htbl->lu_type,
 					 cur_htbl->byte_mask);
 	if (!new_htbl) {
@@ -403,7 +411,7 @@ dr_rule_rehash_htbl(struct mlx5dr_rule *rule,
 	info.miss_icm_addr = nic_matcher->e_anchor->chunk->icm_addr;
 	mlx5dr_ste_set_formatted_ste(dmn->ste_ctx,
 				     dmn->info.caps.gvmi,
-				     nic_dmn,
+				     nic_dmn->type,
 				     new_htbl,
 				     formatted_ste,
 				     &info);
@@ -418,8 +426,10 @@ dr_rule_rehash_htbl(struct mlx5dr_rule *rule,
 	if (err)
 		goto free_new_htbl;
 
-	if (mlx5dr_send_postsend_htbl(dmn, new_htbl, formatted_ste,
-				      nic_matcher->ste_builder[ste_location - 1].bit_mask)) {
+	if (new_htbl->type == DR_STE_HTBL_TYPE_LEGACY)
+		mask = nic_matcher->ste_builder[ste_location - 1].bit_mask;
+
+	if (mlx5dr_send_postsend_htbl(dmn, new_htbl, formatted_ste, mask)) {
 		mlx5dr_err(dmn, "Failed writing table to HW\n");
 		goto free_new_htbl;
 	}
@@ -659,18 +669,21 @@ static bool dr_rule_need_enlarge_hash(struct mlx5dr_ste_htbl *htbl,
 				      struct mlx5dr_domain_rx_tx *nic_dmn)
 {
 	struct mlx5dr_ste_htbl_ctrl *ctrl = &htbl->ctrl;
+	int threshold;
 
 	if (dmn->info.max_log_sw_icm_sz <= htbl->chunk_size)
 		return false;
 
-	if (!ctrl->may_grow)
+	if (!mlx5dr_ste_htbl_may_grow(htbl))
 		return false;
 
-	if (dr_get_bits_per_mask(htbl->byte_mask) * BITS_PER_BYTE <= htbl->chunk_size)
+	if (htbl->type == DR_STE_HTBL_TYPE_LEGACY &&
+	    dr_get_bits_per_mask(htbl->byte_mask) * BITS_PER_BYTE <= htbl->chunk_size)
 		return false;
 
-	if (ctrl->num_of_collisions >= ctrl->increase_threshold &&
-	    (ctrl->num_of_valid_entries - ctrl->num_of_collisions) >= ctrl->increase_threshold)
+	threshold = mlx5dr_ste_htbl_increase_threshold(htbl);
+	if (ctrl->num_of_collisions >= threshold &&
+	    (ctrl->num_of_valid_entries - ctrl->num_of_collisions) >= threshold)
 		return true;
 
 	return false;
@@ -720,6 +733,9 @@ static int dr_rule_handle_action_stes(struct mlx5dr_rule *rule,
 					  GFP_KERNEL);
 		if (!ste_info_arr[k])
 			goto err_exit;
+
+		/* This is an always hit entry */
+		mlx5dr_ste_set_miss_addr(dmn->ste_ctx, curr_hw_ste, 0);
 
 		/* Point current ste to the new action */
 		mlx5dr_ste_set_hit_addr_by_next_htbl(dmn->ste_ctx,
@@ -831,7 +847,8 @@ again:
 			return NULL;
 	} else {
 		/* Hash table index in use, check if this ste is in the miss list */
-		matched_ste = dr_rule_find_ste_in_miss_list(miss_list, hw_ste);
+		matched_ste = dr_rule_find_ste_in_miss_list(miss_list, hw_ste,
+							    mlx5dr_ste_tag_sz(ste));
 		if (matched_ste) {
 			/* If it is last STE in the chain, and has the same tag
 			 * it means that all the previous stes are the same,
@@ -1029,12 +1046,12 @@ static enum mlx5dr_ipv dr_rule_get_ipv(struct mlx5dr_match_spec *spec)
 }
 
 static bool dr_rule_skip(struct mlx5dr_domain *dmn,
-			 enum mlx5dr_ste_entry_type ste_type,
+			 enum mlx5dr_domain_nic_type nic_type,
 			 struct mlx5dr_match_param *mask,
 			 struct mlx5dr_match_param *value,
 			 u32 flow_source)
 {
-	bool rx = ste_type == MLX5DR_STE_TYPE_RX;
+	bool rx = nic_type == DR_DOMAIN_NIC_TYPE_RX;
 
 	if (dmn->type != MLX5DR_DOMAIN_TYPE_FDB)
 		return false;
@@ -1079,7 +1096,7 @@ dr_rule_create_rule_nic(struct mlx5dr_rule *rule,
 	nic_matcher = nic_rule->nic_matcher;
 	nic_dmn = nic_matcher->nic_tbl->nic_dmn;
 
-	if (dr_rule_skip(dmn, nic_dmn->ste_type, &matcher->mask, param,
+	if (dr_rule_skip(dmn, nic_dmn->type, &matcher->mask, param,
 			 rule->flow_source))
 		return 0;
 

@@ -18,7 +18,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  
  #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
  
-@@ -70,20 +72,42 @@ static struct svc_xprt *svc_rdma_create(
+@@ -70,20 +72,45 @@ static struct svc_xprt *svc_rdma_create(
  					struct sockaddr *sa, int salen,
  					int flags);
  static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt);
@@ -52,6 +52,9 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
 +#ifdef HAVE_XPO_READ_PAYLOAD
  	.xpo_read_payload = svc_rdma_read_payload,
 +#endif
++#ifdef HAVE_XPO_RESULT_PAYLOAD
++	.xpo_result_payload = svc_rdma_result_payload,
++#endif
  	.xpo_release_rqst = svc_rdma_release_rqst,
  	.xpo_detach = svc_rdma_detach,
  	.xpo_free = svc_rdma_free,
@@ -61,7 +64,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  	.xpo_has_wspace = svc_rdma_has_wspace,
  	.xpo_accept = svc_rdma_accept,
  	.xpo_secure_port = svc_rdma_secure_port,
-@@ -98,12 +122,37 @@ struct svc_xprt_class svc_rdma_class = {
+@@ -98,12 +125,37 @@ struct svc_xprt_class svc_rdma_class = {
  	.xcl_ident = XPRT_TRANSPORT_RDMA,
  };
  
@@ -99,7 +102,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  	switch (event->event) {
  	/* These are considered benign events */
  	case IB_EVENT_PATH_MIG:
-@@ -139,13 +188,20 @@ static struct svcxprt_rdma *svc_rdma_cre
+@@ -139,13 +191,20 @@ static struct svcxprt_rdma *svc_rdma_cre
  	INIT_LIST_HEAD(&cma_xprt->sc_rq_dto_q);
  	INIT_LIST_HEAD(&cma_xprt->sc_read_complete_q);
  	INIT_LIST_HEAD(&cma_xprt->sc_send_ctxts);
@@ -120,7 +123,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  	spin_lock_init(&cma_xprt->sc_rw_ctxt_lock);
  
  	/*
-@@ -213,8 +269,10 @@ static void handle_connect_req(struct rd
+@@ -213,8 +272,10 @@ static void handle_connect_req(struct rd
  	newxprt->sc_xprt.xpt_remotelen = svc_addr_len(sa);
  	memcpy(&newxprt->sc_xprt.xpt_remote, sa,
  	       newxprt->sc_xprt.xpt_remotelen);
@@ -131,7 +134,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  
  	/* The remote port is arbitrary and not under the control of the
  	 * client ULP. Set it to a fixed value so that the DRC continues
-@@ -310,7 +368,9 @@ static struct svc_xprt *svc_rdma_create(
+@@ -310,7 +371,9 @@ static struct svc_xprt *svc_rdma_create(
  	if (!cma_xprt)
  		return ERR_PTR(-ENOMEM);
  	set_bit(XPT_LISTENER, &cma_xprt->sc_xprt.xpt_flags);
@@ -141,7 +144,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  
  	listen_id = rdma_create_id(net, svc_rdma_listen_handler, cma_xprt,
  				   RDMA_PS_TCP, IB_QPT_RC);
-@@ -425,7 +485,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -425,7 +488,9 @@ static struct svc_xprt *svc_rdma_accept(
  
  	newxprt->sc_pd = ib_alloc_pd(dev, 0);
  	if (IS_ERR(newxprt->sc_pd)) {
@@ -151,7 +154,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  		goto errout;
  	}
  	newxprt->sc_sq_cq = ib_alloc_cq_any(dev, newxprt, newxprt->sc_sq_depth,
-@@ -459,7 +521,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -459,7 +524,9 @@ static struct svc_xprt *svc_rdma_accept(
  
  	ret = rdma_create_qp(newxprt->sc_cm_id, newxprt->sc_pd, &qp_attr);
  	if (ret) {
@@ -161,7 +164,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  		goto errout;
  	}
  	newxprt->sc_qp = newxprt->sc_cm_id->qp;
-@@ -468,7 +532,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -468,7 +535,9 @@ static struct svc_xprt *svc_rdma_accept(
  		newxprt->sc_snd_w_inv = false;
  	if (!rdma_protocol_iwarp(dev, newxprt->sc_port_num) &&
  	    !rdma_ib_or_roce(dev, newxprt->sc_port_num)) {
@@ -171,7 +174,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  		goto errout;
  	}
  
-@@ -493,14 +559,18 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -493,14 +562,18 @@ static struct svc_xprt *svc_rdma_accept(
  					   dev->attrs.max_qp_init_rd_atom);
  	if (!conn_param.initiator_depth) {
  		ret = -EINVAL;
@@ -190,7 +193,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  		goto errout;
  	}
  
-@@ -530,6 +600,12 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -530,6 +603,12 @@ static struct svc_xprt *svc_rdma_accept(
  	return NULL;
  }
  
@@ -203,7 +206,7 @@ Change-Id: Iff5ce72c153a43cb6467b442bd5777cde4041b74
  static void svc_rdma_detach(struct svc_xprt *xprt)
  {
  	struct svcxprt_rdma *rdma =
-@@ -604,10 +680,17 @@ static int svc_rdma_has_wspace(struct sv
+@@ -604,10 +683,17 @@ static int svc_rdma_has_wspace(struct sv
  	return 1;
  }
  

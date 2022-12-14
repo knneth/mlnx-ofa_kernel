@@ -174,6 +174,17 @@ fallback:
 }
 #endif
 
+static int mlx5e_get_up(struct mlx5e_priv *priv, struct sk_buff *skb)
+{
+#ifdef CONFIG_MLX5_CORE_EN_DCB
+	if (READ_ONCE(priv->dcbx_dp.trust_state) == MLX5_QPTS_TRUST_DSCP)
+		return mlx5e_get_dscp_up(priv, skb);
+#endif
+	if (skb_vlan_tag_present(skb))
+		return skb_vlan_tag_get_prio(skb);
+	return 0;
+}
+
 static bool mlx5e_use_ptpsq(struct sk_buff *skb)
 {
 	struct flow_keys fk;
@@ -193,46 +204,44 @@ static bool mlx5e_use_ptpsq(struct sk_buff *skb)
 		fk.ports.dst == htons(PTP_EV_PORT));
 }
 
-static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb)
+static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb,
+			      struct mlx5e_select_queue_params *selq)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
-	int up = 0;
+	int up;
 
-	if (!netdev_get_num_tc(dev))
-		goto return_txq;
+	up = selq->num_tcs > 1 ? mlx5e_get_up(priv, skb) : 0;
 
-#ifdef CONFIG_MLX5_CORE_EN_DCB
-	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
-		up = mlx5e_get_dscp_up(priv, skb);
-	else
-#endif
-		if (skb_vlan_tag_present(skb))
-			up = skb_vlan_tag_get_prio(skb);
-
-return_txq:
-	return priv->port_ptp_tc2realtxq[up];
+	return selq->num_regular_queues + up;
 }
 
 u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 		       struct net_device *sb_dev)
 {
-	int txq_ix;
 	struct mlx5e_priv *priv = netdev_priv(dev);
-	int ch_ix;
-	int up;
+	struct mlx5e_select_queue_params *selq;
+	int txq_ix, up;
 
-	if (unlikely(priv->channels.port_ptp)) {
-		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
-		    mlx5e_use_ptpsq(skb))
-			return mlx5e_select_ptpsq(dev, skb);
+	selq = rcu_dereference_bh(priv->selq);
+
+	/* This is a workaround needed only for the mlx5e_netdev_change_profile
+	 * flow that zeroes out the whole priv without unregistering the netdev
+	 * and without preventing ndo_select_queue from being called.
+	 */
+	if (unlikely(!selq))
+		return 0;
+
+	if (unlikely(selq->is_ptp)) {
+		if (unlikely(mlx5e_use_ptpsq(skb)))
+			return mlx5e_select_ptpsq(dev, skb, selq);
 
 		txq_ix = netdev_pick_tx(dev, skb, NULL);
 		/* Fix netdev_pick_tx() not to choose ptp_channel txqs.
 		 * If they are selected, switch to regular queues.
 		 * Driver to select these queues only at mlx5e_select_ptpsq().
 		 */
-		if (unlikely(txq_ix >= priv->num_tc_x_num_ch))
-			txq_ix = txq_ix % priv->num_tc_x_num_ch;
+		if (unlikely(txq_ix >= selq->num_regular_queues))
+			txq_ix %= selq->num_regular_queues;
 	} else {
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 		if (priv->channels.params.num_rl_txqs) {
@@ -247,26 +256,16 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 		txq_ix = netdev_pick_tx(dev, skb, NULL);
 	}
 
-	up = 0;
-
-	if (!netdev_get_num_tc(dev))
+	if (selq->num_tcs <= 1)
 		return txq_ix;
 
-#ifdef CONFIG_MLX5_CORE_EN_DCB
-	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
-		up = mlx5e_get_dscp_up(priv, skb);
-	else
-#endif
-		if (skb_vlan_tag_present(skb))
-			up = skb_vlan_tag_get_prio(skb);
+	up = mlx5e_get_up(priv, skb);
 
 	/* Normalize any picked txq_ix to [0, num_channels),
 	 * So we can return a txq_ix that matches the channel and
 	 * packet UP.
 	 */
-	ch_ix = priv->txq2sq[txq_ix]->ch_ix;
-
-	return priv->channel_tc2realtxq[ch_ix][up];
+	return txq_ix % selq->num_channels + up * selq->num_channels;
 }
 
 static inline int mlx5e_skb_l2_header_offset(struct sk_buff *skb)
@@ -689,7 +688,7 @@ static void mlx5e_tx_mpwqe_session_start(struct mlx5e_txqsq *sq,
 
 	pi = mlx5e_txqsq_get_next_pi(sq, MLX5E_TX_MPW_MAX_WQEBBS);
 	wqe = MLX5E_TX_FETCH_WQE(sq, pi);
-	prefetchw(wqe->data);
+	net_prefetchw(wqe->data);
 
 	*session = (struct mlx5e_tx_mpwqe) {
 		.wqe = wqe,

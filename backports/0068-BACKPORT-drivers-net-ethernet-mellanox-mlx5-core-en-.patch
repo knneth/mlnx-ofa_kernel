@@ -138,11 +138,11 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  	case TC_SETUP_CLSMATCHALL:
  		return mlx5e_rep_setup_tc_cls_matchall(priv, type_data);
 +#endif
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
-+
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}
+ }
+ 
 +#ifdef HAVE_FLOW_CLS_OFFLOAD
 +static LIST_HEAD(mlx5e_rep_block_cb_list);
 +#endif
@@ -196,13 +196,13 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
 +		list_del(&block_cb->driver_list);
 +#endif
 +		return 0;
- 	default:
- 		return -EOPNOTSUPP;
- 	}
- }
++	default:
++		return -EOPNOTSUPP;
++	}
++}
 +#endif /* HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE */
 +#endif /* HAVE_TC_BLOCK_OFFLOAD */
- 
++
 +#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
 +#ifdef HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE
  static int mlx5e_rep_setup_tc_e2e_cb(enum tc_setup_type type, void *type_data,
@@ -296,10 +296,10 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  						  mlx5e_rep_setup_ft_cb,
  						  priv, priv, true);
 +#endif /* HAVE_TC_SETUP_FT */
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}
+ }
 +#endif
 +
 +#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
@@ -320,10 +320,10 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
 +	switch (type) {
 +	case TC_SETUP_CLSFLOWER:
 +		return mlx5e_rep_setup_tc_cls_flower(priv, type_data, flags);
- 	default:
- 		return -EOPNOTSUPP;
- 	}
- }
++	default:
++		return -EOPNOTSUPP;
++	}
++}
 +#else
 +int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
 +			  void *cb_priv)
@@ -613,7 +613,7 @@ Change-Id: Ib9d4ccca8a3b5970f4a795e6167c24d8cd57d7ae
  		skb->pkt_type = PACKET_HOST;
 +#ifdef HAVE_SKB_SET_REDIRECTED
  		skb_set_redirected(skb, true);
-+#endif	
++#endif
  		err = netif_receive_skb(skb);
  	}
  

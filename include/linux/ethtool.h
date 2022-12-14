@@ -1,5 +1,7 @@
-#ifndef __COMPAT_ETHTOOL_H
-#define __COMPAT_ETHTOOL_H
+#ifndef _COMPAT_LINUX_ETHTOOL_H
+#define _COMPAT_LINUX_ETHTOOL_H
+
+#include "../../compat/config.h"
 
 #include_next <linux/ethtool.h>
 
@@ -237,4 +239,4 @@ struct ethtool_fecparam {
 #define ETHTOOL_PFC_PREVENTION_TOUT	3
 #endif
 
-#endif
+#endif /* _COMPAT_LINUX_ETHTOOL_H */

@@ -140,7 +140,7 @@ Change-Id: Ie6a0d6adb0ef9d14831be1f571479b6edacb9ecc
  }
  
  static void mlx5_sync_reset_abort_event(struct work_struct *work)
-@@ -370,6 +433,27 @@ static int fw_reset_event_notifier(struc
+@@ -373,6 +436,27 @@ static int fw_reset_event_notifier(struc
  	return NOTIFY_OK;
  }
  
@@ -168,7 +168,7 @@ Change-Id: Ie6a0d6adb0ef9d14831be1f571479b6edacb9ecc
  void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev)
  {
  	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
-@@ -404,6 +488,9 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -407,6 +491,9 @@ int mlx5_fw_reset_init(struct mlx5_core_
  	INIT_WORK(&fw_reset->reset_now_work, mlx5_sync_reset_now_event);
  	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);
  

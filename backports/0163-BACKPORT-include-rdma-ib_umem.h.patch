@@ -3,12 +3,21 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem.h
 
 Change-Id: I7ff3dcc59668efeee499eba7d92c7dd4456358f7
 ---
- include/rdma/ib_umem.h | 20 +++++++++++++++++++-
- 1 file changed, 19 insertions(+), 1 deletion(-)
+ include/rdma/ib_umem.h | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
 
 --- a/include/rdma/ib_umem.h
 +++ b/include/rdma/ib_umem.h
-@@ -15,11 +15,18 @@ struct ib_ucontext;
+@@ -6,6 +6,8 @@
+ #ifndef IB_UMEM_H
+ #define IB_UMEM_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/list.h>
+ #include <linux/scatterlist.h>
+ #include <linux/workqueue.h>
+@@ -15,11 +17,18 @@ struct ib_ucontext;
  struct ib_umem_odp;
  
  struct ib_umem {
@@ -27,7 +36,7 @@ Change-Id: I7ff3dcc59668efeee499eba7d92c7dd4456358f7
  	u32 is_odp : 1;
  	/* Placing at the end of the bitfield list is ABI preserving on LE */
  	u32 is_peer : 1;
-@@ -51,7 +58,11 @@ static inline size_t ib_umem_num_pages(s
+@@ -51,7 +60,11 @@ static inline size_t ib_umem_num_pages(s
  
  #ifdef CONFIG_INFINIBAND_USER_MEM
  
@@ -39,7 +48,7 @@ Change-Id: I7ff3dcc59668efeee499eba7d92c7dd4456358f7
  			    size_t size, int access);
  void ib_umem_release(struct ib_umem *umem);
  int ib_umem_page_count(struct ib_umem *umem);
-@@ -60,8 +71,11 @@ int ib_umem_copy_from(void *dst, struct
+@@ -60,8 +73,11 @@ int ib_umem_copy_from(void *dst, struct
  unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  				     unsigned long pgsz_bitmap,
  				     unsigned long virt);
@@ -52,7 +61,7 @@ Change-Id: I7ff3dcc59668efeee499eba7d92c7dd4456358f7
  				 size_t size, int access,
  				 unsigned long peer_mem_flags);
  void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-@@ -72,7 +86,11 @@ void ib_umem_activate_invalidation_notif
+@@ -72,7 +88,11 @@ void ib_umem_activate_invalidation_notif
  
  #include <linux/err.h>
  

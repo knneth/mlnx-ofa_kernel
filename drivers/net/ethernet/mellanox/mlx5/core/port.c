@@ -891,12 +891,12 @@ int mlx5_query_pddr_troubleshooting_info(struct mlx5_core_dev *mdev,
 
 	if (monitor_opcode)
 		*monitor_opcode = MLX5_GET(pddr_reg, out,
-					   page_data.troubleshooting_info_page.status_opcode.monitor_opcodes);
+					   page_data.pddr_troubleshooting_page.status_opcode.pddr_monitor_opcode);
 
 	if (status_message)
 		strncpy(status_message,
-			MLX5_ADDR_OF(pddr_reg, out, page_data.troubleshooting_info_page.status_message),
-			MLX5_FLD_SZ_BYTES(troubleshooting_info_page_layout, status_message));
+			MLX5_ADDR_OF(pddr_reg, out, page_data.pddr_troubleshooting_page.status_message),
+			MLX5_FLD_SZ_BYTES(pddr_troubleshooting_page, status_message));
 
 	return 0;
 }

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
 ---
- .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 670 +++++++++++++++++-
- 1 file changed, 660 insertions(+), 10 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 674 +++++++++++++++++-
+ 1 file changed, 664 insertions(+), 10 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
@@ -860,7 +860,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	release_firmware(fw);
  
  	rtnl_lock();
-@@ -1999,7 +2580,11 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2003,7 +2584,11 @@ static int set_pflag_rx_striding_rq(stru
  			return -EOPNOTSUPP;
  		if (!mlx5e_striding_rq_possible(mdev, &priv->channels.params))
  			return -EINVAL;
@@ -872,7 +872,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  		netdev_warn(netdev, "Can't set legacy RQ with LRO, disable LRO first\n");
  		return -EINVAL;
  	}
-@@ -2017,6 +2602,39 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2021,6 +2606,39 @@ static int set_pflag_rx_striding_rq(stru
  	return mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
  }
  
@@ -912,7 +912,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  static int set_pflag_rx_no_csum_complete(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -2025,7 +2643,11 @@ static int set_pflag_rx_no_csum_complete
+@@ -2029,7 +2647,11 @@ static int set_pflag_rx_no_csum_complete
  	int i;
  
  	if (!test_bit(MLX5E_STATE_OPENED, &priv->state) ||
@@ -924,7 +924,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  		return 0;
  
  	for (i = 0; i < channels->num; i++) {
-@@ -2069,10 +2691,12 @@ static int set_pflag_tx_mpwqe_common(str
+@@ -2073,10 +2695,12 @@ static int set_pflag_tx_mpwqe_common(str
  	return err;
  }
  
@@ -937,7 +937,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  
  static int set_pflag_skb_tx_mpwqe(struct net_device *netdev, bool enable)
  {
-@@ -2198,10 +2822,15 @@ static const struct pflag_desc mlx5e_pri
+@@ -2207,10 +2831,15 @@ static const struct pflag_desc mlx5e_pri
  	{ "tx_cqe_compress",     set_pflag_tx_cqe_compress },
  	{ "rx_striding_rq",      set_pflag_rx_striding_rq },
  	{ "rx_no_csum_complete", set_pflag_rx_no_csum_complete },
@@ -953,7 +953,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	{ "tx_xdp_hw_checksum",  set_pflag_tx_xdp_hw_checksum},
  	{ "skb_xmit_more",       set_pflag_skb_xmit_more},
  	{ "tx_port_ts",          set_pflag_tx_port_ts },
-@@ -2246,7 +2875,6 @@ static int mlx5e_set_priv_flags(struct n
+@@ -2255,7 +2884,6 @@ static int mlx5e_set_priv_flags(struct n
  
  	mutex_unlock(&priv->state_lock);
  
@@ -961,8 +961,19 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	netdev_update_features(netdev);
  
  	return err;
-@@ -2283,9 +2911,11 @@ int mlx5e_set_rxnfc(struct net_device *d
+@@ -2291,6 +2919,7 @@ int mlx5e_set_rxnfc(struct net_device *d
+ 	return mlx5e_ethtool_set_rxnfc(dev, cmd);
  }
+ 
++#ifdef HAVE_GET_LINK_EXT_STATE 
+ static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opcode)
+ {
+ 	struct mlx5_ifc_pddr_troubleshooting_page_bits *pddr_troubleshooting_page;
+@@ -2460,14 +3089,19 @@ mlx5e_get_link_ext_state(struct net_devi
+ 
+ 	return -ENODATA;
+ }
++#endif //HAVE_GET_LINK_EXT_STATE
  
  const struct ethtool_ops mlx5e_ethtool_ops = {
 +#ifdef HAVE_SUPPORTED_COALESCE_PARAM
@@ -972,8 +983,13 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
 +#endif
  	.get_drvinfo       = mlx5e_get_drvinfo,
  	.get_link          = ethtool_op_get_link,
++#ifdef HAVE_GET_LINK_EXT_STATE
+ 	.get_link_ext_state  = mlx5e_get_link_ext_state,
++#endif
  	.get_strings       = mlx5e_get_strings,
-@@ -2297,16 +2927,31 @@ const struct ethtool_ops mlx5e_ethtool_o
+ 	.get_sset_count    = mlx5e_get_sset_count,
+ 	.get_ethtool_stats = mlx5e_get_ethtool_stats,
+@@ -2477,16 +3111,31 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_channels      = mlx5e_set_channels,
  	.get_coalesce      = mlx5e_get_coalesce,
  	.set_coalesce      = mlx5e_set_coalesce,
@@ -1005,7 +1021,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	.get_pauseparam    = mlx5e_get_pauseparam,
  	.set_pauseparam    = mlx5e_set_pauseparam,
  	.get_ts_info       = mlx5e_get_ts_info,
-@@ -2318,6 +2963,8 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2498,6 +3147,8 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.flash_device      = mlx5e_flash_device,
  	.get_priv_flags    = mlx5e_get_priv_flags,
  	.set_priv_flags    = mlx5e_set_priv_flags,
@@ -1014,7 +1030,7 @@ Change-Id: I45edab46c468d7bc7de5536949e10060f2efd1d5
  	.self_test         = mlx5e_self_test,
  	.get_msglevel      = mlx5e_get_msglevel,
  	.set_msglevel      = mlx5e_set_msglevel,
-@@ -2325,6 +2972,9 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2505,6 +3156,9 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.get_dump_flag     = mlx5e_get_dump_flag,
  	.get_dump_data     = mlx5e_get_dump_data,
  	.set_dump          = mlx5e_set_dump,

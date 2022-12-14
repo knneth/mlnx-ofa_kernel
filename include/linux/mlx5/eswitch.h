@@ -77,7 +77,6 @@ mlx5_eswitch_add_send_to_vport_rule(struct mlx5_eswitch *on_esw,
 				    struct mlx5_eswitch_rep *rep,
 				    u32 sqn);
 
-u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev);
 int mlx5_eswitch_query_esw_vport_context(struct mlx5_core_dev *dev, u16 vport,
 					 bool other_vport,
 					 void *out, int outlen);
@@ -141,12 +140,13 @@ u32 mlx5_eswitch_get_vport_metadata_for_set(struct mlx5_eswitch *esw,
 				       ESW_TUN_OPTS_SLOW_TABLE_GOTO_VPORT)
 #define ESW_TUN_SLOW_TABLE_GOTO_VPORT_MARK ESW_TUN_OPTS_MASK
 
-u8 mlx5_eswitch_mode(struct mlx5_eswitch *esw);
+u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev);
 struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw);
 bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num);
+u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev);
 #else  /* CONFIG_MLX5_ESWITCH */
 
-static inline u8 mlx5_eswitch_mode(struct mlx5_eswitch *esw)
+static inline u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev)
 {
 	return MLX5_ESWITCH_NONE;
 }
@@ -170,8 +170,7 @@ mlx5_eswitch_vport_match_metadata_enabled(const struct mlx5_eswitch *esw)
 };
 
 static inline u32
-mlx5_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
-					  int vport_num)
+mlx5_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw, u16 vport_num)
 {
 	return 0;
 };
@@ -188,5 +187,14 @@ mlx5_eswitch_get_vport_metadata_mask(void)
 	return 0;
 }
 
+
+static inline u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev)
+{
+	return 0;
+}
 #endif /* CONFIG_MLX5_ESWITCH */
+static inline bool is_mdev_switchdev_mode(struct mlx5_core_dev *dev)
+{
+	return mlx5_eswitch_mode(dev) == MLX5_ESWITCH_OFFLOADS;
+}
 #endif

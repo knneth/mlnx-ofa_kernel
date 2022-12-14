@@ -27,7 +27,7 @@ static inline int mlx5_is_ipsec_full_offload(struct mlx5e_priv *priv)
 {
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 
-	return esw && (mlx5_eswitch_mode(esw) == MLX5_ESWITCH_OFFLOADS) &&
+	return esw && is_mdev_switchdev_mode(priv->mdev) &&
 	       (esw->offloads.ipsec == DEVLINK_ESWITCH_IPSEC_MODE_FULL);
 }
 #else /* CONFIG_MLX5_EN_IPSEC */

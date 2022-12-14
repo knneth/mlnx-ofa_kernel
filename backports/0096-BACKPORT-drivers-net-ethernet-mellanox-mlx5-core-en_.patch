@@ -73,17 +73,17 @@ Change-Id: Ie1dd2fc0f205c8e3277d9b89f1707ceefb7bbd14
  
  	return err;
  }
-@@ -1205,7 +1221,9 @@ static int mlx5e_trust_initialize(struct
- {
+@@ -1206,7 +1222,9 @@ static int mlx5e_trust_initialize(struct
  	struct mlx5_core_dev *mdev = priv->mdev;
  	int err;
+ 	u8 trust_state;
 +#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
 +#endif
  	const bool take_rtnl = priv->netdev->reg_state == NETREG_REGISTERED;
  
- 	priv->dcbx_dp.trust_state = MLX5_QPTS_TRUST_PCP;
-@@ -1222,7 +1240,11 @@ static int mlx5e_trust_initialize(struct
+ 
+@@ -1225,7 +1243,11 @@ static int mlx5e_trust_initialize(struct
  	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
  		if (take_rtnl)
  			rtnl_lock();
@@ -95,7 +95,7 @@ Change-Id: Ie1dd2fc0f205c8e3277d9b89f1707ceefb7bbd14
  		if (take_rtnl)
  			rtnl_unlock();
  	}
-@@ -1275,3 +1297,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+@@ -1278,3 +1300,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
  
  	mlx5e_ets_init(priv);
  }

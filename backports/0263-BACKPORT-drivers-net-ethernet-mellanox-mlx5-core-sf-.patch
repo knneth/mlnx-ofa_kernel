@@ -1,0 +1,31 @@
+From: Shay Drory <shayd@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+
+Change-Id: I777acff4681f44c2832b5b386c5bb5b185ad3c72
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+@@ -54,7 +54,9 @@ static int mlx5_sf_dev_probe(struct auxi
+ 		mlx5_core_warn(mdev, "mlx5_load_one err=%d\n", err);
+ 		goto load_one_err;
+ 	}
++#ifdef HAVE_DEVLINK_RELOAD_ENABLE
+ 	devlink_reload_enable(devlink);
++#endif
+ 	return 0;
+ 
+ load_one_err:
+@@ -72,7 +74,9 @@ static void mlx5_sf_dev_remove(struct au
+ 	struct devlink *devlink;
+ 
+ 	devlink = priv_to_devlink(sf_dev->mdev);
++#ifdef HAVE_DEVLINK_RELOAD_DISABLE
+ 	devlink_reload_disable(devlink);
++#endif
+ 	mlx5_unload_one(sf_dev->mdev, true);
+ 
+ 	/* health work might still be active, and it needs pci bar in

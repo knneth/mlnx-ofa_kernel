@@ -803,6 +803,9 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"alloc_mod_hdr_actions",
 		/* release order0 pages, for old kernels only */
 		"mlx5e_free_xdpsq_desc",
+		/* kTLS resync dump */
+		"tx_sync_info_get",
+		"mlx5e_ktls_tx_handle_resync_dump_comp",
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);

@@ -768,6 +768,9 @@ int mlx5e_tc_tun_route_lookup(struct mlx5e_priv *priv,
 						  MLX5_ESW_INT_VPORT_INGRESS);
 		if (IS_ERR(int_port)) {
 			err = PTR_ERR(int_port);
+
+			if (err == -EOPNOTSUPP)
+				err = 0;
 			goto out;
 		}
 		attr->int_port = int_port;

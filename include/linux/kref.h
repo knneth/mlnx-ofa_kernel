@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_KREF_H
-#define COMPAT_LINUX_KREF_H
+#ifndef _COMPAT_LINUX_KREF_H
+#define _COMPAT_LINUX_KREF_H
 
 #include "../../compat/config.h"
 
@@ -13,4 +13,4 @@ static inline int kref_read(struct kref *kref)
 }
 #endif
 
-#endif /* COMPAT_LINUX_KREF_H */
+#endif /* _COMPAT_LINUX_KREF_H */

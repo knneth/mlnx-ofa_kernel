@@ -37,6 +37,9 @@ if [ -f /sys/devices/virtual/workqueue/nf_ft_offload_add/cpumask -a -f /sys/devi
 	echo $del_coremask > /sys/devices/virtual/workqueue/nf_ft_offload_del/cpumask
 	echo $add_coremask > /sys/devices/virtual/workqueue/nf_ft_offload_add/cpumask
 	echo "Bluefield ct offload: add wq coremask $add_coremask, del wq coremask $del_coremask" >/dev/kmsg
+
+        echo 1 > /sys/devices/virtual/workqueue/nf_ft_offload_add/max_active
+        echo 1 > /sys/devices/virtual/workqueue/nf_ft_offload_del/max_active
 else
 	echo "cannot set ct offload coremasks" >/dev/kmsg
 fi

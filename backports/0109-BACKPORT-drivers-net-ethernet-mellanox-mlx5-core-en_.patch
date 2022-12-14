@@ -17,7 +17,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  static u16 mlx5e_select_queue_assigned(struct mlx5e_priv *priv,
  				       struct sk_buff *skb)
  {
-@@ -176,12 +176,23 @@ fallback:
+@@ -187,12 +187,23 @@ static int mlx5e_get_up(struct mlx5e_pri
  
  static bool mlx5e_use_ptpsq(struct sk_buff *skb)
  {
@@ -41,16 +41,16 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  	if (fk.basic.n_proto == htons(ETH_P_1588))
  		return true;
  
-@@ -191,6 +202,7 @@ static bool mlx5e_use_ptpsq(struct sk_bu
+@@ -202,6 +213,7 @@ static bool mlx5e_use_ptpsq(struct sk_bu
  
  	return (fk.basic.ip_proto == IPPROTO_UDP &&
  		fk.ports.dst == htons(PTP_EV_PORT));
 +#endif
  }
  
- static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb)
-@@ -213,8 +225,24 @@ return_txq:
- 	return priv->port_ptp_tc2realtxq[up];
+ static u16 mlx5e_select_ptpsq(struct net_device *dev, struct sk_buff *skb,
+@@ -215,8 +227,24 @@ static u16 mlx5e_select_ptpsq(struct net
+ 	return selq->num_regular_queues + up;
  }
  
 +#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
@@ -72,11 +72,11 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
- 	int txq_ix;
  	struct mlx5e_priv *priv = netdev_priv(dev);
-@@ -226,7 +254,13 @@ u16 mlx5e_select_queue(struct net_device
- 		    mlx5e_use_ptpsq(skb))
- 			return mlx5e_select_ptpsq(dev, skb);
+ 	struct mlx5e_select_queue_params *selq;
+@@ -235,7 +263,13 @@ u16 mlx5e_select_queue(struct net_device
+ 		if (unlikely(mlx5e_use_ptpsq(skb)))
+ 			return mlx5e_select_ptpsq(dev, skb, selq);
  
 +#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		txq_ix = netdev_pick_tx(dev, skb, NULL);
@@ -88,16 +88,16 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  		/* Fix netdev_pick_tx() not to choose ptp_channel txqs.
  		 * If they are selected, switch to regular queues.
  		 * Driver to select these queues only at mlx5e_select_ptpsq().
-@@ -234,7 +268,7 @@ u16 mlx5e_select_queue(struct net_device
- 		if (unlikely(txq_ix >= priv->num_tc_x_num_ch))
- 			txq_ix = txq_ix % priv->num_tc_x_num_ch;
+@@ -243,7 +277,7 @@ u16 mlx5e_select_queue(struct net_device
+ 		if (unlikely(txq_ix >= selq->num_regular_queues))
+ 			txq_ix %= selq->num_regular_queues;
  	} else {
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 +#if defined(CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  		if (priv->channels.params.num_rl_txqs) {
  			u16 ix = mlx5e_select_queue_assigned(priv, skb);
  
-@@ -244,7 +278,13 @@ u16 mlx5e_select_queue(struct net_device
+@@ -253,7 +287,13 @@ u16 mlx5e_select_queue(struct net_device
  			}
  		}
  #endif
@@ -110,8 +110,8 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
 +#endif
  	}
  
- 	up = 0;
-@@ -299,7 +339,16 @@ static inline u16 mlx5e_calc_min_inline(
+ 	if (selq->num_tcs <= 1)
+@@ -298,7 +338,16 @@ static inline u16 mlx5e_calc_min_inline(
  	case MLX5_INLINE_MODE_NONE:
  		return 0;
  	case MLX5_INLINE_MODE_TCP_UDP:
@@ -128,7 +128,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  		if (hlen == ETH_HLEN && !skb_vlan_tag_present(skb))
  			hlen += VLAN_HLEN;
  		break;
-@@ -377,13 +426,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
+@@ -376,13 +425,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
  	u16 ihs;
  
  	if (skb->encapsulation) {
@@ -148,7 +148,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  			ihs = skb_transport_offset(skb) + tcp_hdrlen(skb);
  		stats->tso_packets++;
  		stats->tso_bytes += skb->len - ihs;
-@@ -602,6 +657,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+@@ -601,6 +656,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
  	}
  
  	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
@@ -156,7 +156,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  	if (send_doorbell)
  		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
  }
-@@ -620,7 +676,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -619,7 +675,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
  	struct mlx5e_sq_stats *stats = sq->stats;
  	int num_dma;
  
@@ -166,7 +166,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	/* fill wqe */
  	wi   = &sq->db.wqe_info[pi];
-@@ -772,7 +830,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+@@ -771,7 +829,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
  		mlx5e_tx_mpwqe_session_start(sq, eseg);
  	}
  
@@ -176,7 +176,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	txd.data = skb->data;
  	txd.len = skb->len;
-@@ -856,7 +916,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -855,7 +915,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  							     attr.ihs)))
  				return NETDEV_TX_OK;
  
@@ -190,7 +190,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  			return NETDEV_TX_OK;
  		}
  
-@@ -873,7 +939,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -872,7 +938,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  	if (unlikely(!mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs)))
  		return NETDEV_TX_OK;
  
@@ -204,7 +204,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	return NETDEV_TX_OK;
  }
-@@ -920,7 +992,11 @@ static void mlx5e_consume_skb(struct mlx
+@@ -919,7 +991,11 @@ static void mlx5e_consume_skb(struct mlx
  			skb_tstamp_tx(skb, &hwts);
  	}
  
@@ -216,7 +216,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  }
  
  static void mlx5e_tx_wi_consume_fifo_skbs(struct mlx5e_txqsq *sq, struct mlx5e_tx_wqe_info *wi,
-@@ -1131,7 +1207,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -1130,7 +1206,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -228,7 +228,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -1153,7 +1233,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1152,7 +1232,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -238,7 +238,7 @@ Change-Id: I26c0a2446627730fc1cd1fb01984c572b9d798c7
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1179,7 +1261,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1178,7 +1260,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	if (unlikely(num_dma < 0))
  		goto err_drop;
  

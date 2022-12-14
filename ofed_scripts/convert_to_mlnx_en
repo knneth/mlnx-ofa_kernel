@@ -1,0 +1,61 @@
+#!/bin/sh
+
+# convert_to_mlnx_en: Adapts a tree to be mlnx_en
+#
+# Called with --from-buildpl when run from build.pl
+
+mv ofed_scripts/mlnx_en/Makefile.mlnx_en ./Makefile
+mv ofed_scripts/mlnx_en/makefile.mlnx_en ./makefile
+mv ofed_scripts/mlnx_en/MLNX_EN_Linux_README.txt .
+mv ofed_scripts/mlnx_en/MLNX_EN_Linux_Release_Notes.txt .
+mv ofed_scripts/mlnx_en/LICENSE .
+mv drivers/infiniband/debug ./drivers/net/ethernet/mellanox
+
+mv ofed_scripts/mlnx_en/kmodtool.rh5 ../
+mv ofed_scripts/mlnx_en/kmodtool.rh7 ../
+mv ofed_scripts/mlnx_en/kmp-tool.sh ../
+mv ofed_scripts/mlnx_en/mlx4_core.conf ../
+mv ofed_scripts/mlnx_en/mlx4_en.conf ../
+mv ofed_scripts/mlnx_en/mlx4.files ../
+mv ofed_scripts/mlnx_en/mlx4.files.sles* ../
+mv ofed_scripts/mlnx_en/mlx4_ib.conf ../
+
+./ofed_scripts/ofed_patch.sh
+
+rm -rf debian
+mv ofed_scripts/mlnx_en/debian ./
+
+if [ -d "scripts" ]; then
+	rm -rf scripts
+fi
+mv ofed_scripts/mlnx_en/ ./scripts
+rm -rf drivers/infiniband
+rm -rf lib
+rm -rf fs
+rm -rf net
+rm -rf kernel
+rm -rf include-nfs
+rm -rf include/scsi
+rm -rf include/linux/rds.h
+rm -rf drivers/net/ethernet/chelsio
+rm -rf drivers/net/eipoib
+rm -rf drivers/net/ethernet/mellanox/mlx4_vnic
+rm -rf drivers/scsi/
+rm -rf Documentation
+rm -f configure
+
+if echo ofed_scripts/mlnx_en/en_patches/* | grep -q -v '\*'; then
+	patch -p1 -i scripts/en_patches/*
+fi
+
+mkdir -p drivers/infiniband/hw
+cp -a scripts/mlx4_ib-dummy/ drivers/infiniband/hw/mlx4
+cp -a scripts/mlx5_ib-dummy/ drivers/infiniband/hw/mlx5
+
+mv scripts/mlnx_en.spec .
+/bin/rm -f ofed_scripts/mlnx-ofa_kernel.spec
+
+if [ -f "compat/autogen.sh" ]; then
+	cd compat && ./autogen.sh >/dev/null 2>&1 && cd -
+fi
+

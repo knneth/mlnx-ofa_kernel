@@ -63,7 +63,6 @@ out:
 static int mlx5e_diag_fill_driver_version(void *buff)
 {
 	memset(buff, 0, MLX5_DRV_VER_SZ);
-	strlcpy(buff, DRIVER_VERSION, MLX5_DRV_VER_SZ);
 	return MLX5_DRV_VER_SZ;
 }
 

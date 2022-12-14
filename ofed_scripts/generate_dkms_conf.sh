@@ -32,7 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"5.3"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"5.4"}
 
 echo STRIP_MODS=\${STRIP_MODS:-"yes"}
 echo kernelver=\${kernelver:-\$\(uname -r\)}
@@ -45,15 +45,21 @@ i=0
 for module in $modules
 do
 	name=`echo ${module##*/} | sed -e "s/.ko.gz//" -e "s/.ko//"`
+	if [ "$name" = 'auxiliary' ]; then
+		echo "if [[ \$(VER \$kernelver) < \$(VER '5.11.0') ]]; then"
+	fi
 	echo BUILT_MODULE_NAME[$i]=$name
 	echo BUILT_MODULE_LOCATION[$i]=${module%*/*}
 	echo DEST_MODULE_NAME[$i]=$name
 	echo DEST_MODULE_LOCATION[$i]=/kernel/${module%*/*}
 	echo STRIP[$i]="\$STRIP_MODS"
+	if [ "$name" = 'auxiliary' ]; then
+		echo "fi"
+	fi
 	let i++
 done
 
-EXTRA_OPTIONS="--with-mlx5-ipsec --with-gds --without-gds"
+EXTRA_OPTIONS="--with-mlx5-ipsec --with-gds --without-gds --with-sf-cfg-drv"
 for option in $EXTRA_OPTIONS; do
 	if echo "$configure_options" | grep -q -- "$option"; then
 		echo "#:# ExtraOption $option"

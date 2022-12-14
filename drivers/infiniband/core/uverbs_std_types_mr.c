@@ -107,7 +107,12 @@ static int UVERBS_HANDLER(UVERBS_METHOD_DM_MR_REG)(
 
 	ret = uverbs_get_flags32(&attr.access_flags, attrs,
 				 UVERBS_ATTR_REG_DM_MR_ACCESS_FLAGS,
-				 IB_ACCESS_SUPPORTED);
+				 ((IB_UVERBS_ACCESS_HUGETLB << 1) - 1) |
+					 IB_UVERBS_ACCESS_OPTIONAL_RANGE);
+	if (ret)
+		return ret;
+
+	ret = copy_mr_access_flags(&attr.access_flags, attr.access_flags);
 	if (ret)
 		return ret;
 

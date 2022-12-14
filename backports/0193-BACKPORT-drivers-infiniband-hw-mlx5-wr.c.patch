@@ -8,7 +8,7 @@ Change-Id: I5e1a2a236504e428fcf2eea3e1711626b79f34ec
 
 --- a/drivers/infiniband/hw/mlx5/wr.c
 +++ b/drivers/infiniband/hw/mlx5/wr.c
-@@ -1366,6 +1366,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp
+@@ -1403,6 +1403,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp
  			seg += sizeof(*xrc);
  			size += sizeof(*xrc) / 16;
  			fallthrough;

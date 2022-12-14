@@ -1,5 +1,5 @@
-#ifndef _LINUX_PCI_H
-#define _LINUX_PCI_H
+#ifndef _COMPAT_LINUX_PCI_H
+#define _COMPAT_LINUX_PCI_H
 
 #include "../../compat/config.h"
 
@@ -118,4 +118,4 @@ static inline void unregister_pcie_dev_attr_group(struct pci_dev *pdev) { }
 static inline bool pcie_aspm_enabled(struct pci_dev *pdev) { return false; }
 #endif
 
-#endif /* _LINUX_PCI_H */
+#endif /* _COMPAT_LINUX_PCI_H */

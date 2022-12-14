@@ -572,12 +572,14 @@ struct mlx5_ib_dm {
 					 IB_ACCESS_REMOTE_WRITE  |\
 					 IB_ACCESS_REMOTE_READ   |\
 					 IB_ACCESS_REMOTE_ATOMIC |\
-					 IB_ZERO_BASED)
+					 IB_ZERO_BASED		 |\
+					 IB_ACCESS_DISABLE_RELAXED_ORDERING)
 
 #define MLX5_IB_DM_SW_ICM_ALLOWED_ACCESS (IB_ACCESS_LOCAL_WRITE   |\
 					  IB_ACCESS_REMOTE_WRITE  |\
 					  IB_ACCESS_REMOTE_READ   |\
-					  IB_ZERO_BASED)
+					  IB_ZERO_BASED		  |\
+					  IB_ACCESS_DISABLE_RELAXED_ORDERING)
 
 #define mlx5_update_odp_stats(mr, counter_name, value)		\
 	atomic64_add(value, &((mr)->odp_stats.counter_name))
@@ -972,6 +974,11 @@ struct mlx5_var_table {
 	u64 num_var_hw_entries;
 };
 
+struct mlx5_port_caps {
+	bool has_smi;
+	u8 ext_port_cap;
+};
+
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
@@ -1045,6 +1052,8 @@ struct mlx5_ib_dev {
 	struct mlx5_var_table var_table;
 
 	struct xarray sig_mrs;
+	struct mlx5_port_caps port_caps[MLX5_MAX_PORTS];
+	u16 pkey_table_len;
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)
@@ -1229,9 +1238,7 @@ int mlx5_ib_process_mad(struct ib_device *ibdev, int mad_flags, u32 port_num,
 int mlx5_ib_alloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata);
 void mlx5_ib_dealloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata);
 int mlx5_ib_get_buf_offset(u64 addr, int page_shift, u32 *offset);
-int mlx5_query_ext_port_caps(struct mlx5_ib_dev *dev, u32 port);
-int mlx5_query_mad_ifc_smp_attr_node_info(struct ib_device *ibdev,
-					  struct ib_smp *out_mad);
+int mlx5_query_ext_port_caps(struct mlx5_ib_dev *dev, unsigned int port);
 int mlx5_query_mad_ifc_system_image_guid(struct ib_device *ibdev,
 					 __be64 *sys_image_guid);
 int mlx5_query_mad_ifc_max_pkeys(struct ib_device *ibdev,
@@ -1336,8 +1343,8 @@ extern const struct mmu_interval_notifier_ops mlx5_mn_ops;
 void __mlx5_ib_remove(struct mlx5_ib_dev *dev,
 		      const struct mlx5_ib_profile *profile,
 		      int stage);
-void *__mlx5_ib_add(struct mlx5_ib_dev *dev,
-		    const struct mlx5_ib_profile *profile);
+int __mlx5_ib_add(struct mlx5_ib_dev *dev,
+		  const struct mlx5_ib_profile *profile);
 
 int mlx5_ib_get_vf_config(struct ib_device *device, int vf,
 			  u32 port, struct ifla_vf_info *info);
@@ -1483,22 +1490,25 @@ int bfregn_to_uar_index(struct mlx5_ib_dev *dev,
 			bool dyn_bfreg);
 
 static inline bool mlx5_ib_can_use_umr(struct mlx5_ib_dev *dev,
-				       bool do_modify_atomic, int access_flags)
+				       unsigned int current_access_flags,
+				       unsigned int target_access_flags)
 {
+	unsigned int diffs = current_access_flags ^ target_access_flags;
+
 	if (MLX5_CAP_GEN(dev->mdev, umr_modify_entity_size_disabled))
 		return false;
 
-	if (do_modify_atomic &&
+	if ((diffs & IB_ACCESS_REMOTE_ATOMIC) &&
 	    MLX5_CAP_GEN(dev->mdev, atomic) &&
 	    MLX5_CAP_GEN(dev->mdev, umr_modify_atomic_disabled))
 		return false;
 
-	if (access_flags & IB_ACCESS_RELAXED_ORDERING &&
+	if ((diffs & IB_ACCESS_DISABLE_RELAXED_ORDERING) &&
 	    MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write) &&
 	    !MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write_umr))
 		return false;
 
-	if (access_flags & IB_ACCESS_RELAXED_ORDERING &&
+	if ((diffs & IB_ACCESS_DISABLE_RELAXED_ORDERING) &&
 	     MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read) &&
 	     !MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read_umr))
 		return false;

@@ -15,10 +15,10 @@ Change-Id: I8343c4095bda800d23399ec77fab139dd56a3bf7
  
 +#ifdef HAVE_KTLS_STRUCTS
 +
+ #include "en_accel/tls.h"
  #include "en_accel/ktls_txrx.h"
  #include "en_accel/ktls_utils.h"
- 
-@@ -468,6 +470,7 @@ bool mlx5e_ktls_handle_tx_skb(struct tls
+@@ -471,6 +473,7 @@ bool mlx5e_ktls_handle_tx_skb(struct tls
  				goto out;
  			WARN_ON_ONCE(1);
  			fallthrough;
@@ -26,7 +26,7 @@ Change-Id: I8343c4095bda800d23399ec77fab139dd56a3bf7
  		case MLX5E_KTLS_SYNC_FAIL:
  			goto err_out;
  		}
-@@ -487,3 +490,5 @@ err_out:
+@@ -490,3 +493,5 @@ err_out:
  	dev_kfree_skb_any(skb);
  	return false;
  }

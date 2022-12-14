@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_SLAB_H
-#define COMPAT_LINUX_SLAB_H
+#ifndef _COMPAT_LINUX_SLAB_H
+#define _COMPAT_LINUX_SLAB_H
 
 #include "../../compat/config.h"
 
@@ -44,4 +44,4 @@ static inline void compat_kmem_cache_destroy(struct kmem_cache *s)
 }
 #define kmem_cache_destroy compat_kmem_cache_destroy
 
-#endif /* COMPAT_LINUX_SLAB_H */
+#endif /* _COMPAT_LINUX_SLAB_H */

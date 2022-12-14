@@ -1,0 +1,177 @@
+From: root <root@c-236-4-60-065.mtl.labs.mlnx>
+Subject: [PATCH] BACKPORT: net/mlxdevm/mlxdevm.c
+
+---
+ net/mlxdevm/mlxdevm.c | 61 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 61 insertions(+)
+
+--- a/net/mlxdevm/mlxdevm.c
++++ b/net/mlxdevm/mlxdevm.c
+@@ -1414,7 +1414,11 @@ static int mlxdevm_nl_cmd_port_get_dumpi
+ 						   NETLINK_CB(cb->skb).portid,
+ 						   cb->nlh->nlmsg_seq,
+ 						   NLM_F_MULTI,
++#ifdef HAVE_NETLINK_CALLBACK_EXTACK
+ 						   cb->extack);
++#else
++						   NULL);
++#endif
+ 			if (err) {
+ 				up_read(&dev->port_list_rwsem);
+ 				goto out;
+@@ -1711,7 +1715,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
+ 						   NETLINK_CB(cb->skb).portid,
+ 						   cb->nlh->nlmsg_seq,
+ 						   NLM_F_MULTI,
++#ifdef HAVE_NETLINK_CALLBACK_EXTACK
+ 						   cb->extack);
++#else
++						   NULL);
++#endif
+ 			if (err) {
+ 				up_read(&dev->rate_group_rwsem);
+ 				goto out;
+@@ -1729,7 +1737,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
+ 						   NETLINK_CB(cb->skb).portid,
+ 						   cb->nlh->nlmsg_seq,
+ 						   NLM_F_MULTI,
++#ifdef HAVE_NETLINK_CALLBACK_EXTACK
+ 						   cb->extack);
++#else
++						   NULL);
++#endif
+ 			if (err) {
+ 				up_read(&dev->port_list_rwsem);
+ 				goto out;
+@@ -2291,74 +2303,121 @@ static const struct nla_policy mlxdevm_n
+ static const struct genl_ops mlxdevm_nl_ops[] = {
+ 	{
+ 		.cmd = MLXDEVM_CMD_DEV_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_dev_get_doit,
+ 		.dumpit = mlxdevm_nl_cmd_dev_get_dumpit,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_PORT_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_port_set_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_PORT_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_port_get_doit,
+ 		.dumpit = mlxdevm_nl_cmd_port_get_dumpit,
+ 		/* can be retrieved by unprivileged users */
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_PORT_NEW,
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_port_new_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_PORT_DEL,
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_port_del_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_PARAM_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
+ 		.doit = mlxdevm_nl_cmd_param_get_doit,
+ 		.dumpit = mlxdevm_nl_cmd_param_get_dumpit,
+ 		/* can be retrieved by unprivileged users */
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_PARAM_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
+ 		.doit = mlxdevm_nl_cmd_param_set_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_EXT_CAP_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
+ 		.doit = mlxdevm_nl_cmd_port_fn_cap_set_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_EXT_RATE_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_rate_set_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_EXT_RATE_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_rate_get_doit,
+ 		.dumpit = mlxdevm_nl_cmd_rate_get_dumpit,
+ 		/* can be retrieved by unprivileged users */
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_EXT_RATE_NEW,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_rate_new_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+ 	{
+ 		.cmd = MLXDEVM_CMD_EXT_RATE_DEL,
++#ifdef HAVE_GENL_OPS_VALIDATE
+ 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++		.policy = mlxdevm_nl_policy,
++#endif
+ 		.doit = mlxdevm_nl_cmd_rate_del_doit,
+ 		.flags = GENL_ADMIN_PERM,
+ 	},
+@@ -2368,7 +2427,9 @@ static struct genl_family mlxdevm_nl_fam
+ 	.name = MLXDEVM_GENL_NAME,
+ 	.version = MLXDEVM_GENL_VERSION,
+ 	.maxattr = MLXDEVM_ATTR_MAX,
++#ifdef HAVE_GENL_FAMILY_POLICY
+ 	.policy = mlxdevm_nl_policy,
++#endif
+ 	.netnsok = false,
+ 	.module = THIS_MODULE,
+ 	.ops = mlxdevm_nl_ops,

@@ -85,18 +85,43 @@ enum mlx5_ib_uapi_uar_alloc_type {
 };
 
 enum mlx5_ib_uapi_devx_query_port_comp_mask {
-       MLX5_IB_UAPI_QUERY_PORT_VPORT = BIT(0),
-       MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID = BIT(1),
-       MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID = BIT(2),
-       MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX = BIT(3),
-       MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX = BIT(4),
-       MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0 = BIT(5),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_OLD = BIT(0),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID_OLD = BIT(1),
+	MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID_OLD = BIT(2),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX_OLD = BIT(3),
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX_OLD = BIT(4),
+	MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0_OLD = BIT(5),
 };
 
 struct mlx5_ib_uapi_devx_reg_32 {
        __u32 value;
        __u32 mask;
 };
- 
+
+enum mlx5_ib_uapi_query_port_flags {
+	MLX5_IB_UAPI_QUERY_PORT_VPORT			= 1 << 0,
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID		= 1 << 1,
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_STEERING_ICM_RX	= 1 << 2,
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_STEERING_ICM_TX	= 1 << 3,
+	MLX5_IB_UAPI_QUERY_PORT_VPORT_REG_C0		= 1 << 4,
+	MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID	= 1 << 5,
+};
+
+struct mlx5_ib_uapi_reg {
+	__u32 value;
+	__u32 mask;
+};
+
+struct mlx5_ib_uapi_query_port {
+	__aligned_u64 flags;
+	__u16 vport;
+	__u16 vport_vhca_id;
+	__u16 esw_owner_vhca_id;
+	__u16 rsvd0;
+	__aligned_u64 vport_steering_icm_rx;
+	__aligned_u64 vport_steering_icm_tx;
+	struct mlx5_ib_uapi_reg reg_c0;
+};
+
 #endif
 

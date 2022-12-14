@@ -102,7 +102,7 @@ do
 	fi
 
 	# Already exists, check if there is a real diff
-	if (diff -u ${bp} ${TDIR}/${fname} 2>/dev/null | grep -vE -- "^(\-\-\-|\+\+\+) backports|insertions|\+\+$|\-\-$" | grep -E -- "^(\-|\+)" | grep -qvE -- "^(\-|\+)@@|files changed"); then
+	if (diff -u ${bp} ${TDIR}/${fname} 2>/dev/null | grep -vE -- "^(\-\-\-|\+\+\+) backports|insertions|\+\+$|\-\-$" | grep -E -- "^(\-|\+)" | grep -vE -- "^(\-|\+)@@|files changed" | grep -qvE -- "\| [0-9]+ [+|-]+$"); then
 		echo "Updating existing backport '${TDIR}/${fname}'"
 		ex "/bin/cp -f ${bp} ${TDIR}/${fname}"
 		let changes++

@@ -3,15 +3,17 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
 
 Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
 ---
- include/rdma/ib_umem_odp.h | 96 ++++++++++++++++++++++++++++++++++++++
- 1 file changed, 96 insertions(+)
+ include/rdma/ib_umem_odp.h | 98 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 98 insertions(+)
 
 --- a/include/rdma/ib_umem_odp.h
 +++ b/include/rdma/ib_umem_odp.h
-@@ -6,13 +6,21 @@
+@@ -6,13 +6,23 @@
  #ifndef IB_UMEM_ODP_H
  #define IB_UMEM_ODP_H
  
++#include "../../compat/config.h"
++
 +#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
  #include <rdma/ib_umem.h>
  #include <rdma/ib_verbs.h>
@@ -30,7 +32,7 @@ Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
  
  	/*
  	 * An array of the pages included in the on-demand paging umem.
-@@ -35,8 +43,15 @@ struct ib_umem_odp {
+@@ -35,8 +45,15 @@ struct ib_umem_odp {
  	struct mutex		umem_mutex;
  	void			*private; /* for the HW driver to use. */
  
@@ -46,7 +48,7 @@ Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
  	/*
  	 * An implicit odp umem cannot be DMA mapped, has 0 length, and serves
  	 * only as an anchor for the driver to hold onto the per_mm. FIXME:
-@@ -45,6 +60,9 @@ struct ib_umem_odp {
+@@ -45,6 +62,9 @@ struct ib_umem_odp {
  	 */
  	bool is_implicit_odp;
  
@@ -56,7 +58,7 @@ Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
  	unsigned int		page_shift;
  };
  
-@@ -56,13 +74,21 @@ static inline struct ib_umem_odp *to_ib_
+@@ -56,13 +76,21 @@ static inline struct ib_umem_odp *to_ib_
  /* Returns the first page of an ODP umem. */
  static inline unsigned long ib_umem_start(struct ib_umem_odp *umem_odp)
  {
@@ -78,7 +80,7 @@ Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
  }
  
  static inline size_t ib_umem_odp_num_pages(struct ib_umem_odp *umem_odp)
-@@ -86,15 +112,53 @@ static inline size_t ib_umem_odp_num_pag
+@@ -86,15 +114,53 @@ static inline size_t ib_umem_odp_num_pag
  
  #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
  
@@ -132,7 +134,7 @@ Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
  void ib_umem_odp_release(struct ib_umem_odp *umem_odp);
  
  int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 start_offset,
-@@ -104,11 +168,42 @@ int ib_umem_odp_map_dma_pages(struct ib_
+@@ -104,11 +170,42 @@ int ib_umem_odp_map_dma_pages(struct ib_
  void ib_umem_odp_unmap_dma_pages(struct ib_umem_odp *umem_odp, u64 start_offset,
  				 u64 bound);
  
@@ -175,7 +177,7 @@ Change-Id: I3e332cbf73d2f3c969478fb80df5d914009993c5
  {
  	return ERR_PTR(-EINVAL);
  }
-@@ -116,5 +211,6 @@ ib_umem_odp_get(struct ib_device *device
+@@ -116,5 +213,6 @@ ib_umem_odp_get(struct ib_device *device
  static inline void ib_umem_odp_release(struct ib_umem_odp *umem_odp) {}
  
  #endif /* CONFIG_INFINIBAND_ON_DEMAND_PAGING */

@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_DEVLINK_H
-#define COMPAT_LINUX_DEVLINK_H
+#ifndef _COMPAT_NET_DEVLINK_H
+#define _COMPAT_NET_DEVLINK_H
 
 #include "../../compat/config.h"
 
@@ -86,6 +86,19 @@ enum devlink_param_generic_id {
 #define DEVLINK_PARAM_GENERIC_ENABLE_ROCE_TYPE DEVLINK_PARAM_TYPE_BOOL
 
 #endif /* HAVE_DEVLINK_H */
+
+#ifndef HAVE_DEVLINK_PORT_NEW_ATTRS_STRUCT
+struct devlink_port_new_attrs {
+	enum devlink_port_flavour flavour;
+	unsigned int port_index;
+	u32 controller;
+	u32 sfnum;
+	u16 pfnum;
+	u8 port_index_valid:1,
+		controller_valid:1,
+		sfnum_valid:1;
+	};
+#endif
 
 #ifndef HAVE_DEVLINK_NET
 static inline struct net *devlink_net(const struct devlink *devlink)
@@ -190,4 +203,4 @@ struct devlink_port {
 };
 #endif
 
-#endif /* COMPAT_LINUX_DEVLINK_H */
+#endif /* _COMPAT_NET_DEVLINK_H */

@@ -1,5 +1,7 @@
-#ifndef COMPAT_LINUX_STDDEF_H
-#define COMPAT_LINUX_STDDEF_H
+#ifndef _COMPAT_LINUX_STDDEF_H
+#define _COMPAT_LINUX_STDDEF_H
+
+#include "../../compat/config.h"
 
 #include_next <linux/stddef.h>
 
@@ -13,4 +15,4 @@
 #define sizeof_field(TYPE, MEMBER) sizeof((((TYPE *)0)->MEMBER))
 #endif /* sizeof_field */
 
-#endif /* COMPAT_LINUX_STDDEF_H */
+#endif /* _COMPAT_LINUX_STDDEF_H */

@@ -104,11 +104,6 @@ static inline ktime_t mlx5_real_time_cyc2time(struct mlx5_clock *clock,
 	return 0;
 }
 
-static inline ktime_t mlx5_real_time_cyc2time(struct mlx5_clock *clock,
-					      u64 timestamp)
-{
-	return 0;
-}
 #endif
 
 #endif

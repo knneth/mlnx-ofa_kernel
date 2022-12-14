@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 
 Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
 ---
- .../net/ethernet/mellanox/mlx5/core/en_txrx.c | 56 ++++++++++++++++++-
- 1 file changed, 54 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_txrx.c | 55 ++++++++++++++++++-
+ 1 file changed, 54 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
@@ -30,17 +30,17 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
  	bool busy_xsk = false, xsk_rx_alloc_err;
  
  	/* Handle the race between the application querying need_wakeup and the
-@@ -111,30 +114,48 @@ static bool mlx5e_napi_xsk_post(struct m
- 					   mlx5e_post_rx_wqes,
+@@ -112,29 +115,48 @@ static bool mlx5e_napi_xsk_post(struct m
  					   xskrq);
  	busy_xsk |= mlx5e_xsk_update_rx_wakeup(xskrq, xsk_rx_alloc_err);
+ 
 +#else
 +	bool busy_xsk = false;
 +
 +	busy_xsk |= mlx5e_xsk_tx(xsksq, MLX5E_TX_XSK_POLL_BUDGET);
 +	busy_xsk |= xskrq->post_wqes(xskrq);
 +#endif
- 
++
  	return busy_xsk;
  }
 +#endif
@@ -79,7 +79,7 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
  
  	for (i = 0; i < c->num_tc; i++)
  		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
-@@ -144,14 +165,20 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -144,14 +166,20 @@ int mlx5e_napi_poll(struct napi_struct *
  		busy |= mlx5e_poll_tx_cq(&c->special_sq[i].cq, budget);
  #endif
  
@@ -100,7 +100,7 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
  
  		if (likely(budget - work_done))
  			work_done += mlx5e_poll_rx_cq(&rq->cq, budget - work_done);
-@@ -160,22 +187,26 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -160,22 +188,26 @@ int mlx5e_napi_poll(struct napi_struct *
  	}
  
  	mlx5e_poll_ico_cq(&c->icosq.cq);
@@ -127,7 +127,7 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
  
  	if (busy) {
  		if (likely(mlx5e_channel_no_affinity_change(c))) {
-@@ -183,13 +214,25 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -183,13 +215,25 @@ int mlx5e_napi_poll(struct napi_struct *
  			goto out;
  		}
  		ch_stats->aff_change++;
@@ -153,7 +153,7 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
  
  	ch_stats->arm++;
  
-@@ -205,9 +248,14 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -205,9 +249,14 @@ int mlx5e_napi_poll(struct napi_struct *
  
  	mlx5e_rx_dim_cq_rearm(c->priv, rq);
  	mlx5e_cq_arm(&c->icosq.cq);
@@ -162,14 +162,13 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
 +#endif
 +#ifdef HAVE_XDP_REDIRECT
  	mlx5e_cq_arm(&c->xdpsq.cq);
--
 +#endif
-+ 
+ 
 +#ifdef HAVE_XSK_SUPPORT
  	if (xsk_open) {
  		mlx5e_rx_dim_cq_rearm(c->priv, xskrq);
  		mlx5e_cq_arm(&xsksq->cq);
-@@ -217,6 +265,7 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -217,6 +266,7 @@ int mlx5e_napi_poll(struct napi_struct *
  		mlx5e_trigger_irq(&c->icosq);
  		ch_stats->force_irq++;
  	}
@@ -177,7 +176,7 @@ Change-Id: I17ec3c99c182f50407955add9737beb48ce23d89
  
  out:
  	rcu_read_unlock();
-@@ -228,6 +277,9 @@ void mlx5e_completion_event(struct mlx5_
+@@ -228,6 +278,9 @@ void mlx5e_completion_event(struct mlx5_
  {
  	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);
  

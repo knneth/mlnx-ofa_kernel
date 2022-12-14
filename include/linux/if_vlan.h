@@ -1,5 +1,5 @@
-#ifndef LINUX_IF_VLAN_H
-#define LINUX_IF_VLAN_H
+#ifndef _COMPAT_LINUX_IF_VLAN_H
+#define _COMPAT_LINUX_IF_VLAN_H
 
 #include "../../compat/config.h"
 
@@ -86,4 +86,4 @@ static inline int vlan_get_encap_level(struct net_device *dev)
 }
 #endif
 
-#endif /* LINUX_IF_VLAN_H */
+#endif /* _COMPAT_LINUX_IF_VLAN_H */

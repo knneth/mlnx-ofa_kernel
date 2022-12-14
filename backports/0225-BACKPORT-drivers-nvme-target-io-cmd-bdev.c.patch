@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-bdev.c
 
 Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
 ---
- drivers/nvme/target/io-cmd-bdev.c | 131 +++++++++++++++++++++++++++++-
- 1 file changed, 129 insertions(+), 2 deletions(-)
+ drivers/nvme/target/io-cmd-bdev.c | 152 +++++++++++++++++++++++++++++-
+ 1 file changed, 150 insertions(+), 2 deletions(-)
 
 --- a/drivers/nvme/target/io-cmd-bdev.c
 +++ b/drivers/nvme/target/io-cmd-bdev.c
@@ -73,7 +73,31 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  static int nvmet_bdev_alloc_bip(struct nvmet_req *req, struct bio *bio,
  				struct sg_mapping_iter *miter)
  {
-@@ -234,6 +250,9 @@ static void nvmet_bdev_execute_rw(struct
+@@ -187,8 +203,13 @@ static int nvmet_bdev_alloc_bip(struct n
+ 		return -ENODEV;
+ 	}
+ 
++#ifdef HAVE_BIO_MAX_SEGS
++	bip = bio_integrity_alloc(bio, GFP_NOIO,
++		bio_max_segs(req->metadata_sg_cnt));
++#else
+ 	bip = bio_integrity_alloc(bio, GFP_NOIO,
+ 		min_t(unsigned int, req->metadata_sg_cnt, BIO_MAX_PAGES));
++#endif
+ 	if (IS_ERR(bip)) {
+ 		pr_err("Unable to allocate bio_integrity_payload\n");
+ 		return PTR_ERR(bip);
+@@ -228,12 +249,19 @@ static int nvmet_bdev_alloc_bip(struct n
+ 
+ static void nvmet_bdev_execute_rw(struct nvmet_req *req)
+ {
++#ifdef HAVE_BIO_MAX_SEGS
++	unsigned int sg_cnt = req->sg_cnt;
++#else
+ 	int sg_cnt = req->sg_cnt;
++#endif
+ 	struct bio *bio;
+ 	struct scatterlist *sg;
  	struct blk_plug plug;
  	sector_t sector;
  	int op, i, rc;
@@ -83,7 +107,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  	struct sg_mapping_iter prot_miter;
  	unsigned int iter_flags;
  	unsigned int total_len = nvmet_rw_data_len(req) + req->metadata_len;
-@@ -247,9 +266,22 @@ static void nvmet_bdev_execute_rw(struct
+@@ -247,9 +275,22 @@ static void nvmet_bdev_execute_rw(struct
  	}
  
  	if (req->cmd->rw.opcode == nvme_cmd_write) {
@@ -106,7 +130,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  		iter_flags = SG_MITER_TO_SG;
  	} else {
  		op = REQ_OP_READ;
-@@ -257,22 +289,48 @@ static void nvmet_bdev_execute_rw(struct
+@@ -257,22 +298,52 @@ static void nvmet_bdev_execute_rw(struct
  	}
  
  	if (is_pci_p2pdma_page(sg_page(req->sg)))
@@ -129,9 +153,13 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
 +		bio->bi_max_vecs = ARRAY_SIZE(req->inline_bvec);
 +#endif
  	} else {
++#ifdef HAVE_BIO_MAX_SEGS
++		bio = bio_alloc(GFP_KERNEL, bio_max_segs(sg_cnt));
++#else
  		bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
++#endif
  	}
-+#ifdef HAVE_BIO_BI_DISK
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
  	bio_set_dev(bio, req->ns->bdev);
 +#else
 +	bio->bi_bdev = req->ns->bdev;
@@ -155,11 +183,16 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  	blk_start_plug(&plug);
  	if (req->metadata_len)
-@@ -294,12 +352,28 @@ static void nvmet_bdev_execute_rw(struct
+@@ -293,13 +364,33 @@ static void nvmet_bdev_execute_rw(struct
+ 				}
  			}
  
++#ifdef HAVE_BIO_MAX_SEGS
++			bio = bio_alloc(GFP_KERNEL, bio_max_segs(sg_cnt));
++#else
  			bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
-+#ifdef HAVE_BIO_BI_DISK
++#endif
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
  			bio_set_dev(bio, req->ns->bdev);
 +#else
 +			bio->bi_bdev = req->ns->bdev;
@@ -184,7 +217,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  		}
  
  		sector += sg->length >> 9;
-@@ -314,7 +388,11 @@ static void nvmet_bdev_execute_rw(struct
+@@ -314,7 +405,11 @@ static void nvmet_bdev_execute_rw(struct
  		}
  	}
  
@@ -196,7 +229,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  	blk_finish_plug(&plug);
  }
  
-@@ -325,18 +403,40 @@ static void nvmet_bdev_execute_flush(str
+@@ -325,18 +420,44 @@ static void nvmet_bdev_execute_flush(str
  	if (!nvmet_check_transfer_len(req, 0))
  		return;
  
@@ -207,7 +240,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
 +	bio->bi_io_vec = req->inline_bvec;
 +	bio->bi_max_vecs = ARRAY_SIZE(req->inline_bvec);
 +#endif
-+#ifdef HAVE_BIO_BI_DISK
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
  	bio_set_dev(bio, req->ns->bdev);
 +#else
 +	bio->bi_bdev = req->ns->bdev;
@@ -229,15 +262,19 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  u16 nvmet_bdev_flush(struct nvmet_req *req)
  {
++#ifdef HAVE_BLKDEV_ISSUE_FLUSH_1_PARAM
++	if (blkdev_issue_flush(req->ns->bdev))
++#else
 +#ifdef HAVE_BLKDEV_ISSUE_FLUSH_2_PARAM
  	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL))
 +#else
 +	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL, NULL))
 +#endif
++#endif
  		return NVME_SC_INTERNAL | NVME_SC_DNR;
  	return 0;
  }
-@@ -347,10 +447,17 @@ static u16 nvmet_bdev_discard_range(stru
+@@ -347,10 +468,17 @@ static u16 nvmet_bdev_discard_range(stru
  	struct nvmet_ns *ns = req->ns;
  	int ret;
  
@@ -255,7 +292,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  	if (ret && ret != -EOPNOTSUPP) {
  		req->error_slba = le64_to_cpu(range->slba);
  		return errno_to_nvme_status(req, ret);
-@@ -382,7 +489,11 @@ static void nvmet_bdev_execute_discard(s
+@@ -382,7 +510,11 @@ static void nvmet_bdev_execute_discard(s
  		if (status)
  			bio_io_error(bio);
  		else
@@ -267,7 +304,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  	} else {
  		nvmet_req_complete(req, status);
  	}
-@@ -406,6 +517,7 @@ static void nvmet_bdev_execute_dsm(struc
+@@ -406,6 +538,7 @@ static void nvmet_bdev_execute_dsm(struc
  	}
  }
  
@@ -275,7 +312,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  static void nvmet_bdev_execute_write_zeroes(struct nvmet_req *req)
  {
  	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
-@@ -422,16 +534,29 @@ static void nvmet_bdev_execute_write_zer
+@@ -422,16 +555,29 @@ static void nvmet_bdev_execute_write_zer
  	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length) + 1) <<
  		(req->ns->blksize_shift - 9));
  
@@ -305,7 +342,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req)
  {
-@@ -450,9 +575,11 @@ u16 nvmet_bdev_parse_io_cmd(struct nvmet
+@@ -450,9 +596,11 @@ u16 nvmet_bdev_parse_io_cmd(struct nvmet
  	case nvme_cmd_dsm:
  		req->execute = nvmet_bdev_execute_dsm;
  		return 0;

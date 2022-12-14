@@ -1,9 +1,10 @@
-#ifndef _COMPAT_COMPILER_ATRR_H
-#define _COMPAT_COMPILER_ATTR_H
+#ifndef _COMPAT_LINUX_COMPILER_ATTRIBUTES_H
+#define _COMPAT_LINUX_COMPILER_ATTRIBUTES_H
+
+#include "../../compat/config.h"
 
 #include_next <linux/compiler_attributes.h>
 #include <linux/types.h>
-#include "../../compat/config.h"
 
 #ifndef __GCC4_has_attribute___fallthrough__
 # define __GCC4_has_attribute___fallthrough__         0
@@ -24,5 +25,4 @@
 #endif
 #endif /* __GCC4_has_attribute___fallthrough__ */
 
-
-#endif /* _COMPAT_COMPILER_ATTR_H */
+#endif /* _COMPAT_LINUX_COMPILER_ATTRIBUTES_H */

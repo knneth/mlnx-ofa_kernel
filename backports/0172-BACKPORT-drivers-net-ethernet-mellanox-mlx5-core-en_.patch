@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I1235234f18df73af19c617b0ed526bab7770bc6a
 ---
- .../ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c | 24 ++++++++++++++++++++--
+ .../mellanox/mlx5/core/en_accel/ktls_rx.c     | 24 +++++++++++++++++--
  1 file changed, 22 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
@@ -28,7 +28,7 @@ Change-Id: I1235234f18df73af19c617b0ed526bab7770bc6a
  	struct work_struct work;
  	struct mlx5e_priv *priv;
  	refcount_t refcnt;
-@@ -386,7 +390,9 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -401,7 +405,9 @@ void mlx5e_ktls_handle_get_psv_completio
  	struct mlx5e_ktls_rx_resync_ctx *resync;
  	u8 tracker_state, auth_state, *ctx;
  	struct device *dev;
@@ -38,22 +38,22 @@ Change-Id: I1235234f18df73af19c617b0ed526bab7770bc6a
  
  	priv_rx = buf->priv_rx;
  	resync = &priv_rx->resync;
-@@ -406,9 +412,14 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -421,9 +427,14 @@ void mlx5e_ktls_handle_get_psv_completio
  		goto out;
  	}
  
 +#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
  	hw_seq = MLX5_GET(tls_progress_params, ctx, hw_resync_tcp_sn);
  	tls_offload_rx_resync_async_request_end(priv_rx->sk, cpu_to_be32(hw_seq));
- 	priv_rx->stats->tls_resync_req_end++;
+ 	priv_rx->rq_stats->tls_resync_req_end++;
 +#else
 +	tls_offload_rx_force_resync_request(priv_rx->sk);
 +#endif
 +
  out:
- 	refcount_dec(&resync->refcnt);
+ 	mlx5e_ktls_priv_rx_put(priv_rx);
  	dma_unmap_single(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE, DMA_FROM_DEVICE);
-@@ -444,10 +455,12 @@ static void resync_update_sn(struct mlx5
+@@ -459,10 +470,12 @@ static void resync_update_sn(struct mlx5
  	struct ethhdr *eth = (struct ethhdr *)(skb->data);
  	struct net_device *netdev = rq->netdev;
  	struct sock *sk = NULL;
@@ -67,7 +67,7 @@ Change-Id: I1235234f18df73af19c617b0ed526bab7770bc6a
  	int depth = 0;
  
  	__vlan_get_protocol(skb, eth->h_proto, &depth);
-@@ -485,10 +498,14 @@ static void resync_update_sn(struct mlx5
+@@ -500,10 +513,14 @@ static void resync_update_sn(struct mlx5
  	if (unlikely(!resync_queue_get_psv(sk)))
  		goto unref;
  
@@ -82,7 +82,7 @@ Change-Id: I1235234f18df73af19c617b0ed526bab7770bc6a
  
  unref:
  	sock_gen_put(sk);
-@@ -605,9 +622,10 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -621,9 +638,10 @@ int mlx5e_ktls_add_rx(struct net_device
  	accel_rule_init(&priv_rx->rule, priv, sk);
  	resync = &priv_rx->resync;
  	resync_init(resync, priv);
@@ -94,9 +94,9 @@ Change-Id: I1235234f18df73af19c617b0ed526bab7770bc6a
  	err = post_rx_param_wqes(priv->channels.c[rxq], priv_rx, start_offload_tcp_sn);
  	if (err)
  		goto err_post_wqes;
-@@ -682,3 +700,5 @@ void mlx5e_ktls_del_rx(struct net_device
- 	mlx5_ktls_destroy_key(mdev, priv_rx->key_id);
- 	kfree(priv_rx);
+@@ -676,3 +694,5 @@ void mlx5e_ktls_del_rx(struct net_device
+ 	 */
+ 	mlx5e_ktls_priv_rx_put(priv_rx);
  }
 +
 +#endif /* HAVE_KTLS_RX_SUPPORT */

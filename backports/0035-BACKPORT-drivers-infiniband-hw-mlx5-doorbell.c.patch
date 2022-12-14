@@ -8,7 +8,7 @@ Change-Id: I5a0de576dd7c914a8eb9747468d4a5fe7a1c9939
 
 --- a/drivers/infiniband/hw/mlx5/doorbell.c
 +++ b/drivers/infiniband/hw/mlx5/doorbell.c
-@@ -64,8 +64,13 @@ int mlx5_ib_db_map_user(struct mlx5_ib_u
+@@ -67,8 +67,13 @@ int mlx5_ib_db_map_user(struct mlx5_ib_u
  
  	page->user_virt = (virt & PAGE_MASK);
  	page->refcnt    = 0;

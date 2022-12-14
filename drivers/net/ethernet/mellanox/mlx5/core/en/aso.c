@@ -269,7 +269,7 @@ static int mlx5e_alloc_asosq(struct mlx5e_priv *priv, struct mlx5e_aso *aso)
 	int err;
 
 	sqc_wq = MLX5_ADDR_OF(sqc, param->sqc, wq);
-	sq->uar_map = mdev->mlx5e_res.bfreg.map;
+	sq->uar_map = mdev->mlx5e_res.hw_objs.bfreg.map;
 
 	param->wq.db_numa_node = cpu_to_node(aso->cpu);
 	err = mlx5_wq_cyc_create(mdev, &param->wq, sqc_wq, wq, &sq->wq_ctrl);

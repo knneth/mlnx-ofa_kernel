@@ -530,5 +530,4 @@ struct flow_dissector_key_meta {
 };
 #endif /* HAVE_FLOW_DISSECTOR_KEY_META */
 
-#endif
-
+#endif /* _COMPAT_NET_FLOW_DISSECTOR_H */

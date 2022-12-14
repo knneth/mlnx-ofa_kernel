@@ -382,7 +382,7 @@ void mlx5_ib_internal_fill_odp_caps(struct mlx5_ib_dev *dev)
 	memset(caps, 0, sizeof(*caps));
 
 	if (!MLX5_CAP_GEN(dev->mdev, pg) ||
-	    !mlx5_ib_can_use_umr(dev, true, 0))
+	    !mlx5_ib_can_use_umr(dev, 0, 0))
 		return;
 
 	caps->general_caps = IB_ODP_SUPPORT;
@@ -1585,9 +1585,6 @@ mlx5_ib_create_pf_eq(struct mlx5_ib_dev *dev, struct mlx5_ib_pf_eq *eq)
 	struct mlx5_eq_param param = {};
 	int err = 0;
 
-	if (eq->core)
-		return 0;
-
 	mutex_lock(&dev->odp_eq_mutex);
 	if (eq->core) {
 		mutex_unlock(&dev->odp_eq_mutex);
@@ -1614,11 +1611,16 @@ mlx5_ib_create_pf_eq(struct mlx5_ib_dev *dev, struct mlx5_ib_pf_eq *eq)
 
 	eq->irq_nb.notifier_call = mlx5_ib_eq_pf_int;
 	param = (struct mlx5_eq_param) {
-		.irq_index = 0,
 		.nent = MLX5_IB_NUM_PF_EQE,
 	};
 	param.mask[0] = 1ull << MLX5_EVENT_TYPE_PAGE_FAULT;
+	if (!zalloc_cpumask_var(&param.affinity, GFP_KERNEL)) {
+		err = -ENOMEM;
+		goto err_wq;
+	}
+
 	eq->core = mlx5_eq_create_generic(dev->mdev, &param);
+	free_cpumask_var(param.affinity);
 	if (IS_ERR(eq->core)) {
 		err = PTR_ERR(eq->core);
 		goto err_wq;

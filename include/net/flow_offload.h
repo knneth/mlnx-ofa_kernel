@@ -382,5 +382,4 @@ struct flow_block_cb {
 };
 #endif
 
-
-#endif /* _NET_FLOW_OFFLOAD_H */
+#endif /* _COMPAT_NET_FLOW_OFFLOAD_H */

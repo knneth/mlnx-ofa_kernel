@@ -1,6 +1,8 @@
 #ifndef _COMPAT_NET_IP_H
 #define _COMPAT_NET_IP_H 1
 
+#include "../../compat/config.h"
+
 #include_next <net/ip.h>
 
 #ifndef NET_INC_STATS_USER

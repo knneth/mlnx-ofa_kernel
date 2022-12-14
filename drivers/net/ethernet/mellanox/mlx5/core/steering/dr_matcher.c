@@ -25,6 +25,14 @@ static bool dr_mask_is_dst_addr_set(struct mlx5dr_match_spec *spec)
 		spec->dst_ip_63_32 || spec->dst_ip_31_0);
 }
 
+static bool dr_mask_is_ipv6_only_match_set(struct mlx5dr_match_spec *spec)
+{
+	return spec->src_ip_127_96 || spec->src_ip_95_64 ||
+	       spec->src_ip_63_32 ||
+	       spec->dst_ip_127_96 || spec->dst_ip_95_64 ||
+	       spec->dst_ip_63_32;
+}
+
 static bool dr_mask_is_l3_base_set(struct mlx5dr_match_spec *spec)
 {
 	return (spec->ip_protocol || spec->frag || spec->tcp_flags ||
@@ -268,6 +276,243 @@ static bool dr_mask_is_tnl_mpls_over_udp(struct mlx5dr_match_param *mask,
 	return DR_MASK_IS_OUTER_MPLS_OVER_UDP_SET(&mask->misc2) &&
 	       dr_matcher_supp_tnl_mpls_over_udp(&dmn->info.caps);
 }
+
+static bool dr_matcher_is_mask_consumed(struct mlx5dr_match_param *mask)
+{
+	int i;
+
+	for (i = 0; i < sizeof(struct mlx5dr_match_param); i++)
+		if (((u8 *)mask)[i] != 0)
+			return false;
+
+	return true;
+}
+
+static void dr_matcher_copy_mask(struct mlx5dr_match_param *dst_mask,
+				 struct mlx5dr_match_param *src_mask,
+				 u8 match_criteria)
+{
+	if (match_criteria & DR_MATCHER_CRITERIA_OUTER)
+		dst_mask->outer = src_mask->outer;
+
+	if (match_criteria & DR_MATCHER_CRITERIA_MISC)
+		dst_mask->misc = src_mask->misc;
+
+	if (match_criteria & DR_MATCHER_CRITERIA_INNER)
+		dst_mask->inner = src_mask->inner;
+
+	if (match_criteria & DR_MATCHER_CRITERIA_MISC2)
+		dst_mask->misc2 = src_mask->misc2;
+
+	if (match_criteria & DR_MATCHER_CRITERIA_MISC3)
+		dst_mask->misc3 = src_mask->misc3;
+
+	if (match_criteria & DR_MATCHER_CRITERIA_MISC4)
+		dst_mask->misc4 = src_mask->misc4;
+}
+
+static void dr_matcher_destroy_definer_objs(struct mlx5dr_domain *dmn,
+					    struct mlx5dr_ste_build *sb,
+					    u8 idx)
+{
+	int i;
+
+	for (i = 0; i < idx; i++) {
+		mlx5dr_cmd_destroy_definer(dmn->mdev, sb[i].definer_id);
+		memset(&sb[i], 0, sizeof(sb[i]));
+	}
+}
+
+static int dr_matcher_create_definer_objs(struct mlx5dr_domain *dmn,
+					  struct mlx5dr_ste_build *sb,
+					  u8 idx)
+{
+	u32 definer_id;
+	int i, ret;
+
+	for (i = 0; i < idx; i++) {
+		ret = mlx5dr_cmd_create_definer(dmn->mdev,
+						sb[i].format_id,
+						sb[i].match,
+						&definer_id);
+		if (ret)
+			goto cleanup;
+
+		/* The lu_type combines the definer and the entry type */
+		sb[i].lu_type |= definer_id;
+		sb[i].htbl_type = DR_STE_HTBL_TYPE_MATCH;
+		sb[i].definer_id = definer_id;
+	}
+
+	return 0;
+
+cleanup:
+	dr_matcher_destroy_definer_objs(dmn, sb, i);
+	return ret;
+}
+
+static void dr_matcher_clear_definers_builders(struct mlx5dr_ste_build *sb, u8 idx)
+{
+	u8 i;
+
+	for (i = 0; i < idx; i++)
+		memset(&sb[i], 0, sizeof(*sb));
+}
+
+static void dr_matcher_adjust_definer_ipv(struct mlx5dr_match_param *mask, u8 ipv)
+{
+	if (mask->outer.ip_version == 0xf)
+		mask->outer.ip_version = ipv;
+	if (mask->inner.ip_version == 0xf)
+		mask->inner.ip_version = ipv;
+}
+
+static int dr_matcher_set_definer_builders(struct mlx5dr_matcher *matcher,
+					   struct mlx5dr_matcher_rx_tx *nic_matcher,
+					   struct mlx5dr_ste_build *sb,
+					   u8 *idx)
+{
+	struct mlx5dr_domain_rx_tx *nic_dmn = nic_matcher->nic_tbl->nic_dmn;
+	bool rx = nic_dmn->type == DR_DOMAIN_NIC_TYPE_RX;
+	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
+	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
+	struct mlx5dr_ste_ctx *ste_ctx = dmn->ste_ctx;
+	struct mlx5dr_match_param mask = {};
+	bool src_ipv6, dst_ipv6;
+	u8 inner_ipv, outer_ipv;
+	int ret;
+
+	*idx = 0;
+	outer_ipv = matcher->mask.outer.ip_version;
+	inner_ipv = matcher->mask.inner.ip_version;
+
+	src_ipv6 = dr_mask_is_src_addr_set(&matcher->mask.outer);
+	dst_ipv6 = dr_mask_is_dst_addr_set(&matcher->mask.outer);
+
+	if (caps->definer_format_sup & (1 << DR_MATCHER_DEFINER_0)) {
+		dr_matcher_copy_mask(&mask, &matcher->mask, matcher->match_criteria);
+		dr_matcher_adjust_definer_ipv(&mask, 4);
+		ret = mlx5dr_ste_build_def0(ste_ctx, &sb[(*idx)++], &mask, caps, false, rx);
+		if (!ret && dr_matcher_is_mask_consumed(&mask))
+			goto done;
+
+		memset(sb, 0, sizeof(*sb));
+		*idx = 0;
+	}
+
+	if (caps->definer_format_sup & (1 << DR_MATCHER_DEFINER_22)) {
+		dr_matcher_copy_mask(&mask, &matcher->mask, matcher->match_criteria);
+		dr_matcher_adjust_definer_ipv(&mask, 4);
+		ret = mlx5dr_ste_build_def22(ste_ctx, &sb[(*idx)++], &mask, false, rx);
+		if (!ret && dr_matcher_is_mask_consumed(&mask))
+			goto done;
+
+		memset(sb, 0, sizeof(*sb));
+		*idx = 0;
+	}
+
+	if (caps->definer_format_sup & (1 << DR_MATCHER_DEFINER_24)) {
+		dr_matcher_copy_mask(&mask, &matcher->mask, matcher->match_criteria);
+		dr_matcher_adjust_definer_ipv(&mask, 4);
+		ret = mlx5dr_ste_build_def24(ste_ctx, &sb[(*idx)++], &mask, false, rx);
+		if (!ret && dr_matcher_is_mask_consumed(&mask))
+			goto done;
+
+		memset(sb, 0, sizeof(*sb));
+		*idx = 0;
+	}
+
+	if (caps->definer_format_sup & (1 << DR_MATCHER_DEFINER_25)) {
+		dr_matcher_copy_mask(&mask, &matcher->mask, matcher->match_criteria);
+		dr_matcher_adjust_definer_ipv(&mask, 4);
+		ret = mlx5dr_ste_build_def25(ste_ctx, &sb[(*idx)++], &mask, false, rx);
+		if (!ret && dr_matcher_is_mask_consumed(&mask))
+			goto done;
+
+		memset(sb, 0, sizeof(*sb));
+		*idx = 0;
+	}
+
+	if (src_ipv6 &&
+	    (caps->definer_format_sup & (1 << DR_MATCHER_DEFINER_6)) &&
+	    (caps->definer_format_sup & (1 << DR_MATCHER_DEFINER_26))) {
+		dr_matcher_copy_mask(&mask, &matcher->mask, matcher->match_criteria);
+		dr_matcher_adjust_definer_ipv(&mask, 6);
+		ret = mlx5dr_ste_build_def26(ste_ctx, &sb[(*idx)++],
+					     &mask, false, rx);
+		if (!ret && dst_ipv6)
+			ret = mlx5dr_ste_build_def6(ste_ctx, &sb[(*idx)++],
+						    &mask, false, rx);
+
+		if (!ret && dr_matcher_is_mask_consumed(&mask))
+			goto done;
+
+		memset(&sb[0], 0, sizeof(*sb));
+		memset(&sb[1], 0, sizeof(*sb));
+		*idx = 0;
+	}
+
+	return -EOPNOTSUPP;
+
+done:
+	return 0;
+}
+
+static int dr_matcher_set_large_ste_builders(struct mlx5dr_matcher *matcher,
+					     struct mlx5dr_matcher_rx_tx *nic_matcher,
+					     u8 outer_ipv,
+					     u8 inner_ipv)
+{
+	struct mlx5dr_ste_build *sb = nic_matcher->ste_builder_arr[outer_ipv][inner_ipv];
+	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
+	int ret;
+	u8 idx;
+
+	/* Disabling match definers */
+	return -EOPNOTSUPP;
+
+	if (dmn->info.caps.sw_format_ver != MLX5_HW_CONNECTX_6DX ||
+	    !dmn->info.caps.definer_format_sup)
+		return -EOPNOTSUPP;
+
+	ret = dr_matcher_set_definer_builders(matcher, nic_matcher, sb, &idx);
+	if (ret)
+		return ret;
+
+	ret = dr_matcher_create_definer_objs(dmn, sb, idx);
+	if (ret)
+		goto clear_definers_builders;
+
+	nic_matcher->num_of_builders_arr[outer_ipv][inner_ipv] = idx;
+	nic_matcher->num_of_builders = idx;
+	nic_matcher->ste_builder = sb;
+
+	return 0;
+
+clear_definers_builders:
+	dr_matcher_clear_definers_builders(sb, idx);
+	return ret;
+}
+
+static void dr_matcher_clear_ste_builders(struct mlx5dr_matcher *matcher,
+					  struct mlx5dr_matcher_rx_tx *nic_matcher)
+{
+	struct mlx5dr_ste_build *sb;
+	u8 num_of_builders;
+	u32 i, j;
+
+	for (i = 0; i < DR_RULE_IPV_MAX; i++) {
+		for (j = 0; j < DR_RULE_IPV_MAX; j++) {
+			sb = nic_matcher->ste_builder_arr[i][j];
+			num_of_builders = nic_matcher->num_of_builders_arr[i][j];
+			if (sb->htbl_type == DR_STE_HTBL_TYPE_MATCH)
+				dr_matcher_destroy_definer_objs(matcher->tbl->dmn,
+								sb,
+								num_of_builders);
+		}
+	}
+}
+
 int mlx5dr_matcher_select_builders(struct mlx5dr_matcher *matcher,
 				   struct mlx5dr_matcher_rx_tx *nic_matcher,
 				   enum mlx5dr_ipv outer_ipv,
@@ -296,37 +541,37 @@ static int dr_matcher_set_ste_builders(struct mlx5dr_matcher *matcher,
 	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
 	struct mlx5dr_ste_ctx *ste_ctx = dmn->ste_ctx;
 	struct mlx5dr_match_param mask = {};
+	bool allow_empty_match = false;
 	struct mlx5dr_ste_build *sb;
 	bool inner, rx;
 	int idx = 0;
-	int ret, i;
+	int ret;
 
 	sb = nic_matcher->ste_builder_arr[outer_ipv][inner_ipv];
-	rx = nic_dmn->ste_type == MLX5DR_STE_TYPE_RX;
-
-	/* Create a temporary mask to track and clear used mask fields */
-	if (matcher->match_criteria & DR_MATCHER_CRITERIA_OUTER)
-		mask.outer = matcher->mask.outer;
-
-	if (matcher->match_criteria & DR_MATCHER_CRITERIA_MISC)
-		mask.misc = matcher->mask.misc;
-
-	if (matcher->match_criteria & DR_MATCHER_CRITERIA_INNER)
-		mask.inner = matcher->mask.inner;
-
-	if (matcher->match_criteria & DR_MATCHER_CRITERIA_MISC2)
-		mask.misc2 = matcher->mask.misc2;
-
-	if (matcher->match_criteria & DR_MATCHER_CRITERIA_MISC3)
-		mask.misc3 = matcher->mask.misc3;
-
-	if (matcher->match_criteria & DR_MATCHER_CRITERIA_MISC4)
-		mask.misc4 = matcher->mask.misc4;
+	rx = nic_dmn->type == DR_DOMAIN_NIC_TYPE_RX;
 
 	ret = mlx5dr_ste_build_pre_check(dmn, matcher->match_criteria,
 					 &matcher->mask, NULL);
 	if (ret)
 		return ret;
+
+	/* Use a large definers for matching if possible */
+	ret = dr_matcher_set_large_ste_builders(matcher, nic_matcher, outer_ipv, inner_ipv);
+	if (!ret)
+		return 0;
+
+	/* Create a temporary mask to track and clear used mask fields */
+	dr_matcher_copy_mask(&mask, &matcher->mask, matcher->match_criteria);
+
+	/* Optimize RX pipe by reducing source port match, since
+	 * the FDB RX part is connected only to the wire.
+	 */
+	if (dmn->type == MLX5DR_DOMAIN_TYPE_FDB &&
+	    rx && mask.misc.source_port) {
+		mask.misc.source_port = 0;
+		mask.misc.source_eswitch_owner_vhca_id = 0;
+		allow_empty_match = true;
+	}
 
 	/* Outer */
 	if (matcher->match_criteria & (DR_MATCHER_CRITERIA_OUTER |
@@ -507,7 +752,8 @@ static int dr_matcher_set_ste_builders(struct mlx5dr_matcher *matcher,
 	}
 
 	/* Empty matcher, takes all */
-	if (matcher->match_criteria == DR_MATCHER_CRITERIA_EMPTY)
+	if ((!idx && allow_empty_match) ||
+	    matcher->match_criteria == DR_MATCHER_CRITERIA_EMPTY)
 		mlx5dr_ste_build_empty_always_hit(&sb[idx++], rx);
 
 	if (idx == 0) {
@@ -516,11 +762,9 @@ static int dr_matcher_set_ste_builders(struct mlx5dr_matcher *matcher,
 	}
 
 	/* Check that all mask fields were consumed */
-	for (i = 0; i < sizeof(struct mlx5dr_match_param); i++) {
-		if (((u8 *)&mask)[i] != 0) {
-			mlx5dr_dbg(dmn, "Mask contains unsupported parameters\n");
-			return -EOPNOTSUPP;
-		}
+	if (!dr_matcher_is_mask_consumed(&mask)) {
+		mlx5dr_dbg(dmn, "Mask contains unsupported parameters\n");
+		return -EOPNOTSUPP;
 	}
 
 	nic_matcher->ste_builder = sb;
@@ -646,16 +890,18 @@ static int dr_matcher_add_to_tbl(struct mlx5dr_matcher *matcher)
 	return 0;
 }
 
-static void dr_matcher_uninit_nic(struct mlx5dr_matcher_rx_tx *nic_matcher)
+static void dr_matcher_uninit_nic(struct mlx5dr_matcher *matcher,
+				  struct mlx5dr_matcher_rx_tx *nic_matcher)
 {
+	dr_matcher_clear_ste_builders(matcher, nic_matcher);
 	mlx5dr_htbl_put(nic_matcher->s_htbl);
 	mlx5dr_htbl_put(nic_matcher->e_anchor);
 }
 
 static void dr_matcher_uninit_fdb(struct mlx5dr_matcher *matcher)
 {
-	dr_matcher_uninit_nic(&matcher->rx);
-	dr_matcher_uninit_nic(&matcher->tx);
+	dr_matcher_uninit_nic(matcher, &matcher->rx);
+	dr_matcher_uninit_nic(matcher, &matcher->tx);
 }
 
 static void dr_matcher_uninit(struct mlx5dr_matcher *matcher)
@@ -664,10 +910,10 @@ static void dr_matcher_uninit(struct mlx5dr_matcher *matcher)
 
 	switch (dmn->type) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
-		dr_matcher_uninit_nic(&matcher->rx);
+		dr_matcher_uninit_nic(matcher, &matcher->rx);
 		break;
 	case MLX5DR_DOMAIN_TYPE_NIC_TX:
-		dr_matcher_uninit_nic(&matcher->tx);
+		dr_matcher_uninit_nic(matcher, &matcher->tx);
 		break;
 	case MLX5DR_DOMAIN_TYPE_FDB:
 		dr_matcher_uninit_fdb(matcher);
@@ -678,15 +924,77 @@ static void dr_matcher_uninit(struct mlx5dr_matcher *matcher)
 	}
 }
 
+static int dr_matcher_get_mask_ip_versions(struct mlx5dr_matcher *matcher,
+					   bool *outer_ipv4, bool *outer_ipv6,
+					   bool *inner_ipv4, bool *inner_ipv6)
+{
+	bool outer_ipv6_mask_present = false;
+	bool inner_ipv6_mask_present = false;
+	u8 outer_ipv = 0, inner_ipv = 0;
+
+	if (matcher->match_criteria & DR_MATCHER_CRITERIA_OUTER) {
+		outer_ipv = matcher->mask.outer.ip_version;
+		outer_ipv6_mask_present =
+			dr_mask_is_ipv6_only_match_set(&matcher->mask.outer);
+	}
+	if (matcher->match_criteria & DR_MATCHER_CRITERIA_INNER) {
+		inner_ipv = matcher->mask.inner.ip_version;
+		inner_ipv6_mask_present =
+			dr_mask_is_ipv6_only_match_set(&matcher->mask.inner);
+	}
+
+	if ((outer_ipv == 4 && outer_ipv6_mask_present) ||
+	    (inner_ipv == 4 && inner_ipv6_mask_present))
+		return -EINVAL;
+
+	if (outer_ipv == 0xf) {
+		*outer_ipv4 = true;
+		*outer_ipv6 = true;
+	} else if (outer_ipv == 6 || outer_ipv6_mask_present) {
+		*outer_ipv4 = false;
+		*outer_ipv6 = true;
+	} else {
+		*outer_ipv4 = true;
+		*outer_ipv6 = false;
+	}
+
+	if (inner_ipv == 0xf) {
+		*inner_ipv4 = true;
+		*inner_ipv6 = true;
+	} else if (inner_ipv == 6 || inner_ipv6_mask_present) {
+		*inner_ipv4 = false;
+		*inner_ipv6 = true;
+	} else {
+		*inner_ipv4 = true;
+		*inner_ipv6 = false;
+	}
+
+	return 0;
+}
+
 static int dr_matcher_set_all_ste_builders(struct mlx5dr_matcher *matcher,
 					   struct mlx5dr_matcher_rx_tx *nic_matcher)
 {
+	bool outer_ipv6, outer_ipv4, inner_ipv6, inner_ipv4;
 	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
+	int ret;
 
-	dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV4, DR_RULE_IPV4);
-	dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV4, DR_RULE_IPV6);
-	dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV6, DR_RULE_IPV4);
-	dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV6, DR_RULE_IPV6);
+	ret = dr_matcher_get_mask_ip_versions(matcher,
+					      &outer_ipv4, &outer_ipv6,
+					      &inner_ipv4, &inner_ipv6);
+	if (ret) {
+		mlx5dr_err(dmn, "Cannot generate IPv4/6 rules with given IP ver/addr mask\n");
+		return ret;
+	}
+
+	if (outer_ipv4 && inner_ipv4)
+		dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV4, DR_RULE_IPV4);
+	if (outer_ipv4 && inner_ipv6)
+		dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV4, DR_RULE_IPV6);
+	if (outer_ipv6 && inner_ipv4)
+		dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV6, DR_RULE_IPV4);
+	if (outer_ipv6 && inner_ipv6)
+		dr_matcher_set_ste_builders(matcher, nic_matcher, DR_RULE_IPV6, DR_RULE_IPV6);
 
 	if (!nic_matcher->ste_builder) {
 		mlx5dr_err(dmn, "Cannot generate IPv4 or IPv6 rules with given mask\n");
@@ -708,15 +1016,19 @@ static int dr_matcher_init_nic(struct mlx5dr_matcher *matcher,
 
 	nic_matcher->e_anchor = mlx5dr_ste_htbl_alloc(dmn->ste_icm_pool,
 						      DR_CHUNK_SIZE_1,
+						      DR_STE_HTBL_TYPE_LEGACY,
 						      MLX5DR_STE_LU_TYPE_DONT_CARE,
 						      0);
-	if (!nic_matcher->e_anchor)
-		return -ENOMEM;
+	if (!nic_matcher->e_anchor) {
+		ret = -ENOMEM;
+		goto clear_ste_builders;
+	}
 
 	nic_matcher->s_htbl = mlx5dr_ste_htbl_alloc(dmn->ste_icm_pool,
 						    DR_CHUNK_SIZE_1,
-						    nic_matcher->ste_builder[0].lu_type,
-						    nic_matcher->ste_builder[0].byte_mask);
+						    nic_matcher->ste_builder->htbl_type,
+						    nic_matcher->ste_builder->lu_type,
+						    nic_matcher->ste_builder->byte_mask);
 	if (!nic_matcher->s_htbl) {
 		ret = -ENOMEM;
 		goto free_e_htbl;
@@ -730,6 +1042,8 @@ static int dr_matcher_init_nic(struct mlx5dr_matcher *matcher,
 
 free_e_htbl:
 	mlx5dr_ste_htbl_free(nic_matcher->e_anchor);
+clear_ste_builders:
+	dr_matcher_clear_ste_builders(matcher, nic_matcher);
 	return ret;
 }
 
@@ -748,7 +1062,7 @@ static int dr_matcher_init_fdb(struct mlx5dr_matcher *matcher)
 	return 0;
 
 uninit_nic_rx:
-	dr_matcher_uninit_nic(&matcher->rx);
+	dr_matcher_uninit_nic(matcher, &matcher->rx);
 	return ret;
 }
 

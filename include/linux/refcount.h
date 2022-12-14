@@ -1,5 +1,5 @@
-#ifndef _MLNX_LINUX_REFCOUNT_H
-#define _MLNX_LINUX_REFCOUNT_H
+#ifndef _COMPAT_LINUX_REFCOUNT_H
+#define _COMPAT_LINUX_REFCOUNT_H
 
 #include "../../compat/config.h"
 
@@ -45,5 +45,4 @@ refcount_dec_and_lock(refcount_t *r, spinlock_t *lock)
 
 #endif /* HAVE_REFCOUNT */
 
-
-#endif /* _MLNX_LINUX_REFCOUNT_H */
+#endif /* _COMPAT_LINUX_REFCOUNT_H */

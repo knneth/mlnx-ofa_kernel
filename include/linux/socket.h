@@ -1,6 +1,8 @@
 #ifndef _COMPAT_LINUX_SOCKET_H
 #define _COMPAT_LINUX_SOCKET_H 1
 
+#include "../../compat/config.h"
+
 #include_next <linux/socket.h>
 
 #ifndef for_each_cmsghdr

@@ -18,7 +18,7 @@ Change-Id: I694c0a609e5e779453815bdbecb68203a9e2e0c6
  
  static const char * const ibcm_rej_reason_strs[] = {
  	[IB_CM_REJ_NO_QP]			= "no QP",
-@@ -4293,7 +4296,11 @@ static ssize_t cm_show_counter(struct ko
+@@ -4294,7 +4297,11 @@ static ssize_t cm_show_counter(struct ko
  		       atomic_long_read(&group->counter[cm_attr->index]));
  }
  

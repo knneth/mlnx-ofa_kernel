@@ -61,7 +61,7 @@ struct fw_page {
 	u32			function;
 	unsigned long		bitmask;
 	struct list_head	list;
-	unsigned		free_count;
+	unsigned int free_count;
 };
 
 enum {
@@ -77,6 +77,16 @@ enum {
 static u32 get_function(u16 func_id, bool ec_function)
 {
 	return (u32)func_id | (ec_function << 16);
+}
+
+static u32 get_ec_function(u32 function)
+{
+	return function >> 16;
+}
+
+static u32 get_func_id(u32 function)
+{
+	return function & 0xffff;
 }
 
 static struct rb_root *page_root_per_function(struct mlx5_core_dev *dev, u32 function)
@@ -244,7 +254,7 @@ static void free_fwp(struct mlx5_core_dev *dev, struct fw_page *fwp,
 	rb_erase(&fwp->rb_node, root);
 	if (in_free_list)
 		list_del(&fwp->list);
-	dma_unmap_page(dev->device, fwp->addr & MLX5_U64_4K_PAGE_MASK,
+	dma_unmap_page(mlx5_core_dma_dev(dev), fwp->addr & MLX5_U64_4K_PAGE_MASK,
 		       PAGE_SIZE, DMA_BIDIRECTIONAL);
 	__free_page(fwp->page);
 	kfree(fwp);
@@ -278,7 +288,7 @@ static int free_4k(struct mlx5_core_dev *dev, u64 addr, u32 function)
 
 static int alloc_system_page(struct mlx5_core_dev *dev, u32 function)
 {
-	struct device *device = dev->device;
+	struct device *device = mlx5_core_dma_dev(dev);
 	int nid = dev_to_node(device);
 	struct page *page;
 	u64 zero_addr = 1;
@@ -660,7 +670,7 @@ static int optimal_reclaimed_pages(void)
 }
 
 static int mlx5_reclaim_root_pages(struct mlx5_core_dev *dev,
-				   struct rb_root *root, u16 func_id)
+				   struct rb_root *root, u32 function)
 {
 	unsigned long end = jiffies + msecs_to_jiffies(MAX_RECLAIM_TIME_MSECS);
 
@@ -668,11 +678,11 @@ static int mlx5_reclaim_root_pages(struct mlx5_core_dev *dev,
 		int nclaimed;
 		int err;
 
-		err = reclaim_pages(dev, func_id, optimal_reclaimed_pages(),
-				    &nclaimed, mlx5_core_is_ecpf(dev));
+		err = reclaim_pages(dev, get_func_id(function), optimal_reclaimed_pages(),
+				    &nclaimed, get_ec_function(function));
 		if (err) {
 			mlx5_core_warn(dev, "failed reclaiming pages (%d) for func id 0x%x\n",
-				       err, func_id);
+				       err, get_func_id(function));
 			return err;
 		}
 

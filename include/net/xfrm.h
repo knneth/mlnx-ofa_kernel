@@ -1,6 +1,8 @@
 #ifndef _COMPAT_NET_XFRM_H
 #define _COMPAT_NET_XFRM_H 1
 
+#include "../../compat/config.h"
+
 #include_next <net/xfrm.h>
 
 #ifndef XFRM_ESP_NO_TRAILER

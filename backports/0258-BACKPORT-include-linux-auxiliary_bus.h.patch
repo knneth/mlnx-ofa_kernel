@@ -1,0 +1,42 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
+
+Change-Id: I8ef676e1e27efd1e0ace26ffa6d4930f1e067a63
+---
+ include/linux/auxiliary_bus.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/include/linux/auxiliary_bus.h
++++ b/include/linux/auxiliary_bus.h
+@@ -8,6 +8,8 @@
+ #ifndef _AUXILIARY_BUS_H_
+ #define _AUXILIARY_BUS_H_
+ 
++#include "../../compat/config.h"
++
+ #include <linux/device.h>
+ #include <linux/mod_devicetable.h>
+ 
+@@ -70,8 +72,22 @@ void auxiliary_driver_unregister(struct
+ #define module_auxiliary_driver(__auxiliary_driver) \
+ 	module_driver(__auxiliary_driver, auxiliary_driver_register, auxiliary_driver_unregister)
+ 
++#ifdef HAVE_LINUX_DEVICE_BUS_H
+ struct auxiliary_device *auxiliary_find_device(struct device *start,
+ 					       const void *data,
+ 					       int (*match)(struct device *dev, const void *data));
++#else
++#ifdef HAVE_BUS_FIND_DEVICE_GET_CONST
++struct auxiliary_device *
++auxiliary_find_device(struct device *start, 
++		      const void *data,
++		      int (*match)(struct device *dev, const void *data));
++#else
++struct auxiliary_device *
++auxiliary_find_device(struct device *start, 
++		      void *data,
++		      int (*match)(struct device *dev, void *data));
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST */
++#endif /* HAVE_LINUX_DEVICE_BUS_H */
+ 
+ #endif /* _AUXILIARY_BUS_H_ */

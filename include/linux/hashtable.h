@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_HASHTABLE_H
-#define COMPAT_LINUX_HASHTABLE_H
+#ifndef _COMPAT_LINUX_HASHTABLE_H
+#define _COMPAT_LINUX_HASHTABLE_H
 
 #include "../../compat/config.h"
 
@@ -121,4 +121,4 @@ static inline bool hash_hashed(struct hlist_node *node)
 
 #endif /* hash_init */
 
-#endif /* COMPAT_LINUX_HASHTABLE_H */
+#endif /* _COMPAT_LINUX_HASHTABLE_H */

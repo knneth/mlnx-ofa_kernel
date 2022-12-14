@@ -243,7 +243,6 @@ void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,
 	struct mlx5_flow_handle *rule;
 	struct mlx5_flow_spec *spec;
 	struct mlx5e_tc_flow *flow;
-	struct encap_id_entry *ei;
 	struct mlx5_flow_attr *attr;
 	struct mlx5_esw_flow_attr *esw_attr;
 	int err;
@@ -275,19 +274,7 @@ void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,
 
 	/* we know that the encap is valid */
 	e->flags &= ~MLX5_ENCAP_ENTRY_VALID;
-	/* dealloc encap_id in mlx5e_encap_put() when refcnt is 0
-	 * since some flows may still use it now. Otherwise, firmware
-	 * may complain and won't reuse this encap_id anymore.
-	 */
-	ei = kzalloc(sizeof(*ei), GFP_KERNEL);
-	if (!ei) {
-		mlx5_core_warn(priv->mdev, "Failed to alloc encap_id_entry: "
-			      "%d", e->pkt_reformat->id);
-		mlx5_packet_reformat_dealloc(priv->mdev, e->pkt_reformat);
-	} else {
-		ei->pkt_reformat = e->pkt_reformat;
-		list_add(&ei->list, &e->encap_id_list);
-	}
+	mlx5_packet_reformat_dealloc(priv->mdev, e->pkt_reformat);
 }
 
 static void mlx5e_take_tmp_flow(struct mlx5e_tc_flow *flow,
@@ -458,8 +445,6 @@ void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe)
 
 static void mlx5e_encap_dealloc(struct mlx5e_priv *priv, struct mlx5e_encap_entry *e)
 {
-	struct encap_id_entry *ei, *tmp;
-
 	WARN_ON(!list_empty(&e->flows));
 
 	if (e->compl_result > 0) {
@@ -467,11 +452,6 @@ static void mlx5e_encap_dealloc(struct mlx5e_priv *priv, struct mlx5e_encap_entr
 
 		if (e->flags & MLX5_ENCAP_ENTRY_VALID)
 			mlx5_packet_reformat_dealloc(priv->mdev, e->pkt_reformat);
-
-		list_for_each_entry_safe(ei, tmp, &e->encap_id_list, list) {
-			mlx5_packet_reformat_dealloc(priv->mdev, ei->pkt_reformat);
-			kfree(ei);
-		}
 	}
 
 	kfree(e->tun_info);
@@ -761,7 +741,6 @@ int mlx5e_attach_encap(struct mlx5e_priv *priv,
 		goto out_err_init;
 
 	INIT_LIST_HEAD(&e->flows);
-	INIT_LIST_HEAD(&e->encap_id_list);
 	hash_add_rcu(esw->offloads.encap_tbl, &e->encap_hlist, hash_key);
 	tbl_time_before = mlx5e_route_tbl_get_last_update(priv);
 	mutex_unlock(&esw->offloads.encap_tbl_lock);
@@ -788,8 +767,12 @@ attach_flow:
 
 	err = mlx5e_set_int_port_tunnel(priv, attr, e->out_dev,
 					e->route_dev_ifindex, out_index);
-	if (err)
+	if (err == -EOPNOTSUPP) {
+		mlx5_core_dbg(priv->mdev, "int port offload not supported, using uplink device for encap route\n");
+		err = 0;
+	} else if (err) {
 		goto out_err;
+	}
 
 	flow->encaps[out_index].e = e;
 	list_add(&flow->encaps[out_index].list, &e->flows);
@@ -1518,7 +1501,7 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_priv *priv,
 
 	fen_info = container_of(info, struct fib_entry_notifier_info, info);
 	fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
-	if (fib_dev->netdev_ops != &mlx5e_netdev_ops ||
+	if (!fib_dev || fib_dev->netdev_ops != &mlx5e_netdev_ops ||
 	    fen_info->dst_len != 32)
 		return NULL;
 

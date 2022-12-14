@@ -31,6 +31,8 @@ enum {
 	HDR_MPLS_OFFSET_TTL	= 0,
 };
 
+#define DR_STE_SET_BOOL(typ, p, fld, v) MLX5_SET(ste_##typ, p, fld, !!(v))
+
 /* Set to STE a specific value using DR_STE_SET */
 #define DR_STE_SET_VAL(lookup_type, tag, t_fname, spec, s_fname, value) do { \
 	if ((spec)->s_fname) { \
@@ -142,10 +144,16 @@ struct mlx5dr_ste_ctx {
 	mlx5dr_ste_builder_void_init build_src_gvmi_qpn_init;
 	mlx5dr_ste_builder_void_init build_flex_parser_0_init;
 	mlx5dr_ste_builder_void_init build_flex_parser_1_init;
+	mlx5dr_ste_builder_void_init build_def0_init;
+	mlx5dr_ste_builder_void_init build_def6_init;
+	mlx5dr_ste_builder_void_init build_def22_init;
+	mlx5dr_ste_builder_void_init build_def24_init;
+	mlx5dr_ste_builder_void_init build_def25_init;
+	mlx5dr_ste_builder_void_init build_def26_init;
 
 	/* Getters and Setters */
 	void (*ste_init)(u8 *hw_ste_p, u16 lu_type,
-			 u8 entry_type, u16 gvmi);
+			 bool is_rx, u16 gvmi);
 	void (*set_next_lu_type)(u8 *hw_ste_p, u16 lu_type);
 	u16 (*get_next_lu_type)(u8 *hw_ste_p);
 	void (*set_miss_addr)(u8 *hw_ste_p, u64 miss_addr);
@@ -153,6 +161,10 @@ struct mlx5dr_ste_ctx {
 	void (*set_hit_addr)(u8 *hw_ste_p, u64 icm_addr, u32 ht_size);
 	void (*set_byte_mask)(u8 *hw_ste_p, u16 byte_mask);
 	u16 (*get_byte_mask)(u8 *hw_ste_p);
+	void (*set_ctrl_always_hit_htbl)(u8 *hw_ste, u16 byte_mask,
+					 u16 lu_type, u64 icm_addr,
+					 u32 num_of_entries, u16 gvmi);
+	void (*set_ctrl_always_miss)(u8 *hw_ste, u64 miss_addr, u16 gvmi);
 
 	/* Actions */
 	u32 actions_caps;

@@ -14,7 +14,7 @@ mlx5_ib_set_vport_rep(struct mlx5_core_dev *dev,
 {
 	struct mlx5_ib_dev *ibdev;
 
-	ibdev = mlx5_ib_get_uplink_ibdev(dev->priv.eswitch);
+	ibdev = mlx5_eswitch_uplink_get_proto_dev(dev->priv.eswitch, REP_IB);
 	if (!ibdev)
 		return -EINVAL;
 
@@ -38,6 +38,7 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	struct mlx5_core_dev *peer_dev;
 	struct mlx5_ib_dev *ibdev;
 	int vport_index;
+	int ret;
 
 	vport_index = rep->vport_index;
 
@@ -65,8 +66,8 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	ibdev->port = kcalloc(num_ports, sizeof(*ibdev->port),
 			      GFP_KERNEL);
 	if (!ibdev->port) {
-		ib_dealloc_device(&ibdev->ib_dev);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto fail_port;
 	}
 
 	ibdev->is_rep = true;
@@ -76,8 +77,9 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	ibdev->mdev = dev;
 	ibdev->num_ports = num_ports;
 
-	if (!__mlx5_ib_add(ibdev, profile))
-		return -EINVAL;
+	ret = __mlx5_ib_add(ibdev, profile);
+	if (ret)
+		goto fail_add;
 
 	rep->rep_data[REP_IB].priv = ibdev;
 	/* Only master can reach this point */
@@ -85,6 +87,16 @@ mlx5_ib_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 		mlx5_ib_register_peer_vport_reps(dev);
 
 	return 0;
+fail_add:
+	kfree(ibdev->port);
+fail_port:
+	ib_dealloc_device(&ibdev->ib_dev);
+	return ret;
+}
+
+static void *mlx5_ib_rep_to_dev(struct mlx5_eswitch_rep *rep)
+{
+	return rep->rep_data[REP_IB].priv;
 }
 
 static void
@@ -117,24 +129,20 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
 		struct mlx5_core_dev *peer_mdev;
-
+		struct mlx5_eswitch *esw;
 		if (mlx5_lag_is_shared_fdb(mdev)) {
 			peer_mdev = mlx5_lag_get_peer_mdev(mdev);
-			mlx5_ib_unregister_vport_reps(peer_mdev);
+			esw = peer_mdev->priv.eswitch;
+			mlx5_eswitch_unregister_vport_reps(esw, REP_IB);
 		}
 		__mlx5_ib_remove(dev, dev->profile, MLX5_IB_STAGE_MAX);
 	}
 }
 
-static void *mlx5_ib_vport_get_proto_dev(struct mlx5_eswitch_rep *rep)
-{
-	return mlx5_ib_rep_to_dev(rep);
-}
-
 static const struct mlx5_eswitch_rep_ops rep_ops = {
 	.load = mlx5_ib_vport_rep_load,
 	.unload = mlx5_ib_vport_rep_unload,
-	.get_proto_dev = mlx5_ib_vport_get_proto_dev,
+	.get_proto_dev = mlx5_ib_rep_to_dev,
 };
 
 static void mlx5_ib_register_peer_vport_reps(struct mlx5_core_dev *mdev)
@@ -149,54 +157,10 @@ static void mlx5_ib_register_peer_vport_reps(struct mlx5_core_dev *mdev)
 	mlx5_eswitch_register_vport_reps(esw, &rep_ops, REP_IB);
 }
 
-void mlx5_ib_register_vport_reps(struct mlx5_core_dev *mdev)
-{
-	struct mlx5_eswitch *esw = mdev->priv.eswitch;
-
-	mlx5_eswitch_register_vport_reps(esw, &rep_ops, REP_IB);
-}
-
-void mlx5_ib_unregister_vport_reps(struct mlx5_core_dev *mdev)
-{
-	struct mlx5_eswitch *esw = mdev->priv.eswitch;
-
-	if (mlx5_lag_is_shared_fdb(mdev)) {
-		struct mlx5_core_dev *peer_dev;
-
-		peer_dev = mlx5_lag_get_peer_mdev(mdev);
-		mlx5_eswitch_unregister_vport_reps(peer_dev->priv.eswitch,
-						   REP_IB);
-	}
-
-	mlx5_eswitch_unregister_vport_reps(esw, REP_IB);
-}
-
-u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw)
-{
-	return mlx5_eswitch_mode(esw);
-}
-
-struct mlx5_ib_dev *mlx5_ib_get_rep_ibdev(struct mlx5_eswitch *esw,
-					  u16 vport_num)
-{
-	return mlx5_eswitch_get_proto_dev(esw, vport_num, REP_IB);
-}
-
 struct net_device *mlx5_ib_get_rep_netdev(struct mlx5_eswitch *esw,
 					  u16 vport_num)
 {
 	return mlx5_eswitch_get_proto_dev(esw, vport_num, REP_ETH);
-}
-
-struct mlx5_ib_dev *mlx5_ib_get_uplink_ibdev(struct mlx5_eswitch *esw)
-{
-	return mlx5_eswitch_uplink_get_proto_dev(esw, REP_IB);
-}
-
-struct mlx5_eswitch_rep *mlx5_ib_vport_rep(struct mlx5_eswitch *esw,
-					   u16 vport_num)
-{
-	return mlx5_eswitch_vport_rep(esw, vport_num);
 }
 
 u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw)
@@ -233,3 +197,50 @@ struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 	return mlx5_eswitch_add_send_to_vport_rule(esw, esw, rep,
 						   sq->base.mqp.qpn);
 }
+
+static int mlx5r_rep_probe(struct auxiliary_device *adev,
+			   const struct auxiliary_device_id *id)
+{
+	struct mlx5_adev *idev = container_of(adev, struct mlx5_adev, adev);
+	struct mlx5_core_dev *mdev = idev->mdev;
+	struct mlx5_eswitch *esw;
+
+	esw = mdev->priv.eswitch;
+	mlx5_eswitch_register_vport_reps(esw, &rep_ops, REP_IB);
+	return 0;
+}
+
+static void mlx5r_rep_remove(struct auxiliary_device *adev)
+{
+	struct mlx5_adev *idev = container_of(adev, struct mlx5_adev, adev);
+	struct mlx5_core_dev *mdev = idev->mdev;
+	struct mlx5_eswitch *esw;
+
+	esw = mdev->priv.eswitch;
+	mlx5_eswitch_unregister_vport_reps(esw, REP_IB);
+}
+
+static const struct auxiliary_device_id mlx5r_rep_id_table[] = {
+	{ .name = MLX5_ADEV_NAME ".rdma-rep", },
+	{},
+};
+
+MODULE_DEVICE_TABLE(auxiliary_mlx5r_rep_id_table, mlx5r_rep_id_table);
+
+static struct auxiliary_driver mlx5r_rep_driver = {
+	.name = "rep",
+	.probe = mlx5r_rep_probe,
+	.remove = mlx5r_rep_remove,
+	.id_table = mlx5r_rep_id_table,
+};
+
+int mlx5r_rep_init(void)
+{
+	return auxiliary_driver_register(&mlx5r_rep_driver);
+}
+
+void mlx5r_rep_cleanup(void)
+{
+	auxiliary_driver_unregister(&mlx5r_rep_driver);
+}
+

@@ -21,8 +21,6 @@ WITH_DKMS ?= 1
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
-PYTHON = $(shell for i in "" 3 2; do if [ -x /usr/bin/python$$i ]; then echo python$$i; break; fi; done)
-
 MLNX_EN_PATCH_PARAMS ?=
 ifneq ($(MLX5),1)
 	MLNX_EN_PATCH_PARAMS = "$(MLNX_EN_PATCH_PARAMS) --without-mlx5"
@@ -121,27 +119,13 @@ endif
 	dh_installdirs -p$(putils)  usr/sbin
 	dh_installdirs -p$(putils)  lib/systemd/system
 
-	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_configure_ct	debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_udev		debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/mlnx-bf.conf		debian/$(putils)/etc/modprobe.d
-	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/cma_roce_mode			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/cma_roce_tos			debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/*affinity*			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/net-interfaces            debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/show_counters		debian/$(putils)/usr/sbin
 	install -m 0644 source/debian/mlnx-en.upstart			debian/$(putils)/etc/init/mlnx-en.conf
 	install -m 0755 source/scripts/mlnx-en.d_deb						debian/$(putils)/etc/init.d/mlnx-en.d
 	install -m 0644 source/scripts/mlnx-en.conf					debian/$(putils)/etc/mlnx-en.conf
 	with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/deb_mlnx_en_service_install_helper $(CURDIR)/debian/$(putils)
 	install -m 0644 scripts/mlnx-en.d.service			debian/$(putils)/lib/systemd/system
-
-	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
 
 override_dh_installinit:
 

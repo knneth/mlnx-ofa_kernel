@@ -239,11 +239,24 @@ Change-Id: I5c521fa9fe9389563966517c719e1ab708afb33b
 +#endif
  }
  
-+#ifdef HAVE_XPO_READ_PAYLOAD
++#if defined(HAVE_XPO_READ_PAYLOAD) || defined(HAVE_XPO_RESULT_PAYLOAD)
  /**
   * svc_rdma_read_payload - special processing for a READ payload
   * @rqstp: svc_rqst to operate on
-@@ -1003,3 +1074,4 @@ int svc_rdma_read_payload(struct svc_rqs
+@@ -989,7 +1060,12 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+  * payload. svc_rdma_sendto will use that location later when
+  * we actually send the payload.
+  */
++#ifdef HAVE_XPO_READ_PAYLOAD
+ int svc_rdma_read_payload(struct svc_rqst *rqstp, unsigned int offset,
++#endif
++#ifdef HAVE_XPO_RESULT_PAYLOAD
++int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
++#endif
+ 			  unsigned int length)
+ {
+ 	struct svc_rdma_recv_ctxt *rctxt = rqstp->rq_xprt_ctxt;
+@@ -1003,3 +1079,4 @@ int svc_rdma_read_payload(struct svc_rqs
  
  	return 0;
  }

@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I459240cfad151b9ee88329c81d1122f5f8c622bc
 ---
- .../net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 15 ++++++++++++++-
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 15 ++++++++++++++-
  1 file changed, 14 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
@@ -33,9 +33,9 @@ Change-Id: I459240cfad151b9ee88329c81d1122f5f8c622bc
  	u16 fwd_vport_num;
  	int err;
  
-@@ -224,9 +228,12 @@ static void mlx5e_rep_changelowerstate_e
- 	fwd_vport_num = rpriv->rep->vport;
- 	lag_dev = netdev_master_upper_dev_get(netdev);
+@@ -226,9 +230,12 @@ static void mlx5e_rep_changelowerstate_e
+ 	if (!lag_dev)
+ 		return;
  
 +#ifdef HAVE_NET_LAG_PORT_DEV_TXABLE
  	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
@@ -46,7 +46,7 @@ Change-Id: I459240cfad151b9ee88329c81d1122f5f8c622bc
  	/* Point everyone's egress acl to the vport of the active representor */
  	netdev_for_each_lower_dev(lag_dev, dev, iter) {
  		priv = netdev_priv(dev);
-@@ -247,6 +254,7 @@ static void mlx5e_rep_changelowerstate_e
+@@ -249,6 +256,7 @@ static void mlx5e_rep_changelowerstate_e
  					    acl_vport_num, err);
  		}
  	}
@@ -54,7 +54,7 @@ Change-Id: I459240cfad151b9ee88329c81d1122f5f8c622bc
  
  	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
  	 * rx_rule with new destination as active vport's root_ft
-@@ -317,6 +325,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
+@@ -319,6 +327,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
  	if (!mlx5_esw_acl_egress_fwd2vport_supported(priv->mdev->priv.eswitch))
  		goto out;
  

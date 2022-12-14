@@ -17,9 +17,9 @@ Change-Id: I6174701fcb037ffc94b526c7a80cbf299ccfd613
  #ifdef CONFIG_MLX5_ESWITCH
 +#include "eswitch.h"
  #include "esw/vf_meter.h"
+ #include "esw/legacy.h"
  #endif
- 
-@@ -77,6 +77,7 @@ static ssize_t vf_attr_store(struct kobj
+@@ -78,6 +78,7 @@ static ssize_t vf_attr_store(struct kobj
  	return ga->store(g, ga, buf, size);
  }
  
@@ -27,7 +27,7 @@ Change-Id: I6174701fcb037ffc94b526c7a80cbf299ccfd613
  struct vf_group_attributes {
  	struct attribute attr;
  	ssize_t (*show)(struct mlx5_vgroup *, struct vf_group_attributes *,
-@@ -163,7 +164,7 @@ static ssize_t min_tx_rate_group_store(s
+@@ -164,7 +165,7 @@ static ssize_t min_tx_rate_group_store(s
  
  	return err ? err : count;
  }
@@ -36,7 +36,7 @@ Change-Id: I6174701fcb037ffc94b526c7a80cbf299ccfd613
  static ssize_t port_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
  			 char *buf)
  {
-@@ -1004,15 +1005,25 @@ static ssize_t num_vf_show(struct device
+@@ -1015,15 +1016,25 @@ static ssize_t num_vf_show(struct device
  
  static DEVICE_ATTR(mlx5_num_vfs, 0600, num_vf_show, num_vf_store);
  
@@ -62,7 +62,7 @@ Change-Id: I6174701fcb037ffc94b526c7a80cbf299ccfd613
  
  #define VF_RATE_GROUP_ATTR(_name) struct vf_group_attributes vf_group_attr_##_name = \
  	__ATTR(_name, 0644, _name##_group_show, _name##_group_store)
-@@ -1156,7 +1167,9 @@ err_attr:
+@@ -1167,7 +1178,9 @@ err_attr:
  		sriov->groups_config = NULL;
  	}
  
@@ -72,7 +72,7 @@ Change-Id: I6174701fcb037ffc94b526c7a80cbf299ccfd613
  	kobject_put(sriov->config);
  	sriov->config = NULL;
  	return err;
-@@ -1180,10 +1193,10 @@ void mlx5_sriov_sysfs_cleanup(struct mlx
+@@ -1191,10 +1204,10 @@ void mlx5_sriov_sysfs_cleanup(struct mlx
  int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
  			       u32 group_id, struct kobject *group_kobj)
  {

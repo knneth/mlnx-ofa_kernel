@@ -419,7 +419,9 @@ mlx5_esw_chains_add_miss_rule(struct fdb_chain *fdb_chain,
 	struct mlx5_flow_destination dest = {};
 	struct mlx5_flow_act act = {};
 
-	act.flags  = FLOW_ACT_IGNORE_FLOW_LEVEL | FLOW_ACT_NO_APPEND;
+	act.flags = FLOW_ACT_NO_APPEND;
+	if (fdb_ignore_flow_level_supported(esw))
+		act.flags |= FLOW_ACT_IGNORE_FLOW_LEVEL;
 	act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	dest.type  = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 	dest.ft = next_fdb;
@@ -765,6 +767,7 @@ mlx5_esw_chains_init(struct mlx5_eswitch *esw)
 	struct mlx5_core_dev *dev = esw->dev;
 	u32 max_flow_counter, fdb_max;
 	struct mapping_ctx *mapping;
+	u64 mapping_id;
 	int err;
 
 	chains_priv = kzalloc(sizeof(*chains_priv), GFP_KERNEL);
@@ -811,8 +814,10 @@ mlx5_esw_chains_init(struct mlx5_eswitch *esw)
 	if (err)
 		goto init_prios_ht_err;
 
-	mapping = mapping_create(sizeof(u32), esw_get_max_restore_tag(esw),
-				 true);
+	mapping_id = mlx5_query_nic_system_image_guid(dev);
+
+	mapping = mapping_create_for_id(mapping_id + MAPPING_ID_CHAIN,
+					sizeof(u32), esw_get_max_restore_tag(esw), true);
 	if (IS_ERR(mapping)) {
 		err = PTR_ERR(mapping);
 		goto mapping_err;

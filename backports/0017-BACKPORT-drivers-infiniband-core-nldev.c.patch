@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
 
 Change-Id: I4ecaebeb3ffd77ec5e4b420453f16180e74eba6d
 ---
- drivers/infiniband/core/nldev.c | 239 ++++++++++++++++++++++++++++----
- 1 file changed, 209 insertions(+), 30 deletions(-)
+ drivers/infiniband/core/nldev.c | 241 ++++++++++++++++++++++++++++----
+ 1 file changed, 210 insertions(+), 31 deletions(-)
 
 --- a/drivers/infiniband/core/nldev.c
 +++ b/drivers/infiniband/core/nldev.c
@@ -107,19 +107,18 @@ Change-Id: I4ecaebeb3ffd77ec5e4b420453f16180e74eba6d
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
  
-@@ -931,9 +963,14 @@ static int nldev_set_doit(struct sk_buff
- 
+@@ -932,8 +964,13 @@ static int nldev_set_doit(struct sk_buff
  	if (tb[RDMA_NLDEV_ATTR_DEV_NAME]) {
  		char name[IB_DEVICE_NAME_MAX] = {};
--
+ 
 +#ifdef HAVE_NLA_STRLCPY
  		nla_strlcpy(name, tb[RDMA_NLDEV_ATTR_DEV_NAME],
- 			    IB_DEVICE_NAME_MAX);
+-			    IB_DEVICE_NAME_MAX);
++				IB_DEVICE_NAME_MAX);
 +#else
 +		nla_strscpy(name, tb[RDMA_NLDEV_ATTR_DEV_NAME],
-+			    IB_DEVICE_NAME_MAX);
++				IB_DEVICE_NAME_MAX);
 +#endif
-+
  		if (strlen(name) == 0) {
  			err = -EINVAL;
  			goto done;
@@ -386,11 +385,11 @@ Change-Id: I4ecaebeb3ffd77ec5e4b420453f16180e74eba6d
 +#ifdef HAVE_NLA_STRLCPY
  	nla_strlcpy(type, tb[RDMA_NLDEV_ATTR_LINK_TYPE], sizeof(type));
  	nla_strlcpy(ndev_name, tb[RDMA_NLDEV_ATTR_NDEV_NAME],
- 		    sizeof(ndev_name));
++				sizeof(ndev_name));
 +#else
 +	nla_strscpy(type, tb[RDMA_NLDEV_ATTR_LINK_TYPE], sizeof(type));
 +	nla_strscpy(ndev_name, tb[RDMA_NLDEV_ATTR_NDEV_NAME],
-+		    sizeof(ndev_name));
+ 		    sizeof(ndev_name));
 +#endif
  
  	ndev = dev_get_by_name(sock_net(skb->sk), ndev_name);
@@ -440,10 +439,11 @@ Change-Id: I4ecaebeb3ffd77ec5e4b420453f16180e74eba6d
  
 +#ifdef HAVE_NLA_STRLCPY
  	nla_strlcpy(client_name, tb[RDMA_NLDEV_ATTR_CHARDEV_TYPE],
- 		    sizeof(client_name));
+-		    sizeof(client_name));
++			sizeof(client_name));
 +#else
 +	nla_strscpy(client_name, tb[RDMA_NLDEV_ATTR_CHARDEV_TYPE],
-+		    sizeof(client_name));
++			sizeof(client_name));
 +#endif
  
  	if (tb[RDMA_NLDEV_ATTR_DEV_INDEX]) {

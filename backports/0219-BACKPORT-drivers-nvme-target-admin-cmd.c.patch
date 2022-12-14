@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/admin-cmd.c
 
 Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
 ---
- drivers/nvme/target/admin-cmd.c | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ drivers/nvme/target/admin-cmd.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
 
 --- a/drivers/nvme/target/admin-cmd.c
 +++ b/drivers/nvme/target/admin-cmd.c
@@ -18,7 +18,51 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  
  #include <generated/utsrelease.h>
  #include <asm/unaligned.h>
-@@ -336,8 +338,10 @@ static void nvmet_id_set_model_number(st
+@@ -92,12 +94,21 @@ static u16 nvmet_get_smart_log_nsid(stru
+ 	if (!ns->bdev)
+ 		goto out;
+ 
++#ifdef HAVE_REQUEST_BDEV
++	host_reads = part_stat_read(ns->bdev, ios[READ]);
++	data_units_read =
++		DIV_ROUND_UP(part_stat_read(ns->bdev, sectors[READ]), 1000);
++	host_writes = part_stat_read(ns->bdev, ios[WRITE]);
++	data_units_written =
++		DIV_ROUND_UP(part_stat_read(ns->bdev, sectors[WRITE]), 1000);
++#else
+ 	host_reads = part_stat_read(ns->bdev->bd_part, ios[READ]);
+ 	data_units_read = DIV_ROUND_UP(part_stat_read(ns->bdev->bd_part,
+ 		sectors[READ]), 1000);
+ 	host_writes = part_stat_read(ns->bdev->bd_part, ios[WRITE]);
+ 	data_units_written = DIV_ROUND_UP(part_stat_read(ns->bdev->bd_part,
+ 		sectors[WRITE]), 1000);
++#endif
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+ 	put_unaligned_le64(data_units_read, &slog->data_units_read[0]);
+@@ -123,12 +134,21 @@ static u16 nvmet_get_smart_log_all(struc
+ 		/* we don't have the right data for file backed ns */
+ 		if (!ns->bdev)
+ 			continue;
++#ifdef HAVE_REQUEST_BDEV
++		host_reads += part_stat_read(ns->bdev, ios[READ]);
++		data_units_read += DIV_ROUND_UP(
++			part_stat_read(ns->bdev, sectors[READ]), 1000);
++		host_writes += part_stat_read(ns->bdev, ios[WRITE]);
++		data_units_written += DIV_ROUND_UP(
++			part_stat_read(ns->bdev, sectors[WRITE]), 1000);
++#else
+ 		host_reads += part_stat_read(ns->bdev->bd_part, ios[READ]);
+ 		data_units_read += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev->bd_part, sectors[READ]), 1000);
+ 		host_writes += part_stat_read(ns->bdev->bd_part, ios[WRITE]);
+ 		data_units_written += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev->bd_part, sectors[WRITE]), 1000);
++#endif
+ 	}
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+@@ -336,8 +356,10 @@ static void nvmet_id_set_model_number(st
  	rcu_read_unlock();
  }
  
@@ -29,7 +73,7 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  	struct nvmet_ns *ns;
  	unsigned long idx;
  
-@@ -345,7 +349,11 @@ static bool nvmet_is_write_zeroes(struct
+@@ -345,7 +367,11 @@ static bool nvmet_is_write_zeroes(struct
  		if (bdev_write_zeroes_sectors(ns->bdev))
  			return false;
  	return true;
@@ -41,7 +85,7 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  
  static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
  {
-@@ -429,11 +437,15 @@ static void nvmet_execute_identify_ctrl(
+@@ -429,11 +455,15 @@ static void nvmet_execute_identify_ctrl(
  
  	id->nn = cpu_to_le32(ctrl->subsys->max_nsid);
  	id->mnan = cpu_to_le32(NVMET_MAX_NAMESPACES);
@@ -57,7 +101,7 @@ Change-Id: I295e0e7624a214ff5a6b88c6cc8e11d1f1cfa9aa
  
  	/* XXX: don't report vwc if the underlying device is write through */
  	id->vwc = NVME_CTRL_VWC_PRESENT;
-@@ -702,9 +714,11 @@ static u16 nvmet_write_protect_flush_syn
+@@ -702,9 +732,11 @@ static u16 nvmet_write_protect_flush_syn
  {
  	u16 status;
  

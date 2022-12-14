@@ -29,7 +29,7 @@ int mlx5dr_table_set_miss_action(struct mlx5dr_table *tbl,
 			last_htbl = tbl->rx.s_anchor;
 
 		tbl->rx.default_icm_addr = action ?
-			action->dest_tbl.tbl->rx.s_anchor->chunk->icm_addr :
+			action->dest_tbl->tbl->rx.s_anchor->chunk->icm_addr :
 			tbl->rx.nic_dmn->default_icm_addr;
 
 		info.type = CONNECT_MISS;
@@ -53,7 +53,7 @@ int mlx5dr_table_set_miss_action(struct mlx5dr_table *tbl,
 			last_htbl = tbl->tx.s_anchor;
 
 		tbl->tx.default_icm_addr = action ?
-			action->dest_tbl.tbl->tx.s_anchor->chunk->icm_addr :
+			action->dest_tbl->tbl->tx.s_anchor->chunk->icm_addr :
 			tbl->tx.nic_dmn->default_icm_addr;
 
 		info.type = CONNECT_MISS;
@@ -126,6 +126,7 @@ static int dr_table_init_nic(struct mlx5dr_domain *dmn,
 
 	nic_tbl->s_anchor = mlx5dr_ste_htbl_alloc(dmn->ste_icm_pool,
 						  DR_CHUNK_SIZE_1,
+						  DR_STE_HTBL_TYPE_LEGACY,
 						  MLX5DR_STE_LU_TYPE_DONT_CARE,
 						  0);
 	if (!nic_tbl->s_anchor) {

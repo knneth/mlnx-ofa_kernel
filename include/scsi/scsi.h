@@ -1,5 +1,7 @@
-#ifndef COMPAT_SCSI_SCSI_H
-#define COMPAT_SCSI_SCSI_H
+#ifndef _COMPAT_SCSI_SCSI_H
+#define _COMPAT_SCSI_SCSI_H
+
+#include "../../compat/config.h"
 
 #include_next <scsi/scsi.h>
 
@@ -7,4 +9,4 @@
 #define SCSI_MAX_SG_CHAIN_SEGMENTS SG_MAX_SEGMENTS
 #endif
 
-#endif	/* COMPAT_SCSI_SCSI_H */
+#endif /* _COMPAT_SCSI_SCSI_H */

@@ -126,40 +126,7 @@ endif
 
 V ?= 0
 
-#########################
-#	make kernel	#
-#########################
-#NB: The LINUXINCLUDE value comes from main kernel Makefile
-#    with local directories prepended. This eventually affects
-#    CPPFLAGS in the kernel Makefile
-kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
-	@echo "Building kernel modules"
-	@echo "Kernel version: $(KVERSION)"
-	@echo "Modules directory: $(INSTALL_MOD_PATH)/lib/modules/$(KVERSION)/$(INSTALL_MOD_DIR)"
-	@echo "Kernel build: $(KSRC_OBJ)"
-	@echo "Kernel sources: $(KSRC)"
-	env CWD=$(CWD) BACKPORT_INCLUDES=$(BACKPORT_INCLUDES) \
-		$(MAKE) -C $(KSRC_OBJ) M="$(CWD)" \
-		V=$(V) KBUILD_NOCMDDEP=1 $(WITH_MAKE_PARAMS) \
-		CONFIG_COMPAT_VERSION=$(CONFIG_COMPAT_VERSION) \
-		CONFIG_COMPAT_KOBJECT_BACKPORT=$(CONFIG_COMPAT_KOBJECT_BACKPORT) \
-		CONFIG_MEMTRACK=$(CONFIG_MEMTRACK) \
-		CONFIG_MLX5_CORE=$(CONFIG_MLX5_CORE) \
-		CONFIG_MLX5_CORE_EN=$(CONFIG_MLX5_CORE_EN) \
-		CONFIG_MLX5_CORE_EN_DCB=$(CONFIG_MLX5_CORE_EN_DCB) \
-		CONFIG_MLX5_EN_ARFS=$(CONFIG_MLX5_EN_ARFS) \
-		CONFIG_MLX5_EN_RXNFC=$(CONFIG_MLX5_EN_RXNFC) \
-		CONFIG_MLX5_ACCEL=$(CONFIG_MLX5_ACCEL) \
-		CONFIG_MLX5_EN_TLS=$(CONFIG_MLX5_EN_TLS) \
-		CONFIG_MLX5_TLS=$(CONFIG_MLX5_TLS) \
-		CONFIG_MLX5_SW_STEERING=$(CONFIG_MLX5_SW_STEERING) \
-		CONFIG_MLX5_ESWITCH=$(CONFIG_MLX5_ESWITCH) \
-		CONFIG_MLX5_CLS_ACT=$(CONFIG_MLX5_CLS_ACT) \
-		CONFIG_MLX5_MPFS=$(CONFIG_MLX5_MPFS) \
-		CONFIG_MLXFW=$(CONFIG_MLXFW) \
-		CONFIG_DTRACE= \
-		CONFIG_CTF= \
-		LINUXINCLUDE=' \
+LINUXINCLUDE=\
 		$(CFLAGS) \
 		-include $(autoconf_h) \
 		$(KCONFIG_H) \
@@ -183,7 +150,46 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-Iarch/$$(SRCARCH)/include/generated \
-		' \
+		#
+
+#########################
+#	make kernel	#
+#########################
+#NB: The LINUXINCLUDE value comes from main kernel Makefile
+#    with local directories prepended. This eventually affects
+#    CPPFLAGS in the kernel Makefile
+kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
+	@echo "Building kernel modules"
+	@echo "Kernel version: $(KVERSION)"
+	@echo "Modules directory: $(INSTALL_MOD_PATH)/lib/modules/$(KVERSION)/$(INSTALL_MOD_DIR)"
+	@echo "Kernel build: $(KSRC_OBJ)"
+	@echo "Kernel sources: $(KSRC)"
+	env CWD=$(CWD) BACKPORT_INCLUDES=$(BACKPORT_INCLUDES) \
+		$(MAKE) -C $(KSRC_OBJ) M="$(CWD)" \
+		V=$(V) KBUILD_NOCMDDEP=1 $(WITH_MAKE_PARAMS) \
+		CONFIG_COMPAT_VERSION=$(CONFIG_COMPAT_VERSION) \
+		CONFIG_COMPAT_KOBJECT_BACKPORT=$(CONFIG_COMPAT_KOBJECT_BACKPORT) \
+		CONFIG_MEMTRACK=$(CONFIG_MEMTRACK) \
+		CONFIG_AUXILIARY_BUS=$(CONFIG_AUXILIARY_BUS) \
+		CONFIG_MLX5_CORE=$(CONFIG_MLX5_CORE) \
+		CONFIG_MLX5_CORE_EN=$(CONFIG_MLX5_CORE_EN) \
+		CONFIG_MLX5_CORE_EN_DCB=$(CONFIG_MLX5_CORE_EN_DCB) \
+		CONFIG_MLX5_EN_ARFS=$(CONFIG_MLX5_EN_ARFS) \
+		CONFIG_MLX5_EN_RXNFC=$(CONFIG_MLX5_EN_RXNFC) \
+		CONFIG_MLX5_ACCEL=$(CONFIG_MLX5_ACCEL) \
+		CONFIG_MLX5_EN_ACCEL_FS=$(CONFIG_MLX5_EN_ACCEL_FS) \
+		CONFIG_MLX5_SF=$(CONFIG_MLX5_SF) \
+		CONFIG_MLX5_SF_MANAGER=$(CONFIG_MLX5_SF_MANAGER) \
+		CONFIG_MLX5_EN_TLS=$(CONFIG_MLX5_EN_TLS) \
+		CONFIG_MLX5_TLS=$(CONFIG_MLX5_TLS) \
+		CONFIG_MLX5_SW_STEERING=$(CONFIG_MLX5_SW_STEERING) \
+		CONFIG_MLX5_ESWITCH=$(CONFIG_MLX5_ESWITCH) \
+		CONFIG_MLX5_CLS_ACT=$(CONFIG_MLX5_CLS_ACT) \
+		CONFIG_MLX5_MPFS=$(CONFIG_MLX5_MPFS) \
+		CONFIG_MLXFW=$(CONFIG_MLXFW) \
+		CONFIG_DTRACE= \
+		CONFIG_CTF= \
+		LINUXINCLUDE='$(LINUXINCLUDE)' \
 		modules
 
 

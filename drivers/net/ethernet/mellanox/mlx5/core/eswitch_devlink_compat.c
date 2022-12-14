@@ -153,7 +153,6 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
-	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct devlink *devlink = priv_to_devlink(dev);
 	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
@@ -172,9 +171,6 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 
 	if (!op)
 		return -ENOENT;
-
-	if (esw && atomic_inc_return(&esw->handler.in_progress) > 1)
-		return -EBUSY;
 
 	if (op->read_u16) {
 		ret = op->read_u16(devlink, &read);
@@ -201,9 +197,6 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 	} else
 		ret = -ENOENT;
 
-	if (esw)
-		atomic_set(&esw->handler.in_progress, 0);
-
 	if (ret < 0)
 		return ret;
 
@@ -223,7 +216,6 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
-	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct devlink *devlink = priv_to_devlink(dev);
 #ifdef HAVE_NETLINK_EXT_ACK
 	static struct netlink_ext_ack ack = { ._msg = NULL };
@@ -256,15 +248,6 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 		return -EINVAL;
 	}
 
-	/* For eswitch_mode_set, in_progress will be incremented inside
-	 * the callback function, and the value will be kept after return
-	 * because it will be set to zero later when eswitch offloads
-	 * start/stop is really finished by worker.
-	 */
-	if (esw && (strcmp(entname, "mode") != 0) &&
-	    atomic_inc_return(&esw->handler.in_progress) > 1)
-		return -EBUSY;
-
 	if (op->write_u16)
 		ret = op->write_u16(devlink, set
 #ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
@@ -289,7 +272,7 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 		struct devlink_param_gset_ctx ctx;
 
 		ctx.val.vbool = set;
-		ret = op->read_ct_action_on_nat_conns(devlink, 0, &ctx);
+		ret = op->write_ct_action_on_nat_conns(devlink, 0, &ctx);
 	} else if (op->write_vport_match_mode)
 		ret = op->write_vport_match_mode(devlink, set);
 	else if (op->write_enum_ipsec)
@@ -300,9 +283,6 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 				   );
 	else
 		ret = -EINVAL;
-
-	if (esw && strcmp(entname, "mode") != 0)
-		atomic_set(&esw->handler.in_progress, 0);
 
 #ifdef HAVE_NETLINK_EXT_ACK
 	if (ack._msg)
@@ -319,17 +299,20 @@ int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct kobj_attribute *kobj;
 	struct compat_devlink *cdevlink;
+	struct mlx5_core_dev *mdev;
 	int i;
 	int err;
 
-	priv->compat_kobj = kobject_create_and_add("compat",
-						   &netdev->dev.kobj);
-	if (!priv->compat_kobj)
+	mdev = priv->mdev;
+	mdev->mlx5e_res.compat.compat_kobj = kobject_create_and_add("compat",
+								    &netdev->dev.kobj);
+	if (!mdev->mlx5e_res.compat.compat_kobj)
 		return -ENOMEM;
 
-	priv->devlink_kobj = kobject_create_and_add("devlink",
-						    priv->compat_kobj);
-	if (!priv->devlink_kobj) {
+	mdev->mlx5e_res.compat.devlink_kobj =
+			kobject_create_and_add("devlink",
+					       mdev->mlx5e_res.compat.compat_kobj);
+	if (!mdev->mlx5e_res.compat.devlink_kobj) {
 		err = -ENOMEM;
 		goto cleanup_compat;
 	}
@@ -340,7 +323,7 @@ int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 		err = -ENOMEM;
 		goto cleanup_devlink;
 	}
-	priv->devlink_attributes = cdevlink;
+	mdev->mlx5e_res.compat.devlink_attributes = cdevlink;
 
 	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
 		cdevlink->mdev = priv->mdev;
@@ -350,7 +333,7 @@ int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 		kobj->attr.name = devlink_compat_ops[i].compat_name;
 		kobj->show = esw_compat_read;
 		kobj->store = esw_compat_write;
-		WARN_ON_ONCE(sysfs_create_file(priv->devlink_kobj,
+		WARN_ON_ONCE(sysfs_create_file(mdev->mlx5e_res.compat.devlink_kobj,
 					       &kobj->attr));
 		cdevlink++;
 	}
@@ -358,10 +341,10 @@ int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 	return 0;
 
 cleanup_devlink:
-	kobject_put(priv->devlink_kobj);
+	kobject_put(mdev->mlx5e_res.compat.devlink_kobj);
 cleanup_compat:
-	kobject_put(priv->compat_kobj);
-	priv->devlink_kobj = NULL;
+	kobject_put(mdev->mlx5e_res.compat.compat_kobj);
+	mdev->mlx5e_res.compat.devlink_kobj = NULL;
 	return err;
 }
 
@@ -370,24 +353,26 @@ void mlx5_eswitch_compat_sysfs_cleanup(struct net_device *netdev)
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct compat_devlink *cdevlink;
 	struct kobj_attribute *kobj;
+	struct mlx5_core_dev *mdev;
 	int i;
 
-	if (!priv->devlink_kobj)
+	mdev = priv->mdev;
+	if (!mdev->mlx5e_res.compat.devlink_kobj)
 		return;
 
-	cdevlink = priv->devlink_attributes;
+	cdevlink = mdev->mlx5e_res.compat.devlink_attributes;
 
 	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
 		kobj = &cdevlink->devlink_kobj;
 
-		sysfs_remove_file(priv->devlink_kobj, &kobj->attr);
+		sysfs_remove_file(mdev->mlx5e_res.compat.devlink_kobj, &kobj->attr);
 		cdevlink++;
 	}
-	kfree(priv->devlink_attributes);
-	kobject_put(priv->devlink_kobj);
-	kobject_put(priv->compat_kobj);
+	kfree(mdev->mlx5e_res.compat.devlink_attributes);
+	kobject_put(mdev->mlx5e_res.compat.devlink_kobj);
+	kobject_put(mdev->mlx5e_res.compat.compat_kobj);
 
-	priv->devlink_kobj = NULL;
+	mdev->mlx5e_res.compat.devlink_kobj = NULL;
 }
 
 #else

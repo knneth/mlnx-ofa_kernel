@@ -91,7 +91,6 @@ enum {
 	FDB_SLOW_PATH,
 	FDB_CRYPTO_EGRESS,
 	FDB_PER_VPORT,
-	FDB_PET_PUSH_PATH,
 };
 
 struct mlx5_pkt_reformat;

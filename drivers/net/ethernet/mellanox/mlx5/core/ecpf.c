@@ -139,14 +139,11 @@ static int mlx5_regex_enable(struct mlx5_core_dev *dev, int vport, bool en)
 	MLX5_SET(set_hca_cap_in, in_set, other_function, 1);
 	MLX5_SET(set_hca_cap_in, in_set, function_id, vport);
 	MLX5_SET(set_hca_cap_in, in_set,
-		 capability.cmd_hca_cap.regexp, en);
+		 capability.cmd_hca_cap.regexp_mmo, en);
 	if (en) {
 		MLX5_SET(set_hca_cap_in, in_set,
 			 capability.cmd_hca_cap.regexp_num_of_engines,
 			 MLX5_CAP_GEN_MAX(dev, regexp_num_of_engines));
-		MLX5_SET(set_hca_cap_in, in_set,
-			 capability.cmd_hca_cap.regexp_log_crspace_size,
-			 MLX5_CAP_GEN_MAX(dev, regexp_log_crspace_size));
 		MLX5_SET(set_hca_cap_in, in_set,
 			 capability.cmd_hca_cap.regexp_params,
 			 MLX5_CAP_GEN_MAX(dev, regexp_params));
@@ -170,17 +167,21 @@ static ssize_t max_tx_rate_store(struct kobject *kobj,
 	struct mlx5_smart_nic_vport *tmp =
 		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
 	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, tmp->vport);
 	u32 max_tx_rate;
 	u32 min_tx_rate;
 	int err;
 
 	mutex_lock(&esw->state_lock);
-	min_tx_rate = esw->vports[0].info.min_rate;
+	min_tx_rate = evport->qos.min_rate;
 	mutex_unlock(&esw->state_lock);
 
 	err = kstrtou32(buf, 0, &max_tx_rate);
 	if (err)
 		return err;
+
+	if (max_tx_rate && max_tx_rate <= min_tx_rate)
+		return -EINVAL;
 
 	err = mlx5_eswitch_set_vport_rate(esw, tmp->vport,
 					  max_tx_rate, min_tx_rate);
@@ -194,6 +195,44 @@ static ssize_t max_tx_rate_show(struct kobject *kobj,
 {
 	return sprintf(buf,
 		       "usage: write <Rate (Mbit/s)> to set max transmit rate\n");
+}
+
+static ssize_t min_tx_rate_store(struct kobject *kobj,
+				 struct kobj_attribute *attr,
+				 const char *buf,
+				 size_t count)
+{
+	struct mlx5_smart_nic_vport *tmp =
+		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
+	struct mlx5_eswitch *esw = tmp->esw;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, tmp->vport);
+	u32 max_tx_rate;
+	u32 min_tx_rate;
+	int err;
+
+	mutex_lock(&esw->state_lock);
+	max_tx_rate = evport->qos.max_rate;
+	mutex_unlock(&esw->state_lock);
+
+	err = kstrtou32(buf, 0, &min_tx_rate);
+	if (err)
+		return err;
+
+	if (max_tx_rate && max_tx_rate <= min_tx_rate)
+		return -EINVAL;
+
+	err = mlx5_eswitch_set_vport_rate(esw, tmp->vport,
+					  max_tx_rate, min_tx_rate);
+
+	return err ? err : count;
+}
+
+static ssize_t min_tx_rate_show(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				char *buf)
+{
+	return sprintf(buf,
+		       "usage: write <Rate (Mbit/s)> to set min transmit rate\n");
 }
 
 static ssize_t mac_store(struct kobject *kobj,
@@ -240,7 +279,7 @@ static ssize_t regex_en_store(struct kobject *kobj,
 	struct mlx5_eswitch *esw = tmp->esw;
 	int err;
 
-	if (!MLX5_CAP_GEN_MAX(esw->dev, regexp))
+	if (!MLX5_CAP_GEN_MAX(esw->dev, regexp_mmo))
 		return -EOPNOTSUPP;
 	if (sysfs_streq(buf, "1"))
 		err = mlx5_regex_enable(esw->dev, tmp->vport, 1);
@@ -326,13 +365,14 @@ static ssize_t config_show(struct kobject *kobj,
 		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
 	struct mlx5_eswitch *esw = tmp->esw;
 	struct mlx5_vport_info *ivi;
-	int vport = tmp->vport;
+	struct mlx5_vport *evport =  mlx5_eswitch_get_vport(esw, tmp->vport);
 	char *p = buf;
 
 	mutex_lock(&esw->state_lock);
-	ivi = &esw->vports[vport].info;
+	ivi = &evport->info;
 	p += _sprintf(p, buf, "MAC        : %pM\n", ivi->mac);
-	p += _sprintf(p, buf, "MaxTxRate  : %d\n", ivi->max_rate);
+	p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.max_rate);
+	p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.min_rate);
 	p += _sprintf(p, buf, "State      : %s\n", policy_str(ivi->link_state));
 	mutex_unlock(&esw->state_lock);
 
@@ -371,6 +411,13 @@ static struct kobj_attribute attr_max_tx_rate = {
 	.store = max_tx_rate_store,
 };
 
+static struct kobj_attribute attr_min_tx_rate = {
+	.attr = {.name = "min_tx_rate",
+		 .mode = 0644 },
+	.show = min_tx_rate_show,
+	.store = min_tx_rate_store,
+};
+
 static struct kobj_attribute attr_mac = {
 	.attr = {.name = "mac",
 		 .mode = 0644 },
@@ -401,6 +448,7 @@ static struct kobj_attribute attr_config = {
 static struct attribute *smart_nic_attrs[] = {
 	&attr_config.attr,
 	&attr_max_tx_rate.attr,
+	&attr_min_tx_rate.attr,
 	&attr_mac.attr,
 	&attr_vport_state.attr,
 	&attr_regex_en.attr,

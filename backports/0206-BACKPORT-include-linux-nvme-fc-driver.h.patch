@@ -3,12 +3,21 @@ Subject: [PATCH] BACKPORT: include/linux/nvme-fc-driver.h
 
 Change-Id: I6496a406e7a9490fff69006a60be43d5e2dc48f4
 ---
- include/linux/nvme-fc-driver.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ include/linux/nvme-fc-driver.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
 --- a/include/linux/nvme-fc-driver.h
 +++ b/include/linux/nvme-fc-driver.h
-@@ -19,6 +19,13 @@
+@@ -6,6 +6,8 @@
+ #ifndef _NVME_FC_DRIVER_H
+ #define _NVME_FC_DRIVER_H 1
+ 
++#include "../../compat/config.h"
++
+ #include <linux/scatterlist.h>
+ 
+ 
+@@ -19,6 +21,13 @@
   * ***********************************************************
   */
  

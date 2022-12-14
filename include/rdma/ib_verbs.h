@@ -1461,7 +1461,7 @@ enum ib_access_flags {
 	IB_ZERO_BASED = IB_UVERBS_ACCESS_ZERO_BASED,
 	IB_ACCESS_ON_DEMAND = IB_UVERBS_ACCESS_ON_DEMAND,
 	IB_ACCESS_HUGETLB = IB_UVERBS_ACCESS_HUGETLB,
-	IB_ACCESS_RELAXED_ORDERING = IB_UVERBS_ACCESS_RELAXED_ORDERING,
+	IB_ACCESS_DISABLE_RELAXED_ORDERING = IB_UVERBS_ACCESS_OPTIONAL_FIRST,
 
 	IB_ACCESS_OPTIONAL = IB_UVERBS_ACCESS_OPTIONAL_RANGE,
 	IB_ACCESS_SUPPORTED =
@@ -2848,7 +2848,8 @@ void ib_dealloc_device(struct ib_device *device);
 
 void ib_get_device_fw_str(struct ib_device *device, char *str);
 
-int ib_register_device(struct ib_device *device, const char *name);
+int ib_register_device(struct ib_device *device, const char *name,
+		       struct device *dma_device);
 void ib_unregister_device(struct ib_device *device);
 void ib_unregister_driver(enum rdma_driver_id driver_id);
 void ib_unregister_device_and_put(struct ib_device *device);
@@ -4849,5 +4850,74 @@ static inline u32 rdma_calc_flow_label(u32 lqpn, u32 rqpn)
 	v ^= v >> 40;
 
 	return (u32)(v & IB_GRH_FLOWLABEL_MASK);
+}
+
+const struct ib_port_immutable*
+ib_port_immutable_read(struct ib_device *dev, unsigned int port);
+
+static inline void process_access_flag(unsigned int *dest_flags,
+				       unsigned int out_flag,
+				       unsigned int *src_flags,
+				       unsigned int in_flag)
+{
+	if (!(*src_flags & in_flag))
+		return;
+
+	*dest_flags |= out_flag;
+	*src_flags &= ~in_flag;
+}
+
+static inline void process_access_flag_inv(unsigned int *dest_flags,
+					   unsigned int out_flag,
+					   unsigned int *src_flags,
+					   unsigned int in_flag)
+{
+	if (*src_flags & in_flag) {
+		*dest_flags &= ~out_flag;
+		*src_flags &= ~in_flag;
+		return;
+	}
+
+	*dest_flags |= out_flag;
+}
+
+static inline int copy_mr_access_flags(unsigned int *dest_flags,
+				       unsigned int src_flags)
+{
+	*dest_flags = 0;
+
+	process_access_flag(dest_flags, IB_ACCESS_LOCAL_WRITE, &src_flags,
+			    IB_UVERBS_ACCESS_LOCAL_WRITE);
+
+	process_access_flag(dest_flags, IB_ACCESS_REMOTE_WRITE, &src_flags,
+			    IB_UVERBS_ACCESS_REMOTE_WRITE);
+
+	process_access_flag(dest_flags, IB_ACCESS_REMOTE_READ, &src_flags,
+			    IB_UVERBS_ACCESS_REMOTE_READ);
+
+	process_access_flag(dest_flags, IB_ACCESS_REMOTE_ATOMIC, &src_flags,
+			    IB_UVERBS_ACCESS_REMOTE_ATOMIC);
+
+	process_access_flag(dest_flags, IB_ACCESS_MW_BIND, &src_flags,
+			    IB_UVERBS_ACCESS_MW_BIND);
+
+	process_access_flag(dest_flags, IB_ZERO_BASED, &src_flags,
+			    IB_UVERBS_ACCESS_ZERO_BASED);
+
+	process_access_flag(dest_flags, IB_ACCESS_ON_DEMAND, &src_flags,
+			    IB_UVERBS_ACCESS_ON_DEMAND);
+
+	process_access_flag(dest_flags, IB_ACCESS_HUGETLB, &src_flags,
+			    IB_UVERBS_ACCESS_HUGETLB);
+
+	process_access_flag_inv(dest_flags, IB_ACCESS_DISABLE_RELAXED_ORDERING,
+				&src_flags, IB_UVERBS_ACCESS_RELAXED_ORDERING);
+
+	/**
+	 * Don't fail on optional flags as they are not mandatory.
+	 */
+	src_flags &= ~IB_UVERBS_ACCESS_OPTIONAL_RANGE;
+
+	return (src_flags) ? -EINVAL : 0;
 }
 #endif /* IB_VERBS_H */

@@ -562,9 +562,8 @@ static bool devx_is_valid_obj_id(struct uverbs_attr_bundle *attrs,
 	case UVERBS_OBJECT_QP:
 	{
 		struct mlx5_ib_qp *qp = to_mqp(uobj->object);
-		enum ib_qp_type	qp_type = qp->ibqp.qp_type;
 
-		if (qp_type == IB_QPT_RAW_PACKET ||
+		if (qp->type == IB_QPT_RAW_PACKET ||
 		    (qp->flags & IB_QP_CREATE_SOURCE_QPN)) {
 			struct mlx5_ib_raw_packet_qp *raw_packet_qp =
 							 &qp->raw_packet_qp;
@@ -581,10 +580,9 @@ static bool devx_is_valid_obj_id(struct uverbs_attr_bundle *attrs,
 					       sq->tisn) == obj_id);
 		}
 
-		if (qp_type == MLX5_IB_QPT_DCT)
+		if (qp->type == MLX5_IB_QPT_DCT)
 			return get_enc_obj_id(MLX5_CMD_OP_CREATE_DCT,
 					      qp->dct.mdct.mqp.qpn) == obj_id;
-
 		return get_enc_obj_id(MLX5_CMD_OP_CREATE_QP,
 				      qp->ibqp.qp_num) == obj_id;
 	}
@@ -941,7 +939,7 @@ static int mlx5_ib_fill_vport_vhca_id(struct mlx5_core_dev *mdev,
 	err = uverbs_copy_to(attrs, MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_VHCA_ID,
 			     &vport_vhca_id, sizeof(vport_vhca_id));
 	if (!err)
-		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID;
+		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID_OLD;
 
 out:
 	kfree(out);
@@ -990,7 +988,7 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 				   MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_RX,
 				   &icm_rx, sizeof(icm_rx)))
 			return -EFAULT;
-		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX;
+		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX_OLD;
 	}
 
 	/* TODO: FDB sw_owner check */
@@ -1001,7 +999,7 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 				   MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_TX,
 				   &icm_tx, sizeof(icm_tx)))
 			return -EFAULT;
-		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX;
+		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX_OLD;
 	}
 
 	return 0;
@@ -1028,7 +1026,7 @@ static int mlx5_ib_fill_vport_ctx(struct mlx5_ib_dev *dev,
 		if (uverbs_copy_to(attrs, MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT,
 				   &vport_num, sizeof(vport_num)))
 			return -EFAULT;
-		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT;
+		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_OLD;
 	}
 
 	if (uverbs_attr_is_valid(attrs,
@@ -1039,7 +1037,7 @@ static int mlx5_ib_fill_vport_ctx(struct mlx5_ib_dev *dev,
 				   MLX5_IB_ATTR_DEVX_QUERY_PORT_ESW_OWNER_VHCA_ID,
 				   &vhca_id, sizeof(vhca_id)))
 			return -EFAULT;
-		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID;
+		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID_OLD;
 	}
 
 	err = mlx5_ib_fill_vport_vhca_id(mdev, attrs, vport_num, &comp_mask);
@@ -1063,7 +1061,7 @@ static int mlx5_ib_fill_vport_ctx(struct mlx5_ib_dev *dev,
 				   MLX5_IB_ATTR_DEVX_QUERY_PORT_MATCH_REG_C_0,
 				   &reg_c0, sizeof(reg_c0)))
 			return -EFAULT;
-		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0;
+		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0_OLD;
 	}
 
 fill_comp_mask:
@@ -1090,7 +1088,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_QUERY_PORT)(
 	if (!rdma_is_port_valid(&dev->ib_dev, port_num))
 		return -EINVAL;
 
-	if (mlx5_ib_eswitch_mode(dev->mdev->priv.eswitch) != MLX5_ESWITCH_OFFLOADS)
+	if (!is_mdev_switchdev_mode(dev->mdev))
 		return -EOPNOTSUPP;
 
 	return mlx5_ib_fill_vport_ctx(dev, attrs, port_num);
@@ -2170,8 +2168,10 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_SUBSCRIBE_EVENT)(
 
 		num_alloc_xa_entries++;
 		event_sub = kzalloc(sizeof(*event_sub), GFP_KERNEL);
-		if (!event_sub)
+		if (!event_sub) {
+			err = -ENOMEM;
 			goto err;
+		}
 
 		list_add_tail(&event_sub->event_list, &sub_list);
 		uverbs_uobject_get(&ev_file->uobj);
@@ -2266,9 +2266,13 @@ static int devx_umem_get(struct mlx5_ib_dev *dev, struct ib_ucontext *ucontext,
 
 	err = uverbs_get_flags32(&access, attrs,
 				 MLX5_IB_ATTR_DEVX_UMEM_REG_ACCESS,
-				 IB_ACCESS_LOCAL_WRITE |
-				 IB_ACCESS_REMOTE_WRITE |
-				 IB_ACCESS_REMOTE_READ);
+				 IB_UVERBS_ACCESS_LOCAL_WRITE |
+				 IB_UVERBS_ACCESS_REMOTE_WRITE |
+				 IB_UVERBS_ACCESS_REMOTE_READ);
+	if (err)
+		return err;
+
+	err = copy_mr_access_flags(&access, access);
 	if (err)
 		return err;
 

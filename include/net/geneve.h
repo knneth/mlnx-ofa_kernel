@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef _COMPAT__NET_GENEVE_H
-#define _COMPAT__NET_GENEVE_H  1
+#ifndef _COMPAT_NET_GENEVE_H
+#define _COMPAT_NET_GENEVE_H
 
 #include "../../compat/config.h"
 
@@ -20,4 +20,4 @@ static inline bool netif_is_geneve(const struct net_device *dev)
 }
 #endif
 
-#endif /*ifdef_COMPAT__NET_GENEVE_H */
+#endif /* _COMPAT_NET_GENEVE_H */

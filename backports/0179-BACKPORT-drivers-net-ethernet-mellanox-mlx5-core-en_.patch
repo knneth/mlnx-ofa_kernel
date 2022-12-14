@@ -8,7 +8,7 @@ Change-Id: I8a6e663298f607547f2ffff6a94f28ed96846760
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-@@ -62,7 +62,11 @@ void mlx5e_destroy_tir(struct mlx5_core_
+@@ -66,7 +66,11 @@ void mlx5e_destroy_tir(struct mlx5_core_
  
  void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc)
  {

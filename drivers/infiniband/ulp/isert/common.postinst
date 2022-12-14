@@ -265,7 +265,8 @@ for KERNEL in $KERNELS; do
             echo "Building initial module for $KERNEL"
             set +e
             dkms build -m $NAME -v $VERSION -k $KERNEL $ARCH > /dev/null
-            case $? in
+            rc=$?
+            case $rc in
             9)
                 set -e
                 echo "Skipped."
@@ -276,7 +277,7 @@ for KERNEL in $KERNELS; do
                 echo "Done."
                 ;;
             *)
-                exit $?
+                exit $rc
                 ;;
             esac
             dkms_status=`dkms status -m $NAME -v $VERSION -k $KERNEL $ARCH`

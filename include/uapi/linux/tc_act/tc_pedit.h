@@ -1,5 +1,5 @@
-#ifndef _COMPAT_UAPI_TC_ACT_TC_PED_H
-#define _COMPAT_UAPI_TC_ACT_TC_PED_H 1
+#ifndef _COMPAT_UAPI_LINUX_TC_ACT_TC_PEDIT_H
+#define _COMPAT_UAPI_LINUX_TC_ACT_TC_PEDIT_H
 
 #include "../../../../compat/config.h"
 
@@ -75,4 +75,5 @@ struct tc_pedit_sel {
 #define tc_pedit tc_pedit_sel
 
 #endif /* CONFIG_COMPAT_TCF_PEDIT_MOD */
-#endif
+
+#endif /* _COMPAT_UAPI_LINUX_TC_ACT_TC_PEDIT_H */

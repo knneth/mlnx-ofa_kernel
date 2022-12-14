@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 
 Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 6 ++++++
- 1 file changed, 6 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
@@ -18,7 +18,7 @@ Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
  	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
  	DECLARE_HASHTABLE(hairpin_tbl, 8);
  	struct kobject *hp_config;
-@@ -210,6 +212,7 @@ static inline int mlx5e_ethtool_get_rxnf
+@@ -217,6 +219,7 @@ static inline int mlx5e_ethtool_get_rxnf
  #endif /* CONFIG_MLX5_EN_RXNFC */
  
  #ifdef CONFIG_MLX5_EN_ARFS
@@ -26,7 +26,7 @@ Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
  #define ARFS_HASH_SHIFT BITS_PER_BYTE
  #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
  
-@@ -248,6 +251,7 @@ static inline void mlx5e_arfs_destroy_ta
+@@ -255,6 +258,7 @@ static inline void mlx5e_arfs_destroy_ta
  static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
  static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
  #endif
@@ -34,7 +34,7 @@ Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
  
  #ifdef CONFIG_MLX5_EN_TLS
  struct mlx5e_accel_fs_tcp;
-@@ -265,8 +269,10 @@ struct mlx5e_flow_steering {
+@@ -273,8 +277,10 @@ struct mlx5e_flow_steering {
  	struct mlx5e_ttc_table          ttc;
  	struct mlx5e_ttc_table          inner_ttc;
  #ifdef CONFIG_MLX5_EN_ARFS
@@ -45,3 +45,16 @@ Change-Id: I22ce10b559384d083793c996e9204fd6a35a853f
  #ifdef CONFIG_MLX5_EN_TLS
  	struct mlx5e_accel_fs_tcp      *accel_tcp;
  #endif
+@@ -317,10 +323,12 @@ void mlx5e_destroy_flow_steering(struct
+ bool mlx5e_tunnel_proto_supported(struct mlx5_core_dev *mdev, u8 proto_type);
+ bool mlx5e_any_tunnel_proto_supported(struct mlx5_core_dev *mdev);
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5e_add_vlan_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
+ void mlx5e_remove_vlan_trap(struct mlx5e_priv *priv);
+ int mlx5e_add_mac_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
+ void mlx5e_remove_mac_trap(struct mlx5e_priv *priv);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ #endif /* __MLX5E_FLOW_STEER_H__ */
+ 

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
 
 Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
 ---
- .../ethernet/mellanox/mlx5/core/lib/clock.c   | 268 ++++++++++++++++--
- 1 file changed, 252 insertions(+), 16 deletions(-)
+ .../ethernet/mellanox/mlx5/core/lib/clock.c   | 269 ++++++++++++++++--
+ 1 file changed, 253 insertions(+), 16 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
@@ -357,7 +357,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  	u32 field_select = 0;
  	u64 time_stamp = 0;
  	u8 pin_mode = 0;
-@@ -495,7 +653,11 @@ static int mlx5_perout_configure(struct
+@@ -495,7 +653,12 @@ static int mlx5_perout_configure(struct
  		return -EINVAL;
  
  	field_select = MLX5_MTPPS_FS_ENABLE;
@@ -366,10 +366,11 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
 +#else
 +	pin = mlx5_ptp_find_pin(clock, PTP_PF_PEROUT, rq->perout.index, on);
 +#endif
++
  	if (pin < 0)
  		return -EBUSY;
  	if (on) {
-@@ -507,8 +669,11 @@ static int mlx5_perout_configure(struct
+@@ -507,8 +670,11 @@ static int mlx5_perout_configure(struct
  		pattern = MLX5_OUT_PATTERN_PERIODIC;
  		ts.tv_sec = rq->perout.period.sec;
  		ts.tv_nsec = rq->perout.period.nsec;
@@ -382,7 +383,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  		if ((ns >> 1) != 500000000LL)
  			return -EINVAL;
  
-@@ -593,6 +758,7 @@ static int mlx5_ptp_verify(struct ptp_cl
+@@ -593,6 +759,7 @@ static int mlx5_ptp_verify(struct ptp_cl
  		return -EOPNOTSUPP;
  	}
  }
@@ -390,7 +391,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  
  static const struct ptp_clock_info mlx5_ptp_clock_info = {
  	.owner		= THIS_MODULE,
-@@ -601,16 +767,31 @@ static const struct ptp_clock_info mlx5_
+@@ -601,16 +768,31 @@ static const struct ptp_clock_info mlx5_
  	.n_alarm	= 0,
  	.n_ext_ts	= 0,
  	.n_per_out	= 0,
@@ -422,7 +423,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  static int mlx5_query_mtpps_pin_mode(struct mlx5_core_dev *mdev, u8 pin,
  				     u32 *mtpps, u32 mtpps_size)
  {
-@@ -694,7 +875,11 @@ static void mlx5_get_pps_caps(struct mlx
+@@ -694,7 +876,11 @@ static void mlx5_get_pps_caps(struct mlx
  	clock->pps_info.pin_caps[7] = MLX5_GET(mtpps_reg, out, cap_pin_7_mode);
  }
  
@@ -434,7 +435,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  {
  	ts->tv_sec += 1;
  	ts->tv_nsec = 0;
-@@ -704,17 +889,27 @@ static u64 perout_conf_next_event_timer(
+@@ -704,17 +890,27 @@ static u64 perout_conf_next_event_timer(
  					struct mlx5_clock *clock)
  {
  	bool rt_mode = mlx5_real_time_mode(mdev);
@@ -465,7 +466,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  	return rt_mode ? perout_conf_real_time(ts.tv_sec, ts.tv_nsec) :
  			 find_target_cycles(mdev, target_ns);
  }
-@@ -729,21 +924,36 @@ static int mlx5_pps_event(struct notifie
+@@ -729,21 +925,36 @@ static int mlx5_pps_event(struct notifie
  	struct mlx5_core_dev *mdev;
  	unsigned long flags;
  	u64 ns;
@@ -503,7 +504,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  		} else {
  			ptp_event.type = PTP_CLOCK_EXTTS;
  		}
-@@ -764,6 +974,8 @@ static int mlx5_pps_event(struct notifie
+@@ -764,6 +975,8 @@ static int mlx5_pps_event(struct notifie
  
  	return NOTIFY_OK;
  }
@@ -512,7 +513,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  
  static void mlx5_timecounter_init(struct mlx5_core_dev *mdev)
  {
-@@ -789,7 +1001,9 @@ static void mlx5_init_overflow_period(st
+@@ -789,7 +1002,9 @@ static void mlx5_init_overflow_period(st
  	struct mlx5_ib_clock_info *clock_info = mdev->clock_info;
  	struct mlx5_timer *timer = &clock->timer;
  	u64 overflow_cycles;
@@ -522,7 +523,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  	u64 ns;
  
  	/* Calculate period in seconds to call the overflow watchdog - to make
-@@ -801,9 +1015,12 @@ static void mlx5_init_overflow_period(st
+@@ -801,9 +1016,12 @@ static void mlx5_init_overflow_period(st
  	 */
  	overflow_cycles = div64_u64(~0ULL >> 1, timer->cycles.mult);
  	overflow_cycles = min(overflow_cycles, div_u64(timer->cycles.mask, 3));
@@ -536,7 +537,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  	do_div(ns, NSEC_PER_SEC / HZ);
  	timer->overflow_period = ns;
  
-@@ -838,7 +1055,9 @@ static void mlx5_init_clock_info(struct
+@@ -838,7 +1056,9 @@ static void mlx5_init_clock_info(struct
  	info->mask = timer->cycles.mask;
  	info->mult = timer->nominal_c_mult;
  	info->shift = timer->cycles.shift;
@@ -546,7 +547,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  }
  
  static void mlx5_init_timer_clock(struct mlx5_core_dev *mdev)
-@@ -851,9 +1070,15 @@ static void mlx5_init_timer_clock(struct
+@@ -851,9 +1071,15 @@ static void mlx5_init_timer_clock(struct
  	clock->ptp_info = mlx5_ptp_clock_info;
  
  	if (mlx5_real_time_mode(mdev)) {
@@ -562,7 +563,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  		mlx5_ptp_settime(&clock->ptp_info, &ts);
  	}
  }
-@@ -869,17 +1094,21 @@ void mlx5_init_clock(struct mlx5_core_de
+@@ -869,17 +1095,21 @@ void mlx5_init_clock(struct mlx5_core_de
  
  	seqlock_init(&clock->lock);
  	mlx5_init_timer_clock(mdev);
@@ -585,7 +586,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  	clock->ptp = ptp_clock_register(&clock->ptp_info,
  					&mdev->pdev->dev);
  	if (IS_ERR(clock->ptp)) {
-@@ -887,9 +1116,11 @@ void mlx5_init_clock(struct mlx5_core_de
+@@ -887,9 +1117,11 @@ void mlx5_init_clock(struct mlx5_core_de
  			       PTR_ERR(clock->ptp));
  		clock->ptp = NULL;
  	}
@@ -598,7 +599,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  }
  
  void mlx5_cleanup_clock(struct mlx5_core_dev *mdev)
-@@ -900,12 +1131,15 @@ void mlx5_cleanup_clock(struct mlx5_core
+@@ -900,12 +1132,15 @@ void mlx5_cleanup_clock(struct mlx5_core
  		return;
  
  	mlx5_eq_notifier_unregister(mdev, &clock->pps_nb);
@@ -615,7 +616,7 @@ Change-Id: Ibc164e1cf43a37614f868544892f8b903c1edd63
  	cancel_delayed_work_sync(&clock->timer.overflow_work);
  
  	if (mdev->clock_info) {
-@@ -913,5 +1147,7 @@ void mlx5_cleanup_clock(struct mlx5_core
+@@ -913,5 +1148,7 @@ void mlx5_cleanup_clock(struct mlx5_core
  		mdev->clock_info = NULL;
  	}
  

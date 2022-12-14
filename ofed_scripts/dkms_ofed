@@ -112,8 +112,8 @@ module_to_flag()
 		mlxfw)
 		flag=--with-mlxfw-mod
 		;;
-		mdev)
-		flag=--with-mdev-mod
+		mlxdevm)
+		flag=--with-mlxdevm-mod
 		;;
 		*)
 		;;
@@ -175,14 +175,18 @@ get-modules()
 			modules="$modules \
 				drivers/net/ethernet/mellanox/mlxfw/mlxfw"
 			;;
-			--with-mdev-mod )
+			--with-mlxdevm-mod )
 			modules="$modules \
-				drivers/vfio/mdev/mdev"
+				net/mlxdevm/mlxdevm"
 			;;
 			*)
 			;;
 		esac
 	done
+	# The auxiliary module is always used, unless the kernel is
+	# >= 5.11.0 (see generate_dkms_conf)
+	modules="$modules \
+		drivers/base/auxiliary"
 
 	echo $modules
 }

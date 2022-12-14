@@ -51,6 +51,8 @@
 #include "en/xsk/rx.h"
 #include "en/health.h"
 #include "en/params.h"
+#include "devlink.h"
+#include "en/devlink.h"
 #include "en/txrx.h"
 
 static inline void mlx5e_set_skb_driver_xmit_more(struct sk_buff *skb,
@@ -321,8 +323,10 @@ static inline bool mlx5e_rx_cache_extend(struct mlx5e_rq *rq)
 {
 	struct mlx5e_page_cache *cache = &rq->page_cache;
 	struct mlx5e_page_cache_reduce *reduce = &cache->reduce;
+	struct mlx5e_params *params = &rq->priv->channels.params;
+	u8 log_limit_sz = cache->log_min_sz + params->log_rx_page_cache_mult;
 
-	if (ilog2(cache->sz) == cache->log_max_sz)
+	if (ilog2(cache->sz) >= log_limit_sz)
 		return false;
 
 	rq->stats->cache_ext++;
@@ -672,7 +676,6 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	struct mlx5e_icosq *sq = rq->icosq;
 	struct mlx5_wq_cyc *wq = &sq->wq;
 	struct mlx5e_umr_wqe *umr_wqe;
-	u16 xlt_offset = ix << (MLX5E_LOG_ALIGNED_MPWQE_PPW - 1);
 	u16 pi;
 	int err;
 	int i;
@@ -703,7 +706,8 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	umr_wqe->ctrl.opmod_idx_opcode =
 		cpu_to_be32((sq->pc << MLX5_WQE_CTRL_WQE_INDEX_SHIFT) |
 			    MLX5_OPCODE_UMR);
-	umr_wqe->uctrl.xlt_offset = cpu_to_be16(xlt_offset);
+	umr_wqe->uctrl.xlt_offset =
+		cpu_to_be16(MLX5_ALIGNED_MTTS_OCTW(MLX5E_REQUIRED_MTTS(ix)));
 
 	sq->db.wqe_info[pi] = (struct mlx5e_icosq_wqe_info) {
 		.wqe_type   = MLX5E_ICOSQ_WQE_UMR_RX,
@@ -1261,7 +1265,7 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 		stats->removed_vlan_packets++;
 	}
 
-	if (mlx5_eswitch_mode(esw) != MLX5_ESWITCH_OFFLOADS)
+	if (!is_mdev_switchdev_mode(mdev))
 		skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
 
 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
@@ -1505,12 +1509,16 @@ static bool mlx5e_rep_lookup_and_update(struct mlx5e_rq *rq, struct sk_buff *skb
 
 	/* Copy 10 bytes of PET header to local stack for parsing */
 	skb_copy_bits(skb, -2, &pet_hdr, sizeof(pet_hdr));
-	if (pet_hdr.pet_ether_type != esw->offloads.pet_info.ether_type)
+	if (pet_hdr.pet_ether_type != esw->offloads.pet_info.ether_type) {
+		rq->stats->pet_hdr_lookup_drop++;
 		return false;
+	}
 
 	vport_rep = xa_load(&rpriv->vport_rep_map, be32_to_cpu(pet_hdr.metadata_0));
-	if (!vport_rep)
+	if (!vport_rep) {
+		rq->stats->pet_mdata_lookup_drop++;
 		return false;
+	}
 
 	skb_push(skb, ETH_HLEN);
 	curr_eth_hdr = (struct ethhdr *)(skb->data);
@@ -2114,4 +2122,52 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 	}
 
 	return 0;
+}
+
+static void mlx5e_trap_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
+				     bool xmit_more)
+{
+	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
+	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+	struct mlx5e_wqe_frag_info *wi;
+	struct devlink_port *dl_port;
+	struct sk_buff *skb;
+	u32 cqe_bcnt;
+	u16 trap_id;
+	u16 ci;
+
+	trap_id  = get_cqe_flow_tag(cqe);
+	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
+	wi       = get_frag(rq, ci);
+	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
+
+	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
+		rq->stats->wqe_err++;
+		goto free_wqe;
+	}
+
+	skb = mlx5e_skb_from_cqe_nonlinear(rq, cqe, wi, cqe_bcnt);
+	if (!skb)
+		goto free_wqe;
+
+	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+	skb_push(skb, ETH_HLEN);
+
+	dl_port = mlx5e_devlink_get_dl_port(priv);
+	mlx5_devlink_trap_report(rq->mdev, trap_id, skb, dl_port);
+	dev_kfree_skb_any(skb);
+
+free_wqe:
+	mlx5e_free_rx_wqe(rq, wi, false);
+	mlx5_wq_cyc_pop(wq);
+}
+
+void mlx5e_rq_set_trap_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params)
+{
+	rq->wqe.skb_from_cqe = mlx5e_rx_is_linear_skb(params, NULL) ?
+			       mlx5e_skb_from_cqe_linear :
+			       mlx5e_skb_from_cqe_nonlinear;
+	rq->post_wqes = mlx5e_post_rx_wqes;
+	rq->dealloc_wqe = mlx5e_dealloc_rx_wqe;
+	rq->handle_rx_cqe = mlx5e_trap_handle_rx_cqe;
 }

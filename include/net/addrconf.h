@@ -1,5 +1,5 @@
-#ifndef LINUX_ADDRCONF_H
-#define LINUX_ADDRCONF_H
+#ifndef _COMPAT_NET_ADDRCONF_H
+#define _COMPAT_NET_ADDRCONF_H
 
 #include "../../compat/config.h"
 
@@ -54,4 +54,4 @@ static inline void addrconf_addr_eui48(u8 *eui, const char *const addr)
 }
 #endif
 
-#endif /* LINUX_ADDRCONF_H */
+#endif /* _COMPAT_NET_ADDRCONF_H */

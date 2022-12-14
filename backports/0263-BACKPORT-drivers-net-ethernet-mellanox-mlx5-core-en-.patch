@@ -1,0 +1,27 @@
+From: Mikhael Goikhman <migo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
+
+Change-Id: I62ffe31ad9c76b96321486cb0c9100b1b8a0774e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/trap.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
+@@ -29,9 +29,16 @@ struct mlx5e_trap {
+ 	struct mlx5e_rq_param      rq_param;
+ };
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ void mlx5e_close_trap(struct mlx5e_trap *trap);
+ void mlx5e_deactivate_trap(struct mlx5e_priv *priv);
+ int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx);
+ int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable);
++#else
++void mlx5e_close_trap(struct mlx5e_trap *trap) {}
++void mlx5e_deactivate_trap(struct mlx5e_priv *priv) {}
++int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx) { return 0; }
++int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable) { return 0; }
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ #endif

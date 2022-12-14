@@ -40,19 +40,6 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-# Force python3 on RHEL8, fedora3x, SLES15 and similar:
-%global RHEL8 0%{?rhel} >= 8
-%global FEDORA3X 0%{?fedora} >= 30
-%global SLES15 0%{?suse_version} >= 1500
-%global PYTHON3 %{RHEL8} || %{FEDORA3X} || %{SLES15}
-
-# Workaround: To be removed when mlnx_tune has python3 support:
-# mlnx_tune is a python2 script. Avoid generating dependencies
-# from it in some distributions to avoid dragging in a python2
-# dependency
-%if %{PYTHON3}
-%global __requires_exclude_from mlnx_tune
-%endif
 
 %global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
 
@@ -76,19 +63,13 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.3}
-%{!?_release: %global _release OFED.5.3.1.0.5.1}
+%{!?_version: %global _version 5.4}
+%{!?_release: %global _release OFED.5.4.1.0.3.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
 %global devel_pname %{_name}-devel
 %global non_kmp_pname %{_name}-modules
-
-%if %{PYTHON3}
-%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=%{_bindir}/python3
-%else
-%global mlnx_python_env    :
-%endif
 
 Summary: Infiniband HCA Driver
 Name: %{_name}
@@ -119,6 +100,7 @@ Obsoletes: mlnx-en-kmp-trace
 Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
+Requires: mlnx-tools >= 5.2.0
 Requires: coreutils
 Requires: pciutils
 Requires: grep
@@ -132,7 +114,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.3-1.0.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-1.0.3.tgz
 
 
 # build KMP rpms?
@@ -188,7 +170,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.3-1.0.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-1.0.3.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -221,7 +203,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.3-1.0.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-1.0.3.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -261,11 +243,6 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %global __find_requires %{nil}
 %endif
 
-%if "%{_vendor}" == "wrs" || "%{_vendor}" == "bluenix"
-%global __python_provides %{nil}
-%global __python_requires %{nil}
-%endif
-
 # set modules dir
 %if %{IS_RHEL_VENDOR}
 %if 0%{?fedora}
@@ -286,16 +263,12 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 set -- *
 mkdir source
 mv "$@" source/
-%if %{PYTHON3}
-sed -s -i -e '1s|python\>|python3|' `grep -rl '^#!.*python' source/ofed_scripts`
-%endif
 mkdir obj
 
 %build
 export EXTRA_CFLAGS='-DVERSION=\"%version\"'
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export CONF_OPTIONS="%{configure_options}"
-%{mlnx_python_env}
 for flavor in %flavors_to_build; do
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
@@ -311,14 +284,12 @@ for flavor in %flavors_to_build; do
 done
 
 %install
-touch ofed-files
 export RECORD_PY_FILES=1
 export INSTALL_MOD_PATH=%{buildroot}
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export NAME=%{name}
 export VERSION=%{version}
 export PREFIX=%{_prefix}
-%{mlnx_python_env}
 for flavor in %flavors_to_build; do 
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
@@ -346,10 +317,6 @@ for flavor in %flavors_to_build; do
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
 done
-
-if [[ "$(ls %{buildroot}/%{_bindir}/tc_wrap.py* 2>/dev/null)" != "" ]]; then
-	echo '%{_bindir}/tc_wrap.py*' >> ofed-files
-fi
 
 # Set the module(s) to be executable, so that they will be stripped when packaged.
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
@@ -423,9 +390,6 @@ install -m 0755 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/net-interfaces %
 # Install ibroute utilities
 # TBD: move these utilities into standalone package
 install -d %{buildroot}%{_sbindir}
-install -d %{buildroot}%{_defaultdocdir}/ib2ib
-install -m 0755 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/ib2ib/ib2ib*  %{buildroot}%{_sbindir}
-install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/ib2ib/README %{buildroot}%{_defaultdocdir}/ib2ib
 
 # update /etc/init.d/openibd header
 is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
@@ -508,7 +472,8 @@ fi
 if [ $1 -eq 1 ]; then # 1 : This package is being installed
 #############################################################################################################
 is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
+is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
+if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
         /sbin/chkconfig openibd off >/dev/null 2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/chkconfig --del openibd >/dev/null 2>&1 || true
@@ -597,8 +562,9 @@ fi # 1 : closed
 
 %preun -n %{utils_pname}
 is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
+is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
 if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
-          if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
+          if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
                 /sbin/chkconfig openibd off >/dev/null 2>&1 || true
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true
@@ -640,7 +606,7 @@ fi
 
 #end of post uninstall
 
-%files -n %{utils_pname} -f ofed-files
+%files -n %{utils_pname}
 %defattr(-,root,root,-)
 %if "%{KMP}" == "1"
 %if %{IS_RHEL_VENDOR}
@@ -656,26 +622,17 @@ fi
 %{_unitdir}/openibd.service
 /etc/systemd/system/mlnx_interface_mgr@.service
 %endif
-/sbin/sysctl_perf_tuning
-/sbin/mlnx_bf_configure
-/sbin/mlnx_bf_configure_ct
-/sbin/mlnx-sf
-/lib/udev/mlnx_bf_udev
-/usr/sbin/show_gids
-/usr/sbin/compat_gid_gen
-/usr/sbin/cma_roce_mode
-/usr/sbin/cma_roce_tos
+/lib/udev/sf-rep-netdev-rename
+/lib/udev/auxdev-sf-netdev-rename
 /usr/sbin/setup_mr_cache.sh
 /usr/sbin/odp_stat.sh
-/usr/sbin/show_counters
-%dir %{_defaultdocdir}/ib2ib
-%{_defaultdocdir}/ib2ib/*
 %_datadir/mlnx_ofed/mlnx_bf_assign_ct_cores.sh
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %config(noreplace) /etc/modprobe.d/mlnx-bf.conf
 %{_sbindir}/*
-%config(noreplace) /etc/udev/rules.d/90-ib.rules
-%config(noreplace) /etc/udev/rules.d/82-net-setup-link.rules
+/lib/udev/rules.d/83-mlnx-sf-name.rules
+/lib/udev/rules.d/82-net-setup-link.rules
+/lib/udev/rules.d/90-ib.rules
 /bin/mlnx_interface_mgr.sh
 /bin/mlnx_conf_mgr.sh
 %if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"

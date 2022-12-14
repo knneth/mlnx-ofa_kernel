@@ -1,4 +1,4 @@
-PHONY += all autoversion kernel install_kernel install clean clean_kernel distclean install_modules install_scripts build_py_scripts install_py_scripts help
+PHONY += all autoversion kernel install_kernel install clean clean_kernel distclean install_modules install_scripts build_py_scripts help
 	
 all:
 .PHONY: $(PHONY)
@@ -14,11 +14,6 @@ export KSRC_OBJ
 export KLIB_BUILD
 export KVERSION
 export MAKE
-ifneq (,$(MLNX_PYTHON_EXECUTABLE))
-MLNX_PYTHON = $(MLNX_PYTHON_EXECUTABLE)
-else
-MLNX_PYTHON = python
-endif
 
 -include $(COMPAT_CONFIG)
 
@@ -156,6 +151,34 @@ endif
 
 V ?= 0
 
+LINUXINCLUDE=\
+		-D__OFED_BUILD__ \
+		-D__KERNEL__ \
+		$(CFLAGS) \
+		-include $(autoconf_h) \
+		$(KCONFIG_H) \
+		-include $(CWD)/include/linux/compat-2.6.h \
+		$(BACKPORT_INCLUDES) \
+		$(KERNEL_MEMTRACK_CFLAGS) \
+		$(OPENIB_KERNEL_EXTRA_CFLAGS) \
+		-I$(CWD)/include \
+		-I$(CWD)/include/uapi \
+		-I$(CWD)/drivers/infiniband/debug \
+		$$(if $$(CONFIG_XEN),-D__XEN_INTERFACE_VERSION__=$$(CONFIG_XEN_INTERFACE_VERSION)) \
+		$$(if $$(CONFIG_XEN),-I$$(srctree)/arch/x86/include/mach-xen) \
+		-I$$(srctree)/arch/$$(SRCARCH)/include \
+		-Iarch/$$(SRCARCH)/include/generated \
+		-Iinclude \
+		-I$$(srctree)/arch/$$(SRCARCH)/include/uapi \
+		-Iarch/$$(SRCARCH)/include/generated/uapi \
+		-I$$(srctree)/include \
+		-I$$(srctree)/include/uapi \
+		-Iinclude/generated/uapi \
+		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
+		-I$$(srctree)/arch/$$(SRCARCH)/include \
+		-Iarch/$$(SRCARCH)/include/generated \
+		#
+
 #########################
 #	make kernel	#
 #########################
@@ -241,11 +264,10 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_MLX5_ESWITCH=$(CONFIG_MLX5_ESWITCH) \
 		CONFIG_MLX5_CLS_ACT=$(CONFIG_MLX5_CLS_ACT) \
 		CONFIG_MLX5_TC_CT=$(CONFIG_MLX5_TC_CT) \
+		CONFIG_MLX5_SF=$(CONFIG_MLX5_SF) \
+		CONFIG_MLX5_SF_MANAGER=$(CONFIG_MLX5_SF_MANAGER) \
 		CONFIG_MLX5_SW_STEERING=$(CONFIG_MLX5_SW_STEERING) \
 		CONFIG_MLX5_CORE_IPOIB=$(CONFIG_MLX5_CORE_IPOIB) \
-		CONFIG_MLX5_MDEV=$(CONFIG_MLX5_MDEV) \
-		CONFIG_MLNX_VFIO_MDEV=$(CONFIG_MLNX_VFIO_MDEV) \
-		CONFIG_MLNX_VFIO_MDEV_DEVICE=$(CONFIG_MLNX_VFIO_MDEV_DEVICE) \
 		CONFIG_MLX5_INFINIBAND=$(CONFIG_MLX5_INFINIBAND) \
 		CONFIG_MLX5_DEBUG=$(CONFIG_MLX5_DEBUG) \
 		CONFIG_AUXILIARY_BUS=$(CONFIG_AUXILIARY_BUS) \
@@ -258,33 +280,9 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_BF_POWER_FAILURE_EVENT=$(CONFIG_BF_POWER_FAILURE_EVENT) \
 		CONFIG_GPU_DIRECT_STORAGE=$(CONFIG_GPU_DIRECT_STORAGE) \
 		CONFIG_ENABLE_MLX5_FS_DEBUGFS=$(CONFIG_ENABLE_MLX5_FS_DEBUGFS) \
-		LINUXINCLUDE=' \
-		-D__OFED_BUILD__ \
-		-D__KERNEL__ \
-		$(CFLAGS) \
-		-include $(autoconf_h) \
-		$(KCONFIG_H) \
-		-include $(CWD)/include/linux/compat-2.6.h \
-		$(BACKPORT_INCLUDES) \
-		$(KERNEL_MEMTRACK_CFLAGS) \
-		$(OPENIB_KERNEL_EXTRA_CFLAGS) \
-		-I$(CWD)/include \
-		-I$(CWD)/include/uapi \
-		-I$(CWD)/drivers/infiniband/debug \
-		$$(if $$(CONFIG_XEN),-D__XEN_INTERFACE_VERSION__=$$(CONFIG_XEN_INTERFACE_VERSION)) \
-		$$(if $$(CONFIG_XEN),-I$$(srctree)/arch/x86/include/mach-xen) \
-		-I$$(srctree)/arch/$$(SRCARCH)/include \
-		-Iarch/$$(SRCARCH)/include/generated \
-		-Iinclude \
-		-I$$(srctree)/arch/$$(SRCARCH)/include/uapi \
-		-Iarch/$$(SRCARCH)/include/generated/uapi \
-		-I$$(srctree)/include \
-		-I$$(srctree)/include/uapi \
-		-Iinclude/generated/uapi \
-		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
-		-I$$(srctree)/arch/$$(SRCARCH)/include \
-		-Iarch/$$(SRCARCH)/include/generated \
-		' \
+		CONFIG_MLXDEVM=$(CONFIG_MLXDEVM) \
+		CONFIG_MLX5_SF_CFG=$(CONFIG_MLX5_SF_CFG) \
+		LINUXINCLUDE='$(LINUXINCLUDE)' \
 		modules
 
 
@@ -310,7 +308,7 @@ endif
 #########################
 #	Install scripts	 #
 #########################
-install_scripts: install_py_scripts
+install_scripts:
 	@echo "Installing scripts and configuration files"
 	install -d $(INSTALL_MOD_PATH)/etc/init.d
 	install -d $(INSTALL_MOD_PATH)$(data_dir)
@@ -324,12 +322,7 @@ endif
 	ofed_scripts/install_helper $(INSTALL_MOD_PATH)
 
 	install -d $(INSTALL_MOD_PATH)/sbin
-	install -m 0755 ofed_scripts/sysctl_perf_tuning $(INSTALL_MOD_PATH)/sbin
-	install -m 0755 ofed_scripts/mlnx_bf_configure $(INSTALL_MOD_PATH)/sbin
-	install -m 0755 ofed_scripts/mlnx_bf_configure_ct $(INSTALL_MOD_PATH)/sbin
-	install -m 0755 ofed_scripts/mlnx-sf $(INSTALL_MOD_PATH)/sbin
 	install -d $(INSTALL_MOD_PATH)/$(prefix)/sbin
-	install -m 0755 ofed_scripts/*affinity* $(INSTALL_MOD_PATH)/$(prefix)/sbin
 	install -m 0755 ofed_scripts/vf-net-link-name.sh $(INSTALL_MOD_PATH)/etc/infiniband
 	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh $(INSTALL_MOD_PATH)$(data_dir)
 
@@ -354,46 +347,17 @@ ifeq ("$(wildcard $(INSTALL_MOD_PATH)/etc/modprobe.d/ib_ipoib.conf)","")
 endif
 endif
 
-	install -d $(INSTALL_MOD_PATH)/lib/udev
-	install -m 0755 ofed_scripts/mlnx_bf_udev $(INSTALL_MOD_PATH)/lib/udev
-
-	install -d $(INSTALL_MOD_PATH)/etc/udev/rules.d
-ifeq ("$(wildcard $(INSTALL_MOD_PATH)/etc/udev/rules.d/90-ib.rules)","")
-	install -m 0644 ofed_scripts/90-ib.rules $(INSTALL_MOD_PATH)/etc/udev/rules.d
-endif
-ifeq ("$(wildcard $(INSTALL_MOD_PATH)/etc/udev/rules.d/82-net-setup-link.rules)","")
-	install -m 0644 ofed_scripts/82-net-setup-link.rules $(INSTALL_MOD_PATH)/etc/udev/rules.d
-endif
-ifneq ($(shell udevinfo -V 2> /dev/null | awk '{print $NF}' 2>/dev/null | grep -E "^0[1-4]"),)
-	sed -i -e 's/KERNEL==/KERNEL=/g' $(INSTALL_MOD_PATH)/etc/udev/rules.d
-endif
+	install -d $(INSTALL_MOD_PATH)/lib/udev/rules.d
+	install -m 0755 ofed_scripts/auxdev-sf-netdev-rename $(INSTALL_MOD_PATH)/lib/udev
+	install -m 0755 ofed_scripts/sf-rep-netdev-rename $(INSTALL_MOD_PATH)/lib/udev
+	install -m 0644 ofed_scripts/83-mlnx-sf-name.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
+	install -m 0644 ofed_scripts/90-ib.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
+	install -m 0644 ofed_scripts/82-net-setup-link.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
 
 	install -d $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/mlnx_tune $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/show_gids $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/compat_gid_gen $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/cma_roce_mode $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/cma_roce_tos $(INSTALL_MOD_PATH)/usr/sbin
 	install -m 0755 ofed_scripts/setup_mr_cache.sh $(INSTALL_MOD_PATH)/usr/sbin
 	install -m 0755 ofed_scripts/odp_stat.sh $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/show_counters $(INSTALL_MOD_PATH)/usr/sbin
 	install -d $(INSTALL_MOD_PATH)/etc/
-
-
-# build the python scripts
-build_py_scripts:
-ifeq ($(shell /usr/bin/lsb_release -s -i 2>/dev/null | grep -qiE "debian|ubuntu" 2>/dev/null && echo YES || echo ''),)
-	cd ofed_scripts/utils && $(MLNX_PYTHON) setup.py build && cd -
-endif
-
-
-# install the python scripts
-install_py_scripts:
-ifeq ($(RECORD_PY_FILES),1)
-	cd ofed_scripts/utils && $(MLNX_PYTHON) setup.py install -O1 --root=$(INSTALL_MOD_PATH) --record ../../../../ofed-files && cd -
-else
-	cd ofed_scripts/utils && $(MLNX_PYTHON) setup.py install -O1 --root=$(INSTALL_MOD_PATH)/ && cd -
-endif
 
 
 clean: clean_kernel
@@ -411,7 +375,6 @@ clean-files += $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 help:
 	@echo
 	@echo "kernel:                      Build kernel modules"
-	@echo "build_py_scripts:            Build python scripts"
 	@echo "all:                         Run kernel and build_py_scripts"
 	@echo
 	@echo "install_kernel:              Install kernel modules under $(INSTALL_MOD_PATH)/lib/modules/$(KVERSION)/$(INSTALL_MOD_DIR)"

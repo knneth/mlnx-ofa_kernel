@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+for old_udev in \
+	/etc/udev/rules.d/82-net-setup-link.rules \
+	/etc/udev/rules.d/83-net-setup-link.rules \
+	/etc/udev/rules.d/90-ib \
+; do
+	dpkg-maintscript-helper rm_conffile $old_udev 5.4-OFED.5.4.0.4.9 -- "$@"
+done
+
+#DEBHELPER#

@@ -350,7 +350,7 @@ dr_action_reformat_to_action_type(enum mlx5dr_action_reformat_type reformat_type
  * the new size of the STEs array, rule with actions.
  */
 static void dr_actions_apply(struct mlx5dr_domain *dmn,
-			     enum mlx5dr_ste_entry_type ste_type,
+			     enum mlx5dr_domain_nic_type nic_type,
 			     u8 *action_type_set,
 			     u8 *last_ste,
 			     struct mlx5dr_ste_actions_attr *attr,
@@ -359,7 +359,7 @@ static void dr_actions_apply(struct mlx5dr_domain *dmn,
 	struct mlx5dr_ste_ctx *ste_ctx = dmn->ste_ctx;
 	u32 added_stes = 0;
 
-	if (ste_type == MLX5DR_STE_TYPE_RX)
+	if (nic_type == DR_DOMAIN_NIC_TYPE_RX)
 		mlx5dr_ste_set_actions_rx(ste_ctx, dmn, action_type_set,
 					  last_ste, attr, &added_stes);
 	else
@@ -371,7 +371,7 @@ static void dr_actions_apply(struct mlx5dr_domain *dmn,
 
 static enum dr_action_domain
 dr_action_get_action_domain(enum mlx5dr_domain_type domain,
-			    enum mlx5dr_ste_entry_type ste_type)
+			    enum mlx5dr_domain_nic_type nic_type)
 {
 	switch (domain) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
@@ -379,7 +379,7 @@ dr_action_get_action_domain(enum mlx5dr_domain_type domain,
 	case MLX5DR_DOMAIN_TYPE_NIC_TX:
 		return DR_ACTION_DOMAIN_NIC_EGRESS;
 	case MLX5DR_DOMAIN_TYPE_FDB:
-		if (ste_type == MLX5DR_STE_TYPE_RX)
+		if (nic_type == DR_DOMAIN_NIC_TYPE_RX)
 			return DR_ACTION_DOMAIN_FDB_INGRESS;
 		return DR_ACTION_DOMAIN_FDB_EGRESS;
 	default:
@@ -416,8 +416,8 @@ static int dr_action_handle_cs_recalc(struct mlx5dr_domain *dmn,
 		 * table, since there is an *assumption* that in such case FW
 		 * will recalculate the CS.
 		 */
-		if (dest_action->dest_tbl.is_fw_tbl) {
-			*final_icm_addr = dest_action->dest_tbl.fw_tbl.rx_icm_addr;
+		if (dest_action->dest_tbl->is_fw_tbl) {
+			*final_icm_addr = dest_action->dest_tbl->fw_tbl.rx_icm_addr;
 		} else {
 			mlx5dr_dbg(dmn,
 				   "Destination FT should be terminating when modify TTL is used\n");
@@ -429,8 +429,8 @@ static int dr_action_handle_cs_recalc(struct mlx5dr_domain *dmn,
 		/* If destination is vport we will get the FW flow table
 		 * that recalculates the CS and forwards to the vport.
 		 */
-		ret = mlx5dr_domain_cache_get_recalc_cs_ft_addr(dest_action->vport.dmn,
-								dest_action->vport.caps->num,
+		ret = mlx5dr_domain_cache_get_recalc_cs_ft_addr(dest_action->vport->dmn,
+								dest_action->vport->caps->num,
 								final_icm_addr);
 		if (ret) {
 			mlx5dr_err(dmn, "Failed to get FW cs recalc flow table\n");
@@ -452,7 +452,7 @@ dr_action_recalc_csum_required(struct mlx5dr_domain *dmn,
 	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
 	return caps->sw_format_ver == MLX5_HW_CONNECTX_5 &&
 	       dmn->type == MLX5DR_DOMAIN_TYPE_FDB &&
-	       action->rewrite.modify_ttl;
+	       action->rewrite->modify_ttl;
 }
 
 #define WITH_VLAN_NUM_HW_ACTIONS 6
@@ -465,7 +465,7 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 				 u32 *new_hw_ste_arr_sz)
 {
 	struct mlx5dr_domain_rx_tx *nic_dmn = nic_matcher->nic_tbl->nic_dmn;
-	bool rx_rule = nic_dmn->ste_type == MLX5DR_STE_TYPE_RX;
+	bool rx_rule = nic_dmn->type == DR_DOMAIN_NIC_TYPE_RX;
 	struct mlx5dr_domain *dmn = matcher->tbl->dmn;
 	u8 action_type_set[DR_ACTION_TYP_MAX] = {};
 	u32 action_seq_set[DR_ACTION_TYP_MAX];
@@ -480,9 +480,10 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 	attr.gvmi = dmn->info.caps.gvmi;
 	attr.hit_gvmi = dmn->info.caps.gvmi;
 	attr.final_icm_addr = nic_dmn->default_icm_addr;
-	action_domain = dr_action_get_action_domain(dmn->type, nic_dmn->ste_type);
+	action_domain = dr_action_get_action_domain(dmn->type, nic_dmn->type);
 
 	for (i = 0; i < num_actions; i++) {
+		struct mlx5dr_action_dest_tbl *dest_tbl;
 		struct mlx5dr_action *action;
 		int max_actions_type = 1;
 		u32 action_type;
@@ -499,37 +500,38 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 			break;
 		case DR_ACTION_TYP_FT:
 			dest_action = action;
-			if (!action->dest_tbl.is_fw_tbl) {
-				if (action->dest_tbl.tbl->dmn != dmn) {
+			dest_tbl = action->dest_tbl;
+			if (!dest_tbl->is_fw_tbl) {
+				if (dest_tbl->tbl->dmn != dmn) {
 					mlx5dr_err(dmn,
 						   "Destination table belongs to a different domain\n");
 					goto out_invalid_arg;
 				}
-				if (action->dest_tbl.tbl->level <= matcher->tbl->level) {
+				if (dest_tbl->tbl->level <= matcher->tbl->level) {
 					mlx5_core_dbg_once(dmn->mdev,
 							   "Connecting table to a lower/same level destination table\n");
 					mlx5dr_dbg(dmn,
 						   "Connecting table at level %d to a destination table at level %d\n",
 						   matcher->tbl->level,
-						   action->dest_tbl.tbl->level);
+						   dest_tbl->tbl->level);
 				}
 				attr.final_icm_addr = rx_rule ?
-					action->dest_tbl.tbl->rx.s_anchor->chunk->icm_addr :
-					action->dest_tbl.tbl->tx.s_anchor->chunk->icm_addr;
+					dest_tbl->tbl->rx.s_anchor->chunk->icm_addr :
+					dest_tbl->tbl->tx.s_anchor->chunk->icm_addr;
 			} else {
 				struct mlx5dr_cmd_query_flow_table_details output;
 				int ret;
 
 				/* get the relevant addresses */
-				if (!action->dest_tbl.fw_tbl.rx_icm_addr) {
+				if (!action->dest_tbl->fw_tbl.rx_icm_addr) {
 					ret = mlx5dr_cmd_query_flow_table(dmn->mdev,
-									  action->dest_tbl.fw_tbl.type,
-									  action->dest_tbl.fw_tbl.id,
+									  dest_tbl->fw_tbl.type,
+									  dest_tbl->fw_tbl.id,
 									  &output);
 					if (!ret) {
-						action->dest_tbl.fw_tbl.tx_icm_addr =
+						dest_tbl->fw_tbl.tx_icm_addr =
 							output.sw_owner_icm_root_1;
-						action->dest_tbl.fw_tbl.rx_icm_addr =
+						dest_tbl->fw_tbl.rx_icm_addr =
 							output.sw_owner_icm_root_0;
 					} else {
 						mlx5dr_err(dmn,
@@ -539,40 +541,40 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 					}
 				}
 				attr.final_icm_addr = rx_rule ?
-					action->dest_tbl.fw_tbl.rx_icm_addr :
-					action->dest_tbl.fw_tbl.tx_icm_addr;
+					dest_tbl->fw_tbl.rx_icm_addr :
+					dest_tbl->fw_tbl.tx_icm_addr;
 			}
 			break;
 		case DR_ACTION_TYP_QP:
 			mlx5dr_info(dmn, "Domain doesn't support QP\n");
 			goto out_invalid_arg;
 		case DR_ACTION_TYP_CTR:
-			attr.ctr_id = action->ctr.ctr_id +
-				action->ctr.offeset;
+			attr.ctr_id = action->ctr->ctr_id +
+				action->ctr->offeset;
 			break;
 		case DR_ACTION_TYP_TAG:
-			attr.flow_tag = action->flow_tag;
+			attr.flow_tag = action->flow_tag->flow_tag;
 			break;
 		case DR_ACTION_TYP_TNL_L2_TO_L2:
 			break;
 		case DR_ACTION_TYP_TNL_L3_TO_L2:
-			attr.decap_index = action->rewrite.index;
-			attr.decap_actions = action->rewrite.num_of_actions;
+			attr.decap_index = action->rewrite->index;
+			attr.decap_actions = action->rewrite->num_of_actions;
 			attr.decap_with_vlan =
 				attr.decap_actions == WITH_VLAN_NUM_HW_ACTIONS;
-			if (action->rewrite.arg)
-				attr.decap_args_index = mlx5dr_arg_get_object_id(action->rewrite.arg);
+			if (action->rewrite->arg)
+				attr.decap_args_index = mlx5dr_arg_get_object_id(action->rewrite->arg);
 			break;
 		case DR_ACTION_TYP_MODIFY_HDR:
-			attr.modify_actions = action->rewrite.num_of_actions;
+			attr.modify_actions = action->rewrite->num_of_actions;
 			recalc_cs_required =
 				dr_action_recalc_csum_required(dmn, action);
-			if (!action->rewrite.single_action_opt) {
-				attr.modify_index = action->rewrite.index;
-				if (action->rewrite.arg)
-					attr.args_index = mlx5dr_arg_get_object_id(action->rewrite.arg);
+			if (!action->rewrite->single_action_opt) {
+				attr.modify_index = action->rewrite->index;
+				if (action->rewrite->arg)
+					attr.args_index = mlx5dr_arg_get_object_id(action->rewrite->arg);
 			} else {
-				attr.single_modify_action = action->rewrite.data;
+				attr.single_modify_action = action->rewrite->data;
 			}
 			break;
 		case DR_ACTION_TYP_L2_TO_TNL_L2:
@@ -582,24 +584,24 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 				mlx5dr_info(dmn, "Device doesn't support Encap on RX\n");
 				goto out_invalid_arg;
 			}
-			attr.reformat.reformat_size = action->reformat.reformat_size;
-			attr.reformat.reformat_id = action->reformat.reformat_id;
+			attr.reformat.reformat_size = action->reformat->reformat_size;
+			attr.reformat.reformat_id = action->reformat->reformat_id;
 			break;
 		case DR_ACTION_TYP_SAMPLER:
-			attr.final_icm_addr = rx_rule ? action->sampler.rx_icm_addr :
-							action->sampler.tx_icm_addr;
+			attr.final_icm_addr = rx_rule ? action->sampler->rx_icm_addr :
+							action->sampler->tx_icm_addr;
 			break;
 		case DR_ACTION_TYP_VPORT:
-			attr.hit_gvmi = action->vport.caps->vhca_gvmi;
+			attr.hit_gvmi = action->vport->caps->vhca_gvmi;
 			dest_action = action;
 			if (rx_rule) {
 				/* Loopback on WIRE vport is not supported */
-				if (action->vport.caps->num == WIRE_PORT)
+				if (action->vport->caps->num == WIRE_PORT)
 					goto out_invalid_arg;
 
-				attr.final_icm_addr = action->vport.caps->icm_address_rx;
+				attr.final_icm_addr = action->vport->caps->icm_address_rx;
 			} else {
-				attr.final_icm_addr = action->vport.caps->icm_address_tx;
+				attr.final_icm_addr = action->vport->caps->icm_address_tx;
 			}
 			break;
 		case DR_ACTION_TYP_POP_VLAN:
@@ -611,13 +613,13 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 			if (attr.vlans.count == MLX5DR_MAX_VLANS)
 				return -EINVAL;
 
-			attr.vlans.headers[attr.vlans.count++] = action->push_vlan.vlan_hdr;
+			attr.vlans.headers[attr.vlans.count++] = action->push_vlan->vlan_hdr;
 			break;
 		case DR_ACTION_TYP_INSERT_HDR:
-			attr.reformat.reformat_size = action->reformat.reformat_size;
-			attr.reformat.reformat_id = action->reformat.reformat_id;
-			attr.reformat.reformat_param_0 = action->reformat.reformat_param_0;
-			attr.reformat.reformat_param_1 = action->reformat.reformat_param_1;
+			attr.reformat.reformat_size = action->reformat->reformat_size;
+			attr.reformat.reformat_id = action->reformat->reformat_id;
+			attr.reformat.reformat_param_0 = action->reformat->reformat_param_0;
+			attr.reformat.reformat_param_1 = action->reformat->reformat_param_1;
 			break;
 		default:
 			goto out_invalid_arg;
@@ -663,7 +665,7 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 	}
 
 	dr_actions_apply(dmn,
-			 nic_dmn->ste_type,
+			 nic_dmn->type,
 			 action_type_set,
 			 last_ste,
 			 &attr,
@@ -675,17 +677,39 @@ out_invalid_arg:
 	return -EINVAL;
 }
 
+static unsigned int action_size[DR_ACTION_TYP_MAX] = {
+	[DR_ACTION_TYP_TNL_L2_TO_L2] = sizeof(struct mlx5dr_action_reformat),
+	[DR_ACTION_TYP_L2_TO_TNL_L2] = sizeof(struct mlx5dr_action_reformat),
+	[DR_ACTION_TYP_TNL_L3_TO_L2] = sizeof(struct mlx5dr_action_rewrite),
+	[DR_ACTION_TYP_L2_TO_TNL_L3] = sizeof(struct mlx5dr_action_reformat),
+	[DR_ACTION_TYP_FT]           = sizeof(struct mlx5dr_action_dest_tbl),
+	[DR_ACTION_TYP_CTR]          = sizeof(struct mlx5dr_action_ctr),
+	[DR_ACTION_TYP_TAG]          = sizeof(struct mlx5dr_action_flow_tag),
+	[DR_ACTION_TYP_MODIFY_HDR]   = sizeof(struct mlx5dr_action_rewrite),
+	[DR_ACTION_TYP_VPORT]        = sizeof(struct mlx5dr_action_vport),
+	[DR_ACTION_TYP_PUSH_VLAN]    = sizeof(struct mlx5dr_action_push_vlan),
+	[DR_ACTION_TYP_SAMPLER]      = sizeof(struct mlx5dr_action_sampler),
+	[DR_ACTION_TYP_INSERT_HDR]   = sizeof(struct mlx5dr_action_reformat),
+};
+
 static struct mlx5dr_action *
 dr_action_create_generic(enum mlx5dr_action_type action_type)
 {
 	struct mlx5dr_action *action;
+	int extra_size;
 
-	action = kzalloc(sizeof(*action), GFP_KERNEL);
+	if (action_type < DR_ACTION_TYP_MAX)
+		extra_size = action_size[action_type];
+	else
+		return NULL;
+
+	action = kzalloc(sizeof(*action) + extra_size, GFP_KERNEL);
 	if (!action)
 		return NULL;
 
 	action->action_type = action_type;
 	refcount_set(&action->refcount, 1);
+	action->data = action + 1;
 
 	return action;
 }
@@ -704,10 +728,10 @@ mlx5dr_action_create_dest_table_num(struct mlx5dr_domain *dmn, u32 table_num)
 	if (!action)
 		return NULL;
 
-	action->dest_tbl.is_fw_tbl = true;
-	action->dest_tbl.fw_tbl.dmn = dmn;
-	action->dest_tbl.fw_tbl.id = table_num;
-	action->dest_tbl.fw_tbl.type = FS_FT_FDB;
+	action->dest_tbl->is_fw_tbl = true;
+	action->dest_tbl->fw_tbl.dmn = dmn;
+	action->dest_tbl->fw_tbl.id = table_num;
+	action->dest_tbl->fw_tbl.type = FS_FT_FDB;
 	refcount_inc(&dmn->refcount);
 
 	return action;
@@ -724,7 +748,7 @@ mlx5dr_action_create_dest_table(struct mlx5dr_table *tbl)
 	if (!action)
 		goto dec_ref;
 
-	action->dest_tbl.tbl = tbl;
+	action->dest_tbl->tbl = tbl;
 
 	return action;
 
@@ -736,7 +760,8 @@ dec_ref:
 struct mlx5dr_action *
 mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 				   struct mlx5dr_action_dest *dests,
-				   u32 num_of_dests)
+				   u32 num_of_dests,
+				   bool ignore_flow_level)
 {
 	struct mlx5dr_cmd_flow_destination_hw_info *hw_dests;
 	struct mlx5dr_action **ref_actions;
@@ -769,12 +794,12 @@ mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 		case DR_ACTION_TYP_VPORT:
 			hw_dests[i].vport.flags = MLX5_FLOW_DEST_VPORT_VHCA_ID;
 			hw_dests[i].type = MLX5_FLOW_DESTINATION_TYPE_VPORT;
-			hw_dests[i].vport.num = dest_action->vport.caps->num;
-			hw_dests[i].vport.vhca_id = dest_action->vport.caps->vhca_gvmi;
+			hw_dests[i].vport.num = dest_action->vport->caps->num;
+			hw_dests[i].vport.vhca_id = dest_action->vport->caps->vhca_gvmi;
 			if (reformat_action) {
 				reformat_req = true;
 				hw_dests[i].vport.reformat_id =
-					reformat_action->reformat.reformat_id;
+					reformat_action->reformat->reformat_id;
 				ref_actions[num_of_ref++] = reformat_action;
 				hw_dests[i].vport.flags |= MLX5_FLOW_DEST_VPORT_REFORMAT_ID;
 			}
@@ -782,10 +807,10 @@ mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 
 		case DR_ACTION_TYP_FT:
 			hw_dests[i].type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
-			if (dest_action->dest_tbl.is_fw_tbl)
-				hw_dests[i].ft_id = dest_action->dest_tbl.fw_tbl.id;
+			if (dest_action->dest_tbl->is_fw_tbl)
+				hw_dests[i].ft_id = dest_action->dest_tbl->fw_tbl.id;
 			else
-				hw_dests[i].ft_id = dest_action->dest_tbl.tbl->table_id;
+				hw_dests[i].ft_id = dest_action->dest_tbl->tbl->table_id;
 			break;
 
 		default:
@@ -802,8 +827,9 @@ mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 				      hw_dests,
 				      num_of_dests,
 				      reformat_req,
-				      &action->dest_tbl.fw_tbl.id,
-				      &action->dest_tbl.fw_tbl.group_id);
+				      &action->dest_tbl->fw_tbl.id,
+				      &action->dest_tbl->fw_tbl.group_id,
+				      ignore_flow_level);
 	if (ret)
 		goto free_action;
 
@@ -812,11 +838,11 @@ mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 	for (i = 0; i < num_of_ref; i++)
 		refcount_inc(&ref_actions[i]->refcount);
 
-	action->dest_tbl.is_fw_tbl = true;
-	action->dest_tbl.fw_tbl.dmn = dmn;
-	action->dest_tbl.fw_tbl.type = FS_FT_FDB;
-	action->dest_tbl.fw_tbl.ref_actions = ref_actions;
-	action->dest_tbl.fw_tbl.num_of_ref_actions = num_of_ref;
+	action->dest_tbl->is_fw_tbl = true;
+	action->dest_tbl->fw_tbl.dmn = dmn;
+	action->dest_tbl->fw_tbl.type = FS_FT_FDB;
+	action->dest_tbl->fw_tbl.ref_actions = ref_actions;
+	action->dest_tbl->fw_tbl.num_of_ref_actions = num_of_ref;
 
 	kfree(hw_dests);
 
@@ -841,10 +867,10 @@ mlx5dr_action_create_dest_flow_fw_table(struct mlx5dr_domain *dmn,
 	if (!action)
 		return NULL;
 
-	action->dest_tbl.is_fw_tbl = 1;
-	action->dest_tbl.fw_tbl.type = ft->type;
-	action->dest_tbl.fw_tbl.id = ft->id;
-	action->dest_tbl.fw_tbl.dmn = dmn;
+	action->dest_tbl->is_fw_tbl = 1;
+	action->dest_tbl->fw_tbl.type = ft->type;
+	action->dest_tbl->fw_tbl.id = ft->id;
+	action->dest_tbl->fw_tbl.dmn = dmn;
 
 	refcount_inc(&dmn->refcount);
 
@@ -860,7 +886,7 @@ mlx5dr_action_create_flow_counter(u32 counter_id)
 	if (!action)
 		return NULL;
 
-	action->ctr.ctr_id = counter_id;
+	action->ctr->ctr_id = counter_id;
 
 	return action;
 }
@@ -873,7 +899,7 @@ struct mlx5dr_action *mlx5dr_action_create_tag(u32 tag_value)
 	if (!action)
 		return NULL;
 
-	action->flow_tag = tag_value & 0xffffff;
+	action->flow_tag->flow_tag = tag_value & 0xffffff;
 
 	return action;
 }
@@ -894,10 +920,10 @@ mlx5dr_action_create_flow_sampler(struct mlx5dr_domain *dmn, u32 sampler_id)
 	if (!action)
 		return NULL;
 
-	action->sampler.dmn = dmn;
-	action->sampler.sampler_id = sampler_id;
-	action->sampler.rx_icm_addr = icm_rx;
-	action->sampler.tx_icm_addr = icm_tx;
+	action->sampler->dmn = dmn;
+	action->sampler->sampler_id = sampler_id;
+	action->sampler->rx_icm_addr = icm_rx;
+	action->sampler->tx_icm_addr = icm_tx;
 
 	refcount_inc(&dmn->refcount);
 	return action;
@@ -1003,8 +1029,8 @@ dr_action_create_reformat_action(struct mlx5dr_domain *dmn,
 		if (ret)
 			return ret;
 
-		action->reformat.reformat_id = reformat_id;
-		action->reformat.reformat_size = data_sz;
+		action->reformat->reformat_id = reformat_id;
+		action->reformat->reformat_size = data_sz;
 		return 0;
 	}
 	case DR_ACTION_TYP_TNL_L2_TO_L2:
@@ -1022,20 +1048,20 @@ dr_action_create_reformat_action(struct mlx5dr_domain *dmn,
 							  data, data_sz,
 							  hw_actions,
 							  MLX5DR_ACTION_CACHE_LINE_SIZE,
-							  &action->rewrite.num_of_actions);
+							  &action->rewrite->num_of_actions);
 		if (ret) {
 			mlx5dr_dbg(dmn, "Failed creating decap l3 action list\n");
 			kfree(hw_actions);
 			return ret;
 		}
 
-		action->rewrite.data = hw_actions;
-		action->rewrite.dmn = dmn;
+		action->rewrite->data = hw_actions;
+		action->rewrite->dmn = dmn;
 
 		ret = mlx5dr_ste_alloc_modify_hdr(action);
 		if (ret) {
 			mlx5dr_dbg(dmn, "Failed prepare reformat data\n");
-			mlx5dr_icm_free_chunk(action->rewrite.chunk);
+			mlx5dr_icm_free_chunk(action->rewrite->chunk);
 			return ret;
 		}
 		return 0;
@@ -1051,10 +1077,10 @@ dr_action_create_reformat_action(struct mlx5dr_domain *dmn,
 		if (ret)
 			return ret;
 
-		action->reformat.reformat_id = reformat_id;
-		action->reformat.reformat_size = data_sz;
-		action->reformat.reformat_param_0 = reformat_param_0;
-		action->reformat.reformat_param_1 = reformat_param_1;
+		action->reformat->reformat_id = reformat_id;
+		action->reformat->reformat_size = data_sz;
+		action->reformat->reformat_param_0 = reformat_param_0;
+		action->reformat->reformat_param_1 = reformat_param_1;
 		return 0;
 	}
 	default:
@@ -1087,7 +1113,7 @@ struct mlx5dr_action *mlx5dr_action_create_push_vlan(struct mlx5dr_domain *dmn,
 	if (!action)
 		return NULL;
 
-	action->push_vlan.vlan_hdr = vlan_hdr_h;
+	action->push_vlan->vlan_hdr = vlan_hdr_h;
 	return action;
 }
 
@@ -1122,7 +1148,7 @@ mlx5dr_action_create_packet_reformat(struct mlx5dr_domain *dmn,
 	if (!action)
 		goto dec_ref;
 
-	action->reformat.dmn = dmn;
+	action->reformat->dmn = dmn;
 
 	ret = dr_action_create_reformat_action(dmn,
 					       reformat_param_0,
@@ -1330,17 +1356,17 @@ dr_action_modify_check_set_field_limitation(struct mlx5dr_action *action,
 					    const __be64 *sw_action)
 {
 	u16 sw_field = MLX5_GET(set_action_in, sw_action, field);
-	struct mlx5dr_domain *dmn = action->rewrite.dmn;
+	struct mlx5dr_domain *dmn = action->rewrite->dmn;
 
 	if (sw_field == MLX5_ACTION_IN_FIELD_METADATA_REG_A) {
-		action->rewrite.allow_rx = 0;
+		action->rewrite->allow_rx = 0;
 		if (dmn->type != MLX5DR_DOMAIN_TYPE_NIC_TX) {
 			mlx5dr_dbg(dmn, "Unsupported field %d for RX/FDB set action\n",
 				   sw_field);
 			return -EINVAL;
 		}
 	} else if (sw_field == MLX5_ACTION_IN_FIELD_METADATA_REG_B) {
-		action->rewrite.allow_tx = 0;
+		action->rewrite->allow_tx = 0;
 		if (dmn->type != MLX5DR_DOMAIN_TYPE_NIC_RX) {
 			mlx5dr_dbg(dmn, "Unsupported field %d for TX/FDB set action\n",
 				   sw_field);
@@ -1348,7 +1374,7 @@ dr_action_modify_check_set_field_limitation(struct mlx5dr_action *action,
 		}
 	}
 
-	if (!action->rewrite.allow_rx && !action->rewrite.allow_tx) {
+	if (!action->rewrite->allow_rx && !action->rewrite->allow_tx) {
 		mlx5dr_dbg(dmn, "Modify SET actions not supported on both RX and TX\n");
 		return -EINVAL;
 	}
@@ -1361,7 +1387,7 @@ dr_action_modify_check_add_field_limitation(struct mlx5dr_action *action,
 					    const __be64 *sw_action)
 {
 	u16 sw_field = MLX5_GET(set_action_in, sw_action, field);
-	struct mlx5dr_domain *dmn = action->rewrite.dmn;
+	struct mlx5dr_domain *dmn = action->rewrite->dmn;
 
 	if (sw_field != MLX5_ACTION_IN_FIELD_OUT_IP_TTL &&
 	    sw_field != MLX5_ACTION_IN_FIELD_OUT_IPV6_HOPLIMIT &&
@@ -1379,7 +1405,7 @@ static int
 dr_action_modify_check_copy_field_limitation(struct mlx5dr_action *action,
 					     const __be64 *sw_action)
 {
-	struct mlx5dr_domain *dmn = action->rewrite.dmn;
+	struct mlx5dr_domain *dmn = action->rewrite->dmn;
 	u16 sw_fields[2];
 	int i;
 
@@ -1388,14 +1414,14 @@ dr_action_modify_check_copy_field_limitation(struct mlx5dr_action *action,
 
 	for (i = 0; i < 2; i++) {
 		if (sw_fields[i] == MLX5_ACTION_IN_FIELD_METADATA_REG_A) {
-			action->rewrite.allow_rx = 0;
+			action->rewrite->allow_rx = 0;
 			if (dmn->type != MLX5DR_DOMAIN_TYPE_NIC_TX) {
 				mlx5dr_dbg(dmn, "Unsupported field %d for RX/FDB set action\n",
 					   sw_fields[i]);
 				return -EINVAL;
 			}
 		} else if (sw_fields[i] == MLX5_ACTION_IN_FIELD_METADATA_REG_B) {
-			action->rewrite.allow_tx = 0;
+			action->rewrite->allow_tx = 0;
 			if (dmn->type != MLX5DR_DOMAIN_TYPE_NIC_RX) {
 				mlx5dr_dbg(dmn, "Unsupported field %d for TX/FDB set action\n",
 					   sw_fields[i]);
@@ -1404,7 +1430,7 @@ dr_action_modify_check_copy_field_limitation(struct mlx5dr_action *action,
 		}
 	}
 
-	if (!action->rewrite.allow_rx && !action->rewrite.allow_tx) {
+	if (!action->rewrite->allow_rx && !action->rewrite->allow_tx) {
 		mlx5dr_dbg(dmn, "Modify copy actions not supported on both RX and TX\n");
 		return -EINVAL;
 	}
@@ -1416,7 +1442,7 @@ static int
 dr_action_modify_check_field_limitation(struct mlx5dr_action *action,
 					const __be64 *sw_action)
 {
-	struct mlx5dr_domain *dmn = action->rewrite.dmn;
+	struct mlx5dr_domain *dmn = action->rewrite->dmn;
 	u8 action_type;
 	int ret;
 
@@ -1465,7 +1491,7 @@ static int dr_actions_convert_modify_header(struct mlx5dr_action *action,
 {
 	const struct mlx5dr_ste_action_modify_field *hw_dst_action_info;
 	const struct mlx5dr_ste_action_modify_field *hw_src_action_info;
-	struct mlx5dr_domain *dmn = action->rewrite.dmn;
+	struct mlx5dr_domain *dmn = action->rewrite->dmn;
 	int ret, i, hw_idx = 0;
 	__be64 *sw_action;
 	__be64 hw_action;
@@ -1475,8 +1501,8 @@ static int dr_actions_convert_modify_header(struct mlx5dr_action *action,
 
 	*modify_ttl = false;
 
-	action->rewrite.allow_rx = 1;
-	action->rewrite.allow_tx = 1;
+	action->rewrite->allow_rx = 1;
+	action->rewrite->allow_tx = 1;
 
 	for (i = 0; i < num_sw_actions; i++) {
 		sw_action = &sw_actions[i];
@@ -1577,15 +1603,15 @@ static int dr_action_create_modify_action(struct mlx5dr_domain *dmn,
 	if (ret)
 		goto free_hw_actions;
 
-	action->rewrite.modify_ttl = modify_ttl;
-	action->rewrite.data = (u8 *)hw_actions;
-	action->rewrite.num_of_actions = num_hw_actions;
+	action->rewrite->modify_ttl = modify_ttl;
+	action->rewrite->data = (u8 *)hw_actions;
+	action->rewrite->num_of_actions = num_hw_actions;
 
 	if (num_hw_actions == 1 &&
 	    dmn->info.caps.sw_format_ver == MLX5_HW_CONNECTX_6DX) {
-		action->rewrite.single_action_opt = true;
+		action->rewrite->single_action_opt = true;
 	} else {
-		action->rewrite.single_action_opt = false;
+		action->rewrite->single_action_opt = false;
 		ret = mlx5dr_ste_alloc_modify_hdr(action);
 		if (ret)
 			goto free_hw_actions;
@@ -1618,7 +1644,7 @@ mlx5dr_action_create_modify_header(struct mlx5dr_domain *dmn,
 	if (!action)
 		goto dec_ref;
 
-	action->rewrite.dmn = dmn;
+	action->rewrite->dmn = dmn;
 
 	ret = dr_action_create_modify_action(dmn,
 					     actions_sz,
@@ -1672,15 +1698,15 @@ mlx5dr_action_create_dest_vport(struct mlx5dr_domain *dmn,
 	if (!action)
 		return NULL;
 
-	action->vport.dmn = vport_dmn;
-	action->vport.caps = vport_cap;
+	action->vport->dmn = vport_dmn;
+	action->vport->caps = vport_cap;
 
 	return action;
 }
 
 u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action)
 {
-	return action->reformat.reformat_id;
+	return action->reformat->reformat_id;
 }
 
 int mlx5dr_action_destroy(struct mlx5dr_action *action)
@@ -1690,50 +1716,50 @@ int mlx5dr_action_destroy(struct mlx5dr_action *action)
 
 	switch (action->action_type) {
 	case DR_ACTION_TYP_FT:
-		if (action->dest_tbl.is_fw_tbl)
-			refcount_dec(&action->dest_tbl.fw_tbl.dmn->refcount);
+		if (action->dest_tbl->is_fw_tbl)
+			refcount_dec(&action->dest_tbl->fw_tbl.dmn->refcount);
 		else
-			refcount_dec(&action->dest_tbl.tbl->refcount);
+			refcount_dec(&action->dest_tbl->tbl->refcount);
 
-		if (action->dest_tbl.is_fw_tbl &&
-		    action->dest_tbl.fw_tbl.num_of_ref_actions) {
+		if (action->dest_tbl->is_fw_tbl &&
+		    action->dest_tbl->fw_tbl.num_of_ref_actions) {
 			struct mlx5dr_action **ref_actions;
 			int i;
 
-			ref_actions = action->dest_tbl.fw_tbl.ref_actions;
-			for (i = 0; i < action->dest_tbl.fw_tbl.num_of_ref_actions; i++)
+			ref_actions = action->dest_tbl->fw_tbl.ref_actions;
+			for (i = 0; i < action->dest_tbl->fw_tbl.num_of_ref_actions; i++)
 				refcount_dec(&ref_actions[i]->refcount);
 
 			kfree(ref_actions);
 
-			mlx5dr_fw_destroy_md_tbl(action->dest_tbl.fw_tbl.dmn,
-						 action->dest_tbl.fw_tbl.id,
-						 action->dest_tbl.fw_tbl.group_id);
+			mlx5dr_fw_destroy_md_tbl(action->dest_tbl->fw_tbl.dmn,
+						 action->dest_tbl->fw_tbl.id,
+						 action->dest_tbl->fw_tbl.group_id);
 		}
 		break;
 	case DR_ACTION_TYP_TNL_L2_TO_L2:
-		refcount_dec(&action->reformat.dmn->refcount);
+		refcount_dec(&action->reformat->dmn->refcount);
 		break;
 	case DR_ACTION_TYP_TNL_L3_TO_L2:
 		mlx5dr_ste_free_modify_hdr(action);
-		refcount_dec(&action->reformat.dmn->refcount);
+		refcount_dec(&action->reformat->dmn->refcount);
 		break;
 	case DR_ACTION_TYP_L2_TO_TNL_L2:
 	case DR_ACTION_TYP_L2_TO_TNL_L3:
 	case DR_ACTION_TYP_INSERT_HDR:
-		mlx5dr_cmd_destroy_reformat_ctx((action->reformat.dmn)->mdev,
-						action->reformat.reformat_id);
-		refcount_dec(&action->reformat.dmn->refcount);
+		mlx5dr_cmd_destroy_reformat_ctx((action->reformat->dmn)->mdev,
+						action->reformat->reformat_id);
+		refcount_dec(&action->reformat->dmn->refcount);
 		break;
 	case DR_ACTION_TYP_MODIFY_HDR:
-		if (action->rewrite.single_action_opt)
-			kfree(action->rewrite.data);
+		if (action->rewrite->single_action_opt)
+			kfree(action->rewrite->data);
 		else
 			mlx5dr_ste_free_modify_hdr(action);
-		refcount_dec(&action->rewrite.dmn->refcount);
+		refcount_dec(&action->rewrite->dmn->refcount);
 		break;
 	case DR_ACTION_TYP_SAMPLER:
-		refcount_dec(&action->sampler.dmn->refcount);
+		refcount_dec(&action->sampler->dmn->refcount);
 		break;
 	default:
 		break;

@@ -1,5 +1,5 @@
-#ifndef _MLNX_LINUX_RBTREE_H
-#define _MLNX_LINUX_RBTREE_H
+#ifndef _COMPAT_LINUX_RBTREE_H
+#define _COMPAT_LINUX_RBTREE_H
 
 #include "../../compat/config.h"
 
@@ -29,4 +29,4 @@
 	     pos = n)
 #endif
 
-#endif /* _MLNX_LINUX_RBTREE_H */
+#endif /* _COMPAT_LINUX_RBTREE_H */

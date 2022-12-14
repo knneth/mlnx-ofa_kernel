@@ -3,12 +3,21 @@ Subject: [PATCH] BACKPORT: include/rdma/rdma_netlink.h
 
 Change-Id: I165f920794651ef8ebebfa3556fafb0d2c7ef5b7
 ---
- include/rdma/rdma_netlink.h | 8 ++++++--
- 1 file changed, 6 insertions(+), 2 deletions(-)
+ include/rdma/rdma_netlink.h | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
 
 --- a/include/rdma/rdma_netlink.h
 +++ b/include/rdma/rdma_netlink.h
-@@ -13,8 +13,12 @@ enum {
+@@ -3,6 +3,8 @@
+ #ifndef _RDMA_NETLINK_H
+ #define _RDMA_NETLINK_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/netlink.h>
+ #include <uapi/rdma/rdma_netlink.h>
+ 
+@@ -13,8 +15,12 @@ enum {
  };
  
  struct rdma_nl_cbs {

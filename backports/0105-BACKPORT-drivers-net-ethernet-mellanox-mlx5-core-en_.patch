@@ -74,15 +74,15 @@ Change-Id: I185ffbb2a9ecce3dd28c151e271ac595a22f7acb
  	u64 tx_cqe_compress_blks;
  	u64 tx_cqe_compress_pkts;
  	u64 rx_wqe_err;
-@@ -190,6 +203,7 @@ struct mlx5e_sw_stats {
+@@ -192,6 +205,7 @@ struct mlx5e_sw_stats {
  	u64 ch_eq_rearm;
  
  #ifdef CONFIG_MLX5_EN_TLS
 +#ifdef HAVE_UAPI_LINUX_TLS_H
  	u64 tx_tls_encrypted_packets;
  	u64 tx_tls_encrypted_bytes;
- 	u64 tx_tls_ctx;
-@@ -212,6 +226,7 @@ struct mlx5e_sw_stats {
+ 	u64 tx_tls_ooo;
+@@ -211,6 +225,7 @@ struct mlx5e_sw_stats {
  	u64 rx_tls_resync_res_ok;
  	u64 rx_tls_resync_res_skip;
  	u64 rx_tls_err;
@@ -90,7 +90,7 @@ Change-Id: I185ffbb2a9ecce3dd28c151e271ac595a22f7acb
  #endif
  
  	u64 rx_xsk_packets;
-@@ -316,8 +331,12 @@ struct mlx5e_rq_stats {
+@@ -315,8 +330,12 @@ struct mlx5e_rq_stats {
  	u64 mcast_bytes;
  	u64 ecn_mark;
  	u64 removed_vlan_packets;
@@ -103,15 +103,15 @@ Change-Id: I185ffbb2a9ecce3dd28c151e271ac595a22f7acb
  	u64 wqe_err;
  	u64 mpwqe_filler_cqes;
  	u64 mpwqe_filler_strides;
-@@ -337,6 +356,7 @@ struct mlx5e_rq_stats {
- 	u64 arfs_err;
- 	u64 recover;
+@@ -338,6 +357,7 @@ struct mlx5e_rq_stats {
+ 	u64 pet_hdr_lookup_drop;
+ 	u64 pet_mdata_lookup_drop;
  #ifdef CONFIG_MLX5_EN_TLS
 +#ifdef HAVE_UAPI_LINUX_TLS_H
  	u64 tls_decrypted_packets;
  	u64 tls_decrypted_bytes;
- 	u64 tls_ctx;
-@@ -348,6 +368,7 @@ struct mlx5e_rq_stats {
+ 	u64 tls_resync_req_pkt;
+@@ -347,6 +367,7 @@ struct mlx5e_rq_stats {
  	u64 tls_resync_res_ok;
  	u64 tls_resync_res_skip;
  	u64 tls_err;
@@ -119,7 +119,7 @@ Change-Id: I185ffbb2a9ecce3dd28c151e271ac595a22f7acb
  #endif
  };
  
-@@ -391,6 +412,7 @@ struct mlx5e_sq_stats {
+@@ -389,6 +410,7 @@ struct mlx5e_sq_stats {
  	u64 cqe_err;
  };
  
@@ -127,7 +127,7 @@ Change-Id: I185ffbb2a9ecce3dd28c151e271ac595a22f7acb
  struct mlx5e_xdpsq_stats {
  	u64 xmit;
  	u64 mpwqe;
-@@ -401,6 +423,7 @@ struct mlx5e_xdpsq_stats {
+@@ -399,6 +421,7 @@ struct mlx5e_xdpsq_stats {
  	/* dirtied @completion */
  	u64 cqes ____cacheline_aligned_in_smp;
  };

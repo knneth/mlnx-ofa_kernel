@@ -1,6 +1,8 @@
 #ifndef _COMPAT_LINUX_KMOD_H
 #define _COMPAT_LINUX_KMOD_H 1
 
+#include "../../compat/config.h"
+
 #include_next <linux/kmod.h>
 
 #ifdef CONFIG_MODULES

@@ -1,5 +1,5 @@
-#ifndef _MLNX_LINUX_MMU_NOTIFIER_H
-#define _MLNX_LINUX_MMU_NOTIFIER_H
+#ifndef _COMPAT_LINUX_MMU_NOTIFIER_H
+#define _COMPAT_LINUX_MMU_NOTIFIER_H
 
 #include "../../compat/config.h"
 
@@ -15,4 +15,4 @@ extern void mmu_notifier_call_srcu(struct rcu_head *rcu, void (*func)(struct rcu
 extern void mmu_notifier_synchronize(void);
 #endif
 
-#endif /* _MLNX_LINUX_MMU_NOTIFIER_H */
+#endif /* _COMPAT_LINUX_MMU_NOTIFIER_H */

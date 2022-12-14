@@ -2,7 +2,6 @@
 #define _COMPAT_LINUX_UUID_H
 
 #include "../../compat/config.h"
-#include <linux/version.h>
 
 #include_next <linux/uuid.h>
 

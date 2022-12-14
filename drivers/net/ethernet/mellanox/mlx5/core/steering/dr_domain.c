@@ -52,7 +52,31 @@ static int dr_domain_init_cache(struct mlx5dr_domain *dmn)
 	if (!dmn->cache.recalc_cs_ft)
 		return -ENOMEM;
 
+	if (dmn->info.caps.num_sf_vports_base1) {
+		dmn->cache.recalc_cs_ft_sf1 =
+			kcalloc(dmn->info.caps.num_sf_vports_base1,
+				sizeof(dmn->cache.recalc_cs_ft_sf1[0]),
+				GFP_KERNEL);
+		if (!dmn->cache.recalc_cs_ft_sf1)
+			goto err_free_cs_ft;
+	}
+
+	if (dmn->info.caps.num_sf_vports_base2) {
+		dmn->cache.recalc_cs_ft_sf2 =
+			kcalloc(dmn->info.caps.num_sf_vports_base2,
+				sizeof(dmn->cache.recalc_cs_ft_sf2[0]),
+				GFP_KERNEL);
+		if (!dmn->cache.recalc_cs_ft_sf2)
+			goto err_free_cs_ft_sf1;
+	}
+
 	return 0;
+
+err_free_cs_ft_sf1:
+	kfree(dmn->cache.recalc_cs_ft_sf1);
+err_free_cs_ft:
+	kfree(dmn->cache.recalc_cs_ft);
+	return -ENOMEM;
 }
 
 static void dr_domain_uninit_cache(struct mlx5dr_domain *dmn)
@@ -60,32 +84,63 @@ static void dr_domain_uninit_cache(struct mlx5dr_domain *dmn)
 	int i;
 
 	for (i = 0; i < dmn->info.caps.num_nic_vports; i++) {
-		if (!dmn->cache.recalc_cs_ft[i])
-			continue;
+		if (dmn->cache.recalc_cs_ft[i])
+			mlx5dr_fw_destroy_recalc_cs_ft(dmn,
+						       dmn->cache.recalc_cs_ft[i]);
+	}
 
-		mlx5dr_fw_destroy_recalc_cs_ft(dmn, dmn->cache.recalc_cs_ft[i]);
+	for (i = 0; i < dmn->info.caps.num_sf_vports_base1; i++) {
+		if (dmn->cache.recalc_cs_ft_sf1[i])
+			mlx5dr_fw_destroy_recalc_cs_ft(dmn,
+						       dmn->cache.recalc_cs_ft_sf1[i]);
+	}
+
+	for (i = 0; i < dmn->info.caps.num_sf_vports_base2; i++) {
+		if (dmn->cache.recalc_cs_ft_sf2[i])
+			mlx5dr_fw_destroy_recalc_cs_ft(dmn,
+						       dmn->cache.recalc_cs_ft_sf2[i]);
 	}
 
 	kfree(dmn->cache.recalc_cs_ft);
+	kfree(dmn->cache.recalc_cs_ft_sf1);
+	kfree(dmn->cache.recalc_cs_ft_sf2);
+}
+
+struct mlx5dr_fw_recalc_cs_ft **
+dr_domain_cache_get_recalc_cs_ft(struct mlx5dr_domain *dmn, u32 vport)
+{
+	struct mlx5dr_cmd_caps *caps = &dmn->info.caps;
+
+	if (caps->pf_vf_vports_caps && vport < caps->num_pf_vf_vports)
+		return &dmn->cache.recalc_cs_ft[vport];
+
+	if (caps->sf_vports_caps1 && mlx5dr_is_sf_vport_range1(caps, vport))
+		return &dmn->cache.recalc_cs_ft_sf1[mlx5dr_sf_vport_to_idx_range1(caps, vport)];
+
+	if (caps->sf_vports_caps2 && mlx5dr_is_sf_vport_range2(caps, vport))
+		return &dmn->cache.recalc_cs_ft_sf2[mlx5dr_sf_vport_to_idx_range2(caps, vport)];
+
+	return NULL;
 }
 
 int mlx5dr_domain_cache_get_recalc_cs_ft_addr(struct mlx5dr_domain *dmn,
 					      u32 vport_num,
 					      u64 *rx_icm_addr)
 {
-	struct mlx5dr_fw_recalc_cs_ft *recalc_cs_ft;
+	struct mlx5dr_fw_recalc_cs_ft **recalc_cs_ft;
 
-	recalc_cs_ft = dmn->cache.recalc_cs_ft[vport_num];
-	if (!recalc_cs_ft) {
+	recalc_cs_ft = dr_domain_cache_get_recalc_cs_ft(dmn, vport_num);
+	if (!recalc_cs_ft)
+		return -EINVAL;
+
+	if (!*recalc_cs_ft) {
 		/* Table not in cache, need to allocate a new one */
-		recalc_cs_ft = mlx5dr_fw_create_recalc_cs_ft(dmn, vport_num);
-		if (!recalc_cs_ft)
+		*recalc_cs_ft = mlx5dr_fw_create_recalc_cs_ft(dmn, vport_num);
+		if (!(*recalc_cs_ft))
 			return -EINVAL;
-
-		dmn->cache.recalc_cs_ft[vport_num] = recalc_cs_ft;
 	}
 
-	*rx_icm_addr = recalc_cs_ft->rx_icm_addr;
+	*rx_icm_addr = (*recalc_cs_ft)->rx_icm_addr;
 
 	return 0;
 }
@@ -288,19 +343,20 @@ static int dr_domain_query_vports(struct mlx5dr_domain *dmn)
 			return ret;
 	}
 
-	ret = mlx5dr_domain_vport_enable(dmn, 0);
-	if (ret)
-		return ret;
-
-	/* Query vf vports */
-	for (vf = 0; vf < caps->num_vf_vports; vf++) {
-		int vport = vf + 1;
-
-		ret = mlx5dr_domain_vport_enable(dmn, vport);
+	if (caps->host_funcs_enabled) {
+		ret = mlx5dr_domain_vport_enable(dmn, 0);
 		if (ret)
 			return ret;
-	}
 
+		/* Query vf vports */
+		for (vf = 0; vf < caps->num_vf_vports; vf++) {
+			int vport = vf + 1;
+
+			ret = mlx5dr_domain_vport_enable(dmn, vport);
+			if (ret)
+				return ret;
+		}
+	}
 	/* Sf vports cannot be queried before sf was enabled */
 
 	dr_domain_query_uplink(dmn);
@@ -339,20 +395,37 @@ static int dr_domain_query_fdb_caps(struct mlx5_core_dev *mdev,
 		goto free_vports_caps;
 	}
 
-	if (dmn->info.caps.num_sf_vports > 0) {
-		dmn->info.caps.sf_vports_caps =
-			kcalloc(dmn->info.caps.num_sf_vports,
-				sizeof(dmn->info.caps.sf_vports_caps[0]),
-				GFP_KERNEL);
+	if (dmn->info.caps.num_sf_vports_base1 > 0) {
+		dmn->info.caps.sf_vports_caps1 =
+			kvzalloc(dmn->info.caps.num_sf_vports_base1 *
+				 sizeof(*dmn->info.caps.sf_vports_caps1),
+				 GFP_KERNEL);
 
-		if (!dmn->info.caps.sf_vports_caps) {
+		if (!dmn->info.caps.sf_vports_caps1) {
 			ret = -ENOMEM;
 			goto free_vports_caps;
 		}
 	}
 
+	if (dmn->info.caps.num_sf_vports_base2 > 0) {
+		dmn->info.caps.sf_vports_caps2 =
+			kvzalloc(dmn->info.caps.num_sf_vports_base2 *
+				 sizeof(*dmn->info.caps.sf_vports_caps2),
+				 GFP_KERNEL);
+
+		if (!dmn->info.caps.sf_vports_caps2) {
+			ret = -ENOMEM;
+			goto free_sf_range1_vports_caps;
+		}
+	}
+
 	return 0;
 
+free_sf_range1_vports_caps:
+	if (dmn->info.caps.num_sf_vports_base1) {
+		kvfree(dmn->info.caps.sf_vports_caps1);
+		dmn->info.caps.sf_vports_caps1 = NULL;
+	}
 free_vports_caps:
 	kfree(dmn->info.caps.pf_vf_vports_caps);
 	dmn->info.caps.pf_vf_vports_caps = NULL;
@@ -383,18 +456,18 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 
 	switch (dmn->type) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
-		dmn->info.rx.ste_type = MLX5DR_STE_TYPE_RX;
+		dmn->info.rx.type = DR_DOMAIN_NIC_TYPE_RX;
 		dmn->info.rx.default_icm_addr = dmn->info.caps.nic_rx_drop_address;
 		dmn->info.rx.drop_icm_addr = dmn->info.caps.nic_rx_drop_address;
 		break;
 	case MLX5DR_DOMAIN_TYPE_NIC_TX:
-		dmn->info.tx.ste_type = MLX5DR_STE_TYPE_TX;
+		dmn->info.tx.type = DR_DOMAIN_NIC_TYPE_TX;
 		dmn->info.tx.default_icm_addr = dmn->info.caps.nic_tx_allow_address;
 		dmn->info.tx.drop_icm_addr = dmn->info.caps.nic_tx_drop_address;
 		break;
 	case MLX5DR_DOMAIN_TYPE_FDB:
-		dmn->info.rx.ste_type = MLX5DR_STE_TYPE_RX;
-		dmn->info.tx.ste_type = MLX5DR_STE_TYPE_TX;
+		dmn->info.rx.type = DR_DOMAIN_NIC_TYPE_RX;
+		dmn->info.tx.type = DR_DOMAIN_NIC_TYPE_TX;
 		vport_cap = &dmn->info.caps.esw_manager_vport_caps;
 
 		dmn->info.tx.default_icm_addr = vport_cap->icm_address_tx;
@@ -416,8 +489,10 @@ static void dr_domain_caps_uninit(struct mlx5dr_domain *dmn)
 {
 	kfree(dmn->info.caps.pf_vf_vports_caps);
 	dmn->info.caps.pf_vf_vports_caps = NULL;
-	if (dmn->info.caps.num_sf_vports > 0)
-		kfree(dmn->info.caps.sf_vports_caps);
+	if (dmn->info.caps.num_sf_vports_base1)
+		kvfree(dmn->info.caps.sf_vports_caps1);
+	if (dmn->info.caps.num_sf_vports_base2)
+		kvfree(dmn->info.caps.sf_vports_caps2);
 }
 
 struct mlx5dr_domain *

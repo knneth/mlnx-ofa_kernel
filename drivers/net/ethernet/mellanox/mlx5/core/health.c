@@ -332,8 +332,50 @@ int mlx5_health_wait_pci_up(struct mlx5_core_dev *dev)
 	return 0;
 }
 
+#define MLX5_REPORTER_FW_GRACEFUL_PERIOD 1200000
+
+static bool mlx5_health_is_recovery_allowed(struct mlx5_core_health *health)
+{
+	struct mlx5_health_recoveries *recoveries = &health->recoveries;
+	unsigned long recover_ts_deadline;
+	int buf_size, head, tail;
+
+	head = recoveries->head;
+	tail = recoveries->tail;
+
+	buf_size = head >= tail ? head - tail : head + MLX5_RECOVERIES_CIRC_BUFF_SIZE - tail;
+	if (buf_size == MLX5_RECOVERIES_IN_GRACE_PERIOD) {
+		/* Full */
+		recover_ts_deadline = recoveries->ts_list[tail] +
+				      msecs_to_jiffies(MLX5_REPORTER_FW_GRACEFUL_PERIOD);
+		/* Do not recover until grace period passed between
+		 * the "oldest" recovery (stored in tail) and now
+		 */
+		if (time_is_after_jiffies(recover_ts_deadline))
+			return false;
+
+		recoveries->tail = (tail + 1) % MLX5_RECOVERIES_CIRC_BUFF_SIZE;
+	}
+	recoveries->ts_list[head] = jiffies;
+	recoveries->head = (head + 1) % MLX5_RECOVERIES_CIRC_BUFF_SIZE;
+	return true;
+}
+
 static int mlx5_health_try_recover(struct mlx5_core_dev *dev)
 {
+	if (!mlx5_health_is_recovery_allowed(&dev->priv.health)) {
+		/* If recovery wasn't performed, due to grace period,
+		 * unload the driver. This ensures that the driver
+		 * closes all its resources and it is not subjected to
+		 * requests from the kernel.
+		 */
+		mlx5_core_err(dev,
+			      "health recovery flow was not initiated, only %d recoveries are allowed within grace period\n",
+			      MLX5_RECOVERIES_IN_GRACE_PERIOD);
+		mlx5_core_err(dev, "Driver is in error state. Unloading\n");
+		mlx5_unload_one(dev, false);
+		return -ECANCELED;
+	}
 	mlx5_core_warn(dev, "handling bad device here\n");
 	mlx5_handle_bad_state(dev);
 	if (mlx5_health_wait_pci_up(dev)) {
@@ -646,7 +688,6 @@ static const struct devlink_health_reporter_ops mlx5_fw_fatal_reporter_ops = {
 		.dump = mlx5_fw_fatal_reporter_dump,
 };
 
-#define MLX5_REPORTER_FW_GRACEFUL_PERIOD 1200000
 static void mlx5_fw_reporters_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_health *health = &dev->priv.health;
@@ -662,8 +703,7 @@ static void mlx5_fw_reporters_create(struct mlx5_core_dev *dev)
 	health->fw_fatal_reporter =
 		devlink_health_reporter_create(devlink,
 					       &mlx5_fw_fatal_reporter_ops,
-					       MLX5_REPORTER_FW_GRACEFUL_PERIOD,
-					       dev);
+					       0, dev);
 	if (IS_ERR(health->fw_fatal_reporter))
 		mlx5_core_warn(dev, "Failed to create fw fatal reporter, err = %ld\n",
 			       PTR_ERR(health->fw_fatal_reporter));

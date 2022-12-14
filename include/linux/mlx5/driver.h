@@ -48,6 +48,7 @@
 #include <linux/idr.h>
 #include <linux/notifier.h>
 #include <linux/refcount.h>
+#include <linux/auxiliary_bus.h>
 
 #include <linux/mlx5/device.h>
 #include <linux/mlx5/doorbell.h>
@@ -55,6 +56,8 @@
 #include <linux/timecounter.h>
 #include <linux/ptp_clock_kernel.h>
 #include <net/devlink.h>
+
+#define MLX5_ADEV_NAME "mlx5_core"
 
 enum {
 	MLX5_BOARD_ID_LEN = 64,
@@ -123,8 +126,8 @@ enum {
 	MLX5_REG_PMPE		 = 0x5010,
 	MLX5_REG_PELC		 = 0x500e,
 	MLX5_REG_PVLC		 = 0x500f,
-	MLX5_REG_PDDR		 = 0x5031,
 	MLX5_REG_PCMR		 = 0x5041,
+	MLX5_REG_PDDR		 = 0x5031,
 	MLX5_REG_PMLP		 = 0x5002,
 	MLX5_REG_PPLM		 = 0x5023,
 	MLX5_REG_PCAM		 = 0x507f,
@@ -193,7 +196,7 @@ enum port_state_policy {
 enum mlx5_coredev_type {
 	MLX5_COREDEV_PF,
 	MLX5_COREDEV_VF,
-	MLX5_COREDEV_SF
+	MLX5_COREDEV_SF,
 };
 
 struct mlx5_field_desc {
@@ -322,13 +325,6 @@ struct mlx5_cmd {
 	struct mlx5_cmd_stats *stats;
 };
 
-struct mlx5_port_caps {
-	int	gid_table_len;
-	int	pkey_table_len;
-	u8	ext_port_cap;
-	bool	has_smi;
-};
-
 struct mlx5_cmd_mailbox {
 	void	       *buf;
 	dma_addr_t	dma;
@@ -445,6 +441,15 @@ struct mlx5_sq_bfreg {
 
 struct mlx5_fw_crdump;
 
+#define MLX5_RECOVERIES_IN_GRACE_PERIOD 5
+#define MLX5_RECOVERIES_CIRC_BUFF_SIZE (MLX5_RECOVERIES_IN_GRACE_PERIOD + 1)
+
+struct mlx5_health_recoveries {
+	unsigned long ts_list[MLX5_RECOVERIES_CIRC_BUFF_SIZE];
+	int head;
+	int tail;
+};
+
 struct mlx5_core_health {
 	struct health_buffer __iomem   *health;
 	__be32 __iomem		       *health_counter;
@@ -463,6 +468,7 @@ struct mlx5_core_health {
 	struct devlink_health_reporter *fw_reporter;
 	struct devlink_health_reporter *fw_fatal_reporter;
 	struct mlx5_fw_crdump		*crdump;
+	struct mlx5_health_recoveries	recoveries;
 };
 
 struct mlx5_qp_table {
@@ -570,6 +576,10 @@ struct mlx5_devcom;
 struct mlx5_fw_reset;
 struct mlx5_eq_table;
 struct mlx5_irq_table;
+struct mlx5_vhca_state_notifier;
+struct mlx5_sf_dev_table;
+struct mlx5_sf_hw_table;
+struct mlx5_sf_table;
 
 struct mlx5_rate_limit {
 	u32			rate;
@@ -592,12 +602,28 @@ struct mlx5_rl_table {
 	u32                     max_rate;
 	u32                     min_rate;
 	struct mlx5_rl_entry   *rl_entry;
+	u64 refcount;
 };
 
 struct mlx5_core_roce {
 	struct mlx5_flow_table *ft;
 	struct mlx5_flow_group *fg;
 	struct mlx5_flow_handle *allow_rule;
+};
+
+enum {
+	MLX5_PRIV_FLAGS_DISABLE_IB_ADEV = 1 << 0,
+	MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV = 1 << 1,
+	/* Set during device detach to block any further devices
+	 * creation/deletion on drivers rescan. Unset during device attach.
+	 */
+	MLX5_PRIV_FLAGS_DETACH = 1 << 2,
+};
+
+struct mlx5_adev {
+	struct auxiliary_device adev;
+	struct mlx5_core_dev *mdev;
+	int idx;
 };
 
 struct mlx5_tc_ct_debugfs {
@@ -610,6 +636,14 @@ struct mlx5_tc_ct_debugfs {
 	struct dentry *root;
 };
 
+enum {
+	MLX5E_CON_PROTOCOL_802_1_RP,
+	MLX5E_CON_PROTOCOL_R_ROCE_RP,
+	MLX5E_CON_PROTOCOL_R_ROCE_NP,
+	MLX5E_CONG_PROTOCOL_NUM,
+};
+
+struct mlx5_ft_pool;
 struct mlx5_priv {
 	/* IRQ table valid only for real pci devices PF or VF */
 	struct mlx5_irq_table   *irq_table;
@@ -626,6 +660,7 @@ struct mlx5_priv {
 	int			host_pf_pages;
 
 	struct mlx5_core_health health;
+	struct list_head	traps;
 
 	/* start: ct debug fs stuff */
 	struct mlx5_tc_ct_debugfs *ct_debugfs;
@@ -651,6 +686,8 @@ struct mlx5_priv {
 	struct list_head        dev_list;
 	struct list_head        ctx_list;
 	spinlock_t              ctx_lock;
+	struct mlx5_adev	**adev;
+	int			adev_idx;
 	struct mlx5_events      *events;
 	/* Used to save RoCE LAG state during recovery flow */
        	bool                    lag_enabled;
@@ -660,15 +697,27 @@ struct mlx5_priv {
 	struct mlx5_eswitch     *eswitch;
 	struct mlx5_core_sriov	sriov;
 	struct mlx5_lag		*lag;
+	u32			flags;
 	struct mlx5_devcom	*devcom;
 	struct mlx5_fw_reset	*fw_reset;
 	struct mlx5_core_roce	roce;
 	struct mlx5_fc_stats		fc_stats;
 	struct mlx5_rl_table            rl_table;
+	struct mlx5_ft_pool		*ft_pool;
 
 	struct mlx5_bfreg_data		bfregs;
 	struct mlx5_uars_page	       *uar;
 	bool sw_reset_lag;
+#ifdef CONFIG_MLX5_SF
+	struct mlx5_vhca_state_notifier *vhca_state_notifier;
+	struct mlx5_sf_dev_table *sf_dev_table;
+	struct mlx5_core_dev *parent_mdev;
+#endif
+#ifdef CONFIG_MLX5_SF_MANAGER
+	struct mlx5_sf_hw_table *sf_hw_table;
+	struct mlx5_sf_table *sf_table;
+#endif
+	cpumask_var_t available_cpus;
 };
 
 enum mlx5_device_state {
@@ -700,17 +749,82 @@ struct mlx5_td {
 	u32              tdn;
 };
 
+struct mlx5e_ecn_enable_ctx {
+	int cong_protocol;
+	int priority;
+	struct mlx5_core_dev	*mdev;
+
+	struct kobj_attribute	enable;
+};
+
+struct mlx5e_ecn_rp_attributes {
+	struct mlx5_core_dev	*mdev;
+	/* ATTRIBUTES */
+	struct kobj_attribute	enable;
+	struct kobj_attribute	clamp_tgt_rate;
+	struct kobj_attribute	clamp_tgt_rate_ati;
+	struct kobj_attribute	rpg_time_reset;
+	struct kobj_attribute	rpg_byte_reset;
+	struct kobj_attribute	rpg_threshold;
+	struct kobj_attribute	rpg_max_rate;
+	struct kobj_attribute	rpg_ai_rate;
+	struct kobj_attribute	rpg_hai_rate;
+	struct kobj_attribute	rpg_gd;
+	struct kobj_attribute	rpg_min_dec_fac;
+	struct kobj_attribute	rpg_min_rate;
+	struct kobj_attribute	rate2set_fcnp;
+	struct kobj_attribute	dce_tcp_g;
+	struct kobj_attribute	dce_tcp_rtt;
+	struct kobj_attribute	rreduce_mperiod;
+	struct kobj_attribute	initial_alpha_value;
+};
+
+struct mlx5e_ecn_np_attributes {
+	struct mlx5_core_dev	*mdev;
+	/* ATTRIBUTES */
+	struct kobj_attribute	enable;
+	struct kobj_attribute	min_time_between_cnps;
+	struct kobj_attribute	cnp_dscp;
+	struct kobj_attribute	cnp_802p_prio;
+};
+
+union mlx5e_ecn_attributes {
+	struct mlx5e_ecn_rp_attributes rp_attr;
+	struct mlx5e_ecn_np_attributes np_attr;
+};
+
+struct mlx5e_ecn_ctx {
+	union mlx5e_ecn_attributes ecn_attr;
+	struct kobject *ecn_proto_kobj;
+	struct kobject *ecn_enable_kobj;
+};
+
 struct mlx5e_resources {
-	u32                        pdn;
-	struct mlx5_td             td;
-	struct mlx5_core_mkey      mkey;
-	struct mlx5_sq_bfreg       bfreg;
-	u32                        max_rl_queues;
+	struct mlx5e_hw_objs {
+		u32                        pdn;
+		struct mlx5_td             td;
+		struct mlx5_core_mkey      mkey;
+		struct mlx5_sq_bfreg       bfreg;
+	} hw_objs;
+	u32 max_rl_queues;
+	struct devlink_port dl_port;
+	struct net_device *uplink_netdev;
 
 	struct {
 		bool ct_action_on_nat_conns;
 		u32 max_offloaded_conns;
 	} ct;
+
+	struct {
+		struct kobject *ecn_root_kobj;
+		struct mlx5e_ecn_enable_ctx ecn_enable_ctx[MLX5E_CONG_PROTOCOL_NUM][8];
+		struct mlx5e_ecn_ctx ecn_ctx[MLX5E_CONG_PROTOCOL_NUM];
+#ifdef CONFIG_MLX5_ESWITCH
+		struct kobject *compat_kobj;
+		struct kobject *devlink_kobj;
+		void *devlink_attributes;
+#endif
+	} compat;
 };
 
 enum mlx5_sw_icm_type {
@@ -794,6 +908,27 @@ struct mlx5_local_lb {
 	bool driver_state;
 };
 
+enum {
+	MLX5_PROF_MASK_QP_SIZE		= (u64)1 << 0,
+	MLX5_PROF_MASK_MR_CACHE		= (u64)1 << 1,
+};
+
+enum {
+	MR_CACHE_LAST_STD_ENTRY = 20,
+	MLX5_IMR_MTT_CACHE_ENTRY,
+	MLX5_IMR_KSM_CACHE_ENTRY,
+	MAX_MR_CACHE_ENTRIES
+};
+
+struct mlx5_profile {
+	u64	mask;
+	u8	log_max_qp;
+	struct {
+		int	size;
+		int	limit;
+	} mr_cache[MAX_MR_CACHE_ENTRIES];
+};
+
 struct mlx5_core_dev {
 	struct device *device;
 	enum mlx5_coredev_type coredev_type;
@@ -804,7 +939,6 @@ struct mlx5_core_dev {
 	u8			rev_id;
 	char			board_id[MLX5_BOARD_ID_LEN];
 	struct mlx5_cmd		cmd;
-	struct mlx5_port_caps	port_caps[MLX5_MAX_PORTS];
 	struct {
 		u32 hca_cur[MLX5_CAP_NUM][MLX5_UN_SZ_DW(hca_cap_union)];
 		u32 hca_max[MLX5_CAP_NUM][MLX5_UN_SZ_DW(hca_cap_union)];
@@ -823,7 +957,7 @@ struct mlx5_core_dev {
 	struct mutex		intf_state_mutex;
 	unsigned long		intf_state;
 	struct mlx5_priv	priv;
-	struct mlx5_profile	*profile;
+	struct mlx5_profile	profile;
 	u32			issi;
 	struct mlx5e_resources  mlx5e_res;
 	struct mlx5_dm          *dm;
@@ -1193,39 +1327,25 @@ static inline u8 mlx5_mkey_variant(u32 mkey)
 	return mkey & 0xff;
 }
 
-enum {
-	MLX5_PROF_MASK_QP_SIZE		= (u64)1 << 0,
-	MLX5_PROF_MASK_MR_CACHE		= (u64)1 << 1,
-};
-
-enum {
-	MR_CACHE_LAST_STD_ENTRY = 20,
-	MLX5_IMR_MTT_CACHE_ENTRY,
-	MLX5_IMR_KSM_CACHE_ENTRY,
-	MAX_MR_CACHE_ENTRIES
-};
-
-enum {
-	MLX5_INTERFACE_PROTOCOL_IB  = 0,
-	MLX5_INTERFACE_PROTOCOL_ETH = 1,
-	MLX5_INTERFACE_PROTOCOL_VDPA = 2,
-};
-
-struct mlx5_interface {
-	void *			(*add)(struct mlx5_core_dev *dev);
-	void			(*remove)(struct mlx5_core_dev *dev, void *context);
-	int			(*attach)(struct mlx5_core_dev *dev, void *context);
-	void			(*detach)(struct mlx5_core_dev *dev, void *context);
-	int			protocol;
-	struct list_head	list;
-};
-
-int mlx5_register_interface(struct mlx5_interface *intf);
-void mlx5_unregister_interface(struct mlx5_interface *intf);
+/* Async-atomic event notifier used by mlx5 core to forward FW
+ * evetns recived from event queue to mlx5 consumers.
+ * Optimise event queue dipatching.
+ */
 int mlx5_notifier_register(struct mlx5_core_dev *dev, struct notifier_block *nb);
 int mlx5_notifier_unregister(struct mlx5_core_dev *dev, struct notifier_block *nb);
+
+/* Async-atomic event notifier used for forwarding
+ * evetns from the event queue into the to mlx5 events dispatcher,
+ * eswitch, clock and others.
+ */
 int mlx5_eq_notifier_register(struct mlx5_core_dev *dev, struct mlx5_nb *nb);
 int mlx5_eq_notifier_unregister(struct mlx5_core_dev *dev, struct mlx5_nb *nb);
+
+/* Blocking event notifier used to forward SW events, used for slow path */
+int mlx5_blocking_notifier_register(struct mlx5_core_dev *dev, struct notifier_block *nb);
+int mlx5_blocking_notifier_unregister(struct mlx5_core_dev *dev, struct notifier_block *nb);
+int mlx5_blocking_notifier_call_chain(struct mlx5_core_dev *dev, unsigned int event,
+				      void *data);
 
 int mlx5_core_query_vendor_id(struct mlx5_core_dev *mdev, u32 *vendor_id);
 
@@ -1265,15 +1385,6 @@ int mlx5_rdma_rn_get_params(struct mlx5_core_dev *mdev,
 			    struct ib_device *device,
 			    struct rdma_netdev_alloc_params *params);
 
-struct mlx5_profile {
-	u64	mask;
-	u8	log_max_qp;
-	struct {
-		int	size;
-		int	limit;
-	} mr_cache[MAX_MR_CACHE_ENTRIES];
-};
-
 enum {
 	MLX5_PCI_DEV_IS_VF		= 1 << 0,
 };
@@ -1286,11 +1397,6 @@ static inline bool mlx5_core_is_pf(const struct mlx5_core_dev *dev)
 static inline bool mlx5_core_is_vf(const struct mlx5_core_dev *dev)
 {
 	return dev->coredev_type == MLX5_COREDEV_VF;
-}
-
-static inline bool mlx5_core_is_sf(const struct mlx5_core_dev *dev)
-{
-	return dev->coredev_type == MLX5_COREDEV_SF;
 }
 
 static inline bool mlx5_core_is_ecpf(const struct mlx5_core_dev *dev)

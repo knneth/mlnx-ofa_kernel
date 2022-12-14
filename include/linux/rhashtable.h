@@ -13,9 +13,8 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
-#ifndef _MLNX_LINUX_RHASHTABLE_H
-#define _MLNX_LINUX_RHASHTABLE_H
+#ifndef _COMPAT_LINUX_RHASHTABLE_H
+#define _COMPAT_LINUX_RHASHTABLE_H
 
 #include "../../compat/config.h"
 
@@ -2148,4 +2147,4 @@ static inline void rhltable_destroy(struct rhltable *hlt)
 }
 #endif /* HAVE_RHLTABLE */
 
-#endif /* _MLNX_LINUX_RHASHTABLE_H */
+#endif /* _COMPAT_LINUX_RHASHTABLE_H */

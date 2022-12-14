@@ -359,7 +359,7 @@ static ssize_t mlx5e_show_link_down_reason(struct device *device,
 					    struct device_attribute *attr,
 					    char *buf)
 {
-	u8 status_message[MLX5_FLD_SZ_BYTES(troubleshooting_info_page_layout,
+	u8 status_message[MLX5_FLD_SZ_BYTES(pddr_troubleshooting_page,
 					    status_message)];
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	u16 monitor_opcode;
@@ -655,7 +655,8 @@ static void mlx5e_fill_attributes(struct mlx5e_priv *priv,
 				  int proto)
 {
 	const char *priority_arr[8] = {"0", "1", "2", "3", "4", "5", "6", "7"};
-	struct mlx5e_ecn_ctx *ecn_ctx = &priv->ecn_ctx[proto];
+	struct mlx5e_resources *res = &priv->mdev->mlx5e_res;
+	struct mlx5e_ecn_ctx *ecn_ctx = &res->compat.ecn_ctx[proto];
 	struct mlx5e_ecn_enable_ctx *ecn_enable_ctx;
 	int i, err;
 
@@ -663,7 +664,7 @@ static void mlx5e_fill_attributes(struct mlx5e_priv *priv,
 				   ecn_ctx->ecn_proto_kobj);
 
 	for (i = 0; i < 8; i++) {
-		ecn_enable_ctx = &priv->ecn_enable_ctx[proto][i];
+		ecn_enable_ctx = &res->compat.ecn_enable_ctx[proto][i];
 		ecn_enable_ctx->priority = i;
 		ecn_enable_ctx->cong_protocol = proto;
 		ecn_enable_ctx->mdev = priv->mdev;
@@ -702,13 +703,13 @@ static ssize_t mlx5e_show_vf_roce(struct device *device,
 	int len = 0;
 	bool mode;
 	int err = 0;
-	int i;
+	unsigned long i;
 
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
 		err = mlx5_eswitch_vport_get_other_hca_cap_roce(esw, vport, &mode);
 		if (err)
 			break;
-		len += sprintf(buf + len, "vf_num %d: %d\n", i - 1, mode);
+		len += sprintf(buf + len, "vf_num %lu: %d\n", i - 1, mode);
 	}
 
 	if (err)
@@ -747,27 +748,28 @@ static ssize_t mlx5e_store_vf_roce(struct device *device,
 static void mlx5e_remove_attributes(struct mlx5e_priv *priv,
 				    int proto)
 {
-	struct mlx5e_ecn_ctx *ecn_ctx = &priv->ecn_ctx[proto];
+	struct mlx5e_ecn_ctx *ecn_ctx = &priv->mdev->mlx5e_res.compat.ecn_ctx[proto];
+	struct mlx5e_resources *res = &priv->mdev->mlx5e_res;
 	struct mlx5e_ecn_enable_ctx *ecn_enable_ctx;
 	int i;
 
 	for (i = 0; i < 8; i++) {
-		ecn_enable_ctx = &priv->ecn_enable_ctx[proto][i];
-		sysfs_remove_file(priv->ecn_ctx[proto].ecn_enable_kobj,
+		ecn_enable_ctx = &res->compat.ecn_enable_ctx[proto][i];
+		sysfs_remove_file(res->compat.ecn_ctx[proto].ecn_enable_kobj,
 				  &ecn_enable_ctx->enable.attr);
 	}
 
-	kobject_put(priv->ecn_ctx[proto].ecn_enable_kobj);
+	kobject_put(res->compat.ecn_ctx[proto].ecn_enable_kobj);
 
 	switch (proto) {
 	case MLX5E_CON_PROTOCOL_802_1_RP:
 		return;
 	case MLX5E_CON_PROTOCOL_R_ROCE_RP:
-		mlx5e_remove_rp_attributes(priv->ecn_ctx[proto].ecn_proto_kobj,
+		mlx5e_remove_rp_attributes(res->compat.ecn_ctx[proto].ecn_proto_kobj,
 					   &ecn_ctx->ecn_attr.rp_attr);
 		break;
 	case MLX5E_CON_PROTOCOL_R_ROCE_NP:
-		mlx5e_remove_np_attributes(priv->ecn_ctx[proto].ecn_proto_kobj,
+		mlx5e_remove_np_attributes(res->compat.ecn_ctx[proto].ecn_proto_kobj,
 					   &ecn_ctx->ecn_attr.np_attr);
 		break;
 	}
@@ -974,6 +976,52 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
 		   mlx5e_show_force_local_lb,
 		   mlx5e_store_force_local_lb);
 
+static ssize_t mlx5e_show_log_rx_page_cache_mult_limit(struct device *device,
+						       struct device_attribute *attr,
+						       char *buf)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	int len;
+
+	mutex_lock(&priv->state_lock);
+	len = sprintf(buf, "log rx page cache mult limit is %u\n",
+		      priv->channels.params.log_rx_page_cache_mult);
+	mutex_unlock(&priv->state_lock);
+
+	return len;
+}
+
+static ssize_t mlx5e_store_log_rx_page_cache_mult_limit(struct device *device,
+							struct device_attribute *attr,
+							const char *buf,
+							size_t count)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	int err, udata;
+
+	err = kstrtoint(buf, 0, &udata);
+	if (err)
+		return -EINVAL;
+
+	if (udata > MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT || udata < 0) {
+		netdev_err(priv->netdev, "log rx page cache mult limit cannot exceed above %d or below 0\n",
+			   MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT);
+		return -EINVAL;
+	}
+
+	mutex_lock(&priv->state_lock);
+	priv->channels.params.log_rx_page_cache_mult = (u8)udata;
+	mutex_unlock(&priv->state_lock);
+
+	return count;
+}
+
+static DEVICE_ATTR(log_mult_limit, S_IRUGO | S_IWUSR,
+		   mlx5e_show_log_rx_page_cache_mult_limit,
+		   mlx5e_store_log_rx_page_cache_mult_limit);
+
 static struct attribute *mlx5e_settings_attrs[] = {
 	&dev_attr_hfunc.attr,
 	&dev_attr_pfc_stall_prevention.attr,
@@ -1036,6 +1084,16 @@ static struct attribute *mlx5e_phy_stat_attrs[] = {
 static struct attribute_group phy_stat_group = {
 	.name = "phy_stats",
 	.attrs = mlx5e_phy_stat_attrs,
+};
+
+static struct attribute *mlx5e_log_rx_page_cache_attrs[] = {
+	&dev_attr_log_mult_limit.attr,
+	NULL,
+};
+
+static struct attribute_group rx_page_cache_group = {
+	.name = "rx_page_cache",
+	.attrs = mlx5e_log_rx_page_cache_attrs,
 };
 
 static int update_qos_sysfs(struct net_device *dev,
@@ -1367,18 +1425,19 @@ void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 int mlx5e_sysfs_create(struct net_device *dev)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5e_resources *res = &priv->mdev->mlx5e_res;
 	int err = 0;
 	int i;
 
 	if (mlx5_core_is_sf(priv->mdev))
 		return 0;
 
-	priv->ecn_root_kobj = kobject_create_and_add("ecn", &dev->dev.kobj);
+	res->compat.ecn_root_kobj = kobject_create_and_add("ecn", &dev->dev.kobj);
 
 	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
-		priv->ecn_ctx[i].ecn_proto_kobj = kobject_create_and_add(
-					     mlx5e_get_cong_protocol(i),
-					     priv->ecn_root_kobj);
+		res->compat.ecn_ctx[i].ecn_proto_kobj =
+			kobject_create_and_add(mlx5e_get_cong_protocol(i),
+					       res->compat.ecn_root_kobj);
 		mlx5e_fill_attributes(priv, i);
 	}
 
@@ -1408,14 +1467,21 @@ int mlx5e_sysfs_create(struct net_device *dev)
 	if (err)
 		goto remove_debug_group;
 
-	err = hp_sysfs_init(priv);
+	err = sysfs_create_group(&dev->dev.kobj, &rx_page_cache_group);
+
 	if (err)
 		goto remove_phy_stat_group;
+
+	err = hp_sysfs_init(priv);
+	if (err)
+		goto remove_rx_page_cache_group;
 
 	mlx5_eswitch_compat_sysfs_init(dev);
 
 	return 0;
 
+remove_rx_page_cache_group:
+	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
 remove_phy_stat_group:
 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
 remove_debug_group:
@@ -1427,11 +1493,11 @@ remove_settings_group:
 remove_attributes:
 	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
 		mlx5e_remove_attributes(priv, i);
-		kobject_put(priv->ecn_ctx[i].ecn_proto_kobj);
+		kobject_put(res->compat.ecn_ctx[i].ecn_proto_kobj);
 	}
 
-	kobject_put(priv->ecn_root_kobj);
-	priv->ecn_root_kobj = NULL;
+	kobject_put(res->compat.ecn_root_kobj);
+	res->compat.ecn_root_kobj = NULL;
 
 	return err;
 }
@@ -1439,12 +1505,13 @@ remove_attributes:
 void mlx5e_sysfs_remove(struct net_device *dev)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5e_resources *res = &priv->mdev->mlx5e_res;
 	int i;
 
 	if (mlx5_core_is_sf(priv->mdev))
 		return;
 
-	if (!priv->ecn_root_kobj)
+	if (!res->compat.ecn_root_kobj)
 		return;
 
 	mlx5_eswitch_compat_sysfs_cleanup(dev);
@@ -1453,15 +1520,16 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
+	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
 	hp_sysfs_cleanup(priv);
 
 	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
 		mlx5e_remove_attributes(priv, i);
-		kobject_put(priv->ecn_ctx[i].ecn_proto_kobj);
+		kobject_put(res->compat.ecn_ctx[i].ecn_proto_kobj);
 	}
 
-	kobject_put(priv->ecn_root_kobj);
-	priv->ecn_root_kobj = NULL;
+	kobject_put(res->compat.ecn_root_kobj);
+	res->compat.ecn_root_kobj = NULL;
 }
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ

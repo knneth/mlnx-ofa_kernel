@@ -2,19 +2,20 @@ Source: mlnx-ofed-kernel
 Section: net
 Priority: optional
 Maintainer: Vladimir Sokolovsky <vlad@mellanox.com>
-Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dkms, python3-distutils | python
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dkms,
 Standards-Version: 3.9.2
 Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux_sw_drivers
 
 Package: mlnx-ofed-kernel-utils
 Architecture: any
-Depends: ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof
+Depends: ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof,
+ mlnx-tools (>= 5.2.0),
 Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 
 Package: mlnx-ofed-kernel-dkms
 Section: kernel
 Architecture: all
-Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof, mlnx-ofed-kernel-utils, python3-distutils | python
+Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof, mlnx-ofed-kernel-utils,
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
 Provides: mlnx-rdma-rxe-dkms
 Conflicts: mlnx-rdma-rxe-dkms

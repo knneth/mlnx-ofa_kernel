@@ -12,14 +12,8 @@
 extern const struct mlx5_ib_profile raw_eth_profile;
 
 #ifdef CONFIG_MLX5_ESWITCH
-u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw);
-struct mlx5_ib_dev *mlx5_ib_get_rep_ibdev(struct mlx5_eswitch *esw,
-					  u16 vport_num);
-struct mlx5_ib_dev *mlx5_ib_get_uplink_ibdev(struct mlx5_eswitch *esw);
-struct mlx5_eswitch_rep *mlx5_ib_vport_rep(struct mlx5_eswitch *esw,
-					   u16 vport_num);
-void mlx5_ib_register_vport_reps(struct mlx5_core_dev *mdev);
-void mlx5_ib_unregister_vport_reps(struct mlx5_core_dev *mdev);
+int mlx5r_rep_init(void);
+void mlx5r_rep_cleanup(void);
 struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 						   struct mlx5_ib_sq *sq,
 						   u32 port);
@@ -30,33 +24,8 @@ u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 		                                 u16 vport);
 u32 mlx5_ib_eswitch_get_vport_metadata_mask(void);
 #else /* CONFIG_MLX5_ESWITCH */
-static inline u8 mlx5_ib_eswitch_mode(struct mlx5_eswitch *esw)
-{
-	return MLX5_ESWITCH_NONE;
-}
-
-static inline
-struct mlx5_ib_dev *mlx5_ib_get_rep_ibdev(struct mlx5_eswitch *esw,
-					  u16 vport_num)
-{
-	return NULL;
-}
-
-static inline
-struct mlx5_ib_dev *mlx5_ib_get_uplink_ibdev(struct mlx5_eswitch *esw)
-{
-	return NULL;
-}
-
-static inline
-struct mlx5_eswitch_rep *mlx5_ib_vport_rep(struct mlx5_eswitch *esw,
-					   u16 vport_num)
-{
-	return NULL;
-}
-
-static inline void mlx5_ib_register_vport_reps(struct mlx5_core_dev *mdev) {}
-static inline void mlx5_ib_unregister_vport_reps(struct mlx5_core_dev *mdev) {}
+static inline int mlx5r_rep_init(void) { return 0; }
+static inline void mlx5r_rep_cleanup(void) {}
 static inline
 struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 						   struct mlx5_ib_sq *sq,
@@ -91,10 +60,4 @@ u32 mlx5_ib_eswitch_get_vport_metadata_mask(void)
 	return 0;
 };
 #endif
-
-static inline
-struct mlx5_ib_dev *mlx5_ib_rep_to_dev(struct mlx5_eswitch_rep *rep)
-{
-	return rep->rep_data[REP_IB].priv;
-}
 #endif /* __MLX5_IB_REP_H__ */

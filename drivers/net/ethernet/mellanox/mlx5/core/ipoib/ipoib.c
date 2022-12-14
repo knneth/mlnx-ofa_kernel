@@ -82,6 +82,7 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
 	if (err)
 		return err;
 
+	netif_carrier_off(netdev);
 	mlx5e_set_netdev_mtu_boundaries(priv);
 	netdev->mtu = netdev->max_mtu;
 
@@ -720,7 +721,7 @@ static void mlx5_rdma_netdev_free(struct net_device *netdev)
 
 static bool mlx5_is_sub_interface(struct mlx5_core_dev *mdev)
 {
-	return mdev->mlx5e_res.pdn != 0;
+	return mdev->mlx5e_res.hw_objs.pdn != 0;
 }
 
 static const struct mlx5e_profile *mlx5_get_profile(struct mlx5_core_dev *mdev)

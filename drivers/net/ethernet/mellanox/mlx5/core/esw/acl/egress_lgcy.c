@@ -155,7 +155,7 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 		vport->egress.legacy.drop_counter = drop_counter;
 	}
 
-	vport->egress.acl = esw_acl_table_create(esw, vport->vport,
+	vport->egress.acl = esw_acl_table_create(esw, vport,
 						 MLX5_FLOW_NAMESPACE_ESW_EGRESS,
 						 0, table_size);
 	if (IS_ERR_OR_NULL(vport->egress.acl)) {
@@ -253,10 +253,12 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 		goto out;
 	}
 
+	kvfree(spec);
 	return err;
 
 out:
 	esw_acl_egress_lgcy_cleanup(esw, vport);
+	kvfree(spec);
 	return err;
 }
 

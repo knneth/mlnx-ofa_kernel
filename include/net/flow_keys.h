@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_FLOW_KEYS_H
-#define COMPAT_LINUX_FLOW_KEYS_H
+#ifndef _COMPAT_NET_FLOW_KEYS_H
+#define _COMPAT_NET_FLOW_KEYS_H
 
 #include "../../compat/config.h"
 
@@ -23,4 +23,4 @@ extern bool skb_flow_dissect(const struct sk_buff *skb, struct flow_keys *flow);
 
 #endif /* HAVE_NET_FLOW_KEYS_H */
 
-#endif /* COMPAT_LINUX_FLOW_KEYS_H */
+#endif /* _COMPAT_NET_FLOW_KEYS_H */

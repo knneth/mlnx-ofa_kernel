@@ -8,7 +8,7 @@ Change-Id: I82d9ed737dd0e0e0d3825591b68cae354e50a116
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
-@@ -308,11 +308,6 @@ void mlx5_events_stop(struct mlx5_core_d
+@@ -297,11 +297,6 @@ int mlx5_adev_init(struct mlx5_core_dev
  void mlx5_lag_enable(struct mlx5_core_dev *dev, struct mlx5_lag *ldev);
  struct mlx5_lag *mlx5_lag_disable(struct mlx5_core_dev *dev);
  
@@ -20,7 +20,7 @@ Change-Id: I82d9ed737dd0e0e0d3825591b68cae354e50a116
  struct mlx5_vport *mlx5_eswitch_get_vport(struct mlx5_eswitch *esw,
  					  u16 vport_num);
  struct mlx5_flow_root_namespace *find_root(struct fs_node *node);
-@@ -349,8 +344,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
+@@ -329,8 +324,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
  
@@ -34,7 +34,7 @@ Change-Id: I82d9ed737dd0e0e0d3825591b68cae354e50a116
  int mlx5_fw_version_query(struct mlx5_core_dev *dev,
  			  u32 *running_ver, u32 *stored_ver);
  
-@@ -444,6 +442,21 @@ enum {
+@@ -431,6 +429,21 @@ enum {
  	MLX5_NIC_IFC_SW_RESET		= 7
  };
  

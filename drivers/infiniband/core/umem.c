@@ -292,7 +292,7 @@ struct ib_umem *__ib_umem_get(struct ib_device *device,
 
 	sg_mark_end(sg);
 
-	if (access & IB_ACCESS_RELAXED_ORDERING)
+	if (!(access & IB_ACCESS_DISABLE_RELAXED_ORDERING))
 		dma_attr |= DMA_ATTR_WEAK_ORDERING;
 
 	umem->nmap =

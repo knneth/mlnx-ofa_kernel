@@ -1,5 +1,5 @@
-#ifndef _MLNX_LINUX_RADIX_TREE_H
-#define _MLNX_LINUX_RADIX_TREE_H
+#ifndef _COMPAT_LINUX_RADIX_TREE_H
+#define _COMPAT_LINUX_RADIX_TREE_H
 
 #include "../../compat/config.h"
 
@@ -52,4 +52,5 @@ static inline bool radix_tree_is_internal_node(void *ptr)
 		RADIX_TREE_INTERNAL_NODE;
 }
 #endif
-#endif /* _MLNX_LINUX_RADIX_TREE_H */
+
+#endif /* _COMPAT_LINUX_RADIX_TREE_H */

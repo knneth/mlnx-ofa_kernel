@@ -44,8 +44,7 @@
 
 #include "fs_core.h"
 
-#define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"5.3-1.0.5"
+#define DRIVER_VERSION	"5.4-1.0.3"
 
 /* Number of EQs reserved for non-completion purposes */
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
@@ -218,7 +217,7 @@ struct mlx5_mcion_reg {
 	u8  module_status;
 } __packed;
 
-#define MLX5_DEFAULT_PROF	2
+#define MLX5_DEFAULT_PROF       2
 
 int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
@@ -285,25 +284,15 @@ void mlx5_lag_add(struct mlx5_core_dev *dev,
 void mlx5_lag_remove(struct mlx5_core_dev *dev,
 		     bool intf_mutex_held);
 
-int mlx5_irq_table_init(struct mlx5_core_dev *dev);
-void mlx5_irq_table_cleanup(struct mlx5_core_dev *dev);
-int mlx5_irq_table_create(struct mlx5_core_dev *dev);
-void mlx5_irq_table_destroy(struct mlx5_core_dev *dev);
-int mlx5_irq_attach_nb(struct mlx5_irq_table *irq_table, int vecidx,
-		       struct notifier_block *nb);
-int mlx5_irq_detach_nb(struct mlx5_irq_table *irq_table, int vecidx,
-		       struct notifier_block *nb);
-void mlx5_irq_rename(struct mlx5_core_dev *dev, int vecidx,
-		     const char *name);
-struct cpumask *
-mlx5_irq_get_affinity_mask(struct mlx5_irq_table *irq_table, int vecidx);
-struct cpu_rmap *mlx5_irq_get_rmap(struct mlx5_irq_table *table);
-int mlx5_irq_get_num_comp(struct mlx5_irq_table *table);
-
 int mlx5_events_init(struct mlx5_core_dev *dev);
 void mlx5_events_cleanup(struct mlx5_core_dev *dev);
 void mlx5_events_start(struct mlx5_core_dev *dev);
 void mlx5_events_stop(struct mlx5_core_dev *dev);
+
+int mlx5_adev_idx_alloc(void);
+void mlx5_adev_idx_free(int idx);
+void mlx5_adev_cleanup(struct mlx5_core_dev *dev);
+int mlx5_adev_init(struct mlx5_core_dev *dev);
 
 void mlx5_lag_enable(struct mlx5_core_dev *dev, struct mlx5_lag *ldev);
 struct mlx5_lag *mlx5_lag_disable(struct mlx5_core_dev *dev);
@@ -317,24 +306,15 @@ struct mlx5_vport *mlx5_eswitch_get_vport(struct mlx5_eswitch *esw,
 					  u16 vport_num);
 struct mlx5_flow_root_namespace *find_root(struct fs_node *node);
 
-void mlx5_add_device(struct mlx5_interface *intf, struct mlx5_priv *priv);
-void mlx5_remove_device(struct mlx5_interface *intf, struct mlx5_priv *priv);
-void mlx5_attach_device(struct mlx5_core_dev *dev);
-void mlx5_attach_device_by_protocol(struct mlx5_core_dev *dev, int protocol);
+int mlx5_attach_device(struct mlx5_core_dev *dev);
 void mlx5_detach_device(struct mlx5_core_dev *dev);
-bool mlx5_device_registered(struct mlx5_core_dev *dev);
-void mlx5_register_device(struct mlx5_core_dev *dev);
+int mlx5_register_device(struct mlx5_core_dev *dev);
 void mlx5_unregister_device(struct mlx5_core_dev *dev);
-void mlx5_remove_interfaces(struct mlx5_core_dev *dev);
-void mlx5_add_dev_by_protocol(struct mlx5_core_dev *dev, int protocol);
-void mlx5_remove_dev_by_protocol(struct mlx5_core_dev *dev, int protocol);
 struct mlx5_core_dev *mlx5_get_next_phys_dev(struct mlx5_core_dev *dev);
-struct mlx5_core_dev *mlx5_get_next_phys_dev_by_guid(struct mlx5_core_dev *dev);
 void mlx5_dev_list_lock(void);
 void mlx5_dev_list_unlock(void);
 int mlx5_dev_list_trylock(void);
 
-bool mlx5_lag_intf_add(struct mlx5_interface *intf, struct mlx5_priv *priv);
 
 int mlx5_query_mtpps(struct mlx5_core_dev *dev, u32 *mtpps, u32 mtpps_size);
 int mlx5_set_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size);
@@ -382,7 +362,7 @@ int mlx5_icmd_access_register(struct mlx5_core_dev *dev,
 			      void *io_buff,
 			      u32 io_buff_dw_sz);
 
-void mlx5e_init(void);
+int mlx5e_init(void);
 void mlx5e_cleanup(void);
 
 int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
@@ -431,10 +411,17 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 		    MLX5_CAP_GEN(dev, lag_master);
 }
 
-void mlx5_reload_interface(struct mlx5_core_dev *mdev, int protocol);
-void mlx5_reload_interfaces(struct mlx5_core_dev *mdev,
-			    int protocol1, int protocol2,
-			    bool valid1, bool valid2);
+int mlx5_rescan_drivers_locked(struct mlx5_core_dev *dev);
+static inline int mlx5_rescan_drivers(struct mlx5_core_dev *dev)
+{
+	int ret;
+
+	mlx5_dev_list_lock();
+	ret = mlx5_rescan_drivers_locked(dev);
+	mlx5_dev_list_unlock();
+	return ret;
+}
+
 void mlx5_lag_update(struct mlx5_core_dev *dev);
 
 enum {
@@ -450,54 +437,22 @@ void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state);
 int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
 void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
 
-#ifdef CONFIG_MLX5_MDEV
-void mlx5_meddev_init(struct mlx5_core_dev *dev);
-void mlx5_meddev_cleanup(struct mlx5_core_dev *dev);
-bool mlx5_medev_can_and_mark_cleanup(struct mlx5_core_dev *dev);
-int mlx5_meddev_register_driver(void);
-void mlx5_meddev_unregister_driver(void);
-#else
-static inline void mlx5_meddev_init(struct mlx5_core_dev *dev)
-{
-}
-
-static inline void mlx5_meddev_cleanup(struct mlx5_core_dev *dev)
-{
-}
-
-static inline bool mlx5_medev_can_and_mark_cleanup(struct mlx5_core_dev *dev)
-{
-	return true;
-}
-static inline int mlx5_meddev_register_driver(void)
-{
-	        return 0;
-}
-
-static inline void mlx5_meddev_unregister_driver(void)
-{
-}
-#endif
-
-struct mlx5_core_dev *mlx5_get_core_dev(const struct device *dev);
 void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
 int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out);
 
+static inline bool mlx5_core_is_sf(const struct mlx5_core_dev *dev)
+{
+	return dev->coredev_type == MLX5_COREDEV_SF;
+}
+
+int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
+void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
 void mlx5_unload_one(struct mlx5_core_dev *dev, bool cleanup);
 int mlx5_load_one(struct mlx5_core_dev *dev, bool boot);
+void mlx5_events_work_enqueue(struct mlx5_core_dev *dev, struct work_struct *work);
 int set_tunneled_operation(struct mlx5_core_dev *mdev,
 			   u16 asn_match_mask, u16 asn_match_value,
 			   u32 *log_response_bar_size,
 			   u64 *response_bar_address);
 
-#ifdef CONFIG_MLX5_MDEV
-struct mlx5_sf;
-int mlx5_sf_get_mac(struct mlx5_sf *sf, u8 *mac);
-int mlx5_sf_set_mac(struct mlx5_sf *sf, u8 *mac);
-int mlx5_sf_hca_cap_roce_set(struct mlx5_sf *sf, bool disable);
-int mlx5_sf_hca_cap_roce_get(struct mlx5_sf *sf, bool *disable);
-int mlx5_sf_hca_cap_uc_list_set(struct mlx5_sf *sf, u32 val);
-int mlx5_sf_hca_cap_uc_list_get(struct mlx5_sf *sf, u32 *val);
-struct net_device *mlx5_sf_get_netdev(struct mlx5_sf *sf);
-#endif
 #endif /* __MLX5_CORE_H__ */

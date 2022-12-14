@@ -607,10 +607,10 @@ int mlx5_mr_cache_init(struct mlx5_ib_dev *dev)
 		ent->xlt = (1 << ent->order) * sizeof(struct mlx5_mtt) /
 			   MLX5_IB_UMR_OCTOWORD;
 		ent->access_mode = MLX5_MKC_ACCESS_MODE_MTT;
-		if ((dev->mdev->profile->mask & MLX5_PROF_MASK_MR_CACHE) &&
+		if ((dev->mdev->profile.mask & MLX5_PROF_MASK_MR_CACHE) &&
 		    !dev->is_rep &&
 		    mlx5_core_is_pf(dev->mdev))
-			ent->limit = dev->mdev->profile->mr_cache[i].limit;
+			ent->limit = dev->mdev->profile.mr_cache[i].limit;
 		else
 			ent->limit = 0;
 		spin_lock_irq(&ent->lock);
@@ -663,12 +663,12 @@ static void set_mkc_access_pd_addr_fields(void *mkc, int acc, u64 start_addr,
 	MLX5_SET(mkc, mkc, lw, !!(acc & IB_ACCESS_LOCAL_WRITE));
 	MLX5_SET(mkc, mkc, lr, 1);
 
-	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
+	if (!(acc & IB_ACCESS_DISABLE_RELAXED_ORDERING)) {
 		MLX5_SET(mkc, mkc, relaxed_ordering_write,
-			 !!(acc & IB_ACCESS_RELAXED_ORDERING));
-	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read))
+			 MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write));
 		MLX5_SET(mkc, mkc, relaxed_ordering_read,
-			 !!(acc & IB_ACCESS_RELAXED_ORDERING));
+			 MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read));
+	}
 
 	MLX5_SET(mkc, mkc, pd, to_mpd(pd)->pdn);
 	MLX5_SET(mkc, mkc, qpn, 0xffffff);
@@ -889,7 +889,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr *mr, u64 idx, int npages,
 		       int page_shift, int flags)
 {
 	struct mlx5_ib_dev *dev = mr->dev;
-	struct device *ddev = dev->ib_dev.dev.parent;
+	struct device *ddev = &dev->mdev->pdev->dev;
 	int size;
 	void *xlt;
 	dma_addr_t dma;
@@ -1076,12 +1076,12 @@ static struct mlx5_ib_mr *reg_create(struct ib_mr *ibmr, struct ib_pd *pd,
 	mkc = MLX5_ADDR_OF(create_mkey_in, in, memory_key_mkey_entry);
 	MLX5_SET(mkc, mkc, free, !populate);
 	MLX5_SET(mkc, mkc, access_mode_1_0, MLX5_MKC_ACCESS_MODE_MTT);
-	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
+	if (!(access_flags & IB_ACCESS_DISABLE_RELAXED_ORDERING)) {
 		MLX5_SET(mkc, mkc, relaxed_ordering_write,
-			 !!(access_flags & IB_ACCESS_RELAXED_ORDERING));
-	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read))
+			 MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write));
 		MLX5_SET(mkc, mkc, relaxed_ordering_read,
-			 !!(access_flags & IB_ACCESS_RELAXED_ORDERING));
+			 MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read));
+	}
 	MLX5_SET(mkc, mkc, a, !!(access_flags & IB_ACCESS_REMOTE_ATOMIC));
 	MLX5_SET(mkc, mkc, rw, !!(access_flags & IB_ACCESS_REMOTE_WRITE));
 	MLX5_SET(mkc, mkc, rr, !!(access_flags & IB_ACCESS_REMOTE_READ));
@@ -1284,7 +1284,8 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	if (err < 0)
 		return ERR_PTR(err);
 
-	use_umr = mlx5_ib_can_use_umr(dev, true, access_flags);
+	use_umr = mlx5_ib_can_use_umr(dev, IB_ACCESS_DISABLE_RELAXED_ORDERING,
+				      access_flags);
 
 	if (umem->is_peer && MLX5_CAP_GEN(dev->mdev, ats)) {
 		use_umr = false;
@@ -1464,7 +1465,7 @@ int mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
 			goto err;
 	}
 
-	if (!mlx5_ib_can_use_umr(dev, true, access_flags) ||
+	if (!mlx5_ib_can_use_umr(dev, mr->access_flags, access_flags) ||
 	    (flags & IB_MR_REREG_TRANS && !use_umr_mtt_update(mr, addr, len))) {
 		/*
 		 * UMR can't be used - MKey needs to be replaced.
@@ -1527,6 +1528,8 @@ mlx5_alloc_priv_descs(struct ib_device *device,
 		      int ndescs,
 		      int desc_size)
 {
+	struct mlx5_ib_dev *dev = to_mdev(device);
+	struct device *ddev = &dev->mdev->pdev->dev;
 	int size = ndescs * desc_size;
 	int add_size;
 	int ret;
@@ -1539,9 +1542,8 @@ mlx5_alloc_priv_descs(struct ib_device *device,
 
 	mr->descs = PTR_ALIGN(mr->descs_alloc, MLX5_UMR_ALIGN);
 
-	mr->desc_map = dma_map_single(device->dev.parent, mr->descs,
-				      size, DMA_TO_DEVICE);
-	if (dma_mapping_error(device->dev.parent, mr->desc_map)) {
+	mr->desc_map = dma_map_single(ddev, mr->descs, size, DMA_TO_DEVICE);
+	if (dma_mapping_error(ddev, mr->desc_map)) {
 		ret = -ENOMEM;
 		goto err;
 	}
@@ -1559,9 +1561,10 @@ mlx5_free_priv_descs(struct mlx5_ib_mr *mr)
 	if (mr->descs) {
 		struct ib_device *device = mr->ibmr.device;
 		int size = mr->max_descs * mr->desc_size;
+		struct mlx5_ib_dev *dev = to_mdev(device);
 
-		dma_unmap_single(device->dev.parent, mr->desc_map,
-				 size, DMA_TO_DEVICE);
+		dma_unmap_single(&dev->mdev->pdev->dev, mr->desc_map, size,
+				 DMA_TO_DEVICE);
 		kfree(mr->descs_alloc);
 		mr->descs = NULL;
 	}
@@ -1633,9 +1636,14 @@ static void mlx5_set_umr_free_mkey(struct ib_pd *pd, u32 *in, int ndescs,
 				   int access_mode, int page_shift)
 {
 	void *mkc;
+	struct mlx5_ib_dev *dev = to_mdev(pd->device);
 
 	mkc = MLX5_ADDR_OF(create_mkey_in, in, memory_key_mkey_entry);
 
+	MLX5_SET(mkc, mkc, relaxed_ordering_write,
+		 MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write));
+	MLX5_SET(mkc, mkc, relaxed_ordering_read,
+		 MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read));
 	MLX5_SET(mkc, mkc, free, 1);
 	MLX5_SET(mkc, mkc, qpn, 0xffffff);
 	MLX5_SET(mkc, mkc, pd, to_mpd(pd)->pdn);

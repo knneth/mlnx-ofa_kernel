@@ -216,6 +216,11 @@ static void mlx5e_xdp_mpwqe_session_start(struct mlx5e_xdpsq *sq)
 		.inline_on = mlx5e_xdp_get_inline_state(sq, session->inline_on),
 	};
 
+	if (test_bit(MLX5E_SQ_STATE_TX_XDP_CSUM, &sq->state)) {
+		struct mlx5_wqe_eth_seg *eseg = &wqe->eth;
+
+		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM | MLX5_ETH_WQE_L4_CSUM;
+	}
 	stats->mpwqe++;
 }
 
@@ -324,7 +329,6 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
 	struct mlx5_wqe_ctrl_seg *cseg = &wqe->ctrl;
 	struct mlx5_wqe_eth_seg  *eseg = &wqe->eth;
 	struct mlx5_wqe_data_seg *dseg = wqe->data;
-	struct mlx5e_priv *priv = netdev_priv(sq->channel->netdev);
 
 	dma_addr_t dma_addr = xdptxd->dma_addr;
 	u32 dma_len = xdptxd->len;
@@ -354,7 +358,7 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
 		dseg++;
 	}
 
-	if (MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_TX_XDP_CSUM))
+	if (test_bit(MLX5E_SQ_STATE_TX_XDP_CSUM, &sq->state))
 		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM | MLX5_ETH_WQE_L4_CSUM;
 
 	/* write the dma part */

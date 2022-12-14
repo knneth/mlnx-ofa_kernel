@@ -1,0 +1,84 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
+
+Change-Id: Iae20038e2d266aa69ba234bb25b37fbb464bdb09
+---
+ drivers/base/auxiliary.c | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+--- a/drivers/base/auxiliary.c
++++ b/drivers/base/auxiliary.c
+@@ -19,6 +19,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/string.h>
+ #include <linux/auxiliary_bus.h>
++#include <linux/acpi.h>
+ 
+ static const struct auxiliary_device_id *auxiliary_match_id(const struct auxiliary_device_id *id,
+ 							    const struct auxiliary_device *auxdev)
+@@ -69,15 +70,29 @@ static int auxiliary_bus_probe(struct de
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+ 	int ret;
+ 
++#ifdef HAVE_DEV_PM_DOMAIN_ATTACH
+ 	ret = dev_pm_domain_attach(dev, true);
++
++	/* In case of old kernels 4.17 and below do nothing in case of
++	 * failure of ENODEV */
++	if (ret == -ENODEV)
++		ret = 0;
++
+ 	if (ret) {
+ 		dev_warn(dev, "Failed to attach to PM Domain : %d\n", ret);
+ 		return ret;
+ 	}
++#else
++	acpi_dev_pm_attach(dev, true);
++#endif
+ 
+ 	ret = auxdrv->probe(auxdev, auxiliary_match_id(auxdrv->id_table, auxdev));
+ 	if (ret)
++#ifdef HAVE_DEV_PM_DOMAIN_ATTACH
+ 		dev_pm_domain_detach(dev, true);
++#else
++		acpi_dev_pm_detach(dev, true);
++#endif
+ 
+ 	return ret;
+ }
+@@ -89,7 +104,11 @@ static int auxiliary_bus_remove(struct d
+ 
+ 	if (auxdrv->remove)
+ 		auxdrv->remove(auxdev);
++#ifdef HAVE_DEV_PM_DOMAIN_ATTACH
+ 	dev_pm_domain_detach(dev, true);
++#else
++	acpi_dev_pm_detach(dev, true);
++#endif
+ 
+ 	return 0;
+ }
+@@ -211,9 +230,23 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
+  * if it does.  If the callback returns non-zero, this function will
+  * return to the caller and not iterate over any more devices.
+  */
++#ifdef HAVE_LINUX_DEVICE_BUS_H
+ struct auxiliary_device *auxiliary_find_device(struct device *start,
+ 					       const void *data,
+ 					       int (*match)(struct device *dev, const void *data))
++#else
++#ifdef HAVE_BUS_FIND_DEVICE_GET_CONST
++struct auxiliary_device *
++auxiliary_find_device(struct device *start, 
++		      const void *data,
++		      int (*match)(struct device *dev, const void *data))
++#else
++struct auxiliary_device *
++auxiliary_find_device(struct device *start, 
++		      void *data,
++		      int (*match)(struct device *dev, void *data))
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST */
++#endif /* HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct device *dev;
+ 

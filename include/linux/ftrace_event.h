@@ -12,4 +12,4 @@
 
 #include_next <linux/ftrace_event.h>
 
-#endif /* _COMPAT_LINUX_TRACE_EVENTS_H */
+#endif /* _COMPAT_LINUX_FTRACE_EVENT_H */

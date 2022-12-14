@@ -4,6 +4,7 @@ EXTRA_CFLAGS += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
 		-I$(CWD)/drivers/infiniband/ulp/ipoib$(CONFIG_IPOIB_VERSION) \
 		-I$(CWD)/drivers/infiniband/debug \
 		-I$(CWD)/net/rds \
+		-I$(CWD)/net/mlxdevm \
 		-I$(CWD)/drivers/net/ethernet/mellanox/mlx5/core \
 		-I$(CWD)/drivers/infiniband/hw/mlx5 \
 
@@ -23,8 +24,8 @@ obj-$(CONFIG_INFINIBAND_EHCA)   += drivers/infiniband/hw/ehca/
 obj-$(CONFIG_INFINIBAND_AMSO1100)   += drivers/infiniband/hw/amso1100/
 obj-$(CONFIG_MLX5_CORE)         += drivers/net/ethernet/mellanox/mlx5/core/
 obj-$(CONFIG_MLXFW)             += drivers/net/ethernet/mellanox/mlxfw/
-obj-$(CONFIG_MLNX_VFIO_MDEV)    += drivers/vfio/mdev/
 obj-$(CONFIG_RDS)               += net/rds/
+obj-$(CONFIG_MLXDEVM)          += net/mlxdevm/
 obj-$(CONFIG_MEMTRACK)          += drivers/infiniband/debug/
 obj-$(CONFIG_SUNRPC_XPRT_RDMA)  += net/sunrpc/xprtrdma/
 obj-$(CONFIG_SUNRPC_XPRT_RDMA_DUMMY)  += net/sunrpc/xprtrdma/
@@ -53,3 +54,6 @@ obj-$(CONFIG_RDMA_RXE_DUMMY)	+= drivers/infiniband/sw/rxe/
 obj-$(CONFIG_SMC)		+= net/smc/
 obj-$(CONFIG_SMC_DIAG)		+= net/smc/
 obj-$(CONFIG_MLX5_CLS_ACT)      += net/sched/
+obj-$(CONFIG_AUXILIARY_BUS)     += drivers/base/
+obj-$(CONFIG_CIFS_SMB_DIRECT)		+= fs/cifs/
+

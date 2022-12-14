@@ -50,9 +50,12 @@ struct mlx5dr_icm_buddy_mem {
 	/* indicates the byte size of hot mem */
 	unsigned int		hot_memory_size;
 	unsigned int		used_memory;
+
+	/* HW STE cache entry size */
+	u8			hw_ste_sz;
 };
 
-static inline unsigned long dr_ffs(uint64_t l)
+static inline unsigned long dr_ffs(u64 l)
 {
 	unsigned long res = __builtin_ffsl(l);
 
@@ -358,13 +361,15 @@ static void dr_icm_pool_mr_destroy(struct mlx5dr_icm_mr *icm_mr)
 
 static int dr_icm_chunk_ste_init(struct mlx5dr_icm_chunk *chunk)
 {
+	struct mlx5dr_icm_buddy_mem *buddy = chunk->buddy_mem;
+
 	chunk->ste_arr = kvzalloc(chunk->num_of_entries *
 				  sizeof(chunk->ste_arr[0]), GFP_KERNEL);
 	if (!chunk->ste_arr)
 		return -ENOMEM;
 
 	chunk->hw_ste_arr = kvzalloc(chunk->num_of_entries *
-				     DR_STE_SIZE_REDUCED, GFP_KERNEL);
+				     buddy->hw_ste_sz, GFP_KERNEL);
 	if (!chunk->hw_ste_arr)
 		goto out_free_ste_arr;
 
@@ -403,6 +408,7 @@ static void dr_icm_chunk_destroy(struct mlx5dr_icm_chunk *chunk)
 
 static int dr_icm_buddy_create(struct mlx5dr_icm_pool *pool)
 {
+	struct mlx5dr_cmd_caps *caps = &pool->dmn->info.caps;
 	struct mlx5dr_icm_buddy_mem *buddy;
 	struct mlx5dr_icm_mr *icm_mr;
 
@@ -419,6 +425,11 @@ static int dr_icm_buddy_create(struct mlx5dr_icm_pool *pool)
 
 	buddy->icm_mr = icm_mr;
 	buddy->pool = pool;
+
+	/* Set single entry HW STE cache size */
+	if (pool->icm_type == DR_ICM_TYPE_STE)
+		buddy->hw_ste_sz = caps->sw_format_ver == MLX5_HW_CONNECTX_5 ?
+				   DR_STE_SIZE_REDUCED : DR_STE_SIZE;
 
 	/* add it to the -start- of the list in order to search in it first */
 	list_add(&buddy->list_node, &pool->buddy_mem_list);
@@ -467,6 +478,7 @@ dr_icm_chunk_create(struct mlx5dr_icm_pool *pool,
 
 	offset = mlx5dr_icm_pool_dm_type_to_entry_size(pool->icm_type) * seg;
 
+	chunk->buddy_mem = buddy_mem_pool;
 	chunk->rkey = buddy_mem_pool->icm_mr->mkey.key;
 	chunk->mr_addr = offset;
 	chunk->icm_addr =
@@ -485,7 +497,6 @@ dr_icm_chunk_create(struct mlx5dr_icm_pool *pool,
 			goto out_free_chunk;
 		}
 
-	chunk->buddy_mem = buddy_mem_pool;
 	INIT_LIST_HEAD(&chunk->chunk_list);
 
 	/* chunk now is part of the used_list */
@@ -843,7 +854,7 @@ struct mlx5dr_arg_object *mlx5dr_arg_get_obj(struct mlx5dr_domain *dmn,
 	return dr_arg_get_obj_from_pool(dmn->modify_header_arg_pool_mngr->pools[size]);
 }
 
-uint32_t mlx5dr_arg_get_object_id(struct mlx5dr_arg_object *arg_obj)
+u32 mlx5dr_arg_get_object_id(struct mlx5dr_arg_object *arg_obj)
 {
 	return (arg_obj->obj_id + arg_obj->obj_offset);
 }

@@ -2,7 +2,6 @@
 #define _COMPAT_LINUX_BLK_MQ_H
 
 #include "../../compat/config.h"
-#include <linux/version.h>
 
 #include_next <linux/blk-mq.h>
 #ifndef HAVE_BLK_MQ_TAGSET_WAIT_COMPLETED_REQUEST

@@ -24,8 +24,6 @@ struct mlx5_chains_attr {
 	struct mapping_ctx *chains_mapping;
 };
 
-#define POOL_NEXT_SIZE 0
-
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
 
 bool
@@ -73,12 +71,6 @@ void
 mlx5_chains_set_end_ft(struct mlx5_fs_chains *chains,
 		       struct mlx5_flow_table *ft);
 
-int
-mlx5_chains_get_avail_sz_from_pool(struct mlx5_fs_chains *chains,
-				   int desired_size);
-void
-mlx5_chains_put_sz_to_pool(struct mlx5_fs_chains *chains, int sz);
-
 #else /* CONFIG_MLX5_CLS_ACT */
 
 static inline struct mlx5_flow_table *
@@ -96,12 +88,6 @@ mlx5_chains_create(struct mlx5_core_dev *dev, struct mlx5_chains_attr *attr)
 { return NULL; }
 static inline void
 mlx5_chains_destroy(struct mlx5_fs_chains *chains) {};
-
-static inline int
-mlx5_chains_get_avail_sz_from_pool(struct mlx5_fs_chains *chains,
-				   int desired_size) { return 0; }
-static inline void
-mlx5_chains_put_sz_to_pool(struct mlx5_fs_chains *chains, int sz) {}
 
 #endif /* CONFIG_MLX5_CLS_ACT */
 

@@ -1,14 +1,14 @@
-From: Valentine Fatiev <valentinef@mellanox.com>
+From: Shay Drory <shayd@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
 
-Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
+Change-Id: Ib397043647c4c87ccd7462d99bc4b715f373393f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eq.c | 29 ++++++++++++++++++--
- 1 file changed, 27 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 34 ++++++++++++++++++--
+ 1 file changed, 32 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
-@@ -69,7 +69,9 @@ enum {
+@@ -43,7 +43,9 @@ enum {
  	MLX5_EQ_POLLING_BUDGET	= 128,
  };
  
@@ -18,7 +18,7 @@ Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
  
  struct mlx5_eq_table {
  	struct list_head        comp_eqs_list;
-@@ -146,7 +148,11 @@ static int mlx5_eq_comp_int(struct notif
+@@ -123,7 +125,11 @@ static int mlx5_eq_comp_int(struct notif
  		/* Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -30,7 +30,7 @@ Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
  		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
  		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
  
-@@ -223,7 +229,7 @@ static int mlx5_eq_async_int(struct noti
+@@ -200,7 +206,7 @@ static int mlx5_eq_async_int(struct noti
  	struct mlx5_eq_table *eqt;
  	struct mlx5_core_dev *dev;
  	struct mlx5_eqe *eqe;
@@ -39,7 +39,7 @@ Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
  	int num_eqes = 0;
  
  	dev = eq->dev;
-@@ -240,7 +246,11 @@ static int mlx5_eq_async_int(struct noti
+@@ -217,7 +223,11 @@ static int mlx5_eq_async_int(struct noti
  		 * Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -51,7 +51,7 @@ Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
  
  		atomic_notifier_call_chain(&eqt->nh[eqe->type], eqe->type, eqe);
  		atomic_notifier_call_chain(&eqt->nh[MLX5_EVENT_TYPE_NOTIFY_ANY], eqe->type, eqe);
-@@ -338,7 +348,11 @@ create_map_eq(struct mlx5_core_dev *dev,
+@@ -321,7 +331,11 @@ create_map_eq(struct mlx5_core_dev *dev,
  
  	eq->vecidx = vecidx;
  	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
@@ -64,7 +64,7 @@ Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -837,7 +851,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -816,7 +830,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -76,8 +76,22 @@ Change-Id: I9e37bfb96e755006bfaad072cc53affd76fbcf13
  
  	return eqe;
  }
-@@ -992,6 +1010,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
- 	return ERR_PTR(-ENOENT);
+@@ -1037,8 +1055,13 @@ static int set_rmap(struct mlx5_core_dev
+ 	vecidx = MLX5_IRQ_VEC_COMP_BASE;
+ 	for (; vecidx < eq_table->num_comp_eqs + MLX5_IRQ_VEC_COMP_BASE;
+ 	     vecidx++) {
++#ifdef HAVE_PCI_IRQ_API
+ 		err = irq_cpu_rmap_add(eq_table->rmap,
+ 				       pci_irq_vector(mdev->pdev, vecidx));
++#else
++		err = irq_cpu_rmap_add(eq_table->rmap,
++				       mdev->priv.msix_arr[vecidx].vector);
++#endif
+ 		if (err) {
+ 			mlx5_core_err(mdev, "irq_cpu_rmap_add failed. err %d",
+ 				      err);
+@@ -1054,6 +1077,13 @@ err_out:
+ 	return err;
  }
  
 +#ifndef HAVE_PCI_IRQ_API

@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_UAPI_DEVLINK_H
-#define COMPAT_LINUX_UAPI_DEVLINK_H
+#ifndef _COMPAT_UAPI_LINUX_DEVLINK_H
+#define _COMPAT_UAPI_LINUX_DEVLINK_H
 
 #include "../../../compat/config.h"
 
@@ -65,6 +65,24 @@ enum devlink_port_flavour_virtual {
 
 #endif /* HAVE_DEVLINK_H */
 
+#ifndef HAVE_DEVLINK_PORT_FN_STATE
+enum devlink_port_fn_state {
+	DEVLINK_PORT_FN_STATE_INACTIVE,
+	DEVLINK_PORT_FN_STATE_ACTIVE,
+};
+#endif
+
+#ifndef HAVE_DEVLINK_PORT_FN_OPSTATE
+enum devlink_port_fn_opstate {
+	DEVLINK_PORT_FN_OPSTATE_DETACHED,
+	DEVLINK_PORT_FN_OPSTATE_ATTACHED,
+};
+#endif
+
+#ifndef HAVE_DEVLINK_PORT_FLAVOUR_PCI_SF
+#define DEVLINK_PORT_FLAVOUR_PCI_SF  7
+#endif
+
 #ifndef HAVE_DEVLINK_PARAM_CMODE
 enum devlink_param_cmode {
 	DEVLINK_PARAM_CMODE_RUNTIME,
@@ -77,5 +95,4 @@ enum devlink_param_cmode {
 };
 #endif /* HAVE_DEVLINK_PARAM_CMODE */
 
-
-#endif /* COMPAT_LINUX_UAPI_DEVLINK_H */
+#endif /* _COMPAT_UAPI_LINUX_DEVLINK_H */

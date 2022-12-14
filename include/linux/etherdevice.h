@@ -1,5 +1,5 @@
-#ifndef LINUX_ETHERDEVICE_H
-#define LINUX_ETHERDEVICE_H
+#ifndef _COMPAT_LINUX_ETHERDEVICE_H
+#define _COMPAT_LINUX_ETHERDEVICE_H
 
 #include "../../compat/config.h"
 
@@ -29,4 +29,4 @@ static inline void ether_addr_copy(u8 *dst, const u8 *src)
 }
 #endif /* HAVE_ETHER_ADDR_COPY*/
 
-#endif /* LINUX_ETHERDEVICE_H */
+#endif /* _COMPAT_LINUX_ETHERDEVICE_H */

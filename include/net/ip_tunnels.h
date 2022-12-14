@@ -1,5 +1,7 @@
-#ifndef __COMPAT_NET_IP_TUNNELS_H
-#define __COMPAT_NET_IP_TUNNELS_H 1
+#ifndef _COMPAT_NET_IP_TUNNELS_H
+#define _COMPAT_NET_IP_TUNNELS_H
+
+#include "../../compat/config.h"
 
 #ifndef CONFIG_COMPAT_IP_TUNNELS
 #include_next <net/ip_tunnels.h>
@@ -153,4 +155,4 @@ static inline __be32 tunnel_id_to_key32(__be64 tun_id)
 
 #endif
 
-#endif /* __COMPAT_NET_IP_TUNNELS_H */
+#endif /* _COMPAT_NET_IP_TUNNELS_H */

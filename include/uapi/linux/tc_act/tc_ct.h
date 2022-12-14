@@ -1,5 +1,5 @@
-#ifndef _COMPAT_UAPI_TC_ACT_TC_CT_H
-#define _COMPAT_UAPI_TC_ACT_TC_CT_H 1
+#ifndef _COMPAT_UAPI_LINUX_TC_ACT_TC_CT_H
+#define _COMPAT_UAPI_LINUX_TC_ACT_TC_CT_H
 
 #include "../../../../compat/config.h"
 
@@ -15,4 +15,4 @@
 #define TCA_CT_ACT_CLEAR        (1 << 2)
 #endif
 
-#endif /* _COMPAT_UAPI_TC_ACT_TC_CT_H */
+#endif /* _COMPAT_UAPI_LINUX_TC_ACT_TC_CT_H */

@@ -1,5 +1,5 @@
-#ifndef COMPAT_LINUX_SWITCHDEV_H
-#define COMPAT_LINUX_SWITCHDEV_H
+#ifndef _COMPAT_NET_SWITCHDEV_H
+#define _COMPAT_NET_SWITCHDEV_H
 
 #include "../../compat/config.h"
 
@@ -60,4 +60,4 @@ netdev_port_same_parent_id(struct net_device *a, struct net_device *b)
 }
 #endif
 
-#endif /* COMPAT_LINUX_SWITCHDEV_H */
+#endif /* _COMPAT_NET_SWITCHDEV_H */

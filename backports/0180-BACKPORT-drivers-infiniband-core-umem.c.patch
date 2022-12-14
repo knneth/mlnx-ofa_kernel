@@ -342,7 +342,7 @@ Change-Id: I4b82b7137e137737f06d1fee07f86e2f483076c9
  	sg_mark_end(sg);
 +#endif
  
- 	if (access & IB_ACCESS_RELAXED_ORDERING)
+ 	if (!(access & IB_ACCESS_DISABLE_RELAXED_ORDERING))
  		dma_attr |= DMA_ATTR_WEAK_ORDERING;
  
 -	umem->nmap =

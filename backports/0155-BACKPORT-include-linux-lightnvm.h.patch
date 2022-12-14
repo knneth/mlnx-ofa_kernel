@@ -3,12 +3,21 @@ Subject: [PATCH] BACKPORT: include/linux/lightnvm.h
 
 Change-Id: I81f44dace1f6c34840f577e11034ce56d3241a0f
 ---
- include/linux/lightnvm.h | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ include/linux/lightnvm.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
 
 --- a/include/linux/lightnvm.h
 +++ b/include/linux/lightnvm.h
-@@ -671,7 +671,21 @@ extern void nvm_unregister_tgt_type(stru
+@@ -2,6 +2,8 @@
+ #ifndef NVM_H
+ #define NVM_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/blkdev.h>
+ #include <linux/types.h>
+ #include <uapi/linux/lightnvm.h>
+@@ -671,7 +673,21 @@ extern void nvm_unregister_tgt_type(stru
  extern void *nvm_dev_dma_alloc(struct nvm_dev *, gfp_t, dma_addr_t *);
  extern void nvm_dev_dma_free(struct nvm_dev *, void *, dma_addr_t);
  

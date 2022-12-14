@@ -303,14 +303,33 @@ static bool mlx5_lag_check_prereq(struct mlx5_lag *ldev)
 #endif
 }
 
-static void mlx5_lag_add_ib_devices(struct mlx5_lag *ldev)
+static bool is_dev_detached(struct mlx5_core_dev *dev)
+{
+	if (dev->priv.flags &
+	    MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV)
+		return true;
+
+	if (dev->priv.flags &
+	    MLX5_PRIV_FLAGS_DETACH)
+		return true;
+
+	return false;
+}
+
+static void mlx5_lag_add_devices(struct mlx5_lag *ldev)
 {
 	int i;
 
-	for (i = 0; i < MLX5_MAX_PORTS; i++)
-		if (ldev->pf[i].dev)
-			mlx5_add_dev_by_protocol(ldev->pf[i].dev,
-						 MLX5_INTERFACE_PROTOCOL_IB);
+	for (i = 0; i < MLX5_MAX_PORTS; i++) {
+		if (!ldev->pf[i].dev)
+			continue;
+
+		if (is_dev_detached(ldev->pf[i].dev))
+			continue;
+
+		ldev->pf[i].dev->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
+		mlx5_rescan_drivers_locked(ldev->pf[i].dev);
+	}
 }
 
 static void mlx5_lag_reload_ib_reps_not_device(struct mlx5_lag *ldev,
@@ -320,18 +339,25 @@ static void mlx5_lag_reload_ib_reps_not_device(struct mlx5_lag *ldev,
 
 	for (i = 0; i < MLX5_MAX_PORTS; i++)
 		if (ldev->pf[i].dev &&
-		    ldev->pf[i].dev != dev)
+		    ldev->pf[i].dev != dev &&
+		    !is_dev_detached(ldev->pf[i].dev))
 			esw_offloads_reload_reps(ldev->pf[i].dev->priv.eswitch);
 }
 
-static void mlx5_lag_remove_ib_devices(struct mlx5_lag *ldev)
+static void mlx5_lag_remove_devices(struct mlx5_lag *ldev)
 {
 	int i;
 
-	for (i = 0; i < MLX5_MAX_PORTS; i++)
-		if (ldev->pf[i].dev)
-			mlx5_remove_dev_by_protocol(ldev->pf[i].dev,
-						    MLX5_INTERFACE_PROTOCOL_IB);
+	for (i = 0; i < MLX5_MAX_PORTS; i++) {
+		if (!ldev->pf[i].dev)
+			continue;
+
+		if (is_dev_detached(ldev->pf[i].dev))
+			continue;
+
+		ldev->pf[i].dev->priv.flags |= MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
+		mlx5_rescan_drivers_locked(ldev->pf[i].dev);
+	}
 }
 
 static bool mlx5_shared_fdb_supported(struct mlx5_lag *ldev)
@@ -381,7 +407,7 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 			    dev1->priv.eswitch->mode == MLX5_ESWITCH_NONE;
 #endif
 		if (shared_fdb || roce_lag)
-			mlx5_lag_remove_ib_devices(ldev);
+			mlx5_lag_remove_devices(ldev);
 
 		err = mlx5_activate_lag(ldev, &tracker,
 					roce_lag ?
@@ -390,27 +416,28 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 					shared_fdb);
 		if (err) {
 			if (shared_fdb || roce_lag)
-				mlx5_lag_add_ib_devices(ldev);
+				mlx5_lag_add_devices(ldev);
 		} else if (shared_fdb) {
-			mlx5_add_dev_by_protocol(ldev->pf[MLX5_LAG_P1].dev,
-						 MLX5_INTERFACE_PROTOCOL_IB);
+			ldev->pf[MLX5_LAG_P1].dev->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
+			mlx5_rescan_drivers_locked(ldev->pf[MLX5_LAG_P1].dev);
 
 			err = esw_offloads_reload_reps(ldev->pf[MLX5_LAG_P1].dev->priv.eswitch);
 			if (!err)
 				err = esw_offloads_reload_reps(ldev->pf[MLX5_LAG_P2].dev->priv.eswitch);
 
 			if (err) {
-				mlx5_remove_dev_by_protocol(ldev->pf[MLX5_LAG_P1].dev,
-							    MLX5_INTERFACE_PROTOCOL_IB);
+				ldev->pf[MLX5_LAG_P1].dev->priv.flags |= MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
+				mlx5_rescan_drivers_locked(ldev->pf[MLX5_LAG_P1].dev);
 				mlx5_deactivate_lag(ldev);
-				mlx5_lag_add_ib_devices(ldev);
+				mlx5_lag_add_devices(ldev);
 				esw_offloads_reload_reps(ldev->pf[MLX5_LAG_P1].dev->priv.eswitch);
 				esw_offloads_reload_reps(ldev->pf[MLX5_LAG_P2].dev->priv.eswitch);
 				mlx5_core_err(dev0, "Failed to enable lag\n");
 				return;
 			}
 		} else if (roce_lag) {
-			mlx5_add_dev_by_protocol(dev0, MLX5_INTERFACE_PROTOCOL_IB);
+			dev0->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
+			mlx5_rescan_drivers_locked(dev0);
 			mlx5_nic_vport_enable_roce(dev1);
 		}
 	} else if (do_bond && __mlx5_lag_is_active(ldev)) {
@@ -421,21 +448,28 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 		roce_lag = __mlx5_lag_is_roce(ldev);
 
 		if (shared_fdb || roce_lag)
-			mlx5_lag_remove_ib_devices(ldev);
+			mlx5_lag_remove_devices(ldev);
 
-		if (!shared_fdb && roce_lag)
+		if (!shared_fdb && roce_lag) {
+			if (!is_dev_detached(dev0)) {
+				dev0->priv.flags |= MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
+				mlx5_rescan_drivers_locked(dev0);
+			}
 			mlx5_nic_vport_disable_roce(dev1);
+		}
 
 		err = mlx5_deactivate_lag(ldev);
 		if (err)
 			return;
 
 		if (shared_fdb || roce_lag)
-			mlx5_lag_add_ib_devices(ldev);
+			mlx5_lag_add_devices(ldev);
 
 		if (shared_fdb) {
-			esw_offloads_reload_reps(dev0->priv.eswitch);
-			esw_offloads_reload_reps(dev1->priv.eswitch);
+			if (!is_dev_detached(dev0))
+				esw_offloads_reload_reps(dev0->priv.eswitch);
+			if (!is_dev_detached(dev1))
+				esw_offloads_reload_reps(dev1->priv.eswitch);
 		}
 	}
 }
@@ -795,6 +829,8 @@ static void __mlx5_lag_add_mdev(struct mlx5_core_dev *dev)
 	if (err)
 		mlx5_core_err(dev, "Failed to init multipath lag err=%d\n",
 			      err);
+
+	return;
 }
 
 /* Must be called with intf_mutex held */
@@ -821,7 +857,7 @@ static void mlx5_lag_disable_lag(struct mlx5_lag *ldev,
 	struct mlx5_core_dev *dev0, *dev1;
 	bool roce_lag;
 
-	mlx5_lag_remove_ib_devices(ldev);
+	mlx5_lag_remove_devices(ldev);
 
 	dev0 = ldev->pf[MLX5_LAG_P1].dev;
 	dev1 = ldev->pf[MLX5_LAG_P2].dev;
@@ -834,7 +870,7 @@ static void mlx5_lag_disable_lag(struct mlx5_lag *ldev,
 	if (!shared_fdb && roce_lag)
 		mlx5_nic_vport_disable_roce(dev1);
 	mlx5_deactivate_lag(ldev);
-	mlx5_lag_add_ib_devices(ldev);
+	mlx5_lag_add_devices(ldev);
 	if (shared_fdb)
 		mlx5_lag_reload_ib_reps_not_device(ldev, dev);
 }
@@ -1093,24 +1129,6 @@ unlock:
 	return port;
 }
 EXPORT_SYMBOL(mlx5_lag_get_slave_port);
-
-bool mlx5_lag_intf_add(struct mlx5_interface *intf, struct mlx5_priv *priv)
-{
-	struct mlx5_core_dev *dev = container_of(priv, struct mlx5_core_dev,
-						 priv);
-	struct mlx5_lag *ldev;
-
-	if (intf->protocol != MLX5_INTERFACE_PROTOCOL_IB)
-		return true;
-
-	ldev = mlx5_lag_dev_get(dev);
-	if (!ldev || !__mlx5_lag_is_roce(ldev) ||
-	    ldev->pf[MLX5_LAG_P1].dev == dev)
-		return true;
-
-	/* If bonded, we do not add an IB device for PF1. */
-	return false;
-}
 
 int mlx5_lag_query_cong_counters(struct mlx5_core_dev *dev,
 				 u64 *values,

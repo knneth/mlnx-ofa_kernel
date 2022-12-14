@@ -98,7 +98,8 @@ mlx5dr_action_create_dest_vport(struct mlx5dr_domain *domain,
 struct mlx5dr_action *
 mlx5dr_action_create_mult_dest_tbl(struct mlx5dr_domain *dmn,
 				   struct mlx5dr_action_dest *dests,
-				   u32 num_of_dests);
+				   u32 num_of_dests,
+				   bool ignore_flow_level);
 
 struct mlx5dr_action *mlx5dr_action_create_drop(void);
 
@@ -136,8 +137,9 @@ int mlx5dr_action_destroy(struct mlx5dr_action *action);
 static inline bool
 mlx5dr_is_supported(struct mlx5_core_dev *dev)
 {
-	return MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) ||
-	       MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner);
+	return MLX5_CAP_GEN(dev, roce) &&
+		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) ||
+		 MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner));
 }
 
 int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn);

@@ -2,6 +2,7 @@
 #
 # Makefile for Mellanox 5th generation network adapters
 # (ConnectX series) core & netdev driver
+
 #
 
 subdir-ccflags-y += -I$(src)
@@ -14,7 +15,7 @@ obj-$(CONFIG_MLX5_CORE) += mlx5_core.o
 mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		health.o mcg.o cq.o alloc.o port.o mr.o pd.o \
 		transobj.o vport.o sriov.o fs_cmd.o fs_core.o pci_irq.o \
-		fs_counters.o rl.o lag.o dev.o events.o wq.o lib/gid.o \
+		fs_counters.o fs_ft_pool.o rl.o lag.o dev.o events.o wq.o lib/gid.o \
 		lib/devcom.o lib/pci_vsc.o lib/dm.o diag/fs_tracepoint.o \
 		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o \
 		mst_dump.o en_diag.o sriov_sysfs.o crdump.o diag/diag_cnt.o \
@@ -30,7 +31,7 @@ mlx5_core-$(CONFIG_MLX5_CORE_EN) += en_main.o en_common.o en_fs.o en_ethtool.o \
 		en_selftest.o en/port.o en/monitor_stats.o en/health.o \
 		en/reporter_tx.o en/reporter_rx.o en/params.o en/xsk/umem.o \
 		en/xsk/setup.o en/xsk/rx.o en/xsk/tx.o en/devlink.o en_debugfs.o en/ptp.o \
-		en/aso.o
+		en/trap.o en/aso.o
 
 #
 # Netdev extra
@@ -53,16 +54,18 @@ mlx5_core-$(CONFIG_MLX5_TC_CT)	     += en/tc_ct.o
 # Core extra
 #
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += eswitch.o eswitch_offloads.o eswitch_offloads_termtbl.o \
-				      ecpf.o rdma.o esw/vf_meter.o
+				      ecpf.o rdma.o esw/vf_meter.o esw/legacy.o
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += esw/acl/helper.o \
 				      esw/acl/egress_lgcy.o esw/acl/egress_ofld.o \
 				      esw/acl/ingress_lgcy.o esw/acl/ingress_ofld.o \
-				      esw/vporttbl.o esw/pet_offloads.o \
+				      esw/vporttbl.o esw/devlink_port.o esw/pet_offloads.o \
+				      esw/qos.o
 
 mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o
 mlx5_core-$(CONFIG_VXLAN)          += lib/vxlan.o
 mlx5_core-$(CONFIG_PTP_1588_CLOCK) += lib/clock.o
 mlx5_core-$(CONFIG_PCI_HYPERV_INTERFACE) += lib/hv.o lib/hv_vhca.o
+mlx5_core-$(CONFIG_MLXDEVM) += mlx5_devm.o esw/devm_port.o
 
 #
 # Ipoib netdev
@@ -94,8 +97,17 @@ mlx5_core-$(CONFIG_MLX5_SW_STEERING) += steering/dr_domain.o steering/dr_table.o
 					steering/dr_ste_v0.o steering/dr_ste_v1.o\
 					steering/dr_cmd.o steering/dr_fw.o \
 					steering/dr_action.o steering/fs_dr.o steering/dr_dbg.o
+#
+# SF device
+#
+mlx5_core-$(CONFIG_MLX5_SF) += sf/vhca_event.o sf/dev/dev.o sf/dev/driver.o
 
 #
-# Mdev basic
+# SF manager
 #
-mlx5_core-$(CONFIG_MLX5_MDEV) += meddev/sf.o meddev/mdev.o  meddev/mdev_driver.o
+mlx5_core-$(CONFIG_MLX5_SF_MANAGER) += sf/cmd.o sf/hw_table.o sf/devlink.o
+
+#
+# SF cfg driver basic
+#
+mlx5_core-$(CONFIG_MLX5_SF_CFG) += sf/dev/cfg_driver.o

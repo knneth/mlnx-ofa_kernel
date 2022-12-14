@@ -1,5 +1,7 @@
-#ifndef __COMPAT_NET_DST_METADATA_H
-#define __COMPAT_NET_DST_METADATA_H 1
+#ifndef _COMPAT_NET_DST_METADATA_H
+#define _COMPAT_NET_DST_METADATA_H
+
+#include "../../compat/config.h"
 
 #ifndef CONFIG_COMPAT_IP_TUNNELS
 #include_next <net/dst_metadata.h>
@@ -97,4 +99,4 @@ static inline struct ip_tunnel_info *skb_tunnel_info(struct sk_buff *skb)
 
 #endif
 
-#endif /* __COMPAT_NET_DST_METADATA_H */
+#endif /* _COMPAT_NET_DST_METADATA_H */

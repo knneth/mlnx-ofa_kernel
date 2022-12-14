@@ -29,7 +29,6 @@ struct mlx5_ct_attr {
 	u16 ct_action;
 	struct mlx5_ct_flow *ct_flow;
 	struct nf_flowtable *nf_ft;
-	u32 ct_labels_id;
 };
 
 #define zone_to_reg_ct {\
@@ -101,14 +100,10 @@ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 void
 mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv);
 
-void
-mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr);
-
 int
 mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		       struct mlx5_flow_spec *spec,
 		       struct flow_cls_offload *f,
-		       struct mlx5_ct_attr *ct_attr,
 		       struct netlink_ext_ack *extack);
 int
 mlx5_tc_ct_add_no_trk_match(struct mlx5e_priv *priv,
@@ -155,14 +150,10 @@ mlx5_tc_ct_clean(struct mlx5_tc_ct_priv *ct_priv)
 {
 }
 
-static inline void
-mlx5_tc_ct_free_match(struct mlx5_tc_ct_priv *priv, struct mlx5_ct_attr *ct_attr) {}
-
 static inline int
 mlx5_tc_ct_parse_match(struct mlx5_tc_ct_priv *priv,
 		       struct mlx5_flow_spec *spec,
 		       struct flow_cls_offload *f,
-		       struct mlx5_ct_attr *ct_attr,
 		       struct netlink_ext_ack *extack)
 {
 	NL_SET_ERR_MSG_MOD(extack, "mlx5 tc ct offload isn't enabled.");

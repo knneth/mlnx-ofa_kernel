@@ -1,9 +1,9 @@
 #ifndef _COMPAT_NET_IP_FIB_H
 #define _COMPAT_NET_IP_FIB_H 1
 
-#include_next <net/ip_fib.h>
-
 #include "../../compat/config.h"
+
+#include_next <net/ip_fib.h>
 
 #if !defined(HAVE_FIB_LOOKUP_EXPORTED) && defined(CONFIG_COMPAT_IS_FIB_LOOKUP_STATIC_AND_EXTERN)
 #define fib_lookup LINUX_BACKPORT(fib_lookup)

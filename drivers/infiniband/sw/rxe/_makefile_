@@ -85,13 +85,7 @@ rpmmacros =\
 		   --define='_specdir $(PWD)'
 override WITH_MAKE_PARAMS += KBUILD_EXTRA_SYMBOLS=$(OFA)/Module.symvers
 
-default:
-	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
-		CONFIG_RDMA_RXE=m \
-		CONFIG_RDMA_RXE_DUMMY= \
-		CONFIG_DTRACE= \
-		CONFIG_CTF= \
-		LINUXINCLUDE=' \
+LINUXINCLUDE=\
 		$(EXTRA_CFLAGS) \
 		-include $(autoconf_h) \
 		$(KCONFIG_H) \
@@ -113,7 +107,15 @@ default:
 		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-Iarch/$$(SRCARCH)/include/generated \
-		' \
+		#
+
+default:
+	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
+		CONFIG_RDMA_RXE=m \
+		CONFIG_RDMA_RXE_DUMMY= \
+		CONFIG_DTRACE= \
+		CONFIG_CTF= \
+		LINUXINCLUDE='$(LINUXINCLUDE)' \
 		modules
 
 install:

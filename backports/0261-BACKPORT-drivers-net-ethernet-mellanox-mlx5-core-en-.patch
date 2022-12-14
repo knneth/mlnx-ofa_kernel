@@ -1,0 +1,71 @@
+From: Mikhael Goikhman <migo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
+
+Change-Id: Ifd2ff01ddfe1bdd930851548d303c517221398ce
+---
+ .../net/ethernet/mellanox/mlx5/core/en/trap.c | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2020 Mellanox Technologies */
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
++
+ #include <net/page_pool.h>
+ #include "en/txrx.h"
+ #include "en/params.h"
+@@ -56,7 +58,9 @@ static int mlx5e_alloc_trap_rq(struct ml
+ 	rq->tstamp   = &priv->tstamp;
+ 	rq->hw_mtu   = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+ 
++#ifdef HAVE_NET_XDP_H
+ 	xdp_rxq_info_unused(&rq->xdp_rxq);
++#endif
+ 
+ 	rq->buff.map_dir = DMA_FROM_DEVICE;
+ 	rq->buff.headroom = mlx5e_get_rq_headroom(mdev, params, NULL);
+@@ -367,6 +371,13 @@ static int mlx5e_handle_action_trap(stru
+ 		if (err)
+ 			goto err_out;
+ 		break;
++#ifdef HAVE_DEVLINK_TRAP_DMAC_FILTER
++	case DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER:
++		err = mlx5e_add_mac_trap(priv, trap_id, mlx5e_trap_get_tirn(priv->en_trap));
++		if (err)
++			goto err_out;
++		break;
++#endif
+ 	default:
+ 		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
+ 		err = -EINVAL;
+@@ -386,6 +397,11 @@ static int mlx5e_handle_action_drop(stru
+ 	case DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER:
+ 		mlx5e_remove_vlan_trap(priv);
+ 		break;
++#ifdef HAVE_DEVLINK_TRAP_DMAC_FILTER
++	case DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER:
++		mlx5e_remove_mac_trap(priv);
++		break;
++#endif
+ 	default:
+ 		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
+ 		return -EINVAL;
+@@ -439,6 +455,9 @@ static int mlx5e_apply_trap(struct mlx5e
+ 
+ static const int mlx5e_traps_arr[] = {
+ 	DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER,
++#ifdef HAVE_DEVLINK_TRAP_DMAC_FILTER
++	DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER,
++#endif
+ };
+ 
+ int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable)
+@@ -453,3 +472,5 @@ int mlx5e_apply_traps(struct mlx5e_priv
+ 	}
+ 	return 0;
+ }
++
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
