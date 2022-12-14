@@ -1684,7 +1684,8 @@ int mlx4_ib_destroy_qp(struct ib_qp *qp, struct ib_udata *udata)
 {
 	struct mlx4_ib_qp *mqp = to_mqp(qp);
 
-	if (mqp->mlx4_ib_qp_type == MLX4_IB_QPT_GSI) {
+	if (mqp->mlx4_ib_qp_type == MLX4_IB_QPT_GSI ||
+	    mqp->mlx4_ib_qp_type == MLX4_IB_QPT_PROXY_GSI) {
 		struct mlx4_ib_sqp *sqp = to_msqp(mqp);
 
 		if (sqp->roce_v2_gsi)

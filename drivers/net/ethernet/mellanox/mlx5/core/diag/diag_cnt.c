@@ -497,7 +497,7 @@ static int get_supported_cnt_ids(struct mlx5_core_dev *dev)
 
 	for (i = 0; i < num_counters; i++)
 		diag_cnt->cnt_id[i].id =
-			MLX5_CAP_DEBUG(dev, diagnostic_counter[i]) & 0xFFFF;
+			MLX5_CAP_DEBUG(dev, diagnostic_counter[i].counter_id);
 
 	return 0;
 }

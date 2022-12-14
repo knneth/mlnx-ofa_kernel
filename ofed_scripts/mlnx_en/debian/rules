@@ -140,7 +140,7 @@ endif
 	install -m 0644 source/scripts/mlnx-en.conf					debian/$(putils)/etc/mlnx-en.conf
 	with_mlx4=$(MLX4) with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) $(CURDIR)/ofed_scripts/deb_mlnx_en_service_install_helper $(CURDIR)/debian/$(putils)
 
-	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --prefix=/usr --root=../../debian/$(putils)
+	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
 
 override_dh_installinit:
 

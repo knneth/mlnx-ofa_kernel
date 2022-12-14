@@ -196,7 +196,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
  }
-@@ -6631,7 +6671,9 @@ static const struct ib_device_ops mlx5_i
+@@ -6632,7 +6672,9 @@ static const struct ib_device_ops mlx5_i
  	.destroy_qp = mlx5_ib_destroy_qp,
  	.destroy_srq = mlx5_ib_destroy_srq,
  	.detach_mcast = mlx5_ib_mcg_detach,
@@ -206,7 +206,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	.drain_rq = mlx5_ib_drain_rq,
  	.drain_sq = mlx5_ib_drain_sq,
  	.fill_res_entry = mlx5_ib_fill_res_entry,
-@@ -6680,6 +6722,9 @@ static const struct ib_device_ops mlx5_i
+@@ -6681,6 +6723,9 @@ static const struct ib_device_ops mlx5_i
  #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
  	.exp_prefetch_mr	= mlx5_ib_prefetch_mr,
  #endif
@@ -216,7 +216,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  
  	INIT_RDMA_OBJ_SIZE(ib_ah, mlx5_ib_ah, ibah),
-@@ -6709,10 +6754,16 @@ static const struct ib_device_ops mlx5_i
+@@ -6710,10 +6755,16 @@ static const struct ib_device_ops mlx5_i
  };
  
  static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {

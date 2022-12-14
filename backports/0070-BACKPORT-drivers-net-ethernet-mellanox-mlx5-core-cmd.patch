@@ -32,7 +32,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  	cmd_mode = cmd->mode;
  	set_bit(MLX5_CMD_ENT_STATE_PENDING_COMP, &ent->state);
  
-@@ -1071,6 +1079,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
+@@ -1095,6 +1103,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	struct mlx5_cmd_stats *stats;
@@ -42,7 +42,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  	int err = 0;
  	s64 ds;
  	u16 op;
-@@ -1110,7 +1121,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
+@@ -1134,7 +1145,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	if (err == -ECANCELED)
  		goto out_free;
  
@@ -57,7 +57,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  	op = MLX5_GET(mbox_in, in->first.data, opcode);
  	if (op < ARRAY_SIZE(cmd->stats)) {
  		stats = &cmd->stats[op];
-@@ -1239,13 +1257,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
+@@ -1263,13 +1281,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
  	if (!mailbox)
  		return ERR_PTR(-ENOMEM);
  
@@ -80,7 +80,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  	mailbox->next = NULL;
  
  	return mailbox;
-@@ -1467,10 +1494,15 @@ static int create_debugfs_files(struct m
+@@ -1491,10 +1518,15 @@ static int create_debugfs_files(struct m
  	if (!dbg->dbg_outlen)
  		goto err_dbg;
  
@@ -96,7 +96,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  
  	dbg->dbg_run = debugfs_create_file("run", 0200, dbg->dbg_root, dev, &fops);
  	if (!dbg->dbg_run)
-@@ -1564,6 +1596,9 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1589,6 +1621,9 @@ static void mlx5_cmd_comp_handler(struct
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	mlx5_cmd_cbk_t callback;
@@ -106,7 +106,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  	void *context;
  	int err;
  	int i;
-@@ -1594,12 +1629,20 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1627,12 +1662,20 @@ static void mlx5_cmd_comp_handler(struct
  			}
  
  			if (ent->callback)
@@ -127,7 +127,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  			if (!pci_channel_offline(dev->pdev) &&
  			    dev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR) {
  				memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
-@@ -1624,7 +1667,14 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1657,7 +1700,14 @@ static void mlx5_cmd_comp_handler(struct
  				free_ent(cmd, ent->idx);
  
  			if (ent->callback) {
@@ -142,7 +142,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  				if (ent->op < ARRAY_SIZE(cmd->stats)) {
  					stats = &cmd->stats[ent->op];
  					spin_lock_irqsave(&stats->lock, flags);
-@@ -1991,7 +2041,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2024,7 +2074,11 @@ static int alloc_cmd_page(struct mlx5_co
  {
  	struct device *ddev = dev->device;
  
@@ -154,7 +154,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
  		return -ENOMEM;
-@@ -2006,7 +2060,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2039,7 +2093,11 @@ static int alloc_cmd_page(struct mlx5_co
  
  	dma_free_coherent(ddev, MLX5_ADAPTER_PAGE_SIZE, cmd->cmd_alloc_buf,
  			  cmd->alloc_dma);
@@ -166,7 +166,7 @@ Change-Id: Iae7431d219f8a38726ea7f9f1475e3ff0a6d247f
  						2 * MLX5_ADAPTER_PAGE_SIZE - 1,
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
-@@ -2358,7 +2416,11 @@ static ssize_t real_miss_store(struct de
+@@ -2391,7 +2449,11 @@ static ssize_t real_miss_store(struct de
  	return count;
  }
  

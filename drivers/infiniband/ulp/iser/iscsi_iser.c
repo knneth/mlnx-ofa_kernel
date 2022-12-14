@@ -524,6 +524,17 @@ iscsi_iser_conn_start(struct iscsi_cls_conn *cls_conn)
 	iser_conn = iscsi_conn->dd_data;
 	reinit_completion(&iser_conn->stop_completion);
 
+	if (iscsi_conn->ping_task) {
+		iser_err("iscsi conn %p ping_task %p, itt %x, state %d\n",
+			 iscsi_conn, iscsi_conn->ping_task,
+			 iscsi_conn->ping_task->itt,
+			 iscsi_conn->ping_task->state);
+
+		if (iscsi_conn->ping_task->state != ISCSI_TASK_FREE)
+			iscsi_put_task(iscsi_conn->ping_task);
+		iscsi_conn->ping_task = NULL;
+	}
+
 	return iscsi_conn_start(cls_conn);
 }
 

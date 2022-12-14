@@ -1989,8 +1989,10 @@ static ssize_t traffic_class_store(struct mlx5_tc_data *tcd, struct tc_attribute
 		dst_match = tclass_find_match(tcd, &match, match.mask, false);
 		if (!dst_match) {
 			dst_match = tclass_find_empty(tcd);
-			if (!dst_match)
+			if (!dst_match) {
+				mutex_unlock(&tcd->lock);
 				return -ENOMEM;
+			}
 		}
 		if (match.tclass < 0)
 			memset(dst_match, 0, sizeof(*dst_match));

@@ -168,6 +168,7 @@ enum {
 	MLX5_REG_MCC		 = 0x9062,
 	MLX5_REG_MCDA		 = 0x9063,
 	MLX5_REG_MCAM		 = 0x907f,
+	MLX5_REG_SBCAM		 = 0xB01F,
 	MLX5_REG_RESOURCE_DUMP   = 0xC000,
 };
 
@@ -301,6 +302,12 @@ struct cmd_msg_cache {
 
 enum {
 	MLX5_NUM_COMMAND_CACHES = 5,
+};
+
+enum mlx5_comp_t {
+	MLX5_CMD_COMP_TYPE_EVENT,
+	MLX5_CMD_COMP_TYPE_FORCED,
+	MLX5_CMD_COMP_TYPE_POLLING,
 };
 
 struct mlx5_cmd_stats {
@@ -644,10 +651,6 @@ struct mlx5_priv {
 	/* end: alloc staff */
 	struct dentry	       *dbg_root;
 
-	/* protect mkey key part */
-	spinlock_t		mkey_lock;
-	u8			mkey_key;
-
 	struct list_head        dev_list;
 	struct list_head        ctx_list;
 	spinlock_t              ctx_lock;
@@ -681,6 +684,7 @@ enum mlx5_device_state {
 
 enum mlx5_interface_state {
 	MLX5_INTERFACE_STATE_UP = BIT(0),
+	MLX5_INTERFACE_STATE_TEARDOWN = BIT(1),
 };
 
 enum mlx5_pci_status {
@@ -1110,12 +1114,6 @@ void mlx5_free_cmd_mailbox_chain(struct mlx5_core_dev *dev,
 				 struct mlx5_cmd_mailbox *head);
 void mlx5_init_mkey_table(struct mlx5_core_dev *dev);
 void mlx5_cleanup_mkey_table(struct mlx5_core_dev *dev);
-int mlx5_core_create_mkey_cb(struct mlx5_core_dev *dev,
-			     struct mlx5_core_mkey *mkey,
-			     struct mlx5_async_ctx *async_ctx, u32 *in,
-			     int inlen, u32 *out, int outlen,
-			     mlx5_async_cbk_t callback,
-			     struct mlx5_async_work *context);
 int mlx5_core_create_mkey(struct mlx5_core_dev *dev,
 			  struct mlx5_core_mkey *mkey,
 			  u32 *in, int inlen);

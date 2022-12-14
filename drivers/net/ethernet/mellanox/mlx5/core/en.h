@@ -325,6 +325,7 @@ struct mlx5e_dcbx {
 	bool                       manual_buffer;
 	u32                        cable_len;
 	u32                        xoff;
+	u16                        port_buff_cell_sz;
 };
 
 struct mlx5e_dcbx_dp {

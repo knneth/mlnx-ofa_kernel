@@ -193,6 +193,27 @@ u32 mlx5_eq_poll_irq_disabled(struct mlx5_eq_comp *eq)
 	return count_eqe;
 }
 
+static void mlx5_eq_async_int_lock(spinlock_t *spinlock, unsigned long *flags)
+{
+	if (in_irq())
+		spin_lock(spinlock);
+	else
+		spin_lock_irqsave(spinlock, *flags);
+}
+
+static void mlx5_eq_async_int_unlock(spinlock_t *spinlock, unsigned long *flags)
+{
+	if (in_irq())
+		spin_unlock(spinlock);
+	else
+		spin_unlock_irqrestore(spinlock, *flags);
+}
+
+enum async_eq_nb_action {
+	ASYNC_EQ_IRQ_HANDLER = 0,
+	ASYNC_EQ_RECOVER = 1,
+};
+
 static int mlx5_eq_async_int(struct notifier_block *nb,
 			     unsigned long action, void *data)
 {
@@ -202,10 +223,13 @@ static int mlx5_eq_async_int(struct notifier_block *nb,
 	struct mlx5_eq_table *eqt;
 	struct mlx5_core_dev *dev;
 	struct mlx5_eqe *eqe;
+	unsigned long flags;
 	int num_eqes = 0;
 
 	dev = eq->dev;
 	eqt = dev->priv.eq_table;
+
+	mlx5_eq_async_int_lock(&eq_async->lock, &flags);
 
 	eqe = next_eqe_sw(eq);
 	if (!eqe)
@@ -231,8 +255,16 @@ static int mlx5_eq_async_int(struct notifier_block *nb,
 
 out:
 	eq_update_ci(eq, 1);
+	mlx5_eq_async_int_unlock(&eq_async->lock, &flags);
 
-	return 0;
+	return unlikely(action == ASYNC_EQ_RECOVER) ? num_eqes : 0;
+}
+
+int mlx5_cmd_eq_recover(struct mlx5_core_dev *dev)
+{
+	struct mlx5_eq_async *eq = &dev->priv.eq_table->cmd_eq;
+
+	return mlx5_eq_async_int(&eq->irq_nb, ASYNC_EQ_RECOVER, NULL);
 }
 
 static void init_eq_buf(struct mlx5_eq *eq)
@@ -644,6 +676,7 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 	mlx5_eq_notifier_register(dev, &table->cq_err_nb);
 
 	table->cmd_eq.irq_nb.notifier_call = mlx5_eq_async_int;
+	spin_lock_init(&table->cmd_eq.lock);
 	param = (struct mlx5_eq_param) {
 		.irq_index = 0,
 		.nent = MLX5_NUM_CMD_EQE,
@@ -665,6 +698,7 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 	mlx5_cmd_allowed_opcode(dev, 0);
 
 	table->async_eq.irq_nb.notifier_call = mlx5_eq_async_int;
+	spin_lock_init(&table->async_eq.lock);
 	param = (struct mlx5_eq_param) {
 		.irq_index = 0,
 		.nent = MLX5_NUM_ASYNC_EQE,
@@ -684,6 +718,7 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 	}
 
 	table->pages_eq.irq_nb.notifier_call = mlx5_eq_async_int;
+	spin_lock_init(&table->pages_eq.lock);
 	param = (struct mlx5_eq_param) {
 		.irq_index = 0,
 		.nent = /* TODO: sriov max_vf + */ 1,

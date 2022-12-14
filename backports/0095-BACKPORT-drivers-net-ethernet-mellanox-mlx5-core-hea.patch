@@ -8,7 +8,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/health.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/health.c
-@@ -335,6 +335,23 @@ static int mlx5_health_try_recover(struc
+@@ -339,6 +339,23 @@ static int mlx5_health_try_recover(struc
  	return 0;
  }
  
@@ -32,7 +32,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  static const char *hsynd_str(u8 synd)
  {
  	switch (synd) {
-@@ -396,9 +413,14 @@ static void print_health_info(struct mlx
+@@ -400,9 +417,14 @@ static void print_health_info(struct mlx
  	mlx5_core_err(dev, "raw fw_ver 0x%08x\n", fw);
  }
  
@@ -48,7 +48,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  {
  	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
  	struct mlx5_core_health *health = &dev->priv.health;
-@@ -499,7 +521,11 @@ mlx5_fw_reporter_heath_buffer_data_put(s
+@@ -503,7 +525,11 @@ mlx5_fw_reporter_heath_buffer_data_put(s
  
  static int
  mlx5_fw_reporter_dump(struct devlink_health_reporter *reporter,
@@ -61,7 +61,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  {
  	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
  	int err;
-@@ -553,20 +579,36 @@ static const struct devlink_health_repor
+@@ -557,20 +583,36 @@ static const struct devlink_health_repor
  
  static int
  mlx5_fw_fatal_reporter_recover(struct devlink_health_reporter *reporter,
@@ -100,7 +100,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  	int err;
  
  	if (!mlx5_core_is_pf(dev))
-@@ -587,7 +629,24 @@ mlx5_fw_fatal_reporter_dump(struct devli
+@@ -591,7 +633,24 @@ mlx5_fw_fatal_reporter_dump(struct devli
  			goto free_data;
  	}
  
@@ -125,7 +125,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  
  free_data:
  	kvfree(cr_data);
-@@ -656,6 +715,7 @@ static void mlx5_fw_reporters_destroy(st
+@@ -660,6 +719,7 @@ static void mlx5_fw_reporters_destroy(st
  	if (!IS_ERR_OR_NULL(health->fw_fatal_reporter))
  		devlink_health_reporter_destroy(health->fw_fatal_reporter);
  }
@@ -133,7 +133,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  
  static unsigned long get_next_poll_jiffies(void)
  {
-@@ -681,13 +741,25 @@ void mlx5_trigger_health_work(struct mlx
+@@ -685,13 +745,25 @@ void mlx5_trigger_health_work(struct mlx
  	spin_unlock_irqrestore(&health->wq_lock, flags);
  }
  
@@ -159,7 +159,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  	u32 count;
  
  	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
-@@ -713,13 +785,17 @@ static void poll_health(struct timer_lis
+@@ -717,13 +789,17 @@ static void poll_health(struct timer_lis
  	if (health->miss_counter == MAX_MISSES) {
  		mlx5_core_err(dev, "device's health compromised - reached miss count\n");
  		print_health_info(dev);
@@ -177,7 +177,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  
  out:
  	mod_timer(&health->timer, get_next_poll_jiffies());
-@@ -729,7 +805,13 @@ void mlx5_start_health_poll(struct mlx5_
+@@ -733,7 +809,13 @@ void mlx5_start_health_poll(struct mlx5_
  {
  	struct mlx5_core_health *health = &dev->priv.health;
  
@@ -191,7 +191,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  	health->fatal_error = MLX5_SENSOR_NO_ERR;
  	clear_bit(MLX5_DROP_NEW_HEALTH_WORK, &health->flags);
  	health->health = &dev->iseg->health;
-@@ -761,7 +843,9 @@ void mlx5_drain_health_wq(struct mlx5_co
+@@ -765,7 +847,9 @@ void mlx5_drain_health_wq(struct mlx5_co
  	spin_lock_irqsave(&health->wq_lock, flags);
  	set_bit(MLX5_DROP_NEW_HEALTH_WORK, &health->flags);
  	spin_unlock_irqrestore(&health->wq_lock, flags);
@@ -201,7 +201,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  	cancel_work_sync(&health->fatal_report_work);
  }
  
-@@ -777,7 +861,9 @@ void mlx5_health_cleanup(struct mlx5_cor
+@@ -781,7 +865,9 @@ void mlx5_health_cleanup(struct mlx5_cor
  	struct mlx5_core_health *health = &dev->priv.health;
  
  	destroy_workqueue(health->wq);
@@ -211,7 +211,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  }
  
  int mlx5_health_init(struct mlx5_core_dev *dev)
-@@ -785,7 +871,9 @@ int mlx5_health_init(struct mlx5_core_de
+@@ -789,7 +875,9 @@ int mlx5_health_init(struct mlx5_core_de
  	struct mlx5_core_health *health;
  	char *name;
  
@@ -221,7 +221,7 @@ Change-Id: Ib98f39ad5659d04444f9211207a56c9d6931e82b
  
  	health = &dev->priv.health;
  	name = kmalloc(64, GFP_KERNEL);
-@@ -799,12 +887,18 @@ int mlx5_health_init(struct mlx5_core_de
+@@ -803,12 +891,18 @@ int mlx5_health_init(struct mlx5_core_de
  	if (!health->wq)
  		goto out_err;
  	spin_lock_init(&health->wq_lock);

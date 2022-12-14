@@ -12,12 +12,10 @@
 #endif
 
 #ifndef HAVE_MMGET_NOT_ZERO
-#ifndef HAVE_SCHED_MMGET_NOT_ZERO
 static inline bool mmget_not_zero(struct mm_struct *mm)
 {
 	return atomic_inc_not_zero(&mm->mm_users);
 }
-#endif
 #endif
 
 #ifndef HAVE_MMGRAB

@@ -16,6 +16,8 @@ enum ib_exp_access_flags {
 	IB_EXP_ACCESS_TUNNELED_ATOMIC	    = (1 << (15 + IB_EXP_ACCESS_FLAGS_SHIFT)),
 	/* Initial values are non-exp defined as part of  ib_access_flags */
 	IB_EXP_ACCESS_PHYSICAL_ADDR	    = (1 << (16 + IB_EXP_ACCESS_FLAGS_SHIFT)),
+	IB_EXP_ACCESS_SUPPORTED		    = IB_EXP_ACCESS_TUNNELED_ATOMIC |
+					      IB_EXP_ACCESS_PHYSICAL_ADDR,
 };
 
 enum ib_nvmf_offload_type {

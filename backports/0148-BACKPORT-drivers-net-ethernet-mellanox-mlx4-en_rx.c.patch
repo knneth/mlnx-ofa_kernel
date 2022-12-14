@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_rx.c
 
 Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
 ---
- drivers/net/ethernet/mellanox/mlx4/en_rx.c | 313 ++++++++++++++++++++++++++++-
- 1 file changed, 308 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/en_rx.c | 317 ++++++++++++++++++++-
+ 1 file changed, 312 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_rx.c
@@ -552,12 +552,15 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  	mlx4_en_refill_rx_buffers(priv, ring);
  
-@@ -987,22 +1225,39 @@ int mlx4_en_poll_rx_cq(struct napi_struc
+@@ -987,22 +1225,42 @@ int mlx4_en_poll_rx_cq(struct napi_struc
  		}
  	}
  
 +	if (!mlx4_en_cq_lock_napi(cq))
-+		return budget;
++	{
++		done = 0;
++		goto complete;
++	}
 +
  	done = mlx4_en_process_rx_cq(dev, cq, budget);
  
@@ -592,7 +595,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  
  		if (likely(cpumask_test_cpu(cpu_curr, aff)))
  			return budget;
-@@ -1015,10 +1270,30 @@ int mlx4_en_poll_rx_cq(struct napi_struc
+@@ -1015,10 +1273,31 @@ int mlx4_en_poll_rx_cq(struct napi_struc
  		 */
  		if (done)
  			done--;
@@ -607,6 +610,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
 +#endif
 +
  	}
++complete:
  	/* Done for now */
 +#ifdef HAVE_NAPI_COMPLETE_DONE
 +#ifdef NAPI_COMPLETE_DONE_RET_VALUE
@@ -623,7 +627,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	return done;
  }
  
-@@ -1028,6 +1303,7 @@ void mlx4_en_calc_rx_buf(struct net_devi
+@@ -1028,6 +1307,7 @@ void mlx4_en_calc_rx_buf(struct net_devi
  	int eff_mtu = MLX4_EN_EFF_MTU(dev->mtu);
  	int i = 0;
  
@@ -631,7 +635,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	/* bpf requires buffers to be set up as 1 packet per page.
  	 * This only works when num_frags == 1.
  	 */
-@@ -1040,7 +1316,9 @@ void mlx4_en_calc_rx_buf(struct net_devi
+@@ -1040,7 +1320,9 @@ void mlx4_en_calc_rx_buf(struct net_devi
  		priv->dma_dir = PCI_DMA_BIDIRECTIONAL;
  		priv->rx_headroom = XDP_PACKET_HEADROOM;
  		i = 1;
@@ -642,7 +646,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  		int frag_size_max = 2048, buf_size = 0;
  
  		/* should not happen, right ? */
-@@ -1102,7 +1380,11 @@ static int mlx4_en_config_rss_qp(struct
+@@ -1102,7 +1384,11 @@ static int mlx4_en_config_rss_qp(struct
  	if (!context)
  		return -ENOMEM;
  
@@ -654,7 +658,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	if (err) {
  		en_err(priv, "Failed to allocate qp #%x\n", qpn);
  		goto out;
-@@ -1117,7 +1399,11 @@ static int mlx4_en_config_rss_qp(struct
+@@ -1117,7 +1403,11 @@ static int mlx4_en_config_rss_qp(struct
  	/* Cancel FCS removal if FW allows */
  	if (mdev->dev->caps.flags & MLX4_DEV_CAP_FLAG_FCS_KEEP) {
  		context->param3 |= cpu_to_be32(1 << 29);
@@ -666,7 +670,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  			ring->fcs_del = 0;
  		else
  			ring->fcs_del = ETH_FCS_LEN;
-@@ -1147,7 +1433,11 @@ int mlx4_en_create_drop_qp(struct mlx4_e
+@@ -1147,7 +1437,11 @@ int mlx4_en_create_drop_qp(struct mlx4_e
  		en_err(priv, "Failed reserving drop qpn\n");
  		return err;
  	}
@@ -678,7 +682,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	if (err) {
  		en_err(priv, "Failed allocating drop qp\n");
  		mlx4_qp_release_range(priv->mdev->dev, qpn, 1);
-@@ -1220,7 +1510,12 @@ int mlx4_en_config_rss_steer(struct mlx4
+@@ -1220,7 +1514,12 @@ int mlx4_en_config_rss_steer(struct mlx4
  	}
  
  	/* Configure RSS indirection qp */
@@ -691,7 +695,7 @@ Change-Id: Ief16f235e5681e46c43a4ef72452401b58abb75e
  	if (err) {
  		en_err(priv, "Failed to allocate RSS indirection QP\n");
  		goto rss_err;
-@@ -1253,9 +1548,17 @@ int mlx4_en_config_rss_steer(struct mlx4
+@@ -1253,9 +1552,17 @@ int mlx4_en_config_rss_steer(struct mlx4
  
  	rss_context->flags = rss_mask;
  	rss_context->hash_fn = MLX4_RSS_HASH_TOP;

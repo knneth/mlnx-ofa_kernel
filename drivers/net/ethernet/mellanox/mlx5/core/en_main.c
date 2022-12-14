@@ -680,7 +680,6 @@ static int mlx5e_alloc_rq(struct mlx5e_channel *c,
 				rq->mpwqe.num_strides << rq->mpwqe.log_stride_sz;
 			u64 dma_offset = mlx5e_get_mpwqe_offset(rq, i);
 
-			byte_count -= rq->buff.headroom;
 			wqe->data[0].addr = cpu_to_be64(dma_offset + rq->buff.headroom);
 			wqe->data[0].byte_count = cpu_to_be32(byte_count);
 			wqe->data[0].lkey = rq->mkey_be;

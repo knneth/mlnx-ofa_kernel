@@ -46,7 +46,7 @@
 #include "fs_core.h"
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.9-0.1.7"
+#define DRIVER_VERSION	"4.9-2.2.4"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 
@@ -226,6 +226,7 @@ int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force);
+bool mlx5_sensor_pci_not_working(struct mlx5_core_dev *dev);
 void mlx5_error_sw_reset(struct mlx5_core_dev *dev);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
 void mlx5_recover_device(struct mlx5_core_dev *dev);

@@ -219,7 +219,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		MLNX_AC_DEFINE(HAVE_GET_USER_PAGES_GUP_FLAGS, 1,
 			[get_user_pages uses gup_flags])
 	],[
-		AC_MSG_CHECKING([if get_user_pages has 7 params])
 		MLNX_BG_LB_LINUX_TRY_COMPILE([
 			#include <linux/mm.h>
 		],[
@@ -235,7 +234,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		],[
 			AC_MSG_RESULT(yes)
 			MLNX_AC_DEFINE(HAVE_GET_USER_PAGES_GUP_FLAGS, 1,
-				[get_user_pages has 7 params])
+				[NESTED: get_user_pages uses gup_flags])
 		],[
 			AC_MSG_RESULT(no)
 		])
@@ -8775,21 +8774,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if sched/mm.h has mmget_not_zero])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/sched/mm.h>
-	],[
-		mmget_not_zero(NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_SCHED_MMGET_NOT_ZERO, 1,
-			[mmget_not_zero is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if mm.h has mmget_not_zero])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
                 #include <linux/sched/mm.h>
@@ -8811,7 +8795,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		],[
 			AC_MSG_RESULT(yes)
 			MLNX_AC_DEFINE(HAVE_MMGET_NOT_ZERO, 1,
-				[mmget_not_zero is defined])
+				[NESTED: mmget_not_zero is defined])
 		],[
 			AC_MSG_RESULT(no)
 		])
@@ -9219,6 +9203,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 			  [struct xdp_frame is defined])
 	],[
 		AC_MSG_RESULT(no)
+			AC_MSG_CHECKING([if net/xdp.h has struct xdp_frame workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/uek_kabi.h>
+				#include <net/xdp.h>
+
+			],[
+				struct xdp_frame f = {};
+
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_XDP_FRAME, 1,
+					  [NESTED: struct xdp_frame is defined in 5.4.17-2011.1.2.el8uek.x86_64])
+			],[
+				AC_MSG_RESULT(no)
+			])
 	])
 
 	AC_MSG_CHECKING([if filter.h has xdp_set_data_meta_invalid])
@@ -13175,6 +13175,19 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 			  [net/xdp.h is defined])
 	],[
 		AC_MSG_RESULT(no)
+			AC_MSG_CHECKING([if net/xdp.h exists workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/uek_kabi.h>
+				#include <net/xdp.h>
+			],[
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_NET_XDP_H, 1,
+					  [NESTED: net/xdp.h is defined workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			],[
+				AC_MSG_RESULT(no)
+			])
 	])
 
 	AC_MSG_CHECKING([if net/xdp.h has convert_to_xdp_frame])
@@ -13190,6 +13203,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 			  [net/xdp.h has convert_to_xdp_frame])
 	],[
 		AC_MSG_RESULT(no)
+			AC_MSG_CHECKING([if net/xdp.h has convert_to_xdp_frame workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/uek_kabi.h>
+				#include <net/xdp.h>
+			],[
+				convert_to_xdp_frame(NULL);
+
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_XDP_CONVERT_TO_XDP_FRAME, 1,
+					  [NESTED: net/xdp.h has convert_to_xdp_frame workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			],[
+				AC_MSG_RESULT(no)
+			])
 	])
 
 	AC_MSG_CHECKING([if net/xdp.h has xdp_rxq_info_reg_mem_model])
@@ -13205,6 +13233,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 			  [net/xdp.h has xdp_rxq_info_reg_mem_model])
 	],[
 		AC_MSG_RESULT(no)
+			AC_MSG_CHECKING([if net/xdp.h has xdp_rxq_info_reg_mem_model workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			MLNX_BG_LB_LINUX_TRY_COMPILE([
+				#include <linux/uek_kabi.h>
+				#include <net/xdp.h>
+			],[
+				xdp_rxq_info_reg_mem_model(NULL, 0, NULL);
+
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				MLNX_AC_DEFINE(HAVE_XDP_RXQ_INFO_REG_MEM_MODEL, 1,
+					  [NESTED: net/xdp.h has xdp_rxq_info_reg_mem_model workaround for 5.4.17-2011.1.2.el8uek.x86_64])
+			],[
+				AC_MSG_RESULT(no)
+			])
 	])
 
 	AC_MSG_CHECKING([if net/geneve.h exists])
@@ -14804,6 +14847,35 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BLKDEV_QUEUE_FLAG_QUIESCED, 1,
 				[linux/blkdev.h has QUEUE_FLAG_QUIESCED])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if ptp_find_pin_unlocked is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ptp_clock_kernel.h>
+	],[
+		ptp_find_pin_unlocked(NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PTP_FIND_PIN_UNLOCK, 1,
+			  [ptp_find_pin_unlocked is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blkdev.h struct request has mq_hctx])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		struct request rq = { .mq_hctx = NULL };
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_REQUEST_MQ_HCTX, 1,
+			[blkdev.h struct request has mq_hctx])
 	],[
 		AC_MSG_RESULT(no)
 	])

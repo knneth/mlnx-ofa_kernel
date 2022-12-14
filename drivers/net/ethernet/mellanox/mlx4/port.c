@@ -1588,34 +1588,41 @@ static int mlx4_common_set_port(struct mlx4_dev *dev, int slave, u32 in_mod,
 							      gen_context);
 
 			/* For old slaves we parse the port settings and figure
-			 * out the roce_mode of the slave. Such slaves are
+			 * out the roce_mode of the slave when the calling function
+			 * is mlx4_SET_PORT_GENERAL(). Such slaves are
 			 * assumed to use input_modifier MLX4_SET_PORT_GID_TABLE
 			 * later on
 			 */
 #define SET_PORT_ROCE_MODE_BITS 0x10
-			if (gen_context->flags & SET_PORT_ROCE_MODE_BITS) {
-				slave_set_port_mode = (gen_context->roce_mode >> 4) & 7;
-				switch (slave_set_port_mode) {
-				case MLX4_SET_PORT_ROCE_MODE_1:
+
+			if (!(gen_context->flags2 & (MLX4_FLAG2_V_DISABLE_MC_LOOPBACK_MASK |
+						     MLX4_FLAG2_V_USER_MTU_MASK |
+						     MLX4_FLAG2_V_USER_MAC_MASK |
+						     MLX4_FLAG2_V_IGNORE_FCS_MASK))) {
+				if (gen_context->flags & SET_PORT_ROCE_MODE_BITS) {
+					slave_set_port_mode = (gen_context->roce_mode >> 4) & 7;
+					switch (slave_set_port_mode) {
+					case MLX4_SET_PORT_ROCE_MODE_1:
+						slave_st->slave_gid_type = MLX4_ROCE_GID_TYPE_V1;
+						break;
+					case MLX4_SET_PORT_ROCE_MODE_1_PLUS_2:
+						slave_st->slave_gid_type = MLX4_ROCE_GID_TYPE_INVALID;
+						break;
+					default:
+						return -EINVAL;
+					}
+				} else {
+					/* Old slaves don't set roce_mode in old slaves
+					 * if mode if V1
+					 */
 					slave_st->slave_gid_type = MLX4_ROCE_GID_TYPE_V1;
-					break;
-				case MLX4_SET_PORT_ROCE_MODE_1_PLUS_2:
+				}
+
+				if (slave_st->slave_gid_type != MLX4_ROCE_GID_TYPE_INVALID &&
+				    (mlx4_verify_supported_gid_type(dev, slave_st->slave_gid_type, NULL))) {
 					slave_st->slave_gid_type = MLX4_ROCE_GID_TYPE_INVALID;
-					break;
-				default:
 					return -EINVAL;
 				}
-			} else {
-				/* Old slaves don't set roce_mode in old slaves
-				 * if mode if V1
-				 */
-				slave_st->slave_gid_type = MLX4_ROCE_GID_TYPE_V1;
-			}
-
-			if ((slave_st->slave_gid_type != MLX4_ROCE_GID_TYPE_INVALID) &&
-			    (mlx4_verify_supported_gid_type(dev, slave_st->slave_gid_type, NULL))) {
-				slave_st->slave_gid_type = MLX4_ROCE_GID_TYPE_INVALID;
-				return -EINVAL;
 			}
 
 #define SET_PORT_ROCE_IP_PROTO_BITS 0x20

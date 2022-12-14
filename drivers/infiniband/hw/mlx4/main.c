@@ -62,7 +62,7 @@
 #include <rdma/mlx4-abi.h>
 
 #define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"4.9-0.1.7"
+#define DRV_VERSION	"4.9-2.2.4"
 
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF

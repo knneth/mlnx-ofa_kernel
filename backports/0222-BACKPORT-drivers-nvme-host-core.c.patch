@@ -498,7 +498,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  }
  EXPORT_SYMBOL_GPL(nvme_setup_cmd);
  
-+#ifdef HAVE_BLK_TYPES_REQ_HIPRI
++#if defined(HAVE_BLK_TYPES_REQ_HIPRI) && defined(HAVE_REQUEST_MQ_HCTX)
  static void nvme_end_sync_rq(struct request *rq, blk_status_t error)
  {
  	struct completion *waiting = rq->end_io_data;
@@ -539,7 +539,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  			goto out;
  	}
  
-+#ifdef HAVE_BLK_TYPES_REQ_HIPRI
++#if defined(HAVE_BLK_TYPES_REQ_HIPRI) && defined(HAVE_REQUEST_MQ_HCTX)
  	if (poll)
  		nvme_execute_rq_polled(req->q, NULL, req, at_head);
  	else

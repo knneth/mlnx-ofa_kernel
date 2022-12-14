@@ -59,7 +59,7 @@
 #include "mlx4_stats.h"
 
 #define DRV_NAME	"mlx4_en"
-#define DRV_VERSION	"4.9-0.1.7"
+#define DRV_VERSION	"4.9-2.2.4"
 
 #define MLX4_EN_MSG_LEVEL	(NETIF_MSG_LINK | NETIF_MSG_IFDOWN)
 

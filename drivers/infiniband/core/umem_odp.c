@@ -567,7 +567,6 @@ static int ib_umem_odp_map_dma_single_page(
 			atomic_inc(&dev->odp_statistics.num_prefetch_pages);
 		else
 			atomic_inc(&dev->odp_statistics.num_page_fault_pages);
-
 		ret = 1;
 	} else if (umem_odp->page_list[page_index] == page) {
 		umem_odp->dma_list[page_index] |= access_mask;
@@ -585,8 +584,7 @@ out:
 	if (ret < 0)
 		mutex_unlock(&umem_odp->umem_mutex);
 
-	if(ret != 1)
-		put_page(page);
+	put_page(page);
 
 	if (remove_existing_mapping) {
 		umem->context->invalidate_range(

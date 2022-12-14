@@ -90,7 +90,7 @@ void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state)
 		    &dev->iseg->cmdq_addr_l_sz);
 }
 
-static bool sensor_pci_not_working(struct mlx5_core_dev *dev)
+bool mlx5_sensor_pci_not_working(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_health *health = &dev->priv.health;
 	struct health_buffer __iomem *h = health->health;
@@ -113,7 +113,7 @@ static bool sensor_fw_synd_rfr(struct mlx5_core_dev *dev)
 
 static u32 check_fatal_sensors(struct mlx5_core_dev *dev)
 {
-	if (sensor_pci_not_working(dev))
+	if (mlx5_sensor_pci_not_working(dev))
 		return MLX5_SENSOR_PCI_COMM_ERR;
 	if (pci_channel_offline(dev->pdev))
 		return MLX5_SENSOR_PCI_ERR;
@@ -316,11 +316,15 @@ static int mlx5_health_try_recover(struct mlx5_core_dev *dev)
 	mlx5_core_warn(dev, "handling bad device here\n");
 	mlx5_handle_bad_state(dev);
 	end = jiffies + msecs_to_jiffies(MLX5_RECOVERY_WAIT_MSECS);
-	while (sensor_pci_not_working(dev)) {
+	while (mlx5_sensor_pci_not_working(dev)) {
 		if (time_after(jiffies, end)) {
 			mlx5_core_err(dev,
 				      "health recovery flow aborted, PCI reads still not working\n");
 			return -EIO;
+		}
+		if (test_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state)) {
+			mlx5_core_warn(dev, "device is being removed, stop load\n");
+			return -ENODEV;
 		}
 		msleep(100);
 	}

@@ -18,7 +18,7 @@ Change-Id: I5a1acb08ddffa129ee84a4efe059cf9e7125d385
  };
  
  struct mlx5_ib_wc {
-@@ -1489,6 +1491,7 @@ void __mlx5_ib_remove(struct mlx5_ib_dev
+@@ -1494,6 +1496,7 @@ void __mlx5_ib_remove(struct mlx5_ib_dev
  void *__mlx5_ib_add(struct mlx5_ib_dev *dev,
  		    const struct mlx5_ib_profile *profile);
  
@@ -26,7 +26,7 @@ Change-Id: I5a1acb08ddffa129ee84a4efe059cf9e7125d385
  int mlx5_ib_get_vf_config(struct ib_device *device, int vf,
  			  u8 port, struct ifla_vf_info *info);
  int mlx5_ib_set_vf_link_state(struct ib_device *device, int vf,
-@@ -1497,6 +1500,7 @@ int mlx5_ib_get_vf_stats(struct ib_devic
+@@ -1502,6 +1505,7 @@ int mlx5_ib_get_vf_stats(struct ib_devic
  			 u8 port, struct ifla_vf_stats *stats);
  int mlx5_ib_set_vf_guid(struct ib_device *device, int vf, u8 port,
  			u64 guid, int type);

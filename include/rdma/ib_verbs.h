@@ -4474,7 +4474,7 @@ static inline int ib_check_mr_access(int flags)
 	/* Only access flags that are defined in the access flags enum are
 	 * supported
 	 */
-	if (flags & ~IB_ACCESS_SUPPORTED)
+	if (flags & ~(IB_ACCESS_SUPPORTED | IB_EXP_ACCESS_SUPPORTED))
 		return -EINVAL;
 
 	/*

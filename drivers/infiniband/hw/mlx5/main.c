@@ -78,7 +78,7 @@
 #include <rdma/uverbs_named_ioctl.h>
 
 #define DRIVER_NAME "mlx5_ib"
-#define DRIVER_VERSION	"4.9-0.1.7"
+#define DRIVER_VERSION	"4.9-2.2.4"
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB HCA IB driver");
@@ -6570,6 +6570,7 @@ static int mlx5_ib_stage_init_init(struct mlx5_ib_dev *dev)
 	mutex_init(&dev->cap_mask_mutex);
 	INIT_LIST_HEAD(&dev->qp_list);
 	spin_lock_init(&dev->reset_flow_resource_lock);
+	spin_lock_init(&dev->mkey_lock);
 
 	spin_lock_init(&dev->dm.lock);
 	dev->dm.dev = mdev;

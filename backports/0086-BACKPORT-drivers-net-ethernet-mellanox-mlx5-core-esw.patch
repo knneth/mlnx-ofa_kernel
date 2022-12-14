@@ -92,7 +92,7 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
  	u8 read8;
  	u16 read;
  
-@@ -96,10 +140,19 @@ static ssize_t esw_compat_read(struct ko
+@@ -99,10 +143,19 @@ static ssize_t esw_compat_read(struct ko
  
  	if (op->read_u16) {
  		ret = op->read_u16(devlink, &read);
@@ -113,7 +113,7 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
  
  	atomic_set(&esw->handler.in_progress, 0);
  
-@@ -124,7 +177,9 @@ static ssize_t esw_compat_write(struct k
+@@ -127,7 +180,9 @@ static ssize_t esw_compat_write(struct k
  	struct mlx5_core_dev *dev = cdevlink->mdev;
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
  	struct devlink *devlink = priv_to_devlink(dev);
@@ -123,7 +123,7 @@ Change-Id: I2533f0e24095ab75e59fb3fc4509f792babeca21
  	const char *entname = attr->attr.name;
  	struct devlink_compat_op *op = 0;
  	u16 set = 0;
-@@ -163,16 +218,35 @@ static ssize_t esw_compat_write(struct k
+@@ -169,16 +224,35 @@ static ssize_t esw_compat_write(struct k
  		return -EBUSY;
  
  	if (op->write_u16)

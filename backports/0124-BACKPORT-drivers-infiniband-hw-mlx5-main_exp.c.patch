@@ -20,7 +20,7 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
  	.show = dc_attr_show,
  	.store = dc_attr_store
  };
-@@ -2449,6 +2453,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev
+@@ -2451,6 +2455,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev
  	size_t map_size = vma->vm_end - vma->vm_start;
  	pgprot_t vm_page_prot;
  	int err;
@@ -30,7 +30,7 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
  
  	if (indx % uars_per_page) {
  		mlx5_ib_warn(dev, "invalid uar index %d, should be system page aligned and there are %d uars per page.\n",
-@@ -2457,7 +2464,11 @@ int alloc_and_map_wc(struct mlx5_ib_dev
+@@ -2459,7 +2466,11 @@ int alloc_and_map_wc(struct mlx5_ib_dev
  	}
  
  #if defined(CONFIG_X86)
@@ -42,7 +42,7 @@ Change-Id: I4577ed35b2427633d3a8adea7a3fb772af1fca68
  		mlx5_ib_dbg(dev, "write combine not available\n");
  		return -EPERM;
  	}
-@@ -2601,3 +2612,66 @@ int mlx5_ib_exp_set_context_attr(struct
+@@ -2603,3 +2614,66 @@ int mlx5_ib_exp_set_context_attr(struct
  
  	return 0;
  }

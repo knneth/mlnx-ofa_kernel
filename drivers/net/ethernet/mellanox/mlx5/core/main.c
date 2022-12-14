@@ -1518,6 +1518,12 @@ int mlx5_load_one(struct mlx5_core_dev *dev, bool boot)
 		goto out;
 	}
 
+	if (test_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state)) {
+		mlx5_core_warn(dev, "device is being removed, stop load\n");
+		err = -ENODEV;
+		goto out;
+	}
+
 	err = mlx5_function_setup(dev, boot);
 	if (err)
 		goto out;
@@ -1607,6 +1613,12 @@ static int mlx5_try_fast_unload(struct mlx5_core_dev *dev)
 	 */
 	mlx5_drain_health_wq(dev);
 	mlx5_stop_health_poll(dev, false);
+
+	if (mlx5_sensor_pci_not_working(dev)) {
+		mlx5_core_dbg(dev, "PCI interface is down, giving up\n");
+		mlx5_enter_error_state(dev, true);
+		return -EIO;
+	}
 
 	ret = mlx5_cmd_fast_teardown_hca(dev);
 	if (!ret)
@@ -1978,7 +1990,6 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
 	mutex_init(&priv->alloc_mutex);
 	mutex_init(&priv->pgdir_mutex);
 	INIT_LIST_HEAD(&priv->pgdir_list);
-	spin_lock_init(&priv->mkey_lock);
 
 	priv->dbg_root = debugfs_create_dir(dev_name(dev->device),
 					    mlx5_debugfs_root);
@@ -2070,12 +2081,6 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
 		return -ENOMEM;
 	}
 
-	err = device_create_file(&pdev->dev, mlx5_roce_enable_dev_attrs);
-	if (err) {
-		err = 0;
-		goto mdev_init_err;
-	}
-
 	dev = devlink_priv(devlink);
 	priv = &dev->priv;
 	dev->device = &pdev->dev;
@@ -2095,6 +2100,13 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	err = mlx5_mdev_init(dev, prof_sel);
 	if (err)
 		goto mdev_init_err;
+
+	err = device_create_file(&pdev->dev, mlx5_roce_enable_dev_attrs);
+	if (err) {
+		mlx5_core_err(dev, "Failed to create roce_enable sysfs with error code %d\n",
+			      err);
+		goto roce_init_err;
+	}
 
 	err = mlx5_pci_init(dev, pdev, id);
 	if (err) {
@@ -2146,6 +2158,8 @@ clean_crdump:
 	}
 #endif
 pci_init_err:
+	device_remove_file(&pdev->dev, mlx5_roce_enable_dev_attrs);
+roce_init_err:
 	mlx5_mdev_uninit(dev);
 mdev_init_err:
 	mlx5_devlink_free(devlink);
@@ -2166,6 +2180,7 @@ static void remove_one(struct pci_dev *pdev)
 	if (pdev->is_virtfn && !priv->sriov.probe_vf)
 		goto out;
 
+	set_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state);
 	if (priv->steering->mode == MLX5_FLOW_STEERING_MODE_DMFS &&
 	    mlx5_try_fast_unload(dev))
 		dev_dbg(&dev->pdev->dev, "mlx5_try_fast_unload failed\n");
@@ -2187,9 +2202,9 @@ static void remove_one(struct pci_dev *pdev)
 	}
 #endif
 	mlx5_pci_close(dev);
+	device_remove_file(&pdev->dev, mlx5_roce_enable_dev_attrs);
 	mlx5_mdev_uninit(dev);
 out:
-	device_remove_file(&pdev->dev, mlx5_roce_enable_dev_attrs);
 	mlx5_devlink_free(devlink);
 }
 
@@ -2201,6 +2216,9 @@ static int suspend(struct device *device)
 	int err;
 
 	dev_info(&pdev->dev, "suspend was called\n");
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return 0;
 
 	err = mlx5_unload_one(dev, false);
 	if (err) {
@@ -2237,6 +2255,9 @@ static int resume(struct device *device)
 	int err;
 
 	dev_info(&pdev->dev, "resume was called\n");
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return 0;
 
 	err = pci_set_power_state(pdev, PCI_D0);
 	if (err) {
@@ -2279,6 +2300,9 @@ static pci_ers_result_t mlx5_pci_err_detected(struct pci_dev *pdev,
 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
 
 	mlx5_core_info(dev, "%s was called\n", __func__);
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return PCI_ERS_RESULT_CAN_RECOVER;
 
 	mlx5_enter_error_state(dev, false);
 	mlx5_error_sw_reset(dev);
@@ -2333,6 +2357,9 @@ static pci_ers_result_t mlx5_pci_slot_reset(struct pci_dev *pdev)
 
 	mlx5_core_info(dev, "%s was called\n", __func__);
 
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return PCI_ERS_RESULT_NEED_RESET;
+
 	err = mlx5_pci_enable_device(dev);
 	if (err) {
 		mlx5_core_err(dev, "%s: mlx5_pci_enable_device failed with error code: %d\n",
@@ -2359,6 +2386,9 @@ static void mlx5_pci_resume(struct pci_dev *pdev)
 
 	mlx5_core_info(dev, "%s was called\n", __func__);
 
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return;
+
 	dev->priv.sw_reset_lag = dev->priv.lag_enabled;
 	err = mlx5_load_one(dev, false);
 	if (err)
@@ -2380,6 +2410,10 @@ static void shutdown(struct pci_dev *pdev)
 	int err;
 
 	mlx5_core_info(dev, "Shutdown was called\n");
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return;
+
 	err = mlx5_try_fast_unload(dev);
 	if (err) {
 		mlx5_unload_one(dev, false);

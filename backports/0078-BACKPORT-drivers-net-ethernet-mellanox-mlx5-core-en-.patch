@@ -18,7 +18,7 @@ Change-Id: I34f057b4165bfad79811e3c8bc04df1bf6a89e1d
  int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
  			    struct mlx5e_port_buffer *port_buffer)
  {
-@@ -251,7 +253,14 @@ int mlx5e_port_manual_buffer_config(stru
+@@ -256,7 +258,14 @@ int mlx5e_port_manual_buffer_config(stru
  	int i;
  
  	mlx5e_dbg(HW, priv, "%s: change=%x\n", __func__, change);
@@ -33,7 +33,7 @@ Change-Id: I34f057b4165bfad79811e3c8bc04df1bf6a89e1d
  
  	err = mlx5e_port_query_buffer(priv, &port_buffer);
  	if (err)
-@@ -332,3 +341,5 @@ int mlx5e_port_manual_buffer_config(stru
+@@ -337,3 +346,5 @@ int mlx5e_port_manual_buffer_config(stru
  
  	return err;
  }

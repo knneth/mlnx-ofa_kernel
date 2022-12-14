@@ -211,7 +211,7 @@ Change-Id: Icb8ddbdbf2752cf89af8512051df3d3900cc8b09
  		if (err)
  			return ERR_PTR(err);
  
-@@ -3217,7 +3290,11 @@ static int build_mlx_header(struct mlx4_
+@@ -3218,7 +3291,11 @@ static int build_mlx_header(struct mlx4_
  		u16 ether_type;
  		u16 pcp = (be32_to_cpu(ah->av.ib.sl_tclass_flowlabel) >> 29) << 13;
  
@@ -223,7 +223,7 @@ Change-Id: Icb8ddbdbf2752cf89af8512051df3d3900cc8b09
  			(ip_version == 4 ? ETH_P_IP : ETH_P_IPV6);
  
  		mlx->sched_prio = cpu_to_be16(pcp);
-@@ -4350,7 +4427,11 @@ struct ib_wq *mlx4_ib_create_wq(struct i
+@@ -4351,7 +4428,11 @@ struct ib_wq *mlx4_ib_create_wq(struct i
  		ib_qp_init_attr.create_flags |= IB_QP_CREATE_SCATTER_FCS;
  
  	err = create_qp_common(dev, pd, MLX4_IB_RWQ_SRC, &ib_qp_init_attr,
@@ -235,7 +235,7 @@ Change-Id: Icb8ddbdbf2752cf89af8512051df3d3900cc8b09
  	if (err) {
  		kfree(qp);
  		return ERR_PTR(err);
-@@ -4620,9 +4701,18 @@ static void handle_drain_completion(stru
+@@ -4621,9 +4702,18 @@ static void handle_drain_completion(stru
  		if (triggered) {
  			/* Wait for any scheduled/running task to be ended */
  			switch (cq->poll_ctx) {
