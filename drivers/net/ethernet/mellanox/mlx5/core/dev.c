@@ -514,16 +514,40 @@ static int _next_phys_dev(struct mlx5_core_dev *mdev,
 
 static int next_phys_dev(struct device *dev, const void *data)
 {
-	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
-	struct mlx5_core_dev *mdev = madev->mdev;
+	struct mlx5_core_dev *mdev;
+	struct mlx5_adev *madev;
+	int match_size;
+	const char *p;
+
+	p = strchr(dev_name(dev), '.');
+	match_size = p - dev_name(dev);
+
+	/* Verify that the found auxiliary device is mellanox's */
+	if (strncmp(dev_name(dev), KBUILD_MODNAME, match_size))
+		return 0;
+
+	madev = container_of(dev, struct mlx5_adev, adev.dev);
+	mdev = madev->mdev;
 
 	return _next_phys_dev(mdev, data);
 }
 
 static int next_phys_dev_lag(struct device *dev, const void *data)
 {
-	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
-	struct mlx5_core_dev *mdev = madev->mdev;
+	struct mlx5_core_dev *mdev;
+	struct mlx5_adev *madev;
+	int match_size;
+	const char *p;
+
+	p = strchr(dev_name(dev), '.');
+	match_size = p - dev_name(dev);
+
+	/* Verify that the found auxiliary device is mellanox's */
+	if (strncmp(dev_name(dev), KBUILD_MODNAME, match_size))
+		return 0;
+
+	madev = container_of(dev, struct mlx5_adev, adev.dev);
+	mdev = madev->mdev;
 
 	if (!MLX5_CAP_GEN(mdev, vport_group_manager) ||
 	    !MLX5_CAP_GEN(mdev, lag_master) ||

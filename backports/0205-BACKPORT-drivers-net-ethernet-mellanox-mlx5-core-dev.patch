@@ -1,10 +1,10 @@
 From: Maher Sanalla <msanalla@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dev.c
 
-Change-Id: I66ebfaefa466312a902bfc5bb33afd4051559dc4
+Change-Id: I95b623530001db1de1bb245437eb83d888f10b49
 ---
- drivers/net/ethernet/mellanox/mlx5/core/dev.c | 23 +++++++++++++++++--
- 1 file changed, 21 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/dev.c | 22 ++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
@@ -29,7 +29,7 @@ Change-Id: I66ebfaefa466312a902bfc5bb33afd4051559dc4
  }
  
  int mlx5_adev_init(struct mlx5_core_dev *dev)
-@@ -512,15 +520,22 @@ static int _next_phys_dev(struct mlx5_co
+@@ -512,7 +520,11 @@ static int _next_phys_dev(struct mlx5_co
  	return 1;
  }
  
@@ -39,21 +39,21 @@ Change-Id: I66ebfaefa466312a902bfc5bb33afd4051559dc4
 +static int next_phys_dev(struct device *dev, void *data)
 +#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
  {
- 	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
- 	struct mlx5_core_dev *mdev = madev->mdev;
- 
+ 	struct mlx5_core_dev *mdev;
+ 	struct mlx5_adev *madev;
+@@ -532,7 +544,11 @@ static int next_phys_dev(struct device *
  	return _next_phys_dev(mdev, data);
  }
--
+ 
 +#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
  static int next_phys_dev_lag(struct device *dev, const void *data)
 +#else
 +static int next_phys_dev_lag(struct device *dev, void *data)
 +#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
  {
- 	struct mlx5_adev *madev = container_of(dev, struct mlx5_adev, adev.dev);
- 	struct mlx5_core_dev *mdev = madev->mdev;
-@@ -533,9 +548,13 @@ static int next_phys_dev_lag(struct devi
+ 	struct mlx5_core_dev *mdev;
+ 	struct mlx5_adev *madev;
+@@ -557,9 +573,13 @@ static int next_phys_dev_lag(struct devi
  
  	return _next_phys_dev(mdev, data);
  }
