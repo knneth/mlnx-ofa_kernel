@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ic84a3d313a65222f34d2ff07f8d7eec8ea8a3ca5
 ---
- .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c  | 104 ++++++++++++++++++++-
- 1 file changed, 101 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 108 +++++++++++++++++-
+ 1 file changed, 105 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
@@ -177,7 +177,19 @@ Change-Id: Ic84a3d313a65222f34d2ff07f8d7eec8ea8a3ca5
  	}
  
  	mlx5e_set_ttc_basic_params(priv, &ttc_params);
-@@ -534,9 +618,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -504,7 +588,11 @@ out:
+ 	return err;
+ }
+ 
++#ifdef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
++void mlx5i_tx_timeout(struct net_device *netdev, unsigned int txqueue)
++#else
+ void mlx5i_tx_timeout(struct net_device *netdev)
++#endif
+ {
+ 	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
+ 
+@@ -534,9 +622,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:
@@ -191,7 +203,7 @@ Change-Id: Ic84a3d313a65222f34d2ff07f8d7eec8ea8a3ca5
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -672,8 +760,14 @@ static int mlx5i_xmit(struct net_device
+@@ -672,8 +764,14 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5e_txqsq *sq   = epriv->txq2sq[skb_get_queue_mapping(skb)];
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
@@ -207,7 +219,7 @@ Change-Id: Ic84a3d313a65222f34d2ff07f8d7eec8ea8a3ca5
  }
  
  static void mlx5i_set_pkey_index(struct net_device *netdev, int id)
-@@ -763,9 +857,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -763,9 +861,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -219,7 +231,7 @@ Change-Id: Ic84a3d313a65222f34d2ff07f8d7eec8ea8a3ca5
  	return 0;
  
  destroy_ht:
-@@ -793,6 +888,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -793,6 +892,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

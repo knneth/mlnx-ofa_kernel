@@ -132,7 +132,7 @@ unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
 #define TC_CLSFLOWER_TMPLT_DESTROY FLOW_CLS_TMPLT_DESTROY
 #define tc_cls_flower_offload flow_cls_offload
 
-#ifdef HAVE___FLOW_INDR_BLOCK_CB_REGISTER
+#if defined(HAVE___FLOW_INDR_BLOCK_CB_REGISTER) && !defined(HAVE_FLOW_INDR_DEV_SETUP_OFFLOAD)
 #define __tc_indr_block_cb_register __flow_indr_block_cb_register
 #define __tc_indr_block_cb_unregister __flow_indr_block_cb_unregister
 #endif

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 
 Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c | 61 +++++++++++++++++++++-
+ .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 61 ++++++++++++++++++-
  1 file changed, 60 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
@@ -137,7 +137,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
-@@ -1038,7 +1077,9 @@ static struct attribute *mlx5e_debug_gro
+@@ -1084,7 +1123,9 @@ static struct attribute *mlx5e_debug_gro
  };
  
  static struct attribute *mlx5e_qos_attrs[] = {
@@ -147,7 +147,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  	&dev_attr_maxrate.attr,
  	NULL,
  };
-@@ -1089,6 +1130,7 @@ static int update_qos_sysfs(struct net_d
+@@ -1145,6 +1186,7 @@ static int update_qos_sysfs(struct net_d
  {
  	int err = 0;
  
@@ -155,7 +155,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  	if (MLX5_BUFFER_SUPPORTED(mdev)) {
  		err = sysfs_add_file_to_group(&dev->dev.kobj,
-@@ -1099,6 +1141,7 @@ static int update_qos_sysfs(struct net_d
+@@ -1155,6 +1197,7 @@ static int update_qos_sysfs(struct net_d
  					      "qos");
  	}
  #endif
@@ -163,16 +163,16 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  
  	return err;
  }
-@@ -1172,6 +1215,8 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1233,6 +1276,8 @@ int mlx5e_sysfs_create(struct net_device
  	if (err)
- 		goto remove_debug_group;
+ 		goto remove_phy_stat_group;
  
 +	mlx5_eswitch_compat_sysfs_init(dev);
 +
  	return 0;
  
- remove_debug_group:
-@@ -1196,6 +1241,8 @@ void mlx5e_sysfs_remove(struct net_devic
+ remove_phy_stat_group:
+@@ -1259,6 +1304,8 @@ void mlx5e_sysfs_remove(struct net_devic
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	int i;
  
@@ -181,7 +181,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  	sysfs_remove_group(&dev->dev.kobj, &qos_group);
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  	sysfs_remove_group(&dev->dev.kobj, &settings_group);
-@@ -1209,7 +1256,7 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1273,7 +1320,7 @@ void mlx5e_sysfs_remove(struct net_devic
  	kobject_put(priv->ecn_root_kobj);
  }
  
@@ -190,7 +190,7 @@ Change-Id: I9505c5a10f01fbd84a0700321954076b41357699
  enum {
  	ATTR_DST_IP,
  	ATTR_DST_PORT,
-@@ -1278,24 +1325,36 @@ static ssize_t mlx5e_flow_param_store(st
+@@ -1342,24 +1389,36 @@ static ssize_t mlx5e_flow_param_store(st
  }
  
  static ssize_t mlx5e_dst_port_store(struct netdev_queue *queue,

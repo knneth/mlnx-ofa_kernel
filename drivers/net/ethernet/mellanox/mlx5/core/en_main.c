@@ -94,6 +94,7 @@ bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev)
 	bool striding_rq_umr = MLX5_CAP_GEN(mdev, striding_rq) &&
 		MLX5_CAP_GEN(mdev, umr_ptr_rlky) &&
 		MLX5_CAP_ETH(mdev, reg_umr_sq);
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 	u16 max_wqe_sz_cap = MLX5_CAP_GEN(mdev, max_wqe_sz_sq);
 	bool inline_umr = MLX5E_UMR_WQE_INLINE_SZ <= max_wqe_sz_cap;
 
@@ -105,6 +106,9 @@ bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev)
 		return false;
 	}
 	return true;
+#else
+	return striding_rq_umr;
+#endif
 }
 
 void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
@@ -122,12 +126,13 @@ void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
 		params->log_rq_mtu_frames = MLX5E_PARAMS_MAX_LOG_RQ_SIZE_NO_DDW;
 #endif
 
-	mlx5_core_info(mdev, "MLX5E: StrdRq(%d) RqSz(%ld) StrdSz(%ld) RxCqeCmprss(%d)\n",
+	mlx5_core_info(mdev, "MLX5E: StrdRq(%d) RqSz(%ld) StrdSz(%ld) MpwqeLgSz(%d) RxCqeCmprss(%d)\n",
 		       params->rq_wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ,
 		       params->rq_wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ ?
 		       BIT(mlx5e_mpwqe_get_log_rq_size(params)) :
 		       BIT(params->log_rq_mtu_frames),
 		       BIT(mlx5e_mpwqe_get_log_stride_size(mdev, params)),
+		       MLX5_MPWRQ_LOG_WQE_SZ,
 		       MLX5E_GET_PFLAG(params, MLX5E_PFLAG_RX_CQE_COMPRESS));
 }
 
@@ -285,23 +290,42 @@ static inline void mlx5e_build_umr_wqe(struct mlx5e_rq *rq,
 {
 	struct mlx5_wqe_ctrl_seg      *cseg = &wqe->ctrl;
 	struct mlx5_wqe_umr_ctrl_seg *ucseg = &wqe->uctrl;
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 	u8 ds_cnt = DIV_ROUND_UP(MLX5E_UMR_WQE_INLINE_SZ, MLX5_SEND_WQE_DS);
+#else
+	struct mlx5_wqe_data_seg      *dseg = &wqe->data;
+	u8 ds_cnt = DIV_ROUND_UP(sizeof(*wqe), MLX5_SEND_WQE_DS);
+#endif
 
 	cseg->qpn_ds    = cpu_to_be32((sq->sqn << MLX5_WQE_CTRL_QPN_SHIFT) |
 				      ds_cnt);
 	cseg->fm_ce_se  = MLX5_WQE_CTRL_CQ_UPDATE;
 	cseg->imm       = rq->mkey_be;
 
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 	ucseg->flags = MLX5_UMR_TRANSLATION_OFFSET_EN | MLX5_UMR_INLINE;
+#else
+	ucseg->flags = MLX5_UMR_TRANSLATION_OFFSET_EN;
+#endif
 	ucseg->xlt_octowords =
 		cpu_to_be16(MLX5_MTT_OCTW(MLX5_MPWRQ_PAGES_PER_WQE));
 	ucseg->mkey_mask     = cpu_to_be64(MLX5_MKEY_MASK_FREE);
+
+#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
+	dseg->lkey = sq->channel->mkey_be;
+#endif
 }
 
 static int mlx5e_rq_alloc_mpwqe_info(struct mlx5e_rq *rq,
 				     struct mlx5e_channel *c)
 {
 	int wq_sz = mlx5_wq_ll_get_size(&rq->mpwqe.wq);
+#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
+#define MLX5_UMR_ALIGN (2048)
+	int mtt_sz = MLX5E_UMR_WQE_MTT_SZ;
+	int mtt_alloc = mtt_sz + MLX5_UMR_ALIGN - 1;
+	int i;
+#endif
 
 	rq->mpwqe.info = kvzalloc_node(array_size(wq_sz,
 						  sizeof(*rq->mpwqe.info)),
@@ -311,8 +335,60 @@ static int mlx5e_rq_alloc_mpwqe_info(struct mlx5e_rq *rq,
 
 	mlx5e_build_umr_wqe(rq, &c->icosq, &rq->mpwqe.umr_wqe);
 
+#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
+	/* We allocate more than mtt_sz as we will align the pointer */
+	rq->mpwqe.mtt_no_align = kzalloc_node(mtt_alloc * wq_sz, GFP_KERNEL,
+					cpu_to_node(c->cpu));
+	if (unlikely(!rq->mpwqe.mtt_no_align))
+		goto err_free_wqe_info;
+
+	for (i = 0; i < wq_sz; i++) {
+		struct mlx5e_mpw_info *wi = &rq->mpwqe.info[i];
+
+		wi->umr.mtt = PTR_ALIGN(rq->mpwqe.mtt_no_align + i * mtt_alloc,
+					MLX5_UMR_ALIGN);
+		wi->umr.mtt_addr = dma_map_single(c->pdev, wi->umr.mtt, mtt_sz,
+						  PCI_DMA_TODEVICE);
+		if (unlikely(dma_mapping_error(c->pdev, wi->umr.mtt_addr)))
+			goto err_unmap_mtts;
+	}
+#endif
+
 	return 0;
+
+#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
+err_unmap_mtts:
+	while (--i >= 0) {
+		struct mlx5e_mpw_info *wi = &rq->mpwqe.info[i];
+
+		dma_unmap_single(c->pdev, wi->umr.mtt_addr, mtt_sz,
+				 PCI_DMA_TODEVICE);
+	}
+	kfree(rq->mpwqe.mtt_no_align);
+err_free_wqe_info:
+	kfree(rq->mpwqe.info);
+
+	return -ENOMEM;
+#endif
 }
+
+#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
+static void mlx5e_rq_free_mpwqe_info(struct mlx5e_rq *rq)
+{
+	int wq_sz = mlx5_wq_ll_get_size(&rq->mpwqe.wq);
+	int mtt_sz = MLX5E_UMR_WQE_MTT_SZ;
+	int i;
+
+	for (i = 0; i < wq_sz; i++) {
+		struct mlx5e_mpw_info *wi = &rq->mpwqe.info[i];
+
+		dma_unmap_single(rq->pdev, wi->umr.mtt_addr, mtt_sz,
+				 PCI_DMA_TODEVICE);
+	}
+	kfree(rq->mpwqe.mtt_no_align);
+	kfree(rq->mpwqe.info);
+}
+#endif
 
 static int mlx5e_create_umr_mkey(struct mlx5_core_dev *mdev,
 				 u64 npages, u8 page_shift,
@@ -720,7 +796,11 @@ static int mlx5e_alloc_rq(struct mlx5e_channel *c,
 err_free:
 	switch (rq->wq_type) {
 	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 		kvfree(rq->mpwqe.info);
+#else
+		mlx5e_rq_free_mpwqe_info(rq);
+#endif
 		mlx5_core_destroy_mkey(mdev, &rq->umr_mkey);
 		break;
 	default: /* MLX5_WQ_TYPE_CYCLIC */
@@ -749,7 +829,11 @@ static void mlx5e_free_rq(struct mlx5e_rq *rq)
 
 	switch (rq->wq_type) {
 	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 		kvfree(rq->mpwqe.info);
+#else
+		mlx5e_rq_free_mpwqe_info(rq);
+#endif
 		mlx5_core_destroy_mkey(rq->mdev, &rq->umr_mkey);
 		break;
 	default: /* MLX5_WQ_TYPE_CYCLIC */
@@ -5030,6 +5114,7 @@ void mlx5e_build_nic_params(struct mlx5e_priv *priv,
 	params->num_channels = min_t(unsigned int, MLX5E_MAX_NUM_CHANNELS / 2,
 				     mlx5e_get_netdev_max_channels(priv));
 	params->num_tc       = 1;
+	params->log_rx_page_cache_mult = MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT;
 
 	/* SQ */
 	params->log_sq_size = is_kdump_kernel() ?

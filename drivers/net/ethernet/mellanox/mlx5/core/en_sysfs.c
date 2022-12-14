@@ -1020,6 +1020,52 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
 		   mlx5e_show_force_local_lb,
 		   mlx5e_store_force_local_lb);
 
+static ssize_t mlx5e_show_log_rx_page_cache_mult_limit(struct device *device,
+						       struct device_attribute *attr,
+						       char *buf)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	int len;
+
+	mutex_lock(&priv->state_lock);
+	len = sprintf(buf, "log rx page cache mult limit is %u\n",
+		      priv->channels.params.log_rx_page_cache_mult);
+	mutex_unlock(&priv->state_lock);
+
+	return len;
+}
+
+static ssize_t mlx5e_store_log_rx_page_cache_mult_limit(struct device *device,
+							struct device_attribute *attr,
+							const char *buf,
+							size_t count)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	int err, udata;
+
+	err = kstrtoint(buf, 0, &udata);
+	if (err)
+		return -EINVAL;
+
+	if (udata > MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT || udata < 0) {
+		netdev_err(priv->netdev, "log rx page cache mult limit cannot exceed above %d or below 0\n",
+			   MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT);
+		return -EINVAL;
+	}
+
+	mutex_lock(&priv->state_lock);
+	priv->channels.params.log_rx_page_cache_mult = (u8)udata;
+	mutex_unlock(&priv->state_lock);
+
+	return count;
+}
+
+static DEVICE_ATTR(log_mult_limit, S_IRUGO | S_IWUSR,
+		   mlx5e_show_log_rx_page_cache_mult_limit,
+		   mlx5e_store_log_rx_page_cache_mult_limit);
+
 static struct attribute *mlx5e_settings_attrs[] = {
 	&dev_attr_hfunc.attr,
 	&dev_attr_pfc_stall_prevention.attr,
@@ -1082,6 +1128,16 @@ static struct attribute *mlx5e_phy_stat_attrs[] = {
 static struct attribute_group phy_stat_group = {
 	.name = "phy_stats",
 	.attrs = mlx5e_phy_stat_attrs,
+};
+
+static struct attribute *mlx5e_log_rx_page_cache_attrs[] = {
+	&dev_attr_log_mult_limit.attr,
+	NULL,
+};
+
+static struct attribute_group rx_page_cache_group = {
+	.name = "rx_page_cache",
+	.attrs = mlx5e_log_rx_page_cache_attrs,
 };
 
 static int update_qos_sysfs(struct net_device *dev,
@@ -1172,8 +1228,15 @@ int mlx5e_sysfs_create(struct net_device *dev)
 	if (err)
 		goto remove_debug_group;
 
+	err = sysfs_create_group(&dev->dev.kobj, &rx_page_cache_group);
+
+	if (err)
+		goto remove_phy_stat_group;
+
 	return 0;
 
+remove_phy_stat_group:
+	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
 remove_debug_group:
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 remove_qos_group:
@@ -1200,6 +1263,7 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
+	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
 
 	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
 		mlx5e_remove_attributes(priv, i);

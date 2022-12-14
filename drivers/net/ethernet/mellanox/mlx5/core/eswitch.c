@@ -2344,6 +2344,7 @@ static void mlx5_eswitch_clear_vf_vports_info(struct mlx5_eswitch *esw)
 	int i;
 
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
+		memset(&vport->qos, 0, sizeof(vport->qos));
 		memset(&vport->info, 0, sizeof(vport->info));
 		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_AUTO;
 	}
@@ -3200,22 +3201,24 @@ static u32 calculate_min_rate_divider(struct mlx5_eswitch *esw,
 			max_guarantee = evport->info.min_rate;
 		}
 	}
-
-	return max_t(u32, max_guarantee / fw_max_bw_share, 1);
+	if (max_guarantee)
+		return max_t(u32, max_guarantee / fw_max_bw_share, 1);
+	return 0;
 }
 
 static u32 calc_bw_share(u32 min_rate, u32 divider, u32 fw_max)
 {
-	if (min_rate)
+	if (divider)
 		return MLX5_RATE_TO_BW_SHARE(min_rate, divider, fw_max);
 
-	return MLX5_MIN_BW_SHARE;
+	return 0;
 }
 
-static int normalize_vports_min_rate(struct mlx5_eswitch *esw, u32 divider,
+static int normalize_vports_min_rate(struct mlx5_eswitch *esw,
 				     u32 group)
 {
 	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
+	u32 divider = calculate_min_rate_divider(esw, group, false);
 	struct mlx5_vport *evport;
 	u32 bw_share;
 	int err;
@@ -3244,7 +3247,6 @@ static int normalize_vgroups_min_rate(struct mlx5_eswitch *esw, u32 divider)
 {
 	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
 	struct mlx5_vgroup *vgroup;
-	u32 group_divider;
 	u32 bw_share;
 	int err;
 
@@ -3264,8 +3266,7 @@ static int normalize_vgroups_min_rate(struct mlx5_eswitch *esw, u32 divider)
 		/* All the group's vports need to be set with default bw_share
 		 * to enable them with QOS.
 		 */
-		group_divider = calculate_min_rate_divider(esw, vgroup->group_id, false);
-		err = normalize_vports_min_rate(esw, group_divider, vgroup->group_id);
+		err = normalize_vports_min_rate(esw, vgroup->group_id);
 
 		if (err)
 			return err;
@@ -3280,7 +3281,6 @@ int mlx5_eswitch_set_vport_rate(struct mlx5_eswitch *esw, u16 vport,
 	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, vport);
 	u32 fw_max_bw_share;
 	u32 previous_min_rate;
-	u32 divider;
 	bool min_rate_supported;
 	bool max_rate_supported;
 	int err = 0;
@@ -3306,8 +3306,7 @@ int mlx5_eswitch_set_vport_rate(struct mlx5_eswitch *esw, u16 vport,
 
 	previous_min_rate = evport->info.min_rate;
 	evport->info.min_rate = min_rate;
-	divider = calculate_min_rate_divider(esw, evport->info.group, false);
-	err = normalize_vports_min_rate(esw, divider, evport->info.group);
+	err = normalize_vports_min_rate(esw, evport->info.group);
 	if (err) {
 		evport->info.min_rate = previous_min_rate;
 		goto unlock;
@@ -3377,7 +3376,6 @@ int mlx5_eswitch_vport_update_group(struct mlx5_eswitch *esw, int vport_num,
 	struct mlx5_vgroup *curr_group = vport->qos.group;
 	struct mlx5_vgroup *new_group = NULL, *tmp;
 	struct mlx5_core_dev *dev = esw->dev;
-	u32 divider;
 	int err;
 
 	if (!MLX5_CAP_QOS(dev, log_esw_max_sched_depth))
@@ -3452,11 +3450,9 @@ int mlx5_eswitch_vport_update_group(struct mlx5_eswitch *esw, int vport_num,
 
 	/* Recalculate bw share weights of old and new groups */
 	if (vport->qos.bw_share) {
-		divider = calculate_min_rate_divider(esw, curr_group->group_id, false);
-		normalize_vports_min_rate(esw, divider, curr_group->group_id);
+		normalize_vports_min_rate(esw, curr_group->group_id);
 
-		divider = calculate_min_rate_divider(esw, new_group->group_id, false);
-		normalize_vports_min_rate(esw, divider, new_group->group_id);
+		normalize_vports_min_rate(esw, new_group->group_id);
 	}
 
 	if (curr_group->group_id && !curr_group->num_vports)

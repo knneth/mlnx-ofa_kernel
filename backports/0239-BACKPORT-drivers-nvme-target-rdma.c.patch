@@ -22,7 +22,7 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
  MODULE_PARM_DESC(offload_mem_start,
  		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
  		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");
-@@ -1747,6 +1752,7 @@ static void nvmet_rdma_remove_port(struc
+@@ -1757,6 +1762,7 @@ static void nvmet_rdma_remove_port(struc
  static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
  		struct nvmet_port *nport, char *traddr)
  {
@@ -30,7 +30,7 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
  	struct nvmet_rdma_port *port = nport->priv;
  	struct rdma_cm_id *cm_id = port->cm_id;
  
-@@ -1760,6 +1766,9 @@ static void nvmet_rdma_disc_port_addr(st
+@@ -1770,6 +1776,9 @@ static void nvmet_rdma_disc_port_addr(st
  	} else {
  		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
  	}
@@ -40,7 +40,7 @@ Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
  }
  
  static void nvmet_rdma_add_one(struct ib_device *ib_device)
-@@ -1929,6 +1938,9 @@ module_init(nvmet_rdma_init);
+@@ -1939,6 +1948,9 @@ module_init(nvmet_rdma_init);
  module_exit(nvmet_rdma_exit);
  
  MODULE_LICENSE("GPL v2");

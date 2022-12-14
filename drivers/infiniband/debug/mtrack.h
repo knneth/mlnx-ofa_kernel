@@ -49,11 +49,13 @@ static inline void *ioremap_wc(phys_addr_t phys_addr, size_t size)
 #define ARCH_HAS_IOREMAP_WC 1
 #endif
 
+#ifdef iounmap
 #undef iounmap
 static inline void iounmap(void *addr)
 {
 	__iounmap(addr);
 }
+#endif /* iounmap  */
 #endif /* CONFIG_ARM64 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)

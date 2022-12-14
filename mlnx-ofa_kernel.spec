@@ -40,10 +40,11 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-# Force python3 on RHEL8, fedora3x and similar:
+# Force python3 on RHEL8, fedora3x, SLES15 and similar:
 %global RHEL8 %(if test `grep -E '^(ID="(rhel|ol|centos)"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
 %global FEDORA3X %{!?fedora:0}%{?fedora:%(if [ %{fedora} -ge 30 ]; then echo 1; else echo 0; fi)}
-%global PYTHON3 %{RHEL8} || %{FEDORA3X}
+%global SLES15 0%{?suse_version} >= 1500
+%global PYTHON3 %{RHEL8} || %{FEDORA3X} || %{SLES15}
 
 # Workaround: To be removed when mlnx_tune has python3 support:
 # mlnx_tune is a python2 script. Avoid generating dependencies
@@ -53,7 +54,7 @@
 %global __requires_exclude_from mlnx_tune
 %endif
 
-%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux")
+%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -78,7 +79,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 4.9}
-%{!?_release: %global _release OFED.4.9.2.2.6.1}
+%{!?_release: %global _release OFED.4.9.3.1.5.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -86,7 +87,7 @@
 %global non_kmp_pname %{_name}-modules
 
 %if %{PYTHON3}
-%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=python3
+%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=%{_bindir}/python3
 %else
 %global mlnx_python_env    :
 %endif
@@ -133,7 +134,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-2.2.6.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-3.1.5.tgz
 
 
 # build KMP rpms?
@@ -148,6 +149,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %endif
 EOF)
 %(echo "Requires: %{utils_pname}" > %{_builddir}/preamble)
+%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp" >> %{_builddir}/preamble)
 %kernel_module_package -f %{_builddir}/kmp.files -p %{_builddir}/preamble -r %{_kmp_rel}
 %else # not KMP
 %global kernel_source() %{K_SRC}
@@ -180,6 +182,7 @@ Obsoletes: mlnx-en-kmp-trace
 Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
+Obsoletes: mlnx-rdma-rxe
 Version: %{_version}
 Release: %{_release}.kver.%{krelver}
 Summary: Infiniband Driver and ULPs kernel modules
@@ -187,7 +190,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-2.2.6.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-3.1.5.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -220,7 +223,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-2.2.6.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-3.1.5.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -325,7 +328,6 @@ for flavor in %flavors_to_build; do
 	make install_modules KERNELRELEASE=$KVERSION
 	# install script and configuration files
 	make install_scripts
-	mkdir -p %{buildroot}/$PREFIX/src/$NAME/$flavor
 	mkdir -p %{_builddir}/src/$NAME/$flavor
 	cp -ar include/ %{_builddir}/src/$NAME/$flavor
 	cp -ar config* %{_builddir}/src/$NAME/$flavor
@@ -407,11 +409,11 @@ install -d %{buildroot}%{_unitdir}
 install -d %{buildroot}/etc/systemd/system
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/openibd.service %{buildroot}%{_unitdir}
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/mlnx_interface_mgr\@.service %{buildroot}/etc/systemd/system
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
 echo '# For IPoIB Pkeys' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
 %else
 # no systemd support
 echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add", RUN+="/bin/mlnx_interface_mgr.sh $env{INTERFACE} <&- >/dev/null 2>&1 &"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules

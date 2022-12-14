@@ -115,7 +115,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %endif
 
 # set modules dir
-%if "%{_vendor}" == "redhat"
+%if "%{_vendor}" == "redhat" || ("%{_vendor}" == "openEuler")
 %if 0%{?fedora}
 %global install_mod_dir updates/%{name}
 %else
@@ -193,7 +193,7 @@ mod_path=${mod_path/\/${ko_name}}
     %if 0%{?fedora}
         echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf
     %else
-        %if "%{_vendor}" == "redhat"
+        %if "%{_vendor}" == "redhat" || ("%{_vendor}" == "openEuler")
             echo "override ${mod_name} * weak-updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf
         %endif
         echo "override ${mod_name} * extra/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf

@@ -59,7 +59,7 @@
 #include "mlx4_stats.h"
 
 #define DRV_NAME	"mlx4_en"
-#define DRV_VERSION	"4.9-2.2.6"
+#define DRV_VERSION	"4.9-3.1.5"
 
 #define MLX4_EN_MSG_LEVEL	(NETIF_MSG_LINK | NETIF_MSG_IFDOWN)
 
@@ -292,6 +292,10 @@ struct mlx4_en_page_cache {
 	} buf[MLX4_EN_CACHE_SIZE];
 };
 
+enum {
+	MLX4_EN_TX_RING_STATE_RECOVERING,
+};
+
 struct mlx4_en_priv;
 
 struct mlx4_en_tx_ring {
@@ -338,6 +342,7 @@ struct mlx4_en_tx_ring {
 	 * Only queue_stopped might be used if BQL is not properly working.
 	 */
 	unsigned long		queue_stopped;
+	unsigned long		state;
 	struct mlx4_hwq_resources sp_wqres;
 	struct mlx4_qp		sp_qp;
 	struct mlx4_qp_context	sp_context;
@@ -575,6 +580,10 @@ struct mlx4_en_vgtp {
 	unsigned long tx_dropped;
 };
 
+enum {
+	MLX4_EN_STATE_FLAG_RESTARTING,
+};
+
 struct mlx4_en_priv {
 	struct mlx4_en_dev *mdev;
 	struct mlx4_en_port_profile *prof;
@@ -641,7 +650,7 @@ struct mlx4_en_priv {
 	struct mlx4_en_cq *rx_cq[MAX_RX_RINGS];
 	struct mlx4_qp drop_qp;
 	struct work_struct rx_mode_task;
-	struct work_struct watchdog_task;
+	struct work_struct restart_task;
 	struct work_struct linkstate_task;
 	struct delayed_work stats_task;
 	struct delayed_work service_task;
@@ -694,6 +703,7 @@ struct mlx4_en_priv {
 	u8 rss_hash_fn;
 	struct mlx4_en_vgtp *vgtp;
 	u8 num_up;
+	unsigned long state;
 };
 
 enum mlx4_en_wol {

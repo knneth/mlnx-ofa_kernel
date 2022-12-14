@@ -1,10 +1,10 @@
-From: Talat Batheesh <talatb@mellanox.com>
+From: Roy Novich <royno@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
 
-Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
+Change-Id: Ib10c9af0e7ab5baa450651d69186083ff65ea304
 ---
- .../net/ethernet/mellanox/mlx4/en_ethtool.c   | 916 +++++++++++++++++-
- 1 file changed, 909 insertions(+), 7 deletions(-)
+ .../net/ethernet/mellanox/mlx4/en_ethtool.c   | 917 +++++++++++++++++-
+ 1 file changed, 910 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
@@ -1346,19 +1346,18 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_get_tunable(struct net_device *dev,
  			       const struct ethtool_tunable *tuna,
  			       void *data)
-@@ -2262,9 +3093,10 @@ static int mlx4_en_set_tunable(struct ne
+@@ -2262,7 +3093,9 @@ static int mlx4_en_set_tunable(struct ne
  
  	return ret;
  }
 -
 +#endif
- #define MLX4_EEPROM_PAGE_LEN 256
- 
++ 
 +#if defined(HAVE_GET_MODULE_EEPROM) || defined(HAVE_GET_MODULE_EEPROM_EXT)
  static int mlx4_en_get_module_info(struct net_device *dev,
  				   struct ethtool_modinfo *modinfo)
  {
-@@ -2345,7 +3177,9 @@ static int mlx4_en_get_module_eeprom(str
+@@ -2343,7 +3176,9 @@ static int mlx4_en_get_module_eeprom(str
  	}
  	return 0;
  }
@@ -1368,7 +1367,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  static int mlx4_en_set_phys_id(struct net_device *dev,
  			       enum ethtool_phys_id_state state)
  {
-@@ -2371,17 +3205,48 @@ static int mlx4_en_set_phys_id(struct ne
+@@ -2369,17 +3204,48 @@ static int mlx4_en_set_phys_id(struct ne
  	err = mlx4_SET_PORT_BEACON(mdev->dev, priv->port, beacon_duration);
  	return err;
  }
@@ -1417,7 +1416,7 @@ Change-Id: Iaa2ca8571edf0d056a8c8e5589331ea28976f34f
  	.get_wol = mlx4_en_get_wol,
  	.set_wol = mlx4_en_set_wol,
  	.get_msglevel = mlx4_en_get_msglevel,
-@@ -2394,22 +3259,59 @@ const struct ethtool_ops mlx4_en_ethtool
+@@ -2392,22 +3258,59 @@ const struct ethtool_ops mlx4_en_ethtool
  	.set_ringparam = mlx4_en_set_ringparam,
  	.get_rxnfc = mlx4_en_get_rxnfc,
  	.set_rxnfc = mlx4_en_set_rxnfc,

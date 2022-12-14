@@ -214,8 +214,7 @@ get-modules()
 				drivers/net/ethernet/mellanox/mlx5/fpga/mlx5_fpga_tools"
 			;;
 			--with-mdev-mod )
-			modules="$modules \
-				drivers/vfio/mdev/mdev"
+			:
 			;;
 			*)
 			;;

@@ -1,0 +1,19 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/port.c
+
+Change-Id: I2202030ce3d98043ca939c3e4a770eedb00d4d96
+---
+ drivers/net/ethernet/mellanox/mlx4/port.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx4/port.c
++++ b/drivers/net/ethernet/mellanox/mlx4/port.c
+@@ -2419,7 +2419,7 @@ int mlx4_get_module_info(struct mlx4_dev
+ 	struct mlx4_cmd_mailbox *inbox, *outbox;
+ 	struct mlx4_mad_ifc *inmad, *outmad;
+ 	struct mlx4_cable_info *cable_info;
+-	u8 module_id, i2c_addr, page_num;
++	u8 module_id = 0, i2c_addr, page_num;
+ 	int ret;
+ 
+ 	if (size > MODULE_INFO_MAX_READ)

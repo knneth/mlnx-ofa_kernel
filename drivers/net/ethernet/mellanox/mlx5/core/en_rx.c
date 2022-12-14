@@ -280,8 +280,10 @@ static inline bool mlx5e_rx_cache_extend(struct mlx5e_rq *rq)
 {
 	struct mlx5e_page_cache *cache = &rq->page_cache;
 	struct mlx5e_page_cache_reduce *reduce = &cache->reduce;
+	struct mlx5e_params *params = &rq->channel->priv->channels.params;
+	u8 log_limit_sz = cache->log_min_sz + params->log_rx_page_cache_mult;
 
-	if (ilog2(cache->sz) == cache->log_max_sz)
+	if (ilog2(cache->sz) >= log_limit_sz)
 		return false;
 
 	rq->stats->cache_ext++;
@@ -609,7 +611,9 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	struct mlx5e_icosq *sq = &rq->channel->icosq;
 	struct mlx5_wq_cyc *wq = &sq->wq;
 	struct mlx5e_umr_wqe *umr_wqe;
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 	u16 xlt_offset = ix << (MLX5E_LOG_ALIGNED_MPWQE_PPW - 1);
+#endif
 	u16 pi, contig_wqebbs_room;
 	int err;
 	int i;
@@ -624,13 +628,21 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	umr_wqe = mlx5_wq_cyc_get_wqe(wq, pi);
 	if (unlikely(mlx5e_icosq_wrap_cnt(sq) < 2))
 		memcpy(umr_wqe, &rq->mpwqe.umr_wqe,
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 		       offsetof(struct mlx5e_umr_wqe, inline_mtts));
+#else
+		       sizeof(*umr_wqe));
+#endif
 
 	for (i = 0; i < MLX5_MPWRQ_PAGES_PER_WQE; i++, dma_info++) {
 		err = mlx5e_page_alloc_mapped(rq, dma_info);
 		if (unlikely(err))
 			goto err_unmap;
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 		umr_wqe->inline_mtts[i].ptag = cpu_to_be64(dma_info->addr | MLX5_EN_WR);
+#else
+		wi->umr.mtt[i].ptag = cpu_to_be64(dma_info->addr | MLX5_EN_WR);
+#endif
 	}
 
 	bitmap_zero(wi->xdp_xmit_bitmap, MLX5_MPWRQ_PAGES_PER_WQE);
@@ -639,7 +651,13 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	umr_wqe->ctrl.opmod_idx_opcode =
 		cpu_to_be32((sq->pc << MLX5_WQE_CTRL_WQE_INDEX_SHIFT) |
 			    MLX5_OPCODE_UMR);
+#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 	umr_wqe->uctrl.xlt_offset = cpu_to_be16(xlt_offset);
+#else
+	umr_wqe->uctrl.bsf_octowords =
+		cpu_to_be16(MLX5_MTT_OCTW(MLX5E_REQUIRED_MTTS(ix)));
+	umr_wqe->data.addr = cpu_to_be64(wi->umr.mtt_addr);
+#endif
 
 	sq->db.ico_wqe[pi].opcode = MLX5_OPCODE_UMR;
 	sq->db.ico_wqe[pi].num_wqebbs = MLX5E_UMR_WQEBBS;
@@ -1586,10 +1604,11 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 
 	skb->protocol = *((__be16 *)(skb->data));
 
-	if (netdev->features & NETIF_F_RXCSUM) {
-		skb->ip_summed = CHECKSUM_COMPLETE;
-		skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
-		stats->csum_complete++;
+	if ((netdev->features & NETIF_F_RXCSUM) &&
+	    (likely((cqe->hds_ip_ext & CQE_L3_OK) &&
+		    (cqe->hds_ip_ext & CQE_L4_OK)))) {
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		stats->csum_unnecessary++;
 	} else {
 		skb->ip_summed = CHECKSUM_NONE;
 		stats->csum_none++;

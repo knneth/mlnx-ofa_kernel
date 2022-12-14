@@ -5,6 +5,10 @@
 
 #include_next <linux/compiler-gcc.h>
 
+#ifndef fallthrough
+# define fallthrough                    do {} while (0)  /* fallthrough */
+#endif
+
 #ifndef GCC_VERSION
 #define GCC_VERSION (__GNUC__ * 10000		\
 		     + __GNUC_MINOR__ * 100	\

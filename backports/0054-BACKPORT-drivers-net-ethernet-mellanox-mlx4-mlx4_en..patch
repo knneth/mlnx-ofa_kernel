@@ -36,7 +36,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  #include "mlx4_stats.h"
 @@ -61,6 +70,43 @@
  #define DRV_NAME	"mlx4_en"
- #define DRV_VERSION	"4.9-2.2.6"
+ #define DRV_VERSION	"4.9-3.1.5"
  
 +#ifndef CONFIG_COMPAT_DISABLE_DCB
 +#ifdef CONFIG_MLX4_EN_DCB
@@ -135,7 +135,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  #define MLX4_EN_USE_SRQ		0x01000000
  
  #define MLX4_EN_CX3_LOW_ID	0x1000
-@@ -366,10 +441,17 @@ struct mlx4_en_rx_ring {
+@@ -371,10 +446,17 @@ struct mlx4_en_rx_ring {
  	u8  fcs_del;
  	void *buf;
  	void *rx_info;
@@ -153,7 +153,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  	unsigned long csum_ok;
  	unsigned long csum_none;
  	unsigned long csum_complete;
-@@ -381,7 +463,12 @@ struct mlx4_en_rx_ring {
+@@ -386,7 +468,12 @@ struct mlx4_en_rx_ring {
  	unsigned long dropped;
  	int hwtstamp_rx_filter;
  	cpumask_var_t affinity_mask;
@@ -166,7 +166,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  };
  
  struct mlx4_en_cq {
-@@ -401,7 +488,22 @@ struct mlx4_en_cq {
+@@ -406,7 +493,22 @@ struct mlx4_en_cq {
  	u16 moder_cnt;
  	struct mlx4_cqe *buf;
  #define MLX4_EN_OPCODE_ERROR	0x1e
@@ -189,7 +189,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  	struct irq_desc *irq_desc;
  };
  
-@@ -456,8 +558,10 @@ struct mlx4_en_dev {
+@@ -461,8 +563,10 @@ struct mlx4_en_dev {
  	seqlock_t		clock_lock;
  	struct timecounter	clock;
  	unsigned long		last_overflow_check;
@@ -200,7 +200,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  	struct notifier_block	nb;
  };
  
-@@ -580,7 +684,13 @@ struct mlx4_en_priv {
+@@ -589,7 +693,13 @@ struct mlx4_en_priv {
  	struct mlx4_en_port_profile *prof;
  	struct net_device *dev;
  	struct net_device_ops dev_ops;
@@ -214,7 +214,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  	struct mlx4_en_port_state port_state;
  	spinlock_t stats_lock;
  	struct ethtool_flow_id ethtool_rules[MAX_NUM_OF_FS_RULES];
-@@ -672,6 +782,7 @@ struct mlx4_en_priv {
+@@ -681,6 +791,7 @@ struct mlx4_en_priv {
  	u32 counter_index;
  	struct en_port *vf_ports[MLX4_MAX_NUM_VF];
  
@@ -222,7 +222,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  #ifdef CONFIG_MLX4_EN_DCB
  #define MLX4_EN_DCB_ENABLED	0x3
  	struct ieee_ets ets;
-@@ -680,6 +791,7 @@ struct mlx4_en_priv {
+@@ -689,6 +800,7 @@ struct mlx4_en_priv {
  	struct mlx4_en_cee_config cee_config;
  	u8 dcbx_cap;
  #endif
@@ -230,7 +230,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  #ifdef CONFIG_RFS_ACCEL
  	spinlock_t filters_lock;
  	int last_filter_id;
-@@ -689,6 +801,12 @@ struct mlx4_en_priv {
+@@ -698,6 +810,12 @@ struct mlx4_en_priv {
  	u64 tunnel_reg_id;
  	__be16 vxlan_port;
  
@@ -243,7 +243,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  	u32 pflags;
  	u8 rss_key[MLX4_EN_RSS_KEY_SIZE];
  	u8 rss_hash_fn;
-@@ -713,9 +831,122 @@ static inline struct mlx4_cqe *mlx4_en_g
+@@ -723,9 +841,122 @@ static inline struct mlx4_cqe *mlx4_en_g
  	return buf + idx * cqe_sz;
  }
  
@@ -366,7 +366,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  void mlx4_en_update_loopback_state(struct net_device *dev,
  				   netdev_features_t features);
  
-@@ -739,8 +970,12 @@ void mlx4_en_set_stats_bitmap(struct mlx
+@@ -749,8 +980,12 @@ void mlx4_en_set_stats_bitmap(struct mlx
  
  int mlx4_en_try_alloc_resources(struct mlx4_en_priv *priv,
  				struct mlx4_en_priv *tmp,
@@ -379,7 +379,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  void mlx4_en_safe_replace_resources(struct mlx4_en_priv *priv,
  				    struct mlx4_en_priv *tmp);
  
-@@ -754,14 +989,33 @@ int mlx4_en_set_cq_moder(struct mlx4_en_
+@@ -764,14 +999,33 @@ int mlx4_en_set_cq_moder(struct mlx4_en_
  void mlx4_en_arm_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
  
  void mlx4_en_tx_irq(struct mlx4_cq *mcq);
@@ -413,7 +413,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  void mlx4_en_xmit_doorbell(struct mlx4_en_tx_ring *ring);
  bool mlx4_en_rx_recycle(struct mlx4_en_rx_ring *ring,
  			struct mlx4_en_rx_alloc *frame);
-@@ -832,17 +1086,62 @@ void mlx4_en_fold_software_stats(struct
+@@ -842,17 +1096,62 @@ void mlx4_en_fold_software_stats(struct
  int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset);
  int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port);
  
@@ -476,7 +476,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  
  #define MLX4_EN_NUM_SELF_TEST	5
  void mlx4_en_ex_selftest(struct net_device *dev, u32 *flags, u64 *buf);
-@@ -858,8 +1157,10 @@ void mlx4_en_update_pfc_stats_bitmap(str
+@@ -868,8 +1167,10 @@ void mlx4_en_update_pfc_stats_bitmap(str
  				     struct mlx4_en_stats_bitmap *stats_bitmap,
  				     u8 rx_ppp, u8 rx_pause,
  				     u8 tx_ppp, u8 tx_pause);
@@ -487,7 +487,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  
  /*
   * Functions for time stamping
-@@ -874,16 +1175,30 @@ void mlx4_en_remove_timestamp(struct mlx
+@@ -884,16 +1185,30 @@ void mlx4_en_remove_timestamp(struct mlx
  /* Globals
   */
  extern const struct ethtool_ops mlx4_en_ethtool_ops;
@@ -520,7 +520,7 @@ Change-Id: I63d969a11f739088a018729f5a21d0dd9cb467f3
  
  #define en_dbg(mlevel, priv, format, ...)				\
  do {									\
-@@ -907,4 +1222,23 @@ do {									\
+@@ -917,4 +1232,23 @@ do {									\
  	pr_warn(DRV_NAME " %s: " format,				\
  		dev_name(&(mdev)->pdev->dev), ##__VA_ARGS__)
  

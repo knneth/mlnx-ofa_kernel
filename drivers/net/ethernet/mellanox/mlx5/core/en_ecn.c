@@ -64,22 +64,27 @@ ssize_t mlx5e_store_ecn_enable(struct kobject *kobj,
 	int err;
 
 	err = sscanf(buf, "%d", &enable);
+	if (err != 1)
+		return -EINVAL;
 
-	if (enable) {
-		err = mlx5_query_port_cong_status(enable_attr->mdev,
-						  enable_attr->cong_protocol,
-						  enable_attr->priority,
-						  &is_qcn_enable);
+	err = mlx5_query_port_cong_status(enable_attr->mdev,
+					  enable_attr->cong_protocol,
+					  enable_attr->priority,
+					  &is_qcn_enable);
+	if (err)
+		return err;
 
-		if ((!err) & (is_qcn_enable))
-			return -EPERM;
-	}
+	enable &= 1;
+	if (enable == is_qcn_enable)
+		goto success;
 
 	err = mlx5_modify_port_cong_status(enable_attr->mdev,
 					   enable_attr->cong_protocol,
 					   enable_attr->priority, enable);
 	if (err)
 		return err;
+
+success:
 	return count;
 }
 

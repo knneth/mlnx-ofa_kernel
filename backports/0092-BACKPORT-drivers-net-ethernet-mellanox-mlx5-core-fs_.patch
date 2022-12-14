@@ -220,7 +220,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  
  	/* During rekey process, we can have two IPsec rules with duplicate match value but different encryption key.
  	 * Thus, do not allow modify op_mod for IPsec rule
-@@ -2754,6 +2813,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
+@@ -2760,6 +2819,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
  	fs_debugfs_cleanup(dev);
  	kmem_cache_destroy(steering->ftes_cache);
  	kmem_cache_destroy(steering->fgs_cache);
@@ -231,7 +231,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	kfree(steering);
  }
  
-@@ -3028,6 +3091,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -3034,6 +3097,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  	steering->dev = dev;
  	dev->priv.steering = steering;
  
@@ -242,7 +242,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev_name(dev->device));
  	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev_name(dev->device));
  	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
-@@ -3097,12 +3164,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -3103,12 +3170,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  			goto err;
  	}
  

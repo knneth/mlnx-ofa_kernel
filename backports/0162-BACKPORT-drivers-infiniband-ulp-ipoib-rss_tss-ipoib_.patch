@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
 ---
- .../infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c  | 134 +++++++++++++++++----
- 1 file changed, 111 insertions(+), 23 deletions(-)
+ .../ulp/ipoib/rss_tss/ipoib_main_rss.c        | 138 +++++++++++++++---
+ 1 file changed, 115 insertions(+), 23 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
@@ -70,7 +70,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct ipoib_pseudo_header *phdr;
-@@ -120,7 +154,13 @@ static u16 ipoib_select_queue_sw_rss(str
+@@ -120,10 +154,20 @@ static u16 ipoib_select_queue_sw_rss(str
  	header->tss_qpn_mask_sz |= priv->tss_qpn_mask_sz;
  
  	/* don't use special ring in TX */
@@ -83,8 +83,15 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
 +#endif
  }
  
++#ifdef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
++static void ipoib_timeout_rss(struct net_device *dev, unsigned int txqueue)
++#else
  static void ipoib_timeout_rss(struct net_device *dev)
-@@ -250,6 +290,20 @@ static struct ipoib_neigh *ipoib_neigh_c
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	struct ipoib_send_ring *send_ring;
+@@ -250,6 +294,20 @@ static struct ipoib_neigh *ipoib_neigh_c
  	return neigh;
  }
  
@@ -105,7 +112,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  int ipoib_dev_init_default_rss(struct net_device *dev)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-@@ -283,6 +337,9 @@ int ipoib_dev_init_default_rss(struct ne
+@@ -283,6 +341,9 @@ int ipoib_dev_init_default_rss(struct ne
  		}
  		recv_ring->dev = dev;
  		recv_ring->index = i;
@@ -115,7 +122,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  		recv_ring++;
  		rx_allocated++;
  	}
-@@ -382,6 +439,7 @@ static void ipoib_ndo_uninit_rss(struct
+@@ -382,6 +443,7 @@ static void ipoib_ndo_uninit_rss(struct
  	 * ipoib_remove_one guarantees the children are removed before the
  	 * parent, and that is the only place where a parent can be removed.
  	 */
@@ -123,7 +130,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  	WARN_ON(!list_empty(&priv->child_intfs));
  
  	if (priv->parent) {
-@@ -391,6 +449,7 @@ static void ipoib_ndo_uninit_rss(struct
+@@ -391,6 +453,7 @@ static void ipoib_ndo_uninit_rss(struct
  		list_del(&priv->list);
  		up_write(&ppriv->vlan_rwsem);
  	}
@@ -131,7 +138,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  
  	ipoib_dev_uninit_rss(dev);
  
-@@ -703,19 +762,40 @@ static const struct net_device_ops ipoib
+@@ -703,19 +766,40 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_ndo_uninit_rss,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
@@ -185,7 +192,7 @@ Change-Id: Ia8c1120d32b6c2a377798ebcdc0a5af5f0bef609
  };
  
  static const struct net_device_ops ipoib_netdev_ops_vf_sw_tss = {
-@@ -723,14 +803,22 @@ static const struct net_device_ops ipoib
+@@ -723,14 +807,22 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_ndo_uninit_rss,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,

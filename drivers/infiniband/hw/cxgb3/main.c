@@ -35,8 +35,8 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"iw_cxgb3"
-#define DRV_VERSION	"4.9-2.2.6"
-#define DRV_RELDATE	"04 Apr 2021"
+#define DRV_VERSION	"4.9-3.1.5"
+#define DRV_RELDATE	"27 Apr 2021"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("iw_cxgb3 dummy kernel module");
