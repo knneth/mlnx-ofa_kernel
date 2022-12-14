@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /*
  * Copyright (c) 2014-2017 Oracle.  All rights reserved.
  * Copyright (c) 2003-2007 Network Appliance, Inc. All rights reserved.
@@ -46,21 +47,16 @@
  * to the Linux RPC framework lives.
  */
 
-#include "xprt_rdma.h"
-
 #include <linux/highmem.h>
+
+#include <linux/sunrpc/svc_rdma.h>
+
+#include "xprt_rdma.h"
+#include <trace/events/rpcrdma.h>
 
 #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
 # define RPCDBG_FACILITY	RPCDBG_TRANS
 #endif
-
-static const char transfertypes[][12] = {
-	"inline",	/* no chunks */
-	"read list",	/* some argument via rdma read */
-	"*read list",	/* entire request via rdma read */
-	"write list",	/* some result via rdma write */
-	"reply chunk"	/* entire reply via rdma write */
-};
 
 /* Returns size of largest RPC-over-RDMA header in a Call message
  *
@@ -143,7 +139,7 @@ static bool rpcrdma_args_inline(struct rpcrdma_xprt *r_xprt,
 	if (xdr->page_len) {
 		remaining = xdr->page_len;
 		offset = offset_in_page(xdr->page_base);
-		count = 0;
+		count = RPCRDMA_MIN_SEND_SGES;
 		while (remaining) {
 			remaining -= min_t(unsigned int,
 					   PAGE_SIZE - offset, remaining);
@@ -230,7 +226,7 @@ rpcrdma_convert_iovs(struct rpcrdma_xprt *r_xprt, struct xdr_buf *xdrbuf,
 			 */
 			*ppages = alloc_page(GFP_ATOMIC);
 			if (!*ppages)
-				return -EAGAIN;
+				return -ENOBUFS;
 		}
 		seg->mr_page = *ppages;
 		seg->mr_offset = (char *)page_base;
@@ -292,15 +288,15 @@ encode_item_not_present(struct xdr_stream *xdr)
 }
 
 static void
-xdr_encode_rdma_segment(__be32 *iptr, struct rpcrdma_mw *mw)
+xdr_encode_rdma_segment(__be32 *iptr, struct rpcrdma_mr *mr)
 {
-	*iptr++ = cpu_to_be32(mw->mw_handle);
-	*iptr++ = cpu_to_be32(mw->mw_length);
-	xdr_encode_hyper(iptr, mw->mw_offset);
+	*iptr++ = cpu_to_be32(mr->mr_handle);
+	*iptr++ = cpu_to_be32(mr->mr_length);
+	xdr_encode_hyper(iptr, mr->mr_offset);
 }
 
 static int
-encode_rdma_segment(struct xdr_stream *xdr, struct rpcrdma_mw *mw)
+encode_rdma_segment(struct xdr_stream *xdr, struct rpcrdma_mr *mr)
 {
 	__be32 *p;
 
@@ -308,12 +304,12 @@ encode_rdma_segment(struct xdr_stream *xdr, struct rpcrdma_mw *mw)
 	if (unlikely(!p))
 		return -EMSGSIZE;
 
-	xdr_encode_rdma_segment(p, mw);
+	xdr_encode_rdma_segment(p, mr);
 	return 0;
 }
 
 static int
-encode_read_segment(struct xdr_stream *xdr, struct rpcrdma_mw *mw,
+encode_read_segment(struct xdr_stream *xdr, struct rpcrdma_mr *mr,
 		    u32 position)
 {
 	__be32 *p;
@@ -324,7 +320,7 @@ encode_read_segment(struct xdr_stream *xdr, struct rpcrdma_mw *mw,
 
 	*p++ = xdr_one;			/* Item present */
 	*p++ = cpu_to_be32(position);
-	xdr_encode_rdma_segment(p, mw);
+	xdr_encode_rdma_segment(p, mr);
 	return 0;
 }
 
@@ -348,7 +344,7 @@ rpcrdma_encode_read_list(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req,
 {
 	struct xdr_stream *xdr = &req->rl_stream;
 	struct rpcrdma_mr_seg *seg;
-	struct rpcrdma_mw *mw;
+	struct rpcrdma_mr *mr;
 	unsigned int pos;
 	int nsegs;
 
@@ -363,21 +359,17 @@ rpcrdma_encode_read_list(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req,
 
 	do {
 		seg = r_xprt->rx_ia.ri_ops->ro_map(r_xprt, seg, nsegs,
-						   false, &mw);
+						   false, &mr);
 		if (IS_ERR(seg))
 			return PTR_ERR(seg);
-		rpcrdma_push_mw(mw, &req->rl_registered);
+		rpcrdma_mr_push(mr, &req->rl_registered);
 
-		if (encode_read_segment(xdr, mw, pos) < 0)
+		if (encode_read_segment(xdr, mr, pos) < 0)
 			return -EMSGSIZE;
 
-		dprintk("RPC: %5u %s: pos %u %u@0x%016llx:0x%08x (%s)\n",
-			rqst->rq_task->tk_pid, __func__, pos,
-			mw->mw_length, (unsigned long long)mw->mw_offset,
-			mw->mw_handle, mw->mw_nents < nsegs ? "more" : "last");
-
+		trace_xprtrdma_read_chunk(rqst->rq_task, pos, mr, nsegs);
 		r_xprt->rx_stats.read_chunk_count++;
-		nsegs -= mw->mw_nents;
+		nsegs -= mr->mr_nents;
 	} while (nsegs);
 
 	return 0;
@@ -404,7 +396,7 @@ rpcrdma_encode_write_list(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req,
 {
 	struct xdr_stream *xdr = &req->rl_stream;
 	struct rpcrdma_mr_seg *seg;
-	struct rpcrdma_mw *mw;
+	struct rpcrdma_mr *mr;
 	int nsegs, nchunks;
 	__be32 *segcount;
 
@@ -425,23 +417,19 @@ rpcrdma_encode_write_list(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req,
 	nchunks = 0;
 	do {
 		seg = r_xprt->rx_ia.ri_ops->ro_map(r_xprt, seg, nsegs,
-						   true, &mw);
+						   true, &mr);
 		if (IS_ERR(seg))
 			return PTR_ERR(seg);
-		rpcrdma_push_mw(mw, &req->rl_registered);
+		rpcrdma_mr_push(mr, &req->rl_registered);
 
-		if (encode_rdma_segment(xdr, mw) < 0)
+		if (encode_rdma_segment(xdr, mr) < 0)
 			return -EMSGSIZE;
 
-		dprintk("RPC: %5u %s: %u@0x016%llx:0x%08x (%s)\n",
-			rqst->rq_task->tk_pid, __func__,
-			mw->mw_length, (unsigned long long)mw->mw_offset,
-			mw->mw_handle, mw->mw_nents < nsegs ? "more" : "last");
-
+		trace_xprtrdma_write_chunk(rqst->rq_task, mr, nsegs);
 		r_xprt->rx_stats.write_chunk_count++;
-		r_xprt->rx_stats.total_rdma_request += seg->mr_len;
+		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
 		nchunks++;
-		nsegs -= mw->mw_nents;
+		nsegs -= mr->mr_nents;
 	} while (nsegs);
 
 	/* Update count of segments in this Write chunk */
@@ -468,7 +456,7 @@ rpcrdma_encode_reply_chunk(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req,
 {
 	struct xdr_stream *xdr = &req->rl_stream;
 	struct rpcrdma_mr_seg *seg;
-	struct rpcrdma_mw *mw;
+	struct rpcrdma_mr *mr;
 	int nsegs, nchunks;
 	__be32 *segcount;
 
@@ -487,23 +475,19 @@ rpcrdma_encode_reply_chunk(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req,
 	nchunks = 0;
 	do {
 		seg = r_xprt->rx_ia.ri_ops->ro_map(r_xprt, seg, nsegs,
-						   true, &mw);
+						   true, &mr);
 		if (IS_ERR(seg))
 			return PTR_ERR(seg);
-		rpcrdma_push_mw(mw, &req->rl_registered);
+		rpcrdma_mr_push(mr, &req->rl_registered);
 
-		if (encode_rdma_segment(xdr, mw) < 0)
+		if (encode_rdma_segment(xdr, mr) < 0)
 			return -EMSGSIZE;
 
-		dprintk("RPC: %5u %s: %u@0x%016llx:0x%08x (%s)\n",
-			rqst->rq_task->tk_pid, __func__,
-			mw->mw_length, (unsigned long long)mw->mw_offset,
-			mw->mw_handle, mw->mw_nents < nsegs ? "more" : "last");
-
+		trace_xprtrdma_reply_chunk(rqst->rq_task, mr, nsegs);
 		r_xprt->rx_stats.reply_chunk_count++;
-		r_xprt->rx_stats.total_rdma_request += seg->mr_len;
+		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
 		nchunks++;
-		nsegs -= mw->mw_nents;
+		nsegs -= mr->mr_nents;
 	} while (nsegs);
 
 	/* Update count of segments in the Reply chunk */
@@ -523,9 +507,6 @@ rpcrdma_unmap_sendctx(struct rpcrdma_sendctx *sc)
 	struct rpcrdma_ia *ia = &sc->sc_xprt->rx_ia;
 	struct ib_sge *sge;
 	unsigned int count;
-
-	dprintk("RPC:       %s: unmapping %u sges for sc=%p\n",
-		__func__, sc->sc_unmap_count, sc);
 
 	/* The first two SGEs contain the transport header and
 	 * the inline buffer. These are always left mapped so
@@ -709,7 +690,7 @@ rpcrdma_prepare_send_sges(struct rpcrdma_xprt *r_xprt,
 {
 	req->rl_sendctx = rpcrdma_sendctx_get_locked(&r_xprt->rx_buf);
 	if (!req->rl_sendctx)
-		return -ENOBUFS;
+		return -EAGAIN;
 	req->rl_sendctx->sc_wr.num_sge = 0;
 	req->rl_sendctx->sc_unmap_count = 0;
 	req->rl_sendctx->sc_req = req;
@@ -739,8 +720,8 @@ rpcrdma_prepare_send_sges(struct rpcrdma_xprt *r_xprt,
  * Returns:
  *	%0 if the RPC was sent successfully,
  *	%-ENOTCONN if the connection was lost,
- *	%-EAGAIN if not enough pages are available for on-demand reply buffer,
- *	%-ENOBUFS if no MRs are available to register chunks,
+ *	%-EAGAIN if the caller should call again with the same arguments,
+ *	%-ENOBUFS if the caller should call again after a delay,
  *	%-EMSGSIZE if the transport header is too small,
  *	%-EIO if a permanent problem occurred while marshaling.
  */
@@ -753,11 +734,6 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
 	bool ddp_allowed;
 	__be32 *p;
 	int ret;
-
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
-	if (test_bit(RPC_BC_PA_IN_USE, &rqst->rq_bc_pa_state))
-		return rpcrdma_bc_marshal_reply(rqst);
-#endif
 
 	rpcrdma_set_xdrlen(&req->rl_hdrbuf, 0);
 	xdr_init_encode(xdr, &req->rl_hdrbuf,
@@ -821,6 +797,17 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
 		rtype = rpcrdma_areadch;
 	}
 
+	/* If this is a retransmit, discard previously registered
+	 * chunks. Very likely the connection has been replaced,
+	 * so these registrations are invalid and unusable.
+	 */
+	while (unlikely(!list_empty(&req->rl_registered))) {
+		struct rpcrdma_mr *mr;
+
+		mr = rpcrdma_mr_pop(&req->rl_registered);
+		rpcrdma_mr_defer_recovery(mr);
+	}
+
 	/* This implementation supports the following combinations
 	 * of chunk lists in one RPC-over-RDMA Call message:
 	 *
@@ -868,10 +855,7 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
 	if (ret)
 		goto out_err;
 
-	dprintk("RPC: %5u %s: %s/%s: hdrlen %u rpclen\n",
-		rqst->rq_task->tk_pid, __func__,
-		transfertypes[rtype], transfertypes[wtype],
-		xdr_stream_pos(xdr));
+	trace_xprtrdma_marshal(rqst, xdr_stream_pos(xdr), rtype, wtype);
 
 	ret = rpcrdma_prepare_send_sges(r_xprt, req, xdr_stream_pos(xdr),
 					&rqst->rq_snd_buf, rtype);
@@ -880,8 +864,13 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
 	return 0;
 
 out_err:
-	if (ret != -ENOBUFS) {
-		pr_err("rpcrdma: header marshaling failed (%d)\n", ret);
+	switch (ret) {
+	case -EAGAIN:
+		xprt_wait_for_buffer_space(rqst->rq_task, NULL);
+		break;
+	case -ENOBUFS:
+		break;
+	default:
 		r_xprt->rx_stats.failed_marshal_count++;
 	}
 	return ret;
@@ -926,8 +915,7 @@ rpcrdma_inline_fixup(struct rpc_rqst *rqst, char *srcp, int copy_len, int pad)
 	curlen = rqst->rq_rcv_buf.head[0].iov_len;
 	if (curlen > copy_len)
 		curlen = copy_len;
-	dprintk("RPC:       %s: srcp 0x%p len %d hdrlen %d\n",
-		__func__, srcp, copy_len, curlen);
+	trace_xprtrdma_fixup(rqst, copy_len, curlen);
 	srcp += curlen;
 	copy_len -= curlen;
 
@@ -947,9 +935,8 @@ rpcrdma_inline_fixup(struct rpc_rqst *rqst, char *srcp, int copy_len, int pad)
 			if (curlen > pagelist_len)
 				curlen = pagelist_len;
 
-			dprintk("RPC:       %s: page %d"
-				" srcp 0x%p len %d curlen %d\n",
-				__func__, i, srcp, copy_len, curlen);
+			trace_xprtrdma_fixup_pg(rqst, i, srcp,
+						copy_len, curlen);
 			destp = kmap_atomic(ppages[i]);
 			memcpy(destp + page_base, srcp, curlen);
 			flush_dcache_page(ppages[i]);
@@ -982,24 +969,6 @@ rpcrdma_inline_fixup(struct rpc_rqst *rqst, char *srcp, int copy_len, int pad)
 	}
 
 	return fixup_copy_count;
-}
-
-/* Caller must guarantee @rep remains stable during this call.
- */
-static void
-rpcrdma_mark_remote_invalidation(struct list_head *mws,
-				 struct rpcrdma_rep *rep)
-{
-	struct rpcrdma_mw *mw;
-
-	if (!(rep->rr_wc_flags & IB_WC_WITH_INVALIDATE))
-		return;
-
-	list_for_each_entry(mw, mws, mw_list)
-		if (mw->mw_handle == rep->rr_inv_rkey) {
-			mw->mw_flags = RPCRDMA_MW_F_RI;
-			break; /* only one invalidated MR per RPC */
-		}
 }
 
 /* By convention, backchannel calls arrive via rdma_msg type
@@ -1046,8 +1015,6 @@ rpcrdma_is_bcall(struct rpcrdma_xprt *r_xprt, struct rpcrdma_rep *rep)
 
 out_short:
 	pr_warn("RPC/RDMA short backward direction call\n");
-	if (rpcrdma_ep_post_recv(&r_xprt->rx_ia, rep))
-		xprt_disconnect_done(&r_xprt->rx_xprt);
 	return true;
 }
 #else	/* CONFIG_SUNRPC_BACKCHANNEL */
@@ -1058,26 +1025,19 @@ out_short:
 
 static int decode_rdma_segment(struct xdr_stream *xdr, u32 *length)
 {
+	u32 handle;
+	u64 offset;
 	__be32 *p;
 
 	p = xdr_inline_decode(xdr, 4 * sizeof(*p));
 	if (unlikely(!p))
 		return -EIO;
 
-	ifdebug(FACILITY) {
-		u64 offset;
-		u32 handle;
+	handle = be32_to_cpup(p++);
+	*length = be32_to_cpup(p++);
+	xdr_decode_hyper(p, &offset);
 
-		handle = be32_to_cpup(p++);
-		*length = be32_to_cpup(p++);
-		xdr_decode_hyper(p, &offset);
-		dprintk("RPC:       %s:   segment %u@0x%016llx:0x%08x\n",
-			__func__, *length, (unsigned long long)offset,
-			handle);
-	} else {
-		*length = be32_to_cpup(p + 1);
-	}
-
+	trace_xprtrdma_decode_seg(handle, *length, offset);
 	return 0;
 }
 
@@ -1098,8 +1058,6 @@ static int decode_write_chunk(struct xdr_stream *xdr, u32 *length)
 		*length += seglength;
 	}
 
-	dprintk("RPC:       %s: segcount=%u, %u bytes\n",
-		__func__, be32_to_cpup(p), *length);
 	return 0;
 }
 
@@ -1296,8 +1254,7 @@ out:
  * being marshaled.
  */
 out_badheader:
-	dprintk("RPC: %5u %s: invalid rpcrdma reply (type %u)\n",
-		rqst->rq_task->tk_pid, __func__, be32_to_cpu(rep->rr_proc));
+	trace_xprtrdma_reply_hdr(rep);
 	r_xprt->rx_stats.bad_reply_count++;
 	status = -EIO;
 	goto out;
@@ -1339,9 +1296,12 @@ void rpcrdma_deferred_completion(struct work_struct *work)
 	struct rpcrdma_rep *rep =
 			container_of(work, struct rpcrdma_rep, rr_work);
 	struct rpcrdma_req *req = rpcr_to_rdmar(rep->rr_rqst);
+	struct rpcrdma_xprt *r_xprt = rep->rr_rxprt;
 
-	rpcrdma_mark_remote_invalidation(&req->rl_registered, rep);
-	rpcrdma_release_rqst(rep->rr_rxprt, req);
+	trace_xprtrdma_defer_cmp(rep);
+	if (rep->rr_wc_flags & IB_WC_WITH_INVALIDATE)
+		r_xprt->rx_ia.ri_ops->ro_reminv(rep, &req->rl_registered);
+	rpcrdma_release_rqst(r_xprt, req);
 	rpcrdma_complete_rqst(rep);
 }
 
@@ -1360,15 +1320,14 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *rep)
 	u32 credits;
 	__be32 *p;
 
-	dprintk("RPC:       %s: incoming rep %p\n", __func__, rep);
+	--buf->rb_posted_receives;
 
 	if (rep->rr_hdrbuf.head[0].iov_len == 0)
 		goto out_badstatus;
 
+	/* Fixed transport header fields */
 	xdr_init_decode(&rep->rr_stream, &rep->rr_hdrbuf,
 			rep->rr_hdrbuf.head[0].iov_base);
-
-	/* Fixed transport header fields */
 	p = xdr_inline_decode(&rep->rr_stream, 4 * sizeof(*p));
 	if (unlikely(!p))
 		goto out_shortreply;
@@ -1405,23 +1364,14 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *rep)
 	rep->rr_rqst = rqst;
 	clear_bit(RPCRDMA_REQ_F_PENDING, &req->rl_flags);
 
-	dprintk("RPC:       %s: reply %p completes request %p (xid 0x%08x)\n",
-		__func__, rep, req, be32_to_cpu(rep->rr_xid));
+	trace_xprtrdma_reply(rqst->rq_task, rep, req, credits);
 
-	queue_work_on(req->rl_cpu, rpcrdma_receive_wq, &rep->rr_work);
-	return;
-
-out_badstatus:
-	rpcrdma_recv_buffer_put(rep);
-	if (r_xprt->rx_ep.rep_connected == 1) {
-		r_xprt->rx_ep.rep_connected = -EIO;
-		rpcrdma_conn_func(&r_xprt->rx_ep);
-	}
+	rpcrdma_post_recvs(r_xprt, false);
+	queue_work(rpcrdma_receive_wq, &rep->rr_work);
 	return;
 
 out_badversion:
-	dprintk("RPC:       %s: invalid version %d\n",
-		__func__, be32_to_cpu(rep->rr_vers));
+	trace_xprtrdma_reply_vers(rep);
 	goto repost;
 
 /* The RPC transaction has already been terminated, or the header
@@ -1429,18 +1379,17 @@ out_badversion:
  */
 out_norqst:
 	spin_unlock(&xprt->recv_lock);
-	dprintk("RPC:       %s: no match for incoming xid 0x%08x\n",
-		__func__, be32_to_cpu(rep->rr_xid));
+	trace_xprtrdma_reply_rqst(rep);
 	goto repost;
 
 out_shortreply:
-	dprintk("RPC:       %s: short/invalid reply\n", __func__);
+	trace_xprtrdma_reply_short(rep);
 
 /* If no pending RPC transaction was matched, post a replacement
  * receive buffer before returning.
  */
 repost:
-	r_xprt->rx_stats.bad_reply_count++;
-	if (rpcrdma_ep_post_recv(&r_xprt->rx_ia, rep))
-		rpcrdma_recv_buffer_put(rep);
+	rpcrdma_post_recvs(r_xprt, false);
+out_badstatus:
+	rpcrdma_recv_buffer_put(rep);
 }

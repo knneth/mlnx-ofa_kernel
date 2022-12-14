@@ -835,17 +835,25 @@ static ssize_t show_stats_lifespan(struct kobject *kobj,
 				   char *buf)
 {
 	struct hw_stats_attribute *hsa;
+	struct rdma_hw_stats *stats;
 	int msecs;
 
 	hsa = container_of(attr, struct hw_stats_attribute, attr);
 	if (!hsa->port_num) {
 		struct ib_device *dev = container_of((struct device *)kobj,
 						     struct ib_device, dev);
-		msecs = jiffies_to_msecs(dev->hw_stats->lifespan);
+
+		stats = dev->hw_stats;
 	} else {
 		struct ib_port *p = container_of(kobj, struct ib_port, kobj);
-		msecs = jiffies_to_msecs(p->hw_stats->lifespan);
+
+		stats = p->hw_stats;
 	}
+
+	mutex_lock(&stats->lock);
+	msecs = jiffies_to_msecs(stats->lifespan);
+	mutex_unlock(&stats->lock);
+
 	return sprintf(buf, "%d\n", msecs);
 }
 
@@ -854,6 +862,7 @@ static ssize_t set_stats_lifespan(struct kobject *kobj,
 				  const char *buf, size_t count)
 {
 	struct hw_stats_attribute *hsa;
+	struct rdma_hw_stats *stats;
 	int msecs;
 	int jiffies;
 	int ret;
@@ -868,11 +877,18 @@ static ssize_t set_stats_lifespan(struct kobject *kobj,
 	if (!hsa->port_num) {
 		struct ib_device *dev = container_of((struct device *)kobj,
 						     struct ib_device, dev);
-		dev->hw_stats->lifespan = jiffies;
+
+		stats = dev->hw_stats;
 	} else {
 		struct ib_port *p = container_of(kobj, struct ib_port, kobj);
-		p->hw_stats->lifespan = jiffies;
+
+		stats = p->hw_stats;
 	}
+
+	mutex_lock(&stats->lock);
+	stats->lifespan = jiffies;
+	mutex_unlock(&stats->lock);
+
 	return count;
 }
 
@@ -1292,7 +1308,6 @@ int ib_device_register_sysfs(struct ib_device *device,
 	int ret;
 	int i;
 
-	WARN_ON_ONCE(!device->dev.parent);
 	ret = dev_set_name(class_dev, "%s", device->name);
 	if (ret)
 		return ret;

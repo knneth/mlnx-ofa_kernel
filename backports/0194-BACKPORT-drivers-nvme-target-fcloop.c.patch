@@ -1,0 +1,25 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/fcloop.c
+
+Change-Id: I5024bc7accb65ab904fcbe79d200aaabaa98e5b0
+---
+ drivers/nvme/target/fcloop.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/nvme/target/fcloop.c
++++ b/drivers/nvme/target/fcloop.c
+@@ -13,6 +13,8 @@
+  * See the GNU General Public License for more details, a copy of which
+  * can be found in the file COPYING included with this package
+  */
++#ifdef HAVE_LINUX_NVME_FC_DRIVER_H
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -1388,3 +1390,5 @@ module_init(fcloop_init);
+ module_exit(fcloop_exit);
+ 
+ MODULE_LICENSE("GPL v2");
++
++#endif /* HAVE_LINUX_NVME_FC_DRIVER_H */

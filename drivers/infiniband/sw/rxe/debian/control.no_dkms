@@ -8,7 +8,7 @@ Homepage: http://www.mellanox.com
 
 Package: mlnx-rdma-rxe-modules
 Section: kernel
-Architecture: all
+Architecture: any
 Depends: mlnx-ofed-kernel-modules, ${misc:Depends}
 Description: rdma-rxe kernel modules
  This package provides the binary code for the rdma-rxe kernel modules.

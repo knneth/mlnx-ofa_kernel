@@ -237,13 +237,15 @@ static int
 iser_alloc_reg_res(struct iser_device *device,
 		   struct ib_pd *pd,
 		   struct iser_reg_resources *res,
+		   bool pi_enable,
 		   unsigned int size)
 {
 	struct ib_device *ib_dev = device->ib_device;
 	enum ib_mr_type mr_type;
 	int ret;
 
-	if (ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG)
+	if ((ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG) &&
+	    !pi_enable)
 		mr_type = IB_MR_TYPE_SG_GAPS;
 	else
 		mr_type = IB_MR_TYPE_MEM_REG;
@@ -280,7 +282,7 @@ iser_alloc_pi_ctx(struct iser_device *device,
 
 	pi_ctx = desc->pi_ctx;
 
-	ret = iser_alloc_reg_res(device, pd, &pi_ctx->rsc, size);
+	ret = iser_alloc_reg_res(device, pd, &pi_ctx->rsc, true, size);
 	if (ret) {
 		iser_err("failed to allocate reg_resources\n");
 		goto alloc_reg_res_err;
@@ -325,7 +327,7 @@ iser_create_fastreg_desc(struct iser_device *device,
 	if (!desc)
 		return ERR_PTR(-ENOMEM);
 
-	ret = iser_alloc_reg_res(device, pd, &desc->rsc, size);
+	ret = iser_alloc_reg_res(device, pd, &desc->rsc, pi_enable, size);
 	if (ret)
 		goto reg_res_alloc_failure;
 
@@ -717,7 +719,8 @@ iser_calc_scsi_params(struct iser_conn *iser_conn,
 	 * additional entry is required.
 	 */
 	if ((attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) &&
-	    (attr->device_cap_flags & IB_DEVICE_SG_GAPS_REG))
+	    (attr->device_cap_flags & IB_DEVICE_SG_GAPS_REG) &&
+	    !iser_conn->ib_conn.pi_support)
 		reserved_mr_pages = 0;
 	else
 		reserved_mr_pages = 1;

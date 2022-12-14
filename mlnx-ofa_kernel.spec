@@ -64,8 +64,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.4}
-%{!?_release: %global _release OFED.4.4.1.0.0.1.gd647238}
+%{!?_version: %global _version 4.5}
+%{!?_release: %global _release OFED.4.5.1.0.1.1.gb4fdfac}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -104,17 +104,17 @@ Obsoletes: mlnx-en-sources
 Requires: coreutils
 Requires: pciutils
 Requires: grep
-Requires: perl
 Requires: procps
 Requires: module-init-tools
 Requires: lsof
 %if "%{KMP}" == "1"
 BuildRequires: %kernel_module_package_buildreqs
+BuildRequires: /usr/bin/perl
 %endif
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.4-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.5-1.0.1.tgz
 
 
 # build KMP rpms?
@@ -139,7 +139,6 @@ Requires: %{utils_pname}
 Requires: coreutils
 Requires: pciutils
 Requires: grep
-Requires: perl
 Requires: procps
 Requires: module-init-tools
 Requires: lsof
@@ -169,7 +168,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.4-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.5-1.0.1.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -202,7 +201,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.4-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.5-1.0.1.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -656,12 +655,13 @@ fi
 /usr/sbin/cma_roce_tos
 /usr/sbin/setup_mr_cache.sh
 /usr/sbin/odp_stat.sh
+/usr/sbin/show_counters
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %{_sbindir}/*
-/etc/udev/rules.d/90-ib.rules
-/etc/udev/rules.d/82-net-setup-link.rules
+%config(noreplace) /etc/udev/rules.d/90-ib.rules
+%config(noreplace) /etc/udev/rules.d/82-net-setup-link.rules
 /bin/mlnx_interface_mgr.sh
 /bin/mlnx_conf_mgr.sh
 %if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"

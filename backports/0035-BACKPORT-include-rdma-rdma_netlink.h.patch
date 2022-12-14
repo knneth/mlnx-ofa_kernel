@@ -1,7 +1,7 @@
 From: Alaa Hleihel <alaa@mellanox.com>
 Subject: [PATCH] BACKPORT: include/rdma/rdma_netlink.h
 
-Change-Id: I12e0c4ef20893e307d0ef42c867783c9679463d6
+Change-Id: I0f9678136c6ecfe7a1b3ec129a31c6448a965418
 ---
  include/rdma/rdma_netlink.h | 4 ++++
  1 file changed, 4 insertions(+)

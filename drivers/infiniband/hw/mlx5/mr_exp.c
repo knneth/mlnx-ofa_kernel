@@ -36,11 +36,17 @@
 
 struct ib_mr *mlx5_ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *attr)
 {
+	struct ib_dm_mr_attr dm_mr_attr = {0};
 
-	if (attr->dm)
-		return mlx5_ib_get_dm_mr(pd, attr);
-	else
+	if ((attr->mr_type == IB_MR_TYPE_DM) && attr->dm) {
+		dm_mr_attr.length = attr->length;
+		dm_mr_attr.offset = attr->start;
+		dm_mr_attr.access_flags = attr->access_flags;
+
+		return mlx5_ib_reg_dm_mr(pd, attr->dm, &dm_mr_attr, NULL);
+	} else {
 		return mlx5_ib_alloc_mr(pd, attr->mr_type, attr->max_num_sg);
+	}
 }
 
 static int get_arg(unsigned long offset)
@@ -110,79 +116,3 @@ int mlx5_ib_exp_query_mkey(struct ib_mr *mr, u64 mkey_attr_mask,
 
 	return 0;
 }
-
-struct ib_mr *mlx5_ib_get_memic_mr(struct ib_pd *pd, u64 memic_addr,
-				   int acc, u64 length)
-{
-	struct mlx5_ib_dev *dev = to_mdev(pd->device);
-	int inlen = MLX5_ST_SZ_BYTES(create_mkey_in);
-	struct mlx5_core_dev *mdev = dev->mdev;
-	struct mlx5_ib_mr *mr;
-	void *mkc;
-	u32 *in;
-	int err;
-
-	mr = kzalloc(sizeof(*mr), GFP_KERNEL);
-	if (!mr)
-		return ERR_PTR(-ENOMEM);
-
-	in = kzalloc(inlen, GFP_KERNEL);
-	if (!in) {
-		err = -ENOMEM;
-		goto err_free;
-	}
-
-	mkc = MLX5_ADDR_OF(create_mkey_in, in, memory_key_mkey_entry);
-
-	MLX5_SET(mkc, mkc, access_mode_1_0, MLX5_MKC_ACCESS_MODE_MEMIC & 0x3);
-	MLX5_SET(mkc, mkc, access_mode_4_2,
-		 (MLX5_MKC_ACCESS_MODE_MEMIC >> 2) & 0x7);
-	MLX5_SET(mkc, mkc, a, !!(acc & IB_ACCESS_REMOTE_ATOMIC));
-	MLX5_SET(mkc, mkc, rw, !!(acc & IB_ACCESS_REMOTE_WRITE));
-	MLX5_SET(mkc, mkc, rr, !!(acc & IB_ACCESS_REMOTE_READ));
-	MLX5_SET(mkc, mkc, lw, !!(acc & IB_ACCESS_LOCAL_WRITE));
-	MLX5_SET(mkc, mkc, lr, 1);
-
-	MLX5_SET64(mkc, mkc, len, length);
-	MLX5_SET(mkc, mkc, pd, to_mpd(pd)->pdn);
-	MLX5_SET(mkc, mkc, qpn, 0xffffff);
-	MLX5_SET64(mkc, mkc, start_addr,
-		   memic_addr - pci_resource_start(dev->mdev->pdev, 0));
-
-	err = mlx5_core_create_mkey(mdev, &mr->mmkey, in, inlen);
-	if (err)
-		goto err_in;
-
-	kfree(in);
-	mr->ibmr.lkey = mr->mmkey.key;
-	mr->ibmr.rkey = mr->mmkey.key;
-	mr->umem = NULL;
-
-	return &mr->ibmr;
-
-err_in:
-	kfree(in);
-
-err_free:
-	kfree(mr);
-
-	return ERR_PTR(err);
-}
-
-struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
-			    struct ib_mr_init_attr *attr)
-{
-	struct ib_mr *mr;
-
-	/* Registration of dm buffer is not allowed with certain
-	 * access flags.
-	 */
-	if (attr->access_flags & ~MLX5_DM_ALLOWED_ACCESS)
-		return ERR_PTR(-EINVAL);
-
-	mr = mlx5_ib_get_memic_mr(pd, attr->dm->dev_addr + attr->start,
-				  attr->access_flags, attr->length);
-
-	return mr;
-}
-

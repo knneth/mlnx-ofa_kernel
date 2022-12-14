@@ -362,7 +362,8 @@ static int ipoib_cm_nonsrq_init_rx(struct net_device *dev, struct ib_cm_id *cm_i
 	int ret;
 	int i;
 
-	rx->rx_ring = vzalloc(priv->recvq_size * sizeof(*rx->rx_ring));
+	rx->rx_ring = vzalloc(array_size(priv->recvq_size,
+					 sizeof(*rx->rx_ring)));
 	if (!rx->rx_ring)
 		return -ENOMEM;
 
@@ -573,6 +574,7 @@ void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 	int frags;
 	int has_srq;
 	struct sk_buff *small_skb;
+	int dropped;
 
 	ipoib_dbg_data(priv, "cm recv completion: id %d, status: %d\n",
 		       wr_id, wc->status);
@@ -682,8 +684,10 @@ copied:
 	if (unlikely(skb->dev->priv_flags & IFF_EIPOIB_VIF))
 		set_skb_oob_cb_data(skb, wc, NULL);
 
-	netif_receive_skb(skb);
-
+	dropped = netif_receive_skb(skb);
+	if (dropped == NET_RX_DROP)
+		pr_err("%s: skb dropped inside netif_receive_skb skb=%p rx_ring[id].skb=%p\n",
+		       __func__, skb, rx_ring[wr_id].skb);
 repost:
 	if (has_srq) {
 		if (unlikely(ipoib_cm_post_receive_srq(dev, wr_id)))
@@ -783,12 +787,14 @@ void ipoib_cm_send(struct net_device *dev, struct sk_buff *skb, struct ipoib_cm_
 	skb_orphan(skb);
 	skb_dst_drop(skb);
 
-	if (netif_queue_stopped(dev))
-		if (ib_req_notify_cq(priv->send_cq, IB_CQ_NEXT_COMP |
-				     IB_CQ_REPORT_MISSED_EVENTS)) {
+	if (netif_queue_stopped(dev)) {
+		rc = ib_req_notify_cq(priv->send_cq, IB_CQ_NEXT_COMP |
+				      IB_CQ_REPORT_MISSED_EVENTS);
+		if (unlikely(rc < 0))
 			ipoib_warn(priv, "IPoIB/CM:request notify on send CQ failed\n");
+		else if (rc)
 			napi_schedule(&priv->send_napi);
-		}
+	}
 
 	rc = post_send(priv, tx, tx->tx_head & (priv->sendq_size - 1), tx_req);
 	if (unlikely(rc)) {
@@ -1164,7 +1170,7 @@ static int ipoib_cm_tx_init(struct ipoib_cm_tx *p, u32 qpn,
 	int ret;
 
 	noio_flag = memalloc_noio_save();
-	p->tx_ring = vzalloc(priv->sendq_size * sizeof(*p->tx_ring));
+	p->tx_ring = vzalloc(array_size(priv->sendq_size, sizeof(*p->tx_ring)));
 	if (!p->tx_ring) {
 		memalloc_noio_restore(noio_flag);
 		ret = -ENOMEM;
@@ -1422,7 +1428,7 @@ static void ipoib_cm_tx_start(struct work_struct *work)
 				neigh->daddr + QPN_AND_OPTIONS_OFFSET);
 			goto free_neigh;
 		}
-		memcpy(&pathrec, &p->path->pathrec, sizeof pathrec);
+		memcpy(&pathrec, &path->pathrec, sizeof pathrec);
 
 		spin_unlock_irqrestore(&priv->lock, flags);
 		netif_tx_unlock_bh(dev);
@@ -1489,11 +1495,15 @@ static void ipoib_cm_skb_reap(struct work_struct *work)
 		spin_unlock_irqrestore(&priv->lock, flags);
 		netif_tx_unlock_bh(dev);
 
-		if (skb->protocol == htons(ETH_P_IP))
+		if (skb->protocol == htons(ETH_P_IP)) {
+			memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 			icmp_send(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, htonl(mtu));
+		}
 #if IS_ENABLED(CONFIG_IPV6)
-		else if (skb->protocol == htons(ETH_P_IPV6))
+		else if (skb->protocol == htons(ETH_P_IPV6)) {
+			memset(IP6CB(skb), 0, sizeof(*IP6CB(skb)));
 			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0, mtu);
+		}
 #endif
 		dev_kfree_skb_any(skb);
 
@@ -1623,8 +1633,8 @@ static void ipoib_cm_create_srq(struct net_device *dev, int max_sge)
 		return;
 	}
 
-	priv->cm.srq_ring = vzalloc(priv->recvq_size *
-				    sizeof(*priv->cm.srq_ring));
+	priv->cm.srq_ring = vzalloc(array_size(priv->recvq_size,
+					       sizeof(*priv->cm.srq_ring)));
 	if (!priv->cm.srq_ring) {
 		ib_destroy_srq(priv->cm.srq);
 		priv->cm.srq = NULL;

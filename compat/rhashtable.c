@@ -14,6 +14,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/rhashtable.h>
+
 #ifndef HAVE_RHLTABLE
 
 #include <linux/atomic.h>
@@ -26,7 +28,6 @@
 #include <linux/mm.h>
 #include <linux/jhash.h>
 #include <linux/random.h>
-#include <linux/rhashtable.h>
 #include <linux/err.h>
 #include <linux/export.h>
 

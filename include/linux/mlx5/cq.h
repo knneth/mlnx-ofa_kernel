@@ -61,13 +61,9 @@ struct mlx5_core_cq {
 	int			reset_notify_added;
 	struct list_head	reset_notify;
 	struct mlx5_eq		*eq;
+	u16 uid;
 };
 
-enum {
-	MLX5_CQE_RES_FORMAT_HASH = 0,
-	MLX5_CQE_RES_FORMAT_CSUM = 1,
-	MLX5_CQE_RES_FORMAT_CSUM_STRIDX = 3,
-};
 
 enum {
 	MLX5_CQE_SYNDROME_LOCAL_LENGTH_ERR		= 0x01,

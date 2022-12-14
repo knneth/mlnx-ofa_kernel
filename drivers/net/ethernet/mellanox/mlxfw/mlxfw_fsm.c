@@ -272,8 +272,5 @@ err_fsm_lock:
 EXPORT_SYMBOL(mlxfw_firmware_flash);
 
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_AUTHOR("Yotam Gigi <yotamg@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox firmware flash lib");

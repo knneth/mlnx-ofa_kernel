@@ -350,7 +350,6 @@ static int reclaim_pages_cmd(struct mlx5_core_dev *dev,
 	u32 func_id;
 	u32 npages;
 	u32 i = 0;
-	u32 j;
 
 	if (dev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR)
 		return mlx5_cmd_exec(dev, in, in_size, out, out_size);
@@ -366,19 +365,8 @@ static int reclaim_pages_cmd(struct mlx5_core_dev *dev,
 		if (fwp->func_id != func_id)
 			continue;
 
-		/* Find all the used 4KB page in fwp */
-		j = 0;
-		do {
-			j = find_next_zero_bit(&fwp->bitmask, MLX5_NUM_4K_IN_PAGE, j);
-			if (j >= MLX5_NUM_4K_IN_PAGE)
-				break;
-
-			MLX5_ARRAY_SET64(manage_pages_out, out, pas, i,
-					 fwp->addr + (j << MLX5_ADAPTER_PAGE_SHIFT));
-
-			j++;
-			i++;
-		} while (i < npages);
+		MLX5_ARRAY_SET64(manage_pages_out, out, pas, i, fwp->addr);
+		i++;
 	}
 
 	MLX5_SET(manage_pages_out, out, output_num_entries, i);

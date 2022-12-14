@@ -76,9 +76,6 @@
 
 MODULE_DESCRIPTION("iSER (iSCSI Extensions for RDMA) Datamover");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_AUTHOR("Alex Nezhinsky, Dan Bar Dov, Or Gerlitz");
 
 static struct scsi_host_template iscsi_iser_sht;
@@ -875,7 +872,7 @@ iscsi_iser_ep_poll(struct iscsi_endpoint *ep, int timeout_ms)
 	iser_info("iser conn %p rc = %d\n", iser_conn, rc);
 
 	if (rc > 0)
-		return 1; /* success, this is the equivalent of POLLOUT */
+		return 1; /* success, this is the equivalent of EPOLLOUT */
 	else if (!rc)
 		return 0; /* timeout */
 	else
@@ -990,7 +987,8 @@ static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
 	}
 	ib_dev = iser_conn->ib_conn.device->ib_device;
 
-	if (!(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG))
+	if (!(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG) ||
+	    iser_conn->ib_conn.pi_support)
 		blk_queue_virt_boundary(sdev->request_queue, ~MASK_4K);
 
 	mutex_unlock(&unbind_iser_conn_mutex);

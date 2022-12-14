@@ -1,0 +1,20 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/debug/memtrack.c
+
+Change-Id: I63c85cd7f52b71396c0abe04bc1b12a6b6c0b983
+---
+ drivers/infiniband/debug/memtrack.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/infiniband/debug/memtrack.c
++++ b/drivers/infiniband/debug/memtrack.c
+@@ -19,6 +19,9 @@
+   Copyright (c) 2004 Mellanox Technologies Ltd.  All rights reserved.
+ */
+ 
++#include <linux/ratelimit.h>
++#include <linux/printk.h>
++
+ #define C_MEMTRACK_C
+ 
+ #ifdef kmalloc

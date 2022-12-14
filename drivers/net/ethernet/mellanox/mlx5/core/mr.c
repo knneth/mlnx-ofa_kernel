@@ -126,8 +126,8 @@ int mlx5_core_destroy_mkey(struct mlx5_core_dev *dev,
 					 mlx5_mkey_to_idx(mkey->key));
 	spin_unlock_irqrestore(&table->lock, flags);
 	if (!deleted_mkey) {
-		mlx5_core_warn(dev, "failed radix tree delete of mkey 0x%x\n",
-			       mkey->key);
+		mlx5_core_dbg(dev, "failed radix tree delete of mkey 0x%x\n",
+			      mkey->key);
 		return -ENOENT;
 	}
 

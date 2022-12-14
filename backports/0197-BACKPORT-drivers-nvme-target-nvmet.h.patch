@@ -1,0 +1,54 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
+
+Change-Id: I3f85b1f8ce8ed7727c3f2a2477fc9fb8743561e3
+---
+ drivers/nvme/target/nvmet.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/drivers/nvme/target/nvmet.h
++++ b/drivers/nvme/target/nvmet.h
+@@ -312,6 +312,9 @@ struct nvmet_req {
+ 	struct nvmet_cq		*cq;
+ 	struct nvmet_ns		*ns;
+ 	struct scatterlist	*sg;
++#ifdef HAVE_RH7_STRUCT_BIO_AUX
++	struct bio_aux		bio_aux;
++#endif
+ 	struct bio_vec		inline_bvec[NVMET_MAX_INLINE_BIOVEC];
+ 	union {
+ 		struct {
+@@ -319,7 +322,9 @@ struct nvmet_req {
+ 		} b;
+ 		struct {
+ 			bool			mpool_alloc;
++#ifdef HAVE_FS_HAS_KIOCB
+ 			struct kiocb            iocb;
++#endif
+ 			struct bio_vec          *bvec;
+ 			struct work_struct      work;
+ 		} f;
+@@ -366,7 +371,9 @@ struct nvmet_async_event {
+ 
+ u16 nvmet_parse_connect_cmd(struct nvmet_req *req);
+ u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
++#ifdef HAVE_FS_HAS_KIOCB
+ u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
++#endif
+ u16 nvmet_parse_admin_cmd(struct nvmet_req *req);
+ u16 nvmet_parse_discovery_cmd(struct nvmet_req *req);
+ u16 nvmet_parse_fabrics_cmd(struct nvmet_req *req);
+@@ -472,9 +479,13 @@ bool nvmet_host_allowed(struct nvmet_req
+ 		const char *hostnqn);
+ 
+ int nvmet_bdev_ns_enable(struct nvmet_ns *ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ int nvmet_file_ns_enable(struct nvmet_ns *ns);
++#endif
+ void nvmet_bdev_ns_disable(struct nvmet_ns *ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ void nvmet_file_ns_disable(struct nvmet_ns *ns);
++#endif
+ u16 nvmet_bdev_flush(struct nvmet_req *req);
+ u16 nvmet_file_flush(struct nvmet_req *req);
+ void nvmet_ns_changed(struct nvmet_subsys *subsys, u32 nsid);

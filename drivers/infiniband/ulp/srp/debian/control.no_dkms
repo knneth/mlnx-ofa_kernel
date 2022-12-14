@@ -8,7 +8,7 @@ Homepage: http://www.mellanox.com
 
 Package: srp-modules
 Section: kernel
-Architecture: all
+Architecture: any
 Depends: mlnx-ofed-kernel-modules, ${misc:Depends}
 Description: srp kernel modules
  This package provides the binary code for the srp kernel modules.

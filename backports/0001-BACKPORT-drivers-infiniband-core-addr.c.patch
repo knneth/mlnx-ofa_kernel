@@ -1,0 +1,356 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
+
+Change-Id: I0135a65ed2fac2ca25b0ee95300ad907b5a55684
+---
+ drivers/infiniband/core/addr.c | 153 +++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 147 insertions(+), 6 deletions(-)
+
+--- a/drivers/infiniband/core/addr.c
++++ b/drivers/infiniband/core/addr.c
+@@ -48,6 +48,7 @@
+ #include <rdma/ib.h>
+ #include <rdma/rdma_netlink.h>
+ #include <net/netlink.h>
++#include <linux/ratelimit.h>
+ 
+ #include "core_priv.h"
+ #include <rdma/ib_cache.h>
+@@ -127,11 +128,26 @@ static void ib_nl_process_good_ip_rsep(c
+ }
+ 
+ int ib_nl_handle_ip_res_resp(struct sk_buff *skb,
++#ifdef HAVE_NETLINK_EXT_ACK
+ 			     struct nlmsghdr *nlh,
+ 			     struct netlink_ext_ack *extack)
+ {
++#else
++			     struct netlink_callback *cb)
++{
++	const struct nlmsghdr *nlh = (struct nlmsghdr *)cb->nlh;
++
++#endif
+ 	if ((nlh->nlmsg_flags & NLM_F_REQUEST) ||
++#ifdef HAVE_NETLINK_CAPABLE
++#ifdef HAVE_NETLINK_SKB_PARMS_SK
+ 	    !(NETLINK_CB(skb).sk))
++#else
++	    !(NETLINK_CB(skb).ssk))
++#endif
++#else
++	    sock_net(skb->sk) != &init_net)
++#endif
+ 		return -EPERM;
+ 
+ 	if (ib_nl_is_good_ip_resp(nlh))
+@@ -175,7 +191,8 @@ static int ib_nl_ip_send_msg(struct rdma
+ 	}
+ 
+ 	/* Construct the family header first */
+-	header = skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
++	header = (struct rdma_ls_ip_resolve_header *)
++		skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
+ 	header->ifindex = dev_addr->bound_dev_if;
+ 	nla_put(skb, attrtype, size, daddr);
+ 
+@@ -263,7 +280,11 @@ int rdma_translate_ip(const struct socka
+ 		rcu_read_lock();
+ 		for_each_netdev_rcu(dev_addr->net, dev) {
+ 			if (ipv6_chk_addr(dev_addr->net,
+-					  &((const struct sockaddr_in6 *)addr)->sin6_addr,
++#if defined(HAVE_IPV6_CHK_ADDR_TAKES_CONST)
++ 					  &((const struct sockaddr_in6 *)addr)->sin6_addr,
++#else
++					  &((struct sockaddr_in6 *)addr)->sin6_addr,
++#endif
+ 					  dev, 1)) {
+ 				rdma_copy_addr(dev_addr, dev, NULL);
+ 				break;
+@@ -308,23 +329,38 @@ static int ib_nl_fetch_ha(const struct d
+ 	return ib_nl_ip_send_msg(dev_addr, daddr, seq, family);
+ }
+ 
++#ifdef HAVE_DST_NEIGH_LOOKUP
+ static int dst_fetch_ha(const struct dst_entry *dst,
+ 			struct rdma_dev_addr *dev_addr,
+ 			const void *daddr,
+ 			struct neighbour **neigh)
++#else
++static int dst_fetch_ha(const struct dst_entry *dst,
++			struct rdma_dev_addr *addr,
++			struct neighbour **neigh)
++#endif
+ {
+ 	struct neighbour *n;
+ 	int ret = 0;
+ 
++#ifdef HAVE_DST_NEIGH_LOOKUP
+ 	n = dst_neigh_lookup(dst, daddr);
++#endif
+ 
+ 	rcu_read_lock();
++#ifndef HAVE_DST_NEIGH_LOOKUP
++	n = dst_get_neighbour(dst);
++#endif
+ 	if (!n || !(n->nud_state & NUD_VALID)) {
+ 		if (n)
+ 			neigh_event_send(n, NULL);
+ 		ret = -ENODATA;
+ 	} else {
++#ifdef HAVE_DST_NEIGH_LOOKUP
+ 		rdma_copy_addr(dev_addr, dst->dev, n->ha);
++#else
++		rdma_copy_addr(addr, dst->dev, n->ha);
++#endif
+ 	}
+ 	rcu_read_unlock();
+ 
+@@ -333,17 +369,33 @@ static int dst_fetch_ha(const struct dst
+ 	return ret;
+ }
+ 
++#ifdef HAVE_RT_USES_GATEWAY
+ static bool has_gateway(const struct dst_entry *dst, sa_family_t family)
++#else
++static bool has_gateway(const struct dst_entry *dst, const void *daddr, sa_family_t family)
++#endif
+ {
+ 	struct rtable *rt;
+ 	struct rt6_info *rt6;
+ 
+ 	if (family == AF_INET) {
++#ifdef HAVE_RT_DIRECT_DST
+ 		rt = container_of(dst, struct rtable, dst);
++#else
++		rt = container_of(dst, struct rtable, u.dst);
++#endif
++#ifdef HAVE_RT_USES_GATEWAY
+ 		return rt->rt_uses_gateway;
++#else
++		return (rt->rt_gateway != *(__be32 *)daddr);
++#endif
+ 	}
+ 
++#ifdef HAVE_RT_DIRECT_DST
+ 	rt6 = container_of(dst, struct rt6_info, dst);
++#else
++	rt6 = container_of(dst, struct rt6_info, u.dst);
++#endif
+ 	return rt6->rt6i_flags & RTF_GATEWAY;
+ }
+ 
+@@ -360,11 +412,20 @@ static int fetch_ha(const struct dst_ent
+ 		(const void *)&dst_in6->sin6_addr;
+ 	sa_family_t family = dst_in->sa_family;
+ 
++#ifndef HAVE_RT_USES_GATEWAY
++	if (seq && has_gateway(dst, daddr, family) && dst->dev->type == ARPHRD_INFINIBAND)
++		return ib_nl_fetch_ha(dst, dev_addr, daddr, seq, family);
++#else
+ 	/* Gateway + ARPHRD_INFINIBAND -> IB router */
+ 	if (has_gateway(dst, family) && dst->dev->type == ARPHRD_INFINIBAND)
+ 		return ib_nl_fetch_ha(dst, dev_addr, daddr, seq, family);
++#endif
+ 	else
++#ifdef HAVE_DST_NEIGH_LOOKUP
+ 		return dst_fetch_ha(dst, dev_addr, daddr, n);
++#else
++		return  dst_fetch_ha(dst, dev_addr, n);
++#endif
+ }
+ 
+ static int addr4_resolve(struct sockaddr_in *src_in,
+@@ -375,9 +436,14 @@ static int addr4_resolve(struct sockaddr
+ 	__be32 src_ip = src_in->sin_addr.s_addr;
+ 	__be32 dst_ip = dst_in->sin_addr.s_addr;
+ 	struct rtable *rt;
++#ifdef HAVE_FLOWI_AF_SPECIFIC_INSTANCES
+ 	struct flowi4 fl4;
++#else
++	struct flowi fl;
++#endif
+ 	int ret;
+ 
++#ifdef HAVE_FLOWI_AF_SPECIFIC_INSTANCES
+ 	memset(&fl4, 0, sizeof(fl4));
+ 	fl4.daddr = dst_ip;
+ 	fl4.saddr = src_ip;
+@@ -387,17 +453,36 @@ static int addr4_resolve(struct sockaddr
+ 	if (ret)
+ 		return ret;
+ 
++#else
++	memset(&fl, 0, sizeof(fl));
++	fl.nl_u.ip4_u.daddr = dst_ip;
++	fl.nl_u.ip4_u.saddr = src_ip;
++	fl.oif = addr->bound_dev_if;
++	ret = ip_route_output_key(addr->net, &rt, &fl);
++	if (ret)
++		return ret;
++#endif
++
+ 	src_in->sin_family = AF_INET;
++#ifdef HAVE_FLOWI_AF_SPECIFIC_INSTANCES
+ 	src_in->sin_addr.s_addr = fl4.saddr;
+-
++#else
++	src_in->sin_addr.s_addr = rt->rt_src;
++#endif
+ 	/* If there's a gateway and type of device not ARPHRD_INFINIBAND, we're
+ 	 * definitely in RoCE v2 (as RoCE v1 isn't routable) set the network
+ 	 * type accordingly.
+ 	 */
++#ifdef HAVE_RT_USES_GATEWAY
+ 	if (rt->rt_uses_gateway && rt->dst.dev->type != ARPHRD_INFINIBAND)
+ 		addr->network = RDMA_NETWORK_IPV4;
++#endif
+ 
++#ifdef HAVE_RT_DIRECT_DST
+ 	addr->hoplimit = ip4_dst_hoplimit(&rt->dst);
++#else
++	addr->hoplimit = ip4_dst_hoplimit(&rt->u.dst);
++#endif
+ 
+ 	*prt = rt;
+ 	return 0;
+@@ -409,26 +494,64 @@ static int addr6_resolve(struct sockaddr
+ 			 struct rdma_dev_addr *addr,
+ 			 struct dst_entry **pdst)
+ {
++#ifdef HAVE_FLOWI_AF_SPECIFIC_INSTANCES
+ 	struct flowi6 fl6;
++#else /* HAVE_FLOWI_AF_SPECIFIC_INSTANCES */
++	struct flowi fl;
++#endif /* HAVE_FLOWI_AF_SPECIFIC_INSTANCES */
+ 	struct dst_entry *dst;
+ 	struct rt6_info *rt;
+ 	int ret;
+ 
++#ifdef HAVE_FLOWI_AF_SPECIFIC_INSTANCES
+ 	memset(&fl6, 0, sizeof fl6);
+ 	fl6.daddr = dst_in->sin6_addr;
+ 	fl6.saddr = src_in->sin6_addr;
+ 	fl6.flowi6_oif = addr->bound_dev_if;
+ 
++#if defined(HAVE_IPV6_STUB) && defined(HAVE_IPV6_DST_LOOKUP_TAKES_NET)
+ 	ret = ipv6_stub->ipv6_dst_lookup(addr->net, NULL, &dst, &fl6);
+ 	if (ret < 0)
+ 		return ret;
++#else /* HAVE_IPV6_STUB && HAVE_IPV6_DST_LOOKUP_TAKES_NET */
++	dst = ip6_route_output(addr->net, NULL, &fl6);
++	if ((ret = dst->error))
++		return ret;
++	if (ipv6_addr_any(&src_in->sin6_addr)) {
++		ret = ipv6_dev_get_saddr(addr->net, ip6_dst_idev(dst)->dev,
++					 &fl6.daddr, 0, &fl6.saddr);
++		if (ret)
++			goto put;
++	}
++#endif /* HAVE_IPV6_STUB && HAVE_IPV6_DST_LOOKUP_TAKES_NET */
+ 
+ 	rt = (struct rt6_info *)dst;
+ 	if (ipv6_addr_any(&src_in->sin6_addr)) {
+ 		src_in->sin6_family = AF_INET6;
+ 		src_in->sin6_addr = fl6.saddr;
+ 	}
++#else /* HAVE_FLOWI_AF_SPECIFIC_INSTANCES */
++	memset(&fl, 0, sizeof fl);
++	ipv6_addr_copy(&fl.fl6_dst, &dst_in->sin6_addr);
++	ipv6_addr_copy(&fl.fl6_src, &src_in->sin6_addr);
++	fl.oif = addr->bound_dev_if;
+ 
++	dst = ip6_route_output(addr->net, NULL, &fl);
++	ret = dst->error;
++	if (ret)
++		return ret;
++
++	rt = (struct rt6_info *)dst;
++	if (ipv6_addr_any(&fl.fl6_src)) {
++		ret = ipv6_dev_get_saddr(addr->net, ip6_dst_idev(dst)->dev,
++					 &fl.fl6_dst, 0, &fl.fl6_src);
++		if (ret)
++			goto put;
++
++		src_in->sin6_family = AF_INET6;
++		ipv6_addr_copy(&src_in->sin6_addr, &fl.fl6_src);
++	}
++#endif /* HAVE_FLOWI_AF_SPECIFIC_INSTANCES */
+ 	/* If there's a gateway and type of device not ARPHRD_INFINIBAND, we're
+ 	 * definitely in RoCE v2 (as RoCE v1 isn't routable) set the network
+ 	 * type accordingly.
+@@ -441,8 +564,13 @@ static int addr6_resolve(struct sockaddr
+ 
+ 	*pdst = dst;
+ 	return 0;
++#if !(defined(HAVE_FLOWI_AF_SPECIFIC_INSTANCES) && defined(HAVE_IPV6_STUB) && defined(HAVE_IPV6_DST_LOOKUP_TAKES_NET))
++put:
++#endif
++	dst_release(dst);
++	return ret;
+ }
+-#else
++#else /*IS_ENABLED(CONFIG_IPV6) */
+ static int addr6_resolve(struct sockaddr_in6 *src_in,
+ 			 const struct sockaddr_in6 *dst_in,
+ 			 struct rdma_dev_addr *addr,
+@@ -450,7 +578,7 @@ static int addr6_resolve(struct sockaddr
+ {
+ 	return -EADDRNOTAVAIL;
+ }
+-#endif
++#endif /*IS_ENABLED(CONFIG_IPV6) */
+ 
+ static int addr_resolve_neigh(const struct dst_entry *dst,
+ 			      const struct sockaddr *dst_in,
+@@ -536,14 +664,23 @@ static int addr_resolve_rcu(struct socka
+ 			goto err;
+ 
+ 		if (resolve_neigh)
++#ifdef HAVE_RT_DIRECT_DST
+ 			ret = addr_resolve_neigh(&rt->dst, dst_in, addr,
+ 						 seq, n);
++#else
++			ret = addr_resolve_neigh(&rt->u.dst, dst_in, addr,
++						 seq, n);
++
++#endif
+ 		if (ret) {
+ 			ip_rt_put(rt);
+ 			goto err;
+ 		}
+-
++#ifdef HAVE_RT_DIRECT_DST
+ 		ret = addr_translate(&rt->dst, dst_in, addr);
++#else
++		ret = addr_translate(&rt->u.dst, dst_in, addr);
++#endif
+ 		ip_rt_put(rt);
+ 	} else {
+ 		const struct sockaddr_in6 *dst_in6 =
+@@ -640,8 +777,10 @@ static int addr_resolve(struct sockaddr
+ 				       resolve_neigh, seq, &n);
+ 		rcu_read_unlock();
+ 	}
++#ifdef HAVE_DST_NEIGH_LOOKUP
+ 	if (n)
+ 		neigh_release(n);
++#endif
+ 
+ 	return ret;
+ }
+@@ -850,6 +989,7 @@ int rdma_addr_find_l2_eth_by_grh(const u
+ static int netevent_callback(struct notifier_block *self, unsigned long event,
+ 	void *ctx)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,101))
+ 	struct addr_req *req;
+ 
+ 	if (event == NETEVENT_NEIGH_UPDATE) {
+@@ -862,6 +1002,7 @@ static int netevent_callback(struct noti
+ 			spin_unlock_bh(&lock);
+ 		}
+ 	}
++#endif
+ 	return 0;
+ }
+ 

@@ -34,7 +34,7 @@
 
 struct mlx5_ib_gsi_wr {
 	struct ib_cqe cqe;
-	struct ib_wc wc;
+	struct mlx5_ib_wc mwc;
 	int send_flags;
 	bool completed:1;
 };
@@ -85,7 +85,7 @@ static void generate_completions(struct mlx5_ib_gsi_qp *gsi)
 
 		if (gsi->sq_sig_type == IB_SIGNAL_ALL_WR ||
 		    wr->send_flags & IB_SEND_SIGNALED)
-			WARN_ON_ONCE(mlx5_ib_generate_wc(gsi_cq, &wr->wc));
+			mlx5_ib_generate_wc(gsi_cq, &wr->mwc);
 
 		wr->completed = false;
 	}
@@ -103,10 +103,10 @@ static void handle_single_completion(struct ib_cq *cq, struct ib_wc *wc)
 
 	spin_lock_irqsave(&gsi->lock, flags);
 	wr->completed = true;
-	wr_id = wr->wc.wr_id;
-	wr->wc = *wc;
-	wr->wc.wr_id = wr_id;
-	wr->wc.qp = &gsi->ibqp;
+	wr_id = wr->mwc.wc.wr_id;
+	wr->mwc.wc = *wc;
+	wr->mwc.wc.wr_id = wr_id;
+	wr->mwc.wc.qp = &gsi->ibqp;
 
 	generate_completions(gsi);
 	spin_unlock_irqrestore(&gsi->lock, flags);
@@ -121,7 +121,7 @@ struct ib_qp *mlx5_ib_gsi_create_qp(struct ib_pd *pd,
 	const u8 port_num = init_attr->port_num;
 	const int num_pkeys = pd->device->attrs.max_pkeys;
 	const int num_qps = mlx5_ib_deth_sqpn_cap(dev) ? num_pkeys : 0;
-	int ret;
+	int i, ret;
 
 	mlx5_ib_dbg(dev, "creating GSI QP\n");
 
@@ -149,6 +149,9 @@ struct ib_qp *mlx5_ib_gsi_create_qp(struct ib_pd *pd,
 		ret = -ENOMEM;
 		goto err_free_tx;
 	}
+
+	for (i = 0; i < init_attr->cap.max_send_wr; i++)
+		atomic_set(&gsi->outstanding_wrs[i].mwc.in_use, 0);
 
 	mutex_init(&gsi->mutex);
 
@@ -424,14 +427,19 @@ static int mlx5_ib_add_outstanding_wr(struct mlx5_ib_gsi_qp *gsi,
 
 	gsi_wr = &gsi->outstanding_wrs[gsi->outstanding_pi %
 				       gsi->cap.max_send_wr];
+	if (atomic_read(&gsi_wr->mwc.in_use)) {
+		mlx5_ib_warn(dev, "no available GSI work completion.\n");
+		return -ENOMEM;
+	}
+
 	gsi->outstanding_pi++;
 
 	if (!wc) {
-		memset(&gsi_wr->wc, 0, sizeof(gsi_wr->wc));
-		gsi_wr->wc.pkey_index = wr->pkey_index;
-		gsi_wr->wc.wr_id = wr->wr.wr_id;
+		memset(&gsi_wr->mwc.wc, 0, sizeof(gsi_wr->mwc.wc));
+		gsi_wr->mwc.wc.pkey_index = wr->pkey_index;
+		gsi_wr->mwc.wc.wr_id = wr->wr.wr_id;
 	} else {
-		gsi_wr->wc = *wc;
+		gsi_wr->mwc.wc = *wc;
 		gsi_wr->completed = true;
 	}
 

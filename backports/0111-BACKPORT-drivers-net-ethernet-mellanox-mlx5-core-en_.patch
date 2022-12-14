@@ -1,0 +1,851 @@
+From: Talat Batheesh <talatb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
+
+Change-Id: I393b321765c77ffbc16798e9a2a87bda83431f5f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_rx.c | 354 +++++++++++++++++++++++-
+ 1 file changed, 353 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
+@@ -35,9 +35,13 @@
+ #include <linux/ipv6.h>
+ #include <linux/tcp.h>
+ #include <linux/bpf_trace.h>
++#ifdef CONFIG_NET_RX_BUSY_POLL
+ #include <net/busy_poll.h>
++#endif
+ #include <net/ip6_checksum.h>
++#ifdef HAVE_NET_PAGE_POOL_H
+ #include <net/page_pool.h>
++#endif
+ #include "en.h"
+ #include "en_tc.h"
+ #include "eswitch.h"
+@@ -192,7 +196,11 @@ static inline bool mlx5e_rx_cache_is_emp
+ static inline bool mlx5e_rx_cache_page_busy(struct mlx5e_page_cache *cache,
+ 					    u32 i)
+ {
++#ifdef HAVE_PAGE_REF_COUNT_ADD_SUB_INC
+ 	return page_ref_count(cache->page_cache[i].page) != 1;
++#else
++	return atomic_read(&cache->page_cache[i].page->_count) != 1;
++#endif
+ }
+ 
+ static inline bool mlx5e_rx_cache_check_reduce(struct mlx5e_rq *rq)
+@@ -274,7 +282,11 @@ static inline bool mlx5e_rx_cache_extend
+ 
+ static inline bool mlx5e_page_is_reserved(struct page *page)
+ {
++#ifdef HAVE_PAGE_IS_PFMEMALLOC
+ 	return page_is_pfmemalloc(page) || page_to_nid(page) != numa_mem_id();
++#else
++	return page_to_nid(page) != numa_node_id();
++#endif
+ }
+ 
+ static inline bool mlx5e_rx_cache_put(struct mlx5e_rq *rq,
+@@ -330,7 +342,11 @@ static inline int mlx5e_page_alloc_mappe
+ 					  struct mlx5e_dma_info *dma_info)
+ {
+ 	if (!mlx5e_rx_cache_get(rq, dma_info)) {
++#ifdef HAVE_NET_PAGE_POOL_H
+ 		dma_info->page = page_pool_dev_alloc_pages(rq->page_pool);
++#else
++		dma_info->page = dev_alloc_page();
++#endif
+ 		if (unlikely(!dma_info->page))
+ 			return -ENOMEM;
+ 		rq->stats->cache_alloc++;
+@@ -357,6 +373,7 @@ void mlx5e_page_release(struct mlx5e_rq
+ 			bool recycle)
+ {
+ 	mlx5e_page_dma_unmap(rq, dma_info);
++#ifdef HAVE_NET_PAGE_POOL_H
+ 	if (likely(recycle)) {
+ 		if (mlx5e_rx_cache_put(rq, dma_info))
+ 			return;
+@@ -365,6 +382,13 @@ void mlx5e_page_release(struct mlx5e_rq
+ 	} else {
+ 		put_page(dma_info->page);
+ 	}
++#else
++	if (likely(recycle) && mlx5e_rx_cache_put(rq, dma_info))
++		return;
++
++	put_page(dma_info->page);
++
++#endif
+ }
+ 
+ static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
+@@ -469,7 +493,11 @@ mlx5e_add_skb_frag(struct mlx5e_rq *rq,
+ 	dma_sync_single_for_cpu(rq->pdev,
+ 				di->addr + frag_offset,
+ 				len, DMA_FROM_DEVICE);
++#ifdef HAVE_PAGE_REF_COUNT_ADD_SUB_INC
+ 	page_ref_inc(di->page);
++#else
++	atomic_inc(&di->page->_count);
++#endif
+ 	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags,
+ 			di->page, frag_offset, len, truesize);
+ }
+@@ -508,6 +536,7 @@ mlx5e_copy_skb_header_mpwqe(struct devic
+ void mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
+ 			 bool recycle)
+ {
++#ifdef HAVE_NETDEV_BPF
+ 	const bool no_xdp_xmit =
+ 		bitmap_empty(wi->xdp_xmit_bitmap, MLX5_MPWRQ_PAGES_PER_WQE);
+ 	struct mlx5e_dma_info *dma_info = wi->umr.dma_info;
+@@ -516,6 +545,13 @@ void mlx5e_free_rx_mpwqe(struct mlx5e_rq
+ 	for (i = 0; i < MLX5_MPWRQ_PAGES_PER_WQE; i++)
+ 		if (no_xdp_xmit || !test_bit(i, wi->xdp_xmit_bitmap))
+ 			mlx5e_page_release(rq, &dma_info[i], recycle);
++#else
++	struct mlx5e_dma_info *dma_info = &wi->umr.dma_info[0];
++	int i;
++
++	for (i = 0; i < MLX5_MPWRQ_PAGES_PER_WQE; i++, dma_info++)
++		mlx5e_page_release(rq, dma_info, true);
++#endif
+ }
+ 
+ static void mlx5e_post_rx_mpwqe(struct mlx5e_rq *rq)
+@@ -528,7 +564,11 @@ static void mlx5e_post_rx_mpwqe(struct m
+ 	mlx5_wq_ll_push(wq, be16_to_cpu(wqe->next.next_wqe_index));
+ 
+ 	/* ensure wqes are visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
+ 
+ 	mlx5_wq_ll_update_db_record(wq);
+ 
+@@ -586,7 +626,9 @@ static int mlx5e_alloc_rx_mpwqe(struct m
+ 		umr_wqe->inline_mtts[i].ptag = cpu_to_be64(dma_info->addr | MLX5_EN_WR);
+ 	}
+ 
++#ifdef HAVE_NETDEV_BPF
+ 	bitmap_zero(wi->xdp_xmit_bitmap, MLX5_MPWRQ_PAGES_PER_WQE);
++#endif
+ 	wi->consumed_strides = 0;
+ 
+ 	rq->mpwqe.umr_in_progress = true;
+@@ -646,7 +688,11 @@ bool mlx5e_post_rx_wqes(struct mlx5e_rq
+ 	} while (mlx5_wq_cyc_missing(wq) >= wqe_bulk);
+ 
+ 	/* ensure wqes are visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
+ 
+ 	mlx5_wq_cyc_update_db_record(wq);
+ 
+@@ -788,15 +834,21 @@ static void mlx5e_lro_update_hdr(struct
+ 	}
+ }
+ 
++#ifdef HAVE_NETIF_F_RXHASH
+ static inline void mlx5e_skb_set_hash(struct mlx5_cqe64 *cqe,
+ 				      struct sk_buff *skb)
+ {
++#ifdef HAVE_SKB_SET_HASH
+ 	u8 cht = cqe->rss_hash_type;
+ 	int ht = (cht & CQE_RSS_HTYPE_L4) ? PKT_HASH_TYPE_L4 :
+ 		 (cht & CQE_RSS_HTYPE_IP) ? PKT_HASH_TYPE_L3 :
+ 					    PKT_HASH_TYPE_NONE;
+ 	skb_set_hash(skb, be32_to_cpu(cqe->rss_hash_result), ht);
++#else
++	skb->rxhash = be32_to_cpu(cqe->rss_hash_result);
++#endif
+ }
++#endif
+ 
+ static inline bool is_last_ethertype_ip(struct sk_buff *skb, int *network_depth)
+ {
+@@ -806,6 +858,7 @@ static inline bool is_last_ethertype_ip(
+ 	return (ethertype == htons(ETH_P_IP) || ethertype == htons(ETH_P_IPV6));
+ }
+ 
++#ifdef HAVE_NETIF_F_RXFCS
+ static __be32 mlx5e_get_fcs(struct sk_buff *skb)
+ {
+ 	int last_frag_sz, bytes_in_prev, nr_frags;
+@@ -844,6 +897,7 @@ static __be32 mlx5e_get_fcs(struct sk_bu
+ 
+ 	return fcs_bytes;
+ }
++#endif
+ 
+ static inline void mlx5e_handle_csum(struct net_device *netdev,
+ 				     struct mlx5_cqe64 *cqe,
+@@ -874,9 +928,11 @@ static inline void mlx5e_handle_csum(str
+ 			skb->csum = csum_partial(skb->data + ETH_HLEN,
+ 						 network_depth - ETH_HLEN,
+ 						 skb->csum);
++#ifdef HAVE_NETIF_F_RXFCS
+ 		if (unlikely(netdev->features & NETIF_F_RXFCS))
+ 			skb->csum = csum_add(skb->csum,
+ 					     (__force __wsum)mlx5e_get_fcs(skb));
++#endif
+ 		stats->csum_complete++;
+ 		return;
+ 	}
+@@ -885,8 +941,12 @@ static inline void mlx5e_handle_csum(str
+ 		   (cqe->hds_ip_ext & CQE_L4_OK))) {
+ 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+ 		if (cqe_is_tunneled(cqe)) {
++#ifdef HAVE_SK_BUFF_CSUM_LEVEL
+ 			skb->csum_level = 1;
++#endif
++#ifdef HAVE_SK_BUFF_ENCAPSULATION
+ 			skb->encapsulation = 1;
++#endif
+ 			stats->csum_unnecessary_inner++;
+ 			return;
+ 		}
+@@ -906,6 +966,10 @@ static inline void mlx5e_build_rx_skb(st
+ 	u8 lro_num_seg = be32_to_cpu(cqe->srqn) >> 24;
+ 	struct mlx5e_rq_stats *stats = rq->stats;
+ 	struct net_device *netdev = rq->netdev;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct mlx5e_priv *priv = netdev_priv(netdev);
++	u8 l4_hdr_type;
++#endif
+ 
+ 	skb->mac_len = ETH_HLEN;
+ 	if (lro_num_seg > 1) {
+@@ -917,6 +981,16 @@ static inline void mlx5e_build_rx_skb(st
+ 		stats->packets += lro_num_seg - 1;
+ 		stats->lro_packets++;
+ 		stats->lro_bytes += cqe_bcnt;
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
++		/* Flush GRO to avoid OOO packets, since GSO bypasses the
++		 * GRO queue. This was fixed in dev_gro_receive() in kernel 4.10
++		 */
++#ifdef NAPI_GRO_FLUSH_2_PARAMS
++		napi_gro_flush(rq->cq.napi, false);
++#else
++		napi_gro_flush(rq->cq.napi);
++#endif
++#endif
+ 	}
+ 
+ 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp)))
+@@ -925,18 +999,33 @@ static inline void mlx5e_build_rx_skb(st
+ 
+ 	skb_record_rx_queue(skb, rq->ix);
+ 
++#ifdef HAVE_NETIF_F_RXHASH
+ 	if (likely(netdev->features & NETIF_F_RXHASH))
+ 		mlx5e_skb_set_hash(cqe, skb);
++#endif
+ 
+ 	if (cqe_has_vlan(cqe)) {
++#ifndef HAVE_3_PARAMS_FOR_VLAN_HWACCEL_PUT_TAG
++		__vlan_hwaccel_put_tag(skb, be16_to_cpu(cqe->vlan_info));
++#else
+ 		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q),
+ 				       be16_to_cpu(cqe->vlan_info));
++#endif
+ 		stats->removed_vlan_packets++;
+ 	}
+ 
+ 	skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	l4_hdr_type = get_cqe_l4_hdr_type(cqe);
++	mlx5e_handle_csum(netdev, cqe, rq, skb,
++			  !!lro_num_seg ||
++			  (IS_SW_LRO(&priv->channels.params) &&
++			  (l4_hdr_type != CQE_L4_HDR_TYPE_NONE) &&
++			  (l4_hdr_type != CQE_L4_HDR_TYPE_UDP)));
++#else
+ 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
++#endif
+ 
+ 	skb->protocol = eth_type_trans(skb, netdev);
+ 	if (unlikely(mlx5_get_cqe_ft(cqe) ==
+@@ -962,6 +1051,7 @@ static inline void mlx5e_complete_rx_cqe
+ 	}
+ }
+ 
++#ifdef HAVE_NETDEV_BPF
+ static inline void mlx5e_xmit_xdp_doorbell(struct mlx5e_xdpsq *sq)
+ {
+ 	struct mlx5_wq_cyc *wq = &sq->wq;
+@@ -975,7 +1065,12 @@ static inline void mlx5e_xmit_xdp_doorbe
+ 
+ static inline bool mlx5e_xmit_xdp_frame(struct mlx5e_rq *rq,
+ 					struct mlx5e_dma_info *di,
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 					const struct xdp_buff *xdp)
++#else
++					unsigned int data_offset,
++					int len)
++#endif
+ {
+ 	struct mlx5e_xdpsq       *sq   = &rq->xdpsq;
+ 	struct mlx5_wq_cyc       *wq   = &sq->wq;
+@@ -987,8 +1082,11 @@ static inline bool mlx5e_xmit_xdp_frame(
+ 	struct mlx5_wqe_data_seg *dseg;
+ 	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
+ 
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 	ptrdiff_t data_offset = xdp->data - xdp->data_hard_start;
++#endif
+ 	dma_addr_t dma_addr  = di->addr + data_offset;
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 	unsigned int dma_len = xdp->data_end - xdp->data;
+ 
+ 	struct mlx5e_rq_stats *stats = rq->stats;
+@@ -999,6 +1097,12 @@ static inline bool mlx5e_xmit_xdp_frame(
+ 		stats->xdp_drop++;
+ 		return false;
+ 	}
++#else
++	unsigned int dma_len = len - MLX5E_XDP_MIN_INLINE;
++	void *data           = page_address(di->page) + data_offset;
++
++	struct mlx5e_rq_stats *stats = rq->stats;
++#endif
+ 
+ 	if (unlikely(!mlx5e_wqc_has_room_for(wq, sq->cc, sq->pc, 1))) {
+ 		if (sq->db.doorbell) {
+@@ -1018,7 +1122,11 @@ static inline bool mlx5e_xmit_xdp_frame(
+ 
+ 	/* copy the inline part if required */
+ 	if (sq->min_inline_mode != MLX5_INLINE_MODE_NONE) {
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 		memcpy(eseg->inline_hdr.start, xdp->data, MLX5E_XDP_MIN_INLINE);
++#else
++		memcpy(eseg->inline_hdr.start, data, MLX5E_XDP_MIN_INLINE);
++#endif
+ 		eseg->inline_hdr.sz = cpu_to_be16(MLX5E_XDP_MIN_INLINE);
+ 		dma_len  -= MLX5E_XDP_MIN_INLINE;
+ 		dma_addr += MLX5E_XDP_MIN_INLINE;
+@@ -1048,34 +1156,65 @@ static inline bool mlx5e_xmit_xdp_frame(
+ }
+ 
+ /* returns true if packet was consumed by xdp */
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ static inline bool mlx5e_xdp_handle(struct mlx5e_rq *rq,
+ 				    struct mlx5e_dma_info *di,
+ 				    void *va, u16 *rx_headroom, u32 *len)
++#else
++static inline bool mlx5e_xdp_handle(struct mlx5e_rq *rq,
++				    const struct bpf_prog *prog,
++				    struct mlx5e_dma_info *di,
++				    void *data, u16 len)
++#endif
+ {
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 	struct bpf_prog *prog = READ_ONCE(rq->xdp_prog);
++#endif
+ 	struct xdp_buff xdp;
+ 	u32 act;
++#ifdef HAVE_XDP_REDIRECT
+ 	int err;
++#endif
+ 
+ 	if (!prog)
+ 		return false;
+ 
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 	xdp.data = va + *rx_headroom;
++#ifdef HAVE_XDP_SET_DATA_META_INVALID
+ 	xdp_set_data_meta_invalid(&xdp);
++#endif
+ 	xdp.data_end = xdp.data + *len;
+ 	xdp.data_hard_start = va;
++#else
++	xdp.data = data;
++	xdp.data_end = xdp.data + len;
++#endif
++#ifdef HAVE_NET_XDP_H
+ 	xdp.rxq = &rq->xdp_rxq;
++#endif
+ 
+ 	act = bpf_prog_run_xdp(prog, &xdp);
+ 	switch (act) {
+ 	case XDP_PASS:
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 		*rx_headroom = xdp.data - xdp.data_hard_start;
+ 		*len = xdp.data_end - xdp.data;
++#endif
+ 		return false;
+ 	case XDP_TX:
++#if defined(HAVE_TRACE_XDP_EXCEPTION) && !defined(MLX_DISABLE_TRACEPOINTS)
+ 		if (unlikely(!mlx5e_xmit_xdp_frame(rq, di, &xdp)))
+ 			trace_xdp_exception(rq->netdev, prog, act);
++#else
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
++		mlx5e_xmit_xdp_frame(rq, di, &xdp);
++#else
++		mlx5e_xmit_xdp_frame(rq, di, MLX5_RX_HEADROOM, len);
++#endif
++#endif
+ 		return true;
++#ifdef HAVE_XDP_REDIRECT
+ 	case XDP_REDIRECT:
+ 		/* When XDP enabled then page-refcnt==1 here */
+ 		err = xdp_do_redirect(rq->netdev, &xdp, prog);
+@@ -1085,16 +1224,56 @@ static inline bool mlx5e_xdp_handle(stru
+ 			mlx5e_page_dma_unmap(rq, di);
+ 		}
+ 		return true;
++#endif
+ 	default:
+ 		bpf_warn_invalid_xdp_action(act);
+ 	case XDP_ABORTED:
++#if defined(HAVE_TRACE_XDP_EXCEPTION) && !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_xdp_exception(rq->netdev, prog, act);
++#endif
+ 	case XDP_DROP:
+ 		rq->stats->xdp_drop++;
+ 		return true;
+ 	}
+ }
++#endif /* HAVE_NETDEV_BPF */
++
++#ifndef HAVE_BUILD_SKB
++static inline struct sk_buff *mlx5e_compat_build_skb(struct mlx5e_rq *rq,
++						struct page *page,
++						u32 cqe_bcnt,
++						unsigned int offset)
++{
++	u16 headlen = min_t(u32, MLX5E_RX_MAX_HEAD, cqe_bcnt);
++	u32 frag_size = cqe_bcnt - headlen;
++	struct sk_buff *skb;
++	void *head_ptr = page_address(page) + offset + rq->buff.headroom;
++
++	skb = netdev_alloc_skb(rq->netdev, headlen + rq->buff.headroom);
++	if (unlikely(!skb))
++		return NULL;
+ 
++	if (frag_size) {
++		u32 frag_offset = offset + rq->buff.headroom + headlen;
++		unsigned int truesize =	SKB_TRUESIZE(frag_size);
++
++		skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags,
++				page, frag_offset,
++				frag_size, truesize);
++	}
++
++	/* copy header */
++	skb_reserve(skb, rq->buff.headroom);
++	skb_copy_to_linear_data(skb, head_ptr, headlen);
++
++	/* skb linear part was allocated with headlen and aligned to long */
++	skb->tail += headlen;
++	skb->len  += headlen;
++	return skb;
++}
++#endif
++
++#ifdef HAVE_BUILD_SKB
+ static inline
+ struct sk_buff *mlx5e_build_linear_skb(struct mlx5e_rq *rq, void *va,
+ 				       u32 frag_size, u16 headroom,
+@@ -1112,6 +1291,7 @@ struct sk_buff *mlx5e_build_linear_skb(s
+ 
+ 	return skb;
+ }
++#endif
+ 
+ struct sk_buff *
+ mlx5e_skb_from_cqe_linear(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
+@@ -1121,7 +1301,9 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_r
+ 	u16 rx_headroom = rq->buff.headroom;
+ 	struct sk_buff *skb;
+ 	void *va, *data;
++#ifdef HAVE_NETDEV_BPF
+ 	bool consumed;
++#endif
+ 	u32 frag_size;
+ 
+ 	va             = page_address(di->page) + wi->offset;
+@@ -1138,18 +1320,36 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_r
+ 		return NULL;
+ 	}
+ 
++#ifdef HAVE_NETDEV_BPF
+ 	rcu_read_lock();
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 	consumed = mlx5e_xdp_handle(rq, di, va, &rx_headroom, &cqe_bcnt);
++#else
++	consumed = mlx5e_xdp_handle(rq, READ_ONCE(rq->xdp_prog), di, data,
++				    cqe_bcnt);
++#endif
+ 	rcu_read_unlock();
+ 	if (consumed)
+ 		return NULL; /* page/packet was consumed by XDP */
++#endif
+ 
++#ifdef HAVE_BUILD_SKB
+ 	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt);
++#else
++	skb = mlx5e_compat_build_skb(rq, di->page, cqe_bcnt, wi->offset);
++#endif
+ 	if (unlikely(!skb))
+ 		return NULL;
+ 
+ 	/* queue up for recycling/reuse */
++#ifndef HAVE_BUILD_SKB
++	if (skb_shinfo(skb)->nr_frags)
++#endif
++#ifdef HAVE_PAGE_REF_COUNT_ADD_SUB_INC
+ 	page_ref_inc(di->page);
++#else
++	atomic_inc(&di->page->_count);
++#endif
+ 
+ 	return skb;
+ }
+@@ -1173,7 +1373,11 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5
+ 	/* XDP is not supported in this configuration, as incoming packets
+ 	 * might spread among multiple pages.
+ 	 */
++#ifdef HAVE_NAPI_ALLOC_SKB
+ 	skb = napi_alloc_skb(rq->cq.napi,
++#else
++	skb = netdev_alloc_skb_ip_align(rq->netdev,
++#endif
+ 			     ALIGN(MLX5E_RX_MAX_HEAD, sizeof(long)));
+ 	if (unlikely(!skb)) {
+ 		rq->stats->buff_alloc_err++;
+@@ -1206,6 +1410,9 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5
+ 
+ void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
+ {
++#if defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX) || defined(CONFIG_COMPAT_LRO_ENABLED_IPOIB)
++	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
++#endif
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+ 	struct mlx5e_wqe_frag_info *wi;
+ 	struct sk_buff *skb;
+@@ -1229,6 +1436,31 @@ void mlx5e_handle_rx_cqe(struct mlx5e_rq
+ 	}
+ 
+ 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	if (IS_SW_LRO(&priv->channels.params))
++#if defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX)
++		if (priv->channels.params.vlan_grp && cqe_has_vlan(cqe))
++			lro_vlan_hwaccel_receive_skb(&rq->sw_lro->lro_mgr,
++						     skb, priv->channels.params.vlan_grp,
++						     be16_to_cpu(cqe->vlan_info),
++						     NULL);
++		else
++#endif
++		lro_receive_skb(&rq->sw_lro->lro_mgr, skb, NULL);
++	else
++#endif
++#if defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX)
++                if (priv->channels.params.vlan_grp && cqe_has_vlan(cqe))
++#ifdef HAVE_VLAN_GRO_RECEIVE
++                        vlan_gro_receive(rq->cq.napi, priv->channels.params.vlan_grp,
++                                         be16_to_cpu(cqe->vlan_info),
++                                         skb);
++#else
++                        vlan_hwaccel_receive_skb(skb, priv->channels.params.vlan_grp,
++                                        be16_to_cpu(cqe->vlan_info));
++#endif
++		else
++#endif
+ 	napi_gro_receive(rq->cq.napi, skb);
+ 
+ free_wqe:
+@@ -1240,10 +1472,14 @@ wq_cyc_pop:
+ #ifdef CONFIG_MLX5_ESWITCH
+ void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
+ {
++#if defined(HAVE_SKB_VLAN_POP) || defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX)
+ 	struct net_device *netdev = rq->netdev;
+ 	struct mlx5e_priv *priv = netdev_priv(netdev);
++#ifdef HAVE_SKB_VLAN_POP
+ 	struct mlx5e_rep_priv *rpriv  = priv->ppriv;
+ 	struct mlx5_eswitch_rep *rep = rpriv->rep;
++#endif
++#endif
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+ 	struct mlx5e_wqe_frag_info *wi;
+ 	struct sk_buff *skb;
+@@ -1268,9 +1504,23 @@ void mlx5e_handle_rx_cqe_rep(struct mlx5
+ 
+ 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+ 
++#ifdef HAVE_SKB_VLAN_POP
+ 	if (rep->vlan && skb_vlan_tag_present(skb))
+ 		skb_vlan_pop(skb);
++#endif
+ 
++#if defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX)
++	if (priv->channels.params.vlan_grp && cqe_has_vlan(cqe))
++#ifdef HAVE_VLAN_GRO_RECEIVE
++		vlan_gro_receive(rq->cq.napi, priv->channels.params.vlan_grp,
++				 be16_to_cpu(cqe->vlan_info),
++				 skb);
++#else
++	vlan_hwaccel_receive_skb(skb, priv->channels.params.vlan_grp,
++				 be16_to_cpu(cqe->vlan_info));
++#endif
++	else
++#endif
+ 	napi_gro_receive(rq->cq.napi, skb);
+ 
+ free_wqe:
+@@ -1291,7 +1541,11 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
+ 	struct mlx5e_dma_info *head_di = di;
+ 	struct sk_buff *skb;
+ 
++#ifdef HAVE_NAPI_ALLOC_SKB
+ 	skb = napi_alloc_skb(rq->cq.napi,
++#else
++	skb = netdev_alloc_skb_ip_align(rq->netdev,
++#endif
+ 			     ALIGN(MLX5E_RX_MAX_HEAD, sizeof(long)));
+ 	if (unlikely(!skb)) {
+ 		rq->stats->buff_alloc_err++;
+@@ -1337,7 +1591,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+ 	struct sk_buff *skb;
+ 	void *va, *data;
+ 	u32 frag_size;
++#ifdef HAVE_NETDEV_BPF
+ 	bool consumed;
++#endif
+ 
+ 	/* Check packet size. Note LRO doesn't use linear SKB. */
+ 	if (unlikely(cqe_bcnt > rq->hw_mtu)) {
+@@ -1353,27 +1609,49 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+ 				      frag_size, DMA_FROM_DEVICE);
+ 	prefetch(data);
+ 
++#ifdef HAVE_NETDEV_BPF
+ 	rcu_read_lock();
++#ifdef HAVE_XDP_BUFF_DATA_HARD_START
+ 	consumed = mlx5e_xdp_handle(rq, di, va, &rx_headroom, &cqe_bcnt32);
++#else
++	consumed = mlx5e_xdp_handle(rq, READ_ONCE(rq->xdp_prog), di, data,
++				    cqe_bcnt32);
++#endif
++
+ 	rcu_read_unlock();
+ 	if (consumed) {
+ 		if (__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags))
+ 			__set_bit(page_idx, wi->xdp_xmit_bitmap); /* non-atomic */
+ 		return NULL; /* page/packet was consumed by XDP */
+ 	}
++#endif
+ 
++#ifdef HAVE_BUILD_SKB
+ 	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt32);
++#else
++	skb = mlx5e_compat_build_skb(rq, di->page, cqe_bcnt32, head_offset);
++#endif
+ 	if (unlikely(!skb))
+ 		return NULL;
+ 
+ 	/* queue up for recycling/reuse */
++#ifndef HAVE_BUILD_SKB
++	if (skb_shinfo(skb)->nr_frags)
++#endif
++#ifdef HAVE_PAGE_REF_COUNT_ADD_SUB_INC
+ 	page_ref_inc(di->page);
++#else
++	atomic_inc(&di->page->_count);
++#endif
+ 
+ 	return skb;
+ }
+ 
+ void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
+ {
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
++#endif
+ 	u16 cstrides       = mpwrq_get_cqe_consumed_strides(cqe);
+ 	u16 wqe_id         = be16_to_cpu(cqe->wqe_id);
+ 	struct mlx5e_mpw_info *wi = &rq->mpwqe.info[wqe_id];
+@@ -1406,6 +1684,31 @@ void mlx5e_handle_rx_cqe_mpwrq(struct ml
+ 		goto mpwrq_cqe_out;
+ 
+ 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	if (IS_SW_LRO(&priv->channels.params))
++#if defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX)
++		if (priv->channels.params.vlan_grp && cqe_has_vlan(cqe))
++			lro_vlan_hwaccel_receive_skb(&rq->sw_lro->lro_mgr,
++						     skb, priv->channels.params.vlan_grp,
++						     be16_to_cpu(cqe->vlan_info),
++						     NULL);
++		else
++#endif
++		lro_receive_skb(&rq->sw_lro->lro_mgr, skb, NULL);
++	else
++#endif
++#if defined(HAVE_VLAN_GRO_RECEIVE) || defined(HAVE_VLAN_HWACCEL_RX)
++                if (priv->channels.params.vlan_grp && cqe_has_vlan(cqe))
++#ifdef HAVE_VLAN_GRO_RECEIVE
++                        vlan_gro_receive(rq->cq.napi, priv->channels.params.vlan_grp,
++                                         be16_to_cpu(cqe->vlan_info),
++                                         skb);
++#else
++                        vlan_hwaccel_receive_skb(skb, priv->channels.params.vlan_grp,
++                                        be16_to_cpu(cqe->vlan_info));
++#endif
++		else
++#endif
+ 	napi_gro_receive(rq->cq.napi, skb);
+ 
+ mpwrq_cqe_out:
+@@ -1421,9 +1724,20 @@ mpwrq_cqe_out:
+ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
+ {
+ 	struct mlx5e_rq *rq = container_of(cq, struct mlx5e_rq, cq);
++#ifdef HAVE_NETDEV_BPF
+ 	struct mlx5e_xdpsq *xdpsq;
++#endif
+ 	struct mlx5_cqe64 *cqe;
+ 	int work_done = 0;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct mlx5e_priv *priv;
++#ifdef CONFIG_MLX5_CORE_IPOIB
++	if (MLX5_CAP_GEN(cq->mdev, port_type) != MLX5_CAP_PORT_TYPE_ETH)
++		priv = mlx5i_epriv(rq->netdev);
++	else
++#endif
++		priv = netdev_priv(rq->netdev);
++#endif
+ 
+ 	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
+ 		return 0;
+@@ -1435,7 +1749,9 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
+ 	if (!cqe)
+ 		return 0;
+ 
++#ifdef HAVE_NETDEV_BPF
+ 	xdpsq = &rq->xdpsq;
++#endif
+ 
+ 	do {
+ 		if (mlx5_get_cqe_format(cqe) == MLX5_COMPRESSED) {
+@@ -1450,21 +1766,31 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
+ 		rq->handle_rx_cqe(rq, cqe);
+ 	} while ((++work_done < budget) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
+ 
++#ifdef HAVE_NETDEV_BPF
+ 	if (xdpsq->db.doorbell) {
+ 		mlx5e_xmit_xdp_doorbell(xdpsq);
+ 		xdpsq->db.doorbell = false;
+ 	}
+ 
++#ifdef HAVE_XDP_REDIRECT
+ 	if (xdpsq->db.redirect_flush) {
+ 		xdp_do_flush_map();
+ 		xdpsq->db.redirect_flush = false;
+ 	}
++#endif
++
++#endif
+ 
+ 	mlx5_cqwq_update_db_record(&cq->wq);
+ 
+ 	/* ensure cq space is freed before enabling more cqes */
+ 	wmb();
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	if (IS_SW_LRO(&priv->channels.params))
++		lro_flush_all(&rq->sw_lro->lro_mgr);
++#endif
++
+ 	return work_done;
+ }
+ 
+@@ -1558,6 +1884,9 @@ static inline void mlx5i_complete_rx_cqe
+ 	u32 qpn;
+ 	u8 *dgid;
+ 	u8 g;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++       struct mlx5e_priv *parent_priv = mlx5i_epriv(rq->netdev);
++#endif
+ 
+ 	qpn = be32_to_cpu(cqe->sop_drop_qpn) & 0xffffff;
+ 	netdev = mlx5i_pkey_get_netdev(rq->netdev, qpn);
+@@ -1592,8 +1921,19 @@ static inline void mlx5i_complete_rx_cqe
+ 
+ 	skb->protocol = *((__be16 *)(skb->data));
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	if (parent_priv->netdev->features & NETIF_F_LRO) {
++		skb->ip_summed = CHECKSUM_UNNECESSARY;
++	} else {
++		skb->ip_summed = CHECKSUM_COMPLETE;
++		skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
++		stats->csum_complete++;
++	}
++#else
+ 	skb->ip_summed = CHECKSUM_COMPLETE;
+ 	skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
++	stats->csum_complete++;
++#endif
+ 
+ 	if (unlikely(mlx5e_rx_hw_stamp(tstamp)))
+ 		skb_hwtstamps(skb)->hwtstamp =
+@@ -1601,8 +1941,10 @@ static inline void mlx5i_complete_rx_cqe
+ 
+ 	skb_record_rx_queue(skb, rq->ix);
+ 
++#ifdef HAVE_NETIF_F_RXHASH
+ 	if (likely(netdev->features & NETIF_F_RXHASH))
+ 		mlx5e_skb_set_hash(cqe, skb);
++#endif
+ 
+ 	/* 20 bytes of ipoib header and 4 for encap existing */
+ 	pseudo_header = skb_push(skb, MLX5_IPOIB_PSEUDO_LEN);
+@@ -1612,13 +1954,15 @@ static inline void mlx5i_complete_rx_cqe
+ 
+ 	skb->dev = netdev;
+ 
+-	stats->csum_complete++;
+ 	stats->packets++;
+ 	stats->bytes += cqe_bcnt;
+ }
+ 
+ void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
+ {
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct mlx5e_priv *priv = mlx5i_epriv(rq->netdev);
++#endif
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+ 	struct mlx5e_wqe_frag_info *wi;
+ 	struct sk_buff *skb;
+@@ -1638,6 +1982,11 @@ void mlx5i_handle_rx_cqe(struct mlx5e_rq
+ 		dev_kfree_skb_any(skb);
+ 		goto wq_free_wqe;
+ 	}
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	if (priv->netdev->features & NETIF_F_LRO)
++		lro_receive_skb(&rq->sw_lro->lro_mgr, skb, NULL);
++	else
++#endif
+ 	napi_gro_receive(rq->cq.napi, skb);
+ 
+ wq_free_wqe:
+@@ -1651,6 +2000,9 @@ wq_free_wqe:
+ 
+ void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
+ {
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct mlx5e_priv *priv = mlx5i_epriv(rq->netdev);
++#endif
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+ 	struct mlx5e_wqe_frag_info *wi;
+ 	struct sk_buff *skb;

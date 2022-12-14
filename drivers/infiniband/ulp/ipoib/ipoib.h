@@ -195,12 +195,16 @@ struct ipoib_tx_buf {
 	u64		mapping[MAX_SKB_FRAGS + 1];
 	u32		is_inline;
 };
-
+ 
+/* Talat & Tzafrir: Alex Vesker: re-added struct removed in upstream.
+ * Used only in drivers/infiniband/ulp/ipoib_1.5.3/ipoib_cm.c .
+ */
 struct ipoib_cm_tx_buf {
 	struct sk_buff *skb;
 	u64		mapping;
 	u32		is_inline;
 };
+ 
 
 struct ib_cm_id;
 
@@ -455,6 +459,7 @@ struct ipoib_ah {
 	struct list_head   list;
 	struct kref	   ref;
 	unsigned	   last_send;
+	int  		   valid;
 };
 
 struct ipoib_path {
@@ -471,7 +476,6 @@ struct ipoib_path {
 
 	struct rb_node	      rb_node;
 	struct list_head      list;
-	int  		      valid;
 };
 
 struct ipoib_neigh {

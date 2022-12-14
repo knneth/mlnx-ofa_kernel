@@ -39,11 +39,18 @@
 
 #define SGES_PER_PAGE	(PAGE_SIZE / sizeof(struct nvme_sgl_desc))
 
+/*
+ * These can be higher, but we need to ensure that any command doesn't
+ * require an sg allocation that needs more than a page of data.
+ */
+#define NVME_MAX_KB_SZ	4096
+#define NVME_MAX_SEGS	127
+
 static int use_threaded_interrupts;
 module_param(use_threaded_interrupts, int, 0);
 
 static bool use_cmb_sqes = true;
-module_param(use_cmb_sqes, bool, 0644);
+module_param(use_cmb_sqes, bool, 0444);
 MODULE_PARM_DESC(use_cmb_sqes, "use controller's memory buffer for I/O SQes");
 
 static unsigned int max_host_mem_size_mb = 128;
@@ -116,6 +123,8 @@ struct nvme_dev {
 	struct nvme_ctrl ctrl;
 	struct completion ioq_wait;
 	unsigned num_p2p_queues;
+
+	mempool_t *iod_mempool;
 
 	/* shadow doorbell buffer support: */
 	u32 *dbbuf_dbs;
@@ -272,7 +281,6 @@ void nvme_peer_put_resource(struct nvme_peer_resource *resource, bool restart)
 	mutex_unlock(&resource->lock);
 
 	// TODO: create/destroy on demand
-
 	/* Restart the queue for future usage */
 	if (restart) {
 		nvme_suspend_queue(nvmeq);
@@ -435,6 +443,14 @@ static bool nvme_dbbuf_update_and_check_event(u16 value, u32 *dbbuf_db,
 		old_value = *dbbuf_db;
 		*dbbuf_db = value;
 
+		/*
+		 * Ensure that the doorbell is updated before reading the event
+		 * index from memory.  The controller needs to provide similar
+		 * ordering to ensure the envent index is updated before reading
+		 * the doorbell.
+		 */
+		mb();
+
 		if (!nvme_dbbuf_need_event(*dbbuf_ei, value, old_value))
 			return false;
 	}
@@ -537,6 +553,8 @@ static int nvme_init_request(struct blk_mq_tag_set *set, struct request *req,
 
 	BUG_ON(!nvmeq);
 	iod->nvmeq = nvmeq;
+
+	nvme_req(req)->ctrl = &dev->ctrl;
 	return 0;
 }
 
@@ -605,10 +623,7 @@ static blk_status_t nvme_init_iod(struct request *rq, struct nvme_dev *dev)
 	iod->use_sgl = nvme_pci_use_sgls(dev, rq);
 
 	if (nseg > NVME_INT_PAGES || size > NVME_INT_BYTES(dev)) {
-		size_t alloc_size = nvme_pci_iod_alloc_size(dev, size, nseg,
-				iod->use_sgl);
-
-		iod->sg = kmalloc(alloc_size, GFP_ATOMIC);
+		iod->sg = mempool_alloc(dev->iod_mempool, GFP_ATOMIC);
 		if (!iod->sg)
 			return BLK_STS_RESOURCE;
 	} else {
@@ -654,7 +669,7 @@ static void nvme_free_iod(struct nvme_dev *dev, struct request *req)
 	}
 
 	if (iod->sg != iod->inline_sg)
-		kfree(iod->sg);
+		mempool_free(iod->sg, dev->iod_mempool);
 }
 
 #ifdef CONFIG_BLK_DEV_INTEGRITY
@@ -1048,11 +1063,9 @@ static inline void nvme_ring_cq_doorbell(struct nvme_queue *nvmeq)
 {
 	u16 head = nvmeq->cq_head;
 
-	if (likely(nvmeq->cq_vector >= 0)) {
-		if (nvme_dbbuf_update_and_check_event(head, nvmeq->dbbuf_cq_db,
-						      nvmeq->dbbuf_cq_ei))
-			writel(head, nvmeq->q_db + nvmeq->dev->db_stride);
-	}
+	if (nvme_dbbuf_update_and_check_event(head, nvmeq->dbbuf_cq_db,
+					      nvmeq->dbbuf_cq_ei))
+		writel(head, nvmeq->q_db + nvmeq->dev->db_stride);
 }
 
 static inline void nvme_handle_cqe(struct nvme_queue *nvmeq, u16 idx)
@@ -1073,8 +1086,7 @@ static inline void nvme_handle_cqe(struct nvme_queue *nvmeq, u16 idx)
 	 * aborts.  We don't even bother to allocate a struct request
 	 * for them but rather special case them here.
 	 */
-	if (unlikely(nvmeq->qid == 0 &&
-			cqe->command_id >= NVME_AQ_BLK_MQ_DEPTH)) {
+	if (unlikely(nvme_is_aen_req(nvmeq->qid, cqe->command_id))) {
 		nvme_complete_async_event(&nvmeq->dev->ctrl,
 				cqe->status, &cqe->result);
 		return;
@@ -1622,11 +1634,13 @@ static int nvme_create_queue(struct nvme_queue *nvmeq, int qid)
 	 */
 	vector = dev->num_vecs == 1 ? 0 : qid;
 	result = adapter_alloc_cq(dev, qid, nvmeq, vector);
-	if (result < 0)
-		goto out;
+	if (result)
+		return result;
 
 	result = adapter_alloc_sq(dev, qid, nvmeq);
 	if (result < 0)
+		return result;
+	else if (result)
 		goto release_cq;
 
 	/*
@@ -1650,7 +1664,6 @@ release_sq:
 	adapter_delete_sq(dev, qid);
 release_cq:
 	adapter_delete_cq(dev, qid);
-out:
 	return result;
 }
 
@@ -2098,7 +2111,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 		.pre_vectors = 1
 	};
 
-	nr_io_queues = num_possible_cpus() + dev->num_p2p_queues;
+	nr_io_queues = num_present_cpus() + dev->num_p2p_queues;
 	result = nvme_set_queue_count(&dev->ctrl, &nr_io_queues);
 	if (result < 0)
 		return result;
@@ -2151,6 +2164,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	dev->num_vecs = result;
 	dev->max_qid = max(result - 1 + dev->num_p2p_queues, 1u);
 
+
 	/*
 	 * Should investigate if there's a performance win from allocating
 	 * more queues than interrupt vectors; it might allow the submission
@@ -2182,13 +2196,7 @@ static void nvme_del_cq_end(struct request *req, blk_status_t error)
 	if (!error && !nvmeq->p2p) {
 		unsigned long flags;
 
-		/*
-		 * We might be called with the AQ cq_lock held
-		 * and the I/O queue cq_lock should always
-		 * nest inside the AQ one.
-		 */
-		spin_lock_irqsave_nested(&nvmeq->cq_lock, flags,
-					SINGLE_DEPTH_NESTING);
+		spin_lock_irqsave(&nvmeq->cq_lock, flags);
 		nvme_process_cq(nvmeq, &start, &end, -1);
 		spin_unlock_irqrestore(&nvmeq->cq_lock, flags);
 
@@ -2253,8 +2261,9 @@ static void nvme_disable_io_queues(struct nvme_dev *dev)
  */
 static int nvme_dev_add(struct nvme_dev *dev)
 {
-	unsigned nr_hw_queues = dev->online_queues - 1 - dev->num_p2p_queues;
 	int ret;
+
+	unsigned nr_hw_queues = dev->online_queues - 1 - dev->num_p2p_queues;
 
 	if (!dev->ctrl.tagset) {
 		dev->tagset.ops = &nvme_mq_ops;
@@ -2402,14 +2411,6 @@ static void nvme_dev_disable(struct nvme_dev *dev, bool shutdown)
 	nvme_stop_queues(&dev->ctrl);
 
 	if (!dead && dev->ctrl.queue_count > 0) {
-		/*
-		 * If the controller is still alive tell it to stop using the
-		 * host memory buffer.  In theory the shutdown / reset should
-		 * make sure that it doesn't access the host memoery anymore,
-		 * but I'd rather be safe than sorry..
-		 */
-		if (dev->host_mem_descs)
-			nvme_set_host_mem(dev, 0);
 		nvme_disable_io_queues(dev);
 		nvme_disable_admin_queue(dev, shutdown);
 	}
@@ -2466,6 +2467,7 @@ static void nvme_pci_free_ctrl(struct nvme_ctrl *ctrl)
 		blk_put_queue(dev->ctrl.admin_q);
 	kfree(dev->queues);
 	free_opal_dev(dev->ctrl.opal_dev);
+	mempool_destroy(dev->iod_mempool);
 	kfree(dev);
 }
 
@@ -2475,6 +2477,7 @@ static void nvme_remove_dead_ctrl(struct nvme_dev *dev, int status)
 
 	nvme_get_ctrl(&dev->ctrl);
 	nvme_dev_disable(dev, false);
+	nvme_kill_queues(&dev->ctrl);
 	if (!queue_work(nvme_wq, &dev->remove_work))
 		nvme_put_ctrl(&dev->ctrl);
 }
@@ -2518,6 +2521,13 @@ static void nvme_reset_work(struct work_struct *work)
 	result = nvme_alloc_admin_tags(dev);
 	if (result)
 		goto out;
+
+	/*
+	 * Limit the max command size to prevent iod->sg allocations going
+	 * over a single page.
+	 */
+	dev->ctrl.max_hw_sectors = NVME_MAX_KB_SZ << 1;
+	dev->ctrl.max_segments = NVME_MAX_SEGS;
 
 	result = nvme_init_identify(&dev->ctrl);
 	if (result)
@@ -2591,7 +2601,6 @@ static void nvme_remove_dead_ctrl_work(struct work_struct *work)
 	struct nvme_dev *dev = container_of(work, struct nvme_dev, remove_work);
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
 
-	nvme_kill_queues(&dev->ctrl);
 	if (pci_get_drvdata(pdev))
 		device_release_driver(&pdev->dev);
 	nvme_put_ctrl(&dev->ctrl);
@@ -2636,14 +2645,9 @@ static const struct nvme_ctrl_ops nvme_pci_ctrl_ops = {
 
 struct pci_dev *nvme_find_pdev_from_bdev(struct block_device *bdev)
 {
-	struct nvme_ns *ns;
+	struct nvme_ns *ns = disk_to_nvme_ns(bdev->bd_disk);
 
-	if (!disk_is_nvme(bdev->bd_disk))
-		return NULL;
-
-	ns = bdev->bd_disk->private_data;
-
-	if (ns->ctrl->ops != &nvme_pci_ctrl_ops)
+	if (!ns || ns->ctrl->ops != &nvme_pci_ctrl_ops)
 		return NULL;
 
 	return to_pci_dev(to_nvme_dev(ns->ctrl)->dev);
@@ -2652,12 +2656,10 @@ EXPORT_SYMBOL_GPL(nvme_find_pdev_from_bdev);
 
 unsigned nvme_find_ns_id_from_bdev(struct block_device *bdev)
 {
-	struct nvme_ns *ns;
+	struct nvme_ns *ns = disk_to_nvme_ns(bdev->bd_disk);
 
-	if (!disk_is_nvme(bdev->bd_disk))
+	if (!ns)
 		return 0;
-
-	ns = bdev->bd_disk->private_data;
 
 	return ns->head->ns_id;
 }
@@ -2724,6 +2726,7 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	int node, result = -ENOMEM;
 	struct nvme_dev *dev;
 	unsigned long quirks = id->driver_data;
+	size_t alloc_size;
 
 	node = dev_to_node(&pdev->dev);
 	if (node == NUMA_NO_NODE)
@@ -2733,8 +2736,9 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (!dev)
 		return -ENOMEM;
 
-	dev->queues = kcalloc_node(num_possible_cpus() + 1 + num_p2p_queues,
+        dev->queues = kcalloc_node(num_possible_cpus() + 1 + num_p2p_queues,
 			sizeof(struct nvme_queue), GFP_KERNEL, node);
+
 	if (!dev->queues)
 		goto free;
 
@@ -2757,10 +2761,27 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	quirks |= check_vendor_combination_bug(pdev);
 
+	/*
+	 * Double check that our mempool alloc size will cover the biggest
+	 * command we support.
+	 */
+	alloc_size = nvme_pci_iod_alloc_size(dev, NVME_MAX_KB_SZ,
+						NVME_MAX_SEGS, true);
+	WARN_ON_ONCE(alloc_size > PAGE_SIZE);
+
+	dev->iod_mempool = mempool_create_node(1, mempool_kmalloc,
+						mempool_kfree,
+						(void *) alloc_size,
+						GFP_KERNEL, node);
+	if (!dev->iod_mempool) {
+		result = -ENOMEM;
+		goto release_pools;
+	}
+
 	result = nvme_init_ctrl(&dev->ctrl, &pdev->dev, &nvme_pci_ctrl_ops,
 			quirks);
 	if (result)
-		goto release_pools;
+		goto release_mempool;
 
 	/*
 	 * We populate sysfs to know how many p2p queues can be totaly created.
@@ -2780,6 +2801,8 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	return 0;
 
+ release_mempool:
+	mempool_destroy(dev->iod_mempool);
  release_pools:
 	nvme_release_prp_pools(dev);
  unmap:
@@ -2826,7 +2849,7 @@ static void nvme_remove(struct pci_dev *pdev)
 
 	if (!pci_device_is_present(pdev)) {
 		nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DEAD);
-		nvme_dev_disable(dev, false);
+		nvme_dev_disable(dev, true);
 	}
 
 	flush_work(&dev->ctrl.reset_work);
@@ -2840,24 +2863,6 @@ static void nvme_remove(struct pci_dev *pdev)
 	nvme_release_prp_pools(dev);
 	nvme_dev_unmap(dev);
 	nvme_put_ctrl(&dev->ctrl);
-}
-
-static int nvme_pci_sriov_configure(struct pci_dev *pdev, int numvfs)
-{
-	int ret = 0;
-
-	if (numvfs == 0) {
-		if (pci_vfs_assigned(pdev)) {
-			dev_warn(&pdev->dev,
-				"Cannot disable SR-IOV VFs while assigned\n");
-			return -EPERM;
-		}
-		pci_disable_sriov(pdev);
-		return 0;
-	}
-
-	ret = pci_enable_sriov(pdev, numvfs);
-	return ret ? ret : numvfs;
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -2986,7 +2991,7 @@ static struct pci_driver nvme_driver = {
 	.driver		= {
 		.pm	= &nvme_dev_pm_ops,
 	},
-	.sriov_configure = nvme_pci_sriov_configure,
+	.sriov_configure = pci_sriov_configure_simple,
 	.err_handler	= &nvme_err_handler,
 };
 
@@ -3004,9 +3009,6 @@ static void __exit nvme_exit(void)
 
 MODULE_AUTHOR("Matthew Wilcox <willy@linux.intel.com>");
 MODULE_LICENSE("GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION("1.0");
 module_init(nvme_init);
 module_exit(nvme_exit);

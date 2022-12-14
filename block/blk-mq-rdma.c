@@ -1,3 +1,5 @@
+#ifdef HAVE_BLK_MQ_MAP_QUEUES
+
 /*
  * Copyright (c) 2017 Sagi Grimberg.
  *
@@ -50,3 +52,5 @@ fallback:
 	return blk_mq_map_queues(set);
 }
 EXPORT_SYMBOL_GPL(blk_mq_rdma_map_queues);
+
+#endif /* HAVE_BLK_MQ_MAP_QUEUES */

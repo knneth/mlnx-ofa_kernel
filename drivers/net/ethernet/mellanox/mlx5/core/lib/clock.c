@@ -32,7 +32,9 @@
 
 #include <linux/clocksource.h>
 #include <linux/highmem.h>
+#include <rdma/mlx5-abi.h>
 #include "en.h"
+#include "clock.h"
 
 enum {
 	MLX5_CYCLES_SHIFT	= 23
@@ -74,20 +76,24 @@ static u64 read_internal_timer(const struct cyclecounter *cc)
 
 static void mlx5_update_clock_info_page(struct mlx5_core_dev *mdev)
 {
-	struct mlx5_clock_info_v1 *clock_info = mdev->clock_info;
+	struct mlx5_ib_clock_info *clock_info = mdev->clock_info;
 	struct mlx5_clock *clock = &mdev->clock;
+	u32 sign;
 
 	if (!clock_info)
 		return;
 
-	++clock_info->sign;
-	smp_wmb(); /* make sure signature change visible to user space */
+	sign = smp_load_acquire(&clock_info->sign);
+	smp_store_mb(clock_info->sign,
+		     sign | MLX5_IB_CLOCK_INFO_KERNEL_UPDATING);
+
 	clock_info->cycles = clock->tc.cycle_last;
 	clock_info->mult   = clock->cycles.mult;
 	clock_info->nsec   = clock->tc.nsec;
 	clock_info->frac   = clock->tc.frac;
-	smp_wmb(); /* sync all clock_info with userspace */
-	++clock_info->sign;
+
+	smp_store_release(&clock_info->sign,
+			  sign + MLX5_IB_CLOCK_INFO_KERNEL_UPDATING * 2);
 }
 
 static void mlx5_pps_out(struct work_struct *work)
@@ -388,8 +394,9 @@ static int mlx5_init_pin_config(struct mlx5_clock *clock)
 	int i;
 
 	clock->ptp_info.pin_config =
-			kzalloc(sizeof(*clock->ptp_info.pin_config) *
-				clock->ptp_info.n_pins, GFP_KERNEL);
+			kcalloc(clock->ptp_info.n_pins,
+				sizeof(*clock->ptp_info.pin_config),
+				GFP_KERNEL);
 	if (!clock->ptp_info.pin_config)
 		return -ENOMEM;
 	clock->ptp_info.enable = mlx5_ptp_enable;
@@ -481,10 +488,10 @@ void mlx5_pps_event(struct mlx5_core_dev *mdev,
 void mlx5_init_clock(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_clock *clock = &mdev->clock;
+	u64 overflow_cycles;
 	u64 ns;
 	u64 frac = 0;
 	u32 dev_freq;
-	u64 overflow_cycles;
 
 	dev_freq = MLX5_CAP_GEN(mdev, device_frequency_khz);
 	if (!dev_freq) {
@@ -503,10 +510,23 @@ void mlx5_init_clock(struct mlx5_core_dev *mdev)
 	timecounter_init(&clock->tc, &clock->cycles,
 			 ktime_to_ns(ktime_get_real()));
 
+	/* Calculate period in seconds to call the overflow watchdog - to make
+	 * sure counter is checked at least once every wrap around.
+	 * The period is calculated as the minimum between max HW cycles count
+	 * (The clock source mask) and max amount of cycles that can be
+	 * multiplied by clock multiplier where the result doesn't exceed
+	 * 64bits.
+	 */
+	overflow_cycles = div64_u64(~0ULL >> 1, clock->cycles.mult);
+	overflow_cycles = min(overflow_cycles, clock->cycles.mask >> 1);
+
+	ns = cyclecounter_cyc2ns(&clock->cycles, overflow_cycles,
+				 frac, &frac);
+	do_div(ns, NSEC_PER_SEC / HZ);
+	clock->overflow_period = ns;
+
 	mdev->clock_info_page = alloc_page(GFP_KERNEL);
-	if (!mdev->clock_info_page) {
-		mlx5_core_warn(mdev, "failed to allocate user clock page\n");
-	} else {
+	if (mdev->clock_info_page) {
 		mdev->clock_info = kmap(mdev->clock_info_page);
 		if (!mdev->clock_info) {
 			__free_page(mdev->clock_info_page);
@@ -519,22 +539,10 @@ void mlx5_init_clock(struct mlx5_core_dev *mdev)
 			mdev->clock_info->mult   = clock->nominal_c_mult;
 			mdev->clock_info->shift  = clock->cycles.shift;
 			mdev->clock_info->frac   = clock->tc.frac;
+			mdev->clock_info->overflow_period =
+						clock->overflow_period;
 		}
 	}
-
-	/* Calculate period in seconds to call the overflow watchdog - to make
-	 * sure counter is checked at least once every wrap around.
-	 * The period is calculated as the minimum between max HW cycles count
-	 * (The clock source mask) and max amount of cycles that can be
-	 * multiplied by clock multiplier where the result doesn't exceed
-	 * 64bits.
-	 */
-	overflow_cycles = min(~0ULL / 2 / clock->cycles.mult,
-			      clock->cycles.mask / 2);
-	ns = cyclecounter_cyc2ns(&clock->cycles, overflow_cycles,
-				 frac, &frac);
-	do_div(ns, NSEC_PER_SEC / HZ);
-	clock->overflow_period = ns;
 
 	INIT_WORK(&clock->pps_info.out_work, mlx5_pps_out);
 	INIT_DELAYED_WORK(&clock->overflow_work, mlx5_timestamp_overflow);
@@ -565,11 +573,6 @@ void mlx5_cleanup_clock(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_clock *clock = &mdev->clock;
 
-	if (mdev->clock_info) {
-		kunmap(mdev->clock_info_page);
-		__free_page(mdev->clock_info_page);
-	}
-
 	if (!MLX5_CAP_GEN(mdev, device_frequency_khz))
 		return;
 
@@ -580,5 +583,12 @@ void mlx5_cleanup_clock(struct mlx5_core_dev *mdev)
 
 	cancel_work_sync(&clock->pps_info.out_work);
 	cancel_delayed_work_sync(&clock->overflow_work);
+
+	if (mdev->clock_info) {
+		kunmap(mdev->clock_info_page);
+		__free_page(mdev->clock_info_page);
+		mdev->clock_info = NULL;
+	}
+
 	kfree(clock->ptp_info.pin_config);
 }

@@ -1,0 +1,233 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/nvme.h
+
+Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
+---
+ drivers/nvme/host/nvme.h | 85 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 85 insertions(+)
+
+--- a/drivers/nvme/host/nvme.h
++++ b/drivers/nvme/host/nvme.h
+@@ -14,13 +14,21 @@
+ #ifndef _NVME_H
+ #define _NVME_H
+ 
++#ifndef HAVE_BLK_TYPES_REQ_DRV
++#undef CONFIG_NVME_MULTIPATH
++#endif
++
+ #include <linux/nvme.h>
+ #include <linux/cdev.h>
+ #include <linux/pci.h>
+ #include <linux/kref.h>
+ #include <linux/blk-mq.h>
++#ifdef HAVE_LIGHTNVM_H
+ #include <linux/lightnvm.h>
++#endif
++#ifdef HAVE_LINUX_SED_OPAL_H
+ #include <linux/sed-opal.h>
++#endif
+ #include <linux/fault-inject.h>
+ #include <linux/rcupdate.h>
+ 
+@@ -59,11 +67,19 @@ enum nvme_quirks {
+ 	 */
+ 	NVME_QUIRK_IDENTIFY_CNS			= (1 << 1),
+ 
++#ifdef HAVE_BLK_QUEUE_MAX_WRITE_ZEROES_SECTORS
+ 	/*
+ 	 * The controller deterministically returns O's on reads to
+ 	 * logical blocks that deallocate was called on.
+ 	 */
+ 	NVME_QUIRK_DEALLOCATE_ZEROES		= (1 << 2),
++#else
++	/*
++	 * The controller deterministically returns O's on reads to discarded
++	 * logical blocks.
++	 */
++	NVME_QUIRK_DISCARD_ZEROES		= (1 << 2),
++#endif
+ 
+ 	/*
+ 	 * The controller needs a delay before starts checking the device
+@@ -166,7 +182,9 @@ struct nvme_ctrl {
+ 	struct nvme_subsystem *subsys;
+ 	struct list_head subsys_entry;
+ 
++#ifdef HAVE_LINUX_SED_OPAL_H
+ 	struct opal_dev *opal_dev;
++#endif
+ 
+ 	char name[12];
+ 	u16 cntlid;
+@@ -181,8 +199,10 @@ struct nvme_ctrl {
+ 	u32 max_segments;
+ 	u16 oncs;
+ 	u16 oacs;
++#ifdef HAVE_BLK_MAX_WRITE_HINTS
+ 	u16 nssa;
+ 	u16 nr_streams;
++#endif
+ 	u32 max_namespaces;
+ 	atomic_t abort_limit;
+ 	u8 vwc;
+@@ -204,6 +224,9 @@ struct nvme_ctrl {
+ 	struct delayed_work ka_work;
+ 	struct nvme_command ka_cmd;
+ 	struct work_struct fw_act_work;
++#ifndef HAVE_BLK_QUEUE_VIRT_BOUNDARY
++	bool sg_gaps_support;
++#endif
+ 	unsigned long events;
+ 
+ #ifdef CONFIG_NVME_MULTIPATH
+@@ -293,6 +316,9 @@ struct nvme_ns_head {
+ 	struct list_head	entry;
+ 	struct kref		ref;
+ 	int			instance;
++#ifndef HAVE_CLEANUP_SRCU_STRUCT_QUIESCED
++	struct work_struct	free_work;
++#endif
+ };
+ 
+ #ifdef CONFIG_FAULT_INJECTION_DEBUG_FS
+@@ -321,8 +347,10 @@ struct nvme_ns {
+ 
+ 	int lba_shift;
+ 	u16 ms;
++#ifdef HAVE_BLK_MAX_WRITE_HINTS
+ 	u16 sgs;
+ 	u32 sws;
++#endif
+ 	bool ext;
+ 	u8 pi_type;
+ 	unsigned long flags;
+@@ -384,12 +412,35 @@ static inline u64 nvme_block_nr(struct n
+ 	return (sector >> (ns->lba_shift - 9));
+ }
+ 
++#ifndef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
++static inline unsigned nvme_map_len(struct request *rq)
++{
++#ifdef HAVE_BLK_TYPES_REQ_OP_DISCARD
++	if (req_op(rq) == REQ_OP_DISCARD)
++#else
++	if (rq->cmd_flags & REQ_DISCARD)
++#endif
++		return sizeof(struct nvme_dsm_range);
++	else
++		return blk_rq_bytes(rq);
++}
++#endif
++
+ static inline void nvme_cleanup_cmd(struct request *req)
+ {
++#ifdef HAVE_REQUEST_RQ_FLAGS
+ 	if (req->rq_flags & RQF_SPECIAL_PAYLOAD) {
+ 		kfree(page_address(req->special_vec.bv_page) +
+ 		      req->special_vec.bv_offset);
+ 	}
++#else
++#ifdef HAVE_BLK_TYPES_REQ_OP_DISCARD
++	if (req_op(req) == REQ_OP_DISCARD)
++#else
++	if (req->cmd_flags & REQ_DISCARD)
++#endif
++		kfree(req->completion_data);
++#endif
+ }
+ 
+ static inline void nvme_end_request(struct request *req, __le16 status,
+@@ -401,7 +452,11 @@ static inline void nvme_end_request(stru
+ 	rq->result = result;
+ 	/* inject error when permitted by fault injection framework */
+ 	nvme_should_fail(req);
++#ifdef HAVE_BLK_MQ_COMPLETE_REQUEST_HAS_2_PARAMS
++	blk_mq_complete_request(req, 0);
++#else
+ 	blk_mq_complete_request(req);
++#endif
+ }
+ 
+ static inline void nvme_get_ctrl(struct nvme_ctrl *ctrl)
+@@ -436,8 +491,10 @@ int nvme_init_identify(struct nvme_ctrl
+ 
+ void nvme_remove_namespaces(struct nvme_ctrl *ctrl);
+ 
++#ifdef HAVE_LINUX_SED_OPAL_H
+ int nvme_sec_submit(void *data, u16 spsp, u8 secp, void *buffer, size_t len,
+ 		bool send);
++#endif
+ 
+ void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
+ 		volatile union nvme_result *res);
+@@ -451,16 +508,27 @@ void nvme_wait_freeze_timeout(struct nvm
+ void nvme_start_freeze(struct nvme_ctrl *ctrl);
+ 
+ #define NVME_QID_ANY -1
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ struct request *nvme_alloc_request(struct request_queue *q,
+ 		struct nvme_command *cmd, blk_mq_req_flags_t flags, int qid);
++#else
++struct request *nvme_alloc_request(struct request_queue *q,
++		struct nvme_command *cmd, gfp_t gfp, bool reserved, int qid);
++#endif
+ blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req,
+ 		struct nvme_command *cmd);
+ int nvme_submit_sync_cmd(struct request_queue *q, struct nvme_command *cmd,
+ 		void *buf, unsigned bufflen);
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ int __nvme_submit_sync_cmd(struct request_queue *q, struct nvme_command *cmd,
+ 		union nvme_result *result, void *buffer, unsigned bufflen,
+ 		unsigned timeout, int qid, int at_head,
+ 		blk_mq_req_flags_t flags);
++#else
++int __nvme_submit_sync_cmd(struct request_queue *q, struct nvme_command *cmd,
++		union nvme_result *result, void *buffer, unsigned bufflen,
++		unsigned timeout, int qid, int at_head, gfp_t gfp, bool reserved);
++#endif
+ int nvme_set_queue_count(struct nvme_ctrl *ctrl, int *count);
+ void nvme_stop_keep_alive(struct nvme_ctrl *ctrl);
+ int nvme_reset_ctrl(struct nvme_ctrl *ctrl);
+@@ -565,7 +633,9 @@ int nvme_nvm_register(struct nvme_ns *ns
+ void nvme_nvm_unregister(struct nvme_ns *ns);
+ int nvme_nvm_register_sysfs(struct nvme_ns *ns);
+ void nvme_nvm_unregister_sysfs(struct nvme_ns *ns);
++#ifdef HAVE_NVM_USER_VIO
+ int nvme_nvm_ioctl(struct nvme_ns *ns, unsigned int cmd, unsigned long arg);
++#endif
+ #else
+ static inline void nvme_nvm_update_nvm_info(struct nvme_ns *ns) {};
+ static inline int nvme_nvm_register(struct nvme_ns *ns, char *disk_name,
+@@ -580,11 +650,13 @@ static inline int nvme_nvm_register_sysf
+ 	return 0;
+ }
+ static inline void nvme_nvm_unregister_sysfs(struct nvme_ns *ns) {};
++#ifdef HAVE_NVM_USER_VIO
+ static inline int nvme_nvm_ioctl(struct nvme_ns *ns, unsigned int cmd,
+ 							unsigned long arg)
+ {
+ 	return -ENOTTY;
+ }
++#endif
+ #endif /* CONFIG_NVM */
+ 
+ static inline struct nvme_ns *nvme_get_ns_from_dev(struct device *dev)
+@@ -596,4 +668,17 @@ struct nvme_ns *disk_to_nvme_ns(struct g
+ int __init nvme_core_init(void);
+ void nvme_core_exit(void);
+ 
++#ifndef HAVE_BLK_RQ_NR_PHYS_SEGMENTS
++static inline unsigned short blk_rq_nr_phys_segments(struct request *rq)
++{
++#ifdef HAVE_REQUEST_RQ_FLAGS
++	if (rq->rq_flags & RQF_SPECIAL_PAYLOAD)
++		return 1;
++#endif
++	return rq->nr_phys_segments;
++}
++#endif
++
++
++
+ #endif /* _NVME_H */

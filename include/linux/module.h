@@ -13,9 +13,4 @@
 #undef CONFIG_CTF
 #endif
 
-/* This is a workaround to support Ubuntu on ARM kernels */
-#ifdef CONFIG_CC_STACKPROTECTOR_STRONG
-#undef CONFIG_CC_STACKPROTECTOR_STRONG
-#endif
-
 #endif /* _COMPAT_LINUX_MODULE_H */

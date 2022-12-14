@@ -304,7 +304,7 @@ void mlx5_fpga_device_query(struct mlx5_fpga_device *fdev,
 	unsigned long flags;
 
 	spin_lock_irqsave(&fdev->state_lock, flags);
-	query->status = fdev->state;
+	query->image_status = fdev->image_status;
 	query->admin_image = fdev->last_admin_image;
 	query->oper_image = fdev->last_oper_image;
 	spin_unlock_irqrestore(&fdev->state_lock, flags);
@@ -320,15 +320,16 @@ int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,
 	int err = 0;
 
 	spin_lock_irqsave(&fdev->state_lock, flags);
-	switch (fdev->state) {
-	case MLX5_FPGA_STATUS_NONE:
+	switch (fdev->fdev_state) {
+	case MLX5_FDEV_STATE_NONE:
 		err = -ENODEV;
 		break;
-	case MLX5_FPGA_STATUS_IN_PROGRESS:
+	case MLX5_FDEV_STATE_IN_PROGRESS:
 		err = -EBUSY;
 		break;
-	case MLX5_FPGA_STATUS_SUCCESS:
-	case MLX5_FPGA_STATUS_FAILURE:
+	case MLX5_FDEV_STATE_SUCCESS:
+	case MLX5_FDEV_STATE_FAILURE:
+	case MLX5_FDEV_STATE_DISCONNECTED:
 		break;
 	}
 	spin_unlock_irqrestore(&fdev->state_lock, flags);
@@ -342,7 +343,7 @@ int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,
 	mlx5_accel_ipsec_cleanup(mdev);
 	mlx5_fpga_device_stop(mdev);
 
-	fdev->state = MLX5_FPGA_STATUS_IN_PROGRESS;
+	fdev->fdev_state = MLX5_FPGA_STATUS_IN_PROGRESS;
 	reinit_completion(&fdev->load_event);
 
 	if (image <= MLX5_FPGA_IMAGE_MAX) {
@@ -367,7 +368,7 @@ int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,
 	err = wait_for_completion_timeout(&fdev->load_event, timeout - jiffies);
 	if (err < 0) {
 		mlx5_fpga_err(fdev, "Failed waiting for FPGA load: %d\n", err);
-		fdev->state = MLX5_FPGA_STATUS_FAILURE;
+		fdev->fdev_state = MLX5_FDEV_STATE_FAILURE;
 		goto out;
 	}
 
@@ -385,7 +386,7 @@ int mlx5_fpga_device_reload(struct mlx5_fpga_device *fdev,
 	err = mlx5_register_device(mdev);
 	if (err) {
 		mlx5_core_err(mdev, "mlx5_register_device failed %d\n", err);
-		fdev->state = MLX5_FPGA_STATUS_FAILURE;
+		fdev->fdev_state = MLX5_FDEV_STATE_FAILURE;
 		goto err_ipsec;
 	}
 
@@ -409,13 +410,14 @@ int mlx5_fpga_flash_select(struct mlx5_fpga_device *fdev,
 	int err;
 
 	spin_lock_irqsave(&fdev->state_lock, flags);
-	switch (fdev->state) {
-	case MLX5_FPGA_STATUS_NONE:
+	switch (fdev->fdev_state) {
+	case MLX5_FDEV_STATE_NONE:
 		spin_unlock_irqrestore(&fdev->state_lock, flags);
 		return -ENODEV;
-	case MLX5_FPGA_STATUS_IN_PROGRESS:
-	case MLX5_FPGA_STATUS_SUCCESS:
-	case MLX5_FPGA_STATUS_FAILURE:
+	case MLX5_FDEV_STATE_DISCONNECTED:
+	case MLX5_FDEV_STATE_IN_PROGRESS:
+	case MLX5_FDEV_STATE_SUCCESS:
+	case MLX5_FDEV_STATE_FAILURE:
 		break;
 	}
 	spin_unlock_irqrestore(&fdev->state_lock, flags);
@@ -423,12 +425,57 @@ int mlx5_fpga_flash_select(struct mlx5_fpga_device *fdev,
 	err = mlx5_fpga_image_select(fdev->mdev, image);
 	if (err)
 		mlx5_fpga_err(fdev, "Failed to select flash image: %d\n", err);
+	else
+		fdev->last_admin_image = image;
 	return err;
 }
 EXPORT_SYMBOL(mlx5_fpga_flash_select);
+
+int mlx5_fpga_connectdisconnect(struct mlx5_fpga_device *fdev,
+				enum mlx5_fpga_connect *connect)
+{
+	unsigned long flags;
+	int err;
+
+	spin_lock_irqsave(&fdev->state_lock, flags);
+	switch (fdev->fdev_state) {
+	case MLX5_FDEV_STATE_NONE:
+		spin_unlock_irqrestore(&fdev->state_lock, flags);
+		return -ENODEV;
+	case MLX5_FDEV_STATE_IN_PROGRESS:
+	case MLX5_FDEV_STATE_SUCCESS:
+	case MLX5_FDEV_STATE_FAILURE:
+	case MLX5_FDEV_STATE_DISCONNECTED:
+		break;
+	}
+	spin_unlock_irqrestore(&fdev->state_lock, flags);
+
+	err = mlx5_fpga_ctrl_connect(fdev->mdev, connect);
+	if (err)
+		mlx5_fpga_err(fdev, "Failed to connect/disconnect: %d\n", err);
+	return err;
+}
+EXPORT_SYMBOL(mlx5_fpga_connectdisconnect);
+
+int mlx5_fpga_temperature(struct mlx5_fpga_device *fdev,
+			  struct mlx5_fpga_temperature *temp)
+{
+	return mlx5_fpga_query_mtmp(fdev->mdev, temp);
+}
+EXPORT_SYMBOL(mlx5_fpga_temperature);
 
 struct device *mlx5_fpga_dev(struct mlx5_fpga_device *fdev)
 {
 	return &fdev->mdev->pdev->dev;
 }
 EXPORT_SYMBOL(mlx5_fpga_dev);
+
+void mlx5_fpga_get_cap(struct mlx5_fpga_device *fdev, u32 *fpga_caps)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&fdev->state_lock, flags);
+	memcpy(fpga_caps, &fdev->mdev->caps.fpga, sizeof(fdev->mdev->caps.fpga));
+	spin_unlock_irqrestore(&fdev->state_lock, flags);
+}
+EXPORT_SYMBOL(mlx5_fpga_get_cap);

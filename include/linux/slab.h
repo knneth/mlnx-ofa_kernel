@@ -4,6 +4,7 @@
 #include "../../compat/config.h"
 
 #include_next <linux/slab.h>
+#include <linux/overflow.h>
 
 #ifndef HAVE_KMALLOC_ARRAY
 /**

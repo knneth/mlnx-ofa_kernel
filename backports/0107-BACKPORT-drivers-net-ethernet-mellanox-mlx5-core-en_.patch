@@ -1,0 +1,51 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
+
+Change-Id: I46ccd1f6a813fdc5c56fde114749b99c3ecc1b1f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
+@@ -250,6 +250,7 @@ static int set_flow_attrs(u32 *match_c,
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_ETHTOOL_FLOW_EXT_H_DEST
+ 	if ((fs->flow_type & FLOW_EXT) &&
+ 	    (fs->m_ext.vlan_tci & cpu_to_be16(VLAN_VID_MASK))) {
+ 		MLX5_SET(fte_match_set_lyr_2_4, outer_headers_c,
+@@ -261,6 +262,7 @@ static int set_flow_attrs(u32 *match_c,
+ 		MLX5_SET(fte_match_set_lyr_2_4, outer_headers_v,
+ 			 first_vid, ntohs(fs->h_ext.vlan_tci));
+ 	}
++
+ 	if (fs->flow_type & FLOW_MAC_EXT &&
+ 	    !is_zero_ether_addr(fs->m_ext.h_dest)) {
+ 		mask_spec(fs->m_ext.h_dest, fs->h_ext.h_dest, ETH_ALEN);
+@@ -271,6 +273,7 @@ static int set_flow_attrs(u32 *match_c,
+ 					     outer_headers_v, dmac_47_16),
+ 				fs->h_ext.h_dest);
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+@@ -500,6 +503,7 @@ static int validate_flow(struct mlx5e_pr
+ 	default:
+ 		return -EINVAL;
+ 	}
++#ifdef HAVE_ETHTOOL_FLOW_EXT_H_DEST
+ 	if ((fs->flow_type & FLOW_EXT)) {
+ 		if (fs->m_ext.vlan_etype ||
+ 		    (fs->m_ext.vlan_tci != cpu_to_be16(VLAN_VID_MASK)))
+@@ -515,6 +519,7 @@ static int validate_flow(struct mlx5e_pr
+ 	if (fs->flow_type & FLOW_MAC_EXT &&
+ 	    !is_zero_ether_addr(fs->m_ext.h_dest))
+ 		num_tuples++;
++#endif
+ 
+ 	return num_tuples;
+ }

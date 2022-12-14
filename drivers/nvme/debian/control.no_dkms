@@ -8,7 +8,7 @@ Homepage: http://www.mellanox.com
 
 Package: mlnx-nvme-modules
 Section: kernel
-Architecture: all
+Architecture: any
 Depends: mlnx-ofed-kernel-modules, ${misc:Depends}
 Description: nvme kernel module
  This package provides the binary code for the nvme-rdma kernel module.

@@ -195,6 +195,17 @@ if [[ ! -z ${RHEL7_2} ]]; then
 	set_config CONFIG_COMPAT_TCF_VLAN_MOD m
 fi
 
+KERNEL4_9=$(echo ${KVERSION} | grep ^4\.9)
+if [[ ! -z ${KERNEL4_9} ]]; then
+	set_config CONFIG_COMPAT_KERNEL_4_9 y
+fi
+
+if [[ ! -z ${KERNEL4_9} ]]; then
+	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
+	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
+	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
+fi
+
 if [ -e /etc/debian_version ]; then
 	DEBIAN6=$(cat /etc/debian_version | grep 6\.0)
 	if [[ ! -z ${DEBIAN6} ]]; then
@@ -576,14 +587,6 @@ fi
 
 if (grep -q "unsigned lockless" ${KLIB_BUILD}/include/scsi/scsi_host.h > /dev/null 2>&1 || grep -q "unsigned lockless" ${KSRC}/include/scsi/scsi_host.h > /dev/null 2>&1); then
 	set_config CONFIG_IS_SCSI_LOCKLESS y
-fi
-
-if (grep -qw ISCSI_PARAM_DISCOVERY_SESS ${KLIB_BUILD}/include/scsi/iscsi_if.h > /dev/null 2>&1 || grep -qw ISCSI_PARAM_DISCOVERY_SESS ${KSRC}/include/scsi/iscsi_if.h > /dev/null 2>&1); then
-	if [[ ${CONFIG_COMPAT_SLES_12} = "y" ]] ||
-	   [[ ${CONFIG_COMPAT_EL_7} = "y" ]] ||
-	   [[ ${CONFIG_COMPAT_FC_21} = "y" ]]; then
-		set_config CONFIG_ISER_DISCOVERY y
-	fi
 fi
 
 if (grep -q "int  (\*setnumtcs)(struct net_device \*, int, u8)" ${KLIB_BUILD}/include/net/dcbnl.h > /dev/null 2>&1 || grep -q "int  (\*setnumtcs)(struct net_device \*, int, u8)" ${KSRC}/include/net/dcbnl.h > /dev/null 2>&1); then

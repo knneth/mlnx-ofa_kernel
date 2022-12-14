@@ -90,7 +90,6 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		CONFIG_INFINIBAND_ISERT=m \
 		CONFIG_INFINIBAND_ISERT_DUMMY= \
 		CONFIG_DTRACE= \
-		CONFIG_CC_STACKPROTECTOR_STRONG= \
 		CONFIG_CTF= \
 		LINUXINCLUDE=' \
 		$(EXTRA_CFLAGS) \

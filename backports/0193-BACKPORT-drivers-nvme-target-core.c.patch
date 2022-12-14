@@ -1,0 +1,43 @@
+From: Nitzan Carmi <nitzanc@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
+
+Change-Id: If701240f541a182094f52a8f0719133554c86d00
+---
+ drivers/nvme/target/core.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/nvme/target/core.c
++++ b/drivers/nvme/target/core.c
+@@ -468,7 +468,9 @@ void nvmet_put_namespace(struct nvmet_ns
+ static void nvmet_ns_dev_disable(struct nvmet_ns *ns)
+ {
+ 	nvmet_bdev_ns_disable(ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ 	nvmet_file_ns_disable(ns);
++#endif
+ }
+ 
+ int nvmet_ns_enable(struct nvmet_ns *ns)
+@@ -486,8 +488,10 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+ 		goto out_unlock;
+ 
+ 	ret = nvmet_bdev_ns_enable(ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ 	if (ret == -ENOTBLK)
+ 		ret = nvmet_file_ns_enable(ns);
++#endif
+ 	if (ret)
+ 		goto out_unlock;
+ 
+@@ -797,9 +801,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+ 	if (unlikely(ret))
+ 		return ret;
+ 
++#ifdef HAVE_FS_HAS_KIOCB
+ 	if (req->ns->file)
+ 		return nvmet_file_parse_io_cmd(req);
+ 	else
++#endif
+ 		return nvmet_bdev_parse_io_cmd(req);
+ }
+ 

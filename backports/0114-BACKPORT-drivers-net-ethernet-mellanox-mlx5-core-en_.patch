@@ -1,0 +1,52 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+
+Change-Id: I6db0ee8fc78de67b5c221691650468fb64a2f2ba
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_stats.h | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+@@ -80,6 +80,11 @@ struct mlx5e_sw_stats {
+ 	u64 tx_recover;
+ 	u64 tx_queue_wake;
+ 	u64 tx_cqe_err;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	u64 rx_sw_lro_aggregated;
++	u64 rx_sw_lro_flushed;
++	u64 rx_sw_lro_no_desc;
++#endif
+ 	u64 rx_wqe_err;
+ 	u64 rx_mpwqe_filler;
+ 	u64 rx_oversize_pkts_sw_drop;
+@@ -95,7 +100,7 @@ struct mlx5e_sw_stats {
+ 	u64 rx_cache_waive;
+ 	u64 ch_eq_rearm;
+ 
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
+ 	u64 tx_tls_ooo;
+ 	u64 tx_tls_resync_bytes;
+ #endif
+@@ -200,7 +205,7 @@ struct mlx5e_sq_stats {
+ 	u64 csum_partial_inner;
+ 	u64 added_vlan_packets;
+ 	u64 nop;
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
+ 	u64 tls_ooo;
+ 	u64 tls_resync_bytes;
+ #endif
+@@ -224,7 +229,11 @@ struct mlx5e_stats {
+ 	struct mlx5e_vnic_env_stats vnic;
+ 	struct mlx5e_vport_stats vport;
+ 	struct mlx5e_pport_stats pport;
++#ifdef HAVE_RTNL_LINK_STATS64
+ 	struct rtnl_link_stats64 vf_vport;
++#else
++	struct rtnl_link_stats vf_vport;
++#endif
+ 	struct mlx5e_pcie_stats pcie;
+ };
+ 

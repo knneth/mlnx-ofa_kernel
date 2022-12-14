@@ -44,8 +44,9 @@ import re
 import platform
 from optparse 					import OptionParser
 
-VERSION_MAJOR					= "0"
-VERSION_MINOR					= "85"
+VERSION_MAJOR					= "4"
+VERSION_MINOR					= "5"
+VERSION_BUILD					= "1"
 
 INDENT						= 1
 NA						= "N/A"
@@ -154,16 +155,30 @@ class Profile:
 	HIGH_THROUGHPUT				= "HIGH_THROUGHPUT"
 	IP_FORWARDING_MULTI_STREAM_THROUGHPUT	= "IP_FORWARDING_MULTI_STREAM_THROUGHPUT"
 	IP_FORWARDING_MULTI_STREAM_PACKET_RATE	= "IP_FORWARDING_MULTI_STREAM_PACKET_RATE"
+	IP_FORWARDING_MULTI_STREAM_0_LOSS	= "IP_FORWARDING_MULTI_STREAM_0_LOSS"
 	IP_FORWARDING_SINGLE_STREAM		= "IP_FORWARDING_SINGLE_STREAM"
 	IP_FORWARDING_SINGLE_STREAM_0_LOSS	= "IP_FORWARDING_SINGLE_STREAM_0_LOSS"
         IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT = "IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT"
         LOW_LATENCY_VMA				= "LOW_LATENCY_VMA"
         MULTICAST				= "MULTICAST"
 	IP_FORWARDING_SINGLE_STREAM_PROFILES	= [IP_FORWARDING_SINGLE_STREAM, IP_FORWARDING_SINGLE_STREAM_0_LOSS, IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT]
-	IP_FORWARDING_MULTI_STREAM_PROFILES	= [IP_FORWARDING_MULTI_STREAM_THROUGHPUT, IP_FORWARDING_MULTI_STREAM_PACKET_RATE]
+	IP_FORWARDING_MULTI_STREAM_PROFILES	= [
+							IP_FORWARDING_MULTI_STREAM_THROUGHPUT,
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE,
+							IP_FORWARDING_MULTI_STREAM_0_LOSS
+						  ]
+	IP_FORWARDING_0_LOSS_PROFILES		= [
+							IP_FORWARDING_MULTI_STREAM_0_LOSS,
+							IP_FORWARDING_SINGLE_STREAM_0_LOSS
+						  ]
 	ALLOWED_PROFILES			= [
-							HIGH_THROUGHPUT, IP_FORWARDING_MULTI_STREAM_THROUGHPUT, IP_FORWARDING_MULTI_STREAM_PACKET_RATE,
-							IP_FORWARDING_SINGLE_STREAM, IP_FORWARDING_SINGLE_STREAM_0_LOSS, IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT,
+							HIGH_THROUGHPUT,
+							IP_FORWARDING_MULTI_STREAM_THROUGHPUT,
+							IP_FORWARDING_MULTI_STREAM_PACKET_RATE,
+							IP_FORWARDING_MULTI_STREAM_0_LOSS,
+							IP_FORWARDING_SINGLE_STREAM,
+							IP_FORWARDING_SINGLE_STREAM_0_LOSS,
+							IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT,
 							LOW_LATENCY_VMA, MULTICAST
 						  ]
 	NEED_IFCONFIG				= IP_FORWARDING_SINGLE_STREAM_PROFILES + IP_FORWARDING_MULTI_STREAM_PROFILES
@@ -266,7 +281,12 @@ class Unit:
 		return float(value * Unit.unit_to_ratio[original_unit]) / Unit.unit_to_ratio[wanted_unit]
 
 class OS:
-	CENTOS				= "CENTOS"
+	CENTOS7_0			= "CENTOS7.0"
+	CENTOS7_1			= "CENTOS7.1"
+	CENTOS7_2			= "CENTOS7.2"
+	CENTOS7_3			= "CENTOS7.3"
+	CENTOS7_4			= "CENTOS7.4"
+	CENTOS7_5			= "CENTOS7.5"
 	RH6_4				= "RH6.4"
 	RH6_5				= "RH6.5"
 	RH6_6				= "RH6.6"
@@ -287,6 +307,11 @@ class OS:
 	UBUNTU15_10			= "UBUNTU15.10"
 	UBUNTU16_04			= "UBUNTU16.04"
 	UBUNTU16_10			= "UBUNTU16.10"
+	UBUNTU17_04			= "UBUNTU17.04"
+	UBUNTU17_10			= "UBUNTU17.10"
+	UBUNTU18_04			= "UBUNTU18.04"
+	XENSERVER7_0			= "Xen Server 7.0"
+	XENSERVER7_2			= "Xen Server 7.2"
 	ESX				= "ESX"
 	WIN				= "WIN"
 	FREEBSD				= "FREEBSD"
@@ -297,12 +322,21 @@ class OS:
 	UNKNOWN				= "UNKNOWN"
 	ALL				= "ALL"
 	SUPPORTED_OS			= [
-						RH6_4, RH6_5, RH6_6, RH6_7, RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5, SLES11_3, SLES11_4, SLES12,
-						UBUNTU14_04, UBUNTU14_10, UBUNTU15_04, UBUNTU15_10, UBUNTU16_04, UBUNTU16_10, CENTOS
+						RH6_4, RH6_5, RH6_6, RH6_7, RH7_0, RH7_1, RH7_2,
+						RH7_3, RH7_4, RH7_5, SLES11_3, SLES11_4, SLES12,
+						UBUNTU14_04, UBUNTU14_10, UBUNTU15_04, UBUNTU15_10,
+						UBUNTU16_04, UBUNTU16_10, UBUNTU17_04, UBUNTU17_10,
+						UBUNTU18_04, XENSERVER7_0, XENSERVER7_2, CENTOS7_0,
+						CENTOS7_1, CENTOS7_2, CENTOS7_3, CENTOS7_4,
+						CENTOS7_5
 					  ]
-	SYSTEMCTL_ACCESS_OS		= [RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5]
+	SYSTEMCTL_ACCESS_OS		= [
+						RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5,
+						CENTOS7_0, CENTOS7_1, CENTOS7_2, CENTOS7_3,
+						CENTOS7_4, CENTOS7_5, XENSERVER7_0, XENSERVER7_2
+					  ]
 	SUSE				= [SLES11_3, SLES11_4, SLES12]
-	PPC_DEVICE_NEW_FORMAT_OS	= [RH7_0, RH7_1, RH7_2, RH7_3]
+	PPC_DEVICE_NEW_FORMAT_OS	= [RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5]
 	NO_IPV6_FORWARDING_SUPPORT_OS	= [UBUNTU14_04]
 	TC_QDISC_NO_QUEUE_METHOD_SUPPORT_OS = [RH7_3, RH7_4, RH7_5]
 
@@ -324,9 +358,9 @@ class OS:
 			return OS.SUNOS
 
 		if os_platform == "linux":
-			linux_dist = platform.dist()[0].lower()
+			linux_dist = platform.linux_distribution()[0].lower()
 			os_version = platform.platform().split('-with-')[1].split('-')[1]
-			if linux_dist == 'redhat':
+			if any(dist in linux_dist for dist in ['redhat', 'red hat']):
 				if os_version == '6.4':
 					return OS.RH6_4
 				if os_version == '6.5':
@@ -349,7 +383,7 @@ class OS:
 					return OS.RH7_5
 			if linux_dist == 'fedora':
 				return OS.FEDORA
-			if linux_dist == 'suse':
+			if 'suse' in linux_dist:
 				if os_version == '11':
 					return OS.SLES11_3
 				if os_version == '12':
@@ -367,15 +401,36 @@ class OS:
 					return OS.UBUNTU16_04
 				if os_version == '16.10':
 					return OS.UBUNTU16_10
-			if linux_dist == 'centos':
-				return OS.CENTOS
+				if os_version == '17.04':
+					return OS.UBUNTU17_04
+				if os_version == '17.10':
+					return OS.UBUNTU17_10
+				if os_version == '18.04':
+					return OS.UBUNTU18_04
+			if 'centos' in linux_dist:
+				if os_version.startswith('7.0'):
+					return OS.CENTOS7_0
+				if os_version.startswith('7.1'):
+					return OS.CENTOS7_1
+				if os_version.startswith('7.2'):
+					return OS.CENTOS7_2
+				if os_version.startswith('7.3'):
+					return OS.CENTOS7_3
+				if os_version.startswith('7.4'):
+					return OS.CENTOS7_4
+				if os_version.startswith('7.5'):
+					return OS.CENTOS7_5
 			if linux_dist == 'debian':
 				return OS.DEBIAN
 			if linux_dist == "freebsd":
 				return OS.FREEBSD
 			if linux_dist == "ibm_powerkvm":
 				return OS.POWER_KVM
-
+			if linux_dist == 'xenserver':
+				if os_version == '7.0.0':
+					return OS.XENSERVER7_0
+				if os_version == '7.2.0':
+					return OS.XENSERVER7_2
 
 		logging.warning("Unknown OS [%s,%s,%s]. Tuning might be non-optimized." % (str(platform.system()), str(platform.release()), str(platform.dist())))
 		return OS.UNKNOWN
@@ -722,6 +777,7 @@ class Cpu:
 				socket_dict[socket] = sorted(socket_dict[socket])
 		if not socket_dict:
 			# If no NUMA found - consider all CPUs to be on NUMA 0.
+			self.sockets = 1
 			socket_dict[0] = []
 			(rc, output) = run_command_warn_when_fail(ALL_CPUS_CMD, "Unable to find any CPU on the system.")
 			for element in output.split('\n'):
@@ -1293,7 +1349,7 @@ class Service(object):
 			exists_cmd = "ls -l %s"%(os.path.join(Service.SERVICE_PATH, (self.name, self.to_suse())[node_info.os.name in OS.SUSE]))
 
 		if exists_cmd:
-			(rc, output) = run_command(exists_cmd)
+			(rc, output) = run_command_warn_when_fail(exists_cmd, "Unable to check service %s existence" % self.name)
 			if rc:
 				self.status = Status.NOT_PRESENT
 				return
@@ -1532,6 +1588,8 @@ class HyperThreading:
 class Iommu:
 	""" Describes the system's IOMMU
 	"""
+	STATUS_PT = "PASS-THROUGH"
+
 	def __init__(self):
 		logging.info("Collecting IOMMU information")
 		self.status = Status.UNKNOWN
@@ -1555,9 +1613,12 @@ class Iommu:
 		if rc:
 			self.status = Status.NOT_PRESENT
 		else:
-			for line in output:
-				if "intel_iommu" in line:
-					self.status = Status.ACTIVE
+			for line in output.split("\n"):
+				if "intel_iommu=on" in line:
+					if "iommu=pt" in line:
+						self.status = Iommu.STATUS_PT
+					else:
+						self.status = Status.ACTIVE
 					break
 
 class Driver:
@@ -1958,6 +2019,15 @@ class EthInterfaceInfo(InterfaceInfo):
 		if self.speed_value:
 			self.speed_name = str(self.speed_value) + "GbE"
 
+	def set_parameters(self):
+		""" Set the interface's parameters.
+		"""
+		self.set_adaptive_moderation_parameters()
+		self.set_flow_control_parameters()
+		self.set_queue_size_parameters()
+		self.set_offload_parameters()
+		self.set_private_parameters()
+
 	def set_adaptive_moderation_parameters(self):
 		""" Set adaptive moderation parameters.
 		"""
@@ -2003,14 +2073,17 @@ class EthInterfaceInfo(InterfaceInfo):
 		else:
 			self.apply_qdisc_tx_len(0)
 
-	def optimize_qdisc_tx_len(self):
-		""" Optimizng QDISC tx queue by setting its length to a quarter of the interface's tx queue size
-		    If the interface's tx queue size could not be queried, set to 1024 / 4 = 256
+	def optimize_qdisc_tx_len(self, ratio=1):
+		""" Optimizng QDISC tx queue by setting its length to the given ratio of the
+                    interface's tx queue size.
+		    If the interface's tx queue size could not be queried, warn and exit.
 		"""
-		if self.tx_queue_size != NA:
-			wanted_qdisc_tx_queue_len = int(int(self.tx_queue_size) / 4)
-		else:
-			wanted_qdisc_tx_queue_len = 256
+		self.set_parameters()
+		if self.tx_queue_size == NA:
+			logging.warning("Couldn't optimize kernel TX queue for interface '{name}"
+					" - unknown device TX queue size".format(name=self.name))
+			return
+		wanted_qdisc_tx_queue_len = int(int(self.tx_queue_size) * ratio)
 		self.apply_qdisc_tx_len(wanted_qdisc_tx_queue_len)
 
 	def apply_qdisc_tx_len(self, tx_len):
@@ -2379,11 +2452,7 @@ class PciDeviceInfo:
 			interface.set_mtu()
 			interface.set_speed()
 			if interface.link_type == 'eth':
-				interface.set_adaptive_moderation_parameters()
-				interface.set_flow_control_parameters()
-				interface.set_queue_size_parameters()
-				interface.set_offload_parameters()
-				interface.set_private_parameters()
+				interface.set_parameters()
 
 			interface.rings = interface.get_rings()
 			interfaces.append(interface)
@@ -2484,8 +2553,8 @@ class PciDeviceInfo:
 						numa_aware_cores += cores
 					else:
 						numa_aware_cores += core
-				self.closest_core_list = non_numa_cores
-				self.numa_aware_cores = non_numa_cores
+				self.closest_core_list = numa_aware_cores
+				self.numa_aware_cores = numa_aware_cores
 			else:
 				# Use non NUMA cores as NUMA aware core list
 				if non_numa_cores:
@@ -3138,7 +3207,7 @@ def set_ip_forwarding_single_port_profile(device, node_info):
 	device.apply_and_set_xps_affinity_wanted_mask()
 
 
-def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores = True):
+def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss):
 	""" set IP forwarding profile settings for multi stream traffic
 	"""
 	logging.info("Applying IP forwarding multi stream profile.")
@@ -3172,13 +3241,19 @@ def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores = True):
 					interface.apply_network_parameter_value('C', 64, 'tx-frames')
 					interface.apply_network_parameter_value('C', 0, 'rx-usecs')
 				else:
-					interface.optimize_qdisc_tx_len()
 					interface.apply_network_parameter_value('A', 'off', ['rx', 'tx'])
 					interface.apply_network_parameter_value(
 						'G', 8192, ['rx', 'tx'], appearance_index=2)
 					interface.apply_network_parameter_value('L', wanted_number_of_rings, 'combined', appearance_index = 2)
 					interface.apply_network_parameter_value('C', 'on', 'adaptive-rx', 'adaptive rx')
 					interface.apply_network_parameter_value('C', 'off', 'adaptive-tx', 'adaptive tx')
+					interface.apply_network_parameter_value('set-priv-flags', 'off', 'tx_cqe_moder')
+					if zero_loss:
+						interface.optimize_qdisc_tx_len(ratio=1.5)
+						interface.apply_network_parameter_value(
+							'C', 8, 'tx-frames')
+						interface.apply_network_parameter_value(
+							'C', 8, 'tx-usecs')
 
 				interface.apply_network_parameter_value('K', 'off', 'gro', 'generic-receive-offload')
 
@@ -3230,7 +3305,7 @@ def set_ip_forwarding_profile_single_stream(node_info, force_single = False, zer
 					interface.apply_network_parameter_value('L', wanted_number_of_rings, 'tx', appearance_index = 2)
 				else:
 					if zero_loss:
-						interface.optimize_qdisc_tx_len()
+						interface.optimize_qdisc_tx_len(ratio=0.25)
 					interface.apply_network_parameter_value('A', 'off', ['rx', 'tx'])
 					interface.apply_network_parameter_value('L', wanted_number_of_rings, 'combined', appearance_index = 2)
 					interface.apply_network_parameter_value('X', 1, 'equal')
@@ -3264,16 +3339,16 @@ def write_info_to_file(file_path, node_info):
 def set_profile (options, node_info):
 	""" setting user profile
 	"""
-	force_single	= (False, True)[options.profile == Profile.IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT]
-	zero_loss	= (False, True)[options.profile == Profile.IP_FORWARDING_SINGLE_STREAM_0_LOSS]
+	force_single	= options.profile == Profile.IP_FORWARDING_SINGLE_STREAM_SINGLE_PORT
+	use_all_cores	= options.profile == Profile.IP_FORWARDING_MULTI_STREAM_PACKET_RATE
+	zero_loss	= options.profile in Profile.IP_FORWARDING_0_LOSS_PROFILES
 
 	if (options.profile == Profile.HIGH_THROUGHPUT):
 		node_info = set_high_throughput_profile(node_info)
 	elif (options.profile in Profile.IP_FORWARDING_SINGLE_STREAM_PROFILES):
 		node_info = set_ip_forwarding_profile_single_stream(node_info, force_single, zero_loss)
 	elif (options.profile in Profile.IP_FORWARDING_MULTI_STREAM_PROFILES):
-		use_all_cores = (False, True)[options.profile == Profile.IP_FORWARDING_MULTI_STREAM_PACKET_RATE]
-		node_info = set_ip_forwarding_profile_multi_stream(node_info, use_all_cores)
+		node_info = set_ip_forwarding_profile_multi_stream(node_info, use_all_cores, zero_loss)
 	elif (options.profile == Profile.LOW_LATENCY_VMA):
 		node_info = set_vma_low_latency_profile(node_info)
 	elif (options.profile == Profile.MULTICAST):
@@ -3316,7 +3391,8 @@ if __name__ == '__main__':
 	(options, args) = parser.parse_args()
 	set_logger(options)
 	if options.version:
-		logging.info("Version: %s.%s"%(VERSION_MAJOR, VERSION_MINOR))
+		logging.info("Version: {major}.{minor}-{build}".format(
+			major=VERSION_MAJOR, minor=VERSION_MINOR, build=VERSION_BUILD))
 		exit(0)
 	if options.list_os:
 		logging.info("Supported OS: %s"%OS.SUPPORTED_OS)

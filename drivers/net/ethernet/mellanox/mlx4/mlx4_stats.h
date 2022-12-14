@@ -32,13 +32,6 @@ struct mlx4_en_counter_stats {
 #define NUM_PF_STATS      4
 };
 
-struct mlx4_en_phy_stats {
-	unsigned long rx_packets;
-	unsigned long rx_bytes;
-	unsigned long tx_packets;
-	unsigned long tx_bytes;
-};
-
 struct mlx4_en_vf_stats {
 	unsigned long rx_multicast_packets;
 	unsigned long rx_broadcast_packets;
@@ -100,6 +93,14 @@ struct mlx4_en_xdp_stats {
 #define NUM_XDP_STATS		3
 };
 
+struct mlx4_en_phy_stats {
+	unsigned long rx_packets_phy;
+	unsigned long rx_bytes_phy;
+	unsigned long tx_packets_phy;
+	unsigned long tx_bytes_phy;
+#define NUM_PHY_STATS		4
+};
+
 #define NUM_MAIN_STATS	21
 
 #define MLX4_NUM_PRIORITIES	8
@@ -153,7 +154,8 @@ enum {
 
 #define NUM_ALL_STATS	(NUM_MAIN_STATS + NUM_PORT_STATS + NUM_PKT_STATS + \
 			 NUM_FLOW_STATS + NUM_PERF_STATS + NUM_PF_STATS + \
-			 NUM_XDP_STATS + NUM_VF_STATS + NUM_VPORT_STATS)
+			 NUM_XDP_STATS + NUM_PHY_STATS + NUM_VF_STATS + \
+			 NUM_VPORT_STATS)
 
 #define MLX4_FIND_NETDEV_STAT(n) (offsetof(struct net_device_stats, n) / \
 				  sizeof(((struct net_device_stats *)0)->n))

@@ -1362,15 +1362,21 @@ int ib_init_ah_attr_from_path(struct ib_device *device, u8 port_num,
 				      get_src_path_mask(device, port_num));
 	}
 
-	if (rec->hop_limit > 0 || sa_path_is_roce(rec))
+	if (rec->hop_limit > 0 || sa_path_is_roce(rec)) {
 		ret = init_ah_attr_grh_fields(device, port_num,
 					      rec, ah_attr, gid_attr);
+		if (!ret &&
+		    (ah_attr->grh.sgid_attr->gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP))
+			rdma_ah_set_udp_sport(ah_attr,
+					      be16_to_cpu(sa_path_get_udp_sport(rec)));
+	}
 	return ret;
 }
 EXPORT_SYMBOL(ib_init_ah_attr_from_path);
 
 static int alloc_mad(struct ib_sa_query *query, gfp_t gfp_mask)
 {
+	struct rdma_ah_attr ah_attr;
 	unsigned long flags;
 
 	spin_lock_irqsave(&query->port->ah_lock, flags);
@@ -1382,6 +1388,15 @@ static int alloc_mad(struct ib_sa_query *query, gfp_t gfp_mask)
 	query->sm_ah = query->port->sm_ah;
 	spin_unlock_irqrestore(&query->port->ah_lock, flags);
 
+	/*
+	 * Always check if sm_ah has valid dlid assigned,
+	 * before querying for class port info
+	 */
+	if ((rdma_query_ah(query->sm_ah->ah, &ah_attr) < 0) ||
+	    !rdma_is_valid_unicast_lid(&ah_attr)) {
+		kref_put(&query->sm_ah->ref, free_sm_ah);
+		return -EAGAIN;
+	}
 	query->mad_buf = ib_create_send_mad(query->port->agent, 1,
 					    query->sm_ah->pkey_index,
 					    0, IB_MGMT_SA_HDR, IB_MGMT_SA_DATA,
@@ -2298,6 +2313,7 @@ static void update_sm_ah(struct work_struct *work)
 	struct ib_sa_sm_ah *new_ah;
 	struct ib_port_attr port_attr;
 	struct rdma_ah_attr   ah_attr;
+	bool grh_required;
 
 	if (ib_query_port(port->agent->device, port->port_num, &port_attr)) {
 		pr_warn("Couldn't query port\n");
@@ -2322,16 +2338,27 @@ static void update_sm_ah(struct work_struct *work)
 	rdma_ah_set_dlid(&ah_attr, port_attr.sm_lid);
 	rdma_ah_set_sl(&ah_attr, port_attr.sm_sl);
 	rdma_ah_set_port_num(&ah_attr, port->port_num);
-	if (port_attr.grh_required) {
-		if (ah_attr.type == RDMA_AH_ATTR_TYPE_OPA) {
-			rdma_ah_set_make_grd(&ah_attr, true);
-		} else {
-			rdma_ah_set_ah_flags(&ah_attr, IB_AH_GRH);
-			rdma_ah_set_subnet_prefix(&ah_attr,
-						  cpu_to_be64(port_attr.subnet_prefix));
-			rdma_ah_set_interface_id(&ah_attr,
-						 cpu_to_be64(IB_SA_WELL_KNOWN_GUID));
-		}
+
+	grh_required = rdma_is_grh_required(port->agent->device,
+					    port->port_num);
+
+	/*
+	 * The OPA sm_lid of 0xFFFF needs special handling so that it can be
+	 * differentiated from a permissive LID of 0xFFFF.  We set the
+	 * grh_required flag here so the SA can program the DGID in the
+	 * address handle appropriately
+	 */
+	if (ah_attr.type == RDMA_AH_ATTR_TYPE_OPA &&
+	    (grh_required ||
+	     port_attr.sm_lid == be16_to_cpu(IB_LID_PERMISSIVE)))
+		rdma_ah_set_make_grd(&ah_attr, true);
+
+	if (ah_attr.type == RDMA_AH_ATTR_TYPE_IB && grh_required) {
+		rdma_ah_set_ah_flags(&ah_attr, IB_AH_GRH);
+		rdma_ah_set_subnet_prefix(&ah_attr,
+					  cpu_to_be64(port_attr.subnet_prefix));
+		rdma_ah_set_interface_id(&ah_attr,
+					 cpu_to_be64(IB_SA_WELL_KNOWN_GUID));
 	}
 
 	new_ah->ah = rdma_create_ah(port->agent->qp->pd, &ah_attr);

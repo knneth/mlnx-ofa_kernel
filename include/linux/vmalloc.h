@@ -5,6 +5,7 @@
 
 #include <linux/version.h>
 #include_next <linux/vmalloc.h>
+#include <linux/overflow.h>
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 #define vzalloc LINUX_BACKPORT(vzalloc)

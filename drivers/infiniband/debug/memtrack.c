@@ -126,6 +126,9 @@
 #ifdef kvzalloc
 	#undef kvzalloc
 #endif
+#ifdef kvmalloc
+	#undef kvmalloc
+#endif
 #ifdef kvmalloc_array
 	#undef kvmalloc_array
 #endif
@@ -134,6 +137,12 @@
 #endif
 #ifdef kvzalloc_node
 	#undef kvzalloc_node
+#endif
+#ifdef kcalloc_node
+	#undef kcalloc_node
+#endif
+#ifdef kvcalloc
+	#undef kvcalloc
 #endif
 /* if kernel version < 2.6.37, it's defined in compat as singlethread_workqueue */
 #if defined(alloc_ordered_workqueue) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)

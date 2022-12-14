@@ -48,7 +48,7 @@ static void mlx5e_handle_tx_dim(struct mlx5e_txqsq *sq)
 {
 	struct net_dim_sample *sample = &sq->dim_obj.sample;
 
-	if (unlikely(!MLX5E_TEST_BIT(sq->state, MLX5E_SQ_STATE_AM)))
+	if (unlikely(!test_bit(MLX5E_SQ_STATE_AM, &sq->state)))
 		return;
 
 	net_dim_sample(sq->cq.event_ctr, sample->pkt_ctr, sample->byte_ctr, sample);
@@ -59,7 +59,7 @@ static void mlx5e_handle_rx_dim(struct mlx5e_rq *rq)
 {
 	struct net_dim_sample *sample = &rq->dim_obj.sample;
 
-	if (unlikely(!MLX5E_TEST_BIT(rq->state, MLX5E_RQ_STATE_AM)))
+	if (unlikely(!test_bit(MLX5E_RQ_STATE_AM, &rq->state)))
 		return;
 
 	net_dim_sample(rq->cq.event_ctr, sample->pkt_ctr, sample->byte_ctr, sample);
@@ -76,11 +76,6 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 
 	for (i = 0; i < c->num_tc; i++)
 		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
-
-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	for (i = 0; i < c->num_special_sq; i++)
-		busy |= mlx5e_poll_tx_cq(&c->special_sq[i].cq, budget);
-#endif
 
 	if (c->xdp)
 		busy |= mlx5e_poll_xdpsq_cq(&c->rq.xdpsq.cq);
@@ -106,11 +101,6 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 		mlx5e_handle_tx_dim(&c->sq[i]);
 		mlx5e_cq_arm(&c->sq[i].cq);
 	}
-
-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	for (i = 0; i < c->num_special_sq; i++)
-		mlx5e_cq_arm(&c->special_sq[i].cq);
-#endif
 
 	mlx5e_handle_rx_dim(&c->rq);
 

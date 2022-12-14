@@ -12,4 +12,12 @@ typedef u64 cycle_t;
 #endif
 #endif /* __KERNEL__*/
 
+#ifndef HAVE_TYPE___POLL_T
+typedef unsigned __bitwise __poll_t;
+#endif
+
+#ifndef __aligned_u64
+#define __aligned_u64 __u64 __attribute__((aligned(8)))
+#endif
+
 #endif	/* _COMPAT_LINUX_TYPES_H */

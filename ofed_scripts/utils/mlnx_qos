@@ -389,6 +389,35 @@ if (options.dcbx != None):
 		print ("Invalid dcbx mode command. Refer to the help.")
 		sys.exit(1)
 
+# ********* pfc command ******************************
+if options.cable_len:
+	pfc_delay = parse_int(options.cable_len, 0, 1000, "cable_len")
+
+if options.pfc:
+	i = 0
+	pfc_en = 0
+
+	for t in options.pfc.split(","):
+		if i >= 8:
+			print("Too many items for PFC")
+			sys.exit(1)
+
+		temp = parse_int(t, 0, 1, "PFC")
+		pfc_en |= (temp << i)
+
+		i += 1
+
+	if i != 8:
+		print("pfc list must have 8 items")
+		sys.exit(1)
+
+if options.cable_len or options.pfc:
+	try:
+		ctrl.set_ieee_pfc(_pfc_en = pfc_en, _delay = pfc_delay)
+	except OSError as e:
+		print(e)
+		sys.exit(1)
+
 # ********* dscp2prio command ******************************
 if options.dscp2prio and options.trust:
 	print ("trust and dscp2prio commands cannot be used at the same time.")
@@ -560,35 +589,6 @@ except:
 
 if options.printall:
 	printall = True
-
-# ********* pfc command ******************************
-if options.cable_len:
-	pfc_delay = parse_int(options.cable_len, 0, 1000, "cable_len")
-
-if options.pfc:
-	i = 0
-	pfc_en = 0
-
-	for t in options.pfc.split(","):
-		if i >= 8:
-			print("Too many items for PFC")
-			sys.exit(1)
-
-		temp = parse_int(t, 0, 1, "PFC")
-		pfc_en |= (temp << i)
-
-		i += 1
-
-	if i != 8:
-		print("pfc list must have 8 items")
-		sys.exit(1)
-
-if options.cable_len or options.pfc:
-	try:
-		ctrl.set_ieee_pfc(_pfc_en = pfc_en, _delay = pfc_delay)
-	except OSError as e:
-		print(e)
-		sys.exit(1)
 
 # ********* ets (tsa, tc_bw, prio_tc) command ******************************
 if (options.tsa):

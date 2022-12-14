@@ -225,7 +225,7 @@ int poll_cmd(struct mlx5_icmd *icmd)
 					mlx5_core_warn(dev, "icmd syndrome 0x%08x\n", synd);
 			}
 
-			return 0;
+			return status;
 		}
 
 		release_vsec_sem(icmd);

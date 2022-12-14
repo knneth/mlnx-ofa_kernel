@@ -38,9 +38,6 @@
 MODULE_AUTHOR("Ilan Tayari <ilant@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Innova FPGA Tools Driver");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION("0.1");
 
 static void mlx5_fpga_tools_create(struct mlx5_fpga_device *fdev);

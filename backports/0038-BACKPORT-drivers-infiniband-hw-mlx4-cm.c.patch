@@ -1,0 +1,59 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx4/cm.c
+
+Change-Id: I9968ae86b2903e44d74b4a9c0b290d04bf0c0ced
+---
+ drivers/infiniband/hw/mlx4/cm.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx4/cm.c
++++ b/drivers/infiniband/hw/mlx4/cm.c
+@@ -242,7 +242,12 @@ static void sl_id_map_add(struct ib_devi
+ static struct id_map_entry *
+ id_map_alloc(struct ib_device *ibdev, int slave_id, u32 sl_cm_id)
+ {
++#ifndef HAVE_IDR_ALLOC_CYCLIC
++	int ret, id;
++	static int next_id;
++#else
+ 	int ret;
++#endif
+ 	struct id_map_entry *ent;
+ 	struct mlx4_ib_sriov *sriov = &to_mdev(ibdev)->sriov;
+ 
+@@ -256,6 +261,27 @@ id_map_alloc(struct ib_device *ibdev, in
+ 	ent->dev = to_mdev(ibdev);
+ 	INIT_DELAYED_WORK(&ent->timeout, id_map_ent_timeout);
+ 
++#ifndef HAVE_IDR_ALLOC_CYCLIC
++	do {
++		spin_lock(&to_mdev(ibdev)->sriov.id_map_lock);
++		ret = idr_get_new_above(&sriov->pv_id_table, ent,
++					next_id, &id);
++		if (!ret) {
++			next_id = max(id + 1, 0);
++			ent->pv_cm_id = (u32)id;
++			sl_id_map_add(ibdev, ent);
++		}
++
++		spin_unlock(&sriov->id_map_lock);
++	} while (ret == -EAGAIN && idr_pre_get(&sriov->pv_id_table, GFP_KERNEL));
++	/*the function idr_get_new_above can return -ENOSPC, so don't insert in that case.*/
++	if (!ret) {
++		spin_lock(&sriov->id_map_lock);
++		list_add_tail(&ent->list, &sriov->cm_list);
++		spin_unlock(&sriov->id_map_lock);
++		return ent;
++	}
++#else
+ 	idr_preload(GFP_KERNEL);
+ 	spin_lock(&to_mdev(ibdev)->sriov.id_map_lock);
+ 
+@@ -271,6 +297,7 @@ id_map_alloc(struct ib_device *ibdev, in
+ 
+ 	if (ret >= 0)
+ 		return ent;
++#endif
+ 
+ 	/*error flow*/
+ 	kfree(ent);

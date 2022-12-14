@@ -82,7 +82,7 @@ MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC=m \
 			CONFIG_NVME_FABRICS=m \
 			CONFIG_NVME_FC= \
 			CONFIG_NVME_RDMA=m \
-			CONFIG_NVME_MULTIPATH= \
+			CONFIG_NVME_MULTIPATH=y \
 			CONFIG_NVME_HOST_DUMMY=
 else
 MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC= \
@@ -97,11 +97,11 @@ MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC= \
 			CONFIG_NVME_FABRICS=m \
 			CONFIG_NVME_FC=m \
 			CONFIG_NVME_RDMA=m \
-			CONFIG_NVME_MULTIPATH= \
+			CONFIG_NVME_MULTIPATH=y \
 			CONFIG_NVME_HOST_DUMMY=
 endif
 
-EXTRA_CFLAGS += -UCONFIG_NVME_MULTIPATH
+EXTRA_CFLAGS += -DCONFIG_NVME_MULTIPATH=1
 
 name := mlnx-nvme
 VERSION=$(shell grep "define _version" $(name).spec  | sed -e 's/.*_version //' | sed -e 's/}//' | sed -e 's/\s*//g')
@@ -124,7 +124,6 @@ default:
 	make -C $(K_BUILD) O=$(K_OBJ) SUBDIRS=$(shell pwd) $(WITH_MAKE_PARAMS) \
 		$(MY_NVMF_KCONFIGS) \
 		CONFIG_DTRACE= \
-		CONFIG_CC_STACKPROTECTOR_STRONG= \
 		CONFIG_CTF= \
 		LINUXINCLUDE=' \
 		$(EXTRA_CFLAGS) \
@@ -148,7 +147,6 @@ default:
 		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-Iarch/$$(SRCARCH)/include/generated \
-		-include $(SRC_DIR)/build_wa.h \
 		' \
 		modulesymfile=$(SRC_DIR)/Module.symvers \
 		modules
@@ -180,7 +178,6 @@ binrpm: rpmcheck $(rpmspec)
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/
 	cp {$(rpmspec),makefile,Makefile,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
-	cp -r build_wa.h $(rpmroot)/$(PACKAGE)/
 	cp -r target $(rpmroot)/$(PACKAGE)/
 	cp -r host $(rpmroot)/$(PACKAGE)/
 	cp -r lpfc $(rpmroot)/$(PACKAGE)/

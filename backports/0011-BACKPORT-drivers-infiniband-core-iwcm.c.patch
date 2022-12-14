@@ -1,0 +1,83 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
+
+Change-Id: Id19b094cb17fabe6a113d07bb2ea6a8d4b754f5c
+---
+ drivers/infiniband/core/iwcm.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+--- a/drivers/infiniband/core/iwcm.c
++++ b/drivers/infiniband/core/iwcm.c
+@@ -101,6 +101,7 @@ struct iwcm_work {
+ 
+ static unsigned int default_backlog = 256;
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+ static struct ctl_table_header *iwcm_ctl_table_hdr;
+ static struct ctl_table iwcm_ctl_table[] = {
+ 	{
+@@ -112,6 +113,14 @@ static struct ctl_table iwcm_ctl_table[]
+ 	},
+ 	{ }
+ };
++#ifndef HAVE_REGISTER_NET_SYSCTL
++static struct ctl_path iwcm_ctl_path[] = {
++	{ .procname = "net" },
++	{ .procname = "iw_cm" },
++	{ }
++};
++#endif
++#endif
+ 
+ /*
+  * The following services provide a mechanism for pre-allocating iwcm_work
+@@ -476,6 +485,7 @@ static void iw_cm_check_wildcard(struct
+ 			cm4_outaddr->sin_addr = cm4_addr->sin_addr;
+ 		}
+ 	} else {
++#if IS_ENABLED(CONFIG_IPV6)
+ 		struct sockaddr_in6 *pm6_addr = (struct sockaddr_in6 *)pm_addr;
+ 
+ 		if (ipv6_addr_type(&pm6_addr->sin6_addr) == IPV6_ADDR_ANY) {
+@@ -486,6 +496,7 @@ static void iw_cm_check_wildcard(struct
+ 
+ 			cm6_outaddr->sin6_addr = cm6_addr->sin6_addr;
+ 		}
++#endif
+ 	}
+ }
+ 
+@@ -1178,20 +1189,33 @@ static int __init iw_cm_init(void)
+ 	if (!iwcm_wq)
+ 		return -ENOMEM;
+ 
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
++#ifdef HAVE_REGISTER_NET_SYSCTL
+ 	iwcm_ctl_table_hdr = register_net_sysctl(&init_net, "net/iw_cm",
+ 						 iwcm_ctl_table);
++#else
++	iwcm_ctl_table_hdr = register_sysctl_paths(iwcm_ctl_path,
++						   iwcm_ctl_table);
++#endif
+ 	if (!iwcm_ctl_table_hdr) {
+ 		pr_err("iw_cm: couldn't register sysctl paths\n");
+ 		destroy_workqueue(iwcm_wq);
+ 		return -ENOMEM;
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+ 
+ static void __exit iw_cm_cleanup(void)
+ {
++#ifndef CONFIG_SYSCTL_SYSCALL_CHECK
++#ifdef HAVE_REGISTER_NET_SYSCTL
+ 	unregister_net_sysctl_table(iwcm_ctl_table_hdr);
++#else
++	unregister_sysctl_table(iwcm_ctl_table_hdr);
++#endif
++#endif
+ 	destroy_workqueue(iwcm_wq);
+ 	rdma_nl_unregister(RDMA_NL_IWCM);
+ 	iwpm_exit(RDMA_NL_IWCM);

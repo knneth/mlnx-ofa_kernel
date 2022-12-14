@@ -56,7 +56,7 @@ enum {
 
 enum {
 	MLX5_NUM_SPARE_EQE	= 0x80,
-	MLX5_NUM_ASYNC_EQE	= 0x100,
+	MLX5_NUM_ASYNC_EQE	= 0x1000,
 	MLX5_NUM_CMD_EQE	= 32,
 	MLX5_NUM_PF_DRAIN	= 64,
 };
@@ -223,10 +223,6 @@ static void eqe_pf_action(struct work_struct *work)
 	struct mlx5_eq *eq = pfault->eq;
 
 	mlx5_core_page_fault(eq->dev, pfault);
-	if ((pfault->event_subtype == MLX5_PFAULT_SUBTYPE_WQE) &&
-	    pfault->wqe.common)
-		mlx5_core_put_rsc(pfault->wqe.common);
-	mempool_free(pfault, eq->pf_ctx.pool);
 }
 
 static void eq_pf_process(struct mlx5_eq *eq)
@@ -250,6 +246,7 @@ static void eq_pf_process(struct mlx5_eq *eq)
 		pfault->bytes_committed = be32_to_cpu(pf_eqe->bytes_committed);
 		pfault->wqe.common = NULL;
 
+		pfault->start = jiffies;
 		mlx5_core_dbg(dev,
 			      "PAGE_FAULT: subtype: 0x%02x, bytes_committed: 0x%06x\n",
 			      eqe->sub_type, pfault->bytes_committed);
@@ -335,6 +332,7 @@ static void eq_pf_process(struct mlx5_eq *eq)
 			 */
 		}
 
+		pfault->done_cb = NULL;
 		pfault->eq = eq;
 		INIT_WORK(&pfault->work, eqe_pf_action);
 		queue_work(eq->pf_ctx.wq, &pfault->work);
@@ -349,21 +347,6 @@ static void eq_pf_process(struct mlx5_eq *eq)
 	}
 
 	eq_update_ci(eq, 1);
-}
-
-static void dump_eqe(struct mlx5_core_dev *dev, void *eqe)
-{
-	__be32 *buf = eqe;
-	int i;
-
-	mlx5_core_warn(dev, "EQE contents: %08x %08x %08x %08x\n",
-		       be32_to_cpu(buf[0]), be32_to_cpu(buf[1]),
-		       be32_to_cpu(buf[2]), be32_to_cpu(buf[3]));
-	for (i = 4; i < 16; i += 4) {
-		mlx5_core_warn(dev, "              %08x %08x %08x %08x\n",
-			       be32_to_cpu(buf[i]), be32_to_cpu(buf[i + 1]),
-			       be32_to_cpu(buf[i + 2]), be32_to_cpu(buf[i + 3]));
-	}
 }
 
 static irqreturn_t mlx5_eq_pf_int(int irq, void *eq_ptr)
@@ -407,13 +390,9 @@ static int init_pf_ctx(struct mlx5_eq_pagefault *pf_ctx, const char *name, bool 
 	spin_lock_init(&pf_ctx->lock);
 	INIT_WORK(&pf_ctx->work, eq_pf_action);
 
-	if (capi_enabled)
-		pf_ctx->wq = alloc_workqueue(name,
-					     WQ_HIGHPRI | WQ_CPU_INTENSIVE,
-					     16);
-	else
-		pf_ctx->wq = alloc_ordered_workqueue(name,
-						     WQ_MEM_RECLAIM);
+	pf_ctx->wq = alloc_workqueue(name,
+				     WQ_HIGHPRI | WQ_CPU_INTENSIVE | WQ_UNBOUND,
+				     MLX5_NUM_CMD_EQE);
 
 	if (!pf_ctx->wq)
 		return -ENOMEM;
@@ -429,20 +408,58 @@ err_wq:
 	return -ENOMEM;
 }
 
-int mlx5_core_page_fault_resume(struct mlx5_core_dev *dev, u32 token,
-				u32 wq_num, u8 type, int error)
+static void page_fault_resume_callback(int status, void *context)
 {
-	u32 out[MLX5_ST_SZ_DW(page_fault_resume_out)] = {0};
-	u32 in[MLX5_ST_SZ_DW(page_fault_resume_in)]   = {0};
+	struct mlx5_pagefault *pfault = context;
 
-	MLX5_SET(page_fault_resume_in, in, opcode,
-		 MLX5_CMD_OP_PAGE_FAULT_RESUME);
-	MLX5_SET(page_fault_resume_in, in, error, !!error);
-	MLX5_SET(page_fault_resume_in, in, page_fault_type, type);
-	MLX5_SET(page_fault_resume_in, in, wq_number, wq_num);
-	MLX5_SET(page_fault_resume_in, in, token, token);
+	if (pfault->done_cb)
+		pfault->done_cb(pfault, pfault->done_context);
 
-	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+	if (status)
+		mlx5_core_err(pfault->eq->dev, "Resolve the page fault failed with status %d\n",
+			      status);
+	if (pfault->event_subtype == MLX5_PFAULT_SUBTYPE_WQE &&
+	    pfault->wqe.common)
+		mlx5_core_put_rsc(pfault->wqe.common);
+
+	mempool_free(pfault, pfault->eq->pf_ctx.pool);
+}
+
+int mlx5_core_page_fault_resume(struct mlx5_core_dev *dev,
+				struct mlx5_pagefault *pfault,
+				bool drop,
+				int error)
+{
+	int ret;
+
+	if (likely(!drop)) {
+		u32 *out = pfault->out_pf_resume;
+		u32 *in = pfault->in_pf_resume;
+		u32 token = pfault->token;
+		int wq_num = pfault->event_subtype == MLX5_PFAULT_SUBTYPE_WQE ?
+			pfault->wqe.wq_num : pfault->token;
+		u8 type = pfault->type;
+
+		memset(out, 0, MLX5_ST_SZ_BYTES(page_fault_resume_out));
+		memset(in, 0, MLX5_ST_SZ_BYTES(page_fault_resume_in));
+
+		MLX5_SET(page_fault_resume_in, in, opcode,
+			 MLX5_CMD_OP_PAGE_FAULT_RESUME);
+		MLX5_SET(page_fault_resume_in, in, error, !!error);
+		MLX5_SET(page_fault_resume_in, in, page_fault_type, type);
+		MLX5_SET(page_fault_resume_in, in, wq_number, wq_num);
+		MLX5_SET(page_fault_resume_in, in, token, token);
+
+		ret = mlx5_cmd_exec_cb(dev,
+				       in, MLX5_ST_SZ_BYTES(page_fault_resume_in),
+				       out, MLX5_ST_SZ_BYTES(page_fault_resume_out),
+				       page_fault_resume_callback, pfault);
+	} else {
+		page_fault_resume_callback(0, pfault);
+		ret = 0;
+	}
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(mlx5_core_page_fault_resume);
 #endif
@@ -459,6 +476,20 @@ static void general_event_handler(struct mlx5_core_dev *dev,
 		mlx5_core_dbg(dev, "General event with unrecognized subtype: sub_type %d\n",
 			      eqe->sub_type);
 	}
+}
+
+static void mlx5_temp_warning_event(struct mlx5_core_dev *dev,
+				    struct mlx5_eqe *eqe)
+{
+	u64 value_lsb;
+	u64 value_msb;
+
+	value_lsb = be64_to_cpu(eqe->data.temp_warning.sensor_warning_lsb);
+	value_msb = be64_to_cpu(eqe->data.temp_warning.sensor_warning_msb);
+
+	mlx5_core_warn(dev,
+		       "High temperature on sensors with bit set %llx %llx",
+		       value_msb, value_lsb);
 }
 
 /* caller must eventually call mlx5_cq_put on the returned cq */
@@ -481,7 +512,7 @@ static void mlx5_eq_cq_completion(struct mlx5_eq *eq, u32 cqn)
 	struct mlx5_core_cq *cq = mlx5_eq_cq_get(eq, cqn);
 
 	if (unlikely(!cq)) {
-		mlx5_core_warn(eq->dev, "Completion event for bogus CQ 0x%x\n", cqn);
+		mlx5_core_dbg(eq->dev, "Completion event for bogus CQ 0x%x\n", cqn);
 		return;
 	}
 
@@ -506,25 +537,6 @@ static void mlx5_eq_cq_event(struct mlx5_eq *eq, u32 cqn, int event_type)
 	mlx5_cq_put(cq);
 }
 
-static void mlx5_temp_warning_event(struct mlx5_core_dev *dev,
-				    struct mlx5_eqe *eqe)
-{
-	unsigned int bit;
-	u64 value;
-
-	value = be64_to_cpu(eqe->data.temp_warning.sensor_warning_lsb);
-	for (bit = 0; bit < 64; bit++)
-		if ((value >> bit) & 1)
-			mlx5_core_warn(dev, "High temperature on sensor %u",
-				       bit);
-
-	value = be64_to_cpu(eqe->data.temp_warning.sensor_warning_msb);
-	for (bit = 0; bit < 64; bit++)
-		if ((value >> bit) & 1)
-			mlx5_core_warn(dev, "High temperature on sensor %u",
-				       bit + 64);
-}
-
 static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 {
 	struct mlx5_eq *eq = eq_ptr;
@@ -532,8 +544,6 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 	struct mlx5_eqe *eqe;
 	int set_ci = 0;
 	u32 cqn = -1;
-	int err;
-	u32 dctn;
 	u32 rsn;
 	u8 port;
 
@@ -551,17 +561,12 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 			cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
 			mlx5_eq_cq_completion(eq, cqn);
 			break;
-
 		case MLX5_EVENT_TYPE_DCT_DRAINED:
 		case MLX5_EVENT_TYPE_DCT_KEY_VIOLATION:
-			dctn = be32_to_cpu(eqe->data.dct.dctn) & 0xffffff;
-			err = mlx5_rsc_event(dev, dctn, eqe->type);
-			if (err) {
-				mlx5_core_warn(dev, "mlx5_rsc_event failed on eq 0x%x\n", eq->eqn);
-				dump_eqe(dev, eqe);
-			}
+			rsn = be32_to_cpu(eqe->data.dct.dctn) & 0xffffff;
+			rsn |= (MLX5_RES_DCT << MLX5_USER_INDEX_LEN);
+			mlx5_rsc_event(dev, rsn, eqe->type);
 			break;
-
 		case MLX5_EVENT_TYPE_PATH_MIG:
 		case MLX5_EVENT_TYPE_COMM_EST:
 		case MLX5_EVENT_TYPE_SQ_DRAINED:
@@ -606,7 +611,7 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 			break;
 
 		case MLX5_EVENT_TYPE_CMD:
-			mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector), MLX5_CMD_COMP_TYPE_EVENT);
+			mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector), false);
 			break;
 
 		case MLX5_EVENT_TYPE_PORT_CHANGE:
@@ -956,10 +961,11 @@ int mlx5_start_eqs(struct mlx5_core_dev *dev)
 	if (MLX5_CAP_GEN(dev, nvmf_target_offload))
 		async_event_mask |= (1ull << MLX5_EVENT_TYPE_XRQ_ERROR);
 
+	if (MLX5_CAP_GEN_MAX(dev, dct))
+		async_event_mask |= (1ull << MLX5_EVENT_TYPE_DCT_DRAINED);
+
 	if (MLX5_CAP_GEN(dev, temp_warn_event))
 		async_event_mask |= (1ull << MLX5_EVENT_TYPE_TEMP_WARN_EVENT);
-	else
-		mlx5_core_dbg(dev, "temp_warn_event is not set\n");
 
 	if (MLX5_CAP_MCAM_REG(dev, tracer_registers))
 		async_event_mask |= (1ull << MLX5_EVENT_TYPE_DEVICE_TRACER);
@@ -1070,7 +1076,7 @@ void mlx5_core_eq_free_irqs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *table = &dev->priv.eq_table;
 	struct mlx5_eq *eq;
-	
+
 #ifdef CONFIG_RFS_ACCEL
 	if (dev->rmap) {
 		free_irq_cpu_rmap(dev->rmap);

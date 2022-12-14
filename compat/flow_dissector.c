@@ -1,3 +1,5 @@
+#ifdef CONFIG_COMPAT_FLOW_DISSECTOR
+
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 #include <linux/export.h>
@@ -1456,3 +1458,5 @@ int init_default_flow_dissectors(void)
 				ARRAY_SIZE(flow_keys_buf_dissector_keys));
 	return 0;
 }
+
+#endif /* CONFIG_COMPAT_FLOW_DISSECTOR */

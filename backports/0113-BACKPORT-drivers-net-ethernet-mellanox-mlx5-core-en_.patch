@@ -1,0 +1,78 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.c
+
+Change-Id: I563f349ae7eaaa5de11233989c3875ff3eb3dc64
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_stats.c | 33 ++++++++++++++++++++--
+ 1 file changed, 31 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.c
+@@ -45,7 +45,7 @@ static const struct counter_desc sw_stat
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tso_inner_bytes) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_added_vlan_packets) },
+ 
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_ooo) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_tls_resync_bytes) },
+ #endif
+@@ -69,6 +69,11 @@ static const struct counter_desc sw_stat
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_recover) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_queue_wake) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqe_err) },
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_sw_lro_aggregated) },
++	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_sw_lro_flushed) },
++	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_sw_lro_no_desc) },
++#endif
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_wqe_err) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_oversize_pkts_sw_drop) },
+@@ -110,6 +115,26 @@ static int mlx5e_grp_sw_fill_stats(struc
+ 	return idx;
+ }
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++static void mlx5e_update_sw_lro_stats(struct mlx5e_priv *priv)
++{
++	int i;
++	struct mlx5e_sw_stats *s = &priv->stats.sw;
++
++	s->rx_sw_lro_aggregated = 0;
++	s->rx_sw_lro_flushed = 0;
++	s->rx_sw_lro_no_desc = 0;
++
++	for (i = 0; i < priv->channels.num; i++) {
++		struct mlx5e_sw_lro *sw_lro = &priv->sw_lro[i];
++
++		s->rx_sw_lro_aggregated += sw_lro->lro_mgr.stats.aggregated;
++		s->rx_sw_lro_flushed += sw_lro->lro_mgr.stats.flushed;
++		s->rx_sw_lro_no_desc += sw_lro->lro_mgr.stats.no_desc;
++	}
++}
++#endif
++
+ void mlx5e_grp_sw_update_stats(struct mlx5e_priv *priv)
+ {
+ 	struct mlx5e_sw_stats temp, *s = &temp;
+@@ -170,7 +195,7 @@ void mlx5e_grp_sw_update_stats(struct ml
+ 			s->tx_csum_partial_inner += sq_stats->csum_partial_inner;
+ 			s->tx_csum_none		+= sq_stats->csum_none;
+ 			s->tx_csum_partial	+= sq_stats->csum_partial;
+-#ifdef CONFIG_MLX5_EN_TLS
++#if defined(CONFIG_MLX5_EN_TLS) && defined(HAVE_UAPI_LINUX_TLS_H)
+ 			s->tx_tls_ooo		+= sq_stats->tls_ooo;
+ 			s->tx_tls_resync_bytes	+= sq_stats->tls_resync_bytes;
+ #endif
+@@ -178,6 +203,10 @@ void mlx5e_grp_sw_update_stats(struct ml
+ 	}
+ 
+ 	memcpy(&priv->stats.sw, s, sizeof(*s));
++
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	mlx5e_update_sw_lro_stats(priv);
++#endif
+ }
+ 
+ static const struct counter_desc q_stats_desc[] = {

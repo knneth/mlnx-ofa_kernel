@@ -1,0 +1,18 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/restrack.h
+
+Change-Id: I8883b37e0f10c6e0f68497ab180c51fc0cd0d8a7
+---
+ include/rdma/restrack.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/include/rdma/restrack.h
++++ b/include/rdma/restrack.h
+@@ -13,6 +13,7 @@
+ #include <linux/completion.h>
+ #include <linux/sched/task.h>
+ #include <uapi/rdma/rdma_netlink.h>
++#include <linux/hashtable.h>
+ 
+ /**
+  * enum rdma_restrack_type - HW objects to track

@@ -24,12 +24,6 @@ ifneq ($(UEK),)
 EXTRA_CFLAGS += -DCONFIG_COMPAT_ISER_ATTR_IS_VISIBLE
 endif
 
-# This is an UGLY compat fix for SLES12
-SLES12=$(shell uname -a | grep 3.12 && cat /etc/issue | grep SUSE | grep 12)
-ifneq ($(SLES12),)
-EXTRA_CFLAGS += -DSLES12
-endif
-
 CHECK_PROTECTION=$(shell grep -w check_protection ${K_SRC}/include/scsi/scsi_transport_iscsi.h)
 ifneq ($(CHECK_PROTECTION),)
 EXTRA_CFLAGS += -DCONFIG_COMPAT_ISCSI_CHECK_PROTECTION -DCONFIG_COMPAT_SIGNATURE
@@ -154,7 +148,6 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		CONFIG_INFINIBAND_ISER=m \
 		CONFIG_INFINIBAND_ISER_DUMMY= \
 		CONFIG_DTRACE= \
-		CONFIG_CC_STACKPROTECTOR_STRONG= \
 		CONFIG_CTF= \
 		LINUXINCLUDE=' \
 		$(EXTRA_CFLAGS) \

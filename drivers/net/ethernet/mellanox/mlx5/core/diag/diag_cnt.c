@@ -98,10 +98,7 @@ static ssize_t counter_id_read(struct file *filp, char __user *buf,
 	int i;
 
 	diag_cnt = &dev->diag_cnt;
-	if (*pos)
-		return 0;
-
-	if (!diag_cnt->num_cnt_id)
+	if (*pos || !diag_cnt->num_cnt_id)
 		return -EPERM;
 
 	kbuf = kzalloc(5 * diag_cnt->num_cnt_id + 2, GFP_KERNEL);
@@ -176,20 +173,25 @@ static ssize_t params_write(struct file *filp, const char __user *buf,
 				goto out_err;
 
 			if ((1 << (MLX5_CAP_DEBUG(dev, log_max_samples) - temp)) <
-			     diag_cnt->num_cnt_id)
+			     diag_cnt->num_cnt_id) {
+				mlx5_core_warn(dev, "log_num_of_samples is too big for num_cnt_id=%d\n",
+					       diag_cnt->num_cnt_id);
 				goto out_err;
-			else
+			} else {
 				diag_cnt->log_num_of_samples = temp;
+			}
 		}
 
 		if (i == 1) {
 			if (sscanf(p, "%d", &temp) != 1)
 				goto out_err;
 
-			if (temp < MLX5_CAP_DEBUG(dev, log_min_sample_period))
+			if (temp < MLX5_CAP_DEBUG(dev, log_min_sample_period)) {
+				mlx5_core_warn(dev, "log_sample_period smaller than log_min_sample_period\n");
 				goto out_err;
-			else
+			} else {
 				diag_cnt->log_sample_period = temp;
+			}
 		}
 
 		if (i == 2) {
@@ -206,10 +208,12 @@ static ssize_t params_write(struct file *filp, const char __user *buf,
 			if (sscanf(p, "%d", &temp) != 1)
 				goto out_err;
 
-			if (temp > (1 << diag_cnt->log_num_of_samples))
+			if (temp > (1 << diag_cnt->log_num_of_samples)) {
+				mlx5_core_warn(dev, "num_of_samples bigger than log_num_of_samples\n");
 				goto out_err;
-			else
+			} else {
 				diag_cnt->num_of_samples = temp;
+			}
 		}
 
 		if (i == 4) {
@@ -248,8 +252,6 @@ static ssize_t params_read(struct file *filp, char __user *buf,
 
 	if (*pos)
 		return 0;
-
-	mlx5_diag_query_params(dev);
 
 	diag_cnt = &dev->diag_cnt;
 
@@ -354,17 +356,15 @@ static ssize_t dump_read(struct file *filp, char __user *buf,
 	int err;
 	int len;
 
-	if (*pos)
-		return 0;
-
-	if (!dev->diag_cnt.num_of_samples)
+	if (*pos || !dev->diag_cnt.num_of_samples)
 		return -EPERM;
 
 	err = mlx5_diag_query_counters(dev, &out);
 	if (err)
 		return 0;
 
-	err = decode_cnt_buffer(dev->diag_cnt.num_of_samples,
+	err = decode_cnt_buffer(dev->diag_cnt.num_of_samples *
+				dev->diag_cnt.num_cnt_id,
 				out, count, &out_str);
 	if (err) {
 		kfree(out);
@@ -667,7 +667,7 @@ int mlx5_diag_query_counters(struct mlx5_core_dev *dev, u8 **out_buffer)
 	int err;
 
 	out_sz = MLX5_ST_SZ_BYTES(query_diagnostic_cntrs_out) +
-		 diag_cnt->num_of_samples *
+		 diag_cnt->num_of_samples * diag_cnt->num_cnt_id *
 		 MLX5_ST_SZ_BYTES(diagnostic_cntr_struct);
 
 	out = kzalloc(out_sz, GFP_KERNEL);

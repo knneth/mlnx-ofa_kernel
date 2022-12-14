@@ -299,6 +299,3 @@ module_exit(vlan_cleanup_module);
 MODULE_AUTHOR("Jiri Pirko <jiri@resnulli.us>");
 MODULE_DESCRIPTION("vlan manipulation actions");
 MODULE_LICENSE("GPL v2");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif

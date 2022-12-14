@@ -219,7 +219,10 @@ long tools_char_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	int err = 0;
 	struct file_context *context = filep->private_data;
 	struct mlx5_fpga_query query;
+	struct mlx5_fpga_temperature temperature;
+	enum mlx5_fpga_connect connect;
 	struct mlx5_fpga_device *fdev = context->tdev->fdev;
+	u32 fpga_cap[MLX5_ST_SZ_DW(fpga_cap)] = {0};
 
 	if (!fdev)
 		return -ENXIO;
@@ -259,6 +262,48 @@ long tools_char_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 		mlx5_fpga_device_query(fdev, &query);
 
 		if (copy_to_user((void __user *)arg, &query, sizeof(query))) {
+			dev_err(mlx5_fpga_dev(fdev),
+				"Failed to copy data to user buffer\n");
+			err = -EFAULT;
+		}
+		break;
+	case IOCTL_FPGA_CAP:
+		mlx5_fpga_get_cap(fdev, fpga_cap);
+		if (copy_to_user((void __user *)arg, fpga_cap, sizeof(fpga_cap))) {
+			dev_err(mlx5_fpga_dev(fdev),
+				"Failed to copy data to user buffer\n");
+			err = -EFAULT;
+		}
+		break;
+	case IOCTL_FPGA_TEMPERATURE:
+		err = copy_from_user(&temperature, (void *)arg,
+				     sizeof(temperature));
+		if (err) {
+			dev_err(mlx5_fpga_dev(fdev),
+				"Failed to copy data from user buffer\n");
+			err = -EFAULT;
+		}
+		mlx5_fpga_temperature(fdev, &temperature);
+		err = copy_to_user((void __user *)arg, &temperature,
+				   sizeof(temperature));
+		if (err) {
+			dev_err(mlx5_fpga_dev(fdev),
+				"Failed to copy data to user buffer\n");
+			err = -EFAULT;
+		}
+		break;
+	case IOCTL_FPGA_CONNECT:
+		err = copy_from_user(&connect, (void *)arg,
+				     sizeof(connect));
+		if (err) {
+			dev_err(mlx5_fpga_dev(fdev),
+				"Failed to copy data from user buffer\n");
+			err = -EFAULT;
+		}
+		mlx5_fpga_connectdisconnect(fdev, &connect);
+		err = copy_to_user((void __user *)arg, &connect,
+				   sizeof(connect));
+		if (err) {
 			dev_err(mlx5_fpga_dev(fdev),
 				"Failed to copy data to user buffer\n");
 			err = -EFAULT;

@@ -1388,6 +1388,3 @@ module_init(fcloop_init);
 module_exit(fcloop_exit);
 
 MODULE_LICENSE("GPL v2");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif

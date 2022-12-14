@@ -900,6 +900,32 @@ is_ivyb()
     esac
 }
 
+# Returns PCI IDs of virtual functions used by Xen virtual machines
+get_xen_vm_vf_pcis() {
+    if ! $XE >/dev/null 2>&1; then
+        return
+    fi
+
+    lspci_output=`lspci -D | grep Mellanox`
+    # try Xen's xe instead
+    pcis=$(
+        for uuid in $(
+            $XE vm-list power-state=running | awk '/^uuid/ {print $5}'
+        )
+        do
+            $XE vm-param-list uuid=$uuid | awk '/ pci:/{print $6}'
+        done
+    )
+    for pci in $pcis; do
+        echo $pci | sed -e 's|[^/]*/||' -e 's|,[^/]*/| |' -e 's|;$||'
+    done \
+    | while read p_pci_id v_pci_id; do
+        if [ `echo "$lspci_output" | egrep "^($p_pci_id|$v_pci_id) " | wc -l` -eq 2 ]; then
+            echo "$v_pci_id"
+        fi
+    done
+}
+
 is_active_vf()
 {
     # test if have ConnectX with VFs
@@ -914,6 +940,10 @@ is_active_vf()
     virsh -v > /dev/null 2> /dev/null
     if [ $? -ne 0 ] ; then
         # No virsh
+        xen_pcis=$(get_xen_vm_vf_pcis)
+        if [ "$xen_pcis" != "" ]; then
+            return 0
+        fi
         return 1
     fi
 

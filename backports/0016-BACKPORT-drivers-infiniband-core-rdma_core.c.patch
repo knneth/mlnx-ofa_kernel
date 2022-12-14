@@ -1,0 +1,95 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
+
+Change-Id: I4b6a78dfa1201f7e814c51db1050f3d776a2552c
+---
+ drivers/infiniband/core/rdma_core.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+--- a/drivers/infiniband/core/rdma_core.c
++++ b/drivers/infiniband/core/rdma_core.c
+@@ -121,7 +121,13 @@ static int uverbs_try_lock_object(struct
+ 	 * this lock.
+ 	 */
+ 	if (!exclusive)
++#ifdef HAVE_ATOMIC_FETCH_ADD_UNLESS
++		return atomic_fetch_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#elif defined(HAVE___ATOMIC_ADD_UNLESS)
+ 		return __atomic_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#else
++		return atomic_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#endif
+ 			-EBUSY : 0;
+ 
+ 	/* lock is either WRITE or DESTROY - should be exclusive */
+@@ -156,6 +162,7 @@ static int idr_add_uobj(struct ib_uobjec
+ {
+ 	int ret;
+ 
++#ifdef HAVE_IDR_ALLOC
+ 	idr_preload(GFP_KERNEL);
+ 	spin_lock(&uobj->context->ufile->idr_lock);
+ 
+@@ -173,6 +180,20 @@ static int idr_add_uobj(struct ib_uobjec
+ 	idr_preload_end();
+ 
+ 	return ret < 0 ? ret : 0;
++#else
++retry:
++	if (!idr_pre_get(&uobj->context->ufile->idr, GFP_KERNEL))
++		return -ENOMEM;
++
++	spin_lock(&uobj->context->ufile->idr_lock);
++	ret = idr_get_new(&uobj->context->ufile->idr, NULL, &uobj->id);
++	spin_unlock(&uobj->context->ufile->idr_lock);
++
++	if (ret == -EAGAIN)
++		goto retry;
++
++	return ret;
++#endif
+ }
+ 
+ /*
+@@ -290,15 +311,19 @@ static struct ib_uobject *alloc_begin_id
+ 	if (ret)
+ 		goto uobj_put;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ret = ib_rdmacg_try_charge(&uobj->cg_obj, ucontext->device,
+ 				   RDMACG_RESOURCE_HCA_OBJECT);
+ 	if (ret)
+ 		goto idr_remove;
++#endif
+ 
+ 	return uobj;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ idr_remove:
+ 	uverbs_idr_remove_uobj(uobj);
++#endif
+ uobj_put:
+ 	uverbs_uobject_put(uobj);
+ 	return ERR_PTR(ret);
+@@ -366,8 +391,10 @@ static int __must_check remove_commit_id
+ 	if (ib_is_destroy_retryable(ret, why, uobj))
+ 		return ret;
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
+ 			   RDMACG_RESOURCE_HCA_OBJECT);
++#endif
+ 	uverbs_idr_remove_uobj(uobj);
+ 
+ 	return ret;
+@@ -550,8 +577,10 @@ int rdma_alloc_commit_uobject(struct ib_
+ static void alloc_abort_idr_uobject(struct ib_uobject *uobj)
+ {
+ 	uverbs_idr_remove_uobj(uobj);
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
+ 			   RDMACG_RESOURCE_HCA_OBJECT);
++#endif
+ 	uverbs_uobject_put(uobj);
+ }
+ 

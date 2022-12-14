@@ -46,6 +46,7 @@
 #endif
 #include <linux/cpu_rmap.h>
 #include <linux/ptp_clock_kernel.h>
+#include <net/xdp.h>
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/qp.h>
@@ -58,7 +59,7 @@
 #include "mlx4_stats.h"
 
 #define DRV_NAME	"mlx4_en"
-#define DRV_VERSION	"4.4-1.0.0"
+#define DRV_VERSION	"4.5-1.0.1"
 
 #define MLX4_EN_MSG_LEVEL	(NETIF_MSG_LINK | NETIF_MSG_IFDOWN)
 
@@ -142,6 +143,9 @@
 #define MLX4_EN_TX_COAL_PKTS	16
 #define MLX4_EN_TX_COAL_TIME	0x10
 
+#define MLX4_EN_MAX_COAL_PKTS	U16_MAX
+#define MLX4_EN_MAX_COAL_TIME	U16_MAX
+
 #define MLX4_EN_RX_RATE_LOW		400000
 #define MLX4_EN_RX_COAL_TIME_LOW	0
 #define MLX4_EN_RX_RATE_HIGH		450000
@@ -165,9 +169,9 @@
 #define HEADER_COPY_SIZE       (128 - NET_IP_ALIGN)
 #define MLX4_LOOPBACK_TEST_PAYLOAD (HEADER_COPY_SIZE - ETH_HLEN)
 #define PREAMBLE_LEN           8
-#define MLX4_SELFTEST_LB_MIN_MTU (MLX4_LOOPBACK_TEST_PAYLOAD + NET_IP_ALIGN + ETH_HLEN + PREAMBLE_LEN)
+#define MLX4_SELFTEST_LB_MIN_MTU (MLX4_LOOPBACK_TEST_PAYLOAD + NET_IP_ALIGN + \
+				  ETH_HLEN + PREAMBLE_LEN)
 
-#define MLX4_EN_MIN_MTU		46
 /* VLAN_HLEN is added twice,to support skb vlan tagged with multiple
  * headers. (For example: ETH_P_8021Q and ETH_P_8021AD).
  */
@@ -384,6 +388,7 @@ struct mlx4_en_rx_ring {
 	u16 node;
 	void *buf;
 	void *rx_info;
+	unsigned long bytes;
 	struct bpf_prog __rcu		*xdp_prog;
 	struct mlx4_en_page_pool	pool;
 	unsigned long			rx_alloc_pages;
@@ -391,7 +396,6 @@ struct mlx4_en_rx_ring {
 	struct mlx4_en_frag_info	frag_info[MLX4_EN_MAX_RX_FRAGS];
 	struct mlx4_en_page_cache	page_cache;
 
-	unsigned long bytes;
 	unsigned long packets;
 	unsigned long csum_ok;
 	unsigned long csum_none;
@@ -402,6 +406,7 @@ struct mlx4_en_rx_ring {
 	unsigned long xdp_tx_full;
 	unsigned long dropped;
 	cpumask_var_t affinity_mask;
+	struct xdp_rxq_info xdp_rxq;
 };
 
 struct mlx4_en_cq {
@@ -615,8 +620,8 @@ struct mlx4_en_priv {
 	u16 rx_usecs_low;
 	u32 pkt_rate_high;
 	u16 rx_usecs_high;
-	u16 sample_interval;
-	u16 adaptive_rx_coal;
+	u32 sample_interval;
+	u32 adaptive_rx_coal;
 	u32 msg_enable;
 	u32 loopback_ok;
 	u32 validate_loopback;
@@ -799,7 +804,7 @@ void mlx4_en_set_num_rx_rings(struct mlx4_en_dev *mdev);
 void mlx4_en_recover_from_oom(struct mlx4_en_priv *priv);
 int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_rx_ring **pring,
-			   u32 size, u16 stride, int node);
+			   u32 size, u16 stride, int node, int queue_index);
 void mlx4_en_destroy_rx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_rx_ring **pring,
 			     u32 size, u16 stride);

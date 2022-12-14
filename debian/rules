@@ -169,6 +169,7 @@ endif
 	install -m 0644 source/ofed_scripts/ib2ib/README		debian/$(putils)/usr/share/doc/ib2ib
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
+	install -m 0755 source/ofed_scripts/show_counters		debian/$(putils)/usr/sbin
 
 	cd ofed_scripts/utils;	python ./setup.py install --prefix=/usr --root=../../debian/$(putils)
 
@@ -187,3 +188,11 @@ override_dh_installdeb:
 	echo "/etc/infiniband/mlx5.conf"      >>   debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles
+
+ifneq ($(MLNX_KO_NO_STRIP),1)
+ifneq ($(WITH_DKMS),1)
+override_dh_strip:
+	dh_strip
+	find debian -name '*.ko' | xargs strip -g
+endif
+endif

@@ -59,12 +59,6 @@ enum {
 };
 
 enum {
-	MLX5_NIC_IFC_DISABLED		= 1,
-	MLX5_NIC_IFC_NO_DRAM_NIC	= 2,
-	MLX5_NIC_IFC_SW_RESET		= 7,
-};
-
-enum {
 	MLX5_DROP_NEW_HEALTH_WORK,
 	MLX5_DROP_NEW_RECOVERY_WORK,
 };
@@ -98,9 +92,19 @@ static int lock_sem_sw_reset(struct mlx5_core_dev *dev, int state)
 	return ret;
 }
 
-static u8 get_nic_mode(struct mlx5_core_dev *dev)
+u8 mlx5_get_nic_mode(struct mlx5_core_dev *dev)
 {
 	return (ioread32be(&dev->iseg->cmdq_addr_l_sz) >> 8) & 7;
+}
+
+void mlx5_set_nic_mode(struct mlx5_core_dev *dev, u8 state)
+{
+	u32 cur_cmdq_addr_l_sz;
+
+	cur_cmdq_addr_l_sz = ioread32be(&dev->iseg->cmdq_addr_l_sz);
+	iowrite32be((cur_cmdq_addr_l_sz & 0xFFFFF000) |
+		    state << MLX5_NIC_IFC_OFFSET,
+		    &dev->iseg->cmdq_addr_l_sz);
 }
 
 static bool sensor_pci_not_working(struct mlx5_core_dev *dev)
@@ -114,12 +118,12 @@ static bool sensor_pci_not_working(struct mlx5_core_dev *dev)
 
 static bool sensor_nic_disabled(struct mlx5_core_dev *dev)
 {
-	return get_nic_mode(dev) == MLX5_NIC_IFC_DISABLED;
+	return mlx5_get_nic_mode(dev) == MLX5_NIC_IFC_DISABLED;
 }
 
 static bool sensor_nic_sw_reset(struct mlx5_core_dev *dev)
 {
-	return get_nic_mode(dev) == MLX5_NIC_IFC_SW_RESET;
+	return mlx5_get_nic_mode(dev) == MLX5_NIC_IFC_SW_RESET;
 }
 
 static bool sensor_fw_synd_rfr(struct mlx5_core_dev *dev)
@@ -154,7 +158,7 @@ static bool reset_fw_if_needed(struct mlx5_core_dev *dev)
 {
 	bool supported = (ioread32be(&dev->iseg->initializing) >>
 			  MLX5_FW_RESET_SUPPORTED_OFFSET) & 1;
-	u32 cmdq_addr, fatal_error;
+	u32 fatal_error;
 
 	if (!supported)
 		return false;
@@ -176,10 +180,7 @@ static bool reset_fw_if_needed(struct mlx5_core_dev *dev)
 	/* Write the NIC interface field to initiate the reset, the command
 	 * interface address also resides here, don't overwrite it.
 	 */
-	cmdq_addr = ioread32be(&dev->iseg->cmdq_addr_l_sz);
-	iowrite32be((cmdq_addr & 0xFFFFF000) |
-		    MLX5_NIC_IFC_SW_RESET << MLX5_NIC_IFC_OFFSET,
-		    &dev->iseg->cmdq_addr_l_sz);
+	mlx5_set_nic_mode(dev, MLX5_NIC_IFC_SW_RESET);
 
 	return true;
 }
@@ -246,7 +247,7 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 
 	if (!sensor_nic_disabled(dev)) {
 		dev_err(&dev->pdev->dev, "NIC IFC still %d after %lums.\n",
-			get_nic_mode(dev), delay_ms);
+			mlx5_get_nic_mode(dev), delay_ms);
 	}
 
 	/* Release FW semaphore if you are the lock owner */
@@ -265,7 +266,7 @@ unlock:
 
 static void mlx5_handle_bad_state(struct mlx5_core_dev *dev)
 {
-	u8 nic_mode = get_nic_mode(dev);
+	u8 nic_mode = mlx5_get_nic_mode(dev);
 
 	mlx5_core_warn(dev, "NIC mode: %d\n", nic_mode);
 	/* The IFC mode field is 3 bits, so it will read 0x7 in 2 cases:
@@ -279,6 +280,22 @@ static void mlx5_handle_bad_state(struct mlx5_core_dev *dev)
 	if (nic_mode == MLX5_NIC_IFC_SW_RESET &&
 	    dev->priv.health.fatal_error != MLX5_SENSOR_PCI_COMM_ERR)
 		mlx5_core_warn(dev, "NIC SW reset in progress\n");
+
+	switch (nic_mode) {
+	case MLX5_NIC_IFC_FULL:
+		mlx5_core_warn(dev, "Expected to see disabled NIC but it is full driver\n");
+		break;
+
+	case MLX5_NIC_IFC_DISABLED:
+		mlx5_core_warn(dev, "starting teardown\n");
+		break;
+
+	case MLX5_NIC_IFC_NO_DRAM_NIC:
+		mlx5_core_warn(dev, "Expected to see disabled NIC but it is no dram nic\n");
+		break;
+	default:
+		mlx5_core_warn(dev, "Expected to see disabled NIC but it is has invalid value %d\n",nic_mode);
+	}
 
 	mlx5_disable_device(dev);
 }

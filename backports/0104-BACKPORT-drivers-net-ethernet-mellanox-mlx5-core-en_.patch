@@ -1,0 +1,23 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_diag.c
+
+Change-Id: I1273f788cb9291a86d1e273faa0d42405b09f94c
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_diag.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_diag.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_diag.c
+@@ -39,6 +39,7 @@
+ #define DIAG_GET_NEXT_BLK(dump_hdr) \
+ 	((struct mlx5_diag_blk *)(dump_hdr->dump + dump_hdr->total_length))
+ 
++#ifdef HAVE_GET_SET_DUMP
+ static int mlx5e_diag_fill_device_name(struct mlx5e_priv *priv, void *buff)
+ {
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+@@ -302,3 +303,4 @@ int mlx5e_get_dump_data(struct net_devic
+ 
+ 	return 0;
+ }
++#endif

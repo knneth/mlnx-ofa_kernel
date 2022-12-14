@@ -13,7 +13,7 @@ Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 
 Package: mlnx-ofed-kernel-modules
 Section: kernel
-Architecture: all
+Architecture: any
 Depends: ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod, lsof, mlnx-ofed-kernel-utils, python-libxml2
 Description: mlnx-ofed kernel modules
  This package provides the binary and source code for the mlnx-ofed kernel modules.

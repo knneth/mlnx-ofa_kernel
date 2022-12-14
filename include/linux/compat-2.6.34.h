@@ -404,35 +404,6 @@ static inline u8 pci_vpd_srdt_size(const u8 *srdt)
 	return (*srdt) & PCI_VPD_SRDT_LEN_MASK;
 }
 
-#ifndef HAVE_PCI_BUS_SPEED
-/* Based on the PCI Hotplug Spec, but some values are made up by us */
-enum pci_bus_speed {
-	PCI_SPEED_33MHz			= 0x00,
-	PCI_SPEED_66MHz			= 0x01,
-	PCI_SPEED_66MHz_PCIX		= 0x02,
-	PCI_SPEED_100MHz_PCIX		= 0x03,
-	PCI_SPEED_133MHz_PCIX		= 0x04,
-	PCI_SPEED_66MHz_PCIX_ECC	= 0x05,
-	PCI_SPEED_100MHz_PCIX_ECC	= 0x06,
-	PCI_SPEED_133MHz_PCIX_ECC	= 0x07,
-	PCI_SPEED_66MHz_PCIX_266	= 0x09,
-	PCI_SPEED_100MHz_PCIX_266	= 0x0a,
-	PCI_SPEED_133MHz_PCIX_266	= 0x0b,
-	AGP_UNKNOWN			= 0x0c,
-	AGP_1X				= 0x0d,
-	AGP_2X				= 0x0e,
-	AGP_4X				= 0x0f,
-	AGP_8X				= 0x10,
-	PCI_SPEED_66MHz_PCIX_533	= 0x11,
-	PCI_SPEED_100MHz_PCIX_533	= 0x12,
-	PCI_SPEED_133MHz_PCIX_533	= 0x13,
-	PCIE_SPEED_2_5GT		= 0x14,
-	PCIE_SPEED_5_0GT		= 0x15,
-	PCIE_SPEED_8_0GT		= 0x16,
-	PCI_SPEED_UNKNOWN		= 0xff,
-};
-#endif
-
 #ifndef this_cpu_inc
 #define this_cpu_inc(x) ((x)++)
 #endif

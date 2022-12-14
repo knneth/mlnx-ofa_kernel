@@ -15,16 +15,9 @@ static inline struct bpf_prog *bpf_prog_inc(struct bpf_prog *prog)
 #endif
 
 #ifndef HAVE_BPF_PROG_SUB
-#include <linux/filter.h>
-static inline void bpf_prog_sub(struct bpf_prog *prog, int i)
-{
-	/* Only to be used for undoing previous bpf_prog_add() in some
-	 * error path. We still know that another entity in our call
-	 * path holds a reference to the program, thus atomic_sub() can
-	 * be safely used in such cases!
-	 */
-	WARN_ON(atomic_sub_return(i, &prog->aux->refcnt) == 0);
-}
+struct bpf_prog;
+#define bpf_prog_sub LINUX_BACKPORT(bpf_prog_sub)
+void bpf_prog_sub(struct bpf_prog *prog, int i);
 #endif
 
 #endif /* HAVE_LINUX_BPF_H */

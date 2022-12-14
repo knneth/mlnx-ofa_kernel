@@ -44,7 +44,7 @@
 
 /* Timeout in ms to wait for an active mmu notifier to complete when handling
  * a pagefault. */
-#define MMU_NOTIFIER_TIMEOUT 60000
+#define MMU_NOTIFIER_TIMEOUT 1000
 
 #define MLX5_IMR_MTT_BITS (30 - PAGE_SHIFT)
 #define MLX5_IMR_MTT_SHIFT (MLX5_IMR_MTT_BITS + PAGE_SHIFT)
@@ -343,18 +343,14 @@ void mlx5_ib_internal_fill_odp_caps(struct mlx5_ib_dev *dev)
 
 static void mlx5_ib_page_fault_resume(struct mlx5_ib_dev *dev,
 				      struct mlx5_pagefault *pfault,
+				      bool drop,
 				      int error)
 {
-	int wq_num = pfault->event_subtype == MLX5_PFAULT_SUBTYPE_WQE ?
-		     pfault->wqe.wq_num : pfault->token;
-	int ret = mlx5_core_page_fault_resume(dev->mdev,
-					      pfault->token,
-					      wq_num,
-					      pfault->type,
-					      error);
+	int ret = mlx5_core_page_fault_resume(dev->mdev, pfault, drop, error);
+
 	if (ret)
-		mlx5_ib_err(dev, "Failed to resolve the page fault on WQ 0x%x\n",
-			    wq_num);
+		mlx5_ib_err(dev, "Failed to resume the page fault (%d)\n", ret);
+
 	if (likely(!error))
 		ib_umem_odp_account_fault_handled(&dev->ib_dev);
 	else
@@ -366,15 +362,22 @@ static void mlx5_ib_page_fault_resume(struct mlx5_ib_dev *dev,
 static int handle_capi_pg_fault(struct mlx5_ib_dev *dev, struct mm_struct *mm,
 				u64 va, size_t sz, struct mlx5_pagefault *pfault)
 {
-	int err;
+	int err, index;
+	unsigned long start;
+	unsigned int duration;
 
 	if (!mmget_not_zero(mm))
 		return -EPERM;
 
+	start = jiffies;
 	if (pfault->type & MLX5_PAGE_FAULT_RESUME_WRITE)
 		err = cxllib_handle_fault(mm, va, sz, DSISR_ISSTORE);
 	else
 		err = cxllib_handle_fault(mm, va, sz, 0);
+
+	duration = jiffies_to_msecs(jiffies - start);
+	index =	convert_duration_to_hist(duration);
+	dev->pf_cxl_hist[index]++;
 
 	mmput(mm);
 	return err;
@@ -678,8 +681,9 @@ out:
 			if (!wait_for_completion_timeout(
 					&odp->notifier_completion,
 					timeout)) {
-				mlx5_ib_warn(dev, "timeout waiting for mmu notifier. seq %d against %d. notifiers_count=%d\n",
-					     current_seq, odp->notifiers_seq, odp->notifiers_count);
+				mlx5_ib_dbg(dev, "timeout waiting for mmu notifier. seq %d against %d. notifiers_count=%d\n",
+					    current_seq, odp->notifiers_seq, odp->notifiers_count);
+				atomic_inc(&dev->odp_stats.num_timeout_mmu_notifier);
 			}
 		} else {
 			/* The MR is being killed, kill the QP as well. */
@@ -1313,15 +1317,8 @@ static void mlx5_ib_mr_wqe_pfault_handler(struct mlx5_ib_dev *dev,
 
 	resume_with_error = 0;
 resolve_page_fault:
-	if (!drop) {
-		mlx5_ib_page_fault_resume(dev, pfault, resume_with_error);
-		mlx5_ib_dbg(dev, "PAGE FAULT completed. QP 0x%x resume_with_error=%d, type: 0x%x\n",
-			    pfault->wqe.wq_num, resume_with_error,
-			    pfault->type);
-	} else {
-		mlx5_ib_dbg(dev, "PAGE FAULT dropped. QP 0x%x type: 0x%x\n",
-			    pfault->wqe.wq_num, pfault->type);
-	}
+	mlx5_ib_page_fault_resume(dev, pfault, drop, resume_with_error);
+
 	spin_lock_irqsave(&mqp->common.lock, flags);
 	/* check if current pagefault event is also the last for the QP.
 	 * If yes, clear from QP
@@ -1384,14 +1381,14 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 		/* We're racing with an invalidation, don't prefetch */
 		prefetch_activated = 0;
 	} else if (ret < 0 || pages_in_range(address, length) > ret) {
-		mlx5_ib_page_fault_resume(dev, pfault, 1);
+		mlx5_ib_page_fault_resume(dev, pfault, false, 1);
 		if (ret != -ENOENT)
 			mlx5_ib_dbg(dev, "PAGE FAULT error %d. QP 0x%x, type: 0x%x\n",
 				    ret, pfault->token, pfault->type);
 		return;
 	}
 
-	mlx5_ib_page_fault_resume(dev, pfault, 0);
+	mlx5_ib_page_fault_resume(dev, pfault, false, 0);
 	mlx5_ib_dbg(dev, "PAGE FAULT completed. QP 0x%x, type: 0x%x, prefetch_activated: %d\n",
 		    pfault->token, pfault->type,
 		    prefetch_activated);
@@ -1415,12 +1412,31 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 	}
 }
 
+void mlx5_ib_pfault_done(struct mlx5_pagefault *pfault, void *context)
+{
+	struct mlx5_ib_dev *dev = context;
+	unsigned int duration;
+	int index;
+
+	duration = jiffies_to_msecs(jiffies - pfault->start);
+	index =	convert_duration_to_hist(duration);
+	dev->pf_int_total_hist[index]++;
+}
+
 void mlx5_ib_pfault(struct mlx5_core_dev *mdev, void *context,
 		    struct mlx5_pagefault *pfault)
 {
 	struct mlx5_ib_dev *dev = context;
 	u8 event_subtype = pfault->event_subtype;
+	unsigned int duration;
+	int index;
 
+	duration = jiffies_to_msecs(jiffies - pfault->start);
+	index =	convert_duration_to_hist(duration);
+	dev->pf_int_wq_hist[index]++;
+
+	pfault->done_cb = mlx5_ib_pfault_done;
+	pfault->done_context = dev;
 	switch (event_subtype) {
 	case MLX5_PFAULT_SUBTYPE_WQE:
 		mlx5_ib_mr_wqe_pfault_handler(dev, pfault);
@@ -1431,7 +1447,7 @@ void mlx5_ib_pfault(struct mlx5_core_dev *mdev, void *context,
 	default:
 		mlx5_ib_err(dev, "Invalid page fault event subtype: 0x%x\n",
 			    event_subtype);
-		mlx5_ib_page_fault_resume(dev, pfault, 1);
+		mlx5_ib_page_fault_resume(dev, pfault, false, 1);
 	}
 }
 
@@ -1465,10 +1481,6 @@ int mlx5_ib_odp_init_one(struct mlx5_ib_dev *dev)
 {
 	int ret;
 
-	ret = init_srcu_struct(&dev->mr_srcu);
-	if (ret)
-		return ret;
-
 	ret = mlx5_ib_exp_odp_init_one(dev);
 	if (ret)
 		goto out_srcu;
@@ -1481,25 +1493,10 @@ int mlx5_ib_odp_init_one(struct mlx5_ib_dev *dev)
 		}
 	}
 
-	init_completion(&dev->comp_prefetch);
-	atomic_set(&dev->num_prefetch, 1);
-
 	return 0;
 out_srcu:
 	cleanup_srcu_struct(&dev->mr_srcu);
 	return ret;
-}
-
-void mlx5_ib_odp_shutdown_one(struct mlx5_ib_dev *dev)
-{
-	if (!atomic_dec_and_test(&dev->num_prefetch))
-		wait_for_completion(&dev->comp_prefetch);
-}
-
-void mlx5_ib_odp_remove_one(struct mlx5_ib_dev *dev)
-{
-	debugfs_remove_recursive(dev->odp_stats.odp_debugfs);
-	cleanup_srcu_struct(&dev->mr_srcu);
 }
 
 int mlx5_ib_odp_init(void)

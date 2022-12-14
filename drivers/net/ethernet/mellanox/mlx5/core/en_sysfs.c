@@ -36,7 +36,7 @@
 #include "en_ecn.h"
 #include "eswitch.h"
 #ifdef CONFIG_MLX5_CORE_EN_DCB
-#include "en_port_buffer.h"
+#include "en/port_buffer.h"
 #endif
 
 #define MLX5E_SKPRIOS_NUM   16
@@ -764,7 +764,7 @@ static ssize_t mlx5e_show_prio2buffer(struct device *device,
 	int err;
 	int i;
 
-	err = mlx5_query_port_priority2buffer(priv->mdev, prio2buffer);
+	err = mlx5e_port_query_priority2buffer(priv->mdev, prio2buffer);
 	if (err)
 		return err;
 
@@ -805,18 +805,18 @@ static ssize_t mlx5e_store_prio2buffer(struct device *device,
 	if (i != MLX5E_MAX_PRIORITY)
 		return -EINVAL;
 
-	err = mlx5_query_port_priority2buffer(mdev, old_prio2buffer);
+	err = mlx5e_port_query_priority2buffer(mdev, old_prio2buffer);
 	if (err)
 		return err;
 
 	for (i = 0; i < MLX5E_MAX_PRIORITY; i++) {
 		if (prio2buffer[i] != old_prio2buffer[i]) {
-			changed = MLX5E_BUFFER_PRIO2BUFFER;
+			changed = MLX5E_PORT_BUFFER_PRIO2BUFFER;
 			break;
 		}
 	}
 
-	err = mlx5e_manual_buffer_configuration(dev, changed, NULL, NULL, prio2buffer);
+	err = mlx5e_port_manual_buffer_config(priv, changed, dev->mtu, NULL, NULL, prio2buffer);
 	if (err)
 		return err;
 
@@ -828,12 +828,13 @@ static ssize_t mlx5e_show_buffer_size(struct device *device,
 				      char *buf)
 {
 	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5e_port_buffer port_buffer;
 	int len = 0;
 	int err;
 	int i;
 
-	err = mlx5_query_buffer_configuration(dev, &port_buffer);
+	err = mlx5e_port_query_buffer(priv, &port_buffer);
 	if (err)
 		return err;
 
@@ -854,6 +855,7 @@ static ssize_t mlx5e_store_buffer_size(struct device *device,
 				       const char *buf, size_t count)
 {
 	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5e_port_buffer port_buffer;
 	u32 buffer_size[MLX5E_MAX_BUFFER];
 	unsigned int temp;
@@ -874,18 +876,18 @@ static ssize_t mlx5e_store_buffer_size(struct device *device,
 	if (i != MLX5E_MAX_BUFFER)
 		return -EINVAL;
 
-	err = mlx5_query_buffer_configuration(dev, &port_buffer);
+	err = mlx5e_port_query_buffer(priv, &port_buffer);
 	if (err)
 		return err;
 
 	for (i = 0; i < MLX5E_MAX_BUFFER; i++) {
 		if (port_buffer.buffer[i].size != buffer_size[i]) {
-			changed = MLX5E_BUFFER_SIZE;
+			changed = MLX5E_PORT_BUFFER_SIZE;
 			break;
 		}
 	}
 
-	err = mlx5e_manual_buffer_configuration(dev, changed, NULL, buffer_size, NULL);
+	err = mlx5e_port_manual_buffer_config(priv, changed, dev->mtu, NULL, buffer_size, NULL);
 	if (err)
 		return err;
 
@@ -908,6 +910,48 @@ static DEVICE_ATTR(vf_roce, S_IRUGO | S_IWUSR,
 		   mlx5e_show_vf_roce,
 		   mlx5e_store_vf_roce);
 #endif
+
+static ssize_t mlx5e_show_force_local_lb(struct device *device,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	bool force_disable_lb = mdev->local_lb.user_force_disable;
+	int len = 0;
+
+	len += sprintf(buf, "Force local loopback disable is %s\n", force_disable_lb ? "ON" : "OFF");
+
+	return len;
+}
+
+static ssize_t mlx5e_store_force_local_lb(struct device *device,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	struct net_device *dev = to_net_dev(device);
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct mlx5_core_dev *mdev = priv->mdev;
+	bool disable;
+	int err;
+
+	err = kstrtobool(buf, &disable);
+	if (err)
+		return -EINVAL;
+
+	if (mdev->local_lb.user_force_disable != disable) {
+		mdev->local_lb.user_force_disable = disable;
+		mlx5_nic_vport_update_local_lb(mdev,
+					       mdev->local_lb.driver_state);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
+		   mlx5e_show_force_local_lb,
+		   mlx5e_store_force_local_lb);
 
 static struct attribute *mlx5e_settings_attrs[] = {
 	&dev_attr_hfunc.attr,
@@ -1006,6 +1050,13 @@ static int update_settings_sysfs(struct net_device *dev,
 	}
 #endif
 
+	if (MLX5_CAP_GEN(mdev, disable_local_lb_mc) ||
+	    MLX5_CAP_GEN(mdev, disable_local_lb_uc)) {
+		err = sysfs_add_file_to_group(&dev->dev.kobj,
+					      &dev_attr_force_local_lb_disable.attr,
+					      "settings");
+	}
+
 	return err;
 }
 
@@ -1086,163 +1137,3 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 
 	kobject_put(priv->ecn_root_kobj);
 }
-
-#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-enum {
-	ATTR_DST_IP,
-	ATTR_DST_PORT,
-};
-
-static ssize_t mlx5e_flow_param_show(struct kobject *kobj, char *buf, int type)
-{
-	struct netdev_queue *queue = (struct netdev_queue *)kobj;
-	struct net_device *netdev = queue->dev;
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5e_txqsq *sq = priv->txq2sq[queue - netdev->_tx];
-	int len;
-
-	switch (type) {
-	case ATTR_DST_IP:
-		len = sprintf(buf, "0x%8x\n", ntohl(sq->flow_map.dst_ip));
-		break;
-	case ATTR_DST_PORT:
-		len = sprintf(buf, "%d\n", ntohs(sq->flow_map.dst_port));
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return len;
-}
-
-static ssize_t mlx5e_flow_param_store(struct kobject *kobj, const char *buf,
-				      size_t len, int type)
-{
-	struct netdev_queue *queue = (struct netdev_queue *)kobj;
-	struct net_device *netdev = queue->dev;
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	unsigned int queue_index = queue - netdev->_tx;
-	struct mlx5e_txqsq *sq = priv->txq2sq[queue_index];
-	int err = 0;
-	u32 key;
-
-	switch (type) {
-	case ATTR_DST_IP:
-		err  = kstrtou32(buf, 16, &sq->flow_map.dst_ip);
-		if (err < 0)
-			return err;
-		sq->flow_map.dst_ip = htonl(sq->flow_map.dst_ip);
-		break;
-	case ATTR_DST_PORT:
-		err  = kstrtou16(buf, 0, &sq->flow_map.dst_port);
-		if (err < 0)
-			return err;
-		sq->flow_map.dst_port = htons(sq->flow_map.dst_port);
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	/* Each queue can only apear once in the hash table */
-	hash_del_rcu(&sq->flow_map.hlist);
-	sq->flow_map.queue_index = queue_index;
-
-	if (sq->flow_map.dst_ip != 0 || sq->flow_map.dst_port != 0) {
-		/* hash and add to hash table */
-		key = sq->flow_map.dst_ip ^ sq->flow_map.dst_port;
-		hash_add_rcu(priv->flow_map_hash, &sq->flow_map.hlist, key);
-	}
-
-	return len;
-}
-
-static ssize_t mlx5e_dst_port_store(struct kobject *kobj,
-				    struct kobj_attribute *attr,
-				    const char *buf, size_t len)
-{
-	return mlx5e_flow_param_store(kobj, buf, len, ATTR_DST_PORT);
-}
-
-static ssize_t mlx5e_dst_port_show(struct kobject *kobj,
-				   struct kobj_attribute *attr,
-				   char *buf)
-{
-	return mlx5e_flow_param_show(kobj, buf, ATTR_DST_PORT);
-}
-
-static ssize_t mlx5e_dst_ip_store(struct kobject *kobj,
-				  struct kobj_attribute *attr,
-				  const char *buf, size_t len)
-{
-	return mlx5e_flow_param_store(kobj, buf, len, ATTR_DST_IP);
-}
-
-static ssize_t mlx5e_dst_ip_show(struct kobject *kobj,
-				 struct kobj_attribute *attr,
-				 char *buf)
-{
-	return mlx5e_flow_param_show(kobj, buf, ATTR_DST_IP);
-}
-
-static struct kobj_attribute dst_port = {
-	.attr  = {.name = "dst_port",
-		  .mode = (S_IWUSR | S_IRUGO) },
-	.show  = mlx5e_dst_port_show,
-	.store = mlx5e_dst_port_store,
-};
-
-static struct kobj_attribute dst_ip = {
-	.attr  = {.name = "dst_ip",
-		  .mode = (S_IWUSR | S_IRUGO) },
-	.show  = mlx5e_dst_ip_show,
-	.store = mlx5e_dst_ip_store,
-};
-
-static struct attribute *mlx5e_txmap_attrs[] = {
-	&dst_port.attr,
-	&dst_ip.attr,
-	NULL
-};
-
-static struct attribute_group mlx5e_txmap_attr = {
-	.name = "flow_map",
-	.attrs = mlx5e_txmap_attrs
-};
-
-int mlx5e_rl_init_sysfs(struct net_device *netdev, struct mlx5e_params params)
-{
-	struct netdev_queue *txq;
-	int q_ix;
-	int err;
-	int i;
-
-	for (i = 0; i < params.num_rl_txqs; i++) {
-		q_ix = i + params.num_channels * params.num_tc;
-		txq = netdev_get_tx_queue(netdev, q_ix);
-		err = sysfs_create_group(&txq->kobj, &mlx5e_txmap_attr);
-		if (err)
-			goto err;
-	}
-	return 0;
-err:
-	for (--i; i >= 0; i--) {
-		q_ix = i + params.num_channels * params.num_tc;
-		txq = netdev_get_tx_queue(netdev, q_ix);
-		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
-	}
-	return err;
-}
-
-void mlx5e_rl_remove_sysfs(struct mlx5e_priv *priv)
-{
-	struct netdev_queue *txq;
-	int q_ix;
-	int i;
-
-	for (i = 0; i < priv->channels.params.num_rl_txqs; i++) {
-		q_ix = i + priv->channels.params.num_channels * priv->channels.params.num_tc;
-		txq = netdev_get_tx_queue(priv->netdev, q_ix);
-		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
-	}
-}
-#endif /*CONFIG_MLX5_EN_SPECIAL_SQ*/

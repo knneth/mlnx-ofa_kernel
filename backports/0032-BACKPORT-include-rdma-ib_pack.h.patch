@@ -1,7 +1,7 @@
 From: Alaa Hleihel <alaa@mellanox.com>
 Subject: [PATCH] BACKPORT: include/rdma/ib_pack.h
 
-Change-Id: Ice6dbaf9f323bf9ee0c182c5bb07f5b4736a6ba8
+Change-Id: I14c6595bafb1a351a1abefd96e4715f4c28447f7
 ---
  include/rdma/ib_pack.h | 4 ++++
  1 file changed, 4 insertions(+)

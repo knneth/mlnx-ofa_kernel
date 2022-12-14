@@ -45,6 +45,8 @@
  * DOC: Innova SDK
  * This header defines the in-kernel API for Innova FPGA client drivers.
  */
+#define SBU_QP_QUEUE_SIZE 8
+#define MLX5_FPGA_CMD_TIMEOUT_MSEC (60 * 1000)
 
 #define MLX5_FPGA_CLIENT_NAME_MAX 64
 
@@ -53,7 +55,7 @@
  * accessing the device memory address space
  */
 enum mlx5_fpga_access_type {
-	/** Use the slow CX-FPGA I2C bus*/
+	/** Use the slow CX-FPGA I2C bus */
 	MLX5_FPGA_ACCESS_TYPE_I2C = 0x0,
 	/** Use the fast 'shell QP' */
 	MLX5_FPGA_ACCESS_TYPE_RDMA,
@@ -366,5 +368,35 @@ void mlx5_fpga_device_query(struct mlx5_fpga_device *fdev,
  *         sysfs extensions, etc.
  */
 struct device *mlx5_fpga_dev(struct mlx5_fpga_device *fdev);
+
+/**
+ * mlx5_fpga_temperature() - Retrieve FPGA sensor of temperature
+ * @fdev: The FPGA device
+
+ * Return: 0 if successful
+ *         or any other error value otherwise.
+ */
+int mlx5_fpga_temperature(struct mlx5_fpga_device *fdev,
+			  struct mlx5_fpga_temperature *temp);
+
+/**
+ * mlx5_fpga_connectdisconnect() - Connect/disconnect ConnectX to FPGA
+ * @fdev: The FPGA device
+
+ * Return: 0 if successful
+ *         or any other error value otherwise.
+ */
+int mlx5_fpga_connectdisconnect(struct mlx5_fpga_device *fdev,
+				enum mlx5_fpga_connect *connect);
+
+/**
+ * mlx5_fpga_get_cap() - Returns the FPGA cap mailbox from FW without parsing.
+ * @fdev: The FPGA device
+ * @fpga_caps: Is an array with a length of according to the size of
+ * 			   mlx5_ifc_fpga_cap_bits/32
+ *
+ * Returns a copy of the FPGA caps mailbox and returns it in fpga_caps
+ */
+void mlx5_fpga_get_cap(struct mlx5_fpga_device *fdev, u32 *fpga_caps);
 
 #endif /* MLX5_FPGA_SDK_H */

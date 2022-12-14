@@ -340,55 +340,6 @@ static int add_roce_gid(struct ib_gid_table_entry *entry)
 }
 
 /**
- * add_modify_gid - Add or modify GID table entry
- *
- * @table:	GID table in which GID to be added or modified
- * @attr:	Attributes of the GID
- *
- * Returns 0 on success or appropriate error code. It accepts zero
- * GID addition for non RoCE ports for HCA's who report them as valid
- * GID. However such zero GIDs are not added to the cache.
- */
-static int add_modify_gid(struct ib_gid_table *table,
-			  const struct ib_gid_attr *attr)
-{
-	struct ib_gid_table_entry *entry;
-	int ret = 0;
-
-	/*
-	 * Invalidate any old entry in the table to make it safe to write to
-	 * this index.
-	 */
-	if (is_gid_entry_valid(table->data_vec[attr->index]))
-		put_gid_entry(table->data_vec[attr->index]);
-
-	/*
-	 * Some HCA's report multiple GID entries with only one valid GID, and
-	 * leave other unused entries as the zero GID. Convert zero GIDs to
-	 * empty table entries instead of storing them.
-	 */
-	if (rdma_is_zero_gid(&attr->gid))
-		return 0;
-
-	entry = alloc_gid_entry(attr);
-	if (!entry)
-		return -ENOMEM;
-
-	if (rdma_protocol_roce(attr->device, attr->port_num)) {
-		ret = add_roce_gid(entry);
-		if (ret)
-			goto done;
-	}
-
-	store_gid_entry(table, entry);
-	return 0;
-
-done:
-	put_gid_entry(entry);
-	return ret;
-}
-
-/**
  * del_gid - Delete GID table entry
  *
  * @ib_dev:	IB device whose GID entry to be deleted
@@ -421,7 +372,56 @@ static void del_gid(struct ib_device *ib_dev, u8 port,
 	put_gid_entry_locked(entry);
 }
 
-/* rwlock should be read locked */
+/**
+ * add_modify_gid - Add or modify GID table entry
+ *
+ * @table:	GID table in which GID to be added or modified
+ * @attr:	Attributes of the GID
+ *
+ * Returns 0 on success or appropriate error code. It accepts zero
+ * GID addition for non RoCE ports for HCA's who report them as valid
+ * GID. However such zero GIDs are not added to the cache.
+ */
+static int add_modify_gid(struct ib_gid_table *table,
+			  const struct ib_gid_attr *attr)
+{
+	struct ib_gid_table_entry *entry;
+	int ret = 0;
+
+	/*
+	 * Invalidate any old entry in the table to make it safe to write to
+	 * this index.
+	 */
+	if (is_gid_entry_valid(table->data_vec[attr->index]))
+		del_gid(attr->device, attr->port_num, table, attr->index);
+
+	/*
+	 * Some HCA's report multiple GID entries with only one valid GID, and
+	 * leave other unused entries as the zero GID. Convert zero GIDs to
+	 * empty table entries instead of storing them.
+	 */
+	if (rdma_is_zero_gid(&attr->gid))
+		return 0;
+
+	entry = alloc_gid_entry(attr);
+	if (!entry)
+		return -ENOMEM;
+
+	if (rdma_protocol_roce(attr->device, attr->port_num)) {
+		ret = add_roce_gid(entry);
+		if (ret)
+			goto done;
+	}
+
+	store_gid_entry(table, entry);
+	return 0;
+
+done:
+	put_gid_entry(entry);
+	return ret;
+}
+
+/* rwlock should be read locked, or lock should be held */
 static int find_gid(struct ib_gid_table *table, const union ib_gid *gid,
 		    const struct ib_gid_attr *val, bool default_gid,
 		    unsigned long mask, int *pempty)
@@ -977,12 +977,7 @@ static int gid_table_setup_one(struct ib_device *ib_dev)
 	if (err)
 		return err;
 
-	err = roce_rescan_device(ib_dev);
-
-	if (err) {
-		gid_table_cleanup_one(ib_dev);
-		gid_table_release_one(ib_dev);
-	}
+	rdma_roce_rescan_device(ib_dev);
 
 	return err;
 }
@@ -1464,8 +1459,9 @@ static void ib_cache_update(struct ib_device *device,
 			goto err;
 	}
 
-	pkey_cache = kmalloc(sizeof *pkey_cache + tprops->pkey_tbl_len *
-			     sizeof *pkey_cache->table, GFP_KERNEL);
+	pkey_cache = kmalloc(struct_size(pkey_cache, table,
+					 tprops->pkey_tbl_len),
+			     GFP_KERNEL);
 	if (!pkey_cache)
 		goto err;
 
@@ -1555,8 +1551,9 @@ int ib_cache_setup_one(struct ib_device *device)
 	rwlock_init(&device->cache.lock);
 
 	device->cache.ports =
-		kzalloc(sizeof(*device->cache.ports) *
-			(rdma_end_port(device) - rdma_start_port(device) + 1), GFP_KERNEL);
+		kcalloc(rdma_end_port(device) - rdma_start_port(device) + 1,
+			sizeof(*device->cache.ports),
+			GFP_KERNEL);
 	if (!device->cache.ports)
 		return -ENOMEM;
 
@@ -1611,7 +1608,6 @@ void ib_cache_cleanup_one(struct ib_device *device)
 	 */
 	flush_workqueue(ib_wq);
 }
-
 /**
  * rdma_check_gid_user_access - Check if user process can access
  * this GID entry or not.
@@ -1640,12 +1636,3 @@ bool rdma_check_gid_user_access(const struct ib_gid_attr *attr)
 	return allow;
 }
 
-void __init ib_cache_setup(void)
-{
-	roce_gid_mgmt_init();
-}
-
-void __exit ib_cache_cleanup(void)
-{
-	roce_gid_mgmt_cleanup();
-}

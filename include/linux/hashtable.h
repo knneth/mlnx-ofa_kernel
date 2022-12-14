@@ -86,6 +86,20 @@ static inline void hash_del(struct hlist_node *node)
 	hlist_del_init(node);
 }
 
+#define compat_hash_for_each(name, bkt, obj, member)				\
+	for ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\
+			(bkt)++)\
+		compat_hlist_for_each_entry(obj, &name[bkt], member)
+
+#else /* hash_init */
+
+#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
+#define compat_hash_for_each(hash, bkt, e, node) \
+	hash_for_each(hash, bkt, hlnode, e, node)
+#else
+#define compat_hash_for_each hash_for_each
+#endif
+
 #endif /* hash_init */
 
 #endif /* COMPAT_LINUX_HASHTABLE_H */

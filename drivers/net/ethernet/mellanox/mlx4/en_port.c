@@ -215,6 +215,53 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 
 	mlx4_en_stats = mailbox->buf;
 
+	memset(&tmp_vport_stats, 0, sizeof(tmp_vport_stats));
+	err = mlx4_get_vport_ethtool_stats(mdev->dev, port,
+					   &tmp_vport_stats, reset);
+	if (!err) {
+		spin_lock_bh(&priv->stats_lock);
+
+		/* ethtool stats format */
+		vport_stats->rx_unicast_packets = tmp_vport_stats.rx_unicast_packets;
+		vport_stats->rx_unicast_bytes = tmp_vport_stats.rx_unicast_bytes;
+		vport_stats->rx_multicast_packets = tmp_vport_stats.rx_multicast_packets;
+		vport_stats->rx_multicast_bytes = tmp_vport_stats.rx_multicast_bytes;
+		vport_stats->rx_broadcast_packets = tmp_vport_stats.rx_broadcast_packets;
+		vport_stats->rx_broadcast_bytes = tmp_vport_stats.rx_broadcast_bytes;
+		vport_stats->rx_dropped = tmp_vport_stats.rx_dropped;
+		vport_stats->rx_filtered = tmp_vport_stats.rx_filtered;
+		vport_stats->tx_unicast_packets = tmp_vport_stats.tx_unicast_packets;
+		vport_stats->tx_unicast_bytes = tmp_vport_stats.tx_unicast_bytes;
+		vport_stats->tx_multicast_packets = tmp_vport_stats.tx_multicast_packets;
+		vport_stats->tx_multicast_bytes = tmp_vport_stats.tx_multicast_bytes;
+		vport_stats->tx_broadcast_packets = tmp_vport_stats.tx_broadcast_packets;
+		vport_stats->tx_broadcast_bytes = tmp_vport_stats.tx_broadcast_bytes;
+		vport_stats->tx_dropped = tmp_vport_stats.tx_dropped;
+
+		if (mlx4_is_mfunc(mdev->dev)) {
+			/* netdevice stats format */
+			stats->rx_packets = tmp_vport_stats.rx_unicast_packets +
+				tmp_vport_stats.rx_broadcast_packets +
+				tmp_vport_stats.rx_multicast_packets;
+			stats->tx_packets = tmp_vport_stats.tx_unicast_packets +
+				tmp_vport_stats.tx_broadcast_packets +
+				tmp_vport_stats.tx_multicast_packets;
+			stats->rx_bytes = tmp_vport_stats.rx_unicast_bytes +
+				tmp_vport_stats.rx_broadcast_bytes +
+				tmp_vport_stats.rx_multicast_bytes;
+			stats->tx_bytes = tmp_vport_stats.tx_unicast_bytes +
+				tmp_vport_stats.tx_broadcast_bytes +
+				tmp_vport_stats.tx_multicast_bytes;
+			/* PF netdev stats behaves like VF so no rx_errros. */
+			stats->rx_errors = 0;
+			stats->rx_dropped = tmp_vport_stats.rx_dropped;
+			stats->tx_dropped = tmp_vport_stats.tx_dropped;
+			stats->multicast = tmp_vport_stats.rx_multicast_packets;
+		}
+
+		spin_unlock_bh(&priv->stats_lock);
+	}
+
 	memset(&tmp_counter_stats, 0, sizeof(tmp_counter_stats));
 	counter_index = mlx4_get_default_counter_index(mdev->dev, port);
 	err = mlx4_get_counter_stats(mdev->dev, counter_index,
@@ -279,24 +326,31 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 		priv->port_stats.xmit_more         += READ_ONCE(ring->xmit_more);
 	}
 
-	priv->phy_stats.rx_packets = en_stats_adder(&mlx4_en_stats->RTOT_prio_0,
-						    &mlx4_en_stats->RTOT_prio_1,
-						    NUM_PRIORITIES);
-	priv->phy_stats.tx_packets = en_stats_adder(&mlx4_en_stats->TTOT_prio_0,
-						    &mlx4_en_stats->TTOT_prio_1,
-						    NUM_PRIORITIES);
-	priv->phy_stats.rx_bytes = en_stats_adder(&mlx4_en_stats->ROCT_prio_0,
-						  &mlx4_en_stats->ROCT_prio_1,
-						  NUM_PRIORITIES);
-	priv->phy_stats.tx_bytes = en_stats_adder(&mlx4_en_stats->TOCT_prio_0,
-						  &mlx4_en_stats->TOCT_prio_1,
-						  NUM_PRIORITIES);
+	if (!mlx4_is_slave(mdev->dev)) {
+		struct mlx4_en_phy_stats *p_stats = &priv->phy_stats;
 
-	if (mlx4_is_master(mdev->dev)) {
-		stats->rx_packets = priv->phy_stats.rx_packets;
-		stats->tx_packets = priv->phy_stats.tx_packets;
-		stats->rx_bytes = priv->phy_stats.rx_bytes;
-		stats->tx_bytes = priv->phy_stats.tx_bytes;
+		p_stats->rx_packets_phy =
+			en_stats_adder(&mlx4_en_stats->RTOT_prio_0,
+				       &mlx4_en_stats->RTOT_prio_1,
+				       NUM_PRIORITIES);
+		p_stats->tx_packets_phy =
+			en_stats_adder(&mlx4_en_stats->TTOT_prio_0,
+				       &mlx4_en_stats->TTOT_prio_1,
+				       NUM_PRIORITIES);
+		p_stats->rx_bytes_phy =
+			en_stats_adder(&mlx4_en_stats->ROCT_prio_0,
+				       &mlx4_en_stats->ROCT_prio_1,
+				       NUM_PRIORITIES);
+		p_stats->tx_bytes_phy =
+			en_stats_adder(&mlx4_en_stats->TOCT_prio_0,
+				       &mlx4_en_stats->TOCT_prio_1,
+				       NUM_PRIORITIES);
+		if (mlx4_is_master(mdev->dev)) {
+			stats->rx_packets = p_stats->rx_packets_phy;
+			stats->tx_packets = p_stats->tx_packets_phy;
+			stats->rx_bytes = p_stats->rx_bytes_phy;
+			stats->tx_bytes = p_stats->tx_bytes_phy;
+		}
 	}
 
 	/* net device stats */
@@ -384,57 +438,6 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 	priv->pkstats.tx_prio[7][1] = be64_to_cpu(mlx4_en_stats->TOCT_prio_7);
 	priv->pkstats.tx_prio[8][0] = be64_to_cpu(mlx4_en_stats->TTOT_novlan);
 	priv->pkstats.tx_prio[8][1] = be64_to_cpu(mlx4_en_stats->TOCT_novlan);
-
-	spin_unlock_bh(&priv->stats_lock);
-
-	memset(&tmp_vport_stats, 0, sizeof(tmp_vport_stats));
-	err = mlx4_get_vport_ethtool_stats(mdev->dev, port,
-					   &tmp_vport_stats, reset);
-	if (!err) {
-		spin_lock_bh(&priv->stats_lock);
-
-		/* ethtool stats format */
-		vport_stats->rx_unicast_packets = tmp_vport_stats.rx_unicast_packets;
-		vport_stats->rx_unicast_bytes = tmp_vport_stats.rx_unicast_bytes;
-		vport_stats->rx_multicast_packets = tmp_vport_stats.rx_multicast_packets;
-		vport_stats->rx_multicast_bytes = tmp_vport_stats.rx_multicast_bytes;
-		vport_stats->rx_broadcast_packets = tmp_vport_stats.rx_broadcast_packets;
-		vport_stats->rx_broadcast_bytes = tmp_vport_stats.rx_broadcast_bytes;
-		vport_stats->rx_dropped = tmp_vport_stats.rx_dropped;
-		vport_stats->rx_filtered = tmp_vport_stats.rx_filtered;
-		vport_stats->tx_unicast_packets = tmp_vport_stats.tx_unicast_packets;
-		vport_stats->tx_unicast_bytes = tmp_vport_stats.tx_unicast_bytes;
-		vport_stats->tx_multicast_packets = tmp_vport_stats.tx_multicast_packets;
-		vport_stats->tx_multicast_bytes = tmp_vport_stats.tx_multicast_bytes;
-		vport_stats->tx_broadcast_packets = tmp_vport_stats.tx_broadcast_packets;
-		vport_stats->tx_broadcast_bytes = tmp_vport_stats.tx_broadcast_bytes;
-		vport_stats->tx_dropped = tmp_vport_stats.tx_dropped;
-
-		if (mlx4_is_mfunc(mdev->dev)) {
-			/* netdevice stats format */
-			stats->rx_packets = tmp_vport_stats.rx_unicast_packets +
-				tmp_vport_stats.rx_broadcast_packets +
-				tmp_vport_stats.rx_multicast_packets;
-			stats->tx_packets = tmp_vport_stats.tx_unicast_packets +
-				tmp_vport_stats.tx_broadcast_packets +
-				tmp_vport_stats.tx_multicast_packets;
-			stats->rx_bytes = tmp_vport_stats.rx_unicast_bytes +
-				tmp_vport_stats.rx_broadcast_bytes +
-				tmp_vport_stats.rx_multicast_bytes;
-			stats->tx_bytes = tmp_vport_stats.tx_unicast_bytes +
-				tmp_vport_stats.tx_broadcast_bytes +
-				tmp_vport_stats.tx_multicast_bytes;
-			/* PF netdev stats behaves like VF so no rx_errros. */
-			stats->rx_errors = 0;
-			stats->rx_dropped = tmp_vport_stats.rx_dropped;
-			stats->tx_dropped = tmp_vport_stats.tx_dropped;
-			stats->multicast = tmp_vport_stats.rx_multicast_packets;
-		}
-
-		spin_unlock_bh(&priv->stats_lock);
-	}
-
-	spin_lock_bh(&priv->stats_lock);
 
 	if (tmp_counter_stats.counter_mode == MLX4_IF_CNT_MODE_BASIC) {
 		struct mlx4_if_stat_basic *basic = &tmp_counter_stats.basic;

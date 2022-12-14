@@ -46,7 +46,11 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
 #include <rdma/ib_user_verbs.h>
+#include <rdma/uverbs_std_types.h>
 #include <rdma/ib_user_verbs_exp.h>
+
+#define UVERBS_MODULE_NAME ib_uverbs
+#include <rdma/uverbs_named_ioctl.h>
 
 struct uverbs_lock_class {
 	struct lock_class_key	key;
@@ -229,6 +233,7 @@ void ib_uverbs_init_event_queue(struct ib_uverbs_event_queue *ev_queue);
 struct file *ib_uverbs_alloc_async_event_file(struct ib_uverbs_file *uverbs_file,
 					      struct ib_device *ib_dev);
 void ib_uverbs_free_async_event_file(struct ib_uverbs_file *uverbs_file);
+void ib_uverbs_flow_resources_free(struct ib_uflow_resources *uflow_res);
 
 void ib_uverbs_release_ucq(struct ib_uverbs_file *file,
 			   struct ib_uverbs_completion_event_file *ev_file,
@@ -244,13 +249,14 @@ void ib_uverbs_wq_event_handler(struct ib_event *event, void *context_ptr);
 void ib_uverbs_srq_event_handler(struct ib_event *event, void *context_ptr);
 void ib_uverbs_event_handler(struct ib_event_handler *handler,
 			     struct ib_event *event);
-int ib_uverbs_dealloc_xrcd(struct ib_uverbs_device *dev, struct ib_xrcd *xrcd,
+int ib_uverbs_dealloc_xrcd(struct ib_uobject *uobject, struct ib_xrcd *xrcd,
 			   enum rdma_remove_reason why);
 
 int uverbs_dealloc_mw(struct ib_mw *mw);
 void ib_uverbs_detach_umcast(struct ib_qp *qp,
 			     struct ib_uqp_object *uobj);
 
+void create_udata(struct uverbs_attr_bundle *ctx, struct ib_udata *udata);
 long ib_uverbs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 
 struct ib_uverbs_flow_spec {
@@ -265,13 +271,39 @@ struct ib_uverbs_flow_spec {
 		};
 		struct ib_uverbs_flow_spec_eth     eth;
 		struct ib_uverbs_flow_spec_ipv4    ipv4;
+		struct ib_uverbs_flow_spec_esp     esp;
 		struct ib_uverbs_flow_spec_tcp_udp tcp_udp;
 		struct ib_uverbs_flow_spec_ipv6    ipv6;
 		struct ib_uverbs_flow_spec_action_tag	flow_tag;
 		struct ib_uverbs_flow_spec_action_drop	drop;
+		struct ib_uverbs_flow_spec_action_handle action;
 		struct ib_uverbs_flow_spec_action_count flow_count;
 	};
 };
+
+int ib_uverbs_kern_spec_to_ib_spec_filter(enum ib_flow_spec_type type,
+					  const void *kern_spec_mask,
+					  const void *kern_spec_val,
+					  size_t kern_filter_sz,
+					  union ib_flow_spec *ib_spec);
+
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DEVICE);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_PD);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_MR);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_COMP_CHANNEL);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_CQ);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_QP);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_AH);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_MW);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_SRQ);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_FLOW);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_WQ);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_RWQ_IND_TBL);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_XRCD);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_FLOW_ACTION);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DM);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_COUNTERS);
+extern const struct uverbs_object_def UVERBS_OBJECT(UVERBS_OBJECT_DCT);
 
 #define IB_UVERBS_DECLARE_CMD(name)					\
 	ssize_t ib_uverbs_##name(struct ib_uverbs_file *file,		\
@@ -333,9 +365,5 @@ IB_UVERBS_DECLARE_EX_CMD(create_rwq_ind_table);
 IB_UVERBS_DECLARE_EX_CMD(destroy_rwq_ind_table);
 IB_UVERBS_DECLARE_EX_CMD(modify_qp);
 IB_UVERBS_DECLARE_EX_CMD(modify_cq);
-IB_UVERBS_DECLARE_EX_CMD(describe_counter_set);
-IB_UVERBS_DECLARE_EX_CMD(create_counter_set);
-IB_UVERBS_DECLARE_EX_CMD(destroy_counter_set);
-IB_UVERBS_DECLARE_EX_CMD(query_counter_set);
 
 #endif /* UVERBS_H */

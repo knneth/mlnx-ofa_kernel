@@ -8,13 +8,13 @@ Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux
 
 Package: mlnx-en-utils
 Architecture: any
-Depends: ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod
+Depends: ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod
 Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 
 Package: mlnx-en-dkms
 Section: kernel
 Architecture: all
-Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, perl, procps, module-init-tools | kmod, mlnx-en-utils
+Depends: dkms, make, ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, mlnx-en-utils
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
 Description: DKMS support for mlnx-ofed kernel modules
  This package provides integration with the DKMS infrastructure for

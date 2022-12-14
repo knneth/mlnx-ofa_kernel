@@ -573,67 +573,12 @@ static struct attribute_group qos_group = {
 	.attrs = mlx4_en_qos_attrs,
 };
 
-static ssize_t phy_stat_show(const struct device *d,
-			    struct device_attribute *attr, char *buf,
-			    unsigned long offset)
-{
-	struct net_device *dev = to_net_dev(d);
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	struct mlx4_en_phy_stats *stats = &priv->phy_stats;
-
-	ssize_t ret = -EINVAL;
-
-	WARN_ON(offset > sizeof(struct mlx4_en_phy_stats) ||
-		offset % sizeof(u64) != 0);
-
-	spin_lock_bh(&priv->stats_lock);
-	ret = sprintf(buf, "%llu\n", *(u64 *)(((u8 *)stats) + offset));
-	spin_unlock_bh(&priv->stats_lock);
-
-	return ret;
-}
-
-#define PHY_STAT_ENTRY(name)						\
-static ssize_t name##_show(struct device *d,				\
-			   struct device_attribute *attr, char *buf)	\
-{									\
-	return phy_stat_show(d, attr, buf,				\
-			    offsetof(struct mlx4_en_phy_stats, name));	\
-}									\
-static DEVICE_ATTR(name, S_IRUGO, name##_show, NULL)
-
-PHY_STAT_ENTRY(rx_packets);
-PHY_STAT_ENTRY(tx_packets);
-PHY_STAT_ENTRY(rx_bytes);
-PHY_STAT_ENTRY(tx_bytes);
-
-static struct attribute *mlx4_en_phy_stat_attrs[] = {
-	&dev_attr_rx_packets.attr,
-	&dev_attr_tx_packets.attr,
-	&dev_attr_rx_bytes.attr,
-	&dev_attr_tx_bytes.attr,
-	NULL,
-};
-
-static struct attribute_group phy_stat_group = {
-	.name = "phy_stats",
-	.attrs = mlx4_en_phy_stat_attrs,
-};
-
 int mlx4_en_sysfs_create(struct net_device *dev)
 {
-	int err = 0;
-
-	err = sysfs_create_group(&(dev->dev.kobj), &qos_group);
-
-	if (err)
-		return err;
-
-	return sysfs_create_group(&(dev->dev.kobj), &phy_stat_group);
+	return sysfs_create_group(&(dev->dev.kobj), &qos_group);
 }
 
 void mlx4_en_sysfs_remove(struct net_device *dev)
 {
 	sysfs_remove_group(&(dev->dev.kobj), &qos_group);
-	sysfs_remove_group(&(dev->dev.kobj), &phy_stat_group);
 }

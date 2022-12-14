@@ -40,12 +40,6 @@
 #include "uverbs.h"
 #include "uverbs_exp.h"
 
-static int uverbs_exp_free_dm(struct ib_uobject *uobject,
-			      enum rdma_remove_reason why)
-{
-	return ib_exp_free_dm((struct ib_dm *)uobject->object);
-}
-
 static int uverbs_exp_free_dct(struct ib_uobject *uobject,
 			       enum rdma_remove_reason why)
 {
@@ -63,9 +57,6 @@ static int uverbs_exp_free_dct(struct ib_uobject *uobject,
 	return ret;
 }
 
-DECLARE_UVERBS_OBJECT(uverbs_object_dct, UVERBS_OBJECT_DCT,
-		      &UVERBS_TYPE_ALLOC_IDR_SZ(sizeof(struct ib_udct_object), 0,
-						  uverbs_exp_free_dct));
-
-DECLARE_UVERBS_OBJECT(uverbs_object_dm, UVERBS_OBJECT_DM,
-		      &UVERBS_TYPE_ALLOC_IDR(2, uverbs_exp_free_dm));
+DECLARE_UVERBS_NAMED_OBJECT(UVERBS_OBJECT_DCT,
+			    UVERBS_TYPE_ALLOC_IDR_SZ(sizeof(struct ib_udct_object),
+                            uverbs_exp_free_dct));

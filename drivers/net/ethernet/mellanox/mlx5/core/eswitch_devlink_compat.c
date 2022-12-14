@@ -11,8 +11,6 @@
 
 #ifdef CONFIG_MLX5_ESWITCH
 
-DEFINE_MUTEX(devlink_mutex);
-
 static char *mode_to_str[] = {
 	[DEVLINK_ESWITCH_MODE_LEGACY] = "legacy",
 	[DEVLINK_ESWITCH_MODE_SWITCHDEV] = "switchdev",
@@ -92,14 +90,12 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 	if (!op)
 		return -ENOENT;
 
-	mutex_lock(&devlink_mutex);
 	if (op->read_u16) {
 		ret = op->read_u16(devlink, &read);
 	} else {
 		ret = op->read_u8(devlink, &read8);
 		read = read8;
 	}
-	mutex_unlock(&devlink_mutex);
 
 	if (ret < 0)
 		return ret;
@@ -149,12 +145,10 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 		return -EINVAL;
 	}
 
-	mutex_lock(&devlink_mutex);
 	if (op->write_u16)
 		ret = op->write_u16(devlink, set);
 	else
 		ret = op->write_u8(devlink, set);
-	mutex_unlock(&devlink_mutex);
 
 	if (ret < 0)
 		return ret;
@@ -197,7 +191,7 @@ int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
 		cdevlink->mdev = priv->mdev;
 		kobj = &cdevlink->devlink_kobj;
-		sysfs_attr_init(kobj->attr);
+		sysfs_attr_init(&kobj->attr);
 		kobj->attr.mode = 0644;
 		kobj->attr.name = devlink_compat_ops[i].compat_name;
 		kobj->show = esw_compat_read;

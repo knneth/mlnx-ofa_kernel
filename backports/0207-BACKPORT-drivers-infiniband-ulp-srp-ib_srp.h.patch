@@ -1,0 +1,81 @@
+From: Oleksand Bobro <oleksandrb@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/srp/ib_srp.h
+
+Change-Id: Ia6902d340e2593f350ac7febc68d53f0502d14b6
+---
+ drivers/infiniband/ulp/srp/ib_srp.h | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+--- a/drivers/infiniband/ulp/srp/ib_srp.h
++++ b/drivers/infiniband/ulp/srp/ib_srp.h
+@@ -81,6 +81,30 @@ enum srp_iu_type {
+ 	SRP_IU_RSP,
+ };
+ 
++#ifdef HAVE_BLK_MQ_UNIQUE_TAG
++#if !(defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && \
++      !defined(HAVE_SCSI_HOST_TEMPLATE_USE_HOST_WIDE_TAGS))
++#define HAVE_BLK_TAGS 1
++#endif
++#endif /* HAVE_BLK_MQ_UNIQUE_TAG */
++
++#ifndef HAVE_BLK_TAGS
++static inline u32 build_srp_tag(u16 ch, u16 req_idx)
++{
++	return ch << 16 | req_idx;
++}
++
++static inline u16 srp_tag_ch(u32 tag)
++{
++	return tag >> 16;
++}
++
++static inline u16 srp_tag_idx(u32 tag)
++{
++	return tag & ((1 << 16) - 1);
++}
++#endif
++
+ /*
+  * @mr_page_mask: HCA memory registration page mask.
+  * @mr_page_size: HCA memory registration page size.
+@@ -114,6 +138,9 @@ struct srp_host {
+ };
+ 
+ struct srp_request {
++#ifndef HAVE_BLK_TAGS
++	struct list_head        list;
++#endif
+ 	struct scsi_cmnd       *scmnd;
+ 	struct srp_iu	       *cmd;
+ 	union {
+@@ -124,6 +151,9 @@ struct srp_request {
+ 	struct srp_direct_buf  *indirect_desc;
+ 	dma_addr_t		indirect_dma_addr;
+ 	short			nmdesc;
++#ifndef HAVE_BLK_TAGS
++	uint32_t		tag;
++#endif
+ 	struct ib_cqe		reg_cqe;
+ };
+ 
+@@ -134,6 +164,9 @@ struct srp_request {
+ struct srp_rdma_ch {
+ 	/* These are RW in the hot path, and commonly used together */
+ 	struct list_head	free_tx;
++#ifndef HAVE_BLK_TAGS
++	struct list_head        free_reqs;
++#endif
+ 	spinlock_t		lock;
+ 	s32			req_lim;
+ 
+@@ -191,6 +224,9 @@ struct srp_target_port {
+ 	u32			global_rkey;
+ 	struct srp_rdma_ch	*ch;
+ 	struct net		*net;
++#ifndef HAVE_BLK_TAGS
++	int 			*mq_map;
++#endif
+ 	u32			ch_count;
+ 	u32			lkey;
+ 	enum srp_target_state	state;

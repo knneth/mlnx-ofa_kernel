@@ -18,13 +18,14 @@
 #include "rdma_offload.h"
 
 static unsigned int
-__nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps);
+__nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps,
+					  struct nvmet_port *nport);
 
 static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 					  struct nvmet_rdma_xrq *xrq)
 {
 	struct ib_nvmf_caps *nvmf_caps = &xrq->ndev->device->attrs.nvmf_caps;
-	unsigned int sqe_inline_size = __nvmet_rdma_peer_to_peer_sqe_inline_size(nvmf_caps);
+	unsigned int sqe_inline_size = __nvmet_rdma_peer_to_peer_sqe_inline_size(nvmf_caps, xrq->port);
 
 	srq_attr->ext.nvmf.type = IB_NVMF_READ_WRITE_FLUSH_OFFLOAD;
 	srq_attr->ext.nvmf.log_max_namespace = nvmf_caps->max_namespace;
@@ -774,9 +775,10 @@ static u8 nvmet_rdma_peer_to_peer_mdts(struct nvmet_port *nport)
 	return ilog2(cm_id->device->attrs.nvmf_caps.max_io_sz / SZ_4K);
 }
 
-static unsigned int __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps)
+static unsigned int __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps,
+							      struct nvmet_port *nport)
 {
-	unsigned int sqe_inline_size = nvmet_rdma_ops.sqe_inline_size;
+	unsigned int sqe_inline_size = nport->inline_data_size;
 	int p2p_sqe_inline_size = (nvmf_caps->max_cmd_size * 16) - sizeof(struct nvme_command);
 
 	if (p2p_sqe_inline_size >= 0)
@@ -793,7 +795,7 @@ static unsigned int nvmet_rdma_peer_to_peer_sqe_inline_size(struct nvmet_ctrl *c
 	struct rdma_cm_id *cm_id = port->cm_id;
 	struct ib_nvmf_caps *nvmf_caps = &cm_id->device->attrs.nvmf_caps;
 
-	return __nvmet_rdma_peer_to_peer_sqe_inline_size(nvmf_caps);
+	return __nvmet_rdma_peer_to_peer_sqe_inline_size(nvmf_caps, ctrl->port);
 }
 
 static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *nport)

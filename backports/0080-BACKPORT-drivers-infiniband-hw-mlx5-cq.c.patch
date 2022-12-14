@@ -1,0 +1,42 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
+
+Change-Id: I719019397b8107ff8d0d88a83a068eb10dc8d945
+---
+ drivers/infiniband/hw/mlx5/cq.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/cq.c
++++ b/drivers/infiniband/hw/mlx5/cq.c
+@@ -43,6 +43,7 @@
+ 
+ static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq)
+ {
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	struct mlx5_ib_cq *mlx5ib_cq = to_mibcq(cq);
+ 	struct ib_cq *ibcq = &mlx5ib_cq->ibcq;
+ 
+@@ -50,6 +51,11 @@ static void mlx5_ib_cq_comp(struct mlx5_
+ 
+ 	if (unlikely(mlx5ib_cq->tsk))
+ 		kick_process(mlx5ib_cq->tsk);
++#else
++	struct ib_cq *ibcq = &to_mibcq(cq)->ibcq;
++
++	ibcq->comp_handler(ibcq, ibcq->cq_context);
++#endif
+ }
+ 
+ static void mlx5_ib_cq_event(struct mlx5_core_cq *mcq, enum mlx5_event type)
+@@ -936,7 +942,11 @@ static int create_cq_user(struct mlx5_ib
+ 
+ 		err = pnv_pci_get_as_notify_info(current, &lpid, &pid, &tid);
+ 		if (err) {
++#ifdef HAVE_CLEAR_THREAD_TIDR
+ 			clear_thread_tidr(current);
++#else
++			current->thread.tidr = 0;
++#endif
+ 			goto err_cqb;
+ 		}
+ 

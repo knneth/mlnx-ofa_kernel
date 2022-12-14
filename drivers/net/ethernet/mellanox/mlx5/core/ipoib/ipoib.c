@@ -58,18 +58,21 @@ static const struct net_device_ops mlx5i_netdev_ops = {
 };
 
 /* IPoIB mlx5 netdev profile */
-static void mlx5i_build_nic_params(struct mlx5e_priv *priv,
+static void mlx5i_build_nic_params(struct mlx5_core_dev *mdev,
 				   struct mlx5e_params *params)
 {
-	/* Override RQ params as IPoIB supports only legacy RQ for now */
-	mlx5e_init_rq_type_params(priv, params, MLX5_WQ_TYPE_CYCLIC);
+	/* Override RQ params as IPoIB supports only LINKED LIST RQ for now */
+	MLX5E_SET_PFLAG(params, MLX5E_PFLAG_RX_STRIDING_RQ, false);
+	mlx5e_set_rq_type(mdev, params);
+	mlx5e_init_rq_type_params(mdev, params);
 
 	/* RQ size in ipoib by default is 512 */
-	params->log_rq_size = is_kdump_kernel() ?
+	params->log_rq_mtu_frames = is_kdump_kernel() ?
 		MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE :
 		MLX5I_PARAMS_DEFAULT_LOG_RQ_SIZE;
 
 	params->lro_en = false;
+	params->hard_mtu = MLX5_IB_GRH_BYTES + MLX5_IPOIB_HARD_LEN;
 }
 
 static void mlx5i_tx_timeout_work(struct work_struct *work)
@@ -97,19 +100,24 @@ void mlx5i_init(struct mlx5_core_dev *mdev,
 		void *ppriv)
 {
 	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
+	u16 max_mtu;
 
 	/* priv init */
 	priv->mdev        = mdev;
 	priv->netdev      = netdev;
 	priv->profile     = profile;
 	priv->ppriv       = ppriv;
-	priv->hard_mtu = MLX5_IB_GRH_BYTES + MLX5_IPOIB_HARD_LEN;
+	priv->max_opened_tc = 1;
 	mutex_init(&priv->state_lock);
 	INIT_DELAYED_WORK(&priv->update_stats_work, mlx5e_update_stats_work);
 	INIT_WORK(&priv->tx_timeout_work, mlx5i_tx_timeout_work);
 
-	mlx5e_build_nic_params(priv, &priv->channels.params, profile->max_nch(mdev));
-	mlx5i_build_nic_params(priv, &priv->channels.params);
+	mlx5_query_port_max_mtu(mdev, &max_mtu, 1);
+	netdev->mtu = max_mtu;
+
+	mlx5e_build_nic_params(mdev, &priv->channels.params,
+			       profile->max_nch(mdev), netdev->mtu);
+	mlx5i_build_nic_params(mdev, &priv->channels.params);
 
 	mlx5e_timestamp_init(priv);
 
@@ -228,7 +236,7 @@ int mlx5i_create_underlay_qp(struct mlx5_core_dev *mdev, struct mlx5_core_qp *qp
 		 MLX5_QP_ENHANCED_ULP_STATELESS_MODE);
 
 	addr_path = MLX5_ADDR_OF(qpc, qpc, primary_address_path);
-	MLX5_SET(ads, addr_path, port, 1);
+	MLX5_SET(ads, addr_path, vhca_port_num, 1);
 	MLX5_SET(ads, addr_path, grh, 1);
 
 	ret = mlx5_core_create_qp(mdev, qp, in, inlen);
@@ -281,7 +289,8 @@ static void mlx5i_cleanup_tx(struct mlx5e_priv *priv)
 
 static int mlx5i_create_flow_steering(struct mlx5e_priv *priv)
 {
-	int err;
+	struct ttc_params ttc_params = {};
+	int tt, err;
 
 	priv->fs.ns = mlx5_get_flow_namespace(priv->mdev,
 					       MLX5_FLOW_NAMESPACE_KERNEL);
@@ -296,14 +305,23 @@ static int mlx5i_create_flow_steering(struct mlx5e_priv *priv)
 		priv->netdev->hw_features &= ~NETIF_F_NTUPLE;
 	}
 
-	err = mlx5e_create_inner_ttc_table(priv);
+	mlx5e_set_ttc_basic_params(priv, &ttc_params);
+	mlx5e_set_inner_ttc_ft_params(&ttc_params);
+	for (tt = 0; tt < MLX5E_NUM_INDIR_TIRS; tt++)
+		ttc_params.indir_tirn[tt] = priv->inner_indir_tir[tt].tirn;
+
+	err = mlx5e_create_inner_ttc_table(priv, &ttc_params, &priv->fs.inner_ttc);
 	if (err) {
 		netdev_err(priv->netdev, "Failed to create inner ttc table, err=%d\n",
 			   err);
 		goto err_destroy_arfs_tables;
 	}
 
-	err = mlx5e_create_ttc_table(priv);
+	mlx5e_set_ttc_ft_params(&ttc_params);
+	for (tt = 0; tt < MLX5E_NUM_INDIR_TIRS; tt++)
+		ttc_params.indir_tirn[tt] = priv->indir_tir[tt].tirn;
+
+	err = mlx5e_create_ttc_table(priv, &ttc_params, &priv->fs.ttc);
 	if (err) {
 		netdev_err(priv->netdev, "Failed to create ttc table, err=%d\n",
 			   err);
@@ -313,7 +331,7 @@ static int mlx5i_create_flow_steering(struct mlx5e_priv *priv)
 	return 0;
 
 err_destroy_inner_ttc_table:
-	mlx5e_destroy_inner_ttc_table(priv);
+	mlx5e_destroy_inner_ttc_table(priv, &priv->fs.inner_ttc);
 err_destroy_arfs_tables:
 	mlx5e_arfs_destroy_tables(priv);
 
@@ -322,18 +340,27 @@ err_destroy_arfs_tables:
 
 static void mlx5i_destroy_flow_steering(struct mlx5e_priv *priv)
 {
-	mlx5e_destroy_ttc_table(priv);
-	mlx5e_destroy_inner_ttc_table(priv);
+	mlx5e_destroy_ttc_table(priv, &priv->fs.ttc);
+	mlx5e_destroy_inner_ttc_table(priv, &priv->fs.inner_ttc);
 	mlx5e_arfs_destroy_tables(priv);
 }
 
 static int mlx5i_init_rx(struct mlx5e_priv *priv)
 {
+	struct mlx5_core_dev *mdev = priv->mdev;
 	int err;
+
+	mlx5e_create_q_counters(priv);
+
+	err = mlx5e_open_drop_rq(priv, &priv->drop_rq);
+	if (err) {
+		mlx5_core_err(mdev, "open drop rq failed, %d\n", err);
+		goto err_destroy_q_counters;
+	}
 
 	err = mlx5e_create_indirect_rqt(priv);
 	if (err)
-		return err;
+		goto err_close_drop_rq;
 
 	err = mlx5e_create_direct_rqts(priv);
 	if (err)
@@ -361,6 +388,10 @@ err_destroy_direct_rqts:
 	mlx5e_destroy_direct_rqts(priv);
 err_destroy_indirect_rqts:
 	mlx5e_destroy_rqt(priv, &priv->indir_rqt);
+err_close_drop_rq:
+	mlx5e_close_drop_rq(&priv->drop_rq);
+err_destroy_q_counters:
+	mlx5e_destroy_q_counters(priv);
 	return err;
 }
 
@@ -371,11 +402,13 @@ static void mlx5i_cleanup_rx(struct mlx5e_priv *priv)
 	mlx5e_destroy_indirect_tirs(priv);
 	mlx5e_destroy_direct_rqts(priv);
 	mlx5e_destroy_rqt(priv, &priv->indir_rqt);
+	mlx5e_close_drop_rq(&priv->drop_rq);
+	mlx5e_destroy_q_counters(priv);
 }
 
 static void mlx5i_update_stats(struct mlx5e_priv *priv)
 {
-	mlx5e_update_sw_counters(priv);
+	mlx5e_grp_sw_update_stats(priv);
 }
 
 static inline int mlx5i_get_max_num_channels(struct mlx5_core_dev *mdev)
@@ -409,22 +442,25 @@ static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu)
 {
 	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
 	struct mlx5e_channels new_channels = {};
-	int curr_mtu;
+	struct mlx5e_params *params;
 	int err = 0;
 
 	mutex_lock(&priv->state_lock);
 
-	curr_mtu    = netdev->mtu;
-	netdev->mtu = new_mtu;
+	params = &priv->channels.params;
 
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state))
+	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
+		params->sw_mtu = new_mtu;
+		netdev->mtu = params->sw_mtu;
 		goto out;
+	}
 
-	new_channels.params = priv->channels.params;
-
+	new_channels.params = *params;
+	new_channels.params.sw_mtu = new_mtu;
 	err = mlx5e_switch_priv_channels(priv, &new_channels, NULL);
-	if (err)
-		netdev->mtu = curr_mtu;
+	if (err) 
+		goto out;
+	netdev->mtu = new_channels.params.sw_mtu;
 
 out:
 	mutex_unlock(&priv->state_lock);
@@ -435,7 +471,7 @@ void mlx5i_tx_timeout(struct net_device *netdev)
 {
 	struct mlx5e_priv *priv  = mlx5i_epriv(netdev);
 
-	return mlx5e_do_tx_timeout(priv);
+	queue_work(priv->wq, &priv->tx_timeout_work);
 }
 
 int mlx5i_dev_init(struct net_device *dev)
@@ -512,7 +548,6 @@ static int mlx5i_open(struct net_device *netdev)
 
 	if (epriv->profile->update_stats)
 		queue_delayed_work(epriv->wq, &epriv->update_stats_work, 0);
-
 	mutex_unlock(&epriv->state_lock);
 	return 0;
 
@@ -546,7 +581,7 @@ static int mlx5i_close(struct net_device *netdev)
 	mlx5_fs_remove_rx_underlay_qpn(mdev, ipriv->qp.qpn);
 	mlx5i_uninit_underlay_qp(epriv);
 	mlx5e_deactivate_priv_channels(epriv);
-	mlx5e_close_channels(&epriv->channels);;
+	mlx5e_close_channels(&epriv->channels);
 unlock:
 	mutex_unlock(&epriv->state_lock);
 	return 0;
@@ -589,7 +624,7 @@ static int mlx5i_detach_mcast(struct net_device *netdev, struct ib_device *hca,
 
 	err = mlx5_core_detach_mcg(mdev, gid, ipriv->qp.qpn);
 	if (err)
-		mlx5_core_dbg(mdev, "failed dettaching QPN 0x%x, MGID %pI6\n",
+		mlx5_core_dbg(mdev, "failed detaching QPN 0x%x, MGID %pI6\n",
 			      ipriv->qp.qpn, gid->raw);
 
 	return err;

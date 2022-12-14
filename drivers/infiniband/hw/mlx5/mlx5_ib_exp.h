@@ -40,17 +40,11 @@ struct mlx5_ib_dev;
 struct mlx5_ib_rwq;
 struct mlx5_ib_create_wq_data;
 struct mlx5_ib_qp;
-
 #define MLX5_DC_CONNECT_QP_DEPTH 8192
-#define MLX5_IB_QPT_SW_CNAK	IB_QPT_RESERVED3
-#define MLX5_DM_ALLOWED_ACCESS ( IB_ACCESS_LOCAL_WRITE  |\
-				 IB_ACCESS_REMOTE_WRITE |\
-				 IB_ACCESS_REMOTE_READ  |\
-				 IB_ACCESS_REMOTE_ATOMIC )
-
+#define MLX5_IB_QPT_SW_CNAK	IB_QPT_RESERVED5
 
 enum mlx5_cap_flags {
-	MLX5_CAP_COMPACT_AV   = 1 << 0,
+	MLX5_CAP_COMPACT_AV = 1 << 0,
 	MLX5_CAP_ODP_IMPLICIT = 1 << 1,
 };
 
@@ -169,6 +163,16 @@ struct mlx5_tc_data {
 	struct mlx5_ib_dev *ibdev;
 };
 
+#define MLX5_FS_MAX_TYPES	 6
+#define MLX5_FS_LOG_MAX_ENTRIES	 16
+
+struct mlx5_steering_data {
+	unsigned int ingress_log_ft_size[MLX5_BY_PASS_NUM_PRIOS];
+	struct kobject kobj;
+	struct mlx5_ib_dev *ibdev;
+	int initialized;
+};
+
 void tclass_get_tclass(struct mlx5_ib_dev *dev,
 		       struct mlx5_tc_data *tcd,
 		       const struct rdma_ah_attr *ah,
@@ -187,14 +191,9 @@ struct mlx5_dc_tracer {
 	int		order;
 };
 
-struct mlx5_ib_dct {
+struct mlx5_ib_dc_target {
 	struct ib_dct		ibdct;
-	struct mlx5_core_dct	mdct;
-};
-
-struct mlx5_ib_dm {
-	struct ib_dm	ibdm;
-	void	       *dm_base_addr;
+	struct mlx5_ib_qp    *qp;
 };
 
 struct mlx5_ib_exp_odp_stats {
@@ -211,33 +210,28 @@ struct mlx5_ib_exp_odp_stats {
 	atomic_t                num_mrs_not_found;
 	/* Number of instances when the page fault encountered an error */
 	atomic_t                num_failed_resolutions;
+	/* Number of instances of timeout waiting for mmu notifier */
+	atomic_t                num_timeout_mmu_notifier;
 };
 
-static inline struct mlx5_ib_dm *to_mdm(struct ib_dm *ibdm)
+static inline struct mlx5_ib_dc_target *to_mdct(struct ib_dct *ibdct)
 {
-	return container_of(ibdm, struct mlx5_ib_dm, ibdm);
+	return container_of(ibdct, struct mlx5_ib_dc_target, ibdct);
 }
 
-static inline struct mlx5_ib_dct *to_mibdct(struct mlx5_core_dct *mdct)
-{
-	return container_of(mdct, struct mlx5_ib_dct, mdct);
-}
-
-static inline struct mlx5_ib_dct *to_mdct(struct ib_dct *ibdct)
-{
-	return container_of(ibdct, struct mlx5_ib_dct, ibdct);
-}
-
+int init_steering_sysfs(struct mlx5_ib_dev *dev);
+void cleanup_steering_sysfs(struct mlx5_ib_dev *dev);
 int init_tc_sysfs(struct mlx5_ib_dev *dev);
 void cleanup_tc_sysfs(struct mlx5_ib_dev *dev);
 int init_ttl_sysfs(struct mlx5_ib_dev *dev);
 void cleanup_ttl_sysfs(struct mlx5_ib_dev *dev);
-struct ib_dct *mlx5_ib_create_dct(struct ib_pd *pd,
+
+struct ib_dct *mlx5_ib_create_dc_target(struct ib_pd *pd,
 				  struct ib_dct_init_attr *attr,
 				  struct ib_udata *udata);
-int mlx5_ib_destroy_dct(struct ib_dct *dct);
-int mlx5_ib_query_dct(struct ib_dct *dct, struct ib_dct_attr *attr);
-int mlx5_ib_arm_dct(struct ib_dct *dct, struct ib_udata *udata);
+int mlx5_ib_destroy_dc_target(struct ib_dct *dct);
+int mlx5_ib_query_dc_target(struct ib_dct *dct, struct ib_dct_attr *attr);
+int mlx5_ib_arm_dc_target(struct ib_dct *dct, struct ib_udata *udata);
 
 int mlx5_ib_exp_modify_cq(struct ib_cq *cq, struct ib_cq_attr *cq_attr,
 			  int cq_attr_mask);
@@ -245,8 +239,6 @@ int mlx5_ib_exp_modify_cq(struct ib_cq *cq, struct ib_cq_attr *cq_attr,
 int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			     struct ib_exp_device_attr *props,
 			     struct ib_udata *uhw);
-int mlx5_ib_exp_invalidate_range(struct ib_device *device, struct ib_mr *ibmr,
-				 u64 start, u64 length, u32 flags);
 
 int mlx5_ib_exp_is_scat_cqe_dci(struct mlx5_ib_dev *dev,
 				enum ib_sig_type sig_type,
@@ -305,9 +297,6 @@ int mlx5_ib_mmap_dc_info_page(struct mlx5_ib_dev *dev,
 			      struct vm_area_struct *vma);
 int mlx5_ib_init_dc_improvements(struct mlx5_ib_dev *dev);
 void mlx5_ib_cleanup_dc_improvements(struct mlx5_ib_dev *dev);
-
-int mlx5_ib_mmap_clock_info_page(struct mlx5_ib_dev *dev,
-			 struct vm_area_struct *vma);
 
 void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr);
 
@@ -399,9 +388,6 @@ int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
 int mlx5_ib_query_nvmf_ns(struct ib_nvmf_ns *ns,
 			  struct ib_nvmf_ns_attr *ns_attr);
 
-struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
-			    struct ib_mr_init_attr *attr);
-
 struct mlx5_ib_ucontext;
 struct mlx5_ib_vma_private_data;
 
@@ -409,14 +395,30 @@ int alloc_and_map_wc(struct mlx5_ib_dev *dev,
 		     struct mlx5_ib_ucontext *context, u32 indx,
 		     struct vm_area_struct *vma);
 
-phys_addr_t uar_index2pfn(struct mlx5_ib_dev *dev,
-			  struct mlx5_bfreg_info *bfregi, int idx);
-
 int mlx5_ib_set_qp_offload_type(struct mlx5_qp_context *context, struct ib_qp *qp,
 				enum ib_qp_offload_type offload_type);
 
-void mlx5_ib_set_vma_data(struct vm_area_struct *vma,
-			  struct mlx5_ib_ucontext *ctx,
-			  struct mlx5_ib_vma_private_data *vma_prv);
+int mlx5_ib_set_vma_data(struct vm_area_struct *vma,
+			 struct mlx5_ib_ucontext *ctx,
+			 struct mlx5_ib_vma_private_data *vma_prv);
+
+static inline pgprot_t mlx5_ib_pgprot_writecombine(pgprot_t prot)
+{
+#if defined(CONFIG_ARM64)
+	/*
+	 * Fix up arm64 braindamage of using NORMAL_NC for write
+	 * combining when Device GRE exists specifically for the
+	 * purpose. Needed on ThunderX2.
+	 */
+	switch (read_cpuid_id() & MIDR_CPU_MODEL_MASK) {
+	case MIDR_CPU_MODEL(ARM_CPU_IMP_BRCM, BRCM_CPU_PART_VULCAN):
+	case MIDR_CPU_MODEL(0x43, 0x0af):  /* Cavium ThunderX2 */
+		prot = __pgprot_modify(prot, PTE_ATTRINDX_MASK,
+				       PTE_ATTRINDX(MT_DEVICE_GRE) |
+				       PTE_PXN | PTE_UXN);
+	}
+#endif
+	return prot;
+}
 
 #endif

@@ -110,7 +110,31 @@
 	}									\
 	__memtrack_addr;							\
 })
-
+#define kvcalloc(n, size, flags) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvcalloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvcalloc"); \
+	else									\
+		__memtrack_addr = kvcalloc(n, size, flags);			\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {	\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
+	}									\
+	__memtrack_addr;							\
+})
+#define kcalloc_node(n, size, flags, node) ({					\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kcalloc_node", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc_node"); \
+	else									\
+		__memtrack_addr = kcalloc_node(n, size, flags, node);		\
+	if (__memtrack_addr && (size) &&					\
+	    !is_non_trackable_alloc_func(__func__)) {				\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n) * (size), 0UL, 0, __FILE__, __LINE__, flags); \
+	}									\
+	__memtrack_addr;							\
+})
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
 #define kcalloc(n, size, flags) kzalloc((n)*(size), flags)
 #else
@@ -193,6 +217,20 @@
 	__memtrack_addr;							\
 })
 
+#define kvmalloc(sz, flgs) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvmalloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc"); \
+	else									\
+		__memtrack_addr = kvmalloc(sz, flgs);			\
+	if (__memtrack_addr) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
+			memset(__memtrack_addr, 0x5A, sz);			\
+	}									\
+	__memtrack_addr;							\
+})
 #define kvmalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
 										\

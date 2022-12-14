@@ -35,17 +35,19 @@ struct mlx5_dct_context {
 	__be32			access_violations;
 	u8			rsvd[12];
 };
-
+/*
 int mlx5_core_dct_query(struct mlx5_core_dev *dev, struct mlx5_core_dct *dct,
 			u32 *out, int outlen);
+*/
 int mlx5_core_arm_dct(struct mlx5_core_dev *dev, struct mlx5_core_dct *dct);
 
-int mlx5_core_create_dct(struct mlx5_core_dev *dev,
+/*
+void mlx5_core_create_dct(struct mlx5_core_dev *dev,
 			 struct mlx5_core_dct *dct,
 			 u32 *in);
 int mlx5_core_destroy_dct(struct mlx5_core_dev *dev,
 			  struct mlx5_core_dct *dct);
+*/
 int mlx5_debug_dct_add(struct mlx5_core_dev *dev, struct mlx5_core_dct *dct);
 void mlx5_debug_dct_remove(struct mlx5_core_dev *dev, struct mlx5_core_dct *dct);
-
 #endif

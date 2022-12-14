@@ -1,0 +1,144 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/eipoib/eth_ipoib_sysfs.c
+
+Change-Id: I02832ad006a663907255ac85c848b946d839e642
+---
+ drivers/net/eipoib/eth_ipoib_sysfs.c | 65 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 62 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/eipoib/eth_ipoib_sysfs.c
++++ b/drivers/net/eipoib/eth_ipoib_sysfs.c
+@@ -75,8 +75,12 @@ static int get_emac(u8 *mac, char *s)
+ }
+ 
+ /* show/store functions per module (CLASS_ATTR) */
++#ifdef HAVE_CLASS_ATTR_STRING
+ static ssize_t show_parents(struct class *cls, struct class_attribute *attr,
+ 			    char *buf)
++#else
++static ssize_t show_parents(struct class *cls, char *buf)
++#endif
+ {
+ 	char *p = buf;
+ 	struct parent *parent;
+@@ -109,7 +113,10 @@ static ssize_t parent_show_neighs(struct
+ 	parent_for_each_slave_rcu(parent, slave) {
+ 		for (i = 0; i < NEIGH_HASH_SIZE; i++) {
+ 			struct neigh *neigh;
+-			hlist_for_each_entry_rcu(neigh, &slave->hash[i], hlist)
++#ifndef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
++			struct hlist_node *hlnode;
++#endif
++			compat_hlist_for_each_entry_rcu(neigh, &slave->hash[i], hlist)
+ 				p += _sprintf(p, buf, "SLAVE=%-10s EMAC=%pM IMAC=%pM:%pM:%pM:%.2x:%.2x\n",
+ 					      slave->dev->name,
+ 					      neigh->emac,
+@@ -300,8 +307,11 @@ static ssize_t parent_store_slaves(struc
+ 
+ 		pr_info("%s: adding slave %s\n",
+ 			parent->dev->name, ifname);
+-
++#ifdef NDO_ADD_SLAVE_3_PARAMS
+ 		res = parent_enslave(parent->dev, dev, NULL);
++#else
++		res = parent_enslave(parent->dev, dev);
++#endif
+ 		if (res)
+ 			ret = res;
+ 
+@@ -473,6 +483,18 @@ static struct attribute *per_parent_attr
+ 	NULL,
+ };
+ 
++#ifdef HAVE_CLASS_ATTRIBUTE_NAMESPACE
++/* namespace  support */
++static const void *eipoib_namespace(struct class *cls,
++				    const struct class_attribute *attr)
++{
++	const struct eipoib_net *eipoib_n =
++		container_of(attr,
++			     struct eipoib_net, class_attr_eipoib_interfaces);
++	return eipoib_n->net;
++}
++#endif
++
+ static struct attribute_group parent_group = {
+ 	/* per parent sysfs files under: /sys/class/net/<IF>/eth/.. */
+ 	.name = "eth",
+@@ -507,37 +529,74 @@ void destroy_slave_symlinks(struct net_d
+ 	sysfs_remove_link(&(master->dev.kobj), linkname);
+ }
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ static struct class_attribute class_attr_eth_ipoib_interfaces = {
+ 	.attr = {
+ 		.name = "eth_ipoib_interfaces",
+ 		.mode = S_IWUSR | S_IRUGO,
+ 	},
+ 	.show = show_parents,
++#ifdef HAVE_CLASS_ATTRIBUTE_NAMESPACE
++	.namespace = eipoib_namespace,
++#endif
+ };
++#else
++static CLASS_ATTR(eth_ipoib_interfaces,  S_IRUGO,
++		  show_parents, NULL);
++#endif
+ 
+ /* per module sysfs file under: /sys/class/net/eth_ipoib_interfaces */
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ int mod_create_sysfs(struct eipoib_net *eipoib_n)
++#else
++int mod_create_sysfs(void)
++#endif
+ {
+ 	int rc;
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ 	/* defined in CLASS_ATTR(eth_ipoib_interfaces..) */
+ 	eipoib_n->class_attr_eipoib_interfaces =
+ 		class_attr_eth_ipoib_interfaces;
+ 
+ 	sysfs_attr_init(&eipoib_n->class_attr_eipoib_interfaces.attr);
+-
++#ifndef HAVE_SYSFS_CREATE_FILE_NS
++	rc = netdev_class_create_file(&eipoib_n->class_attr_eipoib_interfaces);
++#else
+ 	rc = netdev_class_create_file_ns(
+ 		&eipoib_n->class_attr_eipoib_interfaces, eipoib_n->net);
++#endif
++#else
++	struct class_attribute *cattr = &class_attr_eth_ipoib_interfaces;
++	rc = netdev_class_create_file(cattr);
++#endif
+ 	if (rc)
+ 		pr_err("%s failed to create sysfs (rc %d)\n",
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ 		       eipoib_n->class_attr_eipoib_interfaces.attr.name, rc);
++#else
++			 __func__, rc);
++#endif
+ 
+ 	return rc;
+ }
+ 
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
+ void mod_destroy_sysfs(struct eipoib_net *eipoib_n)
+-{
++#else
++void mod_destroy_sysfs(void)
++#endif
++{
++#ifdef HAVE_PERNET_OPERATIONS_ID_AND_SIZE
++#ifndef HAVE_SYSFS_CREATE_FILE_NS
++	netdev_class_remove_file(&eipoib_n->class_attr_eipoib_interfaces);
++#else
+ 	netdev_class_remove_file_ns(&eipoib_n->class_attr_eipoib_interfaces,
+ 				    eipoib_n->net);
++#endif
++#else
++	struct class_attribute *cattr = &class_attr_eth_ipoib_interfaces;
++	netdev_class_remove_file(cattr);
++#endif
+ }
+ 
+ int parent_create_sysfs_entry(struct parent *parent)

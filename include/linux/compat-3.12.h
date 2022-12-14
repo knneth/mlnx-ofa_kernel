@@ -32,26 +32,6 @@ static inline struct inode *file_inode(struct file *f)
 	return f->f_dentry->d_inode;
 }
 
-#ifndef HAVE_PCIE_LINK_WIDTH
-/* These values come from the PCI Express Spec */
-enum pcie_link_width {
-	PCIE_LNK_WIDTH_RESRV	= 0x00,
-	PCIE_LNK_X1		= 0x01,
-	PCIE_LNK_X2		= 0x02,
-	PCIE_LNK_X4		= 0x04,
-	PCIE_LNK_X8		= 0x08,
-	PCIE_LNK_X12		= 0x0C,
-	PCIE_LNK_X16		= 0x10,
-	PCIE_LNK_X32		= 0x20,
-	PCIE_LNK_WIDTH_UNKNOWN  = 0xFF,
-};
-#endif
-
-extern const unsigned char pcie_link_speed[];
-
-#define pcie_get_minimum_link LINUX_BACKPORT(pcie_get_minimum_link)
-int pcie_get_minimum_link(struct pci_dev *dev, enum pci_bus_speed *speed,
-		enum pcie_link_width *width);
 #ifndef HAVE_UDP4_HWCSUM
 #define udp4_hwcsum LINUX_BACKPORT(udp4_hwcsum)
 void udp4_hwcsum(struct sk_buff *skb, __be32 src, __be32 dst);

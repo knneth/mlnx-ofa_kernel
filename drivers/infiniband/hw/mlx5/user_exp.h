@@ -106,17 +106,18 @@ struct mlx5_exp_ib_alloc_ucontext_resp {
 	__u32						max_recv_wr;
 	__u32						max_srq_recv_wr;
 	__u16						num_ports;
-	__u16						reserved1;
+	__u16						flow_action_flags;
 	__u32						comp_mask;
 	__u32						response_length;
 	__u8						cqe_version;
 	__u8						cmds_supp_uhw;
 	__u8						eth_min_inline;
-	__u8						reserved2;
+	__u8						clock_info_versions;
 	__u64						hca_core_clock_offset;
 	__u32						log_uar_size;
 	__u32						num_uars_per_page;
-	__u32						reserved3[2];
+	__u32						num_dyn_bfregs;
+	__u32						reserved3;
 	/* Some more reserved fields for future growth of mlx5_ib_alloc_ucontext_resp */
 	__u64						prefix_reserved[8];
 	struct mlx5_exp_ib_alloc_ucontext_data_resp	exp_data;
@@ -158,14 +159,14 @@ struct mlx5_exp_ib_create_qp {
 	/* To allow casting to mlx5_ib_create_qp the prefix is the same as
 	 * struct mlx5_ib_create_qp prefix
 	 */
-	__u64	buf_addr;
-	__u64	db_addr;
+	__aligned_u64 buf_addr;
+	__aligned_u64 db_addr;
 	__u32	sq_wqe_count;
 	__u32	rq_wqe_count;
 	__u32	rq_wqe_shift;
 	__u32	flags;
 	__u32	uidx;
-	__u32	reserved0;
+	__u32	bfreg_index;
 	__u64	sq_buf_addr;
 
 	/* Some more reserved fields for future growth of mlx5_ib_create_qp */
@@ -178,10 +179,6 @@ struct mlx5_exp_ib_create_qp {
 	 * Add new experimental data only inside the exp struct
 	 */
 	struct mlx5_exp_ib_create_qp_data exp;
-};
-
-enum {
-	MLX5_EXP_INVALID_BFREG = -1,
 };
 
 enum mlx5_exp_drv_create_qp_uar_idx {

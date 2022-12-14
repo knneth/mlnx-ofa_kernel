@@ -5,6 +5,13 @@
 
 #include_next <linux/blkdev.h>
 
+#ifndef SECTOR_SHIFT
+#define SECTOR_SHIFT 9
+#endif
+#ifndef SECTOR_SIZE
+#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+#endif
+
 #ifndef HAVE_BLK_RQ_IS_PASSTHROUGH
 static inline bool blk_rq_is_passthrough(struct request *rq)
 {

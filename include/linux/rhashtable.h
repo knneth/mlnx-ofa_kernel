@@ -19,6 +19,10 @@
 
 #include "../../compat/config.h"
 
+#ifdef CONFIG_COMPAT_RHLTABLE
+#undef HAVE_RHLTABLE
+#endif
+
 #ifdef HAVE_RHLTABLE
 #include_next <linux/rhashtable.h>
 #else /* HAVE_RHLTABLE */

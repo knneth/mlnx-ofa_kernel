@@ -4,6 +4,7 @@
 #include "../../compat/config.h"
 
 #include_next <linux/mm.h>
+#include <linux/overflow.h>
 
 #ifndef HAVE_KVZALLOC
 #include <linux/vmalloc.h>
@@ -47,6 +48,16 @@ static inline void *kvmalloc_node(size_t size, gfp_t flags, int node) {
 }
 #endif
 
+#ifndef HAVE_KVMALLOC
+#include <linux/vmalloc.h>
+#include <linux/slab.h>
+
+static inline void *kvmalloc(size_t size, gfp_t flags)
+{
+        return kvmalloc_node(size, flags, NUMA_NO_NODE);
+}
+
+#endif
 #ifndef HAVE_KVZALLOC_NODE
 #include <linux/vmalloc.h>
 #include <linux/slab.h>
@@ -57,6 +68,16 @@ static inline void *kvzalloc_node(size_t size, gfp_t flags, int node)
 	if (p)
 		memset(p, 0, size);
 	return p;
+}
+#endif
+
+#ifndef HAVE_KVCALLOC
+#include <linux/vmalloc.h>
+#include <linux/slab.h>
+
+static inline void *kvcalloc(size_t n, size_t size, gfp_t flags)
+{
+	return kvmalloc_array(n, size, flags | __GFP_ZERO);
 }
 #endif
 

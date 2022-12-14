@@ -1,0 +1,25 @@
+From: Chris Mi <chrism@mellanox.com>
+Subject: [PATCH] BACKPORT: include/net/flow_keys.h
+
+---
+ include/net/flow_keys.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/net/flow_keys.h
++++ b/include/net/flow_keys.h
+@@ -1,6 +1,8 @@
+ #ifndef COMPAT_LINUX_FLOW_KEYS_H
+ #define COMPAT_LINUX_FLOW_KEYS_H
+ 
++#ifndef CONFIG_COMPAT_KERNEL_4_9
++
+ #include "../../compat/config.h"
+ 
+ #ifdef HAVE_NET_FLOW_KEYS_H
+@@ -23,4 +25,6 @@ extern bool skb_flow_dissect(const struc
+ 
+ #endif /* HAVE_NET_FLOW_KEYS_H */
+ 
++#endif /* CONFIG_COMPAT_KERNEL_4_9 */
++
+ #endif /* COMPAT_LINUX_FLOW_KEYS_H */

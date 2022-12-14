@@ -2296,7 +2296,7 @@ static void parent_set_dev_addr(struct net_device *ibd,
 static u16 parent_select_q(struct net_device *dev, struct sk_buff *skb,
 			   void *accel_priv, select_queue_fallback_t fallback)
 {
-	return skb_tx_hash(dev, skb);
+	return fallback(dev, skb) % dev->real_num_tx_queues;
 }
 
 int parent_add_vif_param(struct net_device *parent_dev,
@@ -2686,9 +2686,6 @@ static void __exit mod_exit(void)
 module_init(mod_init);
 module_exit(mod_exit);
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 MODULE_DESCRIPTION(DRV_DESCRIPTION ", v" DRV_VERSION);
 MODULE_AUTHOR("Ali Ayoub && Erez Shitrit");

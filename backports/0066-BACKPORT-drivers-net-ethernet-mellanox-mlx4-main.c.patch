@@ -1,0 +1,238 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/main.c
+
+Change-Id: I14820099875dbe9fde54f6075fd4fde1b9b0eb5f
+---
+ drivers/net/ethernet/mellanox/mlx4/main.c | 74 ++++++++++++++++++++++++++++++-
+ 1 file changed, 73 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx4/main.c
++++ b/drivers/net/ethernet/mellanox/mlx4/main.c
+@@ -45,7 +45,9 @@
+ #include <linux/delay.h>
+ #include <linux/kmod.h>
+ #include <linux/etherdevice.h>
++#ifdef HAVE_DEVLINK_H
+ #include <net/devlink.h>
++#endif
+ #include <linux/proc_fs.h>
+ 
+ #include <uapi/rdma/mlx4-abi.h>
+@@ -1678,8 +1680,10 @@ static void mlx4_request_modules(struct
+ 			has_eth_port = true;
+ 	}
+ 
++#ifdef CONFIG_MLX4_EN
+ 	if (has_eth_port)
+ 		request_module_nowait(EN_DRV_NAME);
++#endif
+ 	if (!mlx4_en_only_mode && (has_ib_port || (dev->caps.flags & MLX4_DEV_CAP_FLAG_IBOE)))
+ 		request_module_nowait(IB_DRV_NAME);
+ }
+@@ -3597,6 +3601,9 @@ static void mlx4_enable_msi_x(struct mlx
+ 	struct msix_entry *entries;
+ 	int i;
+ 	int port = 0;
++#ifndef HAVE_PCI_ENABLE_MSIX_RANGE
++	int err;
++#endif
+ 
+ 	if (msi_x) {
+ 		int nreq = min3(dev->caps.num_ports *
+@@ -3620,8 +3627,24 @@ static void mlx4_enable_msi_x(struct mlx
+ 		for (i = 0; i < nreq; ++i)
+ 			entries[i].entry = i;
+ 
++#ifdef HAVE_PCI_ENABLE_MSIX_RANGE
+ 		nreq = pci_enable_msix_range(dev->persist->pdev, entries, 2,
+ 					     nreq);
++#else
++retry:
++		err = pci_enable_msix(dev->persist->pdev, entries, nreq);
++		if (err) {
++			/* Try again if at least 2 vectors are available */
++			if (err > 1) {
++				mlx4_info(dev, "Requested %d vectors, "
++					  "but only %d MSI-X vectors available, "
++					  "trying again\n", nreq, err);
++				nreq = err;
++				goto retry;
++			}
++			nreq = -1;
++		}
++#endif
+ 
+ 		/* At least 2 vectors are required, one for the ASYNC EQ and
+ 		 * a completion EQ.
+@@ -3697,13 +3720,17 @@ no_msi:
+ 
+ static int mlx4_init_port_info(struct mlx4_dev *dev, int port)
+ {
++#ifdef HAVE_DEVLINK_H
+ 	struct devlink *devlink = priv_to_devlink(mlx4_priv(dev));
++#endif
+ 	struct mlx4_port_info *info = &mlx4_priv(dev)->port[port];
+ 	int err;
+ 
++#ifdef HAVE_DEVLINK_H
+ 	err = devlink_port_register(devlink, &info->devlink_port, port);
+ 	if (err)
+ 		return err;
++#endif
+ 
+ 	info->dev = dev;
+ 	info->port = port;
+@@ -3730,7 +3757,9 @@ static int mlx4_init_port_info(struct ml
+ 	err = device_create_file(&dev->persist->pdev->dev, &info->port_attr);
+ 	if (err) {
+ 		mlx4_err(dev, "Failed to create file for port %d\n", port);
++#ifdef HAVE_DEVLINK_H
+ 		devlink_port_unregister(&info->devlink_port);
++#endif
+ 		info->port = -1;
+ 		return err;
+ 	}
+@@ -3752,7 +3781,9 @@ static int mlx4_init_port_info(struct ml
+ 		mlx4_err(dev, "Failed to create mtu file for port %d\n", port);
+ 		device_remove_file(&info->dev->persist->pdev->dev,
+ 				   &info->port_attr);
++#ifdef HAVE_DEVLINK_H
+ 		devlink_port_unregister(&info->devlink_port);
++#endif
+ 		info->port = -1;
+ 		return err;
+ 	}
+@@ -3768,7 +3799,9 @@ static void mlx4_cleanup_port_info(struc
+ 	device_remove_file(&info->dev->persist->pdev->dev, &info->port_attr);
+ 	device_remove_file(&info->dev->persist->pdev->dev,
+ 			   &info->port_mtu_attr);
++#ifdef HAVE_DEVLINK_H
+ 	devlink_port_unregister(&info->devlink_port);
++#endif
+ 
+ #ifdef CONFIG_RFS_ACCEL
+ 	free_irq_cpu_rmap(info->rmap);
+@@ -4575,6 +4608,7 @@ err_disable_pdev:
+ 	return err;
+ }
+ 
++#ifdef HAVE_DEVLINK_H
+ static int mlx4_devlink_port_type_set(struct devlink_port *devlink_port,
+ 				      enum devlink_port_type port_type)
+ {
+@@ -4603,26 +4637,40 @@ static int mlx4_devlink_port_type_set(st
+ static const struct devlink_ops mlx4_devlink_ops = {
+ 	.port_type_set	= mlx4_devlink_port_type_set,
+ };
++#endif
+ 
+ static int mlx4_init_one(struct pci_dev *pdev, const struct pci_device_id *id)
+ {
++#ifdef HAVE_DEVLINK_H
+ 	struct devlink *devlink;
++#endif
+ 	struct mlx4_priv *priv;
+ 	struct mlx4_dev *dev;
+ 	int ret;
+ 
+ 	printk_once(KERN_INFO "%s", mlx4_version);
+ 
++#ifdef HAVE_DEVLINK_H
+ 	devlink = devlink_alloc(&mlx4_devlink_ops, sizeof(*priv));
+ 	if (!devlink)
+ 		return -ENOMEM;
+ 	priv = devlink_priv(devlink);
++#else
++	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
++	if (!priv)
++		return -ENOMEM;
++#endif
+ 
+ 	dev       = &priv->dev;
+ 	dev->persist = kzalloc(sizeof(*dev->persist), GFP_KERNEL);
+ 	if (!dev->persist) {
++#ifdef HAVE_DEVLINK_H
+ 		ret = -ENOMEM;
+ 		goto err_devlink_free;
++#else
++		kfree(priv);
++		return -ENOMEM;
++#endif
+ 	}
+ 	dev->persist->pdev = pdev;
+ 	dev->persist->dev = dev;
+@@ -4632,23 +4680,35 @@ static int mlx4_init_one(struct pci_dev
+ 	mutex_init(&dev->persist->interface_state_mutex);
+ 	mutex_init(&dev->persist->pci_status_mutex);
+ 
++#ifdef HAVE_DEVLINK_H
+ 	ret = devlink_register(devlink, &pdev->dev);
+ 	if (ret)
+ 		goto err_persist_free;
++#endif
+ 
+ 	ret =  __mlx4_init_one(pdev, id->driver_data, priv);
++#ifdef HAVE_DEVLINK_H
+ 	if (ret)
+ 		goto err_devlink_unregister;
+-
+ 	pci_save_state(pdev);
+ 	return 0;
++#else
++	if (ret) {
++		kfree(dev->persist);
++		kfree(priv);
++	} else {
++		pci_save_state(pdev);
++	}
++#endif
+ 
++#ifdef HAVE_DEVLINK_H
+ err_devlink_unregister:
+ 	devlink_unregister(devlink);
+ err_persist_free:
+ 	kfree(dev->persist);
+ err_devlink_free:
+ 	devlink_free(devlink);
++#endif
+ 	return ret;
+ }
+ 
+@@ -4745,7 +4805,9 @@ static void mlx4_remove_one(struct pci_d
+ 	struct mlx4_dev_persistent *persist = pci_get_drvdata(pdev);
+ 	struct mlx4_dev  *dev  = persist->dev;
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
++#ifdef HAVE_DEVLINK_H
+ 	struct devlink *devlink = priv_to_devlink(priv);
++#endif
+ 	int active_vfs = 0;
+ 
+ 	if (mlx4_is_slave(dev))
+@@ -4780,9 +4842,15 @@ static void mlx4_remove_one(struct pci_d
+ 
+ 	pci_release_regions(pdev);
+ 	mlx4_pci_disable_device(dev);
++#ifdef HAVE_DEVLINK_H
+ 	devlink_unregister(devlink);
++#endif
+ 	kfree(dev->persist);
++#ifdef HAVE_DEVLINK_H
+ 	devlink_free(devlink);
++#else
++	kfree(priv);
++#endif
+ }
+ 
+ static int restore_current_port_types(struct mlx4_dev *dev,
+@@ -4969,7 +5037,11 @@ static void mlx4_shutdown(struct pci_dev
+ 	mutex_unlock(&persist->interface_state_mutex);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_PCI_ERROR_HANDLERS
+ static const struct pci_error_handlers mlx4_err_handler = {
++#else
++static struct pci_error_handlers mlx4_err_handler = {
++#endif
+ 	.error_detected = mlx4_pci_err_detected,
+ 	.slot_reset     = mlx4_pci_slot_reset,
+ 	.resume		= mlx4_pci_resume,

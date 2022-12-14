@@ -46,12 +46,21 @@ struct mlx5_fpga_client_data {
 	bool added;
 };
 
+enum mlx5_fdev_state {
+	MLX5_FDEV_STATE_SUCCESS = 0,
+	MLX5_FDEV_STATE_FAILURE = 1,
+	MLX5_FDEV_STATE_IN_PROGRESS = 2,
+	MLX5_FDEV_STATE_DISCONNECTED = 3,
+	MLX5_FDEV_STATE_NONE = 0xFFFF,
+};
+
 /* Represents an Innova device */
 struct mlx5_fpga_device {
 	struct mlx5_core_dev *mdev;
 	struct completion load_event;
 	spinlock_t state_lock; /* Protects state transitions */
-	enum mlx5_fpga_status state;
+	enum mlx5_fdev_state fdev_state;
+	enum mlx5_fpga_status image_status;
 	enum mlx5_fpga_image last_admin_image;
 	enum mlx5_fpga_image last_oper_image;
 
@@ -63,6 +72,7 @@ struct mlx5_fpga_device {
 	} conn_res;
 
 	struct mlx5_fpga_ipsec *ipsec;
+	struct mlx5_fpga_tls *tls;
 
 	struct list_head list;
 	struct list_head client_data_list;

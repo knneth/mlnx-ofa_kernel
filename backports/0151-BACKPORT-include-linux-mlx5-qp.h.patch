@@ -1,0 +1,20 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/qp.h
+
+Change-Id: I8ce6d2e341364ce77f95c476146e5711256cb93b
+---
+ include/linux/mlx5/qp.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/include/linux/mlx5/qp.h
++++ b/include/linux/mlx5/qp.h
+@@ -242,7 +242,9 @@ enum {
+ };
+ 
+ enum {
++#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
+ 	MLX5_ETH_WQE_SVLAN              = 1 << 0,
++#endif
+ 	MLX5_ETH_WQE_INSERT_VLAN        = 1 << 15,
+ };
+ 

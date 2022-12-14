@@ -120,7 +120,7 @@ static u16 ipoib_select_queue_sw_rss(struct net_device *dev, struct sk_buff *skb
 	header->tss_qpn_mask_sz |= priv->tss_qpn_mask_sz;
 
 	/* don't use special ring in TX */
-	return __skb_tx_hash(dev, skb, priv->tss_qp_num);
+	return fallback(dev, skb) % priv->tss_qp_num;
 }
 
 static void ipoib_timeout_rss(struct net_device *dev)
@@ -189,6 +189,32 @@ static struct net_device_stats *ipoib_get_stats_rss(struct net_device *dev)
 	stats->tx_dropped = local_stats.tx_dropped;
 
 	return stats;
+}
+
+static void ipoib_napi_add_rss(struct net_device *dev)
+{
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+	int i;
+
+	for (i = 0; i < priv->num_rx_queues; i++)
+		netif_napi_add(dev, &priv->recv_ring[i].napi,
+			       ipoib_rx_poll_rss, NAPI_POLL_WEIGHT);
+
+	for (i = 0; i < priv->num_tx_queues; i++)
+		netif_napi_add(dev, &priv->send_ring[i].napi,
+			       ipoib_tx_poll_rss, MAX_SEND_CQE);
+}
+
+static void ipoib_napi_del_rss(struct net_device *dev)
+{
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+	int i;
+
+	for (i = 0; i < priv->num_rx_queues; i++)
+		netif_napi_del(&priv->recv_ring[i].napi);
+
+	for (i = 0; i < priv->num_tx_queues; i++)
+		netif_napi_del(&priv->send_ring[i].napi);
 }
 
 static struct ipoib_neigh *ipoib_neigh_ctor_rss(u8 *daddr,
@@ -284,11 +310,13 @@ int ipoib_dev_init_default_rss(struct net_device *dev)
 		tx_allocated++;
 	}
 
+	ipoib_napi_add_rss(dev);
+
 	/* priv->tx_head, tx_tail & tx_outstanding are already 0 */
 
 	if (ipoib_transport_dev_init_rss(dev, priv->ca)) {
 		pr_warn("%s: ipoib_transport_dev_init_rss failed\n", priv->ca->name);
-		goto out_send_ring_cleanup;
+		goto out_napi_delete;
 	}
 
 	up_write(&priv->rings_rwsem);
@@ -305,6 +333,9 @@ int ipoib_dev_init_default_rss(struct net_device *dev)
 	priv->dev->dev_addr[3] = (priv->qp->qp_num) & 0xff;
 
 	return 0;
+
+out_napi_delete:
+	ipoib_napi_del_rss(dev);
 
 out_send_ring_cleanup:
 	for (i = 0; i < tx_allocated; i++)
@@ -436,6 +467,8 @@ void ipoib_dev_uninit_default_rss(struct net_device *dev)
 	int i;
 
 	ipoib_transport_dev_cleanup_rss(dev);
+
+	ipoib_napi_del_rss(dev);
 
 	ipoib_cm_dev_cleanup(dev);
 

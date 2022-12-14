@@ -382,7 +382,7 @@ static int fs_debugfs_read_fte_flow_tag(void *attr, u64 *data)
 {
 	struct fs_fte *fte = attr;
 
-	*data = fte->flow_tag;
+	*data = fte->action.flow_tag;
 	return 0;
 }
 
@@ -818,7 +818,7 @@ static ssize_t action_read(struct file *filp, char __user *buf, size_t count,
 {
 	struct fs_fte *fte  = filp->private_data;
 
-	switch (fte->action) {
+	switch (fte->action.action) {
 	case MLX5_FLOW_CONTEXT_ACTION_ALLOW:
 		return simple_read_from_buffer(buf, count, pos, "ALLOW\n",
 					       sizeof("ALLOW\n") - 1);
@@ -853,6 +853,12 @@ static ssize_t dst_type_read(struct file *filp, char __user *buf, size_t count,
 	case MLX5_FLOW_DESTINATION_TYPE_VPORT:
 		return simple_read_from_buffer(buf, count, pos, "vport\n",
 					       sizeof("vport\n") - 1);
+	case MLX5_FLOW_DESTINATION_TYPE_PORT:
+		return simple_read_from_buffer(buf, count, pos, "port\n",
+					       sizeof("port\n") - 1);
+	case MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM:
+		return simple_read_from_buffer(buf, count, pos, "flow table num\n",
+					       sizeof("flow table num\n") - 1);
 	}
 	return 0;
 }

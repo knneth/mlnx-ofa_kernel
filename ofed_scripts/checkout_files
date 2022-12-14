@@ -33,3 +33,5 @@ include/linux/nvme-fc-driver.h
 include/linux/nvme-fc.h
 include/linux/blk-mq-rdma.h
 block/blk-mq-rdma.c
+include/linux/net_dim.h
+include/linux/lightnvm.h

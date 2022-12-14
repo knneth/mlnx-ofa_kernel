@@ -1,0 +1,160 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
+
+Change-Id: I20b8bcc3b44bef40ee2e9f0012d58ee5450ba0a8
+---
+ drivers/infiniband/hw/mlx5/main.c | 46 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/main.c
++++ b/drivers/infiniband/hw/mlx5/main.c
+@@ -53,7 +53,9 @@
+ #include <linux/mlx5/port.h>
+ #include <linux/mlx5/vport.h>
+ #include <linux/mlx5/capi.h>
++#ifdef HAVE_MM_CONTEXT_ADD_COPRO
+ #include <linux/mmu_context.h>
++#endif
+ #include <linux/mlx5/fs.h>
+ #include <linux/list.h>
+ #include <rdma/ib_smi.h>
+@@ -192,13 +194,17 @@ static int mlx5_netdev_event(struct noti
+ 	case NETDEV_CHANGE:
+ 	case NETDEV_UP:
+ 	case NETDEV_DOWN: {
++#ifdef HAVE_NETDEV_MASTER_UPPER_DEV_GET
+ 		struct net_device *lag_ndev = mlx5_lag_get_roce_netdev(mdev);
++#endif
+ 		struct net_device *upper = NULL;
+ 
++#ifdef HAVE_NETDEV_MASTER_UPPER_DEV_GET
+ 		if (lag_ndev) {
+ 			upper = netdev_master_upper_dev_get(lag_ndev);
+ 			dev_put(lag_ndev);
+ 		}
++#endif
+ 
+ 		if ((upper == ndev || (!upper && ndev == roce->netdev))
+ 		    && ibdev->ib_active) {
+@@ -888,8 +894,10 @@ int mlx5_ib_query_device(struct ib_devic
+ 	if (MLX5_CAP_GEN(mdev, cd))
+ 		props->device_cap_flags |= IB_DEVICE_CROSS_CHANNEL;
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ 	if (!mlx5_core_is_pf(mdev))
+ 		props->device_cap_flags |= IB_DEVICE_VIRTUAL_FUNCTION;
++#endif
+ 
+ 	if (mlx5_ib_port_link_layer(ibdev, 1) ==
+ 	    IB_LINK_LAYER_ETHERNET && raw_support) {
+@@ -1712,7 +1720,9 @@ static int alloc_capi_context(struct mlx
+ 		goto out_mm;
+ 	}
+ 
++#ifdef HAVE_MM_CONTEXT_ADD_COPRO
+ 	mm_context_add_copro(cctx->mm);
++#endif
+ 	return 0;
+ 
+ out_mm:
+@@ -1730,7 +1740,9 @@ static int free_capi_context(struct mlx5
+ 	err = mlx5_core_destroy_pec(dev->mdev, cctx->pasid);
+ 	if (err)
+ 		mlx5_ib_warn(dev, "destroy pec failed\n");
++#ifdef HAVE_MM_CONTEXT_ADD_COPRO
+ 	mm_context_remove_copro(cctx->mm);
++#endif
+ 	mmdrop(cctx->mm);
+ 	return err;
+ }
+@@ -2023,6 +2035,7 @@ static int get_extended_index(unsigned l
+ 	return get_arg(offset) | ((offset >> 16) & 0xff) << 8;
+ }
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ static void  mlx5_ib_vma_open(struct vm_area_struct *area)
+ {
+ 	/* vma_open is called when a new VMA is created on top of our VMA.  This
+@@ -2092,7 +2105,19 @@ int mlx5_ib_set_vma_data(struct vm_area_
+ 
+ 	return 0;
+ }
++#else
++int mlx5_ib_set_vma_data(struct vm_area_struct *vma,
++			  struct mlx5_ib_ucontext *ctx,
++			  struct mlx5_ib_vma_private_data *vma_prv)
++{
++	/* In case vma->vm_ops is not supported just free the vma_prv */
++	kfree(vma_prv);
+ 
++	return 0;
++}
++#endif
++
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ static void mlx5_ib_disassociate_ucontext(struct ib_ucontext *ibcontext)
+ {
+ 	struct vm_area_struct *vma;
+@@ -2114,6 +2139,7 @@ static void mlx5_ib_disassociate_ucontex
+ 	}
+ 	mutex_unlock(&context->vma_private_list_mutex);
+ }
++#endif /* defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED) */
+ 
+ static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
+ {
+@@ -2175,6 +2201,9 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	int dyn_uar = (cmd == MLX5_IB_MMAP_ALLOC_WC);
+ 	int max_valid_idx = dyn_uar ? bfregi->num_sys_pages :
+ 				bfregi->num_static_sys_pages;
++#if defined(CONFIG_X86) && !defined(HAVE_PAT_ENABLED_AS_FUNCTION)
++	pgprot_t tmp_prot = __pgprot(0);
++#endif
+ 
+ 	if (vma->vm_end - vma->vm_start != PAGE_SIZE)
+ 		return -EINVAL;
+@@ -2195,7 +2224,11 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	case MLX5_IB_MMAP_ALLOC_WC:
+ /* Some architectures don't support WC memory */
+ #if defined(CONFIG_X86)
++#ifdef HAVE_PAT_ENABLED_AS_FUNCTION
+ 		if (!pat_enabled())
++#else
++		if (pgprot_val(pgprot_writecombine(tmp_prot)) == pgprot_val(pgprot_noncached(tmp_prot)))
++#endif
+ 			return -EPERM;
+ #elif !(defined(CONFIG_PPC) || ((defined(CONFIG_ARM) || defined(CONFIG_ARM64)) && defined(CONFIG_MMU)))
+ 			return -EPERM;
+@@ -6301,6 +6334,9 @@ int mlx5_ib_stage_caps_init(struct mlx5_
+ 	dev->ib_dev.exp_query_device	= mlx5_ib_exp_query_device;
+ 	dev->ib_dev.exp_query_mkey      = mlx5_ib_exp_query_mkey;
+ 	dev->ib_dev.exp_create_qp	= mlx5_ib_exp_create_qp;
++#ifdef HAVE_MM_STRUCT_FREE_AREA_CACHE
++	dev->ib_dev.exp_get_unmapped_area = mlx5_ib_exp_get_unmapped_area;
++#endif
+ 	dev->ib_dev.resize_cq		= mlx5_ib_resize_cq;
+ 	dev->ib_dev.destroy_cq		= mlx5_ib_destroy_cq;
+ 	dev->ib_dev.poll_cq		= mlx5_ib_poll_cq;
+@@ -6321,14 +6357,22 @@ int mlx5_ib_stage_caps_init(struct mlx5_
+ 	if (MLX5_CAP_GEN(mdev, ipoib_enhanced_offloads))
+ 		dev->ib_dev.alloc_rdma_netdev	= mlx5_ib_alloc_rdma_netdev;
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ 	if (mlx5_core_is_pf(mdev)) {
+ 		dev->ib_dev.get_vf_config	= mlx5_ib_get_vf_config;
++#ifdef HAVE_LINKSTATE
+ 		dev->ib_dev.set_vf_link_state	= mlx5_ib_set_vf_link_state;
++#endif
+ 		dev->ib_dev.get_vf_stats	= mlx5_ib_get_vf_stats;
++#ifdef HAVE_IFLA_VF_IB_NODE_PORT_GUID
+ 		dev->ib_dev.set_vf_guid		= mlx5_ib_set_vf_guid;
++#endif
+ 	}
++#endif
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 	dev->ib_dev.disassociate_ucontext = mlx5_ib_disassociate_ucontext;
++#endif
+ 
+ 	if (MLX5_CAP_GEN(mdev, nvmf_target_offload)) {
+ 		dev->ib_dev.create_nvmf_backend_ctrl  = mlx5_ib_create_nvmf_backend_ctrl;

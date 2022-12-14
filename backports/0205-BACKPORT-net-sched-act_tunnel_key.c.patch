@@ -1,0 +1,27 @@
+From: Chris Mi <chrism@mellanox.com>
+Subject: [PATCH] BACKPORT: net/sched/act_tunnel_key.c
+
+---
+ net/sched/act_tunnel_key.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+--- a/net/sched/act_tunnel_key.c
++++ b/net/sched/act_tunnel_key.c
+@@ -341,7 +341,7 @@ static int tunnel_key_init(struct net *n
+ 			saddr = nla_get_in_addr(tb[TCA_TUNNEL_KEY_ENC_IPV4_SRC]);
+ 			daddr = nla_get_in_addr(tb[TCA_TUNNEL_KEY_ENC_IPV4_DST]);
+ 
+-			metadata = __ip_tun_set_dst(saddr, daddr, 0, 0,
++			metadata = backport__ip_tun_set_dst(saddr, daddr, 0, 0,
+ 						    dst_port, TUNNEL_KEY,
+ 						    key_id, 0);
+ 		} else if (tb[TCA_TUNNEL_KEY_ENC_IPV6_SRC] &&
+@@ -352,7 +352,7 @@ static int tunnel_key_init(struct net *n
+ 			saddr = nla_get_in6_addr(tb[TCA_TUNNEL_KEY_ENC_IPV6_SRC]);
+ 			daddr = nla_get_in6_addr(tb[TCA_TUNNEL_KEY_ENC_IPV6_DST]);
+ 
+-			metadata = __ipv6_tun_set_dst(&saddr, &daddr, 0, 0, dst_port,
++			metadata = backport__ipv6_tun_set_dst(&saddr, &daddr, 0, 0, dst_port,
+ 						      0, TUNNEL_KEY,
+ 						      key_id, 0);
+ 		}

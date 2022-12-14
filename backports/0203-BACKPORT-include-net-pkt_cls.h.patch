@@ -1,0 +1,48 @@
+From: Chris Mi <chrism@mellanox.com>
+Subject: [PATCH] BACKPORT: include/net/pkt_cls.h
+
+---
+ include/net/pkt_cls.h | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+--- a/include/net/pkt_cls.h
++++ b/include/net/pkt_cls.h
+@@ -6,6 +6,7 @@
+ #ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
+ #include <uapi/linux/uapi/pkt_cls.h>
+ 
++#ifndef CONFIG_COMPAT_KERNEL_4_9
+ enum tc_fl_command {
+ 	TC_CLSFLOWER_REPLACE,
+ 	TC_CLSFLOWER_DESTROY,
+@@ -29,11 +30,6 @@ struct tc_cls_flower_offload {
+ 
+ #define NETIF_F_HW_TC ((netdev_features_t)1 << ((NETDEV_FEATURE_COUNT + 1)))
+ 
+-static inline bool tc_skip_hw(u32 flags)
+-{
+-	return (flags & TCA_CLS_FLAGS_SKIP_HW) ? true : false;
+-}
+-
+ static inline bool tc_skip_sw(u32 flags)
+ {
+ 	return (flags & TCA_CLS_FLAGS_SKIP_SW) ? true : false;
+@@ -51,11 +47,18 @@ static inline bool tc_flags_valid(u32 fl
+ 	return true;
+ }
+ 
++#endif /* CONFIG_COMPAT_KERNEL_4_9 */
++
+ static inline bool tc_in_hw(u32 flags)
+ {
+ 	return (flags & TCA_CLS_FLAGS_IN_HW) ? true : false;
+ }
+ 
++static inline bool tc_skip_hw(u32 flags)
++{
++	return (flags & TCA_CLS_FLAGS_SKIP_HW) ? true : false;
++}
++
+ #endif
+ 
+ #endif	/* _COMPAT_NET_PKT_CLS_H */

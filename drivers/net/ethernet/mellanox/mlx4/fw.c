@@ -37,6 +37,7 @@
 #include <linux/module.h>
 #include <linux/cache.h>
 #include <linux/kernel.h>
+#include <uapi/rdma/mlx4-abi.h>
 #include <net/ipv6.h>
 
 #include "fw.h"
@@ -1925,7 +1926,6 @@ int mlx4_INIT_HCA(struct mlx4_dev *dev, struct mlx4_init_hca_param *param)
 	};
 
 #define INIT_HCA_IN_SIZE		 0x200
-#define INIT_HCA_DRV_NAME_FOR_FW_MAX_SIZE 64
 #define INIT_HCA_VERSION_OFFSET		 0x000
 #define	 INIT_HCA_VERSION		 2
 #define INIT_HCA_VXLAN_OFFSET		 0x0c
@@ -1956,6 +1956,7 @@ int mlx4_INIT_HCA(struct mlx4_dev *dev, struct mlx4_init_hca_param *param)
 #define	 INIT_HCA_LOG_MC_TABLE_SZ_OFFSET (INIT_HCA_MCAST_OFFSET + 0x1b)
 #define  INIT_HCA_DEVICE_MANAGED_FLOW_STEERING_EN	0x6
 #define  INIT_HCA_DRIVER_VERSION_OFFSET   0x140
+#define  INIT_HCA_DRIVER_VERSION_SZ       0x40
 #define  INIT_HCA_FS_PARAM_OFFSET         0x1d0
 #define  INIT_HCA_FS_BASE_OFFSET          (INIT_HCA_FS_PARAM_OFFSET + 0x00)
 #define  INIT_HCA_FS_LOG_ENTRY_SZ_OFFSET  (INIT_HCA_FS_PARAM_OFFSET + 0x12)
@@ -2050,11 +2051,10 @@ int mlx4_INIT_HCA(struct mlx4_dev *dev, struct mlx4_init_hca_param *param)
 		*(inbox + INIT_HCA_RECOVERABLE_ERROR_EVENT_OFFSET / 4) |= cpu_to_be32(1 << 31);
 
 	if (dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW) {
-		strncpy((u8 *)mailbox->buf + INIT_HCA_DRIVER_VERSION_OFFSET,
-			DRV_NAME_FOR_FW,
-			INIT_HCA_DRV_NAME_FOR_FW_MAX_SIZE - 1);
-		mlx4_dbg(dev, "Reporting Driver Version to FW: %s\n",
-			 (u8 *)mailbox->buf + INIT_HCA_DRIVER_VERSION_OFFSET);
+		u8 *dst = (u8 *)(inbox + INIT_HCA_DRIVER_VERSION_OFFSET / 4);
+
+		strncpy(dst, DRV_NAME_FOR_FW, INIT_HCA_DRIVER_VERSION_SZ - 1);
+		mlx4_dbg(dev, "Reporting Driver Version to FW: %s\n", dst);
 	}
 
 	if (ingress_parser_mode == MLX4_INGRESS_PARSER_MODE_NON_L4_CSUM_OFFLOAD) {

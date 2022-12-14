@@ -32,8 +32,13 @@ static void mlx_lag_compat_changelowerstate_event(struct slave *slave)
 	info.info.dev         = slave->dev;
 	info.lower_state_info = &lag_lower_info;
 
-	lag_lower_info.link_up    = (slave->link == BOND_LINK_UP);
-	lag_lower_info.tx_enabled = !!bond_slave_can_tx(slave);
+	lag_lower_info.link_up    = bond_slave_is_up(slave);
+
+	/* Refraining here from using bond_slave_can_tx(), due to its reliance
+	 * on slave->link, which at the time this function is called may still
+	 * be set to BOND_LINK_DOWN. */
+	lag_lower_info.tx_enabled = bond_slave_is_up(slave) &&
+				    bond_is_active_slave(slave);
 
 	mlx_lag_compat_netdev_event_cb(NETDEV_CHANGELOWERSTATE, &info);
 }
@@ -64,7 +69,11 @@ static void mlx_lag_compat_changeupper_event(struct bonding *bond,
 	mlx_lag_compat_netdev_event_cb(NETDEV_CHANGEUPPER, &info);
 }
 
+#if defined(HAVE_SOCK_CREATE_KERN_5_PARAMS)
+static void mlx_lag_compat_rtnl_data_ready(struct sock *sk)
+#else
 static void mlx_lag_compat_rtnl_data_ready(struct sock *sk, int bytes)
+#endif
 {
 	struct net_device *ndev;
 	struct ifinfomsg *ifm;
@@ -82,7 +91,8 @@ static void mlx_lag_compat_rtnl_data_ready(struct sock *sk, int bytes)
 	if (!nlh || !NLMSG_OK(nlh, skb->len) || nlh->nlmsg_type != RTM_NEWLINK)
 		goto free_skb;
 
-	ASSERT_RTNL();
+	if (!rtnl_is_locked())
+		goto free_skb;
 
 	ifm  = nlmsg_data(nlh);
 	ndev = dev_get_by_index(&init_net, ifm->ifi_index);
@@ -134,8 +144,13 @@ static int mlx_lag_compat_events_open(void (*cb)(unsigned long, void *))
 	};
 	int err;
 
+#if defined(HAVE_SOCK_CREATE_KERN_5_PARAMS)
+	err = sock_create_kern(&init_net, PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE,
+			       &mlx_lag_compat_rtnl_sock);
+#else
 	err = sock_create_kern(PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE,
 			       &mlx_lag_compat_rtnl_sock);
+#endif
 	if (err) {
 		pr_err("mlx: ERROR: Couldn't create netlink socket. LAG events will not be dispatched.\n");
 		mlx_lag_compat_rtnl_sock = NULL;

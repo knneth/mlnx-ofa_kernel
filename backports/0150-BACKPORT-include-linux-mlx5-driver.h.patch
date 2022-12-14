@@ -1,0 +1,78 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
+
+Change-Id: I0bf2d645b7ed5547df0541d2add12592d1c3763b
+---
+ include/linux/mlx5/driver.h | 26 +++++++++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
+
+--- a/include/linux/mlx5/driver.h
++++ b/include/linux/mlx5/driver.h
+@@ -51,8 +51,15 @@
+ #include <linux/mlx5/device.h>
+ #include <linux/mlx5/doorbell.h>
+ #include <linux/mlx5/srq.h>
++#include <linux/net_tstamp.h>
++#ifdef HAVE_TIMECOUNTER_H
+ #include <linux/timecounter.h>
++#else
++#include <linux/clocksource.h>
++#endif
++#if defined (HAVE_PTP_CLOCK_INFO) && (defined(CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ #include <linux/ptp_clock_kernel.h>
++#endif
+ #ifdef CONFIG_CXL_LIB
+ #include <misc/cxllib.h>
+ #endif
+@@ -701,6 +708,9 @@ struct mlx5_port_module_event_stats {
+ struct mlx5_priv {
+ 	char			name[MLX5_MAX_NAME_LEN];
+ 	struct mlx5_eq_table	eq_table;
++#ifndef HAVE_PCI_IRQ_API
++	struct msix_entry       *msix_arr;
++#endif
+ 	struct mlx5_irq_info	*irq_info;
+ 
+ 	/* pages stuff */
+@@ -891,9 +901,13 @@ struct mlx5_clock {
+ 	unsigned long              overflow_period;
+ 	struct delayed_work        overflow_work;
+ 	struct mlx5_core_dev      *mdev;
++#if defined (HAVE_PTP_CLOCK_INFO) && (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	struct ptp_clock          *ptp;
+ 	struct ptp_clock_info      ptp_info;
++#ifdef HAVE_PTP_CLOCK_INFO_N_PINS
+ 	struct mlx5_pps            pps_info;
++#endif
++#endif
+ };
+ 
+ struct mlx5_mst_dump;
+@@ -1056,8 +1070,13 @@ struct mlx5_cmd_work_ent {
+ 	int			page_queue;
+ 	u8			status;
+ 	u8			token;
++#ifdef HAVE_KTIME_GET_NS
+ 	u64			ts1;
+ 	u64			ts2;
++#else
++	struct timespec		ts1;
++	struct timespec		ts2;
++#endif
+ 	u16			op;
+ 	bool			polling;
+ };
+@@ -1444,7 +1463,12 @@ static inline int mlx5_core_is_pf(struct
+ 	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
+ }
+ 
+-#define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs((mdev)->pdev))
++/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL
++ * return in that case 1
++ */
++#define MLX5_TOTAL_VPORTS(mdev) \
++	(1 + ((pci_sriov_get_totalvfs(mdev->pdev)) < 0 ? \
++	      0 : pci_sriov_get_totalvfs(mdev->pdev)))
+ #define MLX5_VPORT_MANAGER(mdev) \
+ 	(MLX5_CAP_GEN(mdev, vport_group_manager) && \
+ 	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) && \

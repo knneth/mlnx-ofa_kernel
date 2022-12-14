@@ -588,8 +588,8 @@ static int alloc_proxy_bufs(struct ib_device *dev, struct mlx4_ib_qp *qp)
 	int i;
 
 	qp->sqp_proxy_rcv =
-		kmalloc(sizeof (struct mlx4_ib_buf) * qp->rq.wqe_cnt,
-			GFP_KERNEL);
+		kmalloc_array(qp->rq.wqe_cnt, sizeof(struct mlx4_ib_buf),
+			      GFP_KERNEL);
 	if (!qp->sqp_proxy_rcv)
 		return -ENOMEM;
 	for (i = 0; i < qp->rq.wqe_cnt; i++) {
@@ -1217,7 +1217,10 @@ static int create_qp_common(struct mlx4_ib_dev *dev, struct ib_pd *pd,
 		}
 
 		if (qp->max_inline_data) {
-			err = mlx4_bf_alloc(dev->dev, &qp->bf, 0);
+			int numa_node;
+
+			numa_node = dev_to_node(&dev->dev->persist->pdev->dev);
+			err = mlx4_bf_alloc(dev->dev, &qp->bf, numa_node);
 			if (err) {
 				pr_debug("failed to allocate blue flame register (%d)",
 				         err);
@@ -1893,7 +1896,8 @@ static int _mlx4_set_path(struct mlx4_ib_dev *dev,
 		const struct ib_global_route *grh = rdma_ah_read_grh(ah);
 		int real_sgid_index =
 			mlx4_ib_gid_index_to_real_index(dev, grh->sgid_attr);
-
+		if (real_sgid_index < 0)
+			return real_sgid_index;
 		if (real_sgid_index >= dev->dev->caps.gid_table_len[port]) {
 			pr_err("sgid_index (%u) too large. max is %d\n",
 			       real_sgid_index, dev->dev->caps.gid_table_len[port] - 1);
@@ -4101,7 +4105,7 @@ out:
 		 */
 		mmiowb();
 	}
-
+ 
 	if (likely(nreq)) {
 		stamp_send_wqe(qp, stamp, size * 16);
 		ind = pad_wraparound(qp, ind);

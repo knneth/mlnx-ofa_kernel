@@ -169,10 +169,12 @@ struct sa_path_rec_ib {
  *			resolved for this path record entry.
  * @dmac:		Destination mac address for the given DGID entry
  *			of the path record entry.
+ * @udp_sport:		UDP source port for the connection
  */
 struct sa_path_rec_roce {
 	bool	route_resolved;
 	u8	dmac[ETH_ALEN];
+	__be16  udp_sport;
 };
 
 struct sa_path_rec_opa {
@@ -664,5 +666,16 @@ static inline u8 *sa_path_get_dmac(struct sa_path_rec *rec)
 	if (sa_path_is_roce(rec))
 		return rec->roce.dmac;
 	return NULL;
+}
+
+static inline void sa_path_set_udp_sport(struct sa_path_rec *rec,
+					 __be16 udp_sport)
+{
+	rec->roce.udp_sport = udp_sport;
+}
+
+static inline __be16 sa_path_get_udp_sport(struct sa_path_rec *rec)
+{
+	return rec->roce.udp_sport;
 }
 #endif /* IB_SA_H */

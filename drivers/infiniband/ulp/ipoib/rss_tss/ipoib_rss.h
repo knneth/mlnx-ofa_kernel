@@ -192,6 +192,9 @@ struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
 int ipoib_ib_dev_open_default_rss(struct net_device *dev);
 int ipoib_ib_dev_stop_default_rss(struct net_device *dev);
 
+int ipoib_rx_poll_rss(struct napi_struct *napi, int budget);
+int ipoib_tx_poll_rss(struct napi_struct *napi, int budget);
+
 #ifdef CONFIG_INFINIBAND_IPOIB_CM
 
 void ipoib_cm_handle_rx_wc_rss(struct net_device *dev, struct ib_wc *wc);

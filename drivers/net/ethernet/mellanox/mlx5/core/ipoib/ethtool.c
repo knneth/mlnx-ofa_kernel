@@ -277,6 +277,7 @@ const struct ethtool_ops mlx5i_ethtool_ops = {
 	.get_link_ksettings = mlx5i_get_link_ksettings,
 	.get_link           = ethtool_op_get_link,
 	.get_settings       = mlx5i_get_settings,
+	.get_ts_info        = mlx5i_get_ts_info,
 };
 
 const struct ethtool_ops mlx5i_pkey_ethtool_ops = {

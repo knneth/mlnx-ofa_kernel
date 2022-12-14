@@ -105,6 +105,7 @@ enum {
 	IB_QP_EXP_USER_CREATE_RX_END_PADDING = (1<<11),
 	IB_QP_EXP_USER_CREATE_SCATTER_FCS = (1 << 12),
 	IB_QP_EXP_USER_CREATE_TUNNEL_OFFLOADS = (1 << 13),
+	IB_QP_EXP_USER_CREATE_PACKET_BASED_CREDIT_MODE = (1 << 16),
 };
 
 enum ib_uverbs_exp_create_qp_flags {
@@ -114,7 +115,8 @@ enum ib_uverbs_exp_create_qp_flags {
 					 IB_QP_EXP_USER_CREATE_ATOMIC_BE_REPLY |
 					 IB_QP_EXP_USER_CREATE_RX_END_PADDING |
 					 IB_QP_EXP_USER_CREATE_SCATTER_FCS |
-					 IB_QP_EXP_USER_CREATE_TUNNEL_OFFLOADS
+					 IB_QP_EXP_USER_CREATE_TUNNEL_OFFLOADS |
+					 IB_QP_EXP_USER_CREATE_PACKET_BASED_CREDIT_MODE
 };
 
 enum ib_uverbs_exp_create_qp_comp_mask {
@@ -317,6 +319,13 @@ struct ib_uverbs_exp_umr_fixed_size_caps {
 	__u64 max_entity_size;
 };
 
+struct ib_uverbs_exp_pci_atomic_caps {
+	__u16 fetch_add;
+	__u16 swap;
+	__u16 compare_swap;
+	__u16 reserved;
+};
+
 struct ib_uverbs_exp_query_device_resp {
 	__u64					comp_mask;
 	struct ib_uverbs_query_device_resp	base;
@@ -356,6 +365,7 @@ struct ib_uverbs_exp_query_device_resp {
 	__u64 					max_dm_size;
 	__u64					comp_mask_2;
 	struct ib_uverbs_exp_umr_fixed_size_caps umr_fixed_size_caps;
+	struct ib_uverbs_exp_pci_atomic_caps	pci_atomic_caps;
 };
 
 enum ib_uverbs_exp_create_cq_comp_mask {
@@ -564,23 +574,6 @@ struct ib_uverbs_exp_free_dm {
 	__u32 reserved;
 };
 
-struct ib_uverbs_exp_flow_tunnel_filter {
-	__be32 tunnel_id;
-};
-
-struct ib_uverbs_exp_flow_spec_tunnel {
-	union {
-		struct ib_uverbs_flow_spec_hdr hdr;
-		struct {
-			__u32 type;
-			__u16 size;
-			__u16 reserved;
-		};
-	};
-	struct ib_uverbs_exp_flow_tunnel_filter val;
-	struct ib_uverbs_exp_flow_tunnel_filter mask;
-};
-
 struct ib_uverbs_exp_kern_ib_filter {
 	__be32	l3_type_qpn;
 	__u8	dst_gid[16];
@@ -599,19 +592,6 @@ struct ib_uverbs_exp_flow_spec_ib {
 	struct ib_uverbs_exp_kern_ib_filter mask;
 };
 
-struct ib_uverbs_exp_flow_spec_action_tag {
-	union {
-		struct ib_uverbs_flow_spec_hdr hdr;
-		struct {
-			__u32 type;
-			__u16 size;
-			__u16 reserved;
-		};
-	};
-	__be32			      tag_id;
-	__u32			      reserved1;
-};
-
 struct ib_uverbs_exp_flow_spec {
 	union {
 		union {
@@ -627,8 +607,6 @@ struct ib_uverbs_exp_flow_spec {
 		struct ib_uverbs_flow_spec_ipv4    ipv4;
 		struct ib_uverbs_flow_spec_tcp_udp tcp_udp;
 		struct ib_uverbs_flow_spec_ipv6    ipv6;
-		struct ib_uverbs_exp_flow_spec_tunnel	tunnel;
-		struct ib_uverbs_exp_flow_spec_action_tag  flow_tag;
 	};
 };
 

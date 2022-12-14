@@ -62,7 +62,7 @@
 #include <rdma/mlx4-abi.h>
 
 #define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"4.4-1.0.0"
+#define DRV_VERSION	"4.5-1.0.1"
 
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF
@@ -71,9 +71,6 @@
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("Mellanox ConnectX HCA InfiniBand driver");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 
 int mlx4_ib_sm_guid_assign = 0;
 module_param_named(sm_guid_assign, mlx4_ib_sm_guid_assign, int, 0444);
@@ -200,6 +197,7 @@ static struct net_device *mlx4_ib_get_netdev(struct ib_device *device, u8 port_n
 
 static inline enum mlx4_roce_gid_type ib_gid_type_to_mlx4_gid_type(enum ib_gid_type gid_type)
 {
+
 	switch (gid_type) {
 	case IB_GID_TYPE_IB:
 		return MLX4_ROCE_GID_TYPE_V1;
@@ -353,6 +351,7 @@ static int mlx4_ib_del_gid(const struct ib_gid_attr *attr, void **context)
 							port_gid_table->gids[i].gid_type);
 			}
 
+			
 		}
 	}
 	spin_unlock_bh(&iboe->lock);
@@ -403,7 +402,7 @@ int mlx4_ib_gid_index_to_real_index(struct mlx4_ib_dev *ibdev,
 }
 
 #define field_avail(type, fld, sz) (offsetof(type, fld) + \
-		    sizeof(((type *)0)->fld) <= (sz))
+				    sizeof(((type *)0)->fld) <= (sz))
 
 int mlx4_ib_query_device(struct ib_device *ibdev,
 				struct ib_device_attr *props,
@@ -558,7 +557,7 @@ int mlx4_ib_query_device(struct ib_device *ibdev,
 	if (uhw->outlen >= resp.response_length + sizeof(resp.hca_core_clock_offset)) {
 		resp.response_length += sizeof(resp.hca_core_clock_offset);
 		if (!err && !mlx4_is_slave(dev->dev)) {
-			resp.comp_mask |= QUERY_DEVICE_RESP_MASK_TIMESTAMP;
+			resp.comp_mask |= MLX4_IB_QUERY_DEV_RESP_MASK_CORE_CLOCK_OFFSET;
 			resp.hca_core_clock_offset = clock_params.offset % PAGE_SIZE;
 		}
 	}
@@ -751,7 +750,8 @@ static int eth_link_query_port(struct ib_device *ibdev, u8 port,
 					   IB_WIDTH_4X : IB_WIDTH_1X;
 	props->active_speed	=  (((u8 *)mailbox->buf)[5] == 0x20 /*56Gb*/) ?
 					   IB_SPEED_FDR : IB_SPEED_QDR;
-	props->port_cap_flags	= IB_PORT_CM_SUP | IB_PORT_IP_BASED_GIDS;
+	props->port_cap_flags	= IB_PORT_CM_SUP;
+	props->ip_gids = true;
 	props->gid_tbl_len	= mdev->dev->caps.gid_table_len[port];
 	props->max_msg_sz	= mdev->dev->caps.max_msg_sz;
 	props->pkey_tbl_len	= 1;
@@ -1188,84 +1188,39 @@ static const struct vm_operations_struct mlx4_ib_vm_ops = {
 static void mlx4_ib_disassociate_ucontext(struct ib_ucontext *ibcontext)
 {
 	int i;
-	int ret = 0;
 	struct vm_area_struct *vma;
 	struct mlx4_ib_ucontext *context = to_mucontext(ibcontext);
-	struct task_struct *owning_process  = NULL;
-	struct mm_struct   *owning_mm       = NULL;
 	struct mlx4_ib_user_uar *uar;
-
-	owning_process = get_pid_task(ibcontext->tgid, PIDTYPE_PID);
-	if (!owning_process)
-		return;
-
-	owning_mm = get_task_mm(owning_process);
-	if (!owning_mm) {
-		pr_info("no mm, disassociate ucontext is pending task termination\n");
-		while (1) {
-			/* make sure that task is dead before returning, it may
-			 * prevent a rare case of module down in parallel to a
-			 * call to mlx4_ib_vma_close.
-			 */
-			put_task_struct(owning_process);
-			usleep_range(1000, 2000);
-			owning_process = get_pid_task(ibcontext->tgid,
-						      PIDTYPE_PID);
-			if (!owning_process ||
-			    owning_process->state == TASK_DEAD) {
-				pr_info("disassociate ucontext done, task was terminated\n");
-				/* in case task was dead need to release the task struct */
-				if (owning_process)
-					put_task_struct(owning_process);
-				return;
-			}
-		}
-	}
 
 	/* need to protect from a race on closing the vma as part of
 	 * mlx4_ib_vma_close().
 	 */
-	down_write(&owning_mm->mmap_sem);
 	for (i = 0; i < HW_BAR_COUNT; i++) {
 		vma = context->hw_bar_info[i].vma;
 		if (!vma)
 			continue;
 
-		ret = zap_vma_ptes(context->hw_bar_info[i].vma,
-				   context->hw_bar_info[i].vma->vm_start,
-				   PAGE_SIZE);
-		if (ret) {
-			pr_err("Error: zap_vma_ptes failed for index=%d, ret=%d\n", i, ret);
-			BUG_ON(1);
-		}
+		zap_vma_ptes(context->hw_bar_info[i].vma,
+			     context->hw_bar_info[i].vma->vm_start, PAGE_SIZE);
 
 		context->hw_bar_info[i].vma->vm_flags &=
 			~(VM_SHARED | VM_MAYSHARE);
 		/* context going to be destroyed, should not access ops any more */
 		context->hw_bar_info[i].vma->vm_ops = NULL;
 	}
-
 	list_for_each_entry(uar, &context->user_uar_list, list)
 		for (i = 0; i < HW_BAR_COUNT; i++) {
 			vma = uar->hw_bar_info[i].vma;
 			if (!vma)
 				continue;
 
-			ret = zap_vma_ptes(uar->hw_bar_info[i].vma,
+			zap_vma_ptes(uar->hw_bar_info[i].vma,
 					   uar->hw_bar_info[i].vma->vm_start,
 					   PAGE_SIZE);
-			if (ret) {
-				pr_err("Error: zap_vma_ptes failed for uar_idx=%d, index=%d, ret=%d\n", uar->user_idx, i, ret);
-				BUG_ON(1);
-			}
-
 			/* context going to be destroyed, should not access ops any more */
 			uar->hw_bar_info[i].vma->vm_ops = NULL;
 		}
 
-	up_write(&owning_mm->mmap_sem);
-	mmput(owning_mm);
-	put_task_struct(owning_process);
 }
 
 void mlx4_ib_set_vma_data(struct vm_area_struct *vma,
@@ -1910,7 +1865,7 @@ static int mlx4_ib_add_dont_trap_rule(struct mlx4_dev *dev,
 
 static struct ib_flow *mlx4_ib_create_flow(struct ib_qp *qp,
 				    struct ib_flow_attr *flow_attr,
-				    int domain)
+				    int domain, struct ib_udata *udata)
 {
 	int err = 0, i = 0, j = 0;
 	struct mlx4_ib_flow *mflow;
@@ -1921,8 +1876,15 @@ static struct ib_flow *mlx4_ib_create_flow(struct ib_qp *qp,
 	if (flow_attr->port < 1 || flow_attr->port > qp->device->phys_port_cnt)
 		return ERR_PTR(-EINVAL);
 
+	if (flow_attr->flags & ~IB_FLOW_ATTR_FLAGS_DONT_TRAP)
+		return ERR_PTR(-EOPNOTSUPP);
+
 	if ((flow_attr->flags & IB_FLOW_ATTR_FLAGS_DONT_TRAP) &&
 	    (flow_attr->type != IB_FLOW_ATTR_NORMAL))
+		return ERR_PTR(-EOPNOTSUPP);
+
+	if (udata &&
+	    udata->inlen && !ib_is_udata_cleared(udata, 0, udata->inlen))
 		return ERR_PTR(-EOPNOTSUPP);
 
 	memset(type, 0, sizeof(type));
@@ -3160,9 +3122,9 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 			goto err_counter;
 
 		ibdev->ib_uc_qpns_bitmap =
-			kmalloc(BITS_TO_LONGS(ibdev->steer_qpn_count) *
-				sizeof(long),
-				GFP_KERNEL);
+			kmalloc_array(BITS_TO_LONGS(ibdev->steer_qpn_count),
+				      sizeof(long),
+				      GFP_KERNEL);
 		if (!ibdev->ib_uc_qpns_bitmap)
 			goto err_steer_qp_release;
 
@@ -3187,6 +3149,7 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	if (mlx4_ib_alloc_diag_counters(ibdev))
 		goto err_steer_free_bitmap;
 
+	ibdev->ib_dev.driver_id = RDMA_DRIVER_MLX4;
 	if (ib_register_device(&ibdev->ib_dev, NULL))
 		goto err_diag_counters;
 
@@ -3271,9 +3234,8 @@ err_steer_free_bitmap:
 	kfree(ibdev->ib_uc_qpns_bitmap);
 
 err_steer_qp_release:
-	if (ibdev->steering_support == MLX4_STEERING_MODE_DEVICE_MANAGED)
-		mlx4_qp_release_range(dev, ibdev->steer_qpn_base,
-				      ibdev->steer_qpn_count);
+	mlx4_qp_release_range(dev, ibdev->steer_qpn_base,
+			      ibdev->steer_qpn_count);
 err_counter:
 	for (i = 0; i < ibdev->num_ports; ++i)
 		mlx4_ib_delete_counters_table(ibdev, &ibdev->counters_table[i]);
@@ -3316,7 +3278,10 @@ void mlx4_ib_steer_qp_free(struct mlx4_ib_dev *dev, u32 qpn, int count)
 	    dev->steering_support != MLX4_STEERING_MODE_DEVICE_MANAGED)
 		return;
 
-	BUG_ON(qpn < dev->steer_qpn_base);
+	if (WARN(qpn < dev->steer_qpn_base, "qpn = %u, steer_qpn_base = %u\n",
+		 qpn, dev->steer_qpn_base))
+		/* not supposed to be here */
+		return;
 
 	bitmap_release_region(dev->ib_uc_qpns_bitmap,
 			      qpn - dev->steer_qpn_base,
@@ -3391,11 +3356,9 @@ static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
 		ibdev->iboe.nb.notifier_call = NULL;
 	}
 
-	if (ibdev->steering_support == MLX4_STEERING_MODE_DEVICE_MANAGED) {
-		mlx4_qp_release_range(dev, ibdev->steer_qpn_base,
-				      ibdev->steer_qpn_count);
-		kfree(ibdev->ib_uc_qpns_bitmap);
-	}
+	mlx4_qp_release_range(dev, ibdev->steer_qpn_base,
+			      ibdev->steer_qpn_count);
+	kfree(ibdev->ib_uc_qpns_bitmap);
 
 #ifdef CONFIG_MLX4_IB_DEBUG_FS
 	mlx4_ib_delete_debug_files(ibdev);

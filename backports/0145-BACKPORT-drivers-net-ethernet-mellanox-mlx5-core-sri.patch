@@ -1,0 +1,25 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+
+Change-Id: I99545d1c382d43c900550145e23875f775581c2a
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sriov.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+@@ -266,6 +266,14 @@ int mlx5_sriov_init(struct mlx5_core_dev
+ 		return 0;
+ 
+ 	total_vfs = pci_sriov_get_totalvfs(pdev);
++
++	/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL */
++	total_vfs = total_vfs < 0 ? 0 : total_vfs;
++
++
++	/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL */
++	total_vfs = total_vfs < 0 ? 0 : total_vfs;
++
+ 	sriov->num_vfs = pci_num_vf(pdev);
+ 	sriov->vfs_ctx = kcalloc(total_vfs, sizeof(*sriov->vfs_ctx), GFP_KERNEL);
+ 	if (!sriov->vfs_ctx)

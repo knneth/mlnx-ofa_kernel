@@ -1,0 +1,189 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
+
+Change-Id: I8bb7720f1d46fd4f48edf8cacae2cbb5e3427b34
+---
+ drivers/infiniband/core/umem_odp.c | 87 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 87 insertions(+)
+
+--- a/drivers/infiniband/core/umem_odp.c
++++ b/drivers/infiniband/core/umem_odp.c
+@@ -30,6 +30,7 @@
+  * SOFTWARE.
+  */
+ 
++#if HAVE_INTERVAL_TREE_GENERIC_H
+ #include <linux/types.h>
+ #include <linux/sched.h>
+ #include <linux/sched/mm.h>
+@@ -198,6 +199,39 @@ static void ib_umem_notifier_release(str
+ 	up_read(&context->umem_rwsem);
+ }
+ 
++#ifdef HAVE_INVALIDATE_PAGE
++static int invalidate_page_trampoline(struct ib_umem *item, u64 start,
++				      u64 end, void *cookie)
++{
++       ib_umem_notifier_start_account(item);
++       item->context->invalidate_range(item, start, start + PAGE_SIZE);
++       ib_umem_notifier_end_account(item);
++       *(bool *)cookie = true;
++       return 0;
++}
++
++static void ib_umem_notifier_invalidate_page(struct mmu_notifier *mn,
++					     struct mm_struct *mm,
++					     unsigned long address)
++{
++	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
++	bool call_rsync = false;
++
++	if (!context->invalidate_range)
++		return;
++
++	ib_ucontext_notifier_start_account(context);
++	down_read(&context->umem_rwsem);
++	rbt_ib_umem_for_each_in_range(&context->umem_tree, address,
++				      address + PAGE_SIZE,
++				      invalidate_page_trampoline, &call_rsync);
++	if (call_rsync)
++		ib_invoke_sync_clients(mm, address, PAGE_SIZE);
++	up_read(&context->umem_rwsem);
++	ib_ucontext_notifier_end_account(context);
++}
++#endif
++
+ static int invalidate_range_start_trampoline(struct ib_umem *item, u64 start,
+ 					     u64 end, void *cookie)
+ {
+@@ -207,19 +241,38 @@ static int invalidate_range_start_trampo
+ 	return 0;
+ }
+ 
++#ifdef HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE
++static int ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
++						    struct mm_struct *mm,
++						    unsigned long start,
++						    unsigned long end,
++						    bool blockable)
++#else
+ static void ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
+ 						    struct mm_struct *mm,
+ 						    unsigned long start,
+ 						    unsigned long end)
++#endif
+ {
+ 	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
+ 	bool call_rsync = false;
+ 
+ 	if (!context->invalidate_range)
++#ifdef HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE
++		return 0;
++
++	if (blockable)
++		down_read(&context->umem_rwsem);
++	else if (!down_read_trylock(&context->umem_rwsem))
++		return -EAGAIN;
++
++	ib_ucontext_notifier_start_account(context);
++#else
+ 		return;
+ 
+ 	ib_ucontext_notifier_start_account(context);
+ 	down_read(&context->umem_rwsem);
++#endif
+ 	rbt_ib_umem_for_each_in_range(&context->umem_tree, start,
+ 				      end,
+ 				      invalidate_range_start_trampoline,
+@@ -227,6 +280,8 @@ static void ib_umem_notifier_invalidate_
+ 	if (call_rsync)
+ 		ib_invoke_sync_clients(mm, start, end - start);
+ 	up_read(&context->umem_rwsem);
++
++	return 0;
+ }
+ 
+ static int invalidate_range_end_trampoline(struct ib_umem *item, u64 start,
+@@ -276,6 +331,9 @@ static const struct mmu_notifier_ops ib_
+ #ifdef CONFIG_CXL_LIB
+ 	.invalidate_range	    = ib_umem_notifier_invalidate_range,
+ #endif
++#ifdef HAVE_INVALIDATE_PAGE
++	.invalidate_page            = ib_umem_notifier_invalidate_page,
++#endif
+ };
+ 
+ struct ib_umem *ib_alloc_odp_umem(struct ib_ucontext *context,
+@@ -669,7 +727,9 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ 	struct page       **local_page_list = NULL;
+ 	u64 page_mask, off;
+ 	int j, k, ret = 0, start_idx, npages = 0, page_shift;
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	unsigned int flags = 0;
++#endif
+ 	phys_addr_t p = 0;
+ 
+ 	if (access_mask == 0)
+@@ -701,8 +761,10 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ 		goto out_put_task;
+ 	}
+ 
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	if (access_mask & ODP_WRITE_ALLOWED_BIT)
+ 		flags |= FOLL_WRITE;
++#endif
+ 
+ 	start_idx = (user_virt - ib_umem_start(umem)) >> page_shift;
+ 	k = start_idx;
+@@ -720,9 +782,25 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ 		 * complex (and doesn't gain us much performance in most use
+ 		 * cases).
+ 		 */
++#if defined(HAVE_GET_USER_PAGES_REMOTE_8_PARAMS) || defined(HAVE_GET_USER_PAGES_REMOTE_7_PARAMS) || defined(HAVE_GET_USER_PAGES_REMOTE_8_PARAMS_W_LOCKED)
+ 		npages = get_user_pages_remote(owning_process, owning_mm,
+ 				user_virt, gup_num_pages,
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
++#ifdef HAVE_GET_USER_PAGES_REMOTE_8_PARAMS_W_LOCKED
+ 				flags, local_page_list, NULL, NULL);
++#else
++				flags, local_page_list, NULL);
++#endif
++#else
++				access_mask & ODP_WRITE_ALLOWED_BIT, 0,
++				local_page_list, NULL);
++#endif
++#else
++		npages = get_user_pages(owning_process, owning_mm,
++				user_virt, gup_num_pages,
++				access_mask & ODP_WRITE_ALLOWED_BIT,
++				0, local_page_list, NULL);
++#endif
+ 		up_read(&owning_mm->mmap_sem);
+ 
+ 		if (npages < 0) {
+@@ -852,7 +930,11 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
+ /* @last is not a part of the interval. See comment for function
+  * node_last.
+  */
++#ifndef HAVE_INTERVAL_TREE_TAKES_RB_ROOT
+ int rbt_ib_umem_for_each_in_range(struct rb_root_cached *root,
++#else
++int rbt_ib_umem_for_each_in_range(struct rb_root *root,
++#endif
+ 				  u64 start, u64 last,
+ 				  umem_call_back cb,
+ 				  void *cookie)
+@@ -874,8 +956,13 @@ int rbt_ib_umem_for_each_in_range(struct
+ 	return ret_val;
+ }
+ EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);
++#endif
+ 
++#ifndef HAVE_INTERVAL_TREE_TAKES_RB_ROOT
+ struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root_cached *root,
++#else
++struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root *root,
++#endif
+ 				       u64 addr, u64 length)
+ {
+ 	struct umem_odp_node *node;

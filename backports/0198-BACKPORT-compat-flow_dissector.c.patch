@@ -1,0 +1,49 @@
+From: Chris Mi <chrism@mellanox.com>
+Subject: [PATCH] BACKPORT: compat/flow_dissector.c
+
+---
+ compat/flow_dissector.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/compat/flow_dissector.c
++++ b/compat/flow_dissector.c
+@@ -31,6 +31,7 @@
+ #include <net/dsfield.h>
+ #include <net/flow_dissector.h>
+ #include <scsi/fc/fc_fcoe.h>
++#include <net/dst_metadata.h>
+ 
+ #ifndef skb_vlan_tag_get_prio
+ #define skb_vlan_tag_get_prio(__skb)   ((__skb)->vlan_tci & VLAN_PRIO_MASK)
+@@ -59,6 +60,7 @@ static inline bool eth_type_vlan_bp(__be
+ 	}
+ }
+ 
++#ifndef CONFIG_COMPAT_KERNEL_4_9
+ bool skb_flow_dissect_flow_keys(const struct sk_buff *skb,
+ 				struct flow_keys *flow,
+ 				unsigned int flags)
+@@ -68,6 +70,7 @@ bool skb_flow_dissect_flow_keys(const st
+ 				 NULL, 0, 0, 0, flags);
+ }
+ EXPORT_SYMBOL(skb_flow_dissect_flow_keys);
++#endif
+ 
+ static void dissector_set_key(struct flow_dissector *flow_dissector,
+ 			      enum flow_dissector_key_id key_id)
+@@ -1208,6 +1211,7 @@ EXPORT_SYMBOL(make_flow_keys_digest);
+ 
+ static struct flow_dissector flow_keys_dissector_symmetric __read_mostly;
+ 
++#ifndef CONFIG_COMPAT_KERNEL_4_9
+ u32 __skb_get_hash_symmetric(const struct sk_buff *skb)
+ {
+ 	struct flow_keys keys;
+@@ -1222,6 +1226,7 @@ u32 __skb_get_hash_symmetric(const struc
+ 	return __flow_hash_from_keys(&keys, hashrnd);
+ }
+ EXPORT_SYMBOL_GPL(__skb_get_hash_symmetric);
++#endif
+ 
+ /**
+  * __skb_get_hash: calculate a flow hash

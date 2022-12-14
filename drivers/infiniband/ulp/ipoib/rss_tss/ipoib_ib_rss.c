@@ -275,10 +275,9 @@ static void ipoib_ib_handle_tx_wc_rss(struct ipoib_send_ring *send_ring,
 	dev_kfree_skb_any(tx_req->skb);
 
 	++send_ring->tx_tail;
-	if (unlikely(send_ring->tx_head - send_ring->tx_tail ==
-		     priv->sendq_size >> 1) &&
-	    __netif_subqueue_stopped(dev, send_ring->index) &&
-	    test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
+	if (unlikely(__netif_subqueue_stopped(dev, send_ring->index) &&
+		     ((send_ring->tx_head - send_ring->tx_tail) <= priv->sendq_size >> 1) &&
+		     test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags)))
 		netif_wake_subqueue(dev, send_ring->index);
 
 	if (wc->status != IB_WC_SUCCESS &&
@@ -569,25 +568,13 @@ void ipoib_ib_tx_completion_rss(struct ib_cq *cq, void *ctx_ptr)
 static void ipoib_napi_enable_rss(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-	struct ipoib_recv_ring *recv_ring;
-	struct ipoib_send_ring *send_ring;
 	int i;
 
-	recv_ring = priv->recv_ring;
-	for (i = 0; i < priv->num_rx_queues; i++) {
-		netif_napi_add(dev, &recv_ring->napi,
-			       ipoib_rx_poll_rss, NAPI_POLL_WEIGHT);
-		napi_enable(&recv_ring->napi);
-		recv_ring++;
-	}
+	for (i = 0; i < priv->num_rx_queues; i++)
+		napi_enable(&priv->recv_ring[i].napi);
 
-	send_ring = priv->send_ring;
-	for (i = 0; i < priv->num_tx_queues; i++) {
-		netif_napi_add(dev, &send_ring->napi,
-			       ipoib_tx_poll_rss, MAX_SEND_CQE);
-		napi_enable(&send_ring->napi);
-		send_ring++;
-	}
+	for (i = 0; i < priv->num_tx_queues; i++)
+		napi_enable(&priv->send_ring[i].napi);
 }
 
 static void ipoib_napi_disable_rss(struct net_device *dev)
@@ -595,15 +582,11 @@ static void ipoib_napi_disable_rss(struct net_device *dev)
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	int i;
 
-	for (i = 0; i < priv->num_rx_queues; i++) {
+	for (i = 0; i < priv->num_rx_queues; i++)
 		napi_disable(&priv->recv_ring[i].napi);
-		netif_napi_del(&priv->recv_ring[i].napi);
-	}
 
-	for (i = 0; i < priv->num_tx_queues; i++) {
+	for (i = 0; i < priv->num_tx_queues; i++)
 		napi_disable(&priv->send_ring[i].napi);
-		netif_napi_del(&priv->send_ring[i].napi);
-	}
 }
 
 int ipoib_ib_dev_open_default_rss(struct net_device *dev)
@@ -611,9 +594,6 @@ int ipoib_ib_dev_open_default_rss(struct net_device *dev)
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	struct ipoib_recv_ring *recv_ring;
 	int ret, i;
-
-	if (!test_bit(IPOIB_FLAG_INITIALIZED, &priv->flags))
-		ipoib_napi_enable_rss(dev);
 
 	/* Re-arm the RX CQs due to a race between completion event and arm
 	 * during default stop. This fix is temporary and should be removed
@@ -642,6 +622,9 @@ int ipoib_ib_dev_open_default_rss(struct net_device *dev)
 		ipoib_warn(priv, "ipoib_cm_dev_open returned %d\n", ret);
 		goto out;
 	}
+
+	if (!test_bit(IPOIB_FLAG_INITIALIZED, &priv->flags))
+		ipoib_napi_enable_rss(dev);
 
 	return 0;
 out:

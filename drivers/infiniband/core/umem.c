@@ -86,9 +86,8 @@ static struct ib_umem *peer_umem_get(struct ib_peer_memory_client *ib_peer_mem,
 	if (ret)
 		goto put_pages;
 
-	atomic64_add(umem->npages, &ib_peer_mem->stats.num_reg_pages);
-	atomic64_add(umem->npages << umem->page_shift,
-		     &ib_peer_mem->stats.num_reg_bytes);
+	atomic64_add(umem->nmap, &ib_peer_mem->stats.num_reg_pages);
+	atomic64_add(umem->nmap * BIT(umem->page_shift), &ib_peer_mem->stats.num_reg_bytes);
 	atomic64_inc(&ib_peer_mem->stats.num_alloc_mrs);
 	return umem;
 
@@ -117,9 +116,8 @@ static void peer_umem_release(struct ib_umem *umem)
 			    umem->context->device->dma_device);
 	peer_mem->put_pages(&umem->sg_head,
 			    umem->peer_mem_client_context);
-	atomic64_add(umem->npages, &ib_peer_mem->stats.num_dereg_pages);
-	atomic64_add(umem->npages << umem->page_shift,
-		     &ib_peer_mem->stats.num_dereg_bytes);
+	atomic64_add(umem->nmap, &ib_peer_mem->stats.num_dereg_pages);
+	atomic64_add(umem->nmap * BIT(umem->page_shift), &ib_peer_mem->stats.num_dereg_bytes);
 	atomic64_inc(&ib_peer_mem->stats.num_dealloc_mrs);
 	ib_put_peer_client(ib_peer_mem, umem->peer_mem_client_context);
 	kfree(umem);
@@ -145,8 +143,6 @@ static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int d
 	}
 
 	sg_free_table(&umem->sg_head);
-	return;
-
 }
 
 int ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
@@ -190,7 +186,6 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 	struct ib_umem *umem;
 	struct page **page_list;
 	struct vm_area_struct **vma_list;
-	unsigned long locked;
 	unsigned long lock_limit;
 	unsigned long cur_base;
 	unsigned long npages;
@@ -227,25 +222,13 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 	umem->length     = size;
 	umem->address    = addr;
 	umem->page_shift = PAGE_SHIFT;
-	/*
-	 * We ask for writable memory if any of the following
-	 * access flags are set.  "Local write" and "remote write"
-	 * obviously require write access.  "Remote atomic" can do
-	 * things like fetch and add, which will modify memory, and
-	 * "MW bind" can change permissions by binding a window.
-	 */
-	umem->writable  = !!(access &
-		(IB_ACCESS_LOCAL_WRITE   | IB_ACCESS_REMOTE_WRITE |
-		 IB_ACCESS_REMOTE_ATOMIC | IB_ACCESS_MW_BIND));
+	umem->writable   = ib_access_writable(access);
 
-	if (peer_mem_flags & IB_PEER_MEM_ALLOW) {
-		struct ib_peer_memory_client *peer_mem_client;
-
-		peer_mem_client =  ib_get_peer_client(context, addr, size, peer_mem_flags,
-					&umem->peer_mem_client_context);
-		if (peer_mem_client)
-			return peer_umem_get(peer_mem_client, umem, addr,
-					dmasync, peer_mem_flags);
+	/* For known peer context move directly to peer registration handling */
+	if (context->peer_mem_private_data &&
+	    (peer_mem_flags & IB_PEER_MEM_ALLOW)) {
+		ret = -EINVAL;
+		goto peer_out;
 	}
 
 	if (access & IB_ACCESS_ON_DEMAND) {
@@ -278,31 +261,29 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 
 	npages = ib_umem_num_pages(umem);
 
-	down_write(&current->mm->mmap_sem);
-
-	locked     = npages + current->mm->pinned_vm;
 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
-
-	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK)) {
-		pr_err("%s: requested to lock(%lu) while limit is(%lu)\n",
-		       __func__, locked, lock_limit);
+	down_write(&current->mm->mmap_sem);
+	current->mm->pinned_vm += npages;
+	if ((current->mm->pinned_vm > lock_limit) && !capable(CAP_IPC_LOCK)) {
+		up_write(&current->mm->mmap_sem);
 		ret = -ENOMEM;
 		goto out;
 	}
+	up_write(&current->mm->mmap_sem);
 
 	cur_base = addr & PAGE_MASK;
 
 	if (npages == 0 || npages > UINT_MAX) {
-		pr_err("%s: npages(%lu) isn't in the range 1..%u\n", __func__,
-		       npages, UINT_MAX);
+		pr_debug("%s: npages(%lu) isn't in the range 1..%u\n", __func__,
+			 npages, UINT_MAX);
 		ret = -EINVAL;
 		goto out;
 	}
 
 	ret = sg_alloc_table(&umem->sg_head, npages, GFP_KERNEL);
 	if (ret) {
-		pr_err("%s: failed to allocate sg table, npages=%lu\n",
-		       __func__, npages);
+		pr_debug("%s: failed to allocate sg table, npages=%lu\n",
+			 __func__, npages);
 		goto out;
 	}
 
@@ -312,6 +293,7 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 	need_release = 1;
 	sg_list_start = umem->sg_head.sgl;
 
+	down_read(&current->mm->mmap_sem);
 	while (npages) {
 		ret = get_user_pages_longterm(cur_base,
 				     min_t(unsigned long, npages,
@@ -319,10 +301,11 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 				     gup_flags, page_list, vma_list);
 
 		if (ret < 0) {
-			pr_err("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
-			       min_t(unsigned long, npages,
-				     PAGE_SIZE / sizeof(struct page *)),
-			       gup_flags);
+			up_read(&current->mm->mmap_sem);
+			pr_debug("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
+				 min_t(unsigned long, npages,
+				       PAGE_SIZE / sizeof(struct page *)),
+				 gup_flags);
 			goto out;
 		}
 
@@ -340,6 +323,7 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 		/* preparing for next loop */
 		sg_list_start = sg;
 	}
+	up_read(&current->mm->mmap_sem);
 
 	umem->nmap = ib_dma_map_sg_attrs(context->device,
 				  umem->sg_head.sgl,
@@ -358,16 +342,40 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 
 out:
 	if (ret < 0) {
+		down_write(&current->mm->mmap_sem);
+		current->mm->pinned_vm -= ib_umem_num_pages(umem);
+		up_write(&current->mm->mmap_sem);
+
 		if (need_release)
 			__ib_umem_release(context->device, umem, 0);
-		kfree(umem);
-	} else
-		current->mm->pinned_vm = locked;
+	}
 
-	up_write(&current->mm->mmap_sem);
 	if (vma_list)
 		free_page((unsigned long) vma_list);
 	free_page((unsigned long) page_list);
+peer_out:
+	/*
+ 	 * If the address belongs to peer memory client, then the first
+ 	 * call to get_user_pages will fail. In this case, try to get
+ 	 * these pages from the peers.
+ 	 */
+	if (ret < 0) {
+		if (peer_mem_flags & IB_PEER_MEM_ALLOW) {
+			struct ib_peer_memory_client *peer_mem_client;
+
+			peer_mem_client = ib_get_peer_client(context,
+							     addr,
+							     size,
+							     peer_mem_flags,
+							     &umem->peer_mem_client_context);
+			if (peer_mem_client) {
+				umem->hugetlb = 0;
+				return peer_umem_get(peer_mem_client, umem, addr,
+						     dmasync, peer_mem_flags);
+			}
+		}
+		kfree(umem);
+	}
 
 	return ret < 0 ? ERR_PTR(ret) : umem;
 }

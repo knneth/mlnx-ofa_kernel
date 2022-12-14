@@ -213,7 +213,7 @@ static void ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
 						    unsigned long end)
 {
 	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
-	bool call_rsync;
+	bool call_rsync = false;
 
 	if (!context->invalidate_range)
 		return;
@@ -308,13 +308,15 @@ struct ib_umem *ib_alloc_odp_umem(struct ib_ucontext *context,
 	mutex_init(&odp_data->umem_mutex);
 	init_completion(&odp_data->notifier_completion);
 
-	odp_data->page_list = vzalloc(pages * sizeof(*odp_data->page_list));
+	odp_data->page_list =
+		vzalloc(array_size(pages, sizeof(*odp_data->page_list)));
 	if (!odp_data->page_list) {
 		ret = -ENOMEM;
 		goto out_odp_data;
 	}
 
-	odp_data->dma_list = vzalloc(pages * sizeof(*odp_data->dma_list));
+	odp_data->dma_list =
+		vzalloc(array_size(pages, sizeof(*odp_data->dma_list)));
 	if (!odp_data->dma_list) {
 		ret = -ENOMEM;
 		goto out_page_list;
@@ -392,15 +394,17 @@ int ib_umem_odp_get(struct ib_ucontext *context, struct ib_umem *umem,
 	init_completion(&umem->odp_data->notifier_completion);
 
 	if (ib_umem_num_pages(umem)) {
-		umem->odp_data->page_list = vzalloc(ib_umem_num_pages(umem) *
-					    sizeof(*umem->odp_data->page_list));
+		umem->odp_data->page_list =
+			vzalloc(array_size(sizeof(*umem->odp_data->page_list),
+					   ib_umem_num_pages(umem)));
 		if (!umem->odp_data->page_list) {
 			ret_val = -ENOMEM;
 			goto out_odp_data;
 		}
 
-		umem->odp_data->dma_list = vzalloc(ib_umem_num_pages(umem) *
-					  sizeof(*umem->odp_data->dma_list));
+		umem->odp_data->dma_list =
+			vzalloc(array_size(sizeof(*umem->odp_data->dma_list),
+					   ib_umem_num_pages(umem)));
 		if (!umem->odp_data->dma_list) {
 			ret_val = -ENOMEM;
 			goto out_page_list;
@@ -726,8 +730,8 @@ int ib_umem_odp_map_dma_pages(struct ib_umem *umem, u64 user_virt, u64 bcnt,
 				pr_warn("fail to get %zu user pages with error %d\n",
 					gup_num_pages, npages);
 			else
-				pr_debug("fail to get %zu user pages with error %d\n",
-					 gup_num_pages, npages);
+				pr_warn("fail to get %zu user pages with error %d\n",
+					gup_num_pages, npages);
 			break;
 		}
 

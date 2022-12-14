@@ -1,0 +1,306 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
+
+Change-Id: Idda58f581655a7a02d2781d4ccafef984276daee
+---
+ drivers/net/ethernet/mellanox/mlx5/core/main.c | 102 ++++++++++++++++++++++++-
+ 1 file changed, 99 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
+@@ -259,8 +259,10 @@ static struct mlx5_profile profile[] = {
+ #define FW_PRE_INIT_TIMEOUT_MILI	120000
+ #define FW_INIT_WARN_MESSAGE_INTERVAL	20000
+ 
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ static void mlx5_as_notify_init(struct mlx5_core_dev *dev);
+ static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev);
++#endif
+ 
+ static int wait_fw_init(struct mlx5_core_dev *dev, u32 max_wait_mili,
+ 			u32 warn_time_mili)
+@@ -411,6 +413,9 @@ static int mlx5_alloc_irq_vectors(struct
+ 	int num_eqs;
+ 	int nvec;
+ 	int err;
++#ifndef HAVE_PCI_IRQ_API
++	int i;
++#endif
+ 
+ 	if (max_num_eq) {
+ 		num_eqs = max_num_eq;
+@@ -428,9 +433,21 @@ static int mlx5_alloc_irq_vectors(struct
+ 		return -ENOMEM;
+ 
+ 	priv->irq_info = kcalloc(nvec, sizeof(*priv->irq_info), GFP_KERNEL);
++#ifdef HAVE_PCI_IRQ_API
+ 	if (!priv->irq_info)
+ 		return -ENOMEM;
++#else
++	priv->msix_arr = kcalloc(nvec, sizeof(*priv->msix_arr), GFP_KERNEL);
++	if (!priv->msix_arr || !priv->irq_info) {
++		err = -ENOMEM;
++		goto err_free_irq_info;
++	}
++
++	for (i = 0; i < nvec; i++)
++		 priv->msix_arr[i].entry = i;
++#endif
+ 
++#ifdef HAVE_PCI_IRQ_API
+ 	nvec = pci_alloc_irq_vectors(dev->pdev,
+ 			MLX5_EQ_VEC_COMP_BASE + 1, nvec,
+ 			PCI_IRQ_MSIX);
+@@ -440,11 +457,39 @@ static int mlx5_alloc_irq_vectors(struct
+ 	}
+ 
+ 	table->num_comp_vectors = nvec - MLX5_EQ_VEC_COMP_BASE;
++#else /* HAVE_PCI_IRQ_API */
++#ifdef HAVE_PCI_ENABLE_MSIX_RANGE
++	nvec = pci_enable_msix_range(dev->pdev, priv->msix_arr,
++				     MLX5_EQ_VEC_COMP_BASE + 1, nvec);
++	if (nvec < 0) {
++		err = nvec;
++		goto err_free_irq_info;
++	}
++
++	table->num_comp_vectors = nvec - MLX5_EQ_VEC_COMP_BASE;
++#else /* HAVE_PCI_ENABLE_MSIX_RANGE */
++retry:
++	table->num_comp_vectors = nvec - MLX5_EQ_VEC_COMP_BASE;
++	err = pci_enable_msix(dev->pdev, priv->msix_arr, nvec);
++	if (err == 0) {
++		return 0;
++	} else if (err < 0) {
++		goto err_free_irq_info;
++	} else if (err > 2) {
++		nvec = err;
++		goto retry;
++	}
++	mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
++#endif /* HAVE_PCI_ENABLE_MSIX_RANGE */
++#endif /* HAVE_PCI_IRQ_API */
+ 
+ 	return 0;
+ 
+ err_free_irq_info:
+ 	kfree(priv->irq_info);
++#ifndef HAVE_PCI_IRQ_API
++	kfree(priv->msix_arr);
++#endif
+ 	return err;
+ }
+ 
+@@ -452,7 +497,12 @@ static void mlx5_free_irq_vectors(struct
+ {
+ 	struct mlx5_priv *priv = &dev->priv;
+ 
++#ifdef HAVE_PCI_IRQ_API
+ 	pci_free_irq_vectors(dev->pdev);
++#else
++	pci_disable_msix(dev->pdev);
++	kfree(priv->msix_arr);
++#endif
+ 	kfree(priv->irq_info);
+ }
+ 
+@@ -856,7 +906,14 @@ u64 mlx5_read_internal_timer(struct mlx5
+ static int mlx5_irq_set_affinity_hint(struct mlx5_core_dev *mdev, int i)
+ {
+ 	struct mlx5_priv *priv  = &mdev->priv;
++#ifdef HAVE_IRQ_SET_AFFINITY_HINT
++#ifdef HAVE_PCI_IRQ_API
+ 	int irq = pci_irq_vector(mdev->pdev, MLX5_EQ_VEC_COMP_BASE + i);
++#else
++	struct msix_entry *msix = priv->msix_arr;
++	int irq                 = msix[i + MLX5_EQ_VEC_COMP_BASE].vector;
++#endif
++#endif
+ 
+ 	if (!zalloc_cpumask_var(&priv->irq_info[i].mask, GFP_KERNEL)) {
+ 		mlx5_core_warn(mdev, "zalloc_cpumask_var failed");
+@@ -866,9 +923,11 @@ static int mlx5_irq_set_affinity_hint(st
+ 	cpumask_set_cpu(cpumask_local_spread(i, priv->numa_node),
+ 			priv->irq_info[i].mask);
+ 
++#ifdef HAVE_IRQ_SET_AFFINITY_HINT
+ 	if (IS_ENABLED(CONFIG_SMP) &&
+ 	    irq_set_affinity_hint(irq, priv->irq_info[i].mask))
+ 		mlx5_core_warn(mdev, "irq_set_affinity_hint failed, irq 0x%.4x", irq);
++#endif
+ 
+ 	return 0;
+ }
+@@ -876,9 +935,18 @@ static int mlx5_irq_set_affinity_hint(st
+ static void mlx5_irq_clear_affinity_hint(struct mlx5_core_dev *mdev, int i)
+ {
+ 	struct mlx5_priv *priv  = &mdev->priv;
++#ifdef HAVE_IRQ_SET_AFFINITY_HINT
++#ifdef HAVE_PCI_IRQ_API
+ 	int irq = pci_irq_vector(mdev->pdev, MLX5_EQ_VEC_COMP_BASE + i);
++#else
++	struct msix_entry *msix = priv->msix_arr;
++	int irq                 = msix[i + MLX5_EQ_VEC_COMP_BASE].vector;
++#endif
++#endif
+ 
++#ifdef HAVE_IRQ_SET_AFFINITY_HINT
+ 	irq_set_affinity_hint(irq, NULL);
++#endif
+ 	free_cpumask_var(priv->irq_info[i].mask);
+ }
+ 
+@@ -1047,8 +1115,13 @@ static int alloc_comp_eqs(struct mlx5_co
+ 		}
+ 
+ #ifdef CONFIG_RFS_ACCEL
++#ifdef HAVE_PCI_IRQ_API
+ 		irq_cpu_rmap_add(dev->rmap, pci_irq_vector(dev->pdev,
+ 				 MLX5_EQ_VEC_COMP_BASE + i));
++#else
++		irq_cpu_rmap_add(dev->rmap,
++				 dev->priv.msix_arr[i + MLX5_EQ_VEC_COMP_BASE].vector);
++#endif
+ #endif
+ 		snprintf(name, MLX5_MAX_IRQ_NAME,
+ 			 MLX5_DEFAULT_COMP_IRQ_NAME, i);
+@@ -1428,8 +1501,10 @@ static int mlx5_load_one(struct mlx5_cor
+ 		goto reclaim_boot_pages;
+ 	}
+ 
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	/* Treat as_notify as best effort feature */
+ 	mlx5_as_notify_init(dev);
++#endif
+ 
+ 	err = mlx5_pagealloc_start(dev);
+ 	if (err) {
+@@ -1510,11 +1585,13 @@ static int mlx5_load_one(struct mlx5_cor
+ 		goto err_tracer_init;
+ 	}
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	err = mlx5_accel_tls_init(dev);
+ 	if (err) {
+ 		dev_err(&pdev->dev, "TLS device start failed %d\n", err);
+ 		goto err_tls_start;
+ 	}
++#endif
+ 
+ 	err = mlx5_init_fs(dev);
+ 	if (err) {
+@@ -1562,9 +1639,11 @@ err_sriov:
+ 	mlx5_cleanup_fs(dev);
+ 
+ err_fs:
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
+ 
+ err_tls_start:
++#endif
+ 	mlx5_accel_ipsec_cleanup(dev);
+ 
+ err_ipsec_start:
+@@ -1597,7 +1676,9 @@ err_stop_poll:
+ 	}
+ 
+ err_pagealloc_stop:
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	mlx5_as_notify_cleanup(dev);
++#endif
+ 	mlx5_pagealloc_stop(dev);
+ 
+ reclaim_boot_pages:
+@@ -1642,7 +1723,9 @@ static int mlx5_unload_one(struct mlx5_c
+ 	mlx5_sriov_detach(dev);
+ 	mlx5_cleanup_fs(dev);
+ 	mlx5_accel_ipsec_cleanup(dev);
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	mlx5_accel_tls_cleanup(dev);
++#endif
+ 	mlx5_fpga_device_stop(dev);
+ 	mlx5_irq_clear_affinity_hints(dev);
+ 	free_comp_eqs(dev);
+@@ -1658,7 +1741,9 @@ static int mlx5_unload_one(struct mlx5_c
+ 		dev_err(&dev->pdev->dev, "tear_down_hca failed, skip cleanup\n");
+ 		goto out;
+ 	}
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	mlx5_as_notify_cleanup(dev);
++#endif
+ 	mlx5_pagealloc_stop(dev);
+ 	mlx5_reclaim_startup_pages(dev);
+ 	mlx5_core_disable_hca(dev, 0);
+@@ -1677,12 +1762,18 @@ struct mlx5_core_event_handler {
+ 
+ static const struct devlink_ops mlx5_devlink_ops = {
+ #ifdef CONFIG_MLX5_ESWITCH
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET
+ 	.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
+ 	.eswitch_mode_get = mlx5_devlink_eswitch_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_MODE_GET_SET */
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET
+ 	.eswitch_inline_mode_set = mlx5_devlink_eswitch_inline_mode_set,
+ 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_INLINE_MODE_GET_SET */
++#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET
+ 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
+ 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
++#endif /* HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET */
+ #endif
+ };
+ 
+@@ -1985,6 +2076,7 @@ static void capi_cleanup(struct mlx5_cor
+ }
+ #endif
+ 
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
+ {
+ #ifdef HAVE_PNV_PCI_AS_NOTIFY
+@@ -2027,6 +2119,7 @@ static void mlx5_as_notify_init(struct m
+ }
+ 
+ static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
++#endif
+ 
+ #define MLX5_IB_MOD "mlx5_ib"
+ static int init_one(struct pci_dev *pdev,
+@@ -2116,15 +2209,12 @@ static int init_one(struct pci_dev *pdev
+ 	}
+ 
+ 	request_module_nowait(MLX5_IB_MOD);
+-
+ 	err = devlink_register(devlink, &pdev->dev);
+ 	if (err)
+ 		goto clean_load;
+-
+ 	pci_save_state(pdev);
+ 
+ 	return 0;
+-
+ clean_load:
+ 	mlx5_unload_one(dev, priv, true);
+ clean_crdump:
+@@ -2367,7 +2457,11 @@ static void mlx5_pci_resume(struct pci_d
+ 		dev_info(&pdev->dev, "%s: device recovered\n", __func__);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_PCI_ERROR_HANDLERS
+ static const struct pci_error_handlers mlx5_err_handler = {
++#else
++static struct pci_error_handlers mlx5_err_handler = {
++#endif
+ 	.error_detected = mlx5_pci_err_detected,
+ 	.slot_reset	= mlx5_pci_slot_reset,
+ 	.resume		= mlx5_pci_resume
+@@ -2483,7 +2577,9 @@ static struct pci_driver mlx5_core_drive
+ 	.remove         = remove_one,
+ 	.shutdown	= shutdown,
+ 	.err_handler	= &mlx5_err_handler,
++#ifdef HAVE_PCI_DRIVER_SRIOV_CONFIGURE
+ 	.sriov_configure   = mlx5_core_sriov_configure,
++#endif
+ };
+ 
+ static void mlx5_core_verify_params(void)

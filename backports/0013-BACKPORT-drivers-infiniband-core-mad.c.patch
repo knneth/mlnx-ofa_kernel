@@ -1,0 +1,59 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
+
+Change-Id: I42543ecafc94b4e18e584f79895b1d81c2b77692
+---
+ drivers/infiniband/core/mad.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+--- a/drivers/infiniband/core/mad.c
++++ b/drivers/infiniband/core/mad.c
+@@ -121,11 +121,19 @@ static int send_sa_cc_mad(struct ib_mad_
+  * Timeout FIFO functions - implements FIFO with timeout mechanism
+  */
+ 
++#ifdef HAVE_TIMER_SETUP
+ static void activate_timeout_handler_task(struct timer_list *t)
++#else
++static void activate_timeout_handler_task(unsigned long data)
++#endif
+ {
+ 	struct to_fifo *tf;
+ 
++#ifdef HAVE_TIMER_SETUP
+ 	tf = from_timer(tf, t, timer);
++#else
++	tf = (struct to_fifo *)data;
++#endif
+ 	del_timer(&tf->timer);
+ 	queue_work(tf->workq, &tf->work);
+ }
+@@ -233,8 +241,16 @@ static struct to_fifo *tf_create(void)
+ 		spin_lock_init(&tf->lists_lock);
+ 		INIT_LIST_HEAD(&tf->to_head);
+ 		INIT_LIST_HEAD(&tf->fifo_head);
++#ifdef HAVE_TIMER_SETUP
+ 		timer_setup(&tf->timer, activate_timeout_handler_task, 0);
++#else
++		init_timer(&tf->timer);
++#endif
+ 		INIT_WORK(&tf->work, timeout_handler_task);
++#ifndef HAVE_TIMER_SETUP
++		tf->timer.data = (unsigned long)tf;
++		tf->timer.function = activate_timeout_handler_task;
++#endif
+ 		tf->timer.expires = jiffies;
+ 		tf->stop_enqueue = 0;
+ 		tf->num_items = 0;
+@@ -4083,7 +4099,11 @@ static ssize_t sa_cc_attr_show(struct ko
+ 	return sa->show(cc_obj, buf);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops sa_cc_sysfs_ops = {
++#else
++static struct sysfs_ops sa_cc_sysfs_ops = {
++#endif
+ 	.show = sa_cc_attr_show,
+ 	.store = sa_cc_attr_store,
+ };

@@ -36,8 +36,10 @@
 #include <rdma/ib_cache.h>
 #include "mlx5_ib.h"
 #include "user_exp.h"
+#ifdef HAVE_PNV_PCI_AS_NOTIFY
 #include <asm/switch_to.h>
 #include <asm/pnv-pci.h>
+#endif
 
 static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq)
 {
@@ -133,6 +135,7 @@ static void handle_good_req(struct ib_wc *wc, struct mlx5_cqe64 *cqe,
 	case MLX5_OPCODE_SEND_IMM:
 		wc->wc_flags |= IB_WC_WITH_IMM;
 		/* fall through */
+	case MLX5_OPCODE_NOP:
 	case MLX5_OPCODE_SEND:
 	case MLX5_OPCODE_SEND_INVAL:
 		wc->opcode    = IB_WC_SEND;
@@ -454,7 +457,7 @@ static void set_cqe_compression(struct mlx5_ib_dev *dev,
 }
 
 static void sw_send_comp(struct mlx5_ib_qp *qp, int num_entries,
-			 struct ib_wc *wc, int *npolled, struct ib_wc *res_wc)
+			 struct ib_wc *wc, int *npolled)
 {
 	struct mlx5_ib_wq *wq;
 	unsigned int cur;
@@ -472,10 +475,8 @@ static void sw_send_comp(struct mlx5_ib_qp *qp, int num_entries,
 	for (i = 0;  i < cur && np < num_entries; i++) {
 		idx = wq->last_poll & (wq->wqe_cnt - 1);
 		wc->wr_id = wq->wrid[idx];
-		if (res_wc) {
-			wc->status = res_wc->status;
-			wc->vendor_err = res_wc->vendor_err;
-		}
+		wc->status = IB_WC_WR_FLUSH_ERR;
+		wc->vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
 		wq->tail++;
 		np++;
 		wc->qp = &qp->ibqp;
@@ -486,7 +487,7 @@ static void sw_send_comp(struct mlx5_ib_qp *qp, int num_entries,
 }
 
 static void sw_recv_comp(struct mlx5_ib_qp *qp, int num_entries,
-			 struct ib_wc *wc, int *npolled, struct ib_wc *res_wc)
+			 struct ib_wc *wc, int *npolled)
 {
 	struct mlx5_ib_wq *wq;
 	unsigned int cur;
@@ -502,10 +503,8 @@ static void sw_recv_comp(struct mlx5_ib_qp *qp, int num_entries,
 
 	for (i = 0;  i < cur && np < num_entries; i++) {
 		wc->wr_id = wq->wrid[wq->tail & (wq->wqe_cnt - 1)];
-		if (res_wc) {
-			wc->status = res_wc->status;
-			wc->vendor_err = res_wc->vendor_err;
-		}
+		wc->status = IB_WC_WR_FLUSH_ERR;
+		wc->vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
 		wq->tail++;
 		np++;
 		wc->qp = &qp->ibqp;
@@ -515,21 +514,20 @@ static void sw_recv_comp(struct mlx5_ib_qp *qp, int num_entries,
 }
 
 static void mlx5_ib_poll_sw_comp(struct mlx5_ib_cq *cq, int num_entries,
-				 struct ib_wc *wc, int *npolled,
-				 struct ib_wc *res_wc)
+				 struct ib_wc *wc, int *npolled)
 {
 	struct mlx5_ib_qp *qp;
 
 	*npolled = 0;
 	/* Find uncompleted WQEs belonging to that cq and return mmics ones */
 	list_for_each_entry(qp, &cq->list_send_qp, cq_send_list) {
-		sw_send_comp(qp, num_entries, wc + *npolled, npolled, res_wc);
+		sw_send_comp(qp, num_entries, wc + *npolled, npolled);
 		if (*npolled >= num_entries)
 			return;
 	}
 
 	list_for_each_entry(qp, &cq->list_recv_qp, cq_recv_list) {
-		sw_recv_comp(qp, num_entries, wc + *npolled, npolled, res_wc);
+		sw_recv_comp(qp, num_entries, wc + *npolled, npolled);
 		if (*npolled >= num_entries)
 			return;
 	}
@@ -602,7 +600,10 @@ repoll:
 		handle_atomics(*cur_qp, cqe64, wq->last_poll, idx);
 		wc->wr_id = wq->wrid[idx];
 		wq->tail = wq->wqe_head[idx] + 1;
-		wc->status = IB_WC_SUCCESS;
+		if (unlikely(wq->wr_data[idx] == MLX5_IB_WR_SIG_CANCELED))
+			wc->status = IB_WC_SIG_PIPELINE_CANCELED;
+		else
+			wc->status = IB_WC_SUCCESS;
 		break;
 	case MLX5_CQE_RESP_WR_IMM:
 	case MLX5_CQE_RESP_SEND:
@@ -670,7 +671,7 @@ repoll:
 }
 
 static int poll_soft_wc(struct mlx5_ib_cq *cq, int num_entries,
-			struct ib_wc *wc, struct ib_wc *res_wc)
+			struct ib_wc *wc, bool is_fatal_err)
 {
 	struct mlx5_ib_dev *dev = to_mdev(cq->ibcq.device);
 	struct mlx5_ib_wc *soft_wc, *next;
@@ -682,13 +683,14 @@ static int poll_soft_wc(struct mlx5_ib_cq *cq, int num_entries,
 
 		mlx5_ib_dbg(dev, "polled software generated completion on CQ 0x%x\n",
 			    cq->mcq.cqn);
-		if (unlikely(res_wc)) {
-			soft_wc->wc.status = res_wc->status;
-			soft_wc->wc.vendor_err = res_wc->vendor_err;
+
+		if (unlikely(is_fatal_err)) {
+			soft_wc->wc.status = IB_WC_WR_FLUSH_ERR;
+			soft_wc->wc.vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
 		}
 		wc[npolled++] = soft_wc->wc;
 		list_del(&soft_wc->list);
-		kfree(soft_wc);
+		atomic_set(&soft_wc->in_use, 0);
 	}
 
 	return npolled;
@@ -701,26 +703,22 @@ int mlx5_ib_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc)
 	struct mlx5_ib_dev *dev = to_mdev(cq->ibcq.device);
 	struct mlx5_core_dev *mdev = dev->mdev;
 	unsigned long flags;
-	struct ib_wc res_wc;
 	int soft_polled = 0;
 	int npolled;
 
 	spin_lock_irqsave(&cq->lock, flags);
 	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
-		res_wc.status = IB_WC_WR_FLUSH_ERR;
-		res_wc.vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
-
 		/* make sure no soft wqe's are waiting */
 		if (unlikely(!list_empty(&cq->wc_list)))
-			soft_polled = poll_soft_wc(cq, num_entries, wc, &res_wc);
+			soft_polled = poll_soft_wc(cq, num_entries, wc, true);
 
 		mlx5_ib_poll_sw_comp(cq, num_entries - soft_polled,
-				     wc + soft_polled, &npolled, &res_wc);
+				     wc + soft_polled, &npolled);
 		goto out;
 	}
 
 	if (unlikely(!list_empty(&cq->wc_list)))
-		soft_polled = poll_soft_wc(cq, num_entries, wc, NULL);
+		soft_polled = poll_soft_wc(cq, num_entries, wc, false);
 
 	for (npolled = 0; npolled < num_entries - soft_polled; npolled++) {
 		if (mlx5_poll_one(cq, &cur_qp, wc + soft_polled + npolled))
@@ -786,6 +784,12 @@ static int alloc_cq_frag_buf(struct mlx5_ib_dev *dev,
 
 	return 0;
 }
+
+enum {
+	MLX5_CQE_RES_FORMAT_HASH = 0,
+	MLX5_CQE_RES_FORMAT_CSUM = 1,
+	MLX5_CQE_RES_FORMAT_CSUM_STRIDX = 3,
+};
 
 static int mini_cqe_res_format_to_hw(struct mlx5_ib_dev *dev, u8 format)
 {
@@ -916,6 +920,7 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD;
 	}
 
+#ifdef HAVE_PNV_PCI_AS_NOTIFY
 	if (ucmd.exp_data.as_notify_en) {
 		u32 lpid, pid, tid;
 
@@ -927,11 +932,13 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 
 		err = set_thread_tidr(current);
 		if (err)
-			return err;
+			goto err_cqb;
 
 		err = pnv_pci_get_as_notify_info(current, &lpid, &pid, &tid);
-		if (err)
-			return err;
+		if (err) {
+			clear_thread_tidr(current);
+			goto err_cqb;
+		}
 
 		mlx5_ib_dbg(dev, "as_notify_en cq lpid=%x, pid=%x, tid=%x\n", lpid, pid, tid);
 		MLX5_SET(cqc, cqc, as_notify, 1);
@@ -941,11 +948,13 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 
 		cq->tsk = current;
 	}
+#endif
 
+	MLX5_SET(create_cq_in, *cqb, uid, to_mucontext(context)->devx_uid);
 	return 0;
 
 err_cqb:
-	kfree(*cqb);
+	kvfree(*cqb);
 
 err_db:
 	mlx5_ib_db_unmap_user(to_mucontext(context), &cq->db);
@@ -1112,7 +1121,7 @@ struct ib_cq *mlx5_ib_create_cq(struct ib_device *ibdev,
 	MLX5_SET(cqc, cqc, uar_page, index);
 	MLX5_SET(cqc, cqc, c_eqn, eqn);
 	MLX5_SET64(cqc, cqc, dbr_addr, cq->db.dma);
-	if (cq->create_flags & IB_CQ_FLAGS_IGNORE_OVERRUN)
+	if (cq->create_flags & IB_UVERBS_CQ_FLAGS_IGNORE_OVERRUN)
 		MLX5_SET(cqc, cqc, oi, 1);
 
 	err = mlx5_core_create_cq(dev->mdev, &cq->mcq, cqb, inlen);
@@ -1279,7 +1288,12 @@ static int resize_user(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *cq,
 	if (ucmd.reserved0 || ucmd.reserved1)
 		return -EINVAL;
 
-	umem = ib_umem_get(context, ucmd.buf_addr, entries * ucmd.cqe_size,
+	/* check multiplication overflow */
+	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
+		return -EINVAL;
+
+	umem = ib_umem_get(context, ucmd.buf_addr,
+			   (size_t)ucmd.cqe_size * entries,
 			   IB_ACCESS_LOCAL_WRITE, 1, IB_PEER_MEM_ALLOW);
 	if (IS_ERR(umem)) {
 		err = PTR_ERR(umem);
@@ -1531,25 +1545,18 @@ int mlx5_ib_get_cqe_size(struct mlx5_ib_dev *dev, struct ib_cq *ibcq)
 }
 
 /* Called from atomic context */
-int mlx5_ib_generate_wc(struct ib_cq *ibcq, struct ib_wc *wc)
+void mlx5_ib_generate_wc(struct ib_cq *ibcq, struct mlx5_ib_wc *soft_wc)
 {
-	struct mlx5_ib_wc *soft_wc;
 	struct mlx5_ib_cq *cq = to_mcq(ibcq);
 	unsigned long flags;
 
-	soft_wc = kmalloc(sizeof(*soft_wc), GFP_ATOMIC);
-	if (!soft_wc)
-		return -ENOMEM;
-
-	soft_wc->wc = *wc;
 	spin_lock_irqsave(&cq->lock, flags);
 	list_add_tail(&soft_wc->list, &cq->wc_list);
+	atomic_set(&soft_wc->in_use, 1);
 	if (cq->notify_flags == IB_CQ_NEXT_COMP ||
-	    wc->status != IB_WC_SUCCESS) {
+	    soft_wc->wc.status != IB_WC_SUCCESS) {
 		cq->notify_flags = 0;
 		schedule_work(&cq->notify_work);
 	}
 	spin_unlock_irqrestore(&cq->lock, flags);
-
-	return 0;
 }

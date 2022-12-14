@@ -156,6 +156,12 @@ int mlx5_set_port_pfc(struct mlx5_core_dev *dev, u8 pfc_en_tx, u8 pfc_en_rx);
 int mlx5_query_port_pfc(struct mlx5_core_dev *dev, u8 *pfc_en_tx,
 			u8 *pfc_en_rx);
 
+int mlx5_set_port_stall_watermark(struct mlx5_core_dev *dev,
+				  u16 stall_critical_watermark,
+				  u16 stall_minor_watermark);
+int mlx5_query_port_stall_watermark(struct mlx5_core_dev *dev,
+				    u16 *stall_critical_watermark, u16 *stall_minor_watermark);
+
 int mlx5_max_tc(struct mlx5_core_dev *mdev);
 
 int mlx5_set_port_prio_tc(struct mlx5_core_dev *mdev, u8 *prio_tc);
@@ -209,10 +215,5 @@ int mlx5_core_query_hca_vport_context(struct mlx5_core_dev *dev,
 				      u8 other_vport, u8 port_num,
 				      u16 vf_num,
 				      struct mlx5_hca_vport_context *rep);
-
-int mlx5_query_port_pbmc(struct mlx5_core_dev *mdev, void *out);
-int mlx5_set_port_pbmc(struct mlx5_core_dev *mdev, void *in);
-int mlx5_query_port_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer);
-int mlx5_set_port_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer);
 
 #endif /* __MLX5_PORT_H__ */

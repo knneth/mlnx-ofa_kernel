@@ -143,6 +143,9 @@ isert_create_qp(struct isert_conn *isert_conn,
 	if (device->pi_capable)
 		attr.create_flags |= IB_QP_CREATE_SIGNATURE_EN;
 
+	if (device->sig_pipeline)
+		attr.create_flags |= IB_QP_CREATE_SIGNATURE_PIPELINE;
+
 	ret = rdma_create_qp(cma_id, device->pd, &attr);
 	if (ret) {
 		isert_err("rdma_create_qp failed for cma_id %d\n", ret);
@@ -181,8 +184,9 @@ isert_alloc_rx_descriptors(struct isert_conn *isert_conn)
 	u64 dma_addr;
 	int i, j;
 
-	isert_conn->rx_descs = kzalloc(ISERT_QP_MAX_RECV_DTOS *
-				sizeof(struct iser_rx_desc), GFP_KERNEL);
+	isert_conn->rx_descs = kcalloc(ISERT_QP_MAX_RECV_DTOS,
+				       sizeof(struct iser_rx_desc),
+				       GFP_KERNEL);
 	if (!isert_conn->rx_descs)
 		return -ENOMEM;
 
@@ -259,11 +263,11 @@ isert_alloc_comps(struct isert_device *device)
 	device->comps_used = min(ISERT_MAX_CQ, min_t(int, num_online_cpus(),
 				 device->ib_device->num_comp_vectors));
 
-	isert_info("Using %d CQs, %s supports %d vectors support "
-		   "pi_capable %d\n",
+	isert_info("Using %d CQs, %s supports %d vectors support pi_capable %d sig_pipeline %d\n",
 		   device->comps_used, device->ib_device->name,
 		   device->ib_device->num_comp_vectors,
-		   device->pi_capable);
+		   device->pi_capable,
+		   device->sig_pipeline);
 
 	device->comps = kcalloc(device->comps_used, sizeof(struct isert_comp),
 				GFP_KERNEL);
@@ -316,6 +320,9 @@ isert_create_device_ib_res(struct isert_device *device)
 	/* Check signature cap */
 	device->pi_capable = ib_dev->attrs.device_cap_flags &
 			     IB_DEVICE_SIGNATURE_HANDOVER ? true : false;
+
+	device->sig_pipeline = ib_dev->attrs.device_cap_flags &
+			       IB_DEVICE_SIGNATURE_HANDOVER ? true : false;
 
 	return 0;
 
@@ -886,15 +893,9 @@ isert_login_post_send(struct isert_conn *isert_conn, struct iser_tx_desc *tx_des
 }
 
 static void
-isert_create_send_desc(struct isert_conn *isert_conn,
-		       struct isert_cmd *isert_cmd,
-		       struct iser_tx_desc *tx_desc)
+__isert_create_send_desc(struct isert_device *device,
+			 struct iser_tx_desc *tx_desc)
 {
-	struct isert_device *device = isert_conn->device;
-	struct ib_device *ib_dev = device->ib_device;
-
-	ib_dma_sync_single_for_cpu(ib_dev, tx_desc->dma_addr,
-				   ISER_HEADERS_LEN, DMA_TO_DEVICE);
 
 	memset(&tx_desc->iser_header, 0, sizeof(struct iser_ctrl));
 	tx_desc->iser_header.flags = ISCSI_CTRL;
@@ -905,6 +906,20 @@ isert_create_send_desc(struct isert_conn *isert_conn,
 		tx_desc->tx_sg[0].lkey = device->pd->local_dma_lkey;
 		isert_dbg("tx_desc %p lkey mismatch, fixing\n", tx_desc);
 	}
+}
+
+static void
+isert_create_send_desc(struct isert_conn *isert_conn,
+		       struct isert_cmd *isert_cmd,
+		       struct iser_tx_desc *tx_desc)
+{
+	struct isert_device *device = isert_conn->device;
+	struct ib_device *ib_dev = device->ib_device;
+
+	ib_dma_sync_single_for_cpu(ib_dev, tx_desc->dma_addr,
+				   ISER_HEADERS_LEN, DMA_TO_DEVICE);
+
+	__isert_create_send_desc(device, tx_desc);
 }
 
 static int
@@ -935,8 +950,10 @@ isert_init_tx_hdrs(struct isert_conn *isert_conn,
 }
 
 static void
-isert_init_send_wr(struct isert_conn *isert_conn, struct isert_cmd *isert_cmd,
-		   struct ib_send_wr *send_wr)
+isert_init_send_wr_flags(struct isert_conn *isert_conn,
+			 struct isert_cmd *isert_cmd,
+			 struct ib_send_wr *send_wr,
+			 int send_flags)
 {
 	struct iser_tx_desc *tx_desc = &isert_cmd->tx_desc;
 
@@ -952,7 +969,15 @@ isert_init_send_wr(struct isert_conn *isert_conn, struct isert_cmd *isert_cmd,
 
 	send_wr->sg_list = &tx_desc->tx_sg[0];
 	send_wr->num_sge = isert_cmd->tx_desc.num_sge;
-	send_wr->send_flags = IB_SEND_SIGNALED;
+	send_wr->send_flags = send_flags;
+}
+
+static inline void
+isert_init_send_wr(struct isert_conn *isert_conn, struct isert_cmd *isert_cmd,
+		   struct ib_send_wr *send_wr)
+{
+	isert_init_send_wr_flags(isert_conn, isert_cmd, send_wr,
+				 IB_SEND_SIGNALED);
 }
 
 static int
@@ -994,7 +1019,7 @@ isert_put_login_tx(struct iscsi_conn *conn, struct iscsi_login *login,
 	struct iser_tx_desc *tx_desc = &isert_conn->login_tx_desc;
 	int ret;
 
-	isert_create_send_desc(isert_conn, NULL, tx_desc);
+	__isert_create_send_desc(device, tx_desc);
 
 	memcpy(&tx_desc->iscsi_header, &login->rsp[0],
 	       sizeof(struct iscsi_hdr));
@@ -1789,16 +1814,35 @@ isert_send_done(struct ib_cq *cq, struct ib_wc *wc)
 	struct ib_device *ib_dev = isert_conn->cm_id->device;
 	struct iser_tx_desc *tx_desc = cqe_to_tx_desc(wc->wr_cqe);
 	struct isert_cmd *isert_cmd = tx_desc_to_cmd(tx_desc);
+	struct se_cmd *cmd = &isert_cmd->iscsi_cmd->se_cmd;
 
 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
 		isert_print_wc(wc, "send");
-		if (wc->status != IB_WC_WR_FLUSH_ERR)
-			iscsit_cause_connection_reinstatement(isert_conn->conn, 0);
-		isert_completion_put(tx_desc, isert_cmd, ib_dev, true);
+		if (wc->status == IB_WC_SIG_PIPELINE_CANCELED) {
+			isert_check_pi_status(cmd, isert_cmd->rw.sig->sig_mr);
+			isert_rdma_rw_ctx_destroy(isert_cmd, isert_conn);
+			/*
+			 * transport_generic_request_failure() expects to have
+			 * plus two references to handle queue-full, so re-add
+			 * one here as target-core will have already dropped
+			 * it after the first isert_put_datain() callback.
+			 */
+			kref_get(&cmd->cmd_kref);
+			transport_generic_request_failure(cmd, cmd->pi_err);
+		} else {
+			if (wc->status != IB_WC_WR_FLUSH_ERR)
+				iscsit_cause_connection_reinstatement(
+					isert_conn->conn, 0);
+			isert_completion_put(tx_desc, isert_cmd, ib_dev, true);
+		}
 		return;
 	}
 
 	isert_dbg("Cmd %p\n", isert_cmd);
+
+	/* To reuse the signature MR later, we need to mark it as checked. */
+	if (isert_cmd->send_sig_pipelined)
+		isert_check_pi_status(cmd, isert_cmd->rw.sig->sig_mr);
 
 	switch (isert_cmd->iscsi_cmd->i_state) {
 	case ISTATE_SEND_TASKMGTRSP:
@@ -1915,12 +1959,14 @@ isert_get_sup_prot_ops(struct iscsi_conn *conn)
 		if (device->pi_capable) {
 			isert_info("conn %p PI offload enabled\n", isert_conn);
 			isert_conn->pi_support = true;
+			isert_conn->sig_pipeline = device->sig_pipeline;
 			return TARGET_PROT_ALL;
 		}
 	}
 
 	isert_info("conn %p PI offload disabled\n", isert_conn);
 	isert_conn->pi_support = false;
+	isert_conn->sig_pipeline = false;
 
 	return TARGET_PROT_NORMAL;
 }
@@ -2106,10 +2152,13 @@ isert_set_sig_attrs(struct se_cmd *se_cmd, struct ib_sig_attrs *sig_attrs)
 		return -EINVAL;
 	}
 
-	sig_attrs->check_mask =
-	       (se_cmd->prot_checks & TARGET_DIF_CHECK_GUARD  ? 0xc0 : 0) |
-	       (se_cmd->prot_checks & TARGET_DIF_CHECK_REFTAG ? 0x30 : 0) |
-	       (se_cmd->prot_checks & TARGET_DIF_CHECK_REFTAG ? 0x0f : 0);
+	if (se_cmd->prot_checks & TARGET_DIF_CHECK_GUARD)
+		sig_attrs->check_mask |= IB_SIG_CHECK_GUARD;
+	if (se_cmd->prot_checks & TARGET_DIF_CHECK_APPTAG)
+		sig_attrs->check_mask |= IB_SIG_CHECK_APPTAG;
+	if (se_cmd->prot_checks & TARGET_DIF_CHECK_REFTAG)
+		sig_attrs->check_mask |= IB_SIG_CHECK_REFTAG;
+
 	return 0;
 }
 
@@ -2123,6 +2172,9 @@ isert_rdma_rw_ctx_post(struct isert_cmd *cmd, struct isert_conn *conn,
 	u64 addr;
 	u32 rkey, offset;
 	int ret;
+
+	if (cmd->ctx_init_done)
+		goto rdma_ctx_post;
 
 	if (dir == DMA_FROM_DEVICE) {
 		addr = cmd->write_va;
@@ -2151,11 +2203,15 @@ isert_rdma_rw_ctx_post(struct isert_cmd *cmd, struct isert_conn *conn,
 				se_cmd->t_data_sg, se_cmd->t_data_nents,
 				offset, addr, rkey, dir);
 	}
+
 	if (ret < 0) {
 		isert_err("Cmd: %p failed to prepare RDMA res\n", cmd);
 		return ret;
 	}
 
+	cmd->ctx_init_done = true;
+
+rdma_ctx_post:
 	ret = rdma_rw_ctx_post(&cmd->rw, conn->qp, port_num, cqe, chain_wr);
 	if (ret < 0)
 		isert_err("Cmd: %p failed to post RDMA res\n", cmd);
@@ -2175,10 +2231,17 @@ isert_put_datain(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 	isert_dbg("Cmd: %p RDMA_WRITE data_length: %u\n",
 		 isert_cmd, se_cmd->data_length);
 
-	if (isert_prot_cmd(isert_conn, se_cmd)) {
+	if (!isert_conn->sig_pipeline && isert_prot_cmd(isert_conn, se_cmd)) {
 		isert_cmd->tx_desc.tx_cqe.done = isert_rdma_write_done;
 		cqe = &isert_cmd->tx_desc.tx_cqe;
 	} else {
+		int send_flags = IB_SEND_SIGNALED;
+
+		if (isert_prot_cmd(isert_conn, se_cmd)) {
+			send_flags |= IB_SEND_SIG_PIPELINED;
+			isert_cmd->send_sig_pipelined = true;
+		}
+
 		/*
 		 * Build isert_conn->tx_desc for iSCSI response PDU and attach
 		 */
@@ -2187,8 +2250,9 @@ isert_put_datain(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 		iscsit_build_rsp_pdu(cmd, conn, true, (struct iscsi_scsi_rsp *)
 				     &isert_cmd->tx_desc.iscsi_header);
 		isert_init_tx_hdrs(isert_conn, &isert_cmd->tx_desc);
-		isert_init_send_wr(isert_conn, isert_cmd,
-				   &isert_cmd->tx_desc.send_wr);
+		isert_init_send_wr_flags(isert_conn, isert_cmd,
+					 &isert_cmd->tx_desc.send_wr,
+					 send_flags);
 
 		rc = isert_post_recv(isert_conn, isert_cmd->rx_desc);
 		if (rc) {
@@ -2713,9 +2777,6 @@ static void __exit isert_exit(void)
 MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
 MODULE_AUTHOR("nab@Linux-iSCSI.org");
 MODULE_LICENSE("GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 
 module_init(isert_init);
 module_exit(isert_exit);

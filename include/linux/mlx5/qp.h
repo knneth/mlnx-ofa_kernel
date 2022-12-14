@@ -102,7 +102,7 @@ enum {
 	MLX5_QP_ST_UD				= 0x2,
 	MLX5_QP_ST_XRC				= 0x3,
 	MLX5_QP_ST_MLX				= 0x4,
-	MLX5_QP_ST_DC				= 0x5,
+	MLX5_QP_ST_DCI				= 0x5,
 	MLX5_QP_ST_QP0				= 0x7,
 	MLX5_QP_ST_QP1				= 0x8,
 	MLX5_QP_ST_RAW_ETHERTYPE		= 0x9,
@@ -513,6 +513,12 @@ struct mlx5_core_qp {
 	int			pid;
 	struct mlx5_pagefault *pfault_req;
 	struct mlx5_pagefault *pfault_res;
+	u16			uid;
+};
+
+struct mlx5_core_dct {
+	struct mlx5_core_qp	mqp;
+	struct completion	drained;
 };
 
 struct mlx5_qp_path {
@@ -591,6 +597,9 @@ static inline struct mlx5_core_mkey *__mlx5_mr_lookup(struct mlx5_core_dev *dev,
 	return radix_tree_lookup(&dev->priv.mkey_table.tree, key);
 }
 
+int mlx5_core_create_dct(struct mlx5_core_dev *dev,
+			 struct mlx5_core_dct *qp,
+			 u32 *in, int inlen);
 int mlx5_core_create_qp(struct mlx5_core_dev *dev,
 			struct mlx5_core_qp *qp,
 			u32 *in,
@@ -600,8 +609,12 @@ int mlx5_core_qp_modify(struct mlx5_core_dev *dev, u16 opcode,
 			struct mlx5_core_qp *qp);
 int mlx5_core_destroy_qp(struct mlx5_core_dev *dev,
 			 struct mlx5_core_qp *qp);
+int mlx5_core_destroy_dct(struct mlx5_core_dev *dev,
+			  struct mlx5_core_dct *dct);
 int mlx5_core_qp_query(struct mlx5_core_dev *dev, struct mlx5_core_qp *qp,
 		       u32 *out, int outlen);
+int mlx5_core_dct_query(struct mlx5_core_dev *dev, struct mlx5_core_dct *dct,
+			u32 *out, int outlen);
 
 int mlx5_core_set_delay_drop(struct mlx5_core_dev *dev,
 			     u32 timeout_usec);

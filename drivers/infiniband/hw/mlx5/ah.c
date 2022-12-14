@@ -53,6 +53,7 @@ static struct ib_ah *create_ib_ah(struct mlx5_ib_dev *dev,
 
 	if (ah_attr->type == RDMA_AH_ATTR_TYPE_ROCE) {
 		u8 tmp_hop_limit = 0;
+		u16 sport = rdma_ah_get_udp_sport(ah_attr);
 
 		gid_type = ah_attr->grh.sgid_attr->gid_type;
 
@@ -65,8 +66,9 @@ static struct ib_ah *create_ib_ah(struct mlx5_ib_dev *dev,
 			dev->ttld[ah_attr->port_num - 1].val : tmp_hop_limit;
 		memcpy(ah->av.rmac, ah_attr->roce.dmac,
 		       sizeof(ah_attr->roce.dmac));
-		ah->av.udp_sport =
-			mlx5_get_roce_udp_sport(dev, ah_attr->grh.sgid_attr);
+		ah->av.udp_sport = mlx5_valid_roce_udp_sport(sport) ?
+			cpu_to_be16(sport) :
+			mlx5_get_roce_udp_sport_min(dev, ah_attr->grh.sgid_attr);
 		ah->av.stat_rate_sl |= (rdma_ah_get_sl(ah_attr) & 0x7) << 1;
 		if (gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP)
 #define MLX5_ECN_ENABLED BIT(1)

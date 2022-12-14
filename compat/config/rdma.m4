@@ -257,28 +257,38 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if struct ifla_vf_info has tx_rate])
+	AC_MSG_CHECKING([if struct ifla_vf_info has min_tx_rate])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/if_link.h>
+		#include <linux/netdevice.h>
 	],[
 		struct ifla_vf_info *ivf;
 
 		ivf->max_tx_rate = 0;
 		ivf->min_tx_rate = 0;
 
+		struct net_device_ops ndops = {
+			.ndo_set_vf_rate = NULL,
+		};
+
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_TX_RATE_LIMIT, 1,
-			  [max_tx_rate is defined])
+		MLNX_AC_DEFINE(HAVE_VF_TX_RATE_LIMITS, 1,
+			  [min_tx_rate is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if struct net_device_ops has ndo_set_vf_tx_rate])
+	AC_MSG_CHECKING([if struct ifla_vf_info has tx_rate])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/if_link.h>
 		#include <linux/netdevice.h>
 	],[
+		struct ifla_vf_info *ivf;
+
+		ivf->tx_rate = 0;
+
 		struct net_device_ops ndops = {
 			.ndo_set_vf_tx_rate = NULL,
 		};
@@ -287,7 +297,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	],[
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_VF_TX_RATE, 1,
-			  [ndo_set_vf_tx_rate is defined])
+			  [tx_rate is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -950,6 +960,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if skbuff.h has skb_transport_offset])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/skbuff.h>
+	],[
+		skb_transport_offset(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SKB_TRANSPORT_OFFSET, 1,
+			  [skb_transport_offset is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct request_queue has request_fn_active])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
@@ -1133,6 +1158,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_INET_GET_LOCAL_PORT_RANGE_3_PARAMS, 1,
 			  [inet_get_local_port_range has 3 parameters])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if netdevice.h has enum NAPI_STATE_MISSED])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		int napi = NAPI_STATE_MISSED;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NAPI_STATE_MISSED, 1,
+			  [NAPI_STATE_MISSED is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -1486,6 +1526,30 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV, 1,
 			  [ndo_select_queue has accel_priv])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if ndo_select_queue has a second net_device parameter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+
+		static u16 select_queue(struct net_device *dev, struct sk_buff *skb,
+		                        struct net_device *sb_dev,
+		                        select_queue_fallback_t fallback)
+		{
+			return 0;
+		}
+	],[
+		struct net_device_ops ndops = {
+			.ndo_select_queue = select_queue,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SELECT_QUEUE_NET_DEVICE, 1,
+			  [ndo_select_queue has a second net_device parameter])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -2287,7 +2351,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	],[
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TCF_MIRRED_IFINDEX, 1,
-			  [tcf_mirred_if_index is defined])
+			  [tcf_mirred_ifindex is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if tc_mirred.h has tcf_mirred_dev])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/tc_act/tc_mirred.h>
+	],[
+		tcf_mirred_dev(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TCF_MIRRED_DEV, 1,
+			  [tcf_mirred_dev is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -2413,21 +2492,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_NDO_GET_STATS64_RET_VOID, 1,
 			  [ndo_get_stats64 is defined and returns void])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if napi_complete_done returns value])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-
-	],[
-		if (napi_complete_done(NULL, 0))
-			return;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NAPI_COMPLETE_DONE_RET_VALUE, 1,
-			  [napi_complete_done returns value])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -3189,6 +3253,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if ETH_MIN_MTU exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <uapi/linux/if_ether.h>
+	],[
+		u16 min_mtu = ETH_MIN_MTU;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_ETH_MIN_MTU, 1,
+			  [ETH_MIN_MTU exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct ethtool_ops get_rxnfc gets u32 *rule_locs])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -3865,6 +3944,38 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if netdevice.h has NETIF_IS_LAG_MASTER])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct net_device *dev;
+		netif_is_lag_master(dev);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETIF_IS_LAG_MASTER, 1,
+			[NETIF_IS_LAG_MASTER is defined in netdevice.h])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if netdevice.h has NETIF_IS_LAG_PORT])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct net_device *dev;
+		netif_is_lag_port(dev);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETIF_IS_LAG_PORT, 1,
+			[NETIF_IS_LAG_PORT is defined in netdevice.h])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if netdev_features.h has NETIF_IS_BOND_MASTER])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -3880,7 +3991,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	],[
 		AC_MSG_RESULT(no)
 	])
-
 	AC_MSG_CHECKING([if if_vlan.h has vlan_hwaccel_do_receive with *skb])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/if_vlan.h>
@@ -4827,6 +4937,36 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if workqueue.h has WQ_UNBOUND])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/workqueue.h>
+	],[
+		struct workqueue_struct *my_wq = alloc_workqueue("my_wq", WQ_UNBOUND, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_WQ_UNBOUND, 1,
+			  [WQ_UNBOUND is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if workqueue.h has WQ_UNBOUND_MAX_ACTIVE])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/workqueue.h>
+	],[
+		struct workqueue_struct *my_wq = alloc_workqueue("my_wq", WQ_UNBOUND | WQ_UNBOUND_MAX_ACTIVE, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_WQ_UNBOUND_MAX_ACTIVE, 1,
+			  [WQ_UNBOUND_MAX_ACTIVE is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct mm_struct has member pinned_vm])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm_types.h>
@@ -5043,6 +5183,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_SKWQ_HAS_SLEEPER, 1,
 			  [skwq_has_sleeper is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net.h sock_create_kern has 5 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/net.h>
+		#include <net/sock.h>
+	],[
+		sock_create_kern(NULL, 0, 0, 0, NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SOCK_CREATE_KERN_5_PARAMS, 1,
+			  [sock_create_kern has 5 params is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -5612,6 +5767,25 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct dcbnl_rtnl_ops has dcbnl_get/set buffer])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+		#include <net/dcbnl.h>
+	],[
+		const struct dcbnl_rtnl_ops en_dcbnl_ops = {
+			.dcbnl_getbuffer = NULL,
+			.dcbnl_setbuffer = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DCBNL_GETBUFFER, 1,
+			  [struct dcbnl_rtnl_ops has dcbnl_get/set buffer])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if list.h hlist_for_each_entry has 3 params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/list.h>
@@ -6063,6 +6237,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if mm.h has kvmalloc])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mm.h>
+	],[
+		kvmalloc(0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_KVMALLOC, 1,
+			[kvmalloc is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if mm.h has kvzalloc_node])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
@@ -6078,6 +6267,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if mm.h has kvcalloc])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mm.h>
+	],[
+		kvcalloc(0, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_KVCALLOC, 1,
+			[kvcalloc is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
 
 	AC_MSG_CHECKING([if mm_types.h struct page has _count])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -6167,6 +6370,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_RECIPROCAL_SCALE, 1,
 			  [reciprocal_scale is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if hex2bin return value exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/kernel.h>
+	],[
+		int ret;
+
+		ret = hex2bin(NULL, NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_HEX2BIN_NOT_VOID, 1,
+			  [hex2bin return value exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -6307,24 +6527,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DMA_SET_ATTR_TAKES_UNSIGNED_LONG_ATTRS, 1,
 			  [dma_alloc_attrs takes unsigned long attrs])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if lightnvm.h struct nvm_dev has member dev])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/lightnvm.h>
-	],[
-		struct device devx = {0};
-		struct nvm_dev d = {
-			.dev = devx,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_LIGHTNVM_NVM_DEV, 1,
-			  [nvm_dev dev is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -6985,69 +7187,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if lightnvm.h struct nvmm_type has part_to_tgt])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/lightnvm.h>
-	],[
-		struct nvmm_type n = { .part_to_tgt = NULL, };
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NVMM_TYPE_HAS_PART_TO_TGT, 1,
-			[lightnvm.h struct nvmm_type has part_to_tgt])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if lightnvm.h has struct nvm_geo])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/lightnvm.h>
-	],[
-		struct nvm_geo x;
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NVM_GEO, 1,
-			  [HAVE_NVME_GEO is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if lightnvm.h struct nvm_id has grp])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/lightnvm.h>
-	],[
-		struct nvm_id_group grpxx;
-		struct nvm_id x = {
-			.grp = grpxx,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_LIGHTNVM_NVM_ID_GRP, 1,
-			  [struct nvm_id has grp])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if lightnvm.h nvm_end_io takes 1 parameter])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/lightnvm.h>
-	],[
-		nvm_end_io(NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NVM_END_IO_1_PARAM, 1,
-			  [nvm_end_io takes 1 parameter])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if uapi/linux/lightnvm.h has struct nvm_user_vio])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/genhd.h>
@@ -7393,6 +7532,24 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 			[get_task_pid is exported by the kernel])],
 	[])
 
+	LB_CHECK_SYMBOL_EXPORT([get_task_comm],
+		[fs/exec.c],
+		[AC_DEFINE(HAVE_GET_TASK_COMM_EXPORTED, 1,
+			[get_task_comm is exported by the kernel])],
+	[])
+
+	LB_CHECK_SYMBOL_EXPORT([__get_task_comm],
+		[fs/exec.c],
+		[AC_DEFINE(HAVE___GET_TASK_COMM_EXPORTED, 1,
+			[__get_task_comm is exported by the kernel])],
+	[])
+
+	LB_CHECK_SYMBOL_EXPORT([nvm_alloc_dev],
+		[drivers/lightnvm/core.c],
+		[AC_DEFINE(HAVE_NVM_ALLOC_DEV_EXPORTED, 1,
+			[nvm_alloc_dev is exported by the kernel])],
+	[])
+
 	AC_MSG_CHECKING([if linux/bpf.h has bpf_prog_sub])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/bpf.h>
@@ -7425,6 +7582,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/bpf.h has XDP_REDIRECT])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bpf.h>
+	],[
+		enum xdp_action x = XDP_REDIRECT;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDP_REDIRECT, 1,
+			  [XDP_REDIRECT is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct tc_to_netdev has egress_dev])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -7438,6 +7610,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TC_TO_NETDEV_EGRESS_DEV, 1,
 			  [struct tc_to_netdev has egress_dev])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct tc_cls_flower_offload has egress_dev])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/pkt_cls.h>
+	],[
+		struct tc_cls_flower_offload x = {
+			.egress_dev = false,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TC_CLS_FLOWER_OFFLOAD_EGRESS_DEV, 1,
+			  [struct tc_cls_flower_offload has egress_dev])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -7561,6 +7750,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_NETDEV_NOTIFIER_INFO, 1,
 			  [struct netdev_notifier_info is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if netdevice.h has field upper_info in struct netdev_notifier_changeupper_info])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct netdev_notifier_changeupper_info x = {
+			.upper_info = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NOTIFIER_CHANGEUPPER_INFO_UPPER_INFO, 1,
+			  [struct netdev_notifier_changeupper_info has upper_info])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8006,6 +8212,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/atomic.h has atomic_fetch_add_unless])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/highmem.h>
+	],[
+		atomic_t x;
+		atomic_fetch_add_unless(&x, 1, 1);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_ATOMIC_FETCH_ADD_UNLESS, 1,
+			  [atomic_fetch_add_unless is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/net_tstamp.h has HWTSTAMP_FILTER_NTP_ALL])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/net_tstamp.h>
@@ -8048,6 +8268,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TCF_EXTS_HAS_ACTIONS, 1,
 			  [tcf_exts_has_actions is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/pkt_cls.h has tc_cls_can_offload_and_chain0])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/pkt_cls.h>
+	],[
+		tc_cls_can_offload_and_chain0(NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TC_CLS_CAN_OFFLOAD_AND_CHAIN0, 1,
+			  [tc_cls_can_offload_and_chain0 is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8479,23 +8714,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if linux/lightnvm.h nvm_dev_ops has member submit_io_sync])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/lightnvm.h>
-	],[
-		struct nvm_dev_ops x = {
-			.submit_io_sync = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NVM_DEV_OPS_SUBMIT_IO_SYNC, 1,
-			[nvm_dev_ops has member submit_io_sync])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if pci.h struct pci_error_handlers has reset_notify])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
@@ -8528,29 +8746,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_SCSI_MAX_SG_SEGMENTS, 1,
 			  [SCSI_MAX_SG_SEGMENTS is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/blk-mq.h struct blk_mq_ops has field reinit_request])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-mq.h>
-
-		static int
-		nvme_fc_reinit_request(void *data, struct request *rq)
-		{
-			return 0;
-		}
-	],[
-		static struct blk_mq_ops nvme_fc_mq_ops = {
-			.reinit_request = nvme_fc_reinit_request,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_MQ_OPS_REINIT_REQUEST, 1,
-			[struct blk_mq_ops has field reinit_request])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8836,36 +9031,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BLK_MQ_UPDATE_NR_HW_QUEUES, 1,
 			  [blk_mq_update_nr_hw_queues is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/blk-mq.h has blk_mq_tagset_iter])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-mq.h>
-	],[
-		blk_mq_tagset_iter(NULL, NULL, NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_MQ_TAGSET_ITER, 1,
-			  [blk_mq_tagset_iter is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/blk-mq.h blk_mq_reinit_tagset takes 2 params])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-mq.h>
-	],[
-		blk_mq_reinit_tagset(NULL, NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_MQ_REINIT_TAGSET_2_PARAM, 1,
-			  [blk_mq_reinit_tagset takes 2 params])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -9222,6 +9387,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct ifla_vf_stats has rx_dropped and tx_dropped])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/if_link.h>
+	],[
+		struct ifla_vf_stats = {
+			.rx_dropped = 0,
+			.tx_dropped = 0,
+		};
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED, 1,
+			[struct ifla_vf_stats has memebers rx_dropped and tx_dropped])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/moduleparam.h has member param_ops_ullong])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/moduleparam.h>
@@ -9233,6 +9415,37 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_PARAM_OPS_ULLONG, 1,
 			[param_ops_ullong is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if vfs_getattr has 4 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/fs.h>
+	],[
+		vfs_getattr(NULL, NULL, 0, 0);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(VFS_GETATTR_HAS_4_PARAMS, 1,
+			[vfs_getattr has 4 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/fs.h has struct kiocb definition])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/fs.h>
+	],[
+		struct kiocb x = {
+			.ki_flags = 0,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FS_HAS_KIOCB, 1,
+			[struct kiocb is defined in linux/fs.h])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -9370,6 +9583,51 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if pci.h pcie_get_minimum_link])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pcie_get_minimum_link(NULL, NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCIE_GET_MINIMUM_LINK, 1,
+			[pcie_get_minimum_link is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci.h pcie_print_link_status])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pcie_print_link_status(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCIE_PRINT_LINK_STATUS, 1,
+			[pcie_print_link_status is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci.h pci_upstream_bridge])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_upstream_bridge(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_UPSTREAM_BRIDGE, 1,
+			[pci_upstream_bridge is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if pnv-pci.h has pnv_pci_set_p2p])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <asm/pnv-pci.h>
@@ -9399,6 +9657,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if switch_to.h has clear_thread_tidr])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <asm/switch_to.h>
+	],[
+		clear_thread_tidr(NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CLEAR_THREAD_TIDR, 1,
+			[switch_to.h has clear_thread_tidr])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if rbtree.h has struct rb_root_cached])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/rbtree.h>
@@ -9410,6 +9682,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_RB_ROOT_CACHED, 1,
 			[struct rb_root_cached is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if rbtree.h has rb_first_postorder])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/rbtree.h>
+	],[
+		struct rb_root x;
+		rb_first_postorder(&x);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RB_FIRST_POSTORDER, 1,
+			[rb_first_postorder is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -9783,6 +10071,39 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if netdevice.h has netdev_reg_state])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		const struct net_device x;
+		netdev_reg_state(&x);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_REG_STATE, 1,
+			  [netdev_reg_state is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct xfrmdev_ops has member xdo_dev_state_advance_esn])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct xfrmdev_ops x = {
+			.xdo_dev_state_advance_esn = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDO_DEV_STATE_ADVANCE_ESN, 1,
+			  [struct xfrmdev_ops has member xdo_dev_state_advance_esn])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if interrupt.h has irq_calc_affinity_vectors with 3 args])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/interrupt.h>
@@ -9794,6 +10115,326 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_IRQ_CALC_AFFINITY_VECTORS_3_ARGS, 1,
 			  [irq_calc_affinity_vectors is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/overflow.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/overflow.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_OVERFLOW_H, 1,
+			  [linux/overflow.h is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/rtnetlink.h has net_rwsem])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/rtnetlink.h>
+	],[
+		down_read(&net_rwsem);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RTNETLINK_NET_RWSEM, 1,
+			  [linux/rtnetlink.h has net_rwsem])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/net/ip6_route.h rt6_lookup takes 6 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/ip6_route.h>
+	],[
+		rt6_lookup(NULL, NULL, NULL, 0, NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RT6_LOOKUP_TAKES_6_PARAMS, 1,
+			  [rt6_lookup takes 6 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if type __poll_t is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/types.h>
+	],[
+		__poll_t x = 0;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TYPE___POLL_T, 1,
+			  [type __poll_t is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/netlink.h NLA_S32 is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/netlink.h>
+	],[
+		u16 x = NLA_S32;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NLA_S32, 1,
+			  [NLA_S32 is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/xdp.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/xdp.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NET_XDP_H, 1,
+			  [net/xdp.h is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/xdp.h has xdp_rxq_info_reg_mem_model])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/xdp.h>
+	],[
+		xdp_rxq_info_reg_mem_model(NULL, 0, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDP_RXQ_INFO_REG_MEM_MODEL, 1,
+			  [net/xdp.h has xdp_rxq_info_reg_mem_model])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/page_pool.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/page_pool.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NET_PAGE_POOL_H, 1,
+			  [net/page_pool.h is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if uapi/linux/tls.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <uapi/linux/tls.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_UAPI_LINUX_TLS_H, 1,
+			  [uapi/linux/tls.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if smp_load_acquire is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <asm-generic/barrier.h>
+	],[
+		u32 x;
+		smp_load_acquire(&x);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SMP_LOAD_ACQUIRE, 1,
+			  [smp_load_acquire is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	LB_CHECK_SYMBOL_EXPORT([kobj_ns_grab_current],
+		[lib/kobject.c],
+		[AC_DEFINE(HAVE_KOBJ_NS_GRAB_CURRENT_EXPORTED, 1,
+			[kobj_ns_grab_current is exported by the kernel])],
+	[])
+
+	AC_MSG_CHECKING([if linux/blk_types.h has REQ_DRV])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk_types.h>
+	],[
+		int x = REQ_DRV;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_TYPES_REQ_DRV, 1,
+			  [REQ_DRV is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blk_alloc_queue_node has 3 args])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		blk_alloc_queue_node(0, 0, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_ALLOC_QUEUE_NODE_3_ARGS, 1,
+				[blk_alloc_queue_node has 3 args])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci.h has pci_enable_atomic_ops_to_root])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_enable_atomic_ops_to_root(NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_ENABLE_ATOMIC_OPS_TO_ROOT, 1,
+		[pci_enable_atomic_ops_to_root is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if string.h has kstrtobool])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/string.h>
+	],[
+		char s[] = "test";
+		bool res;
+
+		kstrtobool(s, &res);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_KSTRTOBOOL, 1,
+		[kstrtobool is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct blk_mq_ops has poll])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		struct blk_mq_ops ops = {
+			.poll = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_OPS_POLL, 1,
+			  [struct blk_mq_ops has poll])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct iscsi_session has discovery_sess])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <scsi/libiscsi.h>
+	],[
+		struct iscsi_session session = {
+			.discovery_sess = 0,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_ISCSI_DISCOVERY_SESSION, 1,
+			  [struct iscsi_session has discovery_sess])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if select_queue_fallback_t has third parameter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		extern select_queue_fallback_t fallback;
+                fallback(NULL, NULL, NULL);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS, 1,
+			  [select_queue_fallback_t has third parameter])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if t10_pi_ref_tag() exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <scsi/scsi_cmnd.h>
+	],[
+		t10_pi_ref_tag(NULL);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_T10_PI_REF_TAG, 1,
+			  [t10_pi_ref_tag() exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct netdev_bonding_info has prog_attached])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+                struct netdev_bpf s = {};
+	],[
+                s.prog_attached = 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BPF_PROG_PROG_ATTACHED, 1,
+			  [netdev_bpf has prog_attached])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if tcf_block_cb_register has fifth parameter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/pkt_cls.h>
+	],[
+                tcf_block_cb_register(NULL, NULL, NULL, NULL, NULL);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TCF_BLOCK_CB_REGISTER_EXTACK, 1,
+			  [tcf_block_cb_register has fifth parameter])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if ib_umem_notifier_invalidate_range_start has parameter blockable])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mmu_notifier.h>
+		static int notifier(struct mmu_notifier *mn,
+				    struct mm_struct *mm,
+				    unsigned long start,
+				    unsigned long end,
+				    bool blockable) {
+			return 0;
+		}
+	],[
+		static const struct mmu_notifier_ops notifiers = {
+			.invalidate_range_start = notifier
+		};
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE, 1,
+			  [ib_umem_notifier_invalidate_range_start has parameter blockable])
 	],[
 		AC_MSG_RESULT(no)
 	])

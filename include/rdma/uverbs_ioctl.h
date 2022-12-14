@@ -37,6 +37,7 @@
 #include <linux/uaccess.h>
 #include <rdma/rdma_user_ioctl.h>
 #include <rdma/ib_user_ioctl_verbs.h>
+#include <rdma/ib_user_ioctl_cmds.h>
 
 /*
  * =======================================
@@ -50,6 +51,8 @@ enum uverbs_attr_type {
 	UVERBS_ATTR_TYPE_PTR_OUT,
 	UVERBS_ATTR_TYPE_IDR,
 	UVERBS_ATTR_TYPE_FD,
+	UVERBS_ATTR_TYPE_ENUM_IN,
+	UVERBS_ATTR_TYPE_IDRS_ARRAY,
 };
 
 enum uverbs_obj_access {
@@ -59,27 +62,68 @@ enum uverbs_obj_access {
 	UVERBS_ACCESS_DESTROY
 };
 
-enum {
-	UVERBS_ATTR_SPEC_F_MANDATORY	= 1U << 0,
-	/* Support extending attributes by length */
-	UVERBS_ATTR_SPEC_F_MIN_SZ	= 1U << 1,
-};
-
+/* Specification of a single attribute inside the ioctl message */
+/* good size 16 */
 struct uverbs_attr_spec {
-	enum uverbs_attr_type		type;
+	u8 type;
+
+	/*
+	 * Support extending attributes by length. Allow the user to provide
+	 * more bytes than ptr.len, but check that everything after is zero'd
+	 * by the user.
+	 */
+	u8 zero_trailing:1;
+	/*
+	 * Valid only for PTR_IN. Allocate and copy the data inside
+	 * the parser
+	 */
+	u8 alloc_and_copy:1;
+	u8 mandatory:1;
+
 	union {
-		u16				len;
+		struct {
+			/* Current known size to kernel */
+			u16 len;
+			/* User isn't allowed to provide something < min_len */
+			u16 min_len;
+		} ptr;
+
 		struct {
 			/*
 			 * higher bits mean the namespace and lower bits mean
 			 * the type id within the namespace.
 			 */
-			u16			obj_type;
-			u8			access;
+			u16 obj_type;
+			u8 access;
 		} obj;
-	};
-	/* Combination of bits from enum UVERBS_ATTR_SPEC_F_XXXX */
-	u8				flags;
+
+		struct {
+			u8 num_elems;
+		} enum_def;
+	} u;
+
+	/* This weird split lets us remove some padding */
+	union {
+		struct {
+			/*
+			 * The enum attribute can select one of the attributes
+			 * contained in the ids array. Currently only PTR_IN
+			 * attributes are supported in the ids array.
+			 */
+			const struct uverbs_attr_spec *ids;
+		} enum_def;
+
+		struct {
+			/*
+			 * higher bits mean the namespace and lower bits mean
+			 * the type id within the namespace.
+			 */
+			u16				obj_type;
+			u16				min_len;
+			u16				max_len;
+			u8				access;
+		} objs_arr;
+	} u2;
 };
 
 struct uverbs_attr_spec_hash {
@@ -163,112 +207,157 @@ struct uverbs_object_tree_def {
 	const struct uverbs_object_def * const (*objects)[];
 };
 
-#define UA_FLAGS(_flags)  .flags = _flags
-#define __UVERBS_ATTR0(_id, _len, _type, ...)                           \
-	((const struct uverbs_attr_def)				  \
-	 {.id = _id, .attr = {.type = _type, {.len = _len}, .flags = 0, } })
-#define __UVERBS_ATTR1(_id, _len, _type, _flags)                        \
-	((const struct uverbs_attr_def)				  \
-	 {.id = _id, .attr = {.type = _type, {.len = _len}, _flags, } })
-#define __UVERBS_ATTR(_id, _len, _type, _flags, _n, ...)		\
-	__UVERBS_ATTR##_n(_id, _len, _type, _flags)
 /*
- * In new compiler, UVERBS_ATTR could be simplified by declaring it as
- * [_id] = {.type = _type, .len = _len, ##__VA_ARGS__}
- * But since we support older compilers too, we need the more complex code.
+ * =======================================
+ *	Attribute Specifications
+ * =======================================
  */
-#define UVERBS_ATTR(_id, _len, _type, ...)				\
-	__UVERBS_ATTR(_id, _len, _type, ##__VA_ARGS__, 1, 0)
-#define UVERBS_ATTR_PTR_IN_SZ(_id, _len, ...)				\
-	UVERBS_ATTR(_id, _len, UVERBS_ATTR_TYPE_PTR_IN, ##__VA_ARGS__)
-/* If sizeof(_type) <= sizeof(u64), this will be inlined rather than a pointer */
-#define UVERBS_ATTR_PTR_IN(_id, _type, ...)				\
-	UVERBS_ATTR_PTR_IN_SZ(_id, sizeof(_type), ##__VA_ARGS__)
-#define UVERBS_ATTR_PTR_OUT_SZ(_id, _len, ...)				\
-	UVERBS_ATTR(_id, _len, UVERBS_ATTR_TYPE_PTR_OUT, ##__VA_ARGS__)
-#define UVERBS_ATTR_PTR_OUT(_id, _type, ...)				\
-	UVERBS_ATTR_PTR_OUT_SZ(_id, sizeof(_type), ##__VA_ARGS__)
+
+#define UVERBS_ATTR_SIZE(_min_len, _len)			\
+	.u.ptr.min_len = _min_len, .u.ptr.len = _len
+
+#define UVERBS_ATTR_NO_DATA() UVERBS_ATTR_SIZE(0, 0)
 
 /*
- * In new compiler, UVERBS_ATTR_IDR (and FD) could be simplified by declaring
- * it as
- * {.id = _id,								\
- *  .attr {.type = __obj_class,						\
- *         .obj = {.obj_type = _idr_type,				\
- *                       .access = _access                              \
- *                }, ##__VA_ARGS__ } }
- * But since we support older compilers too, we need the more complex code.
+ * Specifies a uapi structure that cannot be extended. The user must always
+ * supply the whole structure and nothing more. The structure must be declared
+ * in a header under include/uapi/rdma.
  */
-#define ___UVERBS_ATTR_OBJ0(_id, _obj_class, _obj_type, _access, ...)\
-	((const struct uverbs_attr_def)					\
-	{.id = _id,							\
-	 .attr = {.type = _obj_class,					\
-		  {.obj = {.obj_type = _obj_type, .access = _access } },\
-		  .flags = 0} })
-#define ___UVERBS_ATTR_OBJ1(_id, _obj_class, _obj_type, _access, _flags)\
-	((const struct uverbs_attr_def)					\
-	{.id = _id,							\
-	.attr = {.type = _obj_class,					\
-		 {.obj = {.obj_type = _obj_type, .access = _access} },	\
-		  _flags} })
-#define ___UVERBS_ATTR_OBJ(_id, _obj_class, _obj_type, _access, _flags, \
-			   _n, ...)					\
-	___UVERBS_ATTR_OBJ##_n(_id, _obj_class, _obj_type, _access, _flags)
-#define __UVERBS_ATTR_OBJ(_id, _obj_class, _obj_type, _access, ...)	\
-	___UVERBS_ATTR_OBJ(_id, _obj_class, _obj_type, _access,		\
-			   ##__VA_ARGS__, 1, 0)
-#define UVERBS_ATTR_IDR(_id, _idr_type, _access, ...)			 \
-	__UVERBS_ATTR_OBJ(_id, UVERBS_ATTR_TYPE_IDR, _idr_type, _access,\
-			  ##__VA_ARGS__)
-#define UVERBS_ATTR_FD(_id, _fd_type, _access, ...)			\
-	__UVERBS_ATTR_OBJ(_id, UVERBS_ATTR_TYPE_FD, _fd_type,		\
-			  (_access) + BUILD_BUG_ON_ZERO(		\
-				(_access) != UVERBS_ACCESS_NEW &&	\
-				(_access) != UVERBS_ACCESS_READ),	\
-			  ##__VA_ARGS__)
-#define DECLARE_UVERBS_ATTR_SPEC(_name, ...)				\
-	const struct uverbs_attr_def _name = __VA_ARGS__
+#define UVERBS_ATTR_TYPE(_type)					\
+	.u.ptr.min_len = sizeof(_type), .u.ptr.len = sizeof(_type)
+/*
+ * Specifies a uapi structure where the user must provide at least up to
+ * member 'last'.  Anything after last and up until the end of the structure
+ * can be non-zero, anything longer than the end of the structure must be
+ * zero. The structure must be declared in a header under include/uapi/rdma.
+ */
+#define UVERBS_ATTR_STRUCT(_type, _last)                                       \
+	.zero_trailing = 1,                                                    \
+	UVERBS_ATTR_SIZE(((uintptr_t)(&((_type *)0)->_last + 1)),              \
+			 sizeof(_type))
+/*
+ * Specifies at least min_len bytes must be passed in, but the amount can be
+ * larger, up to the protocol maximum size. No check for zeroing is done.
+ */
+#define UVERBS_ATTR_MIN_SIZE(_min_len) UVERBS_ATTR_SIZE(_min_len, USHRT_MAX)
 
-#define _UVERBS_METHOD_ATTRS_SZ(...)					\
-	(sizeof((const struct uverbs_attr_def * const []){__VA_ARGS__}) /\
-	 sizeof(const struct uverbs_attr_def *))
-#define _UVERBS_METHOD(_id, _handler, _flags, ...)			\
-	((const struct uverbs_method_def) {				\
-	 .id = _id,							\
-	 .flags = _flags,						\
-	 .handler = _handler,						\
-	 .num_attrs = _UVERBS_METHOD_ATTRS_SZ(__VA_ARGS__),		\
-	 .attrs = &(const struct uverbs_attr_def * const []){__VA_ARGS__} })
-#define DECLARE_UVERBS_METHOD(_name, _id, _handler, ...)		\
-	const struct uverbs_method_def _name =				\
-		_UVERBS_METHOD(_id, _handler, 0, ##__VA_ARGS__)
-#define DECLARE_UVERBS_CTX_METHOD(_name, _id, _handler, _flags, ...)	\
-	const struct uverbs_method_def _name =				\
-		_UVERBS_METHOD(_id, _handler,				\
-			       UVERBS_ACTION_FLAG_CREATE_ROOT,		\
-			       ##__VA_ARGS__)
-#define _UVERBS_OBJECT_METHODS_SZ(...)					\
-	(sizeof((const struct uverbs_method_def * const []){__VA_ARGS__}) / \
-	 sizeof(const struct uverbs_method_def *))
-#define _UVERBS_OBJECT(_id, _type_attrs, ...)				\
-	((const struct uverbs_object_def) {				\
-	 .id = _id,							\
-	 .type_attrs = _type_attrs,					\
-	 .num_methods = _UVERBS_OBJECT_METHODS_SZ(__VA_ARGS__),		\
-	 .methods = &(const struct uverbs_method_def * const []){__VA_ARGS__} })
-#define DECLARE_UVERBS_OBJECT(_name, _id, _type_attrs, ...)		\
-	const struct uverbs_object_def _name =				\
-		_UVERBS_OBJECT(_id, _type_attrs, ##__VA_ARGS__)
-#define _UVERBS_TREE_OBJECTS_SZ(...)					\
-	(sizeof((const struct uverbs_object_def * const []){__VA_ARGS__}) / \
-	 sizeof(const struct uverbs_object_def *))
-#define _UVERBS_OBJECT_TREE(...)					\
-	((const struct uverbs_object_tree_def) {			\
-	 .num_objects = _UVERBS_TREE_OBJECTS_SZ(__VA_ARGS__),		\
-	 .objects = &(const struct uverbs_object_def * const []){__VA_ARGS__} })
-#define DECLARE_UVERBS_OBJECT_TREE(_name, ...)				\
-	const struct uverbs_object_tree_def _name =			\
-		_UVERBS_OBJECT_TREE(__VA_ARGS__)
+/* Must be used in the '...' of any UVERBS_ATTR */
+#define UA_ALLOC_AND_COPY .alloc_and_copy = 1
+#define UA_MANDATORY .mandatory = 1
+#define UA_OPTIONAL .mandatory = 0
+
+/* min_len must be bigger than 0 and _max_len must be smaller than 4095.
+ * Only READ\WRITE accesses are supported.
+ */
+#define UVERBS_ATTR_IDRS_ARR(_attr_id, _idr_type, _access, _min_len, _max_len, \
+			     ...)                                              \
+	(&(const struct uverbs_attr_def){                                      \
+		.id = (_attr_id) +                                             \
+		      BUILD_BUG_ON_ZERO((_min_len) == 0 ||                     \
+					(_max_len) > 4095 ||                   \
+					(_min_len) > (_max_len) ||             \
+					(_access) == UVERBS_ACCESS_NEW ||      \
+					(_access) == UVERBS_ACCESS_DESTROY),   \
+		.attr = {                                                      \
+			.type = UVERBS_ATTR_TYPE_IDRS_ARRAY,                   \
+			.u2.objs_arr.obj_type = _idr_type,                     \
+			.u2.objs_arr.access = _access,                         \
+			.u2.objs_arr.min_len = _min_len,                       \
+			.u2.objs_arr.max_len = _max_len,                       \
+			__VA_ARGS__                                            \
+		} })
+
+#define UVERBS_ATTR_IDR(_attr_id, _idr_type, _access, ...)                     \
+	(&(const struct uverbs_attr_def){                                      \
+		.id = _attr_id,                                                \
+		.attr = { .type = UVERBS_ATTR_TYPE_IDR,                        \
+			  .u.obj.obj_type = _idr_type,                         \
+			  .u.obj.access = _access,                             \
+			  __VA_ARGS__ } })
+
+#define UVERBS_ATTR_FD(_attr_id, _fd_type, _access, ...)                       \
+	(&(const struct uverbs_attr_def){                                      \
+		.id = (_attr_id) +                                             \
+		      BUILD_BUG_ON_ZERO((_access) != UVERBS_ACCESS_NEW &&      \
+					(_access) != UVERBS_ACCESS_READ),      \
+		.attr = { .type = UVERBS_ATTR_TYPE_FD,                         \
+			  .u.obj.obj_type = _fd_type,                          \
+			  .u.obj.access = _access,                             \
+			  __VA_ARGS__ } })
+
+#define UVERBS_ATTR_PTR_IN(_attr_id, _type, ...)                               \
+	(&(const struct uverbs_attr_def){                                      \
+		.id = _attr_id,                                                \
+		.attr = { .type = UVERBS_ATTR_TYPE_PTR_IN,                     \
+			  _type,                                               \
+			  __VA_ARGS__ } })
+
+#define UVERBS_ATTR_PTR_OUT(_attr_id, _type, ...)                              \
+	(&(const struct uverbs_attr_def){                                      \
+		.id = _attr_id,                                                \
+		.attr = { .type = UVERBS_ATTR_TYPE_PTR_OUT,                    \
+			  _type,                                               \
+			  __VA_ARGS__ } })
+
+/* _enum_arry should be a 'static const union uverbs_attr_spec[]' */
+#define UVERBS_ATTR_ENUM_IN(_attr_id, _enum_arr, ...)                          \
+	(&(const struct uverbs_attr_def){                                      \
+		.id = _attr_id,                                                \
+		.attr = { .type = UVERBS_ATTR_TYPE_ENUM_IN,                    \
+			  .u2.enum_def.ids = _enum_arr,                        \
+			  .u.enum_def.num_elems = ARRAY_SIZE(_enum_arr),       \
+			  __VA_ARGS__ },                                       \
+	})
+
+/* An input value that is a member in the enum _enum_type. */
+#define UVERBS_ATTR_CONST_IN(_attr_id, _enum_type, ...)                        \
+	UVERBS_ATTR_PTR_IN(                                                    \
+		_attr_id,                                                      \
+		UVERBS_ATTR_SIZE(sizeof(u64) + BUILD_BUG_ON_ZERO(              \
+						!sizeof(_enum_type)),          \
+				 sizeof(u64)),                                 \
+		__VA_ARGS__)
+
+/*
+ * An input value that is a bitwise combination of values of _enum_type.
+ * This permits the flag value to be passed as either a u32 or u64, it must
+ * be retrieved via uverbs_get_flag().
+ */
+#define UVERBS_ATTR_FLAGS_IN(_attr_id, _enum_type, ...)                        \
+	UVERBS_ATTR_PTR_IN(                                                    \
+		_attr_id,                                                      \
+		UVERBS_ATTR_SIZE(sizeof(u32) + BUILD_BUG_ON_ZERO(              \
+						       !sizeof(_enum_type *)), \
+				 sizeof(u64)),                                 \
+		__VA_ARGS__)
+
+/*
+ * This spec is used in order to pass information to the hardware driver in a
+ * legacy way. Every verb that could get driver specific data should get this
+ * spec.
+ */
+#define UVERBS_ATTR_UHW()                                                      \
+	UVERBS_ATTR_PTR_IN(UVERBS_ATTR_UHW_IN,                                 \
+			   UVERBS_ATTR_MIN_SIZE(0),			       \
+			   UA_OPTIONAL),				       \
+	UVERBS_ATTR_PTR_OUT(UVERBS_ATTR_UHW_OUT,                               \
+			    UVERBS_ATTR_MIN_SIZE(0),			       \
+			    UA_OPTIONAL)
+
+/*
+ * =======================================
+ *	Declaration helpers
+ * =======================================
+ */
+
+#define DECLARE_UVERBS_OBJECT_TREE(_name, ...)                                 \
+	static const struct uverbs_object_def *const _name##_ptr[] = {         \
+		__VA_ARGS__,                                                   \
+	};                                                                     \
+	static const struct uverbs_object_tree_def _name = {                   \
+		.num_objects = ARRAY_SIZE(_name##_ptr),                        \
+		.objects = &_name##_ptr,                                       \
+	}
 
 /* =================================================
  *              Parsing infrastructure
@@ -276,21 +365,27 @@ struct uverbs_object_tree_def {
  */
 
 struct uverbs_ptr_attr {
+	/*
+	 * If UVERBS_ATTR_SPEC_F_ALLOC_AND_COPY is set then the 'ptr' is
+	 * used.
+	 */
 	union {
-		u64		data;
-		void	__user *ptr;
+		void *ptr;
+		u64 data;
 	};
 	u16		len;
 	/* Combination of bits from enum UVERBS_ATTR_F_XXXX */
 	u16		flags;
+	u8		enum_id;
 };
 
 struct uverbs_obj_attr {
-	/* pointer to the kernel descriptor -> type, access, etc */
-	const struct uverbs_obj_type	*type;
 	struct ib_uobject		*uobject;
-	/* fd or id in idr of this object */
-	int				id;
+};
+
+struct uverbs_objs_arr_attr {
+	struct ib_uobject	**uobjects;
+	u16			len;
 };
 
 struct uverbs_attr {
@@ -302,6 +397,7 @@ struct uverbs_attr {
 	union {
 		struct uverbs_ptr_attr	ptr_attr;
 		struct uverbs_obj_attr	obj_attr;
+		struct uverbs_objs_arr_attr	objs_arr_attr;
 	};
 };
 
@@ -339,6 +435,8 @@ static inline bool uverbs_attr_is_valid(const struct uverbs_attr_bundle *attrs_b
 					    idx & ~UVERBS_ID_NS_MASK);
 }
 
+#define IS_UVERBS_COPY_ERR(_ret)		((_ret) && (_ret) != -ENOENT)
+
 static inline const struct uverbs_attr *uverbs_attr_get(const struct uverbs_attr_bundle *attrs_bundle,
 							u16 idx)
 {
@@ -350,39 +448,225 @@ static inline const struct uverbs_attr *uverbs_attr_get(const struct uverbs_attr
 	return &attrs_bundle->hash[idx_bucket].attrs[idx & ~UVERBS_ID_NS_MASK];
 }
 
+static inline int uverbs_attr_get_enum_id(const struct uverbs_attr_bundle *attrs_bundle,
+					  u16 idx)
+{
+	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
+
+	if (IS_ERR(attr))
+		return PTR_ERR(attr);
+
+	return attr->ptr_attr.enum_id;
+}
+
+static inline void *uverbs_attr_get_obj(const struct uverbs_attr_bundle *attrs_bundle,
+					u16 idx)
+{
+	const struct uverbs_attr *attr;
+
+	attr = uverbs_attr_get(attrs_bundle, idx);
+	if (IS_ERR(attr))
+		return ERR_CAST(attr);
+
+	return attr->obj_attr.uobject->object;
+}
+
+static inline struct ib_uobject *uverbs_attr_get_uobject(const struct uverbs_attr_bundle *attrs_bundle,
+							 u16 idx)
+{
+	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
+
+	if (IS_ERR(attr))
+		return ERR_CAST(attr);
+
+	return attr->obj_attr.uobject;
+}
+
+static inline int
+uverbs_attr_get_len(const struct uverbs_attr_bundle *attrs_bundle, u16 idx)
+{
+	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
+
+	if (IS_ERR(attr))
+		return PTR_ERR(attr);
+
+	return attr->ptr_attr.len;
+}
+
+/*
+ * uverbs_attr_get_uobjs_arr - Provides array's properties for attribute for
+ * UVERBS_ATTR_TYPE_IDRS_ARRAY.
+ * @***arr: Returned pointer to array of pointers for uobjects or NULL if
+ * attribute isn't provided.
+ *
+ * Returns:
+ * If attribute isn't provided - return 0. Otherwise, return the array
+ * length.
+ */
+static inline int uverbs_attr_get_uobjs_arr(
+	const struct uverbs_attr_bundle *attrs_bundle, u16 attr_idx,
+	struct ib_uobject ***arr)
+{
+	const struct uverbs_attr *attr =
+			uverbs_attr_get(attrs_bundle, attr_idx);
+
+	if (IS_ERR(attr)) {
+		*arr = NULL;
+		return 0;
+	}
+
+	*arr = attr->objs_arr_attr.uobjects;
+
+	return attr->objs_arr_attr.len;
+}
+
 static inline int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle,
-				 size_t idx, const void *from)
+				 size_t idx, const void *from, size_t size)
 {
 	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
 	u16 flags;
+	size_t min_size;
 
 	if (IS_ERR(attr))
 		return PTR_ERR(attr);
+
+	min_size = min_t(size_t, attr->ptr_attr.len, size);
+	if (copy_to_user(u64_to_user_ptr(attr->ptr_attr.data), from, min_size))
+		return -EFAULT;
 
 	flags = attr->ptr_attr.flags | UVERBS_ATTR_F_VALID_OUTPUT;
-	return (!copy_to_user(attr->ptr_attr.ptr, from, attr->ptr_attr.len) &&
-		!put_user(flags, &attr->uattr->flags)) ? 0 : -EFAULT;
-}
-
-static inline int _uverbs_copy_from(void *to, size_t to_size,
-				    const struct uverbs_attr_bundle *attrs_bundle,
-				    size_t idx)
-{
-	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
-
-	if (IS_ERR(attr))
-		return PTR_ERR(attr);
-
-	if (to_size <= sizeof(((struct ib_uverbs_attr *)0)->data))
-		memcpy(to, &attr->ptr_attr.data, attr->ptr_attr.len);
-	else if (copy_from_user(to, attr->ptr_attr.ptr, attr->ptr_attr.len))
+	if (put_user(flags, &attr->uattr->flags))
 		return -EFAULT;
 
 	return 0;
 }
 
+static inline bool uverbs_attr_ptr_is_inline(const struct uverbs_attr *attr)
+{
+	return attr->ptr_attr.len <= sizeof(attr->ptr_attr.data);
+}
+
+static inline void *uverbs_attr_get_alloced_ptr(
+	const struct uverbs_attr_bundle *attrs_bundle, u16 idx)
+{
+	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
+
+	if (IS_ERR(attr))
+		return (void *)attr;
+
+	return uverbs_attr_ptr_is_inline(attr) ? (void *)&attr->ptr_attr.data :
+						 attr->ptr_attr.ptr;
+}
+
+static inline int _uverbs_copy_from(void *to,
+				    const struct uverbs_attr_bundle *attrs_bundle,
+				    size_t idx,
+				    size_t size)
+{
+	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
+
+	if (IS_ERR(attr))
+		return PTR_ERR(attr);
+
+	/*
+	 * Validation ensures attr->ptr_attr.len >= size. If the caller is
+	 * using UVERBS_ATTR_SPEC_F_MIN_SZ_OR_ZERO then it must call
+	 * uverbs_copy_from_or_zero.
+	 */
+	if (unlikely(size < attr->ptr_attr.len))
+		return -EINVAL;
+
+	if (uverbs_attr_ptr_is_inline(attr))
+		memcpy(to, &attr->ptr_attr.data, attr->ptr_attr.len);
+	else if (copy_from_user(to, u64_to_user_ptr(attr->ptr_attr.data),
+				attr->ptr_attr.len))
+		return -EFAULT;
+
+	return 0;
+}
+
+static inline int _uverbs_copy_from_or_zero(void *to,
+					    const struct uverbs_attr_bundle *attrs_bundle,
+					    size_t idx,
+					    size_t size)
+{
+	const struct uverbs_attr *attr = uverbs_attr_get(attrs_bundle, idx);
+	size_t min_size;
+
+	if (IS_ERR(attr))
+		return PTR_ERR(attr);
+
+	min_size = min_t(size_t, size, attr->ptr_attr.len);
+
+	if (uverbs_attr_ptr_is_inline(attr))
+		memcpy(to, &attr->ptr_attr.data, min_size);
+	else if (copy_from_user(to, u64_to_user_ptr(attr->ptr_attr.data),
+				min_size))
+		return -EFAULT;
+
+	if (size > min_size)
+		memset(to + min_size, 0, size - min_size);
+
+	return 0;
+}
+
 #define uverbs_copy_from(to, attrs_bundle, idx)				      \
-	_uverbs_copy_from(to, sizeof(*(to)), attrs_bundle, idx)
+	_uverbs_copy_from(to, attrs_bundle, idx, sizeof(*to))
+
+#define uverbs_copy_from_or_zero(to, attrs_bundle, idx)			      \
+	_uverbs_copy_from_or_zero(to, attrs_bundle, idx, sizeof(*to))
+
+#if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
+int uverbs_get_flags64(u64 *to, const struct uverbs_attr_bundle *attrs_bundle,
+		       size_t idx, u64 allowed_bits);
+int uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
+		       size_t idx, u64 allowed_bits);
+int _uverbs_get_const(s64 *to, const struct uverbs_attr_bundle *attrs_bundle,
+		      size_t idx, s64 lower_bound, u64 upper_bound,
+		      s64 *def_val);
+#else
+static inline int
+uverbs_get_flags64(u64 *to, const struct uverbs_attr_bundle *attrs_bundle,
+		   size_t idx, u64 allowed_bits)
+{
+	return -EINVAL;
+}
+static inline int
+uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
+		   size_t idx, u64 allowed_bits)
+{
+	return -EINVAL;
+}
+static inline int
+_uverbs_get_const(s64 *to, const struct uverbs_attr_bundle *attrs_bundle,
+		  size_t idx, s64 lower_bound, u64 upper_bound,
+		  s64 *def_val)
+{
+	return -EINVAL;
+}
+#endif
+
+#define uverbs_get_const(_to, _attrs_bundle, _idx)                             \
+	({                                                                     \
+		s64 _val;                                                      \
+		int _ret = _uverbs_get_const(&_val, _attrs_bundle, _idx,       \
+					     type_min(typeof(*_to)),           \
+					     type_max(typeof(*_to)), NULL);    \
+		(*_to) = _val;                                                 \
+		_ret;                                                          \
+	})
+
+#define uverbs_get_const_default(_to, _attrs_bundle, _idx, _default)           \
+	({                                                                     \
+		s64 _val;                                                      \
+		s64 _def_val = _default;                                       \
+		int _ret =                                                     \
+			_uverbs_get_const(&_val, _attrs_bundle, _idx,          \
+					  type_min(typeof(*_to)),              \
+					  type_max(typeof(*_to)), &_def_val);  \
+		(*_to) = _val;                                                 \
+		_ret;                                                          \
+	})
 
 /* =================================================
  *	 Definitions -> Specs infrastructure

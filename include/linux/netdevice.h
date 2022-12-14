@@ -145,33 +145,36 @@ static inline bool netif_is_bond_master(struct net_device *dev)
 #endif
 
 #ifndef HAVE_NETDEV_NOTIFIER_INFO_TO_DEV
-struct netdev_notifier_info {
-	struct net_device *dev;
-};
-
 #define netdev_notifier_info_to_dev LINUX_BACKPORT(netdev_notifier_info_to_dev)
 static inline struct net_device *
 netdev_notifier_info_to_dev(void *ptr)
 {
 	return (struct net_device *)ptr;
 }
+#endif
+
+/* This is geared toward old kernels that have Bonding.h and don't have TX type.
+ * It's tested on RHEL 6.9, 7.2 and 7.3 in addition to Ubuntu 16.04.
+ */
+
+#if defined(HAVE_BONDING_H) && !defined(HAVE_LAG_TX_TYPE)
+#define MLX_USE_LAG_COMPAT
+#define NETDEV_CHANGELOWERSTATE			0x101B
+#undef NETDEV_CHANGEUPPER
+#define NETDEV_CHANGEUPPER			0x1015
+
+#ifndef HAVE_NETDEV_NOTIFIER_INFO
+#define netdev_notifier_info LINUX_BACKPORT(netdev_notifier_info)
+struct netdev_notifier_info {
+	struct net_device *dev;
+};
+#endif
 
 static inline struct net_device *
 netdev_notifier_info_to_dev_v2(void *ptr)
 {
 	return (((struct netdev_notifier_info *)ptr)->dev);
 }
-#endif
-
-/* This is geared toward RHL kernels 3.10.0-327, 2.6.32-696,
- * and those that conform to them.
- */
-#if defined(HAVE_BONDING_H) && !defined(HAVE_LAG_TX_TYPE) && \
-   !defined(HAVE_NETDEV_NOTIFIER_INFO)
-#define MLX_USE_LAG_COMPAT
-
-#define NETDEV_CHANGEUPPER			0x1015
-#define NETDEV_CHANGELOWERSTATE			0x101B
 
 enum netdev_lag_tx_type {
 	NETDEV_LAG_TX_TYPE_UNKNOWN,
@@ -192,6 +195,25 @@ struct netdev_lag_lower_state_info {
 	   tx_enabled : 1;
 };
 
+#ifndef HAVE_NETIF_IS_LAG_MASTER
+#define netif_is_lag_master LINUX_BACKPORT(netif_is_lag_master)
+static inline bool netif_is_lag_master(struct net_device *dev)
+{
+	return netif_is_bond_master(dev);
+}
+#endif
+
+#ifndef HAVE_NETIF_IS_LAG_PORT
+#define netif_is_lag_port LINUX_BACKPORT(netif_is_lag_port)
+static inline bool netif_is_lag_port(struct net_device *dev)
+{
+	return netif_is_bond_slave(dev);
+}
+#endif
+
+#if !defined(HAVE_NETDEV_NOTIFIER_CHANGEUPPER_INFO_UPPER_INFO)
+
+#define netdev_notifier_changeupper_info LINUX_BACKPORT(netdev_notifier_changeupper_info)
 struct netdev_notifier_changeupper_info {
 	struct netdev_notifier_info info; /* must be first */
 	struct net_device *upper_dev; /* new upper dev */
@@ -200,19 +222,11 @@ struct netdev_notifier_changeupper_info {
 	void *upper_info; /* upper dev info */
 };
 
+#define netdev_lag_upper_info LINUX_BACKPORT(netdev_lag_upper_info)
 struct netdev_lag_upper_info {
 	enum netdev_lag_tx_type tx_type;
 };
-
-static inline bool netif_is_lag_master(struct net_device *dev)
-{
-	return netif_is_bond_master(dev);
-}
-
-static inline bool netif_is_lag_port(struct net_device *dev)
-{
-	return netif_is_bond_slave(dev);
-}
+#endif
 #endif
 
 #ifndef NET_NAME_UNKNOWN
@@ -281,11 +295,32 @@ do {								\
 #define netdev_info_once(dev, fmt, ...) \
 	netdev_level_once(KERN_INFO, dev, fmt, ##__VA_ARGS__)
 
-
-#define netdev_WARN_ONCE(dev, condition, format, arg...)		\
-	WARN_ONCE(1, "netdevice: %s%s\n" format, netdev_name(dev)	\
-		  netdev_reg_state(dev), ##args)
 #endif /* netdev_WARN_ONCE */
+
+#ifndef HAVE_NETDEV_REG_STATE
+static inline const char *netdev_reg_state(const struct net_device *dev)
+{
+	switch (dev->reg_state) {
+	case NETREG_UNINITIALIZED: return " (uninitialized)";
+	case NETREG_REGISTERED: return "";
+	case NETREG_UNREGISTERING: return " (unregistering)";
+	case NETREG_UNREGISTERED: return " (unregistered)";
+	case NETREG_RELEASED: return " (released)";
+	case NETREG_DUMMY: return " (dummy)";
+	}
+
+	WARN_ONCE(1, "%s: unknown reg_state %d\n", dev->name, dev->reg_state);
+	return " (unknown)";
+}
+#endif
+
+/* WA for broken netdev_WARN_ONCE in some kernels */
+#ifdef netdev_WARN_ONCE
+#undef netdev_WARN_ONCE
+#endif
+#define netdev_WARN_ONCE(dev, format, args...)				\
+	WARN_ONCE(1, "netdevice: %s%s: " format, netdev_name(dev),	\
+		  netdev_reg_state(dev), ##args)
 
 #ifndef HAVE_NAPI_COMPLETE_DONE
 #define napi_complete_done(p1, p2) napi_complete(p1)

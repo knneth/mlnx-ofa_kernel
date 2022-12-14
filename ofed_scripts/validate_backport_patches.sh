@@ -40,7 +40,7 @@ for backport in ${patches_dir}/*.patch;
 do
 	for patched_file in $(cat ${backport} | diffstat -l -p1)
 	do
-		if (grep -lw ${patched_file} ${patches_dir}/*.patch | grep -qv $(basename ${backport}) ); then
+		if (grep -lw a/${patched_file} ${patches_dir}/*.patch | grep -qv $(basename ${backport}) ); then
 			echo "--------------------------------------------------------------"
 			echo "-E- '$patched_file' was modified by more than one backport patch!!!"
 			grep -l ${patched_file} ${patches_dir}/*.patch

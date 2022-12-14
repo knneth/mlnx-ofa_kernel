@@ -73,7 +73,6 @@ ifeq ($(WITH_DKMS),1)
 	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp dkms.conf debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a build_wa.h debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a target debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a host debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a lpfc debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -91,4 +90,12 @@ override_dh_installinit:
 ifneq ($(WITH_DKMS),1)
 override_dh_gencontrol:
 	dh_gencontrol -- -v$(pversion)-$(prel).kver.$(KVER1)
+endif
+
+ifneq ($(MLNX_KO_NO_STRIP),1)
+ifneq ($(WITH_DKMS),1)
+override_dh_strip:
+	dh_strip
+	find debian -name '*.ko' | xargs strip -g
+endif
 endif

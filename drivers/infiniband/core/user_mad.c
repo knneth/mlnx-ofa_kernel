@@ -63,9 +63,6 @@
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("InfiniBand userspace MAD packet access");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 
 enum {
 	IB_UMAD_MAX_PORTS  = RDMA_MAX_PORTS,
@@ -247,8 +244,7 @@ static void recv_handler(struct ib_mad_agent *agent,
 	 * On OPA devices it is okay to lose the upper 16 bits of LID as this
 	 * information is obtained elsewhere. Mask off the upper 16 bits.
 	 */
-	if (agent->device->port_immutable[agent->port_num].core_cap_flags &
-	    RDMA_CORE_PORT_INTEL_OPA)
+	if (rdma_cap_opa_mad(agent->device, agent->port_num))
 		packet->mad.hdr.lid = ib_lid_be16(0xFFFF &
 						  mad_recv_wc->wc->slid);
 	else
@@ -636,17 +632,17 @@ err:
 	return ret;
 }
 
-static unsigned int ib_umad_poll(struct file *filp, struct poll_table_struct *wait)
+static __poll_t ib_umad_poll(struct file *filp, struct poll_table_struct *wait)
 {
 	struct ib_umad_file *file = filp->private_data;
 
 	/* we will always be able to post a MAD send */
-	unsigned int mask = POLLOUT | POLLWRNORM;
+	__poll_t mask = EPOLLOUT | EPOLLWRNORM;
 
 	poll_wait(filp, &file->recv_wait, wait);
 
 	if (!list_empty(&file->recv_list))
-		mask |= POLLIN | POLLRDNORM;
+		mask |= EPOLLIN | EPOLLRDNORM;
 
 	return mask;
 }
@@ -1344,14 +1340,16 @@ static int __init ib_umad_init(void)
 {
 	int ret;
 
-	ret = register_chrdev_region(base_umad_dev, IB_UMAD_NUM_FIXED_MINOR * 2,
+	ret = register_chrdev_region(base_umad_dev,
+				     IB_UMAD_NUM_FIXED_MINOR * 2,
 				     "infiniband_mad");
 	if (ret) {
 		pr_err("couldn't register device number\n");
 		goto out;
 	}
 
-	ret = alloc_chrdev_region(&dynamic_umad_dev, 0, IB_UMAD_NUM_DYNAMIC_MINOR * 2,
+	ret = alloc_chrdev_region(&dynamic_umad_dev, 0,
+				  IB_UMAD_NUM_DYNAMIC_MINOR * 2,
 				  "infiniband_mad");
 	if (ret) {
 		pr_err("couldn't register dynamic device number\n");
@@ -1386,10 +1384,12 @@ out_class:
 	class_destroy(umad_class);
 
 out_chrdev:
-	unregister_chrdev_region(dynamic_umad_dev, IB_UMAD_NUM_DYNAMIC_MINOR * 2);
+	unregister_chrdev_region(dynamic_umad_dev,
+				 IB_UMAD_NUM_DYNAMIC_MINOR * 2);
 
 out_alloc:
-	unregister_chrdev_region(base_umad_dev, IB_UMAD_NUM_FIXED_MINOR * 2);
+	unregister_chrdev_region(base_umad_dev,
+				 IB_UMAD_NUM_FIXED_MINOR * 2);
 
 out:
 	return ret;
@@ -1399,8 +1399,10 @@ static void __exit ib_umad_cleanup(void)
 {
 	ib_unregister_client(&umad_client);
 	class_destroy(umad_class);
-	unregister_chrdev_region(base_umad_dev, IB_UMAD_NUM_FIXED_MINOR * 2);
-	unregister_chrdev_region(dynamic_umad_dev, IB_UMAD_NUM_DYNAMIC_MINOR * 2);
+	unregister_chrdev_region(base_umad_dev,
+				 IB_UMAD_NUM_FIXED_MINOR * 2);
+	unregister_chrdev_region(dynamic_umad_dev,
+				 IB_UMAD_NUM_DYNAMIC_MINOR * 2);
 }
 
 module_init(ib_umad_init);

@@ -204,6 +204,22 @@ int rdma_addr_size(struct sockaddr *addr)
 }
 EXPORT_SYMBOL(rdma_addr_size);
 
+int rdma_addr_size_in6(struct sockaddr_in6 *addr)
+{
+	int ret = rdma_addr_size((struct sockaddr *) addr);
+
+	return ret <= sizeof(*addr) ? ret : 0;
+}
+EXPORT_SYMBOL(rdma_addr_size_in6);
+
+int rdma_addr_size_kss(struct __kernel_sockaddr_storage *addr)
+{
+	int ret = rdma_addr_size((struct sockaddr *) addr);
+
+	return ret <= sizeof(*addr) ? ret : 0;
+}
+EXPORT_SYMBOL(rdma_addr_size_kss);
+
 void rdma_copy_addr(struct rdma_dev_addr *dev_addr,
 		    const struct net_device *dev,
 		    const unsigned char *dst_dev_addr)
@@ -507,7 +523,6 @@ static int addr_resolve_rcu(struct sockaddr *src_in,
 			    struct neighbour **n)
 
 {
-	struct neighbour *n = NULL;
 	int ret;
 
 	if (src_in->sa_family == AF_INET) {

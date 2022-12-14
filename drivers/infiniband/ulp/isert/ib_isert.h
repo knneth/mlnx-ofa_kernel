@@ -126,6 +126,8 @@ struct isert_cmd {
 	struct rdma_rw_ctx	rw;
 	struct work_struct	comp_work;
 	struct scatterlist	sg;
+	bool			ctx_init_done;
+	bool			send_sig_pipelined;
 };
 
 static inline struct isert_cmd *tx_desc_to_cmd(struct iser_tx_desc *desc)
@@ -140,6 +142,7 @@ struct isert_conn {
 	u32			responder_resources;
 	u32			initiator_depth;
 	bool			pi_support;
+	bool			sig_pipeline;
 	struct iser_rx_desc	*login_req_buf;
 	char			*login_rsp_buf;
 	u64			login_req_dma;
@@ -182,6 +185,7 @@ struct isert_comp {
 
 struct isert_device {
 	bool			pi_capable;
+	bool			sig_pipeline;
 	int			refcount;
 	struct ib_device	*ib_device;
 	struct ib_pd		*pd;

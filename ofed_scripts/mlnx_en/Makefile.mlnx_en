@@ -6,6 +6,15 @@ EXTRA_CFLAGS += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
 		-I$(CWD)/drivers/net/ethernet/mellanox/mlx5 \
 		-I$(CWD)/drivers/net/ethernet/mellanox/mlxfw \
 
+ifneq (,$(CFLAGS_RETPOLINE))
+# This is x86 and kernel has no retpoline support.
+# Now we need to check for gcc support
+ifneq (,$(shell $(CC) --target-help 2>/dev/null | grep -- -mindirect-branch=))
+# The compiler supports it. Set the proper flags (inline or extern):
+subdir-ccflags-y += $(CFLAGS_RETPOLINE)
+endif
+endif
+
 obj-y := compat$(CONFIG_COMPAT_VERSION)/
 obj-$(CONFIG_MLX4_CORE)         += drivers/net/ethernet/mellanox/mlx4/
 obj-$(CONFIG_MLX4_CORE)         += drivers/infiniband/hw/mlx4/

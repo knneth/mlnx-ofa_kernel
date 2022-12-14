@@ -58,6 +58,7 @@ struct mlx5_fw_tracer {
 	u8 trc_ver;
 	u8 trace_to_memory;
 	struct work_struct ownership_change_work;
+	struct work_struct read_fw_strings_work;
 
 	/* Strings DB */
 	struct {
@@ -67,6 +68,7 @@ struct mlx5_fw_tracer {
 		u32 base_address_out[8];
 		u32 size_out[8];
 		void *buffer[8];
+		bool loaded;
 	} str_db;
 
 	/* Log Buffer */
@@ -83,6 +85,7 @@ struct mlx5_fw_tracer {
 	struct work_struct handle_traces_work;
 	struct hlist_head hash[MESSAGE_HASH_SIZE];
 	struct list_head ready_strings_list;
+	char ready_string[1024];
 };
 
 struct tracer_string_format {

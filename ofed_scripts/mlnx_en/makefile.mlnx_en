@@ -69,14 +69,9 @@ KCFLAGS += -Wno-date-time
 export KCFLAGS
 endif
 
-ifneq (,$(CFLAGS_RETPOLINE))
-# This is x86 and kernel has no retpoline support.
-# Now we need to check for gcc support
-ifneq (,$(shell $(CC) --target-help 2>/dev/null | grep -- -mindirect-branch=))
-# The compiler supports it. Set the proper flags (inline or extern):
-CFLAGS += $(CFLAGS_RETPOLINE)
-endif
-endif
+# Pass CFLAGS_RETPOLINE to the kernel's build system. Even if it was
+# not defined: we test there if it is empty
+export CFLAGS_RETPOLINE
 
 CPP_MAJOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f1)
 CPP_MINOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f2)
@@ -159,7 +154,6 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 		CONFIG_MLX5_MPFS=$(CONFIG_MLX5_MPFS) \
 		CONFIG_MLXFW=$(CONFIG_MLXFW) \
 		CONFIG_DTRACE= \
-		CONFIG_CC_STACKPROTECTOR_STRONG= \
 		CONFIG_CTF= \
 		LINUXINCLUDE=' \
 		$(CFLAGS) \

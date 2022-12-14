@@ -41,6 +41,36 @@
 /* Max number of counters to query in bulk read is 32K */
 #define MLX5_SW_MAX_COUNTERS_BULK BIT(15)
 
+
+struct mlx5_fc_cache {
+	u64 packets;
+	u64 bytes;
+	u64 lastuse;
+};
+
+struct mlx5_fc {
+	struct rb_node node;
+	struct list_head list;
+
+	/* last{packets,bytes} members are used when calculating the delta since
+	 * last reading
+	 */
+	u64 lastpackets;
+	u64 lastbytes;
+
+	u32 id;
+	bool deleted;
+	bool aging;
+
+	struct mlx5_fc_cache cache ____cacheline_aligned_in_smp;
+};
+
+u32 mlx5_fc_id(struct mlx5_fc *counter)
+{
+	return counter->id;
+}
+EXPORT_SYMBOL(mlx5_fc_id);
+
 /* locking scheme:
  *
  * It is the responsibility of the user to prevent concurrent calls or bad
@@ -314,33 +344,27 @@ void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
 	}
 }
 
-int mlx5_fc_query(struct mlx5_core_dev *dev, u16 id,
+int mlx5_fc_query(struct mlx5_core_dev *dev, struct mlx5_fc *counter,
 		  u64 *packets, u64 *bytes)
 {
-	return mlx5_cmd_fc_query(dev, id, packets, bytes);
+	return mlx5_cmd_fc_query(dev, counter->id, packets, bytes);
 }
+EXPORT_SYMBOL(mlx5_fc_query);
 
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
-			  u64 *bytes, u64 *packets, u64 *lastuse,
-			  enum mlx5_flow_query_cached_flags query_flags)
+			  u64 *bytes, u64 *packets, u64 *lastuse)
 {
 	struct mlx5_fc_cache c;
 
 	c = counter->cache;
 
-	if (query_flags & MLX5_FLOW_QUERY_CACHED_ABS) {
-		*bytes = c.bytes;
-		*packets = c.packets;
-	} else {
-		*bytes = c.bytes - counter->lastbytes;
-		*packets = c.packets - counter->lastpackets;
-	}
-
+	*bytes = c.bytes - counter->lastbytes;
+	*packets = c.packets - counter->lastpackets;
 	*lastuse = c.lastuse;
+
 	counter->lastbytes = c.bytes;
 	counter->lastpackets = c.packets;
 }
-EXPORT_SYMBOL(mlx5_fc_query_cached);
 
 void mlx5_fc_queue_stats_work(struct mlx5_core_dev *dev,
 			      struct delayed_work *dwork,

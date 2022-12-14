@@ -484,7 +484,8 @@ int mlx5_core_query_ib_ppcnt(struct mlx5_core_dev *dev,
 }
 EXPORT_SYMBOL_GPL(mlx5_core_query_ib_ppcnt);
 
-static int mlx5_query_pfcc_reg(struct mlx5_core_dev *dev, u32 *out, u32 out_size)
+static int mlx5_query_pfcc_reg(struct mlx5_core_dev *dev, u32 *out,
+			       u32 out_size)
 {
 	u32 in[MLX5_ST_SZ_DW(pfcc_reg)] = {0};
 
@@ -560,6 +561,49 @@ int mlx5_query_port_pfc_prevention(struct mlx5_core_dev *dev,
 	if (pfc_preven_critical)
 		*pfc_preven_critical = MLX5_GET(pfcc_reg, out,
 						device_stall_critical_watermark);
+
+	return 0;
+}
+
+int mlx5_set_port_stall_watermark(struct mlx5_core_dev *dev,
+				  u16 stall_critical_watermark,
+				  u16 stall_minor_watermark)
+{
+	u32 in[MLX5_ST_SZ_DW(pfcc_reg)] = {0};
+	u32 out[MLX5_ST_SZ_DW(pfcc_reg)];
+
+	MLX5_SET(pfcc_reg, in, local_port, 1);
+	MLX5_SET(pfcc_reg, in, pptx_mask_n, 1);
+	MLX5_SET(pfcc_reg, in, pprx_mask_n, 1);
+	MLX5_SET(pfcc_reg, in, ppan_mask_n, 1);
+	MLX5_SET(pfcc_reg, in, critical_stall_mask, 1);
+	MLX5_SET(pfcc_reg, in, minor_stall_mask, 1);
+	MLX5_SET(pfcc_reg, in, device_stall_critical_watermark,
+		 stall_critical_watermark);
+	MLX5_SET(pfcc_reg, in, device_stall_minor_watermark, stall_minor_watermark);
+
+	return mlx5_core_access_reg(dev, in, sizeof(in), out,
+				    sizeof(out), MLX5_REG_PFCC, 0, 1);
+}
+
+int mlx5_query_port_stall_watermark(struct mlx5_core_dev *dev,
+				    u16 *stall_critical_watermark,
+				    u16 *stall_minor_watermark)
+{
+	u32 out[MLX5_ST_SZ_DW(pfcc_reg)];
+	int err;
+
+	err = mlx5_query_pfcc_reg(dev, out, sizeof(out));
+	if (err)
+		return err;
+
+	if (stall_critical_watermark)
+		*stall_critical_watermark = MLX5_GET(pfcc_reg, out,
+						     device_stall_critical_watermark);
+
+	if (stall_minor_watermark)
+		*stall_minor_watermark = MLX5_GET(pfcc_reg, out,
+						  device_stall_minor_watermark);
 
 	return 0;
 }
@@ -694,7 +738,7 @@ EXPORT_SYMBOL_GPL(mlx5_query_port_prio_tc);
 static int mlx5_set_port_qetcr_reg(struct mlx5_core_dev *mdev, u32 *in,
 				   int inlen)
 {
-	u32 out[MLX5_ST_SZ_DW(qtct_reg)];
+	u32 out[MLX5_ST_SZ_DW(qetc_reg)];
 
 	if (!MLX5_CAP_GEN(mdev, ets))
 		return -EOPNOTSUPP;
@@ -706,7 +750,7 @@ static int mlx5_set_port_qetcr_reg(struct mlx5_core_dev *mdev, u32 *in,
 static int mlx5_query_port_qetcr_reg(struct mlx5_core_dev *mdev, u32 *out,
 				     int outlen)
 {
-	u32 in[MLX5_ST_SZ_DW(qtct_reg)];
+	u32 in[MLX5_ST_SZ_DW(qetc_reg)];
 
 	if (!MLX5_CAP_GEN(mdev, ets))
 		return -EOPNOTSUPP;
@@ -1010,23 +1054,47 @@ void mlx5_query_port_fcs(struct mlx5_core_dev *mdev, bool *supported,
 	*enabled = !!(MLX5_GET(pcmr_reg, out, fcs_chk));
 }
 
-static const char *mlx5_pme_status[MLX5_MODULE_STATUS_NUM] = {
-	"Cable plugged",   /* MLX5_MODULE_STATUS_PLUGGED    = 0x1 */
-	"Cable unplugged", /* MLX5_MODULE_STATUS_UNPLUGGED  = 0x2 */
-	"Cable error",     /* MLX5_MODULE_STATUS_ERROR      = 0x3 */
-};
+const char *mlx5_pme_status_to_string(enum port_module_event_status_type status)
+{
+	switch (status) {
+	case MLX5_MODULE_STATUS_PLUGGED:
+		return "Cable plugged";
+	case MLX5_MODULE_STATUS_UNPLUGGED:
+		return "Cable unplugged";
+	case MLX5_MODULE_STATUS_ERROR:
+		return "Cable error";
+	case MLX5_MODULE_STATUS_DISABLED:
+		return "Cable disabled";
+	default:
+		return "Unknown status";
+	}
+}
 
-static const char *mlx5_pme_error[MLX5_MODULE_EVENT_ERROR_NUM] = {
-	"Power budget exceeded",
-	"Long Range for non MLNX cable",
-	"Bus stuck(I2C or data shorted)",
-	"No EEPROM/retry timeout",
-	"Enforce part number list",
-	"Unknown identifier",
-	"High Temperature",
-	"Bad or shorted cable/module",
-	"Unknown status",
-};
+const char *mlx5_pme_error_to_string(enum port_module_event_error_type error)
+{
+	switch (error) {
+	case MLX5_MODULE_EVENT_ERROR_POWER_BUDGET_EXCEEDED:
+		return "Power budget exceeded";
+	case MLX5_MODULE_EVENT_ERROR_LONG_RANGE_FOR_NON_MLNX_CABLE_MODULE:
+		return "Long Range for non MLNX cable";
+	case MLX5_MODULE_EVENT_ERROR_BUS_STUCK:
+		return "Bus stuck (I2C or data shorted)";
+	case MLX5_MODULE_EVENT_ERROR_NO_EEPROM_RETRY_TIMEOUT:
+		return "No EEPROM/retry timeout";
+	case MLX5_MODULE_EVENT_ERROR_ENFORCE_PART_NUMBER_LIST:
+		return "Enforce part number list";
+	case MLX5_MODULE_EVENT_ERROR_UNKNOWN_IDENTIFIER:
+		return "Unknown identifier";
+	case MLX5_MODULE_EVENT_ERROR_HIGH_TEMPERATURE:
+		return "High Temperature";
+	case MLX5_MODULE_EVENT_ERROR_BAD_CABLE:
+		return "Bad or shorted cable/module";
+	case MLX5_MODULE_EVENT_ERROR_PCIE_POWER_SLOT_EXCEEDED:
+		return "One or more network ports have been powered down due to insufficient/unadvertised power on the PCIe slot. Please refer to the card's user manual for power specifications or contact Mellanox support";
+	default:
+		return "Unknown error";
+	}
+}
 
 void mlx5_port_module_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe)
 {
@@ -1034,6 +1102,7 @@ void mlx5_port_module_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe)
 	enum port_module_event_error_type error_type;
 	struct mlx5_eqe_port_module *module_event_eqe;
 	struct mlx5_priv *priv = &dev->priv;
+	const char *status_str, *error_str;
 	u8 module_num;
 
 	module_event_eqe = &eqe->data.port_module;
@@ -1043,28 +1112,27 @@ void mlx5_port_module_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe)
 	error_type = module_event_eqe->error_type &
 		     PORT_MODULE_EVENT_ERROR_TYPE_MASK;
 
-	if (module_status < MLX5_MODULE_STATUS_ERROR) {
-		priv->pme_stats.status_counters[module_status - 1]++;
-	} else if (module_status == MLX5_MODULE_STATUS_ERROR) {
-		if (error_type >= MLX5_MODULE_EVENT_ERROR_UNKNOWN)
-			/* Unknown error type */
-			error_type = MLX5_MODULE_EVENT_ERROR_UNKNOWN;
-		priv->pme_stats.error_counters[error_type]++;
+	if (module_status < MLX5_MODULE_STATUS_NUM)
+		priv->pme_stats.status_counters[module_status]++;
+	status_str = mlx5_pme_status_to_string(module_status);
+
+	if (module_status == MLX5_MODULE_STATUS_ERROR) {
+		if (error_type < MLX5_MODULE_EVENT_ERROR_NUM)
+			priv->pme_stats.error_counters[error_type]++;
+		error_str = mlx5_pme_error_to_string(error_type);
 	}
 
 	if (!printk_ratelimit())
 		return;
 
-	if (module_status < MLX5_MODULE_STATUS_ERROR)
+	if (module_status == MLX5_MODULE_STATUS_ERROR)
+		mlx5_core_err(dev,
+			      "Port module event[error]: module %u, %s, %s\n",
+			      module_num, status_str, error_str);
+	else
 		mlx5_core_info(dev,
 			       "Port module event: module %u, %s\n",
-			       module_num, mlx5_pme_status[module_status - 1]);
-
-	else if (module_status == MLX5_MODULE_STATUS_ERROR)
-		mlx5_core_info(dev,
-			       "Port module event[error]: module %u, %s, %s\n",
-			       module_num, mlx5_pme_status[module_status - 1],
-			       mlx5_pme_error[error_type]);
+			       module_num, status_str);
 }
 
 int mlx5_query_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size)
@@ -1455,110 +1523,3 @@ ex:
 	return err;
 }
 EXPORT_SYMBOL_GPL(mlx5_core_query_hca_vport_context);
-
-int mlx5_query_port_pbmc(struct mlx5_core_dev *mdev, void *out)
-{
-	int sz = MLX5_ST_SZ_BYTES(pbmc_reg);
-	void *in;
-	int err;
-
-	in = kzalloc(sz, GFP_KERNEL);
-	if (!in)
-		return -ENOMEM;
-
-	MLX5_SET(pbmc_reg, in, local_port, 1);
-	err = mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PBMC, 0, 0);
-
-	kfree(in);
-	return err;
-}
-
-int mlx5_set_port_pbmc(struct mlx5_core_dev *mdev, void *in)
-{
-	int sz = MLX5_ST_SZ_BYTES(pbmc_reg);
-	void *out;
-	int err;
-
-	out = kzalloc(sz, GFP_KERNEL);
-	if (!out)
-		return -ENOMEM;
-
-	MLX5_SET(pbmc_reg, in, local_port, 1);
-	err = mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PBMC, 0, 1);
-
-	kfree(out);
-	return err;
-}
-
-/* buffer[i]: buffer that priority i mapped to */
-int mlx5_query_port_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer)
-{
-	int sz = MLX5_ST_SZ_BYTES(pptb_reg);
-	u32 prio_x_buff;
-	void *out;
-	void *in;
-	int prio;
-	int err;
-
-	in = kzalloc(sz, GFP_KERNEL);
-	out = kzalloc(sz, GFP_KERNEL);
-	if (!in || !out) {
-		err = -ENOMEM;
-		goto out;
-	}
-
-	MLX5_SET(pptb_reg, in, local_port, 1);
-	err = mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPTB, 0, 0);
-	if (err)
-		goto out;
-
-	prio_x_buff = MLX5_GET(pptb_reg, out, prio_x_buff);
-	for (prio = 0; prio < 8; prio++)
-		buffer[prio] = (u8)(prio_x_buff >> (4 * prio)) & 0xF;
-
-out:
-	kfree(in);
-	kfree(out);
-	return err;
-}
-
-int mlx5_set_port_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer)
-{
-	int sz = MLX5_ST_SZ_BYTES(pptb_reg);
-	void *out;
-	void *in;
-	u32 prio_x_buff;
-	int prio;
-	int err;
-
-	in = kzalloc(sz, GFP_KERNEL);
-	out = kzalloc(sz, GFP_KERNEL);
-	if (!in || !out) {
-		err = -ENOMEM;
-		goto out;
-	}
-
-	/* First query the pptb register */
-	MLX5_SET(pptb_reg, in, local_port, 1);
-	err = mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPTB, 0, 0);
-	if (err)
-		goto out;
-
-	memcpy(in, out, sz);
-	MLX5_SET(pptb_reg, in, local_port, 1);
-
-	/* Update the pm and prio_x_buff */
-	MLX5_SET(pptb_reg, in, pm, 0xFF);
-
-	prio_x_buff = 0;
-	for (prio = 0; prio < 8; prio++)
-		prio_x_buff |= (buffer[prio] << (4 * prio));
-	MLX5_SET(pptb_reg, in, prio_x_buff, prio_x_buff);
-
-	err = mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPTB, 0, 1);
-
-out:
-	kfree(in);
-	kfree(out);
-	return err;
-}

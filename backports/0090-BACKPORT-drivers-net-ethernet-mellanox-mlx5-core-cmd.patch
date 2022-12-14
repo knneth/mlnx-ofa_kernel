@@ -1,0 +1,140 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
+
+Change-Id: I6c810325c3c00046a4bdd8218258905f92e496d4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 49 +++++++++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
+@@ -918,7 +918,11 @@ static void cmd_work_handler(struct work
+ 	lay->status_own = CMD_OWNER_HW;
+ 	set_signature(ent, !cmd->checksum_disabled);
+ 	dump_command(dev, ent, 1);
++#ifdef HAVE_KTIME_GET_NS
+ 	ent->ts1 = ktime_get_ns();
++#else
++	ktime_get_ts(&ent->ts1);
++#endif
+ 	cmd_mode = cmd->mode;
+ 
+ 	if (ent->callback)
+@@ -1021,6 +1025,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
+ 	struct mlx5_cmd *cmd = &dev->cmd;
+ 	struct mlx5_cmd_work_ent *ent;
+ 	struct mlx5_cmd_stats *stats;
++#ifndef HAVE_KTIME_GET_NS
++	ktime_t t1, t2, delta;
++#endif
+ 	int err = 0;
+ 	s64 ds;
+ 	u16 op;
+@@ -1056,7 +1063,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
+ 	if (err == -ETIMEDOUT)
+ 		goto out;
+ 
++#ifdef HAVE_KTIME_GET_NS
+ 	ds = ent->ts2 - ent->ts1;
++#else
++	t1 = timespec_to_ktime(ent->ts1);
++	t2 = timespec_to_ktime(ent->ts2);
++	delta = ktime_sub(t2, t1);
++	ds = ktime_to_ns(delta);
++#endif
+ 	op = MLX5_GET(mbox_in, in->first.data, opcode);
+ 	if (op < ARRAY_SIZE(cmd->stats)) {
+ 		stats = &cmd->stats[op];
+@@ -1182,13 +1196,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
+ 	if (!mailbox)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#ifdef HAVE_DMA_POOL_ZALLOC
+ 	mailbox->buf = dma_pool_zalloc(dev->cmd.pool, flags,
++#elif defined(HAVE_PCI_POOL_ZALLOC)
++	mailbox->buf = pci_pool_zalloc(dev->cmd.pool, flags,
++#else
++	mailbox->buf = pci_pool_alloc(dev->cmd.pool, flags,
++#endif
+ 				       &mailbox->dma);
+ 	if (!mailbox->buf) {
+ 		mlx5_core_dbg(dev, "failed allocation\n");
+ 		kfree(mailbox);
+ 		return ERR_PTR(-ENOMEM);
+ 	}
++#if !defined(HAVE_PCI_POOL_ZALLOC) && !defined(HAVE_DMA_POOL_ZALLOC)
++	memset(mailbox->buf, 0, sizeof(struct mlx5_cmd_prot_block));
++#endif
+ 	mailbox->next = NULL;
+ 
+ 	return mailbox;
+@@ -1451,7 +1474,11 @@ static void trigger_cmd_completions(stru
+ 	u64 vector;
+ 
+ 	/* wait for pending handlers to complete */
++#ifdef HAVE_PCI_IRQ_API
+ 	synchronize_irq(pci_irq_vector(dev->pdev, MLX5_EQ_VEC_CMD));
++#else
++	synchronize_irq(dev->priv.msix_arr[MLX5_EQ_VEC_CMD].vector);
++#endif
+ 	spin_lock_irqsave(&dev->cmd.alloc_lock, flags);
+ 	vector = ~dev->cmd.bitmask & ((1ul << (1 << dev->cmd.log_sz)) - 1);
+ 	if (!vector)
+@@ -1536,6 +1563,9 @@ void mlx5_cmd_comp_handler(struct mlx5_c
+ 	struct mlx5_cmd *cmd = &dev->cmd;
+ 	struct mlx5_cmd_work_ent *ent;
+ 	mlx5_cmd_cbk_t callback;
++#ifndef HAVE_KTIME_GET_NS
++	ktime_t t1, t2, delta;
++#endif
+ 	void *context;
+ 	int err;
+ 	int i;
+@@ -1566,12 +1596,20 @@ void mlx5_cmd_comp_handler(struct mlx5_c
+ 			}
+ 
+ 			if (ent->callback)
++#ifdef HAVE___CANCEL_DELAYED_WORK
++				__cancel_delayed_work(&ent->cb_timeout_work);
++#else
+ 				cancel_delayed_work(&ent->cb_timeout_work);
++#endif
+ 			if (ent->page_queue)
+ 				sem = &cmd->pages_sem;
+ 			else
+ 				sem = &cmd->sem;
++#ifdef HAVE_KTIME_GET_NS
+ 			ent->ts2 = ktime_get_ns();
++#else
++			ktime_get_ts(&ent->ts2);
++#endif
+ 			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
+ 			dump_command(dev, ent, 0);
+ 			if (!ent->ret) {
+@@ -1593,7 +1631,14 @@ void mlx5_cmd_comp_handler(struct mlx5_c
+ 				free_ent(cmd, ent->idx);
+ 
+ 			if (ent->callback) {
++#ifdef HAVE_KTIME_GET_NS
+ 				ds = ent->ts2 - ent->ts1;
++#else
++				t1 = timespec_to_ktime(ent->ts1);
++				t2 = timespec_to_ktime(ent->ts2);
++				delta = ktime_sub(t2, t1);
++				ds = ktime_to_ns(delta);
++#endif
+ 				if (ent->op < ARRAY_SIZE(cmd->stats)) {
+ 					stats = &cmd->stats[ent->op];
+ 					spin_lock_irqsave(&stats->lock, flags);
+@@ -2226,7 +2271,11 @@ static ssize_t real_miss_store(struct de
+ 	return count;
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops cmd_cache_sysfs_ops = {
++#else
++static struct sysfs_ops cmd_cache_sysfs_ops = {
++#endif
+ 	.show = cmd_cache_attr_show,
+ 	.store = cmd_cache_attr_store,
+ };

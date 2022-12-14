@@ -70,36 +70,4 @@ int mlx5_core_destroy_pec(struct mlx5_core_dev *dev, u32 pasid)
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 }
 EXPORT_SYMBOL(mlx5_core_destroy_pec);
-
-static void capi_invalidate(struct mlx5_core_capi *capi)
-{
-	struct mlx5_core_dev *dev = container_of(capi, struct mlx5_core_dev, capi);
-	unsigned long end = jiffies + msecs_to_jiffies(1000);
-
-	iowrite32be(1, capi->inv_io);
-	while (ioread32be(capi->inv_io) & 1) {
-		if (ioread32be(capi->inv_io) == 0xFFFFFFFF)
-			break;
-
-		if (time_after(jiffies, end)) {
-			mlx5_core_warn(dev, "invalidation failed\n");
-			break;
-		}
-	}
-}
-
-int mlx5_core_invalidate_range(struct mlx5_core_dev *dev)
-{
-	struct mlx5_core_capi *capi = &dev->capi;
-
-	if (pci_channel_offline(dev->pdev) ||
-	    dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
-		return 0;
-
-	spin_lock(&capi->inv_lock);
-	capi_invalidate(capi);
-	spin_unlock(&capi->inv_lock);
-	return 0;
-}
-EXPORT_SYMBOL(mlx5_core_invalidate_range);
 #endif

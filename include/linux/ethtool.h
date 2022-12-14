@@ -119,4 +119,11 @@
 #define SPEED_14000	14000
 #endif
 
+#ifndef PFC_STORM_PREVENTION_AUTO
+/* The feature wont work, but this will save backport lines */
+#define PFC_STORM_PREVENTION_AUTO	0xffff
+#define PFC_STORM_PREVENTION_DISABLE	0
+#define ETHTOOL_PFC_PREVENTION_TOUT	3
+#endif
+
 #endif
