@@ -23,7 +23,6 @@ static inline struct mlx5_geneve
 *mlx5_geneve_create(struct mlx5_core_dev *mdev) { return NULL; }
 static inline void
 mlx5_geneve_destroy(struct mlx5_geneve *geneve) {}
-struct geneve_opt;
 static inline int
 mlx5_geneve_tlv_option_add(struct mlx5_geneve *geneve, struct geneve_opt *opt) { return 0; }
 static inline void

@@ -4279,7 +4279,6 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 		qp->sq.cur_post = 0;
 		if (qp->sq.wqe_cnt)
 			qp->sq.cur_edge = get_sq_edge(&qp->sq, 0);
-		qp->sq.last_poll = 0;
 		if (qp->db.db) {
 			qp->db.db[MLX5_RCV_DBR] = 0;
 			qp->db.db[MLX5_SND_DBR] = 0;
@@ -6213,9 +6212,7 @@ static void to_rdma_ah_attr(struct mlx5_ib_dev *ibdev,
 	rdma_ah_set_path_bits(ah_attr, path->grh_mlid & 0x7f);
 	rdma_ah_set_static_rate(ah_attr,
 				path->static_rate ? path->static_rate - 5 : 0);
-
-	if (path->grh_mlid & (1 << 7) ||
-	    ah_attr->type == RDMA_AH_ATTR_TYPE_ROCE) {
+	if (path->grh_mlid & (1 << 7)) {
 		u32 tc_fl = be32_to_cpu(path->tclass_flowlabel);
 
 		rdma_ah_set_grh(ah_attr, NULL,

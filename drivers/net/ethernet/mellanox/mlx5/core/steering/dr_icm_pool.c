@@ -6,13 +6,48 @@
 #define DR_ICM_MODIFY_HDR_ALIGN_BASE 64
 #define DR_ICM_SYNC_THRESHOLD (64 * 1024 * 1024)
 
+struct mlx5dr_icm_pool;
+
+struct mlx5dr_icm_bucket {
+	struct mlx5dr_icm_pool *pool;
+
+	/* Chunks that aren't visible to HW not directly and not in cache */
+	struct list_head free_list;
+	unsigned int free_list_count;
+
+	/* Used chunks, HW may be accessing this memory */
+	struct list_head used_list;
+	unsigned int used_list_count;
+
+	/* HW may be accessing this memory but at some future,
+	 * undetermined time, it might cease to do so. Before deciding to call
+	 * sync_ste, this list is moved to sync_list
+	 */
+	struct list_head hot_list;
+	unsigned int hot_list_count;
+
+	/* Pending sync list, entries from the hot list are moved to this list.
+	 * sync_ste is executed and then sync_list is concatenated to the free list
+	 */
+	struct list_head sync_list;
+	unsigned int sync_list_count;
+
+	u32 total_chunks;
+	u32 num_of_entries;
+	u32 entry_size;
+	/* protect the ICM bucket */
+	struct mutex mutex;
+};
+
 struct mlx5dr_icm_pool {
+	struct mlx5dr_icm_bucket *buckets;
 	enum mlx5dr_icm_type icm_type;
 	enum mlx5dr_icm_chunk_size max_log_chunk_sz;
+	enum mlx5dr_icm_chunk_size num_of_buckets;
+	struct list_head icm_mr_list;
+	/* protect the ICM MR list */
+	struct mutex mr_mutex;
 	struct mlx5dr_domain *dmn;
-	/* memory management */
-	struct mutex mutex; /* protect the ICM pool */
-	struct list_head buddy_mem_list;
 };
 
 struct mlx5dr_icm_dm {
@@ -23,222 +58,14 @@ struct mlx5dr_icm_dm {
 };
 
 struct mlx5dr_icm_mr {
+	struct mlx5dr_icm_pool *pool;
 	struct mlx5_core_mkey mkey;
 	struct mlx5dr_icm_dm dm;
-	struct mlx5dr_domain *dmn;
+	size_t used_length;
 	size_t length;
 	u64 icm_start_addr;
+	struct list_head mr_list;
 };
-
-struct mlx5dr_icm_buddy_mem {
-	unsigned long		**bits;
-	unsigned int		*num_free;
-	unsigned long		**set_bit;
-	u32			max_order;
-	struct list_head	list_node;
-	struct mlx5dr_icm_mr	*icm_mr;
-	struct mlx5dr_icm_pool	*pool;
-
-	/* This is the list of used chunks. HW may be accessing this memory */
-	struct list_head	used_list;
-
-	/* hardware may be accessing this memory but at some future,
-	 * undetermined time, it might cease to do so.
-	 * sync_ste command sets them free.
-	 */
-	struct list_head	hot_list;
-	/* indicates the byte size of hot mem */
-	unsigned int		hot_memory_size;
-	unsigned int		used_memory;
-};
-
-static inline unsigned long dr_ffs(uint64_t l)
-{
-	unsigned long res = __builtin_ffsl(l);
-
-	return res ? res - 1 : 0;
-}
-
-static inline void dr_set_bit(unsigned int nr, unsigned long *addr)
-{
-	addr[(nr / BITS_PER_LONG)] |= (1UL << (nr % BITS_PER_LONG));
-}
-
-static inline void dr_clear_bit(unsigned int nr,  unsigned long *addr)
-{
-	addr[(nr / BITS_PER_LONG)] &= ~(1UL << (nr % BITS_PER_LONG));
-}
-
-static inline int dr_test_bit(unsigned int nr, const unsigned long *addr)
-{
-	return !!(addr[(nr / BITS_PER_LONG)] & (1UL <<  (nr % BITS_PER_LONG)));
-}
-
-static int dr_find_first_bit(const unsigned long *set_addr,
-			     const unsigned long *addr,
-			     unsigned int size)
-{
-	unsigned int set_size = (size - 1) / BITS_PER_LONG + 1;
-	unsigned long set_idx, idx;
-
-	for (idx = 0; idx * BITS_PER_LONG < set_size; idx++) {
-		if (set_addr[idx]) {
-			set_idx = min((unsigned int)(idx * BITS_PER_LONG +
-						     dr_ffs(set_addr[idx])), set_size);
-			return min((unsigned int)(((unsigned int)set_idx) * BITS_PER_LONG +
-						  dr_ffs(addr[set_idx])), size);
-		}
-	}
-
-	return size;
-}
-
-static enum mlx5dr_icm_type
-get_chunk_icm_type(struct mlx5dr_icm_chunk *chunk)
-{
-	return chunk->buddy_mem->pool->icm_type;
-}
-
-static int dr_buddy_init(struct mlx5dr_icm_buddy_mem *buddy, u32 max_order)
-{
-	int i, s;
-
-	buddy->max_order = max_order;
-
-	INIT_LIST_HEAD(&buddy->list_node);
-	INIT_LIST_HEAD(&buddy->used_list);
-	INIT_LIST_HEAD(&buddy->hot_list);
-
-	buddy->bits = kcalloc(buddy->max_order + 1,
-			      sizeof(*buddy->bits),
-			      GFP_KERNEL);
-	if (!buddy->bits)
-		return -ENOMEM;
-
-	buddy->num_free = kcalloc(buddy->max_order + 1,
-				  sizeof(*buddy->num_free),
-				  GFP_KERNEL);
-	if (!buddy->num_free)
-		goto err_out_free_bits;
-
-	buddy->set_bit = kcalloc(buddy->max_order + 1,
-				 sizeof(*buddy->set_bit),
-				 GFP_KERNEL);
-	if (!buddy->set_bit)
-		goto err_out_free_num_free;
-
-	for (i = 0; i <= buddy->max_order; i++) {
-		s = BITS_TO_LONGS(1 << (buddy->max_order - i));
-		buddy->bits[i] = kcalloc(s, sizeof(long), GFP_KERNEL);
-		if (!buddy->bits[i])
-			goto err_out_free_each_bit_per_order;
-	}
-
-	for (i = 0; i <= buddy->max_order; ++i) {
-		s = BITS_TO_LONGS(1 << (buddy->max_order - i));
-		buddy->set_bit[i] = kcalloc(BITS_TO_LONGS(s), sizeof(long), GFP_KERNEL);
-		if (!buddy->set_bit[i])
-			goto err_out_free_set;
-	}
-
-	dr_set_bit(0, buddy->bits[buddy->max_order]);
-	dr_set_bit(0, buddy->set_bit[buddy->max_order]);
-	buddy->num_free[buddy->max_order] = 1;
-
-	return 0;
-
-err_out_free_set:
-	for (i = 0; i <= buddy->max_order; ++i)
-		kfree(buddy->set_bit[i]);
-
-err_out_free_each_bit_per_order:
-	kfree(buddy->set_bit);
-
-	for (i = 0; i <= buddy->max_order; ++i)
-		kfree(buddy->bits[i]);
-
-err_out_free_num_free:
-	kfree(buddy->num_free);
-
-err_out_free_bits:
-	kfree(buddy->bits);
-	return -ENOMEM;
-}
-
-static void dr_buddy_cleanup(struct mlx5dr_icm_buddy_mem *buddy)
-{
-	int i;
-
-	list_del(&buddy->list_node);
-
-	for (i = 0; i <= buddy->max_order; ++i) {
-		kfree(buddy->bits[i]);
-		kfree(buddy->set_bit[i]);
-	}
-
-	kfree(buddy->set_bit);
-	kfree(buddy->num_free);
-	kfree(buddy->bits);
-}
-
-/* This function finds the first area of the managed memory by the buddy.
- * It uses the data structures of the buddy-system in order to find the first
- * area of free place, starting from the current order till the maximum order
- * in the system.
- */
-static int dr_buddy_alloc_mem(struct mlx5dr_icm_buddy_mem *buddy, int order)
-{
-	u32 seg;
-	int o, m;
-
-	for (o = order; o <= buddy->max_order; ++o)
-		if (buddy->num_free[o]) {
-			m = 1 << (buddy->max_order - o);
-			seg = dr_find_first_bit(buddy->set_bit[o],
-						buddy->bits[o], m);
-			if (seg < m)
-				goto found;
-		}
-
-	return -1;
-
-found:
-	dr_clear_bit(seg, buddy->bits[o]);
-	if (buddy->bits[o][seg / BITS_PER_LONG] == 0)
-		dr_clear_bit(seg / BITS_PER_LONG, buddy->set_bit[o]);
-	--buddy->num_free[o];
-	while (o > order) {
-		--o;
-		seg <<= 1;
-		dr_set_bit(seg ^ 1, buddy->bits[o]);
-		dr_set_bit((seg ^ 1) / BITS_PER_LONG, buddy->set_bit[o]);
-
-		++buddy->num_free[o];
-	}
-
-	seg <<= order;
-
-	return seg;
-}
-
-static void
-dr_buddy_free_mem(struct mlx5dr_icm_buddy_mem *buddy, u32 seg, int order)
-{
-	seg >>= order;
-
-	while (dr_test_bit(seg ^ 1, buddy->bits[order])) {
-		dr_clear_bit(seg ^ 1, buddy->bits[order]);
-		if (buddy->bits[order][(seg ^ 1) / BITS_PER_LONG] == 0)
-			dr_clear_bit((seg ^ 1) / BITS_PER_LONG, buddy->set_bit[order]);
-		--buddy->num_free[order];
-		seg >>= 1;
-		++order;
-	}
-	dr_set_bit(seg, buddy->bits[order]);
-	dr_set_bit(seg / BITS_PER_LONG, buddy->set_bit[order]);
-
-	++buddy->num_free[order];
-}
 
 static int dr_icm_create_dm_mkey(struct mlx5_core_dev *mdev,
 				 u32 pd, u64 length, u64 start_addr, int mode,
@@ -280,7 +107,8 @@ dr_icm_pool_mr_create(struct mlx5dr_icm_pool *pool)
 	if (!icm_mr)
 		return NULL;
 
-	icm_mr->dmn = pool->dmn;
+	icm_mr->pool = pool;
+	INIT_LIST_HEAD(&icm_mr->mr_list);
 
 	/* 2^log_biggest_table * entry-size */
 	icm_mr->dm.length = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
@@ -323,6 +151,8 @@ dr_icm_pool_mr_create(struct mlx5dr_icm_pool *pool)
 		goto free_mkey;
 	}
 
+	list_add_tail(&icm_mr->mr_list, &pool->icm_mr_list);
+
 	return icm_mr;
 
 free_mkey:
@@ -337,9 +167,10 @@ free_icm_mr:
 
 static void dr_icm_pool_mr_destroy(struct mlx5dr_icm_mr *icm_mr)
 {
-	struct mlx5_core_dev *mdev = icm_mr->dmn->mdev;
+	struct mlx5_core_dev *mdev = icm_mr->pool->dmn->mdev;
 	struct mlx5dr_icm_dm *dm = &icm_mr->dm;
 
+	list_del(&icm_mr->mr_list);
 	mlx5_core_destroy_mkey(mdev, &icm_mr->mkey);
 	mlx5_dm_sw_icm_dealloc(mdev, dm->type, dm->length, 0,
 			       dm->addr, dm->obj_id);
@@ -348,17 +179,19 @@ static void dr_icm_pool_mr_destroy(struct mlx5dr_icm_mr *icm_mr)
 
 static int dr_icm_chunk_ste_init(struct mlx5dr_icm_chunk *chunk)
 {
-	chunk->ste_arr = kvzalloc(chunk->num_of_entries *
+	struct mlx5dr_icm_bucket *bucket = chunk->bucket;
+
+	chunk->ste_arr = kvzalloc(bucket->num_of_entries *
 				  sizeof(chunk->ste_arr[0]), GFP_KERNEL);
 	if (!chunk->ste_arr)
 		return -ENOMEM;
 
-	chunk->hw_ste_arr = kvzalloc(chunk->num_of_entries *
+	chunk->hw_ste_arr = kvzalloc(bucket->num_of_entries *
 				     DR_STE_SIZE_REDUCED, GFP_KERNEL);
 	if (!chunk->hw_ste_arr)
 		goto out_free_ste_arr;
 
-	chunk->miss_list = kvmalloc(chunk->num_of_entries *
+	chunk->miss_list = kvmalloc(bucket->num_of_entries *
 				    sizeof(chunk->miss_list[0]), GFP_KERNEL);
 	if (!chunk->miss_list)
 		goto out_free_hw_ste_arr;
@@ -372,6 +205,72 @@ out_free_ste_arr:
 	return -ENOMEM;
 }
 
+static int dr_icm_chunks_create(struct mlx5dr_icm_bucket *bucket)
+{
+	size_t mr_free_size, mr_req_size, mr_row_size;
+	struct mlx5dr_icm_pool *pool = bucket->pool;
+	struct mlx5dr_icm_mr *icm_mr = NULL;
+	struct mlx5dr_icm_chunk *chunk;
+	int i, err = 0;
+
+	mr_req_size = bucket->num_of_entries * bucket->entry_size;
+	mr_row_size = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
+							 pool->icm_type);
+	mutex_lock(&pool->mr_mutex);
+	if (!list_empty(&pool->icm_mr_list)) {
+		icm_mr = list_last_entry(&pool->icm_mr_list,
+					 struct mlx5dr_icm_mr, mr_list);
+
+		if (icm_mr)
+			mr_free_size = icm_mr->dm.length - icm_mr->used_length;
+	}
+
+	if (!icm_mr || mr_free_size < mr_row_size) {
+		icm_mr = dr_icm_pool_mr_create(pool);
+		if (!icm_mr) {
+			err = -ENOMEM;
+			goto out_err;
+		}
+	}
+
+	/* Create memory aligned chunks */
+	for (i = 0; i < mr_row_size / mr_req_size; i++) {
+		chunk = kvzalloc(sizeof(*chunk), GFP_KERNEL);
+		if (!chunk) {
+			err = -ENOMEM;
+			goto out_err;
+		}
+
+		chunk->bucket = bucket;
+		chunk->rkey = icm_mr->mkey.key;
+		/* mr start addr is zero based */
+		chunk->mr_addr = icm_mr->used_length;
+		chunk->icm_addr = (uintptr_t)icm_mr->icm_start_addr + icm_mr->used_length;
+		icm_mr->used_length += mr_req_size;
+		chunk->num_of_entries = bucket->num_of_entries;
+		chunk->byte_size = chunk->num_of_entries * bucket->entry_size;
+
+		if (pool->icm_type == DR_ICM_TYPE_STE) {
+			err = dr_icm_chunk_ste_init(chunk);
+			if (err)
+				goto out_free_chunk;
+		}
+
+		INIT_LIST_HEAD(&chunk->chunk_list);
+		list_add(&chunk->chunk_list, &bucket->free_list);
+		bucket->free_list_count++;
+		bucket->total_chunks++;
+	}
+	mutex_unlock(&pool->mr_mutex);
+	return 0;
+
+out_free_chunk:
+	kvfree(chunk);
+out_err:
+	mutex_unlock(&pool->mr_mutex);
+	return err;
+}
+
 static void dr_icm_chunk_ste_cleanup(struct mlx5dr_icm_chunk *chunk)
 {
 	kvfree(chunk->miss_list);
@@ -381,205 +280,164 @@ static void dr_icm_chunk_ste_cleanup(struct mlx5dr_icm_chunk *chunk)
 
 static void dr_icm_chunk_destroy(struct mlx5dr_icm_chunk *chunk)
 {
-	enum mlx5dr_icm_type icm_type = get_chunk_icm_type(chunk);
+	struct mlx5dr_icm_bucket *bucket = chunk->bucket;
 
 	list_del(&chunk->chunk_list);
+	bucket->total_chunks--;
 
-	if (icm_type == DR_ICM_TYPE_STE)
+	if (bucket->pool->icm_type == DR_ICM_TYPE_STE)
 		dr_icm_chunk_ste_cleanup(chunk);
 
 	kvfree(chunk);
 }
 
-static int dr_icm_buddy_create(struct mlx5dr_icm_pool *pool)
+static void dr_icm_bucket_init(struct mlx5dr_icm_pool *pool,
+			       struct mlx5dr_icm_bucket *bucket,
+			       enum mlx5dr_icm_chunk_size chunk_size)
 {
-	struct mlx5dr_icm_buddy_mem *buddy;
-	struct mlx5dr_icm_mr *icm_mr;
+	if (pool->icm_type == DR_ICM_TYPE_STE)
+		bucket->entry_size = DR_STE_SIZE;
+	else
+		bucket->entry_size = DR_MODIFY_ACTION_SIZE;
 
-	icm_mr = dr_icm_pool_mr_create(pool);
-	if (!icm_mr)
-		return -ENOMEM;
-
-	buddy = kvzalloc(sizeof(*buddy), GFP_KERNEL);
-	if (!buddy)
-		goto free_mr;
-
-	if (dr_buddy_init(buddy, pool->max_log_chunk_sz))
-		goto err_free_buddy;
-
-	buddy->icm_mr = icm_mr;
-	buddy->pool = pool;
-
-	/* add it to the -start- of the list in order to search in it first */
-	list_add(&buddy->list_node, &pool->buddy_mem_list);
-
-	return 0;
-
-err_free_buddy:
-	kvfree(buddy);
-free_mr:
-	dr_icm_pool_mr_destroy(icm_mr);
-	return -ENOMEM;
+	bucket->num_of_entries = mlx5dr_icm_pool_chunk_size_to_entries(chunk_size);
+	bucket->pool = pool;
+	mutex_init(&bucket->mutex);
+	INIT_LIST_HEAD(&bucket->free_list);
+	INIT_LIST_HEAD(&bucket->used_list);
+	INIT_LIST_HEAD(&bucket->hot_list);
+	INIT_LIST_HEAD(&bucket->sync_list);
 }
 
-static void dr_icm_buddy_destroy(struct mlx5dr_icm_buddy_mem *buddy)
+static void dr_icm_bucket_cleanup(struct mlx5dr_icm_bucket *bucket)
 {
 	struct mlx5dr_icm_chunk *chunk, *next;
-	struct list_head tmp_list;
 
-	INIT_LIST_HEAD(&tmp_list);
+	mutex_destroy(&bucket->mutex);
+	list_splice_tail_init(&bucket->sync_list, &bucket->free_list);
+	list_splice_tail_init(&bucket->hot_list, &bucket->free_list);
 
-	list_splice_tail_init(&buddy->hot_list, &tmp_list);
-	list_splice_tail_init(&buddy->used_list, &tmp_list);
-
-	list_for_each_entry_safe(chunk, next, &tmp_list, chunk_list)
+	list_for_each_entry_safe(chunk, next, &bucket->free_list, chunk_list)
 		dr_icm_chunk_destroy(chunk);
 
-	dr_icm_pool_mr_destroy(buddy->icm_mr);
+	WARN_ON(bucket->total_chunks != 0);
 
-	dr_buddy_cleanup(buddy);
-
-	kvfree(buddy);
+	/* Cleanup of unreturned chunks */
+	list_for_each_entry_safe(chunk, next, &bucket->used_list, chunk_list)
+		dr_icm_chunk_destroy(chunk);
 }
 
-static struct mlx5dr_icm_chunk *
-dr_icm_chunk_create(struct mlx5dr_icm_pool *pool,
-		    enum mlx5dr_icm_chunk_size chunk_size,
-		    struct mlx5dr_icm_buddy_mem *buddy_mem_pool,
-		    int seg)
+static u64 dr_icm_hot_mem_size(struct mlx5dr_icm_pool *pool)
 {
-	struct mlx5dr_icm_chunk *chunk;
-	int offset;
+	u64 hot_size = 0;
+	int chunk_order;
 
-	chunk = kvzalloc(sizeof(struct mlx5dr_icm_chunk), GFP_KERNEL);
-	if (!chunk)
-		return NULL;
+	for (chunk_order = 0; chunk_order < pool->num_of_buckets; chunk_order++)
+		hot_size += pool->buckets[chunk_order].hot_list_count *
+			    mlx5dr_icm_pool_chunk_size_to_byte(chunk_order, pool->icm_type);
 
-	offset = mlx5dr_icm_pool_dm_type_to_entry_size(pool->icm_type) * seg;
-
-	chunk->rkey = buddy_mem_pool->icm_mr->mkey.key;
-	chunk->mr_addr = offset;
-	chunk->icm_addr =
-		(uintptr_t)buddy_mem_pool->icm_mr->icm_start_addr + offset;
-	chunk->num_of_entries =
-		mlx5dr_icm_pool_chunk_size_to_entries(chunk_size);
-	chunk->byte_size =
-		mlx5dr_icm_pool_chunk_size_to_byte(chunk_size, pool->icm_type);
-	chunk->seg = seg;
-
-	if (pool->icm_type == DR_ICM_TYPE_STE)
-		if (dr_icm_chunk_ste_init(chunk)) {
-			mlx5dr_err(pool->dmn,
-				   "Failed to init ste arrays (order: %d)\n",
-				   chunk_size);
-			goto out_free_chunk;
-		}
-
-	chunk->buddy_mem = buddy_mem_pool;
-	INIT_LIST_HEAD(&chunk->chunk_list);
-
-	/* chunk now is part of the used_list */
-	list_add_tail(&chunk->chunk_list, &buddy_mem_pool->used_list);
-
-	buddy_mem_pool->used_memory += chunk->byte_size;
-
-	return chunk;
-
-out_free_chunk:
-	kvfree(chunk);
-	return NULL;
+	return hot_size;
 }
 
-static bool dr_icm_pool_is_sync_required(struct mlx5dr_icm_pool *pool)
+static bool dr_icm_reuse_hot_entries(struct mlx5dr_icm_pool *pool,
+				     struct mlx5dr_icm_bucket *bucket)
 {
-	u64 allow_hot_size, all_hot_mem = 0;
-	struct mlx5dr_icm_buddy_mem *buddy;
+	u64 bytes_for_sync;
 
-	list_for_each_entry(buddy, &pool->buddy_mem_list, list_node) {
-		allow_hot_size =
-			mlx5dr_icm_pool_chunk_size_to_byte((buddy->max_order - 2),
-							   pool->icm_type);
-		all_hot_mem += buddy->hot_memory_size;
+	bytes_for_sync = dr_icm_hot_mem_size(pool);
+	if (bytes_for_sync < DR_ICM_SYNC_THRESHOLD || !bucket->hot_list_count)
+		return false;
 
-		if ((buddy->hot_memory_size > allow_hot_size) ||
-		    (all_hot_mem > DR_ICM_SYNC_THRESHOLD))
-			return true;
-	}
-
-	return false;
+	return true;
 }
 
-static int dr_icm_pool_sync_all_buddy_pools(struct mlx5dr_icm_pool *pool)
+static void dr_icm_chill_bucket_start(struct mlx5dr_icm_bucket *bucket)
 {
-	struct mlx5dr_icm_buddy_mem *buddy, *tmp_buddy;
-	int err;
-
-	err = mlx5dr_cmd_sync_steering(pool->dmn->mdev);
-	if (err) {
-		mlx5dr_err(pool->dmn, "Failed to sync to HW (err: %d)\n", err);
-		return err;
-	}
-
-	list_for_each_entry_safe(buddy, tmp_buddy, &pool->buddy_mem_list, list_node) {
-		struct mlx5dr_icm_chunk *chunk, *tmp_chunk;
-
-		list_for_each_entry_safe(chunk, tmp_chunk, &buddy->hot_list, chunk_list) {
-			dr_buddy_free_mem(buddy, chunk->seg,
-					  ilog2(chunk->num_of_entries));
-			buddy->hot_memory_size -= chunk->byte_size;
-			buddy->used_memory -= chunk->byte_size;
-			dr_icm_chunk_destroy(chunk);
-		}
-		if (!buddy->used_memory)
-			dr_icm_buddy_destroy(buddy);
-	}
-
-	return 0;
+	list_splice_tail_init(&bucket->hot_list, &bucket->sync_list);
+	bucket->sync_list_count += bucket->hot_list_count;
+	bucket->hot_list_count = 0;
 }
 
-static int dr_icm_handle_buddies_get_mem(struct mlx5dr_icm_pool *pool,
-					 enum mlx5dr_icm_chunk_size chunk_size,
-					 struct mlx5dr_icm_buddy_mem **buddy,
-					 int *seg)
+static void dr_icm_chill_bucket_end(struct mlx5dr_icm_bucket *bucket)
 {
-	struct mlx5dr_icm_buddy_mem *buddy_mem_pool;
-	bool new_mem = false;
-	int err = 0;
+	list_splice_tail_init(&bucket->sync_list, &bucket->free_list);
+	bucket->free_list_count += bucket->sync_list_count;
+	bucket->sync_list_count = 0;
+}
 
-	*seg = -1;
+static void dr_icm_chill_bucket_abort(struct mlx5dr_icm_bucket *bucket)
+{
+	list_splice_tail_init(&bucket->sync_list, &bucket->hot_list);
+	bucket->hot_list_count += bucket->sync_list_count;
+	bucket->sync_list_count = 0;
+}
 
-	/* find the next free place from the buddy list */
-	while (*seg == -1) {
-		list_for_each_entry(buddy_mem_pool, &pool->buddy_mem_list, list_node) {
-			*seg = dr_buddy_alloc_mem(buddy_mem_pool, chunk_size);
-			if (*seg != -1)
-				goto found;
+static void dr_icm_chill_buckets_start(struct mlx5dr_icm_pool *pool,
+				       struct mlx5dr_icm_bucket *cb,
+				       bool buckets[DR_CHUNK_SIZE_MAX])
+{
+	struct mlx5dr_icm_bucket *bucket;
+	int i;
 
-			if (new_mem) {
-				/* We have new memory pool, first in the list */
-				mlx5dr_err(pool->dmn,
-					   "No memory for order: %d\n",
-					   chunk_size);
-				err = -ENOMEM;
-				goto out;
-			}
+	for (i = 0; i < pool->num_of_buckets; i++) {
+		bucket = &pool->buckets[i];
+		if (bucket == cb) {
+			dr_icm_chill_bucket_start(bucket);
+			continue;
 		}
-		/* no more available allocators in that pool, create new */
-		err = dr_icm_buddy_create(pool);
-		if (err) {
-			mlx5dr_err(pool->dmn,
-				   "Failed creating buddy for order %d\n",
-				   chunk_size);
-			goto out;
+
+		/* Freeing the mutex is done at the end of that process, after
+		 * sync_ste was executed at dr_icm_chill_buckets_end func.
+		 */
+		if (mutex_trylock(&bucket->mutex)) {
+			dr_icm_chill_bucket_start(bucket);
+			buckets[i] = true;
 		}
-		/* mark we have new memory, first in list */
-		new_mem = true;
 	}
+}
 
-found:
-	*buddy = buddy_mem_pool;
-out:
-	return err;
+static void dr_icm_chill_buckets_end(struct mlx5dr_icm_pool *pool,
+				     struct mlx5dr_icm_bucket *cb,
+				     bool buckets[DR_CHUNK_SIZE_MAX])
+{
+	struct mlx5dr_icm_bucket *bucket;
+	int i;
+
+	for (i = 0; i < pool->num_of_buckets; i++) {
+		bucket = &pool->buckets[i];
+		if (bucket == cb) {
+			dr_icm_chill_bucket_end(bucket);
+			continue;
+		}
+
+		if (!buckets[i])
+			continue;
+
+		dr_icm_chill_bucket_end(bucket);
+		mutex_unlock(&bucket->mutex);
+	}
+}
+
+static void dr_icm_chill_buckets_abort(struct mlx5dr_icm_pool *pool,
+				       struct mlx5dr_icm_bucket *cb,
+				       bool buckets[DR_CHUNK_SIZE_MAX])
+{
+	struct mlx5dr_icm_bucket *bucket;
+	int i;
+
+	for (i = 0; i < pool->num_of_buckets; i++) {
+		bucket = &pool->buckets[i];
+		if (bucket == cb) {
+			dr_icm_chill_bucket_abort(bucket);
+			continue;
+		}
+
+		if (!buckets[i])
+			continue;
+
+		dr_icm_chill_bucket_abort(bucket);
+		mutex_unlock(&bucket->mutex);
+	}
 }
 
 /* Allocate an ICM chunk, each chunk holds a piece of ICM memory and
@@ -589,47 +447,68 @@ struct mlx5dr_icm_chunk *
 mlx5dr_icm_alloc_chunk(struct mlx5dr_icm_pool *pool,
 		       enum mlx5dr_icm_chunk_size chunk_size)
 {
-	struct mlx5dr_icm_buddy_mem *buddy;
 	struct mlx5dr_icm_chunk *chunk = NULL; /* Fix compilation warning */
-	int ret;
-	int seg;
+	bool buckets[DR_CHUNK_SIZE_MAX] = {};
+	struct mlx5dr_icm_bucket *bucket;
+	int err;
 
 	if (chunk_size > pool->max_log_chunk_sz)
 		return NULL;
 
-	mutex_lock(&pool->mutex);
-	/* find mem, get back the relevant buddy pool and seg in that mem */
-	ret = dr_icm_handle_buddies_get_mem(pool, chunk_size, &buddy, &seg);
-	if (ret)
-		goto out_unlock;
+	bucket = &pool->buckets[chunk_size];
 
-	chunk = dr_icm_chunk_create(pool, chunk_size, buddy, seg);
-	if (!chunk)
-		goto out_err;
+	mutex_lock(&bucket->mutex);
 
-	mutex_unlock(&pool->mutex);
+	/* Take chunk from pool if available, otherwise allocate new chunks */
+	if (list_empty(&bucket->free_list)) {
+		if (dr_icm_reuse_hot_entries(pool, bucket)) {
+			dr_icm_chill_buckets_start(pool, bucket, buckets);
+			err = mlx5dr_cmd_sync_steering(pool->dmn->mdev);
+			if (err) {
+				dr_icm_chill_buckets_abort(pool, bucket, buckets);
+				mlx5dr_err(pool->dmn, "Sync_steering failed\n");
+				chunk = NULL;
+				goto out;
+			}
+			dr_icm_chill_buckets_end(pool, bucket, buckets);
+		} else {
+			dr_icm_chunks_create(bucket);
+		}
+	}
+
+	if (!list_empty(&bucket->free_list)) {
+		chunk = list_last_entry(&bucket->free_list,
+					struct mlx5dr_icm_chunk,
+					chunk_list);
+		if (chunk) {
+			list_del_init(&chunk->chunk_list);
+			list_add_tail(&chunk->chunk_list, &bucket->used_list);
+			bucket->free_list_count--;
+			bucket->used_list_count++;
+		}
+	}
+out:
+	mutex_unlock(&bucket->mutex);
 	return chunk;
-
-out_err:
-	dr_buddy_free_mem(buddy, seg, chunk_size);
-out_unlock:
-	mutex_unlock(&pool->mutex);
-	return NULL;
 }
 
 void mlx5dr_icm_free_chunk(struct mlx5dr_icm_chunk *chunk)
 {
-	struct mlx5dr_icm_buddy_mem *buddy = chunk->buddy_mem;
+	struct mlx5dr_icm_bucket *bucket = chunk->bucket;
 
-	/* move the memory to the waiting list AKA "hot" */
-	mutex_lock(&buddy->pool->mutex);
+	if (bucket->pool->icm_type == DR_ICM_TYPE_STE) {
+		memset(chunk->ste_arr, 0,
+		       bucket->num_of_entries * sizeof(chunk->ste_arr[0]));
+		memset(chunk->hw_ste_arr, 0,
+		       bucket->num_of_entries * DR_STE_SIZE_REDUCED);
+	}
+
+	mutex_lock(&bucket->mutex);
 	list_del_init(&chunk->chunk_list);
-	list_add_tail(&chunk->chunk_list, &buddy->hot_list);
-	buddy->hot_memory_size += chunk->byte_size;
-	/* Check if we have chunks that are waiting for sync-ste */
-	if (dr_icm_pool_is_sync_required(buddy->pool))
-		dr_icm_pool_sync_all_buddy_pools(buddy->pool);
-	mutex_unlock(&buddy->pool->mutex);
+	list_add_tail(&chunk->chunk_list, &bucket->hot_list);
+	bucket->hot_list_count++;
+	bucket->used_list_count--;
+	mutex_unlock(&bucket->mutex);
 }
 
 struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
@@ -637,6 +516,7 @@ struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 {
 	enum mlx5dr_icm_chunk_size max_log_chunk_sz;
 	struct mlx5dr_icm_pool *pool;
+	int i;
 
 	if (icm_type == DR_ICM_TYPE_STE)
 		max_log_chunk_sz = dmn->info.max_log_sw_icm_sz;
@@ -647,23 +527,43 @@ struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 	if (!pool)
 		return NULL;
 
+	pool->buckets = kcalloc(max_log_chunk_sz + 1,
+				sizeof(pool->buckets[0]),
+				GFP_KERNEL);
+	if (!pool->buckets)
+		goto free_pool;
+
 	pool->dmn = dmn;
 	pool->icm_type = icm_type;
 	pool->max_log_chunk_sz = max_log_chunk_sz;
-	INIT_LIST_HEAD(&pool->buddy_mem_list);
+	pool->num_of_buckets = max_log_chunk_sz + 1;
+	INIT_LIST_HEAD(&pool->icm_mr_list);
 
-	mutex_init(&pool->mutex);
+	for (i = 0; i < pool->num_of_buckets; i++)
+		dr_icm_bucket_init(pool, &pool->buckets[i], i);
+
+	mutex_init(&pool->mr_mutex);
 
 	return pool;
+
+free_pool:
+	kvfree(pool);
+	return NULL;
 }
 
 void mlx5dr_icm_pool_destroy(struct mlx5dr_icm_pool *pool)
 {
-	struct mlx5dr_icm_buddy_mem *buddy, *tmp_buddy;
+	struct mlx5dr_icm_mr *icm_mr, *next;
+	int i;
 
-	list_for_each_entry_safe(buddy, tmp_buddy, &pool->buddy_mem_list, list_node)
-		dr_icm_buddy_destroy(buddy);
+	mutex_destroy(&pool->mr_mutex);
 
-	mutex_destroy(&pool->mutex);
+	list_for_each_entry_safe(icm_mr, next, &pool->icm_mr_list, mr_list)
+		dr_icm_pool_mr_destroy(icm_mr);
+
+	for (i = 0; i < pool->num_of_buckets; i++)
+		dr_icm_bucket_cleanup(&pool->buckets[i]);
+
+	kfree(pool->buckets);
 	kvfree(pool);
 }

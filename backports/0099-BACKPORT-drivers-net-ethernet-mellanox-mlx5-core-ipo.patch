@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I7d37649c73b876a2223e40dce5a71a230f5cf39c
 ---
- .../mellanox/mlx5/core/ipoib/ipoib_vlan.c     | 44 ++++++++++++++++++-
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c | 44 +++++++++++++++++++++-
  1 file changed, 43 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c

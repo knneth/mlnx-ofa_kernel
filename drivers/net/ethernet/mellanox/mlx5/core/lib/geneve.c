@@ -118,8 +118,6 @@ void mlx5_geneve_tlv_option_del(struct mlx5_geneve *geneve)
 		return;
 
 	mutex_lock(&geneve->sync_lock);
-	if (!geneve->refcount)
-		goto unlock;
 	if (--geneve->refcount == 0) {
 		/* We've just removed the last user of Geneve option.
 		 * Now delete the object in FW.
@@ -130,7 +128,6 @@ void mlx5_geneve_tlv_option_del(struct mlx5_geneve *geneve)
 		geneve->opt_type = 0;
 		geneve->obj_id = 0;
 	}
-unlock:
 	mutex_unlock(&geneve->sync_lock);
 }
 

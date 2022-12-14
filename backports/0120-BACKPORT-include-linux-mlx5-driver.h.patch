@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
 
 Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
 ---
- include/linux/mlx5/driver.h | 32 ++++++++++++++++++++++++++++++--
- 1 file changed, 30 insertions(+), 2 deletions(-)
+ include/linux/mlx5/driver.h | 34 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 32 insertions(+), 2 deletions(-)
 
 --- a/include/linux/mlx5/driver.h
 +++ b/include/linux/mlx5/driver.h
@@ -27,7 +27,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  
  enum {
  	MLX5_BOARD_ID_LEN = 64,
-@@ -499,9 +505,11 @@ struct mlx5_core_health {
+@@ -491,9 +497,11 @@ struct mlx5_core_health {
  	struct workqueue_struct	       *wq;
  	unsigned long			flags;
  	struct work_struct		fatal_report_work;
@@ -39,7 +39,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  	struct mlx5_fw_crdump		*crdump;
  };
  
-@@ -557,8 +565,10 @@ struct mlx5_fc_pool {
+@@ -549,8 +557,10 @@ struct mlx5_fc_pool {
  };
  
  struct mlx5_fc_stats {
@@ -50,7 +50,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  	struct list_head counters;
  	struct llist_head addlist;
  	struct llist_head dellist;
-@@ -569,6 +579,9 @@ struct mlx5_fc_stats {
+@@ -561,6 +571,9 @@ struct mlx5_fc_stats {
  	unsigned long sampling_interval; /* jiffies */
  	u32 *bulk_query_out;
  	struct mlx5_fc_pool fc_pool;
@@ -60,7 +60,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  };
  
  struct mlx5_events;
-@@ -610,6 +623,9 @@ struct mlx5_priv {
+@@ -602,6 +615,9 @@ struct mlx5_priv {
  	/* IRQ table valid only for real pci devices PF or VF */
  	struct mlx5_irq_table   *irq_table;
  	struct mlx5_eq_table	*eq_table;
@@ -70,7 +70,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  
  	/* pages stuff */
  	struct mlx5_nb          pg_nb;
-@@ -744,9 +760,13 @@ struct mlx5_clock {
+@@ -739,9 +755,13 @@ struct mlx5_clock {
  	u32                        nominal_c_mult;
  	unsigned long              overflow_period;
  	struct delayed_work        overflow_work;
@@ -84,7 +84,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  };
  
  struct mlx5_mst_dump;
-@@ -927,8 +947,13 @@ struct mlx5_cmd_work_ent {
+@@ -922,8 +942,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -98,7 +98,7 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  	u16			op;
  	bool			polling;
  };
-@@ -1064,7 +1089,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
+@@ -1058,7 +1083,7 @@ void mlx5_cmd_use_polling(struct mlx5_co
  struct mlx5_async_ctx {
  	struct mlx5_core_dev *dev;
  	atomic_t num_inflight;
@@ -107,11 +107,14 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  };
  
  struct mlx5_async_work;
-@@ -1375,13 +1400,16 @@ enum {
+@@ -1373,16 +1398,21 @@ enum {
+ 	MLX5_TRIGGERED_CMD_COMP = (u64)1 << 32,
+ };
  
++#ifdef HAVE_DEVLINK_PARAM
  static inline bool mlx5_is_roce_enabled(struct mlx5_core_dev *dev)
  {
-+#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE
  	struct devlink *devlink = priv_to_devlink(dev);
  	union devlink_param_value val;
 -
@@ -120,8 +123,10 @@ Change-Id: Idb1be61ef3ca979f91f1e153ec2a05c1efbfd668
  					   &val);
  	return val.vbool;
 +#else
-+	return dev->roce.enabled && MLX5_CAP_GEN(dev, roce);
++	return false;
 +#endif
  }
++#endif
  
  
+ /* MLX5 Diagnostics */

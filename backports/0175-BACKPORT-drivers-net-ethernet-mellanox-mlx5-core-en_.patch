@@ -38,7 +38,7 @@ Change-Id: I50004c0fc243364f74a4381f6793e3c3b57ca81b
  
  static void mlx5e_handle_tx_dim(struct mlx5e_txqsq *sq)
  {
-@@ -91,6 +99,9 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -90,6 +98,9 @@ int mlx5e_napi_poll(struct napi_struct *
  	int i;
  
  	ch_stats->poll++;
@@ -48,7 +48,7 @@ Change-Id: I50004c0fc243364f74a4381f6793e3c3b57ca81b
  
  	for (i = 0; i < c->num_tc; i++)
  		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
-@@ -100,10 +111,14 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -99,10 +110,14 @@ int mlx5e_napi_poll(struct napi_struct *
  		busy |= mlx5e_poll_tx_cq(&c->special_sq[i].cq, budget);
  #endif
  
@@ -66,7 +66,7 @@ Change-Id: I50004c0fc243364f74a4381f6793e3c3b57ca81b
  
  	if (likely(budget)) { /* budget=0 means: don't poll rx rings */
  		work_done = mlx5e_poll_rx_cq(&rq->cq, budget);
-@@ -112,6 +127,7 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -111,6 +126,7 @@ int mlx5e_napi_poll(struct napi_struct *
  
  	busy |= c->rq.post_wqes(rq);
  
@@ -74,7 +74,7 @@ Change-Id: I50004c0fc243364f74a4381f6793e3c3b57ca81b
  	if (busy) {
  		if (likely(mlx5e_channel_no_affinity_change(c)))
  			return budget;
-@@ -119,9 +135,23 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -118,9 +134,23 @@ int mlx5e_napi_poll(struct napi_struct *
  		if (budget && work_done == budget)
  			work_done--;
  	}
@@ -98,7 +98,7 @@ Change-Id: I50004c0fc243364f74a4381f6793e3c3b57ca81b
  
  	ch_stats->arm++;
  
-@@ -139,7 +169,9 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -138,7 +168,9 @@ int mlx5e_napi_poll(struct napi_struct *
  
  	mlx5e_cq_arm(&rq->cq);
  	mlx5e_cq_arm(&c->icosq.cq);
@@ -108,7 +108,7 @@ Change-Id: I50004c0fc243364f74a4381f6793e3c3b57ca81b
  
  	return work_done;
  }
-@@ -148,6 +180,9 @@ void mlx5e_completion_event(struct mlx5_
+@@ -147,6 +179,9 @@ void mlx5e_completion_event(struct mlx5_
  {
  	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);
  

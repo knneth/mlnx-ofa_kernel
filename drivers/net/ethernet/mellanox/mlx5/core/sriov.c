@@ -72,7 +72,6 @@ static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf)
 static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
-	struct mlx5_lag *ldev;
 	int err;
 	int vf;
 
@@ -98,7 +97,6 @@ enable_vfs_hca:
 		return err;
 	}
 
-	ldev = mlx5_lag_disable(dev);
 	for (vf = 0; vf < num_vfs; vf++) {
 		err = mlx5_core_enable_hca(dev, vf + 1);
 		if (err) {
@@ -117,7 +115,6 @@ enable_vfs_hca:
 		}
 		mlx5_core_dbg(dev, "successfully enabled VF* %d\n", vf);
 	}
-	mlx5_lag_enable(dev, ldev);
 
 	return 0;
 }

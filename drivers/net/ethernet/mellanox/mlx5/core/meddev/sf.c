@@ -97,6 +97,8 @@ static int mlx5_cmd_dealloc_sf(struct mlx5_core_dev *mdev, u16 function_id)
 	return mlx5_cmd_exec(mdev, in, sizeof(in), out, sizeof(out));
 }
 
+static const struct devlink_ops sf_devlink_ops = {};
+
 static int alloc_sf_id(struct mlx5_sf_table *sf_table, u16 *sf_id)
 {
 	int ret = 0;
@@ -136,14 +138,15 @@ struct mlx5_sf *
 mlx5_sf_alloc(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
 	      struct device *dev)
 {
+	struct devlink *devlink;
 	phys_addr_t base_addr;
 	struct mlx5_sf *sf;
 	u16 hw_function_id;
 	u16 sf_id;
 	int ret;
 
-	sf = kzalloc(sizeof(*sf), GFP_KERNEL);
-	if (!sf)
+	devlink = devlink_alloc(&sf_devlink_ops, sizeof(*sf));
+	if (!devlink)
 		return ERR_PTR(-ENOMEM);
 
 	ret = alloc_sf_id(sf_table, &sf_id);
@@ -163,13 +166,25 @@ mlx5_sf_alloc(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
 	if (ret)
 		goto vport_err;
 
+	sf = devlink_priv(devlink);
 	sf->idx = sf_id;
 	sf->parent_dev = coredev;
+	sf->dev.device = dev;
+	sf->dev.pdev = coredev->pdev;
+	sf->dev.coredev_type = MLX5_COREDEV_SF;
 	base_addr = sf_table->base_address +
 			(sf_id << (sf_table->log_sf_bar_size + 12));
-	sf->bar_base_addr = base_addr;
+	sf->dev.bar_addr = base_addr;
+	sf->dev.iseg_base = base_addr;
+
+	ret = devlink_register(devlink, dev);
+	if (ret)
+		goto devlink_err;
+
 	return sf;
 
+devlink_err:
+	mlx5_eswitch_cleanup_sf_vport(coredev->priv.eswitch, hw_function_id);
 vport_err:
 	mlx5_core_disable_sf_hca(coredev, hw_function_id);
 enable_err:
@@ -177,21 +192,23 @@ enable_err:
 alloc_sf_err:
 	free_sf_id(sf_table, sf_id);
 id_err:
-	kfree(sf);
+	devlink_free(devlink);
 	return ERR_PTR(ret);
 }
 
 void mlx5_sf_free(struct mlx5_core_dev *coredev, struct mlx5_sf_table *sf_table,
 		  struct mlx5_sf *sf)
 {
+	struct devlink *devlink = mlx5_core_to_devlink(&sf->dev);
 	u16 hw_function_id;
 
 	hw_function_id = mlx5_sf_hw_id(coredev, sf->idx);
+	devlink_unregister(devlink);
 	mlx5_eswitch_cleanup_sf_vport(coredev->priv.eswitch, hw_function_id);
 	mlx5_core_disable_sf_hca(coredev, hw_function_id);
 	mlx5_cmd_dealloc_sf(coredev, hw_function_id);
 	free_sf_id(sf_table, sf->idx);
-	kfree(sf);
+	devlink_free(devlink);
 }
 
 u16 mlx5_get_free_sfs_locked(struct mlx5_core_dev *dev,
@@ -381,7 +398,7 @@ static void set_dma_params(struct mlx5_core_dev *coredev, struct device *dev)
 
 int mlx5_sf_load(struct mlx5_sf *sf)
 {
-	struct mlx5_core_dev *dev = sf->dev;
+	struct mlx5_core_dev *dev = &sf->dev;
 	struct mlx5_core_dev *parent_dev;
 	int err;
 
@@ -417,36 +434,9 @@ mdev_err:
 
 void mlx5_sf_unload(struct mlx5_sf *sf)
 {
-	{
-	/* Yuk, This is done because remove_one()
-	 * invokes devlink_unregister() which must be mirror
-	 * of mlx5_load_one() which does devlink_register().
-	 * Code normally should be,
-	 * mlx5_load_one()
-	 *    devlink_register()
-	 *
-	 * mlx5_unload_one()
-	 *    devlin_unregister()
-	 * This is done incorrectly in upstream currently.
-	 * Correcting it, will result into lock dependency asserts
-	 * and deadlock described in
-	 * http://l-gerrit.mtl.labs.mlnx:8080/#/c/upstream/linux/+/281516/
-	 *
-	 * Assert on load_one() can be ignored because its false assert.
-	 * Its false because, devlink cannot reload a devlink device which
-	 * hasn't yet done devlink_register() while holding
-	 * interface_state_mutex.
-	 * To avoid this devlink user space commands must not take
-	 * devlink lock as proposed.
-	 */
-		struct devlink *devlink = priv_to_devlink(sf->dev);
-
-		devlink_unregister(devlink);
-	}
-
-	mlx5_unload_one(sf->dev, true);
-	mlx5_mdev_uninit(sf->dev);
-	iounmap(sf->dev->iseg);
+	mlx5_unload_one(&sf->dev, true);
+	mlx5_mdev_uninit(&sf->dev);
+	iounmap(sf->dev.iseg);
 }
 
 int mlx5_sf_set_mac(struct mlx5_sf *sf, u8 *mac)

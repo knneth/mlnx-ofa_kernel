@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/crdump.c
 
 Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
 ---
- drivers/net/ethernet/mellanox/mlx4/crdump.c | 92 ++++++++++++++++++---
- 1 file changed, 79 insertions(+), 13 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/crdump.c | 46 ++++++++++++++++-----
+ 1 file changed, 36 insertions(+), 10 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/crdump.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/crdump.c
@@ -16,37 +16,18 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  #define BAD_ACCESS			0xBADACCE5
  #define HEALTH_BUFFER_SIZE		0x40
  #define CR_ENABLE_BIT			swab32(BIT(6))
-@@ -39,8 +38,29 @@
+@@ -39,8 +38,10 @@
  #define MAX_NUM_OF_DUMPS_TO_STORE	(8)
  #define CRDUMP_PROC_DIR "crdump"
  
-+#ifdef HAVE_DEVLINK_REGION_OPS
-+
-+#define REGION_CR_SPACE "cr-space"
-+#define REGION_FW_HEALTH "fw-health"
-+
-+static const char * const region_cr_space_str = REGION_CR_SPACE;
-+static const char * const region_fw_health_str = REGION_FW_HEALTH;
-+
-+static const struct devlink_region_ops region_cr_space_ops = {
-+	.name = REGION_CR_SPACE,
-+	.destructor = &kvfree,
-+};
-+
-+static const struct devlink_region_ops region_fw_health_ops = {
-+	.name = REGION_FW_HEALTH,
-+	.destructor = &kvfree,
-+};
-+#else
 +#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_REGION_SNAPSHOT
  static const char *region_cr_space_str = "cr-space";
  static const char *region_fw_health_str = "fw-health";
 +#endif
-+#endif /* HAVE_DEVLINK_REGION_OPS */
  
  /* Set to true in case cr enable bit was set to true before crdump */
  static bool crdump_enbale_bit_set;
-@@ -89,6 +109,7 @@ void mlx4_crdump_proc_cleanup(struct pro
+@@ -89,6 +90,7 @@ void mlx4_crdump_proc_cleanup(struct pro
  		remove_proc_entry(CRDUMP_PROC_DIR, proc_core_dir);
  }
  
@@ -54,7 +35,7 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  static void mlx4_crdump_collect_crspace(struct mlx4_dev *dev,
  					u8 __iomem *cr_space,
  					u32 id)
-@@ -104,7 +125,6 @@ static void mlx4_crdump_collect_crspace(
+@@ -104,7 +106,6 @@ static void mlx4_crdump_collect_crspace(
  		mlx4_err(dev, "crdump: cr-space region is NULL\n");
  		return;
  	}
@@ -62,47 +43,29 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  	/* Try to collect CR space */
  	cr_res_size = pci_resource_len(pdev, 0);
  	crspace_data = kvmalloc(cr_res_size, GFP_KERNEL);
-@@ -112,10 +132,18 @@ static void mlx4_crdump_collect_crspace(
- 		for (offset = 0; offset < cr_res_size; offset += 4)
- 			*(u32 *)(crspace_data + offset) =
+@@ -114,7 +115,11 @@ static void mlx4_crdump_collect_crspace(
  					readl(cr_space + offset);
--
-+#ifdef HAVE_DEVLINK_REGION_OPS
+ 
  		err = devlink_region_snapshot_create(crdump->region_crspace,
--						     cr_res_size, crspace_data,
--						     id, &kvfree);
-+				crspace_data, id);
-+#else
-+		err = devlink_region_snapshot_create(crdump->region_crspace,
 +#ifndef HAVE_DEVLINK_REGION_SNAPSHOT_CREATE_4_PARAM
-+				cr_res_size, crspace_data,
+ 						     cr_res_size, crspace_data,
 +#else
-+				crspace_data,
++						     crspace_data,
 +#endif
-+				id, &kvfree);
-+#endif /* HAVE_DEVLINK_REGION_OPS */
+ 						     id, &kvfree);
  		if (err) {
  			kvfree(crspace_data);
- 			mlx4_warn(dev, "crdump: devlink create %s snapshot id %d err %d\n",
-@@ -153,10 +181,17 @@ static void mlx4_crdump_collect_fw_healt
- 			*(u32 *)(health_data + offset) =
+@@ -154,7 +159,9 @@ static void mlx4_crdump_collect_fw_healt
  					readl(health_buf_start + offset);
  
-+#ifdef HAVE_DEVLINK_REGION_OPS
-+		err = devlink_region_snapshot_create(crdump->region_fw_health,
-+				health_data, id);
-+#else
  		err = devlink_region_snapshot_create(crdump->region_fw_health,
 +#ifndef HAVE_DEVLINK_REGION_SNAPSHOT_CREATE_4_PARAM
  						     HEALTH_BUFFER_SIZE,
 +#endif
  						     health_data,
  						     id, &kvfree);
-+#endif /* HAVE_DEVLINK_REGION_OPS */
  		if (err) {
- 			kvfree(health_data);
- 			mlx4_warn(dev, "crdump: devlink create %s snapshot id %d err %d\n",
-@@ -169,15 +204,18 @@ static void mlx4_crdump_collect_fw_healt
+@@ -169,15 +176,18 @@ static void mlx4_crdump_collect_fw_healt
  		mlx4_err(dev, "crdump: Failed to allocate health buffer\n");
  	}
  }
@@ -122,7 +85,7 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  	int offset;
  
  	if (!dev->caps.health_buffer_addrs) {
-@@ -229,22 +267,31 @@ int mlx4_crdump_collect(struct mlx4_dev
+@@ -229,22 +239,27 @@ int mlx4_crdump_collect(struct mlx4_dev
  				MLX4_CORE_PROC, CRDUMP_PROC_DIR,
  				pci_name(dev->persist->pdev));
  
@@ -133,16 +96,12 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  	}
  
  	/* Get the available snapshot ID for the dumps */
-+#ifdef HAVE_DEVLINK_REGION_OPS
-+	devlink_region_snapshot_id_get(devlink, &id);
-+#else
 +#ifdef HAVE_DEVLINK_REGION_SNAPSHOT_EXISTS
 +	id = devlink_region_snapshot_id_get(devlink);
 +#else
  	id = devlink_region_shapshot_id_get(devlink);
 -
 +#endif
-+#endif /* HAVE_DEVLINK_REGION_OPS */
  	/* Try to capture dumps */
  	mlx4_crdump_collect_crspace(dev, cr_space, id);
  	mlx4_crdump_collect_fw_health(dev, cr_space, id);
@@ -156,7 +115,7 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  
  out:
  	crdump_disable_crspace_access(dev, cr_space);
-@@ -323,14 +370,21 @@ static int crdump_proc_open(struct inode
+@@ -323,14 +338,21 @@ static int crdump_proc_open(struct inode
  {
  	struct seq_file *seq;
  	int ret;
@@ -179,7 +138,7 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  	return 0;
  }
  
-@@ -344,17 +398,24 @@ static const struct file_operations crdu
+@@ -344,11 +366,14 @@ static const struct file_operations crdu
  
  int mlx4_crdump_init(struct mlx4_dev *dev)
  {
@@ -196,28 +155,7 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  	crdump->snapshot_enable = false;
  
  	/* Create cr-space region */
- 	crdump->region_crspace =
- 		devlink_region_create(devlink,
-+#ifdef HAVE_DEVLINK_REGION_OPS
-+				      &region_cr_space_ops,
-+#else
- 				      region_cr_space_str,
-+#endif
- 				      MAX_NUM_OF_DUMPS_TO_STORE,
- 				      pci_resource_len(pdev, 0));
- 	if (IS_ERR(crdump->region_crspace))
-@@ -365,14 +426,18 @@ int mlx4_crdump_init(struct mlx4_dev *de
- 	/* Create fw-health region */
- 	crdump->region_fw_health =
- 		devlink_region_create(devlink,
-+#ifdef HAVE_DEVLINK_REGION_OPS
-+				      &region_fw_health_ops,
-+#else
- 				      region_fw_health_str,
-+#endif
- 				      MAX_NUM_OF_DUMPS_TO_STORE,
- 				      HEALTH_BUFFER_SIZE);
- 	if (IS_ERR(crdump->region_fw_health))
+@@ -372,7 +397,7 @@ int mlx4_crdump_init(struct mlx4_dev *de
  		mlx4_warn(dev, "crdump: create devlink region %s err %ld\n",
  			  region_fw_health_str,
  			  PTR_ERR(crdump->region_fw_health));
@@ -226,7 +164,7 @@ Change-Id: I598de2c6892c0e959fb3569aefecd6ac68b1b143
  	if (crdump_proc_dir)
  		proc_create_data(pci_name(dev->persist->pdev), S_IRUGO,
  				 crdump_proc_dir, &crdump_proc_fops, crdump);
-@@ -384,9 +449,10 @@ void mlx4_crdump_end(struct mlx4_dev *de
+@@ -384,9 +409,10 @@ void mlx4_crdump_end(struct mlx4_dev *de
  {
  	struct mlx4_fw_crdump *crdump = &dev->persist->crdump;
  

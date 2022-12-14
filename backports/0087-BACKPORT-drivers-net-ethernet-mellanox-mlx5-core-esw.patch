@@ -139,7 +139,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  }
  
  void esw_offloads_cleanup_reps(struct mlx5_eswitch *esw)
-@@ -2901,9 +2941,11 @@ err_steering_init:
+@@ -2897,9 +2937,11 @@ err_steering_init:
  	return err;
  }
  
@@ -154,7 +154,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	bool can_cleanup;
  	int err, err1;
-@@ -2917,11 +2959,19 @@ static int esw_offloads_stop_imp(struct
+@@ -2913,11 +2955,19 @@ static int esw_offloads_stop_imp(struct
  	mlx5_eswitch_disable_locked(esw, false);
  	err = mlx5_eswitch_enable_locked(esw, MLX5_ESWITCH_LEGACY, -1);
  	if (err) {
@@ -174,7 +174,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  	}
  
  done:
-@@ -2936,25 +2986,42 @@ void esw_offloads_stop_handler(struct wo
+@@ -2932,25 +2982,42 @@ void esw_offloads_stop_handler(struct wo
  		container_of(work, struct mlx5_esw_handler, stop_handler);
  	struct mlx5_eswitch *esw =
  		container_of(handler, struct mlx5_eswitch, handler);
@@ -217,7 +217,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  }
  
  void esw_offloads_disable(struct mlx5_eswitch *esw)
-@@ -3064,8 +3131,34 @@ static int eswitch_devlink_pf_support_ch
+@@ -3060,8 +3127,34 @@ static int eswitch_devlink_pf_support_ch
  		!mlx5_core_is_ecpf_esw_manager(esw->dev)) ? -EOPNOTSUPP : 0;
  }
  
@@ -254,7 +254,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3095,9 +3188,17 @@ int mlx5_devlink_eswitch_mode_set(struct
+@@ -3091,9 +3184,17 @@ int mlx5_devlink_eswitch_mode_set(struct
  
  	ldev = mlx5_lag_disable(esw->dev);
  	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV)
@@ -274,7 +274,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  
  	mutex_unlock(&esw->mode_lock);
  	return err;
-@@ -3108,7 +3209,7 @@ done:
+@@ -3104,7 +3205,7 @@ done:
  	return err;
  }
  
@@ -283,7 +283,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3129,8 +3230,11 @@ done:
+@@ -3125,8 +3226,11 @@ done:
  	return err;
  }
  
@@ -297,7 +297,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3152,7 +3256,11 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -3148,7 +3252,11 @@ int mlx5_devlink_eswitch_inline_mode_set
  			goto out;
  		/* fall through */
  	case MLX5_CAP_INLINE_MODE_L2:
@@ -309,7 +309,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  		err = -EOPNOTSUPP;
  		goto out;
  	case MLX5_CAP_INLINE_MODE_VPORT_CONTEXT:
-@@ -3160,8 +3268,12 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -3156,8 +3264,12 @@ int mlx5_devlink_eswitch_inline_mode_set
  	}
  
  	if (atomic64_read(&esw->offloads.num_flows) > 0) {
@@ -322,7 +322,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  		err = -EOPNOTSUPP;
  		goto out;
  	}
-@@ -3173,8 +3285,12 @@ int mlx5_devlink_eswitch_inline_mode_set
+@@ -3169,8 +3281,12 @@ int mlx5_devlink_eswitch_inline_mode_set
  	mlx5_esw_for_each_host_func_vport(esw, vport, esw->esw_funcs.num_vfs) {
  		err = mlx5_modify_nic_vport_min_inline(dev, vport, mlx5_mode);
  		if (err) {
@@ -337,7 +337,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  			goto revert_inline_mode;
  		}
  	}
-@@ -3194,7 +3310,7 @@ out:
+@@ -3190,7 +3306,7 @@ out:
  	return err;
  }
  
@@ -346,7 +346,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3217,7 +3333,7 @@ done:
+@@ -3213,7 +3329,7 @@ done:
  
  int mlx5_eswitch_inline_mode_get(struct mlx5_eswitch *esw, u8 *mode)
  {
@@ -355,7 +355,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  	struct mlx5_core_dev *dev = esw->dev;
  	int vport;
  
-@@ -3252,8 +3368,16 @@ out:
+@@ -3248,8 +3364,16 @@ out:
  	return 0;
  }
  
@@ -374,7 +374,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3289,8 +3413,13 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3285,8 +3409,13 @@ int mlx5_devlink_eswitch_encap_mode_set(
  		goto done;
  
  	if (atomic64_read(&esw->offloads.num_flows) > 0) {
@@ -388,7 +388,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  		err = -EOPNOTSUPP;
  		goto done;
  	}
-@@ -3302,8 +3431,12 @@ int mlx5_devlink_eswitch_encap_mode_set(
+@@ -3298,8 +3427,12 @@ int mlx5_devlink_eswitch_encap_mode_set(
  	err = esw_create_offloads_fdb_tables(esw, esw->nvports);
  
  	if (err) {
@@ -401,7 +401,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  		esw->offloads.encap = !encap;
  		(void)esw_create_offloads_fdb_tables(esw, esw->nvports);
  	}
-@@ -3313,7 +3446,11 @@ done:
+@@ -3309,7 +3442,11 @@ done:
  	return err;
  }
  
@@ -414,7 +414,7 @@ Change-Id: I5bccb729b4e1aef77ad4aeef0bd1880e5674b650
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3334,6 +3471,91 @@ done:
+@@ -3330,6 +3467,91 @@ done:
  	return 0;
  }
  

@@ -8,7 +8,7 @@ Change-Id: I8aa912c7a4032de81621883ab76e77c511834142
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
-@@ -54,8 +54,12 @@ mlx5_core-$(CONFIG_MLX5_SW_STEERING) +=
+@@ -53,8 +53,12 @@ mlx5_core-$(CONFIG_MLX5_SW_STEERING) +=
  #
  mlx5_core-$(CONFIG_MLX5_ESWITCH)   += eswitch.o eswitch_offloads.o ecpf.o rdma.o
  mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o

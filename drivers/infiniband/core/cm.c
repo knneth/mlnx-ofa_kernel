@@ -92,8 +92,6 @@ static const char * const ibcm_rej_reason_strs[] = {
 	[IB_CM_REJ_INVALID_CLASS_VERSION]	= "invalid class version",
 	[IB_CM_REJ_INVALID_FLOW_LABEL]		= "invalid flow label",
 	[IB_CM_REJ_INVALID_ALT_FLOW_LABEL]	= "invalid alt flow label",
-	[IB_CM_REJ_VENDOR_OPTION_NOT_SUPPORTED] =
-		"vendor option is not supported",
 };
 
 const char *__attribute_const__ ibcm_reject_msg(int reason)
@@ -108,7 +106,7 @@ const char *__attribute_const__ ibcm_reject_msg(int reason)
 }
 EXPORT_SYMBOL(ibcm_reject_msg);
 
-static int cm_add_one(struct ib_device *device);
+static void cm_add_one(struct ib_device *device);
 static void cm_remove_one(struct ib_device *device, void *client_data);
 
 static struct ib_client cm_client = {
@@ -304,8 +302,6 @@ struct cm_id_private {
 
 	struct list_head work_list;
 	atomic_t work_count;
-
-	struct rdma_ucm_ece ece;
 };
 
 struct cm_hdr {
@@ -1310,13 +1306,6 @@ static void cm_format_mad_hdr(struct ib_mad_hdr *hdr,
 	hdr->tid	   = tid;
 }
 
-static void cm_format_mad_ece_hdr(struct ib_mad_hdr *hdr, __be16 attr_id,
-				  __be64 tid, u32 attr_mod)
-{
-	cm_format_mad_hdr(hdr, attr_id, tid);
-	hdr->attr_mod = cpu_to_be32(attr_mod);
-}
-
 static void cm_format_req(struct cm_req_msg *req_msg,
 			  struct cm_id_private *cm_id_priv,
 			  struct ib_cm_req_param *param)
@@ -1329,8 +1318,8 @@ static void cm_format_req(struct cm_req_msg *req_msg,
 		pri_ext = opa_is_extended_lid(pri_path->opa.dlid,
 					      pri_path->opa.slid);
 
-	cm_format_mad_ece_hdr(&req_msg->hdr, CM_REQ_ATTR_ID,
-			      cm_form_tid(cm_id_priv), param->ece.attr_mod);
+	cm_format_mad_hdr(&req_msg->hdr, CM_REQ_ATTR_ID,
+			  cm_form_tid(cm_id_priv));
 
 	req_msg->local_comm_id = cm_id_priv->id.local_id;
 	req_msg->service_id = param->service_id;
@@ -1418,7 +1407,6 @@ static void cm_format_req(struct cm_req_msg *req_msg,
 			cm_ack_timeout(cm_id_priv->av.port->cm_dev->ack_delay,
 				       alt_path->packet_life_time));
 	}
-	IBA_SET(CM_REQ_VENDOR_ID, req_msg, param->ece.vendor_id);
 
 	if (param->private_data && param->private_data_len)
 		memcpy(req_msg->private_data, param->private_data,
@@ -1759,9 +1747,6 @@ static void cm_format_req_event(struct cm_work *work,
 	param->rnr_retry_count = cm_req_get_rnr_retry_count(req_msg);
 	param->srq = cm_req_get_srq(req_msg);
 	param->ppath_sgid_attr = cm_id_priv->av.ah_attr.grh.sgid_attr;
-	param->ece.vendor_id = IBA_GET(CM_REQ_VENDOR_ID, req_msg);
-	param->ece.attr_mod = be32_to_cpu(req_msg->hdr.attr_mod);
-
 	work->cm_event.private_data = &req_msg->private_data;
 }
 
@@ -2118,8 +2103,7 @@ static void cm_format_rep(struct cm_rep_msg *rep_msg,
 			  struct cm_id_private *cm_id_priv,
 			  struct ib_cm_rep_param *param)
 {
-	cm_format_mad_ece_hdr(&rep_msg->hdr, CM_REP_ATTR_ID, cm_id_priv->tid,
-			      param->ece.attr_mod);
+	cm_format_mad_hdr(&rep_msg->hdr, CM_REP_ATTR_ID, cm_id_priv->tid);
 	rep_msg->local_comm_id = cm_id_priv->id.local_id;
 	rep_msg->remote_comm_id = cm_id_priv->id.remote_id;
 	cm_rep_set_starting_psn(rep_msg, cpu_to_be32(param->starting_psn));
@@ -2139,10 +2123,6 @@ static void cm_format_rep(struct cm_rep_msg *rep_msg,
 		cm_rep_set_srq(rep_msg, 1);
 		cm_rep_set_local_eecn(rep_msg, cpu_to_be32(param->qp_num));
 	}
-
-	IBA_SET(CM_REP_VENDOR_ID_L, rep_msg, param->ece.vendor_id);
-	IBA_SET(CM_REP_VENDOR_ID_M, rep_msg, param->ece.vendor_id >> 8);
-	IBA_SET(CM_REP_VENDOR_ID_H, rep_msg, param->ece.vendor_id >> 16);
 
 	if (param->private_data && param->private_data_len)
 		memcpy(rep_msg->private_data, param->private_data,
@@ -2284,11 +2264,6 @@ static void cm_format_rep_event(struct cm_work *work, enum ib_qp_type qp_type)
 	param->flow_control = cm_rep_get_flow_ctrl(rep_msg);
 	param->rnr_retry_count = cm_rep_get_rnr_retry_count(rep_msg);
 	param->srq = cm_rep_get_srq(rep_msg);
-	param->ece.vendor_id = IBA_GET(CM_REP_VENDOR_ID_H, rep_msg) << 16;
-	param->ece.vendor_id |= IBA_GET(CM_REP_VENDOR_ID_M, rep_msg) << 8;
-	param->ece.vendor_id |= IBA_GET(CM_REP_VENDOR_ID_L, rep_msg);
-	param->ece.attr_mod = be32_to_cpu(rep_msg->hdr.attr_mod);
-
 	work->cm_event.private_data = &rep_msg->private_data;
 }
 
@@ -2702,13 +2677,14 @@ static int cm_dreq_handler(struct cm_work *work)
 	switch (cm_id_priv->id.state) {
 	case IB_CM_REP_SENT:
 	case IB_CM_DREQ_SENT:
-	case IB_CM_MRA_REP_RCVD:
 		ib_cancel_mad(cm_id_priv->av.port->mad_agent, cm_id_priv->msg);
 		break;
 	case IB_CM_ESTABLISHED:
 		if (cm_id_priv->id.lap_state == IB_CM_LAP_SENT ||
 		    cm_id_priv->id.lap_state == IB_CM_MRA_LAP_RCVD)
 			ib_cancel_mad(cm_id_priv->av.port->mad_agent, cm_id_priv->msg);
+		break;
+	case IB_CM_MRA_REP_RCVD:
 		break;
 	case IB_CM_TIMEWAIT:
 		atomic_long_inc(&work->port->counter_group[CM_RECV_DUPLICATES].
@@ -3682,17 +3658,13 @@ static void cm_format_sidr_rep(struct cm_sidr_rep_msg *sidr_rep_msg,
 			       struct cm_id_private *cm_id_priv,
 			       struct ib_cm_sidr_rep_param *param)
 {
-	cm_format_mad_ece_hdr(&sidr_rep_msg->hdr, CM_SIDR_REP_ATTR_ID,
-			      cm_id_priv->tid, param->ece.attr_mod);
+	cm_format_mad_hdr(&sidr_rep_msg->hdr, CM_SIDR_REP_ATTR_ID,
+			  cm_id_priv->tid);
 	sidr_rep_msg->request_id = cm_id_priv->id.remote_id;
 	sidr_rep_msg->status = param->status;
 	cm_sidr_rep_set_qpn(sidr_rep_msg, cpu_to_be32(param->qp_num));
 	sidr_rep_msg->service_id = cm_id_priv->id.service_id;
 	sidr_rep_msg->qkey = cpu_to_be32(param->qkey);
-	IBA_SET(CM_SIDR_REP_VENDOR_ID_L, sidr_rep_msg,
-		param->ece.vendor_id & 0xFF);
-	IBA_SET(CM_SIDR_REP_VENDOR_ID_H, sidr_rep_msg,
-		(param->ece.vendor_id >> 8) & 0xFF);
 
 	if (param->info && param->info_length)
 		memcpy(sidr_rep_msg->info, param->info, param->info_length);
@@ -4387,7 +4359,7 @@ static void cm_remove_port_fs(struct cm_port *port)
 
 }
 
-static int cm_add_one(struct ib_device *ib_device)
+static void cm_add_one(struct ib_device *ib_device)
 {
 	struct cm_device *cm_dev;
 	struct cm_port *port;
@@ -4406,7 +4378,7 @@ static int cm_add_one(struct ib_device *ib_device)
 	cm_dev = kzalloc(struct_size(cm_dev, port, ib_device->phys_port_cnt),
 			 GFP_KERNEL);
 	if (!cm_dev)
-		return -ENOMEM;
+		return;
 
 	cm_dev->ib_device = ib_device;
 	cm_dev->ack_delay = ib_device->attrs.local_ca_ack_delay;
@@ -4418,10 +4390,8 @@ static int cm_add_one(struct ib_device *ib_device)
 			continue;
 
 		port = kzalloc(sizeof *port, GFP_KERNEL);
-		if (!port) {
-			ret = -ENOMEM;
+		if (!port)
 			goto error1;
-		}
 
 		cm_dev->port[i-1] = port;
 		port->cm_dev = cm_dev;
@@ -4442,10 +4412,8 @@ static int cm_add_one(struct ib_device *ib_device)
 							cm_recv_handler,
 							port,
 							0);
-		if (IS_ERR(port->mad_agent)) {
-			ret = PTR_ERR(port->mad_agent);
+		if (IS_ERR(port->mad_agent))
 			goto error2;
-		}
 
 		ret = ib_modify_port(ib_device, i, 0, &port_modify);
 		if (ret)
@@ -4454,17 +4422,15 @@ static int cm_add_one(struct ib_device *ib_device)
 		count++;
 	}
 
-	if (!count) {
-		ret = -EOPNOTSUPP;
+	if (!count)
 		goto free;
-	}
 
 	ib_set_client_data(ib_device, &cm_client, cm_dev);
 
 	write_lock_irqsave(&cm.device_lock, flags);
 	list_add_tail(&cm_dev->list, &cm.device_list);
 	write_unlock_irqrestore(&cm.device_lock, flags);
-	return 0;
+	return;
 
 error3:
 	ib_unregister_mad_agent(port->mad_agent);
@@ -4486,7 +4452,6 @@ error1:
 	}
 free:
 	kfree(cm_dev);
-	return ret;
 }
 
 static void cm_remove_one(struct ib_device *ib_device, void *client_data)
@@ -4500,6 +4465,9 @@ static void cm_remove_one(struct ib_device *ib_device, void *client_data)
 	};
 	unsigned long flags;
 	int i;
+
+	if (!cm_dev)
+		return;
 
 	write_lock_irqsave(&cm.device_lock, flags);
 	list_del(&cm_dev->list);

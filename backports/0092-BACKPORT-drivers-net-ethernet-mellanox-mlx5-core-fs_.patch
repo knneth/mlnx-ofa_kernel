@@ -8,7 +8,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
-@@ -231,15 +231,27 @@ enum fs_i_lock_class {
+@@ -229,15 +229,27 @@ enum fs_i_lock_class {
  };
  
  static const struct rhashtable_params rhash_fte = {
@@ -36,7 +36,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	.key_offset = offsetof(struct mlx5_flow_group, mask),
  	.head_offset = offsetof(struct mlx5_flow_group, hash),
  	.automatic_shrinking = true,
-@@ -488,7 +500,9 @@ static void del_hw_flow_table(struct fs_
+@@ -486,7 +498,9 @@ static void del_hw_flow_table(struct fs_
  	fs_get_obj(ft, node);
  	dev = get_dev(&ft->node);
  	root = find_root(&ft->node);
@@ -46,7 +46,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  
  	if (node->active) {
  		err = root->cmds->destroy_flow_table(root, ft);
-@@ -504,7 +518,11 @@ static void del_sw_flow_table(struct fs_
+@@ -502,7 +516,11 @@ static void del_sw_flow_table(struct fs_
  
  	fs_get_obj(ft, node);
  
@@ -58,7 +58,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	fs_get_obj(prio, ft->node.parent);
  	prio->num_ft--;
  	kfree(ft);
-@@ -546,7 +564,9 @@ static void del_sw_hw_rule(struct fs_nod
+@@ -544,7 +562,9 @@ static void del_sw_hw_rule(struct fs_nod
  	}
  
  	fs_get_obj(fte, rule->node.parent);
@@ -69,7 +69,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	if (rule->sw_action == MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO) {
  		mutex_lock(&rule->dest_attr.ft->lock);
  		list_del(&rule->next_ft);
-@@ -584,7 +604,9 @@ static void del_hw_fte(struct fs_node *n
+@@ -582,7 +602,9 @@ static void del_hw_fte(struct fs_node *n
  	fs_get_obj(fg, fte->node.parent);
  	fs_get_obj(ft, fg->node.parent);
  
@@ -79,7 +79,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	dev = get_dev(&ft->node);
  	root = find_root(&ft->node);
  	if (node->active) {
-@@ -625,7 +647,9 @@ static void del_hw_flow_group(struct fs_
+@@ -623,7 +645,9 @@ static void del_hw_flow_group(struct fs_
  	fs_get_obj(fg, node);
  	fs_get_obj(ft, fg->node.parent);
  	dev = get_dev(&ft->node);
@@ -89,7 +89,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  
  	root = find_root(&ft->node);
  	if (fg->node.active && root->cmds->destroy_flow_group(root, ft, fg))
-@@ -650,7 +674,11 @@ static void del_sw_flow_group(struct fs_
+@@ -648,7 +672,11 @@ static void del_sw_flow_group(struct fs_
  			ft->autogroup.num_big_groups--;
  		ft->autogroup.num_groups--;
  	}
@@ -101,7 +101,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  			      &fg->hash,
  			      rhash_fg);
  	WARN_ON(err);
-@@ -760,7 +788,11 @@ static struct mlx5_flow_group *alloc_ins
+@@ -758,7 +786,11 @@ static struct mlx5_flow_group *alloc_ins
  		return fg;
  
  	/* initialize refcnt, add to parent list */
@@ -113,7 +113,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  			      &fg->hash,
  			      rhash_fg);
  	if (ret) {
-@@ -790,7 +822,11 @@ static struct mlx5_flow_table *alloc_flo
+@@ -788,7 +820,11 @@ static struct mlx5_flow_table *alloc_flo
  	if (!ft)
  		return ERR_PTR(-ENOMEM);
  
@@ -125,7 +125,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	if (ret) {
  		kfree(ft);
  		return ERR_PTR(ret);
-@@ -1134,7 +1170,9 @@ static struct mlx5_flow_table *__mlx5_cr
+@@ -1132,7 +1168,9 @@ static struct mlx5_flow_table *__mlx5_cr
  	fs_prio->num_ft++;
  	up_write_ref_node(&fs_prio->node, false);
  	mutex_unlock(&root->chain_lock);
@@ -135,7 +135,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	return ft;
  destroy_ft:
  	root->cmds->destroy_flow_table(root, ft);
-@@ -1240,7 +1278,9 @@ struct mlx5_flow_group *mlx5_create_flow
+@@ -1238,7 +1276,9 @@ struct mlx5_flow_group *mlx5_create_flow
  		tree_put_node(&fg->node, false);
  		return ERR_PTR(err);
  	}
@@ -146,7 +146,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	fg->node.active = true;
  
  	return fg;
-@@ -1480,7 +1520,9 @@ static int create_auto_flow_group(struct
+@@ -1478,7 +1518,9 @@ static int create_auto_flow_group(struct
  	err = root->cmds->create_flow_group(root, ft, in, fg);
  	if (!err) {
  		fg->node.active = true;
@@ -156,26 +156,26 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	}
  
  	kvfree(in);
-@@ -1676,14 +1718,17 @@ static struct mlx5_flow_handle *add_rule
+@@ -1673,14 +1715,18 @@ static struct mlx5_flow_handle *add_rule
  		fte->action.action = old_action;
  		return handle;
  	}
 +#ifndef MLX_DISABLE_TRACEPOINTS
  	trace_mlx5_fs_set_fte(fte, false);
--
 +#endif
+ 
  	for (i = 0; i < handle->num_rules; i++) {
  		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
- 			dest_name = get_dest_name(&handle->rule[i]->dest_attr,
- 						  name);
+ 			dest_name = get_dest_name(&handle->rule[i]->dest_attr);
  			tree_add_node(&handle->rule[i]->node, &fte->node, dest_name);
+ 			kfree(dest_name);
 +#ifndef MLX_DISABLE_TRACEPOINTS
  			trace_mlx5_fs_add_rule(handle->rule[i]);
 +#endif
  			notify_add_rule(handle->rule[i]);
  		}
  	}
-@@ -1744,16 +1789,26 @@ static int build_match_list(struct match
+@@ -1741,16 +1787,26 @@ static int build_match_list(struct match
  			    struct mlx5_flow_spec *spec,
  			    bool ft_locked)
  {
@@ -202,7 +202,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  		struct match_list *curr_match;
  
  		if (likely(list_empty(&match_head->list))) {
-@@ -1852,6 +1907,9 @@ try_add_to_existing_fg(struct mlx5_flow_
+@@ -1849,6 +1905,9 @@ try_add_to_existing_fg(struct mlx5_flow_
  search_again_locked:
  	version = matched_fgs_get_version(match_head);
  	if (flow_act->flags & FLOW_ACT_NO_APPEND)
@@ -212,15 +212,16 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  		list_for_each_entry(iter, match_head, list) {
  			struct fs_fte *fte_tmp;
  
-@@ -1869,6 +1927,7 @@ search_again_locked:
+@@ -1866,7 +1925,7 @@ search_again_locked:
  			tree_put_node(&fte_tmp->node, false);
  			goto skip_search;
  		}
+-
 +#endif
- 
- 	/* During rekey process, we can have two IPsec rules with duplicate match value but different encryption key.
- 	 * Thus, do not allow modify op_mod for IPsec rule
-@@ -2760,6 +2819,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
+ 	/* Try to find a fg that already contains a matching fte */
+ 	list_for_each_entry(iter, match_head, list) {
+ 		struct fs_fte *fte_tmp;
+@@ -2743,6 +2802,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
  	fs_debugfs_cleanup(dev);
  	kmem_cache_destroy(steering->ftes_cache);
  	kmem_cache_destroy(steering->fgs_cache);
@@ -231,7 +232,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	kfree(steering);
  }
  
-@@ -3034,6 +3097,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -3017,6 +3080,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  	steering->dev = dev;
  	dev->priv.steering = steering;
  
@@ -242,7 +243,7 @@ Change-Id: Ie3c02fef31d86215ad6ebdf4bc6c3a9514d3368f
  	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev_name(dev->device));
  	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev_name(dev->device));
  	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
-@@ -3103,12 +3170,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -3086,12 +3153,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  			goto err;
  	}
  

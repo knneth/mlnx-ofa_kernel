@@ -39,9 +39,9 @@ static inline int netdev_set_master(struct net_device *dev,
 	int rc = 0;
 
 	if (master) {
-#if defined(HAVE_NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS)
+#if defined(NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS)
 		rc = netdev_master_upper_dev_link(dev, master, NULL, NULL);
-#elif defined(HAVE_NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS)
+#elif defined(NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS)
 		rc = netdev_master_upper_dev_link(dev, master,
 						  NULL, NULL, NULL);
 #else

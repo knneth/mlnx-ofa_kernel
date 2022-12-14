@@ -132,9 +132,6 @@ mlx5dr_is_supported(struct mlx5_core_dev *dev)
 	return MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner);
 }
 
-int mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn);
-void mlx5dr_dbg_cleanup_dump(struct mlx5dr_domain *dmn);
-
 #else /* CONFIG_MLX5_SW_STEERING */
 
 static inline struct mlx5dr_domain *
@@ -187,7 +184,7 @@ static inline int
 mlx5dr_table_set_miss_action(struct mlx5dr_table *tbl,
 			     struct mlx5dr_action *action) { return 0; }
 
-static inline struct mlx5dr_action *
+static struct mlx5dr_action *
 mlx5dr_action_create_dest_table_num(struct mlx5dr_domain *dmn,
 				    u32 table_num) { return NULL; }
 

@@ -9,7 +9,7 @@ struct ib_mr *mlx4_ib_phys_addr(struct ib_pd *pd, u64 length, u64 virt_addr,
 	if (virt_addr || length)
 		return ERR_PTR(-EINVAL);
 
-	return pd->device->ops.get_dma_mr(pd, access_flags);
+	return pd->device->get_dma_mr(pd, access_flags);
 #else
 	pr_debug("Physical Address MR support wasn't compiled in"
 		 "the RDMA subsystem. Recompile with Physical"

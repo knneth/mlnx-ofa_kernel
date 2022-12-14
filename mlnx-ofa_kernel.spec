@@ -40,21 +40,15 @@
 %global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-# Force python3 on RHEL8, fedora3x, SLES15 and similar:
-%global RHEL8 %(if test `grep -E '^(ID="(rhel|ol|centos|bclinux)"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
+# Force python3 on RHEL8, fedora3x and similar:
+%global RHEL8 %(if test `grep -E '^(ID="(rhel|ol|centos)"|VERSION="8)' /etc/os-release 2>/dev/null | wc -l` -eq 2; then echo -n '1'; else echo -n '0'; fi)
 %global FEDORA3X %{!?fedora:0}%{?fedora:%(if [ %{fedora} -ge 30 ]; then echo 1; else echo 0; fi)}
-%global SLES15 0%{?suse_version} >= 1500
-%global PYTHON3 %{RHEL8} || %{FEDORA3X} || %{SLES15}
+%global PYTHON3 %{RHEL8} || %{FEDORA3X}
 
 # Workaround: To be removed when mlnx_tune has python3 support:
-# mlnx_tune is a python2 script. Avoid generating dependencies
-# from it in some distributions to avoid dragging in a python2
-# dependency
-%if (!%{KMP}) && %{RHEL8}
-%global __requires_exclude_from mlnx_tune
-%endif
+%global REMOVE_MLNX_TUNE  (!%{KMP}) && %{RHEL8}
 
-%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
+%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux")
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -78,8 +72,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.9}
-%{!?_release: %global _release OFED.4.9.5.1.0.1}
+%{!?_version: %global _version 5.0}
+%{!?_release: %global _release OFED.5.0.1.0.0.0.1.g34c46d3}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -87,7 +81,7 @@
 %global non_kmp_pname %{_name}-modules
 
 %if %{PYTHON3}
-%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=%{_bindir}/python3
+%global mlnx_python_env    export MLNX_PYTHON_EXECUTABLE=python3
 %else
 %global mlnx_python_env    :
 %endif
@@ -134,12 +128,12 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-5.1.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-1.0.0.0.tgz
 
 
 # build KMP rpms?
 %if "%{KMP}" == "1"
-%global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
+%global kernel_release() $(make -C %{1} kernelrelease | grep -v make | tail -1)
 # prep file list for kmp rpm
 %(cat > %{_builddir}/kmp.files << EOF
 %defattr(644,root,root,755)
@@ -149,7 +143,6 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %endif
 EOF)
 %(echo "Requires: %{utils_pname}" > %{_builddir}/preamble)
-%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp" >> %{_builddir}/preamble)
 %kernel_module_package -f %{_builddir}/kmp.files -p %{_builddir}/preamble -r %{_kmp_rel}
 %else # not KMP
 %global kernel_source() %{K_SRC}
@@ -182,7 +175,6 @@ Obsoletes: mlnx-en-kmp-trace
 Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
-Obsoletes: mlnx-rdma-rxe
 Version: %{_version}
 Release: %{_release}.kver.%{krelver}
 Summary: Infiniband Driver and ULPs kernel modules
@@ -190,7 +182,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-5.1.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-1.0.0.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -223,7 +215,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.9-5.1.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.0-1.0.0.0.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -328,6 +320,7 @@ for flavor in %flavors_to_build; do
 	make install_modules KERNELRELEASE=$KVERSION
 	# install script and configuration files
 	make install_scripts
+	mkdir -p %{buildroot}/$PREFIX/src/$NAME/$flavor
 	mkdir -p %{_builddir}/src/$NAME/$flavor
 	cp -ar include/ %{_builddir}/src/$NAME/$flavor
 	cp -ar config* %{_builddir}/src/$NAME/$flavor
@@ -348,6 +341,9 @@ for flavor in %flavors_to_build; do
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
 done
+%if %{REMOVE_MLNX_TUNE}
+rm -f %{buildroot}/usr/sbin/mlnx_tune
+%endif
 
 if [[ "$(ls %{buildroot}/%{_bindir}/tc_wrap.py* 2>/dev/null)" != "" ]]; then
 	echo '%{_bindir}/tc_wrap.py*' >> ofed-files
@@ -409,11 +405,11 @@ install -d %{buildroot}%{_unitdir}
 install -d %{buildroot}/etc/systemd/system
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/openibd.service %{buildroot}%{_unitdir}
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/mlnx_interface_mgr\@.service %{buildroot}/etc/systemd/system
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
 echo '# For IPoIB Pkeys' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
-echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$name.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
 %else
 # no systemd support
 echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add", RUN+="/bin/mlnx_interface_mgr.sh $env{INTERFACE} <&- >/dev/null 2>&1 &"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
@@ -440,8 +436,7 @@ install -m 0755 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/ib2ib/ib2ib*  %{
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/ib2ib/README %{buildroot}%{_defaultdocdir}/ib2ib
 
 # update /etc/init.d/openibd header
-is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
+if [[ -f /etc/redhat-release || -f /etc/rocks-release ]]; then
 perl -i -ne 'if (m@^#!/bin/bash@) {
         print q@#!/bin/bash
 #
@@ -527,8 +522,7 @@ fi
 %post -n %{utils_pname}
 if [ $1 -eq 1 ]; then # 1 : This package is being installed
 #############################################################################################################
-is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
+if [[ -f /etc/redhat-release || -f /etc/rocks-release ]]; then
         /sbin/chkconfig openibd off >/dev/null 2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/chkconfig --del openibd >/dev/null 2>&1 || true
@@ -616,9 +610,8 @@ fi # 1 : closed
 # END of post
 
 %preun -n %{utils_pname}
-is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
 if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
-          if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
+          if [[ -f /etc/redhat-release || -f /etc/rocks-release ]]; then
                 /sbin/chkconfig openibd off >/dev/null 2>&1 || true
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true
@@ -677,8 +670,11 @@ fi
 /etc/systemd/system/mlnx_interface_mgr@.service
 %endif
 /sbin/sysctl_perf_tuning
-/sbin/mlnx_bf_configure
-/sbin/mlnx-sf
+/sbin/mlnx_eswitch_set
+/sbin/mlnx_net_rules
+%if %{REMOVE_MLNX_TUNE}
+/usr/sbin/mlnx_tune
+%endif
 /usr/sbin/show_gids
 /usr/sbin/compat_gid_gen
 /usr/sbin/cma_roce_mode
@@ -689,7 +685,7 @@ fi
 %dir %{_defaultdocdir}/ib2ib
 %{_defaultdocdir}/ib2ib/*
 %config(noreplace) /etc/modprobe.d/mlnx.conf
-%config(noreplace) /etc/modprobe.d/mlnx-bf.conf
+%config(noreplace) /etc/modprobe.d/mlnx-eswitch.conf
 %{_sbindir}/*
 %config(noreplace) /etc/udev/rules.d/90-ib.rules
 %config(noreplace) /etc/udev/rules.d/82-net-setup-link.rules

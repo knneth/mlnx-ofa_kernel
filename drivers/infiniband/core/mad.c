@@ -3953,15 +3953,13 @@ static int ib_mad_port_close(struct ib_device *device, int port_num)
 	return 0;
 }
 
-static int ib_mad_init_device(struct ib_device *device)
+static void ib_mad_init_device(struct ib_device *device)
 {
 	int start, i;
-	unsigned int count = 0;
-	int ret;
 
 	if (init_sa_cc_sysfs(device)) {
 		dev_err(&device->dev, "Couldn't open mad congestion control sysfs\n");
-		return -EOPNOTSUPP;
+		return;
 	}
 
 	start = rdma_start_port(device);
@@ -3970,23 +3968,17 @@ static int ib_mad_init_device(struct ib_device *device)
 		if (!rdma_cap_ib_mad(device, i))
 			continue;
 
-		ret = ib_mad_port_open(device, i);
-		if (ret) {
+		if (ib_mad_port_open(device, i)) {
 			dev_err(&device->dev, "Couldn't open port %d\n", i);
 			goto error;
 		}
-		ret = ib_agent_port_open(device, i);
-		if (ret) {
+		if (ib_agent_port_open(device, i)) {
 			dev_err(&device->dev,
 				"Couldn't open port %d for agents\n", i);
 			goto error_agent;
 		}
-		count++;
 	}
-	if (!count)
-		return -EOPNOTSUPP;
-
-	return 0;
+	return;
 
 error_agent:
 	if (ib_mad_port_close(device, i))
@@ -4005,7 +3997,6 @@ error:
 	}
 
 	cleanup_sa_cc_sysfs(device);
-	return ret;
 }
 
 static void ib_mad_remove_device(struct ib_device *device, void *client_data)

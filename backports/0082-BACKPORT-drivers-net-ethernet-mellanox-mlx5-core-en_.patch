@@ -1,9 +1,9 @@
 From: Aya Levin <ayal@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
-Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
+Change-Id: I26b487e588824147faa5488d27d1b5063106545b
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 152 ++++++++++++++++--
+ drivers/net/ethernet/mellanox/mlx5/core/en_tx.c | 152 +++++++++++++++++++++---
  1 file changed, 138 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
@@ -32,11 +32,11 @@ Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
  #endif
  
 +
-+#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
  		       struct net_device *sb_dev)
 +
-+#elif defined(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 +#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
@@ -49,7 +49,7 @@ Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
 +#else
 +		       void *accel_priv)
 +#endif
-+#else /* HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
@@ -67,7 +67,7 @@ Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
  	}
  #endif
 -
-+#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  	txq_ix = netdev_pick_tx(dev, skb, NULL);
 +#elif defined (HAVE_SELECT_QUEUE_FALLBACK_T_3_PARAMS)
 + 	txq_ix = fallback(dev, skb, NULL);
@@ -318,7 +318,7 @@ Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
  }
  
  static void mlx5e_dump_error_cqe(struct mlx5e_txqsq *sq,
-@@ -649,7 +756,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -660,7 +767,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  				continue;
  			}
  
@@ -330,7 +330,7 @@ Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
  				     SKBTX_HW_TSTAMP)) {
  				struct skb_shared_hwtstamps hwts = {};
  
-@@ -669,7 +780,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -680,7 +791,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  			npkts++;
  			nbytes += wi->num_bytes;
  			sqcc += wi->num_wqebbs;
@@ -341,7 +341,7 @@ Change-Id: I0633530cfc299a0c72eb05ca482ce200f4b003df
 +#endif
  		} while (!last_wqe);
  
- 		if (unlikely(get_cqe_opcode(cqe) == MLX5_CQE_REQ_ERR)) {
+ 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
 @@ -756,8 +871,11 @@ mlx5i_txwqe_build_datagram(struct mlx5_a
  }
  

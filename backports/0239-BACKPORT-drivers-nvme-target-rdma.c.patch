@@ -1,14 +1,14 @@
-From: Feras Daoud <ferasda@nvidia.com>
+From: Israel Rukshin <israelr@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
 
-Change-Id: I5c7677944bc60de731090ea3ed94479ae93597bf
+Change-Id: Ia376abb580ccb072767777cba2d20efc078fa774
 ---
- drivers/nvme/target/rdma.c | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ drivers/nvme/target/rdma.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 --- a/drivers/nvme/target/rdma.c
 +++ b/drivers/nvme/target/rdma.c
-@@ -139,8 +139,13 @@ static bool nvmet_rdma_use_srq;
+@@ -138,8 +138,13 @@ static bool nvmet_rdma_use_srq;
  module_param_named(use_srq, nvmet_rdma_use_srq, bool, 0444);
  MODULE_PARM_DESC(use_srq, "Use shared receive queue.");
  
@@ -22,20 +22,7 @@ Change-Id: I5c7677944bc60de731090ea3ed94479ae93597bf
  MODULE_PARM_DESC(offload_mem_start,
  		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
  		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");
-@@ -209,10 +214,12 @@ static int offload_buffer_size_set(const
- }
- 
- /* XXX: really should move to a generic header sooner or later.. */
-+#ifndef HAVE_PUT_UNALIGNED_LE24
- static inline u32 get_unaligned_le24(const u8 *p)
- {
- 	return (u32)p[0] | (u32)p[1] << 8 | (u32)p[2] << 16;
- }
-+#endif
- 
- static inline bool nvmet_rdma_need_data_in(struct nvmet_rdma_rsp *rsp)
- {
-@@ -1781,6 +1788,7 @@ static void nvmet_rdma_remove_port(struc
+@@ -1742,6 +1747,7 @@ static void nvmet_rdma_remove_port(struc
  static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
  		struct nvmet_port *nport, char *traddr)
  {
@@ -43,7 +30,7 @@ Change-Id: I5c7677944bc60de731090ea3ed94479ae93597bf
  	struct nvmet_rdma_port *port = nport->priv;
  	struct rdma_cm_id *cm_id = port->cm_id;
  
-@@ -1794,6 +1802,9 @@ static void nvmet_rdma_disc_port_addr(st
+@@ -1755,6 +1761,9 @@ static void nvmet_rdma_disc_port_addr(st
  	} else {
  		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
  	}
@@ -52,8 +39,8 @@ Change-Id: I5c7677944bc60de731090ea3ed94479ae93597bf
 +#endif
  }
  
- static int nvmet_rdma_add_one(struct ib_device *ib_device)
-@@ -1964,6 +1975,9 @@ module_init(nvmet_rdma_init);
+ static void nvmet_rdma_add_one(struct ib_device *ib_device)
+@@ -1924,6 +1933,9 @@ module_init(nvmet_rdma_init);
  module_exit(nvmet_rdma_exit);
  
  MODULE_LICENSE("GPL v2");

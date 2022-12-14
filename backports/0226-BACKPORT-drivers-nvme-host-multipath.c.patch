@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/multipath.c
 
 Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
 ---
- drivers/nvme/host/multipath.c | 45 +++++++++++++++++++++++++++++++++++
- 1 file changed, 45 insertions(+)
+ drivers/nvme/host/multipath.c | 39 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
 
 --- a/drivers/nvme/host/multipath.c
 +++ b/drivers/nvme/host/multipath.c
@@ -17,29 +17,19 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  #include <linux/moduleparam.h>
  #include <trace/events/block.h>
  #include "nvme.h"
-@@ -366,11 +368,21 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+@@ -366,7 +368,11 @@ int nvme_mpath_alloc_disk(struct nvme_ct
  	if (!(ctrl->subsys->cmic & (1 << 1)) || !multipath)
  		return 0;
  
 +#ifdef HAVE_BLK_ALLOC_QUEUE_NODE_3_ARGS
 +	q = blk_alloc_queue_node(GFP_KERNEL, NUMA_NO_NODE, NULL);
 +#else
-+#ifdef HAVE_BLK_ALLOC_QUEUE_RH
-+	q = blk_alloc_queue_rh(nvme_ns_head_make_request, ctrl->numa_node);
-+#else
  	q = blk_alloc_queue_node(GFP_KERNEL, ctrl->numa_node);
-+#endif
 +#endif
  	if (!q)
  		goto out;
  	q->queuedata = head;
-+#ifndef HAVE_BLK_ALLOC_QUEUE_RH
- 	blk_queue_make_request(q, nvme_ns_head_make_request);
-+#endif
- 	blk_queue_flag_set(QUEUE_FLAG_NONROT, q);
- 	/* set to a default value for 512 until disk is validated */
- 	blk_queue_logical_block_size(q, 512);
-@@ -407,9 +419,19 @@ static void nvme_mpath_set_live(struct n
+@@ -407,9 +413,19 @@ static void nvme_mpath_set_live(struct n
  	if (!head->disk)
  		return;
  
@@ -59,7 +49,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  
  	if (nvme_path_is_optimized(ns)) {
  		int node, srcu_idx;
-@@ -560,9 +582,15 @@ static void nvme_ana_work(struct work_st
+@@ -560,9 +576,15 @@ static void nvme_ana_work(struct work_st
  	nvme_read_ana_log(ctrl, false);
  }
  
@@ -75,7 +65,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  
  	dev_info(ctrl->device, "ANATT timeout, resetting controller.\n");
  	nvme_reset_ctrl(ctrl);
-@@ -662,8 +690,16 @@ void nvme_mpath_remove_disk(struct nvme_
+@@ -662,8 +684,16 @@ void nvme_mpath_remove_disk(struct nvme_
  {
  	if (!head->disk)
  		return;
@@ -92,7 +82,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	blk_set_queue_dying(head->disk->queue);
  	/* make sure all pending bios are cleaned up */
  	kblockd_schedule_work(&head->requeue_work);
-@@ -686,7 +722,11 @@ int nvme_mpath_init(struct nvme_ctrl *ct
+@@ -686,7 +716,11 @@ int nvme_mpath_init(struct nvme_ctrl *ct
  	ctrl->anagrpmax = le32_to_cpu(id->anagrpmax);
  
  	mutex_init(&ctrl->ana_lock);
@@ -104,7 +94,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	ctrl->ana_log_size = sizeof(struct nvme_ana_rsp_hdr) +
  		ctrl->nanagrpid * sizeof(struct nvme_ana_group_desc);
  	ctrl->ana_log_size += ctrl->max_namespaces * sizeof(__le32);
-@@ -701,6 +741,10 @@ int nvme_mpath_init(struct nvme_ctrl *ct
+@@ -701,6 +735,10 @@ int nvme_mpath_init(struct nvme_ctrl *ct
  	}
  
  	INIT_WORK(&ctrl->ana_work, nvme_ana_work);
@@ -115,7 +105,7 @@ Change-Id: Ie81b70d5e2a7ef05e97ca7f1bb43378ab0b20bca
  	ctrl->ana_log_buf = kmalloc(ctrl->ana_log_size, GFP_KERNEL);
  	if (!ctrl->ana_log_buf) {
  		error = -ENOMEM;
-@@ -723,4 +767,5 @@ void nvme_mpath_uninit(struct nvme_ctrl
+@@ -723,4 +761,5 @@ void nvme_mpath_uninit(struct nvme_ctrl
  	kfree(ctrl->ana_log_buf);
  	ctrl->ana_log_buf = NULL;
  }

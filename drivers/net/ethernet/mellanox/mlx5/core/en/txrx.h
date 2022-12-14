@@ -181,12 +181,10 @@ mlx5e_tx_dma_unmap(struct device *pdev, struct mlx5e_sq_dma *dma)
 
 static inline void mlx5e_rqwq_reset(struct mlx5e_rq *rq)
 {
-	if (rq->wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ) {
+	if (rq->wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
 		mlx5_wq_ll_reset(&rq->mpwqe.wq);
-		rq->mpwqe.actual_wq_head = 0;
-	} else {
+	else
 		mlx5_wq_cyc_reset(&rq->wqe.wq);
-	}
 }
 
 /* SW parser related functions */

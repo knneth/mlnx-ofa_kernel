@@ -1029,10 +1029,6 @@ static bool ext_link_mode_requested(const unsigned long *adver)
 	int size = __ETHTOOL_LINK_MODE_MASK_NBITS - MLX5E_MIN_PTYS_EXT_LINK_MODE_BIT;
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(modes);
 
-	/* bitmap_intersects returns true for empty modes, but we want false */
-	if (size <= 0)
-		return false;
-
 	bitmap_set(modes, MLX5E_MIN_PTYS_EXT_LINK_MODE_BIT, size);
 	return bitmap_intersects(modes, adver, __ETHTOOL_LINK_MODE_MASK_NBITS);
 }
@@ -1172,8 +1168,7 @@ int mlx5e_set_rxfh(struct net_device *dev, const u32 *indir,
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5e_rss_params *rss = &priv->rss_params;
 	int inlen = MLX5_ST_SZ_BYTES(modify_tir_in);
-	bool refresh_tirs = false;
-	bool refresh_rqt = false;
+	bool hash_changed = false;
 	void *in;
 
 	if ((hfunc != ETH_RSS_HASH_NO_CHANGE) &&
@@ -1189,38 +1184,36 @@ int mlx5e_set_rxfh(struct net_device *dev, const u32 *indir,
 
 	if (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != rss->hfunc) {
 		rss->hfunc = hfunc;
-		refresh_rqt = true;
-		refresh_tirs = true;
+		hash_changed = true;
 	}
 
 	if (indir) {
 		memcpy(rss->indirection_rqt, indir,
 		       sizeof(rss->indirection_rqt));
-		refresh_rqt = true;
+
+		if (test_bit(MLX5E_STATE_OPENED, &priv->state)) {
+			u32 rqtn = priv->indir_rqt.rqtn;
+			struct mlx5e_redirect_rqt_param rrp = {
+				.is_rss = true,
+				{
+					.rss = {
+						.hfunc = rss->hfunc,
+						.channels  = &priv->channels,
+					},
+				},
+			};
+
+			mlx5e_redirect_rqt(priv, rqtn, MLX5E_INDIR_RQT_SIZE, rrp);
+		}
 	}
 
 	if (key) {
 		memcpy(rss->toeplitz_hash_key, key,
 		       sizeof(rss->toeplitz_hash_key));
-		refresh_tirs = refresh_tirs || rss->hfunc == ETH_RSS_HASH_TOP;
+		hash_changed = hash_changed || rss->hfunc == ETH_RSS_HASH_TOP;
 	}
 
-	if (refresh_rqt && test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		struct mlx5e_redirect_rqt_param rrp = {
-			.is_rss = true,
-			{
-				.rss = {
-					.hfunc = rss->hfunc,
-					.channels  = &priv->channels,
-				},
-			},
-		};
-		u32 rqtn = priv->indir_rqt.rqtn;
-
-		mlx5e_redirect_rqt(priv, rqtn, MLX5E_INDIR_RQT_SIZE, rrp);
-	}
-
-	if (refresh_tirs)
+	if (hash_changed)
 		mlx5e_modify_tirs_hash(priv, in, inlen);
 
 	mutex_unlock(&priv->state_lock);

@@ -4,28 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
 ---
- .../mellanox/mlx5/core/en_accel/ipsec_rxtx.c  | 43 ++++++++++++++++++-
- 1 file changed, 41 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ipsec_rxtx.c       | 41 ++++++++++++++++++++--
+ 1 file changed, 39 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
-@@ -241,6 +241,7 @@ static void mlx5e_ipsec_set_ft_metadata(
- 	eseg->flow_table_metadata |= cpu_to_be32(MLX5_ETH_WQE_FT_META_IPSEC);
- }
- 
-+#ifndef HAVE_ESP_OUTPUT_FILL_TRAILER
- /* Copy from upstream net/ipv4/esp4.c */
- static
- void esp_output_fill_trailer(u8 *tail, int tfclen, int plen, __u8 proto)
-@@ -258,6 +259,7 @@ void esp_output_fill_trailer(u8 *tail, i
- 	tail[plen - 2] = plen - 2;
- 	tail[plen - 1] = proto;
- }
-+#endif
- 
- static int mlx5e_ipsec_set_trailer(struct sk_buff *skb,
- 				   struct mlx5e_tx_wqe *wqe,
-@@ -315,13 +317,19 @@ struct sk_buff *mlx5e_ipsec_handle_tx_sk
+@@ -315,13 +315,19 @@ struct sk_buff *mlx5e_ipsec_handle_tx_sk
  	struct mlx5e_ipsec_metadata *mdata = NULL;
  	struct mlx5e_ipsec_sa_entry *sa_entry;
  	struct xfrm_state *x;
@@ -45,16 +29,16 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		atomic64_inc(&priv->ipsec->sw_stats.ipsec_tx_drop_bundle);
  		goto drop;
  	}
-@@ -384,11 +392,18 @@ mlx5e_ipsec_build_sp(struct net_device *
+@@ -384,11 +390,18 @@ mlx5e_ipsec_build_sp(struct net_device *
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct xfrm_offload *xo;
  	struct xfrm_state *xs;
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	struct sec_path *sp;
 +#endif
  	u32 sa_handle;
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	sp = secpath_set(skb);
  	if (unlikely(!sp)) {
 +#else
@@ -64,11 +48,11 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
  		return NULL;
  	}
-@@ -400,9 +415,14 @@ mlx5e_ipsec_build_sp(struct net_device *
+@@ -400,9 +413,14 @@ mlx5e_ipsec_build_sp(struct net_device *
  		return NULL;
  	}
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	sp = skb_sec_path(skb);
  	sp->xvec[sp->len++] = xs;
  	sp->olen++;
@@ -79,23 +63,23 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  
  	xo = xfrm_offload(skb);
  	xo->flags = CRYPTO_DONE;
-@@ -465,7 +485,9 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -465,7 +483,9 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  	struct mlx5e_priv *priv;
  	struct xfrm_offload *xo;
  	struct xfrm_state *xs;
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	struct sec_path *sp;
 +#endif
  	u32  sa_handle;
  
  	if (likely(!(ipsec_syndrome & MLX5_IPSEC_METADATA_MARKER_MASK)))
-@@ -475,8 +497,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -473,8 +493,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+ 
+ 	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
  	priv = netdev_priv(netdev);
- 	if (!priv->ipsec)
- 		return;
 -	sp = secpath_set(skb);
 -	if (unlikely(!sp)) {
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
 +        sp = secpath_set(skb);
 +        if (unlikely(!sp)) {
 +#else
@@ -105,11 +89,11 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
  		return;
  	}
-@@ -487,9 +514,14 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -485,9 +510,14 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  		return;
  	}
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	sp = skb_sec_path(skb);
  	sp->xvec[sp->len++] = xs;
  	sp->olen++;
@@ -120,16 +104,16 @@ Change-Id: Ife18f52efef5269c44f314c12ab2eb0c3ba80b37
  
  	xo = xfrm_offload(skb);
  	xo->flags = CRYPTO_DONE;
-@@ -514,11 +546,18 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -512,11 +542,18 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  bool mlx5e_ipsec_feature_check(struct sk_buff *skb, struct net_device *netdev,
  			       netdev_features_t features)
  {
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	struct sec_path *sp = skb_sec_path(skb);
 +#endif
  	struct xfrm_state *x;
  
-+#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(HAVE_SECPATH_SET_RETURN_POINTER)
++#if defined(HAVE_SK_BUFF_STRUCT_SOCK_SK) && defined(SECPATH_SET_RETURN_POINTER)
  	if (sp && sp->len) {
  		x = sp->xvec[0];
 +#else

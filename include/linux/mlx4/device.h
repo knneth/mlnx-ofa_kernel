@@ -752,7 +752,6 @@ struct mlx4_caps {
 	u8			force_vlan[MLX4_MAX_PORTS + 1];
 	u32			health_buffer_addrs;
 	u8			roce_addr_support;
-	bool			map_clock_to_user;
 };
 
 struct mlx4_buf_list {

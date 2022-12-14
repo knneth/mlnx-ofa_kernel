@@ -34,10 +34,6 @@
 #include <linux/debugfs.h>
 #include "en.h"
 
-/* For non-default namespaces, add suffix in format "@<pci_id>" */
-/* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
-#define PCI_ID_LEN 16
-#define MLX5_MAX_DEBUGFS_ROOT_NAME_LEN (IFNAMSIZ + 1 + PCI_ID_LEN)
 #define MLX5_MAX_DEBUGFS_NAME_LEN 16
 
 static void mlx5e_create_channel_debugfs(struct mlx5e_priv *priv,
@@ -79,25 +75,12 @@ static void mlx5e_create_channel_debugfs(struct mlx5e_priv *priv,
 void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 {
 	int i;
-	char ns_root_name[MLX5_MAX_DEBUGFS_ROOT_NAME_LEN];
 	char name[MLX5_MAX_DEBUGFS_NAME_LEN];
-	char *root_name;
 
-	struct net_device *dev = priv->netdev;
-	struct net *net = dev_net(dev);
-
-	if (net_eq(net, &init_net)) {
-		root_name = dev->name;
-	} else {
-		snprintf(ns_root_name, MLX5_MAX_DEBUGFS_ROOT_NAME_LEN,
-			 "%s@%s", dev->name, dev_name(priv->mdev->device));
-		root_name = ns_root_name;
-	}
-
-	priv->dfs_root = debugfs_create_dir(root_name, NULL);
+	priv->dfs_root = debugfs_create_dir(priv->netdev->name, NULL);
 	if (!priv->dfs_root) {
 		netdev_err(priv->netdev, "Failed to init debugfs files for %s\n",
-			   root_name);
+			   priv->netdev->name);
 		return;
 	}
 

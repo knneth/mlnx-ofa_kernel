@@ -48,7 +48,6 @@ RUN_SYSCTL=${RUN_SYSCTL:-"no"}
 RUN_MLNX_TUNE=${RUN_MLNX_TUNE:-"no"}
 
 UNLOAD_MODULES="mlx5_ib mlx5_core mlx4_fc mlx4_en mlx4_ib mlx4_core mlxfw memtrack compat mlx_compat"
-UNLOAD_MODULES="$UNLOAD_MODULES mlx5_vdpa"
 STATUS_MODULES="mlx4_en mlx4_core mlx5_core mlxfw"
 
 # Only use ONBOOT option if called by a runlevel directory.
@@ -72,20 +71,10 @@ ACTION=$1
 shift
 
 #########################################################################
-is_serial()
-{
-	if [ "$CONSOLETYPE" = 'serial' ]; then
-		return 0
-	fi
-	case `tty` in ttyS0)
-		return 0
-		;;
-	esac
-	return 1
-}
-
 # Get a sane screen width
 [ -z "${COLUMNS:-}" ] && COLUMNS=80
+
+[ -z "${CONSOLETYPE:-}" ] && [ -x /sbin/consoletype ] && CONSOLETYPE="`/sbin/consoletype`"
 
 # Read in our configuration
 if [ -z "${BOOTUP:-}" ]; then
@@ -103,7 +92,7 @@ if [ -z "${BOOTUP:-}" ]; then
         SETCOLOR_NORMAL="echo -en \\033[0;39m"
         LOGLEVEL=1
     fi
-    if  is_serial; then
+    if [ "$CONSOLETYPE" = "serial" ]; then
         BOOTUP=serial
         MOVE_TO_COL=
         SETCOLOR_SUCCESS=
@@ -444,8 +433,8 @@ start()
         exit 1
     fi
 
-    if [ -x /sbin/mlnx_bf_configure  ]; then
-        /sbin/mlnx_bf_configure
+    if [ -x /sbin/mlnx_eswitch_set  ]; then
+        /sbin/mlnx_eswitch_set
     fi
 
     if [ $my_rc -eq 0 ]; then

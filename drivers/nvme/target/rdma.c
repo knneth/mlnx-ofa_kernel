@@ -81,7 +81,6 @@ enum nvmet_rdma_queue_state {
 
 struct nvmet_rdma_queue {
 	struct rdma_cm_id	*cm_id;
-	struct ib_qp		*qp;
 	struct nvmet_port	*port;
 	struct ib_cq		*cq;
 	atomic_t		sq_wr_avail;
@@ -529,7 +528,7 @@ static int nvmet_rdma_post_recv(struct nvmet_rdma_device *ndev,
 	if (cmd->srq)
 		ret = ib_post_srq_recv(cmd->srq, &cmd->wr, NULL);
 	else
-		ret = ib_post_recv(cmd->queue->qp, &cmd->wr, NULL);
+		ret = ib_post_recv(cmd->queue->cm_id->qp, &cmd->wr, NULL);
 
 	if (unlikely(ret))
 		pr_err("post_recv cmd failed\n");
@@ -568,7 +567,7 @@ static void nvmet_rdma_release_rsp(struct nvmet_rdma_rsp *rsp)
 	atomic_add(1 + rsp->n_rdma, &queue->sq_wr_avail);
 
 	if (rsp->n_rdma) {
-		rdma_rw_ctx_destroy(&rsp->rw, queue->qp,
+		rdma_rw_ctx_destroy(&rsp->rw, queue->cm_id->qp,
 				queue->cm_id->port_num, rsp->req.sg,
 				rsp->req.sg_cnt, nvmet_data_dir(&rsp->req));
 	}
@@ -652,7 +651,7 @@ static void nvmet_rdma_read_data_done(struct ib_cq *cq, struct ib_wc *wc)
 
 	WARN_ON(rsp->n_rdma <= 0);
 	atomic_add(rsp->n_rdma, &queue->sq_wr_avail);
-	rdma_rw_ctx_destroy(&rsp->rw, queue->qp,
+	rdma_rw_ctx_destroy(&rsp->rw, queue->cm_id->qp,
 			queue->cm_id->port_num, rsp->req.sg,
 			rsp->req.sg_cnt, nvmet_data_dir(&rsp->req));
 	rsp->n_rdma = 0;
@@ -807,7 +806,7 @@ static bool nvmet_rdma_execute_command(struct nvmet_rdma_rsp *rsp)
 	}
 
 	if (nvmet_rdma_need_data_in(rsp)) {
-		if (rdma_rw_ctx_post(&rsp->rw, queue->qp,
+		if (rdma_rw_ctx_post(&rsp->rw, queue->cm_id->qp,
 				queue->cm_id->port_num, &rsp->read_cqe, NULL))
 			nvmet_req_complete(&rsp->req, NVME_SC_DATA_XFER_ERROR);
 	} else {
@@ -1114,7 +1113,6 @@ static int nvmet_rdma_create_queue_ib(struct nvmet_rdma_queue *queue)
 		pr_err("failed to create_qp ret= %d\n", ret);
 		goto err_destroy_cq;
 	}
-	queue->qp = queue->cm_id->qp;
 
 	atomic_set(&queue->sq_wr_avail, qp_attr.cap.max_send_wr);
 
@@ -1146,10 +1144,12 @@ err_destroy_xrq:
 
 static void nvmet_rdma_destroy_queue_ib(struct nvmet_rdma_queue *queue)
 {
-	ib_drain_qp(queue->qp);
-	if (queue->cm_id)
-		rdma_destroy_id(queue->cm_id);
-	ib_destroy_qp(queue->qp);
+	struct ib_qp *qp = queue->cm_id->qp;
+
+	/* TODO: bug #974802 - Need to debug with FW */
+	ib_drain_qp(queue->cm_id->qp);
+	rdma_destroy_id(queue->cm_id);
+	ib_destroy_qp(qp);
 	ib_free_cq(queue->cq);
 	if (queue->xrq)
 		kref_put(&queue->xrq->ref, nvmet_rdma_destroy_xrq);
@@ -1409,12 +1409,9 @@ static int nvmet_rdma_queue_connect(struct rdma_cm_id *cm_id,
 
 	ret = nvmet_rdma_cm_accept(cm_id, queue, &event->param.conn);
 	if (ret) {
-		/*
-		 * Don't destroy the cm_id in free path, as we implicitly
-		 * destroy the cm_id here with non-zero ret code.
-		 */
-		queue->cm_id = NULL;
-		goto free_queue;
+		schedule_work(&queue->release_work);
+		/* Destroying rdma_cm id is not needed here */
+		return 0;
 	}
 
 	mutex_lock(&nvmet_rdma_queue_mutex);
@@ -1423,8 +1420,6 @@ static int nvmet_rdma_queue_connect(struct rdma_cm_id *cm_id,
 
 	return 0;
 
-free_queue:
-	nvmet_rdma_free_queue(queue);
 put_device:
 	kref_put(&ndev->ref, nvmet_rdma_free_dev);
 
@@ -1468,16 +1463,6 @@ static void __nvmet_rdma_queue_disconnect(struct nvmet_rdma_queue *queue)
 	spin_lock_irqsave(&queue->state_lock, flags);
 	switch (queue->state) {
 	case NVMET_RDMA_Q_CONNECTING:
-		while (!list_empty(&queue->rsp_wait_list)) {
-			struct nvmet_rdma_rsp *rsp;
-
-			rsp = list_first_entry(&queue->rsp_wait_list,
-					       struct nvmet_rdma_rsp,
-					       wait_list);
-			list_del(&rsp->wait_list);
-			nvmet_rdma_put_rsp(rsp);
-		}
-		fallthrough;
 	case NVMET_RDMA_Q_LIVE:
 		queue->state = NVMET_RDMA_Q_DISCONNECTING;
 		disconnect = true;
@@ -1727,23 +1712,6 @@ out_free_port:
 	return ret;
 }
 
-static void nvmet_rdma_destroy_port_queues(struct nvmet_rdma_port *port)
-{
-	struct nvmet_rdma_queue *queue, *tmp;
-	struct nvmet_port *nport = port->nport;
-
-	mutex_lock(&nvmet_rdma_queue_mutex);
-	list_for_each_entry_safe(queue, tmp, &nvmet_rdma_queue_list,
-				 queue_list) {
-		if (queue->port != nport)
-			continue;
-
-		list_del_init(&queue->queue_list);
-		__nvmet_rdma_queue_disconnect(queue);
-	}
-	mutex_unlock(&nvmet_rdma_queue_mutex);
-}
-
 static void nvmet_rdma_disable_port(struct nvmet_rdma_port *port)
 {
 	struct rdma_cm_id *cm_id = port->cm_id;
@@ -1755,13 +1723,6 @@ static void nvmet_rdma_disable_port(struct nvmet_rdma_port *port)
 	port->cm_id = NULL;
 	if (cm_id)
 		rdma_destroy_id(cm_id);
-
-	/*
-	 * Destroy the remaining queues, which are not belong to any
-	 * controller yet. Do it here after the RDMA-CM was destroyed
-	 * guarantees that no new queue will be created.
-	 */
-	nvmet_rdma_destroy_port_queues(port);
 }
 
 static void nvmet_rdma_remove_port(struct nvmet_port *nport)
@@ -1796,7 +1757,7 @@ static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
 	}
 }
 
-static int nvmet_rdma_add_one(struct ib_device *ib_device)
+static void nvmet_rdma_add_one(struct ib_device *ib_device)
 {
 	struct nvmet_rdma_port *port, *n;
 
@@ -1808,7 +1769,6 @@ static int nvmet_rdma_add_one(struct ib_device *ib_device)
 		schedule_delayed_work(&port->enable_work, HZ);
 	}
 	mutex_unlock(&port_list_mutex);
-	return 0;
 }
 
 static bool nvmet_rdma_is_port_active(struct nvmet_port *nport)

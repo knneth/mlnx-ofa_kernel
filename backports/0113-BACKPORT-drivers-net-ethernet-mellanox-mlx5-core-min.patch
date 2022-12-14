@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I0317ae29fe8b9d12d726e2fef71483d53ca067e8
 ---
- .../mellanox/mlx5/core/miniflow_aging.c       | 23 ++++++++++++++++++-
- 1 file changed, 22 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/miniflow_aging.c    | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/miniflow_aging.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/miniflow_aging.c
@@ -27,21 +27,19 @@ Change-Id: I0317ae29fe8b9d12d726e2fef71483d53ca067e8
  
  static unsigned int offloaded_ct_timeout = 30;
  module_param(offloaded_ct_timeout, int, 0644);
-@@ -117,7 +119,13 @@ static void flow_offload_fixup_ct_state(
+@@ -117,7 +119,11 @@ static void flow_offload_fixup_ct_state(
  	if (l4num == IPPROTO_TCP)
  		flow_offload_fixup_tcp(&ct->proto.tcp);
  
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
 +	l4proto = __nf_ct_l4proto_find(nf_ct_l3num(ct), l4num);
-+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0)
-+	l4proto = nf_ct_l4proto_find(l4num);
 +#else
  	l4proto = __nf_ct_l4proto_find(l4num);
 +#endif
  	if (!l4proto)
  		return;
  
-@@ -128,7 +136,19 @@ static void flow_offload_fixup_ct_state(
+@@ -128,7 +134,19 @@ static void flow_offload_fixup_ct_state(
  	else
  		return;
  
@@ -61,7 +59,7 @@ Change-Id: I0317ae29fe8b9d12d726e2fef71483d53ca067e8
  }
  
  static void flow_offload_free(struct flow_offload *flow)
-@@ -570,4 +590,5 @@ int mlx5_ct_flow_offloaded_count(void)
+@@ -570,4 +588,5 @@ int mlx5_ct_flow_offloaded_count(void)
  	return atomic_read(&offloaded_flow_cnt);
  }
  

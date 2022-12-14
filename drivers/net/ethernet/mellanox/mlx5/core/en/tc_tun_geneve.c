@@ -220,14 +220,12 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 		return -EOPNOTSUPP;
 	}
 
+	MLX5_SET(fte_match_set_misc, misc_c, geneve_opt_len, enc_opts.mask->len / 4);
+	MLX5_SET(fte_match_set_misc, misc_v, geneve_opt_len, enc_opts.key->len / 4);
+
 	/* we support matching on one option only, so just get it */
 	option_key = (struct geneve_opt *)&enc_opts.key->data[0];
 	option_mask = (struct geneve_opt *)&enc_opts.mask->data[0];
-
-	/* Don't do option check if class/mask is 0 */
-	if (!option_key->opt_class ||
-	    !memchr_inv(option_mask->opt_data, 0, option_mask->length * 4))
-		return 0;
 
 	if (option_key->length > max_tlv_option_data_len) {
 		NL_SET_ERR_MSG_MOD(extack,
@@ -246,9 +244,6 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
 			    "Matching on GENEVE options: can't match on 0 data field\n");
 		return -EOPNOTSUPP;
 	}
-
-	MLX5_SET(fte_match_set_misc, misc_c, geneve_opt_len, enc_opts.mask->len / 4);
-	MLX5_SET(fte_match_set_misc, misc_v, geneve_opt_len, enc_opts.key->len / 4);
 
 	/* add new GENEVE TLV options object */
 	res = mlx5_geneve_tlv_option_add(priv->mdev->geneve, option_key);

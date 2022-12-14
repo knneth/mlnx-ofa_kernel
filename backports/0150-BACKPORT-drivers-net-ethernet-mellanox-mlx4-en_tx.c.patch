@@ -1,7 +1,7 @@
-From: Roy Novich <royno@nvidia.com>
+From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_tx.c
 
-Change-Id: I392c541b83d892ffc878795ebf4e138814720917
+Change-Id: I7b0e13987edd7b33e4027ecdb2d902efc0d04aea
 ---
  drivers/net/ethernet/mellanox/mlx4/en_tx.c | 132 ++++++++++++++++++++-
  1 file changed, 129 insertions(+), 3 deletions(-)
@@ -50,7 +50,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  
  	return tx_info->nr_txbb;
  }
-@@ -436,7 +446,13 @@ bool _mlx4_en_process_tx_cq(struct net_d
+@@ -404,7 +414,13 @@ bool _mlx4_en_process_tx_cq(struct net_d
  	if (unlikely(!priv->port_up))
  		return true;
  
@@ -64,7 +64,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  
  	index = cons_index & size_mask;
  	cqe = mlx4_en_get_cqe(buf, index, priv->cqe_size) + factor;
-@@ -454,7 +470,11 @@ bool _mlx4_en_process_tx_cq(struct net_d
+@@ -422,7 +438,11 @@ bool _mlx4_en_process_tx_cq(struct net_d
  		 * make sure we read the CQE after we read the
  		 * ownership bit
  		 */
@@ -75,8 +75,8 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
 +#endif
  
  		if (unlikely((cqe->owner_sr_opcode & MLX4_CQE_OPCODE_MASK) ==
- 			     MLX4_CQE_OPCODE_ERROR))
-@@ -649,9 +669,11 @@ static int get_real_size(const struct sk
+ 			     MLX4_CQE_OPCODE_ERROR)) {
+@@ -620,9 +640,11 @@ static int get_real_size(const struct sk
  
  	if (shinfo->gso_size) {
  		*inline_ok = false;
@@ -88,7 +88,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  			*lso_header_size = skb_transport_offset(skb) + tcp_hdrlen(skb);
  		real_size = CTRL_SIZE + shinfo->nr_frags * DS_SIZE +
  			ALIGN(*lso_header_size + 4, DS_SIZE);
-@@ -725,21 +747,54 @@ static void build_inline_wqe(struct mlx4
+@@ -696,21 +718,54 @@ static void build_inline_wqe(struct mlx4
  				       skb_frag_size(&shinfo->frags[0]));
  		}
  
@@ -101,11 +101,11 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	}
  }
  
-+#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
 +u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb,
 +		       struct net_device *sb_dev)
 +
-+#elif defined(HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++#elif defined(NDO_SELECT_QUEUE_HAS_ACCEL_PRIV) || defined(HAVE_SELECT_QUEUE_FALLBACK_T)
 +
  u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb,
 -			 struct net_device *sb_dev)
@@ -119,7 +119,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
 +#else
 +		       void *accel_priv)
 +#endif
-+#else /* HAVE_NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
++#else /* NDO_SELECT_QUEUE_HAS_ACCEL_PRIV || HAVE_SELECT_QUEUE_FALLBACK_T */
 +u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
 +#endif
  {
@@ -127,7 +127,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	u16 rings_p_up = priv->num_tx_rings_p_up;
  
  	if (netdev_get_num_tc(dev))
-+#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++#ifdef NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
  		return netdev_pick_tx(dev, skb, NULL);
  
  	return netdev_pick_tx(dev, skb, NULL) % rings_p_up;
@@ -144,7 +144,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  }
  
  static void mlx4_bf_copy(void __iomem *dst, const void *src,
-@@ -779,7 +834,11 @@ static void mlx4_en_tx_write_desc(struct
+@@ -750,7 +805,11 @@ static void mlx4_en_tx_write_desc(struct
  		/* Ensure new descriptor hits memory
  		 * before setting ownership of this descriptor to HW
  		 */
@@ -156,7 +156,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		tx_desc->ctrl.owner_opcode = op_own;
  
  		wmb();
-@@ -794,12 +853,18 @@ static void mlx4_en_tx_write_desc(struct
+@@ -765,12 +824,18 @@ static void mlx4_en_tx_write_desc(struct
  		/* Ensure new descriptor hits memory
  		 * before setting ownership of this descriptor to HW
  		 */
@@ -175,7 +175,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	}
  }
  
-@@ -818,9 +883,13 @@ static bool mlx4_en_build_dma_wqe(struct
+@@ -789,9 +854,13 @@ static bool mlx4_en_build_dma_wqe(struct
  
  	/* Map fragments if any */
  	for (i_frag = shinfo->nr_frags - 1; i_frag >= 0; i_frag--) {
@@ -189,7 +189,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		byte_count = skb_frag_size(frag);
  		dma = skb_frag_dma_map(ddev, frag,
  				       0, byte_count,
-@@ -830,7 +899,11 @@ static bool mlx4_en_build_dma_wqe(struct
+@@ -801,7 +870,11 @@ static bool mlx4_en_build_dma_wqe(struct
  
  		data->addr = cpu_to_be64(dma);
  		data->lkey = mr_key;
@@ -201,7 +201,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		data->byte_count = cpu_to_be32(byte_count);
  		--data;
  	}
-@@ -847,7 +920,11 @@ static bool mlx4_en_build_dma_wqe(struct
+@@ -818,7 +891,11 @@ static bool mlx4_en_build_dma_wqe(struct
  
  		data->addr = cpu_to_be64(dma);
  		data->lkey = mr_key;
@@ -213,7 +213,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		data->byte_count = cpu_to_be32(byte_count);
  	}
  	/* tx completion can avoid cache line miss for common cases */
-@@ -917,9 +994,12 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -888,9 +965,12 @@ static inline netdev_tx_t __mlx4_en_xmit
  
  	bf_ok = ring->bf_enabled;
  	if (skb_vlan_tag_present(skb)) {
@@ -226,7 +226,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		vlan_proto = be16_to_cpu(skb->vlan_proto);
  		if (vlan_proto == ETH_P_8021AD)
  			qpn_vlan.ins_vlan = MLX4_WQE_CTRL_INS_SVLAN;
-@@ -927,10 +1007,19 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -898,10 +978,19 @@ static inline netdev_tx_t __mlx4_en_xmit
  			qpn_vlan.ins_vlan = MLX4_WQE_CTRL_INS_CVLAN;
  		else
  			qpn_vlan.ins_vlan = 0;
@@ -246,7 +246,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  
  	/* Track current inflight packets for performance analysis */
  	AVG_PERF_COUNTER(priv->pstats.inflight_avg,
-@@ -987,8 +1076,13 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -958,8 +1047,13 @@ static inline netdev_tx_t __mlx4_en_xmit
  	 */
  	tx_info->ts_requested = 0;
  	if (unlikely(ring->hwtstamp_tx_type == HWTSTAMP_TX_ON &&
@@ -260,7 +260,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		tx_info->ts_requested = 1;
  	}
  
-@@ -996,11 +1090,16 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -967,11 +1061,16 @@ static inline netdev_tx_t __mlx4_en_xmit
  	 * whether LSO is used */
  	tx_desc->ctrl.srcrb_flags = priv->ctrl_flags;
  	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
@@ -277,7 +277,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  		ring->tx_csum++;
  	}
  
-@@ -1046,11 +1145,15 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -1017,11 +1116,15 @@ static inline netdev_tx_t __mlx4_en_xmit
  		ring->packets++;
  	}
  	ring->bytes += tx_info->nr_bytes;
@@ -293,7 +293,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	if (skb->encapsulation) {
  		union {
  			struct iphdr *v4;
-@@ -1068,6 +1171,7 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -1039,6 +1142,7 @@ static inline netdev_tx_t __mlx4_en_xmit
  		else
  			op_own |= cpu_to_be32(MLX4_WQE_CTRL_IIP);
  	}
@@ -301,7 +301,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  
  	ring->prod += nr_txbb;
  
-@@ -1084,9 +1188,21 @@ static inline netdev_tx_t __mlx4_en_xmit
+@@ -1055,9 +1159,21 @@ static inline netdev_tx_t __mlx4_en_xmit
  		ring->queue_stopped++;
  	}
  
@@ -323,7 +323,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  
  	real_size = (real_size / 16) & 0x3f;
  
-@@ -1185,6 +1301,7 @@ void mlx4_en_init_tx_xdp_ring_descs(stru
+@@ -1156,6 +1272,7 @@ void mlx4_en_init_tx_xdp_ring_descs(stru
  	}
  }
  
@@ -331,7 +331,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  netdev_tx_t mlx4_en_xmit_frame(struct mlx4_en_rx_ring *rx_ring,
  			       struct mlx4_en_rx_alloc *frame,
  			       struct mlx4_en_priv *priv, unsigned int length,
-@@ -1227,7 +1344,11 @@ netdev_tx_t mlx4_en_xmit_frame(struct ml
+@@ -1198,7 +1315,11 @@ netdev_tx_t mlx4_en_xmit_frame(struct ml
  					 length, PCI_DMA_TODEVICE);
  
  	data->addr = cpu_to_be64(dma + frame->page_offset);
@@ -343,7 +343,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	data->byte_count = cpu_to_be32(length);
  
  	/* tx completion can avoid cache line miss for common cases */
-@@ -1244,7 +1365,11 @@ netdev_tx_t mlx4_en_xmit_frame(struct ml
+@@ -1215,7 +1336,11 @@ netdev_tx_t mlx4_en_xmit_frame(struct ml
  	/* Ensure new descriptor hits memory
  	 * before setting ownership of this descriptor to HW
  	 */
@@ -356,7 +356,7 @@ Change-Id: I392c541b83d892ffc878795ebf4e138814720917
  	tx_desc->ctrl.owner_opcode = op_own;
  	ring->xmit_more++;
  
-@@ -1258,3 +1383,4 @@ tx_drop_count:
+@@ -1229,3 +1354,4 @@ tx_drop_count:
  tx_drop:
  	return NETDEV_TX_BUSY;
  }

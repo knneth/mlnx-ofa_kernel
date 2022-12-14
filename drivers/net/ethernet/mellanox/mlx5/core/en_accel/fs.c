@@ -89,11 +89,11 @@ struct mlx5_flow_handle *mlx5e_accel_fs_add_flow(struct mlx5e_priv *priv,
 	case AF_INET:
 		mlx5e_accel_set_ipv4_flow(spec, sk);
 		ft = &priv->fs.accel.accel_tables[ACCEL_FS_IPV4_TCP];
-		netdev_dbg(priv->netdev, "%s flow is %pI4:%d -> %pI4:%d\n", __func__,
-			   &inet_sk(sk)->inet_rcv_saddr,
-			   inet_sk(sk)->inet_sport,
-			   &inet_sk(sk)->inet_daddr,
-			   inet_sk(sk)->inet_dport);
+		mlx5e_dbg(HW, priv, "%s flow is %pI4:%d -> %pI4:%d\n", __func__,
+			  &inet_sk(sk)->inet_rcv_saddr,
+			  inet_sk(sk)->inet_sport,
+			  &inet_sk(sk)->inet_daddr,
+			  inet_sk(sk)->inet_dport);
 	break;
 #if IS_ENABLED(CONFIG_IPV6)
 	case AF_INET6:
@@ -140,7 +140,7 @@ struct mlx5_flow_handle *mlx5e_accel_fs_add_flow(struct mlx5e_priv *priv,
 				   1);
 
 	if (IS_ERR_OR_NULL(flow)) {
-		netdev_err(priv->netdev,
+		mlx5_core_err(priv->mdev,
 			      "mlx5_add_flow_rules() failed, flow is %ld\n",
 			      PTR_ERR(flow));
 		flow = NULL;
@@ -338,7 +338,7 @@ static int accel_fs_create_table(struct mlx5e_priv *priv,
 		ft->t = NULL;
 		return err;
 	}
-	netdev_dbg(priv->netdev, "Created fs accel table id %u level %u\n", ft->t->id, ft->t->level);
+	pr_err("Created fs accel table id %u level %u\n", ft->t->id, ft->t->level);
 
 	err = accel_fs_create_groups(ft, type);
 	if (err)

@@ -89,11 +89,7 @@ struct page_pool;
 #define MLX5_MPWRQ_DEF_LOG_STRIDE_SZ(mdev) \
 	MLX5_MPWRQ_LOG_STRIDE_SZ(mdev, order_base_2(MLX5E_RX_MAX_HEAD))
 
-#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 #define MLX5_MPWRQ_LOG_WQE_SZ			18
-#else
-#define MLX5_MPWRQ_LOG_WQE_SZ			20
-#endif
 #define MLX5_MPWRQ_WQE_PAGE_ORDER  (MLX5_MPWRQ_LOG_WQE_SZ - PAGE_SHIFT > 0 ? \
 				    MLX5_MPWRQ_LOG_WQE_SZ - PAGE_SHIFT : 0)
 #define MLX5_MPWRQ_PAGES_PER_WQE		BIT(MLX5_MPWRQ_WQE_PAGE_ORDER)
@@ -159,20 +155,12 @@ struct page_pool;
 #define MLX5E_TX_CQ_POLL_BUDGET        128
 #define MLX5E_SQ_RECOVER_MIN_INTERVAL  500 /* msecs */
 
-#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 #define MLX5E_UMR_WQE_INLINE_SZ \
 	(sizeof(struct mlx5e_umr_wqe) + \
 	 ALIGN(MLX5_MPWRQ_PAGES_PER_WQE * sizeof(struct mlx5_mtt), \
 	       MLX5_UMR_MTT_ALIGNMENT))
 #define MLX5E_UMR_WQEBBS \
 	(DIV_ROUND_UP(MLX5E_UMR_WQE_INLINE_SZ, MLX5_SEND_WQE_BB))
-#else
-#define MLX5E_UMR_WQE_MTT_SZ \
-	(ALIGN(MLX5_MPWRQ_PAGES_PER_WQE * sizeof(struct mlx5_mtt), \
-	       MLX5_UMR_MTT_ALIGNMENT))
-#define MLX5E_UMR_WQEBBS \
-	(DIV_ROUND_UP(sizeof(struct mlx5e_umr_wqe), MLX5_SEND_WQE_BB))
-#endif
 
 #define MLX5E_MSG_LEVEL			NETIF_MSG_LINK
 
@@ -243,11 +231,7 @@ struct mlx5e_umr_wqe {
 	struct mlx5_wqe_umr_ctrl_seg   uctrl;
 	struct mlx5_mkey_seg           mkc;
 	union {
-#ifndef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
 		struct mlx5_mtt        inline_mtts[0];
-#else
-		struct mlx5_wqe_data_seg data;
-#endif
 		u8                     tls_static_params_ctx[0];
 	};
 };
@@ -287,7 +271,6 @@ struct mlx5e_params {
 	u8  log_sq_size;
 	u8  rq_wq_type;
 	u8  log_rq_mtu_frames;
-	u8  log_rx_page_cache_mult;
 	u16 num_channels;
 	u8  num_tc;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
@@ -342,7 +325,6 @@ struct mlx5e_dcbx {
 	bool                       manual_buffer;
 	u32                        cable_len;
 	u32                        xoff;
-	u16                        port_buff_cell_sz;
 };
 
 struct mlx5e_dcbx_dp {
@@ -416,7 +398,6 @@ enum {
 
 struct mlx5e_sq_wqe_info {
 	u8  opcode;
-	u8 num_wqebbs;
 };
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
@@ -587,10 +568,6 @@ struct mlx5e_wqe_frag_info {
 
 struct mlx5e_umr_dma_info {
 	struct mlx5e_dma_info  dma_info[MLX5_MPWRQ_PAGES_PER_WQE];
-#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
-	struct mlx5_mtt       *mtt;
-	dma_addr_t             mtt_addr;
-#endif
 };
 
 struct mlx5e_mpw_info {
@@ -674,9 +651,6 @@ struct mlx5e_rq {
 		struct {
 			struct mlx5_wq_ll      wq;
 			struct mlx5e_umr_wqe   umr_wqe;
-#ifdef CONFIG_ENABLE_CX4LX_OPTIMIZATIONS
-			void                  *mtt_no_align;
-#endif
 			struct mlx5e_mpw_info *info;
 			mlx5e_fp_skb_from_cqe_mpwrq skb_from_cqe_mpwrq;
 			u16                    num_strides;
@@ -1134,7 +1108,6 @@ int mlx5e_modify_rq_state(struct mlx5e_rq *rq, int curr_state, int next_state);
 void mlx5e_activate_rq(struct mlx5e_rq *rq);
 void mlx5e_deactivate_rq(struct mlx5e_rq *rq);
 void mlx5e_free_rx_descs(struct mlx5e_rq *rq);
-void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
 void mlx5e_activate_icosq(struct mlx5e_icosq *icosq);
 void mlx5e_deactivate_icosq(struct mlx5e_icosq *icosq);
 

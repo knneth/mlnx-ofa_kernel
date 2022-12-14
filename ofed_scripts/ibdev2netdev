@@ -172,11 +172,6 @@ function find_matching_ndev_for_gid()
 	do
 		#search for infiniband address
 		if [[ ${array[index]} =~ .*infiniband.* ]]; then
-			# skip bonding master interfaces
-			if [[ ${array[index-1]} =~ .*MASTER.* ]]; then
-				continue
-			fi
-
 			ib_addr=${array[index]}
 			#retain string after link/infiniband
 			ib_addr=${ib_addr##*infiniband}

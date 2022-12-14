@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
 
 Change-Id: I51c4b21196e6d528c9daf725f2fa1eb7fddb26bf
 ---
- drivers/infiniband/core/sa_query.c | 46 ++++++++++++++++++++++++++----
- 1 file changed, 41 insertions(+), 5 deletions(-)
+ drivers/infiniband/core/sa_query.c | 48 ++++++++++++++++++++++++++++++++++----
+ 1 file changed, 43 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/core/sa_query.c
 +++ b/drivers/infiniband/core/sa_query.c
@@ -30,20 +30,23 @@ Change-Id: I51c4b21196e6d528c9daf725f2fa1eb7fddb26bf
  	memcpy(header->device_name, dev_name(&query->port->agent->device->dev),
  	       LS_DEVICE_NAME_MAX);
  	header->port_num = query->port->port_num;
-@@ -1012,8 +1017,12 @@ static void ib_nl_request_timeout(struct
+@@ -1012,9 +1017,15 @@ static void ib_nl_request_timeout(struct
  }
  
  int ib_nl_handle_set_timeout(struct sk_buff *skb,
 +#ifdef HAVE_NETLINK_EXT_ACK
  			     struct nlmsghdr *nlh,
  			     struct netlink_ext_ack *extack)
-+#else
-+			     struct nlmsghdr *nlh)
-+#endif
  {
++#else
++			     struct netlink_callback *cb)
++{
++	const struct nlmsghdr *nlh = (struct nlmsghdr *)cb->nlh;
++#endif
  	int timeout, delta, abs_delta;
  	const struct nlattr *attr;
-@@ -1024,11 +1033,23 @@ int ib_nl_handle_set_timeout(struct sk_b
+ 	unsigned long flags;
+@@ -1024,11 +1035,23 @@ int ib_nl_handle_set_timeout(struct sk_b
  	int ret;
  
  	if (!(nlh->nlmsg_flags & NLM_F_REQUEST) ||
@@ -69,7 +72,7 @@ Change-Id: I51c4b21196e6d528c9daf725f2fa1eb7fddb26bf
  	attr = (const struct nlattr *)tb[LS_NLA_TYPE_TIMEOUT];
  	if (ret || !attr)
  		goto settimeout_out;
-@@ -1079,8 +1100,13 @@ static inline int ib_nl_is_good_resolve_
+@@ -1079,8 +1102,13 @@ static inline int ib_nl_is_good_resolve_
  	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
  		return 0;
  
@@ -83,7 +86,7 @@ Change-Id: I51c4b21196e6d528c9daf725f2fa1eb7fddb26bf
  	if (ret)
  		return 0;
  
-@@ -1088,8 +1114,12 @@ static inline int ib_nl_is_good_resolve_
+@@ -1088,8 +1116,12 @@ static inline int ib_nl_is_good_resolve_
  }
  
  int ib_nl_handle_resolve_resp(struct sk_buff *skb,
@@ -96,7 +99,7 @@ Change-Id: I51c4b21196e6d528c9daf725f2fa1eb7fddb26bf
  {
  	unsigned long flags;
  	struct ib_sa_query *query;
-@@ -1099,7 +1129,15 @@ int ib_nl_handle_resolve_resp(struct sk_
+@@ -1099,7 +1131,15 @@ int ib_nl_handle_resolve_resp(struct sk_
  	int ret;
  
  	if ((nlh->nlmsg_flags & NLM_F_REQUEST) ||
@@ -112,7 +115,7 @@ Change-Id: I51c4b21196e6d528c9daf725f2fa1eb7fddb26bf
  		return -EPERM;
  
  	spin_lock_irqsave(&ib_nl_request_lock, flags);
-@@ -1369,13 +1407,11 @@ static int send_mad(struct ib_sa_query *
+@@ -1369,13 +1409,11 @@ static int send_mad(struct ib_sa_query *
  {
  	unsigned long flags;
  	int ret, id;

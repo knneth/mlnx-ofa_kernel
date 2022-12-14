@@ -83,9 +83,6 @@ static ssize_t esw_compat_read(struct kobject *kobj,
 	u8 read8;
 	u16 read;
 
-	if (!esw)
-		return -EOPNOTSUPP;
-
 	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
 		if (!strcmp(devlink_compat_ops[i].compat_name, entname))
 			op = &devlink_compat_ops[i];
@@ -132,9 +129,6 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 	struct devlink_compat_op *op = 0;
 	u16 set = 0;
 	int ret = 0, i = 0;
-
-	if (!esw)
-		return -EOPNOTSUPP;
 
 	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
 		if (!strcmp(devlink_compat_ops[i].compat_name, entname)) {

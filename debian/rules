@@ -19,7 +19,7 @@ WITH_DKMS ?= 1
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
-PYTHON = $(shell for i in "" 3 2; do if [ -x /usr/bin/python$$i ]; then echo python$$i; break; fi; done)
+PYTHON = $(shell if [ -x /usr/bin/python2 ]; then echo /usr/bin/python2; else /usr/bin/python; fi)
 
 pname:=mlnx-ofed-kernel
 psource:=$(pname)-source
@@ -81,7 +81,6 @@ endif
 	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/fs			debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
@@ -153,8 +152,8 @@ endif
 
 	install -m 0755 source/ofed_scripts/vf-net-link-name.sh		debian/$(putils)/etc/infiniband
 	install -m 0755 source/ofed_scripts/sysctl_perf_tuning		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx_bf_configure		debian/$(putils)/sbin
-	install -m 0755 source/ofed_scripts/mlnx-sf			debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_eswitch_set		debian/$(putils)/sbin
+	install -m 0755 source/ofed_scripts/mlnx_net_rules		debian/$(putils)/sbin
 	install -m 0755 source/ofed_scripts/mlnx_tune			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_gids			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/compat_gid_gen			debian/$(putils)/usr/sbin
@@ -167,7 +166,7 @@ endif
 	install -m 0644 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.upstart	debian/$(putils)/etc/init/openibd.conf
 	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
-	install -m 0644 source/ofed_scripts/mlnx-bf.conf	debian/$(putils)/etc/modprobe.d
+	install -m 0644 source/ofed_scripts/mlnx-eswitch.conf	debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d
 	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
 	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
@@ -177,7 +176,7 @@ endif
 	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_counters		debian/$(putils)/usr/sbin
 
-	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
+	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --prefix=/usr --root=../../debian/$(putils)
 
 override_dh_installinit:
 
@@ -193,7 +192,7 @@ override_dh_installdeb:
 	echo "/etc/infiniband/openib.conf"    >   debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/infiniband/mlx5.conf"      >>   debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
-	echo "/etc/modprobe.d/mlnx-bf.conf"      >>  debian/$(putils)/DEBIAN/conffiles
+	echo "/etc/modprobe.d/mlnx-eswitch.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles
 
 ifneq ($(MLNX_KO_NO_STRIP),1)

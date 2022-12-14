@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
 
 Change-Id: I977b7d53e19bc1624334c19454b644552fb1b5f0
 ---
- .../ethernet/mellanox/mlx5/core/en_dcbnl.c    | 27 ++++++++++++++++++-
+ drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c | 27 +++++++++++++++++++++-
  1 file changed, 26 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
@@ -111,7 +111,7 @@ Change-Id: I977b7d53e19bc1624334c19454b644552fb1b5f0
  
  	return err;
  }
-@@ -1230,3 +1254,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+@@ -1211,3 +1235,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
  	mlx5e_ets_init(priv);
  }
  #endif

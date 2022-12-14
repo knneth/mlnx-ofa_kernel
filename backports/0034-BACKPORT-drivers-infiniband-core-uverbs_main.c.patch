@@ -1,10 +1,10 @@
-From: Patrisious Haddad <phaddad@nvidia.com>
+From: Talat Batheesh <talatb@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
 
-Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
+Change-Id: I44af59c4c1ca183f92a6c31d4a88c8aa1bc10a4a
 ---
- drivers/infiniband/core/uverbs_main.c | 89 +++++++++++++++++++++++++--
- 1 file changed, 83 insertions(+), 6 deletions(-)
+ drivers/infiniband/core/uverbs_main.c | 84 ++++++++++++++++++++++++++++++++---
+ 1 file changed, 78 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
@@ -27,7 +27,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
 +#else
  static DEFINE_IDA(uverbs_ida);
 +#endif
- static int ib_uverbs_add_one(struct ib_device *device);
+ static void ib_uverbs_add_one(struct ib_device *device);
  static void ib_uverbs_remove_one(struct ib_device *device, void *client_data);
  
 @@ -91,8 +98,12 @@ struct ib_ucontext *ib_uverbs_get_uconte
@@ -123,7 +123,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  };
  
  void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
-@@ -1000,11 +1037,16 @@ void uverbs_user_mmap_disassociate(struc
+@@ -996,11 +1033,16 @@ void uverbs_user_mmap_disassociate(struc
  
  			zap_vma_ptes(vma, vma->vm_start,
  				     vma->vm_end - vma->vm_start);
@@ -141,7 +141,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  		}
  		mutex_unlock(&ufile->umap_lock);
  	skip_mm:
-@@ -1089,8 +1131,11 @@ static int ib_uverbs_open(struct inode *
+@@ -1085,8 +1127,11 @@ static int ib_uverbs_open(struct inode *
  	srcu_read_unlock(&dev->disassociate_srcu, srcu_key);
  
  	setup_ufile_idr_uobject(file);
@@ -154,7 +154,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  
  err_module:
  	module_put(ib_dev->owner);
-@@ -1197,8 +1242,16 @@ static const struct attribute_group dev_
+@@ -1193,8 +1238,16 @@ static const struct attribute_group dev_
  	.attrs = ib_dev_attrs,
  };
  
@@ -171,21 +171,19 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  
  static int ib_uverbs_create_uapi(struct ib_device *device,
  				 struct ib_uverbs_device *uverbs_dev)
-@@ -1248,13 +1301,21 @@ static int ib_uverbs_add_one(struct ib_d
+@@ -1244,11 +1297,19 @@ static void ib_uverbs_add_one(struct ib_
  	rcu_assign_pointer(uverbs_dev->ib_dev, device);
  	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
  
 +#ifdef HAVE_IDA_ALLOC_MAX
  	devnum = ida_alloc_max(&uverbs_ida, IB_UVERBS_MAX_DEVICES - 1,
  			       GFP_KERNEL);
- 	if (devnum < 0) {
+ 	if (devnum < 0)
 +#else
 +	devnum = find_first_zero_bit(dev_map, IB_UVERBS_MAX_DEVICES);
-+	if (devnum >= IB_UVERBS_MAX_DEVICES) {
++	if (devnum >= IB_UVERBS_MAX_DEVICES)
 +#endif
- 		ret = -ENOMEM;
  		goto err;
- 	}
  	uverbs_dev->devnum = devnum;
 +#ifndef HAVE_IDA_ALLOC_MAX
 +	set_bit(devnum, dev_map);
@@ -193,8 +191,8 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
  		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
  	else
-@@ -1282,7 +1343,11 @@ static int ib_uverbs_add_one(struct ib_d
- 	return 0;
+@@ -1275,7 +1336,11 @@ static void ib_uverbs_add_one(struct ib_
+ 	return;
  
  err_uapi:
 +#ifndef HAVE_IDA_ALLOC_MAX
@@ -205,7 +203,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  err:
  	if (atomic_dec_and_test(&uverbs_dev->refcount))
  		ib_uverbs_comp_dev(uverbs_dev);
-@@ -1318,7 +1383,6 @@ static void ib_uverbs_free_hw_resources(
+@@ -1311,7 +1376,6 @@ static void ib_uverbs_free_hw_resources(
  
  		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
  		kref_put(&file->ref, ib_uverbs_release_file);
@@ -213,8 +211,8 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  		mutex_lock(&uverbs_dev->lists_mutex);
  	}
  	mutex_unlock(&uverbs_dev->lists_mutex);
-@@ -1332,7 +1396,11 @@ static void ib_uverbs_remove_one(struct
- 	int wait_clients = 1;
+@@ -1328,7 +1392,11 @@ static void ib_uverbs_remove_one(struct
+ 		return;
  
  	cdev_device_del(&uverbs_dev->cdev, &uverbs_dev->dev);
 +#ifndef HAVE_IDA_ALLOC_MAX
@@ -225,7 +223,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  
  	if (device->ops.disassociate_ucontext) {
  		/* We disassociate HW resources and immediately return.
-@@ -1358,7 +1426,11 @@ static void ib_uverbs_remove_one(struct
+@@ -1354,7 +1422,11 @@ static void ib_uverbs_remove_one(struct
  	put_device(&uverbs_dev->dev);
  }
  
@@ -237,7 +235,7 @@ Change-Id: I7f266f1a515388310d02ed8ee55aa3f9ccef7cf4
  {
  	if (mode)
  		*mode = 0666;
-@@ -1394,7 +1466,12 @@ static int __init ib_uverbs_init(void)
+@@ -1390,7 +1462,12 @@ static int __init ib_uverbs_init(void)
  
  	uverbs_class->devnode = uverbs_devnode;
  

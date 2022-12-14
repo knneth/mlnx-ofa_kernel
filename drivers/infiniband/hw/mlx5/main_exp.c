@@ -40,11 +40,8 @@
 #include <rdma/ib_umem.h>
 #include <rdma/ib_user_verbs.h>
 #include <rdma/ib_user_verbs_exp.h>
-#include <rdma/restrack.h>
 #include "mlx5_ib.h"
 #include "cmd.h"
-
-#include "../../core/restrack.h"
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
 static void copy_odp_exp_caps(struct ib_exp_odp_caps *exp_caps,
@@ -1904,15 +1901,17 @@ static int tclass_update_qp(struct mlx5_ib_dev *ibdev, struct mlx5_ib_qp *mqp,
 	return err;
 }
 
+/* Locking here is a mess, mutex -> spinlock -> mutex
+ * We have no other choice as we need to lock the QP
+ * which uses a mutex, and the QP list uses a spinlock
+ * and TCD use a mutex as well.
+ */
 static void tclass_update_qps(struct mlx5_tc_data *tcd)
 {
 	struct mlx5_ib_dev *ibdev = tcd->ibdev;
 	struct mlx5_qp_context *context;
-	struct rdma_restrack_entry *res;
-	struct rdma_restrack_root *rt;
 	struct mlx5_ib_qp *mqp;
-	unsigned long id = 0;
-	struct ib_qp *ibqp;
+	unsigned long flags;
 	u8 tclass;
 	int ret;
 
@@ -1923,23 +1922,9 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 	if (!context)
 		return;
 
-	rt = &ibdev->ib_dev.res[RDMA_RESTRACK_QP];
-	xa_lock(&rt->xa);
-	xa_for_each(&rt->xa, id, res) {
-		if (!rdma_restrack_get(res))
-			continue;
-
-		xa_unlock(&rt->xa);
-
-		ibqp = container_of(res, struct ib_qp, res);
-		mqp = to_mqp(ibqp);
-
-		if (ibqp->qp_type == IB_QPT_GSI ||
-		    mqp->qp_sub_type == MLX5_IB_QPT_DCT)
-			goto cont;
-
+	spin_lock_irqsave(&ibdev->reset_flow_resource_lock, flags);
+	list_for_each_entry(mqp, &ibdev->qp_list, qps_list) {
 		mutex_lock(&mqp->mutex);
-
 		if (mqp->state == IB_QPS_RTS &&
 		    rdma_ah_get_ah_flags(&mqp->ah) & IB_AH_GRH) {
 
@@ -1956,11 +1941,8 @@ static void tclass_update_qps(struct mlx5_tc_data *tcd)
 			}
 		}
 		mutex_unlock(&mqp->mutex);
-cont:
-		rdma_restrack_put(res);
-		xa_lock(&rt->xa);
 	}
-	xa_unlock(&rt->xa);
+	spin_unlock_irqrestore(&ibdev->reset_flow_resource_lock, flags);
 	kfree(context);
 }
 
@@ -1989,10 +1971,8 @@ static ssize_t traffic_class_store(struct mlx5_tc_data *tcd, struct tc_attribute
 		dst_match = tclass_find_match(tcd, &match, match.mask, false);
 		if (!dst_match) {
 			dst_match = tclass_find_empty(tcd);
-			if (!dst_match) {
-				mutex_unlock(&tcd->lock);
+			if (!dst_match)
 				return -ENOMEM;
-			}
 		}
 		if (match.tclass < 0)
 			memset(dst_match, 0, sizeof(*dst_match));

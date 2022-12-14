@@ -12,7 +12,7 @@ Change-Id: Ibdaf982258024af5b353ac7cf12f52aaba67788d
  			--cur_order;
  
  		mask = gfp_mask;
-+#ifdef HAVE_GFP_DIRECT_RECLAIM
++#ifdef HAS_GFP_DIRECT_RECLAIM
  		if (cur_order)
  			mask &= ~__GFP_DIRECT_RECLAIM;
 +#endif

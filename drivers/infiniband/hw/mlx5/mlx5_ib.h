@@ -319,7 +319,6 @@ struct mlx5_ib_wq {
 	unsigned		head;
 	unsigned		tail;
 	u16			cur_post;
-	u16			last_poll;
 	void			*cur_edge;
 };
 
@@ -638,14 +637,12 @@ struct mlx5_ib_dm {
 					 IB_ACCESS_REMOTE_WRITE  |\
 					 IB_ACCESS_REMOTE_READ   |\
 					 IB_ACCESS_REMOTE_ATOMIC |\
-					 IB_ZERO_BASED		 |\
-					 IB_ACCESS_OPTIONAL)
+					 IB_ZERO_BASED)
 
 #define MLX5_IB_DM_SW_ICM_ALLOWED_ACCESS (IB_ACCESS_LOCAL_WRITE   |\
 					  IB_ACCESS_REMOTE_WRITE  |\
 					  IB_ACCESS_REMOTE_READ   |\
-					  IB_ZERO_BASED		  |\
-					  IB_ACCESS_OPTIONAL)
+					  IB_ZERO_BASED)
 
 #define mlx5_update_odp_stats(mr, counter_name, value)		\
 	atomic64_add(value, &((mr)->odp_stats.counter_name))
@@ -1113,11 +1110,6 @@ struct mlx5_ib_dev {
 	/* sync used page count stats
 	 */
 	struct mlx5_ib_resources	devr;
-
-	/* protect mkey key part */
-	spinlock_t			mkey_lock;
-	u8				mkey_key;
-
 	struct mlx5_mr_cache		cache;
 	struct timer_list		delay_timer;
 	/* Prevents soft lock on massive reg MRs */

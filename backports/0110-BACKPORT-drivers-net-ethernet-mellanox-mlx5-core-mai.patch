@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 
 Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
 ---
- .../net/ethernet/mellanox/mlx5/core/main.c    | 36 ++++++++++++++++++-
- 1 file changed, 35 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/main.c    | 32 ++++++++++++++++++-
+ 1 file changed, 31 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
@@ -18,7 +18,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  MODULE_VERSION(DRIVER_VERSION);
  
  unsigned int mlx5_core_debug_mask;
-@@ -888,6 +891,7 @@ int mlx5_core_disable_sf_hca(struct mlx5
+@@ -886,6 +889,7 @@ int mlx5_core_disable_sf_hca(struct mlx5
  	return disable_hca(dev, sf_func_id, 0);
  }
  
@@ -26,7 +26,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev,
  			     struct ptp_system_timestamp *sts)
  {
-@@ -907,6 +911,20 @@ u64 mlx5_read_internal_timer(struct mlx5
+@@ -905,6 +909,20 @@ u64 mlx5_read_internal_timer(struct mlx5
  
  	return (u64)timer_l | (u64)timer_h1 << 32;
  }
@@ -47,31 +47,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  
  static int mlx5_core_set_issi(struct mlx5_core_dev *dev)
  {
-@@ -981,8 +999,10 @@ static ssize_t mlx5_roce_enable_set_enab
- {
- 	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
- 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
-+#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
- 	struct devlink *devlink = priv_to_devlink(dev);
- 	union devlink_param_value value;
-+#endif
- 	int ret;
- 	bool val;
- 
-@@ -995,10 +1015,12 @@ static ssize_t mlx5_roce_enable_set_enab
- 
- 	mutex_lock(&dev->roce.state_lock);
- 	dev->roce.enabled = val;
-+#if defined(HAVE_DEVLINK_PARAM) && defined(HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE)
- 	value.vbool = val;
- 	devlink_param_driverinit_value_set(devlink,
- 					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
- 					   value);
-+#endif
- 	mlx5_reload_interface(dev, MLX5_INTERFACE_PROTOCOL_IB);
- 	mutex_unlock(&dev->roce.state_lock);
- 
-@@ -1425,11 +1447,13 @@ static int mlx5_load(struct mlx5_core_de
+@@ -1414,11 +1432,13 @@ static int mlx5_load(struct mlx5_core_de
  		goto err_ipsec_start;
  	}
  
@@ -85,7 +61,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  
  	err = mlx5_init_fs(dev);
  	if (err) {
-@@ -1462,8 +1486,10 @@ err_ec:
+@@ -1451,8 +1471,10 @@ err_ec:
  err_sriov:
  	mlx5_cleanup_fs(dev);
  err_fs:
@@ -96,7 +72,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  	mlx5_accel_ipsec_cleanup(dev);
  err_ipsec_start:
  	mlx5_fpga_device_stop(dev);
-@@ -1493,7 +1519,9 @@ static void mlx5_unload(struct mlx5_core
+@@ -1482,7 +1504,9 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_sriov_detach(dev);
  	mlx5_cleanup_fs(dev);
  	mlx5_accel_ipsec_cleanup(dev);
@@ -106,7 +82,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  	mlx5_fpga_device_stop(dev);
  	mlx5_rsc_dump_cleanup(dev);
  	mlx5_fw_tracer_cleanup(dev->tracer);
-@@ -1974,7 +2002,7 @@ static void capi_cleanup(struct mlx5_cor
+@@ -1940,7 +1964,7 @@ static void capi_cleanup(struct mlx5_cor
  int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
  {
  	struct mlx5_priv *priv = &dev->priv;
@@ -115,7 +91,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  
  	dev->profile = &profile[profile_idx];
  
-@@ -2398,7 +2426,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -2353,7 +2377,11 @@ static void mlx5_pci_resume(struct pci_d
  		mlx5_core_info(dev, "%s: device recovered\n", __func__);
  }
  
@@ -127,7 +103,7 @@ Change-Id: I08b0291709bac1bab00296521dd6cc602c2c747f
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2479,7 +2511,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2430,7 +2458,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

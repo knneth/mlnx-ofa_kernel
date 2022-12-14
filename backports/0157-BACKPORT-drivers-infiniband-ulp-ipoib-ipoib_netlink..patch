@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
 
 Change-Id: I6af972c98a5c6acaeb21763ac6bbd3ac6c26a55e
 ---
- drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 23 +++++++++++++++++++-
+ drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 23 ++++++++++++++++++++++-
  1 file changed, 22 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c

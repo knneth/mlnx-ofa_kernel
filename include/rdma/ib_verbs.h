@@ -2821,7 +2821,7 @@ struct ib_device {
 
 struct ib_client {
 	const char *name;
-	int (*add)(struct ib_device *ibdev);
+	void (*add)   (struct ib_device *);
 	void (*remove)(struct ib_device *, void *client_data);
 	void (*rename)(struct ib_device *dev, void *client_data);
 
@@ -4474,7 +4474,7 @@ static inline int ib_check_mr_access(int flags)
 	/* Only access flags that are defined in the access flags enum are
 	 * supported
 	 */
-	if (flags & ~(IB_ACCESS_SUPPORTED | IB_EXP_ACCESS_SUPPORTED))
+	if (flags & ~IB_ACCESS_SUPPORTED)
 		return -EINVAL;
 
 	/*

@@ -62,12 +62,11 @@ function get_irq_list
 		irq_list=$interface_in_proc_interrupts
 	elif [ -d $net_device_irqs_path ]; then
 		irq_list=$( /bin/ls $net_device_irqs_path )
-	else
+	else 
 		echo "Error - interface or device \"$interface\" does not exist" 1>&2
 		exit 1
 	fi
-	sorted_irq_list=$( echo $irq_list  | tr " " "\n" | sort -g | tr "\n" " " )
-	echo $sorted_irq_list
+	echo $irq_list
 }
 
 function show_irq_affinity

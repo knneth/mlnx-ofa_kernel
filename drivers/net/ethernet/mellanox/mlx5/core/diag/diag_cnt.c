@@ -57,18 +57,15 @@ static ssize_t counter_id_write(struct file *filp, const char __user *buf,
 	reset_cnt_id(dev);
 
 	/* Collect cnt_id input. Quit if cnt_id does not exist */
-	kbuf = kzalloc(count + 1, GFP_KERNEL);
+	kbuf = kzalloc(count, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
 
-	if (copy_from_user(kbuf, buf, count)) {
-		err = -EFAULT;
-		goto out_copy_from_usr_err;
-	}
+	if (copy_from_user(kbuf, buf, count))
+		return -EFAULT;
 
 	i = 0;
 	options = kbuf;
-
 	while ((p = strsep(&options, ",")) != NULL &&
 	       i < MLX5_CAP_GEN(dev, num_of_diagnostic_counters)) {
 		if (sscanf(p, "%x", &temp) != 1)
@@ -86,9 +83,8 @@ static ssize_t counter_id_write(struct file *filp, const char __user *buf,
 	return count;
 
 out_err:
-	reset_cnt_id(dev);
-out_copy_from_usr_err:
 	kfree(kbuf);
+	reset_cnt_id(dev);
 	return err;
 }
 
@@ -152,14 +148,12 @@ static ssize_t params_write(struct file *filp, const char __user *buf,
 	if (*pos || !diag_cnt->num_cnt_id)
 		return -EPERM;
 
-	kbuf = kzalloc(count + 1, GFP_KERNEL);
+	kbuf = kzalloc(count, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
 
-	if (copy_from_user(kbuf, buf, count)) {
-		err = -EFAULT;
-		goto out_copy_from_usr_err;
-	}
+	if (copy_from_user(kbuf, buf, count))
+		return -EFAULT;
 
 	/* Five parameters
 	 * log_num_of_samples (dec)
@@ -242,9 +236,8 @@ static ssize_t params_write(struct file *filp, const char __user *buf,
 	return count;
 
 out_err:
-	reset_params(diag_cnt);
-out_copy_from_usr_err:
 	kfree(kbuf);
+	reset_params(diag_cnt);
 	return err;
 }
 
@@ -504,7 +497,7 @@ static int get_supported_cnt_ids(struct mlx5_core_dev *dev)
 
 	for (i = 0; i < num_counters; i++)
 		diag_cnt->cnt_id[i].id =
-			MLX5_CAP_DEBUG(dev, diagnostic_counter[i].counter_id);
+			MLX5_CAP_DEBUG(dev, diagnostic_counter[i]) & 0xFFFF;
 
 	return 0;
 }

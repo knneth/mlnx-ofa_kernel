@@ -25,12 +25,6 @@
 	dump_stack();								\
 })
 
-#ifdef ZERO_OR_NULL_PTR
-#define IS_VALID_ADDR(addr) (!ZERO_OR_NULL_PTR(addr))
-#else
-#define IS_VALID_ADDR(addr) (addr)
-#endif
-
 #ifdef CONFIG_ARM64
 #undef ioremap
 static inline void *ioremap(phys_addr_t phys_addr, size_t size)
@@ -55,13 +49,11 @@ static inline void *ioremap_wc(phys_addr_t phys_addr, size_t size)
 #define ARCH_HAS_IOREMAP_WC 1
 #endif
 
-#ifdef iounmap
 #undef iounmap
 static inline void iounmap(void *addr)
 {
 	__iounmap(addr);
 }
-#endif /* iounmap  */
 #endif /* CONFIG_ARM64 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
@@ -78,6 +70,21 @@ static inline void iounmap(void *addr)
 	}									\
 	__memtrack_kz_addr;							\
 })
+
+#else
+#ifdef ZERO_OR_NULL_PTR
+#define kzalloc(size, flags) ({							\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kzalloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kzalloc");\
+	else									\
+		__memtrack_addr = kzalloc(size, flags);				\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {	\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
+	}									\
+	__memtrack_addr;							\
+})
 #else
 #define kzalloc(size, flags) ({							\
 	void *__memtrack_addr = NULL;						\
@@ -86,11 +93,13 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kzalloc");\
 	else									\
 		__memtrack_addr = kzalloc(size, flags);				\
-	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {	\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {	\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
+
+#endif
 #endif
 
 #define kzalloc_node(size, flags, node) ({					\
@@ -100,7 +109,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kzalloc_node"); \
 	else									\
 		__memtrack_addr = kzalloc_node(size, flags, node);		\
-	if (IS_VALID_ADDR(__memtrack_addr) && (size) > 0 &&			\
+	if (__memtrack_addr && (size) > 0 &&					\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
@@ -114,7 +123,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvzalloc"); \
 	else									\
 		__memtrack_addr = kvzalloc(size, flags);			\
-	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {	\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {	\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -127,13 +136,11 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc_array"); \
 	else									\
 		__memtrack_addr = kvmalloc_array(n, size, flags);		\
-	if (IS_VALID_ADDR(__memtrack_addr) && \
-	    !is_non_trackable_alloc_func(__func__) && (n) * (size) > 0) {	\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__) && (n) * (size) > 0) {	\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
-
 #define kvcalloc(n, size, flags) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -141,13 +148,11 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvcalloc"); \
 	else									\
 		__memtrack_addr = kvcalloc(n, size, flags);			\
-	if (IS_VALID_ADDR(__memtrack_addr) &&					\
-	    !is_non_trackable_alloc_func(__func__)) {				\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {	\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
-
 #define kcalloc_node(n, size, flags, node) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -155,15 +160,29 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc_node"); \
 	else									\
 		__memtrack_addr = kcalloc_node(n, size, flags, node);		\
-	if (IS_VALID_ADDR(__memtrack_addr) && (size) > 0 &&			\
+	if (__memtrack_addr && (size) > 0 &&					\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n) * (size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
 #define kcalloc(n, size, flags) kzalloc((n)*(size), flags)
+#else
+#ifdef ZERO_OR_NULL_PTR
+#define kcalloc(n, size, flags) ({ \
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kcalloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
+	else									\
+		__memtrack_addr = kcalloc(n, size, flags);			\
+	if ((!ZERO_OR_NULL_PTR(__memtrack_addr) && (n) * (size) > 0) &&		\
+	    !is_non_trackable_alloc_func(__func__)) {				\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
+	}									\
+	__memtrack_addr;							\
+})
 #else
 #define kcalloc(n, size, flags) ({ \
 	void *__memtrack_addr = NULL;						\
@@ -172,14 +191,18 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
 	else									\
 		__memtrack_addr = kcalloc(n, size, flags);			\
-	if (IS_VALID_ADDR(__memtrack_addr) && (n) * (size) > 0 &&		\
+	if ((__memtrack_addr && (n) * (size) > 0) &&				\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
 #endif
+#endif
 
+
+
+#ifdef ZERO_OR_NULL_PTR
 #define kmalloc(sz, flgs) ({							\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -187,13 +210,30 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc");\
 	else									\
 		__memtrack_addr = kmalloc(sz, flgs);				\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem())					\
 			memset(__memtrack_addr, 0x5A, sz);			\
 	}									\
 	__memtrack_addr;							\
 })
+#else
+#define kmalloc(sz, flgs) ({							\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmalloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc");\
+	else									\
+		__memtrack_addr = kmalloc(sz, flgs);				\
+	if (__memtrack_addr) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		if (memtrack_randomize_mem())					\
+			memset(__memtrack_addr, 0x5A, sz);			\
+	}									\
+	__memtrack_addr;							\
+})
+
+#endif
 
 #define kmalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
@@ -217,14 +257,13 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc"); \
 	else									\
 		__memtrack_addr = kvmalloc(sz, flgs);			\
-	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {\
+	if (__memtrack_addr && !is_non_trackable_alloc_func(__func__)) {\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
 			memset(__memtrack_addr, 0x5A, sz);			\
 	}									\
 	__memtrack_addr;							\
 })
-
 #define kvmalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -232,7 +271,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc_node"); \
 	else									\
 		__memtrack_addr = kvmalloc_node(sz, flgs, node);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
 			memset(__memtrack_addr, 0x5A, sz);			\
@@ -247,7 +286,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvzalloc_node"); \
 	else									\
 		__memtrack_addr = kvzalloc_node(sz, flgs, node);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
 	__memtrack_addr;							\
@@ -256,6 +295,7 @@ static inline void iounmap(void *addr)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0)
 #define kmalloc_array(n, size, flags) kzalloc((n)*(size), flags)
 #else
+#ifdef ZERO_OR_NULL_PTR
 #define kmalloc_array(n, size, flags) ({ \
 	void *__memtrack_addr = NULL;						\
 										\
@@ -263,13 +303,28 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc_array"); \
 	else									\
 		__memtrack_addr = kmalloc_array(n, size, flags);		\
-	if (IS_VALID_ADDR(__memtrack_addr) && (n) * (size) > 0) {		\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr) && (n) * (size) > 0) {		\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
+	}									\
+	__memtrack_addr;							\
+})
+#else
+#define kmalloc_array(n, size, flags) ({ \
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmalloc_array", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc_array"); \
+	else									\
+		__memtrack_addr = kmalloc_array(n, size, flags);			\
+	if (__memtrack_addr && (n) * (size) > 0) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
 #endif
+#endif
 
+#ifdef ZERO_OR_NULL_PTR
 #define kmemdup(src, sz, flgs) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -277,11 +332,25 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmemdup");\
 	else									\
 		__memtrack_addr = kmemdup(src, sz, flgs);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
 	__memtrack_addr;							\
 })
+#else
+#define kmemdup(src, sz, flgs) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmemdup", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmemdup");\
+	else									\
+		__memtrack_addr = kmemdup(src, sz, flgs);			\
+	if (__memtrack_addr) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+	}									\
+	__memtrack_addr;							\
+})
+#endif
 
 #ifndef kstrdup
 #define kstrdup(src, flgs) ({						\
@@ -292,60 +361,60 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kstrdup");\
 	else									\
 		__memtrack_addr = kstrdup(src, flgs);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
 	__memtrack_addr;							\
 })
 #endif
 
+#ifdef ZERO_OR_NULL_PTR
 #define kfree(addr) ({								\
 	void *__memtrack_addr = (void *)addr;					\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr) &&					\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr) &&				\
 	    !is_non_trackable_free_func(__func__)) {				\
 		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	kfree(__memtrack_addr);							\
 })
+#else
+#define kfree(addr) ({								\
+	void *__memtrack_addr = (void *)addr;					\
+										\
+	if (__memtrack_addr && !is_non_trackable_free_func(__func__)) {		\
+		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
+	}									\
+	kfree(__memtrack_addr);							\
+})
+#endif
 
 #ifdef CONFIG_COMPAT_RCU
 #ifdef kfree_rcu
 	#undef kfree_rcu
 #endif
-#if !defined(__kvfree_rcu) && !defined(__kfree_rcu)
-/*
- * Removed __kvfree_rcu macro upstream v5.12
- * commit 5ea5d1ed572c ("rcu: Eliminate the __kvfree_rcu() macro")
- */
-#define __kvfree_rcu(head, offset) \
-       do { \
-              BUILD_BUG_ON(!__is_kvfree_rcu_offset(offset)); \
-              kvfree_call_rcu(head, (rcu_callback_t)(unsigned long)(offset)); \
-       } while (0)
-#endif /* !defined(__kvfree_rcu) && !defined(kfree_rcu) */
-#ifdef __kvfree_rcu
+
+#ifdef ZERO_OR_NULL_PTR
 #define kfree_rcu(addr, rcu_head) ({								\
 	void *__memtrack_addr = (void *)addr;					\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr) &&					\
-	    !is_non_trackable_free_func(__func__)) {				\
-		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
-	}									\
-	__kvfree_rcu(&((addr)->rcu_head), offsetof(typeof(*(addr)), rcu_head));					\
-})
-#else
-#define kfree_rcu(addr, rcu_head) ({								\
-	void *__memtrack_addr = (void *)addr;					\
-										\
-	if (IS_VALID_ADDR(__memtrack_addr) &&					\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr) &&				\
 	    !is_non_trackable_free_func(__func__)) {				\
 		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	__kfree_rcu(&((addr)->rcu_head), offsetof(typeof(*(addr)), rcu_head));					\
 })
+#else
+#define kfree_rcu(addr, rcu_head) ({								\
+	void *__memtrack_addr = (void *)addr;					\
+										\
+	if (__memtrack_addr && !is_non_trackable_free_func(__func__)) {		\
+		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
+	}									\
+	__kfree_rcu(&((addr)->rcu_head), offsetof(typeof(*(addr)), rcu_head));					\
+})
 #endif
-#endif /* CONFIG_COMPAT_RCU */
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0) */
 
 #define vmalloc(size) ({							\
 	void *__memtrack_addr = NULL;						\
@@ -354,7 +423,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "vmalloc");\
 	else									\
 		__memtrack_addr = vmalloc(size);				\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 		if (memtrack_randomize_mem())					\
 			memset(__memtrack_addr, 0x5A, size);			\
@@ -370,7 +439,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "vzalloc");\
 	else									\
 		__memtrack_addr = vzalloc(size);				\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
@@ -385,7 +454,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "vzalloc_node"); \
 	else									\
 		__memtrack_addr = vzalloc_node(size, node);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
@@ -400,7 +469,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "__vmalloc"); \
 	else									\
 		__memtrack_addr = __vmalloc(size, mask, prot);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 		if (memtrack_randomize_mem())					\
 			memset(__memtrack_addr, 0x5A, size);			\
@@ -416,7 +485,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "vmalloc_node"); \
 	else									\
 		__memtrack_addr = vmalloc_node(size, node);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 		if (memtrack_randomize_mem())					\
 			memset(__memtrack_addr, 0x5A, size);			\
@@ -426,16 +495,31 @@ static inline void iounmap(void *addr)
 
 #define vfree(addr) ({ \
 	void *__memtrack_addr = (void *)addr;					\
-	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_free_func(__func__)) {	\
+	if (__memtrack_addr && !is_non_trackable_free_func(__func__)) {		\
 		memtrack_free(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	vfree(__memtrack_addr);							\
 })
 
 #ifndef kvfree
+#ifdef ZERO_OR_NULL_PTR
 #define kvfree(addr) ({								\
 	void *__memtrack_addr = (void *)addr;					\
-	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_free_func(__func__)) {	\
+	if (__memtrack_addr && !is_non_trackable_free_func(__func__)) {		\
+		if (is_vmalloc_addr(__memtrack_addr)) {				\
+			memtrack_free(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
+		} else {							\
+			if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {		\
+				memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
+			}							\
+		}								\
+	}									\
+	kvfree(__memtrack_addr);						\
+})
+#else
+#define kvfree(addr) ({								\
+	void *__memtrack_addr = (void *)addr;					\
+	if (__memtrack_addr && !is_non_trackable_free_func(__func__)) {		\
 		if (is_vmalloc_addr(__memtrack_addr)) {				\
 			memtrack_free(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 		} else {							\
@@ -445,8 +529,10 @@ static inline void iounmap(void *addr)
 	kvfree(__memtrack_addr);						\
 })
 #endif
+#endif
 
 #ifndef memdup_user
+#ifdef ZERO_OR_NULL_PTR
 #define memdup_user(user_addr, size) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -455,14 +541,30 @@ static inline void iounmap(void *addr)
 	else									\
 		__memtrack_addr = memdup_user(user_addr, size);			\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
+	}									\
+	__memtrack_addr;							\
+})
+#else
+#define memdup_user(user_addr, size) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "memdup_user", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "memdup_user"); \
+	else									\
+		__memtrack_addr = memdup_user(user_addr, size);			\
+										\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
 	}									\
 	__memtrack_addr;							\
 })
 #endif
+#endif
 
 #ifndef memdup_user_nul
+#ifdef ZERO_OR_NULL_PTR
 #define memdup_user_nul(user_addr, size) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -471,12 +573,28 @@ static inline void iounmap(void *addr)
 	else									\
 		__memtrack_addr = memdup_user_nul(user_addr, size);			\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (!ZERO_OR_NULL_PTR(__memtrack_addr)) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
+	}									\
+	__memtrack_addr;							\
+})
+#else
+#define memdup_user_nul(user_addr, size) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "memdup_user_nul", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "memdup_user_nul"); \
+	else									\
+		__memtrack_addr = memdup_user_nul(user_addr, size);			\
+										\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
 	}									\
 	__memtrack_addr;							\
 })
 #endif
+#endif
+
 
 #define kmem_cache_alloc(cache, flags) ({					\
 	void *__memtrack_addr = NULL;						\
@@ -485,7 +603,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmem_cache_alloc"); \
 	else									\
 		__memtrack_addr = kmem_cache_alloc(cache, flags);		\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KMEM_OBJ, 0UL, (unsigned long)(__memtrack_addr), 1, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
@@ -501,7 +619,7 @@ static inline void iounmap(void *addr)
 #define kmem_cache_free(cache, addr) ({						\
 	void *__memtrack_addr = (void *)addr;					\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {						\
 		memtrack_free(MEMTRACK_KMEM_OBJ, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	kmem_cache_free(cache, __memtrack_addr);				\
@@ -515,7 +633,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kasprintf"); \
 	else									\
 		__memtrack_addr = kasprintf(gfp, fmt, __VA_ARGS__);		\
-	if (IS_VALID_ADDR(__memtrack_addr) && strncmp((char *)__memtrack_addr, "infiniband", 10)) {	\
+	if (__memtrack_addr && strncmp((char *)__memtrack_addr, "infiniband", 10)) {	\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), strlen((char *)__memtrack_addr), 0UL, 0, __FILE__, __LINE__, gfp); \
 	}									\
 	__memtrack_addr;							\
@@ -533,7 +651,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap");\
 	else									\
 		__memtrack_addr = ioremap(phys_addr, size);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {						\
 		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
@@ -550,7 +668,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_wc");\
 	else									\
 		__memtrack_addr = ioremap_wc(phys_addr, size);			\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {						\
 		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
@@ -574,7 +692,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "io_mapping_create_wc"); \
 	else									\
 		__memtrack_addr = io_mapping_create_wc(base, size);		\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
@@ -583,7 +701,7 @@ static inline void iounmap(void *addr)
 #define io_mapping_free(addr) ({						\
 	void *__memtrack_addr = (void *)addr;					\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_free(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	io_mapping_free(__memtrack_addr);					\
@@ -621,7 +739,7 @@ static inline void iounmap(void *addr)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_nocache"); \
 	else									\
 		__memtrack_addr = ioremap_nocache(phys_addr, size);		\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
@@ -635,7 +753,7 @@ static inline void iounmap(void *addr)
 #define iounmap(addr) ({							\
 	void *__memtrack_addr = (void *)addr;					\
 										\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (__memtrack_addr) {							\
 		memtrack_free(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
 	iounmap(__memtrack_addr);						\

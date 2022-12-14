@@ -518,7 +518,7 @@ static void mlx5e_hairpin_set_ttc_params(struct mlx5e_hairpin *hp,
 	for (tt = 0; tt < MLX5E_NUM_INDIR_TIRS; tt++)
 		ttc_params->indir_tirn[tt] = hp->indir_tirn[tt];
 
-	ft_attr->max_fte = MLX5E_TTC_TABLE_SIZE;
+	ft_attr->max_fte = MLX5E_NUM_TT;
 	ft_attr->level = MLX5E_TC_TTC_FT_LEVEL;
 	ft_attr->prio = MLX5E_TC_PRIO;
 }
@@ -2440,11 +2440,10 @@ static int offload_pedit_fields(struct pedit_headers_action *hdrs,
 			continue;
 
 		if (f->field_bsize == 32) {
-			mask_be32 = (__be32)mask;
+			mask_be32 = *(__be32 *)&mask;
 			mask = (__force unsigned long)cpu_to_le32(be32_to_cpu(mask_be32));
 		} else if (f->field_bsize == 16) {
-			mask_be32 = (__be32)mask;
-			mask_be16 = *(__be16 *)&mask_be32;
+			mask_be16 = *(__be16 *)&mask;
 			mask = (__force unsigned long)cpu_to_le16(be16_to_cpu(mask_be16));
 		}
 
@@ -3300,12 +3299,6 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 	if (!flow_action_has_entries(flow_action))
 		return -EINVAL;
 
-	flow_action_for_each(i, act, flow_action)
-		if (act->id == FLOW_ACTION_TUNNEL_DECAP) {
-			action = MLX5_FLOW_CONTEXT_ACTION_DECAP;
-			break;
-		}
-
 	flow_action_for_each(i, act, flow_action) {
 		switch (act->id) {
 		case FLOW_ACTION_DROP:
@@ -3359,10 +3352,7 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv,
 			if (encap) {
 				parse_attr->mirred_ifindex[attr->out_count] =
 					out_dev->ifindex;
-				memcpy(&parse_attr->tun_info2[attr->out_count], info,
-					sizeof(struct ip_tunnel_info));
-				parse_attr->tun_info[attr->out_count] =
-					&parse_attr->tun_info2[attr->out_count];
+				parse_attr->tun_info[attr->out_count] = info;
 				encap = false;
 				attr->dests[attr->out_count].flags |=
 					MLX5_ESW_DEST_ENCAP;

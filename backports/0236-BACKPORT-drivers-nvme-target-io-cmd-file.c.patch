@@ -21,7 +21,7 @@ Change-Id: Ia0735339e09b80725da0125d7f8aeb775727d380
  		return PTR_ERR(ns->file);
  	}
 -
-+#ifdef HAVE_VFS_GETATTR_HAS_4_PARAMS
++#ifdef VFS_GETATTR_HAS_4_PARAMS
  	ret = vfs_getattr(&ns->file->f_path,
  			&stat, STATX_SIZE, AT_STATX_FORCE_SYNC);
 +#else

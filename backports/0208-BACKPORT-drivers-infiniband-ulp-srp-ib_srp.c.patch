@@ -762,7 +762,7 @@ Change-Id: I87db11ac4a67ae0c9c186703ccabdf3f0d9352fd
  	kfree(target->ch);
  	goto out;
  }
-@@ -4286,11 +4644,19 @@ static int __init srp_init_module(void)
+@@ -4287,11 +4645,19 @@ static int __init srp_init_module(void)
  		indirect_sg_entries = cmd_sg_entries;
  	}
  

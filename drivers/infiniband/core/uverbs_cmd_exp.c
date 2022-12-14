@@ -378,7 +378,7 @@ int ib_uverbs_exp_create_qp(struct uverbs_attr_bundle *attrs)
 	return 0;
 
 err_copy:
-	ib_destroy_qp_user(qp, uverbs_get_cleared_udata(attrs));
+	ib_destroy_qp(qp);
 
 err_put:
 	if (!IS_ERR(xrcd_uobj))
@@ -854,8 +854,6 @@ static int translate_exp_access_flags(u64 exp_access_flags)
 		access_flags |= IB_EXP_ACCESS_PHYSICAL_ADDR;
 	if (exp_access_flags & IB_UVERBS_EXP_ACCESS_TUNNELED_ATOMIC)
 		access_flags |= IB_EXP_ACCESS_TUNNELED_ATOMIC;
-	if (exp_access_flags & IB_UVERBS_EXP_ACCESS_RELAXED_ORDERING)
-		access_flags |= IB_ACCESS_RELAXED_ORDERING;
 
 	return access_flags;
 }

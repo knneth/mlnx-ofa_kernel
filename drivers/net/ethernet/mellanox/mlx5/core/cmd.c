@@ -860,7 +860,7 @@ static u16 msg_to_opcode(struct mlx5_cmd_msg *in)
 	return MLX5_GET(mbox_in, in->first.data, opcode);
 }
 
-static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_comp_t comp_type);
+static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool forced);
 
 static void cb_timeout_handler(struct work_struct *work)
 {
@@ -876,23 +876,12 @@ static void cb_timeout_handler(struct work_struct *work)
 	mlx5_core_warn(dev, "%s(0x%x) timeout. Will cause a leak of a command resource\n",
 		       mlx5_command_str(msg_to_opcode(ent->in)),
 		       msg_to_opcode(ent->in));
-	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
+	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
 }
 
 static void free_msg(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *msg);
 static void mlx5_free_cmd_msg(struct mlx5_core_dev *dev,
 			      struct mlx5_cmd_msg *msg);
-
-static bool opcode_allowed(struct mlx5_cmd *cmd, u16 opcode)
-{
-	if (!cmd->allowed_opcode)
-		return true;
-
-	if (cmd->allowed_opcode != opcode)
-		return false;
-
-	return true;
-}
 
 static void cmd_work_handler(struct work_struct *work)
 {
@@ -962,8 +951,7 @@ static void cmd_work_handler(struct work_struct *work)
 
 	/* Skip sending command to fw if internal error */
 	if (pci_channel_offline(dev->pdev) ||
-	    dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR ||
-	    !opcode_allowed(&dev->cmd, ent->op)) {
+	    dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
 		u8 status = 0;
 		u32 drv_synd;
 
@@ -971,11 +959,7 @@ static void cmd_work_handler(struct work_struct *work)
 		MLX5_SET(mbox_out, ent->out, status, status);
 		MLX5_SET(mbox_out, ent->out, syndrome, drv_synd);
 
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, MLX5_CMD_COMP_TYPE_FORCED);
-		/* no doorbell, no need to keep the entry */
-		free_ent(cmd, ent->idx);
-		if (ent->callback)
-			free_cmd(ent);
+		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
 		return;
 	}
 
@@ -988,8 +972,7 @@ static void cmd_work_handler(struct work_struct *work)
 		poll_timeout(ent);
 		/* make sure we read the descriptor after ownership is SW */
 		rmb();
-		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, ent->ret == -ETIMEDOUT ?
-				      MLX5_CMD_COMP_TYPE_FORCED : MLX5_CMD_COMP_TYPE_POLLING);
+		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, (ent->ret == -ETIMEDOUT));
 	}
 }
 
@@ -1023,31 +1006,6 @@ static const char *deliv_status_to_str(u8 status)
 	}
 }
 
-enum {
-	MLX5_CMD_TIMEOUT_RECOVER_MSEC   = 5 * 1000,
-};
-
-static void wait_func_handle_exec_timeout(struct mlx5_core_dev *dev,
-					  struct mlx5_cmd_work_ent *ent)
-{
-	unsigned long timeout = msecs_to_jiffies(MLX5_CMD_TIMEOUT_RECOVER_MSEC);
-	int eqes = mlx5_cmd_eq_recover(dev);
-
-	/* If mlx5_cmd_eq_recover ret value > 0, a pending EQE got handled.
-	 * This should cause the entry to be completed by the command
-	 * interface. So let's wait for the entry->done completion.
-	 */
-	if (eqes && wait_for_completion_timeout(&ent->done, timeout)) {
-		mlx5_core_warn(dev, "Recovered %d EQEs on cmd_eq\n", eqes);
-		return;
-	}
-
-	mlx5_core_warn(dev, "Recovered %d EQEs on cmd_eq, no done completion for ent (%d)\n",
-		       eqes, ent->idx);
-	ent->ret = -ETIMEDOUT;
-	mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
-}
-
 static int wait_func(struct mlx5_core_dev *dev, struct mlx5_cmd_work_ent *ent)
 {
 	unsigned long timeout = msecs_to_jiffies(MLX5_CMD_TIMEOUT_MSEC);
@@ -1059,10 +1017,12 @@ static int wait_func(struct mlx5_core_dev *dev, struct mlx5_cmd_work_ent *ent)
 		ent->ret = -ECANCELED;
 		goto out_err;
 	}
-	if (cmd->mode == CMD_MODE_POLLING || ent->polling)
+	if (cmd->mode == CMD_MODE_POLLING || ent->polling) {
 		wait_for_completion(&ent->done);
-	else if (!wait_for_completion_timeout(&ent->done, timeout))
-		wait_func_handle_exec_timeout(dev, ent);
+	} else if (!wait_for_completion_timeout(&ent->done, timeout)) {
+		ent->ret = -ETIMEDOUT;
+		mlx5_cmd_comp_handler(dev, 1UL << ent->idx, true);
+	}
 
 out_err:
 	err = ent->ret;
@@ -1509,22 +1469,6 @@ err_dbg:
 	return err;
 }
 
-void mlx5_cmd_allowed_opcode(struct mlx5_core_dev *dev, u16 opcode)
-{
-	struct mlx5_cmd *cmd = &dev->cmd;
-	int i;
-
-	for (i = 0; i < cmd->max_reg_cmds; i++)
-		down(&cmd->sem);
-	down(&cmd->pages_sem);
-
-	cmd->allowed_opcode = opcode;
-
-	up(&cmd->pages_sem);
-	for (i = 0; i < cmd->max_reg_cmds; i++)
-		up(&cmd->sem);
-}
-
 static void mlx5_cmd_change_mod(struct mlx5_core_dev *dev, int mode)
 {
 	struct mlx5_cmd *cmd = &dev->cmd;
@@ -1552,8 +1496,7 @@ static int cmd_comp_notifier(struct notifier_block *nb,
 	dev = container_of(cmd, struct mlx5_core_dev, cmd);
 	eqe = data;
 
-	mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector),
-			      MLX5_CMD_COMP_TYPE_EVENT);
+	mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector), false);
 
 	return NOTIFY_OK;
 }
@@ -1584,7 +1527,7 @@ static void free_msg(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *msg)
 	}
 }
 
-static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_comp_t comp_type)
+static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, bool forced)
 {
 	struct mlx5_cmd *cmd = &dev->cmd;
 	struct mlx5_cmd_work_ent *ent;
@@ -1609,20 +1552,12 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 			if (!test_and_clear_bit(MLX5_CMD_ENT_STATE_PENDING_COMP,
 						&ent->state)) {
 				/* only real completion can free the cmd slot */
-				if (comp_type == MLX5_CMD_COMP_TYPE_EVENT && !ent->polling) {
+				if (!forced) {
 					mlx5_core_err(dev, "Command completion arrived after timeout (entry idx = %d).\n",
 						      ent->idx);
 					free_ent(cmd, ent->idx);
 					free_cmd(ent);
 				}
-				if (comp_type != MLX5_CMD_COMP_TYPE_POLLING)
-					continue;
-			} else if (ent->polling && comp_type == MLX5_CMD_COMP_TYPE_EVENT) {
-				u16 opcode;
-
-				opcode = msg_to_opcode(ent->in);
-				mlx5_core_err(dev, "Command polling got Event as first completion (entry idx = %d) %s.\n",
-					      ent->idx, mlx5_command_str(opcode));
 				continue;
 			}
 
@@ -1653,7 +1588,7 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 			}
 
 			/* only real completion will free the entry slot */
-			if (comp_type != MLX5_CMD_COMP_TYPE_FORCED)
+			if (!forced)
 				free_ent(cmd, ent->idx);
 
 			if (ent->callback) {
@@ -1683,7 +1618,7 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 				free_msg(dev, ent->in);
 
 				err = err ? err : ent->status;
-				if (comp_type != MLX5_CMD_COMP_TYPE_FORCED)
+				if (!forced)
 					free_cmd(ent);
 				callback(err, context);
 			} else {
@@ -1714,7 +1649,7 @@ void mlx5_cmd_trigger_completions(struct mlx5_core_dev *dev)
 	spin_unlock_irqrestore(&dev->cmd.alloc_lock, flags);
 
 	mlx5_core_dbg(dev, "vector 0x%llx\n", vector);
-	mlx5_cmd_comp_handler(dev, vector, MLX5_CMD_COMP_TYPE_FORCED);
+	mlx5_cmd_comp_handler(dev, vector, true);
 	return;
 
 no_trig:
@@ -1831,13 +1766,12 @@ static int cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 	int err;
 	u8 status = 0;
 	u32 drv_synd;
-	u16 opcode;
 	u8 token;
 
-	opcode = MLX5_GET(mbox_in, in, opcode);
 	if (pci_channel_offline(dev->pdev) ||
-	    dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR ||
-	    !opcode_allowed(&dev->cmd, opcode)) {
+	    dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+		u16 opcode = MLX5_GET(mbox_in, in, opcode);
+
 		err = mlx5_internal_err_ret_value(dev, opcode, &drv_synd, &status);
 		MLX5_SET(mbox_out, out, status, status);
 		MLX5_SET(mbox_out, out, syndrome, drv_synd);
@@ -2139,7 +2073,6 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 	mlx5_core_dbg(dev, "descriptor at dma 0x%llx\n", (unsigned long long)(cmd->dma));
 
 	cmd->mode = CMD_MODE_POLLING;
-	cmd->allowed_opcode = 0;
 
 	create_msg_cache(dev);
 

@@ -4,27 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ia7abd3b0c33b11f2e95a04b049e6a502d41c388a
 ---
- .../ulp/ipoib/rss_tss/ipoib_ethtool_rss.c     | 55 +++++++++++++++++--
- 1 file changed, 51 insertions(+), 4 deletions(-)
+ .../ulp/ipoib/rss_tss/ipoib_ethtool_rss.c          | 47 ++++++++++++++++++++--
+ 1 file changed, 44 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ethtool_rss.c
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ethtool_rss.c
-@@ -31,7 +31,13 @@
-  */
- 
- static int ipoib_set_coalesce_rss(struct net_device *dev,
--				  struct ethtool_coalesce *coal)
-+#ifdef HAVE_NDO_GET_COALESCE_GET_4_PARAMS
-+		 		struct ethtool_coalesce *coal,
-+				struct kernel_ethtool_coalesce *kernel_coal,
-+				struct netlink_ext_ack *extack)
-+#else
-+				struct ethtool_coalesce *coal)
-+#endif
- {
- 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
- 	int ret, i;
-@@ -59,7 +65,6 @@ static int ipoib_set_coalesce_rss(struct
+@@ -59,7 +59,6 @@ static int ipoib_set_coalesce_rss(struct
  
  	return 0;
  }
@@ -32,7 +17,7 @@ Change-Id: Ia7abd3b0c33b11f2e95a04b049e6a502d41c388a
  static void ipoib_get_ethtool_stats_rss(struct net_device *dev,
  					struct ethtool_stats __always_unused *stats,
  					u64 *data)
-@@ -146,7 +151,7 @@ static int ipoib_get_sset_count_rss(stru
+@@ -146,7 +145,7 @@ static int ipoib_get_sset_count_rss(stru
  	}
  	return -EOPNOTSUPP;
  }
@@ -41,7 +26,7 @@ Change-Id: Ia7abd3b0c33b11f2e95a04b049e6a502d41c388a
  static void ipoib_get_channels(struct net_device *dev,
  			       struct ethtool_channels *channel)
  {
-@@ -205,23 +210,65 @@ static int ipoib_set_channels(struct net
+@@ -205,23 +204,65 @@ static int ipoib_set_channels(struct net
  
  	return ipoib_reinit_rss(dev, channel->rx_count, channel->tx_count);
  }

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag.c
 
 Change-Id: I2a88aad0f54ecd17882fb357fb7557cd221ff9df
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lag.c | 193 +++++++++++++++++-
+ drivers/net/ethernet/mellanox/mlx5/core/lag.c | 193 +++++++++++++++++++++++++-
  1 file changed, 187 insertions(+), 6 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag.c

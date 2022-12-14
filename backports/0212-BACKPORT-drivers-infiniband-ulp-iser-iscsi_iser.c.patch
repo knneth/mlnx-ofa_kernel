@@ -111,7 +111,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  
  /**
   * iscsi_iser_conn_create() - create a new iscsi-iser connection
-@@ -597,6 +648,7 @@ iscsi_iser_session_destroy(struct iscsi_
+@@ -586,6 +637,7 @@ iscsi_iser_session_destroy(struct iscsi_
  static inline unsigned int
  iser_dif_prot_caps(int prot_caps)
  {
@@ -119,7 +119,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  	return ((prot_caps & IB_PROT_T10DIF_TYPE_1) ?
  		SHOST_DIF_TYPE1_PROTECTION | SHOST_DIX_TYPE0_PROTECTION |
  		SHOST_DIX_TYPE1_PROTECTION : 0) |
-@@ -604,6 +656,14 @@ iser_dif_prot_caps(int prot_caps)
+@@ -593,6 +645,14 @@ iser_dif_prot_caps(int prot_caps)
  		SHOST_DIF_TYPE2_PROTECTION | SHOST_DIX_TYPE2_PROTECTION : 0) |
  	       ((prot_caps & IB_PROT_T10DIF_TYPE_3) ?
  		SHOST_DIF_TYPE3_PROTECTION | SHOST_DIX_TYPE3_PROTECTION : 0);
@@ -134,7 +134,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  }
  
  /**
-@@ -659,8 +719,15 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -648,8 +708,15 @@ iscsi_iser_session_create(struct iscsi_e
  			u32 sig_caps = ib_conn->device->ib_device->attrs.sig_prot_cap;
  
  			scsi_host_set_prot(shost, iser_dif_prot_caps(sig_caps));
@@ -150,7 +150,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  		}
  
  		if (iscsi_host_add(shost,
-@@ -768,9 +835,16 @@ iscsi_iser_conn_get_stats(struct iscsi_c
+@@ -757,9 +824,16 @@ iscsi_iser_conn_get_stats(struct iscsi_c
  	stats->r2t_pdus = conn->r2t_pdus_cnt; /* always 0 */
  	stats->tmfcmd_pdus = conn->tmfcmd_pdus_cnt;
  	stats->tmfrsp_pdus = conn->tmfrsp_pdus_cnt;
@@ -167,7 +167,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  static int iscsi_iser_get_ep_param(struct iscsi_endpoint *ep,
  				   enum iscsi_param param, char *buf)
  {
-@@ -790,6 +864,7 @@ static int iscsi_iser_get_ep_param(struc
+@@ -779,6 +853,7 @@ static int iscsi_iser_get_ep_param(struc
  	}
  	return -ENOSYS;
  }
@@ -175,7 +175,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  
  /**
   * iscsi_iser_ep_connect() - Initiate iSER connection establishment
-@@ -916,7 +991,12 @@ iscsi_iser_ep_disconnect(struct iscsi_en
+@@ -905,7 +980,12 @@ iscsi_iser_ep_disconnect(struct iscsi_en
  	iscsi_destroy_endpoint(ep);
  }
  
@@ -188,7 +188,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  {
  	switch (param_type) {
  	case ISCSI_HOST_PARAM:
-@@ -960,7 +1040,9 @@ static umode_t iser_attr_is_visible(int
+@@ -949,7 +1029,9 @@ static umode_t iser_attr_is_visible(int
  		case ISCSI_PARAM_TGT_RESET_TMO:
  		case ISCSI_PARAM_IFACE_NAME:
  		case ISCSI_PARAM_INITIATOR_NAME:
@@ -198,7 +198,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  			return S_IRUGO;
  		default:
  			return 0;
-@@ -969,7 +1051,9 @@ static umode_t iser_attr_is_visible(int
+@@ -958,7 +1040,9 @@ static umode_t iser_attr_is_visible(int
  
  	return 0;
  }
@@ -208,7 +208,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
  {
  	struct iscsi_session *session;
-@@ -993,29 +1077,47 @@ static int iscsi_iser_slave_alloc(struct
+@@ -982,29 +1066,47 @@ static int iscsi_iser_slave_alloc(struct
  
  	return 0;
  }
@@ -256,7 +256,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  	/* session management */
  	.create_session         = iscsi_iser_session_create,
  	.destroy_session        = iscsi_iser_session_destroy,
-@@ -1023,10 +1125,14 @@ static struct iscsi_transport iscsi_iser
+@@ -1012,10 +1114,14 @@ static struct iscsi_transport iscsi_iser
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,
  	.destroy_conn           = iscsi_conn_teardown,
@@ -271,7 +271,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  	.get_session_param	= iscsi_session_get_param,
  	.start_conn             = iscsi_iser_conn_start,
  	.stop_conn              = iscsi_iser_conn_stop,
-@@ -1040,7 +1146,9 @@ static struct iscsi_transport iscsi_iser
+@@ -1029,7 +1135,9 @@ static struct iscsi_transport iscsi_iser
  	.xmit_task		= iscsi_iser_task_xmit,
  	.cleanup_task		= iscsi_iser_cleanup_task,
  	.alloc_pdu		= iscsi_iser_pdu_alloc,
@@ -281,7 +281,7 @@ Change-Id: I021c626f6742d23667c92ae31bbf4b6797df9669
  	/* recovery */
  	.session_recovery_timedout = iscsi_session_recovery_timedout,
  
-@@ -1060,6 +1168,13 @@ static int __init iser_init(void)
+@@ -1049,6 +1157,13 @@ static int __init iser_init(void)
  		return -EINVAL;
  	}
  

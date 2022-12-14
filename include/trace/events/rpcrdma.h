@@ -12,7 +12,6 @@
 
 #include <linux/scatterlist.h>
 #include <linux/tracepoint.h>
-#include <rdma/ib_cm.h>
 #include <trace/events/rdma.h>
 
 /**

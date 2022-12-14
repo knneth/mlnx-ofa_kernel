@@ -116,7 +116,7 @@ enum {
 #define IB_UCM_BASE_DEV MKDEV(IB_UCM_MAJOR, IB_UCM_BASE_MINOR)
 static dev_t dynamic_ucm_dev;
 
-static int ib_ucm_add_one(struct ib_device *device);
+static void ib_ucm_add_one(struct ib_device *device);
 static void ib_ucm_remove_one(struct ib_device *device, void *client_data);
 
 static struct ib_client ucm_client = {
@@ -1223,29 +1223,26 @@ static ssize_t show_ibdev(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(ibdev, S_IRUGO, show_ibdev, NULL);
 
-static int ib_ucm_add_one(struct ib_device *device)
+static void ib_ucm_add_one(struct ib_device *device)
 {
 	int devnum;
 	dev_t base;
 	struct ib_ucm_device *ucm_dev;
-	int ret;
 
 	if (!device->ops.alloc_ucontext || !rdma_cap_ib_cm(device, 1))
-		return -EOPNOTSUPP;
+		return;
 
 	ucm_dev = kzalloc(sizeof *ucm_dev, GFP_KERNEL);
 	if (!ucm_dev)
-		return -ENOMEM;
+		return;
 
 	device_initialize(&ucm_dev->dev);
 	ucm_dev->ib_dev = device;
 	ucm_dev->dev.release = ib_ucm_release_dev;
 
 	devnum = find_first_zero_bit(dev_map, IB_UCM_MAX_DEVICES);
-	if (devnum >= IB_UCM_MAX_DEVICES) {
-		ret = -EOPNOTSUPP;
+	if (devnum >= IB_UCM_MAX_DEVICES)
 		goto err;
-	}
 	ucm_dev->devnum = devnum;
 	set_bit(devnum, dev_map);
 	if (devnum >= IB_UCM_NUM_FIXED_MINOR)
@@ -1262,16 +1259,14 @@ static int ib_ucm_add_one(struct ib_device *device)
 	ucm_dev->dev.devt = base;
 
 	dev_set_name(&ucm_dev->dev, "ucm%d", ucm_dev->devnum);
-	ret = cdev_device_add(&ucm_dev->cdev, &ucm_dev->dev);
-	if (ret)
+	if (cdev_device_add(&ucm_dev->cdev, &ucm_dev->dev))
 		goto err_devnum;
 
-	ret = device_create_file(&ucm_dev->dev, &dev_attr_ibdev);
-	if (ret)
+	if (device_create_file(&ucm_dev->dev, &dev_attr_ibdev))
 		goto err_dev;
 
 	ib_set_client_data(device, &ucm_client, ucm_dev);
-	return 0;
+	return;
 
 err_dev:
 	cdev_device_del(&ucm_dev->cdev, &ucm_dev->dev);
@@ -1279,12 +1274,15 @@ err_devnum:
 	ib_ucm_free_dev(ucm_dev);
 err:
 	put_device(&ucm_dev->dev);
-	return ret;
+	return;
 }
 
 static void ib_ucm_remove_one(struct ib_device *device, void *client_data)
 {
 	struct ib_ucm_device *ucm_dev = client_data;
+
+	if (!ucm_dev)
+		return;
 
 	cdev_device_del(&ucm_dev->cdev, &ucm_dev->dev);
 	ib_ucm_free_dev(ucm_dev);

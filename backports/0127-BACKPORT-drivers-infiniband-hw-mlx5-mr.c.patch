@@ -18,7 +18,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  #include <rdma/ib_umem.h>
  #include <rdma/ib_umem_odp.h>
  #include <rdma/ib_verbs.h>
-@@ -584,9 +587,17 @@ static void clean_keys(struct mlx5_ib_de
+@@ -548,9 +551,17 @@ static void clean_keys(struct mlx5_ib_de
  	}
  }
  
@@ -36,7 +36,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  
  	dev->fill_delay = 0;
  }
-@@ -606,7 +617,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
+@@ -570,7 +581,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
  	}
  
  	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
@@ -49,7 +49,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  	for (i = 0; i < MAX_MR_CACHE_ENTRIES; i++) {
  		ent = &cache->ent[i];
  		INIT_LIST_HEAD(&ent->head);
-@@ -1703,7 +1718,11 @@ mlx5_alloc_priv_descs(struct ib_device *
+@@ -1661,7 +1676,11 @@ mlx5_alloc_priv_descs(struct ib_device *
  	int add_size;
  	int ret;
  
@@ -61,7 +61,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  
  	mr->descs_alloc = kzalloc(size + add_size, GFP_KERNEL);
  	if (!mr->descs_alloc)
-@@ -1774,7 +1793,7 @@ static void dereg_mr(struct mlx5_ib_dev
+@@ -1732,7 +1751,7 @@ static void dereg_mr(struct mlx5_ib_dev
  {
  	int npages = mr->npages;
  	struct ib_umem *umem = mr->umem;
@@ -70,7 +70,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  	if (is_odp_mr(mr)) {
  		struct ib_umem_odp *umem_odp = to_ib_umem_odp(umem);
  
-@@ -1808,7 +1827,7 @@ static void dereg_mr(struct mlx5_ib_dev
+@@ -1766,7 +1785,7 @@ static void dereg_mr(struct mlx5_ib_dev
  		/* Avoid double-freeing the umem. */
  		umem = NULL;
  	}
@@ -79,7 +79,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  	clean_mr(dev, mr);
  
  	if (!mr->allocated_from_cache) {
-@@ -2794,7 +2813,11 @@ static ssize_t order_attr_store(struct k
+@@ -2746,7 +2765,11 @@ static ssize_t order_attr_store(struct k
  	return oa->store(co, oa, buf, size);
  }
  
@@ -91,7 +91,7 @@ Change-Id: I85f57d1c9a9c99008fab363c0b1325d006850522
  	.show = order_attr_show,
  	.store = order_attr_store,
  };
-@@ -2932,7 +2955,11 @@ static ssize_t cache_attr_store(struct k
+@@ -2884,7 +2907,11 @@ static ssize_t cache_attr_store(struct k
  	return ca->store(dev, buf, size);
  }
  

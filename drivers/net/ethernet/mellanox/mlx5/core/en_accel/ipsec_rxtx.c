@@ -473,8 +473,6 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 
 	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
 	priv = netdev_priv(netdev);
-	if (!priv->ipsec)
-		return;
 	sp = secpath_set(skb);
 	if (unlikely(!sp)) {
 		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
