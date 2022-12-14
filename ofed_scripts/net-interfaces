@@ -1,0 +1,93 @@
+#!/usr/bin/perl
+
+my $got_if = 0;
+my $action = shift @ARGV;
+my $int = shift @ARGV;
+
+sub usage
+{
+	print "\n Usage: $0 <command> <network interface name>\n";
+	print "\n Command:";
+	print "\n\t get-bond-master        Get the name of the corresponding bonding interface";
+	print "\n\t get-mtu                Get the MTU of the interface";
+	print "\n";
+}
+
+# set configuration files
+my @conf_files = ("/etc/network/interfaces");
+if (`grep -w source /etc/network/interfaces 2>/dev/null | grep -vE "^\\s*#" 2>/dev/null` ne "") {
+	# get absolute file paths
+	open(FD, "/etc/network/interfaces");
+	while (<FD>) {
+		next if (/\s*#/);
+		my $line = $_;
+		chomp $line;
+
+		my $ff = "";
+		if ($line =~ /^\s*(source)\s(.*)/) {
+			$ff = $2;
+		} else {
+			next;
+		}
+
+		# check if it's absolute path
+		if (-e "$ff") {
+			push(@conf_files, $ff);
+			next;
+		}
+
+		# check if it's relative path
+		if (`ls $ff 2>/dev/null` eq "") {
+			$ff = "/etc/network/$ff";
+		}
+
+		# support wildcards
+		for my $file (split(' ', `ls $ff 2>/dev/null`)) {
+			chomp $file;
+				if (-e "$file") {
+			        push(@conf_files, $file);
+			}
+		}
+	}
+	close(FD);
+}
+
+# check relevant conf files
+my $confs = join(" ", @conf_files);
+$confs = `grep -lw $int $confs 2>/dev/null`;
+
+for my $conf (split('\n', $confs)) {
+	open(FD, "$conf");
+	while (<FD>) {
+		next if (/\s*#/);
+		if (/^\s*(auto|iface)\s(.*)/) {
+			my $iface = (split ' ')[1];
+			$iface =~ s/ //g;
+			if ($got_if) {
+				$got_if = 0;
+				next;
+			}
+			$got_if = 1 if ($iface eq $int);
+			next;
+		}
+
+		if ($action eq "get-bond-master") {
+			if ($got_if and /^\s*(bond-master)\s(.*)/) {
+				my $bond = $2;
+				$bond =~ s/ //g;
+				print "$bond\n";
+				exit 0;
+			}
+		} elsif ($action eq "get-mtu") {
+			if ($got_if and /^\s*(mtu)\s(.*)/) {
+				my $mtu = $2;
+				$mtu =~ s/ //g;
+				print "$mtu\n";
+				exit 0;
+			}
+		} else {
+			usage();
+			exit 1;
+		}
+	}
+}

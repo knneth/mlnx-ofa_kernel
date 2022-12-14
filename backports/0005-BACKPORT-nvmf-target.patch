@@ -1,0 +1,31 @@
+From: Max Gurtovoy <maxg@mellanox.com>
+Subject: [PATCH] BACKPORT: nvmf target
+
+Change-Id: Ib87b1323030caa0b6a51da3af25f24772d6a5935
+Signed-off-by: Max Gurtovoy <maxg@mellanox.com>
+---
+ drivers/nvme/target/loop.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/nvme/target/loop.c
++++ b/drivers/nvme/target/loop.c
+@@ -273,6 +273,9 @@ static int nvme_loop_init_admin_hctx(str
+ static struct blk_mq_ops nvme_loop_mq_ops = {
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue      = blk_mq_map_queue,
++#endif
+ 	.init_request	= nvme_loop_init_request,
+ 	.init_hctx	= nvme_loop_init_hctx,
+ 	.timeout	= nvme_loop_timeout,
+@@ -281,6 +284,9 @@ static struct blk_mq_ops nvme_loop_mq_op
+ static struct blk_mq_ops nvme_loop_admin_mq_ops = {
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue      = blk_mq_map_queue,
++#endif
+ 	.init_request	= nvme_loop_init_admin_request,
+ 	.init_hctx	= nvme_loop_init_admin_hctx,
+ 	.timeout	= nvme_loop_timeout,

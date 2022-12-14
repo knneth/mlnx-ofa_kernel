@@ -1,0 +1,16 @@
+# mlxn-en.d - configure Mellanox network devices
+#
+
+description	"mlnx-en.d - configure Mellanox devices"
+
+start on (mounted MOUNTPOINT=/run or local-filesystems or runlevel [2345])
+
+stop on runlevel [!2345]
+
+pre-start script
+	exec /etc/init.d/mlnx-en.d start
+	exec ifup -a
+end script
+
+post-stop exec /etc/init.d/mlnx-en.d stop
+

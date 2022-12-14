@@ -1,0 +1,6 @@
+obj-$(CONFIG_INFINIBAND_SRP)			+= ib_srp.o
+obj-$(CONFIG_INFINIBAND_SRP_DUMMY)		+= ib_srp.o
+
+ifeq ($(CONFIG_INFINIBAND_SRP_DUMMY),m)
+ib_srp-y := ib_srp_dummy.o
+endif

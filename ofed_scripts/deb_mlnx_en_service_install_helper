@@ -1,0 +1,22 @@
+#!/bin/bash -x
+
+DEST_DIR=$1; shift
+
+with_mlx4=${with_mlx4:-1}
+with_mlx5=${with_mlx5:-1}
+
+# is systemd supported and systemctl exists
+if (systemctl 2>/dev/null | grep -qw "\\-\.mount" 2>/dev/null); then
+	install -d ${DEST_DIR}/lib/systemd/system
+	install -m 0644 ofed_scripts/mlnx-en.d.service ${DEST_DIR}/lib/systemd/system
+fi
+
+# Update mlnx-en.conf
+config=${DEST_DIR}/etc/mlnx-en.conf
+if [ $with_mlx4 -eq 0 ]; then
+	sed -i 's/MLX4_LOAD=yes/MLX4_LOAD=no/' $config
+fi
+
+if [ $with_mlx5 -eq 0 ]; then
+	sed -i 's/MLX5_LOAD=yes/MLX5_LOAD=no/' $config
+fi

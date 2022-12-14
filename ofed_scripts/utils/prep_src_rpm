@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# prepare source tgz
+python setup.py sdist
+
+# prepare spec file
+python setup.py bdist_rpm  --spec-only
+sed -i "s/BuildArch/#BuildArch/" dist/ofed-le-utils.spec
+
+# prepare src rpm
+rpmbuild --define '_sourcedir dist/' --define '_srcrpmdir dist/'  -bs dist/ofed-le-utils.spec

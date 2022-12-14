@@ -1,0 +1,16 @@
+#!/bin/bash -x
+
+DEST_DIR=$1
+
+install -d ${DEST_DIR}/etc/infiniband
+if [ ! -s ${DEST_DIR}/etc/infiniband/openib.conf ]; then
+	install -m 0644 ofed_scripts/openib.conf ${DEST_DIR}/etc/infiniband
+fi
+
+while read line
+do
+	item=$(echo "$line" | sed -e 's/=.*//g')
+	if [ "X$item" != "X" ] && ! (grep -q "$item" ${DEST_DIR}/etc/infiniband/openib.conf 2>/dev/null); then
+		echo "$line" >> ${DEST_DIR}/etc/infiniband/openib.conf
+	fi
+done < "ofed_scripts/openib.conf.tmp"

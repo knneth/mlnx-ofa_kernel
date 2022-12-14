@@ -1,0 +1,3 @@
+nvmet.ko external
+nvme-loop.ko external
+nvmet-rdma.ko external
