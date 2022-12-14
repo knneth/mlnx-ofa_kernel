@@ -1,0 +1,22 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
+
+Change-Id: Ic1f58ac22362242f977e6f3d9482a7fad26637fb
+---
+ drivers/infiniband/core/mad.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/core/mad.c
++++ b/drivers/infiniband/core/mad.c
+@@ -4083,7 +4083,11 @@ static ssize_t sa_cc_attr_show(struct ko
+ 	return sa->show(cc_obj, buf);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops sa_cc_sysfs_ops = {
++#else
++static struct sysfs_ops sa_cc_sysfs_ops = {
++#endif
+ 	.show = sa_cc_attr_show,
+ 	.store = sa_cc_attr_store,
+ };

@@ -66,12 +66,13 @@ struct mlx4_en_port_stats {
 	unsigned long queue_stopped;
 	unsigned long wake_queue;
 	unsigned long tx_timeout;
-	unsigned long rx_alloc_failed;
+	unsigned long rx_alloc_pages;
+	unsigned long rx_inline_scatter;
 	unsigned long rx_chksum_good;
 	unsigned long rx_chksum_none;
 	unsigned long rx_chksum_complete;
 	unsigned long tx_chksum_offload;
-#define NUM_PORT_STATS		10
+#define NUM_PORT_STATS		11
 };
 
 struct mlx4_en_perf_stats {

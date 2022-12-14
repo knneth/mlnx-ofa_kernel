@@ -48,7 +48,6 @@
 #include <rdma/ib.h>
 #include <rdma/rdma_netlink.h>
 #include <net/netlink.h>
-#include <linux/ratelimit.h>
 
 #include "core_priv.h"
 
@@ -89,7 +88,7 @@ static inline bool ib_nl_is_good_ip_resp(const struct nlmsghdr *nlh)
 		return false;
 
 	ret = nla_parse(tb, LS_NLA_TYPE_MAX - 1, nlmsg_data(nlh),
-			nlmsg_len(nlh), ib_nl_addr_policy);
+			nlmsg_len(nlh), ib_nl_addr_policy, NULL);
 	if (ret)
 		return false;
 
@@ -130,13 +129,11 @@ static void ib_nl_process_good_ip_rsep(const struct nlmsghdr *nlh)
 }
 
 int ib_nl_handle_ip_res_resp(struct sk_buff *skb,
-			     struct netlink_callback *cb)
+			     struct nlmsghdr *nlh,
+			     struct netlink_ext_ack *extack)
 {
-	const struct nlmsghdr *nlh = (struct nlmsghdr *)cb->nlh;
-
 	if ((nlh->nlmsg_flags & NLM_F_REQUEST) ||
-	    !(NETLINK_CB(skb).sk) ||
-	    !netlink_capable(skb, CAP_NET_ADMIN))
+	    !(NETLINK_CB(skb).sk))
 		return -EPERM;
 
 	if (ib_nl_is_good_ip_resp(nlh))
@@ -180,14 +177,13 @@ static int ib_nl_ip_send_msg(struct rdma_dev_addr *dev_addr,
 	}
 
 	/* Construct the family header first */
-	header = (struct rdma_ls_ip_resolve_header *)
-		skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
+	header = skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
 	header->ifindex = dev_addr->bound_dev_if;
 	nla_put(skb, attrtype, size, daddr);
 
 	/* Repair the nlmsg header length */
 	nlmsg_end(skb, nlh);
-	ibnl_multicast(skb, nlh, RDMA_NL_GROUP_LS, GFP_KERNEL);
+	rdma_nl_multicast(skb, RDMA_NL_GROUP_LS, GFP_KERNEL);
 
 	/* Make the request retry, so when we get the response from userspace
 	 * we will have something.
@@ -328,7 +324,7 @@ static void queue_req(struct addr_req *req)
 static int ib_nl_fetch_ha(struct dst_entry *dst, struct rdma_dev_addr *dev_addr,
 			  const void *daddr, u32 seq, u16 family)
 {
-	if (ibnl_chk_listeners(RDMA_NL_GROUP_LS))
+	if (rdma_nl_chk_listeners(RDMA_NL_GROUP_LS))
 		return -EADDRNOTAVAIL;
 
 	/* We fill in what we can, the response will fill the rest */
@@ -411,7 +407,7 @@ static int addr4_resolve(struct sockaddr_in *src_in,
 	rt = ip_route_output_key(addr->net, &fl4);
 	ret = PTR_ERR_OR_ZERO(rt);
 	if (ret)
-		goto out;
+		return ret;
 
 	src_in->sin_family = AF_INET;
 	src_in->sin_addr.s_addr = fl4.saddr;
@@ -427,8 +423,6 @@ static int addr4_resolve(struct sockaddr_in *src_in,
 
 	*prt = rt;
 	return 0;
-out:
-	return ret;
 }
 
 #if IS_ENABLED(CONFIG_IPV6)
@@ -447,17 +441,12 @@ static int addr6_resolve(struct sockaddr_in6 *src_in,
 	fl6.saddr = src_in->sin6_addr;
 	fl6.flowi6_oif = addr->bound_dev_if;
 
-	dst = ip6_route_output(addr->net, NULL, &fl6);
-	if ((ret = dst->error))
-		goto put;
+	ret = ipv6_stub->ipv6_dst_lookup(addr->net, NULL, &dst, &fl6);
+	if (ret < 0)
+		return ret;
 
 	rt = (struct rt6_info *)dst;
-	if (ipv6_addr_any(&fl6.saddr)) {
-		ret = ipv6_dev_get_saddr(addr->net, ip6_dst_idev(dst)->dev,
-					 &fl6.daddr, 0, &fl6.saddr);
-		if (ret)
-			goto put;
-
+	if (ipv6_addr_any(&src_in->sin6_addr)) {
 		src_in->sin6_family = AF_INET6;
 		src_in->sin6_addr = fl6.saddr;
 	}
@@ -474,9 +463,6 @@ static int addr6_resolve(struct sockaddr_in6 *src_in,
 
 	*pdst = dst;
 	return 0;
-put:
-	dst_release(dst);
-	return ret;
 }
 #else
 static int addr6_resolve(struct sockaddr_in6 *src_in,
@@ -522,7 +508,7 @@ static int addr_resolve(struct sockaddr *src_in,
 	int ret;
 
 	if (!addr->net) {
-		pr_warn_ratelimited("addr_resolve: missing namespace\n");
+		pr_warn_ratelimited("%s: missing namespace\n", __func__);
 		return -EINVAL;
 	}
 
@@ -572,7 +558,10 @@ static int addr_resolve(struct sockaddr *src_in,
 
 	if (ndev->flags & IFF_LOOPBACK) {
 		ret = rdma_translate_ip(dst_in, addr, NULL);
-		/* put the loopback device and get the translated device instead */
+		/*
+		 * Put the loopback device and get the translated
+		 * device instead.
+		 */
 		dev_put(ndev);
 		ndev = dev_get_by_index(addr->net, addr->bound_dev_if);
 	} else {

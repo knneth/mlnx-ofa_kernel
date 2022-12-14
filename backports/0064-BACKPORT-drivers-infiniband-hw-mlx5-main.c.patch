@@ -1,0 +1,161 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
+
+Change-Id: I0622271fd029ba0e93fb71991a7dddcfada904ad
+---
+ drivers/infiniband/hw/mlx5/main.c | 42 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/main.c
++++ b/drivers/infiniband/hw/mlx5/main.c
+@@ -143,13 +143,17 @@ static int mlx5_netdev_event(struct noti
+ 	case NETDEV_CHANGE:
+ 	case NETDEV_UP:
+ 	case NETDEV_DOWN: {
++#ifdef HAVE_NETDEV_MASTER_UPPER_DEV_GET
+ 		struct net_device *lag_ndev = mlx5_lag_get_roce_netdev(ibdev->mdev);
++#endif
+ 		struct net_device *upper = NULL;
+ 
++#ifdef HAVE_NETDEV_MASTER_UPPER_DEV_GET
+ 		if (lag_ndev) {
+ 			upper = netdev_master_upper_dev_get(lag_ndev);
+ 			dev_put(lag_ndev);
+ 		}
++#endif
+ 
+ 		if ((upper == ndev || (!upper && ndev == ibdev->roce.netdev))
+ 		    && ibdev->ib_active) {
+@@ -761,8 +765,10 @@ int mlx5_ib_query_device(struct ib_devic
+ 	if (MLX5_CAP_GEN(mdev, cd))
+ 		props->device_cap_flags |= IB_DEVICE_CROSS_CHANNEL;
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ 	if (!mlx5_core_is_pf(mdev))
+ 		props->device_cap_flags |= IB_DEVICE_VIRTUAL_FUNCTION;
++#endif
+ 
+ 	if (mlx5_ib_port_link_layer(ibdev, 1) ==
+ 	    IB_LINK_LAYER_ETHERNET) {
+@@ -999,7 +1005,9 @@ static int mlx5_query_hca_port(struct ib
+ 	props->qkey_viol_cntr	= rep->qkey_violation_counter;
+ 	props->subnet_timeout	= rep->subnet_timeout;
+ 	props->init_type_reply	= rep->init_type_reply;
++#ifdef HAVE_NDO_SET_VF_MAC
+ 	props->grh_required	= rep->grh_required;
++#endif
+ 
+ 	err = mlx5_query_port_link_width_oper(mdev, &ib_link_width_oper, port);
+ 	if (err)
+@@ -1618,6 +1626,7 @@ static int get_index(unsigned long offse
+ 	return get_arg(offset);
+ }
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ static void  mlx5_ib_vma_open(struct vm_area_struct *area)
+ {
+ 	/* vma_open is called when a new VMA is created on top of our VMA.  This
+@@ -1674,7 +1683,17 @@ void mlx5_ib_set_vma_data(struct vm_area
+ 
+ 	list_add(&vma_prv->list, vma_head);
+ }
++#else
++void mlx5_ib_set_vma_data(struct vm_area_struct *vma,
++			  struct mlx5_ib_ucontext *ctx,
++			  struct mlx5_ib_vma_private_data *vma_prv)
++{
++	/* In case vma->vm_ops is not supported just free the vma_prv */
++	kfree(vma_prv);
++}
++#endif
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ static void mlx5_ib_disassociate_ucontext(struct ib_ucontext *ibcontext)
+ {
+ 	int ret;
+@@ -1731,6 +1750,7 @@ static void mlx5_ib_disassociate_ucontex
+ 	mmput(owning_mm);
+ 	put_task_struct(owning_process);
+ }
++#endif /* defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED) */
+ 
+ static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
+ {
+@@ -1757,6 +1777,9 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	phys_addr_t pfn, pa;
+ 	pgprot_t prot;
+ 	int uars_per_page;
++#if defined(CONFIG_X86) && !defined(HAVE_PAT_ENABLED_AS_FUNCTION)
++	pgprot_t tmp_prot = __pgprot(0);
++#endif
+ 
+ 	if (vma->vm_end - vma->vm_start != PAGE_SIZE)
+ 		return -EINVAL;
+@@ -1773,7 +1796,11 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	case MLX5_IB_MMAP_WC_PAGE:
+ /* Some architectures don't support WC memory */
+ #if defined(CONFIG_X86)
++#ifdef HAVE_PAT_ENABLED_AS_FUNCTION
+ 		if (!pat_enabled())
++#else
++		if (pgprot_val(pgprot_writecombine(tmp_prot)) == pgprot_val(pgprot_noncached(tmp_prot)))
++#endif
+ 			return -EPERM;
+ #elif !(defined(CONFIG_PPC) || ((defined(CONFIG_ARM) || defined(CONFIG_ARM64)) && defined(CONFIG_MMU)))
+ 			return -EPERM;
+@@ -1782,6 +1809,7 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 	case MLX5_IB_MMAP_REGULAR_PAGE:
+ 		/* For MLX5_IB_MMAP_REGULAR_PAGE do the best effort to get WC */
+ 		prot = pgprot_writecombine(vma->vm_page_prot);
++#if defined(MIDR_CPU_MODEL_MASK)
+ #if defined(CONFIG_ARM64)
+ 		/*
+ 		 * Fix up arm64 braindamage of using NORMAL_NC for write
+@@ -1789,11 +1817,14 @@ static int uar_mmap(struct mlx5_ib_dev *
+ 		 * purpose. Needed on ThunderX2.
+ 		 */
+ 		switch (read_cpuid_id() & MIDR_CPU_MODEL_MASK) {
++#if defined(ARM_CPU_IMP_BRCM) && defined(BRCM_CPU_PART_VULCAN)
+ 		case MIDR_CPU_MODEL(ARM_CPU_IMP_BRCM, BRCM_CPU_PART_VULCAN):
++#endif
+ 		case MIDR_CPU_MODEL(0x43, 0x0af):  /* Cavium ThunderX2 */
+ 			prot = __pgprot_modify(prot, PTE_ATTRINDX_MASK, PTE_ATTRINDX(MT_DEVICE_GRE) | PTE_PXN | PTE_UXN);
+ 		}
+ #endif
++#endif
+ 		break;
+ 	case MLX5_IB_MMAP_NC_PAGE:
+ 		prot = pgprot_noncached(vma->vm_page_prot);
+@@ -4509,6 +4540,9 @@ void *__mlx5_ib_add(struct mlx5_core_dev
+ 	dev->ib_dev.exp_query_device	= mlx5_ib_exp_query_device;
+ 	dev->ib_dev.exp_query_mkey      = mlx5_ib_exp_query_mkey;
+ 	dev->ib_dev.exp_create_qp	= mlx5_ib_exp_create_qp;
++#ifdef HAVE_MM_STRUCT_FREE_AREA_CACHE
++	dev->ib_dev.exp_get_unmapped_area = mlx5_ib_exp_get_unmapped_area;
++#endif
+ 	dev->ib_dev.resize_cq		= mlx5_ib_resize_cq;
+ 	dev->ib_dev.destroy_cq		= mlx5_ib_destroy_cq;
+ 	dev->ib_dev.poll_cq		= mlx5_ib_poll_cq;
+@@ -4534,14 +4568,22 @@ void *__mlx5_ib_add(struct mlx5_core_dev
+ 	dev->ib_dev.query_counter_set   = mlx5_ib_query_counter_set;
+ 	dev->ib_dev.describe_counter_set = mlx5_ib_describe_counter_set;
+ 
++#ifdef HAVE_NDO_SET_VF_MAC
+ 	if (mlx5_core_is_pf(mdev)) {
+ 		dev->ib_dev.get_vf_config	= mlx5_ib_get_vf_config;
++#ifdef HAVE_LINKSTATE
+ 		dev->ib_dev.set_vf_link_state	= mlx5_ib_set_vf_link_state;
++#endif
+ 		dev->ib_dev.get_vf_stats	= mlx5_ib_get_vf_stats;
++#ifdef HAVE_IFLA_VF_IB_NODE_PORT_GUID
+ 		dev->ib_dev.set_vf_guid		= mlx5_ib_set_vf_guid;
++#endif
+ 	}
++#endif
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined (HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 	dev->ib_dev.disassociate_ucontext = mlx5_ib_disassociate_ucontext;
++#endif
+ 
+ 	if (MLX5_CAP_GEN(mdev, nvmf_target_offload)) {
+ 		dev->ib_dev.create_nvmf_backend_ctrl  = mlx5_ib_create_nvmf_backend_ctrl;

@@ -33,6 +33,8 @@
 # KMP is disabled by default
 %{!?KMP: %global KMP 0}
 
+%{!?NVME_HOST_WITHOUT_FC: %global NVME_HOST_WITHOUT_FC 0}
+
 # take kernel version or default to uname -r
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -145,7 +147,11 @@ for flavor in %{flavors_to_build}; do
 	rm -rf obj/$flavor
 	cp -r source obj/$flavor
 	cd $PWD/obj/$flavor
-	make
+%if "%{NVME_HOST_WITHOUT_FC}" == "1"
+	make CONFIG_NVME_HOST_WITHOUT_FC=m
+%else
+	make CONFIG_NVME_HOST_WITHOUT_FC=
+%endif
 	cd -
 done
 
@@ -157,7 +163,11 @@ for flavor in %flavors_to_build; do
 	export K_BUILD=%{kernel_source $flavor}
 	export KVER=%{kernel_release $K_BUILD}
 	cd $PWD/obj/$flavor
-	make install KERNELRELEASE=$KVER
+%if "%{NVME_HOST_WITHOUT_FC}" == "1"
+	make install KERNELRELEASE=$KVER CONFIG_NVME_HOST_WITHOUT_FC=m
+%else
+	make install KERNELRELEASE=$KVER CONFIG_NVME_HOST_WITHOUT_FC=
+%endif
 	# Cleanup unnecessary kernel-generated module dependency files.
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
@@ -211,7 +221,7 @@ fi
 %if "%{KMP}" != "1"
 %files
 %defattr(-,root,root,-)
-/lib/modules/%{KVERSION}/
+/lib/modules/%{KVERSION}/%{install_mod_dir}/
 %{_sysconfdir}/depmod.d/zz02-%{name}.conf
 %endif
 

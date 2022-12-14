@@ -1,0 +1,49 @@
+From: Bodong Wang <bodong@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
+
+Change-Id: Ief2f94e6499e8e6d7153c06b1105f7a05eff6c70
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fs_core.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
+@@ -2448,6 +2448,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
+ 	kmem_cache_destroy(steering->ftes_cache);
+ 	kmem_cache_destroy(steering->fgs_cache);
+ 	mlx5_cleanup_fc_stats(dev);
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3,6,11))
++	kfree(steering->ftes_cache_name);
++	kfree(steering->fgs_cache_name);
++#endif
+ 	kfree(steering);
+ }
+ 
+@@ -2570,6 +2574,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+ 	steering->dev = dev;
+ 	dev->priv.steering = steering;
+ 
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3,6,11))
++	steering->ftes_cache_name = ftes_cache_name;
++	steering->fgs_cache_name = fgs_cache_name;
++#endif
+ 	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev->priv.name);
+ 	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev->priv.name);
+ 	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
+@@ -2626,12 +2634,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+ 			goto err;
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,6,11))
+ 	kfree(ftes_cache_name);
+ 	kfree(fgs_cache_name);
++#endif
+ 	return 0;
+ err:
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,6,11))
+ 	kfree(ftes_cache_name);
+ 	kfree(fgs_cache_name);
++#endif
+ 	mlx5_cleanup_fs(dev);
+ 	return err;
+ }

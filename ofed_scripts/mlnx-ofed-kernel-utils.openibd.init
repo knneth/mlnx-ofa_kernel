@@ -109,6 +109,10 @@ if ${modprobe} -c | grep -q '^allow_unsupported_modules  *0'; then
     modprobe="${modprobe} --allow-unsupported-modules"
 fi
 
+# Allow calling the service script with the option 'stop' for unloading the driver stack.
+# This flag should be disabled when the OS root file system is on remote storage.
+ALLOW_STOP=${ALLOW_STOP:-"yes"}
+
 OPENIBD_PRE_START=${OPENIBD_PRE_START:-"/etc/infiniband/pre-start-hook.sh"}
 OPENIBD_POST_START=${OPENIBD_POST_START:-"/etc/infiniband/post-start-hook.sh"}
 OPENIBD_PRE_STOP=${OPENIBD_PRE_STOP:-"/etc/infiniband/pre-stop-hook.sh"}
@@ -116,6 +120,7 @@ OPENIBD_POST_STOP=${OPENIBD_POST_STOP:-"/etc/infiniband/post-stop-hook.sh"}
 
 ACTION=$1
 shift
+ORIG_ACTION=$ACTION
 max_ports_num_in_hca=0
 load_module_RC=0
 FORCE=0
@@ -298,10 +303,6 @@ fi
 # Define kernel version prefix
 KPREFIX=`uname -r | cut -c -3 | tr -d '.' | tr -d '[:space:]'`
 
-if [ "X${MLX4_VNIC_LOAD}" == "Xyes" ]; then
-    MLX4_LOAD="yes"
-fi
-
 # Setting OpenIB start parameters
 POST_LOAD_MODULES=""
 
@@ -345,15 +346,14 @@ fi
 
 GEN1_UNLOAD_MODULES="ib_srp_target scsi_target ib_srp kdapltest_module ib_kdapl ib_sdp eth_ipoib ib_useraccess ib_useraccess_cm ib_cm ib_dapl_srv ib_ip2pr ib_ipoib ib_mlnx_bx ib_tavor mod_thh mod_rhh ib_dm_client ib_sa_client ib_client_query ib_poll ib_mad ib_core ib_services"
 
-UNLOAD_MODULES="ib_mthca mlx5_ib mlx5_core mlx4_ib ib_ipath ipath_core ib_ehca iw_nes cxgb3i iw_cxgb3 cxgb3 iw_cxgb4 cxgb4i iw_cxgb4 cxgb4"
+UNLOAD_MODULES="ib_mthca mlx5_fpga_tools mlx5_ib mlx5_core mlx4_ib ib_ipath ipath_core ib_ehca iw_nes cxgb3i iw_cxgb3 cxgb3 iw_cxgb4 cxgb4i cxgb4"
 UNLOAD_MODULES="$UNLOAD_MODULES ib_qib"
 UNLOAD_MODULES="$UNLOAD_MODULES eth_ipoib ib_ipoib mlx4_vnic ib_madeye ib_rds"
 UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target scsi_target ib_srp ib_iser ib_sdp"
 UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
-UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe"
+UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw"
 
-STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib ib_ehca ib_ipath ipath_core mlx4_core mlx4_ib mlx4_en mlx4_vnic mlx5_core mlx5_ib ib_mthca ib_uverbs ib_umad ib_ucm ib_cm ib_core iw_nes cxgb3i iw_cxgb3 cxgb3 iw_cxgb4 cxgb4i iw_cxgb4 cxgb4"
-STATUS_MODULES="$STATUS_MODULES ib_qib"
+STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib mlx4_core mlx4_ib mlx4_en mlx5_core mlx5_ib ib_uverbs ib_umad ib_ucm ib_cm ib_core mlxfw mlx5_fpga_tools"
 
 if (modinfo scsi_transport_srp 2>/dev/null | grep depends: | grep -q compat 2>/dev/null) ||
     (lsmod 2>/dev/null | grep scsi_transport_srp | grep -q compat); then
@@ -455,6 +455,27 @@ load_module()
             load_module_insmod $module
             return $?
         fi
+    fi
+}
+
+# Load an arbitrary external module w/o OFED-related checks
+load_module_external()
+{
+    local module=$1
+    filename=`modinfo $module 2>/dev/null | grep filename | awk '{print $NF}'`
+
+    if [ ! -n "$filename" ]; then
+        echo_failure "Module $module does not exist, skipping..."
+        log_msg "ERROR: Module $module does not exist, skipping..."
+        load_module_RC=2
+        return 0
+    fi
+
+    if [ $IS_IN_CONTAINER -eq 0 ]; then
+        ${modprobe} $module > /dev/null 2>&1
+    else
+        load_module_insmod $module
+        return $?
     fi
 }
 
@@ -868,7 +889,7 @@ start()
     fi
 
     # W/A: inbox drivers are loaded at boot instead of new ones
-    local loaded_modules=$(/sbin/lsmod 2>/dev/null | grep -E '^be2net|^cxgb|^mlx|^iw_nes|^iw_cxgb|^ib_qib|^ib_mthca|^ocrdma|^ib_ipoib|^ib_srp|^ib_iser|^ib_uverbs|^ib_addr|^ib_mad|^ib_sa|^iw_cm|^ib_core|^ib_ucm|^ib_cm|^rdma_ucm|^ib_umad|^rdma_cm|^compat|^ib_netlink|^rdma_rxe' | awk '{print $1}')
+    local loaded_modules=$(/sbin/lsmod 2>/dev/null | grep -E '^be2net|^cxgb|^mlx|^iw_nes|^iw_cxgb|^ib_qib|^ib_mthca|^ocrdma|^ib_ipoib|^ib_srp|^ib_iser|^ib_uverbs|^ib_addr|^ib_mad|^ib_sa|^iw_cm|^ib_core|^mlxfw|^ib_ucm|^ib_cm|^rdma_ucm|^ib_umad|^rdma_cm|^compat|^ib_netlink|^rdma_rxe' | awk '{print $1}')
     for loaded_module in $loaded_modules
     do
         local loaded_srcver=$(/bin/cat /sys/module/$loaded_module/srcversion 2>/dev/null)
@@ -943,12 +964,8 @@ start()
 
     # Load Mellanox HCA driver
     if [ "X${MTHCA_LOAD}" == "Xyes" ]; then
-        load_module ib_mthca
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading Mellanox HCA driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
+        echo "Module ib_mthca is unsupported"
+        echo "please remove MTHCA_LOAD from your ${CONFIG} file"
     fi
 
     if [ "X${MLX4_LOAD}" == "Xyes" ]; then
@@ -993,27 +1010,9 @@ start()
     fi
 
     if [ "X${MLX4_VNIC_LOAD}" == "Xyes" ]; then
-        if ! is_module mlx4_core; then
-                load_module mlx4_core
-        fi
-        if ! is_module ib_core; then
-                load_module ib_core
-        fi
-
-        sleep 1
-
-        # load mlx4_vnic module
-        load_module mlx4_vnic
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading Mellanox MLX4_VNIC HCA driver: "
-	else
-		echo_success $"Loading Mellanox MLX4_VNIC HCA driver: "
-        fi
-
-        RC=$[ $RC + $my_rc ]
+        echo "Module mlx4_vnic is unsupported"
+        echo "please remove MLX4_VNIC_LOAD from your ${CONFIG} file"
     fi
-
 
     if [ "X${MLX5_LOAD}" == "Xyes" ]; then
         load_module mlx5_core
@@ -1029,72 +1028,65 @@ start()
         RC=$[ $RC + $my_rc ]
     fi
 
-    # Load QLogic QIB driver
-    if [ "X${QIB_LOAD}" == "Xyes" ]; then
-        load_module ib_qib
+    if [ "X${MLX5_FPGA_LOAD}" == "Xyes" ]; then
+        load_module mlx5_fpga_tools
         my_rc=$?
         if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading QLogic QIB driver: "
-	elif [ -s ${_truescale} ]; then
-		 . ${_truescale} start
+                echo_failure $"Loading Mellanox MLX5 FPGA Tools driver: "
         fi
         RC=$[ $RC + $my_rc ]
+    fi
+
+    # Load ESP Offload kernel modules for Innova IPsec
+    if [ "X${ESP_OFFLOAD_LOAD}" == "Xyes" ]; then
+        load_module_external esp4_offload
+        my_rc=$?
+        if [ $my_rc -ne 0 ]; then
+            echo_failure $"Loading ESP Offload for IPv4 module: "
+        else
+            load_module_external esp6_offload
+            my_rc=$?
+            if [ $my_rc -ne 0 ]; then
+                echo_failure $"Loading ESP Offload for IPv6 module: "
+            fi
+        fi
+        RC=$[ $RC + $my_rc ]
+    fi
+
+    # Load QLogic QIB driver
+    if [ "X${QIB_LOAD}" == "Xyes" ]; then
+        echo "Module ib_qib is unsupported"
+        echo "please remove QIB_LOAD from your ${CONFIG} file"
     fi
 
     # Load QLogic InfiniPath driver
     if [ "X${IPATH_LOAD}" == "Xyes" ]; then
-        load_module ib_ipath
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading QLogic InfiniPath driver: "
-        fi
-        # Don't exit on error
-        # Workarround for Bug 252.
-        # RC=$[ $RC + $my_rc ]
+        echo "Module ib_ipath is unsupported"
+        echo "please remove IPATH_LOAD from your ${CONFIG} file"
     fi
 
     # Load eHCA driver
     if [ "X${EHCA_LOAD}" == "Xyes" ]; then
-        fix_location_codes
-        load_module ib_ehca
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading eHCA driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
+        echo "Module ib_ehca is unsupported"
+        echo "please remove EHCA_LOAD from your ${CONFIG} file"
     fi
 
     # Load iw_cxgb3 driver
     if [ "X${CXGB3_LOAD}" == "Xyes" ]; then
-        fix_location_codes
-        load_module iw_cxgb3
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading cxgb3 driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
+        echo "Module iw_cxgb3 is unsupported"
+        echo "please remove CXGB3_LOAD from your ${CONFIG} file"
     fi
 
     # Load iw_cxgb4 driver
     if [ "X${CXGB4_LOAD}" == "Xyes" ]; then
-        fix_location_codes
-        load_module iw_cxgb4
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading cxgb4 driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
+        echo "Module iw_cxgb4 is unsupported"
+        echo "please remove CXGB4_LOAD from your ${CONFIG} file"
     fi
 
     # Load iw_nes driver
     if [ "X${NES_LOAD}" == "Xyes" ]; then
-        fix_location_codes
-        load_module iw_nes
-        my_rc=$?
-        if [ $my_rc -ne 0 ]; then
-                echo_failure $"Loading nes driver: "
-        fi
-        RC=$[ $RC + $my_rc ]
+        echo "Module iw_nes is unsupported"
+        echo "please remove NES_LOAD from your ${CONFIG} file"
     fi
 
     ib_set_node_desc > /dev/null 2>&1 &
@@ -1364,51 +1356,42 @@ unload()
 
 stop()
 {
-
         # Refuse to stop if not running automatically (on boot) and some conditions are met
         if [ "X$RUNMODE" != "Xauto" ]; then
+            local cannot_continue=0
+            local blocking_modules=""
+
             # Check if Lustre is loaded
             if ( grep -q "ko2iblnd" /proc/modules ); then
-                echo
-                echo "Please stop Lustre services before unloading the"
-                echo "Infiniband stack."
-                echo
-                cleanup
-                exit 1
+                echo "Please stop Lustre services before unloading the Infiniband stack."
+                cannot_continue=1
             fi
 
             if is_active_vf; then
                 echo "There are active virtual functions. Cannot continue..."
-                cleanup
-                exit 1
+                cannot_continue=1
             fi
 
             # Check if applications which use infiniband are running
             local apps="opensm osmtest ibbs ibns ibacm"
             local pid
-
             for app in $apps
             do
                 if ( /usr/bin/pgrep $app > /dev/null 2>&1 ); then
-                    echo
-                    echo "Please stop \"$app\" and all applications running over InfiniBand"
-                    echo "Then run \"$0 $ACTION\""
-                    echo
-                    cleanup
-                    exit 1
+                    echo "Please stop \"$app\" and all applications running over InfiniBand."
+                    cannot_continue=1
                 fi
             done
 
             # Lookup for remaining applications using infiniband devices
             local entries
-
             if [ -d /dev/infiniband ]; then
                 entries=$(lsof +c 0 -a +d /dev/infiniband 2>/dev/null | grep -v "^COMMAND" | \
                 awk '{print $1 " " $2 " " $3 " " $NF}' | sort -u)
             fi
-
             if [ -n "$entries" ]; then
-
+                cannot_continue=1
+                echo
                 echo "Please stop the following applications still using Infiniband devices:"
 
                 while IFS= read -r entry; do
@@ -1419,12 +1402,7 @@ stop()
 
                     echo "$app($pid) user $owner is using device $device"
                 done <<< "$entries"
-
                 echo
-                echo "Then run \"$0 $ACTION\""
-
-                cleanup
-                exit 1
             fi
 
             # Check if open-iscsi is running and if there are open iSER sessions
@@ -1432,17 +1410,13 @@ stop()
                     iser_session_cnt=$(iscsiadm -m session 2>&1 | grep -c "^iser")
 
                     if [ $iser_session_cnt -gt 0 ]; then
-                            echo
                             # If it's RH4, open-iscsi must be stopped before openibd
                             if [[ -f /etc/redhat-release && $(grep -c "Red Hat Enterprise Linux AS release 4" /etc/redhat-release) -eq 1 ]]; then
                                 echo "Please stop open-iscsi: /etc/init.d/iscsi stop"
                             else
                                 echo "Please logout from all open-iscsi over iSER sessions"
                             fi
-                            echo "Then run \"$0 $ACTION\""
-                            echo
-                            cleanup
-                            exit 1
+                            cannot_continue=1
                     fi
             fi
 
@@ -1454,10 +1428,10 @@ stop()
                         do
                             holders=`ls /sys/block/$i/holders 2> /dev/null`
                             if [ -n "$holders" ]; then
+                                cannot_continue=1
+                                blocking_modules="${blocking_modules} ib_srp"
                                 echo "Please flush multipath devices running over SRP devices"
-                                echo
-                                cleanup
-                                exit 1
+                                break
                             fi
                         done
                     fi
@@ -1465,9 +1439,44 @@ stop()
             fi
 
             if is_module ib_isert; then
-                echo "Cannot unload driver while ib_isert is loaded..."
-                echo "Please close all isert sessions and unload ib_isert module first."
+                cannot_continue=1
+                blocking_modules="${blocking_modules} ib_isert"
+                echo "Please close all isert sessions and unload 'ib_isert' module."
+            fi
+
+            if is_module nvme_rdma; then
+                cannot_continue=1
+                blocking_modules="${blocking_modules} nvme_rdma"
+                echo "Please close all nvme sessions and unload 'nvme_rdma' module."
+            fi
+
+            if is_module nvmet_rdma; then
+                cannot_continue=1
+                blocking_modules="${blocking_modules} nvmet_rdma"
+                echo "Please close all nvmet sessions and unload 'nvmet_rdma' module."
+            fi
+
+            # check other storage modules
+            for storage_mod in rpcrdma xprtrdma ib_srpt
+            do
+                if is_module ${storage_mod}; then
+                    cannot_continue=1
+                    blocking_modules="${blocking_modules} ${storage_mod}"
+                    echo "Please make sure module '${storage_mod}' is not in use and unload it."
+                fi
+            done
+
+            if [ $cannot_continue -eq 1 ]; then
                 echo
+                echo "Error: Cannot unload the Infiniband driver stack due to the above issue(s)!"
+                if [ "X${blocking_modules}" != "X" ]; then
+                    echo
+                    echo "To unload the blocking modules, you can run:"
+                    echo "# modprobe -rv ${blocking_modules}"
+                fi
+                echo
+                echo "Once the above issue(s) resolved, run:"
+                echo "# $0 $ORIG_ACTION"
                 cleanup
                 exit 1
             fi
@@ -1610,7 +1619,7 @@ status()
 {
     local RC=0
 
-       if is_module ib_mthca || is_module mlx4_core || is_module mlx5_core || is_module ib_qib || is_module ib_ipath || is_module ib_ehca || is_module iw_cxgb3 || is_module iw_cxgb4 || is_module iw_nes; then
+       if is_module mlx4_core || is_module mlx5_core; then
                echo
                echo "  HCA driver loaded"
                echo
@@ -1717,6 +1726,15 @@ case $ACTION in
                 [ ! -z $OPENIBD_POST_START ] && [ -x $OPENIBD_POST_START ] && $OPENIBD_POST_START
                 ;;
         stop)
+                if [ $FORCE -eq 0 ]; then
+                        echo "WARNING: Option 'stop' is deprecated and will be replaced by 'force-stop' in next release."
+                        if [ "X${ALLOW_STOP}" != "Xyes" ]; then
+                                echo "ERROR: Option 'stop' is disabled!"
+                                log_msg "ERROR: Option 'stop' is disabled!"
+                                echo "Either use 'force-stop', or enable 'stop' by setting 'ALLOW_STOP=yes' in your ${CONFIG} file"
+                                exit 1
+                        fi
+                fi
                 [ ! -z $OPENIBD_PRE_STOP ] && [ -x $OPENIBD_PRE_STOP ] && $OPENIBD_PRE_STOP
                 stop
                 RC=$?

@@ -117,6 +117,15 @@
 #ifdef destroy_workqueue
 	#undef destroy_workqueue
 #endif
+#ifdef kvzalloc
+	#undef kvzalloc
+#endif
+#ifdef kvmalloc_array
+	#undef kvmalloc_array
+#endif
+#ifdef kvmalloc_node
+	#undef kvmalloc_node
+#endif
 /* if kernel version < 2.6.37, it's defined in compat as singlethread_workqueue */
 #if defined(alloc_ordered_workqueue) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
 	#undef alloc_ordered_workqueue
@@ -740,6 +749,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 		"mlx4_en_destroy_allocator",
 		"mlx4_en_complete_rx_desc",
 		"mlx4_alloc_pages",
+		"mlx4_alloc_page",
 		"mlx5e_page_alloc_mapped",
 		"mlx5e_page_release",
 		"mlx5e_rx_free_page_cache",

@@ -28,8 +28,6 @@ int kobject_init_and_add(struct kobject *kobj, struct kobj_type *ktype,
 			 struct kobject *parent, const char *fmt, ...);
 #define kvfree LINUX_BACKPORT(kvfree)
 void kvfree(const void *addr);
-#define vzalloc LINUX_BACKPORT(vzalloc)
-void *vzalloc_node(unsigned long size, int node);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
 #include <linux/uaccess.h>
@@ -74,8 +72,6 @@ static inline long IS_ERR_OR_NULL(const void *ptr)
 }
 
 /* Taken from compat-2.6.37.h */
-extern void *vzalloc(unsigned long size);
-extern void *vzalloc_node(unsigned long size, int node);
 
 static inline void *dma_zalloc_coherent(struct device *dev, size_t size,
 					dma_addr_t *dma_handle, gfp_t flag)

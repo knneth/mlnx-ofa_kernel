@@ -54,7 +54,8 @@ static inline int pci_sriov_get_totalvfs(struct pci_dev *pdev)
 #endif
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || \
+    (defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 2)
 #ifndef HAVE_PCI_IRQ_GET_AFFINITY
 static inline const struct cpumask *pci_irq_get_affinity(struct pci_dev *pdev,
 							 int vec)
@@ -71,7 +72,11 @@ static inline int pci_irq_get_node(struct pci_dev *pdev, int vec)
 
 	mask = pci_irq_get_affinity(pdev, vec);
 	if (mask)
+#ifdef CONFIG_HAVE_MEMORYLESS_NODES
 		return local_memory_node(cpu_to_node(cpumask_first(mask)));
+#else
+		return cpu_to_node(cpumask_first(mask));
+#endif
 	return dev_to_node(&pdev->dev);
 #else /* CONFIG_PCI_MSI */
 	return first_online_node;
@@ -79,5 +84,25 @@ static inline int pci_irq_get_node(struct pci_dev *pdev, int vec)
 }
 #endif /* pci_irq_get_node */
 #endif
+
+#ifdef CONFIG_PCI
+#ifndef HAVE_PCI_REQUEST_MEM_REGIONS
+static inline int
+pci_request_mem_regions(struct pci_dev *pdev, const char *name)
+{
+	return pci_request_selected_regions(pdev,
+			    pci_select_bars(pdev, IORESOURCE_MEM), name);
+}
+#endif
+
+#ifndef HAVE_PCI_RELEASE_MEM_REGIONS
+static inline void
+pci_release_mem_regions(struct pci_dev *pdev)
+{
+	return pci_release_selected_regions(pdev,
+			    pci_select_bars(pdev, IORESOURCE_MEM));
+}
+#endif
+#endif /* CONFIG_PCI */
 
 #endif /* _LINUX_PCI_H */

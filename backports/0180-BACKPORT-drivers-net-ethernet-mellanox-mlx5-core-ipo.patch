@@ -1,0 +1,29 @@
+From: Shalom Lagziel <shaloml@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+
+Change-Id: If1ed0279edacf18dd1708952b0f607962bd1a52d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+@@ -93,13 +93,17 @@ const struct mlx5e_profile *mlx5i_child_
+ netdev_tx_t mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+ 			  struct mlx5_av *av, u32 dqpn, u32 dqkey);
+ void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
++#ifdef HAVE_GET_TS_INFO
+ int mlx5i_get_ts_info(struct net_device *netdev, struct ethtool_ts_info *info);
++#endif
+ void mlx5i_get_drvinfo(struct net_device *dev,
+ 		       struct ethtool_drvinfo *drvinfo);
+ int mlx5i_get_settings(struct net_device *netdev,
+ 		       struct ethtool_cmd *ecmd);
++#ifdef HAVE_GET_SET_LINK_KSETTINGS
+ int mlx5i_get_link_ksettings(struct net_device *netdev,
+ 			     struct ethtool_link_ksettings *link_ksettings);
++#endif
+ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
+ 
+ #endif /* __MLX5E_IPOB_H__ */

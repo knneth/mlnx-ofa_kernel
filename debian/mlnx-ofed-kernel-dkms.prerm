@@ -22,12 +22,12 @@ case "$1" in
     ;;
 esac
 
-echo "Cleaning up '/usr/src/ofa_kernel/default/' ..."
+echo "Cleaning up '/usr/src/ofa_kernel/' ..."
 # we might have hidden files or so...
 # so, remove it and recreate it so that dpkg can remove it cleanly
-if [ -e /usr/src/ofa_kernel/default ]; then
-	/bin/rm -rf /usr/src/ofa_kernel/default
-	mkdir -p /usr/src/ofa_kernel/default
+if [ -e /usr/src/ofa_kernel ]; then
+	/bin/rm -rf /usr/src/ofa_kernel
+	mkdir -p /usr/src/ofa_kernel
 fi
 
 #DEBHELPER#

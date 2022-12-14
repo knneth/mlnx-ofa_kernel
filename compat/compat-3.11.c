@@ -427,3 +427,27 @@ size_t sg_pcopy_to_buffer(struct scatterlist *sgl, unsigned int nents,
 	return sg_copy_buffer(sgl, nents, buf, buflen, skip, true);
 }
 EXPORT_SYMBOL(sg_pcopy_to_buffer);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+/**
+ * fixed_size_llseek - llseek implementation for fixed-sized devices
+ * @file:   file structure to seek on
+ * @offset:    file offset to seek to
+ * @whence:   type of seek
+ * @size:    size of the file
+ *
+ **/
+#define fixed_size_llseek LINUX_BACKPORT(fixed_size_llseek)
+loff_t fixed_size_llseek(struct file *file, loff_t offset, int whence,
+			 loff_t size)
+{
+	switch (whence) {
+	case SEEK_SET: case SEEK_CUR: case SEEK_END:
+		return generic_file_llseek_size(file, offset, whence,
+						size, size);
+	default:
+		return -EINVAL;
+	}
+}
+EXPORT_SYMBOL(fixed_size_llseek);
+#endif

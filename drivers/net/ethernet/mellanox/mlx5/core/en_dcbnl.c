@@ -32,6 +32,8 @@
 #include <linux/device.h>
 #include <linux/netdevice.h>
 #include "en.h"
+#include "en_trust.h"
+#include "en_port_buffer.h"
 
 #define MLX5E_MAX_PRIORITY 8
 
@@ -40,6 +42,13 @@
 
 #define MLX5E_CEE_STATE_UP    1
 #define MLX5E_CEE_STATE_DOWN  0
+
+#define IEEE_8021QAZ_APP_SEL_DSCP 5
+
+enum {
+	MLX5E_VENDOR_TC_GROUP_NUM = 7,
+	MLX5E_LOWEST_PRIO_GROUP   = 0,
+};
 
 #ifdef CONFIG_MLX5_CORE_EN_DCB
 /* If dcbx mode is non-host set the dcbx mode to host.
@@ -73,10 +82,6 @@ static int mlx5e_dcbnl_switch_to_host_mode(struct mlx5e_priv *priv)
 	if (dcbx->mode == MLX5E_DCBX_PARAM_VER_OPER_HOST)
 		return 0;
 
-	/* skip switch the dcbx mode to fw if the qos_with_dcbx_by_fw is set */
-	if (MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_QOS_WITH_DCBX_BY_FW))
-		return 0;
-
 	err = mlx5e_dcbnl_set_dcbx_mode(priv, MLX5E_DCBX_PARAM_VER_OPER_HOST);
 	if (err)
 		return err;
@@ -90,6 +95,9 @@ static int mlx5e_dcbnl_ieee_getets(struct net_device *netdev,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_core_dev *mdev = priv->mdev;
+	u8 tc_group[IEEE_8021QAZ_MAX_TCS];
+	bool is_tc_group_6_exist = false;
+	bool is_zero_bw_ets_tc = false;
 	int err = 0;
 	int i;
 
@@ -101,37 +109,64 @@ static int mlx5e_dcbnl_ieee_getets(struct net_device *netdev,
 		err = mlx5_query_port_prio_tc(mdev, i, &ets->prio_tc[i]);
 		if (err)
 			return err;
-	}
 
-	for (i = 0; i < ets->ets_cap; i++) {
+		err = mlx5_query_port_tc_group(mdev, i, &tc_group[i]);
+		if (err)
+			return err;
+
 		err = mlx5_query_port_tc_bw_alloc(mdev, i, &ets->tc_tx_bw[i]);
 		if (err)
 			return err;
-		if (ets->tc_tx_bw[i] < MLX5E_MAX_BW_ALLOC)
-			priv->dcbx.tc_tsa[i] = IEEE_8021QAZ_TSA_ETS;
+
+		if (ets->tc_tx_bw[i] < MLX5E_MAX_BW_ALLOC &&
+		    tc_group[i] == (MLX5E_LOWEST_PRIO_GROUP + 1))
+			is_zero_bw_ets_tc = true;
+
+		if (tc_group[i] == (MLX5E_VENDOR_TC_GROUP_NUM - 1))
+			is_tc_group_6_exist = true;
 	}
 
+	/* Report 0% ets tc if exits*/
+	if (is_zero_bw_ets_tc) {
+		for (i = 0; i < ets->ets_cap; i++)
+			if (tc_group[i] == MLX5E_LOWEST_PRIO_GROUP)
+				ets->tc_tx_bw[i] = 0;
+	}
+
+	/* Update tc_tsa based on fw setting*/
+	for (i = 0; i < ets->ets_cap; i++) {
+		if (ets->tc_tx_bw[i] < MLX5E_MAX_BW_ALLOC)
+			priv->dcbx.tc_tsa[i] = IEEE_8021QAZ_TSA_ETS;
+		else if (tc_group[i] == MLX5E_VENDOR_TC_GROUP_NUM &&
+			 !is_tc_group_6_exist)
+			priv->dcbx.tc_tsa[i] = IEEE_8021QAZ_TSA_VENDOR;
+	}
 	memcpy(ets->tc_tsa, priv->dcbx.tc_tsa, sizeof(ets->tc_tsa));
 
 	return err;
 }
 
-enum {
-	MLX5E_VENDOR_TC_GROUP_NUM = 7,
-	MLX5E_ETS_TC_GROUP_NUM    = 0,
-};
-
 static void mlx5e_build_tc_group(struct ieee_ets *ets, u8 *tc_group, int max_tc)
 {
 	bool any_tc_mapped_to_ets = false;
+	bool ets_zero_bw = false;
 	int strict_group;
 	int i;
 
-	for (i = 0; i <= max_tc; i++)
-		if (ets->tc_tsa[i] == IEEE_8021QAZ_TSA_ETS)
+	for (i = 0; i <= max_tc; i++) {
+		if (ets->tc_tsa[i] == IEEE_8021QAZ_TSA_ETS) {
 			any_tc_mapped_to_ets = true;
+			if (!ets->tc_tx_bw[i])
+				ets_zero_bw = true;
+		}
+	}
 
-	strict_group = any_tc_mapped_to_ets ? 1 : 0;
+	/* strict group has higher priority than ets group */
+	strict_group = MLX5E_LOWEST_PRIO_GROUP;
+	if (any_tc_mapped_to_ets)
+		strict_group++;
+	if (ets_zero_bw)
+		strict_group++;
 
 	for (i = 0; i <= max_tc; i++) {
 		switch (ets->tc_tsa[i]) {
@@ -142,7 +177,9 @@ static void mlx5e_build_tc_group(struct ieee_ets *ets, u8 *tc_group, int max_tc)
 			tc_group[i] = strict_group++;
 			break;
 		case IEEE_8021QAZ_TSA_ETS:
-			tc_group[i] = MLX5E_ETS_TC_GROUP_NUM;
+			tc_group[i] = MLX5E_LOWEST_PRIO_GROUP;
+			if (ets->tc_tx_bw[i] && ets_zero_bw)
+				tc_group[i] = MLX5E_LOWEST_PRIO_GROUP + 1;
 			break;
 		}
 	}
@@ -151,7 +188,21 @@ static void mlx5e_build_tc_group(struct ieee_ets *ets, u8 *tc_group, int max_tc)
 static void mlx5e_build_tc_tx_bw(struct ieee_ets *ets, u8 *tc_tx_bw,
 				 u8 *tc_group, int max_tc)
 {
+	int bw_for_ets_zero_bw_tc = 0;
+	int last_ets_zero_bw_tc = -1;
+	int num_ets_zero_bw = 0;
 	int i;
+
+	for (i = 0; i <= max_tc; i++) {
+		if (ets->tc_tsa[i] == IEEE_8021QAZ_TSA_ETS &&
+		    !ets->tc_tx_bw[i]) {
+			num_ets_zero_bw++;
+			last_ets_zero_bw_tc = i;
+		}
+	}
+
+	if (num_ets_zero_bw)
+		bw_for_ets_zero_bw_tc = MLX5E_MAX_BW_ALLOC / num_ets_zero_bw;
 
 	for (i = 0; i <= max_tc; i++) {
 		switch (ets->tc_tsa[i]) {
@@ -162,12 +213,26 @@ static void mlx5e_build_tc_tx_bw(struct ieee_ets *ets, u8 *tc_tx_bw,
 			tc_tx_bw[i] = MLX5E_MAX_BW_ALLOC;
 			break;
 		case IEEE_8021QAZ_TSA_ETS:
-			tc_tx_bw[i] = ets->tc_tx_bw[i];
+			tc_tx_bw[i] = ets->tc_tx_bw[i] ?
+				      ets->tc_tx_bw[i] :
+				      bw_for_ets_zero_bw_tc;
 			break;
 		}
 	}
+
+	/* Make sure the total bw for ets zero bw group is 100% */
+	if (last_ets_zero_bw_tc != -1)
+		tc_tx_bw[last_ets_zero_bw_tc] +=
+			MLX5E_MAX_BW_ALLOC % num_ets_zero_bw;
 }
 
+/* If there are ETS BW 0,
+ *   Set ETS group # to 1 for all ETS non zero BW tcs. Their sum must be 100%.
+ *   Set group #0 to all the ETS BW 0 tcs and
+ *     equally splits the 100% BW between them
+ *   Report both group #0 and #1 as ETS type.
+ *     All the tcs in group #0 will be reported with 0% BW.
+ */
 int mlx5e_dcbnl_ieee_setets_core(struct mlx5e_priv *priv, struct ieee_ets *ets)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
@@ -207,6 +272,7 @@ int mlx5e_dcbnl_ieee_setets_core(struct mlx5e_priv *priv, struct ieee_ets *ets)
 static int mlx5e_dbcnl_validate_ets(struct net_device *netdev,
 				    struct ieee_ets *ets)
 {
+	bool have_ets_tc = false;
 	int bw_sum = 0;
 	int i;
 
@@ -223,17 +289,12 @@ static int mlx5e_dbcnl_validate_ets(struct net_device *netdev,
 	/* Validate Bandwidth Sum */
 	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
 		if (ets->tc_tsa[i] == IEEE_8021QAZ_TSA_ETS) {
-			if (!ets->tc_tx_bw[i]) {
-				netdev_err(netdev,
-					   "Failed to validate ETS: BW 0 is illegal\n");
-				return -EINVAL;
-			}
-
+			have_ets_tc = true;
 			bw_sum += ets->tc_tx_bw[i];
 		}
 	}
 
-	if (bw_sum != 0 && bw_sum != 100) {
+	if (have_ets_tc && bw_sum != 100) {
 		netdev_err(netdev,
 			   "Failed to validate ETS: BW sum is illegal\n");
 		return -EINVAL;
@@ -275,6 +336,9 @@ static int mlx5e_dcbnl_ieee_getpfc(struct net_device *dev,
 		pfc->indications[i] = PPORT_PER_PRIO_GET(pstats, i, rx_pause);
 	}
 
+	if (MLX5_BUFFER_SUPPORTED(mdev))
+		pfc->delay = priv->dcbx.cable_len;
+
 	return mlx5_query_port_pfc(mdev, &pfc->pfc_en, NULL);
 }
 
@@ -283,16 +347,38 @@ static int mlx5e_dcbnl_ieee_setpfc(struct net_device *dev,
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5_core_dev *mdev = priv->mdev;
+	u32 old_cable_len = priv->dcbx.cable_len;
+	struct ieee_pfc pfc_new;
+	u32 changed = 0;
 	u8 curr_pfc_en;
-	int ret;
+	int ret = 0;
 
+	/* pfc_en */
 	mlx5_query_port_pfc(mdev, &curr_pfc_en, NULL);
+	if (pfc->pfc_en != curr_pfc_en) {
+		ret = mlx5_set_port_pfc(mdev, pfc->pfc_en, pfc->pfc_en);
+		if (ret)
+			return ret;
+		mlx5_toggle_port_link(mdev);
+		changed |= MLX5E_BUFFER_PFC;
+	}
 
-	if (pfc->pfc_en == curr_pfc_en)
-		return 0;
+	/* cable len from pfc->delay */
+	if (pfc->delay &&
+	    pfc->delay < 1000 &&
+	    pfc->delay != priv->dcbx.cable_len) {
+		priv->dcbx.cable_len = pfc->delay;
+		changed |= MLX5E_BUFFER_CABLE_LEN;
+	}
 
-	ret = mlx5_set_port_pfc(mdev, pfc->pfc_en, pfc->pfc_en);
-	mlx5_toggle_port_link(mdev);
+	if (MLX5_BUFFER_SUPPORTED(mdev)) {
+		pfc_new.pfc_en = (changed & MLX5E_BUFFER_PFC) ? pfc->pfc_en : curr_pfc_en;
+		if (priv->dcbx.manual_buffer)
+			ret = mlx5e_manual_buffer_configuration(dev, changed, &pfc_new, NULL, NULL);
+
+		if (ret && (changed & MLX5E_BUFFER_CABLE_LEN))
+			priv->dcbx.cable_len = old_cable_len;
+	}
 
 	if (!ret) {
 		mlx5e_dbg(HW, priv,
@@ -305,13 +391,8 @@ static int mlx5e_dcbnl_ieee_setpfc(struct net_device *dev,
 static u8 mlx5e_dcbnl_getdcbx(struct net_device *dev)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
-	struct mlx5e_dcbx *dcbx = &priv->dcbx;
-	u8 mode = DCB_CAP_DCBX_VER_IEEE | DCB_CAP_DCBX_VER_CEE;
 
-	if (dcbx->mode == MLX5E_DCBX_PARAM_VER_OPER_HOST)
-		mode |= DCB_CAP_DCBX_HOST;
-
-	return mode;
+	return priv->dcbx.cap;
 }
 
 static u8 mlx5e_dcbnl_setdcbx(struct net_device *dev, u8 mode)
@@ -329,6 +410,7 @@ static u8 mlx5e_dcbnl_setdcbx(struct net_device *dev, u8 mode)
 		/* set dcbx to fw controlled */
 		if (!mlx5e_dcbnl_set_dcbx_mode(priv, MLX5E_DCBX_PARAM_VER_OPER_AUTO)) {
 			dcbx->mode = MLX5E_DCBX_PARAM_VER_OPER_AUTO;
+			dcbx->cap &= ~DCB_CAP_DCBX_HOST;
 			return 0;
 		}
 
@@ -341,7 +423,116 @@ static u8 mlx5e_dcbnl_setdcbx(struct net_device *dev, u8 mode)
 	if (mlx5e_dcbnl_switch_to_host_mode(netdev_priv(dev)))
 		return 1;
 
+	dcbx->cap = mode;
+
 	return 0;
+}
+
+static int mlx5e_dcbnl_ieee_setapp(struct net_device *dev, struct dcb_app *app)
+{
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	struct dcb_app temp;
+	bool is_new;
+	int err;
+
+	if (app->selector != IEEE_8021QAZ_APP_SEL_DSCP)
+		return -EINVAL;
+
+	if (!MLX5_CAP_GEN(priv->mdev, vport_group_manager))
+		return -EINVAL;
+
+	if (!MLX5_DSCP_SUPPORTED(priv->mdev))
+		return -EINVAL;
+
+	if (app->protocol >= MLX5E_MAX_DSCP)
+		return -EINVAL;
+
+	/* Save the old entry info */
+	temp.selector = IEEE_8021QAZ_APP_SEL_DSCP;
+	temp.protocol = app->protocol;
+	temp.priority = priv->dscp2prio[app->protocol];
+
+	/* Check if need to switch to dscp trust state */
+	if (!priv->dcbx.dscp_app_cnt) {
+		err =  mlx5e_set_trust_state(priv, MLX5_QPTS_TRUST_DSCP);
+		if (err)
+			return err;
+	}
+
+	/* Skip the fw command if new and old mapping are the same */
+	if (app->priority != priv->dscp2prio[app->protocol]) {
+		err = mlx5e_set_dscp2prio(priv, app->protocol, app->priority);
+		if (err)
+			goto fw_err;
+	}
+
+	/* Delete the old entry if exists */
+	is_new = false;
+	err = dcb_ieee_delapp(dev, &temp);
+	if (err)
+		is_new = true;
+
+	/* Add new entry and update counter */
+	err = dcb_ieee_setapp(dev, app);
+	if (err)
+		return err;
+
+	if (is_new)
+		priv->dcbx.dscp_app_cnt++;
+
+	return err;
+
+fw_err:
+	mlx5e_set_trust_state(priv, MLX5_QPTS_TRUST_PCP);
+	return err;
+}
+
+static int mlx5e_dcbnl_ieee_delapp(struct net_device *dev, struct dcb_app *app)
+{
+	struct mlx5e_priv *priv = netdev_priv(dev);
+	int err;
+
+	if (app->selector != IEEE_8021QAZ_APP_SEL_DSCP)
+		return -EINVAL;
+
+	if (!MLX5_CAP_GEN(priv->mdev, vport_group_manager))
+		return -EINVAL;
+
+	if (!MLX5_DSCP_SUPPORTED(priv->mdev))
+		return -EINVAL;
+
+	if (app->protocol >= MLX5E_MAX_DSCP)
+		return -EINVAL;
+
+	/* Skip if no dscp app entry */
+	if (!priv->dcbx.dscp_app_cnt)
+		return -ENOENT;
+
+	/* Check if the entry matches fw setting */
+	if (app->priority != priv->dscp2prio[app->protocol])
+		return -ENOENT;
+
+	/* Delete the app entry */
+	err = dcb_ieee_delapp(dev, app);
+	if (err)
+		return err;
+
+	/* Reset the priority mapping back to zero */
+	err = mlx5e_set_dscp2prio(priv, app->protocol, 0);
+	if (err)
+		goto fw_err;
+
+	priv->dcbx.dscp_app_cnt--;
+
+	/* Check if need to switch to pcp trust state */
+	if (!priv->dcbx.dscp_app_cnt)
+		err = mlx5e_set_trust_state(priv, MLX5_QPTS_TRUST_PCP);
+
+	return err;
+
+fw_err:
+	mlx5e_set_trust_state(priv, MLX5_QPTS_TRUST_PCP);
+	return err;
 }
 
 static int mlx5e_dcbnl_ieee_getmaxrate(struct net_device *netdev,
@@ -490,6 +681,8 @@ static void mlx5e_dcbnl_getpermhwaddr(struct net_device *netdev,
 	if (!perm_addr)
 		return;
 
+	memset(perm_addr, 0xff, MAX_ADDR_LEN);
+
 	mlx5_query_nic_vport_mac_address(priv->mdev, 0, perm_addr);
 }
 
@@ -559,8 +752,7 @@ static void mlx5e_dcbnl_getpgtccfgtx(struct net_device *netdev,
 static void mlx5e_dcbnl_getpgbwgcfgtx(struct net_device *netdev,
 				      int pgid, u8 *bw_pct)
 {
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5_core_dev *mdev = priv->mdev;
+	struct ieee_ets ets;
 
 	if (pgid >= CEE_DCBX_MAX_PGS) {
 		netdev_err(netdev,
@@ -568,8 +760,8 @@ static void mlx5e_dcbnl_getpgbwgcfgtx(struct net_device *netdev,
 		return;
 	}
 
-	if (mlx5_query_port_tc_bw_alloc(mdev, pgid, bw_pct))
-		*bw_pct = 0;
+	mlx5e_dcbnl_ieee_getets(netdev, &ets);
+	*bw_pct = ets.tc_tx_bw[pgid];
 }
 
 static void mlx5e_dcbnl_setpfccfg(struct net_device *netdev,
@@ -652,9 +844,9 @@ static u8 mlx5e_dcbnl_getcap(struct net_device *netdev,
 		*cap = false;
 		break;
 	case DCB_CAP_ATTR_DCBX:
-		*cap = (DCB_CAP_DCBX_LLD_MANAGED |
-			DCB_CAP_DCBX_VER_CEE |
-			DCB_CAP_DCBX_STATIC);
+		*cap = priv->dcbx.cap |
+		       DCB_CAP_DCBX_VER_CEE |
+		       DCB_CAP_DCBX_VER_IEEE;
 		break;
 	default:
 		*cap = 0;
@@ -711,6 +903,8 @@ const struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
 	.ieee_setmaxrate = mlx5e_dcbnl_ieee_setmaxrate,
 	.ieee_getpfc	= mlx5e_dcbnl_ieee_getpfc,
 	.ieee_setpfc	= mlx5e_dcbnl_ieee_setpfc,
+	.ieee_setapp    = mlx5e_dcbnl_ieee_setapp,
+	.ieee_delapp    = mlx5e_dcbnl_ieee_delapp,
 	.getdcbx	= mlx5e_dcbnl_getdcbx,
 	.setdcbx	= mlx5e_dcbnl_setdcbx,
 
@@ -765,11 +959,11 @@ static void mlx5e_ets_init(struct mlx5e_priv *priv)
 		ets.prio_tc[i] = i;
 	}
 
-	memcpy(priv->dcbx.tc_tsa, ets.tc_tsa, sizeof(ets.tc_tsa));
-
-	/* tclass[prio=0]=1, tclass[prio=1]=0, tclass[prio=i]=i (for i>1) */
-	ets.prio_tc[0] = 1;
-	ets.prio_tc[1] = 0;
+	if (ets.ets_cap > 1) {
+		/* tclass[prio=0]=1, tclass[prio=1]=0, tclass[prio=i]=i (for i>1) */
+		ets.prio_tc[0] = 1;
+		ets.prio_tc[1] = 0;
+	}
 
 	mlx5e_dcbnl_ieee_setets_core(priv, &ets);
 }
@@ -778,12 +972,65 @@ void mlx5e_dcbnl_initialize(struct mlx5e_priv *priv)
 {
 	struct mlx5e_dcbx *dcbx = &priv->dcbx;
 
-	if (MLX5_CAP_GEN(priv->mdev, dcbx)) {
+	mlx5e_trust_initialize(priv);
+
+	if (!MLX5_CAP_GEN(priv->mdev, qos))
+		return;
+
+	if (MLX5_CAP_GEN(priv->mdev, dcbx))
 		mlx5e_dcbnl_query_dcbx_mode(priv, &dcbx->mode);
-		if (dcbx->mode == MLX5E_DCBX_PARAM_VER_OPER_HOST)
-			MLX5E_SET_PFLAG(&priv->channels.params, MLX5E_PFLAG_QOS_WITH_DCBX_BY_FW, 0);
-	}
+
+	priv->dcbx.cap = DCB_CAP_DCBX_VER_CEE |
+			 DCB_CAP_DCBX_VER_IEEE;
+	if (priv->dcbx.mode == MLX5E_DCBX_PARAM_VER_OPER_HOST)
+		priv->dcbx.cap |= DCB_CAP_DCBX_HOST;
+
+	priv->dcbx.manual_buffer = false;
+	priv->dcbx.cable_len = MLX5E_DEFAULT_CABLE_LEN;
 
 	mlx5e_ets_init(priv);
+}
+
+enum {
+	INIT,
+	DELETE,
+};
+
+static void mlx5e_dcbnl_dscp_app(struct mlx5e_priv *priv, int action)
+{
+	struct dcb_app temp;
+	int i;
+
+	if (!MLX5_CAP_GEN(priv->mdev, vport_group_manager))
+		return;
+
+	if (!MLX5_DSCP_SUPPORTED(priv->mdev))
+		return;
+
+	/* No SEL_DSCP entry in non DSCP state */
+	if (priv->trust_state != MLX5_QPTS_TRUST_DSCP)
+		return;
+
+	temp.selector = IEEE_8021QAZ_APP_SEL_DSCP;
+	for (i = 0; i < MLX5E_MAX_DSCP; i++) {
+		temp.protocol = i;
+		temp.priority = priv->dscp2prio[i];
+		if (action == INIT)
+			dcb_ieee_setapp(priv->netdev, &temp);
+		else
+			dcb_ieee_delapp(priv->netdev, &temp);
+	}
+
+	priv->dcbx.dscp_app_cnt = (action == INIT) ? MLX5E_MAX_DSCP : 0;
+}
+
+void mlx5e_dcbnl_init_app(struct mlx5e_priv *priv)
+{
+	mlx5e_dcbnl_dscp_app(priv, INIT);
+}
+
+void mlx5e_dcbnl_delete_app(struct mlx5e_priv *priv)
+{
+	mlx5e_dcbnl_dscp_app(priv, DELETE);
 }
 #endif

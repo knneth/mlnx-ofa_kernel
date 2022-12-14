@@ -119,15 +119,6 @@ static inline int skb_checksum_start_offset(const struct sk_buff *skb)
 	no_printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-/* include/linux/netdevice.h */
-#ifndef HAVE_ALLOC_NETDEV_MQS_5_PARAMS
-/* HAVE_ALLOC_NETDEV_MQS_5_PARAMS not defined when alloc_netdev_mqs is missing or
- * with very new kernel where it gets more than 5 params */
-#define alloc_netdev_mqs(sizeof_priv, name, setup, txqs, rxqs) \
-	alloc_netdev_mq(sizeof_priv, name, setup, \
-			max_t(unsigned int, txqs, rxqs))
-#endif
-
 #define ETH_P_LINK_CTL	0x886c		/* HPNA, wlan link local tunnel */
 
 /**

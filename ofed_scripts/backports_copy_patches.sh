@@ -87,18 +87,24 @@ for bp in $(/bin/ls ${SDIR}/*patch)
 do
 	fname=$(basename ${bp})
 
+	patched_file=$(cat ${bp} | diffstat -l -p1 | head -1)
+	nfname=$(grep -lw "${patched_file}" ${TDIR}/*.patch)
+	if [ "X${nfname}" != "X" ]; then
+		fname=$(basename ${nfname})
+	fi
+
 	if [ ! -e "${TDIR}/${fname}" ]; then
 		echo "Copying new backport '${fname}'"
-		ex "/bin/cp -f ${bp} ${TDIR}"
+		ex "/bin/cp -f ${bp} ${TDIR}/${fname}"
 		let changes++
 		new_files=1
 		continue
 	fi
 
 	# Already exists, check if there is a real diff
-	if (diff -u ${bp} ${TDIR}/${fname} 2>/dev/null | grep -vE -- "^(\-\-\-|\+\+\+) backports" | grep -E -- "^(\-|\+)" | grep -qvE -- "^(\-|\+)@@"); then
+	if (diff -u ${bp} ${TDIR}/${fname} 2>/dev/null | grep -vE -- "^(\-\-\-|\+\+\+) backports|insertions|\+\+$|\-\-$" | grep -E -- "^(\-|\+)" | grep -qvE -- "^(\-|\+)@@|files changed"); then
 		echo "Updating existing backport '${TDIR}/${fname}'"
-		ex "/bin/cp -f ${bp} ${TDIR}"
+		ex "/bin/cp -f ${bp} ${TDIR}/${fname}"
 		let changes++
 		continue
 	fi

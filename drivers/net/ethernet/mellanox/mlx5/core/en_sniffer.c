@@ -106,7 +106,7 @@ static int mlx5e_sniffer_create_tx_rule(struct mlx5e_sniffer *sniffer)
 	int err = 0;
 
 	/* Create no filter rule */
-	spec = mlx5_vzalloc(sizeof(*spec));
+	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
 
@@ -156,7 +156,7 @@ static int sniffer_create_roce_rules(struct mlx5e_sniffer *sniffer)
 	u32 *mv;
 	int err = 0;
 
-	spec = mlx5_vzalloc(sizeof(*spec));
+	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
 
@@ -246,7 +246,7 @@ static int sniffer_add_flow_rule(struct mlx5e_sniffer *sniffer,
 	struct mlx5_flow_table *ft;
 	int err = 0;
 
-	spec = mlx5_vzalloc(sizeof(*spec));
+	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
 
@@ -510,7 +510,7 @@ static int sniffer_create_tirs(struct mlx5e_sniffer *sniffer)
 	int tt;
 
 	inlen = MLX5_ST_SZ_BYTES(create_tir_in);
-	in = mlx5_vzalloc(inlen);
+	in = kvzalloc(inlen, GFP_KERNEL);
 	if (!in)
 		return -ENOMEM;
 

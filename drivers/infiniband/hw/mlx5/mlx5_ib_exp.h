@@ -43,6 +43,11 @@ struct mlx5_ib_qp;
 
 #define MLX5_DC_CONNECT_QP_DEPTH 8192
 #define MLX5_IB_QPT_SW_CNAK	IB_QPT_RESERVED3
+#define MLX5_DM_ALLOWED_ACCESS ( IB_ACCESS_LOCAL_WRITE  |\
+				 IB_ACCESS_REMOTE_WRITE |\
+				 IB_ACCESS_REMOTE_READ  |\
+				 IB_ACCESS_REMOTE_ATOMIC )
+
 
 enum mlx5_cap_flags {
 	MLX5_CAP_COMPACT_AV   = 1 << 0,
@@ -63,11 +68,6 @@ enum mlx5_op {
 	MLX5_WR_OP_MLX	= 1,
 };
 
-enum {
-	MLX5_TM_MAX_RNDV_MSG_SIZE	= 64,
-	MLX5_TM_MAX_SGE			= 1,
-};
-
 struct mlx5_mlx_wr {
 	u8	sl;
 	u16	dlid;
@@ -79,6 +79,17 @@ struct mlx5_send_wr {
 	union {
 		struct mlx5_mlx_wr	mlx;
 	} sel;
+};
+
+struct mlx5_dc_stats {
+	struct kobject		kobj;
+	struct mlx5_ib_dev	*dev;
+	int			port;
+	atomic64_t		connects;
+	atomic64_t		cnaks;
+	atomic64_t		discards;
+	int			*rx_scatter;
+	int			initialized;
 };
 
 struct mlx5_dc_data {
@@ -97,11 +108,15 @@ struct mlx5_dc_data {
 	struct mlx5_ib_dev	*dev;
 	int			port;
 	int			initialized;
-	struct kobject		kobj;
-	unsigned long		connects;
-	unsigned long		cnaks;
-	unsigned long		discards;
+	int			index;
+	int			tx_signal_factor;
 	struct ib_wc		wc_tbl[MLX5_CNAK_RX_POLL_CQ_QUOTA];
+};
+
+struct mlx5_tc_data {
+	bool initialized;
+	int val;
+	struct kobject kobj;
 };
 
 struct mlx5_dc_tracer {
@@ -114,6 +129,11 @@ struct mlx5_dc_tracer {
 struct mlx5_ib_dct {
 	struct ib_dct		ibdct;
 	struct mlx5_core_dct	mdct;
+};
+
+struct mlx5_ib_dm {
+	struct ib_dm	ibdm;
+	void	       *dm_base_addr;
 };
 
 struct mlx5_ib_exp_odp_stats {
@@ -132,6 +152,11 @@ struct mlx5_ib_exp_odp_stats {
 	atomic_t                num_failed_resolutions;
 };
 
+static inline struct mlx5_ib_dm *to_mdm(struct ib_dm *ibdm)
+{
+	return container_of(ibdm, struct mlx5_ib_dm, ibdm);
+}
+
 static inline struct mlx5_ib_dct *to_mibdct(struct mlx5_core_dct *mdct)
 {
 	return container_of(mdct, struct mlx5_ib_dct, mdct);
@@ -142,6 +167,8 @@ static inline struct mlx5_ib_dct *to_mdct(struct ib_dct *ibdct)
 	return container_of(ibdct, struct mlx5_ib_dct, ibdct);
 }
 
+int init_tc_sysfs(struct mlx5_ib_dev *dev);
+void cleanup_tc_sysfs(struct mlx5_ib_dev *dev);
 struct ib_dct *mlx5_ib_create_dct(struct ib_pd *pd,
 				  struct ib_dct_init_attr *attr,
 				  struct ib_udata *udata);
@@ -191,8 +218,8 @@ enum mlx5_ib_exp_mmap_cmd {
 	MLX5_IB_EXP_MMAP_CLOCK_INFO			= 0xFF,
 };
 
-struct ib_mr *mlx5_ib_exp_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
-				      u64 virt_addr, int access_flags,
+struct ib_mr *mlx5_ib_exp_reg_user_mr(struct ib_pd *pd,
+				      struct ib_mr_init_attr *attr,
 				      struct ib_udata *udata, int mr_id);
 struct ib_mr *mlx5_ib_reg_user_mr_wrp(struct ib_pd *pd, u64 start, u64 length,
 				      u64 virt_addr, int access_flags,
@@ -257,6 +284,11 @@ int mlx5_ib_exp_create_srq_user(struct mlx5_ib_dev *dev,
 				struct ib_udata *udata,
 				struct mlx5_ib_create_srq *ucmd);
 
+struct ib_mr *mlx5_ib_get_dma_mr_ex(struct ib_pd *pd, int acc,
+				    u64 start_addr, u64 length);
+
+struct ib_mr *mlx5_ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *attr);
+
 /* NVMEoF target offload */
 void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev);
 int mlx5_ib_exp_set_nvmf_srq_attrs(struct mlx5_nvmf_attr *nvmf,
@@ -272,6 +304,12 @@ struct mlx5_ib_nvmf_ns {
 	struct mlx5_core_nvmf_ns	mns;
 };
 
+static inline struct mlx5_ib_nvmf_be_ctrl *
+to_mibctrl(struct mlx5_core_nvmf_be_ctrl *mctrl)
+{
+	return container_of(mctrl, struct mlx5_ib_nvmf_be_ctrl, mctrl);
+}
+
 static inline struct mlx5_ib_nvmf_be_ctrl *to_mctrl(struct ib_nvmf_ctrl *ibctrl)
 {
 	return container_of(ibctrl, struct mlx5_ib_nvmf_be_ctrl, ibctrl);
@@ -282,12 +320,25 @@ static inline struct mlx5_ib_nvmf_ns *to_mns(struct ib_nvmf_ns *ibns)
 	return container_of(ibns, struct mlx5_ib_nvmf_ns, ibns);
 }
 
+struct ib_dm *mlx5_ib_exp_alloc_dm(struct ib_device *ibdev,
+				   struct ib_ucontext *context,
+				   u64 length, u64 uaddr,
+				   struct ib_udata *uhw);
+
+int mlx5_ib_exp_free_dm(struct ib_dm *dm);
+
+int mlx5_ib_exp_memcpy_dm(struct ib_dm *dm,
+			  struct ib_exp_memcpy_dm_attr *attr);
+
 struct ib_nvmf_ctrl *mlx5_ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
 		struct ib_nvmf_backend_ctrl_init_attr *init_attr);
 int mlx5_ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
 struct ib_nvmf_ns *mlx5_ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
 		struct ib_nvmf_ns_init_attr *init_attr);
 int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
+
+struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
+			    struct ib_mr_init_attr *attr);
 
 struct mlx5_ib_ucontext;
 struct mlx5_ib_vma_private_data;

@@ -18,6 +18,7 @@
 #ifndef _RDMA_OFFLOAD_H
 #define _RDMA_OFFLOAD_H
 
+#include <linux/sizes.h>
 #include <rdma/ib_verbs.h>
 #include "nvmet.h"
 
@@ -35,6 +36,8 @@ struct nvmet_rdma_backend_ctrl {
 	struct pci_dev		  *pdev;
 	struct list_head	  entry;
 	struct nvme_peer_resource *ofl;
+	struct nvmet_rdma_xrq	  *xrq;
+	struct work_struct	  release_work;
 };
 
 struct nvmet_rdma_offload_ctrl {

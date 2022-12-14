@@ -114,7 +114,6 @@ struct mlx5_flow_table_attr {
 	int max_fte;
 	u32 level;
 	u32 flags;
-	u32 underlay_qpn;
 };
 
 struct mlx5_flow_table *
@@ -144,8 +143,17 @@ void mlx5_destroy_flow_group(struct mlx5_flow_group *fg);
 struct mlx5_flow_act {
 	u32 action;
 	u32 flow_tag;
+	u8  vlan_pcp;
+	u8  vlan_dei;
+	u16 vlan_id;
+	u16  tpid;
 	u32 encap_id;
+	u32 modify_id;
 };
+
+#define MLX5_DECLARE_FLOW_ACT(name) \
+	struct mlx5_flow_act name = {MLX5_FLOW_CONTEXT_ACTION_FWD_DEST,\
+				     MLX5_FS_DEFAULT_FLOW_TAG, 0, 0}
 
 /* Single destination per rule.
  * Group ID is implied by the match criteria.
@@ -165,8 +173,39 @@ int mlx5_modify_rule_destination(struct mlx5_flow_handle *handler,
 struct mlx5_fc *mlx5_flow_rule_counter(struct mlx5_flow_handle *handler);
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging);
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
+
+enum mlx5_flow_query_cached_flags {
+	MLX5_FLOW_QUERY_CACHED_DIFF = 0,
+	MLX5_FLOW_QUERY_CACHED_ABS = 1 << 0,
+};
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
-			  u64 *bytes, u64 *packets, u64 *lastuse);
+			  u64 *bytes, u64 *packets, u64 *lastusei,
+			  enum mlx5_flow_query_cached_flags query_flags);
+int mlx5_cmd_fc_query(struct mlx5_core_dev *dev, u32 id,
+		      u64 *packets, u64 *bytes);
+
+struct mlx5_fc_cache {
+	u64 packets;
+	u64 bytes;
+	u64 lastuse;
+};
+
+struct mlx5_fc {
+	struct rb_node node;
+	struct list_head list;
+
+	/* last{packets,bytes} members are used when calculating the delta since
+	 * last reading
+	 */
+	u64 lastpackets;
+	u64 lastbytes;
+
+	u32 id;
+	bool deleted;
+	bool aging;
+
+	struct mlx5_fc_cache cache ____cacheline_aligned_in_smp;
+};
 
 int mlx5_fs_add_rx_underlay_qpn(struct mlx5_core_dev *dev, u32 underlay_qpn);
 int mlx5_fs_remove_rx_underlay_qpn(struct mlx5_core_dev *dev, u32 underlay_qpn);

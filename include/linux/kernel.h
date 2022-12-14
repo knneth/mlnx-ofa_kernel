@@ -23,7 +23,7 @@
 #endif
 
 #ifndef U64_MAX
-#define U64_MAX        ((u64)~0U)
+#define U64_MAX        ((u64)~0ULL)
 #endif
 
 #ifdef __KERNEL__

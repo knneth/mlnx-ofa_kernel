@@ -41,7 +41,7 @@ struct ib_nvmf_init_data {
 	u8				staging_buffer_log_page_size;
 	u16				staging_buffer_number_of_pages;
 	u32				staging_buffer_page_offset;
-	u16				nvme_queue_size;
+	u32				nvme_queue_size;
 	u64				*staging_buffer_pas;
 };
 
@@ -64,37 +64,6 @@ enum ib_qp_offload_type {
 	IB_QP_OFFLOAD_NVMF = 1,
 };
 
-struct ib_nvmf_ctrl {
-	struct ib_srq	*srq;
-	u32		id;
-	atomic_t	usecnt; /* count all attached namespaces */
-};
-
-struct ib_nvmf_backend_ctrl_init_attr {
-	u32		cq_page_offset;
-	u32		sq_page_offset;
-	u8		cq_log_page_size;
-	u8		sq_log_page_size;
-	u16		initial_cqh_db_value;
-	u16		initial_sqt_db_value;
-	u64		cqh_dbr_addr;
-	u64		sqt_dbr_addr;
-	u64		cq_pas;
-	u64		sq_pas;
-};
-
-struct ib_nvmf_ns {
-	struct ib_nvmf_ctrl	*ctrl;
-	u32			nsid;
-};
-
-struct ib_nvmf_ns_init_attr {
-	u32		frontend_namespace;
-	u32		backend_namespace;
-	u16		lba_data_size;
-	u16		backend_ctrl_id;
-};
-
 struct ib_odp_statistics {
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
 
@@ -112,6 +81,19 @@ struct ib_odp_statistics {
 
 	atomic_t num_prefetch_pages;
 #endif
+};
+
+enum ibv_exp_dm_memcpy_dir {
+	IBV_EXP_DM_CPY_TO_DEVICE,
+	IBV_EXP_DM_CPY_TO_HOST
+};
+
+struct ib_exp_memcpy_dm_attr {
+	enum ibv_exp_dm_memcpy_dir memcpy_dir;
+	void *host_addr;
+	uint64_t dm_offset;
+	size_t length;
+	uint32_t comp_mask;
 };
 
 #endif

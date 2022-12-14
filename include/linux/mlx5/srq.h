@@ -39,6 +39,7 @@ enum {
 	MLX5_SRQ_FLAG_ERR    = (1 << 0),
 	MLX5_SRQ_FLAG_WQ_SIG = (1 << 1),
 	MLX5_SRQ_FLAG_RNDV   = (1 << 2),
+	MLX5_SRQ_FLAG_SET_DC_OP = 1 << 3,
 };
 
 enum mlx5_nvmf_offload_type {
@@ -59,8 +60,21 @@ struct mlx5_nvmf_attr {
 	u8				staging_buffer_log_page_size;
 	u16				staging_buffer_number_of_pages;
 	u8				staging_buffer_page_offset;
-	u16				nvme_queue_size;
+	u32				nvme_queue_size;
 	u64				*staging_buffer_pas;
+};
+
+struct mlx5_dc_offload_params {
+	u16				pkey_index;
+	enum ib_mtu			path_mtu;
+	u8				sl;
+	u8				max_rd_atomic;
+	u8				min_rnr_timer;
+	u8				timeout;
+	u8				retry_cnt;
+	u8				rnr_retry;
+	u64				dct_key;
+	u32				ooo_caps;
 };
 
 struct mlx5_srq_attr {
@@ -80,7 +94,11 @@ struct mlx5_srq_attr {
 	u64 db_record;
 	__be64 *pas;
 	u32 tm_log_list_size;
+	u32 tm_next_tag;
+	u32 tm_hw_phase_cnt;
+	u32 tm_sw_phase_cnt;
 	struct mlx5_nvmf_attr nvmf;
+	struct mlx5_dc_offload_params dc_op;
 };
 
 struct mlx5_core_dev;

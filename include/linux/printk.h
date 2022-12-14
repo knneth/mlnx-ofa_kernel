@@ -69,4 +69,21 @@
 
 #endif /* HAVE_LINUX_PRINTK_H */
 
+#ifndef HAVE_PRINT_HEX_DUMP_DEBUG
+
+#if  defined(CONFIG_PRINTK) && defined(DEBUG)
+#define print_hex_dump_debug(prefix_str, prefix_type, rowsize,         \
+			     groupsize, buf, len, ascii)               \
+	print_hex_dump(KERN_DEBUG, prefix_str, prefix_type, rowsize,   \
+		       groupsize, buf, len, ascii)
+#else
+static inline void print_hex_dump_debug(const char *prefix_str, int prefix_type,
+					int rowsize, int groupsize,
+					const void *buf, size_t len, bool ascii)
+{
+}
+#endif
+
+#endif /* HAVE_PRINT_HEX_DUMP_DEBUG */
+
 #endif	/* _COMPAT_LINUX_PRINTK_H */

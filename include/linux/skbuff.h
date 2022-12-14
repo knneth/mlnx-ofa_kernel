@@ -39,4 +39,28 @@ extern void v2_6_28_skb_add_rx_frag(struct sk_buff *skb, int i, struct page *pag
 #endif /* HAVE_SKB_ADD_RX_FRAG_5_PARAMS */
 #endif /*  LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) */
 
+#ifndef HAVE_SKB_PUT_ZERO
+#define skb_put_zero LINUX_BACKPORT(skb_put_zero)
+static inline void *skb_put_zero(struct sk_buff *skb, unsigned int len)
+{
+	void *tmp = skb_put(skb, len);
+
+	memset(tmp, 0, len);
+
+	return tmp;
+}
+#endif
+
+#ifndef HAVE_SKB_CLEAR_HASH
+static inline void skb_clear_hash(struct sk_buff *skb)
+{
+#ifdef HAVE_SKB_RXHASH
+	skb->rxhash = 0;
+#endif
+#ifdef HAVE_SKB_L4_RXHASH
+	skb->l4_rxhash = 0;
+#endif
+}
+#endif
+
 #endif /* _COMPAT_LINUX_SKBUFF_H */

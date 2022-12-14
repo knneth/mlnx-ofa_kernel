@@ -37,7 +37,7 @@ static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 	srq_attr->ext.nvmf.data_offset = 0;
 	srq_attr->ext.nvmf.log_max_io_size = ilog2(nvmf_caps->max_io_sz);
 	srq_attr->ext.nvmf.nvme_memory_log_page_size = 0;
-	srq_attr->ext.nvmf.nvme_queue_size = min_t(u16, NVMET_QUEUE_SIZE, nvmf_caps->max_queue_sz);
+	srq_attr->ext.nvmf.nvme_queue_size = min_t(u32, NVMET_QUEUE_SIZE, nvmf_caps->max_queue_sz);
 	srq_attr->ext.nvmf.staging_buffer_number_of_pages = xrq->st->num_pages;
 	srq_attr->ext.nvmf.staging_buffer_log_page_size = ilog2(xrq->st->page_size >> 12); //4k granularity in PRM
 	srq_attr->ext.nvmf.staging_buffer_pas = kzalloc(sizeof(dma_addr_t) * xrq->st->num_pages, GFP_KERNEL);
@@ -109,6 +109,12 @@ static void nvmet_rdma_destroy_xrq(struct kref *ref)
 	int i;
 
 	pr_info("destroying XRQ %p port %p\n", xrq, xrq->port);
+
+	mutex_lock(&nvmet_rdma_xrq_mutex);
+	if (!list_empty(&xrq->entry))
+		list_del_init(&xrq->entry);
+	mutex_unlock(&nvmet_rdma_xrq_mutex);
+
 	/* TODO: check if need to reduce refcound on pdev */
 	nvmet_rdma_free_cmds(ndev, xrq->ofl_srq_cmds, xrq->ofl_srq_size, false);
 	ib_destroy_srq(xrq->ofl_srq);
@@ -322,11 +328,30 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 	kfree(be_ctrl);
 }
 
-static void nvmet_rdma_init_be_ctrl_attr(struct ib_nvmf_backend_ctrl_init_attr *attr,
-					 struct nvme_peer_resource *ofl)
+static void nvmet_rdma_backend_ctrl_event(struct ib_event *event, void *priv)
 {
+	struct nvmet_rdma_backend_ctrl *be_ctrl = priv;
+
+	switch (event->event) {
+	case IB_EXP_EVENT_XRQ_NVMF_BACKEND_CTRL_ERR:
+		schedule_work(&be_ctrl->release_work);
+		break;
+	default:
+		pr_err("received IB Backend ctrl event: %s (%d)\n",
+		       ib_event_msg(event->event), event->event);
+		break;
+	}
+}
+
+static void nvmet_rdma_init_be_ctrl_attr(struct ib_nvmf_backend_ctrl_init_attr *attr,
+					 struct nvmet_rdma_backend_ctrl *be_ctrl)
+{
+	struct nvme_peer_resource *ofl = be_ctrl->ofl;
+
 	memset(attr, 0, sizeof(*attr));
 
+	attr->be_context = be_ctrl;
+	attr->event_handler = nvmet_rdma_backend_ctrl_event;
 	attr->cq_page_offset = 0;
 	attr->sq_page_offset = 0;
 	attr->cq_log_page_size = ilog2(ofl->nvme_cq_size >> 12);
@@ -353,6 +378,21 @@ static void nvmet_rdma_init_ns_attr(struct ib_nvmf_ns_init_attr *attr,
 	attr->backend_ctrl_id = backend_ctrl_id;
 }
 
+
+static void nvmet_release_backend_ctrl_work(struct work_struct *w)
+{
+	struct nvmet_rdma_backend_ctrl *be_ctrl =
+		container_of(w, struct nvmet_rdma_backend_ctrl, release_work);
+	struct nvmet_rdma_xrq *xrq = be_ctrl->xrq;
+
+	mutex_lock(&xrq->be_mutex);
+	if (!list_empty(&be_ctrl->entry))
+		list_del_init(&be_ctrl->entry);
+	mutex_unlock(&xrq->be_mutex);
+
+	nvmet_rdma_free_be_ctrl(be_ctrl);
+}
+
 static struct nvmet_rdma_backend_ctrl *
 nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 			  struct nvmet_ns *ns)
@@ -363,8 +403,13 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	int err;
 
 	be_ctrl = kzalloc(sizeof(*be_ctrl), GFP_KERNEL);
-	if (!be_ctrl)
-		return ERR_PTR(-ENOMEM);
+	if (!be_ctrl) {
+		err = -ENOMEM;
+		goto out_err;
+	}
+
+	INIT_WORK(&be_ctrl->release_work,
+		  nvmet_release_backend_ctrl_work);
 
 	be_ctrl->ofl = nvme_peer_get_resource(ns->pdev,
 			NVME_PEER_SQT_DBR      |
@@ -381,7 +426,7 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	}
 	be_ctrl->pdev = ns->pdev;
 
-	nvmet_rdma_init_be_ctrl_attr(&init_attr, be_ctrl->ofl);
+	nvmet_rdma_init_be_ctrl_attr(&init_attr, be_ctrl);
 	be_ctrl->ibctrl = ib_create_nvmf_backend_ctrl(xrq->ofl_srq, &init_attr);
 	if (IS_ERR(be_ctrl->ibctrl)) {
 		err = PTR_ERR(be_ctrl->ibctrl);
@@ -396,6 +441,7 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 		goto out_destroy_be_ctrl;
 	}
 
+	be_ctrl->xrq = xrq;
 	return be_ctrl;
 
 out_destroy_be_ctrl:
@@ -404,7 +450,7 @@ out_put_resource:
 	nvme_peer_put_resource(be_ctrl->ofl);
 out_free_be_ctrl:
 	kfree(be_ctrl);
-
+out_err:
 	return ERR_PTR(err);
 }
 

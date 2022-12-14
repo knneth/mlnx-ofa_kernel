@@ -13,6 +13,7 @@ drivers/infiniband/sw/Makefile
 drivers/infiniband/sw/rxe
 drivers/net/ethernet/mellanox/mlx4
 drivers/net/ethernet/mellanox/mlx5
+drivers/net/ethernet/mellanox/mlxfw
 drivers/net/ethernet/mellanox/Kconfig
 drivers/nvme/
 drivers/scsi/scsi_priv.h

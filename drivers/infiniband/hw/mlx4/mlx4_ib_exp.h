@@ -6,6 +6,7 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_cmem.h>
 #include <linux/mlx4/device.h>
+#include <linux/mlx4/qp.h>
 #include "user_exp.h"
 
 struct mlx4_ib_dev;
@@ -95,8 +96,8 @@ int mlx4_ib_umem_calc_optimal_mtt_size(struct ib_umem *umem,
 						u64 start_va,
 						int *num_of_mtts);
 
-struct ib_mr *mlx4_ib_exp_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
-				      u64 virt_addr, int access_flags,
+struct ib_mr *mlx4_ib_exp_reg_user_mr(struct ib_pd *pd,
+				      struct ib_mr_init_attr *attr,
 				      struct ib_udata *udata, int mr_id);
 
 struct ib_mr *mlx4_ib_reg_user_mr_wrp(struct ib_pd *pd, u64 start, u64 length,
@@ -120,8 +121,15 @@ int mlx4_ib_exp_query_device(struct ib_device *ibdev,
 int mlx4_ib_exp_ioctl(struct ib_ucontext *context, unsigned int cmd, unsigned long arg);
 int mlx4_ib_alloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp,
 			     struct ib_qp_init_attr *attr, int *qpn, int is_exp);
-void mlx4_ib_unalloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int qpn);
-void mlx4_ib_release_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp);
+struct mlx4_ib_ucontext;
+void mlx4_ib_unalloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int qpn,
+				struct mlx4_ib_ucontext *context,
+				enum mlx4_ib_source_type src,
+				bool dirty_release);
+void mlx4_ib_release_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp,
+				struct mlx4_ib_ucontext *context,
+				enum mlx4_ib_source_type src,
+				bool dirty_release);
 int mlx4_ib_check_qpg_attr(struct ib_pd *pd, struct ib_qp_init_attr *attr);
 struct ib_qp *mlx4_ib_create_qp_wrp(struct ib_pd *pd,
 				    struct ib_qp_init_attr *init_attr,

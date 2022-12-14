@@ -249,7 +249,6 @@ static ssize_t average_read(struct file *filp, char __user *buf, size_t count,
 	return ret;
 }
 
-
 static ssize_t average_write(struct file *filp, const char __user *buf,
 			     size_t count, loff_t *pos)
 {
@@ -532,7 +531,7 @@ static u64 cq_read_field(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 	u32 *out;
 	int err;
 
-	out = mlx5_vzalloc(outlen);
+	out = kvzalloc(outlen, GFP_KERNEL);
 	if (!out)
 		return param;
 
@@ -596,7 +595,6 @@ static ssize_t dbg_read(struct file *filp, char __user *buf, size_t count,
 		mlx5_core_warn(d->dev, "invalid resource type %d\n", d->type);
 		return -EINVAL;
 	}
-
 
 	if (is_str)
 		ret = snprintf(tbuf, sizeof(tbuf), "%s\n", (const char *)(unsigned long)field);

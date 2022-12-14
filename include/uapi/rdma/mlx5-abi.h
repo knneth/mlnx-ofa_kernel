@@ -172,6 +172,33 @@ struct mlx5_packet_pacing_caps {
 	__u32 reserved;
 };
 
+enum mlx5_ib_mpw_caps {
+	MPW_RESERVED		= 1 << 0,
+	MLX5_IB_ALLOW_MPW	= 1 << 1,
+	MLX5_IB_SUPPORT_EMPW	= 1 << 2,
+};
+
+enum mlx5_ib_sw_parsing_offloads {
+	MLX5_IB_SW_PARSING = 1 << 0,
+	MLX5_IB_SW_PARSING_CSUM = 1 << 1,
+	MLX5_IB_SW_PARSING_LSO = 1 << 2,
+};
+
+struct mlx5_ib_sw_parsing_caps {
+	__u32 sw_parsing_offloads; /* enum mlx5_ib_sw_parsing_offloads */
+
+	/* Corresponding bit will be set if qp type from
+	 * 'enum ib_qp_type' is supported, e.g.
+	 * supported_qpts |= 1 << IB_QPT_RAW_PACKET
+	 */
+	__u32 supported_qpts;
+};
+
+enum mlx5_ib_query_dev_resp_flags {
+	MLX5_IB_QUERY_DEV_RESP_FLAGS_CQE_128B_COMP = 1 << 0,
+	MLX5_IB_QUERY_DEV_RESP_FLAGS_CQE_128B_PAD  = 1 << 1,
+};
+
 struct mlx5_ib_query_device_resp {
 	__u32	comp_mask;
 	__u32	response_length;
@@ -180,7 +207,13 @@ struct mlx5_ib_query_device_resp {
 	struct	mlx5_ib_cqe_comp_caps cqe_comp_caps;
 	struct	mlx5_packet_pacing_caps packet_pacing_caps;
 	__u32	mlx5_ib_support_multi_pkt_send_wqes;
-	__u32	reserved;
+	__u32	flags; /* Use enum mlx5_ib_query_dev_resp_flags */
+	struct mlx5_ib_sw_parsing_caps sw_parsing_caps;
+};
+
+enum mlx5_ib_create_cq_flags {
+	MLX5_IB_CREATE_CQ_FLAGS_CQE_128B_PAD	= 1 << 0,
+	MLX5_IB_CREATE_CQ_FLAGS_RESERVED	= 1 << 1,
 };
 
 struct mlx5_ib_create_cq {
@@ -189,7 +222,7 @@ struct mlx5_ib_create_cq {
 	__u32	cqe_size;
 	__u8    cqe_comp_en;
 	__u8    cqe_comp_res_format;
-	__u16	reserved; /* explicit padding (optional on i386) */
+	__u16	flags;
 };
 
 struct mlx5_ib_create_cq_resp {
@@ -304,6 +337,21 @@ struct mlx5_ib_create_rwq_ind_tbl_resp {
 
 struct mlx5_ib_modify_wq {
 	__u32	comp_mask;
+	__u32	reserved;
+};
+
+struct mlx5_ib_describe_counter_set_resp {
+	__u32	response_length;
+	__u32	reserved;
+};
+
+struct mlx5_ib_create_counter_set_resp {
+	__u32	response_length;
+	__u32	reserved;
+};
+
+struct mlx5_ib_query_counter_set_resp {
+	__u32	response_length;
 	__u32	reserved;
 };
 #endif /* MLX5_ABI_USER_H */

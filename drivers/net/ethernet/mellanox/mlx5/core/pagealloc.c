@@ -181,7 +181,7 @@ static int alloc_4k(struct mlx5_core_dev *dev, u64 *addr)
 
 #define MLX5_U64_4K_PAGE_MASK ((~(u64)0U) << PAGE_SHIFT)
 
-static void free_4k(struct mlx5_core_dev *dev, u64 addr)
+static int free_4k(struct mlx5_core_dev *dev, u64 addr)
 {
 	struct fw_page *fwp;
 	int n;
@@ -189,14 +189,21 @@ static void free_4k(struct mlx5_core_dev *dev, u64 addr)
 	fwp = find_fw_page(dev, addr & MLX5_U64_4K_PAGE_MASK);
 	if (!fwp) {
 		mlx5_core_warn(dev, "page not found\n");
-		return;
+		return -ENOMEM;
 	}
 
 	n = (addr & ~MLX5_U64_4K_PAGE_MASK) >> MLX5_ADAPTER_PAGE_SHIFT;
+	if (test_bit(n, &fwp->bitmask)) {
+		mlx5_core_warn(dev, "addr 0x%llx is already freed, n %d\n", addr, n);
+		return -EINVAL;
+	}
+
 	fwp->free_count++;
 	set_bit(n, &fwp->bitmask);
 	if (fwp->free_count == 1)
 		list_add(&fwp->list, &dev->priv.free_list);
+
+	return 0;
 }
 
 static int alloc_system_page(struct mlx5_core_dev *dev, u16 func_id)
@@ -276,7 +283,7 @@ static int give_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
 	int i;
 
 	inlen += npages * MLX5_FLD_SZ_BYTES(manage_pages_in, pas[0]);
-	in = mlx5_vzalloc(inlen);
+	in = kvzalloc(inlen, GFP_KERNEL);
 	if (!in) {
 		err = -ENOMEM;
 		mlx5_core_warn(dev, "vzalloc failed %d\n", inlen);
@@ -387,12 +394,13 @@ static int reclaim_pages(struct mlx5_core_dev *dev, u32 func_id, int npages,
 	u32 *out;
 	int err;
 	int i;
+	int claimed = 0;
 
 	if (nclaimed)
 		*nclaimed = 0;
 
 	outlen += npages * MLX5_FLD_SZ_BYTES(manage_pages_out, pas[0]);
-	out = mlx5_vzalloc(outlen);
+	out = kvzalloc(outlen, GFP_KERNEL);
 	if (!out)
 		return -ENOMEM;
 
@@ -417,15 +425,15 @@ static int reclaim_pages(struct mlx5_core_dev *dev, u32 func_id, int npages,
 	}
 
 	for (i = 0; i < num_claimed; i++)
-		free_4k(dev, MLX5_GET64(manage_pages_out, out, pas[i]));
-
+		if (!free_4k(dev, MLX5_GET64(manage_pages_out, out, pas[i])))
+			claimed++;
 
 	if (nclaimed)
-		*nclaimed = num_claimed;
+		*nclaimed = claimed;
 
-	dev->priv.fw_pages -= num_claimed;
+	dev->priv.fw_pages -= claimed;
 	if (func_id)
-		dev->priv.vfs_pages -= num_claimed;
+		dev->priv.vfs_pages -= claimed;
 
 out_free:
 	kvfree(out);

@@ -90,8 +90,6 @@ int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
 		goto register_failed;
 	}
 
-	ipoib_create_debug_files(priv->dev);
-
 	/* RTNL childs don't need proprietary sysfs entries */
 	if (type == IPOIB_LEGACY_CHILD) {
 		if (ipoib_cm_add_mode_attr(priv->dev))
@@ -104,7 +102,7 @@ int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
 		if (device_create_file(&priv->dev->dev, &dev_attr_parent))
 			goto sysfs_failed;
 
-		if (priv->hca_caps_exp & IB_EXP_DEVICE_UD_RSS) {
+		if (priv->max_tx_queues > 1) {
 			if (ipoib_set_rss_sysfs(priv))
 				goto sysfs_failed;
 		}
@@ -117,7 +115,6 @@ int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
 
 sysfs_failed:
 	result = -ENOMEM;
-	ipoib_delete_debug_files(priv->dev);
 	unregister_netdevice(priv->dev);
 
 register_failed:
@@ -132,6 +129,7 @@ int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey)
 	struct ipoib_dev_priv *ppriv, *priv;
 	char intf_name[IFNAMSIZ];
 	struct ipoib_dev_priv *tpriv;
+	struct rdma_netdev *rn;
 	int result;
 
 	if (!capable(CAP_NET_ADMIN))
@@ -159,6 +157,9 @@ int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey)
 		rtnl_unlock();
 		return -ENOMEM;
 	}
+
+	rn = netdev_priv(priv->dev);
+
 	/*
 	 * First ensure this isn't a duplicate. We check the parent device and
 	 * then all of the legacy child interfaces to make sure the Pkey
@@ -185,9 +186,10 @@ out:
 	rtnl_unlock();
 
 	if (result) {
-		ipoib_free_netdev(ppriv->ca, priv->dev);
+		rn->free_rdma_netdev(priv->dev);
 		kfree(priv);
 	}
+
 	return result;
 }
 
@@ -232,7 +234,9 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey)
 	rtnl_unlock();
 
 	if (dev) {
-		ipoib_free_netdev(priv->ca, dev);
+		struct rdma_netdev *rn;
+		rn = netdev_priv(dev);
+		rn->free_rdma_netdev(priv->dev);
 		kfree(priv);
 		return 0;
 	}

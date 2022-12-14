@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2013-2017, Mellanox Technologies. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -149,7 +149,7 @@ static u32 mlx5_get_cc_param_val(void *field, int offset)
 				cnp_802p_prio);
 	default:
 		return 0;
-	};
+	}
 }
 
 static void mlx5_ib_set_cc_param_mask_val(void *field, int offset,
@@ -244,7 +244,7 @@ static void mlx5_ib_set_cc_param_mask_val(void *field, int offset,
 		MLX5_SET(cong_control_r_roce_ecn_np, field, cnp_prio_mode, 0);
 		MLX5_SET(cong_control_r_roce_ecn_np, field, cnp_802p_prio, var);
 		break;
-	};
+	}
 }
 
 static int mlx5_ib_get_cc_params(struct mlx5_ib_dev *dev, int offset, u32 *var)
@@ -255,7 +255,7 @@ static int mlx5_ib_get_cc_params(struct mlx5_ib_dev *dev, int offset, u32 *var)
 	int err;
 	enum mlx5_ib_cong_node_type node;
 
-	out = mlx5_vzalloc(outlen);
+	out = kvzalloc(outlen, GFP_KERNEL);
 	if (!out)
 		return -ENOMEM;
 
@@ -282,7 +282,7 @@ static int mlx5_ib_set_cc_params(struct mlx5_ib_dev *dev, int offset, u32 var)
 	u32 attr_mask = 0;
 	int err;
 
-	in = mlx5_vzalloc(inlen);
+	in = kvzalloc(inlen, GFP_KERNEL);
 	if (!in)
 		return -ENOMEM;
 
@@ -364,17 +364,10 @@ static const struct file_operations dbg_cc_fops = {
 
 void mlx5_ib_cleanup_cong_debugfs(struct mlx5_ib_dev *dev)
 {
-	if (!mlx5_debugfs_root)
-		return;
-
-	if (!MLX5_CAP_GEN(dev->mdev, cc_query_allowed) ||
-	    !MLX5_CAP_GEN(dev->mdev, cc_modify_allowed))
-		return;
-
-	if (!dev->dbg_cc_params)
-		return;
-
-	if (!dev->dbg_cc_params->root)
+	if (!mlx5_debugfs_root ||
+	    dev->rep ||
+	    !dev->dbg_cc_params ||
+	    !dev->dbg_cc_params->root)
 		return;
 
 	debugfs_remove_recursive(dev->dbg_cc_params->root);
@@ -387,16 +380,16 @@ int mlx5_ib_init_cong_debugfs(struct mlx5_ib_dev *dev)
 	struct mlx5_ib_dbg_cc_params *dbg_cc_params;
 	int i;
 
-	if (!mlx5_debugfs_root)
-		return 0;
+	if (!mlx5_debugfs_root || dev->rep)
+		goto out;
 
 	if (!MLX5_CAP_GEN(dev->mdev, cc_query_allowed) ||
 	    !MLX5_CAP_GEN(dev->mdev, cc_modify_allowed))
-		return 0;
+		goto out;
 
 	dbg_cc_params = kzalloc(sizeof(*dbg_cc_params), GFP_KERNEL);
 	if (!dbg_cc_params)
-		goto err;
+		goto out;
 
 	dev->dbg_cc_params = dbg_cc_params;
 
@@ -416,7 +409,7 @@ int mlx5_ib_init_cong_debugfs(struct mlx5_ib_dev *dev)
 		if (!dbg_cc_params->params[i].dentry)
 			goto err;
 	}
-	return 0;
+out:	return 0;
 
 err:
 	mlx5_ib_warn(dev, "cong debugfs failure\n");

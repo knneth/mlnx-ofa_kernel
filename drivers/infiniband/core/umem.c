@@ -86,8 +86,9 @@ static struct ib_umem *peer_umem_get(struct ib_peer_memory_client *ib_peer_mem,
 	if (ret)
 		goto put_pages;
 
-	atomic64_add(umem->nmap, &ib_peer_mem->stats.num_reg_pages);
-	atomic64_add(umem->nmap * BIT(umem->page_shift), &ib_peer_mem->stats.num_reg_bytes);
+	atomic64_add(umem->npages, &ib_peer_mem->stats.num_reg_pages);
+	atomic64_add(umem->npages << umem->page_shift,
+		     &ib_peer_mem->stats.num_reg_bytes);
 	atomic64_inc(&ib_peer_mem->stats.num_alloc_mrs);
 	return umem;
 
@@ -116,8 +117,9 @@ static void peer_umem_release(struct ib_umem *umem)
 			    umem->context->device->dma_device);
 	peer_mem->put_pages(&umem->sg_head,
 			    umem->peer_mem_client_context);
-	atomic64_add(umem->nmap, &ib_peer_mem->stats.num_dereg_pages);
-	atomic64_add(umem->nmap * BIT(umem->page_shift), &ib_peer_mem->stats.num_dereg_bytes);
+	atomic64_add(umem->npages, &ib_peer_mem->stats.num_dereg_pages);
+	atomic64_add(umem->npages << umem->page_shift,
+		     &ib_peer_mem->stats.num_dereg_bytes);
 	atomic64_inc(&ib_peer_mem->stats.num_dealloc_mrs);
 	ib_put_peer_client(ib_peer_mem, umem->peer_mem_client_context);
 	kfree(umem);
@@ -137,7 +139,7 @@ static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int d
 	for_each_sg(umem->sg_head.sgl, sg, umem->npages, i) {
 
 		page = sg_page(sg);
-		if (umem->writable && dirty)
+		if (!PageDirty(page) && umem->writable && dirty)
 			set_page_dirty_lock(page);
 		put_page(page);
 	}
@@ -486,7 +488,7 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
 		return -EINVAL;
 	}
 
-	ret = sg_pcopy_to_buffer(umem->sg_head.sgl, umem->nmap, dst, length,
+	ret = sg_pcopy_to_buffer(umem->sg_head.sgl, umem->npages, dst, length,
 				 offset + ib_umem_offset(umem));
 
 	if (ret < 0)

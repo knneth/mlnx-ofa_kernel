@@ -1,0 +1,58 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_exp.c
+
+Change-Id: I5ef86c466e8fbbc9b21cfae20d5b676a936ca6e4
+---
+ drivers/infiniband/core/umem_exp.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/infiniband/core/umem_exp.c
++++ b/drivers/infiniband/core/umem_exp.c
+@@ -56,7 +56,11 @@ static void umem_vma_open(struct vm_area
+ 	with mm->mmap_sem held for writing.
+ 	*/
+ 	if (current->mm)
++#ifdef HAVE_PINNED_VM
+ 		current->mm->pinned_vm += ntotal_pages;
++#else
++		current->mm->locked_vm += ntotal_pages;
++#endif
+ 	return;
+ }
+ 
+@@ -76,7 +80,11 @@ static void umem_vma_close(struct vm_are
+ 	with mm->mmap_sem held for writing.
+ 	*/
+ 	if (current->mm)
++#ifdef HAVE_PINNED_VM
+ 		current->mm->pinned_vm -= ntotal_pages;
++#else
++		current->mm->locked_vm -= ntotal_pages;
++#endif
+ 	return;
+ 
+ }
+@@ -111,7 +119,11 @@ int ib_umem_map_to_vma(struct ib_umem *u
+ 	with mm->mmap_sem held for writing.
+ 	No need to lock.
+ 	*/
++#ifdef HAVE_PINNED_VM
+ 	locked = ntotal_pages + current->mm->pinned_vm;
++#else
++	locked = ntotal_pages + current->mm->locked_vm;
++#endif
+ 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+ 
+ 	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK))
+@@ -140,7 +152,11 @@ int ib_umem_map_to_vma(struct ib_umem *u
+ end:
+ 	/* We expect to have enough pages   */
+ 	if (vma_entry_number >= ntotal_pages) {
++#ifdef HAVE_PINNED_VM
+ 		current->mm->pinned_vm = locked;
++#else
++		current->mm->locked_vm = locked;
++#endif
+ 		vma->vm_ops =  &umem_vm_ops;
+ 		return 0;
+ 	}

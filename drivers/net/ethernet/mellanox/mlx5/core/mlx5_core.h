@@ -37,12 +37,10 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/if_link.h>
+#include <linux/firmware.h>
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.1-1.0.2"
-#define DRIVER_RELDATE	"27 Jun 2017"
-
-#define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev))
+#define DRIVER_VERSION	"4.2-1.0.0"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 
@@ -137,13 +135,6 @@ enum {
 	MLX5_ICMD_ACCESS_REG_DATA_DW_SZ = 0x2,
 };
 
-struct mlx5_delayed_event {
-	struct list_head	list;
-	struct mlx5_core_dev	*dev;
-	enum mlx5_dev_event	event;
-	unsigned long		param;
-};
-
 struct mlx5_icmd_ctrl_bits {
 	u16 opcode;
 	u8  status;
@@ -184,11 +175,12 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
 int mlx5_cmd_init_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
-int mlx5_cmd_panic_teardown_hca(struct mlx5_core_dev *dev);
+int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_core_event(struct mlx5_core_dev *dev, enum mlx5_dev_event event,
 		     unsigned long param);
 void mlx5_core_page_fault(struct mlx5_core_dev *dev,
 			  struct mlx5_pagefault *pfault);
+void mlx5_pps_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe);
 void mlx5_port_module_event(struct mlx5_core_dev *dev, struct mlx5_eqe *eqe);
 void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
@@ -257,6 +249,11 @@ int mlx5_encap_alloc(struct mlx5_core_dev *dev,
 		     u32 *encap_id);
 void mlx5_encap_dealloc(struct mlx5_core_dev *dev, u32 encap_id);
 
+int mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
+			     u8 namespace, u8 num_actions,
+			     void *modify_actions, u32 *modify_header_id);
+void mlx5_modify_header_dealloc(struct mlx5_core_dev *dev, u32 modify_header_id);
+
 bool mlx5_lag_intf_add(struct mlx5_interface *intf, struct mlx5_priv *priv);
 
 int mlx5_query_mtpps(struct mlx5_core_dev *dev, u32 *mtpps, u32 mtpps_size);
@@ -264,6 +261,26 @@ int mlx5_set_mtpps(struct mlx5_core_dev *mdev, u32 *mtpps, u32 mtpps_size);
 int mlx5_query_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 *arm, u8 *mode);
 int mlx5_set_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 arm, u8 mode);
 
+#define MLX5_PPS_CAP(mdev) (MLX5_CAP_GEN((mdev), pps) &&		\
+			    MLX5_CAP_GEN((mdev), pps_modify) &&		\
+			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
+			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
+
+int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw);
+
+enum {
+	UNLOCK,
+	LOCK,
+	CAP_ID = 0x9,
+};
+
+int mlx5_pciconf_cap9_sem(struct mlx5_core_dev *dev, int state);
+int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space);
+int mlx5_pciconf_set_protected_addr_space(struct mlx5_core_dev *dev,
+					  u32 *ret_space_size);
+int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,
+			  unsigned int offset, u32 *data,
+			  int length);
 int mlx5_mst_dump_init(struct mlx5_core_dev *dev);
 int mlx5_mst_capture(struct mlx5_core_dev *dev);
 u32 mlx5_mst_dump(struct mlx5_core_dev *dev, void *buff, u32 buff_sz);
@@ -276,14 +293,6 @@ int mlx5_icmd_access_register(struct mlx5_core_dev *dev,
 			      void *io_buff,
 			      u32 io_buff_dw_sz);
 
-static inline bool mlx5_pps_is_supported(struct mlx5_core_dev *dev)
-{
-	return MLX5_CAP_GEN(dev, pps) &&
-	       MLX5_CAP_GEN(dev, pps_modify) &&
-	       MLX5_CAP_MCAM_FEATURE(dev, mtpps_fs) &&
-	       MLX5_CAP_MCAM_FEATURE(dev, mtpps_enh_out_per_adj);
-}
-
 void mlx5e_init(void);
 void mlx5e_cleanup(void);
 
@@ -291,6 +300,23 @@ int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
 				   int function_id, bool value);
 int mlx5_get_other_hca_cap_roce(struct mlx5_core_dev *mdev,
 				int function_id, bool *value);
+/* crdump */
+struct mlx5_fw_crdump {
+	u32	crspace_size;
+	/* sync reading/freeing the data */
+	struct mutex crspace_mutex;
+	u32	vsec_addr;
+	u8	*crspace;
+};
+
+int mlx5_cr_protected_capture(struct mlx5_core_dev *dev);
+
+#define MLX5_CORE_PROC "driver/mlx5_core"
+#define MLX5_CORE_PROC_CRDUMP "crdump"
+extern struct proc_dir_entry *mlx5_crdump_dir;
+int mlx5_crdump_init(struct mlx5_core_dev *dev);
+void mlx5_crdump_cleanup(struct mlx5_core_dev *dev);
+int mlx5_fill_cr_dump(struct mlx5_core_dev *dev);
 
 static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 {

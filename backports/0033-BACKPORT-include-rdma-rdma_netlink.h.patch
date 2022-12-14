@@ -1,0 +1,21 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/rdma_netlink.h
+
+Change-Id: Id3b0e77a5b9b8faf4d55fe29a7f710cec7aae2b1
+---
+ include/rdma/rdma_netlink.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/include/rdma/rdma_netlink.h
++++ b/include/rdma/rdma_netlink.h
+@@ -6,8 +6,10 @@
+ #include <uapi/rdma/rdma_netlink.h>
+ 
+ struct rdma_nl_cbs {
++#ifdef HAVE_NETLINK_EXT_ACK
+ 	int (*doit)(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 		    struct netlink_ext_ack *extack);
++#endif
+ 	int (*dump)(struct sk_buff *skb, struct netlink_callback *nlcb);
+ 	u8 flags;
+ };

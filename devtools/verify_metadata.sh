@@ -86,7 +86,7 @@ get_id_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | cut -d';' -f'1' | sed -r -e 's/^[^=]*=\s*//')
+	echo $(echo "$line" | sed -r -e 's/.*Change-Id=\s*//' -e 's/;\s*subject=.*//')
 }
 
 get_commitID()
@@ -104,21 +104,21 @@ get_subject_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | cut -d';' -f'2' | sed -r -e 's/^[^=]*=\s*//')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*subject=\s*//' -e 's/;\s*feature.*//')
 }
 
 get_feature_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | cut -d';' -f'3' | sed -r -e 's/^[^=]*=\s*//')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*feature=\s*//' -e 's/;\s*upstream_status.*//')
 }
 
 get_upstream_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | cut -d';' -f'4' | sed -r -e 's/^[^=]*=\s*//')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*general.*//')
 }
 
 ##################################################################

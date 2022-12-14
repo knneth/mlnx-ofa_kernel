@@ -27,8 +27,19 @@
 #
 set -e
 
-ofa_build_src=/usr/src/ofa_kernel/default/
-build_dir=$PWD/../build
+ofa_build_src=${ofa_build_src:-/usr/src/ofa_kernel/default/}
+build_dir=${build_dir:-$PWD/../build}
+running_kernel=$(uname -r)
+
+if [ "X${ofa_build_src}" == "X" ]; then
+	echo "ofa_build_src is not given!" >&2
+	exit 1
+fi
+
+if !(echo "${ofa_build_src}" | grep -q "^/usr/src/ofa_kernel/"); then
+	echo "ofa_build_src must start with '/usr/src/ofa_kernel/', you provided '${ofa_build_src}'" >&2
+	exit 1
+fi
 
 echo "Copying build sources from '$build_dir' to '$ofa_build_src' ..."
 if [ ! -e "$build_dir" ]; then
@@ -38,10 +49,21 @@ fi
 
 cd $build_dir
 
-/bin/rm -rf /usr/src/ofa_kernel/default
-mkdir -p /usr/src/ofa_kernel/default
+/bin/rm -rf $ofa_build_src
+mkdir -p $ofa_build_src
 /bin/cp -ar include/			$ofa_build_src
 /bin/cp -ar config*				$ofa_build_src
 /bin/cp -ar compat*				$ofa_build_src
 /bin/cp -ar ofed_scripts		$ofa_build_src
 /bin/cp -ar Module*.symvers		$ofa_build_src
+
+if [ "${ofa_build_src}" != "X/usr/src/ofa_kernel/default/" ] &&
+	[ ! -e "/usr/src/ofa_kernel/default" ]; then
+
+	if (echo "${ofa_build_src}" | grep -wq "${running_kernel}") ||
+		[ "X$(ls -d /lib/modules/* | wc -l)" == "X1" ]; then
+		echo "Creating /usr/src/ofa_kernel/default/ link to ${ofa_build_src} ..."
+		cd /usr/src/ofa_kernel/
+		ln -snf $(basename ${ofa_build_src}) default
+	fi
+fi

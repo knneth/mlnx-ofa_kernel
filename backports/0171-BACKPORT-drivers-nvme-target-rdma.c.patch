@@ -1,0 +1,24 @@
+From: Nitzan Carmi <nitzanc@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
+
+Change-Id: If0be228983c48f8ab335a61f10e38546b19bc430
+---
+ drivers/nvme/target/rdma.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/nvme/target/rdma.c
++++ b/drivers/nvme/target/rdma.c
+@@ -132,8 +132,13 @@ static bool nvmet_rdma_use_srq;
+ module_param_named(use_srq, nvmet_rdma_use_srq, bool, 0444);
+ MODULE_PARM_DESC(use_srq, "Use shared receive queue.");
+ 
++#ifdef HAVE_PARAM_OPS_ULLONG
+ static unsigned long long nvmet_rdma_offload_mem_start = 0;
+ module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ullong, 0444);
++#else
++static unsigned long nvmet_rdma_offload_mem_start = 0;
++module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ulong, 0444);
++#endif
+ MODULE_PARM_DESC(offload_mem_start,
+ 		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
+ 		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");

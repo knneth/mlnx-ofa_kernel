@@ -17,19 +17,21 @@ fi
 # set specific module parameter for Ubuntu
 echo "options ib_ipoib send_queue_size=128 recv_queue_size=128" >> /etc/modprobe.d/ib_ipoib.conf
 
-# Update limits.conf
-if [ -e /etc/security/limits.conf ]; then
-	LIMITS_UPDATED=0
-	if ! (grep -qE "soft.*memlock" /etc/security/limits.conf 2>/dev/null); then
-		echo "* soft memlock unlimited" >> /etc/security/limits.conf
-		LIMITS_UPDATED=1
-	fi
-	if ! (grep -qE "hard.*memlock" /etc/security/limits.conf 2>/dev/null); then
-		echo "* hard memlock unlimited" >> /etc/security/limits.conf
-		LIMITS_UPDATED=1
-	fi
-	if [ $LIMITS_UPDATED -eq 1 ]; then
-		echo "Configured /etc/security/limits.conf"
+# Update limits.conf (but not for Containers)
+if [ ! -e "/.dockerenv" ] && ! (grep -q docker /proc/self/cgroup 2>/dev/null); then
+	if [ -e /etc/security/limits.conf ]; then
+		LIMITS_UPDATED=0
+		if ! (grep -qE "soft.*memlock" /etc/security/limits.conf 2>/dev/null); then
+			echo "* soft memlock unlimited" >> /etc/security/limits.conf
+			LIMITS_UPDATED=1
+		fi
+		if ! (grep -qE "hard.*memlock" /etc/security/limits.conf 2>/dev/null); then
+			echo "* hard memlock unlimited" >> /etc/security/limits.conf
+			LIMITS_UPDATED=1
+		fi
+		if [ $LIMITS_UPDATED -eq 1 ]; then
+			echo "Configured /etc/security/limits.conf"
+		fi
 	fi
 fi
 

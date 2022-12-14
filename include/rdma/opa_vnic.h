@@ -54,8 +54,6 @@
 
 #include <rdma/ib_verbs.h>
 
-#define OPA_MAX_NUM_VNICS  255
-
 /* VNIC uses 16B header format */
 #define OPA_VNIC_L2_TYPE    0x2
 

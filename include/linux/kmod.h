@@ -18,8 +18,12 @@
 #undef request_module_nowait
 #endif
 
-#define request_module_nowait(mod...)
-#define request_module(mod...)
+static inline int compat_block_request_module(const char *name, ...) {
+	return 0;
+}
+#define request_module(mod...) compat_block_request_module(mod)
+#define request_module_nowait(mod...) compat_block_request_module(mod)
+
 #endif /* CONFIG_MLNX_BLOCK_REQUEST_MODULE */
 
 #endif /* CONFIG_MODULES */

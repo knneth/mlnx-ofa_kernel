@@ -43,6 +43,7 @@
 #include <rdma/ib_addr.h>
 
 static struct workqueue_struct *gid_cache_wq;
+
 bool roce_v1_noncompat_gid = true;
 EXPORT_SYMBOL_GPL(roce_v1_noncompat_gid);
 module_param_named(roce_v1_noncompat_gid, roce_v1_noncompat_gid, bool, 0444);
@@ -746,7 +747,6 @@ static struct notifier_block nb_inet6addr = {
 
 int __init roce_gid_mgmt_init(void)
 {
-
 	gid_cache_wq = alloc_ordered_workqueue("gid-cache-wq", 0);
 	if (!gid_cache_wq)
 		return -ENOMEM;

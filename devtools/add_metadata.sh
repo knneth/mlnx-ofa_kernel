@@ -195,14 +195,14 @@ get_feature_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | cut -d';' -f'3' | sed -r -e 's/.*=\s*//g')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*feature=\s*//' -e 's/;\s*upstream_status.*//')
 }
 
 get_upstream_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | cut -d';' -f'4' | sed -r -e 's/.*=\s*//g')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*general.*//')
 }
 
 map_id_new_to_old()
@@ -233,7 +233,7 @@ get_feature_from_ref()
 	local ref_db=$1; shift
 	local subject=$1; shift
 
-	if [ "X$changeid_map" != "" ]; then
+	if [ "X$changeid_map" != "X" ]; then
 		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
 	fi
 	local line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)
@@ -250,7 +250,7 @@ get_upstream_status_from_ref()
 	local ref_db=$1; shift
 	local subject=$1; shift
 
-	if [ "X$changeid_map" != "" ]; then
+	if [ "X$changeid_map" != "X" ]; then
 		uniqID=$(map_id_new_to_old $uniqID $changeid_map "$subject")
 	fi
 	local line=$(grep --no-filename -wr -- "$uniqID" ${ref_db}/*csv 2>/dev/null)

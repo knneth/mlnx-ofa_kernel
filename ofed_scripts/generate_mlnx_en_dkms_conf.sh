@@ -31,6 +31,7 @@ cd ${0%*/*}
 
 with_mlx4=${with_mlx4:-1}
 with_mlx5=${with_mlx5:-1}
+with_mlxfw=${with_mlxfw:-1}
 MLNX_EN_PATCH_PARAMS=
 
 kernelver=${kernelver:-`uname -r`}
@@ -52,6 +53,11 @@ if [ $with_mlx5 -eq 1 ]; then
 	modules="$modules drivers/net/ethernet/mellanox/mlx5/core/mlx5_core drivers/infiniband/hw/mlx5/mlx5_ib"
 else
 	MLNX_EN_PATCH_PARAMS="$MLNX_EN_PATCH_PARAMS --without-mlx5"
+fi
+if [ $with_mlxfw -eq 1 ]; then
+	modules="$modules drivers/net/ethernet/mellanox/mlxfw/mlxfw"
+else
+	MLNX_EN_PATCH_PARAMS="$MLNX_EN_PATCH_PARAMS --without-mlxfw"
 fi
 
 i=0

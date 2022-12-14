@@ -111,4 +111,12 @@
 #define ETHER_FLOW      0x12    /* spec only (ether_spec) */
 #endif
 
+#ifndef SPEED_5000
+#define SPEED_5000	5000
+#endif
+
+#ifndef SPEED_14000
+#define SPEED_14000	14000
+#endif
+
 #endif

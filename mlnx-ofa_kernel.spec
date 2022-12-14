@@ -31,7 +31,7 @@
 
 %global WITH_SYSTEMD %(if ( test -d "%{_unitdir}" > /dev/null); then echo -n '1'; else echo -n '0'; fi)
 
-%{!?configure_options: %global configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx5-mod --with-ipoib-mod}
+%{!?configure_options: %global configure_options --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-mlx4-mod --with-mlx4_en-mod --with-mlx5-mod --with-mlxfw-mod --with-ipoib-mod}
 
 %global MEMTRACK %(if ( echo %{configure_options} | grep "with-memtrack" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global MADEYE %(if ( echo %{configure_options} | grep "with-madeye-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
@@ -63,8 +63,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.1}
-%{!?_release: %global _release OFED.4.1.1.0.2.1.gc22af88}
+%{!?_version: %global _version 4.2}
+%{!?_release: %global _release OFED.4.2.1.0.0.1.gf36c870}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -112,7 +112,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.1-1.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.0.0.tgz
 
 
 # build KMP rpms?
@@ -166,7 +166,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.1-1.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.0.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -198,7 +198,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.1-1.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.0.0.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -494,9 +494,12 @@ if [[ -f /etc/redhat-release || -f /etc/rocks-release ]]; then
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/chkconfig --del openibd >/dev/null 2>&1 || true
 
+%if "%{WITH_SYSTEMD}" != "1"
         /sbin/chkconfig --add openibd >/dev/null 2>&1 || true
         /sbin/chkconfig openibd on >/dev/null 2>&1 || true
+%else
         /usr/bin/systemctl enable openibd >/dev/null  2>&1 || true
+%endif
 fi
 
 if [ -f /etc/SuSE-release ]; then
@@ -504,9 +507,12 @@ if [ -f /etc/SuSE-release ]; then
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/insserv -r openibd >/dev/null 2>&1 || true
 
+%if "%{WITH_SYSTEMD}" != "1"
         /sbin/insserv openibd >/dev/null 2>&1 || true
         /sbin/chkconfig openibd on >/dev/null 2>&1 || true
+%else
         /usr/bin/systemctl enable openibd >/dev/null  2>&1 || true
+%endif
 fi
 
 %if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"
@@ -536,19 +542,21 @@ if [ -e /etc/modprobe.d/ipv6 ]; then
 fi
 %endif
 
-# Update limits.conf
-if [ -e /etc/security/limits.conf ]; then
-	LIMITS_UPDATED=0
-	if ! (grep -qE "soft.*memlock" /etc/security/limits.conf 2>/dev/null); then
-		echo "* soft memlock unlimited" >> /etc/security/limits.conf
-		LIMITS_UPDATED=1
-	fi
-	if ! (grep -qE "hard.*memlock" /etc/security/limits.conf 2>/dev/null); then
-		echo "* hard memlock unlimited" >> /etc/security/limits.conf
-		LIMITS_UPDATED=1
-	fi
-	if [ $LIMITS_UPDATED -eq 1 ]; then
-		echo "Configured /etc/security/limits.conf"
+# Update limits.conf (but not for Containers)
+if [ ! -e "/.dockerenv" ] && ! (grep -q docker /proc/self/cgroup 2>/dev/null); then
+	if [ -e /etc/security/limits.conf ]; then
+		LIMITS_UPDATED=0
+		if ! (grep -qE "soft.*memlock" /etc/security/limits.conf 2>/dev/null); then
+			echo "* soft memlock unlimited" >> /etc/security/limits.conf
+			LIMITS_UPDATED=1
+		fi
+		if ! (grep -qE "hard.*memlock" /etc/security/limits.conf 2>/dev/null); then
+			echo "* hard memlock unlimited" >> /etc/security/limits.conf
+			LIMITS_UPDATED=1
+		fi
+		if [ $LIMITS_UPDATED -eq 1 ]; then
+			echo "Configured /etc/security/limits.conf"
+		fi
 	fi
 fi
 
@@ -655,7 +663,7 @@ fi
 
 %if "%{KMP}" != "1"
 %files -n %{non_kmp_pname}
-/lib/modules/%{KVERSION}/
+/lib/modules/%{KVERSION}/%{install_mod_dir}/
 %endif
 
 %files -n %{devel_pname}

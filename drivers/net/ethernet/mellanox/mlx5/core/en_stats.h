@@ -47,7 +47,7 @@
 
 struct counter_desc {
 	char		format[ETH_GSTRING_LEN];
-	int		offset; /* Byte offset */
+	size_t		offset; /* Byte offset */
 };
 
 struct mlx5e_sw_stats {
@@ -274,7 +274,7 @@ static const struct counter_desc pport_2819_stats_desc[] = {
 };
 
 static const struct counter_desc pport_phy_statistical_stats_desc[] = {
-	{ "rx_symbol_errors_phy", PPORT_PHY_STATISTICAL_OFF(phy_symbol_errors) },
+	{ "rx_pcs_symbol_err_phy", PPORT_PHY_STATISTICAL_OFF(phy_symbol_errors) },
 	{ "rx_corrected_bits_phy", PPORT_PHY_STATISTICAL_OFF(phy_corrected_bits) },
 };
 
@@ -292,6 +292,11 @@ static const struct counter_desc pport_per_prio_pfc_stats_desc[] = {
 	{ "tx_%s_pause", PPORT_PER_PRIO_OFF(tx_pause) },
 	{ "tx_%s_pause_duration", PPORT_PER_PRIO_OFF(tx_pause_duration) },
 	{ "rx_%s_pause_transition", PPORT_PER_PRIO_OFF(rx_pause_transition) },
+};
+
+static const struct counter_desc pport_pfc_stall_stats_desc[] = {
+	{ "tx_pause_storm_warning_events ", PPORT_PER_PRIO_OFF(device_stall_minor_watermark_cnt) },
+	{ "tx_pause_storm_error_events", PPORT_PER_PRIO_OFF(device_stall_critical_watermark_cnt) },
 };
 
 #define PCIE_PERF_OFF(c) \
@@ -409,12 +414,16 @@ static const struct counter_desc sq_stats_desc[] = {
 	ARRAY_SIZE(pport_per_prio_traffic_stats_desc)
 #define NUM_PPORT_PER_PRIO_PFC_COUNTERS \
 	ARRAY_SIZE(pport_per_prio_pfc_stats_desc)
+#define NUM_PPORT_PFC_STALL_COUNTERS(priv) \
+	(ARRAY_SIZE(pport_pfc_stall_stats_desc) * \
+	MLX5_CAP_PCAM_FEATURE((priv)->mdev, pfcc_mask))
 #define NUM_PPORT_COUNTERS(priv)	(NUM_PPORT_802_3_COUNTERS + \
 					 NUM_PPORT_2863_COUNTERS  + \
 					 NUM_PPORT_2819_COUNTERS  + \
 					 NUM_PPORT_PHY_STATISTICAL_COUNTERS(priv) + \
 					 NUM_PPORT_PER_PRIO_TRAFFIC_COUNTERS * \
-					 NUM_PPORT_PRIO)
+					 NUM_PPORT_PRIO + \
+					 NUM_PPORT_PFC_STALL_COUNTERS(priv))
 #define NUM_PCIE_COUNTERS(priv)		NUM_PCIE_PERF_COUNTERS(priv)
 #define NUM_RQ_STATS			ARRAY_SIZE(rq_stats_desc)
 #define NUM_SQ_STATS			ARRAY_SIZE(sq_stats_desc)
@@ -433,8 +442,8 @@ static const struct counter_desc mlx5e_pme_status_desc[] = {
 };
 
 static const struct counter_desc mlx5e_pme_error_desc[] = {
-	{ "module_bus_stuck", 16 },      /* bus stuck (I2C or data shorted) */
-	{ "module_high_temp", 48 },      /* high temperature */
+	{ "module_bus_stuck", 16 },       /* bus stuck (I2C or data shorted) */
+	{ "module_high_temp", 48 },       /* high temperature */
 	{ "module_bad_shorted", 56 },    /* bad or shorted cable/module */
 };
 

@@ -232,7 +232,6 @@ struct mlx5_mlx_seg {
 #define MLX5_WQE_CTRL_OPMOD_EXT_ATOMIC 0x08
 #define MLX5_WQE_CTRL_OPMOD_OP_LEN 0x07
 #define MLX5_WQE_CTRL_OPMOD_OP_PTR 7
-#define MLX5_WQE_AV_EXT 0x80000000
 
 enum {
 	MLX5_ETH_WQE_L3_INNER_CSUM      = 1 << 4,
@@ -245,10 +244,20 @@ enum {
 	MLX5_ETH_WQE_INSERT_VLAN        = 1 << 15,
 };
 
+enum {
+	MLX5_ETH_WQE_SWP_INNER_L3_IPV6  = 1 << 0,
+	MLX5_ETH_WQE_SWP_INNER_L4_UDP   = 1 << 1,
+	MLX5_ETH_WQE_SWP_OUTER_L3_IPV6  = 1 << 4,
+	MLX5_ETH_WQE_SWP_OUTER_L4_UDP   = 1 << 5,
+};
+
 struct mlx5_wqe_eth_seg {
-	u8              rsvd0[4];
+	u8              swp_outer_l4_offset;
+	u8              swp_outer_l3_offset;
+	u8              swp_inner_l4_offset;
+	u8              swp_inner_l3_offset;
 	u8              cs_flags;
-	u8              rsvd1;
+	u8              swp_flags;
 	__be16          mss;
 	__be32          rsvd2;
 	union {
@@ -475,6 +484,25 @@ struct mlx5_stride_block_ctrl_seg {
 	__be16		num_entries;
 };
 
+enum {
+	MLX5_CALC_MATRIX	= 1 << 7,
+};
+
+struct mlx5_vec_calc_seg {
+	u8		calc_op[4];
+	__be32		rsvd0[2];
+	u8		op_tags;
+	u8		mat_le_tag_cs;
+	u8		rsvd1;
+	u8		vec_count;
+	__be32		rsvd2;
+	__be32		cm_lkey;
+	__be64		cm_addr;
+	__be32		vec_size;
+	__be32		vec_lkey;
+	__be64		vec_addr;
+};
+
 struct mlx5_core_qp {
 	struct mlx5_core_rsc_common	common; /* must be first */
 	void (*event)		(struct mlx5_core_qp *, int);
@@ -592,8 +620,6 @@ int mlx5_core_alloc_q_counter(struct mlx5_core_dev *dev, u16 *counter_id);
 int mlx5_core_dealloc_q_counter(struct mlx5_core_dev *dev, u16 counter_id);
 int mlx5_core_query_q_counter(struct mlx5_core_dev *dev, u16 counter_id,
 			      int reset, void *out, int out_size);
-int mlx5_core_query_out_of_buffer(struct mlx5_core_dev *dev, u16 counter_id,
-				  u32 *out_of_buffer);
 
 static inline const char *mlx5_qp_type_str(int type)
 {

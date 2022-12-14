@@ -11,7 +11,7 @@ else
 variant=default
 endif
 FLAVOR ?= $(variant)
-OFA = $(shell test -d $(OFA_DIR)/$(FLAVOR) && echo $(OFA_DIR)/$(FLAVOR) || (test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build) || echo $(OFA_DIR))
+OFA = $(shell ( test -d $(OFA_DIR)/$(KVER) && echo $(OFA_DIR)/$(KVER) ) || ( test -d $(OFA_DIR)/$(FLAVOR) && echo $(OFA_DIR)/$(FLAVOR) ) || ( test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build ) || ( echo $(OFA_DIR) ))
 
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 include $(OFA)/configure.mk.kernel
@@ -69,6 +69,36 @@ ifneq ($(shell if (echo $(KVER) | grep -qE 'uek'); then \
 override WITH_MAKE_PARAMS += ctf-dir=$(CWD)/.ctf
 endif
 
+ifeq ($(CONFIG_NVME_HOST_WITHOUT_FC),m)
+MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC=m \
+			CONFIG_NVME_TARGET= \
+			CONFIG_NVME_TARGET_LOOP= \
+			CONFIG_NVME_TARGET_RDMA= \
+			CONFIG_NVME_TARGET_FC= \
+			CONFIG_NVME_TARGET_FCLOOP= \
+			CONFIG_NVME_TARGET_DUMMY= \
+			CONFIG_NVME_CORE=m \
+			CONFIG_BLK_DEV_NVME=m \
+			CONFIG_NVME_FABRICS=m \
+			CONFIG_NVME_FC= \
+			CONFIG_NVME_RDMA=m \
+			CONFIG_NVME_HOST_DUMMY=
+else
+MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC= \
+			CONFIG_NVME_TARGET=m \
+			CONFIG_NVME_TARGET_LOOP=m \
+			CONFIG_NVME_TARGET_RDMA=m \
+			CONFIG_NVME_TARGET_FC=m \
+			CONFIG_NVME_TARGET_FCLOOP=m \
+			CONFIG_NVME_TARGET_DUMMY= \
+			CONFIG_NVME_CORE=m \
+			CONFIG_BLK_DEV_NVME=m \
+			CONFIG_NVME_FABRICS=m \
+			CONFIG_NVME_FC=m \
+			CONFIG_NVME_RDMA=m \
+			CONFIG_NVME_HOST_DUMMY=
+endif
+
 name := mlnx-nvme
 VERSION=$(shell grep "define _version" $(name).spec  | sed -e 's/.*_version //' | sed -e 's/}//' | sed -e 's/\s*//g')
 RELEASE=$(shell grep "define _release" $(name).spec  | sed -e 's/.*_release //' | sed -e 's/}//' | sed -e 's/\s*//g')
@@ -88,19 +118,7 @@ default:
 # compile with ofed driver
 	-cp -f $(OFA)/Module*.symvers $(SRC_DIR)/Module.symvers
 	make -C $(K_BUILD) O=$(K_OBJ) SUBDIRS=$(shell pwd) $(WITH_MAKE_PARAMS) \
-		CONFIG_NVME_TARGET=m \
-		CONFIG_NVME_TARGET_LOOP=m \
-		CONFIG_NVME_TARGET_RDMA=m \
-		CONFIG_NVME_TARGET_FC=m \
-		CONFIG_NVME_TARGET_FCLOOP=m \
-		CONFIG_NVME_TARGET_DUMMY= \
-		CONFIG_NVME_CORE=m \
-		CONFIG_BLK_DEV_NVME=m \
-		CONFIG_NVME_FABRICS=m \
-		CONFIG_NVME_FC=m \
-		CONFIG_NVME_RDMA=m \
-		CONFIG_BLK_DEV_NVME_SCSI=y \
-		CONFIG_NVME_HOST_DUMMY= \
+		$(MY_NVMF_KCONFIGS) \
 		CONFIG_DTRACE= \
 		CONFIG_CC_STACKPROTECTOR_STRONG= \
 		CONFIG_CTF= \

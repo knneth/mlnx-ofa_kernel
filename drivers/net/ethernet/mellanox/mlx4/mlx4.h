@@ -56,11 +56,10 @@
 
 #define DRV_NAME	"mlx4_core"
 #define PFX		DRV_NAME ": "
-#define DRV_VERSION	"4.1-1.0.2"
-#define DRV_RELDATE	"27 Jun 2017"
+#define DRV_VERSION	"4.2-1.0.0"
 
 #define DRV_STACK_NAME		"Linux-MLNX_OFED"
-#define DRV_STACK_VERSION	"4.1-1.0.2"
+#define DRV_STACK_VERSION	"4.2-1.0.0"
 #define DRV_NAME_FOR_FW		DRV_STACK_NAME "," DRV_STACK_VERSION
 
 #define MLX4_FS_NUM_OF_L2_ADDR		8
@@ -70,6 +69,8 @@
 #define INIT_HCA_TPT_MW_ENABLE          (1 << 7)
 
 #define MLX4_QUERY_IF_STAT_RESET	BIT(31)
+
+#define MLX4_CORE_PROC "driver/mlx4_core"
 
  enum {
 	 MLX4_INGRESS_PARSER_MODE_STANDARD               = 0,
@@ -239,7 +240,6 @@ do {									\
 #define mlx4_warn(mdev, format, ...)					\
 	dev_warn(&(mdev)->persist->pdev->dev, format, ##__VA_ARGS__)
 
-extern int mlx4_log_num_mgm_entry_size;
 extern int log_mtts_per_seg;
 extern int mlx4_internal_err_reset;
 extern int mlx4_blck_lb;
@@ -829,6 +829,8 @@ struct mlx4_set_port_general_context {
 	u8 phv_en;
 	u8 reserved6[5];
 	__be16 user_mtu;
+	u16 reserved7;
+	u8 user_mac[6];
 };
 
 struct mlx4_set_port_rqp_calc_context {
@@ -991,7 +993,7 @@ void mlx4_cleanup_cq_table(struct mlx4_dev *dev);
 void mlx4_cleanup_qp_table(struct mlx4_dev *dev);
 void mlx4_cleanup_srq_table(struct mlx4_dev *dev);
 void mlx4_cleanup_mcg_table(struct mlx4_dev *dev);
-int __mlx4_qp_alloc_icm(struct mlx4_dev *dev, int qpn, gfp_t gfp);
+int __mlx4_qp_alloc_icm(struct mlx4_dev *dev, int qpn);
 void __mlx4_qp_free_icm(struct mlx4_dev *dev, int qpn);
 int __mlx4_cq_alloc_icm(struct mlx4_dev *dev, int *cqn);
 void __mlx4_cq_free_icm(struct mlx4_dev *dev, int cqn);
@@ -999,7 +1001,7 @@ int __mlx4_srq_alloc_icm(struct mlx4_dev *dev, int *srqn);
 void __mlx4_srq_free_icm(struct mlx4_dev *dev, int srqn);
 int __mlx4_mpt_reserve(struct mlx4_dev *dev);
 void __mlx4_mpt_release(struct mlx4_dev *dev, u32 index);
-int __mlx4_mpt_alloc_icm(struct mlx4_dev *dev, u32 index, gfp_t gfp);
+int __mlx4_mpt_alloc_icm(struct mlx4_dev *dev, u32 index);
 void __mlx4_mpt_free_icm(struct mlx4_dev *dev, u32 index);
 u32 __mlx4_alloc_mtt_range(struct mlx4_dev *dev, int order);
 void __mlx4_free_mtt_range(struct mlx4_dev *dev, u32 first_seg, int order);
@@ -1062,6 +1064,10 @@ void mlx4_start_catas_poll(struct mlx4_dev *dev);
 void mlx4_stop_catas_poll(struct mlx4_dev *dev);
 int mlx4_catas_init(struct mlx4_dev *dev);
 void mlx4_catas_end(struct mlx4_dev *dev);
+void mlx4_crdump_proc_init(struct proc_dir_entry *proc_core_dir);
+void mlx4_crdump_proc_cleanup(struct proc_dir_entry *proc_core_dir);
+int mlx4_crdump_init(struct mlx4_dev *dev);
+void mlx4_crdump_end(struct mlx4_dev *dev);
 int mlx4_restart_one(struct pci_dev *pdev);
 int mlx4_register_device(struct mlx4_dev *dev);
 void mlx4_unregister_device(struct mlx4_dev *dev);
@@ -1247,6 +1253,8 @@ void mlx4_srq_event(struct mlx4_dev *dev, u32 srqn, int event_type);
 void mlx4_enter_error_state(struct mlx4_dev_persistent *persist);
 int mlx4_comm_internal_err(u32 slave_read);
 
+int mlx4_crdump_collect(struct mlx4_dev *dev);
+
 int mlx4_SENSE_PORT(struct mlx4_dev *dev, int port,
 		    enum mlx4_port_type *type);
 void mlx4_do_sense_ports(struct mlx4_dev *dev,
@@ -1279,6 +1287,7 @@ int mlx4_get_slave_from_resource_id(struct mlx4_dev *dev,
 void mlx4_delete_all_resources_for_slave(struct mlx4_dev *dev, int slave_id);
 void mlx4_reset_roce_gids(struct mlx4_dev *dev, int slave);
 int mlx4_init_resource_tracker(struct mlx4_dev *dev);
+void mlx4_update_counter_resource_tracker(struct mlx4_dev *dev);
 
 void mlx4_free_resource_tracker(struct mlx4_dev *dev,
 				enum mlx4_res_tracker_free_type type);

@@ -1,0 +1,71 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+
+Change-Id: I4a1a5595ddd820c9e21bfac38f7d85e3a4d1f8b9
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+@@ -50,6 +50,7 @@ enum {
+ 	MLX5E_LOWEST_PRIO_GROUP   = 0,
+ };
+ 
++#ifdef HAVE_IEEE_DCBNL_ETS
+ #ifdef CONFIG_MLX5_CORE_EN_DCB
+ /* If dcbx mode is non-host set the dcbx mode to host.
+  */
+@@ -535,6 +536,7 @@ fw_err:
+ 	return err;
+ }
+ 
++#ifdef HAVE_IEEE_GET_SET_MAXRATE
+ static int mlx5e_dcbnl_ieee_getmaxrate(struct net_device *netdev,
+ 				       struct ieee_maxrate *maxrate)
+ {
+@@ -607,6 +609,7 @@ static int mlx5e_dcbnl_ieee_setmaxrate(s
+ 
+ 	return mlx5_modify_port_ets_rate_limit(mdev, max_bw_value, max_bw_unit);
+ }
++#endif
+ 
+ static u8 mlx5e_dcbnl_setall(struct net_device *netdev)
+ {
+@@ -857,8 +860,13 @@ static u8 mlx5e_dcbnl_getcap(struct net_
+ 	return rval;
+ }
+ 
++#ifdef HAVE_DCBNL_RTNL_OPS_GETNUMTCS_RET_INT
+ static int mlx5e_dcbnl_getnumtcs(struct net_device *netdev,
+ 				 int tcs_id, u8 *num)
++#else
++static u8 mlx5e_dcbnl_getnumtcs(struct net_device *netdev,
++				int tcs_id, u8 *num)
++#endif
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(netdev);
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+@@ -896,11 +904,17 @@ static void mlx5e_dcbnl_setpfcstate(stru
+ 	cee_cfg->pfc_enable = state;
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_DCBNL_OPS_CONST
+ const struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
++#else
++struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
++#endif
+ 	.ieee_getets	= mlx5e_dcbnl_ieee_getets,
+ 	.ieee_setets	= mlx5e_dcbnl_ieee_setets,
++#ifdef HAVE_IEEE_GET_SET_MAXRATE
+ 	.ieee_getmaxrate = mlx5e_dcbnl_ieee_getmaxrate,
+ 	.ieee_setmaxrate = mlx5e_dcbnl_ieee_setmaxrate,
++#endif
+ 	.ieee_getpfc	= mlx5e_dcbnl_ieee_getpfc,
+ 	.ieee_setpfc	= mlx5e_dcbnl_ieee_setpfc,
+ 	.ieee_setapp    = mlx5e_dcbnl_ieee_setapp,
+@@ -1034,3 +1048,4 @@ void mlx5e_dcbnl_delete_app(struct mlx5e
+ 	mlx5e_dcbnl_dscp_app(priv, DELETE);
+ }
+ #endif
++#endif

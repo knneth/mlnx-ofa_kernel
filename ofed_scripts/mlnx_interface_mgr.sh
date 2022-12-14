@@ -192,7 +192,15 @@ is_connected_mode_supported()
     # Devices that support connected mode:
     #  "4113", "Connect-IB"
     #  "4114", "Connect-IBVF"
-    if (grep -qE "4113|4114" /sys/class/net/${i}/device/infiniband/*/hca_type 2>/dev/null); then
+    local hca_type=""
+    if [ -e /sys/class/net/${i}/device/infiniband ]; then
+        hca_type=$(cat /sys/class/net/${i}/device/infiniband/*/hca_type 2>/dev/null)
+    elif [ -e /sys/class/net/${i}/parent ]; then
+        # for Pkeys, check their parent
+        local parent=$(cat /sys/class/net/${i}/parent)
+        hca_type=$(cat /sys/class/net/${parent}/device/infiniband/*/hca_type 2>/dev/null)
+    fi
+    if (echo -e "${hca_type}" | grep -qE "4113|4114" 2>/dev/null); then
         return 0
     fi
 
@@ -251,7 +259,15 @@ bring_up()
             fi
         elif [ "X${SET_CONNECTED_MODE}" == "Xauto" ]; then
             # handle mlx5 interfaces, assumption: mlx5 interface will be with CM mode.
-            if [ "X$(basename `readlink -f /sys/class/net/${i}/device/driver/module 2>/dev/null` 2>/dev/null)" == "Xmlx5_core" ]; then
+            local drvname=""
+            if [ -e /sys/class/net/${i}/device/driver/module ]; then
+                drvname=$(basename `readlink -f /sys/class/net/${i}/device/driver/module 2>/dev/null` 2>/dev/null)
+            elif [ -e /sys/class/net/${i}/parent ]; then
+                # for Pkeys, check their parent
+                local parent=$(cat /sys/class/net/${i}/parent)
+                drvname=$(basename `readlink -f /sys/class/net/${parent}/device/driver/module 2>/dev/null` 2>/dev/null)
+            fi
+            if [ "X${drvname}" == "Xmlx5_core" ]; then
                 if is_connected_mode_supported ${i} ; then
                     set_ipoib_cm ${i} ${MTU}
                     if [ $? -ne 0 ]; then

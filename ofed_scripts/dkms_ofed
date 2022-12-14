@@ -53,6 +53,7 @@ def_configure_options=" \
 	--with-mlx4-mod \
 	--with-mlx4_en-mod \
 	--with-mlx5-mod \
+	--with-mlxfw-mod \
 	--with-ipoib-mod \
 	"
 # check if dkms.conf exists and parse it, otherwise use the env variable or the default
@@ -68,6 +69,10 @@ if [ -f $WDIR/../dkms.conf ];then
 			fi
 		fi
 	done < $WDIR/../dkms.conf
+	# W/A for --with-innova-ipsec flag opens features (not adding new module)
+	if (grep -q "with-innova-ipsec" $WDIR/../dkms.conf); then
+		options="${options} --with-innova-ipsec"
+	fi
 	configure_options=$options
 else
 	configure_options=${configure_options:-"$def_configure_options"}
@@ -116,6 +121,12 @@ module_to_flag()
 		;;
 		ib_mad|ib_sa|ib_addr)
 		flag=--with-dummy-core-mods
+		;;
+		mlxfw)
+		flag=--with-mlxfw-mod
+		;;
+		mlx5_fpga_tools)
+		flag=--with-innova-flex
 		;;
 		*)
 		;;
@@ -186,6 +197,14 @@ get-modules()
 			--with-memtrack )
 			modules="$modules \
 				drivers/infiniband/debug/memtrack"
+			;;
+			--with-mlxfw-mod )
+			modules="$modules \
+				drivers/net/ethernet/mellanox/mlxfw/mlxfw"
+			;;
+			--with-innova-flex | --with-innova-ipsec )
+			modules="$modules \
+				drivers/net/ethernet/mellanox/mlx5/fpga/mlx5_fpga_tools"
 			;;
 			*)
 			;;

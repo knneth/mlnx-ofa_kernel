@@ -30,7 +30,6 @@
  * SOFTWARE.
  */
 
-
 #include <linux/gfp.h>
 #include <linux/export.h>
 #include <linux/mlx5/cmd.h>
@@ -80,6 +79,7 @@ static u64 qp_allowed_event_types(void)
 	       BIT(MLX5_EVENT_TYPE_PATH_MIG_FAILED) |
 	       BIT(MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR) |
 	       BIT(MLX5_EVENT_TYPE_WQ_ACCESS_ERROR) |
+	       BIT(MLX5_EVENT_TYPE_XRQ_ERROR) |
 	       BIT(MLX5_EVENT_TYPE_DCT_DRAINED) |
 	       BIT(MLX5_EVENT_TYPE_DCT_KEY_VIOLATION);
 
@@ -116,11 +116,12 @@ static bool is_event_type_allowed(int rsc_type, int event_type)
 	}
 }
 
-int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_type)
+int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_info)
 {
 	struct mlx5_core_rsc_common *common = mlx5_get_rsc(dev, rsn);
 	struct mlx5_core_dct *dct;
 	struct mlx5_core_qp *qp;
+	int event_type = event_info & 0xff;
 
 	if (!common)
 		return -1;
@@ -136,7 +137,7 @@ int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_type)
 	case MLX5_RES_RQ:
 	case MLX5_RES_SQ:
 		qp = (struct mlx5_core_qp *)common;
-		qp->event(qp, event_type);
+		qp->event(qp, event_info);
 		break;
 	case MLX5_RES_DCT:
 		dct = (struct mlx5_core_dct *)common;
@@ -259,17 +260,12 @@ int mlx5_core_set_delay_drop(struct mlx5_core_dev *dev,
 {
 	u32 out[MLX5_ST_SZ_DW(set_delay_drop_params_out)] = {0};
 	u32 in[MLX5_ST_SZ_DW(set_delay_drop_params_in)]   = {0};
-	int err;
 
 	MLX5_SET(set_delay_drop_params_in, in, opcode,
 		 MLX5_CMD_OP_SET_DELAY_DROP_PARAMS);
 	MLX5_SET(set_delay_drop_params_in, in, delay_drop_timeout,
 		 timeout_usec / 100);
-	err = mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
-	if (err)
-		return err;
-
-	return 0;
+	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 }
 EXPORT_SYMBOL_GPL(mlx5_core_set_delay_drop);
 
@@ -549,23 +545,3 @@ int mlx5_core_query_q_counter(struct mlx5_core_dev *dev, u16 counter_id,
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, out_size);
 }
 EXPORT_SYMBOL_GPL(mlx5_core_query_q_counter);
-
-int mlx5_core_query_out_of_buffer(struct mlx5_core_dev *dev, u16 counter_id,
-				  u32 *out_of_buffer)
-{
-	int outlen = MLX5_ST_SZ_BYTES(query_q_counter_out);
-	void *out;
-	int err;
-
-	out = mlx5_vzalloc(outlen);
-	if (!out)
-		return -ENOMEM;
-
-	err = mlx5_core_query_q_counter(dev, counter_id, 0, out, outlen);
-	if (!err)
-		*out_of_buffer = MLX5_GET(query_q_counter_out, out,
-					  out_of_buffer);
-
-	kfree(out);
-	return err;
-}

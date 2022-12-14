@@ -62,7 +62,7 @@ out:
 static int mlx5e_diag_fill_driver_version(void *buff)
 {
 	memset(buff, 0, MLX5_DRV_VER_SZ);
-	strlcpy(buff, DRIVER_VERSION " (" DRIVER_RELDATE ")", MLX5_DRV_VER_SZ);
+	strlcpy(buff, DRIVER_VERSION, MLX5_DRV_VER_SZ);
 	return MLX5_DRV_VER_SZ;
 }
 
@@ -246,8 +246,16 @@ int mlx5e_get_dump_data(struct net_device *netdev, struct ethtool_dump *dump,
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5_diag_dump *dump_hdr = buffer;
 	struct mlx5_diag_blk *dump_blk;
-	struct mlx5_mcion_reg mcion;
+	struct mlx5_mcion_reg mcion = {};
+	int module_num;
+	int err;
 
+	err = mlx5_query_module_num(priv->mdev, &module_num);
+
+	if (err)
+		return err;
+
+	mcion.module = module_num;
 	dump_hdr->version = MLX5_DIAG_DUMP_VERSION;
 	dump_hdr->flag = 0;
 	dump_hdr->num_blocks = 0;

@@ -139,11 +139,13 @@ int mlx5_odp_populate_xlt(void *xlt, size_t offset, size_t nentries,
 		__be64 *pas = xlt;
 
 		nentries = min(nentries, ib_umem_num_pages(mr->umem) - offset);
-		odp = mr->umem->odp_data;
-		for (i = 0; i < nentries; i++) {
-			dma_addr_t pa = odp->dma_list[offset + i];
+		if (!(flags & MLX5_IB_UPD_XLT_ZAP)) {
+			odp = mr->umem->odp_data;
+			for (i = 0; i < nentries; i++) {
+				dma_addr_t pa = odp->dma_list[offset + i];
 
-			pas[i] = cpu_to_be64(umem_dma_to_mtt(pa));
+				pas[i] = cpu_to_be64(umem_dma_to_mtt(pa));
+			}
 		}
 		return nentries;
 	}
@@ -204,7 +206,7 @@ void mlx5_ib_invalidate_range(struct ib_umem *umem, unsigned long start,
 	const u64 umr_block_mask = (MLX5_UMR_MTT_ALIGNMENT /
 				    sizeof(struct mlx5_mtt)) - 1;
 	u64 idx = 0, blk_start_idx = 0;
-	int in_block = 0;
+	int in_block = 0, np_stat;
 	u64 addr;
 
 	if (!umem || !umem->odp_data) {
@@ -264,7 +266,8 @@ void mlx5_ib_invalidate_range(struct ib_umem *umem, unsigned long start,
 	 * needed.
 	 */
 
-	ib_umem_odp_unmap_dma_pages(umem, start, end);
+	ib_umem_odp_unmap_dma_pages(umem, start, end, &np_stat);
+	atomic_sub(np_stat, &mr->dev->odp_stats.num_odp_mr_pages);
 
 	if (unlikely(!umem->npages && mr->parent &&
 		     !umem->odp_data->dying)) {
@@ -513,13 +516,16 @@ static int mr_leaf_free(struct ib_umem *umem, u64 start,
 			u64 end, void *cookie)
 {
 	struct mlx5_ib_mr *mr = umem->odp_data->private, *imr = cookie;
+	int np_stat;
 
 	if (mr->parent != imr)
 		return 0;
 
 	ib_umem_odp_unmap_dma_pages(umem,
 				    ib_umem_start(umem),
-				    ib_umem_end(umem));
+				    ib_umem_end(umem),
+				    &np_stat);
+	atomic_sub(np_stat, &mr->dev->odp_stats.num_odp_mr_pages);
 
 	if (umem->odp_data->dying)
 		return 0;
@@ -546,13 +552,11 @@ void mlx5_ib_free_implicit_mr(struct mlx5_ib_mr *imr)
 static int pagefault_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr,
 			u64 io_virt, size_t bcnt, u32 *bytes_mapped)
 {
+	int npages = 0, implicit = 0, current_seq, page_shift, ret, np, np_stat;
 	u64 access_mask = ODP_READ_ALLOWED_BIT;
-	int npages = 0, page_shift, np;
 	u64 start_idx, page_mask;
 	struct ib_umem_odp *odp;
-	int current_seq;
 	size_t size;
-	int ret;
 
 	if (!mr->umem->odp_data->page_list) {
 		odp = implicit_mr_get_data(mr, io_virt, bcnt);
@@ -560,7 +564,7 @@ static int pagefault_mr(struct mlx5_ib_dev *dev, struct mlx5_ib_mr *mr,
 		if (IS_ERR(odp))
 			return PTR_ERR(odp);
 		mr = odp->private;
-
+		implicit = 1;
 	} else {
 		odp = mr->umem->odp_data;
 	}
@@ -582,8 +586,9 @@ next_mr:
 	 */
 	smp_rmb();
 
-	ret = ib_umem_odp_map_dma_pages(mr->umem, io_virt, size,
-					access_mask, current_seq, 0);
+	ret = ib_umem_odp_map_dma_pages(mr->umem, io_virt, size, access_mask,
+					current_seq, 0, &np_stat);
+	atomic_add(np_stat, &dev->odp_stats.num_odp_mr_pages);
 
 	if (ret < 0)
 		goto out;
@@ -638,7 +643,7 @@ next_mr:
 
 out:
 	if (ret == -EAGAIN) {
-		if (mr->parent || !odp->dying) {
+		if (implicit || !odp->dying) {
 			unsigned long timeout =
 				msecs_to_jiffies(MMU_NOTIFIER_TIMEOUT);
 
@@ -689,6 +694,7 @@ int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
 	struct mlx5_klm *pklm;
 	u32 *out = NULL;
 	size_t offset;
+	int ndescs;
 
 	srcu_key = srcu_read_lock(&dev->mr_srcu);
 
@@ -704,12 +710,19 @@ next_mr:
 		goto srcu_unlock;
 	}
 
-	switch (mmkey->type) {
-	case MLX5_MKEY_MR:
+	if (mmkey->type == MLX5_MKEY_MR) {
 		mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
 		if (!mr->live || !mr->ibmr.pd) {
 			mlx5_ib_dbg(dev, "got dead MR\n");
 			ret = -EFAULT;
+			goto srcu_unlock;
+		}
+
+		if (!mr->umem->odp_data) {
+			mlx5_ib_dbg(dev, "skipping non ODP MR (lkey=0x%06x) in page fault handler.\n",
+				    key);
+			if (bytes_mapped)
+				*bytes_mapped += bcnt;
 			goto srcu_unlock;
 		}
 
@@ -719,10 +732,18 @@ next_mr:
 
 		npages += ret;
 		ret = 0;
-		break;
-
-	case MLX5_MKEY_MW:
-		mw = container_of(mmkey, struct mlx5_ib_mw, mmkey);
+	} else {
+		if (mmkey->type == MLX5_MKEY_MW) {
+			mw = container_of(mmkey, struct mlx5_ib_mw, mmkey);
+			ndescs = mw->ndescs;
+		} else if (mmkey->type == MLX5_MKEY_MR_USER) {
+			mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
+			ndescs = mr->max_descs;
+		} else {
+			mlx5_ib_warn(dev, "wrong mkey type %d\n", mmkey->type);
+			ret = -EFAULT;
+			goto srcu_unlock;
+		}
 
 		if (depth >= MLX5_CAP_GEN(dev->mdev, max_indirection)) {
 			mlx5_ib_dbg(dev, "indirection level exceeded\n");
@@ -731,7 +752,7 @@ next_mr:
 		}
 
 		outlen = MLX5_ST_SZ_BYTES(query_mkey_out) +
-			sizeof(*pklm) * (mw->ndescs - 2);
+			sizeof(*pklm) * (ndescs - 2);
 
 		if (outlen > cur_outlen) {
 			kfree(out);
@@ -746,14 +767,16 @@ next_mr:
 		pklm = (struct mlx5_klm *)MLX5_ADDR_OF(query_mkey_out, out,
 						       bsf0_klm0_pas_mtt0_1);
 
-		ret = mlx5_core_query_mkey(dev->mdev, &mw->mmkey, out, outlen);
-		if (ret)
+		ret = mlx5_core_query_mkey(dev->mdev, mmkey, out, outlen);
+		if (ret) {
+			mlx5_ib_warn(dev, "ret %d\n", ret);
 			goto srcu_unlock;
+		}
 
 		offset = io_virt - MLX5_GET64(query_mkey_out, out,
 					      memory_key_mkey_entry.start_addr);
 
-		for (i = 0; bcnt && i < mw->ndescs; i++, pklm++) {
+		for (i = 0; bcnt && i < ndescs; i++, pklm++) {
 			if (offset >= be32_to_cpu(pklm->bcount)) {
 				offset -= be32_to_cpu(pklm->bcount);
 				continue;
@@ -774,13 +797,8 @@ next_mr:
 			head = frame;
 
 			bcnt -= frame->bcnt;
+			offset = 0;
 		}
-		break;
-
-	default:
-		mlx5_ib_dbg(dev, "wrong mkey type %d\n", mmkey->type);
-		ret = -EFAULT;
-		goto srcu_unlock;
 	}
 
 	if (head) {
@@ -900,10 +918,8 @@ static int pagefault_data_segments(struct mlx5_ib_dev *dev,
 
 static int ext_atomic_handler(struct mlx5_ib_dev *dev,
 			      struct mlx5_wqe_ctrl_seg *ctrl,
-			      void **wqe, int op)
+			      void **wqe, int op, int opmod)
 {
-	int opmod = be32_to_cpu(ctrl->opmod_idx_opcode) >>
-		    MLX5_WQE_CTRL_OPMOD_SHIFT;
 	int log_arg_sz;
 	int num_fields = op == MLX5_OPCODE_ATOMIC_MASKED_FA ? 2 : 4;
 
@@ -922,6 +938,25 @@ static int ext_atomic_handler(struct mlx5_ib_dev *dev,
 	*wqe += ALIGN(num_fields << (log_arg_sz + 2), 16);
 
 	return 0;
+}
+
+static size_t vec_calc_handler(void *wqe)
+{
+	struct mlx5_vec_calc_seg *vc = wqe;
+	int m;
+
+	vc->vec_size = cpu_to_be32(be32_to_cpu(vc->vec_size) * vc->vec_count);
+
+	if (vc->mat_le_tag_cs & MLX5_CALC_MATRIX) {
+		for (m = 0; m < 4; m++)
+			if (!vc->calc_op[m])
+				break;
+		/* fill rsvd2 so calc matrix seg may be processed as data seg */
+		vc->rsvd2 = cpu_to_be32(m * vc->vec_count);
+		return offsetof(struct mlx5_vec_calc_seg, rsvd2);
+	} else {
+		return offsetof(struct mlx5_vec_calc_seg, vec_size);
+	}
 }
 
 static const uint32_t mlx5_ib_odp_opcode_cap[] = {
@@ -949,7 +984,7 @@ static int mlx5_ib_mr_initiator_pfault_handler(
 	u16 wqe_index = pfault->wqe.wqe_index;
 	u32 transport_caps;
 	struct mlx5_base_av *av;
-	unsigned ds, opcode;
+	unsigned int ds, opcode, opmod;
 #if defined(DEBUG)
 	u32 ctrl_wqe_index, ctrl_qpn;
 #endif
@@ -994,6 +1029,8 @@ static int mlx5_ib_mr_initiator_pfault_handler(
 
 	opcode = be32_to_cpu(ctrl->opmod_idx_opcode) &
 		 MLX5_WQE_CTRL_OPCODE_MASK;
+	opmod  = be32_to_cpu(ctrl->opmod_idx_opcode) >>
+		 MLX5_WQE_CTRL_OPMOD_SHIFT;
 
 	switch (qp->ibqp.qp_type) {
 	case IB_QPT_RC:
@@ -1021,13 +1058,19 @@ static int mlx5_ib_mr_initiator_pfault_handler(
 
 	if (qp->ibqp.qp_type != IB_QPT_RC) {
 		av = *wqe;
-		if (av->dqp_dct & be32_to_cpu(MLX5_WQE_AV_EXT))
+		if (av->dqp_dct & cpu_to_be32(MLX5_EXTENDED_UD_AV))
 			*wqe += sizeof(struct mlx5_av);
 		else
 			*wqe += sizeof(struct mlx5_base_av);
 	}
 
 	switch (opcode) {
+	case MLX5_OPCODE_SEND:
+	case MLX5_OPCODE_SEND_IMM:
+	case MLX5_OPCODE_SEND_INVAL:
+		if (opmod == 0xff)
+			*wqe += vec_calc_handler(*wqe);
+		break;
 	case MLX5_OPCODE_RDMA_WRITE:
 	case MLX5_OPCODE_RDMA_WRITE_IMM:
 	case MLX5_OPCODE_RDMA_READ:
@@ -1041,7 +1084,7 @@ static int mlx5_ib_mr_initiator_pfault_handler(
 	case MLX5_OPCODE_ATOMIC_MASKED_CS:
 	case MLX5_OPCODE_ATOMIC_MASKED_FA:
 		*wqe += sizeof(struct mlx5_wqe_raddr_seg);
-		return ext_atomic_handler(dev, ctrl, wqe, opcode);
+		return ext_atomic_handler(dev, ctrl, wqe, opcode, opmod);
 	}
 
 	return 0;

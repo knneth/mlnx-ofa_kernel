@@ -1,0 +1,118 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
+
+Change-Id: Ib7ad800f9975ec2d26d25f4986bebe4a59a01a59
+---
+ drivers/infiniband/core/nldev.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+--- a/drivers/infiniband/core/nldev.c
++++ b/drivers/infiniband/core/nldev.c
+@@ -125,6 +125,7 @@ static int fill_port_info(struct sk_buff
+ 	return 0;
+ }
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ static int nldev_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 			  struct netlink_ext_ack *extack)
+ {
+@@ -149,7 +150,11 @@ static int nldev_get_doit(struct sk_buff
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_NETLINK_SKB_PARMS_PORTID
+ 	nlh = nlmsg_put(msg, NETLINK_CB(skb).portid, nlh->nlmsg_seq,
++#else
++	nlh = nlmsg_put(msg, NETLINK_CB(skb).pid, nlh->nlmsg_seq,
++#endif
+ 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
+ 			0, 0);
+ 
+@@ -161,8 +166,13 @@ static int nldev_get_doit(struct sk_buff
+ 
+ 	nlmsg_end(msg, nlh);
+ 
++#ifdef HAVE_NETLINK_SKB_PARMS_PORTID
+ 	return rdma_nl_unicast(msg, NETLINK_CB(skb).portid);
++#else
++	return rdma_nl_unicast(msg, NETLINK_CB(skb).pid);
++#endif
+ }
++#endif
+ 
+ static int _nldev_get_dumpit(struct ib_device *device,
+ 			     struct sk_buff *skb,
+@@ -175,7 +185,11 @@ static int _nldev_get_dumpit(struct ib_d
+ 	if (idx < start)
+ 		return 0;
+ 
++#ifdef HAVE_NETLINK_SKB_PARMS_PORTID
+ 	nlh = nlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
++#else
++	nlh = nlmsg_put(skb, NETLINK_CB(cb->skb).pid, cb->nlh->nlmsg_seq,
++#endif
+ 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
+ 			0, NLM_F_MULTI);
+ 
+@@ -201,6 +215,7 @@ static int nldev_get_dumpit(struct sk_bu
+ 	return ib_enum_all_devs(_nldev_get_dumpit, skb, cb);
+ }
+ 
++#ifdef HAVE_NETLINK_EXT_ACK
+ static int nldev_port_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 			       struct netlink_ext_ack *extack)
+ {
+@@ -229,7 +244,11 @@ static int nldev_port_get_doit(struct sk
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_NETLINK_SKB_PARMS_PORTID
+ 	nlh = nlmsg_put(msg, NETLINK_CB(skb).portid, nlh->nlmsg_seq,
++#else
++	nlh = nlmsg_put(msg, NETLINK_CB(skb).pid, nlh->nlmsg_seq,
++#endif
+ 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_GET),
+ 			0, 0);
+ 
+@@ -241,8 +260,13 @@ static int nldev_port_get_doit(struct sk
+ 
+ 	nlmsg_end(msg, nlh);
+ 
++#ifdef HAVE_NETLINK_SKB_PARMS_PORTID
+ 	return rdma_nl_unicast(msg, NETLINK_CB(skb).portid);
++#else
++	return rdma_nl_unicast(msg, NETLINK_CB(skb).pid);
++#endif
+ }
++#endif
+ 
+ static int nldev_port_get_dumpit(struct sk_buff *skb,
+ 				 struct netlink_callback *cb)
+@@ -272,7 +296,11 @@ static int nldev_port_get_dumpit(struct
+ 			continue;
+ 		}
+ 
++#ifdef HAVE_NETLINK_SKB_PARMS_PORTID
+ 		nlh = nlmsg_put(skb, NETLINK_CB(cb->skb).portid,
++#else
++		nlh = nlmsg_put(skb, NETLINK_CB(cb->skb).pid,
++#endif
+ 				cb->nlh->nlmsg_seq,
+ 				RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
+ 						 RDMA_NLDEV_CMD_PORT_GET),
+@@ -292,11 +320,15 @@ out:	cb->args[0] = idx;
+ 
+ static const struct rdma_nl_cbs nldev_cb_table[] = {
+ 	[RDMA_NLDEV_CMD_GET] = {
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		.doit = nldev_get_doit,
++#endif
+ 		.dump = nldev_get_dumpit,
+ 	},
+ 	[RDMA_NLDEV_CMD_PORT_GET] = {
++#ifdef HAVE_NETLINK_EXT_ACK
+ 		.doit = nldev_port_get_doit,
++#endif
+ 		.dump = nldev_port_get_dumpit,
+ 	},
+ };

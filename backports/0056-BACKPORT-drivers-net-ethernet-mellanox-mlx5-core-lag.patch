@@ -1,0 +1,156 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag.c
+
+Change-Id: I0fa6637d0d0ded50e5dcc90e302b385466d91625
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag.c | 32 +++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag.c
+@@ -35,6 +35,7 @@
+ #include <linux/mlx5/vport.h>
+ #include "mlx5_core.h"
+ 
++#ifdef HAVE_LAG_TX_TYPE
+ enum {
+ 	MLX5_LAG_FLAG_BONDED = 1 << 0,
+ };
+@@ -114,29 +115,39 @@ static int mlx5_cmd_destroy_lag(struct m
+ 
+ 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+ }
++#endif /* #ifdef HAVE_LAG_TX_TYPE */
+ 
+ int mlx5_cmd_create_vport_lag(struct mlx5_core_dev *dev)
+ {
++#ifndef HAVE_LAG_TX_TYPE
++	return -EOPNOTSUPP;
++#else
+ 	u32  in[MLX5_ST_SZ_DW(create_vport_lag_in)]  = {0};
+ 	u32 out[MLX5_ST_SZ_DW(create_vport_lag_out)] = {0};
+ 
+ 	MLX5_SET(create_vport_lag_in, in, opcode, MLX5_CMD_OP_CREATE_VPORT_LAG);
+ 
+ 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
++#endif /* #ifndef HAVE_LAG_TX_TYPE */
+ }
+ EXPORT_SYMBOL(mlx5_cmd_create_vport_lag);
+ 
+ int mlx5_cmd_destroy_vport_lag(struct mlx5_core_dev *dev)
+ {
++#ifndef HAVE_LAG_TX_TYPE
++	return -EOPNOTSUPP;
++#else
+ 	u32  in[MLX5_ST_SZ_DW(destroy_vport_lag_in)]  = {0};
+ 	u32 out[MLX5_ST_SZ_DW(destroy_vport_lag_out)] = {0};
+ 
+ 	MLX5_SET(destroy_vport_lag_in, in, opcode, MLX5_CMD_OP_DESTROY_VPORT_LAG);
+ 
+ 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
++#endif /* #ifndef HAVE_LAG_TX_TYPE */
+ }
+ EXPORT_SYMBOL(mlx5_cmd_destroy_vport_lag);
+ 
++#ifdef HAVE_LAG_TX_TYPE
+ static struct mlx5_lag *mlx5_lag_dev_get(struct mlx5_core_dev *dev)
+ {
+ 	return dev->priv.lag;
+@@ -477,10 +488,12 @@ static void mlx5_lag_dev_remove_pf(struc
+ 	ldev->allowed = mlx5_lag_check_prereq(ldev);
+ 	mutex_unlock(&lag_mutex);
+ }
++#endif /* #ifdef HAVE_LAG_TX_TYPE */
+ 
+ /* Must be called with intf_mutex held */
+ void mlx5_lag_add(struct mlx5_core_dev *dev, struct net_device *netdev)
+ {
++#ifdef HAVE_LAG_TX_TYPE
+ 	struct mlx5_lag *ldev = NULL;
+ 	struct mlx5_core_dev *tmp_dev;
+ 
+@@ -510,11 +523,13 @@ void mlx5_lag_add(struct mlx5_core_dev *
+ 			mlx5_core_err(dev, "Failed to register LAG netdev notifier\n");
+ 		}
+ 	}
++#endif /* #ifdef HAVE_LAG_TX_TYPE */
+ }
+ 
+ /* Must be called with intf_mutex held */
+ void mlx5_lag_remove(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_LAG_TX_TYPE
+ 	struct mlx5_lag *ldev;
+ 	int i;
+ 
+@@ -537,10 +552,14 @@ void mlx5_lag_remove(struct mlx5_core_de
+ 		cancel_delayed_work_sync(&ldev->bond_work);
+ 		mlx5_lag_dev_free(ldev);
+ 	}
++#endif /* #ifdef HAVE_LAG_TX_TYPE */
+ }
+ 
+ bool mlx5_lag_is_active(struct mlx5_core_dev *dev)
+ {
++#ifndef HAVE_LAG_TX_TYPE
++	return false;
++#else
+ 	struct mlx5_lag *ldev;
+ 	bool res;
+ 
+@@ -550,11 +569,15 @@ bool mlx5_lag_is_active(struct mlx5_core
+ 	mutex_unlock(&lag_mutex);
+ 
+ 	return res;
++#endif /* #ifndef HAVE_LAG_TX_TYPE */
+ }
+ EXPORT_SYMBOL(mlx5_lag_is_active);
+ 
+ static int mlx5_lag_set_state(struct mlx5_core_dev *dev, bool allow)
+ {
++#ifndef HAVE_LAG_TX_TYPE
++	return 0;
++#else
+ 	struct mlx5_lag *ldev;
+ 	int ret = 0;
+ 	bool lag_active;
+@@ -579,6 +602,7 @@ static int mlx5_lag_set_state(struct mlx
+ unlock:
+ 	mlx5_dev_list_unlock();
+ 	return ret;
++#endif
+ }
+ 
+ int mlx5_lag_forbid(struct mlx5_core_dev *dev)
+@@ -593,6 +617,9 @@ int mlx5_lag_allow(struct mlx5_core_dev
+ 
+ struct net_device *mlx5_lag_get_roce_netdev(struct mlx5_core_dev *dev)
+ {
++#ifndef HAVE_LAG_TX_TYPE
++	return NULL;
++#else
+ 	struct net_device *ndev = NULL;
+ 	struct mlx5_lag *ldev;
+ 
+@@ -615,11 +642,15 @@ unlock:
+ 	mutex_unlock(&lag_mutex);
+ 
+ 	return ndev;
++#endif /* #ifndef HAVE_LAG_TX_TYPE */
+ }
+ EXPORT_SYMBOL(mlx5_lag_get_roce_netdev);
+ 
+ bool mlx5_lag_intf_add(struct mlx5_interface *intf, struct mlx5_priv *priv)
+ {
++#ifndef HAVE_LAG_TX_TYPE
++	return false;
++#else
+ 	struct mlx5_core_dev *dev = container_of(priv, struct mlx5_core_dev,
+ 						 priv);
+ 	struct mlx5_lag *ldev;
+@@ -633,4 +664,5 @@ bool mlx5_lag_intf_add(struct mlx5_inter
+ 
+ 	/* If bonded, we do not add an IB device for PF1. */
+ 	return false;
++#endif /* #ifndef HAVE_LAG_TX_TYPE */
+ }

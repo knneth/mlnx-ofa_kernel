@@ -1,0 +1,167 @@
+From: Feras Daoud <ferasda@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+
+Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
+---
+ .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c  | 84 ++++++++++++++++++++--
+ 1 file changed, 80 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+@@ -43,8 +43,16 @@
+ static int mlx5i_open(struct net_device *netdev);
+ static int mlx5i_close(struct net_device *netdev);
+ static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu);
+-static void mlx5i_get_stats(struct net_device *dev,
+-			    struct rtnl_link_stats64 *stats);
++
++static
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
++void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
++#elif defined(HAVE_NDO_GET_STATS64)
++struct rtnl_link_stats64 * mlx5i_get_stats(struct net_device *dev,
++                                          struct rtnl_link_stats64 *stats);
++#else
++struct net_device_stats * mlx5i_get_stats(struct net_device *dev);
++#endif
+ 
+ static const struct net_device_ops mlx5i_netdev_ops = {
+ 	.ndo_open                = mlx5i_open,
+@@ -54,7 +62,11 @@ static const struct net_device_ops mlx5i
+ 	.ndo_uninit              = mlx5i_dev_cleanup,
+ 	.ndo_change_mtu          = mlx5i_change_mtu,
+ 	.ndo_do_ioctl            = mlx5i_ioctl,
++#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
+ 	.ndo_get_stats64         = mlx5i_get_stats,
++#else
++	.ndo_get_stats           = mlx5i_get_stats,
++#endif
+ };
+ 
+ /* IPoIB mlx5 netdev profile */
+@@ -69,8 +81,32 @@ static void mlx5i_build_nic_params(struc
+ 		MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE :
+ 		MLX5I_PARAMS_DEFAULT_LOG_RQ_SIZE;
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	params->lro_en = true;
++	params->pflags &= ~MLX5E_PFLAG_HWLRO;
++#else
+ 	params->lro_en = false;
++#endif
++}
++
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++void set_lro_features_bit(struct mlx5e_priv *priv)
++{
++	u64 hw_support_lro = 0;
++#ifdef HAVE_NETDEV_HW_FEATURES
++	hw_support_lro = priv->netdev->hw_features & NETIF_F_RXCSUM;
++#else
++	hw_support_lro = priv->netdev->features & NETIF_F_RXCSUM;
++#endif
++	if (hw_support_lro) {
++		priv->netdev->features |= NETIF_F_LRO;
++#ifdef HAVE_NETDEV_HW_FEATURES
++		priv->netdev->hw_features |= NETIF_F_LRO;
++		priv->netdev->wanted_features |= NETIF_F_LRO;
++#endif
++	}
+ }
++#endif
+ 
+ static void mlx5i_tx_timeout_work(struct work_struct *work)
+ {
+@@ -112,6 +148,7 @@ void mlx5i_init(struct mlx5_core_dev *md
+ 	mlx5i_build_nic_params(mdev, &priv->channels.params);
+ 
+ 	/* netdev init */
++#ifdef HAVE_NETDEV_HW_FEATURES
+ 	netdev->hw_features    |= NETIF_F_SG;
+ 	netdev->hw_features    |= NETIF_F_IP_CSUM;
+ 	netdev->hw_features    |= NETIF_F_IPV6_CSUM;
+@@ -119,17 +156,44 @@ void mlx5i_init(struct mlx5_core_dev *md
+ 	netdev->hw_features    |= NETIF_F_TSO;
+ 	netdev->hw_features    |= NETIF_F_TSO6;
+ 	netdev->hw_features    |= NETIF_F_RXCSUM;
++#ifdef HAVE_NETIF_F_RXHASH
+ 	netdev->hw_features    |= NETIF_F_RXHASH;
++#endif
++#else /* HAVE_NETDEV_HW_FEATURES */
++	netdev->features    |= NETIF_F_SG;
++	netdev->features    |= NETIF_F_IP_CSUM;
++	netdev->features    |= NETIF_F_IPV6_CSUM;
++	netdev->features    |= NETIF_F_GRO;
++	netdev->features    |= NETIF_F_TSO;
++	netdev->features    |= NETIF_F_TSO6;
++	netdev->features    |= NETIF_F_RXCSUM;
++#ifdef HAVE_NETIF_F_RXHASH
++	netdev->features    |= NETIF_F_RXHASH;
++#endif
++#endif /* HAVE_NETDEV_HW_FEATURES */
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	set_lro_features_bit(priv);
++#endif
+ 
+ 	netdev->netdev_ops = &mlx5i_netdev_ops;
+ 	netdev->ethtool_ops = &mlx5i_ethtool_ops;
+ }
+ 
+-static void
+-mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
++static
++#ifdef HAVE_NDO_GET_STATS64_RET_VOID
++void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
++#elif defined(HAVE_NDO_GET_STATS64)
++struct rtnl_link_stats64 * mlx5i_get_stats(struct net_device *dev,
++					   struct rtnl_link_stats64 *stats)
++#else
++struct net_device_stats * mlx5i_get_stats(struct net_device *dev)
++#endif
+ {
+ 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
+ 	struct mlx5e_sw_stats *sstats = &priv->stats.sw;
++#if !defined(HAVE_NDO_GET_STATS64) && !defined(HAVE_NDO_GET_STATS64_RET_VOID)
++	struct net_device_stats *stats = &priv->netdev_stats;
++#endif
+ 
+ 	stats->rx_packets = sstats->rx_packets;
+ 	stats->rx_bytes   = sstats->rx_bytes;
+@@ -137,6 +201,10 @@ mlx5i_get_stats(struct net_device *dev,
+ 	stats->tx_bytes   = sstats->tx_bytes;
+ 	stats->tx_dropped = sstats->tx_queue_dropped;
+ 	stats->rx_dropped = priv->stats.qcnt.rx_out_of_buffer;
++
++#ifndef HAVE_NDO_GET_STATS64_RET_VOID
++	return stats;
++#endif
+ }
+ 
+ /* Called directly before IPoIB netdevice is destroyed to cleanup SW structs */
+@@ -282,7 +350,11 @@ static int mlx5i_create_flow_steering(st
+ 	if (err) {
+ 		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
+ 			   err);
++#ifdef HAVE_NETDEV_HW_FEATURES
++#ifdef CONFIG_RFS_ACCEL
+ 		priv->netdev->hw_features &= ~NETIF_F_NTUPLE;
++#endif
++#endif
+ 	}
+ 
+ 	err = mlx5e_create_inner_ttc_table(priv);
+@@ -447,9 +519,13 @@ int mlx5i_ioctl(struct net_device *dev,
+ 
+ 	switch (cmd) {
+ 	case SIOCSHWTSTAMP:
++#ifdef HAVE_SIOCGHWTSTAMP
+ 		return mlx5e_hwstamp_set(priv, ifr);
+ 	case SIOCGHWTSTAMP:
+ 		return mlx5e_hwstamp_get(priv, ifr);
++#else
++		return mlx5e_hwstamp_ioctl(priv->netdev, ifr);
++#endif
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}

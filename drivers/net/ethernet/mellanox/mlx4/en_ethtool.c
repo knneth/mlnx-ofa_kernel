@@ -47,79 +47,6 @@
 #define EN_ETHTOOL_SHORT_MASK cpu_to_be16(0xffff)
 #define EN_ETHTOOL_WORD_MASK  cpu_to_be32(0xffffffff)
 
-static int mlx4_en_change_inline_scatter_thold(struct net_device *dev,
-					       int thold)
-{
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	struct mlx4_en_dev *mdev = priv->mdev;
-	struct mlx4_en_port_profile new_prof;
-	struct mlx4_en_priv *tmp;
-	int port_up = 0;
-	int stride = 0;
-	int val = 0;
-	int err = 0;
-
-	/* can enable inline scatter if port is up and MTU is 1500 */
-	if (priv->num_frags != 1)
-		return -EINVAL;
-
-	if (thold >= MIN_INLINE_SCATTER) {
-		stride = roundup_pow_of_two(thold);
-		val = stride;
-	}
-
-	/* disable inline scatter and reset stride */
-	if (stride == 0) {
-		stride = roundup_pow_of_two(sizeof(struct mlx4_en_rx_desc) +
-					    DS_SIZE * MLX4_EN_MAX_RX_FRAGS);
-		val = 0;
-	}
-
-	if (stride > MAX_INLINE_SCATTER)
-		return -EINVAL;
-
-	/* stride cannot be larger than MAX_DESC_SIZE,
-	 * unless we ensure that all packets will
-	 * be inline scatterd - thold >= MTU
-	 */
-	if (stride > MAX_DESC_SIZE && stride < dev->mtu)
-		return -EINVAL;
-
-	/* inline scatter thold is good */
-	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
-	if (!tmp)
-		return -ENOMEM;
-
-	mutex_lock(&mdev->state_lock);
-	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
-	new_prof.inline_scatter_thold = val;
-	tmp->stride = stride;
-	err = mlx4_en_try_alloc_resources(priv, tmp, &new_prof, true);
-	if (err) {
-		en_err(priv, "Failed allocating port resources\n");
-		goto out;
-	}
-
-	if (priv->port_up) {
-		port_up = 1;
-		mlx4_en_stop_port(dev, 1);
-	}
-
-	mlx4_en_safe_replace_resources(priv, tmp);
-
-	if (port_up) {
-		err = mlx4_en_start_port(dev);
-		if (err)
-			en_err(priv, "Failed starting port\n");
-	}
-
-out:
-	mutex_unlock(&mdev->state_lock);
-	kfree(tmp);
-
-	return err;
-}
-
 static int mlx4_en_moderation_update(struct mlx4_en_priv *priv)
 {
 	int i, t;
@@ -162,7 +89,7 @@ mlx4_en_get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *drvinfo)
 	struct mlx4_en_dev *mdev = priv->mdev;
 
 	strlcpy(drvinfo->driver, DRV_NAME, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, DRV_VERSION " (" DRV_RELDATE ")",
+	strlcpy(drvinfo->version, DRV_VERSION,
 		sizeof(drvinfo->version));
 	snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
 		"%d.%d.%d",
@@ -176,7 +103,6 @@ mlx4_en_get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *drvinfo)
 static const char mlx4_en_priv_flags[][ETH_GSTRING_LEN] = {
 	"blueflame",
 	"phv-bit",
-	"rx-copy",
 #ifdef CONFIG_MLX4_EN_DCB
 	"qcn_disable_32_14_4_e",
 #endif
@@ -185,6 +111,7 @@ static const char mlx4_en_priv_flags[][ETH_GSTRING_LEN] = {
 	"mlx4_flow_steering_tcp",
 	"mlx4_flow_steering_udp",
 	"disable_mc_loopback",
+	"rx-copy",
 };
 
 static const char main_strings[][ETH_GSTRING_LEN] = {
@@ -199,7 +126,7 @@ static const char main_strings[][ETH_GSTRING_LEN] = {
 	/* port statistics */
 	"tso_packets",
 	"xmit_more",
-	"queue_stopped", "wake_queue", "tx_timeout", "rx_alloc_failed",
+	"queue_stopped", "wake_queue", "tx_timeout", "rx_alloc_pages", "rx_inline_scatter",
 	"rx_csum_good", "rx_csum_none", "rx_csum_complete", "tx_chksum_offload",
 
 	/* pf statistics */
@@ -330,6 +257,7 @@ static void mlx4_en_get_wol(struct net_device *netdev,
 			    struct ethtool_wolinfo *wol)
 {
 	struct mlx4_en_priv *priv = netdev_priv(netdev);
+	struct mlx4_caps *caps = &priv->mdev->dev->caps;
 	int err = 0;
 	u64 config = 0;
 	u64 mask;
@@ -342,14 +270,13 @@ static void mlx4_en_get_wol(struct net_device *netdev,
 	mask = (priv->port == 1) ? MLX4_DEV_CAP_FLAG_WOL_PORT1 :
 		MLX4_DEV_CAP_FLAG_WOL_PORT2;
 
-	if (!(priv->mdev->dev->caps.flags & mask)) {
+	if (!(caps->flags & mask)) {
 		wol->supported = 0;
 		wol->wolopts = 0;
 		return;
 	}
 
-	if ((priv->port == 1 && priv->mdev->dev->caps.wol_port1) ||
-	    (priv->port == 2 && priv->mdev->dev->caps.wol_port2))
+	if (caps->wol_port[priv->port])
 		wol->supported = WAKE_MAGIC;
 	else
 		wol->supported = 0;
@@ -1912,6 +1839,11 @@ static int mlx4_en_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	return err;
 }
 
+static int mlx4_en_get_max_num_rx_rings(struct net_device *dev)
+{
+	return min_t(int, num_online_cpus(), MAX_RX_RINGS);
+}
+
 static void mlx4_en_get_channels(struct net_device *dev,
 				 struct ethtool_channels *channel)
 {
@@ -1919,11 +1851,12 @@ static void mlx4_en_get_channels(struct net_device *dev,
 
 	memset(channel, 0, sizeof(*channel));
 
-	channel->max_rx = MAX_RX_RINGS;
-	channel->max_tx = MLX4_EN_MAX_TX_RING_P_UP;
+	channel->max_rx = mlx4_en_get_max_num_rx_rings(dev);
+	channel->max_tx = priv->mdev->profile.max_num_tx_rings_p_up;
 
 	channel->rx_count = priv->rx_ring_num;
-	channel->tx_count = priv->tx_ring_num[TX] / MLX4_EN_NUM_UP;
+	channel->tx_count = priv->tx_ring_num[TX] /
+			    priv->prof->num_up;
 }
 
 static int mlx4_en_set_channels(struct net_device *dev,
@@ -1933,13 +1866,17 @@ static int mlx4_en_set_channels(struct net_device *dev,
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct mlx4_en_port_profile new_prof;
 	struct mlx4_en_priv *tmp;
+	struct ethtool_channels tmp_channel = {};
 	int port_up = 0;
 	int xdp_count;
 	int err = 0;
+	u8 up;
+
+	mlx4_en_get_channels(dev, &tmp_channel);
 
 	if (channel->other_count || channel->combined_count ||
-	    channel->tx_count > MLX4_EN_MAX_TX_RING_P_UP ||
-	    channel->rx_count > MAX_RX_RINGS ||
+	    channel->tx_count > tmp_channel.max_tx ||
+	    channel->rx_count > tmp_channel.max_rx ||
 	    !channel->tx_count || !channel->rx_count)
 		return -EINVAL;
 
@@ -1949,11 +1886,12 @@ static int mlx4_en_set_channels(struct net_device *dev,
 
 	mutex_lock(&mdev->state_lock);
 	xdp_count = priv->tx_ring_num[TX_XDP] ? channel->rx_count : 0;
-	if (channel->tx_count * MLX4_EN_NUM_UP + xdp_count > MAX_TX_RINGS) {
+	if (channel->tx_count * priv->prof->num_up + xdp_count >
+	    priv->mdev->profile.max_num_tx_rings_p_up * priv->prof->num_up) {
 		err = -EINVAL;
 		en_err(priv,
 		       "Total number of TX and XDP rings (%d) exceeds the maximum supported (%d)\n",
-		       channel->tx_count * MLX4_EN_NUM_UP + xdp_count,
+		       channel->tx_count * priv->prof->num_up  + xdp_count,
 		       MAX_TX_RINGS);
 		goto out;
 	}
@@ -1975,11 +1913,11 @@ static int mlx4_en_set_channels(struct net_device *dev,
 
 	mlx4_en_safe_replace_resources(priv, tmp);
 
-	netif_set_real_num_tx_queues(dev, priv->tx_ring_num[TX]);
 	netif_set_real_num_rx_queues(dev, priv->rx_ring_num);
 
-	if (netdev_get_num_tc(dev))
-		mlx4_en_setup_tc(dev, MLX4_EN_NUM_UP);
+	up = (priv->prof->num_up == MLX4_EN_NUM_UP_LOW) ?
+				    0 : priv->prof->num_up;
+	mlx4_en_setup_tc(dev, up);
 
 	en_warn(priv, "Using %d TX rings\n", priv->tx_ring_num[TX]);
 	en_warn(priv, "Using %d RX rings\n", priv->rx_ring_num);
@@ -2029,6 +1967,73 @@ static int mlx4_en_get_ts_info(struct net_device *dev,
 	return ret;
 }
 
+static int mlx4_en_set_inline_scatter_thold(struct net_device *dev, int thold)
+{
+	struct mlx4_en_priv *priv = netdev_priv(dev);
+	struct mlx4_en_dev *mdev = priv->mdev;
+	struct mlx4_en_port_profile new_prof;
+	struct mlx4_en_priv *tmp;
+	int port_up = 0;
+	int err = 0;
+
+	/* can enable inline scatter if port is up and MTU is 1500 */
+	if (priv->num_frags != 1)
+		return -EINVAL;
+
+	if (thold >= MIN_INLINE_SCATTER) {
+		int stride;
+
+		thold = roundup_pow_of_two(thold);
+
+		if (thold > MAX_INLINE_SCATTER)
+			return -EINVAL;
+
+		stride = thold;
+		/* stride cannot be larger than MAX_DESC_SIZE,
+		 * unless we ensure that all packets will
+		 * be inline scatterd - thold >= MTU
+		 */
+		if (stride > MAX_DESC_SIZE && stride < dev->mtu)
+			return -EINVAL;
+	} else {
+		/* disable inline scatter and reset stride */
+		thold = 0;
+	}
+
+	/* inline scatter thold is good */
+	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
+	if (!tmp)
+		return -ENOMEM;
+
+	mutex_lock(&mdev->state_lock);
+	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
+	new_prof.inline_scatter_thold = thold;
+	err = mlx4_en_try_alloc_resources(priv, tmp, &new_prof, true);
+	if (err) {
+		en_err(priv, "Failed allocating port resources\n");
+		goto out;
+	}
+
+	if (priv->port_up) {
+		port_up = 1;
+		mlx4_en_stop_port(dev, 1);
+	}
+
+	mlx4_en_safe_replace_resources(priv, tmp);
+
+	if (port_up) {
+		err = mlx4_en_start_port(dev);
+		if (err)
+			en_err(priv, "Failed starting port\n");
+	}
+
+out:
+	mutex_unlock(&mdev->state_lock);
+	kfree(tmp);
+
+	return err;
+}
+
 static int mlx4_en_set_priv_flags(struct net_device *dev, u32 flags)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -2038,8 +2043,7 @@ static int mlx4_en_set_priv_flags(struct net_device *dev, u32 flags)
 	bool phv_enabled_new = !!(flags & MLX4_EN_PRIV_FLAGS_PHV);
 	bool phv_enabled_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_PHV);
 	bool is_enabled_new = !!(flags & MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
-	bool is_enabled_old = !!(priv->pflags &
-				 MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
+	bool is_enabled_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
 #ifdef CONFIG_MLX4_EN_DCB
 	bool qcn_disable_new = !!(flags & MLX4_EN_PRIV_FLAGS_DISABLE_32_14_4_E);
 	bool qcn_disable_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_DISABLE_32_14_4_E);
@@ -2056,21 +2060,6 @@ static int mlx4_en_set_priv_flags(struct net_device *dev, u32 flags)
 	     MLX4_EN_PRIV_FLAGS_FS_EN_UDP))
 		return -EINVAL;
 
-	if (is_enabled_new != is_enabled_old) {
-		int val = MAX_INLINE_SCATTER * is_enabled_new;
-
-		ret = mlx4_en_change_inline_scatter_thold(dev, val);
-		if (ret)
-			return ret;
-
-		if (is_enabled_new)
-			priv->pflags |= MLX4_EN_PRIV_FLAGS_INLINE_SCATTER;
-		else
-			priv->pflags &= ~MLX4_EN_PRIV_FLAGS_INLINE_SCATTER;
-
-		en_info(priv, "Inline Scatter %s\n",
-			is_enabled_new ? "Enabled" : "Disabled");
-	}
 
 #ifdef CONFIG_MLX4_EN_DCB
 	if (qcn_disable_new != qcn_disable_old) {
@@ -2112,6 +2101,22 @@ static int mlx4_en_set_priv_flags(struct net_device *dev, u32 flags)
 
 		en_info(priv, "Multicast loopback disable is %s\n",
 			ld_new ? "ON" : "OFF");
+	}
+
+	if (is_enabled_new != is_enabled_old) {
+		int val = MAX_INLINE_SCATTER * is_enabled_new;
+
+		ret = mlx4_en_set_inline_scatter_thold(dev, val);
+		if (ret)
+			return ret;
+
+		if (is_enabled_new)
+			priv->pflags |= MLX4_EN_PRIV_FLAGS_INLINE_SCATTER;
+		else
+			priv->pflags &= ~MLX4_EN_PRIV_FLAGS_INLINE_SCATTER;
+
+		en_info(priv, "Inline Scatter %s\n",
+			is_enabled_new ? "Enabled" : "Disabled");
 	}
 
 	if (bf_enabled_new != bf_enabled_old) {
@@ -2204,7 +2209,7 @@ static int mlx4_en_set_tunable(struct net_device *dev,
 		break;
 	case ETHTOOL_RX_COPYBREAK:
 		val = *(u32 *)data;
-		ret = mlx4_en_change_inline_scatter_thold(dev, val);
+		ret = mlx4_en_set_inline_scatter_thold(dev, val);
 		break;
 	default:
 		ret = -EINVAL;

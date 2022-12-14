@@ -59,7 +59,7 @@ static int set_qps_qkey_rss(struct ipoib_dev_priv *priv)
 }
 
 int ipoib_mcast_attach_rss(struct net_device *dev, struct ib_device *hca,
-			   union ib_gid *mgid, u16 mlid, int set_qkey)
+			   union ib_gid *mgid, u16 mlid, int set_qkey, u32 qkey)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	struct ib_qp_attr *qp_attr = NULL;
@@ -285,7 +285,7 @@ static int ipoib_transport_cq_init_rss(struct net_device *dev,
 		/* Try to spread vectors based on port and ring numbers */
 		cq_attr.cqe = size;
 		cq_attr.comp_vector = req_vec % priv->ca->num_comp_vectors;
-		cq = ib_create_cq(priv->ca, ipoib_ib_rx_completion_rss, NULL,
+		cq = ib_create_cq(priv->ca, ipoib_ib_completion_rss, NULL,
 				  recv_ring, &cq_attr);
 		if (IS_ERR(cq)) {
 			printk(KERN_WARNING "%s: failed to create recv CQ\n",
@@ -353,7 +353,10 @@ static int ipoib_create_parent_qp(struct net_device *dev,
 	struct ib_exp_qp_init_attr init_attr = {
 		.sq_sig_type = IB_SIGNAL_ALL_WR,
 		.qp_type     = IB_EXP_UD_RSS_TSS,
-		.cap.max_inline_data    = IPOIB_MAX_INLINE_SIZE
+		.cap.max_inline_data    = IPOIB_MAX_INLINE_SIZE,
+		.cap.max_send_wr	= priv->sendq_size,
+		.cap.max_send_sge 	= min_t(u32, priv->ca->attrs.max_sge,
+						MAX_SKB_FRAGS + 1),
 	};
 	struct ib_qp *qp;
 
@@ -377,16 +380,6 @@ static int ipoib_create_parent_qp(struct net_device *dev,
 
 	if (priv->hca_caps & IB_DEVICE_MANAGED_FLOW_STEERING)
 		init_attr.create_flags |= IB_QP_CREATE_NETIF_QP;
-
-	/*
-	 * NO TSS (tss_qp_num = 0 priv->num_tx_queues  == 1)
-	 * OR TSS is not supported in HW in this case
-	 * parent QP is used for ARP and friend transmission
-	 */
-	if (priv->num_tx_queues > priv->tss_qp_num) {
-		init_attr.cap.max_send_wr  = priv->sendq_size;
-		init_attr.cap.max_send_sge = 1;
-	}
 
 	/* No RSS parent QP will be used for RX */
 	if (priv->rss_qp_num == 0) {
@@ -601,8 +594,6 @@ int ipoib_transport_dev_init_rss(struct net_device *dev, struct ib_device *ca)
 			printk(KERN_ERR "IPoIB ERROR - check send_queue_size module parameter\n");
 		goto out_free_cqs;
 	}
-
-	priv->qp_num = priv->qp->qp_num;
 
 	/* create TSS & RSS QPs */
 	ret = ipoib_create_other_qps(dev, ca);

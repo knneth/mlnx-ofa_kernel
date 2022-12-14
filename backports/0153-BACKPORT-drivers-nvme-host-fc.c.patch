@@ -1,0 +1,224 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fc.c
+
+Change-Id: Ide140c0d0a57938afbdbcc96e53da3dc0e6540e8
+---
+ drivers/nvme/host/fc.c | 84 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 84 insertions(+)
+
+--- a/drivers/nvme/host/fc.c
++++ b/drivers/nvme/host/fc.c
+@@ -14,6 +14,8 @@
+  * can be found in the file COPYING included with this package
+  *
+  */
++#ifdef HAVE_LINUX_NVME_FC_DRIVER_H
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -1166,6 +1168,7 @@ __nvme_fc_exit_request(struct nvme_fc_ct
+ 	atomic_set(&op->state, FCPOP_STATE_UNINIT);
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_EXIT_REQUEST_HAS_3_PARAMS
+ static void
+ nvme_fc_exit_request(struct blk_mq_tag_set *set, struct request *rq,
+ 		unsigned int hctx_idx)
+@@ -1174,6 +1177,16 @@ nvme_fc_exit_request(struct blk_mq_tag_s
+ 
+ 	return __nvme_fc_exit_request(set->driver_data, op);
+ }
++#else
++static void
++nvme_fc_exit_request(void *data, struct request *rq,
++		unsigned int hctx_idx, unsigned int rq_idx)
++{
++	struct nvme_fc_fcp_op *op = blk_mq_rq_to_pdu(rq);
++
++	__nvme_fc_exit_request(data, op);
++}
++#endif
+ 
+ static int
+ __nvme_fc_abort_op(struct nvme_fc_ctrl *ctrl, struct nvme_fc_fcp_op *op)
+@@ -1444,6 +1457,7 @@ out_on_error:
+ 	return ret;
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ static int
+ nvme_fc_init_request(struct blk_mq_tag_set *set, struct request *rq,
+ 		unsigned int hctx_idx, unsigned int numa_node)
+@@ -1455,6 +1469,31 @@ nvme_fc_init_request(struct blk_mq_tag_s
+ 
+ 	return __nvme_fc_init_request(ctrl, queue, op, rq, queue->rqcnt++);
+ }
++#else
++static int
++nvme_fc_init_request(void *data, struct request *rq,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	struct nvme_fc_ctrl *ctrl = data;
++	struct nvme_fc_fcp_op *op = blk_mq_rq_to_pdu(rq);
++	struct nvme_fc_queue *queue = &ctrl->queues[hctx_idx+1];
++
++	return __nvme_fc_init_request(ctrl, queue, op, rq, queue->rqcnt++);
++}
++
++static int
++nvme_fc_init_admin_request(void *data, struct request *rq,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	struct nvme_fc_ctrl *ctrl = data;
++	struct nvme_fc_fcp_op *op = blk_mq_rq_to_pdu(rq);
++	struct nvme_fc_queue *queue = &ctrl->queues[0];
++
++	return __nvme_fc_init_request(ctrl, queue, op, rq, queue->rqcnt++);
++}
++#endif
+ 
+ static int
+ nvme_fc_init_aen_ops(struct nvme_fc_ctrl *ctrl)
+@@ -1706,7 +1745,9 @@ nvme_fc_ctrl_free(struct kref *ref)
+ 	list_del(&ctrl->ctrl_list);
+ 	spin_unlock_irqrestore(&ctrl->rport->lock, flags);
+ 
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 	blk_mq_unquiesce_queue(ctrl->ctrl.admin_q);
++#endif
+ 	blk_cleanup_queue(ctrl->ctrl.admin_q);
+ 	blk_mq_free_tag_set(&ctrl->admin_tag_set);
+ 
+@@ -1807,12 +1848,24 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ct
+ 
+ 	freq->sg_cnt = 0;
+ 
++#ifdef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
+ 	if (!blk_rq_payload_bytes(rq))
+ 		return 0;
++#else
++	if (!nvme_map_len(rq))
++		return 0;
++#endif
+ 
+ 	freq->sg_table.sgl = freq->first_sgl;
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_4_PARAMS
++	ret = sg_alloc_table_chained(&freq->sg_table,
++				blk_rq_nr_phys_segments(rq),
++				GFP_ATOMIC,
++				freq->sg_table.sgl);
++#else
+ 	ret = sg_alloc_table_chained(&freq->sg_table,
+ 			blk_rq_nr_phys_segments(rq), freq->sg_table.sgl);
++#endif
+ 	if (ret)
+ 		return -ENOMEM;
+ 
+@@ -1977,7 +2030,14 @@ nvme_fc_start_fcp_op(struct nvme_fc_ctrl
+ 
+ busy:
+ 	if (!(op->flags & FCOP_FLAGS_AEN) && queue->hctx)
++#ifdef HAVE_BLK_MQ_DELAY_RUN_HW_QUEUE
+ 		blk_mq_delay_run_hw_queue(queue->hctx, NVMEFC_QUEUE_DELAY);
++#else
++		{
++			blk_mq_stop_hw_queues(op->rq->q);
++			blk_mq_delay_queue(queue->hctx, NVMEFC_QUEUE_DELAY);
++		}
++#endif
+ 
+ 	return BLK_STS_RESOURCE;
+ }
+@@ -2001,7 +2061,11 @@ nvme_fc_queue_rq(struct blk_mq_hw_ctx *h
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
+ 	data_len = blk_rq_payload_bytes(rq);
++#else
++	data_len = nvme_map_len(rq);
++#endif
+ 	if (data_len)
+ 		io_dir = ((rq_data_dir(rq) == WRITE) ?
+ 					NVMEFC_FCP_WRITE : NVMEFC_FCP_READ);
+@@ -2020,6 +2084,7 @@ nvme_fc_tagset(struct nvme_fc_queue *que
+ 	return queue->ctrl->tag_set.tags[queue->qnum - 1];
+ }
+ 
++#ifdef HAVE_BLK_MQ_POLL
+ static int
+ nvme_fc_poll(struct blk_mq_hw_ctx *hctx, unsigned int tag)
+ 
+@@ -2042,6 +2107,7 @@ nvme_fc_poll(struct blk_mq_hw_ctx *hctx,
+ 
+ 	return ((atomic_read(&op->state) != FCPOP_STATE_ACTIVE));
+ }
++#endif
+ 
+ static void
+ nvme_fc_submit_async_event(struct nvme_ctrl *arg, int aer_idx)
+@@ -2173,7 +2239,9 @@ static const struct blk_mq_ops nvme_fc_m
+ 	.exit_request	= nvme_fc_exit_request,
+ 	.reinit_request	= nvme_fc_reinit_request,
+ 	.init_hctx	= nvme_fc_init_hctx,
++#ifdef HAVE_BLK_MQ_POLL
+ 	.poll		= nvme_fc_poll,
++#endif
+ 	.timeout	= nvme_fc_timeout,
+ };
+ 
+@@ -2327,7 +2395,11 @@ nvme_fc_create_association(struct nvme_f
+ 		goto out_delete_hw_queue;
+ 
+ 	if (ctrl->ctrl.state != NVME_CTRL_NEW)
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 		blk_mq_unquiesce_queue(ctrl->ctrl.admin_q);
++#else
++		blk_mq_start_stopped_hw_queues(ctrl->ctrl.admin_q, true);
++#endif
+ 
+ 	ret = nvmf_connect_admin_queue(&ctrl->ctrl);
+ 	if (ret)
+@@ -2472,7 +2544,11 @@ nvme_fc_delete_association(struct nvme_f
+ 	 * use blk_mq_tagset_busy_itr() and the transport routine to
+ 	 * terminate the exchanges.
+ 	 */
++#ifdef HAVE_BLK_MQ_UNQUIESCE_QUEUE
+ 	blk_mq_quiesce_queue(ctrl->ctrl.admin_q);
++#else
++	blk_mq_stop_hw_queues(ctrl->ctrl.admin_q);
++#endif
+ 	blk_mq_tagset_busy_iter(&ctrl->admin_tag_set,
+ 				nvme_fc_terminate_exchange, &ctrl->ctrl);
+ 
+@@ -2656,7 +2732,11 @@ nvme_fc_connect_ctrl_work(struct work_st
+ static const struct blk_mq_ops nvme_fc_admin_mq_ops = {
+ 	.queue_rq	= nvme_fc_queue_rq,
+ 	.complete	= nvme_fc_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ 	.init_request	= nvme_fc_init_request,
++#else
++	.init_request	= nvme_fc_init_admin_request,
++#endif
+ 	.exit_request	= nvme_fc_exit_request,
+ 	.reinit_request	= nvme_fc_reinit_request,
+ 	.init_hctx	= nvme_fc_init_admin_hctx,
+@@ -2732,7 +2812,9 @@ nvme_fc_init_ctrl(struct device *dev, st
+ 	ctrl->admin_tag_set.driver_data = ctrl;
+ 	ctrl->admin_tag_set.nr_hw_queues = 1;
+ 	ctrl->admin_tag_set.timeout = ADMIN_TIMEOUT;
++#ifdef HAVE_BLK_MQ_F_NO_SCHED
+ 	ctrl->admin_tag_set.flags = BLK_MQ_F_NO_SCHED;
++#endif
+ 
+ 	ret = blk_mq_alloc_tag_set(&ctrl->admin_tag_set);
+ 	if (ret)
+@@ -2952,3 +3034,5 @@ module_init(nvme_fc_init_module);
+ module_exit(nvme_fc_exit_module);
+ 
+ MODULE_LICENSE("GPL v2");
++
++#endif /* HAVE_LINUX_NVME_FC_DRIVER_H */

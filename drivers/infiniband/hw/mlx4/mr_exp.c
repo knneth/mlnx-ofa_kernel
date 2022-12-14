@@ -233,13 +233,13 @@ end:
 
 }
 
-struct ib_mr *mlx4_ib_exp_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
-				      u64 virt_addr, int access_flags,
+struct ib_mr *mlx4_ib_exp_reg_user_mr(struct ib_pd *pd,
+				      struct ib_mr_init_attr *attr,
 				      struct ib_udata *udata,
 				      int mr_id)
 {
-	return mlx4_ib_reg_user_mr(pd, start, length,
-				   virt_addr, access_flags,
+	return mlx4_ib_reg_user_mr(pd, attr->start, attr->length,
+				   attr->hca_va, attr->access_flags,
 				   udata,
 				   mr_id);
 }

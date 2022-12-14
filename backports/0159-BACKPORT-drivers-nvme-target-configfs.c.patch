@@ -1,0 +1,82 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/configfs.c
+
+Change-Id: Ic33c67862a8d244036e5602a424597b2e4493614
+---
+ drivers/nvme/target/configfs.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+--- a/drivers/nvme/target/configfs.c
++++ b/drivers/nvme/target/configfs.c
+@@ -616,8 +616,13 @@ out_free_link:
+ 	return ret;
+ }
+ 
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ static void nvmet_port_subsys_drop_link(struct config_item *parent,
+ 		struct config_item *target)
++#else
++static int nvmet_port_subsys_drop_link(struct config_item *parent,
++		struct config_item *target)
++#endif
+ {
+ 	struct nvmet_port *port = to_nvmet_port(parent->ci_parent);
+ 	struct nvmet_subsys *subsys = to_subsys(target);
+@@ -629,7 +634,11 @@ static void nvmet_port_subsys_drop_link(
+ 			goto found;
+ 	}
+ 	up_write(&nvmet_config_sem);
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ 	return;
++#else
++	return -EINVAL;
++#endif
+ 
+ found:
+ 	list_del(&p->entry);
+@@ -638,6 +647,9 @@ found:
+ 		nvmet_disable_port(port);
+ 	up_write(&nvmet_config_sem);
+ 	kfree(p);
++#ifdef CONFIGFS_DROP_LINK_RETURNS_INT
++	return 0;
++#endif
+ }
+ 
+ static struct configfs_item_operations nvmet_port_subsys_item_ops = {
+@@ -691,8 +703,14 @@ out_free_link:
+ 	return ret;
+ }
+ 
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ static void nvmet_allowed_hosts_drop_link(struct config_item *parent,
+ 		struct config_item *target)
++#else
++static int nvmet_allowed_hosts_drop_link(struct config_item *parent,
++		struct config_item *target)
++
++#endif
+ {
+ 	struct nvmet_subsys *subsys = to_subsys(parent->ci_parent);
+ 	struct nvmet_host *host = to_host(target);
+@@ -704,13 +722,20 @@ static void nvmet_allowed_hosts_drop_lin
+ 			goto found;
+ 	}
+ 	up_write(&nvmet_config_sem);
++#ifndef CONFIGFS_DROP_LINK_RETURNS_INT
+ 	return;
++#else
++	return -EINVAL;
++#endif
+ 
+ found:
+ 	list_del(&p->entry);
+ 	nvmet_genctr++;
+ 	up_write(&nvmet_config_sem);
+ 	kfree(p);
++#ifdef CONFIGFS_DROP_LINK_RETURNS_INT
++	return 0;
++#endif
+ }
+ 
+ static struct configfs_item_operations nvmet_allowed_hosts_item_ops = {

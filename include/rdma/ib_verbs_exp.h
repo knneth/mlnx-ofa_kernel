@@ -79,7 +79,8 @@ enum ib_rx_hash_fields {
 	IB_RX_HASH_SRC_PORT_TCP	= 1 << 4,
 	IB_RX_HASH_DST_PORT_TCP	= 1 << 5,
 	IB_RX_HASH_SRC_PORT_UDP	= 1 << 6,
-	IB_RX_HASH_DST_PORT_UDP	= 1 << 7
+	IB_RX_HASH_DST_PORT_UDP	= 1 << 7,
+	IB_RX_HASH_INNER	= 1 << 31
 };
 
 struct ib_rx_hash_conf {
@@ -155,6 +156,8 @@ enum ib_exp_device_attr_comp_mask {
 	IB_EXP_DEVICE_ATTR_SW_PARSING_CAPS	= 1ULL << 25,
 	IB_EXP_DEVICE_ATTR_ODP_MAX_SIZE		= 1ULL << 26,
 	IB_EXP_DEVICE_ATTR_TM_CAPS		= 1ULL << 27,
+	IB_EXP_DEVICE_ATTR_TUNNEL_OFFLOADS_CAPS	= 1ULL << 28,
+	IB_EXP_DEVICE_ATTR_MAX_DM_SIZE		= 1ULL << 29,
 };
 
 enum ib_exp_device_cap_flags2 {
@@ -174,6 +177,7 @@ enum ib_exp_device_cap_flags2 {
 	IB_EXP_DEVICE_RX_TCP_UDP_PKT_TYPE       = 1 << 15,
 	IB_EXP_DEVICE_SCATTER_FCS               = 1 << 16,
 	IB_EXP_DEVICE_DELAY_DROP                = 1 << 18,
+	IB_EXP_DEVICE_PHYSICAL_RANGE_MR		= 1 << 19,
 	IB_EXP_DEVICE_CROSS_CHANNEL	= 1 << 28, /* Comapt with user exp area */
 	IB_EXP_DEVICE_MASK =	IB_DEVICE_CROSS_CHANNEL |
 				IB_EXP_DEVICE_EC_OFFLOAD,
@@ -234,6 +238,12 @@ struct ib_exp_ooo_caps {
 	u32 ud_caps;
 };
 
+enum ib_exp_tunnel_offloads_caps {
+	IBV_EXP_RAW_PACKET_CAP_TUNNELED_OFFLOAD_VXLAN  = 1 << 0,
+	IBV_EXP_RAW_PACKET_CAP_TUNNELED_OFFLOAD_GRE    = 1 << 1,
+	IBV_EXP_RAW_PACKET_CAP_TUNNELED_OFFLOAD_GENEVE = 1 << 2
+};
+
 enum ib_exp_sw_parsing_offloads {
 	IB_RAW_PACKET_QP_SW_PARSING	 = (1 << 0),
 	IB_RAW_PACKET_QP_SW_PARSING_CSUM = (1 << 1),
@@ -251,9 +261,11 @@ struct ib_exp_context_attr {
 	u32	comp_mask;
 };
 
-enum ib_tm_cap_flags {
+enum ib_exp_tm_cap_flags {
 	/*  Support tag matching on RC transport */
-	IB_TM_CAP_RC		    = 1 << 0,
+	IB_EXP_TM_CAP_RC	    = IB_TM_CAP_RC,
+	/*  Support tag matching on DC transport */
+	IB_EXP_TM_CAP_DC	    = 1 << 1,
 };
 
 struct ib_exp_tm_caps {
@@ -261,7 +273,7 @@ struct ib_exp_tm_caps {
 	u32 max_rndv_hdr_size;
 	/* Max number of entries in a tag matching list */
 	u32 max_num_tags;
-	/* TM capabilities mask - from enum ib_tm_cap_flags */
+	/* TM capabilities mask - from enum ib_exp_tm_cap_flags */
 	u32 capability_flags;
 	/* Max number of outstanding list operations */
 	u32 max_ops;
@@ -315,6 +327,17 @@ struct ib_exp_device_attr {
 	struct ib_exp_ooo_caps		ooo_caps;
 	struct ib_exp_sw_parsing_caps	sw_parsing_caps;
 	struct ib_exp_tm_caps		tm_caps;
+	u32				tunnel_offloads_caps; /* ib_exp_tunnel_offloads_caps */
+	u64			max_dm_size;
+};
+
+struct ib_dm {
+	struct ib_device  *device;
+	phys_addr_t	   dev_addr;
+	u32		   length;
+	u32		   flags;
+	struct ib_uobject *uobject;
+	atomic_t	   usecnt;
 };
 
 enum ib_dct_create_flags {
@@ -369,6 +392,16 @@ struct ib_dct {
 	u32			dct_num;
 };
 
+struct ib_mr_init_attr {
+	u64		start;
+	u64		length;
+	u64		hca_va;
+	int		access_flags;
+	struct ib_dm   *dm;
+	enum ib_mr_type mr_type;
+	u32 max_num_sg;
+};
+
 /**
  * struct ib_mkey_attr - Memory key attributes
  *
@@ -402,11 +435,49 @@ int ib_exp_query_dct(struct ib_dct *dct, struct ib_dct_attr *attr);
 int ib_exp_query_mkey(struct ib_mr *mr, u64 mkey_attr_mask,
 		  struct ib_mkey_attr *mkey_attr);
 /* NVMEoF target offload EXP API */
+struct ib_nvmf_ctrl {
+	struct ib_srq	*srq;
+	u32		id;
+	atomic_t	usecnt; /* count all attached namespaces */
+	void		(*event_handler)(struct ib_event *, void *);
+	void		*be_context;
+};
+
+struct ib_nvmf_backend_ctrl_init_attr {
+	void		(*event_handler)(struct ib_event *, void *);
+	void		*be_context;
+	u32		cq_page_offset;
+	u32		sq_page_offset;
+	u8		cq_log_page_size;
+	u8		sq_log_page_size;
+	u16		initial_cqh_db_value;
+	u16		initial_sqt_db_value;
+	u64		cqh_dbr_addr;
+	u64		sqt_dbr_addr;
+	u64		cq_pas;
+	u64		sq_pas;
+};
+
+struct ib_nvmf_ns {
+	struct ib_nvmf_ctrl	*ctrl;
+	u32			nsid;
+};
+
+struct ib_nvmf_ns_init_attr {
+	u32		frontend_namespace;
+	u32		backend_namespace;
+	u16		lba_data_size;
+	u16		backend_ctrl_id;
+};
+
 struct ib_nvmf_ctrl *ib_create_nvmf_backend_ctrl(struct ib_srq *srq,
 		struct ib_nvmf_backend_ctrl_init_attr *init_attr);
 int ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
 struct ib_nvmf_ns *ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
 			struct ib_nvmf_ns_init_attr *init_attr);
 int ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
-
+struct ib_dm *ib_exp_alloc_dm(struct ib_device *device, u64 length);
+int ib_exp_free_dm(struct ib_dm *dm);
+int ib_exp_memcpy_dm(struct ib_dm *dm, struct ib_exp_memcpy_dm_attr *attr);
+struct ib_mr *ib_exp_alloc_mr(struct ib_pd *pd, struct ib_mr_init_attr *attr);
 #endif

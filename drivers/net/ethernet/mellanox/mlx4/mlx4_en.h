@@ -58,8 +58,7 @@
 #include "mlx4_stats.h"
 
 #define DRV_NAME	"mlx4_en"
-#define DRV_VERSION	"4.1-1.0.2"
-#define DRV_RELDATE	"27 Jun 2017"
+#define DRV_VERSION	"4.2-1.0.0"
 
 #define MLX4_EN_MSG_LEVEL	(NETIF_MSG_LINK | NETIF_MSG_IFDOWN)
 
@@ -73,7 +72,8 @@
 #define DEF_RX_RINGS		16
 #define MAX_RX_RINGS		128
 #define MIN_RX_RINGS		4
-#define TXBB_SIZE		64
+#define LOG_TXBB_SIZE		6
+#define TXBB_SIZE		BIT(LOG_TXBB_SIZE)
 #define HEADROOM		(2048 / TXBB_SIZE + 1)
 #define STAMP_STRIDE		64
 #define STAMP_DWORDS		(STAMP_STRIDE / 4)
@@ -100,55 +100,40 @@
 
 #define MLX4_EN_PRIV_FLAGS_BLUEFLAME		(1 << 0)
 #define MLX4_EN_PRIV_FLAGS_PHV			(1 << 1)
-#define MLX4_EN_PRIV_FLAGS_INLINE_SCATTER	(1 << 2)
 #ifdef CONFIG_MLX4_EN_DCB
-#define MLX4_EN_PRIV_FLAGS_DISABLE_32_14_4_E	(1 << 3)
+#define MLX4_EN_PRIV_FLAGS_DISABLE_32_14_4_E	(1 << 2)
 #endif
-#define MLX4_EN_PRIV_FLAGS_FS_EN_L2		(1 << 4)
-#define MLX4_EN_PRIV_FLAGS_FS_EN_IPV4		(1 << 5)
-#define MLX4_EN_PRIV_FLAGS_FS_EN_TCP		(1 << 6)
-#define MLX4_EN_PRIV_FLAGS_FS_EN_UDP		(1 << 7)
-#define MLX4_EN_PRIV_FLAGS_DISABLE_MC_LOOPBACK	(1 << 8)
+#define MLX4_EN_PRIV_FLAGS_FS_EN_L2		(1 << 3)
+#define MLX4_EN_PRIV_FLAGS_FS_EN_IPV4		(1 << 4)
+#define MLX4_EN_PRIV_FLAGS_FS_EN_TCP		(1 << 5)
+#define MLX4_EN_PRIV_FLAGS_FS_EN_UDP		(1 << 6)
+#define MLX4_EN_PRIV_FLAGS_DISABLE_MC_LOOPBACK	(1 << 7)
+#define MLX4_EN_PRIV_FLAGS_INLINE_SCATTER	(1 << 8)
 
 #define MLX4_EN_WATCHDOG_TIMEOUT	(15 * HZ)
 
-/* Use the maximum between 16384 and a single page */
-#define MLX4_EN_ALLOC_SIZE	PAGE_ALIGN(16384)
-
-#define MLX4_EN_ALLOC_PREFER_ORDER min_t(int, get_order(32768),		\
-					 PAGE_ALLOC_COSTLY_ORDER)
-
-/* Receive fragment sizes; we use at most 3 fragments (for 9600 byte MTU
- * and 4K allocations) */
-enum {
-	FRAG_SZ0 = 1536 - NET_IP_ALIGN,
-	FRAG_SZ1 = 4096,
-	FRAG_SZ2 = 4096,
-	FRAG_SZ3 = MLX4_EN_ALLOC_SIZE
-};
 #define MLX4_EN_MAX_RX_FRAGS	4
 
 /* Maximum ring sizes */
 #define MLX4_EN_MAX_TX_SIZE	8192
 #define MLX4_EN_MAX_RX_SIZE	8192
 
-/* Minimum ring size for our page-allocation scheme to work */
-#define MLX4_EN_MIN_RX_SIZE	(MLX4_EN_ALLOC_SIZE / SMP_CACHE_BYTES)
+#define MLX4_EN_MIN_RX_SIZE	256
 #define MLX4_EN_MIN_TX_SIZE	(4096 / TXBB_SIZE)
 
 #define MLX4_EN_SMALL_PKT_SIZE		64
 #define MLX4_EN_MIN_TX_RING_P_UP	1
 #define MLX4_EN_MAX_TX_RING_P_UP	32
-#define MLX4_EN_NUM_UP			8
-#define MLX4_EN_DEF_TX_RING_SIZE	512
+#define MLX4_EN_NUM_UP_LOW		1
+#define MLX4_EN_NUM_UP_HIGH		8
 #define MLX4_EN_DEF_RX_RING_SIZE  	1024
+#define MLX4_EN_DEF_TX_RING_SIZE	MLX4_EN_DEF_RX_RING_SIZE
 #define MAX_TX_RINGS			(MLX4_EN_MAX_TX_RING_P_UP * \
-					 MLX4_EN_NUM_UP)
+					 MLX4_EN_NUM_UP_HIGH)
 
 #define MLX4_EN_NO_VLAN			0xffff
 
 #define MLX4_EN_DEFAULT_TX_WORK		256
-#define MLX4_EN_DOORBELL_BUDGET		8
 
 /* Target number of packets to coalesce with interrupt moderation */
 #define MLX4_EN_RX_COAL_TARGET	44
@@ -287,13 +272,16 @@ struct mlx4_en_rx_alloc {
 	struct page	*page;
 	dma_addr_t	dma;
 	u32		page_offset;
-	u32		page_size;
 };
 
 #define MLX4_EN_CACHE_SIZE (2 * NAPI_POLL_WEIGHT)
+
 struct mlx4_en_page_cache {
 	u32 index;
-	struct mlx4_en_rx_alloc buf[MLX4_EN_CACHE_SIZE];
+	struct {
+		struct page	*page;
+		dma_addr_t	dma;
+	} buf[MLX4_EN_CACHE_SIZE];
 };
 
 struct mlx4_en_priv;
@@ -308,7 +296,7 @@ struct mlx4_en_tx_ring {
 	struct netdev_queue	*tx_queue;
 	u32			(*free_tx_desc)(struct mlx4_en_priv *priv,
 						struct mlx4_en_tx_ring *ring,
-						int index, u8 owner,
+						int index,
 						u64 timestamp, int napi_mode);
 	struct mlx4_en_rx_ring	*recycle_ring;
 
@@ -356,9 +344,32 @@ struct mlx4_en_rx_desc {
 	struct mlx4_wqe_data_seg data[0];
 };
 
+/* Each rx_ring has a pool of pages, with associated dma mapping.
+ * We try to recycle the pages, by keeping a reference on them.
+ */
+struct mlx4_en_page {
+	struct page	*page;
+	dma_addr_t	dma; /* might be kept in page_private() ? */
+};
+
+/* A page pool contains a fixed number of pages, and a current index.
+ */
+struct mlx4_en_page_pool {
+	unsigned int		pool_size;
+	unsigned int		pool_idx;
+	struct mlx4_en_page	*array;
+};
+
+struct mlx4_en_frag_info {
+	u16		frag_size;
+	u32		frag_stride;
+	struct page	*page;
+	dma_addr_t	dma;
+	u32		page_offset;
+};
+
 struct mlx4_en_rx_ring {
 	struct mlx4_hwq_resources wqres;
-	struct mlx4_en_rx_alloc page_alloc[MLX4_EN_MAX_RX_FRAGS];
 	u32 size ;	/* number of Rx descs*/
 	u32 actual_size;
 	u32 size_mask;
@@ -369,20 +380,27 @@ struct mlx4_en_rx_ring {
 	u32 cons;
 	u32 buf_size;
 	u8  fcs_del;
+	u8  hwtstamp_rx_filter;
+	u16 node;
 	void *buf;
 	void *rx_info;
-	struct bpf_prog __rcu *xdp_prog;
-	struct mlx4_en_page_cache page_cache;
+	struct bpf_prog __rcu		*xdp_prog;
+	struct mlx4_en_page_pool	pool;
+	unsigned long			rx_alloc_pages;
+
+	struct mlx4_en_frag_info	frag_info[MLX4_EN_MAX_RX_FRAGS];
+	struct mlx4_en_page_cache	page_cache;
+
 	unsigned long bytes;
 	unsigned long packets;
 	unsigned long csum_ok;
 	unsigned long csum_none;
 	unsigned long csum_complete;
+	unsigned long inline_scatter;
 	unsigned long xdp_drop;
 	unsigned long xdp_tx;
 	unsigned long xdp_tx_full;
 	unsigned long dropped;
-	int hwtstamp_rx_filter;
 	cpumask_var_t affinity_mask;
 };
 
@@ -391,7 +409,10 @@ struct mlx4_en_cq {
 	struct mlx4_hwq_resources wqres;
 	int                     ring;
 	struct net_device      *dev;
-	struct napi_struct	napi;
+	union {
+		struct napi_struct napi;
+		bool               xdp_busy;
+	};
 	int size;
 	int buf_size;
 	int vector;
@@ -411,11 +432,11 @@ struct mlx4_en_port_profile {
 	u32 tx_ring_size;
 	u32 rx_ring_size;
 	u8 num_tx_rings_p_up;
-	u8 num_up;
 	u8 rx_pause;
 	u8 rx_ppp;
 	u8 tx_pause;
 	u8 tx_ppp;
+	u8 num_up;
 	int rss_rings;
 	int inline_thold;
 	int inline_scatter_thold;
@@ -428,7 +449,7 @@ struct mlx4_en_profile {
 	u32 active_ports;
 	u32 small_pkt_int;
 	u8 no_reset;
-	u8 num_tx_rings_p_up;
+	u8 max_num_tx_rings_p_up;
 	struct mlx4_en_port_profile prof[MLX4_MAX_PORTS + 1];
 };
 
@@ -465,7 +486,7 @@ struct mlx4_en_rss_map {
 	int base_qpn;
 	struct mlx4_qp qps[MAX_RX_RINGS];
 	enum mlx4_qp_state state[MAX_RX_RINGS];
-	struct mlx4_qp indir_qp;
+	struct mlx4_qp *indir_qp;
 	enum mlx4_qp_state indir_state;
 };
 
@@ -495,15 +516,6 @@ struct mlx4_en_mc_list {
 	u64			tunnel_reg_id;
 };
 
-struct mlx4_en_frag_info {
-	u16 frag_size;
-	u16 frag_prefix_size;
-	u32 frag_stride;
-	enum dma_data_direction dma_dir;
-	u16 order;
-	u16 rx_headroom;
-};
-
 #ifdef CONFIG_MLX4_EN_DCB
 /* Minimal TC BW - setting to 0 will block traffic */
 #define MLX4_EN_BW_MIN 1
@@ -521,7 +533,7 @@ enum dcb_pfc_type {
 
 struct mlx4_en_cee_config {
 	bool	pfc_state;
-	enum	dcb_pfc_type dcb_pfc[MLX4_EN_NUM_UP];
+	enum	dcb_pfc_type dcb_pfc[MLX4_EN_NUM_UP_HIGH];
 };
 #endif
 
@@ -633,8 +645,10 @@ struct mlx4_en_priv {
 	u32 rx_ring_num;
 	u32 rx_skb_size;
 	struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
-	u16 num_frags;
-	u16 log_rx_info;
+	u8 num_frags;
+	u8 log_rx_info;
+	u8 dma_dir;
+	u16 rx_headroom;
 
 	struct mlx4_en_tx_ring **tx_ring[MLX4_EN_NUM_TX_TYPES];
 	struct mlx4_en_rx_ring *rx_ring[MAX_RX_RINGS];
@@ -751,7 +765,7 @@ int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 			int cq_idx, bool vgtp_cq);
 void mlx4_en_deactivate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq **pcq);
 int mlx4_en_set_cq_moder(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
-int mlx4_en_arm_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
+void mlx4_en_arm_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
 
 void mlx4_en_tx_irq(struct mlx4_cq *mcq);
 u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb,
@@ -761,10 +775,10 @@ netdev_tx_t mlx4_en_vgtp_xmit(struct sk_buff *skb, struct net_device *dev);
 netdev_tx_t mlx4_en_xmit_frame(struct mlx4_en_rx_ring *rx_ring,
 			       struct mlx4_en_rx_alloc *frame,
 			       struct net_device *dev, unsigned int length,
-			       int tx_ind, int *doorbell_pending);
+			       int tx_ind, bool *doorbell_pending);
 void mlx4_en_xmit_doorbell(struct mlx4_en_tx_ring *ring);
 bool mlx4_en_rx_recycle(struct mlx4_en_rx_ring *ring,
-			struct mlx4_en_rx_alloc *frame);
+			struct page *page, dma_addr_t dma);
 
 int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_tx_ring **pring,
@@ -794,14 +808,17 @@ int mlx4_en_process_rx_cq(struct net_device *dev,
 			  int budget);
 int mlx4_en_poll_rx_cq(struct napi_struct *napi, int budget);
 int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget);
+bool _mlx4_en_process_tx_cq(struct net_device *dev,
+			   struct mlx4_en_cq *cq, int napi_budget,
+			   struct mlx4_en_tx_ring *ring);
 int mlx4_en_vgtp_poll_tx_cq(struct napi_struct *napi, int budget);
 u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 			 struct mlx4_en_tx_ring *ring,
-			 int index, u8 owner, u64 timestamp,
+			 int index, u64 timestamp,
 			 int napi_mode);
 u32 mlx4_en_recycle_tx_desc(struct mlx4_en_priv *priv,
 			    struct mlx4_en_tx_ring *ring,
-			    int index, u8 owner, u64 timestamp,
+			    int index, u64 timestamp,
 			    int napi_mode);
 void mlx4_en_fill_qp_context(struct mlx4_en_priv *priv, int size, int stride,
 		int is_tx, int rss, int qpn, int cqn, int user_prio,
@@ -833,6 +850,7 @@ extern const struct dcbnl_rtnl_ops mlx4_en_dcbnl_pfc_ops;
 #endif
 
 int mlx4_en_setup_tc(struct net_device *dev, u8 up);
+int mlx4_en_alloc_tx_queue_per_tc(struct net_device *dev, u8 tc);
 
 #ifdef CONFIG_RFS_ACCEL
 void mlx4_en_cleanup_filters(struct mlx4_en_priv *priv);

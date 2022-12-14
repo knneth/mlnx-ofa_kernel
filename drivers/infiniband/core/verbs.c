@@ -44,6 +44,7 @@
 #include <linux/in.h>
 #include <linux/in6.h>
 #include <net/addrconf.h>
+#include <linux/security.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_cache.h>
@@ -72,6 +73,8 @@ static const char * const ib_events[] = {
 	[IB_EVENT_QP_LAST_WQE_REACHED]	= "last WQE reached",
 	[IB_EVENT_CLIENT_REREGISTER]	= "client reregister",
 	[IB_EVENT_GID_CHANGE]		= "GID changed",
+	[IB_EXP_EVENT_XRQ_QP_ERR]	= "XRQ QP error",
+	[IB_EXP_EVENT_XRQ_NVMF_BACKEND_CTRL_ERR] = "XRQ NVMF backend ctrl error",
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event)
@@ -179,43 +182,33 @@ EXPORT_SYMBOL(ib_rate_to_mbps);
 __attribute_const__ enum rdma_transport_type
 rdma_node_get_transport(enum rdma_node_type node_type)
 {
-	switch (node_type) {
-	case RDMA_NODE_IB_CA:
-	case RDMA_NODE_IB_SWITCH:
-	case RDMA_NODE_IB_ROUTER:
+	if (node_type == RDMA_NODE_IB_CA)
 		return RDMA_TRANSPORT_IB;
-	case RDMA_NODE_RNIC:
+
+	if (node_type == RDMA_NODE_RNIC)
 		return RDMA_TRANSPORT_IWARP;
-	case RDMA_NODE_USNIC:
-		return RDMA_TRANSPORT_USNIC;
-	case RDMA_NODE_USNIC_UDP:
-		return RDMA_TRANSPORT_USNIC_UDP;
-	case RDMA_EXP_NODE_MIC:
+
+	if(node_type == RDMA_EXP_NODE_MIC)
 		return RDMA_EXP_TRANSPORT_SCIF;
-	default:
-		BUG();
-		return 0;
-	}
+
+	return RDMA_TRANSPORT_USNIC_UDP;
 }
 EXPORT_SYMBOL(rdma_node_get_transport);
 
 enum rdma_link_layer rdma_port_get_link_layer(struct ib_device *device, u8 port_num)
 {
+	enum rdma_transport_type lt;
 	if (device->get_link_layer)
 		return device->get_link_layer(device, port_num);
 
-	switch (rdma_node_get_transport(device->node_type)) {
-	case RDMA_TRANSPORT_IB:
+	lt = rdma_node_get_transport(device->node_type);
+	if (lt == RDMA_TRANSPORT_IB)
 		return IB_LINK_LAYER_INFINIBAND;
-	case RDMA_TRANSPORT_IWARP:
-	case RDMA_TRANSPORT_USNIC:
-	case RDMA_TRANSPORT_USNIC_UDP:
-		return IB_LINK_LAYER_ETHERNET;
-	case RDMA_EXP_TRANSPORT_SCIF:
+
+	if (lt == RDMA_EXP_TRANSPORT_SCIF)
 		return IB_EXP_LINK_LAYER_SCIF;
-	default:
-		return IB_LINK_LAYER_UNSPECIFIED;
-	}
+
+	return IB_LINK_LAYER_ETHERNET;
 }
 EXPORT_SYMBOL(rdma_port_get_link_layer);
 
@@ -315,7 +308,7 @@ EXPORT_SYMBOL(ib_dealloc_pd);
 
 /* Address handles */
 
-struct ib_ah *ib_create_ah(struct ib_pd *pd, struct ib_ah_attr *ah_attr)
+struct ib_ah *rdma_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr)
 {
 	struct ib_ah *ah;
 
@@ -325,12 +318,13 @@ struct ib_ah *ib_create_ah(struct ib_pd *pd, struct ib_ah_attr *ah_attr)
 		ah->device  = pd->device;
 		ah->pd      = pd;
 		ah->uobject = NULL;
+		ah->type    = ah_attr->type;
 		atomic_inc(&pd->usecnt);
 	}
 
 	return ah;
 }
-EXPORT_SYMBOL(ib_create_ah);
+EXPORT_SYMBOL(rdma_create_ah);
 
 int ib_get_rdma_header_version(const union rdma_network_hdr *hdr)
 {
@@ -454,9 +448,22 @@ int ib_get_gids_from_rdma_hdr(const union rdma_network_hdr *hdr,
 }
 EXPORT_SYMBOL(ib_get_gids_from_rdma_hdr);
 
+/*
+ * This function creates ah from the incoming packet.
+ * Incoming packet has dgid of the receiver node on which this code is
+ * getting executed and, sgid contains the GID of the sender.
+ *
+ * When resolving mac address of destination, the arrived dgid is used
+ * as sgid and, sgid is used as dgid because sgid contains destinations
+ * GID whom to respond to.
+ *
+ * This is why when calling rdma_addr_find_l2_eth_by_grh() function, the
+ * position of arguments dgid and sgid do not match the order of the
+ * parameters.
+ */
 int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 		       const struct ib_wc *wc, const struct ib_grh *grh,
-		       struct ib_ah_attr *ah_attr)
+		       struct rdma_ah_attr *ah_attr)
 {
 	u32 flow_class;
 	u16 gid_index;
@@ -468,6 +475,7 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 	union ib_gid sgid;
 
 	memset(ah_attr, 0, sizeof *ah_attr);
+	ah_attr->type = rdma_ah_find_type(device, port_num);
 	if (rdma_cap_eth_ah(device, port_num)) {
 		if (wc->wc_flags & IB_WC_WITH_NETWORK_HDR_TYPE)
 			net_type = wc->network_hdr_type;
@@ -490,9 +498,9 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 
 		if (ll_dest_addr && (wc->wc_flags & IB_WC_WITH_VLAN)) {
 			if (wc->wc_flags & IB_WC_WITH_SMAC)
-				memcpy(ah_attr->dmac, wc->smac, ETH_ALEN);
+				memcpy(ah_attr->roce.dmac, wc->smac, ETH_ALEN);
 			else
-				rdma_get_ll_mac((struct in6_addr *)sgid.raw, ah_attr->dmac);
+				rdma_get_ll_mac((struct in6_addr *)sgid.raw, ah_attr->roce.dmac);
 
 			ret = get_sgid_index_from_eth(device, port_num, vlan_id,
 						      &dgid, gid_type, &gid_index);
@@ -506,15 +514,17 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 
 			if (!device->get_netdev)
 				return -EOPNOTSUPP;
+
 			idev = device->get_netdev(device, port_num);
 			if (!idev)
 				return -ENODEV;
 
 			if (ll_dest_addr)
-				rdma_get_ll_mac((struct in6_addr *)sgid.raw, ah_attr->dmac);
+				rdma_get_ll_mac((struct in6_addr *)sgid.raw, ah_attr->roce.dmac);
+
 			ret = rdma_addr_find_l2_eth_by_grh(&dgid, &sgid,
 							   ll_dest_addr ?
-							   NULL : ah_attr->dmac,
+							   NULL : ah_attr->roce.dmac,
 							   wc->wc_flags & IB_WC_WITH_VLAN ?
 							   NULL : &vlan_id,
 							   &if_index, &hoplimit);
@@ -522,10 +532,11 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 				dev_put(idev);
 				return ret;
 			}
+
 			resolved_dev = dev_get_by_index(&init_net, if_index);
 			rcu_read_lock();
 			if (resolved_dev != idev && !rdma_is_upper_dev_rcu(idev,
-						resolved_dev))
+									   resolved_dev))
 				ret = -EHOSTUNREACH;
 			rcu_read_unlock();
 			dev_put(idev);
@@ -540,15 +551,12 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 
 	}
 
-	ah_attr->dlid = wc->slid;
-	ah_attr->sl = wc->sl;
-	ah_attr->src_path_bits = wc->dlid_path_bits;
-	ah_attr->port_num = port_num;
+	rdma_ah_set_dlid(ah_attr, wc->slid);
+	rdma_ah_set_sl(ah_attr, wc->sl);
+	rdma_ah_set_path_bits(ah_attr, wc->dlid_path_bits);
+	rdma_ah_set_port_num(ah_attr, port_num);
 
 	if (wc->wc_flags & IB_WC_GRH) {
-		ah_attr->ah_flags = IB_AH_GRH;
-		ah_attr->grh.dgid = sgid;
-
 		if (!rdma_cap_eth_ah(device, port_num)) {
 			if (dgid.global.interface_id != cpu_to_be64(IB_SA_WELL_KNOWN_GUID)) {
 				ret = ib_find_cached_gid_by_port(device, &dgid,
@@ -562,11 +570,12 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 			}
 		}
 
-		ah_attr->grh.sgid_index = (u8) gid_index;
 		flow_class = be32_to_cpu(grh->version_tclass_flow);
-		ah_attr->grh.flow_label = flow_class & 0xFFFFF;
-		ah_attr->grh.hop_limit = hoplimit;
-		ah_attr->grh.traffic_class = (flow_class >> 20) & 0xFF;
+		rdma_ah_set_grh(ah_attr, &sgid,
+				flow_class & 0xFFFFF,
+				(u8)gid_index, hoplimit,
+				(flow_class >> 20) & 0xFF);
+
 	}
 	return 0;
 }
@@ -575,34 +584,37 @@ EXPORT_SYMBOL(ib_init_ah_from_wc);
 struct ib_ah *ib_create_ah_from_wc(struct ib_pd *pd, const struct ib_wc *wc,
 				   const struct ib_grh *grh, u8 port_num)
 {
-	struct ib_ah_attr ah_attr;
+	struct rdma_ah_attr ah_attr;
 	int ret;
 
 	ret = ib_init_ah_from_wc(pd->device, port_num, wc, grh, &ah_attr);
 	if (ret)
 		return ERR_PTR(ret);
 
-	return ib_create_ah(pd, &ah_attr);
+	return rdma_create_ah(pd, &ah_attr);
 }
 EXPORT_SYMBOL(ib_create_ah_from_wc);
 
-int ib_modify_ah(struct ib_ah *ah, struct ib_ah_attr *ah_attr)
+int rdma_modify_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 {
+	if (ah->type != ah_attr->type)
+		return -EINVAL;
+
 	return ah->device->modify_ah ?
 		ah->device->modify_ah(ah, ah_attr) :
 		-ENOSYS;
 }
-EXPORT_SYMBOL(ib_modify_ah);
+EXPORT_SYMBOL(rdma_modify_ah);
 
-int ib_query_ah(struct ib_ah *ah, struct ib_ah_attr *ah_attr)
+int rdma_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr)
 {
 	return ah->device->query_ah ?
 		ah->device->query_ah(ah, ah_attr) :
 		-ENOSYS;
 }
-EXPORT_SYMBOL(ib_query_ah);
+EXPORT_SYMBOL(rdma_query_ah);
 
-int ib_destroy_ah(struct ib_ah *ah)
+int rdma_destroy_ah(struct ib_ah *ah)
 {
 	struct ib_pd *pd;
 	int ret;
@@ -614,7 +626,7 @@ int ib_destroy_ah(struct ib_ah *ah)
 
 	return ret;
 }
-EXPORT_SYMBOL(ib_destroy_ah);
+EXPORT_SYMBOL(rdma_destroy_ah);
 
 /* Shared receive queues */
 
@@ -727,10 +739,18 @@ static struct ib_qp *__ib_open_qp(struct ib_qp *real_qp,
 {
 	struct ib_qp *qp;
 	unsigned long flags;
+	int err;
 
 	qp = kzalloc(sizeof *qp, GFP_KERNEL);
 	if (!qp)
 		return ERR_PTR(-ENOMEM);
+
+	qp->real_qp = real_qp;
+	err = ib_open_shared_qp_security(qp, real_qp->device);
+	if (err) {
+		kfree(qp);
+		return ERR_PTR(err);
+	}
 
 	qp->real_qp = real_qp;
 	atomic_inc(&real_qp->usecnt);
@@ -818,6 +838,12 @@ struct ib_qp *ib_create_qp(struct ib_pd *pd,
 	if (IS_ERR(qp))
 		return qp;
 
+	ret = ib_create_qp_security(qp, device);
+	if (ret) {
+		ib_destroy_qp(qp);
+		return ERR_PTR(ret);
+	}
+
 	qp->device     = device;
 	qp->real_qp    = qp;
 	qp->uobject    = NULL;
@@ -829,6 +855,7 @@ struct ib_qp *ib_create_qp(struct ib_pd *pd,
 	spin_lock_init(&qp->mr_lock);
 	INIT_LIST_HEAD(&qp->rdma_mrs);
 	INIT_LIST_HEAD(&qp->sig_mrs);
+	qp->port = 0;
 
 	if (qp_init_attr->qp_type == IB_QPT_XRC_TGT)
 		return ib_create_xrc_qp(qp, qp_init_attr);
@@ -1259,19 +1286,34 @@ int ib_modify_qp_is_ok(enum ib_qp_state cur_state, enum ib_qp_state next_state,
 EXPORT_SYMBOL(ib_modify_qp_is_ok);
 
 int ib_resolve_eth_dmac(struct ib_device *device,
-			struct ib_ah_attr *ah_attr)
+			struct rdma_ah_attr *ah_attr)
 {
 	int           ret = 0;
+	struct ib_global_route *grh;
 
-	if (!rdma_is_port_valid(device, ah_attr->port_num))
+	if (!rdma_is_port_valid(device, rdma_ah_get_port_num(ah_attr)))
 		return -EINVAL;
 
-	if (!rdma_cap_eth_ah(device, ah_attr->port_num))
+	if (ah_attr->type != RDMA_AH_ATTR_TYPE_ROCE)
 		return 0;
 
-	if (rdma_link_local_addr((struct in6_addr *)ah_attr->grh.dgid.raw)) {
-		rdma_get_ll_mac((struct in6_addr *)ah_attr->grh.dgid.raw,
-				ah_attr->dmac);
+	grh = rdma_ah_retrieve_grh(ah_attr);
+
+	if (rdma_link_local_addr((struct in6_addr *)grh->dgid.raw)) {
+		rdma_get_ll_mac((struct in6_addr *)grh->dgid.raw,
+				ah_attr->roce.dmac);
+		return 0;
+	}
+	if (rdma_is_multicast_addr((struct in6_addr *)ah_attr->grh.dgid.raw)) {
+		if (ipv6_addr_v4mapped((struct in6_addr *)ah_attr->grh.dgid.raw)) {
+			__be32 addr = 0;
+
+			memcpy(&addr, ah_attr->grh.dgid.raw + 12, 4);
+			ip_eth_mc_map(addr, (char *)ah_attr->roce.dmac);
+		} else {
+			ipv6_eth_mc_map((struct in6_addr *)ah_attr->grh.dgid.raw,
+					(char *)ah_attr->roce.dmac);
+		}
 	} else {
 		union ib_gid		sgid;
 		struct ib_gid_attr	sgid_attr;
@@ -1279,8 +1321,8 @@ int ib_resolve_eth_dmac(struct ib_device *device,
 		int			hop_limit;
 
 		ret = ib_query_gid(device,
-				   ah_attr->port_num,
-				   ah_attr->grh.sgid_index,
+				   rdma_ah_get_port_num(ah_attr),
+				   grh->sgid_index,
 				   &sgid, &sgid_attr);
 
 		if (ret || !sgid_attr.ndev) {
@@ -1291,34 +1333,54 @@ int ib_resolve_eth_dmac(struct ib_device *device,
 
 		ifindex = sgid_attr.ndev->ifindex;
 
-		ret = rdma_addr_find_l2_eth_by_grh(&sgid,
-						   &ah_attr->grh.dgid,
-						   ah_attr->dmac,
-						   NULL, &ifindex, &hop_limit);
+		ret =
+		rdma_addr_find_l2_eth_by_grh(&sgid, &grh->dgid,
+					     ah_attr->roce.dmac,
+					     NULL, &ifindex, &hop_limit);
 
 		dev_put(sgid_attr.ndev);
 
-		ah_attr->grh.hop_limit = hop_limit;
+		grh->hop_limit = hop_limit;
 	}
 out:
 	return ret;
 }
 EXPORT_SYMBOL(ib_resolve_eth_dmac);
 
+/**
+ * ib_modify_qp_with_udata - Modifies the attributes for the specified QP.
+ * @qp: The QP to modify.
+ * @attr: On input, specifies the QP attributes to modify.  On output,
+ *   the current values of selected QP attributes are returned.
+ * @attr_mask: A bit-mask used to specify which attributes of the QP
+ *   are being modified.
+ * @udata: pointer to user's input output buffer information
+ *   are being modified.
+ * It returns 0 on success and returns appropriate error code on error.
+ */
+int ib_modify_qp_with_udata(struct ib_qp *qp, struct ib_qp_attr *attr,
+			    int attr_mask, struct ib_udata *udata)
+{
+	int ret;
+
+	if (attr_mask & IB_QP_AV) {
+		ret = ib_resolve_eth_dmac(qp->device, &attr->ah_attr);
+		if (ret)
+			return ret;
+	}
+	ret = ib_security_modify_qp(qp, attr, attr_mask, udata);
+	if (!ret && (attr_mask & IB_QP_PORT))
+		qp->port = attr->port_num;
+
+	return ret;
+}
+EXPORT_SYMBOL(ib_modify_qp_with_udata);
+
 int ib_modify_qp(struct ib_qp *qp,
 		 struct ib_qp_attr *qp_attr,
 		 int qp_attr_mask)
 {
-
-	if (qp_attr_mask & IB_QP_AV) {
-		int ret;
-
-		ret = ib_resolve_eth_dmac(qp->device, &qp_attr->ah_attr);
-		if (ret)
-			return ret;
-	}
-
-	return qp->device->modify_qp(qp->real_qp, qp_attr, qp_attr_mask, NULL);
+	return ib_modify_qp_with_udata(qp, qp_attr, qp_attr_mask, NULL);
 }
 EXPORT_SYMBOL(ib_modify_qp);
 
@@ -1347,6 +1409,7 @@ int ib_close_qp(struct ib_qp *qp)
 	spin_unlock_irqrestore(&real_qp->device->event_handler_lock, flags);
 
 	atomic_dec(&real_qp->usecnt);
+	ib_close_shared_qp_security(qp->qp_sec);
 	kfree(qp);
 
 	return 0;
@@ -1387,6 +1450,7 @@ int ib_destroy_qp(struct ib_qp *qp)
 	struct ib_cq *scq, *rcq;
 	struct ib_srq *srq;
 	struct ib_rwq_ind_table *ind_tbl;
+	struct ib_qp_security *sec;
 	int ret;
 
 	WARN_ON_ONCE(qp->mrs_used > 0);
@@ -1402,6 +1466,9 @@ int ib_destroy_qp(struct ib_qp *qp)
 	rcq  = qp->recv_cq;
 	srq  = qp->srq;
 	ind_tbl = qp->rwq_ind_tbl;
+	sec  = qp->qp_sec;
+	if (sec)
+		ib_destroy_qp_security_begin(sec);
 
 	if (!qp->uobject)
 		rdma_rw_cleanup_mrs(qp);
@@ -1418,6 +1485,11 @@ int ib_destroy_qp(struct ib_qp *qp)
 			atomic_dec(&srq->usecnt);
 		if (ind_tbl)
 			atomic_dec(&ind_tbl->usecnt);
+		if (sec)
+			ib_destroy_qp_security_end(sec);
+	} else {
+		if (sec)
+			ib_destroy_qp_security_abort(sec);
 	}
 
 	return ret;
@@ -1477,11 +1549,16 @@ EXPORT_SYMBOL(ib_resize_cq);
 int ib_dereg_mr(struct ib_mr *mr)
 {
 	struct ib_pd *pd = mr->pd;
+	struct ib_dm *dm = mr->dm;
 	int ret;
 
 	ret = mr->device->dereg_mr(mr);
-	if (!ret)
+	if (!ret) {
 		atomic_dec(&pd->usecnt);
+
+		if (dm)
+			atomic_dec(&dm->usecnt);
+	}
 
 	return ret;
 }
@@ -1571,13 +1648,53 @@ EXPORT_SYMBOL(ib_dealloc_fmr);
 
 /* Multicast groups */
 
+static bool is_valid_mcast_lid(struct ib_qp *qp, u16 lid)
+{
+	struct ib_qp_init_attr init_attr = {};
+	struct ib_qp_attr attr = {};
+	int num_eth_ports = 0;
+	int port;
+
+	/* If QP state >= init, it is assigned to a port and we can check this
+	 * port only.
+	 */
+	if (!ib_query_qp(qp, &attr, IB_QP_STATE | IB_QP_PORT, &init_attr)) {
+		if (attr.qp_state >= IB_QPS_INIT) {
+			if (qp->device->get_link_layer(qp->device, attr.port_num) !=
+			    IB_LINK_LAYER_INFINIBAND)
+				return true;
+			goto lid_check;
+		}
+	}
+
+	/* Can't get a quick answer, iterate over all ports */
+	for (port = 0; port < qp->device->phys_port_cnt; port++)
+		if (qp->device->get_link_layer(qp->device, port) !=
+		    IB_LINK_LAYER_INFINIBAND)
+			num_eth_ports++;
+
+	/* If we have at lease one Ethernet port, RoCE annex declares that
+	 * multicast LID should be ignored. We can't tell at this step if the
+	 * QP belongs to an IB or Ethernet port.
+	 */
+	if (num_eth_ports)
+		return true;
+
+	/* If all the ports are IB, we can check according to IB spec. */
+lid_check:
+	return !(lid < be16_to_cpu(IB_MULTICAST_LID_BASE) ||
+		 lid == be16_to_cpu(IB_LID_PERMISSIVE));
+}
+
 int ib_attach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 {
 	int ret;
 
 	if (!qp->device->attach_mcast)
 		return -ENOSYS;
-	if (gid->raw[0] != 0xff || qp->qp_type != IB_QPT_UD)
+
+	if (!rdma_is_multicast_addr((struct in6_addr *)gid->raw) ||
+	    qp->qp_type != IB_QPT_UD || !is_valid_mcast_lid(qp, lid))
 		return -EINVAL;
 
 	if (rdma_node_get_transport(qp->device->node_type) ==
@@ -1597,7 +1714,9 @@ int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 
 	if (!qp->device->detach_mcast)
 		return -ENOSYS;
-	if (gid->raw[0] != 0xff || qp->qp_type != IB_QPT_UD)
+
+	if (!rdma_is_multicast_addr((struct in6_addr *)gid->raw) ||
+	    qp->qp_type != IB_QPT_UD || !is_valid_mcast_lid(qp, lid))
 		return -EINVAL;
 
 	if (rdma_node_get_transport(qp->device->node_type) ==
@@ -1806,6 +1925,8 @@ struct ib_flow *ib_create_flow(struct ib_qp *qp,
 	if (!IS_ERR(flow_id)) {
 		atomic_inc(&qp->usecnt);
 		flow_id->qp = qp;
+		if (flow_id->counter_set)
+			atomic_inc(&flow_id->counter_set->usecnt);
 	}
 	return flow_id;
 }
@@ -1815,10 +1936,14 @@ int ib_destroy_flow(struct ib_flow *flow_id)
 {
 	int err;
 	struct ib_qp *qp = flow_id->qp;
+	struct ib_counter_set *counter_set = flow_id->counter_set;
 
 	err = qp->device->destroy_flow(flow_id);
-	if (!err)
+	if (!err) {
 		atomic_dec(&qp->usecnt);
+		if (counter_set)
+			atomic_dec(&counter_set->usecnt);
+	}
 	return err;
 }
 EXPORT_SYMBOL(ib_destroy_flow);
@@ -2155,3 +2280,86 @@ void ib_drain_qp(struct ib_qp *qp)
 		ib_drain_rq(qp);
 }
 EXPORT_SYMBOL(ib_drain_qp);
+
+/**
+ * ib_describe_counter_set - Describes a Counter Set
+ * @device: The device on which to describe a counter set.
+ * @cs_id: the counter set id to be described
+ * @cs_describe_attr: A list of description attributes
+ * required to get the outcome.
+ */
+int ib_describe_counter_set(struct ib_device *device,
+			    u16 cs_id,
+			    struct ib_counter_set_describe_attr *cs_describe_attr)
+{
+	if (!device->describe_counter_set)
+		return -ENOSYS;
+
+	return device->describe_counter_set(device, cs_id,
+					cs_describe_attr,
+					NULL);
+}
+EXPORT_SYMBOL(ib_describe_counter_set);
+
+/**
+ * ib_create_counter_set - Creates a Counter Set
+ * @device: The device on which to create the counter set.
+ * @cs_id: counter set id required to
+ * create the counter set.
+ */
+struct ib_counter_set *ib_create_counter_set(struct ib_device *device,
+					     u16 cs_id)
+{
+	struct ib_counter_set *cs;
+
+	if (!device->create_counter_set)
+		return ERR_PTR(-ENOSYS);
+
+	cs = device->create_counter_set(device, cs_id, NULL);
+	if (!IS_ERR(cs)) {
+		cs->device = device;
+		cs->uobject = NULL;
+		cs->cs_id = cs_id;
+		atomic_set(&cs->usecnt, 0);
+	}
+
+	return cs;
+}
+EXPORT_SYMBOL(ib_create_counter_set);
+
+/**
+ * ib_destroy_counter_set - Destroys the specified counter set.
+ * @cs: The counter set to destroy.
+ **/
+int ib_destroy_counter_set(struct ib_counter_set *cs)
+{
+	if (!cs->device->destroy_counter_set)
+		return -ENOSYS;
+
+	if (atomic_read(&cs->usecnt))
+		return -EBUSY;
+
+	return cs->device->destroy_counter_set(cs);
+}
+EXPORT_SYMBOL(ib_destroy_counter_set);
+
+/**
+ * ib_query_counter_set - Queries a Counter Set
+ * @cs: The counter set to query.
+ * @cs_query_attr: A list of query attributes
+ * required to get the outcome.
+ */
+int ib_query_counter_set(struct ib_counter_set *cs,
+			 struct ib_counter_set_query_attr *cs_query_attr)
+{
+	if (!cs->device->query_counter_set)
+		return -ENOSYS;
+
+	if (!atomic_read(&cs->usecnt))
+		return -EINVAL;
+
+	return cs->device->query_counter_set(cs,
+				cs_query_attr,
+				NULL);
+}
+EXPORT_SYMBOL(ib_query_counter_set);

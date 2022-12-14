@@ -1,0 +1,62 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
+
+Change-Id: I35bb56cc7a98d7eae66706793945ea88476c2afe
+---
+ include/rdma/ib_umem_odp.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/include/rdma/ib_umem_odp.h
++++ b/include/rdma/ib_umem_odp.h
+@@ -35,13 +35,21 @@
+ 
+ #include <rdma/ib_umem.h>
+ #include <rdma/ib_verbs.h>
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifdef HAVE_INTERVAL_TREE_GENERIC_H
+ #include <linux/interval_tree.h>
++#endif
++#endif
+ #include <rdma/ib_umem_odp_exp.h>
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifdef HAVE_INTERVAL_TREE_GENERIC_H
+ struct umem_odp_node {
+ 	u64 __subtree_last;
+ 	struct rb_node rb;
+ };
++#endif
++#endif
+ 
+ struct ib_umem_odp {
+ 	/*
+@@ -73,6 +81,8 @@ struct ib_umem_odp {
+ 	/* A linked list of umems that don't have private mmu notifier
+ 	 * counters yet. */
+ 	struct list_head no_private_counters;
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifdef HAVE_INTERVAL_TREE_GENERIC_H
+ 	struct ib_umem		*umem;
+ 
+ 	/* Tree tracking */
+@@ -81,9 +91,12 @@ struct ib_umem_odp {
+ 	struct completion	notifier_completion;
+ 	int			dying;
+ 	struct work_struct	work;
++#endif /* HAVE_INTERVAL_TREE_GENERIC_H */
++#endif /* CONFIG_INFINIBAND_ON_DEMAND_PAGING */
+ };
+ 
+ #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifdef HAVE_INTERVAL_TREE_GENERIC_H
+ 
+ int ib_umem_odp_get(struct ib_ucontext *context, struct ib_umem *umem,
+ 		    int access);
+@@ -93,6 +106,7 @@ struct ib_umem *ib_alloc_odp_umem(struct
+ 
+ void ib_umem_odp_release(struct ib_umem *umem);
+ 
++#endif /* HAVE_INTERVAL_TREE_GENERIC_H */
+ /*
+  * The lower 2 bits of the DMA address signal the R/W permissions for
+  * the entry. To upgrade the permissions, provide the appropriate

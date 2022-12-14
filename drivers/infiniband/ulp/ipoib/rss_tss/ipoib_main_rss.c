@@ -134,10 +134,9 @@ static void ipoib_timeout_rss(struct net_device *dev)
 	for (index = 0; index < priv->num_tx_queues; index++) {
 		if (__netif_subqueue_stopped(dev, index)) {
 			send_ring = priv->send_ring + index;
-			ipoib_warn(priv, "queue (%d) stopped, tx_head %u, tx_tail %u tx_outstanding: %d\n",
+			ipoib_warn(priv, "queue (%d) stopped, tx_head %u, tx_tail %u\n",
 				   index, send_ring->tx_head,
-				   send_ring->tx_tail,
-				   atomic_read(&send_ring->tx_outstanding));
+				   send_ring->tx_tail);
 		}
 	}
 	/* XXX reset QP, etc. */
@@ -216,7 +215,7 @@ static struct ipoib_neigh *ipoib_neigh_ctor_rss(u8 *daddr,
 	 */
 	if (priv->tss_qp_num > 0)
 		neigh->index = atomic_inc_return(&priv->tx_ring_ind)
-			% priv->tss_qp_num;
+			       % priv->tss_qp_num;
 	else
 		neigh->index = 0;
 
@@ -280,7 +279,6 @@ int ipoib_dev_init_default_rss(struct net_device *dev)
 		}
 		send_ring->dev = dev;
 		send_ring->index = i;
-		atomic_set(&send_ring->tx_outstanding, 0);
 		send_ring++;
 		tx_allocated++;
 	}
@@ -301,9 +299,9 @@ int ipoib_dev_init_default_rss(struct net_device *dev)
 	* transmission the peer should advertise TSS as well
 	*/
 	priv->dev->dev_addr[0] |= IPOIB_FLAGS_TSS;
-	priv->dev->dev_addr[1] = (priv->qp_num >> 16) & 0xff;
-	priv->dev->dev_addr[2] = (priv->qp_num >>  8) & 0xff;
-	priv->dev->dev_addr[3] = (priv->qp_num) & 0xff;
+	priv->dev->dev_addr[1] = (priv->qp->qp_num >> 16) & 0xff;
+	priv->dev->dev_addr[2] = (priv->qp->qp_num >>  8) & 0xff;
+	priv->dev->dev_addr[3] = (priv->qp->qp_num) & 0xff;
 
 	return 0;
 
@@ -350,8 +348,6 @@ void ipoib_dev_cleanup_rss(struct net_device *dev)
 	LIST_HEAD(head);
 
 	ASSERT_RTNL();
-
-	ipoib_delete_debug_files(dev);
 
 	/* Delete any child interfaces first */
 	list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs, list) {
@@ -497,10 +493,7 @@ int ipoib_reinit_rss(struct net_device *dev, int num_rx, int num_tx)
 		return ret;
 	}
 	if (!test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags)) {
-		ret = ib_register_event_handler(&priv->event_handler);
-		if (ret)
-			pr_warn("%s: failed to rereg port %d (ret = %d)\n",
-				priv->ca->name, priv->port, ret);
+		ib_register_event_handler(&priv->event_handler);
 	}
 	dev->flags = flags;
 	/* if the device was up bring it up again */
@@ -711,7 +704,7 @@ struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
 	struct net_device *dev;
 	struct rdma_netdev *rn;
 
-	dev = alloc_netdev_mqs((int)sizeof(struct ipoib_rdma_netdev), name,
+	dev = alloc_netdev_mqs((int)sizeof(struct rdma_netdev), name,
 			       NET_NAME_UNKNOWN, setup,
 			       temp_priv->max_tx_queues,
 			       temp_priv->max_rx_queues);
@@ -727,6 +720,8 @@ struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
 	rn->send = ipoib_send_rss;
 	rn->attach_mcast = ipoib_mcast_attach_rss;
 	rn->detach_mcast = ipoib_mcast_detach;
+	rn->free_rdma_netdev = free_netdev;
+	rn->hca = hca;
 
 	dev->netdev_ops = &ipoib_netdev_default_pf_rss;
 
@@ -752,7 +747,7 @@ const struct net_device_ops *ipoib_get_netdev_ops(void)
 
 void ipoib_main_rss_init_fp(struct ipoib_dev_priv *priv)
 {
-	if (priv->hca_caps_exp & IB_EXP_DEVICE_UD_RSS) {
+	if (priv->max_tx_queues > 1) {
 		priv->fp.ipoib_set_mode = ipoib_set_mode_rss;
 		priv->fp.ipoib_neigh_ctor = ipoib_neigh_ctor_rss;
 		priv->fp.ipoib_dev_cleanup = ipoib_dev_cleanup_rss;

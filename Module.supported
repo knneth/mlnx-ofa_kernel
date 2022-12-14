@@ -65,3 +65,6 @@ vmw_pvrdma.ko external
 smc.ko external
 smc_diag.ko external
 lpfc.ko external
+opa_vnic.ko external
+mlxfw.ko external
+mlx5_fpga_tools.ko external

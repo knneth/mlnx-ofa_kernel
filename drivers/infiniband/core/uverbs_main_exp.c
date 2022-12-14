@@ -99,26 +99,3 @@ void ib_uverbs_dct_event_handler(struct ib_event *event, void *context_ptr)
 				event->event, &uobj->event_list,
 				&uobj->events_reported);
 }
-
-void ib_uverbs_exp_cleanup_dct_ucontext(struct ib_uverbs_file *file,
-					struct ib_ucontext *context)
-{
-	struct ib_uobject *uobj, *tmp;
-	int err;
-
-	list_for_each_entry_safe(uobj, tmp, &context->dct_list, list) {
-		struct ib_dct *dct = uobj->object;
-		struct ib_udct_object *udct =
-			container_of(uobj, struct ib_udct_object, uevent.uobject);
-
-		idr_remove_uobj(&ib_uverbs_dct_idr, uobj);
-
-		err = ib_exp_destroy_dct(dct);
-		if (err)
-			pr_info("destroying uverbs dct failed: err %d\n", err);
-
-		ib_uverbs_release_uevent(file, &udct->uevent);
-		kfree(udct);
-	}
-}
-

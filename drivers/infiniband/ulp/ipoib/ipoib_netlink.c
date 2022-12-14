@@ -64,8 +64,9 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static int ipoib_changelink(struct net_device *dev,
-			    struct nlattr *tb[], struct nlattr *data[])
+static int ipoib_changelink(struct net_device *dev, struct nlattr *tb[],
+			    struct nlattr *data[],
+			    struct netlink_ext_ack *extack)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 	u16 mode, umcast;
@@ -94,7 +95,8 @@ out_err:
 }
 
 static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
-			       struct nlattr *tb[], struct nlattr *data[])
+				struct nlattr *tb[], struct nlattr *data[],
+				struct netlink_ext_ack *extack)
 {
 	struct net_device *pdev;
 	struct ipoib_dev_priv *ppriv;
@@ -133,10 +135,11 @@ static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
 	 */
 	child_pkey |= 0x8000;
 
-	err = __ipoib_vlan_add(ppriv, ipoib_priv(dev), child_pkey, IPOIB_RTNL_CHILD);
+	err = __ipoib_vlan_add(ppriv, ipoib_priv(dev),
+			       child_pkey, IPOIB_RTNL_CHILD);
 
 	if (!err && data)
-		err = ipoib_changelink(dev, tb, data);
+		err = ipoib_changelink(dev, tb, data, extack);
 	return err;
 }
 

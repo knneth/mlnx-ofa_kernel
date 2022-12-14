@@ -1,0 +1,64 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx4/mr_exp.c
+
+Change-Id: Ibb8827e60db1f0b20074d737dca5b6af91f4a2c6
+---
+ drivers/infiniband/hw/mlx4/mr_exp.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx4/mr_exp.c
++++ b/drivers/infiniband/hw/mlx4/mr_exp.c
+@@ -266,8 +266,13 @@ static ssize_t shared_mr_proc_write(stru
+ 
+ static int shared_mr_mmap(struct file *filep, struct vm_area_struct *vma)
+ {
++#ifdef HAVE_PDE_DATA
+ 	struct mlx4_shared_mr_info *smr_info =
+ 		(struct mlx4_shared_mr_info *)PDE_DATA(filep->f_path.dentry->d_inode);
++#else
++	struct proc_dir_entry *pde = PDE(filep->f_path.dentry->d_inode);
++	struct mlx4_shared_mr_info *smr_info = (struct mlx4_shared_mr_info *)pde->data;
++#endif
+ 
+ 	/* Prevent any mapping not on start of area */
+ 	if (vma->vm_pgoff != 0)
+@@ -299,8 +304,10 @@ int prepare_shared_mr(struct mlx4_ib_mr
+ 	struct proc_dir_entry *mr_proc_entry;
+ 	mode_t mode = S_IFREG;
+ 	char name_buff[128];
++#ifdef HAVE_PROC_SET_USER
+ 	kuid_t uid;
+ 	kgid_t gid;
++#endif
+ 
+ 	/* start address and length must be aligned to page size in order
+ 	  * to map a full page and preventing leakage of data.
+@@ -325,9 +332,14 @@ int prepare_shared_mr(struct mlx4_ib_mr
+ 		return -ENODEV;
+ 	}
+ 
++#ifdef HAVE_PROC_SET_USER
+ 	current_uid_gid(&uid, &gid);
+ 	proc_set_user(mr_proc_entry, uid, gid);
+ 	proc_set_size(mr_proc_entry, mr->umem->length);
++#else
++	current_uid_gid(&(mr_proc_entry->uid), &(mr_proc_entry->gid));
++	mr_proc_entry->size = mr->umem->length;
++#endif
+ 
+ 	/* now creating an extra entry having a uniqe suffix counter */
+ 	mr->smr_info->counter = atomic64_inc_return(&shared_mr_count);
+@@ -343,8 +355,13 @@ int prepare_shared_mr(struct mlx4_ib_mr
+ 	}
+ 
+ 	mr->smr_info->counter_used = 1;
++#ifdef HAVE_PROC_SET_USER
+ 	proc_set_user(mr_proc_entry, uid, gid);
+ 	proc_set_size(mr_proc_entry, mr->umem->length);
++#else
++	current_uid_gid(&(mr_proc_entry->uid), &(mr_proc_entry->gid));
++	mr_proc_entry->size = mr->umem->length;
++#endif
+ 
+ 	return 0;
+ }

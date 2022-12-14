@@ -108,6 +108,11 @@ enum {
 	MLX5_CQE_VERSION_V1,
 };
 
+enum {
+	MLX5_TM_MAX_RNDV_MSG_SIZE	= 64,
+	MLX5_TM_MAX_SGE			= 1,
+};
+
 struct mlx5_ib_vma_private_data {
 	struct list_head list;
 	struct vm_area_struct *vma;
@@ -232,6 +237,7 @@ struct wr_list {
 
 enum mlx5_ib_rq_flags {
 	MLX5_IB_RQ_CVLAN_STRIPPING	= 1 << 0,
+	MLX5_IB_RQ_SCATTER_END_PADDING	= 1 << 1,
 };
 
 struct mlx5_ib_wq {
@@ -254,6 +260,10 @@ struct mlx5_ib_wq {
 	u16			cur_post;
 	u16			last_poll;
 	void		       *qend;
+};
+
+enum mlx5_ib_wq_flags {
+	MLX5_IB_WQ_FLAGS_DELAY_DROP = 0x1,
 };
 
 struct mlx5_ib_mp_rq {
@@ -280,6 +290,7 @@ struct mlx5_ib_rwq {
 	u32			wqe_count;
 	u32			wqe_shift;
 	int			wq_sig;
+	u32			create_flags; /* Use enum mlx5_ib_wq_flags */
 	struct mlx5_ib_mp_rq	mp_rq;
 	u16			vlan_offloads;
 	u32			flags;
@@ -340,9 +351,9 @@ struct mlx5_ib_sq {
 	struct mlx5_ib_wq	*sq;
 	struct mlx5_ib_ubuffer  ubuffer;
 	struct mlx5_db		*doorbell;
+	struct mlx5_flow_handle	*flow_rule;
 	u32			tisn;
 	u8			state;
-	int			allow_mp_wqe;
 };
 
 struct mlx5_ib_raw_packet_qp {
@@ -369,7 +380,7 @@ struct mlx5_ib_qp {
 	struct mlx5_ib_wq	rq;
 
 	u8			sq_signal_bits;
-	u8			fm_cache;
+	u8			next_fence;
 	struct mlx5_ib_wq	sq;
 
 	/* serialize qp state modifications
@@ -420,8 +431,9 @@ enum mlx5_ib_qp_flags {
 	MLX5_IB_QP_CAP_SCATTER_FCS		= 1 << 7,
 	MLX5_IB_QP_RSS				= 1 << 8,
 	MLX5_IB_QP_CVLAN_STRIPPING		= 1 << 9,
-	MLX5_IB_QP_CAP_RX_END_PADDING		= 1 << 10,
-	MLX5_IB_QP_UNDERLAY			= 1 << 11,
+	MLX5_IB_QP_UNDERLAY			= 1 << 10,
+	MLX5_IB_QP_SCATTER_END_PADDING		= 1 << 11,
+	MLX5_IB_QP_TUNNEL_OFFLOADS		= 1 << 12,
 };
 
 struct mlx5_umr_wr {
@@ -446,6 +458,10 @@ struct mlx5_shared_mr_info {
 	struct ib_umem		*umem;
 };
 
+enum mlx5_ib_cq_flags {
+	MLX5_IB_CQ_FLAGS_CQE_128_PAD	= 1 << 0,
+};
+
 struct mlx5_ib_cq {
 	struct ib_cq		ibcq;
 	struct mlx5_core_cq	mcq;
@@ -468,6 +484,7 @@ struct mlx5_ib_cq {
 	struct list_head	wc_list;
 	enum ib_cq_notify_flags notify_flags;
 	struct work_struct	notify_work;
+	u16			flags; /* Use mlx5_ib_cq_flags */
 };
 
 struct mlx5_ib_wc {
@@ -519,7 +536,7 @@ struct mlx5_ib_mr {
 	struct mlx5_shared_mr_info	*smr_info;
 	struct list_head	list;
 	int			order;
-	int			umred;
+	bool			allocated_from_cache;
 	int			free;
 	int			npages;
 	struct mlx5_ib_dev     *dev;
@@ -656,26 +673,7 @@ struct mlx5_roce {
 	struct net_device	*netdev;
 	struct notifier_block	nb;
 	atomic_t		next_port;
-	enum ib_port_state	last_port_state;
-};
-
-enum {
-	MLX5_MAX_DELAY_DROP_TIMEOUT_MS = 100,
-};
-
-struct mlx5_ib_delay_drop {
-	struct mlx5_ib_dev     *dev;
-	struct work_struct	delay_drop_work;
-	/* serialize setting of delay drop */
-	struct mutex		lock;
-	u32			timeout;
-	bool			activate;
-	atomic_t		events_cnt;
-	atomic_t		rqs_cnt;
-	struct dentry		*dir_debugfs;
-	struct dentry		*rqs_cnt_debugfs;
-	struct dentry		*events_cnt_debugfs;
-	struct dentry		*timeout_debugfs;
+	enum ib_port_state last_port_state;
 };
 
 struct mlx5_ib_dbg_param {
@@ -709,6 +707,54 @@ enum mlx5_ib_dbg_cc_types {
 struct mlx5_ib_dbg_cc_params {
 	struct dentry			*root;
 	struct mlx5_ib_dbg_param	params[MLX5_IB_DBG_CC_MAX];
+};
+
+struct mlx5_ib_dbg_delay_drop {
+	struct dentry		*dir_debugfs;
+	struct dentry		*rqs_cnt_debugfs;
+	struct dentry		*events_cnt_debugfs;
+	struct dentry		*timeout_debugfs;
+};
+
+struct mlx5_ib_delay_drop {
+	struct mlx5_ib_dev     *dev;
+	struct work_struct	delay_drop_work;
+	/* serialize setting of delay drop */
+	struct mutex		lock;
+	u32			timeout;
+	bool			activate;
+	atomic_t		events_cnt;
+	atomic_t		rqs_cnt;
+	struct mlx5_ib_dbg_delay_drop *dbg;
+};
+
+struct mlx5_query_count_attr {
+	void *hw_cs_handle;
+	u64 *out;
+	u32 query_flags;
+};
+
+struct mlx5_desc_cs_attr {
+	struct ib_counter_set_describe_attr cs_desc;
+	void (*fill_counters_names)(char *cs_names_buff);
+};
+
+struct mlx5_ib_cs {
+	struct ib_counter_set ibcs;
+	struct mlx5_desc_cs_attr *desc_cs;
+	void *hw_cs_handle;
+	int (*query_count)(struct ib_device *ibdev,
+			   struct mlx5_query_count_attr *query_attr);
+};
+
+static inline struct mlx5_ib_cs *to_mcs(struct ib_counter_set *ibcs)
+{
+	return container_of(ibcs, struct mlx5_ib_cs, ibcs);
+}
+
+struct mlx5_ib_counter_sets {
+	struct mlx5_desc_cs_attr *desc_cs_arr;
+	u16 max_counter_sets;
 };
 
 struct mlx5_ib_dev {
@@ -745,25 +791,32 @@ struct mlx5_ib_dev {
 	struct completion       comp_prefetch;
 #endif
 	struct ib_nvmf_caps	nvmf_caps;
-	struct mlx5_ib_flow_db	flow_db;
+	struct mlx5_ib_flow_db	*flow_db;
 	/* protect resources needed as part of reset flow */
 	spinlock_t		reset_flow_resource_lock;
 	struct list_head	qp_list;
 	struct mlx5_dc_tracer	dctr;
-	struct mlx5_dc_data	dcd[MLX5_MAX_PORTS];
+	u32			num_dc_cnak_qps;
+	u32			max_dc_cnak_qps;
+	struct mlx5_dc_stats	dc_stats[MLX5_MAX_PORTS];
+	struct mlx5_dc_data	*dcd[MLX5_MAX_PORTS];
+	struct mlx5_tc_data	tcd[MLX5_MAX_PORTS];
 	struct kobject		*dc_kobj;
+	struct kobject		*tc_kobj;
 	/* Array with num_ports elements */
 	struct mlx5_ib_port	*port;
 	struct mlx5_sq_bfreg     bfreg;
 	struct mlx5_sq_bfreg     fp_bfreg;
-	u8			umr_fence;
+	struct mlx5_eswitch_rep	*rep;
+	u8                       umr_fence;
 	struct kobject		mr_cache;
-	struct mlx5_ib_delay_drop delay_drop;
-	struct mlx5_ib_dbg_cc_params *dbg_cc_params;
 
 	/* protect the user_td */
 	struct mutex             lb_mutex;
 	u32                      user_td;
+	struct mlx5_ib_dbg_cc_params *dbg_cc_params;
+	struct mlx5_ib_delay_drop delay_drop;
+	struct mlx5_ib_counter_sets counter_sets;
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)
@@ -853,9 +906,9 @@ void mlx5_ib_free_srq_wqe(struct mlx5_ib_srq *srq, int wqe_index);
 int mlx5_MAD_IFC(struct mlx5_ib_dev *dev, int ignore_mkey, int ignore_bkey,
 		 u8 port, const struct ib_wc *in_wc, const struct ib_grh *in_grh,
 		 const void *in_mad, void *response_mad);
-struct ib_ah *mlx5_ib_create_ah(struct ib_pd *pd, struct ib_ah_attr *ah_attr,
+struct ib_ah *mlx5_ib_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
 				struct ib_udata *udata);
-int mlx5_ib_query_ah(struct ib_ah *ibah, struct ib_ah_attr *ah_attr);
+int mlx5_ib_query_ah(struct ib_ah *ibah, struct rdma_ah_attr *ah_attr);
 int mlx5_ib_destroy_ah(struct ib_ah *ah);
 struct ib_srq *mlx5_ib_create_srq(struct ib_pd *pd,
 				  struct ib_srq_init_attr *init_attr,
@@ -899,8 +952,8 @@ int mlx5_ib_arm_cq(struct ib_cq *ibcq, enum ib_cq_notify_flags flags);
 int mlx5_ib_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period);
 int mlx5_ib_resize_cq(struct ib_cq *ibcq, int entries, struct ib_udata *udata);
 struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc);
-struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
-				  u64 virt_addr, int access_flags,
+struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd,
+				  struct ib_mr_init_attr *attr,
 				  struct ib_udata *udata, int mr_id);
 struct ib_mw *mlx5_ib_alloc_mw(struct ib_pd *pd, enum ib_mw_type type,
 			       struct ib_udata *udata);
@@ -917,6 +970,8 @@ int mlx5_ib_dereg_mr(struct ib_mr *ibmr);
 struct ib_mr *mlx5_ib_alloc_mr(struct ib_pd *pd,
 			       enum ib_mr_type mr_type,
 			       u32 max_num_sg);
+struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
+				struct ib_mr_init_attr *attr);
 int mlx5_ib_map_mr_sg(struct ib_mr *ibmr, struct scatterlist *sg, int sg_nents,
 		      unsigned int *sg_offset);
 int mlx5_ib_process_mad(struct ib_device *ibdev, int mad_flags, u8 port_num,
@@ -1017,6 +1072,11 @@ int mlx5_ib_get_vf_stats(struct ib_device *device, int vf,
 int mlx5_ib_set_vf_guid(struct ib_device *device, int vf, u8 port,
 			u64 guid, int type);
 
+void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
+		    struct mlx5_ib_dev *__dev,
+		    bool rep);
+void __mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context,
+		      bool rep);
 __be16 mlx5_get_roce_udp_sport(struct mlx5_ib_dev *dev, u8 port_num,
 			       int index);
 int mlx5_get_roce_gid_type(struct mlx5_ib_dev *dev, u8 port_num,

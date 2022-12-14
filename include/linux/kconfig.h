@@ -71,4 +71,10 @@
 
 
 #endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0)) */
+
+#ifndef IS_REACHABLE
+#define IS_REACHABLE(option) (config_enabled(option) || \
+	      (config_enabled(option##_MODULE) && config_enabled(MODULE)))
+#endif
+
 #endif /* _COMPAT_LINUX_KCONFIG_H */

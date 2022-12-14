@@ -102,6 +102,9 @@ DCB_ATTR_IEEE_QCN = 8
 DCB_ATTR_IEEE_QCN_STATS = 9
 DCB_ATTR_IEEE_TRUST = 10
 
+DCB_ATTR_IEEE_APP_UNSPEC = 0
+DCB_ATTR_IEEE_APP = 1
+
 class DcbnlHdr:
 	def __init__(self, len, type):
 		self.len = len
@@ -179,7 +182,7 @@ class DcbController:
 		m = DcbNlMessage.recv(self.conn)
 		self.check_err(m, DCB_ATTR_DCBX)
 
-	def get_ieee_pfc(self):
+	def get_ieee_pfc_en(self):
 		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
 		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
 				flags=NLM_F_REQUEST, attrs=[a])
@@ -192,6 +195,20 @@ class DcbController:
 		a.fromstring(ieee[DCB_ATTR_IEEE_PFC].str()[0:])
 
 		return a[1]
+
+	def get_ieee_pfc_delay(self):
+		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
+				flags=NLM_F_REQUEST, attrs=[a])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+
+		ieee = m.attrs[DCB_ATTR_IEEE].nested()
+
+		a = array.array('B')
+		a.fromstring(ieee[DCB_ATTR_IEEE_PFC].str()[0:])
+
+		return a[4] + (a[5] << 8)
 
 	def get_ieee_ets(self):
 		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
@@ -213,10 +230,9 @@ class DcbController:
 
 		return prio_tc, tc_tsa, tc_tc_bw
 
-	def set_ieee_pfc(self, _pfc_en):
+	def set_ieee_pfc(self, _pfc_en, _delay):
 		pfc_cap = 8
 		mbc = 0
-		delay = 0
 
 		requests = array.array('B', '\0' * 64)
 		indications = array.array('B', '\0' * 64)
@@ -224,7 +240,8 @@ class DcbController:
 		#netlink packet is 64bit alignment
 		pads = array.array('B', '\0' * 3)
 
-		pfc = struct.pack("BBBBB", pfc_cap, _pfc_en, mbc, delay, delay) + (requests + indications + pads).tostring()
+		#delay is 16bit value
+		pfc = struct.pack("BBBBBB", pfc_cap, _pfc_en, mbc, 0, _delay & 0xFF , _delay >> 8) + (requests + indications + pads).tostring()
 
 		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
 		ieee_pfc = StrAttr(DCB_ATTR_IEEE_PFC, pfc)
@@ -260,33 +277,6 @@ class DcbController:
 		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
 		ieee_ets = StrAttr(DCB_ATTR_IEEE_ETS, ets)
 		ieee = Nested(DCB_ATTR_IEEE, [ieee_ets]);
-
-		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_SET,
-				flags=NLM_F_REQUEST, attrs=[intf, ieee])
-		m.send(self.conn)
-		m = DcbNlMessage.recv(self.conn)
-		self.check_err(m, DCB_ATTR_IEEE)
-
-	def get_ieee_trust(self):
-		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
-		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
-				flags=NLM_F_REQUEST, attrs=[a])
-		m.send(self.conn)
-		m = DcbNlMessage.recv(self.conn)
-
-		ieee_nested = m.attrs[DCB_ATTR_IEEE]
-
-		ieee = m.attrs[DCB_ATTR_IEEE].nested()
-
-		dcb_trust = struct.unpack_from("B", ieee[DCB_ATTR_IEEE_TRUST].str(), 0);
-
-		return dcb_trust[0]
-
-	def set_ieee_trust(self, trust):
-		dcb_trust = struct.pack("B", trust)
-		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
-		ieee_maxrate = StrAttr(DCB_ATTR_IEEE_TRUST, dcb_trust)
-		ieee = Nested(DCB_ATTR_IEEE, [ieee_maxrate]);
 
 		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_SET,
 				flags=NLM_F_REQUEST, attrs=[intf, ieee])
@@ -399,3 +389,93 @@ class DcbController:
 		m.send(self.conn)
 		m = DcbNlMessage.recv(self.conn)
 		self.check_err(m, DCB_ATTR_IEEE)
+
+	def get_ieee_app_table(self):
+		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
+				flags=NLM_F_REQUEST, attrs=[a])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+
+		ieee = m.attrs[DCB_ATTR_IEEE].nested()
+		ieee_app_table = ieee[DCB_ATTR_IEEE_APP_TABLE]
+
+		attrs = ieee_app_table.get_app_table()
+		appTable = DcbAppTable()
+		for i in range(len(attrs)):
+			selector, priority, protocol  = struct.unpack('BBH', attrs[i].data)
+			appTable.apps[i] = DcbApp(selector, priority, protocol)
+
+		return appTable
+
+	def set_ieee_app(self, selector, priority, protocol):
+		dcb_app        = struct.pack("BBH", selector, priority, protocol)
+		intf           = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		ieee_app = StrAttr(DCB_ATTR_IEEE_APP, dcb_app)
+		ieee_app_table = Nested(DCB_ATTR_IEEE_APP_TABLE, [ieee_app]);
+		ieee           = Nested(DCB_ATTR_IEEE, [ieee_app_table]);
+
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_SET,
+				flags=NLM_F_REQUEST, attrs=[intf, ieee])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+		self.check_err(m, DCB_ATTR_IEEE)
+
+	def del_ieee_app(self, selector, priority, protocol):
+		dcb_app        = struct.pack("BBH", selector, priority, protocol)
+		intf           = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		ieee_app = StrAttr(DCB_ATTR_IEEE_APP, dcb_app)
+		ieee_app_table = Nested(DCB_ATTR_IEEE_APP_TABLE, [ieee_app]);
+		ieee           = Nested(DCB_ATTR_IEEE, [ieee_app_table]);
+
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_DEL,
+				flags=NLM_F_REQUEST, attrs=[intf, ieee])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+		self.check_err(m, DCB_ATTR_IEEE)
+
+class DcbApp:
+	def __init__(self, selector, priority, protocol):
+		self.selector = selector
+		self.priority = priority
+		self.protocol = protocol
+
+class DcbAppTable:
+	def __init__ (self):
+		self.apps = {}
+
+	def countAppSelector(self, selector):
+		count = 0
+		for i in range(len(self.apps)):
+			if self.apps[i].selector == selector:
+				count = count + 1
+		return count
+
+	def printAppSelector(self, selector):
+		s = ["","","","","","","",""]
+		pad = "\t            "
+
+		for i in range(len(self.apps)):
+			if self.apps[i].selector == selector:
+				s[self.apps[i].priority] += '%02d,' % self.apps[i].protocol
+
+		for i in range(8):
+			temp = ""
+			while (len(s[i]) > 24):
+				temp = temp + s[i][:24] + "\n" + pad
+				s[i] = s[i][24:]
+			temp += s[i]
+
+			if s[i] != "":
+				print "\tprio:%d dscp:" % i + temp
+
+	def delAppEntry(self, ctrl, selector):
+		for i in range(len(self.apps)):
+			if self.apps[i].selector == selector:
+				ctrl.del_ieee_app(self.apps[i].selector, self.apps[i].priority, self.apps[i].protocol)
+
+	def setDefaultAppEntry(self, ctrl, selector, max_protocol):
+		for i in range(max_protocol):
+			ctrl.set_ieee_app(selector, i >> 3, i) #firmware default
+
+		return

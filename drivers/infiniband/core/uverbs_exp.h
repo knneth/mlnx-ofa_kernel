@@ -48,6 +48,8 @@ IB_UVERBS_DECLARE_EXP_CMD(create_rwq_ind_table);
 IB_UVERBS_DECLARE_EXP_CMD(destroy_rwq_ind_table);
 IB_UVERBS_DECLARE_EXP_CMD(set_context_attr);
 IB_UVERBS_DECLARE_EXP_CMD(create_srq);
+IB_UVERBS_DECLARE_EXP_CMD(alloc_dm);
+IB_UVERBS_DECLARE_EXP_CMD(free_dm);
 
 unsigned long ib_uverbs_exp_get_unmapped_area(struct file *filp,
 					      unsigned long addr,
@@ -61,9 +63,6 @@ void ib_uverbs_async_handler(struct ib_uverbs_file *file,
 			     struct list_head *obj_list,
 			     u32 *counter);
 void ib_uverbs_dct_event_handler(struct ib_event *event, void *context_ptr);
-
-void ib_uverbs_exp_cleanup_dct_ucontext(struct ib_uverbs_file *file,
-					struct ib_ucontext *context);
 
 int ib_uverbs_create_flow_common(struct ib_uverbs_file *file,
 				 struct ib_device *ib_dev,

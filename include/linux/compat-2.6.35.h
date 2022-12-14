@@ -25,21 +25,6 @@
 #define  PCI_EXP_LNKSTA_CLS_5_0GB 0x02 /* Current Link Speed 5.0GT/s */
 #endif
 
-#if !defined(CONFIG_COMPAT_HAS_IRQ_AFFINITY_HINT)
-/*
- * We cannot backport this guy as the IRQ data structure
- * was modified in the kernel itself to support this. We
- * treat the system as uni-processor in this case.
- */
-#define irq_set_affinity_hint LINUX_BACKPORT(irq_set_affinity_hint)
-
-static inline int irq_set_affinity_hint(unsigned int irq,
-					const struct cpumask *m)
-{
-	return -ENOSYS;
-}
-#endif
-
 static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 {
 	return sk->sk_sleep;

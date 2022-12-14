@@ -46,7 +46,7 @@ fi
 
 echo "Preparing patches"
 
-git format-patch -o $out --subject-prefix="PATCH" --no-numbered $1
+git format-patch -o $out --subject-prefix="PATCH" --no-numbered --diff-algorithm=myers $1
 
 echo "Stripping id's from patches"
 for f in $out/*.patch; do

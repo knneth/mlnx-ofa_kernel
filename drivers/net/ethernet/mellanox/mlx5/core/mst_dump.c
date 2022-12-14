@@ -6774,13 +6774,7 @@ mlx5_mst_dump_regs_mt4115[MLX5_NUM_MST_OFFSETS_MT4115][2] = {{0x000000, 16388},
 	{0x11fdc0, 3} };
 
 enum {
-	CAP_ID = 0x9,
 	IFC_MAX_RETRIES = 2048
-};
-
-enum {
-	UNLOCK,
-	LOCK
 };
 
 enum {
@@ -6791,13 +6785,19 @@ enum {
 	PCI_CTRL_OFFSET = 0x4,
 	PCI_COUNTER_OFFSET = 0x8,
 	PCI_SEMAPHORE_OFFSET = 0xc,
+
 	PCI_ADDR_OFFSET = 0x10,
+	PCI_ADDR_BIT_LEN = 30,
+
 	PCI_DATA_OFFSET = 0x14,
 
 	PCI_FLAG_BIT_OFFS = 31,
 
 	PCI_SPACE_BIT_OFFS = 0,
 	PCI_SPACE_BIT_LEN = 16,
+
+	PCI_SIZE_VLD_BIT_OFFS = 28,
+	PCI_SIZE_VLD_BIT_LEN = 1,
 
 	PCI_STATUS_BIT_OFFS = 29,
 	PCI_STATUS_BIT_LEN = 3,
@@ -6816,7 +6816,9 @@ struct mlx5_mst_dump {
 	struct mutex lock;
 };
 
-static int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space)
+#define MLX5_PROTECTED_CR_SPCAE_DOMAIN 0x6
+
+int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space)
 {
 	int ret = 0;
 	u32 val;
@@ -6827,6 +6829,7 @@ static int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space)
 				    &val);
 	if (ret)
 		goto out;
+
 	val = MLX5_MERGE(val, space, PCI_SPACE_BIT_OFFS, PCI_SPACE_BIT_LEN);
 	ret = pci_write_config_dword(dev->pdev,
 				     dev->mst_dump->vsec_addr +
@@ -6834,20 +6837,56 @@ static int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space)
 				     val);
 	if (ret)
 		goto out;
+
 	ret = pci_read_config_dword(dev->pdev,
 				    dev->mst_dump->vsec_addr +
 				    PCI_CTRL_OFFSET,
 				    &val);
 	if (ret)
 		goto out;
+
 	if (MLX5_EXTRACT(val, PCI_STATUS_BIT_OFFS, PCI_STATUS_BIT_LEN) == 0)
 		return -EINVAL;
+
+	if ((space == MLX5_PROTECTED_CR_SPCAE_DOMAIN) &&
+	    (!MLX5_EXTRACT(val, PCI_SIZE_VLD_BIT_OFFS, PCI_SIZE_VLD_BIT_LEN))) {
+		mlx5_core_warn(dev, "Failed to get protected cr space size, valid bit not set");
+		return -EINVAL;
+	}
+
 	return 0;
 out:
 	return ret;
 }
 
-static int mlx5_pciconf_cap9_sem(struct mlx5_core_dev *dev, int state)
+int mlx5_pciconf_set_protected_addr_space(struct mlx5_core_dev *dev,
+					  u32 *ret_space_size) {
+	int ret;
+
+	if (!ret_space_size)
+		return -EINVAL;
+
+	*ret_space_size = 0;
+
+	ret = mlx5_pciconf_set_addr_space(dev, MLX5_PROTECTED_CR_SPCAE_DOMAIN);
+	if (ret)
+		return ret;
+
+	ret = pci_read_config_dword(dev->pdev,
+				    dev->mst_dump->vsec_addr +
+				    PCI_ADDR_OFFSET,
+				    ret_space_size);
+	if (ret) {
+		mlx5_core_warn(dev, "Failed to get read protected cr space size");
+		return ret;
+	}
+
+	*ret_space_size = MLX5_EXTRACT(*ret_space_size, 0, PCI_ADDR_BIT_LEN);
+
+	return 0;
+}
+
+int mlx5_pciconf_cap9_sem(struct mlx5_core_dev *dev, int state)
 {
 	u32 counter = 0;
 	int retries = 0;
@@ -6985,9 +7024,9 @@ out:
 	return ret;
 }
 
-static int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,
-				 unsigned int offset, u32 *data,
-				 int length)
+int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,
+			  unsigned int offset, u32 *data,
+			  int length)
 {
 	int read = length;
 	int i;
@@ -7047,7 +7086,7 @@ static int mlx5_read4_block_old(struct mlx5_core_dev *dev,
 	return mlx5_block_op_pciconf_old(dev, offset, data, length);
 }
 
-static int mlx5_get_vendor_cap_addr(struct mlx5_core_dev *dev)
+int mlx5_get_vendor_cap_addr(struct mlx5_core_dev *dev)
 {
 	int vend_cap;
 	int ret;
@@ -7351,9 +7390,8 @@ int mlx5_icmd_access_register(struct mlx5_core_dev *dev,
 	u.mailbox_in.constant_3 = 0x1;
 	u.mailbox_in.len = cpu_to_be16(0x3 << 11 | 0x3);
 
-	if (method == MLX5_ICMD_WRITE)
-		for (i = 0; i < io_buff_dw_sz; i++)
-			u.mailbox_in.reg_data[i] = *data_in++;
+	for (i = 0; i < io_buff_dw_sz; i++)
+		u.mailbox_in.reg_data[i] = *data_in++;
 
 	ret = mlx5_pciconf_cap9_sem(dev, LOCK);
 	if (ret)

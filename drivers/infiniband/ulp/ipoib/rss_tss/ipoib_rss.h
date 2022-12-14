@@ -58,6 +58,7 @@ struct ipoib_rx_ring_stats {
 	unsigned long rx_bytes;
 	unsigned long rx_errors;
 	unsigned long rx_dropped;
+	unsigned long multicast;
 };
 
 /*
@@ -70,13 +71,13 @@ struct ipoib_send_ring {
 	struct ipoib_tx_buf	*tx_ring;
 	unsigned		tx_head;
 	unsigned		tx_tail;
+	struct napi_struct	napi;
 	struct ib_sge		tx_sge[MAX_SKB_FRAGS + 1];
 	struct ib_ud_wr		tx_wr;
-	atomic_t		tx_outstanding;
 	struct ib_wc		tx_wc[MAX_SEND_CQE];
+	struct timer_list	poll_timer;
 	struct ipoib_tx_ring_stats stats;
 	unsigned		index;
-	struct napi_struct	napi;
 };
 
 struct ipoib_rx_cm_info {
@@ -149,17 +150,19 @@ struct ipoib_func_pointers {
 	void (*__ipoib_reap_ah)(struct net_device *dev);
 };
 
+void ipoib_ib_tx_completion_rss(struct ib_cq *cq, void *ctx_ptr);
+
 int ipoib_ib_dev_init_rss(struct net_device *dev, struct ib_device *ca, int port);
 
 int ipoib_mcast_attach_rss(struct net_device *dev, struct ib_device *hca,
-			   union ib_gid *mgid, u16 mlid, int set_qkey);
+			   union ib_gid *mgid, u16 mlid, int set_qkey, u32 qkey);
 
 int ipoib_init_qp_rss(struct net_device *dev);
 int ipoib_transport_dev_init_rss(struct net_device *dev, struct ib_device *ca);
 void ipoib_transport_dev_cleanup_rss(struct net_device *dev);
 
 int ipoib_send_rss(struct net_device *dev, struct sk_buff *skb,
-		   struct ib_ah *address, u32 dqpn, u32 dqkey);
+		   struct ib_ah *address, u32 dqpn);
 
 void ipoib_ib_completion_rss(struct ib_cq *cq, void *ctx_ptr);
 
@@ -183,9 +186,6 @@ const struct net_device_ops *ipoib_get_netdev_ops(void);
 
 void ipoib_select_ethtool_ops(struct ipoib_dev_priv *priv);
 const struct ethtool_ops *ipoib_get_ethtool_ops(void);
-
-void ipoib_ib_rx_completion_rss(struct ib_cq *cq, void *ctx_ptr);
-void ipoib_ib_tx_completion_rss(struct ib_cq *cq, void *ctx_ptr);
 
 struct net_device *ipoib_create_netdev_default_rss(struct ib_device *hca,
 						   const char *name,

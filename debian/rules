@@ -80,7 +80,7 @@ endif
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -97,9 +97,7 @@ endif
 	# however, some old versions of DKMS are buggy and ignores POST_BUILD
 ifeq ($(WITH_DKMS),1)
 	dh_installdirs -p$(pdkms)  usr/src/ofa_kernel/
-	# old dkms version ignores POST_BUILD, but also do not clean the build folder, so let
-	# the ofa sources be a link to the build folder.
-	grep POST_BUILD /usr/sbin/dkms | grep -vq "post_build=" && mkdir -p debian/$(pdkms)/usr/src/ofa_kernel/default || cd debian/$(pdkms)/usr/src/ofa_kernel && ln -snf /var/lib/dkms/$(pname)/$(pversion)/build default
+	# copy the ofa-kernel build headers using ofed_scripts/pre_build.sh in the DKMS MAKE step (called from ofed_scripts/pre_build.sh).
 else
 	dh_installdirs -p$(pdkms)  usr/src/ofa_kernel/default
 	cp -ar include/			debian/$(pdkms)/usr/src/ofa_kernel/default/

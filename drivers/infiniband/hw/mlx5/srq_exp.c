@@ -51,7 +51,8 @@ int mlx5_ib_exp_create_srq_user(struct mlx5_ib_dev *dev,
 		return -EFAULT;
 	}
 
-	if (ucmd_exp.reserved0 || ucmd_exp.reserved1 || ucmd_exp.comp_mask)
+	if (ucmd_exp.reserved0 || ucmd_exp.reserved1 ||
+	    ucmd_exp.comp_mask >= MLX5_EXP_CREATE_SRQ_MASK_RESERVED)
 		return -EINVAL;
 
 	if (in->type == IB_EXP_SRQT_TAG_MATCHING) {
@@ -64,6 +65,20 @@ int mlx5_ib_exp_create_srq_user(struct mlx5_ib_dev *dev,
 			return -EINVAL;
 		}
 		in->flags |= MLX5_SRQ_FLAG_RNDV;
+
+		if (ucmd_exp.comp_mask & MLX5_EXP_CREATE_SRQ_MASK_DC_OP) {
+			in->dc_op.pkey_index = ucmd_exp.dc_op.pkey_index;
+			in->dc_op.path_mtu = ucmd_exp.dc_op.path_mtu;
+			in->dc_op.sl = ucmd_exp.dc_op.sl;
+			in->dc_op.max_rd_atomic = ucmd_exp.dc_op.max_rd_atomic;
+			in->dc_op.min_rnr_timer = ucmd_exp.dc_op.min_rnr_timer;
+			in->dc_op.timeout = ucmd_exp.dc_op.timeout;
+			in->dc_op.retry_cnt = ucmd_exp.dc_op.retry_cnt;
+			in->dc_op.rnr_retry = ucmd_exp.dc_op.rnr_retry;
+			in->dc_op.dct_key = ucmd_exp.dc_op.dct_key;
+			in->dc_op.ooo_caps = ucmd_exp.dc_op.ooo_caps;
+			in->flags |= MLX5_SRQ_FLAG_SET_DC_OP;
+		}
 	}
 
 	ucmdlen = offsetof(typeof(*ucmd), reserved1) + sizeof(ucmd->reserved1);

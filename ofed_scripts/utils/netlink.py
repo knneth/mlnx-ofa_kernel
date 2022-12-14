@@ -139,6 +139,8 @@ class Attr:
         return self.data.split('\0')[0]
     def nested(self):
         return parse_attributes(self.data)
+    def get_app_table(self):
+        return parse_app_entry(self.data)
 
 class StrAttr(Attr):
     def __init__(self, attr_type, data):
@@ -261,6 +263,18 @@ def parse_attributes(data):
     while len(data):
         attr_len, attr_type = struct.unpack("HH", data[:4])
         attrs[attr_type] = Attr(attr_type, data[4:attr_len])
+        attr_len = ((attr_len + 4 - 1) & ~3 )
+        data = data[attr_len:]
+    return attrs
+
+def parse_app_entry(data):
+    attrs = {}
+    i = 0
+
+    while len(data):
+        attr_len, attr_type = struct.unpack("HH", data[:4])
+        attrs[i] = Attr(attr_type, data[4:attr_len])
+        i = i + 1
         attr_len = ((attr_len + 4 - 1) & ~3 )
         data = data[attr_len:]
     return attrs

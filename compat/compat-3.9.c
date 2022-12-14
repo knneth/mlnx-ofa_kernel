@@ -25,8 +25,10 @@
 #include <net/flow_keys.h>
 #include <linux/pci.h>
 
+#ifndef CONFIG_COMPAT_NETIF_HAS_PICK_TX
 #ifdef CONFIG_XPS
 static u32 hashrnd __read_mostly;
+#endif
 #endif
 
 #ifndef CONFIG_COMPAT_NETIF_HAS_PICK_TX

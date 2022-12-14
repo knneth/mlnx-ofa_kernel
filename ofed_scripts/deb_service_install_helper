@@ -33,6 +33,8 @@ if (systemctl 2>/dev/null | grep -qw "\\-\.mount" 2>/dev/null); then
 	install -d ${DEST_DIR}/lib/systemd/system
 	install -d ${DEST_DIR}/etc/systemd/system
 	install -m 0644 ofed_scripts/openibd.service ${DEST_DIR}/lib/systemd/system
+	# Prevent ordering cycle on sysinit.target/start
+	sed -i 's/ sysinit.target//g' ${DEST_DIR}/lib/systemd/system/openibd.service
 	install -m 0644 ofed_scripts/mlnx_interface_mgr\@.service  ${DEST_DIR}/etc/systemd/system
 	echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> ${DEST_DIR}/etc/udev/rules.d/90-ib.rules
 else

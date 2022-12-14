@@ -345,14 +345,6 @@ static int fs_debugfs_read_fg_max_ftes(void *attr, u64 *data)
 	return 0;
 }
 
-static int fs_debugfs_read_fg_num_ftes(void *attr, u64 *data)
-{
-	struct mlx5_flow_group *fg = attr;
-
-	*data = fg->num_ftes;
-	return 0;
-}
-
 static int fs_debugfs_read_fg_start_index(void *attr, u64 *data)
 {
 	struct mlx5_flow_group *fg = attr;
@@ -426,8 +418,6 @@ FS_DEFINE_SIMPLE_ATTRIBUTE(fs_ft_autogroup_num_groups,
 			   fs_debugfs_read_ft_autogroup_num_groups, "%u\n");
 /*Define flow group attributes*/
 FS_DEFINE_SIMPLE_ATTRIBUTE(fs_fg_max_ftes, fs_debugfs_read_fg_max_ftes,
-			   "%u\n");
-FS_DEFINE_SIMPLE_ATTRIBUTE(fs_fg_num_ftes, fs_debugfs_read_fg_num_ftes,
 			   "%u\n");
 FS_DEFINE_SIMPLE_ATTRIBUTE(fs_fg_start_index, fs_debugfs_read_fg_start_index,
 			   "%u\n");
@@ -1211,12 +1201,6 @@ static int fs_debugfs_add_fg(struct fs_node *node)
 					     node->debugfs.dir, fg,
 					     &fs_fg_id);
 	if (!fg->debugfs.id)
-		return -ENOMEM;
-
-	fg->debugfs.num_ftes = debugfs_create_file("num_ftes", 0400,
-						   node->debugfs.dir, fg,
-						   &fs_fg_num_ftes);
-	if (!fg->debugfs.num_ftes)
 		return -ENOMEM;
 
 	fg->debugfs.start_index = debugfs_create_file("start_index", 0400,

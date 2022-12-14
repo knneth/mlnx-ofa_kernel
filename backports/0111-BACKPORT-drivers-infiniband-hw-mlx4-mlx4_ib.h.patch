@@ -1,0 +1,31 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx4/mlx4_ib.h
+
+Change-Id: Iff8399032244bddfccd722b40046443ccde6f8db
+---
+ drivers/infiniband/hw/mlx4/mlx4_ib.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx4/mlx4_ib.h
++++ b/drivers/infiniband/hw/mlx4/mlx4_ib.h
+@@ -218,6 +218,9 @@ enum mlx4_ib_qp_flags {
+ 	MLX4_IB_QP_MANAGED_SEND = IB_QP_CREATE_MANAGED_SEND,
+ 	MLX4_IB_QP_MANAGED_RECV = IB_QP_CREATE_MANAGED_RECV,
+ 	MLX4_IB_QP_NETIF = IB_QP_CREATE_NETIF_QP,
++#ifndef HAVE_MEMALLOC_NOIO_SAVE
++	MLX4_IB_QP_CREATE_USE_GFP_NOIO = IB_QP_CREATE_USE_GFP_NOIO,
++#endif
+ 
+ 	/* Mellanox specific flags start from IB_QP_CREATE_RESERVED_START */
+ 	MLX4_IB_ROCE_V2_GSI_QP = MLX4_IB_QP_CREATE_ROCE_V2_GSI,
+@@ -952,8 +955,10 @@ int mlx4_ib_device_register_sysfs(struct
+ 
+ void mlx4_ib_device_unregister_sysfs(struct mlx4_ib_dev *device);
+ 
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ void mlx4_ib_set_vma_data(struct vm_area_struct *vma,
+ 				 struct mlx4_ib_vma_private_data *vma_private_data);
++#endif
+ __be64 mlx4_ib_gen_node_guid(void);
+ int mlx4_ib_query_device(struct ib_device *ibdev,
+ 				struct ib_device_attr *props,

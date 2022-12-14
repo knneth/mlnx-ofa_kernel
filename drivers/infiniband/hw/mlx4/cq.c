@@ -103,7 +103,7 @@ static int mlx4_ib_alloc_cq_buf(struct mlx4_ib_dev *dev, struct mlx4_ib_cq_buf *
 	int err;
 
 	err = mlx4_buf_alloc(dev->dev, nent * dev->dev->caps.cqe_size,
-			     PAGE_SIZE * 2, &buf->buf, GFP_KERNEL);
+			     PAGE_SIZE * 2, &buf->buf);
 
 	if (err)
 		goto out;
@@ -114,7 +114,7 @@ static int mlx4_ib_alloc_cq_buf(struct mlx4_ib_dev *dev, struct mlx4_ib_cq_buf *
 	if (err)
 		goto err_buf;
 
-	err = mlx4_buf_write_mtt(dev->dev, &buf->mtt, &buf->buf, GFP_KERNEL);
+	err = mlx4_buf_write_mtt(dev->dev, &buf->mtt, &buf->buf);
 	if (err)
 		goto err_mtt;
 
@@ -229,8 +229,9 @@ struct ib_cq *mlx4_ib_create_cq(struct ib_device *ibdev,
 			goto err_mtt;
 
 		uar = &to_mucontext(context)->uar;
+		cq->mcq.usage = MLX4_RES_USAGE_USER_VERBS;
 	} else {
-		err = mlx4_db_alloc(dev->dev, &cq->db, 1, GFP_KERNEL);
+		err = mlx4_db_alloc(dev->dev, &cq->db, 1);
 		if (err)
 			goto err_cq;
 
@@ -246,6 +247,7 @@ struct ib_cq *mlx4_ib_create_cq(struct ib_device *ibdev,
 		buf_addr = &cq->buf.buf;
 
 		uar = &dev->priv_uar;
+		cq->mcq.usage = MLX4_RES_USAGE_DRIVER;
 	}
 
 	if (dev->eq_table)
@@ -650,7 +652,7 @@ static void mlx4_ib_poll_sw_comp(struct mlx4_ib_cq *cq, int num_entries,
 	struct mlx4_ib_qp *qp;
 
 	*npolled = 0;
-	/* Find uncompleted WQEs belonging to that cq and retrun
+	/* Find uncompleted WQEs belonging to that cq and return
 	 * simulated FLUSH_ERR completions
 	 */
 	list_for_each_entry(qp, &cq->send_qp_list, cq_send_list) {

@@ -318,9 +318,6 @@ fi
 if (grep -qw "skb_has_frag_list" ${KLIB_BUILD}/include/linux/skbuff.h > /dev/null 2>&1 || grep -qw "skb_has_frag_list" ${KSRC}/include/linux/skbuff.h > /dev/null 2>&1); then
 	set_config CONFIG_COMPAT_SKB_HAS_FRAG_LIST y
 fi
-if (grep -qw "irq_set_affinity_hint" ${KLIB_BUILD}/include/linux/interrupt.h > /dev/null 2>&1 || grep -qw "irq_set_affinity_hint" ${KSRC}/include/linux/interrupt.h > /dev/null 2>&1); then
-        set_config CONFIG_COMPAT_HAS_IRQ_AFFINITY_HINT y
-fi
 if (grep -qw "irq_set_affinity_notifier" ${KLIB_BUILD}/include/linux/interrupt.h > /dev/null 2>&1 || grep -qw "irq_set_affinity_notifier" ${KSRC}/include/linux/interrupt.h > /dev/null 2>&1); then
         set_config CONFIG_COMPAT_HAS_IRQ_AFFINITY_NOTIFIER y
 fi

@@ -1,0 +1,67 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
+
+Change-Id: Icc8a559b020382eef2be7bd9f7d4e81c9f8e8e12
+---
+ drivers/infiniband/core/uverbs_main.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+--- a/drivers/infiniband/core/uverbs_main.c
++++ b/drivers/infiniband/core/uverbs_main.c
+@@ -258,10 +258,14 @@ static int ib_uverbs_cleanup_ucontext(st
+ {
+ 	context->closing = 1;
+ 	uverbs_cleanup_ucontext(context, device_removed);
++#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
+ 	put_pid(context->tgid);
++#endif
+ 
++#ifdef HAVE_CGROUP_RDMA_H
+ 	ib_rdmacg_uncharge(&context->cg_obj, context->device,
+ 			   RDMACG_RESOURCE_HCA_HANDLE);
++#endif
+ 
+ 	return context->device->dealloc_ucontext(context);
+ }
+@@ -1058,8 +1062,16 @@ static ssize_t show_dev_abi_version(stru
+ }
+ static DEVICE_ATTR(abi_version, S_IRUGO, show_dev_abi_version, NULL);
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ static CLASS_ATTR_STRING(abi_version, S_IRUGO,
+ 			 __stringify(IB_USER_VERBS_ABI_VERSION));
++#else
++static ssize_t show_abi_version(struct class *class, char *buf)
++{
++	return sprintf(buf, "%d\n", IB_USER_VERBS_ABI_VERSION);
++}
++static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
++#endif
+ 
+ static dev_t overflow_maj;
+ static DECLARE_BITMAP(overflow_map, IB_UVERBS_MAX_DEVICES);
+@@ -1296,7 +1308,11 @@ static void ib_uverbs_remove_one(struct
+ 	kobject_put(&uverbs_dev->kobj);
+ }
+ 
++#ifdef HAVE_CLASS_DEVNODE_UMODE_T
+ static char *uverbs_devnode(struct device *dev, umode_t *mode)
++#else
++static char *uverbs_devnode(struct device *dev, mode_t *mode)
++#endif
+ {
+ 	if (mode)
+ 		*mode = 0666;
+@@ -1323,7 +1339,12 @@ static int __init ib_uverbs_init(void)
+ 
+ 	uverbs_class->devnode = uverbs_devnode;
+ 
++#ifdef HAVE_CLASS_ATTR_STRING
+ 	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
++#else
++	ret = class_create_file(uverbs_class, &class_attr_abi_version);
++#endif
++
+ 	if (ret) {
+ 		pr_err("user_verbs: couldn't create abi_version attribute\n");
+ 		goto out_class;

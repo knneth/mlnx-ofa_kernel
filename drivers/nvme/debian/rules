@@ -56,14 +56,14 @@ override_dh_auto_build:
 ifneq ($(WITH_DKMS),1)
 	@echo Building for $(KVER)
 	make clean || true
-	make -j$(NJOBS) KVER=$(KVER) K_BUILD=$(K_BUILD)
+	make -j$(NJOBS) KVER=$(KVER) K_BUILD=$(K_BUILD) CONFIG_NVME_HOST_WITHOUT_FC=
 endif
 
 override_dh_auto_test:
 
 override_dh_auto_install:
 ifneq ($(WITH_DKMS),1)
-	make install INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) KERNELRELEASE=$(KVER) KVER=$(KVER) K_BUILD=$(K_BUILD)
+	make install INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) KERNELRELEASE=$(KVER) KVER=$(KVER) K_BUILD=$(K_BUILD) CONFIG_NVME_HOST_WITHOUT_FC=
 	find $(INSTALL_MOD_PATH) \( -type f -a -name "modules.*" \) -delete
 endif
 

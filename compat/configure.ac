@@ -44,3 +44,11 @@ sed -i '/\<PACKAGE_TARNAME\>/d' $PWD/config.h
 sed -i '/\<PACKAGE_URL\>/d' $PWD/config.h
 sed -i '/\<PACKAGE_VERSION\>/d' $PWD/config.h
 sed -i '/\<VERSION\>/d' $PWD/config.h
+
+#
+echo '' >> $PWD/config.h
+echo '/* Make sure LINUX_BACKPORT macro is defined for all external users */' >> $PWD/config.h
+echo '#ifndef LINUX_BACKPORT' >> $PWD/config.h
+echo '#define LINUX_BACKPORT(__sym) backport_ ##__sym' >> $PWD/config.h
+echo '#endif' >> $PWD/config.h
+echo '' >> $PWD/config.h

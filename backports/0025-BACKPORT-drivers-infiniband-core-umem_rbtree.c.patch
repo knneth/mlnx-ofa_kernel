@@ -1,0 +1,26 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_rbtree.c
+
+Change-Id: I1c855dbac234984fe11a6862cd28ddbe81800efc
+---
+ drivers/infiniband/core/umem_rbtree.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/infiniband/core/umem_rbtree.c
++++ b/drivers/infiniband/core/umem_rbtree.c
+@@ -30,6 +30,7 @@
+  * SOFTWARE.
+  */
+ 
++#if HAVE_INTERVAL_TREE_GENERIC_H
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/interval_tree_generic.h>
+@@ -94,6 +95,7 @@ int rbt_ib_umem_for_each_in_range(struct
+ 	return ret_val;
+ }
+ EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);
++#endif /* HAVE_INTERVAL_TREE_GENERIC_H */
+ 
+ struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root *root,
+ 				       u64 addr, u64 length)

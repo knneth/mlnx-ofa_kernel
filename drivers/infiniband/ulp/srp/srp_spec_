@@ -216,7 +216,7 @@ fi
 %if "%{KMP}" != "1"
 %files
 %defattr(-,root,root,-)
-/lib/modules/%{KVERSION}/
+/lib/modules/%{KVERSION}/%{install_mod_dir}/
 %{_sysconfdir}/depmod.d/zz02-%{name}.conf
 %endif
 

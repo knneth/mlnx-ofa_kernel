@@ -312,13 +312,13 @@ static ssize_t mlx4_en_store_tc_num(struct device *d,
 	if (err != 1)
 		return -EINVAL;
 
-	if (tc_num != MLX4_EN_NUM_UP && tc_num)
-		return -EINVAL;
-
 	rtnl_lock();
-	netdev_set_num_tc(netdev, tc_num);
-	mlx4_en_setup_tc(netdev, tc_num);
+	err = mlx4_en_setup_tc(netdev, tc_num);
 	rtnl_unlock();
+
+	if (err)
+		return err;
+
 	return count;
 
 }

@@ -51,7 +51,6 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_pack.h>
 #include <rdma/ib_sa.h>
-#include <rdma/rn_ipoib.h>
 #include <linux/sched.h>
 /* constants */
 
@@ -155,14 +154,11 @@ static inline void skb_add_pseudo_hdr(struct sk_buff *skb)
 	skb_pull(skb, IPOIB_HARD_LEN);
 }
 
-extern int ipoib_enhanced_enabled;
-
-static inline void ipoib_free_netdev(struct ib_device *ca, struct net_device *dev)
+static inline struct ipoib_dev_priv *ipoib_priv(const struct net_device *dev)
 {
-	if (ca->free_rdma_netdev && ipoib_enhanced_enabled)
-		ca->free_rdma_netdev(dev);
-	else
-		free_netdev(dev);
+	struct rdma_netdev *rn = netdev_priv(dev);
+
+	return rn->clnt_priv;
 }
 
 /* Used for all multicast joins (broadcast, IPv4 mcast and IPv6 mcast) */
@@ -385,7 +381,6 @@ struct ipoib_dev_priv {
 	struct ib_cq	 *recv_cq;
 	struct ib_cq	 *send_cq;
 	struct ib_qp	 *qp; /* also parent QP for TSS & RSS */
-	u32		  qp_num;
 	u32		  qkey;
 
 	union ib_gid local_gid;
@@ -402,7 +397,6 @@ struct ipoib_dev_priv {
 	unsigned	     tx_tail;
 	struct ib_sge	     tx_sge[MAX_SKB_FRAGS + 1];
 	struct ib_ud_wr      tx_wr;
-	atomic_t	     tx_outstanding;
 	struct ib_wc	     send_wc[MAX_SEND_CQE];
 
 	struct ib_recv_wr    rx_wr;
@@ -431,6 +425,7 @@ struct ipoib_dev_priv {
 	u64	hca_caps;
 	u64	hca_caps_exp;
 	struct ipoib_ethtool_st ethtool;
+	struct timer_list poll_timer;
 	struct ipoib_recv_ring *recv_ring;
 	struct ipoib_send_ring *send_ring;
 	unsigned int rss_qp_num; /* No RSS HW support 0 */
@@ -462,7 +457,7 @@ struct ipoib_ah {
 
 struct ipoib_path {
 	struct net_device    *dev;
-	struct ib_sa_path_rec pathrec;
+	struct sa_path_rec pathrec;
 	struct ipoib_ah      *ah;
 	struct sk_buff_head   queue;
 
@@ -514,12 +509,13 @@ extern struct workqueue_struct *ipoib_workqueue;
 
 /* functions */
 
-int ipoib_poll(struct napi_struct *napi, int budget);
+int ipoib_rx_poll(struct napi_struct *napi, int budget);
+int ipoib_tx_poll(struct napi_struct *napi, int budget);
 void ipoib_ib_rx_completion(struct ib_cq *cq, void *ctx_ptr);
 void ipoib_ib_tx_completion(struct ib_cq *cq, void *ctx_ptr);
 
 struct ipoib_ah *ipoib_create_ah(struct net_device *dev,
-				 struct ib_pd *pd, struct ib_ah_attr *attr);
+				 struct ib_pd *pd, struct rdma_ah_attr *attr);
 void ipoib_free_ah(struct kref *kref);
 static inline void ipoib_put_ah(struct ipoib_ah *ah)
 {
@@ -530,23 +526,23 @@ int ipoib_add_pkey_attr(struct net_device *dev);
 int ipoib_add_umcast_attr(struct net_device *dev);
 
 int ipoib_send(struct net_device *dev, struct sk_buff *skb,
-	       struct ib_ah *address, u32 dqpn, u32 dqkey);
+	       struct ib_ah *address, u32 dqpn);
 void ipoib_reap_ah(struct work_struct *work);
 void ipoib_repath_ah(struct work_struct *work);
 
 struct ipoib_path *__path_find(struct net_device *dev, void *gid);
 void ipoib_mark_paths_invalid(struct net_device *dev);
 void ipoib_flush_paths(struct net_device *dev);
-int ipoib_check_sm_sendonly_fullmember_support(struct ipoib_dev_priv *priv);
 struct ipoib_dev_priv *ipoib_intf_alloc(struct ib_device *hca, u8 port,
 					const char *format);
+void ipoib_ib_tx_timer_func(unsigned long ctx);
 void ipoib_ib_dev_flush_light(struct work_struct *work);
 void ipoib_ib_dev_flush_normal(struct work_struct *work);
 void ipoib_ib_dev_flush_heavy(struct work_struct *work);
 void ipoib_pkey_event(struct work_struct *work);
 void ipoib_ib_dev_cleanup(struct net_device *dev);
+
 int ipoib_ib_dev_open_default(struct net_device *dev);
-int ipoib_ib_dev_stop_default(struct net_device *dev);
 int ipoib_ib_dev_open(struct net_device *dev);
 int ipoib_ib_dev_stop(struct net_device *dev);
 void ipoib_ib_dev_up(struct net_device *dev);
@@ -612,7 +608,7 @@ void ipoib_path_iter_read(struct ipoib_path_iter *iter,
 #endif
 
 int ipoib_mcast_attach(struct net_device *dev, struct ib_device *hca,
-		       union ib_gid *mgid, u16 mlid, int set_qkey);
+		       union ib_gid *mgid, u16 mlid, int set_qkey, u32 qkey);
 int ipoib_mcast_detach(struct net_device *dev, struct ib_device *hca,
 		       union ib_gid *mgid, u16 mlid);
 void ipoib_mcast_remove_list(struct list_head *remove_list);
@@ -645,9 +641,6 @@ void ipoib_drain_cq(struct net_device *dev);
 
 void ipoib_set_ethtool_ops(struct net_device *dev);
 void ipoib_set_dev_features(struct ipoib_dev_priv *priv, struct ib_device *hca);
-
-void ipoib_napi_add(struct net_device *dev);
-void ipoib_napi_del(struct net_device *dev);
 
 #define IPOIB_FLAGS_RC		0x80
 #define IPOIB_FLAGS_UC		0x40

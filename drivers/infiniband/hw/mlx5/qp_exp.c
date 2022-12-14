@@ -427,6 +427,16 @@ struct ib_dct *mlx5_ib_create_dct(struct ib_pd *pd,
 		}
 	}
 
+	if (attr->srq && attr->srq->srq_type == IB_EXP_SRQT_TAG_MATCHING) {
+		if (MLX5_CAP_GEN(dev->mdev, rndv_offload_dc)) {
+			MLX5_SET(dctc, dctc, offload_type,
+				 MLX5_DCTC_OFFLOAD_TYPE_RNDV);
+		} else {
+			err = -EINVAL;
+			goto err_alloc;
+		}
+	}
+
 	err = mlx5_core_create_dct(dev->mdev, &dct->mdct, in);
 	if (err)
 		goto err_alloc;

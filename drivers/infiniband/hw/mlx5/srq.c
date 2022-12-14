@@ -132,7 +132,7 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
 		goto err_umem;
 	}
 
-	in->pas = mlx5_vzalloc(sizeof(*in->pas) * ncont);
+	in->pas = kvzalloc(sizeof(*in->pas) * ncont, GFP_KERNEL);
 	if (!in->pas) {
 		err = -ENOMEM;
 		goto err_umem;
@@ -194,14 +194,14 @@ static int create_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq,
 	}
 
 	mlx5_ib_dbg(dev, "srq->buf.page_shift = %d\n", srq->buf.page_shift);
-	in->pas = mlx5_vzalloc(sizeof(*in->pas) * srq->buf.npages);
+	in->pas = kvzalloc(sizeof(*in->pas) * srq->buf.npages, GFP_KERNEL);
 	if (!in->pas) {
 		err = -ENOMEM;
 		goto err_buf;
 	}
 	mlx5_fill_page_array(&srq->buf, in->pas);
 
-	srq->wrid = kmalloc(srq->msrq.max * sizeof(u64), GFP_KERNEL);
+	srq->wrid = kvmalloc_array(srq->msrq.max, sizeof(u64), GFP_KERNEL);
 	if (!srq->wrid) {
 		err = -ENOMEM;
 		goto err_in;
@@ -235,7 +235,7 @@ static void destroy_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq)
 
 static void destroy_srq_kernel(struct mlx5_ib_dev *dev, struct mlx5_ib_srq *srq)
 {
-	kfree(srq->wrid);
+	kvfree(srq->wrid);
 	mlx5_buf_free(dev->mdev, &srq->buf);
 	mlx5_db_free(dev->mdev, &srq->db);
 }
@@ -309,6 +309,18 @@ struct ib_srq *mlx5_ib_create_srq(struct ib_pd *pd,
 			mlx5_ib_warn(dev, "setting nvmf srq attrs failed, err %d\n", err);
 			goto err_usr_kern_srq;
 		}
+	}
+
+	if (init_attr->srq_type == IB_SRQT_TM) {
+		in.tm_log_list_size =
+			ilog2(init_attr->ext.tag_matching.max_num_tags) + 1;
+		if (in.tm_log_list_size >
+		    MLX5_CAP_GEN(dev->mdev, log_tag_matching_list_sz)) {
+			mlx5_ib_dbg(dev, "TM SRQ max_num_tags exceeding limit\n");
+			err = -EINVAL;
+			goto err_usr_kern_srq;
+		}
+		in.flags |= MLX5_SRQ_FLAG_RNDV;
 	}
 
 	if (ib_srq_has_cq(init_attr->srq_type))

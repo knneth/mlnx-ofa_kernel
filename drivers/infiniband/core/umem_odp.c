@@ -163,33 +163,6 @@ static void ib_umem_notifier_release(struct mmu_notifier *mn,
 	up_read(&context->umem_rwsem);
 }
 
-static int invalidate_page_trampoline(struct ib_umem *item, u64 start,
-				      u64 end, void *cookie)
-{
-	ib_umem_notifier_start_account(item);
-	item->context->invalidate_range(item, start, start + PAGE_SIZE);
-	ib_umem_notifier_end_account(item);
-	return 0;
-}
-
-static void ib_umem_notifier_invalidate_page(struct mmu_notifier *mn,
-					     struct mm_struct *mm,
-					     unsigned long address)
-{
-	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
-
-	if (!context->invalidate_range)
-		return;
-
-	ib_ucontext_notifier_start_account(context);
-	down_read(&context->umem_rwsem);
-	rbt_ib_umem_for_each_in_range(&context->umem_tree, address,
-				      address + PAGE_SIZE,
-				      invalidate_page_trampoline, NULL);
-	up_read(&context->umem_rwsem);
-	ib_ucontext_notifier_end_account(context);
-}
-
 static int invalidate_range_start_trampoline(struct ib_umem *item, u64 start,
 					     u64 end, void *cookie)
 {
@@ -243,7 +216,6 @@ static void ib_umem_notifier_invalidate_range_end(struct mmu_notifier *mn,
 
 static const struct mmu_notifier_ops ib_umem_notifiers = {
 	.release                    = ib_umem_notifier_release,
-	.invalidate_page            = ib_umem_notifier_invalidate_page,
 	.invalidate_range_start     = ib_umem_notifier_invalidate_range_start,
 	.invalidate_range_end       = ib_umem_notifier_invalidate_range_end,
 };
@@ -452,7 +424,7 @@ void ib_umem_odp_release(struct ib_umem *umem)
 	 * that the hardware will not attempt to access the MR any more.
 	 */
 	ib_umem_odp_unmap_dma_pages(umem, ib_umem_start(umem),
-				    ib_umem_end(umem));
+				    ib_umem_end(umem), NULL);
 
 	down_write(&context->umem_rwsem);
 	if (likely(ib_umem_start(umem) != ib_umem_end(umem)))
@@ -536,7 +508,6 @@ static int ib_umem_odp_map_dma_single_page(
 {
 	struct ib_device *dev = umem->context->device;
 	dma_addr_t dma_addr;
-	int stored_page = 0;
 	int remove_existing_mapping = 0;
 	int ret = 0;
 
@@ -566,7 +537,7 @@ static int ib_umem_odp_map_dma_single_page(
 		else
 			atomic_inc(&dev->odp_statistics.num_page_fault_pages);
 
-		stored_page = 1;
+		ret = 1;
 	} else if (umem->odp_data->page_list[page_index] == page) {
 		umem->odp_data->dma_list[page_index] |= access_mask;
 	} else {
@@ -579,16 +550,17 @@ static int ib_umem_odp_map_dma_single_page(
 
 out:
 	/* On Demand Paging - avoid pinning the page */
-	if (umem->context->invalidate_range || !stored_page)
+	if (umem->context->invalidate_range || ret != 1)
 		put_page(page);
 
 	if (remove_existing_mapping && umem->context->invalidate_range) {
-		invalidate_page_trampoline(
+		ib_umem_notifier_start_account(umem);
+		umem->context->invalidate_range(
 			umem,
-			ib_umem_start(umem) + (page_index >> umem->page_shift),
-			ib_umem_start(umem) + ((page_index + 1) >>
-					       umem->page_shift),
-			NULL);
+			ib_umem_start(umem) + (page_index << umem->page_shift),
+			ib_umem_start(umem) + ((page_index + 1) <<
+					       umem->page_shift));
+		ib_umem_notifier_end_account(umem);
 		ret = -EAGAIN;
 	}
 
@@ -623,11 +595,14 @@ out:
  *	   was called from the prefetch verb. IB_ODP_DMA_MAP_FOR_PAGEFAULT is
  *	   used to indicate that the function was called from a pagefault
  *	   handler.
+ * @num_pages: returns number of affected pages
  */
 int ib_umem_odp_map_dma_pages(struct ib_umem *umem, u64 user_virt, u64 bcnt,
 			      u64 access_mask, unsigned long current_seq,
-			      enum ib_odp_dma_map_flags odp_flags)
+			      enum ib_odp_dma_map_flags odp_flags,
+			      int *num_pages)
 {
+	int num = 0;
 	struct task_struct *owning_process  = NULL;
 	struct mm_struct   *owning_mm       = NULL;
 	struct page       **local_page_list = NULL;
@@ -711,6 +686,7 @@ int ib_umem_odp_map_dma_pages(struct ib_umem *umem, u64 user_virt, u64 bcnt,
 			if (ret < 0)
 				break;
 
+			num += ret;
 			p = page_to_phys(local_page_list[j]);
 			k++;
 		}
@@ -736,14 +712,17 @@ out_put_task:
 	put_task_struct(owning_process);
 out_no_task:
 	free_page((unsigned long)local_page_list);
+
+	if (num_pages)
+		*num_pages = num;
 	return ret;
 }
 EXPORT_SYMBOL(ib_umem_odp_map_dma_pages);
 
 void ib_umem_odp_unmap_dma_pages(struct ib_umem *umem, u64 virt,
-				 u64 bound)
+				 u64 bound, int *num_pages)
 {
-	int idx;
+	int idx, num = 0;
 	u64 addr;
 	struct ib_device *dev = umem->context->device;
 
@@ -786,8 +765,13 @@ void ib_umem_odp_unmap_dma_pages(struct ib_umem *umem, u64 virt,
 			umem->odp_data->dma_list[idx] = 0;
 			atomic_inc(&dev->odp_statistics.num_invalidation_pages);
 			umem->npages--;
+			num++;
 		}
 	}
+
+	if (num_pages)
+		*num_pages = num;
+
 	mutex_unlock(&umem->odp_data->umem_mutex);
 }
 EXPORT_SYMBOL(ib_umem_odp_unmap_dma_pages);

@@ -174,7 +174,8 @@ static int init_qpg_parent(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *pqp,
 			dev->dev, tss_align_num,
 			tss_align_num, &tss_base, MLX4_RESERVE_ETH_BF_QP |
 			((attr->qp_type == IB_QPT_RAW_PACKET) ?
-			 MLX4_RESERVE_A0_QP : 0));
+			 MLX4_RESERVE_A0_QP : 0),
+			MLX4_RES_USAGE_USER_VERBS);
 	if (err)
 		goto err1;
 
@@ -195,7 +196,8 @@ static int init_qpg_parent(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *pqp,
 		u32 alloc = BITS_TO_LONGS(rss_align_num) * sizeof(long);
 
 		err = mlx4_qp_reserve_range(dev->dev, rss_align_num,
-					    1, &rss_base, 0);
+					    1, &rss_base, 0,
+					    MLX4_RES_USAGE_USER_VERBS);
 		if (err)
 			goto err3;
 		qpg_data->rss_bitmap = kzalloc(alloc, GFP_KERNEL);
@@ -362,13 +364,14 @@ int mlx4_ib_alloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp,
 						    (attr->cap.max_send_wr ?
 						     MLX4_RESERVE_ETH_BF_QP : 0) |
 						    (attr->cap.max_recv_wr ?
-						     MLX4_RESERVE_A0_QP : 0));
+						     MLX4_RESERVE_A0_QP : 0),
+						    qp->mqp.usage);
 		} else {
 			if (qp->flags & MLX4_IB_QP_NETIF)
 				err = mlx4_ib_steer_qp_alloc(dev, 1, qpn);
 			else
 				err = mlx4_qp_reserve_range(dev->dev, 1, 1,
-							    qpn, 0);
+							    qpn, 0, qp->mqp.usage);
 		}
 		break;
 	case IB_QPG_PARENT:
@@ -388,12 +391,17 @@ int mlx4_ib_alloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp,
 	return 0;
 }
 
-static void free_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int qpn)
+static void free_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int qpn,
+			    struct mlx4_ib_ucontext *context,
+			    enum mlx4_ib_source_type src,
+			    bool dirty_release)
 {
 	switch (qp->qpg_type) {
 	case IB_QPG_NONE:
 		if (qp->flags & MLX4_IB_QP_NETIF)
 			mlx4_ib_steer_qp_free(dev, qpn, 1);
+		else if (src == MLX4_IB_RWQ_SRC)
+			mlx4_ib_release_wqn(context, qp, dirty_release);
 		else
 			mlx4_qp_release_range(dev->dev, qpn, 1);
 		break;
@@ -410,14 +418,20 @@ static void free_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int 
 }
 
 /* Revert allocation on create_qp_common */
-void mlx4_ib_unalloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int qpn)
+void mlx4_ib_unalloc_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, int qpn,
+				struct mlx4_ib_ucontext *context,
+				enum mlx4_ib_source_type src,
+				bool dirty_release)
 {
-	free_qpn_common(dev, qp, qpn);
+	free_qpn_common(dev, qp, qpn, context, src, dirty_release);
 }
 
-void mlx4_ib_release_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp)
+void mlx4_ib_release_qpn_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp,
+				struct mlx4_ib_ucontext *context,
+				enum mlx4_ib_source_type src,
+				bool dirty_release)
 {
-	free_qpn_common(dev, qp, qp->mqp.qpn);
+	free_qpn_common(dev, qp, qp->mqp.qpn, context, src, dirty_release);
 }
 
 int mlx4_ib_check_qpg_attr(struct ib_pd *pd, struct ib_qp_init_attr *init_attr)

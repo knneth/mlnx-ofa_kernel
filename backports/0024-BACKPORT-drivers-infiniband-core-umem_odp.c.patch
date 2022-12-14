@@ -1,0 +1,116 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
+
+Change-Id: If48fd42fa7c3ea3f0a883cda85145872a88eef66
+---
+ drivers/infiniband/core/umem_odp.c | 54 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+--- a/drivers/infiniband/core/umem_odp.c
++++ b/drivers/infiniband/core/umem_odp.c
+@@ -30,6 +30,7 @@
+  * SOFTWARE.
+  */
+ 
++#if HAVE_INTERVAL_TREE_GENERIC_H
+ #include <linux/types.h>
+ #include <linux/sched.h>
+ #include <linux/sched/mm.h>
+@@ -163,6 +164,35 @@ static void ib_umem_notifier_release(str
+ 	up_read(&context->umem_rwsem);
+ }
+ 
++#ifdef HAVE_INVALIDATE_PAGE
++static int invalidate_page_trampoline(struct ib_umem *item, u64 start,
++				      u64 end, void *cookie)
++{
++       ib_umem_notifier_start_account(item);
++       item->context->invalidate_range(item, start, start + PAGE_SIZE);
++       ib_umem_notifier_end_account(item);
++       return 0;
++}
++
++static void ib_umem_notifier_invalidate_page(struct mmu_notifier *mn,
++					     struct mm_struct *mm,
++					     unsigned long address)
++{
++	struct ib_ucontext *context = container_of(mn, struct ib_ucontext, mn);
++
++	if (!context->invalidate_range)
++		return;
++
++	ib_ucontext_notifier_start_account(context);
++	down_read(&context->umem_rwsem);
++	rbt_ib_umem_for_each_in_range(&context->umem_tree, address,
++				      address + PAGE_SIZE,
++				      invalidate_page_trampoline, NULL);
++	up_read(&context->umem_rwsem);
++	ib_ucontext_notifier_end_account(context);
++}
++#endif
++
+ static int invalidate_range_start_trampoline(struct ib_umem *item, u64 start,
+ 					     u64 end, void *cookie)
+ {
+@@ -216,6 +246,9 @@ static void ib_umem_notifier_invalidate_
+ 
+ static const struct mmu_notifier_ops ib_umem_notifiers = {
+ 	.release                    = ib_umem_notifier_release,
++#ifdef HAVE_INVALIDATE_PAGE
++	.invalidate_page            = ib_umem_notifier_invalidate_page,
++#endif
+ 	.invalidate_range_start     = ib_umem_notifier_invalidate_range_start,
+ 	.invalidate_range_end       = ib_umem_notifier_invalidate_range_end,
+ };
+@@ -608,7 +641,9 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ 	struct page       **local_page_list = NULL;
+ 	u64 page_mask, off;
+ 	int j, k, ret = 0, start_idx, npages = 0, page_shift;
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	unsigned int flags = 0;
++#endif
+ 	phys_addr_t p = 0;
+ 
+ 	if (access_mask == 0)
+@@ -640,8 +675,10 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ 		goto out_put_task;
+ 	}
+ 
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
+ 	if (access_mask & ODP_WRITE_ALLOWED_BIT)
+ 		flags |= FOLL_WRITE;
++#endif
+ 
+ 	start_idx = (user_virt - ib_umem_start(umem)) >> page_shift;
+ 	k = start_idx;
+@@ -659,9 +696,25 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ 		 * complex (and doesn't gain us much performance in most use
+ 		 * cases).
+ 		 */
++#if defined(HAVE_GET_USER_PAGES_REMOTE_8_PARAMS) || defined(HAVE_GET_USER_PAGES_REMOTE_7_PARAMS) || defined(HAVE_GET_USER_PAGES_REMOTE_8_PARAMS_W_LOCKED)
+ 		npages = get_user_pages_remote(owning_process, owning_mm,
+ 				user_virt, gup_num_pages,
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
++#ifdef HAVE_GET_USER_PAGES_REMOTE_8_PARAMS_W_LOCKED
+ 				flags, local_page_list, NULL, NULL);
++#else
++				flags, local_page_list, NULL);
++#endif
++#else
++				access_mask & ODP_WRITE_ALLOWED_BIT, 0,
++				local_page_list, NULL);
++#endif
++#else
++		npages = get_user_pages(owning_process, owning_mm,
++				user_virt, gup_num_pages,
++				access_mask & ODP_WRITE_ALLOWED_BIT,
++				0, local_page_list, NULL);
++#endif
+ 		up_read(&owning_mm->mmap_sem);
+ 
+ 		if (npages < 0)
+@@ -775,3 +828,4 @@ void ib_umem_odp_unmap_dma_pages(struct
+ 	mutex_unlock(&umem->odp_data->umem_mutex);
+ }
+ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_pages);
++#endif

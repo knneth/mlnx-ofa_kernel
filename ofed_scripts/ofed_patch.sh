@@ -287,7 +287,7 @@ main()
 #Set default values
 KVERSION=${KVERSION:-$(uname -r)}
 WITH_GIT=${WITH_GIT:-"yes"}
-WITH_QUILT=${WITH_QUILT:-"yes"}
+WITH_QUILT=${WITH_QUILT:-"no"}
 WITH_PATCH=${WITH_PATCH:-"yes"}
 WITH_KERNEL_FIXES=${WITH_KERNEL_FIXES:-"yes"}
 BACKPORT_INCLUDES=""

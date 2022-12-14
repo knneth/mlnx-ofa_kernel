@@ -631,8 +631,8 @@ int rxe_qp_from_attr(struct rxe_qp *qp, struct ib_qp_attr *attr, int mask,
 
 	if (mask & IB_QP_AV) {
 		ib_get_cached_gid(&rxe->ib_dev, 1,
-				  attr->ah_attr.grh.sgid_index, &sgid,
-				  &sgid_attr);
+				  rdma_ah_read_grh(&attr->ah_attr)->sgid_index,
+				  &sgid, &sgid_attr);
 		rxe_av_from_attr(rxe, attr->port_num, &qp->pri_av,
 				 &attr->ah_attr);
 		rxe_av_fill_ip_info(rxe, &qp->pri_av, &attr->ah_attr,
@@ -642,9 +642,11 @@ int rxe_qp_from_attr(struct rxe_qp *qp, struct ib_qp_attr *attr, int mask,
 	}
 
 	if (mask & IB_QP_ALT_PATH) {
-		ib_get_cached_gid(&rxe->ib_dev, 1,
-				  attr->alt_ah_attr.grh.sgid_index, &sgid,
-				  &sgid_attr);
+		u8 sgid_index =
+			rdma_ah_read_grh(&attr->alt_ah_attr)->sgid_index;
+
+		ib_get_cached_gid(&rxe->ib_dev, 1, sgid_index,
+				  &sgid, &sgid_attr);
 
 		rxe_av_from_attr(rxe, attr->alt_port_num, &qp->alt_av,
 				 &attr->alt_ah_attr);
@@ -847,6 +849,14 @@ void rxe_qp_cleanup(struct rxe_pool_entry *arg)
 	if (qp->resp.mr) {
 		rxe_drop_ref(qp->resp.mr);
 		qp->resp.mr = NULL;
+	}
+
+	if (qp_type(qp) == IB_QPT_RC) {
+		struct dst_entry *dst = NULL;
+
+		dst = sk_dst_get(qp->sk->sk);
+		if (dst)
+			dst_release(dst);
 	}
 
 	free_rd_atomic_resources(qp);

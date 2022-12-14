@@ -278,23 +278,6 @@ typedef u32 phys_addr_t;
 #endif
 
 /*
- * Backports for affinity hint feature - deprecated on SLES10.2
- */
-typedef struct cpumask *cpumask_var_t;
-#ifndef CONFIG_COMPAT_HAS_IRQ_AFFINITY_HINT
-static inline int irq_set_affinity_hint(unsigned int irq,
-					const struct cpumask *m)
-{
-	return -ENOSYS;
-}
-
-static inline bool cpumask_empty(const struct cpumask *srcp)
-{
-	return true;
-}
-#endif
-
-/*
  * Backport work for QoS dependencies (kernel/pm_qos_params.c)
  * pm-qos stuff written by mark gross mgross@linux.intel.com.
  *

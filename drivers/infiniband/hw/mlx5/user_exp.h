@@ -59,7 +59,7 @@ struct mlx5_exp_ib_create_cq {
 	__u32					cqe_size;
 	__u8					cqe_comp_en;
 	__u8					cqe_comp_res_format;
-	__u16					reserved; /* explicit padding (optional on i386) */
+	__u16					flags; /* Use mlx5_ib_create_cq_flags */
 
 	/* Some more reserved fields for future growth of mlx5_ib_create_cq */
 	__u64					prefix_reserved[8];
@@ -282,6 +282,25 @@ struct mlx5_ib_exp_create_wq {
 	struct mlx5_ib_create_wq_mp_rq mp_rq;
 };
 
+enum mlx5_exp_create_srq_mask {
+	MLX5_EXP_CREATE_SRQ_MASK_DC_OP	  = 1 << 0,
+	MLX5_EXP_CREATE_SRQ_MASK_RESERVED = 1 << 1,
+};
+
+struct mlx5_ib_set_xrq_dc_offload_params {
+	__u16	pkey_index;
+	__u8	path_mtu;
+	__u8	sl;
+	__u8	max_rd_atomic;
+	__u8	min_rnr_timer;
+	__u8	timeout;
+	__u8	retry_cnt;
+	__u8	rnr_retry;
+	__u8	reserved2[3];
+	__u32	ooo_caps;
+	__u64	dct_key;
+};
+
 struct mlx5_ib_exp_create_srq {
 	__u64	buf_addr;
 	__u64	db_addr;
@@ -291,6 +310,7 @@ struct mlx5_ib_exp_create_srq {
 	__u32	reserved1;
 	__u32	max_num_tags;
 	__u32	comp_mask;
+	struct mlx5_ib_set_xrq_dc_offload_params dc_op;
 };
 
 static inline int get_qp_exp_user_index(struct mlx5_ib_ucontext *ucontext,

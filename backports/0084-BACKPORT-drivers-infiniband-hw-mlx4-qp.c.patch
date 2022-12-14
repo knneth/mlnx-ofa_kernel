@@ -1,0 +1,259 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx4/qp.c
+
+Change-Id: I02c6a2e50066180c4e1cfce42ae101bb45c858e7
+---
+ drivers/infiniband/hw/mlx4/qp.c | 89 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 89 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx4/qp.c
++++ b/drivers/infiniband/hw/mlx4/qp.c
+@@ -38,6 +38,7 @@
+ #include <linux/netdevice.h>
+ #include <linux/vmalloc.h>
+ #include <net/inet_ecn.h>
++#include <linux/ratelimit.h>
+ 
+ #include <rdma/ib_cache.h>
+ #include <rdma/ib_pack.h>
+@@ -84,6 +85,12 @@ enum {
+ 	MLX4_IB_LSO_HEADER_SPARE	= 128,
+ };
+ 
++#ifndef HAVE_ETH_P_IBOE
++enum {
++	MLX4_IB_IBOE_ETHERTYPE		= 0x8915
++};
++#endif
++
+ struct mlx4_ib_sqp {
+ 	struct mlx4_ib_qp	qp;
+ 	int			pkey_index;
+@@ -755,7 +762,11 @@ static int create_qp_rss(struct mlx4_ib_
+ 	if (err)
+ 		return err;
+ 
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 	err = mlx4_qp_alloc(dev->dev, qpn, &qp->mqp);
++#else
++	err = mlx4_qp_alloc(dev->dev, qpn, &qp->mqp, GFP_KERNEL);
++#endif
+ 	if (err)
+ 		goto err_qpn;
+ 
+@@ -964,7 +975,11 @@ static int create_qp_common(struct mlx4_
+ 			    struct ib_qp_init_attr *init_attr,
+ 			    struct ib_udata *udata, int sqpn,
+ 			    struct mlx4_ib_qp **caller_qp,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 			    int is_exp)
++#else
++			    gfp_t gfp, int is_exp)
++#endif
+ {
+ 	int qpn;
+ 	int err;
+@@ -1021,14 +1036,22 @@ static int create_qp_common(struct mlx4_
+ 		if (qp_type == MLX4_IB_QPT_SMI || qp_type == MLX4_IB_QPT_GSI ||
+ 		    (qp_type & (MLX4_IB_QPT_PROXY_SMI | MLX4_IB_QPT_PROXY_SMI_OWNER |
+ 				MLX4_IB_QPT_PROXY_GSI | MLX4_IB_QPT_TUN_SMI_OWNER))) {
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 			sqp = kzalloc(sizeof(struct mlx4_ib_sqp), GFP_KERNEL);
++#else
++			sqp = kzalloc(sizeof (struct mlx4_ib_sqp), gfp);
++#endif
+ 			if (!sqp)
+ 				return -ENOMEM;
+ 			qp = &sqp->qp;
+ 			qp->pri.vid = 0xFFFF;
+ 			qp->alt.vid = 0xFFFF;
+ 		} else {
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 			qp = kzalloc(sizeof(struct mlx4_ib_qp), GFP_KERNEL);
++#else
++			qp = kzalloc(sizeof (struct mlx4_ib_qp), gfp);
++#endif
+ 			if (!qp)
+ 				return -ENOMEM;
+ 			qp->pri.vid = 0xFFFF;
+@@ -1174,7 +1197,11 @@ static int create_qp_common(struct mlx4_
+ 			goto err;
+ 
+ 		if (qp_has_rq(init_attr)) {
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 			err = mlx4_db_alloc(dev->dev, &qp->db, 0);
++#else
++			err = mlx4_db_alloc(dev->dev, &qp->db, 0, gfp);
++#endif
+ 			if (err)
+ 				goto err;
+ 
+@@ -1193,7 +1220,11 @@ static int create_qp_common(struct mlx4_
+ 		}
+ 
+ 		if (mlx4_buf_alloc(dev->dev, qp->buf_size, qp->buf_size,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 				   &qp->buf)) {
++#else
++				   &qp->buf, gfp)) {
++#endif
+ 			memcpy(&init_attr->cap, &backup_cap,
+ 			       sizeof(backup_cap));
+ 			err = set_kernel_sq_size(dev, &init_attr->cap, qp_type,
+@@ -1202,7 +1233,11 @@ static int create_qp_common(struct mlx4_
+ 				goto err_db;
+ 
+ 			if (mlx4_buf_alloc(dev->dev, qp->buf_size,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 					   PAGE_SIZE * 2, &qp->buf)) {
++#else
++					   PAGE_SIZE * 2, &qp->buf, gfp)) {
++#endif
+ 				err = -ENOMEM;
+ 				goto err_db;
+ 			}
+@@ -1213,20 +1248,36 @@ static int create_qp_common(struct mlx4_
+ 		if (err)
+ 			goto err_buf;
+ 
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 		err = mlx4_buf_write_mtt(dev->dev, &qp->mtt, &qp->buf);
++#else
++		err = mlx4_buf_write_mtt(dev->dev, &qp->mtt, &qp->buf, gfp);
++#endif
+ 		if (err)
+ 			goto err_mtt;
+ 
+ 		qp->sq.wrid = kmalloc_array(qp->sq.wqe_cnt, sizeof(u64),
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 					GFP_KERNEL | __GFP_NOWARN);
++#else
++					gfp | __GFP_NOWARN);
++#endif
+ 		if (!qp->sq.wrid)
+ 			qp->sq.wrid = __vmalloc(qp->sq.wqe_cnt * sizeof(u64),
+ 						GFP_KERNEL, PAGE_KERNEL);
+ 		qp->rq.wrid = kmalloc_array(qp->rq.wqe_cnt, sizeof(u64),
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 					GFP_KERNEL | __GFP_NOWARN);
++#else
++					gfp | __GFP_NOWARN);
++#endif
+ 		if (!qp->rq.wrid)
+ 			qp->rq.wrid = __vmalloc(qp->rq.wqe_cnt * sizeof(u64),
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 						GFP_KERNEL, PAGE_KERNEL);
++#else
++						gfp, PAGE_KERNEL);
++#endif
+ 		if (!qp->sq.wrid || !qp->rq.wrid) {
+ 			err = -ENOMEM;
+ 			goto err_wrid;
+@@ -1256,7 +1307,11 @@ static int create_qp_common(struct mlx4_
+ 	if (init_attr->create_flags & IB_QP_CREATE_BLOCK_MULTICAST_LOOPBACK)
+ 		qp->flags |= MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK;
+ 
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 	err = mlx4_qp_alloc(dev->dev, qpn, &qp->mqp);
++#else
++	err = mlx4_qp_alloc(dev->dev, qpn, &qp->mqp, gfp);
++#endif
+ 	if (err)
+ 		goto err_qpn;
+ 
+@@ -1567,6 +1622,12 @@ static struct ib_qp *_mlx4_ib_create_qp(
+ 	int sup_u_create_flags = MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK | MLX4_IB_QP_CROSS_CHANNEL |
+ 			            MLX4_IB_QP_MANAGED_SEND | MLX4_IB_QP_MANAGED_RECV;
+ 	u16 xrcdn = 0;
++#ifndef HAVE_MEMALLOC_NOIO_SAVE
++	gfp_t gfp;
++
++	gfp = (init_attr->create_flags & MLX4_IB_QP_CREATE_USE_GFP_NOIO) ?
++		GFP_NOIO : GFP_KERNEL;
++#endif
+ 
+ 	if (init_attr->rwq_ind_tbl)
+ 		return _mlx4_ib_create_qp_rss(pd, init_attr, udata);
+@@ -1583,7 +1644,12 @@ static struct ib_qp *_mlx4_ib_create_qp(
+ 					MLX4_IB_SRIOV_TUNNEL_QP |
+ 					MLX4_IB_SRIOV_SQP |
+ 					MLX4_IB_QP_NETIF |
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 					MLX4_IB_QP_CREATE_ROCE_V2_GSI))
++#else
++					MLX4_IB_QP_CREATE_ROCE_V2_GSI |
++					MLX4_IB_QP_CREATE_USE_GFP_NOIO))
++#endif
+ 		return ERR_PTR(-EINVAL);
+ 
+ 	if (init_attr->create_flags & IB_QP_CREATE_NETIF_QP) {
+@@ -1601,6 +1667,9 @@ static struct ib_qp *_mlx4_ib_create_qp(
+ 		      IB_QP_CREATE_MANAGED_RECV)) {
+ 
+ 			if ((init_attr->create_flags & ~(MLX4_IB_SRIOV_SQP |
++#ifndef HAVE_MEMALLOC_NOIO_SAVE
++							 MLX4_IB_QP_CREATE_USE_GFP_NOIO |
++#endif
+ 							 MLX4_IB_QP_CREATE_ROCE_V2_GSI  |
+ 							 MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK) &&
+ 			     init_attr->qp_type != IB_QPT_UD) ||
+@@ -1632,7 +1701,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
+ 	case IB_QPT_RC:
+ 	case IB_QPT_UC:
+ 	case IB_QPT_RAW_PACKET:
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 		qp = kzalloc(sizeof(*qp), GFP_KERNEL);
++#else
++		qp = kzalloc(sizeof(*qp), gfp);
++#endif
+ 		if (!qp)
+ 			return ERR_PTR(-ENOMEM);
+ 		qp->pri.vid = 0xFFFF;
+@@ -1641,7 +1714,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
+ 	case IB_QPT_UD:
+ 	{
+ 		err = create_qp_common(to_mdev(pd->device), pd,	MLX4_IB_QP_SRC,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 				       init_attr, udata, 0, &qp, is_exp);
++#else
++				       init_attr, udata, 0, &qp, gfp, is_exp);
++#endif
+ 		if (err) {
+ 			kfree(qp);
+ 			return ERR_PTR(err);
+@@ -1672,7 +1749,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
+ 		}
+ 
+ 		err = create_qp_common(to_mdev(pd->device), pd, MLX4_IB_QP_SRC,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 				       init_attr, udata, sqpn, &qp, is_exp);
++#else
++				       init_attr, udata, sqpn, &qp, gfp, is_exp);
++#endif
+ 		if (err)
+ 			return ERR_PTR(err);
+ 
+@@ -3309,7 +3390,11 @@ static int build_mlx_header(struct mlx4_
+ 		u16 ether_type;
+ 		u16 pcp = (be32_to_cpu(ah->av.ib.sl_tclass_flowlabel) >> 29) << 13;
+ 
++#ifdef HAVE_ETH_P_IBOE
+ 		ether_type = (!ip_version) ? ETH_P_IBOE:
++#else
++		ether_type = (!ip_version) ? MLX4_IB_IBOE_ETHERTYPE :
++#endif
+ 			(ip_version == 4 ? ETH_P_IP : ETH_P_IPV6);
+ 
+ 		mlx->sched_prio = cpu_to_be16(pcp);
+@@ -4434,7 +4519,11 @@ struct ib_wq *mlx4_ib_create_wq(struct i
+ 	ib_qp_init_attr.send_cq = ib_qp_init_attr.recv_cq; /* Dummy CQ */
+ 
+ 	err = create_qp_common(dev, pd, MLX4_IB_RWQ_SRC, &ib_qp_init_attr,
++#ifdef HAVE_MEMALLOC_NOIO_SAVE
+ 			       udata, 0, &qp, 0);
++#else
++			       udata, 0, &qp, GFP_KERNEL, 0);
++#endif
+ 	if (err) {
+ 		kfree(qp);
+ 		return ERR_PTR(err);

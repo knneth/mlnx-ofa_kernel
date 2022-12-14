@@ -1,0 +1,158 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+
+Change-Id: Id4df6f59658c8e54884b99aade20337587149c3e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs.c | 54 ++++++++++++++++++++++++-
+ 1 file changed, 52 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+@@ -79,8 +79,9 @@ static void mlx5e_add_l2_to_hash(struct
+ 	struct mlx5e_l2_hash_node *hn;
+ 	int ix = mlx5e_hash_l2(addr);
+ 	int found = 0;
++	COMPAT_HL_NODE
+ 
+-	hlist_for_each_entry(hn, &hash[ix], hlist)
++	compat_hlist_for_each_entry(hn, &hash[ix], hlist)
+ 		if (ether_addr_equal_64bits(hn->ai.addr, addr)) {
+ 			found = 1;
+ 			break;
+@@ -305,18 +306,49 @@ void mlx5e_disable_vlan_filter(struct ml
+ 	mlx5e_add_any_vid_rules(priv);
+ }
+ 
++#if defined(HAVE_NDO_RX_ADD_VID_HAS_3_PARAMS)
+ int mlx5e_vlan_rx_add_vid(struct net_device *dev, __always_unused __be16 proto,
+ 			  u16 vid)
++#elif defined(HAVE_NDO_RX_ADD_VID_HAS_2_PARAMS_RET_INT)
++int mlx5e_vlan_rx_add_vid(struct net_device *dev, u16 vid)
++#else
++void mlx5e_vlan_rx_add_vid(struct net_device *dev, u16 vid)
++#endif
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 
++#if (1) /* MLX5E TRUE backport*/
++
++	/* This is a WA for old kernels (<3.10) that don't delete vlan id 0
++	 * when the interface goes down.
++	 */
++	if (test_bit(vid, priv->fs.vlan.active_vlans))
++#if (defined(HAVE_NDO_RX_ADD_VID_HAS_3_PARAMS) || \
++     defined(HAVE_NDO_RX_ADD_VID_HAS_2_PARAMS_RET_INT))
++		return 0;
++#else
++		return;
++#endif
++#endif
++
+ 	set_bit(vid, priv->fs.vlan.active_vlans);
+ 
++#if (defined(HAVE_NDO_RX_ADD_VID_HAS_3_PARAMS) || \
++     defined(HAVE_NDO_RX_ADD_VID_HAS_2_PARAMS_RET_INT))
+ 	return mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_VID, vid);
++#else
++	mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_VID, vid);
++#endif
+ }
+ 
++#if defined(HAVE_NDO_RX_ADD_VID_HAS_3_PARAMS)
+ int mlx5e_vlan_rx_kill_vid(struct net_device *dev, __always_unused __be16 proto,
+ 			   u16 vid)
++#elif defined(HAVE_NDO_RX_ADD_VID_HAS_2_PARAMS_RET_INT)
++int mlx5e_vlan_rx_kill_vid(struct net_device *dev, u16 vid)
++#else
++void mlx5e_vlan_rx_kill_vid(struct net_device *dev, u16 vid)
++#endif
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 
+@@ -324,7 +356,10 @@ int mlx5e_vlan_rx_kill_vid(struct net_de
+ 
+ 	mlx5e_del_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_MATCH_VID, vid);
+ 
++#if (defined(HAVE_NDO_RX_ADD_VID_HAS_3_PARAMS) || \
++     defined(HAVE_NDO_RX_ADD_VID_HAS_2_PARAMS_RET_INT))
+ 	return 0;
++#endif
+ }
+ 
+ static void mlx5e_add_vlan_rules(struct mlx5e_priv *priv)
+@@ -359,7 +394,7 @@ static void mlx5e_del_vlan_rules(struct
+ 
+ #define mlx5e_for_each_hash_node(hn, tmp, hash, i) \
+ 	for (i = 0; i < MLX5E_L2_ADDR_HASH_SIZE; i++) \
+-		hlist_for_each_entry_safe(hn, tmp, &hash[i], hlist)
++		compat_hlist_for_each_entry_safe(hn, tmp, &hash[i], hlist)
+ 
+ static void mlx5e_execute_l2_action(struct mlx5e_priv *priv,
+ 				    struct mlx5e_l2_hash_node *hn)
+@@ -394,6 +429,9 @@ static void mlx5e_sync_netdev_addr(struc
+ {
+ 	struct net_device *netdev = priv->netdev;
+ 	struct netdev_hw_addr *ha;
++#ifndef HAVE_NETDEV_FOR_EACH_MC_ADDR
++	struct dev_mc_list *mclist;
++#endif
+ 
+ 	netif_addr_lock_bh(netdev);
+ 
+@@ -403,8 +441,14 @@ static void mlx5e_sync_netdev_addr(struc
+ 	netdev_for_each_uc_addr(ha, netdev)
+ 		mlx5e_add_l2_to_hash(priv->fs.l2.netdev_uc, ha->addr);
+ 
++#ifdef HAVE_NETDEV_FOR_EACH_MC_ADDR
+ 	netdev_for_each_mc_addr(ha, netdev)
+ 		mlx5e_add_l2_to_hash(priv->fs.l2.netdev_mc, ha->addr);
++#else
++	for (mclist = netdev->mc_list; mclist; mclist = mclist->next)
++		mlx5e_add_l2_to_hash(priv->fs.l2.netdev_mc,
++				     mclist->dmi_addr);
++#endif
+ 
+ 	netif_addr_unlock_bh(netdev);
+ }
+@@ -419,6 +463,7 @@ static void mlx5e_fill_addr_array(struct
+ 	struct hlist_node *tmp;
+ 	int i = 0;
+ 	int hi;
++	COMPAT_HL_NODE
+ 
+ 	addr_list = is_uc ? priv->fs.l2.netdev_uc : priv->fs.l2.netdev_mc;
+ 
+@@ -448,6 +493,7 @@ static void mlx5e_vport_context_update_a
+ 	int size;
+ 	int err;
+ 	int hi;
++	COMPAT_HL_NODE
+ 
+ 	size = is_uc ? 0 : (priv->fs.l2.broadcast_enabled ? 1 : 0);
+ 	max_size = is_uc ?
+@@ -499,6 +545,7 @@ static void mlx5e_apply_netdev_addr(stru
+ 	struct mlx5e_l2_hash_node *hn;
+ 	struct hlist_node *tmp;
+ 	int i;
++	COMPAT_HL_NODE
+ 
+ 	mlx5e_for_each_hash_node(hn, tmp, priv->fs.l2.netdev_uc, i)
+ 		mlx5e_execute_l2_action(priv, hn);
+@@ -512,6 +559,7 @@ static void mlx5e_handle_netdev_addr(str
+ 	struct mlx5e_l2_hash_node *hn;
+ 	struct hlist_node *tmp;
+ 	int i;
++	COMPAT_HL_NODE
+ 
+ 	mlx5e_for_each_hash_node(hn, tmp, priv->fs.l2.netdev_uc, i)
+ 		hn->action = MLX5E_ACTION_DEL;
+@@ -1486,7 +1534,9 @@ int mlx5e_create_flow_steering(struct ml
+ 	if (err) {
+ 		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
+ 			   err);
++#ifdef HAVE_NETDEV_HW_FEATURES
+ 		priv->netdev->hw_features &= ~NETIF_F_NTUPLE;
++#endif
+ 	}
+ 
+ 	err = mlx5e_create_inner_ttc_table(priv);

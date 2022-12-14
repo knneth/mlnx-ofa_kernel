@@ -55,11 +55,15 @@ fi
 
 . $CONFIG
 
+# Allow calling the service script with the option 'stop' for unloading the driver stack.
+# This flag should be disabled when the OS root file system is on remote storage.
+ALLOW_STOP=${ALLOW_STOP:-"yes"}
+
 RUN_SYSCTL=${RUN_SYSCTL:-"no"}
 RUN_MLNX_TUNE=${RUN_MLNX_TUNE:-"no"}
 
-UNLOAD_MODULES="mlx5_ib mlx5_core mlx4_fc mlx4_en mlx4_ib mlx4_core memtrack compat mlx_compat"
-STATUS_MODULES="mlx4_en mlx4_core mlx5_core"
+UNLOAD_MODULES="mlx5_ib mlx5_core mlx4_fc mlx4_en mlx4_ib mlx4_core mlxfw memtrack compat mlx_compat"
+STATUS_MODULES="mlx4_en mlx4_core mlx5_core mlxfw"
 
 # Allow unsupported modules, if disallowed by current configuration
 modprobe=/sbin/modprobe
@@ -675,6 +679,17 @@ case $ACTION in
         RC=$?
         ;;
     stop)
+        echo "WARNING: Option 'stop' is deprecated and will be replaced by 'force-stop' in next release."
+        if [ "X${ALLOW_STOP}" != "Xyes" ]; then
+            echo "ERROR: Option 'stop' is disabled!"
+            log_msg "ERROR: Option 'stop' is disabled!"
+            echo "Either use 'force-stop', or enable 'stop' by setting 'ALLOW_STOP=yes' in your ${CONFIG} file"
+            exit 1
+        fi
+        stop
+        RC=$?
+        ;;
+    force-stop)
         stop
         RC=$?
         ;;
@@ -690,7 +705,7 @@ case $ACTION in
         ;;
     *)
         echo
-        echo "Usage: `basename $0` {start|stop|restart|status}"
+        echo "Usage: `basename $0` {start|stop|force-stop|restart|status}"
         echo
         exit 1
         ;;

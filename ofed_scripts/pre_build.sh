@@ -42,3 +42,7 @@ find compat -type f -exec touch -t 200012201010 '{}' \; || true
 make -j${NJOBS:-1}
 
 ./ofed_scripts/install_helper
+
+# copy the ofa-kernel build headers
+export ofa_build_src=/usr/src/ofa_kernel/${kernelver}
+./ofed_scripts/dkms_ofed_post_build.sh

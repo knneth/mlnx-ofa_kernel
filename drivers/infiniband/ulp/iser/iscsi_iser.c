@@ -77,7 +77,6 @@
 MODULE_DESCRIPTION("iSER (iSCSI Extensions for RDMA) Datamover");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Alex Nezhinsky, Dan Bar Dov, Or Gerlitz");
-MODULE_VERSION(DRV_VER);
 
 static struct scsi_host_template iscsi_iser_sht;
 static struct iscsi_transport iscsi_iser_transport;
@@ -984,10 +983,10 @@ static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
 
 	session = starget_to_session(scsi_target(sdev))->dd_data;
 	iser_conn = session->leadconn->dd_data;
-	if(!iser_conn) {
-                mutex_unlock(&unbind_iser_conn_mutex);
-                return -ENOTCONN;
-        }
+	if (!iser_conn) {
+		mutex_unlock(&unbind_iser_conn_mutex);
+		return -ENOTCONN;
+	}
 	ib_dev = iser_conn->ib_conn.device->ib_device;
 
 	if (!(ib_dev->attrs.device_cap_flags & IB_DEVICE_SG_GAPS_REG))

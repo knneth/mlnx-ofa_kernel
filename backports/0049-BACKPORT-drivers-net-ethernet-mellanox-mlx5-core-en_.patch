@@ -1,0 +1,46 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+
+Change-Id: I3189c0a6e109ca57d97c2f75e0f95c05b1b14693
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_stats.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+@@ -74,6 +74,11 @@ struct mlx5e_sw_stats {
+ 	u64 tx_queue_wake;
+ 	u64 tx_queue_dropped;
+ 	u64 tx_xmit_more;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	u64 rx_sw_lro_aggregated;
++	u64 rx_sw_lro_flushed;
++	u64 rx_sw_lro_no_desc;
++#endif
+ 	u64 rx_wqe_err;
+ 	u64 rx_mpwqe_filler;
+ 	u64 rx_buff_alloc_err;
+@@ -115,6 +120,11 @@ static const struct counter_desc sw_stat
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_queue_wake) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_queue_dropped) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xmit_more) },
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_sw_lro_aggregated) },
++	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_sw_lro_flushed) },
++	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_sw_lro_no_desc) },
++#endif
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_wqe_err) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler) },
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_buff_alloc_err) },
+@@ -433,7 +443,11 @@ struct mlx5e_stats {
+ 	struct mlx5e_qcounter_stats qcnt;
+ 	struct mlx5e_vport_stats vport;
+ 	struct mlx5e_pport_stats pport;
++#ifdef HAVE_RTNL_LINK_STATS64
+ 	struct rtnl_link_stats64 vf_vport;
++#else
++	struct rtnl_link_stats vf_vport;
++#endif
+ 	struct mlx5e_pcie_stats pcie;
+ };
+ 

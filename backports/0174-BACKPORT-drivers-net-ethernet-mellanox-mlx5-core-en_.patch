@@ -1,0 +1,25 @@
+From: Huy Nguyen <huyn@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_trust.c
+
+Change-Id: I15271e64ba17d9ed4a2aebd1190027c61671cdce
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_trust.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_trust.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_trust.c
+@@ -31,6 +31,8 @@
+  */
+ #include "en_trust.h"
+ 
++#ifdef HAVE_IEEE_DCBNL_ETS
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ static void mlx5e_trust_update_txsq_inline_mode(struct mlx5e_priv *priv)
+ {
+ 	struct mlx5e_channels new_channels = {};
+@@ -100,3 +102,5 @@ u8 mlx5e_trust_get_txsq_inline_mode(stru
+ 	else
+ 		return params->tx_min_inline_mode;
+ }
++#endif
++#endif

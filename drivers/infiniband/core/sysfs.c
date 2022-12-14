@@ -194,6 +194,19 @@ static ssize_t sm_lid_show(struct ib_port *p, struct port_attribute *unused,
 	return sprintf(buf, "0x%x\n", attr.sm_lid);
 }
 
+static ssize_t has_smi_show(struct ib_port *p, struct port_attribute *unused,
+			    char *buf)
+{
+	struct ib_port_attr attr;
+	ssize_t ret;
+
+	ret = ib_query_port(p->ibdev, p->port_num, &attr);
+	if (ret)
+		return ret;
+
+	return sprintf(buf, "%d\n", attr.has_smi);
+}
+
 static ssize_t sm_sl_show(struct ib_port *p, struct port_attribute *unused,
 			  char *buf)
 {
@@ -295,12 +308,14 @@ static PORT_ATTR_RO(cap_mask);
 static PORT_ATTR_RO(rate);
 static PORT_ATTR_RO(phys_state);
 static PORT_ATTR_RO(link_layer);
+static PORT_ATTR_RO(has_smi);
 
 static struct attribute *port_default_attrs[] = {
 	&port_attr_state.attr,
 	&port_attr_lid.attr,
 	&port_attr_lid_mask_count.attr,
 	&port_attr_sm_lid.attr,
+	&port_attr_has_smi.attr,
 	&port_attr_sm_sl.attr,
 	&port_attr_cap_mask.attr,
 	&port_attr_rate.attr,
@@ -1124,12 +1139,8 @@ static ssize_t show_node_type(struct device *device,
 	switch (dev->node_type) {
 	case RDMA_NODE_IB_CA:	  return sprintf(buf, "%d: CA\n", dev->node_type);
 	case RDMA_NODE_RNIC:	  return sprintf(buf, "%d: RNIC\n", dev->node_type);
-	case RDMA_NODE_USNIC:	  return sprintf(buf, "%d: usNIC\n", dev->node_type);
 	case RDMA_NODE_USNIC_UDP: return sprintf(buf, "%d: usNIC UDP\n", dev->node_type);
-	case RDMA_NODE_IB_SWITCH: return sprintf(buf, "%d: switch\n", dev->node_type);
-	case RDMA_NODE_IB_ROUTER: return sprintf(buf, "%d: router\n", dev->node_type);
-	case RDMA_EXP_NODE_MIC:	  return sprintf(buf, "%d: MIC\n",
-						 dev->node_type);
+	case RDMA_EXP_NODE_MIC:	  return sprintf(buf, "%d: MIC\n", dev->node_type);
 	default:		  return sprintf(buf, "%d: <unknown>\n", dev->node_type);
 	}
 }
@@ -1190,8 +1201,8 @@ static ssize_t show_fw_ver(struct device *device, struct device_attribute *attr,
 {
 	struct ib_device *dev = container_of(device, struct ib_device, dev);
 
-	ib_get_device_fw_str(dev, buf, PAGE_SIZE);
-	strlcat(buf, "\n", PAGE_SIZE);
+	ib_get_device_fw_str(dev, buf);
+	strlcat(buf, "\n", IB_FW_VERSION_NAME_MAX);
 	return strlen(buf);
 }
 

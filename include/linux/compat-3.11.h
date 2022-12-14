@@ -38,6 +38,12 @@ size_t sg_pcopy_from_buffer(struct scatterlist *sgl, unsigned int nents,
 size_t sg_pcopy_to_buffer(struct scatterlist *sgl, unsigned int nents,
 			  void *buf, size_t buflen, off_t skip);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+#define fixed_size_llseek LINUX_BACKPORT(fixed_size_llseek)
+loff_t fixed_size_llseek(struct file *file, loff_t offset, int whence,
+			 loff_t size);
+#endif
+
 #endif
 
 #endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0)) */

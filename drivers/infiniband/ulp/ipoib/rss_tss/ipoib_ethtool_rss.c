@@ -78,6 +78,7 @@ static void ipoib_get_ethtool_stats_rss(struct net_device *dev,
 		data[index++] = rx_stats->rx_bytes;
 		data[index++] = rx_stats->rx_errors;
 		data[index++] = rx_stats->rx_dropped;
+		data[index++] = rx_stats->multicast;
 		recv_ring++;
 	}
 	send_ring = priv->send_ring;
@@ -111,6 +112,8 @@ static void ipoib_get_strings_rss(struct net_device __always_unused *dev,
 					"rx%d_errors", i);
 			sprintf(data + (index++) * ETH_GSTRING_LEN,
 					"rx%d_dropped", i);
+			sprintf(data + (index++) * ETH_GSTRING_LEN,
+					"multicast");
 		}
 		for (i = 0; i < priv->num_tx_queues; i++) {
 			sprintf(data + (index++) * ETH_GSTRING_LEN,
@@ -136,7 +139,7 @@ static int ipoib_get_sset_count_rss(struct net_device __always_unused *dev,
 
 	switch (sset) {
 	case ETH_SS_STATS:
-		return (priv->num_rx_queues + priv->num_tx_queues) * 4;
+		return ((priv->num_rx_queues * 5) + (priv->num_tx_queues * 4));
 	case ETH_SS_TEST:
 	default:
 		break;
@@ -222,7 +225,7 @@ static const struct ethtool_ops *ipoib_ethtool_ops_select;
 
 void ipoib_select_ethtool_ops(struct ipoib_dev_priv *priv)
 {
-	if (priv->hca_caps_exp & IB_EXP_DEVICE_UD_RSS)
+	if (priv->max_tx_queues > 1)
 		ipoib_ethtool_ops_select = &ipoib_ethtool_ops_rss;
 	else
 		ipoib_ethtool_ops_select = &ipoib_ethtool_ops;
