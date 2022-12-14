@@ -33,7 +33,7 @@ Change-Id: If48096ef7859169f3f7cccbd5e000506f780ed11
 +#endif
 +
  #define DRV_NAME	MLX4_IB_DRV_NAME
- #define DRV_VERSION	"4.2-1.0.0"
+ #define DRV_VERSION	"4.2-1.2.0"
  
 @@ -175,6 +187,7 @@ static struct net_device *mlx4_ib_get_ne
  	dev = mlx4_get_protocol_dev(ibdev->dev, MLX4_PROT_ETH, port_num);

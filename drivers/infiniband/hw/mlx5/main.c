@@ -66,7 +66,7 @@
 #include <linux/mlx5/vport.h>
 
 #define DRIVER_NAME "mlx5_ib"
-#define DRIVER_VERSION	"4.2-1.0.0"
+#define DRIVER_VERSION	"4.2-1.2.0"
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB HCA IB driver");
@@ -1481,6 +1481,7 @@ static struct ib_ucontext *mlx5_ib_alloc_ucontext(struct ib_device *ibdev,
 	}
 
 	INIT_LIST_HEAD(&context->vma_private_list);
+	mutex_init(&context->vma_private_list_mutex);
 	INIT_LIST_HEAD(&context->db_page_list);
 	mutex_init(&context->db_page_mutex);
 
@@ -1653,7 +1654,9 @@ static void  mlx5_ib_vma_close(struct vm_area_struct *area)
 	 * mlx5_ib_disassociate_ucontext().
 	 */
 	mlx5_ib_vma_priv_data->vma = NULL;
+	mutex_lock(mlx5_ib_vma_priv_data->vma_private_list_mutex);
 	list_del(&mlx5_ib_vma_priv_data->list);
+	mutex_unlock(mlx5_ib_vma_priv_data->vma_private_list_mutex);
 	kfree(mlx5_ib_vma_priv_data);
 }
 
@@ -1669,10 +1672,13 @@ void mlx5_ib_set_vma_data(struct vm_area_struct *vma,
 	struct list_head *vma_head = &ctx->vma_private_list;
 
 	vma_prv->vma = vma;
+	vma_prv->vma_private_list_mutex = &ctx->vma_private_list_mutex;
 	vma->vm_private_data = vma_prv;
 	vma->vm_ops =  &mlx5_ib_vm_ops;
 
+	mutex_lock(&ctx->vma_private_list_mutex);
 	list_add(&vma_prv->list, vma_head);
+	mutex_unlock(&ctx->vma_private_list_mutex);
 }
 
 static void mlx5_ib_disassociate_ucontext(struct ib_ucontext *ibcontext)
@@ -3889,28 +3895,12 @@ static int mlx5_ib_query_cong_counters(struct mlx5_ib_dev *dev,
 				       struct mlx5_ib_port *port,
 				       struct rdma_hw_stats *stats)
 {
-	int outlen = MLX5_ST_SZ_BYTES(query_cong_statistics_out);
-	void *out;
-	int ret, i;
 	int offset = port->cnts.num_q_counters;
 
-	out = kvzalloc(outlen, GFP_KERNEL);
-	if (!out)
-		return -ENOMEM;
-
-	ret = mlx5_cmd_query_cong_counter(dev->mdev, false, out, outlen);
-	if (ret)
-		goto free;
-
-	for (i = 0; i < port->cnts.num_cong_counters; i++) {
-		stats->value[i + offset] =
-			be64_to_cpup((__be64 *)(out +
-				     port->cnts.offsets[i + offset]));
-	}
-
-free:
-	kvfree(out);
-	return ret;
+	return mlx5_lag_query_cong_counters(dev->mdev,
+					    stats->value + offset,
+					    port->cnts.num_cong_counters,
+					    port->cnts.offsets + offset);
 }
 
 static int mlx5_ib_get_hw_stats(struct ib_device *ibdev,

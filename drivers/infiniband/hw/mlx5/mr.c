@@ -336,9 +336,9 @@ static void __cache_work_func(struct mlx5_cache_ent *ent)
 		 */
 		dtime = (cache->last_add + (s64)cache->rel_timeout * HZ) -
 			jiffies;
-		if (cache->rel_imm ||
-		    (cache->rel_timeout >= 0 && !someone_adding(cache) &&
-		     dtime <= 0)) {
+		if (cache->rel_imm || (!need_resched() &&
+		    cache->rel_timeout >= 0 && !someone_adding(cache) &&
+		    dtime <= 0)) {
 			remove_keys(dev, i, 1);
 			if (ent->cur > ent->limit)
 				queue_work(cache->wq, &ent->work);
@@ -536,7 +536,6 @@ int mlx5_mr_cache_init(struct mlx5_ib_dev *dev)
 		init_completion(&ent->compl);
 		INIT_WORK(&ent->work, cache_work_func);
 		INIT_DELAYED_WORK(&ent->dwork, delayed_cache_work_func);
-		queue_work(cache->wq, &ent->work);
 
 		if (i > MR_CACHE_LAST_STD_ENTRY) {
 			mlx5_odp_init_mr_cache_entry(ent);
@@ -555,6 +554,7 @@ int mlx5_mr_cache_init(struct mlx5_ib_dev *dev)
 			ent->limit = dev->mdev->profile->mr_cache[i].limit;
 		else
 			ent->limit = 0;
+		queue_work(cache->wq, &ent->work);
 	}
 
 	err = mlx5_mr_sysfs_init(dev);

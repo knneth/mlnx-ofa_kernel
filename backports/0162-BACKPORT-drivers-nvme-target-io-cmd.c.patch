@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd.c
 
 Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
 ---
- drivers/nvme/target/io-cmd.c | 91 +++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 90 insertions(+), 1 deletion(-)
+ drivers/nvme/target/io-cmd.c | 90 +++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 89 insertions(+), 1 deletion(-)
 
 --- a/drivers/nvme/target/io-cmd.c
 +++ b/drivers/nvme/target/io-cmd.c
@@ -67,7 +67,7 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
  			op_flags |= REQ_FUA;
  	} else {
-@@ -72,11 +94,20 @@ static void nvmet_execute_rw(struct nvme
+@@ -72,11 +94,19 @@ static void nvmet_execute_rw(struct nvme
  	nvmet_inline_bio_init(req);
  	bio = &req->inline_bio;
  	bio->bi_bdev = req->ns->bdev;
@@ -81,14 +81,13 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  	bio_set_op_attrs(bio, op, op_flags);
  
 +#ifdef HAVE_RH7_STRUCT_BIO_AUX
-+	bio->bio_aux = kmalloc(sizeof(struct bio_aux), GFP_KERNEL);
-+	bio_init_aux(bio, bio->bio_aux);
++	bio_init_aux(bio, &req->bio_aux);
 +#endif
 +
  	for_each_sg(req->sg, sg, req->sg_cnt, i) {
  		while (bio_add_page(bio, sg_page(sg), sg->length, sg->offset)
  				!= sg->length) {
-@@ -84,20 +115,37 @@ static void nvmet_execute_rw(struct nvme
+@@ -84,20 +114,37 @@ static void nvmet_execute_rw(struct nvme
  
  			bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
  			bio->bi_bdev = req->ns->bdev;
@@ -127,7 +126,7 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  }
  
  static void nvmet_execute_flush(struct nvmet_req *req)
-@@ -110,18 +158,33 @@ static void nvmet_execute_flush(struct n
+@@ -110,18 +157,33 @@ static void nvmet_execute_flush(struct n
  	bio->bi_bdev = req->ns->bdev;
  	bio->bi_private = req;
  	bio->bi_end_io = nvmet_bio_done;
@@ -161,7 +160,7 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  		return NVME_SC_INTERNAL | NVME_SC_DNR;
  	return 0;
  }
-@@ -148,10 +211,22 @@ static void nvmet_execute_discard(struct
+@@ -148,10 +210,22 @@ static void nvmet_execute_discard(struct
  		bio->bi_private = req;
  		bio->bi_end_io = nvmet_bio_done;
  		if (status) {
@@ -184,7 +183,7 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  		}
  	} else {
  		nvmet_req_complete(req, status);
-@@ -173,6 +248,7 @@ static void nvmet_execute_dsm(struct nvm
+@@ -173,6 +247,7 @@ static void nvmet_execute_dsm(struct nvm
  	}
  }
  
@@ -192,7 +191,7 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  static void nvmet_execute_write_zeroes(struct nvmet_req *req)
  {
  	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
-@@ -186,18 +262,29 @@ static void nvmet_execute_write_zeroes(s
+@@ -186,18 +261,29 @@ static void nvmet_execute_write_zeroes(s
  	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length)) <<
  		(req->ns->blksize_shift - 9)) + 1;
  
@@ -222,7 +221,7 @@ Change-Id: I55da76d67c65ab0777427dc4830fd28d7c7b630e
  
  u16 nvmet_parse_io_cmd(struct nvmet_req *req)
  {
-@@ -229,9 +316,11 @@ u16 nvmet_parse_io_cmd(struct nvmet_req
+@@ -229,9 +315,11 @@ u16 nvmet_parse_io_cmd(struct nvmet_req
  		req->data_len = (le32_to_cpu(cmd->dsm.nr) + 1) *
  			sizeof(struct nvme_dsm_range);
  		return 0;

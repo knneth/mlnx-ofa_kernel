@@ -837,10 +837,12 @@ static ssize_t mlx5e_show_buffer_size(struct device *device,
 
 	len += sprintf(buf + len, "Port buffer size = %d\n", port_buffer.port_buffer_size);
 	len += sprintf(buf + len, "Spare buffer size = %d\n", port_buffer.spare_buffer_size);
-	len += sprintf(buf + len, "Buffer\tSize\n");
+	len += sprintf(buf + len, "Buffer\tSize\txoff_threshold\txon_threshold\n");
 	for (i = 0; i < MLX5E_MAX_BUFFER; i++)
-		len += sprintf(buf + len, "%d\t%d\n",
-			       i, port_buffer.buffer[i].size);
+		len += sprintf(buf + len, "%d\t%d\t%d\t\t%d\n", i,
+			       port_buffer.buffer[i].size,
+			       port_buffer.buffer[i].xoff,
+			       port_buffer.buffer[i].xon);
 
 	return len;
 }

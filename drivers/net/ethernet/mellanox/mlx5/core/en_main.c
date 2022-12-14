@@ -43,9 +43,6 @@
 #include "en_accel/ipsec_rxtx.h"
 #include "accel/ipsec.h"
 #include "vxlan.h"
-#ifdef CONFIG_MLX5_CORE_EN_DCB
-#include "en_trust.h"
-#endif
 
 struct mlx5e_rq_param {
 	u32			rqc[MLX5_ST_SZ_DW(rqc)];
@@ -1239,7 +1236,6 @@ static int mlx5e_alloc_txqsq(struct mlx5e_channel *c,
 			     struct mlx5e_txqsq *sq)
 {
 	void *sqc_wq               = MLX5_ADDR_OF(sqc, param->sqc, wq);
-	struct mlx5e_priv    *priv = c->priv;
 	struct mlx5_core_dev *mdev = c->mdev;
 	int err;
 
@@ -1251,11 +1247,7 @@ static int mlx5e_alloc_txqsq(struct mlx5e_channel *c,
 	sq->txq_ix    = txq_ix;
 	sq->uar_map   = mdev->mlx5e_res.bfreg.map;
 	sq->max_inline      = params->tx_max_inline;
-#ifdef CONFIG_MLX5_CORE_EN_DCB
-	sq->min_inline_mode = mlx5e_trust_get_txsq_inline_mode(priv);
-#else
 	sq->min_inline_mode = params->tx_min_inline_mode;
-#endif
 	if (MLX5_IPSEC_DEV(c->priv->mdev))
 		set_bit(MLX5E_SQ_STATE_IPSEC, &sq->state);
 
@@ -4365,10 +4357,7 @@ void mlx5e_build_nic_params(struct mlx5_core_dev *mdev,
 
 	/* TX inline */
 	params->tx_max_inline = mlx5e_get_max_inline_cap(mdev);
-	mlx5_query_min_inline(mdev, &params->tx_min_inline_mode);
-	if (params->tx_min_inline_mode == MLX5_INLINE_MODE_NONE &&
-	    !MLX5_CAP_ETH(mdev, wqe_vlan_insert))
-		params->tx_min_inline_mode = MLX5_INLINE_MODE_L2;
+	params->tx_min_inline_mode = mlx5e_params_calculate_tx_min_inline(mdev);
 
 	/* RSS */
 	params->rss_hfunc = ETH_RSS_HASH_XOR;
@@ -4378,6 +4367,8 @@ void mlx5e_build_nic_params(struct mlx5_core_dev *mdev,
 
 	/* Sniffer is off by default - performance wise */
 	MLX5E_SET_PFLAG(params, MLX5E_PFLAG_SNIFFER, 0);
+
+	MLX5E_SET_PFLAG(params, MLX5E_PFLAG_PER_CH_STATS, true);
 }
 
 static void mlx5e_build_nic_netdev_priv(struct mlx5_core_dev *mdev,

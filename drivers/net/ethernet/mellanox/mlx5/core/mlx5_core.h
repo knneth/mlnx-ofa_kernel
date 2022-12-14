@@ -40,7 +40,7 @@
 #include <linux/firmware.h>
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.2-1.0.0"
+#define DRIVER_VERSION	"4.2-1.2.0"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 

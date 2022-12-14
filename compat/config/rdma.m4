@@ -1118,21 +1118,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if netdevice.h has napi_hash_add])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/netdevice.h>
-	],[
-		napi_hash_add(NULL);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NAPI_HASH_ADD, 1,
-			  [napi_hash_add is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
         AC_MSG_CHECKING([if netdevice.h has netif_keep_dst])
         MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>

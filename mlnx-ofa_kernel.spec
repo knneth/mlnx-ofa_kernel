@@ -64,7 +64,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 4.2}
-%{!?_release: %global _release OFED.4.2.1.0.0.1.gf36c870}
+%{!?_release: %global _release OFED.4.2.1.2.0.1.gf8de107}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -112,7 +112,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.2.0.tgz
 
 
 # build KMP rpms?
@@ -123,7 +123,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %defattr(644,root,root,755)
 /lib/modules/%2-%1
 %if "%{_vendor}" == "redhat"
-%{_sysconfdir}/depmod.d/zz01-%{_name}.conf
+%config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}.conf
 %endif
 EOF)
 %(echo "Requires: %{utils_pname}" > %{_builddir}/preamble)
@@ -166,7 +166,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.2.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -198,7 +198,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.2-1.2.0.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -330,7 +330,7 @@ find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} 
 %if "%{_vendor}" == "redhat"
 %if "%{KMP}" == "1"
 %{__install} -d %{buildroot}%{_sysconfdir}/depmod.d/
-for module in `find %{buildroot}/ -name '*.ko' -o -name '*.ko.gz'`
+for module in `find %{buildroot}/ -name '*.ko' -o -name '*.ko.gz' | sort`
 do
 ko_name=${module##*/}
 mod_name=${ko_name/.ko*/}
@@ -380,6 +380,7 @@ install -d %{buildroot}/etc/systemd/system
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/openibd.service %{buildroot}%{_unitdir}
 install -m 0644 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/mlnx_interface_mgr\@.service %{buildroot}/etc/systemd/system
 echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/usr/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
+echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/usr/bin/systemctl stop mlnx_interface_mgr@$env{INTERFACE}.service"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules
 %else
 # no systemd support
 echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add", RUN+="/bin/mlnx_interface_mgr.sh $env{INTERFACE} <&- >/dev/null 2>&1 &"' >> %{buildroot}/etc/udev/rules.d/90-ib.rules

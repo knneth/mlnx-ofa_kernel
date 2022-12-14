@@ -1069,7 +1069,9 @@ static int handle_counter(struct mlx4_dev *dev, struct mlx4_qp_context *qpc,
 			  u8 slave, int port)
 {
 	if (PF_USES_EXT_COUNTERS(dev) &&
-	    qpc->pri_path.counter_index == MLX4_OLD_SINK_COUNTER_INDEX) {
+	    (qpc->pri_path.counter_index == MLX4_OLD_SINK_COUNTER_INDEX ||
+	     (!qpc->pri_path.counter_index && slave > 0 &&
+	      (dev->caps.port_type[port] == MLX4_PORT_TYPE_IB)))) {
 		qpc->pri_path.counter_index = MLX4_SINK_COUNTER_INDEX(dev);
 		mlx4_dbg(dev, "%s: modifying sink counter index to %d. slave=%d, port = %d\n",
 			 __func__, qpc->pri_path.counter_index, slave, port);

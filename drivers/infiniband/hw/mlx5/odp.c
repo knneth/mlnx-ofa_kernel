@@ -670,6 +670,46 @@ struct pf_frame {
 	int depth;
 };
 
+static int pagefault_stride_block(void *pklm, size_t *offset, size_t *bcnt,
+				  struct pf_frame **head, int depth)
+{
+	struct mlx5_stride_block_ctrl_seg *sbc = pklm;
+	struct mlx5_stride_block_entry *sbe = (void *)(sbc + 1);
+	size_t bcount = be32_to_cpu(sbc->bcount_per_cycle) *
+			be32_to_cpu(sbc->repeat_count);
+	int j, nent = be16_to_cpu(sbc->num_entries);
+	int cycle_offset, cycle_count;
+	struct pf_frame *frame;
+
+	if (*offset >= bcount) {
+		*offset -= bcount;
+		return nent;
+	}
+
+	cycle_offset = *offset / be32_to_cpu(sbc->bcount_per_cycle);
+	cycle_count = DIV_ROUND_UP(min_t(size_t, *bcnt + *offset, bcount),
+			be32_to_cpu(sbc->bcount_per_cycle)) - cycle_offset;
+
+	for (j = 0; j < nent; j++, sbe++) {
+		frame = kzalloc(sizeof(*frame), GFP_KERNEL);
+		if (!frame)
+			return -ENOMEM;
+
+		frame->key = be32_to_cpu(sbe->key);
+		frame->io_virt = be64_to_cpu(sbe->va) +
+			cycle_offset * be16_to_cpu(sbe->stride);
+		frame->bcnt = cycle_count * be16_to_cpu(sbe->stride);
+		frame->depth = depth + 1;
+		frame->next = *head;
+		*head = frame;
+	}
+
+	*bcnt -= min_t(size_t, *bcnt, bcount);
+	*offset = 0;
+
+	return nent;
+}
+
 /*
  * Handle a single data segment in a page-fault WQE or RDMA region.
  *
@@ -777,6 +817,23 @@ next_mr:
 					      memory_key_mkey_entry.start_addr);
 
 		for (i = 0; bcnt && i < ndescs; i++, pklm++) {
+			if (pklm->key == cpu_to_be32(MLX5_STRIDE_BLOCK_OP)) {
+				ret = pagefault_stride_block(pklm, &offset,
+							     &bcnt, &head,
+							     depth);
+				if (ret < 0)
+					goto srcu_unlock;
+
+				i += ret;
+				if (unlikely(i >= ndescs)) {
+					ret = -EINVAL;
+					goto srcu_unlock;
+				}
+				pklm += ret;
+				ret = 0;
+				continue;
+			}
+
 			if (offset >= be32_to_cpu(pklm->bcount)) {
 				offset -= be32_to_cpu(pklm->bcount);
 				continue;

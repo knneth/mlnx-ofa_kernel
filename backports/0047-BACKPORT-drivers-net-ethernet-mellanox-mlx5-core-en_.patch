@@ -2,6 +2,7 @@ From: Feras Daoud <ferasda@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
 
 Change-Id: I1611a484a4b80477fe711adc96f8cddd74b29a2b
+Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
 ---
  drivers/net/ethernet/mellanox/mlx5/core/en_rx.c | 297 +++++++++++++++++++++++-
  1 file changed, 295 insertions(+), 2 deletions(-)

@@ -144,7 +144,7 @@ static inline int mlx5e_get_dscp_up(struct mlx5e_priv *priv, struct sk_buff *skb
 	else if (skb->protocol == htons(ETH_P_IPV6))
 		dscp_cp = ipv6_get_dsfield(ipv6_hdr(skb)) >> 2;
 
-	return priv->dscp2prio[dscp_cp];
+	return priv->dcbx_dp.dscp2prio[dscp_cp];
 }
 #endif
 
@@ -174,16 +174,12 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 		return channel_ix;
 
 #ifdef CONFIG_MLX5_CORE_EN_DCB
-	if (priv->trust_state == MLX5_QPTS_TRUST_DSCP) {
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
 		up = mlx5e_get_dscp_up(priv, skb);
-	} else {
+	else
+#endif
 		if (skb_vlan_tag_present(skb))
 			up = skb->vlan_tci >> VLAN_PRIO_SHIFT;
-	}
-#else
-	if (skb_vlan_tag_present(skb))
-		up = skb->vlan_tci >> VLAN_PRIO_SHIFT;
-#endif
 
 	/* channel_ix can be larger than num_channels since
 	 * dev->num_real_tx_queues = num_channels * num_tc

@@ -1884,7 +1884,7 @@ enum ib_flow_spec_type {
 	IB_FLOW_SPEC_ACTION_COUNT       = 0x1003,
 };
 #define IB_FLOW_SPEC_LAYER_MASK	0xF0
-#define IB_FLOW_SPEC_SUPPORT_LAYERS 8
+#define IB_FLOW_SPEC_SUPPORT_LAYERS 10
 
 /* Flow steering rule priority is set according to it's domain.
  * Lower domain value means higher priority.

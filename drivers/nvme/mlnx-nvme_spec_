@@ -71,7 +71,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %(mkdir -p %{buildroot})
 %(echo '%defattr (-,root,root)' > %{buildroot}/file_list)
 %(echo '/lib/modules/%2-%1' >> %{buildroot}/file_list)
-%(echo '%{_sysconfdir}/depmod.d/zz02-%{name}-%1.conf' >> %{buildroot}/file_list)
+%(echo '%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-%1.conf' >> %{buildroot}/file_list)
 %{kernel_module_package -f %{buildroot}/file_list -r %{_kmp_rel} }
 %else
 %global kernel_source() %{K_SRC}
@@ -177,7 +177,7 @@ done
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
 
 %{__install} -d %{buildroot}%{_sysconfdir}/depmod.d/
-for module in `find %{buildroot}/ -name '*.ko' -o -name '*.ko.gz'`
+for module in `find %{buildroot}/ -name '*.ko' -o -name '*.ko.gz' | sort`
 do
 ko_name=${module##*/}
 mod_name=${ko_name/.ko*/}
@@ -222,7 +222,7 @@ fi
 %files
 %defattr(-,root,root,-)
 /lib/modules/%{KVERSION}/%{install_mod_dir}/
-%{_sysconfdir}/depmod.d/zz02-%{name}.conf
+%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}.conf
 %endif
 
 %changelog

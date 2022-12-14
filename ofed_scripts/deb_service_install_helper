@@ -37,6 +37,7 @@ if (systemctl 2>/dev/null | grep -qw "\\-\.mount" 2>/dev/null); then
 	sed -i 's/ sysinit.target//g' ${DEST_DIR}/lib/systemd/system/openibd.service
 	install -m 0644 ofed_scripts/mlnx_interface_mgr\@.service  ${DEST_DIR}/etc/systemd/system
 	echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add",RUN+="/bin/systemctl --no-block start mlnx_interface_mgr@$env{INTERFACE}.service"' >> ${DEST_DIR}/etc/udev/rules.d/90-ib.rules
+	echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="remove",RUN+="/bin/systemctl stop mlnx_interface_mgr@$env{INTERFACE}.service"' >> ${DEST_DIR}/etc/udev/rules.d/90-ib.rules
 else
 	# no systemd support
 	echo 'DRIVERS=="*mlx*", SUBSYSTEM=="net", ACTION=="add", RUN+="/bin/mlnx_interface_mgr.sh $env{INTERFACE} <&- >/dev/null 2>&1 &"' >> ${DEST_DIR}/etc/udev/rules.d/90-ib.rules

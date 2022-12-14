@@ -58,7 +58,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  static ssize_t mlx5e_show_prio2buffer(struct device *device,
  				      struct device_attribute *attr,
-@@ -888,7 +896,9 @@ static ssize_t mlx5e_store_buffer_size(s
+@@ -890,7 +898,9 @@ static ssize_t mlx5e_store_buffer_size(s
  	return count;
  }
  #endif
@@ -68,7 +68,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  static DEVICE_ATTR(buffer_size, S_IRUGO | S_IWUSR,
  		   mlx5e_show_buffer_size,
-@@ -898,6 +908,7 @@ static DEVICE_ATTR(prio2buffer, S_IRUGO
+@@ -900,6 +910,7 @@ static DEVICE_ATTR(prio2buffer, S_IRUGO
  		   mlx5e_show_prio2buffer,
  		   mlx5e_store_prio2buffer);
  #endif
@@ -76,7 +76,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  
  #ifdef CONFIG_MLX5_ESWITCH
  static DEVICE_ATTR(vf_roce, S_IRUGO | S_IWUSR,
-@@ -923,7 +934,9 @@ static struct attribute *mlx5e_debug_gro
+@@ -925,7 +936,9 @@ static struct attribute *mlx5e_debug_gro
  };
  
  static struct attribute *mlx5e_qos_attrs[] = {
@@ -86,7 +86,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  	&dev_attr_maxrate.attr,
  	NULL,
  };
-@@ -943,6 +956,7 @@ static int update_qos_sysfs(struct net_d
+@@ -945,6 +958,7 @@ static int update_qos_sysfs(struct net_d
  {
  	int err = 0;
  
@@ -94,7 +94,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  	if (MLX5_BUFFER_SUPPORTED(mdev)) {
  		err = sysfs_add_file_to_group(&dev->dev.kobj,
-@@ -953,6 +967,7 @@ static int update_qos_sysfs(struct net_d
+@@ -955,6 +969,7 @@ static int update_qos_sysfs(struct net_d
  					      "qos");
  	}
  #endif
@@ -102,7 +102,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  
  	return err;
  }
-@@ -1044,7 +1059,7 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1046,7 +1061,7 @@ void mlx5e_sysfs_remove(struct net_devic
  	kobject_put(priv->ecn_root_kobj);
  }
  
@@ -111,7 +111,7 @@ Change-Id: Ie28dfbe74b637d2e1aa496faa0ec9ce12dc17411
  enum {
  	ATTR_DST_IP,
  	ATTR_DST_PORT,
-@@ -1202,4 +1217,4 @@ void mlx5e_rl_remove_sysfs(struct mlx5e_
+@@ -1204,4 +1219,4 @@ void mlx5e_rl_remove_sysfs(struct mlx5e_
  		sysfs_remove_group(&txq->kobj, &mlx5e_txmap_attr);
  	}
  }

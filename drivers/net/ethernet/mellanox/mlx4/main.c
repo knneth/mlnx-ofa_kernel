@@ -499,7 +499,7 @@ static int parse_array(struct param_data *pdata, char *p, long *vals, u32 n)
 			return ++iter;
 		}
 
-		if (!t || t == p || val_len > sizeof(sval))
+		if (!t || t == p || val_len >= sizeof(sval))
 			return -INVALID_STR;
 
 		strncpy(sval, p, val_len);
@@ -654,7 +654,7 @@ int mlx4_fill_dbdf2val_tbl(struct mlx4_dbdf2val_lst *dbdf2val_lst)
 				v = t;
 				last_occurrence = 1;
 			}
-			if (!v || v > t || v == p || (v - p) > sizeof(sval)) {
+			if (!v || v > t || v == p || (v - p) >= sizeof(sval)) {
 				pr_val_err(sbdf, dbdf2val_lst->name, p);
 				goto err;
 			}

@@ -164,16 +164,18 @@ static bool mlx5e_query_global_pause_combined(struct mlx5e_priv *priv)
 	return err ? false : rx_pause | tx_pause;
 }
 
+#define MLX5E_PER_CHANNEL_STATS(priv) \
+	(priv->channels.num * MLX5E_GET_PFLAG(&(priv)->channels.params, MLX5E_PFLAG_PER_CH_STATS))
 #define MLX5E_NUM_Q_CNTRS(priv) (NUM_Q_COUNTERS * (!!priv->q_counter))
-#define MLX5E_NUM_RQ_STATS(priv) (NUM_RQ_STATS * (priv)->channels.num)
 
+#define MLX5E_NUM_RQ_STATS(priv) (NUM_RQ_STATS * MLX5E_PER_CHANNEL_STATS(priv))
 #ifndef CONFIG_MLX5_EN_SPECIAL_SQ
 #define MLX5E_NUM_SQ_STATS(priv) \
-	(NUM_SQ_STATS * (priv)->channels.num * (priv)->channels.params.num_tc)
+	(NUM_SQ_STATS * MLX5E_PER_CHANNEL_STATS(priv) * (priv)->channels.params.num_tc)
 #else
 #define MLX5E_NUM_SQ_STATS(priv) \
-	(NUM_SQ_STATS * ((priv)->channels.num * (priv)->channels.params.num_tc + \
-			 (priv)->channels.params.num_rl_txqs))
+	(NUM_SQ_STATS * ((MLX5E_PER_CHANNEL_STATS(priv) * (priv)->channels.params.num_tc) + \
+			 (priv)->channels.params.num_rl_txqs * MLX5E_GET_PFLAG(&(priv)->channels.params, MLX5E_PFLAG_PER_CH_STATS) ))
 #endif /*CONFIG_MLX5_EN_SPECIAL_SQ*/
 
 #define MLX5E_NUM_PFC_COUNTERS(priv) \
@@ -293,13 +295,13 @@ static void mlx5e_fill_stats_strings(struct mlx5e_priv *priv, u8 *data)
 		return;
 
 	/* per channel counters */
-	for (i = 0; i < priv->channels.num; i++)
+	for (i = 0; i < MLX5E_PER_CHANNEL_STATS(priv); i++)
 		for (j = 0; j < NUM_RQ_STATS; j++)
 			sprintf(data + (idx++) * ETH_GSTRING_LEN,
 				rq_stats_desc[j].format, i);
 
 	for (tc = 0; tc < priv->channels.params.num_tc; tc++)
-		for (i = 0; i < priv->channels.num; i++)
+		for (i = 0; i < MLX5E_PER_CHANNEL_STATS(priv); i++)
 			for (j = 0; j < NUM_SQ_STATS; j++)
 				sprintf(data + (idx++) * ETH_GSTRING_LEN,
 					sq_stats_desc[j].format,
@@ -307,7 +309,7 @@ static void mlx5e_fill_stats_strings(struct mlx5e_priv *priv, u8 *data)
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	/* Special TX queue counters */
-	for (i = 0; i < priv->channels.params.num_rl_txqs; i++)
+	for (i = 0; i < priv->channels.params.num_rl_txqs * MLX5E_GET_PFLAG(&(priv)->channels.params, MLX5E_PFLAG_PER_CH_STATS); i++)
 		for (j = 0; j < NUM_SQ_STATS; j++)
 			sprintf(data + (idx++) * ETH_GSTRING_LEN,
 				sq_stats_desc[j].format,
@@ -436,14 +438,14 @@ void mlx5e_ethtool_get_ethtool_stats(struct mlx5e_priv *priv,
 		return;
 
 	/* per channel counters */
-	for (i = 0; i < channels->num; i++)
+	for (i = 0; i < MLX5E_PER_CHANNEL_STATS(priv); i++)
 		for (j = 0; j < NUM_RQ_STATS; j++)
 			data[idx++] =
 			       MLX5E_READ_CTR64_CPU(&channels->c[i]->rq.stats,
 						    rq_stats_desc, j);
 
 	for (tc = 0; tc < priv->channels.params.num_tc; tc++)
-		for (i = 0; i < channels->num; i++)
+		for (i = 0; i < MLX5E_PER_CHANNEL_STATS(priv); i++)
 			for (j = 0; j < NUM_SQ_STATS; j++)
 				data[idx++] = MLX5E_READ_CTR64_CPU(&channels->c[i]->sq[tc].stats,
 								   sq_stats_desc, j);
@@ -1811,7 +1813,7 @@ static int mlx5e_handle_pflag(struct net_device *netdev,
 	if (!(changes & flag))
 		return 0;
 
-	err = pflag_handler(netdev, enable);
+	err = pflag_handler ? pflag_handler(netdev, enable) : 0;
 	if (err) {
 		netdev_err(netdev, "%s private flag 0x%x failed err %d\n",
 			   enable ? "Enable" : "Disable", flag, err);
@@ -1837,6 +1839,10 @@ static int mlx5e_set_priv_flags(struct net_device *netdev, u32 pflags)
 	err = mlx5e_handle_pflag(netdev, pflags,
 				 MLX5E_PFLAG_RX_CQE_COMPRESS,
 				 set_pflag_rx_cqe_compress);
+	if (err)
+		goto out;
+	err = mlx5e_handle_pflag(netdev, pflags, MLX5E_PFLAG_PER_CH_STATS, NULL);
+
 	if (err)
 		goto out;
 

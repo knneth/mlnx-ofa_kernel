@@ -2,6 +2,7 @@ From: Alaa Hleihel <alaa@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_cq.c
 
 Change-Id: Iab37c5d50a737b3a5e213c52ae6f90433351d2a8
+Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
 ---
  drivers/net/ethernet/mellanox/mlx4/en_cq.c | 6 ++++++
  1 file changed, 6 insertions(+)

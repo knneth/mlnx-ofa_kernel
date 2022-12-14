@@ -32,7 +32,6 @@
 #include <linux/device.h>
 #include <linux/netdevice.h>
 #include "en.h"
-#include "en_trust.h"
 #include "en_port_buffer.h"
 
 #define MLX5E_MAX_PRIORITY 8
@@ -50,7 +49,14 @@ enum {
 	MLX5E_LOWEST_PRIO_GROUP   = 0,
 };
 
+#define MLX5_DSCP_SUPPORTED(mdev) (MLX5_CAP_GEN(mdev, qcam_reg)  && \
+				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
+				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
+
 #ifdef CONFIG_MLX5_CORE_EN_DCB
+static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
+static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
+
 /* If dcbx mode is non-host set the dcbx mode to host.
  */
 static int mlx5e_dcbnl_set_dcbx_mode(struct mlx5e_priv *priv,
@@ -450,7 +456,7 @@ static int mlx5e_dcbnl_ieee_setapp(struct net_device *dev, struct dcb_app *app)
 	/* Save the old entry info */
 	temp.selector = IEEE_8021QAZ_APP_SEL_DSCP;
 	temp.protocol = app->protocol;
-	temp.priority = priv->dscp2prio[app->protocol];
+	temp.priority = priv->dcbx_dp.dscp2prio[app->protocol];
 
 	/* Check if need to switch to dscp trust state */
 	if (!priv->dcbx.dscp_app_cnt) {
@@ -460,7 +466,7 @@ static int mlx5e_dcbnl_ieee_setapp(struct net_device *dev, struct dcb_app *app)
 	}
 
 	/* Skip the fw command if new and old mapping are the same */
-	if (app->priority != priv->dscp2prio[app->protocol]) {
+	if (app->priority != priv->dcbx_dp.dscp2prio[app->protocol]) {
 		err = mlx5e_set_dscp2prio(priv, app->protocol, app->priority);
 		if (err)
 			goto fw_err;
@@ -509,7 +515,7 @@ static int mlx5e_dcbnl_ieee_delapp(struct net_device *dev, struct dcb_app *app)
 		return -ENOENT;
 
 	/* Check if the entry matches fw setting */
-	if (app->priority != priv->dscp2prio[app->protocol])
+	if (app->priority != priv->dcbx_dp.dscp2prio[app->protocol])
 		return -ENOENT;
 
 	/* Delete the app entry */
@@ -968,6 +974,135 @@ static void mlx5e_ets_init(struct mlx5e_priv *priv)
 	mlx5e_dcbnl_ieee_setets_core(priv, &ets);
 }
 
+enum {
+	INIT,
+	DELETE,
+};
+
+static void mlx5e_dcbnl_dscp_app(struct mlx5e_priv *priv, int action)
+{
+	struct dcb_app temp;
+	int i;
+
+	if (!MLX5_CAP_GEN(priv->mdev, vport_group_manager))
+		return;
+
+	if (!MLX5_DSCP_SUPPORTED(priv->mdev))
+		return;
+
+	/* No SEL_DSCP entry in non DSCP state */
+	if (priv->dcbx_dp.trust_state != MLX5_QPTS_TRUST_DSCP)
+		return;
+
+	temp.selector = IEEE_8021QAZ_APP_SEL_DSCP;
+	for (i = 0; i < MLX5E_MAX_DSCP; i++) {
+		temp.protocol = i;
+		temp.priority = priv->dcbx_dp.dscp2prio[i];
+		if (action == INIT)
+			dcb_ieee_setapp(priv->netdev, &temp);
+		else
+			dcb_ieee_delapp(priv->netdev, &temp);
+	}
+
+	priv->dcbx.dscp_app_cnt = (action == INIT) ? MLX5E_MAX_DSCP : 0;
+}
+
+void mlx5e_dcbnl_init_app(struct mlx5e_priv *priv)
+{
+	mlx5e_dcbnl_dscp_app(priv, INIT);
+}
+
+void mlx5e_dcbnl_delete_app(struct mlx5e_priv *priv)
+{
+	mlx5e_dcbnl_dscp_app(priv, DELETE);
+}
+
+static void mlx5e_trust_update_tx_min_inline_mode(struct mlx5e_priv *priv,
+						  struct mlx5e_params *params)
+{
+	params->tx_min_inline_mode = mlx5e_params_calculate_tx_min_inline(priv->mdev);
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP &&
+	    params->tx_min_inline_mode == MLX5_INLINE_MODE_L2)
+		params->tx_min_inline_mode = MLX5_INLINE_MODE_IP;
+}
+
+static void mlx5e_trust_update_sq_inline_mode(struct mlx5e_priv *priv)
+{
+	struct mlx5e_channels new_channels = {};
+
+	mutex_lock(&priv->state_lock);
+
+	if (!test_bit(MLX5E_STATE_OPENED, &priv->state))
+		goto out;
+
+	new_channels.params = priv->channels.params;
+	mlx5e_trust_update_tx_min_inline_mode(priv, &new_channels.params);
+
+	/* Skip if tx_min_inline is the same */
+	if (new_channels.params.tx_min_inline_mode ==
+	    priv->channels.params.tx_min_inline_mode)
+		goto out;
+
+	if (mlx5e_open_channels(priv, &new_channels))
+		goto out;
+	mlx5e_switch_priv_channels(priv, &new_channels, NULL);
+
+out:
+	mutex_unlock(&priv->state_lock);
+}
+
+static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
+{
+	int err;
+
+	err =  mlx5_set_trust_state(priv->mdev, trust_state);
+	if (err)
+		return err;
+	priv->dcbx_dp.trust_state = trust_state;
+	mlx5e_trust_update_sq_inline_mode(priv);
+
+	/* In DSCP trust state, we need 8 send queues per channel */
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
+		mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);
+
+	return err;
+}
+
+static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio)
+{
+	int err;
+
+	err = mlx5_set_dscp2prio(priv->mdev, dscp, prio);
+	if (err)
+		return err;
+
+	priv->dcbx_dp.dscp2prio[dscp] = prio;
+	return err;
+}
+
+static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
+{
+	struct mlx5_core_dev *mdev = priv->mdev;
+	int err;
+
+	if (!MLX5_DSCP_SUPPORTED(mdev))
+		return 0;
+
+	err = mlx5_query_trust_state(priv->mdev, &priv->dcbx_dp.trust_state);
+	if (err)
+		return err;
+
+	mlx5e_trust_update_tx_min_inline_mode(priv, &priv->channels.params);
+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
+		priv->channels.params.num_tc = MLX5E_MAX_NUM_TC;
+
+	err = mlx5_query_dscp2prio(priv->mdev, priv->dcbx_dp.dscp2prio);
+	if (err)
+		return err;
+
+	return 0;
+}
+
 void mlx5e_dcbnl_initialize(struct mlx5e_priv *priv)
 {
 	struct mlx5e_dcbx *dcbx = &priv->dcbx;
@@ -989,48 +1124,5 @@ void mlx5e_dcbnl_initialize(struct mlx5e_priv *priv)
 	priv->dcbx.cable_len = MLX5E_DEFAULT_CABLE_LEN;
 
 	mlx5e_ets_init(priv);
-}
-
-enum {
-	INIT,
-	DELETE,
-};
-
-static void mlx5e_dcbnl_dscp_app(struct mlx5e_priv *priv, int action)
-{
-	struct dcb_app temp;
-	int i;
-
-	if (!MLX5_CAP_GEN(priv->mdev, vport_group_manager))
-		return;
-
-	if (!MLX5_DSCP_SUPPORTED(priv->mdev))
-		return;
-
-	/* No SEL_DSCP entry in non DSCP state */
-	if (priv->trust_state != MLX5_QPTS_TRUST_DSCP)
-		return;
-
-	temp.selector = IEEE_8021QAZ_APP_SEL_DSCP;
-	for (i = 0; i < MLX5E_MAX_DSCP; i++) {
-		temp.protocol = i;
-		temp.priority = priv->dscp2prio[i];
-		if (action == INIT)
-			dcb_ieee_setapp(priv->netdev, &temp);
-		else
-			dcb_ieee_delapp(priv->netdev, &temp);
-	}
-
-	priv->dcbx.dscp_app_cnt = (action == INIT) ? MLX5E_MAX_DSCP : 0;
-}
-
-void mlx5e_dcbnl_init_app(struct mlx5e_priv *priv)
-{
-	mlx5e_dcbnl_dscp_app(priv, INIT);
-}
-
-void mlx5e_dcbnl_delete_app(struct mlx5e_priv *priv)
-{
-	mlx5e_dcbnl_dscp_app(priv, DELETE);
 }
 #endif

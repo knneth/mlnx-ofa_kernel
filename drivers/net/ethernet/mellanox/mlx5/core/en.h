@@ -218,6 +218,7 @@ static const char mlx5e_priv_flags[][ETH_GSTRING_LEN] = {
 	"rx_cqe_compress",
 	"sniffer",
 	"dropless_rq",
+	"per_channel_stats",
 };
 
 enum mlx5e_priv_flag {
@@ -225,6 +226,7 @@ enum mlx5e_priv_flag {
 	MLX5E_PFLAG_RX_CQE_COMPRESS = (1 << 1),
 	MLX5E_PFLAG_SNIFFER = (1 << 2),
 	MLX5E_PFLAG_DROPLESS_RQ = (1 << 3),
+	MLX5E_PFLAG_PER_CH_STATS = (1 << 4),
 };
 
 #define MLX5E_SET_PFLAG(params, pflag, enable)			\
@@ -309,6 +311,11 @@ struct mlx5e_dcbx {
 	bool                       manual_buffer;
 	u32                        cable_len;
 	u32                        xoff;
+};
+
+struct mlx5e_dcbx_dp {
+	u8                         dscp2prio[MLX5E_MAX_DSCP];
+	u8                         trust_state;
 };
 #endif
 
@@ -894,8 +901,7 @@ struct mlx5e_priv {
 #endif
 
 #ifdef CONFIG_MLX5_CORE_EN_DCB
-	u8                         dscp2prio[MLX5E_MAX_DSCP];
-	u8                         trust_state;
+	 struct mlx5e_dcbx_dp      dcbx_dp;
 #endif
 	/* priv data path fields - end */
 
@@ -1271,6 +1277,7 @@ void mlx5e_destroy_netdev(struct mlx5e_priv *priv);
 void mlx5e_build_nic_params(struct mlx5_core_dev *mdev,
 			    struct mlx5e_params *params,
 			    u16 max_channels);
+u8 mlx5e_params_calculate_tx_min_inline(struct mlx5_core_dev *mdev);
 
 int mlx5e_get_dump_flag(struct net_device *netdev, struct ethtool_dump *dump);
 int mlx5e_get_dump_data(struct net_device *netdev, struct ethtool_dump *dump,

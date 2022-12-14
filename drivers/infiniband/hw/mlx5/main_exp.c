@@ -262,6 +262,7 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			     struct ib_udata *uhw)
 {
 	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+	u32 uar_sz_shift;
 	u32 max_tso;
 	int ret;
 
@@ -330,7 +331,8 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 			IB_RX_HASH_SRC_PORT_TCP |
 			IB_RX_HASH_DST_PORT_TCP |
 			IB_RX_HASH_SRC_PORT_UDP |
-			IB_RX_HASH_DST_PORT_UDP;
+			IB_RX_HASH_DST_PORT_UDP |
+			IB_RX_HASH_INNER;
 		props->rx_hash_caps.supported_qps = IB_QPT_RAW_PACKET;
 		props->max_wq_type_rq = 1 << MLX5_CAP_GEN(dev->mdev, log_max_rq);
 	} else {
@@ -453,11 +455,19 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 	props->device_cap_flags2 |= IB_EXP_DEVICE_NOP;
 
 	props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_MAX_DEVICE_CTX;
-	/*mlx5_core uses MLX5_NUM_DRIVER_UARS uar pages*/
-	/*For simplicity, assume one to one releation ship between uar pages and context*/
+
+	if (MLX5_CAP_GEN(dev->mdev, uar_4k))
+		uar_sz_shift = MLX5_ADAPTER_PAGE_SHIFT;
+	else
+		uar_sz_shift = PAGE_SHIFT;
+
+	/* mlx5_core uses MLX5_NUM_DRIVER_UARS uar pages. Each ucontext uses
+	 * 8 uars (see MLX5_DEF_TOT_UUARS and MLX5_NUM_NON_FP_BFREGS_PER_UAR
+	 * in libmlx5). Note that the CAP's uar_sz is in MB unit.
+	 */
 	props->max_device_ctx =
-		(1 << (MLX5_CAP_GEN(dev->mdev, uar_sz) + 20 - PAGE_SHIFT))
-		/ (MLX5_DEF_TOT_BFREGS / MLX5_NUM_DRIVER_UARS)
+		(1 << (MLX5_CAP_GEN(dev->mdev, uar_sz) + 20 - uar_sz_shift))
+		/ (MLX5_DEF_TOT_BFREGS / MLX5_NON_FP_BFREGS_PER_UAR)
 		- MLX5_NUM_DRIVER_UARS;
 
 	if (MLX5_CAP_GEN(dev->mdev, rq_delay_drop) &&

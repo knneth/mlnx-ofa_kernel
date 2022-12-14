@@ -62,7 +62,7 @@ Change-Id: I32a10351bbc548039580e8fcf684f874763385c1
  	u16			op;
  	bool			polling;
  };
-@@ -1339,7 +1358,12 @@ static inline int mlx5_core_is_pf(struct
+@@ -1343,7 +1362,12 @@ static inline int mlx5_core_is_pf(struct
  	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
  }
  
