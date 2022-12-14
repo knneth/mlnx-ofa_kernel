@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
 
 Change-Id: I0622271fd029ba0e93fb71991a7dddcfada904ad
 ---
- drivers/infiniband/hw/mlx5/main.c | 43 +++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/hw/mlx5/main.c | 43 +++++++++++++++++++++++++++++++
  1 file changed, 43 insertions(+)
 
 --- a/drivers/infiniband/hw/mlx5/main.c
@@ -126,7 +126,7 @@ Change-Id: I0622271fd029ba0e93fb71991a7dddcfada904ad
  		break;
  	case MLX5_IB_MMAP_NC_PAGE:
  		prot = pgprot_noncached(vma->vm_page_prot);
-@@ -4499,6 +4531,9 @@ void *__mlx5_ib_add(struct mlx5_core_dev
+@@ -4536,6 +4568,9 @@ void *__mlx5_ib_add(struct mlx5_core_dev
  	dev->ib_dev.exp_query_device	= mlx5_ib_exp_query_device;
  	dev->ib_dev.exp_query_mkey      = mlx5_ib_exp_query_mkey;
  	dev->ib_dev.exp_create_qp	= mlx5_ib_exp_create_qp;
@@ -136,7 +136,7 @@ Change-Id: I0622271fd029ba0e93fb71991a7dddcfada904ad
  	dev->ib_dev.resize_cq		= mlx5_ib_resize_cq;
  	dev->ib_dev.destroy_cq		= mlx5_ib_destroy_cq;
  	dev->ib_dev.poll_cq		= mlx5_ib_poll_cq;
-@@ -4524,14 +4559,22 @@ void *__mlx5_ib_add(struct mlx5_core_dev
+@@ -4561,14 +4596,22 @@ void *__mlx5_ib_add(struct mlx5_core_dev
  	dev->ib_dev.query_counter_set   = mlx5_ib_query_counter_set;
  	dev->ib_dev.describe_counter_set = mlx5_ib_describe_counter_set;
  

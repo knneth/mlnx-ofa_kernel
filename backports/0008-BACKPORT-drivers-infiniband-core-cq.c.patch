@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cq.c
 
 Change-Id: I0a0ea32c70aa341ce9ea9d0b9c27d11790b8cf8c
 ---
- drivers/infiniband/core/cq.c | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/cq.c | 44 ++++++++++++++++++++++++++++++++++++
  1 file changed, 44 insertions(+)
 
 --- a/drivers/infiniband/core/cq.c

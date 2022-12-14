@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Id381913f088b37ce45da43c107e01e3d7fa10fdc
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c | 16 ++++++++++++----
+ .../ethernet/mellanox/mlx5/core/en_selftest.c    | 16 ++++++++++++----
  1 file changed, 12 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
-@@ -132,14 +132,14 @@ static struct sk_buff *mlx5e_test_get_ud
+@@ -133,14 +133,14 @@ static struct sk_buff *mlx5e_test_get_ud
  	skb_reserve(skb, NET_IP_ALIGN);
  
  	/*  Reserve for ethernet and IP header  */
@@ -27,7 +27,7 @@ Change-Id: Id381913f088b37ce45da43c107e01e3d7fa10fdc
  
  	/* Fill ETH header */
  	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
-@@ -167,7 +167,7 @@ static struct sk_buff *mlx5e_test_get_ud
+@@ -168,7 +168,7 @@ static struct sk_buff *mlx5e_test_get_ud
  	ip_send_check(iph);
  
  	/* Fill test header and data */
@@ -36,7 +36,7 @@ Change-Id: Id381913f088b37ce45da43c107e01e3d7fa10fdc
  	mlxh->version = 0;
  	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
  	strlcpy(mlxh->text, mlx5e_test_text, sizeof(mlxh->text));
-@@ -216,7 +216,15 @@ mlx5e_test_loopback_validate(struct sk_b
+@@ -217,7 +217,15 @@ mlx5e_test_loopback_validate(struct sk_b
  	if (iph->protocol != IPPROTO_UDP)
  		goto out;
  

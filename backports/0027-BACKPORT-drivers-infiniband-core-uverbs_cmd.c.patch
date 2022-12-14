@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
 
 Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
 ---
- drivers/infiniband/core/uverbs_cmd.c | 38 ++++++++++++++++++++++++++++++++++++
- 1 file changed, 38 insertions(+)
+ drivers/infiniband/core/uverbs_cmd.c | 42 ++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
 
 --- a/drivers/infiniband/core/uverbs_cmd.c
 +++ b/drivers/infiniband/core/uverbs_cmd.c
@@ -30,7 +30,7 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  
  	ucontext = ib_dev->alloc_ucontext(ib_dev, &udata);
  	if (IS_ERR(ucontext)) {
-@@ -113,14 +117,18 @@ ssize_t ib_uverbs_get_context(struct ib_
+@@ -113,20 +117,28 @@ ssize_t ib_uverbs_get_context(struct ib_
  	}
  
  	ucontext->device = ib_dev;
@@ -49,7 +49,17 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  	ucontext->closing = 0;
  	ucontext->peer_mem_private_data = NULL;
  	ucontext->peer_mem_name = NULL;
-@@ -175,7 +183,9 @@ err_free:
+ 
+ #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
++#ifdef HAVE_RB_ROOT_CACHED
++	ucontext->umem_tree = RB_ROOT_CACHED;
++#else
+ 	ucontext->umem_tree = RB_ROOT;
++#endif
+ 	init_rwsem(&ucontext->umem_rwsem);
+ 	ucontext->odp_mrs_count = 0;
+ 	INIT_LIST_HEAD(&ucontext->no_private_counters);
+@@ -175,7 +187,9 @@ err_free:
  	ib_dev->dealloc_ucontext(ucontext);
  
  err_alloc:
@@ -59,7 +69,7 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  
  err:
  	mutex_unlock(&file->mutex);
-@@ -480,7 +490,11 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -480,7 +494,11 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  	struct ib_udata			udata;
  	struct ib_uxrcd_object         *obj;
  	struct ib_xrcd                 *xrcd = NULL;
@@ -71,7 +81,7 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  	struct inode                   *inode = NULL;
  	int				ret = 0;
  	int				new_xrcd = 0;
-@@ -498,6 +512,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -498,6 +516,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  	mutex_lock(&file->device->xrcd_tree_mutex);
  
  	if (cmd.fd != -1) {
@@ -79,7 +89,7 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  		/* search for file descriptor */
  		f = fdget(cmd.fd);
  		if (!f.file) {
-@@ -506,6 +521,19 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -506,6 +525,19 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  		}
  
  		inode = file_inode(f.file);
@@ -99,7 +109,7 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  		xrcd = find_xrcd(file->device, inode);
  		if (!xrcd && !(cmd.oflags & O_CREAT)) {
  			/* no file descriptor. Need CREATE flag */
-@@ -562,8 +590,13 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -562,8 +594,13 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  		goto err_copy;
  	}
  
@@ -113,7 +123,7 @@ Change-Id: I0d9470691ea6dd2a0555bb4d807e3ab475409d31
  
  	uobj_alloc_commit(&obj->uobject);
  
-@@ -584,8 +617,13 @@ err:
+@@ -584,8 +621,13 @@ err:
  	uobj_alloc_abort(&obj->uobject);
  
  err_tree_mutex_unlock:

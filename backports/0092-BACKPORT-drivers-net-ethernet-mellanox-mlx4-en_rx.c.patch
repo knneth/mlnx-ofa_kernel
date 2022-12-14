@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_rx.c
 Change-Id: I6c33567afccbd402006454d85f2581a6c46469c7
 Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
 ---
- drivers/net/ethernet/mellanox/mlx4/en_rx.c | 322 ++++++++++++++++++++++++++++-
+ drivers/net/ethernet/mellanox/mlx4/en_rx.c | 322 ++++++++++++++++++++-
  1 file changed, 315 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_rx.c
@@ -608,7 +608,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	}
  	/* Done for now */
 +#ifdef HAVE_NAPI_COMPLETE_DONE
-+#ifdef NAPI_COMPLETE_DONE_RET_VALUE
++#ifdef HAVE_NAPI_COMPLETE_DONE_RET_VALUE
  	if (likely(napi_complete_done(napi, done)))
  		mlx4_en_arm_cq(priv, cq);
 +#else

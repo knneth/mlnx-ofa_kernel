@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
 
 Change-Id: Ic87ab51f7404455c129e4eab6e2ff67bf43da47d
 ---
- drivers/infiniband/core/netlink.c | 70 +++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/netlink.c | 70 +++++++++++++++++++++++++++++++
  1 file changed, 70 insertions(+)
 
 --- a/drivers/infiniband/core/netlink.c

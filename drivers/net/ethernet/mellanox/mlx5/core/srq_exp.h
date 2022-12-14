@@ -37,7 +37,7 @@
 
 /* NVMEoF API */
 int get_nvmf_pas_size(struct mlx5_nvmf_attr *nvmf);
-void set_nvmf_srq_pas(struct mlx5_nvmf_attr *nvmf, void *start, int align);
+void set_nvmf_srq_pas(struct mlx5_nvmf_attr *nvmf, __be64 *pas);
 void set_nvmf_xrq_context(struct mlx5_nvmf_attr *nvmf, void *xrqc);
 
 int set_xrq_dc_params_entry(struct mlx5_core_dev *dev,

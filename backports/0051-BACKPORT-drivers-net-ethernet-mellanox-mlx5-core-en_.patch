@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
 
 Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_tc.c | 238 ++++++++++++++++++++++++
- 1 file changed, 238 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en_tc.c   | 250 +++++++++++++++++-
+ 1 file changed, 249 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
@@ -420,7 +420,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  
  static int parse_tc_nic_actions(struct mlx5e_priv *priv, struct tcf_exts *exts,
  				struct mlx5e_tc_flow_parse_attr *parse_attr,
-@@ -1325,7 +1432,9 @@ static int parse_tc_nic_actions(struct m
+@@ -1325,16 +1432,26 @@ static int parse_tc_nic_actions(struct m
  	struct mlx5_nic_flow_attr *attr = flow->nic_attr;
  	const struct tc_action *a;
  	LIST_HEAD(actions);
@@ -428,9 +428,13 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	int err;
 +#endif
  
++#ifdef HAVE_TCF_EXTS_HAS_ACTIONS
++	if (!tcf_exts_has_actions(exts))
++#else
  	if (tc_no_actions(exts))
++#endif
  		return -EINVAL;
-@@ -1333,8 +1442,12 @@ static int parse_tc_nic_actions(struct m
+ 
  	attr->flow_tag = MLX5_FS_DEFAULT_FLOW_TAG;
  	attr->action = 0;
  
@@ -443,7 +447,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (is_tcf_gact_shot(a)) {
  			attr->action |= MLX5_FLOW_CONTEXT_ACTION_DROP;
  			if (MLX5_CAP_FLOWTABLE(priv->mdev,
-@@ -1343,6 +1456,7 @@ static int parse_tc_nic_actions(struct m
+@@ -1343,6 +1460,7 @@ static int parse_tc_nic_actions(struct m
  			continue;
  		}
  
@@ -451,7 +455,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (is_tcf_pedit(a)) {
  			err = parse_tc_pedit_action(priv, a, MLX5_FLOW_NAMESPACE_KERNEL,
  						    parse_attr);
-@@ -1353,7 +1467,9 @@ static int parse_tc_nic_actions(struct m
+@@ -1353,7 +1471,9 @@ static int parse_tc_nic_actions(struct m
  					MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
  			continue;
  		}
@@ -461,7 +465,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (is_tcf_csum(a)) {
  			if (csum_offload_supported(priv, attr->action,
  						   tcf_csum_update_flags(a)))
-@@ -1361,6 +1477,7 @@ static int parse_tc_nic_actions(struct m
+@@ -1361,6 +1481,7 @@ static int parse_tc_nic_actions(struct m
  
  			return -EOPNOTSUPP;
  		}
@@ -469,7 +473,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  
  		if (is_tcf_skbedit_mark(a)) {
  			u32 mark = tcf_skbedit_mark(a);
-@@ -1382,6 +1499,7 @@ static int parse_tc_nic_actions(struct m
+@@ -1382,6 +1503,7 @@ static int parse_tc_nic_actions(struct m
  	return 0;
  }
  
@@ -477,7 +481,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  static inline int cmp_encap_info(struct ip_tunnel_key *a,
  				 struct ip_tunnel_key *b)
  {
-@@ -1400,7 +1518,9 @@ static int mlx5e_route_lookup_ipv4(struc
+@@ -1400,7 +1522,9 @@ static int mlx5e_route_lookup_ipv4(struc
  				   struct neighbour **out_n,
  				   int *out_ttl)
  {
@@ -487,7 +491,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	struct rtable *rt;
  	struct neighbour *n = NULL;
  
-@@ -1415,9 +1535,11 @@ static int mlx5e_route_lookup_ipv4(struc
+@@ -1415,9 +1539,11 @@ static int mlx5e_route_lookup_ipv4(struc
  	return -EOPNOTSUPP;
  #endif
  	/* if the egress device isn't on the same HW e-switch, we use the uplink */
@@ -499,7 +503,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		*out_dev = rt->dst.dev;
  
  	*out_ttl = ip4_dst_hoplimit(&rt->dst);
-@@ -1441,7 +1563,9 @@ static int mlx5e_route_lookup_ipv6(struc
+@@ -1441,7 +1567,9 @@ static int mlx5e_route_lookup_ipv6(struc
  	struct dst_entry *dst;
  
  #if IS_ENABLED(CONFIG_INET) && IS_ENABLED(CONFIG_IPV6)
@@ -509,7 +513,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	int ret;
  
  	ret = ipv6_stub->ipv6_dst_lookup(dev_net(mirred_dev), NULL, &dst,
-@@ -1452,9 +1576,11 @@ static int mlx5e_route_lookup_ipv6(struc
+@@ -1452,9 +1580,11 @@ static int mlx5e_route_lookup_ipv6(struc
  	*out_ttl = ip6_dst_hoplimit(dst);
  
  	/* if the egress device isn't on the same HW e-switch, we use the uplink */
@@ -521,18 +525,18 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		*out_dev = dst->dev;
  #else
  	return -EOPNOTSUPP;
-@@ -1576,6 +1702,7 @@ static int mlx5e_create_encap_header_ipv
+@@ -1576,6 +1706,7 @@ static int mlx5e_create_encap_header_ipv
  	if (err)
- 		goto out;
+ 		goto free_encap;
  
 +#ifdef HAVE_TCF_TUNNEL_INFO
  	/* used by mlx5e_detach_encap to lookup a neigh hash table
  	 * entry in the neigh hash table when a user deletes a rule
  	 */
-@@ -1592,12 +1719,25 @@ static int mlx5e_create_encap_header_ipv
+@@ -1592,12 +1723,25 @@ static int mlx5e_create_encap_header_ipv
  	err = mlx5e_rep_encap_entry_attach(netdev_priv(out_dev), e);
  	if (err)
- 		goto out;
+ 		goto free_encap;
 +#endif
  
  	read_lock_bh(&n->lock);
@@ -555,7 +559,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	switch (e->tunnel_type) {
  	case MLX5_HEADER_TYPE_VXLAN:
  		gen_vxlan_header_ipv4(out_dev, encap_header,
-@@ -1608,6 +1748,7 @@ static int mlx5e_create_encap_header_ipv
+@@ -1608,6 +1752,7 @@ static int mlx5e_create_encap_header_ipv
  		break;
  	default:
  		err = -EOPNOTSUPP;
@@ -563,7 +567,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		goto destroy_neigh_entry;
  	}
  	e->encap_size = ipv4_encap_size;
-@@ -1616,11 +1757,13 @@ static int mlx5e_create_encap_header_ipv
+@@ -1616,11 +1761,13 @@ static int mlx5e_create_encap_header_ipv
  	if (!(nud_state & NUD_VALID)) {
  		neigh_event_send(n, NULL);
  		err = -EAGAIN;
@@ -577,15 +581,15 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	if (err)
  		goto destroy_neigh_entry;
  
-@@ -1631,6 +1774,7 @@ static int mlx5e_create_encap_header_ipv
+@@ -1631,6 +1778,7 @@ static int mlx5e_create_encap_header_ipv
  
  destroy_neigh_entry:
  	mlx5e_rep_encap_entry_detach(netdev_priv(e->out_dev), e);
 +#endif
- out:
+ free_encap:
  	kfree(encap_header);
- 	if (n)
-@@ -1685,7 +1829,9 @@ static int mlx5e_create_encap_header_ipv
+ out:
+@@ -1686,7 +1834,9 @@ static int mlx5e_create_encap_header_ipv
  	 * entry in the neigh hash table when a user deletes a rule
  	 */
  	e->m_neigh.dev = n->dev;
@@ -595,7 +599,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	memcpy(&e->m_neigh.dst_ip, n->primary_key, n->tbl->key_len);
  	e->out_dev = out_dev;
  
-@@ -1731,7 +1877,9 @@ static int mlx5e_create_encap_header_ipv
+@@ -1732,7 +1882,9 @@ static int mlx5e_create_encap_header_ipv
  		goto destroy_neigh_entry;
  
  	e->flags |= MLX5_ENCAP_ENTRY_VALID;
@@ -605,17 +609,22 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	neigh_release(n);
  	return err;
  
-@@ -1816,7 +1964,9 @@ vxlan_encap_offload_err:
+@@ -1819,10 +1971,14 @@ vxlan_encap_offload_err:
  attach_flow:
  	list_add(&flow->encap, &e->flows);
  	*encap_dev = e->out_dev;
 +#ifdef HAVE_TCF_TUNNEL_INFO
  	if (e->flags & MLX5_ENCAP_ENTRY_VALID)
-+#endif
  		attr->encap_id = e->encap_id;
+ 	else
+ 		err = -EAGAIN;
++#else
++	attr->encap_id = e->encap_id;
++#endif
  
  	return err;
-@@ -1825,17 +1975,28 @@ out_err:
+ 
+@@ -1830,33 +1986,53 @@ out_err:
  	kfree(e);
  	return err;
  }
@@ -643,8 +652,13 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
 +#endif
  	int err = 0;
  
++#ifdef HAVE_TCF_EXTS_HAS_ACTIONS
++	if (!tcf_exts_has_actions(exts))
++#else
  	if (tc_no_actions(exts))
-@@ -1844,14 +2005,19 @@ static int parse_tc_fdb_actions(struct m
++#endif
+ 		return -EINVAL;
+ 
  	memset(attr, 0, sizeof(*attr));
  	attr->in_rep = rpriv->rep;
  
@@ -664,7 +678,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (is_tcf_pedit(a)) {
  			err = parse_tc_pedit_action(priv, a, MLX5_FLOW_NAMESPACE_FDB,
  						    parse_attr);
-@@ -1861,7 +2027,9 @@ static int parse_tc_fdb_actions(struct m
+@@ -1866,7 +2042,9 @@ static int parse_tc_fdb_actions(struct m
  			attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
  			continue;
  		}
@@ -674,7 +688,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (is_tcf_csum(a)) {
  			if (csum_offload_supported(priv, attr->action,
  						   tcf_csum_update_flags(a)))
-@@ -1869,14 +2037,22 @@ static int parse_tc_fdb_actions(struct m
+@@ -1874,14 +2052,22 @@ static int parse_tc_fdb_actions(struct m
  
  			return -EOPNOTSUPP;
  		}
@@ -697,7 +711,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  			if (switchdev_port_same_parent_id(priv->netdev,
  							  out_dev)) {
  				attr->action |= MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
-@@ -1885,6 +2061,9 @@ static int parse_tc_fdb_actions(struct m
+@@ -1890,6 +2076,9 @@ static int parse_tc_fdb_actions(struct m
  				rpriv = out_priv->ppriv;
  				attr->out_rep = rpriv->rep;
  			} else if (encap) {
@@ -707,7 +721,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  				err = mlx5e_attach_encap(priv, info,
  							 out_dev, &encap_dev, flow);
  				if (err && err != -EAGAIN)
-@@ -1895,7 +2074,9 @@ static int parse_tc_fdb_actions(struct m
+@@ -1900,7 +2089,9 @@ static int parse_tc_fdb_actions(struct m
  				out_priv = netdev_priv(encap_dev);
  				rpriv = out_priv->ppriv;
  				attr->out_rep = rpriv->rep;
@@ -717,7 +731,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  			} else {
  				pr_err("devices %s %s not on same switch HW, can't offload forwarding\n",
  				       priv->netdev->name, out_dev->name);
-@@ -1913,6 +2094,25 @@ static int parse_tc_fdb_actions(struct m
+@@ -1918,6 +2109,25 @@ static int parse_tc_fdb_actions(struct m
  			continue;
  		}
  
@@ -743,7 +757,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (is_tcf_vlan(a)) {
  			if (tcf_vlan_action(a) == TCA_VLAN_ACT_POP) {
  				attr->action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_POP;
-@@ -1928,10 +2128,12 @@ static int parse_tc_fdb_actions(struct m
+@@ -1940,17 +2150,19 @@ static int parse_tc_fdb_actions(struct m
  			continue;
  		}
  
@@ -756,7 +770,15 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  
  		return -EINVAL;
  	}
-@@ -1971,7 +2173,11 @@ int mlx5e_configure_flower(struct mlx5e_
+ 	return err;
+ }
+ 
+-int mlx5e_configure_flower(struct mlx5e_priv *priv, __be16 protocol,
++int mlx5e_configure_flower(struct mlx5e_priv *priv,
+ 			   struct tc_cls_flower_offload *f)
+ {
+ 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+@@ -1983,7 +2195,11 @@ int mlx5e_configure_flower(struct mlx5e_
  		goto err_free;
  
  	if (flow->flags & MLX5E_TC_FLOW_ESWITCH) {
@@ -768,7 +790,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  		if (err < 0)
  			goto err_handle_encap_flow;
  		flow->rule = mlx5e_tc_add_fdb_flow(priv, parse_attr, flow);
-@@ -2002,6 +2208,7 @@ err_del_rule:
+@@ -2014,6 +2230,7 @@ err_del_rule:
  	mlx5e_tc_del_flow(priv, flow);
  
  err_handle_encap_flow:
@@ -776,7 +798,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	if (err == -EAGAIN) {
  		err = rhashtable_insert_fast(&tc->ht, &flow->node,
  					     tc->ht_params);
-@@ -2010,6 +2217,7 @@ err_handle_encap_flow:
+@@ -2022,6 +2239,7 @@ err_handle_encap_flow:
  		else
  			return 0;
  	}
@@ -784,7 +806,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  
  err_free:
  	kvfree(parse_attr);
-@@ -2037,12 +2245,17 @@ int mlx5e_delete_flower(struct mlx5e_pri
+@@ -2049,12 +2267,17 @@ int mlx5e_delete_flower(struct mlx5e_pri
  	return 0;
  }
  
@@ -802,7 +824,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	u64 bytes;
  	u64 packets;
  	u64 lastuse;
-@@ -2062,10 +2275,24 @@ int mlx5e_stats_flower(struct mlx5e_priv
+@@ -2074,10 +2297,24 @@ int mlx5e_stats_flower(struct mlx5e_priv
  	mlx5_fc_query_cached(counter, &bytes, &packets, &lastuse,
  			     MLX5_FLOW_QUERY_CACHED_DIFF);
  
@@ -827,7 +849,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  
  static const struct rhashtable_params mlx5e_tc_flow_ht_params = {
  	.head_offset = offsetof(struct mlx5e_tc_flow, node),
-@@ -2073,17 +2300,25 @@ static const struct rhashtable_params ml
+@@ -2085,17 +2322,25 @@ static const struct rhashtable_params ml
  	.key_len = sizeof(((struct mlx5e_tc_flow *)0)->cookie),
  	.automatic_shrinking = true,
  };
@@ -853,7 +875,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  static void _mlx5e_tc_del_flow(void *ptr, void *arg)
  {
  	struct mlx5e_tc_flow *flow = ptr;
-@@ -2092,9 +2327,11 @@ static void _mlx5e_tc_del_flow(void *ptr
+@@ -2104,9 +2349,11 @@ static void _mlx5e_tc_del_flow(void *ptr
  	mlx5e_tc_del_flow(priv, flow);
  	kfree(flow);
  }
@@ -865,7 +887,7 @@ Change-Id: Ib33654edaa83a2c13382f4042d83f5026bcd3328
  	struct mlx5e_tc_table *tc = &priv->fs.tc;
  
  	rhashtable_free_and_destroy(&tc->ht, _mlx5e_tc_del_flow, priv);
-@@ -2103,4 +2340,5 @@ void mlx5e_tc_cleanup(struct mlx5e_priv
+@@ -2115,4 +2362,5 @@ void mlx5e_tc_cleanup(struct mlx5e_priv
  		mlx5_destroy_flow_table(tc->t);
  		tc->t = NULL;
  	}

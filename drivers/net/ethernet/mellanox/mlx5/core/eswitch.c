@@ -81,9 +81,8 @@ static int arm_vport_context_events_cmd(struct mlx5_core_dev *dev, u16 vport,
 	MLX5_SET(modify_nic_vport_context_in, in,
 		 opcode, MLX5_CMD_OP_MODIFY_NIC_VPORT_CONTEXT);
 	MLX5_SET(modify_nic_vport_context_in, in, field_select.change_event, 1);
+	MLX5_SET(modify_nic_vport_context_in, in, other_vport, get_other_vport(dev, &vport));
 	MLX5_SET(modify_nic_vport_context_in, in, vport_number, vport);
-	if (vport)
-		MLX5_SET(modify_nic_vport_context_in, in, other_vport, 1);
 	nic_vport_ctx = MLX5_ADDR_OF(modify_nic_vport_context_in,
 				     in, nic_vport_context);
 
@@ -110,9 +109,8 @@ static int modify_esw_vport_context_cmd(struct mlx5_core_dev *dev, u16 vport,
 
 	MLX5_SET(modify_esw_vport_context_in, in, opcode,
 		 MLX5_CMD_OP_MODIFY_ESW_VPORT_CONTEXT);
+	MLX5_SET(modify_esw_vport_context_in, in, other_vport, get_other_vport(dev, &vport));
 	MLX5_SET(modify_esw_vport_context_in, in, vport_number, vport);
-	if (vport)
-		MLX5_SET(modify_esw_vport_context_in, in, other_vport, 1);
 	return mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));
 }
 
@@ -248,7 +246,7 @@ esw_fdb_set_vport_promisc_rule(struct mlx5_eswitch *esw, u32 vport)
 	return __esw_fdb_set_vport_rule(esw, vport, true, mac_c, mac_v);
 }
 
-static int esw_create_legacy_fdb_table(struct mlx5_eswitch *esw, int nvports)
+static int esw_create_legacy_fdb_table(struct mlx5_eswitch *esw)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
 	struct mlx5_flow_table_attr ft_attr = {};
@@ -384,7 +382,7 @@ static int esw_add_uc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	/* Skip mlx5_mpfs_add_mac for PFs,
 	 * it is already done by the PF netdev in mlx5e_execute_l2_action
 	 */
-	if (!vport)
+	if (mlx5_priviliged_vport(esw, vport))
 		goto fdb_add;
 
 	err = mlx5_mpfs_add_mac(esw->dev, mac);
@@ -416,7 +414,7 @@ static int esw_del_uc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	/* Skip mlx5_mpfs_del_mac for PFs,
 	 * it is already done by the PF netdev in mlx5e_execute_l2_action
 	 */
-	if (!vport || !vaddr->mpfs)
+	if (mlx5_priviliged_vport(esw, vport) || !vaddr->mpfs)
 		goto fdb_del;
 
 	err = mlx5_mpfs_del_mac(esw->dev, mac);
@@ -439,7 +437,7 @@ static void update_allmulti_vports(struct mlx5_eswitch *esw,
 				   struct esw_mc_addr *esw_mc)
 {
 	u8 *mac = vaddr->node.addr;
-	u32 vport_idx = 0;
+	u32 vport_idx;
 
 	for (vport_idx = 0; vport_idx < esw->total_vports; vport_idx++) {
 		struct mlx5_vport *vport = &esw->vports[vport_idx];
@@ -449,7 +447,7 @@ static void update_allmulti_vports(struct mlx5_eswitch *esw,
 							 mac,
 							 struct vport_addr);
 		if (IS_ERR_OR_NULL(vport->allmulti_rule) ||
-		    vaddr->vport == vport_idx)
+		    vaddr->vport == vport->vport)
 			continue;
 		switch (vaddr->action) {
 		case MLX5_ACTION_ADD:
@@ -461,14 +459,14 @@ static void update_allmulti_vports(struct mlx5_eswitch *esw,
 			if (!iter_vaddr) {
 				esw_warn(esw->dev,
 					 "ALL-MULTI: Failed to add MAC(%pM) to vport[%d] DB\n",
-					 mac, vport_idx);
+					 mac, vport->vport);
 				continue;
 			}
-			iter_vaddr->vport = vport_idx;
+			iter_vaddr->vport = vport->vport;
 			iter_vaddr->flow_rule =
 					esw_fdb_set_vport_rule(esw,
 							       mac,
-							       vport_idx);
+							       vport->vport);
 			iter_vaddr->mc_promisc = true;
 			break;
 		case MLX5_ACTION_DEL:
@@ -567,7 +565,8 @@ static int esw_del_mc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 static void esw_apply_vport_addr_list(struct mlx5_eswitch *esw,
 				      u32 vport_num, int list_type)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	bool is_uc = list_type == MLX5_NVPRT_LIST_TYPE_UC;
 	vport_addr_action vport_addr_add;
 	vport_addr_action vport_addr_del;
@@ -602,7 +601,8 @@ static void esw_apply_vport_addr_list(struct mlx5_eswitch *esw,
 static void esw_update_vport_addr_list(struct mlx5_eswitch *esw,
 				       u32 vport_num, int list_type)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	bool is_uc = list_type == MLX5_NVPRT_LIST_TYPE_UC;
 	u8 (*mac_list)[ETH_ALEN];
 	struct l2addr_node *node;
@@ -700,10 +700,12 @@ static int esw_vport_ingress_config(struct mlx5_eswitch *esw,
 /* Sync vport vlan list from vport context */
 static void esw_update_vport_vlan_list(struct mlx5_eswitch *esw, u32 vport_num)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport;
 	DECLARE_BITMAP(tmp_vlans_bitmap, VLAN_N_VID);
 	int err;
 
+	vport = &esw->vports[vport_idx];
 	if (!vport->enabled)
 		return;
 
@@ -728,7 +730,8 @@ static void esw_update_vport_vlan_list(struct mlx5_eswitch *esw, u32 vport_num)
  */
 static void esw_update_vport_mc_promisc(struct mlx5_eswitch *esw, u32 vport_num)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	struct l2addr_node *node;
 	struct vport_addr *addr;
 	struct hlist_head *hash;
@@ -764,8 +767,9 @@ static void esw_update_vport_mc_promisc(struct mlx5_eswitch *esw, u32 vport_num)
 static void esw_apply_vport_rx_mode(struct mlx5_eswitch *esw, u32 vport_num,
 				    bool promisc, bool mc_promisc)
 {
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
 	struct esw_mc_addr *allmulti_addr = &esw->mc_promisc;
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 
 	if (IS_ERR_OR_NULL(vport->allmulti_rule) != mc_promisc)
 		goto promisc;
@@ -806,7 +810,8 @@ promisc:
 /* Sync vport rx mode from vport context */
 static void esw_update_vport_rx_mode(struct mlx5_eswitch *esw, u32 vport_num)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	int promisc_all = 0;
 	int promisc_uc = 0;
 	int promisc_mc = 0;
@@ -837,40 +842,41 @@ static void esw_vport_change_handle_locked(struct mlx5_vport *vport)
 	struct mlx5_core_dev *dev = vport->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	u8 mac[ETH_ALEN];
+	int vport_num = vport->vport;
 
-	mlx5_query_nic_vport_mac_address(dev, vport->vport, mac);
+	mlx5_query_nic_vport_mac_address(dev, vport_num, mac);
 	esw_debug(dev, "vport[%d] Context Changed: perm mac: %pM\n",
-		  vport->vport, mac);
+		  vport_num, mac);
 
 	if (vport->enabled_events & UC_ADDR_CHANGE) {
-		esw_update_vport_addr_list(esw, vport->vport,
+		esw_update_vport_addr_list(esw, vport_num,
 					   MLX5_NVPRT_LIST_TYPE_UC);
-		esw_apply_vport_addr_list(esw, vport->vport,
+		esw_apply_vport_addr_list(esw, vport_num,
 					  MLX5_NVPRT_LIST_TYPE_UC);
 	}
 
 	if (vport->enabled_events & MC_ADDR_CHANGE) {
-		esw_update_vport_addr_list(esw, vport->vport,
+		esw_update_vport_addr_list(esw, vport_num,
 					   MLX5_NVPRT_LIST_TYPE_MC);
 	}
 
 	if (vport->enabled_events & VLAN_CHANGE)
-		esw_update_vport_vlan_list(esw, vport->vport);
+		esw_update_vport_vlan_list(esw, vport_num);
 
 	if (vport->enabled_events & PROMISC_CHANGE) {
-		esw_update_vport_rx_mode(esw, vport->vport);
+		esw_update_vport_rx_mode(esw, vport_num);
 		if (!IS_ERR_OR_NULL(vport->allmulti_rule))
-			esw_update_vport_mc_promisc(esw, vport->vport);
+			esw_update_vport_mc_promisc(esw, vport_num);
 	}
 
 	if (vport->enabled_events & (PROMISC_CHANGE | MC_ADDR_CHANGE)) {
-		esw_apply_vport_addr_list(esw, vport->vport,
+		esw_apply_vport_addr_list(esw, vport_num,
 					  MLX5_NVPRT_LIST_TYPE_MC);
 	}
 
-	esw_debug(esw->dev, "vport[%d] Context Changed: Done\n", vport->vport);
+	esw_debug(esw->dev, "vport[%d] Context Changed: Done\n", vport_num);
 	if (vport->enabled)
-		arm_vport_context_events_cmd(dev, vport->vport,
+		arm_vport_context_events_cmd(dev, vport_num,
 					     vport->enabled_events);
 }
 
@@ -1307,7 +1313,7 @@ static int esw_vport_ingress_config(struct mlx5_eswitch *esw,
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_ALLOW;
 	if (vst_mode_steering && (vport->info.vlan || vport->info.qos)) {
-		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_PUSH_VLAN;
+		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
 		flow_act.vlan_pcp = vport->info.qos;
 		flow_act.vlan_dei = 0;
 		flow_act.vlan_id = vport->info.vlan;
@@ -1553,7 +1559,7 @@ static int esw_vport_egress_config(struct mlx5_eswitch *esw,
 		MLX5_SET(fte_match_param, spec->match_value, outer_headers.first_vid, vport->info.vlan);
 
 		if (vst_mode_steering)
-			flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_POP_VLAN;
+			flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_POP;
 		vport->egress.allow_vst_vlan =
 			mlx5_add_flow_rules(vport->egress.acl, spec,
 					    &flow_act, NULL, 0);
@@ -1663,8 +1669,9 @@ static void esw_destroy_tsar(struct mlx5_eswitch *esw)
 static int esw_vport_enable_qos(struct mlx5_eswitch *esw, int vport_num,
 				u32 initial_max_rate, u32 initial_bw_share)
 {
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
 	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {0};
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	struct mlx5_core_dev *dev = esw->dev;
 	void *vport_elem;
 	int err = 0;
@@ -1703,7 +1710,8 @@ static int esw_vport_enable_qos(struct mlx5_eswitch *esw, int vport_num,
 
 static void esw_vport_disable_qos(struct mlx5_eswitch *esw, int vport_num)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	int err = 0;
 
 	if (!vport->qos.enabled)
@@ -1722,8 +1730,9 @@ static void esw_vport_disable_qos(struct mlx5_eswitch *esw, int vport_num)
 static int esw_vport_qos_config(struct mlx5_eswitch *esw, int vport_num,
 				u32 max_rate, u32 bw_share)
 {
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
 	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {0};
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 	struct mlx5_core_dev *dev = esw->dev;
 	void *vport_elem;
 	u32 bitmask = 0;
@@ -1779,15 +1788,28 @@ static void esw_apply_vport_conf(struct mlx5_eswitch *esw,
 {
 	int vport_num = vport->vport;
 
-	if (!vport_num)
+	if (!mlx5_priviliged_vport(esw, vport_num)) {
+		mlx5_modify_vport_admin_state(esw->dev,
+					      MLX5_QUERY_VPORT_STATE_IN_OP_MOD_ESW_VPORT,
+					      vport_num,
+					      vport->info.link_state);
+	}
+
+	if (esw->mode == SRIOV_LEGACY && !vport_num) {
+		mlx5_modify_vport_admin_state(esw->dev,
+					      MLX5_QUERY_VPORT_STATE_IN_OP_MOD_ESW_VPORT,
+					      vport_num,
+					      MLX5_ESW_VPORT_ADMIN_STATE_AUTO);
+	}
+
+	if (!mlx5_priviliged_vport(esw, vport_num) && vport_num) {
+		mlx5_modify_nic_vport_mac_address(esw->dev, vport_num, vport->info.mac);
+		mlx5_modify_nic_vport_node_guid(esw->dev, vport_num, vport->info.node_guid);
+	}
+
+	if (mlx5_priviliged_vport(esw, vport_num))
 		return;
 
-	mlx5_modify_vport_admin_state(esw->dev,
-				      MLX5_QUERY_VPORT_STATE_IN_OP_MOD_ESW_VPORT,
-				      vport_num,
-				      vport->info.link_state);
-	mlx5_modify_nic_vport_mac_address(esw->dev, vport_num, vport->info.mac);
-	mlx5_modify_nic_vport_node_guid(esw->dev, vport_num, vport->info.node_guid);
 	if (!esw_vst_mode_is_steering(esw))
 		modify_esw_vport_cvlan(esw->dev, vport_num,
 				       vport->info.vlan, vport->info.qos,
@@ -1838,7 +1860,8 @@ static void esw_vport_destroy_drop_counters(struct mlx5_vport *vport)
 static void esw_enable_vport(struct mlx5_eswitch *esw, int vport_num,
 			     int enable_events)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 
 	mutex_lock(&esw->state_lock);
 	WARN_ON(vport->enabled);
@@ -1865,11 +1888,11 @@ static void esw_enable_vport(struct mlx5_eswitch *esw, int vport_num,
 	vport->enabled = true;
 
 	/* only PF is trusted by default */
-	if (!vport_num)
+	if (mlx5_priviliged_vport(esw, vport_num))
 		vport->info.trusted = true;
 
 	/* create steering drop counters for ingress and egress ACLs */
-	if (vport_num && esw->mode == SRIOV_LEGACY)
+	if (!mlx5_priviliged_vport(esw, vport_num) && esw->mode == SRIOV_LEGACY)
 		esw_vport_create_drop_counters(vport);
 
 	esw_vport_change_handle_locked(vport);
@@ -1893,7 +1916,8 @@ static void mlx5_cleanup_vport_vmacs(struct mlx5_vport *vport)
 
 static void esw_disable_vport(struct mlx5_eswitch *esw, int vport_num)
 {
-	struct mlx5_vport *vport = &esw->vports[vport_num];
+	int vport_idx = vport_num2idx(esw->dev, vport_num);
+	struct mlx5_vport *vport = &esw->vports[vport_idx];
 
 	if (!vport->enabled)
 		return;
@@ -1906,7 +1930,7 @@ static void esw_disable_vport(struct mlx5_eswitch *esw, int vport_num)
 	/* Wait for current already scheduled events to complete */
 	flush_workqueue(esw->work_queue);
 	/* Disable events from this vport */
-	arm_vport_context_events_cmd(esw->dev, vport->vport, 0);
+	arm_vport_context_events_cmd(esw->dev, vport_num, 0);
 	mutex_lock(&esw->state_lock);
 	/* We don't assume VFs will cleanup after themselves.
 	 * Calling vport change handler while vport is disabled will cleanup
@@ -1915,7 +1939,7 @@ static void esw_disable_vport(struct mlx5_eswitch *esw, int vport_num)
 	esw_vport_change_handle_locked(vport);
 	vport->enabled_events = 0;
 	esw_vport_disable_qos(esw, vport_num);
-	if (vport_num && esw->mode == SRIOV_LEGACY) {
+	if (!mlx5_priviliged_vport(esw, vport_num) && esw->mode == SRIOV_LEGACY) {
 		mlx5_modify_vport_admin_state(esw->dev,
 					      MLX5_QUERY_VPORT_STATE_IN_OP_MOD_ESW_VPORT,
 					      vport_num,
@@ -1936,14 +1960,17 @@ int mlx5_eswitch_enable_sriov(struct mlx5_eswitch *esw, int nvfs, int mode)
 {
 	int err;
 	int i, enabled_events;
+	int nvports;
 
 	if (!ESW_ALLOWED(esw))
 		return 0;
 
-	if (!MLX5_CAP_GEN(esw->dev, eswitch_flow_table) ||
+	nvports = nvfs + 1 + !!mlx5_core_is_ecpf(esw->dev);
+	esw->num_vfs = nvfs;
+	if (!MLX5_ESWITCH_MANAGER(esw->dev) ||
 	    !MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ft_support)) {
-		esw_warn(esw->dev, "E-Switch FDB is not supported, aborting ...\n");
-		return -EOPNOTSUPP;
+		esw_warn(esw->dev, "E-Switch FDB is not supported...\n");
+		return 0;
 	}
 
 	if (!MLX5_CAP_ESW_INGRESS_ACL(esw->dev, ft_support))
@@ -1952,18 +1979,19 @@ int mlx5_eswitch_enable_sriov(struct mlx5_eswitch *esw, int nvfs, int mode)
 	if (!MLX5_CAP_ESW_EGRESS_ACL(esw->dev, ft_support))
 		esw_warn(esw->dev, "E-Switch engress ACL is not supported by FW\n");
 
-	esw_info(esw->dev, "E-Switch enable SRIOV: nvfs(%d) mode (%d)\n", nvfs, mode);
+	esw_info(esw->dev, "E-Switch enable SRIOV: nvports(%d) mode (%s)\n",
+		 nvports, mlx5_esw_mode_str(mode));
 	esw->mode = mode;
 
 	if (mode == SRIOV_LEGACY) {
-		err = esw_create_legacy_fdb_table(esw, nvfs + 1);
+		err = esw_create_legacy_fdb_table(esw);
 	} else {
 		mlx5_dev_list_lock();
 		mlx5_remove_dev_by_protocol(esw->dev, MLX5_INTERFACE_PROTOCOL_IB);
 		mlx5_add_dev_by_protocol(esw->dev, MLX5_INTERFACE_PROTOCOL_IB);
 		mlx5_dev_list_unlock();
 
-		err = esw_offloads_init(esw, nvfs + 1);
+		err = esw_offloads_init(esw, nvports);
 	}
 	if (err)
 		goto abort;
@@ -1980,8 +2008,12 @@ int mlx5_eswitch_enable_sriov(struct mlx5_eswitch *esw, int nvfs, int mode)
 	for (i = 0; i <= nvfs; i++)
 		esw_enable_vport(esw, i, enabled_events);
 
+	if (mlx5_core_is_ecpf(esw->dev))
+		esw_enable_vport(esw, ECPF_ESW_PORT_NUMBER, enabled_events);
+
 	esw_info(esw->dev, "SRIOV enabled: active vports(%d)\n",
 		 esw->enabled_vports);
+
 	return 0;
 
 abort:
@@ -2003,17 +2035,25 @@ void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw)
 	int nvports;
 	int i;
 
+	/* now sriov can be enabled while eswtich is not */
+	if (!esw)
+		return;
+
 	if (!ESW_ALLOWED(esw) || esw->mode == SRIOV_NONE)
 		return;
 
-	esw_info(esw->dev, "disable SRIOV: active vports(%d) mode(%d)\n",
-		 esw->enabled_vports, esw->mode);
+	if (!MLX5_ESWITCH_MANAGER(esw->dev) ||
+	    !MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ft_support))
+		return;
+
+	esw_info(esw->dev, "disable SRIOV: active vports(%d) mode(%s)\n",
+		 esw->enabled_vports, mlx5_esw_mode_str(esw->mode));
 
 	mc_promisc = &esw->mc_promisc;
 	nvports = esw->enabled_vports;
 
 	for (i = 0; i < esw->total_vports; i++)
-		esw_disable_vport(esw, i);
+		esw_disable_vport(esw, esw->vports[i].vport);
 
 	if (mc_promisc && mc_promisc->uplink_rule)
 		mlx5_del_flow_rules(mc_promisc->uplink_rule);
@@ -2033,7 +2073,7 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	int total_vports = MLX5_TOTAL_VPORTS(dev);
 	struct mlx5_eswitch *esw;
 	bool access_other_hca_roce;
-	int vport_num;
+	int i;
 	int err;
 
 	if (!MLX5_VPORT_MANAGER(dev))
@@ -2073,17 +2113,19 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	mutex_init(&esw->state_lock);
 
 	access_other_hca_roce = MLX5_CAP_GEN(dev, vhca_group_manager) &&
+				MLX5_CAP_GEN(dev, vhca_resource_manager) &&
 				MLX5_CAP_GEN(dev, access_other_hca_roce);
 
-	for (vport_num = 0; vport_num < total_vports; vport_num++) {
-		struct mlx5_vport *vport = &esw->vports[vport_num];
+	for (i = 0; i < total_vports; i++) {
+		struct mlx5_vport *vport = &esw->vports[i];
+		int vport_num = vport_idx2num(dev, i);
 
 		vport->info.roce = true;
-		if (access_other_hca_roce)
-			mlx5_get_other_hca_cap_roce(dev, vport_num,
+		if (access_other_hca_roce && (vport_num != 0xfffe))
+			mlx5_get_other_hca_cap_roce(dev, i,
 						    &vport->info.roce);
 
-		vport->vport = vport_num;
+		vport->vport = vport_idx2num(dev, i);
 		vport->info.link_state = MLX5_ESW_VPORT_ADMIN_STATE_AUTO;
 		vport->info.vlan_proto = htons(ETH_P_8021Q);
 		vport->dev = dev;
@@ -2119,6 +2161,7 @@ int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
 	int err = 0;
 
 	if (!(MLX5_CAP_GEN(esw->dev, vhca_group_manager) &&
+	      MLX5_CAP_GEN(esw->dev, vhca_resource_manager) &&
 	      MLX5_CAP_GEN(esw->dev, access_other_hca_roce)))
 		return -EOPNOTSUPP;
 
@@ -2188,7 +2231,8 @@ void mlx5_eswitch_vport_event(struct mlx5_eswitch *esw, struct mlx5_eqe *eqe)
 }
 
 /* Vport Administration */
-#define LEGAL_VPORT(esw, vport) (vport >= 0 && vport < esw->total_vports)
+#define LEGAL_VPORT(__esw, __vport) (((__vport) >= 0 && (__vport) < (__esw)->total_vports) || \
+				 (mlx5_core_is_ecpf((__esw)->dev) && (__vport) == ECPF_ESW_PORT_NUMBER))
 
 int mlx5_eswitch_set_vport_mac(struct mlx5_eswitch *esw,
 			       int vport, u8 mac[ETH_ALEN])
@@ -2244,7 +2288,7 @@ int mlx5_eswitch_set_vport_state(struct mlx5_eswitch *esw,
 	struct mlx5_vport *evport;
 	int err = 0;
 
-	if (!ESW_ALLOWED(esw))
+	if (!MLX5_ESWITCH_MANAGER(esw->dev))
 		return -EPERM;
 	if (!LEGAL_VPORT(esw, vport))
 		return -EINVAL;
@@ -2306,7 +2350,7 @@ int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
 	struct mlx5_vport *evport;
 	int err = 0;
 
-	if (!ESW_ALLOWED(esw))
+	if (!MLX5_ESWITCH_MANAGER(esw->dev))
 		return -EPERM;
 	if (!LEGAL_VPORT(esw, vport) || (vlan > 4095) || (qos > 7))
 		return -EINVAL;
@@ -2366,7 +2410,7 @@ int mlx5_eswitch_set_vport_spoofchk(struct mlx5_eswitch *esw,
 	bool pschk;
 	int err = 0;
 
-	if (!ESW_ALLOWED(esw))
+	if (!MLX5_ESWITCH_MANAGER(esw->dev))
 		return -EPERM;
 	if (!LEGAL_VPORT(esw, vport))
 		return -EINVAL;
@@ -2704,7 +2748,7 @@ int mlx5_eswitch_query_vport_drop_stats(struct mlx5_core_dev *dev,
 }
 
 int mlx5_eswitch_get_vport_stats(struct mlx5_eswitch *esw,
-				 int vport,
+				 u16 vport,
 				 struct ifla_vf_stats *vf_stats)
 {
 	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
@@ -2724,9 +2768,8 @@ int mlx5_eswitch_get_vport_stats(struct mlx5_eswitch *esw,
 	MLX5_SET(query_vport_counter_in, in, opcode,
 		 MLX5_CMD_OP_QUERY_VPORT_COUNTER);
 	MLX5_SET(query_vport_counter_in, in, op_mod, 0);
+	MLX5_SET(query_vport_counter_in, in, other_vport, get_other_vport(esw->dev, &vport));
 	MLX5_SET(query_vport_counter_in, in, vport_number, vport);
-	if (vport)
-		MLX5_SET(query_vport_counter_in, in, other_vport, 1);
 
 	memset(out, 0, outlen);
 	err = mlx5_cmd_exec(esw->dev, in, sizeof(in), out, outlen);

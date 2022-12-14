@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
 
 Change-Id: Ib4c1006d07f756d663d3b042ae9165de7800e25b
 ---
- drivers/infiniband/core/sa_query.c | 55 ++++++++++++++++++++++++++++++++++++--
+ drivers/infiniband/core/sa_query.c | 55 ++++++++++++++++++++++++++++--
  1 file changed, 53 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/sa_query.c

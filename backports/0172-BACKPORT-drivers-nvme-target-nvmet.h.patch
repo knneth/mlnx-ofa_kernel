@@ -1,0 +1,20 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
+
+Change-Id: I3f85b1f8ce8ed7727c3f2a2477fc9fb8743561e3
+---
+ drivers/nvme/target/nvmet.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/nvme/target/nvmet.h
++++ b/drivers/nvme/target/nvmet.h
+@@ -264,6 +264,9 @@ struct nvmet_req {
+ 	struct nvmet_ns		*ns;
+ 	struct scatterlist	*sg;
+ 	struct bio		inline_bio;
++#ifdef HAVE_RH7_STRUCT_BIO_AUX
++	struct bio_aux		bio_aux;
++#endif
+ 	struct bio_vec		inline_bvec[NVMET_MAX_INLINE_BIOVEC];
+ 	int			sg_cnt;
+ 	/* data length as parsed from the command: */

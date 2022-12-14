@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 Change-Id: I2a1ff2213a4603129eb4803e7aa6c7f716da696b
 Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
 ---
- drivers/net/ethernet/mellanox/mlx5/core/main.c | 42 +++++++++++++++++++++++---
- 1 file changed, 38 insertions(+), 4 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/main.c    | 39 ++++++++++++++++++-
+ 1 file changed, 38 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
-@@ -393,6 +393,9 @@ static int mlx5_enable_msix(struct mlx5_
+@@ -395,6 +395,9 @@ static int mlx5_enable_msix(struct mlx5_
  	struct mlx5_eq_table *table = &priv->eq_table;
  	int num_eqs = 1 << MLX5_CAP_GEN(dev, log_max_eq);
  	int nvec;
@@ -19,7 +19,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	int i;
  
  	nvec = MLX5_CAP_GEN(dev, num_ports) * num_online_cpus() +
-@@ -410,13 +413,25 @@ static int mlx5_enable_msix(struct mlx5_
+@@ -412,13 +415,25 @@ static int mlx5_enable_msix(struct mlx5_
  	for (i = 0; i < nvec; i++)
  		priv->msix_arr[i].entry = i;
  
@@ -46,7 +46,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	return 0;
  
  err_free_msix:
-@@ -800,9 +815,11 @@ static int mlx5_irq_set_affinity_hint(st
+@@ -820,9 +835,11 @@ static int mlx5_irq_set_affinity_hint(st
  	cpumask_set_cpu(cpumask_local_spread(i, priv->numa_node),
  			priv->irq_info[i].mask);
  
@@ -58,7 +58,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  	return 0;
  }
-@@ -813,7 +830,9 @@ static void mlx5_irq_clear_affinity_hint
+@@ -833,7 +850,9 @@ static void mlx5_irq_clear_affinity_hint
  	struct msix_entry *msix = priv->msix_arr;
  	int irq                 = msix[i + MLX5_EQ_VEC_COMP_BASE].vector;
  
@@ -68,7 +68,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	free_cpumask_var(priv->irq_info[i].mask);
  }
  
-@@ -1185,11 +1204,13 @@ static int mlx5_init_once(struct mlx5_co
+@@ -1205,11 +1224,13 @@ static int mlx5_init_once(struct mlx5_co
  		goto err_rl_cleanup;
  	}
  
@@ -82,7 +82,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  	err = mlx5_eswitch_init(dev);
  	if (err) {
-@@ -1216,8 +1237,10 @@ err_sriov_cleanup:
+@@ -1236,8 +1257,10 @@ err_sriov_cleanup:
  err_eswitch_cleanup:
  	mlx5_eswitch_cleanup(dev->priv.eswitch);
  err_mst_dump_cleanup:
@@ -93,7 +93,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	mlx5_mpfs_cleanup(dev);
  err_rl_cleanup:
  	mlx5_cleanup_rl_table(dev);
-@@ -1240,7 +1263,9 @@ static void mlx5_cleanup_once(struct mlx
+@@ -1260,7 +1283,9 @@ static void mlx5_cleanup_once(struct mlx
  	mlx5_fpga_cleanup(dev);
  	mlx5_sriov_cleanup(dev);
  	mlx5_eswitch_cleanup(dev->priv.eswitch);
@@ -103,7 +103,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	mlx5_mpfs_cleanup(dev);
  	mlx5_cleanup_rl_table(dev);
  	mlx5_cleanup_dct_table(dev);
-@@ -1568,12 +1593,18 @@ struct mlx5_core_event_handler {
+@@ -1612,12 +1637,18 @@ struct mlx5_core_event_handler {
  
  static const struct devlink_ops mlx5_devlink_ops = {
  #ifdef CONFIG_MLX5_ESWITCH
@@ -122,23 +122,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  #endif
  };
  
-@@ -1657,15 +1688,12 @@ static int init_one(struct pci_dev *pdev
- 	}
- 
- 	request_module_nowait(MLX5_IB_MOD);
--
- 	err = devlink_register(devlink, &pdev->dev);
- 	if (err)
- 		goto clean_load;
--
- 	pci_save_state(pdev);
- 
- 	return 0;
--
- clean_load:
- 	mlx5_unload_one(dev, priv, true);
- clean_crdump:
-@@ -1891,7 +1919,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -1936,7 +1967,11 @@ static void mlx5_pci_resume(struct pci_d
  		dev_info(&pdev->dev, "%s: device recovered\n", __func__);
  }
  
@@ -150,7 +134,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -1986,7 +2018,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2031,7 +2066,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

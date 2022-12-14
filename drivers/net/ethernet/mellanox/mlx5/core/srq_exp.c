@@ -37,20 +37,15 @@
 
 int get_nvmf_pas_size(struct mlx5_nvmf_attr *nvmf)
 {
-	return nvmf->staging_buffer_number_of_pages * MLX5_PAS_ALIGN;
+	return nvmf->staging_buffer_number_of_pages * sizeof(u64);
 }
 
-void set_nvmf_srq_pas(struct mlx5_nvmf_attr *nvmf,
-			     void *start,
-			     int align)
+void set_nvmf_srq_pas(struct mlx5_nvmf_attr *nvmf, __be64 *pas)
 {
 	int i;
-	dma_addr_t dma_addr_be;
 
-	for (i = 0; i < nvmf->staging_buffer_number_of_pages; i++) {
-		dma_addr_be = cpu_to_be64(nvmf->staging_buffer_pas[i]);
-		memcpy(start + i * align, &dma_addr_be, sizeof(u64));
-	}
+	for (i = 0; i < nvmf->staging_buffer_number_of_pages; i++)
+		pas[i] = cpu_to_be64(nvmf->staging_buffer_pas[i]);
 }
 
 void set_nvmf_xrq_context(struct mlx5_nvmf_attr *nvmf, void *xrqc)
@@ -73,9 +68,6 @@ void set_nvmf_xrq_context(struct mlx5_nvmf_attr *nvmf, void *xrqc)
 	MLX5_SET(xrqc, xrqc,
 		 nvme_offload_context.log_max_namespace,
 		 nvmf->log_max_namespace);
-	MLX5_SET(xrqc, xrqc,
-		 nvme_offload_context.offloaded_capsules_count,
-		 nvmf->offloaded_capsules_count);
 	MLX5_SET(xrqc, xrqc,
 		 nvme_offload_context.ioccsz,
 		 nvmf->ioccsz);

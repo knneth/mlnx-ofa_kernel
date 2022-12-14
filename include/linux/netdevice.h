@@ -163,5 +163,14 @@ static inline void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
 }
 #endif
 
+#ifdef HAVE_NETDEV_XDP
+#define HAVE_NETDEV_BPF 1
+#define netdev_bpf	netdev_xdp
+#define ndo_bpf		ndo_xdp
+#endif
+
+#ifndef HAVE_TC_SETUP_QDISC_MQPRIO
+#define TC_SETUP_QDISC_MQPRIO TC_SETUP_MQPRIO
+#endif
 
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

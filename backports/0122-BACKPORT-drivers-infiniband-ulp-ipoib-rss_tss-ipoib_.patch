@@ -1,60 +1,50 @@
 From: Alaa Hleihel <alaa@mellanox.com>
-Subject: [PATCH] BACKPORT:
- drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ethtool_rss.c
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ib_rss.c
 
-Change-Id: I7a07cbafb2718e29e3be38ecd1c40631a91f8b50
+Change-Id: I31cdb42dc01d4063ca492cdb19a2dbd2bc75a67f
 ---
- .../ulp/ipoib/rss_tss/ipoib_ethtool_rss.c          | 24 +++++++++++++++++++++-
- 1 file changed, 23 insertions(+), 1 deletion(-)
+ .../ulp/ipoib/rss_tss/ipoib_ib_rss.c           | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
 
---- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ethtool_rss.c
-+++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ethtool_rss.c
-@@ -146,7 +146,7 @@ static int ipoib_get_sset_count_rss(stru
+--- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ib_rss.c
++++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_ib_rss.c
+@@ -216,7 +216,10 @@ static void ipoib_ib_handle_rx_wc_rss(st
  	}
- 	return -EOPNOTSUPP;
- }
+ 
+ 	skb_pull(skb, IB_GRH_BYTES);
 -
-+#ifdef HAVE_GET_SET_CHANNELS
- static void ipoib_get_channels(struct net_device *dev,
- 			       struct ethtool_channels *channel)
- {
-@@ -205,6 +205,7 @@ static int ipoib_set_channels(struct net
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)) && ! defined(HAVE_SK_BUFF_CSUM_LEVEL)
++	/* indicate size for reasmb, only for old kernels */
++	skb->truesize = SKB_TRUESIZE(skb->len);
++#endif
+ 	skb->protocol = ((struct ipoib_header *) skb->data)->proto;
+ 	skb_add_pseudo_hdr(skb);
  
- 	return ipoib_reinit_rss(dev, channel->rx_count, channel->tx_count);
- }
+@@ -232,9 +235,14 @@ static void ipoib_ib_handle_rx_wc_rss(st
+ 	if ((dev->features & NETIF_F_RXCSUM) &&
+ 			likely(wc->wc_flags & IB_WC_IP_CSUM_OK))
+ 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+-
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	if (dev->features & NETIF_F_LRO)
++		lro_receive_skb(&recv_ring->lro.lro_mgr, skb, NULL);
++	else
++		netif_receive_skb(skb);
++#else
+ 	napi_gro_receive(&recv_ring->napi, skb);
+-
 +#endif
+ repost:
+ 	if (unlikely(ipoib_ib_post_receive_rss(dev, recv_ring, wr_id)))
+ 		ipoib_warn(priv, "ipoib_ib_post_receive_rss failed "
+@@ -331,6 +339,10 @@ poll_more:
+ 	}
  
- static const struct ethtool_ops ipoib_ethtool_ops_rss = {
- 	.get_drvinfo		= ipoib_get_drvinfo,
-@@ -215,10 +216,31 @@ static const struct ethtool_ops ipoib_et
- 	.get_strings		= ipoib_get_strings_rss,
- 	.get_ethtool_stats	= ipoib_get_ethtool_stats_rss,
- 	.get_sset_count		= ipoib_get_sset_count_rss,
-+#ifdef HAVE_GET_SET_CHANNELS
- 	.get_channels		= ipoib_get_channels,
- 	.set_channels		= ipoib_set_channels,
+ 	if (done < budget) {
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++		if (dev->features & NETIF_F_LRO)
++			lro_flush_all(&rx_ring->lro.lro_mgr);
 +#endif
- 	.set_ringparam		= ipoib_set_ring_param,
- 	.get_ringparam		= ipoib_get_ring_param,
-+/* IPoIB current code supports HW_FEATURES and doesn't
-+ * support EXTENDED_HW_FEATURES. If support for EXTENDED_HW_FEATURES
-+ * is added then this code and the set function should be masked
-+ * with LEGACY_ETHTOOL_OPS.
-+ */
-+#ifndef HAVE_NETDEV_HW_FEATURES
-+#ifdef HAVE_GET_SET_FLAGS
-+#if defined (CONFIG_COMPAT_LRO_ENABLED_IPOIB)
-+	.set_flags              = ipoib_set_flags,
-+#endif
-+	.get_flags              = ethtool_op_get_flags,
-+#endif
-+#ifdef HAVE_GET_SET_TSO
-+	.set_tso                = ethtool_op_set_tso,
-+#endif
-+#ifdef HAVE_GET_SET_RX_CSUM
-+	.get_rx_csum		= ipoib_get_rx_csum,
-+#endif
-+#endif
- };
- 
- static const struct ethtool_ops *ipoib_ethtool_ops_select;
+ 		napi_complete(napi);
+ 		if (unlikely(ib_req_notify_cq(rx_ring->recv_cq,
+ 					      IB_CQ_NEXT_COMP |

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucm.c
 
 Change-Id: Ic13a8e137321e4b9075637a2aabf1e5b43043ce1
 ---
- drivers/infiniband/core/ucm.c | 39 +++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/ucm.c | 39 +++++++++++++++++++++++++++++++++++
  1 file changed, 39 insertions(+)
 
 --- a/drivers/infiniband/core/ucm.c

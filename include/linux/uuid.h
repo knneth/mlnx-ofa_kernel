@@ -43,6 +43,14 @@ int uuid_be_to_bin(const char *uuid, uuid_be *u);
 
 #endif /* HAVE_UUID_GEN */
 
+#ifndef HAVE_UUID_EQUAL
+#define uuid_equal LINUX_BACKPORT(uuid_equal)
+static inline bool uuid_equal(const uuid_t *u1, const uuid_t *u2)
+{
+	return memcmp(u1, u2, sizeof(uuid_t)) == 0;
+}
+#endif
+
 #endif
 
 #endif /* _COMPAT_LINUX_UUID_H */

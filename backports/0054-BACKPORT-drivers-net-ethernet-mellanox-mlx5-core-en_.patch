@@ -8,7 +8,7 @@ Change-Id: Iae3bb40af49f569d1621b294d2c6d9e4ab69d19c
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
-@@ -110,8 +110,10 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -50,8 +50,10 @@ int mlx5e_napi_poll(struct napi_struct *
  		busy |= mlx5e_poll_tx_cq(&c->special_sq[i].cq, budget);
  #endif
  
@@ -19,7 +19,7 @@ Change-Id: Iae3bb40af49f569d1621b294d2c6d9e4ab69d19c
  
  	work_done = mlx5e_poll_rx_cq(&c->rq.cq, budget);
  	busy |= work_done == budget;
-@@ -123,7 +125,11 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -61,7 +63,11 @@ int mlx5e_napi_poll(struct napi_struct *
  	if (busy)
  		return budget;
  

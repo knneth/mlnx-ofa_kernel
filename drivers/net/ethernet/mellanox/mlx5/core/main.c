@@ -84,6 +84,8 @@ MODULE_PARM_DESC(probe_vf, "probe VFs or not, 0 = not probe, 1 = probe. Default 
 struct proc_dir_entry *mlx5_core_proc_dir;
 struct proc_dir_entry *mlx5_crdump_dir;
 
+static struct workqueue_struct *wq;
+
 enum {
 	MLX5_ATOMIC_REQ_MODE_BE = 0x0,
 	MLX5_ATOMIC_REQ_MODE_HOST_ENDIANNESS = 0x1,
@@ -467,24 +469,40 @@ static u16 to_fw_pkey_sz(struct mlx5_core_dev *dev, u32 size)
 	}
 }
 
-static int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev,
-				   enum mlx5_cap_type cap_type,
-				   enum mlx5_cap_mode cap_mode)
+int mlx5_query_hca_cap(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type,
+		       enum mlx5_cap_mode cap_mode, u16 function_id, void *out)
 {
 	u8 in[MLX5_ST_SZ_BYTES(query_hca_cap_in)];
 	int out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
-	void *out, *hca_caps;
 	u16 opmod = (cap_type << 1) | (cap_mode & 0x01);
 	int err;
 
 	memset(in, 0, sizeof(in));
+	MLX5_SET(query_hca_cap_in, in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
+	MLX5_SET(query_hca_cap_in, in, op_mod, opmod);
+	if (function_id) {
+		MLX5_SET(query_hca_cap_in, in, other_function, 1);
+		MLX5_SET(query_hca_cap_in, in, function_id, function_id);
+	}
+	err = mlx5_cmd_exec(dev, in, sizeof(in), out, out_sz);
+
+	return err;
+	
+}
+
+static int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev,
+				   enum mlx5_cap_type cap_type,
+				   enum mlx5_cap_mode cap_mode)
+{
+	int out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
+	void *out, *hca_caps;
+	int err;
+
 	out = kzalloc(out_sz, GFP_KERNEL);
 	if (!out)
 		return -ENOMEM;
 
-	MLX5_SET(query_hca_cap_in, in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
-	MLX5_SET(query_hca_cap_in, in, op_mod, opmod);
-	err = mlx5_cmd_exec(dev, in, sizeof(in), out, out_sz);
+	err = mlx5_query_hca_cap(dev, cap_type, cap_mode, 0, out);
 	if (err) {
 		mlx5_core_warn(dev,
 			       "QUERY_HCA_CAP : type(%x) opmode(%x) Failed(%d)\n",
@@ -753,23 +771,25 @@ static int mlx5_core_set_hca_defaults(struct mlx5_core_dev *dev)
 	return ret;
 }
 
-int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id)
+int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id, bool embedded_cpu_function)
 {
 	u32 out[MLX5_ST_SZ_DW(enable_hca_out)] = {0};
 	u32 in[MLX5_ST_SZ_DW(enable_hca_in)]   = {0};
 
 	MLX5_SET(enable_hca_in, in, opcode, MLX5_CMD_OP_ENABLE_HCA);
 	MLX5_SET(enable_hca_in, in, function_id, func_id);
+	MLX5_SET(enable_hca_in, in, embedded_cpu_function, !!embedded_cpu_function);
 	return mlx5_cmd_exec(dev, &in, sizeof(in), &out, sizeof(out));
 }
 
-int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id)
+int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id, bool embedded_cpu_function)
 {
 	u32 out[MLX5_ST_SZ_DW(disable_hca_out)] = {0};
 	u32 in[MLX5_ST_SZ_DW(disable_hca_in)]   = {0};
 
 	MLX5_SET(disable_hca_in, in, opcode, MLX5_CMD_OP_DISABLE_HCA);
 	MLX5_SET(disable_hca_in, in, function_id, func_id);
+	MLX5_SET(enable_hca_in, in, embedded_cpu_function, !!embedded_cpu_function);
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
 }
 
@@ -1253,12 +1273,18 @@ static void mlx5_cleanup_once(struct mlx5_core_dev *dev)
 	mlx5_eq_cleanup(dev);
 }
 
+static bool read_embedded_cpu(struct mlx5_core_dev *dev)
+{
+	return (ioread32be(&dev->iseg->initializing) >> 23) & 1;
+}
+
 static int mlx5_load_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 			 bool boot)
 {
 	struct pci_dev *pdev = dev->pdev;
 	int err;
 
+	dev->ecpu.embedded_cpu = read_embedded_cpu(dev);
 	mutex_lock(&dev->intf_state_mutex);
 	if (test_bit(MLX5_INTERFACE_STATE_UP, &dev->intf_state)) {
 		dev_warn(&dev->pdev->dev, "%s: interface is up, NOP\n",
@@ -1296,7 +1322,7 @@ static int mlx5_load_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 		goto err_cmd_cleanup;
 	}
 
-	err = mlx5_core_enable_hca(dev, 0);
+	err = mlx5_core_enable_hca(dev, 0, !!mlx5_core_is_ecpf(dev));
 	if (err) {
 		dev_err(&pdev->dev, "enable hca failed\n");
 		goto err_cmd_cleanup;
@@ -1438,6 +1464,14 @@ static int mlx5_load_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 		goto err_ipsec_start;
 	}
 
+	if (mlx5_core_is_ecpf(dev)) {
+		err = mlx5_core_enable_hca(dev, 0, 0);
+		if (err) {
+			dev_err(&pdev->dev, "enable hca for PF failed\n");
+			goto err_ecpf_ehca;
+		}
+	}
+
 	if (mlx5_device_registered(dev)) {
 		mlx5_attach_device(dev);
 	} else {
@@ -1455,6 +1489,9 @@ out:
 	return 0;
 
 err_reg_dev:
+	if (mlx5_core_is_ecpf(dev) && mlx5_core_disable_hca(dev, 0, 0))
+		dev_warn(&dev->pdev->dev, "%s: disable_hca for PF failed\n", __func__);
+err_ecpf_ehca:
 	mlx5_accel_ipsec_cleanup(dev);
 err_ipsec_start:
 	mlx5_fpga_device_stop(dev);
@@ -1498,7 +1535,7 @@ reclaim_boot_pages:
 	mlx5_reclaim_startup_pages(dev);
 
 err_disable_hca:
-	mlx5_core_disable_hca(dev, 0);
+	mlx5_core_disable_hca(dev, 0, mlx5_core_is_ecpf(dev));
 
 err_cmd_cleanup:
 	mlx5_cmd_cleanup(dev);
@@ -1532,6 +1569,13 @@ static int mlx5_unload_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 	if (mlx5_device_registered(dev))
 		mlx5_detach_device(dev);
 
+	if (mlx5_core_is_ecpf(dev)) {
+		if (mlx5_core_disable_hca(dev, 0, 0))
+			dev_warn(&dev->pdev->dev, "%s: disable_hca for PF failed\n", __func__);
+		if (mlx5_wait_for_pages(dev, &dev->priv.peer_pf_pages))
+			dev_warn(&dev->pdev->dev, "%s: timeout reclaiming peer PF pages\n", __func__);
+	}
+
 	mlx5_accel_ipsec_cleanup(dev);
 	mlx5_fpga_device_stop(dev);
 
@@ -1552,7 +1596,7 @@ static int mlx5_unload_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 	}
 	mlx5_pagealloc_stop(dev);
 	mlx5_reclaim_startup_pages(dev);
-	mlx5_core_disable_hca(dev, 0);
+	mlx5_core_disable_hca(dev, 0, mlx5_core_is_ecpf(dev));
 	mlx5_cmd_cleanup(dev);
 
 out:
@@ -1612,6 +1656,7 @@ static int init_one(struct pci_dev *pdev,
 	spin_lock_init(&priv->ctx_lock);
 	mutex_init(&dev->pci_status_mutex);
 	mutex_init(&dev->intf_state_mutex);
+	mutex_init(&dev->configure_mutex);
 	spin_lock_init(&priv->memic_lock);
 
 	INIT_LIST_HEAD(&priv->waiting_events_list);
@@ -1656,7 +1701,7 @@ static int init_one(struct pci_dev *pdev,
 		goto clean_crdump;
 	}
 
-	request_module_nowait(MLX5_IB_MOD);
+	dev->mlx5_ib_requested = !request_module_nowait(MLX5_IB_MOD);
 
 	err = devlink_register(devlink, &pdev->dev);
 	if (err)
@@ -2026,8 +2071,76 @@ static void mlx5_remove_core_dir(void)
 	}
 }
 
+struct mlx5_ec_work {
+	struct mlx5_core_dev *dev;
+	struct work_struct	work;
+};
+
+static void ec_params_handler(struct work_struct *work)
+{
+	struct mlx5_ec_work *w = container_of(work, struct mlx5_ec_work, work);
+	struct mlx5_core_dev *dev = w->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	int num_vfs;
+	int err;
+
+	if (!mlx5_core_is_ecpf(dev)) {
+		mlx5_core_warn(dev, "got ec params event but I am not the ecpu - ignoring\n");
+		return;
+	}
+	err = mlx5_query_ec_params(dev, &num_vfs);
+	if (err) {
+		mlx5_core_warn(dev, "failed to query ec params %d\n", err);
+		goto out;
+	}
+
+	mlx5_core_warn(dev, "esw->mode %d\n", esw->mode);
+	esw->num_vfs = num_vfs;
+	if (esw->mode == SRIOV_OFFLOADS) {
+		err = esw_offloads_stop(esw);
+		if (err) {
+			mlx5_core_warn(w->dev, "failed to to stop offloads %d\n", err);
+			goto out;
+		}
+	}
+
+	err = esw_offloads_start(esw);
+	if (err) {
+		mlx5_core_warn(dev, "failed to to start offloads %d\n", err);
+		goto out;
+	}
+out:
+	kfree(w);
+}
+
+void mlx5_ec_params_update(struct mlx5_core_dev *dev)
+{
+	struct mlx5_ec_work *ecw;
+
+	ecw = kzalloc(sizeof(*ecw), GFP_ATOMIC);
+	if (!ecw)
+		return;
+
+	ecw->dev = dev;
+	INIT_WORK(&ecw->work, ec_params_handler);
+	queue_work(wq, &ecw->work);
+}
+
+static void configure_handler(struct work_struct *work)
+{
+	mlx5_configure_interfaces();
+	kfree(work);
+}
+
+static void unconfigure_handler(struct work_struct *work)
+{
+	mlx5_unconfigure_interfaces();
+	kfree(work);
+}
+
 static int __init init(void)
 {
+	struct work_struct *ws;
 	int err;
 
 	mlx5_core_verify_params();
@@ -2036,16 +2149,37 @@ static int __init init(void)
 	if (err)
 		goto err_debug;
 
+	wq = create_singlethread_workqueue("mlx5_generic");
+	if (!wq) {
+		err = -ENOMEM;
+		goto err_core_dir;
+	}
+
 	err = pci_register_driver(&mlx5_core_driver);
 	if (err)
-		goto err_core_dir;
+		goto err_wq;
 
 #ifdef CONFIG_MLX5_CORE_EN
 	mlx5e_init();
 #endif
 
+	ws = kzalloc(sizeof(*ws), GFP_ATOMIC);
+	if (!ws) {
+		err = -ENOMEM;
+		goto err_cleanup;
+	}
+
+	INIT_WORK(ws, configure_handler);
+	queue_work(wq, ws);
+
 	return 0;
 
+err_cleanup:
+#ifdef CONFIG_MLX5_CORE_EN
+	mlx5e_cleanup();
+#endif
+err_wq:
+	destroy_workqueue(wq);
 err_core_dir:
 	mlx5_remove_core_dir();
 err_debug:
@@ -2055,11 +2189,22 @@ err_debug:
 
 static void __exit cleanup(void)
 {
+	struct work_struct *ws;
+
+	flush_workqueue(wq);
+	ws = kzalloc(sizeof(*ws), GFP_ATOMIC);
+	if (ws) {
+		INIT_WORK(ws, unconfigure_handler);
+		queue_work(wq, ws);
+		flush_workqueue(wq);
+	}
+
 #ifdef CONFIG_MLX5_CORE_EN
 	mlx5e_cleanup();
 #endif
 	pci_unregister_driver(&mlx5_core_driver);
 
+	destroy_workqueue(wq);
 	mlx5_remove_core_dir();
 	mlx5_unregister_debugfs();
 }

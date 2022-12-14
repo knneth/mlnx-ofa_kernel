@@ -56,6 +56,13 @@ static inline bool mlx5e_vxlan_allowed(struct mlx5_core_dev *mdev)
 		mlx5_core_is_pf(mdev));
 }
 
+static inline bool mlx5e_vxlan_udp_port_allowed(struct mlx5_core_dev *mdev)
+{
+	return (mdev->priv.eswitch &&
+		(mdev->priv.eswitch->offloads.encap != DEVLINK_ESWITCH_ENCAP_MODE_NONE) &&
+		mlx5_core_is_pf(mdev));
+}
+
 void mlx5e_vxlan_init(struct mlx5e_priv *priv);
 void mlx5e_vxlan_cleanup(struct mlx5e_priv *priv);
 

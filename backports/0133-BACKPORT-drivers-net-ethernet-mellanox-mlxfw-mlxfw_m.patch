@@ -1,18 +1,23 @@
 From: Alaa Hleihel <alaa@mellanox.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c
 
-Change-Id: Idfef782787d5fe217df4a361b2dbe96623036c25
+Change-Id: I2452322ea09a6e28701e5c4e166ac8714db832c0
 ---
- drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c | 1 +
- 1 file changed, 1 insertion(+)
+ drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
-+++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
-@@ -38,6 +38,7 @@
- #define pr_fmt(fmt) "mlxfw_mfa2: " fmt
+--- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c
++++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2_tlv_multi.c
+@@ -38,7 +38,11 @@
+ #define pr_fmt(fmt) "MFA2: " fmt
  
- #include <linux/kernel.h>
-+#include <linux/printk.h>
- #include <linux/module.h>
- #include <linux/netlink.h>
- #include <linux/xz.h>
+ #include "mlxfw_mfa2_tlv_multi.h"
++#ifdef HAVE_UAPI_LINUX_NETLINK_H
+ #include <uapi/linux/netlink.h>
++#else
++#include <linux/netlink.h>
++#endif
+ 
+ #define MLXFW_MFA2_TLV_TOTAL_SIZE(tlv) \
+ 	NLA_ALIGN(sizeof(*(tlv)) + be16_to_cpu((tlv)->len))

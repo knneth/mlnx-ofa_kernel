@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
 Change-Id: If48fd42fa7c3ea3f0a883cda85145872a88eef66
 ---
- drivers/infiniband/core/umem_odp.c | 54 ++++++++++++++++++++++++++++++++++++++
+ drivers/infiniband/core/umem_odp.c | 54 ++++++++++++++++++++++++++++++
  1 file changed, 54 insertions(+)
 
 --- a/drivers/infiniband/core/umem_odp.c

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
 ---
- .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c  | 84 ++++++++++++++++++++--
- 1 file changed, 80 insertions(+), 4 deletions(-)
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 97 ++++++++++++++++++-
+ 1 file changed, 93 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
@@ -28,19 +28,28 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
  
  static const struct net_device_ops mlx5i_netdev_ops = {
  	.ndo_open                = mlx5i_open,
-@@ -54,7 +62,11 @@ static const struct net_device_ops mlx5i
+@@ -52,9 +60,20 @@ static const struct net_device_ops mlx5i
+ 	.ndo_tx_timeout          = mlx5i_tx_timeout,
+ 	.ndo_init                = mlx5i_dev_init,
  	.ndo_uninit              = mlx5i_dev_cleanup,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu          = mlx5i_change_mtu,
++#else
  	.ndo_change_mtu          = mlx5i_change_mtu,
++#endif
  	.ndo_do_ioctl            = mlx5i_ioctl,
 +#if defined(HAVE_NDO_GET_STATS64) || defined(HAVE_NDO_GET_STATS64_RET_VOID)
  	.ndo_get_stats64         = mlx5i_get_stats,
 +#else
 +	.ndo_get_stats           = mlx5i_get_stats,
 +#endif
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
++#endif
  };
  
  /* IPoIB mlx5 netdev profile */
-@@ -69,8 +81,32 @@ static void mlx5i_build_nic_params(struc
+@@ -69,9 +88,33 @@ static void mlx5i_build_nic_params(struc
  		MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE :
  		MLX5I_PARAMS_DEFAULT_LOG_RQ_SIZE;
  
@@ -50,8 +59,8 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
 +#else
  	params->lro_en = false;
 +#endif
-+}
-+
+ }
+ 
 +#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
 +void set_lro_features_bit(struct mlx5e_priv *priv)
 +{
@@ -68,20 +77,21 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
 +		priv->netdev->wanted_features |= NETIF_F_LRO;
 +#endif
 +	}
- }
++}
 +#endif
- 
++
  static void mlx5i_tx_timeout_work(struct work_struct *work)
  {
-@@ -112,6 +148,7 @@ void mlx5i_init(struct mlx5_core_dev *md
- 	mlx5i_build_nic_params(mdev, &priv->channels.params);
+ 	struct mlx5e_priv *priv = container_of(work, struct mlx5e_priv,
+@@ -112,6 +155,7 @@ void mlx5i_init(struct mlx5_core_dev *md
+ 	mlx5i_build_nic_params(priv, &priv->channels.params);
  
  	/* netdev init */
 +#ifdef HAVE_NETDEV_HW_FEATURES
  	netdev->hw_features    |= NETIF_F_SG;
  	netdev->hw_features    |= NETIF_F_IP_CSUM;
  	netdev->hw_features    |= NETIF_F_IPV6_CSUM;
-@@ -119,17 +156,44 @@ void mlx5i_init(struct mlx5_core_dev *md
+@@ -119,17 +163,50 @@ void mlx5i_init(struct mlx5_core_dev *md
  	netdev->hw_features    |= NETIF_F_TSO;
  	netdev->hw_features    |= NETIF_F_TSO6;
  	netdev->hw_features    |= NETIF_F_RXCSUM;
@@ -105,7 +115,13 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
 +#endif
  
  	netdev->netdev_ops = &mlx5i_netdev_ops;
++
++#ifdef HAVE_ETHTOOL_OPS_EXT
++	SET_ETHTOOL_OPS(netdev, &mlx5i_ethtool_ops);
++	set_ethtool_ops_ext(netdev, &mlx5i_ethtool_ops_ext);
++#else
  	netdev->ethtool_ops = &mlx5i_ethtool_ops;
++#endif
  }
  
 -static void
@@ -128,7 +144,7 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
  
  	stats->rx_packets = sstats->rx_packets;
  	stats->rx_bytes   = sstats->rx_bytes;
-@@ -137,6 +201,10 @@ mlx5i_get_stats(struct net_device *dev,
+@@ -137,6 +214,10 @@ mlx5i_get_stats(struct net_device *dev,
  	stats->tx_bytes   = sstats->tx_bytes;
  	stats->tx_dropped = sstats->tx_queue_dropped;
  	stats->rx_dropped = priv->stats.qcnt.rx_out_of_buffer;
@@ -139,7 +155,7 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
  }
  
  /* Called directly before IPoIB netdevice is destroyed to cleanup SW structs */
-@@ -282,7 +350,11 @@ static int mlx5i_create_flow_steering(st
+@@ -282,7 +363,11 @@ static int mlx5i_create_flow_steering(st
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -151,7 +167,7 @@ Change-Id: I3ca5ae7c6634b9a0aa8eafe84f0c6908a1de6c79
  	}
  
  	err = mlx5e_create_inner_ttc_table(priv);
-@@ -447,9 +519,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -447,9 +532,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:

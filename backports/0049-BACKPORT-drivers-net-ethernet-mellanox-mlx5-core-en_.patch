@@ -20,7 +20,7 @@ Change-Id: I3189c0a6e109ca57d97c2f75e0f95c05b1b14693
  	u64 rx_wqe_err;
  	u64 rx_mpwqe_filler;
  	u64 rx_buff_alloc_err;
-@@ -115,6 +120,11 @@ static const struct counter_desc sw_stat
+@@ -114,6 +119,11 @@ static const struct counter_desc sw_stat
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_queue_wake) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_queue_dropped) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xmit_more) },
@@ -32,7 +32,7 @@ Change-Id: I3189c0a6e109ca57d97c2f75e0f95c05b1b14693
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_wqe_err) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler) },
  	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_buff_alloc_err) },
-@@ -433,7 +443,11 @@ struct mlx5e_stats {
+@@ -429,7 +439,11 @@ struct mlx5e_stats {
  	struct mlx5e_qcounter_stats qcnt;
  	struct mlx5e_vport_stats vport;
  	struct mlx5e_pport_stats pport;

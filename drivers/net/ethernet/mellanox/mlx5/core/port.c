@@ -313,6 +313,7 @@ int mlx5_query_port_admin_status(struct mlx5_core_dev *dev,
 	if (err)
 		return err;
 	*status = MLX5_GET(paos_reg, out, admin_status);
+	mlx5_core_warn(dev, "oper_status %d\n", MLX5_GET(paos_reg, out, admin_status));
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mlx5_query_port_admin_status);

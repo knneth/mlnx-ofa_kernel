@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/sysfs.c
 
 Change-Id: Id20d4c40bbb5128ef6bb31775ed657d3a72ed23c
 ---
- drivers/infiniband/core/sysfs.c | 118 +++++++++++++++++++++++++++++++++++++++-
+ drivers/infiniband/core/sysfs.c | 118 +++++++++++++++++++++++++++++++-
  1 file changed, 117 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/sysfs.c

@@ -391,7 +391,10 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev, int entry)
 			if (err && err != -EAGAIN)
 				return ERR_PTR(err);
 
-			wait_for_completion(&ent->compl);
+			if (err)
+				msleep(20);
+			else
+				wait_for_completion(&ent->compl);
 		} else {
 			mr = list_first_entry(&ent->head, struct mlx5_ib_mr,
 					      list);

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: Icf86b3fa27edf7e5a5e2332cf2a81c2fb7597b38
 ---
- drivers/infiniband/core/umem.c | 75 ++++++++++++++++++++++++++++++++++++++++--
+ drivers/infiniband/core/umem.c | 75 +++++++++++++++++++++++++++++++++-
  1 file changed, 73 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c

@@ -77,7 +77,8 @@ int mlx5_wq_cyc_create(struct mlx5_core_dev *mdev, struct mlx5_wq_param *param,
 	int err;
 
 	wq->log_stride = MLX5_GET(wq, wqc, log_wq_stride);
-	wq->sz_m1 = (1 << MLX5_GET(wq, wqc, log_wq_sz)) - 1;
+	wq->sz    = 1 << MLX5_GET(wq, wqc, log_wq_sz);
+	wq->sz_m1 = wq->sz - 1;
 
 	err = mlx5_db_alloc_node(mdev, &wq_ctrl->db, param->db_numa_node);
 	if (err) {

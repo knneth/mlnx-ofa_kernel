@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
 
 Change-Id: Idd37c8fee7340ca275c18dedf2f5e13856503556
 ---
- drivers/infiniband/core/roce_gid_mgmt.c | 67 ++++++++++++++++++++++++++++++++-
+ drivers/infiniband/core/roce_gid_mgmt.c | 67 ++++++++++++++++++++++++-
  1 file changed, 65 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/roce_gid_mgmt.c

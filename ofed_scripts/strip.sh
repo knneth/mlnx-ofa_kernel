@@ -40,8 +40,6 @@ if [ ! "$last" == "-- " ]; then
 fi
 
 head -n -3 $1 | \
-	sed -e "s/^index [[:xdigit:]]*\.\.[[:xdigit:]]* [[:digit:]]*$/index xxxxxxx..xxxxxxx xxxxxx/" | \
-	sed -e "s/^index [[:xdigit:]]*..[[:xdigit:]]*$/index xxxxxxx..xxxxxxx xxxxxx/" | \
+	sed -e "s/^index [[:xdigit:]]\+\.\.[[:xdigit:]]\+/index xxxxxxx..xxxxxxx/" | \
 	grep -v "^From " | \
 	grep -v "^Date: " > $tmpfile && mv $1 $1.orig && mv $tmpfile $1
-

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_clock.c
 
 Change-Id: I081b9927549ec599394e0d825fa3f5b88daffedc
 ---
- drivers/net/ethernet/mellanox/mlx4/en_clock.c | 32 +++++++++++++++++++++++++++
+ drivers/net/ethernet/mellanox/mlx4/en_clock.c | 32 +++++++++++++++++++
  1 file changed, 32 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_clock.c

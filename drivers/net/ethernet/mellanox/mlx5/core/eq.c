@@ -151,6 +151,8 @@ static const char *eqe_type_str(u8 type)
 		return "MLX5_EVENT_TYPE_STALL_EVENT";
 	case MLX5_EVENT_TYPE_CMD:
 		return "MLX5_EVENT_TYPE_CMD";
+	case MLX5_EVENT_EC_PARAMS_CHANGE:
+		return "MLX5_EVENT_EC_PARAMS_CHANGE";
 	case MLX5_EVENT_TYPE_PAGE_REQUEST:
 		return "MLX5_EVENT_TYPE_PAGE_REQUEST";
 	case MLX5_EVENT_TYPE_PAGE_FAULT:
@@ -551,10 +553,11 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 			{
 				u16 func_id = be16_to_cpu(eqe->data.req_pages.func_id);
 				s32 npages = be32_to_cpu(eqe->data.req_pages.num_pages);
+				bool ec_function = be16_to_cpu(eqe->data.req_pages.ec_function_rsvd) & 0x8000;
 
-				mlx5_core_dbg(dev, "page request for func 0x%x, npages %d\n",
-					      func_id, npages);
-				mlx5_core_req_pages_handler(dev, func_id, npages);
+				mlx5_core_dbg(dev, "page request for func 0x%x, npages %d, ec_function %d\n",
+					      func_id, npages, ec_function);
+				mlx5_core_req_pages_handler(dev, func_id, npages, ec_function);
 			}
 			break;
 
@@ -582,6 +585,11 @@ static irqreturn_t mlx5_eq_int(int irq, void *eq_ptr)
 		case MLX5_EVENT_TYPE_GENERAL_EVENT:
 			general_event_handler(dev, eqe);
 			break;
+
+		case MLX5_EVENT_EC_PARAMS_CHANGE:
+			mlx5_ec_params_update(dev);
+			break;
+
 		default:
 			mlx5_core_warn(dev, "Unhandled event 0x%x on EQ 0x%x\n",
 				       eqe->type, eq->eqn);
@@ -816,6 +824,9 @@ int mlx5_start_eqs(struct mlx5_core_dev *dev)
 		async_event_mask |= (1ull << MLX5_EVENT_TYPE_TEMP_WARN_EVENT);
 	else
 		mlx5_core_dbg(dev, "temp_warn_event is not set\n");
+
+	if (mlx5_core_is_ecpf(dev))
+		async_event_mask |= (1ull << MLX5_EVENT_EC_PARAMS_CHANGE);
 
 	err = mlx5_create_map_eq(dev, &table->cmd_eq, MLX5_EQ_VEC_CMD,
 				 MLX5_NUM_CMD_EQE, 1ull << MLX5_EVENT_TYPE_CMD,

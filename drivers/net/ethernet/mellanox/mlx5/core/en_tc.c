@@ -1565,7 +1565,7 @@ static int mlx5e_create_encap_header_ipv4(struct mlx5e_priv *priv,
 		break;
 	default:
 		err = -EOPNOTSUPP;
-		goto out;
+		goto free_encap;
 	}
 	fl4.flowi4_tos = tun_key->tos;
 	fl4.daddr = tun_key->u.ipv4.dst;
@@ -1574,7 +1574,7 @@ static int mlx5e_create_encap_header_ipv4(struct mlx5e_priv *priv,
 	err = mlx5e_route_lookup_ipv4(priv, mirred_dev, &out_dev,
 				      &fl4, &n, &ttl);
 	if (err)
-		goto out;
+		goto free_encap;
 
 	/* used by mlx5e_detach_encap to lookup a neigh hash table
 	 * entry in the neigh hash table when a user deletes a rule
@@ -1591,7 +1591,7 @@ static int mlx5e_create_encap_header_ipv4(struct mlx5e_priv *priv,
 	 */
 	err = mlx5e_rep_encap_entry_attach(netdev_priv(out_dev), e);
 	if (err)
-		goto out;
+		goto free_encap;
 
 	read_lock_bh(&n->lock);
 	nud_state = n->nud_state;
@@ -1631,8 +1631,9 @@ static int mlx5e_create_encap_header_ipv4(struct mlx5e_priv *priv,
 
 destroy_neigh_entry:
 	mlx5e_rep_encap_entry_detach(netdev_priv(e->out_dev), e);
-out:
+free_encap:
 	kfree(encap_header);
+out:
 	if (n)
 		neigh_release(n);
 	return err;
@@ -1669,7 +1670,7 @@ static int mlx5e_create_encap_header_ipv6(struct mlx5e_priv *priv,
 		break;
 	default:
 		err = -EOPNOTSUPP;
-		goto out;
+		goto free_encap;
 	}
 
 	fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tun_key->tos), tun_key->label);
@@ -1679,7 +1680,7 @@ static int mlx5e_create_encap_header_ipv6(struct mlx5e_priv *priv,
 	err = mlx5e_route_lookup_ipv6(priv, mirred_dev, &out_dev,
 				      &fl6, &n, &ttl);
 	if (err)
-		goto out;
+		goto free_encap;
 
 	/* used by mlx5e_detach_encap to lookup a neigh hash table
 	 * entry in the neigh hash table when a user deletes a rule
@@ -1696,7 +1697,7 @@ static int mlx5e_create_encap_header_ipv6(struct mlx5e_priv *priv,
 	 */
 	err = mlx5e_rep_encap_entry_attach(netdev_priv(out_dev), e);
 	if (err)
-		goto out;
+		goto free_encap;
 
 	read_lock_bh(&n->lock);
 	nud_state = n->nud_state;
@@ -1737,8 +1738,9 @@ static int mlx5e_create_encap_header_ipv6(struct mlx5e_priv *priv,
 
 destroy_neigh_entry:
 	mlx5e_rep_encap_entry_detach(netdev_priv(e->out_dev), e);
-out:
+free_encap:
 	kfree(encap_header);
+out:
 	if (n)
 		neigh_release(n);
 	return err;
@@ -1792,6 +1794,7 @@ vxlan_encap_offload_err:
 		}
 	}
 
+	/* must verify if encap is valid or not */
 	if (found)
 		goto attach_flow;
 
@@ -1818,6 +1821,8 @@ attach_flow:
 	*encap_dev = e->out_dev;
 	if (e->flags & MLX5_ENCAP_ENTRY_VALID)
 		attr->encap_id = e->encap_id;
+	else
+		err = -EAGAIN;
 
 	return err;
 
@@ -1917,11 +1922,18 @@ static int parse_tc_fdb_actions(struct mlx5e_priv *priv, struct tcf_exts *exts,
 			if (tcf_vlan_action(a) == TCA_VLAN_ACT_POP) {
 				attr->action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_POP;
 			} else if (tcf_vlan_action(a) == TCA_VLAN_ACT_PUSH) {
-				if (tcf_vlan_push_proto(a) != htons(ETH_P_8021Q))
-					return -EOPNOTSUPP;
-
 				attr->action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
-				attr->vlan = tcf_vlan_push_vid(a);
+				attr->vlan_vid = tcf_vlan_push_vid(a);
+				if (mlx5_eswitch_vlan_actions_supported(priv->mdev)) {
+					attr->vlan_prio = tcf_vlan_push_prio(a);
+					attr->vlan_proto = tcf_vlan_push_proto(a);
+					if (!attr->vlan_proto)
+						attr->vlan_proto = htons(ETH_P_8021Q);
+				} else if (tcf_vlan_push_proto(a) != htons(ETH_P_8021Q) ||
+					   tcf_vlan_push_prio(a)) {
+					return -EOPNOTSUPP;
+				}
+
 			} else { /* action is TCA_VLAN_ACT_MODIFY */
 				return -EOPNOTSUPP;
 			}

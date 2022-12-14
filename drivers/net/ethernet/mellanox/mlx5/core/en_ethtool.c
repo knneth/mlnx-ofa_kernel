@@ -36,15 +36,18 @@
 void mlx5e_ethtool_get_drvinfo(struct mlx5e_priv *priv,
 			       struct ethtool_drvinfo *drvinfo)
 {
+#define NAMESZ sizeof(drvinfo->version)
 	struct mlx5_core_dev *mdev = priv->mdev;
+	char dname[NAMESZ];
 
-	strlcpy(drvinfo->driver, DRIVER_NAME, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, DRIVER_VERSION,
-		sizeof(drvinfo->version));
-	snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
-		 "%d.%d.%04d (%.16s)",
-		 fw_rev_maj(mdev), fw_rev_min(mdev), fw_rev_sub(mdev),
-		 mdev->board_id);
+	strlcpy(dname, DRIVER_NAME, NAMESZ);
+	if (priv->representor)
+		strlcat(dname, "-rep", NAMESZ);
+
+	strlcpy(drvinfo->driver, dname, NAMESZ);
+	strlcpy(drvinfo->version, DRIVER_VERSION, NAMESZ);
+	snprintf(drvinfo->fw_version, NAMESZ, "%d.%d.%04d (%.16s)", fw_rev_maj(mdev),
+		 fw_rev_min(mdev), fw_rev_sub(mdev), mdev->board_id);
 	strlcpy(drvinfo->bus_info, pci_name(mdev->pdev),
 		sizeof(drvinfo->bus_info));
 }
@@ -481,8 +484,8 @@ static u32 mlx5e_rx_wqes_to_packets(struct mlx5e_priv *priv, int rq_wq_type,
 	if (rq_wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
 		return num_wqe;
 
-	stride_size = 1 << priv->channels.params.mpwqe_log_stride_sz;
-	num_strides = 1 << priv->channels.params.mpwqe_log_num_strides;
+	stride_size = 1 << mlx5e_mpwqe_get_log_stride_size(priv, &priv->channels.params);
+	num_strides = 1 << mlx5e_mpwqe_get_log_num_strides(priv, &priv->channels.params);
 	wqe_size = stride_size * num_strides;
 
 	packets_per_wqe = wqe_size /
@@ -502,8 +505,8 @@ static u32 mlx5e_packets_to_rx_wqes(struct mlx5e_priv *priv, int rq_wq_type,
 	if (rq_wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
 		return num_packets;
 
-	stride_size = 1 << priv->channels.params.mpwqe_log_stride_sz;
-	num_strides = 1 << priv->channels.params.mpwqe_log_num_strides;
+	stride_size = 1 << mlx5e_mpwqe_get_log_stride_size(priv, &priv->channels.params);
+	num_strides = 1 << mlx5e_mpwqe_get_log_num_strides(priv, &priv->channels.params);
 	wqe_size = stride_size * num_strides;
 
 	num_packets = (1 << order_base_2(num_packets));
@@ -645,8 +648,8 @@ void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
 #endif
 }
 
-static void mlx5e_get_channels(struct net_device *dev,
-			       struct ethtool_channels *ch)
+void mlx5e_get_channels(struct net_device *dev,
+			struct ethtool_channels *ch)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
@@ -732,8 +735,8 @@ out:
 	return err;
 }
 
-static int mlx5e_set_channels(struct net_device *dev,
-			      struct ethtool_channels *ch)
+int  mlx5e_set_channels(struct net_device *dev,
+			struct ethtool_channels *ch)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
@@ -1735,15 +1738,15 @@ int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 	new_channels.params = priv->channels.params;
 	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_RX_CQE_COMPRESS, new_val);
 
-	mlx5e_set_rq_type_params(priv->mdev, &new_channels.params,
-				 new_channels.params.rq_wq_type);
-
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		priv->channels.params = new_channels.params;
 		return 0;
 	}
 
 	err = mlx5e_switch_priv_channels(priv, &new_channels, NULL);
+	mlx5e_dbg(DRV, priv, "MLX5E: RxCqeCmprss was turned %s\n",
+		  MLX5E_GET_PFLAG(&priv->channels.params,
+				  MLX5E_PFLAG_RX_CQE_COMPRESS) ? "ON" : "OFF");
 
 	return err;
 }
@@ -1787,8 +1790,8 @@ static int set_pflag_dropless_rq(struct net_device *netdev,
 
 	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_DROPLESS_RQ, new_val);
 
-	mlx5e_set_rq_type_params(priv->mdev, &new_channels.params,
-				 new_channels.params.rq_wq_type);
+	mlx5e_init_rq_type_params(priv, &new_channels.params,
+				  new_channels.params.rq_wq_type);
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		priv->channels.params = new_channels.params;

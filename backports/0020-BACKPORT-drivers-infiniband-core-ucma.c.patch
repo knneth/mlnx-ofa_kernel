@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
 
 Change-Id: Idee88b1f2836d3404c97a25306b650c0f2dfb798
 ---
- drivers/infiniband/core/ucma.c | 79 +++++++++++++++++++++++++++++++++++++++++-
+ drivers/infiniband/core/ucma.c | 79 +++++++++++++++++++++++++++++++++-
  1 file changed, 78 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/ucma.c

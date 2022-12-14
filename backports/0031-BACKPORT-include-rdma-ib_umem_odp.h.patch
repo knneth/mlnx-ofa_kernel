@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
 
 Change-Id: I35bb56cc7a98d7eae66706793945ea88476c2afe
 ---
- include/rdma/ib_umem_odp.h | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ include/rdma/ib_umem_odp.h | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
 
 --- a/include/rdma/ib_umem_odp.h
 +++ b/include/rdma/ib_umem_odp.h
@@ -60,3 +60,39 @@ Change-Id: I35bb56cc7a98d7eae66706793945ea88476c2afe
  /*
   * The lower 2 bits of the DMA address signal the R/W permissions for
   * the entry. To upgrade the permissions, provide the appropriate
+@@ -114,22 +128,35 @@ int ib_umem_odp_map_dma_pages(struct ib_
+ void ib_umem_odp_unmap_dma_pages(struct ib_umem *umem, u64 start_offset,
+ 				 u64 bound, int *num_pages);
+ 
++#ifdef HAVE_RB_ROOT_CACHED
++void rbt_ib_umem_insert(struct umem_odp_node *node, struct rb_root_cached *root);
++void rbt_ib_umem_remove(struct umem_odp_node *node, struct rb_root_cached *root);
++#else
+ void rbt_ib_umem_insert(struct umem_odp_node *node, struct rb_root *root);
+ void rbt_ib_umem_remove(struct umem_odp_node *node, struct rb_root *root);
++#endif
+ typedef int (*umem_call_back)(struct ib_umem *item, u64 start, u64 end,
+ 			      void *cookie);
+ /*
+  * Call the callback on each ib_umem in the range. Returns the logical or of
+  * the return values of the functions called.
+  */
++#ifdef HAVE_RB_ROOT_CACHED
++int rbt_ib_umem_for_each_in_range(struct rb_root_cached *root, u64 start, u64 end,
++#else
+ int rbt_ib_umem_for_each_in_range(struct rb_root *root, u64 start, u64 end,
++#endif
+ 				  umem_call_back cb, void *cookie);
+ 
+ /*
+  * Find first region intersecting with address range.
+  * Return NULL if not found
+  */
++#ifdef HAVE_RB_ROOT_CACHED
++struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root_cached *root,
++#else
+ struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root *root,
++#endif
+ 				       u64 addr, u64 length);
+ 
+ static inline int ib_umem_mmu_notifier_retry(struct ib_umem *item,

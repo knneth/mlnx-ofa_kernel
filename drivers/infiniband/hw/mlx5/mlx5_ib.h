@@ -759,6 +759,10 @@ struct mlx5_ib_counter_sets {
 	u16 max_counter_sets;
 };
 
+enum {
+	MAX_DEV_DESC = 64
+};
+
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
@@ -819,6 +823,7 @@ struct mlx5_ib_dev {
 	struct mlx5_ib_dbg_cc_params *dbg_cc_params;
 	struct mlx5_ib_delay_drop delay_drop;
 	struct mlx5_ib_counter_sets counter_sets;
+	char description[MAX_DEV_DESC];
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)

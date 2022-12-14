@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
 
 Change-Id: Ib21220569d95829b70eccf7acf8e928ff9e43e4d
 ---
- drivers/infiniband/core/device.c | 102 ++++++++++++++++++++++++++++++++++++++-
+ drivers/infiniband/core/device.c | 102 ++++++++++++++++++++++++++++++-
  1 file changed, 101 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/device.c

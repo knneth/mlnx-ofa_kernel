@@ -411,8 +411,8 @@ bool _mlx4_en_process_tx_cq(struct net_device *dev,
 
 	index = cons_index & size_mask;
 	cqe = mlx4_en_get_cqe(buf, index, priv->cqe_size) + factor;
-	last_nr_txbb = ACCESS_ONCE(ring->last_nr_txbb);
-	ring_cons = ACCESS_ONCE(ring->cons);
+	last_nr_txbb = READ_ONCE(ring->last_nr_txbb);
+	ring_cons = READ_ONCE(ring->cons);
 	ring_index = ring_cons & size_mask;
 	stamp_index = ring_index;
 
@@ -476,8 +476,8 @@ bool _mlx4_en_process_tx_cq(struct net_device *dev,
 	wmb();
 
 	/* we want to dirty this cache line once */
-	ACCESS_ONCE(ring->last_nr_txbb) = last_nr_txbb;
-	ACCESS_ONCE(ring->cons) = ring_cons + txbbs_skipped;
+	WRITE_ONCE(ring->last_nr_txbb, last_nr_txbb);
+	WRITE_ONCE(ring->cons, ring_cons + txbbs_skipped);
 
 	if (cq->type == TX_XDP)
 		return done < budget;
@@ -873,7 +873,7 @@ static inline netdev_tx_t __mlx4_en_xmit(struct sk_buff *skb,
 		goto tx_drop;
 
 	/* fetch ring->cons far ahead before needing it to avoid stall */
-	ring_cons = ACCESS_ONCE(ring->cons);
+	ring_cons = READ_ONCE(ring->cons);
 
 	real_size = get_real_size(skb, shinfo, dev, &lso_header_size,
 				  &inline_ok, &fragptr);
@@ -1081,7 +1081,7 @@ static inline netdev_tx_t __mlx4_en_xmit(struct sk_buff *skb,
 		 */
 		smp_rmb();
 
-		ring_cons = ACCESS_ONCE(ring->cons);
+		ring_cons = READ_ONCE(ring->cons);
 		if (unlikely(!mlx4_en_is_tx_ring_full(ring))) {
 			netif_tx_wake_queue(ring->tx_queue);
 			ring->wake_queue++;

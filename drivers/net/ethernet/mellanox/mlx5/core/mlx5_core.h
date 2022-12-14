@@ -40,7 +40,7 @@
 #include <linux/firmware.h>
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.2-1.2.0"
+#define DRIVER_VERSION	"4.2-1.5.1"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 
@@ -171,6 +171,8 @@ struct mlx5_mcion_reg {
 	u8  module_status;
 } __packed;
 
+int mlx5_query_hca_cap(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type,
+		       enum mlx5_cap_mode cap_mode, u16 function_id, void *out);
 int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
 int mlx5_cmd_init_hca(struct mlx5_core_dev *dev);
@@ -199,8 +201,8 @@ int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev);
-int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
-int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id);
+int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id, bool embedded_cpu_function);
+int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id, bool embedded_cpu_function);
 int mlx5_create_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 				       void *context, u32 *element_id);
 int mlx5_modify_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
@@ -208,7 +210,7 @@ int mlx5_modify_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 				       u32 modify_bitmask);
 int mlx5_destroy_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 					u32 element_id);
-int mlx5_wait_for_vf_pages(struct mlx5_core_dev *dev);
+int mlx5_wait_for_pages(struct mlx5_core_dev *dev, int *pages);
 u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev);
 u32 mlx5_get_msix_vec(struct mlx5_core_dev *dev, int vecidx);
 struct mlx5_eq *mlx5_eqn2eq(struct mlx5_core_dev *dev, int eqn);
@@ -332,5 +334,20 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 
 int mlx5_lag_allow(struct mlx5_core_dev *dev);
 int mlx5_lag_forbid(struct mlx5_core_dev *dev);
+int mlx5_query_ec_params(struct mlx5_core_dev *dev, int *num_vfs);
+void mlx5_ec_params_update(struct mlx5_core_dev *dev);
+
+static inline int get_other_vport(struct mlx5_core_dev *mdev, u16 *vport)
+{
+	if (mlx5_core_is_ecpf(mdev)) {
+		if (*vport == ECPF_ESW_PORT_NUMBER) {
+			*vport = 0;
+			return 0;
+		}
+		return 1;
+	}
+
+	return !!*vport;
+}
 
 #endif /* __MLX5_CORE_H__ */

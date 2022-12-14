@@ -32,6 +32,7 @@
 
 #include <linux/mutex.h>
 #include <linux/mlx5/driver.h>
+#include <linux/mlx5/eswitch.h>
 
 #include "mlx5_core.h"
 #include "fs_core.h"
@@ -158,17 +159,18 @@ static const struct rhashtable_params rhash_fte = {
 	.key_len = FIELD_SIZEOF(struct fs_fte, val),
 	.key_offset = offsetof(struct fs_fte, val),
 	.head_offset = offsetof(struct fs_fte, hash),
-	.automatic_shrinking = true,
-	.min_size = 1,
+	.automatic_shrinking = false,
+	.min_size = 64,
+	.nelem_hint = 64,
 };
 
 static const struct rhashtable_params rhash_fg = {
 	.key_len = FIELD_SIZEOF(struct mlx5_flow_group, mask),
 	.key_offset = offsetof(struct mlx5_flow_group, mask),
 	.head_offset = offsetof(struct mlx5_flow_group, hash),
-	.automatic_shrinking = true,
-	.min_size = 1,
-
+	.automatic_shrinking = false,
+	.min_size = 1024,
+	.nelem_hint = 1024,
 };
 
 static void del_generic(struct fs_node *node);
@@ -978,6 +980,11 @@ static struct mlx5_flow_table *__mlx5_create_flow_table(struct mlx5_flow_namespa
 		return ERR_PTR(-ENODEV);
 	}
 
+	if (!ft_attr->max_fte) {
+		pr_err("mlx5: table size must be greater then zero\n");
+		return ERR_PTR(-EINVAL);
+	}
+
 	mutex_lock(&root->chain_lock);
 	fs_prio = find_prio(ns, ft_attr->prio);
 	if (!fs_prio) {
@@ -988,13 +995,13 @@ static struct mlx5_flow_table *__mlx5_create_flow_table(struct mlx5_flow_namespa
 		err = -ENOSPC;
 		goto unlock_root;
 	}
-	/* The level is related to the
+	/* The level is relative to the
 	 * priority level range.
 	 */
 	ft_attr->level += fs_prio->start_level;
 	ft = alloc_flow_table(ft_attr->level,
 			      vport,
-			      ft_attr->max_fte ? roundup_pow_of_two(ft_attr->max_fte) : 0,
+			      roundup_pow_of_two(ft_attr->max_fte),
 			      root->table_type,
 			      op_mod, ft_attr->flags);
 	if (IS_ERR(ft)) {
@@ -1003,7 +1010,7 @@ static struct mlx5_flow_table *__mlx5_create_flow_table(struct mlx5_flow_namespa
 	}
 
 	tree_init_node(&ft->node, del_flow_table);
-	log_table_sz = ft->max_fte ? ilog2(ft->max_fte) : 0;
+	log_table_sz = ilog2(ft->max_fte);
 	next_ft = find_next_chained_ft(fs_prio);
 	err = mlx5_cmd_create_flow_table(root->dev, ft->vport, ft->op_mod, ft->type,
 					 ft->level, log_table_sz, next_ft, &ft->id,
@@ -1035,7 +1042,15 @@ unlock_root:
 struct mlx5_flow_table *mlx5_create_flow_table(struct mlx5_flow_namespace *ns,
 					       struct mlx5_flow_table_attr *ft_attr)
 {
-	return __mlx5_create_flow_table(ns, ft_attr, FS_FT_OP_MOD_NORMAL, 0);
+	struct mlx5_core_dev *dev = get_dev(&ns->node);
+	u16 vport;
+
+	if (!dev) {
+		pr_err("mlx5: flow steering failed to find root of namespace\n");
+		return ERR_PTR(-ENODEV);
+	}
+	vport = get_privileged_vport_num(dev);
+	return __mlx5_create_flow_table(ns, ft_attr, FS_FT_OP_MOD_NORMAL, vport);
 }
 
 struct mlx5_flow_table *mlx5_create_vport_flow_table(struct mlx5_flow_namespace *ns,
@@ -1744,7 +1759,6 @@ search_again_locked:
 
 	list_for_each_entry(iter, match_head, list) {
 		g = iter->g;
-
 		if (!g->node.active)
 			continue;
 		err = alloc_fte_locked(g, fte);
@@ -1779,7 +1793,7 @@ _mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 		     struct mlx5_flow_spec *spec,
 		     struct mlx5_flow_act *flow_act,
 		     struct mlx5_flow_destination *dest,
-		     int dest_num)
+		     int num_dest)
 
 {
 	struct mlx5_flow_steering *steering = get_steering(&ft->node);
@@ -1795,7 +1809,7 @@ _mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 	if (!check_valid_spec(spec))
 		return ERR_PTR(-EINVAL);
 
-	for (i = 0; i < dest_num; i++) {
+	for (i = 0; i < num_dest; i++) {
 		if (!dest_is_valid(&dest[i], flow_act->action, ft))
 			return ERR_PTR(-EINVAL);
 	}
@@ -1814,7 +1828,7 @@ search_again_locked:
 		up_read_ref_node(&ft->node);
 
 	rule = try_add_to_existing_fg(ft, &match_head.list, spec, flow_act, dest,
-				      dest_num, version);
+				      num_dest, version);
 	free_match_list(&match_head);
 	if (!IS_ERR(rule) ||
 	    (PTR_ERR(rule) != -ENOENT && PTR_ERR(rule) != -EAGAIN))
@@ -1858,7 +1872,7 @@ search_again_locked:
 	nested_down_write_ref_node(&fte->node, FS_LOCK_CHILD);
 	up_write_ref_node(&g->node);
 	rule = add_rule_fg(g, spec->match_value, flow_act, dest,
-			   dest_num, fte);
+			   num_dest, fte);
 	up_write_ref_node(&fte->node);
 	tree_put_node(&fte->node);
 	tree_put_node(&g->node);
@@ -1881,7 +1895,7 @@ mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 		    struct mlx5_flow_spec *spec,
 		    struct mlx5_flow_act *flow_act,
 		    struct mlx5_flow_destination *dest,
-		    int dest_num)
+		    int num_dest)
 {
 	struct mlx5_flow_root_namespace *root = find_root(&ft->node);
 	struct mlx5_flow_destination gen_dest;
@@ -1903,7 +1917,7 @@ mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 			gen_dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 			gen_dest.ft = next_ft;
 			dest = &gen_dest;
-			dest_num = 1;
+			num_dest = 1;
 			flow_act->action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 		} else {
 			mutex_unlock(&root->chain_lock);
@@ -1915,7 +1929,7 @@ mlx5_add_flow_rules(struct mlx5_flow_table *ft,
 	if (ns)
 		down_read(&ns->ns_rw_sem);
 
-	handle = _mlx5_add_flow_rules(ft, spec, flow_act, dest, dest_num);
+	handle = _mlx5_add_flow_rules(ft, spec, flow_act, dest, num_dest);
 
 	if (sw_action == MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO) {
 		if (!IS_ERR_OR_NULL(handle) &&
@@ -2065,9 +2079,11 @@ int mlx5_destroy_flow_table(struct mlx5_flow_table *ft)
 		mutex_unlock(&root->chain_lock);
 		return err;
 	}
-	if (tree_remove_node(&ft->node))
-		mlx5_core_warn(get_dev(&ft->node), "Flow table %d wasn't destroyed, refcount > 1\n",
-			       ft->id);
+	if (tree_remove_node(&ft->node)) {
+		mlx5_core_warn(get_dev(&ft->node), "Flow table %p id %d wasn't destroyed, refcount > 1\n",
+			       ft, ft->id);
+		dump_stack();
+	}
 	mutex_unlock(&root->chain_lock);
 
 	return err;
@@ -2596,7 +2612,7 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 			goto err;
 	}
 
-	if (MLX5_CAP_GEN(dev, eswitch_flow_table)) {
+	if (MLX5_ESWITCH_MANAGER(dev)) {
 		if (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, ft_support)) {
 			err = init_fdb_root_ns(steering);
 			if (err)

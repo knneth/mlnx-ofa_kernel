@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
 
 Change-Id: I32a10351bbc548039580e8fcf684f874763385c1
 ---
- include/linux/mlx5/driver.h | 26 +++++++++++++++++++++++++-
- 1 file changed, 25 insertions(+), 1 deletion(-)
+ include/linux/mlx5/driver.h | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
 --- a/include/linux/mlx5/driver.h
 +++ b/include/linux/mlx5/driver.h
@@ -23,7 +23,7 @@ Change-Id: I32a10351bbc548039580e8fcf684f874763385c1
  
  enum {
  	MLX5_BOARD_ID_LEN = 64,
-@@ -714,6 +720,10 @@ struct mlx5_priv {
+@@ -715,6 +721,10 @@ struct mlx5_priv {
  	struct dentry	       *dct_debugfs;
  	/* end: dct stuff */
  
@@ -34,7 +34,7 @@ Change-Id: I32a10351bbc548039580e8fcf684f874763385c1
  	/* start: cq staff */
  	struct mlx5_cq_table	cq_table;
  	/* end: cq staff */
-@@ -881,9 +891,13 @@ struct mlx5_clock {
+@@ -882,9 +892,13 @@ struct mlx5_clock {
  	unsigned long              overflow_period;
  	struct delayed_work        overflow_work;
  	struct mlx5_core_dev      *mdev;
@@ -47,8 +47,8 @@ Change-Id: I32a10351bbc548039580e8fcf684f874763385c1
 +#endif
  };
  
- struct mlx5_core_dev {
-@@ -988,8 +1002,13 @@ struct mlx5_cmd_work_ent {
+ struct ecpu_params {
+@@ -998,8 +1012,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -62,17 +62,3 @@ Change-Id: I32a10351bbc548039580e8fcf684f874763385c1
  	u16			op;
  	bool			polling;
  };
-@@ -1343,7 +1362,12 @@ static inline int mlx5_core_is_pf(struct
- 	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
- }
- 
--#define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev))
-+/* In RH6.8 and lower pci_sriov_get_totalvfs might return -EINVAL
-+ * return in that case 1
-+ */
-+#define MLX5_TOTAL_VPORTS(mdev) \
-+	(1 + ((pci_sriov_get_totalvfs(mdev->pdev)) < 0 ? \
-+	      0 : pci_sriov_get_totalvfs(mdev->pdev)))
- #define MLX5_VPORT_MANAGER(mdev) \
- 	(MLX5_CAP_GEN(mdev, vport_group_manager) && \
- 	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) && \

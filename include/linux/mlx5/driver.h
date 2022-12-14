@@ -63,7 +63,7 @@ enum {
 	/* one minute for the sake of bringup. Generally, commands must always
 	 * complete and we may need to increase this timeout value
 	 */
-	MLX5_CMD_TIMEOUT_MSEC	= 60 * 1000,
+	MLX5_CMD_TIMEOUT_MSEC	= 6000 * 1000,
 	MLX5_CMD_WQ_MAX_NAME	= 32,
 };
 
@@ -696,6 +696,7 @@ struct mlx5_priv {
 	atomic_t		reg_pages;
 	struct list_head	free_list;
 	int			vfs_pages;
+	int			peer_pf_pages;
 
 	struct mlx5_core_health health;
 
@@ -886,6 +887,10 @@ struct mlx5_clock {
 	struct mlx5_pps            pps_info;
 };
 
+struct ecpu_params {
+	bool	embedded_cpu;
+};
+
 struct mlx5_core_dev {
 	struct pci_dev	       *pdev;
 	/* sync pci state */
@@ -934,6 +939,11 @@ struct mlx5_core_dev {
 	struct mlx5_clock_info_v1 *clock_info;
 	struct page		  *clock_info_page;
 	struct mlx5_clock	   clock;
+	struct ecpu_params	ecpu;
+	bool			mlx5_ib_requested;
+	bool			mlx5_ib_loaded;
+	/* don't allow open/close while configuring */
+	struct mutex		configure_mutex;
 };
 
 struct mlx5_db {
@@ -1152,7 +1162,7 @@ void mlx5_pagealloc_cleanup(struct mlx5_core_dev *dev);
 int mlx5_pagealloc_start(struct mlx5_core_dev *dev);
 void mlx5_pagealloc_stop(struct mlx5_core_dev *dev);
 void mlx5_core_req_pages_handler(struct mlx5_core_dev *dev, u16 func_id,
-				 s32 npages);
+				 s32 npages, bool ec_function);
 int mlx5_update_guids(struct mlx5_core_dev *dev);
 int mlx5_satisfy_startup_pages(struct mlx5_core_dev *dev, int boot);
 int mlx5_reclaim_startup_pages(struct mlx5_core_dev *dev);
@@ -1285,6 +1295,8 @@ struct mlx5_interface {
 					  void *context,
 					  struct mlx5_pagefault *pfault);
 	void *                  (*get_dev)(void *context);
+	void			(*configure)(struct mlx5_core_dev *dev);
+	void			(*unconfigure)(struct mlx5_core_dev *dev);
 	int			protocol;
 	struct list_head	list;
 };
@@ -1304,6 +1316,8 @@ int mlx5_lag_query_cong_counters(struct mlx5_core_dev *dev,
 				 size_t *offsets);
 struct mlx5_uars_page *mlx5_get_uars_page(struct mlx5_core_dev *mdev);
 void mlx5_put_uars_page(struct mlx5_core_dev *mdev, struct mlx5_uars_page *up);
+void mlx5_configure_interfaces(void);
+void mlx5_unconfigure_interfaces(void);
 
 #ifndef CONFIG_MLX5_CORE_IPOIB
 static inline
@@ -1343,11 +1357,29 @@ static inline int mlx5_core_is_pf(struct mlx5_core_dev *dev)
 	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
 }
 
-#define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev))
+#define MLX5_TOTAL_VPORTS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev) + !!mlx5_core_is_ecpf(mdev))
 #define MLX5_VPORT_MANAGER(mdev) \
 	(MLX5_CAP_GEN(mdev, vport_group_manager) && \
 	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) && \
 	 mlx5_core_is_pf(mdev))
+
+/* one for the uplink and one for each VF. In case of ecpf, we have one for the PF */
+#define MLX5_TOTAL_REPS(mdev) (1 + pci_sriov_get_totalvfs(mdev->pdev) + !!mlx5_core_is_ecpf(mdev))
+
+static inline bool mlx5_core_is_ecpf(struct mlx5_core_dev *dev)
+{
+	return dev->ecpu.embedded_cpu;
+}
+
+static inline int get_privileged_vport_num(struct mlx5_core_dev *dev)
+{
+	return mlx5_core_is_ecpf(dev) ? ECPF_ESW_PORT_NUMBER : 0;
+}
+
+static inline int get_my_own_vport_number(struct mlx5_core_dev *dev)
+{
+	return mlx5_core_is_ecpf(dev) ? ECPF_ESW_PORT_NUMBER : 0;
+}
 
 static inline int mlx5_get_gid_table_len(u16 param)
 {

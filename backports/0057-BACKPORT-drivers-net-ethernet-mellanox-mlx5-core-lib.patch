@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
 
 Change-Id: I047277f015783926e78694793d6052cae5a0608f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c | 16 ++++++++++++++++
+ .../net/ethernet/mellanox/mlx5/core/lib/gid.c    | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c

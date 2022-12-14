@@ -35,6 +35,8 @@
 
 #include <linux/mlx5/driver.h>
 
+#define MLX5_ESWITCH_MANAGER(mdev) MLX5_CAP_GEN(mdev, eswitch_manager)
+
 enum {
 	SRIOV_NONE,
 	SRIOV_LEGACY,
@@ -60,6 +62,7 @@ struct mlx5_eswitch_rep {
 	struct mlx5_eswitch_rep_if rep_if[NUM_REP_TYPES];
 	u16		       vport;
 	u8		       hw_id[ETH_ALEN];
+	struct mlx5_flow_handle *refwd;
 };
 
 u8 mlx5_eswitch_mode(struct mlx5_eswitch *esw);

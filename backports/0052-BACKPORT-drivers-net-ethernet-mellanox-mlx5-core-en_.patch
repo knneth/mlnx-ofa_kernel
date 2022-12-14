@@ -3,17 +3,26 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
 
 Change-Id: Ibdb472df8423e30b00caa6073eb78cc40be83490
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_tc.h | 6 ++++++
- 1 file changed, 6 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_tc.h | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
-@@ -39,14 +39,18 @@
+@@ -33,20 +33,26 @@
+ #ifndef __MLX5_EN_TC_H__
+ #define __MLX5_EN_TC_H__
+ 
++#include <net/pkt_cls.h>
++
+ #define MLX5E_TC_FLOW_ID_MASK 0x0000ffff
+ 
+ #ifdef CONFIG_MLX5_ESWITCH
  int mlx5e_tc_init(struct mlx5e_priv *priv);
  void mlx5e_tc_cleanup(struct mlx5e_priv *priv);
  
+-int mlx5e_configure_flower(struct mlx5e_priv *priv, __be16 protocol,
 +#ifdef HAVE_TC_FLOWER_OFFLOAD
- int mlx5e_configure_flower(struct mlx5e_priv *priv, __be16 protocol,
++int mlx5e_configure_flower(struct mlx5e_priv *priv,
  			   struct tc_cls_flower_offload *f);
  int mlx5e_delete_flower(struct mlx5e_priv *priv,
  			struct tc_cls_flower_offload *f);
@@ -27,7 +36,7 @@ Change-Id: Ibdb472df8423e30b00caa6073eb78cc40be83490
  struct mlx5e_encap_entry;
  void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
  			      struct mlx5e_encap_entry *e);
-@@ -55,11 +59,13 @@ void mlx5e_tc_encap_flows_del(struct mlx
+@@ -55,11 +61,13 @@ void mlx5e_tc_encap_flows_del(struct mlx
  
  struct mlx5e_neigh_hash_entry;
  void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe);

@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma.c
 
 Change-Id: I2be00bb630f58545af0751a995a11b66118eb3fa
 ---
- drivers/infiniband/core/cma.c | 149 ++++++++++++++++++++++++++++++++++++++++--
+ drivers/infiniband/core/cma.c | 149 ++++++++++++++++++++++++++++++++--
  1 file changed, 142 insertions(+), 7 deletions(-)
 
 --- a/drivers/infiniband/core/cma.c

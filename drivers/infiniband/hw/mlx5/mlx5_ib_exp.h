@@ -336,6 +336,8 @@ int mlx5_ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
 struct ib_nvmf_ns *mlx5_ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
 		struct ib_nvmf_ns_init_attr *init_attr);
 int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
+int mlx5_ib_query_nvmf_ns(struct ib_nvmf_ns *ns,
+			  struct ib_nvmf_ns_attr *ns_attr);
 
 struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
 			    struct ib_mr_init_attr *attr);

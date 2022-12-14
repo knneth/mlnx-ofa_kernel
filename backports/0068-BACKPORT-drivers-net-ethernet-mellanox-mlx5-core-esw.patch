@@ -3,20 +3,20 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 
 Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 28 +++++++++++++++++++++++
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 28 +++++++++++++++++++
  1 file changed, 28 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
-@@ -440,6 +440,7 @@ static void update_allmulti_vports(struc
+@@ -438,6 +438,7 @@ static void update_allmulti_vports(struc
  {
  	u8 *mac = vaddr->node.addr;
- 	u32 vport_idx = 0;
+ 	u32 vport_idx;
 +	COMPAT_HL_NODE
  
  	for (vport_idx = 0; vport_idx < esw->total_vports; vport_idx++) {
  		struct mlx5_vport *vport = &esw->vports[vport_idx];
-@@ -487,6 +488,7 @@ static int esw_add_mc_addr(struct mlx5_e
+@@ -485,6 +486,7 @@ static int esw_add_mc_addr(struct mlx5_e
  	struct esw_mc_addr *esw_mc;
  	u8 *mac = vaddr->node.addr;
  	u32 vport = vaddr->vport;
@@ -24,7 +24,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  
  	if (!esw->fdb_table.fdb)
  		return 0;
-@@ -527,6 +529,7 @@ static int esw_del_mc_addr(struct mlx5_e
+@@ -525,6 +527,7 @@ static int esw_del_mc_addr(struct mlx5_e
  	struct esw_mc_addr *esw_mc;
  	u8 *mac = vaddr->node.addr;
  	u32 vport = vaddr->vport;
@@ -32,7 +32,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  
  	if (!esw->fdb_table.fdb)
  		return 0;
-@@ -576,6 +579,7 @@ static void esw_apply_vport_addr_list(st
+@@ -575,6 +578,7 @@ static void esw_apply_vport_addr_list(st
  	struct hlist_head *hash;
  	struct hlist_node *tmp;
  	int hi;
@@ -48,7 +48,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  
  	size = is_uc ? MLX5_MAX_UC_PER_VPORT(esw->dev) :
  		       MLX5_MAX_MC_PER_VPORT(esw->dev);
-@@ -734,6 +739,7 @@ static void esw_update_vport_mc_promisc(
+@@ -737,6 +742,7 @@ static void esw_update_vport_mc_promisc(
  	struct hlist_head *hash;
  	struct hlist_node *tmp;
  	int hi;
@@ -56,7 +56,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  
  	hash = vport->mc_list;
  
-@@ -2068,8 +2074,12 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2108,8 +2114,12 @@ int mlx5_eswitch_init(struct mlx5_core_d
  	if (err)
  		goto abort;
  
@@ -69,7 +69,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  	mutex_init(&esw->state_lock);
  
  	access_other_hca_roce = MLX5_CAP_GEN(dev, vhca_group_manager) &&
-@@ -2103,6 +2113,9 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2145,6 +2155,9 @@ int mlx5_eswitch_init(struct mlx5_core_d
  
  	dev->priv.eswitch = esw;
  
@@ -79,7 +79,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  	return 0;
  abort:
  	if (esw->work_queue)
-@@ -2163,6 +2176,7 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -2206,6 +2219,7 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  
  	esw_info(esw->dev, "cleanup\n");
  
@@ -87,7 +87,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  	esw->dev->priv.eswitch = NULL;
  	destroy_workqueue(esw->work_queue);
  	kfree(esw->vports);
-@@ -2269,6 +2283,7 @@ unlock:
+@@ -2313,6 +2327,7 @@ unlock:
  	return 0;
  }
  
@@ -95,7 +95,7 @@ Change-Id: I8c2fa2c3f3296ea24abf683fb37d269d8e50e6ae
  int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
  				  int vport, struct ifla_vf_info *ivi)
  {
-@@ -2286,18 +2301,31 @@ int mlx5_eswitch_get_vport_config(struct
+@@ -2330,18 +2345,31 @@ int mlx5_eswitch_get_vport_config(struct
  
  	mutex_lock(&esw->state_lock);
  	ether_addr_copy(ivi->mac, evport->info.mac);

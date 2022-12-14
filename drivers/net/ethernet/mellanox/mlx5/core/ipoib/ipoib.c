@@ -58,11 +58,11 @@ static const struct net_device_ops mlx5i_netdev_ops = {
 };
 
 /* IPoIB mlx5 netdev profile */
-static void mlx5i_build_nic_params(struct mlx5_core_dev *mdev,
+static void mlx5i_build_nic_params(struct mlx5e_priv *priv,
 				   struct mlx5e_params *params)
 {
-	/* Override RQ params as IPoIB supports only LINKED LIST RQ for now */
-	mlx5e_set_rq_type_params(mdev, params, MLX5_WQ_TYPE_LINKED_LIST);
+	/* Override RQ params as IPoIB supports only legacy RQ for now */
+	mlx5e_init_rq_type_params(priv, params, MLX5_WQ_TYPE_CYCLIC);
 
 	/* RQ size in ipoib by default is 512 */
 	params->log_rq_size = is_kdump_kernel() ?
@@ -108,8 +108,8 @@ void mlx5i_init(struct mlx5_core_dev *mdev,
 	INIT_DELAYED_WORK(&priv->update_stats_work, mlx5e_update_stats_work);
 	INIT_WORK(&priv->tx_timeout_work, mlx5i_tx_timeout_work);
 
-	mlx5e_build_nic_params(mdev, &priv->channels.params, profile->max_nch(mdev));
-	mlx5i_build_nic_params(mdev, &priv->channels.params);
+	mlx5e_build_nic_params(priv, &priv->channels.params, profile->max_nch(mdev));
+	mlx5i_build_nic_params(priv, &priv->channels.params);
 
 	/* netdev init */
 	netdev->hw_features    |= NETIF_F_SG;

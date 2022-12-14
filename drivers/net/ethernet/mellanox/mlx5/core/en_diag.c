@@ -73,10 +73,19 @@ static int dump_rq_info(struct mlx5e_rq *rq, void *buffer)
 	rqd->wq_type = MLX5_DIAG_RQ;
 	rqd->wqn = rq->rqn;
 	rqd->ci = 0;
-	rqd->pi = rq->wq.cur_sz;
-	rqd->wqe_stride = rq->wq.log_stride;
-	rqd->size = rq->wq.sz_m1 + 1;
-	rqd->wqe_num = ((rq->wq.sz_m1 + 1) << rq->wq.log_stride);
+	switch (rq->wq_type) {
+	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
+		rqd->pi = rq->mpwqe.wq.cur_sz;
+		rqd->wqe_stride = rq->mpwqe.wq.log_stride;
+		rqd->size = rq->mpwqe.wq.sz_m1 + 1;
+		rqd->wqe_num = ((rq->mpwqe.wq.sz_m1 + 1) << rq->mpwqe.wq.log_stride);
+		break;
+	default: /* MLX5_WQ_TYPE_CYCLIC */
+		rqd->pi = rq->wqe.wq.cur_sz;
+		rqd->wqe_stride = rq->wqe.wq.log_stride;
+		rqd->size = rq->wqe.wq.sz_m1 + 1;
+		rqd->wqe_num = ((rq->wqe.wq.sz_m1 + 1) << rq->wqe.wq.log_stride);
+	}
 	rqd->group_id = rq->channel->ix;
 
 	return sizeof(*rqd);

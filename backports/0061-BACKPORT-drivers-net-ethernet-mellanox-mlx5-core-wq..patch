@@ -8,7 +8,7 @@ Change-Id: I3f7a59e4ae96a20a081dc8fa95152015340bc362
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/wq.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/wq.h
-@@ -168,7 +168,11 @@ static inline struct mlx5_cqe64 *mlx5_cq
+@@ -213,7 +213,11 @@ static inline struct mlx5_cqe64 *mlx5_cq
  		return NULL;
  
  	/* ensure cqe content is read after cqe ownership bit */

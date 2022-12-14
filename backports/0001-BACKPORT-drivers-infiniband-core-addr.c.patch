@@ -3,7 +3,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
 Change-Id: Id78c7e5f10acb924846703e04326474b7d6031e9
 ---
- drivers/infiniband/core/addr.c | 148 +++++++++++++++++++++++++++++++++++++++--
+ drivers/infiniband/core/addr.c | 148 +++++++++++++++++++++++++++++++--
  1 file changed, 143 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/core/addr.c

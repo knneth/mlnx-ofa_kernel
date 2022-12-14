@@ -1,0 +1,50 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/health.c
+
+Change-Id: Ibada8d01561dd99068a8f8f524fa88cf370aa858
+---
+ drivers/net/ethernet/mellanox/mlx5/core/health.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/health.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/health.c
+@@ -251,9 +251,17 @@ void mlx5_trigger_health_work(struct mlx
+ 	spin_unlock_irqrestore(&health->wq_lock, flags);
+ }
+ 
++#ifdef HAVE_TIMER_SETUP
++static void poll_health(struct timer_list *t)
++#else
+ static void poll_health(unsigned long data)
++#endif
+ {
++#ifdef HAVE_TIMER_SETUP
++	struct mlx5_core_dev *dev = from_timer(dev, t, priv.health.timer);
++#else
+ 	struct mlx5_core_dev *dev = (struct mlx5_core_dev *)data;
++#endif
+ 	struct mlx5_core_health *health = &dev->priv.health;
+ 	u32 count;
+ 
+@@ -286,15 +294,21 @@ void mlx5_start_health_poll(struct mlx5_
+ {
+ 	struct mlx5_core_health *health = &dev->priv.health;
+ 
++#ifdef HAVE_TIMER_SETUP
++	timer_setup(&health->timer, poll_health, 0);
++#else
+ 	init_timer(&health->timer);
++#endif
+ 	health->sick = 0;
+ 	clear_bit(MLX5_DROP_NEW_HEALTH_WORK, &health->flags);
+ 	clear_bit(MLX5_DROP_NEW_RECOVERY_WORK, &health->flags);
+ 	health->health = &dev->iseg->health;
+ 	health->health_counter = &dev->iseg->health_counter;
+ 
++#ifndef HAVE_TIMER_SETUP
+ 	health->timer.data = (unsigned long)dev;
+ 	health->timer.function = poll_health;
++#endif
+ 	health->timer.expires = round_jiffies(jiffies + MLX5_HEALTH_POLL_INTERVAL);
+ 	add_timer(&health->timer);
+ }

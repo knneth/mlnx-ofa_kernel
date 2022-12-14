@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_rbtree.c
 
 Change-Id: I1c855dbac234984fe11a6862cd28ddbe81800efc
 ---
- drivers/infiniband/core/umem_rbtree.c | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/infiniband/core/umem_rbtree.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
 --- a/drivers/infiniband/core/umem_rbtree.c
 +++ b/drivers/infiniband/core/umem_rbtree.c
@@ -16,11 +16,29 @@ Change-Id: I1c855dbac234984fe11a6862cd28ddbe81800efc
  #include <linux/kernel.h>
  #include <linux/module.h>
  #include <linux/interval_tree_generic.h>
-@@ -94,6 +95,7 @@ int rbt_ib_umem_for_each_in_range(struct
+@@ -72,7 +73,11 @@ INTERVAL_TREE_DEFINE(struct umem_odp_nod
+ /* @last is not a part of the interval. See comment for function
+  * node_last.
+  */
++#ifdef HAVE_RB_ROOT_CACHED
++int rbt_ib_umem_for_each_in_range(struct rb_root_cached *root,
++#else
+ int rbt_ib_umem_for_each_in_range(struct rb_root *root,
++#endif
+ 				  u64 start, u64 last,
+ 				  umem_call_back cb,
+ 				  void *cookie)
+@@ -94,8 +99,13 @@ int rbt_ib_umem_for_each_in_range(struct
  	return ret_val;
  }
  EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);
 +#endif /* HAVE_INTERVAL_TREE_GENERIC_H */
  
++#ifdef HAVE_RB_ROOT_CACHED
++struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root_cached *root,
++#else
  struct ib_umem_odp *rbt_ib_umem_lookup(struct rb_root *root,
++#endif
  				       u64 addr, u64 length)
+ {
+ 	struct umem_odp_node *node;

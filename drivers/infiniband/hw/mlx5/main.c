@@ -66,7 +66,7 @@
 #include <linux/mlx5/vport.h>
 
 #define DRIVER_NAME "mlx5_ib"
-#define DRIVER_VERSION	"4.2-1.2.0"
+#define DRIVER_VERSION	"4.2-1.5.1"
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB HCA IB driver");
@@ -2937,6 +2937,15 @@ static ssize_t show_reg_pages(struct device *device,
 	return sprintf(buf, "%d\n", atomic_read(&dev->mdev->priv.reg_pages));
 }
 
+static ssize_t show_description(struct device *device, struct device_attribute *attr,
+				char *buf)
+{
+	struct mlx5_ib_dev *dev =
+		container_of(device, struct mlx5_ib_dev, ib_dev.dev);
+
+	return snprintf(buf, sizeof(dev->description), "%s\n", dev->description);
+}
+
 static ssize_t show_hca(struct device *device, struct device_attribute *attr,
 			char *buf)
 {
@@ -2967,6 +2976,7 @@ static DEVICE_ATTR(hca_type, S_IRUGO, show_hca,    NULL);
 static DEVICE_ATTR(board_id, S_IRUGO, show_board,  NULL);
 static DEVICE_ATTR(fw_pages, S_IRUGO, show_fw_pages, NULL);
 static DEVICE_ATTR(reg_pages, S_IRUGO, show_reg_pages, NULL);
+static DEVICE_ATTR(description, S_IRUGO, show_description, NULL);
 
 static struct device_attribute *mlx5_class_attributes[] = {
 	&dev_attr_hw_rev,
@@ -2974,6 +2984,7 @@ static struct device_attribute *mlx5_class_attributes[] = {
 	&dev_attr_board_id,
 	&dev_attr_fw_pages,
 	&dev_attr_reg_pages,
+	&dev_attr_description,
 };
 
 static void pkey_change_handler(struct work_struct *work)
@@ -4348,6 +4359,30 @@ static void dealloc_ib_counter_sets(struct mlx5_ib_dev *dev)
 	kfree(dev->counter_sets.desc_cs_arr);
 }
 
+static void pci_str(struct mlx5_ib_dev *dev, char *str)
+{
+	sprintf(str, "%04d:%02d.%d", PCI_BUS_NUM(dev->mdev->pdev->devfn), PCI_SLOT(dev->mdev->pdev->devfn), PCI_FUNC(dev->mdev->pdev->devfn));
+}
+
+static void set_description(struct mlx5_ib_dev *dev)
+{
+	char port_str[20];
+	char pfunc[20];
+
+	pci_str(dev, pfunc);
+	if (!dev->rep) {
+		snprintf(dev->description, sizeof(dev->description), "regular IB devicei on %s", pfunc);
+		return;
+	}
+
+	if (dev->rep->vport == 0xffff)
+		strncpy(port_str, "Uplink port", sizeof(port_str));
+	else
+		snprintf(port_str, sizeof(port_str), "vport %d", dev->rep->vport);
+
+	snprintf(dev->description, sizeof(dev->description), "Representor IB device on %s, %s", pfunc, port_str);
+}
+
 void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 		    struct mlx5_ib_dev *dev,
 		    bool rep)
@@ -4369,6 +4404,8 @@ void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 			    GFP_KERNEL);
 	if (!dev->port)
 		goto err_dealloc;
+
+	set_description(dev);
 
 	rwlock_init(&dev->roce.netdev_lock);
 	err = get_port_caps(dev);
@@ -4538,6 +4575,8 @@ void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 		dev->ib_dev.destroy_nvmf_backend_ctrl = mlx5_ib_destroy_nvmf_backend_ctrl;
 		dev->ib_dev.attach_nvmf_ns            = mlx5_ib_attach_nvmf_ns;
 		dev->ib_dev.detach_nvmf_ns            = mlx5_ib_detach_nvmf_ns;
+		if (MLX5_CAP_NVMF(mdev, frontend_namespace_context))
+			dev->ib_dev.query_nvmf_ns = mlx5_ib_query_nvmf_ns;
 
 		mlx5_ib_internal_fill_nvmf_caps(dev);
 	}
@@ -4766,16 +4805,20 @@ err_dealloc:
 static void *mlx5_ib_add(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_ib_dev *ibdev;
+        void *ret;
 
 	ibdev = (struct mlx5_ib_dev *)ib_alloc_device(sizeof(*ibdev));
 	if (!ibdev)
 		return NULL;
 
-	if (MLX5_VPORT_MANAGER(mdev) &&
+	if (MLX5_ESWITCH_MANAGER(mdev) &&
 	    mlx5_ib_eswitch_mode(mdev->priv.eswitch) == SRIOV_OFFLOADS)
 		ibdev->rep = mlx5_ib_vport_rep(mdev->priv.eswitch, 0);
 
-	return __mlx5_ib_add(mdev, ibdev, false);
+	ret = __mlx5_ib_add(mdev, ibdev, false);
+	if (ret)
+		mdev->mlx5_ib_loaded = true;
+	return ret;
 }
 
 void __mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context,
@@ -4814,6 +4857,7 @@ void __mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context,
 		kfree(dev->flow_db);
 	kfree(dev->port);
 	ib_dealloc_device(&dev->ib_dev);
+	mdev->mlx5_ib_loaded = false;
 }
 
 static void mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context)

@@ -80,6 +80,7 @@ struct ib_nvmf_ctrl;
 struct ib_nvmf_backend_ctrl_init_attr;
 struct ib_nvmf_ns;
 struct ib_nvmf_ns_init_attr;
+struct ib_nvmf_ns_attr;
 struct ib_mr_init_attr;
 
 union ib_gid {
@@ -1048,6 +1049,7 @@ struct ib_srq_attr {
 	u32	max_wr;
 	u32	max_sge;
 	u32	srq_limit;
+	struct ib_nvmf_srq_attr nvmf;
 };
 
 struct ib_srq_init_attr {
@@ -2205,6 +2207,8 @@ struct ib_device {
 	struct kobject		      *mad_sa_cc_kobj;
 
 	/* EXP APIs will be added below to minimize conflicts via upstream rebase */
+	int                     (*query_nvmf_ns)(struct ib_nvmf_ns *ns,
+						 struct ib_nvmf_ns_attr *ns_attr);
 	struct ib_nvmf_ctrl *   (*create_nvmf_backend_ctrl)(struct ib_srq *srq,
 				struct ib_nvmf_backend_ctrl_init_attr *init_attr);
 	int                     (*destroy_nvmf_backend_ctrl)(struct ib_nvmf_ctrl *ctrl);

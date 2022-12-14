@@ -1,0 +1,25 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
+
+Change-Id: I7ae7cf90872f0c0cb25dee836d930d81c67063f2
+---
+ drivers/nvme/target/fc.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/nvme/target/fc.c
++++ b/drivers/nvme/target/fc.c
+@@ -14,6 +14,8 @@
+  * can be found in the file COPYING included with this package
+  *
+  */
++#ifdef HAVE_LINUX_NVME_FC_DRIVER_H
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -2588,3 +2590,5 @@ module_init(nvmet_fc_init_module);
+ module_exit(nvmet_fc_exit_module);
+ 
+ MODULE_LICENSE("GPL v2");
++
++#endif /* HAVE_LINUX_NVME_FC_DRIVER_H */

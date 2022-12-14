@@ -4,7 +4,7 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I868814be44188b049bd5ebb03ac02359361e5a8e
 ---
- .../ethernet/mellanox/mlx5/core/ipoib/ethtool.c    | 70 ++++++++++++++++++++++
+ .../mellanox/mlx5/core/ipoib/ethtool.c        | 70 +++++++++++++++++++
  1 file changed, 70 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c

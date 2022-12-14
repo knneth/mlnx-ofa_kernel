@@ -492,8 +492,7 @@ static int create_xrq_cmd(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 	} else if (in->type == IB_EXP_SRQT_NVMF) {
 		MLX5_SET(xrqc, xrqc, offload, MLX5_XRQC_OFFLOAD_NVMF);
 		set_nvmf_srq_pas(&in->nvmf,
-				 rq_pas_addr + roundup(rq_pas_size, MLX5_PAS_ALIGN),
-				 MLX5_PAS_ALIGN);
+				 rq_pas_addr + roundup(rq_pas_size, MLX5_PAS_ALIGN));
 		set_nvmf_xrq_context(&in->nvmf, xrqc);
 	}
 	MLX5_SET(xrqc, xrqc, user_index, in->user_index);
@@ -571,6 +570,12 @@ static int query_xrq_cmd(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 	out->tm_sw_phase_cnt =
 		MLX5_GET(xrqc, xrqc,
 			 tag_matching_topology_context.sw_phase_cnt);
+
+	if (MLX5_CAP_NVMF(dev, cmd_unknown_namespace_cnt)) {
+		out->nvmf.cmd_unknown_namespace_cnt =
+			MLX5_GET(xrqc, xrqc,
+				 nvme_offload_context.cmd_unknown_namespace_cnt);
+	}
 
 out:
 	kvfree(xrq_out);
