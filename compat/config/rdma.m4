@@ -5884,6 +5884,36 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct netdev_features.h has NETIF_F_GSO_UDP_TUNNEL_CSUM])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+        	#include <linux/netdev_features.h>
+	],[
+        	int x = NETIF_F_GSO_UDP_TUNNEL_CSUM;
+	
+        	return 0;
+	],[
+        	AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM, 1,
+			[NETIF_F_GSO_UDP_TUNNEL_CSUM is defined in netdev_features.h])
+	],[
+        	AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct netdev_features.h has NETIF_F_GSO_GRE_CSUM])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+        	#include <linux/netdev_features.h>
+	],[
+	        int x = NETIF_F_GSO_GRE_CSUM;
+	
+	        return 0;
+	],[
+        	AC_MSG_RESULT(yes)
+        	MLNX_AC_DEFINE(HAVE_NETIF_F_GSO_GRE_CSUM, 1,
+        		[NETIF_F_GSO_GRE_CSUM is defined in netdev_features.h])
+	],[
+        	AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct netdev_features.h has NETIF_F_GSO_PARTIAL])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdev_features.h>

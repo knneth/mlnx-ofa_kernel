@@ -56,4 +56,5 @@ obj-$(CONFIG_SMC_DIAG)		+= net/smc/
 obj-$(CONFIG_MLX5_CLS_ACT)      += net/sched/
 obj-$(CONFIG_AUXILIARY_BUS)     += drivers/base/
 obj-$(CONFIG_CIFS_SMB_DIRECT)		+= fs/cifs/
+obj-$(CONFIG_MLX5_VDPA_NET)	+= drivers/vdpa/mlx5/
 

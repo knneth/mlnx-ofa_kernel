@@ -3,21 +3,22 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_addr.h
 
 Change-Id: I147f5974da0e4a865ae5219781f4ff7b8a9c01c9
 ---
- include/rdma/ib_addr.h | 33 +++++++++++++++++++++++++++++----
- 1 file changed, 29 insertions(+), 4 deletions(-)
+ include/rdma/ib_addr.h | 34 ++++++++++++++++++++++++++++++----
+ 1 file changed, 30 insertions(+), 4 deletions(-)
 
 --- a/include/rdma/ib_addr.h
 +++ b/include/rdma/ib_addr.h
-@@ -7,6 +7,8 @@
+@@ -7,6 +7,9 @@
  #ifndef IB_ADDR_H
  #define IB_ADDR_H
  
 +#include "../../compat/config.h"
 +
++#include <linux/ethtool.h>
  #include <linux/in.h>
  #include <linux/in6.h>
  #include <linux/if_arp.h>
-@@ -20,6 +22,7 @@
+@@ -20,6 +23,7 @@
  #include <rdma/ib_verbs.h>
  #include <rdma/ib_pack.h>
  #include <net/net_namespace.h>
@@ -25,7 +26,7 @@ Change-Id: I147f5974da0e4a865ae5219781f4ff7b8a9c01c9
  
  /**
   * struct rdma_dev_addr - Contains resolved RDMA hardware addresses
-@@ -105,7 +108,11 @@ static inline int rdma_addr_gid_offset(s
+@@ -105,7 +109,11 @@ static inline int rdma_addr_gid_offset(s
  	return dev_addr->dev_type == ARPHRD_INFINIBAND ? 4 : 0;
  }
  
@@ -37,7 +38,7 @@ Change-Id: I147f5974da0e4a865ae5219781f4ff7b8a9c01c9
  {
  	return is_vlan_dev(dev) ? vlan_dev_vlan_id(dev) : 0xffff;
  }
-@@ -195,22 +202,36 @@ static inline enum ib_mtu iboe_get_mtu(i
+@@ -195,22 +203,36 @@ static inline enum ib_mtu iboe_get_mtu(i
  
  static inline int iboe_get_rate(struct net_device *dev)
  {
@@ -78,7 +79,7 @@ Change-Id: I147f5974da0e4a865ae5219781f4ff7b8a9c01c9
  		return IB_RATE_10_GBPS;
  	else
  		return IB_RATE_PORT_CURRENT;
-@@ -261,7 +282,11 @@ static inline u16 rdma_get_vlan_id(union
+@@ -261,7 +283,11 @@ static inline u16 rdma_get_vlan_id(union
  	return vid < 0x1000 ? vid : 0xffff;
  }
  

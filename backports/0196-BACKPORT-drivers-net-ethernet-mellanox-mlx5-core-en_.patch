@@ -1,10 +1,10 @@
-From: Shay Drory <shayd@nvidia.com>
+From: Aya Levin <ayal@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_main.c
 
-Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
+Change-Id: I6e247a0eb61f634e12713a454171b1e6d93d8165
 ---
- .../net/ethernet/mellanox/mlx5/core/en_main.c | 1229 ++++++++++++++++-
- 1 file changed, 1155 insertions(+), 74 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_main.c | 1259 ++++++++++++++++-
+ 1 file changed, 1184 insertions(+), 75 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
@@ -2435,7 +2435,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  	netdev->watchdog_timeo    = 15 * HZ;
  
  	netdev->ethtool_ops	  = &mlx5e_ethtool_ops;
-@@ -5652,39 +6676,57 @@ static void mlx5e_build_nic_netdev(struc
+@@ -5652,46 +6676,92 @@ static void mlx5e_build_nic_netdev(struc
  	netdev->hw_features      |= NETIF_F_HW_VLAN_CTAG_FILTER;
  	netdev->hw_features      |= NETIF_F_HW_VLAN_STAG_TX;
  
@@ -2451,24 +2451,60 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  		netdev->hw_enc_features |= NETIF_F_TSO6;
 +#ifdef HAVE_NETIF_F_GSO_PARTIAL
  		netdev->hw_enc_features |= NETIF_F_GSO_PARTIAL;
--	}
 +#endif
-+       }
+ 	}
 +#endif
  
 +#ifdef HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
  	if (mlx5_vxlan_allowed(mdev->vxlan) || mlx5_geneve_tx_allowed(mdev)) {
- 		netdev->hw_features     |= NETIF_F_GSO_UDP_TUNNEL;
- 		netdev->hw_enc_features |= NETIF_F_GSO_UDP_TUNNEL;
- 		netdev->vlan_features |= NETIF_F_GSO_UDP_TUNNEL;
- 	}
- 
+ 		netdev->hw_features     |= NETIF_F_GSO_UDP_TUNNEL |
++#ifdef HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM
+ 					   NETIF_F_GSO_UDP_TUNNEL_CSUM;
++#else
++					   0;
 +#endif
- 	if (mlx5_tunnel_proto_supported(mdev, IPPROTO_GRE)) {
- 		netdev->hw_features     |= NETIF_F_GSO_GRE;
- 		netdev->hw_enc_features |= NETIF_F_GSO_GRE;
+ 		netdev->hw_enc_features |= NETIF_F_GSO_UDP_TUNNEL |
++#ifdef HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM
+ 					   NETIF_F_GSO_UDP_TUNNEL_CSUM;
++#else
++					   0;
++#endif
++
 +#ifdef HAVE_NETIF_F_GSO_PARTIAL
- 		netdev->gso_partial_features |= NETIF_F_GSO_GRE;
+ 		netdev->gso_partial_features = NETIF_F_GSO_UDP_TUNNEL_CSUM;
++#endif
+ 		netdev->vlan_features |= NETIF_F_GSO_UDP_TUNNEL |
+-					 NETIF_F_GSO_UDP_TUNNEL_CSUM;
++#ifdef HAVE_NETIF_F_GSO_UDP_TUNNEL_CSUM
++					   NETIF_F_GSO_UDP_TUNNEL_CSUM;
++#else
++					   0;
++#endif
+ 	}
++#endif
+ 
+ 	if (mlx5_tunnel_proto_supported(mdev, IPPROTO_GRE)) {
+ 		netdev->hw_features     |= NETIF_F_GSO_GRE |
++#ifdef HAVE_NETIF_F_GSO_GRE_CSUM
+ 					   NETIF_F_GSO_GRE_CSUM;
++#else
++					   0;
++#endif
+ 		netdev->hw_enc_features |= NETIF_F_GSO_GRE |
++#ifdef HAVE_NETIF_F_GSO_GRE_CSUM
+ 					   NETIF_F_GSO_GRE_CSUM;
++#else
++					   0;
++#endif
++
++#ifdef HAVE_NETIF_F_GSO_PARTIAL
+ 		netdev->gso_partial_features |= NETIF_F_GSO_GRE |
+-						NETIF_F_GSO_GRE_CSUM;
++#ifdef HAVE_NETIF_F_GSO_GRE_CSUM
++					   NETIF_F_GSO_GRE_CSUM;
++#else
++					   0;
++#endif
 +#endif
  	}
  
@@ -2495,7 +2531,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  
  	mlx5_query_port_fcs(mdev, &fcs_supported, &fcs_enabled);
  
-@@ -5711,10 +6753,17 @@ static void mlx5e_build_nic_netdev(struc
+@@ -5718,10 +6788,17 @@ static void mlx5e_build_nic_netdev(struc
  		netdev->hw_features      |= NETIF_F_HW_TC;
  #endif
  #ifdef CONFIG_MLX5_EN_ARFS
@@ -2513,7 +2549,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  	netdev->features         |= NETIF_F_HIGHDMA;
  	netdev->features         |= NETIF_F_HW_VLAN_STAG_FILTER;
  
-@@ -5770,7 +6819,9 @@ static int mlx5e_nic_init(struct mlx5_co
+@@ -5777,7 +6854,9 @@ static int mlx5e_nic_init(struct mlx5_co
  	int err;
  
  	mlx5e_build_nic_params(priv, &priv->xsk, netdev->mtu);
@@ -2523,7 +2559,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  
  	mlx5e_init_delay_drop(priv, &priv->channels.params);
  
-@@ -5913,6 +6964,9 @@ static void mlx5e_nic_enable(struct mlx5
+@@ -5920,6 +6999,9 @@ static void mlx5e_nic_enable(struct mlx5
  {
  	struct net_device *netdev = priv->netdev;
  	struct mlx5_core_dev *mdev = priv->mdev;
@@ -2533,7 +2569,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  
  	mlx5e_init_l2_addr(priv);
  
-@@ -5920,11 +6974,20 @@ static void mlx5e_nic_enable(struct mlx5
+@@ -5927,11 +7009,20 @@ static void mlx5e_nic_enable(struct mlx5
  	if (!netif_running(netdev))
  		mlx5e_modify_admin_state(mdev, MLX5_PORT_DOWN);
  
@@ -2554,7 +2590,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  	mlx5e_enable_async_events(priv);
  	mlx5e_enable_blocking_events(priv);
  	if (mlx5e_monitor_counter_supported(priv))
-@@ -5940,7 +7003,9 @@ static void mlx5e_nic_enable(struct mlx5
+@@ -5947,7 +7038,9 @@ static void mlx5e_nic_enable(struct mlx5
  	rtnl_lock();
  	if (netif_running(netdev))
  		mlx5e_open(netdev);
@@ -2564,7 +2600,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  	netif_device_attach(netdev);
  	rtnl_unlock();
  }
-@@ -5972,7 +7037,9 @@ static void mlx5e_nic_disable(struct mlx
+@@ -5979,7 +7072,9 @@ static void mlx5e_nic_disable(struct mlx
  	}
  	mlx5e_disable_async_events(priv);
  	mlx5_lag_remove(mdev, true);
@@ -2574,7 +2610,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  }
  
  int mlx5e_update_nic_rx(struct mlx5e_priv *priv)
-@@ -6219,7 +7286,9 @@ int mlx5e_attach_netdev(struct mlx5e_pri
+@@ -6226,7 +7321,9 @@ int mlx5e_attach_netdev(struct mlx5e_pri
  		/* Reducing the number of channels - RXFH has to be reset, and
  		 * mlx5e_num_channels_changed below will build the RQT.
  		 */
@@ -2584,7 +2620,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  		priv->channels.params.num_channels = max_nch;
  	}
  	/* 1. Set the real number of queues in the kernel the first time.
-@@ -6432,11 +7501,13 @@ static int mlx5e_probe(struct auxiliary_
+@@ -6439,11 +7536,13 @@ static int mlx5e_probe(struct auxiliary_
  	priv->profile = profile;
  	priv->ppriv = NULL;
  
@@ -2598,7 +2634,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  
  	err = profile->init(mdev, netdev);
  	if (err) {
-@@ -6450,13 +7521,17 @@ static int mlx5e_probe(struct auxiliary_
+@@ -6457,13 +7556,17 @@ static int mlx5e_probe(struct auxiliary_
  		goto err_profile_cleanup;
  	}
  
@@ -2616,7 +2652,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  
  	err = mlx5e_sysfs_create(netdev);
  	if (err)
-@@ -6473,8 +7548,10 @@ err_resume:
+@@ -6480,8 +7583,10 @@ err_resume:
  	mlx5e_suspend(adev, state);
  err_profile_cleanup:
  	profile->cleanup(priv);
@@ -2627,7 +2663,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  err_destroy_netdev:
  	mlx5e_destroy_netdev(priv);
  	return err;
-@@ -6490,7 +7567,9 @@ static void mlx5e_remove(struct auxiliar
+@@ -6497,7 +7602,9 @@ static void mlx5e_remove(struct auxiliar
  	unregister_netdev(priv->netdev);
  	mlx5e_suspend(adev, state);
  	priv->profile->cleanup(priv);
@@ -2637,7 +2673,7 @@ Change-Id: I87b12af3cf2656bb94dc9245636a04c5ba77f912
  	mlx5e_destroy_netdev(priv);
  }
  
-@@ -6515,7 +7594,9 @@ int mlx5e_init(void)
+@@ -6522,7 +7629,9 @@ int mlx5e_init(void)
  	int ret;
  
  	mlx5e_ipsec_build_inverse_table();
