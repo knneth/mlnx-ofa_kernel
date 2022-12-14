@@ -11,8 +11,10 @@
 #include <net/dst_metadata.h>
 
 /* Bit31 - 30: MACsec marker, Bit15-0: MACsec id */
+#define MLX5_MACEC_RX_FS_ID_MAX USHRT_MAX /* Must be power of two */
+#define MLX5_MACSEC_RX_FS_ID_MASK MLX5_MACEC_RX_FS_ID_MAX
 #define MLX5_MACSEC_METADATA_MARKER(metadata)  ((((metadata) >> 30) & 0x3)  == 0x1)
-#define MLX5_MACSEC_METADATA_HANDLE(metadata)  ((metadata) & GENMASK(15, 0))
+#define MLX5_MACSEC_RX_METADAT_HANDLE(metadata)  ((metadata) & MLX5_MACSEC_RX_FS_ID_MASK)
 
 struct mlx5e_priv;
 struct mlx5e_macsec;

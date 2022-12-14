@@ -8803,22 +8803,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if struct flow_action_entry has police.rate_bytes_ps])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <net/flow_offload.h>
-	],[
-		struct flow_action_entry x = {
-			.police.rate_bytes_ps = 1,
-		};
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_FLOW_ACTION_POLICE_RATE_BYTES_PS, 1,
-			  [struct flow_action_entry has police.rate_bytes_ps])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if flow_rule_match_meta exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/flow_offload.h>
@@ -15793,6 +15777,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_FLOW_DISSECTOR_F_STOP_BEFORE_ENCAP, 1,
 			  [FLOW_DISSECTOR_F_STOP_BEFORE_ENCAP is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/macsec.c has function netdev_macsec_is_offloaded])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/macsec.h>
+	],[
+		netdev_macsec_is_offloaded(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FUNC_NETDEV_MACSEC_IS_OFFLOADED, 1,
+			      [net/macsec.c has function netdev_macsec_is_offloaded])
 	],[
 		AC_MSG_RESULT(no)
 	])

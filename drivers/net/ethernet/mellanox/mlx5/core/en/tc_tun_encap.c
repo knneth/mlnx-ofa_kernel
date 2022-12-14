@@ -151,9 +151,18 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 	struct mlx5_flow_spec *spec;
 	struct mlx5e_tc_flow *flow;
 	int err;
+	int count = 0, ok = 0, skip = 0;
 
-	if (e->flags & MLX5_ENCAP_ENTRY_NO_ROUTE)
+	if (e->flags & MLX5_ENCAP_ENTRY_NO_ROUTE) {
+		list_for_each_entry(flow, flow_list, tmp_list) {
+			if (!mlx5e_is_offloaded_flow(flow) || !flow_flag_test(flow, SLOW))
+				continue;
+			count++;
+		}
+		mlx5_core_warn(priv->mdev, "Skip %d flows for e %p dst %pI4, no route.\n",
+			       count, e, &e->tun_info->key.u.ipv4.dst);
 		return;
+	}
 
 	memset(&reformat_params, 0, sizeof(reformat_params));
 	reformat_params.type = e->reformat_type;
@@ -171,8 +180,11 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 	mlx5e_rep_queue_neigh_stats_work(priv);
 
 	list_for_each_entry(flow, flow_list, tmp_list) {
-		if (!mlx5e_is_offloaded_flow(flow) || !flow_flag_test(flow, SLOW))
+		count++;
+		if (!mlx5e_is_offloaded_flow(flow) || !flow_flag_test(flow, SLOW)) {
+			skip++;
 			continue;
+		}
 
 		spec = &flow->attr->parse_attr->spec;
 
@@ -182,8 +194,12 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 		esw_attr->dests[flow->tmp_entry_index].flags |= MLX5_ESW_DEST_ENCAP_VALID;
 
 		/* Do not offload flows with unresolved neighbors */
-		if (!mlx5e_tc_flow_all_encaps_valid(esw_attr))
+		if (!mlx5e_tc_flow_all_encaps_valid(esw_attr)) {
+			mlx5_core_warn(priv->mdev, "Not all encaps are valid for flow %p e %p dst %pI4\n",
+				       flow, e, &e->tun_info->key.u.ipv4.dst);
+			skip++;
 			continue;
+		}
 
 		err = mlx5e_tc_offload_flow_post_acts(flow);
 		if (err) {
@@ -199,6 +215,7 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 			err = PTR_ERR(rule);
 			mlx5_core_warn(priv->mdev, "Failed to update cached encapsulation flow, %d\n",
 				       err);
+			skip++;
 			continue;
 		}
 
@@ -206,7 +223,12 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 		flow->rule[0] = rule;
 		/* was unset when slow path rule removed */
 		flow_flag_set(flow, OFFLOADED);
+		ok++;
 	}
+
+	if (count != ok || skip > 0 || (count == 0 && count == ok))
+		mlx5_core_warn(priv->mdev, "Skip stats for e %p dst %pI4, count %d, ok %d, skip %d\n",
+			       e, &e->tun_info->key.u.ipv4.dst, count, ok, skip);
 }
 
 void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,
@@ -224,15 +246,16 @@ void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,
 	list_for_each_entry(flow, flow_list, tmp_list) {
 		if (!mlx5e_is_offloaded_flow(flow) || flow_flag_test(flow, SLOW))
 			continue;
-		spec = &flow->attr->parse_attr->spec;
-
-		/* update from encap rule to slow path rule */
-		rule = mlx5e_tc_offload_to_slow_path(esw, flow, spec);
 
 		attr = mlx5e_tc_get_encap_attr(flow);
 		esw_attr = attr->esw_attr;
 		/* mark the flow's encap dest as non-valid */
 		esw_attr->dests[flow->tmp_entry_index].flags &= ~MLX5_ESW_DEST_ENCAP_VALID;
+		esw_attr->dests[flow->tmp_entry_index].pkt_reformat = NULL;
+
+		/* update from encap rule to slow path rule */
+		spec = &flow->attr->parse_attr->spec;
+		rule = mlx5e_tc_offload_to_slow_path(esw, flow, spec);
 
 		if (IS_ERR(rule)) {
 			err = PTR_ERR(rule);
@@ -251,6 +274,7 @@ void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,
 	/* we know that the encap is valid */
 	e->flags &= ~MLX5_ENCAP_ENTRY_VALID;
 	mlx5_packet_reformat_dealloc(priv->mdev, e->pkt_reformat);
+	e->pkt_reformat = NULL;
 }
 
 static void mlx5e_take_tmp_flow(struct mlx5e_tc_flow *flow,
@@ -762,8 +786,7 @@ int mlx5e_attach_encap(struct mlx5e_priv *priv,
 		       struct net_device *mirred_dev,
 		       int out_index,
 		       struct netlink_ext_ack *extack,
-		       struct net_device **encap_dev,
-		       bool *encap_valid)
+		       struct net_device **encap_dev)
 {
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct mlx5e_tc_flow_parse_attr *parse_attr;
@@ -878,9 +901,8 @@ attach_flow:
 	if (e->flags & MLX5_ENCAP_ENTRY_VALID) {
 		attr->esw_attr->dests[out_index].pkt_reformat = e->pkt_reformat;
 		attr->esw_attr->dests[out_index].flags |= MLX5_ESW_DEST_ENCAP_VALID;
-		*encap_valid = true;
 	} else {
-		*encap_valid = false;
+		flow_flag_set(flow, SLOW);
 	}
 	mutex_unlock(&esw->offloads.encap_tbl_lock);
 

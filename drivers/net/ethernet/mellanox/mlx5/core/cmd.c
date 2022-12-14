@@ -1936,7 +1936,7 @@ static void cmd_status_log(struct mlx5_core_dev *dev, u16 opcode, u8 status, int
 {
 	struct mlx5_cmd_stats *stats;
 
-	if (!err)
+	if (!err || mlx5_cmd_is_down(dev))
 		return;
 
 	stats = &dev->cmd.stats[opcode];

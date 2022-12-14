@@ -59,3 +59,6 @@ mlx_compat-$(CONFIG_COMPAT_CLS_FLOWER_4_18_MOD) += nf_flow_table_core.o nf_flow_
 endif
 
 mlx_compat-y += bitmap.o
+ifdef CONFIG_MLX5_EN_MACSEC
+mlx_compat-y += macsec.o
+endif

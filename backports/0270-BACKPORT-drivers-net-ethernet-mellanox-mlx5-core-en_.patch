@@ -2929,7 +2929,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  	.stats_grps	   = mlx5e_nic_stats_grps,
  	.stats_grps_num	   = mlx5e_nic_stats_grps_num,
  	.features          = BIT(MLX5E_PROFILE_FEATURE_PTP_RX) |
-@@ -5934,12 +7126,16 @@ int mlx5e_attach_netdev(struct mlx5e_pri
+@@ -5914,12 +7106,16 @@ int mlx5e_attach_netdev(struct mlx5e_pri
  		/* Reducing the number of channels - RXFH has to be reset, and
  		 * mlx5e_num_channels_changed below will build the RQT.
  		 */
@@ -2946,7 +2946,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  	}
  	if (max_nch != priv->max_nch) {
  		mlx5_core_warn(priv->mdev,
-@@ -6172,11 +7368,13 @@ static int mlx5e_probe(struct auxiliary_
+@@ -6152,11 +7348,13 @@ static int mlx5e_probe(struct auxiliary_
  	priv->profile = profile;
  	priv->ppriv = NULL;
  
@@ -2960,7 +2960,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  
  	err = profile->init(mdev, netdev);
  	if (err) {
-@@ -6190,13 +7388,17 @@ static int mlx5e_probe(struct auxiliary_
+@@ -6170,13 +7368,17 @@ static int mlx5e_probe(struct auxiliary_
  		goto err_profile_cleanup;
  	}
  
@@ -2978,7 +2978,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  
  	err = mlx5e_sysfs_create(netdev);
  	if (err)
-@@ -6213,8 +7415,10 @@ err_resume:
+@@ -6193,8 +7395,10 @@ err_resume:
  err_profile_cleanup:
  	profile->cleanup(priv);
  err_devlink_cleanup:
@@ -2989,7 +2989,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  	mlx5e_destroy_netdev(priv);
  	return err;
  }
-@@ -6229,7 +7433,9 @@ static void mlx5e_remove(struct auxiliar
+@@ -6209,7 +7413,9 @@ static void mlx5e_remove(struct auxiliar
  	unregister_netdev(priv->netdev);
  	mlx5e_suspend(adev, state);
  	priv->profile->cleanup(priv);
@@ -2999,7 +2999,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  	mlx5e_destroy_netdev(priv);
  }
  
-@@ -6254,7 +7460,9 @@ int mlx5e_init(void)
+@@ -6234,7 +7440,9 @@ int mlx5e_init(void)
  	int ret;
  
  	mlx5e_ipsec_build_inverse_table();

@@ -16,7 +16,7 @@ Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 Package: mlnx-ofed-kernel-dkms
 Section: kernel
 Architecture: all
-Depends: dkms, ${misc:Depends}, mlnx-ofed-kernel-utils, libc6-dev,
+Depends: dkms, ${misc:Depends}, mlnx-ofed-kernel-utils, libc6-dev, gcc,
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
 Provides: mlnx-rdma-rxe-dkms
 Conflicts: mlnx-rdma-rxe-dkms

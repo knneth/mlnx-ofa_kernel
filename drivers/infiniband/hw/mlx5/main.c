@@ -659,6 +659,9 @@ static int add_gid_macsec_operations(const struct ib_gid_attr *attr)
 	if (!netif_is_macsec(ndev))
 		goto out;
 
+	if (!netdev_macsec_is_offloaded(ndev))
+		goto out;
+
 	if (!(macsec_get_real_dev(ndev)->features &
 	      NETIF_F_HW_MACSEC)) {
 		ret = -EOPNOTSUPP;
@@ -729,17 +732,17 @@ static int mlx5_ib_add_gid(const struct ib_gid_attr *attr,
 }
 
 #ifdef CONFIG_MLX5_EN_MACSEC
-static int del_gid_macsec_operations(const struct ib_gid_attr *attr)
+static void del_gid_macsec_operations(const struct ib_gid_attr *attr)
 {
 	struct mlx5_ib_dev *dev = to_mdev(attr->device);
 	struct mlx5_reserved_gids *mgids;
-	int ret, i;
+	int i;
 
 	if (((MLX5_CAP_GEN_2(dev->mdev, flow_table_type_2_type) &
 	     NIC_RDMA_BOTH_DIRS_CAPS) != NIC_RDMA_BOTH_DIRS_CAPS) ||
 	     !MLX5_CAP_FLOWTABLE_RDMA_TX(dev->mdev, max_modify_header_actions)) {
 		mlx5_ib_dbg(dev, "Failed to add RoCE MACsec, capabilities not supported\n");
-		return 0;
+		return;
 	}
 
 	for (i = 0; i < MLX5_MAX_MACSEC_GIDS; i++) {
@@ -747,20 +750,16 @@ static int del_gid_macsec_operations(const struct ib_gid_attr *attr)
 		if (mgids->macsec_index == attr->index) {
 			const struct ib_gid_attr *physical_gid = mgids->physical_gid;
 
-			ret = set_roce_addr(to_mdev(physical_gid->device),
-					    physical_gid->port_num,
-					    physical_gid->index,
-					    &physical_gid->gid, physical_gid);
-			if (ret)
-				return ret;
+			set_roce_addr(to_mdev(physical_gid->device),
+				      physical_gid->port_num,
+				      physical_gid->index,
+				      &physical_gid->gid, physical_gid);
 
 			rdma_put_gid_attr(physical_gid);
 			mgids->macsec_index = -1;
 			break;
 		}
 	}
-
-	return 0;
 }
 #endif
 
@@ -771,14 +770,11 @@ static int mlx5_ib_del_gid(const struct ib_gid_attr *attr,
 
 	ret = set_roce_addr(to_mdev(attr->device), attr->port_num,
 			    attr->index, NULL, attr);
+#ifdef CONFIG_MLX5_EN_MACSEC
 	if (ret)
 		return ret;
 
-#ifdef CONFIG_MLX5_EN_MACSEC
-	ret = del_gid_macsec_operations(attr);
-	if (ret)
-		set_roce_addr(to_mdev(attr->device), attr->port_num,
-			      attr->index, &attr->gid, attr);
+	del_gid_macsec_operations(attr);
 #endif
 
 	return ret;

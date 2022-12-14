@@ -432,7 +432,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  	struct mlx5e_select_queue_params *final_selq;
  };
  
-@@ -1012,7 +1142,13 @@ struct mlx5e_priv {
+@@ -1011,7 +1141,13 @@ struct mlx5e_priv {
  	struct mlx5e_ptp_stats     ptp_stats;
  	u16                        stats_nch;
  	u16                        max_nch;
@@ -446,7 +446,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  	u8                         shared_rq:1;
  	bool                       tx_ptp_opened;
  	bool                       rx_ptp_opened;
-@@ -1022,7 +1158,9 @@ struct mlx5e_priv {
+@@ -1021,7 +1157,9 @@ struct mlx5e_priv {
  	struct notifier_block      events_nb;
  	struct notifier_block      blocking_events_nb;
  
@@ -456,7 +456,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  #ifdef CONFIG_MLX5_CORE_EN_DCB
  	struct mlx5e_dcbx          dcbx;
  #endif
-@@ -1042,7 +1180,9 @@ struct mlx5e_priv {
+@@ -1041,7 +1179,9 @@ struct mlx5e_priv {
  	struct mlx5e_delay_drop delay_drop;
  	struct devlink_health_reporter *tx_reporter;
  	struct devlink_health_reporter *rx_reporter;
@@ -466,7 +466,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  #if IS_ENABLED(CONFIG_PCI_HYPERV_INTERFACE)
  	struct mlx5e_hv_vhca_stats_agent stats_agent;
  #endif
-@@ -1096,7 +1236,9 @@ struct mlx5e_profile {
+@@ -1095,7 +1235,9 @@ struct mlx5e_profile {
  void mlx5e_create_debugfs(struct mlx5e_priv *priv);
  void mlx5e_destroy_debugfs(struct mlx5e_priv *priv);
  
@@ -476,7 +476,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  
  bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev);
  
-@@ -1104,10 +1246,26 @@ void mlx5e_shampo_dealloc_hd(struct mlx5
+@@ -1103,10 +1245,26 @@ void mlx5e_shampo_dealloc_hd(struct mlx5
  int mlx5e_sysfs_create(struct net_device *dev);
  void mlx5e_sysfs_remove(struct net_device *dev);
  
@@ -504,7 +504,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  void mlx5e_fold_sw_stats64(struct mlx5e_priv *priv, struct rtnl_link_stats64 *s);
  
  void mlx5e_init_l2_addr(struct mlx5e_priv *priv);
-@@ -1120,6 +1278,7 @@ void mlx5e_set_rx_mode_work(struct work_
+@@ -1119,6 +1277,7 @@ void mlx5e_set_rx_mode_work(struct work_
  int mlx5e_hwstamp_set(struct mlx5e_priv *priv, struct ifreq *ifr);
  int mlx5e_hwstamp_get(struct mlx5e_priv *priv, struct ifreq *ifr);
  int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool val, bool rx_filter);
@@ -512,7 +512,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  
  int mlx5e_vlan_rx_add_vid(struct net_device *dev, __always_unused __be16 proto,
  			  u16 vid);
-@@ -1135,6 +1294,9 @@ struct mlx5e_create_cq_param {
+@@ -1134,6 +1293,9 @@ struct mlx5e_create_cq_param {
  	struct mlx5e_ch_stats *ch_stats;
  	int node;
  	int ix;
@@ -522,7 +522,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  };
  int mlx5e_wait_for_min_rx_wqes(struct mlx5e_rq *rq, int wait_time);
  void mlx5e_close_rq(struct mlx5e_priv *priv, struct mlx5e_rq *rq);
-@@ -1146,12 +1308,22 @@ int mlx5e_create_rq(struct mlx5e_rq *rq,
+@@ -1145,12 +1307,22 @@ int mlx5e_create_rq(struct mlx5e_rq *rq,
  void mlx5e_destroy_rq(struct mlx5e_rq *rq);
  
  struct mlx5e_sq_param;
@@ -548,7 +548,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  
  struct mlx5e_cq_param;
  int mlx5e_open_cq(struct mlx5e_priv *priv, struct dim_cq_moder moder,
-@@ -1240,6 +1412,8 @@ void mlx5e_destroy_mdev_resources(struct
+@@ -1239,6 +1411,8 @@ void mlx5e_destroy_mdev_resources(struct
  int mlx5e_refresh_tirs(struct mlx5e_priv *priv, bool enable_uc_lb,
  		       bool enable_mc_lb);
  int mlx5e_modify_tirs_packet_merge(struct mlx5e_priv *priv);
@@ -557,7 +557,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc);
  
  /* common netdev helpers */
-@@ -1268,7 +1442,9 @@ int mlx5e_set_dev_port_mtu(struct mlx5e_
+@@ -1267,7 +1441,9 @@ int mlx5e_set_dev_port_mtu(struct mlx5e_
  int mlx5e_set_dev_port_mtu_ctx(struct mlx5e_priv *priv, void *context);
  int mlx5e_change_mtu(struct net_device *netdev, int new_mtu,
  		     mlx5e_fp_preactivate preactivate);
@@ -567,7 +567,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  
  /* ethtool helpers */
  void mlx5e_ethtool_get_drvinfo(struct mlx5e_priv *priv,
-@@ -1287,19 +1463,36 @@ void mlx5e_ethtool_get_channels(struct m
+@@ -1286,19 +1462,36 @@ void mlx5e_ethtool_get_channels(struct m
  int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
  			       struct ethtool_channels *ch);
  int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
@@ -607,7 +607,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  int mlx5e_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
  		    u32 *rule_locs);
  int mlx5e_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd);
-@@ -1309,6 +1502,12 @@ int mlx5e_ethtool_get_ts_info(struct mlx
+@@ -1308,6 +1501,12 @@ int mlx5e_ethtool_get_ts_info(struct mlx
  			      struct ethtool_ts_info *info);
  int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
  			       struct ethtool_flash *flash);
@@ -620,7 +620,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam);
  int mlx5e_ethtool_set_pauseparam(struct mlx5e_priv *priv,
-@@ -1337,7 +1536,11 @@ int mlx5e_netdev_change_profile(struct m
+@@ -1336,7 +1535,11 @@ int mlx5e_netdev_change_profile(struct m
  				const struct mlx5e_profile *new_profile, void *new_ppriv);
  void mlx5e_netdev_attach_nic_profile(struct mlx5e_priv *priv);
  void mlx5e_set_netdev_mtu_boundaries(struct mlx5e_priv *priv);
@@ -633,7 +633,7 @@ Change-Id: I75a9db15426bd2e37cd05bb32ba324c16fa4b7b0
  void mlx5e_build_txq_maps(struct mlx5e_priv *priv);
  
  int mlx5e_get_dump_flag(struct net_device *netdev, struct ethtool_dump *dump);
-@@ -1354,19 +1557,36 @@ static inline bool mlx5e_dropless_rq_sup
+@@ -1353,19 +1556,36 @@ static inline bool mlx5e_dropless_rq_sup
  void mlx5e_rx_dim_work(struct work_struct *work);
  void mlx5e_tx_dim_work(struct work_struct *work);
  

@@ -976,7 +976,6 @@ struct mlx5e_priv {
 	/* priv data path fields - start */
 	struct mlx5e_select_queue_params __rcu *selq;
 	struct mlx5e_txqsq **txq2sq;
-	int **channel_tc2realtxq;
 #ifdef CONFIG_MLX5_CORE_EN_DCB
 	struct mlx5e_dcbx_dp       dcbx_dp;
 #endif

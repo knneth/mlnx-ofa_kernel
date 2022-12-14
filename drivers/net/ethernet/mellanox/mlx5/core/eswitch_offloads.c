@@ -449,7 +449,7 @@ esw_setup_vport_dest(struct mlx5_flow_destination *dest, struct mlx5_flow_act *f
 		}
 	}
 
-	if (esw_attr->dests[attr_idx].flags & MLX5_ESW_DEST_ENCAP) {
+	if (esw_attr->dests[attr_idx].flags & MLX5_ESW_DEST_ENCAP_VALID) {
 		if (pkt_reformat) {
 			flow_act->action |= MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
 			flow_act->pkt_reformat = esw_attr->dests[attr_idx].pkt_reformat;
@@ -2630,7 +2630,9 @@ static void __unload_reps_all_vport(struct mlx5_eswitch *esw, u8 rep_type)
 	}
 
 	rep = mlx5_eswitch_get_rep(esw, MLX5_VPORT_UPLINK);
+	down_write(&esw->mode_lock);
 	__esw_offloads_unload_rep(esw, rep, rep_type);
+	up_write(&esw->mode_lock);
 }
 
 int mlx5_esw_offloads_rep_load(struct mlx5_eswitch *esw, u16 vport_num)

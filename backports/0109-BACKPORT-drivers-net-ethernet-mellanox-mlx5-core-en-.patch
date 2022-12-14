@@ -30,7 +30,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  enum {
  	MLX5E_ROUTE_ENTRY_VALID     = BIT(0),
  };
-@@ -288,6 +294,7 @@ void mlx5e_take_all_encap_flows(struct m
+@@ -312,6 +318,7 @@ void mlx5e_take_all_encap_flows(struct m
  /* Takes reference to all flows attached to route and adds the flows to
   * flow_list using 'tmp_list' list_head in mlx5e_tc_flow.
   */
@@ -38,7 +38,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  static void mlx5e_take_all_route_decap_flows(struct mlx5e_route_entry *r,
  					     struct list_head *flow_list)
  {
-@@ -296,6 +303,7 @@ static void mlx5e_take_all_route_decap_f
+@@ -320,6 +327,7 @@ static void mlx5e_take_all_route_decap_f
  	list_for_each_entry(flow, &r->decap_flows, decap_routes)
  		mlx5e_take_tmp_flow(flow, flow_list, 0);
  }
@@ -46,7 +46,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  typedef bool (match_cb)(struct mlx5e_encap_entry *);
  
-@@ -383,9 +391,11 @@ void mlx5e_tc_update_neigh_used_value(st
+@@ -407,9 +415,11 @@ void mlx5e_tc_update_neigh_used_value(st
  	if (m_neigh->family == AF_INET)
  		tbl = &arp_tbl;
  #if IS_ENABLED(CONFIG_IPV6)
@@ -58,7 +58,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  	else
  		return;
  
-@@ -426,7 +436,9 @@ void mlx5e_tc_update_neigh_used_value(st
+@@ -450,7 +460,9 @@ void mlx5e_tc_update_neigh_used_value(st
  		}
  	}
  
@@ -68,7 +68,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  	if (neigh_used) {
  		nhe->reported_lastuse = jiffies;
-@@ -695,6 +707,7 @@ out:
+@@ -719,6 +731,7 @@ out:
  	return err;
  }
  
@@ -76,7 +76,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  static int mlx5e_update_vf_tunnel(struct mlx5_eswitch *esw,
  				  struct mlx5_esw_flow_attr *attr,
  				  struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts,
-@@ -729,6 +742,7 @@ out:
+@@ -753,6 +766,7 @@ out:
  		dev_put(route_dev);
  	return err;
  }
@@ -84,7 +84,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  static unsigned int mlx5e_route_tbl_get_last_update(struct mlx5e_priv *priv)
  {
-@@ -1008,6 +1022,7 @@ static void mlx5e_route_dealloc(struct m
+@@ -1030,6 +1044,7 @@ static void mlx5e_route_dealloc(struct m
  	kfree_rcu(r, rcu);
  }
  
@@ -92,7 +92,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  static void mlx5e_route_put(struct mlx5e_priv *priv, struct mlx5e_route_entry *r)
  {
  	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
-@@ -1020,6 +1035,7 @@ static void mlx5e_route_put(struct mlx5e
+@@ -1042,6 +1057,7 @@ static void mlx5e_route_put(struct mlx5e
  
  	mlx5e_route_dealloc(priv, r);
  }
@@ -100,7 +100,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  static void mlx5e_route_put_locked(struct mlx5e_priv *priv, struct mlx5e_route_entry *r)
  {
-@@ -1097,6 +1113,7 @@ mlx5e_route_get_create(struct mlx5e_priv
+@@ -1119,6 +1135,7 @@ mlx5e_route_get_create(struct mlx5e_priv
  	return r;
  }
  
@@ -108,7 +108,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  static struct mlx5e_route_entry *
  mlx5e_route_lookup_for_update(struct mlx5e_tc_tun_encap *encap, struct mlx5e_route_key *key)
  {
-@@ -1159,6 +1176,7 @@ mlx5e_route_enqueue_update(struct mlx5e_
+@@ -1181,6 +1198,7 @@ mlx5e_route_enqueue_update(struct mlx5e_
  
  	return 0;
  }
@@ -116,7 +116,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  int mlx5e_attach_decap_route(struct mlx5e_priv *priv,
  			     struct mlx5e_tc_flow *flow)
-@@ -1199,6 +1217,7 @@ int mlx5e_attach_decap_route(struct mlx5
+@@ -1221,6 +1239,7 @@ int mlx5e_attach_decap_route(struct mlx5
  	/* Routing changed concurrently. FIB event handler might have missed new
  	 * entry, schedule update.
  	 */
@@ -124,7 +124,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  	if (tbl_time_before != tbl_time_after) {
  		err = mlx5e_route_enqueue_update(priv, r, FIB_EVENT_ENTRY_REPLACE);
  		if (err) {
-@@ -1206,6 +1225,7 @@ int mlx5e_attach_decap_route(struct mlx5
+@@ -1228,6 +1247,7 @@ int mlx5e_attach_decap_route(struct mlx5
  			goto out;
  		}
  	}
@@ -132,7 +132,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  	flow->decap_route = r;
  	list_add(&flow->decap_routes, &r->decap_flows);
-@@ -1261,6 +1281,7 @@ static int mlx5e_attach_encap_route(stru
+@@ -1283,6 +1303,7 @@ static int mlx5e_attach_encap_route(stru
  	/* Routing changed concurrently. FIB event handler might have missed new
  	 * entry, schedule update.
  	 */
@@ -140,7 +140,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  	if (tbl_time_before != tbl_time_after) {
  		err = mlx5e_route_enqueue_update(priv, r, FIB_EVENT_ENTRY_REPLACE);
  		if (err) {
-@@ -1268,6 +1289,7 @@ static int mlx5e_attach_encap_route(stru
+@@ -1290,6 +1311,7 @@ static int mlx5e_attach_encap_route(stru
  			return err;
  		}
  	}
@@ -148,7 +148,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  	flow->encap_routes[out_index].r = r;
  	if (new_encap_entry)
-@@ -1325,6 +1347,7 @@ static void mlx5e_detach_encap_route(str
+@@ -1347,6 +1369,7 @@ static void mlx5e_detach_encap_route(str
  	mlx5e_route_dealloc(priv, r);
  }
  
@@ -156,7 +156,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  static void mlx5e_invalidate_encap(struct mlx5e_priv *priv,
  				   struct mlx5e_encap_entry *e,
  				   struct list_head *encap_flows)
-@@ -1596,7 +1619,9 @@ out:
+@@ -1618,7 +1641,9 @@ out:
  	dev_put(event_data->ul_dev);
  	kfree(event_data);
  }
@@ -166,7 +166,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  static struct mlx5e_tc_fib_event_data *
  mlx5e_init_fib_work_ipv4(struct mlx5e_priv *priv,
  			 struct net_device *ul_dev,
-@@ -1608,15 +1633,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
+@@ -1630,15 +1655,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct mlx5e_route_entry *r;
  	struct mlx5e_route_key key;
@@ -186,7 +186,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
  	if (!fib_work)
-@@ -1649,24 +1678,31 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+@@ -1671,24 +1700,31 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
  			 unsigned long event,
  			 struct fib_notifier_info *info)
  {
@@ -218,7 +218,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  	key.ip_version = 6;
  
  	/* Can't fail after this point because releasing reference to r
-@@ -1683,11 +1719,14 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+@@ -1705,11 +1741,14 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
  
  out:
  	kfree(fib_work);
@@ -233,7 +233,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct fib_notifier_info *info = ptr;
  	struct mlx5e_tc_tun_encap *encap;
-@@ -1702,17 +1741,21 @@ static int mlx5e_tc_tun_fib_event(struct
+@@ -1724,17 +1763,21 @@ static int mlx5e_tc_tun_fib_event(struct
  	switch (event) {
  	case FIB_EVENT_ENTRY_REPLACE:
  	case FIB_EVENT_ENTRY_DEL:
@@ -255,7 +255,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  			mlx5_core_warn(priv->mdev, "Failed to init fib work, %ld\n",
  				       PTR_ERR(fib_work));
  		}
-@@ -1721,6 +1764,7 @@ static int mlx5e_tc_tun_fib_event(struct
+@@ -1743,6 +1786,7 @@ static int mlx5e_tc_tun_fib_event(struct
  	default:
  		return NOTIFY_DONE;
  	}
@@ -263,7 +263,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  
  	return NOTIFY_DONE;
  }
-@@ -1738,8 +1782,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
+@@ -1760,8 +1804,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
  	encap->fib_nb.notifier_call = mlx5e_tc_tun_fib_event;
  	spin_lock_init(&encap->route_lock);
  	hash_init(encap->route_tbl);
@@ -276,7 +276,7 @@ Change-Id: I006d73768393f3a6c4fb854bed06586660187ab2
  	if (err) {
  		kvfree(encap);
  		return ERR_PTR(err);
-@@ -1753,7 +1801,12 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
+@@ -1775,7 +1823,12 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
  	if (!encap)
  		return;
  
