@@ -368,6 +368,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if map_lock has mmap_read_lock])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/mm.h>
+	],[
+		mmap_read_lock(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_MMAP_READ_LOCK, 1,
+			[map_lock has mmap_read_lock])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if net_namespace.h has pernet_operations_id])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <net/net_namespace.h>
@@ -10219,6 +10234,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if flow_indr_dev_register exist])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+		#include <net/flow_offload.h>
+	],[
+		flow_indr_dev_register(NULL, NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FLOW_INDR_DEV_REGISTER, 1,
+			  [flow_indr_dev_register exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+
 	AC_MSG_CHECKING([if flow_stats_update has 5 parameters])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/flow_offload.h>
@@ -12981,6 +13012,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TYPE___POLL_T, 1,
 			  [type __poll_t is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/xdp.h has xdp_convert_buff_to_frame])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/xdp.h>
+	],[
+		xdp_convert_buff_to_frame(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDP_CONVERT_BUFF_TO_FRAME, 1,
+			[net/xdp.h has xdp_convert_buff_to_frame])
 	],[
 		AC_MSG_RESULT(no)
 	])

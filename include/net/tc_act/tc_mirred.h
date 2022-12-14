@@ -19,6 +19,7 @@
 #include <net/netlink.h>
 #include <linux/skbuff.h>
 
+#ifdef CONFIG_NET_CLS_ACT
 #if !defined(HAVE_TCF_MIRRED_IFINDEX) || \
     (!defined(HAVE_IS_TCF_MIRRED_EGRESS_REDIRECT) && \
      !defined(HAVE_IS_TCF_MIRRED_REDIRECT)) || \
@@ -104,4 +105,5 @@ static inline struct net_device *tcf_mirred_dev(const struct tc_action *a)
 }
 #endif
 
+#endif  /*  CONFIG_NET_CLS_ACT */
 #endif	/* _COMPAT_NET_TC_ACT_TC_MIRRED_H */

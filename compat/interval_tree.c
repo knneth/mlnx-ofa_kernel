@@ -1,4 +1,4 @@
-#ifndef HAVE_INTERVAL_TREE_EXPORTED
+#if (defined(HAVE_INTERVAL_TREE_EXPORTED) && !defined(CONFIG_INTERVAL_TREE)) || !defined(HAVE_INTERVAL_TREE_EXPORTED)
 #include <linux/init.h>
 #include <linux/interval_tree.h>
 #include <linux/interval_tree_generic.h>

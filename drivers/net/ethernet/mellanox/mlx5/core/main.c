@@ -1800,6 +1800,9 @@ static int suspend(struct device *device)
 
 	dev_info(&pdev->dev, "suspend was called\n");
 
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return 0;
+
 	err = mlx5_unload_one(dev, false);
 	if (err) {
 		dev_err(&pdev->dev, "mlx5_unload_one failed with error code: %d\n", err);
@@ -1835,6 +1838,9 @@ static int resume(struct device *device)
 	int err;
 
 	dev_info(&pdev->dev, "resume was called\n");
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return 0;
 
 	err = pci_set_power_state(pdev, PCI_D0);
 	if (err) {
@@ -1876,6 +1882,9 @@ static pci_ers_result_t mlx5_pci_err_detected(struct pci_dev *pdev,
 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
 
 	mlx5_core_info(dev, "%s was called\n", __func__);
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return PCI_ERS_RESULT_CAN_RECOVER;
 
 	mlx5_enter_error_state(dev, false);
 	mlx5_error_sw_reset(dev);
@@ -1923,6 +1932,9 @@ static pci_ers_result_t mlx5_pci_slot_reset(struct pci_dev *pdev)
 
 	mlx5_core_info(dev, "%s was called\n", __func__);
 
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return PCI_ERS_RESULT_NEED_RESET;
+
 	err = mlx5_pci_enable_device(dev);
 	if (err) {
 		mlx5_core_err(dev, "%s: mlx5_pci_enable_device failed with error code: %d\n",
@@ -1949,6 +1961,9 @@ static void mlx5_pci_resume(struct pci_dev *pdev)
 
 	mlx5_core_info(dev, "%s was called\n", __func__);
 
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return;
+
 	dev->priv.sw_reset_lag = dev->priv.lag_enabled;
 	err = mlx5_load_one(dev, false);
 	if (err)
@@ -1970,6 +1985,10 @@ static void shutdown(struct pci_dev *pdev)
 	int err;
 
 	mlx5_core_info(dev, "Shutdown was called\n");
+
+	if (pdev->is_virtfn && !dev->priv.sriov.probe_vf)
+		return;
+
 	err = mlx5_try_fast_unload(dev);
 	if (err) {
 		mlx5_unload_one(dev, false);

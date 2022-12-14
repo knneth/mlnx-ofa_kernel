@@ -138,10 +138,9 @@ int esw_acl_egress_lgcy_setup(struct mlx5_eswitch *esw,
 
 	esw_acl_egress_lgcy_rules_destroy(vport);
 
-	if (!need_acl_table) {
-		esw_acl_egress_lgcy_cleanup(esw, vport);
+	esw_acl_egress_lgcy_cleanup(esw, vport);
+	if (!need_acl_table)
 		return 0;
-	}
 
 	if (!IS_ERR_OR_NULL(vport->egress.acl))
 		return 0;

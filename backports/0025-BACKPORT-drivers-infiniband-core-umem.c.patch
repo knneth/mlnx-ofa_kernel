@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
 ---
- drivers/infiniband/core/umem.c | 250 +++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 242 insertions(+), 8 deletions(-)
+ drivers/infiniband/core/umem.c | 254 +++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 246 insertions(+), 8 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
@@ -149,7 +149,7 @@ Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -248,53 +327,159 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -248,52 +327,160 @@ struct ib_umem *__ib_umem_get(struct ib_
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -253,8 +253,9 @@ Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
 +			       min_t(unsigned long, npages,
 +				     PAGE_SIZE / sizeof(struct page *)));
 +#endif
-+
- 			up_read(&mm->mmap_sem);
++#ifndef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
++			up_read(&mm->mmap_sem);
++#endif
  			goto umem_release;
  		}
 +#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
@@ -315,7 +316,7 @@ Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
  
  	if (!umem->nmap) {
  		pr_err("%s: failed to map scatterlist, npages=%lu\n", __func__,
-@@ -307,10 +492,28 @@ struct ib_umem *__ib_umem_get(struct ib_
+@@ -306,7 +493,11 @@ struct ib_umem *__ib_umem_get(struct ib_
  	goto out;
  
  umem_release:
@@ -324,6 +325,12 @@ Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
 +#else
 +	__ib_umem_release(context->device, umem, 0);
 +#endif
+ 	/*
+ 	 * If the address belongs to peer memory client, then the first
+ 	 * call to get_user_pages will fail. In this case, try to get
+@@ -326,8 +517,22 @@ umem_release:
+ 		goto out;
+ 	}
  vma:
 +#ifdef HAVE_ATOMIC_PINNED_VM
  	atomic64_sub(ib_umem_num_pages(umem), &mm->pinned_vm);
@@ -342,9 +349,9 @@ Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
 +		free_page((unsigned long) vma_list);
 +#endif
  	free_page((unsigned long) page_list);
- 	/*
- 	 * If the address belongs to peer memory client, then the first
-@@ -337,19 +540,36 @@ umem_kfree:
+ umem_kfree:
+ 	if (ret) {
+@@ -337,19 +542,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -381,7 +388,7 @@ Change-Id: Ibf6284b3c9337924375481cda4a1437e88e094c7
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -361,14 +581,30 @@ void ib_umem_release(struct ib_umem *ume
+@@ -361,14 +583,30 @@ void ib_umem_release(struct ib_umem *ume
  {
  	if (!umem)
  		return;

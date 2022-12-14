@@ -191,10 +191,9 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 
 	esw_acl_ingress_lgcy_rules_destroy(vport);
 
-	if (!need_acl_table) {
-		esw_acl_ingress_lgcy_cleanup(esw, vport);
+	esw_acl_ingress_lgcy_cleanup(esw, vport);
+	if (!need_acl_table)
 		return 0;
-	}
 
 	if (!mlx5_esw_is_manager_vport(esw->dev, vport->vport) &&
 	    MLX5_CAP_ESW_INGRESS_ACL(esw->dev, flow_counter)) {
@@ -206,20 +205,18 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 		vport->ingress.legacy.drop_counter = counter;
 	}
 
-	if (!vport->ingress.acl) {
-		vport->ingress.acl = esw_acl_table_create(esw, vport->vport,
-							  MLX5_FLOW_NAMESPACE_ESW_INGRESS,
-							  table_size);
-		if (IS_ERR_OR_NULL(vport->ingress.acl)) {
-			err = PTR_ERR(vport->ingress.acl);
-			vport->ingress.acl = NULL;
-			return err;
-		}
-
-		err = esw_acl_ingress_lgcy_groups_create(esw, vport);
-		if (err)
-			goto out;
+	vport->ingress.acl = esw_acl_table_create(esw, vport->vport,
+						  MLX5_FLOW_NAMESPACE_ESW_INGRESS,
+						  table_size);
+	if (IS_ERR_OR_NULL(vport->ingress.acl)) {
+		err = PTR_ERR(vport->ingress.acl);
+		vport->ingress.acl = NULL;
+		return err;
 	}
+
+	err = esw_acl_ingress_lgcy_groups_create(esw, vport);
+	if (err)
+		goto out;
 
 	esw_debug(esw->dev,
 		  "vport[%d] configure ingress rules, vlan(%d) qos(%d)\n",
@@ -335,7 +332,8 @@ drop_rule:
 	return 0;
 
 out:
-	esw_acl_ingress_lgcy_cleanup(esw, vport);
+	if (err)
+		esw_acl_ingress_lgcy_cleanup(esw, vport);
 	kvfree(spec);
 	return err;
 }

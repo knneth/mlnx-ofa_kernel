@@ -53,7 +53,7 @@
 %global __requires_exclude_from mlnx_tune
 %endif
 
-%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux")
+%global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -76,7 +76,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 5.1}
-%{!?_release: %global _release OFED.5.1.2.3.7.1}
+%{!?_release: %global _release OFED.5.1.2.5.8.0.60.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -131,7 +131,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.3.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.5.8.0.60.tgz
 
 
 # build KMP rpms?
@@ -187,7 +187,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.3.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.5.8.0.60.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -220,7 +220,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.3.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.1-2.5.8.0.60.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -517,7 +517,8 @@ fi
 %post -n %{utils_pname}
 if [ $1 -eq 1 ]; then # 1 : This package is being installed
 #############################################################################################################
-if [[ -f /etc/redhat-release || -f /etc/rocks-release ]]; then
+is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
+if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
         /sbin/chkconfig openibd off >/dev/null 2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/chkconfig --del openibd >/dev/null 2>&1 || true
@@ -605,8 +606,9 @@ fi # 1 : closed
 # END of post
 
 %preun -n %{utils_pname}
+is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
 if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
-          if [[ -f /etc/redhat-release || -f /etc/rocks-release ]]; then
+          if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
                 /sbin/chkconfig openibd off >/dev/null 2>&1 || true
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true

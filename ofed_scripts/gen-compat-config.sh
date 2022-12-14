@@ -896,6 +896,11 @@ if (look_exists "cls_common->prio = tp->prio >> 16" include/net/pkt_cls.h); then
     set_config CONFIG_COMPAT_TC_PRIO_IS_MAJOR y
 fi
 
+if (look_exists "define offsetofend" include/linux/vfio.h); then
+    set_config CONFIG_COMPAT_OFFSETOFEND_IN_VFIO_H y
+fi
+
+
 # by default MLX5_TC_CT is enabled by configure and here we disable
 # it if kernel doesn't support it.
 tc_ct=0

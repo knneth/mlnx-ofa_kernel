@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 
 Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
 ---
- .../net/ethernet/mellanox/mlx5/core/en/rep/tc.c    | 301 ++++++++++++++++++++-
- 1 file changed, 299 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 343 +++++++++++++++++-
+ 1 file changed, 323 insertions(+), 20 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
@@ -189,11 +189,11 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  	case TC_SETUP_CLSMATCHALL:
  		return mlx5e_rep_setup_tc_cls_matchall(priv, type_data);
 +#endif
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
-+
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}
+ }
+ 
 +#ifdef HAVE_FLOW_CLS_OFFLOAD
 +static LIST_HEAD(mlx5e_rep_block_cb_list);
 +#endif
@@ -247,13 +247,13 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
 +		list_del(&block_cb->driver_list);
 +#endif
 +		return 0;
- 	default:
- 		return -EOPNOTSUPP;
- 	}
- }
++	default:
++		return -EOPNOTSUPP;
++	}
++}
 +#endif /* HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE */
 +#endif /* HAVE_TC_BLOCK_OFFLOAD */
- 
++
 +#ifdef HAVE_TC_SETUP_FT
  static int mlx5e_rep_setup_ft_cb(enum tc_setup_type type, void *type_data,
  				 void *cb_priv)
@@ -326,10 +326,10 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  						  mlx5e_rep_setup_ft_cb,
  						  priv, priv, true);
 +#endif /* HAVE_TC_SETUP_FT */
- 	default:
- 		return -EOPNOTSUPP;
- 	}
- }
++	default:
++		return -EOPNOTSUPP;
++	}
++}
 +#endif
 +
 +#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
@@ -350,10 +350,10 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
 +	switch (type) {
 +	case TC_SETUP_CLSFLOWER:
 +		return mlx5e_rep_setup_tc_cls_flower(priv, type_data, flags);
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}
+ }
 +#else
 +int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
 +			  void *cb_priv)
@@ -375,7 +375,28 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  static struct mlx5e_rep_indr_block_priv *
  mlx5e_rep_indr_block_priv_lookup(struct mlx5e_rep_priv *rpriv,
  				 struct net_device *netdev)
-@@ -469,6 +724,7 @@ static int mlx5e_rep_indr_setup_tc_cb(en
+@@ -414,20 +669,6 @@ mlx5e_rep_indr_block_priv_lookup(struct
+ 	return NULL;
+ }
+ 
+-static void mlx5e_rep_indr_unregister_block(struct mlx5e_rep_priv *rpriv,
+-					    struct net_device *netdev);
+-
+-void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv)
+-{
+-	struct mlx5e_rep_indr_block_priv *cb_priv, *temp;
+-	struct list_head *head = &rpriv->uplink_priv.tc_indr_block_priv_list;
+-
+-	list_for_each_entry_safe(cb_priv, temp, head, list) {
+-		mlx5e_rep_indr_unregister_block(rpriv, cb_priv->netdev);
+-		kfree(cb_priv);
+-	}
+-}
+-
+ static int
+ mlx5e_rep_indr_offload(struct net_device *netdev,
+ 		       struct flow_cls_offload *flower,
+@@ -469,6 +710,7 @@ static int mlx5e_rep_indr_setup_tc_cb(en
  	}
  }
  
@@ -383,7 +404,7 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  static int mlx5e_rep_indr_setup_ft_cb(enum tc_setup_type type,
  				      void *type_data, void *indr_priv)
  {
-@@ -514,7 +770,9 @@ static int mlx5e_rep_indr_setup_ft_cb(en
+@@ -514,7 +756,9 @@ static int mlx5e_rep_indr_setup_ft_cb(en
  		return -EOPNOTSUPP;
  	}
  }
@@ -393,7 +414,7 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  static void mlx5e_rep_indr_block_unbind(void *cb_priv)
  {
  	struct mlx5e_rep_indr_block_priv *indr_priv = cb_priv;
-@@ -522,6 +780,7 @@ static void mlx5e_rep_indr_block_unbind(
+@@ -522,6 +766,7 @@ static void mlx5e_rep_indr_block_unbind(
  	list_del(&indr_priv->list);
  	kfree(indr_priv);
  }
@@ -401,7 +422,7 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  
  static LIST_HEAD(mlx5e_block_cb_list);
  
-@@ -532,13 +791,22 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -532,13 +777,22 @@ mlx5e_rep_indr_setup_block(struct net_de
  			   flow_setup_cb_t *setup_cb)
  {
  	struct mlx5e_rep_indr_block_priv *indr_priv;
@@ -424,7 +445,7 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  
  	switch (f->command) {
  	case FLOW_BLOCK_BIND:
-@@ -555,6 +823,7 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -555,6 +809,7 @@ mlx5e_rep_indr_setup_block(struct net_de
  		list_add(&indr_priv->list,
  			 &rpriv->uplink_priv.tc_indr_block_priv_list);
  
@@ -432,7 +453,7 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  		block_cb = flow_block_cb_alloc(setup_cb, indr_priv, indr_priv,
  					       mlx5e_rep_indr_block_unbind);
  		if (IS_ERR(block_cb)) {
-@@ -566,17 +835,42 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -566,17 +821,42 @@ mlx5e_rep_indr_setup_block(struct net_de
  		list_add_tail(&block_cb->driver_list, &mlx5e_block_cb_list);
  
  		return 0;
@@ -475,7 +496,7 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  		return 0;
  	default:
  		return -EOPNOTSUPP;
-@@ -592,9 +886,11 @@ int mlx5e_rep_indr_setup_cb(struct net_d
+@@ -592,14 +872,17 @@ int mlx5e_rep_indr_setup_cb(struct net_d
  	case TC_SETUP_BLOCK:
  		return mlx5e_rep_indr_setup_block(netdev, cb_priv, type_data,
  						  mlx5e_rep_indr_setup_tc_cb);
@@ -487,9 +508,70 @@ Change-Id: Ie1c94f327b0b7b8575c84f6a4f7de6539d2ca2d4
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -671,6 +967,7 @@ void mlx5e_rep_tc_netdevice_event_unregi
+ }
+ 
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
+ static int mlx5e_rep_indr_register_block(struct mlx5e_rep_priv *rpriv,
+ 					 struct net_device *netdev)
+ {
+@@ -624,6 +907,18 @@ static void mlx5e_rep_indr_unregister_bl
+ 					rpriv);
+ }
+ 
++
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv)
++{
++	struct mlx5e_rep_indr_block_priv *cb_priv, *temp;
++	struct list_head *head = &rpriv->uplink_priv.tc_indr_block_priv_list;
++
++	list_for_each_entry_safe(cb_priv, temp, head, list) {
++		mlx5e_rep_indr_unregister_block(rpriv, cb_priv->netdev);
++		kfree(cb_priv);
++	}
++}
++
+ static int mlx5e_nic_rep_netdevice_event(struct notifier_block *nb,
+ 					 unsigned long event, void *ptr)
+ {
+@@ -646,31 +941,39 @@ static int mlx5e_nic_rep_netdevice_event
+ 	}
+ 	return NOTIFY_OK;
+ }
++#endif /* HAVE_FLOW_INDR_DEV_REGISTER */
+ 
+ int mlx5e_rep_tc_netdevice_event_register(struct mlx5e_rep_priv *rpriv)
+ {
+ 	struct mlx5_rep_uplink_priv *uplink_priv = &rpriv->uplink_priv;
+-	int err;
+ 
+ 	/* init indirect block notifications */
+ 	INIT_LIST_HEAD(&uplink_priv->tc_indr_block_priv_list);
+-
++#ifdef HAVE_FLOW_INDR_DEV_REGISTER
++        return flow_indr_dev_register(mlx5e_rep_indr_setup_cb, rpriv);
++#else
+ 	uplink_priv->netdevice_nb.notifier_call = mlx5e_nic_rep_netdevice_event;
+-	err = register_netdevice_notifier_dev_net(rpriv->netdev,
++	return register_netdevice_notifier_dev_net(rpriv->netdev,
+ 						  &uplink_priv->netdevice_nb,
+ 						  &uplink_priv->netdevice_nn);
+-	return err;
++#endif
+ }
+ 
+ void mlx5e_rep_tc_netdevice_event_unregister(struct mlx5e_rep_priv *rpriv)
+ {
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
+ 	struct mlx5_rep_uplink_priv *uplink_priv = &rpriv->uplink_priv;
+ 
+ 	/* clean indirect TC block notifications */
+ 	unregister_netdevice_notifier_dev_net(rpriv->netdev,
  					      &uplink_priv->netdevice_nb,
  					      &uplink_priv->netdevice_nn);
++#else
++	flow_indr_dev_unregister(mlx5e_rep_indr_setup_cb, rpriv,
++				 mlx5e_rep_indr_setup_tc_cb);
++#endif
  }
 +#endif /* HAVE_TC_BLOCK_OFFLOAD || HAVE_FLOW_BLOCK_OFFLOAD */
  

@@ -157,7 +157,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  
  #define MLX5_IB_MOD "mlx5_ib"
  static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
-@@ -1958,7 +1983,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -1973,7 +1998,11 @@ static void mlx5_pci_resume(struct pci_d
  		mlx5_core_info(dev, "%s: device recovered\n", __func__);
  }
  
@@ -169,7 +169,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2033,7 +2062,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2052,7 +2081,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,
