@@ -175,7 +175,7 @@ endif
 	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/show_counters		debian/$(putils)/usr/sbin
 
-	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --prefix=/usr --root=../../debian/$(putils)
+	cd ofed_scripts/utils;	$(PYTHON) ./setup.py install --install-layout=deb --root=../../debian/$(putils)
 
 override_dh_installinit:
 

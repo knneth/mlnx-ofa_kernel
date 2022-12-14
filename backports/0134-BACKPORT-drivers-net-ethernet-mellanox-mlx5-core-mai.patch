@@ -63,7 +63,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	mlx5_reload_interface(dev, MLX5_INTERFACE_PROTOCOL_IB);
  	mutex_unlock(&dev->roce.state_lock);
  
-@@ -1287,9 +1298,11 @@ static int mlx5_load(struct mlx5_core_de
+@@ -1286,9 +1297,11 @@ static int mlx5_load(struct mlx5_core_de
  	mlx5_events_start(dev);
  
  #ifdef CONFIG_PPC
@@ -75,7 +75,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  
  	mlx5_pagealloc_start(dev);
  
-@@ -1327,11 +1340,13 @@ static int mlx5_load(struct mlx5_core_de
+@@ -1326,11 +1339,13 @@ static int mlx5_load(struct mlx5_core_de
  
  	mlx5_accel_ipsec_init(dev);
  
@@ -89,7 +89,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  
  	err = mlx5_init_fs(dev);
  	if (err) {
-@@ -1364,8 +1379,10 @@ err_ec:
+@@ -1363,8 +1378,10 @@ err_ec:
  err_sriov:
  	mlx5_cleanup_fs(dev);
  err_fs:
@@ -100,7 +100,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	mlx5_accel_ipsec_cleanup(dev);
  	mlx5_fpga_device_stop(dev);
  err_fpga_start:
-@@ -1379,8 +1396,10 @@ err_eq_table:
+@@ -1378,8 +1395,10 @@ err_eq_table:
  	mlx5_irq_table_destroy(dev);
  err_irq_table:
  #ifdef CONFIG_PPC
@@ -111,7 +111,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	mlx5_pagealloc_stop(dev);
  	mlx5_events_stop(dev);
  	mlx5_put_uars_page(dev, dev->priv.uar);
-@@ -1395,7 +1414,9 @@ static void mlx5_unload(struct mlx5_core
+@@ -1394,7 +1413,9 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_sriov_detach(dev);
  	mlx5_cleanup_fs(dev);
  	mlx5_accel_ipsec_cleanup(dev);
@@ -121,7 +121,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	mlx5_fpga_device_stop(dev);
  	mlx5_rsc_dump_cleanup(dev);
  	mlx5_hv_vhca_cleanup(dev->hv_vhca);
-@@ -1403,8 +1424,10 @@ static void mlx5_unload(struct mlx5_core
+@@ -1402,8 +1423,10 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_eq_table_destroy(dev);
  	mlx5_irq_table_destroy(dev);
  #ifdef CONFIG_PPC
@@ -132,7 +132,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	mlx5_pagealloc_stop(dev);
  	mlx5_events_stop(dev);
  	mlx5_put_uars_page(dev, dev->priv.uar);
-@@ -1566,7 +1589,7 @@ out:
+@@ -1580,7 +1603,7 @@ out:
  int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
  {
  	struct mlx5_priv *priv = &dev->priv;
@@ -141,7 +141,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  
  	dev->profile = &profile[profile_idx];
  
-@@ -1616,6 +1639,7 @@ void mlx5_mdev_uninit(struct mlx5_core_d
+@@ -1630,6 +1653,7 @@ void mlx5_mdev_uninit(struct mlx5_core_d
  }
  
  #ifdef CONFIG_PPC
@@ -149,7 +149,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
  {
  	struct pci_dev *pdev = dev->pdev;
-@@ -1656,6 +1680,7 @@ static void mlx5_as_notify_init(struct m
+@@ -1670,6 +1694,7 @@ static void mlx5_as_notify_init(struct m
  
  static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
  #endif
@@ -157,7 +157,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  
  #define MLX5_IB_MOD "mlx5_ib"
  static int init_one(struct pci_dev *pdev, const struct pci_device_id *id)
-@@ -1943,7 +1968,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -1958,7 +1983,11 @@ static void mlx5_pci_resume(struct pci_d
  		mlx5_core_info(dev, "%s: device recovered\n", __func__);
  }
  
@@ -169,7 +169,7 @@ Change-Id: I205c8cbfafc99887ce5571c88368179f0a2156d8
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2018,7 +2047,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2033,7 +2062,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

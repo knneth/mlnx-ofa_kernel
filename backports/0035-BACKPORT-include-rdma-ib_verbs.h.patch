@@ -230,7 +230,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	struct kobject *ports_kobj;
  	struct list_head port_list;
  	struct ib_device *owner; /* reach back to owner ib_device */
-@@ -2737,15 +2842,26 @@ struct ib_device {
+@@ -2738,15 +2843,26 @@ struct ib_device {
  	struct attribute_group	     *hw_stats_ag;
  	struct rdma_hw_stats         *hw_stats;
  
@@ -257,7 +257,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	/*
  	 * Positive refcount indicates that the device is currently
  	 * registered and cannot be unregistered.
-@@ -3412,6 +3528,7 @@ static inline unsigned int rdma_find_pg_
+@@ -3413,6 +3529,7 @@ static inline unsigned int rdma_find_pg_
  	return __fls(pgsz);
  }
  
@@ -265,7 +265,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  int ib_set_vf_link_state(struct ib_device *device, int vf, u8 port,
  			 int state);
  int ib_get_vf_config(struct ib_device *device, int vf, u8 port,
-@@ -3423,6 +3540,7 @@ int ib_get_vf_guid(struct ib_device *dev
+@@ -3424,6 +3541,7 @@ int ib_get_vf_guid(struct ib_device *dev
  		    struct ifla_vf_guid *port_guid);
  int ib_set_vf_guid(struct ib_device *device, int vf, u8 port, u64 guid,
  		   int type);
@@ -273,7 +273,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  
  int ib_query_pkey(struct ib_device *device,
  		  u8 port_num, u16 index, u16 *pkey);
-@@ -4074,6 +4192,10 @@ struct ib_mr *ib_get_dma_mr(struct ib_pd
+@@ -4075,6 +4193,10 @@ struct ib_mr *ib_get_dma_mr(struct ib_pd
   */
  static inline int ib_dma_mapping_error(struct ib_device *dev, u64 dma_addr)
  {
@@ -284,7 +284,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	return dma_mapping_error(dev->dma_device, dma_addr);
  }
  
-@@ -4088,6 +4210,10 @@ static inline u64 ib_dma_map_single(stru
+@@ -4089,6 +4211,10 @@ static inline u64 ib_dma_map_single(stru
  				    void *cpu_addr, size_t size,
  				    enum dma_data_direction direction)
  {
@@ -295,7 +295,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	return dma_map_single(dev->dma_device, cpu_addr, size, direction);
  }
  
-@@ -4102,6 +4228,11 @@ static inline void ib_dma_unmap_single(s
+@@ -4103,6 +4229,11 @@ static inline void ib_dma_unmap_single(s
  				       u64 addr, size_t size,
  				       enum dma_data_direction direction)
  {
@@ -307,7 +307,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	dma_unmap_single(dev->dma_device, addr, size, direction);
  }
  
-@@ -4119,6 +4250,10 @@ static inline u64 ib_dma_map_page(struct
+@@ -4120,6 +4251,10 @@ static inline u64 ib_dma_map_page(struct
  				  size_t size,
  					 enum dma_data_direction direction)
  {
@@ -318,7 +318,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	return dma_map_page(dev->dma_device, page, offset, size, direction);
  }
  
-@@ -4133,6 +4268,11 @@ static inline void ib_dma_unmap_page(str
+@@ -4134,6 +4269,11 @@ static inline void ib_dma_unmap_page(str
  				     u64 addr, size_t size,
  				     enum dma_data_direction direction)
  {
@@ -330,7 +330,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	dma_unmap_page(dev->dma_device, addr, size, direction);
  }
  
-@@ -4147,6 +4287,10 @@ static inline int ib_dma_map_sg(struct i
+@@ -4148,6 +4288,10 @@ static inline int ib_dma_map_sg(struct i
  				struct scatterlist *sg, int nents,
  				enum dma_data_direction direction)
  {
@@ -341,7 +341,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	return dma_map_sg(dev->dma_device, sg, nents, direction);
  }
  
-@@ -4161,14 +4305,28 @@ static inline void ib_dma_unmap_sg(struc
+@@ -4162,14 +4306,28 @@ static inline void ib_dma_unmap_sg(struc
  				   struct scatterlist *sg, int nents,
  				   enum dma_data_direction direction)
  {
@@ -370,7 +370,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	return dma_map_sg_attrs(dev->dma_device, sg, nents, direction,
  				dma_attrs);
  }
-@@ -4176,8 +4334,18 @@ static inline int ib_dma_map_sg_attrs(st
+@@ -4177,8 +4335,18 @@ static inline int ib_dma_map_sg_attrs(st
  static inline void ib_dma_unmap_sg_attrs(struct ib_device *dev,
  					 struct scatterlist *sg, int nents,
  					 enum dma_data_direction direction,
@@ -389,7 +389,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	dma_unmap_sg_attrs(dev->dma_device, sg, nents, direction, dma_attrs);
  }
  
-@@ -4204,6 +4372,11 @@ static inline void ib_dma_sync_single_fo
+@@ -4205,6 +4373,11 @@ static inline void ib_dma_sync_single_fo
  					      size_t size,
  					      enum dma_data_direction dir)
  {
@@ -401,7 +401,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	dma_sync_single_for_cpu(dev->dma_device, addr, size, dir);
  }
  
-@@ -4219,6 +4392,11 @@ static inline void ib_dma_sync_single_fo
+@@ -4220,6 +4393,11 @@ static inline void ib_dma_sync_single_fo
  						 size_t size,
  						 enum dma_data_direction dir)
  {
@@ -413,7 +413,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	dma_sync_single_for_device(dev->dma_device, addr, size, dir);
  }
  
-@@ -4234,6 +4412,16 @@ static inline void *ib_dma_alloc_coheren
+@@ -4235,6 +4413,16 @@ static inline void *ib_dma_alloc_coheren
  					   dma_addr_t *dma_handle,
  					   gfp_t flag)
  {
@@ -430,7 +430,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	return dma_alloc_coherent(dev->dma_device, size, dma_handle, flag);
  }
  
-@@ -4248,6 +4436,11 @@ static inline void ib_dma_free_coherent(
+@@ -4249,6 +4437,11 @@ static inline void ib_dma_free_coherent(
  					size_t size, void *cpu_addr,
  					dma_addr_t dma_handle)
  {
@@ -442,7 +442,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  	dma_free_coherent(dev->dma_device, size, cpu_addr, dma_handle);
  }
  
-@@ -4400,6 +4593,45 @@ struct ib_xrcd *__ib_alloc_xrcd(struct i
+@@ -4401,6 +4594,45 @@ struct ib_xrcd *__ib_alloc_xrcd(struct i
   */
  int ib_dealloc_xrcd(struct ib_xrcd *xrcd, struct ib_udata *udata);
  
@@ -488,7 +488,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  static inline int ib_check_mr_access(int flags)
  {
  	/*
-@@ -4750,6 +4982,14 @@ ib_get_vector_affinity(struct ib_device
+@@ -4751,6 +4983,14 @@ ib_get_vector_affinity(struct ib_device
   */
  void rdma_roce_rescan_device(struct ib_device *ibdev);
  
@@ -503,7 +503,7 @@ Change-Id: Id4a701f489121d0aea749520b8e0ade8260f2082
  struct ib_ucontext *ib_uverbs_get_ucontext_file(struct ib_uverbs_file *ufile);
  
  int uverbs_destroy_def_handler(struct uverbs_attr_bundle *attrs);
-@@ -4767,6 +5007,11 @@ int rdma_init_netdev(struct ib_device *d
+@@ -4768,6 +5008,11 @@ int rdma_init_netdev(struct ib_device *d
  		     struct net_device *netdev,
  		     int force_fail);
  

@@ -14,8 +14,9 @@ static bool mlx5_lag_multipath_check_prereq(struct mlx5_lag *ldev)
 	if (!ldev->pf[MLX5_LAG_P1].dev || !ldev->pf[MLX5_LAG_P2].dev)
 		return false;
 
-	return mlx5_esw_multipath_prereq(ldev->pf[MLX5_LAG_P1].dev,
-					 ldev->pf[MLX5_LAG_P2].dev);
+	return mlx5_esw_check_modes_match(ldev->pf[MLX5_LAG_P1].dev,
+					  ldev->pf[MLX5_LAG_P2].dev,
+					  MLX5_ESWITCH_OFFLOADS);
 }
 
 static bool __mlx5_lag_is_multipath(struct mlx5_lag *ldev)

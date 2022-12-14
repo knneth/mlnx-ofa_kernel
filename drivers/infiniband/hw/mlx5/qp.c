@@ -589,6 +589,11 @@ static int sq_overhead(struct ib_qp_init_attr *attr)
 			sizeof(struct mlx5_mkey_seg);
 		break;
 
+	case MLX5_IB_QPT_SW_CNAK:
+		size += sizeof(struct mlx5_wqe_ctrl_seg) +
+			sizeof(struct mlx5_mlx_seg);
+		break;
+
 	default:
 		return -EINVAL;
 	}
@@ -863,6 +868,7 @@ static int to_mlx5_st(enum ib_qp_type type)
 	case IB_QPT_UC:			return MLX5_QP_ST_UC;
 	case IB_QPT_UD:			return MLX5_QP_ST_UD;
 	case MLX5_IB_QPT_REG_UMR:	return MLX5_QP_ST_REG_UMR;
+	case MLX5_IB_QPT_SW_CNAK:	return MLX5_QP_ST_SW_CNAK;
 	case IB_QPT_XRC_INI:
 	case IB_QPT_XRC_TGT:		return MLX5_QP_ST_XRC;
 	case IB_QPT_SMI:		return MLX5_QP_ST_QP0;
@@ -1893,15 +1899,14 @@ err:
 }
 
 static void configure_requester_scat_cqe(struct mlx5_ib_dev *dev,
+					 struct mlx5_ib_qp *qp,
 					 struct ib_qp_init_attr *init_attr,
-					 struct mlx5_ib_create_qp *ucmd,
 					 void *qpc)
 {
 	int scqe_sz;
 	bool allow_scat_cqe = false;
 
-	if (ucmd)
-		allow_scat_cqe = ucmd->flags & MLX5_QP_FLAG_ALLOW_SCATTER_CQE;
+	allow_scat_cqe = qp->flags_en & MLX5_QP_FLAG_ALLOW_SCATTER_CQE;
 
 	if (!allow_scat_cqe && init_attr->sq_sig_type != IB_SIGNAL_ALL_WR)
 		return;
@@ -2140,7 +2145,7 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	}
 	if ((qp->flags_en & MLX5_QP_FLAG_SCATTER_CQE) &&
 	    (qp->type == MLX5_IB_QPT_DCI || qp->type == IB_QPT_RC))
-		configure_requester_scat_cqe(dev, init_attr, ucmd, qpc);
+		configure_requester_scat_cqe(dev, qp, init_attr, qpc);
 
 	if (qp->rq.wqe_cnt) {
 		MLX5_SET(qpc, qpc, log_rq_stride, qp->rq.wqe_shift - 4);
@@ -2448,6 +2453,7 @@ static void get_cqs(enum ib_qp_type qp_type,
 	case IB_QPT_RC:
 	case IB_QPT_UC:
 	case IB_QPT_UD:
+	case MLX5_IB_QPT_SW_CNAK:
 	case IB_QPT_RAW_PACKET:
 		*send_cq = ib_send_cq ? to_mcq(ib_send_cq) : NULL;
 		*recv_cq = ib_recv_cq ? to_mcq(ib_recv_cq) : NULL;
@@ -2593,6 +2599,7 @@ static int check_qp_type(struct mlx5_ib_dev *dev, struct ib_qp_init_attr *attr,
 	case MLX5_IB_QPT_REG_UMR:
 	case IB_QPT_DRIVER:
 	case IB_QPT_GSI:
+	case MLX5_IB_QPT_SW_CNAK:
 		break;
 	default:
 		goto out;
@@ -2674,13 +2681,18 @@ static void process_vendor_flag(struct mlx5_ib_dev *dev, int *flags, int flag,
 		return;
 	}
 
-	if (flag == MLX5_QP_FLAG_SCATTER_CQE) {
+	switch (flag) {
+	case MLX5_QP_FLAG_SCATTER_CQE:
+	case MLX5_QP_FLAG_ALLOW_SCATTER_CQE:
 		/*
-		 * We don't return error if this flag was provided,
-		 * and mlx5 doesn't have right capability.
-		 */
-		*flags &= ~MLX5_QP_FLAG_SCATTER_CQE;
+			 * We don't return error if these flags were provided,
+			 * and mlx5 doesn't have right capability.
+			 */
+		*flags &= ~(MLX5_QP_FLAG_SCATTER_CQE |
+			    MLX5_QP_FLAG_ALLOW_SCATTER_CQE);
 		return;
+	default:
+		break;
 	}
 	mlx5_ib_dbg(dev, "Vendor create QP flag 0x%X is not supported\n", flag);
 }
@@ -2719,6 +2731,8 @@ static int process_vendor_flags(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 
 	process_vendor_flag(dev, &flags, MLX5_QP_FLAG_SIGNATURE, true, qp);
 	process_vendor_flag(dev, &flags, MLX5_QP_FLAG_SCATTER_CQE,
+			    MLX5_CAP_GEN(mdev, sctr_data_cqe), qp);
+	process_vendor_flag(dev, &flags, MLX5_QP_FLAG_ALLOW_SCATTER_CQE,
 			    MLX5_CAP_GEN(mdev, sctr_data_cqe), qp);
 
 	if (qp->type == IB_QPT_RAW_PACKET) {
@@ -4433,6 +4447,16 @@ static int mlx5_ib_modify_dct(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	return err;
 }
 
+static int ignored_ts_check(enum ib_qp_type qp_type)
+{
+	if (qp_type == MLX5_IB_QPT_REG_UMR ||
+	    qp_type == MLX5_IB_QPT_SW_CNAK ||
+	    qp_type == MLX5_IB_QPT_DCI)
+		return 1;
+
+	return 0;
+}
+
 int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata)
 {
@@ -4492,8 +4516,7 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 				    attr_mask);
 			goto out;
 		}
-	} else if (qp_type != MLX5_IB_QPT_REG_UMR &&
-		   qp_type != MLX5_IB_QPT_DCI &&
+	} else if (!ignored_ts_check(qp_type) &&
 		   !ib_modify_qp_is_ok(cur_state, new_state, qp_type,
 				       attr_mask)) {
 		mlx5_ib_dbg(dev, "invalid QP state transition from %d to %d, qp_type %d, attr_mask 0x%x\n",
@@ -5651,4 +5674,12 @@ int mlx5_ib_qp_set_counter(struct ib_qp *qp, struct rdma_counter *counter)
 out:
 	mutex_unlock(&mqp->mutex);
 	return err;
+}
+
+void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr)
+{
+	memset(seg, 0, sizeof(*seg));
+	seg->stat_rate_sl = wr->sl & 0xf;
+	seg->dlid = cpu_to_be16(wr->dlid);
+	seg->flags = wr->icrc ? 8 : 0;
 }

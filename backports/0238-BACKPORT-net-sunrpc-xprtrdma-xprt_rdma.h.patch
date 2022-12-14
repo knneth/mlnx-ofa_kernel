@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/xprt_rdma.h
 
 Change-Id: I3eeeae91762f935596bd03339fe1f03df0f9fb46
 ---
- net/sunrpc/xprtrdma/xprt_rdma.h | 83 +++++++++++++++++++++++++++++++++
- 1 file changed, 83 insertions(+)
+ net/sunrpc/xprtrdma/xprt_rdma.h | 86 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 86 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/xprt_rdma.h
 +++ b/net/sunrpc/xprtrdma/xprt_rdma.h
@@ -156,9 +156,13 @@ Change-Id: I3eeeae91762f935596bd03339fe1f03df0f9fb46
  /* RPC/RDMA module init - xprtrdma/transport.c
   */
  extern unsigned int xprt_rdma_max_inline_read;
-@@ -596,7 +677,9 @@ void xprt_rdma_cleanup(void);
+@@ -595,8 +676,13 @@ void xprt_rdma_cleanup(void);
+  */
  #if defined(CONFIG_SUNRPC_BACKCHANNEL)
  int xprt_rdma_bc_setup(struct rpc_xprt *, unsigned int);
++#ifdef HAVE_RPC_XPRT_OPS_BC_UP
++int xprt_rdma_bc_up(struct svc_serv *, struct net *);
++#endif
  size_t xprt_rdma_bc_maxpayload(struct rpc_xprt *);
 +#ifdef HAVE_RPC_XPRT_OPS_BC_NUM_SLOTS
  unsigned int xprt_rdma_bc_max_slots(struct rpc_xprt *);

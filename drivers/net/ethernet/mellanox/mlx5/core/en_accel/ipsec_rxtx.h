@@ -67,6 +67,8 @@ static inline bool mlx5_ipsec_is_rx_flow(struct mlx5_cqe64 *cqe)
 {
 	return !!(MLX5_IPSEC_METADATA_MARKER_MASK & be32_to_cpu(cqe->ft_metadata));
 }
+
+__wsum mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe64 *cqe);
 #else
 static inline
 void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
@@ -75,6 +77,10 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 {}
 
 static inline bool mlx5_ipsec_is_rx_flow(struct mlx5_cqe64 *cqe) { return false; }
+
+static inline __wsum mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb,
+							struct mlx5_cqe64 *cqe)
+{ return 0; }
 #endif /* CONFIG_MLX5_EN_IPSEC */
 
 int mlx5e_ipsec_set_flow_attrs(struct mlx5e_priv *priv, u32 *match_c, u32 *match_v,

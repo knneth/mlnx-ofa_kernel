@@ -4,7 +4,7 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/mlx5_ifc.h>
 #include <linux/mlx5/fs.h>
-#include "esw/chains.h"
+#include "lib/fs_chains.h"
 #include "esw/ipsec.h"
 #include "mlx5_core.h"
 #include "accel/ipsec_offload.h"
@@ -76,12 +76,12 @@ static void esw_offloads_ipsec_tables_rx_destroy(struct mlx5_eswitch *esw)
 {
 	mlx5_del_flow_rules(esw_ipsec_decap_rule(esw));
 	mlx5_packet_reformat_dealloc(esw->dev, esw_ipsec_pkt_reformat(esw));
-	mlx5_esw_chains_put_table(esw, 0, 1, 0);
+	mlx5_chains_put_table(esw_chains(esw), 0, 1, 0);
 	mlx5_del_flow_rules(esw_ipsec_decap_miss_rule(esw));
 	mlx5_destroy_flow_group(esw_ipsec_decap_miss_grp(esw));
 	mlx5_destroy_flow_table(esw_ipsec_ft_decap_rx(esw));
 	mlx5_del_flow_rules(esw_ipsec_ft_crypto_rx_fwd_rule(esw));
-	mlx5_esw_chains_put_table(esw, 0, 1, 0);
+	mlx5_chains_put_table(esw_chains(esw), 0, 1, 0);
 	mlx5_destroy_flow_group(esw_ipsec_ft_crypto_rx_miss_grp(esw));
 	mlx5_destroy_flow_table(esw_ipsec_ft_crypto_rx(esw));
 }
@@ -131,7 +131,7 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	flow_act.flags = FLOW_ACT_NO_APPEND;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
-	dest.ft = mlx5_esw_chains_get_table(esw, 0, 1, 0);
+	dest.ft = mlx5_chains_get_table(esw_chains(esw), 0, 1, 0);
 	rule = mlx5_add_flow_rules(esw_ipsec_ft_crypto_rx(esw), &spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
@@ -180,7 +180,7 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	flow_act.flags = FLOW_ACT_NO_APPEND;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT | MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
-	dest.ft = mlx5_esw_chains_get_table(esw, 0, 1, 0);
+	dest.ft = mlx5_chains_get_table(esw_chains(esw), 0, 1, 0);
 	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, MLX5_REFORMAT_TYPE_DEL_ESP_TRANSPORT, 0, 0, NULL, MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(flow_act.pkt_reformat)) {
 		err = PTR_ERR(flow_act.pkt_reformat);
@@ -203,7 +203,7 @@ decap_rule_err:
 	mlx5_packet_reformat_dealloc(mdev, esw_ipsec_pkt_reformat(esw));
 	esw_ipsec_pkt_reformat(esw) = NULL;
 pkt_reformat_err:
-	mlx5_esw_chains_put_table(esw, 0, 1, 0);
+	mlx5_chains_put_table(esw_chains(esw), 0, 1, 0);
 	mlx5_del_flow_rules(esw_ipsec_decap_miss_rule(esw));
 	esw_ipsec_decap_miss_rule(esw) = NULL;
 decap_miss_rule_err:
@@ -216,7 +216,7 @@ decap_fdb_err:
 	mlx5_del_flow_rules(esw_ipsec_ft_crypto_rx_fwd_rule(esw));
 	esw_ipsec_ft_crypto_rx_fwd_rule(esw) = NULL;
 crypto_rx_fwd_rule_err:
-	mlx5_esw_chains_put_table(esw, 0, 1, 0);
+	mlx5_chains_put_table(esw_chains(esw), 0, 1, 0);
 	mlx5_destroy_flow_group(esw_ipsec_ft_crypto_rx_miss_grp(esw));
 	esw_ipsec_ft_crypto_rx_miss_grp(esw) = NULL;
 crypto_rx_miss_grp_err:

@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
 
 Change-Id: I297dd909193a890ba59434953612ee7dce780096
 ---
- drivers/infiniband/core/mad.c | 99 ++++++++++++++++++++++++++++-------
- 1 file changed, 81 insertions(+), 18 deletions(-)
+ drivers/infiniband/core/mad.c | 119 +++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 101 insertions(+), 18 deletions(-)
 
 --- a/drivers/infiniband/core/mad.c
 +++ b/drivers/infiniband/core/mad.c
-@@ -54,13 +54,18 @@
+@@ -55,13 +55,18 @@
  #include "opa_smi.h"
  #include "agent.h"
  
@@ -27,7 +27,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  {
  	u16 pkey;
  	struct ib_device *dev = qp_info->port_priv->device;
-@@ -79,6 +84,7 @@ static void create_mad_addr_info(struct
+@@ -80,6 +85,7 @@ static void create_mad_addr_info(struct
  	entry->dlid = rdma_ah_get_dlid(&attr);
  }
  #endif
@@ -35,7 +35,44 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  
  static int mad_sendq_size = IB_MAD_QP_SEND_SIZE;
  static int mad_recvq_size = IB_MAD_QP_RECV_SIZE;
-@@ -253,30 +259,46 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -152,11 +158,19 @@ static int send_sa_cc_mad(struct ib_mad_
+  * Timeout FIFO functions - implements FIFO with timeout mechanism
+  */
+ 
++#ifdef HAVE_TIMER_SETUP
+ static void activate_timeout_handler_task(struct timer_list *t)
++#else
++static void activate_timeout_handler_task(unsigned long data)
++#endif
+ {
+ 	struct to_fifo *tf;
+ 
++#ifdef HAVE_TIMER_SETUP
+ 	tf = from_timer(tf, t, timer);
++#else
++	tf = (struct to_fifo *)data;
++#endif
+ 	del_timer(&tf->timer);
+ 	queue_work(tf->workq, &tf->work);
+ }
+@@ -264,8 +278,16 @@ static struct to_fifo *tf_create(void)
+ 		spin_lock_init(&tf->lists_lock);
+ 		INIT_LIST_HEAD(&tf->to_head);
+ 		INIT_LIST_HEAD(&tf->fifo_head);
++#ifdef HAVE_TIMER_SETUP
+ 		timer_setup(&tf->timer, activate_timeout_handler_task, 0);
++#else
++		init_timer(&tf->timer);
++#endif
+ 		INIT_WORK(&tf->work, timeout_handler_task);
++#ifndef HAVE_TIMER_SETUP
++		tf->timer.data = (unsigned long)tf;
++		tf->timer.function = activate_timeout_handler_task;
++#endif
+ 		tf->timer.expires = jiffies;
+ 		tf->stop_enqueue = 0;
+ 		tf->num_items = 0;
+@@ -813,30 +835,46 @@ struct ib_mad_agent *ib_register_mad_age
  	/* Validate parameters */
  	qpn = get_spl_qp_index(qp_type);
  	if (qpn == -1) {
@@ -82,7 +119,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  			goto error1;
  		}
  		if (mad_reg_req->mgmt_class >= MAX_MGMT_CLASS) {
-@@ -286,9 +308,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -846,9 +884,13 @@ struct ib_mad_agent *ib_register_mad_age
  			 */
  			if (mad_reg_req->mgmt_class !=
  			    IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE) {
@@ -96,7 +133,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  				goto error1;
  			}
  		} else if (mad_reg_req->mgmt_class == 0) {
-@@ -296,9 +322,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -856,9 +898,13 @@ struct ib_mad_agent *ib_register_mad_age
  			 * Class 0 is reserved in IBA and is used for
  			 * aliasing of IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE
  			 */
@@ -110,7 +147,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  			goto error1;
  		} else if (is_vendor_class(mad_reg_req->mgmt_class)) {
  			/*
-@@ -306,19 +336,27 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -866,19 +912,27 @@ struct ib_mad_agent *ib_register_mad_age
  			 * ensure supplied OUI is not zero
  			 */
  			if (!is_vendor_oui(mad_reg_req->oui)) {
@@ -138,7 +175,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  				goto error1;
  			}
  		}
-@@ -329,9 +367,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -889,9 +943,13 @@ struct ib_mad_agent *ib_register_mad_age
  					IB_MGMT_CLASS_SUBN_LID_ROUTED) &&
  			    (mad_reg_req->mgmt_class !=
  					IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE)) {
@@ -152,7 +189,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  				goto error1;
  			}
  		} else {
-@@ -339,9 +381,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -899,9 +957,13 @@ struct ib_mad_agent *ib_register_mad_age
  					IB_MGMT_CLASS_SUBN_LID_ROUTED) ||
  			    (mad_reg_req->mgmt_class ==
  					IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE)) {
@@ -166,7 +203,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  				goto error1;
  			}
  		}
-@@ -356,8 +402,12 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -916,8 +978,12 @@ struct ib_mad_agent *ib_register_mad_age
  	/* Validate device and port */
  	port_priv = ib_get_mad_port(device, port_num);
  	if (!port_priv) {
@@ -179,7 +216,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		ret = ERR_PTR(-ENODEV);
  		goto error1;
  	}
-@@ -366,8 +416,12 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -926,8 +992,12 @@ struct ib_mad_agent *ib_register_mad_age
  	 * will not have QP0.
  	 */
  	if (!port_priv->qp_info[qpn].qp) {
@@ -192,7 +229,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		ret = ERR_PTR(-EPROTONOSUPPORT);
  		goto error1;
  	}
-@@ -414,7 +468,6 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -974,7 +1044,6 @@ struct ib_mad_agent *ib_register_mad_age
  		ret = ERR_PTR(ret2);
  		goto error4;
  	}
@@ -200,7 +237,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	/*
  	 * The mlx4 driver uses the top byte to distinguish which virtual
  	 * function generated the MAD, so we must avoid using it.
-@@ -431,6 +484,7 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -991,6 +1060,7 @@ struct ib_mad_agent *ib_register_mad_age
  	 * Make sure MAD registration (if supplied)
  	 * is non overlapping with any existing ones
  	 */
@@ -208,7 +245,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	spin_lock_irq(&port_priv->reg_lock);
  	if (mad_reg_req) {
  		mgmt_class = convert_mgmt_class(mad_reg_req->mgmt_class);
-@@ -458,19 +512,20 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -1018,19 +1088,20 @@ struct ib_mad_agent *ib_register_mad_age
  					if (is_vendor_method_in_use(
  							vendor_class,
  							mad_reg_req))
@@ -232,7 +269,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	return &mad_agent_priv->agent;
  error6:
  	spin_unlock_irq(&port_priv->reg_lock);
-@@ -624,10 +679,10 @@ static inline void deref_snoop_agent(str
+@@ -1055,10 +1126,10 @@ static inline void deref_mad_agent(struc
  static void unregister_mad_agent(struct ib_mad_agent_private *mad_agent_priv)
  {
  	struct ib_mad_port_private *port_priv;
@@ -245,7 +282,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	/*
  	 * Canceling all sends results in dropping received response
  	 * MADs, preventing us from queuing additional work
-@@ -843,9 +898,9 @@ static int handle_outgoing_dr_smp(struct
+@@ -1297,9 +1368,9 @@ static int handle_outgoing_dr_smp(struct
  	 */
  	if (opa && smp->class_version == OPA_SM_CLASS_VERSION) {
  		u32 opa_drslid;
@@ -257,7 +294,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		if ((opa_get_smp_direction(opa_smp)
  		     ? opa_smp->route.dr.dr_dlid : opa_smp->route.dr.dr_slid) ==
  		     OPA_LID_PERMISSIVE &&
-@@ -871,8 +926,9 @@ static int handle_outgoing_dr_smp(struct
+@@ -1325,8 +1396,9 @@ static int handle_outgoing_dr_smp(struct
  		    opa_smi_check_local_returning_smp(opa_smp, device) == IB_SMI_DISCARD)
  			goto out;
  	} else {
@@ -268,9 +305,9 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		if ((ib_get_smp_direction(smp) ? smp->dr_dlid : smp->dr_slid) ==
  		     IB_LID_PERMISSIVE &&
  		     smi_handle_dr_smp_send(smp, rdma_cap_ib_switch(device), port_num) ==
-@@ -1250,7 +1306,9 @@ int ib_send_mad(struct ib_mad_send_wr_pr
- 
- 	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
+@@ -1717,7 +1789,9 @@ int ib_send_mad(struct ib_mad_send_wr_pr
+ 		}
+ 	}
  	if (qp_info->send_queue.count < qp_info->send_queue.max_active) {
 +#ifndef MLX_DISABLE_TRACEPOINTS
  		trace_ib_mad_ib_send_mad(mad_send_wr, qp_info);
@@ -278,7 +315,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		ret = ib_post_send(mad_agent->qp, &mad_send_wr->send_wr.wr,
  				   NULL);
  		list = &qp_info->send_queue.list;
-@@ -1830,7 +1888,6 @@ out:
+@@ -2346,7 +2420,6 @@ out:
  		deref_mad_agent(mad_agent);
  		mad_agent = NULL;
  	}
@@ -286,7 +323,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	return mad_agent;
  }
  
-@@ -2085,9 +2142,9 @@ static enum smi_action handle_ib_smi(con
+@@ -2601,9 +2674,9 @@ static enum smi_action handle_ib_smi(con
  {
  	enum smi_forward_action retsmi;
  	struct ib_smp *smp = (struct ib_smp *)recv->mad;
@@ -298,7 +335,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	if (smi_handle_dr_smp_recv(smp,
  				   rdma_cap_ib_switch(port_priv->device),
  				   port_num,
-@@ -2172,9 +2229,9 @@ handle_opa_smi(struct ib_mad_port_privat
+@@ -2688,9 +2761,9 @@ handle_opa_smi(struct ib_mad_port_privat
  {
  	enum smi_forward_action retsmi;
  	struct opa_smp *smp = (struct opa_smp *)recv->mad;
@@ -310,7 +347,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	if (opa_smi_handle_dr_smp_recv(smp,
  				   rdma_cap_ib_switch(port_priv->device),
  				   port_num,
-@@ -2298,10 +2355,10 @@ static void ib_mad_recv_done(struct ib_c
+@@ -2811,10 +2884,10 @@ static void ib_mad_recv_done(struct ib_c
  	/* Validate MAD */
  	if (!validate_mad((const struct ib_mad_hdr *)recv->mad, qp_info, opa))
  		goto out;
@@ -323,7 +360,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  	mad_size = recv->mad_size;
  	response = alloc_mad_private(mad_size, GFP_KERNEL);
  	if (!response)
-@@ -2348,7 +2405,9 @@ static void ib_mad_recv_done(struct ib_c
+@@ -2861,7 +2934,9 @@ static void ib_mad_recv_done(struct ib_c
  
  	mad_agent = find_mad_agent(port_priv, (const struct ib_mad_hdr *)recv->mad);
  	if (mad_agent) {
@@ -333,7 +370,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		ib_mad_complete_recv(mad_agent, &recv->header.recv_wc);
  		/*
  		 * recv is freed up in error cases in ib_mad_complete_recv
-@@ -2512,10 +2571,10 @@ static void ib_mad_send_done(struct ib_c
+@@ -3030,10 +3105,10 @@ static void ib_mad_send_done(struct ib_c
  				   mad_list);
  	send_queue = mad_list->mad_queue;
  	qp_info = send_queue->qp_info;
@@ -346,7 +383,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  retry:
  	ib_dma_unmap_single(mad_send_wr->send_buf.mad_agent->device,
  			    mad_send_wr->header_mapping,
-@@ -2547,7 +2606,9 @@ retry:
+@@ -3062,7 +3137,9 @@ retry:
  	ib_mad_complete_send_wr(mad_send_wr, &mad_send_wc);
  
  	if (queued_send_wr) {
@@ -356,7 +393,7 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  		ret = ib_post_send(qp_info->qp, &queued_send_wr->send_wr.wr,
  				   NULL);
  		if (ret) {
-@@ -2595,7 +2656,9 @@ static bool ib_mad_send_error(struct ib_
+@@ -3110,7 +3187,9 @@ static bool ib_mad_send_error(struct ib_
  		if (mad_send_wr->retry) {
  			/* Repost send */
  			mad_send_wr->retry = 0;
@@ -366,3 +403,15 @@ Change-Id: I297dd909193a890ba59434953612ee7dce780096
  			ret = ib_post_send(qp_info->qp, &mad_send_wr->send_wr.wr,
  					   NULL);
  			if (!ret)
+@@ -4038,7 +4117,11 @@ static ssize_t sa_cc_attr_show(struct ko
+ 	return sa->show(cc_obj, buf);
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops sa_cc_sysfs_ops = {
++#else
++static struct sysfs_ops sa_cc_sysfs_ops = {
++#endif
+ 	.show = sa_cc_attr_show,
+ 	.store = sa_cc_attr_store,
+ };

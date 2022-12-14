@@ -218,7 +218,7 @@ dr_dump_rule_action_mem(struct dr_dump_ctx *ctx, const u64 rule_id,
 }
 
 static int
-dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_rule_member *rule_mem,
+dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_ste *ste,
 		 bool is_rx, const u64 rule_id,
 		 enum mlx5_ifc_steering_format_version format_ver)
 {
@@ -235,11 +235,11 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_rule_member *rule_mem,
 				       DR_DUMP_REC_TYPE_RULE_TX_ENTRY_V1;
 	}
 
-	dr_dump_hex_print(hw_ste_dump, BUF_SIZE, (char *)rule_mem->ste->hw_ste,
+	dr_dump_hex_print(hw_ste_dump, BUF_SIZE, (char *)ste->hw_ste,
 			  DR_STE_SIZE_REDUCED);
 	ret = snprintf(tmp_buf, BUF_SIZE, "%d,0x%llx,0x%llx,%s\n",
 		       mem_rec_type,
-		       dr_dump_icm_to_idx(mlx5dr_ste_get_icm_addr(rule_mem->ste)),
+		       dr_dump_icm_to_idx(mlx5dr_ste_get_icm_addr(ste)),
 		       rule_id,
 		       hw_ste_dump);
 	if (ret < 0)
@@ -253,15 +253,19 @@ dr_dump_rule_mem(struct dr_dump_ctx *ctx, struct mlx5dr_rule_member *rule_mem,
 }
 
 static int
-dr_dump_rule_rx_tx(struct dr_dump_ctx *ctx, struct mlx5dr_rule_rx_tx *rule_rx_tx,
+dr_dump_rule_rx_tx(struct dr_dump_ctx *ctx, struct mlx5dr_rule_rx_tx *nic_rule,
 		   bool is_rx, const u64 rule_id,
 		   enum mlx5_ifc_steering_format_version format_ver)
 {
-	struct mlx5dr_rule_member *rule_mem;
-	int ret;
+	struct mlx5dr_ste *ste_arr[DR_RULE_MAX_STES + DR_ACTION_MAX_STES];
+	struct mlx5dr_ste *curr_ste = nic_rule->last_rule_ste;
+	int ret, i;
 
-	list_for_each_entry(rule_mem, &rule_rx_tx->rule_members_list, list) {
-		ret = dr_dump_rule_mem(ctx, rule_mem, is_rx, rule_id, format_ver);
+	if (mlx5dr_rule_get_reverse_rule_members(ste_arr, curr_ste, &i))
+		return 0;
+
+	while (i--) {
+		ret = dr_dump_rule_mem(ctx, ste_arr[i], is_rx, rule_id, format_ver);
 		if (ret < 0)
 			return ret;
 	}

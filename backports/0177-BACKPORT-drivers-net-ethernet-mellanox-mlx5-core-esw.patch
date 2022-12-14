@@ -9,7 +9,7 @@ Change-Id: I5cb6f90b04ab40b71c2a6e80977f622331211d3f
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_offloads.c
-@@ -2830,15 +2830,24 @@ static int eswitch_devlink_pf_support_ch
+@@ -2986,15 +2986,24 @@ static int eswitch_devlink_pf_support_ch
  		!mlx5_core_is_ecpf_esw_manager(esw->dev)) ? -EOPNOTSUPP : 0;
  }
  
@@ -36,7 +36,7 @@ Change-Id: I5cb6f90b04ab40b71c2a6e80977f622331211d3f
  	err = mlx5_eswitch_check(dev);
  	if (err)
  		return err;
-@@ -2901,25 +2910,32 @@ int mlx5_devlink_eswitch_mode_get(struct
+@@ -3057,25 +3066,32 @@ int mlx5_devlink_eswitch_mode_get(struct
  	if (err)
  		return err;
  
@@ -73,7 +73,7 @@ Change-Id: I5cb6f90b04ab40b71c2a6e80977f622331211d3f
  	err = mlx5_eswitch_check(dev);
  	if (err)
  		return err;
-@@ -2989,14 +3005,12 @@ int mlx5_devlink_eswitch_inline_mode_get
+@@ -3145,14 +3161,12 @@ int mlx5_devlink_eswitch_inline_mode_get
  	if (err)
  		return err;
  
@@ -88,7 +88,7 @@ Change-Id: I5cb6f90b04ab40b71c2a6e80977f622331211d3f
  	return err;
  }
  
-@@ -3038,12 +3052,25 @@ out:
+@@ -3194,12 +3208,25 @@ out:
  }
  
  int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
@@ -116,7 +116,7 @@ Change-Id: I5cb6f90b04ab40b71c2a6e80977f622331211d3f
  
  	err = mlx5_eswitch_check(dev);
  	if (err)
-@@ -3101,7 +3128,11 @@ done:
+@@ -3257,7 +3284,11 @@ done:
  }
  
  int mlx5_devlink_eswitch_encap_mode_get(struct devlink *devlink,
@@ -128,7 +128,7 @@ Change-Id: I5cb6f90b04ab40b71c2a6e80977f622331211d3f
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
-@@ -3111,26 +3142,33 @@ int mlx5_devlink_eswitch_encap_mode_get(
+@@ -3267,26 +3298,33 @@ int mlx5_devlink_eswitch_encap_mode_get(
  	if (err)
  		return err;
  

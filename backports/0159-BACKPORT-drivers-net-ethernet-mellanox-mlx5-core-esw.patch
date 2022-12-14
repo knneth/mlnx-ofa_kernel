@@ -3,20 +3,20 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.h
 
 Change-Id: I0558d7b8612f262f505ccd6b2b565fda2c915865
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eswitch.h | 48 +++++++++++++++--------
+ .../net/ethernet/mellanox/mlx5/core/eswitch.h | 48 ++++++++++++-------
  1 file changed, 31 insertions(+), 17 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.h
-@@ -46,7 +46,6 @@
- #include "lib/mpfs.h"
+@@ -47,7 +47,6 @@
+ #include "lib/fs_chains.h"
  #include "mlx5_core.h"
  #include "meddev/sf.h"
 -#include "en/tc_ct.h"
  
  #define FDB_TC_MAX_CHAIN 3
  #define FDB_FT_CHAIN (FDB_TC_MAX_CHAIN + 1)
-@@ -59,10 +58,11 @@
+@@ -60,10 +59,11 @@
  #define FDB_TC_MAX_PRIO 16
  #define FDB_TC_LEVELS_PER_PRIO 2
  
@@ -30,8 +30,8 @@ Change-Id: I0558d7b8612f262f505ccd6b2b565fda2c915865
  #define MLX5_MAX_UC_PER_VPORT(dev) \
  	(1 << MLX5_CAP_GEN(dev, log_max_current_uc_list))
  
-@@ -540,11 +540,17 @@ struct mlx5_esw_flow_attr {
- 	struct mlx5e_tc_flow_parse_attr *parse_attr;
+@@ -553,11 +553,17 @@ struct mlx5_flow_attr {
+ 	};
  };
  
 -int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
@@ -52,7 +52,7 @@ Change-Id: I0558d7b8612f262f505ccd6b2b565fda2c915865
  int mlx5_devlink_eswitch_inline_mode_get(struct devlink *devlink, u8 *mode);
  int mlx5_eswitch_inline_mode_get(struct mlx5_eswitch *esw, u8 *mode);
  int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
-@@ -553,13 +559,27 @@ int mlx5_eswitch_vport_get_other_hca_cap
+@@ -566,13 +572,27 @@ int mlx5_eswitch_vport_get_other_hca_cap
  					      struct mlx5_vport *vport, bool *value);
  
  int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
@@ -84,7 +84,7 @@ Change-Id: I0558d7b8612f262f505ccd6b2b565fda2c915865
  int mlx5_devlink_eswitch_ipsec_mode_get(struct devlink *devlink,
  					enum devlink_eswitch_ipsec_mode *ipsec);
  void *mlx5_eswitch_get_uplink_priv(struct mlx5_eswitch *esw, u8 rep_type);
-@@ -901,12 +921,6 @@ static inline u16 mlx5_eswitch_max_sfs(c
+@@ -914,12 +934,6 @@ static inline u16 mlx5_eswitch_max_sfs(c
  	return 0;
  }
  

@@ -129,7 +129,7 @@ void ipoib_path_add_notify(struct ipoib_dev_priv *priv,
 	INIT_WORK(&genl_work->work, generate_reply);
 	genl_work->priv = priv;
 	genl_work->type = PATH_ADD;
-	queue_work(ipoib_workqueue, &genl_work->work);
+	queue_work(priv->wq, &genl_work->work);
 }
 
 void ipoib_path_del_notify(struct ipoib_dev_priv *priv,
@@ -150,7 +150,7 @@ void ipoib_path_del_notify(struct ipoib_dev_priv *priv,
 	INIT_WORK(&genl_work->work, generate_reply);
 	genl_work->priv = priv;
 	genl_work->type = PATH_DEL;
-	queue_work(ipoib_workqueue, &genl_work->work);
+	queue_work(priv->wq, &genl_work->work);
 }
 
 /*

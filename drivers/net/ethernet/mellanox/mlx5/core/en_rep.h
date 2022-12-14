@@ -246,6 +246,7 @@ struct devlink_port *mlx5e_rep_get_devlink_port(struct net_device *dev);
 
 #else /* CONFIG_MLX5_ESWITCH */
 static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
+static inline bool mlx5e_eswitch_vf_rep(struct net_device *netdev) { return false; }
 static inline int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv) { return 0; }
 static inline void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv) {}
 static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,

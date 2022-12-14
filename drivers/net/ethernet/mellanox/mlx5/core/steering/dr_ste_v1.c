@@ -1953,52 +1953,86 @@ static void dr_ste_v1_build_flex_parser_1_init(struct mlx5dr_ste_build *sb,
 	sb->ste_build_tag_func = &dr_ste_v1_build_felx_parser_tag;
 }
 
+static int
+dr_ste_v1_build_flex_parser_tnl_geneve_tlv_option_tag(struct mlx5dr_match_param *value,
+						      struct mlx5dr_ste_build *sb,
+						      uint8_t *tag)
+{
+	struct mlx5dr_match_misc3 *misc3 = &value->misc3;
+	uint8_t parser_id = sb->caps->flex_parser_id_geneve_tlv_option_0;
+	uint8_t *parser_ptr = dr_ste_calc_flex_parser_offset(tag, parser_id);
+
+	MLX5_SET(ste_flex_parser_0, parser_ptr, flex_parser_3,
+		   misc3->geneve_tlv_option_0_data);
+	misc3->geneve_tlv_option_0_data = 0;
+
+	return 0;
+}
+
+static void
+dr_ste_v1_build_flex_parser_tnl_geneve_tlv_option_init(struct mlx5dr_ste_build *sb,
+						       struct mlx5dr_match_param *mask)
+{
+	dr_ste_v1_build_flex_parser_tnl_geneve_tlv_option_tag(mask, sb, sb->bit_mask);
+
+	/* STEs with lookup type FLEX_PARSER_{0/1} includes
+	 * flex parsers_{0-3}/{4-7} respectively.
+	 */
+	sb->lu_type = sb->caps->flex_parser_id_geneve_tlv_option_0 > 3 ?
+		      DR_STE_V1_LU_TYPE_FLEX_PARSER_1 :
+		      DR_STE_V1_LU_TYPE_FLEX_PARSER_0;
+
+	sb->byte_mask = mlx5dr_ste_conv_bit_to_byte_mask(sb->bit_mask);
+	sb->ste_build_tag_func = &dr_ste_v1_build_flex_parser_tnl_geneve_tlv_option_tag;
+}
+
 static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	/* Builders */
-	.build_eth_l2_src_dst_init	= &dr_ste_v1_build_eth_l2_src_dst_init,
-	.build_eth_l3_ipv6_src_init	= &dr_ste_v1_build_eth_l3_ipv6_src_init,
-	.build_eth_l3_ipv6_dst_init	= &dr_ste_v1_build_eth_l3_ipv6_dst_init,
-	.build_eth_l3_ipv4_5_tuple_init	= &dr_ste_v1_build_eth_l3_ipv4_5_tuple_init,
-	.build_eth_l2_src_init		= &dr_ste_v1_build_eth_l2_src_init,
-	.build_eth_l2_dst_init		= &dr_ste_v1_build_eth_l2_dst_init,
-	.build_eth_l2_tnl_init		= &dr_ste_v1_build_eth_l2_tnl_init,
-	.build_eth_l3_ipv4_misc_init	= &dr_ste_v1_build_eth_l3_ipv4_misc_init,
-	.build_eth_ipv6_l3_l4_init	= &dr_ste_v1_build_eth_ipv6_l3_l4_init,
-	.build_mpls_init		= &dr_ste_v1_build_mpls_init,
-	.build_tnl_gre_init		= &dr_ste_v1_build_tnl_gre_init,
-	.build_tnl_mpls_init		= &dr_ste_v1_build_tnl_mpls_init,
-	.build_icmp_init		= &dr_ste_v1_build_icmp_init,
-	.build_general_purpose_init	= &dr_ste_v1_build_general_purpose_init,
-	.build_eth_l4_misc_init		= &dr_ste_v1_build_eth_l4_misc_init,
-	.build_tnl_vxlan_gpe_init	= &dr_ste_v1_build_flex_parser_tnl_vxlan_gpe_init,
-	.build_tnl_geneve_init		= &dr_ste_v1_build_flex_parser_tnl_geneve_init,
-	.build_register_0_init		= &dr_ste_v1_build_register_0_init,
-	.build_register_1_init		= &dr_ste_v1_build_register_1_init,
-	.build_src_gvmi_qpn_init	= &dr_ste_v1_build_src_gvmi_qpn_init,
-	.build_flex_parser_0_init	= &dr_ste_v1_build_flex_parser_0_init,
-	.build_flex_parser_1_init	= &dr_ste_v1_build_flex_parser_1_init,
+	.build_eth_l2_src_dst_init		= &dr_ste_v1_build_eth_l2_src_dst_init,
+	.build_eth_l3_ipv6_src_init		= &dr_ste_v1_build_eth_l3_ipv6_src_init,
+	.build_eth_l3_ipv6_dst_init		= &dr_ste_v1_build_eth_l3_ipv6_dst_init,
+	.build_eth_l3_ipv4_5_tuple_init		= &dr_ste_v1_build_eth_l3_ipv4_5_tuple_init,
+	.build_eth_l2_src_init			= &dr_ste_v1_build_eth_l2_src_init,
+	.build_eth_l2_dst_init			= &dr_ste_v1_build_eth_l2_dst_init,
+	.build_eth_l2_tnl_init			= &dr_ste_v1_build_eth_l2_tnl_init,
+	.build_eth_l3_ipv4_misc_init		= &dr_ste_v1_build_eth_l3_ipv4_misc_init,
+	.build_eth_ipv6_l3_l4_init		= &dr_ste_v1_build_eth_ipv6_l3_l4_init,
+	.build_mpls_init			= &dr_ste_v1_build_mpls_init,
+	.build_tnl_gre_init			= &dr_ste_v1_build_tnl_gre_init,
+	.build_tnl_mpls_init			= &dr_ste_v1_build_tnl_mpls_init,
+	.build_icmp_init			= &dr_ste_v1_build_icmp_init,
+	.build_general_purpose_init		= &dr_ste_v1_build_general_purpose_init,
+	.build_eth_l4_misc_init			= &dr_ste_v1_build_eth_l4_misc_init,
+	.build_tnl_vxlan_gpe_init		= &dr_ste_v1_build_flex_parser_tnl_vxlan_gpe_init,
+	.build_tnl_geneve_init			= &dr_ste_v1_build_flex_parser_tnl_geneve_init,
+	.build_tnl_geneve_tlv_option_init	= &dr_ste_v1_build_flex_parser_tnl_geneve_tlv_option_init,
+	.build_register_0_init			= &dr_ste_v1_build_register_0_init,
+	.build_register_1_init			= &dr_ste_v1_build_register_1_init,
+	.build_src_gvmi_qpn_init		= &dr_ste_v1_build_src_gvmi_qpn_init,
+	.build_flex_parser_0_init		= &dr_ste_v1_build_flex_parser_0_init,
+	.build_flex_parser_1_init		= &dr_ste_v1_build_flex_parser_1_init,
 	/* Getters and Setters */
-	.ste_init			= &dr_ste_v1_init,
-	.set_next_lu_type		= &dr_ste_v1_set_next_lu_type,
-	.get_next_lu_type		= &dr_ste_v1_get_next_lu_type,
-	.set_miss_addr			= &dr_ste_v1_set_miss_addr,
-	.get_miss_addr			= &dr_ste_v1_get_miss_addr,
-	.set_hit_addr			= &dr_ste_v1_set_hit_addr,
-	.set_byte_mask			= &dr_ste_v1_set_byte_mask,
-	.get_byte_mask			= &dr_ste_v1_get_byte_mask,
+	.ste_init				= &dr_ste_v1_init,
+	.set_next_lu_type			= &dr_ste_v1_set_next_lu_type,
+	.get_next_lu_type			= &dr_ste_v1_get_next_lu_type,
+	.set_miss_addr				= &dr_ste_v1_set_miss_addr,
+	.get_miss_addr				= &dr_ste_v1_get_miss_addr,
+	.set_hit_addr				= &dr_ste_v1_set_hit_addr,
+	.set_byte_mask				= &dr_ste_v1_set_byte_mask,
+	.get_byte_mask				= &dr_ste_v1_get_byte_mask,
 	/* Actions */
-	.set_actions_rx			= &dr_ste_v1_set_actions_rx,
-	.set_actions_tx			= &dr_ste_v1_set_actions_tx,
-	.modify_field_arr_sz		= ARRAY_SIZE(dr_ste_v1_action_modify_field_arr),
-	.modify_field_arr		= dr_ste_v1_action_modify_field_arr,
-	.set_action_set			= &dr_ste_v1_set_action_set,
-	.set_action_add			= &dr_ste_v1_set_action_add,
-	.set_action_copy		= &dr_ste_v1_set_action_copy,
-	.set_action_decap_l3_list	= &dr_ste_v1_set_action_decap_l3_list,
-	.alloc_modify_hdr_chunk		= &dr_ste_v1_alloc_modify_hdr_chunk,
-	.dealloc_modify_hdr_chunk	= &dr_ste_v1_dealloc_modify_hdr_chunk,
+	.set_actions_rx				= &dr_ste_v1_set_actions_rx,
+	.set_actions_tx				= &dr_ste_v1_set_actions_tx,
+	.modify_field_arr_sz			= ARRAY_SIZE(dr_ste_v1_action_modify_field_arr),
+	.modify_field_arr			= dr_ste_v1_action_modify_field_arr,
+	.set_action_set				= &dr_ste_v1_set_action_set,
+	.set_action_add				= &dr_ste_v1_set_action_add,
+	.set_action_copy			= &dr_ste_v1_set_action_copy,
+	.set_action_decap_l3_list		= &dr_ste_v1_set_action_decap_l3_list,
+	.alloc_modify_hdr_chunk			= &dr_ste_v1_alloc_modify_hdr_chunk,
+	.dealloc_modify_hdr_chunk		= &dr_ste_v1_dealloc_modify_hdr_chunk,
 	/* Send */
-	.prepare_for_postsend		= &dr_ste_v1_prepare_for_postsend,
+	.prepare_for_postsend			= &dr_ste_v1_prepare_for_postsend,
 };
 
 struct mlx5dr_ste_ctx *mlx5dr_ste_get_ctx_v1(void)

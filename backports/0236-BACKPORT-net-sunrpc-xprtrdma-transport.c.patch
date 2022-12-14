@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
 
 Change-Id: Ia32aecbe9ee3a22f38e663d3d3a3d650f52dd193
 ---
- net/sunrpc/xprtrdma/transport.c | 121 +++++++++++++++++++++++++++++++-
- 1 file changed, 119 insertions(+), 2 deletions(-)
+ net/sunrpc/xprtrdma/transport.c | 124 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 122 insertions(+), 2 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/transport.c
 +++ b/net/sunrpc/xprtrdma/transport.c
@@ -347,7 +347,7 @@ Change-Id: Ia32aecbe9ee3a22f38e663d3d3a3d650f52dd193
  	.timer			= xprt_rdma_timer,
  	.rpcbind		= rpcb_getport_async,	/* sunrpc/rpcb_clnt.c */
  	.set_port		= xprt_rdma_set_port,
-@@ -786,7 +899,9 @@ static const struct rpc_xprt_ops xprt_rd
+@@ -786,15 +899,22 @@ static const struct rpc_xprt_ops xprt_rd
  	.send_request		= xprt_rdma_send_request,
  	.close			= xprt_rdma_close,
  	.destroy		= xprt_rdma_destroy,
@@ -357,9 +357,12 @@ Change-Id: Ia32aecbe9ee3a22f38e663d3d3a3d650f52dd193
  	.print_stats		= xprt_rdma_print_stats,
  	.enable_swap		= xprt_rdma_enable_swap,
  	.disable_swap		= xprt_rdma_disable_swap,
-@@ -794,7 +909,9 @@ static const struct rpc_xprt_ops xprt_rd
+ 	.inject_disconnect	= xprt_rdma_inject_disconnect,
  #if defined(CONFIG_SUNRPC_BACKCHANNEL)
  	.bc_setup		= xprt_rdma_bc_setup,
++#ifdef HAVE_RPC_XPRT_OPS_BC_UP
++	.bc_up			= xprt_rdma_bc_up,
++#endif
  	.bc_maxpayload		= xprt_rdma_bc_maxpayload,
 +#ifdef HAVE_RPC_XPRT_OPS_BC_NUM_SLOTS
  	.bc_num_slots		= xprt_rdma_bc_max_slots,

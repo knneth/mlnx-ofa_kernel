@@ -2338,6 +2338,8 @@ static int mlx5_ib_mmap(struct ib_ucontext *ibcontext, struct vm_area_struct *vm
 
 	command = get_command(vma->vm_pgoff);
 	switch (command) {
+	case MLX5_IB_MMAP_MAP_DC_INFO_PAGE:
+		return mlx5_ib_mmap_dc_info_page(dev, vma);
 	case MLX5_IB_MMAP_WC_PAGE:
 	case MLX5_IB_MMAP_NC_PAGE:
 	case MLX5_IB_MMAP_REGULAR_PAGE:
@@ -5408,6 +5410,7 @@ static const struct mlx5_ib_counter retrans_q_cnts[] = {
 	INIT_Q_COUNTER(packet_seq_err),
 	INIT_Q_COUNTER(implied_nak_seq_err),
 	INIT_Q_COUNTER(local_ack_timeout_err),
+	INIT_Q_COUNTER(rx_dct_connect),
 };
 
 #define INIT_CONG_COUNTER(_name)		\
@@ -7004,6 +7007,24 @@ static void mlx5_ib_stage_delay_drop_cleanup(struct mlx5_ib_dev *dev)
 	cancel_delay_drop(dev);
 }
 
+static int mlx5_ib_stage_dc_tracer_init(struct mlx5_ib_dev *dev)
+{
+	if (MLX5_CAP_GEN(dev->mdev, port_type) ==
+	    MLX5_CAP_PORT_TYPE_IB) {
+		if (mlx5_ib_init_dc_improvements(dev))
+			mlx5_ib_dbg(dev, "init_dc_improvements - continuing\n");
+	}
+
+	return 0;
+}
+
+static void mlx5_ib_stage_dc_tracer_cleanup(struct mlx5_ib_dev *dev)
+{
+	if (MLX5_CAP_GEN(dev->mdev, port_type) ==
+			MLX5_CAP_PORT_TYPE_IB)
+		mlx5_ib_cleanup_dc_improvements(dev);
+}
+
 static int mlx5_ib_stage_dev_notifier_init(struct mlx5_ib_dev *dev)
 {
 	dev->mdev_events.notifier_call = mlx5_ib_event;
@@ -7182,6 +7203,9 @@ static const struct mlx5_ib_profile pf_profile = {
 	STAGE_CREATE(MLX5_IB_STAGE_DELAY_DROP,
 		     mlx5_ib_stage_delay_drop_init,
 		     mlx5_ib_stage_delay_drop_cleanup),
+	STAGE_CREATE(MLX5_IB_STAGE_DC_TRACER,
+		     mlx5_ib_stage_dc_tracer_init,
+		     mlx5_ib_stage_dc_tracer_cleanup),
 	STAGE_CREATE(MLX5_IB_STAGE_TTL_SYSFS,
 		     mlx5_ib_stage_ttl_sysfs_init,
 		     mlx5_ib_stage_ttl_sysfs_cleanup), 

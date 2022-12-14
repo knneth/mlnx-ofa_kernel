@@ -1180,8 +1180,7 @@ static int mlx5_function_setup(struct mlx5_core_dev *dev, bool boot)
 		goto err_cmd_cleanup;
 	}
 
-	/* remove any previous indication of internal error */
-	dev->state = MLX5_DEVICE_STATE_UP;
+	mlx5_cmd_set_state(dev, MLX5_CMDIF_STATE_UP);
 
 	err = mlx5_core_enable_hca(dev, 0);
 	if (err) {
@@ -1248,7 +1247,7 @@ reclaim_boot_pages:
 err_disable_hca:
 	mlx5_core_disable_hca(dev, 0);
 err_cmd_cleanup:
-	dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
+	mlx5_cmd_set_state(dev, MLX5_CMDIF_STATE_DOWN);
 	mlx5_cmd_cleanup(dev);
 
 	return err;
@@ -1266,7 +1265,7 @@ static int mlx5_function_teardown(struct mlx5_core_dev *dev, bool boot)
 	}
 	mlx5_reclaim_startup_pages(dev);
 	mlx5_core_disable_hca(dev, 0);
-	dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
+	mlx5_cmd_set_state(dev, MLX5_CMDIF_STATE_DOWN);
 	mlx5_cmd_cleanup(dev);
 	unregister_pcie_dev_attr_group(dev->pdev);
 
@@ -1420,6 +1419,14 @@ int mlx5_load_one(struct mlx5_core_dev *dev, bool boot)
 		mlx5_core_warn(dev, "interface is up, NOP\n");
 		goto out;
 	}
+	/* remove any previous indication of internal error */
+	dev->state = MLX5_DEVICE_STATE_UP;
+
+	if (test_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state)) {
+		mlx5_core_warn(dev, "device is being removed, stop load\n");
+		err = -ENODEV;
+		goto out;
+	}
 
 	err = mlx5_function_setup(dev, boot);
 	if (err)
@@ -1481,6 +1488,7 @@ err_load:
 		mlx5_cleanup_once(dev);
 function_teardown:
 	mlx5_function_teardown(dev, boot);
+	dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
 	mutex_unlock(&dev->intf_state_mutex);
 
 	return err;
@@ -1510,6 +1518,12 @@ static int mlx5_try_fast_unload(struct mlx5_core_dev *dev)
 	 */
 	mlx5_drain_health_wq(dev);
 	mlx5_stop_health_poll(dev, false);
+
+	if (mlx5_sensor_pci_not_working(dev)) {
+		mlx5_core_dbg(dev, "PCI interface is down, giving up\n");
+		mlx5_enter_error_state(dev, true);
+		return -EIO;
+	}
 
 	ret = mlx5_cmd_fast_teardown_hca(dev);
 	if (!ret)
@@ -1755,6 +1769,7 @@ static void remove_one(struct pci_dev *pdev)
 	if (pdev->is_virtfn && !priv->sriov.probe_vf)
 		goto out;
 
+	set_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state);
 	if (priv->steering->mode == MLX5_FLOW_STEERING_MODE_DMFS &&
 	    mlx5_try_fast_unload(dev))
 		dev_dbg(&dev->pdev->dev, "mlx5_try_fast_unload failed\n");

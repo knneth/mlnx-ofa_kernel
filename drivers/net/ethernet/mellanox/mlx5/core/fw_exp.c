@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2016, Mellanox Technologies. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -30,30 +30,23 @@
  * SOFTWARE.
  */
 
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/errno.h>
+#include <linux/mlx5/driver.h>
 
-#define DRV_NAME	"ib_ipath"
-#define DRV_VERSION	"5.1-2.3.7"
-#define DRV_RELDATE	"14 Sep 2020"
-
-MODULE_AUTHOR("Alaa Hleihel");
-MODULE_DESCRIPTION("ib_ipath dummy kernel module");
-MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
-MODULE_VERSION(DRV_VERSION);
-
-static int __init ib_ipath_init(void)
+int mlx5_core_set_dc_cnak_trace(struct mlx5_core_dev *dev, int enable_val,
+				u64 addr)
 {
-	return 0;
-}
+	u32 in[MLX5_ST_SZ_DW(set_dc_cnak_trace_in)] = {0};
+	u32 out[MLX5_ST_SZ_DW(set_dc_cnak_trace_out)] = {0};
+	__be64 be_addr;
+	void *pas;
 
-static void __exit ib_ipath_cleanup(void)
-{
-}
+	MLX5_SET(set_dc_cnak_trace_in, in, opcode,
+		 MLX5_CMD_OP_SET_DC_CNAK_TRACE);
+	MLX5_SET(set_dc_cnak_trace_in, in, enable, enable_val);
+	pas = MLX5_ADDR_OF(set_dc_cnak_trace_in, in, pas);
+	be_addr = cpu_to_be64(addr);
+	memcpy(MLX5_ADDR_OF(cmd_pas, pas, pa_h), &be_addr, sizeof(be_addr));
 
-module_init(ib_ipath_init);
-module_exit(ib_ipath_cleanup);
+	return mlx5_cmd_exec(dev, &in, sizeof(in), &out, sizeof(out));
+}
+EXPORT_SYMBOL_GPL(mlx5_core_set_dc_cnak_trace);

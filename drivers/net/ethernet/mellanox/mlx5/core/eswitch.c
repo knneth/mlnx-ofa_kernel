@@ -2320,8 +2320,6 @@ int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
 	enum esw_vst_mode vst_mode;
 	int err = 0;
 
-	if (!ESW_ALLOWED(esw))
-		return -EPERM;
 	if (IS_ERR(evport))
 		return PTR_ERR(evport);
 	if (vlan > 4095 || qos > 7)
@@ -2365,6 +2363,9 @@ int mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport,
 {
 	u8 set_flags = 0;
 	int err;
+
+	if (!ESW_ALLOWED(esw))
+		return -EPERM;
 
 	if (esw->mode != MLX5_ESWITCH_LEGACY) {
 		if (!vlan)
@@ -3102,15 +3103,16 @@ mlx5_eswitch_get_encap_mode(const struct mlx5_core_dev *dev)
 }
 EXPORT_SYMBOL(mlx5_eswitch_get_encap_mode);
 
-bool mlx5_esw_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev1)
+bool mlx5_esw_check_modes_match(struct mlx5_core_dev *dev0,
+				struct mlx5_core_dev *dev1,
+				int mode)
 {
-	if ((dev0->priv.eswitch->mode == MLX5_ESWITCH_NONE &&
-	     dev1->priv.eswitch->mode == MLX5_ESWITCH_NONE) ||
-	    (dev0->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS &&
-	     dev1->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS))
-		return true;
+	if (!ESW_ALLOWED(dev0->priv.eswitch) ||
+	    !ESW_ALLOWED(dev1->priv.eswitch))
+		return false;
 
-	return false;
+	return dev0->priv.eswitch->mode == mode &&
+	       dev1->priv.eswitch->mode == mode;
 }
 
 bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num)
@@ -3118,12 +3120,3 @@ bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num
 	return ESW_ALLOWED(esw) ? is_esw_manager_vport(esw, vport_num) : false;
 }
 EXPORT_SYMBOL_GPL(mlx5_eswitch_is_manager_vport);
-
-bool mlx5_esw_multipath_prereq(struct mlx5_core_dev *dev0,
-			       struct mlx5_core_dev *dev1)
-{
-	return (dev0->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS &&
-		dev1->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS);
-}
-
-

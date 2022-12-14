@@ -3,7 +3,7 @@
 
 #include <linux/netdevice.h>
 #include "accel/ipsec_offload.h"
-#include "../esw/chains.h"
+#include "../lib/fs_chains.h"
 #include "../esw/ipsec.h"
 #include "ipsec_fs.h"
 #include "fs_core.h"

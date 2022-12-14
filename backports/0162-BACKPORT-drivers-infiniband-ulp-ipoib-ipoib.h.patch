@@ -59,7 +59,7 @@ Change-Id: I91b8a6bd8bb9eadedde38797a26d01ad9e851850
  };
  
  struct ipoib_ah {
-@@ -888,5 +909,6 @@ extern int ipoib_debug_level;
+@@ -866,5 +887,6 @@ extern int ipoib_debug_level;
  #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
  
  extern const char ipoib_driver_version[];

@@ -113,7 +113,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  		break;
  	case MLX5_IB_MMAP_NC_PAGE:
  		prot = pgprot_noncached(vma->vm_page_prot);
-@@ -3402,15 +3429,17 @@ static struct mlx5_ib_flow_prio *get_flo
+@@ -3404,15 +3431,17 @@ static struct mlx5_ib_flow_prio *get_flo
  	int max_table_size;
  	int num_entries;
  	int num_groups;
@@ -135,7 +135,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  
  	if (flow_attr->type == IB_FLOW_ATTR_NORMAL) {
  		enum mlx5_flow_namespace_type fn_type;
-@@ -4047,7 +4076,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+@@ -4049,7 +4078,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
  	struct mlx5_flow_namespace *ns = NULL;
  	struct mlx5_ib_flow_prio *prio = NULL;
  	int max_table_size = 0;
@@ -144,7 +144,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  	u32 flags = 0;
  	int priority;
  
-@@ -4056,9 +4085,11 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+@@ -4058,9 +4087,11 @@ _get_flow_table(struct mlx5_ib_dev *dev,
  	else
  		priority = ib_prio_to_core_prio(fs_matcher->priority, false);
  
@@ -159,7 +159,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  	if (fs_matcher->ns_type == MLX5_FLOW_NAMESPACE_BYPASS) {
  		max_table_size = BIT(MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev,
  					log_max_ft_size));
-@@ -6398,9 +6429,10 @@ static struct ib_counters *mlx5_ib_creat
+@@ -6401,9 +6432,10 @@ static struct ib_counters *mlx5_ib_creat
  static void mlx5_ib_stage_init_cleanup(struct mlx5_ib_dev *dev)
  {
  	mlx5_ib_cleanup_multiport_master(dev);
@@ -173,7 +173,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  	WARN_ON(!xa_empty(&dev->sig_mrs));
  	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
  }
-@@ -6522,7 +6554,9 @@ static const struct ib_device_ops mlx5_i
+@@ -6525,7 +6557,9 @@ static const struct ib_device_ops mlx5_i
  	.destroy_qp = mlx5_ib_destroy_qp,
  	.destroy_srq = mlx5_ib_destroy_srq,
  	.detach_mcast = mlx5_ib_mcg_detach,
@@ -184,7 +184,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  	.drain_rq = mlx5_ib_drain_rq,
  	.drain_sq = mlx5_ib_drain_sq,
  	.enable_driver = mlx5_ib_enable_driver,
-@@ -6588,11 +6622,16 @@ static const struct ib_device_ops mlx5_i
+@@ -6591,11 +6625,16 @@ static const struct ib_device_ops mlx5_i
  };
  
  static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {
@@ -206,7 +206,7 @@ Change-Id: Ibff7c24dae60dbcf96a445900741b18d88e0435b
  };
  
  static const struct ib_device_ops mlx5_ib_dev_mw_ops = {
-@@ -6694,8 +6733,10 @@ static int mlx5_ib_stage_caps_init(struc
+@@ -6697,8 +6736,10 @@ static int mlx5_ib_stage_caps_init(struc
  			ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_frontend_ns_context_ops);
  	}
  

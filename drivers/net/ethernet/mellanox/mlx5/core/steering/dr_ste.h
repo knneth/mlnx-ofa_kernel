@@ -109,6 +109,13 @@ typedef void (*mlx5dr_ste_builder_void_init)(struct mlx5dr_ste_build *sb,
 typedef int (*mlx5dr_ste_builder_int_init)(struct mlx5dr_ste_build *sb,
 					   struct mlx5dr_match_param *mask);
 
+static inline u8 *
+dr_ste_calc_flex_parser_offset(u8 *tag, u8 parser_id)
+{
+	/* calculate tag byte offset based on flex parser id */
+	return tag + 4 * (3 - (parser_id % 4));
+}
+
 struct mlx5dr_ste_ctx {
 	/* Builders */
 	mlx5dr_ste_builder_void_init build_eth_l2_src_dst_init;
@@ -128,6 +135,7 @@ struct mlx5dr_ste_ctx {
 	mlx5dr_ste_builder_void_init build_eth_l4_misc_init;
 	mlx5dr_ste_builder_void_init build_tnl_vxlan_gpe_init;
 	mlx5dr_ste_builder_void_init build_tnl_geneve_init;
+	mlx5dr_ste_builder_void_init build_tnl_geneve_tlv_option_init;
 	mlx5dr_ste_builder_void_init build_register_0_init;
 	mlx5dr_ste_builder_void_init build_register_1_init;
 	mlx5dr_ste_builder_void_init build_src_gvmi_qpn_init;

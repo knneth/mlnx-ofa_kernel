@@ -8,7 +8,7 @@ Change-Id: I8c28ad57f9c9d194fda44daed73d2f8c5382c641
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
-@@ -55,10 +55,10 @@ void mlx5_add_device(struct mlx5_interfa
+@@ -56,10 +56,10 @@ void mlx5_add_device(struct mlx5_interfa
  {
  	struct mlx5_device_context *dev_ctx;
  	struct mlx5_core_dev *dev = container_of(priv, struct mlx5_core_dev, priv);

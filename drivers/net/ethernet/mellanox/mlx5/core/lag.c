@@ -263,14 +263,23 @@ static int mlx5_deactivate_lag(struct mlx5_lag *ldev)
 	return err;
 }
 
+#ifdef CONFIG_MLX5_ESWITCH
+static bool mlx5_lag_prereq(struct mlx5_core_dev *dev0,
+			    struct mlx5_core_dev *dev1)
+{
+	return mlx5_esw_check_modes_match(dev0, dev1, MLX5_ESWITCH_NONE) ||
+	       mlx5_esw_check_modes_match(dev0, dev1, MLX5_ESWITCH_OFFLOADS);
+}
+#endif
+
 static bool mlx5_lag_check_prereq(struct mlx5_lag *ldev)
 {
 	if (!ldev->pf[MLX5_LAG_P1].dev || !ldev->pf[MLX5_LAG_P2].dev)
 		return false;
 
 #ifdef CONFIG_MLX5_ESWITCH
-	return mlx5_esw_lag_prereq(ldev->pf[MLX5_LAG_P1].dev,
-				   ldev->pf[MLX5_LAG_P2].dev);
+	return mlx5_lag_prereq(ldev->pf[MLX5_LAG_P1].dev,
+			       ldev->pf[MLX5_LAG_P2].dev);
 #else
 	return (!mlx5_sriov_is_enabled(ldev->pf[MLX5_LAG_P1].dev) &&
 		!mlx5_sriov_is_enabled(ldev->pf[MLX5_LAG_P2].dev));
@@ -313,8 +322,7 @@ static bool mlx5_shared_fdb_supported(struct mlx5_lag *ldev)
 	struct mlx5_core_dev *dev0 = ldev->pf[MLX5_LAG_P1].dev;
 	struct mlx5_core_dev *dev1 = ldev->pf[MLX5_LAG_P2].dev;
 
-	if (mlx5_sriov_is_enabled(dev0) &&
-	    mlx5_sriov_is_enabled(dev1) &&
+	if (mlx5_esw_check_modes_match(dev0, dev1, MLX5_ESWITCH_OFFLOADS) &&
 	    mlx5_eswitch_vport_match_metadata_enabled(dev0->priv.eswitch) &&
 	    mlx5_eswitch_vport_match_metadata_enabled(dev1->priv.eswitch) &&
 	    mlx5_devcom_is_paired(dev0->priv.devcom,

@@ -2708,6 +2708,7 @@ struct ib_device {
 	struct ib_port_data *port_data;
 
 	int			      num_comp_vectors;
+	struct kobject		      *mad_sa_cc_kobj;
 
 	union {
 		struct device		dev;
@@ -3985,9 +3986,9 @@ int ib_destroy_cq_user(struct ib_cq *cq, struct ib_udata *udata);
  *
  * NOTE: for user cq use ib_destroy_cq_user with valid udata!
  */
-static inline void ib_destroy_cq(struct ib_cq *cq)
+static inline int ib_destroy_cq(struct ib_cq *cq)
 {
-	ib_destroy_cq_user(cq, NULL);
+	return ib_destroy_cq_user(cq, NULL);
 }
 
 /**

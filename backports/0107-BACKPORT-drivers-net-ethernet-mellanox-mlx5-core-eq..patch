@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
 
 Change-Id: I2f930fd36c394dc6b989558377050e85c7018716
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eq.c | 27 ++++++++++++++++++++++++++-
- 1 file changed, 26 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 29 ++++++++++++++++++--
+ 1 file changed, 27 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
@@ -30,7 +30,16 @@ Change-Id: I2f930fd36c394dc6b989558377050e85c7018716
  		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
  		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
  
-@@ -214,7 +220,11 @@ static int mlx5_eq_async_int(struct noti
+@@ -223,7 +229,7 @@ static int mlx5_eq_async_int(struct noti
+ 	struct mlx5_eq_table *eqt;
+ 	struct mlx5_core_dev *dev;
+ 	struct mlx5_eqe *eqe;
+-	unsigned long flags;
++	unsigned long flags = 0;
+ 	int num_eqes = 0;
+ 
+ 	dev = eq->dev;
+@@ -240,7 +246,11 @@ static int mlx5_eq_async_int(struct noti
  		 * Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -42,7 +51,7 @@ Change-Id: I2f930fd36c394dc6b989558377050e85c7018716
  
  		atomic_notifier_call_chain(&eqt->nh[eqe->type], eqe->type, eqe);
  		atomic_notifier_call_chain(&eqt->nh[MLX5_EVENT_TYPE_NOTIFY_ANY], eqe->type, eqe);
-@@ -301,7 +311,11 @@ create_map_eq(struct mlx5_core_dev *dev,
+@@ -338,7 +348,11 @@ create_map_eq(struct mlx5_core_dev *dev,
  
  	eq->vecidx = vecidx;
  	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
@@ -55,7 +64,7 @@ Change-Id: I2f930fd36c394dc6b989558377050e85c7018716
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -767,7 +781,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -807,7 +821,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -67,7 +76,7 @@ Change-Id: I2f930fd36c394dc6b989558377050e85c7018716
  
  	return eqe;
  }
-@@ -917,6 +935,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
+@@ -957,6 +975,13 @@ struct mlx5_eq_comp *mlx5_eqn2comp_eq(st
  	return ERR_PTR(-ENOENT);
  }
  

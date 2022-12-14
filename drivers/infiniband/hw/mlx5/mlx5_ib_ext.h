@@ -109,4 +109,83 @@ void tclass_get_tclass(struct mlx5_ib_dev *dev,
 		u8 port,
 		u8 *tclass);
 
+/* DC_cnak feature */
+
+#define MLX5_DC_CONNECT_QP_DEPTH 8192
+#define MLX5_IB_QPT_SW_CNAK     IB_QPT_RESERVED5
+
+enum {
+        MLX5_DCT_CS_RES_64      = 2,
+        MLX5_CNAK_RX_POLL_CQ_QUOTA      = 256,
+};
+
+struct mlx5_ib_dev;
+
+struct mlx5_dc_tracer {
+        struct page     *pg;
+        dma_addr_t      dma;
+        int             size;
+        int             order;
+};
+
+struct mlx5_dc_desc {
+        dma_addr_t      dma;
+        void            *buf;
+};
+
+enum mlx5_op {
+        MLX5_WR_OP_MLX  = 1,
+};
+
+struct mlx5_mlx_wr {
+        u8      sl;
+        u16     dlid;
+        int     icrc;
+};
+
+struct mlx5_send_wr {
+        struct ib_send_wr       wr;
+        union {
+                struct mlx5_mlx_wr      mlx;
+        } sel;
+};
+
+struct mlx5_dc_stats {
+	struct kobject          kobj;
+	struct mlx5_ib_dev      *dev;
+	int                     port;
+	atomic64_t              connects;
+	atomic64_t              cnaks;
+	atomic64_t              discards;
+	int                     *rx_scatter;
+	int                     initialized;
+};
+
+struct mlx5_dc_data {
+        struct ib_mr            *mr;
+        struct ib_qp            *dcqp;
+        struct ib_cq            *rcq;
+        struct ib_cq            *scq;
+        unsigned int            rx_npages;
+        unsigned int            tx_npages;
+        struct mlx5_dc_desc     *rxdesc;
+        struct mlx5_dc_desc     *txdesc;
+        unsigned int            max_wqes;
+        unsigned int            cur_send;
+        unsigned int            last_send_completed;
+        int                     tx_pending;
+        struct mlx5_ib_dev      *dev;
+        int                     port;
+        int                     initialized;
+	int                     index;
+	int                     tx_signal_factor;
+        struct ib_wc            wc_tbl[MLX5_CNAK_RX_POLL_CQ_QUOTA];
+};
+
+int mlx5_ib_mmap_dc_info_page(struct mlx5_ib_dev *dev,
+                              struct vm_area_struct *vma);
+int mlx5_ib_init_dc_improvements(struct mlx5_ib_dev *dev);
+void mlx5_ib_cleanup_dc_improvements(struct mlx5_ib_dev *dev);
+
+void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr);
 #endif /*MLX5_IB_EXT_H*/

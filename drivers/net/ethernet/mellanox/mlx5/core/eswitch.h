@@ -44,6 +44,7 @@
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/fs.h>
 #include "lib/mpfs.h"
+#include "lib/fs_chains.h"
 #include "mlx5_core.h"
 #include "meddev/sf.h"
 #include "en/tc_ct.h"
@@ -82,6 +83,9 @@
 
 #define VHCA_VPORT_MATCH_ID_BITS 16
 #define VHCA_VPORT_MATCH_ID_SIZE BIT(VHCA_VPORT_MATCH_ID_BITS)
+
+#define esw_chains(esw) \
+	((esw)->fdb_table.offloads.esw_chains_priv)
 
 struct vport_ingress {
 	struct mlx5_flow_table *acl;
@@ -192,11 +196,6 @@ struct mlx5_vport {
 	u32 metadata;
 };
 
-enum offloads_fdb_flags {
-	ESW_FDB_CHAINS_AND_PRIOS_SUPPORTED = BIT(0),
-};
-
-struct mlx5_esw_chains_priv;
 struct mlx5_esw_ipsec_priv;
 
 struct mlx5_eswitch_fdb {
@@ -222,7 +221,7 @@ struct mlx5_eswitch_fdb {
 			struct mlx5_flow_handle *miss_rule_multi;
 			int vlan_push_pop_refcount;
 
-			struct mlx5_esw_chains_priv *esw_chains_priv;
+			struct mlx5_fs_chains *esw_chains_priv;
 			struct {
 				DECLARE_HASHTABLE(table, 8);
 				/* Protects vports.table */
@@ -461,19 +460,19 @@ mlx5_eswitch_termtbl_put(struct mlx5_eswitch *esw,
 struct mlx5_flow_handle *
 mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 				struct mlx5_flow_spec *spec,
-				struct mlx5_esw_flow_attr *attr);
+				struct mlx5_flow_attr *attr);
 struct mlx5_flow_handle *
 mlx5_eswitch_add_fwd_rule(struct mlx5_eswitch *esw,
 			  struct mlx5_flow_spec *spec,
-			  struct mlx5_esw_flow_attr *attr);
+			  struct mlx5_flow_attr *attr);
 void
 mlx5_eswitch_del_offloaded_rule(struct mlx5_eswitch *esw,
 				struct mlx5_flow_handle *rule,
-				struct mlx5_esw_flow_attr *attr);
+				struct mlx5_flow_attr *attr);
 void
 mlx5_eswitch_del_fwd_rule(struct mlx5_eswitch *esw,
 			  struct mlx5_flow_handle *rule,
-			  struct mlx5_esw_flow_attr *attr);
+			  struct mlx5_flow_attr *attr);
 
 struct mlx5_flow_handle *
 mlx5_eswitch_create_vport_rx_rule(struct mlx5_eswitch *esw, u16 vport,
@@ -513,7 +512,6 @@ struct mlx5_esw_flow_attr {
 	int split_count;
 	int out_count;
 
-	int	action;
 	__be16	vlan_proto[MLX5_FS_VLAN_DEPTH];
 	u16	vlan_vid[MLX5_FS_VLAN_DEPTH];
 	u8	vlan_prio[MLX5_FS_VLAN_DEPTH];
@@ -525,19 +523,34 @@ struct mlx5_esw_flow_attr {
 		struct mlx5_core_dev *mdev;
 		struct mlx5_termtbl_handle *termtbl;
 	} dests[MLX5_MAX_FLOW_FWD_VPORTS];
-	struct  mlx5_modify_hdr *modify_hdr;
-	u8	inner_match_level;
-	u8	outer_match_level;
 	bool	is_tunnel_flow;
+};
+
+struct mlx5_nic_flow_attr {
+	u32 flow_tag;
+	u32 hairpin_tirn;
+	struct mlx5_flow_table *hairpin_ft;
+	u32 user_prio;
+};
+
+struct mlx5_flow_attr {
+	u32 action;
 	struct mlx5_fc *counter;
-	u32	chain;
-	u16	prio;
-	u32	dest_chain;
-	u32	flags;
-	struct mlx5_flow_table *fdb;
-	struct mlx5_flow_table *dest_ft;
+	struct mlx5_modify_hdr *modify_hdr;
 	struct mlx5_ct_attr ct_attr;
 	struct mlx5e_tc_flow_parse_attr *parse_attr;
+	u32 chain;
+	u16 prio;
+	u32 dest_chain;
+	struct mlx5_flow_table *ft;
+	struct mlx5_flow_table *dest_ft;
+	u8 inner_match_level;
+	u8 outer_match_level;
+	u32 flags;
+	union {
+		struct mlx5_esw_flow_attr esw_attr[0];
+		struct mlx5_nic_flow_attr nic_attr[0];
+	};
 };
 
 int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
@@ -565,9 +578,9 @@ int mlx5_devlink_eswitch_ipsec_mode_get(struct devlink *devlink,
 void *mlx5_eswitch_get_uplink_priv(struct mlx5_eswitch *esw, u8 rep_type);
 
 int mlx5_eswitch_add_vlan_action(struct mlx5_eswitch *esw,
-				 struct mlx5_esw_flow_attr *attr);
+				 struct mlx5_flow_attr *attr);
 int mlx5_eswitch_del_vlan_action(struct mlx5_eswitch *esw,
-				 struct mlx5_esw_flow_attr *attr);
+				 struct mlx5_flow_attr *attr);
 int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport,
 				  u16 vlan, u8 qos, __be16 proto, u8 set_flags);
 
@@ -606,11 +619,9 @@ static inline enum esw_vst_mode esw_get_vst_mode(struct mlx5_eswitch *esw)
 		return ESW_VST_MODE_BASIC;
 }
 
-bool mlx5_esw_lag_prereq(struct mlx5_core_dev *dev0,
-			 struct mlx5_core_dev *dev1);
-bool mlx5_esw_multipath_prereq(struct mlx5_core_dev *dev0,
-			       struct mlx5_core_dev *dev1);
-
+bool mlx5_esw_check_modes_match(struct mlx5_core_dev *dev0,
+				struct mlx5_core_dev *dev1,
+				int mode);
 const u32 *mlx5_esw_query_functions(struct mlx5_core_dev *dev);
 
 #define MLX5_DEBUG_ESWITCH_MASK BIT(3)
@@ -883,7 +894,9 @@ static inline int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int mode,
 static inline int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int mode, int num_vfs) { return 0; }
 static inline void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw, bool clear_vf) { }
 static inline void mlx5_eswitch_disable(struct mlx5_eswitch *esw, bool clear_vf) {}
-static inline bool mlx5_esw_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev1) { return true; }
+static inline bool mlx5_esw_check_modes_match(struct mlx5_core_dev *dev0,
+					      struct mlx5_core_dev *dev1,
+					      int mode) { return false; }
 static inline bool mlx5_eswitch_is_funcs_handler(struct mlx5_core_dev *dev) { return false; }
 static inline const u32 *mlx5_esw_query_functions(struct mlx5_core_dev *dev)
 {

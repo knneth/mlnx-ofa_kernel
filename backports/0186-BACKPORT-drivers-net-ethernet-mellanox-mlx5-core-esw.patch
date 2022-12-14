@@ -27,7 +27,7 @@ Change-Id: Ia441d8da7519c3f1790b9608af6cbf02ce3070b5
  	ivi->min_tx_rate = evport->info.min_rate;
  	ivi->max_tx_rate = evport->info.max_rate;
  	mutex_unlock(&esw->state_lock);
-@@ -2957,7 +2963,9 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -2958,7 +2964,9 @@ int mlx5_eswitch_get_vport_stats(struct
  	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
  	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
  	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
@@ -37,7 +37,7 @@ Change-Id: Ia441d8da7519c3f1790b9608af6cbf02ce3070b5
  	int err = 0;
  	u32 *out;
  
-@@ -3019,12 +3027,13 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -3020,12 +3028,13 @@ int mlx5_eswitch_get_vport_stats(struct
  
  	vf_stats->broadcast =
  		MLX5_GET_CTR(out, received_eth_broadcast.packets);

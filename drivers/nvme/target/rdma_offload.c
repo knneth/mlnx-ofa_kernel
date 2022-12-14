@@ -183,7 +183,7 @@ static int nvmet_rdma_init_xrq(struct nvmet_rdma_queue *queue,
 	}
 
 	srq_attr.attr.max_wr = srq_size;
-	srq_attr.attr.max_sge = 2;
+	srq_attr.attr.max_sge = 1 + ndev->inline_page_count;
 	srq_attr.srq_type = IB_EXP_SRQT_NVMF;
 	if (nvmet_rdma_fill_srq_nvmf_attrs(&srq_attr, xrq)) {
 		ret = -ENOMEM;

@@ -33,42 +33,9 @@ LB_LINUX_CONFIG_VALUE([XEN_INTERFACE_VERSION],[XEN_INCLUDES="$XEN_INCLUDES -D__X
 AC_DEFUN([LB_LINUX_VERSION],[
 KMODEXT=".ko"
 AC_SUBST(KMODEXT)
+]
+)
 
-makerule="$PWD/build"
-AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
-[
-	lb_cv_module_target=""
-	MODULE_TARGET="SUBDIRS"
-	rm -f build/conftest.i
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule MLNX_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
-		[lb_cv_module_target="SUBDIRS"],[
-	MODULE_TARGET="M"
-	makerule="$PWD/build/"
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule MLNX_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
-		[lb_cv_module_target="M54"], [
-	MODULE_TARGET="M"
-	makerule="_module_$PWD/build"
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule MLNX_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
-		[lb_cv_module_target="M"], [
-			AC_MSG_ERROR([kernel module make failed; check config.log for details])
-	])])])
-])
-AS_IF([test -z "$lb_cv_module_target"],
-	[AC_MSG_ERROR([unknown external module build target])],
-[test "x$lb_cv_module_target" = "xM54"],
-	[makerule="$PWD/build"
-	lb_cv_module_target="M"],
-[test "x$lb_cv_module_target" = "xM"],
-	[makerule="_module_$PWD/build"])
-MODULE_TARGET=$lb_cv_module_target
-AC_SUBST(MODULE_TARGET)
-])
 
 #
 # LB_LINUX_RELEASE
@@ -90,7 +57,7 @@ LB_LINUX_TRY_MAKE([
 	char *LINUXRELEASE;
 	LINUXRELEASE=UTS_RELEASE;
 ],[
-	$makerule MLNX_KERNEL_TEST=conftest.i
+	MLNX_KERNEL_TEST=conftest.i
 ],[
 	test -s build/conftest.i
 ],[
@@ -389,7 +356,7 @@ AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 MAKE=${MAKE:-make}
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko build/output.log
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include $AUTOCONF_HDIR/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS $MODULE_TARGET=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include $AUTOCONF_HDIR/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
@@ -578,7 +545,7 @@ LB_LINUX_TRY_MAKE([
 	int myretval=ENOSYS ;
 	return myretval;
 ],[
-	$makerule MLNX_KERNEL_TEST=conftest.i
+	MLNX_KERNEL_TEST=conftest.i
 ],[dnl
 	grep request_module build/conftest.i |dnl
 		grep -v `grep "int myretval=" build/conftest.i |dnl

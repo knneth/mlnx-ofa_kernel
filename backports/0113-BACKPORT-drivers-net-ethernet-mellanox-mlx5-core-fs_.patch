@@ -174,7 +174,7 @@ Change-Id: I4e03a32dda920fbf797949326acfa7e1dc732a19
  		}
  	}
  	return handle;
-@@ -1673,16 +1719,26 @@ static int build_match_list(struct match
+@@ -1674,16 +1720,26 @@ static int build_match_list(struct match
  			    const struct mlx5_flow_spec *spec,
  			    bool ft_locked)
  {
@@ -203,7 +203,7 @@ Change-Id: I4e03a32dda920fbf797949326acfa7e1dc732a19
  		struct match_list *curr_match;
  
  		if (likely(list_empty(&match_head->list))) {
-@@ -1776,25 +1832,24 @@ try_add_to_existing_fg(struct mlx5_flow_
+@@ -1777,25 +1833,24 @@ try_add_to_existing_fg(struct mlx5_flow_
  	fte = alloc_fte(ft, spec, flow_act);
  	if (IS_ERR(fte))
  		return  ERR_PTR(-ENOMEM);

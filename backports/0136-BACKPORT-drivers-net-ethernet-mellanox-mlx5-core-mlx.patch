@@ -8,7 +8,7 @@ Change-Id: I939b73510dcf836f3801078cb8dca07d70ffd772
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
-@@ -296,12 +296,6 @@ void mlx5_events_stop(struct mlx5_core_d
+@@ -297,12 +297,6 @@ void mlx5_events_stop(struct mlx5_core_d
  void mlx5_lag_enable(struct mlx5_core_dev *dev, struct mlx5_lag *ldev);
  struct mlx5_lag *mlx5_lag_disable(struct mlx5_core_dev *dev);
  
@@ -21,7 +21,7 @@ Change-Id: I939b73510dcf836f3801078cb8dca07d70ffd772
  struct mlx5_vport *mlx5_eswitch_get_vport(struct mlx5_eswitch *esw,
  					  u16 vport_num);
  struct mlx5_flow_root_namespace *find_root(struct fs_node *node);
-@@ -337,8 +331,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
+@@ -339,8 +333,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
  
@@ -35,7 +35,7 @@ Change-Id: I939b73510dcf836f3801078cb8dca07d70ffd772
  int mlx5_fw_version_query(struct mlx5_core_dev *dev,
  			  u32 *running_ver, u32 *stored_ver);
  
-@@ -471,6 +468,22 @@ static inline void mlx5_meddev_unregiste
+@@ -473,6 +470,22 @@ static inline void mlx5_meddev_unregiste
  }
  #endif
  

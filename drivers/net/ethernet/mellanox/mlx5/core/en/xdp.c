@@ -156,15 +156,18 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *rq, struct mlx5e_dma_info *di,
 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
 		return true;
 	case XDP_REDIRECT:
-		page_ref_sub(di->page, di->refcnt_bias);
-		di->refcnt_bias = 0;
+		if (xdp.rxq->mem.type != MEM_TYPE_ZERO_COPY) {
+			page_ref_sub(di->page, di->refcnt_bias);
+			di->refcnt_bias = 0;
+		}
 		/* When XDP enabled then page-refcnt==1 here */
 		err = xdp_do_redirect(rq->netdev, &xdp, prog);
 		if (unlikely(err))
 			goto xdp_abort;
 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
-		mlx5e_page_dma_unmap(rq, di);
+		if (xdp.rxq->mem.type != MEM_TYPE_ZERO_COPY)
+			mlx5e_page_dma_unmap(rq, di);
 		rq->stats->xdp_redirect++;
 		return true;
 	default:

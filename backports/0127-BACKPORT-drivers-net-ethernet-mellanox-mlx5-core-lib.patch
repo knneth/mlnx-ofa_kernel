@@ -8,7 +8,7 @@ Change-Id: Ie2b3e017ab6e0f47d5d28c9ffd68cef6a5c9151f
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/eq.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/eq.h
-@@ -91,6 +91,9 @@ void mlx5_debug_eq_remove(struct mlx5_co
+@@ -93,6 +93,9 @@ void mlx5_debug_eq_remove(struct mlx5_co
  void mlx5_eq_debugfs_init(struct mlx5_core_dev *dev);
  void mlx5_eq_debugfs_cleanup(struct mlx5_core_dev *dev);
  

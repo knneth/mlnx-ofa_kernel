@@ -562,3 +562,37 @@ int mlx5e_ipsec_set_flow_attrs(struct mlx5e_priv *priv, u32 *match_c, u32 *match
 	mdata_v->content.rx.sa_handle = htonl(handle);
 	return 0;
 }
+
+__wsum  mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe64 *cqe)
+{
+	unsigned int tr_len, alen;
+	struct xfrm_offload *xo;
+	struct ipv6hdr *ipv6hdr;
+	struct iphdr *ipv4hdr;
+	__wsum csum, hw_csum;
+	struct xfrm_state *x;
+	u8 plen, proto;
+
+	xo = xfrm_offload(skb);
+	x = xfrm_input_state(skb);
+	alen = crypto_aead_authsize(x->data);
+	skb_copy_bits(skb, skb->len - alen - 2, &plen, 1);
+	skb_copy_bits(skb, skb->len - alen - 1, &proto, 1);
+	tr_len = alen + plen + 2;
+	csum = skb_checksum(skb, skb->len - tr_len, tr_len, 0);
+	hw_csum = csum_unfold((__force __sum16)cqe->check_sum);
+	csum = csum_block_sub(csum_unfold((__force __sum16)cqe->check_sum), csum,
+			      skb->len - tr_len);
+	pskb_trim(skb, skb->len - tr_len);
+	xo->flags |= XFRM_ESP_NO_TRAILER;
+	xo->proto = proto;
+	if (skb->protocol == htons(ETH_P_IP)) {
+		ipv4hdr = ip_hdr(skb);
+		ipv4hdr->tot_len = htons(ntohs(ipv4hdr->tot_len) - tr_len);
+	} else {
+		ipv6hdr = ipv6_hdr(skb);
+		ipv6hdr->payload_len = htons(ntohs(ipv6hdr->payload_len) - tr_len);
+	}
+
+	return csum;
+}

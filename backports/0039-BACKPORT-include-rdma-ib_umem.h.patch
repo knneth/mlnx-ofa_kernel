@@ -27,7 +27,7 @@ Change-Id: I9b32cf9d0ea606bb2a29b65ffeef30dc9d713dc4
  	u32 is_odp : 1;
  	/* Placing at the end of the bitfield list is ABI preserving on LE */
  	u32 is_peer : 1;
-@@ -77,7 +84,11 @@ static inline size_t ib_umem_num_pages(s
+@@ -78,7 +85,11 @@ static inline size_t ib_umem_num_pages(s
  
  #ifdef CONFIG_INFINIBAND_USER_MEM
  
@@ -39,7 +39,7 @@ Change-Id: I9b32cf9d0ea606bb2a29b65ffeef30dc9d713dc4
  			    size_t size, int access);
  void ib_umem_release(struct ib_umem *umem);
  int ib_umem_page_count(struct ib_umem *umem);
-@@ -86,8 +97,11 @@ int ib_umem_copy_from(void *dst, struct
+@@ -87,8 +98,11 @@ int ib_umem_copy_from(void *dst, struct
  unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  				     unsigned long pgsz_bitmap,
  				     unsigned long virt);
@@ -52,7 +52,7 @@ Change-Id: I9b32cf9d0ea606bb2a29b65ffeef30dc9d713dc4
  				 size_t size, int access,
  				 unsigned long peer_mem_flags);
  void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-@@ -98,7 +112,11 @@ void ib_umem_activate_invalidation_notif
+@@ -99,7 +113,11 @@ void ib_umem_activate_invalidation_notif
  
  #include <linux/err.h>
  

@@ -4655,6 +4655,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if ETH_MAX_MTU exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <uapi/linux/if_ether.h>
+	],[
+		u16 max_mtu = ETH_MAX_MTU;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_ETH_MAX_MTU, 1,
+			  [ETH_MAX_MTU exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if pci.h has pci_vfs_assigned])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
@@ -10176,6 +10191,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if FLOW_ACTION_PRIORITY exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/flow_offload.h>
+	],[
+		enum flow_action_id action = FLOW_ACTION_PRIORITY;
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_FLOW_ACTION_PRIORITY, 1,
+			  [FLOW_ACTION_PRIORITY exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if NUM_FLOW_ACTIONS exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/flow_offload.h>
@@ -14301,6 +14330,19 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if svc_fill_write_vector existing in svc.h])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sunrpc/svc.h>
+	],[
+		return svc_fill_write_vector(NULL, NULL, NULL, 0);
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SVC_FILL_WRITE_VECTOR, 1,
+			[svc.h has svc_fill_write_vector])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if *send_request has 'struct rpc_rqst *req' as a param])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/sunrpc/xprt.h>
@@ -14545,6 +14587,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([for "bc_up" inside "struct rpc_xprt_ops"])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sunrpc/xprt.h>
+	],[
+		struct rpc_xprt_ops dummy_ops;
+
+		dummy_ops.bc_up = NULL;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RPC_XPRT_OPS_BC_UP, 1,
+			[struct rpc_xprt_ops has 'bc_up' field])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/sysctl.h has SYSCTL_ZERO])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/sysctl.h>
@@ -14694,6 +14753,28 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE___NETDEV_TX_SENT_QUEUE, 1,
 			  [netdevice.h has __netdev_tx_sent_queue])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if synchronize_net done when updating netdev queues])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		/*
+		 * We can't have a real test for upstream commit ac5b70198adc
+		 * This test is good for us. All kernels 4.16+ include the fix.
+		 * And if the older kernels include this synchronize_net fix,
+		 * it is still harmless for us to add it again in our backport.
+		 */
+
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0)
+		#error No synchronize_net fix in kernel
+		#endif
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NET_SYNCHRONIZE_IN_SET_REAL_NUM_TX_QUEUES, 1,
+			  [kernel does synchronize_net for us])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -15002,6 +15083,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_ESP_OUTPUT_FILL_TRAILER, 1,
 			  [esp_output_fill_trailer is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if ptp_find_pin_unlocked is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ptp_clock_kernel.h>
+	],[
+		ptp_find_pin_unlocked(NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PTP_FIND_PIN_UNLOCK, 1,
+			  [ptp_find_pin_unlocked is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])

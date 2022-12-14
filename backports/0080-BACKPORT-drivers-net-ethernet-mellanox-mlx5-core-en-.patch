@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
 Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
 ---
- .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 189 +++++++++++++++---
- 1 file changed, 165 insertions(+), 24 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 197 +++++++++++++++---
+ 1 file changed, 173 insertions(+), 24 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
@@ -101,16 +101,30 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  		*len = xdp.data_end - xdp.data;
  		return false;
  	case XDP_TX:
-@@ -155,6 +181,7 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -155,27 +181,37 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  			goto xdp_abort;
  		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
  		return true;
 +#ifdef HAVE_XDP_REDIRECT
  	case XDP_REDIRECT:
- 		page_ref_sub(di->page, di->refcnt_bias);
- 		di->refcnt_bias = 0;
-@@ -167,12 +194,15 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
- 		mlx5e_page_dma_unmap(rq, di);
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 		if (xdp.rxq->mem.type != MEM_TYPE_ZERO_COPY) {
++#endif
+ 			page_ref_sub(di->page, di->refcnt_bias);
+ 			di->refcnt_bias = 0;
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 		}
++#endif
+ 		/* When XDP enabled then page-refcnt==1 here */
+ 		err = xdp_do_redirect(rq->netdev, &xdp, prog);
+ 		if (unlikely(err))
+ 			goto xdp_abort;
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
++#ifdef HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
+ 		if (xdp.rxq->mem.type != MEM_TYPE_ZERO_COPY)
++#endif
+ 			mlx5e_page_dma_unmap(rq, di);
  		rq->stats->xdp_redirect++;
  		return true;
 +#endif
@@ -125,7 +139,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  		/* fall through */
  	case XDP_DROP:
  		rq->stats->xdp_drop++;
-@@ -385,7 +415,9 @@ static bool mlx5e_xmit_xdp_frame(struct
+@@ -388,7 +424,9 @@ static bool mlx5e_xmit_xdp_frame(struct
  
  static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  				  struct mlx5e_xdp_wqe_info *wi,
@@ -135,7 +149,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  				  bool recycle)
  {
  	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
-@@ -399,16 +431,23 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -402,16 +440,23 @@ static void mlx5e_free_xdpsq_desc(struct
  			/* XDP_TX from the XSK RQ and XDP_REDIRECT */
  			dma_unmap_single(sq->pdev, xdpi.frame.dma_addr,
  					 xdpi.frame.xdpf->len, DMA_TO_DEVICE);
@@ -159,7 +173,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  		default:
  			WARN_ON_ONCE(true);
  		}
-@@ -419,7 +458,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -422,7 +467,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  {
  	struct mlx5e_xdpsq *sq;
  	struct mlx5_cqe64 *cqe;
@@ -169,7 +183,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  	u16 sqcc;
  	int i;
  
-@@ -456,7 +497,11 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -459,7 +506,11 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  			sqcc += wi->num_wqebbs;
  
@@ -181,7 +195,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  		} while (!last_wqe);
  
  		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -467,10 +512,10 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -470,10 +521,10 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  					     (struct mlx5_err_cqe *)cqe);
  		}
  	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
@@ -194,7 +208,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  	sq->stats->cqes += i;
  
  	mlx5_cqwq_update_db_record(&cq->wq);
-@@ -484,7 +529,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -487,7 +538,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  {
@@ -204,7 +218,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  
  	while (sq->cc != sq->pc) {
  		struct mlx5e_xdp_wqe_info *wi;
-@@ -495,13 +542,43 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -498,13 +551,45 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
  
  		sq->cc += wi->num_wqebbs;
  
@@ -239,6 +253,8 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
 +
 +void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw)
 +{
++	sq->xmit_xdp_frame_check = is_mpw ?
++		mlx5e_xmit_xdp_frame_check_mpwqe : mlx5e_xmit_xdp_frame_check;
 +	sq->xmit_xdp_frame = is_mpw ?
 +		mlx5e_xmit_xdp_frame_mpwqe : mlx5e_xmit_xdp_frame;
  }
@@ -248,7 +264,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -562,26 +639,90 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -565,26 +650,90 @@ int mlx5e_xdp_xmit(struct net_device *de
  	return n - drops;
  }
  
@@ -296,7 +312,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
 +	if (unlikely(dma_mapping_error(sq->pdev, xdptxd.dma_addr))) {
 +		err = -ENOMEM;
 +		goto err_release_page;
-+	}
+ 	}
 +
 +	xdpi.mode = MLX5E_XDP_XMIT_MODE_FRAME;
 +	xdpi.frame.xdpf = xdpf;
@@ -307,7 +323,7 @@ Change-Id: I4fb0074a315498b55e74e0ecf4dfd93c10a3aed1
 +				 xdptxd.len, DMA_TO_DEVICE);
 +		err = -ENOSPC;
 +		goto err_release_page;
- 	}
++	}
 +
 +	return 0;
 +

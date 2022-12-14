@@ -8,7 +8,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
-@@ -127,15 +127,19 @@ struct mlx5e_sw_stats {
+@@ -129,15 +129,19 @@ struct mlx5e_sw_stats {
  	u64 rx_csum_complete_tail;
  	u64 rx_csum_complete_tail_slow;
  	u64 rx_csum_unnecessary_inner;
@@ -37,7 +37,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  	u64 tx_csum_none;
  	u64 tx_csum_partial;
  	u64 tx_csum_partial_inner;
-@@ -146,13 +150,20 @@ struct mlx5e_sw_stats {
+@@ -148,13 +152,20 @@ struct mlx5e_sw_stats {
  	u64 tx_cqes;
  	u64 tx_queue_wake;
  	u64 tx_cqe_err;
@@ -65,7 +65,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  	u64 tx_cqe_compress_blks;
  	u64 tx_cqe_compress_pkts;
  	u64 rx_wqe_err;
-@@ -180,7 +191,7 @@ struct mlx5e_sw_stats {
+@@ -182,7 +193,7 @@ struct mlx5e_sw_stats {
  	u64 ch_force_irq;
  	u64 ch_eq_rearm;
  
@@ -74,8 +74,8 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  	u64 tx_tls_encrypted_packets;
  	u64 tx_tls_encrypted_bytes;
  	u64 tx_tls_ctx;
-@@ -300,8 +311,12 @@ struct mlx5e_rq_stats {
- 	u64 lro_bytes;
+@@ -304,8 +315,12 @@ struct mlx5e_rq_stats {
+ 	u64 mcast_bytes;
  	u64 ecn_mark;
  	u64 removed_vlan_packets;
 +#ifdef HAVE_XDP_BUFF
@@ -87,7 +87,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  	u64 wqe_err;
  	u64 mpwqe_filler_cqes;
  	u64 mpwqe_filler_strides;
-@@ -343,7 +358,7 @@ struct mlx5e_sq_stats {
+@@ -347,7 +362,7 @@ struct mlx5e_sq_stats {
  	u64 csum_partial_inner;
  	u64 added_vlan_packets;
  	u64 nop;
@@ -96,7 +96,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  	u64 tls_encrypted_packets;
  	u64 tls_encrypted_bytes;
  	u64 tls_ctx;
-@@ -368,6 +383,7 @@ struct mlx5e_sq_stats {
+@@ -372,6 +387,7 @@ struct mlx5e_sq_stats {
  	u64 cqe_err;
  };
  
@@ -104,7 +104,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  struct mlx5e_xdpsq_stats {
  	u64 xmit;
  	u64 mpwqe;
-@@ -378,6 +394,7 @@ struct mlx5e_xdpsq_stats {
+@@ -382,6 +398,7 @@ struct mlx5e_xdpsq_stats {
  	/* dirtied @completion */
  	u64 cqes ____cacheline_aligned_in_smp;
  };
@@ -112,7 +112,7 @@ Change-Id: I932799b9da774ebf316c45602e866e184df872ba
  
  struct mlx5e_ch_stats {
  	u64 events;
-@@ -394,7 +411,11 @@ struct mlx5e_stats {
+@@ -398,7 +415,11 @@ struct mlx5e_stats {
  	struct mlx5e_vnic_env_stats vnic;
  	struct mlx5e_vport_stats vport;
  	struct mlx5e_pport_stats pport;

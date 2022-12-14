@@ -48,6 +48,7 @@
 /* QP and CQ parameters */
 #define IB_MAD_QP_SEND_SIZE	128
 #define IB_MAD_QP_RECV_SIZE	512
+#define IB_MAD_QP_SMP_WINDOW	128 /* Use INT_MAX to disable the feature */
 #define IB_MAD_QP_MIN_SIZE	64
 #define IB_MAD_QP_MAX_SIZE	8192
 #define IB_MAD_SEND_REQ_MAX_SG	2
@@ -104,19 +105,19 @@ struct ib_mad_agent_private {
 	struct list_head rmpp_list;
 
 	atomic_t refcount;
+	int send_list_closed;
 	union {
 		struct completion comp;
 		struct rcu_head rcu;
 	};
 };
 
-struct ib_mad_snoop_private {
-	struct ib_mad_agent agent;
-	struct ib_mad_qp_info *qp_info;
-	int snoop_index;
-	int mad_snoop_flags;
-	atomic_t refcount;
-	struct completion comp;
+/* Structure for timeout-fifo entry */
+struct tf_entry {
+	unsigned long exp_time;	    /* entry expiration time */
+	struct list_head fifo_list; /* to keep entries in fifo order */
+	struct list_head to_list;   /* to keep entries in timeout order */
+	int canceled;		    /* indicates whether entry is canceled */
 };
 
 struct ib_mad_send_wr_private {
@@ -144,6 +145,13 @@ struct ib_mad_send_wr_private {
 	int seg_num;
 	int newwin;
 	int pad;
+
+	/* SMP window */
+	int is_smp_mad;
+
+	/* SA congestion controlled MAD */
+	int is_sa_cc_mad;
+	struct tf_entry tf_list;
 };
 
 struct ib_mad_local_private {
@@ -190,10 +198,35 @@ struct ib_mad_qp_info {
 	struct ib_mad_queue send_queue;
 	struct ib_mad_queue recv_queue;
 	struct list_head overflow_list;
-	spinlock_t snoop_lock;
-	struct ib_mad_snoop_private **snoop_table;
-	int snoop_table_size;
-	atomic_t snoop_count;
+};
+
+struct smp_window {
+	unsigned long outstanding;
+	unsigned long max_outstanding;
+	struct list_head overflow_list;
+};
+
+struct to_fifo {
+	struct list_head to_head;
+	struct list_head fifo_head;
+	spinlock_t lists_lock;
+	struct timer_list timer;
+	struct work_struct work;
+	u32 num_items;
+	int stop_enqueue;
+	struct workqueue_struct *workq;
+};
+
+/* SA congestion control data */
+struct sa_cc_data {
+	spinlock_t lock;
+	unsigned long outstanding;
+	unsigned long queue_size;
+	unsigned long time_sa_mad;
+	unsigned long max_outstanding;
+	unsigned long drops;
+	struct kobject kobj;
+	struct to_fifo  *tf;
 };
 
 struct ib_mad_port_private {
@@ -207,6 +240,9 @@ struct ib_mad_port_private {
 	struct ib_mad_mgmt_version_table version[MAX_MGMT_VERSION];
 	struct workqueue_struct *wq;
 	struct ib_mad_qp_info qp_info[IB_MAD_QPS_CORE];
+
+	struct smp_window smp_window;
+	struct sa_cc_data sa_cc;
 };
 
 int ib_send_mad(struct ib_mad_send_wr_private *mad_send_wr);

@@ -11,19 +11,40 @@ enum {
 	MLX5E_TC_TTC_FT_LEVEL,
 };
 
+struct mlx5_prio_hp {
+	u32 rate;
+	struct kobject kobj;
+	struct mlx5e_priv *priv;
+	u32 prio;
+};
+
+#define MLX5E_MAX_HP_PRIO 1000
+
 struct mlx5e_tc_table {
-	/* protects flow table */
+	/* Protects the dynamic assignment of the t parameter
+	 * which is the nic tc root table.
+	 */
 	struct mutex			t_lock;
 	struct mlx5_flow_table		*t;
+	struct mlx5_fs_chains           *chains;
 
 	struct rhashtable               ht;
 
 	struct mod_hdr_tbl mod_hdr;
 	struct mutex hairpin_tbl_lock; /* protects hairpin_tbl */
-	DECLARE_HASHTABLE(hairpin_tbl, 8);
+	DECLARE_HASHTABLE(hairpin_tbl, 16);
+	struct kobject *hp_config;
+	struct mlx5_prio_hp *prio_hp;
+	int num_prio_hp;
+	atomic_t hp_fwd_ref_cnt;
+	struct mlx5_flow_table *hp_fwd;
+	struct mlx5_flow_group *hp_fwd_g;
+	u32 max_pp_burst_size;
 
 	struct notifier_block     netdevice_nb;
 	struct netdev_net_notifier	netdevice_nn;
+
+	struct mlx5_tc_ct_priv         *ct;
 };
 
 struct mlx5e_flow_table {

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_rw.c
 
 Change-Id: I7bbdbf97fc27bd6e587dced7988bf6a276b1d8e6
 ---
- net/sunrpc/xprtrdma/svc_rdma_rw.c | 40 +++++++++++++++++++++++++++++++
- 1 file changed, 40 insertions(+)
+ net/sunrpc/xprtrdma/svc_rdma_rw.c | 74 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 74 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_rw.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_rw.c
@@ -153,7 +153,16 @@ Change-Id: I7bbdbf97fc27bd6e587dced7988bf6a276b1d8e6
  		info->ri_chunklen += rs_length;
  	}
  
-@@ -722,7 +758,9 @@ static int svc_rdma_build_normal_read_ch
+@@ -718,13 +754,22 @@ static int svc_rdma_build_normal_read_ch
+ 	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
+ 	int ret;
+ 
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	info->ri_pageno = head->rc_hdr_count;
++	info->ri_pageoff = 0;
++#endif
++
+ 	ret = svc_rdma_build_read_chunk(rqstp, info, p);
  	if (ret < 0)
  		goto out;
  
@@ -161,9 +170,22 @@ Change-Id: I7bbdbf97fc27bd6e587dced7988bf6a276b1d8e6
  	trace_svcrdma_encode_read(info->ri_chunklen, info->ri_position);
 +#endif
  
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
  	head->rc_hdr_count = 0;
++#endif
  
-@@ -778,7 +816,9 @@ static int svc_rdma_build_pz_read_chunk(
+ 	/* Split the Receive buffer between the head and tail
+ 	 * buffers at Read chunk's position. XDR roundup of the
+@@ -774,15 +819,23 @@ static int svc_rdma_build_pz_read_chunk(
+ 	struct svc_rdma_recv_ctxt *head = info->ri_readctxt;
+ 	int ret;
+ 
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	info->ri_pageno = head->rc_hdr_count - 1;
++	info->ri_pageoff = offset_in_page(head->rc_byte_len);
++#endif
++
+ 	ret = svc_rdma_build_read_chunk(rqstp, info, p);
  	if (ret < 0)
  		goto out;
  
@@ -173,3 +195,52 @@ Change-Id: I7bbdbf97fc27bd6e587dced7988bf6a276b1d8e6
  
  	head->rc_arg.len += info->ri_chunklen;
  	head->rc_arg.buflen += info->ri_chunklen;
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	head->rc_hdr_count = 1;
+ 	head->rc_arg.head[0].iov_base = page_address(head->rc_pages[0]);
+ 	head->rc_arg.head[0].iov_len = min_t(size_t, PAGE_SIZE,
+@@ -790,6 +843,22 @@ static int svc_rdma_build_pz_read_chunk(
+ 
+ 	head->rc_arg.page_len = info->ri_chunklen -
+ 				head->rc_arg.head[0].iov_len;
++#else
++	if (head->rc_arg.buflen <= head->rc_sges[0].length) {
++		/* Transport header and RPC message fit entirely
++		 * in page where head iovec resides.
++		 */
++		head->rc_arg.head[0].iov_len = info->ri_chunklen;
++	} else {
++		/* Transport header and part of RPC message reside
++		 * in the head iovec's page.
++		 */
++		head->rc_arg.head[0].iov_len =
++			head->rc_sges[0].length - head->rc_byte_len;
++		head->rc_arg.page_len =
++			info->ri_chunklen - head->rc_arg.head[0].iov_len;
++	}
++#endif
+ 
+ out:
+ 	return ret;
+@@ -822,6 +891,9 @@ int svc_rdma_recv_read_chunk(struct svcx
+ 	 * head->rc_arg. Pages involved with RDMA Read I/O are
+ 	 * transferred there.
+ 	 */
++#ifndef HAVE_SVC_FILL_WRITE_VECTOR
++	head->rc_page_count = head->rc_hdr_count;
++#endif
+ 	head->rc_arg.head[0] = rqstp->rq_arg.head[0];
+ 	head->rc_arg.tail[0] = rqstp->rq_arg.tail[0];
+ 	head->rc_arg.pages = head->rc_pages;
+@@ -834,8 +906,10 @@ int svc_rdma_recv_read_chunk(struct svcx
+ 	if (!info)
+ 		return -ENOMEM;
+ 	info->ri_readctxt = head;
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	info->ri_pageno = 0;
+ 	info->ri_pageoff = 0;
++#endif
+ 
+ 	info->ri_position = be32_to_cpup(p + 1);
+ 	if (info->ri_position)

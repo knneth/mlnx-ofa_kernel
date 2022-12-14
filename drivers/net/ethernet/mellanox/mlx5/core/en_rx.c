@@ -231,6 +231,9 @@ static inline bool mlx5e_rx_cache_check_reduce(struct mlx5e_rq *rq)
 {
 	struct mlx5e_page_cache *cache = &rq->page_cache;
 
+	if (!cache->page_cache)
+		return false;
+
 	if (unlikely(test_bit(MLX5E_RQ_STATE_CACHE_REDUCE_PENDING, &rq->state)))
 		return false;
 
@@ -1135,12 +1138,11 @@ static inline void mlx5e_handle_csum(struct net_device *netdev,
 		if (unlikely(ipproto == IPPROTO_SCTP))
 			goto csum_unnecessary;
 
-		if (unlikely(mlx5_ipsec_is_rx_flow(cqe)))
-			goto csum_none;
-
 		stats->csum_complete++;
 		skb->ip_summed = CHECKSUM_COMPLETE;
-		skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
+		skb->csum = unlikely(mlx5_ipsec_is_rx_flow(cqe)) ?
+			    mlx5e_ipsec_offload_handle_rx_csum(skb, cqe) :
+			    csum_unfold((__force __sum16)cqe->check_sum);
 
 		if (test_bit(MLX5E_RQ_STATE_CSUM_FULL, &rq->state))
 			return; /* CQE csum covers all received bytes */
@@ -1221,6 +1223,11 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 		mlx5e_enable_ecn(rq, skb);
 
 	skb->protocol = eth_type_trans(skb, netdev);
+
+	if (unlikely(mlx5e_skb_is_multicast(skb))) {
+		stats->mcast_packets++;
+		stats->mcast_bytes += cqe_bcnt;
+	}
 }
 
 static inline void mlx5e_complete_rx_cqe(struct mlx5e_rq *rq,
@@ -1383,7 +1390,13 @@ void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	}
 
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+
 	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
+
+	if (mlx5e_cqe_regb_chain(cqe))
+		if (!mlx5e_tc_update_skb(cqe, skb))
+			goto free_wqe;
+
 	napi_gro_receive(rq->cq.napi, skb);
 
 free_wqe:
@@ -1640,7 +1653,13 @@ void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 		goto mpwrq_cqe_out;
 
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
+
 	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
+
+	if (mlx5e_cqe_regb_chain(cqe))
+		if (!mlx5e_tc_update_skb(cqe, skb))
+			goto mpwrq_cqe_out;
+
 	napi_gro_receive(rq->cq.napi, skb);
 
 mpwrq_cqe_out:

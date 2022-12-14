@@ -94,17 +94,23 @@ mlx5_ib_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 {
 	struct mlx5_core_dev *mdev = mlx5_eswitch_get_core_dev(rep->esw);
 	struct mlx5_ib_dev *dev = mlx5_ib_rep_to_dev(rep);
+	int vport_index = rep->vport_index;
 	struct mlx5_ib_port *port;
 
 	if (mlx5_lag_is_shared_fdb(mdev) &&
-	    !mlx5_lag_is_master(mdev) &&
-	    rep->vport == MLX5_VPORT_UPLINK)
-		return;
+	    !mlx5_lag_is_master(mdev)) {
+		struct mlx5_core_dev *peer_mdev;
+
+		if (rep->vport == MLX5_VPORT_UPLINK)
+			return;
+		peer_mdev = mlx5_lag_get_peer_mdev(mdev);
+		vport_index += mlx5_eswitch_get_total_vports(peer_mdev);
+	}
 
 	if (!dev)
 		return;
 
-	port = &dev->port[rep->vport_index];
+	port = &dev->port[vport_index];
 	write_lock(&port->roce.netdev_lock);
 	port->roce.netdev = NULL;
 	write_unlock(&port->roce.netdev_lock);
@@ -228,4 +234,9 @@ struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 
 	return mlx5_eswitch_add_send_to_vport_rule(esw, esw, rep,
 						   sq->base.mqp.qpn);
+}
+
+bool mlx5_ib_eswitch_is_manager_vport(struct mlx5_eswitch *esw, u16 vport)
+{
+	return mlx5_eswitch_is_manager_vport(esw, vport);
 }

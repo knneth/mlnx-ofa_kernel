@@ -450,7 +450,7 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 	 */
 	cmd_capsule_size = sizeof(struct nvme_command);
 	if (!ctrl->pi_support)
-		cmd_capsule_size += req->port->inline_data_size;
+		cmd_capsule_size += ctrl->sqe_inline_size;
 	id->ioccsz = cpu_to_le32(cmd_capsule_size / 16);
 
 	/* Max response capsule size is cqe */

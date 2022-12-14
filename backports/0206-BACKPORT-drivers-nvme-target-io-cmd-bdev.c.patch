@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-bdev.c
 
 Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
 ---
- drivers/nvme/target/io-cmd-bdev.c | 125 +++++++++++++++++++++++++++++++++++++-
- 1 file changed, 124 insertions(+), 1 deletion(-)
+ drivers/nvme/target/io-cmd-bdev.c | 127 +++++++++++++++++++++++++++++-
+ 1 file changed, 125 insertions(+), 2 deletions(-)
 
 --- a/drivers/nvme/target/io-cmd-bdev.c
 +++ b/drivers/nvme/target/io-cmd-bdev.c
@@ -12,7 +12,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  static void nvmet_bdev_ns_enable_integrity(struct nvmet_ns *ns)
  {
-+#if defined(CONFIG_BLK_DEV_INTEGRITY_T10) && \
++#if defined(CONFIG_BLK_DEV_INTEGRITY) && \
 +	defined(HAVE_BLKDEV_BIO_INTEGRITY_BYTES)
  	struct blk_integrity *bi = bdev_get_integrity(ns->bdev);
  
@@ -25,6 +25,15 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  }
  
  int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
+@@ -86,7 +89,7 @@ int nvmet_bdev_ns_enable(struct nvmet_ns
+ 
+ 	ns->pi_type = 0;
+ 	ns->metadata_size = 0;
+-	if (IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY_T10))
++	if (IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY))
+ 		nvmet_bdev_ns_enable_integrity(ns);
+ 
+ 	return 0;
 @@ -105,6 +108,7 @@ void nvmet_bdev_ns_revalidate(struct nvm
  	ns->size = i_size_read(ns->bdev->bd_inode);
  }

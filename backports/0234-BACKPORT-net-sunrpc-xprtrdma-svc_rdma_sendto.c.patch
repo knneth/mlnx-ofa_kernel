@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
 
 Change-Id: I281cedaa5e5b03ac033b95282f1f8e82e3f973d8
 ---
- net/sunrpc/xprtrdma/svc_rdma_sendto.c | 18 ++++++++++++++++++
- 1 file changed, 18 insertions(+)
+ net/sunrpc/xprtrdma/svc_rdma_sendto.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_sendto.c
@@ -86,7 +86,19 @@ Change-Id: I281cedaa5e5b03ac033b95282f1f8e82e3f973d8
  	p += 3;
  	*p++ = rdma_error;
  	*p   = err_chunk;
-@@ -895,7 +911,9 @@ out:
+@@ -830,7 +846,11 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+ 	struct svc_rdma_send_ctxt *sctxt;
+ 	int ret;
+ 
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
+ 	rdma_argp = rctxt->rc_recv_buf;
++#else
++	rdma_argp = page_address(rqstp->rq_pages[0]);
++#endif
+ 	svc_rdma_get_write_arrays(rdma_argp, &wr_lst, &rp_ch);
+ 
+ 	/* Create the RDMA response header. xprt->xpt_mutex,
+@@ -895,7 +915,9 @@ out:
   err1:
  	svc_rdma_send_ctxt_put(rdma, sctxt);
   err0:

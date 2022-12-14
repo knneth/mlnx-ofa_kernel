@@ -1022,7 +1022,7 @@ static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
 	} else {
 		err = mlx5_eswitch_query_esw_vport_context(mdev,
 							   vport_num,
-							   vport_num != MLX5_VPORT_PF,
+							   !mlx5_ib_eswitch_is_manager_vport(mdev->priv.eswitch, vport_num),
 							   out, sizeof(out));
 		if (err)
 			return err;

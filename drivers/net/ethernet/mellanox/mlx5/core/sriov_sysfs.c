@@ -715,6 +715,56 @@ static ssize_t min_pf_tx_rate_store(struct mlx5_sriov_vf *g,
 	((PAGE_SIZE - (int)(p - buf)) <= 0 ? 0 :			\
 	scnprintf(p, PAGE_SIZE - (int)(p - buf), format, ## arg))
 
+static ssize_t trunk_show(struct mlx5_sriov_vf *g,
+			  struct vf_attributes *oa,
+			  char *buf)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *vport = &esw->vports[g->vf + 1];
+	u16 vlan_id = 0;
+	char *ret = buf;
+
+	mutex_lock(&esw->state_lock);
+	if (!!bitmap_weight(vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID)) {
+		ret += _sprintf(ret, buf, "Allowed 802.1Q VLANs:");
+		for_each_set_bit(vlan_id, vport->info.vlan_trunk_8021q_bitmap, VLAN_N_VID)
+			ret += _sprintf(ret, buf, " %d", vlan_id);
+		ret += _sprintf(ret, buf, "\n");
+	}
+	mutex_unlock(&esw->state_lock);
+
+	return (ssize_t)(ret - buf);
+}
+
+static ssize_t trunk_store(struct mlx5_sriov_vf *g,
+			   struct vf_attributes *oa,
+			   const char *buf,
+			   size_t count)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	u16 start_vid, end_vid;
+	char op[5];
+	int err;
+
+	err = sscanf(buf, "%4s %hu %hu", op, &start_vid, &end_vid);
+	if (err != 3)
+		return -EINVAL;
+
+	if (!strcmp(op, "add"))
+		err = mlx5_eswitch_add_vport_trunk_range(dev->priv.eswitch,
+							 g->vf + 1,
+							 start_vid, end_vid);
+	else if (!strcmp(op, "rem"))
+		err = mlx5_eswitch_del_vport_trunk_range(dev->priv.eswitch,
+							 g->vf + 1,
+							 start_vid, end_vid);
+	else
+		return -EINVAL;
+
+	return err ? err : count;
+}
+
 static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 			   char *buf)
 {
@@ -743,6 +793,9 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "MinTxRate  : %d\n", ivi->min_rate);
 	p += _sprintf(p, buf, "MaxTxRate  : %d\n", ivi->max_rate);
 	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
+	p += _sprintf(p, buf, "VGT+       : %s\n",
+		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap, VLAN_N_VID) ?
+		      "ON" : "OFF");
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -894,6 +947,7 @@ VF_ATTR(trust);
 VF_ATTR(max_tx_rate);
 VF_ATTR(min_tx_rate);
 VF_ATTR(config);
+VF_ATTR(trunk);
 VF_ATTR(stats);
 VF_ATTR(group);
 VF_RATE_GROUP_ATTR(max_tx_rate);
@@ -910,6 +964,7 @@ static struct attribute *vf_eth_attrs[] = {
 	&vf_attr_max_tx_rate.attr,
 	&vf_attr_min_tx_rate.attr,
 	&vf_attr_config.attr,
+	&vf_attr_trunk.attr,
 	&vf_attr_stats.attr,
 	&vf_attr_group.attr,
 	NULL

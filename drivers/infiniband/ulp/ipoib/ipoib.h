@@ -625,7 +625,6 @@ void ipoib_drain_cq(struct net_device *dev);
 
 void ipoib_set_ethtool_ops(struct net_device *dev);
 
-#ifdef CONFIG_IPOIB_ALL_MULTI
 int ipoib_register_genl(void);
 void ipoib_unregister_genl(void);
 
@@ -634,27 +633,6 @@ void ipoib_path_add_notify(struct ipoib_dev_priv *priv,
 
 void ipoib_path_del_notify(struct ipoib_dev_priv *priv,
 			    struct sa_path_rec *pathrec);
-#else
-/* When CONFIG_IPOIB_ALL_MULTI is disabled, the following stubs are used */
-static inline int ipoib_register_genl(void)
-{
-		return 0;
-}
-static inline void ipoib_unregister_genl(void)
-{
-		return;
-}
-static inline void ipoib_path_add_notify(struct ipoib_dev_priv *priv,
-					    struct sa_path_rec *pathrec)
-{
-		return;
-}
-static inline void ipoib_path_del_notify(struct ipoib_dev_priv *priv,
-					    struct sa_path_rec *pathrec)
-{
-		return;
-}
-#endif
 #define IPOIB_FLAGS_RC		0x80
 #define IPOIB_FLAGS_UC		0x40
 

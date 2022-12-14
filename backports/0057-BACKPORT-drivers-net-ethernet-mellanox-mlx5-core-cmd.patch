@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 
 Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
 ---
- drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 57 +++++++++++++++++++
- 1 file changed, 57 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 61 ++++++++++++++++++-
+ 1 file changed, 60 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
-@@ -784,7 +784,11 @@ static int mlx5_cmd_check(struct mlx5_co
+@@ -802,7 +802,11 @@ static int mlx5_cmd_check(struct mlx5_co
  	if (!uid &&
  	    opcode != MLX5_CMD_OP_DESTROY_MKEY &&
  	    !(opcode == MLX5_CMD_OP_ALLOC_MEMIC && status == MLX5_CMD_STAT_NO_RES_ERR))
@@ -20,7 +20,7 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  			"%s(0x%x) op_mod(0x%x) failed, status %s(0x%x), syndrome (0x%x)\n",
  			mlx5_command_str(opcode), opcode, op_mod,
  			cmd_status_str(status), status, syndrome);
-@@ -949,7 +953,11 @@ static void cmd_work_handler(struct work
+@@ -997,7 +1001,11 @@ static void cmd_work_handler(struct work
  	lay->status_own = CMD_OWNER_HW;
  	set_signature(ent, !cmd->checksum_disabled);
  	dump_command(dev, ent, 1);
@@ -30,9 +30,9 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
 +	ktime_get_ts(&ent->ts1);
 +#endif
  	cmd_mode = cmd->mode;
- 	set_bit(MLX5_CMD_ENT_STATE_PENDING_COMP, &ent->state);
  
-@@ -1068,6 +1076,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
+ 	if (ent->callback && schedule_delayed_work(&ent->cb_timeout_work, cb_timeout))
+@@ -1141,6 +1149,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	struct mlx5_cmd_stats *stats;
@@ -42,8 +42,8 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  	int err = 0;
  	s64 ds;
  	u16 op;
-@@ -1107,7 +1118,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
- 	if (err == -ECANCELED)
+@@ -1183,7 +1194,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
+ 	if (err == -ETIMEDOUT || err == -ECANCELED)
  		goto out_free;
  
 +#ifdef HAVE_KTIME_GET_NS
@@ -57,7 +57,7 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  	op = MLX5_GET(mbox_in, in->first.data, opcode);
  	if (op < ARRAY_SIZE(cmd->stats)) {
  		stats = &cmd->stats[op];
-@@ -1236,13 +1254,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
+@@ -1312,13 +1330,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
  	if (!mailbox)
  		return ERR_PTR(-ENOMEM);
  
@@ -80,7 +80,7 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  	mailbox->next = NULL;
  
  	return mailbox;
-@@ -1532,6 +1559,9 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1608,6 +1635,9 @@ static void mlx5_cmd_comp_handler(struct
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	mlx5_cmd_cbk_t callback;
@@ -90,16 +90,22 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  	void *context;
  	int err;
  	int i;
-@@ -1570,12 +1600,20 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1644,7 +1674,13 @@ static void mlx5_cmd_comp_handler(struct
+ 				continue;
  			}
  
- 			if (ent->callback)
+-			if (ent->callback && cancel_delayed_work(&ent->cb_timeout_work))
++			if (ent->callback &&
 +#ifdef HAVE___CANCEL_DELAYED_WORK
-+				__cancel_delayed_work(&ent->cb_timeout_work);
++				__cancel_delayed_work(&ent->cb_timeout_work)
 +#else
- 				cancel_delayed_work(&ent->cb_timeout_work);
++				cancel_delayed_work(&ent->cb_timeout_work)
 +#endif
- 			if (ent->page_queue)
++			)
+ 				cmd_ent_put(ent); /* timeout work was canceled */
+ 
+ 			if ((comp_type != MLX5_CMD_COMP_TYPE_FORCED) || /* Real FW completion */
+@@ -1656,7 +1692,11 @@ static void mlx5_cmd_comp_handler(struct
  				sem = &cmd->pages_sem;
  			else
  				sem = &cmd->sem;
@@ -111,8 +117,8 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  			if (!pci_channel_offline(dev->pdev) &&
  			    dev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR) {
  				memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
-@@ -1600,7 +1638,14 @@ static void mlx5_cmd_comp_handler(struct
- 				free_ent(cmd, ent->idx);
+@@ -1677,7 +1717,14 @@ static void mlx5_cmd_comp_handler(struct
+ 			}
  
  			if (ent->callback) {
 +#ifdef HAVE_KTIME_GET_NS
@@ -126,7 +132,7 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  				if (ent->op < ARRAY_SIZE(cmd->stats)) {
  					stats = &cmd->stats[ent->op];
  					spin_lock_irqsave(&stats->lock, flags);
-@@ -1973,7 +2018,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2078,7 +2125,11 @@ static int alloc_cmd_page(struct mlx5_co
  {
  	struct device *ddev = dev->device;
  
@@ -138,7 +144,7 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
  		return -ENOMEM;
-@@ -1988,7 +2037,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2093,7 +2144,11 @@ static int alloc_cmd_page(struct mlx5_co
  
  	dma_free_coherent(ddev, MLX5_ADAPTER_PAGE_SIZE, cmd->cmd_alloc_buf,
  			  cmd->alloc_dma);
@@ -150,7 +156,7 @@ Change-Id: Ib36f2f3f527f02bb78bc049b1460e9c7a224d432
  						2 * MLX5_ADAPTER_PAGE_SIZE - 1,
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
-@@ -2333,7 +2386,11 @@ static ssize_t real_miss_store(struct de
+@@ -2446,7 +2501,11 @@ static ssize_t real_miss_store(struct de
  	return count;
  }
  

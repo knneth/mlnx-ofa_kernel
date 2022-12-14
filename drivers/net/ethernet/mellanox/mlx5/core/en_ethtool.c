@@ -34,6 +34,7 @@
 #include "en/port.h"
 #include "en/xsk/umem.h"
 #include "lib/clock.h"
+#include "en_rep.h"
 
 void mlx5e_ethtool_get_drvinfo(struct mlx5e_priv *priv,
 			       struct ethtool_drvinfo *drvinfo)
@@ -381,7 +382,8 @@ void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
 	ch->max_combined   = priv->max_nch;
 	ch->combined_count = priv->channels.params.num_channels;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	ch->max_other      = priv->mdev->mlx5e_res.max_rl_queues;
+	if (!mlx5e_eswitch_vf_rep(priv->netdev))
+		ch->max_other      = priv->mdev->mlx5e_res.max_rl_queues;
 	ch->other_count    = priv->channels.params.num_rl_txqs;
 #endif
 	if (priv->xsk.refcnt) {
@@ -430,6 +432,9 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 	}
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
+	if (ch->other_count && mlx5e_eswitch_vf_rep(priv->netdev))
+		return -EINVAL;
+
 	if (ch->other_count > priv->mdev->mlx5e_res.max_rl_queues) {
 		netdev_info(priv->netdev, "%s: other_count (%d) > max (%d)\n",
 			    __func__, ch->other_count,
@@ -560,8 +565,8 @@ int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
 	struct dim_cq_moder *rx_moder, *tx_moder;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_channels new_channels = {};
+	bool reset_rx, reset_tx;
 	int err = 0;
-	bool reset;
 
 	if (!MLX5_CAP_GEN(mdev, cq_moderation))
 		return -EOPNOTSUPP;
@@ -599,13 +604,26 @@ int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
 	}
 	/* we are opened */
 
-	reset = (!!coal->use_adaptive_rx_coalesce != priv->channels.params.rx_dim_enabled) ||
-		(!!coal->use_adaptive_tx_coalesce != priv->channels.params.tx_dim_enabled);
+	reset_rx = !!coal->use_adaptive_rx_coalesce != priv->channels.params.rx_dim_enabled;
+	reset_tx = !!coal->use_adaptive_tx_coalesce != priv->channels.params.tx_dim_enabled;
 
-	if (!reset) {
+	if (!reset_rx && !reset_tx) {
 		mlx5e_set_priv_channels_coalesce(priv, coal);
 		priv->channels.params = new_channels.params;
 		goto out;
+	}
+
+	if (reset_rx) {
+		u8 mode = MLX5E_GET_PFLAG(&new_channels.params,
+					  MLX5E_PFLAG_RX_CQE_BASED_MODER);
+
+		mlx5e_reset_rx_moderation(&new_channels.params, mode);
+	}
+	if (reset_tx) {
+		u8 mode = MLX5E_GET_PFLAG(&new_channels.params,
+					  MLX5E_PFLAG_TX_CQE_BASED_MODER);
+
+		mlx5e_reset_tx_moderation(&new_channels.params, mode);
 	}
 
 	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
