@@ -289,6 +289,15 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 			if (dst->dest_attr.type ==
 			    MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE) {
 				id = dst->dest_attr.ft->id;
+			} else if (dst->dest_attr.type ==
+				   MLX5_FLOW_DESTINATION_TYPE_VPORT) {
+				id = dst->dest_attr.vport.num;
+				MLX5_SET(dest_format_struct, in_dests,
+					 destination_eswitch_owner_vhca_id_valid,
+					 dst->dest_attr.vport.vhca_id_valid);
+				MLX5_SET(dest_format_struct, in_dests,
+					 destination_eswitch_owner_vhca_id,
+					 dst->dest_attr.vport.vhca_id);
 			} else {
 				id = dst->dest_attr.tir_num;
 			}
@@ -326,7 +335,7 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 			 list_size);
 	}
 
-	if (fte->action & MLX5_FLOW_CONTEXT_ACTION_PUSH_VLAN) {
+	if (fte->action & MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH) {
 		MLX5_SET(flow_context, in_flow_context, vlan_pcp, fte->vlan_pcp);
 		MLX5_SET(flow_context, in_flow_context, vlan_dei, fte->vlan_dei);
 		MLX5_SET(flow_context, in_flow_context, vlan_id, fte->vlan_id);

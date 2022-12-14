@@ -40,6 +40,7 @@
 
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include <rdma/ib_cache.h>
 
 #include "ipoib.h"
 #include <linux/if_arp.h>      /* For ARPHRD_xxx */
@@ -300,7 +301,14 @@ static void ipoib_ib_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 			likely(wc->wc_flags & IB_WC_IP_CSUM_OK))
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-	napi_gro_receive(&priv->recv_napi, skb);
+	/* if handler is registered on top of ipoib, set skb oob data. */
+	if (unlikely(dev->priv_flags & IFF_EIPOIB_VIF)) {
+		set_skb_oob_cb_data(skb, wc, &priv->recv_napi);
+		/* the registered handler will take care of the skb.*/
+		netif_receive_skb(skb);
+	} else {
+		napi_gro_receive(&priv->recv_napi, skb);
+	}
 
 repost:
 	if (unlikely(ipoib_ib_post_receive(dev, wr_id)))
@@ -1138,7 +1146,7 @@ static bool ipoib_dev_addr_changed_valid(struct ipoib_dev_priv *priv)
 	bool ret = false;
 
 	netdev_gid = (union ib_gid *)(priv->dev->dev_addr + 4);
-	if (ib_query_gid(priv->ca, priv->port, 0, &gid0, NULL))
+	if (rdma_query_gid(priv->ca, priv->port, 0, &gid0))
 		return false;
 
 	netif_addr_lock_bh(priv->dev);
@@ -1154,8 +1162,7 @@ static bool ipoib_dev_addr_changed_valid(struct ipoib_dev_priv *priv)
 
 	netif_addr_unlock_bh(priv->dev);
 
-	err = ib_find_gid(priv->ca, &search_gid, IB_GID_TYPE_IB,
-			  priv->dev, &port, &index);
+	err = ib_find_gid(priv->ca, &search_gid, &port, &index);
 
 	netif_addr_lock_bh(priv->dev);
 

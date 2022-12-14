@@ -45,6 +45,7 @@ extern const struct ethtool_ops mlx5i_pkey_ethtool_ops;
 #define MLX5_IPOIB_ENCAP_LEN    4
 #define MLX5_IPOIB_PSEUDO_LEN   20
 #define MLX5_IPOIB_HARD_LEN     (MLX5_IPOIB_PSEUDO_LEN + MLX5_IPOIB_ENCAP_LEN)
+#define MLX5_IPOIB_FLAGS_TSS    0x20
 
 /* ipoib rdma netdev's private data structure */
 struct mlx5i_priv {

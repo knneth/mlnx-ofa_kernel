@@ -51,6 +51,7 @@
 
 # Kernel module packages to be included into kernel-ib
 %global build_ipoib %(if ( echo %{configure_options} | grep "with-ipoib-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
+%global build_eipoib %(if ( echo %{configure_options} | grep "with-e_ipoib-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global build_oiscsi %(if ( echo %{configure_options} | grep "with-iscsi-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global build_mlx4 %(if ( echo %{configure_options} | grep "with-mlx4-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global build_mlx5 %(if ( echo %{configure_options} | grep "with-mlx5-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
@@ -63,8 +64,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 4.3}
-%{!?_release: %global _release OFED.4.3.3.0.2.1.gcf60532}
+%{!?_version: %global _version 4.4}
+%{!?_release: %global _release OFED.4.4.1.0.0.1.gd647238}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -89,6 +90,7 @@ Obsoletes: rdma-core < 41mlnx1-1
 Provides: rdma-core = 41mlnx1-1
 Obsoletes: rdma-core-devel < 41mlnx1-1
 Provides: rdma-core-devel = 41mlnx1-1
+Provides: rdma-core-devel%{?_isa} = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -112,7 +114,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-3.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.4-1.0.0.tgz
 
 
 # build KMP rpms?
@@ -149,6 +151,7 @@ Obsoletes: rdma-core < 41mlnx1-1
 Provides: rdma-core = 41mlnx1-1
 Obsoletes: rdma-core-devel < 41mlnx1-1
 Provides: rdma-core-devel = 41mlnx1-1
+Provides: rdma-core-devel%{?_isa} = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -166,7 +169,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-3.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.4-1.0.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -181,6 +184,7 @@ Obsoletes: rdma
 Provides: rdma
 Obsoletes: rdma-core-devel < 41mlnx1-1
 Provides: rdma-core-devel = 41mlnx1-1
+Provides: rdma-core-devel%{?_isa} = 41mlnx1-1
 Obsoletes: mlnx-en
 Obsoletes: mlnx_en
 Obsoletes: mlnx-en-utils
@@ -198,7 +202,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-3.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.4-1.0.0.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -638,6 +642,7 @@ fi
 %config(noreplace) /etc/infiniband/openib.conf
 %config(noreplace) /etc/infiniband/mlx5.conf
 /etc/infiniband/info
+/etc/infiniband/vf-net-link-name.sh
 /etc/init.d/openibd
 %if "%{WITH_SYSTEMD}" == "1"
 %{_unitdir}/openibd.service
@@ -656,6 +661,7 @@ fi
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %{_sbindir}/*
 /etc/udev/rules.d/90-ib.rules
+/etc/udev/rules.d/82-net-setup-link.rules
 /bin/mlnx_interface_mgr.sh
 /bin/mlnx_conf_mgr.sh
 %if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"

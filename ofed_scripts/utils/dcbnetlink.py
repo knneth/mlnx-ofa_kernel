@@ -102,7 +102,7 @@ DCB_ATTR_IEEE_PEER_APP = 6
 DCB_ATTR_IEEE_MAXRATE = 7
 DCB_ATTR_IEEE_QCN = 8
 DCB_ATTR_IEEE_QCN_STATS = 9
-DCB_ATTR_IEEE_TRUST = 10
+DCB_ATTR_DCB_BUFFER = 10
 
 DCB_ATTR_IEEE_APP_UNSPEC = 0
 DCB_ATTR_IEEE_APP = 1
@@ -231,6 +231,35 @@ class DcbController:
 		tc_tc_bw, tc_rx_bw, tc_tsa, prio_tc, tc_reco_bw, tc_reco_tsa, reco_prio_tc = f(a,8)
 
 		return prio_tc, tc_tsa, tc_tc_bw
+
+	def get_ieee_dcb_buffer(self):
+		a = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_GET,
+				flags=NLM_F_REQUEST, attrs=[a])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+
+		ieee = m.attrs[DCB_ATTR_IEEE].nested()
+
+		prio2buffer = array.array('B')
+		prio2buffer.fromstring(ieee[DCB_ATTR_DCB_BUFFER].str()[:8])
+		buffer_size = array.array('I')
+		buffer_size.fromstring(ieee[DCB_ATTR_DCB_BUFFER].str()[8:])
+
+		return prio2buffer, buffer_size
+
+	def set_dcb_buffer(self, _prio2buffer, _buffer_size):
+		dcb_buffer = _prio2buffer.tostring() + _buffer_size.tostring()
+
+		intf = NulStrAttr(DCB_ATTR_IFNAME, self.intf)
+		dcb_buffer_str = StrAttr(DCB_ATTR_DCB_BUFFER, dcb_buffer)
+		ieee = Nested(DCB_ATTR_IEEE, [dcb_buffer_str]);
+
+		m = DcbNlMessage(type = RTM_GETDCB, cmd = DCB_CMD_IEEE_SET,
+				flags=NLM_F_REQUEST, attrs=[intf, ieee])
+		m.send(self.conn)
+		m = DcbNlMessage.recv(self.conn)
+		self.check_err(m, DCB_ATTR_IEEE)
 
 	def set_ieee_pfc(self, _pfc_en, _delay):
 		pfc_cap = 8

@@ -88,6 +88,9 @@ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
 		return -EBUSY;
 	}
 
+	if (!MLX5_ESWITCH_MANAGER(dev))
+		goto enable_vfs_hca;
+
 	err = mlx5_eswitch_enable_sriov(dev->priv.eswitch, num_vfs, SRIOV_LEGACY);
 	if (err) {
 		mlx5_core_warn(dev,
@@ -95,11 +98,13 @@ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
 		return err;
 	}
 
+enable_vfs_hca:
 	err = mlx5_create_vfs_sysfs(dev, num_vfs);
 	if (err) {
 		mlx5_core_warn(dev, "failed to create SRIOV sysfs (%d)\n", err);
 #ifdef CONFIG_MLX5_CORE_EN
-		mlx5_eswitch_disable_sriov(dev->priv.eswitch);
+		if (MLX5_ESWITCH_MANAGER(dev))
+			mlx5_eswitch_disable_sriov(dev->priv.eswitch);
 #endif
 		return err;
 	}
@@ -149,9 +154,10 @@ static void mlx5_device_disable_sriov(struct mlx5_core_dev *dev)
 	}
 
 out:
-	mlx5_destroy_vfs_sysfs(dev);
+	if (MLX5_ESWITCH_MANAGER(dev))
+		mlx5_eswitch_disable_sriov(dev->priv.eswitch);
 
-	mlx5_eswitch_disable_sriov(dev->priv.eswitch);
+	mlx5_destroy_vfs_sysfs(dev);
 
 	if (mlx5_wait_for_vf_pages(dev))
 		mlx5_core_warn(dev, "timeout reclaiming VFs pages\n");
@@ -222,20 +228,10 @@ int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	if (!mlx5_core_is_pf(dev))
 		return -EPERM;
 
-	if (num_vfs) {
-		int ret;
-
-		ret = mlx5_lag_forbid(dev);
-		if (ret && (ret != -ENODEV))
-			return ret;
-	}
-
-	if (num_vfs) {
+	if (num_vfs)
 		err = mlx5_sriov_enable(pdev, num_vfs);
-	} else {
+	else
 		mlx5_sriov_disable(pdev);
-		mlx5_lag_allow(dev);
-	}
 
 	return err ? err : num_vfs;
 }
@@ -294,4 +290,20 @@ void mlx5_sriov_cleanup(struct mlx5_core_dev *dev)
 
 	mlx5_sriov_sysfs_cleanup(dev);
 	kfree(sriov->vfs_ctx);
+}
+
+bool mlx5_sriov_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev1)
+{
+	if (!mlx5_sriov_is_enabled(dev0) &&
+	    !mlx5_sriov_is_enabled(dev1))
+		return true;
+
+	if (MLX5_CAP_ESW(dev0, merged_eswitch) &&
+	    MLX5_VPORT_MANAGER(dev0) &&
+	    dev0->priv.eswitch->mode == SRIOV_OFFLOADS &&
+	    MLX5_VPORT_MANAGER(dev1) &&
+	    dev1->priv.eswitch->mode == SRIOV_OFFLOADS)
+		return true;
+
+	return false;
 }

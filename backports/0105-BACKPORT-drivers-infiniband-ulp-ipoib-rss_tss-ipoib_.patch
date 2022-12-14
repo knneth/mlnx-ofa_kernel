@@ -8,7 +8,7 @@ Change-Id: I118bbcf42922d862cfe3eca2323a263950de2fd4
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_cm_rss.c
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_cm_rss.c
-@@ -540,7 +540,11 @@ static struct ib_qp *ipoib_cm_create_tx_
+@@ -545,7 +545,11 @@ static struct ib_qp *ipoib_cm_create_tx_
  		.sq_sig_type		= IB_SIGNAL_ALL_WR,
  		.qp_type		= IB_QPT_RC,
  		.qp_context		= tx,
@@ -20,7 +20,7 @@ Change-Id: I118bbcf42922d862cfe3eca2323a263950de2fd4
  	};
  	struct ib_qp *tx_qp;
  
-@@ -551,6 +555,12 @@ static struct ib_qp *ipoib_cm_create_tx_
+@@ -556,6 +560,12 @@ static struct ib_qp *ipoib_cm_create_tx_
  			min_t(u32, priv->ca->attrs.max_sge, MAX_SKB_FRAGS + 1);
  
  	tx_qp = ib_create_qp(priv->pd, &attr);

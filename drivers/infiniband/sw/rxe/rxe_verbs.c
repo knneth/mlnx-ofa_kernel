@@ -77,40 +77,6 @@ out:
 	return rc;
 }
 
-static int rxe_query_gid(struct ib_device *device,
-			 u8 port_num, int index, union ib_gid *gid)
-{
-	int ret;
-
-	if (index > RXE_PORT_GID_TBL_LEN)
-		return -EINVAL;
-
-	ret = ib_get_cached_gid(device, port_num, index, gid, NULL);
-	if (ret == -EAGAIN) {
-		memcpy(gid, &zgid, sizeof(*gid));
-		return 0;
-	}
-
-	return ret;
-}
-
-static int rxe_add_gid(struct ib_device *device, u8 port_num, unsigned int
-		       index, const union ib_gid *gid,
-		       const struct ib_gid_attr *attr, void **context)
-{
-	if (index >= RXE_PORT_GID_TBL_LEN)
-		return -EINVAL;
-	return 0;
-}
-
-static int rxe_del_gid(struct ib_device *device, u8 port_num, unsigned int
-		       index, void **context)
-{
-	if (index >= RXE_PORT_GID_TBL_LEN)
-		return -EINVAL;
-	return 0;
-}
-
 static struct net_device *rxe_get_netdev(struct ib_device *device,
 					 u8 port_num)
 {
@@ -259,23 +225,8 @@ static int rxe_dealloc_pd(struct ib_pd *ibpd)
 static int rxe_init_av(struct rxe_dev *rxe, struct rdma_ah_attr *attr,
 		       struct rxe_av *av)
 {
-	int err;
-	union ib_gid sgid;
-	struct ib_gid_attr sgid_attr;
-
-	err = ib_get_cached_gid(&rxe->ib_dev, rdma_ah_get_port_num(attr),
-				rdma_ah_read_grh(attr)->sgid_index, &sgid,
-				&sgid_attr);
-	if (err) {
-		pr_err("Failed to query sgid. err = %d\n", err);
-		return err;
-	}
-
 	rxe_av_from_attr(rdma_ah_get_port_num(attr), av, attr);
-	rxe_av_fill_ip_info(av, attr, &sgid_attr, &sgid);
-
-	if (sgid_attr.ndev)
-		dev_put(sgid_attr.ndev);
+	rxe_av_fill_ip_info(av, attr);
 	return 0;
 }
 
@@ -302,13 +253,9 @@ static struct ib_ah *rxe_create_ah(struct ib_pd *ibpd,
 	rxe_add_ref(pd);
 	ah->pd = pd;
 
-	err = rxe_init_av(rxe, attr, &ah->av);
-	if (err)
-		goto err2;
-
+	rxe_init_av(rxe, attr, &ah->av);
 	return &ah->ibah;
 
-err2:
 	rxe_drop_ref(pd);
 	rxe_drop_ref(ah);
 err1:
@@ -325,10 +272,7 @@ static int rxe_modify_ah(struct ib_ah *ibah, struct rdma_ah_attr *attr)
 	if (err)
 		return err;
 
-	err = rxe_init_av(rxe, attr, &ah->av);
-	if (err)
-		return err;
-
+	rxe_init_av(rxe, attr, &ah->av);
 	return 0;
 }
 
@@ -1250,10 +1194,7 @@ int rxe_register_device(struct rxe_dev *rxe)
 	dev->query_port = rxe_query_port;
 	dev->modify_port = rxe_modify_port;
 	dev->get_link_layer = rxe_get_link_layer;
-	dev->query_gid = rxe_query_gid;
 	dev->get_netdev = rxe_get_netdev;
-	dev->add_gid = rxe_add_gid;
-	dev->del_gid = rxe_del_gid;
 	dev->query_pkey = rxe_query_pkey;
 	dev->alloc_ucontext = rxe_alloc_ucontext;
 	dev->dealloc_ucontext = rxe_dealloc_ucontext;

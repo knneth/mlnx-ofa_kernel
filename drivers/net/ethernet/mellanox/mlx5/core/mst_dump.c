@@ -6818,6 +6818,9 @@ struct mlx5_mst_dump {
 };
 
 #define MLX5_PROTECTED_CR_SPCAE_DOMAIN 0x6
+#define MLX5_PROTECTED_CR_SCAN_CRSPACE 0x7
+
+#define BAD_ACCESS_VAL 0xbadacce5
 
 int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space)
 {
@@ -6849,7 +6852,7 @@ int mlx5_pciconf_set_addr_space(struct mlx5_core_dev *dev, u16 space)
 	if (MLX5_EXTRACT(val, PCI_STATUS_BIT_OFFS, PCI_STATUS_BIT_LEN) == 0)
 		return -EINVAL;
 
-	if ((space == MLX5_PROTECTED_CR_SPCAE_DOMAIN) &&
+	if ((space == MLX5_PROTECTED_CR_SCAN_CRSPACE || space == MLX5_PROTECTED_CR_SPCAE_DOMAIN) &&
 	    (!MLX5_EXTRACT(val, PCI_SIZE_VLD_BIT_OFFS, PCI_SIZE_VLD_BIT_LEN))) {
 		mlx5_core_warn(dev, "Failed to get protected cr space size, valid bit not set");
 		return -EINVAL;
@@ -6869,9 +6872,15 @@ int mlx5_pciconf_set_protected_addr_space(struct mlx5_core_dev *dev,
 
 	*ret_space_size = 0;
 
-	ret = mlx5_pciconf_set_addr_space(dev, MLX5_PROTECTED_CR_SPCAE_DOMAIN);
-	if (ret)
-		return ret;
+	ret = mlx5_pciconf_set_addr_space(dev, MLX5_PROTECTED_CR_SCAN_CRSPACE);
+	if (ret) {
+		ret = mlx5_pciconf_set_addr_space(dev, MLX5_PROTECTED_CR_SPCAE_DOMAIN);
+		if (ret)
+			return ret;
+		dev->priv.health.crdump->space = MLX5_PROTECTED_CR_SPCAE_DOMAIN;
+	} else {
+		dev->priv.health.crdump->space = MLX5_PROTECTED_CR_SCAN_CRSPACE;
+	}
 
 	ret = pci_read_config_dword(dev->pdev,
 				    dev->mst_dump->vsec_addr +
@@ -6991,6 +7000,32 @@ out:
 	return ret;
 }
 
+static int mlx5_pciconf_read_fast(struct mlx5_core_dev *dev,
+				  unsigned int read_addr,
+				  unsigned int *next_read_addr,
+				  u32 *data)
+{
+	int ret;
+
+	ret = mlx5_pciconf_read(dev, read_addr, data);
+	if (ret)
+		goto out;
+
+	ret = pci_read_config_dword(dev->pdev,
+				    dev->mst_dump->vsec_addr +
+				    PCI_ADDR_OFFSET,
+				    next_read_addr);
+	if (ret)
+		goto out;
+
+	*next_read_addr = MLX5_EXTRACT(*next_read_addr, 0, PCI_ADDR_BIT_LEN);
+
+	if (*next_read_addr <= read_addr)
+		ret = EINVAL;
+out:
+	return ret;
+}
+
 static int mlx5_pciconf_write(struct mlx5_core_dev *dev,
 			      unsigned int offset,
 			      u32 data)
@@ -7078,6 +7113,29 @@ int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,
 	}
 cleanup:
 	return read;
+}
+
+int mlx5_block_op_pciconf_fast(struct mlx5_core_dev *dev,
+			       u32 *data,
+			       int length)
+{
+	unsigned int next_read_addr = 0;
+	unsigned int read_addr = 0;
+	int i;
+
+	if (length % 4)
+		return -EINVAL;
+
+	for (i = 0; i < (length / 4); i++)
+		data[i] = BAD_ACCESS_VAL;
+
+	while (read_addr < length) {
+		if (mlx5_pciconf_read_fast(dev, read_addr, &next_read_addr, &data[(read_addr >> 2)]))
+			return read_addr;
+
+		read_addr = next_read_addr;
+	}
+	return length;
 }
 
 static int mlx5_read_reg_dword(struct mlx5_core_dev *dev, u32 addr, u32 *data)

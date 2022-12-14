@@ -11,14 +11,14 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
 @@ -65,7 +65,9 @@
  #include "lib/clock.h"
  #include "icmd.h"
- #include "diag/tracer.h"
+ #include "diag/fw_tracer.h"
 +#ifdef HAVE_PNV_PCI_AS_NOTIFY
  #include <asm/pnv-pci.h>
 +#endif
+ #include "diag/diag_cnt.h"
  
  MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
- MODULE_DESCRIPTION("Mellanox Connect-IB, ConnectX-4, ConnectX-5 core driver");
-@@ -252,8 +254,10 @@ static struct mlx5_profile profile[] = {
+@@ -258,8 +260,10 @@ static struct mlx5_profile profile[] = {
  #define FW_PRE_INIT_TIMEOUT_MILI	120000
  #define FW_INIT_WARN_MESSAGE_INTERVAL	20000
  
@@ -29,7 +29,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  
  static int wait_fw_init(struct mlx5_core_dev *dev, u32 max_wait_mili,
  			u32 warn_time_mili)
-@@ -403,6 +407,9 @@ static int mlx5_alloc_irq_vectors(struct
+@@ -409,6 +413,9 @@ static int mlx5_alloc_irq_vectors(struct
  	int num_eqs = 1 << MLX5_CAP_GEN(dev, log_max_eq);
  	int nvec;
  	int err;
@@ -39,7 +39,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  
  	/* This adjustment is a stop gap until a PRM method is defined */
  	num_eqs = num_eqs - MLX5_FW_RESERVED_EQS;
-@@ -415,9 +422,21 @@ static int mlx5_alloc_irq_vectors(struct
+@@ -421,9 +428,21 @@ static int mlx5_alloc_irq_vectors(struct
  		return -ENOMEM;
  
  	priv->irq_info = kcalloc(nvec, sizeof(*priv->irq_info), GFP_KERNEL);
@@ -61,7 +61,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	nvec = pci_alloc_irq_vectors(dev->pdev,
  			MLX5_EQ_VEC_COMP_BASE + 1, nvec,
  			PCI_IRQ_MSIX);
-@@ -427,11 +446,39 @@ static int mlx5_alloc_irq_vectors(struct
+@@ -433,11 +452,39 @@ static int mlx5_alloc_irq_vectors(struct
  	}
  
  	table->num_comp_vectors = nvec - MLX5_EQ_VEC_COMP_BASE;
@@ -101,7 +101,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	return err;
  }
  
-@@ -439,7 +486,12 @@ static void mlx5_free_irq_vectors(struct
+@@ -445,7 +492,12 @@ static void mlx5_free_irq_vectors(struct
  {
  	struct mlx5_priv *priv = &dev->priv;
  
@@ -114,7 +114,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	kfree(priv->irq_info);
  }
  
-@@ -797,7 +849,14 @@ u64 mlx5_read_internal_timer(struct mlx5
+@@ -803,7 +855,14 @@ u64 mlx5_read_internal_timer(struct mlx5
  static int mlx5_irq_set_affinity_hint(struct mlx5_core_dev *mdev, int i)
  {
  	struct mlx5_priv *priv  = &mdev->priv;
@@ -129,7 +129,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  
  	if (!zalloc_cpumask_var(&priv->irq_info[i].mask, GFP_KERNEL)) {
  		mlx5_core_warn(mdev, "zalloc_cpumask_var failed");
-@@ -807,9 +866,11 @@ static int mlx5_irq_set_affinity_hint(st
+@@ -813,9 +872,11 @@ static int mlx5_irq_set_affinity_hint(st
  	cpumask_set_cpu(cpumask_local_spread(i, priv->numa_node),
  			priv->irq_info[i].mask);
  
@@ -141,7 +141,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  
  	return 0;
  }
-@@ -817,9 +878,18 @@ static int mlx5_irq_set_affinity_hint(st
+@@ -823,9 +884,18 @@ static int mlx5_irq_set_affinity_hint(st
  static void mlx5_irq_clear_affinity_hint(struct mlx5_core_dev *mdev, int i)
  {
  	struct mlx5_priv *priv  = &mdev->priv;
@@ -160,7 +160,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	free_cpumask_var(priv->irq_info[i].mask);
  }
  
-@@ -988,8 +1058,13 @@ static int alloc_comp_eqs(struct mlx5_co
+@@ -994,8 +1064,13 @@ static int alloc_comp_eqs(struct mlx5_co
  		}
  
  #ifdef CONFIG_RFS_ACCEL
@@ -174,7 +174,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  #endif
  		snprintf(name, MLX5_MAX_IRQ_NAME,
  			 MLX5_DEFAULT_COMP_IRQ_NAME, i);
-@@ -1363,8 +1438,10 @@ static int mlx5_load_one(struct mlx5_cor
+@@ -1369,8 +1444,10 @@ static int mlx5_load_one(struct mlx5_cor
  		goto reclaim_boot_pages;
  	}
  
@@ -183,9 +183,9 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	mlx5_as_notify_init(dev);
 +#endif
  
- 	err = mlx5_cmd_init_hca(dev);
+ 	err = mlx5_cmd_init_hca(dev, sw_owner_id);
  	if (err) {
-@@ -1512,7 +1589,9 @@ err_stop_poll:
+@@ -1521,7 +1598,9 @@ err_stop_poll:
  	}
  
  err_pagealloc_stop:
@@ -195,7 +195,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	mlx5_pagealloc_stop(dev);
  
  reclaim_boot_pages:
-@@ -1572,7 +1651,9 @@ static int mlx5_unload_one(struct mlx5_c
+@@ -1582,7 +1661,9 @@ static int mlx5_unload_one(struct mlx5_c
  		dev_err(&dev->pdev->dev, "tear_down_hca failed, skip cleanup\n");
  		goto out;
  	}
@@ -205,7 +205,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	mlx5_pagealloc_stop(dev);
  	mlx5_reclaim_startup_pages(dev);
  	mlx5_core_disable_hca(dev, 0);
-@@ -1591,12 +1672,18 @@ struct mlx5_core_event_handler {
+@@ -1601,12 +1682,18 @@ struct mlx5_core_event_handler {
  
  static const struct devlink_ops mlx5_devlink_ops = {
  #ifdef CONFIG_MLX5_ESWITCH
@@ -224,7 +224,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  #endif
  };
  
-@@ -1899,6 +1986,7 @@ static void capi_cleanup(struct mlx5_cor
+@@ -1909,6 +1996,7 @@ static void capi_cleanup(struct mlx5_cor
  }
  #endif
  
@@ -232,7 +232,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
  {
  	struct pci_dev *pdev = dev->pdev;
-@@ -1936,6 +2024,7 @@ static void mlx5_as_notify_init(struct m
+@@ -1946,6 +2034,7 @@ static void mlx5_as_notify_init(struct m
  }
  
  static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
@@ -240,7 +240,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  
  #define MLX5_IB_MOD "mlx5_ib"
  static int init_one(struct pci_dev *pdev,
-@@ -2026,15 +2115,12 @@ static int init_one(struct pci_dev *pdev
+@@ -2036,15 +2125,12 @@ static int init_one(struct pci_dev *pdev
  	}
  
  	request_module_nowait(MLX5_IB_MOD);
@@ -256,7 +256,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  clean_load:
  	mlx5_unload_one(dev, priv, true);
  clean_crdump:
-@@ -2277,7 +2363,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -2287,7 +2373,11 @@ static void mlx5_pci_resume(struct pci_d
  		dev_info(&pdev->dev, "%s: device recovered\n", __func__);
  }
  
@@ -268,7 +268,7 @@ Change-Id: Iadad1899f46244db99b7f9bb6bf696cd62989222
  	.error_detected = mlx5_pci_err_detected,
  	.slot_reset	= mlx5_pci_slot_reset,
  	.resume		= mlx5_pci_resume
-@@ -2380,7 +2470,9 @@ static struct pci_driver mlx5_core_drive
+@@ -2390,7 +2480,9 @@ static struct pci_driver mlx5_core_drive
  	.remove         = remove_one,
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,

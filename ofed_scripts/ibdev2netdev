@@ -162,9 +162,9 @@ if [ "x$oldstyle" == "xn" ]; then
 							if [ -f $filepath_vpd ]; then
 								tmp=$IFS
 								IFS=":"
-								vpd_content=`cat $filepath_vpd`
-								devdesc=$(printf "%-15s" $(echo $vpd_content | strings | head -1))
-								partid=$(printf "%-11s" $(echo $vpd_content | strings | head -4 | tail -1 | awk '{print $1}'))
+								vpd_content=`cat $filepath_vpd | strings`
+								devdesc=$(printf "%-15s" $(echo $vpd_content | head -1))
+								partid=$(printf "%-11s" $(echo $vpd_content | head -4 | tail -1 | awk '{print $1}'))
 								IFS=$tmp
 							else
 								devdesc=""

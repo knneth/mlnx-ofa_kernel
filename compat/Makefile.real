@@ -59,6 +59,7 @@ mlx_compat-$(CONFIG_COMPAT_KERNEL_4_1) += compat-4.1.o
 
 mlx_compat-$(CONFIG_COMPAT_CORDIC) += cordic.o
 mlx_compat-$(CONFIG_COMPAT_CRC8) += crc8.o
+mlx_compat-$(CONFIG_COMPAT_FLOW_DISSECTOR) += flow_dissector.o
 mlx_compat-y += string.o
 mlx_compat-y += output_core.o
 mlx_compat-y += idr.o

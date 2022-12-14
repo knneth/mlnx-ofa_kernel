@@ -48,6 +48,7 @@ struct nvme_loop_ctrl {
 	struct nvme_ctrl	ctrl;
 
 	struct nvmet_ctrl	*target_ctrl;
+	struct nvmet_port	*port;
 };
 
 static inline struct nvme_loop_ctrl *to_loop_ctrl(struct nvme_ctrl *ctrl)
@@ -66,7 +67,8 @@ struct nvme_loop_queue {
 	unsigned long		flags;
 };
 
-static struct nvmet_port *nvmet_loop_port;
+static LIST_HEAD(nvme_loop_ports);
+static DEFINE_MUTEX(nvme_loop_ports_mutex);
 
 static LIST_HEAD(nvme_loop_ctrl_list);
 static DEFINE_MUTEX(nvme_loop_ctrl_mutex);
@@ -149,15 +151,7 @@ nvme_loop_timeout(struct request *rq, bool reserved)
 	/* fail with DNR on admin cmd timeout */
 	nvme_req(rq)->status = NVME_SC_ABORT_REQ | NVME_SC_DNR;
 
-	return BLK_EH_HANDLED;
-}
-
-static inline blk_status_t nvme_loop_is_ready(struct nvme_loop_queue *queue,
-		struct request *rq)
-{
-	if (unlikely(!test_bit(NVME_LOOP_Q_LIVE, &queue->flags)))
-		return nvmf_check_init_req(&queue->ctrl->ctrl, rq);
-	return BLK_STS_OK;
+	return BLK_EH_DONE;
 }
 
 static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
@@ -169,7 +163,8 @@ static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
 	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
 	blk_status_t ret;
 
-	ret = nvme_loop_is_ready(queue, req);
+	ret = nvmf_check_if_ready(&queue->ctrl->ctrl, req,
+		test_bit(NVME_LOOP_Q_LIVE, &queue->flags), true);
 	if (unlikely(ret))
 		return ret;
 
@@ -177,17 +172,14 @@ static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
 	if (ret)
 		return ret;
 
+	blk_mq_start_request(req);
 	iod->cmd.common.flags |= NVME_CMD_SGL_METABUF;
-	iod->req.port = nvmet_loop_port;
+	iod->req.port = queue->ctrl->port;
 	if (!nvmet_req_init(&iod->req, &queue->nvme_cq,
-			&queue->nvme_sq, &nvme_loop_ops)) {
-		nvme_cleanup_cmd(req);
-		blk_mq_start_request(req);
-		nvme_loop_queue_response(&iod->req);
+			&queue->nvme_sq, &nvme_loop_ops))
 		return BLK_STS_OK;
-	}
 
-	if (blk_rq_bytes(req)) {
+	if (blk_rq_nr_phys_segments(req)) {
 		iod->sg_table.sgl = iod->first_sgl;
 		if (sg_alloc_table_chained(&iod->sg_table,
 				blk_rq_nr_phys_segments(req),
@@ -196,10 +188,8 @@ static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
 
 		iod->req.sg = iod->sg_table.sgl;
 		iod->req.sg_cnt = blk_rq_map_sg(req->q, req, iod->sg_table.sgl);
-		iod->req.transfer_len = blk_rq_bytes(req);
+		iod->req.transfer_len = blk_rq_payload_bytes(req);
 	}
-
-	blk_mq_start_request(req);
 
 	schedule_work(&iod->work);
 	return BLK_STS_OK;
@@ -484,6 +474,12 @@ static void nvme_loop_reset_ctrl_work(struct work_struct *work)
 	nvme_stop_ctrl(&ctrl->ctrl);
 	nvme_loop_shutdown_ctrl(ctrl);
 
+	if (!nvme_change_ctrl_state(&ctrl->ctrl, NVME_CTRL_CONNECTING)) {
+		/* state change failure should never happen */
+		WARN_ON_ONCE(1);
+		return;
+	}
+
 	ret = nvme_loop_configure_admin_queue(ctrl);
 	if (ret)
 		goto out_disable;
@@ -526,6 +522,7 @@ static const struct nvme_ctrl_ops nvme_loop_ctrl_ops = {
 	.free_ctrl		= nvme_loop_free_ctrl,
 	.submit_async_event	= nvme_loop_submit_async_event,
 	.delete_ctrl		= nvme_loop_delete_ctrl_host,
+	.get_address		= nvmf_get_address,
 };
 
 static int nvme_loop_create_io_queues(struct nvme_loop_ctrl *ctrl)
@@ -574,6 +571,23 @@ out_destroy_queues:
 	return ret;
 }
 
+static struct nvmet_port *nvme_loop_find_port(struct nvme_ctrl *ctrl)
+{
+	struct nvmet_port *p, *found = NULL;
+
+	mutex_lock(&nvme_loop_ports_mutex);
+	list_for_each_entry(p, &nvme_loop_ports, entry) {
+		/* if no transport address is specified use the first port */
+		if ((ctrl->opts->mask & NVMF_OPT_TRADDR) &&
+		    strcmp(ctrl->opts->traddr, p->disc_addr.traddr))
+			continue;
+		found = p;
+		break;
+	}
+	mutex_unlock(&nvme_loop_ports_mutex);
+	return found;
+}
+
 static struct nvme_ctrl *nvme_loop_create_ctrl(struct device *dev,
 		struct nvmf_ctrl_options *opts)
 {
@@ -598,6 +612,7 @@ static struct nvme_ctrl *nvme_loop_create_ctrl(struct device *dev,
 
 	ctrl->ctrl.sqsize = opts->queue_size - 1;
 	ctrl->ctrl.kato = opts->kato;
+	ctrl->port = nvme_loop_find_port(&ctrl->ctrl);
 
 	ctrl->queues = kcalloc(opts->nr_io_queues + 1, sizeof(*ctrl->queues),
 			GFP_KERNEL);
@@ -655,27 +670,17 @@ out_put_ctrl:
 
 static int nvme_loop_add_port(struct nvmet_port *port)
 {
-	/*
-	 * XXX: disalow adding more than one port so
-	 * there is no connection rejections when a
-	 * a subsystem is assigned to a port for which
-	 * loop doesn't have a pointer.
-	 * This scenario would be possible if we allowed
-	 * more than one port to be added and a subsystem
-	 * was assigned to a port other than nvmet_loop_port.
-	 */
-
-	if (nvmet_loop_port)
-		return -EPERM;
-
-	nvmet_loop_port = port;
+	mutex_lock(&nvme_loop_ports_mutex);
+	list_add_tail(&port->entry, &nvme_loop_ports);
+	mutex_unlock(&nvme_loop_ports_mutex);
 	return 0;
 }
 
 static void nvme_loop_remove_port(struct nvmet_port *port)
 {
-	if (port == nvmet_loop_port)
-		nvmet_loop_port = NULL;
+	mutex_lock(&nvme_loop_ports_mutex);
+	list_del_init(&port->entry);
+	mutex_unlock(&nvme_loop_ports_mutex);
 }
 
 static const struct nvmet_fabrics_ops nvme_loop_ops = {
@@ -691,6 +696,7 @@ static struct nvmf_transport_ops nvme_loop_transport = {
 	.name		= "loop",
 	.module		= THIS_MODULE,
 	.create_ctrl	= nvme_loop_create_ctrl,
+	.allowed_opts	= NVMF_OPT_TRADDR,
 };
 
 static int __init nvme_loop_init_module(void)
@@ -727,4 +733,7 @@ module_init(nvme_loop_init_module);
 module_exit(nvme_loop_cleanup_module);
 
 MODULE_LICENSE("GPL v2");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 MODULE_ALIAS("nvmet-transport-254"); /* 254 == NVMF_TRTYPE_LOOP */

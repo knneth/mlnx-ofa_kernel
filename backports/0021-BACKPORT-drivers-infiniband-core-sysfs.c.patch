@@ -8,7 +8,7 @@ Change-Id: I39d8417733a06b03880e9510c03a32f1e6a491f3
 
 --- a/drivers/infiniband/core/sysfs.c
 +++ b/drivers/infiniband/core/sysfs.c
-@@ -108,6 +108,7 @@ static ssize_t port_attr_show(struct kob
+@@ -109,6 +109,7 @@ static ssize_t port_attr_show(struct kob
  	return port_attr->show(p, port_attr, buf);
  }
  
@@ -16,7 +16,7 @@ Change-Id: I39d8417733a06b03880e9510c03a32f1e6a491f3
  static ssize_t port_attr_store(struct kobject *kobj,
  			       struct attribute *attr,
  			       const char *buf, size_t count)
-@@ -120,10 +121,17 @@ static ssize_t port_attr_store(struct ko
+@@ -121,10 +122,17 @@ static ssize_t port_attr_store(struct ko
  		return -EIO;
  	return port_attr->store(p, port_attr, buf, count);
  }
@@ -34,7 +34,7 @@ Change-Id: I39d8417733a06b03880e9510c03a32f1e6a491f3
  };
  
  static ssize_t gid_attr_show(struct kobject *kobj,
-@@ -140,7 +148,11 @@ static ssize_t gid_attr_show(struct kobj
+@@ -141,7 +149,11 @@ static ssize_t gid_attr_show(struct kobj
  	return port_attr->show(p, port_attr, buf);
  }
  
@@ -46,7 +46,7 @@ Change-Id: I39d8417733a06b03880e9510c03a32f1e6a491f3
  	.show = gid_attr_show
  };
  
-@@ -234,6 +246,90 @@ static ssize_t sm_sl_show(struct ib_port
+@@ -235,6 +247,90 @@ static ssize_t sm_sl_show(struct ib_port
  	return sprintf(buf, "%d\n", attr.sm_sl);
  }
  
@@ -137,7 +137,7 @@ Change-Id: I39d8417733a06b03880e9510c03a32f1e6a491f3
  static ssize_t cap_mask_show(struct ib_port *p, struct port_attribute *unused,
  			     char *buf)
  {
-@@ -318,6 +414,9 @@ static PORT_ATTR_RO(lid);
+@@ -319,6 +415,9 @@ static PORT_ATTR_RO(lid);
  static PORT_ATTR_RO(lid_mask_count);
  static PORT_ATTR_RO(sm_lid);
  static PORT_ATTR_RO(sm_sl);
@@ -147,7 +147,7 @@ Change-Id: I39d8417733a06b03880e9510c03a32f1e6a491f3
  static PORT_ATTR_RO(cap_mask);
  static PORT_ATTR_RO(rate);
  static PORT_ATTR_RO(phys_state);
-@@ -331,6 +430,9 @@ static struct attribute *port_default_at
+@@ -332,6 +431,9 @@ static struct attribute *port_default_at
  	&port_attr_sm_lid.attr,
  	&port_attr_has_smi.attr,
  	&port_attr_sm_sl.attr,

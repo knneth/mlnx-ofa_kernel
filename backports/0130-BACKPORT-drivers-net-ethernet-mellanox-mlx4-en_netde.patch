@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 
 Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 ---
- drivers/net/ethernet/mellanox/mlx4/en_netdev.c | 915 ++++++++++++++++++++++++-
- 1 file changed, 901 insertions(+), 14 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/en_netdev.c | 918 ++++++++++++++++++++++++-
+ 1 file changed, 904 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
@@ -1192,7 +1192,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  static int mlx4_xdp(struct net_device *dev, struct netdev_bpf *xdp)
  {
-@@ -3555,45 +4118,135 @@ static int mlx4_xdp(struct net_device *d
+@@ -3555,45 +4118,138 @@ static int mlx4_xdp(struct net_device *d
  	case XDP_SETUP_PROG:
  		return mlx4_xdp_set(dev, xdp->prog);
  	case XDP_QUERY_PROG:
@@ -1250,7 +1250,10 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +	.extended.ndo_setup_tc_rh = __mlx4_en_setup_tc,
 +#else
 +#ifdef HAVE_NDO_SETUP_TC
-+#if defined(HAVE_NDO_SETUP_TC_4_PARAMS) || defined(HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX) || defined(HAVE_TC_FLOWER_OFFLOAD)
++#if defined(HAVE_NDO_SETUP_TC_4_PARAMS) || \
++    defined(HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX) || \
++    defined(HAVE_TC_FLOWER_OFFLOAD) && \
++    !defined(CONFIG_COMPAT_CLS_FLOWER_MOD)
  	.ndo_setup_tc		= __mlx4_en_setup_tc,
 +#else
 +	.ndo_setup_tc           = mlx4_en_setup_tc,
@@ -1328,7 +1331,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  struct mlx4_en_bond {
  	struct work_struct work;
  	struct mlx4_en_priv *priv;
-@@ -3601,6 +4254,7 @@ struct mlx4_en_bond {
+@@ -3601,6 +4257,7 @@ struct mlx4_en_bond {
  	struct mlx4_port_map port_map;
  };
  
@@ -1336,7 +1339,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  static void mlx4_en_bond_work(struct work_struct *work)
  {
  	struct mlx4_en_bond *bond = container_of(work,
-@@ -3766,6 +4420,7 @@ int mlx4_en_netdev_event(struct notifier
+@@ -3766,6 +4423,7 @@ int mlx4_en_netdev_event(struct notifier
  
  	return NOTIFY_DONE;
  }
@@ -1344,7 +1347,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  void mlx4_en_update_pfc_stats_bitmap(struct mlx4_dev *dev,
  				     struct mlx4_en_stats_bitmap *stats_bitmap,
-@@ -3863,12 +4518,46 @@ void mlx4_en_set_stats_bitmap(struct mlx
+@@ -3863,12 +4521,46 @@ void mlx4_en_set_stats_bitmap(struct mlx
  static void mlx4_en_set_netdev_ops(struct mlx4_en_priv *priv)
  {
  	if (mlx4_is_master(priv->mdev->dev)) {
@@ -1391,7 +1394,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  		priv->dev_ops.ndo_get_vf_config = mlx4_en_get_vf_config;
  		priv->dev_ops.ndo_do_ioctl = mlx4_en_ioctl;
  	}
-@@ -3877,11 +4566,27 @@ static void mlx4_en_set_netdev_ops(struc
+@@ -3877,11 +4569,27 @@ static void mlx4_en_set_netdev_ops(struc
  		priv->dev_ops.ndo_start_xmit = mlx4_en_vgtp_xmit;
  
  	priv->dev->netdev_ops = &priv->dev_ops;
@@ -1419,7 +1422,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	struct net_device *dev;
  	struct mlx4_en_priv *priv;
  	int i, t;
-@@ -3904,14 +4609,25 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3904,14 +4612,25 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	}
  	if (udev_dev_port_dev_id == 0) {
  		/* in mode 0 update dev_port */
@@ -1445,7 +1448,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	}
  
  	/*
-@@ -3949,7 +4665,11 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3949,7 +4668,11 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		mdev->profile.prof[priv->port].num_tx_rings_p_up;
  	priv->num_up = prof->num_up;
  	priv->tx_work_limit = MLX4_EN_DEFAULT_TX_WORK;
@@ -1457,7 +1460,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	for (t = 0; t < MLX4_EN_NUM_TX_TYPES; t++) {
  		priv->tx_ring_num[t] = prof->tx_ring_num[t];
-@@ -3975,6 +4695,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3975,6 +4698,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	priv->cqe_size = mdev->dev->caps.cqe_size;
  	priv->mac_index = -1;
  	priv->msg_enable = MLX4_EN_MSG_LEVEL;
@@ -1465,7 +1468,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  #ifdef CONFIG_MLX4_EN_DCB
  	if (!mlx4_is_slave(priv->mdev->dev)) {
  		u8 config = 0;
-@@ -3995,6 +4716,9 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3995,6 +4719,9 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  
  		if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_ETS_CFG) {
  			dev->dcbnl_ops = &mlx4_en_dcbnl_ops;
@@ -1475,7 +1478,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  		} else {
  			en_info(priv, "enabling only PFC DCB ops\n");
  			dev->dcbnl_ops = &mlx4_en_dcbnl_pfc_ops;
-@@ -4011,6 +4735,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4011,6 +4738,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		}
  	}
  #endif
@@ -1483,7 +1486,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	for (i = 0; i < MLX4_EN_MAC_HASH_SIZE; ++i)
  		INIT_HLIST_HEAD(&priv->mac_hash[i]);
-@@ -4092,24 +4817,41 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4092,24 +4820,41 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	netif_set_real_num_tx_queues(dev, priv->tx_ring_num[TX]);
  	netif_set_real_num_rx_queues(dev, priv->rx_ring_num);
  
@@ -1525,7 +1528,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	if (!(mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_SKIP_OUTER_VLAN)) {
  		dev->features |= NETIF_F_HW_VLAN_STAG_RX |
  			NETIF_F_HW_VLAN_STAG_FILTER;
-@@ -4143,45 +4885,141 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4143,45 +4888,141 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		      MLX4_DEV_CAP_FLAG2_SKIP_OUTER_VLAN))
  			dev->hw_features |= NETIF_F_HW_VLAN_STAG_TX;
  	}
@@ -1667,7 +1670,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	mdev->pndev[port] = dev;
  	mdev->upper[port] = NULL;
-@@ -4253,8 +5091,34 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4253,8 +5094,34 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	}
  
  	priv->registered = 1;
@@ -1702,7 +1705,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	if (mlx4_is_master(priv->mdev->dev)) {
  		for (i = 0; i < priv->mdev->dev->persist->num_vfs; i++) {
-@@ -4288,6 +5152,13 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4288,6 +5155,13 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		}
  	}
  
@@ -1716,7 +1719,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	return 0;
  
  err_free_tx:
-@@ -4313,8 +5184,12 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4313,8 +5187,12 @@ int mlx4_en_reset_config(struct net_devi
  
  	if (priv->hwtstamp_config.tx_type == ts_config.tx_type &&
  	    priv->hwtstamp_config.rx_filter == ts_config.rx_filter &&
@@ -1729,7 +1732,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  		return 0; /* Nothing to change */
  
  	if (DEV_FEATURE_CHANGED(dev, features, NETIF_F_HW_VLAN_CTAG_RX) &&
-@@ -4333,7 +5208,11 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4333,7 +5211,11 @@ int mlx4_en_reset_config(struct net_devi
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	memcpy(&new_prof.hwtstamp_config, &ts_config, sizeof(ts_config));
  
@@ -1741,7 +1744,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	if (err)
  		goto out;
  
-@@ -4357,18 +5236,26 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4357,18 +5239,26 @@ int mlx4_en_reset_config(struct net_devi
  		/* RX time-stamping is OFF, update the RX vlan offload
  		 * to the latest wanted state
  		 */

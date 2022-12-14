@@ -34,7 +34,7 @@
 
 #ifndef _IPOIB_H
 #define _IPOIB_H
-
+#include <rdma/e_ipoib.h>
 #include <linux/list.h>
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
@@ -251,6 +251,7 @@ struct ipoib_cm_rx {
 	unsigned long		jiffies;
 	enum ipoib_cm_state	state;
 	int			recv_count;
+	int			qpn;
 	int index; /* For RSS ring counters */
 };
 
@@ -412,6 +413,7 @@ struct ipoib_dev_priv {
 	struct net_device *parent;
 	struct list_head child_intfs;
 	struct list_head list;
+	int child_index;
 	int    child_type;
 
 #ifdef CONFIG_INFINIBAND_IPOIB_CM
@@ -622,8 +624,10 @@ void ipoib_transport_dev_cleanup(struct net_device *dev);
 void ipoib_event(struct ib_event_handler *handler,
 		 struct ib_event *record);
 
-int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey);
-int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey);
+int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey,
+						unsigned char clone_index);
+int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey,
+						unsigned char clone_index);
 
 int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
 		     u16 pkey, int child_type);
@@ -840,6 +844,34 @@ extern int ipoib_recvq_size;
 extern u32 ipoib_inline_thold;
 
 extern struct ib_sa_client ipoib_sa_client;
+
+static inline void set_skb_oob_cb_data(struct sk_buff *skb, struct ib_wc *wc,
+				struct napi_struct *napi)
+{
+	struct ipoib_cm_rx *p_cm_ctx = NULL;
+	struct eipoib_cb_data *data = NULL;
+	struct ipoib_header *header;
+	unsigned int tss_mask, tss_qpn_mask_sz;
+
+	p_cm_ctx = wc->qp->qp_context;
+	data = IPOIB_HANDLER_CB(skb);
+
+	data->rx.slid = wc->slid;
+	header = (struct ipoib_header *)(skb->data - IPOIB_ENCAP_LEN);
+	if (header->tss_qpn_mask_sz & cpu_to_be16(0xF000)) {
+		tss_qpn_mask_sz = be16_to_cpu(header->tss_qpn_mask_sz) >> 12;
+		tss_mask = 0xffff >> (16 - tss_qpn_mask_sz);
+		data->rx.sqpn = wc->src_qp & tss_mask;
+	} else {
+		data->rx.sqpn = wc->src_qp;
+	}
+
+	data->rx.napi = napi;
+
+	/* in CM mode, use the "base" qpn as sqpn */
+	if (p_cm_ctx)
+		data->rx.sqpn = p_cm_ctx->qpn;
+}
 
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
 extern int ipoib_debug_level;

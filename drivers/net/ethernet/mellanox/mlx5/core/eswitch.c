@@ -47,6 +47,12 @@ enum {
 	MLX5_ACTION_DEL  = 2,
 };
 
+enum esw_vst_mode {
+	ESW_VST_MODE_BASIC,
+	ESW_VST_MODE_STEERING,
+	ESW_VST_MODE_INSERT_ALWAYS,
+};
+
 /* Vport UC/MC hash node */
 struct vport_addr {
 	struct l2addr_node     node;
@@ -117,7 +123,8 @@ static int modify_esw_vport_context_cmd(struct mlx5_core_dev *dev, u16 vport,
 }
 
 static int modify_esw_vport_cvlan(struct mlx5_core_dev *dev, u32 vport,
-				  u16 vlan, u8 qos, u8 set_flags)
+				  u16 vlan, u8 qos, u8 set_flags,
+				  enum esw_vst_mode vst_mode)
 {
 	u32 in[MLX5_ST_SZ_DW(modify_esw_vport_context_in)] = {0};
 
@@ -133,10 +140,17 @@ static int modify_esw_vport_cvlan(struct mlx5_core_dev *dev, u32 vport,
 			 esw_vport_context.vport_cvlan_strip, 1);
 
 	if (set_flags & SET_VLAN_INSERT) {
-		/* insert only if no vlan in packet */
-		MLX5_SET(modify_esw_vport_context_in, in,
-			 esw_vport_context.vport_cvlan_insert, 1);
-
+		if (vst_mode == ESW_VST_MODE_INSERT_ALWAYS) {
+			/* insert either if vlan exist in packet or not */
+			MLX5_SET(modify_esw_vport_context_in, in,
+				 esw_vport_context.vport_cvlan_insert,
+				 MLX5_VPORT_CVLAN_INSERT_ALWAYS);
+		} else {
+			/* insert only if no vlan in packet */
+			MLX5_SET(modify_esw_vport_context_in, in,
+				 esw_vport_context.vport_cvlan_insert,
+				 MLX5_VPORT_CVLAN_INSERT_WHEN_NO_CVLAN);
+		}
 		MLX5_SET(modify_esw_vport_context_in, in,
 			 esw_vport_context.cvlan_pcp, qos);
 		MLX5_SET(modify_esw_vport_context_in, in,
@@ -194,7 +208,7 @@ __esw_fdb_set_vport_rule(struct mlx5_eswitch *esw, u32 vport, bool rx_rule,
 	}
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_VPORT;
-	dest.vport_num = vport;
+	dest.vport.num = vport;
 
 	esw_debug(esw->dev,
 		  "\tFDB add rule dmac_v(%pM) dmac_c(%pM) -> vport(%d)\n",
@@ -202,7 +216,7 @@ __esw_fdb_set_vport_rule(struct mlx5_eswitch *esw, u32 vport, bool rx_rule,
 	spec->match_criteria_enable = match_header;
 	flow_act.action =  MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	flow_rule =
-		mlx5_add_flow_rules(esw->fdb_table.fdb, spec,
+		mlx5_add_flow_rules(esw->fdb_table.legacy.fdb, spec,
 				    &flow_act, &dest, 1);
 	if (IS_ERR(flow_rule)) {
 		esw_warn(esw->dev,
@@ -284,7 +298,7 @@ static int esw_create_legacy_fdb_table(struct mlx5_eswitch *esw, int nvports)
 		esw_warn(dev, "Failed to create FDB Table err %d\n", err);
 		goto out;
 	}
-	esw->fdb_table.fdb = fdb;
+	esw->fdb_table.legacy.fdb = fdb;
 
 	/* Addresses group : Full match unicast/multicast addresses */
 	MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable,
@@ -345,9 +359,9 @@ out:
 			mlx5_destroy_flow_group(esw->fdb_table.legacy.addr_grp);
 			esw->fdb_table.legacy.addr_grp = NULL;
 		}
-		if (!IS_ERR_OR_NULL(esw->fdb_table.fdb)) {
-			mlx5_destroy_flow_table(esw->fdb_table.fdb);
-			esw->fdb_table.fdb = NULL;
+		if (!IS_ERR_OR_NULL(esw->fdb_table.legacy.fdb)) {
+			mlx5_destroy_flow_table(esw->fdb_table.legacy.fdb);
+			esw->fdb_table.legacy.fdb = NULL;
 		}
 	}
 
@@ -357,15 +371,15 @@ out:
 
 static void esw_destroy_legacy_fdb_table(struct mlx5_eswitch *esw)
 {
-	if (!esw->fdb_table.fdb)
+	if (!esw->fdb_table.legacy.fdb)
 		return;
 
 	esw_debug(esw->dev, "Destroy FDB Table\n");
 	mlx5_destroy_flow_group(esw->fdb_table.legacy.promisc_grp);
 	mlx5_destroy_flow_group(esw->fdb_table.legacy.allmulti_grp);
 	mlx5_destroy_flow_group(esw->fdb_table.legacy.addr_grp);
-	mlx5_destroy_flow_table(esw->fdb_table.fdb);
-	esw->fdb_table.fdb = NULL;
+	mlx5_destroy_flow_table(esw->fdb_table.legacy.fdb);
+	esw->fdb_table.legacy.fdb = NULL;
 	esw->fdb_table.legacy.addr_grp = NULL;
 	esw->fdb_table.legacy.allmulti_grp = NULL;
 	esw->fdb_table.legacy.promisc_grp = NULL;
@@ -398,7 +412,7 @@ static int esw_add_uc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 
 fdb_add:
 	/* SRIOV is enabled: Forward UC MAC to vport */
-	if (esw->fdb_table.fdb && esw->mode == SRIOV_LEGACY)
+	if (esw->fdb_table.legacy.fdb && esw->mode == SRIOV_LEGACY)
 		vaddr->flow_rule = esw_fdb_set_vport_rule(esw, mac, vport);
 
 	esw_debug(esw->dev, "\tADDED UC MAC: vport[%d] %pM fr(%p)\n",
@@ -488,7 +502,7 @@ static int esw_add_mc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	u8 *mac = vaddr->node.addr;
 	u32 vport = vaddr->vport;
 
-	if (!esw->fdb_table.fdb)
+	if (!esw->fdb_table.legacy.fdb)
 		return 0;
 
 	esw_mc = l2addr_hash_find(hash, mac, struct esw_mc_addr);
@@ -528,7 +542,7 @@ static int esw_del_mc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	u8 *mac = vaddr->node.addr;
 	u32 vport = vaddr->vport;
 
-	if (!esw->fdb_table.fdb)
+	if (!esw->fdb_table.legacy.fdb)
 		return 0;
 
 	esw_mc = l2addr_hash_find(hash, mac, struct esw_mc_addr);
@@ -556,8 +570,10 @@ static int esw_del_mc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	/* Remove this multicast mac from all the mc promiscuous vports */
 	update_allmulti_vports(esw, vaddr, esw_mc);
 
-	if (esw_mc->uplink_rule)
+	if (esw_mc->uplink_rule) {
 		mlx5_del_flow_rules(esw_mc->uplink_rule);
+		esw_mc->uplink_rule = NULL;
+	}
 
 	l2addr_hash_del(esw_mc);
 	return 0;
@@ -806,7 +822,9 @@ promisc:
 /* Sync vport rx mode from vport context */
 static void esw_update_vport_rx_mode(struct mlx5_eswitch *esw, u32 vport_num)
 {
+	struct esw_mc_addr *allmulti_addr = &esw->mc_promisc;
 	struct mlx5_vport *vport = &esw->vports[vport_num];
+	struct mlx5_core_dev *dev = vport->dev;
 	int promisc_all = 0;
 	int promisc_uc = 0;
 	int promisc_mc = 0;
@@ -817,8 +835,30 @@ static void esw_update_vport_rx_mode(struct mlx5_eswitch *esw, u32 vport_num)
 					   &promisc_uc,
 					   &promisc_mc,
 					   &promisc_all);
-	if (err)
+	if (err) {
+		if (!pci_channel_offline(dev->pdev) &&
+		    dev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR)
+			return;
+
+		/* EEH or PCI error. Delete promisc, multi and uplink multi rules */
+		if (vport->allmulti_rule) {
+			mlx5_del_flow_rules(vport->allmulti_rule);
+			vport->allmulti_rule = NULL;
+
+			allmulti_addr->refcnt --;
+			if (!allmulti_addr->refcnt && allmulti_addr->uplink_rule) {
+				mlx5_del_flow_rules(allmulti_addr->uplink_rule);
+				allmulti_addr->uplink_rule = NULL;
+			}
+		}
+
+		if (vport->promisc_rule) {
+			mlx5_del_flow_rules(vport->promisc_rule);
+			vport->promisc_rule = NULL;
+		}
+
 		return;
+	}
 	esw_debug(esw->dev, "vport[%d] context update rx mode promisc_all=%d, all_multi=%d\n",
 		  vport_num, promisc_all, promisc_mc);
 
@@ -1044,10 +1084,20 @@ static void esw_vport_disable_egress_acl(struct mlx5_eswitch *esw,
 	vport->egress.acl = NULL;
 }
 
-static inline bool esw_vst_mode_is_steering(struct mlx5_eswitch *esw)
+static inline enum esw_vst_mode esw_get_vst_mode(struct mlx5_eswitch *esw)
 {
-	return (MLX5_CAP_ESW_EGRESS_ACL(esw->dev, pop_vlan) &&
-		MLX5_CAP_ESW_INGRESS_ACL(esw->dev, push_vlan));
+	/*  vst mode precedence:
+	 *  if vst steering mode is supported use it
+	 *  if not, look for vst vport insert always support
+	 *  if both not supported, we use basic vst, can't support QinQ
+	 */
+	if (MLX5_CAP_ESW_EGRESS_ACL(esw->dev, pop_vlan) &&
+	    MLX5_CAP_ESW_INGRESS_ACL(esw->dev, push_vlan))
+		return ESW_VST_MODE_STEERING;
+	else if (MLX5_CAP_ESW(esw->dev, vport_cvlan_insert_always))
+		return ESW_VST_MODE_INSERT_ALWAYS;
+	else
+		return ESW_VST_MODE_BASIC;
 }
 
 static int esw_vport_enable_ingress_acl(struct mlx5_eswitch *esw,
@@ -1055,7 +1105,7 @@ static int esw_vport_enable_ingress_acl(struct mlx5_eswitch *esw,
 {
 	bool need_vlan_filter = !!bitmap_weight(vport->info.vlan_trunk_8021q_bitmap,
 						VLAN_N_VID);
-	bool vst_mode_steering = esw_vst_mode_is_steering(esw);
+	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
 	struct mlx5_flow_group *untagged_spoof_grp = NULL;
 	struct mlx5_flow_group *tagged_spoof_grp = NULL;
@@ -1109,13 +1159,13 @@ static int esw_vport_enable_ingress_acl(struct mlx5_eswitch *esw,
 
 	match_criteria = MLX5_ADDR_OF(create_flow_group_in, flow_group_in, match_criteria);
 
-	push_on_any_pkt = (vst_mode_steering && !vport->info.spoofchk &&
-			   !need_vlan_filter);
+	push_on_any_pkt = (vst_mode != ESW_VST_MODE_BASIC) &&
+			  !vport->info.spoofchk && !need_vlan_filter;
 	if (!push_on_any_pkt)
 		MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
 
-	if (need_vlan_filter ||
-	    (!vst_mode_steering && (vport->info.vlan || vport->info.qos)))
+	if (need_vlan_filter || (vst_mode == ESW_VST_MODE_BASIC &&
+				 (vport->info.vlan || vport->info.qos)))
 		MLX5_SET_TO_ONES(fte_match_param, match_criteria, outer_headers.cvlan_tag);
 
 	if (vport->info.spoofchk) {
@@ -1243,7 +1293,7 @@ static int esw_vport_ingress_config(struct mlx5_eswitch *esw,
 {
 	bool need_vlan_filter = !!bitmap_weight(vport->info.vlan_trunk_8021q_bitmap,
 						VLAN_N_VID);
-	bool vst_mode_steering = esw_vst_mode_is_steering(esw);
+	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
 	struct mlx5_fc *counter = vport->ingress.drop_counter;
 	struct mlx5_acl_vlan *trunk_vlan_rule;
 	struct mlx5_flow_destination dest;
@@ -1287,8 +1337,8 @@ static int esw_vport_ingress_config(struct mlx5_eswitch *esw,
 	}
 
 	esw_debug(esw->dev,
-		  "vport[%d] configure ingress rules, vlan(%d) qos(%d) vst_mode_steering (%d)\n",
-		  vport->vport, vport->info.vlan, vport->info.qos, vst_mode_steering);
+		  "vport[%d] configure ingress rules, vlan(%d) qos(%d) vst_mode (%d)\n",
+		  vport->vport, vport->info.vlan, vport->info.qos, vst_mode);
 
 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec) {
@@ -1296,22 +1346,23 @@ static int esw_vport_ingress_config(struct mlx5_eswitch *esw,
 		goto out;
 	}
 
-	push_on_any_pkt = (vst_mode_steering && !vport->info.spoofchk &&
-			   !need_vlan_filter);
+	push_on_any_pkt = (vst_mode != ESW_VST_MODE_BASIC) &&
+			  !vport->info.spoofchk && !need_vlan_filter;
 	if (!push_on_any_pkt)
 		spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_ALLOW;
-	if (vst_mode_steering && (vport->info.vlan || vport->info.qos)) {
-		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_PUSH_VLAN;
+	if (vst_mode == ESW_VST_MODE_STEERING &&
+	    (vport->info.vlan || vport->info.qos)) {
+		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
 		flow_act.vlan_pcp = vport->info.qos;
 		flow_act.vlan_dei = 0;
 		flow_act.vlan_id = vport->info.vlan;
 		flow_act.tpid = ntohs(vport->info.vlan_proto);
 	}
 
-	if (need_vlan_filter ||
-	    (!vst_mode_steering && (vport->info.vlan || vport->info.qos)))
+	if (need_vlan_filter || (vst_mode == ESW_VST_MODE_BASIC &&
+				 (vport->info.vlan || vport->info.qos)))
 		MLX5_SET_TO_ONES(fte_match_param, spec->match_criteria, outer_headers.cvlan_tag);
 
 	if (vport->info.spoofchk) {
@@ -1409,7 +1460,7 @@ static int esw_vport_egress_config(struct mlx5_eswitch *esw,
 						VLAN_N_VID);
 	bool need_acl_table = vport->info.vlan || vport->info.qos ||
 			      need_vlan_filter;
-	bool vst_mode_steering = esw_vst_mode_is_steering(esw);
+	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
 	struct mlx5_fc *counter = vport->egress.drop_counter;
 	struct mlx5_acl_vlan *trunk_vlan_rule;
 	struct mlx5_flow_destination dest;
@@ -1473,8 +1524,8 @@ static int esw_vport_egress_config(struct mlx5_eswitch *esw,
 	if (vport->info.vlan || vport->info.qos) {
 		MLX5_SET(fte_match_param, spec->match_value, outer_headers.first_vid, vport->info.vlan);
 
-		if (vst_mode_steering)
-			flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_POP_VLAN;
+		if (vst_mode == ESW_VST_MODE_STEERING)
+			flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_POP;
 		vport->egress.allow_vst_vlan =
 			mlx5_add_flow_rules(vport->egress.acl, spec,
 					    &flow_act, NULL, 0);
@@ -1698,6 +1749,7 @@ static void node_guid_gen_from_mac(u64 *node_guid, u8 mac[ETH_ALEN])
 static void esw_apply_vport_conf(struct mlx5_eswitch *esw,
 				 struct mlx5_vport *vport)
 {
+	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
 	int vport_num = vport->vport;
 
 	if (!vport_num)
@@ -1709,10 +1761,11 @@ static void esw_apply_vport_conf(struct mlx5_eswitch *esw,
 				      vport->info.link_state);
 	mlx5_modify_nic_vport_mac_address(esw->dev, vport_num, vport->info.mac);
 	mlx5_modify_nic_vport_node_guid(esw->dev, vport_num, vport->info.node_guid);
-	if (!esw_vst_mode_is_steering(esw))
+	if (vst_mode != ESW_VST_MODE_STEERING)
 		modify_esw_vport_cvlan(esw->dev, vport_num,
 				       vport->info.vlan, vport->info.qos,
-				       (vport->info.vlan || vport->info.qos));
+				       (vport->info.vlan || vport->info.qos),
+				       vst_mode);
 
 	/* Only legacy mode needs ACLs */
 	if (esw->mode == SRIOV_LEGACY) {
@@ -1837,17 +1890,15 @@ static void esw_disable_vport(struct mlx5_eswitch *esw, int vport_num)
 }
 
 /* Public E-Switch API */
-#define ESW_ALLOWED(esw) ((esw) && MLX5_VPORT_MANAGER((esw)->dev))
+#define ESW_ALLOWED(esw) ((esw) && MLX5_ESWITCH_MANAGER((esw)->dev))
+
 
 int mlx5_eswitch_enable_sriov(struct mlx5_eswitch *esw, int nvfs, int mode)
 {
 	int err;
 	int i, enabled_events;
 
-	if (!ESW_ALLOWED(esw))
-		return 0;
-
-	if (!MLX5_CAP_GEN(esw->dev, eswitch_flow_table) ||
+	if (!ESW_ALLOWED(esw) ||
 	    !MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ft_support)) {
 		esw_warn(esw->dev, "E-Switch FDB is not supported, aborting ...\n");
 		return -EOPNOTSUPP;
@@ -1861,6 +1912,8 @@ int mlx5_eswitch_enable_sriov(struct mlx5_eswitch *esw, int nvfs, int mode)
 
 	esw_info(esw->dev, "E-Switch enable SRIOV: nvfs(%d) mode (%d)\n", nvfs, mode);
 	esw->mode = mode;
+
+	mlx5_lag_update(esw->dev);
 
 	if (mode == SRIOV_LEGACY) {
 		err = esw_create_legacy_fdb_table(esw, nvfs + 1);
@@ -1935,6 +1988,8 @@ void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw)
 
 	old_mode = esw->mode;
 	esw->mode = SRIOV_NONE;
+
+	mlx5_lag_update(esw->dev);
 
 	if (old_mode == SRIOV_OFFLOADS) {
 		mlx5_dev_list_lock();
@@ -2113,7 +2168,7 @@ int mlx5_eswitch_set_vport_mac(struct mlx5_eswitch *esw,
 	u64 node_guid;
 	int err = 0;
 
-	if (!ESW_ALLOWED(esw))
+	if (!MLX5_CAP_GEN(esw->dev, vport_group_manager))
 		return -EPERM;
 	if (!LEGAL_VPORT(esw, vport) || is_multicast_ether_addr(mac))
 		return -EINVAL;
@@ -2190,7 +2245,7 @@ int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
 {
 	struct mlx5_vport *evport;
 
-	if (!ESW_ALLOWED(esw))
+	if (!MLX5_CAP_GEN(esw->dev, vport_group_manager))
 		return -EPERM;
 	if (!LEGAL_VPORT(esw, vport))
 		return -EINVAL;
@@ -2218,8 +2273,8 @@ int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
 int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
 				  u8 qos, __be16 proto, u8 set_flags)
 {
-	bool vst_mode_steering = esw_vst_mode_is_steering(esw);
 	struct mlx5_vport *evport;
+	enum esw_vst_mode vst_mode;
 	int err = 0;
 
 	if (!ESW_ALLOWED(esw))
@@ -2229,7 +2284,8 @@ int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
 	if (proto != htons(ETH_P_8021Q) && proto != htons(ETH_P_8021AD))
 		return -EINVAL;
 
-	if (proto == htons(ETH_P_8021AD) && !vst_mode_steering)
+	vst_mode = esw_get_vst_mode(esw);
+	if (proto == htons(ETH_P_8021AD) && (vst_mode != ESW_VST_MODE_STEERING))
 		return -EPROTONOSUPPORT;
 
 	mutex_lock(&esw->state_lock);
@@ -2243,8 +2299,9 @@ int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport, u16 vlan,
 		goto unlock;
 	}
 
-	if (!vst_mode_steering) {
-		err = modify_esw_vport_cvlan(esw->dev, vport, vlan, qos, set_flags);
+	if (vst_mode != ESW_VST_MODE_STEERING) {
+		err = modify_esw_vport_cvlan(esw->dev, vport, vlan, qos,
+					     set_flags, vst_mode);
 		if (err)
 			goto unlock;
 	}
@@ -2599,34 +2656,100 @@ int mlx5_eswitch_get_vport_stats(struct mlx5_eswitch *esw,
 	memset(vf_stats, 0, sizeof(*vf_stats));
 	vf_stats->rx_packets =
 		MLX5_GET_CTR(out, received_eth_unicast.packets) +
+		MLX5_GET_CTR(out, received_ib_unicast.packets) +
 		MLX5_GET_CTR(out, received_eth_multicast.packets) +
+		MLX5_GET_CTR(out, received_ib_multicast.packets) +
 		MLX5_GET_CTR(out, received_eth_broadcast.packets);
 
 	vf_stats->rx_bytes =
 		MLX5_GET_CTR(out, received_eth_unicast.octets) +
+		MLX5_GET_CTR(out, received_ib_unicast.octets) +
 		MLX5_GET_CTR(out, received_eth_multicast.octets) +
+		MLX5_GET_CTR(out, received_ib_multicast.octets) +
 		MLX5_GET_CTR(out, received_eth_broadcast.octets);
 
 	vf_stats->tx_packets =
 		MLX5_GET_CTR(out, transmitted_eth_unicast.packets) +
+		MLX5_GET_CTR(out, transmitted_ib_unicast.packets) +
 		MLX5_GET_CTR(out, transmitted_eth_multicast.packets) +
+		MLX5_GET_CTR(out, transmitted_ib_multicast.packets) +
 		MLX5_GET_CTR(out, transmitted_eth_broadcast.packets);
 
 	vf_stats->tx_bytes =
 		MLX5_GET_CTR(out, transmitted_eth_unicast.octets) +
+		MLX5_GET_CTR(out, transmitted_ib_unicast.octets) +
 		MLX5_GET_CTR(out, transmitted_eth_multicast.octets) +
+		MLX5_GET_CTR(out, transmitted_ib_multicast.octets) +
 		MLX5_GET_CTR(out, transmitted_eth_broadcast.octets);
 
 	vf_stats->multicast =
-		MLX5_GET_CTR(out, received_eth_multicast.packets);
+		MLX5_GET_CTR(out, received_eth_multicast.packets) +
+		MLX5_GET_CTR(out, received_ib_multicast.packets);
 
 	vf_stats->broadcast =
 		MLX5_GET_CTR(out, received_eth_broadcast.packets);
+
+#ifdef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
+	vf_stats->tx_multicast =
+		MLX5_GET_CTR(out, transmitted_eth_multicast.packets) +
+		MLX5_GET_CTR(out, transmitted_ib_multicast.packets);
+
+	vf_stats->tx_broadcast =
+		MLX5_GET_CTR(out, transmitted_eth_broadcast.packets);
+#endif
 
 free_out:
 	kvfree(out);
 	return err;
 }
+
+#ifndef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
+int mlx5_eswitch_get_vport_stats_backport(struct mlx5_eswitch *esw,
+					  int vport,
+					  struct ifla_vf_stats_backport *vf_stats_backport)
+{
+	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
+	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {0};
+	int err = 0;
+	u32 *out;
+
+	if (!ESW_ALLOWED(esw))
+		return -EPERM;
+	if (!LEGAL_VPORT(esw, vport))
+		return -EINVAL;
+
+	out = kvzalloc(outlen, GFP_KERNEL);
+	if (!out)
+		return -ENOMEM;
+
+	MLX5_SET(query_vport_counter_in, in, opcode,
+		 MLX5_CMD_OP_QUERY_VPORT_COUNTER);
+	MLX5_SET(query_vport_counter_in, in, op_mod, 0);
+	MLX5_SET(query_vport_counter_in, in, vport_number, vport);
+	if (vport)
+		MLX5_SET(query_vport_counter_in, in, other_vport, 1);
+
+	memset(out, 0, outlen);
+	err = mlx5_cmd_exec(esw->dev, in, sizeof(in), out, outlen);
+	if (err)
+		goto free_out;
+
+	#define MLX5_GET_CTR(p, x) \
+		MLX5_GET64(query_vport_counter_out, p, x)
+
+	memset(vf_stats_backport, 0, sizeof(*vf_stats_backport));
+	vf_stats_backport->tx_multicast =
+		MLX5_GET_CTR(out, transmitted_eth_multicast.packets) +
+		MLX5_GET_CTR(out, transmitted_ib_multicast.packets);
+
+	vf_stats_backport->tx_broadcast =
+		MLX5_GET_CTR(out, transmitted_eth_broadcast.packets);
+
+free_out:
+	kvfree(out);
+	return err;
+}
+#endif
 
 u8 mlx5_eswitch_mode(struct mlx5_eswitch *esw)
 {

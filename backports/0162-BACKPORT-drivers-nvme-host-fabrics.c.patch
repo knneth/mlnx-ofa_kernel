@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
 
 Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
 ---
- drivers/nvme/host/fabrics.c | 31 +++++++++++++++++++++++++++++++
- 1 file changed, 31 insertions(+)
+ drivers/nvme/host/fabrics.c | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
 
 --- a/drivers/nvme/host/fabrics.c
 +++ b/drivers/nvme/host/fabrics.c
@@ -82,7 +82,21 @@ Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
  	if (ret) {
  		nvmf_log_connect_error(ctrl, ret, le32_to_cpu(res.u32),
  				       &cmd, data);
-@@ -568,7 +595,11 @@ static int nvmf_parse_options(struct nvm
+@@ -594,8 +621,13 @@ blk_status_t nvmf_check_if_ready(struct
+ 	 * initialize the controller will be marked for failfast.
+ 	 * Note: nvme cli/ioctl commands are marked for failfast.
+ 	 */
++#ifdef CONFIG_NVME_MULTIPATH
+ 	if (!blk_noretry_request(rq) && !(rq->cmd_flags & REQ_NVME_MPATH))
+ 		return BLK_STS_RESOURCE;
++#else
++	if (!blk_noretry_request(rq))
++		return BLK_STS_RESOURCE;
++#endif
+ 	nvme_req(rq)->status = NVME_SC_ABORT_REQ;
+ 	return BLK_STS_IOERR;
+ }
+@@ -630,7 +662,11 @@ static int nvmf_parse_options(struct nvm
  
  	/* Set defaults */
  	opts->queue_size = NVMF_DEF_QUEUE_SIZE;

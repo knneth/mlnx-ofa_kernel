@@ -3,33 +3,30 @@
 
 #include "../../../compat/config.h"
 
-#ifdef HAVE_TC_VLAN_H
-#include <linux/tc_act/tc_vlan.h>
+#ifndef CONFIG_COMPAT_TCF_VLAN_MOD
 #include_next <net/tc_act/tc_vlan.h>
 #endif
 
-#ifndef HAVE_TC_VLAN_H
-static inline bool is_tcf_vlan(const struct tc_action *a)
-{
-	return false;
-}
-
-static inline u32 tcf_vlan_action(const struct tc_action *a)
-{
-	return 0;
-}
-
-static inline u16 tcf_vlan_push_vid(const struct tc_action *a)
-{
-	return 0;
-}
-
-static inline __be16 tcf_vlan_push_proto(const struct tc_action *a)
-{
-	return 0;
-}
+#ifndef to_vlan
+#define act_to_vlan(a) ((struct tcf_vlan *) a->priv)
 #else
-#ifndef HAVE_IS_TCF_VLAN
+#define act_to_vlan(a) to_vlan(a)
+#endif
+
+#ifdef CONFIG_COMPAT_TCF_VLAN_MOD
+#include <net/act_api.h>
+#include <linux/tc_act/tc_vlan.h>
+
+struct tcf_vlan {
+	struct tcf_common common;
+	int tcfv_action;
+	u16 tcfv_push_vid;
+	__be16 tcfv_push_proto;
+	u8 tcfv_push_prio;
+};
+#define pc_to_vlan(pc) \
+	container_of(pc, struct tcf_vlan, common)
+
 static inline bool is_tcf_vlan(const struct tc_action *a)
 {
 #ifdef CONFIG_NET_CLS_ACT
@@ -38,29 +35,29 @@ static inline bool is_tcf_vlan(const struct tc_action *a)
 #endif
 	return false;
 }
-#endif
 
-#ifndef HAVE_TCF_VLAN_ACTION
 static inline u32 tcf_vlan_action(const struct tc_action *a)
 {
-	return to_vlan(a)->tcfv_action;
+	return act_to_vlan(a)->tcfv_action;
 }
-#endif
 
-#ifndef HAVE_TCF_VLAN_PUSH_VID
 static inline u16 tcf_vlan_push_vid(const struct tc_action *a)
 {
-	return to_vlan(a)->tcfv_push_vid;
+	return act_to_vlan(a)->tcfv_push_vid;
 }
-#endif
 
-#ifndef HAVE_TCF_VLAN_PUSH_PROTO
 static inline __be16 tcf_vlan_push_proto(const struct tc_action *a)
 {
-	return to_vlan(a)->tcfv_push_proto;
+	return act_to_vlan(a)->tcfv_push_proto;
 }
+
 #endif
 
-#endif /* HAVE_TC_VLAN_H */
+#ifndef HAVE_TCF_VLAN_PUSH_PRIO
+static inline __be16 tcf_vlan_push_prio(const struct tc_action *a)
+{
+	return act_to_vlan(a)->tcfv_push_prio;
+}
+#endif
 
 #endif	/* _COMPAT_NET_TC_ACT_TC_VLAN_H */

@@ -667,11 +667,34 @@ int ib_uverbs_exp_query_device(struct ib_uverbs_file *file,
 		resp->comp_mask |= IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC;
 	}
 
+
+	if (exp_attr->exp_comp_mask & IB_EXP_DEVICE_ATTR_COMP_MASK_2) {
+		if (exp_attr->exp_comp_mask_2 & IB_EXP_DEVICE_ATTR_UMR_FIXED_SIZE_CAPS) {
+			resp->umr_fixed_size_caps.max_entity_size = exp_attr->umr_fixed_size_caps.max_entity_size;
+			resp->comp_mask_2 |= IB_EXP_DEVICE_ATTR_UMR_FIXED_SIZE_CAPS;
+		}
+		resp->comp_mask |= IB_EXP_DEVICE_ATTR_COMP_MASK_2;
+	}
+
 	ret = ib_copy_to_udata(ucore, resp, min_t(size_t, sizeof(*resp), ucore->outlen));
 out:
 	kfree(exp_attr);
 	kfree(resp);
 	return ret;
+}
+
+static u32 mr_create_flag_to_mr_type(u32 create_flags)
+{
+	switch (create_flags) {
+	case IB_EXP_MR_SIGNATURE_EN:
+		return IB_MR_TYPE_SIGNATURE;
+	case IB_EXP_MR_INDIRECT_KLMS:
+		return IB_MR_INDIRECT_REG;
+	case IB_EXP_MR_FIXED_BUFFER_SIZE:
+		return IB_MR_TYPE_FIXED_SIZE;
+	default:
+		return 0;
+	}
 }
 
 int ib_uverbs_exp_create_mr(struct ib_uverbs_file *file,
@@ -681,6 +704,7 @@ int ib_uverbs_exp_create_mr(struct ib_uverbs_file *file,
 {
 	struct ib_uverbs_exp_create_mr          cmd_exp;
 	struct ib_uverbs_exp_create_mr_resp     resp_exp;
+	struct ib_mr_init_attr			attr = {0};
 	struct ib_pd                            *pd = NULL;
 	struct ib_mr                            *mr = NULL;
 	struct ib_uobject                       *uobj = NULL;
@@ -703,7 +727,10 @@ int ib_uverbs_exp_create_mr(struct ib_uverbs_file *file,
 		goto err_free;
 	}
 
-	mr = ib_alloc_mr(pd, cmd_exp.create_flags, cmd_exp.max_reg_descriptors);
+
+	attr.mr_type = mr_create_flag_to_mr_type(cmd_exp.create_flags);
+	attr.max_num_sg = cmd_exp.max_reg_descriptors;
+	mr = ib_exp_alloc_mr(pd, &attr);
 	if (IS_ERR(mr)) {
 		ret = PTR_ERR(mr);
 		goto err_put;
@@ -1037,6 +1064,12 @@ int ib_uverbs_exp_create_cq(struct ib_uverbs_file *file, struct ib_device *ib_de
 	return 0;
 }
 
+static void set_dc_ini_ah_fields(struct ib_device *device, struct rdma_ah_attr *ah)
+{
+	ah->static_rate = IB_RATE_PORT_CURRENT;
+	ah->port_num = rdma_start_port(device);
+}
+
 int ib_uverbs_exp_modify_qp(struct ib_uverbs_file *file, struct ib_device *ib_dev,
 			    struct ib_udata *ucore, struct ib_udata *uhw)
 {
@@ -1117,8 +1150,16 @@ int ib_uverbs_exp_modify_qp(struct ib_uverbs_file *file, struct ib_device *ib_de
 		}
 	}
 
-	if (cmd.attr_mask & IB_QP_AV)
+	if (cmd.attr_mask & IB_QP_AV) {
 		copy_ah_attr_from_uverbs(qp, &attr->ah_attr, &cmd.dest);
+		/* When modifying a DC INI from INIT to RTR, only the SL is valid.
+		 * Since old applications set zeros or invalid values for the rest
+		 * of the fields, we might fail down the road in rdma_check_ah_attr.
+		 * Change those values to avoid failures and backward compatibility issues.
+		 */
+		if (qp->qp_type == IB_EXP_QPT_DC_INI)
+			set_dc_ini_ah_fields(qp->device, &attr->ah_attr);
+	}
 	if (cmd.attr_mask & IB_QP_ALT_PATH)
 		copy_ah_attr_from_uverbs(qp, &attr->alt_ah_attr,
 					 &cmd.alt_dest);

@@ -32,5 +32,8 @@ MODULE_AUTHOR("Lasse Collin <lasse.collin@tukaani.org> and Igor Pavlov");
  * say it's GPL and consider the authors as the copyright holders.
  */
 /*MODULE_LICENSE("GPL");*/
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 #endif /* !(defined(HAVE_LINUX_XZ_H) && IS_ENABLED(CONFIG_XZ_DEC)) */

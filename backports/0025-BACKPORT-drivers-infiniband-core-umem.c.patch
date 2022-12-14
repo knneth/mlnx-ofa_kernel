@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
 ---
- drivers/infiniband/core/umem.c | 79 ++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 77 insertions(+), 2 deletions(-)
+ drivers/infiniband/core/umem.c | 75 ++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 73 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
@@ -32,27 +32,7 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -227,7 +237,9 @@ struct ib_umem *ib_umem_get(struct ib_uc
- 	umem->length     = size;
- 	umem->address    = addr;
- 	umem->page_shift = PAGE_SHIFT;
-+#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
- 	umem->pid	 = get_task_pid(current, PIDTYPE_PID);
-+#endif
- 	/*
- 	 * We ask for writable memory if any of the following
- 	 * access flags are set.  "Local write" and "remote write"
-@@ -250,7 +262,9 @@ struct ib_umem *ib_umem_get(struct ib_uc
- 	}
- 
- 	if (access & IB_ACCESS_ON_DEMAND) {
-+#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
- 		put_pid(umem->pid);
-+#endif
- 		ret = ib_umem_odp_get(context, umem, access);
- 		if (ret) {
- 			kfree(umem);
-@@ -282,8 +296,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
+@@ -279,8 +289,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
  	npages = ib_umem_num_pages(umem);
  
  	down_write(&current->mm->mmap_sem);
@@ -65,7 +45,7 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
  	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK)) {
-@@ -309,23 +326,46 @@ struct ib_umem *ib_umem_get(struct ib_uc
+@@ -306,23 +319,46 @@ struct ib_umem *ib_umem_get(struct ib_uc
  		goto out;
  	}
  
@@ -112,7 +92,7 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  			goto out;
  		}
  
-@@ -348,7 +388,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
+@@ -345,7 +381,11 @@ struct ib_umem *ib_umem_get(struct ib_uc
  				  umem->sg_head.sgl,
  				  umem->npages,
  				  DMA_BIDIRECTIONAL,
@@ -124,8 +104,8 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  
  	if (umem->nmap <= 0) {
  		pr_err("%s: failed to map scatterlist, npages=%d\n", __func__,
-@@ -366,7 +410,11 @@ out:
- 		put_pid(umem->pid);
+@@ -362,7 +402,11 @@ out:
+ 			__ib_umem_release(context->device, umem, 0);
  		kfree(umem);
  	} else
 +#ifdef HAVE_PINNED_VM
@@ -136,7 +116,7 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  
  	up_write(&current->mm->mmap_sem);
  	if (vma_list)
-@@ -382,7 +430,11 @@ static void ib_umem_account(struct work_
+@@ -378,7 +422,11 @@ static void ib_umem_account(struct work_
  	struct ib_umem *umem = container_of(work, struct ib_umem, work);
  
  	down_write(&umem->mm->mmap_sem);
@@ -148,7 +128,7 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  	up_write(&umem->mm->mmap_sem);
  	mmput(umem->mm);
  	kfree(umem);
-@@ -396,7 +448,9 @@ void ib_umem_release(struct ib_umem *ume
+@@ -392,7 +440,9 @@ void ib_umem_release(struct ib_umem *ume
  {
  	struct ib_ucontext *context = umem->context;
  	struct mm_struct *mm;
@@ -158,15 +138,15 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  	unsigned long diff;
  	if (umem->ib_peer_mem) {
  		peer_umem_release(umem);
-@@ -410,6 +464,7 @@ void ib_umem_release(struct ib_umem *ume
+@@ -406,6 +456,7 @@ void ib_umem_release(struct ib_umem *ume
  
  	__ib_umem_release(umem->context->device, umem, 1);
  
 +#if defined(HAVE_PUT_TASK_STRUCT_EXPORTED) && defined(HAVE_GET_TASK_PID_EXPORTED) && defined(HAVE_GET_PID_TASK_EXPORTED)
- 	task = get_pid_task(umem->pid, PIDTYPE_PID);
- 	put_pid(umem->pid);
+ 	task = get_pid_task(umem->context->tgid, PIDTYPE_PID);
  	if (!task)
-@@ -418,6 +473,13 @@ void ib_umem_release(struct ib_umem *ume
+ 		goto out;
+@@ -413,6 +464,13 @@ void ib_umem_release(struct ib_umem *ume
  	put_task_struct(task);
  	if (!mm)
  		goto out;
@@ -180,7 +160,7 @@ Change-Id: I1b8b777a47412b2afab5083db63f1c64f3c618f1
  
  	diff = ib_umem_num_pages(umem);
  
-@@ -440,11 +502,24 @@ void ib_umem_release(struct ib_umem *ume
+@@ -435,11 +493,24 @@ void ib_umem_release(struct ib_umem *ume
  		}
  	} else
  		down_write(&mm->mmap_sem);

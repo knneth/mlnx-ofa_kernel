@@ -313,6 +313,10 @@ struct ib_uverbs_exp_tm_caps {
 	__u32 reserved;
 };
 
+struct ib_uverbs_exp_umr_fixed_size_caps {
+	__u64 max_entity_size;
+};
+
 struct ib_uverbs_exp_query_device_resp {
 	__u64					comp_mask;
 	struct ib_uverbs_query_device_resp	base;
@@ -350,6 +354,8 @@ struct ib_uverbs_exp_query_device_resp {
 	__u32					tunnel_offloads_caps;
 	__u32					tunneled_atomic_caps;
 	__u64 					max_dm_size;
+	__u64					comp_mask_2;
+	struct ib_uverbs_exp_umr_fixed_size_caps umr_fixed_size_caps;
 };
 
 enum ib_uverbs_exp_create_cq_comp_mask {

@@ -8,7 +8,7 @@ Change-Id: I1073d45018c5f4b2889397201fb36c1f5e68bc7e
 
 --- a/drivers/infiniband/core/verbs.c
 +++ b/drivers/infiniband/core/verbs.c
-@@ -1407,7 +1407,11 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -1737,7 +1737,11 @@ int ib_get_eth_speed(struct ib_device *d
  	int rc;
  	u32 netdev_speed;
  	struct net_device *netdev;
@@ -20,7 +20,7 @@ Change-Id: I1073d45018c5f4b2889397201fb36c1f5e68bc7e
  
  	if (rdma_port_get_link_layer(dev, port_num) != IB_LINK_LAYER_ETHERNET)
  		return -EINVAL;
-@@ -1420,13 +1424,21 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -1750,13 +1754,21 @@ int ib_get_eth_speed(struct ib_device *d
  		return -ENODEV;
  
  	rtnl_lock();
@@ -42,7 +42,7 @@ Change-Id: I1073d45018c5f4b2889397201fb36c1f5e68bc7e
  	} else {
  		netdev_speed = SPEED_1000;
  		pr_warn("%s speed is unknown, defaulting to %d\n", netdev->name,
-@@ -2045,6 +2057,7 @@ int ib_check_mr_status(struct ib_mr *mr,
+@@ -2384,6 +2396,7 @@ int ib_check_mr_status(struct ib_mr *mr,
  }
  EXPORT_SYMBOL(ib_check_mr_status);
  
@@ -50,7 +50,7 @@ Change-Id: I1073d45018c5f4b2889397201fb36c1f5e68bc7e
  int ib_set_vf_link_state(struct ib_device *device, int vf, u8 port,
  			 int state)
  {
-@@ -2084,6 +2097,7 @@ int ib_set_vf_guid(struct ib_device *dev
+@@ -2423,6 +2436,7 @@ int ib_set_vf_guid(struct ib_device *dev
  	return device->set_vf_guid(device, vf, port, guid, type);
  }
  EXPORT_SYMBOL(ib_set_vf_guid);

@@ -32,6 +32,7 @@
 
 #include <linux/mutex.h>
 #include <linux/mlx5/driver.h>
+#include <linux/mlx5/eswitch.h>
 
 #include "mlx5_core.h"
 #include "fs_core.h"
@@ -186,9 +187,6 @@ static void del_sw_ns(struct fs_node *node);
 static void del_sw_hw_rule(struct fs_node *node);
 static bool mlx5_flow_dests_cmp(struct mlx5_flow_destination *d1,
 				struct mlx5_flow_destination *d2);
-static struct mlx5_flow_rule *
-find_flow_rule(struct fs_fte *fte,
-	       struct mlx5_flow_destination *dest);
 
 static void tree_init_node(struct fs_node *node,
 			   void (*del_hw_func)(struct fs_node *),
@@ -359,7 +357,8 @@ static bool check_valid_mask(u8 match_criteria_enable, const u32 *match_criteria
 	if (match_criteria_enable & ~(
 		(1 << MLX5_CREATE_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_OUTER_HEADERS)   |
 		(1 << MLX5_CREATE_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS) |
-		(1 << MLX5_CREATE_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_INNER_HEADERS)))
+		(1 << MLX5_CREATE_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_INNER_HEADERS) |
+		(1 << MLX5_CREATE_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS_2)))
 		return false;
 
 	if (!(match_criteria_enable &
@@ -392,6 +391,17 @@ static bool check_valid_mask(u8 match_criteria_enable, const u32 *match_criteria
 		if (fg_type_mask[0] ||
 		    memcmp(fg_type_mask, fg_type_mask + 1,
 			   MLX5_ST_SZ_BYTES(fte_match_set_lyr_2_4) - 1))
+			return false;
+	}
+
+	if (!(match_criteria_enable &
+	      1 << MLX5_CREATE_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS_2)) {
+		char *fg_type_mask = MLX5_ADDR_OF(fte_match_param,
+						  match_criteria, misc_parameters_2);
+
+		if (fg_type_mask[0] ||
+		    memcmp(fg_type_mask, fg_type_mask + 1,
+			   MLX5_ST_SZ_BYTES(fte_match_set_misc2) - 1))
 			return false;
 	}
 
@@ -1286,14 +1296,6 @@ create_flow_handle(struct fs_fte *fte,
 		return ERR_PTR(-ENOMEM);
 
 	do {
-		if (dest) {
-			rule = find_flow_rule(fte, dest + i);
-			if (rule) {
-				refcount_inc(&rule->node.refcount);
-				goto rule_found;
-			}
-		}
-
 		*new_rule = true;
 		rule = alloc_rule(dest + i);
 		if (!rule)
@@ -1315,7 +1317,6 @@ create_flow_handle(struct fs_fte *fte,
 				MLX5_FLOW_DESTINATION_TYPE_COUNTER;
 			*modify_mask |= type ? count : dst;
 		}
-rule_found:
 		handle->rule[i] = rule;
 	} while (++i < dest_num);
 
@@ -1422,6 +1423,8 @@ static int create_auto_flow_group(struct mlx5_flow_table *ft,
 	struct mlx5_core_dev *dev = get_dev(&ft->node);
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
 	void *match_criteria_addr;
+	u8 src_esw_owner_mask_on;
+	void *misc;
 	int err;
 	u32 *in;
 
@@ -1434,6 +1437,14 @@ static int create_auto_flow_group(struct mlx5_flow_table *ft,
 	MLX5_SET(create_flow_group_in, in, start_flow_index, fg->start_index);
 	MLX5_SET(create_flow_group_in, in, end_flow_index,   fg->start_index +
 		 fg->max_ftes - 1);
+
+	misc = MLX5_ADDR_OF(fte_match_param, fg->mask.match_criteria,
+			    misc_parameters);
+	src_esw_owner_mask_on = !!MLX5_GET(fte_match_set_misc, misc,
+					 source_eswitch_owner_vhca_id);
+	MLX5_SET(create_flow_group_in, in,
+		 source_eswitch_owner_vhca_id_valid, src_esw_owner_mask_on);
+
 	match_criteria_addr = MLX5_ADDR_OF(create_flow_group_in,
 					   in, match_criteria);
 	memcpy(match_criteria_addr, fg->mask.match_criteria,
@@ -1454,7 +1465,7 @@ static bool mlx5_flow_dests_cmp(struct mlx5_flow_destination *d1,
 {
 	if (d1->type == d2->type) {
 		if ((d1->type == MLX5_FLOW_DESTINATION_TYPE_VPORT &&
-		     d1->vport_num == d2->vport_num) ||
+		     d1->vport.num == d2->vport.num) ||
 		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE &&
 		     d1->ft == d2->ft) ||
 		    (d1->type == MLX5_FLOW_DESTINATION_TYPE_TIR &&
@@ -1463,18 +1474,6 @@ static bool mlx5_flow_dests_cmp(struct mlx5_flow_destination *d1,
 	}
 
 	return false;
-}
-
-static struct mlx5_flow_rule *find_flow_rule(struct fs_fte *fte,
-					     struct mlx5_flow_destination *dest)
-{
-	struct mlx5_flow_rule *rule;
-
-	list_for_each_entry(rule, &fte->node.children, node.list) {
-		if (mlx5_flow_dests_cmp(&rule->dest_attr, dest))
-			return rule;
-	}
-	return NULL;
 }
 
 static bool check_conflicting_actions(u32 action1, u32 action2)
@@ -1579,7 +1578,7 @@ static char *get_dest_name(struct mlx5_flow_destination *dest)
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_VPORT:
 		snprintf(name, 20, "dest_%s_%u", "vport",
-			 dest->vport_num);
+			 dest->vport.num);
 		return name;
 	case MLX5_FLOW_DESTINATION_TYPE_TIR:
 		snprintf(name, 20, "dest_%s_%u", "tir", dest->tir_num);
@@ -1617,13 +1616,11 @@ static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
 	trace_mlx5_fs_set_fte(fte, false);
 
 	for (i = 0; i < handle->num_rules; i++) {
-		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
-			dest_name = get_dest_name(&handle->rule[i]->dest_attr);
-			tree_add_node(&handle->rule[i]->node, &fte->node, dest_name);
-			kfree(dest_name);
-			trace_mlx5_fs_add_rule(handle->rule[i]);
-			notify_add_rule(handle->rule[i]);
-		}
+		dest_name = get_dest_name(&handle->rule[i]->dest_attr);
+		tree_add_node(&handle->rule[i]->node, &fte->node, dest_name);
+		kfree(dest_name);
+		trace_mlx5_fs_add_rule(handle->rule[i]);
+		notify_add_rule(handle->rule[i]);
 	}
 	return handle;
 }
@@ -2594,7 +2591,7 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 	if (!steering->fdb_root_ns)
 		return -ENOMEM;
 
-	prio = fs_create_prio(&steering->fdb_root_ns->ns, 0, 1, "fdb_prio_0");
+	prio = fs_create_prio(&steering->fdb_root_ns->ns, 0, 2, "fdb_prio_0");
 	if (IS_ERR(prio))
 		goto out_err;
 
@@ -2693,7 +2690,7 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 			goto err;
 	}
 
-	if (MLX5_CAP_GEN(dev, eswitch_flow_table)) {
+	if (MLX5_ESWITCH_MANAGER(dev)) {
 		if (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, ft_support)) {
 			err = init_fdb_root_ns(steering);
 			if (err)

@@ -39,6 +39,42 @@ sub usage
 	print "\n";
 }
 
+sub get_netplan_config
+{
+	$ENV{PYTHONPATH}="/usr/share/netplan/netplan";
+	my $prog = <<'EOF';
+import sys
+import configmanager
+
+cm = configmanager.ConfigManager()
+cm.parse()
+
+command = sys.argv[1]
+if_name = sys.argv[2]
+
+if if_name not in cm.ethernets:
+    exit(2)
+
+eth = cm.ethernets[if_name]
+if command == 'get-mtu':
+    if 'mtu' in eth:
+        print(eth['mtu'])
+elif command == 'get-bond-master':
+    for bond_name in cm.bonds:
+        bond = cm.bonds[bond_name]
+        if if_name in bond['interfaces']:
+            print(bond_name)
+            break
+else:
+    exit(1)
+EOF
+	return system('python3', '-c', $prog, @_);
+}
+
+if ((-x '/usr/sbin/netplan') && (! -x '/sbin/ifup')) {
+	exit get_netplan_config($action, $int);
+}
+
 # set configuration files
 my @conf_files = ("/etc/network/interfaces");
 if (`grep -w source /etc/network/interfaces 2>/dev/null | grep -vE "^\\s*#" 2>/dev/null` ne "") {

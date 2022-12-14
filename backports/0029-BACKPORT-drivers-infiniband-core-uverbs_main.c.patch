@@ -8,7 +8,7 @@ Change-Id: Ia27e1cab572229b7d460287d9a3a3e63885e7a38
 
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
-@@ -262,10 +262,14 @@ static int ib_uverbs_cleanup_ucontext(st
+@@ -265,10 +265,14 @@ static int ib_uverbs_cleanup_ucontext(st
  {
  	context->closing = 1;
  	uverbs_cleanup_ucontext(context, device_removed);
@@ -23,7 +23,7 @@ Change-Id: Ia27e1cab572229b7d460287d9a3a3e63885e7a38
  
  	return context->device->dealloc_ucontext(context);
  }
-@@ -1069,8 +1073,16 @@ static ssize_t show_dev_abi_version(stru
+@@ -1072,8 +1076,16 @@ static ssize_t show_dev_abi_version(stru
  }
  static DEVICE_ATTR(abi_version, S_IRUGO, show_dev_abi_version, NULL);
  
@@ -40,7 +40,7 @@ Change-Id: Ia27e1cab572229b7d460287d9a3a3e63885e7a38
  
  static void ib_uverbs_add_one(struct ib_device *device)
  {
-@@ -1280,7 +1292,11 @@ static void ib_uverbs_remove_one(struct
+@@ -1283,7 +1295,11 @@ static void ib_uverbs_remove_one(struct
  	kobject_put(&uverbs_dev->kobj);
  }
  
@@ -52,7 +52,7 @@ Change-Id: Ia27e1cab572229b7d460287d9a3a3e63885e7a38
  {
  	if (mode)
  		*mode = 0666;
-@@ -1314,7 +1330,12 @@ static int __init ib_uverbs_init(void)
+@@ -1317,7 +1333,12 @@ static int __init ib_uverbs_init(void)
  
  	uverbs_class->devnode = uverbs_devnode;
  

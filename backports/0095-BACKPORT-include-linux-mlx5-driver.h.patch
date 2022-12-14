@@ -1,10 +1,9 @@
 From: Feras Daoud <ferasda@mellanox.com>
 Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
 
-Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
 ---
- include/linux/mlx5/driver.h | 41 ++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 40 insertions(+), 1 deletion(-)
+ include/linux/mlx5/driver.h | 26 +++++++++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
 
 --- a/include/linux/mlx5/driver.h
 +++ b/include/linux/mlx5/driver.h
@@ -24,7 +23,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  #ifdef CONFIG_CXL_LIB
  #include <misc/cxllib.h>
  #endif
-@@ -697,6 +704,9 @@ struct mlx5_port_module_event_stats {
+@@ -701,6 +708,9 @@ struct mlx5_port_module_event_stats {
  struct mlx5_priv {
  	char			name[MLX5_MAX_NAME_LEN];
  	struct mlx5_eq_table	eq_table;
@@ -34,18 +33,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  	struct mlx5_irq_info	*irq_info;
  
  	/* pages stuff */
-@@ -726,6 +736,10 @@ struct mlx5_priv {
- 	struct dentry	       *dct_debugfs;
- 	/* end: dct stuff */
- 
-+#ifndef HAVE_DEVLINK_H
-+	struct dentry	       *compat_debugfs;
-+#endif
-+
- 	/* start: cq staff */
- 	struct mlx5_cq_table	cq_table;
- 	/* end: cq staff */
-@@ -879,9 +893,13 @@ struct mlx5_clock {
+@@ -886,9 +896,13 @@ struct mlx5_clock {
  	unsigned long              overflow_period;
  	struct delayed_work        overflow_work;
  	struct mlx5_core_dev      *mdev;
@@ -58,8 +46,8 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
 +#endif
  };
  
- /* need to move the tracer stuff to tracer.h*/
-@@ -1074,8 +1092,13 @@ struct mlx5_cmd_work_ent {
+ struct mlx5_mst_dump;
+@@ -1057,8 +1071,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -73,7 +61,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  	u16			op;
  	bool			polling;
  };
-@@ -1434,7 +1457,12 @@ static inline int mlx5_core_is_pf(struct
+@@ -1418,7 +1437,12 @@ static inline int mlx5_core_is_pf(struct
  	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
  }
  
@@ -87,31 +75,3 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  #define MLX5_VPORT_MANAGER(mdev) \
  	(MLX5_CAP_GEN(mdev, vport_group_manager) && \
  	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) && \
-@@ -1462,6 +1490,10 @@ enum {
- static inline const struct cpumask *
- mlx5_get_vector_affinity(struct mlx5_core_dev *dev, int vector)
- {
-+#if ( defined(HAVE_IRQ_TO_DESC_EXPORTED) ) && \
-+    ( defined(CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK) || \
-+      defined(HAVE_IRQ_DESC_IRQ_COMMON_DATA_AFFINITY) || \
-+      defined(HAVE_IRQ_DESC_IRQ_DATA_AFFINITY))
- 	const struct cpumask *mask;
- 	struct irq_desc *desc;
- 	unsigned int irq;
-@@ -1476,9 +1508,16 @@ mlx5_get_vector_affinity(struct mlx5_cor
- #ifdef CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK
- 	mask = irq_data_get_effective_affinity_mask(&desc->irq_data);
- #else
-+#if defined(HAVE_IRQ_DESC_IRQ_COMMON_DATA_AFFINITY)
- 	mask = desc->irq_common_data.affinity;
-+#elif defined(HAVE_IRQ_DESC_IRQ_DATA_AFFINITY)
-+	mask = desc->irq_data.affinity;
-+#endif
- #endif
- 	return mask;
-+#else
-+	return cpu_possible_mask;
-+#endif
- }
- 
- /* MLX5 Diagnostics */

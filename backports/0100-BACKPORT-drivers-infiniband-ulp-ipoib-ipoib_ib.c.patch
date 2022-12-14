@@ -3,12 +3,24 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ib.c
 
 Change-Id: Icd077865488cbb56b28051ab57995da2b7dbaa48
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ib.c | 17 +++++++++++++++--
- 1 file changed, 15 insertions(+), 2 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_ib.c | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ib.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ib.c
-@@ -283,7 +283,10 @@ static void ipoib_ib_handle_rx_wc(struct
+@@ -203,7 +203,10 @@ static inline void ipoib_create_repath_e
+ 	else
+ 		kfree(arp_repath);
+ }
+-
++#ifndef HAVE_NETDEV_RX_HANDLER_REGISTER
++int (*eth_ipoib_handle_frame_hook)(struct sk_buff **skb) = NULL;
++EXPORT_SYMBOL_GPL(eth_ipoib_handle_frame_hook);
++#endif
+ static void ipoib_ib_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+@@ -284,7 +287,10 @@ static void ipoib_ib_handle_rx_wc(struct
  	}
  
  	skb_pull(skb, IB_GRH_BYTES);
@@ -20,23 +32,29 @@ Change-Id: Icd077865488cbb56b28051ab57995da2b7dbaa48
  	skb->protocol = ((struct ipoib_header *) skb->data)->proto;
  	skb_add_pseudo_hdr(skb);
  
-@@ -299,8 +302,14 @@ static void ipoib_ib_handle_rx_wc(struct
- 	if ((dev->features & NETIF_F_RXCSUM) &&
- 			likely(wc->wc_flags & IB_WC_IP_CSUM_OK))
- 		skb->ip_summed = CHECKSUM_UNNECESSARY;
--
+@@ -305,9 +311,21 @@ static void ipoib_ib_handle_rx_wc(struct
+ 	if (unlikely(dev->priv_flags & IFF_EIPOIB_VIF)) {
+ 		set_skb_oob_cb_data(skb, wc, &priv->recv_napi);
+ 		/* the registered handler will take care of the skb.*/
++#ifndef HAVE_NETDEV_RX_HANDLER_REGISTER
++		if (eth_ipoib_handle_frame_hook)
++			eth_ipoib_handle_frame_hook(&skb);
++		else
++#endif
+ 		netif_receive_skb(skb);
+ 	} else {
 +#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
 +		if (dev->features & NETIF_F_LRO)
 +			lro_receive_skb(&priv->lro.lro_mgr, skb, NULL);
 +		else
 +			netif_receive_skb(skb);
 +#else
- 	napi_gro_receive(&priv->recv_napi, skb);
+ 		napi_gro_receive(&priv->recv_napi, skb);
 +#endif
+ 	}
  
  repost:
- 	if (unlikely(ipoib_ib_post_receive(dev, wr_id)))
-@@ -518,6 +527,10 @@ poll_more:
+@@ -526,6 +544,10 @@ poll_more:
  	}
  
  	if (done < budget) {

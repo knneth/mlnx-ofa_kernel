@@ -61,7 +61,6 @@ FIREWALL_IPTABLES_SERVICE			= "iptables"
 FIREWALL_IP6TABLES_SERVICE			= "ip6tables"
 
 CPU_MAX_PERFORMANCE_CMD				= "echo performance > /sys/devices/system/cpu/cpu%s/cpufreq/scaling_governor"
-MTU_CMD						= "cat /sys/class/net/%s/mtu"
 NUMA_NODES_CMD			 		= "ls /sys/devices/system/node/ | grep node"
 CPUINFO_CMD					= "cat /proc/cpuinfo"
 GET_ARCHITECTURE_INFO_CMD			= "uname -m"
@@ -138,9 +137,6 @@ IFCONFIG					= "ifconfig"
 ETHTOOL						= "ethtool"
 LSPCI						= "lspci"
 QDISC						= "tc qdisc"
-PCI_SLOT_PREFIX					= "/sys/class/net/"
-PCI_SLOT_SUFFIX					= "/device/../"
-FATHER_PCI_SLOT_SUFFIX				= "/device/../uevent"
 KERNEL_PARAMETERS				= "cat /proc/cmdline"
 
 OFED_PATH					= "which ofed_info"
@@ -150,14 +146,8 @@ SET_MULTIPLE_NETWORK_PARAMETER_CMD		= ETHTOOL + " -%s %s %s"
 SET_TXQ_LENGTH_CMD				= IFCONFIG + " %s txqueuelen %s"
 ADD_INTERFACE_TO_QDISC_CMD			= QDISC + " add dev %s root sfq"
 DEL_INTERFACE_FROM_QDISC_CMD			= QDISC + " del dev %s root"
+ADD_INTERFACE_QDISC_NO_QUEUE_CMD = QDISC + " add dev %s root noqueue"
 
-
-CPU_ARCH_SANDY_BRIDGE				= "Sandy Bridge"
-CPU_ARCH_IVY_BRIDGE				= "Ivy Bridge"
-CPU_ARCH_HASWELL				= "Haswell"
-CPU_ARCH_TBD					= "TBD"	#TODO
-
-# enums
 class Profile:
 	""" Describes a valid service status
 	"""
@@ -190,10 +180,13 @@ class Status:
 class CPUVendor:
 	""" Describes a CPU vendor
 	"""
-	INTEL		= "Intel"
+	INTEL		= "GenuineIntel"
+	AMD		= "AuthenticAMD"
 	IBM		= "IBM"
 	ARM		= "ARM"
 	UNKNOWN		= NA
+
+	LIMIT_TO_32_QUEUES = [AMD]
 
 class CPUConstant:
 	""" Describes CPU constants per vendor
@@ -204,6 +197,8 @@ class CPUConstant:
 	INTEL_HSW_MODEL		= 63
 	INTEL_BDWL_MODEL	= 79
 	INTEL_SKL_MODEL		= 85
+
+	AMD_MODEL		= "AMD"
 
 	IBM_PPC64LE_MODEL	= "ppc64le"
 
@@ -217,6 +212,7 @@ class Architecture:
 	HASWELL		= "Haswell"
 	BROADWELL	= "Broadwell"
 	SKYLAKE		= "Skylake"
+	AMD		= "AMD"
 	AARCH64		= "AArch64"
 	PPC64LE		= "ppc64le"
 	X86_64		= "x86_64"
@@ -232,6 +228,9 @@ class Architecture:
 						CPUConstant.INTEL_BDWL_MODEL: BROADWELL,
 						CPUConstant.INTEL_SKL_MODEL: SKYLAKE
 					}
+				},
+				CPUVendor.AMD: {
+					CPUConstant.AMD_MODEL: AMD
 				},
 				CPUVendor.IBM: {
 					CPUConstant.IBM_PPC64LE_MODEL: PPC64LE
@@ -271,11 +270,13 @@ class OS:
 	RH6_4				= "RH6.4"
 	RH6_5				= "RH6.5"
 	RH6_6				= "RH6.6"
-        RH6_7           		= "RH6.7"
+	RH6_7				= "RH6.7"
 	RH7_0				= "RH7.0"
 	RH7_1				= "RH7.1"
 	RH7_2				= "RH7.2"
 	RH7_3				= "RH7.3"
+	RH7_4				= "RH7.4"
+	RH7_5				= "RH7.5"
 	FEDORA				= "FEDORA"
 	SLES11_3			= "SLES11.3"
 	SLES11_4			= "SLES11.4"
@@ -296,13 +297,14 @@ class OS:
 	UNKNOWN				= "UNKNOWN"
 	ALL				= "ALL"
 	SUPPORTED_OS			= [
-						RH6_4, RH6_5, RH6_6, RH6_7, RH7_0, RH7_1, RH7_2, SLES11_3, SLES11_4, SLES12,
+						RH6_4, RH6_5, RH6_6, RH6_7, RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5, SLES11_3, SLES11_4, SLES12,
 						UBUNTU14_04, UBUNTU14_10, UBUNTU15_04, UBUNTU15_10, UBUNTU16_04, UBUNTU16_10, CENTOS
 					  ]
-	SYSTEMCTL_ACCESS_OS		= [RH7_0, RH7_1, RH7_2, RH7_3]
+	SYSTEMCTL_ACCESS_OS		= [RH7_0, RH7_1, RH7_2, RH7_3, RH7_4, RH7_5]
 	SUSE				= [SLES11_3, SLES11_4, SLES12]
 	PPC_DEVICE_NEW_FORMAT_OS	= [RH7_0, RH7_1, RH7_2, RH7_3]
 	NO_IPV6_FORWARDING_SUPPORT_OS	= [UBUNTU14_04]
+	TC_QDISC_NO_QUEUE_METHOD_SUPPORT_OS = [RH7_3, RH7_4, RH7_5]
 
 	def get_os(self):
 		""" Return local OS Type (one of the list OS_ALL)
@@ -341,6 +343,10 @@ class OS:
 					return OS.RH7_2
 				if os_version == '7.3':
 					return OS.RH7_3
+				if os_version == '7.4':
+					return OS.RH7_4
+				if os_version == '7.5':
+					return OS.RH7_5
 			if linux_dist == 'fedora':
 				return OS.FEDORA
 			if linux_dist == 'suse':
@@ -435,6 +441,7 @@ class Devices:
 						ConnectX5, ConnectX5EX, ConnectX4, ConnectX4LX,
 						ConnectX5VF, ConnectX5EXVF, ConnectX4VF, ConnectX4LXVF
 					  ]
+	NEED_32_QUEUES_LIMIT_DEVICES	= [ConnectX4LX]
 
 	def supported_ids(self):
 		""" Returns a list of all supported device ids
@@ -684,8 +691,7 @@ class Cpu:
 		# Get CPU vendor name. TODO - Move to OS/ARCH access module.
 		architecture_str = architecture_info_output.lower()
 		if Architecture.X86_64.lower() in architecture_str:
-			self.vendor = CPUVendor.INTEL
-			self.collect_intel_cpu_info(cpuinfo_output)
+			self.collect_x86_64_cpu_info(cpuinfo_output)
 		elif Architecture.PPC64LE.lower() in architecture_str:
 			self.vendor = CPUVendor.IBM
 			self.collect_ppc_cpu_info(cpuinfo_output)
@@ -806,10 +812,14 @@ class Cpu:
 				self.physical_cores_num = int(self.total_cores / threads_per_core)
 				break
 
-	def collect_intel_cpu_info(self, raw_cpuinfo):
+	def collect_x86_64_cpu_info(self, raw_cpuinfo):
 		""" Collects CPU information for Intel systems
 		"""
 		raw_cpuinfo = raw_cpuinfo.split('\n')
+		for line in raw_cpuinfo:
+			if "vendor_id" in line:
+				self.vendor = (line.split(":")[1].strip())
+				break
 		for line in raw_cpuinfo:
 			if "siblings" in line:
 				self.total_cores = int(line.split(":")[1].strip())
@@ -834,7 +844,10 @@ class Cpu:
 			if "cpu family" in line:
 				cpu_family_number = line.split(":")[1].strip()
 				break
-		self.architecture = self.convert_architecture_number_to_name(int(cpu_model_number), int(cpu_family_number))
+
+		if self.vendor == CPUVendor.INTEL:
+			self.architecture = self.convert_architecture_number_to_name(
+				int(cpu_model_number), int(cpu_family_number))
 		(rc, output) = run_command_warn_when_fail("%s %s"%(DMIDECODE, "-s processor-frequency"), "Unable to collect processor frequency")
 		if rc:
 			self.max_freq = None
@@ -1913,7 +1926,8 @@ class EthInterfaceInfo(InterfaceInfo):
 		self.link_type			= "eth"
 		self.flow_control_rx		= NA
 		self.flow_control_tx		= NA
-		self.adaptive_moderation	= NA
+		self.rx_adaptive_moderation	= NA
+		self.tx_adaptive_moderation	= NA
 		self.gro_offload		= NA
 		self.moderation_tx_frames	= NA
 		self.moderation_rx_frames	= NA
@@ -1947,7 +1961,8 @@ class EthInterfaceInfo(InterfaceInfo):
 	def set_adaptive_moderation_parameters(self):
 		""" Set adaptive moderation parameters.
 		"""
-		self.adaptive_moderation	= self.get_network_parameter_value('c', 'adaptive rx')
+		self.rx_adaptive_moderation	= self.get_network_parameter_value('c', 'adaptive rx')
+		self.tx_adaptive_moderation	= self.get_network_parameter_value('c', 'adaptive tx')
 		self.moderation_tx_frames	= self.get_network_parameter_value('c', 'tx-frames')
 		self.moderation_rx_frames	= self.get_network_parameter_value('c', 'rx-frames')
 
@@ -1978,10 +1993,15 @@ class EthInterfaceInfo(InterfaceInfo):
 		if not self.disable_mc_loopback:
 			self.disable_mc_loopback = NA
 
-	def disable_qdisc_tx(self):
-		""" Diable QDISC tx queue by setting its length to 0
+	def disable_qdisc_tx(self, node_info):
+		""" Disable QDISC tx queue. Use no queue method for supporting OS or set to 0 length otherwise
 		"""
-		self.apply_qdisc_tx_len(0)
+		if node_info.os.name in OS.TC_QDISC_NO_QUEUE_METHOD_SUPPORT_OS:
+			logging.debug("Setting %s to no queue." % (self.name))
+			cmd = ADD_INTERFACE_QDISC_NO_QUEUE_CMD % (self.name)
+			run_command_warn_when_fail(cmd, "Failed to set %s to no queue." % (self.name))
+		else:
+			self.apply_qdisc_tx_len(0)
 
 	def optimize_qdisc_tx_len(self):
 		""" Optimizng QDISC tx queue by setting its length to a quarter of the interface's tx queue size
@@ -2550,29 +2570,42 @@ class PciDeviceInfo:
 		if len(interfaces_ordered) == 2:
 			interfaces_ordered[1].set_affinity(numa_cores[len(numa_cores)/2:])
 
+	def get_cores_for_steering_tuning(self, node_info, min_num, preferred_num=None):
+		""" Gets a list of cores to be used for steering tuning. This is the full
+		    list of available cores from which a subset should be chosen. If available
+		    cores number is less than min_number returns an empty list. If preferred_num
+		    argument is given, will try to find a list with at least preferred_num cores.
+		"""
+		if self.numa == -1:
+			cores = self.closest_core_list
+		else:
+			cores = node_info.cpu.physical_cores[self.numa]
+			if (preferred_num and len(cores) < preferred_num):
+				cores = node_info.cpu.sockets_cores[self.numa]
+		if len(cores) < min_num:
+			cores = []
+		return cores
+
 	def set_wanted_affinity_2interfaces_to_oposites_cores_on_numa_node(self, node_info):
 		""" Sets wanted affinity for 2 interfaces. Each interface gets a core in each side of the NUMA in symmetric way
 		    The Idea is to put rx0 of each interface on the first and last core
 		    tx1 will be set to second and second from last
 		    using RSS indirection all rx packets will be directed to rx0
 		    tx1 will handle the completion of the forwarded packets
-		    This will work properly only for devices with at least 4 cores
+		    This will work properly only for devices with at least 4 cores. We prefer using
+		    at least 6 cores, even if they are logical, in order to comply with XPS/RPS best
+		    effort tuning.
 		"""
-		if self.numa == -1:
-			numa_cores = self.closest_core_list
-		else:
-			numa_cores = node_info.cpu.physical_cores[self.numa]
-
-		number_of_cores = len(numa_cores)
-		if number_of_cores < 4:
+		tuning_cores = self.get_cores_for_steering_tuning(node_info, 4, 6)
+		if not tuning_cores:
 			logging.warning("Can't assign affinity for devices with 2 interfaces and less than 4 cores.")
 			return
 
 		interfaces_ordered = self.get_interfaces_ordered()
-		affinity_core_list = [numa_cores[0], numa_cores[-2]]
+		affinity_core_list = [tuning_cores[0], tuning_cores[-2]]
 		interfaces_ordered[0].set_affinity(affinity_core_list)
 		logging.debug("interface: %s got list %s"%(interfaces_ordered[0].name, affinity_core_list))
-		affinity_core_list = [numa_cores[-1], numa_cores[1]]
+		affinity_core_list = [tuning_cores[-1], tuning_cores[1]]
 		interfaces_ordered[1].set_affinity(affinity_core_list)
 		logging.debug("interface: %s got list %s"%(interfaces_ordered[1].name, affinity_core_list))
 
@@ -2606,21 +2639,17 @@ class PciDeviceInfo:
 		    E.g. for the following core list [0,1,2,3,4,5,6,7], 2 rings per interface:
 		    First interface set irq affinity: tx-0:3, tx-1:6
 		    Second interface set irq affinity: tx-0:6, tx-1:3
-		    This will work properly only for devices with at least 6 cores.
+		    This will work best for devices with at least 6 cores, preferred physical. For systems
+		    with 4 cores we use best effort tuning (non-optimal).
 		"""
-		if self.numa == -1:
-			numa_cores = self.closest_core_list
-		else:
-			numa_cores = node_info.cpu.physical_cores[self.numa]
-
-		number_of_cores = len(numa_cores)
-		if number_of_cores < 6:
-			logging.warning("Can't assign XPS for devices with 2 interfaces and less than 6 cores.")
+		tuning_cores = self.get_cores_for_steering_tuning(node_info, 4, 6)
+		if not tuning_cores:
+			logging.warning("Can't assign XPS for devices with 2 interfaces and less than 4 cores.")
 			return
 
 		interfaces_ordered = self.get_interfaces_ordered()
 		for i in range(2):
-			xps_core_list = self.get_rps_xps_cores_list(numa_cores, i+1)
+			xps_core_list = self.get_rps_xps_cores_list(tuning_cores, i+1)
 			logging.debug("interface: %s got list %s"%(interfaces_ordered[i].name, xps_core_list))
 			interfaces_ordered[i].reset_xps()
 			interfaces_ordered[i].set_xps(xps_core_list, False)
@@ -2655,21 +2684,17 @@ class PciDeviceInfo:
 		    E.g. for the following core list [0,1,2,3,4,5,6,7], 2 rings per interface:
 		    First interface set irq affinity: rx-0:2, rx-1:5
 		    Second interface set irq affinity: rx-0:5, rx-1:2
-		    This will work properly only for devices with at least 6 cores.
+		    This will work best for devices with at least 6 cores, preferred physical. For systems
+		    with 4 cores we use best effort tuning (non-optimal).
 		"""
-		if self.numa == -1:
-			numa_cores = self.closest_core_list
-		else:
-			numa_cores = node_info.cpu.physical_cores[self.numa]
-
-		number_of_cores = len(numa_cores)
-		if number_of_cores < 6:
-			logging.warning("Can't assign RPS for devices with 2 interfaces and less than 6 cores.")
+		tuning_cores = self.get_cores_for_steering_tuning(node_info, 4, 6)
+		if not tuning_cores:
+			logging.warning("Can't assign RPS for devices with 2 interfaces and less than 4 cores.")
 			return
 
 		interfaces_ordered = self.get_interfaces_ordered()
 		for i in range(2):
-			rps_core_list = self.get_rps_xps_cores_list(numa_cores, i+1)
+			rps_core_list = self.get_rps_xps_cores_list(tuning_cores, i+1)
 			logging.debug("Interface %s got core list %s"%(interfaces_ordered[i].name, rps_core_list))
 			interfaces_ordered[i].set_rps(rps_core_list, False)
 
@@ -3126,15 +3151,20 @@ def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores = True):
 	if not any(node_info.pci_devices):
 		return
 
+	need_limit = any(node_info.cpu.vendor == v for v in CPUVendor.LIMIT_TO_32_QUEUES)
+
 	for device in node_info.pci_devices:
 		if use_all_cores:
 			wanted_number_of_rings = len(node_info.cpu.all_cores)
 		else:
 			wanted_number_of_rings = len(device.closest_core_list)
 
+		if need_limit and device.type in Devices.NEED_32_QUEUES_LIMIT_DEVICES:
+			wanted_number_of_rings = min(wanted_number_of_rings, 32)
+
 		for interface in device.interfaces:
 			if interface.status == InterfaceInfo.UP and interface.link_type == 'eth':
-				interface.disable_qdisc_tx()
+				interface.disable_qdisc_tx(node_info)
 				if device.type in Devices.MLX4_CONSUMERS:
 					interface.apply_network_parameter_value('A', 'off', 'tx')
 					interface.apply_network_parameter_value('A', 'off', 'rx')
@@ -3144,8 +3174,11 @@ def set_ip_forwarding_profile_multi_stream(node_info, use_all_cores = True):
 				else:
 					interface.optimize_qdisc_tx_len()
 					interface.apply_network_parameter_value('A', 'off', ['rx', 'tx'])
+					interface.apply_network_parameter_value(
+						'G', 8192, ['rx', 'tx'], appearance_index=2)
 					interface.apply_network_parameter_value('L', wanted_number_of_rings, 'combined', appearance_index = 2)
 					interface.apply_network_parameter_value('C', 'on', 'adaptive-rx', 'adaptive rx')
+					interface.apply_network_parameter_value('C', 'off', 'adaptive-tx', 'adaptive tx')
 
 				interface.apply_network_parameter_value('K', 'off', 'gro', 'generic-receive-offload')
 
@@ -3185,7 +3218,7 @@ def set_ip_forwarding_profile_single_stream(node_info, force_single = False, zer
 			if interface.status == InterfaceInfo.UP and interface.link_type == 'eth':
 				number_of_active_ethernet_interfaces += 1
 
-				interface.disable_qdisc_tx()
+				interface.disable_qdisc_tx(node_info)
 				if device.type in Devices.MLX4_CONSUMERS:
 					set_xor_hash_rc = interface.apply_network_parameter_value('set-priv-flags', 'on', 'mlx4_rss_xor_hash_function')
 					if not set_xor_hash_rc:
@@ -3203,6 +3236,7 @@ def set_ip_forwarding_profile_single_stream(node_info, force_single = False, zer
 					interface.apply_network_parameter_value('X', 1, 'equal')
 
 				interface.apply_network_parameter_value('C', 'off', 'adaptive-rx', 'adaptive rx')
+				interface.apply_network_parameter_value('C', 'off', 'adaptive-tx', 'adaptive tx')
 				interface.apply_network_parameter_value('K', 'off', 'gro', 'generic-receive-offload')
 				interface.apply_network_parameter_value('C', 64, 'tx-frames')
 				interface.apply_network_parameter_value('C', 0, 'rx-usecs')

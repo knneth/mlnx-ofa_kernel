@@ -44,6 +44,11 @@
 #include "en_tc.h"
 #include "fs_core.h"
 
+#define MLX5E_REP_PARAMS_LOG_SQ_SIZE \
+	max(0x6, MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE)
+#define MLX5E_REP_PARAMS_LOG_RQ_SIZE \
+	max(0x6, MLX5E_PARAMS_DEFAULT_LOG_RQ_SIZE)
+
 static const char mlx5e_rep_driver_name[] = "mlx5e_rep";
 
 static void mlx5e_rep_get_drvinfo(struct net_device *dev,
@@ -61,18 +66,36 @@ static const struct counter_desc sw_rep_stats_desc[] = {
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_bytes) },
 };
 
-#define NUM_VPORT_REP_COUNTERS	ARRAY_SIZE(sw_rep_stats_desc)
+struct vport_stats {
+	u64 vport_rx_packets;
+	u64 vport_tx_packets;
+	u64 vport_rx_bytes;
+	u64 vport_tx_bytes;
+};
+
+static const struct counter_desc vport_rep_stats_desc[] = {
+	{ MLX5E_DECLARE_STAT(struct vport_stats, vport_rx_packets) },
+	{ MLX5E_DECLARE_STAT(struct vport_stats, vport_rx_bytes) },
+	{ MLX5E_DECLARE_STAT(struct vport_stats, vport_tx_packets) },
+	{ MLX5E_DECLARE_STAT(struct vport_stats, vport_tx_bytes) },
+};
+
+#define NUM_VPORT_REP_SW_COUNTERS ARRAY_SIZE(sw_rep_stats_desc)
+#define NUM_VPORT_REP_HW_COUNTERS ARRAY_SIZE(vport_rep_stats_desc)
 
 static void mlx5e_rep_get_strings(struct net_device *dev,
 				  u32 stringset, uint8_t *data)
 {
-	int i;
+	int i, j;
 
 	switch (stringset) {
 	case ETH_SS_STATS:
-		for (i = 0; i < NUM_VPORT_REP_COUNTERS; i++)
+		for (i = 0; i < NUM_VPORT_REP_SW_COUNTERS; i++)
 			strcpy(data + (i * ETH_GSTRING_LEN),
 			       sw_rep_stats_desc[i].format);
+		for (j = 0; j < NUM_VPORT_REP_HW_COUNTERS; j++, i++)
+			strcpy(data + (i * ETH_GSTRING_LEN),
+			       vport_rep_stats_desc[j].format);
 		break;
 	}
 }
@@ -135,7 +158,7 @@ static void mlx5e_rep_get_ethtool_stats(struct net_device *dev,
 					struct ethtool_stats *stats, u64 *data)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
-	int i;
+	int i, j;
 
 	if (!data)
 		return;
@@ -143,18 +166,23 @@ static void mlx5e_rep_get_ethtool_stats(struct net_device *dev,
 	mutex_lock(&priv->state_lock);
 	if (test_bit(MLX5E_STATE_OPENED, &priv->state))
 		mlx5e_rep_update_sw_counters(priv);
+	mlx5e_rep_update_hw_counters(priv);
 	mutex_unlock(&priv->state_lock);
 
-	for (i = 0; i < NUM_VPORT_REP_COUNTERS; i++)
+	for (i = 0; i < NUM_VPORT_REP_SW_COUNTERS; i++)
 		data[i] = MLX5E_READ_CTR64_CPU(&priv->stats.sw,
 					       sw_rep_stats_desc, i);
+
+	for (j = 0; j < NUM_VPORT_REP_HW_COUNTERS; j++, i++)
+		data[i] = MLX5E_READ_CTR64_CPU(&priv->stats.vf_vport,
+					       vport_rep_stats_desc, j);
 }
 
 static int mlx5e_rep_get_sset_count(struct net_device *dev, int sset)
 {
 	switch (sset) {
 	case ETH_SS_STATS:
-		return NUM_VPORT_REP_COUNTERS;
+		return NUM_VPORT_REP_SW_COUNTERS + NUM_VPORT_REP_HW_COUNTERS;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -171,9 +199,10 @@ static const struct ethtool_ops mlx5e_rep_ethtool_ops = {
 int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-	struct mlx5_eswitch_rep *rep = rpriv->rep;
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+	struct net_device *uplink_dev = mlx5_eswitch_get_uplink_netdev(esw);
+	struct mlx5e_priv *uplink_priv = netdev_priv(uplink_dev);
+	struct net_device *uplink_upper = netdev_master_upper_dev_get(uplink_dev);
 
 	if (esw->mode == SRIOV_NONE)
 		return -EOPNOTSUPP;
@@ -181,7 +210,14 @@ int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
 	switch (attr->id) {
 	case SWITCHDEV_ATTR_ID_PORT_PARENT_ID:
 		attr->u.ppid.id_len = ETH_ALEN;
-		ether_addr_copy(attr->u.ppid.id, rep->hw_id);
+		if (uplink_upper && mlx5_lag_is_active(uplink_priv->mdev)) {
+			ether_addr_copy(attr->u.ppid.id, uplink_upper->dev_addr);
+		} else {
+			struct mlx5e_rep_priv *rpriv = priv->ppriv;
+			struct mlx5_eswitch_rep *rep = rpriv->rep;
+
+			ether_addr_copy(attr->u.ppid.id, rep->hw_id);
+		}
 		break;
 	default:
 		return -EOPNOTSUPP;
@@ -242,8 +278,8 @@ void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv)
 static void mlx5e_rep_neigh_update_init_interval(struct mlx5e_rep_priv *rpriv)
 {
 #if IS_ENABLED(CONFIG_IPV6)
-	unsigned long ipv6_interval = NEIGH_VAR(&ipv6_stub->nd_tbl->parms,
-						DELAY_PROBE_TIME);
+	unsigned long ipv6_interval = ipv6_stub ? NEIGH_VAR(&ipv6_stub->nd_tbl->parms,
+						  DELAY_PROBE_TIME) : ~0UL;
 #else
 	unsigned long ipv6_interval = ~0UL;
 #endif
@@ -376,7 +412,8 @@ static int mlx5e_rep_netevent_event(struct notifier_block *nb,
 	case NETEVENT_NEIGH_UPDATE:
 		n = ptr;
 #if IS_ENABLED(CONFIG_IPV6)
-		if (n->tbl != ipv6_stub->nd_tbl && n->tbl != &arp_tbl)
+		if ((!ipv6_stub || n->tbl != ipv6_stub->nd_tbl) &&
+		     n->tbl != &arp_tbl)
 #else
 		if (n->tbl != &arp_tbl)
 #endif
@@ -424,7 +461,8 @@ static int mlx5e_rep_netevent_event(struct notifier_block *nb,
 		 * done per device delay prob time parameter.
 		 */
 #if IS_ENABLED(CONFIG_IPV6)
-		if (!p->dev || (p->tbl != ipv6_stub->nd_tbl && p->tbl != &arp_tbl))
+		if (!p->dev || ((!ipv6_stub || p->tbl != ipv6_stub->nd_tbl) &&
+		    p->tbl != &arp_tbl))
 #else
 		if (!p->dev || p->tbl != &arp_tbl)
 #endif
@@ -620,7 +658,6 @@ static int mlx5e_rep_open(struct net_device *dev)
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep = rpriv->rep;
-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	int err;
 
 	mutex_lock(&priv->state_lock);
@@ -628,8 +665,9 @@ static int mlx5e_rep_open(struct net_device *dev)
 	if (err)
 		goto unlock;
 
-	if (!mlx5_eswitch_set_vport_state(esw, rep->vport,
-					  MLX5_ESW_VPORT_ADMIN_STATE_UP))
+	if (!mlx5_modify_vport_admin_state(priv->mdev,
+			MLX5_QUERY_VPORT_STATE_IN_OP_MOD_ESW_VPORT,
+			rep->vport, MLX5_ESW_VPORT_ADMIN_STATE_UP))
 		netif_carrier_on(dev);
 
 unlock:
@@ -642,11 +680,12 @@ static int mlx5e_rep_close(struct net_device *dev)
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep = rpriv->rep;
-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	int ret;
 
 	mutex_lock(&priv->state_lock);
-	(void)mlx5_eswitch_set_vport_state(esw, rep->vport, MLX5_ESW_VPORT_ADMIN_STATE_DOWN);
+	mlx5_modify_vport_admin_state(priv->mdev,
+			MLX5_QUERY_VPORT_STATE_IN_OP_MOD_ESW_VPORT,
+			rep->vport, MLX5_ESW_VPORT_ADMIN_STATE_DOWN);
 	ret = mlx5e_close_locked(dev);
 	mutex_unlock(&priv->state_lock);
 	return ret;
@@ -739,7 +778,7 @@ bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv)
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep;
 
-	if (!MLX5_CAP_GEN(priv->mdev, vport_group_manager))
+	if (!MLX5_ESWITCH_MANAGER(priv->mdev))
 		return false;
 
 	rep = rpriv->rep;
@@ -753,8 +792,12 @@ bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv)
 static bool mlx5e_is_vf_vport_rep(struct mlx5e_priv *priv)
 {
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-	struct mlx5_eswitch_rep *rep = rpriv->rep;
+	struct mlx5_eswitch_rep *rep;
 
+	if (!MLX5_ESWITCH_MANAGER(priv->mdev))
+ 		return false;
+
+	rep = rpriv->rep;
 	if (rep && rep->vport != FDB_UPLINK_VPORT)
 		return true;
 
@@ -832,11 +875,11 @@ static void mlx5e_build_rep_params(struct mlx5_core_dev *mdev,
 					 MLX5_CQ_PERIOD_MODE_START_FROM_CQE :
 					 MLX5_CQ_PERIOD_MODE_START_FROM_EQE;
 
-	params->log_sq_size = MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
+	params->log_sq_size = MLX5E_REP_PARAMS_LOG_SQ_SIZE;
 	params->rq_wq_type  = MLX5_WQ_TYPE_CYCLIC;
-	params->log_rq_size = MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE;
+	params->log_rq_size = MLX5E_REP_PARAMS_LOG_RQ_SIZE;
 
-	params->rx_am_enabled = MLX5_CAP_GEN(mdev, cq_moderation);
+	params->rx_dim_enabled = MLX5_CAP_GEN(mdev, cq_moderation);
 	mlx5e_set_rx_cq_mode_params(params, cq_period_mode);
 
 	params->tx_max_inline         = mlx5e_get_max_inline_cap(mdev);
@@ -860,6 +903,16 @@ static void mlx5e_build_rep_netdev(struct net_device *netdev)
 
 	netdev->features	 |= NETIF_F_VLAN_CHALLENGED | NETIF_F_HW_TC | NETIF_F_NETNS_LOCAL;
 	netdev->hw_features      |= NETIF_F_HW_TC;
+
+	netdev->hw_features    |= NETIF_F_SG;
+	netdev->hw_features    |= NETIF_F_IP_CSUM;
+	netdev->hw_features    |= NETIF_F_IPV6_CSUM;
+	netdev->hw_features    |= NETIF_F_GRO;
+	netdev->hw_features    |= NETIF_F_TSO;
+	netdev->hw_features    |= NETIF_F_TSO6;
+	netdev->hw_features    |= NETIF_F_RXCSUM;
+
+	netdev->features |= netdev->hw_features;
 
 	eth_hw_addr_random(netdev);
 }

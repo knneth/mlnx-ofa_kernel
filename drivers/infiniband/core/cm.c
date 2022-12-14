@@ -56,6 +56,9 @@
 MODULE_AUTHOR("Sean Hefty");
 MODULE_DESCRIPTION("InfiniBand CM");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 static const char * const ibcm_rej_reason_strs[] = {
 	[IB_CM_REJ_NO_QP]			= "no QP",
@@ -452,53 +455,51 @@ static void cm_set_private_data(struct cm_id_private *cm_id_priv,
 	cm_id_priv->private_data_len = private_data_len;
 }
 
+static int cm_init_av_for_lap(struct cm_port *port, struct ib_wc *wc,
+			      struct ib_grh *grh, struct cm_av *av)
+{
+	struct rdma_ah_attr new_ah_attr;
+	int ret;
+
+	av->port = port;
+	av->pkey_index = wc->pkey_index;
+
+	/*
+	 * av->ah_attr might be initialized based on past wc during incoming
+	 * connect request or while sending out connect request. So initialize
+	 * a new ah_attr on stack. If initialization fails, old ah_attr is
+	 * used for sending any responses. If initialization is successful,
+	 * than new ah_attr is used by overwriting old one.
+	 */
+	ret = ib_init_ah_attr_from_wc(port->cm_dev->ib_device,
+				      port->port_num, wc,
+				      grh, &new_ah_attr);
+	if (ret)
+		return ret;
+
+	rdma_move_ah_attr(&av->ah_attr, &new_ah_attr);
+	return 0;
+}
+
 static int cm_init_av_for_response(struct cm_port *port, struct ib_wc *wc,
 				   struct ib_grh *grh, struct cm_av *av)
 {
 	av->port = port;
 	av->pkey_index = wc->pkey_index;
-	return ib_init_ah_from_wc(port->cm_dev->ib_device, port->port_num, wc,
-				  grh, &av->ah_attr);
+	return ib_init_ah_attr_from_wc(port->cm_dev->ib_device,
+				       port->port_num, wc,
+				       grh, &av->ah_attr);
 }
 
-static int cm_init_av_by_path(struct sa_path_rec *path, struct cm_av *av,
-			      struct cm_id_private *cm_id_priv)
+static int add_cm_id_to_port_list(struct cm_id_private *cm_id_priv,
+				  struct cm_av *av,
+				  struct cm_port *port)
 {
-	struct cm_device *cm_dev;
-	struct cm_port *port = NULL;
 	unsigned long flags;
-	int ret;
-	u8 p;
-	struct net_device *ndev = ib_get_ndev_from_path(path);
-
-	read_lock_irqsave(&cm.device_lock, flags);
-	list_for_each_entry(cm_dev, &cm.device_list, list) {
-		if (!ib_find_cached_gid(cm_dev->ib_device, &path->sgid,
-					sa_conv_pathrec_to_gid_type(path),
-					ndev, &p, NULL)) {
-			port = cm_dev->port[p-1];
-			break;
-		}
-	}
-	read_unlock_irqrestore(&cm.device_lock, flags);
-
-	if (ndev)
-		dev_put(ndev);
-
-	if (!port)
-		return -EINVAL;
-
-	ret = ib_find_cached_pkey(cm_dev->ib_device, port->port_num,
-				  be16_to_cpu(path->pkey), &av->pkey_index);
-	if (ret)
-		return ret;
-
-	av->port = port;
-	ib_init_ah_from_path(cm_dev->ib_device, port->port_num, path,
-			     &av->ah_attr);
-	av->timeout = path->packet_life_time + 1;
+	int ret = 0;
 
 	spin_lock_irqsave(&cm.lock, flags);
+
 	if (&cm_id_priv->av == av)
 		list_add_tail(&cm_id_priv->prim_list, &port->cm_priv_prim_list);
 	else if (&cm_id_priv->alt_av == av)
@@ -507,8 +508,95 @@ static int cm_init_av_by_path(struct sa_path_rec *path, struct cm_av *av,
 		ret = -EINVAL;
 
 	spin_unlock_irqrestore(&cm.lock, flags);
-
 	return ret;
+}
+
+static struct cm_port *
+get_cm_port_from_path(struct sa_path_rec *path, const struct ib_gid_attr *attr)
+{
+	struct cm_device *cm_dev;
+	struct cm_port *port = NULL;
+	unsigned long flags;
+
+	if (attr) {
+		read_lock_irqsave(&cm.device_lock, flags);
+		list_for_each_entry(cm_dev, &cm.device_list, list) {
+			if (cm_dev->ib_device == attr->device) {
+				port = cm_dev->port[attr->port_num - 1];
+				break;
+			}
+		}
+		read_unlock_irqrestore(&cm.device_lock, flags);
+	} else {
+		/* SGID attribute can be NULL in following
+		 * conditions.
+		 * (a) Alternative path
+		 * (b) IB link layer without GRH
+		 * (c) LAP send messages
+		 */
+		read_lock_irqsave(&cm.device_lock, flags);
+		list_for_each_entry(cm_dev, &cm.device_list, list) {
+			attr = rdma_find_gid(cm_dev->ib_device,
+					     &path->sgid,
+					     sa_conv_pathrec_to_gid_type(path),
+					     NULL);
+			if (!IS_ERR(attr)) {
+				port = cm_dev->port[attr->port_num - 1];
+				break;
+			}
+		}
+		read_unlock_irqrestore(&cm.device_lock, flags);
+		if (port)
+			rdma_put_gid_attr(attr);
+	}
+	return port;
+}
+
+static int cm_init_av_by_path(struct sa_path_rec *path,
+			      const struct ib_gid_attr *sgid_attr,
+			      struct cm_av *av,
+			      struct cm_id_private *cm_id_priv)
+{
+	struct rdma_ah_attr new_ah_attr;
+	struct cm_device *cm_dev;
+	struct cm_port *port;
+	int ret;
+
+	port = get_cm_port_from_path(path, sgid_attr);
+	if (!port)
+		return -EINVAL;
+	cm_dev = port->cm_dev;
+
+	ret = ib_find_cached_pkey(cm_dev->ib_device, port->port_num,
+				  be16_to_cpu(path->pkey), &av->pkey_index);
+	if (ret)
+		return ret;
+
+	av->port = port;
+
+	/*
+	 * av->ah_attr might be initialized based on wc or during
+	 * request processing time which might have reference to sgid_attr.
+	 * So initialize a new ah_attr on stack.
+	 * If initialization fails, old ah_attr is used for sending any
+	 * responses. If initialization is successful, than new ah_attr
+	 * is used by overwriting the old one. So that right ah_attr
+	 * can be used to return an error response.
+	 */
+	ret = ib_init_ah_attr_from_path(cm_dev->ib_device, port->port_num, path,
+					&new_ah_attr, sgid_attr);
+	if (ret)
+		return ret;
+
+	av->timeout = path->packet_life_time + 1;
+
+	ret = add_cm_id_to_port_list(cm_id_priv, av, port);
+	if (ret) {
+		rdma_destroy_ah_attr(&new_ah_attr);
+		return ret;
+	}
+	rdma_move_ah_attr(&av->ah_attr, &new_ah_attr);
+	return 0;
 }
 
 static int cm_alloc_id(struct cm_id_private *cm_id_priv)
@@ -1029,6 +1117,9 @@ retest:
 	wait_for_completion(&cm_id_priv->comp);
 	while ((work = cm_dequeue_work(cm_id_priv)) != NULL)
 		cm_free_work(work);
+
+	rdma_destroy_ah_attr(&cm_id_priv->av.ah_attr);
+	rdma_destroy_ah_attr(&cm_id_priv->alt_av.ah_attr);
 	kfree(cm_id_priv->private_data);
 	kfree(cm_id_priv);
 }
@@ -1351,12 +1442,13 @@ int ib_send_cm_req(struct ib_cm_id *cm_id,
 		goto out;
 	}
 
-	ret = cm_init_av_by_path(param->primary_path, &cm_id_priv->av,
+	ret = cm_init_av_by_path(param->primary_path,
+				 param->ppath_sgid_attr, &cm_id_priv->av,
 				 cm_id_priv);
 	if (ret)
 		goto error1;
 	if (param->alternate_path) {
-		ret = cm_init_av_by_path(param->alternate_path,
+		ret = cm_init_av_by_path(param->alternate_path, NULL,
 					 &cm_id_priv->alt_av, cm_id_priv);
 		if (ret)
 			goto error1;
@@ -1519,6 +1611,8 @@ static void cm_format_paths_from_req(struct cm_req_msg *req_msg,
 		cm_req_get_primary_local_ack_timeout(req_msg);
 	primary_path->packet_life_time -= (primary_path->packet_life_time > 0);
 	primary_path->service_id = req_msg->service_id;
+	if (sa_path_is_roce(primary_path))
+		primary_path->roce.route_resolved = false;
 
 	if (cm_req_has_alt_path(req_msg)) {
 		alt_path->dgid = req_msg->alt_local_gid;
@@ -1538,6 +1632,9 @@ static void cm_format_paths_from_req(struct cm_req_msg *req_msg,
 			cm_req_get_alt_local_ack_timeout(req_msg);
 		alt_path->packet_life_time -= (alt_path->packet_life_time > 0);
 		alt_path->service_id = req_msg->service_id;
+
+		if (sa_path_is_roce(alt_path))
+			alt_path->roce.route_resolved = false;
 	}
 	cm_format_path_lid_from_req(req_msg, primary_path, alt_path);
 }
@@ -1560,6 +1657,35 @@ static u16 cm_get_bth_pkey(struct cm_work *work)
 	return pkey;
 }
 
+/**
+ * Convert OPA SGID to IB SGID
+ * ULPs (such as IPoIB) do not understand OPA GIDs and will
+ * reject them as the local_gid will not match the sgid. Therefore,
+ * change the pathrec's SGID to an IB SGID.
+ *
+ * @work: Work completion
+ * @path: Path record
+ */
+static void cm_opa_to_ib_sgid(struct cm_work *work,
+			      struct sa_path_rec *path)
+{
+	struct ib_device *dev = work->port->cm_dev->ib_device;
+	u8 port_num = work->port->port_num;
+
+	if (rdma_cap_opa_ah(dev, port_num) &&
+	    (ib_is_opa_gid(&path->sgid))) {
+		union ib_gid sgid;
+
+		if (rdma_query_gid(dev, port_num, 0, &sgid)) {
+			dev_warn(&dev->dev,
+				 "Error updating sgid in CM request\n");
+			return;
+		}
+
+		path->sgid = sgid;
+	}
+}
+
 static void cm_format_req_event(struct cm_work *work,
 				struct cm_id_private *cm_id_priv,
 				struct ib_cm_id *listen_id)
@@ -1573,10 +1699,13 @@ static void cm_format_req_event(struct cm_work *work,
 	param->bth_pkey = cm_get_bth_pkey(work);
 	param->port = cm_id_priv->av.port->port_num;
 	param->primary_path = &work->path[0];
-	if (cm_req_has_alt_path(req_msg))
+	cm_opa_to_ib_sgid(work, param->primary_path);
+	if (cm_req_has_alt_path(req_msg)) {
 		param->alternate_path = &work->path[1];
-	else
+		cm_opa_to_ib_sgid(work, param->alternate_path);
+	} else {
 		param->alternate_path = NULL;
+	}
 	param->remote_ca_guid = req_msg->local_ca_guid;
 	param->remote_qkey = be32_to_cpu(req_msg->local_qkey);
 	param->remote_qpn = be32_to_cpu(cm_req_get_local_qpn(req_msg));
@@ -1592,6 +1721,7 @@ static void cm_format_req_event(struct cm_work *work,
 	param->retry_count = cm_req_get_retry_count(req_msg);
 	param->rnr_retry_count = cm_req_get_rnr_retry_count(req_msg);
 	param->srq = cm_req_get_srq(req_msg);
+	param->ppath_sgid_attr = cm_id_priv->av.ah_attr.grh.sgid_attr;
 	work->cm_event.private_data = &req_msg->private_data;
 }
 
@@ -1813,9 +1943,8 @@ static int cm_req_handler(struct cm_work *work)
 	struct ib_cm_id *cm_id;
 	struct cm_id_private *cm_id_priv, *listen_cm_id_priv;
 	struct cm_req_msg *req_msg;
-	union ib_gid gid;
-	struct ib_gid_attr gid_attr;
 	const struct ib_global_route *grh;
+	const struct ib_gid_attr *gid_attr;
 	int ret;
 
 	req_msg = (struct cm_req_msg *)work->mad_recv_wc->recv_buf.mad;
@@ -1859,69 +1988,50 @@ static int cm_req_handler(struct cm_work *work)
 	if (cm_req_has_alt_path(req_msg))
 		memset(&work->path[1], 0, sizeof(work->path[1]));
 	grh = rdma_ah_read_grh(&cm_id_priv->av.ah_attr);
-	ret = ib_get_cached_gid(work->port->cm_dev->ib_device,
-				work->port->port_num,
-				grh->sgid_index,
-				&gid, &gid_attr);
-	if (!ret) {
-		if (gid_attr.ndev) {
-			work->path[0].rec_type =
-				sa_conv_gid_to_pathrec_type(gid_attr.gid_type);
-			sa_path_set_ifindex(&work->path[0],
-					    gid_attr.ndev->ifindex);
-			sa_path_set_ndev(&work->path[0],
-					 dev_net(gid_attr.ndev));
-			dev_put(gid_attr.ndev);
-		} else {
-			cm_path_set_rec_type(work->port->cm_dev->ib_device,
-					     work->port->port_num,
-					     &work->path[0],
-					     &req_msg->primary_local_gid);
-		}
-		if (cm_req_has_alt_path(req_msg))
-			work->path[1].rec_type = work->path[0].rec_type;
-		cm_format_paths_from_req(req_msg, &work->path[0],
-					 &work->path[1]);
-		if (cm_id_priv->av.ah_attr.type == RDMA_AH_ATTR_TYPE_ROCE)
-			sa_path_set_dmac(&work->path[0],
-					 cm_id_priv->av.ah_attr.roce.dmac);
-		work->path[0].hop_limit = grh->hop_limit;
-		ret = cm_init_av_by_path(&work->path[0], &cm_id_priv->av,
-					 cm_id_priv);
+	gid_attr = grh->sgid_attr;
+	if (gid_attr && gid_attr->ndev) {
+		work->path[0].rec_type =
+			sa_conv_gid_to_pathrec_type(gid_attr->gid_type);
+	} else {
+		/* If no GID attribute or ndev is null, it is not RoCE. */
+		cm_path_set_rec_type(work->port->cm_dev->ib_device,
+				     work->port->port_num,
+				     &work->path[0],
+				     &req_msg->primary_local_gid);
 	}
+	if (cm_req_has_alt_path(req_msg))
+		work->path[1].rec_type = work->path[0].rec_type;
+	cm_format_paths_from_req(req_msg, &work->path[0],
+				 &work->path[1]);
+	if (cm_id_priv->av.ah_attr.type == RDMA_AH_ATTR_TYPE_ROCE)
+		sa_path_set_dmac(&work->path[0],
+				 cm_id_priv->av.ah_attr.roce.dmac);
+	work->path[0].hop_limit = grh->hop_limit;
+	ret = cm_init_av_by_path(&work->path[0], gid_attr, &cm_id_priv->av,
+				 cm_id_priv);
 	if (ret) {
-		int err = ib_get_cached_gid(work->port->cm_dev->ib_device,
-					    work->port->port_num, 0,
-					    &work->path[0].sgid,
-					    &gid_attr);
-		if (!err && gid_attr.ndev) {
-			work->path[0].rec_type =
-				sa_conv_gid_to_pathrec_type(gid_attr.gid_type);
-			sa_path_set_ifindex(&work->path[0],
-					    gid_attr.ndev->ifindex);
-			sa_path_set_ndev(&work->path[0],
-					 dev_net(gid_attr.ndev));
-			dev_put(gid_attr.ndev);
-		} else {
-			cm_path_set_rec_type(work->port->cm_dev->ib_device,
-					     work->port->port_num,
-					     &work->path[0],
-					     &req_msg->primary_local_gid);
-		}
-		if (cm_req_has_alt_path(req_msg))
-			work->path[1].rec_type = work->path[0].rec_type;
-		ib_send_cm_rej(cm_id, IB_CM_REJ_INVALID_GID,
-			       &work->path[0].sgid, sizeof work->path[0].sgid,
-			       NULL, 0);
+		int err;
+
+		err = rdma_query_gid(work->port->cm_dev->ib_device,
+				     work->port->port_num, 0,
+				     &work->path[0].sgid);
+		if (err)
+			ib_send_cm_rej(cm_id, IB_CM_REJ_INVALID_GID,
+				       NULL, 0, NULL, 0);
+		else
+			ib_send_cm_rej(cm_id, IB_CM_REJ_INVALID_GID,
+				       &work->path[0].sgid,
+				       sizeof(work->path[0].sgid),
+				       NULL, 0);
 		goto rejected;
 	}
 	if (cm_req_has_alt_path(req_msg)) {
-		ret = cm_init_av_by_path(&work->path[1], &cm_id_priv->alt_av,
-					 cm_id_priv);
+		ret = cm_init_av_by_path(&work->path[1], NULL,
+					 &cm_id_priv->alt_av, cm_id_priv);
 		if (ret) {
 			ib_send_cm_rej(cm_id, IB_CM_REJ_INVALID_ALT_GID,
 				       &work->path[0].sgid,
-				       sizeof work->path[0].sgid, NULL, 0);
+				       sizeof(work->path[0].sgid), NULL, 0);
 			goto rejected;
 		}
 	}
@@ -3003,7 +3113,7 @@ int ib_send_cm_lap(struct ib_cm_id *cm_id,
 		goto out;
 	}
 
-	ret = cm_init_av_by_path(alternate_path, &cm_id_priv->alt_av,
+	ret = cm_init_av_by_path(alternate_path, NULL, &cm_id_priv->alt_av,
 				 cm_id_priv);
 	if (ret)
 		goto out;
@@ -3082,6 +3192,13 @@ static int cm_lap_handler(struct cm_work *work)
 	struct ib_mad_send_buf *msg = NULL;
 	int ret;
 
+	/* Currently Alternate path messages are not supported for
+	 * RoCE link layer.
+	 */
+	if (rdma_protocol_roce(work->port->cm_dev->ib_device,
+			       work->port->port_num))
+		return -EINVAL;
+
 	/* todo: verify LAP request and send reject APR if invalid. */
 	lap_msg = (struct cm_lap_msg *)work->mad_recv_wc->recv_buf.mad;
 	cm_id_priv = cm_acquire_id(lap_msg->remote_comm_id,
@@ -3133,13 +3250,16 @@ static int cm_lap_handler(struct cm_work *work)
 		goto unlock;
 	}
 
+	ret = cm_init_av_for_lap(work->port, work->mad_recv_wc->wc,
+				 work->mad_recv_wc->recv_buf.grh,
+				 &cm_id_priv->av);
+	if (ret)
+		goto unlock;
+
+	cm_init_av_by_path(param->alternate_path, NULL, &cm_id_priv->alt_av,
+			   cm_id_priv);
 	cm_id_priv->id.lap_state = IB_CM_LAP_RCVD;
 	cm_id_priv->tid = lap_msg->hdr.tid;
-	cm_init_av_for_response(work->port, work->mad_recv_wc->wc,
-				work->mad_recv_wc->recv_buf.grh,
-				&cm_id_priv->av);
-	cm_init_av_by_path(param->alternate_path, &cm_id_priv->alt_av,
-			   cm_id_priv);
 	ret = atomic_inc_and_test(&cm_id_priv->work_count);
 	if (!ret)
 		list_add_tail(&work->list, &cm_id_priv->work_list);
@@ -3227,6 +3347,13 @@ static int cm_apr_handler(struct cm_work *work)
 	struct cm_id_private *cm_id_priv;
 	struct cm_apr_msg *apr_msg;
 	int ret;
+
+	/* Currently Alternate path messages are not supported for
+	 * RoCE link layer.
+	 */
+	if (rdma_protocol_roce(work->port->cm_dev->ib_device,
+			       work->port->port_num))
+		return -EINVAL;
 
 	apr_msg = (struct cm_apr_msg *)work->mad_recv_wc->recv_buf.mad;
 	cm_id_priv = cm_acquire_id(apr_msg->remote_comm_id,
@@ -3331,7 +3458,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id *cm_id,
 		return -EINVAL;
 
 	cm_id_priv = container_of(cm_id, struct cm_id_private, id);
-	ret = cm_init_av_by_path(param->path, &cm_id_priv->av, cm_id_priv);
+	ret = cm_init_av_by_path(param->path, param->sgid_attr,
+				 &cm_id_priv->av,
+				 cm_id_priv);
 	if (ret)
 		goto out;
 
@@ -3368,6 +3497,7 @@ out:
 EXPORT_SYMBOL(ib_send_cm_sidr_req);
 
 static void cm_format_sidr_req_event(struct cm_work *work,
+				     const struct cm_id_private *rx_cm_id,
 				     struct ib_cm_id *listen_id)
 {
 	struct cm_sidr_req_msg *sidr_req_msg;
@@ -3381,6 +3511,7 @@ static void cm_format_sidr_req_event(struct cm_work *work,
 	param->service_id = sidr_req_msg->service_id;
 	param->bth_pkey = cm_get_bth_pkey(work);
 	param->port = work->port->port_num;
+	param->sgid_attr = rx_cm_id->av.ah_attr.grh.sgid_attr;
 	work->cm_event.private_data = &sidr_req_msg->private_data;
 }
 
@@ -3435,7 +3566,7 @@ static int cm_sidr_req_handler(struct cm_work *work)
 	cm_id_priv->id.service_id = sidr_req_msg->service_id;
 	cm_id_priv->id.service_mask = ~cpu_to_be64(0);
 
-	cm_format_sidr_req_event(work, &cur_cm_id_priv->id);
+	cm_format_sidr_req_event(work, cm_id_priv, &cur_cm_id_priv->id);
 	cm_process_work(cm_id_priv, work);
 	cm_deref_id(cur_cm_id_priv);
 	return 0;
@@ -3512,7 +3643,8 @@ error:	spin_unlock_irqrestore(&cm_id_priv->lock, flags);
 }
 EXPORT_SYMBOL(ib_send_cm_sidr_rep);
 
-static void cm_format_sidr_rep_event(struct cm_work *work)
+static void cm_format_sidr_rep_event(struct cm_work *work,
+				     const struct cm_id_private *cm_id_priv)
 {
 	struct cm_sidr_rep_msg *sidr_rep_msg;
 	struct ib_cm_sidr_rep_event_param *param;
@@ -3525,6 +3657,7 @@ static void cm_format_sidr_rep_event(struct cm_work *work)
 	param->qpn = be32_to_cpu(cm_sidr_rep_get_qpn(sidr_rep_msg));
 	param->info = &sidr_rep_msg->info;
 	param->info_len = sidr_rep_msg->info_length;
+	param->sgid_attr = cm_id_priv->av.ah_attr.grh.sgid_attr;
 	work->cm_event.private_data = &sidr_rep_msg->private_data;
 }
 
@@ -3548,7 +3681,7 @@ static int cm_sidr_rep_handler(struct cm_work *work)
 	ib_cancel_mad(cm_id_priv->av.port->mad_agent, cm_id_priv->msg);
 	spin_unlock_irq(&cm_id_priv->lock);
 
-	cm_format_sidr_rep_event(work);
+	cm_format_sidr_rep_event(work, cm_id_priv);
 	cm_process_work(cm_id_priv, work);
 	return 0;
 out:

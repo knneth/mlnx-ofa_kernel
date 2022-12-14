@@ -231,6 +231,27 @@ case $KVERSION in
 	*)
 	;;
 esac
+
+ARCH=${ARCH:-$(uname -m)}
+
+case $ARCH in
+	ppc*)
+	ARCH=powerpc
+	;;
+	i?86)
+	ARCH=i386
+	;;
+esac
+
+CFLAGS_RETPOLINE=''
+case "$ARCH" in i386 | x86_64)
+	check_autofconf CONFIG_RETPOLINE
+	if [ "$CONFIG_RETPOLINE" != "1" ]; then
+		CFLAGS_RETPOLINE="-mindirect-branch=thunk-inline -mindirect-branch-register -DRETPOLINE_MLNX"
+	fi
+	;;
+esac
+
         # Create config.mk
         /bin/rm -f ${CWD}/${CONFIG}
         cat >> ${CWD}/${CONFIG} << EOFCONFIG
@@ -238,7 +259,10 @@ KVERSION=${KVERSION}
 CONFIG_COMPAT_VERSION=${CONFIG_COMPAT_VERSION}
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT}
 BACKPORT_INCLUDES=${BACKPORT_INCLUDES}
-ARCH=`uname -m`
+ARCH=${ARCH}
+
+CFLAGS_RETPOLINE=${CFLAGS_RETPOLINE}
+
 MODULES_DIR:=/lib/modules/${KVERSION}/updates
 KSRC=${KSRC}
 KSRC_OBJ=${KSRC_OBJ}

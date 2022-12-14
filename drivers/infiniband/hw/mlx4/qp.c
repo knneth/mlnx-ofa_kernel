@@ -688,7 +688,8 @@ static int set_qp_rss(struct mlx4_ib_dev *dev, struct mlx4_ib_rss *rss_ctx,
 					  MLX4_IB_RX_HASH_SRC_PORT_TCP	|
 					  MLX4_IB_RX_HASH_DST_PORT_TCP	|
 					  MLX4_IB_RX_HASH_SRC_PORT_UDP	|
-					  MLX4_IB_RX_HASH_DST_PORT_UDP)) {
+					  MLX4_IB_RX_HASH_DST_PORT_UDP  |
+					  MLX4_IB_RX_HASH_INNER)) {
 		pr_debug("RX Hash fields_mask has unsupported mask (0x%llx)\n",
 			 ucmd->rx_hash_fields_mask);
 		return (-EOPNOTSUPP);
@@ -747,6 +748,20 @@ static int set_qp_rss(struct mlx4_ib_dev *dev, struct mlx4_ib_rss *rss_ctx,
 		   (ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_DST_PORT_TCP)) {
 		pr_debug("RX Hash fields_mask is not supported - both TCP SRC and DST must be set\n");
 		return (-EOPNOTSUPP);
+	}
+
+	if (ucmd->rx_hash_fields_mask & MLX4_IB_RX_HASH_INNER) {
+		if (dev->dev->caps.tunnel_offload_mode ==
+		    MLX4_TUNNEL_OFFLOAD_MODE_VXLAN) {
+			/*
+			 * Hash according to inner headers if exist, otherwise
+			 * according to outer headers.
+			 */
+			rss_ctx->flags |= MLX4_RSS_BY_INNER_HEADERS_IPONLY;
+		} else {
+			pr_debug("RSS Hash for inner headers isn't supported\n");
+			return (-EOPNOTSUPP);
+		}
 	}
 
 	return 0;
@@ -979,7 +994,6 @@ static int create_qp_common(struct mlx4_ib_dev *dev, struct ib_pd *pd,
 {
 	int qpn;
 	int err;
-	struct ib_qp_cap backup_cap;
 	struct mlx4_ib_sqp *sqp = NULL;
 	struct mlx4_ib_qp *qp;
 	enum mlx4_ib_qp_type qp_type = (enum mlx4_ib_qp_type) init_attr->qp_type;
@@ -1189,9 +1203,8 @@ static int create_qp_common(struct mlx4_ib_dev *dev, struct ib_pd *pd,
 				goto err;
 		}
 
-		memcpy(&backup_cap, &init_attr->cap, sizeof(backup_cap));
 		err = set_kernel_sq_size(dev, &init_attr->cap,
-					 qp_type, qp, true);
+					 qp_type, qp, false);
 		if (err)
 			goto err;
 
@@ -1214,20 +1227,10 @@ static int create_qp_common(struct mlx4_ib_dev *dev, struct ib_pd *pd,
 			qp->bf.uar = &dev->priv_uar;
 		}
 
-		if (mlx4_buf_alloc(dev->dev, qp->buf_size, qp->buf_size,
-				   &qp->buf)) {
-			memcpy(&init_attr->cap, &backup_cap,
-			       sizeof(backup_cap));
-			err = set_kernel_sq_size(dev, &init_attr->cap, qp_type,
-						 qp, false);
-			if (err)
-				goto err_db;
-
-			if (mlx4_buf_alloc(dev->dev, qp->buf_size,
-					   PAGE_SIZE * 2, &qp->buf)) {
-				err = -ENOMEM;
-				goto err_db;
-			}
+		if (mlx4_buf_alloc(dev->dev, qp->buf_size,
+				   PAGE_SIZE * 2, &qp->buf)) {
+			err = -ENOMEM;
+			goto err_db;
 		}
 
 		err = mlx4_mtt_init(dev->dev, qp->buf.npages, qp->buf.page_shift,
@@ -1889,8 +1892,7 @@ static int _mlx4_set_path(struct mlx4_ib_dev *dev,
 	if (rdma_ah_get_ah_flags(ah) & IB_AH_GRH) {
 		const struct ib_global_route *grh = rdma_ah_read_grh(ah);
 		int real_sgid_index =
-			mlx4_ib_gid_index_to_real_index(dev, port,
-							grh->sgid_index);
+			mlx4_ib_gid_index_to_real_index(dev, grh->sgid_attr);
 
 		if (real_sgid_index >= dev->dev->caps.gid_table_len[port]) {
 			pr_err("sgid_index (%u) too large. max is %d\n",
@@ -2224,6 +2226,7 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 {
 	struct ib_uobject *ibuobject;
 	struct ib_srq  *ibsrq;
+	const struct ib_gid_attr *gid_attr = NULL;
 	struct ib_rwq_ind_table *rwq_ind_tbl;
 	enum ib_qp_type qp_type;
 	struct mlx4_ib_dev *dev;
@@ -2410,31 +2413,17 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 	if (attr_mask & IB_QP_AV) {
 		u8 port_num = mlx4_is_bonded(dev->dev) ? 1 :
 			attr_mask & IB_QP_PORT ? attr->port_num : qp->port;
-		union ib_gid gid;
-		struct ib_gid_attr gid_attr = {.gid_type = IB_GID_TYPE_IB};
 		u16 vlan = 0xffff;
 		u8 smac[ETH_ALEN];
-		int status = 0;
 		int is_eth =
 			rdma_cap_eth_ah(&dev->ib_dev, port_num) &&
 			rdma_ah_get_ah_flags(&attr->ah_attr) & IB_AH_GRH;
 
 		if (is_eth) {
-			int index =
-				rdma_ah_read_grh(&attr->ah_attr)->sgid_index;
-
-			status = ib_get_cached_gid(&dev->ib_dev, port_num,
-						   index, &gid, &gid_attr);
-			if (!status && !memcmp(&gid, &zgid, sizeof(gid)))
-				status = -ENOENT;
-			if (!status && gid_attr.ndev) {
-				vlan = rdma_vlan_dev_vlan_id(gid_attr.ndev);
-				memcpy(smac, gid_attr.ndev->dev_addr, ETH_ALEN);
-				dev_put(gid_attr.ndev);
-			}
+			gid_attr = attr->ah_attr.grh.sgid_attr;
+			vlan = rdma_vlan_dev_vlan_id(gid_attr->ndev);
+			memcpy(smac, gid_attr->ndev->dev_addr, ETH_ALEN);
 		}
-		if (status)
-			goto out;
 
 		if (mlx4_set_path(dev, attr, attr_mask, qp, &context->pri_path,
 				  port_num, vlan, smac))
@@ -2445,7 +2434,7 @@ static int __mlx4_ib_modify_qp(void *src, enum mlx4_ib_source_type src_type,
 
 		if (is_eth &&
 		    (cur_state == IB_QPS_INIT && new_state == IB_QPS_RTR)) {
-			u8 qpc_roce_mode = gid_type_to_qpc(gid_attr.gid_type);
+			u8 qpc_roce_mode = gid_type_to_qpc(gid_attr->gid_type);
 
 			if (qpc_roce_mode == MLX4_QPC_ROCE_MODE_UNDEFINED) {
 				err = -EINVAL;
@@ -3149,7 +3138,7 @@ static int fill_gid_by_hw_index(struct mlx4_ib_dev *ibdev, u8 port_num,
 	memcpy(gid, &port_gid_table->gids[index].gid, sizeof(*gid));
 	*gid_type = port_gid_table->gids[index].gid_type;
 	spin_unlock_irqrestore(&iboe->lock, flags);
-	if (!memcmp(gid, &zgid, sizeof(*gid)))
+	if (rdma_is_zero_gid(gid))
 		return -ENOENT;
 
 	return 0;
@@ -3266,10 +3255,8 @@ static int build_mlx_header(struct mlx4_ib_sqp *sqp, struct ib_ud_wr *wr,
 					to_mdev(ib_dev)->sriov.demux[sqp->qp.port - 1].
 						       guid_cache[ah->av.ib.gid_index];
 			} else {
-				ib_get_cached_gid(ib_dev,
-						  be32_to_cpu(ah->av.ib.port_pd) >> 24,
-						  ah->av.ib.gid_index,
-						  &sqp->ud_header.grh.source_gid, NULL);
+				sqp->ud_header.grh.source_gid =
+					ah->ibah.sgid_attr->gid;
 			}
 		}
 		memcpy(sqp->ud_header.grh.destination_gid.raw,

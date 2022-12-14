@@ -201,7 +201,11 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 		goto unlock;
 	}
 
-	mlx5_core_err(dev, "start\n");
+	if (force)
+		mlx5_core_dbg(dev, "start\n");
+	else
+		mlx5_core_err(dev, "start\n");
+
 	fatal_error = check_fatal_sensors(dev);
 
 	if (fatal_error || force) {
@@ -250,7 +254,10 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 		lock_sem_sw_reset(dev, UNLOCK);
 
 err_state_done:
-	mlx5_core_err(dev, "end\n");
+	if (force)
+		mlx5_core_dbg(dev, "end\n");
+	else
+		mlx5_core_err(dev, "end\n");
 
 unlock:
 	mutex_unlock(&dev->intf_state_mutex);

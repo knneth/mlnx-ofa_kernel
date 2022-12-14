@@ -114,10 +114,10 @@ static int dump_cq_info(struct mlx5e_cq *cq, void *buffer)
 
 	cqd->wq_type = MLX5_DIAG_CQ;
 	cqd->wqn = cq->mcq.cqn;
-	cqd->ci = wq->cc & wq->sz_m1;
+	cqd->ci = wq->cc & wq->fbc.sz_m1;
 	cqd->pi = 0;
-	cqd->wqe_stride = wq->log_stride;
-	cqd->size = wq->sz_m1 + 1;
+	cqd->wqe_stride = wq->fbc.log_stride;
+	cqd->size = wq->fbc.sz_m1 + 1;
 	cqd->wqe_num = cqd->size;
 	cqd->group_id = cq->channel->ix;
 

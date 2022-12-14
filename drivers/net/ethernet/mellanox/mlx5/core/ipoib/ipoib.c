@@ -444,6 +444,7 @@ int mlx5i_dev_init(struct net_device *dev)
 	struct mlx5i_priv    *ipriv  = priv->ppriv;
 
 	/* Set dev address using underlay QP */
+	dev->dev_addr[0] |= MLX5_IPOIB_FLAGS_TSS;
 	dev->dev_addr[1] = (ipriv->qp.qpn >> 16) & 0xff;
 	dev->dev_addr[2] = (ipriv->qp.qpn >>  8) & 0xff;
 	dev->dev_addr[3] = (ipriv->qp.qpn) & 0xff;

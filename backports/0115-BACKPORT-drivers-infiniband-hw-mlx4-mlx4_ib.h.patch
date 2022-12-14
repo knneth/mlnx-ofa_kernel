@@ -18,7 +18,7 @@ Change-Id: Ibb94ea7a78b3ee9a7fc25e8834ec87b7d212b492
  	MLX4_IB_QP_LSO = IB_QP_CREATE_IPOIB_UD_LSO,
  	MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK = IB_QP_CREATE_BLOCK_MULTICAST_LOOPBACK,
  	MLX4_IB_QP_CROSS_CHANNEL = IB_QP_CREATE_CROSS_CHANNEL,
-@@ -953,8 +956,10 @@ int mlx4_ib_device_register_sysfs(struct
+@@ -963,8 +966,10 @@ int mlx4_ib_device_register_sysfs(struct
  
  void mlx4_ib_device_unregister_sysfs(struct mlx4_ib_dev *device);
  

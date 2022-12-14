@@ -891,6 +891,9 @@ static void __exit srp_transport_exit(void)
 MODULE_AUTHOR("FUJITA Tomonori");
 MODULE_DESCRIPTION("SRP Transport Attributes");
 MODULE_LICENSE("GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 module_init(srp_transport_init);
 module_exit(srp_transport_exit);

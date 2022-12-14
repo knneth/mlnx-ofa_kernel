@@ -79,6 +79,11 @@
 		     << __mlx5_dw_bit_off(typ, fld))); \
 } while (0)
 
+#define MLX5_ARRAY_SET(typ, p, fld, idx, v) do { \
+	BUILD_BUG_ON(__mlx5_bit_off(typ, fld) % 32); \
+	MLX5_SET(typ, p, fld[idx], v); \
+} while (0)
+
 #define MLX5_SET_TO_ONES(typ, p, fld) do { \
 	BUILD_BUG_ON(__mlx5_st_sz_bits(typ) % 32);             \
 	*((__be32 *)(p) + __mlx5_dw_off(typ, fld)) = \
@@ -1020,6 +1025,13 @@ enum {
 };
 
 enum {
+	MLX5_VPORT_CVLAN_NO_INSERT             = 0x0,
+	MLX5_VPORT_CVLAN_INSERT_WHEN_NO_CVLAN  = 0x1,
+	MLX5_VPORT_CVLAN_INSERT_OR_OVERWRITE   = 0x2,
+	MLX5_VPORT_CVLAN_INSERT_ALWAYS         = 0x3,
+};
+
+enum {
 	MLX5_L3_PROT_TYPE_IPV4		= 0,
 	MLX5_L3_PROT_TYPE_IPV6		= 1,
 };
@@ -1077,6 +1089,18 @@ enum mlx5_wol_mode {
 	MLX5_WOL_PHY_ACTIVITY   = 1 << 7,
 };
 
+enum mlx5_mpls_supported_fields {
+	MLX5_FIELD_SUPPORT_MPLS_LABEL = 1 << 0,
+	MLX5_FIELD_SUPPORT_MPLS_EXP   = 1 << 1,
+	MLX5_FIELD_SUPPORT_MPLS_S_BOS = 1 << 2,
+	MLX5_FIELD_SUPPORT_MPLS_TTL   = 1 << 3
+};
+
+enum mlx5_flex_parser_protos {
+	MLX5_FLEX_PROTO_CW_MPLS_GRE   = 1 << 4,
+	MLX5_FLEX_PROTO_CW_MPLS_UDP   = 1 << 5,
+};
+
 /* MLX5 DEV CAPs */
 
 /* TODO: EAT.ME */
@@ -1099,9 +1123,10 @@ enum mlx5_cap_type {
 	MLX5_CAP_RESERVED,
 	MLX5_CAP_VECTOR_CALC,
 	MLX5_CAP_QOS,
-	MLX5_CAP_RESERVED_1,
+	MLX5_CAP_DEBUG,
 	MLX5_CAP_NVMF,
 	MLX5_CAP_DEVICE_MEM,
+
 	/* NUM OF CAP Types */
 	MLX5_CAP_NUM
 };
@@ -1228,6 +1253,9 @@ enum mlx5_qcam_feature_groups {
 
 #define MLX5_CAP_QOS(mdev, cap)\
 	MLX5_GET(qos_cap, mdev->caps.hca_cur[MLX5_CAP_QOS], cap)
+
+#define MLX5_CAP_DEBUG(mdev, cap)\
+	MLX5_GET(debug_cap, mdev->caps.hca_cur[MLX5_CAP_DEBUG], cap)
 
 #define MLX5_CAP_NVMF(mdev, cap)\
 	MLX5_GET(nvmf_cap, mdev->caps.hca_cur[MLX5_CAP_NVMF], cap)

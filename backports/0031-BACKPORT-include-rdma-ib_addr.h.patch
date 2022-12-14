@@ -8,7 +8,7 @@ Change-Id: I71468cedd5bd7aed8591ed96f1bef9c582cff4ff
 
 --- a/include/rdma/ib_addr.h
 +++ b/include/rdma/ib_addr.h
-@@ -160,7 +160,11 @@ static inline int rdma_addr_gid_offset(s
+@@ -134,7 +134,11 @@ static inline int rdma_addr_gid_offset(s
  	return dev_addr->dev_type == ARPHRD_INFINIBAND ? 4 : 0;
  }
  
@@ -20,7 +20,7 @@ Change-Id: I71468cedd5bd7aed8591ed96f1bef9c582cff4ff
  {
  	return is_vlan_dev(dev) ? vlan_dev_vlan_id(dev) : 0xffff;
  }
-@@ -269,22 +273,36 @@ static inline enum ib_mtu iboe_get_mtu(i
+@@ -224,22 +228,36 @@ static inline enum ib_mtu iboe_get_mtu(i
  
  static inline int iboe_get_rate(struct net_device *dev)
  {
@@ -61,7 +61,7 @@ Change-Id: I71468cedd5bd7aed8591ed96f1bef9c582cff4ff
  		return IB_RATE_10_GBPS;
  	else
  		return IB_RATE_PORT_CURRENT;
-@@ -335,7 +353,11 @@ static inline u16 rdma_get_vlan_id(union
+@@ -290,7 +308,11 @@ static inline u16 rdma_get_vlan_id(union
  	return vid < 0x1000 ? vid : 0xffff;
  }
  

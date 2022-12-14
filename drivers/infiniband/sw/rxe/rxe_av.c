@@ -69,14 +69,13 @@ void rxe_av_to_attr(struct rxe_av *av, struct rdma_ah_attr *attr)
 	rdma_ah_set_port_num(attr, av->port_num);
 }
 
-void rxe_av_fill_ip_info(struct rxe_av *av,
-			struct rdma_ah_attr *attr,
-			struct ib_gid_attr *sgid_attr,
-			union ib_gid *sgid)
+void rxe_av_fill_ip_info(struct rxe_av *av, struct rdma_ah_attr *attr)
 {
-	rdma_gid2ip(&av->sgid_addr._sockaddr, sgid);
+	const struct ib_gid_attr *sgid_attr = attr->grh.sgid_attr;
+
+	rdma_gid2ip((struct sockaddr *)&av->sgid_addr, &sgid_attr->gid);
 	rdma_gid2ip(&av->dgid_addr._sockaddr, &rdma_ah_read_grh(attr)->dgid);
-	av->network_type = ib_gid_to_network_type(sgid_attr->gid_type, sgid);
+	av->network_type = rdma_gid_attr_network_type(sgid_attr);
 }
 
 struct rxe_av *rxe_get_av(struct rxe_pkt_info *pkt)

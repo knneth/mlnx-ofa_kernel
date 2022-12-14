@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
 Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
 ---
- drivers/infiniband/core/addr.c | 148 +++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 144 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/addr.c | 154 +++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 147 insertions(+), 7 deletions(-)
 
 --- a/drivers/infiniband/core/addr.c
 +++ b/drivers/infiniband/core/addr.c
@@ -15,8 +15,8 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
 +#include <linux/ratelimit.h>
  
  #include "core_priv.h"
- 
-@@ -129,11 +130,26 @@ static void ib_nl_process_good_ip_rsep(c
+ #include <rdma/ib_cache.h>
+@@ -127,11 +128,26 @@ static void ib_nl_process_good_ip_rsep(c
  }
  
  int ib_nl_handle_ip_res_resp(struct sk_buff *skb,
@@ -43,7 +43,7 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  		return -EPERM;
  
  	if (ib_nl_is_good_ip_resp(nlh))
-@@ -177,7 +193,8 @@ static int ib_nl_ip_send_msg(struct rdma
+@@ -175,7 +191,8 @@ static int ib_nl_ip_send_msg(struct rdma
  	}
  
  	/* Construct the family header first */
@@ -53,27 +53,32 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  	header->ifindex = dev_addr->bound_dev_if;
  	nla_put(skb, attrtype, size, daddr);
  
-@@ -275,7 +292,11 @@ int rdma_translate_ip(const struct socka
+@@ -247,7 +264,11 @@ int rdma_translate_ip(const struct socka
  		rcu_read_lock();
  		for_each_netdev_rcu(dev_addr->net, dev) {
  			if (ipv6_chk_addr(dev_addr->net,
+-					  &((const struct sockaddr_in6 *)addr)->sin6_addr,
 +#if defined(HAVE_IPV6_CHK_ADDR_TAKES_CONST)
- 					  &((const struct sockaddr_in6 *)addr)->sin6_addr,
++ 					  &((const struct sockaddr_in6 *)addr)->sin6_addr,
 +#else
 +					  &((struct sockaddr_in6 *)addr)->sin6_addr,
 +#endif
  					  dev, 1)) {
  				rdma_copy_addr(dev_addr, dev, NULL);
- 				dev_addr->bound_dev_if = dev->ifindex;
-@@ -331,41 +352,72 @@ static int ib_nl_fetch_ha(struct dst_ent
+ 				break;
+@@ -292,23 +313,38 @@ static int ib_nl_fetch_ha(const struct d
  	return ib_nl_ip_send_msg(dev_addr, daddr, seq, family);
  }
  
 +#ifdef HAVE_DST_NEIGH_LOOKUP
- static int dst_fetch_ha(struct dst_entry *dst, struct rdma_dev_addr *dev_addr,
- 			const void *daddr)
+ static int dst_fetch_ha(const struct dst_entry *dst,
+ 			struct rdma_dev_addr *dev_addr,
+ 			const void *daddr,
+ 			struct neighbour **neigh)
 +#else
-+static int dst_fetch_ha(struct dst_entry *dst, struct rdma_dev_addr *addr)
++static int dst_fetch_ha(const struct dst_entry *dst,
++			struct rdma_dev_addr *addr,
++			struct neighbour **neigh)
 +#endif
  {
  	struct neighbour *n;
@@ -100,18 +105,14 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  	}
  	rcu_read_unlock();
  
-+#ifdef HAVE_DST_NEIGH_LOOKUP
- 	if (n)
- 		neigh_release(n);
-+#endif
- 
+@@ -317,17 +353,33 @@ static int dst_fetch_ha(const struct dst
  	return ret;
  }
  
 +#ifdef HAVE_RT_USES_GATEWAY
- static bool has_gateway(struct dst_entry *dst, sa_family_t family)
+ static bool has_gateway(const struct dst_entry *dst, sa_family_t family)
 +#else
-+static bool has_gateway(struct dst_entry *dst, const void *daddr, sa_family_t family)
++static bool has_gateway(const struct dst_entry *dst, const void *daddr, sa_family_t family)
 +#endif
  {
  	struct rtable *rt;
@@ -138,7 +139,7 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  	return rt6->rt6i_flags & RTF_GATEWAY;
  }
  
-@@ -381,11 +433,20 @@ static int fetch_ha(struct dst_entry *ds
+@@ -344,11 +396,20 @@ static int fetch_ha(const struct dst_ent
  		(const void *)&dst_in6->sin6_addr;
  	sa_family_t family = dst_in->sa_family;
  
@@ -152,14 +153,14 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
 +#endif
  	else
 +#ifdef HAVE_DST_NEIGH_LOOKUP
- 		return dst_fetch_ha(dst, dev_addr, daddr);
+ 		return dst_fetch_ha(dst, dev_addr, daddr, n);
 +#else
-+		return  dst_fetch_ha(dst, dev_addr);
++		return  dst_fetch_ha(dst, dev_addr, n);
 +#endif
  }
  
  static int addr4_resolve(struct sockaddr_in *src_in,
-@@ -396,9 +457,14 @@ static int addr4_resolve(struct sockaddr
+@@ -359,9 +420,14 @@ static int addr4_resolve(struct sockaddr
  	__be32 src_ip = src_in->sin_addr.s_addr;
  	__be32 dst_ip = dst_in->sin_addr.s_addr;
  	struct rtable *rt;
@@ -174,7 +175,7 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  	memset(&fl4, 0, sizeof(fl4));
  	fl4.daddr = dst_ip;
  	fl4.saddr = src_ip;
-@@ -408,17 +474,36 @@ static int addr4_resolve(struct sockaddr
+@@ -371,17 +437,36 @@ static int addr4_resolve(struct sockaddr
  	if (ret)
  		return ret;
  
@@ -212,7 +213,7 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  
  	*prt = rt;
  	return 0;
-@@ -430,26 +515,64 @@ static int addr6_resolve(struct sockaddr
+@@ -393,26 +478,64 @@ static int addr6_resolve(struct sockaddr
  			 struct rdma_dev_addr *addr,
  			 struct dst_entry **pdst)
  {
@@ -257,12 +258,12 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
 +	ipv6_addr_copy(&fl.fl6_dst, &dst_in->sin6_addr);
 +	ipv6_addr_copy(&fl.fl6_src, &src_in->sin6_addr);
 +	fl.oif = addr->bound_dev_if;
-+
+ 
 +	dst = ip6_route_output(addr->net, NULL, &fl);
 +	ret = dst->error;
 +	if (ret)
 +		return ret;
- 
++
 +	rt = (struct rt6_info *)dst;
 +	if (ipv6_addr_any(&fl.fl6_src)) {
 +		ret = ipv6_dev_get_saddr(addr->net, ip6_dst_idev(dst)->dev,
@@ -277,7 +278,7 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  	/* If there's a gateway and type of device not ARPHRD_INFINIBAND, we're
  	 * definitely in RoCE v2 (as RoCE v1 isn't routable) set the network
  	 * type accordingly.
-@@ -462,8 +585,13 @@ static int addr6_resolve(struct sockaddr
+@@ -425,8 +548,13 @@ static int addr6_resolve(struct sockaddr
  
  	*pdst = dst;
  	return 0;
@@ -292,45 +293,72 @@ Change-Id: I8c8f7bd1d6f38a6f53dc611a03ae7d98cac31b1c
  static int addr6_resolve(struct sockaddr_in6 *src_in,
  			 const struct sockaddr_in6 *dst_in,
  			 struct rdma_dev_addr *addr,
-@@ -471,7 +599,7 @@ static int addr6_resolve(struct sockaddr
+@@ -434,7 +562,7 @@ static int addr6_resolve(struct sockaddr
  {
  	return -EADDRNOTAVAIL;
  }
 -#endif
 +#endif /*IS_ENABLED(CONFIG_IPV6) */
  
- static int addr_resolve_neigh(struct dst_entry *dst,
+ static int addr_resolve_neigh(const struct dst_entry *dst,
  			      const struct sockaddr *dst_in,
-@@ -524,12 +652,20 @@ static int addr_resolve(struct sockaddr
- 			return ret;
+@@ -507,7 +635,6 @@ static int addr_resolve_rcu(struct socka
+ 			    struct neighbour **n)
+ 
+ {
+-	struct neighbour *n = NULL;
+ 	int ret;
+ 
+ 	if (src_in->sa_family == AF_INET) {
+@@ -521,14 +648,23 @@ static int addr_resolve_rcu(struct socka
+ 			goto err;
  
  		if (resolve_neigh)
 +#ifdef HAVE_RT_DIRECT_DST
- 			ret = addr_resolve_neigh(&rt->dst, dst_in, addr, seq);
+ 			ret = addr_resolve_neigh(&rt->dst, dst_in, addr,
+ 						 seq, n);
 +#else
-+			ret = addr_resolve_neigh(&rt->u.dst, dst_in, addr, seq);
++			ret = addr_resolve_neigh(&rt->u.dst, dst_in, addr,
++						 seq, n);
++
 +#endif
- 
- 		if (addr->bound_dev_if) {
- 			ndev = dev_get_by_index(addr->net, addr->bound_dev_if);
- 		} else {
-+#ifdef HAVE_RT_DIRECT_DST
- 			ndev = rt->dst.dev;
-+#else
-+			ndev = rt->u.dst.dev;
-+#endif
- 			dev_hold(ndev);
+ 		if (ret) {
+ 			ip_rt_put(rt);
+ 			goto err;
  		}
- 
-@@ -805,7 +941,11 @@ static struct notifier_block nb = {
- 
- int addr_init(void)
- {
-+#if defined(HAVE_WQ_MEM_RECLAIM)
-+	addr_wq = alloc_workqueue("ib_addr", 0, 0);
+-
++#ifdef HAVE_RT_DIRECT_DST
+ 		ret = addr_translate(&rt->dst, dst_in, addr);
 +#else
- 	addr_wq = alloc_workqueue("ib_addr", 0, 0);
++		ret = addr_translate(&rt->u.dst, dst_in, addr);
 +#endif
- 	if (!addr_wq)
- 		return -ENOMEM;
+ 		ip_rt_put(rt);
+ 	} else {
+ 		const struct sockaddr_in6 *dst_in6 =
+@@ -625,8 +761,10 @@ static int addr_resolve(struct sockaddr
+ 				       resolve_neigh, seq, &n);
+ 		rcu_read_unlock();
+ 	}
++#ifdef HAVE_DST_NEIGH_LOOKUP
+ 	if (n)
+ 		neigh_release(n);
++#endif
+ 
+ 	return ret;
+ }
+@@ -835,6 +973,7 @@ int rdma_addr_find_l2_eth_by_grh(const u
+ static int netevent_callback(struct notifier_block *self, unsigned long event,
+ 	void *ctx)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,101))
+ 	struct addr_req *req;
+ 
+ 	if (event == NETEVENT_NEIGH_UPDATE) {
+@@ -847,6 +986,7 @@ static int netevent_callback(struct noti
+ 			spin_unlock_bh(&lock);
+ 		}
+ 	}
++#endif
+ 	return 0;
+ }
  

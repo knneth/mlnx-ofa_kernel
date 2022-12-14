@@ -18,7 +18,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  #include <linux/proc_fs.h>
  
  #include <linux/mlx4/device.h>
-@@ -1756,8 +1758,10 @@ static void mlx4_request_modules(struct
+@@ -1759,8 +1761,10 @@ static void mlx4_request_modules(struct
  			has_eth_port = true;
  	}
  
@@ -29,7 +29,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  	if (!mlx4_en_only_mode && (has_ib_port || (dev->caps.flags & MLX4_DEV_CAP_FLAG_IBOE)))
  		request_module_nowait(IB_DRV_NAME);
  }
-@@ -3675,6 +3679,9 @@ static void mlx4_enable_msi_x(struct mlx
+@@ -3678,6 +3682,9 @@ static void mlx4_enable_msi_x(struct mlx
  	struct msix_entry *entries;
  	int i;
  	int port = 0;
@@ -39,7 +39,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  
  	if (msi_x) {
  		int nreq = min3(dev->caps.num_ports *
-@@ -3698,8 +3705,24 @@ static void mlx4_enable_msi_x(struct mlx
+@@ -3701,8 +3708,24 @@ static void mlx4_enable_msi_x(struct mlx
  		for (i = 0; i < nreq; ++i)
  			entries[i].entry = i;
  
@@ -64,7 +64,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  
  		/* At least 2 vectors are required, one for the ASYNC EQ and
  		 * a completion EQ.
-@@ -3775,13 +3798,17 @@ no_msi:
+@@ -3778,13 +3801,17 @@ no_msi:
  
  static int mlx4_init_port_info(struct mlx4_dev *dev, int port)
  {
@@ -82,7 +82,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  
  	info->dev = dev;
  	info->port = port;
-@@ -3808,7 +3835,9 @@ static int mlx4_init_port_info(struct ml
+@@ -3811,7 +3838,9 @@ static int mlx4_init_port_info(struct ml
  	err = device_create_file(&dev->persist->pdev->dev, &info->port_attr);
  	if (err) {
  		mlx4_err(dev, "Failed to create file for port %d\n", port);
@@ -92,7 +92,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  		info->port = -1;
  	}
  
-@@ -3829,7 +3858,9 @@ static int mlx4_init_port_info(struct ml
+@@ -3832,7 +3861,9 @@ static int mlx4_init_port_info(struct ml
  		mlx4_err(dev, "Failed to create mtu file for port %d\n", port);
  		device_remove_file(&info->dev->persist->pdev->dev,
  				   &info->port_attr);
@@ -102,7 +102,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  		info->port = -1;
  	}
  
-@@ -3844,7 +3875,9 @@ static void mlx4_cleanup_port_info(struc
+@@ -3847,7 +3878,9 @@ static void mlx4_cleanup_port_info(struc
  	device_remove_file(&info->dev->persist->pdev->dev, &info->port_attr);
  	device_remove_file(&info->dev->persist->pdev->dev,
  			   &info->port_mtu_attr);
@@ -112,7 +112,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  
  #ifdef CONFIG_RFS_ACCEL
  	free_irq_cpu_rmap(info->rmap);
-@@ -4650,6 +4683,7 @@ err_disable_pdev:
+@@ -4653,6 +4686,7 @@ err_disable_pdev:
  	return err;
  }
  
@@ -120,7 +120,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  static int mlx4_devlink_port_type_set(struct devlink_port *devlink_port,
  				      enum devlink_port_type port_type)
  {
-@@ -4678,26 +4712,40 @@ static int mlx4_devlink_port_type_set(st
+@@ -4681,26 +4715,40 @@ static int mlx4_devlink_port_type_set(st
  static const struct devlink_ops mlx4_devlink_ops = {
  	.port_type_set	= mlx4_devlink_port_type_set,
  };
@@ -161,7 +161,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  	}
  	dev->persist->pdev = pdev;
  	dev->persist->dev = dev;
-@@ -4707,23 +4755,35 @@ static int mlx4_init_one(struct pci_dev
+@@ -4710,23 +4758,35 @@ static int mlx4_init_one(struct pci_dev
  	mutex_init(&dev->persist->interface_state_mutex);
  	mutex_init(&dev->persist->pci_status_mutex);
  
@@ -198,7 +198,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  	return ret;
  }
  
-@@ -4820,7 +4880,9 @@ static void mlx4_remove_one(struct pci_d
+@@ -4823,7 +4883,9 @@ static void mlx4_remove_one(struct pci_d
  	struct mlx4_dev_persistent *persist = pci_get_drvdata(pdev);
  	struct mlx4_dev  *dev  = persist->dev;
  	struct mlx4_priv *priv = mlx4_priv(dev);
@@ -208,7 +208,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  	int active_vfs = 0;
  
  	if (mlx4_is_slave(dev))
-@@ -4855,9 +4917,15 @@ static void mlx4_remove_one(struct pci_d
+@@ -4858,9 +4920,15 @@ static void mlx4_remove_one(struct pci_d
  
  	pci_release_regions(pdev);
  	mlx4_pci_disable_device(dev);
@@ -224,7 +224,7 @@ Change-Id: I69888ec4c389423c98f226b204d29c541cd03ee5
  }
  
  static int restore_current_port_types(struct mlx4_dev *dev,
-@@ -5044,7 +5112,11 @@ static void mlx4_shutdown(struct pci_dev
+@@ -5047,7 +5115,11 @@ static void mlx4_shutdown(struct pci_dev
  	mutex_unlock(&persist->interface_state_mutex);
  }
  

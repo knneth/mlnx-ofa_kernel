@@ -304,3 +304,6 @@ MODULE_DESCRIPTION("Controlled Delay queue discipline");
 MODULE_AUTHOR("Dave Taht");
 MODULE_AUTHOR("Eric Dumazet");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif

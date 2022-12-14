@@ -167,7 +167,7 @@ Change-Id: I8c3836646eff5f001e26b5c796b5cc4f81bdf36b
  	}
  
  	err = mlx5e_create_inner_ttc_table(priv);
-@@ -460,9 +546,13 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -461,9 +547,13 @@ int mlx5i_ioctl(struct net_device *dev,
  
  	switch (cmd) {
  	case SIOCSHWTSTAMP:

@@ -60,8 +60,14 @@ struct mlx5_core_cq {
 	} tasklet_ctx;
 	int			reset_notify_added;
 	struct list_head	reset_notify;
+	struct mlx5_eq		*eq;
 };
 
+enum {
+	MLX5_CQE_RES_FORMAT_HASH = 0,
+	MLX5_CQE_RES_FORMAT_CSUM = 1,
+	MLX5_CQE_RES_FORMAT_CSUM_STRIDX = 3,
+};
 
 enum {
 	MLX5_CQE_SYNDROME_LOCAL_LENGTH_ERR		= 0x01,
@@ -171,8 +177,17 @@ static inline void mlx5_cq_arm(struct mlx5_core_cq *cq, u32 cmd,
 	mlx5_write64(doorbell, uar_page + MLX5_CQ_DOORBELL, NULL);
 }
 
-int mlx5_init_cq_table(struct mlx5_core_dev *dev);
-void mlx5_cleanup_cq_table(struct mlx5_core_dev *dev);
+static inline void mlx5_cq_hold(struct mlx5_core_cq *cq)
+{
+	refcount_inc(&cq->refcount);
+}
+
+static inline void mlx5_cq_put(struct mlx5_core_cq *cq)
+{
+	if (refcount_dec_and_test(&cq->refcount))
+		complete(&cq->free);
+}
+
 int mlx5_core_create_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 			u32 *in, int inlen);
 int mlx5_core_destroy_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq);

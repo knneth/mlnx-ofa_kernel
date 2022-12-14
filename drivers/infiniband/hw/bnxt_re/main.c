@@ -41,6 +41,9 @@
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("bnxt_re dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init bnxt_re_init(void)

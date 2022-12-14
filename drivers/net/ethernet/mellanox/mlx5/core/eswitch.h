@@ -60,6 +60,9 @@
 #define MLX5_RATE_TO_BW_SHARE(rate, divider, limit) \
 	min_t(u32, max_t(u32, (rate) / (divider), MLX5_MIN_BW_SHARE), limit)
 
+#define mlx5_esw_has_fwd_fdb(dev) \
+	MLX5_CAP_ESW_FLOWTABLE(dev, fdb_multi_path_to_table)
+
 struct vport_ingress {
 	struct mlx5_flow_table *acl;
 	struct mlx5_flow_group *allow_untagged_spoofchk_grp;
@@ -132,18 +135,27 @@ struct mlx5_vport {
 	u16                     enabled_events;
 };
 
+enum {
+	FDB_HAS_PEER_MISS_RULES = BIT(0),
+};
+
 struct mlx5_eswitch_fdb {
-	void *fdb;
 	union {
 		struct legacy_fdb {
+			struct mlx5_flow_table *fdb;
 			struct mlx5_flow_group *addr_grp;
 			struct mlx5_flow_group *allmulti_grp;
 			struct mlx5_flow_group *promisc_grp;
 		} legacy;
 
 		struct offloads_fdb {
-			struct mlx5_flow_table *fdb;
+			u8 flags;
+			struct mlx5_flow_table *fast_fdb;
+			struct mlx5_flow_table *fwd_fdb;
+			struct mlx5_flow_table *slow_fdb;
 			struct mlx5_flow_group *send_to_vport_grp;
+			struct mlx5_flow_group *peer_miss_grp;
+			struct mlx5_flow_handle **peer_miss_rules;
 			struct mlx5_flow_group *miss_grp;
 			struct mlx5_flow_handle *miss_rule_multi;
 			struct mlx5_flow_handle *miss_rule_uni;
@@ -246,6 +258,16 @@ int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
 int mlx5_eswitch_get_vport_stats(struct mlx5_eswitch *esw,
 				 int vport,
 				 struct ifla_vf_stats *vf_stats);
+#ifndef HAVE_STRUCT_IFLA_VF_STATS_TX_BROADCAST
+struct ifla_vf_stats_backport {
+	__u64 tx_broadcast;
+	__u64 tx_multicast;
+};
+
+int mlx5_eswitch_get_vport_stats_backport(struct mlx5_eswitch *esw,
+					  int vport,
+					  struct ifla_vf_stats_backport *vf_stats_backport);
+#endif
 int mlx5_eswitch_query_vport_drop_stats(struct mlx5_core_dev *dev,
 					int vport_idx,
 					struct mlx5_vport_drop_stats *stats);
@@ -261,6 +283,10 @@ struct mlx5_flow_handle *
 mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 				struct mlx5_flow_spec *spec,
 				struct mlx5_esw_flow_attr *attr);
+struct mlx5_flow_handle *
+mlx5_eswitch_add_fwd_rule(struct mlx5_eswitch *esw,
+			  struct mlx5_flow_spec *spec,
+			  struct mlx5_esw_flow_attr *attr);
 void
 mlx5_eswitch_del_offloaded_rule(struct mlx5_eswitch *esw,
 				struct mlx5_flow_handle *rule,
@@ -274,15 +300,23 @@ enum {
 	SET_VLAN_INSERT	= BIT(1)
 };
 
-#define MLX5_FLOW_CONTEXT_ACTION_VLAN_POP  0x4000
-#define MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH 0x8000
+/* current maximum for flow based vport multicasting */
+#define MLX5_MAX_FLOW_FWD_VPORTS 2
 
 struct mlx5_esw_flow_attr {
 	struct mlx5_eswitch_rep *in_rep;
-	struct mlx5_eswitch_rep *out_rep;
+	struct mlx5_eswitch_rep *out_rep[MLX5_MAX_FLOW_FWD_VPORTS];
+	struct mlx5_core_dev    *out_mdev[MLX5_MAX_FLOW_FWD_VPORTS];
+	struct mlx5_core_dev    *in_mdev;
+	struct mlx5_core_dev    *counter_dev;
+
+	int mirror_count;
+	int out_count;
 
 	int	action;
-	u16	vlan;
+	__be16	vlan_proto;
+	u16	vlan_vid;
+	u8	vlan_prio;
 	bool	vlan_handled;
 	u32	encap_id;
 	u32	mod_hdr_id;
@@ -316,6 +350,12 @@ int mlx5_eswitch_del_vlan_action(struct mlx5_eswitch *esw,
 				 struct mlx5_esw_flow_attr *attr);
 int __mlx5_eswitch_set_vport_vlan(struct mlx5_eswitch *esw, int vport,
 				  u16 vlan, u8 qos, __be16 proto, u8 set_flags);
+
+static inline bool mlx5_eswitch_vlan_actions_supported(struct mlx5_core_dev *dev)
+{
+	return MLX5_CAP_ESW_FLOWTABLE_FDB(dev, pop_vlan) &&
+	       MLX5_CAP_ESW_FLOWTABLE_FDB(dev, push_vlan);
+}
 
 #define MLX5_DEBUG_ESWITCH_MASK BIT(3)
 

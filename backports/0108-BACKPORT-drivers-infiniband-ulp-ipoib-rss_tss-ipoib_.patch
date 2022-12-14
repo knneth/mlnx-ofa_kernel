@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I0db8f74e242e5b6fad5584d2e577bb1b23963556
 ---
- .../infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c  | 81 +++++++++++++++++++++-
- 1 file changed, 78 insertions(+), 3 deletions(-)
+ .../infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c  | 84 +++++++++++++++++++++-
+ 1 file changed, 81 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
@@ -120,7 +120,7 @@ Change-Id: I0db8f74e242e5b6fad5584d2e577bb1b23963556
  	ipoib_dev_uninit_rss(dev);
  }
  
-@@ -665,33 +714,59 @@ static const struct net_device_ops ipoib
+@@ -665,33 +714,62 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
@@ -154,6 +154,9 @@ Change-Id: I0db8f74e242e5b6fad5584d2e577bb1b23963556
 +#endif
 +#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0)
  	.ndo_set_mac_address	 = ipoib_set_mac,
++#endif
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
 +#endif
  };
  

@@ -18,7 +18,7 @@ Change-Id: I612974568029cb30a6bccedaec4ad1366b195190
  #include <net/addrconf.h>
  #include "rxe.h"
  #include "rxe_loc.h"
-@@ -1207,7 +1209,11 @@ int rxe_register_device(struct rxe_dev *
+@@ -1151,7 +1153,11 @@ int rxe_register_device(struct rxe_dev *
  	dev->local_dma_lkey = 0;
  	addrconf_addr_eui48((unsigned char *)&dev->node_guid,
  			    rxe->ndev->dev_addr);

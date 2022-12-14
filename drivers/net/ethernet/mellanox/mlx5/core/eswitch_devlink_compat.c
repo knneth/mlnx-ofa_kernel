@@ -7,8 +7,11 @@
 #include <linux/fs.h>
 #include "mlx5_core.h"
 #include "eswitch.h"
+#include "en.h"
 
-#ifndef HAVE_DEVLINK_H
+#ifdef CONFIG_MLX5_ESWITCH
+
+DEFINE_MUTEX(devlink_mutex);
 
 static char *mode_to_str[] = {
 	[DEVLINK_ESWITCH_MODE_LEGACY] = "legacy",
@@ -35,10 +38,9 @@ struct devlink_compat_op {
 	char **map;
 	int map_size;
 	char *compat_name;
-	struct mlx5_eswitch *esw;
 };
 
-static struct devlink_compat_op compat_ops[] =  {
+static struct devlink_compat_op devlink_compat_ops[] =  {
 	{
 		.read_u16 = mlx5_devlink_eswitch_mode_get,
 		.write_u16 = mlx5_devlink_eswitch_mode_set,
@@ -62,70 +64,71 @@ static struct devlink_compat_op compat_ops[] =  {
 	},
 };
 
-static ssize_t esw_compat_read(struct file *filp, char __user *buf,
-			       size_t count, loff_t *pos)
+struct compat_devlink {
+	struct mlx5_core_dev *mdev;
+	struct kobj_attribute devlink_kobj;
+};
+
+static ssize_t esw_compat_read(struct kobject *kobj,
+			       struct kobj_attribute *attr,
+			       char *buf)
 {
-	struct mlx5_core_dev *dev = filp->private_data;
+	struct compat_devlink *cdevlink = container_of(attr,
+						       struct compat_devlink,
+						       devlink_kobj);
+	struct mlx5_core_dev *dev = cdevlink->mdev;
 	struct devlink *devlink = priv_to_devlink(dev);
-	struct dentry *dentry = filp->f_path.dentry;
-	const char *entname = dentry->d_name.name;
+	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
-	char strout[32] = "unknown\n";
-	int i = 0, ret;
+	int i = 0, ret, len = 0;
 	u8 read8;
 	u16 read;
 
-	if (*pos)
-		return 0;
-
-	for (i = 0; i < ARRAY_SIZE(compat_ops); i++) {
-		if (!strcmp(compat_ops[i].compat_name, entname))
-			op = &compat_ops[i];
+	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
+		if (!strcmp(devlink_compat_ops[i].compat_name, entname))
+			op = &devlink_compat_ops[i];
 	}
 
 	if (!op)
 		return -ENOENT;
 
+	mutex_lock(&devlink_mutex);
 	if (op->read_u16) {
 		ret = op->read_u16(devlink, &read);
 	} else {
 		ret = op->read_u8(devlink, &read8);
 		read = read8;
 	}
+	mutex_unlock(&devlink_mutex);
 
 	if (ret < 0)
 		return ret;
 
 	if (read < op->map_size && op->map[read])
-		sprintf(strout, "%s\n", op->map[read]);
+		len = sprintf(buf, "%s\n", op->map[read]);
+	else
+		len = sprintf(buf, "return: %d\n", read);
 
-	if (copy_to_user(buf, strout, strlen(strout)))
-		return -EFAULT;
-
-	*pos += strlen(strout);
-	ret = strlen(strout);
-
-	return ret;
+	return len;
 }
 
-static ssize_t esw_compat_write(struct file *filp, const char __user *buf,
-				size_t count, loff_t *pos)
+static ssize_t esw_compat_write(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				const char *buf, size_t count)
 {
-	struct mlx5_core_dev *dev = filp->private_data;
+	struct compat_devlink *cdevlink = container_of(attr,
+						       struct compat_devlink,
+						       devlink_kobj);
+	struct mlx5_core_dev *dev = cdevlink->mdev;
 	struct devlink *devlink = priv_to_devlink(dev);
-	struct dentry *dentry = filp->f_path.dentry;
-	const char *entname = dentry->d_name.name;
+	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
-	char tempbuf[32] = { 0 };
 	u16 set = 0;
 	int ret = 0, i = 0;
 
-	if (count <= 1)
-		return max_t(size_t, count, 0);
-
-	for (i = 0; i < ARRAY_SIZE(compat_ops); i++) {
-		if (!strcmp(compat_ops[i].compat_name, entname)) {
-			op = &compat_ops[i];
+	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
+		if (!strcmp(devlink_compat_ops[i].compat_name, entname)) {
+			op = &devlink_compat_ops[i];
 			break;
 		}
 	}
@@ -133,23 +136,25 @@ static ssize_t esw_compat_write(struct file *filp, const char __user *buf,
 	if (!op)
 		return -ENOENT;
 
-	if (copy_from_user(tempbuf, buf, min(count, sizeof(tempbuf)) - 1))
-		return -EFAULT;
-
 	for (i = 0; i < op->map_size; i++) {
-		if (op->map[i] && !strcmp(op->map[i], tempbuf)) {
+		if (op->map[i] && sysfs_streq(op->map[i], buf)) {
 			set = i;
 			break;
 		}
 	}
 
-	if (i >= op->map_size)
+	if (i >= op->map_size) {
+		mlx5_core_warn(dev, "devlink op %s doesn't support %s argument\n",
+			       op->compat_name, buf);
 		return -EINVAL;
+	}
 
+	mutex_lock(&devlink_mutex);
 	if (op->write_u16)
 		ret = op->write_u16(devlink, set);
 	else
 		ret = op->write_u8(devlink, set);
+	mutex_unlock(&devlink_mutex);
 
 	if (ret < 0)
 		return ret;
@@ -157,53 +162,94 @@ static ssize_t esw_compat_write(struct file *filp, const char __user *buf,
 	return count;
 }
 
-static const struct file_operations esw_compat_fops = {
-	.owner	= THIS_MODULE,
-	.open	= simple_open,
-	.read	= esw_compat_read,
-	.write	= esw_compat_write,
-};
-
-int mlx5_eswitch_compat_debugfs_init(struct mlx5_eswitch *esw)
+int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 {
-	struct mlx5_core_dev *dev = esw->dev;
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct kobj_attribute *kobj;
+	struct compat_devlink *cdevlink;
 	int i;
+	int err;
 
-	if (!dev || !dev->priv.dbg_root)
+	if (!MLX5_VPORT_MANAGER(priv->mdev))
 		return 0;
 
-	dev->priv.compat_debugfs = debugfs_create_dir("compat",
-						      dev->priv.dbg_root);
-	if (dev->priv.compat_debugfs) {
-		for (i = 0; i < ARRAY_SIZE(compat_ops); i++) {
-			debugfs_create_file(compat_ops[i].compat_name, 0400,
-					    dev->priv.compat_debugfs, dev,
-					    &esw_compat_fops);
-		}
+	priv->compat_kobj = kobject_create_and_add("compat",
+						   &netdev->dev.kobj);
+	if (!priv->compat_kobj)
+		return -ENOMEM;
+
+	priv->devlink_kobj = kobject_create_and_add("devlink",
+						    priv->compat_kobj);
+	if (!priv->compat_kobj) {
+		err = -ENOMEM;
+		goto cleanup_compat;
 	}
 
-	return dev->priv.compat_debugfs ? 0 : -ENOMEM;
+	cdevlink = kzalloc(sizeof(*cdevlink) * ARRAY_SIZE(devlink_compat_ops),
+			   GFP_KERNEL);
+	if (!cdevlink) {
+		err = -ENOMEM;
+		goto cleanup_devlink;
+	}
+
+	priv->devlink_attributes = cdevlink;
+
+	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
+		cdevlink->mdev = priv->mdev;
+		kobj = &cdevlink->devlink_kobj;
+		sysfs_attr_init(kobj->attr);
+		kobj->attr.mode = 0644;
+		kobj->attr.name = devlink_compat_ops[i].compat_name;
+		kobj->show = esw_compat_read;
+		kobj->store = esw_compat_write;
+		WARN_ON_ONCE(sysfs_create_file(priv->devlink_kobj,
+					       &kobj->attr));
+		cdevlink++;
+	}
+
+	return 0;
+
+cleanup_devlink:
+	kobject_put(priv->devlink_kobj);
+cleanup_compat:
+	kobject_put(priv->compat_kobj);
+	return err;
 }
 
-void mlx5_eswitch_compat_debugfs_cleanup(struct mlx5_eswitch *esw)
+void mlx5_eswitch_compat_sysfs_cleanup(struct net_device *netdev)
 {
-	struct mlx5_core_dev *dev = esw->dev;
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct compat_devlink *cdevlink;
+	struct kobj_attribute *kobj;
+	int i;
 
-	if (!dev || !dev->priv.dbg_root || !dev->priv.compat_debugfs)
+	if (!priv->devlink_kobj)
 		return;
 
-	debugfs_remove_recursive(dev->priv.compat_debugfs);
+	cdevlink = priv->devlink_attributes;
+
+	for (i = 0; i < ARRAY_SIZE(devlink_compat_ops); i++) {
+		kobj = &cdevlink->devlink_kobj;
+
+		sysfs_remove_file(priv->devlink_kobj, &kobj->attr);
+		cdevlink++;
+	}
+	kfree(priv->devlink_attributes);
+	kobject_put(priv->devlink_kobj);
+	kobject_put(priv->compat_kobj);
+
+	priv->devlink_kobj = NULL;
 }
 
 #else
 
-int mlx5_eswitch_compat_debugfs_init(struct mlx5_eswitch *esw)
+int mlx5_eswitch_compat_sysfs_init(struct net_device *netdev)
 {
 	return 0;
 }
 
-void mlx5_eswitch_compat_debugfs_cleanup(struct mlx5_eswitch *esw)
+void mlx5_eswitch_compat_sysfs_cleanup(struct net_device *netdev)
 {
 }
 
-#endif /* HAVE_DEVLINK_H */
+#endif

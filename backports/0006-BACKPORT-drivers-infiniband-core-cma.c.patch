@@ -1,14 +1,14 @@
-From: Alaa Hleihel <alaa@mellanox.com>
+From: Yonatan Cohen <yonatanc@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma.c
 
-Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
+Change-Id: I9e1fce6893d939bdd7824928832e8b82e3c7dbc8
 ---
  drivers/infiniband/core/cma.c | 146 ++++++++++++++++++++++++++++++++++++++++--
  1 file changed, 142 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/core/cma.c
 +++ b/drivers/infiniband/core/cma.c
-@@ -162,6 +162,8 @@ static LIST_HEAD(dev_list);
+@@ -164,6 +164,8 @@ static LIST_HEAD(dev_list);
  static LIST_HEAD(listen_any_list);
  static DEFINE_MUTEX(lock);
  static struct workqueue_struct *cma_wq;
@@ -17,7 +17,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  static unsigned int cma_pernet_id;
  
  struct cma_pernet {
-@@ -193,6 +195,28 @@ static struct idr *cma_pernet_idr(struct
+@@ -195,6 +197,28 @@ static struct idr *cma_pernet_idr(struct
  		return NULL;
  	}
  }
@@ -46,7 +46,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  struct cma_device {
  	struct list_head	list;
-@@ -221,22 +245,48 @@ struct class_port_info_context {
+@@ -223,22 +247,48 @@ struct class_port_info_context {
  static int cma_ps_alloc(struct net *net, enum rdma_port_space ps,
  			struct rdma_bind_list *bind_list, int snum)
  {
@@ -95,7 +95,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	idr_remove(idr, snum);
  }
-@@ -1268,9 +1318,17 @@ static bool validate_ipv4_net_dev(struct
+@@ -1279,9 +1329,17 @@ static bool validate_ipv4_net_dev(struct
  {
  	__be32 daddr = dst_addr->sin_addr.s_addr,
  	       saddr = src_addr->sin_addr.s_addr;
@@ -113,7 +113,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	bool ret;
  
  	if (ipv4_is_multicast(saddr) || ipv4_is_lbcast(saddr) ||
-@@ -1279,15 +1337,36 @@ static bool validate_ipv4_net_dev(struct
+@@ -1290,15 +1348,36 @@ static bool validate_ipv4_net_dev(struct
  	    ipv4_is_loopback(saddr))
  		return false;
  
@@ -150,7 +150,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	return ret;
  }
-@@ -1308,7 +1387,15 @@ static bool validate_ipv6_net_dev(struct
+@@ -1319,7 +1398,15 @@ static bool validate_ipv6_net_dev(struct
  		return false;
  
  	ret = rt->rt6i_idev->dev == net_dev;
@@ -166,7 +166,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	return ret;
  #else
-@@ -1450,11 +1537,12 @@ static struct rdma_id_private *cma_find_
+@@ -1473,11 +1560,12 @@ static struct rdma_id_private *cma_find_
  		const struct net_device *net_dev)
  {
  	struct rdma_id_private *id_priv, *id_priv_dev;
@@ -180,7 +180,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  		if (cma_match_private_data(id_priv, ib_event->private_data)) {
  			if (id_priv->id.device == cm_id->device &&
  			    cma_match_net_dev(&id_priv->id, net_dev, req->port))
-@@ -2471,19 +2559,41 @@ static int cma_resolve_iw_route(struct r
+@@ -2642,19 +2730,41 @@ static int cma_resolve_iw_route(struct r
  	return 0;
  }
  
@@ -222,8 +222,8 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
 +#endif
  }
  
- static enum ib_gid_type cma_route_gid_type(enum rdma_network_type network_type,
-@@ -2570,7 +2680,13 @@ static int cma_resolve_iboe_route(struct
+ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
+@@ -2701,7 +2811,13 @@ static int cma_resolve_iboe_route(struct
  	route->path_rec->reversible = 1;
  	route->path_rec->pkey = cpu_to_be16(0xffff);
  	route->path_rec->mtu_selector = IB_SA_EQ;
@@ -237,7 +237,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	route->path_rec->traffic_class = tos;
  	route->path_rec->mtu = iboe_get_mtu(ndev->mtu);
  	route->path_rec->rate_selector = IB_SA_EQ;
-@@ -3000,9 +3116,11 @@ static int cma_port_is_unique(struct rdm
+@@ -3119,9 +3235,11 @@ static int cma_port_is_unique(struct rdm
  	struct rdma_id_private *cur_id;
  	struct sockaddr  *daddr = cma_dst_addr(id_priv);
  	struct sockaddr  *saddr = cma_src_addr(id_priv);
@@ -250,7 +250,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  		struct sockaddr  *cur_daddr = cma_dst_addr(cur_id);
  		struct sockaddr  *cur_saddr = cma_src_addr(cur_id);
  		__be16 cur_dport = cma_port(cur_daddr);
-@@ -3039,7 +3157,11 @@ static int cma_alloc_any_port(enum rdma_
+@@ -3158,7 +3276,11 @@ static int cma_alloc_any_port(enum rdma_
  	unsigned int rover;
  	struct net *net = id_priv->id.route.addr.dev_addr.net;
  
@@ -262,7 +262,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	remaining = (high - low) + 1;
  	rover = prandom_u32() % remaining + low;
  retry:
-@@ -3085,9 +3207,10 @@ static int cma_check_port(struct rdma_bi
+@@ -3204,9 +3326,10 @@ static int cma_check_port(struct rdma_bi
  {
  	struct rdma_id_private *cur_id;
  	struct sockaddr *addr, *cur_addr;
@@ -274,7 +274,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  		if (id_priv == cur_id)
  			continue;
  
-@@ -4471,6 +4594,7 @@ static const struct rdma_nl_cbs cma_cb_t
+@@ -4588,6 +4711,7 @@ static const struct rdma_nl_cbs cma_cb_t
  	[RDMA_NL_RDMA_CM_ID_STATS] = { .dump = cma_get_id_stats},
  };
  
@@ -282,7 +282,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  static int cma_init_net(struct net *net)
  {
  	struct cma_pernet *pernet = cma_pernet(net);
-@@ -4493,12 +4617,14 @@ static void cma_exit_net(struct net *net
+@@ -4610,12 +4734,14 @@ static void cma_exit_net(struct net *net
  	idr_destroy(&pernet->ib_ps);
  }
  
@@ -297,7 +297,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  static int __init cma_init(void)
  {
-@@ -4508,9 +4634,11 @@ static int __init cma_init(void)
+@@ -4625,9 +4751,11 @@ static int __init cma_init(void)
  	if (!cma_wq)
  		return -ENOMEM;
  
@@ -308,10 +308,10 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
 +#endif
  
  	ib_sa_register_client(&sa_client);
- 	rdma_addr_register_client(&addr_client);
-@@ -4529,7 +4657,9 @@ err:
+ 	register_netdevice_notifier(&cma_nb);
+@@ -4644,7 +4772,9 @@ static int __init cma_init(void)
+ err:
  	unregister_netdevice_notifier(&cma_nb);
- 	rdma_addr_unregister_client(&addr_client);
  	ib_sa_unregister_client(&sa_client);
 +#ifdef HAVE_PERENT_OPERATIONS_ID
  err_wq:
@@ -319,9 +319,9 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	destroy_workqueue(cma_wq);
  	return ret;
  }
-@@ -4542,8 +4672,16 @@ static void __exit cma_cleanup(void)
+@@ -4656,8 +4786,16 @@ static void __exit cma_cleanup(void)
+ 	ib_unregister_client(&cma_client);
  	unregister_netdevice_notifier(&cma_nb);
- 	rdma_addr_unregister_client(&addr_client);
  	ib_sa_unregister_client(&sa_client);
 +#ifdef HAVE_PERENT_OPERATIONS_ID
  	unregister_pernet_subsys(&cma_pernet_operations);

@@ -8,7 +8,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
-@@ -879,7 +879,11 @@ static void cmd_work_handler(struct work
+@@ -885,7 +885,11 @@ static void cmd_work_handler(struct work
  	lay->status_own = CMD_OWNER_HW;
  	set_signature(ent, !cmd->checksum_disabled);
  	dump_command(dev, ent, 1);
@@ -20,7 +20,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  
  	if (ent->callback)
  		schedule_delayed_work(&ent->cb_timeout_work, cb_timeout);
-@@ -982,6 +986,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
+@@ -988,6 +992,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	struct mlx5_cmd_stats *stats;
@@ -30,7 +30,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  	int err = 0;
  	s64 ds;
  	u16 op;
-@@ -1017,7 +1024,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
+@@ -1023,7 +1030,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	if (err == -ETIMEDOUT)
  		goto out;
  
@@ -45,7 +45,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  	op = MLX5_GET(mbox_in, in->first.data, opcode);
  	if (op < ARRAY_SIZE(cmd->stats)) {
  		stats = &cmd->stats[op];
-@@ -1143,13 +1157,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
+@@ -1149,13 +1163,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
  	if (!mailbox)
  		return ERR_PTR(-ENOMEM);
  
@@ -68,7 +68,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  	mailbox->next = NULL;
  
  	return mailbox;
-@@ -1416,7 +1439,11 @@ static void trigger_cmd_completions(stru
+@@ -1422,7 +1445,11 @@ static void trigger_cmd_completions(stru
  	u64 vector;
  
  	/* wait for pending handlers to complete */
@@ -80,7 +80,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  	spin_lock_irqsave(&dev->cmd.alloc_lock, flags);
  	vector = ~dev->cmd.bitmask & ((1ul << (1 << dev->cmd.log_sz)) - 1);
  	if (!vector)
-@@ -1501,6 +1528,9 @@ void mlx5_cmd_comp_handler(struct mlx5_c
+@@ -1507,6 +1534,9 @@ void mlx5_cmd_comp_handler(struct mlx5_c
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	mlx5_cmd_cbk_t callback;
@@ -90,7 +90,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  	void *context;
  	int err;
  	int i;
-@@ -1538,12 +1568,20 @@ void mlx5_cmd_comp_handler(struct mlx5_c
+@@ -1542,12 +1572,20 @@ void mlx5_cmd_comp_handler(struct mlx5_c
  			}
  
  			if (ent->callback)
@@ -111,7 +111,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
  			dump_command(dev, ent, 0);
  			if (!ent->ret) {
-@@ -1565,7 +1603,14 @@ void mlx5_cmd_comp_handler(struct mlx5_c
+@@ -1569,7 +1607,14 @@ void mlx5_cmd_comp_handler(struct mlx5_c
  				free_ent(cmd, ent->idx);
  
  			if (ent->callback) {
@@ -126,7 +126,7 @@ Change-Id: Ie97923638198a327a49bcdeaf4625f7b430a9815
  				if (ent->op < ARRAY_SIZE(cmd->stats)) {
  					stats = &cmd->stats[ent->op];
  					spin_lock_irqsave(&stats->lock, flags);
-@@ -2198,7 +2243,11 @@ static ssize_t real_miss_store(struct de
+@@ -2202,7 +2247,11 @@ static ssize_t real_miss_store(struct de
  	return count;
  }
  

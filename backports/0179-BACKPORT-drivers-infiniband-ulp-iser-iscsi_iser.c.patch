@@ -8,7 +8,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
-@@ -108,7 +108,11 @@ MODULE_PARM_DESC(pi_enable, "Enable T10-
+@@ -111,7 +111,11 @@ MODULE_PARM_DESC(pi_enable, "Enable T10-
  
  int iser_pi_guard;
  module_param_named(pi_guard, iser_pi_guard, int, S_IRUGO);
@@ -20,7 +20,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  
  /*
   * iscsi_iser_recv() - Process a successful recv completion
-@@ -220,6 +224,27 @@ out:
+@@ -223,6 +227,27 @@ out:
  	return ret;
  }
  
@@ -48,7 +48,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  /**
   * iscsi_iser_task_init() - Initialize iscsi-iser task
   * @task: iscsi task
-@@ -237,8 +262,18 @@ iscsi_iser_task_init(struct iscsi_task *
+@@ -240,8 +265,18 @@ iscsi_iser_task_init(struct iscsi_task *
  
  	ret = iser_initialize_task_headers(task, &iser_task->desc);
  	if (ret) {
@@ -67,7 +67,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  		return ret;
  	}
  
-@@ -272,6 +307,17 @@ iscsi_iser_mtask_xmit(struct iscsi_conn
+@@ -275,6 +310,17 @@ iscsi_iser_mtask_xmit(struct iscsi_conn
  	iser_dbg("mtask xmit [cid %d itt 0x%x]\n", conn->id, task->itt);
  
  	error = iser_send_control(conn, task);
@@ -85,7 +85,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  
  	/* since iser xmits control with zero copy, tasks can not be recycled
  	 * right after sending them.
-@@ -390,6 +436,7 @@ static void iscsi_iser_cleanup_task(stru
+@@ -393,6 +439,7 @@ static void iscsi_iser_cleanup_task(stru
  	}
  }
  
@@ -93,7 +93,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  /**
   * iscsi_iser_check_protection() - check protection information status of task.
   * @task:     iscsi task
-@@ -414,6 +461,7 @@ iscsi_iser_check_protection(struct iscsi
+@@ -417,6 +464,7 @@ iscsi_iser_check_protection(struct iscsi
  		return iser_check_task_pi_status(iser_task, ISER_DIR_OUT,
  						 sector);
  }
@@ -101,7 +101,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  
  /**
   * iscsi_iser_conn_create() - create a new iscsi-iser connection
-@@ -585,6 +633,7 @@ iscsi_iser_session_destroy(struct iscsi_
+@@ -588,6 +636,7 @@ iscsi_iser_session_destroy(struct iscsi_
  static inline unsigned int
  iser_dif_prot_caps(int prot_caps)
  {
@@ -109,7 +109,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  	return ((prot_caps & IB_PROT_T10DIF_TYPE_1) ?
  		SHOST_DIF_TYPE1_PROTECTION | SHOST_DIX_TYPE0_PROTECTION |
  		SHOST_DIX_TYPE1_PROTECTION : 0) |
-@@ -592,6 +641,14 @@ iser_dif_prot_caps(int prot_caps)
+@@ -595,6 +644,14 @@ iser_dif_prot_caps(int prot_caps)
  		SHOST_DIF_TYPE2_PROTECTION | SHOST_DIX_TYPE2_PROTECTION : 0) |
  	       ((prot_caps & IB_PROT_T10DIF_TYPE_3) ?
  		SHOST_DIF_TYPE3_PROTECTION | SHOST_DIX_TYPE3_PROTECTION : 0);
@@ -124,7 +124,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  }
  
  /**
-@@ -649,8 +706,15 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -652,8 +709,15 @@ iscsi_iser_session_create(struct iscsi_e
  			u32 sig_caps = ib_conn->device->ib_device->attrs.sig_prot_cap;
  
  			scsi_host_set_prot(shost, iser_dif_prot_caps(sig_caps));
@@ -140,7 +140,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  		}
  
  		if (iscsi_host_add(shost,
-@@ -768,9 +832,16 @@ iscsi_iser_conn_get_stats(struct iscsi_c
+@@ -769,9 +833,16 @@ iscsi_iser_conn_get_stats(struct iscsi_c
  	stats->r2t_pdus = conn->r2t_pdus_cnt; /* always 0 */
  	stats->tmfcmd_pdus = conn->tmfcmd_pdus_cnt;
  	stats->tmfrsp_pdus = conn->tmfrsp_pdus_cnt;
@@ -157,7 +157,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  static int iscsi_iser_get_ep_param(struct iscsi_endpoint *ep,
  				   enum iscsi_param param, char *buf)
  {
-@@ -793,6 +864,7 @@ static int iscsi_iser_get_ep_param(struc
+@@ -794,6 +865,7 @@ static int iscsi_iser_get_ep_param(struc
  
  	return len;
  }
@@ -165,7 +165,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  
  /**
   * iscsi_iser_ep_connect() - Initiate iSER connection establishment
-@@ -919,7 +991,12 @@ iscsi_iser_ep_disconnect(struct iscsi_en
+@@ -920,7 +992,12 @@ iscsi_iser_ep_disconnect(struct iscsi_en
  	iscsi_destroy_endpoint(ep);
  }
  
@@ -178,7 +178,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  {
  	switch (param_type) {
  	case ISCSI_HOST_PARAM:
-@@ -963,7 +1040,9 @@ static umode_t iser_attr_is_visible(int
+@@ -964,7 +1041,9 @@ static umode_t iser_attr_is_visible(int
  		case ISCSI_PARAM_TGT_RESET_TMO:
  		case ISCSI_PARAM_IFACE_NAME:
  		case ISCSI_PARAM_INITIATOR_NAME:
@@ -188,7 +188,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  			return S_IRUGO;
  		default:
  			return 0;
-@@ -972,7 +1051,9 @@ static umode_t iser_attr_is_visible(int
+@@ -973,7 +1052,9 @@ static umode_t iser_attr_is_visible(int
  
  	return 0;
  }
@@ -198,7 +198,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
  {
  	struct iscsi_session *session;
-@@ -996,30 +1077,45 @@ static int iscsi_iser_slave_alloc(struct
+@@ -997,30 +1078,45 @@ static int iscsi_iser_slave_alloc(struct
  
  	return 0;
  }
@@ -244,7 +244,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  	/* session management */
  	.create_session         = iscsi_iser_session_create,
  	.destroy_session        = iscsi_iser_session_destroy,
-@@ -1027,10 +1123,14 @@ static struct iscsi_transport iscsi_iser
+@@ -1028,10 +1124,14 @@ static struct iscsi_transport iscsi_iser
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,
  	.destroy_conn           = iscsi_conn_teardown,
@@ -259,7 +259,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  	.get_session_param	= iscsi_session_get_param,
  	.start_conn             = iscsi_iser_conn_start,
  	.stop_conn              = iscsi_iser_conn_stop,
-@@ -1044,7 +1144,9 @@ static struct iscsi_transport iscsi_iser
+@@ -1045,7 +1145,9 @@ static struct iscsi_transport iscsi_iser
  	.xmit_task		= iscsi_iser_task_xmit,
  	.cleanup_task		= iscsi_iser_cleanup_task,
  	.alloc_pdu		= iscsi_iser_pdu_alloc,
@@ -269,7 +269,7 @@ Change-Id: I8477f2ac02a8634614bafaa438e19db303c67062
  	/* recovery */
  	.session_recovery_timedout = iscsi_session_recovery_timedout,
  
-@@ -1064,6 +1166,13 @@ static int __init iser_init(void)
+@@ -1065,6 +1167,13 @@ static int __init iser_init(void)
  		return -EINVAL;
  	}
  

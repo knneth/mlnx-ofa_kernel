@@ -334,6 +334,7 @@ err1:
 
 static int rxe_match_dgid(struct rxe_dev *rxe, struct sk_buff *skb)
 {
+	const struct ib_gid_attr *gid_attr;
 	union ib_gid dgid;
 	union ib_gid *pdgid;
 
@@ -345,9 +346,14 @@ static int rxe_match_dgid(struct rxe_dev *rxe, struct sk_buff *skb)
 		pdgid = (union ib_gid *)&ipv6_hdr(skb)->daddr;
 	}
 
-	return ib_find_cached_gid_by_port(&rxe->ib_dev, pdgid,
-					  IB_GID_TYPE_ROCE_UDP_ENCAP,
-					  1, rxe->ndev, NULL);
+	gid_attr = rdma_find_gid_by_port(&rxe->ib_dev, pdgid,
+					 IB_GID_TYPE_ROCE_UDP_ENCAP,
+					 1, skb->dev);
+	if (IS_ERR(gid_attr))
+		return PTR_ERR(gid_attr);
+
+	rdma_put_gid_attr(gid_attr);
+	return 0;
 }
 
 /* rxe_rcv is called from the interface driver */

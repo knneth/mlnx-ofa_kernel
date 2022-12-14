@@ -3,21 +3,19 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_rep.h | 62 ++++++++++++++++++++++++
- 1 file changed, 62 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_rep.h | 54 ++++++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
-@@ -33,12 +33,22 @@
+@@ -33,8 +33,15 @@
  #ifndef __MLX5E_REP_H__
  #define __MLX5E_REP_H__
  
-+#ifdef HAVE_IP_TUNNEL_INFO
++#if defined(HAVE_IP_TUNNEL_INFO) || defined(CONFIG_COMPAT_IP_TUNNELS)
  #include <net/ip_tunnels.h>
 +#endif
-+#ifdef HAVE_RHASHTABLE_PARAMS_AUTOMATIC_SHRINKING
  #include <linux/rhashtable.h>
-+#endif
 +#ifdef HAVE_REFCOUNT
 +#include <linux/refcount.h>
 +#else
@@ -26,12 +24,7 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  #include "eswitch.h"
  #include "en.h"
  
- #ifdef CONFIG_MLX5_ESWITCH
-+#ifdef HAVE_RHASHTABLE_PARAMS_AUTOMATIC_SHRINKING
- struct mlx5e_neigh_update_table {
- 	struct rhashtable       neigh_ht;
- 	/* Save the neigh hash entries in a list in addition to the hash table
-@@ -47,24 +57,32 @@ struct mlx5e_neigh_update_table {
+@@ -47,10 +54,12 @@ struct mlx5e_neigh_update_table {
  	 */
  	struct list_head	neigh_list;
  	/* protect lookup/remove operations */
@@ -42,19 +35,9 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  	unsigned long           min_interval; /* jiffies */
 +#endif
  };
-+#endif
  
  struct mlx5e_rep_priv {
- 	struct mlx5_eswitch_rep *rep;
-+#ifdef HAVE_RHASHTABLE_PARAMS_AUTOMATIC_SHRINKING
- 	struct mlx5e_neigh_update_table neigh_update;
-+#endif
- };
- 
-+#ifdef HAVE_RHASHTABLE_PARAMS_AUTOMATIC_SHRINKING
- struct mlx5e_neigh {
- 	struct net_device *dev;
- 	union {
+@@ -64,7 +73,9 @@ struct mlx5e_neigh {
  		__be32	v4;
  		struct in6_addr v6;
  	} dst_ip;
@@ -64,7 +47,7 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  };
  
  struct mlx5e_neigh_hash_entry {
-@@ -77,6 +95,7 @@ struct mlx5e_neigh_hash_entry {
+@@ -77,6 +88,7 @@ struct mlx5e_neigh_hash_entry {
  	 */
  	struct list_head neigh_list;
  
@@ -72,7 +55,7 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  	/* encap list sharing the same neigh */
  	struct list_head encap_list;
  
-@@ -90,39 +109,69 @@ struct mlx5e_neigh_hash_entry {
+@@ -90,39 +102,68 @@ struct mlx5e_neigh_hash_entry {
  	 * refcount is needed to avoid neigh hash entry removal by TC, while
  	 * it's used by the neigh notification call.
  	 */
@@ -91,7 +74,6 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  	unsigned long reported_lastuse;
 +#endif
  };
-+#endif
  
 +#ifdef HAVE_TCF_TUNNEL_INFO
  enum {
@@ -101,7 +83,7 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
 +#endif
 +
 +#ifdef HAVE_NET_TC_ACT_TC_TUNNEL_KEY_H
-+#ifndef HAVE_IP_TUNNEL_INFO
++#if !defined(HAVE_IP_TUNNEL_INFO) && !defined(CONFIG_COMPAT_IP_TUNNELS)
 +struct mlx5_encap_info {
 +	__be32 daddr;
 +	__be32 tun_id;
@@ -121,7 +103,7 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  	struct hlist_node encap_hlist;
  	struct list_head flows;
  	u32 encap_id;
-+#ifdef HAVE_IP_TUNNEL_INFO
++#if defined(HAVE_IP_TUNNEL_INFO) || defined(CONFIG_COMPAT_IP_TUNNELS)
  	struct ip_tunnel_info tun_info;
 +#else
 +	struct mlx5_encap_info tun_info;
@@ -142,7 +124,7 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  
  void *mlx5e_alloc_nic_rep_priv(struct mlx5_core_dev *mdev);
  int mlx5e_register_vport_reps(struct mlx5e_priv *priv);
-@@ -131,16 +180,29 @@ bool mlx5e_is_uplink_rep(struct mlx5e_pr
+@@ -131,16 +172,29 @@ bool mlx5e_is_uplink_rep(struct mlx5e_pr
  int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv);
  void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv);
  

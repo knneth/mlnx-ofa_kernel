@@ -8,7 +8,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
-@@ -512,7 +512,9 @@ static void del_sw_hw_rule(struct fs_nod
+@@ -522,7 +522,9 @@ static void del_sw_hw_rule(struct fs_nod
  	fs_get_obj(fte, rule->node.parent);
  	fs_get_obj(fg, fte->node.parent);
  	fs_get_obj(ft, fg->node.parent);
@@ -18,7 +18,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	if (rule->sw_action == MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO) {
  		mutex_lock(&rule->dest_attr.ft->lock);
  		list_del(&rule->next_ft);
-@@ -555,7 +557,9 @@ static void del_hw_fte(struct fs_node *n
+@@ -565,7 +567,9 @@ static void del_hw_fte(struct fs_node *n
  	fs_get_obj(fg, fte->node.parent);
  	fs_get_obj(ft, fg->node.parent);
  
@@ -28,7 +28,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	dev = get_dev(&ft->node);
  	if (node->active) {
  		err = mlx5_cmd_delete_fte(dev, ft,
-@@ -594,7 +598,9 @@ static void del_hw_flow_group(struct fs_
+@@ -604,7 +608,9 @@ static void del_hw_flow_group(struct fs_
  	fs_get_obj(fg, node);
  	fs_get_obj(ft, fg->node.parent);
  	dev = get_dev(&ft->node);
@@ -38,7 +38,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  
  	if (fg->node.active && mlx5_cmd_destroy_flow_group(dev, ft, fg->id))
  		mlx5_core_warn(dev, "flow steering can't destroy fg %d of ft %d\n",
-@@ -894,7 +900,7 @@ static int update_root_ft_create(struct
+@@ -904,7 +910,7 @@ static int update_root_ft_create(struct
  	struct mlx5_flow_root_namespace *root = find_root(&prio->node);
  	struct mlx5_ft_underlay_qp *uqp;
  	int min_level = INT_MAX;
@@ -47,7 +47,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	u32 qpn;
  
  	if (root->root_ft)
-@@ -1212,7 +1218,9 @@ struct mlx5_flow_group *mlx5_create_flow
+@@ -1222,7 +1228,9 @@ struct mlx5_flow_group *mlx5_create_flow
  		tree_put_node(&fg->node);
  		return ERR_PTR(err);
  	}
@@ -57,7 +57,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	fg->node.active = true;
  
  	return fg;
-@@ -1442,7 +1450,9 @@ static int create_auto_flow_group(struct
+@@ -1453,7 +1461,9 @@ static int create_auto_flow_group(struct
  	err = mlx5_cmd_create_flow_group(dev, ft, in, &fg->id);
  	if (!err) {
  		fg->node.active = true;
@@ -67,7 +67,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	}
  
  	kvfree(in);
-@@ -1614,14 +1624,18 @@ static struct mlx5_flow_handle *add_rule
+@@ -1613,13 +1623,17 @@ static struct mlx5_flow_handle *add_rule
  		fte->action = old_action;
  		return handle;
  	}
@@ -76,17 +76,16 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
 +#endif
  
  	for (i = 0; i < handle->num_rules; i++) {
- 		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
- 			dest_name = get_dest_name(&handle->rule[i]->dest_attr);
- 			tree_add_node(&handle->rule[i]->node, &fte->node, dest_name);
- 			kfree(dest_name);
+ 		dest_name = get_dest_name(&handle->rule[i]->dest_attr);
+ 		tree_add_node(&handle->rule[i]->node, &fte->node, dest_name);
+ 		kfree(dest_name);
 +#ifndef MLX_DISABLE_TRACEPOINTS
- 			trace_mlx5_fs_add_rule(handle->rule[i]);
+ 		trace_mlx5_fs_add_rule(handle->rule[i]);
 +#endif
- 			notify_add_rule(handle->rule[i]);
- 		}
+ 		notify_add_rule(handle->rule[i]);
  	}
-@@ -2545,6 +2559,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
+ 	return handle;
+@@ -2542,6 +2556,10 @@ void mlx5_cleanup_fs(struct mlx5_core_de
  	fs_debugfs_cleanup(dev);
  	kmem_cache_destroy(steering->ftes_cache);
  	kmem_cache_destroy(steering->fgs_cache);
@@ -97,7 +96,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	kfree(steering);
  }
  
-@@ -2667,6 +2685,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -2664,6 +2682,10 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  	steering->dev = dev;
  	dev->priv.steering = steering;
  
@@ -108,7 +107,7 @@ Change-Id: I06442ff18ecf480a679e0709bef2b2f2e5370516
  	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev->priv.name);
  	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev->priv.name);
  	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
-@@ -2723,12 +2745,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
+@@ -2720,12 +2742,16 @@ int mlx5_init_fs(struct mlx5_core_dev *d
  			goto err;
  	}
  

@@ -39,6 +39,9 @@
 #include <linux/device.h>
 #include <linux/sysfs.h>
 #include <linux/sched/signal.h>
+#ifdef CONFIG_CXL_LIB
+#include <linux/sched/mm.h>
+#endif
 #include <rdma/ib_umem.h>
 #include <rdma/ib_umem_odp.h>
 #include <rdma/ib_verbs.h>
@@ -1274,7 +1277,10 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd,
 		populate_mtts = true;
 
 		/* it is safe to do this because current is running */
+#ifdef CONFIG_CXL_LIB
 		umem->mm = current->mm;
+		mmgrab(umem->mm);
+#endif
 	} else if (use_umr(dev, order)) {
 		mr = alloc_mr_from_cache(pd, umem, virt_addr, length, ncont,
 					 page_shift, order, access_flags);
@@ -1657,6 +1663,12 @@ int mlx5_ib_dereg_mr(struct ib_mr *ibmr)
 	int ret = 0;
 	int allocated_from_cache = mr->allocated_from_cache;
 
+#ifdef CONFIG_CXL_LIB
+	if (mlx5_ib_capi_enabled(dev) && mr->umem && mr->umem->mm) {
+		if (virt_addr_valid(mr->umem->mm))
+			mmdrop(mr->umem->mm);
+	}
+#endif
 	if (atomic_inc_return(&mr->invalidated) > 1) {
 		/* In case there is inflight invalidation call pending for its termination */
 		wait_for_completion(&mr->invalidation_comp);
@@ -1752,6 +1764,12 @@ struct ib_mr *mlx5_ib_alloc_mr(struct ib_pd *pd,
 		MLX5_SET(mkc, mkc, translations_octword_size,
 			 ALIGN(max_num_sg + 1, 4));
 		mr->access_mode = MLX5_MKC_ACCESS_MODE_KLMS | MLX5_PERM_UMR_EN;
+		mr->max_descs = ndescs;
+	} else if (mr_type == IB_MR_TYPE_FIXED_SIZE) {
+		MLX5_SET(mkc, mkc, translations_octword_size,
+			 ALIGN(max_num_sg + 1, 4));
+		MLX5_SET(mkc, mkc, log_page_size, 31);
+		mr->access_mode = MLX5_MKC_ACCESS_MODE_KSM | MLX5_PERM_UMR_EN;
 		mr->max_descs = ndescs;
 	} else {
 		mlx5_ib_warn(dev, "Invalid mr type %d\n", mr_type);

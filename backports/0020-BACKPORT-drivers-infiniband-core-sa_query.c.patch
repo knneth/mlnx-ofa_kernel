@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
 
 Change-Id: I9cbb5bd5252997678eaefeea2935a3c5c2a114c3
 ---
- drivers/infiniband/core/sa_query.c | 55 ++++++++++++++++++++++++++++++++++++--
- 1 file changed, 53 insertions(+), 2 deletions(-)
+ drivers/infiniband/core/sa_query.c | 64 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 62 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/sa_query.c
 +++ b/drivers/infiniband/core/sa_query.c
@@ -94,7 +94,32 @@ Change-Id: I9cbb5bd5252997678eaefeea2935a3c5c2a114c3
  		return -EPERM;
  
  	spin_lock_irqsave(&ib_nl_request_lock, flags);
-@@ -1403,10 +1436,17 @@ static void init_mad(struct ib_sa_query
+@@ -1275,8 +1308,13 @@ roce_resolve_route_from_path(struct ib_d
+ 		ret = -ENODEV;
+ 		goto done;
+ 	}
++#ifdef HAVE_NETIF_DEV_GET_BY_INDEX_RCU
+ 	resolved_dev = dev_get_by_index_rcu(dev_net(attr->ndev),
+ 					    attr->ndev->ifindex);
++#else
++	resolved_dev = dev_get_by_index(dev_net(attr->ndev),
++					attr->ndev->ifindex);
++#endif
+ 	if (!resolved_dev) {
+ 		ret = -ENODEV;
+ 		goto done;
+@@ -1287,6 +1325,10 @@ roce_resolve_route_from_path(struct ib_d
+ 		ret = -EHOSTUNREACH;
+ done:
+ 	rcu_read_unlock();
++#ifndef HAVE_NETIF_DEV_GET_BY_INDEX_RCU
++	if (resolved_dev)
++		dev_put(resolved_dev);
++#endif
+ 	dev_put(idev);
+ 	if (!ret)
+ 		rec->roce.route_resolved = true;
+@@ -1429,10 +1471,17 @@ static void init_mad(struct ib_sa_query
  static int send_mad(struct ib_sa_query *query, int timeout_ms, int retries,
  		    gfp_t gfp_mask)
  {
@@ -112,7 +137,7 @@ Change-Id: I9cbb5bd5252997678eaefeea2935a3c5c2a114c3
  	if (preload)
  		idr_preload(gfp_mask);
  	spin_lock_irqsave(&idr_lock, flags);
-@@ -1418,7 +1458,18 @@ static int send_mad(struct ib_sa_query *
+@@ -1444,7 +1493,18 @@ static int send_mad(struct ib_sa_query *
  		idr_preload_end();
  	if (id < 0)
  		return id;

@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 
 Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 32 +++++++++++++++++++++++
- 1 file changed, 32 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch.c | 28 +++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
-@@ -440,6 +440,7 @@ static void update_allmulti_vports(struc
+@@ -454,6 +454,7 @@ static void update_allmulti_vports(struc
  {
  	u8 *mac = vaddr->node.addr;
  	u32 vport_idx = 0;
@@ -16,23 +16,23 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  
  	for (vport_idx = 0; vport_idx < esw->total_vports; vport_idx++) {
  		struct mlx5_vport *vport = &esw->vports[vport_idx];
-@@ -487,6 +488,7 @@ static int esw_add_mc_addr(struct mlx5_e
+@@ -501,6 +502,7 @@ static int esw_add_mc_addr(struct mlx5_e
  	struct esw_mc_addr *esw_mc;
  	u8 *mac = vaddr->node.addr;
  	u32 vport = vaddr->vport;
 +	COMPAT_HL_NODE
  
- 	if (!esw->fdb_table.fdb)
+ 	if (!esw->fdb_table.legacy.fdb)
  		return 0;
-@@ -527,6 +529,7 @@ static int esw_del_mc_addr(struct mlx5_e
+@@ -541,6 +543,7 @@ static int esw_del_mc_addr(struct mlx5_e
  	struct esw_mc_addr *esw_mc;
  	u8 *mac = vaddr->node.addr;
  	u32 vport = vaddr->vport;
 +	COMPAT_HL_NODE
  
- 	if (!esw->fdb_table.fdb)
+ 	if (!esw->fdb_table.legacy.fdb)
  		return 0;
-@@ -576,6 +579,7 @@ static void esw_apply_vport_addr_list(st
+@@ -592,6 +595,7 @@ static void esw_apply_vport_addr_list(st
  	struct hlist_head *hash;
  	struct hlist_node *tmp;
  	int hi;
@@ -40,7 +40,7 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  
  	vport_addr_add = is_uc ? esw_add_uc_addr :
  				 esw_add_mc_addr;
-@@ -613,6 +617,7 @@ static void esw_update_vport_addr_list(s
+@@ -629,6 +633,7 @@ static void esw_update_vport_addr_list(s
  	int err;
  	int hi;
  	int i;
@@ -48,7 +48,7 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  
  	size = is_uc ? MLX5_MAX_UC_PER_VPORT(esw->dev) :
  		       MLX5_MAX_MC_PER_VPORT(esw->dev);
-@@ -734,6 +739,7 @@ static void esw_update_vport_mc_promisc(
+@@ -750,6 +755,7 @@ static void esw_update_vport_mc_promisc(
  	struct hlist_head *hash;
  	struct hlist_node *tmp;
  	int hi;
@@ -56,7 +56,7 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  
  	hash = vport->mc_list;
  
-@@ -1810,7 +1816,11 @@ static void esw_disable_vport(struct mlx
+@@ -1863,7 +1869,11 @@ static void esw_disable_vport(struct mlx
  	/* Mark this vport as disabled to discard new events */
  	vport->enabled = false;
  
@@ -68,7 +68,7 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  	/* Wait for current already scheduled events to complete */
  	flush_workqueue(esw->work_queue);
  	/* Disable events from this vport */
-@@ -1984,8 +1994,12 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2039,8 +2049,12 @@ int mlx5_eswitch_init(struct mlx5_core_d
  	if (err)
  		goto abort;
  
@@ -81,25 +81,7 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  	mutex_init(&esw->state_lock);
  
  	access_other_hca_roce = MLX5_CAP_GEN(dev, vhca_group_manager) &&
-@@ -2019,6 +2033,9 @@ int mlx5_eswitch_init(struct mlx5_core_d
- 
- 	dev->priv.eswitch = esw;
- 
-+	mlx5_eswitch_compat_debugfs_init(esw);
-+
-+
- 	return 0;
- abort:
- 	if (esw->work_queue)
-@@ -2079,6 +2096,7 @@ void mlx5_eswitch_cleanup(struct mlx5_es
- 
- 	esw_info(esw->dev, "cleanup\n");
- 
-+	mlx5_eswitch_compat_debugfs_cleanup(esw);
- 	esw->dev->priv.eswitch = NULL;
- 	destroy_workqueue(esw->work_queue);
- 	kfree(esw->vports);
-@@ -2185,6 +2203,7 @@ unlock:
+@@ -2240,6 +2254,7 @@ unlock:
  	return 0;
  }
  
@@ -107,7 +89,7 @@ Change-Id: I94aa1251b77fc358a14bbff42e9027607845b31b
  int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
  				  int vport, struct ifla_vf_info *ivi)
  {
-@@ -2202,18 +2221,31 @@ int mlx5_eswitch_get_vport_config(struct
+@@ -2257,18 +2272,31 @@ int mlx5_eswitch_get_vport_config(struct
  
  	mutex_lock(&esw->state_lock);
  	ether_addr_copy(ivi->mac, evport->info.mac);

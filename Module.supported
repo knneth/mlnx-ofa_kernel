@@ -68,3 +68,7 @@ lpfc.ko external
 opa_vnic.ko external
 mlxfw.ko external
 mlx5_fpga_tools.ko external
+act_vlan.ko external
+act_tunnel_key.ko external
+cls_flower.ko external
+eth_ipoib.ko

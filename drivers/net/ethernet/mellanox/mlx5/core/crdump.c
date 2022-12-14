@@ -35,6 +35,7 @@
 #include "mlx5_core.h"
 
 #define MLX5_PROTECTED_CR_SPCAE_DOMAIN 0x6
+#define MLX5_PROTECTED_CR_SCAN_CRSPACE 0x7
 
 /* iter func */
 struct mlx5_crdump_iter {
@@ -197,8 +198,10 @@ int mlx5_cr_protected_capture(struct mlx5_core_dev *dev)
 		ret = -ENOMEM;
 		goto unlock;
 	}
-
-	ret = mlx5_block_op_pciconf(dev, 0, (u32 *)cr_data, total_len);
+	if (priv->health.crdump->space == MLX5_PROTECTED_CR_SCAN_CRSPACE)
+		ret = mlx5_block_op_pciconf_fast(dev, (u32 *)cr_data, total_len);
+	else
+		ret = mlx5_block_op_pciconf(dev, 0, (u32 *)cr_data, total_len);
 	if (ret < 0)
 		goto free_mem;
 

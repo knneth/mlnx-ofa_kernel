@@ -18,7 +18,7 @@ Change-Id: I0f3834888d11843d517e229916ebba0b77dea50e
  
  #include "ipoib.h"
  
-@@ -1076,7 +1078,11 @@ static struct ib_qp *ipoib_cm_create_tx_
+@@ -1081,7 +1083,11 @@ static struct ib_qp *ipoib_cm_create_tx_
  		.sq_sig_type		= IB_SIGNAL_ALL_WR,
  		.qp_type		= IB_QPT_RC,
  		.qp_context		= tx,
@@ -30,7 +30,7 @@ Change-Id: I0f3834888d11843d517e229916ebba0b77dea50e
  	};
  	struct ib_qp *tx_qp;
  
-@@ -1085,6 +1091,12 @@ static struct ib_qp *ipoib_cm_create_tx_
+@@ -1090,6 +1096,12 @@ static struct ib_qp *ipoib_cm_create_tx_
  			min_t(u32, priv->ca->attrs.max_sge, MAX_SKB_FRAGS + 1);
  
  	tx_qp = ib_create_qp(priv->pd, &attr);
@@ -43,7 +43,7 @@ Change-Id: I0f3834888d11843d517e229916ebba0b77dea50e
  	tx->max_send_sge = attr.cap.max_send_sge;
  	return tx_qp;
  }
-@@ -1155,20 +1167,31 @@ static int ipoib_cm_tx_init(struct ipoib
+@@ -1160,20 +1172,31 @@ static int ipoib_cm_tx_init(struct ipoib
  			    struct sa_path_rec *pathrec)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(p->dev);
@@ -75,7 +75,7 @@ Change-Id: I0f3834888d11843d517e229916ebba0b77dea50e
  	if (IS_ERR(p->qp)) {
  		ret = PTR_ERR(p->qp);
  		ipoib_warn(priv, "failed to create tx qp: %d\n", ret);
-@@ -1488,7 +1511,11 @@ static void ipoib_cm_skb_reap(struct wor
+@@ -1493,7 +1516,11 @@ static void ipoib_cm_skb_reap(struct wor
  			icmp_send(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, htonl(mtu));
  #if IS_ENABLED(CONFIG_IPV6)
  		else if (skb->protocol == htons(ETH_P_IPV6))

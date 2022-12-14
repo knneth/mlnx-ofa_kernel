@@ -111,6 +111,11 @@ if (grep -w source /etc/network/interfaces 2>/dev/null | grep -qvE "^\s*#" 2>/de
         done
     done
 fi
+use_netplan=0
+if [ ! -x  /sbin/ifup -a -x /usr/sbin/netplan ]; then
+    use_netplan=1
+    conf_files=""
+fi
 
 log_msg()
 {
@@ -294,6 +299,12 @@ bring_up()
         fi
     fi
 
+    if [ "$use_netplan" = 1 ]; then
+        # System does not use ifupdown. No use in manually
+        # starting interface.
+        return 0
+    fi
+
     if ! (grep -wh ${i} $conf_files 2>/dev/null | grep -qvE "^\s*#" 2>/dev/null); then
         log_msg "No configuration found for ${i}"
         return 4
@@ -438,3 +449,5 @@ do
         fi
     done < "$file"
 done
+
+# vi:ts=4 sts=4 sw=0 expandtab:

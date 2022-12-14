@@ -163,6 +163,11 @@ enum ib_exp_device_attr_comp_mask {
 	IB_EXP_DEVICE_ATTR_TUNNEL_OFFLOADS_CAPS	= 1ULL << 28,
 	IB_EXP_DEVICE_ATTR_MAX_DM_SIZE		= 1ULL << 29,
 	IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC	= 1ULL << 30,
+	IB_EXP_DEVICE_ATTR_COMP_MASK_2		= 1ULL << 31,
+};
+
+enum ib_exp_device_attr_comp_mask_2 {
+	IB_EXP_DEVICE_ATTR_UMR_FIXED_SIZE_CAPS  = 1ULL << 0,
 };
 
 enum ib_exp_device_cap_flags2 {
@@ -184,6 +189,7 @@ enum ib_exp_device_cap_flags2 {
 	IB_EXP_DEVICE_DELAY_DROP                = 1 << 18,
 	IB_EXP_DEVICE_PHYSICAL_RANGE_MR		= 1 << 19,
 	IB_EXP_DEVICE_CAPI			= 1 << 20,
+	IB_EXP_DEVICE_UMR_FIXED_SIZE		= 1 << 25,
 	IB_EXP_DEVICE_CROSS_CHANNEL	= 1 << 28, /* Comapt with user exp area */
 	IB_EXP_DEVICE_MASK =	IB_DEVICE_CROSS_CHANNEL |
 				IB_EXP_DEVICE_EC_OFFLOAD,
@@ -296,6 +302,10 @@ struct ib_exp_tm_caps {
 	u32 max_sge;
 };
 
+struct ib_exp_umr_fixed_size_caps {
+	u64 max_entity_size;
+};
+
 struct ib_exp_device_attr {
 	struct ib_device_attr	base;
 	/* Use IB_EXP_DEVICE_ATTR_... for exp_comp_mask */
@@ -345,6 +355,8 @@ struct ib_exp_device_attr {
 	u32				tunnel_offloads_caps; /* ib_exp_tunnel_offloads_caps */
 	u64			max_dm_size;
 	u32				tunneled_atomic_caps; /* ib_exp_tunneled_atomic_caps */
+	u64				exp_comp_mask_2;         /* ib_exp_device_attr_comp_mask_2 */
+	struct ib_exp_umr_fixed_size_caps umr_fixed_size_caps;
 };
 
 struct ib_dm {
@@ -406,6 +418,12 @@ struct ib_dct {
 	void		      (*event_handler)(struct ib_event *, void *);
 	void		       *dct_context;
 	u32			dct_num;
+};
+
+enum ib_mr_create_flags {
+	IB_EXP_MR_SIGNATURE_EN         = (1 << 0),
+	IB_EXP_MR_INDIRECT_KLMS        = (1 << 1),
+	IB_EXP_MR_FIXED_BUFFER_SIZE    = (1 << 2)
 };
 
 struct ib_mr_init_attr {

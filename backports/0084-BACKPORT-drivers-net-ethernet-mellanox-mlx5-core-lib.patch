@@ -223,9 +223,9 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	u64 frac = 0;
 +#endif
  	u32 dev_freq;
+ 	u64 overflow_cycles;
  
- 	dev_freq = MLX5_CAP_GEN(mdev, device_frequency_khz);
-@@ -517,28 +580,38 @@ void mlx5_init_clock(struct mlx5_core_de
+@@ -518,7 +581,9 @@ void mlx5_init_clock(struct mlx5_core_de
  			mdev->clock_info->mask   = clock->cycles.mask;
  			mdev->clock_info->mult   = clock->nominal_c_mult;
  			mdev->clock_info->shift  = clock->cycles.shift;
@@ -235,16 +235,17 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  		}
  	}
  
- 	/* Calculate period in seconds to call the overflow watchdog - to make
- 	 * sure counter is checked at least once every wrap around.
+@@ -531,21 +596,29 @@ void mlx5_init_clock(struct mlx5_core_de
  	 */
+ 	overflow_cycles = min(~0ULL / 2 / clock->cycles.mult,
+ 			      clock->cycles.mask / 2);
 +#ifdef HAVE_CYCLECOUNTER_CYC2NS_4_PARAMS
- 	ns = cyclecounter_cyc2ns(&clock->cycles, clock->cycles.mask,
+ 	ns = cyclecounter_cyc2ns(&clock->cycles, overflow_cycles,
  				 frac, &frac);
 +#else
-+	ns = cyclecounter_cyc2ns(&clock->cycles, clock->cycles.mask);
++	ns = cyclecounter_cyc2ns(&clock->cycles, overflow_cycles);
 +#endif
- 	do_div(ns, NSEC_PER_SEC / 2 / HZ);
+ 	do_div(ns, NSEC_PER_SEC / HZ);
  	clock->overflow_period = ns;
  
 +#if defined (HAVE_PTP_CLOCK_INFO_N_PINS) && defined (HAVE_PTP_CLOCK_INFO) && (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
@@ -264,7 +265,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	/* Initialize 1PPS data structures */
  	if (MLX5_PPS_CAP(mdev))
  		mlx5_get_pps_caps(mdev);
-@@ -552,6 +625,8 @@ void mlx5_init_clock(struct mlx5_core_de
+@@ -559,6 +632,8 @@ void mlx5_init_clock(struct mlx5_core_de
  			       PTR_ERR(clock->ptp));
  		clock->ptp = NULL;
  	}
@@ -273,7 +274,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  }
  
  void mlx5_cleanup_clock(struct mlx5_core_dev *mdev)
-@@ -566,12 +641,16 @@ void mlx5_cleanup_clock(struct mlx5_core
+@@ -573,12 +648,16 @@ void mlx5_cleanup_clock(struct mlx5_core
  	if (!MLX5_CAP_GEN(mdev, device_frequency_khz))
  		return;
  

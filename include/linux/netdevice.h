@@ -30,6 +30,29 @@
 
 #ifndef HAVE_NETDEV_MASTER_UPPER_DEV_GET_RCU
 #define netdev_master_upper_dev_get_rcu(x) (x)->master
+#define netdev_master_upper_dev_get(x) \
+	netdev_master_upper_dev_get_rcu(x)
+#else
+static inline int netdev_set_master(struct net_device *dev,
+				    struct net_device *master)
+{
+	int rc = 0;
+
+	if (master) {
+#if defined(NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS)
+		rc = netdev_master_upper_dev_link(dev, master, NULL, NULL);
+#elif defined(NETDEV_MASTER_UPPER_DEV_LINK_5_PARAMS)
+		rc = netdev_master_upper_dev_link(dev, master,
+						  NULL, NULL, NULL);
+#else
+		rc = netdev_master_upper_dev_link(dev, master);
+#endif
+	} else {
+		master = netdev_master_upper_dev_get_rcu(dev);
+		netdev_upper_dev_unlink(dev, master);
+	}
+	return rc;
+}
 #endif
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
@@ -82,10 +105,6 @@ static inline void netif_trans_update(struct net_device *dev)
 
 #ifndef NETDEV_JOIN
 #define NETDEV_JOIN           0x0014
-#endif
-
-#ifndef NETDEV_MASTER_UPPER_DEV_LINK_4_PARAMS
-#define netdev_master_upper_dev_link(a,b,c,d) netdev_master_upper_dev_link(a,b)
 #endif
 
 #ifdef HAVE_ALLOC_NETDEV_MQS_5_PARAMS
@@ -283,6 +302,25 @@ do {								\
 struct netdev_phys_item_id {
     unsigned char id[MAX_PHYS_ITEM_ID_LEN];
     unsigned char id_len;
+};
+#endif
+
+#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
+enum {
+	TC_SETUP_MQPRIO,
+	TC_SETUP_CLSU32,
+	TC_SETUP_CLSFLOWER,
+};
+
+struct tc_cls_u32_offload;
+
+struct tc_to_netdev {
+	unsigned int type;
+	union {
+		u8 tc;
+		struct tc_cls_u32_offload *cls_u32;
+		struct tc_cls_flower_offload *cls_flower;
+	};
 };
 #endif
 

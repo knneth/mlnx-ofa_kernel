@@ -158,6 +158,9 @@
 MODULE_AUTHOR("Mellanox Technologies LTD.");
 MODULE_DESCRIPTION("Memory allocations tracking");
 MODULE_LICENSE("GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 #define MEMTRACK_HASH_SZ ((1<<15)-19)   /* prime: http://www.utm.edu/research/primes/lists/2small/0bit.html */
 #define MAX_FILENAME_LEN 31
@@ -812,23 +815,23 @@ int is_non_trackable_free_func(const char *func_name)
 }
 EXPORT_SYMBOL(is_non_trackable_free_func);
 
-
-/* WA - In this function handles confirm
-   the the function name is
-   '__ib_umem_release' or 'ib_umem_get'
-   In this case we won't track the
-   memory there because the kernel
-   was the one who allocated it.
-   Return value:
-     1 - if the function name is match, else 0 */
+/* Check if put_page tracking should be skipped since it is called from
+ * untracked caller function (func_name).
+ * Return values:
+ * 1 - Should be skipped
+ * 0 - Shouldn't be skipped
+ */
 int is_umem_put_page(const char *func_name)
 {
-	const char func_str[18] = "__ib_umem_release";
-	/* In case of error flow put_page is called as part of ib_umem_get */
+	const char func_str[18]	= "__ib_umem_release";
 	const char func_str1[12] = "ib_umem_get";
+	const char func_str2[32] = "ib_umem_odp_map_dma_single_page";
+	const char func_str3[26] = "ib_umem_odp_map_dma_pages";
 
-	return ((strstr(func_name, func_str) != NULL) ||
-		(strstr(func_name, func_str1) != NULL)) ? 1 : 0;
+	return ((strstr(func_name, func_str) != NULL)	||
+		(strstr(func_name, func_str1) != NULL)	||
+		(strstr(func_name, func_str2) != NULL)	||
+		(strstr(func_name, func_str3) != NULL)) ? 1 : 0;
 }
 EXPORT_SYMBOL(is_umem_put_page);
 

@@ -112,8 +112,8 @@ Change-Id: I46012050ee4f2d00c13d107bb3f18c40f126f088
 +#endif
  		up_read(&owning_mm->mmap_sem);
  
- 		if (npages < 0)
-@@ -836,7 +893,11 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
+ 		if (npages < 0) {
+@@ -848,7 +905,11 @@ EXPORT_SYMBOL(ib_umem_odp_unmap_dma_page
  /* @last is not a part of the interval. See comment for function
   * node_last.
   */
@@ -125,7 +125,7 @@ Change-Id: I46012050ee4f2d00c13d107bb3f18c40f126f088
  				  u64 start, u64 last,
  				  umem_call_back cb,
  				  void *cookie)
-@@ -858,8 +919,13 @@ int rbt_ib_umem_for_each_in_range(struct
+@@ -870,8 +931,13 @@ int rbt_ib_umem_for_each_in_range(struct
  	return ret_val;
  }
  EXPORT_SYMBOL(rbt_ib_umem_for_each_in_range);

@@ -233,7 +233,14 @@ static void ipoib_ib_handle_rx_wc_rss(struct net_device *dev,
 			likely(wc->wc_flags & IB_WC_IP_CSUM_OK))
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-	napi_gro_receive(&recv_ring->napi, skb);
+	/* if handler is registered on top of ipoib, set skb oob data. */
+	if (unlikely(dev->priv_flags & IFF_EIPOIB_VIF)) {
+		set_skb_oob_cb_data(skb, wc, &priv->recv_napi);
+		/* the registered handler will take care of the skb.*/
+		netif_receive_skb(skb);
+	} else {
+		napi_gro_receive(&recv_ring->napi, skb);
+	}
 
 repost:
 	if (unlikely(ipoib_ib_post_receive_rss(dev, recv_ring, wr_id)))

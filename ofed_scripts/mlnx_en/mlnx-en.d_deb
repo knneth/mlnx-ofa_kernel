@@ -43,6 +43,13 @@ CONFIG=${CONFIG:-"/etc/mlnx-en.conf"}
 export LANG="C"
 PATH=$PATH:/sbin:/usr/bin:/lib/udev
 
+HAS_IFUP=1
+if [ ! -x /sbin/ifup ]; then
+    # On systems with no ifup command, we are likely to have a dynamic
+    # network system and the network interface is started automatically
+    HAS_IFUP=0
+fi
+
 IS_IN_CONTAINER=0
 if [ -e /.dockerenv ]; then
     IS_IN_CONTAINER=1
@@ -482,7 +489,7 @@ start()
         exit 1
     fi
 
-    if [ $my_rc -eq 0 ]; then
+    if [ $my_rc -eq 0 -a "$HAS_IFUP" = "1" ]; then
         # Bring up network interfaces
         sleep 1
         get_mlx_en_interfaces
@@ -713,3 +720,5 @@ case $ACTION in
     esac
 
 exit $RC
+
+# vi: ts=4 sts=4 sw=0 expandtab:

@@ -318,6 +318,9 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_SET_DC_CNAK_TRACE:
 	case MLX5_CMD_OP_PAGE_FAULT_RESUME:
 	case MLX5_CMD_OP_DESTROY_CAPI_PEC:
+	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_PARAMS:
+	case MLX5_CMD_OP_SET_DIAGNOSTIC_PARAMS:
+	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_COUNTERS:
 		return MLX5_CMD_STAT_OK;
 
 	case MLX5_CMD_OP_QUERY_HCA_CAP:
@@ -628,6 +631,9 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(QUERY_NVMF_NAMESPACE_CONTEXT);
 	MLX5_COMMAND_STR_CASE(CREATE_CAPI_PEC);
 	MLX5_COMMAND_STR_CASE(DESTROY_CAPI_PEC);
+	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_PARAMS);
+	MLX5_COMMAND_STR_CASE(SET_DIAGNOSTIC_PARAMS);
+	MLX5_COMMAND_STR_CASE(QUERY_DIAGNOSTIC_COUNTERS);
 	default: return "unknown command opcode";
 	}
 }
@@ -1321,7 +1327,7 @@ static ssize_t outlen_write(struct file *filp, const char __user *buf,
 	if (copy_from_user(outlen_str, buf, count))
 		return -EFAULT;
 
-	outlen_str[7] = 0;
+	outlen_str[count] = 0;
 
 	err = sscanf(outlen_str, "%d", &outlen);
 	if (err < 0)
@@ -1514,26 +1520,24 @@ void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_comp_t 
 	for (i = 0; i < (1 << cmd->log_sz); i++) {
 		if (test_bit(i, &vector)) {
 			struct semaphore *sem;
-			u16 opcode;
 
 			ent = cmd->ent_arr[i];
-			opcode = msg_to_opcode(ent->in);
 
 			/* if we already completed the command, ignore it */
 			if (!test_and_clear_bit(MLX5_CMD_ENT_STATE_PENDING_COMP,
 						&ent->state)) {
 				/* only real completion can free the cmd slot */
 				if (comp_type == MLX5_CMD_COMP_TYPE_EVENT && !ent->polling) {
-					mlx5_core_err(dev, "Command completion arrived after timeout (entry idx = %d) %s.\n",
-						      ent->idx, mlx5_command_str(opcode));
+					mlx5_core_err(dev, "Command completion arrived after timeout (entry idx = %d)\n",
+						      ent->idx);
 					free_ent(cmd, ent->idx);
 					free_cmd(ent);
 				}
 				if (comp_type != MLX5_CMD_COMP_TYPE_POLLING)
 					continue;
 			} else if (ent->polling && comp_type == MLX5_CMD_COMP_TYPE_EVENT) {
-				mlx5_core_err(dev, "Command polling got Event as first completion (entry idx = %d) %s.\n",
-					      ent->idx, mlx5_command_str(opcode));
+				mlx5_core_err(dev, "Command polling got Event as first completion (entry idx = %d)\n",
+					      ent->idx);
 				continue;
 			}
 

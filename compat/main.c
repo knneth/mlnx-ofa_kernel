@@ -4,9 +4,16 @@
 #include "config_test.h"
 #endif
 
+#ifdef CONFIG_COMPAT_FLOW_DISSECTOR
+#include <net/flow_dissector.h>
+#endif
+
 MODULE_AUTHOR("Luis R. Rodriguez");
 MODULE_DESCRIPTION("Kernel backport module");
 MODULE_LICENSE("GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 #ifndef COMPAT_BASE
 #error "You need a COMPAT_BASE"
@@ -60,6 +67,10 @@ static int __init backport_init(void)
 		pr_warn("backport_system_workqueue_create() failed\n");
 		return err;
 	}
+
+#ifdef CONFIG_COMPAT_FLOW_DISSECTOR
+	init_default_flow_dissectors();
+#endif
 
 	printk(KERN_INFO
 	       COMPAT_PROJECT " backport release: "

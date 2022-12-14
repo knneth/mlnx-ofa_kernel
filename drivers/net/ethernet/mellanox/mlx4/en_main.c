@@ -46,6 +46,9 @@
 MODULE_AUTHOR("Liran Liss, Yevgeny Petrilin");
 MODULE_DESCRIPTION("Mellanox ConnectX HCA Ethernet driver");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 MODULE_VERSION(DRV_VERSION);
 
 static const char mlx4_en_version[] =

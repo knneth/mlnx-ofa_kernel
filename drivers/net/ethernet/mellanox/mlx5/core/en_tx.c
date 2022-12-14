@@ -717,6 +717,9 @@ netdev_tx_t mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	mlx5e_txwqe_complete(sq, skb, opcode, ds_cnt + num_dma,
 			     num_bytes, num_dma, wi, cseg);
 
+	sq->dim_obj.sample.pkt_ctr  = sq->stats.packets;
+	sq->dim_obj.sample.byte_ctr = sq->stats.bytes;
+
 	return NETDEV_TX_OK;
 
 dma_unmap_wqe_err:

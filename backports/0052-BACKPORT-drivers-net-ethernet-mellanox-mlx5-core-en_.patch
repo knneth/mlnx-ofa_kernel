@@ -21,7 +21,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  /* If dcbx mode is non-host set the dcbx mode to host.
   */
  static int mlx5e_dcbnl_set_dcbx_mode(struct mlx5e_priv *priv,
-@@ -539,6 +540,7 @@ fw_err:
+@@ -541,6 +542,7 @@ fw_err:
  	return err;
  }
  
@@ -29,7 +29,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  static int mlx5e_dcbnl_ieee_getmaxrate(struct net_device *netdev,
  				       struct ieee_maxrate *maxrate)
  {
-@@ -611,6 +613,7 @@ static int mlx5e_dcbnl_ieee_setmaxrate(s
+@@ -613,6 +615,7 @@ static int mlx5e_dcbnl_ieee_setmaxrate(s
  
  	return mlx5_modify_port_ets_rate_limit(mdev, max_bw_value, max_bw_unit);
  }
@@ -37,7 +37,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  
  static u8 mlx5e_dcbnl_setall(struct net_device *netdev)
  {
-@@ -861,8 +864,13 @@ static u8 mlx5e_dcbnl_getcap(struct net_
+@@ -860,8 +863,13 @@ static u8 mlx5e_dcbnl_getcap(struct net_
  	return rval;
  }
  
@@ -51,7 +51,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct mlx5_core_dev *mdev = priv->mdev;
-@@ -900,11 +908,17 @@ static void mlx5e_dcbnl_setpfcstate(stru
+@@ -899,11 +907,17 @@ static void mlx5e_dcbnl_setpfcstate(stru
  	cee_cfg->pfc_enable = state;
  }
  
@@ -69,7 +69,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  	.ieee_getpfc	= mlx5e_dcbnl_ieee_getpfc,
  	.ieee_setpfc	= mlx5e_dcbnl_ieee_setpfc,
  	.ieee_setapp    = mlx5e_dcbnl_ieee_setapp,
-@@ -1055,7 +1069,9 @@ out:
+@@ -1054,7 +1068,9 @@ out:
  
  static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
  {
@@ -79,7 +79,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  	int err;
  
  	err =  mlx5_set_trust_state(priv->mdev, trust_state);
-@@ -1066,7 +1082,11 @@ static int mlx5e_set_trust_state(struct
+@@ -1065,7 +1081,11 @@ static int mlx5e_set_trust_state(struct
  
  	/* In DSCP trust state, we need 8 send queues per channel */
  	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
@@ -91,7 +91,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  
  	return err;
  }
-@@ -1129,3 +1149,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+@@ -1128,3 +1148,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
  	mlx5e_ets_init(priv);
  }
  #endif

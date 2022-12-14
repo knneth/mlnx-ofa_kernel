@@ -31,9 +31,9 @@ Change-Id: I3c358826e118772359fa442e76acbcec59526294
  	lockdep_assert_held(&be_ctrl->xrq->be_mutex);
  	list_del_init(&be_ctrl->entry);
  
-@@ -432,6 +441,14 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
- 	struct ib_nvmf_ns_init_attr ns_init_attr;
+@@ -433,6 +442,14 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
  	int err;
+ 	unsigned be_nsid;
  
 +#if defined(CONFIG_PPC) && defined(HAVE_PNV_PCI_SET_P2P)
 +	err = pnv_pci_set_p2p(container_of(xrq->ndev->device->dev.parent,
@@ -46,7 +46,7 @@ Change-Id: I3c358826e118772359fa442e76acbcec59526294
  	be_ctrl = kzalloc(sizeof(*be_ctrl), GFP_KERNEL);
  	if (!be_ctrl) {
  		err = -ENOMEM;
-@@ -494,6 +511,11 @@ out_free_be_ctrl:
+@@ -501,6 +518,11 @@ out_free_be_ctrl:
  	kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
  	kfree(be_ctrl);
  out_err:

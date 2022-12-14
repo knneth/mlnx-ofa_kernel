@@ -96,4 +96,6 @@ void backport_dependency_symbol(void);
 #define elfcorehdr_addr LINUX_BACKPORT(elfcorehdr_addr)
 #endif
 
+#include <linux/compat_fix.h>
+
 #endif /* LINUX_26_COMPAT_H */

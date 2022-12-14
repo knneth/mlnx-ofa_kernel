@@ -186,6 +186,15 @@ if [[ ! -z ${RHEL7_2} ]]; then
    set_config CONFIG_COMPAT_RHEL_7_2 y
 fi
 
+if [[ ! -z ${RHEL7_2} ]]; then
+	set_config CONFIG_COMPAT_IP_TUNNELS y
+	set_config CONFIG_COMPAT_TCF_GACT y
+	set_config CONFIG_COMPAT_FLOW_DISSECTOR y
+	set_config CONFIG_COMPAT_CLS_FLOWER_MOD m
+	set_config CONFIG_COMPAT_TCF_TUNNEL_KEY_MOD m
+	set_config CONFIG_COMPAT_TCF_VLAN_MOD m
+fi
+
 if [ -e /etc/debian_version ]; then
 	DEBIAN6=$(cat /etc/debian_version | grep 6\.0)
 	if [[ ! -z ${DEBIAN6} ]]; then

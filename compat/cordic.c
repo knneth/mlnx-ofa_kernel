@@ -100,3 +100,6 @@ EXPORT_SYMBOL_GPL(cordic_calc_iq);
 MODULE_DESCRIPTION("Cordic functions");
 MODULE_AUTHOR("Broadcom Corporation");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif

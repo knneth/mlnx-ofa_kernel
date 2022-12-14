@@ -1,0 +1,49 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/trace.h
+
+Change-Id: Ide7c291734b2826461b3d1bebabc2fbc09639b0c
+---
+ drivers/nvme/host/trace.h | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+--- a/drivers/nvme/host/trace.h
++++ b/drivers/nvme/host/trace.h
+@@ -25,6 +25,7 @@
+ #include "nvme.h"
+ 
+ #define nvme_admin_opcode_name(opcode)	{ opcode, #opcode }
++#ifdef HAVE_BLK_MAX_WRITE_HINTS
+ #define show_admin_opcode_name(val)					\
+ 	__print_symbolic(val,						\
+ 		nvme_admin_opcode_name(nvme_admin_delete_sq),		\
+@@ -49,6 +50,30 @@
+ 		nvme_admin_opcode_name(nvme_admin_security_send),	\
+ 		nvme_admin_opcode_name(nvme_admin_security_recv),	\
+ 		nvme_admin_opcode_name(nvme_admin_sanitize_nvm))
++#else
++#define show_admin_opcode_name(val)					\
++	__print_symbolic(val,						\
++		nvme_admin_opcode_name(nvme_admin_delete_sq),		\
++		nvme_admin_opcode_name(nvme_admin_create_sq),		\
++		nvme_admin_opcode_name(nvme_admin_get_log_page),	\
++		nvme_admin_opcode_name(nvme_admin_delete_cq),		\
++		nvme_admin_opcode_name(nvme_admin_create_cq),		\
++		nvme_admin_opcode_name(nvme_admin_identify),		\
++		nvme_admin_opcode_name(nvme_admin_abort_cmd),		\
++		nvme_admin_opcode_name(nvme_admin_set_features),	\
++		nvme_admin_opcode_name(nvme_admin_get_features),	\
++		nvme_admin_opcode_name(nvme_admin_async_event),		\
++		nvme_admin_opcode_name(nvme_admin_ns_mgmt),		\
++		nvme_admin_opcode_name(nvme_admin_activate_fw),		\
++		nvme_admin_opcode_name(nvme_admin_download_fw),		\
++		nvme_admin_opcode_name(nvme_admin_ns_attach),		\
++		nvme_admin_opcode_name(nvme_admin_keep_alive),		\
++		nvme_admin_opcode_name(nvme_admin_dbbuf),		\
++		nvme_admin_opcode_name(nvme_admin_format_nvm),		\
++		nvme_admin_opcode_name(nvme_admin_security_send),	\
++		nvme_admin_opcode_name(nvme_admin_security_recv),	\
++		nvme_admin_opcode_name(nvme_admin_sanitize_nvm))
++#endif
+ 
+ const char *nvme_trace_parse_admin_cmd(struct trace_seq *p, u8 opcode,
+ 				       u8 *cdw10);

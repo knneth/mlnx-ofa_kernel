@@ -395,7 +395,7 @@ struct mlx5_ib_qp {
 		struct mlx5_ib_raw_packet_qp raw_packet_qp;
 		struct mlx5_ib_rss_qp rss_qp;
 	};
-	struct mlx5_buf		buf;
+	struct mlx5_frag_buf	buf;
 
 	struct mlx5_db		db;
 	struct mlx5_ib_wq	rq;
@@ -437,7 +437,7 @@ struct mlx5_ib_qp {
 };
 
 struct mlx5_ib_cq_buf {
-	struct mlx5_buf		buf;
+	struct mlx5_frag_buf_ctrl fbc;
 	struct ib_umem		*umem;
 	int			cqe_size;
 	int			nent;
@@ -521,7 +521,7 @@ struct mlx5_ib_wc {
 struct mlx5_ib_srq {
 	struct ib_srq		ibsrq;
 	struct mlx5_core_srq	msrq;
-	struct mlx5_buf		buf;
+	struct mlx5_frag_buf	buf;
 	struct mlx5_db		db;
 	u64		       *wrid;
 	/* protect SRQ hanlding
@@ -685,6 +685,7 @@ struct mlx5_ib_counters {
 	size_t *offsets;
 	u32 num_q_counters;
 	u32 num_cong_counters;
+	u32 num_ext_eth_counters;
 	u16 set_id;
 };
 
@@ -834,8 +835,10 @@ struct mlx5_ib_dev {
 	struct mlx5_dc_stats	dc_stats[MLX5_MAX_PORTS];
 	struct mlx5_dc_data	*dcd[MLX5_MAX_PORTS];
 	struct mlx5_tc_data	tcd[MLX5_MAX_PORTS];
+	struct mlx5_ttl_data	ttld[MLX5_MAX_PORTS];
 	struct kobject		*dc_kobj;
 	struct kobject		*tc_kobj;
+	struct kobject		*ttl_kobj;
 	/* Array with num_ports elements */
 	struct mlx5_ib_port	*port;
 	struct mlx5_sq_bfreg	bfreg;
@@ -969,6 +972,8 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 int mlx5_ib_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr, int qp_attr_mask,
 		     struct ib_qp_init_attr *qp_init_attr);
 int mlx5_ib_destroy_qp(struct ib_qp *qp);
+void mlx5_ib_drain_sq(struct ib_qp *qp);
+void mlx5_ib_drain_rq(struct ib_qp *qp);
 int mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 		      struct ib_send_wr **bad_wr);
 int mlx5_ib_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
@@ -1112,10 +1117,8 @@ void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 		    bool rep);
 void __mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context,
 		      bool rep);
-__be16 mlx5_get_roce_udp_sport(struct mlx5_ib_dev *dev, u8 port_num,
-			       int index);
-int mlx5_get_roce_gid_type(struct mlx5_ib_dev *dev, u8 port_num,
-			   int index, enum ib_gid_type *gid_type);
+__be16 mlx5_get_roce_udp_sport(struct mlx5_ib_dev *dev,
+			       const struct ib_gid_attr *attr);
 
 void mlx5_ib_cleanup_cong_debugfs(struct mlx5_ib_dev *dev);
 int mlx5_ib_init_cong_debugfs(struct mlx5_ib_dev *dev);

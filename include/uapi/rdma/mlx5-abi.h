@@ -154,7 +154,7 @@ struct mlx5_ib_rss_caps {
 enum mlx5_ib_cqe_comp_res_format {
 	MLX5_IB_CQE_RES_FORMAT_HASH	= 1 << 0,
 	MLX5_IB_CQE_RES_FORMAT_CSUM	= 1 << 1,
-	MLX5_IB_CQE_RES_RESERVED	= 1 << 2,
+	MLX5_IB_CQE_RES_FORMAT_CSUM_STRIDX = 1 << 2,
 };
 
 struct mlx5_ib_cqe_comp_caps {
@@ -219,7 +219,9 @@ enum mlx5_ib_query_dev_resp_flags {
 enum mlx5_ib_tunnel_offloads {
 	MLX5_IB_TUNNELED_OFFLOADS_VXLAN  = 1 << 0,
 	MLX5_IB_TUNNELED_OFFLOADS_GRE    = 1 << 1,
-	MLX5_IB_TUNNELED_OFFLOADS_GENEVE = 1 << 2
+	MLX5_IB_TUNNELED_OFFLOADS_GENEVE = 1 << 2,
+	MLX5_IB_TUNNELED_OFFLOADS_MPLS_GRE = 1 << 3,
+	MLX5_IB_TUNNELED_OFFLOADS_MPLS_UDP = 1 << 4,
 };
 
 struct mlx5_ib_query_device_resp {
@@ -311,7 +313,7 @@ enum mlx5_rx_hash_fields {
 	MLX5_RX_HASH_SRC_PORT_UDP	= 1 << 6,
 	MLX5_RX_HASH_DST_PORT_UDP	= 1 << 7,
 	/* Save bits for future fields */
-	MLX5_RX_HASH_INNER		= 1 << 31
+	MLX5_RX_HASH_INNER		= (1UL << 31),
 };
 
 struct mlx5_ib_create_qp_rss {

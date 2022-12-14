@@ -38,9 +38,10 @@
 #include <linux/sched.h>
 #include <linux/if_link.h>
 #include <linux/firmware.h>
+#include <linux/mlx5/cq.h>
 
 #define DRIVER_NAME "mlx5_core"
-#define DRIVER_VERSION	"4.3-3.0.2"
+#define DRIVER_VERSION	"4.4-1.0.0"
 
 #define MLX5_DEFAULT_COMP_IRQ_NAME "mlx5_comp%d"
 
@@ -173,7 +174,7 @@ struct mlx5_mcion_reg {
 
 int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
-int mlx5_cmd_init_hca(struct mlx5_core_dev *dev);
+int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, uint32_t *sw_owner_id);
 int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_core_event(struct mlx5_core_dev *dev, enum mlx5_dev_event event,
@@ -195,6 +196,7 @@ int mlx5_sriov_attach(struct mlx5_core_dev *dev);
 void mlx5_sriov_detach(struct mlx5_core_dev *dev);
 int mlx5_core_sriov_configure(struct pci_dev *dev, int num_vfs);
 bool mlx5_sriov_is_enabled(struct mlx5_core_dev *dev);
+bool mlx5_sriov_lag_prereq(struct mlx5_core_dev *dev0, struct mlx5_core_dev *dev1);
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
@@ -210,10 +212,30 @@ int mlx5_destroy_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 					u32 element_id);
 int mlx5_wait_for_vf_pages(struct mlx5_core_dev *dev);
 u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev);
+
+int mlx5_eq_init(struct mlx5_core_dev *dev);
+void mlx5_eq_cleanup(struct mlx5_core_dev *dev);
+int mlx5_create_map_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq, u8 vecidx,
+		       int nent, u64 mask, const char *name,
+		       enum mlx5_eq_type type);
+int mlx5_destroy_unmap_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq);
+int mlx5_eq_add_cq(struct mlx5_eq *eq, struct mlx5_core_cq *cq);
+int mlx5_eq_del_cq(struct mlx5_eq *eq, struct mlx5_core_cq *cq);
+int mlx5_core_eq_query(struct mlx5_core_dev *dev, struct mlx5_eq *eq,
+		       u32 *out, int outlen);
+int mlx5_start_eqs(struct mlx5_core_dev *dev);
+void mlx5_stop_eqs(struct mlx5_core_dev *dev);
 struct mlx5_eq *mlx5_eqn2eq(struct mlx5_core_dev *dev, int eqn);
 int mlx5_vector2eq(struct mlx5_core_dev *dev, int vector, struct mlx5_eq *eqc);
 u32 mlx5_eq_poll_irq_disabled(struct mlx5_eq *eq);
 void mlx5_cq_tasklet_cb(unsigned long data);
+void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_comp_t comp_type);
+int mlx5_debug_eq_add(struct mlx5_core_dev *dev, struct mlx5_eq *eq);
+void mlx5_debug_eq_remove(struct mlx5_core_dev *dev, struct mlx5_eq *eq);
+int mlx5_eq_debugfs_init(struct mlx5_core_dev *dev);
+void mlx5_eq_debugfs_cleanup(struct mlx5_core_dev *dev);
+int mlx5_cq_debugfs_init(struct mlx5_core_dev *dev);
+void mlx5_cq_debugfs_cleanup(struct mlx5_core_dev *dev);
 
 int mlx5_query_pcam_reg(struct mlx5_core_dev *dev, u32 *pcam, u8 feature_group,
 			u8 access_reg_group);
@@ -287,6 +309,9 @@ int mlx5_pciconf_set_sem_addr_space(struct mlx5_core_dev *dev,
 int mlx5_block_op_pciconf(struct mlx5_core_dev *dev,
 			  unsigned int offset, u32 *data,
 			  int length);
+int mlx5_block_op_pciconf_fast(struct mlx5_core_dev *dev,
+			       u32 *data,
+			       int length);
 int mlx5_mst_dump_init(struct mlx5_core_dev *dev);
 int mlx5_mst_capture(struct mlx5_core_dev *dev);
 u32 mlx5_mst_dump(struct mlx5_core_dev *dev, void *buff, u32 buff_sz);
@@ -313,6 +338,7 @@ struct mlx5_fw_crdump {
 	struct mutex crspace_mutex;
 	u32	vsec_addr;
 	u8	*crspace;
+	u16	space;
 };
 
 int mlx5_cr_protected_capture(struct mlx5_core_dev *dev);
@@ -336,8 +362,9 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 		    MLX5_CAP_GEN(dev, lag_master);
 }
 
-int mlx5_lag_allow(struct mlx5_core_dev *dev);
-int mlx5_lag_forbid(struct mlx5_core_dev *dev);
+void mlx5_lag_update(struct mlx5_core_dev *dev);
+struct mlx5_core_dev *mlx5_lag_get_peer_mdev(struct mlx5_core_dev *dev);
+struct net_device *mlx5_lag_get_peer_netdev(struct mlx5_core_dev *dev);
 
 void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
 

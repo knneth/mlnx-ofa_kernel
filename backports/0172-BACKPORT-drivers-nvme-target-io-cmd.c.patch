@@ -237,7 +237,7 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  
  u16 nvmet_parse_io_cmd(struct nvmet_req *req)
  {
-@@ -222,9 +326,11 @@ u16 nvmet_parse_io_cmd(struct nvmet_req
+@@ -220,9 +324,11 @@ u16 nvmet_parse_io_cmd(struct nvmet_req
  		req->data_len = (le32_to_cpu(cmd->dsm.nr) + 1) *
  			sizeof(struct nvme_dsm_range);
  		return 0;

@@ -8,7 +8,7 @@ Change-Id: I79b56693345084acdd74f42600ef6ddfa3d6619f
 
 --- a/drivers/infiniband/hw/mlx5/mlx5_ib_exp.h
 +++ b/drivers/infiniband/hw/mlx5/mlx5_ib_exp.h
-@@ -412,4 +412,12 @@ void mlx5_ib_set_vma_data(struct vm_area
+@@ -419,4 +419,12 @@ void mlx5_ib_set_vma_data(struct vm_area
  			  struct mlx5_ib_ucontext *ctx,
  			  struct mlx5_ib_vma_private_data *vma_prv);
  

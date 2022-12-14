@@ -69,6 +69,15 @@ KCFLAGS += -Wno-date-time
 export KCFLAGS
 endif
 
+ifneq (,$(CFLAGS_RETPOLINE))
+# This is x86 and kernel has no retpoline support.
+# Now we need to check for gcc support
+ifneq (,$(shell $(CC) --target-help 2>/dev/null | grep -- -mindirect-branch=))
+# The compiler supports it. Set the proper flags (inline or extern):
+CFLAGS += $(CFLAGS_RETPOLINE)
+endif
+endif
+
 CPP_MAJOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f1)
 CPP_MINOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f2)
 CPP_PATCH := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f3)

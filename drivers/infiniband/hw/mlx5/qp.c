@@ -56,6 +56,7 @@ enum {
 
 enum {
 	MLX5_IB_SQ_STRIDE	= 6,
+	MLX5_IB_SQ_UMR_INLINE_THRESHOLD = 64,
 };
 
 static const u32 mlx5_ib_opcode[] = {
@@ -284,7 +285,11 @@ static int set_rq_size(struct mlx5_ib_dev *dev, struct ib_qp_cap *cap,
 	} else {
 		if (ucmd) {
 			qp->rq.wqe_cnt = ucmd->rq_wqe_count;
+			if (ucmd->rq_wqe_shift > BITS_PER_BYTE * sizeof(ucmd->rq_wqe_shift))
+				return -EINVAL;
 			qp->rq.wqe_shift = ucmd->rq_wqe_shift;
+			if ((1 << qp->rq.wqe_shift) / sizeof(struct mlx5_wqe_data_seg) < qp->wq_sig)
+				return -EINVAL;
 			qp->rq.max_gs = (1 << qp->rq.wqe_shift) / sizeof(struct mlx5_wqe_data_seg) - qp->wq_sig;
 			qp->rq.max_post = qp->rq.wqe_cnt;
 		} else {
@@ -323,7 +328,9 @@ static int sq_overhead(struct ib_qp_init_attr *attr)
 			max(sizeof(struct mlx5_wqe_atomic_seg) +
 			    sizeof(struct mlx5_wqe_raddr_seg),
 			    sizeof(struct mlx5_wqe_umr_ctrl_seg) +
-			    sizeof(struct mlx5_mkey_seg));
+			    sizeof(struct mlx5_mkey_seg) +
+			    MLX5_IB_SQ_UMR_INLINE_THRESHOLD /
+			    MLX5_IB_UMR_OCTOWORD);
 		break;
 
 	case IB_QPT_XRC_TGT:
@@ -2525,18 +2532,18 @@ enum {
 
 static int ib_rate_to_mlx5(struct mlx5_ib_dev *dev, u8 rate)
 {
-	if (rate == IB_RATE_PORT_CURRENT) {
+	if (rate == IB_RATE_PORT_CURRENT)
 		return 0;
-	} else if (rate < IB_RATE_2_5_GBPS || rate > IB_RATE_300_GBPS) {
-		return -EINVAL;
-	} else {
-		while (rate != IB_RATE_2_5_GBPS &&
-		       !(1 << (rate + MLX5_STAT_RATE_OFFSET) &
-			 MLX5_CAP_GEN(dev->mdev, stat_rate_support)))
-			--rate;
-	}
 
-	return rate + MLX5_STAT_RATE_OFFSET;
+	if (rate < IB_RATE_2_5_GBPS || rate > IB_RATE_300_GBPS)
+		return -EINVAL;
+
+	while (rate != IB_RATE_PORT_CURRENT &&
+	       !(1 << (rate + MLX5_STAT_RATE_OFFSET) &
+		 MLX5_CAP_GEN(dev->mdev, stat_rate_support)))
+		--rate;
+
+	return rate ? rate + MLX5_STAT_RATE_OFFSET : rate;
 }
 
 static int modify_raw_packet_eth_prio(struct mlx5_core_dev *dev,
@@ -2597,7 +2604,7 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 {
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah);
 	int err;
-	enum ib_gid_type gid_type;
+	enum ib_gid_type gid_type = IB_GID_TYPE_IB;
 	u8 ah_flags = rdma_ah_get_ah_flags(ah);
 	u8 sl = rdma_ah_get_sl(ah);
 	u8 tclass = grh->traffic_class;
@@ -2614,7 +2621,7 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			       dev->mdev->port_caps[port - 1].gid_table_len);
 			return -EINVAL;
 		}
-
+		gid_type = ah->grh.sgid_attr->gid_type;
 		tclass_get_tclass(dev, &dev->tcd[port - 1], ah, port, &tclass);
 		memcpy(&qp->ah, ah, sizeof(qp->ah));
 		qp->tclass = tclass;
@@ -2623,17 +2630,14 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	if (ah->type == RDMA_AH_ATTR_TYPE_ROCE) {
 		if (!(ah_flags & IB_AH_GRH))
 			return -EINVAL;
-		err = mlx5_get_roce_gid_type(dev, port, grh->sgid_index,
-					     &gid_type);
-		if (err)
-			return err;
+
 		memcpy(path->rmac, ah->roce.dmac, sizeof(ah->roce.dmac));
 		if (qp->ibqp.qp_type == IB_QPT_RC ||
 		    qp->ibqp.qp_type == IB_QPT_UC ||
 		    qp->ibqp.qp_type == IB_QPT_XRC_INI ||
 		    qp->ibqp.qp_type == IB_QPT_XRC_TGT)
-			path->udp_sport = mlx5_get_roce_udp_sport(dev, port,
-								  grh->sgid_index);
+			path->udp_sport =
+				mlx5_get_roce_udp_sport(dev, ah->grh.sgid_attr);
 		path->dci_cfi_prio_sl = (sl & 0x7) << 4;
 		if (gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP)
 			path->ecn_dscp = (tclass >> 2) & 0x3f;
@@ -2649,13 +2653,17 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	}
 
 	if (ah_flags & IB_AH_GRH) {
+		u8 tmp_hop_limit = 0;
+
 		path->mgid_index = grh->sgid_index;
 		if ((ah->type == RDMA_AH_ATTR_TYPE_ROCE) &&
 		    (gid_type != IB_GID_TYPE_IB) &&
 		    (ah->grh.hop_limit < 2))
-			path->hop_limit  = IPV6_DEFAULT_HOPLIMIT;
+			tmp_hop_limit  = IPV6_DEFAULT_HOPLIMIT;
 		else
-			path->hop_limit  = ah->grh.hop_limit;
+			tmp_hop_limit  = ah->grh.hop_limit;
+		path->hop_limit = (dev->ttld[port - 1].val) ?
+			dev->ttld[port - 1].val : tmp_hop_limit;
 		path->tclass_flowlabel =
 			cpu_to_be32((tclass << 20) |
 				    (grh->flow_label));
@@ -3279,8 +3287,10 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 		goto out;
 
 	if (mlx5_cur >= MLX5_QP_NUM_STATE || mlx5_new >= MLX5_QP_NUM_STATE ||
-	    !optab[mlx5_cur][mlx5_new])
+	    !optab[mlx5_cur][mlx5_new]) {
+		err = -EINVAL;
 		goto out;
+	}
 
 	op = optab[mlx5_cur][mlx5_new];
 	optpar = ib_mask_to_mlx5_opt(attr_mask);
@@ -3494,7 +3504,22 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		attr_mask |= IB_EXP_QP_OOO_RW_DATA_PLACEMENT;
 
 	err = __mlx5_ib_modify_qp(ibqp, attr, attr_mask, cur_state, new_state);
+	if (!err &&
+	    cur_state != IB_QPS_RESET &&
+	    new_state == IB_QPS_RESET) {
+		struct mlx5_ib_qp_base *base = &qp->trans_qp.base;
+		struct mlx5_core_qp *mqp = &base->mqp;
+		unsigned long flags;
 
+		/* modify to RESET makes pending pagefault irrelevant */
+		spin_lock_irqsave(&mqp->common.lock, flags);
+		if (mqp->pfault_req)
+			mqp->pfault_req->wqe.ignore = true;
+
+		if (mqp->pfault_res)
+			mqp->pfault_res->wqe.ignore = true;
+		spin_unlock_irqrestore(&mqp->common.lock, flags);
+	}
 out:
 	mutex_unlock(&qp->mutex);
 	return err;
@@ -3641,13 +3666,15 @@ static __be64 sig_mkey_mask(void)
 }
 
 static void set_reg_umr_seg(struct mlx5_wqe_umr_ctrl_seg *umr,
-			    struct mlx5_ib_mr *mr)
+			    struct mlx5_ib_mr *mr, bool umr_inline)
 {
 	int size = mr->ndescs * mr->desc_size;
 
 	memset(umr, 0, sizeof(*umr));
 
 	umr->flags = MLX5_UMR_CHECK_NOT_FREE;
+	if (umr_inline)
+		umr->flags |= MLX5_UMR_INLINE;
 	umr->xlt_octowords = cpu_to_be16(get_xlt_octo(size));
 	umr->mkey_mask = frwr_mkey_mask();
 }
@@ -3857,6 +3884,24 @@ static void set_reg_data_seg(struct mlx5_wqe_data_seg *dseg,
 	dseg->addr = cpu_to_be64(mr->desc_map);
 	dseg->byte_count = cpu_to_be32(ALIGN(bcount, 64));
 	dseg->lkey = cpu_to_be32(pd->ibpd.local_dma_lkey);
+}
+
+static void set_reg_umr_inline_seg(void *seg, struct mlx5_ib_qp *qp,
+				   struct mlx5_ib_mr *mr, int mr_list_size)
+{
+	void *qend = qp->sq.qend;
+	void *addr = mr->descs;
+	int copy;
+
+	if (unlikely(seg + mr_list_size > qend)) {
+		copy = qend - seg;
+		memcpy(seg, addr, copy);
+		addr += copy;
+		mr_list_size -= copy;
+		seg = mlx5_get_send_wqe(qp, 0);
+	}
+	memcpy(seg, addr, mr_list_size);
+	seg += mr_list_size;
 }
 
 static __be32 send_ieth(struct ib_send_wr *wr)
@@ -4253,6 +4298,8 @@ static int set_reg_wr(struct mlx5_ib_qp *qp,
 {
 	struct mlx5_ib_mr *mr = to_mmr(wr->mr);
 	struct mlx5_ib_pd *pd = to_mpd(qp->ibqp.pd);
+	int mr_list_size = mr->ndescs * mr->desc_size;
+	bool umr_inline = mr_list_size <= MLX5_IB_SQ_UMR_INLINE_THRESHOLD;
 
 	if (unlikely(wr->wr.send_flags & IB_SEND_INLINE)) {
 		mlx5_ib_warn(to_mdev(qp->ibqp.device),
@@ -4260,7 +4307,7 @@ static int set_reg_wr(struct mlx5_ib_qp *qp,
 		return -EINVAL;
 	}
 
-	set_reg_umr_seg(*seg, mr);
+	set_reg_umr_seg(*seg, mr, umr_inline);
 	*seg += sizeof(struct mlx5_wqe_umr_ctrl_seg);
 	*size += sizeof(struct mlx5_wqe_umr_ctrl_seg) / 16;
 	if (unlikely((*seg == qp->sq.qend)))
@@ -4272,10 +4319,14 @@ static int set_reg_wr(struct mlx5_ib_qp *qp,
 	if (unlikely((*seg == qp->sq.qend)))
 		*seg = mlx5_get_send_wqe(qp, 0);
 
-	set_reg_data_seg(*seg, mr, pd);
-	*seg += sizeof(struct mlx5_wqe_data_seg);
-	*size += (sizeof(struct mlx5_wqe_data_seg) / 16);
-
+	if (umr_inline) {
+		set_reg_umr_inline_seg(*seg, qp, mr, mr_list_size);
+		*size += get_xlt_octo(mr_list_size);
+	} else {
+		set_reg_data_seg(*seg, mr, pd);
+		*seg += sizeof(struct mlx5_wqe_data_seg);
+		*size += (sizeof(struct mlx5_wqe_data_seg) / 16);
+	}
 	return 0;
 }
 
@@ -4359,8 +4410,8 @@ static void finish_wqe(struct mlx5_ib_qp *qp,
 	qp->sq.w_list[idx].next = qp->sq.cur_post;
 }
 
-int mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
-		      struct ib_send_wr **bad_wr)
+static int _mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
+		      struct ib_send_wr **bad_wr, bool drain)
 {
 	struct mlx5_wqe_ctrl_seg *ctrl = NULL;  /* compiler warning */
 	struct mlx5_ib_dev *dev = to_mdev(ibqp->device);
@@ -4391,7 +4442,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 
 	spin_lock_irqsave(&qp->sq.lock, flags);
 
-	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR && !drain) {
 		err = -EIO;
 		*bad_wr = wr;
 		nreq = 0;
@@ -4696,13 +4747,19 @@ out:
 	return err;
 }
 
+int mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
+		      struct ib_send_wr **bad_wr)
+{
+	return _mlx5_ib_post_send(ibqp, wr, bad_wr, false);
+}
+
 static void set_sig_seg(struct mlx5_rwqe_sig *sig, int size)
 {
 	sig->signature = calc_sig(sig, size);
 }
 
-int mlx5_ib_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
-		      struct ib_recv_wr **bad_wr)
+static int _mlx5_ib_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
+		      struct ib_recv_wr **bad_wr, bool drain)
 {
 	struct mlx5_ib_qp *qp = to_mqp(ibqp);
 	struct mlx5_wqe_data_seg *scat;
@@ -4720,7 +4777,7 @@ int mlx5_ib_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
 
 	spin_lock_irqsave(&qp->rq.lock, flags);
 
-	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR && !drain) {
 		err = -EIO;
 		*bad_wr = wr;
 		nreq = 0;
@@ -4780,6 +4837,12 @@ out:
 	spin_unlock_irqrestore(&qp->rq.lock, flags);
 
 	return err;
+}
+
+int mlx5_ib_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
+		      struct ib_recv_wr **bad_wr)
+{
+	return _mlx5_ib_post_recv(ibqp, wr, bad_wr, false);
 }
 
 static inline enum ib_qp_state to_ib_qp_state(enum mlx5_qp_state mlx5_state)
@@ -5140,13 +5203,10 @@ int mlx5_ib_dealloc_xrcd(struct ib_xrcd *xrcd)
 	int err;
 
 	err = mlx5_core_xrcd_dealloc(dev->mdev, xrcdn);
-	if (err) {
+	if (err)
 		mlx5_ib_warn(dev, "failed to dealloc xrcdn 0x%x\n", xrcdn);
-		return err;
-	}
 
 	kfree(xrcd);
-
 	return 0;
 }
 
@@ -5704,4 +5764,138 @@ common:
 out:
 	kvfree(in);
 	return err;
+}
+
+struct mlx5_ib_drain_cqe {
+	struct ib_cqe cqe;
+	struct completion done;
+};
+
+static void mlx5_ib_drain_qp_done(struct ib_cq *cq, struct ib_wc *wc)
+{
+	struct mlx5_ib_drain_cqe *cqe = container_of(wc->wr_cqe, struct mlx5_ib_drain_cqe,
+						cqe);
+
+	complete(&cqe->done);
+}
+
+/* This function returns only once the drained WR was completed */
+static void handle_drain_completion(struct ib_cq *cq, struct mlx5_ib_drain_cqe *sdrain,
+					struct mlx5_ib_dev *dev)
+{
+	struct mlx5_core_dev *mdev = dev->mdev;
+
+	if (cq->poll_ctx == IB_POLL_DIRECT) {
+		while (wait_for_completion_timeout(&sdrain->done, HZ / 10) <= 0)
+			ib_process_cq_direct(cq, -1);
+		return;
+	}
+
+	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+		struct mlx5_ib_cq *mcq = to_mcq(cq);
+
+		unsigned long flags_cq;
+		bool triggered = false;
+
+		/* Make sure that the CQ handler won't run if it wasn't run yet */
+		spin_lock_irqsave(&mcq->lock, flags_cq);
+		if (mcq->mcq.reset_notify_added)
+			triggered = true;
+		else
+			mcq->mcq.reset_notify_added = 1;
+		spin_unlock_irqrestore(&mcq->lock, flags_cq);
+
+		if (triggered) {
+			unsigned long flags;
+			/* Make sure that the triggered task was scheduled to run so
+			 * that we can safely wait for its termination.
+			 */
+			spin_lock_irqsave(&dev->reset_flow_resource_lock, flags);
+			spin_unlock_irqrestore(&dev->reset_flow_resource_lock, flags);
+
+			/* Wait for any scheduled/running task on this CQ to be ended */
+			switch (cq->poll_ctx) {
+			case IB_POLL_SOFTIRQ:
+				irq_poll_disable(&cq->iop);
+				irq_poll_enable(&cq->iop);
+				break;
+			case IB_POLL_WORKQUEUE:
+				cancel_work_sync(&cq->work);
+				break;
+			default:
+				WARN_ON_ONCE(1);
+			}
+		}
+
+		/* Run the CQ handler - this makes sure that the drain WR will
+		 * be processed if wasn't processed yet.
+		 */
+		mcq->mcq.comp(&mcq->mcq);
+	}
+
+	wait_for_completion(&sdrain->done);
+}
+
+void mlx5_ib_drain_sq(struct ib_qp *qp)
+{
+	struct ib_cq *cq = qp->send_cq;
+	struct ib_qp_attr attr = { .qp_state = IB_QPS_ERR };
+	struct mlx5_ib_drain_cqe sdrain;
+	struct ib_send_wr *bad_swr;
+	struct ib_rdma_wr swr = {
+		.wr = {
+			.next = NULL,
+			{ .wr_cqe	= &sdrain.cqe, },
+			.opcode	= IB_WR_RDMA_WRITE,
+		},
+	};
+	int ret;
+	struct mlx5_ib_dev *dev = to_mdev(qp->device);
+	struct mlx5_core_dev *mdev = dev->mdev;
+
+	ret = ib_modify_qp(qp, &attr, IB_QP_STATE);
+	if (ret && mdev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+		WARN_ONCE(ret, "failed to drain send queue: %d\n", ret);
+		return;
+	}
+
+	sdrain.cqe.done = mlx5_ib_drain_qp_done;
+	init_completion(&sdrain.done);
+
+	ret = _mlx5_ib_post_send(qp, &swr.wr, &bad_swr, true);
+	if (ret) {
+		WARN_ONCE(ret, "failed to drain send queue: %d\n", ret);
+		return;
+	}
+
+	handle_drain_completion(cq, &sdrain, dev);
+}
+
+void mlx5_ib_drain_rq(struct ib_qp *qp)
+{
+	struct ib_cq *cq = qp->recv_cq;
+	struct ib_qp_attr attr = { .qp_state = IB_QPS_ERR };
+	struct mlx5_ib_drain_cqe rdrain;
+	struct ib_recv_wr rwr = {}, *bad_rwr;
+	int ret;
+	struct mlx5_ib_dev *dev = to_mdev(qp->device);
+	struct mlx5_core_dev *mdev = dev->mdev;
+
+	ret = ib_modify_qp(qp, &attr, IB_QP_STATE);
+	if (ret && mdev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR) {
+		WARN_ONCE(ret, "failed to drain recv queue: %d\n", ret);
+		return;
+	}
+
+	rwr.wr_cqe = &rdrain.cqe;
+	rdrain.cqe.done = mlx5_ib_drain_qp_done;
+	init_completion(&rdrain.done);
+
+	ret = _mlx5_ib_post_recv(qp, &rwr, &bad_rwr, true);
+	if (ret) {
+		WARN_ONCE(ret, "failed to drain recv queue: %d\n", ret);
+		return;
+	}
+
+	handle_drain_completion(cq, &rdrain, dev);
 }

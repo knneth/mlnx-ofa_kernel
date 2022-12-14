@@ -35,12 +35,15 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"iw_c2"
-#define DRV_VERSION	"4.3-3.0.2"
-#define DRV_RELDATE	"01 May 2018"
+#define DRV_VERSION	"4.4-1.0.0"
+#define DRV_RELDATE	"03 Jul 2018"
 
 MODULE_AUTHOR("Vladimir Sokolovsky");
 MODULE_DESCRIPTION("iw_c2 dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init iw_c2_init(void)

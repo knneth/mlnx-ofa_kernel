@@ -63,6 +63,9 @@
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("InfiniBand userspace MAD packet access");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 enum {
 	IB_UMAD_MAX_PORTS  = RDMA_MAX_PORTS,
@@ -257,10 +260,14 @@ static void recv_handler(struct ib_mad_agent *agent,
 	if (packet->mad.hdr.grh_present) {
 		struct rdma_ah_attr ah_attr;
 		const struct ib_global_route *grh;
+		int ret;
 
-		ib_init_ah_from_wc(agent->device, agent->port_num,
-				   mad_recv_wc->wc, mad_recv_wc->recv_buf.grh,
-				   &ah_attr);
+		ret = ib_init_ah_attr_from_wc(agent->device, agent->port_num,
+					      mad_recv_wc->wc,
+					      mad_recv_wc->recv_buf.grh,
+					      &ah_attr);
+		if (ret)
+			goto err2;
 
 		grh = rdma_ah_read_grh(&ah_attr);
 		packet->mad.hdr.gid_index = grh->sgid_index;
@@ -268,6 +275,7 @@ static void recv_handler(struct ib_mad_agent *agent,
 		packet->mad.hdr.traffic_class = grh->traffic_class;
 		memcpy(packet->mad.hdr.gid, &grh->dgid, 16);
 		packet->mad.hdr.flow_label = cpu_to_be32(grh->flow_label);
+		rdma_destroy_ah_attr(&ah_attr);
 	}
 
 	if (queue_packet(file, agent, packet))

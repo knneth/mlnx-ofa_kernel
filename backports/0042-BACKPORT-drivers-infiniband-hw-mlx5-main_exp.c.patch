@@ -8,7 +8,7 @@ Change-Id: I21e669ff0bc23df4e68644bfc4b9f71bcced9070
 
 --- a/drivers/infiniband/hw/mlx5/main_exp.c
 +++ b/drivers/infiniband/hw/mlx5/main_exp.c
-@@ -1178,7 +1178,11 @@ static ssize_t dc_attr_store(struct kobj
+@@ -1188,7 +1188,11 @@ static ssize_t dc_attr_store(struct kobj
  	return dc_attr->store(d, dc_attr, buf, size);
  }
  
@@ -20,7 +20,7 @@ Change-Id: I21e669ff0bc23df4e68644bfc4b9f71bcced9070
  	.show = dc_attr_show,
  	.store = dc_attr_store
  };
-@@ -2105,6 +2109,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev
+@@ -2215,6 +2219,9 @@ int alloc_and_map_wc(struct mlx5_ib_dev
  	u32 uar_index;
  	struct mlx5_ib_vma_private_data *vma_prv;
  	int err;
@@ -30,7 +30,7 @@ Change-Id: I21e669ff0bc23df4e68644bfc4b9f71bcced9070
  
  	if (indx % uars_per_page) {
  		mlx5_ib_warn(dev, "invalid uar index %d, should be system page aligned and there are %d uars per page.\n",
-@@ -2113,7 +2120,11 @@ int alloc_and_map_wc(struct mlx5_ib_dev
+@@ -2223,7 +2230,11 @@ int alloc_and_map_wc(struct mlx5_ib_dev
  	}
  
  #if defined(CONFIG_X86)
@@ -42,7 +42,7 @@ Change-Id: I21e669ff0bc23df4e68644bfc4b9f71bcced9070
  		mlx5_ib_dbg(dev, "write combine not available\n");
  		return -EPERM;
  	}
-@@ -2287,3 +2298,73 @@ int mlx5_ib_exp_set_context_attr(struct
+@@ -2397,3 +2408,73 @@ int mlx5_ib_exp_set_context_attr(struct
  
  	return 0;
  }

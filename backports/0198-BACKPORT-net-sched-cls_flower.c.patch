@@ -1,0 +1,89 @@
+From: Yevgeny Kliteynik <kliteyn@mellanox.com>
+Subject: [PATCH] BACKPORT: net/sched/cls_flower.c
+
+---
+ net/sched/cls_flower.c | 61 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 61 insertions(+)
+
+--- a/net/sched/cls_flower.c
++++ b/net/sched/cls_flower.c
+@@ -42,6 +42,56 @@
+ #define MPLS_LABEL_MASK		(MPLS_LS_LABEL_MASK >> MPLS_LS_LABEL_SHIFT)
+ #endif
+ 
++#ifndef HAVE_TCF_QUEUE_WORK
++static struct workqueue_struct *tc_filter_wq;
++
++static bool tcf_queue_work(struct work_struct *work)
++{
++	return queue_work(tc_filter_wq, work);
++}
++#endif
++
++#ifndef HAVE_TCF_EXTS_GET_DEV
++static int tcf_exts_get_dev(struct net_device *dev, struct tcf_exts *exts,
++			    struct net_device **hw_dev)
++{
++#ifdef CONFIG_NET_CLS_ACT
++	const struct tc_action *a;
++
++	if (tc_no_actions(exts))
++		return -EINVAL;
++
++	tc_for_each_action(a, exts) {
++		if (is_tcf_mirred_egress_redirect(a)) {
++			int ifindex = tcf_mirred_ifindex(a);
++
++			*hw_dev = __dev_get_by_index(dev_net(dev), ifindex);
++			break;
++		}
++	}
++
++	if (*hw_dev)
++		return 0;
++#endif
++	return -EOPNOTSUPP;
++}
++
++static inline bool tc_can_offload(const struct net_device *dev,
++				  const struct tcf_proto *tp)
++{
++	if (!(dev->features & NETIF_F_HW_TC)) {
++		return false;
++	}
++
++	return true;
++}
++#endif
++
++#ifndef HAVE_TCF_EXTS_INIT
++static struct tcf_ext_map flower_ext_map = {
++    .action = TCA_FLOWER_ACT,
++};
++
+ #define tcf_exts_init(exts, action, police) (0)
+ 
+ #define tcf_exts_validate(net, tp, tb, est, eptr, ovr) \
+@@ -1439,11 +1489,22 @@ static struct tcf_proto_ops cls_fl_ops _
+ 
+ static int __init cls_fl_init(void)
+ {
++#ifndef HAVE_TCF_QUEUE_WORK
++	tc_filter_wq = alloc_ordered_workqueue("flower_tc_filter_workqueue", 0);
++	if (!tc_filter_wq)
++		return -ENOMEM;
++#endif
++
+ 	return register_tcf_proto_ops(&cls_fl_ops);
+ }
+ 
+ static void __exit cls_fl_exit(void)
+ {
++#ifndef HAVE_TCF_QUEUE_WORK
++	flush_workqueue(tc_filter_wq);
++	destroy_workqueue(tc_filter_wq);
++#endif
++
+ 	unregister_tcf_proto_ops(&cls_fl_ops);
+ }
+ 

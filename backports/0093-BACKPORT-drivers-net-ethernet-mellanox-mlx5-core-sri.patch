@@ -9,7 +9,7 @@ Change-Id: If9784d3ce0554874ba5fdbe54f34eb17ca35ab1d
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
-@@ -757,7 +757,11 @@ static ssize_t num_vf_show(struct device
+@@ -771,7 +771,11 @@ static ssize_t num_vf_show(struct device
  
  static DEVICE_ATTR(mlx5_num_vfs, 0600, num_vf_show, num_vf_store);
  

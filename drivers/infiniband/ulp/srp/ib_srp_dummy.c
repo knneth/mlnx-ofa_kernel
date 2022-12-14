@@ -37,12 +37,15 @@
 
 #define DRV_NAME	"ib_srp"
 #define PFX		DRV_NAME ": "
-#define DRV_VERSION	"4.3-3.0.2"
-#define DRV_RELDATE	"01 May 2018"
+#define DRV_VERSION	"4.4-1.0.0"
+#define DRV_RELDATE	"03 Jul 2018"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("ib_srp dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init srp_init(void)

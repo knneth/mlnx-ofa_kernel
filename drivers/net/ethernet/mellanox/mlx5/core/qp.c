@@ -174,6 +174,7 @@ static int create_qprqsq_common(struct mlx5_core_dev *dev,
 
 	atomic_set(&qp->common.refcount, 1);
 	init_completion(&qp->common.free);
+	spin_lock_init(&qp->common.lock);
 	qp->pid = current->pid;
 
 	return 0;
@@ -220,6 +221,8 @@ int mlx5_core_create_qp(struct mlx5_core_dev *dev,
 		mlx5_core_dbg(dev, "failed adding QP 0x%x to debug file system\n",
 			      qp->qpn);
 
+	qp->pfault_req = NULL;
+	qp->pfault_res = NULL;
 	atomic_inc(&dev->num_qps);
 
 	return 0;

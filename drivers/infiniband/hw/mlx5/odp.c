@@ -34,6 +34,7 @@
 #include <rdma/ib_umem_odp.h>
 #include <linux/kernel.h>
 #include <linux/debugfs.h>
+#include <linux/sched/mm.h>
 
 #include "mlx5_ib.h"
 #include "cmd.h"
@@ -43,7 +44,7 @@
 
 /* Timeout in ms to wait for an active mmu notifier to complete when handling
  * a pagefault. */
-#define MMU_NOTIFIER_TIMEOUT 1000
+#define MMU_NOTIFIER_TIMEOUT 60000
 
 #define MLX5_IMR_MTT_BITS (30 - PAGE_SHIFT)
 #define MLX5_IMR_MTT_SHIFT (MLX5_IMR_MTT_BITS + PAGE_SHIFT)
@@ -367,10 +368,15 @@ static int handle_capi_pg_fault(struct mlx5_ib_dev *dev, struct mm_struct *mm,
 {
 	int err;
 
+	if (!mmget_not_zero(mm))
+		return -EPERM;
+
 	if (pfault->type & MLX5_PAGE_FAULT_RESUME_WRITE)
 		err = cxllib_handle_fault(mm, va, sz, DSISR_ISSTORE);
 	else
 		err = cxllib_handle_fault(mm, va, sz, 0);
+
+	mmput(mm);
 	return err;
 }
 #else
@@ -672,8 +678,8 @@ out:
 			if (!wait_for_completion_timeout(
 					&odp->notifier_completion,
 					timeout)) {
-				mlx5_ib_warn(dev, "timeout waiting for mmu notifier. seq %d against %d\n",
-					     current_seq, odp->notifiers_seq);
+				mlx5_ib_warn(dev, "timeout waiting for mmu notifier. seq %d against %d. notifiers_count=%d\n",
+					     current_seq, odp->notifiers_seq, odp->notifiers_count);
 			}
 		} else {
 			/* The MR is being killed, kill the QP as well. */
@@ -1253,10 +1259,18 @@ static void mlx5_ib_mr_wqe_pfault_handler(struct mlx5_ib_dev *dev,
 	int requestor = pfault->type & MLX5_PFAULT_REQUESTOR;
 	struct mlx5_core_qp *mqp = (struct mlx5_core_qp *)pfault->wqe.common;
 	struct mlx5_ib_qp *qp;
+	bool drop = false;
+	unsigned long flags;
 
 	if (!mqp)
 		return;
 	qp = to_mibqp(mqp);
+
+	mutex_lock(&qp->mutex);
+	if (pfault->wqe.ignore) {
+		drop = true;
+		goto resolve_page_fault;
+	}
 
 	buffer = (char *)__get_free_page(GFP_KERNEL);
 	if (!buffer) {
@@ -1299,10 +1313,28 @@ static void mlx5_ib_mr_wqe_pfault_handler(struct mlx5_ib_dev *dev,
 
 	resume_with_error = 0;
 resolve_page_fault:
-	mlx5_ib_page_fault_resume(dev, pfault, resume_with_error);
-	mlx5_ib_dbg(dev, "PAGE FAULT completed. QP 0x%x resume_with_error=%d, type: 0x%x\n",
-		    pfault->wqe.wq_num, resume_with_error,
-		    pfault->type);
+	if (!drop) {
+		mlx5_ib_page_fault_resume(dev, pfault, resume_with_error);
+		mlx5_ib_dbg(dev, "PAGE FAULT completed. QP 0x%x resume_with_error=%d, type: 0x%x\n",
+			    pfault->wqe.wq_num, resume_with_error,
+			    pfault->type);
+	} else {
+		mlx5_ib_dbg(dev, "PAGE FAULT dropped. QP 0x%x type: 0x%x\n",
+			    pfault->wqe.wq_num, pfault->type);
+	}
+	spin_lock_irqsave(&mqp->common.lock, flags);
+	/* check if current pagefault event is also the last for the QP.
+	 * If yes, clear from QP
+	 */
+	if (requestor) {
+		if (pfault == mqp->pfault_req)
+			mqp->pfault_req = NULL;
+	} else {
+		if (pfault == mqp->pfault_res)
+			mqp->pfault_res = NULL;
+	}
+	spin_unlock_irqrestore(&mqp->common.lock, flags);
+	mutex_unlock(&qp->mutex);
 	free_page((unsigned long)buffer);
 }
 

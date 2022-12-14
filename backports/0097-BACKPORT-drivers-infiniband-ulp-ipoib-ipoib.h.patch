@@ -46,7 +46,7 @@ Change-Id: Ic7ffba1016fc7b3f23fb0ff2af475e47898b6f93
  #define	IPOIB_OP_RECV   (1ul << 31)
  #ifdef CONFIG_INFINIBAND_IPOIB_CM
  #define	IPOIB_OP_CM     (1ul << 30)
-@@ -443,6 +458,12 @@ struct ipoib_dev_priv {
+@@ -445,6 +460,12 @@ struct ipoib_dev_priv {
  	bool sm_fullmember_sendonly_support;
  	const struct net_device_ops	*rn_ops;
  

@@ -56,10 +56,10 @@
 
 #define DRV_NAME	"mlx4_core"
 #define PFX		DRV_NAME ": "
-#define DRV_VERSION	"4.3-3.0.2"
+#define DRV_VERSION	"4.4-1.0.0"
 
 #define DRV_STACK_NAME		"Linux-MLNX_OFED"
-#define DRV_STACK_VERSION	"4.3-3.0.2"
+#define DRV_STACK_VERSION	"4.4-1.0.0"
 #define DRV_NAME_FOR_FW		DRV_STACK_NAME "," DRV_STACK_VERSION
 
 #define MLX4_FS_NUM_OF_L2_ADDR		8

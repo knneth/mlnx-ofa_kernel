@@ -44,6 +44,28 @@ static inline bool mlx5e_channel_no_affinity_change(struct mlx5e_channel *c)
 	return cpumask_test_cpu(current_cpu, aff);
 }
 
+static void mlx5e_handle_tx_dim(struct mlx5e_txqsq *sq)
+{
+	struct net_dim_sample *sample = &sq->dim_obj.sample;
+
+	if (unlikely(!MLX5E_TEST_BIT(sq->state, MLX5E_SQ_STATE_AM)))
+		return;
+
+	net_dim_sample(sq->cq.event_ctr, sample->pkt_ctr, sample->byte_ctr, sample);
+	net_dim(&sq->dim_obj.dim, *sample);
+}
+
+static void mlx5e_handle_rx_dim(struct mlx5e_rq *rq)
+{
+	struct net_dim_sample *sample = &rq->dim_obj.sample;
+
+	if (unlikely(!MLX5E_TEST_BIT(rq->state, MLX5E_RQ_STATE_AM)))
+		return;
+
+	net_dim_sample(rq->cq.event_ctr, sample->pkt_ctr, sample->byte_ctr, sample);
+	net_dim(&rq->dim_obj.dim, *sample);
+}
+
 int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 {
 	struct mlx5e_channel *c = container_of(napi, struct mlx5e_channel,
@@ -80,16 +102,17 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 	if (unlikely(!napi_complete_done(napi, work_done)))
 		return work_done;
 
-	for (i = 0; i < c->num_tc; i++)
+	for (i = 0; i < c->num_tc; i++) {
+		mlx5e_handle_tx_dim(&c->sq[i]);
 		mlx5e_cq_arm(&c->sq[i].cq);
+	}
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
 	for (i = 0; i < c->num_special_sq; i++)
 		mlx5e_cq_arm(&c->special_sq[i].cq);
 #endif
 
-	if (MLX5E_TEST_BIT(c->rq.state, MLX5E_RQ_STATE_AM))
-		mlx5e_rx_am(&c->rq);
+	mlx5e_handle_rx_dim(&c->rq);
 
 	mlx5e_cq_arm(&c->rq.cq);
 	mlx5e_cq_arm(&c->icosq.cq);

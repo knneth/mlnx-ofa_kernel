@@ -58,6 +58,9 @@
 MODULE_AUTHOR("Tom Tucker");
 MODULE_DESCRIPTION("iWARP CM");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 static const char * const iwcm_rej_reason_strs[] = {
 	[ECONNRESET]			= "reset by remote host",

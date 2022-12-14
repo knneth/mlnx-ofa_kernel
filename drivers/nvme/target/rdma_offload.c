@@ -431,6 +431,7 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	struct ib_nvmf_backend_ctrl_init_attr init_attr;
 	struct ib_nvmf_ns_init_attr ns_init_attr;
 	int err;
+	unsigned be_nsid;
 
 	be_ctrl = kzalloc(sizeof(*be_ctrl), GFP_KERNEL);
 	if (!be_ctrl) {
@@ -472,7 +473,13 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 		goto out_put_resource;
 	}
 
-	nvmet_rdma_init_ns_attr(&ns_init_attr, ns->nsid, 1, 0,
+	be_nsid = nvme_find_ns_id_from_bdev(ns->bdev);
+	if (!be_nsid) {
+		err = -ENODEV;
+		goto out_destroy_be_ctrl;
+	}
+
+	nvmet_rdma_init_ns_attr(&ns_init_attr, ns->nsid, be_nsid, 0,
 				be_ctrl->ibctrl->id);
 	be_ctrl->ibns = ib_attach_nvmf_ns(be_ctrl->ibctrl, &ns_init_attr);
 	if (IS_ERR(be_ctrl->ibns)) {

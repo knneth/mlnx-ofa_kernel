@@ -1,0 +1,70 @@
+From: Feras Daoud <ferasda@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
+
+Change-Id: I7fde8298ee4fccecc72a35fd73d38f7eecc57d54
+---
+ .../net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c   | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
+@@ -30,9 +30,11 @@
+  * SOFTWARE.
+  */
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ #define CREATE_TRACE_POINTS
+-#include "fw_tracer.h"
+ #include "fw_tracer_tracepoint.h"
++#endif
++#include "fw_tracer.h"
+ 
+ static int mlx5_query_mtrc_caps(struct mlx5_fw_tracer *tracer)
+ {
+@@ -444,8 +446,9 @@ static int mlx5_tracer_get_num_of_params
+ static struct tracer_string_format *mlx5_tracer_message_find(struct hlist_head *head, u8 event_id, u32 tmsn)
+ {
+ 	struct tracer_string_format *message;
++	COMPAT_HL_NODE
+ 
+-	hlist_for_each_entry(message, head, hlist)
++	compat_hlist_for_each_entry(message, head, hlist)
+ 		if (message->event_id == event_id && message->tmsn == tmsn)
+ 			return message;
+ 
+@@ -533,10 +536,11 @@ static void mlx5_fw_tracer_clean_print_h
+ {
+ 	struct tracer_string_format *str_frmt;
+ 	struct hlist_node *n;
++	COMPAT_HL_NODE
+ 	int i;
+ 
+ 	for (i = 0; i < MESSAGE_HASH_SIZE; i++) {
+-		hlist_for_each_entry_safe(str_frmt, n, &tracer->hash[i], hlist)
++		compat_hlist_for_each_entry_safe(str_frmt, n, &tracer->hash[i], hlist)
+ 			mlx5_tracer_clean_message(str_frmt);
+ 	}
+ }
+@@ -569,8 +573,14 @@ static void mlx5_tracer_print_trace(stru
+ 		str_frmt->params[9],
+ 		str_frmt->params[10]);
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_fw_tracer(dev->tracer, trace_timestamp, str_frmt->lost,
+ 			str_frmt->event_id, tmp);
++#else
++	pr_debug("%s %llu %d %d %s\n", dev_name(&dev->pdev->dev),
++		 trace_timestamp, str_frmt->lost,
++		 str_frmt->event_id, tmp);
++#endif
+ 
+ 	/* remove it from hash */
+ 	mlx5_tracer_clean_message(str_frmt);
+@@ -935,4 +945,6 @@ void mlx5_fw_tracer_event(struct mlx5_co
+ 	}
+ }
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ EXPORT_TRACEPOINT_SYMBOL(fw_tracer);
++#endif

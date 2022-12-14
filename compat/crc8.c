@@ -88,3 +88,6 @@ EXPORT_SYMBOL_GPL(crc8);
 MODULE_DESCRIPTION("CRC8 (by Williams, Ross N.) function");
 MODULE_AUTHOR("Broadcom Corporation");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif

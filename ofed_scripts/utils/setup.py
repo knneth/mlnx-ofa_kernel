@@ -27,7 +27,13 @@
 
 from distutils.core import setup
 from subprocess import Popen, PIPE
+import sys
 from sys import argv
+
+# We cannot sanely support python 2.4:
+if sys.version_info < (2, 5):
+    print('requires python 2.5 and up')
+    sys.exit(0)
 
 # I would absolutely *LOVE* to be informed of a sexier way to do this,
 # preferably without hard-coding Ubuntu as a special case...

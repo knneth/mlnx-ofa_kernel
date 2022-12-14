@@ -8,7 +8,7 @@ Change-Id: Iff79f31189358283df659c61d583390a2822b880
 
 --- a/drivers/infiniband/core/iwcm.c
 +++ b/drivers/infiniband/core/iwcm.c
-@@ -101,6 +101,7 @@ struct iwcm_work {
+@@ -104,6 +104,7 @@ struct iwcm_work {
  
  static unsigned int default_backlog = 256;
  
@@ -16,7 +16,7 @@ Change-Id: Iff79f31189358283df659c61d583390a2822b880
  static struct ctl_table_header *iwcm_ctl_table_hdr;
  static struct ctl_table iwcm_ctl_table[] = {
  	{
-@@ -112,6 +113,14 @@ static struct ctl_table iwcm_ctl_table[]
+@@ -115,6 +116,14 @@ static struct ctl_table iwcm_ctl_table[]
  	},
  	{ }
  };
@@ -31,7 +31,7 @@ Change-Id: Iff79f31189358283df659c61d583390a2822b880
  
  /*
   * The following services provide a mechanism for pre-allocating iwcm_work
-@@ -476,6 +485,7 @@ static void iw_cm_check_wildcard(struct
+@@ -479,6 +488,7 @@ static void iw_cm_check_wildcard(struct
  			cm4_outaddr->sin_addr = cm4_addr->sin_addr;
  		}
  	} else {
@@ -39,7 +39,7 @@ Change-Id: Iff79f31189358283df659c61d583390a2822b880
  		struct sockaddr_in6 *pm6_addr = (struct sockaddr_in6 *)pm_addr;
  
  		if (ipv6_addr_type(&pm6_addr->sin6_addr) == IPV6_ADDR_ANY) {
-@@ -486,6 +496,7 @@ static void iw_cm_check_wildcard(struct
+@@ -489,6 +499,7 @@ static void iw_cm_check_wildcard(struct
  
  			cm6_outaddr->sin6_addr = cm6_addr->sin6_addr;
  		}
@@ -47,7 +47,7 @@ Change-Id: Iff79f31189358283df659c61d583390a2822b880
  	}
  }
  
-@@ -1178,20 +1189,33 @@ static int __init iw_cm_init(void)
+@@ -1181,20 +1192,33 @@ static int __init iw_cm_init(void)
  	if (!iwcm_wq)
  		return -ENOMEM;
  

@@ -8,7 +8,7 @@ Change-Id: I3f85b1f8ce8ed7727c3f2a2477fc9fb8743561e3
 
 --- a/drivers/nvme/target/nvmet.h
 +++ b/drivers/nvme/target/nvmet.h
-@@ -264,6 +264,9 @@ struct nvmet_req {
+@@ -283,6 +283,9 @@ struct nvmet_req {
  	struct nvmet_ns		*ns;
  	struct scatterlist	*sg;
  	struct bio		inline_bio;

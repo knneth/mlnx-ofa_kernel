@@ -12,4 +12,12 @@ static inline int __must_check kref_get_unless_zero(struct kref *kref)
 }
 #endif
 
+#ifndef HAVE_KREF_READ
+
+static inline int kref_read(struct kref *kref)
+{
+	return atomic_read(&kref->refcount);
+}
+#endif
+
 #endif /* COMPAT_LINUX_KREF_H */

@@ -8,7 +8,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
 
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
-@@ -57,6 +57,7 @@ MODULE_LICENSE("Dual BSD/GPL");
+@@ -60,6 +60,7 @@ MODULE_INFO(retpoline, "Y");
  
  static unsigned int max_backlog = 1024;
  
@@ -16,7 +16,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  static struct ctl_table_header *ucma_ctl_table_hdr;
  static struct ctl_table ucma_ctl_table[] = {
  	{
-@@ -68,6 +69,14 @@ static struct ctl_table ucma_ctl_table[]
+@@ -71,6 +72,14 @@ static struct ctl_table ucma_ctl_table[]
  	},
  	{ }
  };
@@ -31,7 +31,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -184,6 +193,9 @@ static void ucma_close_id(struct work_st
+@@ -187,6 +196,9 @@ static void ucma_close_id(struct work_st
  static struct ucma_context *ucma_alloc_ctx(struct ucma_file *file)
  {
  	struct ucma_context *ctx;
@@ -41,7 +41,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  
  	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
  	if (!ctx)
-@@ -195,11 +207,26 @@ static struct ucma_context *ucma_alloc_c
+@@ -198,11 +210,26 @@ static struct ucma_context *ucma_alloc_c
  	INIT_LIST_HEAD(&ctx->mc_list);
  	ctx->file = file;
  
@@ -68,7 +68,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  
  	list_add_tail(&ctx->list, &file->ctx_list);
  	return ctx;
-@@ -212,16 +239,33 @@ error:
+@@ -215,16 +242,33 @@ error:
  static struct ucma_multicast* ucma_alloc_multicast(struct ucma_context *ctx)
  {
  	struct ucma_multicast *mc;
@@ -103,7 +103,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  
  	mc->ctx = ctx;
  	list_add_tail(&mc->list, &ctx->mc_list);
-@@ -1516,7 +1560,11 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1520,7 +1564,11 @@ static ssize_t ucma_migrate_id(struct uc
  	struct rdma_ucm_migrate_id cmd;
  	struct rdma_ucm_migrate_resp resp;
  	struct ucma_context *ctx;
@@ -115,7 +115,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  	struct ucma_file *cur_file;
  	int ret = 0;
  
-@@ -1524,12 +1572,22 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1528,12 +1576,22 @@ static ssize_t ucma_migrate_id(struct uc
  		return -EFAULT;
  
  	/* Get current fd to protect against it being closed */
@@ -138,7 +138,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  	if (IS_ERR(ctx)) {
  		ret = PTR_ERR(ctx);
  		goto file_put;
-@@ -1563,7 +1621,11 @@ response:
+@@ -1567,7 +1625,11 @@ response:
  
  	ucma_put_ctx(ctx);
  file_put:
@@ -150,7 +150,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  	return ret;
  }
  
-@@ -1755,15 +1817,24 @@ static int __init ucma_init(void)
+@@ -1759,15 +1821,24 @@ static int __init ucma_init(void)
  		goto err1;
  	}
  
@@ -175,7 +175,7 @@ Change-Id: I33867e3bf47b2716abef21aa757a0ce4a6db7e6d
  err1:
  	misc_deregister(&ucma_misc);
  	return ret;
-@@ -1771,7 +1842,13 @@ err1:
+@@ -1775,7 +1846,13 @@ err1:
  
  static void __exit ucma_cleanup(void)
  {

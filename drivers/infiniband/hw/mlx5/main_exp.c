@@ -280,6 +280,7 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 		return ret;
 
 	props->exp_comp_mask = 0;
+	props->exp_comp_mask_2 = 0;
 	props->device_cap_flags2 = 0;
 	props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_CAP_FLAGS2;
 
@@ -518,6 +519,15 @@ int mlx5_ib_exp_query_device(struct ib_device *ibdev,
 	    host_support_p9_atomic()) {
 		props->tunneled_atomic_caps |= IB_EXP_TUNNELED_ATOMIC_SUPPORTED;
 		props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_TUNNELED_ATOMIC;
+	}
+
+	props->exp_comp_mask |= IB_EXP_DEVICE_ATTR_COMP_MASK_2;
+
+#define KSM_LOG_ENTITY_SIZE 31
+	if (MLX5_CAP_GEN(dev->mdev, fixed_buffer_size)) {
+		props->umr_fixed_size_caps.max_entity_size = 1ULL << KSM_LOG_ENTITY_SIZE;
+		props->exp_comp_mask_2 |= IB_EXP_DEVICE_ATTR_UMR_FIXED_SIZE_CAPS;
+		props->device_cap_flags2 |= IB_EXP_DEVICE_UMR_FIXED_SIZE;
 	}
 
 	return 0;
@@ -1791,13 +1801,12 @@ void tclass_get_tclass_locked(struct mlx5_ib_dev *dev,
 	if (tcd->val >= 0) {
 		*tclass = tcd->val;
 	} else if (ah && ah->type == RDMA_AH_ATTR_TYPE_ROCE) {
-		err = ib_query_gid(&dev->ib_dev, port, ah->grh.sgid_index,
-				   &gid, NULL);
+		err = rdma_query_gid(&dev->ib_dev, port, ah->grh.sgid_index,
+				     &gid);
 		if (err)
 			goto out;
-		err = mlx5_get_roce_gid_type(dev, port, ah->grh.sgid_index,
-					     &gid_type);
-		if (err || gid_type != IB_GID_TYPE_ROCE_UDP_ENCAP)
+		gid_type = ah->grh.sgid_attr->gid_type;
+		if (gid_type != IB_GID_TYPE_ROCE_UDP_ENCAP)
 			goto out;
 
 		if (ipv6_addr_v4mapped((struct in6_addr *)&gid)) {
@@ -2082,6 +2091,107 @@ void cleanup_tc_sysfs(struct mlx5_ib_dev *dev)
 
 			if (tcd->initialized)
 				kobject_put(&tcd->kobj);
+		}
+	}
+}
+
+struct ttl_attribute {
+	struct attribute attr;
+	ssize_t (*show)(struct mlx5_ttl_data *, struct ttl_attribute *, char *buf);
+	ssize_t (*store)(struct mlx5_ttl_data *, struct ttl_attribute *,
+			 const char *buf, size_t count);
+};
+
+#define TTL_ATTR(_name, _mode, _show, _store) \
+struct ttl_attribute ttl_attr_##_name = __ATTR(_name, _mode, _show, _store)
+
+static ssize_t ttl_show(struct mlx5_ttl_data *ttld, struct ttl_attribute *unused, char *buf)
+{
+	return sprintf(buf, "%d\n", ttld->val);
+}
+
+static ssize_t ttl_store(struct mlx5_ttl_data *ttld, struct ttl_attribute *unused,
+				   const char *buf, size_t count)
+{
+	unsigned long var;
+
+	if (kstrtol(buf, 0, &var) || var > 0xff)
+		return -EINVAL;
+
+	ttld->val = var;
+	return count;
+}
+
+static TTL_ATTR(ttl, 0644, ttl_show, ttl_store);
+
+static struct attribute *ttl_attrs[] = {
+	&ttl_attr_ttl.attr,
+	NULL
+};
+
+static ssize_t ttl_attr_show(struct kobject *kobj,
+			    struct attribute *attr, char *buf)
+{
+	struct ttl_attribute *ttl_attr = container_of(attr, struct ttl_attribute, attr);
+	struct mlx5_ttl_data *d = container_of(kobj, struct mlx5_ttl_data, kobj);
+
+	return ttl_attr->show(d, ttl_attr, buf);
+}
+
+static ssize_t ttl_attr_store(struct kobject *kobj,
+			     struct attribute *attr, const char *buf, size_t count)
+{
+	struct ttl_attribute *ttl_attr = container_of(attr, struct ttl_attribute, attr);
+	struct mlx5_ttl_data *d = container_of(kobj, struct mlx5_ttl_data, kobj);
+
+	return ttl_attr->store(d, ttl_attr, buf, count);
+}
+
+static const struct sysfs_ops ttl_sysfs_ops = {
+	.show = ttl_attr_show,
+	.store = ttl_attr_store
+};
+
+static struct kobj_type ttl_type = {
+	.sysfs_ops     = &ttl_sysfs_ops,
+	.default_attrs = ttl_attrs
+};
+
+int init_ttl_sysfs(struct mlx5_ib_dev *dev)
+{
+	struct device *device = &dev->ib_dev.dev;
+	int port;
+	int err;
+
+	dev->ttl_kobj = kobject_create_and_add("ttl", &device->kobj);
+	if (!dev->ttl_kobj)
+		return -ENOMEM;
+	for (port = 1; port <= MLX5_CAP_GEN(dev->mdev, num_ports); port++) {
+		struct mlx5_ttl_data *ttld = &dev->ttld[port - 1];
+
+		err = kobject_init_and_add(&ttld->kobj, &ttl_type, dev->ttl_kobj, "%d", port);
+		if (err)
+			goto err;
+		ttld->val = 0;
+	}
+	return 0;
+err:
+	cleanup_ttl_sysfs(dev);
+	return err;
+}
+
+void cleanup_ttl_sysfs(struct mlx5_ib_dev *dev)
+{
+	if (dev->ttl_kobj) {
+		int port;
+
+		kobject_put(dev->ttl_kobj);
+		dev->ttl_kobj = NULL;
+		for (port = 1; port <= MLX5_CAP_GEN(dev->mdev, num_ports); port++) {
+			struct mlx5_ttl_data *ttld = &dev->ttld[port - 1];
+
+			if (ttld->kobj.state_initialized)
+				kobject_put(&ttld->kobj);
 		}
 	}
 }

@@ -1953,7 +1953,7 @@ static void copy_ah_attr_from_uverbs(struct ib_qp *qp,
 				     struct rdma_ah_attr *rdma_attr,
 				     struct ib_uverbs_qp_dest *uverb_attr)
 {
-	rdma_attr->type = rdma_ah_find_type(qp->device, qp->port);
+	rdma_attr->type = rdma_ah_find_type(qp->device, qp->real_qp->port);
 	if (uverb_attr->is_global) {
 		rdma_ah_set_grh(rdma_attr, NULL,
 				uverb_attr->flow_label,
@@ -1979,7 +1979,7 @@ static int modify_qp(struct ib_uverbs_file *file,
 	struct ib_qp *qp;
 	int ret;
 
-	attr = kmalloc(sizeof *attr, GFP_KERNEL);
+	attr = kzalloc(sizeof(*attr), GFP_KERNEL);
 	if (!attr)
 		return -ENOMEM;
 
@@ -2555,7 +2555,7 @@ ssize_t ib_uverbs_create_ah(struct ib_uverbs_file *file,
 	struct ib_uobject		*uobj;
 	struct ib_pd			*pd;
 	struct ib_ah			*ah;
-	struct rdma_ah_attr		attr;
+	struct rdma_ah_attr		attr = {};
 	int ret;
 	struct ib_udata                   udata;
 
@@ -2905,6 +2905,28 @@ static int kern_spec_to_ib_spec_filter(struct ib_uverbs_flow_spec *kern_spec,
 		if ((ntohl(ib_spec->tunnel.mask.tunnel_id)) >= BIT(24) ||
 		    (ntohl(ib_spec->tunnel.val.tunnel_id)) >= BIT(24))
 			return -EINVAL;
+		break;
+	case IB_FLOW_SPEC_GRE:
+		ib_filter_sz = offsetof(struct ib_flow_gre_filter, real_sz);
+		actual_filter_sz = spec_filter_size(kern_spec_mask,
+						    kern_filter_sz,
+						    ib_filter_sz);
+		if (actual_filter_sz <= 0)
+			return -EINVAL;
+		ib_spec->gre.size = sizeof(struct ib_flow_spec_gre);
+		memcpy(&ib_spec->gre.val, kern_spec_val, actual_filter_sz);
+		memcpy(&ib_spec->gre.mask, kern_spec_mask, actual_filter_sz);
+		break;
+	case IB_FLOW_SPEC_MPLS:
+		ib_filter_sz = offsetof(struct ib_flow_mpls_filter, real_sz);
+		actual_filter_sz = spec_filter_size(kern_spec_mask,
+						    kern_filter_sz,
+						    ib_filter_sz);
+		if (actual_filter_sz <= 0)
+			return -EINVAL;
+		ib_spec->mpls.size = sizeof(struct ib_flow_spec_mpls);
+		memcpy(&ib_spec->mpls.val, kern_spec_val, actual_filter_sz);
+		memcpy(&ib_spec->mpls.mask, kern_spec_mask, actual_filter_sz);
 		break;
 	default:
 		return -EINVAL;

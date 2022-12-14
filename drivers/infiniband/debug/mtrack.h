@@ -217,8 +217,6 @@
 		__memtrack_addr = kvzalloc_node(sz, flgs, node);			\
 	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
-		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
-			memset(__memtrack_addr, 0x5A, sz);			\
 	}									\
 	__memtrack_addr;							\
 })
@@ -748,7 +746,7 @@
 	if (page_addr && !is_non_trackable_alloc_func(__func__)) {		\
 		memtrack_alloc(MEMTRACK_PAGE_ALLOC, 0UL, (unsigned long)(page_addr), (unsigned long)(order), 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
-	page_addr;								\
+	(unsigned long)page_addr;						\
 })
 
 #define get_zeroed_page(gfp_mask) ({						\

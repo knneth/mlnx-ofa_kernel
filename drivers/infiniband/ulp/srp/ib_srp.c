@@ -60,11 +60,14 @@
 #define DRV_NAME	"ib_srp"
 #define PFX		DRV_NAME ": "
 #define DRV_VERSION	"2.0"
-#define DRV_RELDATE	"01 May 2018"
+#define DRV_RELDATE	"03 Jul 2018"
 
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("InfiniBand SCSI RDMA Protocol initiator");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 MODULE_INFO(release_date, DRV_RELDATE);
 
 #if !defined(CONFIG_DYNAMIC_DEBUG)
@@ -3445,7 +3448,7 @@ static ssize_t srp_create_target(struct device *dev,
 	INIT_WORK(&target->tl_err_work, srp_tl_err_work);
 	INIT_WORK(&target->remove_work, srp_remove_work);
 	spin_lock_init(&target->lock);
-	ret = ib_query_gid(ibdev, host->port, 0, &target->sgid, NULL);
+	ret = rdma_query_gid(ibdev, host->port, 0, &target->sgid);
 	if (ret)
 		goto out;
 

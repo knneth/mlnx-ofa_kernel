@@ -3,14 +3,26 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
 
 Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
 ---
- drivers/nvme/target/loop.c | 49 ++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 49 insertions(+)
+ drivers/nvme/target/loop.c | 57 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 57 insertions(+)
 
 --- a/drivers/nvme/target/loop.c
 +++ b/drivers/nvme/target/loop.c
-@@ -189,9 +189,16 @@ static blk_status_t nvme_loop_queue_rq(s
+@@ -151,7 +151,11 @@ nvme_loop_timeout(struct request *rq, bo
+ 	/* fail with DNR on admin cmd timeout */
+ 	nvme_req(rq)->status = NVME_SC_ABORT_REQ | NVME_SC_DNR;
  
- 	if (blk_rq_bytes(req)) {
++#ifdef HAVE_BLK_EH_DONE
+ 	return BLK_EH_DONE;
++#else
++	return BLK_EH_HANDLED;
++#endif
+ }
+ 
+ static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
+@@ -181,14 +185,25 @@ static blk_status_t nvme_loop_queue_rq(s
+ 
+ 	if (blk_rq_nr_phys_segments(req)) {
  		iod->sg_table.sgl = iod->first_sgl;
 +#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_4_PARAMS
  		if (sg_alloc_table_chained(&iod->sg_table,
@@ -25,7 +37,16 @@ Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
  			return BLK_STS_RESOURCE;
  
  		iod->req.sg = iod->sg_table.sgl;
-@@ -235,6 +242,7 @@ static int nvme_loop_init_iod(struct nvm
+ 		iod->req.sg_cnt = blk_rq_map_sg(req->q, req, iod->sg_table.sgl);
++#ifdef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
+ 		iod->req.transfer_len = blk_rq_payload_bytes(req);
++#else
++		iod->req.transfer_len = nvme_map_len(req);
++#endif
+ 	}
+ 
+ 	schedule_work(&iod->work);
+@@ -225,6 +240,7 @@ static int nvme_loop_init_iod(struct nvm
  	return 0;
  }
  
@@ -33,7 +54,7 @@ Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
  static int nvme_loop_init_request(struct blk_mq_tag_set *set,
  		struct request *req, unsigned int hctx_idx,
  		unsigned int numa_node)
-@@ -244,6 +252,21 @@ static int nvme_loop_init_request(struct
+@@ -234,6 +250,21 @@ static int nvme_loop_init_request(struct
  	return nvme_loop_init_iod(ctrl, blk_mq_rq_to_pdu(req),
  			(set == &ctrl->tag_set) ? hctx_idx + 1 : 0);
  }
@@ -55,7 +76,7 @@ Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
  
  static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
  		unsigned int hctx_idx)
-@@ -269,18 +292,36 @@ static int nvme_loop_init_admin_hctx(str
+@@ -259,18 +290,36 @@ static int nvme_loop_init_admin_hctx(str
  	return 0;
  }
  
@@ -92,7 +113,7 @@ Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
  	.init_hctx	= nvme_loop_init_admin_hctx,
  	.timeout	= nvme_loop_timeout,
  };
-@@ -381,7 +422,9 @@ static int nvme_loop_configure_admin_que
+@@ -371,7 +420,9 @@ static int nvme_loop_configure_admin_que
  	ctrl->admin_tag_set.driver_data = ctrl;
  	ctrl->admin_tag_set.nr_hw_queues = 1;
  	ctrl->admin_tag_set.timeout = ADMIN_TIMEOUT;
@@ -102,7 +123,7 @@ Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
  
  	ctrl->queues[0].ctrl = ctrl;
  	error = nvmet_sq_init(&ctrl->queues[0].nvme_sq);
-@@ -450,10 +493,16 @@ static void nvme_loop_shutdown_ctrl(stru
+@@ -440,10 +491,16 @@ static void nvme_loop_shutdown_ctrl(stru
  	if (ctrl->ctrl.state == NVME_CTRL_LIVE)
  		nvme_shutdown_ctrl(&ctrl->ctrl);
  

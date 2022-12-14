@@ -8,7 +8,7 @@ Change-Id: I1c343684dae9bfda51c76beea015c1a7fa29182c
 
 --- a/drivers/infiniband/sw/rxe/rxe_loc.h
 +++ b/drivers/infiniband/sw/rxe/rxe_loc.h
-@@ -216,8 +216,13 @@ static inline void rxe_advance_resp_reso
+@@ -213,8 +213,13 @@ static inline void rxe_advance_resp_reso
  		qp->resp.res_head = 0;
  }
  
@@ -22,7 +22,7 @@ Change-Id: I1c343684dae9bfda51c76beea015c1a7fa29182c
  
  /* rxe_srq.c */
  #define IB_SRQ_INIT_MASK (~IB_SRQ_LIMIT)
-@@ -233,6 +238,10 @@ int rxe_srq_from_attr(struct rxe_dev *rx
+@@ -230,6 +235,10 @@ int rxe_srq_from_attr(struct rxe_dev *rx
  		      struct ib_srq_attr *attr, enum ib_srq_attr_mask mask,
  		      struct ib_udata *udata);
  

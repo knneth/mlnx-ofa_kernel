@@ -54,13 +54,16 @@
 #include <linux/inet.h>
 #include <linux/sched/signal.h>
 
-#define DRV_VERSION	"4.3-3.0.2"
+#define DRV_VERSION	"4.4-1.0.0"
 
 const char ipoib_driver_version[] = DRV_VERSION;
 
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("IP-over-InfiniBand net driver");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef RETPOLINE_MLNX
+MODULE_INFO(retpoline, "Y");
+#endif
 
 int ipoib_sendq_size __read_mostly = IPOIB_TX_RING_SIZE;
 int ipoib_recvq_size __read_mostly = IPOIB_RX_RING_SIZE;
@@ -791,8 +794,11 @@ static void path_rec_completion(int status,
 	if (!status) {
 		struct rdma_ah_attr av;
 
-		if (!ib_init_ah_from_path(priv->ca, priv->port, pathrec, &av))
+		if (!ib_init_ah_attr_from_path(priv->ca, priv->port,
+					       pathrec, &av, NULL)) {
 			ah = ipoib_create_ah(dev, priv->pd, &av);
+			rdma_destroy_ah_attr(&av);
+		}
 	}
 
 	spin_lock_irqsave(&priv->lock, flags);
@@ -1784,8 +1790,8 @@ static int ipoib_dev_init_default(struct net_device *dev)
 
 	priv->tx_ring = vzalloc(priv->sendq_size * sizeof *priv->tx_ring);
 	if (!priv->tx_ring) {
-		printk(KERN_WARNING "%s: failed to allocate TX ring (%d entries)\n",
-		       priv->ca->name, priv->sendq_size);
+		pr_warn("%s: failed to allocate TX ring (%d entries)\n",
+			priv->ca->name, ipoib_sendq_size);
 		goto out_rx_ring_cleanup;
 	}
 
@@ -1960,6 +1966,21 @@ static int ipoib_get_vf_stats(struct net_device *dev, int vf,
 	return ib_get_vf_stats(priv->ca, vf, priv->port, vf_stats);
 }
 
+static int ipoib_set_vf_local_mac(struct net_device *dev, void *addr)
+{
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+	struct sockaddr_storage *ss = addr;
+	int ret = 0;
+
+	netif_addr_lock_bh(dev);
+	if (memcmp(dev->dev_addr, ss->__data, 4 + sizeof(union ib_gid))) {
+		ipoib_warn(priv, "mac address change is unsupported.\n");
+		ret = -EINVAL;
+	}
+	netif_addr_unlock_bh(dev);
+	return ret;
+}
+
 static const struct header_ops ipoib_header_ops = {
 	.create	= ipoib_hard_header,
 };
@@ -1994,6 +2015,7 @@ static const struct net_device_ops ipoib_netdev_ops_vf = {
 	.ndo_tx_timeout		 = ipoib_timeout,
 	.ndo_set_rx_mode	 = ipoib_set_mcast_list,
 	.ndo_get_iflink		 = ipoib_get_iflink,
+	.ndo_set_mac_address	 = ipoib_set_vf_local_mac,
 	.ndo_get_stats64	 = ipoib_get_stats,
 	.ndo_do_ioctl		 = ipoib_ioctl,
 };
@@ -2274,17 +2296,46 @@ static ssize_t ipoib_set_mac_using_sysfs(struct device *dev,
 }
 static DEVICE_ATTR(set_mac, S_IWUSR, NULL, ipoib_set_mac_using_sysfs);
 
+int parse_child(struct device *dev, const char *buf, int *pkey,
+		int *child_index)
+{
+	int ret;
+	struct ipoib_dev_priv *priv = ipoib_priv(to_net_dev(dev));
+
+	*pkey = *child_index = -1;
+
+	/* 'pkey' or 'pkey.child_index' or '.child_index' are allowed */
+	ret = sscanf(buf, "%i.%i", pkey, child_index);
+	if (ret == 1)  /* just pkey, implicit child index is 0 */
+		*child_index = 0;
+	else  if (ret != 2) { /* pkey same as parent, specified child index */
+		*pkey = priv->pkey;
+		ret  = sscanf(buf, ".%i", child_index);
+		if (ret != 1 || *child_index == 0)
+			return -EINVAL;
+		if (priv->ca->alloc_rdma_netdev && ipoib_enhanced_enabled)
+			return -EOPNOTSUPP;
+	}
+
+	if (*child_index < 0 || *child_index > 0xff)
+		return -EINVAL;
+
+	if (*pkey <= 0 || *pkey > 0xffff || *pkey == 0x8000)
+		return -EINVAL;
+
+	ipoib_dbg(priv, "parse_child inp %s out pkey %04x index %d\n",
+		buf, *pkey, *child_index);
+	return 0;
+}
+
 static ssize_t create_child(struct device *dev,
 			    struct device_attribute *attr,
 			    const char *buf, size_t count)
 {
-	int pkey;
+	int pkey, child_index;
 	int ret;
 
-	if (sscanf(buf, "%i", &pkey) != 1)
-		return -EINVAL;
-
-	if (pkey <= 0 || pkey > 0xffff || pkey == 0x8000)
+	if (parse_child(dev, buf, &pkey, &child_index))
 		return -EINVAL;
 
 	/*
@@ -2293,7 +2344,7 @@ static ssize_t create_child(struct device *dev,
 	 */
 	pkey |= 0x8000;
 
-	ret = ipoib_vlan_add(to_net_dev(dev), pkey);
+	ret = ipoib_vlan_add(to_net_dev(dev), pkey, child_index);
 
 	return ret ? ret : count;
 }
@@ -2303,16 +2354,13 @@ static ssize_t delete_child(struct device *dev,
 			    struct device_attribute *attr,
 			    const char *buf, size_t count)
 {
-	int pkey;
+	int pkey, child_index;
 	int ret;
 
-	if (sscanf(buf, "%i", &pkey) != 1)
+	if (parse_child(dev, buf, &pkey, &child_index))
 		return -EINVAL;
 
-	if (pkey < 0 || pkey > 0xffff)
-		return -EINVAL;
-
-	ret = ipoib_vlan_delete(to_net_dev(dev), pkey);
+	ret = ipoib_vlan_delete(to_net_dev(dev), pkey, child_index);
 
 	return ret ? ret : count;
 
@@ -2357,8 +2405,7 @@ static struct net_device *ipoib_add_port(const char *format,
 
 	result = ib_query_port(hca, port, &attr);
 	if (result) {
-		printk(KERN_WARNING "%s: ib_query_port %d failed\n",
-		       hca->name, port);
+		pr_warn("%s: ib_query_port %d failed\n", hca->name, port);
 		goto device_init_failed;
 	}
 
@@ -2377,8 +2424,8 @@ static struct net_device *ipoib_add_port(const char *format,
 
 	result = ib_query_pkey(hca, port, 0, &priv->pkey);
 	if (result) {
-		printk(KERN_WARNING "%s: ib_query_pkey port %d failed (ret = %d)\n",
-		       hca->name, port, result);
+		pr_warn("%s: ib_query_pkey port %d failed (ret = %d)\n",
+			hca->name, port, result);
 		goto device_init_failed;
 	}
 
@@ -2393,10 +2440,10 @@ static struct net_device *ipoib_add_port(const char *format,
 	priv->dev->broadcast[8] = priv->pkey >> 8;
 	priv->dev->broadcast[9] = priv->pkey & 0xff;
 
-	result = ib_query_gid(hca, port, 0, &priv->local_gid, NULL);
+	result = rdma_query_gid(hca, port, 0, &priv->local_gid);
 	if (result) {
-		printk(KERN_WARNING "%s: ib_query_gid port %d failed (ret = %d)\n",
-		       hca->name, port, result);
+		pr_warn("%s: rdma_query_gid port %d failed (ret = %d)\n",
+			hca->name, port, result);
 		goto device_init_failed;
 	}
 
@@ -2406,8 +2453,8 @@ static struct net_device *ipoib_add_port(const char *format,
 
 	result = ipoib_dev_init(priv->dev, hca, port);
 	if (result) {
-		printk(KERN_WARNING "%s: failed to initialize port %d (ret = %d)\n",
-		       hca->name, port, result);
+		pr_warn("%s: failed to initialize port %d (ret = %d)\n",
+			hca->name, port, result);
 		goto device_init_failed;
 	}
 
@@ -2417,8 +2464,8 @@ static struct net_device *ipoib_add_port(const char *format,
 
 	result = register_netdev(priv->dev);
 	if (result) {
-		printk(KERN_WARNING "%s: couldn't register ipoib port %d; error %d\n",
-		       hca->name, port, result);
+		pr_warn("%s: couldn't register ipoib port %d; error %d\n",
+			hca->name, port, result);
 		goto register_failed;
 	}
 

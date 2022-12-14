@@ -17,9 +17,9 @@ Change-Id: I5024bc7accb65ab904fcbe79d200aaabaa98e5b0
  #ifdef pr_fmt
  #undef pr_fmt
  #endif
-@@ -1240,3 +1242,5 @@ module_init(fcloop_init);
- module_exit(fcloop_exit);
- 
- MODULE_LICENSE("GPL v2");
+@@ -1391,3 +1393,5 @@ MODULE_LICENSE("GPL v2");
+ #ifdef RETPOLINE_MLNX
+ MODULE_INFO(retpoline, "Y");
+ #endif
 +
 +#endif /* HAVE_LINUX_NVME_FC_DRIVER_H */

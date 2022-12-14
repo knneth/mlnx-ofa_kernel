@@ -35,7 +35,7 @@ Change-Id: I20ba52b6648885ad7dc3ea78e149a5f80c6a20ec
  }
  
  static void mlx5_ib_cq_event(struct mlx5_core_cq *mcq, enum mlx5_event type)
-@@ -892,6 +900,7 @@ static int create_cq_user(struct mlx5_ib
+@@ -916,6 +924,7 @@ static int create_cq_user(struct mlx5_ib
  		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD;
  	}
  
@@ -43,7 +43,7 @@ Change-Id: I20ba52b6648885ad7dc3ea78e149a5f80c6a20ec
  	if (ucmd.exp_data.as_notify_en) {
  		u32 lpid, pid, tid;
  
-@@ -917,6 +926,7 @@ static int create_cq_user(struct mlx5_ib
+@@ -941,6 +950,7 @@ static int create_cq_user(struct mlx5_ib
  
  		cq->tsk = current;
  	}

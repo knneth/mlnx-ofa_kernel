@@ -8,7 +8,7 @@ Change-Id: I16201b47f932cce7460d6dc5246d7fe98a616e95
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
-@@ -155,14 +155,20 @@ static int mlx5_crdump_open(struct inode
+@@ -156,14 +156,20 @@ static int mlx5_crdump_open(struct inode
  {
  	struct seq_file *seq;
  	int ret;

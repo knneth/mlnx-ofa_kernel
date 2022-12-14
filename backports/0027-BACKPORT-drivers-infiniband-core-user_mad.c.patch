@@ -8,7 +8,7 @@ Change-Id: Id71f5a16c301e87cfa296149e3507c300a93d6ac
 
 --- a/drivers/infiniband/core/user_mad.c
 +++ b/drivers/infiniband/core/user_mad.c
-@@ -1147,8 +1147,16 @@ static ssize_t show_port(struct device *
+@@ -1155,8 +1155,16 @@ static ssize_t show_port(struct device *
  }
  static DEVICE_ATTR(port, S_IRUGO, show_port, NULL);
  
@@ -25,7 +25,7 @@ Change-Id: Id71f5a16c301e87cfa296149e3507c300a93d6ac
  
  static int ib_umad_init_port(struct ib_device *device, int port_num,
  			     struct ib_umad_device *umad_dev,
-@@ -1327,7 +1335,11 @@ static void ib_umad_remove_one(struct ib
+@@ -1335,7 +1343,11 @@ static void ib_umad_remove_one(struct ib
  	kobject_put(&umad_dev->kobj);
  }
  
@@ -37,7 +37,7 @@ Change-Id: Id71f5a16c301e87cfa296149e3507c300a93d6ac
  {
  	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
  }
-@@ -1360,7 +1372,11 @@ static int __init ib_umad_init(void)
+@@ -1368,7 +1380,11 @@ static int __init ib_umad_init(void)
  
  	umad_class->devnode = umad_devnode;
  
