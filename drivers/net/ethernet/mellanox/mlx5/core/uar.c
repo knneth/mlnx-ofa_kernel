@@ -384,22 +384,13 @@ void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev)
 	 speed == PCIE_SPEED_2_5GT ? "2.5GT/s" : \
 	 "Unknown")
 
-	err = mlx5_get_pcie_dev_link_caps(dev->pdev, &speed_cap, &width_cap);
-	if (err) {
-		mlx5_core_warn(
-			dev,
-			"Unable to determine PCIe device BW capabilities\n");
+	if (mlx5_get_pcie_dev_link_caps(dev->pdev, &speed_cap, &width_cap))
 		return;
-	}
 
 	err = pcie_get_minimum_link(dev->pdev, &speed, &width);
 	if (err || speed == PCI_SPEED_UNKNOWN ||
-	    width == PCIE_LNK_WIDTH_UNKNOWN) {
-		mlx5_core_warn(
-			dev,
-			"Unable to determine PCI device chain minimum BW\n");
+	    width == PCIE_LNK_WIDTH_UNKNOWN)
 		return;
-	}
 
 	if (width != width_cap)
 		mlx5_core_warn(

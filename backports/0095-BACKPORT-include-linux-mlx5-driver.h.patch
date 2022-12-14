@@ -45,7 +45,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  	/* start: cq staff */
  	struct mlx5_cq_table	cq_table;
  	/* end: cq staff */
-@@ -876,9 +890,13 @@ struct mlx5_clock {
+@@ -879,9 +893,13 @@ struct mlx5_clock {
  	unsigned long              overflow_period;
  	struct delayed_work        overflow_work;
  	struct mlx5_core_dev      *mdev;
@@ -59,7 +59,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  };
  
  /* need to move the tracer stuff to tracer.h*/
-@@ -1065,8 +1083,13 @@ struct mlx5_cmd_work_ent {
+@@ -1074,8 +1092,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -73,7 +73,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  	u16			op;
  	bool			polling;
  };
-@@ -1423,7 +1446,12 @@ static inline int mlx5_core_is_pf(struct
+@@ -1434,7 +1457,12 @@ static inline int mlx5_core_is_pf(struct
  	return !(dev->priv.pci_dev_data & MLX5_PCI_DEV_IS_VF);
  }
  
@@ -87,7 +87,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  #define MLX5_VPORT_MANAGER(mdev) \
  	(MLX5_CAP_GEN(mdev, vport_group_manager) && \
  	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) && \
-@@ -1451,6 +1479,10 @@ enum {
+@@ -1462,6 +1490,10 @@ enum {
  static inline const struct cpumask *
  mlx5_get_vector_affinity(struct mlx5_core_dev *dev, int vector)
  {
@@ -98,7 +98,7 @@ Change-Id: Ifc8d8aea309b82b4097a202aa7668235e07d99af
  	const struct cpumask *mask;
  	struct irq_desc *desc;
  	unsigned int irq;
-@@ -1465,9 +1497,16 @@ mlx5_get_vector_affinity(struct mlx5_cor
+@@ -1476,9 +1508,16 @@ mlx5_get_vector_affinity(struct mlx5_cor
  #ifdef CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK
  	mask = irq_data_get_effective_affinity_mask(&desc->irq_data);
  #else

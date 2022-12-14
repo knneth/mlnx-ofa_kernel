@@ -34,6 +34,9 @@
 #include <linux/module.h>
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/cmd.h>
+#ifdef CONFIG_RFS_ACCEL
+#include <linux/cpu_rmap.h>
+#endif
 #include "mlx5_core.h"
 #include "fpga/core.h"
 #include "eswitch.h"
@@ -219,6 +222,9 @@ static void eqe_pf_action(struct work_struct *work)
 	struct mlx5_eq *eq = pfault->eq;
 
 	mlx5_core_page_fault(eq->dev, pfault);
+	if ((pfault->event_subtype == MLX5_PFAULT_SUBTYPE_WQE) &&
+	    pfault->wqe.common)
+		mlx5_core_put_rsc(pfault->wqe.common);
 	mempool_free(pfault, eq->pf_ctx.pool);
 }
 
@@ -241,6 +247,7 @@ static void eq_pf_process(struct mlx5_eq *eq)
 		pf_eqe = &eqe->data.page_fault;
 		pfault->event_subtype = eqe->sub_type;
 		pfault->bytes_committed = be32_to_cpu(pf_eqe->bytes_committed);
+		pfault->wqe.common = NULL;
 
 		mlx5_core_dbg(dev,
 			      "PAGE_FAULT: subtype: 0x%02x, bytes_committed: 0x%06x\n",
@@ -290,6 +297,8 @@ static void eq_pf_process(struct mlx5_eq *eq)
 				      pfault->type, pfault->token,
 				      pfault->wqe.wq_num,
 				      pfault->wqe.wqe_index);
+			pfault->wqe.common = mlx5_core_get_rsc(eq->dev,
+							       pfault->wqe.wq_num);
 			break;
 
 		default:
@@ -368,13 +377,19 @@ static void eq_pf_action(struct work_struct *work)
 	spin_unlock_irq(&eq->pf_ctx.lock);
 }
 
-static int init_pf_ctx(struct mlx5_eq_pagefault *pf_ctx, const char *name)
+static int init_pf_ctx(struct mlx5_eq_pagefault *pf_ctx, const char *name, bool capi_enabled)
 {
 	spin_lock_init(&pf_ctx->lock);
 	INIT_WORK(&pf_ctx->work, eq_pf_action);
 
-	pf_ctx->wq = alloc_ordered_workqueue(name,
-					     WQ_MEM_RECLAIM);
+	if (capi_enabled)
+		pf_ctx->wq = alloc_workqueue(name,
+					     WQ_HIGHPRI | WQ_CPU_INTENSIVE,
+					     16);
+	else
+		pf_ctx->wq = alloc_ordered_workqueue(name,
+						     WQ_MEM_RECLAIM);
+
 	if (!pf_ctx->wq)
 		return -ENOMEM;
 
@@ -727,7 +742,7 @@ int mlx5_create_map_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq, u8 vecidx,
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
 	if (type == MLX5_EQ_TYPE_PF) {
-		err = init_pf_ctx(&eq->pf_ctx, name);
+		err = init_pf_ctx(&eq->pf_ctx, name, dev->capi.enabled);
 		if (err)
 			goto err_irq;
 	} else
@@ -942,3 +957,28 @@ int mlx5_core_eq_query(struct mlx5_core_dev *dev, struct mlx5_eq *eq,
 	return mlx5_cmd_exec(dev, in, sizeof(in), out, outlen);
 }
 EXPORT_SYMBOL_GPL(mlx5_core_eq_query);
+
+/* This function should only be called after mlx5_cmd_force_teardown_hca */
+void mlx5_core_eq_free_irqs(struct mlx5_core_dev *dev)
+{
+	struct mlx5_eq_table *table = &dev->priv.eq_table;
+	struct mlx5_eq *eq;
+	
+#ifdef CONFIG_RFS_ACCEL
+	if (dev->rmap) {
+		free_irq_cpu_rmap(dev->rmap);
+		dev->rmap = NULL;
+	}
+#endif
+	list_for_each_entry(eq, &table->comp_eqs_list, list)
+		free_irq(eq->irqn, eq);
+
+	free_irq(table->pages_eq.irqn, &table->pages_eq);
+	free_irq(table->async_eq.irqn, &table->async_eq);
+	free_irq(table->cmd_eq.irqn, &table->cmd_eq);
+#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+	if (MLX5_CAP_GEN(dev, pg))
+		free_irq(table->pfault_eq.irqn, &table->pfault_eq);
+#endif
+	pci_free_irq_vectors(dev->pdev);
+}

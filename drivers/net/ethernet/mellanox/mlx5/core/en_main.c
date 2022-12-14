@@ -753,13 +753,13 @@ static int mlx5e_rx_alloc_page_cache(struct mlx5e_rq *rq,
 	cache->log_min_sz = log_init_sz;
 	max_sz = 1 << cache->log_max_sz;
 
-	cache->page_cache = kzalloc_node(max_sz * sizeof(*cache->page_cache),
-					 GFP_KERNEL, node);
+	cache->page_cache = kvzalloc_node(max_sz * sizeof(*cache->page_cache),
+					  GFP_KERNEL, node);
 	if (!cache->page_cache)
 		return -ENOMEM;
 
-	reduce->pending = kzalloc_node(max_sz * sizeof(*reduce->pending),
-				       GFP_KERNEL, node);
+	reduce->pending = kvzalloc_node(max_sz * sizeof(*reduce->pending),
+					GFP_KERNEL, node);
 	if (!reduce->pending)
 		goto err_free_cache;
 
@@ -773,7 +773,7 @@ static int mlx5e_rx_alloc_page_cache(struct mlx5e_rq *rq,
 	return 0;
 
 err_free_cache:
-	kfree(cache->page_cache);
+	kvfree(cache->page_cache);
 
 	return -ENOMEM;
 }
@@ -786,14 +786,14 @@ static void mlx5e_rx_free_page_cache(struct mlx5e_rq *rq)
 
 	cancel_delayed_work_sync(&reduce->reduce_work);
 	mlx5e_rx_cache_reduce_clean_pending(rq);
-	kfree(reduce->pending);
+	kvfree(reduce->pending);
 
 	for (i = 0; i <= cache->head; i++) {
 		struct mlx5e_dma_info *dma_info = &cache->page_cache[i];
 
 		put_page(dma_info->page);
 	}
-	kfree(cache->page_cache);
+	kvfree(cache->page_cache);
 }
 
 static int mlx5e_alloc_rq(struct mlx5e_channel *c,
@@ -5283,8 +5283,12 @@ struct net_device *mlx5e_create_netdev(struct mlx5_core_dev *mdev,
 	struct net_device *netdev;
 	struct mlx5e_priv *priv;
 
+	if (MLX5_CAP_GEN(mdev, qos) &&
+	    MLX5_CAP_QOS(mdev, packet_pacing))
+		mdev->mlx5e_res.max_rl_queues = MLX5E_MAX_RL_QUEUES;
+
 	netdev = alloc_etherdev_mqs(sizeof(struct mlx5e_priv),
-				    nch * profile->max_tc + MLX5E_MAX_RL_QUEUES,
+				    nch * profile->max_tc + mdev->mlx5e_res.max_rl_queues,
 				    nch);
 	if (!netdev) {
 		mlx5_core_err(mdev, "alloc_etherdev_mqs() failed\n");

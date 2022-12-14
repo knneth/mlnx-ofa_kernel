@@ -1,0 +1,53 @@
+From: Huy Nguyen <huyn@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
+
+Change-Id: I20ba52b6648885ad7dc3ea78e149a5f80c6a20ec
+---
+ drivers/infiniband/hw/mlx5/cq.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/cq.c
++++ b/drivers/infiniband/hw/mlx5/cq.c
+@@ -36,11 +36,14 @@
+ #include <rdma/ib_cache.h>
+ #include "mlx5_ib.h"
+ #include "user_exp.h"
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ #include <asm/switch_to.h>
+ #include <asm/pnv-pci.h>
++#endif
+ 
+ static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq)
+ {
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	struct mlx5_ib_cq *mlx5ib_cq = to_mibcq(cq);
+ 	struct ib_cq *ibcq = &mlx5ib_cq->ibcq;
+ 
+@@ -48,6 +51,11 @@ static void mlx5_ib_cq_comp(struct mlx5_
+ 
+ 	if (unlikely(mlx5ib_cq->tsk))
+ 		kick_process(mlx5ib_cq->tsk);
++#else
++	struct ib_cq *ibcq = &to_mibcq(cq)->ibcq;
++
++	ibcq->comp_handler(ibcq, ibcq->cq_context);
++#endif
+ }
+ 
+ static void mlx5_ib_cq_event(struct mlx5_core_cq *mcq, enum mlx5_event type)
+@@ -892,6 +900,7 @@ static int create_cq_user(struct mlx5_ib
+ 		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD;
+ 	}
+ 
++#ifdef HAVE_PNV_PCI_AS_NOTIFY
+ 	if (ucmd.exp_data.as_notify_en) {
+ 		u32 lpid, pid, tid;
+ 
+@@ -917,6 +926,7 @@ static int create_cq_user(struct mlx5_ib
+ 
+ 		cq->tsk = current;
+ 	}
++#endif
+ 
+ 	return 0;
+ 

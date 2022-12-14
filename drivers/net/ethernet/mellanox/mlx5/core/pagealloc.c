@@ -293,9 +293,10 @@ static int give_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
 	for (i = 0; i < npages; i++) {
 		if (time_after(jiffies, max_duration)) {
 			mlx5_core_warn(dev,
-				       "%d pages alloc time exceeded the max permitted duration. Allocated %d pages.\n",
-				       npages, i);
-			break;
+				       "%d pages alloc time exceeded the max permitted duration\n",
+				       npages);
+			err = -ENOMEM;
+			goto out_4k;
 		}
 retry:
 		err = alloc_4k(dev, &addr);
@@ -313,18 +314,18 @@ retry:
 	MLX5_SET(manage_pages_in, in, opcode, MLX5_CMD_OP_MANAGE_PAGES);
 	MLX5_SET(manage_pages_in, in, op_mod, MLX5_PAGES_GIVE);
 	MLX5_SET(manage_pages_in, in, function_id, func_id);
-	MLX5_SET(manage_pages_in, in, input_num_entries, i);
+	MLX5_SET(manage_pages_in, in, input_num_entries, npages);
 
 	err = mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));
 	if (err) {
-		mlx5_core_warn(dev, "func_id 0x%x, num pages %d, err %d\n",
-			       func_id, i, err);
+		mlx5_core_warn(dev, "func_id 0x%x, npages %d, err %d\n",
+			       func_id, npages, err);
 		goto out_4k;
 	}
 
-	dev->priv.fw_pages += i;
+	dev->priv.fw_pages += npages;
 	if (func_id)
-		dev->priv.vfs_pages += i;
+		dev->priv.vfs_pages += npages;
 
 	mlx5_core_dbg(dev, "err %d\n", err);
 

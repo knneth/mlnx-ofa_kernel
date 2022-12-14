@@ -1,0 +1,25 @@
+From: Leon Romanovsky <leonro@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/restrack.c
+
+Change-Id: I73edb4226ce69ca915555341b94c9025401ead27
+---
+ drivers/infiniband/core/restrack.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/infiniband/core/restrack.c
++++ b/drivers/infiniband/core/restrack.c
+@@ -28,9 +28,14 @@ int rdma_restrack_count(struct rdma_rest
+ {
+ 	struct rdma_restrack_entry *e;
+ 	u32 cnt = 0;
++	COMPAT_HL_NODE
+ 
+ 	down_read(&res->rwsem);
++#ifdef HAVE_HLIST_FOR_EACH_ENTRY_3_PARAMS
+ 	hash_for_each_possible(res->hash, e, node, type) {
++#else
++	hash_for_each_possible(res->hash, e, hlnode, node, type) {
++#endif
+ 		if (ns == &init_pid_ns ||
+ 		    (!rdma_is_kernel_res(e) &&
+ 		     ns == task_active_pid_ns(e->task)))

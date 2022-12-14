@@ -64,6 +64,7 @@
 #include <linux/cgroup_rdma.h>
 #include <uapi/rdma/ib_user_verbs.h>
 #include <rdma/ib_verbs_exp_def.h>
+#include <rdma/restrack.h>
 
 #define IB_FW_VERSION_NAME_MAX	ETHTOOL_FWVERS_LEN
 
@@ -80,6 +81,7 @@ struct ib_nvmf_ctrl;
 struct ib_nvmf_backend_ctrl_init_attr;
 struct ib_nvmf_ns;
 struct ib_nvmf_ns_init_attr;
+struct ib_nvmf_ns_attr;
 struct ib_mr_init_attr;
 
 union ib_gid {
@@ -512,6 +514,7 @@ enum ib_port_speed {
  *   filled in by the drivers get_stats routine
  */
 struct rdma_hw_stats {
+	struct mutex lock;
 	unsigned long	timestamp;
 	unsigned long	lifespan;
 	const char * const *names;
@@ -1064,6 +1067,7 @@ struct ib_srq_attr {
 	u32	max_wr;
 	u32	max_sge;
 	u32	srq_limit;
+	struct ib_nvmf_srq_attr nvmf;
 };
 
 struct ib_srq_init_attr {
@@ -1615,6 +1619,7 @@ struct ib_pd {
 	 * Implementation details of the RDMA core, don't use in drivers:
 	 */
 	struct ib_mr	       *__internal_mr;
+	struct rdma_restrack_entry res;
 };
 
 struct ib_xrcd {
@@ -1624,6 +1629,10 @@ struct ib_xrcd {
 
 	struct mutex		tgt_qp_mutex;
 	struct list_head	tgt_qp_list;
+	/*
+	 * Implementation details of the RDMA core, don't use in drivers:
+	 */
+	struct rdma_restrack_entry res;
 };
 
 struct ib_ah {
@@ -1655,6 +1664,10 @@ struct ib_cq {
 		struct irq_poll		iop;
 		struct work_struct	work;
 	};
+	/*
+	 * Implementation details of the RDMA core, don't use in drivers:
+	 */
+	struct rdma_restrack_entry res;
 };
 
 struct ib_srq {
@@ -1832,6 +1845,11 @@ struct ib_qp {
 	struct ib_qp_security  *qp_sec;
 	u8			port;
 	enum ib_qpg_type        qpg_type;
+
+	/*
+	 * Implementation details of the RDMA core, don't use in drivers:
+	 */
+	struct rdma_restrack_entry     res;
 };
 
 struct ib_mr {
@@ -1848,6 +1866,11 @@ struct ib_mr {
 		struct list_head	qp_entry;	/* FR */
 	};
 	struct ib_dm	  *dm;
+
+	/*
+	 * Implementation details of the RDMA core, don't use in drivers:
+	 */
+	struct rdma_restrack_entry res;
 };
 
 struct ib_mw {
@@ -2222,6 +2245,8 @@ struct ib_device {
 	struct kobject		      *mad_sa_cc_kobj;
 
 	/* EXP APIs will be added below to minimize conflicts via upstream rebase */
+	int                     (*query_nvmf_ns)(struct ib_nvmf_ns *ns,
+						 struct ib_nvmf_ns_attr *ns_attr);
 	struct ib_nvmf_ctrl *   (*create_nvmf_backend_ctrl)(struct ib_srq *srq,
 				struct ib_nvmf_backend_ctrl_init_attr *init_attr);
 	int                     (*destroy_nvmf_backend_ctrl)(struct ib_nvmf_ctrl *ctrl);
@@ -2554,6 +2579,10 @@ struct ib_device {
 #endif
 
 	u32                          index;
+	/*
+	 * Implementation details of the RDMA core, don't use in drivers
+	 */
+	struct rdma_restrack_root     res;
 
 	/**
 	 * The following mandatory functions are used only at device
@@ -3074,14 +3103,16 @@ enum ib_pd_flags {
 };
 
 struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
-		const char *caller);
+		const char *caller, bool skip_tracking);
 
 /* Part of Lustre compatibility patch */
 #define ib_alloc_pd(device, ...) ib_alloc_pd_(device, ##__VA_ARGS__, 2, 1)
 #define ib_alloc_pd_(device, flags, n, ...) ib_alloc_pd_##n(device, flags)
-#define ib_alloc_pd_1(device, ...) __ib_alloc_pd(device, 0, __func__)
-#define ib_alloc_pd_2(device, flags) __ib_alloc_pd(device, flags, __func__)
+#define ib_alloc_pd_1(device, ...) __ib_alloc_pd(device, 0, KBUILD_MODNAME, false)
+#define ib_alloc_pd_2(device, flags) __ib_alloc_pd(device, flags, KBUILD_MODNAME, false)
 
+#define ib_alloc_pd_notrack(device, flags) \
+	__ib_alloc_pd((device), (flags), KBUILD_MODNAME, true)
 void ib_dealloc_pd(struct ib_pd *pd);
 
 /**
@@ -3358,8 +3389,15 @@ static inline int ib_post_recv(struct ib_qp *qp,
 	return qp->device->post_recv(qp, recv_wr, bad_recv_wr);
 }
 
-struct ib_cq *ib_alloc_cq(struct ib_device *dev, void *private,
-		int nr_cqe, int comp_vector, enum ib_poll_context poll_ctx);
+struct ib_cq *__ib_alloc_cq(struct ib_device *dev, void *private,
+			    int nr_cqe, int comp_vector,
+			    enum ib_poll_context poll_ctx, const char *caller,
+			    bool skip_tracking);
+#define ib_alloc_cq(device, priv, nr_cqe, comp_vect, poll_ctx) \
+	__ib_alloc_cq((device), (priv), (nr_cqe), (comp_vect), (poll_ctx), KBUILD_MODNAME, false)
+#define ib_alloc_cq_notrack(device, priv, nr_cqe, comp_vect, poll_ctx) \
+	__ib_alloc_cq((device), (priv), (nr_cqe), (comp_vect), (poll_ctx), KBUILD_MODNAME, true)
+
 void ib_free_cq(struct ib_cq *cq);
 int ib_process_cq_direct(struct ib_cq *cq, int budget);
 
@@ -3795,8 +3833,11 @@ int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid);
 /**
  * ib_alloc_xrcd - Allocates an XRC domain.
  * @device: The device on which to allocate the XRC domain.
+ * @caller: Module name for kernel consumers
  */
-struct ib_xrcd *ib_alloc_xrcd(struct ib_device *device);
+struct ib_xrcd *__ib_alloc_xrcd(struct ib_device *device, const char *caller);
+#define ib_alloc_xrcd(device) \
+	__ib_alloc_xrcd((device), KBUILD_MODNAME)
 
 /**
  * ib_dealloc_xrcd - Deallocates an XRC domain.

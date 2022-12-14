@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/nvme.h
 
 Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
 ---
- drivers/nvme/host/nvme.h | 80 +++++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 79 insertions(+), 1 deletion(-)
+ drivers/nvme/host/nvme.h | 84 +++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 83 insertions(+), 1 deletion(-)
 
 --- a/drivers/nvme/host/nvme.h
 +++ b/drivers/nvme/host/nvme.h
@@ -72,7 +72,18 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  
  	/* Power saving configuration */
  	u64 ps_max_latency_us;
-@@ -274,8 +293,10 @@ struct nvme_ns {
+@@ -259,6 +278,10 @@ struct nvme_ns_head {
+ 	struct list_head	entry;
+ 	struct kref		ref;
+ 	int			instance;
++
++#ifndef HAVE_CLEANUP_SRCU_STRUCT_QUIESCED
++	struct work_struct      free_work;
++#endif
+ };
+ 
+ struct nvme_ns {
+@@ -274,8 +297,10 @@ struct nvme_ns {
  
  	int lba_shift;
  	u16 ms;
@@ -83,7 +94,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  	bool ext;
  	u8 pi_type;
  	unsigned long flags;
-@@ -321,12 +342,35 @@ static inline u64 nvme_block_nr(struct n
+@@ -322,12 +347,35 @@ static inline u64 nvme_block_nr(struct n
  	return (sector >> (ns->lba_shift - 9));
  }
  
@@ -119,7 +130,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  }
  
  static inline void nvme_end_request(struct request *req, __le16 status,
-@@ -336,7 +380,11 @@ static inline void nvme_end_request(stru
+@@ -337,7 +385,11 @@ static inline void nvme_end_request(stru
  
  	rq->status = le16_to_cpu(status) >> 1;
  	rq->result = result;
@@ -131,7 +142,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  }
  
  static inline void nvme_get_ctrl(struct nvme_ctrl *ctrl)
-@@ -367,8 +415,10 @@ int nvme_init_identify(struct nvme_ctrl
+@@ -368,8 +420,10 @@ int nvme_init_identify(struct nvme_ctrl
  void nvme_queue_scan(struct nvme_ctrl *ctrl);
  void nvme_remove_namespaces(struct nvme_ctrl *ctrl);
  
@@ -142,7 +153,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  
  void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
  		union nvme_result *res);
-@@ -383,16 +433,27 @@ void nvme_start_freeze(struct nvme_ctrl
+@@ -384,16 +438,27 @@ void nvme_start_freeze(struct nvme_ctrl
  int nvme_reinit_tagset(struct nvme_ctrl *ctrl, struct blk_mq_tag_set *set);
  
  #define NVME_QID_ANY -1
@@ -170,7 +181,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  int nvme_set_queue_count(struct nvme_ctrl *ctrl, int *count);
  void nvme_start_keep_alive(struct nvme_ctrl *ctrl);
  void nvme_stop_keep_alive(struct nvme_ctrl *ctrl);
-@@ -468,12 +529,14 @@ static inline void nvme_mpath_check_last
+@@ -461,12 +526,14 @@ static inline void nvme_mpath_check_last
  }
  #endif /* CONFIG_NVME_MULTIPATH */
  
@@ -186,7 +197,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  #else
  static inline int nvme_nvm_register(struct nvme_ns *ns, char *disk_name,
  				    int node)
-@@ -487,11 +550,13 @@ static inline int nvme_nvm_register_sysf
+@@ -480,11 +547,13 @@ static inline int nvme_nvm_register_sysf
  	return 0;
  }
  static inline void nvme_nvm_unregister_sysfs(struct nvme_ns *ns) {};
@@ -200,7 +211,7 @@ Change-Id: I7d4d628aac4be6550135ff71e002a32265e13aa9
  #endif /* CONFIG_NVM */
  
  static inline struct nvme_ns *nvme_get_ns_from_dev(struct device *dev)
-@@ -503,4 +568,17 @@ bool disk_is_nvme(struct gendisk *disk);
+@@ -496,4 +565,17 @@ bool disk_is_nvme(struct gendisk *disk);
  int __init nvme_core_init(void);
  void nvme_core_exit(void);
  

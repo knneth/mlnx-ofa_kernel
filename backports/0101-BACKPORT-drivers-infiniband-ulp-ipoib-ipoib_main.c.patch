@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
 
 Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
 ---
- drivers/infiniband/ulp/ipoib/ipoib_main.c | 245 ++++++++++++++++++++++++++++--
- 1 file changed, 235 insertions(+), 10 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_main.c | 268 ++++++++++++++++++++++++++++--
+ 1 file changed, 257 insertions(+), 11 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_main.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_main.c
@@ -47,7 +47,30 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  static int ipoib_change_mtu(struct net_device *dev, int new_mtu)
  {
-@@ -292,15 +300,42 @@ static int ipoib_change_mtu(struct net_d
+@@ -274,14 +282,21 @@ static int ipoib_change_mtu(struct net_d
+ 				"link layer MTU - 4 (%u)\n", priv->mcast_mtu);
+ 
+ 	new_mtu = min(priv->mcast_mtu, priv->admin_mtu);
+-
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	if (priv->rn_ops->extended.ndo_change_mtu) {
++#else
+ 	if (priv->rn_ops->ndo_change_mtu) {
++#endif
+ 		bool carrier_status = netif_carrier_ok(dev);
+ 
+ 		netif_carrier_off(dev);
+ 
+ 		/* notify lower level on the real mtu */
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++		ret = priv->rn_ops->extended.ndo_change_mtu(dev, new_mtu);
++#else
+ 		ret = priv->rn_ops->ndo_change_mtu(dev, new_mtu);
++#endif
+ 
+ 		if (carrier_status)
+ 			netif_carrier_on(dev);
+@@ -292,15 +307,42 @@ static int ipoib_change_mtu(struct net_d
  	return ret;
  }
  
@@ -90,7 +113,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  }
  
  /* Called with an RCU read lock taken */
-@@ -319,9 +354,21 @@ static bool ipoib_is_dev_match_addr_rcu(
+@@ -319,9 +361,21 @@ static bool ipoib_is_dev_match_addr_rcu(
  		if (!in_dev)
  			return false;
  
@@ -112,7 +135,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  		in_dev_put(in_dev);
  		if (ret_addr)
  			return true;
-@@ -366,6 +413,7 @@ struct ipoib_walk_data {
+@@ -366,6 +420,7 @@ struct ipoib_walk_data {
  	struct net_device *result;
  };
  
@@ -120,7 +143,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  static int ipoib_upper_walk(struct net_device *upper, void *_data)
  {
  	struct ipoib_walk_data *data = _data;
-@@ -379,6 +427,7 @@ static int ipoib_upper_walk(struct net_d
+@@ -379,6 +434,7 @@ static int ipoib_upper_walk(struct net_d
  
  	return ret;
  }
@@ -128,7 +151,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  /**
   * Find a net_device matching the given address, which is an upper device of
-@@ -395,6 +444,9 @@ static struct net_device *ipoib_get_net_
+@@ -395,6 +451,9 @@ static struct net_device *ipoib_get_net_
  	struct ipoib_walk_data data = {
  		.addr = addr,
  	};
@@ -138,7 +161,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  	rcu_read_lock();
  	if (ipoib_is_dev_match_addr_rcu(addr, dev)) {
-@@ -402,8 +454,18 @@ static struct net_device *ipoib_get_net_
+@@ -402,8 +461,18 @@ static struct net_device *ipoib_get_net_
  		data.result = dev;
  		goto out;
  	}
@@ -158,7 +181,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  out:
  	rcu_read_unlock();
  	return data.result;
-@@ -552,7 +614,11 @@ int ipoib_set_mode(struct net_device *de
+@@ -552,7 +621,11 @@ int ipoib_set_mode(struct net_device *de
  			set_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
  			ipoib_warn(priv, "enabling connected mode "
  				   "will cause multicast packet drops\n");
@@ -170,7 +193,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  			dev_set_mtu(dev, ipoib_cm_max_mtu(dev));
  			rtnl_unlock();
  			priv->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
-@@ -569,7 +635,19 @@ int ipoib_set_mode(struct net_device *de
+@@ -569,7 +642,19 @@ int ipoib_set_mode(struct net_device *de
  
  	if (!strcmp(buf, "datagram\n")) {
  		clear_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
@@ -190,7 +213,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  		dev_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
  		rtnl_unlock();
  		ipoib_flush_paths(dev);
-@@ -730,7 +808,7 @@ static void push_pseudo_header(struct sk
+@@ -730,7 +815,7 @@ static void push_pseudo_header(struct sk
  {
  	struct ipoib_pseudo_header *phdr;
  
@@ -199,7 +222,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  	memcpy(phdr->hwaddr, daddr, INFINIBAND_ALEN);
  }
  
-@@ -1268,7 +1346,13 @@ static int ipoib_hard_header(struct sk_b
+@@ -1268,7 +1353,13 @@ static int ipoib_hard_header(struct sk_b
  {
  	struct ipoib_header *header;
  
@@ -214,7 +237,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  	header->proto = htons(type);
  	header->tss_qpn_mask_sz = 0; /* Needed for RSS support */
-@@ -1295,6 +1379,7 @@ static void ipoib_set_mcast_list(struct
+@@ -1295,6 +1386,7 @@ static void ipoib_set_mcast_list(struct
  	queue_work(priv->wq, &priv->restart_task);
  }
  
@@ -222,7 +245,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  static int ipoib_get_iflink(const struct net_device *dev)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-@@ -1306,6 +1391,76 @@ static int ipoib_get_iflink(const struct
+@@ -1306,6 +1398,76 @@ static int ipoib_get_iflink(const struct
  	/* child/vlan interface */
  	return priv->parent->ifindex;
  }
@@ -299,7 +322,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  static u32 ipoib_addr_hash(struct ipoib_neigh_hash *htbl, u8 *daddr)
  {
-@@ -1782,6 +1937,10 @@ static int ipoib_dev_init_default(struct
+@@ -1782,6 +1944,10 @@ static int ipoib_dev_init_default(struct
  	if (!priv->rx_ring)
  		goto out;
  
@@ -310,7 +333,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  	priv->tx_ring = vzalloc(priv->sendq_size * sizeof *priv->tx_ring);
  	if (!priv->tx_ring) {
  		printk(KERN_WARNING "%s: failed to allocate TX ring (%d entries)\n",
-@@ -1904,9 +2063,15 @@ void ipoib_dev_cleanup(struct net_device
+@@ -1904,9 +2070,15 @@ void ipoib_dev_cleanup(struct net_device
  		/* Stop GC on child */
  		set_bit(IPOIB_STOP_NEIGH_GC, &cpriv->flags);
  		cancel_delayed_work(&cpriv->neigh_reap_task);
@@ -326,7 +349,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  	ipoib_neigh_hash_uninit(dev);
  
-@@ -1920,13 +2085,16 @@ void ipoib_dev_cleanup(struct net_device
+@@ -1920,13 +2092,16 @@ void ipoib_dev_cleanup(struct net_device
  	}
  }
  
@@ -343,7 +366,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  static int ipoib_get_vf_config(struct net_device *dev, int vf,
  			       struct ifla_vf_info *ivf)
  {
-@@ -1941,7 +2109,9 @@ static int ipoib_get_vf_config(struct ne
+@@ -1941,7 +2116,9 @@ static int ipoib_get_vf_config(struct ne
  
  	return 0;
  }
@@ -353,7 +376,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  static int ipoib_set_vf_guid(struct net_device *dev, int vf, u64 guid, int type)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-@@ -1951,7 +2121,9 @@ static int ipoib_set_vf_guid(struct net_
+@@ -1951,7 +2128,9 @@ static int ipoib_set_vf_guid(struct net_
  
  	return ib_set_vf_guid(priv->ca, vf, priv->port, guid, type);
  }
@@ -363,7 +386,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  static int ipoib_get_vf_stats(struct net_device *dev, int vf,
  			      struct ifla_vf_stats *vf_stats)
  {
-@@ -1959,6 +2131,7 @@ static int ipoib_get_vf_stats(struct net
+@@ -1959,6 +2138,7 @@ static int ipoib_get_vf_stats(struct net
  
  	return ib_get_vf_stats(priv->ca, vf, priv->port, vf_stats);
  }
@@ -371,10 +394,15 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  static const struct header_ops ipoib_header_ops = {
  	.create	= ipoib_hard_header,
-@@ -1969,18 +2142,35 @@ static const struct net_device_ops ipoib
+@@ -1968,34 +2148,73 @@ static const struct net_device_ops ipoib
+ 	.ndo_uninit		 = ipoib_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = ipoib_change_mtu,
++#else
  	.ndo_change_mtu		 = ipoib_change_mtu,
++#endif
 +#ifdef HAVE_NDO_FIX_FEATURES
  	.ndo_fix_features	 = ipoib_fix_features,
 +#endif
@@ -406,12 +434,20 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
 +	.ndo_get_stats           = ipoib_get_stats,
 +#endif
  	.ndo_do_ioctl		 = ipoib_ioctl,
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
++#endif
  };
  
-@@ -1989,12 +2179,20 @@ static const struct net_device_ops ipoib
+ static const struct net_device_ops ipoib_netdev_ops_vf = {
+ 	.ndo_uninit		 = ipoib_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = ipoib_change_mtu,
++#else
  	.ndo_change_mtu		 = ipoib_change_mtu,
++#endif
 +#ifdef HAVE_NDO_FIX_FEATURES
  	.ndo_fix_features	 = ipoib_fix_features,
 +#endif
@@ -427,9 +463,13 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
 +	.ndo_get_stats           = ipoib_get_stats,
 +#endif
  	.ndo_do_ioctl		 = ipoib_ioctl,
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
++#endif
  };
  
-@@ -2014,7 +2212,12 @@ void ipoib_setup_common(struct net_devic
+ void ipoib_setup_common(struct net_device *dev)
+@@ -2014,7 +2233,12 @@ void ipoib_setup_common(struct net_devic
  	dev->tx_queue_len	 = ipoib_sendq_size * 2;
  	dev->features		 = (NETIF_F_VLAN_CHALLENGED	|
  				    NETIF_F_HIGHDMA);
@@ -442,7 +482,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  	memcpy(dev->broadcast, ipv4_bcast_addr, INFINIBAND_ALEN);
  }
-@@ -2061,9 +2264,9 @@ static struct net_device
+@@ -2061,9 +2285,9 @@ static struct net_device
  	struct net_device *dev;
  	struct rdma_netdev *rn;
  
@@ -455,7 +495,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  	if (!dev)
  		return NULL;
  
-@@ -2216,6 +2419,7 @@ static void set_base_guid(struct ipoib_d
+@@ -2216,6 +2440,7 @@ static void set_base_guid(struct ipoib_d
  	}
  }
  
@@ -463,7 +503,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  static int ipoib_check_lladdr(struct net_device *dev,
  			      struct sockaddr_storage *ss)
  {
-@@ -2241,9 +2445,13 @@ static int ipoib_set_mac(struct net_devi
+@@ -2241,9 +2466,13 @@ static int ipoib_set_mac(struct net_devi
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct sockaddr_storage *ss = addr;
@@ -478,7 +518,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  		return -EBUSY;
  
  	ret = ipoib_check_lladdr(dev, ss);
-@@ -2256,6 +2464,7 @@ static int ipoib_set_mac(struct net_devi
+@@ -2256,6 +2485,7 @@ static int ipoib_set_mac(struct net_devi
  
  	return 0;
  }
@@ -486,7 +526,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  
  static ssize_t ipoib_set_mac_using_sysfs(struct device *dev,
  					 struct device_attribute *attr,
-@@ -2329,12 +2538,19 @@ void ipoib_set_dev_features(struct ipoib
+@@ -2329,12 +2559,19 @@ void ipoib_set_dev_features(struct ipoib
  	ipoib_get_hca_features(priv, hca);
  
  	if (priv->hca_caps & IB_DEVICE_UD_IP_CSUM) {
@@ -506,7 +546,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  	}
  }
  
-@@ -2371,10 +2587,12 @@ static struct net_device *ipoib_add_port
+@@ -2371,10 +2608,12 @@ static struct net_device *ipoib_add_port
  	/* MTU will be reset when mcast join happens */
  	priv->dev->mtu  = IPOIB_UD_MTU(priv->max_ib_mtu);
  	priv->mcast_mtu  = priv->admin_mtu = priv->dev->mtu;
@@ -521,7 +561,7 @@ Change-Id: Ia0ab0b8a711b22d54b7238cb01cffe0cf210fdf6
  	result = ib_query_pkey(hca, port, 0, &priv->pkey);
  	if (result) {
  		printk(KERN_WARNING "%s: ib_query_pkey port %d failed (ret = %d)\n",
-@@ -2422,6 +2640,13 @@ static struct net_device *ipoib_add_port
+@@ -2422,6 +2661,13 @@ static struct net_device *ipoib_add_port
  		goto register_failed;
  	}
  

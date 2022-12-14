@@ -50,7 +50,8 @@ struct mlx5_exp_ib_create_cq_data {
 	__u32   comp_mask; /* use mlx5_exp_ib_creaet_cq_mask */
 	__u8    cqe_comp_en;
 	__u8    cqe_comp_recv_type; /* use mlx5_exp_cqe_comp_recv_type */
-	__u16	reserved;
+	__u8    as_notify_en;
+	__u8	reserved;
 };
 
 struct mlx5_exp_ib_create_cq {

@@ -22,15 +22,28 @@
 #include "nvmet.h"
 
 #define NVMET_DYNAMIC_STAGING_BUFFER_PAGE_SIZE_MB 1
+#define NVMET_DEFAULT_CMD_TIMEOUT_USEC 30000000
 
 struct nvmet_rdma_xrq;
 struct nvmet_rdma_device;
 struct nvmet_rdma_cmd;
 struct nvmet_rdma_queue queue;
 
+enum nvmet_rdma_offload_ns_counter {
+	NVMET_RDMA_OFFLOAD_NS_READ_CMDS,
+	NVMET_RDMA_OFFLOAD_NS_READ_BLOCKS,
+	NVMET_RDMA_OFFLOAD_NS_WRITE_CMDS,
+	NVMET_RDMA_OFFLOAD_NS_WRITE_BLOCKS,
+	NVMET_RDMA_OFFLOAD_NS_WRITE_INLINE_CMDS,
+	NVMET_RDMA_OFFLOAD_NS_FLUSH_CMDS,
+	NVMET_RDMA_OFFLOAD_NS_ERROR_CMDS,
+	NVMET_RDMA_OFFLOAD_NS_BACKEND_ERROR_CMDS,
+};
+
 struct nvmet_rdma_backend_ctrl {
 	struct ib_nvmf_ctrl	  *ibctrl;
 	struct ib_nvmf_ns	  *ibns;
+	struct nvmet_ns		  *ns;
 	struct pci_dev		  *pdev;
 	struct list_head	  entry;
 	struct nvme_peer_resource *ofl;
@@ -88,9 +101,18 @@ static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl);
 static void nvmet_rdma_destroy_offload_ctrl(struct nvmet_ctrl *ctrl);
 static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl);
 static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl);
-static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *port);
+static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *nport);
 static unsigned int nvmet_rdma_peer_to_peer_sqe_inline_size(struct nvmet_ctrl *ctrl);
-static u8 nvmet_rdma_peer_to_peer_mdts(struct nvmet_port *port);
+static u8 nvmet_rdma_peer_to_peer_mdts(struct nvmet_port *nport);
+static u64 nvmet_rdma_offload_subsys_unknown_ns_cmds(struct nvmet_subsys *subsys);
+static u64 nvmet_rdma_offload_ns_read_cmds(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_read_blocks(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_write_cmds(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_write_blocks(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_write_inline_cmds(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_flush_cmds(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_error_cmds(struct nvmet_ns *ns);
+static u64 nvmet_rdma_offload_ns_backend_error_cmds(struct nvmet_ns *ns);
 static int nvmet_rdma_init_st_pool(struct nvmet_rdma_staging_buf_pool *pool,
 				   unsigned long long mem_start,
 				   unsigned int mem_size,

@@ -35,8 +35,8 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"9pnet_rdma"
-#define DRV_VERSION	"4.3-1.0.1"
-#define DRV_RELDATE	"27 Feb 2018"
+#define DRV_VERSION	"4.3-3.0.2"
+#define DRV_RELDATE	"01 May 2018"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("9pnet_rdma dummy kernel module");

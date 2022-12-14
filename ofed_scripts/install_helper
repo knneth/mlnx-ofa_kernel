@@ -32,6 +32,9 @@ install -d ${DEST_DIR}/etc/infiniband
 if [ ! -s ${DEST_DIR}/etc/infiniband/openib.conf ]; then
 	install -m 0644 ofed_scripts/openib.conf ${DEST_DIR}/etc/infiniband
 fi
+if [ ! -s ${DEST_DIR}/etc/infiniband/mlx5.conf ]; then
+	install -m 0644 ofed_scripts/mlx5.conf ${DEST_DIR}/etc/infiniband
+fi
 
 while read line
 do

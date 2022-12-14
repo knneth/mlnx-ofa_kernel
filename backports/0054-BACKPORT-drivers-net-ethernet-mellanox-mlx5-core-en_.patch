@@ -5,8 +5,8 @@ Subject: [PATCH] BACKPORT:
 Change-Id: I0c6f71995d1fa40f4bbc31f0926500a15961383f
 Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
 ---
- .../net/ethernet/mellanox/mlx5/core/en_ethtool.c   | 735 ++++++++++++++++++++-
- 1 file changed, 732 insertions(+), 3 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_ethtool.c   | 750 ++++++++++++++++++++-
+ 1 file changed, 747 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
@@ -502,7 +502,50 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  	case ETH_SS_TEST:
  		for (i = 0; i < mlx5e_self_test_num(priv); i++)
-@@ -385,6 +843,7 @@ static int mlx5e_set_ringparam(struct ne
+@@ -293,6 +751,7 @@ int mlx5e_ethtool_set_ringparam(struct m
+ 	struct mlx5e_channels new_channels = {};
+ 	u32 rx_pending_wqes;
+ 	u32 min_rq_size;
++	u32 max_rq_size;
+ 	u8 log_rq_size;
+ 	u8 log_sq_size;
+ 	u32 num_mtts;
+@@ -311,6 +770,8 @@ int mlx5e_ethtool_set_ringparam(struct m
+ 
+ 	min_rq_size = mlx5e_rx_wqes_to_packets(priv, rq_wq_type,
+ 					       1 << mlx5_min_log_rq_size(rq_wq_type));
++	max_rq_size = mlx5e_rx_wqes_to_packets(priv, rq_wq_type,
++					       1 << mlx5_max_log_rq_size(rq_wq_type));
+ 	rx_pending_wqes = mlx5e_packets_to_rx_wqes(priv, rq_wq_type,
+ 						   param->rx_pending);
+ 
+@@ -320,6 +781,12 @@ int mlx5e_ethtool_set_ringparam(struct m
+ 			    min_rq_size);
+ 		return -EINVAL;
+ 	}
++	if (param->rx_pending > max_rq_size) {
++		netdev_info(priv->netdev, "%s: rx_pending (%d) > max (%d)\n",
++			    __func__, param->rx_pending,
++			    max_rq_size);
++		return -EINVAL;
++	}
+ 
+ 	num_mtts = MLX5E_REQUIRED_MTTS(rx_pending_wqes);
+ 	if (priv->channels.params.rq_wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ &&
+@@ -335,6 +802,12 @@ int mlx5e_ethtool_set_ringparam(struct m
+ 			    1 << MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE);
+ 		return -EINVAL;
+ 	}
++	if (param->tx_pending > (1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE)) {
++		netdev_info(priv->netdev, "%s: tx_pending (%d) > max (%d)\n",
++			    __func__, param->tx_pending,
++			    1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE);
++		return -EINVAL;
++	}
+ 
+ 	log_rq_size = order_base_2(rx_pending_wqes);
+ 	log_sq_size = order_base_2(param->tx_pending);
+@@ -370,6 +843,7 @@ static int mlx5e_set_ringparam(struct ne
  	return mlx5e_ethtool_set_ringparam(priv, param);
  }
  
@@ -510,7 +553,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
  				struct ethtool_channels *ch)
  {
-@@ -452,7 +911,9 @@ int mlx5e_ethtool_set_channels(struct ml
+@@ -437,7 +911,9 @@ int mlx5e_ethtool_set_channels(struct ml
  #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
  	new_channels.params.num_rl_txqs = ch->other_count;
  #endif
@@ -520,7 +563,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  		mlx5e_build_default_indir_rqt(new_channels.params.indirection_rqt,
  					      MLX5E_INDIR_RQT_SIZE, count);
  
-@@ -491,6 +952,8 @@ static int mlx5e_set_channels(struct net
+@@ -476,6 +952,8 @@ static int mlx5e_set_channels(struct net
  	return mlx5e_ethtool_set_channels(priv, ch);
  }
  
@@ -529,7 +572,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
  			       struct ethtool_coalesce *coal)
  {
-@@ -585,6 +1048,7 @@ static int mlx5e_set_coalesce(struct net
+@@ -570,6 +1048,7 @@ static int mlx5e_set_coalesce(struct net
  	return mlx5e_ethtool_set_coalesce(priv, coal);
  }
  
@@ -537,7 +580,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static void ptys2ethtool_supported_link(unsigned long *supported_modes,
  					u32 eth_proto_cap)
  {
-@@ -595,6 +1059,7 @@ static void ptys2ethtool_supported_link(
+@@ -580,6 +1059,7 @@ static void ptys2ethtool_supported_link(
  		bitmap_or(supported_modes, supported_modes,
  			  ptys2ethtool_table[proto].supported,
  			  __ETHTOOL_LINK_MODE_MASK_NBITS);
@@ -545,7 +588,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  }
  
  static void ptys2ethtool_adver_link(unsigned long *advertising_modes,
-@@ -686,7 +1151,9 @@ static void ptys2ethtool_supported_adver
+@@ -671,7 +1151,9 @@ static void ptys2ethtool_supported_adver
  		break;
  	}
  }
@@ -555,7 +598,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static void get_speed_duplex(struct net_device *netdev,
  			     u32 eth_proto_oper,
  			     struct ethtool_link_ksettings *link_ksettings)
-@@ -847,7 +1314,9 @@ static int mlx5e_get_link_ksettings(stru
+@@ -832,7 +1314,9 @@ static int mlx5e_get_link_ksettings(stru
  err_query_ptys:
  	return err;
  }
@@ -565,7 +608,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static u32 mlx5e_ethtool2ptys_adver_link(const unsigned long *link_modes)
  {
  	u32 i, ptys_modes = 0;
-@@ -861,7 +1330,9 @@ static u32 mlx5e_ethtool2ptys_adver_link
+@@ -846,7 +1330,9 @@ static u32 mlx5e_ethtool2ptys_adver_link
  
  	return ptys_modes;
  }
@@ -575,7 +618,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static int mlx5e_set_link_ksettings(struct net_device *netdev,
  				    const struct ethtool_link_ksettings *link_ksettings)
  {
-@@ -921,7 +1392,9 @@ static int mlx5e_set_link_ksettings(stru
+@@ -906,7 +1392,9 @@ static int mlx5e_set_link_ksettings(stru
  out:
  	return err;
  }
@@ -585,7 +628,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static u32 mlx5e_get_rxfh_key_size(struct net_device *netdev)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -929,13 +1402,26 @@ static u32 mlx5e_get_rxfh_key_size(struc
+@@ -914,13 +1402,26 @@ static u32 mlx5e_get_rxfh_key_size(struc
  	return sizeof(priv->channels.params.toeplitz_hash_key);
  }
  
@@ -612,7 +655,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  
-@@ -943,15 +1429,20 @@ static int mlx5e_get_rxfh(struct net_dev
+@@ -928,15 +1429,20 @@ static int mlx5e_get_rxfh(struct net_dev
  		memcpy(indir, priv->channels.params.indirection_rqt,
  		       sizeof(priv->channels.params.indirection_rqt));
  
@@ -633,7 +676,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  static void mlx5e_modify_tirs_hash(struct mlx5e_priv *priv, void *in, int inlen)
  {
-@@ -983,18 +1474,32 @@ void mlx5e_sysfs_modify_tirs_hash(struct
+@@ -968,18 +1474,32 @@ void mlx5e_sysfs_modify_tirs_hash(struct
  	mlx5e_modify_tirs_hash(priv, in, inlen);
  }
  
@@ -666,7 +709,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  	in = kvzalloc(inlen, GFP_KERNEL);
  	if (!in)
-@@ -1002,11 +1507,13 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -987,11 +1507,13 @@ static int mlx5e_set_rxfh(struct net_dev
  
  	mutex_lock(&priv->state_lock);
  
@@ -680,7 +723,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  	if (indir) {
  		memcpy(priv->channels.params.indirection_rqt, indir,
-@@ -1028,15 +1535,21 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1013,15 +1535,21 @@ static int mlx5e_set_rxfh(struct net_dev
  		}
  	}
  
@@ -702,7 +745,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  	mutex_unlock(&priv->state_lock);
  
-@@ -1044,9 +1557,14 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1029,9 +1557,14 @@ static int mlx5e_set_rxfh(struct net_dev
  
  	return 0;
  }
@@ -717,7 +760,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	int err = 0;
-@@ -1072,6 +1590,7 @@ static int mlx5e_get_rxnfc(struct net_de
+@@ -1057,6 +1590,7 @@ static int mlx5e_get_rxnfc(struct net_de
  	return err;
  }
  
@@ -725,7 +768,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static int mlx5e_get_tunable(struct net_device *dev,
  			     const struct ethtool_tunable *tuna,
  			     void *data)
-@@ -1131,6 +1650,7 @@ static int mlx5e_set_tunable(struct net_
+@@ -1116,6 +1650,7 @@ static int mlx5e_set_tunable(struct net_
  	return err;
  }
  
@@ -733,7 +776,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static void mlx5e_get_pauseparam(struct net_device *netdev,
  				 struct ethtool_pauseparam *pauseparam)
  {
-@@ -1166,20 +1686,23 @@ static int mlx5e_set_pauseparam(struct n
+@@ -1151,20 +1686,23 @@ static int mlx5e_set_pauseparam(struct n
  
  	return err;
  }
@@ -759,7 +802,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	if (!MLX5_CAP_GEN(priv->mdev, device_frequency_khz))
  		return 0;
  
-@@ -1203,7 +1726,7 @@ static int mlx5e_get_ts_info(struct net_
+@@ -1188,7 +1726,7 @@ static int mlx5e_get_ts_info(struct net_
  
  	return mlx5e_ethtool_get_ts_info(priv, info);
  }
@@ -768,7 +811,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static __u32 mlx5e_get_wol_supported(struct mlx5_core_dev *mdev)
  {
  	__u32 ret = 0;
-@@ -1327,6 +1850,7 @@ static int mlx5e_set_wol(struct net_devi
+@@ -1312,6 +1850,7 @@ static int mlx5e_set_wol(struct net_devi
  	return mlx5_set_port_wol(mdev, mlx5_wol_mode);
  }
  
@@ -776,7 +819,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static u32 mlx5e_get_msglevel(struct net_device *dev)
  {
  	return ((struct mlx5e_priv *)netdev_priv(dev))->msglevel;
-@@ -1336,7 +1860,9 @@ static void mlx5e_set_msglevel(struct ne
+@@ -1321,7 +1860,9 @@ static void mlx5e_set_msglevel(struct ne
  {
  	((struct mlx5e_priv *)netdev_priv(dev))->msglevel = val;
  }
@@ -786,7 +829,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static int mlx5e_set_phys_id(struct net_device *dev,
  			     enum ethtool_phys_id_state state)
  {
-@@ -1360,7 +1886,9 @@ static int mlx5e_set_phys_id(struct net_
+@@ -1345,7 +1886,9 @@ static int mlx5e_set_phys_id(struct net_
  
  	return mlx5_set_port_beacon(mdev, beacon_duration);
  }
@@ -796,7 +839,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static int mlx5e_get_module_info(struct net_device *netdev,
  				 struct ethtool_modinfo *modinfo)
  {
-@@ -1438,6 +1966,7 @@ static int mlx5e_get_module_eeprom(struc
+@@ -1423,6 +1966,7 @@ static int mlx5e_get_module_eeprom(struc
  
  	return 0;
  }
@@ -804,7 +847,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  typedef int (*mlx5e_pflag_handler)(struct net_device *netdev, bool enable);
  
-@@ -1450,6 +1979,39 @@ static int set_pflag_sniffer(struct net_
+@@ -1435,6 +1979,39 @@ static int set_pflag_sniffer(struct net_
  	return mlx5e_sniffer_stop(priv);
  }
  
@@ -844,7 +887,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static int set_pflag_cqe_based_moder(struct net_device *netdev, bool enable,
  				     bool is_rx_cq)
  {
-@@ -1605,6 +2167,7 @@ static int mlx5e_handle_pflag(struct net
+@@ -1590,6 +2167,7 @@ static int mlx5e_handle_pflag(struct net
  	return 0;
  }
  
@@ -852,7 +895,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  static int mlx5e_set_priv_flags(struct net_device *netdev, u32 pflags)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -1623,6 +2186,14 @@ static int mlx5e_set_priv_flags(struct n
+@@ -1608,6 +2186,14 @@ static int mlx5e_set_priv_flags(struct n
  	if (err)
  		goto out;
  
@@ -867,7 +910,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  	err = mlx5e_handle_pflag(netdev, pflags,
  				 MLX5E_PFLAG_RX_CQE_COMPRESS,
  				 set_pflag_rx_cqe_compress);
-@@ -1654,6 +2225,86 @@ static u32 mlx5e_get_priv_flags(struct n
+@@ -1639,6 +2225,86 @@ static u32 mlx5e_get_priv_flags(struct n
  
  	return priv->channels.params.pflags;
  }
@@ -954,7 +997,7 @@ Signed-off-by: Eugenia Emantayev <eugenia@mellanox.com>
  
  static int mlx5e_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
  {
-@@ -1717,37 +2368,115 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -1702,37 +2368,115 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.get_ethtool_stats = mlx5e_get_ethtool_stats,
  	.get_ringparam     = mlx5e_get_ringparam,
  	.set_ringparam     = mlx5e_set_ringparam,

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
 
 Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
 ---
- drivers/net/ethernet/mellanox/mlx4/en_ethtool.c | 886 +++++++++++++++++++++++-
- 1 file changed, 880 insertions(+), 6 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/en_ethtool.c | 903 +++++++++++++++++++++++-
+ 1 file changed, 884 insertions(+), 19 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
@@ -461,14 +461,14 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
 +{
 +	int i;
 +	u32 link_modes = 0;
-+
+ 
 +	for (i = 0; i < MLX4_LINK_MODES_SZ; i++) {
 +		if (eth_proto & MLX4_PROT_MASK(i))
 +			link_modes |= deprecated_ptys2ethtool_map[i][report];
 +	}
 +	return link_modes;
 +}
- 
++
 +#ifdef HAVE_ETHTOOL_xLINKSETTINGS
  static u32 ethtool2ptys_link_modes(const unsigned long *link_modes,
  				   enum ethtool_report report)
@@ -750,7 +750,33 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  static int mlx4_en_get_coalesce(struct net_device *dev,
  			      struct ethtool_coalesce *coal)
-@@ -1211,7 +1784,11 @@ static int mlx4_en_set_ringparam(struct
+@@ -1191,21 +1764,12 @@ static int mlx4_en_set_ringparam(struct
+ 	if (param->rx_jumbo_pending || param->rx_mini_pending)
+ 		return -EINVAL;
+ 
+-	if (param->rx_pending < MLX4_EN_MIN_RX_SIZE) {
+-		en_warn(priv, "%s: rx_pending (%d) < min (%d)\n",
+-			__func__, param->rx_pending,
+-			MLX4_EN_MIN_RX_SIZE);
+-		return -EINVAL;
+-	}
+-	if (param->tx_pending < MLX4_EN_MIN_TX_SIZE) {
+-		en_warn(priv, "%s: tx_pending (%d) < min (%lu)\n",
+-			__func__, param->tx_pending,
+-			MLX4_EN_MIN_TX_SIZE);
+-		return -EINVAL;
+-	}
+-
+ 	rx_size = roundup_pow_of_two(param->rx_pending);
++	rx_size = max_t(u32, rx_size, MLX4_EN_MIN_RX_SIZE);
++	rx_size = min_t(u32, rx_size, MLX4_EN_MAX_RX_SIZE);
+ 	tx_size = roundup_pow_of_two(param->tx_pending);
++	tx_size = max_t(u32, tx_size, MLX4_EN_MIN_TX_SIZE);
++	tx_size = min_t(u32, tx_size, MLX4_EN_MAX_TX_SIZE);
+ 
+ 	if (rx_size == (priv->port_up ? priv->rx_ring[0]->actual_size :
+ 					priv->rx_ring[0]->size) &&
+@@ -1220,7 +1784,11 @@ static int mlx4_en_set_ringparam(struct
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	new_prof.tx_ring_size = tx_size;
  	new_prof.rx_ring_size = rx_size;
@@ -762,7 +788,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  	if (err)
  		goto out;
  
-@@ -1248,18 +1825,27 @@ static void mlx4_en_get_ringparam(struct
+@@ -1257,18 +1825,27 @@ static void mlx4_en_get_ringparam(struct
  	param->tx_pending = priv->tx_ring[TX][0]->size;
  }
  
@@ -790,7 +816,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  static int mlx4_en_check_rxfh_func(struct net_device *dev, u8 hfunc)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1281,9 +1867,19 @@ static int mlx4_en_check_rxfh_func(struc
+@@ -1290,9 +1867,19 @@ static int mlx4_en_check_rxfh_func(struc
  
  	return -EINVAL;
  }
@@ -811,7 +837,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
  	u32 n = mlx4_en_get_rxfh_indir_size(dev);
-@@ -1298,15 +1894,30 @@ static int mlx4_en_get_rxfh(struct net_d
+@@ -1307,15 +1894,30 @@ static int mlx4_en_get_rxfh(struct net_d
  			break;
  		ring_index[i] = i % rss_rings;
  	}
@@ -842,7 +868,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
  	u32 n = mlx4_en_get_rxfh_indir_size(dev);
-@@ -1336,11 +1947,13 @@ static int mlx4_en_set_rxfh(struct net_d
+@@ -1345,11 +1947,13 @@ static int mlx4_en_set_rxfh(struct net_d
  	if (!is_power_of_2(rss_rings))
  		return -EINVAL;
  
@@ -856,7 +882,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	mutex_lock(&mdev->state_lock);
  	if (priv->port_up) {
-@@ -1350,10 +1963,14 @@ static int mlx4_en_set_rxfh(struct net_d
+@@ -1359,10 +1963,14 @@ static int mlx4_en_set_rxfh(struct net_d
  
  	if (ring_index)
  		priv->prof->rss_rings = rss_rings;
@@ -871,7 +897,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	if (port_up) {
  		err = mlx4_en_start_port(dev);
-@@ -1369,7 +1986,11 @@ static int mlx4_en_set_rxfh(struct net_d
+@@ -1378,7 +1986,11 @@ static int mlx4_en_set_rxfh(struct net_d
  	((field) == 0 || (field) == (__force typeof(field))-1)
  
  static int mlx4_en_validate_flow(struct net_device *dev,
@@ -883,7 +909,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  {
  	struct ethtool_usrip4_spec *l3_mask;
  	struct ethtool_tcpip4_spec *l4_mask;
-@@ -1378,11 +1999,13 @@ static int mlx4_en_validate_flow(struct
+@@ -1387,11 +1999,13 @@ static int mlx4_en_validate_flow(struct
  	if (cmd->fs.location >= MAX_NUM_OF_FS_RULES)
  		return -EINVAL;
  
@@ -897,7 +923,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	switch (cmd->fs.flow_type & ~(FLOW_EXT | FLOW_MAC_EXT)) {
  	case TCP_V4_FLOW:
-@@ -1423,6 +2046,7 @@ static int mlx4_en_validate_flow(struct
+@@ -1432,6 +2046,7 @@ static int mlx4_en_validate_flow(struct
  		return -EINVAL;
  	}
  
@@ -905,7 +931,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  	if ((cmd->fs.flow_type & FLOW_EXT)) {
  		if (cmd->fs.m_ext.vlan_etype ||
  		    !((cmd->fs.m_ext.vlan_tci & cpu_to_be16(VLAN_VID_MASK)) ==
-@@ -1437,11 +2061,16 @@ static int mlx4_en_validate_flow(struct
+@@ -1446,11 +2061,16 @@ static int mlx4_en_validate_flow(struct
  
  		}
  	}
@@ -922,7 +948,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  					struct list_head *rule_list_h,
  					struct mlx4_spec_list *spec_l2,
  					unsigned char *mac)
-@@ -1453,11 +2082,13 @@ static int mlx4_en_ethtool_add_mac_rule(
+@@ -1462,11 +2082,13 @@ static int mlx4_en_ethtool_add_mac_rule(
  	memcpy(spec_l2->eth.dst_mac_msk, &mac_msk, ETH_ALEN);
  	memcpy(spec_l2->eth.dst_mac, mac, ETH_ALEN);
  
@@ -936,7 +962,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	list_add_tail(&spec_l2->list, rule_list_h);
  
-@@ -1465,7 +2096,11 @@ static int mlx4_en_ethtool_add_mac_rule(
+@@ -1474,7 +2096,11 @@ static int mlx4_en_ethtool_add_mac_rule(
  }
  
  static int mlx4_en_ethtool_add_mac_rule_by_ipv4(struct mlx4_en_priv *priv,
@@ -948,7 +974,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  						struct list_head *rule_list_h,
  						struct mlx4_spec_list *spec_l2,
  						__be32 ipv4_dst)
-@@ -1474,9 +2109,11 @@ static int mlx4_en_ethtool_add_mac_rule_
+@@ -1483,9 +2109,11 @@ static int mlx4_en_ethtool_add_mac_rule_
  	unsigned char mac[ETH_ALEN];
  
  	if (!ipv4_is_multicast(ipv4_dst)) {
@@ -960,7 +986,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  			memcpy(&mac, priv->dev->dev_addr, ETH_ALEN);
  	} else {
  		ip_eth_mc_map(ipv4_dst, mac);
-@@ -1489,7 +2126,11 @@ static int mlx4_en_ethtool_add_mac_rule_
+@@ -1498,7 +2126,11 @@ static int mlx4_en_ethtool_add_mac_rule_
  }
  
  static int add_ip_rule(struct mlx4_en_priv *priv,
@@ -972,7 +998,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  		       struct list_head *list_h)
  {
  	int err;
-@@ -1527,7 +2168,11 @@ free_spec:
+@@ -1536,7 +2168,11 @@ free_spec:
  }
  
  static int add_tcp_udp_rule(struct mlx4_en_priv *priv,
@@ -984,7 +1010,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  			     struct list_head *list_h, int proto)
  {
  	int err;
-@@ -1595,7 +2240,11 @@ free_spec:
+@@ -1604,7 +2240,11 @@ free_spec:
  }
  
  static int mlx4_en_ethtool_to_net_trans_rule(struct net_device *dev,
@@ -996,7 +1022,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  					     struct list_head *rule_list_h)
  {
  	int err;
-@@ -1635,7 +2284,11 @@ static int mlx4_en_ethtool_to_net_trans_
+@@ -1644,7 +2284,11 @@ static int mlx4_en_ethtool_to_net_trans_
  }
  
  static int mlx4_en_flow_replace(struct net_device *dev,
@@ -1008,7 +1034,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  {
  	int err;
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1711,7 +2364,11 @@ out_free_list:
+@@ -1720,7 +2364,11 @@ out_free_list:
  }
  
  static int mlx4_en_flow_detach(struct net_device *dev,
@@ -1020,7 +1046,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  {
  	int err = 0;
  	struct ethtool_flow_id *rule;
-@@ -1740,7 +2397,12 @@ out:
+@@ -1749,7 +2397,12 @@ out:
  
  }
  
@@ -1033,7 +1059,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  			    int loc)
  {
  	int err = 0;
-@@ -1772,13 +2434,24 @@ static int mlx4_en_get_num_flows(struct
+@@ -1781,13 +2434,24 @@ static int mlx4_en_get_num_flows(struct
  
  }
  
@@ -1058,7 +1084,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	if ((cmd->cmd == ETHTOOL_GRXCLSRLCNT ||
  	     cmd->cmd == ETHTOOL_GRXCLSRULE ||
-@@ -1801,7 +2474,11 @@ static int mlx4_en_get_rxnfc(struct net_
+@@ -1810,7 +2474,11 @@ static int mlx4_en_get_rxnfc(struct net_
  		while ((!err || err == -ENOENT) && priority < cmd->rule_cnt) {
  			err = mlx4_en_get_flow(dev, cmd, i);
  			if (!err)
@@ -1070,7 +1096,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  			i++;
  		}
  		err = 0;
-@@ -1814,11 +2491,18 @@ static int mlx4_en_get_rxnfc(struct net_
+@@ -1823,11 +2491,18 @@ static int mlx4_en_get_rxnfc(struct net_
  	return err;
  }
  
@@ -1089,7 +1115,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	if (mdev->dev->caps.steering_mode !=
  	    MLX4_STEERING_MODE_DEVICE_MANAGED || !priv->port_up)
-@@ -1843,8 +2527,11 @@ static int mlx4_en_get_max_num_rx_rings(
+@@ -1852,8 +2527,11 @@ static int mlx4_en_get_max_num_rx_rings(
  {
  	return min_t(int, num_online_cpus(), MAX_RX_RINGS);
  }
@@ -1102,7 +1128,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  				 struct ethtool_channels *channel)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1859,7 +2546,11 @@ static void mlx4_en_get_channels(struct
+@@ -1868,7 +2546,11 @@ static void mlx4_en_get_channels(struct
  			    priv->prof->num_up;
  }
  
@@ -1114,7 +1140,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  				struct ethtool_channels *channel)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
-@@ -1902,7 +2593,11 @@ static int mlx4_en_set_channels(struct n
+@@ -1911,7 +2593,11 @@ static int mlx4_en_set_channels(struct n
  	new_prof.tx_ring_num[TX_XDP] = xdp_count;
  	new_prof.rx_ring_num = channel->rx_count;
  
@@ -1126,7 +1152,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  	if (err)
  		goto out;
  
-@@ -1935,6 +2630,7 @@ out:
+@@ -1944,6 +2630,7 @@ out:
  	return err;
  }
  
@@ -1134,7 +1160,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  static int mlx4_en_get_ts_info(struct net_device *dev,
  			       struct ethtool_ts_info *info)
  {
-@@ -1960,12 +2656,15 @@ static int mlx4_en_get_ts_info(struct ne
+@@ -1969,12 +2656,15 @@ static int mlx4_en_get_ts_info(struct ne
  			(1 << HWTSTAMP_FILTER_NONE) |
  			(1 << HWTSTAMP_FILTER_ALL);
  
@@ -1150,7 +1176,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  static int mlx4_en_set_inline_scatter_thold(struct net_device *dev, int thold)
  {
-@@ -2008,7 +2707,11 @@ static int mlx4_en_set_inline_scatter_th
+@@ -2017,7 +2707,11 @@ static int mlx4_en_set_inline_scatter_th
  	mutex_lock(&mdev->state_lock);
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	new_prof.inline_scatter_thold = thold;
@@ -1162,7 +1188,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  	if (err) {
  		en_err(priv, "Failed allocating port resources\n");
  		goto out;
-@@ -2044,12 +2747,18 @@ static int mlx4_en_set_priv_flags(struct
+@@ -2053,12 +2747,18 @@ static int mlx4_en_set_priv_flags(struct
  	bool phv_enabled_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_PHV);
  	bool is_enabled_new = !!(flags & MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
  	bool is_enabled_old = !!(priv->pflags & MLX4_EN_PRIV_FLAGS_INLINE_SCATTER);
@@ -1181,7 +1207,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  	int i;
  	int ret = 0;
  
-@@ -2061,6 +2770,39 @@ static int mlx4_en_set_priv_flags(struct
+@@ -2070,6 +2770,39 @@ static int mlx4_en_set_priv_flags(struct
  		return -EINVAL;
  
  
@@ -1221,7 +1247,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  #ifdef CONFIG_MLX4_EN_DCB
  	if (qcn_disable_new != qcn_disable_old) {
  		ret = mlx4_disable_32_14_4_e_write(mdev->dev, qcn_disable_new,
-@@ -2079,6 +2821,67 @@ static int mlx4_en_set_priv_flags(struct
+@@ -2088,6 +2821,67 @@ static int mlx4_en_set_priv_flags(struct
  			qcn_disable_new ? "ON" : "OFF");
  	}
  #endif
@@ -1289,7 +1315,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  
  	if (ld_new != ld_old) {
  		if (!(mdev->dev->caps.flags2 &
-@@ -2170,6 +2973,7 @@ static u32 mlx4_en_get_priv_flags(struct
+@@ -2179,6 +2973,7 @@ static u32 mlx4_en_get_priv_flags(struct
  	return priv->pflags;
  }
  
@@ -1297,7 +1323,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  static int mlx4_en_get_tunable(struct net_device *dev,
  			       const struct ethtool_tunable *tuna,
  			       void *data)
-@@ -2218,7 +3022,9 @@ static int mlx4_en_set_tunable(struct ne
+@@ -2227,7 +3022,9 @@ static int mlx4_en_set_tunable(struct ne
  
  	return ret;
  }
@@ -1307,7 +1333,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  static int mlx4_en_get_module_info(struct net_device *dev,
  				   struct ethtool_modinfo *modinfo)
  {
-@@ -2299,7 +3105,9 @@ static int mlx4_en_get_module_eeprom(str
+@@ -2308,7 +3105,9 @@ static int mlx4_en_get_module_eeprom(str
  	}
  	return 0;
  }
@@ -1317,7 +1343,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  static int mlx4_en_set_phys_id(struct net_device *dev,
  			       enum ethtool_phys_id_state state)
  {
-@@ -2325,17 +3133,46 @@ static int mlx4_en_set_phys_id(struct ne
+@@ -2334,17 +3133,46 @@ static int mlx4_en_set_phys_id(struct ne
  	err = mlx4_SET_PORT_BEACON(mdev->dev, priv->port, beacon_duration);
  	return err;
  }
@@ -1364,7 +1390,7 @@ Change-Id: I451e13b65d7c1a84f7a99292ce85bd3a1247a11c
  	.get_wol = mlx4_en_get_wol,
  	.set_wol = mlx4_en_set_wol,
  	.get_msglevel = mlx4_en_get_msglevel,
-@@ -2348,22 +3185,59 @@ const struct ethtool_ops mlx4_en_ethtool
+@@ -2357,22 +3185,59 @@ const struct ethtool_ops mlx4_en_ethtool
  	.set_ringparam = mlx4_en_set_ringparam,
  	.get_rxnfc = mlx4_en_get_rxnfc,
  	.set_rxnfc = mlx4_en_set_rxnfc,

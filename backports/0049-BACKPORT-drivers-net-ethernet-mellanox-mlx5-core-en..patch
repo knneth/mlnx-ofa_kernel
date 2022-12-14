@@ -14,7 +14,7 @@ Change-Id: I77de234c29594710d4717e17530f9cca797d46d4
  #include <linux/timecounter.h>
 +#include <linux/clocksource.h>
  #include <linux/net_tstamp.h>
-+#if defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_TC_FLOWER_OFFLOAD)
++#if defined(HAVE_NDO_SET_TX_MAXRATE) || defined (HAVE_NDO_SET_TX_MAXRATE_EXTENDED) || defined(HAVE_TC_FLOWER_OFFLOAD)
  #include <linux/hashtable.h>
 +#endif
 +#if defined (HAVE_PTP_CLOCK_INFO) && (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
@@ -111,7 +111,7 @@ Change-Id: I77de234c29594710d4717e17530f9cca797d46d4
  };
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-+#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && defined(HAVE_NDO_SET_TX_MAXRATE)
++#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined (HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  struct mlx5e_sq_flow_map {
  	struct hlist_node hlist;
  	u32               dst_ip;
@@ -120,7 +120,7 @@ Change-Id: I77de234c29594710d4717e17530f9cca797d46d4
  	} recover;
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-+#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && defined(HAVE_NDO_SET_TX_MAXRATE)
++#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined (HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  	struct mlx5e_sq_flow_map   flow_map;
  #endif
  } ____cacheline_aligned_in_smp;
@@ -243,7 +243,7 @@ Change-Id: I77de234c29594710d4717e17530f9cca797d46d4
  	struct mlx5e_txqsq *txq2sq[MLX5E_MAX_NUM_CHANNELS * MLX5E_MAX_NUM_TC + MLX5E_MAX_RL_QUEUES];
  	int channel_tc2txq[MLX5E_MAX_NUM_CHANNELS][MLX5E_MAX_NUM_TC];
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-+#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && defined(HAVE_NDO_SET_TX_MAXRATE)
++#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined (HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  	DECLARE_HASHTABLE(flow_map_hash, ilog2(MLX5E_MAX_RL_QUEUES));
  #endif
 -#ifdef CONFIG_MLX5_CORE_EN_DCB
@@ -294,12 +294,12 @@ Change-Id: I77de234c29594710d4717e17530f9cca797d46d4
  void mlx5e_sysfs_remove(struct net_device *dev);
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-+#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && defined(HAVE_NDO_SET_TX_MAXRATE)
++#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined (HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  int mlx5e_rl_init_sysfs(struct net_device *netdev, struct mlx5e_params params);
  void mlx5e_rl_remove_sysfs(struct mlx5e_priv *priv);
  #endif
  
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  int mlx5e_setup_tc_mqprio(struct net_device *netdev,
  			  struct tc_mqprio_qopt *mqprio);
 +#else

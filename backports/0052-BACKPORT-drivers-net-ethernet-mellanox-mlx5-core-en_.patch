@@ -73,7 +73,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  
  static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
  {
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
 +#endif
  	int err;
@@ -83,7 +83,7 @@ Change-Id: Ie1cef8d8ba6d73473ba63da66446420731f78131
  
  	/* In DSCP trust state, we need 8 send queues per channel */
  	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  		mlx5e_setup_tc_mqprio(priv->netdev, &mqprio);
 +#else
 +		mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);

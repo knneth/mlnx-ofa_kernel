@@ -146,10 +146,10 @@ Change-Id: Ifbf8dff865e5c385766dae8b2144401945d51a3f
  int mlx5e_add_sqs_fwd_rules(struct mlx5e_priv *priv);
  void mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv);
  
-+#ifdef HAVE_NDO_GET_OFFLOAD_STATS
++#if defined(HAVE_NDO_GET_OFFLOAD_STATS) || defined(HAVE_NDO_GET_OFFLOAD_STATS_EXTENDED)
  int mlx5e_get_offload_stats(int attr_id, const struct net_device *dev, void *sp);
 +#endif
-+#ifdef NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE
++#if defined(NDO_HAS_OFFLOAD_STATS_GETS_NET_DEVICE) || defined(HAVE_NDO_HAS_OFFLOAD_STATS_EXTENDED)
  bool mlx5e_has_offload_stats(const struct net_device *dev, int attr_id);
 +#endif
  

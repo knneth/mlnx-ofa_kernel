@@ -69,7 +69,7 @@ Change-Id: Ia7a7b7cbe5bbefd26a213bdf5d2118ddd7c3b74b
  
  err:
  	mutex_unlock(&file->mutex);
-@@ -484,7 +498,11 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -486,7 +500,11 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  	struct ib_udata			udata;
  	struct ib_uxrcd_object         *obj;
  	struct ib_xrcd                 *xrcd = NULL;
@@ -81,7 +81,7 @@ Change-Id: Ia7a7b7cbe5bbefd26a213bdf5d2118ddd7c3b74b
  	struct inode                   *inode = NULL;
  	int				ret = 0;
  	int				new_xrcd = 0;
-@@ -503,6 +521,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -505,6 +523,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  	mutex_lock(&file->device->xrcd_tree_mutex);
  
  	if (cmd.fd != -1) {
@@ -89,7 +89,7 @@ Change-Id: Ia7a7b7cbe5bbefd26a213bdf5d2118ddd7c3b74b
  		/* search for file descriptor */
  		f = fdget(cmd.fd);
  		if (!f.file) {
-@@ -511,6 +530,19 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -513,6 +532,19 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  		}
  
  		inode = file_inode(f.file);
@@ -109,7 +109,7 @@ Change-Id: Ia7a7b7cbe5bbefd26a213bdf5d2118ddd7c3b74b
  		xrcd = find_xrcd(file->device, inode);
  		if (!xrcd && !(cmd.oflags & O_CREAT)) {
  			/* no file descriptor. Need CREATE flag */
-@@ -566,8 +598,13 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
+@@ -568,8 +600,13 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uv
  		goto err_copy;
  	}
  
@@ -123,7 +123,7 @@ Change-Id: Ia7a7b7cbe5bbefd26a213bdf5d2118ddd7c3b74b
  
  	uobj_alloc_commit(&obj->uobject);
  
-@@ -588,8 +625,13 @@ err:
+@@ -590,8 +627,13 @@ err:
  	uobj_alloc_abort(&obj->uobject);
  
  err_tree_mutex_unlock:

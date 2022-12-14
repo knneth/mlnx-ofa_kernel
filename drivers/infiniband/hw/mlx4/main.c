@@ -62,7 +62,7 @@
 #include <rdma/mlx4-abi.h>
 
 #define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"4.3-1.0.1"
+#define DRV_VERSION	"4.3-3.0.2"
 
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF
@@ -544,14 +544,19 @@ int mlx4_ib_query_device(struct ib_device *ibdev,
 	props->timestamp_mask = 0xFFFFFFFFFFFFULL;
 	props->max_ah = INT_MAX;
 
-	if ((dev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_RSS) &&
-	    (mlx4_ib_port_link_layer(ibdev, 1) == IB_LINK_LAYER_ETHERNET ||
-	     mlx4_ib_port_link_layer(ibdev, 2) == IB_LINK_LAYER_ETHERNET)) {
-		props->rss_caps.max_rwq_indirection_tables = props->max_qp;
-		props->rss_caps.max_rwq_indirection_table_size =
-			dev->dev->caps.max_rss_tbl_sz;
-		props->rss_caps.supported_qpts = 1 << IB_QPT_RAW_PACKET;
-		props->max_wq_type_rq = props->max_qp;
+	if (mlx4_ib_port_link_layer(ibdev, 1) == IB_LINK_LAYER_ETHERNET ||
+	    mlx4_ib_port_link_layer(ibdev, 2) == IB_LINK_LAYER_ETHERNET) {
+		if (dev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_RSS) {
+			props->rss_caps.max_rwq_indirection_tables =
+				props->max_qp;
+			props->rss_caps.max_rwq_indirection_table_size =
+				dev->dev->caps.max_rss_tbl_sz;
+			props->rss_caps.supported_qpts = 1 << IB_QPT_RAW_PACKET;
+			props->max_wq_type_rq = props->max_qp;
+		}
+
+		if (dev->dev->caps.flags & MLX4_DEV_CAP_FLAG_FCS_KEEP)
+			props->raw_packet_caps |= IB_RAW_PACKET_CAP_SCATTER_FCS;
 	}
 
 	props->cq_caps.max_cq_moderation_count = MLX4_MAX_CQ_COUNT;
@@ -1359,7 +1364,7 @@ static struct ib_pd *mlx4_ib_alloc_pd(struct ib_device *ibdev,
 	struct mlx4_ib_pd *pd;
 	int err;
 
-	pd = kmalloc(sizeof *pd, GFP_KERNEL);
+	pd = kzalloc(sizeof(*pd), GFP_KERNEL);
 	if (!pd)
 		return ERR_PTR(-ENOMEM);
 
@@ -1375,7 +1380,6 @@ static struct ib_pd *mlx4_ib_alloc_pd(struct ib_device *ibdev,
 			kfree(pd);
 			return ERR_PTR(-EFAULT);
 		}
-
 	return &pd->ibpd;
 }
 

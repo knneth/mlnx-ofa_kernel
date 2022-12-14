@@ -39,8 +39,8 @@
 
 #include "mlx5_core.h"
 
-static struct mlx5_core_rsc_common *mlx5_get_rsc(struct mlx5_core_dev *dev,
-						 u32 rsn)
+struct mlx5_core_rsc_common *mlx5_core_get_rsc(struct mlx5_core_dev *dev,
+					       u32 rsn)
 {
 	struct mlx5_qp_table *table = &dev->priv.qp_table;
 	struct mlx5_core_rsc_common *common;
@@ -118,7 +118,7 @@ static bool is_event_type_allowed(int rsc_type, int event_type)
 
 int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_info)
 {
-	struct mlx5_core_rsc_common *common = mlx5_get_rsc(dev, rsn);
+	struct mlx5_core_rsc_common *common = mlx5_core_get_rsc(dev, rsn);
 	struct mlx5_core_dct *dct;
 	struct mlx5_core_qp *qp;
 	int event_type = event_info & 0xff;
@@ -129,6 +129,7 @@ int mlx5_rsc_event(struct mlx5_core_dev *dev, u32 rsn, int event_info)
 	if (!is_event_type_allowed((rsn >> MLX5_USER_INDEX_LEN), event_type)) {
 		mlx5_core_warn(dev, "event 0x%.2x is not allowed on resource 0x%.8x\n",
 			       event_type, rsn);
+		mlx5_core_put_rsc(common);
 		return -1;
 	}
 

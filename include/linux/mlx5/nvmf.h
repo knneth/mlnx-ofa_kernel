@@ -42,6 +42,7 @@ struct mlx5_be_ctrl_attr {
 	u8	sq_log_page_size;
 	u16	initial_cqh_db_value;
 	u16	initial_sqt_db_value;
+	u8	log_cmd_timeout_us;
 	u64	cqh_dbr_addr;
 	u64	sqt_dbr_addr;
 	u64	cq_pas;
@@ -63,10 +64,22 @@ struct mlx5_core_nvmf_be_ctrl {
 	struct list_head	entry;
 };
 
+struct mlx5_core_nvmf_ns_counters {
+	u64 num_read_cmd;
+	u64 num_read_blocks;
+	u64 num_write_cmd;
+	u64 num_write_blocks;
+	u64 num_write_inline_cmd;
+	u64 num_flush_cmd;
+	u64 num_error_cmd;
+	u64 num_backend_error_cmd;
+};
+
 struct mlx5_core_nvmf_ns {
-	u32			frontend_nsid;
-	u32			backend_nsid;
-	struct list_head	entry;
+	u32 frontend_nsid;
+	u32 backend_nsid;
+	struct list_head entry;
+	struct mlx5_core_nvmf_ns_counters counters;
 };
 
 int mlx5_core_create_nvmf_backend_ctrl(struct mlx5_core_dev *dev,
@@ -88,5 +101,9 @@ int mlx5_core_detach_nvmf_ns(struct mlx5_core_dev *dev,
 			     struct mlx5_core_srq *srq,
 			     struct mlx5_core_nvmf_be_ctrl *ctrl,
 			     struct mlx5_core_nvmf_ns *ns);
+
+int mlx5_core_query_nvmf_ns(struct mlx5_core_dev *dev,
+			    struct mlx5_core_srq *srq,
+			    struct mlx5_core_nvmf_ns *ns);
 
 #endif /* MLX5_NVMF_H */

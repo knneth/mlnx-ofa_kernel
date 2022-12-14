@@ -592,6 +592,12 @@ static int query_xrq_cmd(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 		MLX5_GET(xrqc, xrqc,
 			 tag_matching_topology_context.sw_phase_cnt);
 
+	if (MLX5_CAP_NVMF(dev, cmd_unknown_namespace_cnt)) {
+		out->nvmf.cmd_unknown_namespace_cnt =
+			MLX5_GET(xrqc, xrqc,
+				 nvme_offload_context.cmd_unknown_namespace_cnt);
+	}
+
 out:
 	kvfree(xrq_out);
 	return err;

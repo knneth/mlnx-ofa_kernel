@@ -1,7 +1,7 @@
-From: Alaa Hleihel <alaa@mellanox.com>
+From: Leon Romanovsky <leonro@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
 
-Change-Id: Iaf67f0b95c7555a866004d78c5e2a238cddc2910
+Change-Id: I08d3f9d4adf1859c4acfa440001e3b3da1190994
 ---
  drivers/infiniband/core/core_priv.h | 42 +++++++++++++++++++++++++++++++++++++
  1 file changed, 42 insertions(+)
@@ -15,8 +15,8 @@ Change-Id: Iaf67f0b95c7555a866004d78c5e2a238cddc2910
 +#include <rdma/ib_addr.h>
  #include <rdma/opa_addr.h>
  #include <rdma/ib_mad.h>
- #include "mad_priv.h"
-@@ -147,6 +148,7 @@ int ib_cache_setup_one(struct ib_device
+ #include <rdma/restrack.h>
+@@ -148,6 +149,7 @@ int ib_cache_setup_one(struct ib_device
  void ib_cache_cleanup_one(struct ib_device *device);
  void ib_cache_release_one(struct ib_device *device);
  
@@ -24,7 +24,7 @@ Change-Id: Iaf67f0b95c7555a866004d78c5e2a238cddc2910
  #ifdef CONFIG_CGROUP_RDMA
  int ib_device_register_rdmacg(struct ib_device *device);
  void ib_device_unregister_rdmacg(struct ib_device *device);
-@@ -175,11 +177,39 @@ static inline void ib_rdmacg_uncharge(st
+@@ -176,11 +178,39 @@ static inline void ib_rdmacg_uncharge(st
  				      enum rdmacg_resource_type resource_index)
  { }
  #endif
@@ -64,7 +64,7 @@ Change-Id: Iaf67f0b95c7555a866004d78c5e2a238cddc2910
  }
  
  int addr_init(void);
-@@ -202,14 +232,26 @@ void rdma_nl_exit(void);
+@@ -203,14 +233,26 @@ void rdma_nl_exit(void);
  int ibnl_chk_listeners(unsigned int group);
  
  int ib_nl_handle_resolve_resp(struct sk_buff *skb,

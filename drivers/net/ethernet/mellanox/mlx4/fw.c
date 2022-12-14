@@ -1082,7 +1082,7 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 	if (field & 1<<6)
 		dev_cap->flags2 |= MLX4_DEV_CAP_FLAG2_REASSIGN_MAC_EN;
 	MLX4_GET(field, outbox, QUERY_DEV_CAP_VXLAN);
-	if (field & 1<<3)
+	if (field & 1<<3 && !(-mlx4_log_num_mgm_entry_size & MLX4_DISABLE_VXLAN_OFFLOADS))
 		dev_cap->flags2 |= MLX4_DEV_CAP_FLAG2_VXLAN_OFFLOADS;
 	if (field & (1 << 5))
 		dev_cap->flags2 |= MLX4_DEV_CAP_FLAG2_ETS_CFG;

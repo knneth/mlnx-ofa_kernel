@@ -63,35 +63,6 @@
 #define MLX4_FLAG2_V_DISABLE_MC_LOOPBACK_MASK	BIT(2)
 #define MLX4_DISABLE_MC_LOOPBACK_MASK		0x6
 
-static void mlx4_inc_port_macs(struct mlx4_dev *mdev, int port)
-{
-	struct mlx4_port_info *info = &mlx4_priv(mdev)->port[port];
-
-	mutex_lock(&info->mac_table.mutex);
-	info->mac_table.total++;
-	mutex_unlock(&info->mac_table.mutex);
-	mlx4_dbg(mdev, "%s added mac for port: %d, now: %d\n",
-		 __func__, port, info->mac_table.total);
-}
-
-static void mlx4_dec_port_macs(struct mlx4_dev *mdev, int port)
-{
-	struct mlx4_port_info *info = &mlx4_priv(mdev)->port[port];
-
-	mutex_lock(&info->mac_table.mutex);
-	if (!info->mac_table.total) {
-		mutex_unlock(&info->mac_table.mutex);
-		mlx4_dbg(mdev, "No current macs for port: %d\n", port);
-		return;
-	}
-
-	info->mac_table.total--;
-	mutex_unlock(&info->mac_table.mutex);
-
-	mlx4_dbg(mdev, "%s removed mac, port: %d, now: %d\n",
-		 __func__, port, info->mac_table.total);
-}
-
 void mlx4_init_mac_table(struct mlx4_dev *dev, struct mlx4_mac_table *table)
 {
 	int i;
@@ -101,6 +72,7 @@ void mlx4_init_mac_table(struct mlx4_dev *dev, struct mlx4_mac_table *table)
 		table->entries[i] = 0;
 		table->refs[i]	 = 0;
 		table->is_dup[i] = false;
+		table->mac_index[i] = 0;
 	}
 	table->max   = 1 << dev->caps.log_num_macs;
 	table->total = 0;
@@ -373,38 +345,72 @@ EXPORT_SYMBOL_GPL(__mlx4_register_mac);
 
 int mlx4_register_mac(struct mlx4_dev *dev, u8 port, u64 mac)
 {
+	struct mlx4_mac_table *table = NULL;
 	u64 out_param = 0;
 	int err = -EINVAL;
+	int mac_ix = 0;
+	u32 p_l;
 
-	if (mlx4_is_mfunc(dev)) {
-		u32 p_l;
+	if (!mlx4_is_mfunc(dev))
+		return __mlx4_register_mac(dev, port, mac);
 
-		if (!(dev->flags & MLX4_FLAG_OLD_REG_MAC)) {
-			err = mlx4_cmd_imm(dev, mac, &out_param,
-					   ((u32) port) << 8 | (u32) RES_MAC,
-					   RES_OP_RESERVE_AND_MAP, MLX4_CMD_ALLOC_RES,
-					   MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
+	if (mlx4_is_slave(dev)) {
+		table = &mlx4_priv(dev)->port[port].mac_table;
+		mutex_lock(&table->mutex);
+		mac_ix = find_index(dev, table, mac);
+		if (mac_ix >= 0) {
+			/* mac already registered with PF */
+			table->refs[mac_ix]++;
+			mutex_unlock(&table->mutex);
+			return table->mac_index[mac_ix];
 		}
-		if (err && err == -EINVAL && mlx4_is_slave(dev)) {
-			/* retry using old REG_MAC format */
-			set_param_l(&out_param, port);
-			err = mlx4_cmd_imm(dev, mac, &out_param, RES_MAC,
-					   RES_OP_RESERVE_AND_MAP, MLX4_CMD_ALLOC_RES,
-					   MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
-			if (!err)
-				dev->flags |= MLX4_FLAG_OLD_REG_MAC;
+		/* find a free slot for the new mac*/
+		for (mac_ix = 0; mac_ix < MLX4_MAX_MAC_NUM; mac_ix++) {
+			if (!table->refs[mac_ix])
+				break;
 		}
-		if (err)
-			return err;
-
-		p_l = get_param_l(&out_param);
-		/* update vf table, the master updated via __register_mac */
-		if (p_l && mlx4_is_slave(dev))
-			mlx4_inc_port_macs(dev, port);
-		return p_l;
+		if (mac_ix == MLX4_MAX_MAC_NUM) {
+			mlx4_err(dev, "%s no slots available to add mac 0x%llx to port: %d (%d macs registered)\n",
+				 __func__, mac, port, table->total);
+			err = -ENOSPC;
+			goto err_out;
+		}
 	}
+	if (!(dev->flags & MLX4_FLAG_OLD_REG_MAC)) {
+		err = mlx4_cmd_imm(dev, mac, &out_param,
+				   ((u32)port) << 8 | (u32)RES_MAC,
+				   RES_OP_RESERVE_AND_MAP, MLX4_CMD_ALLOC_RES,
+				   MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
+	}
+	if (err && err == -EINVAL && mlx4_is_slave(dev)) {
+		/* retry using old REG_MAC format */
+		set_param_l(&out_param, port);
+		err = mlx4_cmd_imm(dev, mac, &out_param, RES_MAC,
+				   RES_OP_RESERVE_AND_MAP, MLX4_CMD_ALLOC_RES,
+				   MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
+		if (!err)
+			dev->flags |= MLX4_FLAG_OLD_REG_MAC;
+	}
+	if (err)
+		goto err_out;
 
-	return __mlx4_register_mac(dev, port, mac);
+	p_l = get_param_l(&out_param);
+	/* update vf table, the master updated via __register_mac */
+	if (mlx4_is_slave(dev)) {
+		/* Register new MAC, inserting into free slot */
+		table->refs[mac_ix] = 1;
+		table->entries[mac_ix] = cpu_to_be64(mac | MLX4_MAC_VALID);
+		table->mac_index[mac_ix] = p_l;
+		table->total++;
+		mlx4_dbg(dev, "%s: added mac 0x%llx to port: %d at index %d on VM, %d on HV (%d macs registered)\n",
+			 __func__, mac, port, mac_ix, p_l, table->total);
+		mutex_unlock(&table->mutex);
+	}
+	return p_l;
+err_out:
+	if (mlx4_is_slave(dev))
+		mutex_unlock(&table->mutex);
+	return err;
 }
 EXPORT_SYMBOL_GPL(mlx4_register_mac);
 
@@ -488,29 +494,52 @@ EXPORT_SYMBOL_GPL(__mlx4_unregister_mac);
 
 void mlx4_unregister_mac(struct mlx4_dev *dev, u8 port, u64 mac)
 {
+	struct mlx4_mac_table *table = NULL;
 	u64 out_param = 0;
 
-	if (mlx4_is_mfunc(dev)) {
-		if (!(dev->flags & MLX4_FLAG_OLD_REG_MAC)) {
-			(void) mlx4_cmd_imm(dev, mac, &out_param,
-					    ((u32) port) << 8 | (u32) RES_MAC,
-					    RES_OP_RESERVE_AND_MAP, MLX4_CMD_FREE_RES,
-					    MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
-		} else {
-			/* use old unregister mac format */
-			set_param_l(&out_param, port);
-			(void) mlx4_cmd_imm(dev, mac, &out_param, RES_MAC,
-					    RES_OP_RESERVE_AND_MAP, MLX4_CMD_FREE_RES,
-					    MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
-		}
-
-		/* update vf mac table */
-		if (mlx4_is_slave(dev))
-			mlx4_dec_port_macs(dev, port);
-
+	if (!mlx4_is_mfunc(dev)) {
+		__mlx4_unregister_mac(dev, port, mac);
 		return;
 	}
-	__mlx4_unregister_mac(dev, port, mac);
+
+	if (mlx4_is_slave(dev)) {
+		int mac_ix;
+
+		table = &mlx4_priv(dev)->port[port].mac_table;
+		mutex_lock(&table->mutex);
+		mac_ix = find_index(dev, table, mac);
+		if (mac_ix < 0) {
+			mlx4_warn(dev, "%s: mac 0x%llx not registered on port %d\n",
+				  __func__, mac, port);
+			goto out;
+		}
+		/* reduce ref count, and return if still > 0 */
+		if (--table->refs[mac_ix])
+			goto out;
+		/* invalidate mac entry */
+		table->entries[mac_ix] = 0;
+		table->total--;
+		table->mac_index[mac_ix] = 0;
+		mlx4_dbg(dev, "%s: deleting mac 0x%llx from port %d at VM index %d (%d macs remaining)\n",
+			 __func__, mac, port, mac_ix, table->total);
+	}
+
+	if (!(dev->flags & MLX4_FLAG_OLD_REG_MAC)) {
+		(void)mlx4_cmd_imm(dev, mac, &out_param,
+				   ((u32)port) << 8 | (u32)RES_MAC,
+				   RES_OP_RESERVE_AND_MAP, MLX4_CMD_FREE_RES,
+				   MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
+	} else {
+		/* use old unregister mac format */
+		set_param_l(&out_param, port);
+		(void)mlx4_cmd_imm(dev, mac, &out_param, RES_MAC,
+				   RES_OP_RESERVE_AND_MAP, MLX4_CMD_FREE_RES,
+				   MLX4_CMD_TIME_CLASS_A, MLX4_CMD_WRAPPED);
+	}
+
+out:
+	if (mlx4_is_slave(dev))
+		mutex_unlock(&table->mutex);
 	return;
 }
 EXPORT_SYMBOL_GPL(mlx4_unregister_mac);

@@ -65,6 +65,7 @@
 #include "lib/clock.h"
 #include "icmd.h"
 #include "diag/tracer.h"
+#include <asm/pnv-pci.h>
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB, ConnectX-4, ConnectX-5 core driver");
@@ -251,6 +252,9 @@ static struct mlx5_profile profile[] = {
 #define FW_PRE_INIT_TIMEOUT_MILI	120000
 #define FW_INIT_WARN_MESSAGE_INTERVAL	20000
 
+static void mlx5_as_notify_init(struct mlx5_core_dev *dev);
+static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev);
+
 static int wait_fw_init(struct mlx5_core_dev *dev, u32 max_wait_mili,
 			u32 warn_time_mili)
 {
@@ -390,6 +394,8 @@ static void release_bar(struct pci_dev *pdev)
 	pci_release_regions(pdev);
 }
 
+/* FW reserves 16 EQs for itself, PRM definition to find this is in progress */
+#define MLX5_FW_RESERVED_EQS 16
 static int mlx5_alloc_irq_vectors(struct mlx5_core_dev *dev)
 {
 	struct mlx5_priv *priv = &dev->priv;
@@ -398,6 +404,10 @@ static int mlx5_alloc_irq_vectors(struct mlx5_core_dev *dev)
 	int nvec;
 	int err;
 
+	/* This adjustment is a stop gap until a PRM method is defined */
+	num_eqs = num_eqs - MLX5_FW_RESERVED_EQS;
+	if (num_eqs <= 0)
+		return -ENOMEM;
 	nvec = MLX5_CAP_GEN(dev, num_ports) * num_online_cpus() +
 	       MLX5_EQ_VEC_COMP_BASE;
 	nvec = min_t(int, nvec, num_eqs);
@@ -1265,7 +1275,8 @@ static int mlx5_load_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 	dev_info(&pdev->dev, "firmware version: %d.%d.%d\n", fw_rev_maj(dev),
 		 fw_rev_min(dev), fw_rev_sub(dev));
 
-	mlx5_pcie_print_link_status(dev);
+	if (mlx5_core_is_pf(dev))
+		mlx5_pcie_print_link_status(dev);
 
 	/* on load removing any previous indication of internal error, device is
 	 * up
@@ -1351,6 +1362,9 @@ static int mlx5_load_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 		dev_err(&pdev->dev, "mlx5_pagealloc_start failed\n");
 		goto reclaim_boot_pages;
 	}
+
+	/* Treat as_notify as best effort feature */
+	mlx5_as_notify_init(dev);
 
 	err = mlx5_cmd_init_hca(dev);
 	if (err) {
@@ -1498,6 +1512,7 @@ err_stop_poll:
 	}
 
 err_pagealloc_stop:
+	mlx5_as_notify_cleanup(dev);
 	mlx5_pagealloc_stop(dev);
 
 reclaim_boot_pages:
@@ -1557,6 +1572,7 @@ static int mlx5_unload_one(struct mlx5_core_dev *dev, struct mlx5_priv *priv,
 		dev_err(&dev->pdev->dev, "tear_down_hca failed, skip cleanup\n");
 		goto out;
 	}
+	mlx5_as_notify_cleanup(dev);
 	mlx5_pagealloc_stop(dev);
 	mlx5_reclaim_startup_pages(dev);
 	mlx5_core_disable_hca(dev, 0);
@@ -1748,11 +1764,6 @@ static int capi_init(struct mlx5_core_dev *dev)
 	struct mlx5_core_capi *capi = &dev->capi;
 	int err;
 
-	if (!cxllib_slot_is_supported(dev->pdev, 0)) {
-		mlx5_core_dbg(dev, "slot does not NOT support CAPI\n");
-		return -ENOTSUPP;
-	}
-
 	err = mlx5_core_icmd_query_cap(dev, 0, &capi->icmd_caps);
 	if (err) {
 		mlx5_core_warn(dev, "failed to query icmd caps\n");
@@ -1763,6 +1774,11 @@ static int capi_init(struct mlx5_core_dev *dev)
 
 	if (!mlx5_capi_supported(dev)) {
 		mlx5_core_warn(dev, "capi is NOT enabled\n");
+		return -ENOTSUPP;
+	}
+
+	if (!cxllib_slot_is_supported(dev->pdev, 0)) {
+		mlx5_core_dbg(dev, "slot does not NOT support CAPI\n");
 		return -ENOTSUPP;
 	}
 
@@ -1862,6 +1878,8 @@ static void capi_cleanup(struct mlx5_core_dev *dev)
 	if (!dev->capi.enabled)
 		return;
 
+	dev->capi.enabled = false;
+
 	if (!dev->capi.owner)
 		return;
 
@@ -1880,6 +1898,44 @@ static void capi_cleanup(struct mlx5_core_dev *dev)
 		mlx5_core_warn(dev, "failed to clear bar\n");
 }
 #endif
+
+static void mlx5_as_notify_init(struct mlx5_core_dev *dev)
+{
+	struct pci_dev *pdev = dev->pdev;
+	u32 log_response_bar_size;
+	u64 response_bar_address;
+	u64 asn_match_value;
+	int err;
+
+	if (!mlx5_core_is_pf(dev))
+		return;
+
+	if (!MLX5_CAP_GEN(dev, tunneled_atomic) &&
+	    !MLX5_CAP_GEN(dev, as_notify))
+		return;
+
+	err = pnv_pci_enable_tunnel(pdev, &asn_match_value);
+	if (err)
+		return;
+	err = set_tunneled_operation(dev, 0xFFFF, asn_match_value, &log_response_bar_size, &response_bar_address);
+	if (err)
+		return;
+
+	if (!MLX5_CAP_GEN(dev, as_notify))
+		return;
+
+	err = pnv_pci_set_tunnel_bar(pdev, response_bar_address, 1);
+	if (err)
+		return;
+
+	dev->as_notify.response_bar_address = response_bar_address;
+	dev->as_notify.enabled = true;
+	mlx5_core_dbg(dev,
+		      "asn_match_value=%llx, log_response_bar_size=%x, response_bar_address=%llx\n",
+		      asn_match_value, log_response_bar_size, response_bar_address);
+}
+
+static void mlx5_as_notify_cleanup(struct mlx5_core_dev *dev) { }
 
 #define MLX5_IB_MOD "mlx5_ib"
 static int init_one(struct pci_dev *pdev,
@@ -2135,6 +2191,13 @@ static pci_ers_result_t mlx5_pci_err_detected(struct pci_dev *pdev,
 
 	mlx5_enter_error_state(dev, false);
 	mlx5_unload_one(dev, priv, false);
+
+#ifdef CONFIG_CXL_LIB
+	if (mlx5_core_is_pf(dev)) {
+		capi_cleanup(dev);
+		mlx5_icmd_cleanup(dev);
+	}
+#endif
 	/* In case of kernel call drain the health wq */
 	if (state) {
 		mlx5_drain_health_wq(dev);
@@ -2248,6 +2311,14 @@ static int mlx5_try_fast_unload(struct mlx5_core_dev *dev)
 	}
 
 	mlx5_enter_error_state(dev, true);
+
+	/* Some platforms requiring freeing the IRQ's in the shutdown
+	 * flow. If they aren't freed they can't be allocated after
+	 * kexec. There is no need to cleanup the mlx5_core software
+	 * contexts.
+	 */
+	mlx5_irq_clear_affinity_hints(dev);
+	mlx5_core_eq_free_irqs(dev);
 
 	return 0;
 }

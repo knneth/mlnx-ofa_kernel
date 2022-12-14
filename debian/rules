@@ -129,6 +129,7 @@ endif
 	dh_installdirs -p$(putils)  usr/share/doc/ib2ib
 
 	cp source/ofed_scripts/openib.conf debian/$(putils)/etc/infiniband
+	cp source/ofed_scripts/mlx5.conf   debian/$(putils)/etc/infiniband
 ifneq ($(WITH_DKMS),1)
 	$(CURDIR)/ofed_scripts/install_helper $(CURDIR)/debian/$(putils)
 endif
@@ -161,6 +162,7 @@ endif
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d
 	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
+	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
 	install -m 0755 source/ofed_scripts/ib2ib/ib2ib*		debian/$(putils)/usr/sbin
 	install -m 0644 source/ofed_scripts/ib2ib/README		debian/$(putils)/usr/share/doc/ib2ib
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
@@ -180,5 +182,6 @@ override_dh_installdeb:
 	dh_installdeb
 	# override conf files list
 	echo "/etc/infiniband/openib.conf"    >   debian/$(putils)/DEBIAN/conffiles
+	echo "/etc/infiniband/mlx5.conf"      >>   debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles

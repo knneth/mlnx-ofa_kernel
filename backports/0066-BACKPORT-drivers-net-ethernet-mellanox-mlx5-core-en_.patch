@@ -35,7 +35,7 @@ Change-Id: I8eaf0d3483101825b78752e2daba24e10b6e21ac
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	struct net_device *netdev = priv->netdev;
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  	struct tc_mqprio_qopt mqprio = { 0 };
 +#endif
  	int tc_num;
@@ -45,7 +45,7 @@ Change-Id: I8eaf0d3483101825b78752e2daba24e10b6e21ac
  		return -EINVAL;
  
  	rtnl_lock();
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  	mqprio.num_tc = tc_num;
  	mlx5e_setup_tc_mqprio(netdev, &mqprio);
 +#else
@@ -126,7 +126,7 @@ Change-Id: I8eaf0d3483101825b78752e2daba24e10b6e21ac
  }
  
 -#ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-+#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && defined(HAVE_NDO_SET_TX_MAXRATE)
++#if defined (CONFIG_MLX5_EN_SPECIAL_SQ) && (defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED))
  enum {
  	ATTR_DST_IP,
  	ATTR_DST_PORT,

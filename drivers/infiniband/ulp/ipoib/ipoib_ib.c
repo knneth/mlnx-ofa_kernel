@@ -1299,9 +1299,9 @@ static void __ipoib_ib_dev_flush(struct ipoib_dev_priv *priv,
 		 */
 		oper_up = test_and_clear_bit(IPOIB_FLAG_OPER_UP, &priv->flags);
 		ipoib_mcast_dev_flush(dev);
+		ipoib_flush_ah(dev);
 		if (oper_up)
 			set_bit(IPOIB_FLAG_OPER_UP, &priv->flags);
-		ipoib_flush_ah(dev);
 	}
 
 	if (level >= IPOIB_FLUSH_NORMAL)
@@ -1335,7 +1335,9 @@ void ipoib_ib_dev_flush_light(struct work_struct *work)
 	struct ipoib_dev_priv *priv =
 		container_of(work, struct ipoib_dev_priv, flush_light);
 
+	rtnl_lock();
 	__ipoib_ib_dev_flush(priv, IPOIB_FLUSH_LIGHT, 0);
+	rtnl_unlock();
 }
 
 void ipoib_ib_dev_flush_normal(struct work_struct *work)

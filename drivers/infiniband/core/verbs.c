@@ -230,7 +230,7 @@ EXPORT_SYMBOL(rdma_port_get_link_layer);
  * memory operations.
  */
 struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
-		const char *caller)
+			    const char *caller, bool skip_tracking)
 {
 	struct ib_pd *pd;
 	int mr_access_flags = 0;
@@ -254,6 +254,14 @@ struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
 		pr_warn("%s: enabling unsafe global rkey\n", caller);
 		mr_access_flags |= IB_ACCESS_REMOTE_READ | IB_ACCESS_REMOTE_WRITE;
 	}
+
+	pd->res.type = RDMA_RESTRACK_PD;
+	pd->res.kern_name = caller;
+
+	if (skip_tracking)
+		rdma_restrack_dontrack(&pd->res);
+	else
+		rdma_restrack_add(&pd->res);
 
 	if (mr_access_flags) {
 		struct ib_mr *mr;
@@ -304,6 +312,7 @@ void ib_dealloc_pd(struct ib_pd *pd)
 	   requires the caller to guarantee we can't race here. */
 	WARN_ON(atomic_read(&pd->usecnt));
 
+	rdma_restrack_del(&pd->res);
 	/* Making delalloc_pd a void return is a WIP, no driver should return
 	   an error here. */
 	ret = pd->device->dealloc_pd(pd);
@@ -886,7 +895,7 @@ struct ib_qp *ib_create_qp(struct ib_pd *pd,
 	if (qp_init_attr->cap.max_rdma_ctxs)
 		rdma_rw_init_qp(device, qp_init_attr);
 
-	qp = device->create_qp(pd, qp_init_attr, NULL);
+	qp = _ib_create_qp(device, pd, qp_init_attr, NULL, NULL);
 	if (IS_ERR(qp))
 		return qp;
 
@@ -896,9 +905,7 @@ struct ib_qp *ib_create_qp(struct ib_pd *pd,
 		return ERR_PTR(ret);
 	}
 
-	qp->device     = device;
 	qp->real_qp    = qp;
-	qp->uobject    = NULL;
 	qp->qp_type    = qp_init_attr->qp_type;
 	qp->rwq_ind_tbl = qp_init_attr->rwq_ind_tbl;
 
@@ -926,7 +933,6 @@ struct ib_qp *ib_create_qp(struct ib_pd *pd,
 			atomic_inc(&qp_init_attr->srq->usecnt);
 	}
 
-	qp->pd	    = pd;
 	qp->send_cq = qp_init_attr->send_cq;
 	qp->xrcd    = NULL;
 
@@ -1549,6 +1555,7 @@ int ib_destroy_qp(struct ib_qp *qp)
 	if (!qp->uobject)
 		rdma_rw_cleanup_mrs(qp);
 
+	rdma_restrack_del(&qp->res);
 	ret = qp->device->destroy_qp(qp);
 	if (!ret) {
 		if (pd)
@@ -1591,6 +1598,8 @@ struct ib_cq *ib_create_cq(struct ib_device *device,
 		cq->event_handler = event_handler;
 		cq->cq_context    = cq_context;
 		atomic_set(&cq->usecnt, 0);
+		cq->res.type = RDMA_RESTRACK_CQ;
+		rdma_restrack_add(&cq->res);
 	}
 
 	return cq;
@@ -1609,6 +1618,7 @@ int ib_destroy_cq(struct ib_cq *cq)
 	if (atomic_read(&cq->usecnt))
 		return -EBUSY;
 
+	rdma_restrack_del(&cq->res);
 	return cq->device->destroy_cq(cq);
 }
 EXPORT_SYMBOL(ib_destroy_cq);
@@ -1628,6 +1638,7 @@ int ib_dereg_mr(struct ib_mr *mr)
 	struct ib_dm *dm = mr->dm;
 	int ret;
 
+	rdma_restrack_del(&mr->res);
 	ret = mr->device->dereg_mr(mr);
 	if (!ret) {
 		atomic_dec(&pd->usecnt);
@@ -1668,6 +1679,8 @@ struct ib_mr *ib_alloc_mr(struct ib_pd *pd,
 		mr->uobject = NULL;
 		atomic_inc(&pd->usecnt);
 		mr->need_inval = false;
+		mr->res.type = RDMA_RESTRACK_MR;
+		rdma_restrack_add(&mr->res);
 	}
 
 	return mr;
@@ -1806,7 +1819,7 @@ int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid)
 }
 EXPORT_SYMBOL(ib_detach_mcast);
 
-struct ib_xrcd *ib_alloc_xrcd(struct ib_device *device)
+struct ib_xrcd *__ib_alloc_xrcd(struct ib_device *device, const char *caller)
 {
 	struct ib_xrcd *xrcd;
 
@@ -1824,7 +1837,7 @@ struct ib_xrcd *ib_alloc_xrcd(struct ib_device *device)
 
 	return xrcd;
 }
-EXPORT_SYMBOL(ib_alloc_xrcd);
+EXPORT_SYMBOL(__ib_alloc_xrcd);
 
 int ib_dealloc_xrcd(struct ib_xrcd *xrcd)
 {

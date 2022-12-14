@@ -17,6 +17,11 @@ static inline void *kvzalloc(unsigned long size,...) {
 		rtn = vzalloc(size);
 	return rtn;
 }
+#endif
+
+#ifndef HAVE_KVMALLOC_ARRAY
+#include <linux/vmalloc.h>
+#include <linux/slab.h>
 
 static inline void *kvmalloc_array(size_t n, size_t size,...) {
 	void *rtn;
@@ -26,6 +31,11 @@ static inline void *kvmalloc_array(size_t n, size_t size,...) {
 		rtn = vzalloc(n * size);
 	return rtn;
 }
+#endif
+
+#ifndef HAVE_KVMALLOC_NODE
+#include <linux/vmalloc.h>
+#include <linux/slab.h>
 
 static inline void *kvmalloc_node(size_t size, gfp_t flags, int node) {
 	void *rtn;
@@ -34,6 +44,19 @@ static inline void *kvmalloc_node(size_t size, gfp_t flags, int node) {
 	if (!rtn)
 		rtn = vmalloc(size);
 	return rtn;
+}
+#endif
+
+#ifndef HAVE_KVZALLOC_NODE
+#include <linux/vmalloc.h>
+#include <linux/slab.h>
+
+static inline void *kvzalloc_node(size_t size, gfp_t flags, int node)
+{
+	void *p = kvmalloc_node(size, flags, node);
+	if (p)
+		memset(p, 0, size);
+	return p;
 }
 #endif
 

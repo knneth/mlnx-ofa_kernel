@@ -76,7 +76,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  			if (!qp)
  				return -ENOMEM;
  			qp->pri.vid = 0xFFFF;
-@@ -1185,7 +1208,11 @@ static int create_qp_common(struct mlx4_
+@@ -1196,7 +1219,11 @@ static int create_qp_common(struct mlx4_
  			goto err;
  
  		if (qp_has_rq(init_attr)) {
@@ -88,7 +88,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  			if (err)
  				goto err;
  
-@@ -1204,7 +1231,11 @@ static int create_qp_common(struct mlx4_
+@@ -1215,7 +1242,11 @@ static int create_qp_common(struct mlx4_
  		}
  
  		if (mlx4_buf_alloc(dev->dev, qp->buf_size, qp->buf_size,
@@ -100,7 +100,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  			memcpy(&init_attr->cap, &backup_cap,
  			       sizeof(backup_cap));
  			err = set_kernel_sq_size(dev, &init_attr->cap, qp_type,
-@@ -1213,7 +1244,11 @@ static int create_qp_common(struct mlx4_
+@@ -1224,7 +1255,11 @@ static int create_qp_common(struct mlx4_
  				goto err_db;
  
  			if (mlx4_buf_alloc(dev->dev, qp->buf_size,
@@ -112,7 +112,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  				err = -ENOMEM;
  				goto err_db;
  			}
-@@ -1224,14 +1259,26 @@ static int create_qp_common(struct mlx4_
+@@ -1235,14 +1270,26 @@ static int create_qp_common(struct mlx4_
  		if (err)
  			goto err_buf;
  
@@ -139,7 +139,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  		if (!qp->sq.wrid || !qp->rq.wrid) {
  			err = -ENOMEM;
  			goto err_wrid;
-@@ -1261,7 +1308,11 @@ static int create_qp_common(struct mlx4_
+@@ -1272,7 +1319,11 @@ static int create_qp_common(struct mlx4_
  	if (init_attr->create_flags & IB_QP_CREATE_BLOCK_MULTICAST_LOOPBACK)
  		qp->flags |= MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK;
  
@@ -151,7 +151,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  	if (err)
  		goto err_qpn;
  
-@@ -1572,6 +1623,12 @@ static struct ib_qp *_mlx4_ib_create_qp(
+@@ -1583,6 +1634,12 @@ static struct ib_qp *_mlx4_ib_create_qp(
  	int sup_u_create_flags = MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK | MLX4_IB_QP_CROSS_CHANNEL |
  			            MLX4_IB_QP_MANAGED_SEND | MLX4_IB_QP_MANAGED_RECV;
  	u16 xrcdn = 0;
@@ -164,7 +164,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  
  	if (init_attr->rwq_ind_tbl)
  		return _mlx4_ib_create_qp_rss(pd, init_attr, udata);
-@@ -1588,7 +1645,12 @@ static struct ib_qp *_mlx4_ib_create_qp(
+@@ -1599,7 +1656,12 @@ static struct ib_qp *_mlx4_ib_create_qp(
  					MLX4_IB_SRIOV_TUNNEL_QP |
  					MLX4_IB_SRIOV_SQP |
  					MLX4_IB_QP_NETIF |
@@ -177,7 +177,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  		return ERR_PTR(-EINVAL);
  
  	if (init_attr->create_flags & IB_QP_CREATE_NETIF_QP) {
-@@ -1606,6 +1668,9 @@ static struct ib_qp *_mlx4_ib_create_qp(
+@@ -1617,6 +1679,9 @@ static struct ib_qp *_mlx4_ib_create_qp(
  		      IB_QP_CREATE_MANAGED_RECV)) {
  
  			if ((init_attr->create_flags & ~(MLX4_IB_SRIOV_SQP |
@@ -187,7 +187,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  							 MLX4_IB_QP_CREATE_ROCE_V2_GSI  |
  							 MLX4_IB_QP_BLOCK_MULTICAST_LOOPBACK) &&
  			     init_attr->qp_type != IB_QPT_UD) ||
-@@ -1637,7 +1702,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
+@@ -1648,7 +1713,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
  	case IB_QPT_RC:
  	case IB_QPT_UC:
  	case IB_QPT_RAW_PACKET:
@@ -199,7 +199,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  		if (!qp)
  			return ERR_PTR(-ENOMEM);
  		qp->pri.vid = 0xFFFF;
-@@ -1646,7 +1715,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
+@@ -1657,7 +1726,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
  	case IB_QPT_UD:
  	{
  		err = create_qp_common(to_mdev(pd->device), pd,	MLX4_IB_QP_SRC,
@@ -211,7 +211,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  		if (err) {
  			kfree(qp);
  			return ERR_PTR(err);
-@@ -1677,7 +1750,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
+@@ -1688,7 +1761,11 @@ static struct ib_qp *_mlx4_ib_create_qp(
  		}
  
  		err = create_qp_common(to_mdev(pd->device), pd, MLX4_IB_QP_SRC,
@@ -223,7 +223,7 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  		if (err)
  			return ERR_PTR(err);
  
-@@ -3314,7 +3391,11 @@ static int build_mlx_header(struct mlx4_
+@@ -3328,7 +3405,11 @@ static int build_mlx_header(struct mlx4_
  		u16 ether_type;
  		u16 pcp = (be32_to_cpu(ah->av.ib.sl_tclass_flowlabel) >> 29) << 13;
  
@@ -235,8 +235,8 @@ Change-Id: Ic02b582623de54219d96c8bc10b94d848e6742a3
  			(ip_version == 4 ? ETH_P_IP : ETH_P_IPV6);
  
  		mlx->sched_prio = cpu_to_be16(pcp);
-@@ -4439,7 +4520,11 @@ struct ib_wq *mlx4_ib_create_wq(struct i
- 	ib_qp_init_attr.send_cq = ib_qp_init_attr.recv_cq; /* Dummy CQ */
+@@ -4456,7 +4537,11 @@ struct ib_wq *mlx4_ib_create_wq(struct i
+ 		ib_qp_init_attr.create_flags |= IB_QP_CREATE_SCATTER_FCS;
  
  	err = create_qp_common(dev, pd, MLX4_IB_RWQ_SRC, &ib_qp_init_attr,
 +#ifdef HAVE_MEMALLOC_NOIO_SAVE

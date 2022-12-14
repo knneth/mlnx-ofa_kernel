@@ -40,6 +40,7 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/opa_addr.h>
 #include <rdma/ib_mad.h>
+#include <rdma/restrack.h>
 #include "mad_priv.h"
 
 /* Total number of ports combined across all struct ib_devices's */
@@ -321,4 +322,33 @@ struct ib_device *ib_device_get_by_index(u32 ifindex);
 /* RDMA device netlink */
 void nldev_init(void);
 void nldev_exit(void);
+
+static inline struct ib_qp *_ib_create_qp(struct ib_device *dev,
+					  struct ib_pd *pd,
+					  struct ib_qp_init_attr *attr,
+					  struct ib_udata *udata,
+					  struct ib_uobject *uobj)
+{
+	struct ib_qp *qp;
+
+	qp = dev->create_qp(pd, attr, udata);
+	if (IS_ERR(qp))
+		return qp;
+
+	qp->device = dev;
+	qp->pd = pd;
+	qp->uobject = uobj;
+	/*
+	 * We don't track XRC QPs for now, because they don't have PD
+	 * and more importantly they are created internaly by driver,
+	 * see mlx5 create_dev_resources() as an example.
+	 */
+	qp->res.type = RDMA_RESTRACK_QP;
+	if (attr->qp_type < IB_QPT_XRC_INI)
+		rdma_restrack_add(&qp->res);
+	else
+		rdma_restrack_dontrack(&qp->res);
+
+	return qp;
+}
 #endif /* _CORE_PRIV_H */

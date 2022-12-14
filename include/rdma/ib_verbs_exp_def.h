@@ -25,10 +25,13 @@ enum ib_nvmf_offload_type {
 	IB_NVMF_READ_WRITE_FLUSH_OFFLOAD = (1ULL << 3),
 };
 
+struct ib_nvmf_srq_attr {
+	u64 cmd_unknown_namespace_cnt;
+};
+
 struct ib_nvmf_init_data {
 	enum ib_nvmf_offload_type	type;
 	u8				log_max_namespace;
-	u32				offloaded_capsules_count;
 	u32				cmd_size;
 	u8				data_offset;
 	u8				log_max_io_size;
@@ -53,6 +56,8 @@ struct ib_nvmf_caps {
 	u32 min_cmd_size;
 	u32 max_cmd_size;
 	u8  max_data_offset;
+	u32 min_cmd_timeout_us; /* 0 means use HCA default value */
+	u32 max_cmd_timeout_us; /* 0 means use HCA default value */
 };
 
 enum ib_qp_offload_type {

@@ -3,12 +3,25 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_main.c
 
 Change-Id: Iff7696e6f160e1ad7d3cb55058f47ad77bb4a77d
 ---
- drivers/net/ethernet/mellanox/mlx4/en_main.c | 6 ++++++
- 1 file changed, 6 insertions(+)
+ drivers/net/ethernet/mellanox/mlx4/en_main.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_main.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_main.c
-@@ -78,6 +78,7 @@ MLX4_EN_PARM_INT(inline_thold, MAX_INLIN
+@@ -57,6 +57,12 @@ static const char mlx4_en_version[] =
+ 	module_param(X , uint, 0444); \
+ 	MODULE_PARM_DESC(X, desc);
+ 
++#ifdef register_netdevice_notifier_rh
++#undef  register_netdevice_notifier
++#undef  unregister_netdevice_notifier
++#define register_netdevice_notifier             register_netdevice_notifier_rh
++#define unregister_netdevice_notifier           unregister_netdevice_notifier_rh
++#endif
+ 
+ /*
+  * Device scope module parameters
+@@ -78,6 +84,7 @@ MLX4_EN_PARM_INT(inline_thold, MAX_INLIN
  #define MAX_PFC_TX     0xff
  #define MAX_PFC_RX     0xff
  
@@ -16,7 +29,7 @@ Change-Id: Iff7696e6f160e1ad7d3cb55058f47ad77bb4a77d
  void en_print(const char *level, const struct mlx4_en_priv *priv,
  	      const char *format, ...)
  {
-@@ -97,6 +98,7 @@ void en_print(const char *level, const s
+@@ -97,6 +104,7 @@ void en_print(const char *level, const s
  		       priv->port, &vaf);
  	va_end(args);
  }
@@ -24,7 +37,7 @@ Change-Id: Iff7696e6f160e1ad7d3cb55058f47ad77bb4a77d
  
  void mlx4_en_update_loopback_state(struct net_device *dev,
  				   netdev_features_t features)
-@@ -257,12 +259,14 @@ static void mlx4_en_activate(struct mlx4
+@@ -257,12 +265,14 @@ static void mlx4_en_activate(struct mlx4
  			mdev->pndev[i] = NULL;
  	}
  
@@ -39,7 +52,7 @@ Change-Id: Iff7696e6f160e1ad7d3cb55058f47ad77bb4a77d
  }
  
  static void *mlx4_en_add(struct mlx4_dev *dev)
-@@ -381,7 +385,9 @@ static void mlx4_en_verify_params(void)
+@@ -381,7 +391,9 @@ static void mlx4_en_verify_params(void)
  static int __init mlx4_en_init(void)
  {
  	mlx4_en_verify_params();

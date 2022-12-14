@@ -782,6 +782,7 @@ struct mlx5_priv {
 };
 
 enum mlx5_device_state {
+	MLX5_DEVICE_STATE_UNINITIALIZED,
 	MLX5_DEVICE_STATE_UP,
 	MLX5_DEVICE_STATE_INTERNAL_ERROR,
 };
@@ -821,6 +822,7 @@ struct mlx5_pagefault {
 			 * receive queue, according to event_subtype.
 			 */
 			u16	wqe_index;
+			struct mlx5_core_rsc_common *common;
 		} wqe;
 		/* RDMA responder pagefault details */
 		struct {
@@ -849,6 +851,7 @@ struct mlx5e_resources {
 	struct mlx5_td             td;
 	struct mlx5_core_mkey      mkey;
 	struct mlx5_sq_bfreg       bfreg;
+	u32                        max_rl_queues;
 };
 
 #define MLX5_MAX_RESERVED_GIDS 8
@@ -955,6 +958,11 @@ struct mlx5_core_capi {
 	__be32 __iomem		       *inv_io;
 };
 
+struct mlx5_as_notify {
+	bool                    enabled;
+	u64                     response_bar_address;
+};
+
 struct mlx5_core_dev {
 	struct pci_dev	       *pdev;
 	/* sync pci state */
@@ -1006,6 +1014,7 @@ struct mlx5_core_dev {
 	struct page		  *clock_info_page;
 	struct mlx5_core_capi	capi;
 	struct mlx5_tracer	tracer;
+	struct mlx5_as_notify	as_notify;
 };
 
 struct mlx5_tracer_read_strings_db {
@@ -1287,6 +1296,8 @@ void mlx5_cmdif_debugfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_core_create_psv(struct mlx5_core_dev *dev, u32 pdn,
 			 int npsvs, u32 *sig_index);
 int mlx5_core_destroy_psv(struct mlx5_core_dev *dev, int psv_num);
+struct mlx5_core_rsc_common *mlx5_core_get_rsc(struct mlx5_core_dev *dev,
+					       u32 rsn);
 void mlx5_core_put_rsc(struct mlx5_core_rsc_common *common);
 int mlx5_query_odp_caps(struct mlx5_core_dev *dev,
 			struct mlx5_odp_caps *odp_caps);

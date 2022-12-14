@@ -45,12 +45,6 @@ struct mlx5_ib_prefetch_work {
 	struct work_struct work;
 };
 
-int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
-				  u32 key, u64 io_virt, size_t bcnt,
-				  u32 *bytes_committed,
-				  u32 *bytes_mapped,
-				  enum ib_odp_dma_map_flags dma_flags);
-
 static void prefetch_work(struct work_struct *work)
 {
 	struct mlx5_ib_prefetch_work *pwork;
@@ -59,7 +53,7 @@ static void prefetch_work(struct work_struct *work)
 	pwork = container_of(work, struct mlx5_ib_prefetch_work, work);
 	pagefault_single_data_segment(pwork->dev, pwork->key, pwork->start,
 				      pwork->length, &bytes_committed,
-				      NULL, IB_ODP_DMA_MAP_FOR_PREFETCH);
+				      NULL, IB_ODP_DMA_MAP_FOR_PREFETCH, NULL);
 
 	if (atomic_dec_and_test(&pwork->dev->num_prefetch))
 		complete(&pwork->dev->comp_prefetch);
@@ -70,6 +64,12 @@ int mlx5_ib_prefetch_mr(struct ib_mr *ibmr, u64 start, u64 length, u32 flags)
 {
 	struct mlx5_ib_dev *dev = to_mdev(ibmr->device);
 	struct mlx5_ib_prefetch_work *pwork;
+
+	if (mlx5_ib_capi_enabled(dev)) {
+		mlx5_ib_dbg(dev, "drop prefetch mr req start=%llx, len=%llx, flags=%x\n",
+			    start, length, flags);
+		return 0;
+	}
 
 	pwork = kmalloc(sizeof(*pwork), GFP_KERNEL);
 	if (!pwork)

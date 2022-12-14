@@ -37,6 +37,7 @@
 
 #include "mlx5_ib.h"
 #include "cmd.h"
+#include "odp_exp.h"
 
 #define MAX_PREFETCH_LEN (4*1024*1024U)
 
@@ -53,6 +54,7 @@
 #define MLX5_KSM_PAGE_SHIFT MLX5_IMR_MTT_SHIFT
 
 static u64 mlx5_imr_ksm_entries;
+static int pages_in_range(u64 address, u32 length);
 
 static int check_parent(struct ib_umem_odp *odp,
 			       struct mlx5_ib_mr *parent)
@@ -332,6 +334,9 @@ void mlx5_ib_internal_fill_odp_caps(struct mlx5_ib_dev *dev)
 	    MLX5_CAP_GEN(dev->mdev, umr_extended_translation_offset))
 		caps->general_caps |= IB_ODP_SUPPORT_IMPLICIT;
 
+	if (mlx5_ib_capi_enabled(dev))
+		caps->general_caps |= IB_ODP_SUPPORT_IMPLICIT;
+
 	return;
 }
 
@@ -358,16 +363,19 @@ static void mlx5_ib_page_fault_resume(struct mlx5_ib_dev *dev,
 
 #ifdef CONFIG_CXL_LIB
 static int handle_capi_pg_fault(struct mlx5_ib_dev *dev, struct mm_struct *mm,
-				u64 va, size_t sz)
+				u64 va, size_t sz, struct mlx5_pagefault *pfault)
 {
 	int err;
 
-	err = cxllib_handle_fault(mm, va, sz, 0);
+	if (pfault->type & MLX5_PAGE_FAULT_RESUME_WRITE)
+		err = cxllib_handle_fault(mm, va, sz, DSISR_ISSTORE);
+	else
+		err = cxllib_handle_fault(mm, va, sz, 0);
 	return err;
 }
 #else
 static int handle_capi_pg_fault(struct mlx5_ib_dev *dev, struct mm_struct *mm,
-				u64 va, size_t sz)
+				u64 va, size_t sz, struct mlx5_pagefault *pfault)
 {
 	return 0;
 }
@@ -593,17 +601,6 @@ next_mr:
 	if (mr->umem->writable)
 		access_mask |= ODP_WRITE_ALLOWED_BIT;
 
-	if (mlx5_ib_capi_enabled(dev)) {
-		if (!mr->umem->mm) {
-			mlx5_ib_warn(dev, "mm is null\n");
-			return -1;
-		}
-		ret = handle_capi_pg_fault(dev, mr->umem->mm, io_virt, bcnt);
-		if (!ret && bytes_mapped)
-			*bytes_mapped += bcnt;
-		return ret;
-	}
-
 	current_seq = READ_ONCE(odp->notifiers_seq);
 	/*
 	 * Ensure the sequence number is valid for some time before we call
@@ -750,7 +747,8 @@ int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
 				  u32 key, u64 io_virt, size_t bcnt,
 				  u32 *bytes_committed,
 				  u32 *bytes_mapped,
-				  enum ib_odp_dma_map_flags dma_flags)
+				  enum ib_odp_dma_map_flags dma_flags,
+				  struct mlx5_pagefault *pfault)
 {
 	int npages = 0, srcu_key, ret, i, outlen, cur_outlen = 0, depth = 0;
 	struct pf_frame *head = NULL, *frame;
@@ -782,6 +780,31 @@ next_mr:
 		if (!mr->live || !mr->ibmr.pd) {
 			mlx5_ib_dbg(dev, "got dead MR\n");
 			ret = -EFAULT;
+			goto srcu_unlock;
+		}
+
+		if (mlx5_ib_capi_enabled(dev)) {
+			if (!pfault) {
+				mlx5_ib_dbg(dev, "CAPI: pfault is NULL\n");
+				ret = -EFAULT;
+				goto srcu_unlock;
+			}
+
+			if (!mr->umem->mm) {
+				mlx5_ib_dbg(dev, "CAPI: skipping non ODP MR (lkey=0x%06x) in page fault handler.\n",
+					    key);
+				if (bytes_mapped)
+					*bytes_mapped += bcnt;
+				goto srcu_unlock;
+			}
+
+			ret = handle_capi_pg_fault(dev, mr->umem->mm,
+						   io_virt, bcnt, pfault);
+			if (!ret) {
+				if (bytes_mapped)
+					*bytes_mapped += bcnt;
+				ret = pages_in_range(io_virt, bcnt);
+			}
 			goto srcu_unlock;
 		}
 
@@ -992,7 +1015,7 @@ static int pagefault_data_segments(struct mlx5_ib_dev *dev,
 
 		ret = pagefault_single_data_segment(dev, key, io_virt, bcnt,
 						    &pfault->bytes_committed,
-						    bytes_mapped, 0);
+						    bytes_mapped, 0, pfault);
 		if (ret < 0)
 			break;
 		npages += ret;
@@ -1218,19 +1241,6 @@ invalid_transport_or_opcode:
 	return 0;
 }
 
-static struct mlx5_ib_qp *mlx5_ib_odp_find_qp(struct mlx5_ib_dev *dev,
-					      u32 wq_num)
-{
-	struct mlx5_core_qp *mqp = __mlx5_qp_lookup(dev->mdev, wq_num);
-
-	if (!mqp) {
-		mlx5_ib_dbg(dev, "QPN 0x%6x not found\n", wq_num);
-		return NULL;
-	}
-
-	return to_mibqp(mqp);
-}
-
 static void mlx5_ib_mr_wqe_pfault_handler(struct mlx5_ib_dev *dev,
 					  struct mlx5_pagefault *pfault)
 {
@@ -1241,15 +1251,18 @@ static void mlx5_ib_mr_wqe_pfault_handler(struct mlx5_ib_dev *dev,
 	int resume_with_error = 1;
 	u16 wqe_index = pfault->wqe.wqe_index;
 	int requestor = pfault->type & MLX5_PFAULT_REQUESTOR;
+	struct mlx5_core_qp *mqp = (struct mlx5_core_qp *)pfault->wqe.common;
 	struct mlx5_ib_qp *qp;
 
-	buffer = (char *)__get_free_page(GFP_KERNEL);
-	if (!buffer)
+	if (!mqp)
 		return;
+	qp = to_mibqp(mqp);
 
-	qp = mlx5_ib_odp_find_qp(dev, pfault->wqe.wq_num);
-	if (!qp)
-		goto out_err;
+	buffer = (char *)__get_free_page(GFP_KERNEL);
+	if (!buffer) {
+		mlx5_ib_err(dev, "Error allocating memory for IO page fault handling.\n");
+		goto resolve_page_fault;
+	}
 
 	ret = mlx5_ib_read_user_wqe(qp, requestor, wqe_index, buffer,
 				    PAGE_SIZE, &qp->trans_qp.base);
@@ -1290,7 +1303,6 @@ resolve_page_fault:
 	mlx5_ib_dbg(dev, "PAGE FAULT completed. QP 0x%x resume_with_error=%d, type: 0x%x\n",
 		    pfault->wqe.wq_num, resume_with_error,
 		    pfault->type);
-out_err:
 	free_page((unsigned long)buffer);
 }
 
@@ -1334,7 +1346,8 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 	}
 
 	ret = pagefault_single_data_segment(dev, rkey, address, length,
-					    &pfault->bytes_committed, NULL, 0);
+					    &pfault->bytes_committed, NULL, 0,
+					    pfault);
 	if (ret == -EAGAIN) {
 		/* We're racing with an invalidation, don't prefetch */
 		prefetch_activated = 0;
@@ -1361,7 +1374,8 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 
 		ret = pagefault_single_data_segment(dev, rkey, address,
 						    prefetch_len,
-						    &bytes_committed, NULL, 0);
+						    &bytes_committed, NULL, 0,
+						    pfault);
 		if (ret < 0 && ret != -EAGAIN) {
 			mlx5_ib_dbg(dev, "Prefetch failed. ret: %d, QP 0x%x, address: 0x%.16llx, length = 0x%.16x\n",
 				    ret, pfault->token, address, prefetch_len);

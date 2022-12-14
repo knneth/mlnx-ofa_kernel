@@ -63,6 +63,7 @@
 #include <rdma/iw_cm.h>
 
 #include "core_priv.h"
+#include "cma_priv.h"
 
 MODULE_AUTHOR("Sean Hefty");
 MODULE_DESCRIPTION("Generic RDMA CM Agent");
@@ -328,46 +329,6 @@ struct ib_device *cma_get_ib_dev(struct cma_device *cma_dev)
  * We do this by disabling removal notification while a callback is in process,
  * and reporting it after the callback completes.
  */
-struct rdma_id_private {
-	struct rdma_cm_id	id;
-
-	struct rdma_bind_list	*bind_list;
-	struct hlist_node	node;
-	struct list_head	list; /* listen_any_list or cma_device.list */
-	struct list_head	listen_list; /* per device listens */
-	struct cma_device	*cma_dev;
-	struct list_head	mc_list;
-
-	int			internal_id;
-	enum rdma_cm_state	state;
-	spinlock_t		lock;
-	struct mutex		qp_mutex;
-
-	struct completion	comp;
-	atomic_t		refcount;
-	struct mutex		handler_mutex;
-
-	int			backlog;
-	int			timeout_ms;
-	struct ib_sa_query	*query;
-	int			query_id;
-	union {
-		struct ib_cm_id	*ib;
-		struct iw_cm_id	*iw;
-	} cm_id;
-
-	u32			seq_num;
-	u32			qkey;
-	u32			qp_num;
-	pid_t			owner;
-	u32			options;
-	u8			srq;
-	u8			tos;
-	bool			tos_set;
-	u8			reuseaddr;
-	u8			afonly;
-	enum ib_gid_type	gid_type;
-};
 
 struct cma_multicast {
 	struct rdma_id_private *id_priv;
@@ -506,6 +467,8 @@ static void _cma_attach_to_dev(struct rdma_id_private *id_priv,
 	id_priv->id.route.addr.dev_addr.transport =
 		rdma_node_get_transport(cma_dev->device->node_type);
 	list_add_tail(&id_priv->list, &cma_dev->id_list);
+	id_priv->res.type = RDMA_RESTRACK_CM_ID;
+	rdma_restrack_add(&id_priv->res);
 }
 
 static void cma_attach_to_dev(struct rdma_id_private *id_priv,
@@ -775,10 +738,10 @@ static void cma_deref_id(struct rdma_id_private *id_priv)
 		complete(&id_priv->comp);
 }
 
-struct rdma_cm_id *rdma_create_id(struct net *net,
-				  rdma_cm_event_handler event_handler,
-				  void *context, enum rdma_port_space ps,
-				  enum ib_qp_type qp_type)
+struct rdma_cm_id *__rdma_create_id(struct net *net,
+				    rdma_cm_event_handler event_handler,
+				    void *context, enum rdma_port_space ps,
+				    enum ib_qp_type qp_type, const char *caller)
 {
 	struct rdma_id_private *id_priv;
 
@@ -786,7 +749,10 @@ struct rdma_cm_id *rdma_create_id(struct net *net,
 	if (!id_priv)
 		return ERR_PTR(-ENOMEM);
 
-	id_priv->owner = task_pid_nr(current);
+	if (caller)
+		id_priv->res.kern_name = caller;
+	else
+		rdma_restrack_set_task(&id_priv->res, current);
 	id_priv->state = RDMA_CM_IDLE;
 	id_priv->id.context = context;
 	id_priv->id.event_handler = event_handler;
@@ -806,7 +772,7 @@ struct rdma_cm_id *rdma_create_id(struct net *net,
 
 	return &id_priv->id;
 }
-EXPORT_SYMBOL(rdma_create_id);
+EXPORT_SYMBOL(__rdma_create_id);
 
 static int cma_init_ud_qp(struct rdma_id_private *id_priv, struct ib_qp *qp)
 {
@@ -1669,6 +1635,7 @@ void rdma_destroy_id(struct rdma_cm_id *id)
 	mutex_unlock(&id_priv->handler_mutex);
 
 	if (id_priv->cma_dev) {
+		rdma_restrack_del(&id_priv->res);
 		if (rdma_cap_ib_cm(id_priv->id.device, 1)) {
 			if (id_priv->cm_id.ib)
 				ib_destroy_cm_id(id_priv->cm_id.ib);
@@ -1819,6 +1786,7 @@ static struct rdma_id_private *cma_new_conn_id(struct rdma_cm_id *listen_id,
 					       struct ib_cm_event *ib_event,
 					       struct net_device *net_dev)
 {
+	struct rdma_id_private *listen_id_priv;
 	struct rdma_id_private *id_priv;
 	struct rdma_cm_id *id;
 	struct rdma_route *rt;
@@ -1828,9 +1796,11 @@ static struct rdma_id_private *cma_new_conn_id(struct rdma_cm_id *listen_id,
 		ib_event->param.req_rcvd.primary_path->service_id;
 	int ret;
 
-	id = rdma_create_id(listen_id->route.addr.dev_addr.net,
+	listen_id_priv = container_of(listen_id, struct rdma_id_private, id);
+	id = __rdma_create_id(listen_id->route.addr.dev_addr.net,
 			    listen_id->event_handler, listen_id->context,
-			    listen_id->ps, ib_event->param.req_rcvd.qp_type);
+			    listen_id->ps, ib_event->param.req_rcvd.qp_type,
+			    listen_id_priv->res.kern_name);
 	if (IS_ERR(id))
 		return NULL;
 
@@ -1879,14 +1849,17 @@ static struct rdma_id_private *cma_new_udp_id(struct rdma_cm_id *listen_id,
 					      struct ib_cm_event *ib_event,
 					      struct net_device *net_dev)
 {
+	struct rdma_id_private *listen_id_priv;
 	struct rdma_id_private *id_priv;
 	struct rdma_cm_id *id;
 	const sa_family_t ss_family = listen_id->route.addr.src_addr.ss_family;
 	struct net *net = listen_id->route.addr.dev_addr.net;
 	int ret;
 
-	id = rdma_create_id(net, listen_id->event_handler, listen_id->context,
-			    listen_id->ps, IB_QPT_UD);
+	listen_id_priv = container_of(listen_id, struct rdma_id_private, id);
+	id = __rdma_create_id(net, listen_id->event_handler, listen_id->context,
+			      listen_id->ps, IB_QPT_UD,
+			      listen_id_priv->res.kern_name);
 	if (IS_ERR(id))
 		return NULL;
 
@@ -2125,10 +2098,11 @@ static int iw_conn_req_handler(struct iw_cm_id *cm_id,
 		goto out;
 
 	/* Create a new RDMA id for the new IW CM ID */
-	new_cm_id = rdma_create_id(listen_id->id.route.addr.dev_addr.net,
-				   listen_id->id.event_handler,
-				   listen_id->id.context,
-				   RDMA_PS_TCP, IB_QPT_RC);
+	new_cm_id = __rdma_create_id(listen_id->id.route.addr.dev_addr.net,
+				     listen_id->id.event_handler,
+				     listen_id->id.context,
+				     RDMA_PS_TCP, IB_QPT_RC,
+				     listen_id->res.kern_name);
 	if (IS_ERR(new_cm_id)) {
 		ret = -ENOMEM;
 		goto out;
@@ -2253,8 +2227,8 @@ static void cma_listen_on_dev(struct rdma_id_private *id_priv,
 	if (cma_family(id_priv) == AF_IB && !rdma_cap_ib_cm(cma_dev->device, 1))
 		return;
 
-	id = rdma_create_id(net, cma_listen_handler, id_priv, id_priv->id.ps,
-			    id_priv->id.qp_type);
+	id = __rdma_create_id(net, cma_listen_handler, id_priv, id_priv->id.ps,
+			      id_priv->id.qp_type, id_priv->res.kern_name);
 	if (IS_ERR(id))
 		return;
 
@@ -3356,8 +3330,10 @@ int rdma_bind_addr(struct rdma_cm_id *id, struct sockaddr *addr)
 
 	return 0;
 err2:
-	if (id_priv->cma_dev)
+	if (id_priv->cma_dev) {
+		rdma_restrack_del(&id_priv->res);
 		cma_release_dev(id_priv);
+	}
 err1:
 	cma_comp_exch(id_priv, RDMA_CM_ADDR_BOUND, RDMA_CM_IDLE);
 	return ret;
@@ -3740,14 +3716,18 @@ static int cma_send_sidr_rep(struct rdma_id_private *id_priv,
 	return ib_send_cm_sidr_rep(id_priv->cm_id.ib, &rep);
 }
 
-int rdma_accept(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
+int __rdma_accept(struct rdma_cm_id *id, struct rdma_conn_param *conn_param,
+		  const char *caller)
 {
 	struct rdma_id_private *id_priv;
 	int ret;
 
 	id_priv = container_of(id, struct rdma_id_private, id);
 
-	id_priv->owner = task_pid_nr(current);
+	if (caller)
+		id_priv->res.kern_name = caller;
+	else
+		rdma_restrack_set_task(&id_priv->res, current);
 
 	if (!cma_comp(id_priv, RDMA_CM_CONNECT))
 		return -EINVAL;
@@ -3788,7 +3768,7 @@ reject:
 	rdma_reject(id, NULL, 0);
 	return ret;
 }
-EXPORT_SYMBOL(rdma_accept);
+EXPORT_SYMBOL(__rdma_accept);
 
 int rdma_notify(struct rdma_cm_id *id, enum ib_event_type event)
 {
@@ -4466,7 +4446,7 @@ static int cma_get_id_stats(struct sk_buff *skb, struct netlink_callback *cb)
 					  RDMA_NL_RDMA_CM_ATTR_DST_ADDR))
 				goto out;
 
-			id_stats->pid		= id_priv->owner;
+			id_stats->pid	= task_pid_vnr(id_priv->res.task);
 			id_stats->port_space	= id->ps;
 			id_stats->cm_state	= id_priv->state;
 			id_stats->qp_num	= id_priv->qp_num;

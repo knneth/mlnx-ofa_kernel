@@ -49,7 +49,7 @@ Change-Id: Ic27c7e8a8e4cf582a3c820a08d5d55525acd7e61
  
  static void ib_cq_poll_work(struct work_struct *work)
  {
-@@ -158,12 +185,21 @@ struct ib_cq *ib_alloc_cq(struct ib_devi
+@@ -169,12 +196,21 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
  	case IB_POLL_DIRECT:
  		cq->comp_handler = ib_cq_completion_direct;
  		break;
@@ -71,7 +71,7 @@ Change-Id: Ic27c7e8a8e4cf582a3c820a08d5d55525acd7e61
  	case IB_POLL_WORKQUEUE:
  		cq->comp_handler = ib_cq_completion_workqueue;
  		INIT_WORK(&cq->work, ib_cq_poll_work);
-@@ -198,9 +234,17 @@ void ib_free_cq(struct ib_cq *cq)
+@@ -210,9 +246,17 @@ void ib_free_cq(struct ib_cq *cq)
  	switch (cq->poll_ctx) {
  	case IB_POLL_DIRECT:
  		break;

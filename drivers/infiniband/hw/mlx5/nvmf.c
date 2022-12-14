@@ -78,8 +78,16 @@ void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev)
 	caps->min_cmd_size = MLX5_CAP_NVMF(mdev, min_ioccsz);
 	caps->max_cmd_size = MLX5_CAP_NVMF(mdev, max_ioccsz);
 	caps->max_data_offset = MLX5_CAP_NVMF(mdev, max_icdoff);
-
-	return;
+	/* log_min_cmd_timeout = 0 meens use default timeout from HCA */
+	if (MLX5_CAP_NVMF(mdev, log_min_cmd_timeout))
+		caps->min_cmd_timeout_us = 1 << MLX5_CAP_NVMF(mdev, log_min_cmd_timeout);
+	else
+		caps->min_cmd_timeout_us = 0;
+	/* log_max_cmd_timeout = 0 meens use default timeout from HCA */
+	if (MLX5_CAP_NVMF(mdev, log_max_cmd_timeout))
+		caps->max_cmd_timeout_us = 1 << MLX5_CAP_NVMF(mdev, log_max_cmd_timeout);
+	else
+		caps->max_cmd_timeout_us = 0;
 }
 
 static void set_nvmf_backend_ctrl_attrs(struct ib_nvmf_backend_ctrl_init_attr *attr,
@@ -91,6 +99,7 @@ static void set_nvmf_backend_ctrl_attrs(struct ib_nvmf_backend_ctrl_init_attr *a
 	in->sq_log_page_size = attr->sq_log_page_size;
 	in->initial_cqh_db_value = attr->initial_cqh_db_value;
 	in->initial_sqt_db_value = attr->initial_sqt_db_value;
+	in->log_cmd_timeout_us = attr->cmd_timeout_us ? ilog2(attr->cmd_timeout_us) : 0;
 	in->cqh_dbr_addr = attr->cqh_dbr_addr;
 	in->sqt_dbr_addr = attr->sqt_dbr_addr;
 	in->cq_pas = attr->cq_pas;
@@ -238,4 +247,27 @@ int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns)
 
 	kfree(mns);
 	return 0;
+}
+
+int mlx5_ib_query_nvmf_ns(struct ib_nvmf_ns *ns,
+			  struct ib_nvmf_ns_attr *ns_attr)
+{
+	struct mlx5_ib_nvmf_ns *mns = to_mns(ns);
+	struct mlx5_ib_dev *dev = to_mdev(ns->ctrl->srq->device);
+	struct mlx5_ib_srq *msrq = to_msrq(ns->ctrl->srq);
+	int ret;
+
+	ret = mlx5_core_query_nvmf_ns(dev->mdev, &msrq->msrq, &mns->mns);
+	if (!ret) {
+		ns_attr->num_read_cmd = mns->mns.counters.num_read_cmd;
+		ns_attr->num_read_blocks = mns->mns.counters.num_read_blocks;
+		ns_attr->num_write_cmd = mns->mns.counters.num_write_cmd;
+		ns_attr->num_write_blocks = mns->mns.counters.num_write_blocks;
+		ns_attr->num_write_inline_cmd = mns->mns.counters.num_write_inline_cmd;
+		ns_attr->num_flush_cmd = mns->mns.counters.num_flush_cmd;
+		ns_attr->num_error_cmd = mns->mns.counters.num_error_cmd;
+		ns_attr->num_backend_error_cmd = mns->mns.counters.num_backend_error_cmd;
+	}
+
+	return ret;
 }

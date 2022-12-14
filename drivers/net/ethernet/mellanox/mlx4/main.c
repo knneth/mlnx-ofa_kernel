@@ -211,15 +211,7 @@ MODULE_PARM_DESC(probe_vf,
 		 "\t\t(e.g. '0000:04:00.0-3,002b:1c:0b.a-13;12;11') could be given.\n"
 		 "\t\tHexadecimal digits for the device function (e.g. 002b:1c:0b.a) and decimal for probe_vf value (e.g. 13 or 1;2;3).");
 
-#define MLX4_FORCE_DMFS_IF_NO_NCSI_FS		(1U << 0)
-#define MLX4_DMFS_ETH_ONLY			(1U << 1)
-#define MLX4_DMFS_A0_STEERING			(1U << 2)
-#define MLX4_DISABLE_DMFS_LOW_QP_NUM		(1U << 3)
-#define MLX4_IB_IGNORE_SIP_CHECK		(1U << 4)
-#define MLX4_ETH_IGNORE_SIP_CHECK		(1U << 5)
-#define MLX4_DMFS_PARAM_VALUES			((MLX4_ETH_IGNORE_SIP_CHECK << 1) - 1)
-
-static int mlx4_log_num_mgm_entry_size = -(MLX4_DMFS_ETH_ONLY | MLX4_DISABLE_DMFS_LOW_QP_NUM);
+int mlx4_log_num_mgm_entry_size = -(MLX4_DMFS_ETH_ONLY | MLX4_DISABLE_DMFS_LOW_QP_NUM);
 module_param_named(log_num_mgm_entry_size,
 			mlx4_log_num_mgm_entry_size, int, 0444);
 MODULE_PARM_DESC(log_num_mgm_entry_size,
@@ -234,7 +226,8 @@ MODULE_PARM_DESC(log_num_mgm_entry_size,
 		 "\t\t2: Enable optimized steering (even if in limited L2 mode. Can't be set if b2 is cleared)\n"
 		 "\t\t3: Disable DMFS if number of QPs per MCG is low\n"
 		 "\t\t4: Optimize IPoIB/EoIB steering table for non source IP rules if possible\n"
-		 "\t\t5: Optimize steering table for non source IP rules if possible");
+		 "\t\t5: Optimize steering table for non source IP rules if possible\n"
+		 "\t\t6: Disable VXLAN offloads\n");
 
 static int fast_drop;
 module_param_named(fast_drop, fast_drop, int, 0444);

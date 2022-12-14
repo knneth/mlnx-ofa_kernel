@@ -64,7 +64,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 4.3}
-%{!?_release: %global _release OFED.4.3.1.0.1.1.g8509e41}
+%{!?_release: %global _release OFED.4.3.3.0.2.1.gcf60532}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -112,7 +112,7 @@ BuildRequires: %kernel_module_package_buildreqs
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-3.0.2.tgz
 
 
 # build KMP rpms?
@@ -166,7 +166,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-3.0.2.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -198,7 +198,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-1.0.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-4.3-3.0.2.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -393,6 +393,7 @@ echo 'KERNEL=="ib[0-9]*\.*|*nfiniband[0-9]*\.*", DRIVERS=="", SUBSYSTEM=="net", 
 %endif
 
 install -d %{buildroot}/bin
+install -m 0755 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/mlnx_conf_mgr.sh %{buildroot}/bin/
 %if "%{WINDRIVER}" == "0" && "%{BLUENIX}" == "0"
 install -m 0755 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/mlnx_interface_mgr.sh %{buildroot}/bin/
 %else
@@ -635,6 +636,7 @@ fi
 %endif # end KMP=1
 %dir /etc/infiniband
 %config(noreplace) /etc/infiniband/openib.conf
+%config(noreplace) /etc/infiniband/mlx5.conf
 /etc/infiniband/info
 /etc/init.d/openibd
 %if "%{WITH_SYSTEMD}" == "1"
@@ -655,6 +657,7 @@ fi
 %{_sbindir}/*
 /etc/udev/rules.d/90-ib.rules
 /bin/mlnx_interface_mgr.sh
+/bin/mlnx_conf_mgr.sh
 %if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"
 /usr/sbin/net-interfaces
 %endif

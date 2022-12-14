@@ -444,6 +444,11 @@ struct ib_dct *mlx5_ib_create_dct(struct ib_pd *pd,
 		MLX5_SET(dctc, dctc, user_index, uidx);
 	}
 
+	if (!pd->uobject &&
+	    dev->ooo.enabled &&
+	    MLX5_CAP_GEN(dev->mdev, multipath_dc_qp))
+		attr->create_flags |= IB_EXP_DCT_OOO_RW_DATA_PLACEMENT;
+
 	if (attr->create_flags & IB_EXP_DCT_OOO_RW_DATA_PLACEMENT) {
 		if (MLX5_CAP_GEN(dev->mdev, multipath_dc_qp)) {
 			MLX5_SET(dctc, dctc, multipath, 1);

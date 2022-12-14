@@ -16,6 +16,8 @@
 #ifndef hash_init
 #include <linux/types.h>
 #include <linux/list.h>
+#include <linux/hash.h>
+
 #define HASH_SIZE(name) (ARRAY_SIZE(name))
 static inline void __hash_init(struct hlist_head *ht, unsigned int sz)
 {
@@ -36,6 +38,54 @@ static inline void __hash_init(struct hlist_head *ht, unsigned int sz)
  * it calculates the size during preprocessing.
  */
 #define hash_init(hashtable) __hash_init(hashtable, HASH_SIZE(hashtable))
+
+#define HASH_SIZE(name) (ARRAY_SIZE(name))
+#define HASH_BITS(name) ilog2(HASH_SIZE(name))
+/* Use hash_32 when possible to allow for fast 32bit hashing in 64bit kernels. */
+#define hash_min(val, bits)							\
+	(sizeof(val) <= 4 ? hash_32(val, bits) : hash_long(val, bits))
+
+#define hash_for_each_possible(name, obj, node, member, key)                   \
+	hlist_for_each_entry(obj, node, &name[hash_min(key, HASH_BITS(name))], member)
+
+/**
+ * hash_add - add an object to a hashtable
+ * @hashtable: hashtable to add to
+ * @node: the &struct hlist_node of the object to be added
+ * @key: the key of the object to be added
+ */
+#define hash_add(hashtable, node, key)						\
+	hlist_add_head(node, &hashtable[hash_min(key, HASH_BITS(hashtable))])
+
+static inline bool __hash_empty(struct hlist_head *ht, unsigned int sz)
+{
+	unsigned int i;
+
+	for (i = 0; i < sz; i++)
+		if (!hlist_empty(&ht[i]))
+			return false;
+
+	return true;
+}
+
+/**
+ * hash_empty - check whether a hashtable is empty
+ * @hashtable: hashtable to check
+ *
+ * This has to be a macro since HASH_BITS() will not work on pointers since
+ * it calculates the size during preprocessing.
+ */
+#define hash_empty(hashtable) __hash_empty(hashtable, HASH_SIZE(hashtable))
+
+/**
+ * hash_del - remove an object from a hashtable
+ * @node: &struct hlist_node of the object to remove
+ */
+static inline void hash_del(struct hlist_node *node)
+{
+	hlist_del_init(node);
+}
+
 #endif /* hash_init */
 
 #endif /* COMPAT_LINUX_HASHTABLE_H */

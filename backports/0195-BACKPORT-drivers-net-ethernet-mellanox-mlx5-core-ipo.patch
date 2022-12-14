@@ -1,0 +1,22 @@
+From: Alex Vesker <valex@mellanox.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+
+Change-Id: I9d2f56f0e7706eb785853b84511abf56f0acbc4f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+@@ -40,6 +40,10 @@
+ 
+ extern const struct ethtool_ops mlx5i_ethtool_ops;
+ extern const struct ethtool_ops mlx5i_pkey_ethtool_ops;
++#ifdef HAVE_ETHTOOL_OPS_EXT
++extern const struct ethtool_ops_ext mlx5i_ethtool_ops_ext;
++extern const struct ethtool_ops_ext mlx5i_pkey_ethtool_ops_ext;
++#endif
+ 
+ #define MLX5_IB_GRH_BYTES       40
+ #define MLX5_IPOIB_ENCAP_LEN    4

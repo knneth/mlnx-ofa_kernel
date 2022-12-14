@@ -616,3 +616,41 @@ int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
 	kfree(in);
 	return err;
 }
+
+int set_tunneled_operation(struct mlx5_core_dev *mdev,
+			   u16 asn_match_mask, u16 asn_match_value,
+			   u32 *log_response_bar_size,
+			   u64 *response_bar_address)
+{
+	int out_sz = MLX5_ST_SZ_BYTES(set_tunnel_operation_out);
+	int in_sz = MLX5_ST_SZ_BYTES(set_tunnel_operation_in);
+	void *out, *in;
+	int err;
+
+	err = -ENOMEM;
+	in = kzalloc(in_sz, GFP_KERNEL);
+	if (!in)
+		goto out;
+
+	out = kzalloc(out_sz, GFP_KERNEL);
+	if (!out)
+		goto free_in;
+
+	MLX5_SET(set_tunnel_operation_in, in, opcode,
+		 MLX5_CMD_OP_SET_TUNNELED_OPERATIONS);
+	MLX5_SET(set_tunnel_operation_in, in,
+		 asn_match_mask, asn_match_mask);
+	MLX5_SET(set_tunnel_operation_in, in,
+		 asn_match_value, asn_match_value);
+
+	err = mlx5_cmd_exec(mdev, in, in_sz, out, out_sz);
+	if (!err) {
+		*log_response_bar_size = MLX5_GET(set_tunnel_operation_out, out, log_response_bar_size);
+		*response_bar_address = MLX5_GET64(set_tunnel_operation_out, out, response_bar_address);
+	}
+	kfree(out);
+free_in:
+	kfree(in);
+out:
+	return err;
+}

@@ -60,7 +60,7 @@
 #define DRV_NAME	"ib_srp"
 #define PFX		DRV_NAME ": "
 #define DRV_VERSION	"2.0"
-#define DRV_RELDATE	"27 Feb 2018"
+#define DRV_RELDATE	"01 May 2018"
 
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("InfiniBand SCSI RDMA Protocol initiator");

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/mlx4_en.h
 
 Change-Id: Iff4230c6a64fc8309885697516b9e5095dbf9465
 ---
- drivers/net/ethernet/mellanox/mlx4/mlx4_en.h | 323 ++++++++++++++++++++++++++-
- 1 file changed, 321 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/mlx4_en.h | 326 ++++++++++++++++++++++++++-
+ 1 file changed, 324 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/mlx4_en.h
 +++ b/drivers/net/ethernet/mellanox/mlx4/mlx4_en.h
@@ -33,7 +33,7 @@ Change-Id: Iff4230c6a64fc8309885697516b9e5095dbf9465
  #include "mlx4_stats.h"
 @@ -60,6 +67,43 @@
  #define DRV_NAME	"mlx4_en"
- #define DRV_VERSION	"4.3-1.0.1"
+ #define DRV_VERSION	"4.3-3.0.2"
  
 +#ifndef CONFIG_COMPAT_DISABLE_DCB
 +#ifdef CONFIG_MLX4_EN_DCB
@@ -400,13 +400,16 @@ Change-Id: Iff4230c6a64fc8309885697516b9e5095dbf9465
  void mlx4_en_xmit_doorbell(struct mlx4_en_tx_ring *ring);
  bool mlx4_en_rx_recycle(struct mlx4_en_rx_ring *ring,
  			struct page *page, dma_addr_t dma);
-@@ -847,17 +1089,59 @@ void mlx4_en_fold_software_stats(struct
+@@ -847,17 +1089,62 @@ void mlx4_en_fold_software_stats(struct
  int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset);
  int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port);
  
 +#ifndef CONFIG_COMPAT_DISABLE_DCB
  #ifdef CONFIG_MLX4_EN_DCB
  extern const struct dcbnl_rtnl_ops mlx4_en_dcbnl_ops;
++#ifdef HAVE_DCBNL_RTNL_OPS_EXTENDED
++extern const struct dcbnl_rtnl_ops_ext mlx4_en_dcbnl_ops_ext;
++#endif
  extern const struct dcbnl_rtnl_ops mlx4_en_dcbnl_pfc_ops;
  #endif
 +#endif
@@ -460,7 +463,7 @@ Change-Id: Iff4230c6a64fc8309885697516b9e5095dbf9465
  
  #define MLX4_EN_NUM_SELF_TEST	5
  void mlx4_en_ex_selftest(struct net_device *dev, u32 *flags, u64 *buf);
-@@ -873,8 +1157,10 @@ void mlx4_en_update_pfc_stats_bitmap(str
+@@ -873,8 +1160,10 @@ void mlx4_en_update_pfc_stats_bitmap(str
  				     struct mlx4_en_stats_bitmap *stats_bitmap,
  				     u8 rx_ppp, u8 rx_pause,
  				     u8 tx_ppp, u8 tx_pause);
@@ -471,7 +474,7 @@ Change-Id: Iff4230c6a64fc8309885697516b9e5095dbf9465
  
  /*
   * Functions for time stamping
-@@ -889,16 +1175,30 @@ void mlx4_en_remove_timestamp(struct mlx
+@@ -889,16 +1178,30 @@ void mlx4_en_remove_timestamp(struct mlx
  /* Globals
   */
  extern const struct ethtool_ops mlx4_en_ethtool_ops;
@@ -504,7 +507,7 @@ Change-Id: Iff4230c6a64fc8309885697516b9e5095dbf9465
  
  #define en_dbg(mlevel, priv, format, ...)				\
  do {									\
-@@ -922,4 +1222,23 @@ do {									\
+@@ -922,4 +1225,23 @@ do {									\
  	pr_warn(DRV_NAME " %s: " format,				\
  		dev_name(&(mdev)->pdev->dev), ##__VA_ARGS__)
  

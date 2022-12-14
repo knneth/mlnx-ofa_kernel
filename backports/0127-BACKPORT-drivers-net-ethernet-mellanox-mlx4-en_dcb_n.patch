@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c
 
 Change-Id: Ic98138ecd77032779d9aadf4d7873eacaeb1ba77
 ---
- drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c | 39 ++++++++++++++++++++++++++
- 1 file changed, 39 insertions(+)
+ drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c | 47 ++++++++++++++++++++++++++
+ 1 file changed, 47 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c
@@ -122,7 +122,7 @@ Change-Id: Ic98138ecd77032779d9aadf4d7873eacaeb1ba77
  	.ieee_getpfc		= mlx4_en_dcbnl_ieee_getpfc,
  	.ieee_setpfc		= mlx4_en_dcbnl_ieee_setpfc,
  
-@@ -815,7 +852,9 @@ const struct dcbnl_rtnl_ops mlx4_en_dcbn
+@@ -815,7 +852,17 @@ const struct dcbnl_rtnl_ops mlx4_en_dcbn
  
  	.getdcbx	= mlx4_en_dcbnl_getdcbx,
  	.setdcbx	= mlx4_en_dcbnl_setdcbx,
@@ -132,3 +132,11 @@ Change-Id: Ic98138ecd77032779d9aadf4d7873eacaeb1ba77
  	.ieee_getqcnstats = mlx4_en_dcbnl_ieee_getqcnstats,
 +#endif
  };
++
++#ifdef HAVE_DCBNL_RTNL_OPS_EXTENDED
++const struct dcbnl_rtnl_ops_ext mlx4_en_dcbnl_ops_ext = {
++	.ieee_getqcn 	= mlx4_en_dcbnl_ieee_getqcn,
++	.ieee_setqcn 	= mlx4_en_dcbnl_ieee_setqcn,
++	.ieee_getqcnstats = mlx4_en_dcbnl_ieee_getqcnstats,
++};
++#endif

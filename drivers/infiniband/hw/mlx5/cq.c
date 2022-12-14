@@ -36,12 +36,18 @@
 #include <rdma/ib_cache.h>
 #include "mlx5_ib.h"
 #include "user_exp.h"
+#include <asm/switch_to.h>
+#include <asm/pnv-pci.h>
 
 static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq)
 {
-	struct ib_cq *ibcq = &to_mibcq(cq)->ibcq;
+	struct mlx5_ib_cq *mlx5ib_cq = to_mibcq(cq);
+	struct ib_cq *ibcq = &mlx5ib_cq->ibcq;
 
 	ibcq->comp_handler(ibcq, ibcq->cq_context);
+
+	if (unlikely(mlx5ib_cq->tsk))
+		kick_process(mlx5ib_cq->tsk);
 }
 
 static void mlx5_ib_cq_event(struct mlx5_core_cq *mcq, enum mlx5_event type)
@@ -453,7 +459,7 @@ static void set_cqe_compression(struct mlx5_ib_dev *dev,
 }
 
 static void sw_send_comp(struct mlx5_ib_qp *qp, int num_entries,
-			 struct ib_wc *wc, int *npolled)
+			 struct ib_wc *wc, int *npolled, struct ib_wc *res_wc)
 {
 	struct mlx5_ib_wq *wq;
 	unsigned int cur;
@@ -471,8 +477,10 @@ static void sw_send_comp(struct mlx5_ib_qp *qp, int num_entries,
 	for (i = 0;  i < cur && np < num_entries; i++) {
 		idx = wq->last_poll & (wq->wqe_cnt - 1);
 		wc->wr_id = wq->wrid[idx];
-		wc->status = IB_WC_WR_FLUSH_ERR;
-		wc->vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
+		if (res_wc) {
+			wc->status = res_wc->status;
+			wc->vendor_err = res_wc->vendor_err;
+		}
 		wq->tail++;
 		np++;
 		wc->qp = &qp->ibqp;
@@ -483,7 +491,7 @@ static void sw_send_comp(struct mlx5_ib_qp *qp, int num_entries,
 }
 
 static void sw_recv_comp(struct mlx5_ib_qp *qp, int num_entries,
-			 struct ib_wc *wc, int *npolled)
+			 struct ib_wc *wc, int *npolled, struct ib_wc *res_wc)
 {
 	struct mlx5_ib_wq *wq;
 	unsigned int cur;
@@ -499,8 +507,10 @@ static void sw_recv_comp(struct mlx5_ib_qp *qp, int num_entries,
 
 	for (i = 0;  i < cur && np < num_entries; i++) {
 		wc->wr_id = wq->wrid[wq->tail & (wq->wqe_cnt - 1)];
-		wc->status = IB_WC_WR_FLUSH_ERR;
-		wc->vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
+		if (res_wc) {
+			wc->status = res_wc->status;
+			wc->vendor_err = res_wc->vendor_err;
+		}
 		wq->tail++;
 		np++;
 		wc->qp = &qp->ibqp;
@@ -510,20 +520,21 @@ static void sw_recv_comp(struct mlx5_ib_qp *qp, int num_entries,
 }
 
 static void mlx5_ib_poll_sw_comp(struct mlx5_ib_cq *cq, int num_entries,
-				 struct ib_wc *wc, int *npolled)
+				 struct ib_wc *wc, int *npolled,
+				 struct ib_wc *res_wc)
 {
 	struct mlx5_ib_qp *qp;
 
 	*npolled = 0;
 	/* Find uncompleted WQEs belonging to that cq and return mmics ones */
 	list_for_each_entry(qp, &cq->list_send_qp, cq_send_list) {
-		sw_send_comp(qp, num_entries, wc + *npolled, npolled);
+		sw_send_comp(qp, num_entries, wc + *npolled, npolled, res_wc);
 		if (*npolled >= num_entries)
 			return;
 	}
 
 	list_for_each_entry(qp, &cq->list_recv_qp, cq_recv_list) {
-		sw_recv_comp(qp, num_entries, wc + *npolled, npolled);
+		sw_recv_comp(qp, num_entries, wc + *npolled, npolled, res_wc);
 		if (*npolled >= num_entries)
 			return;
 	}
@@ -664,7 +675,7 @@ repoll:
 }
 
 static int poll_soft_wc(struct mlx5_ib_cq *cq, int num_entries,
-			struct ib_wc *wc)
+			struct ib_wc *wc, struct ib_wc *res_wc)
 {
 	struct mlx5_ib_dev *dev = to_mdev(cq->ibcq.device);
 	struct mlx5_ib_wc *soft_wc, *next;
@@ -676,7 +687,10 @@ static int poll_soft_wc(struct mlx5_ib_cq *cq, int num_entries,
 
 		mlx5_ib_dbg(dev, "polled software generated completion on CQ 0x%x\n",
 			    cq->mcq.cqn);
-
+		if (unlikely(res_wc)) {
+			soft_wc->wc.status = res_wc->status;
+			soft_wc->wc.vendor_err = res_wc->vendor_err;
+		}
 		wc[npolled++] = soft_wc->wc;
 		list_del(&soft_wc->list);
 		kfree(soft_wc);
@@ -692,17 +706,26 @@ int mlx5_ib_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc)
 	struct mlx5_ib_dev *dev = to_mdev(cq->ibcq.device);
 	struct mlx5_core_dev *mdev = dev->mdev;
 	unsigned long flags;
+	struct ib_wc res_wc;
 	int soft_polled = 0;
 	int npolled;
 
 	spin_lock_irqsave(&cq->lock, flags);
 	if (mdev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
-		mlx5_ib_poll_sw_comp(cq, num_entries, wc, &npolled);
+		res_wc.status = IB_WC_WR_FLUSH_ERR;
+		res_wc.vendor_err = MLX5_CQE_SYNDROME_WR_FLUSH_ERR;
+
+		/* make sure no soft wqe's are waiting */
+		if (unlikely(!list_empty(&cq->wc_list)))
+			soft_polled = poll_soft_wc(cq, num_entries, wc, &res_wc);
+
+		mlx5_ib_poll_sw_comp(cq, num_entries - soft_polled,
+				     wc + soft_polled, &npolled, &res_wc);
 		goto out;
 	}
 
 	if (unlikely(!list_empty(&cq->wc_list)))
-		soft_polled = poll_soft_wc(cq, num_entries, wc);
+		soft_polled = poll_soft_wc(cq, num_entries, wc, NULL);
 
 	for (npolled = 0; npolled < num_entries - soft_polled; npolled++) {
 		if (mlx5_poll_one(cq, &cur_qp, wc + soft_polled + npolled))
@@ -867,6 +890,32 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 		}
 
 		cq->private_flags |= MLX5_IB_CQ_PR_FLAGS_CQE_128_PAD;
+	}
+
+	if (ucmd.exp_data.as_notify_en) {
+		u32 lpid, pid, tid;
+
+		if (!dev->mdev->as_notify.enabled) {
+			err = -EOPNOTSUPP;
+			mlx5_ib_warn(dev, "as_notify is not enabled\n");
+			goto err_cqb;
+		}
+
+		err = set_thread_tidr(current);
+		if (err)
+			return err;
+
+		err = pnv_pci_get_as_notify_info(current, &lpid, &pid, &tid);
+		if (err)
+			return err;
+
+		mlx5_ib_dbg(dev, "as_notify_en cq lpid=%x, pid=%x, tid=%x\n", lpid, pid, tid);
+		MLX5_SET(cqc, cqc, as_notify, 1);
+		MLX5_SET(cqc, cqc, local_partition_id, lpid);
+		MLX5_SET(cqc, cqc, process_id, pid);
+		MLX5_SET(cqc, cqc, thread_id, tid);
+
+		cq->tsk = current;
 	}
 
 	return 0;

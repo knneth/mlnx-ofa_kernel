@@ -69,9 +69,6 @@ void set_nvmf_xrq_context(struct mlx5_nvmf_attr *nvmf, void *xrqc)
 		 nvme_offload_context.log_max_namespace,
 		 nvmf->log_max_namespace);
 	MLX5_SET(xrqc, xrqc,
-		 nvme_offload_context.offloaded_capsules_count,
-		 nvmf->offloaded_capsules_count);
-	MLX5_SET(xrqc, xrqc,
 		 nvme_offload_context.ioccsz,
 		 nvmf->ioccsz);
 	MLX5_SET(xrqc, xrqc,

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I0db8f74e242e5b6fad5584d2e577bb1b23963556
 ---
- .../infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c  | 73 +++++++++++++++++++++-
- 1 file changed, 70 insertions(+), 3 deletions(-)
+ .../infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c  | 81 +++++++++++++++++++++-
+ 1 file changed, 78 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
 +++ b/drivers/infiniband/ulp/ipoib/rss_tss/ipoib_main_rss.c
@@ -120,10 +120,15 @@ Change-Id: I0db8f74e242e5b6fad5584d2e577bb1b23963556
  	ipoib_dev_uninit_rss(dev);
  }
  
-@@ -666,18 +715,32 @@ static const struct net_device_ops ipoib
+@@ -665,33 +714,59 @@ static const struct net_device_ops ipoib
+ 	.ndo_uninit		 = ipoib_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = ipoib_change_mtu,
++#else
  	.ndo_change_mtu		 = ipoib_change_mtu,
++#endif
 +#ifdef HAVE_NDO_FIX_FEATURES
  	.ndo_fix_features	 = ipoib_fix_features,
 +#endif
@@ -153,10 +158,14 @@ Change-Id: I0db8f74e242e5b6fad5584d2e577bb1b23963556
  };
  
  static const struct net_device_ops ipoib_netdev_ops_vf_sw_tss = {
-@@ -685,13 +748,17 @@ static const struct net_device_ops ipoib
+ 	.ndo_uninit		 = ipoib_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = ipoib_change_mtu,
++#else
  	.ndo_change_mtu		 = ipoib_change_mtu,
++#endif
 +#ifdef HAVE_NDO_FIX_FEATURES
  	.ndo_fix_features	 = ipoib_fix_features,
 +#endif

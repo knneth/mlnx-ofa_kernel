@@ -19,7 +19,7 @@ Change-Id: I3c358826e118772359fa442e76acbcec59526294
  
  static unsigned int
  __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps);
-@@ -300,6 +304,11 @@ static int nvmet_rdma_install_offload_qu
+@@ -306,6 +310,11 @@ static int nvmet_rdma_install_offload_qu
  
  static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
  {
@@ -31,7 +31,7 @@ Change-Id: I3c358826e118772359fa442e76acbcec59526294
  	lockdep_assert_held(&be_ctrl->xrq->be_mutex);
  	list_del_init(&be_ctrl->entry);
  
-@@ -417,6 +426,14 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
+@@ -432,6 +441,14 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
  	struct ib_nvmf_ns_init_attr ns_init_attr;
  	int err;
  
@@ -46,8 +46,8 @@ Change-Id: I3c358826e118772359fa442e76acbcec59526294
  	be_ctrl = kzalloc(sizeof(*be_ctrl), GFP_KERNEL);
  	if (!be_ctrl) {
  		err = -ENOMEM;
-@@ -474,6 +491,11 @@ out_put_resource:
- out_free_be_ctrl:
+@@ -494,6 +511,11 @@ out_free_be_ctrl:
+ 	kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
  	kfree(be_ctrl);
  out_err:
 +#if defined(CONFIG_PPC) && defined(HAVE_PNV_PCI_SET_P2P)

@@ -466,6 +466,9 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd,
 		goto err_mr;
 
 	mr->ibmr.rkey = mr->ibmr.lkey = mr->mmr.key;
+	mr->ibmr.length = length;
+	mr->ibmr.iova = virt_addr;
+	mr->ibmr.page_size = 1U << shift;
 
 	mr->live = 1;
 	mutex_unlock(&mr->lock);

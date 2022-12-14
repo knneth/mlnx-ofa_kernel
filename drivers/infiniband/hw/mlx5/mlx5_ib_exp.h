@@ -113,11 +113,67 @@ struct mlx5_dc_data {
 	struct ib_wc		wc_tbl[MLX5_CNAK_RX_POLL_CQ_QUOTA];
 };
 
+enum {
+	TCLASS_MATCH_SRC_ADDR_IP,
+	TCLASS_MATCH_DST_ADDR_IP,
+	TCLASS_MATCH_SRC_ADDR_IP6,
+	TCLASS_MATCH_DST_ADDR_IP6,
+	TCLASS_MATCH_TCLASS,
+	TCLASS_MATCH_TCLASS_NO_PREFIX,
+	TCLASS_MATCH_MAX,
+};
+
+struct tclass_match {
+	u32 mask;
+	u8 s_addr[16];
+	u8 d_addr[16];
+	u8 d_addr_m[16];
+	int     tclass; /* Should be always last! */
+};
+
+struct tclass_parse_node {
+	int (*parse)(const char *str, void *store, void *store_mask);
+	int (*compare)(struct tclass_match *match, struct tclass_match *match2,
+		       bool with_mask);
+	size_t (*print)(struct tclass_match *match, char *buf, size_t size);
+	const char *pattern;
+	size_t v_offset;
+	size_t m_offset;
+	u32 mask;
+};
+
+#define TCLASS_CREATE_PARSE_NODE(type, parse, compare, print, pattern,	\
+				 mask, v_member, m_member)		\
+	[(type)] = {parse, compare, print, pattern,			\
+		    offsetof(struct tclass_match, v_member),		\
+		    offsetof(struct tclass_match, m_member), mask}
+
+enum {
+	TCLASS_MATCH_MASK_SRC_ADDR_IP = BIT(TCLASS_MATCH_SRC_ADDR_IP),
+	TCLASS_MATCH_MASK_DST_ADDR_IP = BIT(TCLASS_MATCH_DST_ADDR_IP),
+	TCLASS_MATCH_MASK_SRC_ADDR_IP6 = BIT(TCLASS_MATCH_SRC_ADDR_IP6),
+	TCLASS_MATCH_MASK_DST_ADDR_IP6 = BIT(TCLASS_MATCH_DST_ADDR_IP6),
+	TCLASS_MATCH_MASK_TCLASS = BIT(TCLASS_MATCH_TCLASS),
+	TCLASS_MATCH_MASK_MAX = BIT(TCLASS_MATCH_MAX),
+};
+
+#define TCLASS_MAX_RULES 40
+#define TCLASS_MAX_CMD 100
+
 struct mlx5_tc_data {
+	struct tclass_match rule[TCLASS_MAX_RULES];
+	struct mutex lock;
 	bool initialized;
 	int val;
 	struct kobject kobj;
+	struct mlx5_ib_dev *ibdev;
 };
+
+void tclass_get_tclass(struct mlx5_ib_dev *dev,
+		       struct mlx5_tc_data *tcd,
+		       const struct rdma_ah_attr *ah,
+		       u8 port,
+		       u8 *tclass);
 
 struct mlx5_dc_tracer {
 	struct page	*pg;
@@ -333,6 +389,8 @@ int mlx5_ib_destroy_nvmf_backend_ctrl(struct ib_nvmf_ctrl *ctrl);
 struct ib_nvmf_ns *mlx5_ib_attach_nvmf_ns(struct ib_nvmf_ctrl *ctrl,
 		struct ib_nvmf_ns_init_attr *init_attr);
 int mlx5_ib_detach_nvmf_ns(struct ib_nvmf_ns *ns);
+int mlx5_ib_query_nvmf_ns(struct ib_nvmf_ns *ns,
+			  struct ib_nvmf_ns_attr *ns_attr);
 
 struct ib_mr *mlx5_ib_get_dm_mr(struct ib_pd *pd,
 			    struct ib_mr_init_attr *attr);

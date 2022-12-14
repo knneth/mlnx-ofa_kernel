@@ -8,7 +8,7 @@ Change-Id: I8e97622a3a4f3ce62c5b55c8f07bf7e1981402b2
 
 --- a/include/linux/mlx5/qp.h
 +++ b/include/linux/mlx5/qp.h
-@@ -241,7 +241,9 @@ enum {
+@@ -242,7 +242,9 @@ enum {
  };
  
  enum {

@@ -133,10 +133,13 @@ set_ipoib_cm()
         log_msg "set_ipoib_cm: cannot write to /sys/class/net/${i}/mode"
         RC=1
     fi
-    /sbin/ip link set ${i} mtu ${mtu}
-    if [ $? -ne 0 ]; then
-        log_msg "set_ipoib_cm: Failed to set mtu for ${i}"
-        RC=1
+
+    if [ $RC -eq 0 ] ; then
+        /sbin/ip link set ${i} mtu ${mtu}
+        if [ $? -ne 0 ]; then
+            log_msg "set_ipoib_cm: Failed to set mtu for ${i}"
+            RC=1
+        fi
     fi
 
     #if the intf was up returns it to
@@ -255,8 +258,6 @@ bring_up()
     fi
     if [ $is_ipoib_if -eq 1 ]; then
         if [ "X${SET_CONNECTED_MODE}" == "Xyes" ]; then
-            # Ignore RC, just print a warning if we think CM is not supported by the current device.
-            is_connected_mode_supported ${i}
             set_ipoib_cm ${i} ${MTU}
             if [ $? -ne 0 ]; then
                 RC=1
@@ -364,13 +365,21 @@ if [ $? -eq 1 ]; then
     log_msg "Couldn't fully configure ${i}, review system logs and restart network service after fixing the issues."
 fi
 
+# call mlnx_conf_mgr.sh for IB interfaces
+case "$(echo "$i" | tr '[:upper:]' '[:lower:]')" in
+    *ib* | *infiniband*)
+    log_msg "Running: /bin/mlnx_conf_mgr.sh ${i}"
+    /bin/mlnx_conf_mgr.sh ${i}
+    ;;
+esac
+
 case "$(echo ${i} | tr '[:upper:]' '[:lower:]')" in
     *ib* | *infiniband*)
     ############################ IPoIB (Pkeys) ####################################
     # get list of conf child interfaces conf files
-    CHILD_CONFS=$(/bin/ls -1 ${NETWORK_CONF_DIR}/ifcfg-${i}.[0-9]* 2> /dev/null)
+    CHILD_CONFS=$(/bin/ls -1 ${NETWORK_CONF_DIR}/ifcfg-${i}.[0-9a-fA-F]* 2> /dev/null)
     # W/A for conf files created with nmcli
-    for ff in $(grep -E "=\s*\"*${i}\.[0-9]*\"*\s*\$" ${NETWORK_CONF_DIR}/* 2>/dev/null | cut -d":" -f"1")
+    for ff in $(grep -E "=\s*\"*${i}\.[0-9a-fA-F]*\"*\s*\$" ${NETWORK_CONF_DIR}/* 2>/dev/null | cut -d":" -f"1")
     do
         if $(echo ${CHILD_CONFS} 2>/dev/null | grep -q ${ff}); then
             continue

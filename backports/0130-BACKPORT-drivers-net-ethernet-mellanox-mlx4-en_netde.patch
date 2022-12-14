@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 
 Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 ---
- drivers/net/ethernet/mellanox/mlx4/en_netdev.c | 877 ++++++++++++++++++++++++-
- 1 file changed, 863 insertions(+), 14 deletions(-)
+ drivers/net/ethernet/mellanox/mlx4/en_netdev.c | 915 ++++++++++++++++++++++++-
+ 1 file changed, 901 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
 +++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
@@ -75,8 +75,8 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	return err;
  }
  
-+#ifdef HAVE_NDO_SETUP_TC
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE
++#if defined(HAVE_NDO_SETUP_TC) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
  static int __mlx4_en_setup_tc(struct net_device *dev, enum tc_setup_type type,
  			      void *type_data)
  {
@@ -409,7 +409,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
 +#ifdef HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
  	if (priv->mdev->dev->caps.tunnel_offload_mode == MLX4_TUNNEL_OFFLOAD_MODE_VXLAN)
-+#ifdef HAVE_NDO_UDP_TUNNEL_ADD
++#if defined(HAVE_NDO_UDP_TUNNEL_ADD) || defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED)
  		udp_tunnel_get_rx_info(dev);
 +#elif defined(HAVE_NDO_ADD_VXLAN_PORT)
 +		vxlan_get_rx_port(dev);
@@ -952,11 +952,11 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +{
 +	struct mlx4_en_priv *en_priv = netdev_priv(dev);
 +	struct mlx4_en_dev *mdev = en_priv->mdev;
-+
+ 
 +	return mlx4_set_vf_rate(mdev->dev, en_priv->port, vf, 0, rate);
 +}
 +#endif
- 
++
 +#if defined(HAVE_NETDEV_OPS_NDO_SET_VF_SPOOFCHK) || defined(HAVE_NETDEV_OPS_EXT_NDO_SET_VF_SPOOFCHK)
  static int mlx4_en_set_vf_spoofchk(struct net_device *dev, int vf, bool setting)
  {
@@ -1061,7 +1061,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  }
  
 +#ifdef HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
-+#ifdef HAVE_NDO_UDP_TUNNEL_ADD
++#if defined(HAVE_NDO_UDP_TUNNEL_ADD) || defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED)
  static void mlx4_en_add_vxlan_port(struct  net_device *dev,
  				   struct udp_tunnel_info *ti)
  {
@@ -1143,7 +1143,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +}
 +#endif
  
-+#ifdef HAVE_NDO_SET_TX_MAXRATE
++#if defined(HAVE_NDO_SET_TX_MAXRATE) || defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED)
  static int mlx4_en_set_tx_maxrate(struct net_device *dev, int queue_index, u32 maxrate)
  {
  	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -1192,7 +1192,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  static int mlx4_xdp(struct net_device *dev, struct netdev_bpf *xdp)
  {
-@@ -3555,45 +4118,115 @@ static int mlx4_xdp(struct net_device *d
+@@ -3555,45 +4118,135 @@ static int mlx4_xdp(struct net_device *d
  	case XDP_SETUP_PROG:
  		return mlx4_xdp_set(dev, xdp->prog);
  	case XDP_QUERY_PROG:
@@ -1214,6 +1214,9 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	.ndo_stop		= mlx4_en_close,
  	.ndo_start_xmit		= mlx4_en_xmit,
  	.ndo_select_queue	= mlx4_en_select_queue,
++#ifdef HAVE_NET_DEVICE_OPS_EXTENDED
++	.ndo_size = sizeof(struct net_device_ops),
++#endif
 +#if defined(HAVE_NDO_GET_STATS64_RET_VOID) || defined(HAVE_NDO_GET_STATS64)
  	.ndo_get_stats64	= mlx4_en_get_stats64,
 +#else
@@ -1222,7 +1225,11 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	.ndo_set_rx_mode	= mlx4_en_set_rx_mode,
  	.ndo_set_mac_address	= mlx4_en_set_mac,
  	.ndo_validate_addr	= eth_validate_addr,
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++	.extended.ndo_change_mtu = mlx4_en_change_mtu,
++#else
  	.ndo_change_mtu		= mlx4_en_change_mtu,
++#endif
  	.ndo_do_ioctl		= mlx4_en_ioctl,
  	.ndo_tx_timeout		= mlx4_en_tx_timeout,
 +#ifdef MLX4_EN_VLGRP
@@ -1239,11 +1246,15 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +#ifdef HAVE_NETIF_F_HW_VLAN_STAG_RX
  	.ndo_fix_features	= mlx4_en_fix_features,
 +#endif
++#ifdef HAVE_NDO_SETUP_TC_RH_EXTENDED
++	.extended.ndo_setup_tc_rh = __mlx4_en_setup_tc,
++#else
 +#ifdef HAVE_NDO_SETUP_TC
 +#if defined(HAVE_NDO_SETUP_TC_4_PARAMS) || defined(HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX) || defined(HAVE_TC_FLOWER_OFFLOAD)
  	.ndo_setup_tc		= __mlx4_en_setup_tc,
 +#else
 +	.ndo_setup_tc           = mlx4_en_setup_tc,
++#endif
 +#endif
 +#endif
 +#ifdef HAVE_NDO_RX_FLOW_STEER
@@ -1258,11 +1269,16 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +#endif
 +#ifdef HAVE_NETDEV_NDO_GET_PHYS_PORT_ID
  	.ndo_get_phys_port_id	= mlx4_en_get_phys_port_id,
++#elif defined(HAVE_NDO_GET_PHYS_PORT_NAME_EXTENDED)
++	.extended.ndo_get_phys_port_id	= mlx4_en_get_phys_port_id,
 +#endif
 +#ifdef HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
 +#ifdef HAVE_NDO_UDP_TUNNEL_ADD
  	.ndo_udp_tunnel_add	= mlx4_en_add_vxlan_port,
  	.ndo_udp_tunnel_del	= mlx4_en_del_vxlan_port,
++#elif defined(HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED)
++	.extended.ndo_udp_tunnel_add      = mlx4_en_add_vxlan_port,
++	.extended.ndo_udp_tunnel_del      = mlx4_en_del_vxlan_port,
 +#elif defined(HAVE_NDO_ADD_VXLAN_PORT)
 +	.ndo_add_vxlan_port	= mlx4_en_add_vxlan_port,
 +	.ndo_del_vxlan_port	= mlx4_en_del_vxlan_port,
@@ -1275,12 +1291,16 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +#endif
 +#ifdef HAVE_NDO_SET_TX_MAXRATE
  	.ndo_set_tx_maxrate	= mlx4_en_set_tx_maxrate,
++#elif defined(HAVE_NDO_SET_TX_MAXRATE_EXTENDED)
++	.extended.ndo_set_tx_maxrate	= mlx4_en_set_tx_maxrate,
 +#endif
-+#ifdef HAVE_XDP_BUFF
++#ifdef HAVE_NDO_XDP_EXTENDED
++	.extended.ndo_xdp        = mlx4_xdp,
++#elif defined(HAVE_XDP_BUFF)
  	.ndo_bpf		= mlx4_xdp,
 +#endif
-+};
-+
+ };
+ 
 +#ifdef HAVE_NET_DEVICE_OPS_EXT
 +static const struct net_device_ops_ext mlx4_netdev_ops_ext = {
 +	.size		  = sizeof(struct net_device_ops_ext),
@@ -1288,8 +1308,8 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +#ifdef HAVE_NETDEV_EXT_NDO_GET_PHYS_PORT_ID
 +	.ndo_get_phys_port_id = mlx4_en_get_phys_port_id,
 +#endif
- };
- 
++};
++
 +static const struct net_device_ops_ext mlx4_netdev_ops_master_ext = {
 +	.size			= sizeof(struct net_device_ops_ext),
 +#ifdef HAVE_NETDEV_OPS_EXT_NDO_SET_VF_SPOOFCHK
@@ -1308,7 +1328,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  struct mlx4_en_bond {
  	struct work_struct work;
  	struct mlx4_en_priv *priv;
-@@ -3601,6 +4234,7 @@ struct mlx4_en_bond {
+@@ -3601,6 +4254,7 @@ struct mlx4_en_bond {
  	struct mlx4_port_map port_map;
  };
  
@@ -1316,7 +1336,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  static void mlx4_en_bond_work(struct work_struct *work)
  {
  	struct mlx4_en_bond *bond = container_of(work,
-@@ -3766,6 +4400,7 @@ int mlx4_en_netdev_event(struct notifier
+@@ -3766,6 +4420,7 @@ int mlx4_en_netdev_event(struct notifier
  
  	return NOTIFY_DONE;
  }
@@ -1324,7 +1344,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  void mlx4_en_update_pfc_stats_bitmap(struct mlx4_dev *dev,
  				     struct mlx4_en_stats_bitmap *stats_bitmap,
-@@ -3863,12 +4498,34 @@ void mlx4_en_set_stats_bitmap(struct mlx
+@@ -3863,12 +4518,46 @@ void mlx4_en_set_stats_bitmap(struct mlx
  static void mlx4_en_set_netdev_ops(struct mlx4_en_priv *priv)
  {
  	if (mlx4_is_master(priv->mdev->dev)) {
@@ -1332,6 +1352,9 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +		/* This is a must for using RH net_device_ops_extended
 +		 * which is the 'extended' field in net_device_ops struct */
 +		priv->dev_ops.ndo_size = sizeof(struct net_device_ops);
++#endif
++#ifdef HAVE_NDO_CHANGE_MTU_EXTENDED
++		priv->dev_ops.extended.ndo_change_mtu = mlx4_en_change_mtu;
 +#endif
 +#ifdef HAVE_NDO_SET_VF_MAC
  		priv->dev_ops.ndo_set_vf_mac = mlx4_en_set_vf_mac;
@@ -1341,11 +1364,20 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
 +#elif defined(HAVE_NDO_SET_VF_VLAN_EXTENDED)
 +		priv->dev_ops.extended.ndo_set_vf_vlan = mlx4_en_set_vf_vlan;
 +#endif
++#ifdef HAVE_NDO_SETUP_TC_RH_EXTENDED
++		priv->dev_ops.extended.ndo_setup_tc_rh = __mlx4_en_setup_tc;
++#endif
++#ifdef HAVE_NDO_UDP_TUNNEL_ADD_EXTENDED
++		priv->dev_ops.extended.ndo_udp_tunnel_add = mlx4_en_add_vxlan_port;
++		priv->dev_ops.extended.ndo_udp_tunnel_del = mlx4_en_del_vxlan_port;
++#endif
 +#ifdef HAVE_TX_RATE_LIMIT
  		priv->dev_ops.ndo_set_vf_rate = mlx4_en_set_vf_rate;
 +#elif defined(HAVE_VF_TX_RATE)
 +		priv->dev_ops.ndo_set_vf_tx_rate =  mlx4_en_set_vf_tx_rate;
-+
++#endif
++#ifdef HAVE_NDO_SET_TX_MAXRATE_EXTENDED
++		priv->dev_ops.extended.ndo_set_tx_maxrate = mlx4_en_set_tx_maxrate;
 +#endif
 +#if (defined(HAVE_NETDEV_OPS_NDO_SET_VF_SPOOFCHK) && !defined(HAVE_NET_DEVICE_OPS_EXT))
  		priv->dev_ops.ndo_set_vf_spoofchk = mlx4_en_set_vf_spoofchk;
@@ -1359,7 +1391,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  		priv->dev_ops.ndo_get_vf_config = mlx4_en_get_vf_config;
  		priv->dev_ops.ndo_do_ioctl = mlx4_en_ioctl;
  	}
-@@ -3877,11 +4534,27 @@ static void mlx4_en_set_netdev_ops(struc
+@@ -3877,11 +4566,27 @@ static void mlx4_en_set_netdev_ops(struc
  		priv->dev_ops.ndo_start_xmit = mlx4_en_vgtp_xmit;
  
  	priv->dev->netdev_ops = &priv->dev_ops;
@@ -1387,7 +1419,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	struct net_device *dev;
  	struct mlx4_en_priv *priv;
  	int i, t;
-@@ -3904,14 +4577,25 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3904,14 +4609,25 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	}
  	if (udev_dev_port_dev_id == 0) {
  		/* in mode 0 update dev_port */
@@ -1413,7 +1445,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	}
  
  	/*
-@@ -3949,7 +4633,11 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3949,7 +4665,11 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		mdev->profile.prof[priv->port].num_tx_rings_p_up;
  	priv->num_up = prof->num_up;
  	priv->tx_work_limit = MLX4_EN_DEFAULT_TX_WORK;
@@ -1425,7 +1457,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	for (t = 0; t < MLX4_EN_NUM_TX_TYPES; t++) {
  		priv->tx_ring_num[t] = prof->tx_ring_num[t];
-@@ -3975,6 +4663,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3975,6 +4695,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	priv->cqe_size = mdev->dev->caps.cqe_size;
  	priv->mac_index = -1;
  	priv->msg_enable = MLX4_EN_MSG_LEVEL;
@@ -1433,7 +1465,17 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  #ifdef CONFIG_MLX4_EN_DCB
  	if (!mlx4_is_slave(priv->mdev->dev)) {
  		u8 config = 0;
-@@ -4011,6 +4700,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -3995,6 +4716,9 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+ 
+ 		if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_ETS_CFG) {
+ 			dev->dcbnl_ops = &mlx4_en_dcbnl_ops;
++#ifdef HAVE_DCBNL_RTNL_OPS_EXTENDED
++			dev->dcbnl_ops_ext = &mlx4_en_dcbnl_ops_ext;
++#endif
+ 		} else {
+ 			en_info(priv, "enabling only PFC DCB ops\n");
+ 			dev->dcbnl_ops = &mlx4_en_dcbnl_pfc_ops;
+@@ -4011,6 +4735,7 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		}
  	}
  #endif
@@ -1441,7 +1483,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	for (i = 0; i < MLX4_EN_MAC_HASH_SIZE; ++i)
  		INIT_HLIST_HEAD(&priv->mac_hash[i]);
-@@ -4092,24 +4782,41 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4092,24 +4817,41 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	netif_set_real_num_tx_queues(dev, priv->tx_ring_num[TX]);
  	netif_set_real_num_rx_queues(dev, priv->rx_ring_num);
  
@@ -1483,7 +1525,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	if (!(mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_SKIP_OUTER_VLAN)) {
  		dev->features |= NETIF_F_HW_VLAN_STAG_RX |
  			NETIF_F_HW_VLAN_STAG_FILTER;
-@@ -4143,45 +4850,138 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4143,45 +4885,141 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		      MLX4_DEV_CAP_FLAG2_SKIP_OUTER_VLAN))
  			dev->hw_features |= NETIF_F_HW_VLAN_STAG_TX;
  	}
@@ -1618,11 +1660,14 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	/* MTU range: 46 - hw-specific max */
  	dev->min_mtu = MLX4_EN_MIN_MTU;
  	dev->max_mtu = priv->max_mtu;
++#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
++	dev->extended->min_mtu = MLX4_EN_MIN_MTU;
++	dev->extended->max_mtu = priv->max_mtu;
 +#endif
  
  	mdev->pndev[port] = dev;
  	mdev->upper[port] = NULL;
-@@ -4253,8 +5053,34 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4253,8 +5091,34 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  	}
  
  	priv->registered = 1;
@@ -1657,7 +1702,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  
  	if (mlx4_is_master(priv->mdev->dev)) {
  		for (i = 0; i < priv->mdev->dev->persist->num_vfs; i++) {
-@@ -4288,6 +5114,13 @@ int mlx4_en_init_netdev(struct mlx4_en_d
+@@ -4288,6 +5152,13 @@ int mlx4_en_init_netdev(struct mlx4_en_d
  		}
  	}
  
@@ -1671,7 +1716,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	return 0;
  
  err_free_tx:
-@@ -4313,8 +5146,12 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4313,8 +5184,12 @@ int mlx4_en_reset_config(struct net_devi
  
  	if (priv->hwtstamp_config.tx_type == ts_config.tx_type &&
  	    priv->hwtstamp_config.rx_filter == ts_config.rx_filter &&
@@ -1684,7 +1729,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  		return 0; /* Nothing to change */
  
  	if (DEV_FEATURE_CHANGED(dev, features, NETIF_F_HW_VLAN_CTAG_RX) &&
-@@ -4333,7 +5170,11 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4333,7 +5208,11 @@ int mlx4_en_reset_config(struct net_devi
  	memcpy(&new_prof, priv->prof, sizeof(struct mlx4_en_port_profile));
  	memcpy(&new_prof.hwtstamp_config, &ts_config, sizeof(ts_config));
  
@@ -1696,7 +1741,7 @@ Change-Id: I60a69699096db2a9992bb138134a5d4f79526f58
  	if (err)
  		goto out;
  
-@@ -4357,18 +5198,26 @@ int mlx4_en_reset_config(struct net_devi
+@@ -4357,18 +5236,26 @@ int mlx4_en_reset_config(struct net_devi
  		/* RX time-stamping is OFF, update the RX vlan offload
  		 * to the latest wanted state
  		 */

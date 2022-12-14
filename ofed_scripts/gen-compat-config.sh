@@ -486,6 +486,11 @@ if (grep -q bitmap_set ${KLIB_BUILD}/include/linux/bitmap.h > /dev/null 2>&1 || 
 		set_config CONFIG_COMPAT_IS_BITMAP y
 fi
 
+if (grep -A2 __blkdev_issue_zeroout ${KLIB_BUILD}/include/linux/blkdev.h | grep -q "unsigned flags" > /dev/null 2>&1 ||
+    grep -A2 __blkdev_issue_zeroout ${KSRC}/include/linux/blkdev.h | grep -q "unsigned flags" > /dev/null 2>&1); then
+		set_config CONFIG_COMPAT_IS_BLKDEV_ISSUE_ZEROOUT_HAS_FLAGS y
+fi
+
 if (grep -Eq "struct in_device.*idev" ${KLIB_BUILD}/include/net/route.h > /dev/null 2>&1 || grep -Eq "struct in_device.*idev" ${KSRC}/include/net/route.h > /dev/null 2>&1); then
 		set_config CONFIG_IS_RTABLE_IDEV y
 fi

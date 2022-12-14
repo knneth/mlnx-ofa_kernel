@@ -18,7 +18,7 @@ Change-Id: I90eb6a84c25d454776221d5515c6e76ebef53626
  #include <linux/rwsem.h>
  
  #include <linux/mlx4/device.h>
-@@ -864,7 +866,9 @@ struct mlx4_port_info {
+@@ -876,7 +878,9 @@ struct mlx4_port_info {
  	struct mlx4_roce_info	roce;
  	int			base_qpn;
  	struct cpu_rmap		*rmap;
@@ -28,7 +28,7 @@ Change-Id: I90eb6a84c25d454776221d5515c6e76ebef53626
  };
  
  struct mlx4_sense {
-@@ -993,7 +997,11 @@ void mlx4_cleanup_cq_table(struct mlx4_d
+@@ -1005,7 +1009,11 @@ void mlx4_cleanup_cq_table(struct mlx4_d
  void mlx4_cleanup_qp_table(struct mlx4_dev *dev);
  void mlx4_cleanup_srq_table(struct mlx4_dev *dev);
  void mlx4_cleanup_mcg_table(struct mlx4_dev *dev);
@@ -40,7 +40,7 @@ Change-Id: I90eb6a84c25d454776221d5515c6e76ebef53626
  void __mlx4_qp_free_icm(struct mlx4_dev *dev, int qpn);
  int __mlx4_cq_alloc_icm(struct mlx4_dev *dev, int *cqn);
  void __mlx4_cq_free_icm(struct mlx4_dev *dev, int cqn);
-@@ -1001,7 +1009,11 @@ int __mlx4_srq_alloc_icm(struct mlx4_dev
+@@ -1013,7 +1021,11 @@ int __mlx4_srq_alloc_icm(struct mlx4_dev
  void __mlx4_srq_free_icm(struct mlx4_dev *dev, int srqn);
  int __mlx4_mpt_reserve(struct mlx4_dev *dev);
  void __mlx4_mpt_release(struct mlx4_dev *dev, u32 index);

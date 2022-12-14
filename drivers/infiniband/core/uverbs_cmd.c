@@ -349,6 +349,8 @@ ssize_t ib_uverbs_alloc_pd(struct ib_uverbs_file *file,
 	uobj->object = pd;
 	memset(&resp, 0, sizeof resp);
 	resp.pd_handle = uobj->id;
+	pd->res.type = RDMA_RESTRACK_PD;
+	rdma_restrack_add(&pd->res);
 
 	if (copy_to_user(u64_to_user_ptr(cmd.response), &resp, sizeof resp)) {
 		ret = -EFAULT;
@@ -706,6 +708,8 @@ ssize_t ib_uverbs_reg_mr(struct ib_uverbs_file *file,
 	mr->pd      = pd;
 	mr->uobject = uobj;
 	atomic_inc(&pd->usecnt);
+	mr->res.type = RDMA_RESTRACK_MR;
+	rdma_restrack_add(&mr->res);
 
 	uobj->object = mr;
 
@@ -1047,6 +1051,8 @@ static struct ib_ucq_object *create_cq(struct ib_uverbs_file *file,
 		goto err_cb;
 
 	uobj_alloc_commit(&obj->uobject);
+	cq->res.type = RDMA_RESTRACK_CQ;
+	rdma_restrack_add(&cq->res);
 
 	return obj;
 
@@ -1533,7 +1539,8 @@ static int create_qp(struct ib_uverbs_file *file,
 	if (cmd->qp_type == IB_QPT_XRC_TGT)
 		qp = ib_create_qp(pd, &attr);
 	else
-		qp = device->create_qp(pd, &attr, uhw);
+		qp = _ib_create_qp(device, pd, &attr, uhw,
+				   &obj->uevent.uobject);
 
 	if (IS_ERR(qp)) {
 		ret = PTR_ERR(qp);
@@ -1546,7 +1553,6 @@ static int create_qp(struct ib_uverbs_file *file,
 			goto err_cb;
 
 		qp->real_qp	  = qp;
-		qp->device	  = device;
 		qp->pd		  = pd;
 		qp->send_cq	  = attr.send_cq;
 		qp->recv_cq	  = attr.recv_cq;
@@ -1566,8 +1572,10 @@ static int create_qp(struct ib_uverbs_file *file,
 			atomic_inc(&attr.srq->usecnt);
 		if (ind_tbl)
 			atomic_inc(&ind_tbl->usecnt);
+	} else {
+		/* It is done in _ib_create_qp for other QP types */
+		qp->uobject = &obj->uevent.uobject;
 	}
-	qp->uobject = &obj->uevent.uobject;
 
 	obj->uevent.uobject.object = qp;
 

@@ -78,6 +78,26 @@ enum  {
 	MLX5_SENSOR_FW_SYND_RFR		= 5,
 };
 
+static int lock_sem_sw_reset(struct mlx5_core_dev *dev, int state)
+{
+	int ret;
+
+	/* Lock GW access */
+	ret = mlx5_pciconf_cap9_sem(dev, LOCK);
+	if (ret == -EBUSY)
+		return -EINVAL;
+	if (ret)
+		return ret;
+
+	ret = mlx5_pciconf_set_sem_addr_space(dev, MLX5_SEMAPHORE_SW_RESET, state);
+	if (!ret && state == LOCK)
+		mlx5_core_warn(dev, "SW reset semaphore locked\n");
+
+	/* Unlock GW access */
+	mlx5_pciconf_cap9_sem(dev, UNLOCK);
+	return ret;
+}
+
 static u8 get_nic_mode(struct mlx5_core_dev *dev)
 {
 	return (ioread32be(&dev->iseg->cmdq_addr_l_sz) >> 8) & 7;
@@ -130,13 +150,56 @@ static u32 check_fatal_sensors(struct mlx5_core_dev *dev)
 	return MLX5_SENSOR_NO_ERR;
 }
 
+static bool reset_fw_if_needed(struct mlx5_core_dev *dev)
+{
+	bool supported = (ioread32be(&dev->iseg->initializing) >>
+			  MLX5_FW_RESET_SUPPORTED_OFFSET) & 1;
+	u32 cmdq_addr, fatal_error;
+
+	if (!supported)
+		return false;
+
+	/* The reset only needs to be issued by one PF. The health buffer is
+	 * shared between all functions, and will be cleared during a reset.
+	 * Check again to avoid a redundant 2nd reset. If the fatal erros was
+	 * PCI related a reset won't help.
+	 */
+	fatal_error = check_fatal_sensors(dev);
+	if (fatal_error == MLX5_SENSOR_PCI_COMM_ERR ||
+	    fatal_error == MLX5_SENSOR_NIC_DISABLED ||
+	    fatal_error == MLX5_SENSOR_NIC_SW_RESET) {
+		mlx5_core_warn(dev, "Not issuing FW reset. Either it's already done or won't help.");
+		return false;
+	}
+
+	mlx5_core_warn(dev, "Issuing FW Reset\n");
+	/* Write the NIC interface field to initiate the reset, the command
+	 * interface address also resides here, don't overwrite it.
+	 */
+	cmdq_addr = ioread32be(&dev->iseg->cmdq_addr_l_sz);
+	iowrite32be((cmdq_addr & 0xFFFFF000) |
+		    MLX5_NIC_IFC_SW_RESET << MLX5_NIC_IFC_OFFSET,
+		    &dev->iseg->cmdq_addr_l_sz);
+
+	return true;
+}
+
+#define MLX5_CRDUMP_WAIT_MS	60000
+#define MLX5_FW_RESET_WAIT_MS	1000
+#define MLX5_NIC_STATE_POLL_MS	5
 void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 {
+	unsigned long end, delay_ms = MLX5_FW_RESET_WAIT_MS;
 	u32 fatal_error, err;
+	int lock = -EBUSY;
 
 	mutex_lock(&dev->intf_state_mutex);
 	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
 		goto unlock;
+	if (dev->state == MLX5_DEVICE_STATE_UNINITIALIZED) {
+		dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
+		goto unlock;
+	}
 
 	mlx5_core_err(dev, "start\n");
 	fatal_error = check_fatal_sensors(dev);
@@ -147,15 +210,46 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 		mlx5_unlock_cmdif(dev);
 	}
 
-	if (!force && fatal_error == MLX5_SENSOR_FW_SYND_RFR) {
-		err = mlx5_fill_cr_dump(dev);
-		if (err)
-			mlx5_core_err(dev, "Failed to collect crdump area err %d\n", err);
-	} else {
-		mlx5_core_dbg(dev, "pci in bad state, crdump will not be collected.\n");
+	mlx5_core_event(dev, MLX5_DEV_EVENT_SYS_ERROR, 1);
+
+	if (force)
+		goto err_state_done;
+
+	if (fatal_error == MLX5_SENSOR_FW_SYND_RFR) {
+		/* Get cr-dump and reset FW semaphore */
+		if (mlx5_core_is_pf(dev))
+			lock = lock_sem_sw_reset(dev, LOCK);
+
+		/* Execute cr-dump and SW reset */
+		if (lock != -EBUSY) {
+			err = mlx5_fill_cr_dump(dev);
+			if (err)
+				mlx5_core_err(dev, "Failed to collect crdump area err %d\n", err);
+			reset_fw_if_needed(dev);
+		} else {
+			delay_ms = MLX5_CRDUMP_WAIT_MS;
+		}
 	}
 
-	mlx5_core_event(dev, MLX5_DEV_EVENT_SYS_ERROR, 1);
+	/* Recover from SW reset */
+	end = jiffies + msecs_to_jiffies(delay_ms);
+	do {
+		if (sensor_nic_disabled(dev))
+			break;
+
+		msleep(MLX5_NIC_STATE_POLL_MS);
+	} while (!time_after(jiffies, end));
+
+	if (!sensor_nic_disabled(dev)) {
+		dev_err(&dev->pdev->dev, "NIC IFC still %d after %lums.\n",
+			get_nic_mode(dev), delay_ms);
+	}
+
+	/* Release FW semaphore if you are the lock owner */
+	if (!lock)
+		lock_sem_sw_reset(dev, UNLOCK);
+
+err_state_done:
 	mlx5_core_err(dev, "end\n");
 
 unlock:
@@ -182,16 +276,12 @@ static void mlx5_handle_bad_state(struct mlx5_core_dev *dev)
 	mlx5_disable_device(dev);
 }
 
-#define MLX5_FW_RESET_WAIT_MS	1000
-#define MLX5_NIC_STATE_POLL_MS	5
 static void health_recover(struct work_struct *work)
 {
-	unsigned long end = jiffies + msecs_to_jiffies(MLX5_FW_RESET_WAIT_MS);
 	struct mlx5_core_health *health;
 	struct delayed_work *dwork;
 	struct mlx5_core_dev *dev;
 	struct mlx5_priv *priv;
-	u8 nic_mode;
 
 	dwork = container_of(work, struct delayed_work, work);
 	health = container_of(dwork, struct mlx5_core_health, recover_work);
@@ -200,18 +290,6 @@ static void health_recover(struct work_struct *work)
 
 	if (sensor_pci_not_working(dev)) {
 		dev_err(&dev->pdev->dev, "health recovery flow aborted, PCI reads still not working\n");
-		return;
-	}
-
-	nic_mode = get_nic_mode(dev);
-	while (nic_mode == MLX5_NIC_IFC_SW_RESET &&
-	       !time_after(jiffies, end)) {
-		msleep(MLX5_NIC_STATE_POLL_MS);
-		nic_mode = get_nic_mode(dev);
-	}
-
-	if (nic_mode == MLX5_NIC_IFC_SW_RESET) {
-		dev_err(&dev->pdev->dev, "health recovery flow aborted, NIC IFC still SW_RESET after 1 second.\n");
 		return;
 	}
 
@@ -229,38 +307,6 @@ static unsigned long get_recovery_delay(struct mlx5_core_dev *dev)
 	       MLX5_RECOVERY_DELAY_MSECS : MLX5_RECOVERY_NO_DELAY;
 }
 
-static void reset_fw_if_needed(struct mlx5_core_dev *dev)
-{
-	bool supported = (ioread32be(&dev->iseg->initializing) >>
-			  MLX5_FW_RESET_SUPPORTED_OFFSET) & 1;
-	u32 cmdq_addr, fatal_error;
-
-	if (!supported)
-		return;
-
-	/* The reset only needs to be issued by one PF. The health buffer is
-	 * shared between all functions, and will be cleared during a reset.
-	 * Check again to avoid a redundant 2nd reset. If the fatal erros was
-	 * PCI related a reset won't help.
-	 */
-	fatal_error = check_fatal_sensors(dev);
-	if (fatal_error == MLX5_SENSOR_PCI_COMM_ERR ||
-	    fatal_error == MLX5_SENSOR_NIC_DISABLED ||
-	    fatal_error == MLX5_SENSOR_NIC_SW_RESET) {
-		mlx5_core_warn(dev, "Not issuing FW reset. Either it's already done or won't help.");
-		return;
-	}
-
-	mlx5_core_warn(dev, "Issuing FW Reset\n");
-	/* Write the NIC interface field to initiate the reset, the command
-	 * interface address also resides here, don't overwrite it.
-	 */
-	cmdq_addr = ioread32be(&dev->iseg->cmdq_addr_l_sz);
-	iowrite32be((cmdq_addr & 0xFFFFF000) |
-		    MLX5_NIC_IFC_SW_RESET << MLX5_NIC_IFC_OFFSET,
-		    &dev->iseg->cmdq_addr_l_sz);
-}
-
 static void health_care(struct work_struct *work)
 {
 	struct mlx5_core_health *health;
@@ -272,11 +318,10 @@ static void health_care(struct work_struct *work)
 	health = container_of(work, struct mlx5_core_health, work);
 	priv = container_of(health, struct mlx5_priv, health);
 	dev = container_of(priv, struct mlx5_core_dev, priv);
+
 	mlx5_core_warn(dev, "handling bad device here\n");
 	mlx5_handle_bad_state(dev);
 	recover_delay = msecs_to_jiffies(get_recovery_delay(dev));
-
-	reset_fw_if_needed(dev);
 
 	spin_lock_irqsave(&health->wq_lock, flags);
 	if (!test_bit(MLX5_DROP_NEW_RECOVERY_WORK, &health->flags)) {

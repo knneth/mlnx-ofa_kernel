@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I985e1b615123f741d7f41fcae4b01e15ec2e3389
 ---
- .../ethernet/mellanox/mlx5/core/ipoib/ethtool.c    | 74 ++++++++++++++++++++++
- 1 file changed, 74 insertions(+)
+ .../ethernet/mellanox/mlx5/core/ipoib/ethtool.c    | 88 ++++++++++++++++++++++
+ 1 file changed, 88 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
@@ -13,7 +13,7 @@ Change-Id: I985e1b615123f741d7f41fcae4b01e15ec2e3389
  	mlx5e_ethtool_get_ringparam(priv, param);
  }
  
-+#ifdef HAVE_GET_SET_CHANNELS
++#if defined(HAVE_GET_SET_CHANNELS) || defined(HAVE_GET_SET_CHANNELS_EXT)
  static int mlx5i_set_channels(struct net_device *dev,
  			      struct ethtool_channels *ch)
  {
@@ -103,7 +103,7 @@ Change-Id: I985e1b615123f741d7f41fcae4b01e15ec2e3389
  const struct ethtool_ops mlx5i_ethtool_ops = {
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
-@@ -269,20 +314,49 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -269,20 +314,63 @@ const struct ethtool_ops mlx5i_ethtool_o
  	.get_ringparam      = mlx5i_get_ringparam,
  	.set_ringparam      = mlx5i_set_ringparam,
  	.flash_device       = mlx5i_flash_device,
@@ -152,4 +152,18 @@ Change-Id: I985e1b615123f741d7f41fcae4b01e15ec2e3389
 +#ifdef HAVE_GET_SET_LINK_KSETTINGS
  	.get_link_ksettings = mlx5i_get_link_ksettings,
 +#endif
++};
++
++#ifdef HAVE_ETHTOOL_OPS_EXT
++const struct ethtool_ops_ext mlx5i_ethtool_ops_ext = {
++	.size 			= sizeof(struct ethtool_ops_ext),
++#ifdef HAVE_GET_SET_CHANNELS_EXT
++	.get_channels		= mlx5i_get_channels,
++	.set_channels		= mlx5i_set_channels,
++#endif
++};
++
++const struct ethtool_ops_ext mlx5i_pkey_ethtool_ops_ext = {
++	.size 			= sizeof(struct ethtool_ops_ext),
  };
++#endif /* HAVE_ETHTOOL_OPS_EXT */

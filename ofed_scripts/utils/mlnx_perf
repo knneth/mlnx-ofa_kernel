@@ -126,8 +126,9 @@ while count != 0:
 
 		bw = (curr[key]-prev[key]) / secs
 		if (bw > 0):
-			if "bytes" in key:
+			if "bytes" in key and not "_to_" in key:
 				# Calculate throughput rate in Mbps from the Bytes counter
+				# Make sure to not include rx_XXX_to_XXX_bytes_phy counters
 				print(("%30s: %-20s = %-20s" % (key, thous(bw) + " Bps",
 					thous(bw * 8 / 1000000) + " Mbps")))
 			else:

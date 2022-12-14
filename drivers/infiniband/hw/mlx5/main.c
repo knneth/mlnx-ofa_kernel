@@ -68,7 +68,7 @@
 #include <linux/mmu_context.h>
 
 #define DRIVER_NAME "mlx5_ib"
-#define DRIVER_VERSION	"4.3-1.0.1"
+#define DRIVER_VERSION	"4.3-3.0.2"
 
 MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox Connect-IB HCA IB driver");
@@ -871,8 +871,12 @@ int mlx5_ib_query_device(struct ib_device *ibdev,
 				MLX5_MIN_SINGLE_STRIDE_LOG_NUM_BYTES;
 			resp.striding_rq_caps.max_single_stride_log_num_of_bytes =
 				MLX5_MAX_SINGLE_STRIDE_LOG_NUM_BYTES;
-			resp.striding_rq_caps.min_single_wqe_log_num_of_strides =
-				MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES;
+			if (MLX5_CAP_GEN(dev->mdev, ext_stride_num_range))
+				resp.striding_rq_caps.min_single_wqe_log_num_of_strides =
+					MLX5_EXT_MIN_SINGLE_WQE_LOG_NUM_STRIDES;
+			else
+				resp.striding_rq_caps.min_single_wqe_log_num_of_strides =
+					MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES;
 			resp.striding_rq_caps.max_single_wqe_log_num_of_strides =
 				MLX5_MAX_SINGLE_WQE_LOG_NUM_STRIDES;
 			resp.striding_rq_caps.supported_qpts =
@@ -1420,32 +1424,34 @@ static int alloc_capi_context(struct mlx5_ib_dev *dev, struct mlx5_capi_context 
 
 	err = cxllib_get_PE_attributes(current, CXL_TRANSLATED_MODE, &attr);
 	if (err)
-		goto out;
+		return err;
 
 	mlx5_ib_dbg(dev, "sr 0x%llx\n", attr.sr);
 	mlx5_ib_dbg(dev, "lpid 0x%x\n", attr.lpid);
 	mlx5_ib_dbg(dev, "tid 0x%x\n", attr.tid);
 	mlx5_ib_dbg(dev, "pid 0x%x\n", attr.pid);
 
+	/* Obtain process's mm */
 	cctx->mm = get_task_mm(current);
 	if (!cctx->mm) {
 		err = -ENOMEM;
-		goto out;
+		return err;
 	}
+	mmgrab(cctx->mm);
+	mmput(cctx->mm);
 
-	mm_context_add_copro(cctx->mm);
+	/* create pec */
 	err = mlx5_core_create_pec(dev->mdev, &attr, &cctx->pasid);
 	if (err) {
 		mlx5_ib_warn(dev, "create pec failed %d\n", err);
 		goto out_mm;
 	}
 
+	mm_context_add_copro(cctx->mm);
 	return 0;
 
 out_mm:
-	mm_context_remove_copro(cctx->mm);
-	mmput(cctx->mm);
-out:
+	mmdrop(cctx->mm);
 	return err;
 }
 
@@ -1457,14 +1463,10 @@ static int free_capi_context(struct mlx5_ib_dev *dev, struct mlx5_capi_context *
 		return 0;
 
 	err = mlx5_core_destroy_pec(dev->mdev, cctx->pasid);
-	if (err) {
+	if (err)
 		mlx5_ib_warn(dev, "destroy pec failed\n");
-		goto out;
-	}
 	mm_context_remove_copro(cctx->mm);
-	mmput(cctx->mm);
-
-out:
+	mmdrop(cctx->mm);
 	return err;
 }
 #else
@@ -3364,14 +3366,14 @@ static int create_umr_res(struct mlx5_ib_dev *dev)
 		goto error_0;
 	}
 
-	pd = ib_alloc_pd(&dev->ib_dev, 0);
+	pd = ib_alloc_pd_notrack(&dev->ib_dev, 0);
 	if (IS_ERR(pd)) {
 		mlx5_ib_dbg(dev, "Couldn't create PD for sync UMR QP\n");
 		ret = PTR_ERR(pd);
 		goto error_0;
 	}
 
-	cq = ib_alloc_cq(&dev->ib_dev, NULL, 128, 0, IB_POLL_SOFTIRQ);
+	cq = ib_alloc_cq_notrack(&dev->ib_dev, NULL, 128, 0, IB_POLL_SOFTIRQ);
 	if (IS_ERR(cq)) {
 		mlx5_ib_dbg(dev, "Couldn't create CQ for sync UMR QP\n");
 		ret = PTR_ERR(cq);
@@ -4449,6 +4451,78 @@ static void dealloc_ib_counter_sets(struct mlx5_ib_dev *dev)
 	kfree(dev->counter_sets.desc_cs_arr);
 }
 
+static ssize_t ooo_read(struct file *filp, char __user *buf,
+			size_t count, loff_t *pos)
+{
+	struct mlx5_ib_dbg_ooo *ooo = filp->private_data;
+	char lbuf[20];
+	int len;
+
+	len = snprintf(lbuf, sizeof(lbuf), "%d\n", ooo->enabled);
+	return simple_read_from_buffer(buf, count, pos, lbuf, len);
+}
+
+static ssize_t ooo_write(struct file *filp, const char __user *buf,
+			 size_t count, loff_t *pos)
+{
+	struct mlx5_ib_dbg_ooo *ooo = filp->private_data;
+	u32 var;
+
+	if (kstrtouint_from_user(buf, count, 0, &var))
+		return -EFAULT;
+
+	ooo->enabled = !!var;
+	return count;
+}
+
+static const struct file_operations dbg_ooo_fops = {
+	.owner	= THIS_MODULE,
+	.open	= simple_open,
+	.write	= ooo_write,
+	.read	= ooo_read,
+};
+
+static void mlx5_ib_cleanup_ooo_debugfs(struct mlx5_ib_dev *dev)
+{
+	if (!mlx5_debugfs_root || !dev->ooo.dir_debugfs)
+		return;
+
+	debugfs_remove_recursive(dev->ooo.dir_debugfs);
+	memset(&dev->ooo, 0, sizeof(dev->ooo));
+}
+
+static void mlx5_ib_init_ooo_debugfs(struct mlx5_ib_dev *dev)
+{
+	if (!mlx5_debugfs_root || dev->rep)
+		return;
+
+	if (!MLX5_CAP_GEN(dev->mdev, multipath_rc_qp) &&
+	    !MLX5_CAP_GEN(dev->mdev, multipath_xrc_qp) &&
+	    !MLX5_CAP_GEN(dev->mdev, multipath_dc_qp))
+		return;
+
+	dev->ooo.dir_debugfs =
+		debugfs_create_dir("ooo",
+				   dev->mdev->priv.dbg_root);
+	if (!dev->ooo.dir_debugfs)
+		goto out_debugfs;
+
+	dev->ooo.ooo_debugfs =
+		debugfs_create_file("enable", 0600,
+				    dev->ooo.dir_debugfs,
+				    &dev->ooo,
+				    &dbg_ooo_fops);
+
+	if (!dev->ooo.ooo_debugfs)
+		goto out_debugfs;
+
+	return;
+
+out_debugfs:
+	mlx5_ib_warn(dev, "ooo debugfs failure\n");
+	mlx5_ib_cleanup_ooo_debugfs(dev);
+}
+
 void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 		    struct mlx5_ib_dev *dev,
 		    bool rep)
@@ -4640,6 +4714,8 @@ void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 		dev->ib_dev.destroy_nvmf_backend_ctrl = mlx5_ib_destroy_nvmf_backend_ctrl;
 		dev->ib_dev.attach_nvmf_ns            = mlx5_ib_attach_nvmf_ns;
 		dev->ib_dev.detach_nvmf_ns            = mlx5_ib_detach_nvmf_ns;
+		if (MLX5_CAP_NVMF(mdev, frontend_namespace_context))
+			dev->ib_dev.query_nvmf_ns = mlx5_ib_query_nvmf_ns;
 
 		mlx5_ib_internal_fill_nvmf_caps(dev);
 	}
@@ -4812,6 +4888,8 @@ void *__mlx5_ib_add(struct mlx5_core_dev *mdev,
 	if (!rep && MLX5_VPORT_MANAGER(mdev))
 		mlx5_ib_register_vport_reps(dev);
 
+	mlx5_ib_init_ooo_debugfs(dev);
+
 	dev->ib_active = true;
 
 	return dev;
@@ -4888,6 +4966,8 @@ void __mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context,
 {
 	struct mlx5_ib_dev *dev = context;
 	enum rdma_link_layer ll = mlx5_ib_port_link_layer(&dev->ib_dev, 1);
+
+	mlx5_ib_cleanup_ooo_debugfs(dev);
 
 	if (!rep && MLX5_VPORT_MANAGER(mdev))
 		mlx5_ib_unregister_vport_reps(dev);

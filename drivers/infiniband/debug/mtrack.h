@@ -208,6 +208,21 @@
 	__memtrack_addr;							\
 })
 
+#define kvzalloc_node(sz, flgs, node) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvzalloc_node", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvzalloc_node"); \
+	else									\
+		__memtrack_addr = kvzalloc_node(sz, flgs, node);			\
+	if (__memtrack_addr) {							\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
+			memset(__memtrack_addr, 0x5A, sz);			\
+	}									\
+	__memtrack_addr;							\
+})
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0)
 #define kmalloc_array(n, size, flags) kzalloc((n)*(size), flags)
 #else

@@ -432,6 +432,8 @@ struct mlx5_ib_qp {
 	struct mlx5_rate_limit	rl;
 	u32                     underlay_qpn;
 	bool			tunnel_offload_en;
+	struct rdma_ah_attr	ah;
+	u8			tclass;
 };
 
 struct mlx5_ib_cq_buf {
@@ -507,6 +509,8 @@ struct mlx5_ib_cq {
 	enum ib_cq_notify_flags notify_flags;
 	struct work_struct	notify_work;
 	u16			private_flags; /* Use mlx5_ib_cq_pr_flags */
+
+	struct task_struct     *tsk;
 };
 
 struct mlx5_ib_wc {
@@ -780,6 +784,12 @@ struct mlx5_ib_counter_sets {
 	u16 max_counter_sets;
 };
 
+struct mlx5_ib_dbg_ooo {
+	u8			enabled;
+	struct dentry		*dir_debugfs;
+	struct dentry		*ooo_debugfs;
+};
+
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
@@ -840,6 +850,8 @@ struct mlx5_ib_dev {
 	u32			user_td;
 	u8			umr_fence;
 	struct kobject          mr_cache;
+
+	struct mlx5_ib_dbg_ooo	ooo;
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)

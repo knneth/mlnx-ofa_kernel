@@ -8,7 +8,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
 
 --- a/drivers/infiniband/core/cma.c
 +++ b/drivers/infiniband/core/cma.c
-@@ -161,6 +161,8 @@ static LIST_HEAD(dev_list);
+@@ -162,6 +162,8 @@ static LIST_HEAD(dev_list);
  static LIST_HEAD(listen_any_list);
  static DEFINE_MUTEX(lock);
  static struct workqueue_struct *cma_wq;
@@ -17,7 +17,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  static unsigned int cma_pernet_id;
  
  struct cma_pernet {
-@@ -192,6 +194,28 @@ static struct idr *cma_pernet_idr(struct
+@@ -193,6 +195,28 @@ static struct idr *cma_pernet_idr(struct
  		return NULL;
  	}
  }
@@ -46,7 +46,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  struct cma_device {
  	struct list_head	list;
-@@ -220,22 +244,48 @@ struct class_port_info_context {
+@@ -221,22 +245,48 @@ struct class_port_info_context {
  static int cma_ps_alloc(struct net *net, enum rdma_port_space ps,
  			struct rdma_bind_list *bind_list, int snum)
  {
@@ -95,7 +95,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	idr_remove(idr, snum);
  }
-@@ -1302,9 +1352,17 @@ static bool validate_ipv4_net_dev(struct
+@@ -1268,9 +1318,17 @@ static bool validate_ipv4_net_dev(struct
  {
  	__be32 daddr = dst_addr->sin_addr.s_addr,
  	       saddr = src_addr->sin_addr.s_addr;
@@ -113,7 +113,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	bool ret;
  
  	if (ipv4_is_multicast(saddr) || ipv4_is_lbcast(saddr) ||
-@@ -1313,15 +1371,36 @@ static bool validate_ipv4_net_dev(struct
+@@ -1279,15 +1337,36 @@ static bool validate_ipv4_net_dev(struct
  	    ipv4_is_loopback(saddr))
  		return false;
  
@@ -150,7 +150,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	return ret;
  }
-@@ -1342,7 +1421,15 @@ static bool validate_ipv6_net_dev(struct
+@@ -1308,7 +1387,15 @@ static bool validate_ipv6_net_dev(struct
  		return false;
  
  	ret = rt->rt6i_idev->dev == net_dev;
@@ -166,7 +166,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	return ret;
  #else
-@@ -1484,11 +1571,12 @@ static struct rdma_id_private *cma_find_
+@@ -1450,11 +1537,12 @@ static struct rdma_id_private *cma_find_
  		const struct net_device *net_dev)
  {
  	struct rdma_id_private *id_priv, *id_priv_dev;
@@ -180,7 +180,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  		if (cma_match_private_data(id_priv, ib_event->private_data)) {
  			if (id_priv->id.device == cm_id->device &&
  			    cma_match_net_dev(&id_priv->id, net_dev, req->port))
-@@ -2497,19 +2585,41 @@ static int cma_resolve_iw_route(struct r
+@@ -2471,19 +2559,41 @@ static int cma_resolve_iw_route(struct r
  	return 0;
  }
  
@@ -223,7 +223,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  }
  
  static enum ib_gid_type cma_route_gid_type(enum rdma_network_type network_type,
-@@ -2596,7 +2706,13 @@ static int cma_resolve_iboe_route(struct
+@@ -2570,7 +2680,13 @@ static int cma_resolve_iboe_route(struct
  	route->path_rec->reversible = 1;
  	route->path_rec->pkey = cpu_to_be16(0xffff);
  	route->path_rec->mtu_selector = IB_SA_EQ;
@@ -237,7 +237,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	route->path_rec->traffic_class = tos;
  	route->path_rec->mtu = iboe_get_mtu(ndev->mtu);
  	route->path_rec->rate_selector = IB_SA_EQ;
-@@ -3026,9 +3142,11 @@ static int cma_port_is_unique(struct rdm
+@@ -3000,9 +3116,11 @@ static int cma_port_is_unique(struct rdm
  	struct rdma_id_private *cur_id;
  	struct sockaddr  *daddr = cma_dst_addr(id_priv);
  	struct sockaddr  *saddr = cma_src_addr(id_priv);
@@ -250,7 +250,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  		struct sockaddr  *cur_daddr = cma_dst_addr(cur_id);
  		struct sockaddr  *cur_saddr = cma_src_addr(cur_id);
  		__be16 cur_dport = cma_port(cur_daddr);
-@@ -3065,7 +3183,11 @@ static int cma_alloc_any_port(enum rdma_
+@@ -3039,7 +3157,11 @@ static int cma_alloc_any_port(enum rdma_
  	unsigned int rover;
  	struct net *net = id_priv->id.route.addr.dev_addr.net;
  
@@ -262,7 +262,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	remaining = (high - low) + 1;
  	rover = prandom_u32() % remaining + low;
  retry:
-@@ -3111,9 +3233,10 @@ static int cma_check_port(struct rdma_bi
+@@ -3085,9 +3207,10 @@ static int cma_check_port(struct rdma_bi
  {
  	struct rdma_id_private *cur_id;
  	struct sockaddr *addr, *cur_addr;
@@ -274,7 +274,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  		if (id_priv == cur_id)
  			continue;
  
-@@ -4491,6 +4614,7 @@ static const struct rdma_nl_cbs cma_cb_t
+@@ -4471,6 +4594,7 @@ static const struct rdma_nl_cbs cma_cb_t
  	[RDMA_NL_RDMA_CM_ID_STATS] = { .dump = cma_get_id_stats},
  };
  
@@ -282,7 +282,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  static int cma_init_net(struct net *net)
  {
  	struct cma_pernet *pernet = cma_pernet(net);
-@@ -4513,12 +4637,14 @@ static void cma_exit_net(struct net *net
+@@ -4493,12 +4617,14 @@ static void cma_exit_net(struct net *net
  	idr_destroy(&pernet->ib_ps);
  }
  
@@ -297,7 +297,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  static int __init cma_init(void)
  {
-@@ -4528,9 +4654,11 @@ static int __init cma_init(void)
+@@ -4508,9 +4634,11 @@ static int __init cma_init(void)
  	if (!cma_wq)
  		return -ENOMEM;
  
@@ -309,7 +309,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  
  	ib_sa_register_client(&sa_client);
  	rdma_addr_register_client(&addr_client);
-@@ -4549,7 +4677,9 @@ err:
+@@ -4529,7 +4657,9 @@ err:
  	unregister_netdevice_notifier(&cma_nb);
  	rdma_addr_unregister_client(&addr_client);
  	ib_sa_unregister_client(&sa_client);
@@ -319,7 +319,7 @@ Change-Id: I8d09e3745d48e77b776499148cba50390ac76197
  	destroy_workqueue(cma_wq);
  	return ret;
  }
-@@ -4562,8 +4692,16 @@ static void __exit cma_cleanup(void)
+@@ -4542,8 +4672,16 @@ static void __exit cma_cleanup(void)
  	unregister_netdevice_notifier(&cma_nb);
  	rdma_addr_unregister_client(&addr_client);
  	ib_sa_unregister_client(&sa_client);

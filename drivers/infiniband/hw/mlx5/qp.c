@@ -38,6 +38,7 @@
 #include "mlx5_ib.h"
 #include "ib_rep.h"
 #include "user_exp.h"
+#include "mlx5_ib_exp.h"
 
 /* not supported currently */
 static int wq_signature;
@@ -2614,8 +2615,9 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			return -EINVAL;
 		}
 
-		if (dev->tcd[port - 1].val >= 0)
-			tclass = dev->tcd[port - 1].val;
+		tclass_get_tclass(dev, &dev->tcd[port - 1], ah, port, &tclass);
+		memcpy(&qp->ah, ah, sizeof(qp->ah));
+		qp->tclass = tclass;
 	}
 
 	if (ah->type == RDMA_AH_ATTR_TYPE_ROCE) {
@@ -3383,6 +3385,26 @@ static int ignored_ts_check(enum ib_qp_type qp_type)
 	return 0;
 }
 
+static bool is_ooo_supported(struct ib_qp *ibqp)
+{
+	struct mlx5_ib_dev *dev = to_mdev(ibqp->device);
+
+	if (ibqp->qp_type == IB_QPT_RC &&
+	    MLX5_CAP_GEN(dev->mdev, multipath_rc_qp))
+		return true;
+
+	if ((ibqp->qp_type == IB_QPT_XRC_INI ||
+	     ibqp->qp_type == IB_QPT_XRC_TGT) &&
+	    MLX5_CAP_GEN(dev->mdev, multipath_xrc_qp))
+		return true;
+
+	if (ibqp->qp_type == IB_EXP_QPT_DC_INI &&
+	    MLX5_CAP_GEN(dev->mdev, multipath_dc_qp))
+		return true;
+
+	return false;
+}
+
 int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata)
 {
@@ -3464,6 +3486,12 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		err = 0;
 		goto out;
 	}
+
+	if (qp->create_type == MLX5_QP_KERNEL &&
+	    new_state == IB_QPS_RTR &&
+	    dev->ooo.enabled &&
+	    is_ooo_supported(ibqp))
+		attr_mask |= IB_EXP_QP_OOO_RW_DATA_PLACEMENT;
 
 	err = __mlx5_ib_modify_qp(ibqp, attr, attr_mask, cur_state, new_state);
 
@@ -3703,8 +3731,19 @@ static __be64 get_umr_tunneled_atomic_mask(void)
 	return cpu_to_be64(result);
 }
 
-static void set_reg_umr_segment(struct mlx5_wqe_umr_ctrl_seg *umr,
-				struct ib_send_wr *wr, int atomic)
+static inline int umr_check_mkey_mask(struct mlx5_ib_dev *dev, u64 mask)
+{
+	if ((mask & MLX5_MKEY_MASK_PAGE_SIZE &&
+	     MLX5_CAP_GEN(dev->mdev, umr_modify_entity_size_disabled)) ||
+	    (mask & MLX5_MKEY_MASK_A &&
+	     MLX5_CAP_GEN(dev->mdev, umr_modify_atomic_disabled)))
+		return -EPERM;
+	return 0;
+}
+
+static int set_reg_umr_segment(struct mlx5_ib_dev *dev,
+			       struct mlx5_wqe_umr_ctrl_seg *umr,
+			       struct ib_send_wr *wr, int atomic)
 {
 	struct mlx5_umr_wr *umrwr = umr_wr(wr);
 
@@ -3742,6 +3781,8 @@ static void set_reg_umr_segment(struct mlx5_wqe_umr_ctrl_seg *umr,
 		umr->mkey_mask |= get_umr_enable_umr_mask();
 		umr->mkey_mask |= get_umr_update_access_mask(0);
 	}
+
+	return umr_check_mkey_mask(dev, be64_to_cpu(umr->mkey_mask));
 }
 
 static u8 get_umr_flags(int acc)
@@ -4575,7 +4616,9 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 			}
 			qp->sq.wr_data[idx] = MLX5_IB_WR_UMR;
 			ctrl->imm = cpu_to_be32(umr_wr(wr)->mkey);
-			set_reg_umr_segment(seg, wr, !!(MLX5_CAP_GEN(mdev, atomic)));
+			err = set_reg_umr_segment(dev, seg, wr, !!(MLX5_CAP_GEN(mdev, atomic)));
+			if (unlikely(err))
+				goto out;
 			seg += sizeof(struct mlx5_wqe_umr_ctrl_seg);
 			size += sizeof(struct mlx5_wqe_umr_ctrl_seg) / 16;
 			if (unlikely((seg == qend)))
@@ -5191,12 +5234,21 @@ static int  create_rq(struct mlx5_ib_rwq *rwq, struct ib_pd *pd,
 	}
 	MLX5_SET(wq, wq, log_wq_stride, rwq->log_rq_stride);
 	if (rwq->create_flags & MLX5_IB_WQ_FLAGS_STRIDING_RQ) {
+		int log_num_of_strides;
+		u8 twos_comp_log_num_of_strides;
+
 		MLX5_SET(wq, wq, two_byte_shift_en, rwq->two_byte_shift_en);
 		MLX5_SET(wq, wq, log_wqe_stride_size,
 			 rwq->single_stride_log_num_of_bytes -
 			 MLX5_MIN_SINGLE_STRIDE_LOG_NUM_BYTES);
-		MLX5_SET(wq, wq, log_wqe_num_of_strides, rwq->log_num_strides -
-			 MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES);
+		/* Normalize to device's interface values (range of (-6) - 7) */
+		log_num_of_strides =
+			rwq->log_num_strides - 9;
+		/* Convert to 2's complement representation */
+		twos_comp_log_num_of_strides = log_num_of_strides < 0 ?
+			((u32)(~abs(log_num_of_strides)) + 1) & 0xF :
+			(u8)log_num_of_strides;
+		MLX5_SET(wq, wq, log_wqe_num_of_strides, twos_comp_log_num_of_strides);
 	}
 	MLX5_SET(wq, wq, log_wq_sz, rwq->log_rq_size);
 	MLX5_SET(wq, wq, pd, to_mpd(pd)->pdn);
@@ -5342,10 +5394,15 @@ static int prepare_user_rq(struct ib_pd *pd,
 		}
 		if ((ucmd.single_wqe_log_num_of_strides >
 		    MLX5_MAX_SINGLE_WQE_LOG_NUM_STRIDES) ||
-		     (ucmd.single_wqe_log_num_of_strides <
-			MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES)) {
+		     ((ucmd.single_wqe_log_num_of_strides <
+		       MLX5_EXT_MIN_SINGLE_WQE_LOG_NUM_STRIDES) ||
+		      (ucmd.single_wqe_log_num_of_strides <
+		       MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES &&
+		       !MLX5_CAP_GEN(dev->mdev, ext_stride_num_range)))) {
 			mlx5_ib_dbg(dev, "Invalid log num strides (%u. Range is %u - %u)\n",
 				    ucmd.single_wqe_log_num_of_strides,
+				    MLX5_CAP_GEN(dev->mdev, ext_stride_num_range) ?
+				    MLX5_EXT_MIN_SINGLE_WQE_LOG_NUM_STRIDES :
 				    MLX5_MIN_SINGLE_WQE_LOG_NUM_STRIDES,
 				    MLX5_MAX_SINGLE_WQE_LOG_NUM_STRIDES);
 			return -EINVAL;

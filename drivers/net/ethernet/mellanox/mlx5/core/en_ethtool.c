@@ -293,7 +293,6 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 	struct mlx5e_channels new_channels = {};
 	u32 rx_pending_wqes;
 	u32 min_rq_size;
-	u32 max_rq_size;
 	u8 log_rq_size;
 	u8 log_sq_size;
 	u32 num_mtts;
@@ -312,8 +311,6 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 
 	min_rq_size = mlx5e_rx_wqes_to_packets(priv, rq_wq_type,
 					       1 << mlx5_min_log_rq_size(rq_wq_type));
-	max_rq_size = mlx5e_rx_wqes_to_packets(priv, rq_wq_type,
-					       1 << mlx5_max_log_rq_size(rq_wq_type));
 	rx_pending_wqes = mlx5e_packets_to_rx_wqes(priv, rq_wq_type,
 						   param->rx_pending);
 
@@ -321,12 +318,6 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 		netdev_info(priv->netdev, "%s: rx_pending (%d) < min (%d)\n",
 			    __func__, param->rx_pending,
 			    min_rq_size);
-		return -EINVAL;
-	}
-	if (param->rx_pending > max_rq_size) {
-		netdev_info(priv->netdev, "%s: rx_pending (%d) > max (%d)\n",
-			    __func__, param->rx_pending,
-			    max_rq_size);
 		return -EINVAL;
 	}
 
@@ -342,12 +333,6 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 		netdev_info(priv->netdev, "%s: tx_pending (%d) < min (%d)\n",
 			    __func__, param->tx_pending,
 			    1 << MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE);
-		return -EINVAL;
-	}
-	if (param->tx_pending > (1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE)) {
-		netdev_info(priv->netdev, "%s: tx_pending (%d) > max (%d)\n",
-			    __func__, param->tx_pending,
-			    1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE);
 		return -EINVAL;
 	}
 
@@ -391,7 +376,7 @@ void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
 	ch->max_combined   = priv->profile->max_nch(priv->mdev);
 	ch->combined_count = priv->channels.params.num_channels;
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	ch->max_other      = MLX5E_MAX_RL_QUEUES;
+	ch->max_other      = priv->mdev->mlx5e_res.max_rl_queues;
 	ch->other_count    = priv->channels.params.num_rl_txqs;
 #endif
 }
@@ -432,9 +417,9 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 	}
 
 #ifdef CONFIG_MLX5_EN_SPECIAL_SQ
-	if (ch->other_count > MLX5E_MAX_RL_QUEUES) {
+	if (ch->other_count > priv->mdev->mlx5e_res.max_rl_queues) {
 		netdev_info(priv->netdev, "%s: other_count (%d) > max (%d)\n",
-			    __func__, ch->other_count, MLX5E_MAX_RL_QUEUES);
+			    __func__, ch->other_count, priv->mdev->mlx5e_res.max_rl_queues);
 		return -EINVAL;
 	}
 

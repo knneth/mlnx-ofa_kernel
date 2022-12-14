@@ -208,8 +208,8 @@ Change-Id: I71920f797060e4028e9e7e8132df3ff0d202ce8f
  {
  	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
 @@ -179,18 +272,29 @@ static void nvmet_execute_write_zeroes(s
- 	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length)) <<
- 		(req->ns->blksize_shift - 9)) + 1;
+ 	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length) + 1) <<
+ 		(req->ns->blksize_shift - 9));
  
 +#ifdef CONFIG_COMPAT_IS_BLKDEV_ISSUE_ZEROOUT_HAS_FLAGS
  	if (__blkdev_issue_zeroout(req->ns->bdev, sector, nr_sector,

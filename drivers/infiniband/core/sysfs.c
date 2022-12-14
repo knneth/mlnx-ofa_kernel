@@ -803,10 +803,15 @@ static ssize_t show_hw_stats(struct kobject *kobj, struct attribute *attr,
 		dev = port->ibdev;
 		stats = port->hw_stats;
 	}
+	mutex_lock(&stats->lock);
 	ret = update_hw_stats(dev, stats, hsa->port_num, hsa->index);
 	if (ret)
-		return ret;
-	return print_hw_stat(stats, hsa->index, buf);
+		goto unlock;
+	ret = print_hw_stat(stats, hsa->index, buf);
+unlock:
+	mutex_unlock(&stats->lock);
+
+	return ret;
 }
 
 static ssize_t show_stats_lifespan(struct kobject *kobj,
@@ -944,6 +949,7 @@ static void setup_hw_stats(struct ib_device *device, struct ib_port *port,
 		sysfs_attr_init(hsag->attrs[i]);
 	}
 
+	mutex_init(&stats->lock);
 	/* treat an error here as non-fatal */
 	hsag->attrs[i] = alloc_hsa_lifespan("lifespan", port_num);
 	if (hsag->attrs[i])

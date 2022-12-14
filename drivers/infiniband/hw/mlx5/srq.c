@@ -412,6 +412,9 @@ int mlx5_ib_query_srq(struct ib_srq *ibsrq, struct ib_srq_attr *srq_attr)
 	srq_attr->srq_limit = out->lwm;
 	srq_attr->max_wr    = srq->msrq.max - 1;
 	srq_attr->max_sge   = srq->msrq.max_gs;
+	if (ibsrq->srq_type == IB_EXP_SRQT_NVMF)
+		srq_attr->nvmf.cmd_unknown_namespace_cnt =
+			out->nvmf.cmd_unknown_namespace_cnt;
 
 out_box:
 	kfree(out);

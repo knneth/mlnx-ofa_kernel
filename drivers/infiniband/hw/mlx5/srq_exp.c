@@ -175,7 +175,6 @@ int mlx5_ib_exp_set_nvmf_srq_attrs(struct mlx5_nvmf_attr *nvmf,
 
 	nvmf->type = to_mlx5_nvmf_offload_type(init_attr->ext.nvmf.type);
 	nvmf->log_max_namespace = init_attr->ext.nvmf.log_max_namespace;
-	nvmf->offloaded_capsules_count = init_attr->ext.nvmf.offloaded_capsules_count;
 	nvmf->ioccsz = init_attr->ext.nvmf.cmd_size;
 	nvmf->icdoff = init_attr->ext.nvmf.data_offset;
 	nvmf->log_max_io_size = init_attr->ext.nvmf.log_max_io_size;

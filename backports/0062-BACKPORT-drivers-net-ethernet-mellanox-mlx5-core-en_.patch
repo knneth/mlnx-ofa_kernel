@@ -1,7 +1,7 @@
-From: Alaa Hleihel <alaa@mellanox.com>
+From: Feras Daoud <ferasda@mellanox.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
 
-Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
+Change-Id: Ib0073386ace01c036c0c7fa4a2dc0da954624e3e
 ---
  drivers/net/ethernet/mellanox/mlx5/core/en_rx.c | 298 +++++++++++++++++++++++-
  1 file changed, 295 insertions(+), 3 deletions(-)
@@ -607,7 +607,7 @@ Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
  	return work_done;
  }
  
-@@ -1370,6 +1636,9 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1372,6 +1638,9 @@ static inline void mlx5i_complete_rx_cqe
  	u32 qpn;
  	u8 *dgid;
  	u8 g;
@@ -617,7 +617,7 @@ Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
  
  	qpn = be32_to_cpu(cqe->sop_drop_qpn) & 0xffffff;
  	netdev = mlx5i_pkey_get_netdev(rq->netdev, qpn);
-@@ -1401,8 +1670,19 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1406,8 +1675,19 @@ static inline void mlx5i_complete_rx_cqe
  
  	skb->protocol = *((__be16 *)(skb->data));
  
@@ -635,9 +635,9 @@ Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
 +	rq->stats.csum_complete++;
 +#endif
  
- 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp)))
+ 	if (unlikely(mlx5e_rx_hw_stamp(tstamp)))
  		skb_hwtstamps(skb)->hwtstamp =
-@@ -1410,8 +1690,10 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1415,8 +1695,10 @@ static inline void mlx5i_complete_rx_cqe
  
  	skb_record_rx_queue(skb, rq->ix);
  
@@ -648,7 +648,7 @@ Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
  
  	/* 20 bytes of ipoib header and 4 for encap existing */
  	pseudo_header = skb_push(skb, MLX5_IPOIB_PSEUDO_LEN);
-@@ -1421,13 +1703,15 @@ static inline void mlx5i_complete_rx_cqe
+@@ -1426,13 +1708,15 @@ static inline void mlx5i_complete_rx_cqe
  
  	skb->dev = netdev;
  
@@ -665,7 +665,7 @@ Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
  	struct mlx5e_rx_wqe_cyc *wqe;
-@@ -1449,6 +1733,11 @@ void mlx5i_handle_rx_cqe(struct mlx5e_rq
+@@ -1454,6 +1738,11 @@ void mlx5i_handle_rx_cqe(struct mlx5e_rq
  		dev_kfree_skb_any(skb);
  		goto wq_free_wqe;
  	}
@@ -677,7 +677,7 @@ Change-Id: Id3552b8ee0826546e531dafb0cc22707ecfdf8ce
  	napi_gro_receive(rq->cq.napi, skb);
  
  wq_free_wqe:
-@@ -1462,6 +1751,9 @@ wq_free_wqe:
+@@ -1467,6 +1756,9 @@ wq_free_wqe:
  
  void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  {
