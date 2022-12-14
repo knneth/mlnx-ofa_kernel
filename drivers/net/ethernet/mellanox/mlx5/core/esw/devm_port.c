@@ -7,7 +7,8 @@
 #include "mlx5_esw_devm.h"
 
 int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
-			       u32 controller, u32 sfnum)
+			       u32 controller, u32 sfnum,
+			       struct devlink_port *dl_port)
 {
 	struct mlx5_devm_device *devm_dev;
 	struct mlxdevm_port_attrs attrs;
@@ -38,6 +39,7 @@ int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
 	if (ret)
 		goto port_err;
 
+	port->port.dl_port = dl_port;
 	down_write(&devm_dev->port_list_rwsem);
 	list_add_tail(&port->list, &devm_dev->port_list);
 	up_write(&devm_dev->port_list_rwsem);

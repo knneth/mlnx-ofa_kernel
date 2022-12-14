@@ -213,26 +213,6 @@ struct mlx5_wqe_ctrl_seg {
 	};
 };
 
-struct mlx5_wqe_aso_ctrl_seg {
-	__be32  va_h;
-	__be32  va_l; /* include read_enable */
-	__be32  l_key;
-	u8      data_mask_mode;
-	u8      condition_1_0_operand;
-	u8      condition_1_0_offset;
-	u8      data_offset_condition_operand;
-	__be32  condition_0_data;
-	__be32  condition_0_mask;
-	__be32  condition_1_data;
-	__be32  condition_1_mask;
-	__be64  bitwise_data;
-	__be64  data_mask;
-};
-
-struct mlx5_wqe_aso_data_seg {
-	__be32  bytewise_data[16];
-};
-
 enum {
 	MLX5_MLX_FLAG_MASK_VL15 = 0x40,
 	MLX5_MLX_FLAG_MASK_SLR  = 0x20,
@@ -283,6 +263,7 @@ enum {
 
 enum {
 	MLX5_ETH_WQE_FT_META_IPSEC = BIT(0),
+	MLX5_ETH_WQE_FT_META_MACSEC = BIT(1),
 };
 
 struct mlx5_wqe_eth_seg {

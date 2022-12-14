@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
 
 Change-Id: I28cf6c15f74ea9f208c9641ac9a469538d63df1c
 ---
- drivers/infiniband/core/umem_dmabuf.c | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ drivers/infiniband/core/umem_dmabuf.c | 31 +++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
 
 --- a/drivers/infiniband/core/umem_dmabuf.c
 +++ b/drivers/infiniband/core/umem_dmabuf.c
@@ -16,7 +16,7 @@ Change-Id: I28cf6c15f74ea9f208c9641ac9a469538d63df1c
  #include <linux/dma-buf.h>
  #include <linux/dma-resv.h>
  #include <linux/dma-mapping.h>
-@@ -10,7 +11,9 @@
+@@ -10,15 +11,22 @@
  
  #include "uverbs.h"
  
@@ -26,7 +26,20 @@ Change-Id: I28cf6c15f74ea9f208c9641ac9a469538d63df1c
  
  int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf)
  {
-@@ -58,8 +61,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
+ 	struct sg_table *sgt;
+ 	struct scatterlist *sg;
++#ifndef HAVE_DMA_RESV_WAIT_TIMEOUT //forwardport
+ 	struct dma_fence *fence;
++#endif
+ 	unsigned long start, end, cur = 0;
+ 	unsigned int nmap = 0;
++#ifdef HAVE_DMA_RESV_WAIT_TIMEOUT
++	long ret;
++#endif
+ 	int i;
+ 
+ 	dma_resv_assert_held(umem_dmabuf->attach->dmabuf->resv);
+@@ -58,8 +66,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
  		cur += sg_dma_len(sg);
  	}
  
@@ -41,10 +54,19 @@ Change-Id: I28cf6c15f74ea9f208c9641ac9a469538d63df1c
  	umem_dmabuf->sgt = sgt;
  
  wait_fence:
-@@ -68,7 +77,11 @@ wait_fence:
+@@ -68,11 +82,25 @@ wait_fence:
  	 * may be not up-to-date. Wait for the exporter to finish
  	 * the migration.
  	 */
++#ifdef HAVE_DMA_RESV_WAIT_TIMEOUT //forwardport
++	ret =  dma_resv_wait_timeout(umem_dmabuf->attach->dmabuf->resv, false,
++				     false, MAX_SCHEDULE_TIMEOUT);
++	if (ret < 0)
++		return ret;
++	if (ret == 0)
++		return -ETIMEDOUT;
++	return 0;
++#else /* HAVE_DMA_RESV_WAIT_TIMEOUT */
 +#ifdef HAVE_DMA_RESV_EXCL_FENCE
  	fence = dma_resv_excl_fence(umem_dmabuf->attach->dmabuf->resv);
 +#else
@@ -53,7 +75,12 @@ Change-Id: I28cf6c15f74ea9f208c9641ac9a469538d63df1c
  	if (fence)
  		return dma_fence_wait(fence, false);
  
-@@ -176,7 +189,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
+ 	return 0;
++#endif /* HAVE_DMA_RESV_WAIT_TIMEOUT */
+ }
+ EXPORT_SYMBOL(ib_umem_dmabuf_map_pages);
+ 
+@@ -176,7 +204,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
  }
  
  static struct dma_buf_attach_ops ib_umem_dmabuf_attach_pinned_ops = {
@@ -63,7 +90,7 @@ Change-Id: I28cf6c15f74ea9f208c9641ac9a469538d63df1c
  	.move_notify = ib_umem_dmabuf_unsupported_move_notify,
  };
  
-@@ -229,3 +244,4 @@ void ib_umem_dmabuf_release(struct ib_um
+@@ -229,3 +259,4 @@ void ib_umem_dmabuf_release(struct ib_um
  	dma_buf_put(dmabuf);
  	kfree(umem_dmabuf);
  }

@@ -42,6 +42,8 @@ struct mlx5e_port_eth_proto {
 	u32 oper;
 };
 
+int mlx5_query_port_status(struct mlx5_core_dev *mdev, u32 *status_opcode,
+			   u16 *monitor_opcode, char *status_message);
 int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
 			      struct mlx5e_port_eth_proto *eproto);
 void mlx5_port_query_eth_autoneg(struct mlx5_core_dev *dev, u8 *an_status,

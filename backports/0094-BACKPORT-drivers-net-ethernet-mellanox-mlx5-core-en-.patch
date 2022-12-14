@@ -83,7 +83,7 @@ Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
  
  	ch_stats->arm++;
  
-@@ -399,6 +430,9 @@ static int mlx5e_ptp_open_tx_cqs(struct
+@@ -398,6 +429,9 @@ static int mlx5e_ptp_open_tx_cqs(struct
  	ccp.ch_stats = c->stats;
  	ccp.napi     = &c->napi;
  	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
@@ -93,7 +93,7 @@ Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
  
  	cq_param = &cparams->txq_sq_param.cqp;
  
-@@ -456,7 +490,16 @@ static int mlx5e_init_ptp_rq(struct mlx5
+@@ -455,7 +489,16 @@ static int mlx5e_init_ptp_rq(struct mlx5
  	if (err)
  		return err;
  
@@ -111,7 +111,7 @@ Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
  }
  
  static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c,
-@@ -472,7 +515,9 @@ static int mlx5e_ptp_open_rq(struct mlx5
+@@ -471,7 +514,9 @@ static int mlx5e_ptp_open_rq(struct mlx5
  	ccp.ch_stats = c->stats;
  	ccp.napi     = &c->napi;
  	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
@@ -122,7 +122,7 @@ Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
  	err = mlx5e_init_ptp_rq(c, params, &c->rq);
  	if (err)
  		return err;
-@@ -517,7 +562,11 @@ static void mlx5e_ptp_build_rq_param(str
+@@ -516,7 +561,11 @@ static void mlx5e_ptp_build_rq_param(str
  
  	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
  	mlx5e_init_rq_type_params(mdev, params);

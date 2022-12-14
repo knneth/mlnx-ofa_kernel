@@ -8,7 +8,7 @@ Change-Id: I883421b87de3661b098a8e52da3324ca0f2f57e5
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-@@ -39,6 +39,9 @@ struct mlx5e_ptp {
+@@ -40,6 +40,9 @@ struct mlx5e_ptp {
  
  	/* data path - accessed per napi poll */
  	struct mlx5e_ch_stats     *stats;
@@ -18,7 +18,7 @@ Change-Id: I883421b87de3661b098a8e52da3324ca0f2f57e5
  
  	/* control */
  	struct mlx5e_priv         *priv;
-@@ -49,14 +52,26 @@ struct mlx5e_ptp {
+@@ -50,14 +53,26 @@ struct mlx5e_ptp {
  
  static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
  {
@@ -47,11 +47,11 @@ Change-Id: I883421b87de3661b098a8e52da3324ca0f2f57e5
  	if (fk.basic.n_proto == htons(ETH_P_1588))
  		return true;
  
-@@ -66,6 +81,7 @@ static inline bool mlx5e_use_ptpsq(struc
+@@ -67,6 +82,7 @@ static inline bool mlx5e_use_ptpsq(struc
  
  	return (fk.basic.ip_proto == IPPROTO_UDP &&
  		fk.ports.dst == htons(PTP_EV_PORT));
 +#endif
  }
  
- int mlx5e_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
+ static inline bool mlx5e_ptpsq_fifo_has_room(struct mlx5e_txqsq *sq)

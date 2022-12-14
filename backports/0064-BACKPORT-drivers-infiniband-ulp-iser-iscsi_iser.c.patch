@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 
 Change-Id: I14c334184582c18ab629558c244fe4e27b605458
 ---
- drivers/infiniband/ulp/iser/iscsi_iser.c | 120 ++++++++++++++++++++++-
- 1 file changed, 118 insertions(+), 2 deletions(-)
+ drivers/infiniband/ulp/iser/iscsi_iser.c | 128 ++++++++++++++++++++++-
+ 1 file changed, 126 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
@@ -106,7 +106,19 @@ Change-Id: I14c334184582c18ab629558c244fe4e27b605458
  	mutex_unlock(&iser_conn->state_mutex);
  	return error;
  }
-@@ -578,7 +631,9 @@ static inline unsigned int iser_dif_prot
+@@ -568,7 +621,11 @@ static void iscsi_iser_session_destroy(s
+ 	struct Scsi_Host *shost = iscsi_session_to_shost(cls_session);
+ 
+ 	iscsi_session_teardown(cls_session);
++#ifdef HAVE_ISCSI_HOST_REMOVE_2_PARAMS
++	iscsi_host_remove(shost, false);
++#else
+ 	iscsi_host_remove(shost);
++#endif
+ 	iscsi_host_free(shost);
+ }
+ 
+@@ -578,7 +635,9 @@ static inline unsigned int iser_dif_prot
  
  	if (prot_caps & IB_PROT_T10DIF_TYPE_1)
  		ret |= SHOST_DIF_TYPE1_PROTECTION |
@@ -116,7 +128,7 @@ Change-Id: I14c334184582c18ab629558c244fe4e27b605458
  		       SHOST_DIX_TYPE1_PROTECTION;
  	if (prot_caps & IB_PROT_T10DIF_TYPE_2)
  		ret |= SHOST_DIF_TYPE2_PROTECTION |
-@@ -646,13 +701,20 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -646,13 +705,20 @@ iscsi_iser_session_create(struct iscsi_e
  
  			shost->sg_prot_tablesize = shost->sg_tablesize;
  			scsi_host_set_prot(shost, iser_dif_prot_caps(sig_caps));
@@ -139,7 +151,19 @@ Change-Id: I14c334184582c18ab629558c244fe4e27b605458
  		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
  			mutex_unlock(&iser_conn->state_mutex);
  			goto free_host;
-@@ -756,7 +818,13 @@ static void iscsi_iser_conn_get_stats(st
+@@ -685,7 +751,11 @@ iscsi_iser_session_create(struct iscsi_e
+ 	return cls_session;
+ 
+ remove_host:
++#ifdef HAVE_ISCSI_HOST_REMOVE_2_PARAMS
++	iscsi_host_remove(shost, false);
++#else
+ 	iscsi_host_remove(shost);
++#endif
+ free_host:
+ 	iscsi_host_free(shost);
+ 	return NULL;
+@@ -756,7 +826,13 @@ static void iscsi_iser_conn_get_stats(st
  	stats->r2t_pdus = conn->r2t_pdus_cnt; /* always 0 */
  	stats->tmfcmd_pdus = conn->tmfcmd_pdus_cnt;
  	stats->tmfrsp_pdus = conn->tmfrsp_pdus_cnt;
@@ -153,7 +177,7 @@ Change-Id: I14c334184582c18ab629558c244fe4e27b605458
  }
  
  static int iscsi_iser_get_ep_param(struct iscsi_endpoint *ep,
-@@ -956,21 +1024,60 @@ static umode_t iser_attr_is_visible(int
+@@ -956,21 +1032,60 @@ static umode_t iser_attr_is_visible(int
  	return 0;
  }
  
@@ -214,7 +238,7 @@ Change-Id: I14c334184582c18ab629558c244fe4e27b605458
  };
  
  static struct iscsi_transport iscsi_iser_transport = {
-@@ -983,7 +1090,9 @@ static struct iscsi_transport iscsi_iser
+@@ -983,7 +1098,9 @@ static struct iscsi_transport iscsi_iser
  	/* connection management */
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,
@@ -224,7 +248,7 @@ Change-Id: I14c334184582c18ab629558c244fe4e27b605458
  	.destroy_conn           = iscsi_conn_teardown,
  	.attr_is_visible	= iser_attr_is_visible,
  	.set_param              = iscsi_iser_set_param,
-@@ -1017,6 +1126,13 @@ static int __init iser_init(void)
+@@ -1017,6 +1134,13 @@ static int __init iser_init(void)
  
  	iser_dbg("Starting iSER datamover...\n");
  

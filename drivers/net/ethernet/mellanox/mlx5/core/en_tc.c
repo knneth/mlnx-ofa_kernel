@@ -369,19 +369,42 @@ static int
 mlx5e_tc_add_flow_meter(struct mlx5e_priv *priv,
 			struct mlx5_flow_attr *attr)
 {
+	struct mlx5e_post_act *post_act = get_post_action(priv);
+	struct mlx5e_post_meter_priv *post_meter;
+	enum mlx5_flow_namespace_type ns_type;
 	struct mlx5e_flow_meter_handle *meter;
 
-	meter = mlx5e_tc_meter_get(priv->mdev, &attr->meter_attr.params);
+	meter = mlx5e_tc_meter_replace(priv->mdev, &attr->meter_attr.params);
 	if (IS_ERR(meter)) {
 		mlx5_core_err(priv->mdev, "Failed to get flow meter\n");
 		return PTR_ERR(meter);
 	}
 
+	ns_type = mlx5e_tc_meter_get_namespace(meter->flow_meters);
+	post_meter = mlx5e_post_meter_init(priv, ns_type, post_act, meter->green_counter,
+					   meter->red_counter);
+	if (IS_ERR(post_meter)) {
+		mlx5_core_err(priv->mdev, "Failed to init post meter\n");
+		goto err_meter_init;
+	}
+
 	attr->meter_attr.meter = meter;
-	attr->dest_ft = mlx5e_tc_meter_get_post_meter_ft(meter->flow_meters);
+	attr->meter_attr.post_meter = post_meter;
+	attr->dest_ft = mlx5e_post_meter_get_ft(post_meter);
 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 
 	return 0;
+
+err_meter_init:
+	mlx5e_tc_meter_put(meter);
+	return PTR_ERR(post_meter);
+}
+
+static void
+mlx5e_tc_del_flow_meter(struct mlx5_flow_attr *attr)
+{
+	mlx5e_post_meter_cleanup(attr->meter_attr.post_meter);
+	mlx5e_tc_meter_put(attr->meter_attr.meter);
 }
 
 struct mlx5_flow_handle *
@@ -441,7 +464,7 @@ mlx5e_tc_rule_unoffload(struct mlx5e_priv *priv,
 	mlx5_eswitch_del_offloaded_rule(esw, rule, attr);
 
 	if (attr->meter_attr.meter)
-		mlx5e_tc_meter_put(priv->mdev, attr->meter_attr.meter);
+		mlx5e_tc_del_flow_meter(attr);
 }
 
 int
@@ -2122,7 +2145,6 @@ mlx5e_tc_add_nic_flow(struct mlx5e_priv *priv,
 
 	if (attr->action & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR) {
 		err = mlx5e_attach_mod_hdr(priv, flow, parse_attr);
-		mlx5e_mod_hdr_dealloc(&parse_attr->mod_hdr_acts);
 		if (err)
 			return err;
 	}
@@ -2178,8 +2200,10 @@ static void mlx5e_tc_del_nic_flow(struct mlx5e_priv *priv,
 	}
 	mutex_unlock(&priv->fs.tc.t_lock);
 
-	if (attr->action & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR)
+	if (attr->action & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR) {
+		mlx5e_mod_hdr_dealloc(&attr->parse_attr->mod_hdr_acts);
 		mlx5e_detach_mod_hdr(priv, flow);
+	}
 
 	if (attr->action & MLX5_FLOW_CONTEXT_ACTION_COUNT)
 		mlx5_fc_destroy(priv->mdev, attr->counter);
@@ -2245,8 +2269,13 @@ mlx5e_tc_offload_to_slow_path(struct mlx5_eswitch *esw,
 			      struct mlx5e_tc_flow *flow,
 			      struct mlx5_flow_spec *spec)
 {
+	struct mlx5e_tc_mod_hdr_acts mod_acts = {};
+	struct mlx5e_mod_hdr_handle *mh = NULL;
 	struct mlx5_flow_attr *slow_attr;
 	struct mlx5_flow_handle *rule;
+	bool fwd_and_modify_cap;
+	u32 chain_mapping = 0;
+	int err;
 
 	slow_attr = mlx5_alloc_flow_attr(MLX5_FLOW_NAMESPACE_FDB);
 	if (!slow_attr)
@@ -2257,13 +2286,56 @@ mlx5e_tc_offload_to_slow_path(struct mlx5_eswitch *esw,
 	slow_attr->esw_attr->split_count = 0;
 	slow_attr->flags |= MLX5_ATTR_FLAG_SLOW_PATH;
 
-	rule = mlx5e_tc_offload_fdb_rules(esw, flow, spec, slow_attr);
-	if (!IS_ERR(rule))
-		flow_flag_set(flow, SLOW);
+	fwd_and_modify_cap = MLX5_CAP_ESW_FLOWTABLE((esw)->dev, fdb_modify_header_fwd_to_table);
+	if (!fwd_and_modify_cap)
+		goto skip_restore;
 
+	err = mlx5_chains_get_chain_mapping(esw_chains(esw), flow->attr->chain, &chain_mapping);
+	if (err)
+		goto err_get_chain;
+
+	err = mlx5e_tc_match_to_reg_set(esw->dev, &mod_acts, MLX5_FLOW_NAMESPACE_FDB,
+					CHAIN_TO_REG, chain_mapping);
+	if (err)
+		goto err_reg_set;
+
+	mh = mlx5e_mod_hdr_attach(esw->dev, get_mod_hdr_table(flow->priv, flow),
+				  MLX5_FLOW_NAMESPACE_FDB, &mod_acts);
+	if (IS_ERR(mh)) {
+		err = PTR_ERR(mh);
+		goto err_attach;
+	}
+
+	slow_attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
+	slow_attr->modify_hdr = mlx5e_mod_hdr_get(mh);
+
+skip_restore:
+	rule = mlx5e_tc_offload_fdb_rules(esw, flow, spec, slow_attr);
+	if (IS_ERR(rule)) {
+		err = PTR_ERR(rule);
+		goto err_offload;
+	}
+
+	flow->slow_mh = mh;
+	flow->chain_mapping = chain_mapping;
+	flow_flag_set(flow, SLOW);
+
+	mlx5e_mod_hdr_dealloc(&mod_acts);
 	kfree(slow_attr);
 
 	return rule;
+
+err_offload:
+	if (fwd_and_modify_cap)
+		mlx5e_mod_hdr_detach(esw->dev, get_mod_hdr_table(flow->priv, flow), mh);
+err_attach:
+err_reg_set:
+	if (fwd_and_modify_cap)
+		mlx5_chains_put_chain_mapping(esw_chains(esw), chain_mapping);
+err_get_chain:
+	mlx5e_mod_hdr_dealloc(&mod_acts);
+	kfree(slow_attr);
+	return ERR_PTR(err);
 }
 
 void mlx5e_tc_unoffload_from_slow_path(struct mlx5_eswitch *esw,
@@ -2281,7 +2353,17 @@ void mlx5e_tc_unoffload_from_slow_path(struct mlx5_eswitch *esw,
 	slow_attr->action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 	slow_attr->esw_attr->split_count = 0;
 	slow_attr->flags |= MLX5_ATTR_FLAG_SLOW_PATH;
+	if (flow->slow_mh) {
+		slow_attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
+		slow_attr->modify_hdr = mlx5e_mod_hdr_get(flow->slow_mh);
+	}
 	mlx5e_tc_unoffload_fdb_rules(esw, flow, slow_attr);
+	if (flow->slow_mh) {
+		mlx5e_mod_hdr_detach(esw->dev, get_mod_hdr_table(flow->priv, flow), flow->slow_mh);
+		mlx5_chains_put_chain_mapping(esw_chains(esw), flow->chain_mapping);
+		flow->chain_mapping = 0;
+		flow->slow_mh = NULL;
+	}
 	flow_flag_clear(flow, SLOW);
 	kfree(slow_attr);
 }
@@ -2345,8 +2427,11 @@ bool mlx5e_tc_is_vf_tunnel(struct net_device *out_dev, struct net_device *route_
 	route_priv = netdev_priv(route_dev);
 	route_mdev = route_priv->mdev;
 
-	if (out_mdev->coredev_type != MLX5_COREDEV_PF ||
-	    route_mdev->coredev_type != MLX5_COREDEV_VF)
+	if (out_mdev->coredev_type != MLX5_COREDEV_PF)
+		return false;
+
+	if (route_mdev->coredev_type != MLX5_COREDEV_VF &&
+	    route_mdev->coredev_type != MLX5_COREDEV_SF)
 		return false;
 
 	return mlx5e_same_hw_devs(out_priv, route_priv);

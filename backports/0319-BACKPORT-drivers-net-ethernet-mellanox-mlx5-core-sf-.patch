@@ -1,0 +1,34 @@
+From: Maher Sanalla <msanalla@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
+
+Change-Id: I4c99ddeeb0c7171db284df2e7c62ee1b29f23a1d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
+@@ -23,11 +23,21 @@ int mlx5_devlink_sf_port_new(struct devl
+ 			     unsigned int *new_port_index);
+ int mlx5_devlink_sf_port_del(struct devlink *devlink, unsigned int port_index,
+ 			     struct netlink_ext_ack *extack);
+-int mlx5_devlink_sf_port_fn_state_get(struct devlink_port *dl_port,
++#ifdef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
++int mlx5_devlink_sf_port_fn_state_get(
++#else
++int mlx5_devlink_sf_port_fn_state_get(struct devlink *devlink,
++#endif
++				      struct devlink_port *dl_port,
+ 				      enum devlink_port_fn_state *state,
+ 				      enum devlink_port_fn_opstate *opstate,
+ 				      struct netlink_ext_ack *extack);
+-int mlx5_devlink_sf_port_fn_state_set(struct devlink_port *dl_port,
++#ifdef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
++int mlx5_devlink_sf_port_fn_state_set(
++#else
++int mlx5_devlink_sf_port_fn_state_set(struct devlink *devlink,
++#endif
++				      struct devlink_port *dl_port,
+ 				      enum devlink_port_fn_state state,
+ 				      struct netlink_ext_ack *extack);
+ #if IS_ENABLED(CONFIG_MLXDEVM)

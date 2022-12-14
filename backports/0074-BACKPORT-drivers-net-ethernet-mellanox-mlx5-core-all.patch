@@ -3,12 +3,19 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/alloc.c
 
 Change-Id: Ia13dc1726e4514a8ac3341f45738359f37af0423
 ---
- drivers/net/ethernet/mellanox/mlx5/core/alloc.c | 7 +++++--
- 1 file changed, 5 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/alloc.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
-@@ -68,8 +68,11 @@ static void *mlx5_dma_zalloc_coherent_no
+@@ -61,11 +61,18 @@ static void *mlx5_dma_zalloc_coherent_no
+ 	int original_node;
+ 	void *cpu_handle;
+ 
++	/* WA for kernels that don't use numa_mem_id in alloc_pages_node */
++	if (node == NUMA_NO_NODE)
++		node = numa_mem_id();
++
  	mutex_lock(&priv->alloc_mutex);
  	original_node = dev_to_node(device);
  	set_dev_node(device, node);

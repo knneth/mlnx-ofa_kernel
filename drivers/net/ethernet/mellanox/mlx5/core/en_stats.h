@@ -184,8 +184,6 @@ struct mlx5e_sw_stats {
 	u64 tx_xdp_full;
 	u64 tx_xdp_err;
 	u64 tx_xdp_cqes;
-	u64 tx_cqe_compress_blks;
-	u64 tx_cqe_compress_pkts;
 	u64 rx_wqe_err;
 	u64 rx_mpwqe_filler_cqes;
 	u64 rx_mpwqe_filler_strides;
@@ -411,8 +409,6 @@ struct mlx5e_sq_stats {
 	u64 recover;
 	/* dirtied @completion */
 	u64 cqes ____cacheline_aligned_in_smp;
-	u64 cqe_compress_blks;
-	u64 cqe_compress_pkts;
 	u64 wake;
 	u64 cqe_err;
 };
@@ -476,5 +472,6 @@ extern MLX5E_DECLARE_STATS_GRP(per_port_buff_congest);
 extern MLX5E_DECLARE_STATS_GRP(ipsec_hw);
 extern MLX5E_DECLARE_STATS_GRP(ipsec_sw);
 extern MLX5E_DECLARE_STATS_GRP(ptp);
+extern MLX5E_DECLARE_STATS_GRP(macsec_hw);
 
 #endif /* __MLX5_EN_STATS_H__ */

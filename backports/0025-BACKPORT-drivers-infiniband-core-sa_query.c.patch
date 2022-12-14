@@ -8,7 +8,7 @@ Change-Id: I53449d1b2c1ab4a4fec05166682aeeb205560b57
 
 --- a/drivers/infiniband/core/sa_query.c
 +++ b/drivers/infiniband/core/sa_query.c
-@@ -705,10 +705,17 @@ static void ib_nl_set_path_rec_attrs(str
+@@ -714,10 +714,17 @@ static void ib_nl_set_path_rec_attrs(str
  	query->mad_buf->context[1] = NULL;
  
  	/* Construct the family header first */
@@ -27,7 +27,7 @@ Change-Id: I53449d1b2c1ab4a4fec05166682aeeb205560b57
  	header->port_num = query->port->port_num;
  
  	if ((comp_mask & IB_SA_PATH_REC_REVERSIBLE) &&
-@@ -955,8 +962,12 @@ static void ib_nl_request_timeout(struct
+@@ -995,8 +1002,12 @@ static void ib_nl_request_timeout(struct
  }
  
  int ib_nl_handle_set_timeout(struct sk_buff *skb,
@@ -40,7 +40,7 @@ Change-Id: I53449d1b2c1ab4a4fec05166682aeeb205560b57
  {
  	int timeout, delta, abs_delta;
  	const struct nlattr *attr;
-@@ -967,11 +978,15 @@ int ib_nl_handle_set_timeout(struct sk_b
+@@ -1007,11 +1018,15 @@ int ib_nl_handle_set_timeout(struct sk_b
  	int ret;
  
  	if (!(nlh->nlmsg_flags & NLM_F_REQUEST) ||
@@ -58,7 +58,7 @@ Change-Id: I53449d1b2c1ab4a4fec05166682aeeb205560b57
  	attr = (const struct nlattr *)tb[LS_NLA_TYPE_TIMEOUT];
  	if (ret || !attr)
  		goto settimeout_out;
-@@ -1022,8 +1037,13 @@ static inline int ib_nl_is_good_resolve_
+@@ -1062,8 +1077,13 @@ static inline int ib_nl_is_good_resolve_
  	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
  		return 0;
  
@@ -72,7 +72,7 @@ Change-Id: I53449d1b2c1ab4a4fec05166682aeeb205560b57
  	if (ret)
  		return 0;
  
-@@ -1031,8 +1051,12 @@ static inline int ib_nl_is_good_resolve_
+@@ -1071,8 +1091,12 @@ static inline int ib_nl_is_good_resolve_
  }
  
  int ib_nl_handle_resolve_resp(struct sk_buff *skb,

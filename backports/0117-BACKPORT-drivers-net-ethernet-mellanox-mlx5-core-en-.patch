@@ -129,7 +129,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  	case XDP_DROP:
  		rq->stats->xdp_drop++;
  		return true;
-@@ -380,9 +426,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -378,9 +424,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  
  static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  				  struct mlx5e_xdp_wqe_info *wi,
@@ -147,7 +147,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  {
  	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
  	u16 i;
-@@ -395,16 +447,25 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -393,16 +445,25 @@ static void mlx5e_free_xdpsq_desc(struct
  			/* XDP_TX from the XSK RQ and XDP_REDIRECT */
  			dma_unmap_single(sq->pdev, xdpi.frame.dma_addr,
  					 xdpi.frame.xdpf->len, DMA_TO_DEVICE);
@@ -173,7 +173,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  		default:
  			WARN_ON_ONCE(true);
  		}
-@@ -413,14 +474,20 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -411,14 +472,20 @@ static void mlx5e_free_xdpsq_desc(struct
  
  bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  {
@@ -194,7 +194,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  
  	sq = container_of(cq, struct mlx5e_xdpsq, cq);
  
-@@ -453,7 +520,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -451,7 +518,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  			sqcc += wi->num_wqebbs;
  
@@ -211,7 +211,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  		} while (!last_wqe);
  
  		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -466,10 +541,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -464,10 +539,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  		}
  	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
  
@@ -230,7 +230,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  
  	sq->stats->cqes += i;
  
-@@ -484,12 +567,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -482,12 +565,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  {
@@ -249,7 +249,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  
  	while (sq->cc != sq->pc) {
  		struct mlx5e_xdp_wqe_info *wi;
-@@ -500,16 +589,57 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -498,16 +587,57 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
  
  		sq->cc += wi->num_wqebbs;
  
@@ -308,7 +308,7 @@ Change-Id: Iadf0cd7110da5fb771033d34fe4ad2c56a60d230
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -570,25 +700,90 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -568,25 +698,90 @@ int mlx5e_xdp_xmit(struct net_device *de
  	return nxmit;
  }
  

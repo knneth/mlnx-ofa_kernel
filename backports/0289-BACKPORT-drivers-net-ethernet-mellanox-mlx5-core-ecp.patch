@@ -8,7 +8,7 @@ Change-Id: I3337e98de3ea94a2e6096cc494713a63a018c110
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
-@@ -474,6 +474,9 @@ static struct attribute *smart_nic_attrs
+@@ -508,6 +508,9 @@ static struct attribute *smart_nic_attrs
  	&attr_regex_en.attr,
  	NULL,
  };
@@ -18,7 +18,7 @@ Change-Id: I3337e98de3ea94a2e6096cc494713a63a018c110
  
  static const struct sysfs_ops smart_nic_sysfs_ops = {
  	.show   = smart_nic_attr_show,
-@@ -482,7 +485,11 @@ static const struct sysfs_ops smart_nic_
+@@ -516,7 +519,11 @@ static const struct sysfs_ops smart_nic_
  
  static struct kobj_type smart_nic_type = {
  	.sysfs_ops     = &smart_nic_sysfs_ops,
@@ -30,7 +30,7 @@ Change-Id: I3337e98de3ea94a2e6096cc494713a63a018c110
  };
  
  void mlx5_smartnic_sysfs_init(struct net_device *dev)
-@@ -608,6 +615,9 @@ static struct attribute *regex_attrs[] =
+@@ -642,6 +649,9 @@ static struct attribute *regex_attrs[] =
  	&attr_regex.attr,
  	NULL,
  };
@@ -40,7 +40,7 @@ Change-Id: I3337e98de3ea94a2e6096cc494713a63a018c110
  
  static ssize_t regex_attr_show(struct kobject *kobj,
  			       struct attribute *attr, char *buf)
-@@ -629,7 +639,11 @@ static const struct sysfs_ops regex_sysf
+@@ -663,7 +673,11 @@ static const struct sysfs_ops regex_sysf
  
  static struct kobj_type regex_type = {
  	.sysfs_ops     = &regex_sysfs_ops,

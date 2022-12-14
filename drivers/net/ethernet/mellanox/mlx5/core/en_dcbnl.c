@@ -1149,13 +1149,18 @@ static int mlx5e_update_trust_state_hw(struct mlx5e_priv *priv, void *context)
 
 static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 {
-	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC,
-						.mode = TC_MQPRIO_MODE_DCB};
+	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
 	struct mlx5e_params new_params;
 	bool reset = true;
 	int err;
 
 	mutex_lock(&priv->state_lock);
+	mqprio.mode = priv->channels.params.mqprio.mode;
+	if (mqprio.mode != TC_MQPRIO_MODE_DCB) {
+		netdev_err(priv->netdev, "Can't change trust state while in channel mode.\n");
+		err = -EINVAL;
+		goto unlock;
+	}
 
 	new_params = priv->channels.params;
 	mlx5e_params_calc_trust_tx_min_inline_mode(priv->mdev, &new_params,
@@ -1168,8 +1173,10 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 	err = mlx5e_safe_switch_params(priv, &new_params,
 				       mlx5e_update_trust_state_hw,
 				       &trust_state, reset);
-
+unlock:
 	mutex_unlock(&priv->state_lock);
+	if (err)
+		return err;
 
 	/* In DSCP trust state, we need 8 send queues per channel */
 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
@@ -1183,7 +1190,7 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 		mutex_unlock(&priv->state_lock);
 	}
 
-	return err;
+	return 0;
 }
 
 static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio)

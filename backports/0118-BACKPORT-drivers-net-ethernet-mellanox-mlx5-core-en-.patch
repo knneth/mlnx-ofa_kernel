@@ -40,7 +40,7 @@ Change-Id: Ib48b0889eba748480d35057bc445ec1977696ae6
  /* Enable inline WQEs to shift some load from a congested HCA (HW) to
   * a less congested cpu (SW).
   */
-@@ -184,3 +191,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
+@@ -185,3 +192,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
  	return fifo->xi[(*fifo->cc)++ & fifo->mask];
  }
  #endif

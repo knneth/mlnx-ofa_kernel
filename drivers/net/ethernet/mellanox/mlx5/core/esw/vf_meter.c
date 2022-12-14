@@ -208,7 +208,7 @@ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 			    int rx_tx, int xps, u64 rate, u64 burst)
 {
 	struct mlx5e_flow_meter_handle *meter_hndl;
-	struct mlx5_flow_meter_params params;
+	struct mlx5e_flow_meter_params params;
 	int ns, prio;
 	int err;
 

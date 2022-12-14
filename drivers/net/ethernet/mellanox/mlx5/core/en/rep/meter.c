@@ -129,7 +129,7 @@ mlx5_rep_set_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_pr
 {
 	struct rep_meter *meter = &rep_priv->rep_meter;
 	struct mlx5e_flow_meter_handle *meter_hndl;
-	struct mlx5_flow_meter_params params;
+	struct mlx5e_flow_meter_params params;
 	int err;
 
 	if (rate == meter->rate && burst == meter->burst)

@@ -84,7 +84,8 @@ enum mlx5_sqp_t {
 };
 
 enum {
-	MLX5_MAX_PORTS	= 4,
+	MLX5_MAX_PORTS = 4,
+	MLX5_MAX_MACSEC_GIDS = 8,
 };
 
 enum {
@@ -212,17 +213,9 @@ struct mlx5_rsc_debug {
 	struct mlx5_field_desc	fields[];
 };
 
-enum mlx5_flow_meter_mode {
+enum mlx5e_flow_meter_mode {
 	MLX5_RATE_LIMIT_BPS,
 	MLX5_RATE_LIMIT_PPS,
-};
-
-struct mlx5_flow_meter_params {
-	enum mlx5_flow_meter_mode mode;
-	/* police action index */
-	u32 index;
-	u64 rate;
-	u64 burst;
 };
 
 enum mlx5_dev_event {
@@ -449,15 +442,6 @@ struct mlx5_sq_bfreg {
 
 struct mlx5_fw_crdump;
 
-#define MLX5_RECOVERIES_IN_GRACE_PERIOD 5
-#define MLX5_RECOVERIES_CIRC_BUFF_SIZE (MLX5_RECOVERIES_IN_GRACE_PERIOD + 1)
-
-struct mlx5_health_recoveries {
-	unsigned long ts_list[MLX5_RECOVERIES_CIRC_BUFF_SIZE];
-	int head;
-	int tail;
-};
-
 struct mlx5_core_health {
 	struct health_buffer __iomem   *health;
 	__be32 __iomem		       *health_counter;
@@ -472,12 +456,13 @@ struct mlx5_core_health {
 	struct workqueue_struct	       *wq;
 	unsigned long			flags;
 	struct mlx5_fw_crdump		*crdump;
-	struct mlx5_health_recoveries	recoveries;
 	struct work_struct		fatal_report_work;
 	struct work_struct		report_work;
 	struct devlink_health_reporter *fw_reporter;
 	struct devlink_health_reporter *fw_fatal_reporter;
 	struct delayed_work		update_fw_log_ts_work;
+	/* failed recoveries in sequence*/
+	u32 failed_in_seq;
 };
 
 struct mlx5_qp_table {
@@ -544,7 +529,6 @@ struct mlx5_core_sriov {
 	struct kobject		*groups_config;
 	struct kobject		node_guid_kobj;
 	struct mlx5_sriov_vf	*vfs;
-	bool			probe_vf;
 };
 
 struct mlx5_fc_pool {
@@ -871,6 +855,8 @@ struct mlx5_pps {
 	struct work_struct         out_work;
 	u64                        start[MAX_PIN_NUM];
 	u8                         enabled;
+	u64                        min_npps_period;
+	u64                        min_out_pulse_duration_ns;
 };
 
 struct mlx5_timer {
@@ -979,6 +965,7 @@ struct mlx5_core_dev {
 	enum mlx5_device_state	state;
 	/* sync interface state */
 	struct mutex		intf_state_mutex;
+	struct lock_class_key	lock_key;
 	unsigned long		intf_state;
 	struct mlx5_priv	priv;
 	struct mlx5_profile	profile;
@@ -1250,6 +1237,7 @@ void mlx5_health_cleanup(struct mlx5_core_dev *dev);
 int mlx5_health_init(struct mlx5_core_dev *dev);
 void mlx5_start_health_poll(struct mlx5_core_dev *dev);
 void mlx5_stop_health_poll(struct mlx5_core_dev *dev, bool disable_health);
+void mlx5_start_health_fw_log_up(struct mlx5_core_dev *dev);
 void mlx5_drain_health_wq(struct mlx5_core_dev *dev);
 void mlx5_trigger_health_work(struct mlx5_core_dev *dev);
 int mlx5_buf_alloc(struct mlx5_core_dev *dev,
@@ -1381,6 +1369,7 @@ int mlx5_cmd_create_vport_lag(struct mlx5_core_dev *dev);
 int mlx5_cmd_destroy_vport_lag(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_roce(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_sriov(struct mlx5_core_dev *dev);
+bool mlx5_lag_is_mpesw(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_active(struct mlx5_core_dev *dev);
 bool mlx5_lag_mode_is_hash(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_master(struct mlx5_core_dev *dev);
@@ -1429,6 +1418,11 @@ static inline bool mlx5_core_is_pf(const struct mlx5_core_dev *dev)
 static inline bool mlx5_core_is_vf(const struct mlx5_core_dev *dev)
 {
 	return dev->coredev_type == MLX5_COREDEV_VF;
+}
+
+static inline bool mlx5_core_is_management_pf(const struct mlx5_core_dev *dev)
+{
+	return MLX5_CAP_GEN(dev, num_ports) == 1 && !MLX5_CAP_GEN(dev, native_port_num);
 }
 
 static inline bool mlx5_core_is_ecpf(const struct mlx5_core_dev *dev)
@@ -1506,16 +1500,17 @@ enum {
 	MLX5_TRIGGERED_CMD_COMP = (u64)1 << 32,
 };
 
-static inline bool mlx5_is_roce_init_enabled(struct mlx5_core_dev *dev)
-{
-	struct devlink *devlink = priv_to_devlink(dev);
-	union devlink_param_value val;
-	int err;
+bool mlx5_is_roce_on(struct mlx5_core_dev *dev);
 
-	err = devlink_param_driverinit_value_get(devlink,
-						 DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
-						 &val);
-	return err ? MLX5_CAP_GEN(dev, roce) : val.vbool;
+static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
+{
+	if (MLX5_CAP_GEN(dev, roce_rw_supported))
+		return MLX5_CAP_GEN(dev, roce);
+
+	/* If RoCE cap is read-only in FW, get RoCE state from devlink
+	 * in order to support RoCE enable/disable feature
+	 */
+	return mlx5_is_roce_on(dev);
 }
 
 /* MLX5 Diagnostics */

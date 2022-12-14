@@ -3,12 +3,32 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
 Change-Id: I26abe6ad6a2b2b07cc594ff716334b85bb6fe11d
 ---
- .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 32 +++++++++++++++++--
- 1 file changed, 30 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 45 +++++++++++++------
+ 1 file changed, 31 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
-@@ -38,7 +38,7 @@ enum mlx5e_icosq_wqe_type {
+@@ -9,18 +9,7 @@
+ 
+ #define MLX5E_TX_WQE_EMPTY_DS_COUNT (sizeof(struct mlx5e_tx_wqe) / MLX5_SEND_WQE_DS)
+ 
+-/* The mult of MLX5_SEND_WQE_MAX_WQEBBS * MLX5_SEND_WQEBB_NUM_DS
+- * (16 * 4 == 64) does not fit in the 6-bit DS field of Ctrl Segment.
+- * We use a bound lower that MLX5_SEND_WQE_MAX_WQEBBS to let a
+- * full-session WQE be cache-aligned.
+- */
+-#if L1_CACHE_BYTES < 128
+-#define MLX5E_TX_MPW_MAX_WQEBBS (MLX5_SEND_WQE_MAX_WQEBBS - 1)
+-#else
+-#define MLX5E_TX_MPW_MAX_WQEBBS (MLX5_SEND_WQE_MAX_WQEBBS - 2)
+-#endif
+-
+-#define MLX5E_TX_MPW_MAX_NUM_DS (MLX5E_TX_MPW_MAX_WQEBBS * MLX5_SEND_WQEBB_NUM_DS)
++#define MLX5_XMIT_MORE_SKB_CB 0xa
+ 
+ #define INL_HDR_START_SZ (sizeof(((struct mlx5_wqe_eth_seg *)NULL)->inline_hdr.start))
+ 
+@@ -37,7 +26,7 @@ enum mlx5e_icosq_wqe_type {
  	MLX5E_ICOSQ_WQE_NOP,
  	MLX5E_ICOSQ_WQE_UMR_RX,
  	MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR,
@@ -17,7 +37,7 @@ Change-Id: I26abe6ad6a2b2b07cc594ff716334b85bb6fe11d
  	MLX5E_ICOSQ_WQE_UMR_TLS,
  	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
  	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
-@@ -70,8 +70,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
+@@ -69,8 +58,27 @@ void mlx5e_free_rx_descs(struct mlx5e_rq
  void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
  
  /* TX */
@@ -45,7 +65,7 @@ Change-Id: I26abe6ad6a2b2b07cc594ff716334b85bb6fe11d
  netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev);
  bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget);
  void mlx5e_free_txqsq_descs(struct mlx5e_txqsq *sq);
-@@ -235,7 +254,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+@@ -240,7 +248,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
  {
  	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
  	/* ensure wqe is visible to device before updating doorbell record */
@@ -57,7 +77,7 @@ Change-Id: I26abe6ad6a2b2b07cc594ff716334b85bb6fe11d
  
  	*wq->db = cpu_to_be32(pc);
  
-@@ -427,8 +450,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -432,8 +444,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
  	case IPPROTO_UDP:
  		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  		fallthrough;

@@ -90,7 +90,7 @@ enable_vfs_hca:
 		mlx5_core_warn(dev, "failed to create SRIOV sysfs (%d)\n", err);
 #ifdef CONFIG_MLX5_CORE_EN
 		if (MLX5_ESWITCH_MANAGER(dev))
-			mlx5_eswitch_disable(dev->priv.eswitch, true);
+			mlx5_eswitch_disable(dev->priv.eswitch);
 #endif
 		return err;
 	}
@@ -145,8 +145,7 @@ mlx5_device_disable_sriov(struct mlx5_core_dev *dev, int num_vfs, bool clear_vf)
 		sriov->vfs_ctx[vf].enabled = 0;
 	}
 
-	if (MLX5_ESWITCH_MANAGER(dev))
-		mlx5_eswitch_disable(dev->priv.eswitch, clear_vf);
+	mlx5_eswitch_disable_sriov(dev->priv.eswitch, clear_vf);
 
 	mlx5_destroy_vfs_sysfs(dev, num_vfs);
 

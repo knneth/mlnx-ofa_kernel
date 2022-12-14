@@ -42,6 +42,7 @@
 %global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 
 %global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
+%global KMOD_PREAMBLE "%{_vendor}" != "openEuler"
 
 # MarinerOS 1.0 sets -fPIE in the hardening cflags
 # (in the gcc specs file).
@@ -70,8 +71,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.7}
-%{!?_release: %global _release OFED.5.7.1.0.2.1}
+%{!?_version: %global _version 5.8}
+%{!?_release: %global _release OFED.5.8.1.0.1.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -113,7 +114,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.7-1.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.8-1.0.1.tgz
 
 
 # build KMP rpms?
@@ -128,7 +129,11 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %endif
 EOF)
 %(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp" >> %{_builddir}/preamble)
-%kernel_module_package -f %{_builddir}/kmp.files -p %{_builddir}/preamble -r %{_kmp_rel}
+%if %KMOD_PREAMBLE
+%kernel_module_package -f %{_builddir}/kmp.files -r %{_kmp_rel} -p %{_builddir}/preamble
+%else
+%kernel_module_package -f %{_builddir}/kmp.files -r %{_kmp_rel}
+%endif
 %else # not KMP
 %global kernel_source() %{K_SRC}
 %global kernel_release() %{KVERSION}
@@ -153,7 +158,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.7-1.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.8-1.0.1.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -184,7 +189,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.7-1.0.2.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.8-1.0.1.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver

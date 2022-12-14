@@ -16,7 +16,7 @@ Change-Id: I4770154627874a4bc0ecabd7f144cd2e2be4dbbb
  #include "iscsi_iser.h"
  
  /* Register user buffer memory and initialize passive rdma
-@@ -638,7 +637,6 @@ static int iser_check_remote_inv(struct
+@@ -643,7 +642,6 @@ static int iser_check_remote_inv(struct
  	return 0;
  }
  
@@ -24,7 +24,7 @@ Change-Id: I4770154627874a4bc0ecabd7f144cd2e2be4dbbb
  void iser_task_rsp(struct ib_cq *cq, struct ib_wc *wc)
  {
  	struct ib_conn *ib_conn = wc->qp->qp_context;
-@@ -741,12 +739,27 @@ void iser_task_rdma_init(struct iscsi_is
+@@ -746,12 +744,27 @@ void iser_task_rdma_init(struct iscsi_is
  void iser_task_rdma_finalize(struct iscsi_iser_task *iser_task)
  {
  	int prot_count = scsi_prot_sg_count(iser_task->sc);
@@ -55,7 +55,7 @@ Change-Id: I4770154627874a4bc0ecabd7f144cd2e2be4dbbb
  		if (prot_count)
  			iser_dma_unmap_task_data(iser_task,
  						 &iser_task->prot[ISER_DIR_IN],
-@@ -754,10 +767,22 @@ void iser_task_rdma_finalize(struct iscs
+@@ -759,10 +772,22 @@ void iser_task_rdma_finalize(struct iscs
  	}
  
  	if (iser_task->dir[ISER_DIR_OUT]) {

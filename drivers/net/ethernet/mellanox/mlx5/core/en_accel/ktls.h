@@ -22,11 +22,7 @@ static inline bool mlx5e_accel_is_ktls_tx(struct mlx5_core_dev *mdev)
 		mlx5_accel_is_ktls_tx(mdev);
 }
 
-static inline bool mlx5e_accel_is_ktls_rx(struct mlx5_core_dev *mdev)
-{
-	return !is_kdump_kernel() &&
-		mlx5_accel_is_ktls_rx(mdev);
-}
+bool mlx5e_accel_is_ktls_rx(struct mlx5_core_dev *mdev);
 
 static inline bool mlx5e_accel_is_ktls_device(struct mlx5_core_dev *mdev)
 {

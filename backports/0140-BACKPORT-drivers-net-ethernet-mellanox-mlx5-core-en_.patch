@@ -75,7 +75,7 @@ Change-Id: I9855117c5fecde6f22fa0614e55c570a400537af
  		priv = netdev_priv(rq->netdev);
 @@ -388,3 +402,5 @@ u16 mlx5e_tls_get_stop_room(struct mlx5_
  	/* Resync SKB. */
- 	return mlx5e_stop_room_for_wqe(MLX5_SEND_WQE_MAX_WQEBBS);
+ 	return mlx5e_stop_room_for_max_wqe(mdev);
  }
 +
 +#endif

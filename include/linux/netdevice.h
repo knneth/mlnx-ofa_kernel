@@ -176,11 +176,6 @@ struct netdev_lag_upper_info {
 #define NET_NAME_UNKNOWN        0       /*  unknown origin (not exposed to userspace) */
 #endif
 
-
-#if IS_ENABLED(CONFIG_VXLAN) && (defined(HAVE_NDO_ADD_VXLAN_PORT) || defined(HAVE_NDO_UDP_TUNNEL_ADD) || defined(HAVE_UDP_TUNNEL_NIC_INFO))
-#define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
-#endif
-
 #ifdef HAVE_NETDEV_XDP
 #define HAVE_NETDEV_BPF 1
 #define netdev_bpf	netdev_xdp

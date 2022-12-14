@@ -33,6 +33,7 @@
 #include <linux/device.h>
 #include <linux/netdevice.h>
 #include "en.h"
+#include "en/port.h"
 #include "en_tc.h"
 #include "eswitch.h"
 #include "en_ecn.h"
@@ -283,18 +284,18 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
 				char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	u8 *hfunc = NULL;
+	u8 hfunc;
 	int err, len = 0;
 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
-	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, hfunc);
+	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc);
 	mutex_unlock(&priv->state_lock);
 	if (err)
 		goto out;
 
 	len += sprintf(buf + len, "Operational hfunc: %s\n",
-		       *hfunc == MLX5E_HFUNC_XOR ?
+		       hfunc == MLX5E_HFUNC_XOR ?
 		       "xor" : "toeplitz");
 	len += sprintf(buf + len, "Supported hfuncs: xor toeplitz\n");
 
@@ -350,17 +351,14 @@ static ssize_t mlx5e_show_link_down_reason(struct device *device,
 					    struct device_attribute *attr,
 					    char *buf)
 {
-	u8 status_message[MLX5_FLD_SZ_BYTES(pddr_troubleshooting_page,
+	char status_message[MLX5_FLD_SZ_BYTES(pddr_troubleshooting_page,
 					    status_message)];
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	u16 monitor_opcode;
+	u16 monitor_opcode = 0;
 	int len = 0;
-	int err;
 
-	err = mlx5_query_pddr_troubleshooting_info(priv->mdev, &monitor_opcode,
-						   status_message);
-	if (err)
-		return err;
+	if (mlx5_query_port_status(priv->mdev, NULL, &monitor_opcode, status_message))
+		return -ENODATA;
 
 	len += sprintf(buf + len, "monitor_opcode: %#x\n", monitor_opcode);
 	len += sprintf(buf + len, "status_message: %s\n", status_message);

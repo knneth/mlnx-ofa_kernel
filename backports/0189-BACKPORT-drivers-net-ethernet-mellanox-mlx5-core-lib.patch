@@ -14,7 +14,7 @@ Change-Id: I90167df82f82e34936f5a7402429cc60650daa49
  	u32 index;
 +	COMPAT_HL_NODE
  
- 	if (!MLX5_ESWITCH_MANAGER(dev))
+ 	if (!mpfs)
  		return 0;
 @@ -184,6 +185,7 @@ int mlx5_mpfs_del_mac(struct mlx5_core_d
  	struct l2table_node *l2addr;
@@ -22,5 +22,5 @@ Change-Id: I90167df82f82e34936f5a7402429cc60650daa49
  	u32 index;
 +	COMPAT_HL_NODE
  
- 	if (!MLX5_ESWITCH_MANAGER(dev))
+ 	if (!mpfs)
  		return 0;

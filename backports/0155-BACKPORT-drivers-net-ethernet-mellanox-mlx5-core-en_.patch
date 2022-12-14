@@ -14,9 +14,9 @@ Change-Id: Ib86105a2b804f1b91889f451e1108514e9bdd4d0
  #include <linux/netdevice.h>
 +#include <linux/dcbnl.h>
  #include "en.h"
+ #include "en/port.h"
  #include "en_tc.h"
- #include "eswitch.h"
-@@ -63,7 +64,13 @@ static ssize_t mlx5e_store_tc_num(struct
+@@ -64,7 +65,13 @@ static ssize_t mlx5e_store_tc_num(struct
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	struct net_device *netdev = priv->netdev;
@@ -31,7 +31,7 @@ Change-Id: Ib86105a2b804f1b91889f451e1108514e9bdd4d0
  	int tc_num;
  	int err = 0;
  
-@@ -76,9 +83,17 @@ static ssize_t mlx5e_store_tc_num(struct
+@@ -77,9 +84,17 @@ static ssize_t mlx5e_store_tc_num(struct
  		return -EINVAL;
  
  	rtnl_lock();
@@ -49,7 +49,7 @@ Change-Id: Ib86105a2b804f1b91889f451e1108514e9bdd4d0
  	rtnl_unlock();
  	return count;
  }
-@@ -956,10 +971,22 @@ static ssize_t mlx5e_store_force_local_l
+@@ -954,10 +969,22 @@ static ssize_t mlx5e_store_force_local_l
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -72,7 +72,7 @@ Change-Id: Ib86105a2b804f1b91889f451e1108514e9bdd4d0
  
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
-@@ -1239,10 +1266,17 @@ static struct attribute *prio_hp_attrs[]
+@@ -1237,10 +1264,17 @@ static struct attribute *prio_hp_attrs[]
  	&prio_hp_attr_rate.attr,
  	NULL
  };

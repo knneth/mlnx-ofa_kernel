@@ -3,20 +3,12 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/eswitch.h
 
 Change-Id: If57e18057ae3accbc6d768795fdd693383e1e947
 ---
- include/linux/mlx5/eswitch.h | 6 ------
- 1 file changed, 6 deletions(-)
+ include/linux/mlx5/eswitch.h | 5 -----
+ 1 file changed, 5 deletions(-)
 
 --- a/include/linux/mlx5/eswitch.h
 +++ b/include/linux/mlx5/eswitch.h
-@@ -155,7 +155,6 @@ int mlx5_eswitch_query_esw_vport_context
- 					 void *out, int outlen);
- 
- #else  /* CONFIG_MLX5_ESWITCH */
--
- static inline u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev)
- {
- 	return MLX5_ESWITCH_NONE;
-@@ -201,11 +200,6 @@ static inline struct mlx5_core_dev *mlx5
+@@ -200,11 +200,6 @@ static inline struct mlx5_core_dev *mlx5
  	return NULL;
  }
  
@@ -27,4 +19,4 @@ Change-Id: If57e18057ae3accbc6d768795fdd693383e1e947
 -}
  #endif /* CONFIG_MLX5_ESWITCH */
  
- static inline bool is_mdev_switchdev_mode(struct mlx5_core_dev *dev)
+ static inline bool is_mdev_legacy_mode(struct mlx5_core_dev *dev)

@@ -17,7 +17,7 @@ Change-Id: If385cc6e3ca1e4c8ecbd11dd4422841c33a69f8f
  	refcount_t usecount;
  };
  
-@@ -1277,7 +1277,8 @@ to_mmmap(struct rdma_user_mmap_entry *rd
+@@ -1283,7 +1283,8 @@ to_mmmap(struct rdma_user_mmap_entry *rd
  		struct mlx5_user_mmap_entry, rdma_entry);
  }
  
@@ -27,7 +27,7 @@ Change-Id: If385cc6e3ca1e4c8ecbd11dd4422841c33a69f8f
  			struct mlx5_db *db);
  void mlx5_ib_db_unmap_user(struct mlx5_ib_ucontext *context, struct mlx5_db *db);
  void __mlx5_ib_cq_clean(struct mlx5_ib_cq *cq, u32 qpn, struct mlx5_ib_srq *srq);
-@@ -1342,6 +1343,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+@@ -1348,6 +1349,7 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
  		       int page_shift, int flags);
  int mlx5_ib_update_mr_pas(struct mlx5_ib_mr *mr, unsigned int flags);
  struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
@@ -35,7 +35,7 @@ Change-Id: If385cc6e3ca1e4c8ecbd11dd4422841c33a69f8f
  					     int access_flags);
  void mlx5_ib_free_implicit_mr(struct mlx5_ib_mr *mr);
  void mlx5_ib_free_odp_mr(struct mlx5_ib_mr *mr);
-@@ -1416,6 +1418,10 @@ int mlx5r_odp_create_eq(struct mlx5_ib_d
+@@ -1422,6 +1424,10 @@ int mlx5r_odp_create_eq(struct mlx5_ib_d
  void mlx5_ib_odp_cleanup_one(struct mlx5_ib_dev *ibdev);
  int __init mlx5_ib_odp_init(void);
  void mlx5_ib_odp_cleanup(void);
@@ -46,7 +46,7 @@ Change-Id: If385cc6e3ca1e4c8ecbd11dd4422841c33a69f8f
  void mlx5_odp_init_mr_cache_entry(struct mlx5_cache_ent *ent);
  void mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
  			   struct mlx5_ib_mr *mr, int flags);
-@@ -1454,10 +1460,17 @@ static inline int mlx5_ib_init_dmabuf_mr
+@@ -1460,10 +1466,17 @@ static inline int mlx5_ib_init_dmabuf_mr
  {
  	return -EOPNOTSUPP;
  }

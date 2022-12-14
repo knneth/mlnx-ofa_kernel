@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
 
 Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 ---
- .../net/ethernet/mellanox/mlx5/core/lag/lag.c | 212 +++++++++++++++++-
- 1 file changed, 202 insertions(+), 10 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/lag/lag.c | 210 +++++++++++++++++-
+ 1 file changed, 202 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
@@ -77,7 +77,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +               mlx5_lag_netdev_event(&ldev->nb, event, ptr);
 +       }
 +}
- 
++
 +static int mlx5_lag_compat_register_netdev_notifier(struct notifier_block *nb)
 +{
 +       struct mlx5_lag *ldev = container_of(nb, struct mlx5_lag, nb);
@@ -128,7 +128,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +               mlx_lag_compat_events_close();
 +}
 +#endif
-+
+ 
 +#ifdef MLX_LAG_SUPPORTED
  static u8 lag_active_port_bits(struct mlx5_lag *ldev)
  {
@@ -205,7 +205,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	return -ENOENT;
  }
  
-@@ -862,6 +979,7 @@ static void mlx5_do_bond(struct mlx5_lag
+@@ -859,6 +976,7 @@ static void mlx5_do_bond(struct mlx5_lag
  			dev0->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
  			mlx5_rescan_drivers_locked(dev0);
  
@@ -213,7 +213,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  			err = mlx5_eswitch_reload_reps(dev0->priv.eswitch);
  			if (!err)
  				err = mlx5_eswitch_reload_reps(dev1->priv.eswitch);
-@@ -876,6 +994,7 @@ static void mlx5_do_bond(struct mlx5_lag
+@@ -873,6 +991,7 @@ static void mlx5_do_bond(struct mlx5_lag
  				mlx5_core_err(dev0, "Failed to enable lag\n");
  				return;
  			}
@@ -221,7 +221,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  		}
  	} else if (do_bond && __mlx5_lag_is_active(ldev)) {
  		mlx5_modify_lag(ldev, &tracker);
-@@ -936,8 +1055,12 @@ static bool mlx5_lag_eval_bonding_conds(
+@@ -933,8 +1052,12 @@ static bool mlx5_lag_eval_bonding_conds(
  	struct slave *slave;
  	bool changed = false;
  	
@@ -236,7 +236,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  		idx = mlx5_lag_dev_get_netdev_idx(ldev, ndev_tmp);
  		if (idx >= 0) {
  			slave = bond_slave_get_rcu(ndev_tmp);
-@@ -948,8 +1071,9 @@ static bool mlx5_lag_eval_bonding_conds(
+@@ -945,8 +1068,9 @@ static bool mlx5_lag_eval_bonding_conds(
  
  		num_slaves++;
  	}
@@ -247,7 +247,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	/* None of this lagdev's netdevs are slaves of this master. */
  	if (!(bond_status & GENMASK(ldev->ports - 1, 0)))
  		return false;
-@@ -978,13 +1102,23 @@ static bool mlx5_lag_eval_bonding_conds(
+@@ -975,13 +1099,23 @@ static bool mlx5_lag_eval_bonding_conds(
  
  	if (!mlx5_lag_is_ready(ldev)) {
  		if (info)
@@ -271,7 +271,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	}
  
  	return changed;
-@@ -1007,7 +1141,9 @@ static bool mlx5_handle_changeupper_even
+@@ -1004,7 +1138,9 @@ static bool mlx5_handle_changeupper_even
  
  		if (lag_upper_info) {
  			tx_type = lag_upper_info->tx_type;
@@ -281,7 +281,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  		}
  	}
  
-@@ -1268,6 +1404,7 @@ static int __mlx5_lag_dev_add_mdev(struc
+@@ -1271,6 +1407,7 @@ static int __mlx5_lag_dev_add_mdev(struc
  
  void mlx5_lag_remove_mdev(struct mlx5_core_dev *dev)
  {
@@ -289,7 +289,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	struct mlx5_lag *ldev;
  
  	ldev = mlx5_lag_dev(dev);
-@@ -1288,10 +1425,12 @@ recheck:
+@@ -1291,10 +1428,12 @@ recheck:
  	mlx5_ldev_remove_mdev(ldev, dev);
  	mutex_unlock(&ldev->lock);
  	mlx5_ldev_put(ldev);
@@ -302,7 +302,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	int err;
  
  	if (!mlx5_lag_is_supported(dev))
-@@ -1307,11 +1446,13 @@ recheck:
+@@ -1310,11 +1449,13 @@ recheck:
  		goto recheck;
  	}
  	mlx5_ldev_add_debugfs(dev);
@@ -316,7 +316,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	struct mlx5_lag *ldev;
  	bool lag_is_active;
  
-@@ -1331,12 +1472,14 @@ void mlx5_lag_remove_netdev(struct mlx5_
+@@ -1334,12 +1475,14 @@ void mlx5_lag_remove_netdev(struct mlx5_
  
  	if (lag_is_active)
  		mlx5_queue_bond_work(ldev, 0);
@@ -331,7 +331,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	struct mlx5_lag *ldev;
  	int i;
  
-@@ -1356,10 +1499,14 @@ void mlx5_lag_add_netdev(struct mlx5_cor
+@@ -1359,10 +1502,14 @@ void mlx5_lag_add_netdev(struct mlx5_cor
  
  	mutex_unlock(&ldev->lock);
  	mlx5_lag_update_trackers(ldev);
@@ -344,10 +344,10 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +       return false;
 +#else
  	struct mlx5_lag *ldev;
+ 	unsigned long flags;
  	bool res;
- 
-@@ -1369,11 +1516,15 @@ bool mlx5_lag_is_roce(struct mlx5_core_d
- 	spin_unlock(&lag_lock);
+@@ -1373,11 +1520,15 @@ bool mlx5_lag_is_roce(struct mlx5_core_d
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  
  	return res;
 +#endif /* #ifdef MLX_LAG_SUPPORTED */
@@ -360,17 +360,17 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +	return false;
 +#else
  	struct mlx5_lag *ldev;
+ 	unsigned long flags;
  	bool res;
- 
-@@ -1383,6 +1534,7 @@ bool mlx5_lag_is_active(struct mlx5_core
- 	spin_unlock(&lag_lock);
+@@ -1388,6 +1539,7 @@ bool mlx5_lag_is_active(struct mlx5_core
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  
  	return res;
-+#endif /* #ifndef MLX_LAG_SUPPORTED */
++#endif /* #ifdef MLX_LAG_SUPPORTED */
  }
  EXPORT_SYMBOL(mlx5_lag_is_active);
  
-@@ -1403,6 +1555,9 @@ EXPORT_SYMBOL(mlx5_lag_mode_is_hash);
+@@ -1409,6 +1561,9 @@ EXPORT_SYMBOL(mlx5_lag_mode_is_hash);
  
  bool mlx5_lag_is_master(struct mlx5_core_dev *dev)
  {
@@ -378,13 +378,13 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +	return false;
 +#else
  	struct mlx5_lag *ldev;
+ 	unsigned long flags;
  	bool res;
- 
-@@ -1413,11 +1568,15 @@ bool mlx5_lag_is_master(struct mlx5_core
- 	spin_unlock(&lag_lock);
+@@ -1420,11 +1575,15 @@ bool mlx5_lag_is_master(struct mlx5_core
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  
  	return res;
-+#endif /* #ifndef MLX_LAG_SUPPORTED */
++#endif /* #ifdef MLX_LAG_SUPPORTED */
  }
  EXPORT_SYMBOL(mlx5_lag_is_master);
  
@@ -394,13 +394,13 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +        return false;
 +#else
  	struct mlx5_lag *ldev;
+ 	unsigned long flags;
  	bool res;
- 
-@@ -1427,11 +1586,15 @@ bool mlx5_lag_is_sriov(struct mlx5_core_
- 	spin_unlock(&lag_lock);
+@@ -1435,11 +1594,15 @@ bool mlx5_lag_is_sriov(struct mlx5_core_
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  
  	return res;
-+#endif /* #ifndef MLX_LAG_SUPPORTED */
++#endif /* #ifdef MLX_LAG_SUPPORTED */
  }
  EXPORT_SYMBOL(mlx5_lag_is_sriov);
  
@@ -410,17 +410,17 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +        return false;
 +#else
  	struct mlx5_lag *ldev;
+ 	unsigned long flags;
  	bool res;
+@@ -1449,6 +1612,7 @@ bool mlx5_lag_is_mpesw(struct mlx5_core_
+ 	res  = ldev && ldev->flags & MLX5_LAG_FLAG_MULTI_PORT_ESW;
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  
-@@ -1441,6 +1604,7 @@ bool mlx5_lag_is_mpesw(struct mlx5_core_
- 	spin_unlock(&lag_lock);
- 
++#endif /* #ifdef MLX_LAG_SUPPORTED */
  	return res;
-+#endif /* #ifndef MLX_LAG_SUPPORTED */
  }
- 
- bool mlx5_lag_is_shared_fdb(struct mlx5_core_dev *dev)
-@@ -1459,6 +1623,7 @@ EXPORT_SYMBOL(mlx5_lag_is_shared_fdb);
+ EXPORT_SYMBOL(mlx5_lag_is_mpesw);
+@@ -1470,6 +1634,7 @@ EXPORT_SYMBOL(mlx5_lag_is_shared_fdb);
  
  void mlx5_lag_disable_change(struct mlx5_core_dev *dev)
  {
@@ -428,7 +428,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	struct mlx5_lag *ldev;
  
  	ldev = mlx5_lag_dev(dev);
-@@ -1474,10 +1639,12 @@ void mlx5_lag_disable_change(struct mlx5
+@@ -1485,10 +1650,12 @@ void mlx5_lag_disable_change(struct mlx5
  
  	mutex_unlock(&ldev->lock);
  	mlx5_dev_list_unlock();
@@ -441,7 +441,7 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  	struct mlx5_lag *ldev;
  
  	ldev = mlx5_lag_dev(dev);
-@@ -1488,10 +1655,14 @@ void mlx5_lag_enable_change(struct mlx5_
+@@ -1499,10 +1666,14 @@ void mlx5_lag_enable_change(struct mlx5_
  	ldev->mode_changes_in_progress--;
  	mutex_unlock(&ldev->lock);
  	mlx5_queue_bond_work(ldev, 0);
@@ -455,12 +455,12 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +#else
  	struct net_device *ndev = NULL;
  	struct mlx5_lag *ldev;
- 	int i;
-@@ -1518,12 +1689,16 @@ unlock:
- 	spin_unlock(&lag_lock);
+ 	unsigned long flags;
+@@ -1530,12 +1701,16 @@ unlock:
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  
  	return ndev;
-+#endif /* #ifndef MLX_LAG_SUPPORTED */
++#endif /* #ifdef MLX_LAG_SUPPORTED */
  }
  EXPORT_SYMBOL(mlx5_lag_get_roce_netdev);
  
@@ -471,17 +471,17 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +       return 0;
 +#else
  	struct mlx5_lag *ldev;
+ 	unsigned long flags;
  	u8 port = 0;
- 	int i;
-@@ -1545,6 +1720,7 @@ u8 mlx5_lag_get_slave_port(struct mlx5_c
+@@ -1558,6 +1733,7 @@ u8 mlx5_lag_get_slave_port(struct mlx5_c
  unlock:
- 	spin_unlock(&lag_lock);
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  	return port;
 +#endif /* #ifndef MLX_LAG_SUPPORTED */
  }
  EXPORT_SYMBOL(mlx5_lag_get_slave_port);
  
-@@ -1562,9 +1738,11 @@ EXPORT_SYMBOL(mlx5_lag_get_num_ports);
+@@ -1575,6 +1751,9 @@ EXPORT_SYMBOL(mlx5_lag_get_num_ports);
  
  struct mlx5_core_dev *mlx5_lag_get_peer_mdev(struct mlx5_core_dev *dev)
  {
@@ -490,40 +490,37 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
 +#else
  	struct mlx5_core_dev *peer_dev = NULL;
  	struct mlx5_lag *ldev;
--
- 	spin_lock(&lag_lock);
- 	ldev = mlx5_lag_dev(dev);
- 	if (!ldev)
-@@ -1577,6 +1755,7 @@ struct mlx5_core_dev *mlx5_lag_get_peer_
+ 	unsigned long flags;
+@@ -1591,6 +1770,7 @@ struct mlx5_core_dev *mlx5_lag_get_peer_
  unlock:
- 	spin_unlock(&lag_lock);
+ 	spin_unlock_irqrestore(&lag_lock, flags);
  	return peer_dev;
-+#endif
++#endif /* #ifndef MLX_LAG_SUPPORTED */
  }
  EXPORT_SYMBOL(mlx5_lag_get_peer_mdev);
  
-@@ -1587,7 +1766,9 @@ int mlx5_lag_query_cong_counters(struct
+@@ -1601,7 +1781,9 @@ int mlx5_lag_query_cong_counters(struct
  {
  	int outlen = MLX5_ST_SZ_BYTES(query_cong_statistics_out);
  	struct mlx5_core_dev **mdev;
 +#ifdef MLX_LAG_SUPPORTED
  	struct mlx5_lag *ldev;
 +#endif
+ 	unsigned long flags;
  	int num_ports;
  	int ret = 0;
- 	int i, j;
-@@ -1605,6 +1786,7 @@ int mlx5_lag_query_cong_counters(struct
+@@ -1620,6 +1802,7 @@ int mlx5_lag_query_cong_counters(struct
  
  	memset(values, 0, sizeof(*values) * num_counters);
  
 +#ifdef MLX_LAG_SUPPORTED
- 	spin_lock(&lag_lock);
+ 	spin_lock_irqsave(&lag_lock, flags);
  	ldev = mlx5_lag_dev(dev);
  	if (ldev && __mlx5_lag_is_active(ldev)) {
-@@ -1616,6 +1798,10 @@ int mlx5_lag_query_cong_counters(struct
+@@ -1631,6 +1814,10 @@ int mlx5_lag_query_cong_counters(struct
  		mdev[MLX5_LAG_P1] = dev;
  	}
- 	spin_unlock(&lag_lock);
+ 	spin_unlock_irqrestore(&lag_lock, flags);
 +#else
 +	num_ports = 1;
 +	mdev[0] = dev;
@@ -531,29 +528,28 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  
  	for (i = 0; i < num_ports; ++i) {
  		u32 in[MLX5_ST_SZ_DW(query_cong_statistics_in)] = {};
-@@ -1651,7 +1837,9 @@ int mlx5_lag_modify_cong_params(struct m
+@@ -1666,7 +1853,9 @@ int mlx5_lag_modify_cong_params(struct m
  				void *in, int in_size)
  {
  	struct mlx5_core_dev **mdev;
 +#ifdef MLX_LAG_SUPPORTED
  	struct mlx5_lag *ldev;
 +#endif
+ 	unsigned long flags;
  	int num_ports;
  	int ret = 0;
- 	int i;
-@@ -1659,7 +1847,7 @@ int mlx5_lag_modify_cong_params(struct m
- 	mdev = kvzalloc(sizeof(mdev[0]) * MLX5_MAX_PORTS, GFP_KERNEL);
+@@ -1676,6 +1865,7 @@ int mlx5_lag_modify_cong_params(struct m
  	if (!mdev)
  		return -ENOMEM;
--
+ 
 +#ifdef MLX_LAG_SUPPORTED
- 	spin_lock(&lag_lock);
+ 	spin_lock_irqsave(&lag_lock, flags);
  	ldev = mlx5_lag_dev(dev);
  	if (ldev && __mlx5_lag_is_active(ldev)) {
-@@ -1671,6 +1859,10 @@ int mlx5_lag_modify_cong_params(struct m
+@@ -1687,6 +1877,10 @@ int mlx5_lag_modify_cong_params(struct m
  		mdev[0] = dev;
  	}
- 	spin_unlock(&lag_lock);
+ 	spin_unlock_irqrestore(&lag_lock, flags);
 +#else
 +	num_ports = 1;
 +	mdev[0] = dev;

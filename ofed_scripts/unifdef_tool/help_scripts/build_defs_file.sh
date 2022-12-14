@@ -52,6 +52,7 @@ TMP_CONFIGURE="${TEMP_DIR}/configure.ac"
 TMP_DEF="${TEMP_DIR}/defs_file.h"
 MK_PATH="${WORK_DIR}/configure.mk.kernel"
 FINAL_CONFIG="$2"
+INCLUDE_MK_CONFIG="$3"
 
 cleanup()
 {
@@ -79,11 +80,13 @@ else
 	echo "/*-----------------------*/" > $FINAL_CONFIG
 	echo "/* config.h defs section */" >> $FINAL_CONFIG
 	echo "/*-----------------------*/" >> $FINAL_CONFIG
-	echo "/*-----------------------*/" >> $TMP_DEF
-	echo "/* configure.mk.kernel defs section */" >> $TMP_DEF
-	echo "/*-----------------------*/" >> $TMP_DEF
-	grep =y "${MK_PATH}" | sort | uniq | sed -e 's/=y/ 1/' | sed -e 's/^/#define /' >> "$TMP_DEF"
-	grep -E "=$"  "${MK_PATH}" | sort | uniq | sed -e 's/=//' | sed -e 's/^/#undef /' >> "$TMP_DEF"
+	if [ "$INCLUDE_MK_CONFIG" -eq 1 ]; then
+		echo "/*-----------------------*/" >> $TMP_DEF
+		echo "/* configure.mk.kernel defs section */" >> $TMP_DEF
+		echo "/*-----------------------*/" >> $TMP_DEF
+		grep =y "${MK_PATH}" | sort | uniq | sed -e 's/=y/ 1/' | sed -e 's/^/#define /' >> "$TMP_DEF"
+		grep -E "=$"  "${MK_PATH}" | sort | uniq | sed -e 's/=//' | sed -e 's/^/#undef /' >> "$TMP_DEF"
+	fi
 	cat "$TMP_DEF" >> "$FINAL_CONFIG"
 	echo "/*---------------------------*/" >> "$FINAL_CONFIG"
 	echo "/* configure.ac defs section */" >> "$FINAL_CONFIG"

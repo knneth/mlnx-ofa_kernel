@@ -28,7 +28,7 @@ Change-Id: Ibfbff98b93739dd1e467b78d0247fd74a5188a76
  	&mlx5e_tc_act_ptype,
 +#endif
 +#ifdef HAVE_FLOW_ACTION_PRIORITY
- 	&mlx5e_tc_act_prio,
+ 	NULL, /* FLOW_ACTION_PRIORITY, */
 +#endif
  	NULL, /* FLOW_ACTION_WAKE, */
  	NULL, /* FLOW_ACTION_QUEUE, */
@@ -66,7 +66,7 @@ Change-Id: Ibfbff98b93739dd1e467b78d0247fd74a5188a76
  	NULL, /* FLOW_ACTION_PTYPE, */
 +#endif
 +#ifdef HAVE_FLOW_ACTION_PRIORITY
- 	NULL, /* FLOW_ACTION_PRIORITY, */
+ 	&mlx5e_tc_act_prio,
 +#endif
  	NULL, /* FLOW_ACTION_WAKE, */
  	NULL, /* FLOW_ACTION_QUEUE, */

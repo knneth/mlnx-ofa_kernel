@@ -105,6 +105,7 @@ int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
 {
 	struct mlx5e_asosq *sq = container_of(cq, struct mlx5e_asosq, cq);
 	struct mlx5_cqe64 *cqe;
+	unsigned long expires;
 	int i, err;
 	u16 sqcc;
 
@@ -120,8 +121,11 @@ int mlx5e_poll_aso_cq(struct mlx5e_cq *cq)
 		 * We measure the total time in FW from doorbell ring until cqe update is 980us.
 		 * So put 2us is sufficient.
 		 */
-		usleep_range(20, 50); /* WA for RM 2323775 */
-		cqe = mlx5_cqwq_get_cqe(&cq->wq);
+		expires = jiffies + msecs_to_jiffies(10);
+		while (!cqe && time_is_after_jiffies(expires)) {
+			usleep_range(20, 50); /* WA for RM 2323775 */
+			cqe = mlx5_cqwq_get_cqe(&cq->wq);
+		}
 		if (!cqe) {
 			mlx5_core_err(cq->mdev, "No ASO completion\n");
 			return -EIO;

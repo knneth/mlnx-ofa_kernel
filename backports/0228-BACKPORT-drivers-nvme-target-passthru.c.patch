@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/passthru.c
 
 Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
 ---
- drivers/nvme/target/passthru.c | 59 ++++++++++++++++++++++++++++++++++
- 1 file changed, 59 insertions(+)
+ drivers/nvme/target/passthru.c | 64 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 64 insertions(+)
 
 --- a/drivers/nvme/target/passthru.c
 +++ b/drivers/nvme/target/passthru.c
@@ -112,19 +112,24 @@ Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
  
  	return 0;
  }
-@@ -342,7 +391,17 @@ static void nvmet_passthru_execute_cmd(s
+@@ -342,7 +391,22 @@ static void nvmet_passthru_execute_cmd(s
  		schedule_work(&req->p.work);
  	} else {
  		rq->end_io_data = req;
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_2_PARAM
++		rq->end_io = nvmet_passthru_req_done;
++		blk_execute_rq_nowait(rq, false);
++#else
 +#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_5_PARAM
 +		blk_execute_rq_nowait(rq->q, ns ? ns->disk : NULL, rq, 0,
 +				      nvmet_passthru_req_done);
 +#else
-+#ifdef HAVE_BLK_EXECUTE_RQ_2_PARAM
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_3_PARAM
  		blk_execute_rq_nowait(rq, false, nvmet_passthru_req_done);
 +#else
 +		blk_execute_rq_nowait(ns ? ns->disk : NULL, rq, 0,
 +				      nvmet_passthru_req_done);
++#endif
 +#endif
 +#endif
  	}

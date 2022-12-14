@@ -341,7 +341,7 @@ static int tx_create(struct mlx5e_priv *priv)
 
 	priv->fs.egress_ns =
 		mlx5_get_flow_namespace(priv->mdev,
-					MLX5_FLOW_NAMESPACE_EGRESS_KERNEL);
+					MLX5_FLOW_NAMESPACE_EGRESS_IPSEC);
 	if (!priv->fs.egress_ns)
 		return -EOPNOTSUPP;
 
@@ -472,7 +472,8 @@ static void setup_fte_common(struct mlx5_accel_esp_xfrm_attrs *attrs,
 		       0xff, 16);
 	}
 
-	flow_act->ipsec_obj_id = ipsec_obj_id;
+	flow_act->crypto.type = MLX5_FLOW_CONTEXT_ENCRYPT_DECRYPT_TYPE_IPSEC;
+	flow_act->crypto.obj_id = ipsec_obj_id;
 	flow_act->flags |= FLOW_ACT_NO_APPEND;
 }
 
@@ -500,7 +501,8 @@ static int rx_add_rule_full(struct mlx5e_priv *priv,
 
 	setup_fte_common(attrs, ipsec_obj_id, spec, &flow_act);
 	setup_esp_match(attrs, spec);
-	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_IPSEC_DECRYPT;
+	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
+			  MLX5_FLOW_CONTEXT_ACTION_CRYPTO_DECRYPT;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 	dest.ft = mlx5_esw_ipsec_get_table(esw, MLX5_ESW_IPSEC_FT_RX_DECAP);
 	rule = mlx5_add_flow_rules(mlx5_esw_ipsec_get_table(esw, MLX5_ESW_IPSEC_FT_RX_CRYPTO), spec, &flow_act, &dest, 1);
@@ -572,7 +574,7 @@ static int rx_add_rule(struct mlx5e_priv *priv,
 	}
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
-			  MLX5_FLOW_CONTEXT_ACTION_IPSEC_DECRYPT |
+			  MLX5_FLOW_CONTEXT_ACTION_CRYPTO_DECRYPT |
 			  MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 	flow_act.modify_hdr = modify_hdr;
@@ -637,8 +639,9 @@ static int tx_add_rule_full(struct mlx5e_priv *priv,
 	setup_udp_match(attrs, spec);
 
 	/* IPsec Tx table1 FW rule */
-	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_IPSEC_ENCRYPT
-			  | MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
+	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
+			  MLX5_FLOW_CONTEXT_ACTION_CRYPTO_ENCRYPT |
+			  MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
 
 	memcpy(reformatbf, &attrs->spi, 4);
 	memcpy(reformatbf + 4, &attrs->seq, 4);
@@ -660,7 +663,8 @@ static int tx_add_rule_full(struct mlx5e_priv *priv,
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 	dest.ft = mlx5_esw_ipsec_get_table(mdev->priv.eswitch, MLX5_ESW_IPSEC_FT_TX_CHK);
-	flow_act.ipsec_obj_id = ipsec_obj_id;
+	flow_act.crypto.type = MLX5_FLOW_CONTEXT_ENCRYPT_DECRYPT_TYPE_IPSEC;
+	flow_act.crypto.obj_id = ipsec_obj_id;
 	rule = mlx5_add_flow_rules(mlx5_esw_ipsec_get_table(esw, MLX5_ESW_IPSEC_FT_TX_CRYPTO), spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
@@ -714,7 +718,7 @@ static int tx_add_rule(struct mlx5e_priv *priv,
 		 MLX5_ETH_WQE_FT_META_IPSEC);
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_ALLOW |
-			  MLX5_FLOW_CONTEXT_ACTION_IPSEC_ENCRYPT;
+			  MLX5_FLOW_CONTEXT_ACTION_CRYPTO_ENCRYPT;
 	rule = mlx5_add_flow_rules(priv->ipsec->tx_fs->ft, spec, &flow_act, NULL, 0);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);

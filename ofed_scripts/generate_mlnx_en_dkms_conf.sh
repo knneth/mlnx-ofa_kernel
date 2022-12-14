@@ -53,9 +53,7 @@ if [ $with_mlxfw -eq 1 ]; then
 else
 	MLNX_EN_PATCH_PARAMS="$MLNX_EN_PATCH_PARAMS --without-mlxfw"
 fi
-if [ $with_mlxdevm -eq 1 ]; then
-	modules="$modules net/mlxdevm/mlxdevm"
-fi
+modules="$modules net/mlxdevm/mlxdevm"
 modules="$modules drivers/base/auxiliary"
 
 echo 'i=0'

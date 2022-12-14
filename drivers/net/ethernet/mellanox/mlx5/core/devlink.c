@@ -314,13 +314,15 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.rate_node_del = mlx5_esw_devlink_rate_node_del,
 	.rate_leaf_parent_set = mlx5_esw_devlink_rate_parent_set,
 #endif
-#if !IS_ENABLED(CONFIG_MLXDEVM)
-#ifdef CONFIG_MLX5_SF_MANAGER
+#if defined(CONFIG_MLX5_SF_MANAGER) && \
+   (defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS))
 	.port_new = mlx5_devlink_sf_port_new,
 	.port_del = mlx5_devlink_sf_port_del,
+#endif
+#if defined(CONFIG_MLX5_SF_MANAGER) && \
+    defined(HAVE_DEVLINK_HAS_PORT_FUNCTION_STATE_GET)
 	.port_fn_state_get = mlx5_devlink_sf_port_fn_state_get,
 	.port_fn_state_set = mlx5_devlink_sf_port_fn_state_set,
-#endif
 #endif
 	.flash_update = mlx5_devlink_flash_update,
 	.info_get = mlx5_devlink_info_get,

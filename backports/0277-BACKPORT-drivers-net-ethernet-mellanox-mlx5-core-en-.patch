@@ -4,12 +4,25 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: If47db432fd762dcbe3e7b7690136b13d8e980741
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en/tc/int_port.c   | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
-@@ -291,7 +291,7 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
+@@ -30,8 +30,12 @@ struct mlx5e_tc_int_port_priv {
+ 
+ bool mlx5e_tc_int_port_supported(const struct mlx5_eswitch *esw)
+ {
++#ifdef HAVE_FLOW_BLOCK_OFFLOAD
+ 	return mlx5_eswitch_vport_match_metadata_enabled(esw) &&
+ 	       MLX5_CAP_GEN(esw->dev, reg_c_preserve);
++#else
++	return false;
++#endif
+ }
+ 
+ u32 mlx5e_tc_int_port_get_metadata(struct mlx5e_tc_int_port *int_port)
+@@ -291,7 +295,7 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
  		mlx5_del_flow_rules(int_port->rx_rule);
  	mapping_remove(ctx, int_port->mapping);
  	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
@@ -18,7 +31,7 @@ Change-Id: If47db432fd762dcbe3e7b7690136b13d8e980741
  	priv->num_ports--;
  }
  
-@@ -493,12 +493,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
+@@ -493,12 +497,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
  
  	if (fwd_type == MLX5E_TC_INT_PORT_INGRESS) {
  		skb->pkt_type = PACKET_HOST;

@@ -18,7 +18,7 @@ struct mlx5_devm_port {
 };
 
 int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
-			       u32 contoller, u32 sfnum);
+			       u32 contoller, u32 sfnum, struct devlink_port *dl_port);
 void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num);
 void mlx5_devm_sf_port_type_eth_set(struct mlx5_core_dev *dev, u16 vport_num,
 				    struct net_device *ndev);

@@ -918,7 +918,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_rq_dto_q);
  	if (ctxt)
  		list_del(&ctxt->rc_list);
-@@ -809,22 +1377,33 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -809,53 +1377,92 @@ int svc_rdma_recvfrom(struct svc_rqst *r
  		clear_bit(XPT_DATA, &xprt->xpt_flags);
  	spin_unlock(&rdma_xprt->sc_rq_dto_lock);
  
@@ -952,9 +952,12 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  
  	ret = svc_rdma_xdr_decode_req(&rqstp->rq_arg, ctxt);
  	if (ret < 0)
-@@ -833,29 +1412,55 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+ 		goto out_err;
+ 	if (ret == 0)
  		goto out_drop;
++#ifdef HAVE_SVC_RQST_RQ_XPRT_HLEN
  	rqstp->rq_xprt_hlen = 0;
++#endif
  
 +#ifdef HAVE_SVC_RDMA_PCL
  	if (svc_rdma_is_reverse_direction_reply(xprt, ctxt))

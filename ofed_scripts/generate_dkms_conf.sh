@@ -32,7 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"5.7"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"5.8"}
 
 echo STRIP_MODS=\${STRIP_MODS:-"yes"}
 echo kernelver=\${kernelver:-\$\(uname -r\)}
@@ -62,7 +62,7 @@ do
 	esac
 done
 
-EXTRA_OPTIONS="--with-mlx5-ipsec --with-gds --without-gds --with-sf-cfg-drv"
+EXTRA_OPTIONS="--with-mlx5-macsec --with-mlx5-ipsec --with-gds --without-gds --with-sf-cfg-drv"
 for option in $EXTRA_OPTIONS; do
 	if echo "$configure_options" | grep -q -- "$option"; then
 		echo "#:# ExtraOption $option"

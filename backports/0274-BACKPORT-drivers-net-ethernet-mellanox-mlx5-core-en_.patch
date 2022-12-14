@@ -3,20 +3,80 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
 Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 93 ++++++++++++++++++-
- 1 file changed, 91 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 179 +++++++++++++++++-
+ 1 file changed, 176 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
-@@ -40,6 +40,7 @@
- #include "en_accel/en_accel.h"
+@@ -41,6 +41,67 @@
  #include "en_accel/ipsec_rxtx.h"
+ #include "en_accel/macsec.h"
  #include "en/ptp.h"
 +#include <uapi/linux/pkt_sched.h>
++
++static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
++				       u32 cqcc, void *data)
++{
++	u32 ci = mlx5_cqwq_ctr2ix(wq, cqcc);
++
++	memcpy(data, mlx5_cqwq_get_wqe(wq, ci), sizeof(struct mlx5_cqe64));
++}
++
++static inline void mlx5e_read_title_slot(struct mlx5e_txqsq *sq,
++					 struct mlx5_cqwq *wq,
++					 u32 cqcc)
++{
++	struct mlx5e_cq_decomp *cqd = &sq->cqd;
++	struct mlx5_cqe64 *title = &cqd->title;
++
++	mlx5e_read_cqe_slot(wq, cqcc, title);
++	cqd->left = be32_to_cpu(title->byte_cnt);
++	sq->stats->cqe_compress_blks++;
++	sq->stats->cqe_compress_pkts += cqd->left;
++}
++
++static inline void mlx5e_decompress_cqes(struct mlx5e_txqsq *sq,
++					 struct mlx5_cqwq *wq)
++{
++	struct mlx5e_cq_decomp *cqd = &sq->cqd;
++	struct mlx5_cqe64 *title = &cqd->title;
++	struct mlx5_mini_cqe8 *mini_cqe;
++	int iteration_sz;
++	u32 cc = wq->cc;
++
++	mlx5e_read_title_slot(sq, wq, cc);
++	mlx5e_read_cqe_slot(wq, cc + 1, cqd->mini_arr);
++	cqd->mini_arr_idx = 0;
++	do {
++		// Read 8 mini CQEs
++		iteration_sz = min_t(u16, cqd->left, 8);
++		// For each CQE update WQ
++		do {
++			struct mlx5_cqe64 cqe_tmp = *title;
++			struct mlx5_cqe64 *cqe;
++
++			mini_cqe = &cqd->mini_arr[cqd->mini_arr_idx++];
++			cqe_tmp.byte_cnt     = mini_cqe->byte_cnt;
++			cqe_tmp.op_own      &= 0xf0;
++			cqe_tmp.op_own      |= 0x01 & (cc >> wq->fbc.log_sz);
++			cqe_tmp.wqe_counter  = mini_cqe->s_wqe_info.wqe_counter;
++
++			cqe = mlx5_cqwq_get_wqe(wq, mlx5_cqwq_ctr2ix(wq, cc++));
++			*cqe = cqe_tmp;
++
++		} while (cqd->mini_arr_idx < iteration_sz);
++
++		cqd->left -= iteration_sz;
++		if (!cqd->left)
++			break;
++		mlx5e_read_cqe_slot(wq, cc, cqd->mini_arr);
++		cqd->mini_arr_idx = 0;
++	} while (1);
++}
  
- static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
- 				       u32 cqcc, void *data)
-@@ -165,8 +166,24 @@ static int mlx5e_select_htb_queue(struct
+ static void mlx5e_dma_unmap_wqe_err(struct mlx5e_txqsq *sq, u8 num_dma)
+ {
+@@ -106,8 +167,24 @@ static int mlx5e_select_htb_queue(struct
  	return mlx5e_get_txq_by_classid(priv, classid);
  }
  
@@ -41,7 +101,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	struct mlx5e_select_queue_params *selq;
-@@ -190,7 +207,13 @@ u16 mlx5e_select_queue(struct net_device
+@@ -131,7 +208,13 @@ u16 mlx5e_select_queue(struct net_device
  			if (unlikely(mlx5e_use_ptpsq(skb)))
  				return mlx5e_select_ptpsq(dev, skb, selq);
  
@@ -55,7 +115,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  		/* Fix netdev_pick_tx() not to choose ptp_channel and HTB txqs.
  		 * If they are selected, switch to regular queues.
  		 * Driver to select these queues only at mlx5e_select_ptpsq()
-@@ -199,7 +222,13 @@ u16 mlx5e_select_queue(struct net_device
+@@ -140,7 +223,13 @@ u16 mlx5e_select_queue(struct net_device
  		if (unlikely(txq_ix >= selq->num_regular_queues))
  			txq_ix %= selq->num_regular_queues;
  	} else {
@@ -69,7 +129,23 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  	}
  
  	if (selq->num_tcs <= 1)
-@@ -244,7 +273,16 @@ static inline u16 mlx5e_calc_min_inline(
+@@ -159,7 +248,14 @@ static inline int mlx5e_skb_l2_header_of
+ {
+ #define MLX5E_MIN_INLINE (ETH_HLEN + VLAN_HLEN)
+ 
+-	return max(skb_network_offset(skb), MLX5E_MIN_INLINE);
++	struct ethhdr *eth = (struct ethhdr *)(skb->data);
++	int max_hlen, l2_hlen = 0;
++
++	max_hlen = max_t(int, skb_network_offset(skb), MLX5E_MIN_INLINE);
++	if (unlikely(!__vlan_get_protocol(skb, eth->h_proto, &l2_hlen)))
++		return max_hlen;
++
++	return max_t(int, max_hlen, l2_hlen);
+ }
+ 
+ static inline int mlx5e_skb_l3_header_offset(struct sk_buff *skb)
+@@ -179,12 +275,23 @@ static inline u16 mlx5e_calc_min_inline(
  	case MLX5_INLINE_MODE_NONE:
  		return 0;
  	case MLX5_INLINE_MODE_TCP_UDP:
@@ -86,7 +162,14 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  		if (hlen == ETH_HLEN && !skb_vlan_tag_present(skb))
  			hlen += VLAN_HLEN;
  		break;
-@@ -266,7 +304,11 @@ static inline void mlx5e_insert_vlan(voi
+ 	case MLX5_INLINE_MODE_IP:
+ 		hlen = mlx5e_skb_l3_header_offset(skb);
++		if (unlikely(hlen < ETH_HLEN + sizeof(struct iphdr)))
++			hlen = MLX5E_MIN_INLINE + sizeof(struct ipv6hdr);
+ 		break;
+ 	case MLX5_INLINE_MODE_L2:
+ 	default:
+@@ -199,7 +306,11 @@ static inline void mlx5e_insert_vlan(voi
  	int cpy1_sz = 2 * ETH_ALEN;
  	int cpy2_sz = ihs - cpy1_sz;
  
@@ -98,7 +181,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  	vhdr->h_vlan_proto = skb->vlan_proto;
  	vhdr->h_vlan_TCI = cpu_to_be16(skb_vlan_tag_get(skb));
  	memcpy(&vhdr->h_vlan_encapsulated_proto, skb->data + cpy1_sz, cpy2_sz);
-@@ -277,8 +319,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+@@ -210,8 +321,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
  			    struct mlx5e_accel_tx_state *accel,
  			    struct mlx5_wqe_eth_seg *eseg)
  {
@@ -113,7 +196,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  
  	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
  		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
-@@ -306,13 +354,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
+@@ -239,13 +356,19 @@ mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq
  	u16 ihs;
  
  	if (skb->encapsulation) {
@@ -133,7 +216,31 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  			ihs = skb_transport_offset(skb) + tcp_hdrlen(skb);
  		stats->tso_packets++;
  		stats->tso_bytes += skb->len - ihs;
-@@ -531,6 +585,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+@@ -420,6 +543,14 @@ static void mlx5e_tx_check_stop(struct m
+ 	}
+ }
+ 
++static inline bool mlx5e_is_skb_driver_xmit_more(struct sk_buff *skb,
++		struct mlx5e_txqsq *sq)
++{
++	if (test_bit(MLX5E_SQ_STATE_SKB_XMIT_MORE, &sq->state))
++		return skb->cb[47] & MLX5_XMIT_MORE_SKB_CB;
++	return false;
++}
++
+ static inline void
+ mlx5e_txwqe_complete(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+ 		     const struct mlx5e_tx_attr *attr,
+@@ -438,6 +569,8 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+ 		.num_fifo_pkts = 0,
+ 	};
+ 
++	xmit_more = xmit_more || mlx5e_is_skb_driver_xmit_more(skb, sq);
++
+ 	cseg->opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | attr->opcode);
+ 	cseg->qpn_ds           = cpu_to_be32((sq->sqn << 8) | wqe_attr->ds_cnt);
+ 
+@@ -459,6 +592,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
  	}
  
  	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
@@ -141,7 +248,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  	if (send_doorbell)
  		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
  }
-@@ -548,7 +603,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -476,7 +610,9 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
  	struct mlx5e_sq_stats *stats = sq->stats;
  	int num_dma;
  
@@ -151,7 +258,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  
  	/* fill wqe */
  	wi   = &sq->db.wqe_info[pi];
-@@ -700,7 +757,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+@@ -628,7 +764,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
  		mlx5e_tx_mpwqe_session_start(sq, eseg);
  	}
  
@@ -161,7 +268,16 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  
  	txd.data = skb->data;
  	txd.len = skb->len;
-@@ -759,7 +818,12 @@ static void mlx5e_txwqe_build_eseg(struc
+@@ -644,6 +782,8 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+ 
+ 	mlx5e_tx_skb_update_hwts_flags(skb);
+ 
++	xmit_more = xmit_more || mlx5e_is_skb_driver_xmit_more(skb, sq);
++
+ 	if (unlikely(mlx5e_tx_mpwqe_is_full(&sq->mpwqe, sq->max_sq_mpw_wqebbs))) {
+ 		/* Might stop the queue and affect the retval of __netdev_tx_sent_queue. */
+ 		cseg = mlx5e_tx_mpwqe_session_complete(sq);
+@@ -685,7 +825,12 @@ static void mlx5e_txwqe_build_eseg(struc
  				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
  				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
  {
@@ -175,7 +291,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
  	if (unlikely(sq->ptpsq))
  		mlx5e_cqe_ts_id_eseg(sq, skb, eseg);
-@@ -799,7 +863,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -725,7 +870,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  			struct mlx5_wqe_eth_seg eseg = {};
  
  			mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg, attr.ihs);
@@ -189,7 +305,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  			return NETDEV_TX_OK;
  		}
  
-@@ -814,7 +884,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -740,7 +891,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  	mlx5e_accel_tx_finish(sq, wqe, &accel,
  			      (struct mlx5_wqe_inline_seg *)(wqe->data + wqe_attr.ds_cnt_inl));
  	mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs);
@@ -203,7 +319,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  
  	return NETDEV_TX_OK;
  }
-@@ -861,7 +937,11 @@ static void mlx5e_consume_skb(struct mlx
+@@ -787,7 +944,11 @@ static void mlx5e_consume_skb(struct mlx
  			skb_tstamp_tx(skb, &hwts);
  	}
  
@@ -215,7 +331,17 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  }
  
  static void mlx5e_tx_wi_consume_fifo_skbs(struct mlx5e_txqsq *sq, struct mlx5e_tx_wqe_info *wi,
-@@ -939,7 +1019,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -842,6 +1003,9 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+ 		bool last_wqe;
+ 		u16 ci;
+ 
++		if (mlx5_get_cqe_format(cqe) == MLX5_COMPRESSED)
++			mlx5e_decompress_cqes(sq, &cq->wq);
++
+ 		mlx5_cqwq_pop(&cq->wq);
+ 
+ 		wqe_counter = be16_to_cpu(cqe->wqe_counter);
+@@ -862,7 +1026,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  				nbytes += wi->num_bytes;
  				continue;
  			}
@@ -223,7 +349,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  			if (unlikely(mlx5e_ktls_tx_try_handle_resync_dump_comp(sq, wi,
  									       &dma_fifo_cc)))
  				continue;
-@@ -1072,7 +1151,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -996,7 +1159,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -235,7 +361,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -1094,7 +1177,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1018,7 +1185,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -245,7 +371,7 @@ Change-Id: I040cdd07dd338653de3f2f9102fc73992bf46c5c
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1120,7 +1205,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1044,7 +1213,11 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	if (unlikely(num_dma < 0))
  		goto err_drop;
  

@@ -5,6 +5,7 @@
 #include "linux/dma-mapping.h"
 #include "en/txrx.h"
 #include "en/params.h"
+#include "lib/aso.h"
 
 #ifndef __MLX5_EN_ASO_H__
 #define __MLX5_EN_ASO_H__
@@ -16,6 +17,8 @@
 #define MLX5E_ASO_WQEBBS_DATA \
 	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe_data), MLX5_SEND_WQE_BB))
 #define ASO_CTRL_READ_EN BIT(0)
+#define MLX5E_MACSEC_ASO_DS_CNT \
+	(DIV_ROUND_UP(sizeof(struct mlx5e_aso_wqe), MLX5_SEND_WQE_DS))
 
 enum {
 	MLX5_ASO_SOFT_ARM = BIT(0),
@@ -131,6 +134,7 @@ enum {
 
 enum {
 	MLX5_ACCESS_ASO_OPC_MOD_FLOW_METER = 0x2,
+	MLX5_ACCESS_ASO_OPC_MOD_MACSEC = 0x5,
 };
 
 void mlx5e_build_aso_wqe(struct mlx5e_aso *aso, struct mlx5e_asosq *sq,

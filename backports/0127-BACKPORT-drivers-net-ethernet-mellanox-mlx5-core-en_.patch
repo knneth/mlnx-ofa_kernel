@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I5dbe19c92a9bedcab5999ffffe089b1f0945827b
 ---
- .../mellanox/mlx5/core/en_accel/en_accel.h         | 14 ++++++++++++--
- 1 file changed, 12 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_accel/en_accel.h  | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-@@ -119,8 +119,10 @@ static inline bool mlx5e_accel_tx_begin(
+@@ -120,8 +120,10 @@ static inline bool mlx5e_accel_tx_begin(
  					struct sk_buff *skb,
  					struct mlx5e_accel_tx_state *state)
  {
@@ -20,7 +20,7 @@ Change-Id: I5dbe19c92a9bedcab5999ffffe089b1f0945827b
  
  #ifdef CONFIG_MLX5_EN_TLS
  	/* May send SKBs and WQEs. */
-@@ -164,11 +166,19 @@ static inline unsigned int mlx5e_accel_t
+@@ -174,11 +176,19 @@ static inline unsigned int mlx5e_accel_t
  
  static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
  				       struct sk_buff *skb,
@@ -33,12 +33,11 @@ Change-Id: I5dbe19c92a9bedcab5999ffffe089b1f0945827b
  {
  #ifdef CONFIG_MLX5_EN_IPSEC
  	if (xfrm_offload(skb))
--		mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
 +#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+       	mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
+ 		mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
 +#else
 +		mlx5e_ipsec_tx_build_eseg(priv, skb, ipsec_st, eseg);
 +#endif
  #endif
  
- #if IS_ENABLED(CONFIG_GENEVE)
+ #ifdef CONFIG_MLX5_EN_MACSEC

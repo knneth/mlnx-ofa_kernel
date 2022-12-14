@@ -67,15 +67,15 @@ Change-Id: I32a564e0d1563ba56c4ce7136207259825ed0084
  
 +#ifndef MLX_DISABLE_TRACEPOINTS
  	trace_mlx5_fw(dev->tracer, trace_timestamp, str_frmt->lost,
- 			str_frmt->event_id, tracer->ready_string);
+ 		      str_frmt->event_id, tmp);
 +#else
 +	pr_debug("%s %llu %d %d %s\n", dev_name(&dev->pdev->dev),
 +		 trace_timestamp, str_frmt->lost,
-+		 str_frmt->event_id, tracer->ready_string);
++		 str_frmt->event_id, tmp);
 +#endif
  
  	mlx5_fw_tracer_save_trace(dev->tracer, trace_timestamp,
- 				  str_frmt->lost, str_frmt->event_id, tracer->ready_string);
+ 				  str_frmt->lost, str_frmt->event_id, tmp);
 @@ -827,6 +841,7 @@ static void mlx5_fw_tracer_ownership_cha
  	mlx5_fw_tracer_start(tracer);
  }

@@ -168,8 +168,6 @@ static const struct counter_desc sw_stats_desc[] = {
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xdp_full) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xdp_err) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_xdp_cqes) },
-	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqe_compress_blks) },
-	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, tx_cqe_compress_pkts) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_wqe_err) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler_cqes) },
 	{ MLX5E_DECLARE_STAT(struct mlx5e_sw_stats, rx_mpwqe_filler_strides) },
@@ -420,8 +418,6 @@ static void mlx5e_stats_grp_sw_update_stats_sq(struct mlx5e_sw_stats *s,
 	s->tx_tls_drop_bypass_req   += sq_stats->tls_drop_bypass_req;
 #endif
 	s->tx_cqes                  += sq_stats->cqes;
-	s->tx_cqe_compress_blks += sq_stats->cqe_compress_blks;
-	s->tx_cqe_compress_pkts += sq_stats->cqe_compress_pkts;
 }
 
 static void mlx5e_stats_grp_sw_update_stats_ptp(struct mlx5e_priv *priv,
@@ -1950,8 +1946,6 @@ static const struct counter_desc sq_stats_desc[] = {
 	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, xmit_more) },
 	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, recover) },
 	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, cqes) },
-	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, cqe_compress_blks) },
-	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, cqe_compress_pkts) },
 	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, wake) },
 	{ MLX5E_DECLARE_TX_STAT(struct mlx5e_sq_stats, cqe_err) },
 };
@@ -2399,6 +2393,9 @@ mlx5e_stats_grp_t mlx5e_nic_stats_grps[] = {
 	&MLX5E_STATS_GRP(per_port_buff_congest),
 	&MLX5E_STATS_GRP(ptp),
 	&MLX5E_STATS_GRP(qos),
+#ifdef CONFIG_MLX5_EN_MACSEC
+	&MLX5E_STATS_GRP(macsec_hw),
+#endif
 };
 
 unsigned int mlx5e_nic_stats_grps_num(struct mlx5e_priv *priv)

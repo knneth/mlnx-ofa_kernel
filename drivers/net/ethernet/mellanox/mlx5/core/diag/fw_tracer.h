@@ -104,7 +104,6 @@ struct mlx5_fw_tracer {
 	struct work_struct handle_traces_work;
 	struct hlist_head hash[MESSAGE_HASH_SIZE];
 	struct list_head ready_strings_list;
-	char ready_string[1024];
 };
 
 struct tracer_string_format {

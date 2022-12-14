@@ -1,11 +1,11 @@
-From: Roy Novich <royno@nvidia.com>
+From: Maher Sanalla <msanalla@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 
-Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
+Change-Id: I073a7860c9d305d42fd248fd494457d82ac1ff99
 ---
- .../mellanox/mlx5/core/esw/devlink_port.c     | 85 ++++++++++++++++++-
- 1 file changed, 84 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/esw/devlink_port.c     | 142 ++++++++++++++++--
+ 1 file changed, 132 insertions(+), 10 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
@@ -133,12 +133,24 @@ Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
  	struct mlx5_core_dev *dev = esw->dev;
  	struct devlink_port *dl_port;
  	unsigned int dl_port_index;
-@@ -92,22 +147,30 @@ int mlx5_esw_offloads_devlink_port_regis
+@@ -88,26 +143,46 @@ int mlx5_esw_offloads_devlink_port_regis
+ 
+ 	devlink = priv_to_devlink(dev);
+ 	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	err = devl_port_register(devlink, dl_port, dl_port_index);
++#else
+ 	err = devlink_port_register(devlink, dl_port, dl_port_index);
++#endif
  	if (err)
  		goto reg_err;
  
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	err = devl_rate_leaf_create(dl_port, vport);
++#else
  	err = devlink_rate_leaf_create(dl_port, vport);
++#endif
  	if (err)
  		goto rate_err;
 +#endif
@@ -148,7 +160,11 @@ Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
  
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  rate_err:
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	devl_port_unregister(dl_port);
++#else
  	devlink_port_unregister(dl_port);
++#endif
 +#endif
  reg_err:
  	mlx5_esw_dl_port_free(dl_port);
@@ -164,34 +180,46 @@ Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
  	struct mlx5_vport *vport;
  
  	if (!mlx5_esw_devlink_port_supported(esw, vport_num))
-@@ -117,15 +180,18 @@ void mlx5_esw_offloads_devlink_port_unre
+@@ -117,15 +192,26 @@ void mlx5_esw_offloads_devlink_port_unre
  	if (IS_ERR(vport))
  		return;
  
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  	if (vport->dl_port->devlink_rate) {
- 		if (refcount_read(&esw->qos.refcnt))
+ 		if (!test_bit(MLX5_INTERFACE_STATE_TEARDOWN, &esw->dev->intf_state))
  			mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
- 		devlink_rate_leaf_destroy(vport->dl_port);
+-		devlink_rate_leaf_destroy(vport->dl_port);
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++		devl_rate_leaf_destroy(vport->dl_port);
++#else
++ 		devlink_rate_leaf_destroy(vport->dl_port);
++#endif
  	}
 +#endif
  
- 	devlink_port_unregister(vport->dl_port);
- 	mlx5_esw_dl_port_free(vport->dl_port);
- 	vport->dl_port = NULL;
+-	devlink_port_unregister(vport->dl_port);
+-	mlx5_esw_dl_port_free(vport->dl_port);
+-	vport->dl_port = NULL;
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	devl_port_unregister(vport->dl_port);
++#else
++ 	devlink_port_unregister(vport->dl_port);
++#endif
++ 	mlx5_esw_dl_port_free(vport->dl_port);
++ 	vport->dl_port = NULL;
 +#endif
  }
  
  struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u16 vport_num)
-@@ -146,6 +212,7 @@ int mlx5_esw_devlink_sf_port_register(st
- int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
+@@ -139,6 +225,7 @@ struct devlink_port *mlx5_esw_offloads_d
+ int _mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
  				      u16 vport_num, u32 controller, u32 sfnum)
  {
 +#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
  	struct mlx5_core_dev *dev = esw->dev;
  	struct netdev_phys_item_id ppid = {};
  	unsigned int dl_port_index;
-@@ -162,23 +229,35 @@ int mlx5_esw_devlink_sf_port_register(st
+@@ -155,23 +242,44 @@ int _mlx5_esw_devlink_sf_port_register(s
  	mlx5_esw_get_port_parent_id(dev, &ppid);
  	memcpy(dl_port->attrs.switch_id.id, &ppid.id[0], ppid.id_len);
  	dl_port->attrs.switch_id.id_len = ppid.id_len;
@@ -202,22 +230,34 @@ Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
 +#endif
  	devlink = priv_to_devlink(dev);
  	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	err = devl_port_register(devlink, dl_port, dl_port_index);
++#else
  	err = devlink_port_register(devlink, dl_port, dl_port_index);
++#endif
  	if (err)
  		return err;
- 
-+ #ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+-
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	err = devl_rate_leaf_create(dl_port, vport);
++#else
  	err = devlink_rate_leaf_create(dl_port, vport);
++#endif
  	if (err)
  		goto rate_err;
-+ #endif
- 
+-
++#endif
  	vport->dl_port = dl_port;
  	return 0;
- 
+-
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  rate_err:
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	devl_port_unregister(dl_port);
++#else
  	devlink_port_unregister(dl_port);
++#endif
  	return err;
 +#endif
 +#else /* defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS) */
@@ -225,11 +265,24 @@ Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
 +	return -EOPNOTSUPP;
 +#endif /* defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS) */
  }
- #endif
  
-@@ -190,18 +269,22 @@ void mlx5_esw_devlink_sf_port_unregister
- #else
- void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
+ int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw,
+@@ -181,10 +289,12 @@ int mlx5_esw_devlink_sf_port_register(st
+ {
+ 	int err = 0;
+ 
++#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
+ 	err = _mlx5_esw_devlink_sf_port_register(esw, dl_port, vport_num,
+ 						 controller, sfnum);
+ 	if (err)
+ 		return err;
++#endif
+ 
+ #if IS_ENABLED(CONFIG_MLXDEVM)
+ 	err = mlx5_devm_sf_port_register(esw->dev, vport_num, controller, sfnum, dl_port);
+@@ -194,25 +304,37 @@ int mlx5_esw_devlink_sf_port_register(st
+ 
+ void _mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
  {
 +#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
  	struct mlx5_vport *vport;
@@ -237,16 +290,33 @@ Change-Id: Ia7d7d409aacebb2e6587bf8315ebdd32a6faa84f
  	vport = mlx5_eswitch_get_vport(esw, vport_num);
  	if (IS_ERR(vport))
  		return;
- 
+-
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  	if (vport->dl_port->devlink_rate) {
  		mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++		devl_rate_leaf_destroy(vport->dl_port);
++#else
  		devlink_rate_leaf_destroy(vport->dl_port);
++#endif
  	}
-+ #endif
- 
+-
++#endif
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	devl_port_unregister(vport->dl_port);
++#else
  	devlink_port_unregister(vport->dl_port);
++#endif
  	vport->dl_port = NULL;
 +#endif /* defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS) */
  }
+ 
+ void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw,
+ 					 u16 vport_num)
+ {
++#if defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS)
+ 	_mlx5_esw_devlink_sf_port_unregister(esw, vport_num);
++#endif
+ #if IS_ENABLED(CONFIG_MLXDEVM)
+ 	mlx5_devm_sf_port_unregister(esw->dev, vport_num);
  #endif

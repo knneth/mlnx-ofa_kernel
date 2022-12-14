@@ -592,7 +592,10 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 			 fte->action.modify_hdr->id);
 	}
 
-	MLX5_SET(flow_context, in_flow_context, ipsec_obj_id, fte->action.ipsec_obj_id);
+	MLX5_SET(flow_context, in_flow_context, encrypt_decrypt_type,
+		 fte->action.crypto.type);
+	MLX5_SET(flow_context, in_flow_context, encrypt_decrypt_obj_id,
+		 fte->action.crypto.obj_id);
 
 	vlan = MLX5_ADDR_OF(flow_context, in_flow_context, push_vlan);
 
@@ -656,6 +659,11 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 				break;
 			case MLX5_FLOW_DESTINATION_TYPE_FLOW_SAMPLER:
 				id = dst->dest_attr.sampler_id;
+				break;
+			case MLX5_FLOW_DESTINATION_TYPE_TABLE_TYPE:
+				MLX5_SET(dest_format_struct, in_dests,
+					 destination_table_type, dst->dest_attr.ft->type);
+				id = dst->dest_attr.ft->id;
 				break;
 			default:
 				id = dst->dest_attr.tir_num;
@@ -926,6 +934,7 @@ static int mlx5_cmd_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 		max_actions = MLX5_CAP_ESW_FLOWTABLE_FDB(dev, max_modify_header_actions);
 		table_type = FS_FT_FDB;
 		break;
+	case MLX5_FLOW_NAMESPACE_KERNEL_RX_MACSEC:
 	case MLX5_FLOW_NAMESPACE_KERNEL:
 	case MLX5_FLOW_NAMESPACE_BYPASS:
 		max_actions = MLX5_CAP_FLOWTABLE_NIC_RX(dev, max_modify_header_actions);
@@ -933,8 +942,9 @@ static int mlx5_cmd_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 		break;
 	case MLX5_FLOW_NAMESPACE_EGRESS:
 #ifdef CONFIG_MLX5_IPSEC
-	case MLX5_FLOW_NAMESPACE_EGRESS_KERNEL:
+	case MLX5_FLOW_NAMESPACE_EGRESS_IPSEC:
 #endif
+	case MLX5_FLOW_NAMESPACE_EGRESS_MACSEC:
 		max_actions = MLX5_CAP_FLOWTABLE_NIC_TX(dev, max_modify_header_actions);
 		table_type = FS_FT_NIC_TX;
 		break;
@@ -942,6 +952,7 @@ static int mlx5_cmd_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 		max_actions = MLX5_CAP_ESW_INGRESS_ACL(dev, max_modify_header_actions);
 		table_type = FS_FT_ESW_INGRESS_ACL;
 		break;
+	case MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC:
 	case MLX5_FLOW_NAMESPACE_RDMA_TX:
 		max_actions = MLX5_CAP_FLOWTABLE_RDMA_TX(dev, max_modify_header_actions);
 		table_type = FS_FT_RDMA_TX;

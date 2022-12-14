@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 
 Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
 ---
- .../ethernet/mellanox/mlx5/core/en_stats.h    | 26 +++++++++++++++++--
- 1 file changed, 24 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_stats.h    | 30 +++++++++++++++++--
+ 1 file changed, 28 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
@@ -70,15 +70,17 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  	u64 tx_xdp_xmit;
  	u64 tx_xdp_mpwqe;
  	u64 tx_xdp_inlnw;
-@@ -184,6 +197,7 @@ struct mlx5e_sw_stats {
+@@ -184,6 +197,9 @@ struct mlx5e_sw_stats {
  	u64 tx_xdp_full;
  	u64 tx_xdp_err;
  	u64 tx_xdp_cqes;
 +#endif
- 	u64 tx_cqe_compress_blks;
- 	u64 tx_cqe_compress_pkts;
++	u64 tx_cqe_compress_blks;
++	u64 tx_cqe_compress_pkts;
  	u64 rx_wqe_err;
-@@ -214,6 +228,7 @@ struct mlx5e_sw_stats {
+ 	u64 rx_mpwqe_filler_cqes;
+ 	u64 rx_mpwqe_filler_strides;
+@@ -212,6 +228,7 @@ struct mlx5e_sw_stats {
  	u64 ch_eq_rearm;
  
  #ifdef CONFIG_MLX5_EN_TLS
@@ -86,7 +88,7 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  	u64 tx_tls_encrypted_packets;
  	u64 tx_tls_encrypted_bytes;
  	u64 tx_tls_ooo;
-@@ -234,6 +249,7 @@ struct mlx5e_sw_stats {
+@@ -232,6 +249,7 @@ struct mlx5e_sw_stats {
  	u64 rx_tls_resync_res_retry;
  	u64 rx_tls_resync_res_skip;
  	u64 rx_tls_err;
@@ -94,7 +96,7 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  #endif
  
  	u64 rx_xsk_packets;
-@@ -342,8 +358,10 @@ struct mlx5e_rq_stats {
+@@ -340,8 +358,10 @@ struct mlx5e_rq_stats {
  	u64 mcast_packets;
  	u64 ecn_mark;
  	u64 removed_vlan_packets;
@@ -105,7 +107,7 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  	u64 wqe_err;
  	u64 mpwqe_filler_cqes;
  	u64 mpwqe_filler_strides;
-@@ -365,6 +383,7 @@ struct mlx5e_rq_stats {
+@@ -363,6 +383,7 @@ struct mlx5e_rq_stats {
  	u64 pet_hdr_lookup_drop;
  	u64 pet_mdata_lookup_drop;
  #ifdef CONFIG_MLX5_EN_TLS
@@ -113,7 +115,7 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  	u64 tls_decrypted_packets;
  	u64 tls_decrypted_bytes;
  	u64 tls_resync_req_pkt;
-@@ -375,6 +394,7 @@ struct mlx5e_rq_stats {
+@@ -373,6 +394,7 @@ struct mlx5e_rq_stats {
  	u64 tls_resync_res_retry;
  	u64 tls_resync_res_skip;
  	u64 tls_err;
@@ -121,7 +123,13 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  #endif
  };
  
-@@ -417,6 +437,7 @@ struct mlx5e_sq_stats {
+@@ -409,10 +431,13 @@ struct mlx5e_sq_stats {
+ 	u64 recover;
+ 	/* dirtied @completion */
+ 	u64 cqes ____cacheline_aligned_in_smp;
++	u64 cqe_compress_blks;
++	u64 cqe_compress_pkts;
+ 	u64 wake;
  	u64 cqe_err;
  };
  
@@ -129,7 +137,7 @@ Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
  struct mlx5e_xdpsq_stats {
  	u64 xmit;
  	u64 mpwqe;
-@@ -427,6 +448,7 @@ struct mlx5e_xdpsq_stats {
+@@ -423,6 +448,7 @@ struct mlx5e_xdpsq_stats {
  	/* dirtied @completion */
  	u64 cqes ____cacheline_aligned_in_smp;
  };

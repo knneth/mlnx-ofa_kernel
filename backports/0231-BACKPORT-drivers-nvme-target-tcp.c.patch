@@ -18,7 +18,7 @@ Change-Id: I9ecfbfc638e6e80645fdde805c1530fef6cb5a19
  #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
  #include <linux/module.h>
  #include <linux/init.h>
-@@ -1525,14 +1528,27 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1528,14 +1531,27 @@ static int nvmet_tcp_set_queue_sock(stru
  	struct socket *sock = queue->sock;
  	struct inet_sock *inet = inet_sk(sock->sk);
  	int ret;
@@ -46,7 +46,7 @@ Change-Id: I9ecfbfc638e6e80645fdde805c1530fef6cb5a19
  	if (ret < 0)
  		return ret;
  
-@@ -1547,8 +1563,19 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1550,8 +1566,19 @@ static int nvmet_tcp_set_queue_sock(stru
  		sock_set_priority(sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -66,7 +66,7 @@ Change-Id: I9ecfbfc638e6e80645fdde805c1530fef6cb5a19
  
  	ret = 0;
  	write_lock_bh(&sock->sk->sk_callback_lock);
-@@ -1677,6 +1704,9 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -1680,6 +1707,9 @@ static int nvmet_tcp_add_port(struct nvm
  	struct nvmet_tcp_port *port;
  	__kernel_sa_family_t af;
  	int ret;
@@ -76,7 +76,7 @@ Change-Id: I9ecfbfc638e6e80645fdde805c1530fef6cb5a19
  
  	port = kzalloc(sizeof(*port), GFP_KERNEL);
  	if (!port)
-@@ -1720,7 +1750,17 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -1723,7 +1753,17 @@ static int nvmet_tcp_add_port(struct nvm
  	port->data_ready = port->sock->sk->sk_data_ready;
  	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
  	sock_set_reuseaddr(port->sock->sk);

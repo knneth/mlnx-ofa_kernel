@@ -26,7 +26,15 @@ tc_act_parse_prio(struct mlx5e_tc_act_parse_state *parse_state,
 			 struct mlx5e_priv *priv,
 			 struct mlx5_flow_attr *attr)
 {
+	int err;
+
 	attr->nic_attr->user_prio = act->priority;
+	err = mlx5e_tc_match_to_reg_set(priv->mdev, &attr->parse_attr->mod_hdr_acts,
+					MLX5_FLOW_NAMESPACE_KERNEL,
+					USER_PRIO_TO_REG, attr->nic_attr->user_prio);
+	if (err)
+		return err;
+
 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
 
 	return 0;

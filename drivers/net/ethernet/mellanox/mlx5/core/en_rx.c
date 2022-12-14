@@ -49,6 +49,7 @@
 #include "ipoib/ipoib.h"
 #include "accel/ipsec.h"
 #include "fpga/ipsec.h"
+#include "en_accel/macsec.h"
 #include "en_accel/ipsec_rxtx.h"
 #include "en_accel/tls_rxtx.h"
 #include "en/xdp.h"
@@ -58,15 +59,6 @@
 #include "devlink.h"
 #include "en/devlink.h"
 #include "esw/ipsec.h"
-#include "en/txrx.h"
-
-static inline void mlx5e_set_skb_driver_xmit_more(struct sk_buff *skb,
-						  struct mlx5e_rq *rq,
-						  bool xmit_more)
-{
-	if (test_bit(MLX5E_RQ_STATE_SKB_XMIT_MORE, &rq->state) && xmit_more)
-		skb->cb[47] = MLX5_XMIT_MORE_SKB_CB;
-}
 
 static struct sk_buff *
 mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
@@ -74,9 +66,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 static struct sk_buff *
 mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 				   u16 cqe_bcnt, u32 head_offset, u32 page_idx);
-static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, bool xmit_more);
-static void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, bool xmit_more);
-static void mlx5e_handle_rx_cqe_mpwrq_shampo(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, bool xmit_more);
+static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
+static void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
+static void mlx5e_handle_rx_cqe_mpwrq_shampo(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe);
 
 const struct mlx5e_rx_handlers mlx5e_rx_handlers_nic = {
 	.handle_rx_cqe       = mlx5e_handle_rx_cqe,
@@ -203,7 +195,7 @@ static inline u32 mlx5e_decompress_cqes_cont(struct mlx5e_rq *rq,
 		mlx5e_decompress_cqe_no_hash(rq, wq, cqcc);
 		INDIRECT_CALL_3(rq->handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq,
 				mlx5e_handle_rx_cqe_mpwrq_shampo, mlx5e_handle_rx_cqe,
-				rq, &cqd->title, i < cqe_count - 1);
+				rq, &cqd->title);
 	}
 	mlx5e_cqes_update_owner(wq, cqcc - wq->cc);
 	wq->cc = cqcc;
@@ -225,7 +217,7 @@ static inline u32 mlx5e_decompress_cqes_start(struct mlx5e_rq *rq,
 	mlx5e_decompress_cqe(rq, wq, cc);
 	INDIRECT_CALL_3(rq->handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq,
 			mlx5e_handle_rx_cqe_mpwrq_shampo, mlx5e_handle_rx_cqe,
-			rq, &cqd->title, true);
+			rq, &cqd->title);
 	cqd->mini_arr_idx++;
 
 	return mlx5e_decompress_cqes_cont(rq, wq, 1, budget_rem) - 1;
@@ -790,7 +782,7 @@ static int mlx5e_alloc_rx_hd_mpwqe(struct mlx5e_rq *rq)
 	struct mlx5e_icosq *sq = rq->icosq;
 	int i, err, max_klm_entries, len;
 
-	max_klm_entries = MLX5E_MAX_KLM_PER_WQE;
+	max_klm_entries = MLX5E_MAX_KLM_PER_WQE(rq->mdev);
 	klm_entries = bitmap_find_window(shampo->bitmap,
 					 shampo->hd_per_wqe,
 					 shampo->hd_per_wq, shampo->pi);
@@ -1598,6 +1590,9 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	if (unlikely(mlx5_ipsec_is_rx_flow(cqe)))
 		mlx5e_ipsec_offload_handle_rx_skb(netdev, skb, cqe);
 
+	if (unlikely(mlx5e_macsec_is_rx_flow(cqe)))
+		mlx5e_macsec_offload_handle_rx_skb(netdev, skb, cqe);
+
 	if (lro_num_seg > 1) {
 		mlx5e_lro_update_hdr(skb, cqe, cqe_bcnt);
 		skb_shinfo(skb)->gso_size = DIV_ROUND_UP(cqe_bcnt, lro_num_seg);
@@ -1799,8 +1794,7 @@ static void mlx5e_handle_rx_err_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 	rq->stats->wqe_err++;
 }
 
-void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			 bool xmit_more)
+static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	struct mlx5e_wqe_frag_info *wi;
@@ -1840,7 +1834,6 @@ void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 			goto free_wqe;
 		}
 
-	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
 	napi_gro_receive(rq->cq.napi, skb);
 
 free_wqe:
@@ -1909,8 +1902,7 @@ static bool mlx5e_rep_lookup_and_update(struct mlx5e_rq *rq, struct sk_buff *skb
 	return true;
 }
 
-void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			     bool xmit_more)
+static void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	struct net_device *netdev = rq->netdev;
 	struct mlx5e_priv *priv = netdev_priv(netdev);
@@ -1962,8 +1954,7 @@ wq_cyc_pop:
 	mlx5_wq_cyc_pop(wq);
 }
 
-static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-					 bool xmit_more)
+static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	u16 cstrides       = mpwrq_get_cqe_consumed_strides(cqe);
 	u16 wqe_id         = be16_to_cpu(cqe->wqe_id);
@@ -2226,7 +2217,7 @@ mlx5e_free_rx_shampo_hd_entry(struct mlx5e_rq *rq, u16 header_index)
 	bitmap_clear(shampo->bitmap, header_index, 1);
 }
 
-static void mlx5e_handle_rx_cqe_mpwrq_shampo(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, bool xmit_more)
+static void mlx5e_handle_rx_cqe_mpwrq_shampo(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	u16 data_bcnt		= mpwrq_get_cqe_byte_cnt(cqe) - cqe->shampo.header_size;
 	u16 header_index	= mlx5e_shampo_get_cqe_header_index(rq, cqe);
@@ -2311,8 +2302,7 @@ mpwrq_cqe_out:
 	mlx5_wq_ll_pop(wq, cqe->wqe_id, &wqe->next.next_wqe_index);
 }
 
-void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			       bool xmit_more)
+static void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	u16 cstrides       = mpwrq_get_cqe_consumed_strides(cqe);
 	u16 wqe_id         = be16_to_cpu(cqe->wqe_id);
@@ -2358,7 +2348,6 @@ void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 			goto mpwrq_cqe_out;
 		}
 
-	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
 	napi_gro_receive(rq->cq.napi, skb);
 
 mpwrq_cqe_out:
@@ -2375,7 +2364,7 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 {
 	struct mlx5e_rq *rq = container_of(cq, struct mlx5e_rq, cq);
 	struct mlx5_cqwq *cqwq = &cq->wq;
-	struct mlx5_cqe64 *cqe, *next_cqe;
+	struct mlx5_cqe64 *cqe;
 	int work_done = 0;
 
 	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
@@ -2399,20 +2388,15 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 			work_done +=
 				mlx5e_decompress_cqes_start(rq, cqwq,
 							    budget - work_done);
-			if (work_done == budget)
-				break;
-			cqe = mlx5_cqwq_get_cqe(&cq->wq);
 			continue;
 		}
 
 		mlx5_cqwq_pop(cqwq);
 
-		next_cqe = mlx5_cqwq_get_cqe(&cq->wq);
 		INDIRECT_CALL_3(rq->handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq,
 				mlx5e_handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq_shampo,
-				rq, cqe, next_cqe && (work_done & 0xf));
-		cqe = next_cqe;
-	} while ((++work_done < budget) && cqe);
+				rq, cqe);
+	} while ((++work_done < budget) && (cqe = mlx5_cqwq_get_cqe(cqwq)));
 
 out:
 	if (test_bit(MLX5E_RQ_STATE_SHAMPO, &rq->state) && rq->hw_gro_data->skb)
@@ -2527,8 +2511,7 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 	}
 }
 
-void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			 bool xmit_more)
+static void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	struct mlx5e_wqe_frag_info *wi;
@@ -2557,7 +2540,6 @@ void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 		dev_kfree_skb_any(skb);
 		goto wq_free_wqe;
 	}
-	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
 	napi_gro_receive(rq->cq.napi, skb);
 
 wq_free_wqe:
@@ -2573,8 +2555,7 @@ const struct mlx5e_rx_handlers mlx5i_rx_handlers = {
 
 #ifdef CONFIG_MLX5_EN_IPSEC
 
-void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			       bool xmit_more)
+static void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	struct mlx5e_wqe_frag_info *wi;
@@ -2603,7 +2584,6 @@ void mlx5e_ipsec_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 		goto wq_free_wqe;
 
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
-	mlx5e_set_skb_driver_xmit_more(skb, rq, xmit_more);
 	napi_gro_receive(rq->cq.napi, skb);
 
 wq_free_wqe:
@@ -2678,8 +2658,7 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 	return 0;
 }
 
-static void mlx5e_trap_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-		bool xmit_more)
+static void mlx5e_trap_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	struct mlx5e_priv *priv = netdev_priv(rq->netdev);
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;

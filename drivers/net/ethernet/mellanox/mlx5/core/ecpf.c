@@ -79,6 +79,10 @@ int mlx5_ec_init(struct mlx5_core_dev *dev)
 	if (!mlx5_core_is_ecpf(dev))
 		return 0;
 
+	/* Management PF don't have a peer PF */
+	if (mlx5_core_is_management_pf(dev))
+		return 0;
+
 	return mlx5_host_pf_init(dev);
 }
 
@@ -87,6 +91,10 @@ void mlx5_ec_cleanup(struct mlx5_core_dev *dev)
 	int err;
 
 	if (!mlx5_core_is_ecpf(dev))
+		return;
+
+	/* Management PF don't have a peer PF */
+	if (mlx5_core_is_management_pf(dev))
 		return;
 
 	mlx5_host_pf_cleanup(dev);
@@ -377,6 +385,27 @@ static const char *policy_str(enum port_state_policy policy)
        ((PAGE_SIZE - (int)(p - buf)) <= 0 ? 0 :                        \
        scnprintf(p, PAGE_SIZE - (int)(p - buf), format, ## arg))
 
+static u8 mlx5_query_vport_admin_state(struct mlx5_core_dev *mdev,
+				       u8 opmod,
+				       u16 vport, u8 other_vport)
+{
+	u32 out[MLX5_ST_SZ_DW(query_vport_state_out)] = {};
+	u32 in[MLX5_ST_SZ_DW(query_vport_state_in)] = {};
+	int err;
+
+	MLX5_SET(query_vport_state_in, in, opcode,
+		 MLX5_CMD_OP_QUERY_VPORT_STATE);
+	MLX5_SET(query_vport_state_in, in, op_mod, opmod);
+	MLX5_SET(query_vport_state_in, in, vport_number, vport);
+	MLX5_SET(query_vport_state_in, in, other_vport, other_vport);
+
+	err = mlx5_cmd_exec_inout(mdev, query_vport_state, in, out);
+	if (err)
+		return 0;
+
+	return MLX5_GET(query_vport_state_out, out, admin_state);
+}
+
 static ssize_t config_show(struct kobject *kobj,
 			   struct kobj_attribute *attr,
 			   char *buf)
@@ -385,15 +414,20 @@ static ssize_t config_show(struct kobject *kobj,
 		container_of(kobj, struct mlx5_smart_nic_vport, kobj);
 	struct mlx5_eswitch *esw = tmp->esw;
 	struct mlx5_vport *evport =  mlx5_eswitch_get_vport(esw, tmp->vport);
+	int opmod = MLX5_VPORT_STATE_OP_MOD_ESW_VPORT;
 	struct mlx5_vport_info *ivi;
+	int other_vport = 1;
 	char *p = buf;
+	u8 port_state;
 
 	mutex_lock(&esw->state_lock);
 	ivi = &evport->info;
 	p += _sprintf(p, buf, "MAC        : %pM\n", ivi->mac);
 	p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.max_rate);
 	p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.min_rate);
-	p += _sprintf(p, buf, "State      : %s\n", policy_str(ivi->link_state));
+	port_state = mlx5_query_vport_admin_state(esw->dev, opmod,
+						  tmp->vport, other_vport);
+	p += _sprintf(p, buf, "State      : %s\n", policy_str(port_state));
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);

@@ -127,9 +127,12 @@ static inline int blk_mq_request_completed(struct request *rq)
 
 #ifndef HAVE_BLK_MQ_TAGSET_WAIT_COMPLETED_REQUEST
 #ifdef HAVE_MQ_RQ_STATE
-#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
+#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL_3_PARAMS
 static inline bool blk_mq_tagset_count_completed_rqs(struct request *rq,
                         void *data, bool reserved)
+#elif defined HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL_2_PARAMS
+static inline bool blk_mq_tagset_count_completed_rqs(struct request *rq,
+                        void *data)
 #else
 static inline void blk_mq_tagset_count_completed_rqs(struct request *rq,
                         void *data, bool reserved)

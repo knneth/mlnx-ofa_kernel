@@ -4,13 +4,13 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I280d0e9b1881708285a3e56d5688daf6a752cdb9
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/meter.c | 34 +++++++++++++++----
- 1 file changed, 28 insertions(+), 6 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/tc/meter.c | 24 +++++++++++++++++++
+ 1 file changed, 24 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
-@@ -3,9 +3,15 @@
- 
+@@ -4,8 +4,14 @@
+ #include <linux/math64.h>
  #include "en/aso.h"
  #include "meter.h"
 +#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
@@ -18,7 +18,6 @@ Change-Id: I280d0e9b1881708285a3e56d5688daf6a752cdb9
 +#elif defined(CONFIG_MLX5_ESWITCH)
 +#include "en_tc.h"
 +#endif
- #include "post_meter.h"
 +#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
  #include "en/tc/post_act.h"
 +#endif
@@ -36,7 +35,35 @@ Change-Id: I280d0e9b1881708285a3e56d5688daf6a752cdb9
  /* cir = 8*(10^9)*cir_mantissa/(2^cir_exponent)) bits/s */
  #define CONST_CIR 8000000000ULL
  #define CALC_CIR(m, e)  ((CONST_CIR * (m)) >> (e))
-@@ -336,8 +346,10 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+@@ -373,8 +383,10 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
+@@ -445,12 +457,16 @@ int
+ mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
+ 		      struct mlx5e_flow_meter_params *params)
+ {
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
++#endif
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -466,8 +482,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
  	struct mlx5e_flow_meter_handle *meter;
  	int err;
  
@@ -47,75 +74,31 @@ Change-Id: I280d0e9b1881708285a3e56d5688daf6a752cdb9
  		return ERR_PTR(-EOPNOTSUPP);
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -395,11 +407,13 @@ mlx5e_tc_meter_put(struct mlx5_core_dev
- 	mutex_unlock(&flow_meters->sync_lock);
- }
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- struct mlx5_flow_table *
- mlx5e_tc_meter_get_post_meter_ft(struct mlx5e_flow_meters *flow_meters)
- {
- 	return mlx5e_post_meter_get_ft(flow_meters->post_meter);
- }
-+#endif
- 
- struct mlx5e_flow_meters *
- mlx5e_flow_meters_init(struct mlx5e_priv *priv,
-@@ -416,23 +430,25 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+@@ -515,11 +533,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
  	if (!flow_meters)
  		return NULL;
  
--	if (IS_ERR_OR_NULL(post_act)) {
--		netdev_dbg(priv->netdev,
--			   "flow meter offload is not supported, post action is missing\n");
--		goto errout;
--	}
--
- 	flow_meters->aso = mlx5e_aso_get(priv);
- 	if (!flow_meters->aso) {
- 		mlx5_core_warn(priv->mdev, "Failed to create aso wqe for flow meter\n");
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_act)) {
+ 		netdev_dbg(priv->netdev,
+ 			   "flow meter offload is not supported, post action is missing\n");
  		goto errout;
  	}
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
-+	if (IS_ERR_OR_NULL(post_act)) {
-+		netdev_dbg(priv->netdev,
-+			   "flow meter offload is not supported, post action is missing\n");
-+		goto errout;
-+	}
-+
- 	flow_meters->ns_type = ns_type;
- 	flow_meters->post_act = post_act;
- 	flow_meters->post_meter = mlx5e_post_meter_init(priv, ns_type, post_act);
- 	if (IS_ERR(flow_meters->post_meter))
- 		goto err_post_meter;
 +#endif
  
- 	flow_meters->log_granularity = min_t(int, 6,
- 					     MLX5_CAP_QOS(priv->mdev, log_meter_aso_max_alloc));
-@@ -442,8 +458,10 @@ mlx5e_flow_meters_init(struct mlx5e_priv
- 
- 	return flow_meters;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- err_post_meter:
- 	mlx5e_aso_put(priv);
-+#endif
- errout:
- 	kfree(flow_meters);
- 	return NULL;
-@@ -455,8 +473,10 @@ mlx5e_flow_meters_cleanup(struct mlx5e_f
+ 	flow_meters->aso = mlx5e_aso_get(priv);
+ 	if (!flow_meters->aso) {
+@@ -549,7 +569,9 @@ mlx5e_flow_meters_cleanup(struct mlx5e_f
  	if (!flow_meters)
  		return;
  
 +#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	mlx5e_post_meter_cleanup(flow_meters->post_meter);
  	mlx5e_aso_put(flow_meters->aso->priv);
 +#endif
- 
  	kfree(flow_meters);
  }
-@@ -700,8 +720,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+ 
+@@ -792,8 +814,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
  	struct mlx5e_flow_meters *flow_meters;
  	struct mlx5e_flow_meter_handle *meter;
  

@@ -110,7 +110,7 @@ struct page_pool;
 #define MLX5E_REQUIRED_WQE_MTTS		(MLX5_ALIGN_MTTS(MLX5_MPWRQ_PAGES_PER_WQE + 1))
 #define MLX5E_REQUIRED_MTTS(wqes)	(wqes * MLX5E_REQUIRED_WQE_MTTS)
 #define MLX5E_MAX_RQ_NUM_MTTS	\
-	((1 << 16) * 2) /* So that MLX5_MTT_OCTW(num_mtts) fits into u16 */
+	(ALIGN_DOWN(U16_MAX, 4) * 2) /* So that MLX5_MTT_OCTW(num_mtts) fits into u16 */
 #define MLX5E_ORDER2_MAX_PACKET_MTU (order_base_2(10 * 1024))
 #define MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE_MPW	\
 		(ilog2(MLX5E_MAX_RQ_NUM_MTTS / MLX5E_REQUIRED_WQE_MTTS))
@@ -178,8 +178,8 @@ struct page_pool;
 #define MLX5E_KLM_ENTRIES_PER_WQE(wqe_size)\
 	ALIGN_DOWN(MLX5E_KLM_MAX_ENTRIES_PER_WQE(wqe_size), MLX5_UMR_KLM_ALIGNMENT)
 
-#define MLX5E_MAX_KLM_PER_WQE \
-	MLX5E_KLM_ENTRIES_PER_WQE(MLX5E_TX_MPW_MAX_NUM_DS << MLX5_MKEY_BSF_OCTO_SIZE)
+#define MLX5E_MAX_KLM_PER_WQE(mdev) \
+	MLX5E_KLM_ENTRIES_PER_WQE(MLX5_SEND_WQE_BB * mlx5e_get_max_sq_aligned_wqebbs(mdev))
 
 #define MLX5E_MSG_LEVEL			NETIF_MSG_LINK
 
@@ -227,6 +227,36 @@ static inline int mlx5e_get_max_num_channels(struct mlx5_core_dev *mdev)
 		min_t(int, mlx5_comp_vectors_count(mdev), MLX5E_MAX_NUM_CHANNELS);
 }
 
+/* The maximum WQE size can be retrieved by max_wqe_sz_sq in
+ * bytes units. Driver hardens the limitation to 1KB (16
+ * WQEBBs), unless firmware capability is stricter.
+ */
+static inline u8 mlx5e_get_max_sq_wqebbs(struct mlx5_core_dev *mdev)
+{
+	BUILD_BUG_ON(MLX5_SEND_WQE_MAX_WQEBBS > U8_MAX);
+
+	return (u8)min_t(u16, MLX5_SEND_WQE_MAX_WQEBBS,
+			 MLX5_CAP_GEN(mdev, max_wqe_sz_sq) / MLX5_SEND_WQE_BB);
+}
+
+static inline u8 mlx5e_get_max_sq_aligned_wqebbs(struct mlx5_core_dev *mdev)
+{
+/* The return value will be multiplied by MLX5_SEND_WQEBB_NUM_DS.
+ * Since max_sq_wqebbs may be up to MLX5_SEND_WQE_MAX_WQEBBS == 16,
+ * see mlx5e_get_max_sq_wqebbs(), the multiplication (16 * 4 == 64)
+ * overflows the 6-bit DS field of Ctrl Segment. Use a bound lower
+ * than MLX5_SEND_WQE_MAX_WQEBBS to let a full-session WQE be
+ * cache-aligned.
+ */
+	u8 wqebbs = mlx5e_get_max_sq_wqebbs(mdev);
+
+	wqebbs = min_t(u8, wqebbs, MLX5_SEND_WQE_MAX_WQEBBS - 1);
+#if L1_CACHE_BYTES >= 128
+	wqebbs = ALIGN_DOWN(wqebbs, 2);
+#endif
+	return wqebbs;
+}
+
 struct mlx5e_tx_wqe {
 	struct mlx5_wqe_ctrl_seg ctrl;
 	struct mlx5_wqe_eth_seg  eth;
@@ -256,7 +286,6 @@ enum mlx5e_priv_flag {
 	MLX5E_PFLAG_RX_CQE_BASED_MODER,
 	MLX5E_PFLAG_TX_CQE_BASED_MODER,
 	MLX5E_PFLAG_RX_CQE_COMPRESS,
-	MLX5E_PFLAG_TX_CQE_COMPRESS,
 	MLX5E_PFLAG_RX_STRIDING_RQ,
 	MLX5E_PFLAG_RX_NO_CSUM_COMPLETE,
 	MLX5E_PFLAG_XDP_TX_MPWQE,
@@ -265,7 +294,6 @@ enum mlx5e_priv_flag {
 	MLX5E_PFLAG_DROPLESS_RQ,
 	MLX5E_PFLAG_PER_CH_STATS,
 	MLX5E_PFLAG_TX_XDP_CSUM,
-	MLX5E_PFLAG_SKB_XMIT_MORE,
 	MLX5E_NUM_PFLAGS, /* Keep last */
 };
 
@@ -305,7 +333,8 @@ struct mlx5e_params {
 		u8 num_tc;
 		struct netdev_tc_txq tc_to_txq[TC_MAX_QUEUE];
 		struct {
-			struct mlx5e_mqprio_rl *rl;
+			u64 max_rate[TC_MAX_QUEUE];
+			u32 hw_id[TC_MAX_QUEUE];
 		} channel;
 	} mqprio;
 	bool rx_cqe_compress_def;
@@ -345,8 +374,7 @@ enum {
 	MLX5E_RQ_STATE_FPGA_TLS, /* FPGA TLS enabled */
 	MLX5E_RQ_STATE_MINI_CQE_HW_STRIDX, /* set when mini_cqe_resp_stride_index cap is used */
 	MLX5E_RQ_STATE_SHAMPO, /* set when SHAMPO cap is used */
-	MLX5E_RQ_STATE_CACHE_REDUCE_PENDING,
-	MLX5E_RQ_STATE_SKB_XMIT_MORE
+	MLX5E_RQ_STATE_CACHE_REDUCE_PENDING
 };
 
 struct mlx5e_cq {
@@ -397,7 +425,6 @@ enum {
 	MLX5E_SQ_STATE_PENDING_XSK_TX,
 	MLX5E_SQ_STATE_PENDING_TLS_RX_RESYNC,
 	MLX5E_SQ_STATE_TX_XDP_CSUM,
-	MLX5E_SQ_STATE_SKB_XMIT_MORE,
 };
 
 struct mlx5e_tx_mpwqe {
@@ -439,7 +466,6 @@ struct mlx5e_txqsq {
 	struct mlx5e_tx_mpwqe      mpwqe;
 
 	struct mlx5e_cq            cq;
-	struct mlx5e_cq_decomp     cqd;
 
 	/* read only */
 	struct mlx5_wq_cyc         wq;
@@ -454,12 +480,12 @@ struct mlx5e_txqsq {
 	struct netdev_queue       *txq;
 	u32                        sqn;
 	u16                        stop_room;
+	u8                         max_sq_mpw_wqebbs;
 	u8                         min_inline_mode;
 	struct device             *pdev;
 	__be32                     mkey_be;
 	unsigned long              state;
 	unsigned int               hw_mtu;
-	struct hwtstamp_config    *tstamp;
 	struct mlx5_clock         *clock;
 	struct net_device         *netdev;
 	struct mlx5_core_dev      *mdev;
@@ -568,6 +594,8 @@ struct mlx5e_xdpsq {
 	u32                        sqn;
 	struct device             *pdev;
 	__be32                     mkey_be;
+	u16                        stop_room;
+	u8                         max_sq_mpw_wqebbs;
 	u8                         min_inline_mode;
 	unsigned long              state;
 	unsigned int               hw_mtu;
@@ -658,8 +686,7 @@ static inline void mlx5e_put_page(struct mlx5e_dma_info *dma_info)
 }
 
 struct mlx5e_rq;
-typedef void (*mlx5e_fp_handle_rx_cqe)(struct mlx5e_rq*, struct mlx5_cqe64*,
-				       bool xmit_more);
+typedef void (*mlx5e_fp_handle_rx_cqe)(struct mlx5e_rq*, struct mlx5_cqe64*);
 typedef struct sk_buff *
 (*mlx5e_fp_skb_from_cqe_mpwrq)(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 			       u16 cqe_bcnt, u32 head_offset, u32 page_idx);
@@ -1002,6 +1029,9 @@ struct mlx5e_priv {
 
 	const struct mlx5e_profile *profile;
 	void                      *ppriv;
+#ifdef CONFIG_MLX5_EN_MACSEC
+	struct mlx5e_macsec       *macsec;
+#endif
 #ifdef CONFIG_MLX5_EN_IPSEC
 	struct mlx5e_ipsec        *ipsec;
 #endif
@@ -1090,7 +1120,6 @@ void mlx5e_set_rx_mode_work(struct work_struct *work);
 int mlx5e_hwstamp_set(struct mlx5e_priv *priv, struct ifreq *ifr);
 int mlx5e_hwstamp_get(struct mlx5e_priv *priv, struct ifreq *ifr);
 int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool val, bool rx_filter);
-int mlx5e_modify_tx_cqe_compression_locked(struct mlx5e_priv *priv, bool val);
 
 int mlx5e_vlan_rx_add_vid(struct net_device *dev, __always_unused __be16 proto,
 			  u16 vid);
@@ -1205,6 +1234,7 @@ static inline bool mlx5_tx_swp_supported(struct mlx5_core_dev *mdev)
 
 extern const struct ethtool_ops mlx5e_ethtool_ops;
 
+int mlx5e_create_mkey(struct mlx5_core_dev *mdev, u32 pdn, u32 *mkey);
 int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev);
 void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev);
 int mlx5e_refresh_tirs(struct mlx5e_priv *priv, bool enable_uc_lb,

@@ -118,7 +118,7 @@ void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_eswitch *esw, u16 vpo
 		return;
 
 	if (vport->dl_port->devlink_rate) {
-		if (refcount_read(&esw->qos.refcnt))
+		if (!test_bit(MLX5_INTERFACE_STATE_TEARDOWN, &esw->dev->intf_state))
 			mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
 		devlink_rate_leaf_destroy(vport->dl_port);
 	}
@@ -136,14 +136,7 @@ struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u1
 	return IS_ERR(vport) ? ERR_CAST(vport) : vport->dl_port;
 }
 
-#if IS_ENABLED(CONFIG_MLXDEVM)
-int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
-				      u16 vport_num, u32 controller, u32 sfnum)
-{
-	return mlx5_devm_sf_port_register(esw->dev, vport_num, controller, sfnum);
-}
-#else
-int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
+int _mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
 				      u16 vport_num, u32 controller, u32 sfnum)
 {
 	struct mlx5_core_dev *dev = esw->dev;
@@ -180,15 +173,26 @@ rate_err:
 	devlink_port_unregister(dl_port);
 	return err;
 }
-#endif
+
+int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw,
+				      struct devlink_port *dl_port,
+				      u16 vport_num, u32 controller,
+				      u32 sfnum)
+{
+	int err = 0;
+
+	err = _mlx5_esw_devlink_sf_port_register(esw, dl_port, vport_num,
+						 controller, sfnum);
+	if (err)
+		return err;
 
 #if IS_ENABLED(CONFIG_MLXDEVM)
-void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
-{
-	mlx5_devm_sf_port_unregister(esw->dev, vport_num);
+	err = mlx5_devm_sf_port_register(esw->dev, vport_num, controller, sfnum, dl_port);
+#endif
+	return err;
 }
-#else
-void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
+
+void _mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
 {
 	struct mlx5_vport *vport;
 
@@ -204,4 +208,12 @@ void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num
 	devlink_port_unregister(vport->dl_port);
 	vport->dl_port = NULL;
 }
+
+void mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw,
+					 u16 vport_num)
+{
+	_mlx5_esw_devlink_sf_port_unregister(esw, vport_num);
+#if IS_ENABLED(CONFIG_MLXDEVM)
+	mlx5_devm_sf_port_unregister(esw->dev, vport_num);
 #endif
+}

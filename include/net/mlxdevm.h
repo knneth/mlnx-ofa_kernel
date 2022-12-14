@@ -8,6 +8,7 @@
 
 #include <uapi/mlxdevm/mlxdevm_netlink.h>
 #include <linux/rwsem.h>
+#include <net/devlink.h>
 
 struct mlxdevm;
 
@@ -64,6 +65,7 @@ struct mlxdevm_port_attrs {
 };
 
 struct mlxdevm_port {
+	struct devlink_port *dl_port;
 	struct list_head list;
 	struct mlxdevm *devm;
 	unsigned int index;

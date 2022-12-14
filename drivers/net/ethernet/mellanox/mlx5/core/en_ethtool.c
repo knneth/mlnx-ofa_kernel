@@ -2005,37 +2005,6 @@ int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 	return 0;
 }
 
-int mlx5e_modify_tx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val)
-{
-	bool curr_val = MLX5E_GET_PFLAG(&priv->channels.params, MLX5E_PFLAG_TX_CQE_COMPRESS);
-	struct mlx5e_params new_params;
-	int err = 0;
-
-	if (!MLX5_CAP_GEN(priv->mdev, cqe_compression))
-		return new_val ? -EOPNOTSUPP : 0;
-
-	if (curr_val == new_val)
-		return 0;
-
-	new_params = priv->channels.params;
-	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_TX_CQE_COMPRESS, new_val);
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_params;
-		return 0;
-	}
-
-	err = mlx5e_safe_switch_params(priv, &new_params, NULL ,NULL, true);
-	if (err)
-		return err;
-
-	mlx5e_dbg(DRV, priv, "MLX5E: TxCqeCmprss was turned %s\n",
-		  MLX5E_GET_PFLAG(&priv->channels.params,
-				  MLX5E_PFLAG_TX_CQE_COMPRESS) ? "ON" : "OFF");
-
-	return 0;
-}
-
 static int set_pflag_rx_cqe_compress(struct net_device *netdev,
 				     bool enable)
 {
@@ -2057,19 +2026,6 @@ static int set_pflag_rx_cqe_compress(struct net_device *netdev,
 	return 0;
 }
 
-static int set_pflag_tx_cqe_compress(struct net_device *netdev, bool enable)
-{
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5_core_dev *mdev = priv->mdev;
-
-	if (!MLX5_CAP_GEN(mdev, cqe_compression))
-		return -EOPNOTSUPP;
-
-	mlx5e_modify_tx_cqe_compression_locked(priv, enable);
-
-	return 0;
-}
-
 static int set_pflag_rx_striding_rq(struct net_device *netdev, bool enable)
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
@@ -2077,10 +2033,14 @@ static int set_pflag_rx_striding_rq(struct net_device *netdev, bool enable)
 	struct mlx5e_params new_params;
 
 	if (enable) {
-		if (!mlx5e_check_fragmented_striding_rq_cap(mdev))
-			return -EOPNOTSUPP;
-		if (!mlx5e_striding_rq_possible(mdev, &priv->channels.params))
-			return -EINVAL;
+		/* Checking the regular RQ here; mlx5e_validate_xsk_param called
+		 * from mlx5e_open_xsk will check for each XSK queue, and
+		 * mlx5e_safe_switch_params will be reverted if any check fails.
+		 */
+		int err = mlx5e_mpwrq_validate_regular(mdev, &priv->channels.params);
+
+		if (err)
+			return err;
 	} else if (priv->channels.params.packet_merge.type != MLX5E_PACKET_MERGE_NONE) {
 		netdev_warn(netdev, "Can't set legacy RQ with HW-GRO/LRO, disable them first\n");
 		return -EINVAL;
@@ -2256,30 +2216,10 @@ static int set_pflag_tx_xdp_hw_checksum(struct net_device *netdev, bool new_val)
 	return err;
 }
 
-static int set_pflag_skb_xmit_more(struct net_device *netdev, bool enable)
-{
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5e_params new_params;
-	int err;
-
-	new_params = priv->channels.params;
-
-	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_SKB_XMIT_MORE, enable);
-
-	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
-		priv->channels.params = new_params;
-		return 0;
-	}
-
-	err = mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
-	return err;
-}
-
 static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS] = {
 	{ "rx_cqe_moder",        set_pflag_rx_cqe_based_moder },
 	{ "tx_cqe_moder",        set_pflag_tx_cqe_based_moder },
 	{ "rx_cqe_compress",     set_pflag_rx_cqe_compress },
-	{ "tx_cqe_compress",     set_pflag_tx_cqe_compress },
 	{ "rx_striding_rq",      set_pflag_rx_striding_rq },
 	{ "rx_no_csum_complete", set_pflag_rx_no_csum_complete },
 	{ "xdp_tx_mpwqe",        set_pflag_xdp_tx_mpwqe },
@@ -2288,7 +2228,6 @@ static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS] = {
 	{ "dropless_rq",	 set_pflag_dropless_rq},
 	{ "per_channel_stats",	 set_pflag_per_channel_stats},
 	{ "tx_xdp_hw_checksum",  set_pflag_tx_xdp_hw_checksum},
-	{ "skb_xmit_more",       set_pflag_skb_xmit_more},
 };
 
 static int mlx5e_handle_pflag(struct net_device *netdev,
@@ -2368,7 +2307,8 @@ int mlx5e_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	return mlx5e_ethtool_set_rxnfc(priv, cmd);
 }
 
-static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opcode)
+int mlx5_query_port_status(struct mlx5_core_dev *mdev, u32 *status_opcode,
+			   u16 *monitor_opcode, char *status_message)
 {
 	struct mlx5_ifc_pddr_troubleshooting_page_bits *pddr_troubleshooting_page;
 	u32 in[MLX5_ST_SZ_DW(pddr_reg)] = {};
@@ -2388,8 +2328,18 @@ static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opco
 		return err;
 
 	pddr_troubleshooting_page = MLX5_ADDR_OF(pddr_reg, out, page_data);
-	*status_opcode = MLX5_GET(pddr_troubleshooting_page, pddr_troubleshooting_page,
-				  status_opcode);
+	if (status_opcode)
+		*status_opcode = MLX5_GET(pddr_troubleshooting_page, pddr_troubleshooting_page,
+					  status_opcode);
+	if (monitor_opcode)
+		*monitor_opcode = MLX5_GET(pddr_troubleshooting_page, pddr_troubleshooting_page,
+					   status_opcode.pddr_monitor_opcode);
+	if (status_message)
+		strncpy(status_message,
+			MLX5_ADDR_OF(pddr_troubleshooting_page, pddr_troubleshooting_page,
+				     status_message),
+			MLX5_FLD_SZ_BYTES(pddr_troubleshooting_page, status_message));
+
 	return 0;
 }
 
@@ -2522,7 +2472,7 @@ mlx5e_get_link_ext_state(struct net_device *dev,
 	if (netif_carrier_ok(dev))
 		return -ENODATA;
 
-	if (query_port_status_opcode(priv->mdev, &status_opcode) ||
+	if (mlx5_query_port_status(priv->mdev, &status_opcode, NULL, NULL) ||
 	    !status_opcode)
 		return -ENODATA;
 

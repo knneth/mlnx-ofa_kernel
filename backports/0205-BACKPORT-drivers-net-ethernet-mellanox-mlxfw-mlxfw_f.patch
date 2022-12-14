@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c
 
 Change-Id: I758da2d1c64ef054cecc519a51b700150fae02b9
 ---
- .../net/ethernet/mellanox/mlxfw/mlxfw_fsm.c   | 277 ++++++++++++++++--
- 1 file changed, 258 insertions(+), 19 deletions(-)
+ .../net/ethernet/mellanox/mlxfw/mlxfw_fsm.c   | 284 ++++++++++++++++--
+ 1 file changed, 265 insertions(+), 19 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c
 +++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c
@@ -479,7 +479,7 @@ Change-Id: I758da2d1c64ef054cecc519a51b700150fae02b9
  {
  	struct mlxfw_mfa2_file *mfa2_file;
  	bool reactivate_supp = true;
-@@ -357,66 +544,118 @@ int mlxfw_firmware_flash(struct mlxfw_de
+@@ -357,68 +544,124 @@ int mlxfw_firmware_flash(struct mlxfw_de
  	int err;
  
  	if (!mlxfw_mfa2_check(firmware)) {
@@ -602,4 +602,20 @@ Change-Id: I758da2d1c64ef054cecc519a51b700150fae02b9
 +#endif
  	mlxfw_status_notify(mlxfw_dev, "Firmware flash done", NULL, 0, 0);
  	mlxfw_mfa2_file_fini(mfa2_file);
++
++#ifdef HAVE_DEVLINK_FLASH_UPDATE_END_NOTIFY
++	devlink_flash_update_end_notify(mlxfw_dev->devlink);
++#endif
  	return 0;
+ 
+ err_state_wait_activate_to_locked:
+@@ -430,6 +673,9 @@ err_state_wait_idle_to_locked:
+ 	mlxfw_dev->ops->fsm_release(mlxfw_dev, fwhandle);
+ err_fsm_lock:
+ 	mlxfw_mfa2_file_fini(mfa2_file);
++#ifdef HAVE_DEVLINK_FLASH_UPDATE_END_NOTIFY
++	devlink_flash_update_end_notify(mlxfw_dev->devlink);
++#endif
+ 	return err;
+ }
+ EXPORT_SYMBOL(mlxfw_firmware_flash);

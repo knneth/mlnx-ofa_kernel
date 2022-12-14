@@ -1,0 +1,27 @@
+From: Roi Dayan <roid@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h
+
+Change-Id: I0bfa3760a3c0bcc6b3666df612851b17540f2d53
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h
+@@ -49,6 +49,7 @@ struct mlx5e_tc_act {
+ 				   const struct flow_action_entry *act,
+ 				   struct mlx5_flow_attr *attr);
+ 
++#ifdef HAVE_FLOW_OFFLOAD_ACTION
+ 	int (*offload_action)(struct mlx5e_priv *priv,
+ 			      struct flow_offload_action *fl_act,
+ 			      struct flow_action_entry *act);
+@@ -58,6 +59,7 @@ struct mlx5e_tc_act {
+ 
+ 	int (*stats_action)(struct mlx5e_priv *priv,
+ 			    struct flow_offload_action *fl_act);
++#endif
+ };
+ 
+ struct mlx5e_tc_flow_action {

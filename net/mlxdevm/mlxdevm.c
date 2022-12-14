@@ -1719,18 +1719,20 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
 {
 	struct mlxdevm_rate_group *group;
 	struct mlxdevm_port *port;
+	int start = cb->args[0];
 	struct mlxdevm *dev;
 	unsigned long index;
 	int idx = 0;
 	int err;
 
-	if (cb->args[0])
-		return msg->len;
-
 	mutex_lock(&mlxdevm_mutex);
 	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		down_read(&dev->rate_group_rwsem);
 		list_for_each_entry(group, &dev->rate_group_list, list) {
+			if (idx < start) {
+				idx++;
+				continue;
+			}
 			err = mlxdevm_nl_node_fill(msg, dev, group,
 						   MLXDEVM_CMD_EXT_RATE_NEW,
 						   NETLINK_CB(cb->skb).portid,
@@ -1749,6 +1751,10 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
 	xa_for_each_marked(&mlxdevms, index, dev, MLXDEVM_REGISTERED) {
 		down_read(&dev->port_list_rwsem);
 		list_for_each_entry(port, &dev->port_list, list) {
+			if (idx < start) {
+				idx++;
+				continue;
+			}
 			err = mlxdevm_nl_leaf_fill(msg, port,
 						   MLXDEVM_CMD_PORT_NEW,
 						   NETLINK_CB(cb->skb).portid,
@@ -1766,6 +1772,8 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
 
 out:
 	mutex_unlock(&mlxdevm_mutex);
+	if (err != -EMSGSIZE)
+		return err;
 	cb->args[0] = idx;
 	return msg->len;
 }

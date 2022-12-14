@@ -18,7 +18,7 @@ Change-Id: Ibf737275631c442d2dead5302f3484b16b157710
  #define CREATE_TRACE_POINTS
  
  #include "fs_tracepoint.h"
-@@ -274,3 +276,4 @@ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_fte
+@@ -278,3 +280,4 @@ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_fte
  EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_add_rule);
  EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_rule);
  

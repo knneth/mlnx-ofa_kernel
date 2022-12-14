@@ -19,7 +19,7 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o \
 		fw_reset.o qos.o mst_dump.o en_diag.o sriov_sysfs.o crdump.o\
 		diag/diag_cnt.o params.o fw_exp.o lib/tout.o eswitch_devlink_compat.o \
-		ecpf.o
+		ecpf.o lib/aso.o
 
 #
 # Netdev basic

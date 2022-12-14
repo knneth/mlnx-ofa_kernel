@@ -54,7 +54,7 @@ Change-Id: Ife1f49222e3b289ae37e31859fad2be58455f4e9
  	if (ret)
  		goto out_unlock;
  
-@@ -1080,12 +1091,16 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1082,12 +1093,16 @@ static u16 nvmet_parse_io_cmd(struct nvm
  
  	switch (req->ns->csi) {
  	case NVME_CSI_NVM:
@@ -71,7 +71,7 @@ Change-Id: Ife1f49222e3b289ae37e31859fad2be58455f4e9
  		return NVME_SC_INVALID_IO_CMD_SET;
  	default:
  		return NVME_SC_INVALID_IO_CMD_SET;
-@@ -1228,6 +1243,63 @@ static struct pci_dev *nvmet_req_find_p2
+@@ -1230,6 +1245,63 @@ static struct pci_dev *nvmet_req_find_p2
  	return radix_tree_lookup(&req->sq->ctrl->p2p_ns_map, req->ns->nsid);
  }
  
@@ -135,7 +135,7 @@ Change-Id: Ife1f49222e3b289ae37e31859fad2be58455f4e9
  int nvmet_req_alloc_sgls(struct nvmet_req *req)
  {
  	struct pci_dev *p2p_dev = nvmet_req_find_p2p_dev(req);
-@@ -1235,21 +1307,37 @@ int nvmet_req_alloc_sgls(struct nvmet_re
+@@ -1237,21 +1309,37 @@ int nvmet_req_alloc_sgls(struct nvmet_re
  	if (p2p_dev && !nvmet_req_alloc_p2pmem_sgls(p2p_dev, req))
  		return 0;
  
@@ -173,7 +173,7 @@ Change-Id: Ife1f49222e3b289ae37e31859fad2be58455f4e9
  out:
  	return -ENOMEM;
  }
-@@ -1263,9 +1351,15 @@ void nvmet_req_free_sgls(struct nvmet_re
+@@ -1265,9 +1353,15 @@ void nvmet_req_free_sgls(struct nvmet_re
  			pci_p2pmem_free_sgl(req->p2p_dev, req->metadata_sg);
  		req->p2p_dev = NULL;
  	} else {
@@ -189,7 +189,7 @@ Change-Id: Ife1f49222e3b289ae37e31859fad2be58455f4e9
  	}
  
  	req->sg = NULL;
-@@ -1859,3 +1953,6 @@ module_init(nvmet_init);
+@@ -1861,3 +1955,6 @@ module_init(nvmet_init);
  module_exit(nvmet_exit);
  
  MODULE_LICENSE("GPL v2");

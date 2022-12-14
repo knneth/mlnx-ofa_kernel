@@ -3,14 +3,14 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/Makefile
 
 Change-Id: Iab23f4328b0d0808cbd31dd08483926c71c8a33d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/Makefile | 9 +++++++--
- 1 file changed, 7 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/Makefile | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 @@ -21,6 +21,7 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw
  		diag/diag_cnt.o params.o fw_exp.o lib/tout.o eswitch_devlink_compat.o \
- 		ecpf.o
+ 		ecpf.o lib/aso.o
  
 +mlx5_core-y += compat.o
  #
@@ -31,3 +31,13 @@ Change-Id: Iab23f4328b0d0808cbd31dd08483926c71c8a33d
  mlx5_core-$(CONFIG_PCI_HYPERV_INTERFACE) += lib/hv.o lib/hv_vhca.o
  mlx5_core-$(CONFIG_MLXDEVM) += mlx5_devm.o esw/devm_port.o
  
+@@ -97,6 +102,9 @@ mlx5_core-$(CONFIG_MLX5_ACCEL)      += l
+ 
+ mlx5_core-$(CONFIG_MLX5_FPGA) += fpga/cmd.o fpga/core.o fpga/conn.o fpga/sdk.o
+ 
++mlx5_core-$(CONFIG_MLX5_EN_MACSEC) += en_accel/macsec.o en_accel/macsec_fs.o \
++				      en_accel/macsec_stats.o
++
+ mlx5_core-$(CONFIG_MLX5_EN_IPSEC) += en_accel/ipsec.o en_accel/ipsec_rxtx.o \
+ 				     en_accel/ipsec_stats.o en_accel/ipsec_fs.o esw/ipsec.o \
+ 				     en/ipsec_aso.o

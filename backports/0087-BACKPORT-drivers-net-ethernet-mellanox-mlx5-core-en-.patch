@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
 ---
- .../ethernet/mellanox/mlx5/core/en/devlink.c  | 39 ++++++++++++++++++-
- 1 file changed, 37 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 61 ++++++++++++++++++-
+ 1 file changed, 59 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
@@ -17,7 +17,7 @@ Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
  static void
  mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
  {
-@@ -13,14 +14,17 @@ mlx5e_devlink_get_port_parent_id(struct
+@@ -13,14 +14,20 @@ mlx5e_devlink_get_port_parent_id(struct
  	ppid->id_len = sizeof(parent_id);
  	memcpy(ppid->id, &parent_id, sizeof(parent_id));
  }
@@ -31,13 +31,16 @@ Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
 -	struct netdev_phys_item_id ppid = {};
  	struct devlink_port *dl_port;
  	unsigned int dl_port_index;
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	int ret;
++#endif
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
 +	struct devlink_port_attrs attrs = {};
 +	struct netdev_phys_item_id ppid = {};
  
  	if (mlx5_core_is_pf(priv->mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
-@@ -40,7 +44,37 @@ int mlx5e_devlink_port_register(struct m
+@@ -40,8 +47,48 @@ int mlx5e_devlink_port_register(struct m
  	dl_port = mlx5e_devlink_get_dl_port(priv);
  	memset(dl_port, 0, sizeof(*dl_port));
  	devlink_port_attrs_set(dl_port, &attrs);
@@ -72,10 +75,39 @@ Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
 +		);
 +	}
 +#endif
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_lock(devlink);
++	ret = devl_port_register(devlink, dl_port, dl_port_index);
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_unlock(devlink);
++
++	return ret;
++#else
  	return devlink_port_register(devlink, dl_port, dl_port_index);
++#endif
  }
  
-@@ -67,3 +101,4 @@ struct devlink_port *mlx5e_get_devlink_p
+ void mlx5e_devlink_port_type_eth_set(struct mlx5e_priv *priv)
+@@ -54,8 +101,17 @@ void mlx5e_devlink_port_type_eth_set(str
+ void mlx5e_devlink_port_unregister(struct mlx5e_priv *priv)
+ {
+ 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
++#ifdef HAVE_DEVL_PORT_REGISTER //forward port
++	struct devlink *devlink = priv_to_devlink(priv->mdev);
+ 
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_lock(devlink);
++	devl_port_unregister(dl_port);
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_unlock(devlink);
++#else
+ 	devlink_port_unregister(dl_port);
++#endif
+ }
+ 
+ struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
+@@ -67,3 +123,4 @@ struct devlink_port *mlx5e_get_devlink_p
  
  	return mlx5e_devlink_get_dl_port(priv);
  }

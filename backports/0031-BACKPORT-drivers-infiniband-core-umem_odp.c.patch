@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
 Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
 ---
- drivers/infiniband/core/umem_odp.c | 1066 ++++++++++++++++++++++++++++
- 1 file changed, 1066 insertions(+)
+ drivers/infiniband/core/umem_odp.c | 1082 +++++++++++++++++++++++++++-
+ 1 file changed, 1081 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/umem_odp.c
 +++ b/drivers/infiniband/core/umem_odp.c
@@ -183,7 +183,7 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
 +                                                   unsigned long end)
 +#endif
 +#endif /*HAVE_MMU_NOTIFIER_RANGE_STRUCT*/
-+{
+ {
 +	struct ib_ucontext_per_mm *per_mm =
 +		container_of(mn, struct ib_ucontext_per_mm, mn);
 +
@@ -314,7 +314,7 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
 +};
 +
 +static void remove_umem_from_per_mm(struct ib_umem_odp *umem_odp)
- {
++{
 +	struct ib_ucontext_per_mm *per_mm = umem_odp->per_mm;
 +
 +	down_write(&per_mm->umem_rwsem);
@@ -919,7 +919,19 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
  static int ib_umem_odp_map_dma_single_page(
  		struct ib_umem_odp *umem_odp,
  		unsigned int dma_index,
-@@ -399,8 +1120,13 @@ retry:
+@@ -372,7 +1093,11 @@ int ib_umem_odp_map_dma_and_lock(struct
+ 	 * mmget_not_zero will fail in this case.
+ 	 */
+ 	owning_process = get_pid_task(umem_odp->tgid, PIDTYPE_PID);
++#ifdef HAVE_MMPUT_ASYNC_EXPORTED /* Forward port */
+ 	if (!owning_process || !mmget_not_zero(owning_mm)) {
++#else
++	if (!owning_process) {
++#endif
+ 		ret = -EINVAL;
+ 		goto out_put_task;
+ 	}
+@@ -399,10 +1124,19 @@ retry:
  	mmap_read_lock(owning_mm);
  	ret = hmm_range_fault(&range);
  	mmap_read_unlock(owning_mm);
@@ -931,9 +943,26 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
 +		if ((ret == 0 || ret == -EBUSY) && !time_after(jiffies, timeout))
 +#endif
  			goto retry;
++#ifdef HAVE_MMPUT_ASYNC_EXPORTED /* Forward port */
  		goto out_put_mm;
++#else
++		goto out_put_task;
++#endif
  	}
-@@ -469,15 +1195,302 @@ out_put_task:
+ 
+ 	start_idx = (range.start - ib_umem_start(umem_odp)) >> page_shift;
+@@ -461,23 +1195,316 @@ retry:
+ 	else
+ 		mutex_unlock(&umem_odp->umem_mutex);
+ 
++#ifdef HAVE_MMPUT_ASYNC_EXPORTED /* Forward port */
+ out_put_mm:
+-	mmput(owning_mm);
++	mmput_async(owning_mm);
++#endif
+ out_put_task:
+ 	if (owning_process)
+ 		put_task_struct(owning_process);
  	return ret;
  }
  EXPORT_SYMBOL(ib_umem_odp_map_dma_and_lock);
@@ -1209,7 +1238,11 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
 +			ret = k - start_idx;
 +	}
 +
++#ifdef HAVE_MMPUT_ASYNC_EXPORTED /* Forward port */
++	mmput_async(owning_mm);
++#else
 +	mmput(owning_mm);
++#endif
 +out_put_task:
 +	if (owning_process)
 +		put_task_struct(owning_process);
@@ -1236,7 +1269,7 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
  
  	lockdep_assert_held(&umem_odp->umem_mutex);
  
-@@ -485,6 +1498,7 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -485,6 +1512,7 @@ void ib_umem_odp_unmap_dma_pages(struct
  	bound = min_t(u64, bound, ib_umem_end(umem_odp));
  	for (addr = virt; addr < bound; addr += BIT(umem_odp->page_shift)) {
  		idx = (addr - ib_umem_start(umem_odp)) >> umem_odp->page_shift;
@@ -1244,7 +1277,7 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
  		dma = umem_odp->dma_list[idx];
  
  		/* The access flags guaranteed a valid DMA address in case was NULL */
-@@ -493,6 +1507,13 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -493,6 +1521,13 @@ void ib_umem_odp_unmap_dma_pages(struct
  			struct page *page = hmm_pfn_to_page(umem_odp->pfn_list[pfn_idx]);
  
  			dma_addr = dma & ODP_DMA_ADDR_MASK;
@@ -1258,7 +1291,7 @@ Change-Id: I499d44dd95625904120a8f4428ece9ef86b98ff3
  			ib_dma_unmap_page(dev, dma_addr,
  					  BIT(umem_odp->page_shift),
  					  DMA_BIDIRECTIONAL);
-@@ -509,9 +1530,54 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -509,9 +1544,54 @@ void ib_umem_odp_unmap_dma_pages(struct
  				 */
  				set_page_dirty(head_page);
  			}

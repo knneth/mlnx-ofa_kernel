@@ -16,7 +16,7 @@ static int mlx5e_ktls_add(struct net_device *netdev, struct sock *sk,
 	struct mlx5_core_dev *mdev = priv->mdev;
 	int err;
 
-	if (WARN_ON(!mlx5e_ktls_type_check(mdev, crypto_info)))
+	if (!mlx5e_ktls_type_check(mdev, crypto_info))
 		return -EOPNOTSUPP;
 
 	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
@@ -53,6 +53,24 @@ static const struct tlsdev_ops mlx5e_ktls_ops = {
 	.tls_dev_del = mlx5e_ktls_del,
 	.tls_dev_resync = mlx5e_ktls_resync,
 };
+
+bool mlx5e_accel_is_ktls_rx(struct mlx5_core_dev *mdev)
+{
+	u8 max_sq_wqebbs = mlx5e_get_max_sq_wqebbs(mdev);
+
+	if (is_kdump_kernel() || !mlx5_accel_is_ktls_rx(mdev))
+		return false;
+
+	/* Check the possibility to post the required ICOSQ WQEs. */
+	if (WARN_ON_ONCE(max_sq_wqebbs < MLX5E_TLS_SET_STATIC_PARAMS_WQEBBS))
+		return false;
+	if (WARN_ON_ONCE(max_sq_wqebbs < MLX5E_TLS_SET_PROGRESS_PARAMS_WQEBBS))
+		return false;
+	if (WARN_ON_ONCE(max_sq_wqebbs < MLX5E_KTLS_GET_PROGRESS_WQEBBS))
+		return false;
+
+	return true;
+}
 
 void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
 {

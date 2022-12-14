@@ -24,6 +24,9 @@
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/eswitch.h>
+#ifdef CONFIG_MLX5_EN_MACSEC
+#include <linux/mlx5/macsec.h>
+#endif
 #include <linux/list.h>
 #include <rdma/ib_smi.h>
 #include <rdma/ib_umem.h>
@@ -47,6 +50,9 @@
 #include <rdma/mlx5_user_ioctl_verbs.h>
 #include <rdma/mlx5_user_ioctl_cmds.h>
 #include <rdma/ib_umem_odp.h>
+#ifdef CONFIG_MLX5_EN_MACSEC
+#include <net/macsec.h>
+#endif
 
 #define UVERBS_MODULE_NAME mlx5_ib
 #include <rdma/uverbs_named_ioctl.h>
@@ -618,18 +624,164 @@ static int set_roce_addr(struct mlx5_ib_dev *dev, u32 port_num,
 				      port_num);
 }
 
+#ifdef CONFIG_MLX5_EN_MACSEC
+#define NIC_RDMA_BOTH_DIRS_CAPS (MLX5_FT_NIC_RX_2_NIC_RX_RDMA | MLX5_FT_NIC_TX_RDMA_2_NIC_TX)
+
+static int add_gid_macsec_operations(const struct ib_gid_attr *attr)
+{
+	struct mlx5_ib_dev *dev = to_mdev(attr->device);
+	const struct ib_gid_attr *physical_gid;
+	struct mlx5_reserved_gids *mgids;
+	struct net_device *ndev;
+	int ret = 0, i;
+	union {
+		struct sockaddr_in  sockaddr_in;
+		struct sockaddr_in6 sockaddr_in6;
+	} addr;
+
+	if (((MLX5_CAP_GEN_2(dev->mdev, flow_table_type_2_type) &
+	     NIC_RDMA_BOTH_DIRS_CAPS) != NIC_RDMA_BOTH_DIRS_CAPS) ||
+	     !MLX5_CAP_FLOWTABLE_RDMA_TX(dev->mdev, max_modify_header_actions)) {
+		mlx5_ib_dbg(dev, "Failed to add RoCE MACsec, capabilities not supported\n");
+		return 0;
+	}
+
+	rcu_read_lock();
+	ndev = rcu_dereference(attr->ndev);
+	if (!ndev) {
+		rcu_read_unlock();
+		ret = -ENODEV;
+		goto out_rcu;
+	}
+	dev_hold(ndev);
+	rcu_read_unlock();
+
+	if (!netif_is_macsec(ndev))
+		goto out;
+
+	if (!(macsec_get_real_dev(ndev)->features &
+	      NETIF_F_HW_MACSEC)) {
+		ret = -EOPNOTSUPP;
+		goto out;
+	}
+
+	physical_gid = rdma_find_gid(attr->device, &attr->gid,
+				     attr->gid_type, NULL);
+	if (IS_ERR(physical_gid))
+		goto no_gid_ambig;
+
+	ret = set_roce_addr(to_mdev(physical_gid->device),
+			    physical_gid->port_num,
+			    physical_gid->index, NULL,
+			    physical_gid);
+	if (ret)
+		goto gid_err;
+	for (i = 0; i < MLX5_MAX_MACSEC_GIDS; i++) {
+		mgids = &dev->reserved_gids[attr->port_num - 1][i];
+		if (mgids->macsec_index == -1) {
+			mgids->macsec_index = attr->index;
+			mgids->physical_gid = physical_gid;
+			break;
+		}
+	}
+no_gid_ambig:
+	rdma_gid2ip((struct sockaddr *)&addr, &attr->gid);
+	ret = mlx5e_macsec_fs_add_roce_rule(ndev, (struct sockaddr *)&addr);
+	if (ret)
+		goto rule_err;
+
+	dev_put(ndev);
+	return 0;
+
+rule_err:
+	if (!IS_ERR(physical_gid)) {
+		set_roce_addr(to_mdev(physical_gid->device), physical_gid->port_num,
+			      physical_gid->index, &physical_gid->gid, physical_gid);
+		dev->reserved_gids[attr->port_num - 1][i].macsec_index = -1;
+	}
+gid_err:
+	if (!IS_ERR(physical_gid))
+		rdma_put_gid_attr(physical_gid);
+out:
+	dev_put(ndev);
+out_rcu:
+	return ret;
+}
+#endif
+
 static int mlx5_ib_add_gid(const struct ib_gid_attr *attr,
 			   __always_unused void **context)
 {
-	return set_roce_addr(to_mdev(attr->device), attr->port_num,
-			     attr->index, &attr->gid, attr);
+	int ret;
+
+	ret = set_roce_addr(to_mdev(attr->device), attr->port_num,
+			    attr->index, &attr->gid, attr);
+	if (ret)
+		return ret;
+
+#ifdef CONFIG_MLX5_EN_MACSEC
+	ret = add_gid_macsec_operations(attr);
+	if (ret)
+		set_roce_addr(to_mdev(attr->device), attr->port_num,
+			      attr->index, NULL, attr);
+#endif
+	return ret;
 }
+
+#ifdef CONFIG_MLX5_EN_MACSEC
+static int del_gid_macsec_operations(const struct ib_gid_attr *attr)
+{
+	struct mlx5_ib_dev *dev = to_mdev(attr->device);
+	struct mlx5_reserved_gids *mgids;
+	int ret, i;
+
+	if (((MLX5_CAP_GEN_2(dev->mdev, flow_table_type_2_type) &
+	     NIC_RDMA_BOTH_DIRS_CAPS) != NIC_RDMA_BOTH_DIRS_CAPS) ||
+	     !MLX5_CAP_FLOWTABLE_RDMA_TX(dev->mdev, max_modify_header_actions)) {
+		mlx5_ib_dbg(dev, "Failed to add RoCE MACsec, capabilities not supported\n");
+		return 0;
+	}
+
+	for (i = 0; i < MLX5_MAX_MACSEC_GIDS; i++) {
+		mgids = &dev->reserved_gids[attr->port_num - 1][i];
+		if (mgids->macsec_index == attr->index) {
+			const struct ib_gid_attr *physical_gid = mgids->physical_gid;
+
+			ret = set_roce_addr(to_mdev(physical_gid->device),
+					    physical_gid->port_num,
+					    physical_gid->index,
+					    &physical_gid->gid, physical_gid);
+			if (ret)
+				return ret;
+
+			rdma_put_gid_attr(physical_gid);
+			mgids->macsec_index = -1;
+			break;
+		}
+	}
+
+	return 0;
+}
+#endif
 
 static int mlx5_ib_del_gid(const struct ib_gid_attr *attr,
 			   __always_unused void **context)
 {
-	return set_roce_addr(to_mdev(attr->device), attr->port_num,
-			     attr->index, NULL, attr);
+	int ret;
+
+	ret = set_roce_addr(to_mdev(attr->device), attr->port_num,
+			    attr->index, NULL, attr);
+	if (ret)
+		return ret;
+
+#ifdef CONFIG_MLX5_EN_MACSEC
+	ret = del_gid_macsec_operations(attr);
+	if (ret)
+		set_roce_addr(to_mdev(attr->device), attr->port_num,
+			      attr->index, &attr->gid, attr);
+#endif
+
+	return ret;
 }
 
 __be16 mlx5_get_roce_udp_sport_min(const struct mlx5_ib_dev *dev,
@@ -2798,26 +2950,24 @@ static int set_has_smi_cap(struct mlx5_ib_dev *dev)
 	int err;
 	int port;
 
-	for (port = 1; port <= ARRAY_SIZE(dev->port_caps); port++) {
-		dev->port_caps[port - 1].has_smi = false;
-		if (MLX5_CAP_GEN(dev->mdev, port_type) ==
-		    MLX5_CAP_PORT_TYPE_IB) {
-			if (MLX5_CAP_GEN(dev->mdev, ib_virt)) {
-				err = mlx5_query_hca_vport_context(dev->mdev, 0,
-								   port, 0,
-								   &vport_ctx);
-				if (err) {
-					mlx5_ib_err(dev, "query_hca_vport_context for port=%d failed %d\n",
-						    port, err);
-					return err;
-				}
-				dev->port_caps[port - 1].has_smi =
-					vport_ctx.has_smi;
-			} else {
-				dev->port_caps[port - 1].has_smi = true;
-			}
+	if (MLX5_CAP_GEN(dev->mdev, port_type) != MLX5_CAP_PORT_TYPE_IB)
+		return 0;
+
+	for (port = 1; port <= dev->num_ports; port++) {
+		if (!MLX5_CAP_GEN(dev->mdev, ib_virt)) {
+			dev->port_caps[port - 1].has_smi = true;
+			continue;
 		}
+		err = mlx5_query_hca_vport_context(dev->mdev, 0, port, 0,
+						   &vport_ctx);
+		if (err) {
+			mlx5_ib_err(dev, "query_hca_vport_context for port=%d failed %d\n",
+				    port, err);
+			return err;
+		}
+		dev->port_caps[port - 1].has_smi = vport_ctx.has_smi;
 	}
+
 	return 0;
 }
 
@@ -3039,7 +3189,7 @@ static int mlx5_eth_lag_init(struct mlx5_ib_dev *dev)
 	struct mlx5_flow_table *ft;
 	int err;
 
-	if (!ns || !mlx5_lag_is_active(mdev))
+	if (!ns || !mlx5_lag_is_active(mdev) || mlx5_lag_is_mpesw(mdev))
 		return 0;
 
 	err = mlx5_cmd_create_vport_lag(mdev);
@@ -3691,7 +3841,7 @@ static int mlx5_ib_stage_init_init(struct mlx5_ib_dev *dev)
 {
 	struct mlx5_core_dev *mdev = dev->mdev;
 	int err;
-	int i;
+	int i, j;
 
 	dev->ib_dev.node_type = RDMA_NODE_IB_CA;
 	dev->ib_dev.local_dma_lkey = 0 /* not supported for now */;
@@ -3705,6 +3855,11 @@ static int mlx5_ib_stage_init_init(struct mlx5_ib_dev *dev)
 		dev->port[i].roce.dev = dev;
 		dev->port[i].roce.native_port_num = i + 1;
 		dev->port[i].roce.last_port_state = IB_PORT_DOWN;
+	}
+
+	for (i = 0; i < MLX5_MAX_PORTS; i++) {
+		for (j = 0; j < MLX5_MAX_MACSEC_GIDS; j++)
+			dev->reserved_gids[i][j].macsec_index = -1;
 	}
 
 	err = mlx5_ib_init_multiport_master(dev);
@@ -4539,6 +4694,9 @@ const struct mlx5_ib_profile raw_eth_profile = {
 	STAGE_CREATE(MLX5_IB_STAGE_TC_SYSFS,
 		     mlx5_ib_stage_tc_sysfs_init,
 		     mlx5_ib_stage_tc_sysfs_cleanup),
+	STAGE_CREATE(MLX5_IB_STAGE_DELAY_DROP,
+		     mlx5_ib_stage_delay_drop_init,
+		     mlx5_ib_stage_delay_drop_cleanup),
 };
 
 static int mlx5r_mp_probe(struct auxiliary_device *adev,
@@ -4628,8 +4786,8 @@ static int mlx5r_probe(struct auxiliary_device *adev,
 	dev->mdev = mdev;
 	dev->num_ports = num_ports;
 
-	mdev->roce.enabled = mlx5_is_roce_init_enabled(mdev);
-	if (ll == IB_LINK_LAYER_ETHERNET && !mlx5_is_roce_init_enabled(mdev))
+	mdev->roce.enabled = mlx5_get_roce_state(mdev);
+	if (ll == IB_LINK_LAYER_ETHERNET && !mlx5_get_roce_state(mdev))
 		profile = &raw_eth_profile;
 	else
 		profile = &pf_profile;

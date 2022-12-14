@@ -106,6 +106,10 @@
 #define BY_PASS_MIN_LEVEL (ETHTOOL_MIN_LEVEL + MLX5_BY_PASS_NUM_PRIOS +\
 			   LEFTOVERS_NUM_PRIOS)
 
+#define KERNEL_RX_MACSEC_NUM_PRIOS  1
+#define KERNEL_RX_MACSEC_NUM_LEVELS 3
+#define KERNEL_RX_MACSEC_MIN_LEVEL (BY_PASS_MIN_LEVEL + KERNEL_RX_MACSEC_NUM_PRIOS)
+
 #define ETHTOOL_PRIO_NUM_LEVELS 1
 #define ETHTOOL_NUM_PRIOS 11
 #define ETHTOOL_MIN_LEVEL (KERNEL_MIN_LEVEL + ETHTOOL_NUM_PRIOS)
@@ -128,14 +132,18 @@
 
 #define LAG_PRIO_NUM_LEVELS 1
 #define LAG_NUM_PRIOS 1
-#define LAG_MIN_LEVEL (OFFLOADS_MIN_LEVEL + 1)
+#define LAG_MIN_LEVEL (OFFLOADS_MIN_LEVEL + KERNEL_RX_MACSEC_MIN_LEVEL + 1)
 
 #define KERNEL_TX_HP_OOB_NUM_PRIOS  1
 #define KERNEL_TX_HP_OOB_NUM_LEVELS 1
 
 #define KERNEL_TX_IPSEC_NUM_PRIOS  1
 #define KERNEL_TX_IPSEC_NUM_LEVELS 1
-#define KERNEL_TX_MIN_LEVEL        (KERNEL_TX_IPSEC_NUM_LEVELS + 1)
+#define KERNEL_TX_IPSEC_MIN_LEVEL        (KERNEL_TX_IPSEC_NUM_LEVELS + 1)
+
+#define KERNEL_TX_MACSEC_NUM_PRIOS  1
+#define KERNEL_TX_MACSEC_NUM_LEVELS 2
+#define KERNEL_TX_MACSEC_MIN_LEVEL       (KERNEL_TX_IPSEC_MIN_LEVEL + KERNEL_TX_MACSEC_NUM_PRIOS)
 
 #define MLX5_INGRESS_ACL_NUM_PRIOS 5
 #define MLX5_EGRESS_ACL_NUM_PRIOS 5
@@ -157,12 +165,16 @@ static struct init_tree_node {
 	enum mlx5_flow_table_miss_action def_miss_action;
 } root_fs = {
 	.type = FS_TYPE_NAMESPACE,
-	.ar_size = 7,
+	.ar_size = 8,
 	  .children = (struct init_tree_node[]){
 		  ADD_PRIO(0, BY_PASS_MIN_LEVEL, 0, FS_CHAINING_CAPS,
 			   ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				  ADD_MULTIPLE_PRIO(MLX5_BY_PASS_NUM_PRIOS,
 						    BY_PASS_PRIO_NUM_LEVELS))),
+		  ADD_PRIO(0, KERNEL_RX_MACSEC_MIN_LEVEL, 0, FS_CHAINING_CAPS,
+			   ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
+				  ADD_MULTIPLE_PRIO(KERNEL_RX_MACSEC_NUM_PRIOS,
+						    KERNEL_RX_MACSEC_NUM_LEVELS))),
 		  ADD_PRIO(0, LAG_MIN_LEVEL, 0, FS_CHAINING_CAPS,
 			   ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				  ADD_MULTIPLE_PRIO(LAG_NUM_PRIOS,
@@ -194,14 +206,14 @@ static struct init_tree_node {
 
 static struct init_tree_node egress_root_fs = {
 	.type = FS_TYPE_NAMESPACE,
-	.ar_size = 2,
+	.ar_size = 3,
 	.children = (struct init_tree_node[]) {
 		ADD_PRIO(0, MLX5_BY_PASS_NUM_PRIOS, 0,
 			 FS_CHAINING_CAPS_EGRESS,
 			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				ADD_MULTIPLE_PRIO(MLX5_BY_PASS_NUM_PRIOS,
 						  BY_PASS_PRIO_NUM_LEVELS))),
-		ADD_PRIO(0, KERNEL_TX_MIN_LEVEL, 0,
+		ADD_PRIO(0, KERNEL_TX_IPSEC_MIN_LEVEL, 0,
 			 FS_CHAINING_CAPS_EGRESS,
 			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				ADD_MULTIPLE_PRIO(KERNEL_TX_HP_OOB_NUM_PRIOS,
@@ -211,10 +223,16 @@ static struct init_tree_node egress_root_fs = {
 						  KERNEL_TX_IPSEC_NUM_LEVELS),
 #endif
 						)),
+		ADD_PRIO(0, KERNEL_TX_MACSEC_MIN_LEVEL, 0,
+			 FS_CHAINING_CAPS_EGRESS,
+			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
+				ADD_MULTIPLE_PRIO(KERNEL_TX_MACSEC_NUM_PRIOS,
+						  KERNEL_TX_MACSEC_NUM_LEVELS))),
 	}
 };
 
 enum {
+	RDMA_RX_MACSEC_PRIO,
 	RDMA_RX_COUNTERS_PRIO,
 	RDMA_RX_BYPASS_PRIO,
 	RDMA_RX_KERNEL_PRIO,
@@ -224,10 +242,20 @@ enum {
 #define RDMA_RX_KERNEL_MIN_LEVEL (RDMA_RX_BYPASS_MIN_LEVEL + 1)
 #define RDMA_RX_COUNTERS_MIN_LEVEL (RDMA_RX_KERNEL_MIN_LEVEL + 2)
 
+#define RDMA_RX_MACSEC_NUM_PRIOS 1
+#define RDMA_RX_MACSEC_PRIO_NUM_LEVELS 2
+#define RDMA_RX_MACSEC_MIN_LEVEL  (RDMA_RX_COUNTERS_MIN_LEVEL + RDMA_RX_MACSEC_NUM_PRIOS)
+
 static struct init_tree_node rdma_rx_root_fs = {
 	.type = FS_TYPE_NAMESPACE,
-	.ar_size = 3,
+	.ar_size = 4,
 	.children = (struct init_tree_node[]) {
+		[RDMA_RX_MACSEC_PRIO] =
+		ADD_PRIO(0, RDMA_RX_MACSEC_MIN_LEVEL, 0,
+			 FS_CHAINING_CAPS,
+			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
+				ADD_MULTIPLE_PRIO(RDMA_RX_MACSEC_NUM_PRIOS,
+						  RDMA_RX_MACSEC_PRIO_NUM_LEVELS))),
 		[RDMA_RX_COUNTERS_PRIO] =
 		ADD_PRIO(0, RDMA_RX_COUNTERS_MIN_LEVEL, 0,
 			 FS_CHAINING_CAPS,
@@ -250,15 +278,20 @@ static struct init_tree_node rdma_rx_root_fs = {
 
 enum {
 	RDMA_TX_COUNTERS_PRIO,
+	RDMA_TX_MACSEC_PRIO,
 	RDMA_TX_BYPASS_PRIO,
 };
 
 #define RDMA_TX_BYPASS_MIN_LEVEL MLX5_BY_PASS_NUM_PRIOS
 #define RDMA_TX_COUNTERS_MIN_LEVEL (RDMA_TX_BYPASS_MIN_LEVEL + 1)
 
+#define RDMA_TX_MACSEC_NUM_PRIOS 1
+#define RDMA_TX_MACESC_PRIO_NUM_LEVELS 1
+#define RDMA_TX_MACSEC_MIN_LEVEL  (RDMA_TX_COUNTERS_MIN_LEVEL + RDMA_TX_MACSEC_NUM_PRIOS)
+
 static struct init_tree_node rdma_tx_root_fs = {
 	.type = FS_TYPE_NAMESPACE,
-	.ar_size = 2,
+	.ar_size = 3,
 	.children = (struct init_tree_node[]) {
 		[RDMA_TX_COUNTERS_PRIO] =
 		ADD_PRIO(0, RDMA_TX_COUNTERS_MIN_LEVEL, 0,
@@ -266,6 +299,12 @@ static struct init_tree_node rdma_tx_root_fs = {
 			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				ADD_MULTIPLE_PRIO(MLX5_RDMA_TX_NUM_COUNTERS_PRIOS,
 						  RDMA_TX_COUNTERS_PRIO_NUM_LEVELS))),
+		[RDMA_TX_MACSEC_PRIO] =
+		ADD_PRIO(0, RDMA_TX_MACSEC_MIN_LEVEL, 0,
+			 FS_CHAINING_CAPS,
+			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
+				ADD_MULTIPLE_PRIO(RDMA_TX_MACSEC_NUM_PRIOS,
+						  RDMA_TX_MACESC_PRIO_NUM_LEVELS))),
 		[RDMA_TX_BYPASS_PRIO] =
 		ADD_PRIO(0, RDMA_TX_BYPASS_MIN_LEVEL, 0,
 			 FS_CHAINING_CAPS_RDMA_TX,
@@ -2148,16 +2187,16 @@ void mlx5_del_flow_rules(struct mlx5_flow_handle *handle)
 	down_write_ref_node(&fte->node, false);
 	for (i = handle->num_rules - 1; i >= 0; i--)
 		tree_remove_node(&handle->rule[i]->node, true);
-	if (fte->dests_size) {
-		if (fte->modify_mask)
-			modify_fte(fte);
-		up_write_ref_node(&fte->node, false);
-	} else if (list_empty(&fte->node.children)) {
+	if (list_empty(&fte->node.children)) {
 		del_hw_fte(&fte->node);
 		/* Avoid double call to del_hw_fte */
 		fte->node.del_hw_func = NULL;
 		up_write_ref_node(&fte->node, false);
 		tree_put_node(&fte->node, false);
+	} else if (fte->dests_size) {
+		if (fte->modify_mask)
+			modify_fte(fte);
+		up_write_ref_node(&fte->node, false);
 	} else {
 		up_write_ref_node(&fte->node, false);
 	}
@@ -2297,6 +2336,7 @@ static bool is_nic_rx_ns(enum mlx5_flow_namespace_type type)
 {
 	switch (type) {
 	case MLX5_FLOW_NAMESPACE_BYPASS:
+	case MLX5_FLOW_NAMESPACE_KERNEL_RX_MACSEC:
 	case MLX5_FLOW_NAMESPACE_LAG:
 	case MLX5_FLOW_NAMESPACE_OFFLOADS:
 	case MLX5_FLOW_NAMESPACE_ETHTOOL:
@@ -2343,7 +2383,8 @@ struct mlx5_flow_namespace *mlx5_get_flow_namespace(struct mlx5_core_dev *dev,
 		prio =  FDB_BYPASS_PATH;
 		break;
 	case MLX5_FLOW_NAMESPACE_EGRESS:
-	case MLX5_FLOW_NAMESPACE_EGRESS_KERNEL:
+	case MLX5_FLOW_NAMESPACE_EGRESS_IPSEC:
+	case MLX5_FLOW_NAMESPACE_EGRESS_MACSEC:
 		root_ns = steering->egress_root_ns;
 		prio = type - MLX5_FLOW_NAMESPACE_EGRESS;
 		break;
@@ -2365,6 +2406,14 @@ struct mlx5_flow_namespace *mlx5_get_flow_namespace(struct mlx5_core_dev *dev,
 	case MLX5_FLOW_NAMESPACE_RDMA_TX_COUNTERS:
 		root_ns = steering->rdma_tx_root_ns;
 		prio = RDMA_TX_COUNTERS_PRIO;
+		break;
+	case MLX5_FLOW_NAMESPACE_RDMA_RX_MACSEC:
+		root_ns = steering->rdma_rx_root_ns;
+		prio = RDMA_RX_MACSEC_PRIO;
+		break;
+	case MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC:
+		root_ns = steering->rdma_tx_root_ns;
+		prio = RDMA_TX_MACSEC_PRIO;
 		break;
 	default: /* Must be NIC RX */
 		WARN_ON(!is_nic_rx_ns(type));

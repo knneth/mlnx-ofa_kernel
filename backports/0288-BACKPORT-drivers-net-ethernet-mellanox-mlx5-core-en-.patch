@@ -4,15 +4,15 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ibdb8fde20dd1828c60a8b1ca8db1a52648b68754
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc/act/police.c    | 8 ++++++++
- 1 file changed, 8 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/tc/act/police.c    | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/police.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/police.c
-@@ -22,16 +22,21 @@ tc_act_parse_police(struct mlx5e_tc_act_
- 	struct mlx5_flow_meter_params *params;
- 
- 	params = &attr->meter_attr.params;
+@@ -17,20 +17,25 @@ static int
+ fill_meter_params_from_act(const struct flow_action_entry *act,
+ 			   struct mlx5e_flow_meter_params *params)
+ {
 +#ifdef HAVE_FLOW_ACTION_POLICE_RATE_BYTES_PS
 +#ifdef HAVE_FLOW_ACTION_HW_INDEX
  	params->index = act->hw_index;
@@ -31,13 +31,32 @@ Change-Id: Ibdb8fde20dd1828c60a8b1ca8db1a52648b68754
  	} else {
  		return -EOPNOTSUPP;
  	}
-@@ -40,6 +45,9 @@ tc_act_parse_police(struct mlx5e_tc_act_
- 	attr->exe_aso_type = MLX5_EXE_ASO_FLOW_METER;
- 
- 	return 0;
-+#else
-+	return -EOPNOTSUPP;
+-
 +#endif
+ 	return 0;
  }
  
- static bool
+@@ -60,6 +65,7 @@ tc_act_is_multi_table_act_police(struct
+ 	return true;
+ }
+ 
++#ifdef HAVE_FLOW_OFFLOAD_ACTION
+ static int
+ tc_act_police_offload(struct mlx5e_priv *priv,
+ 		      struct flow_offload_action *fl_act,
+@@ -132,12 +138,15 @@ tc_act_police_stats(struct mlx5e_priv *p
+ 	mlx5e_tc_meter_put(meter);
+ 	return 0;
+ }
++#endif /* HAVE_FLOW_OFFLOAD_ACTION */
+ 
+ struct mlx5e_tc_act mlx5e_tc_act_police = {
+ 	.can_offload = tc_act_can_offload_police,
+ 	.parse_action = tc_act_parse_police,
+ 	.is_multi_table_act = tc_act_is_multi_table_act_police,
++#ifdef HAVE_FLOW_OFFLOAD_ACTION
+ 	.offload_action = tc_act_police_offload,
+ 	.destroy_action = tc_act_police_destroy,
+ 	.stats_action = tc_act_police_stats,
++#endif
+ };

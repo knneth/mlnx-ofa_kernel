@@ -30,22 +30,32 @@
 #endif
 
 #ifdef CONFIG_ARM64
+#ifndef CONFIG_GENERIC_IOREMAP
 #undef ioremap
 static inline void *ioremap(phys_addr_t phys_addr, size_t size)
 {
 	return __ioremap(phys_addr, size, __pgprot(PROT_DEVICE_nGnRE));
 }
+#endif /* CONFIG_GENERIC_IOREMAP */
 
 #undef ioremap_nocache
 static inline void *ioremap_nocache(phys_addr_t phys_addr, size_t size)
 {
+#ifndef CONFIG_GENERIC_IOREMAP
 	return __ioremap(phys_addr, size, __pgprot(PROT_DEVICE_nGnRE));
+#else
+	return ioremap_prot(phys_addr, size, PROT_DEVICE_nGnRE);
+#endif
 }
 
 #undef ioremap_wc
 static inline void *ioremap_wc(phys_addr_t phys_addr, size_t size)
 {
+#ifndef CONFIG_GENERIC_IOREMAP
 	return __ioremap(phys_addr, size, __pgprot(PROT_NORMAL_NC));
+#else
+	return ioremap_prot(phys_addr, size, PROT_NORMAL_NC);
+#endif
 }
 
 /* ARCH_HAS_IOREMAP_WC was defined for arm64 until 2014-07-24 */

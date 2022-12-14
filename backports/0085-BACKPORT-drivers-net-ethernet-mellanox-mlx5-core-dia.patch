@@ -9,7 +9,7 @@ Change-Id: I6d66e3bfc0a35573d661976c147a198b1b3607dd
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.h
-@@ -189,9 +189,10 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
+@@ -188,9 +188,10 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
  int mlx5_fw_tracer_init(struct mlx5_fw_tracer *tracer);
  void mlx5_fw_tracer_cleanup(struct mlx5_fw_tracer *tracer);
  void mlx5_fw_tracer_destroy(struct mlx5_fw_tracer *tracer);

@@ -32,6 +32,7 @@ SCRIPT_NAME="$(basename "$0")"
 WORK_DIR="$(dirname $(dirname ${SCRIPTS_DIR}))"
 CUSTOM_OFA_DIR=
 CUSTOM_CONFIG=
+INCLUDE_MK_CONFIG=0
 CONFIG=$(mktemp "/tmp/final_defs_XXXXXX.h")
 while [ ! -z "$1" ]
 do
@@ -56,6 +57,10 @@ do
 		fi
 		shift;
 		;;
+		--include_mk_config)
+		INCLUDE_MK_CONFIG=1
+		shift;
+		;;
 		-h | --help)
 		echo "Usage: ${SCRIPT_NAME} [options]
 
@@ -67,6 +72,9 @@ do
 					default is '$WORK_DIR'
 		-c, --config-file	Path to specific ready config file,
 					script will not create new one.
+		--include_mk_config	Include filtered configs found in
+					configure.mk.kernel to be removed by
+					unifdef
 
 	Requirements:
 	-------------
@@ -115,12 +123,12 @@ if [ ! -z "$CUSTOM_CONFIG" ] && [ ! -f "backports_applied" ]; then
 	exit 1
 fi
 if [ -z "$CUSTOM_CONFIG" ];then
-	"$SCRIPTS_DIR"/help_scripts/build_defs_file.sh "$WORK_DIR" "$CONFIG"
+	"$SCRIPTS_DIR"/help_scripts/build_defs_file.sh "$WORK_DIR" "$CONFIG" "$INCLUDE_MK_CONFIG"
 	if [ $? -ne 0 ]; then
 		exit 1
 	fi
 else
-	"$SCRIPTS_DIR"/help_scripts/build_defs_file.sh "$CUSTOM_CONFIG" "$CONFIG"
+	"$SCRIPTS_DIR"/help_scripts/build_defs_file.sh "$CUSTOM_CONFIG" "$CONFIG" "$INCLUDE_MK_CONFIG"
 fi
 if [ ! -f "${CONFIG}" ]; then
 	echo "-E- Config file does not exist at '${CONFIG}'" >&2

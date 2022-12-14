@@ -1,0 +1,21 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+
+Change-Id: I3743469f528b65e78f8378b7a95a3a15460ab0fd
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+@@ -93,8 +93,10 @@ void mlx5e_set_rx_cq_mode_params(struct
+ 
+ bool slow_pci_heuristic(struct mlx5_core_dev *mdev);
+ int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *params,
+ 			     struct mlx5e_xsk_param *xsk);
++#endif
+ void mlx5e_build_rq_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
