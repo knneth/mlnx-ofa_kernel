@@ -4,12 +4,40 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
 ---
- .../mellanox/mlx5/core/ipoib/ethtool.c        | 75 ++++++++++++++++++-
- 1 file changed, 71 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/ipoib/ethtool.c        | 87 ++++++++++++++++++-
+ 1 file changed, 83 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
-@@ -99,19 +99,41 @@ static void mlx5i_get_channels(struct ne
+@@ -67,7 +67,13 @@ static void mlx5i_get_ethtool_stats(stru
+ }
+ 
+ static int mlx5i_set_ringparam(struct net_device *dev,
++#ifdef HAVE_GET_RINGPARAM_GET_4_PARAMS
++			       struct ethtool_ringparam *param,
++			       struct kernel_ethtool_ringparam *kernel_param,
++			       struct netlink_ext_ack *extack)
++#else
+ 			       struct ethtool_ringparam *param)
++#endif
+ {
+ 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
+ 
+@@ -75,7 +81,13 @@ static int mlx5i_set_ringparam(struct ne
+ }
+ 
+ static void mlx5i_get_ringparam(struct net_device *dev,
++#ifdef HAVE_GET_RINGPARAM_GET_4_PARAMS
++				struct ethtool_ringparam *param,
++				struct kernel_ethtool_ringparam *kernel_param,
++				struct netlink_ext_ack *extack)
++#else
+ 				struct ethtool_ringparam *param)
++#endif
+ {
+ 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
+ 
+@@ -99,19 +111,41 @@ static void mlx5i_get_channels(struct ne
  }
  
  static int mlx5i_set_coalesce(struct net_device *netdev,
@@ -55,7 +83,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  }
  
  static int mlx5i_get_ts_info(struct net_device *netdev,
-@@ -208,6 +230,7 @@ static int mlx5i_get_speed_settings(u16
+@@ -208,6 +242,7 @@ static int mlx5i_get_speed_settings(u16
  	return rate * width;
  }
  
@@ -63,7 +91,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  static int mlx5i_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *link_ksettings)
  {
-@@ -235,11 +258,43 @@ static int mlx5i_get_link_ksettings(stru
+@@ -235,11 +270,43 @@ static int mlx5i_get_link_ksettings(stru
  
  	return 0;
  }
@@ -107,7 +135,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
  	.get_sset_count     = mlx5i_get_sset_count,
-@@ -252,7 +307,12 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -252,7 +319,12 @@ const struct ethtool_ops mlx5i_ethtool_o
  	.get_coalesce       = mlx5i_get_coalesce,
  	.set_coalesce       = mlx5i_set_coalesce,
  	.get_ts_info        = mlx5i_get_ts_info,
@@ -120,7 +148,7 @@ Change-Id: Ic3e5876f07caacc328f54924455b7b0fc87edf7b
  	.get_link           = ethtool_op_get_link,
  };
  
-@@ -260,4 +320,11 @@ const struct ethtool_ops mlx5i_pkey_etht
+@@ -260,4 +332,11 @@ const struct ethtool_ops mlx5i_pkey_etht
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_link           = ethtool_op_get_link,
  	.get_ts_info        = mlx5i_get_ts_info,

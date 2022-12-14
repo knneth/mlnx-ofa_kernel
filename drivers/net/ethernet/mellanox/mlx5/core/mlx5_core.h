@@ -44,7 +44,7 @@
 
 #include "fs_core.h"
 
-#define DRIVER_VERSION	"5.4-3.5.8"
+#define DRIVER_VERSION	"5.4-3.6.8"
 
 /* Number of EQs reserved for non-completion purposes */
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING

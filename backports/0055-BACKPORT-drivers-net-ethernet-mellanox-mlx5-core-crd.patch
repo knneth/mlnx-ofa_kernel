@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/crdump.c
 
 Change-Id: I3f10dc62cbbdbd6f03c9fca5d660af2e67e64415
 ---
- drivers/net/ethernet/mellanox/mlx5/core/crdump.c | 16 ++++++++++++++--
- 1 file changed, 14 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/crdump.c  | 20 +++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
-@@ -157,23 +157,31 @@ static int mlx5_crdump_open(struct inode
+@@ -157,23 +157,35 @@ static int mlx5_crdump_open(struct inode
  {
  	struct seq_file *seq;
  	int ret;
@@ -18,8 +18,12 @@ Change-Id: I3f10dc62cbbdbd6f03c9fca5d660af2e67e64415
  		return ret;
  
  	seq = file->private_data;
++#ifdef HAVE_PDE_DATA
++	seq->private = pde_data(inode);
++#else
  	seq->private = PDE_DATA(inode);
 -
++#endif
  	return 0;
  }
  
@@ -42,7 +46,7 @@ Change-Id: I3f10dc62cbbdbd6f03c9fca5d660af2e67e64415
  
  int mlx5_cr_protected_capture(struct mlx5_core_dev *dev)
  {
-@@ -291,7 +299,11 @@ int mlx5_crdump_init(struct mlx5_core_de
+@@ -291,7 +303,11 @@ int mlx5_crdump_init(struct mlx5_core_de
  
  	if (mlx5_crdump_dir)
  		if (!proc_create_data(pci_name(dev->pdev), S_IRUGO,

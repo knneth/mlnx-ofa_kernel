@@ -49,10 +49,12 @@ static inline void mmget(struct mm_struct *mm)
  * the coredump code will hold the mmap_sem for writing before
  * invoking the ->core_dump methods.
  */
+#ifndef HAVE_GET_RINGPARAM_GET_4_PARAMS /* no need to have it in CENTOS STREAM - removed from upstrem */
 static inline bool mmget_still_valid(struct mm_struct *mm)
 {
        return likely(!mm->core_state);
 }
+#endif
 #endif
 
 #endif /* _COMPAT_LINUX_SCHED_MM_H */

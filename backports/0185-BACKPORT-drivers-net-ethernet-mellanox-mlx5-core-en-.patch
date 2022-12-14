@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
 Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
 ---
- .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 184 ++++++++++++++++--
- 1 file changed, 170 insertions(+), 14 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 188 ++++++++++++++++--
+ 1 file changed, 174 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
@@ -84,7 +84,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  	switch (act) {
  	case XDP_PASS:
  		*len = xdp->data_end - xdp->data;
-@@ -140,27 +170,38 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -140,27 +170,42 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  			goto xdp_abort;
  		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
  		return true;
@@ -112,7 +112,11 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  		return true;
 +#endif
  	default:
++#ifdef HAVE_BPF_WARN_IVALID_XDP_ACTION_GET_3_PARAMS
++		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
++#else
  		bpf_warn_invalid_xdp_action(act);
++#endif
  		fallthrough;
 +
  	case XDP_ABORTED:
@@ -123,7 +127,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  		fallthrough;
  	case XDP_DROP:
  		rq->stats->xdp_drop++;
-@@ -378,7 +419,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -378,7 +423,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  
  static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  				  struct mlx5e_xdp_wqe_info *wi,
@@ -133,7 +137,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  				  bool recycle)
  {
  	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
-@@ -392,16 +435,23 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -392,16 +439,23 @@ static void mlx5e_free_xdpsq_desc(struct
  			/* XDP_TX from the XSK RQ and XDP_REDIRECT */
  			dma_unmap_single(sq->pdev, xdpi.frame.dma_addr,
  					 xdpi.frame.xdpf->len, DMA_TO_DEVICE);
@@ -157,7 +161,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  		default:
  			WARN_ON_ONCE(true);
  		}
-@@ -412,7 +462,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -412,7 +466,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  {
  	struct mlx5e_xdpsq *sq;
  	struct mlx5_cqe64 *cqe;
@@ -167,7 +171,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  	u16 sqcc;
  	int i;
  
-@@ -447,7 +499,11 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -447,7 +503,11 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  			sqcc += wi->num_wqebbs;
  
@@ -179,7 +183,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  		} while (!last_wqe);
  
  		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -460,8 +516,10 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -460,8 +520,10 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  		}
  	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
  
@@ -190,7 +194,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  
  	sq->stats->cqes += i;
  
-@@ -476,7 +534,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -476,7 +538,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  {
@@ -200,7 +204,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  
  	while (sq->cc != sq->pc) {
  		struct mlx5e_xdp_wqe_info *wi;
-@@ -487,13 +547,45 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -487,13 +551,45 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
  
  		sq->cc += wi->num_wqebbs;
  
@@ -246,7 +250,7 @@ Change-Id: I3ddda08f37abe25edd673f7806af717bf109844b
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -557,26 +649,90 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -557,26 +653,90 @@ int mlx5e_xdp_xmit(struct net_device *de
  	return n - drops;
  }
  

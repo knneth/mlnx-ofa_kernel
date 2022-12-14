@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 
 Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
 ---
- drivers/infiniband/ulp/iser/iscsi_iser.c | 128 ++++++++++++++++++++++-
- 1 file changed, 126 insertions(+), 2 deletions(-)
+ drivers/infiniband/ulp/iser/iscsi_iser.c | 136 ++++++++++++++++++++++-
+ 1 file changed, 134 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
@@ -111,7 +111,18 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  
  /**
   * iscsi_iser_conn_create() - create a new iscsi-iser connection
-@@ -583,6 +634,7 @@ iscsi_iser_session_destroy(struct iscsi_
+@@ -576,13 +627,18 @@ iscsi_iser_session_destroy(struct iscsi_
+ 	struct Scsi_Host *shost = iscsi_session_to_shost(cls_session);
+ 
+ 	iscsi_session_teardown(cls_session);
++#ifdef HAVE_ISCSI_HOST_REMOVE_GET_2_PARAMS
++	iscsi_host_remove(shost, false);
++#else
+ 	iscsi_host_remove(shost);
++#endif
+ 	iscsi_host_free(shost);
+ }
+ 
  static inline unsigned int
  iser_dif_prot_caps(int prot_caps)
  {
@@ -119,7 +130,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  	return ((prot_caps & IB_PROT_T10DIF_TYPE_1) ?
  		SHOST_DIF_TYPE1_PROTECTION | SHOST_DIX_TYPE0_PROTECTION |
  		SHOST_DIX_TYPE1_PROTECTION : 0) |
-@@ -590,6 +642,14 @@ iser_dif_prot_caps(int prot_caps)
+@@ -590,6 +646,14 @@ iser_dif_prot_caps(int prot_caps)
  		SHOST_DIF_TYPE2_PROTECTION | SHOST_DIX_TYPE2_PROTECTION : 0) |
  	       ((prot_caps & IB_PROT_T10DIF_TYPE_3) ?
  		SHOST_DIF_TYPE3_PROTECTION | SHOST_DIX_TYPE3_PROTECTION : 0);
@@ -134,7 +145,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  }
  
  /**
-@@ -648,13 +708,20 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -648,13 +712,20 @@ iscsi_iser_session_create(struct iscsi_e
  
  			shost->sg_prot_tablesize = shost->sg_tablesize;
  			scsi_host_set_prot(shost, iser_dif_prot_caps(sig_caps));
@@ -157,7 +168,19 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
  			mutex_unlock(&iser_conn->state_mutex);
  			goto free_host;
-@@ -759,7 +826,13 @@ iscsi_iser_conn_get_stats(struct iscsi_c
+@@ -687,7 +758,11 @@ iscsi_iser_session_create(struct iscsi_e
+ 	return cls_session;
+ 
+ remove_host:
++#ifdef HAVE_ISCSI_HOST_REMOVE_GET_2_PARAMS
++	iscsi_host_remove(shost, false);
++#else
+ 	iscsi_host_remove(shost);
++#endif
+ free_host:
+ 	iscsi_host_free(shost);
+ 	return NULL;
+@@ -759,7 +834,13 @@ iscsi_iser_conn_get_stats(struct iscsi_c
  	stats->r2t_pdus = conn->r2t_pdus_cnt; /* always 0 */
  	stats->tmfcmd_pdus = conn->tmfcmd_pdus_cnt;
  	stats->tmfrsp_pdus = conn->tmfrsp_pdus_cnt;
@@ -171,7 +194,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  }
  
  static int iscsi_iser_get_ep_param(struct iscsi_endpoint *ep,
-@@ -961,21 +1034,60 @@ static umode_t iser_attr_is_visible(int
+@@ -961,21 +1042,60 @@ static umode_t iser_attr_is_visible(int
  	return 0;
  }
  
@@ -232,7 +255,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  };
  
  static struct iscsi_transport iscsi_iser_transport = {
-@@ -988,6 +1100,9 @@ static struct iscsi_transport iscsi_iser
+@@ -988,6 +1108,9 @@ static struct iscsi_transport iscsi_iser
  	/* connection management */
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,
@@ -242,7 +265,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  	.destroy_conn           = iscsi_conn_teardown,
  	.attr_is_visible	= iser_attr_is_visible,
  	.set_param              = iscsi_iser_set_param,
-@@ -1006,7 +1121,9 @@ static struct iscsi_transport iscsi_iser
+@@ -1006,7 +1129,9 @@ static struct iscsi_transport iscsi_iser
  	.xmit_task		= iscsi_iser_task_xmit,
  	.cleanup_task		= iscsi_iser_cleanup_task,
  	.alloc_pdu		= iscsi_iser_pdu_alloc,
@@ -252,7 +275,7 @@ Change-Id: Id99ae12373882d3367733ba4814dfff7abd932de
  	/* recovery */
  	.session_recovery_timedout = iscsi_session_recovery_timedout,
  
-@@ -1026,6 +1143,13 @@ static int __init iser_init(void)
+@@ -1026,6 +1151,13 @@ static int __init iser_init(void)
  		return -EINVAL;
  	}
  

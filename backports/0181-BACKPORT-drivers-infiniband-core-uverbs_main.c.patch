@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
 
 Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
 ---
- drivers/infiniband/core/uverbs_main.c | 76 +++++++++++++++++++++++++--
- 1 file changed, 73 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/uverbs_main.c | 80 ++++++++++++++++++++++++++-
+ 1 file changed, 77 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
@@ -108,7 +108,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  };
  
  void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
-@@ -844,7 +877,11 @@ void uverbs_user_mmap_disassociate(struc
+@@ -844,9 +877,15 @@ void uverbs_user_mmap_disassociate(struc
  		 * at a time to get the lock ordering right. Typically there
  		 * will only be one mm, so no big deal.
  		 */
@@ -117,10 +117,14 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
 +#else
 +		down_read(&mm->mmap_sem);
 +#endif
++#ifndef HAVE_GET_RINGPARAM_GET_4_PARAMS
  		if (!mmget_still_valid(mm))
  			goto skip_mm;
++#endif
  		mutex_lock(&ufile->umap_lock);
-@@ -863,10 +900,19 @@ void uverbs_user_mmap_disassociate(struc
+ 		list_for_each_entry_safe (priv, next_priv, &ufile->umaps,
+ 					  list) {
+@@ -863,10 +902,21 @@ void uverbs_user_mmap_disassociate(struc
  				rdma_user_mmap_entry_put(priv->entry);
  				priv->entry = NULL;
  			}
@@ -131,7 +135,9 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
 +#endif
  		}
  		mutex_unlock(&ufile->umap_lock);
++#ifndef HAVE_GET_RINGPARAM_GET_4_PARAMS
  	skip_mm:
++#endif
 +#ifdef HAVE_MMAP_READ_LOCK
  		mmap_read_unlock(mm);
 +#else
@@ -140,7 +146,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  		mmput(mm);
  	}
  }
-@@ -947,7 +993,11 @@ static int ib_uverbs_open(struct inode *
+@@ -947,7 +997,11 @@ static int ib_uverbs_open(struct inode *
  
  	setup_ufile_idr_uobject(file);
  
@@ -152,7 +158,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  
  err_module:
  	module_put(ib_dev->ops.owner);
-@@ -1133,13 +1183,21 @@ static int ib_uverbs_add_one(struct ib_d
+@@ -1133,13 +1187,21 @@ static int ib_uverbs_add_one(struct ib_d
  	rcu_assign_pointer(uverbs_dev->ib_dev, device);
  	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
  
@@ -174,7 +180,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
  		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
  	else
-@@ -1164,7 +1222,11 @@ static int ib_uverbs_add_one(struct ib_d
+@@ -1164,7 +1226,11 @@ static int ib_uverbs_add_one(struct ib_d
  	return 0;
  
  err_uapi:
@@ -186,7 +192,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  err:
  	if (atomic_dec_and_test(&uverbs_dev->refcount))
  		ib_uverbs_comp_dev(uverbs_dev);
-@@ -1197,7 +1259,6 @@ static void ib_uverbs_free_hw_resources(
+@@ -1197,7 +1263,6 @@ static void ib_uverbs_free_hw_resources(
  
  		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
  		kref_put(&file->ref, ib_uverbs_release_file);
@@ -194,7 +200,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  		mutex_lock(&uverbs_dev->lists_mutex);
  	}
  	mutex_unlock(&uverbs_dev->lists_mutex);
-@@ -1211,7 +1272,11 @@ static void ib_uverbs_remove_one(struct
+@@ -1211,7 +1276,11 @@ static void ib_uverbs_remove_one(struct
  	int wait_clients = 1;
  
  	cdev_device_del(&uverbs_dev->cdev, &uverbs_dev->dev);
@@ -206,7 +212,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  
  	if (device->ops.disassociate_ucontext) {
  		/* We disassociate HW resources and immediately return.
-@@ -1274,6 +1339,7 @@ static int __init ib_uverbs_init(void)
+@@ -1274,6 +1343,7 @@ static int __init ib_uverbs_init(void)
  	uverbs_class->devnode = uverbs_devnode;
  
  	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
@@ -214,7 +220,7 @@ Change-Id: I2a519f46227db04ffc7eb554d6fb8ae59dceb858
  	if (ret) {
  		pr_err("user_verbs: couldn't create abi_version attribute\n");
  		goto out_class;
-@@ -1310,7 +1376,11 @@ static void __exit ib_uverbs_cleanup(voi
+@@ -1310,7 +1380,11 @@ static void __exit ib_uverbs_cleanup(voi
  				 IB_UVERBS_NUM_FIXED_MINOR);
  	unregister_chrdev_region(dynamic_uverbs_dev,
  				 IB_UVERBS_NUM_DYNAMIC_MINOR);

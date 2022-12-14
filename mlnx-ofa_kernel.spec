@@ -64,7 +64,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 5.4}
-%{!?_release: %global _release OFED.5.4.3.5.8.1}
+%{!?_release: %global _release OFED.5.4.3.6.8.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -106,7 +106,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.5.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.6.8.tgz
 
 
 # build KMP rpms?
@@ -154,7 +154,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.5.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.6.8.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -180,7 +180,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.5.8.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.4-3.6.8.tgz
 
 #
 # setup module sign scripts if paths to the keys are given
@@ -389,7 +389,7 @@ perl -i -ne 'if (m@^#!/bin/bash@) {
                  }' %{buildroot}/etc/init.d/openibd
 fi
 
-if [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
+if [ -f /etc/SuSE-release ] || grep -qwi SLES /etc/os-release 2>/dev/null; then
     local_fs='$local_fs'
     openiscsi=''
     %if %{build_oiscsi}
@@ -463,7 +463,7 @@ if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' || "$
 %endif
 fi
 
-if [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
+if [ -f /etc/SuSE-release ] || grep -qwi SLES /etc/os-release 2>/dev/null; then
         /sbin/chkconfig openibd off >/dev/null  2>&1 || true
         /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
         /sbin/insserv -r openibd >/dev/null 2>&1 || true
@@ -546,7 +546,7 @@ if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true
           fi
-          if [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
+          if [ -f /etc/SuSE-release ] || grep -qwi SLES /etc/os-release 2>/dev/null; then
                 /sbin/chkconfig openibd off >/dev/null 2>&1 || true
                 /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
                 /sbin/insserv -r openibd >/dev/null 2>&1 || true

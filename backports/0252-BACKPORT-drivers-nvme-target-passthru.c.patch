@@ -4,12 +4,26 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/passthru.c
 Change-Id: I0baf34ae65c0dbdcb87b42af2f6bbcf549ade2b9
 Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
 ---
- drivers/nvme/target/passthru.c | 22 +++++++++++++++++++++-
- 1 file changed, 21 insertions(+), 1 deletion(-)
+ drivers/nvme/target/passthru.c | 27 +++++++++++++++++++++++++--
+ 1 file changed, 25 insertions(+), 2 deletions(-)
 
 --- a/drivers/nvme/target/passthru.c
 +++ b/drivers/nvme/target/passthru.c
-@@ -187,14 +187,21 @@ static int nvmet_passthru_map_sg(struct
+@@ -151,9 +151,12 @@ static void nvmet_passthru_execute_cmd_w
+ 	struct request *rq = req->p.rq;
+ 	u16 status;
+ 
++#if defined(HAVE_BLK_EXECUTE_RQ_2_PARAM) || defined(HAVE_BLK_EXECUTE_RQ_3_PARAM)
++	status = nvme_execute_passthru_rq(rq);
++#else
+ 	nvme_execute_passthru_rq(rq);
+-
+ 	status = nvme_req(rq)->status;
++#endif
+ 	if (status == NVME_SC_SUCCESS &&
+ 	    req->cmd->common.opcode == nvme_admin_identify) {
+ 		switch (req->cmd->identify.cns) {
+@@ -187,14 +190,21 @@ static int nvmet_passthru_map_sg(struct
  	struct scatterlist *sg;
  	int op_flags = 0;
  	struct bio *bio;
@@ -32,7 +46,7 @@ Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
  	bio->bi_end_io = bio_put;
  	bio->bi_opf = req_op(rq) | op_flags;
  
-@@ -207,11 +214,15 @@ static int nvmet_passthru_map_sg(struct
+@@ -207,11 +217,15 @@ static int nvmet_passthru_map_sg(struct
  		sg_cnt--;
  	}
  
@@ -48,7 +62,7 @@ Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
  
  	return 0;
  }
-@@ -267,8 +278,17 @@ static void nvmet_passthru_execute_cmd(s
+@@ -267,8 +281,17 @@ static void nvmet_passthru_execute_cmd(s
  		schedule_work(&req->p.work);
  	} else {
  		rq->end_io_data = req;

@@ -1,0 +1,34 @@
+From: Sergey Gorenko <sergeygo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.h
+
+Change-Id: If5432fe227487897e738aa6f16d704d4d7aa4b2b
+---
+ drivers/infiniband/ulp/isert/ib_isert.h | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+--- a/drivers/infiniband/ulp/isert/ib_isert.h
++++ b/drivers/infiniband/ulp/isert/ib_isert.h
+@@ -11,6 +11,23 @@
+ #define DRV_NAME	"isert"
+ #define PFX		DRV_NAME ": "
+ 
++#ifdef HAVE_ISCSIT_CONN
++#define iscsi_conn iscsit_conn
++#endif
++
++#ifdef HAVE_ISCSIT_CMD
++#define iscsi_cmd iscsit_cmd
++#endif
++
++#ifdef HAVE_ISCSIT_CONN_LOGIN_SOCKADDR
++#define HAVE_ISCSI_CONN_LOGIN_SOCKADDR 1
++#endif
++
++#ifdef HAVE_ISCSIT_CONN_LOCAL_SOCKADDR
++#define HAVE_ISCSI_CONN_LOCAL_SOCKADDR 1
++#endif
++
++
+ #define isert_dbg(fmt, arg...)				 \
+ 	do {						 \
+ 		if (unlikely(isert_debug_level > 2))	 \

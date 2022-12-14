@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pci.c
 
 Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 ---
- drivers/nvme/host/pci.c | 629 +++++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 620 insertions(+), 9 deletions(-)
+ drivers/nvme/host/pci.c | 649 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 640 insertions(+), 9 deletions(-)
 
 --- a/drivers/nvme/host/pci.c
 +++ b/drivers/nvme/host/pci.c
@@ -172,7 +172,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 +	nvme_req(req)->ctrl = &dev->ctrl;
 +	return 0;
 +}
- 
++
 +static int nvme_admin_init_request(void *data, struct request *req,
 +		unsigned int hctx_idx, unsigned int rq_idx,
 +		unsigned int numa_node)
@@ -183,7 +183,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 +
 +	BUG_ON(!nvmeq);
 +	iod->nvmeq = nvmeq;
-+
+ 
 +	nvme_req(req)->ctrl = &dev->ctrl;
 +	return 0;
 +}
@@ -671,7 +671,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	}
  
  	if (atomic_dec_return(&dev->ctrl.abort_limit) < 0) {
-@@ -1470,17 +1785,24 @@ static enum blk_eh_timer_return nvme_tim
+@@ -1470,17 +1785,33 @@ static enum blk_eh_timer_return nvme_tim
  		"I/O %d QID %d timeout, aborting\n",
  		 req->tag, nvmeq->qid);
  
@@ -689,16 +689,25 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 -
  	abort_req->timeout = ADMIN_TIMEOUT;
  	abort_req->end_io_data = NULL;
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_2_PARAM
++	abort_req->end_io = abort_endio;
++	blk_execute_rq_nowait(abort_req, false);
++#else
 +#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_5_PARAM
  	blk_execute_rq_nowait(abort_req->q, NULL, abort_req, 0, abort_endio);
 -
 +#else
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_3_PARAM
++	blk_execute_rq_nowait(abort_req, false, abort_endio);
++#else
 +	blk_execute_rq_nowait(NULL, abort_req, 0, abort_endio);
++#endif
++#endif
 +#endif
  	/*
  	 * The aborted req will be completed on receiving the abort req.
  	 * We enable the timer again. If hit twice, it'll cause a device reset,
-@@ -1538,9 +1860,17 @@ static int nvme_suspend_queue(struct nvm
+@@ -1538,9 +1869,17 @@ static int nvme_suspend_queue(struct nvm
  
  	nvmeq->dev->online_queues--;
  	if (!nvmeq->qid && nvmeq->dev->ctrl.admin_q)
@@ -716,7 +725,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	return 0;
  }
  
-@@ -1561,7 +1891,11 @@ static void nvme_disable_admin_queue(str
+@@ -1561,7 +1900,11 @@ static void nvme_disable_admin_queue(str
  	else
  		nvme_disable_ctrl(&dev->ctrl);
  
@@ -728,7 +737,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  }
  
  /*
-@@ -1578,7 +1912,11 @@ static void nvme_reap_pending_cqes(struc
+@@ -1578,7 +1921,11 @@ static void nvme_reap_pending_cqes(struc
  		if (dev->queues[i].p2p)
  			continue;
  		spin_lock(&dev->queues[i].cq_poll_lock);
@@ -740,7 +749,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		spin_unlock(&dev->queues[i].cq_poll_lock);
  	}
  }
-@@ -1652,6 +1990,10 @@ static int nvme_alloc_queue(struct nvme_
+@@ -1652,6 +1999,10 @@ static int nvme_alloc_queue(struct nvme_
  		goto free_cqdma;
  
  	nvmeq->dev = dev;
@@ -751,7 +760,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	spin_lock_init(&nvmeq->sq_lock);
  	spin_lock_init(&nvmeq->cq_poll_lock);
  	nvmeq->cq_head = 0;
-@@ -1674,6 +2016,7 @@ static int nvme_alloc_queue(struct nvme_
+@@ -1674,6 +2025,7 @@ static int nvme_alloc_queue(struct nvme_
  
  static int queue_request_irq(struct nvme_queue *nvmeq)
  {
@@ -759,7 +768,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	struct pci_dev *pdev = to_pci_dev(nvmeq->dev->dev);
  	int nr = nvmeq->dev->ctrl.instance;
  
-@@ -1684,6 +2027,14 @@ static int queue_request_irq(struct nvme
+@@ -1684,6 +2036,14 @@ static int queue_request_irq(struct nvme
  		return pci_request_irq(pdev, nvmeq->cq_vector, nvme_irq,
  				NULL, nvmeq, "nvme%dq%d", nr, nvmeq->qid);
  	}
@@ -774,7 +783,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  }
  
  static void nvme_init_queue(struct nvme_queue *nvmeq, u16 qid)
-@@ -1714,7 +2065,11 @@ static int nvme_create_queue(struct nvme
+@@ -1714,7 +2074,11 @@ static int nvme_create_queue(struct nvme
  	 * has only one vector available.
  	 */
  	if (!polled && !nvmeq->p2p)
@@ -786,7 +795,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	else if (polled)
  		set_bit(NVMEQ_POLLED, &nvmeq->flags);
  
-@@ -1748,23 +2103,49 @@ release_cq:
+@@ -1748,23 +2112,49 @@ release_cq:
  	return result;
  }
  
@@ -836,7 +845,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  };
  
  static void nvme_dev_remove_admin(struct nvme_dev *dev)
-@@ -1775,7 +2156,11 @@ static void nvme_dev_remove_admin(struct
+@@ -1775,7 +2165,11 @@ static void nvme_dev_remove_admin(struct
  		 * user requests may be waiting on a stopped queue. Start the
  		 * queue to flush these to completion.
  		 */
@@ -848,7 +857,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		blk_cleanup_queue(dev->ctrl.admin_q);
  		blk_mq_free_tag_set(&dev->admin_tagset);
  	}
-@@ -1791,7 +2176,9 @@ static int nvme_alloc_admin_tags(struct
+@@ -1791,7 +2185,9 @@ static int nvme_alloc_admin_tags(struct
  		dev->admin_tagset.timeout = ADMIN_TIMEOUT;
  		dev->admin_tagset.numa_node = dev->ctrl.numa_node;
  		dev->admin_tagset.cmd_size = sizeof(struct nvme_iod);
@@ -858,7 +867,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		dev->admin_tagset.driver_data = dev;
  
  		if (blk_mq_alloc_tag_set(&dev->admin_tagset))
-@@ -1809,7 +2196,11 @@ static int nvme_alloc_admin_tags(struct
+@@ -1809,7 +2205,11 @@ static int nvme_alloc_admin_tags(struct
  			return -ENODEV;
  		}
  	} else
@@ -870,7 +879,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	return 0;
  }
-@@ -1904,12 +2295,16 @@ static int nvme_create_io_queues(struct
+@@ -1904,12 +2304,16 @@ static int nvme_create_io_queues(struct
  	}
  
  	max = min(dev->max_qid, dev->ctrl.queue_count - 1);
@@ -887,7 +896,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	for (i = dev->online_queues; i <= max; i++) {
  		bool polled = i > rw_queues && !dev->queues[i].p2p;
-@@ -2055,9 +2450,20 @@ static void nvme_free_host_mem(struct nv
+@@ -2055,9 +2459,20 @@ static void nvme_free_host_mem(struct nv
  		struct nvme_host_mem_buf_desc *desc = &dev->host_mem_descs[i];
  		size_t size = le32_to_cpu(desc->size) * NVME_CTRL_PAGE_SIZE;
  
@@ -908,7 +917,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	}
  
  	kfree(dev->host_mem_desc_bufs);
-@@ -2097,10 +2503,26 @@ static int __nvme_alloc_host_mem(struct
+@@ -2097,10 +2512,26 @@ static int __nvme_alloc_host_mem(struct
  
  	for (size = 0; size < preferred && i < max_entries; size += len) {
  		dma_addr_t dma_addr;
@@ -935,7 +944,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		if (!bufs[i])
  			break;
  
-@@ -2123,9 +2545,20 @@ out_free_bufs:
+@@ -2123,9 +2554,20 @@ out_free_bufs:
  	while (--i >= 0) {
  		size_t size = le32_to_cpu(descs[i].size) * NVME_CTRL_PAGE_SIZE;
  
@@ -956,7 +965,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	}
  
  	kfree(bufs);
-@@ -2200,6 +2633,7 @@ static int nvme_setup_host_mem(struct nv
+@@ -2200,6 +2642,7 @@ static int nvme_setup_host_mem(struct nv
  	return ret;
  }
  
@@ -964,7 +973,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  /*
   * nirqs is the number of interrupts available for write and read
   * queues. The core already reserved an interrupt for the admin queue.
-@@ -2237,14 +2671,18 @@ static void nvme_calc_irq_sets(struct ir
+@@ -2237,14 +2680,18 @@ static void nvme_calc_irq_sets(struct ir
  	affd->set_size[HCTX_TYPE_READ] = nr_read_queues;
  	affd->nr_sets = nr_read_queues ? 2 : 1;
  }
@@ -983,7 +992,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	};
  	unsigned int irq_queues, this_p_queues;
  
-@@ -2259,11 +2697,13 @@ static int nvme_setup_irqs(struct nvme_d
+@@ -2259,11 +2706,13 @@ static int nvme_setup_irqs(struct nvme_d
  	} else {
  		irq_queues = nr_io_queues - this_p_queues + 1 - dev->num_p2p_queues;
  	}
@@ -997,7 +1006,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	/*
  	 * Some Apple controllers require all queues to use the
-@@ -2275,6 +2715,7 @@ static int nvme_setup_irqs(struct nvme_d
+@@ -2275,6 +2724,7 @@ static int nvme_setup_irqs(struct nvme_d
  	return pci_alloc_irq_vectors_affinity(pdev, 1, irq_queues,
  			      PCI_IRQ_ALL_TYPES | PCI_IRQ_AFFINITY, &affd);
  }
@@ -1005,7 +1014,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  static void nvme_disable_io_queues(struct nvme_dev *dev)
  {
-@@ -2294,6 +2735,9 @@ static int nvme_setup_io_queues(struct n
+@@ -2294,6 +2744,9 @@ static int nvme_setup_io_queues(struct n
  	unsigned int nr_io_queues;
  	unsigned long size;
  	int result;
@@ -1015,7 +1024,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	/*
  	 * Sample the module parameters once at reset time so that we have
-@@ -2354,21 +2798,60 @@ static int nvme_setup_io_queues(struct n
+@@ -2354,21 +2807,60 @@ static int nvme_setup_io_queues(struct n
  
   retry:
  	/* Deregister the admin queue's interrupt */
@@ -1077,7 +1086,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	/*
  	 * Should investigate if there's a performance win from allocating
-@@ -2391,10 +2874,12 @@ static int nvme_setup_io_queues(struct n
+@@ -2391,10 +2883,12 @@ static int nvme_setup_io_queues(struct n
  		nvme_suspend_io_queues(dev);
  		goto retry;
  	}
@@ -1090,7 +1099,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	return 0;
  }
  
-@@ -2426,20 +2911,28 @@ static int nvme_delete_queue(struct nvme
+@@ -2426,20 +2920,39 @@ static int nvme_delete_queue(struct nvme
  	cmd.delete_queue.opcode = opcode;
  	cmd.delete_queue.qid = cpu_to_le16(nvmeq->qid);
  
@@ -1106,14 +1115,25 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	req->end_io_data = nvmeq;
 -
  	init_completion(&nvmeq->delete_done);
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_2_PARAM
++	if (opcode == nvme_admin_delete_cq)
++		req->end_io = nvme_del_cq_end;
++	else
++		req->end_io = nvme_del_queue_end;
++	blk_execute_rq_nowait(req, false);
++#else
 +#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_5_PARAM
  	blk_execute_rq_nowait(q, NULL, req, false,
 +#else
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_3_PARAM
++	blk_execute_rq_nowait(req, false,
++#else
 +	blk_execute_rq_nowait(NULL, req, false,
++#endif
 +#endif
  			opcode == nvme_admin_delete_cq ?
  				nvme_del_cq_end : nvme_del_queue_end);
-+
++#endif
 +
  	return 0;
  }
@@ -1121,7 +1141,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static bool __nvme_disable_io_queues(struct nvme_dev *dev, u8 opcode)
  {
  	int nr_queues = dev->online_queues - 1, sent = 0;
-@@ -2476,9 +2969,11 @@ static void nvme_dev_add(struct nvme_dev
+@@ -2476,9 +2989,11 @@ static void nvme_dev_add(struct nvme_dev
  	if (!dev->ctrl.tagset) {
  		dev->tagset.ops = &nvme_mq_ops;
  		dev->tagset.nr_hw_queues = nr_hw_queues;
@@ -1133,7 +1153,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		dev->tagset.timeout = NVME_IO_TIMEOUT;
  		dev->tagset.numa_node = dev->ctrl.numa_node;
  		dev->tagset.queue_depth = min_t(unsigned int, dev->q_depth,
-@@ -2503,7 +2998,9 @@ static void nvme_dev_add(struct nvme_dev
+@@ -2503,7 +3018,9 @@ static void nvme_dev_add(struct nvme_dev
  		}
  		dev->ctrl.tagset = &dev->tagset;
  	} else {
@@ -1143,7 +1163,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  		/* Free previously allocated queues that are no longer usable */
  		nvme_free_queues(dev, dev->online_queues);
-@@ -2535,9 +3032,21 @@ static int nvme_pci_enable(struct nvme_d
+@@ -2535,9 +3052,21 @@ static int nvme_pci_enable(struct nvme_d
  	 * interrupts. Pre-enable a single MSIX or MSI vec for setup. We'll
  	 * adjust this later.
  	 */
@@ -1165,7 +1185,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	dev->ctrl.cap = lo_hi_readq(dev->bar + NVME_REG_CAP);
  
-@@ -2608,7 +3117,14 @@ static void nvme_pci_disable(struct nvme
+@@ -2608,7 +3137,14 @@ static void nvme_pci_disable(struct nvme
  {
  	struct pci_dev *pdev = to_pci_dev(dev->dev);
  
@@ -1180,7 +1200,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	if (pci_is_enabled(pdev)) {
  		pci_disable_pcie_error_reporting(pdev);
-@@ -2665,7 +3181,11 @@ static void nvme_dev_disable(struct nvme
+@@ -2665,7 +3201,11 @@ static void nvme_dev_disable(struct nvme
  	if (shutdown) {
  		nvme_start_queues(&dev->ctrl);
  		if (dev->ctrl.admin_q && !blk_queue_dying(dev->ctrl.admin_q))
@@ -1192,7 +1212,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	}
  	mutex_unlock(&dev->shutdown_lock);
  }
-@@ -2717,7 +3237,12 @@ static void nvme_pci_free_ctrl(struct nv
+@@ -2717,7 +3257,12 @@ static void nvme_pci_free_ctrl(struct nv
  	nvme_free_tagset(dev);
  	if (dev->ctrl.admin_q)
  		blk_put_queue(dev->ctrl.admin_q);
@@ -1205,7 +1225,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	mempool_destroy(dev->iod_mempool);
  	put_device(dev->dev);
  	kfree(dev->queues);
-@@ -2742,7 +3267,9 @@ static void nvme_reset_work(struct work_
+@@ -2742,7 +3287,9 @@ static void nvme_reset_work(struct work_
  {
  	struct nvme_dev *dev =
  		container_of(work, struct nvme_dev, ctrl.reset_work);
@@ -1215,7 +1235,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	int result;
  
  	if (WARN_ON(dev->ctrl.state != NVME_CTRL_RESETTING)) {
-@@ -2775,8 +3302,12 @@ static void nvme_reset_work(struct work_
+@@ -2775,8 +3322,12 @@ static void nvme_reset_work(struct work_
  	 * Limit the max command size to prevent iod->sg allocations going
  	 * over a single page.
  	 */
@@ -1228,7 +1248,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	dev->ctrl.max_segments = NVME_MAX_SEGS;
  
  	/*
-@@ -2807,6 +3338,7 @@ static void nvme_reset_work(struct work_
+@@ -2807,6 +3358,7 @@ static void nvme_reset_work(struct work_
  	if (result)
  		goto out;
  
@@ -1236,7 +1256,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	if (dev->ctrl.oacs & NVME_CTRL_OACS_SEC_SUPP) {
  		if (!dev->ctrl.opal_dev)
  			dev->ctrl.opal_dev =
-@@ -2817,6 +3349,7 @@ static void nvme_reset_work(struct work_
+@@ -2817,6 +3369,7 @@ static void nvme_reset_work(struct work_
  		free_opal_dev(dev->ctrl.opal_dev);
  		dev->ctrl.opal_dev = NULL;
  	}
@@ -1244,7 +1264,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	if (dev->ctrl.oacs & NVME_CTRL_OACS_DBBUF_SUPP) {
  		result = nvme_dbbuf_dma_alloc(dev);
-@@ -3075,6 +3608,13 @@ static int nvme_probe(struct pci_dev *pd
+@@ -3075,6 +3628,13 @@ static int nvme_probe(struct pci_dev *pd
  	if (!dev)
  		return -ENOMEM;
  
@@ -1258,7 +1278,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	dev->nr_write_queues = write_queues;
  	dev->nr_poll_queues = poll_queues;
  	dev->nr_allocated_queues = nvme_max_io_queues(dev) + 1;
-@@ -3160,10 +3700,24 @@ static int nvme_probe(struct pci_dev *pd
+@@ -3160,10 +3720,24 @@ static int nvme_probe(struct pci_dev *pd
  	put_device(dev->dev);
   free:
  	kfree(dev->queues);
@@ -1283,7 +1303,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static void nvme_reset_prepare(struct pci_dev *pdev)
  {
  	struct nvme_dev *dev = pci_get_drvdata(pdev);
-@@ -3184,6 +3738,7 @@ static void nvme_reset_done(struct pci_d
+@@ -3184,6 +3758,7 @@ static void nvme_reset_done(struct pci_d
  	if (!nvme_try_sched_reset(&dev->ctrl))
  		flush_work(&dev->ctrl.reset_work);
  }
@@ -1291,7 +1311,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  static void nvme_shutdown(struct pci_dev *pdev)
  {
-@@ -3223,6 +3778,7 @@ static void nvme_remove(struct pci_dev *
+@@ -3223,6 +3798,7 @@ static void nvme_remove(struct pci_dev *
  	nvme_uninit_ctrl(&dev->ctrl);
  }
  
@@ -1299,7 +1319,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  #ifdef CONFIG_PM_SLEEP
  static int nvme_get_power_state(struct nvme_ctrl *ctrl, u32 *ps)
  {
-@@ -3340,6 +3896,7 @@ static const struct dev_pm_ops nvme_dev_
+@@ -3340,6 +3916,7 @@ static const struct dev_pm_ops nvme_dev_
  	.restore	= nvme_simple_resume,
  };
  #endif /* CONFIG_PM_SLEEP */
@@ -1307,7 +1327,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  static pci_ers_result_t nvme_error_detected(struct pci_dev *pdev,
  						pci_channel_state_t state)
-@@ -3388,11 +3945,20 @@ static const struct pci_error_handlers n
+@@ -3388,11 +3965,20 @@ static const struct pci_error_handlers n
  	.error_detected	= nvme_error_detected,
  	.slot_reset	= nvme_slot_reset,
  	.resume		= nvme_error_resume,
@@ -1328,7 +1348,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_VDEVICE(INTEL, 0x0953),	/* Intel 750/P3500/P3600/P3700 */
  		.driver_data = NVME_QUIRK_STRIPE_SIZE |
  				NVME_QUIRK_DEALLOCATE_ZEROES, },
-@@ -3405,6 +3971,20 @@ static const struct pci_device_id nvme_i
+@@ -3405,6 +3991,20 @@ static const struct pci_device_id nvme_i
  	{ PCI_VDEVICE(INTEL, 0x0a55),	/* Dell Express Flash P4600 */
  		.driver_data = NVME_QUIRK_STRIPE_SIZE |
  				NVME_QUIRK_DEALLOCATE_ZEROES, },
@@ -1349,7 +1369,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_VDEVICE(INTEL, 0xf1a5),	/* Intel 600P/P3100 */
  		.driver_data = NVME_QUIRK_NO_DEEPEST_PS |
  				NVME_QUIRK_MEDIUM_PRIO_SQ |
-@@ -3454,18 +4034,44 @@ static const struct pci_device_id nvme_i
+@@ -3454,18 +4054,44 @@ static const struct pci_device_id nvme_i
  };
  MODULE_DEVICE_TABLE(pci, nvme_id_table);
  
@@ -1394,7 +1414,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	.err_handler	= &nvme_err_handler,
  };
  
-@@ -3474,7 +4080,9 @@ static int __init nvme_init(void)
+@@ -3474,7 +4100,9 @@ static int __init nvme_init(void)
  	BUILD_BUG_ON(sizeof(struct nvme_create_cq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_create_sq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_delete_queue) != 64);
@@ -1404,7 +1424,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	return pci_register_driver(&nvme_driver);
  }
-@@ -3487,6 +4095,9 @@ static void __exit nvme_exit(void)
+@@ -3487,6 +4115,9 @@ static void __exit nvme_exit(void)
  
  MODULE_AUTHOR("Matthew Wilcox <willy@linux.intel.com>");
  MODULE_LICENSE("GPL");

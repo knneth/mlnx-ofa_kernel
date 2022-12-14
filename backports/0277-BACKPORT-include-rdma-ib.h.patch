@@ -1,0 +1,30 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib.h
+
+---
+ include/rdma/ib.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/include/rdma/ib.h
++++ b/include/rdma/ib.h
+@@ -6,6 +6,8 @@
+ #ifndef _RDMA_IB_H
+ #define _RDMA_IB_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/types.h>
+ #include <linux/sched.h>
+ #include <linux/cred.h>
+@@ -75,7 +77,11 @@ struct sockaddr_ib {
+  */
+ static inline bool ib_safe_file_access(struct file *filp)
+ {
++#ifdef HAVE_GET_RINGPARAM_GET_4_PARAMS
++	return filp->f_cred == current_cred();
++#else
+ 	return filp->f_cred == current_cred() && !uaccess_kernel();
++#endif
+ }
+ 
+ #endif /* _RDMA_IB_H */

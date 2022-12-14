@@ -3,12 +3,26 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 
 Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 62 ++++++++++++++++++++
- 1 file changed, 62 insertions(+)
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 76 +++++++++++++++++++-
+ 1 file changed, 75 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
-@@ -100,7 +100,11 @@ static int ipoib_set_ring_param(struct n
+@@ -59,7 +59,13 @@ static const struct ipoib_stats ipoib_gs
+ #define IPOIB_GLOBAL_STATS_LEN	ARRAY_SIZE(ipoib_gstrings_stats)
+ 
+ static int ipoib_set_ring_param(struct net_device *dev,
++#ifdef HAVE_GET_RINGPARAM_GET_4_PARAMS
++				struct ethtool_ringparam *ringparam,
++				struct kernel_ethtool_ringparam *kernel_param,
++				struct netlink_ext_ack *extack)
++#else
+ 				struct ethtool_ringparam *ringparam)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	unsigned int new_recvq_size, new_sendq_size;
+@@ -100,7 +106,11 @@ static int ipoib_set_ring_param(struct n
  		priv_current_flags = priv->flags;
  		dev_current_flags = dev->flags;
  
@@ -20,7 +34,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  		priv->rn_ops->ndo_uninit(dev);
  
  		do {
-@@ -136,7 +140,11 @@ static int ipoib_set_ring_param(struct n
+@@ -136,14 +146,24 @@ static int ipoib_set_ring_param(struct n
  				dev->name, new_recvq_size, new_sendq_size);
  
  		if (dev_current_flags & IFF_UP)
@@ -32,7 +46,21 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  	}
  
  	return 0;
-@@ -171,7 +179,13 @@ static void ipoib_get_drvinfo(struct net
+ }
+ 
+ static void ipoib_get_ring_param(struct net_device *dev,
+-				 struct ethtool_ringparam *ringparam)
++#ifdef HAVE_GET_RINGPARAM_GET_4_PARAMS
++				 struct ethtool_ringparam *ringparam,
++				 struct kernel_ethtool_ringparam *kernel_param,
++				 struct netlink_ext_ack *extack)
++#else
++				struct ethtool_ringparam *ringparam)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 
+@@ -171,7 +191,13 @@ static void ipoib_get_drvinfo(struct net
  }
  
  static int ipoib_get_coalesce(struct net_device *dev,
@@ -46,7 +74,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  
-@@ -182,7 +196,13 @@ static int ipoib_get_coalesce(struct net
+@@ -182,7 +208,13 @@ static int ipoib_get_coalesce(struct net
  }
  
  static int ipoib_set_coalesce(struct net_device *dev,
@@ -60,7 +88,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	int ret;
-@@ -208,6 +228,39 @@ static int ipoib_set_coalesce(struct net
+@@ -208,6 +240,39 @@ static int ipoib_set_coalesce(struct net
  
  	return 0;
  }
@@ -100,7 +128,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  static void ipoib_get_ethtool_stats(struct net_device *dev,
  				    struct ethtool_stats __always_unused *stats,
  				    u64 *data)
-@@ -274,6 +327,7 @@ static inline int ib_speed_enum_to_int(i
+@@ -274,6 +339,7 @@ static inline int ib_speed_enum_to_int(i
  	return SPEED_UNKNOWN;
  }
  
@@ -108,7 +136,7 @@ Change-Id: I104675ec38dd48e958bde8e9555f491f6a0b9a84
  static int ipoib_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *cmd)
  {
-@@ -311,14 +365,22 @@ static int ipoib_get_link_ksettings(stru
+@@ -311,14 +377,22 @@ static int ipoib_get_link_ksettings(stru
  
  	return 0;
  }

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
 
 Change-Id: I3f85b1f8ce8ed7727c3f2a2477fc9fb8743561e3
 ---
- drivers/nvme/target/nvmet.h | 23 +++++++++++++++++++++++
- 1 file changed, 23 insertions(+)
+ drivers/nvme/target/nvmet.h | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
 
 --- a/drivers/nvme/target/nvmet.h
 +++ b/drivers/nvme/target/nvmet.h
@@ -85,3 +85,15 @@ Change-Id: I3f85b1f8ce8ed7727c3f2a2477fc9fb8743561e3
  void nvmet_ns_revalidate(struct nvmet_ns *ns);
  
  static inline u32 nvmet_rw_data_len(struct nvmet_req *req)
+@@ -677,6 +700,11 @@ static inline __le16 to0based(u32 a)
+ 	return cpu_to_le16(max(1U, min(1U << 16, a)) - 1);
+ }
+ 
++static inline sector_t nvmet_lba_to_sect(struct nvmet_ns *ns, __le64 lba)
++{
++	return le64_to_cpu(lba) << (ns->blksize_shift - SECTOR_SHIFT);
++}
++
+ static inline bool nvmet_ns_has_pi(struct nvmet_ns *ns)
+ {
+ 	if (!IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY))
