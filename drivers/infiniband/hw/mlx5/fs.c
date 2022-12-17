@@ -1808,7 +1808,8 @@ static int get_dests(struct uverbs_attr_bundle *attrs,
 	*flags = 0;
 	err = uverbs_get_flags32(flags, attrs, MLX5_IB_ATTR_CREATE_FLOW_FLAGS,
 				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DEFAULT_MISS |
-					 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP);
+				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP |
+				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DONT_TRAP);
 	if (err)
 		return err;
 
@@ -1936,6 +1937,9 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_CREATE_FLOW)(
 
 	if (flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP)
 		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_DROP;
+
+	if (flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DONT_TRAP)
+		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO;
 
 	len = uverbs_attr_get_uobjs_arr(attrs,
 		MLX5_IB_ATTR_CREATE_FLOW_ARR_COUNTERS_DEVX, &arr_flow_actions);
