@@ -1805,7 +1805,9 @@ static int get_dests(struct uverbs_attr_bundle *attrs,
 	*flags = 0;
 	err = uverbs_get_flags32(flags, attrs, MLX5_IB_ATTR_CREATE_FLOW_FLAGS,
 				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DEFAULT_MISS |
-					 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP);
+				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP |
+				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DONT_TRAP |
+				 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_REPARSE);
 	if (err)
 		return err;
 
@@ -1815,10 +1817,14 @@ static int get_dests(struct uverbs_attr_bundle *attrs,
 		return -EINVAL;
 
 	if (fs_matcher->ns_type == MLX5_FLOW_NAMESPACE_BYPASS) {
-		if (dest_devx && (dest_qp || *flags))
+		// Default/drop actions are mutually exclusive with any other action except counter
+		if (dest_devx && (dest_qp || (*flags & (MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DEFAULT_MISS |
+							MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP)))) {
 			return -EINVAL;
-		else if (dest_qp && *flags)
+		} else if (dest_qp && (*flags & (MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DEFAULT_MISS |
+						 MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP))) {
 			return -EINVAL;
+		}
 	}
 
 	/* Allow only DEVX object, drop as dest for FDB */
@@ -1933,6 +1939,12 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_CREATE_FLOW)(
 
 	if (flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP)
 		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_DROP;
+
+	if (flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DONT_TRAP)
+		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO;
+
+	if (flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_REPARSE)
+		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_REPARSE;
 
 	len = uverbs_attr_get_uobjs_arr(attrs,
 		MLX5_IB_ATTR_CREATE_FLOW_ARR_COUNTERS_DEVX, &arr_flow_actions);
