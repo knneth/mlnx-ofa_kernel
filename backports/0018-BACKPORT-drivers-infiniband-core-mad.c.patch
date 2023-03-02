@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
 
-Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
+Change-Id: Idba40cfe932199f192cc5ec6981be2aeadff5913
 ---
- drivers/infiniband/core/mad.c | 134 ++++++++++++++++++++++++++++------
- 1 file changed, 112 insertions(+), 22 deletions(-)
+ drivers/infiniband/core/mad.c | 132 ++++++++++++++++++++++++++++------
+ 1 file changed, 110 insertions(+), 22 deletions(-)
 
 --- a/drivers/infiniband/core/mad.c
 +++ b/drivers/infiniband/core/mad.c
@@ -25,9 +25,9 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
 +			  struct ftrace_raw_ib_mad_send_template *entry)
 +#endif
  {
- 	u16 pkey;
- 	struct ib_device *dev = qp_info->port_priv->device;
-@@ -80,6 +85,7 @@ static void create_mad_addr_info(struct
+ 	struct ib_ud_wr *wr = &mad_send_wr->send_wr;
+ 	struct rdma_ah_attr attr = {};
+@@ -75,6 +80,7 @@ static void create_mad_addr_info(struct
  	entry->dlid = rdma_ah_get_dlid(&attr);
  }
  #endif
@@ -35,7 +35,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  
  static int mad_sendq_size = IB_MAD_QP_SEND_SIZE;
  static int mad_recvq_size = IB_MAD_QP_RECV_SIZE;
-@@ -151,12 +157,19 @@ static int send_sa_cc_mad(struct ib_mad_
+@@ -146,12 +152,19 @@ static int send_sa_cc_mad(struct ib_mad_
  /*
   * Timeout FIFO functions - implements FIFO with timeout mechanism
   */
@@ -56,7 +56,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	del_timer(&tf->timer);
  	queue_work(tf->workq, &tf->work);
  }
-@@ -264,8 +277,16 @@ static struct to_fifo *tf_create(void)
+@@ -259,8 +272,16 @@ static struct to_fifo *tf_create(void)
  		spin_lock_init(&tf->lists_lock);
  		INIT_LIST_HEAD(&tf->to_head);
  		INIT_LIST_HEAD(&tf->fifo_head);
@@ -73,11 +73,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		tf->timer.expires = jiffies;
  		tf->stop_enqueue = 0;
  		tf->num_items = 0;
-@@ -812,30 +833,46 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -807,30 +828,46 @@ struct ib_mad_agent *ib_register_mad_age
  	/* Validate parameters */
  	qpn = get_spl_qp_index(qp_type);
  	if (qpn == -1) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  		dev_dbg_ratelimited(&device->dev, "%s: invalid QP Type %d\n",
  				    __func__, qp_type);
 +#else
@@ -87,7 +87,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	}
  
  	if (rmpp_version && rmpp_version != IB_MGMT_RMPP_VERSION) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  		dev_dbg_ratelimited(&device->dev,
  				    "%s: invalid RMPP Version %u\n",
  				    __func__, rmpp_version);
@@ -100,7 +100,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	/* Validate MAD registration request if supplied */
  	if (mad_reg_req) {
  		if (mad_reg_req->mgmt_class_version >= MAX_MGMT_VERSION) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  			dev_dbg_ratelimited(&device->dev,
  					    "%s: invalid Class Version %u\n",
  					    __func__,
@@ -111,7 +111,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  			goto error1;
  		}
  		if (!recv_handler) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  			dev_dbg_ratelimited(&device->dev,
  					    "%s: no recv_handler\n", __func__);
 +#else
@@ -120,11 +120,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  			goto error1;
  		}
  		if (mad_reg_req->mgmt_class >= MAX_MGMT_CLASS) {
-@@ -845,9 +882,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -840,9 +877,13 @@ struct ib_mad_agent *ib_register_mad_age
  			 */
  			if (mad_reg_req->mgmt_class !=
  			    IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  				dev_dbg_ratelimited(&device->dev,
  					"%s: Invalid Mgmt Class 0x%x\n",
  					__func__, mad_reg_req->mgmt_class);
@@ -134,11 +134,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  				goto error1;
  			}
  		} else if (mad_reg_req->mgmt_class == 0) {
-@@ -855,9 +896,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -850,9 +891,13 @@ struct ib_mad_agent *ib_register_mad_age
  			 * Class 0 is reserved in IBA and is used for
  			 * aliasing of IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE
  			 */
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  			dev_dbg_ratelimited(&device->dev,
  					    "%s: Invalid Mgmt Class 0\n",
  					    __func__);
@@ -148,11 +148,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  			goto error1;
  		} else if (is_vendor_class(mad_reg_req->mgmt_class)) {
  			/*
-@@ -865,19 +910,27 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -860,19 +905,27 @@ struct ib_mad_agent *ib_register_mad_age
  			 * ensure supplied OUI is not zero
  			 */
  			if (!is_vendor_oui(mad_reg_req->oui)) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  				dev_dbg_ratelimited(&device->dev,
  					"%s: No OUI specified for class 0x%x\n",
  					__func__,
@@ -166,7 +166,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		/* Make sure class supplied is consistent with RMPP */
  		if (!ib_is_mad_class_rmpp(mad_reg_req->mgmt_class)) {
  			if (rmpp_version) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  				dev_dbg_ratelimited(&device->dev,
  					"%s: RMPP version for non-RMPP class 0x%x\n",
  					__func__, mad_reg_req->mgmt_class);
@@ -176,11 +176,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  				goto error1;
  			}
  		}
-@@ -888,9 +941,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -883,9 +936,13 @@ struct ib_mad_agent *ib_register_mad_age
  					IB_MGMT_CLASS_SUBN_LID_ROUTED) &&
  			    (mad_reg_req->mgmt_class !=
  					IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE)) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  				dev_dbg_ratelimited(&device->dev,
  					"%s: Invalid SM QP type: class 0x%x\n",
  					__func__, mad_reg_req->mgmt_class);
@@ -190,11 +190,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  				goto error1;
  			}
  		} else {
-@@ -898,9 +955,13 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -893,9 +950,13 @@ struct ib_mad_agent *ib_register_mad_age
  					IB_MGMT_CLASS_SUBN_LID_ROUTED) ||
  			    (mad_reg_req->mgmt_class ==
  					IB_MGMT_CLASS_SUBN_DIRECTED_ROUTE)) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  				dev_dbg_ratelimited(&device->dev,
  					"%s: Invalid GS QP type: class 0x%x\n",
  					__func__, mad_reg_req->mgmt_class);
@@ -204,11 +204,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  				goto error1;
  			}
  		}
-@@ -915,8 +976,12 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -910,8 +971,12 @@ struct ib_mad_agent *ib_register_mad_age
  	/* Validate device and port */
  	port_priv = ib_get_mad_port(device, port_num);
  	if (!port_priv) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  		dev_dbg_ratelimited(&device->dev, "%s: Invalid port %u\n",
  				    __func__, port_num);
 +#else
@@ -217,11 +217,11 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		ret = ERR_PTR(-ENODEV);
  		goto error1;
  	}
-@@ -925,8 +990,12 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -920,8 +985,12 @@ struct ib_mad_agent *ib_register_mad_age
  	 * will not have QP0.
  	 */
  	if (!port_priv->qp_info[qpn].qp) {
-+#ifdef RATELIMIT_STATE_INIT 		
++#ifdef RATELIMIT_STATE_INIT
  		dev_dbg_ratelimited(&device->dev, "%s: QP %d not supported\n",
  				    __func__, qpn);
 +#else
@@ -230,7 +230,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		ret = ERR_PTR(-EPROTONOSUPPORT);
  		goto error1;
  	}
-@@ -973,7 +1042,6 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -968,7 +1037,6 @@ struct ib_mad_agent *ib_register_mad_age
  		ret = ERR_PTR(ret2);
  		goto error4;
  	}
@@ -238,7 +238,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	/*
  	 * The mlx4 driver uses the top byte to distinguish which virtual
  	 * function generated the MAD, so we must avoid using it.
-@@ -990,6 +1058,7 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -985,6 +1053,7 @@ struct ib_mad_agent *ib_register_mad_age
  	 * Make sure MAD registration (if supplied)
  	 * is non overlapping with any existing ones
  	 */
@@ -246,7 +246,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	spin_lock_irq(&port_priv->reg_lock);
  	if (mad_reg_req) {
  		mgmt_class = convert_mgmt_class(mad_reg_req->mgmt_class);
-@@ -1017,19 +1086,20 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -1012,19 +1081,20 @@ struct ib_mad_agent *ib_register_mad_age
  					if (is_vendor_method_in_use(
  							vendor_class,
  							mad_reg_req))
@@ -270,7 +270,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	return &mad_agent_priv->agent;
  error6:
  	spin_unlock_irq(&port_priv->reg_lock);
-@@ -1054,10 +1124,10 @@ static inline void deref_mad_agent(struc
+@@ -1049,10 +1119,10 @@ static inline void deref_mad_agent(struc
  static void unregister_mad_agent(struct ib_mad_agent_private *mad_agent_priv)
  {
  	struct ib_mad_port_private *port_priv;
@@ -283,7 +283,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	/*
  	 * Canceling all sends results in dropping received response
  	 * MADs, preventing us from queuing additional work
-@@ -1296,9 +1366,9 @@ static int handle_outgoing_dr_smp(struct
+@@ -1291,9 +1361,9 @@ static int handle_outgoing_dr_smp(struct
  	 */
  	if (opa && smp->class_version == OPA_SM_CLASS_VERSION) {
  		u32 opa_drslid;
@@ -295,7 +295,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		if ((opa_get_smp_direction(opa_smp)
  		     ? opa_smp->route.dr.dr_dlid : opa_smp->route.dr.dr_slid) ==
  		     OPA_LID_PERMISSIVE &&
-@@ -1324,8 +1394,9 @@ static int handle_outgoing_dr_smp(struct
+@@ -1319,8 +1389,9 @@ static int handle_outgoing_dr_smp(struct
  		    opa_smi_check_local_returning_smp(opa_smp, device) == IB_SMI_DISCARD)
  			goto out;
  	} else {
@@ -306,7 +306,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		if ((ib_get_smp_direction(smp) ? smp->dr_dlid : smp->dr_slid) ==
  		     IB_LID_PERMISSIVE &&
  		     smi_handle_dr_smp_send(smp, rdma_cap_ib_switch(device), port_num) ==
-@@ -1714,7 +1785,9 @@ int ib_send_mad(struct ib_mad_send_wr_pr
+@@ -1709,7 +1780,9 @@ int ib_send_mad(struct ib_mad_send_wr_pr
  		}
  	}
  	if (qp_info->send_queue.count < qp_info->send_queue.max_active) {
@@ -316,7 +316,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		ret = ib_post_send(mad_agent->qp, &mad_send_wr->send_wr.wr,
  				   NULL);
  		list = &qp_info->send_queue.list;
-@@ -2340,7 +2413,6 @@ out:
+@@ -2335,7 +2408,6 @@ out:
  		deref_mad_agent(mad_agent);
  		mad_agent = NULL;
  	}
@@ -324,7 +324,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	return mad_agent;
  }
  
-@@ -2595,9 +2667,9 @@ static enum smi_action handle_ib_smi(con
+@@ -2590,9 +2662,9 @@ static enum smi_action handle_ib_smi(con
  {
  	enum smi_forward_action retsmi;
  	struct ib_smp *smp = (struct ib_smp *)recv->mad;
@@ -336,7 +336,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	if (smi_handle_dr_smp_recv(smp,
  				   rdma_cap_ib_switch(port_priv->device),
  				   port_num,
-@@ -2682,9 +2754,9 @@ handle_opa_smi(struct ib_mad_port_privat
+@@ -2677,9 +2749,9 @@ handle_opa_smi(struct ib_mad_port_privat
  {
  	enum smi_forward_action retsmi;
  	struct opa_smp *smp = (struct opa_smp *)recv->mad;
@@ -348,7 +348,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	if (opa_smi_handle_dr_smp_recv(smp,
  				   rdma_cap_ib_switch(port_priv->device),
  				   port_num,
-@@ -2805,10 +2877,10 @@ static void ib_mad_recv_done(struct ib_c
+@@ -2800,10 +2872,10 @@ static void ib_mad_recv_done(struct ib_c
  	/* Validate MAD */
  	if (!validate_mad((const struct ib_mad_hdr *)recv->mad, qp_info, opa))
  		goto out;
@@ -361,7 +361,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  	mad_size = recv->mad_size;
  	response = alloc_mad_private(mad_size, GFP_KERNEL);
  	if (!response)
-@@ -2855,7 +2927,9 @@ static void ib_mad_recv_done(struct ib_c
+@@ -2850,7 +2922,9 @@ static void ib_mad_recv_done(struct ib_c
  
  	mad_agent = find_mad_agent(port_priv, (const struct ib_mad_hdr *)recv->mad);
  	if (mad_agent) {
@@ -371,7 +371,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		ib_mad_complete_recv(mad_agent, &recv->header.recv_wc);
  		/*
  		 * recv is freed up in error cases in ib_mad_complete_recv
-@@ -3025,10 +3099,10 @@ static void ib_mad_send_done(struct ib_c
+@@ -3020,10 +3094,10 @@ static void ib_mad_send_done(struct ib_c
  				   mad_list);
  	send_queue = mad_list->mad_queue;
  	qp_info = send_queue->qp_info;
@@ -384,7 +384,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  retry:
  	ib_dma_unmap_single(mad_send_wr->send_buf.mad_agent->device,
  			    mad_send_wr->header_mapping,
-@@ -3057,7 +3131,9 @@ retry:
+@@ -3052,7 +3126,9 @@ retry:
  	ib_mad_complete_send_wr(mad_send_wr, &mad_send_wc);
  
  	if (queued_send_wr) {
@@ -394,7 +394,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  		ret = ib_post_send(qp_info->qp, &queued_send_wr->send_wr.wr,
  				   NULL);
  		if (ret) {
-@@ -3105,7 +3181,9 @@ static bool ib_mad_send_error(struct ib_
+@@ -3100,7 +3176,9 @@ static bool ib_mad_send_error(struct ib_
  		if (mad_send_wr->retry) {
  			/* Repost send */
  			mad_send_wr->retry = 0;
@@ -404,7 +404,7 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  			ret = ib_post_send(qp_info->qp, &mad_send_wr->send_wr.wr,
  					   NULL);
  			if (!ret)
-@@ -4040,10 +4118,14 @@ static ssize_t sa_cc_attr_show(struct ko
+@@ -4035,10 +4113,14 @@ static ssize_t sa_cc_attr_show(struct ko
  	return sa->show(cc_obj, buf);
  }
  
@@ -422,24 +422,21 @@ Change-Id: Iee59cdcd26b190f6e365f004acd5eb430bbbf318
  
  #define SA_CC_ATTR(_name) struct sa_cc_attribute sa_cc_attr_##_name = \
  	__ATTR(_name, 0644, _name##_show, _name##_store)
-@@ -4060,12 +4142,20 @@ static struct attribute *sa_cc_default_a
- 	&sa_cc_attr_drops.attr,
+@@ -4056,11 +4138,17 @@ static struct attribute *sa_cc_default_a
  	NULL
  };
+ 
 +#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
-+ATTRIBUTE_GROUPS(sa_cc_default);
+ ATTRIBUTE_GROUPS(sa_cc_default);
 +#endif
  
  static struct kobj_type sa_cc_type = {
  	.sysfs_ops = &sa_cc_sysfs_ops,
 +#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
-+	.default_groups = sa_cc_default_groups
+ 	.default_groups = sa_cc_default_groups
 +#else
- 	.default_attrs = sa_cc_default_attrs
++	.default_attrs = sa_cc_default_attrs
 +#endif
  };
  
-+
  static void cleanup_sa_cc_sysfs_ports(struct sa_cc_data *cc_obj)
- {
- 	kobject_put(&cc_obj->kobj);

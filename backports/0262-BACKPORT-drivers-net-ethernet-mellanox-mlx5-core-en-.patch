@@ -1,0 +1,72 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c
+
+Change-Id: I6a2e57475ee10387ddd59366662b88c45f295cfe
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c
+@@ -29,10 +29,12 @@ mlx5_rep_destroy_miss_meter(struct mlx5_
+ 		meter->meter_rule = NULL;
+ 	}
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	if (meter->meter_hndl) {
+ 		mlx5e_free_flow_meter(meter->meter_hndl);
+ 		meter->meter_hndl = NULL;
+ 	}
++#endif
+ }
+ 
+ static int mlx5_rep_create_miss_meter_rules(struct mlx5_core_dev *dev,
+@@ -128,7 +130,9 @@ mlx5_rep_set_miss_meter(struct mlx5_core
+ 			u16 vport, u64 rate, u64 burst)
+ {
+ 	struct rep_meter *meter = &rep_priv->rep_meter;
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	struct mlx5e_flow_meter_handle *meter_hndl;
++#endif
+ 	struct mlx5e_flow_meter_params params;
+ 	int err;
+ 
+@@ -140,19 +144,23 @@ mlx5_rep_set_miss_meter(struct mlx5_core
+ 		goto update;
+ 	}
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	if (!meter->meter_hndl) {
+ 		meter_hndl = mlx5e_alloc_flow_meter(dev);
+ 		if (IS_ERR(meter_hndl))
+ 			return PTR_ERR(meter_hndl);
+ 		meter->meter_hndl = meter_hndl;
+ 	}
++#endif
+ 
+ 	params.mode = MLX5_RATE_LIMIT_PPS;
+ 	params.rate = rate;
+ 	params.burst = burst;
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	err = mlx5e_tc_meter_modify(dev, meter->meter_hndl, &params);
+ 	if (err)
+ 		goto check_and_free_meter_aso;
++#endif
+ 
+ 	if (!meter->meter_rule) {
+ 		err = mlx5_rep_create_miss_meter_rules(dev, rep_priv, vport);
+@@ -166,11 +174,13 @@ update:
+ 
+ 	return 0;
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ check_and_free_meter_aso:
+ 	if (!meter->meter_rule) {
+ 		mlx5e_free_flow_meter(meter->meter_hndl);
+ 		meter->meter_hndl = NULL;
+ 	}
++#endif
+ 	return err;
+ }
+ 

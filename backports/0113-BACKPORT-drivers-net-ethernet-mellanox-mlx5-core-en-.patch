@@ -1,98 +1,113 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.c
 
-Change-Id: I9d7c3152268794515b9e240f96b4323bbc631357
+Change-Id: Iab65ca94e312ee61c41a4c0d69ebfcf4dff4a0d1
 ---
- .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 25 ++++++++++++++++++-
- 1 file changed, 24 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en/tc/act/act.c        | 39 +++++++++++++++++++
+ 1 file changed, 39 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
- 
-+#ifdef HAVE_TCF_TUNNEL_INFO
-+
- #include <net/vxlan.h>
- #include "lib/vxlan.h"
- #include "en/tc_tun.h"
-@@ -17,9 +19,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
- 
- static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
- 					      struct flow_cls_offload *f)
-+
- {
- 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
--	struct netlink_ext_ack *extack = f->common.extack;
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
-+       struct netlink_ext_ack *extack = f->common.extack;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.c
+@@ -14,8 +14,10 @@ static struct mlx5e_tc_act *tc_acts_fdb[
+ 	&mlx5e_tc_act_goto,
+ 	&mlx5e_tc_act_mirred,
+ 	&mlx5e_tc_act_mirred,
++#ifdef HAVE_FLOW_ACTION_REDIRECT_INGRESS
+ 	&mlx5e_tc_act_redirect_ingress,
+ 	NULL, /* FLOW_ACTION_MIRRED_INGRESS, */
 +#endif
- 	struct flow_match_ports enc_ports;
- 
- 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS))
-@@ -31,8 +36,10 @@ static int mlx5e_tc_tun_check_udp_dport_
- 
- 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan,
- 				    be16_to_cpu(enc_ports.key->dst))) {
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 		NL_SET_ERR_MSG_MOD(extack,
- 				   "Matched UDP dst port is not registered as a VXLAN port");
+ 	&mlx5e_tc_act_vlan,
+ 	&mlx5e_tc_act_vlan,
+ 	&mlx5e_tc_act_vlan_mangle,
+@@ -25,23 +27,41 @@ static struct mlx5e_tc_act *tc_acts_fdb[
+ 	&mlx5e_tc_act_pedit,
+ 	&mlx5e_tc_act_csum,
+ 	NULL, /* FLOW_ACTION_MARK, */
++#ifdef HAVE_FLOW_ACTION_PTYPE
+ 	&mlx5e_tc_act_ptype,
 +#endif
- 		netdev_warn(priv->netdev,
- 			    "UDP port %d is not registered as a VXLAN port\n",
- 			    be16_to_cpu(enc_ports.key->dst));
-@@ -67,8 +74,10 @@ static int mlx5e_tc_tun_init_encap_attr_
- 	e->tunnel = &vxlan_tunnel;
- 
- 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 		NL_SET_ERR_MSG_MOD(extack,
- 				   "vxlan udp dport was not registered with the HW");
++#ifdef HAVE_FLOW_ACTION_PRIORITY
+ 	NULL, /* FLOW_ACTION_PRIORITY, */
 +#endif
- 		netdev_warn(priv->netdev,
- 			    "%d isn't an offloaded vxlan udp dport\n",
- 			    dst_port);
-@@ -105,7 +114,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
- 				    void *headers_v)
- {
- 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 	struct netlink_ext_ack *extack = f->common.extack;
+ 	NULL, /* FLOW_ACTION_WAKE, */
+ 	NULL, /* FLOW_ACTION_QUEUE, */
+ 	&mlx5e_tc_act_sample,
+ 	&mlx5e_tc_act_police,
++#ifdef HAVE_FLOW_ACTION_CT
+ 	&mlx5e_tc_act_ct,
 +#endif
- 	struct flow_match_enc_keyid enc_keyid;
- 	void *misc_c, *misc_v;
- 
-@@ -124,8 +135,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
- 
- 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
- 					ft_field_support.outer_vxlan_vni)) {
-+#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
- 		NL_SET_ERR_MSG_MOD(extack,
- 				   "Matching on VXLAN VNI is not supported");
++#ifdef HAVE_FLOW_ACTION_CT_METADATA
+ 	NULL, /* FLOW_ACTION_CT_METADATA, */
 +#endif
- 		netdev_warn(priv->netdev,
- 			    "Matching on VXLAN VNI is not supported\n");
- 		return -EOPNOTSUPP;
-@@ -145,6 +158,15 @@ static int mlx5e_tc_tun_get_remote_ifind
- {
- 	const struct vxlan_dev *vxlan = netdev_priv(mirred_dev);
- 	const struct vxlan_rdst *dst = &vxlan->default_dst;
-+	int i;
-+
-+	for (i = 0; i < 5; i++) {
-+		if ((int) dst->remote_ifindex >= 0)
-+			break;
-+		msleep(1);
-+	}
-+	if ((int) dst->remote_ifindex < 0)
-+		return 0;
- 
- 	return dst->remote_ifindex;
- }
-@@ -161,3 +183,4 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
- 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
- 	.get_remote_ifindex   = mlx5e_tc_tun_get_remote_ifindex,
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	&mlx5e_tc_act_mpls_push,
+ 	&mlx5e_tc_act_mpls_pop,
+ 	NULL, /* FLOW_ACTION_MPLS_MANGLE, */
++#endif
++#ifdef HAVE_FLOW_ACTION_GATE
+ 	NULL, /* FLOW_ACTION_GATE, */
++#endif
++#ifdef HAVE_FLOW_ACTION_PPPOE_PUSH
+ 	NULL, /* FLOW_ACTION_PPPOE_PUSH, */
++#endif
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	NULL, /* FLOW_ACTION_JUMP, */
+ 	NULL, /* FLOW_ACTION_PIPE, */
++#endif
++#ifdef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
+ 	&mlx5e_tc_act_vlan,
+ 	&mlx5e_tc_act_vlan,
++#endif
  };
-+#endif /* HAVE_TCF_TUNNEL_INFO */
+ 
+ /* Must be aligned with enum flow_action_id. */
+@@ -51,8 +71,10 @@ static struct mlx5e_tc_act *tc_acts_nic[
+ 	NULL, /* FLOW_ACTION_TRAP, */
+ 	&mlx5e_tc_act_goto,
+ 	&mlx5e_tc_act_mirred_nic,
++#ifdef HAVE_FLOW_ACTION_REDIRECT_INGRESS
+ 	NULL, /* FLOW_ACTION_MIRRED, */
+ 	NULL, /* FLOW_ACTION_REDIRECT_INGRESS, */
++#endif
+ 	NULL, /* FLOW_ACTION_MIRRED_INGRESS, */
+ 	NULL, /* FLOW_ACTION_VLAN_PUSH, */
+ 	NULL, /* FLOW_ACTION_VLAN_POP, */
+@@ -63,13 +85,19 @@ static struct mlx5e_tc_act *tc_acts_nic[
+ 	&mlx5e_tc_act_pedit,
+ 	&mlx5e_tc_act_csum,
+ 	&mlx5e_tc_act_mark,
++#ifdef HAVE_FLOW_ACTION_PTYPE
+ 	NULL, /* FLOW_ACTION_PTYPE, */
++#endif
++#ifdef HAVE_FLOW_ACTION_PRIORITY
+ 	&mlx5e_tc_act_prio,
++#endif
+ 	NULL, /* FLOW_ACTION_WAKE, */
+ 	NULL, /* FLOW_ACTION_QUEUE, */
+ 	NULL, /* FLOW_ACTION_SAMPLE, */
+ 	NULL, /* FLOW_ACTION_POLICE, */
++#ifdef HAVE_FLOW_ACTION_CT
+ 	&mlx5e_tc_act_ct,
++#endif
+ };
+ 
+ /**
+@@ -83,6 +111,17 @@ mlx5e_tc_act_get(enum flow_action_id act
+ {
+ 	struct mlx5e_tc_act **tc_acts;
+ 
++#if defined(HAVE_FLOW_ACTION_PRIORITY) && defined(HAVE_BASECODE_EXTRAS)
++	/* WA for BF kernel 5.4 where flow_action_id order is wrong, FLOW_ACTION_PRIORITY is
++	 * defined after FLOW_ACTION_MPLS_MANGLE
++	 */
++	if (FLOW_ACTION_PRIORITY > FLOW_ACTION_WAKE) {
++		if (act_id >= FLOW_ACTION_WAKE && act_id != FLOW_ACTION_PRIORITY)
++			act_id++;
++		else if (act_id == FLOW_ACTION_PRIORITY)
++			act_id = FLOW_ACTION_WAKE;
++	}
++#endif
+ 	tc_acts = ns_type == MLX5_FLOW_NAMESPACE_FDB ? tc_acts_fdb : tc_acts_nic;
+ 
+ 	return tc_acts[act_id];

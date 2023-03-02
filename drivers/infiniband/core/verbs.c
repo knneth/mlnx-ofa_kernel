@@ -151,8 +151,6 @@ __attribute_const__ int ib_rate_to_mult(enum ib_rate rate)
 	case IB_RATE_50_GBPS:  return  20;
 	case IB_RATE_400_GBPS: return 160;
 	case IB_RATE_600_GBPS: return 240;
-	case IB_RATE_800_GBPS: return 320;
-	case IB_RATE_1200_GBPS: return 480;
 	default:	       return  -1;
 	}
 }
@@ -182,8 +180,6 @@ __attribute_const__ enum ib_rate mult_to_ib_rate(int mult)
 	case 20:  return IB_RATE_50_GBPS;
 	case 160: return IB_RATE_400_GBPS;
 	case 240: return IB_RATE_600_GBPS;
-	case 320: return IB_RATE_800_GBPS;
-	case 480: return IB_RATE_1200_GBPS;
 	default:  return IB_RATE_PORT_CURRENT;
 	}
 }
@@ -213,8 +209,6 @@ __attribute_const__ int ib_rate_to_mbps(enum ib_rate rate)
 	case IB_RATE_50_GBPS:  return 53125;
 	case IB_RATE_400_GBPS: return 425000;
 	case IB_RATE_600_GBPS: return 637500;
-	case IB_RATE_800_GBPS: return 850000;
-	case IB_RATE_1200_GBPS: return 1275000;
 	default:	       return -1;
 	}
 }
@@ -267,7 +261,7 @@ EXPORT_SYMBOL(rdma_port_get_link_layer);
  * memory operations.
  */
 struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
-			    const char *caller, bool skip_tracking)
+		const char *caller)
 {
 	struct ib_pd *pd;
 	int mr_access_flags = 0;
@@ -289,13 +283,9 @@ struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
 		kfree(pd);
 		return ERR_PTR(ret);
 	}
-	
-	if (skip_tracking)
-		rdma_restrack_dontrack(&pd->res);
-	else
-		rdma_restrack_add(&pd->res);
+	rdma_restrack_add(&pd->res);
 
-	if (device->attrs.device_cap_flags & IB_DEVICE_LOCAL_DMA_LKEY)
+	if (device->attrs.kernel_cap_flags & IBK_LOCAL_DMA_LKEY)
 		pd->local_dma_lkey = device->local_dma_lkey;
 	else
 		mr_access_flags |= IB_ACCESS_LOCAL_WRITE;
@@ -322,7 +312,7 @@ struct ib_pd *__ib_alloc_pd(struct ib_device *device, unsigned int flags,
 
 		pd->__internal_mr = mr;
 
-		if (!(device->attrs.device_cap_flags & IB_DEVICE_LOCAL_DMA_LKEY))
+		if (!(device->attrs.kernel_cap_flags & IBK_LOCAL_DMA_LKEY))
 			pd->local_dma_lkey = pd->__internal_mr->lkey;
 
 		if (flags & IB_PD_UNSAFE_GLOBAL_RKEY)
@@ -2161,8 +2151,8 @@ struct ib_mr *ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	struct ib_mr *mr;
 
 	if (access_flags & IB_ACCESS_ON_DEMAND) {
-		if (!(pd->device->attrs.device_cap_flags &
-		      IB_DEVICE_ON_DEMAND_PAGING)) {
+		if (!(pd->device->attrs.kernel_cap_flags &
+		      IBK_ON_DEMAND_PAGING)) {
 			pr_debug("ODP support not available\n");
 			return ERR_PTR(-EINVAL);
 		}
@@ -2179,6 +2169,8 @@ struct ib_mr *ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	mr->pd = pd;
 	mr->dm = NULL;
 	atomic_inc(&pd->usecnt);
+	mr->iova =  virt_addr;
+	mr->length = length;
 
 	rdma_restrack_new(&mr->res, RDMA_RESTRACK_MR);
 	rdma_restrack_parent_name(&mr->res, &pd->res);

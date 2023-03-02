@@ -88,9 +88,6 @@ void mlx5e_tir_builder_build_packet_merge(struct mlx5e_tir_builder *builder,
 			 (MLX5E_PARAMS_DEFAULT_LRO_WQE_SZ - rough_max_l2_l3_hdr_sz) >> 8);
 		MLX5_SET(tirc, tirc, lro_timeout_period_usecs, pkt_merge_param->timeout);
 		break;
-	case MLX5E_PACKET_MERGE_SHAMPO:
-		MLX5_SET(tirc, tirc, packet_merge_mask, MLX5_TIRC_PACKET_MERGE_MASK_SHAMPO);
-		break;
 	default:
 		break;
 	}
@@ -198,7 +195,6 @@ void mlx5e_tir_destroy(struct mlx5e_tir *tir)
 	}
 
 	mlx5_core_destroy_tir(tir->mdev, tir->tirn);
-	tir->tirn = 0;
 }
 
 int mlx5e_tir_modify(struct mlx5e_tir *tir, struct mlx5e_tir_builder *builder)

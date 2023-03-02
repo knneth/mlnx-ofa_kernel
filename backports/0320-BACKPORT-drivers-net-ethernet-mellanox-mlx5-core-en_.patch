@@ -1,0 +1,33 @@
+From: Aya Levin <ayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+
+Change-Id: I9140763bd63621a5d66ab4a7db6d1777da535fdc
+---
+ .../mellanox/mlx5/core/en_accel/ktls_utils.h         | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+@@ -19,9 +19,21 @@ enum {
+ 	MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_SEARCHING = 2,
+ };
+ 
++#ifdef HAVE_KTLS_STRUCTS
+ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx);
++#else
++static inline int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
++				    struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
++{
++}
++#endif
+ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);

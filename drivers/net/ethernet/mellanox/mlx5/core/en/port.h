@@ -42,8 +42,6 @@ struct mlx5e_port_eth_proto {
 	u32 oper;
 };
 
-int mlx5_query_port_status(struct mlx5_core_dev *mdev, u32 *status_opcode,
-			   u16 *monitor_opcode, char *status_message);
 int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
 			      struct mlx5e_port_eth_proto *eproto);
 void mlx5_port_query_eth_autoneg(struct mlx5_core_dev *dev, u8 *an_status,
@@ -59,6 +57,12 @@ u32 mlx5e_port_speed2linkmodes(struct mlx5_core_dev *mdev, u32 speed,
 bool mlx5e_ptys_ext_supported(struct mlx5_core_dev *mdev);
 int mlx5e_port_query_pbmc(struct mlx5_core_dev *mdev, void *out);
 int mlx5e_port_set_pbmc(struct mlx5_core_dev *mdev, void *in);
+int mlx5e_port_query_sbpr(struct mlx5_core_dev *mdev, u32 desc, u8 dir,
+			  u8 pool_idx, void *out, int size_out);
+int mlx5e_port_set_sbpr(struct mlx5_core_dev *mdev, u32 desc, u8 dir,
+			u8 pool_idx, u32 infi_size, u32 size);
+int mlx5e_port_set_sbcm(struct mlx5_core_dev *mdev, u32 desc, u8 pg_buff_idx,
+			u8 dir, u8 infi_size, u32 max_buff, u8 pool_idx);
 int mlx5e_port_query_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer);
 int mlx5e_port_set_priority2buffer(struct mlx5_core_dev *mdev, u8 *buffer);
 

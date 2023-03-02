@@ -1,0 +1,44 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
+
+Change-Id: I1d76449a83ac30151fdb45a751046e96a1846d0a
+---
+ drivers/nvme/host/zns.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/nvme/host/zns.c
++++ b/drivers/nvme/host/zns.c
+@@ -3,6 +3,8 @@
+  * Copyright (C) 2020 Western Digital Corporation or its affiliates.
+  */
+ 
++#ifdef HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES
++
+ #include <linux/blkdev.h>
+ #include <linux/vmalloc.h>
+ #include "nvme.h"
+@@ -109,10 +111,19 @@ int nvme_update_zone_info(struct nvme_ns
+ 		goto free_data;
+ 	}
+ 
++#ifdef HAVE_DISK_SET_ZONED
+ 	disk_set_zoned(ns->disk, BLK_ZONED_HM);
++#else
++	blk_queue_set_zoned(ns->disk, BLK_ZONED_HM);
++#endif
+ 	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, q);
++#ifdef HAVE_DISK_SET_ZONED
+ 	disk_set_max_open_zones(ns->disk, le32_to_cpu(id->mor) + 1);
+ 	disk_set_max_active_zones(ns->disk, le32_to_cpu(id->mar) + 1);
++#else
++	blk_queue_max_open_zones(q, le32_to_cpu(id->mor) + 1);
++	blk_queue_max_active_zones(q, le32_to_cpu(id->mar) + 1);
++#endif
+ free_data:
+ 	kfree(id);
+ 	return status;
+@@ -248,3 +259,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
+ 
+ 	return BLK_STS_OK;
+ }
++#endif /* HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES */

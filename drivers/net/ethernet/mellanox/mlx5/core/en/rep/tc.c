@@ -762,7 +762,6 @@ static bool mlx5e_restore_skb_chain(struct sk_buff *skb, u32 chain, u32 reg_c1,
 				    struct mlx5e_tc_update_priv *tc_priv)
 {
 	struct mlx5e_priv *priv = netdev_priv(skb->dev);
-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	u32 tunnel_id = (reg_c1 >> ESW_TUN_OFFSET) & TUNNEL_ID_MASK;
 
 #if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
@@ -770,28 +769,26 @@ static bool mlx5e_restore_skb_chain(struct sk_buff *skb, u32 chain, u32 reg_c1,
 		struct mlx5_rep_uplink_priv *uplink_priv;
 		struct mlx5e_rep_priv *uplink_rpriv;
 		struct tc_skb_ext *tc_skb_ext;
+		struct mlx5_eswitch *esw;
 		u32 zone_restore_id;
 
 		tc_skb_ext = tc_skb_ext_alloc(skb);
 		if (!tc_skb_ext) {
 			WARN_ON(1);
-			goto out_incr_rx_counter;
+			return false;
 		}
 		tc_skb_ext->chain = chain;
 		zone_restore_id = reg_c1 & ESW_ZONE_ID_MASK;
+		esw = priv->mdev->priv.eswitch;
 		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
 		uplink_priv = &uplink_rpriv->uplink_priv;
 		if (!mlx5e_tc_ct_restore_flow(uplink_priv->ct_priv, skb,
 					      zone_restore_id))
-			goto out_incr_rx_counter;
+			return false;
 	}
 #endif /* CONFIG_NET_TC_SKB_EXT */
+
 	return mlx5e_restore_tunnel(priv, skb, tc_priv, tunnel_id);
-
-out_incr_rx_counter:
-	atomic_inc(&esw->dev->priv.ct_debugfs->stats.rx_dropped);
-
-	return false;
 }
 
 static void mlx5_rep_tc_post_napi_receive(struct mlx5e_tc_update_priv *tc_priv)

@@ -15,7 +15,6 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/fs_helpers.h>
-#include <linux/mlx5/accel.h>
 #include <linux/mlx5/eswitch.h>
 #include <net/inet_ecn.h>
 #include "mlx5_ib.h"
@@ -148,16 +147,6 @@ int parse_flow_flow_action(struct mlx5_ib_flow_action *maction,
 {
 
 	switch (maction->ib_action.type) {
-	case IB_FLOW_ACTION_ESP:
-		if (action->action & (MLX5_FLOW_CONTEXT_ACTION_ENCRYPT |
-				      MLX5_FLOW_CONTEXT_ACTION_DECRYPT))
-			return -EINVAL;
-		/* Currently only AES_GCM keymat is supported by the driver */
-		action->esp_id = (uintptr_t)maction->esp_aes_gcm.ctx;
-		action->action |= is_egress ?
-			MLX5_FLOW_CONTEXT_ACTION_ENCRYPT :
-			MLX5_FLOW_CONTEXT_ACTION_DECRYPT;
-		return 0;
 	case IB_FLOW_ACTION_UNSPECIFIED:
 		if (maction->flow_action_raw.sub_type ==
 		    MLX5_IB_FLOW_ACTION_MODIFY_HEADER) {
@@ -368,14 +357,7 @@ static int parse_flow_attr(struct mlx5_core_dev *mdev,
 			       ib_spec->type & IB_FLOW_SPEC_INNER);
 		break;
 	case IB_FLOW_SPEC_ESP:
-		if (ib_spec->esp.mask.seq)
-			return -EOPNOTSUPP;
-
-		MLX5_SET(fte_match_set_misc, misc_params_c, outer_esp_spi,
-			 ntohl(ib_spec->esp.mask.spi));
-		MLX5_SET(fte_match_set_misc, misc_params_v, outer_esp_spi,
-			 ntohl(ib_spec->esp.val.spi));
-		break;
+		return -EOPNOTSUPP;
 	case IB_FLOW_SPEC_TCP:
 		if (FIELDS_NOT_SUPPORTED(ib_spec->tcp_udp.mask,
 					 LAST_TCP_UDP_FIELD))
@@ -587,12 +569,6 @@ static bool flow_is_multicast_only(const struct ib_flow_attr *ib_attr)
 	return false;
 }
 
-enum valid_spec {
-	VALID_SPEC_INVALID,
-	VALID_SPEC_VALID,
-	VALID_SPEC_NA,
-};
-
 static bool is_valid_ethertype(struct mlx5_core_dev *mdev,
 			       const struct ib_flow_attr *flow_attr,
 			       bool check_inner)
@@ -754,8 +730,7 @@ static struct mlx5_ib_flow_prio *get_flow_table(struct mlx5_ib_dev *dev,
 	max_table_size = BIT(MLX5_CAP_FLOWTABLE_NIC_RX(dev->mdev,
 						       log_max_ft_size));
 	esw_encap = mlx5_eswitch_get_encap_mode(dev->mdev) !=
-		    DEVLINK_ESWITCH_ENCAP_MODE_NONE;
-
+		DEVLINK_ESWITCH_ENCAP_MODE_NONE;
 	switch (flow_attr->type) {
 	case IB_FLOW_ATTR_NORMAL:
 		if (flow_is_multicast_only(flow_attr) && !dont_trap)
@@ -1459,7 +1434,7 @@ _get_flow_table(struct mlx5_ib_dev *dev, u16 user_priority,
 		priority = ib_prio_to_core_prio(user_priority, false);
 
 	esw_encap = mlx5_eswitch_get_encap_mode(dev->mdev) !=
-		    DEVLINK_ESWITCH_ENCAP_MODE_NONE;
+		DEVLINK_ESWITCH_ENCAP_MODE_NONE;
 	switch (ns_type) {
 	case MLX5_FLOW_NAMESPACE_BYPASS:
 		max_table_size = BIT(
@@ -1711,149 +1686,6 @@ unlock:
 	return ERR_PTR(err);
 }
 
-static u32 mlx5_ib_flow_action_flags_to_accel_xfrm_flags(u32 mlx5_flags)
-{
-	u32 flags = 0;
-
-	if (mlx5_flags & MLX5_IB_UAPI_FLOW_ACTION_FLAGS_REQUIRE_METADATA)
-		flags |= MLX5_ACCEL_XFRM_FLAG_REQUIRE_METADATA;
-
-	return flags;
-}
-
-#define MLX5_FLOW_ACTION_ESP_CREATE_LAST_SUPPORTED                             \
-	MLX5_IB_UAPI_FLOW_ACTION_FLAGS_REQUIRE_METADATA
-static struct ib_flow_action *
-mlx5_ib_create_flow_action_esp(struct ib_device *device,
-			       const struct ib_flow_action_attrs_esp *attr,
-			       struct uverbs_attr_bundle *attrs)
-{
-	struct mlx5_ib_dev *mdev = to_mdev(device);
-	struct ib_uverbs_flow_action_esp_keymat_aes_gcm *aes_gcm;
-	struct mlx5_accel_esp_xfrm_attrs accel_attrs = {};
-	struct mlx5_ib_flow_action *action;
-	u64 action_flags;
-	u64 flags;
-	int err = 0;
-
-	err = uverbs_get_flags64(
-		&action_flags, attrs, MLX5_IB_ATTR_CREATE_FLOW_ACTION_FLAGS,
-		((MLX5_FLOW_ACTION_ESP_CREATE_LAST_SUPPORTED << 1) - 1));
-	if (err)
-		return ERR_PTR(err);
-
-	flags = mlx5_ib_flow_action_flags_to_accel_xfrm_flags(action_flags);
-
-	/* We current only support a subset of the standard features. Only a
-	 * keymat of type AES_GCM, with icv_len == 16, iv_algo == SEQ and esn
-	 * (with overlap). Full offload mode isn't supported.
-	 */
-	if (!attr->keymat || attr->replay || attr->encap ||
-	    attr->spi || attr->seq || attr->tfc_pad ||
-	    attr->hard_limit_pkts ||
-	    (attr->flags & ~(IB_FLOW_ACTION_ESP_FLAGS_ESN_TRIGGERED |
-			     IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ENCRYPT)))
-		return ERR_PTR(-EOPNOTSUPP);
-
-	if (attr->keymat->protocol !=
-	    IB_UVERBS_FLOW_ACTION_ESP_KEYMAT_AES_GCM)
-		return ERR_PTR(-EOPNOTSUPP);
-
-	aes_gcm = &attr->keymat->keymat.aes_gcm;
-
-	if (aes_gcm->icv_len != 16 ||
-	    aes_gcm->iv_algo != IB_UVERBS_FLOW_ACTION_IV_ALGO_SEQ)
-		return ERR_PTR(-EOPNOTSUPP);
-
-	action = kmalloc(sizeof(*action), GFP_KERNEL);
-	if (!action)
-		return ERR_PTR(-ENOMEM);
-
-	action->esp_aes_gcm.ib_flags = attr->flags;
-	memcpy(&accel_attrs.keymat.aes_gcm.aes_key, &aes_gcm->aes_key,
-	       sizeof(accel_attrs.keymat.aes_gcm.aes_key));
-	accel_attrs.keymat.aes_gcm.key_len = aes_gcm->key_len * 8;
-	memcpy(&accel_attrs.keymat.aes_gcm.salt, &aes_gcm->salt,
-	       sizeof(accel_attrs.keymat.aes_gcm.salt));
-	memcpy(&accel_attrs.keymat.aes_gcm.seq_iv, &aes_gcm->iv,
-	       sizeof(accel_attrs.keymat.aes_gcm.seq_iv));
-	accel_attrs.keymat.aes_gcm.icv_len = aes_gcm->icv_len * 8;
-	accel_attrs.keymat.aes_gcm.iv_algo = MLX5_ACCEL_ESP_AES_GCM_IV_ALGO_SEQ;
-	accel_attrs.keymat_type = MLX5_ACCEL_ESP_KEYMAT_AES_GCM;
-
-	accel_attrs.esn = attr->esn;
-	if (attr->flags & IB_FLOW_ACTION_ESP_FLAGS_ESN_TRIGGERED)
-		accel_attrs.flags |= MLX5_ACCEL_ESP_FLAGS_ESN_TRIGGERED;
-	if (attr->flags & IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ESN_NEW_WINDOW)
-		accel_attrs.flags |= MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP;
-
-	if (attr->flags & IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ENCRYPT)
-		accel_attrs.action |= MLX5_ACCEL_ESP_ACTION_ENCRYPT;
-
-	action->esp_aes_gcm.ctx =
-		mlx5_accel_esp_create_xfrm(mdev->mdev, &accel_attrs, flags);
-	if (IS_ERR(action->esp_aes_gcm.ctx)) {
-		err = PTR_ERR(action->esp_aes_gcm.ctx);
-		goto err_parse;
-	}
-
-	action->esp_aes_gcm.ib_flags = attr->flags;
-
-	return &action->ib_action;
-
-err_parse:
-	kfree(action);
-	return ERR_PTR(err);
-}
-
-static int
-mlx5_ib_modify_flow_action_esp(struct ib_flow_action *action,
-			       const struct ib_flow_action_attrs_esp *attr,
-			       struct uverbs_attr_bundle *attrs)
-{
-	struct mlx5_ib_flow_action *maction = to_mflow_act(action);
-	struct mlx5_accel_esp_xfrm_attrs accel_attrs;
-	int err = 0;
-
-	if (attr->keymat || attr->replay || attr->encap ||
-	    attr->spi || attr->seq || attr->tfc_pad ||
-	    attr->hard_limit_pkts ||
-	    (attr->flags & ~(IB_FLOW_ACTION_ESP_FLAGS_ESN_TRIGGERED |
-			     IB_FLOW_ACTION_ESP_FLAGS_MOD_ESP_ATTRS |
-			     IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ESN_NEW_WINDOW)))
-		return -EOPNOTSUPP;
-
-	/* Only the ESN value or the MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP can
-	 * be modified.
-	 */
-	if (!(maction->esp_aes_gcm.ib_flags &
-	      IB_FLOW_ACTION_ESP_FLAGS_ESN_TRIGGERED) &&
-	    attr->flags & (IB_FLOW_ACTION_ESP_FLAGS_ESN_TRIGGERED |
-			   IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ESN_NEW_WINDOW))
-		return -EINVAL;
-
-	memcpy(&accel_attrs, &maction->esp_aes_gcm.ctx->attrs,
-	       sizeof(accel_attrs));
-
-	accel_attrs.esn = attr->esn;
-	if (attr->flags & IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ESN_NEW_WINDOW)
-		accel_attrs.flags |= MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP;
-	else
-		accel_attrs.flags &= ~MLX5_ACCEL_ESP_FLAGS_ESN_STATE_OVERLAP;
-
-	err = mlx5_accel_esp_modify_xfrm(maction->esp_aes_gcm.ctx,
-					 &accel_attrs);
-	if (err)
-		return err;
-
-	maction->esp_aes_gcm.ib_flags &=
-		~IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ESN_NEW_WINDOW;
-	maction->esp_aes_gcm.ib_flags |=
-		attr->flags & IB_UVERBS_FLOW_ACTION_ESP_FLAGS_ESN_NEW_WINDOW;
-
-	return 0;
-}
-
 static void destroy_flow_action_raw(struct mlx5_ib_flow_action *maction)
 {
 	switch (maction->flow_action_raw.sub_type) {
@@ -1877,13 +1709,6 @@ static int mlx5_ib_destroy_flow_action(struct ib_flow_action *action)
 	struct mlx5_ib_flow_action *maction = to_mflow_act(action);
 
 	switch (action->type) {
-	case IB_FLOW_ACTION_ESP:
-		/*
-		 * We only support aes_gcm by now, so we implicitly know this is
-		 * the underline crypto.
-		 */
-		mlx5_accel_esp_destroy_xfrm(maction->esp_aes_gcm.ctx);
-		break;
 	case IB_FLOW_ACTION_UNSPECIFIED:
 		destroy_flow_action_raw(maction);
 		break;
@@ -2796,11 +2621,6 @@ static const struct ib_device_ops flow_ops = {
 	.destroy_flow_action = mlx5_ib_destroy_flow_action,
 };
 
-static const struct ib_device_ops flow_ipsec_ops = {
-	.create_flow_action_esp = mlx5_ib_create_flow_action_esp,
-	.modify_flow_action_esp = mlx5_ib_modify_flow_action_esp,
-};
-
 int mlx5_ib_fs_init(struct mlx5_ib_dev *dev)
 {
 	dev->flow_db = kzalloc(sizeof(*dev->flow_db), GFP_KERNEL);
@@ -2811,9 +2631,5 @@ int mlx5_ib_fs_init(struct mlx5_ib_dev *dev)
 	mutex_init(&dev->flow_db->lock);
 
 	ib_set_device_ops(&dev->ib_dev, &flow_ops);
-	if (mlx5_accel_ipsec_device_caps(dev->mdev) &
-	    MLX5_ACCEL_IPSEC_CAP_DEVICE)
-		ib_set_device_ops(&dev->ib_dev, &flow_ipsec_ops);
-
 	return 0;
 }

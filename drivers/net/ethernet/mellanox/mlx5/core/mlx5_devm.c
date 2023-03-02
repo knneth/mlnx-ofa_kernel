@@ -619,6 +619,13 @@ int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,
 		goto unlock;
 	}
 
+	group = esw_qos_find_devm_group(esw, group_name);
+	if (group) {
+		NL_SET_ERR_MSG_MOD(extack, "Node already exists");
+		err = -EEXIST;
+		goto unlock;
+	}
+
 	group = esw_qos_create_rate_group(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
 	if (IS_ERR(group)) {
 		err = PTR_ERR(group);

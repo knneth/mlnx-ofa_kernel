@@ -1,0 +1,31 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
+
+Change-Id: Icfacc86ab801ac725d2ef8c781e492e8f6f0ed88
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
+@@ -4,12 +4,19 @@
+ #ifndef __MLX5_EN_XSK_TX_H__
+ #define __MLX5_EN_XSK_TX_H__
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
++
+ #include "en.h"
+ 
+ /* TX data path */
+ 
+-int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags);
++int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid
++#ifdef HAVE_NDO_XSK_WAKEUP
++		    , u32 flags
++#endif
++		    );
+ 
+ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget);
+ 
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ #endif /* __MLX5_EN_XSK_TX_H__ */

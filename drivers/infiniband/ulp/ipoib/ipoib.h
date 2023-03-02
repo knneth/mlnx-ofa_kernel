@@ -423,6 +423,7 @@ struct ipoib_dev_priv {
 	struct dentry *path_dentry;
 #endif
 	u64	hca_caps;
+	u64	kernel_caps;
 	struct ipoib_ethtool_st ethtool;
 	u32 sendq_size;
 	u32 recvq_size;

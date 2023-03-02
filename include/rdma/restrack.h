@@ -173,14 +173,4 @@ static inline bool rdma_restrack_is_tracked(struct rdma_restrack_entry *res)
 {
 	return !res->no_track;
 }
-
-/**
- * rdma_restrack_dontrack() - mark resource as not valid
- * @res:  resource entry
- */
-static inline void rdma_restrack_dontrack(struct rdma_restrack_entry *res)
-{
-	res->valid = false;
-	res->task = NULL;
-}
 #endif /* _RDMA_RESTRACK_H_ */

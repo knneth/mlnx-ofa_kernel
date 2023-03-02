@@ -1,0 +1,324 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dev.c
+
+Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
+---
+ drivers/net/ethernet/mellanox/mlx5/core/dev.c | 128 +++++++++++++++++-
+ 1 file changed, 123 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
+@@ -112,8 +112,10 @@ bool mlx5_eth_supported(struct mlx5_core
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static bool is_eth_enabled(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_DEVLINK_PARAM_REGISTER
+ 	union devlink_param_value val;
+ 	int err;
+ 
+@@ -121,7 +123,11 @@ static bool is_eth_enabled(struct mlx5_c
+ 						 DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
+ 						 &val);
+ 	return err ? false : val.vbool;
++#else
++	return true;
++#endif
+ }
++#endif
+ 
+ bool mlx5_vnet_supported(struct mlx5_core_dev *dev)
+ {
+@@ -145,8 +151,10 @@ bool mlx5_vnet_supported(struct mlx5_cor
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static bool is_vnet_enabled(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_DEVLINK_PARAM_REGISTER
+ 	union devlink_param_value val;
+ 	int err;
+ 
+@@ -154,7 +162,11 @@ static bool is_vnet_enabled(struct mlx5_
+ 						 DEVLINK_PARAM_GENERIC_ID_ENABLE_VNET,
+ 						 &val);
+ 	return err ? false : val.vbool;
++#else
++	return true;
++#endif
+ }
++#endif
+ 
+ static bool is_ib_rep_supported(struct mlx5_core_dev *dev)
+ {
+@@ -219,8 +231,10 @@ bool mlx5_rdma_supported(struct mlx5_cor
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static bool is_ib_enabled(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_DEVLINK_PARAM_REGISTER
+ 	union devlink_param_value val;
+ 	int err;
+ 
+@@ -228,7 +242,11 @@ static bool is_ib_enabled(struct mlx5_co
+ 						 DEVLINK_PARAM_GENERIC_ID_ENABLE_RDMA,
+ 						 &val);
+ 	return err ? false : val.vbool;
++#else
++	return true;
++#endif
+ }
++#endif
+ 
+ enum {
+ 	MLX5_INTERFACE_PROTOCOL_ETH,
+@@ -248,13 +266,22 @@ static const struct mlx5_adev_device {
+ } mlx5_adev_devices[] = {
+ 	[MLX5_INTERFACE_PROTOCOL_VNET] = { .suffix = "vnet",
+ 					   .is_supported = &mlx5_vnet_supported,
+-					   .is_enabled = &is_vnet_enabled },
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
++					   .is_enabled = &is_vnet_enabled
++#endif
++					 },
+ 	[MLX5_INTERFACE_PROTOCOL_IB] = { .suffix = "rdma",
+ 					 .is_supported = &mlx5_rdma_supported,
+-					 .is_enabled = &is_ib_enabled },
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
++					 .is_enabled = &is_ib_enabled
++#endif
++				       },
+ 	[MLX5_INTERFACE_PROTOCOL_ETH] = { .suffix = "eth",
+ 					  .is_supported = &mlx5_eth_supported,
+-					  .is_enabled = &is_eth_enabled },
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
++					  .is_enabled = &is_eth_enabled
++#endif
++					},
+ 	[MLX5_INTERFACE_PROTOCOL_ETH_REP] = { .suffix = "eth-rep",
+ 					   .is_supported = &is_eth_rep_supported },
+ 	[MLX5_INTERFACE_PROTOCOL_IB_REP] = { .suffix = "rdma-rep",
+@@ -265,12 +292,20 @@ static const struct mlx5_adev_device {
+ 
+ int mlx5_adev_idx_alloc(void)
+ {
++#ifdef HAVE_IDA_ALLOC
+ 	return ida_alloc(&mlx5_adev_ida, GFP_KERNEL);
++#else
++	return ida_simple_get(&mlx5_adev_ida,0, 0, GFP_KERNEL);
++#endif
+ }
+ 
+ void mlx5_adev_idx_free(int idx)
+ {
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&mlx5_adev_ida, idx);
++#else
++	ida_simple_remove(&mlx5_adev_ida, idx);
++#endif
+ }
+ 
+ int mlx5_adev_init(struct mlx5_core_dev *dev)
+@@ -344,15 +379,27 @@ static void del_adev(struct auxiliary_de
+ 
+ int mlx5_attach_device(struct mlx5_core_dev *dev)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	struct mlx5_priv *priv = &dev->priv;
+ 	struct auxiliary_device *adev;
+ 	struct auxiliary_driver *adrv;
+ 	int ret = 0, i;
+ 
++#ifdef HAVE_DEVL_PORT_REGISTER
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(dev));
++#else
++	devl_lock(devlink);
++#endif /* HAVE_DEVL_TRAP_GROUPS_REGISTER*/
++#endif /* HAVE_DEVL_PORT_REGISTER */
+ 	mutex_lock(&mlx5_intf_mutex);
+ 	priv->flags &= ~MLX5_PRIV_FLAGS_DETACH;
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	priv->flags |= MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
++#endif
+ 	for (i = 0; i < ARRAY_SIZE(mlx5_adev_devices); i++) {
+ 		if (!priv->adev[i]) {
+ 			bool is_supported = false;
+@@ -400,22 +447,40 @@ int mlx5_attach_device(struct mlx5_core_
+ 			break;
+ 		}
+ 	}
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	priv->flags &= ~MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
++#endif
+ 	mutex_unlock(&mlx5_intf_mutex);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ 	return ret;
+ }
+ 
+ void mlx5_detach_device(struct mlx5_core_dev *dev)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	struct mlx5_priv *priv = &dev->priv;
+ 	struct auxiliary_device *adev;
+ 	struct auxiliary_driver *adrv;
+ 	pm_message_t pm = {};
+ 	int i;
+ 
++#ifdef HAVE_DEVL_PORT_REGISTER
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(dev));
++#else
++	devl_lock(devlink);
++#endif /* HAVE_DEVL_TRAP_GROUPS_REGISTER */
++#endif /* HAVE_DEVL_PORT_REGISTER */
+ 	mutex_lock(&mlx5_intf_mutex);
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	priv->flags |= MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
++#endif
+ 	for (i = ARRAY_SIZE(mlx5_adev_devices) - 1; i >= 0; i--) {
+ 		if (!priv->adev[i])
+ 			continue;
+@@ -444,20 +509,41 @@ skip_suspend:
+ 		del_adev(&priv->adev[i]->adev);
+ 		priv->adev[i] = NULL;
+ 	}
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	priv->flags &= ~MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
++#endif
+ 	priv->flags |= MLX5_PRIV_FLAGS_DETACH;
+ 	mutex_unlock(&mlx5_intf_mutex);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ }
+ 
+ int mlx5_register_device(struct mlx5_core_dev *dev)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	int ret;
+ 
++#ifdef HAVE_DEVL_PORT_REGISTER
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(dev));
++#else
++	devlink = priv_to_devlink(dev);
++	devl_lock(devlink);
++#endif /* HAVE_DEVL_TRAP_GROUPS_REGISTER */
++#endif /* HAVE_DEVL_PORT_REGISTER */
+ 	mutex_lock(&mlx5_intf_mutex);
+ 	dev->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
+ 	ret = mlx5_rescan_drivers_locked(dev);
+ 	mutex_unlock(&mlx5_intf_mutex);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ 	if (ret)
+ 		mlx5_unregister_device(dev);
+ 
+@@ -466,12 +552,25 @@ int mlx5_register_device(struct mlx5_cor
+ 
+ void mlx5_unregister_device(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_DEVL_PORT_REGISTER
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(dev));
++#else
++	struct devlink *devlink;
++
++	devlink = priv_to_devlink(dev);
++	devl_lock(devlink);
++#endif /* HAVE_DEVL_TRAP_GROUPS_REGISTER */
++#endif /* HAVE_DEVL_PORT_REGISTER */
+ 	mutex_lock(&mlx5_intf_mutex);
+ 	dev->priv.flags = MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
+ 	dev->priv.flags &= ~MLX5_PRIV_FLAGS_DETACH;
+ 	mlx5_rescan_drivers_locked(dev);
+ 	mutex_unlock(&mlx5_intf_mutex);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ }
+ 
+ static int add_drivers(struct mlx5_core_dev *dev)
+@@ -544,15 +643,20 @@ del_adev:
+ int mlx5_rescan_drivers_locked(struct mlx5_core_dev *dev)
+ {
+ 	struct mlx5_priv *priv = &dev->priv;
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	int err = 0;
++#endif
+ 
+ 	lockdep_assert_held(&mlx5_intf_mutex);
+ 	if (priv->flags & MLX5_PRIV_FLAGS_DETACH)
+ 		return 0;
+ 
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	priv->flags |= MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
++#endif
+ 	delete_drivers(dev);
+ 	if (priv->flags & MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV)
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 		goto out;
+ 
+ 	err = add_drivers(dev);
+@@ -560,6 +664,11 @@ int mlx5_rescan_drivers_locked(struct ml
+ out:
+ 	priv->flags &= ~MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
+ 	return err;
++#else
++		return 0;
++
++	return add_drivers(dev);
++#endif
+ }
+ 
+ bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev)
+@@ -603,7 +712,11 @@ static void *pci_get_other_drvdata(struc
+ 	return pci_get_drvdata(to_pci_dev(other));
+ }
+ 
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
+ static int next_phys_dev_lag(struct device *dev, const void *data)
++#else
++static int next_phys_dev_lag(struct device *dev, void *data)
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct mlx5_core_dev *mdev, *this = (struct mlx5_core_dev *)data;
+ 
+@@ -620,8 +733,13 @@ static int next_phys_dev_lag(struct devi
+ 	return _next_phys_dev(mdev, data);
+ }
+ 
+-static struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
+-					       int (*match)(struct device *dev, const void *data))
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
++struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
++		int (*match)(struct device *dev, const void *data))
++#else
++struct mlx5_core_dev *mlx5_get_next_dev(struct mlx5_core_dev *dev,
++		int (*match)(struct device *dev, void *data))
++#endif
+ {
+ 	struct device *next;
+ 

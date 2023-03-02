@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
 
-Change-Id: I90f3d938c9cf861bf6b5437ca0c52b17ba430b76
+Change-Id: I0c3fd3f49d2dd2a993364a929fb6ee2328cfe971
 ---
  drivers/infiniband/core/netlink.c | 42 +++++++++++++++++++++++++------
  1 file changed, 35 insertions(+), 7 deletions(-)

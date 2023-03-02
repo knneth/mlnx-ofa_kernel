@@ -30,10 +30,11 @@
  * SOFTWARE.
  */
 
+#include <linux/ethtool_netlink.h>
+
 #include "en.h"
 #include "en/port.h"
 #include "en/params.h"
-#include "en/xsk/pool.h"
 #include "en/ptp.h"
 #include "lib/clock.h"
 
@@ -307,17 +308,30 @@ static void mlx5e_get_ethtool_stats(struct net_device *dev,
 }
 
 void mlx5e_ethtool_get_ringparam(struct mlx5e_priv *priv,
-				 struct ethtool_ringparam *param)
+				 struct ethtool_ringparam *param,
+				 struct kernel_ethtool_ringparam *kernel_param)
 {
+	/* Limitation for regular RQ. XSK RQ may clamp the queue length in
+	 * mlx5e_mpwqe_get_log_rq_size.
+	 */
+	u8 max_log_mpwrq_pkts = mlx5e_mpwrq_max_log_rq_pkts(priv->mdev,
+							    PAGE_SHIFT,
+							    MLX5E_MPWRQ_UMR_MODE_ALIGNED);
 	if (priv->shared_rq) {
 		param->rx_max_pending = 0;
 		param->rx_pending     = 0;
 	} else {
-		param->rx_max_pending = 1 << MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE;
+		param->rx_max_pending = 1 << min_t(u8, MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE,
+					   max_log_mpwrq_pkts);
 		param->rx_pending     = 1 << priv->channels.params.log_rq_mtu_frames;
 	}
 	param->tx_max_pending = 1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE;
 	param->tx_pending     = 1 << priv->channels.params.log_sq_size;
+
+	kernel_param->tcp_data_split =
+		(priv->channels.params.packet_merge.type == MLX5E_PACKET_MERGE_SHAMPO) ?
+		ETHTOOL_TCP_DATA_SPLIT_ENABLED :
+		ETHTOOL_TCP_DATA_SPLIT_DISABLED;
 }
 
 static void mlx5e_get_ringparam(struct net_device *dev,
@@ -327,7 +341,7 @@ static void mlx5e_get_ringparam(struct net_device *dev,
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
-	mlx5e_ethtool_get_ringparam(priv, param);
+	mlx5e_ethtool_get_ringparam(priv, param, kernel_param);
 }
 
 int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
@@ -403,15 +417,8 @@ void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
 				struct ethtool_channels *ch)
 {
 	mutex_lock(&priv->state_lock);
-
 	ch->max_combined   = priv->max_nch;
 	ch->combined_count = priv->channels.params.num_channels;
-	if (priv->xsk.refcnt) {
-		/* The upper half are XSK queues. */
-		ch->max_combined *= 2;
-		ch->combined_count *= 2;
-	}
-
 	mutex_unlock(&priv->state_lock);
 }
 
@@ -458,21 +465,11 @@ int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
 
 	mutex_lock(&priv->state_lock);
 
-	/* Don't allow changing the number of channels if there is an active
-	 * XSK, because the numeration of the XSK and regular RQs will change.
-	 */
-	if (priv->xsk.refcnt) {
-		err = -EINVAL;
-		netdev_err(priv->netdev, "%s: AF_XDP is active, cannot change the number of channels\n",
-			   __func__);
-		goto out;
-	}
-
 	/* Don't allow changing the number of channels if HTB offload is active,
 	 * because the numeration of the QoS SQs will change, while per-queue
 	 * qdiscs are attached.
 	 */
-	if (priv->htb.maj_id) {
+	if (mlx5e_selq_is_htb_enabled(&priv->selq)) {
 		err = -EINVAL;
 		netdev_err(priv->netdev, "%s: HTB offload is active, cannot change the number of channels\n",
 			   __func__);
@@ -2123,7 +2120,7 @@ static int set_pflag_tx_port_ts(struct net_device *netdev, bool enable)
 	 * the numeration of the QoS SQs will change, while per-queue qdiscs are
 	 * attached.
 	 */
-	if (priv->htb.maj_id) {
+	if (mlx5e_selq_is_htb_enabled(&priv->selq)) {
 		netdev_err(priv->netdev, "%s: HTB offload is active, cannot change the PTP state\n",
 			   __func__);
 		return -EINVAL;
@@ -2307,8 +2304,7 @@ int mlx5e_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	return mlx5e_ethtool_set_rxnfc(priv, cmd);
 }
 
-int mlx5_query_port_status(struct mlx5_core_dev *mdev, u32 *status_opcode,
-			   u16 *monitor_opcode, char *status_message)
+static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opcode)
 {
 	struct mlx5_ifc_pddr_troubleshooting_page_bits *pddr_troubleshooting_page;
 	u32 in[MLX5_ST_SZ_DW(pddr_reg)] = {};
@@ -2328,18 +2324,8 @@ int mlx5_query_port_status(struct mlx5_core_dev *mdev, u32 *status_opcode,
 		return err;
 
 	pddr_troubleshooting_page = MLX5_ADDR_OF(pddr_reg, out, page_data);
-	if (status_opcode)
-		*status_opcode = MLX5_GET(pddr_troubleshooting_page, pddr_troubleshooting_page,
-					  status_opcode);
-	if (monitor_opcode)
-		*monitor_opcode = MLX5_GET(pddr_troubleshooting_page, pddr_troubleshooting_page,
-					   status_opcode.pddr_monitor_opcode);
-	if (status_message)
-		strncpy(status_message,
-			MLX5_ADDR_OF(pddr_troubleshooting_page, pddr_troubleshooting_page,
-				     status_message),
-			MLX5_FLD_SZ_BYTES(pddr_troubleshooting_page, status_message));
-
+	*status_opcode = MLX5_GET(pddr_troubleshooting_page, pddr_troubleshooting_page,
+				  status_opcode);
 	return 0;
 }
 
@@ -2472,7 +2458,7 @@ mlx5e_get_link_ext_state(struct net_device *dev,
 	if (netif_carrier_ok(dev))
 		return -ENODATA;
 
-	if (mlx5_query_port_status(priv->mdev, &status_opcode, NULL, NULL) ||
+	if (query_port_status_opcode(priv->mdev, &status_opcode) ||
 	    !status_opcode)
 		return -ENODATA;
 

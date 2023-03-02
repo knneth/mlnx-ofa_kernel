@@ -400,7 +400,6 @@ static const struct file_operations dbg_cc_fops = {
 void mlx5_ib_cleanup_cong_debugfs(struct mlx5_ib_dev *dev, u32 port_num)
 {
 	if (!mlx5_debugfs_root ||
-	    dev->is_rep ||
 	    !dev->port[port_num].dbg_cc_params ||
 	    !dev->port[port_num].dbg_cc_params->root)
 		return;
@@ -416,7 +415,7 @@ void mlx5_ib_init_cong_debugfs(struct mlx5_ib_dev *dev, u32 port_num)
 	struct mlx5_core_dev *mdev;
 	int i;
 
-	if (!mlx5_debugfs_root || dev->is_rep)
+	if (!mlx5_debugfs_root)
 		return;
 
 	/* Takes a 1-based port number */

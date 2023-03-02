@@ -54,9 +54,9 @@ esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
 	}
 
 	if (meter->meter_hndl) {
-		mlx5e_free_flow_meter(vport->dev, meter->meter_hndl);
+		mlx5e_free_flow_meter(meter->meter_hndl);
 		meter->meter_hndl = NULL;
- 	}
+	}
 
 	if (meter->meter_tbl) {
 		mlx5_destroy_flow_table(meter->meter_tbl);
@@ -194,13 +194,31 @@ out:
 	return err;
 }
 
+/* vf_meter_lock is held before calling this func */
 static struct vport_meter *
 esw_acl_get_meter(struct mlx5_vport *vport, int rx_tx, int xps)
 {
+	struct vport_meter *meter;
+
 	if (rx_tx == MLX5_RATE_LIMIT_TX)
-		return vport->ingress.offloads.meter_xps[xps];
+		meter = vport->ingress.offloads.meter_xps[xps];
 	else
-		return vport->egress.offloads.meter_xps[xps];
+		meter = vport->egress.offloads.meter_xps[xps];
+
+	if (meter)
+		goto out;
+
+	meter = kzalloc(sizeof(*meter), GFP_KERNEL);
+	if (!meter)
+		goto out;
+
+	if (rx_tx == MLX5_RATE_LIMIT_TX)
+		vport->ingress.offloads.meter_xps[xps] = meter;
+	else
+		vport->egress.offloads.meter_xps[xps] = meter;
+
+out:
+	return meter;
 }
 
 int
@@ -225,12 +243,12 @@ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 		if (IS_ERR(meter_hndl))
 			return PTR_ERR(meter_hndl);
 		meter->meter_hndl = meter_hndl;
- 	}
+	}
 
-	params.mode = xps;
 	params.rate = rate;
 	params.burst = burst;
-	err = mlx5e_aso_send_flow_meter_aso(vport->dev, meter->meter_hndl, &params);
+	params.mode = xps;
+	err = mlx5e_tc_meter_modify(vport->dev, meter->meter_hndl, &params);
 	if (err)
 		goto check_and_free_meter_aso;
 
@@ -258,59 +276,10 @@ update:
 
 check_and_free_meter_aso:
 	if (!meter->meter_tbl) {
-		mlx5e_free_flow_meter(vport->dev, meter->meter_hndl);
+		mlx5e_free_flow_meter(meter->meter_hndl);
 		meter->meter_hndl = NULL;
 	}
 	return err;
-}
-
-void
-esw_vf_meter_destroy_meters(struct mlx5_eswitch *esw)
-{
-	struct mlx5_vport *vport;
-	int j;
-	unsigned long i;
-
-	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
-		for (j = MLX5_RATE_LIMIT_BPS; j <= MLX5_RATE_LIMIT_PPS; j++) {
-			kfree(vport->ingress.offloads.meter_xps[j]);
-			vport->ingress.offloads.meter_xps[j] = NULL;
-			kfree(vport->egress.offloads.meter_xps[j]);
-			vport->egress.offloads.meter_xps[j] = NULL;
-		}
-	}
-}
-
-int
-esw_vf_meter_create_meters(struct mlx5_eswitch *esw)
-{
-	struct vport_meter *meter;
-	struct mlx5_vport *vport;
-	int j;
-	unsigned long i;
-
-	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
-		for (j = MLX5_RATE_LIMIT_BPS; j <= MLX5_RATE_LIMIT_PPS; j++) {
-			meter = kzalloc(sizeof(*meter), GFP_KERNEL);
-			if (!meter)
-				goto err_out;
-			vport->egress.offloads.meter_xps[j] = meter;
-		}
-
-		for (j = MLX5_RATE_LIMIT_BPS; j <= MLX5_RATE_LIMIT_PPS; j++) {
-			meter = kzalloc(sizeof(*meter), GFP_KERNEL);
-			if (!meter)
-				goto err_out;
-			vport->ingress.offloads.meter_xps[j] = meter;
-		}
-	}
-
-	return 0;
-
-err_out:
-	esw_vf_meter_destroy_meters(esw);
-
-	return -ENOMEM;
 }
 
 void
@@ -383,7 +352,7 @@ mlx5_eswitch_set_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 
 	meter = esw_acl_get_meter(vport, rx_tx, xps);
 	if (!meter) {
-		err = -EOPNOTSUPP;
+		err = -ENOMEM;
 		goto unlock;
 	}
 
@@ -432,7 +401,7 @@ mlx5_eswitch_get_vf_meter_data(struct mlx5_eswitch *esw, int vport_num,
 
 	meter = esw_acl_get_meter(vport, rx_tx, xps);
 	if (!meter) {
-		err = -EOPNOTSUPP;
+		err = -ENOMEM;
 		goto unlock;
 	}
 

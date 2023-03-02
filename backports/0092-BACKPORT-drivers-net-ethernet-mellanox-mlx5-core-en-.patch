@@ -1,39 +1,42 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
 
-Change-Id: I68792188369355fce76ff40844e600b15cd734e4
+Change-Id: I5187ade021dd0fd79ef163ab7be85f13ebeb150a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 9 +++++++++
+ drivers/net/ethernet/mellanox/mlx5/core/en/channels.c | 9 +++++++++
  1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
-@@ -31,6 +31,7 @@
-  */
- #include "port_buffer.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
+@@ -18,9 +18,13 @@ static struct mlx5e_channel *mlx5e_chann
  
-+#ifdef CONFIG_MLX5_CORE_EN_DCB
- int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
- 			    struct mlx5e_port_buffer *port_buffer)
+ bool mlx5e_channels_is_xsk(struct mlx5e_channels *chs, unsigned int ix)
  {
-@@ -279,7 +280,14 @@ int mlx5e_port_manual_buffer_config(stru
- 	int i;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	struct mlx5e_channel *c = mlx5e_channels_get(chs, ix);
  
- 	mlx5e_dbg(HW, priv, "%s: change=%x\n", __func__, change);
-+#if defined(HAVE_NET_DEVICE_MIN_MAX_MTU)
- 	max_mtu = max_t(unsigned int, priv->netdev->max_mtu, MINIMUM_MAX_MTU);
-+#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
-+	max_mtu = max_t(unsigned int, priv->netdev->extended->min_mtu, MINIMUM_MAX_MTU);
+ 	return test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
 +#else
-+	max_mtu = mtu;
++	return false;
 +#endif
-+
- 
- 	err = mlx5e_port_query_buffer(priv, &port_buffer);
- 	if (err)
-@@ -360,3 +368,4 @@ int mlx5e_port_manual_buffer_config(stru
- 
- 	return err;
  }
+ 
+ void mlx5e_channels_get_regular_rqn(struct mlx5e_channels *chs, unsigned int ix, u32 *rqn)
+@@ -32,11 +36,16 @@ void mlx5e_channels_get_regular_rqn(stru
+ 
+ void mlx5e_channels_get_xsk_rqn(struct mlx5e_channels *chs, unsigned int ix, u32 *rqn)
+ {
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	struct mlx5e_channel *c = mlx5e_channels_get(chs, ix);
+ 
+ 	WARN_ON_ONCE(!test_bit(MLX5E_CHANNEL_STATE_XSK, c->state));
+ 
+ 	*rqn = c->xskrq.rqn;
++#else
++	return;
++
 +#endif
+ }
+ 
+ bool mlx5e_channels_get_ptp_rqn(struct mlx5e_channels *chs, u32 *rqn)

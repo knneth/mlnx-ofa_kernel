@@ -125,6 +125,17 @@ check_complex_defines()
         echo " * based on defines prior this section" >> $COMPAT_CONFIG_H
 
         echo " *  _________________________________________________________ */" >> $COMPAT_CONFIG_H
+
+# Define HAVE_BASECODE_EXTRAS always set define.
+# Use to wrap extra code added to base code with backports apply.
+# This wrapped code compile over all kernels.
+        if [ "X${CONFIG_ENABLE_BASECODE_EXTRAS}" == "Xy" ]
+	then
+		set_complex_define_to_config_h HAVE_BASECODE_EXTRAS
+	else
+		unset_complex_define_to_config_h HAVE_BASECODE_EXTRAS
+	fi
+
 # Define HAVE_TC_SETUP_FLOW_ACTION from other flags
 	if check_compat_config_h_var HAVE_TC_SETUP_FLOW_ACTION_FUNC ||
 	   check_compat_config_h_var HAVE_TC_SETUP_OFFLOAD_ACTION_FUNC ||
@@ -319,9 +330,10 @@ check_complex_defines()
 			unset_complex_define_to_config_h HAVE_IS_PCI_P2PDMA_PAGE
 	fi
 }
-check_kerver_rh()
+
+check_kerver_rh_cls()
 {
-	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 1062 ? 0 : 1)'
+	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 693 ? 0 : 1)'
 }
 
 check_kerver_rh_bridge()
@@ -441,11 +453,10 @@ function check_autofconf {
 main() {
 
 # block RHEL supports
-OFED_BASE_KVERSION="5.17.0"
+OFED_BASE_KVERSION="6.0.0"
 MIN_KVERSION="3.10"
 
 CLS_ACT_SUPPORTED_KVERSION="4.12.0"
-CLS_ACT_SUPPORTED_KVERSION_LIST="3.10.0-693 3.10.0-862 3.10.0-957 3.10.0-1062 3.10.0-1127"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
@@ -485,6 +496,7 @@ CONFIG_MLX5_FPGA=''
 CONFIG_MLX5_FPGA_TLS=''
 CONFIG_MLX5_FPGA_IPSEC=''
 CONFIG_ENABLE_XDP="y"
+CONFIG_ENABLE_BASECODE_EXTRAS="y"
 DEFINE_MLX5_CORE='#undef CONFIG_MLX5_CORE\n#define CONFIG_MLX5_CORE 1'
 DEFINE_AUXILIARY_BUS='#undef CONFIG_AUXILIARY_BUS\n#define CONFIG_AUXILIARY_BUS 1'
 DEFINE_MLX5_CORE_EN='#undef CONFIG_MLX5_CORE_EN\n#define CONFIG_MLX5_CORE_EN 1'
@@ -604,14 +616,12 @@ esac
 
 if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 	if (! check_kerver_rh ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVERSION}; then
-		if ! check_kerver_list $KVERSION $CLS_ACT_SUPPORTED_KVERSION_LIST; then
 			CONFIG_MLX5_CLS_ACT=
 			CONFIG_MLX5_TC_CT=
 			CONFIG_MLX5_TC_SAMPLE=
 			CONFIG_MLX5_SW_STEERING=
 			CONFIG_MLX5_BRIDGE=
 			echo "Warning: CONFIG_MLX5_CLS_ACT requires kernel version ${CLS_ACT_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-		fi
 	fi
 fi
 

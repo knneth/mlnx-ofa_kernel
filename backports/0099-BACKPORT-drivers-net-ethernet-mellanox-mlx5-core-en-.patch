@@ -1,29 +1,39 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 
-Change-Id: I8482b6fea345f060004e0a9d2a1f4e672e155a50
+Change-Id: I47e7f3be05047b357e577545de5eb849b091186c
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-@@ -10,6 +10,7 @@
- #include <linux/notifier.h>
- #include <net/netevent.h>
- #include <net/arp.h>
-+#include <net/addrconf.h>
- #include "neigh.h"
- #include "tc.h"
- #include "en_rep.h"
-@@ -150,7 +151,9 @@ static void mlx5e_rep_neigh_update(struc
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+@@ -31,6 +31,7 @@
+  */
+ #include "port_buffer.h"
  
- 	neigh_connected = (nud_state & NUD_VALID) && !dead;
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
+ 			    struct mlx5e_port_buffer *port_buffer)
+ {
+@@ -485,7 +486,14 @@ int mlx5e_port_manual_buffer_config(stru
+ 	int i;
  
-+#ifndef MLX_DISABLE_TRACEPOINTS
- 	trace_mlx5e_rep_neigh_update(nhe, ha, neigh_connected);
+ 	mlx5e_dbg(HW, priv, "%s: change=%x\n", __func__, change);
++#if defined(HAVE_NET_DEVICE_MIN_MAX_MTU)
+ 	max_mtu = max_t(unsigned int, priv->netdev->max_mtu, MINIMUM_MAX_MTU);
++#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
++	max_mtu = max_t(unsigned int, priv->netdev->extended->min_mtu, MINIMUM_MAX_MTU);
++#else
++	max_mtu = mtu;
 +#endif
++
  
- 	if (!same_dev)
- 		goto out;
+ 	err = mlx5e_port_query_buffer(priv, &port_buffer);
+ 	if (err)
+@@ -573,3 +581,4 @@ int mlx5e_port_manual_buffer_config(stru
+ 
+ 	return err;
+ }
++#endif

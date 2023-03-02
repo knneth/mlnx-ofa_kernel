@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+
+Change-Id: Ia4ab04056cec38c18aaa2ef7ef61c18bac328481
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+@@ -4,11 +4,22 @@
+ #ifndef __MLX5_EN_XSK_RX_H__
+ #define __MLX5_EN_XSK_RX_H__
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "en.h"
+ 
+ /* RX data path */
+ 
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count);
++void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
++			    struct mlx5e_alloc_unit *au);
++void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle);
++int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au);
++#endif
+ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix);
++#ifdef HAVE_NO_REFCNT_BIAS
++int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk);
++#endif
+ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk);
+ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
+ 						    struct mlx5e_mpw_info *wi,
+@@ -19,4 +30,5 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 					      struct mlx5e_wqe_frag_info *wi,
+ 					      u32 cqe_bcnt);
+ 
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ #endif /* __MLX5_EN_XSK_RX_H__ */

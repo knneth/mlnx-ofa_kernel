@@ -1,90 +1,103 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
 
-Change-Id: I2c30893cb783fc2d5a5b001afa702be9171770d2
+Change-Id: Id96896cbbe87fcbb713729cd3c0f794364e8ef92
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/rx.h   | 41 +++++++++++++++++--
- 1 file changed, 38 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/tc/meter.c | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
-@@ -4,11 +4,25 @@
- #ifndef __MLX5_EN_XSK_RX_H__
- #define __MLX5_EN_XSK_RX_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+@@ -3,9 +3,15 @@
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include <linux/math64.h>
+ #include "lib/aso.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
+ #include "meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ 
+ #define MLX5_START_COLOR_SHIFT 28
+ #define MLX5_METER_MODE_SHIFT 24
+@@ -23,6 +29,10 @@
+ #define MLX5_MAX_CBS ((0x100ULL << 0x1F) - 1)
+ #define MLX5_MAX_HW_CBS 0x7FFFFFFF
+ 
++#ifndef BITS_TO_BYTES
++#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
++#endif
 +
- #include "en.h"
-+#ifdef HAVE_NDO_XSK_WAKEUP
-+#ifdef HAVE_XDP_SOCK_DRV_H
- #include <net/xdp_sock_drv.h>
-+#else
-+#include <net/xdp_sock.h>
+ struct mlx5e_flow_meter_aso_obj {
+ 	struct list_head entry;
+ 	int base_id;
+@@ -350,8 +360,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(dev);
+ 	if (!flow_meters)
 +#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -395,9 +407,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
+ 		return ERR_PTR(-EOPNOTSUPP);
 +#endif
  
- /* RX data path */
- 
-+#ifndef HAVE_XSK_BUFF_ALLOC
-+bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count);
-+void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
-+			    struct mlx5e_dma_info *dma_info);
-+void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle);
-+#endif
- struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
- 						    struct mlx5e_mpw_info *wi,
- 						    u16 cqe_bcnt,
-@@ -19,10 +33,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
- 					      struct mlx5e_wqe_frag_info *wi,
- 					      u32 cqe_bcnt);
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- static inline int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq,
- 					    struct mlx5e_dma_info *dma_info)
+ 	mutex_lock(&flow_meters->sync_lock);
+ 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
+@@ -468,12 +482,16 @@ int
+ mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
+ 		      struct mlx5e_flow_meter_params *params)
  {
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	dma_info->xsk = xsk_buff_alloc(rq->xsk_pool);
-+#else
-+	dma_info->xsk = xsk_buff_alloc(rq->umem);
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
 +#endif
-+
- 	if (!dma_info->xsk)
- 		return -ENOMEM;
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	int err;
  
-@@ -35,18 +55,33 @@ static inline int mlx5e_xsk_page_alloc_p
- 
- 	return 0;
- }
-+#else
-+int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq,
-+			      struct mlx5e_dma_info *dma_info);
-+#endif /* HAVE_XSK_BUFF_ALLOC */
- 
-+#ifdef HAVE_NDO_XSK_WAKEUP
- static inline bool mlx5e_xsk_update_rx_wakeup(struct mlx5e_rq *rq, bool alloc_err)
- {
--	if (!xsk_uses_need_wakeup(rq->xsk_pool))
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+	struct xsk_buff_pool *xsk_pool = rq->xsk_pool;
-+
-+	if (!xsk_uses_need_wakeup(xsk_pool))
-+#else
-+	struct xdp_umem *xsk_pool = rq->umem;
-+
-+	if (!xsk_umem_uses_need_wakeup(xsk_pool))
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
 +#endif
- 		return alloc_err;
+ 		return -EOPNOTSUPP;
  
- 	if (unlikely(alloc_err))
--		xsk_set_rx_need_wakeup(rq->xsk_pool);
-+		xsk_set_rx_need_wakeup(xsk_pool);
- 	else
--		xsk_clear_rx_need_wakeup(rq->xsk_pool);
-+		xsk_clear_rx_need_wakeup(xsk_pool);
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -489,8 +507,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
+ 	struct mlx5e_flow_meter_handle *meter;
+ 	int err;
  
- 	return false;
- }
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -536,11 +556,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_act)) {
+ 		netdev_dbg(priv->netdev,
+ 			   "flow meter offload is not supported, post action is missing\n");
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 	}
 +#endif
  
-+#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
- #endif /* __MLX5_EN_XSK_RX_H__ */
+ 	flow_meters = kzalloc(sizeof(*flow_meters), GFP_KERNEL);
+ 	if (!flow_meters)

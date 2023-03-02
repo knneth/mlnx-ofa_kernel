@@ -1,0 +1,135 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+
+Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
+---
+ .../net/ethernet/mellanox/mlx5/core/sriov.c   | 37 ++++++++++++++++++-
+ 1 file changed, 36 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+@@ -72,7 +72,10 @@ static int sriov_restore_guids(struct ml
+ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
+ {
+ 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+-	int err, vf, num_msix_count;
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
++	int num_msix_count;
++#endif
++	int err, vf;
+ 
+ 	if (!MLX5_ESWITCH_MANAGER(dev))
+ 		goto enable_vfs_hca;
+@@ -95,7 +98,9 @@ enable_vfs_hca:
+ 		return err;
+ 	}
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ 	num_msix_count = mlx5_get_default_msix_vec_count(dev, num_vfs);
++#endif
+ 	for (vf = 0; vf < num_vfs; vf++) {
+ 		/* Notify the VF before its enablement to let it set
+ 		 * some stuff.
+@@ -108,6 +113,7 @@ enable_vfs_hca:
+ 			continue;
+ 		}
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ 		err = mlx5_set_msix_vec_count(dev, vf + 1, num_msix_count);
+ 		if (err) {
+ 			mlx5_core_warn(dev,
+@@ -115,6 +121,7 @@ enable_vfs_hca:
+ 				       vf, err);
+ 			continue;
+ 		}
++#endif
+ 
+ 		sriov->vfs_ctx[vf].enabled = 1;
+ 		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) {
+@@ -166,7 +173,9 @@ mlx5_device_disable_sriov(struct mlx5_co
+ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
+ {
+ 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	int err;
+ 
+ 	if (num_vfs && pci_num_vf(dev->pdev)) {
+@@ -179,9 +188,13 @@ static int mlx5_sriov_enable(struct pci_
+ 		return -EBUSY;
+ 	}
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_lock(devlink);
++#endif
+ 	err = mlx5_device_enable_sriov(dev, num_vfs);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_unlock(devlink);
++#endif
+ 	if (err) {
+ 		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
+ 		return err;
+@@ -198,13 +211,19 @@ static int mlx5_sriov_enable(struct pci_
+ void mlx5_sriov_disable(struct pci_dev *pdev)
+ {
+ 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	int num_vfs = pci_num_vf(dev->pdev);
+ 
+ 	pci_disable_sriov(pdev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_lock(devlink);
++#endif
+ 	mlx5_device_disable_sriov(dev, num_vfs, true);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_unlock(devlink);
++#endif
+ }
+ 
+ int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
+@@ -225,6 +244,7 @@ int mlx5_core_sriov_configure(struct pci
+ 	return err ? err : num_vfs;
+ }
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
+ {
+ 	struct pci_dev *pf = pci_physfn(vf);
+@@ -242,12 +262,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
+ 			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
+ 
+ 	sriov = &dev->priv.sriov;
++#ifdef HAVE_PCI_IOV_VF_ID
+ 	id = pci_iov_vf_id(vf);
+ 	if (id < 0 || !sriov->vfs_ctx[id].enabled)
++#else
++	/* Reversed translation of PCI VF function number to the internal
++	 * function_id, which exists in the name of virtfn symlink. */
++	for (id = 0; id < pci_num_vf(pf); id++) {
++		if (!sriov->vfs_ctx[id].enabled)
++			continue;
++
++		if (vf->devfn == pci_iov_virtfn_devfn(pf, id))
++			break;
++	}
++	if (id == pci_num_vf(pf) || !sriov->vfs_ctx[id].enabled)
++#endif
+ 		return -EINVAL;
+ 
+ 	return mlx5_set_msix_vec_count(dev, id + 1, msix_vec_count);
+ }
++#endif
+ 
+ int mlx5_sriov_attach(struct mlx5_core_dev *dev)
+ {
+@@ -301,6 +335,7 @@ int mlx5_sriov_init(struct mlx5_core_dev
+ 		return 0;
+ 
+ 	total_vfs = pci_sriov_get_totalvfs(pdev);
++
+ 	sriov->max_vfs = mlx5_get_max_vfs(dev);
+ 	sriov->num_vfs = pci_num_vf(pdev);
+ 	sriov->vfs_ctx = kcalloc(total_vfs, sizeof(*sriov->vfs_ctx), GFP_KERNEL);

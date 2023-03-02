@@ -1,0 +1,33 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/umr.c
+
+Change-Id: I8f729986a1dde84446c5773c7e88172fa91a3ebc
+---
+ drivers/infiniband/hw/mlx5/umr.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/umr.c
++++ b/drivers/infiniband/hw/mlx5/umr.c
+@@ -432,7 +432,9 @@ static void *mlx5r_umr_alloc_xlt(size_t
+ 	size_t size;
+ 	void *res = NULL;
+ 
++#ifdef HAVE_STATIC_ASSERT
+ 	static_assert(PAGE_SIZE % MLX5_UMR_MTT_ALIGNMENT == 0);
++#endif
+ 
+ 	/*
+ 	 * MLX5_IB_UPD_XLT_ATOMIC doesn't signal an atomic context just that the
+@@ -636,8 +638,12 @@ int mlx5r_umr_update_mr_pas(struct mlx5_
+ 	mlx5r_umr_set_update_xlt_data_seg(&wqe.data_seg, &sg);
+ 
+ 	cur_mtt = mtt;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	rdma_for_each_block(mr->umem->sgt_append.sgt.sgl, &biter,
+ 			    mr->umem->sgt_append.sgt.nents,
++#else
++	rdma_for_each_block (mr->umem->sg_head.sgl, &biter, mr->umem->nmap,
++#endif
+ 			    BIT(mr->page_shift)) {
+ 		if (cur_mtt == (void *)mtt + sg.length) {
+ 			dma_sync_single_for_device(ddev, sg.addr, sg.length,

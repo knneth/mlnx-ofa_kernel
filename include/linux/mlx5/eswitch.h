@@ -146,12 +146,8 @@ u32 mlx5_eswitch_get_vport_metadata_for_set(struct mlx5_eswitch *esw,
 		ESW_TUN_OPTS_OFFSET + 1)
 
 u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev);
-bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw, u16 vport_num);
 u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev);
 struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw);
-int mlx5_eswitch_query_esw_vport_context(struct mlx5_core_dev *dev, u16 vport,
-					 bool other_vport,
-					 void *out, int outlen);
 
 #else  /* CONFIG_MLX5_ESWITCH */
 
@@ -200,11 +196,6 @@ static inline struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitc
 	return NULL;
 }
 
-static bool mlx5_eswitch_is_manager_vport(const struct mlx5_eswitch *esw,
-					  u16 vport_num)
-{
-	return false;
-}
 #endif /* CONFIG_MLX5_ESWITCH */
 
 static inline bool is_mdev_legacy_mode(struct mlx5_core_dev *dev)

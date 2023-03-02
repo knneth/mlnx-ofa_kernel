@@ -136,6 +136,7 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.map_size = ARRAY_SIZE(steering_mode_to_str),
 		.compat_name = "steering_mode",
 	},
+/* only for kernel linux-5.4.0-1020.21.g8ebdd1f-bluefield*/
 #ifdef HAVE_XFRM_OFFLOAD_FULL
 	{
 		.read_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_get,
@@ -153,7 +154,7 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.compat_name = "vport_match_mode",
 	},
 	{
-		.read_param_bool = mlx5_devlink_ct_action_on_nat_conns_get,
+	 	.read_param_bool = mlx5_devlink_ct_action_on_nat_conns_get,
 		.write_param_bool = mlx5_devlink_ct_action_on_nat_conns_set,
 		.compat_name = "ct_action_on_nat_conns",
 	},

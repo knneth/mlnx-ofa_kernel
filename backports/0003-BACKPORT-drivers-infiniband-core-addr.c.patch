@@ -1,14 +1,14 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
-Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
+Change-Id: I807959d637f7dcec214be1c728af363db890eddc
 ---
- drivers/infiniband/core/addr.c | 102 +++++++++++++++++++++++++++++----
- 1 file changed, 92 insertions(+), 10 deletions(-)
+ drivers/infiniband/core/addr.c | 107 ++++++++++++++++++++++++++++++---
+ 1 file changed, 97 insertions(+), 10 deletions(-)
 
 --- a/drivers/infiniband/core/addr.c
 +++ b/drivers/infiniband/core/addr.c
-@@ -42,7 +42,9 @@
+@@ -41,7 +41,9 @@
  #include <net/neighbour.h>
  #include <net/route.h>
  #include <net/netevent.h>
@@ -18,16 +18,18 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  #include <net/ip6_route.h>
  #include <rdma/ib_addr.h>
  #include <rdma/ib_cache.h>
-@@ -50,6 +52,8 @@
+@@ -49,6 +51,10 @@
  #include <rdma/ib.h>
  #include <rdma/rdma_netlink.h>
  #include <net/netlink.h>
++#ifdef HAVE_BASECODE_EXTRAS
 +#include <net/addrconf.h>
 +#include <linux/ratelimit.h>
++#endif
  
  #include "core_priv.h"
  
-@@ -76,9 +80,13 @@ static struct workqueue_struct *addr_wq;
+@@ -75,9 +81,13 @@ static struct workqueue_struct *addr_wq;
  
  static const struct nla_policy ib_nl_addr_policy[LS_NLA_TYPE_MAX] = {
  	[LS_NLA_TYPE_DGID] = {.type = NLA_BINARY,
@@ -41,7 +43,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  };
  
  static inline bool ib_nl_is_good_ip_resp(const struct nlmsghdr *nlh)
-@@ -88,9 +96,12 @@ static inline bool ib_nl_is_good_ip_resp
+@@ -87,9 +97,12 @@ static inline bool ib_nl_is_good_ip_resp
  
  	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
  		return false;
@@ -56,7 +58,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  	if (ret)
  		return false;
  
-@@ -131,8 +142,12 @@ static void ib_nl_process_good_ip_rsep(c
+@@ -130,8 +143,12 @@ static void ib_nl_process_good_ip_rsep(c
  }
  
  int ib_nl_handle_ip_res_resp(struct sk_buff *skb,
@@ -69,17 +71,20 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  {
  	if ((nlh->nlmsg_flags & NLM_F_REQUEST) ||
  	    !(NETLINK_CB(skb).sk))
-@@ -179,7 +194,8 @@ static int ib_nl_ip_send_msg(struct rdma
+@@ -178,7 +195,11 @@ static int ib_nl_ip_send_msg(struct rdma
  	}
  
  	/* Construct the family header first */
 -	header = skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
-+	header = (struct rdma_ls_ip_resolve_header *)
++	header =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct rdma_ls_ip_resolve_header *)
++#endif
 +		skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
  	header->ifindex = dev_addr->bound_dev_if;
  	nla_put(skb, attrtype, size, daddr);
  
-@@ -251,17 +267,26 @@ rdma_find_ndev_for_src_ip_rcu(struct net
+@@ -250,17 +271,26 @@ rdma_find_ndev_for_src_ip_rcu(struct net
  
  	switch (src_in->sa_family) {
  	case AF_INET:
@@ -107,7 +112,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  					  dev, 1)) {
  				ret = 0;
  				break;
-@@ -347,14 +372,24 @@ static int dst_fetch_ha(const struct dst
+@@ -346,14 +376,24 @@ static int dst_fetch_ha(const struct dst
  	return ret;
  }
  
@@ -132,7 +137,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  	}
  
  	rt6 = container_of(dst, struct rt6_info, dst);
-@@ -375,8 +410,12 @@ static int fetch_ha(const struct dst_ent
+@@ -374,8 +414,12 @@ static int fetch_ha(const struct dst_ent
  
  	might_sleep();
  
@@ -145,7 +150,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  		return ib_nl_fetch_ha(dev_addr, daddr, seq, family);
  	else
  		return dst_fetch_ha(dst, dev_addr, daddr);
-@@ -406,6 +445,7 @@ static int addr4_resolve(struct sockaddr
+@@ -405,6 +449,7 @@ static int addr4_resolve(struct sockaddr
  	if (ret)
  		return ret;
  
@@ -153,7 +158,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  	src_in->sin_addr.s_addr = fl4.saddr;
  
  	addr->hoplimit = ip4_dst_hoplimit(&rt->dst);
-@@ -423,17 +463,41 @@ static int addr6_resolve(struct sockaddr
+@@ -422,17 +467,41 @@ static int addr6_resolve(struct sockaddr
  	struct sockaddr_in6 *src_in = (struct sockaddr_in6 *)src_sock;
  	const struct sockaddr_in6 *dst_in =
  				(const struct sockaddr_in6 *)dst_sock;
@@ -199,7 +204,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  
  	if (ipv6_addr_any(&src_in->sin6_addr))
  		src_in->sin6_addr = fl6.saddr;
-@@ -442,8 +506,13 @@ static int addr6_resolve(struct sockaddr
+@@ -441,8 +510,13 @@ static int addr6_resolve(struct sockaddr
  
  	*pdst = dst;
  	return 0;
@@ -214,7 +219,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  static int addr6_resolve(struct sockaddr *src_sock,
  			 const struct sockaddr *dst_sock,
  			 struct rdma_dev_addr *addr,
-@@ -451,7 +520,7 @@ static int addr6_resolve(struct sockaddr
+@@ -450,7 +524,7 @@ static int addr6_resolve(struct sockaddr
  {
  	return -EADDRNOTAVAIL;
  }
@@ -223,7 +228,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  
  static int addr_resolve_neigh(const struct dst_entry *dst,
  			      const struct sockaddr *dst_in,
-@@ -478,6 +547,15 @@ static int copy_src_l2_addr(struct rdma_
+@@ -477,6 +551,15 @@ static int copy_src_l2_addr(struct rdma_
  			    const struct net_device *ndev)
  {
  	int ret = 0;
@@ -239,7 +244,7 @@ Change-Id: Ia1ff9d323d0e66564792cda8bd9154c96f91d3c6
  
  	if (dst->dev->flags & IFF_LOOPBACK)
  		ret = rdma_translate_ip(dst_in, dev_addr);
-@@ -489,7 +567,11 @@ static int copy_src_l2_addr(struct rdma_
+@@ -488,7 +571,11 @@ static int copy_src_l2_addr(struct rdma_
  	 * we're definitely in RoCE v2 (as RoCE v1 isn't routable) set the
  	 * network type accordingly.
  	 */

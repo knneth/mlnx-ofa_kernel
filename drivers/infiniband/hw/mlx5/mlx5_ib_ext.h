@@ -103,12 +103,12 @@ struct mlx5_tc_data {
 
 int init_tc_sysfs(struct mlx5_ib_dev *dev);
 void cleanup_tc_sysfs(struct mlx5_ib_dev *dev);
-void tclass_get_tclass_locked(struct mlx5_ib_dev *dev,
-			      struct mlx5_tc_data *tcd,
-			      const struct rdma_ah_attr *ah,
-			      u8 port,
-			      u8 *tclass,
-			      bool *global_tc);
+void tclass_get_tclass(struct mlx5_ib_dev *dev,
+		struct mlx5_tc_data *tcd,
+		const struct rdma_ah_attr *ah,
+		u8 port,
+		u8 *tclass,
+		bool *global_tc);
 
 /* DC_cnak feature */
 

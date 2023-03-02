@@ -54,7 +54,8 @@ port_err:
 void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
 {
 	struct mlx5_devm_device *devm_dev;
-	struct mlx5_devm_port *port;
+	struct mlx5_devm_port *port, *tmp;
+	const struct mlxdevm_ops *ops;
 	bool found = false;
 
 	devm_dev = mlx5_devm_device_get(dev);
@@ -62,10 +63,16 @@ void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
 		return;
 
 	down_write(&devm_dev->port_list_rwsem);
-	list_for_each_entry(port, &devm_dev->port_list, list) {
+	list_for_each_entry_safe(port, tmp, &devm_dev->port_list, list) {
 		if (port->vport_num != vport_num)
 			continue;
 		/* found the port */
+		ops = devm_dev->device.ops;
+
+		ops->rate_leaf_group_set(&port->port, "", NULL);
+		ops->rate_leaf_tx_max_set(&port->port, 0, NULL);
+		ops->rate_leaf_tx_share_set(&port->port, 0, NULL);
+
 		list_del(&port->list);
 		found = true;
 		break;

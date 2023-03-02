@@ -36,7 +36,7 @@ static struct mlx5_nb events_nbs_ref[] = {
 	/* Events to be forwarded (as is) to mlx5 core interfaces (mlx5e/mlx5_ib) */
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_PORT_CHANGE },
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_GENERAL_EVENT },
-	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT },
+	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_OBJECT_CHANGE },
 	/* QP/WQ resource events to forward */
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_DCT_DRAINED },
 	{.nb.notifier_call = forward_event,   .event_type = MLX5_EVENT_TYPE_PATH_MIG },
@@ -134,10 +134,10 @@ static const char *eqe_type_str(u8 type)
 		return "MLX5_EVENT_TYPE_MONITOR_COUNTER";
 	case MLX5_EVENT_TYPE_DEVICE_TRACER:
 		return "MLX5_EVENT_TYPE_DEVICE_TRACER";
+	case MLX5_EVENT_TYPE_OBJECT_CHANGE:
+		return "MLX5_EVENT_TYPE_OBJECT_CHANGE";
 	case MLX5_EVENT_TYPE_XRQ_ERROR:
 		return "MLX5_EVENT_TYPE_XRQ_ERROR";
-	case MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT:
-		return "MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT";
 	default:
 		return "Unrecognized event";
 	}
@@ -427,6 +427,7 @@ int mlx5_blocking_notifier_register(struct mlx5_core_dev *dev, struct notifier_b
 
 	return blocking_notifier_chain_register(&events->sw_nh, nb);
 }
+EXPORT_SYMBOL(mlx5_blocking_notifier_register);
 
 int mlx5_blocking_notifier_unregister(struct mlx5_core_dev *dev, struct notifier_block *nb)
 {
@@ -434,6 +435,7 @@ int mlx5_blocking_notifier_unregister(struct mlx5_core_dev *dev, struct notifier
 
 	return blocking_notifier_chain_unregister(&events->sw_nh, nb);
 }
+EXPORT_SYMBOL(mlx5_blocking_notifier_unregister);
 
 int mlx5_blocking_notifier_call_chain(struct mlx5_core_dev *dev, unsigned int event,
 				      void *data)

@@ -1,147 +1,22 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 
-Change-Id: If0495f20991a179dda86b4f43a941a5c370b9d78
+Change-Id: I0977084c652bbc6512df518617ed29aab5d252fb
 ---
- .../ethernet/mellanox/mlx5/core/en_stats.h    | 30 +++++++++++++++++--
- 1 file changed, 28 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
-@@ -33,6 +33,8 @@
- #ifndef __MLX5_EN_STATS_H__
- #define __MLX5_EN_STATS_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+@@ -38,7 +38,11 @@
  
-+#include <uapi/linux/ethtool.h>
-+
- #define MLX5E_READ_CTR64_CPU(ptr, dsc, i) \
- 	(*(u64 *)((char *)ptr + dsc[i].offset))
- #define MLX5E_READ_CTR64_BE(ptr, dsc, i) \
-@@ -114,9 +116,11 @@ void mlx5e_stats_update_ndo_stats(struct
- 
- void mlx5e_stats_pause_get(struct mlx5e_priv *priv,
- 			   struct ethtool_pause_stats *pause_stats);
-+#ifdef HAVE_NDO_GET_FEC_STATS
- void mlx5e_stats_fec_get(struct mlx5e_priv *priv,
- 			 struct ethtool_fec_stats *fec_stats);
--
+ void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc)
+ {
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 	bool ro_pci_enable = pcie_relaxed_ordering_enabled(mdev->pdev);
++#else
++	bool ro_pci_enable = true;
 +#endif
-+#ifdef HAVE_NDO_ETH_PHY_STATS
- void mlx5e_stats_eth_phy_get(struct mlx5e_priv *priv,
- 			     struct ethtool_eth_phy_stats *phy_stats);
- void mlx5e_stats_eth_mac_get(struct mlx5e_priv *priv,
-@@ -126,6 +130,7 @@ void mlx5e_stats_eth_ctrl_get(struct mlx
- void mlx5e_stats_rmon_get(struct mlx5e_priv *priv,
- 			  struct ethtool_rmon_stats *rmon,
- 			  const struct ethtool_rmon_hist_range **ranges);
-+#endif
+ 	bool ro_write = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
+ 	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read);
  
- /* Concrete NIC Stats */
- 
-@@ -158,15 +163,17 @@ struct mlx5e_sw_stats {
- 	u64 rx_csum_complete_tail;
- 	u64 rx_csum_complete_tail_slow;
- 	u64 rx_csum_unnecessary_inner;
-+#ifdef HAVE_XDP_SUPPORT
- 	u64 rx_xdp_drop;
- 	u64 rx_xdp_redirect;
- 	u64 rx_xdp_tx_xmit;
-+	u64 rx_xdp_tx_nops;
- 	u64 rx_xdp_tx_mpwqe;
- 	u64 rx_xdp_tx_inlnw;
--	u64 rx_xdp_tx_nops;
- 	u64 rx_xdp_tx_full;
- 	u64 rx_xdp_tx_err;
- 	u64 rx_xdp_tx_cqe;
-+#endif
- 	u64 tx_csum_none;
- 	u64 tx_csum_partial;
- 	u64 tx_csum_partial_inner;
-@@ -177,6 +184,12 @@ struct mlx5e_sw_stats {
- 	u64 tx_cqes;
- 	u64 tx_queue_wake;
- 	u64 tx_cqe_err;
-+#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
-+	u64 rx_sw_lro_aggregated;
-+	u64 rx_sw_lro_flushed;
-+	u64 rx_sw_lro_no_desc;
-+#endif
-+#ifdef HAVE_XDP_SUPPORT
- 	u64 tx_xdp_xmit;
- 	u64 tx_xdp_mpwqe;
- 	u64 tx_xdp_inlnw;
-@@ -184,6 +197,9 @@ struct mlx5e_sw_stats {
- 	u64 tx_xdp_full;
- 	u64 tx_xdp_err;
- 	u64 tx_xdp_cqes;
-+#endif
-+	u64 tx_cqe_compress_blks;
-+	u64 tx_cqe_compress_pkts;
- 	u64 rx_wqe_err;
- 	u64 rx_mpwqe_filler_cqes;
- 	u64 rx_mpwqe_filler_strides;
-@@ -212,6 +228,7 @@ struct mlx5e_sw_stats {
- 	u64 ch_eq_rearm;
- 
- #ifdef CONFIG_MLX5_EN_TLS
-+#ifdef HAVE_UAPI_LINUX_TLS_H
- 	u64 tx_tls_encrypted_packets;
- 	u64 tx_tls_encrypted_bytes;
- 	u64 tx_tls_ooo;
-@@ -232,6 +249,7 @@ struct mlx5e_sw_stats {
- 	u64 rx_tls_resync_res_retry;
- 	u64 rx_tls_resync_res_skip;
- 	u64 rx_tls_err;
-+#endif /* HAVE_UAPI_LINUX_TLS_H */
- #endif
- 
- 	u64 rx_xsk_packets;
-@@ -340,8 +358,10 @@ struct mlx5e_rq_stats {
- 	u64 mcast_packets;
- 	u64 ecn_mark;
- 	u64 removed_vlan_packets;
-+#ifdef HAVE_XDP_SUPPORT
- 	u64 xdp_drop;
- 	u64 xdp_redirect;
-+#endif
- 	u64 wqe_err;
- 	u64 mpwqe_filler_cqes;
- 	u64 mpwqe_filler_strides;
-@@ -363,6 +383,7 @@ struct mlx5e_rq_stats {
- 	u64 pet_hdr_lookup_drop;
- 	u64 pet_mdata_lookup_drop;
- #ifdef CONFIG_MLX5_EN_TLS
-+#ifdef HAVE_UAPI_LINUX_TLS_H
- 	u64 tls_decrypted_packets;
- 	u64 tls_decrypted_bytes;
- 	u64 tls_resync_req_pkt;
-@@ -373,6 +394,7 @@ struct mlx5e_rq_stats {
- 	u64 tls_resync_res_retry;
- 	u64 tls_resync_res_skip;
- 	u64 tls_err;
-+#endif /* HAVE_UAPI_LINUX_TLS_H */
- #endif
- };
- 
-@@ -409,10 +431,13 @@ struct mlx5e_sq_stats {
- 	u64 recover;
- 	/* dirtied @completion */
- 	u64 cqes ____cacheline_aligned_in_smp;
-+	u64 cqe_compress_blks;
-+	u64 cqe_compress_pkts;
- 	u64 wake;
- 	u64 cqe_err;
- };
- 
-+#ifdef HAVE_XDP_SUPPORT
- struct mlx5e_xdpsq_stats {
- 	u64 xmit;
- 	u64 mpwqe;
-@@ -423,6 +448,7 @@ struct mlx5e_xdpsq_stats {
- 	/* dirtied @completion */
- 	u64 cqes ____cacheline_aligned_in_smp;
- };
-+#endif
- 
- struct mlx5e_ch_stats {
- 	u64 events;

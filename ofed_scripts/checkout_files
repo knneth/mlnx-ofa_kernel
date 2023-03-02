@@ -18,6 +18,7 @@ drivers/scsi/scsi_priv.h
 drivers/scsi/scsi_transport_srp.c
 drivers/base/auxiliary.c
 drivers/base/Makefile
+drivers/vfio/pci/mlx5
 net/sunrpc/xprtrdma
 include/linux/mlx5/
 include/rdma/

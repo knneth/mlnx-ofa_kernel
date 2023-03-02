@@ -388,46 +388,12 @@ err_out_alloc:
 
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 {
+	struct mlx5_fc *counter = mlx5_fc_create_ex(dev, aging);
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
-	struct mlx5_fc *counter;
-	int err;
 
-	if (dev->disable_fc)
-		return ERR_PTR(-EOPNOTSUPP);
-
-	counter = mlx5_fc_acquire(dev, aging);
-	if (IS_ERR(counter))
-		return counter;
-
-	INIT_LIST_HEAD(&counter->list);
-	counter->aging = aging;
-
-	if (aging) {
-		u32 id = counter->id;
-		counter->cache.lastuse = jiffies;
-		counter->lastbytes = counter->cache.bytes;
-		counter->lastpackets = counter->cache.packets;
-
-		idr_preload(GFP_KERNEL);
-		spin_lock(&fc_stats->counters_idr_lock);
-
-		err = idr_alloc_u32(&fc_stats->counters_idr, counter, &id, id,
-				    GFP_NOWAIT);
-
-		spin_unlock(&fc_stats->counters_idr_lock);
-		idr_preload_end();
-		if (err)
-			goto err_out_alloc;
-		llist_add(&counter->addlist, &fc_stats->addlist);
-
+	if (aging)
 		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
-	}
-
 	return counter;
-
-err_out_alloc:
-	mlx5_fc_release(dev, counter);
-	return ERR_PTR(err);
 }
 EXPORT_SYMBOL(mlx5_fc_create);
 
@@ -446,6 +412,7 @@ void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 
 	if (counter->aging) {
 		llist_add(&counter->dellist, &fc_stats->dellist);
+		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
 		return;
 	}
 
@@ -458,9 +425,6 @@ int mlx5_init_fc_stats(struct mlx5_core_dev *dev)
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
 	int init_bulk_len;
 	int init_out_len;
-
-	if (dev->disable_fc)
-		return 0;
 
 	spin_lock_init(&fc_stats->counters_idr_lock);
 	idr_init(&fc_stats->counters_idr);
@@ -496,9 +460,6 @@ void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
 	struct llist_node *tmplist;
 	struct mlx5_fc *counter;
 	struct mlx5_fc *tmp;
-
-	if (dev->disable_fc)
-		return;
 
 	cancel_delayed_work_sync(&dev->priv.fc_stats.work);
 	destroy_workqueue(dev->priv.fc_stats.wq);

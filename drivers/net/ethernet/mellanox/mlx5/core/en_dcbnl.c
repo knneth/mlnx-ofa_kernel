@@ -1026,15 +1026,6 @@ void mlx5e_dcbnl_build_netdev(struct net_device *netdev)
 		netdev->dcbnl_ops = &mlx5e_dcbnl_ops;
 }
 
-void mlx5e_dcbnl_build_rep_netdev(struct net_device *netdev)
-{
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5_core_dev *mdev = priv->mdev;
-
-	if (MLX5_CAP_GEN(mdev, qos))
-		netdev->dcbnl_ops = &mlx5e_dcbnl_ops;
-}
-
 static void mlx5e_dcbnl_query_dcbx_mode(struct mlx5e_priv *priv,
 					enum mlx5_dcbx_oper_mode *mode)
 {
@@ -1208,14 +1199,14 @@ static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio)
 static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
-	int err;
 	u8 trust_state;
+	int err;
 	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
 	const bool take_rtnl = priv->netdev->reg_state == NETREG_REGISTERED;
 
 	if (!MLX5_DSCP_SUPPORTED(mdev)) {
 		WRITE_ONCE(priv->dcbx_dp.trust_state, MLX5_QPTS_TRUST_PCP);
- 		return 0;
+		return 0;
 	}
 
 	err = mlx5_query_trust_state(priv->mdev, &trust_state);

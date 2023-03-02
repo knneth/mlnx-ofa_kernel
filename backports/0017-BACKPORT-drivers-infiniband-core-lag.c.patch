@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/lag.c
 
-Change-Id: I823acc086ab4bcdf1b6abfd882c0579c9538b8ad
+Change-Id: I8d7878481a917d6589dbc91a6ebed2d8a47efa73
 ---
  drivers/infiniband/core/lag.c | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)

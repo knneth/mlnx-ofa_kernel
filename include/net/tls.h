@@ -3,7 +3,13 @@
 
 #include "../../compat/config.h"
 
+#ifdef HAVE_NET_TLS_H
 #include_next <net/tls.h>
+#endif
+
+#ifndef TLS_DRIVER_STATE_SIZE_TX
+#define TLS_DRIVER_STATE_SIZE_TX	16
+#endif
 
 #if defined(HAVE_KTLS_STRUCTS) && !defined(HAVE_TLS_DRIVER_CTX)
 

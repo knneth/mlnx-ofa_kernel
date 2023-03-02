@@ -10,6 +10,7 @@
 #include "en/tc_tun_encap.h"
 #include "en/tc_priv.h"
 #include "en_rep.h"
+#include "lag/lag.h"
 
 static bool
 same_vf_reps(struct mlx5e_priv *priv, struct net_device *out_dev)
@@ -125,6 +126,16 @@ tc_act_can_offload_mirred(struct mlx5e_tc_act_parse_state *parse_state,
 		return false;
 	}
 
+	if (parse_state->eth_pop && !parse_state->mpls_push) {
+		NL_SET_ERR_MSG_MOD(extack, "vlan pop eth is supported only with mpls push");
+		return false;
+	}
+
+	if (flow_flag_test(parse_state->flow, L3_TO_L2_DECAP) && !parse_state->eth_push) {
+		NL_SET_ERR_MSG_MOD(extack, "mpls pop is only supported with vlan eth push");
+		return false;
+	}
+
 	if (mlx5e_is_ft_flow(flow) && out_dev == priv->netdev) {
 		/* Ignore forward to self rules generated
 		 * by adding both mlx5 devs to the flow table
@@ -209,6 +220,7 @@ parse_mirred(struct mlx5e_tc_act_parse_state *parse_state,
 	struct net_device *uplink_dev;
 	struct mlx5e_priv *out_priv;
 	struct mlx5_eswitch *esw;
+	bool is_uplink_rep;
 	int *ifindexes;
 	int if_count;
 	int err;
@@ -223,6 +235,10 @@ parse_mirred(struct mlx5e_tc_act_parse_state *parse_state,
 
 	parse_state->ifindexes[if_count] = out_dev->ifindex;
 	parse_state->if_count++;
+	is_uplink_rep = mlx5e_eswitch_uplink_rep(out_dev);
+	err = mlx5_lag_do_mirred(priv->mdev, out_dev);
+	if (err)
+		return err;
 
 	out_dev = get_fdb_out_dev(uplink_dev, out_dev);
 	if (!out_dev)
@@ -262,6 +278,14 @@ parse_mirred(struct mlx5e_tc_act_parse_state *parse_state,
 	rpriv = out_priv->ppriv;
 	esw_attr->dests[esw_attr->out_count].rep = rpriv->rep;
 	esw_attr->dests[esw_attr->out_count].mdev = out_priv->mdev;
+
+	/* If output device is bond master then rules are not explicit
+	 * so we don't attempt to count them.
+	 */
+	if (is_uplink_rep && MLX5_CAP_PORT_SELECTION(priv->mdev, port_select_flow_table) &&
+	    MLX5_CAP_GEN(priv->mdev, create_lag_when_not_master_up))
+		attr->lag.count = true;
+
 	esw_attr->out_count++;
 
 	return 0;

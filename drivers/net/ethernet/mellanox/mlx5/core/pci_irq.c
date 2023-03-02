@@ -3,7 +3,6 @@
 
 #include <linux/interrupt.h>
 #include <linux/notifier.h>
-#include <linux/module.h>
 #include <linux/mlx5/driver.h>
 #include "mlx5_core.h"
 #include "mlx5_irq.h"
@@ -97,8 +96,8 @@ int mlx5_set_msix_vec_count(struct mlx5_core_dev *dev, int function_id,
 	if (msix_vec_count > max_msix)
 		return -EOVERFLOW;
 
-	query_cap = kzalloc(query_sz, GFP_KERNEL);
-	hca_cap = kzalloc(set_sz, GFP_KERNEL);
+	query_cap = kvzalloc(query_sz, GFP_KERNEL);
+	hca_cap = kvzalloc(set_sz, GFP_KERNEL);
 	if (!hca_cap || !query_cap) {
 		ret = -ENOMEM;
 		goto out;
@@ -121,8 +120,8 @@ int mlx5_set_msix_vec_count(struct mlx5_core_dev *dev, int function_id,
 		 MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE << 1);
 	ret = mlx5_cmd_exec_in(dev, set_hca_cap, hca_cap);
 out:
-	kfree(hca_cap);
-	kfree(query_cap);
+	kvfree(hca_cap);
+	kvfree(query_cap);
 	return ret;
 }
 
@@ -298,11 +297,6 @@ int mlx5_irq_get_index(struct mlx5_irq *irq)
 }
 
 /* irq_pool API */
-
-static int irq_pool_size_get(struct mlx5_irq_pool *pool)
-{
-	return pool->xa_num_irqs.max - pool->xa_num_irqs.min + 1;
-}
 
 /* requesting an irq from a given pool according to given index */
 static struct mlx5_irq *
@@ -645,7 +639,7 @@ static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pf_vec)
 	}
 	/* init sf_comp_pool */
 	table->sf_comp_pool = irq_pool_alloc(dev, pf_vec + num_sf_ctrl,
-					     sf_vec - num_sf_ctrl - 1, "mlx5_sf_comp",
+					     sf_vec - num_sf_ctrl, "mlx5_sf_comp",
 					     MLX5_EQ_SHARE_IRQ_MIN_COMP,
 					     MLX5_EQ_SHARE_IRQ_MAX_COMP);
 	if (IS_ERR(table->sf_comp_pool)) {
@@ -688,7 +682,8 @@ int mlx5_irq_table_init(struct mlx5_core_dev *dev)
 	if (mlx5_core_is_sf(dev))
 		return 0;
 
-	irq_table = kvzalloc(sizeof(*irq_table), GFP_KERNEL);
+	irq_table = kvzalloc_node(sizeof(*irq_table), GFP_KERNEL,
+				  dev->priv.numa_node);
 	if (!irq_table)
 		return -ENOMEM;
 
@@ -708,7 +703,7 @@ int mlx5_irq_table_get_num_comp(struct mlx5_irq_table *table)
 {
 	if (!table->pf_pool->xa_num_irqs.max)
 		return 1;
-	return irq_pool_size_get(table->pf_pool) - MLX5_PF_IRQ_CTRL_NUM;
+	return table->pf_pool->xa_num_irqs.max - table->pf_pool->xa_num_irqs.min;
 }
 
 int mlx5_irq_table_create(struct mlx5_core_dev *dev)
@@ -802,7 +797,7 @@ void mlx5_irq_rename(struct mlx5_core_dev *dev, struct mlx5_irq *irq,
 				"%s@pci:%s", default_name, pci_name(dev->pdev));
 	} else {
 		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
-				irq->index - MLX5_PF_IRQ_CTRL_NUM + 1);
+				irq->index - MLX5_PF_IRQ_CTRL_NUM);
 	}
 }
 

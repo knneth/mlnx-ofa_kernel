@@ -1,97 +1,48 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
 
-Change-Id: I3219dc8abed31bfe1e34c25c5f6a2e3ce80bbb1a
+Change-Id: I2b1a11fd2148239027d0589da338f30f99b198ce
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/tx.c   | 38 +++++++++++++++++--
- 1 file changed, 35 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
-@@ -1,13 +1,22 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2019 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- #include "tx.h"
- #include "pool.h"
- #include "en/xdp.h"
- #include "en/params.h"
-+#ifdef HAVE_XDP_SOCK_DRV_H
- #include <net/xdp_sock_drv.h>
--
--int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags)
-+#else
-+#include <net/xdp_sock.h>
-+#endif
-+
-+int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid
-+#ifdef HAVE_NDO_XSK_WAKEUP
-+		     , u32 flags
-+#endif
-+		     )
+ void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
  {
- 	struct mlx5e_priv *priv = netdev_priv(dev);
- 	struct mlx5e_params *params = &priv->channels.params;
-@@ -66,7 +75,11 @@ static void mlx5e_xsk_tx_post_err(struct
++#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
+ 	u32 trunc_size = mapped_obj->sample.trunc_size;
+ 	struct psample_group psample_group = {};
+ 	struct psample_metadata md = {};
+@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
+ 	skb_push(skb, skb->mac_len);
  
- bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
- {
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	struct xsk_buff_pool *pool = sq->xsk_pool;
+ 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
 +#else
-+	struct xdp_umem *pool = sq->umem;
-+#endif
- 	struct mlx5e_xmit_data xdptxd;
- 	struct mlx5e_xdp_info xdpi;
- 	bool work_done = true;
-@@ -86,8 +99,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			work_done = false;
- 			break;
- 		}
--
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 		if (!xsk_tx_peek_desc(pool, &desc)) {
-+#else
-+		if (!xsk_umem_consume_tx(pool, &desc)) {
-+#endif
- 			/* TX will get stuck until something wakes it up by
- 			 * triggering NAPI. Currently it's expected that the
- 			 * application calls sendto() if there are consumed, but
-@@ -96,11 +112,22 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			break;
- 		}
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 		xdptxd.dma_addr = xsk_buff_raw_get_dma(pool, desc.addr);
- 		xdptxd.data = xsk_buff_raw_get_data(pool, desc.addr);
-+#else
-+		xdptxd.dma_addr = xdp_umem_get_dma(pool, desc.addr);
-+		xdptxd.data = xdp_umem_get_data(pool, desc.addr);
-+#endif
- 		xdptxd.len = desc.len;
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 		xsk_buff_raw_dma_sync_for_device(pool, xdptxd.dma_addr, xdptxd.len);
-+#else
-+		dma_sync_single_for_device(sq->pdev, xdptxd.dma_addr,
-+					   xdptxd.len, DMA_BIDIRECTIONAL);
++	u32 trunc_size = mapped_obj->sample.trunc_size;
++	struct psample_group psample_group = {};
++	int iif = skb->dev->ifindex;
++	u32 size;
 +
++	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
++	psample_group.group_num = mapped_obj->sample.group_id;
++	psample_group.net = &init_net;
++	skb_push(skb, skb->mac_len);
++
++	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
 +#endif
- 
- 		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
- 				      mlx5e_xmit_xdp_frame, sq, &xdptxd, &xdpi, check_result);
-@@ -119,8 +146,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			mlx5e_xdp_mpwqe_complete(sq);
- 		mlx5e_xmit_xdp_doorbell(sq);
- 
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 		xsk_tx_release(pool);
-+#else
-+		xsk_umem_consume_tx_done(pool);
-+#endif
- 	}
- 
- 	return !(budget && work_done);
  }
-+#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ 
+ static int
+@@ -479,7 +493,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
+ 	struct mlx5_flow_attr *pre_attr;
+ 	u32 tunnel_id = attr->tunnel_id;
+ 	struct mlx5_eswitch *esw;
+-	u32 default_tbl_id;
++	u32 default_tbl_id = 0;
+ 	u32 obj_id;
+ 	int err;
+ 

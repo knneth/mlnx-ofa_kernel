@@ -1,27 +1,24 @@
-From: Chris Mi <cmi@nvidia.com>
+From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
 
-Change-Id: Id914c6cae530e6b475b09ad1efbe56548f396b08
+Change-Id: Ifeaa9b1bac9899aaf4582c155f57c55035aeaa46
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 2 ++
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c | 2 ++
  1 file changed, 2 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-@@ -12,6 +12,7 @@ tc_act_can_offload_sample(struct mlx5e_t
- 			  int act_index,
- 			  struct mlx5_flow_attr *attr)
- {
-+#ifdef CONFIG_COMPAT_KERNEL_CT
- 	struct netlink_ext_ack *extack = parse_state->extack;
- 	bool ct_nat;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+@@ -121,10 +121,12 @@ tc_act_can_offload_mirred(struct mlx5e_t
+ 		return false;
+ 	}
  
-@@ -21,6 +22,7 @@ tc_act_can_offload_sample(struct mlx5e_t
- 		NL_SET_ERR_MSG_MOD(extack, "Sample action with CT NAT is not supported");
++#ifdef HAVE_NETIF_IS_BAREDUDP
+ 	if (parse_state->mpls_push && !netif_is_bareudp(out_dev)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "mpls is supported only through a bareudp device");
  		return false;
  	}
 +#endif
  
- 	return true;
- }
+ 	if (parse_state->eth_pop && !parse_state->mpls_push) {
+ 		NL_SET_ERR_MSG_MOD(extack, "vlan pop eth is supported only with mpls push");

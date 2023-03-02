@@ -1336,7 +1336,9 @@ static void ib_umad_kill_port(struct ib_umad_port *port)
 	struct ib_umad_file *file;
 	int id;
 
+	cdev_device_del(&port->sm_cdev, &port->sm_dev);
 	cdev_device_del(&port->cdev, &port->dev);
+
 	mutex_lock(&port->file_mutex);
 
 	/* Mark ib_dev NULL and block ioctl or other file ops to progress
@@ -1357,7 +1359,6 @@ static void ib_umad_kill_port(struct ib_umad_port *port)
 
 	mutex_unlock(&port->file_mutex);
 
-	cdev_device_del(&port->sm_cdev, &port->sm_dev);
 	ida_free(&umad_ida, port->dev_num);
 
 	/* balances device_initialize() */

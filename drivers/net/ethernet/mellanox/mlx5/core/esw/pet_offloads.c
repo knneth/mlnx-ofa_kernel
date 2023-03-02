@@ -9,8 +9,6 @@
 #include "mlx5_core.h"
 #include <linux/mlx5/eswitch.h>
 #include "esw/acl/ofld.h"
-#include "accel/ipsec_offload.h"
-#include "esw/ipsec.h"
 #include "esw/indir_table.h"
 #include "rdma.h"
 #include "en.h"
@@ -20,6 +18,7 @@
 #include "lib/fs_chains.h"
 #include "en_tc.h"
 #include "en_rep.h"
+#include "eswitch.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
 

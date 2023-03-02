@@ -1,0 +1,69 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+
+Change-Id: I632ae32b22eaac7bab8e98b6de00d3e12c60e52b
+---
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 21 +++++++++++++++++--
+ 1 file changed, 19 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -34,6 +34,9 @@
+ 
+ #define MLX5E_RX_ERR_CQE(cqe) (get_cqe_opcode(cqe) != MLX5_CQE_RESP_SEND)
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++#define MLX5_XMIT_MORE_SKB_CB 0xa
++#endif
+ static inline
+ ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns func, struct mlx5_clock *clock, u64 cqe_ts)
+ {
+@@ -45,7 +48,7 @@ enum mlx5e_icosq_wqe_type {
+ 	MLX5E_ICOSQ_WQE_NOP,
+ 	MLX5E_ICOSQ_WQE_UMR_RX,
+ 	MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR,
+-#ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_KTLS_RX_SUPPORT
+ 	MLX5E_ICOSQ_WQE_UMR_TLS,
+ 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
+ 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
+@@ -65,7 +68,12 @@ int mlx5e_napi_poll(struct napi_struct *
+ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq);
+ 
+ /* RX */
+-void mlx5e_page_dma_unmap(struct mlx5e_rq *rq, struct page *page);
++void mlx5e_page_dma_unmap(struct mlx5e_rq *rq,
++#ifdef HAVE_PAGE_DMA_ADDR
++			  struct page *page);
++#else
++			  struct mlx5e_alloc_unit *au);
++#endif
+ void mlx5e_page_release_dynamic(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au, bool recycle);
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq));
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq));
+@@ -244,7 +252,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+ {
+ 	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
+ 
+ 	*wq->db = cpu_to_be32(pc);
+ 
+@@ -436,8 +448,13 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+ 	case IPPROTO_UDP:
+ 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 		fallthrough;
++
+ 	case IPPROTO_TCP:
++#ifdef HAVE_SKB_INNER_TRANSPORT_OFFSET
+ 		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
++#else
++		eseg->swp_inner_l4_offset = (skb_inner_transport_header(skb)  - skb->data) / 2;
++#endif /*HAVE_SKB_INNER_TRANSPORT_OFFSET*/
+ 		break;
+ 	}
+ }

@@ -40,8 +40,7 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));
 
 		dm->steering_sw_icm_alloc_blocks =
-			kcalloc(BITS_TO_LONGS(steering_icm_blocks),
-				sizeof(unsigned long), GFP_KERNEL);
+			bitmap_zalloc(steering_icm_blocks, GFP_KERNEL);
 		if (!dm->steering_sw_icm_alloc_blocks)
 			goto err_steering;
 	}
@@ -52,8 +51,7 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));
 
 		dm->header_modify_sw_icm_alloc_blocks =
-			kcalloc(BITS_TO_LONGS(header_modify_icm_blocks),
-				sizeof(unsigned long), GFP_KERNEL);
+			bitmap_zalloc(header_modify_icm_blocks, GFP_KERNEL);
 		if (!dm->header_modify_sw_icm_alloc_blocks)
 			goto err_modify_hdr;
 	}
@@ -64,24 +62,22 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));
 
 		dm->header_encap_sw_icm_alloc_blocks =
-			kcalloc(BITS_TO_LONGS(header_sw_encap_icm_blocks),
-				sizeof(unsigned long), GFP_KERNEL);
+			bitmap_zalloc(header_sw_encap_icm_blocks, GFP_KERNEL);
 		if (!dm->header_encap_sw_icm_alloc_blocks)
 			goto err_sw_encap;
 	}
 
 	support_v2 = MLX5_CAP_FLOWTABLE_NIC_RX(dev, sw_owner_v2) &&
-		MLX5_CAP_FLOWTABLE_NIC_TX(dev, sw_owner_v2);
+		     MLX5_CAP_FLOWTABLE_NIC_TX(dev, sw_owner_v2) &&
+		     MLX5_CAP64_DEV_MEM(dev, header_modify_pattern_sw_icm_start_address);
 
-	if (support_v2 &&
-	    MLX5_CAP64_DEV_MEM(dev, header_modify_pattern_sw_icm_start_address)) {
+	if (support_v2) {
 		header_modify_pattern_icm_blocks =
 			BIT(MLX5_CAP_DEV_MEM(dev, log_header_modify_pattern_sw_icm_size) -
 			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));
 
 		dm->header_modify_pattern_sw_icm_alloc_blocks =
-			kcalloc(BITS_TO_LONGS(header_modify_pattern_icm_blocks),
-				sizeof(unsigned long), GFP_KERNEL);
+			bitmap_zalloc(header_modify_pattern_icm_blocks, GFP_KERNEL);
 		if (!dm->header_modify_pattern_sw_icm_alloc_blocks)
 			goto err_pattern;
 	}
@@ -89,13 +85,13 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 	return dm;
 
 err_pattern:
-	kfree(dm->header_encap_sw_icm_alloc_blocks);
+	bitmap_free(dm->header_encap_sw_icm_alloc_blocks);
 
 err_sw_encap:
-	kfree(dm->header_modify_sw_icm_alloc_blocks);
+	bitmap_free(dm->header_modify_sw_icm_alloc_blocks);
 
 err_modify_hdr:
-	kfree(dm->steering_sw_icm_alloc_blocks);
+	bitmap_free(dm->steering_sw_icm_alloc_blocks);
 
 err_steering:
 	kfree(dm);
@@ -114,7 +110,7 @@ void mlx5_dm_cleanup(struct mlx5_core_dev *dev)
 		WARN_ON(!bitmap_empty(dm->steering_sw_icm_alloc_blocks,
 				      BIT(MLX5_CAP_DEV_MEM(dev, log_steering_sw_icm_size) -
 					  MLX5_LOG_SW_ICM_BLOCK_SIZE(dev))));
-		kfree(dm->steering_sw_icm_alloc_blocks);
+		bitmap_free(dm->steering_sw_icm_alloc_blocks);
 	}
 
 	if (dm->header_modify_sw_icm_alloc_blocks) {
@@ -122,7 +118,7 @@ void mlx5_dm_cleanup(struct mlx5_core_dev *dev)
 				      BIT(MLX5_CAP_DEV_MEM(dev,
 							   log_header_modify_sw_icm_size) -
 				      MLX5_LOG_SW_ICM_BLOCK_SIZE(dev))));
-		kfree(dm->header_modify_sw_icm_alloc_blocks);
+		bitmap_free(dm->header_modify_sw_icm_alloc_blocks);
 	}
 
 	if (dm->header_encap_sw_icm_alloc_blocks) {
@@ -130,7 +126,7 @@ void mlx5_dm_cleanup(struct mlx5_core_dev *dev)
 				      BIT(MLX5_CAP_DEV_MEM(dev,
 							   log_indirect_encap_sw_icm_size) -
 				      MLX5_LOG_SW_ICM_BLOCK_SIZE(dev))));
-		kfree(dm->header_encap_sw_icm_alloc_blocks);
+		bitmap_free(dm->header_encap_sw_icm_alloc_blocks);
 	}
 
 	if (dm->header_modify_pattern_sw_icm_alloc_blocks) {
@@ -138,7 +134,7 @@ void mlx5_dm_cleanup(struct mlx5_core_dev *dev)
 				      BIT(MLX5_CAP_DEV_MEM(dev,
 							   log_header_modify_pattern_sw_icm_size) -
 					  MLX5_LOG_SW_ICM_BLOCK_SIZE(dev))));
-		kfree(dm->header_modify_pattern_sw_icm_alloc_blocks);
+		bitmap_free(dm->header_modify_pattern_sw_icm_alloc_blocks);
 	}
 
 	kfree(dm);

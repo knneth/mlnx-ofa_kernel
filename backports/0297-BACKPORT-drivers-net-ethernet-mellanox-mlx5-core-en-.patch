@@ -1,25 +1,24 @@
-From: Chris Mi <cmi@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
 
-Change-Id: I016e1d421dc93bbb23bc917502c8472a49aa27b4
+Change-Id: I1cf4b999d017da4d91921cb6aed92780c0899551
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 4 +++-
- 1 file changed, 3 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-@@ -133,10 +133,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
- 	struct flow_action_entry vlan_act = {
- 		.id = FLOW_ACTION_VLAN_POP,
- 	};
--	int nest_level, err = 0;
-+	int nest_level = 1, err = 0;
- 
-+#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
- 	nest_level = attr->parse_attr->filter_dev->lower_level -
- 						priv->netdev->lower_level;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
+ int
+ mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
+ 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
+ 		       struct netlink_ext_ack *extack);
++#else
++int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
++		       u16 *new_qid, struct netlink_ext_ack *extack);
 +#endif
- 	while (nest_level--) {
- 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
- 					   extack);
+ int
+ mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
+ 			struct netlink_ext_ack *extack);

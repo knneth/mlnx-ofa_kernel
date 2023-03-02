@@ -140,6 +140,12 @@ static ssize_t miss_rl_stats_clr_store(struct kobject *kobj,
 	return err ? err : count;
 }
 
+static struct kobj_attribute attr_miss_rl_stats_clr = {
+	.attr = {.name = "miss_rl_stats_clr",
+		 .mode = 0200 },
+	.store = miss_rl_stats_clr_store,
+};
+
 static ssize_t page_limit_show(struct kobject *kobj,
 			       struct kobj_attribute *attr,
 			       char *buf)
@@ -215,12 +221,6 @@ static struct kobj_attribute attr_miss_rl_dropped_bytes = {
 	.show = miss_rl_dropped_bytes_show,
 };
 
-static struct kobj_attribute attr_miss_rl_stats_clr = {
-	.attr = {.name = "miss_rl_stats_clr",
-		 .mode = 0200 },
-	.store = miss_rl_stats_clr_store,
-};
-
 static struct kobj_attribute attr_page_limit = {
 	.attr = {.name = "page_limit",
 		 .mode = 0644 },
@@ -247,9 +247,11 @@ static const struct sysfs_ops rep_sysfs_ops = {
 	.store  = rep_attr_store
 };
 
+ATTRIBUTE_GROUPS(rep);
+
 static struct kobj_type rep_type = {
 	.sysfs_ops     = &rep_sysfs_ops,
-	.default_attrs = rep_attrs
+	.default_groups = rep_groups
 };
 
 static struct attribute *rep_paging_attrs[] = {
@@ -257,10 +259,12 @@ static struct attribute *rep_paging_attrs[] = {
 	&attr_num_pages.attr,
 	NULL,
 };
+ATTRIBUTE_GROUPS(rep_paging);
+
 
 static struct kobj_type rep_paging = {
 	.sysfs_ops     = &rep_sysfs_ops,
-	.default_attrs = rep_paging_attrs
+	.default_groups = rep_paging_groups
 };
 
 void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)

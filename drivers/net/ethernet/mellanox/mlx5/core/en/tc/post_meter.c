@@ -125,7 +125,7 @@ mlx5e_post_meter_rules_create(struct mlx5e_priv *priv,
 
 	rule = mlx5_add_flow_rules(post_meter->ft, spec, &flow_act, dest, 2);
 	if (IS_ERR(rule)) {
-		mlx5_core_warn(priv->mdev, "Failed to create post_meter flow green rule\n");
+		mlx5_core_warn(priv->mdev, "Failed to create post_meter flow fwd rule\n");
 		err = PTR_ERR(rule);
 		goto err_green;
 	}

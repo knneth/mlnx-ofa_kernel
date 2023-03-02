@@ -5,7 +5,6 @@
 
 #include <linux/interrupt.h>
 #include <linux/notifier.h>
-#include <linux/module.h>
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/eq.h>
@@ -398,20 +397,16 @@ void mlx5_eq_disable(struct mlx5_core_dev *dev, struct mlx5_eq *eq,
 }
 EXPORT_SYMBOL(mlx5_eq_disable);
 
-static int destroy_unmap_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq,
-			    bool reentry)
+static int destroy_unmap_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq)
 {
 	int err;
 
 	mlx5_debug_eq_remove(dev, eq);
 
 	err = mlx5_cmd_destroy_eq(dev, eq->eqn);
-	if (err) {
+	if (err)
 		mlx5_core_warn(dev, "failed to destroy a previously created eq: eqn %d\n",
 			       eq->eqn);
-		if (!reentry)
-			return err;
-	}
 
 	mlx5_frag_buf_free(dev, &eq->frag_buf);
 	return err;
@@ -454,7 +449,8 @@ int mlx5_eq_table_init(struct mlx5_core_dev *dev)
 	struct mlx5_eq_table *eq_table;
 	int i;
 
-	eq_table = kvzalloc(sizeof(*eq_table), GFP_KERNEL);
+	eq_table = kvzalloc_node(sizeof(*eq_table), GFP_KERNEL,
+				 dev->priv.numa_node);
 	if (!eq_table)
 		return -ENOMEM;
 
@@ -541,7 +537,7 @@ static int destroy_async_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq)
 	int err;
 
 	mutex_lock(&eq_table->lock);
-	err = destroy_unmap_eq(dev, eq, true);
+	err = destroy_unmap_eq(dev, eq);
 	mutex_unlock(&eq_table->lock);
 	return err;
 }
@@ -639,9 +635,9 @@ static void gather_async_events_mask(struct mlx5_core_dev *dev, u64 mask[4])
 	if (MLX5_CAP_GEN_MAX(dev, vhca_state))
 		async_event_mask |= (1ull << MLX5_EVENT_TYPE_VHCA_STATE_CHANGE);
 
-	if (MLX5_CAP_IPSEC(dev, ipsec_full_offload))
-		async_event_mask |=
-			(1ull << MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT);
+	if (MLX5_CAP_MACSEC(dev, log_max_macsec_offload) ||
+	    MLX5_CAP_IPSEC(dev, ipsec_full_offload))
+		async_event_mask |= (1ull << MLX5_EVENT_TYPE_OBJECT_CHANGE);
 
 	mask[0] = async_event_mask;
 
@@ -799,7 +795,8 @@ struct mlx5_eq *
 mlx5_eq_create_generic(struct mlx5_core_dev *dev,
 		       struct mlx5_eq_param *param)
 {
-	struct mlx5_eq *eq = kvzalloc(sizeof(*eq), GFP_KERNEL);
+	struct mlx5_eq *eq = kvzalloc_node(sizeof(*eq), GFP_KERNEL,
+					   dev->priv.numa_node);
 	int err;
 
 	if (!eq)
@@ -818,15 +815,12 @@ EXPORT_SYMBOL(mlx5_eq_create_generic);
 
 int mlx5_eq_destroy_generic(struct mlx5_core_dev *dev, struct mlx5_eq *eq)
 {
-	struct mlx5_eq_table *eq_table = dev->priv.eq_table;
 	int err;
 
 	if (IS_ERR(eq))
 		return -EINVAL;
 
-	mutex_lock(&eq_table->lock);
-	err = destroy_unmap_eq(dev, eq, false);
-	mutex_unlock(&eq_table->lock);
+	err = destroy_async_eq(dev, eq);
 	if (err)
 		goto out;
 
@@ -948,7 +942,7 @@ static void destroy_comp_eqs(struct mlx5_core_dev *dev)
 	list_for_each_entry_safe(eq, n, &table->comp_eqs_list, list) {
 		list_del(&eq->list);
 		mlx5_eq_disable(dev, &eq->core, &eq->irq_nb);
-		if (destroy_unmap_eq(dev, &eq->core, true))
+		if (destroy_unmap_eq(dev, &eq->core))
 			mlx5_core_warn(dev, "failed to destroy comp EQ 0x%x\n",
 				       eq->core.eqn);
 		tasklet_disable(&eq->tasklet_ctx.task);
@@ -994,7 +988,7 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 	for (i = 0; i < ncomp_eqs; i++) {
 		struct mlx5_eq_param param = {};
 
-		eq = kzalloc(sizeof(*eq), GFP_KERNEL);
+		eq = kzalloc_node(sizeof(*eq), GFP_KERNEL, dev->priv.numa_node);
 		if (!eq) {
 			err = -ENOMEM;
 			goto clean;
@@ -1016,7 +1010,7 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 			goto clean_eq;
 		err = mlx5_eq_enable(dev, &eq->core, &eq->irq_nb);
 		if (err) {
-			destroy_unmap_eq(dev, &eq->core, true);
+			destroy_unmap_eq(dev, &eq->core);
 			goto clean_eq;
 		}
 

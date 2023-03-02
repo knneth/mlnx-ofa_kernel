@@ -53,9 +53,6 @@ struct mlx5e_accel_tx_ipsec_state {
 
 #ifdef CONFIG_MLX5_EN_IPSEC
 
-struct sk_buff *mlx5e_ipsec_handle_rx_skb(struct net_device *netdev,
-					  struct sk_buff *skb, u32 *cqe_bcnt);
-
 void mlx5e_ipsec_inverse_table_init(void);
 void mlx5e_ipsec_set_iv_esn(struct sk_buff *skb, struct xfrm_state *x,
 			    struct xfrm_offload *xo);
@@ -181,6 +178,4 @@ static inline __wsum mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb,
 
 #endif /* CONFIG_MLX5_EN_IPSEC */
 
-int mlx5e_ipsec_set_flow_attrs(struct mlx5e_priv *priv, u32 *match_c, u32 *match_v,
-			       struct ethtool_rx_flow_spec *fs);
 #endif /* __MLX5E_IPSEC_RXTX_H__ */

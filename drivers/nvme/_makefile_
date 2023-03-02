@@ -171,15 +171,13 @@ binrpm: rpmcheck $(rpmspec)
 		(exit 1); exit 1; \
 		fi
 
+dist_files = $(rpmspec) makefile Makefile dkms.conf Module.supported \
+	common.postinst
+dist_dirs = common debian host lpfc target tools
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/
-	cp {$(rpmspec),makefile,Makefile,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
-	cp common.postinst $(rpmroot)/$(PACKAGE)/
-	cp -r target $(rpmroot)/$(PACKAGE)/
-	cp -r host $(rpmroot)/$(PACKAGE)/
-	cp -r lpfc $(rpmroot)/$(PACKAGE)/
-	cp -r debian $(rpmroot)/$(PACKAGE)/
-	cp -r tools $(rpmroot)/$(PACKAGE)/
+	cp $(dist_files) $(rpmroot)/$(PACKAGE)/
+	cp -r $(dist_dirs) $(rpmroot)/$(PACKAGE)/
 	cd $(rpmroot) && tar czf $(PACKAGE).tgz $(PACKAGE)
 	cd $(rpmroot) && tar czf $(name)_$(VERSION).orig.tar.gz $(PACKAGE)
 

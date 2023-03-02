@@ -24,12 +24,13 @@ struct macsec_dev_compat {
 
 struct net_device *macsec_get_real_dev(const struct net_device *dev)
 {
-	return (struct macsec_dev_compat *)netdev_priv(dev)->real_dev;
+	return ((struct macsec_dev_compat *)netdev_priv(dev))->real_dev;
 }
 EXPORT_SYMBOL_GPL(macsec_get_real_dev);
 #endif /* HAVE_FUNC_MACSEC_GET_REAL_DEV_ */
 
-#ifndef HAVE_FUNC_NETDEV_MACSEC_IS_OFFLOADED
+#ifndef HAVE_FUNC_MACSEC_NETDEV_IS_OFFLOADED
+#ifdef HAVE_FUNC_MACSEC_GET_REAL_DEV
 #include <linux/netdevice.h>
 #include <net/gro_cells.h>
 
@@ -49,11 +50,11 @@ struct macsec_dev_compat {
 	struct gro_cells gro_cells;
 	enum macsec_offload offload;
 };
-
+#endif
 #define MACSEC_OFFLOAD_PHY_COMPAT 1
 #define MACSEC_OFFLOAD_MAC_COMPAT 2
 
-bool netdev_macsec_is_offloaded(struct net_device *dev)
+bool macsec_netdev_is_offloaded(struct net_device *dev)
 {
 	struct macsec_dev_compat *macsec_dev;
 
@@ -68,5 +69,5 @@ bool netdev_macsec_is_offloaded(struct net_device *dev)
 
 	return false;
 }
-EXPORT_SYMBOL_GPL(netdev_macsec_is_offloaded);
-#endif /* HAVE_FUNC_NETDEV_MACSEC_IS_OFFLOADED */
+EXPORT_SYMBOL_GPL(macsec_netdev_is_offloaded);
+#endif /* HAVE_FUNC_MACSEC_NETDEV_IS_OFFLOADED */

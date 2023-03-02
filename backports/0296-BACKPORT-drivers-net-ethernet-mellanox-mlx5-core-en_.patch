@@ -1,0 +1,153 @@
+From: Raed Salem <raeds@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+
+---
+ .../mellanox/mlx5/core/en_accel/macsec.c      | 35 +++++++++++++------
+ 1 file changed, 24 insertions(+), 11 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+@@ -620,9 +620,10 @@ static int mlx5e_macsec_add_txsa(struct
+ 	struct mlx5e_macsec *macsec;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 
+ 	macsec = priv->macsec;
+@@ -697,9 +698,10 @@ static int mlx5e_macsec_upd_txsa(struct
+ 	struct net_device *netdev;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 
+ 	macsec = priv->macsec;
+@@ -759,9 +761,10 @@ static int mlx5e_macsec_del_txsa(struct
+ 	struct mlx5e_macsec *macsec;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 	macsec = priv->macsec;
+ 	macsec_device = mlx5e_macsec_get_macsec_device_context(macsec, ctx->secy->netdev);
+@@ -813,9 +816,10 @@ static int mlx5e_macsec_add_rxsc(struct
+ 	struct mlx5e_macsec *macsec;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 	macsec = priv->macsec;
+ 	macsec_device = mlx5e_macsec_get_macsec_device_context(macsec, ctx->secy->netdev);
+@@ -886,9 +890,10 @@ static int mlx5e_macsec_upd_rxsc(struct
+ 	int i;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 
+ 	macsec = priv->macsec;
+@@ -962,8 +967,10 @@ static int mlx5e_macsec_del_rxsc(struct
+ 	struct list_head *list;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
++#endif
+ 
+ 	mutex_lock(&priv->macsec->lock);
+ 
+@@ -1006,9 +1013,10 @@ static int mlx5e_macsec_add_rxsa(struct
+ 	struct list_head *list;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 
+ 	macsec = priv->macsec;
+@@ -1094,9 +1102,10 @@ static int mlx5e_macsec_upd_rxsa(struct
+ 	struct list_head *list;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 
+ 	macsec = priv->macsec;
+@@ -1153,9 +1162,10 @@ static int mlx5e_macsec_del_rxsa(struct
+ 	struct list_head *list;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 
+ 	macsec = priv->macsec;
+@@ -1205,9 +1215,10 @@ static int mlx5e_macsec_add_secy(struct
+ 	struct mlx5e_macsec *macsec;
+ 	int err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	if (!mlx5e_macsec_secy_features_validate(ctx))
+ 		return -EINVAL;
+ 
+@@ -1316,9 +1327,10 @@ static int mlx5e_macsec_upd_secy(struct
+ 	struct mlx5e_macsec *macsec;
+ 	int i, err = 0;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	if (!mlx5e_macsec_secy_features_validate(ctx))
+ 		return -EINVAL;
+ 
+@@ -1383,9 +1395,10 @@ static int mlx5e_macsec_del_secy(struct
+ 	int err = 0;
+ 	int i;
+ 
++#ifdef HAVE_MACSEC_CTX_PREPARE
+ 	if (ctx->prepare)
+ 		return 0;
+-
++#endif
+ 	mutex_lock(&priv->macsec->lock);
+ 	macsec = priv->macsec;
+ 	macsec_device = mlx5e_macsec_get_macsec_device_context(macsec, ctx->secy->netdev);

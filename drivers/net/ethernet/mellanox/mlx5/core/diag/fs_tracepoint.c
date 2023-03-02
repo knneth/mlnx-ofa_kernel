@@ -263,6 +263,9 @@ const char *parse_fs_dst(struct trace_seq *p,
 		trace_seq_printf(p, "flow_table_type=%u id:%u\n", dst->ft->type,
 				 dst->ft->id);
 		break;
+	case MLX5_FLOW_DESTINATION_TYPE_NONE:
+		trace_seq_printf(p, "none\n");
+		break;
 	}
 
 	trace_seq_putc(p, 0);

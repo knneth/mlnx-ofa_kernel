@@ -1,0 +1,371 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+
+Change-Id: Id66895f9d1fc6d1a55ef7ba3a1b5d8aada6a2060
+---
+ .../ethernet/mellanox/mlx5/core/en/xsk/rx.c   | 262 +++++++++++++++++-
+ 1 file changed, 253 insertions(+), 9 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+@@ -1,13 +1,99 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "rx.h"
+ #include "en/xdp.h"
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
+ #include <linux/filter.h>
++#ifdef HAVE_NET_PAGE_POOL_H
++#include <net/page_pool.h>
++#endif
+ 
+ /* RX data path */
+ 
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count)
++{
++	/* Check in advance that we have enough frames, instead of allocating
++	 * one-by-one, failing and moving frames to the Reuse Ring.
++	 */
++	return xsk_umem_has_addrs_rq(rq->umem, count);
++}
++
++int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq,
++		struct mlx5e_alloc_unit *au)
++{
++	struct xdp_umem *umem = rq->umem;
++
++	dma_addr_t addr;
++	u64 handle;
++
++	if (!xsk_umem_peek_addr_rq(umem, &handle))
++		return -ENOMEM;
++
++#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
++	au->xsk.handle = xsk_umem_adjust_offset(umem, handle,
++			rq->buff.umem_headroom);
++#else
++	au->xsk.handle = handle + rq->buff.umem_headroom;
++#endif
++	au->xsk.data = xdp_umem_get_data(umem, au->xsk.handle);
++
++	/* No need to add headroom to the DMA address. In striding RQ case, we
++	 * just provide pages for UMR, and headroom is counted at the setup
++	 * stage when creating a WQE. In non-striding RQ case, headroom is
++	 * accounted in mlx5e_alloc_rx_wqe.
++	 */
++	addr = xdp_umem_get_dma(umem, handle);
++#if !defined(HAVE_PAGE_POOL_GET_DMA_ADDR) || !defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
++	au->addr = addr;
++#endif
++
++#ifdef HAVE_XSK_UMEM_RELEASE_ADDR_RQ
++	xsk_umem_release_addr_rq(umem);
++#else
++	xsk_umem_discard_addr_rq(umem);
++#endif
++
++	dma_sync_single_for_device(rq->pdev, addr, PAGE_SIZE,
++			DMA_BIDIRECTIONAL);
++	return 0;
++}
++
++static inline void mlx5e_xsk_recycle_frame(struct mlx5e_rq *rq, u64 handle)
++{
++	xsk_umem_fq_reuse(rq->umem, handle & rq->umem->chunk_mask);
++}
++
++/* XSKRQ uses pages from UMEM, they must not be released. They are returned to
++ * the userspace if possible, and if not, this function is called to reuse them
++ * in the driver.
++ */
++void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
++		struct mlx5e_alloc_unit *au)
++{
++	mlx5e_xsk_recycle_frame(rq, au->xsk.handle);
++}
++
++/* Return a frame back to the hardware to fill in again. It is used by XDP when
++ * the XDP program returns XDP_TX or XDP_REDIRECT not to an XSKMAP.
++ */
++void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle)
++{
++	struct mlx5e_rq *rq = container_of(zca, struct mlx5e_rq, zca);
++
++	mlx5e_xsk_recycle_frame(rq, handle);
++}
++
++void mlx5e_fill_xdp_buff_for_old_xsk(struct mlx5e_rq *rq, void *va, u16 headroom,
++		u32 len, struct xdp_buff *xdp, struct mlx5e_alloc_unit *au);
++#endif /* HAVE_XSK_BUFF_ALLOC */
++#ifdef HAVE_XSK_BUFF_ALLOC_BATCH
+ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
+ {
+ 	struct mlx5e_mpw_info *wi = mlx5e_get_mpw_info(rq, ix);
+@@ -18,11 +104,38 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 	u32 offset; /* 17-bit value with MTT. */
+ 	u16 pi;
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	if (unlikely(!xsk_buff_can_alloc(rq->xsk_pool, rq->mpwqe.pages_per_wqe)))
++#else
++	if (unlikely(!xsk_buff_can_alloc(rq->umem, MLX5_MPWRQ_MAX_PAGES_PER_WQE)))
++#endif
+ 		goto err;
+ 
++#ifdef HAVE_NO_REFCNT_BIAS
++	BUILD_BUG_ON(sizeof(wi->alloc_units[0].page) != sizeof(wi->alloc_units[0].xsk));
++	batch = xsk_buff_alloc_batch(
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++				     rq->xsk_pool,
++#else
++				     rq->umem,
++#endif
++				     (struct xdp_buff **)wi->alloc_units,
++				     rq->mpwqe.pages_per_wqe);
++		/* If batch < pages_per_wqe, either:
++		 * 1. Some (or all) descriptors were invalid.
++		 * 2. dma_need_sync is true, and it fell back to allocating one frame.
++		 * In either case, try to continue allocating frames one by one, until
++		 * the first error, which will mean there are no more valid descriptors.
++		 */
++#endif
++
+ 	for (batch = 0; batch < rq->mpwqe.pages_per_wqe; batch++) {
+-		wi->alloc_units[batch].xsk = xsk_buff_alloc(rq->xsk_pool);
++		wi->alloc_units[batch].xsk =
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++		xsk_buff_alloc(rq->xsk_pool);
++#else
++		xsk_buff_alloc(rq->umem);
++#endif
+ 		if (unlikely(!wi->alloc_units[batch].xsk))
+ 			goto err_reuse_batch;
+ 	}
+@@ -33,7 +146,12 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 
+ 	if (likely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_ALIGNED)) {
+ 		for (i = 0; i < batch; i++) {
+-			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
++			dma_addr_t addr =
++#if defined(HAVE_PAGE_POOL_GET_DMA_ADDR) && defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
++				xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
++#else
++				wi->alloc_units[i].addr;
++#endif
+ 
+ 			umr_wqe->inline_mtts[i] = (struct mlx5_mtt) {
+ 				.ptag = cpu_to_be64(addr | MLX5_EN_WR),
+@@ -91,8 +209,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 			};
+ 		}
+ 	}
+-
++#ifdef HAVE_XDP_SUPPORT
+ 	bitmap_zero(wi->xdp_xmit_bitmap, rq->mpwqe.pages_per_wqe);
++#endif
+ 	wi->consumed_strides = 0;
+ 
+ 	umr_wqe->ctrl.opmod_idx_opcode =
+@@ -123,12 +242,53 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ err_reuse_batch:
+ 	while (--batch >= 0)
+ 		xsk_buff_free(wi->alloc_units[batch].xsk);
+-
+ err:
+ 	rq->stats->buff_alloc_err++;
+ 	return -ENOMEM;
+ }
++#endif
+ 
++#ifdef HAVE_NO_REFCNT_BIAS
++int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
++{
++	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
++	struct xdp_buff **buffs;
++	u32 contig, alloc;
++	int i;
++
++	/* mlx5e_init_frags_partition creates a 1:1 mapping between
++	 * rq->wqe.frags and rq->wqe.alloc_units, which allows us to
++	 * allocate XDP buffers straight into alloc_units.
++	 */
++	BUILD_BUG_ON(sizeof(rq->wqe.alloc_units[0].page) !=
++		     sizeof(rq->wqe.alloc_units[0].xsk));
++	buffs = (struct xdp_buff **)rq->wqe.alloc_units;
++	contig = mlx5_wq_cyc_get_size(wq) - ix;
++	if (wqe_bulk <= contig) {
++		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, wqe_bulk);
++	} else {
++		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, contig);
++		if (likely(alloc == contig))
++			alloc += xsk_buff_alloc_batch(rq->xsk_pool, buffs, wqe_bulk - contig);
++	}
++
++	for (i = 0; i < alloc; i++) {
++		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
++		struct mlx5e_wqe_frag_info *frag;
++		struct mlx5e_rx_wqe_cyc *wqe;
++		dma_addr_t addr;
++
++		wqe = mlx5_wq_cyc_get_wqe(wq, j);
++		/* Assumes log_num_frags == 0. */
++		frag = &rq->wqe.frags[j];
++
++		addr = xsk_buff_xdp_get_frame_dma(frag->au->xsk);
++		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
++	}
++
++	return alloc;
++}
++#endif
+ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
+ {
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+@@ -144,11 +304,24 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e
+ 		/* Assumes log_num_frags == 0. */
+ 		frag = &rq->wqe.frags[j];
+ 
+-		frag->au->xsk = xsk_buff_alloc(rq->xsk_pool);
+-		if (unlikely(!frag->au->xsk))
++#ifdef HAVE_XSK_BUFF_ALLOC
++		frag->au->xsk =
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++			xsk_buff_alloc(rq->xsk_pool);
++#else
++			xsk_buff_alloc(rq->umem);
++#endif
++		if (unlikely(!(frag->au->xsk)))
+ 			return i;
++#endif
++
++		addr =
++#if defined(HAVE_PAGE_POOL_GET_DMA_ADDR) && defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
++			xsk_buff_xdp_get_frame_dma(frag->au->xsk);
++#else
++			frag->au->addr;
++#endif
+ 
+-		addr = xsk_buff_xdp_get_frame_dma(frag->au->xsk);
+ 		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
+ 	}
+ 
+@@ -183,7 +356,22 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+ 						    u32 head_offset,
+ 						    u32 page_idx)
+ {
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 	struct xdp_buff *xdp = wi->alloc_units[page_idx].xsk;
++#else
++	struct xdp_buff xdp_old;
++	struct xdp_buff *xdp = &xdp_old;
++	struct mlx5e_alloc_unit *au = &wi->alloc_units[page_idx];
++	u16 rx_headroom = rq->buff.headroom - rq->buff.umem_headroom;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	dma_addr_t addr;
++#endif
++	void *va, *data;
++	u32 frag_size;
++#endif
++#if !defined(HAVE_XSK_BUFF_SET_SIZE) || !defined(HAVE_XSK_BUFF_ALLOC)
++	u32 cqe_bcnt32 = cqe_bcnt;
++#endif
+ 	struct bpf_prog *prog;
+ 
+ 	/* Check packet size. Note LRO doesn't use linear SKB */
+@@ -198,9 +386,31 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+ 	 * head_offset should always be 0.
+ 	 */
+ 	WARN_ON_ONCE(head_offset);
+-	xdp->data_end = xdp->data + cqe_bcnt;
++#ifdef HAVE_XSK_BUFF_ALLOC
++#ifdef HAVE_XSK_BUFF_SET_SIZE
++	xsk_buff_set_size(xdp, cqe_bcnt);
++#else
+ 	xdp_set_data_meta_invalid(xdp);
++	xdp->data_end = xdp->data + cqe_bcnt32;
++#endif
++#ifdef HAVE_XSK_BUFF_DMA_SYNC_FOR_CPU_2_PARAMS
+ 	xsk_buff_dma_sync_for_cpu(xdp, rq->xsk_pool);
++#else
++	xsk_buff_dma_sync_for_cpu(xdp);
++#endif
++#else
++	va        = au->xsk.data;
++	data      = va + rx_headroom;
++	frag_size = rq->buff.headroom + cqe_bcnt32;
++
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	addr = page_pool_get_dma_addr(au->page);
++	dma_sync_single_for_cpu(rq->pdev, addr, frag_size, DMA_BIDIRECTIONAL);
++#else
++	dma_sync_single_for_cpu(rq->pdev, au->addr, frag_size, DMA_BIDIRECTIONAL);
++#endif
++	mlx5e_fill_xdp_buff_for_old_xsk(rq, va, rx_headroom, cqe_bcnt32, xdp, au);
++#endif
+ 	net_prefetch(xdp->data);
+ 
+ 	/* Possible flows:
+@@ -235,7 +445,19 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 					      struct mlx5e_wqe_frag_info *wi,
+ 					      u32 cqe_bcnt)
+ {
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 	struct xdp_buff *xdp = wi->au->xsk;
++#else
++	struct xdp_buff xdp_old;
++	struct xdp_buff *xdp = &xdp_old;
++	struct mlx5e_alloc_unit *au = wi->au;
++	u16 rx_headroom = rq->buff.headroom - rq->buff.umem_headroom;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	dma_addr_t addr;
++#endif
++	void *va, *data;
++	u32 frag_size;
++#endif
+ 	struct bpf_prog *prog;
+ 
+ 	/* wi->offset is not used in this function, because xdp->data and the
+@@ -244,9 +466,30 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 	 * wi->offset should always be 0.
+ 	 */
+ 	WARN_ON_ONCE(wi->offset);
+-	xdp->data_end = xdp->data + cqe_bcnt;
++#ifdef HAVE_XSK_BUFF_ALLOC
++#ifdef HAVE_XSK_BUFF_SET_SIZE
++	xsk_buff_set_size(xdp, cqe_bcnt);
++#else
+ 	xdp_set_data_meta_invalid(xdp);
++	xdp->data_end = xdp->data + cqe_bcnt;
++#endif
++#ifdef HAVE_XSK_BUFF_DMA_SYNC_FOR_CPU_2_PARAMS
+ 	xsk_buff_dma_sync_for_cpu(xdp, rq->xsk_pool);
++#else
++	xsk_buff_dma_sync_for_cpu(xdp);
++#endif
++#else
++	va        = au->xsk.data;
++	data      = va + rx_headroom;
++	frag_size = rq->buff.headroom + cqe_bcnt;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	addr = page_pool_get_dma_addr(au->page);
++	dma_sync_single_for_cpu(rq->pdev, addr, frag_size, DMA_BIDIRECTIONAL);
++#else
++	dma_sync_single_for_cpu(rq->pdev, au->addr, frag_size, DMA_BIDIRECTIONAL);
++#endif
++	mlx5e_fill_xdp_buff_for_old_xsk(rq, va, rx_headroom, cqe_bcnt, xdp, au);
++#endif
+ 	net_prefetch(xdp->data);
+ 
+ 	prog = rcu_dereference(rq->xdp_prog);
+@@ -259,3 +502,4 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 	 */
+ 	return mlx5e_xsk_construct_skb(rq, xdp);
+ }
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT*/

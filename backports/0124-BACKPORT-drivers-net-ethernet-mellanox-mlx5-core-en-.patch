@@ -1,37 +1,19 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
 
-Change-Id: I5c6b2e7b95848317cbaecd65b51378c0ae8b9e16
+Change-Id: Ic908bf7b99ad6446c8676c5255f9629e4066e822
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h | 9 ++++++++-
- 1 file changed, 8 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h | 1 +
+ 1 file changed, 1 insertion(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.h
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
 @@ -4,6 +4,7 @@
- #ifndef __MLX5_EN_XSK_SETUP_H__
- #define __MLX5_EN_XSK_SETUP_H__
+ #ifndef __MLX5_EN_POST_METER_H__
+ #define __MLX5_EN_POST_METER_H__
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- #include "en.h"
- 
- struct mlx5e_xsk_param;
-@@ -12,10 +13,16 @@ bool mlx5e_validate_xsk_param(struct mlx
- 			      struct mlx5e_xsk_param *xsk,
- 			      struct mlx5_core_dev *mdev);
- int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
--		   struct mlx5e_xsk_param *xsk, struct xsk_buff_pool *pool,
-+		   struct mlx5e_xsk_param *xsk,
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+		   struct xsk_buff_pool *pool,
-+#else
-+		   struct xdp_umem *umem,
-+#endif
- 		   struct mlx5e_channel *c);
- void mlx5e_close_xsk(struct mlx5e_channel *c);
- void mlx5e_activate_xsk(struct mlx5e_channel *c);
- void mlx5e_deactivate_xsk(struct mlx5e_channel *c);
- 
-+#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
- #endif /* __MLX5_EN_XSK_SETUP_H__ */
++
+ #define packet_color_to_reg { \
+ 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5, \
+ 	.moffset = 0, \

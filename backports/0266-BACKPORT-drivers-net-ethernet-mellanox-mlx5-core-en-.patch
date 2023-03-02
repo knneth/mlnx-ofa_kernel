@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+
+Change-Id: Ibe8a963f36273fe1a01459eb1ea42e291d47d2d2
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/qos.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+@@ -371,6 +371,7 @@ void mlx5e_reset_qdisc(struct net_device
+ 	spin_unlock_bh(qdisc_lock(qdisc));
+ }
+ 
++#ifdef HAVE_ENUM_TC_HTB_COMMAND
+ int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_qopt)
+ {
+ 	struct mlx5e_htb *htb = priv->htb;
+@@ -412,7 +413,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 		return mlx5e_htb_leaf_to_inner(htb, htb_qopt->parent_classid, htb_qopt->classid,
+ 					       htb_qopt->rate, htb_qopt->ceil, htb_qopt->extack);
+ 	case TC_HTB_LEAF_DEL:
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID 
+ 		return mlx5e_htb_leaf_del(htb, &htb_qopt->classid, htb_qopt->extack);
++#else
++		return mlx5e_htb_leaf_del(htb, htb_qopt->classid, &htb_qopt->moved_qid, &htb_qopt->qid,
++					  htb_qopt->extack);
++#endif
+ 	case TC_HTB_LEAF_DEL_LAST:
+ 	case TC_HTB_LEAF_DEL_LAST_FORCE:
+ 		return mlx5e_htb_leaf_del_last(htb, htb_qopt->classid,
+@@ -431,6 +437,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 		return -EOPNOTSUPP;
+ 	}
+ }
++#endif
+ 
+ struct mlx5e_mqprio_rl {
+ 	struct mlx5_core_dev *mdev;

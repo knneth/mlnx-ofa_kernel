@@ -62,10 +62,8 @@ static int mlx5e_open_trap_rq(struct mlx5e_priv *priv, struct mlx5e_trap *t)
 	struct mlx5e_rq_param *rq_param = &t->rq_param;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_create_cq_param ccp = {};
-	struct dim_cq_moder trap_moder = {};
 	struct mlx5e_rq *rq = &t->rq;
 	int node;
-	int err;
 
 	node = dev_to_node(mdev->device);
 
@@ -75,11 +73,8 @@ static int mlx5e_open_trap_rq(struct mlx5e_priv *priv, struct mlx5e_trap *t)
 	ccp.ix       = 0;
 
 	mlx5e_init_trap_rq(t, &t->params, rq);
-	err = mlx5e_open_rq(priv, &t->params, rq_param, NULL, &ccp, trap_moder, node, rq);
-	if (err)
-		return err;
 
-	return 0;
+	return mlx5e_open_rq(&t->params, rq_param, NULL, node, rq, &ccp);
 }
 
 static void mlx5e_close_trap_rq(struct mlx5e_rq *rq)

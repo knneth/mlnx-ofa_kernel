@@ -1,52 +1,95 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
 
-Change-Id: Ia463bd7f9d2f879fed94184c47bbcaef750aaede
+Change-Id: I389c6dc1c9fffb6c2c58ff68398b49afd964a89a
 ---
- .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 22 +++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ .../mellanox/mlx5/core/en_accel/ipsec_rxtx.h  | 35 ++++++++++++++++---
+ 1 file changed, 30 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
-@@ -92,6 +92,10 @@ struct mlx5_rep_uplink_priv {
- 
- 	/* support eswitch vports bonding */
- 	struct mlx5e_rep_bond *bond;
-+#ifndef HAVE_FLOW_INDR_DEV_REGISTER
-+	struct notifier_block       netdevice_nb;
-+	struct netdev_net_notifier  netdevice_nn;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+@@ -49,6 +49,9 @@ struct mlx5e_accel_tx_ipsec_state {
+ 	struct xfrm_state *x;
+ 	u32 tailen;
+ 	u32 plen;
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	u8 inner_ipproto;
 +#endif
+ };
  
- 	/* tc tunneling encapsulation private data */
- 	struct mlx5e_tc_tun_encap *encap;
-@@ -278,12 +282,30 @@ static inline bool mlx5e_eswitch_rep(con
- 	       mlx5e_eswitch_uplink_rep(netdev);
+ #ifdef CONFIG_MLX5_EN_IPSEC
+@@ -88,6 +91,9 @@ static inline bool mlx5e_ipsec_eseg_meta
  }
  
-+#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
-+int mlx5e_rep_get_phys_port_name(struct net_device *dev,
-+				 char *buf, size_t len);
+ void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
+ 			       struct mlx5_wqe_eth_seg *eseg);
+ 
+ static inline netdev_features_t
+@@ -95,6 +101,12 @@ mlx5e_ipsec_feature_check(struct sk_buff
+ {
+ 	struct xfrm_offload *xo = xfrm_offload(skb);
+ 	struct sec_path *sp = skb_sec_path(skb);
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	u8 inner_ipproto = xo->inner_ipproto;
++#else
++	u8 inner_ipproto = 0;
 +#endif
 +
-+#if defined(HAVE_NDO_GET_PORT_PARENT_ID) || defined(HAVE_SWITCHDEV_OPS) || defined(HAVE_SWITCHDEV_H_COMPAT)
-+#ifdef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
-+void
+ 
+ 	if (sp && sp->len && xo) {
+ 		struct xfrm_state *x = sp->xvec[0];
+@@ -102,7 +114,7 @@ mlx5e_ipsec_feature_check(struct sk_buff
+ 		if (!x || !x->xso.offload_handle)
+ 			goto out_disable;
+ 
+-		if (xo->inner_ipproto) {
++		if (inner_ipproto) {
+ 			/* Cannot support tunnel packet over IPsec tunnel mode
+ 			 * because we cannot offload three IP header csum
+ 			 */
+@@ -110,8 +122,8 @@ mlx5e_ipsec_feature_check(struct sk_buff
+ 				goto out_disable;
+ 
+ 			/* Only support UDP or TCP L4 checksum */
+-			if (xo->inner_ipproto != IPPROTO_UDP &&
+-			    xo->inner_ipproto != IPPROTO_TCP)
++			if (inner_ipproto != IPPROTO_UDP &&
++			    inner_ipproto != IPPROTO_TCP)
+ 				goto out_disable;
+ 		}
+ 
+@@ -126,15 +138,28 @@ out_disable:
+ 
+ static inline bool
+ mlx5e_ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++					struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
+ 				  struct mlx5_wqe_eth_seg *eseg)
+ {
+-	u8 inner_ipproto;
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	struct xfrm_offload *xo;
++	u32 inner_ipproto;
 +#else
-+int
++	u8 inner_ipproto = ipsec_st->inner_ipproto;
 +#endif
-+mlx5e_rep_get_port_parent_id(struct net_device *dev,
-+			     struct netdev_phys_item_id *ppid);
+ 
+ 	if (!mlx5e_ipsec_eseg_meta(eseg))
+ 		return false;
+ 
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	xo = xfrm_offload(skb);
++	inner_ipproto = xo->inner_ipproto;
++#else
++	inner_ipproto = ipsec_st->inner_ipproto;
 +#endif
- #else /* CONFIG_MLX5_ESWITCH */
- static inline bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv) { return false; }
- static inline void mlx5e_rep_activate_channels(struct mlx5e_priv *priv) {}
- static inline void mlx5e_rep_deactivate_channels(struct mlx5e_priv *priv) {}
- static inline int mlx5e_rep_init(void) { return 0; };
- static inline void mlx5e_rep_cleanup(void) {};
-+#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
-+static inline int mlx5e_rep_get_phys_port_name(struct net_device *dev,
-+					       char *buf, size_t len) { return 0; }
-+#endif
- static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,
- 					       int attr_id) { return false; }
- static inline int mlx5e_rep_get_offload_stats(int attr_id,
+ 	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
+-	inner_ipproto = xfrm_offload(skb)->inner_ipproto;
+ 	if (inner_ipproto) {
+ 		eseg->cs_flags |= MLX5_ETH_WQE_L3_INNER_CSUM;
+ 		if (inner_ipproto == IPPROTO_TCP || inner_ipproto == IPPROTO_UDP)

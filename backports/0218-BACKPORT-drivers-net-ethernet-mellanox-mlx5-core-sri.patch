@@ -1,0 +1,91 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+
+Change-Id: I3c1b5f1e068a5d3949afec7b6a4a69c177992121
+---
+ .../ethernet/mellanox/mlx5/core/sriov_sysfs.c | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+@@ -1141,25 +1141,43 @@ static struct attribute *vf_paging_attrs
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(vf_group);
++#endif
+ 
+ static struct kobj_type vf_group = {
+ 	.sysfs_ops     = &vf_group_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = vf_group_groups
++#else
++	.default_attrs = vf_group_attrs
++#endif
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(vf_eth);
++#endif
+ 
+ static struct kobj_type vf_type_eth = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = vf_eth_groups
++#else
++	.default_attrs = vf_eth_attrs
++#endif
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(vf_paging);
++#endif
+ 
+ static struct kobj_type vf_paging = {
+ 	.sysfs_ops     = &vf_paging_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = vf_paging_groups
++#else
++	.default_attrs = vf_paging_attrs
++#endif
+ };
+ 
+ VF_ATTR(rate);
+@@ -1175,11 +1193,17 @@ static struct attribute *vf_meters_eth_a
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(vf_meters_eth);
++#endif
+ 
+ static struct kobj_type vf_meters_type_eth = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = vf_meters_eth_groups
++#else
++	.default_attrs = vf_meters_eth_attrs
++#endif
+ };
+ #endif /* CONFIG_MLX5_ESWITCH */
+ 
+@@ -1190,11 +1214,17 @@ static struct attribute *vf_ib_attrs[] =
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(vf_ib);
++#endif
+ 
+ static struct kobj_type vf_type_ib = {
+ 	.sysfs_ops     = &vf_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = vf_ib_groups
++#else
++	.default_attrs = vf_ib_attrs
++#endif
+ };
+ 
+ static struct device_attribute *mlx5_class_attributes[] = {

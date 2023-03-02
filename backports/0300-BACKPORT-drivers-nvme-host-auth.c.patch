@@ -1,0 +1,26 @@
+From: Dana Benbasat <dbenbasat@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/auth.c
+
+Change-Id: I8417b7e82482c73cb5ef02c04d97ea6c1ba12cf9
+Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
+---
+ drivers/nvme/host/auth.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/host/auth.c
++++ b/drivers/nvme/host/auth.c
+@@ -2,7 +2,7 @@
+ /*
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Linux
+  */
+-
++#ifdef HAVE_NVME_AUTH_H
+ #include <linux/crc32.h>
+ #include <linux/base64.h>
+ #include <linux/prandom.h>
+@@ -1015,3 +1015,4 @@ void nvme_auth_free(struct nvme_ctrl *ct
+ 	}
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_free);
++#endif
+\ No newline at end of file

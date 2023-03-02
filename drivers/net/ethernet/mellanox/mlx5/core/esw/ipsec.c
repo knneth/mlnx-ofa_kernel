@@ -7,7 +7,7 @@
 #include "lib/fs_chains.h"
 #include "esw/ipsec.h"
 #include "mlx5_core.h"
-#include "accel/ipsec_offload.h"
+#include "en_accel/ipsec.h"
 #include "../fs_core.h"
 
 #define esw_ipsec_priv(esw) ((esw)->fdb_table.offloads.esw_ipsec_priv)

@@ -23,6 +23,7 @@ mlx5_ib-y := ah.o \
 	     srq.o \
 	     srq_cmd.o \
 	     srq_nvmf.o \
+	     umr.o \
 	     wr.o
 
 mlx5_ib-$(CONFIG_INFINIBAND_ON_DEMAND_PAGING) += odp.o
@@ -31,3 +32,4 @@ mlx5_ib-$(CONFIG_INFINIBAND_USER_ACCESS) += devx.o \
 					    fs.o \
 					    qos.o \
 					    std_types.o
+mlx5_ib-$(CONFIG_MLX5_EN_MACSEC) += macsec.o

@@ -4,7 +4,6 @@
 #ifndef __MLX5_ESW_FT_H__
 #define __MLX5_ESW_FT_H__
 
-#include "en/tc_ct.h"
 #ifdef CONFIG_MLX5_CLS_ACT
 
 struct mlx5_esw_indir_table *

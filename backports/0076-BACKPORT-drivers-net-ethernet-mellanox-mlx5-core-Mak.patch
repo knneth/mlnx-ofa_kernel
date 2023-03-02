@@ -1,0 +1,33 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/Makefile
+
+Change-Id: I86ee8cbe01f9467b15b253a69a740fa07d4b26b0
+---
+ drivers/net/ethernet/mellanox/mlx5/core/Makefile | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
++++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
+@@ -21,6 +21,7 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw
+ 		sriov_sysfs.o crdump.o diag/diag_cnt.o params.o fw_exp.o \
+ 		eswitch_devlink_compat.o ecpf.o 
+ 
++mlx5_core-y += compat.o
+ #
+ # Netdev basic
+ #
+@@ -79,8 +80,12 @@ mlx5_core-$(CONFIG_MLX5_ESWITCH)   += es
+ mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o en/rep/bridge.o
+ 
+ mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o
+-mlx5_core-$(CONFIG_VXLAN)          += lib/vxlan.o
+-mlx5_core-$(CONFIG_PTP_1588_CLOCK) += lib/clock.o
++ifneq ($(CONFIG_VXLAN),)
++	mlx5_core-y		+= lib/vxlan.o
++endif
++ifneq ($(CONFIG_PTP_1588_CLOCK),)
++	mlx5_core-y		+= lib/clock.o
++endif
+ mlx5_core-$(CONFIG_PCI_HYPERV_INTERFACE) += lib/hv.o lib/hv_vhca.o
+ mlx5_core-$(CONFIG_MLXDEVM) += mlx5_devm.o esw/devm_port.o
+ 

@@ -13,15 +13,17 @@
 struct mlx5_flow_attr;
 
 struct mlx5e_tc_act_parse_state {
-	unsigned int num_actions;
+	struct flow_action *flow_action;
 	struct mlx5e_tc_flow *flow;
 	struct netlink_ext_ack *extack;
-	bool ct;
 	u32 actions;
+	bool ct;
 	bool ct_clear;
 	bool encap;
 	bool decap;
 	bool mpls_push;
+	bool eth_push;
+	bool eth_pop;
 	bool ptype_host;
 	const struct ip_tunnel_info *tun_info;
 	struct mlx5e_mpls_info mpls_info;

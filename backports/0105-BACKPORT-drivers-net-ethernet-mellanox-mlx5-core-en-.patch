@@ -1,75 +1,31 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 
-Change-Id: Ideb51730a74a4a23c43aab43595b8072c9dbfb31
+Change-Id: Id9251ee1971ea04025cb237d268ad00c19746d1b
 ---
- .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 19 ++++++++++++++-----
- 1 file changed, 14 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
-@@ -786,7 +786,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
- 	}
- 
- 	ct_state |= MLX5_CT_STATE_ESTABLISHED_BIT | MLX5_CT_STATE_TRK_BIT;
-+#ifdef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
- 	ct_state |= meta->ct_metadata.orig_dir ? 0 : MLX5_CT_STATE_REPLY_BIT;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+@@ -10,6 +10,9 @@
+ #include <linux/notifier.h>
+ #include <net/netevent.h>
+ #include <net/arp.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/addrconf.h>
 +#endif
- 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
- 					     ct_state,
- 					     meta->ct_metadata.mark,
-@@ -1121,9 +1123,9 @@ err_orig:
+ #include "neigh.h"
+ #include "tc.h"
+ #include "en_rep.h"
+@@ -150,7 +153,9 @@ static void mlx5e_rep_neigh_update(struc
  
- static int
- mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
--				  struct flow_cls_offload *flow)
-+				  struct flow_cls_offload1 *flow)
- {
--	struct flow_rule *flow_rule = flow_cls_offload_flow_rule(flow);
-+	struct flow_rule *flow_rule = flow_cls_offload_flow_rule1(flow);
- 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
- 	struct flow_action_entry *meta_action;
- 	unsigned long cookie = flow->cookie;
-@@ -1224,7 +1226,7 @@ err_set:
+ 	neigh_connected = (nud_state & NUD_VALID) && !dead;
  
- static int
- mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
--				  struct flow_cls_offload *flow)
-+				  struct flow_cls_offload1 *flow)
- {
- 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
- 	unsigned long cookie = flow->cookie;
-@@ -1252,7 +1254,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
- 
- static int
- mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
--				    struct flow_cls_offload *f)
-+				    struct flow_cls_offload1 *f)
- {
- 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
- 	unsigned long cookie = f->cookie;
-@@ -1274,8 +1276,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
- 	spin_unlock_bh(&ct_priv->ht_lock);
- 
- 	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
-+#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
- 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
- 			  FLOW_ACTION_HW_STATS_DELAYED);
-+#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
-+	flow_stats_update(&f->stats, bytes, packets, lastuse,
-+			  FLOW_ACTION_HW_STATS_DELAYED);
-+#else
-+	flow_stats_update(&f->stats, bytes, packets, lastuse);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_rep_neigh_update(nhe, ha, neigh_connected);
 +#endif
  
- 	mlx5_tc_ct_entry_put(entry);
- 	return 0;
-@@ -1285,7 +1294,7 @@ static int
- mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
- 			      void *cb_priv)
- {
--	struct flow_cls_offload *f = type_data;
-+	struct flow_cls_offload1 *f = type_data;
- 	struct mlx5_ct_ft *ft = cb_priv;
- 
- 	if (type != TC_SETUP_CLSFLOWER)
+ 	if (!same_dev)
+ 		goto out;

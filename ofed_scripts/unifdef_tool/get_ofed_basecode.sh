@@ -128,7 +128,8 @@ if [ -z "$CUSTOM_CONFIG" ];then
 		exit 1
 	fi
 else
-	"$SCRIPTS_DIR"/help_scripts/build_defs_file.sh "$CUSTOM_CONFIG" "$CONFIG" "$INCLUDE_MK_CONFIG"
+	CONFIG=$CUSTOM_CONFIG
+	echo "Using custom config: $CONFIG"
 fi
 if [ ! -f "${CONFIG}" ]; then
 	echo "-E- Config file does not exist at '${CONFIG}'" >&2
@@ -147,12 +148,15 @@ Aborting..." >&2
 fi
 echo "Verification done, start running.."
 # This part search & remove risk defines that can change their values during compilation
-echo "search & remove risk defines that can change their values during compilation"
-for d in $(grep -rE "^#define.*HAVE_.*|^#undef.*HAVE_.*" | grep -v compat/config | grep -v compat/configure.ac | grep -v backports | grep -v output | grep -vi binary | sed 's/.*\(HAVE_[A-Z0-9_]*\).*/\1/' | sort | uniq)
-do
-	sed -i "/\<${d}\>/d" "${CONFIG}"
-done
+if [ -z "$CUSTOM_CONFIG" ];then
+	echo "search & remove risk defines that can change their values during compilation"
+	for d in $(grep -rE "^#define.*HAVE_.*|^#undef.*HAVE_.*" | grep -v compat/config | grep -v compat/configure.ac | grep -v backports | grep -v output | grep -vi binary | sed 's/.*\(HAVE_[A-Z0-9_]*\).*/\1/' | sort | uniq)
+	do
+		sed -i "/\<${d}\>/d" "${CONFIG}"
+	done
+fi
 echo "start cleaning files.."
+MOD="tmp.txt"
 for i in $(find "${WORK_DIR}" \( -name '*.c' -o \
 			  -name '*.h' -o \
 			  -name 'Kbuild' -o \
@@ -163,9 +167,11 @@ do
 		continue
 	fi
 	echo "cleaning ${i} ..."
-	unifdef -f "${CONFIG}" "${i}" -o "${i}".tmp
-	mv -f "${i}".tmp "$i"
+	perl -p -e 'next unless (/defined/); s/\\\n/ /' "${i}" > "$MOD"
+	unifdef -f "${CONFIG}" "$MOD" -o "${i}".tmp
+	mv -f "${i}".tmp "${i}"
 done
+rm -rf "$MOD"
 echo "Create git commit"
 git add -u
 git commit -s -m "BASECODE: remove #ifdef from code"

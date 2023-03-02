@@ -1,0 +1,139 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/passthru.c
+
+Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
+---
+ drivers/nvme/target/passthru.c | 64 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/target/passthru.c
++++ b/drivers/nvme/target/passthru.c
+@@ -112,8 +112,13 @@ static u16 nvmet_passthru_override_id_ct
+ 	 * nvmet_passthru_map_sg is limitted to using a single bio so limit
+ 	 * the mdts based on BIO_MAX_VECS as well
+ 	 */
++#ifdef HAVE_BIO_MAX_VECS
+ 	max_hw_sectors = min_not_zero(BIO_MAX_VECS << (PAGE_SHIFT - 9),
+ 				      max_hw_sectors);
++#else
++	max_hw_sectors = min_not_zero(((uint32_t)BIO_MAX_PAGES) << (PAGE_SHIFT - 9),
++				      max_hw_sectors);
++#endif
+ 
+ 	page_shift = NVME_CAP_MPSMIN(ctrl->cap) + 12;
+ 
+@@ -218,9 +223,18 @@ static void nvmet_passthru_execute_cmd_w
+ {
+ 	struct nvmet_req *req = container_of(w, struct nvmet_req, p.work);
+ 	struct request *rq = req->p.rq;
++#if defined(HAVE_BLK_EXECUTE_RQ_2_PARAM) || defined(HAVE_BLK_EXECUTE_RQ_3_PARAM)
++	u16 status;
++#else
+ 	int status;
++#endif
+ 
++#if defined(HAVE_BLK_EXECUTE_RQ_2_PARAM) || defined(HAVE_BLK_EXECUTE_RQ_3_PARAM)
+ 	status = nvme_execute_passthru_rq(rq);
++#else
++	nvme_execute_passthru_rq(rq);
++	status = nvme_req(rq)->status;
++#endif
+ 
+ 	if (status == NVME_SC_SUCCESS &&
+ 	    req->cmd->common.opcode == nvme_admin_identify) {
+@@ -235,8 +249,12 @@ static void nvmet_passthru_execute_cmd_w
+ 			nvmet_passthru_override_id_descs(req);
+ 			break;
+ 		}
++#if defined(HAVE_BLK_EXECUTE_RQ_2_PARAM) || defined(HAVE_BLK_EXECUTE_RQ_3_PARAM)
+ 	} else if (status < 0)
+ 		status = NVME_SC_INTERNAL;
++#else
++	}
++#endif
+ 
+ 	req->cqe->result = nvme_req(rq)->result;
+ 	nvmet_req_complete(req, status);
+@@ -258,19 +276,41 @@ static int nvmet_passthru_map_sg(struct
+ 	struct scatterlist *sg;
+ 	struct bio *bio;
+ 	int i;
++#ifndef HAVE_BLK_RQ_BIO_PREP
++	int ret;
++#endif
+ 
++#ifdef HAVE_BIO_MAX_VECS
+ 	if (req->sg_cnt > BIO_MAX_VECS)
++#else
++	if (req->sg_cnt > BIO_MAX_PAGES)
++#endif
+ 		return -EINVAL;
+ 
+ 	if (nvmet_use_inline_bvec(req)) {
+ 		bio = &req->p.inline_bio;
++#ifdef HAVE_BIO_INIT_5_PARAMS
+ 		bio_init(bio, NULL, req->inline_bvec,
+ 			 ARRAY_SIZE(req->inline_bvec), req_op(rq));
++#else
++		bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#endif
+ 	} else {
++#ifdef HAVE_BIO_INIT_5_PARAMS
+ 		bio = bio_alloc(NULL, bio_max_segs(req->sg_cnt), req_op(rq),
+ 				GFP_KERNEL);
++#else
++#ifdef HAVE_BIO_MAX_SEGS
++		bio = bio_alloc(GFP_KERNEL, bio_max_segs(req->sg_cnt));
++#else
++		bio = bio_alloc(GFP_KERNEL, min(req->sg_cnt, BIO_MAX_PAGES));
++#endif
++#endif
+ 		bio->bi_end_io = bio_put;
+ 	}
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio->bi_opf = req_op(rq);
++#endif
+ 
+ 	for_each_sg(req->sg, sg, req->sg_cnt, i) {
+ 		if (bio_add_pc_page(rq->q, bio, sg_page(sg), sg->length,
+@@ -280,7 +320,15 @@ static int nvmet_passthru_map_sg(struct
+ 		}
+ 	}
+ 
++#ifdef HAVE_BLK_RQ_BIO_PREP
+ 	blk_rq_bio_prep(rq, bio, req->sg_cnt);
++#else
++	ret = blk_rq_append_bio(rq, &bio);
++	if (unlikely(ret)) {
++	        bio_put(bio);
++	        return ret;
++	}
++#endif
+ 
+ 	return 0;
+ }
+@@ -343,9 +391,23 @@ static void nvmet_passthru_execute_cmd(s
+ 		req->p.rq = rq;
+ 		queue_work(nvmet_wq, &req->p.work);
+ 	} else {
+-		rq->end_io = nvmet_passthru_req_done;
+ 		rq->end_io_data = req;
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_2_PARAM
++		rq->end_io = nvmet_passthru_req_done;
+ 		blk_execute_rq_nowait(rq, false);
++#else
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_5_PARAM
++		blk_execute_rq_nowait(rq->q, ns ? ns->disk : NULL, rq, 0,
++				      nvmet_passthru_req_done);
++#else
++#ifdef HAVE_BLK_EXECUTE_RQ_NOWAIT_3_PARAM
++		blk_execute_rq_nowait(rq, false, nvmet_passthru_req_done);
++#else
++		blk_execute_rq_nowait(ns ? ns->disk : NULL, rq, 0,
++				      nvmet_passthru_req_done);
++#endif
++#endif
++#endif
+ 	}
+ 
+ 	if (ns)

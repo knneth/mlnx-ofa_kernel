@@ -1913,8 +1913,8 @@ dr_ste_v0_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
 		return -ENOMEM;
 
 	action->rewrite->index = (mlx5dr_icm_pool_get_chunk_icm_addr(action->rewrite->chunk) -
-			action->rewrite->dmn->info.caps.hdr_modify_icm_addr) /
-		MLX5DR_ACTION_CACHE_LINE_SIZE;
+				  action->rewrite->dmn->info.caps.hdr_modify_icm_addr) /
+				  MLX5DR_ACTION_CACHE_LINE_SIZE;
 
 	ret = mlx5dr_send_postsend_action(action->rewrite->dmn, action);
 	if (ret)

@@ -63,9 +63,6 @@ static void create_mad_addr_info(struct ib_mad_send_wr_private *mad_send_wr,
 			  struct ib_mad_qp_info *qp_info,
 			  struct trace_event_raw_ib_mad_send_template *entry)
 {
-	u16 pkey;
-	struct ib_device *dev = qp_info->port_priv->device;
-	u32 pnum = qp_info->port_priv->port_num;
 	struct ib_ud_wr *wr = &mad_send_wr->send_wr;
 	struct rdma_ah_attr attr = {};
 
@@ -73,8 +70,6 @@ static void create_mad_addr_info(struct ib_mad_send_wr_private *mad_send_wr,
 
 	/* These are common */
 	entry->sl = attr.sl;
-	ib_query_pkey(dev, pnum, wr->pkey_index, &pkey);
-	entry->pkey = pkey;
 	entry->rqpn = wr->remote_qpn;
 	entry->rqkey = wr->remote_qkey;
 	entry->dlid = rdma_ah_get_dlid(&attr);
@@ -4061,9 +4056,11 @@ static struct attribute *sa_cc_default_attrs[] = {
 	NULL
 };
 
+ATTRIBUTE_GROUPS(sa_cc_default);
+
 static struct kobj_type sa_cc_type = {
 	.sysfs_ops = &sa_cc_sysfs_ops,
-	.default_attrs = sa_cc_default_attrs
+	.default_groups = sa_cc_default_groups
 };
 
 static void cleanup_sa_cc_sysfs_ports(struct sa_cc_data *cc_obj)

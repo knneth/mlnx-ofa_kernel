@@ -1,0 +1,52 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
+
+Change-Id: I016102d63df5b409526e801e23a6942ada3de3b8
+---
+ .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
+@@ -92,6 +92,10 @@ struct mlx5_rep_uplink_priv {
+ 
+ 	/* support eswitch vports bonding */
+ 	struct mlx5e_rep_bond *bond;
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
++	struct notifier_block       netdevice_nb;
++	struct netdev_net_notifier  netdevice_nn;
++#endif
+ 
+ 	/* tc tunneling encapsulation private data */
+ 	struct mlx5e_tc_tun_encap *encap;
+@@ -278,12 +282,30 @@ static inline bool mlx5e_eswitch_rep(con
+ 	       mlx5e_eswitch_uplink_rep(netdev);
+ }
+ 
++#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++int mlx5e_rep_get_phys_port_name(struct net_device *dev,
++				 char *buf, size_t len);
++#endif
++
++#if defined(HAVE_NDO_GET_PORT_PARENT_ID) || defined(HAVE_SWITCHDEV_OPS) || defined(HAVE_SWITCHDEV_H_COMPAT)
++#ifdef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++void
++#else
++int
++#endif
++mlx5e_rep_get_port_parent_id(struct net_device *dev,
++			     struct netdev_phys_item_id *ppid);
++#endif
+ #else /* CONFIG_MLX5_ESWITCH */
+ static inline bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv) { return false; }
+ static inline void mlx5e_rep_activate_channels(struct mlx5e_priv *priv) {}
+ static inline void mlx5e_rep_deactivate_channels(struct mlx5e_priv *priv) {}
+ static inline int mlx5e_rep_init(void) { return 0; };
+ static inline void mlx5e_rep_cleanup(void) {};
++#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++static inline int mlx5e_rep_get_phys_port_name(struct net_device *dev,
++					       char *buf, size_t len) { return 0; }
++#endif
+ static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,
+ 					       int attr_id) { return false; }
+ static inline int mlx5e_rep_get_offload_stats(int attr_id,

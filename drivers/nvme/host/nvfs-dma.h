@@ -10,21 +10,21 @@ static blk_status_t nvme_pci_setup_prps(struct nvme_dev *dev,
                 struct request *req, struct nvme_rw_command *cmnd);
 
 static blk_status_t nvme_pci_setup_sgls(struct nvme_dev *dev,
-                struct request *req, struct nvme_rw_command *cmd, int entries);
+                struct request *req, struct nvme_rw_command *cmnd);
 
 static bool nvme_nvfs_unmap_data(struct nvme_dev *dev, struct request *req)
 {
         struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
         enum dma_data_direction dma_dir = rq_dma_dir(req);
 
-	if (!iod || !iod->nents)
+	if (!iod || !iod->sgt.nents)
 		return false;
-        if (iod->sg && !is_pci_p2pdma_page(sg_page(iod->sg)) &&
+        if (iod->sgt.sgl && !is_pci_p2pdma_page(sg_page(iod->sgt.sgl)) &&
             !blk_integrity_rq(req) &&
             !iod->dma_len &&
             nvfs_ops != NULL) {
                 int count;
-                count = nvfs_ops->nvfs_dma_unmap_sg(dev->dev, iod->sg, iod->nents,
+                count = nvfs_ops->nvfs_dma_unmap_sg(dev->dev, iod->sgt.sgl, iod->sgt.nents,
                                 dma_dir);
 
                 if (!count)
@@ -50,51 +50,53 @@ static blk_status_t nvme_nvfs_map_data(struct nvme_dev *dev, struct request *req
 
        if (!blk_integrity_rq(req) && nvfs_get_ops()) {
                 iod->dma_len = 0;
-                iod->sg = mempool_alloc(dev->iod_mempool, GFP_ATOMIC);
-                if (!iod->sg) {
+                iod->sgt.sgl = mempool_alloc(dev->iod_mempool, GFP_ATOMIC);
+                if (!iod->sgt.sgl) {
                         nvfs_put_ops();
                         return BLK_STS_RESOURCE;
                 }
 
-               sg_init_table(iod->sg, blk_rq_nr_phys_segments(req));
+               sg_init_table(iod->sgt.sgl, blk_rq_nr_phys_segments(req));
                // associates bio pages to scatterlist
-               iod->nents = nvfs_ops->nvfs_blk_rq_map_sg(q, req, iod->sg);
-               if (!iod->nents) {
-                       mempool_free(iod->sg, dev->iod_mempool);
+               iod->sgt.orig_nents = nvfs_ops->nvfs_blk_rq_map_sg(q, req, iod->sgt.sgl);
+               if (!iod->sgt.orig_nents) {
+                       mempool_free(iod->sgt.sgl, dev->iod_mempool);
                        nvfs_put_ops();
                        return BLK_STS_IOERR; // reset to original ret
                }
                *is_nvfs_io = true;
 
-               if (unlikely((iod->nents == NVFS_IO_ERR))) {
-                       pr_err("%s: failed to map sg_nents=:%d\n", __func__, iod->nents);
-                       mempool_free(iod->sg, dev->iod_mempool);
+               if (unlikely((iod->sgt.orig_nents == NVFS_IO_ERR))) {
+                       pr_err("%s: failed to map sg_nents=:%d\n", __func__, iod->sgt.nents);
+                       mempool_free(iod->sgt.sgl, dev->iod_mempool);
                        nvfs_put_ops();
                        return BLK_STS_IOERR;
                }
 
                nr_mapped = nvfs_ops->nvfs_dma_map_sg_attrs(dev->dev,
-                               iod->sg,
-                               iod->nents,
+                               iod->sgt.sgl,
+                               iod->sgt.orig_nents,
                                dma_dir,
                                DMA_ATTR_NO_WARN);
 
+
                if (unlikely((nr_mapped == NVFS_IO_ERR))) {
-                       mempool_free(iod->sg, dev->iod_mempool);
+                       mempool_free(iod->sgt.sgl, dev->iod_mempool);
                        nvfs_put_ops();
-                       pr_err("%s: failed to dma map sglist=:%d\n", __func__, iod->nents);
+                       pr_err("%s: failed to dma map sglist=:%d\n", __func__, iod->sgt.nents);
                        return BLK_STS_IOERR;
                }
 
                if (unlikely(nr_mapped == NVFS_CPU_REQ)) {
-                       mempool_free(iod->sg, dev->iod_mempool);
+                       mempool_free(iod->sgt.sgl, dev->iod_mempool);
                        nvfs_put_ops();
                        BUG();
                }
 
+	       iod->sgt.nents = nr_mapped;
                iod->use_sgl = nvme_pci_use_sgls(dev, req);
                if (iod->use_sgl) { // TBD: not tested on SGL mode supporting drive
-                       ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw, nr_mapped);
+                       ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw);
                } else {
                        // push dma address to hw registers
                        ret = nvme_pci_setup_prps(dev, req, &cmnd->rw);
@@ -102,7 +104,7 @@ static blk_status_t nvme_nvfs_map_data(struct nvme_dev *dev, struct request *req
 
                if (ret != BLK_STS_OK) {
                        nvme_nvfs_unmap_data(dev, req);
-		       mempool_free(iod->sg, dev->iod_mempool);
+		       mempool_free(iod->sgt.sgl, dev->iod_mempool);
                }
                return ret;
        }

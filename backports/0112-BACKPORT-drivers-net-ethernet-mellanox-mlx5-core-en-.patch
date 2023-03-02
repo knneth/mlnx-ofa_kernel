@@ -1,25 +1,34 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
 
-Change-Id: I5a4e8ba9a095fe7e3c035d7edc52b8e794f60f9b
+Change-Id: Iba890ea8137ac20d9d663b25dfaeabde6abbde0b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
+@@ -502,9 +502,11 @@ void mlx5e_rx_res_channels_activate(stru
+ 	nch = mlx5e_channels_get_num(chs);
  
-+#if defined(HAVE_NET_BAREUDP_H) && defined(HAVE_FLOW_DISSECTOR_MPLS_LSE)
-+
- #include <net/bareudp.h>
- #include <net/mpls.h>
- #include "en/tc_tun.h"
-@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
- 	.parse_tunnel         = parse_tunnel,
- 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
- };
-+#endif /* HAVE_NET_BAREUDP_H */
+ 	for (ix = 0; ix < chs->num; ix++) {
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 		if (mlx5e_channels_is_xsk(chs, ix))
+ 			mlx5e_channels_get_xsk_rqn(chs, ix, &res->rss_rqns[ix]);
+ 		else
++#endif
+ 			mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix]);
+ 	}
+ 	res->rss_nch = chs->num;
+@@ -552,9 +554,11 @@ void mlx5e_rx_res_channels_deactivate(st
+ void mlx5e_rx_res_xsk_update(struct mlx5e_rx_res *res, struct mlx5e_channels *chs,
+ 			     unsigned int ix, bool xsk)
+ {
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk)
+ 		mlx5e_channels_get_xsk_rqn(chs, ix, &res->rss_rqns[ix]);
+ 	else
++#endif
+ 		mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix]);
+ 
+ 	mlx5e_rx_res_rss_enable(res);

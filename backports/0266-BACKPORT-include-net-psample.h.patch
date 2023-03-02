@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/psample.h
+
+Change-Id: Ib49b73235dfdb1a976147c01330dec9542c91e7e
+---
+ include/net/psample.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/include/net/psample.h
++++ b/include/net/psample.h
+@@ -4,6 +4,8 @@
+ #include "../../compat/config.h"
+ 
+ #ifdef HAVE_NET_PSAMPLE_H
++struct sk_buff;
++
+ #include_next <net/psample.h>
+ #else
+ struct psample_group {

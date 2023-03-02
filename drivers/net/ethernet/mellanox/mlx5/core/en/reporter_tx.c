@@ -80,8 +80,7 @@ static int mlx5e_tx_reporter_err_cqe_recover(void *ctx)
 	mlx5e_reset_txqsq_cc_pc(sq);
 	sq->stats->recover++;
 	clear_bit(MLX5E_SQ_STATE_RECOVERING, &sq->state);
-	mlx5e_enable_txqsq(sq);
-	mlx5e_start_txqsq(sq);
+	mlx5e_activate_txqsq(sq);
 
 	return 0;
 out:

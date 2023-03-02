@@ -936,7 +936,7 @@ static int path_rec_start(struct net_device *dev,
 				   IB_SA_PATH_REC_NUMB_PATH	|
 				   IB_SA_PATH_REC_TRAFFIC_CLASS |
 				   IB_SA_PATH_REC_PKEY,
-				   1000, 0, GFP_ATOMIC,
+				   1000, GFP_ATOMIC,
 				   path_rec_completion,
 				   path, &path->query);
 	if (path->query_id < 0) {
@@ -1798,8 +1798,10 @@ static void ipoib_napi_add(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
-	netif_napi_add(dev, &priv->recv_napi, ipoib_rx_poll, IPOIB_NUM_WC);
-	netif_napi_add(dev, &priv->send_napi, ipoib_tx_poll, MAX_SEND_CQE);
+	netif_napi_add_weight(dev, &priv->recv_napi, ipoib_rx_poll,
+			      IPOIB_NUM_WC);
+	netif_napi_add_weight(dev, &priv->send_napi, ipoib_tx_poll,
+			      MAX_SEND_CQE);
 }
 
 static void ipoib_napi_del(struct net_device *dev)
@@ -1984,11 +1986,12 @@ static void ipoib_parent_unregister_pre(struct net_device *ndev)
 static void ipoib_set_dev_features(struct ipoib_dev_priv *priv)
 {
 	priv->hca_caps = priv->ca->attrs.device_cap_flags;
+	priv->kernel_caps = priv->ca->attrs.kernel_cap_flags;
 
 	if (priv->hca_caps & IB_DEVICE_UD_IP_CSUM) {
 		priv->dev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_RXCSUM;
 
-		if (priv->hca_caps & IB_DEVICE_UD_TSO)
+		if (priv->kernel_caps & IBK_UD_TSO)
 			priv->dev->hw_features |= NETIF_F_TSO;
 
 		priv->dev->features |= priv->dev->hw_features;
@@ -2359,7 +2362,7 @@ int ipoib_intf_init(struct ib_device *hca, u32 port, const char *name,
 
 	priv->rn_ops = dev->netdev_ops;
 
-	if (hca->attrs.device_cap_flags & IB_DEVICE_VIRTUAL_FUNCTION)
+	if (hca->attrs.kernel_cap_flags & IBK_VIRTUAL_FUNCTION)
 		dev->netdev_ops	= &ipoib_netdev_ops_vf;
 	else
 		dev->netdev_ops	= &ipoib_netdev_ops_pf;

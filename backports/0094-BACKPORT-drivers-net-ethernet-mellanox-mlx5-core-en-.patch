@@ -1,148 +1,60 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 
-Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
+Change-Id: Ic556afe3f8360b265000865ccb73f7d16a16f995
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 57 ++++++++++++++++++-
- 1 file changed, 55 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-@@ -39,10 +39,19 @@ static void mlx5e_skb_cb_hwtstamp_tx(str
- 				     struct mlx5e_ptp_cq_stats *cq_stats)
- {
- 	struct skb_shared_hwtstamps hwts = {};
-+#ifndef HAVE_KTIME_UNION_TV64
- 	ktime_t diff;
-+#else
-+	s64 diff;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+@@ -6,6 +6,9 @@
+ 
+ #include "mod_hdr.h"
+ #include "lib/fs_ttc.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/rhashtable.h>
 +#endif
  
-+#ifndef HAVE_KTIME_UNION_TV64
- 	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp -
- 		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp);
-+#else
-+	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp.tv64 -
-+		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp.tv64);
+ struct mlx5_prio_hp {
+ 	u32 rate;
+@@ -189,6 +192,7 @@ static inline int mlx5e_ethtool_get_rxnf
+ #endif /* CONFIG_MLX5_EN_RXNFC */
+ 
+ #ifdef CONFIG_MLX5_EN_ARFS
++#ifndef HAVE_NET_FLOW_KEYS_H
+ struct mlx5e_arfs_tables;
+ 
+ int mlx5e_arfs_create_tables(struct mlx5e_priv *priv);
+@@ -203,6 +207,7 @@ static inline void mlx5e_arfs_destroy_ta
+ static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
+ static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
+ #endif
 +#endif
  
- 	/* Maximal allowed diff is 1 / 128 second */
- 	if (diff > (NSEC_PER_SEC >> 7)) {
-@@ -71,8 +80,13 @@ void mlx5e_skb_cb_hwtstamp_handler(struc
- 	/* If both CQEs arrive, check and report the port tstamp, and clear skb cb as
- 	 * skb soon to be released.
- 	 */
-+#ifndef HAVE_KTIME_UNION_TV64
- 	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp ||
- 	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp)
-+#else
-+	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp.tv64 ||
-+	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp.tv64)
+ #ifdef CONFIG_MLX5_EN_TLS
+ struct mlx5e_accel_fs_tcp;
+@@ -228,8 +233,10 @@ struct mlx5e_flow_steering {
+ 	struct mlx5_ttc_table           *ttc;
+ 	struct mlx5_ttc_table           *inner_ttc;
+ #ifdef CONFIG_MLX5_EN_ARFS
++#ifndef HAVE_NET_FLOW_KEYS_H
+ 	struct mlx5e_arfs_tables       *arfs;
+ #endif
 +#endif
- 		return;
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	struct mlx5e_accel_fs_tcp      *accel_tcp;
+ #endif
+@@ -257,10 +264,12 @@ struct mlx5e_flow_steering *mlx5e_fs_ini
+ 					  bool state_destroy);
+ void mlx5e_fs_cleanup(struct mlx5e_flow_steering *fs);
  
- 	mlx5e_skb_cb_hwtstamp_tx(skb, cq_stats);
-@@ -119,7 +133,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
- 	ptpsq->cq_stats->cqe++;
- 
- out:
-+#ifdef HAVE_NAPI_CONSUME_SKB
- 	napi_consume_skb(skb, budget);
-+#else
-+	dev_kfree_skb(skb);
-+#endif
- }
- 
- static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int budget)
-@@ -162,6 +180,9 @@ static int mlx5e_ptp_napi_poll(struct na
- 	rcu_read_lock();
- 
- 	ch_stats->poll++;
-+#ifndef HAVE_NAPI_STATE_MISSED
-+	clear_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags);
-+#endif
- 
- 	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
- 		for (i = 0; i < c->num_tc; i++) {
-@@ -183,8 +204,18 @@ static int mlx5e_ptp_napi_poll(struct na
- 		goto out;
- 	}
- 
-+#ifdef HAVE_NAPI_STATE_MISSED
- 	if (unlikely(!napi_complete_done(napi, work_done)))
- 		goto out;
-+#else
-+	napi_complete_done(napi, work_done);
-+
-+	/* avoid losing completion event during/after polling cqs */
-+	if (test_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags)) {
-+		napi_schedule(napi);
-+		goto out;
-+	}
-+#endif
- 
- 	ch_stats->arm++;
- 
-@@ -398,6 +429,9 @@ static int mlx5e_ptp_open_tx_cqs(struct
- 	ccp.ch_stats = c->stats;
- 	ccp.napi     = &c->napi;
- 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
-+#ifndef HAVE_NAPI_STATE_MISSED
-+	ccp.ch_flags = &c->flags;
-+#endif
- 
- 	cq_param = &cparams->txq_sq_param.cqp;
- 
-@@ -455,7 +489,16 @@ static int mlx5e_init_ptp_rq(struct mlx5
- 	if (err)
- 		return err;
- 
--	return xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
-+#ifdef HAVE_XDP_SUPPORT
-+#ifdef HAVE_XDP_RXQ_INFO
-+#ifdef HAVE_XDP_RXQ_INFO_REG_4_PARAMS
-+	err = xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
-+#else
-+	err = xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix);
-+#endif
-+#endif
-+#endif /* HAVE_XDP_SUPPORT */
-+	return err;
- }
- 
- static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c,
-@@ -471,7 +514,9 @@ static int mlx5e_ptp_open_rq(struct mlx5
- 	ccp.ch_stats = c->stats;
- 	ccp.napi     = &c->napi;
- 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
--
-+#ifndef HAVE_NAPI_STATE_MISSED
-+        ccp.ch_flags = &c->flags;
-+#endif
- 	err = mlx5e_init_ptp_rq(c, params, &c->rq);
- 	if (err)
- 		return err;
-@@ -516,7 +561,11 @@ static void mlx5e_ptp_build_rq_param(str
- 
- 	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
- 	mlx5e_init_rq_type_params(mdev, params);
-+#ifdef HAVE_NET_DEVICE_MIN_MAX_MTU
- 	params->sw_mtu = netdev->max_mtu;
-+#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
-+	params->sw_mtu = netdev->extended->max_mtu;
-+#endif
- 	mlx5e_build_rq_param(mdev, params, NULL, q_counter, rq_params);
- }
- 
-@@ -698,7 +747,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
- 	if (err)
- 		goto err_free;
- 
-+#ifdef HAVE_NETIF_NAPI_ADD_GET_3_PARAMS //forwardport
-+	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll);
-+#else
- 	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll, 64);
-+#endif
- 
- 	mlx5e_ptp_build_params(c, cparams, params);
- 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5e_add_vlan_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
+ void mlx5e_remove_vlan_trap(struct mlx5e_priv *priv);
+ int mlx5e_add_mac_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
+ void mlx5e_remove_mac_trap(struct mlx5e_priv *priv);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs, struct net_device *netdev);
+ int mlx5e_fs_vlan_rx_add_vid(struct mlx5e_flow_steering *fs,
+ 			     struct net_device *netdev,

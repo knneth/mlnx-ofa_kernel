@@ -1,22 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
 
-Change-Id: Ie1b1fbc2aa6d8bc4cc8d9867510a2c68f7f6ac26
+Change-Id: I0365e129ff8c97aa2b36f1c2e1f016f99b049d06
 ---
- drivers/infiniband/core/core_priv.h | 42 +++++++++++++++++++++++++++++
- 1 file changed, 42 insertions(+)
+ drivers/infiniband/core/core_priv.h | 44 +++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
 
 --- a/drivers/infiniband/core/core_priv.h
 +++ b/drivers/infiniband/core/core_priv.h
-@@ -40,6 +40,7 @@
+@@ -40,6 +40,9 @@
  #include <net/netns/generic.h>
  
  #include <rdma/ib_verbs.h>
++#ifdef HAVE_BASECODE_EXTRAS
 +#include <rdma/ib_addr.h>
++#endif
  #include <rdma/opa_addr.h>
  #include <rdma/ib_mad.h>
  #include <rdma/restrack.h>
-@@ -150,6 +151,7 @@ void ib_cache_cleanup_one(struct ib_devi
+@@ -150,6 +153,7 @@ void ib_cache_cleanup_one(struct ib_devi
  void ib_cache_release_one(struct ib_device *device);
  void ib_dispatch_event_clients(struct ib_event *event);
  
@@ -24,7 +26,7 @@ Change-Id: Ie1b1fbc2aa6d8bc4cc8d9867510a2c68f7f6ac26
  #ifdef CONFIG_CGROUP_RDMA
  void ib_device_register_rdmacg(struct ib_device *device);
  void ib_device_unregister_rdmacg(struct ib_device *device);
-@@ -183,11 +185,39 @@ static inline void ib_rdmacg_uncharge(st
+@@ -183,11 +187,39 @@ static inline void ib_rdmacg_uncharge(st
  {
  }
  #endif
@@ -64,7 +66,7 @@ Change-Id: Ie1b1fbc2aa6d8bc4cc8d9867510a2c68f7f6ac26
  }
  
  int addr_init(void);
-@@ -203,14 +233,26 @@ void rdma_nl_init(void);
+@@ -203,14 +235,26 @@ void rdma_nl_init(void);
  void rdma_nl_exit(void);
  
  int ib_nl_handle_resolve_resp(struct sk_buff *skb,

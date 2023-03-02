@@ -1,0 +1,1486 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
+
+Change-Id: I0d27678554f0e4a5924cd3b2d9afef05282f8041
+---
+ .../net/ethernet/mellanox/mlx5/core/en_tc.c   | 541 ++++++++++++++++--
+ 1 file changed, 501 insertions(+), 40 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
+@@ -39,6 +39,9 @@
+ #include <linux/rhashtable.h>
+ #include <linux/refcount.h>
+ #include <linux/completion.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/tc_act/tc_pedit.h>
++#endif
+ #include <net/arp.h>
+ #include <net/ipv6_stubs.h>
+ #include <net/bareudp.h>
+@@ -1448,8 +1451,10 @@ static int mlx5e_hairpin_get_prio(struct
+ 
+ #ifdef CONFIG_MLX5_CORE_EN_DCB
+ 	if (priv->dcbx_dp.trust_state != MLX5_QPTS_TRUST_PCP) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "only PCP trust state supported for hairpin");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ #endif
+@@ -1465,8 +1470,10 @@ static int mlx5e_hairpin_get_prio(struct
+ 	if (!vlan_present || !prio_mask) {
+ 		prio_val = 0;
+ 	} else if (prio_mask != 0x7) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "masked priority match not supported for hairpin");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -1960,12 +1967,16 @@ static int mlx5e_hairpin_flow_add(struct
+ 
+ 	peer_mdev = mlx5e_hairpin_get_mdev(dev_net(priv->netdev), peer_ifindex);
+ 	if (IS_ERR(peer_mdev)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "invalid ifindex of mirred device");
++#endif
+ 		return PTR_ERR(peer_mdev);
+ 	}
+ 
+ 	if (!MLX5_CAP_GEN(priv->mdev, hairpin) || !MLX5_CAP_GEN(peer_mdev, hairpin)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "hairpin is not supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -2558,7 +2569,9 @@ set_encap_dests(struct mlx5e_priv *priv,
+ 		mirred_ifindex = parse_attr->mirred_ifindex[out_index];
+ 		out_dev = dev_get_by_index(dev_net(priv->netdev), mirred_ifindex);
+ 		if (!out_dev) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "Requested mirred device not found");
++#endif
+ 			err = -ENODEV;
+ 			goto out;
+ 		}
+@@ -2580,7 +2593,9 @@ set_encap_dests(struct mlx5e_priv *priv,
+ 	}
+ 
+ 	if (*vf_tun && esw_attr->out_count > 1) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "VF tunnel encap with mirroring is not supported");
++#endif
+ 		err = -EOPNOTSUPP;
+ 		goto out;
+ 	}
+@@ -2642,16 +2657,20 @@ mlx5e_tc_add_fdb_flow(struct mlx5e_priv
+ 	 */
+ 	max_chain = mlx5_chains_get_chain_range(esw_chains(esw));
+ 	if (!mlx5e_is_ft_flow(flow) && attr->chain > max_chain) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Requested chain is out of supported range");
++#endif
+ 		err = -EOPNOTSUPP;
+ 		goto err_out;
+ 	}
+ 
+ 	max_prio = mlx5_chains_get_prio_range(esw_chains(esw));
+ 	if (attr->prio > max_prio) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Requested priority is out of supported range");
++#endif
+ 		err = -EOPNOTSUPP;
+ 		goto err_out;
+ 	}
+@@ -2693,15 +2712,19 @@ mlx5e_tc_add_fdb_flow(struct mlx5e_priv
+ 		struct mlx5e_tc_int_port *int_port;
+ 
+ 		if (attr->chain) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Internal port rule is only supported on chain 0");
++#endif
+ 			err = -EOPNOTSUPP;
+ 			goto err_out;
+ 		}
+ 
+ 		if (attr->dest_chain) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Internal port rule offload doesn't support goto action");
++#endif
+ 			err = -EOPNOTSUPP;
+ 			goto err_out;
+ 		}
+@@ -2952,8 +2975,10 @@ enc_opts_is_dont_care_or_full_match(stru
+ 
+ 			if (opt->opt_class != htons(U16_MAX) ||
+ 			    opt->type != U8_MAX) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 				NL_SET_ERR_MSG_MOD(extack,
+ 						   "Partial match of tunnel options in chain > 0 isn't supported");
++#endif
+ 				netdev_warn(priv->netdev,
+ 					    "Partial match of tunnel options in chain > 0 isn't supported");
+ 				return -EOPNOTSUPP;
+@@ -2984,7 +3009,11 @@ static int mlx5e_get_flow_tunnel_id(stru
+ 				    struct net_device *filter_dev)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#else
++	struct netlink_ext_ack *extack = NULL;
++#endif
+ 	struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts;
+ 	struct flow_match_enc_opts enc_opts_match;
+ 	struct tunnel_match_enc_opts tun_enc_opts;
+@@ -3003,6 +3032,7 @@ static int mlx5e_get_flow_tunnel_id(stru
+ 	uplink_priv = &uplink_rpriv->uplink_priv;
+ 
+ 	memset(&tunnel_key, 0, sizeof(tunnel_key));
++#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_CONTROL
+ 	COPY_DISSECTOR(rule, FLOW_DISSECTOR_KEY_ENC_CONTROL,
+ 		       &tunnel_key.enc_control);
+ 	if (tunnel_key.enc_control.addr_type == FLOW_DISSECTOR_KEY_IPV4_ADDRS)
+@@ -3016,6 +3046,7 @@ static int mlx5e_get_flow_tunnel_id(stru
+ 		       &tunnel_key.enc_tp);
+ 	COPY_DISSECTOR(rule, FLOW_DISSECTOR_KEY_ENC_KEYID,
+ 		       &tunnel_key.enc_key_id);
++#endif
+ 	tunnel_key.filter_ifindex = filter_dev->ifindex;
+ 
+ 	err = mapping_add(uplink_priv->tunnel_mapping, &tunnel_key, &tun_id);
+@@ -3171,7 +3202,9 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+ {
+ 	u8 outer_ecn_mask = 0, outer_ecn_key = 0, inner_ecn_mask = 0, inner_ecn_key = 0;
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_ip match;
+ 
+ 	*match_inner_ecn = true;
+@@ -3189,7 +3222,9 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+ 	}
+ 
+ 	if (outer_ecn_mask != 0 && outer_ecn_mask != INET_ECN_MASK) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Partial match on enc_tos ecn bits isn't supported");
++#endif
+ 		netdev_warn(priv->netdev, "Partial match on enc_tos ecn bits isn't supported");
+ 		return -EOPNOTSUPP;
+ 	}
+@@ -3198,16 +3233,20 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+ 		if (!inner_ecn_mask)
+ 			return 0;
+ 
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matching on tos ecn bits without also matching enc_tos ecn bits isn't supported");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "Matching on tos ecn bits without also matching enc_tos ecn bits isn't supported");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (inner_ecn_mask && inner_ecn_mask != INET_ECN_MASK) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Partial match on tos ecn bits with match on enc_tos ecn bits isn't supported");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "Partial match on tos ecn bits with match on enc_tos ecn bits isn't supported");
+ 		return -EOPNOTSUPP;
+@@ -3221,7 +3260,9 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+ 	if (outer_ecn_key == INET_ECN_ECT_1) {
+ 		/* inner ecn might change by DECAP action */
+ 
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Match on enc_tos ecn = ECT(1) isn't supported");
++#endif
+ 		netdev_warn(priv->netdev, "Match on enc_tos ecn = ECT(1) isn't supported");
+ 		return -EOPNOTSUPP;
+ 	}
+@@ -3231,8 +3272,10 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+ 
+ 	if (inner_ecn_key != INET_ECN_CE) {
+ 		/* Can't happen in software, as packet ecn will be changed to CE after decap */
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Match on tos enc_tos ecn = CE while match on tos ecn != CE isn't supported");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "Match on tos enc_tos ecn = CE while match on tos ecn != CE isn't supported");
+ 		return -EOPNOTSUPP;
+@@ -3246,6 +3289,7 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+ 	return 0;
+ }
+ 
++#ifdef HAVE_TCF_TUNNEL_INFO
+ static int parse_tunnel_attr(struct mlx5e_priv *priv,
+ 			     struct mlx5e_tc_flow *flow,
+ 			     struct mlx5_flow_spec *spec,
+@@ -3256,12 +3300,16 @@ static int parse_tunnel_attr(struct mlx5
+ {
+ 	struct mlx5e_tc_tunnel *tunnel = mlx5e_get_tc_tun(filter_dev);
+ 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	bool needs_mapping, sets_mapping;
+ 	int err;
+ 
+ 	if (!mlx5e_is_eswitch_flow(flow)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Match on tunnel is not supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -3271,8 +3319,10 @@ static int parse_tunnel_attr(struct mlx5
+ 
+ 	if ((needs_mapping || sets_mapping) &&
+ 	    !mlx5_eswitch_reg_c1_loopback_enabled(esw)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Chains on tunnel devices isn't supported without register loopback support");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "Chains on tunnel devices isn't supported without register loopback support");
+ 		return -EOPNOTSUPP;
+@@ -3282,8 +3332,10 @@ static int parse_tunnel_attr(struct mlx5
+ 		err = mlx5e_tc_tun_parse(filter_dev, priv, spec, f,
+ 					 match_level);
+ 		if (err) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Failed to parse tunnel attributes");
++#endif
+ 			netdev_warn(priv->netdev,
+ 				    "Failed to parse tunnel attributes");
+ 			return err;
+@@ -3292,7 +3344,9 @@ static int parse_tunnel_attr(struct mlx5
+ 		/* With mpls over udp we decapsulate using packet reformat
+ 		 * object
+ 		 */
++#ifdef HAVE_NET_BAREUDP_H
+ 		if (!netif_is_bareudp(filter_dev))
++#endif
+ 			flow->attr->action |= MLX5_FLOW_CONTEXT_ACTION_DECAP;
+ 		err = mlx5e_tc_set_attr_rx_tun(flow, spec);
+ 		if (err)
+@@ -3302,7 +3356,9 @@ static int parse_tunnel_attr(struct mlx5
+ 
+ 		tmp_spec = kvzalloc(sizeof(*tmp_spec), GFP_KERNEL);
+ 		if (!tmp_spec) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "Failed to allocate memory for vxlan tmp spec");
++#endif
+ 			netdev_warn(priv->netdev, "Failed to allocate memory for vxlan tmp spec");
+ 			return -ENOMEM;
+ 		}
+@@ -3311,7 +3367,9 @@ static int parse_tunnel_attr(struct mlx5
+ 		err = mlx5e_tc_tun_parse(filter_dev, priv, tmp_spec, f, match_level);
+ 		if (err) {
+ 			kvfree(tmp_spec);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "Failed to parse tunnel attributes");
++#endif
+ 			netdev_warn(priv->netdev, "Failed to parse tunnel attributes");
+ 			return err;
+ 		}
+@@ -3326,6 +3384,7 @@ static int parse_tunnel_attr(struct mlx5
+ 
+ 	return mlx5e_get_flow_tunnel_id(priv, flow, f, filter_dev);
+ }
++#endif /* HAVE_TCF_TUNNEL_INFO */
+ 
+ static void *get_match_inner_headers_criteria(struct mlx5_flow_spec *spec)
+ {
+@@ -3369,9 +3428,16 @@ static int mlx5e_flower_parse_meta(struc
+ 				   struct flow_cls_offload *f)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#else
++	struct netlink_ext_ack *extack;
++#endif
+ 	struct net_device *ingress_dev;
+ 	struct flow_match_meta match;
++#ifndef HAVE_TC_CLS_OFFLOAD_EXTACK
++	extack = NULL;
++#endif
+ 
+ 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_META))
+ 		return 0;
+@@ -3381,21 +3447,27 @@ static int mlx5e_flower_parse_meta(struc
+ 		return 0;
+ 
+ 	if (match.mask->ingress_ifindex != 0xFFFFFFFF) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Unsupported ingress ifindex mask");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	ingress_dev = __dev_get_by_index(dev_net(filter_dev),
+ 					 match.key->ingress_ifindex);
+ 	if (!ingress_dev) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Can't find the ingress port to match on");
++#endif
+ 		return -ENOENT;
+ 	}
+ 
+ 	if (ingress_dev != filter_dev) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Can't match on the ingress filter port");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -3410,9 +3482,10 @@ static bool skip_key_basic(struct net_de
+ 	 * label fields.  However, the actual ethertype is IP so we want to
+ 	 * avoid matching on this, otherwise we'll fail the match.
+ 	 */
++#ifdef HAVE_NET_BAREUDP_H
+ 	if (netif_is_bareudp(filter_dev) && f->common.chain_index == 0)
+ 		return true;
+-
++#endif
+ 	return false;
+ }
+ 
+@@ -3423,7 +3496,11 @@ static int __parse_cls_flower(struct mlx
+ 			      struct net_device *filter_dev,
+ 			      u8 *inner_match_level, u8 *outer_match_level)
+ {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#else
++	struct netlink_ext_ack *extack;
++#endif
+ 	void *headers_c = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
+ 				       outer_headers);
+ 	void *headers_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,
+@@ -3444,6 +3521,9 @@ static int __parse_cls_flower(struct mlx
+ 	u8 ip_proto = 0;
+ 	u8 *match_level;
+ 	int err;
++#ifndef HAVE_TC_CLS_OFFLOAD_EXTACK
++	extack = NULL;
++#endif
+ 
+ 	fs_type = mlx5e_is_eswitch_flow(flow) ? FS_FT_FDB : FS_FT_NIC_RX;
+ 	match_level = outer_match_level;
+@@ -3458,25 +3538,44 @@ static int __parse_cls_flower(struct mlx
+ 	      BIT(FLOW_DISSECTOR_KEY_IPV4_ADDRS) |
+ 	      BIT(FLOW_DISSECTOR_KEY_IPV6_ADDRS) |
+ 	      BIT(FLOW_DISSECTOR_KEY_PORTS) |
++#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_CONTROL
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_KEYID) |
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_IPV4_ADDRS) |
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_IPV6_ADDRS) |
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_PORTS)	|
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_CONTROL) |
++#endif
+ 	      BIT(FLOW_DISSECTOR_KEY_TCP) |
+ 	      BIT(FLOW_DISSECTOR_KEY_IP)  |
+ 	      BIT(FLOW_DISSECTOR_KEY_CT) |
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_IP) |
+ 	      BIT(FLOW_DISSECTOR_KEY_ENC_OPTS) |
++#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_CONTROL
+ 	      BIT(FLOW_DISSECTOR_KEY_ICMP) |
++#endif
+ 	      BIT(FLOW_DISSECTOR_KEY_MPLS))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Unsupported key");
++#endif
+ 		netdev_dbg(priv->netdev, "Unsupported key used: 0x%x\n",
+ 			   dissector->used_keys);
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+-	if (mlx5e_get_tc_tun(filter_dev)) {
++#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_CONTROL
++#if !defined(HAVE_TC_INDR_API) && !defined(CONFIG_COMPAT_KERNEL_4_14)
++	/* for old kernels we dont have real filter_dev,
++	 * and mlx5e_get_tc_tun always return vxlan
++	 */
++	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_IPV4_ADDRS) ||
++	    flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_IPV6_ADDRS) ||
++	    flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_KEYID) ||
++	    flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS) ||
++	    flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_OPTS))
++#else
++	if (mlx5e_get_tc_tun(filter_dev))
++#endif
++	{
+ 		bool match_inner = false;
+ 
+ 		err = parse_tunnel_attr(priv, flow, spec, f, filter_dev,
+@@ -3498,6 +3597,7 @@ static int __parse_cls_flower(struct mlx
+ 		if (err)
+ 			return err;
+ 	}
++#endif
+ 
+ 	err = mlx5e_flower_parse_meta(filter_dev, f);
+ 	if (err)
+@@ -3514,6 +3614,15 @@ static int __parse_cls_flower(struct mlx
+ 
+ 		if (match.mask->n_proto)
+ 			*match_level = MLX5_MATCH_L2;
++
++#ifndef HAVE_FLOW_DISSECTOR_KEY_CVLAN
++		if (match.key->n_proto == htons(ETH_P_8021AD)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++			NL_SET_ERR_MSG_MOD(extack, "Matching on CVLAN is not supported");
++#endif
++			return -EOPNOTSUPP;
++		}
++#endif
+ 	}
+ 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_VLAN) ||
+ 	    is_vlan_dev(filter_dev)) {
+@@ -3559,6 +3668,7 @@ static int __parse_cls_flower(struct mlx
+ 
+ 			*match_level = MLX5_MATCH_L2;
+ 
++#ifdef HAVE_FLOW_DISSECTOR_KEY_VLAN_ETH_TYPE
+ 			if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CVLAN) &&
+ 			    match.mask->vlan_eth_type &&
+ 			    MLX5_CAP_FLOWTABLE_TYPE(priv->mdev,
+@@ -3569,6 +3679,7 @@ static int __parse_cls_flower(struct mlx
+ 				spec->match_criteria_enable |=
+ 					MLX5_MATCH_MISC_PARAMETERS;
+ 			}
++#endif
+ 		}
+ 	} else if (*match_level != MLX5_MATCH_NONE) {
+ 		/* cvlan_tag enabled in match criteria and
+@@ -3588,8 +3699,10 @@ static int __parse_cls_flower(struct mlx
+ 		    match.mask->vlan_tpid) {
+ 			if (!MLX5_CAP_FLOWTABLE_TYPE(priv->mdev, ft_field_support.outer_second_vid,
+ 						     fs_type)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 				NL_SET_ERR_MSG_MOD(extack,
+ 						   "Matching on CVLAN is not supported");
++#endif
+ 				return -EOPNOTSUPP;
+ 			}
+ 
+@@ -3650,7 +3763,9 @@ static int __parse_cls_flower(struct mlx
+ 
+ 		/* the HW doesn't support frag first/later */
+ 		if (match.mask->flags & FLOW_DIS_FIRST_FRAG) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "Match on frag first/later is not supported");
++#endif
+ 			return -EOPNOTSUPP;
+ 		}
+ 
+@@ -3751,8 +3866,10 @@ static int __parse_cls_flower(struct mlx
+ 		if (match.mask->ttl &&
+ 		    !MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
+ 						ft_field_support.outer_ipv4_ttl)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Matching on TTL is not supported");
++#endif
+ 			return -EOPNOTSUPP;
+ 		}
+ 
+@@ -3791,8 +3908,10 @@ static int __parse_cls_flower(struct mlx
+ 				 udp_dport, ntohs(match.key->dst));
+ 			break;
+ 		default:
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Only UDP and TCP transports are supported for L4 matching");
++#endif
+ 			netdev_err(priv->netdev,
+ 				   "Only UDP and TCP transport are supported\n");
+ 			return -EINVAL;
+@@ -3814,6 +3933,7 @@ static int __parse_cls_flower(struct mlx
+ 		if (match.mask->flags)
+ 			*match_level = MLX5_MATCH_L4;
+ 	}
++#ifdef HAVE_FLOW_DISSECTOR_KEY_ENC_CONTROL
+ 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ICMP)) {
+ 		struct flow_match_icmp match;
+ 
+@@ -3822,8 +3942,10 @@ static int __parse_cls_flower(struct mlx
+ 		case IPPROTO_ICMP:
+ 			if (!(MLX5_CAP_GEN(priv->mdev, flex_parser_protocols) &
+ 			      MLX5_FLEX_PROTO_ICMP)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 				NL_SET_ERR_MSG_MOD(extack,
+ 						   "Match on Flex protocols for ICMP is not supported");
++#endif
+ 				return -EOPNOTSUPP;
+ 			}
+ 			MLX5_SET(fte_match_set_misc3, misc_c_3, icmp_type,
+@@ -3838,8 +3960,10 @@ static int __parse_cls_flower(struct mlx
+ 		case IPPROTO_ICMPV6:
+ 			if (!(MLX5_CAP_GEN(priv->mdev, flex_parser_protocols) &
+ 			      MLX5_FLEX_PROTO_ICMPV6)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 				NL_SET_ERR_MSG_MOD(extack,
+ 						   "Match on Flex protocols for ICMPV6 is not supported");
++#endif
+ 				return -EOPNOTSUPP;
+ 			}
+ 			MLX5_SET(fte_match_set_misc3, misc_c_3, icmpv6_type,
+@@ -3852,8 +3976,10 @@ static int __parse_cls_flower(struct mlx
+ 				 match.key->code);
+ 			break;
+ 		default:
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Code and type matching only with ICMP and ICMPv6");
++#endif
+ 			netdev_err(priv->netdev,
+ 				   "Code and type matching only with ICMP and ICMPv6\n");
+ 			return -EINVAL;
+@@ -3863,15 +3989,20 @@ static int __parse_cls_flower(struct mlx
+ 			spec->match_criteria_enable |= MLX5_MATCH_MISC_PARAMETERS_3;
+ 		}
+ 	}
++#endif
++#ifdef HAVE_NET_BAREUDP_H
+ 	/* Currently supported only for MPLS over UDP */
+ 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_MPLS) &&
+ 	    !netif_is_bareudp(filter_dev)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matching on MPLS is supported only for MPLS over UDP");
++#endif
+ 		netdev_err(priv->netdev,
+ 			   "Matching on MPLS is supported only for MPLS over UDP\n");
+ 		return -EOPNOTSUPP;
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+@@ -3883,7 +4014,9 @@ static int parse_cls_flower(struct mlx5e
+ 			    struct net_device *filter_dev)
+ {
+ 	u8 inner_match_level, outer_match_level, non_tunnel_match_level;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct mlx5_core_dev *dev = priv->mdev;
+ 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+ 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+@@ -3905,8 +4038,10 @@ static int parse_cls_flower(struct mlx5e
+ 		if (rep->vport != MLX5_VPORT_UPLINK &&
+ 		    (esw->offloads.inline_mode != MLX5_INLINE_MODE_NONE &&
+ 		    esw->offloads.inline_mode < non_tunnel_match_level)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "Flow is not offloaded due to min inline setting");
++#endif
+ 			netdev_warn(priv->netdev,
+ 				    "Flow is not offloaded due to min inline setting, required %d actual %d\n",
+ 				    non_tunnel_match_level, esw->offloads.inline_mode);
+@@ -4068,8 +4203,10 @@ static int offload_pedit_fields(struct m
+ 			continue;
+ 
+ 		if (s_mask && a_mask) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "can't set and add to the same HW field");
++#endif
+ 			netdev_warn(priv->netdev,
+ 				    "mlx5: can't set and add to the same HW field (%x)\n",
+ 				    f->field);
+@@ -4109,8 +4246,10 @@ static int offload_pedit_fields(struct m
+ 		next_z = find_next_zero_bit(&mask, f->field_bsize, first);
+ 		last  = find_last_bit(&mask, f->field_bsize);
+ 		if (first < next_z && next_z < last) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "rewrite of few sub-fields isn't supported");
++#endif
+ 			netdev_warn(priv->netdev,
+ 				    "mlx5: rewrite of few sub-fields (mask %lx) isn't offloaded\n",
+ 				    mask);
+@@ -4119,8 +4258,10 @@ static int offload_pedit_fields(struct m
+ 
+ 		action = mlx5e_mod_hdr_alloc(priv->mdev, namespace, mod_acts);
+ 		if (IS_ERR(action)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "too many pedit actions, can't offload");
++#endif
+ 			mlx5_core_warn(priv->mdev,
+ 				       "mlx5: parsed %d pedit actions, can't do more\n",
+ 				       mod_acts->num_actions);
+@@ -4168,7 +4309,9 @@ static int verify_offload_pedit_fields(s
+ 	for (cmd = 0; cmd < __PEDIT_CMD_MAX; cmd++) {
+ 		cmd_masks = &parse_attr->hdrs[cmd].masks;
+ 		if (memcmp(cmd_masks, &zero_masks, sizeof(zero_masks))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "attempt to offload an unsupported field");
++#endif
+ 			netdev_warn(priv->netdev, "attempt to offload an unsupported field (cmd %d)\n", cmd);
+ 			print_hex_dump(KERN_WARNING, "mask: ", DUMP_PREFIX_ADDRESS,
+ 				       16, 1, cmd_masks, sizeof(zero_masks), true);
+@@ -4186,6 +4329,7 @@ static int alloc_tc_pedit_action(struct
+ {
+ 	int err;
+ 
++#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
+ 	err = offload_pedit_fields(priv, namespace, parse_attr, action_flags, extack);
+ 	if (err)
+ 		goto out_dealloc_parsed_actions;
+@@ -4194,6 +4338,9 @@ static int alloc_tc_pedit_action(struct
+ 	if (err)
+ 		goto out_dealloc_parsed_actions;
+ 
++#else /* HAVE_TCF_PEDIT_TCFP_KEYS_EX */
++	return -EOPNOTSUPP;
++#endif /* HAVE_TCF_PEDIT_TCFP_KEYS_EX */
+ 	return 0;
+ 
+ out_dealloc_parsed_actions:
+@@ -4242,8 +4389,10 @@ is_action_keys_supported(const struct fl
+ 			*modify_tuple = true;
+ 
+ 		if (ct_flow && *modify_tuple) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "can't offload re-write of ipv4 address with action ct");
++#endif
+ 			return false;
+ 		}
+ 	} else if (htype == FLOW_ACT_MANGLE_HDR_TYPE_IP6) {
+@@ -4260,16 +4409,20 @@ is_action_keys_supported(const struct fl
+ 			*modify_tuple = true;
+ 
+ 		if (ct_flow && *modify_tuple) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "can't offload re-write of ipv6 address with action ct");
++#endif
+ 			return false;
+ 		}
+ 	} else if (htype == FLOW_ACT_MANGLE_HDR_TYPE_TCP ||
+ 		   htype == FLOW_ACT_MANGLE_HDR_TYPE_UDP) {
+ 		*modify_tuple = true;
+ 		if (ct_flow) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack,
+ 					   "can't offload re-write of transport header ports with action ct");
++#endif
+ 			return false;
+ 		}
+ 	}
+@@ -4286,8 +4439,10 @@ static bool modify_tuple_supported(bool
+ 		return true;
+ 
+ 	if (ct_flow) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "can't offload tuple modification with non-clear ct()");
++#endif
+ 		netdev_info(priv->netdev,
+ 			    "can't offload tuple modification with non-clear ct()");
+ 		return false;
+@@ -4298,8 +4453,10 @@ static bool modify_tuple_supported(bool
+ 	 * we can't restore ct state
+ 	 */
+ 	if (mlx5_tc_ct_add_no_trk_match(spec)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "can't offload tuple modification with ct matches and no ct(clear) action");
++#endif
+ 		netdev_info(priv->netdev,
+ 			    "can't offload tuple modification with ct matches and no ct(clear) action");
+ 		return false;
+@@ -4352,8 +4509,10 @@ static bool modify_header_match_supporte
+ 	ip_proto = MLX5_GET(fte_match_set_lyr_2_4, headers_v, ip_protocol);
+ 	if (modify_ip_header && ip_proto != IPPROTO_TCP &&
+ 	    ip_proto != IPPROTO_UDP && ip_proto != IPPROTO_ICMP) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "can't offload re-write of non TCP/UDP");
++#endif
+ 		netdev_info(priv->netdev, "can't offload re-write of ip proto %d\n",
+ 			    ip_proto);
+ 		return false;
+@@ -4380,13 +4539,17 @@ actions_match_supported_fdb(struct mlx5e
+ 		/* All registers used by ct are cleared when using
+ 		 * split rules.
+ 		 */
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Can't offload mirroring with action ct");
++#endif
+ 		return false;
+ 	}
+ 
+ 	if (esw_attr->split_count > 0 && !mlx5_esw_has_fwd_fdb(priv->mdev)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "current firmware doesn't support split rule for port mirroring");
++#endif
+ 		netdev_warn_once(priv->netdev,
+ 				 "current firmware doesn't support split rule for port mirroring\n");
+ 		return false;
+@@ -4410,31 +4573,41 @@ actions_match_supported(struct mlx5e_pri
+ 
+ 	if (!(actions &
+ 	      (MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_DROP))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Rule must have at least one forward/drop action");
++#endif
+ 		return false;
+ 	}
+ 
+ 	if (!(~actions &
+ 	      (MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_DROP))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Rule cannot support forward+drop action");
++#endif
+ 		return false;
+ 	}
+ 
+ 	if (actions & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR &&
+ 	    actions & MLX5_FLOW_CONTEXT_ACTION_DROP) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Drop with modify header action is not supported");
++#endif
+ 		return false;
+ 	}
+ 
+ 	if (!(~actions &
+ 	      (MLX5_FLOW_CONTEXT_ACTION_FWD_DEST | MLX5_FLOW_CONTEXT_ACTION_DROP))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Rule cannot support forward+drop action");
++#endif
+ 		return false;
+ 	}
+ 
+ 	if (actions & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR &&
+ 	    actions & MLX5_FLOW_CONTEXT_ACTION_DROP) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Drop with modify header action is not supported");
++#endif
+ 		return false;
+ 	}
+ 
+@@ -4751,7 +4924,9 @@ parse_tc_actions(struct mlx5e_tc_act_par
+ 		act = *_act;
+ 		tc_act = mlx5e_tc_act_get(act->id, ns_type);
+ 		if (!tc_act) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "Not implemented offload action");
++#endif
+ 			err = -EOPNOTSUPP;
+ 			goto out_free;
+ 		}
+@@ -4810,15 +4985,21 @@ flow_action_supported(struct flow_action
+ 		      struct netlink_ext_ack *extack)
+ {
+ 	if (!flow_action_has_entries(flow_action)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Flow action doesn't have any entries");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_FLOW_ACTION_HW_STATS_CHECK
+ 	if (!flow_action_hw_stats_check(flow_action, extack,
+ 					FLOW_ACTION_HW_STATS_DELAYED_BIT)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Flow action HW stats type is not supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+@@ -4988,16 +5169,20 @@ parse_tc_fdb_actions(struct mlx5e_priv *
+ 	/* Forward to/from internal port can only have 1 dest */
+ 	if ((netif_is_ovs_master(filter_dev) || esw_attr->dest_int_port) &&
+ 	    esw_attr->out_count > 1) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Rules with internal port can have only one destination");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	/* Forward from tunnel/internal port to internal port is not supported */
+ 	if ((mlx5e_get_tc_tun(filter_dev) || netif_is_ovs_master(filter_dev)) &&
+ 	    esw_attr->dest_int_port) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Forwarding from tunnel/internal port to internal port is not supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -5038,13 +5223,47 @@ static const struct rhashtable_params tc
+ 	.automatic_shrinking = true,
+ };
+ 
++#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
++static void get_new_flags(struct mlx5e_priv *priv, unsigned long *flags)
++{
++	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
++
++	if (mlx5e_eswitch_rep(priv->netdev) &&
++	    MLX5_VPORT_MANAGER(priv->mdev) && esw->mode == MLX5_ESWITCH_OFFLOADS)
++		*flags |= MLX5_TC_FLAG(ESW_OFFLOAD);
++}
++#elif !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++static void get_new_flags(struct mlx5e_priv *priv, unsigned long *flags)
++{
++	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
++
++	if (esw && esw->mode == MLX5_ESWITCH_OFFLOADS)
++		*flags |= MLX5_TC_FLAG(ESW_OFFLOAD);
++}
++#endif
++
+ static struct rhashtable *get_tc_ht(struct mlx5e_priv *priv,
+ 				    unsigned long flags)
+ {
+ 	struct mlx5e_rep_priv *rpriv;
+ 
++#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
++	if (mlx5e_eswitch_rep(priv->netdev) &&
++	    MLX5_VPORT_MANAGER(priv->mdev) &&
++	    priv->mdev->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS) {
++#elif !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++	if ((flags & MLX5_TC_FLAG(ESW_OFFLOAD)) ||
++	    (priv->mdev->priv.eswitch &&
++	     priv->mdev->priv.eswitch->mode == MLX5_ESWITCH_OFFLOADS)) {
++#else
+ 	if (flags & MLX5_TC_FLAG(ESW_OFFLOAD)) {
++#endif
+ 		rpriv = priv->ppriv;
++#if !defined(CONFIG_COMPAT_CLS_FLOWER_MOD) && \
++    !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++		if (!rpriv || !rpriv->tc_ht.tbl)
++			return &priv->fs->tc->ht;
++#endif
+ 		return &rpriv->tc_ht;
+ 	} else /* NIC offload */
+ 		return &priv->fs->tc->ht;
+@@ -5053,23 +5272,33 @@ static struct rhashtable *get_tc_ht(stru
+ static bool is_peer_flow_needed(struct mlx5e_tc_flow *flow)
+ {
+ 	struct mlx5_esw_flow_attr *esw_attr = flow->attr->esw_attr;
++#ifdef HAVE_QDISC_SUPPORTS_BLOCK_SHARING
+ 	struct mlx5_flow_attr *attr = flow->attr;
+ 	bool is_rep_ingress = esw_attr->in_rep->vport != MLX5_VPORT_UPLINK &&
+ 		flow_flag_test(flow, INGRESS);
+ 	bool act_is_encap = !!(attr->action &
+ 			       MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT);
++#endif
+ 	bool esw_paired = mlx5_devcom_is_paired(esw_attr->in_mdev->priv.devcom,
+ 						MLX5_DEVCOM_ESW_OFFLOADS);
+ 
+ 	if (!esw_paired)
+ 		return false;
+ 
++#ifdef HAVE_QDISC_SUPPORTS_BLOCK_SHARING
+ 	if ((mlx5_lag_is_sriov(esw_attr->in_mdev) ||
+ 	     mlx5_lag_is_multipath(esw_attr->in_mdev)) &&
+-	    (is_rep_ingress || act_is_encap))
++	    (is_rep_ingress || act_is_encap
++#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
++	     || (flow->flags & MLX5_TC_FLAG(EGRESS))
++#endif
++	    ))
+ 		return true;
+ 
+ 	return false;
++#else
++	return (mlx5_lag_is_sriov(esw_attr->in_mdev) ||  mlx5_lag_is_multipath(esw_attr->in_mdev));
++#endif
+ }
+ 
+ struct mlx5_flow_attr *
+@@ -5141,8 +5370,16 @@ mlx5e_flow_attr_init(struct mlx5_flow_at
+ 		     struct flow_cls_offload *f)
+ {
+ 	attr->parse_attr = parse_attr;
++#ifdef CONFIG_COMPAT_PRIO_CHAIN_SUPPORT
+ 	attr->chain = f->common.chain_index;
++#ifdef CONFIG_COMPAT_TC_PRIO_IS_MAJOR
+ 	attr->prio = f->common.prio;
++#else
++	attr->prio = TC_H_MAJ(f->common.prio) >> 16;
++#endif
++#else
++	attr->prio = 1;
++#endif
+ }
+ 
+ static void
+@@ -5176,13 +5413,25 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *
+ 		     struct mlx5_eswitch_rep *in_rep,
+ 		     struct mlx5_core_dev *in_mdev)
+ {
+-	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
++	struct flow_rule *rule;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#else
++	struct netlink_ext_ack *extack = NULL;
++#endif
++	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+ 	struct mlx5e_tc_flow_parse_attr *parse_attr;
+ 	struct mlx5e_tc_flow *flow;
+ 	int attr_size, err;
+ 
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++	rule = alloc_flow_rule(&f);
++	if (IS_ERR(rule))
++		return ERR_PTR(PTR_ERR(rule));
++#else
++	rule = flow_cls_offload_flow_rule(f);
++#endif
++
+ 	flow_flags |= BIT(MLX5E_TC_FLOW_FLAG_ESWITCH);
+ 	attr_size  = sizeof(struct mlx5_esw_flow_attr);
+ 	err = mlx5e_alloc_flow(priv, attr_size, f, flow_flags,
+@@ -5228,6 +5477,10 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *
+ 		add_unready_flow(flow);
+ 	}
+ 
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++	free_flow_rule(rule);
++#endif
++
+ 	return flow;
+ 
+ err_lag:
+@@ -5236,6 +5489,9 @@ err_lag:
+ err_free:
+ 	mlx5e_flow_put(priv, flow);
+ out:
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++        free_flow_rule(rule);
++#endif
+ 	return ERR_PTR(err);
+ }
+ 
+@@ -5335,18 +5591,32 @@ mlx5e_add_nic_flow(struct mlx5e_priv *pr
+ 		   struct net_device *filter_dev,
+ 		   struct mlx5e_tc_flow **__flow)
+ {
+-	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++	struct flow_rule *rule;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#else
++	struct netlink_ext_ack *extack = NULL;
++#endif
+ 	struct mlx5e_tc_flow_parse_attr *parse_attr;
+ 	struct mlx5e_tc_flow *flow;
+-	int attr_size, err;
++	int attr_size, err = -EOPNOTSUPP;
+ 
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++	rule = alloc_flow_rule(&f);
++	if (IS_ERR(rule))
++		return PTR_ERR(rule);
++#else
++	rule = flow_cls_offload_flow_rule(f);
++#endif
++
++#if defined(HAVE_TC_CLS_OFFLOAD_EXTACK) && defined(CONFIG_COMPAT_PRIO_CHAIN_SUPPORT)
+ 	if (!MLX5_CAP_FLOWTABLE_NIC_RX(priv->mdev, ignore_flow_level)) {
+ 		if (!tc_cls_can_offload_and_chain0(priv->netdev, &f->common))
+-			return -EOPNOTSUPP;
++			goto out;
+ 	} else if (!tc_can_offload_extack(priv->netdev, f->common.extack)) {
+-		return -EOPNOTSUPP;
++		goto out;
+ 	}
++#endif
+ 
+ 	flow_flags |= BIT(MLX5E_TC_FLOW_FLAG_NIC);
+ 	attr_size  = sizeof(struct mlx5_nic_flow_attr);
+@@ -5377,6 +5647,9 @@ mlx5e_add_nic_flow(struct mlx5e_priv *pr
+ 		goto err_free;
+ 
+ 	flow_flag_set(flow, OFFLOADED);
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++        free_flow_rule(rule);
++#endif
+ 	*__flow = flow;
+ 
+ 	return 0;
+@@ -5386,6 +5659,9 @@ err_free:
+ 	mlx5e_mod_hdr_dealloc(&parse_attr->mod_hdr_acts);
+ 	mlx5e_flow_put(priv, flow);
+ out:
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++        free_flow_rule(rule);
++#endif
+ 	return err;
+ }
+ 
+@@ -5402,8 +5678,10 @@ mlx5e_tc_add_flow(struct mlx5e_priv *pri
+ 
+ 	get_flags(flags, &flow_flags);
+ 
++#if defined(HAVE_TC_CLS_OFFLOAD_EXTACK) && defined(HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON)
+ 	if (!tc_can_offload_extack(priv->netdev, f->common.extack))
+ 		return -EOPNOTSUPP;
++#endif
+ 
+ 	if (esw && esw->mode == MLX5_ESWITCH_OFFLOADS)
+ 		err = mlx5e_add_fdb_flow(priv, f, flow_flags,
+@@ -5428,12 +5706,19 @@ static bool is_flow_rule_duplicate_allow
+ int mlx5e_configure_flower(struct net_device *dev, struct mlx5e_priv *priv,
+ 			   struct flow_cls_offload *f, unsigned long flags)
+ {
+-	struct netlink_ext_ack *extack = f->common.extack;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++       struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct rhashtable *tc_ht = get_tc_ht(priv, flags);
+ 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+ 	struct mlx5e_tc_flow *flow;
+ 	int err = 0;
+ 
++#if defined(CONFIG_COMPAT_CLS_FLOWER_MOD) || \
++    (!defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD))
++	get_new_flags(priv, &flags);
++#endif
++
+ 	if (!mlx5_esw_hold(priv->mdev))
+ 		return -EBUSY;
+ 
+@@ -5448,8 +5733,15 @@ int mlx5e_configure_flower(struct net_de
+ 		if (is_flow_rule_duplicate_allowed(dev, rpriv) && flow->orig_dev != dev)
+ 			goto rcu_unlock;
+ 
++#if !defined(HAVE_TC_INDR_API)
++		if(flow->orig_dev != dev)
++			goto out;
++#endif
++
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "flow cookie already exists, ignoring");
++#endif
+ 		netdev_warn_once(priv->netdev,
+ 				 "flow cookie %lx already exists, ignoring\n",
+ 				 f->cookie);
+@@ -5461,7 +5753,9 @@ rcu_unlock:
+ 	if (flow)
+ 		goto out;
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_configure_flower(f);
++#endif
+ 	err = mlx5e_tc_add_flow(priv, f, flags, dev, &flow);
+ 	if (err)
+ 		goto out;
+@@ -5487,6 +5781,10 @@ out:
+ 	return err;
+ }
+ 
++#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
++EXPORT_SYMBOL(mlx5e_configure_flower);
++#endif
++
+ static bool same_flow_direction(struct mlx5e_tc_flow *flow, int flags)
+ {
+ 	bool dir_ingress = !!(flags & MLX5_TC_FLAG(INGRESS));
+@@ -5520,7 +5818,9 @@ int mlx5e_delete_flower(struct net_devic
+ 	rhashtable_remove_fast(tc_ht, &flow->node, tc_ht_params);
+ 	rcu_read_unlock();
+ 
+-	trace_mlx5e_delete_flower(f);
++#ifndef MLX_DISABLE_TRACEPOINTS
++       trace_mlx5e_delete_flower(f);
++#endif
+ 	mlx5e_flow_put(priv, flow);
+ 
+ 	mlx5_esw_put(priv->mdev);
+@@ -5530,6 +5830,9 @@ errout:
+ 	rcu_read_unlock();
+ 	return err;
+ }
++#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
++EXPORT_SYMBOL(mlx5e_delete_flower);
++#endif
+ 
+ int mlx5e_stats_flower(struct net_device *dev, struct mlx5e_priv *priv,
+ 		       struct flow_cls_offload *f, unsigned long flags)
+@@ -5539,11 +5842,21 @@ int mlx5e_stats_flower(struct net_device
+ 	struct mlx5_eswitch *peer_esw;
+ 	struct mlx5e_tc_flow *flow;
+ 	struct mlx5_fc *counter;
++#if !defined(HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD) && \
++    !defined(HAVE_TCF_EXTS_STATS_UPDATE)
++	struct tc_action *a;
++	LIST_HEAD(actions);
++#endif
+ 	u64 lastuse = 0;
+ 	u64 packets = 0;
+ 	u64 bytes = 0;
+ 	int err = 0;
+ 
++#if defined(CONFIG_COMPAT_CLS_FLOWER_MOD) || \
++    (!defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD))
++	get_new_flags(priv, &flags);
++#endif
++
+ 	rcu_read_lock();
+ 	flow = mlx5e_flow_get(rhashtable_lookup(tc_ht, &f->cookie,
+ 						tc_ht_params));
+@@ -5590,14 +5903,81 @@ int mlx5e_stats_flower(struct net_device
+ no_peer_counter:
+ 	mlx5_devcom_release_peer_data(devcom, MLX5_DEVCOM_ESW_OFFLOADS);
+ out:
++#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
+ 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
+ 			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
++	flow_stats_update(&f->stats, bytes, packets, lastuse,
++			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD)
++	flow_stats_update(&f->stats, bytes, packets, lastuse);
++#elif defined(HAVE_TCF_EXTS_STATS_UPDATE)
++	tcf_exts_stats_update(f->exts, bytes, packets, lastuse);
++#else
++	preempt_disable();
++
++#ifdef HAVE_TCF_EXTS_TO_LIST
++	tcf_exts_to_list(f->exts, &actions);
++	list_for_each_entry(a, &actions, list)
++#else
++	tc_for_each_action(a, f->exts)
++#endif
++#ifdef HAVE_TCF_ACTION_STATS_UPDATE
++		tcf_action_stats_update(a, bytes, packets, lastuse);
++#else
++	{
++		struct tcf_act_hdr *h = a->priv;
++
++		spin_lock(&h->tcf_lock);
++		h->tcf_tm.lastuse = max_t(u64, h->tcf_tm.lastuse, lastuse);
++		h->tcf_bstats.bytes += bytes;
++		h->tcf_bstats.packets += packets;
++		spin_unlock(&h->tcf_lock);
++	}
++#endif
++	preempt_enable();
++#endif /* HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD */
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_stats_flower(f);
++#endif
+ errout:
+ 	mlx5e_flow_put(priv, flow);
+ 	return err;
+ }
++#ifdef CONFIG_COMPAT_CLS_FLOWER_MOD
++EXPORT_SYMBOL(mlx5e_stats_flower);
++#endif
+ 
++int mlx5e_policer_validate(const struct flow_action *action,
++			   const struct flow_action_entry *act,
++			   struct netlink_ext_ack *extack)
++{
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
++	if (act->police.exceed.act_id != FLOW_ACTION_DROP) {
++		NL_SET_ERR_MSG_MOD(extack,
++				   "Offload not supported when exceed action is not drop");
++		return -EOPNOTSUPP;
++	}
++
++	if (act->police.notexceed.act_id == FLOW_ACTION_ACCEPT &&
++	    !flow_action_is_last_entry(action, act)) {
++		NL_SET_ERR_MSG_MOD(extack,
++				   "Offload not supported when conform action is ok, but action is not last");
++		return -EOPNOTSUPP;
++	}
++
++	if (act->police.peakrate_bytes_ps ||
++	    act->police.avrate || act->police.overhead) {
++		NL_SET_ERR_MSG_MOD(extack,
++				   "Offload not supported when peakrate/avrate/overhead is configured");
++		return -EOPNOTSUPP;
++	}
++#endif
++
++	return 0;
++}
++
++#ifdef HAVE_TC_CLSMATCHALL_STATS
+ static int apply_police_params(struct mlx5e_priv *priv, u64 rate,
+ 			       struct netlink_ext_ack *extack)
+ {
+@@ -5609,8 +5989,10 @@ static int apply_police_params(struct ml
+ 
+ 	vport_num = rpriv->rep->vport;
+ 	if (vport_num >= MLX5_VPORT_ECPF) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Ingress rate limit is supported only for Eswitch ports connected to VFs");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -5634,33 +6016,6 @@ static int apply_police_params(struct ml
+ 	return err;
+ }
+ 
+-int mlx5e_policer_validate(const struct flow_action *action,
+-			   const struct flow_action_entry *act,
+-			   struct netlink_ext_ack *extack)
+-{
+-	if (act->police.exceed.act_id != FLOW_ACTION_DROP) {
+-		NL_SET_ERR_MSG_MOD(extack,
+-				   "Offload not supported when exceed action is not drop");
+-		return -EOPNOTSUPP;
+-	}
+-
+-	if (act->police.notexceed.act_id == FLOW_ACTION_ACCEPT &&
+-	    !flow_action_is_last_entry(action, act)) {
+-		NL_SET_ERR_MSG_MOD(extack,
+-				   "Offload not supported when conform action is ok, but action is not last");
+-		return -EOPNOTSUPP;
+-	}
+-
+-	if (act->police.peakrate_bytes_ps ||
+-	    act->police.avrate || act->police.overhead) {
+-		NL_SET_ERR_MSG_MOD(extack,
+-				   "Offload not supported when peakrate/avrate/overhead is configured");
+-		return -EOPNOTSUPP;
+-	}
+-
+-	return 0;
+-}
+-
+ static int scan_tc_matchall_fdb_actions(struct mlx5e_priv *priv,
+ 					struct flow_action *flow_action,
+ 					struct netlink_ext_ack *extack)
+@@ -5671,28 +6026,42 @@ static int scan_tc_matchall_fdb_actions(
+ 	int i;
+ 
+ 	if (!flow_action_has_entries(flow_action)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "matchall called with no action");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_FLOW_OFFLOAD_HAS_ONE_ACTION
+ 	if (!flow_offload_has_one_action(flow_action)) {
++#else
++	if (flow_action->num_entries != 1) {
++#endif
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "matchall policing support only a single action");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
++#ifdef HAVE_FLOW_ACTION_HW_STATS_CHECK
+ 	if (!flow_action_basic_hw_stats_check(flow_action, extack)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Flow action HW stats type is not supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
++#endif
+ 
+ 	flow_action_for_each(i, act, flow_action) {
+ 		switch (act->id) {
+ 		case FLOW_ACTION_POLICE:
++#if defined(HAVE_FLOW_ACTION_POLICE_EXCEED) && defined (HAVE_FLOW_ACTION_CONTINUE)
+ 			if (act->police.notexceed.act_id != FLOW_ACTION_CONTINUE) {
+ 				NL_SET_ERR_MSG_MOD(extack,
+ 						   "Offload not supported when conform action is not continue");
+ 				return -EOPNOTSUPP;
+ 			}
++#endif
+ 
+ 			err = mlx5e_policer_validate(flow_action, act, extack);
+ 			if (err)
+@@ -5705,7 +6074,9 @@ static int scan_tc_matchall_fdb_actions(
+ 			rpriv->prev_vf_vport_stats = priv->stats.vf_vport;
+ 			break;
+ 		default:
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 			NL_SET_ERR_MSG_MOD(extack, "mlx5 supports only police action for matchall");
++#endif
+ 			return -EOPNOTSUPP;
+ 		}
+ 	}
+@@ -5717,13 +6088,35 @@ int mlx5e_tc_configure_matchall(struct m
+ 				struct tc_cls_matchall_offload *ma)
+ {
+ 	struct netlink_ext_ack *extack = ma->common.extack;
++	int prio = ma->common.prio;
++	struct flow_rule *rule;
++	int err;
+ 
+-	if (ma->common.prio != 1) {
++#ifndef CONFIG_COMPAT_TC_PRIO_IS_MAJOR
++	prio = TC_H_MAJ(prio) >> 16;
++#endif
++ 
++	if (prio != 1) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "only priority 1 is supported");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+-	return scan_tc_matchall_fdb_actions(priv, &ma->rule->action, extack);
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++	rule = __alloc_flow_rule(ma->exts, NULL, 0);
++	if (IS_ERR(rule))
++		return PTR_ERR(rule);
++#else
++	rule = ma->rule;
++#endif
++
++	err = scan_tc_matchall_fdb_actions(priv, &rule->action, extack);
++#ifndef HAVE_TC_SETUP_FLOW_ACTION
++	free_flow_rule(rule);
++#endif
++
++	return err;
+ }
+ 
+ int mlx5e_tc_delete_matchall(struct mlx5e_priv *priv,
+@@ -5746,9 +6139,19 @@ void mlx5e_tc_stats_matchall(struct mlx5
+ 	dpkts = cur_stats.rx_packets - rpriv->prev_vf_vport_stats.rx_packets;
+ 	dbytes = cur_stats.rx_bytes - rpriv->prev_vf_vport_stats.rx_bytes;
+ 	rpriv->prev_vf_vport_stats = cur_stats;
++#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
+ 	flow_stats_update(&ma->stats, dbytes, dpkts, 0, jiffies,
+ 			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
++	flow_stats_update(&ma->stats, dbytes, dpkts, jiffies,
++			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_TC_SETUP_FLOW_ACTION)
++	flow_stats_update(&ma->stats, dbytes, dpkts, jiffies);
++#else
++	tcf_exts_stats_update(ma->exts, dbytes, dpkts, jiffies);
++#endif
+ }
++#endif /* HAVE_TC_CLSMATCHALL_STATS */
+ 
+ static void mlx5e_tc_hairpin_update_dead_peer(struct mlx5e_priv *priv,
+ 					      struct mlx5e_priv *peer_priv)
+@@ -5989,6 +6392,10 @@ int mlx5e_tc_ht_init(struct rhashtable *
+ void mlx5e_tc_ht_cleanup(struct rhashtable *tc_ht)
+ {
+ 	rhashtable_free_and_destroy(tc_ht, _mlx5e_tc_del_flow, NULL);
++#if !defined (CONFIG_COMPAT_CLS_FLOWER_MOD) && \
++    !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++	tc_ht->tbl = NULL;
++#endif
+ }
+ 
+ int mlx5e_tc_esw_init(struct mlx5_rep_uplink_priv *uplink_priv)
+@@ -6112,10 +6519,28 @@ void mlx5e_tc_reoffload_flows_work(struc
+ 	mutex_unlock(&rpriv->unready_flows_lock);
+ }
+ 
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#ifdef CONFIG_MLX5_ESWITCH
++#if defined(HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_BLOCK_OFFLOAD)
+ static int mlx5e_setup_tc_cls_flower(struct mlx5e_priv *priv,
++#else
++int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++#endif
+ 				     struct flow_cls_offload *cls_flower,
+ 				     unsigned long flags)
+ {
++#ifndef HAVE_TC_CLS_CAN_OFFLOAD_AND_CHAIN0
++#ifdef HAVE_TC_BLOCK_OFFLOAD
++	if (cls_flower->common.chain_index)
++#else
++	struct mlx5e_priv *priv = netdev_priv(dev);
++
++	if (!is_classid_clsact_ingress(cls_flower->common.classid) ||
++	    cls_flower->common.chain_index)
++#endif
++		return -EOPNOTSUPP;
++#endif
++
+ 	switch (cls_flower->command) {
+ 	case FLOW_CLS_REPLACE:
+ 		return mlx5e_configure_flower(priv->netdev, priv, cls_flower,
+@@ -6131,6 +6556,7 @@ static int mlx5e_setup_tc_cls_flower(str
+ 	}
+ }
+ 
++#if defined(HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_BLOCK_OFFLOAD)
+ int mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data,
+ 			    void *cb_priv)
+ {
+@@ -6140,6 +6566,11 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
+ 	if (!priv->netdev || !netif_device_present(priv->netdev))
+ 		return -EOPNOTSUPP;
+ 
++#if defined(HAVE_TC_CLS_OFFLOAD_EXTACK) && !defined(CONFIG_COMPAT_PRIO_CHAIN_SUPPORT)
++	if (!tc_cls_can_offload_and_chain0(priv->netdev, type_data))
++		return -EOPNOTSUPP;
++#endif
++
+ 	if (mlx5e_is_uplink_rep(priv))
+ 		flags |= MLX5_TC_FLAG(ESW_OFFLOAD);
+ 	else
+@@ -6198,3 +6629,33 @@ bool mlx5e_tc_update_skb(struct mlx5_cqe
+ 
+ 	return true;
+ }
++
++#ifndef HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE
++int mlx5e_setup_tc_block(struct net_device *dev,
++			 struct tc_block_offload *f)
++{
++	struct mlx5e_priv *priv = netdev_priv(dev);
++
++	if (f->binder_type != FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
++		return -EOPNOTSUPP;
++
++	switch (f->command) {
++	case TC_BLOCK_BIND:
++		return tcf_block_cb_register(f->block, mlx5e_setup_tc_block_cb,
++					     priv, priv
++#ifdef HAVE_TC_BLOCK_OFFLOAD_EXTACK
++					     , f->extack
++#endif
++					    );
++	case TC_BLOCK_UNBIND:
++		tcf_block_cb_unregister(f->block, mlx5e_setup_tc_block_cb,
++					priv);
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++#endif /* HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE */
++#endif /* HAVE_TC_BLOCK_OFFLOAD || HAVE_FLOW_BLOCK_OFFLOAD */
++#endif /*ESWITCH */
++#endif

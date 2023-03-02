@@ -60,6 +60,7 @@
 #include "lib/hv_vhca.h"
 #include "lib/clock.h"
 #include "en/rx_res.h"
+#include "en/selq.h"
 
 extern const struct net_device_ops mlx5e_netdev_ops;
 struct page_pool;
@@ -94,29 +95,26 @@ struct page_pool;
 #define MLX5_MPWRQ_DEF_LOG_STRIDE_SZ(mdev) \
 	MLX5_MPWRQ_LOG_STRIDE_SZ(mdev, order_base_2(MLX5E_RX_MAX_HEAD))
 
-#define MLX5_MPWRQ_LOG_WQE_SZ			18
-#define MLX5_MPWRQ_WQE_PAGE_ORDER  (MLX5_MPWRQ_LOG_WQE_SZ - PAGE_SHIFT > 0 ? \
-				    MLX5_MPWRQ_LOG_WQE_SZ - PAGE_SHIFT : 0)
-#define MLX5_MPWRQ_PAGES_PER_WQE		BIT(MLX5_MPWRQ_WQE_PAGE_ORDER)
+#define MLX5_MPWRQ_MAX_LOG_WQE_SZ 18
 
-#define MLX5_ALIGN_MTTS(mtts)		(ALIGN(mtts, 8))
-#define MLX5_ALIGNED_MTTS_OCTW(mtts)	((mtts) / 2)
-#define MLX5_MTT_OCTW(mtts)		(MLX5_ALIGNED_MTTS_OCTW(MLX5_ALIGN_MTTS(mtts)))
-/* Add another page to MLX5E_REQUIRED_WQE_MTTS as a buffer between
- * WQEs, This page will absorb write overflow by the hardware, when
- * receiving packets larger than MTU. These oversize packets are
- * dropped by the driver at a later stage.
+/* Keep in sync with mlx5e_mpwrq_log_wqe_sz.
+ * These are theoretical maximums, which can be further restricted by
+ * capabilities. These values are used for static resource allocations and
+ * sanity checks.
+ * MLX5_SEND_WQE_MAX_SIZE is a bit bigger than the maximum cacheline-aligned WQE
+ * size actually used at runtime, but it's not a problem when calculating static
+ * array sizes.
  */
-#define MLX5E_REQUIRED_WQE_MTTS		(MLX5_ALIGN_MTTS(MLX5_MPWRQ_PAGES_PER_WQE + 1))
-#define MLX5E_REQUIRED_MTTS(wqes)	(wqes * MLX5E_REQUIRED_WQE_MTTS)
+#define MLX5_UMR_MAX_MTT_SPACE \
+	(ALIGN_DOWN(MLX5_SEND_WQE_MAX_SIZE - sizeof(struct mlx5e_umr_wqe), \
+		    MLX5_UMR_MTT_ALIGNMENT))
+#define MLX5_MPWRQ_MAX_PAGES_PER_WQE \
+	rounddown_pow_of_two(MLX5_UMR_MAX_MTT_SPACE / sizeof(struct mlx5_mtt))
+
 #define MLX5E_MAX_RQ_NUM_MTTS	\
-	(ALIGN_DOWN(U16_MAX, 4) * 2) /* So that MLX5_MTT_OCTW(num_mtts) fits into u16 */
+	(ALIGN_DOWN(U16_MAX, 4) * 2) /* Fits into u16 and aligned by WQEBB. */
+#define MLX5E_MAX_RQ_NUM_KSMS (U16_MAX - 1) /* So that num_ksms fits into u16. */
 #define MLX5E_ORDER2_MAX_PACKET_MTU (order_base_2(10 * 1024))
-#define MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE_MPW	\
-		(ilog2(MLX5E_MAX_RQ_NUM_MTTS / MLX5E_REQUIRED_WQE_MTTS))
-#define MLX5E_LOG_MAX_RQ_NUM_PACKETS_MPW \
-	(MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE_MPW + \
-	 (MLX5_MPWRQ_LOG_WQE_SZ - MLX5E_ORDER2_MAX_PACKET_MTU))
 
 #define MLX5E_MIN_SKB_FRAG_SZ		(MLX5_SKB_FRAG_SZ(MLX5_RX_HEADROOM))
 #define MLX5E_LOG_MAX_RX_WQE_BULK	\
@@ -128,8 +126,7 @@ struct page_pool;
 
 #define MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE (1 + MLX5E_LOG_MAX_RX_WQE_BULK)
 #define MLX5E_PARAMS_DEFAULT_LOG_RQ_SIZE                0xa
-#define MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE min_t(u8, 0xd,	\
-					       MLX5E_LOG_MAX_RQ_NUM_PACKETS_MPW)
+#define MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE		0xd
 
 #define MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE_MPW            0x2
 
@@ -154,13 +151,6 @@ struct page_pool;
 #define MLX5E_TX_CQ_POLL_BUDGET        128
 #define MLX5E_TX_XSK_POLL_BUDGET       64
 #define MLX5E_SQ_RECOVER_MIN_INTERVAL  500 /* msecs */
-
-#define MLX5E_UMR_WQE_INLINE_SZ \
-	(sizeof(struct mlx5e_umr_wqe) + \
-	 ALIGN(MLX5_MPWRQ_PAGES_PER_WQE * sizeof(struct mlx5_mtt), \
-	       MLX5_UMR_MTT_ALIGNMENT))
-#define MLX5E_UMR_WQEBBS \
-	(DIV_ROUND_UP(MLX5E_UMR_WQE_INLINE_SZ, MLX5_SEND_WQE_BB))
 
 #define MLX5E_KLM_UMR_WQE_SZ(sgl_len)\
 	(sizeof(struct mlx5e_umr_wqe) +\
@@ -192,12 +182,6 @@ do {                                                            \
 
 #define mlx5e_state_dereference(priv, p) \
 	rcu_dereference_protected((p), lockdep_is_held(&(priv)->state_lock))
-
-enum mlx5e_rq_group {
-	MLX5E_RQ_GROUP_REGULAR,
-	MLX5E_RQ_GROUP_XSK,
-#define MLX5E_NUM_RQ_GROUPS(g) (1 + MLX5E_RQ_GROUP_##g)
-};
 
 static inline u8 mlx5e_get_num_lag_ports(struct mlx5_core_dev *mdev)
 {
@@ -279,6 +263,7 @@ struct mlx5e_umr_wqe {
 	union {
 		DECLARE_FLEX_ARRAY(struct mlx5_mtt, inline_mtts);
 		DECLARE_FLEX_ARRAY(struct mlx5_klm, inline_klms);
+		DECLARE_FLEX_ARRAY(struct mlx5_ksm, inline_ksms);
 	};
 };
 
@@ -371,7 +356,6 @@ enum {
 	MLX5E_RQ_STATE_AM,
 	MLX5E_RQ_STATE_NO_CSUM_COMPLETE,
 	MLX5E_RQ_STATE_CSUM_FULL, /* cqe_csum_full hw bit is set */
-	MLX5E_RQ_STATE_FPGA_TLS, /* FPGA TLS enabled */
 	MLX5E_RQ_STATE_MINI_CQE_HW_STRIDX, /* set when mini_cqe_resp_stride_index cap is used */
 	MLX5E_RQ_STATE_SHAMPO, /* set when SHAMPO cap is used */
 	MLX5E_RQ_STATE_CACHE_REDUCE_PENDING
@@ -425,6 +409,7 @@ enum {
 	MLX5E_SQ_STATE_PENDING_XSK_TX,
 	MLX5E_SQ_STATE_PENDING_TLS_RX_RESYNC,
 	MLX5E_SQ_STATE_TX_XDP_CSUM,
+	MLX5E_SQ_STATE_XDP_MULTIBUF,
 };
 
 struct mlx5e_tx_mpwqe {
@@ -501,8 +486,7 @@ struct mlx5e_txqsq {
 	cqe_ts_to_ns               ptp_cyc2time;
 } ____cacheline_aligned_in_smp;
 
-struct mlx5e_dma_info {
-	dma_addr_t addr;
+struct mlx5e_alloc_unit {
 	u32 refcnt_bias;
 	union {
 		struct page *page;
@@ -540,7 +524,7 @@ struct mlx5e_xdp_info {
 		} frame;
 		struct {
 			struct mlx5e_rq *rq;
-			struct mlx5e_dma_info di;
+			struct mlx5e_alloc_unit au;
 		} page;
 	};
 };
@@ -562,7 +546,7 @@ struct mlx5e_xdpsq;
 typedef int (*mlx5e_fp_xmit_xdp_frame_check)(struct mlx5e_xdpsq *);
 typedef bool (*mlx5e_fp_xmit_xdp_frame)(struct mlx5e_xdpsq *,
 					struct mlx5e_xmit_data *,
-					struct mlx5e_xdp_info *,
+					struct skb_shared_info *,
 					int);
 
 struct mlx5e_xdpsq {
@@ -636,23 +620,22 @@ struct mlx5e_icosq {
 } ____cacheline_aligned_in_smp;
 
 struct mlx5e_wqe_frag_info {
-	struct mlx5e_dma_info *di;
+	struct mlx5e_alloc_unit *au;
 	u32 offset;
 	bool last_in_page;
 };
 
-struct mlx5e_umr_dma_info {
-	struct mlx5e_dma_info  dma_info[MLX5_MPWRQ_PAGES_PER_WQE];
-};
-
 struct mlx5e_mpw_info {
-	struct mlx5e_umr_dma_info umr;
 	u16 consumed_strides;
-	DECLARE_BITMAP(xdp_xmit_bitmap, MLX5_MPWRQ_PAGES_PER_WQE);
+	DECLARE_BITMAP(xdp_xmit_bitmap, MLX5_MPWRQ_MAX_PAGES_PER_WQE);
+	struct mlx5e_alloc_unit alloc_units[];
 };
 
 #define MLX5E_MAX_RX_FRAGS 4
 
+/* a single cache unit is capable to serve one napi call (for non-striding rq)
+ * or a MPWQE (for striding rq).
+ */
 #define MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT	4
 #define MLX5E_PAGE_CACHE_REDUCE_WORK_INTERVAL	200 /* msecs */
 #define MLX5E_PAGE_CACHE_REDUCE_GRACE_PERIOD	1000 /* msecs */
@@ -665,12 +648,12 @@ struct mlx5e_page_cache_reduce {
 	unsigned long graceful_period;
 	unsigned long delay;
 
-	struct mlx5e_dma_info *pending;
+	struct mlx5e_alloc_unit *pending;
 	u32 npages;
 };
 
 struct mlx5e_page_cache {
-	struct mlx5e_dma_info *page_cache;
+	struct mlx5e_alloc_unit *page_cache;
 	int head;
 	u32 sz;
 	u32 lrs; /* least recently sampled */
@@ -678,11 +661,9 @@ struct mlx5e_page_cache {
 	u8 log_max_sz;
 	struct mlx5e_page_cache_reduce reduce;
 };
-
-static inline void mlx5e_put_page(struct mlx5e_dma_info *dma_info)
+static inline void mlx5e_put_page(struct page *page)
 {
-	page_ref_sub(dma_info->page, dma_info->refcnt_bias);
-	put_page(dma_info->page);
+	put_page(page);
 }
 
 struct mlx5e_rq;
@@ -691,8 +672,8 @@ typedef struct sk_buff *
 (*mlx5e_fp_skb_from_cqe_mpwrq)(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 			       u16 cqe_bcnt, u32 head_offset, u32 page_idx);
 typedef struct sk_buff *
-(*mlx5e_fp_skb_from_cqe)(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
-			 struct mlx5e_wqe_frag_info *wi, u32 cqe_bcnt);
+(*mlx5e_fp_skb_from_cqe)(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi,
+			 u32 cqe_bcnt);
 typedef bool (*mlx5e_fp_post_rx_wqes)(struct mlx5e_rq *rq);
 typedef void (*mlx5e_fp_dealloc_wqe)(struct mlx5e_rq*, u16);
 typedef void (*mlx5e_fp_shampo_dealloc_hd)(struct mlx5e_rq*, u16, u16, bool);
@@ -716,6 +697,12 @@ struct mlx5e_rq_frags_info {
 	u8 num_frags;
 	u8 log_num_frags;
 	u8 wqe_bulk;
+	u8 wqe_index_mask;
+};
+
+struct mlx5e_dma_info {
+	dma_addr_t addr;
+	struct page *page;
 };
 
 struct mlx5e_shampo_hd {
@@ -737,13 +724,20 @@ struct mlx5e_hw_gro_data {
 	int second_ip_id;
 };
 
+enum mlx5e_mpwrq_umr_mode {
+	MLX5E_MPWRQ_UMR_MODE_ALIGNED,
+	MLX5E_MPWRQ_UMR_MODE_UNALIGNED,
+	MLX5E_MPWRQ_UMR_MODE_OVERSIZED,
+	MLX5E_MPWRQ_UMR_MODE_TRIPLE,
+};
+
 struct mlx5e_rq {
 	/* data path */
 	union {
 		struct {
 			struct mlx5_wq_cyc          wq;
 			struct mlx5e_wqe_frag_info *frags;
-			struct mlx5e_dma_info      *di;
+			struct mlx5e_alloc_unit    *alloc_units;
 			struct mlx5e_rq_frags_info  info;
 			mlx5e_fp_skb_from_cqe       skb_from_cqe;
 		} wqe;
@@ -752,15 +746,21 @@ struct mlx5e_rq {
 			struct mlx5e_umr_wqe   umr_wqe;
 			struct mlx5e_mpw_info *info;
 			mlx5e_fp_skb_from_cqe_mpwrq skb_from_cqe_mpwrq;
+			__be32                 umr_mkey_be;
 			u16                    num_strides;
 			u16                    actual_wq_head;
 			u8                     log_stride_sz;
 			u8                     umr_in_progress;
 			u8                     umr_last_bulk;
 			u8                     umr_completed;
+			u8                     min_wqe_bulk;
+			u8                     page_shift;
+			u8                     pages_per_wqe;
+			u8                     umr_wqebbs;
+			u8                     mtts_per_wqe;
+			u8                     umr_mode;
 			struct mlx5e_shampo_hd *shampo;
 		} mpwqe;
-
 	};
 	struct {
 		u16            headroom;
@@ -810,7 +810,6 @@ struct mlx5e_rq {
 	u32                    rqn;
 	struct mlx5_core_dev  *mdev;
 	struct mlx5e_channel  *channel;
-	u32  umr_mkey;
 	struct mlx5e_dma_info  wqe_overflow;
 
 	/* XDP read-mostly */
@@ -944,24 +943,6 @@ struct mlx5e_scratchpad {
 	cpumask_var_t cpumask;
 };
 
-struct mlx5e_select_queue_params {
-	unsigned int num_regular_queues;
-	unsigned int num_channels;
-	unsigned int num_tcs;
-	bool is_htb;
-	bool is_ptp;
-};
-
-struct mlx5e_htb {
-	DECLARE_HASHTABLE(qos_tc2node, order_base_2(MLX5E_QOS_MAX_LEAF_NODES));
-	DECLARE_BITMAP(qos_used_qids, MLX5E_QOS_MAX_LEAF_NODES);
-	struct mlx5e_sq_stats **qos_sq_stats;
-	u16 max_qos_sqs;
-	u16 maj_id;
-	u16 defcls;
-	struct mlx5e_select_queue_params *final_selq;
-};
-
 struct mlx5e_delay_drop {
 	struct work_struct	work;
 	/* serialize setting of delay drop */
@@ -971,10 +952,11 @@ struct mlx5e_delay_drop {
 };
 
 struct mlx5e_trap;
+struct mlx5e_htb;
 
 struct mlx5e_priv {
 	/* priv data path fields - start */
-	struct mlx5e_select_queue_params __rcu *selq;
+	struct mlx5e_selq selq;
 	struct mlx5e_txqsq **txq2sq;
 #ifdef CONFIG_MLX5_CORE_EN_DCB
 	struct mlx5e_dcbx_dp       dcbx_dp;
@@ -992,7 +974,7 @@ struct mlx5e_priv {
 	struct mlx5e_rx_res       *rx_res;
 	u32                       *tx_rates;
 
-	struct mlx5e_flow_steering fs;
+	struct mlx5e_flow_steering *fs;
 
 	struct workqueue_struct    *wq;
 	struct work_struct         update_carrier_work;
@@ -1009,6 +991,8 @@ struct mlx5e_priv {
 	struct mlx5e_channel_stats **channel_stats;
 	struct mlx5e_channel_stats trap_stats;
 	struct mlx5e_ptp_stats     ptp_stats;
+	struct mlx5e_sq_stats      **htb_qos_sq_stats;
+	u16                        htb_max_qos_sqs;
 	u16                        stats_nch;
 	u16                        max_nch;
 	u8                         max_opened_tc;
@@ -1046,11 +1030,8 @@ struct mlx5e_priv {
 	struct mlx5e_hv_vhca_stats_agent stats_agent;
 #endif
 	struct mlx5e_scratchpad    scratchpad;
-	struct mlx5e_htb           htb;
+	struct mlx5e_htb          *htb;
 	struct mlx5e_mqprio_rl    *mqprio_rl;
-
-	struct mutex               aso_lock; /* Protects aso data and operations */
-	struct mlx5e_aso          *aso;
 };
 
 struct mlx5e_rx_handlers {
@@ -1065,6 +1046,8 @@ enum mlx5e_profile_feature {
 	MLX5E_PROFILE_FEATURE_PTP_RX,
 	MLX5E_PROFILE_FEATURE_PTP_TX,
 	MLX5E_PROFILE_FEATURE_QOS_HTB,
+	MLX5E_PROFILE_FEATURE_FS_VLAN,
+	MLX5E_PROFILE_FEATURE_FS_TC,
 };
 
 struct mlx5e_profile {
@@ -1085,7 +1068,6 @@ struct mlx5e_profile {
 	mlx5e_stats_grp_t *stats_grps;
 	const struct mlx5e_rx_handlers *rx_handlers;
 	int	max_tc;
-	u8	rq_groups;
 	u32     features;
 };
 
@@ -1097,7 +1079,8 @@ void mlx5e_destroy_debugfs(struct mlx5e_priv *priv);
 
 void mlx5e_build_ptys2ethtool_map(void);
 
-bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev);
+bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev, u8 page_shift,
+					    enum mlx5e_mpwrq_umr_mode umr_mode);
 
 void mlx5e_shampo_dealloc_hd(struct mlx5e_rq *rq, u16 len, u16 start, bool close);
 int mlx5e_sysfs_create(struct net_device *dev);
@@ -1109,7 +1092,6 @@ int mlx5e_setup_tc_mqprio(struct mlx5e_priv *priv,
 void mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
 void mlx5e_fold_sw_stats64(struct mlx5e_priv *priv, struct rtnl_link_stats64 *s);
 
-void mlx5e_init_l2_addr(struct mlx5e_priv *priv);
 int mlx5e_self_test_num(struct mlx5e_priv *priv);
 int mlx5e_self_test_fill_strings(struct mlx5e_priv *priv, u8 *data);
 void mlx5e_self_test(struct net_device *ndev, struct ethtool_test *etest,
@@ -1137,10 +1119,10 @@ struct mlx5e_create_cq_param {
 };
 int mlx5e_wait_for_min_rx_wqes(struct mlx5e_rq *rq, int wait_time);
 void mlx5e_close_rq(struct mlx5e_priv *priv, struct mlx5e_rq *rq);
-int mlx5e_open_rq(struct mlx5e_priv *priv, struct mlx5e_params *params,
-		  struct mlx5e_rq_param *param, struct mlx5e_xsk_param *xsk,
-		  struct mlx5e_create_cq_param *ccp, struct dim_cq_moder moder,
-		  int node, struct mlx5e_rq *rq);
+int mlx5e_open_rq(struct mlx5e_params *params, struct mlx5e_rq_param *param,
+		  struct mlx5e_xsk_param *xsk, int node, struct mlx5e_rq *rq,
+		  struct mlx5e_create_cq_param *ccp);
+#define MLX5E_RQ_WQES_TIMEOUT 20000 /* msecs */
 int mlx5e_create_rq(struct mlx5e_rq *rq, struct mlx5e_rq_param *param);
 void mlx5e_destroy_rq(struct mlx5e_rq *rq);
 
@@ -1149,8 +1131,6 @@ int mlx5e_open_xdpsq(struct mlx5e_channel *c, struct mlx5e_params *params,
 		     struct mlx5e_sq_param *param, struct xsk_buff_pool *xsk_pool,
 		     struct mlx5e_xdpsq *sq, bool is_redirect);
 void mlx5e_close_xdpsq(struct mlx5e_xdpsq *sq);
-void mlx5e_activate_xdpsq(struct mlx5e_xdpsq *sq);
-void mlx5e_deactivate_xdpsq(struct mlx5e_xdpsq *sq);
 
 struct mlx5e_cq_param;
 int mlx5e_open_cq(struct mlx5e_priv *priv, struct dim_cq_moder moder,
@@ -1196,7 +1176,7 @@ void mlx5e_activate_priv_channels(struct mlx5e_priv *priv);
 void mlx5e_deactivate_priv_channels(struct mlx5e_priv *priv);
 int mlx5e_ptp_rx_manage_fs_ctx(struct mlx5e_priv *priv, void *ctx);
 
-int mlx5e_modify_rq_state(struct mlx5e_rq *rq, int curr_state, int next_state);
+int mlx5e_flush_rq(struct mlx5e_rq *rq, int curr_state);
 void mlx5e_activate_rq(struct mlx5e_rq *rq);
 void mlx5e_deactivate_rq(struct mlx5e_rq *rq);
 void mlx5e_activate_icosq(struct mlx5e_icosq *icosq);
@@ -1208,10 +1188,8 @@ int mlx5e_open_txqsq(struct mlx5e_channel *c, u32 tisn, int txq_ix,
 		     struct mlx5e_params *params, struct mlx5e_sq_param *param,
 		     struct mlx5e_txqsq *sq, int tc, u16 qos_queue_group_id,
 		     struct mlx5e_sq_stats *sq_stats);
-void mlx5e_enable_txqsq(struct mlx5e_txqsq *sq);
-void mlx5e_start_txqsq(struct mlx5e_txqsq *sq);
-void mlx5e_disable_txqsq(struct mlx5e_txqsq *sq);
-void mlx5e_stop_txqsq(struct mlx5e_txqsq *sq);
+void mlx5e_activate_txqsq(struct mlx5e_txqsq *sq);
+void mlx5e_deactivate_txqsq(struct mlx5e_txqsq *sq);
 void mlx5e_free_txqsq(struct mlx5e_txqsq *sq);
 void mlx5e_tx_disable_queue(struct netdev_queue *txq);
 int mlx5e_alloc_txqsq_db(struct mlx5e_txqsq *sq, int numa);
@@ -1247,8 +1225,6 @@ void mlx5e_destroy_q_counters(struct mlx5e_priv *priv);
 int mlx5e_open_drop_rq(struct mlx5e_priv *priv,
 		       struct mlx5e_rq *drop_rq);
 void mlx5e_close_drop_rq(struct mlx5e_rq *drop_rq);
-int mlx5e_init_di_list(struct mlx5e_rq *rq, int wq_sz, int node);
-void mlx5e_free_di_list(struct mlx5e_rq *rq);
 
 int mlx5e_create_tis(struct mlx5_core_dev *mdev, void *in, u32 *tisn);
 void mlx5e_destroy_tis(struct mlx5_core_dev *mdev, u32 tisn);
@@ -1278,7 +1254,8 @@ int mlx5e_ethtool_get_sset_count(struct mlx5e_priv *priv, int sset);
 void mlx5e_ethtool_get_ethtool_stats(struct mlx5e_priv *priv,
 				     struct ethtool_stats *stats, u64 *data);
 void mlx5e_ethtool_get_ringparam(struct mlx5e_priv *priv,
-				 struct ethtool_ringparam *param);
+				 struct ethtool_ringparam *param,
+				 struct kernel_ethtool_ringparam *kernel_param);
 int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 				struct ethtool_ringparam *param);
 void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
@@ -1337,7 +1314,6 @@ int mlx5e_netdev_change_profile(struct mlx5e_priv *priv,
 void mlx5e_netdev_attach_nic_profile(struct mlx5e_priv *priv);
 void mlx5e_set_netdev_mtu_boundaries(struct mlx5e_priv *priv);
 void mlx5e_build_nic_params(struct mlx5e_priv *priv, struct mlx5e_xsk *xsk, u16 mtu);
-void mlx5e_build_txq_maps(struct mlx5e_priv *priv);
 
 int mlx5e_get_dump_flag(struct net_device *netdev, struct ethtool_dump *dump);
 int mlx5e_get_dump_data(struct net_device *netdev, struct ethtool_dump *dump,
@@ -1369,8 +1345,5 @@ int mlx5e_get_vf_stats(struct net_device *dev, int vf, struct ifla_vf_stats *vf_
 bool mlx5e_is_rep_shared_rq(const struct mlx5e_priv *priv);
 #endif
 
-void mlx5e_build_selq(struct mlx5e_select_queue_params *selq,
-		      struct mlx5e_params *params, bool htb);
-void mlx5e_replace_selq(struct mlx5e_priv *priv, struct mlx5e_select_queue_params *selq);
 void mlx5e_destroy_sq(struct mlx5_core_dev *mdev, u32 sqn);
 #endif /* __MLX5_EN_H__ */

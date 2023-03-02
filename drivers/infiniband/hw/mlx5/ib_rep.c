@@ -170,22 +170,6 @@ struct net_device *mlx5_ib_get_rep_netdev(struct mlx5_eswitch *esw,
 	return mlx5_eswitch_get_proto_dev(esw, vport_num, REP_ETH);
 }
 
-u32 mlx5_ib_eswitch_vport_match_metadata_enabled(struct mlx5_eswitch *esw)
-{
-	return mlx5_eswitch_vport_match_metadata_enabled(esw);
-}
-
-u32 mlx5_ib_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
-		u16 vport)
-{
-	return mlx5_eswitch_get_vport_metadata_for_match(esw, vport);
-}
-
-u32 mlx5_ib_eswitch_get_vport_metadata_mask(void)
-{
-	return mlx5_eswitch_get_vport_metadata_mask();
-}
-
 struct mlx5_flow_handle *create_flow_rule_vport_sq(struct mlx5_ib_dev *dev,
 						   struct mlx5_ib_sq *sq,
 						   u32 port)

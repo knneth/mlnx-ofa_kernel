@@ -1,0 +1,43 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+
+Change-Id: Ie6b67bc9e921aeafa47ff8340c4742e388ec22b9
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+@@ -40,7 +40,9 @@
+ 	 MLX5_ESW_BRIDGE_INGRESS_TABLE_UNTAGGED_GRP_SIZE - 1)
+ #define MLX5_ESW_BRIDGE_INGRESS_TABLE_SIZE			\
+ 	(MLX5_ESW_BRIDGE_INGRESS_TABLE_MAC_GRP_IDX_TO + 1)
++#ifdef HAVE_STATIC_ASSERT
+ static_assert(MLX5_ESW_BRIDGE_INGRESS_TABLE_SIZE == 64000);
++#endif
+ 
+ #define MLX5_ESW_BRIDGE_EGRESS_TABLE_VLAN_GRP_SIZE 16000
+ #define MLX5_ESW_BRIDGE_EGRESS_TABLE_MAC_GRP_SIZE (32000 - 1)
+@@ -63,7 +65,9 @@ static_assert(MLX5_ESW_BRIDGE_INGRESS_TA
+ 	MLX5_ESW_BRIDGE_EGRESS_TABLE_MISS_GRP_IDX_FROM
+ #define MLX5_ESW_BRIDGE_EGRESS_TABLE_SIZE			\
+ 	(MLX5_ESW_BRIDGE_EGRESS_TABLE_MISS_GRP_IDX_TO + 1)
++#ifdef HAVE_STATIC_ASSERT
+ static_assert(MLX5_ESW_BRIDGE_EGRESS_TABLE_SIZE == 64000);
++#endif
+ 
+ #define MLX5_ESW_BRIDGE_SKIP_TABLE_SIZE 0
+ 
+@@ -114,7 +118,11 @@ mlx5_esw_bridge_fdb_offload_notify(struc
+ 	send_info.addr = addr;
+ 	send_info.vid = vid;
+ 	send_info.offloaded = true;
++#ifdef HAVE_CALL_SWITCHDEV_NOTIFIERS_4_PARAMS
+ 	call_switchdev_notifiers(val, dev, &send_info.info, NULL);
++#else
++	call_switchdev_notifiers(val, dev, &send_info.info);
++#endif
+ }
+ 
+ static void

@@ -1,0 +1,54 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+
+Change-Id: I0e3ca1172698d76b3f803044f441e87a59d73c18
+---
+ .../ethernet/mellanox/mlx5/core/en_selftest.c | 24 +++++++++++++++----
+ 1 file changed, 20 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+@@ -95,14 +95,26 @@ static struct sk_buff *mlx5e_test_get_ud
+ 	skb_reserve(skb, NET_IP_ALIGN);
+ 
+ 	/*  Reserve for ethernet and IP header  */
+-	ethh = skb_push(skb, ETH_HLEN);
++	ethh =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct ethhdr *)
++#endif
++		skb_push(skb, ETH_HLEN);
+ 	skb_reset_mac_header(skb);
+ 
+ 	skb_set_network_header(skb, skb->len);
+-	iph = skb_put(skb, sizeof(struct iphdr));
++	iph =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct iphdr *)
++#endif
++		skb_put(skb, sizeof(struct iphdr));
+ 
+ 	skb_set_transport_header(skb, skb->len);
+-	udph = skb_put(skb, sizeof(struct udphdr));
++	udph =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct udphdr *)
++#endif
++		skb_put(skb, sizeof(struct udphdr));
+ 
+ 	/* Fill ETH header */
+ 	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
+@@ -131,7 +143,11 @@ static struct sk_buff *mlx5e_test_get_ud
+ 	ip_send_check(iph);
+ 
+ 	/* Fill test header and data */
+-	mlxh = skb_put(skb, sizeof(*mlxh));
++	mlxh =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct mlx5ehdr *)
++#endif
++		skb_put(skb, sizeof(*mlxh));
+ 	mlxh->version = 0;
+ 	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
+ 

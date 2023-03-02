@@ -30,7 +30,6 @@ struct mlx5_ct_attr {
 	struct mlx5_ct_flow *ct_flow;
 	struct nf_flowtable *nf_ft;
 	u32 ct_labels_id;
-	bool clear_mod_acts_set;
 };
 
 #define zone_to_reg_ct {\
@@ -88,8 +87,8 @@ struct mlx5_ct_attr {
 	.mlen = ESW_ZONE_ID_BITS,\
 }
 
-#define MLX5_CT_ZONE_BITS (mlx5e_tc_attr_to_reg_mappings[ZONE_TO_REG].mlen)
-#define MLX5_CT_ZONE_MASK GENMASK(MLX5_CT_ZONE_BITS - 1, 0)
+#define MLX5_CT_ZONE_BITS MLX5_REG_MAPPING_MBITS(ZONE_TO_REG)
+#define MLX5_CT_ZONE_MASK MLX5_REG_MAPPING_MASK(ZONE_TO_REG)
 
 #if IS_ENABLED(CONFIG_MLX5_TC_CT)
 
@@ -135,7 +134,6 @@ u32
 mlx5_tc_ct_max_offloaded_conns_get(struct mlx5_core_dev *dev);
 void
 mlx5_tc_ct_max_offloaded_conns_set(struct mlx5_core_dev *dev, u32 max);
-
 bool
 mlx5_tc_ct_labels_mapping_get(struct mlx5_core_dev *dev);
 void

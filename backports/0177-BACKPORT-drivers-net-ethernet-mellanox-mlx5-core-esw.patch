@@ -1,0 +1,209 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+
+Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
+---
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 72 ++++++++++++++++++-
+ 1 file changed, 71 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+@@ -965,7 +965,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
+ 			  enum mlx5_eswitch_vport_event enabled_events)
+ {
+ 	struct mlx5_vport *vport;
+-	int ret;
++	int ret = 0;
+ 
+ 	vport = mlx5_eswitch_get_vport(esw, vport_num);
+ 	if (IS_ERR(vport))
+@@ -1484,19 +1484,30 @@ abort:
+  */
+ int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	bool toggle_lag;
+ 	int ret;
+ 
+ 	if (!mlx5_esw_allowed(esw))
+ 		return 0;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#endif
+ 
+ 	toggle_lag = !mlx5_sriov_is_enabled(esw->dev) && !is_mdev_switchdev_mode(esw->dev);
+ 
+ 	if (toggle_lag)
+ 		mlx5_lag_disable_change(esw->dev);
+ 
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = priv_to_devlink(esw->dev);
++	devl_lock(devlink);
++#endif
+ 	down_write(&esw->mode_lock);
+ 	if (!mlx5_esw_is_fdb_created(esw)) {
+ 		ret = mlx5_eswitch_enable_locked(esw, num_vfs);
+@@ -1510,6 +1521,10 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+ 			esw->esw_funcs.num_vfs = num_vfs;
+ 	}
+ 	up_write(&esw->mode_lock);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ 
+ 	if (toggle_lag)
+ 		mlx5_lag_enable_change(esw->dev);
+@@ -1520,10 +1535,19 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+ /* When disabling sriov, free driver level resources. */
+ void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw, bool clear_vf)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	if (!mlx5_esw_allowed(esw))
+ 		return;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#elif defined(HAVE_DEVL_PORT_REGISTER)
++	devlink = priv_to_devlink(esw->dev);
++	devl_lock(devlink);
++#endif
+ 	down_write(&esw->mode_lock);
+ 	/* If driver is unloaded, this function is called twice by remove_one()
+ 	 * and mlx5_unload(). Prevent the second call.
+@@ -1542,9 +1566,17 @@ void mlx5_eswitch_disable_sriov(struct m
+ 	 * because it depends on num_vfs.
+ 	 */
+ 	if (esw->mode == MLX5_ESWITCH_OFFLOADS) {
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 		struct devlink *devlink = priv_to_devlink(esw->dev);
++#endif
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 		devl_rate_nodes_destroy(devlink);
++#else
++ 		devlink_rate_nodes_destroy(devlink);
++#endif
++#endif
+ 	}
+ 	/* Destroy legacy fdb when disabling sriov in legacy mode. */
+ 	if (esw->mode == MLX5_ESWITCH_LEGACY)
+@@ -1555,6 +1587,10 @@ void mlx5_eswitch_disable_sriov(struct m
+ 
+ unlock:
+ 	up_write(&esw->mode_lock);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ }
+ 
+ /* Free resources for corresponding eswitch mode. It is called by devlink
+@@ -1562,12 +1598,16 @@ unlock:
+  */
+ void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw)
+ {
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	struct devlink *devlink = priv_to_devlink(esw->dev);
++#endif
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	if (esw->mode == MLX5_ESWITCH_OFFLOADS)
+ #if IS_ENABLED(CONFIG_MLXDEVM)
+ 		mlx5_devm_rate_nodes_destroy(esw->dev);
+ #endif
++#endif
+ 
+ 	/* Notify eswitch users that it is exiting from current mode.
+ 	 * So that it can do necessary cleanup before the eswitch is disabled.
+@@ -1589,21 +1629,43 @@ void mlx5_eswitch_disable_locked(struct
+ 		mlx5_esw_acls_ns_cleanup(esw);
+ 	}
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	if (esw->mode == MLX5_ESWITCH_OFFLOADS)
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 		devl_rate_nodes_destroy(devlink);
++#else
++ 		devlink_rate_nodes_destroy(devlink);
++#endif
++#endif
+ }
+ 
+ void mlx5_eswitch_disable(struct mlx5_eswitch *esw)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
++
+ 	if (!mlx5_esw_allowed(esw))
+ 		return;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#endif
+ 	mlx5_lag_disable_change(esw->dev);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = priv_to_devlink(esw->dev);
++	devl_lock(devlink);
++#endif
+ 	down_write(&esw->mode_lock);
+ 	mlx5_eswitch_disable_locked(esw);
+ 	esw->mode = MLX5_ESWITCH_LEGACY;
+ 	up_write(&esw->mode_lock);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ 	mlx5_lag_enable_change(esw->dev);
+ }
+ 
+@@ -2285,9 +2347,13 @@ int mlx5_eswitch_get_vport_config(struct
+ 	ivi->linkstate = evport->info.link_state;
+ 	ivi->vlan = evport->info.vlan;
+ 	ivi->qos = evport->info.qos;
++#ifdef HAVE_VF_VLAN_PROTO
+ 	ivi->vlan_proto = evport->info.vlan_proto;
++#endif
+ 	ivi->spoofchk = evport->info.spoofchk;
++#ifdef HAVE_VF_INFO_TRUST
+ 	ivi->trusted = evport->info.trusted;
++#endif
+ 	if (evport->qos.enabled) {
+ 		ivi->min_tx_rate = evport->qos.min_rate;
+ 		ivi->max_tx_rate = evport->qos.max_rate;
+@@ -2349,7 +2415,9 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
+ 	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
+ 	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	struct mlx5_vport_drop_stats stats = {};
++#endif
+ 	int err = 0;
+ 	u32 *out;
+ 
+@@ -2409,11 +2477,13 @@ int mlx5_eswitch_get_vport_stats(struct
+ 	vf_stats->broadcast =
+ 		MLX5_GET_CTR(out, received_eth_broadcast.packets);
+ 
++#ifdef HAVE_STRUCT_IFLA_VF_STATS_RX_TX_DROPPED
+ 	err = mlx5_esw_query_vport_drop_stats(esw->dev, vport, &stats);
+ 	if (err)
+ 		goto free_out;
+ 	vf_stats->rx_dropped = stats.rx_dropped;
+ 	vf_stats->tx_dropped = stats.tx_dropped;
++#endif
+ 
+ free_out:
+ 	kvfree(out);

@@ -1,0 +1,153 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+
+Change-Id: I5599055cdb8cfb7eacc147dca94e71197df483ba
+---
+ .../ethernet/mellanox/mlx5/core/en_stats.h    | 36 +++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+@@ -33,6 +33,10 @@
+ #ifndef __MLX5_EN_STATS_H__
+ #define __MLX5_EN_STATS_H__
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++#include <uapi/linux/ethtool.h>
++#endif
++
+ #define MLX5E_READ_CTR64_CPU(ptr, dsc, i) \
+ 	(*(u64 *)((char *)ptr + dsc[i].offset))
+ #define MLX5E_READ_CTR64_BE(ptr, dsc, i) \
+@@ -114,9 +118,11 @@ void mlx5e_stats_update_ndo_stats(struct
+ 
+ void mlx5e_stats_pause_get(struct mlx5e_priv *priv,
+ 			   struct ethtool_pause_stats *pause_stats);
++#ifdef HAVE_NDO_GET_FEC_STATS
+ void mlx5e_stats_fec_get(struct mlx5e_priv *priv,
+ 			 struct ethtool_fec_stats *fec_stats);
+-
++#endif
++#ifdef HAVE_NDO_ETH_PHY_STATS
+ void mlx5e_stats_eth_phy_get(struct mlx5e_priv *priv,
+ 			     struct ethtool_eth_phy_stats *phy_stats);
+ void mlx5e_stats_eth_mac_get(struct mlx5e_priv *priv,
+@@ -126,6 +132,7 @@ void mlx5e_stats_eth_ctrl_get(struct mlx
+ void mlx5e_stats_rmon_get(struct mlx5e_priv *priv,
+ 			  struct ethtool_rmon_stats *rmon,
+ 			  const struct ethtool_rmon_hist_range **ranges);
++#endif
+ 
+ /* Concrete NIC Stats */
+ 
+@@ -158,15 +165,17 @@ struct mlx5e_sw_stats {
+ 	u64 rx_csum_complete_tail;
+ 	u64 rx_csum_complete_tail_slow;
+ 	u64 rx_csum_unnecessary_inner;
++#ifdef HAVE_XDP_SUPPORT
+ 	u64 rx_xdp_drop;
+ 	u64 rx_xdp_redirect;
+ 	u64 rx_xdp_tx_xmit;
++	u64 rx_xdp_tx_nops;
+ 	u64 rx_xdp_tx_mpwqe;
+ 	u64 rx_xdp_tx_inlnw;
+-	u64 rx_xdp_tx_nops;
+ 	u64 rx_xdp_tx_full;
+ 	u64 rx_xdp_tx_err;
+ 	u64 rx_xdp_tx_cqe;
++#endif
+ 	u64 tx_csum_none;
+ 	u64 tx_csum_partial;
+ 	u64 tx_csum_partial_inner;
+@@ -177,6 +186,12 @@ struct mlx5e_sw_stats {
+ 	u64 tx_cqes;
+ 	u64 tx_queue_wake;
+ 	u64 tx_cqe_err;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	u64 rx_sw_lro_aggregated;
++	u64 rx_sw_lro_flushed;
++	u64 rx_sw_lro_no_desc;
++#endif
++#ifdef HAVE_XDP_SUPPORT
+ 	u64 tx_xdp_xmit;
+ 	u64 tx_xdp_mpwqe;
+ 	u64 tx_xdp_inlnw;
+@@ -184,6 +199,11 @@ struct mlx5e_sw_stats {
+ 	u64 tx_xdp_full;
+ 	u64 tx_xdp_err;
+ 	u64 tx_xdp_cqes;
++#endif
++#ifdef HAVE_BASECODE_EXTRAS
++	u64 tx_cqe_compress_blks;
++	u64 tx_cqe_compress_pkts;
++#endif
+ 	u64 rx_wqe_err;
+ 	u64 rx_mpwqe_filler_cqes;
+ 	u64 rx_mpwqe_filler_strides;
+@@ -224,6 +244,7 @@ struct mlx5e_sw_stats {
+ 	u64 rx_pp_recycle_released_ref;
+ #endif
+ #ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	u64 tx_tls_encrypted_packets;
+ 	u64 tx_tls_encrypted_bytes;
+ 	u64 tx_tls_ooo;
+@@ -244,6 +265,7 @@ struct mlx5e_sw_stats {
+ 	u64 rx_tls_resync_res_retry;
+ 	u64 rx_tls_resync_res_skip;
+ 	u64 rx_tls_err;
++#endif /* HAVE_UAPI_LINUX_TLS_H */
+ #endif
+ 
+ 	u64 rx_xsk_packets;
+@@ -356,8 +378,10 @@ struct mlx5e_rq_stats {
+ 	u64 mcast_packets;
+ 	u64 ecn_mark;
+ 	u64 removed_vlan_packets;
++#ifdef HAVE_XDP_SUPPORT
+ 	u64 xdp_drop;
+ 	u64 xdp_redirect;
++#endif
+ 	u64 wqe_err;
+ 	u64 mpwqe_filler_cqes;
+ 	u64 mpwqe_filler_strides;
+@@ -392,6 +416,7 @@ struct mlx5e_rq_stats {
+ 	u64 pp_recycle_released_ref;
+ #endif
+ #ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ 	u64 tls_decrypted_packets;
+ 	u64 tls_decrypted_bytes;
+ 	u64 tls_resync_req_pkt;
+@@ -402,6 +427,7 @@ struct mlx5e_rq_stats {
+ 	u64 tls_resync_res_retry;
+ 	u64 tls_resync_res_skip;
+ 	u64 tls_err;
++#endif /* HAVE_UAPI_LINUX_TLS_H */
+ #endif
+ };
+ 
+@@ -438,10 +464,15 @@ struct mlx5e_sq_stats {
+ 	u64 recover;
+ 	/* dirtied @completion */
+ 	u64 cqes ____cacheline_aligned_in_smp;
++#ifdef HAVE_BASECODE_EXTRAS
++	u64 cqe_compress_blks;
++	u64 cqe_compress_pkts;
++#endif
+ 	u64 wake;
+ 	u64 cqe_err;
+ };
+ 
++#ifdef HAVE_XDP_SUPPORT
+ struct mlx5e_xdpsq_stats {
+ 	u64 xmit;
+ 	u64 mpwqe;
+@@ -452,6 +483,7 @@ struct mlx5e_xdpsq_stats {
+ 	/* dirtied @completion */
+ 	u64 cqes ____cacheline_aligned_in_smp;
+ };
++#endif
+ 
+ struct mlx5e_ch_stats {
+ 	u64 events;

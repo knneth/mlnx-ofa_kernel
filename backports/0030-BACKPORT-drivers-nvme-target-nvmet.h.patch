@@ -1,0 +1,111 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
+
+Change-Id: Idc76180a8600aeb79485137a311462911cfbd50d
+---
+ drivers/nvme/target/nvmet.h | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+--- a/drivers/nvme/target/nvmet.h
++++ b/drivers/nvme/target/nvmet.h
+@@ -6,6 +6,10 @@
+ #ifndef _NVMET_H
+ #define _NVMET_H
+ 
++#ifndef HAVE_NVME_AUTH_H
++#undef CONFIG_NVME_TARGET_AUTH
++#endif
++
+ #include <linux/dma-mapping.h>
+ #include <linux/types.h>
+ #include <linux/device.h>
+@@ -22,6 +26,11 @@
+ #include <linux/blkdev.h>
+ #include <linux/radix-tree.h>
+ #include <linux/t10-pi.h>
++#include <linux/xarray.h>
++
++#ifdef HAVE_BLK_INTEGRITY_H
++#define HAVE_BLKDEV_BIO_INTEGRITY_BYTES
++#endif
+ 
+ #define NVMET_DEFAULT_VS		NVME_VS(1, 3, 0)
+ 
+@@ -428,6 +437,9 @@ struct nvmet_req {
+ 	struct nvmet_ns		*ns;
+ 	struct scatterlist	*sg;
+ 	struct scatterlist	*metadata_sg;
++#ifdef HAVE_RH7_STRUCT_BIO_AUX
++	struct bio_aux		bio_aux;
++#endif
+ 	struct bio_vec		inline_bvec[NVMET_MAX_INLINE_BIOVEC];
+ 	union {
+ 		struct {
+@@ -435,7 +447,9 @@ struct nvmet_req {
+ 		} b;
+ 		struct {
+ 			bool			mpool_alloc;
++#ifdef HAVE_FS_HAS_KIOCB
+ 			struct kiocb            iocb;
++#endif
+ 			struct bio_vec          *bvec;
+ 			struct work_struct      work;
+ 		} f;
+@@ -522,8 +536,12 @@ void nvmet_stop_keep_alive_timer(struct
+ u16 nvmet_parse_connect_cmd(struct nvmet_req *req);
+ void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id);
+ u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
++#ifdef HAVE_FS_HAS_KIOCB
+ u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
++#endif
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ u16 nvmet_bdev_zns_parse_io_cmd(struct nvmet_req *req);
++#endif
+ u16 nvmet_parse_admin_cmd(struct nvmet_req *req);
+ u16 nvmet_parse_discovery_cmd(struct nvmet_req *req);
+ u16 nvmet_parse_fabrics_admin_cmd(struct nvmet_req *req);
+@@ -596,8 +614,13 @@ void nvmet_offload_ctx_configfs_del(stru
+ void nvmet_referral_enable(struct nvmet_port *parent, struct nvmet_port *port);
+ void nvmet_referral_disable(struct nvmet_port *parent, struct nvmet_port *port);
+ 
++#ifdef CONFIG_COMPAT_SCATTERLIST_SG_PCOPY_TO_BUFFER
+ u16 nvmet_copy_to_sgl(struct nvmet_req *req, off_t off, const void *buf,
+ 		size_t len);
++#else
++u16 nvmet_copy_to_sgl(struct nvmet_req *req, off_t off, void *buf,
++		size_t len);
++#endif
+ u16 nvmet_copy_from_sgl(struct nvmet_req *req, off_t off, void *buf,
+ 		size_t len);
+ u16 nvmet_zero_sgl(struct nvmet_req *req, off_t off, size_t len);
+@@ -652,20 +675,30 @@ extern struct rw_semaphore nvmet_ana_sem
+ bool nvmet_host_allowed(struct nvmet_subsys *subsys, const char *hostnqn);
+ 
+ int nvmet_bdev_ns_enable(struct nvmet_ns *ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ int nvmet_file_ns_enable(struct nvmet_ns *ns);
++#endif
+ void nvmet_bdev_ns_disable(struct nvmet_ns *ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ void nvmet_file_ns_disable(struct nvmet_ns *ns);
++#endif
+ u16 nvmet_bdev_flush(struct nvmet_req *req);
+ u16 nvmet_file_flush(struct nvmet_req *req);
+ void nvmet_ns_changed(struct nvmet_subsys *subsys, u32 nsid);
+ void nvmet_bdev_ns_revalidate(struct nvmet_ns *ns);
++#ifdef HAVE_FS_HAS_KIOCB
+ void nvmet_file_ns_revalidate(struct nvmet_ns *ns);
++#endif
+ bool nvmet_ns_revalidate(struct nvmet_ns *ns);
++#ifdef HAVE_BLK_STATUS_T
+ u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts);
++#endif
+ 
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ bool nvmet_bdev_zns_enable(struct nvmet_ns *ns);
+ void nvmet_execute_identify_cns_cs_ctrl(struct nvmet_req *req);
+ void nvmet_execute_identify_cns_cs_ns(struct nvmet_req *req);
++#endif
+ void nvmet_bdev_execute_zone_mgmt_recv(struct nvmet_req *req);
+ void nvmet_bdev_execute_zone_mgmt_send(struct nvmet_req *req);
+ void nvmet_bdev_execute_zone_append(struct nvmet_req *req);

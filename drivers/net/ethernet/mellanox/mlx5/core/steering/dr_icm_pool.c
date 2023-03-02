@@ -284,7 +284,7 @@ static void dr_icm_buddy_destroy(struct mlx5dr_icm_buddy_mem *buddy)
 }
 
 static struct mlx5dr_icm_chunk *
-dr_icm_chunk_create(enum mlx5dr_icm_type icm_type,
+dr_icm_chunk_create(struct mlx5dr_icm_pool *pool,
 		    enum mlx5dr_icm_chunk_size chunk_size,
 		    struct mlx5dr_icm_buddy_mem *buddy_mem_pool,
 		    unsigned int seg)
@@ -297,13 +297,13 @@ dr_icm_chunk_create(enum mlx5dr_icm_type icm_type,
 	if (!chunk)
 		return NULL;
 
-	offset = mlx5dr_icm_pool_dm_type_to_entry_size(icm_type) * seg;
+	offset = mlx5dr_icm_pool_dm_type_to_entry_size(pool->icm_type) * seg;
 
 	chunk->seg = seg;
 	chunk->size = chunk_size;
 	chunk->buddy_mem = buddy_mem_pool;
 
-	if (icm_type == DR_ICM_TYPE_STE)
+	if (pool->icm_type == DR_ICM_TYPE_STE)
 		dr_icm_chunk_ste_init(chunk, offset);
 
 	buddy_mem_pool->used_memory += mlx5dr_icm_pool_get_chunk_byte_size(chunk);
@@ -430,7 +430,7 @@ mlx5dr_icm_alloc_chunk(struct mlx5dr_icm_pool *pool,
 	if (ret)
 		goto out;
 
-	chunk = dr_icm_chunk_create(pool->icm_type, chunk_size, buddy, seg);
+	chunk = dr_icm_chunk_create(pool, chunk_size, buddy, seg);
 	if (!chunk)
 		goto out_err;
 

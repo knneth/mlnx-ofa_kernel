@@ -148,32 +148,6 @@ struct mlx5_ifc_ste_modify_packet_bits {
 	u8         miss_rank[0x2];
 };
 
-struct mlx5_ifc_ste_mask_and_match_bits {
-	u8         entry_format[0x8];
-	u8         counter_id[0x18];
-
-	u8         miss_address_63_48[0x10];
-	u8         match_definer_ctx_idx[0x8];
-	u8         miss_address_39_32[0x8];
-
-	u8         miss_address_31_6[0x1a];
-	u8         reserved_at_5a[0x1];
-	u8         match_polarity[0x1];
-	u8         reparse[0x1];
-	u8         reserved_at_5d[0x3];
-
-	u8         next_table_base_63_48[0x10];
-	u8         hash_definer_ctx_idx[0x8];
-	u8         next_table_base_39_32_size[0x8];
-
-	u8         next_table_base_31_5_size[0x1b];
-	u8         hash_type[0x2];
-	u8         hash_after_actions[0x1];
-	u8         reserved_at_9e[0x2];
-
-	u8         action[0x60];
-};
-
 struct mlx5_ifc_ste_eth_l2_src_bits {
 	u8         smac_47_16[0x20];
 
@@ -577,34 +551,6 @@ struct mlx5_ifc_ste_double_action_accelerated_modify_action_list_bits {
 	u8         modify_actions_argument_pointer[0x18];
 };
 
-enum {
-	MLX5DR_ASO_FIRST_HIT_NUM_PER_OBJ = 512,
-	MLX5DR_ASO_FLOW_METER_NUM_PER_OBJ = 2,
-	MLX5DR_ASO_CT_NUM_PER_OBJ = 1,
-};
-
-struct mlx5_ifc_ste_aso_flow_meter_action_bits {
-	u8         reserved_at_0[0xc];
-	u8         action[0x1];
-	u8         initial_color[0x2];
-	u8         line_id[0x1];
-};
-
-struct mlx5_ifc_ste_double_action_aso_v1_bits {
-	u8         action_id[0x8];
-	u8         aso_context_number[0x18];
-
-	u8         dest_reg_id[0x2];
-	u8         change_ordering_tag[0x1];
-	u8         aso_check_ordering[0x1];
-	u8         aso_context_type[0x4];
-	u8         reserved_at_28[0x8];
-	union {
-		u8 aso_fields[0x10];
-		struct mlx5_ifc_ste_aso_flow_meter_action_bits flow_meter;
-	};
-};
-
 struct mlx5_ifc_ste_double_action_add_bits {
 	u8         action_id[0x8];
 	u8         destination_dw_offset[0x8];
@@ -656,6 +602,32 @@ struct mlx5_ifc_dr_action_hw_copy_bits {
 	u8         reserved_at_30[0x2];
 	u8         source_left_shifter[0x6];
 	u8         reserved_at_38[0x8];
+};
+
+enum {
+	MLX5DR_ASO_FLOW_METER_NUM_PER_OBJ = 2,
+};
+
+struct mlx5_ifc_ste_aso_flow_meter_action_bits {
+	u8         reserved_at_0[0xc];
+	u8         action[0x1];
+	u8         initial_color[0x2];
+	u8         line_id[0x1];
+};
+
+struct mlx5_ifc_ste_double_action_aso_v1_bits {
+	u8         action_id[0x8];
+	u8         aso_context_number[0x18];
+
+	u8         dest_reg_id[0x2];
+	u8         change_ordering_tag[0x1];
+	u8         aso_check_ordering[0x1];
+	u8         aso_context_type[0x4];
+	u8         reserved_at_28[0x8];
+	union {
+		u8 aso_fields[0x10];
+		struct mlx5_ifc_ste_aso_flow_meter_action_bits flow_meter;
+	};
 };
 
 #endif /* MLX5_IFC_DR_H */

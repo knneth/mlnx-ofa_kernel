@@ -12,11 +12,8 @@
 #include <rdma/ib_umem.h>
 #include <rdma/uverbs_std_types.h>
 #include <linux/mlx5/driver.h>
-#include <linux/mlx5/eswitch.h>
-#include <linux/mlx5/vport.h>
 #include <linux/mlx5/fs.h>
 #include "mlx5_ib.h"
-#include "ib_rep.h"
 #include "devx.h"
 #include "qp.h"
 #include <linux/xarray.h>
@@ -971,198 +968,6 @@ static bool devx_is_general_cmd(void *in, struct mlx5_ib_dev *dev)
 	default:
 		return false;
 	}
-}
-
-static int mlx5_ib_fill_vport_vhca_id(struct mlx5_core_dev *mdev,
-				      struct uverbs_attr_bundle *attrs,
-				      u16 vport_num,
-				      u64 *comp_mask)
-{
-	size_t out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
-	u32 in [MLX5_ST_SZ_DW(query_hca_cap_in)] = {};
-	u16 vport_vhca_id;
-	int err = 0;
-	void *out;
-
-	out = kzalloc(out_sz, GFP_KERNEL);
-	if (!out)
-		return -ENOMEM;
-
-	if (!uverbs_attr_is_valid(attrs,
-				  MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_VHCA_ID) ||
-	    (vport_num == MLX5_VPORT_UPLINK))
-		goto out;
-
-	MLX5_SET(query_hca_cap_in, in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
-	MLX5_SET(query_hca_cap_in, in, other_function, true);
-	MLX5_SET(query_hca_cap_in, in, function_id, vport_num);
-	MLX5_SET(query_hca_cap_in, in, op_mod,
-		 MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE |
-		 HCA_CAP_OPMOD_GET_CUR);
-
-	err = mlx5_cmd_exec(mdev, in, sizeof(in), out, out_sz);
-	if (err)
-		goto out;
-
-	vport_vhca_id = MLX5_GET(query_hca_cap_out, out,
-				 capability.cmd_hca_cap.vhca_id);
-
-	err = uverbs_copy_to(attrs, MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_VHCA_ID,
-			     &vport_vhca_id, sizeof(vport_vhca_id));
-	if (!err)
-		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_VHCA_ID_OLD;
-
-out:
-	kfree(out);
-	return err;
-}
-
-static int mlx5_ib_fill_vport_icm_addr(struct mlx5_core_dev *mdev,
-				       struct uverbs_attr_bundle *attrs,
-				       u16 vport_num,
-				       u64 *comp_mask)
-{
-	u32 out[MLX5_ST_SZ_DW(query_esw_vport_context_out)] = {};
-	u32 in[MLX5_ST_SZ_DW(query_esw_vport_context_in)] = {};
-	u64 icm_rx;
-	u64 icm_tx;
-	int err;
-
-	if (vport_num == MLX5_VPORT_UPLINK) {
-		/* TODO: FDB sw_owner check */
-		icm_rx = MLX5_CAP_ESW_FLOWTABLE_64(mdev, sw_steering_uplink_icm_address_rx);
-		icm_tx = MLX5_CAP_ESW_FLOWTABLE_64(mdev, sw_steering_uplink_icm_address_tx);
-	} else {
-		MLX5_SET(query_esw_vport_context_in, in, opcode,
-				MLX5_CMD_OP_QUERY_ESW_VPORT_CONTEXT);
-		MLX5_SET(query_esw_vport_context_in, in, vport_number,
-			 vport_num);
-		MLX5_SET(query_esw_vport_context_in, in, other_vport, true);
-
-		err = mlx5_cmd_exec_inout(mdev, query_esw_vport_context, in, out);
-
-		if (err)
-			return err;
-
-		icm_rx = MLX5_GET64(query_esw_vport_context_out, out,
-				    esw_vport_context.sw_steering_vport_icm_address_rx);
-
-		icm_tx = MLX5_GET64(query_esw_vport_context_out, out,
-				    esw_vport_context.sw_steering_vport_icm_address_tx);
-	}
-
-	/* TODO: FDB sw_owner check */
-	if (uverbs_attr_is_valid(attrs,
-				 MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_RX) &&
-	    icm_rx) {
-		if (uverbs_copy_to(attrs,
-				   MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_RX,
-				   &icm_rx, sizeof(icm_rx)))
-			return -EFAULT;
-		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_RX_OLD;
-	}
-
-	/* TODO: FDB sw_owner check */
-	if (uverbs_attr_is_valid(attrs,
-				 MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_TX) &&
-	    icm_tx) {
-		if (uverbs_copy_to(attrs,
-				   MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_TX,
-				   &icm_tx, sizeof(icm_tx)))
-			return -EFAULT;
-		*comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_ICM_TX_OLD;
-	}
-
-	return 0;
-}
-
-static int mlx5_ib_fill_vport_ctx(struct mlx5_ib_dev *dev,
-				  struct uverbs_attr_bundle *attrs,
-				  u32 port_num)
-{
-	struct mlx5_eswitch_rep *rep;
-	struct mlx5_core_dev *mdev;
-	u64 comp_mask = 0;
-	u16 vport_num;
-	int err;
-
-	rep = dev->port[port_num - 1].rep;
-
-	if (!rep)
-		goto fill_comp_mask;
-
-	mdev = mlx5_eswitch_get_core_dev(rep->esw);
-	vport_num = rep->vport;
-	if (uverbs_attr_is_valid(attrs, MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT)) {
-		if (uverbs_copy_to(attrs, MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT,
-				   &vport_num, sizeof(vport_num)))
-			return -EFAULT;
-		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_VPORT_OLD;
-	}
-
-	if (uverbs_attr_is_valid(attrs,
-				 MLX5_IB_ATTR_DEVX_QUERY_PORT_ESW_OWNER_VHCA_ID)) {
-		u16 vhca_id = MLX5_CAP_GEN(mdev, vhca_id);
-
-		if (uverbs_copy_to(attrs,
-				   MLX5_IB_ATTR_DEVX_QUERY_PORT_ESW_OWNER_VHCA_ID,
-				   &vhca_id, sizeof(vhca_id)))
-			return -EFAULT;
-		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_ESW_OWNER_VHCA_ID_OLD;
-	}
-
-	err = mlx5_ib_fill_vport_vhca_id(mdev, attrs, vport_num, &comp_mask);
-	if (err)
-		return err;
-
-	err = mlx5_ib_fill_vport_icm_addr(mdev, attrs, vport_num, &comp_mask);
-	if (err)
-		return err;
-
-	if (uverbs_attr_is_valid(attrs,
-				 MLX5_IB_ATTR_DEVX_QUERY_PORT_MATCH_REG_C_0) &&
-	    mlx5_ib_eswitch_vport_match_metadata_enabled(rep->esw)) {
-		struct mlx5_ib_uapi_devx_reg_32 reg_c0 = {};
-		reg_c0.value =
-			mlx5_ib_eswitch_get_vport_metadata_for_match(rep->esw,
-								     rep->vport);
-		reg_c0.mask = mlx5_ib_eswitch_get_vport_metadata_mask();
-
-		if (uverbs_copy_to(attrs,
-				   MLX5_IB_ATTR_DEVX_QUERY_PORT_MATCH_REG_C_0,
-				   &reg_c0, sizeof(reg_c0)))
-			return -EFAULT;
-		comp_mask |= MLX5_IB_UAPI_QUERY_PORT_MATCH_REG_C_0_OLD;
-	}
-
-fill_comp_mask:
-	return uverbs_set_flags64(attrs, MLX5_IB_ATTR_DEVX_QUERY_PORT_COMP_MASK,
-				  comp_mask);
-}
-
-static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_QUERY_PORT)(
-	struct uverbs_attr_bundle *attrs)
-{
-	struct mlx5_ib_ucontext *c;
-	struct mlx5_ib_dev *dev;
-	u32 port_num;
-
-	if (uverbs_copy_from(&port_num, attrs,
-			     MLX5_IB_ATTR_DEVX_QUERY_PORT_NUM))
-		return -EFAULT;
-
-	c = devx_ufile2uctx(attrs);
-	if (IS_ERR(c))
-		return PTR_ERR(c);
-	dev = to_mdev(c->ibucontext.device);
-
-	if (!rdma_is_port_valid(&dev->ib_dev, port_num))
-		return -EINVAL;
-
-	if (!is_mdev_switchdev_mode(dev->mdev))
-		return -EOPNOTSUPP;
-
-	return mlx5_ib_fill_vport_ctx(dev, attrs, port_num);
 }
 
 static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_QUERY_EQN)(
@@ -3051,34 +2856,6 @@ DECLARE_UVERBS_NAMED_METHOD_DESTROY(
 			UA_MANDATORY));
 
 DECLARE_UVERBS_NAMED_METHOD(
-       MLX5_IB_METHOD_DEVX_QUERY_PORT,
-       UVERBS_ATTR_PTR_IN(MLX5_IB_ATTR_DEVX_QUERY_PORT_NUM,
-                          UVERBS_ATTR_TYPE(u32),
-                          UA_MANDATORY),
-       UVERBS_ATTR_FLAGS_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_COMP_MASK,
-                             enum mlx5_ib_uapi_devx_query_port_comp_mask,
-                             UA_MANDATORY),
-       UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT,
-                           UVERBS_ATTR_TYPE(u16),
-                           UA_OPTIONAL),
-       UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_VHCA_ID,
-                           UVERBS_ATTR_TYPE(u16),
-                           UA_OPTIONAL),
-       UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_ESW_OWNER_VHCA_ID,
-                           UVERBS_ATTR_TYPE(u16),
-                           UA_OPTIONAL),
-       UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_RX,
-                           UVERBS_ATTR_TYPE(u64),
-                           UA_OPTIONAL),
-       UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_TX,
-                           UVERBS_ATTR_TYPE(u64),
-                           UA_OPTIONAL),
-       UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_DEVX_QUERY_PORT_MATCH_REG_C_0,
-                           UVERBS_ATTR_STRUCT(struct mlx5_ib_uapi_devx_reg_32,
-                                              mask),
-                           UA_OPTIONAL));
-
-DECLARE_UVERBS_NAMED_METHOD(
 	MLX5_IB_METHOD_DEVX_QUERY_EQN,
 	UVERBS_ATTR_PTR_IN(MLX5_IB_ATTR_DEVX_QUERY_EQN_USER_VEC,
 			   UVERBS_ATTR_TYPE(u32),
@@ -3209,7 +2986,6 @@ DECLARE_UVERBS_GLOBAL_METHODS(MLX5_IB_OBJECT_DEVX,
 			      &UVERBS_METHOD(MLX5_IB_METHOD_DEVX_OTHER),
 			      &UVERBS_METHOD(MLX5_IB_METHOD_DEVX_QUERY_UAR),
 			      &UVERBS_METHOD(MLX5_IB_METHOD_DEVX_QUERY_EQN),
-			      &UVERBS_METHOD(MLX5_IB_METHOD_DEVX_QUERY_PORT),
 			      &UVERBS_METHOD(MLX5_IB_METHOD_DEVX_SUBSCRIBE_EVENT));
 
 DECLARE_UVERBS_NAMED_OBJECT(MLX5_IB_OBJECT_DEVX_OBJ,

@@ -4,8 +4,6 @@
 #ifndef __MLX5_ESW_VF_METERS_H__
 #define __MLX5_ESW_VF_METERS_H__
 
-int esw_vf_meter_create_meters(struct mlx5_eswitch *esw);
-void esw_vf_meter_destroy_meters(struct mlx5_eswitch *esw);
 void esw_vf_meter_ingress_destroy(struct mlx5_vport *vport);
 void esw_vf_meter_egress_destroy(struct mlx5_vport *vport);
 void esw_vf_meter_destroy_all(struct mlx5_eswitch *esw);

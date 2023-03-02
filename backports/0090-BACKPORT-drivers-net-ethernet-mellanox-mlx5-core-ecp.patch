@@ -1,0 +1,50 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
+
+Change-Id: Ide0acf91aaa357dc0d9da1969604c208282a18e1
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ecpf.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
+@@ -518,7 +518,9 @@ static struct attribute *smart_nic_attrs
+ 	NULL,
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(smart_nic);
++#endif
+ 
+ static const struct sysfs_ops smart_nic_sysfs_ops = {
+ 	.show   = smart_nic_attr_show,
+@@ -527,7 +529,11 @@ static const struct sysfs_ops smart_nic_
+ 
+ static struct kobj_type smart_nic_type = {
+ 	.sysfs_ops     = &smart_nic_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = smart_nic_groups
++#else
++	.default_attrs = smart_nic_attrs
++#endif
+ };
+ 
+ void mlx5_smartnic_sysfs_init(struct net_device *dev)
+@@ -672,11 +678,17 @@ static const struct sysfs_ops regex_sysf
+ 	.store  = regex_attr_store
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(regex);
++#endif
+ 
+ static struct kobj_type regex_type = {
+ 	.sysfs_ops     = &regex_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = regex_groups
++#else
++	.default_attrs = regex_attrs
++#endif
+ };
+ 
+ int mlx5_regex_sysfs_init(struct mlx5_core_dev *dev)

@@ -1,0 +1,126 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma.c
+
+Change-Id: I9814d7c9e87078a2eab91c98eb8b8a88677ccb7c
+---
+ drivers/nvme/target/rdma.c | 39 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+--- a/drivers/nvme/target/rdma.c
++++ b/drivers/nvme/target/rdma.c
+@@ -8,7 +8,9 @@
+ #endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/atomic.h>
++#ifdef HAVE_BLK_INTEGRITY_H
+ #include <linux/blk-integrity.h>
++#endif
+ #include <linux/ctype.h>
+ #include <linux/delay.h>
+ #include <linux/err.h>
+@@ -167,8 +169,13 @@ static int nvmet_rdma_srq_size = 1024;
+ module_param_cb(srq_size, &srq_size_ops, &nvmet_rdma_srq_size, 0644);
+ MODULE_PARM_DESC(srq_size, "set Shared Receive Queue (SRQ) size, should >= 256 (default: 1024)");
+ 
++#ifdef HAVE_PARAM_OPS_ULLONG
+ static unsigned long long nvmet_rdma_offload_mem_start = 0;
+ module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ullong, 0444);
++#else
++static unsigned long nvmet_rdma_offload_mem_start = 0;
++module_param_named(offload_mem_start, nvmet_rdma_offload_mem_start, ulong, 0444);
++#endif
+ MODULE_PARM_DESC(offload_mem_start,
+ 		 "Start address of the memory dedicated for P2P data transfer. If not set, the driver will allocate 1MB staging buffer per offload context."
+ 		 "Using bigger staging buffer will improve performance. Must be contiguous and aligned to" __stringify(PAGE_SIZE) "(default:0)");
+@@ -232,6 +239,13 @@ static int srq_size_set(const char *val,
+ 	return param_set_int(val, kp);
+ }
+ 
++#if !defined HAVE_PUT_UNALIGNED_LE24 && !defined HAVE_PUT_UNALIGNED_LE24_ASM_GENERIC
++static inline u32 get_unaligned_le24(const u8 *p)
++{
++	return (u32)p[0] | (u32)p[1] << 8 | (u32)p[2] << 16;
++}
++#endif
++
+ static int num_pages(int len)
+ {
+ 	return 1 + (((len - 1) & PAGE_MASK) >> PAGE_SHIFT);
+@@ -639,7 +653,13 @@ static void nvmet_rdma_set_sig_domain(st
+ {
+ 	domain->sig_type = IB_SIG_TYPE_T10_DIF;
+ 	domain->sig.dif.bg_type = IB_T10DIF_CRC;
++#ifdef CONFIG_BLK_DEV_INTEGRITY
++#ifdef HAVE_BLK_INTEGRITY_SECTOR_SIZE
++	domain->sig.dif.pi_interval = 1 << bi->sector_size;
++#else
+ 	domain->sig.dif.pi_interval = 1 << bi->interval_exp;
++#endif
++#endif
+ 	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
+ 	if (control & NVME_RW_PRINFO_PRCHK_REF)
+ 		domain->sig.dif.ref_remap = true;
+@@ -1443,7 +1463,11 @@ static void nvmet_rdma_free_queue(struct
+ 				!queue->host_qid);
+ 	}
+ 	nvmet_rdma_free_rsps(queue);
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&nvmet_rdma_queue_ida, queue->idx);
++#else
++	ida_simple_remove(&nvmet_rdma_queue_ida, queue->idx);
++#endif
+ 	kfree(queue);
+ }
+ 
+@@ -1557,7 +1581,11 @@ nvmet_rdma_alloc_queue(struct nvmet_rdma
+ 	spin_lock_init(&queue->rsps_lock);
+ 	INIT_LIST_HEAD(&queue->queue_list);
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	queue->idx = ida_alloc(&nvmet_rdma_queue_ida, GFP_KERNEL);
++#else
++	queue->idx = ida_simple_get(&nvmet_rdma_queue_ida, 0, 0, GFP_KERNEL);
++#endif
+ 	if (queue->idx < 0) {
+ 		ret = NVME_RDMA_CM_NO_RSC;
+ 		goto out_destroy_sq;
+@@ -1608,7 +1636,11 @@ out_free_cmds:
+ out_free_responses:
+ 	nvmet_rdma_free_rsps(queue);
+ out_ida_remove:
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&nvmet_rdma_queue_ida, queue->idx);
++#else
++	ida_simple_remove(&nvmet_rdma_queue_ida, queue->idx);
++#endif
+ out_destroy_sq:
+ 	nvmet_sq_destroy(&queue->nvme_sq);
+ out_free_queue:
+@@ -2077,6 +2109,7 @@ static void nvmet_rdma_remove_port(struc
+ static void nvmet_rdma_disc_port_addr(struct nvmet_req *req,
+ 		struct nvmet_port *nport, char *traddr)
+ {
++#ifdef HAVE_INET_ADDR_IS_ANY
+ 	struct nvmet_rdma_port *port = nport->priv;
+ 	struct rdma_cm_id *cm_id = port->cm_id;
+ 
+@@ -2090,6 +2123,9 @@ static void nvmet_rdma_disc_port_addr(st
+ 	} else {
+ 		memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
+ 	}
++#else
++	memcpy(traddr, nport->disc_addr.traddr, NVMF_TRADDR_SIZE);
++#endif
+ }
+ 
+ static u8 nvmet_rdma_get_mdts(const struct nvmet_ctrl *ctrl)
+@@ -2278,6 +2314,9 @@ module_init(nvmet_rdma_init);
+ module_exit(nvmet_rdma_exit);
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_ALIAS("nvmet-transport-1"); /* 1 == NVMF_TRTYPE_RDMA */
+ 
+ #include "rdma_offload.c"

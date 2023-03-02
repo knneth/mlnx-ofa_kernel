@@ -1,0 +1,126 @@
+From: Israel Rukshin <israelr@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
+
+Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
+---
+ drivers/nvme/host/fabrics.c | 35 ++++++++++++++++++++++++++++++++++-
+ drivers/nvme/host/fabrics.h |  2 ++
+ 2 files changed, 36 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/host/fabrics.c
++++ b/drivers/nvme/host/fabrics.c
+@@ -155,9 +155,13 @@ int nvmf_reg_read32(struct nvme_ctrl *ct
+ 	cmd.prop_get.fctype = nvme_fabrics_type_property_get;
+ 	cmd.prop_get.offset = cpu_to_le32(off);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0,
+ 			NVME_QID_ANY, 0, 0);
+-
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0, 0,
++			NVME_QID_ANY, 0, GFP_KERNEL, false, false);
++#endif
+ 	if (ret >= 0)
+ 		*val = le64_to_cpu(res.u64);
+ 	if (unlikely(ret != 0))
+@@ -201,8 +205,13 @@ int nvmf_reg_read64(struct nvme_ctrl *ct
+ 	cmd.prop_get.attrib = 1;
+ 	cmd.prop_get.offset = cpu_to_le32(off);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0,
+ 			NVME_QID_ANY, 0, 0);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0, 0,
++			NVME_QID_ANY, 0, GFP_KERNEL, false, false);
++#endif
+ 
+ 	if (ret >= 0)
+ 		*val = le64_to_cpu(res.u64);
+@@ -246,8 +255,13 @@ int nvmf_reg_write32(struct nvme_ctrl *c
+ 	cmd.prop_set.offset = cpu_to_le32(off);
+ 	cmd.prop_set.value = cpu_to_le64(val);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, NULL, NULL, 0,
+ 			NVME_QID_ANY, 0, 0);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, NULL, NULL, 0, 0,
++			NVME_QID_ANY, 0, GFP_KERNEL, false, false);
++#endif
+ 	if (unlikely(ret))
+ 		dev_err(ctrl->device,
+ 			"Property Set error: %d, offset %#x\n",
+@@ -402,9 +416,15 @@ int nvmf_connect_admin_queue(struct nvme
+ 	strncpy(data->subsysnqn, ctrl->opts->subsysnqn, NVMF_NQN_SIZE);
+ 	strncpy(data->hostnqn, ctrl->opts->host->nqn, NVMF_NQN_SIZE);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res,
+ 			data, sizeof(*data), NVME_QID_ANY, 1,
+ 			BLK_MQ_REQ_RESERVED | BLK_MQ_REQ_NOWAIT);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res,
++			data, sizeof(*data), 0, NVME_QID_ANY, 1,
++			GFP_ATOMIC, true, false);
++#endif
+ 	if (ret) {
+ 		nvmf_log_connect_error(ctrl, ret, le32_to_cpu(res.u32),
+ 				       &cmd, data);
+@@ -481,9 +501,15 @@ int nvmf_connect_io_queue(struct nvme_ct
+ 	strncpy(data->subsysnqn, ctrl->opts->subsysnqn, NVMF_NQN_SIZE);
+ 	strncpy(data->hostnqn, ctrl->opts->host->nqn, NVMF_NQN_SIZE);
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HAS_3_PARAMS
+ 	ret = __nvme_submit_sync_cmd(ctrl->connect_q, &cmd, &res,
+ 			data, sizeof(*data), qid, 1,
+ 			BLK_MQ_REQ_RESERVED | BLK_MQ_REQ_NOWAIT);
++#else
++	ret = __nvme_submit_sync_cmd(ctrl->connect_q, &cmd, &res,
++			data, sizeof(*data), 0, qid, 1,
++			GFP_ATOMIC, true, false);
++#endif
+ 	if (ret) {
+ 		nvmf_log_connect_error(ctrl, ret, le32_to_cpu(res.u32),
+ 				       &cmd, data);
+@@ -612,7 +638,11 @@ static int nvmf_parse_options(struct nvm
+ 
+ 	/* Set defaults */
+ 	opts->queue_size = NVMF_DEF_QUEUE_SIZE;
++#ifdef HAVE_BLK_MQ_ALLOC_REQUEST_HCTX
+ 	opts->nr_io_queues = num_online_cpus();
++#else
++	opts->nr_io_queues = 1;
++#endif
+ 	opts->reconnect_delay = NVMF_DEF_RECONNECT_DELAY;
+ 	opts->kato = 0;
+ 	opts->duplicate_connect = false;
+@@ -1283,6 +1313,9 @@ static void __exit nvmf_exit(void)
+ }
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ module_init(nvmf_init);
+ module_exit(nvmf_exit);
+--- a/drivers/nvme/host/fabrics.h
++++ b/drivers/nvme/host/fabrics.h
+@@ -194,6 +194,7 @@ static inline char *nvmf_ctrl_subsysnqn(
+ 	return ctrl->subsys->subnqn;
+ }
+ 
++#ifdef HAVE_BLK_EH_DONE
+ static inline void nvmf_complete_timed_out_request(struct request *rq)
+ {
+ 	if (blk_mq_request_started(rq) && !blk_mq_request_completed(rq)) {
+@@ -201,6 +202,7 @@ static inline void nvmf_complete_timed_o
+ 		blk_mq_complete_request(rq);
+ 	}
+ }
++#endif
+ 
+ int nvmf_reg_read32(struct nvme_ctrl *ctrl, u32 off, u32 *val);
+ int nvmf_reg_read64(struct nvme_ctrl *ctrl, u32 off, u64 *val);

@@ -1,27 +1,46 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
 
-Change-Id: I198c63243d2b896d229250aeb89265720f2b1160
+Change-Id: If109046588ba36ce78b5570d9398ee268bcf7716
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/trap.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
-@@ -29,9 +29,16 @@ struct mlx5e_trap {
- 	struct mlx5e_rq_param      rq_param;
- };
- 
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- void mlx5e_close_trap(struct mlx5e_trap *trap);
- void mlx5e_deactivate_trap(struct mlx5e_priv *priv);
- int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx);
- int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+@@ -11,7 +11,11 @@ tc_act_can_offload_ct(struct mlx5e_tc_ac
+ 		      int act_index,
+ 		      struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	bool clear_action = act->ct.action & TCA_CT_ACT_CLEAR;
 +#else
-+void mlx5e_close_trap(struct mlx5e_trap *trap) {}
-+void mlx5e_deactivate_trap(struct mlx5e_priv *priv) {}
-+int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx) { return 0; }
-+int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable) { return 0; }
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
++	bool clear_action = false;
++#endif
+ 	struct netlink_ext_ack *extack = parse_state->extack;
  
- #endif
+ 	if (parse_state->ct && !clear_action) {
+@@ -28,7 +32,11 @@ tc_act_parse_ct(struct mlx5e_tc_act_pars
+ 		struct mlx5e_priv *priv,
+ 		struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	bool clear_action = act->ct.action & TCA_CT_ACT_CLEAR;
++#else
++	bool clear_action = false;
++#endif
+ 	int err;
+ 
+ 	/* It's redundant to do ct clear more than once. */
+@@ -89,8 +97,10 @@ tc_act_is_multi_table_act_ct(struct mlx5
+ 			     const struct flow_action_entry *act,
+ 			     struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	if (act->ct.action & TCA_CT_ACT_CLEAR)
+ 		return false;
++#endif
+ 
+ 	return true;
+ }

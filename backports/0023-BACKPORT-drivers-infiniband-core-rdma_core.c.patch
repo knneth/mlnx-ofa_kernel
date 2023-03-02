@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
 
-Change-Id: If107ff28d8fe5101bdfe8f17b1c704d78d4f369c
+Change-Id: I3dde50d60dac0704274b4d1ca05a53171fbc2929
 ---
  drivers/infiniband/core/rdma_core.c | 19 +++++++++++++++++--
  1 file changed, 17 insertions(+), 2 deletions(-)

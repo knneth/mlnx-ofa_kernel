@@ -1,0 +1,102 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
+
+Change-Id: If637e7ce187b3177c03dda1cc92b9a6f53a7b176
+---
+ drivers/infiniband/core/umem_dmabuf.c | 33 +++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+--- a/drivers/infiniband/core/umem_dmabuf.c
++++ b/drivers/infiniband/core/umem_dmabuf.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2020 Intel Corporation. All rights reserved.
+  */
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ #include <linux/dma-buf.h>
+ #include <linux/dma-resv.h>
+ #include <linux/dma-mapping.h>
+@@ -10,15 +11,22 @@
+ 
+ #include "uverbs.h"
+ 
++#ifdef MODULE_IMPORT_NS
+ MODULE_IMPORT_NS(DMA_BUF);
++#endif
+ 
+ int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf)
+ {
+ 	struct sg_table *sgt;
+ 	struct scatterlist *sg;
++#ifndef HAVE_DMA_RESV_WAIT_TIMEOUT //forwardport
++	struct dma_fence *fence;
++#endif
+ 	unsigned long start, end, cur = 0;
+ 	unsigned int nmap = 0;
++#ifdef HAVE_DMA_RESV_WAIT_TIMEOUT
+ 	long ret;
++#endif
+ 	int i;
+ 
+ 	dma_resv_assert_held(umem_dmabuf->attach->dmabuf->resv);
+@@ -58,8 +66,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
+ 		cur += sg_dma_len(sg);
+ 	}
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	umem_dmabuf->umem.sgt_append.sgt.sgl = umem_dmabuf->first_sg;
+ 	umem_dmabuf->umem.sgt_append.sgt.nents = nmap;
++#else
++	umem_dmabuf->umem.sg_head.sgl = umem_dmabuf->first_sg;
++	umem_dmabuf->umem.sg_head.nents = nmap;
++	umem_dmabuf->umem.nmap = nmap;
++#endif
+ 	umem_dmabuf->sgt = sgt;
+ 
+ wait_fence:
+@@ -68,14 +82,30 @@ wait_fence:
+ 	 * may be not up-to-date. Wait for the exporter to finish
+ 	 * the migration.
+ 	 */
++#ifdef HAVE_DMA_RESV_WAIT_TIMEOUT //forwardport
+ 	ret = dma_resv_wait_timeout(umem_dmabuf->attach->dmabuf->resv,
++#ifdef HAVE_DMA_RESV_USAGE_KERNEL
+ 				     DMA_RESV_USAGE_KERNEL,
++#else
++				     false,
++#endif
+ 				     false, MAX_SCHEDULE_TIMEOUT);
+ 	if (ret < 0)
+ 		return ret;
+ 	if (ret == 0)
+ 		return -ETIMEDOUT;
+ 	return 0;
++#else /* HAVE_DMA_RESV_WAIT_TIMEOUT */
++#ifdef HAVE_DMA_RESV_EXCL_FENCE
++ 	fence = dma_resv_excl_fence(umem_dmabuf->attach->dmabuf->resv);
++#else
++	fence = dma_resv_get_excl(umem_dmabuf->attach->dmabuf->resv);
++#endif
++ 	if (fence)
++ 		return dma_fence_wait(fence, false);
++ 
++ 	return 0;
++#endif /* HAVE_DMA_RESV_WAIT_TIMEOUT */
+ }
+ EXPORT_SYMBOL(ib_umem_dmabuf_map_pages);
+ 
+@@ -179,7 +209,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
+ }
+ 
+ static struct dma_buf_attach_ops ib_umem_dmabuf_attach_pinned_ops = {
++#ifdef HAVE_DMA_BUF_ATTACH_OPS_ALLOW_PEER2PEER
+ 	.allow_peer2peer = true,
++#endif
+ 	.move_notify = ib_umem_dmabuf_unsupported_move_notify,
+ };
+ 
+@@ -232,3 +264,4 @@ void ib_umem_dmabuf_release(struct ib_um
+ 	dma_buf_put(dmabuf);
+ 	kfree(umem_dmabuf);
+ }
++#endif

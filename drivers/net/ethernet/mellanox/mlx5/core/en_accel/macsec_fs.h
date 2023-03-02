@@ -42,17 +42,17 @@ void mlx5e_macsec_fs_del_rule(struct mlx5e_macsec_fs *macsec_fs,
 
 void mlx5e_macsec_fs_get_stats_fill(struct mlx5e_macsec_fs *macsec_fs, void *macsec_stats);
 
-int macsec_fs_add_roce_rule_rx(struct mlx5e_macsec_fs *macsec_fs, u32 fs_id,
-			       const struct sockaddr *addr, union mlx5e_macsec_rule *rule);
+int mlx5e_macsec_fs_add_roce_rule_rx(struct mlx5e_macsec_fs *macsec_fs, u32 fs_id, u16 gid_idx,
+				     const struct sockaddr *addr, union mlx5e_macsec_rule *rule);
 
-void macsec_fs_del_roce_rule_rx(struct mlx5e_macsec_fs *macsec_fs,
-				union mlx5e_macsec_rule *rule);
+void mlx5e_macsec_fs_del_roce_rule_rx(struct mlx5e_macsec_fs *macsec_fs,
+				      union mlx5e_macsec_rule *rule, u16 gid_idx);
 
-int macsec_fs_add_roce_rule_tx(struct mlx5e_macsec_fs *macsec_fs, u32 fs_id,
-			       const struct sockaddr *addr, union mlx5e_macsec_rule *rule);
+int mlx5e_macsec_fs_add_roce_rule_tx(struct mlx5e_macsec_fs *macsec_fs, u32 fs_id, u16 gid_idx,
+				     const struct sockaddr *addr, union mlx5e_macsec_rule *rule);
 
-void macsec_fs_del_roce_rule_tx(struct mlx5e_macsec_fs *macsec_fs,
-				union mlx5e_macsec_rule *rule);
+void mlx5e_macsec_fs_del_roce_rule_tx(struct mlx5e_macsec_fs *macsec_fs,
+				      union mlx5e_macsec_rule *rule, u16 gid_idx);
 
 #endif
 

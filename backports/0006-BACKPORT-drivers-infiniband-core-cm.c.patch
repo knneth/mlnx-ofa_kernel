@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
 
-Change-Id: I2759a5278e1fe88c9e8bc2a9fa64a69c2afd41f1
+Change-Id: Idb4366b7ce6b4d20a86d748e177519d08c84e6ad
 ---
  drivers/infiniband/core/cm.c | 73 ++++++++++++++++++++++++++++++++++++
  1 file changed, 73 insertions(+)

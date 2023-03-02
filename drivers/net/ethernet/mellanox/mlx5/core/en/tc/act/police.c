@@ -10,6 +10,16 @@ tc_act_can_offload_police(struct mlx5e_tc_act_parse_state *parse_state,
 			  int act_index,
 			  struct mlx5_flow_attr *attr)
 {
+	if (act->police.notexceed.act_id != FLOW_ACTION_PIPE &&
+	    act->police.notexceed.act_id != FLOW_ACTION_ACCEPT) {
+		NL_SET_ERR_MSG_MOD(parse_state->extack,
+				   "Offload not supported when conform action is not pipe or ok");
+		return false;
+	}
+	if (mlx5e_policer_validate(parse_state->flow_action, act,
+				   parse_state->extack))
+		return false;
+
 	return !!mlx5e_get_flow_meters(parse_state->flow->priv->mdev);
 }
 
@@ -68,6 +78,10 @@ tc_act_police_offload(struct mlx5e_priv *priv,
 	struct mlx5e_flow_meter_params params = {};
 	struct mlx5e_flow_meter_handle *meter;
 	int err = 0;
+
+	err = mlx5e_policer_validate(&fl_act->action, act, fl_act->extack);
+	if (err)
+		return err;
 
 	err = fill_meter_params_from_act(act, &params);
 	if (err)

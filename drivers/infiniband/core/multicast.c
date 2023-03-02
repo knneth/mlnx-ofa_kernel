@@ -337,7 +337,7 @@ static int send_join(struct mcast_group *group, struct mcast_member *member)
 				       port->port_num, IB_MGMT_METHOD_SET,
 				       &member->multicast.rec,
 				       member->multicast.comp_mask,
-				       1000, 3, GFP_KERNEL, join_handler, group,
+				       3000, GFP_KERNEL, join_handler, group,
 				       &group->query);
 	return (ret > 0) ? 0 : ret;
 }
@@ -357,7 +357,7 @@ static int send_leave(struct mcast_group *group, u8 leave_state)
 				       IB_SA_MCMEMBER_REC_MGID     |
 				       IB_SA_MCMEMBER_REC_PORT_GID |
 				       IB_SA_MCMEMBER_REC_JOIN_STATE,
-				       1000, 3, GFP_KERNEL, leave_handler,
+				       3000, GFP_KERNEL, leave_handler,
 				       group, &group->query);
 	return (ret > 0) ? 0 : ret;
 }

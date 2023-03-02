@@ -54,8 +54,6 @@
 			    ESW_FLOW_ATTR_SZ :\
 			    NIC_FLOW_ATTR_SZ)
 
-struct mlx5_flow_attr;
-
 int mlx5e_tc_num_filters(struct mlx5e_priv *priv, unsigned long flags);
 
 struct mlx5e_tc_update_priv {
@@ -91,6 +89,13 @@ struct mlx5_flow_attr {
 	u32 exe_aso_type;
 	struct list_head list;
 	struct mlx5e_post_act_handle *post_act_handle;
+	struct {
+		/* Indicate whether the parsed flow should be counted for lag mode decision
+		 * making
+		 */
+		bool count;
+	} lag;
+	/* keep this union last */
 	union {
 		struct mlx5_esw_flow_attr esw_attr[0];
 		struct mlx5_nic_flow_attr nic_attr[0];
@@ -355,6 +360,8 @@ mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
 #endif
 
 #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+struct mlx5e_tc_table *mlx5e_tc_table_alloc(void);
+void mlx5e_tc_table_free(struct mlx5e_tc_table *tc);
 static inline bool mlx5e_cqe_regb_chain(struct mlx5_cqe64 *cqe)
 {
 #if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
@@ -380,13 +387,12 @@ int mlx5e_prio_hairpin_mode_disable(struct mlx5e_priv *priv);
 int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio);
 int mlx5e_set_prio_hairpin_rate(struct mlx5e_priv *priv,
 				u16 prio, int rate);
-int
-mlx5e_hairpin_oob_cnt_enable(struct mlx5e_priv *priv, struct net_device *peer_dev);
-int
-mlx5e_hairpin_oob_cnt_disable(struct mlx5e_priv *priv);
+int mlx5e_hairpin_oob_cnt_enable(struct mlx5e_priv *priv, struct net_device *peer_dev);
+int mlx5e_hairpin_oob_cnt_disable(struct mlx5e_priv *priv);
 void mlx5e_hairpin_oob_cnt_get(struct mlx5e_priv *priv, u64 *cnt);
-
 #else /* CONFIG_MLX5_CLS_ACT */
+static inline struct mlx5e_tc_table *mlx5e_tc_table_alloc(void) { return NULL; }
+static inline void mlx5e_tc_table_free(struct mlx5e_tc_table *tc) {}
 static inline bool mlx5e_cqe_regb_chain(struct mlx5_cqe64 *cqe)
 { return false; }
 static inline bool

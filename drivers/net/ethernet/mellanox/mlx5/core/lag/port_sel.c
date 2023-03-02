@@ -13,7 +13,7 @@ enum {
 static struct mlx5_flow_group *
 mlx5_create_hash_flow_group(struct mlx5_flow_table *ft,
 			    struct mlx5_flow_definer *definer,
-			    int num_entries)
+			    u8 rules)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
 	struct mlx5_flow_group *fg;
@@ -26,7 +26,7 @@ mlx5_create_hash_flow_group(struct mlx5_flow_table *ft,
 	MLX5_SET(create_flow_group_in, in, match_definer_id,
 		 mlx5_get_match_definer_id(definer));
 	MLX5_SET(create_flow_group_in, in, start_flow_index, 0);
-	MLX5_SET(create_flow_group_in, in, end_flow_index, num_entries - 1);
+	MLX5_SET(create_flow_group_in, in, end_flow_index, rules - 1);
 	MLX5_SET(create_flow_group_in, in, group_type,
 		 MLX5_CREATE_FLOW_GROUP_IN_GROUP_TYPE_HASH_SPLIT);
 
@@ -594,12 +594,8 @@ mlx5_lag_modify_definers_destinations(struct mlx5_lag *ldev,
 				      u8 *ports)
 {
 	struct mlx5_lag_port_sel *port_sel = &ldev->port_sel;
-	struct mlx5_flow_destination dest = {};
 	int err;
 	int tt;
-
-	dest.type = MLX5_FLOW_DESTINATION_TYPE_UPLINK;
-	dest.vport.flags |= MLX5_FLOW_DEST_VPORT_VHCA_ID;
 
 	for_each_set_bit(tt, port_sel->tt_map, MLX5_NUM_TT) {
 		err = __mlx5_lag_modify_definers_destinations(ldev, definers[tt], ports);

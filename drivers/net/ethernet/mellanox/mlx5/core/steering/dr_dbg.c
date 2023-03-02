@@ -222,7 +222,7 @@ dr_dump_rule_mem(struct seq_file *file, struct mlx5dr_ste *ste,
 	}
 
 	dr_dump_hex_print(hw_ste_dump, (char *)mlx5dr_ste_get_hw_ste(ste),
- 			  DR_STE_SIZE_REDUCED);
+			  DR_STE_SIZE_REDUCED);
 
 	seq_printf(file, "%d,0x%llx,0x%llx,%s\n", mem_rec_type,
 		   dr_dump_icm_to_idx(mlx5dr_ste_get_icm_addr(ste)), rule_id,
@@ -639,7 +639,7 @@ void mlx5dr_dbg_init_dump(struct mlx5dr_domain *dmn)
 	}
 
 	dmn->dump_info.steering_debugfs =
-		debugfs_create_dir("steering", dev->priv.dbg.dbg_root);
+		debugfs_create_dir("steering", mlx5_debugfs_get_dev_root(dev));
 	dmn->dump_info.fdb_debugfs =
 		debugfs_create_dir("fdb", dmn->dump_info.steering_debugfs);
 

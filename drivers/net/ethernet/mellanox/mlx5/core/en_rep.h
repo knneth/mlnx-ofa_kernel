@@ -102,7 +102,7 @@ struct mlx5_rep_uplink_priv {
 	struct mlx5e_flow_meters *flow_meters;
 };
 
-struct mlx5_meter_handle;
+struct mlx5e_flow_meter_handle;
 
 struct rep_meter {
 	u64 rate;

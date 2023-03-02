@@ -42,8 +42,8 @@ static const char * const action_type_to_str[] = {
 	[DR_ACTION_TYP_PUSH_VLAN] = "DR_ACTION_TYP_PUSH_VLAN",
 	[DR_ACTION_TYP_SAMPLER] = "DR_ACTION_TYP_SAMPLER",
 	[DR_ACTION_TYP_INSERT_HDR] = "DR_ACTION_TYP_INSERT_HDR",
-	[DR_ACTION_TYP_ASO_FLOW_METER] = "DR_ACTION_TYP_ASO_FLOW_METER",
 	[DR_ACTION_TYP_REMOVE_HDR] = "DR_ACTION_TYP_REMOVE_HDR",
+	[DR_ACTION_TYP_ASO_FLOW_METER] = "DR_ACTION_TYP_ASO_FLOW_METER",
 	[DR_ACTION_TYP_MAX] = "DR_ACTION_UNKNOWN",
 };
 
@@ -245,10 +245,8 @@ next_action_state[DR_ACTION_DOMAIN_MAX][DR_ACTION_STATE_MAX][DR_ACTION_TYP_MAX] 
 		[DR_ACTION_STATE_ASO] = {
 			[DR_ACTION_TYP_L2_TO_TNL_L2]    = DR_ACTION_STATE_ENCAP,
 			[DR_ACTION_TYP_L2_TO_TNL_L3]    = DR_ACTION_STATE_ENCAP,
-			[DR_ACTION_TYP_VPORT]           = DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_MODIFY_HDR]      = DR_ACTION_STATE_MODIFY_HDR,
 			[DR_ACTION_TYP_PUSH_VLAN]       = DR_ACTION_STATE_PUSH_VLAN,
-			[DR_ACTION_TYP_POP_VLAN]        = DR_ACTION_STATE_POP_VLAN,
 			[DR_ACTION_TYP_CTR]             = DR_ACTION_STATE_ASO,
 			[DR_ACTION_TYP_DROP]            = DR_ACTION_STATE_TERM,
 			[DR_ACTION_TYP_FT]              = DR_ACTION_STATE_TERM,
@@ -745,7 +743,6 @@ int mlx5dr_actions_build_ste_arr(struct mlx5dr_matcher *matcher,
 			break;
 		case DR_ACTION_TYP_MODIFY_HDR:
 			attr.modify_actions = action->rewrite->num_of_actions;
-
 			if (action->rewrite->modify_ttl)
 				dr_action_modify_ttl_adjust(dmn, &attr, rx_rule,
 							    &recalc_cs_required);
@@ -1796,7 +1793,6 @@ static int dr_action_create_modify_action(struct mlx5dr_domain *dmn,
 	action->rewrite->modify_ttl = modify_ttl;
 	action->rewrite->data = (u8 *)hw_actions;
 	action->rewrite->num_of_actions = num_hw_actions;
-
 	if (num_hw_actions == 1 &&
 	    dmn->info.caps.sw_format_ver >= MLX5_STEERING_FORMAT_CONNECTX_6DX) {
 		action->rewrite->single_action_opt = true;
@@ -1894,36 +1890,6 @@ mlx5dr_action_create_dest_vport(struct mlx5dr_domain *dmn,
 	return action;
 }
 
-u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action)
-{
-	return action->reformat->id;
-}
-
-struct mlx5dr_action *
-mlx5dr_action_create_aso_flow_meter(struct mlx5dr_domain *dmn,
-				    u32 obj_id, u8 dest_reg_id,
-				    u8 init_color, u8 meter_idx)
-{
-	struct mlx5dr_action *action;
-
-	if (init_color > MLX5_FLOW_METER_COLOR_UNDEFINED)
-		return NULL;
-
-	action = dr_action_create_generic(DR_ACTION_TYP_ASO_FLOW_METER);
-	if (!action)
-		return NULL;
-
-	action->aso->obj_id = obj_id;
-	action->aso->offset = meter_idx;
-	action->aso->dest_reg_id = dest_reg_id;
-	action->aso->init_color = init_color;
-	action->aso->dmn = dmn;
-
-	refcount_inc(&dmn->refcount);
-
-	return action;
-}
-
 struct mlx5dr_action *
 mlx5dr_action_create_aso(struct mlx5dr_domain *dmn, u32 obj_id,
 			 u8 dest_reg_id, u8 aso_type,
@@ -1950,6 +1916,11 @@ mlx5dr_action_create_aso(struct mlx5dr_domain *dmn, u32 obj_id,
 	refcount_inc(&dmn->refcount);
 
 	return action;
+}
+
+u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action)
+{
+	return action->reformat->id;
 }
 
 int mlx5dr_action_destroy(struct mlx5dr_action *action)

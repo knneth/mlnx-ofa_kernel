@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/Makefile
+
+Change-Id: I6b51c74ec4f789fa10e2e6fc64c968a8b1f45bb4
+---
+ drivers/vfio/pci/mlx5/Makefile | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+--- a/drivers/vfio/pci/mlx5/Makefile
++++ b/drivers/vfio/pci/mlx5/Makefile
+@@ -1,10 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ 
+-# Commented out as should be compiled only in backports
+-# Allow compilation on base kernel as VFIO not supported on 6.0
+-# Backports will remove the comment .
+-# Backport shpould be removed in next version
+-
+-#obj-$(CONFIG_MLX5_VFIO_PCI) += mlx5-vfio-pci.o
+-#mlx5-vfio-pci-y := main.o cmd.o
++obj-$(CONFIG_MLX5_VFIO_PCI) += mlx5-vfio-pci.o
++mlx5-vfio-pci-y := main.o cmd.o
+ 

@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.h
+
+Change-Id: Ie7ce07ad72ffb594c08b0670ecdcfc8e03ceb905
+---
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.h | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.h
+@@ -188,9 +188,10 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
+ int mlx5_fw_tracer_init(struct mlx5_fw_tracer *tracer);
+ void mlx5_fw_tracer_cleanup(struct mlx5_fw_tracer *tracer);
+ void mlx5_fw_tracer_destroy(struct mlx5_fw_tracer *tracer);
++int mlx5_fw_tracer_reload(struct mlx5_fw_tracer *tracer);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ int mlx5_fw_tracer_trigger_core_dump_general(struct mlx5_core_dev *dev);
+ int mlx5_fw_tracer_get_saved_traces_objects(struct mlx5_fw_tracer *tracer,
+-					    struct devlink_fmsg *fmsg);
+-int mlx5_fw_tracer_reload(struct mlx5_fw_tracer *tracer);
+-
++			    		    struct devlink_fmsg *fmsg);
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ #endif

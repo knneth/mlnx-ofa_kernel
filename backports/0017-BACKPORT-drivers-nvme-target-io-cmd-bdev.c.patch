@@ -1,0 +1,464 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-bdev.c
+
+Change-Id: I8520008cd8438ea5d04a2831716037b2f19fcb6e
+---
+ drivers/nvme/target/io-cmd-bdev.c | 238 +++++++++++++++++++++++++++++-
+ 1 file changed, 236 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/target/io-cmd-bdev.c
++++ b/drivers/nvme/target/io-cmd-bdev.c
+@@ -8,8 +8,12 @@
+ #endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/blkdev.h>
++#ifdef HAVE_BLK_INTEGRITY_H
+ #include <linux/blk-integrity.h>
++#endif
++#ifdef HAVE_NET_MEMREMAP_H
+ #include <linux/memremap.h>
++#endif
+ #include <linux/module.h>
+ #include "nvmet.h"
+ 
+@@ -62,6 +66,8 @@ void nvmet_bdev_ns_disable(struct nvmet_
+ 
+ static void nvmet_bdev_ns_enable_integrity(struct nvmet_ns *ns)
+ {
++#if defined(CONFIG_BLK_DEV_INTEGRITY) && \
++	defined(HAVE_BLKDEV_BIO_INTEGRITY_BYTES)
+ 	struct blk_integrity *bi = bdev_get_integrity(ns->bdev);
+ 
+ 	if (bi) {
+@@ -74,6 +80,7 @@ static void nvmet_bdev_ns_enable_integri
+ 			/* Unsupported metadata type */
+ 			ns->metadata_size = 0;
+ 	}
++#endif
+ }
+ 
+ int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
+@@ -99,14 +106,20 @@ int nvmet_bdev_ns_enable(struct nvmet_ns
+ 		ns->bdev = NULL;
+ 		return ret;
+ 	}
++#ifdef HAVE_BDEV_NR_BYTES
+ 	ns->size = bdev_nr_bytes(ns->bdev);
++#else
++	ns->size = i_size_read(ns->bdev->bd_inode);
++#endif
+ 	ns->blksize_shift = blksize_bits(bdev_logical_block_size(ns->bdev));
+ 
+ 	ns->pi_type = 0;
+ 	ns->metadata_size = 0;
+-	if (IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY_T10))
++	if (IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY))
+ 		nvmet_bdev_ns_enable_integrity(ns);
+ 
++#ifdef CONFIG_BLK_DEV_ZONED
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 	if (bdev_is_zoned(ns->bdev)) {
+ 		if (!nvmet_bdev_zns_enable(ns)) {
+ 			nvmet_bdev_ns_disable(ns);
+@@ -114,15 +127,22 @@ int nvmet_bdev_ns_enable(struct nvmet_ns
+ 		}
+ 		ns->csi = NVME_CSI_ZNS;
+ 	}
++#endif
++#endif
+ 
+ 	return 0;
+ }
+ 
+ void nvmet_bdev_ns_revalidate(struct nvmet_ns *ns)
+ {
++#ifdef HAVE_BDEV_NR_BYTES
+ 	ns->size = bdev_nr_bytes(ns->bdev);
++#else
++	ns->size = i_size_read(ns->bdev->bd_inode);
++#endif
+ }
+ 
++#ifdef HAVE_BLK_STATUS_T
+ u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts)
+ {
+ 	u16 status = NVME_SC_SUCCESS;
+@@ -179,16 +199,28 @@ u16 blk_to_nvme_status(struct nvmet_req
+ 	}
+ 	return status;
+ }
++#endif
+ 
++#ifdef HAVE_BIO_ENDIO_1_PARAM
+ static void nvmet_bio_done(struct bio *bio)
++#else
++static void nvmet_bio_done(struct bio *bio, int error)
++#endif
+ {
+ 	struct nvmet_req *req = bio->bi_private;
+ 
++#ifdef HAVE_BLK_STATUS_T
+ 	nvmet_req_complete(req, blk_to_nvme_status(req, bio->bi_status));
++#elif defined(HAVE_STRUCT_BIO_BI_ERROR)
++	nvmet_req_complete(req, bio->bi_error ? NVME_SC_INTERNAL | NVME_SC_DNR : 0);
++#else
++	nvmet_req_complete(req, error ? NVME_SC_INTERNAL | NVME_SC_DNR : 0);
++#endif
+ 	nvmet_req_bio_put(req, bio);
+ }
+ 
+-#ifdef CONFIG_BLK_DEV_INTEGRITY
++#if defined(CONFIG_BLK_DEV_INTEGRITY) && \
++	defined(HAVE_BLKDEV_BIO_INTEGRITY_BYTES)
+ static int nvmet_bdev_alloc_bip(struct nvmet_req *req, struct bio *bio,
+ 				struct sg_mapping_iter *miter)
+ {
+@@ -203,8 +235,14 @@ static int nvmet_bdev_alloc_bip(struct n
+ 		return -ENODEV;
+ 	}
+ 
++#ifdef HAVE_BIO_MAX_SEGS
+ 	bip = bio_integrity_alloc(bio, GFP_NOIO,
+ 					bio_max_segs(req->metadata_sg_cnt));
++#else
++	bip = bio_integrity_alloc(bio, GFP_NOIO,
++			min_t(unsigned int, req->metadata_sg_cnt, BIO_MAX_PAGES));
++#endif
++
+ 	if (IS_ERR(bip)) {
+ 		pr_err("Unable to allocate bio_integrity_payload\n");
+ 		return PTR_ERR(bip);
+@@ -244,13 +282,24 @@ static int nvmet_bdev_alloc_bip(struct n
+ 
+ static void nvmet_bdev_execute_rw(struct nvmet_req *req)
+ {
++#ifdef HAVE_BIO_MAX_SEGS
+ 	unsigned int sg_cnt = req->sg_cnt;
++#else
++	int sg_cnt = req->sg_cnt;
++#endif
+ 	struct bio *bio;
+ 	struct scatterlist *sg;
+ 	struct blk_plug plug;
+ 	sector_t sector;
++#ifdef HAVE_BLK_OPF_T
+ 	blk_opf_t opf;
+ 	int i, rc;
++#else
++	int op, i, rc;
++#endif
++#ifndef HAVE_BLK_TYPE_OP_IS_SYNC
++	int op_flags = 0;
++#endif
+ 	struct sg_mapping_iter prot_miter;
+ 	unsigned int iter_flags;
+ 	unsigned int total_len = nvmet_rw_data_len(req) + req->metadata_len;
+@@ -264,31 +313,107 @@ static void nvmet_bdev_execute_rw(struct
+ 	}
+ 
+ 	if (req->cmd->rw.opcode == nvme_cmd_write) {
++#ifdef HAVE_BLK_OPF_T
+ 		opf = REQ_OP_WRITE | REQ_SYNC | REQ_IDLE;
++#elif defined (HAVE_BLK_TYPE_OP_IS_SYNC)
++#ifdef HAVE_REQ_IDLE
++		op = REQ_OP_WRITE | REQ_SYNC | REQ_IDLE;
++#else
++		op = REQ_OP_WRITE | WRITE_ODIRECT;
++#endif
++#else
++		op = REQ_OP_WRITE;
++		op_flags = REQ_SYNC;
++#endif /* HAVE_BLK_OPF_T */
+ 		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
++#ifdef HAVE_BLK_OPF_T
+ 			opf |= REQ_FUA;
++#elif defined (HAVE_BLK_TYPE_OP_IS_SYNC)
++			op |= REQ_FUA;
++#else
++			op_flags |= REQ_FUA;
++#endif
+ 		iter_flags = SG_MITER_TO_SG;
+ 	} else {
++#ifdef HAVE_BLK_OPF_T
+ 		opf = REQ_OP_READ;
++#else
++		op = REQ_OP_READ;
++#endif
+ 		iter_flags = SG_MITER_FROM_SG;
+ 	}
+ 
+ 	if (is_pci_p2pdma_page(sg_page(req->sg)))
++#ifdef HAVE_BLK_OPF_T
+ 		opf |= REQ_NOMERGE;
++#elif defined (HAVE_BLK_TYPE_OP_IS_SYNC)
++		op |= REQ_NOMERGE;
++#else
++		op_flags |= REQ_NOMERGE;
++#endif
+ 
+ 	sector = nvmet_lba_to_sect(req->ns, req->cmd->rw.slba);
+ 
+ 	if (nvmet_use_inline_bvec(req)) {
+ 		bio = &req->b.inline_bio;
++#ifdef HAVE_BIO_INIT_5_PARAMS
++#ifdef HAVE_BLK_OPF_T
+ 		bio_init(bio, req->ns->bdev, req->inline_bvec,
+ 			 ARRAY_SIZE(req->inline_bvec), opf);
++#else
++		bio_init(bio, req->ns->bdev, req->inline_bvec,
++			 ARRAY_SIZE(req->inline_bvec), op);
++#endif
++#else
++#ifdef HAVE_BIO_INIT_3_PARAMS
++		bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#else
++		bio_init(bio);
++		bio->bi_io_vec = req->inline_bvec;
++		bio->bi_max_vecs = ARRAY_SIZE(req->inline_bvec);
++#endif
++#endif
+ 	} else {
++#ifdef HAVE_BIO_INIT_5_PARAMS
++#ifdef HAVE_BLK_OPF_T
+ 		bio = bio_alloc(req->ns->bdev, bio_max_segs(sg_cnt), opf,
+ 				GFP_KERNEL);
++#else
++		bio = bio_alloc(req->ns->bdev, bio_max_segs(sg_cnt), op,
++				GFP_KERNEL);
++#endif
++#else
++#ifdef HAVE_BIO_MAX_SEGS
++		bio = bio_alloc(GFP_KERNEL, bio_max_segs(sg_cnt));
++#else
++		bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
++#endif
++#endif
+ 	}
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio_set_dev(bio, req->ns->bdev);
++#endif
++#else
++	bio->bi_bdev = req->ns->bdev;
++#endif /* HAVE_BIO_BI_DISK || HAVE_ENUM_BIO_REMAPPED */
++#ifdef HAVE_STRUCT_BIO_BI_ITER
+ 	bio->bi_iter.bi_sector = sector;
++#else
++	bio->bi_sector = sector;
++#endif
+ 	bio->bi_private = req;
+ 	bio->bi_end_io = nvmet_bio_done;
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio->bi_opf = op;
++#endif
++#else
++	bio_set_op_attrs(bio, op, op_flags);
++#endif /* HAVE_BLK_TYPE_OP_IS_SYNC */
++#ifdef HAVE_RH7_STRUCT_BIO_AUX
++	bio_init_aux(bio, &req->bio_aux);
++#endif
+ 
+ 	blk_start_plug(&plug);
+ 	if (req->metadata_len)
+@@ -309,12 +434,47 @@ static void nvmet_bdev_execute_rw(struct
+ 				}
+ 			}
+ 
++#ifdef HAVE_BIO_INIT_5_PARAMS
++#ifdef HAVE_BLK_OPF_T
+ 			bio = bio_alloc(req->ns->bdev, bio_max_segs(sg_cnt),
+ 					opf, GFP_KERNEL);
++#else
++			bio = bio_alloc(req->ns->bdev, bio_max_segs(sg_cnt),
++					op, GFP_KERNEL);
++#endif
++#else
++#ifdef HAVE_BIO_MAX_SEGS
++			bio = bio_alloc(GFP_KERNEL, bio_max_segs(sg_cnt));
++#else
++			bio = bio_alloc(GFP_KERNEL, min(sg_cnt, BIO_MAX_PAGES));
++#endif
++#endif
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
++#ifndef HAVE_BIO_INIT_5_PARAMS
++			bio_set_dev(bio, req->ns->bdev);
++#endif
++#else
++			bio->bi_bdev = req->ns->bdev;
++#endif
++#ifdef HAVE_STRUCT_BIO_BI_ITER
+ 			bio->bi_iter.bi_sector = sector;
++#else
++			bio->bi_sector = sector;
++#endif
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
++#ifndef HAVE_BIO_INIT_5_PARAMS
++			bio->bi_opf = op;
++#endif
++#else
++			bio_set_op_attrs(bio, op, op_flags);
++#endif
+ 
+ 			bio_chain(bio, prev);
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 			submit_bio(prev);
++#else
++			submit_bio(bio_data_dir(prev), prev);
++#endif
+ 		}
+ 
+ 		sector += sg->length >> 9;
+@@ -329,7 +489,11 @@ static void nvmet_bdev_execute_rw(struct
+ 		}
+ 	}
+ 
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 	submit_bio(bio);
++#else
++	submit_bio(bio_data_dir(bio), bio);
++#endif
+ 	blk_finish_plug(&plug);
+ }
+ 
+@@ -340,17 +504,53 @@ static void nvmet_bdev_execute_flush(str
+ 	if (!nvmet_check_transfer_len(req, 0))
+ 		return;
+ 
++#ifdef HAVE_BIO_INIT_5_PARAMS
+ 	bio_init(bio, req->ns->bdev, req->inline_bvec,
+ 		 ARRAY_SIZE(req->inline_bvec), REQ_OP_WRITE | REQ_PREFLUSH);
++#else
++#ifdef HAVE_BIO_INIT_3_PARAMS
++	bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#else
++	bio_init(bio);
++	bio->bi_io_vec = req->inline_bvec;
++	bio->bi_max_vecs = ARRAY_SIZE(req->inline_bvec);
++#endif
++#endif
++#if defined HAVE_BIO_BI_DISK || defined HAVE_ENUM_BIO_REMAPPED
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio_set_dev(bio, req->ns->bdev);
++#endif
++#else
++	bio->bi_bdev = req->ns->bdev;
++#endif
+ 	bio->bi_private = req;
+ 	bio->bi_end_io = nvmet_bio_done;
++#ifdef HAVE_BLK_TYPE_OP_IS_SYNC
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio->bi_opf = REQ_OP_WRITE | REQ_PREFLUSH;
++#endif
++#else
++	bio_set_op_attrs(bio, REQ_OP_WRITE, WRITE_FLUSH);
++#endif
+ 
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 	submit_bio(bio);
++#else
++	submit_bio(bio_data_dir(bio), bio);
++#endif
+ }
+ 
+ u16 nvmet_bdev_flush(struct nvmet_req *req)
+ {
++#ifdef HAVE_BLKDEV_ISSUE_FLUSH_1_PARAM
+ 	if (blkdev_issue_flush(req->ns->bdev))
++#else
++#ifdef HAVE_BLKDEV_ISSUE_FLUSH_2_PARAM
++	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL))
++#else
++	if (blkdev_issue_flush(req->ns->bdev, GFP_KERNEL, NULL))
++#endif
++#endif
+ 		return NVME_SC_INTERNAL | NVME_SC_DNR;
+ 	return 0;
+ }
+@@ -361,10 +561,24 @@ static u16 nvmet_bdev_discard_range(stru
+ 	struct nvmet_ns *ns = req->ns;
+ 	int ret;
+ 
++#ifdef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM
+ 	ret = __blkdev_issue_discard(ns->bdev,
+ 			nvmet_lba_to_sect(ns, range->slba),
+ 			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
+ 			GFP_KERNEL, bio);
++#else
++#ifdef HAVE___BLKDEV_ISSUE_DISCARD
++	ret = __blkdev_issue_discard(ns->bdev,
++			nvmet_lba_to_sect(ns, range->slba),
++			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
++			GFP_KERNEL, 0, bio);
++#else
++	ret = blkdev_issue_discard(ns->bdev,
++			nvmet_lba_to_sect(ns, range->slba),
++			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
++			GFP_KERNEL, 0);
++#endif
++#endif
+ 	if (ret && ret != -EOPNOTSUPP) {
+ 		req->error_slba = le64_to_cpu(range->slba);
+ 		return errno_to_nvme_status(req, ret);
+@@ -396,7 +610,11 @@ static void nvmet_bdev_execute_discard(s
+ 		if (status)
+ 			bio_io_error(bio);
+ 		else
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 			submit_bio(bio);
++#else
++			submit_bio(bio_data_dir(bio), bio);
++#endif
+ 	} else {
+ 		nvmet_req_complete(req, status);
+ 	}
+@@ -420,6 +638,7 @@ static void nvmet_bdev_execute_dsm(struc
+ 	}
+ }
+ 
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ static void nvmet_bdev_execute_write_zeroes(struct nvmet_req *req)
+ {
+ 	struct nvme_write_zeroes_cmd *write_zeroes = &req->cmd->write_zeroes;
+@@ -435,16 +654,29 @@ static void nvmet_bdev_execute_write_zer
+ 	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length) + 1) <<
+ 		(req->ns->blksize_shift - 9));
+ 
++#ifdef CONFIG_COMPAT_IS_BLKDEV_ISSUE_ZEROOUT_HAS_FLAGS
+ 	ret = __blkdev_issue_zeroout(req->ns->bdev, sector, nr_sector,
+ 			GFP_KERNEL, &bio, 0);
++#else
++	if (__blkdev_issue_zeroout(req->ns->bdev, sector, nr_sector,
++			GFP_KERNEL, &bio, true))
++		ret = -EIO;
++	else
++		ret = 0;
++#endif
+ 	if (bio) {
+ 		bio->bi_private = req;
+ 		bio->bi_end_io = nvmet_bio_done;
++#ifdef HAVE_SUBMIT_BIO_1_PARAM
+ 		submit_bio(bio);
++#else
++		submit_bio(bio_data_dir(bio), bio);
++#endif
+ 	} else {
+ 		nvmet_req_complete(req, errno_to_nvme_status(req, ret));
+ 	}
+ }
++#endif
+ 
+ u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req)
+ {
+@@ -461,9 +693,11 @@ u16 nvmet_bdev_parse_io_cmd(struct nvmet
+ 	case nvme_cmd_dsm:
+ 		req->execute = nvmet_bdev_execute_dsm;
+ 		return 0;
++#ifdef HAVE_BLKDEV_ISSUE_ZEROOUT
+ 	case nvme_cmd_write_zeroes:
+ 		req->execute = nvmet_bdev_execute_write_zeroes;
+ 		return 0;
++#endif
+ 	default:
+ 		return nvmet_report_invalid_opcode(req);
+ 	}

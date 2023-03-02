@@ -1,155 +1,57 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 
-Change-Id: I976687d21f7fe9e5c58b327dc844cd313c542c03
+Change-Id: I95871be16a161634d4289377314d9112b519c7dc
 ---
- .../mellanox/mlx5/core/en/reporter_tx.c       | 57 ++++++++++++++++---
- 1 file changed, 50 insertions(+), 7 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.h  | 22 ++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
-@@ -127,6 +127,7 @@ static int mlx5e_tx_reporter_timeout_rec
- 	return err;
- }
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+@@ -40,6 +40,9 @@ struct mlx5e_ptp {
  
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- /* state lock cannot be grabbed within this function.
-  * It can cause a dead lock or a read-after-free.
-  */
-@@ -136,8 +137,11 @@ static int mlx5e_tx_reporter_recover_fro
- }
- 
- static int mlx5e_tx_reporter_recover(struct devlink_health_reporter *reporter,
--				     void *context,
--				     struct netlink_ext_ack *extack)
-+		                     void *context
-+#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
-+                                    , struct netlink_ext_ack *extack
-+#endif
-+                                    )
- {
- 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
- 	struct mlx5e_err_ctx *err_ctx = context;
-@@ -352,8 +356,11 @@ out:
- }
- 
- static int mlx5e_tx_reporter_diagnose(struct devlink_health_reporter *reporter,
--				      struct devlink_fmsg *fmsg,
--				      struct netlink_ext_ack *extack)
-+				      struct devlink_fmsg *fmsg
-+#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
-+                                      , struct netlink_ext_ack *extack
-+#endif
-+                                     )
- {
- 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
- 	struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
-@@ -536,8 +543,11 @@ static int mlx5e_tx_reporter_dump_from_c
- }
- 
- static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,
--				  struct devlink_fmsg *fmsg, void *context,
--				  struct netlink_ext_ack *extack)
-+				  struct devlink_fmsg *fmsg, void *context
-+#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
-+                                  , struct netlink_ext_ack *extack
-+#endif
-+                                 )
- {
- 	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
- 	struct mlx5e_err_ctx *err_ctx = context;
-@@ -545,6 +555,7 @@ static int mlx5e_tx_reporter_dump(struct
- 	return err_ctx ? mlx5e_tx_reporter_dump_from_ctx(priv, err_ctx, fmsg) :
- 			 mlx5e_tx_reporter_dump_all_sqs(priv, fmsg);
- }
-+#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
- 
- void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq)
- {
-@@ -554,7 +565,9 @@ void mlx5e_reporter_tx_err_cqe(struct ml
- 
- 	err_ctx.ctx = sq;
- 	err_ctx.recover = mlx5e_tx_reporter_err_cqe_recover;
--	err_ctx.dump = mlx5e_tx_reporter_dump_sq;
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+       err_ctx.dump = mlx5e_tx_reporter_dump_sq;
-+#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
- 	snprintf(err_str, sizeof(err_str), "ERR CQE on SQ: 0x%x", sq->sqn);
- 
- 	mlx5e_health_report(priv, priv->tx_reporter, err_str, &err_ctx);
-@@ -570,7 +583,9 @@ int mlx5e_reporter_tx_timeout(struct mlx
- 	to_ctx.sq = sq;
- 	err_ctx.ctx = &to_ctx;
- 	err_ctx.recover = mlx5e_tx_reporter_timeout_recover;
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- 	err_ctx.dump = mlx5e_tx_reporter_timeout_dump;
-+#endif
- 	snprintf(err_str, sizeof(err_str),
- 		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
- 		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,
-@@ -580,22 +595,43 @@ int mlx5e_reporter_tx_timeout(struct mlx
- 	return to_ctx.status;
- }
- 
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- static const struct devlink_health_reporter_ops mlx5_tx_reporter_ops = {
- 		.name = "tx",
- 		.recover = mlx5e_tx_reporter_recover,
- 		.diagnose = mlx5e_tx_reporter_diagnose,
- 		.dump = mlx5e_tx_reporter_dump,
- };
+ 	/* data path - accessed per napi poll */
+ 	struct mlx5e_ch_stats     *stats;
++#ifndef HAVE_NAPI_STATE_MISSED
++	unsigned long              flags;
 +#endif
  
- #define MLX5_REPORTER_TX_GRACEFUL_PERIOD 500
+ 	/* control */
+ 	struct mlx5e_priv         *priv;
+@@ -50,14 +53,26 @@ struct mlx5e_ptp {
  
- void mlx5e_reporter_tx_create(struct mlx5e_priv *priv)
+ static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
  {
-+#ifndef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+	priv->tx_reporter = NULL;
++#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
+ 	struct flow_keys fk;
++#endif
+ 
+ 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+ 		return false;
+ 
+-	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
+-		return false;
++#ifdef HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS
++        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
++#elif defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
++        if (!skb_flow_dissect_flow_keys(skb, &fk))
++#endif
++#ifdef HAVE_PTP_CLASSIFY_RAW
++                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
++                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
 +#else
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
- 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
++                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588));
 +#endif
- 	struct devlink_health_reporter *reporter;
  
-+#ifndef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
-+	struct mlx5_core_dev *mdev = priv->mdev;
-+	struct devlink *devlink;
++#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
+ 	if (fk.basic.n_proto == htons(ETH_P_1588))
+ 		return true;
+ 
+@@ -67,6 +82,7 @@ static inline bool mlx5e_use_ptpsq(struc
+ 
+ 	return (fk.basic.ip_proto == IPPROTO_UDP &&
+ 		fk.ports.dst == htons(PTP_EV_PORT));
 +#endif
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
- 	reporter = devlink_port_health_reporter_create(dl_port, &mlx5_tx_reporter_ops,
- 						       MLX5_REPORTER_TX_GRACEFUL_PERIOD, priv);
-+#else
-+	devlink = priv_to_devlink(mdev);
-+	reporter =
-+		 devlink_health_reporter_create(devlink, &mlx5_tx_reporter_ops,
-+#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
-+				MLX5_REPORTER_TX_GRACEFUL_PERIOD,
-+#endif
-+				true, priv);
-+#endif
- 	if (IS_ERR(reporter)) {
- 		netdev_warn(priv->netdev,
- 			    "Failed to create tx reporter, err = %ld\n",
-@@ -603,6 +639,7 @@ void mlx5e_reporter_tx_create(struct mlx
- 		return;
- 	}
- 	priv->tx_reporter = reporter;
-+#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  }
  
- void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
-@@ -610,6 +647,12 @@ void mlx5e_reporter_tx_destroy(struct ml
- 	if (!priv->tx_reporter)
- 		return;
- 
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
- 	devlink_port_health_reporter_destroy(priv->tx_reporter);
-+#else
-+	devlink_health_reporter_destroy(priv->tx_reporter);
-+#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE  */
-+#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
- 	priv->tx_reporter = NULL;
- }
+ static inline bool mlx5e_ptpsq_fifo_has_room(struct mlx5e_txqsq *sq)

@@ -40,6 +40,19 @@
 
 #define MLX5_SET_CFG(p, f, v) MLX5_SET(create_flow_group_in, p, f, v)
 
+enum mlx5_flow_destination_type {
+	MLX5_FLOW_DESTINATION_TYPE_NONE,
+	MLX5_FLOW_DESTINATION_TYPE_VPORT,
+	MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE,
+	MLX5_FLOW_DESTINATION_TYPE_TIR,
+	MLX5_FLOW_DESTINATION_TYPE_FLOW_SAMPLER,
+	MLX5_FLOW_DESTINATION_TYPE_UPLINK,
+	MLX5_FLOW_DESTINATION_TYPE_PORT,
+	MLX5_FLOW_DESTINATION_TYPE_COUNTER,
+	MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM,
+	MLX5_FLOW_DESTINATION_TYPE_TABLE_TYPE,
+};
+
 enum {
 	MLX5_FLOW_CONTEXT_ACTION_FWD_NEXT_PRIO	= 1 << 16,
 	MLX5_FLOW_CONTEXT_ACTION_ENCRYPT	= 1 << 17,
@@ -239,18 +252,15 @@ struct mlx5_flow_act {
 	u32 action;
 	struct mlx5_modify_hdr  *modify_hdr;
 	struct mlx5_pkt_reformat *pkt_reformat;
-	union {
-		struct mlx5_flow_act_crypto_params {
-			u8 type;
-			u32 obj_id;
-		} crypto;
-		uintptr_t esp_id;
-	};
+	struct mlx5_flow_act_crypto_params {
+		u8 type;
+		u32 obj_id;
+	} crypto;
 	u32 flags;
 	struct mlx5_fs_vlan vlan[MLX5_FS_VLAN_DEPTH];
 	struct ib_counters *counters;
-	struct mlx5_exe_aso exe_aso;
 	struct mlx5_flow_group *fg;
+	struct mlx5_exe_aso exe_aso;
 };
 
 #define MLX5_DECLARE_FLOW_ACT(name) \

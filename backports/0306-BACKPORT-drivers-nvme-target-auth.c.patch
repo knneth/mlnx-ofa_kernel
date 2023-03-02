@@ -1,0 +1,27 @@
+From: Karam Ghanayem <kghanayem@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/auth.c
+
+Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
+Change-Id: I96bf38ad9504270d07c6ab8de5023aea84f446ef
+---
+ drivers/nvme/target/auth.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/nvme/target/auth.c
++++ b/drivers/nvme/target/auth.c
+@@ -4,6 +4,9 @@
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Software Solutions.
+  * All rights reserved.
+  */
++
++#ifdef HAVE_NVME_AUTH_H
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -529,3 +532,5 @@ int nvmet_auth_ctrl_sesskey(struct nvmet
+ 
+ 	return ret;
+ }
++
++#endif

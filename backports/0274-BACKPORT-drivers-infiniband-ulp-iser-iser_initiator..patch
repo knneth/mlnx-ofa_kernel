@@ -1,0 +1,74 @@
+From: Sergey Gorenko <sergeygo@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_initiator.c
+
+Change-Id: I8eecc33274da395cb330e42d372e96cbf30faa3c
+---
+ drivers/infiniband/ulp/iser/iser_initiator.c | 37 ++++++++++++++++----
+ 1 file changed, 31 insertions(+), 6 deletions(-)
+
+--- a/drivers/infiniband/ulp/iser/iser_initiator.c
++++ b/drivers/infiniband/ulp/iser/iser_initiator.c
+@@ -37,7 +37,6 @@
+ #include <linux/kfifo.h>
+ #include <scsi/scsi_cmnd.h>
+ #include <scsi/scsi_host.h>
+-
+ #include "iscsi_iser.h"
+ 
+ /* Register user buffer memory and initialize passive rdma
+@@ -626,7 +625,6 @@ static int iser_check_remote_inv(struct
+ 	return 0;
+ }
+ 
+-
+ void iser_task_rsp(struct ib_cq *cq, struct ib_wc *wc)
+ {
+ 	struct ib_conn *ib_conn = wc->qp->qp_context;
+@@ -728,16 +726,43 @@ void iser_task_rdma_init(struct iscsi_is
+ 
+ void iser_task_rdma_finalize(struct iscsi_iser_task *iser_task)
+ {
++#ifndef HAVE_VIRT_BOUNDARY
++	bool is_rdma_data_aligned;
++#endif
+ 
+ 	if (iser_task->dir[ISER_DIR_IN]) {
++#ifndef HAVE_VIRT_BOUNDARY
++		is_rdma_data_aligned = true;
++		if (iser_task->data[ISER_DIR_IN].orig_sg) {
++			iser_finalize_rdma_unaligned_sg(iser_task,
++							&iser_task->data[ISER_DIR_IN],
++							ISER_DIR_IN);
++			is_rdma_data_aligned = false;
++		}
++#endif
+ 		iser_unreg_mem_fastreg(iser_task, ISER_DIR_IN);
+-		iser_dma_unmap_task_data(iser_task, ISER_DIR_IN,
+-					 DMA_FROM_DEVICE);
++#ifndef HAVE_VIRT_BOUNDARY
++		if (is_rdma_data_aligned)
++#endif
++			iser_dma_unmap_task_data(iser_task, ISER_DIR_IN,
++						 DMA_FROM_DEVICE);
+ 	}
+ 
+ 	if (iser_task->dir[ISER_DIR_OUT]) {
++#ifndef HAVE_VIRT_BOUNDARY
++		is_rdma_data_aligned = true;
++		if (iser_task->data[ISER_DIR_OUT].orig_sg) {
++			iser_finalize_rdma_unaligned_sg(iser_task,
++							&iser_task->data[ISER_DIR_OUT],
++							ISER_DIR_OUT);
++			is_rdma_data_aligned = false;
++		}
++#endif
+ 		iser_unreg_mem_fastreg(iser_task, ISER_DIR_OUT);
+-		iser_dma_unmap_task_data(iser_task, ISER_DIR_OUT,
+-					 DMA_TO_DEVICE);
++#ifndef HAVE_VIRT_BOUNDARY
++		if (is_rdma_data_aligned)
++#endif
++			iser_dma_unmap_task_data(iser_task, ISER_DIR_OUT,
++						 DMA_TO_DEVICE);
+ 	}
+ }

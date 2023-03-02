@@ -335,7 +335,7 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR = 0x10,
 	MLX5_EVENT_TYPE_WQ_ACCESS_ERROR	   = 0x11,
 	MLX5_EVENT_TYPE_SRQ_CATAS_ERROR	   = 0x12,
-	MLX5_EVENT_TYPE_OBJECT_CHANGE_EVENT	= 0x27,
+	MLX5_EVENT_TYPE_OBJECT_CHANGE	   = 0x27,
 
 	MLX5_EVENT_TYPE_INTERNAL_ERROR	   = 0x08,
 	MLX5_EVENT_TYPE_PORT_CHANGE	   = 0x09,
@@ -373,6 +373,7 @@ enum mlx5_event {
 
 enum mlx5_driver_event {
 	MLX5_DRIVER_EVENT_TYPE_TRAP = 0,
+	MLX5_DRIVER_EVENT_UPLINK_NETDEV,
 };
 
 enum {
@@ -395,21 +396,6 @@ enum {
 	MLX5_PORT_CHANGE_SUBTYPE_PKEY		= 7,
 	MLX5_PORT_CHANGE_SUBTYPE_GUID		= 8,
 	MLX5_PORT_CHANGE_SUBTYPE_CLIENT_REREG	= 9,
-};
-
-enum {
-	MLX5_DEV_CAP_FLAG_XRC		= 1LL <<  3,
-	MLX5_DEV_CAP_FLAG_BAD_PKEY_CNTR	= 1LL <<  8,
-	MLX5_DEV_CAP_FLAG_BAD_QKEY_CNTR	= 1LL <<  9,
-	MLX5_DEV_CAP_FLAG_APM		= 1LL << 17,
-	MLX5_DEV_CAP_FLAG_ATOMIC	= 1LL << 18,
-	MLX5_DEV_CAP_FLAG_BLOCK_MCAST	= 1LL << 23,
-	MLX5_DEV_CAP_FLAG_ON_DMND_PG	= 1LL << 24,
-	MLX5_DEV_CAP_FLAG_CQ_MODER	= 1LL << 29,
-	MLX5_DEV_CAP_FLAG_RESIZE_CQ	= 1LL << 30,
-	MLX5_DEV_CAP_FLAG_DCT		= 1LL << 37,
-	MLX5_DEV_CAP_FLAG_SIG_HAND_OVER	= 1LL << 40,
-	MLX5_DEV_CAP_FLAG_CMDIF_CSUM	= 3LL << 46,
 };
 
 enum {
@@ -506,10 +492,6 @@ enum {
 
 enum {
 	MLX5_MAX_PAGE_SHIFT		= 31
-};
-
-enum {
-	MLX5_CAP_OFF_CMDIF_CSUM		= 46,
 };
 
 enum {
@@ -737,9 +719,9 @@ struct mlx5_eqe_temp_warning {
 } __packed;
 
 struct mlx5_eqe_obj_change {
-	u8	rsvd0[2];
-	__be16	obj_type;
-	__be32	obj_id;
+	u8      rsvd0[2];
+	__be16  obj_type;
+	__be32  obj_id;
 } __packed;
 
 #define SYNC_RST_STATE_MASK    0xf
@@ -867,7 +849,10 @@ struct mlx5_cqe64 {
 	__be32		timestamp_l;
 	__be32		sop_drop_qpn;
 	__be16		wqe_counter;
-	u8		signature;
+	union {
+		u8	signature;
+		u8	validity_iteration_count;
+	};
 	u8		op_own;
 };
 
@@ -899,6 +884,11 @@ enum {
 	MLX5_CQE_FORMAT_CSUM_STRIDX = 0x3,
 };
 
+enum {
+	MLX5_CQE_COMPRESS_LAYOUT_BASIC = 0,
+	MLX5_CQE_COMPRESS_LAYOUT_ENHANCED = 1,
+};
+
 #define MLX5_MINI_CQE_ARRAY_SIZE 8
 
 static inline u8 mlx5_get_cqe_format(struct mlx5_cqe64 *cqe)
@@ -909,6 +899,12 @@ static inline u8 mlx5_get_cqe_format(struct mlx5_cqe64 *cqe)
 static inline u8 get_cqe_opcode(struct mlx5_cqe64 *cqe)
 {
 	return cqe->op_own >> 4;
+}
+
+static inline u8 get_cqe_enhanced_num_mini_cqes(struct mlx5_cqe64 *cqe)
+{
+	/* num_of_mini_cqes is zero based */
+	return get_cqe_opcode(cqe) + 1;
 }
 
 static inline u8 get_cqe_lro_tcppsh(struct mlx5_cqe64 *cqe)
@@ -1239,6 +1235,7 @@ enum mlx5_cap_type {
 	MLX5_CAP_MACSEC = 0x1f,
 	MLX5_CAP_GENERAL_2 = 0x20,
 	MLX5_CAP_PORT_SELECTION = 0x25,
+	MLX5_CAP_ADV_VIRTUALIZATION = 0x26,
 	/* NUM OF CAP Types */
 	MLX5_CAP_NUM
 };
@@ -1362,10 +1359,6 @@ enum mlx5_qcam_feature_groups {
 	MLX5_GET(flow_table_eswitch_cap, \
 		 mdev->caps.hca[MLX5_CAP_ESWITCH_FLOW_TABLE]->cur, cap)
 
-#define MLX5_CAP_ESW_FLOWTABLE_64(mdev, cap) \
-       MLX5_GET64(flow_table_eswitch_cap, \
-                  mdev->caps.hca[MLX5_CAP_ESWITCH_FLOW_TABLE]->cur, cap)
-
 #define MLX5_CAP_ESW_FLOWTABLE_MAX(mdev, cap) \
 	MLX5_GET(flow_table_eswitch_cap, \
 		 mdev->caps.hca[MLX5_CAP_ESWITCH_FLOW_TABLE]->max, cap)
@@ -1407,6 +1400,14 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_PORT_SELECTION_MAX(mdev, cap) \
 	MLX5_GET(port_selection_cap, \
 		 mdev->caps.hca[MLX5_CAP_PORT_SELECTION]->max, cap)
+
+#define MLX5_CAP_ADV_VIRTUALIZATION(mdev, cap) \
+	MLX5_GET(adv_virtualization_cap, \
+		 mdev->caps.hca[MLX5_CAP_ADV_VIRTUALIZATION]->cur, cap)
+
+#define MLX5_CAP_ADV_VIRTUALIZATION_MAX(mdev, cap) \
+	MLX5_GET(adv_virtualization_cap, \
+		 mdev->caps.hca[MLX5_CAP_ADV_VIRTUALIZATION]->max, cap)
 
 #define MLX5_CAP_FLOWTABLE_PORT_SELECTION(mdev, cap) \
 	MLX5_CAP_PORT_SELECTION(mdev, flow_table_properties_port_selection.cap)
@@ -1450,9 +1451,6 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_MCAM_REG2(mdev, reg) \
 	MLX5_GET(mcam_reg, (mdev)->caps.mcam[MLX5_MCAM_REGS_0x9100_0x917F], \
 		 mng_access_reg_cap_mask.access_regs2.reg)
-
-#define MLX5_CAP_PCAM_REG(mdev, reg) \
-	MLX5_GET(pcam_reg, (mdev)->caps.pcam, port_access_reg_cap_mask.regs_5000_to_507f.reg)
 
 #define MLX5_CAP_MCAM_FEATURE(mdev, fld) \
 	MLX5_GET(mcam_reg, (mdev)->caps.mcam, mng_feature_cap_mask.enhanced_features.fld)

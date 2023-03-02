@@ -1,49 +1,42 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
-Change-Id: I83f767cb28e10ecd80f5d90506dced476ac0c5bd
+Change-Id: If490112f0f810e70eeef1ed983e34e709c914b9d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h | 9 +++++++--
- 1 file changed, 7 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.h   | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
-@@ -8,10 +8,12 @@
- #include <linux/mlx5/fs.h>
- #include <net/pkt_cls.h>
- #include <linux/netlink.h>
--#include "en.h"
--#include "en_rep.h"
-+#include "../en.h"
-+#include "../en_rep.h"
-+#include "../eswitch.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+@@ -33,12 +33,31 @@ int mlx5e_rep_encap_entry_attach(struct
+ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
+ 				  struct mlx5e_encap_entry *e);
  
- #ifdef CONFIG_MLX5_ESWITCH
-+#ifdef HAVE_TCF_TUNNEL_INFO
++#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		       void *type_data);
++#else
++int mlx5e_rep_setup_tc(struct net_device *dev, u32 handle,
++#ifdef HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX
++		       u32 chain_index, __be16 proto,
++#else
++		       __be16 proto,
++#endif
++		       struct tc_to_netdev *tc);
++#endif
++#endif
  
- enum {
- 	MLX5E_TC_TUNNEL_TYPE_UNKNOWN,
-@@ -36,6 +38,7 @@ struct mlx5e_tc_tunnel {
- 			       struct mlx5e_priv *priv,
- 			       struct mlx5e_encap_entry *e,
- 			       struct netlink_ext_ack *extack);
+ void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
+ 			  struct sk_buff *skb);
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
 +
- 	int (*generate_ip_tun_hdr)(char buf[],
- 				   __u8 *ip_proto,
- 				   struct mlx5e_encap_entry *e);
-@@ -44,6 +47,7 @@ struct mlx5e_tc_tunnel {
- 			       struct flow_cls_offload *f,
- 			       void *headers_c,
- 			       void *headers_v);
++int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
++				void *cb_priv);
++#endif
 +
- 	int (*parse_tunnel)(struct mlx5e_priv *priv,
- 			    struct mlx5_flow_spec *spec,
- 			    struct flow_cls_offload *f,
-@@ -115,6 +119,7 @@ int mlx5e_tc_tun_parse_udp_ports(struct
- bool mlx5e_tc_tun_encap_info_equal_generic(struct mlx5e_encap_key *a,
- 					   struct mlx5e_encap_key *b);
+ #else /* CONFIG_MLX5_CLS_ACT */
  
-+#endif /* HAVE_TCF_TUNNEL_INFO */
- #endif /* CONFIG_MLX5_ESWITCH */
- 
- #endif //__MLX5_EN_TC_TUNNEL_H__
+ struct mlx5e_rep_priv;

@@ -338,7 +338,7 @@ static void ib_unmap_peer_client(struct ib_umem_peer *umem_p,
 					    umem_p->peer_client_context);
 		}
 
-		memset(&umem->sgt_append.sgt, 0, sizeof(umem->sgt_append.sgt));
+		memset(&umem->sgt_append, 0, sizeof(umem->sgt_append));
 		atomic64_inc(&ib_peer_client->stats.num_dealloc_mrs);
 	}
 
@@ -518,7 +518,7 @@ static void fix_peer_sgls(struct ib_umem_peer *umem_p,
 	struct scatterlist *sg;
 	int i;
 
-	for_each_sgtable_dma_sg(&umem->sgt_append.sgt, sg, i) {
+	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i) {
 		if (i == 0) {
 			unsigned long offset;
 
@@ -534,7 +534,7 @@ static void fix_peer_sgls(struct ib_umem_peer *umem_p,
 			sg->length -= offset;
 		}
 
-		if (i == umem_p->umem.sgt_append.sgt.nents - 1) {
+		if (i == umem->sgt_append.sgt.nents - 1) {
 			unsigned long trim;
 
 			umem_p->last_sg = sg;
@@ -573,7 +573,7 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
 
 	kref_init(&umem_p->kref);
 	umem_p->umem = *old_umem;
-	memset(&umem_p->umem.sgt_append.sgt, 0, sizeof(umem_p->umem.sgt_append.sgt));
+	memset(&umem_p->umem.sgt_append, 0, sizeof(umem_p->umem.sgt_append));
 	umem_p->umem.is_peer = 1;
 	umem_p->ib_peer_client = ib_peer_client;
 	umem_p->peer_client_context = peer_client_context;

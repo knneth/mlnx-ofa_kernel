@@ -1,0 +1,65 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main_ext.c
+
+Change-Id: Ia2f6ec19da6664bd819228d1138704a6438ebb90
+---
+ drivers/infiniband/hw/mlx5/main_ext.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/hw/mlx5/main_ext.c
++++ b/drivers/infiniband/hw/mlx5/main_ext.c
+@@ -97,11 +97,17 @@ static const struct sysfs_ops ttl_sysfs_
+ 	.store = ttl_attr_store
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(ttl);
++#endif
+ 
+ static struct kobj_type ttl_type = {
+ 	.sysfs_ops     = &ttl_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = ttl_groups
++#else
++       .default_attrs = ttl_attrs
++#endif
+ };
+ 
+ int init_ttl_sysfs(struct mlx5_ib_dev *dev)
+@@ -710,11 +716,17 @@ static const struct sysfs_ops tc_sysfs_o
+ 	.store = tc_attr_store
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(tc);
++#endif
+ 
+ static struct kobj_type tc_type = {
+ 	.sysfs_ops     = &tc_sysfs_ops,
+-	.default_groups = tc_groups
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++       .default_groups = tc_groups
++#else
++       .default_attrs = tc_attrs
++#endif
+ };
+ 
+ int init_tc_sysfs(struct mlx5_ib_dev *dev)
+@@ -1412,11 +1424,17 @@ static const struct sysfs_ops dc_sysfs_o
+ 	.store = dc_attr_store
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(dc);
++#endif
+ 
+ static struct kobj_type dc_type = {
+         .sysfs_ops     = &dc_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = dc_groups
++#else
++	.default_attrs = dc_attrs
++#endif
+ };
+ 
+ static int init_sysfs(struct mlx5_ib_dev *dev)

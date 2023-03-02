@@ -2,7 +2,6 @@
 /*
  * Copyright (c) 2015 HGST, a Western Digital Company.
  */
-#include <linux/module.h>
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <rdma/ib_verbs.h>
@@ -204,7 +203,6 @@ static void ib_cq_completion_workqueue(struct ib_cq *cq, void *private)
  * @comp_vector:	HCA completion vectors for this CQ
  * @poll_ctx:		context to poll the CQ from.
  * @caller:		module owner name.
- * @skip_tracking:	avoid resource tracking
  *
  * This is the proper interface to allocate a CQ for in-kernel users. A
  * CQ allocated with this interface will automatically be polled from the
@@ -213,7 +211,7 @@ static void ib_cq_completion_workqueue(struct ib_cq *cq, void *private)
  */
 struct ib_cq *__ib_alloc_cq(struct ib_device *dev, void *private, int nr_cqe,
 			    int comp_vector, enum ib_poll_context poll_ctx,
-			    const char *caller, bool skip_tracking)
+			    const char *caller)
 {
 	struct ib_cq_init_attr cq_attr = {
 		.cqe		= nr_cqe,
@@ -268,10 +266,7 @@ struct ib_cq *__ib_alloc_cq(struct ib_device *dev, void *private, int nr_cqe,
 		goto out_destroy_cq;
 	}
 
-	if (skip_tracking)
-		rdma_restrack_dontrack(&cq->res);
-	else
-		rdma_restrack_add(&cq->res);
+	rdma_restrack_add(&cq->res);
 	trace_cq_alloc(cq, nr_cqe, comp_vector, poll_ctx);
 	return cq;
 
@@ -312,7 +307,7 @@ struct ib_cq *__ib_alloc_cq_any(struct ib_device *dev, void *private,
 			min_t(int, dev->num_comp_vectors, num_online_cpus());
 
 	return __ib_alloc_cq(dev, private, nr_cqe, comp_vector, poll_ctx,
-			     caller, false);
+			     caller);
 }
 EXPORT_SYMBOL(__ib_alloc_cq_any);
 

@@ -1,0 +1,214 @@
+From: Alaa Hleihel <alaa@mellanox.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
+
+Change-Id: If8b0c6a0985942e15579e581ffa4691bcac9b46f
+---
+ drivers/nvme/target/loop.c | 89 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 89 insertions(+)
+
+--- a/drivers/nvme/target/loop.c
++++ b/drivers/nvme/target/loop.c
+@@ -78,7 +78,11 @@ static void nvme_loop_complete_rq(struct
+ {
+ 	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
+ 
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 	sg_free_table_chained(&iod->sg_table, NVME_INLINE_SG_CNT);
++#else
++	sg_free_table_chained(&iod->sg_table, true);
++#endif
+ 	nvme_complete_rq(req);
+ }
+ 
+@@ -157,16 +161,29 @@ static blk_status_t nvme_loop_queue_rq(s
+ 
+ 	if (blk_rq_nr_phys_segments(req)) {
+ 		iod->sg_table.sgl = iod->first_sgl;
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 		if (sg_alloc_table_chained(&iod->sg_table,
+ 				blk_rq_nr_phys_segments(req),
+ 				iod->sg_table.sgl, NVME_INLINE_SG_CNT)) {
++#else
++		if (sg_alloc_table_chained(&iod->sg_table,
++				blk_rq_nr_phys_segments(req),
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_4_PARAMS
++				GFP_ATOMIC,
++#endif
++				iod->sg_table.sgl)) {
++#endif
+ 			nvme_cleanup_cmd(req);
+ 			return BLK_STS_RESOURCE;
+ 		}
+ 
+ 		iod->req.sg = iod->sg_table.sgl;
+ 		iod->req.sg_cnt = blk_rq_map_sg(req->q, req, iod->sg_table.sgl);
++#ifdef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
+ 		iod->req.transfer_len = blk_rq_payload_bytes(req);
++#else
++		iod->req.transfer_len = nvme_map_len(req);
++#endif
+ 	}
+ 
+ 	queue_work(nvmet_wq, &iod->work);
+@@ -203,6 +220,7 @@ static int nvme_loop_init_iod(struct nvm
+ 	return 0;
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ static int nvme_loop_init_request(struct blk_mq_tag_set *set,
+ 		struct request *req, unsigned int hctx_idx,
+ 		unsigned int numa_node)
+@@ -215,8 +233,35 @@ static int nvme_loop_init_request(struct
+ 	return nvme_loop_init_iod(ctrl, blk_mq_rq_to_pdu(req),
+ 			(set == &ctrl->tag_set) ? hctx_idx + 1 : 0);
+ }
++#else
++static int nvme_loop_init_request(void *data, struct request *req,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	struct nvme_loop_ctrl *ctrl = data;
++	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
++
++	nvme_req(req)->ctrl = &ctrl->ctrl;
++	nvme_req(req)->cmd = &iod->cmd;
++	return nvme_loop_init_iod(data, blk_mq_rq_to_pdu(req), hctx_idx + 1);
++}
+ 
++static int nvme_loop_init_admin_request(void *data, struct request *req,
++		unsigned int hctx_idx, unsigned int rq_idx,
++		unsigned int numa_node)
++{
++	struct nvme_loop_ctrl *ctrl = data;
++	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
++
++	nvme_req(req)->ctrl = &ctrl->ctrl;
++	nvme_req(req)->cmd = &iod->cmd;
++	return nvme_loop_init_iod(data, blk_mq_rq_to_pdu(req), 0);
++}
++#endif
++
++#ifdef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
+ static struct lock_class_key loop_hctx_fq_lock_key;
++#endif
+ 
+ static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
+ 		unsigned int hctx_idx)
+@@ -232,7 +277,9 @@ static int nvme_loop_init_hctx(struct bl
+ 	 * then we can remove the dynamically allocated lock class for each
+ 	 * flush queue, that way may cause horrible boot delay.
+ 	 */
++#ifdef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
+ 	blk_mq_hctx_set_fq_lock_class(hctx, &loop_hctx_fq_lock_key);
++#endif
+ 
+ 	hctx->driver_data = queue;
+ 	return 0;
+@@ -250,17 +297,35 @@ static int nvme_loop_init_admin_hctx(str
+ 	return 0;
+ }
+ 
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_CONST_OPS
+ static const struct blk_mq_ops nvme_loop_mq_ops = {
++#else
++static struct blk_mq_ops nvme_loop_mq_ops = {
++#endif
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue	= blk_mq_map_queue,
++#endif
+ 	.init_request	= nvme_loop_init_request,
+ 	.init_hctx	= nvme_loop_init_hctx,
+ };
+ 
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_CONST_OPS
+ static const struct blk_mq_ops nvme_loop_admin_mq_ops = {
++#else
++static struct blk_mq_ops nvme_loop_admin_mq_ops = {
++#endif
+ 	.queue_rq	= nvme_loop_queue_rq,
+ 	.complete	= nvme_loop_complete_rq,
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUE
++	.map_queue	= blk_mq_map_queue,
++#endif
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_HAS_4_PARAMS
+ 	.init_request	= nvme_loop_init_request,
++#else
++	.init_request	= nvme_loop_init_admin_request,
++#endif
+ 	.init_hctx	= nvme_loop_init_admin_hctx,
+ };
+ 
+@@ -269,8 +334,13 @@ static void nvme_loop_destroy_admin_queu
+ 	if (!test_and_clear_bit(NVME_LOOP_Q_LIVE, &ctrl->queues[0].flags))
+ 		return;
+ 	nvmet_sq_destroy(&ctrl->queues[0].nvme_sq);
++#ifdef HAVE_BLK_MQ_DESTROY_QUEUE
+ 	blk_mq_destroy_queue(ctrl->ctrl.admin_q);
+ 	blk_mq_destroy_queue(ctrl->ctrl.fabrics_q);
++#else
++	blk_cleanup_queue(ctrl->ctrl.admin_q);
++	blk_cleanup_queue(ctrl->ctrl.fabrics_q);
++#endif
+ 	blk_mq_free_tag_set(&ctrl->admin_tag_set);
+ }
+ 
+@@ -286,7 +356,11 @@ static void nvme_loop_free_ctrl(struct n
+ 	mutex_unlock(&nvme_loop_ctrl_mutex);
+ 
+ 	if (nctrl->tagset) {
++#ifdef HAVE_BLK_MQ_DESTROY_QUEUE
+ 		blk_mq_destroy_queue(ctrl->ctrl.connect_q);
++#else
++		blk_cleanup_queue(ctrl->ctrl.connect_q);
++#endif
+ 		blk_mq_free_tag_set(&ctrl->tag_set);
+ 	}
+ 	kfree(ctrl->queues);
+@@ -363,7 +437,9 @@ static int nvme_loop_configure_admin_que
+ 	ctrl->admin_tag_set.driver_data = ctrl;
+ 	ctrl->admin_tag_set.nr_hw_queues = 1;
+ 	ctrl->admin_tag_set.timeout = NVME_ADMIN_TIMEOUT;
++#ifdef HAVE_BLK_MQ_F_NO_SCHED
+ 	ctrl->admin_tag_set.flags = BLK_MQ_F_NO_SCHED;
++#endif
+ 
+ 	ctrl->queues[0].ctrl = ctrl;
+ 	error = nvmet_sq_init(&ctrl->queues[0].nvme_sq);
+@@ -413,9 +489,15 @@ static int nvme_loop_configure_admin_que
+ 
+ out_cleanup_queue:
+ 	clear_bit(NVME_LOOP_Q_LIVE, &ctrl->queues[0].flags);
++#ifdef HAVE_BLK_MQ_DESTROY_QUEUE
+ 	blk_mq_destroy_queue(ctrl->ctrl.admin_q);
+ out_cleanup_fabrics_q:
+ 	blk_mq_destroy_queue(ctrl->ctrl.fabrics_q);
++#else
++	blk_cleanup_queue(ctrl->ctrl.admin_q);
++out_cleanup_fabrics_q:
++	blk_cleanup_queue(ctrl->ctrl.fabrics_q);
++#endif
+ out_free_tagset:
+ 	blk_mq_free_tag_set(&ctrl->admin_tag_set);
+ out_free_sq:
+@@ -554,7 +636,11 @@ static int nvme_loop_create_io_queues(st
+ 	return 0;
+ 
+ out_cleanup_connect_q:
++#ifdef HAVE_BLK_MQ_DESTROY_QUEUE
+ 	blk_mq_destroy_queue(ctrl->ctrl.connect_q);
++#else
++	blk_cleanup_queue(ctrl->ctrl.connect_q);
++#endif
+ out_free_tagset:
+ 	blk_mq_free_tag_set(&ctrl->tag_set);
+ out_destroy_queues:
+@@ -735,4 +821,7 @@ module_init(nvme_loop_init_module);
+ module_exit(nvme_loop_cleanup_module);
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_ALIAS("nvmet-transport-254"); /* 254 == NVMF_TRTYPE_LOOP */

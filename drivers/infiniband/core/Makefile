@@ -24,7 +24,7 @@ ib_core-y :=			packer.o ud_header.o verbs.o cq.o rw.o sysfs.o verbs_nvmf.o \
 ib_core-$(CONFIG_SECURITY_INFINIBAND) += security.o
 ib_core-$(CONFIG_CGROUP_RDMA) += cgroup.o
 
-ib_cm-y :=                  	cm.o cm_trace.o
+ib_cm-y :=			cm.o cm_trace.o
 
 iw_cm-y :=			iwcm.o iwpm_util.o iwpm_msg.o
 

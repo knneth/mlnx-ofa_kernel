@@ -407,9 +407,8 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 			enum mlx5_flow_destination_type type = dst->dest_attr.type;
 			u32 id;
 
-			if (num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX ||
-			    num_term_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX ||
-			    fs_dr_num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX) {
+			if (fs_dr_num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX ||
+			    num_term_actions == MLX5_FLOW_CONTEXT_ACTION_MAX) {
 				err = -EOPNOTSUPP;
 				goto free_actions;
 			}
@@ -483,8 +482,8 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 			    MLX5_FLOW_DESTINATION_TYPE_COUNTER)
 				continue;
 
-			if (num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX ||
-			    fs_dr_num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX) {
+			if (num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX ||
+			    fs_dr_num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX) {
 				err = -EOPNOTSUPP;
 				goto free_actions;
 			}
@@ -527,14 +526,14 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 	params.match_buf = (u64 *)fte->val;
 	if (num_term_actions == 1) {
 		if (term_actions->reformat) {
-			if (num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX) {
+			if (num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX) {
 				err = -EOPNOTSUPP;
 				goto free_actions;
 			}
 			actions[num_actions++] = term_actions->reformat;
 		}
 
-		if (num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX) {
+		if (num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX) {
 			err = -EOPNOTSUPP;
 			goto free_actions;
 		}
@@ -544,8 +543,8 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 			!!(fte->action.flags & FLOW_ACT_IGNORE_FLOW_LEVEL);
 		u32 flow_source = fte->flow_context.flow_source;
 
-		if (num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX ||
-		    fs_dr_num_actions >= MLX5_FLOW_CONTEXT_ACTION_MAX) {
+		if (num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX ||
+		    fs_dr_num_actions == MLX5_FLOW_CONTEXT_ACTION_MAX) {
 			err = -EOPNOTSUPP;
 			goto free_actions;
 		}
@@ -780,6 +779,16 @@ static int mlx5_cmd_dr_destroy_ns(struct mlx5_flow_root_namespace *ns)
 	return mlx5dr_domain_destroy(ns->fs_dr_domain.dr_domain);
 }
 
+static u32 mlx5_cmd_dr_get_capabilities(struct mlx5_flow_root_namespace *ns,
+					enum fs_flow_table_type ft_type)
+{
+	if (ft_type != FS_FT_FDB ||
+	    MLX5_CAP_GEN(ns->dev, steering_format_version) == MLX5_STEERING_FORMAT_CONNECTX_5)
+		return 0;
+
+	return MLX5_FLOW_STEERING_CAP_VLAN_PUSH_ON_RX | MLX5_FLOW_STEERING_CAP_VLAN_POP_ON_TX;
+}
+
 bool mlx5_fs_dr_is_supported(struct mlx5_core_dev *dev)
 {
 	return mlx5dr_is_supported(dev);
@@ -804,6 +813,7 @@ static const struct mlx5_flow_cmds mlx5_flow_cmds_dr = {
 	.set_peer = mlx5_cmd_dr_set_peer,
 	.create_ns = mlx5_cmd_dr_create_ns,
 	.destroy_ns = mlx5_cmd_dr_destroy_ns,
+	.get_capabilities = mlx5_cmd_dr_get_capabilities,
 };
 
 const struct mlx5_flow_cmds *mlx5_fs_cmd_get_dr_cmds(void)

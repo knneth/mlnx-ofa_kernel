@@ -19,6 +19,7 @@ ifneq (,$(CFLAGS_RETPOLINE))
 endif
 
 
+obj-$(CONFIG_NVME_COMMON)          += common/
 obj-y		+= host/
 obj-y		+= target/
 obj-y		+= lpfc/

@@ -32,11 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"5.8"}
-
-echo 'is_conf_set() {'
-echo '	grep -q "^$1=[ym]" "$kernel_source_dir/.config" 2>/dev/null'
-echo '}'
+PACKAGE_VERSION=${PACKAGE_VERSION:-"5.9"}
 
 echo STRIP_MODS=\${STRIP_MODS:-"yes"}
 echo kernelver=\${kernelver:-\$\(uname -r\)}
@@ -55,21 +51,18 @@ do
 	if [ "$name" = 'mlxdevm' ]; then
 		echo "if [[ ! \$(VER \$kernelver) < \$(VER '4.15.0') ]]; then"
 	fi
-	if [ "$name" = 'irdma' ]; then
-		echo "if is_conf_set CONFIG_INFINIBAND_IRDMA; then"
-	fi
 	echo 'BUILT_MODULE_NAME[$i]='$name
 	echo 'BUILT_MODULE_LOCATION[$i]='${module%*/*}
 	echo 'DEST_MODULE_NAME[$i]='$name
 	echo 'DEST_MODULE_LOCATION[$i]='/kernel/${module%*/*}
 	echo 'STRIP[$i]="$STRIP_MODS"'
 	echo 'let i++'
-	case "$name" in auxiliary | mlxdevm | irdma)
+	case "$name" in auxiliary | mlxdevm)
 		echo "fi";;
 	esac
 done
 
-EXTRA_OPTIONS="--with-mlx5-macsec --with-mlx5-ipsec --with-gds --without-gds --with-sf-cfg-drv"
+EXTRA_OPTIONS="--with-mlx5-ipsec --with-gds --without-gds --with-sf-cfg-drv"
 for option in $EXTRA_OPTIONS; do
 	if echo "$configure_options" | grep -q -- "$option"; then
 		echo "#:# ExtraOption $option"

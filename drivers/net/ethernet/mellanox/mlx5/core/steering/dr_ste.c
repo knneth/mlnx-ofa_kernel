@@ -624,25 +624,6 @@ int mlx5dr_ste_set_action_decap_l3_list(struct mlx5dr_ste_ctx *ste_ctx,
 						 used_hw_action_num);
 }
 
-int mlx5dr_ste_alloc_modify_hdr(struct mlx5dr_action *action)
-{
-	u32 dynamic_chunck_size;
-
-	dynamic_chunck_size = ilog2(roundup_pow_of_two(action->rewrite->num_of_actions));
-
-	/* HW modify action index granularity is at least 64B */
-	dynamic_chunck_size = max_t(u32, dynamic_chunck_size,
-			DR_CHUNK_SIZE_8);
-
-	return action->rewrite->dmn->ste_ctx->alloc_modify_hdr_chunk(action,
-			dynamic_chunck_size);
-}
-
-void mlx5dr_ste_free_modify_hdr(struct mlx5dr_action *action)
-{
-	return action->rewrite->dmn->ste_ctx->dealloc_modify_hdr_chunk(action);
-}
-
 static int dr_ste_build_pre_check_spec(struct mlx5dr_domain *dmn,
 				       struct mlx5dr_match_spec *spec)
 {
@@ -660,6 +641,25 @@ static int dr_ste_build_pre_check_spec(struct mlx5dr_domain *dmn,
 	}
 
 	return 0;
+}
+
+int mlx5dr_ste_alloc_modify_hdr(struct mlx5dr_action *action)
+{
+	u32 dynamic_chunck_size;
+
+	dynamic_chunck_size = ilog2(roundup_pow_of_two(action->rewrite->num_of_actions));
+
+	/* HW modify action index granularity is at least 64B */
+	dynamic_chunck_size = max_t(u32, dynamic_chunck_size,
+			DR_CHUNK_SIZE_8);
+
+	return action->rewrite->dmn->ste_ctx->alloc_modify_hdr_chunk(action,
+			dynamic_chunck_size);
+}
+
+void mlx5dr_ste_free_modify_hdr(struct mlx5dr_action *action)
+{
+	return action->rewrite->dmn->ste_ctx->dealloc_modify_hdr_chunk(action);
 }
 
 int mlx5dr_ste_build_pre_check(struct mlx5dr_domain *dmn,
@@ -834,7 +834,7 @@ static void dr_ste_copy_mask_spec(char *mask, struct mlx5dr_match_spec *spec, bo
 	spec->tcp_sport = IFC_GET_CLR(fte_match_set_lyr_2_4, mask, tcp_sport, clr);
 	spec->tcp_dport = IFC_GET_CLR(fte_match_set_lyr_2_4, mask, tcp_dport, clr);
 
-	spec->ipv4_ihl = MLX5_GET(fte_match_set_lyr_2_4, mask, ipv4_ihl);
+	spec->ipv4_ihl = IFC_GET_CLR(fte_match_set_lyr_2_4, mask, ipv4_ihl, clr);
 	spec->ttl_hoplimit = IFC_GET_CLR(fte_match_set_lyr_2_4, mask, ttl_hoplimit, clr);
 
 	spec->udp_sport = IFC_GET_CLR(fte_match_set_lyr_2_4, mask, udp_sport, clr);

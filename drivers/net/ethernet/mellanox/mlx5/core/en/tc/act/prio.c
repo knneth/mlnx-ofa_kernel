@@ -12,13 +12,14 @@ tc_act_can_offload_prio(struct mlx5e_tc_act_parse_state *parse_state,
 			int act_index,
 			struct mlx5_flow_attr *attr)
 {
-	if (act->priority > parse_state->flow->priv->fs.tc.num_prio_hp) {
+	if (act->priority > parse_state->flow->priv->fs->tc->num_prio_hp) {
 		NL_SET_ERR_MSG_MOD(parse_state->extack, "Skb priority value is out of range");
 		return false;
 	}
 
 	return true;
 }
+
 
 static int
 tc_act_parse_prio(struct mlx5e_tc_act_parse_state *parse_state,

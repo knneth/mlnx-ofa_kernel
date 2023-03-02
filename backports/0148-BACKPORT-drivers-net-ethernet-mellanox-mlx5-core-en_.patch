@@ -1,0 +1,55 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+
+Change-Id: I0810dc8c04680838dcadfc6f67299512f4c5df43
+---
+ .../mellanox/mlx5/core/en_accel/en_accel.h       | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+@@ -120,8 +120,10 @@ static inline bool mlx5e_accel_tx_begin(
+ 					struct sk_buff *skb,
+ 					struct mlx5e_accel_tx_state *state)
+ {
++#ifdef HAVE_NETIF_F_GSO_UDP_L4
+ 	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
+ 		mlx5e_udp_gso_handle_tx_skb(skb);
++#endif
+ 
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	/* May send SKBs and WQEs. */
+@@ -166,11 +168,19 @@ static inline unsigned int mlx5e_accel_t
+ 
+ static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
+ 				       struct sk_buff *skb,
+-				       struct mlx5_wqe_eth_seg *eseg, u16 ihs)
++				       struct mlx5_wqe_eth_seg *eseg,
++#if !defined(HAVE_XFRM_OFFLOAD_INNER_IPPROTO) && defined(CONFIG_MLX5_EN_IPSEC)
++				       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
++				       u16 ihs)
+ {
+ #ifdef CONFIG_MLX5_EN_IPSEC
+ 	if (xfrm_offload(skb))
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
+ 		mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
++#else
++		mlx5e_ipsec_tx_build_eseg(priv, skb, ipsec_st, eseg);
++#endif
+ #endif
+ 
+ #ifdef CONFIG_MLX5_EN_MACSEC
+@@ -212,7 +222,11 @@ static inline void mlx5e_accel_cleanup_r
+ 
+ static inline int mlx5e_accel_init_tx(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_KTLS_STRUCTS
+ 	return mlx5e_ktls_init_tx(priv);
++#else
++	return 0;
++#endif
+ }
+ 
+ static inline void mlx5e_accel_cleanup_tx(struct mlx5e_priv *priv)

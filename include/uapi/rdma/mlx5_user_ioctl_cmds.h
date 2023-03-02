@@ -71,7 +71,6 @@ enum mlx5_ib_devx_methods {
 	MLX5_IB_METHOD_DEVX_QUERY_UAR,
 	MLX5_IB_METHOD_DEVX_QUERY_EQN,
 	MLX5_IB_METHOD_DEVX_SUBSCRIBE_EVENT,
-	MLX5_IB_METHOD_DEVX_QUERY_PORT,
 };
 
 enum  mlx5_ib_devx_other_attrs {
@@ -125,17 +124,6 @@ enum mlx5_ib_devx_subscribe_event_attrs {
 enum  mlx5_ib_devx_query_eqn_attrs {
 	MLX5_IB_ATTR_DEVX_QUERY_EQN_USER_VEC = (1U << UVERBS_ID_NS_SHIFT),
 	MLX5_IB_ATTR_DEVX_QUERY_EQN_DEV_EQN,
-};
-
-enum  mlx5_ib_devx_query_port_attrs {
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_NUM = (1U << UVERBS_ID_NS_SHIFT),
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_COMP_MASK,
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT,
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_VHCA_ID,
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_ESW_OWNER_VHCA_ID,
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_RX,
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_VPORT_ICM_TX,
-       MLX5_IB_ATTR_DEVX_QUERY_PORT_MATCH_REG_C_0,
 };
 
 enum mlx5_ib_devx_obj_methods {

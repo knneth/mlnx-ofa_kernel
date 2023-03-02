@@ -1,25 +1,22 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
 
-Change-Id: I61e04f475e71876acbd3a4fab72cf82f738dd95a
+Change-Id: I3627ecbce503c5827ce9d87699ef2a65f9efe96f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rss.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
+@@ -327,7 +327,11 @@ err_out:
  
-+#ifdef HAVE_TCF_TUNNEL_INFO
-+
- #include <net/gre.h>
- #include "en/tc_tun.h"
+ int mlx5e_rss_cleanup(struct mlx5e_rss *rss)
+ {
++#ifdef HAVE_REFCOUNT_DEC_IF_ONE
+ 	if (!refcount_dec_if_one(&rss->refcnt))
++#else
++	if (atomic_cmpxchg(&rss->refcnt, 1, 0) != 1)
++#endif
+ 		return -EBUSY;
  
-@@ -96,3 +98,4 @@ struct mlx5e_tc_tunnel gre_tunnel = {
- 	.parse_tunnel         = mlx5e_tc_tun_parse_gretap,
- 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
- };
-+#endif /* HAVE_TCF_TUNNEL_INFO */
+ 	mlx5e_rss_destroy_tirs(rss, false);

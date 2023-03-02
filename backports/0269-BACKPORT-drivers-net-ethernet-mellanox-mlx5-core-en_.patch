@@ -1,0 +1,75 @@
+From: Aya Levin <ayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+
+Change-Id: If02be69bed87494b65a3925931cf767122c85c41
+---
+ .../mellanox/mlx5/core/en_accel/ktls.h        | 27 ++++++++++++++++---
+ 1 file changed, 23 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+@@ -4,8 +4,12 @@
+ #ifndef __MLX5E_KTLS_H__
+ #define __MLX5E_KTLS_H__
+ 
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ #include <linux/tls.h>
++#endif
++#ifdef HAVE_NET_TLS_H
+ #include <net/tls.h>
++#endif
+ #include "en.h"
+ 
+ #ifdef CONFIG_MLX5_EN_TLS
+@@ -42,14 +46,29 @@ static inline bool mlx5e_ktls_type_check
+ }
+ 
+ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
++#ifdef HAVE_KTLS_STRUCTS
+ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
++#else
++static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
++{
++}
++static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
++{
++	return 0;
++}
++#endif
+ int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
+ int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
+ struct mlx5e_ktls_resync_resp *
+ mlx5e_ktls_rx_resync_create_resp_list(void);
++#ifdef HAVE_KTLS_RX_SUPPORT
+ void mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list);
++#else
++static inline void
++mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list) {}
++#endif
+ 
+ static inline bool mlx5e_is_ktls_tx(struct mlx5_core_dev *mdev)
+ {
+@@ -85,16 +104,16 @@ static inline void mlx5e_ktls_build_netd
+ {
+ }
+ 
+-static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
++static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
+ {
+-	return 0;
+ }
+ 
+-static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
++static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
+ {
++	return 0;
+ }
+ 
+-static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
++static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
+ {
+ 	return 0;
+ }

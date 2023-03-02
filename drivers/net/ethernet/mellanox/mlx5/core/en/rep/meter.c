@@ -30,7 +30,7 @@ mlx5_rep_destroy_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *re
 	}
 
 	if (meter->meter_hndl) {
-		mlx5e_free_flow_meter(dev, meter->meter_hndl);
+		mlx5e_free_flow_meter(meter->meter_hndl);
 		meter->meter_hndl = NULL;
 	}
 }
@@ -150,7 +150,7 @@ mlx5_rep_set_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_pr
 	params.mode = MLX5_RATE_LIMIT_PPS;
 	params.rate = rate;
 	params.burst = burst;
-	err = mlx5e_aso_send_flow_meter_aso(dev, meter->meter_hndl, &params);
+	err = mlx5e_tc_meter_modify(dev, meter->meter_hndl, &params);
 	if (err)
 		goto check_and_free_meter_aso;
 
@@ -168,7 +168,7 @@ update:
 
 check_and_free_meter_aso:
 	if (!meter->meter_rule) {
-		mlx5e_free_flow_meter(dev, meter->meter_hndl);
+		mlx5e_free_flow_meter(meter->meter_hndl);
 		meter->meter_hndl = NULL;
 	}
 	return err;

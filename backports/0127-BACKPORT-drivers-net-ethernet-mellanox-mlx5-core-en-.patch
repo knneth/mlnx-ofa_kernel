@@ -1,0 +1,75 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+
+Change-Id: I4fbbeb08451451f246dabac30afb6e04f0e74998
+---
+ .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+@@ -799,7 +799,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
+ 	}
+ 
+ 	ct_state |= MLX5_CT_STATE_ESTABLISHED_BIT | MLX5_CT_STATE_TRK_BIT;
++#ifdef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
+ 	ct_state |= meta->ct_metadata.orig_dir ? 0 : MLX5_CT_STATE_REPLY_BIT;
++#endif
+ 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
+ 					     ct_state,
+ 					     meta->ct_metadata.mark,
+@@ -1136,9 +1138,9 @@ err_orig:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+-	struct flow_rule *flow_rule = flow_cls_offload_flow_rule(flow);
++	struct flow_rule *flow_rule = flow_cls_offload_flow_rule1(flow);
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	struct flow_action_entry *meta_action;
+ 	unsigned long cookie = flow->cookie;
+@@ -1239,7 +1241,7 @@ err_set:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = flow->cookie;
+@@ -1267,7 +1269,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
+-				    struct flow_cls_offload *f)
++				    struct flow_cls_offload1 *f)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = f->cookie;
+@@ -1289,8 +1291,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+ 	spin_unlock_bh(&ct_priv->ht_lock);
+ 
+ 	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
++#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
+ 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
+ 			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
++	flow_stats_update(&f->stats, bytes, packets, lastuse,
++			  FLOW_ACTION_HW_STATS_DELAYED);
++#else
++	flow_stats_update(&f->stats, bytes, packets, lastuse);
++#endif
+ 
+ 	mlx5_tc_ct_entry_put(entry);
+ 	return 0;
+@@ -1300,7 +1309,7 @@ static int
+ mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
+ 			      void *cb_priv)
+ {
+-	struct flow_cls_offload *f = type_data;
++	struct flow_cls_offload1 *f = type_data;
+ 	struct mlx5_ct_ft *ft = cb_priv;
+ 
+ 	if (type != TC_SETUP_CLSFLOWER)

@@ -829,7 +829,7 @@ int is_non_trackable_free_func(const char *func_name)
 {
 	static const char * const str_cmp_arr[] = {
 		/* sw steering functions */
-		"mlx5dr_icm_free_chunk",
+		"dr_icm_chunk_destroy",
 		/* external function in mdev module */
 		"create_store",
 		/* functions in mlxdevm.c uses memory allocated by nla_strdup */
@@ -1229,11 +1229,7 @@ int memtrack_inject_error(struct module *module_obj,
 		return 0;
 
 	if (inject_freq) {
-#ifdef HAVE_GET_RANDOM_U32
 		if (!(get_random_u32() % inject_freq)) {
-#else
-		if (!(prandom_u32() % inject_freq)) {
-#endif
 			val = inject_error_record(module_obj->name,
 						  file_name, func_name,
 						  caller_func_name,

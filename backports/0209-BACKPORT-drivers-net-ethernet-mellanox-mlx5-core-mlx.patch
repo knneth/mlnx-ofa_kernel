@@ -1,0 +1,70 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+
+Change-Id: I4653a4647d44cdfef9b1a41f68a8f0b13d795ba6
+---
+ .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 23 +++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+@@ -1,6 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2021 Mellanox Technologies Ltd. */
+-
+ #include <linux/log2.h>
+ #include "mlx5_core.h"
+ #include "fs_core.h"
+@@ -140,8 +139,11 @@ int mlx5_devm_sf_port_fn_state_get(struc
+ 	memset(&devport, 0, sizeof(devport));
+ 	devport.devlink = devlink;
+ 	devport.index = port->index;
+-
++#ifdef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
+ 	ret = mlx5_devlink_sf_port_fn_state_get(&devport, &dl_state, &dl_opstate, extack);
++#else
++	ret = mlx5_devlink_sf_port_fn_state_get(devlink, &devport, &dl_state, &dl_opstate, extack);
++#endif
+ 	if (!ret) {
+ 		*state = devlink_to_mlxdevm_state(dl_state);
+ 		*opstate = devlink_to_mlxdevm_opstate(dl_opstate);
+@@ -162,7 +164,12 @@ int mlx5_devm_sf_port_fn_state_set(struc
+ 	devport.devlink = devlink;
+ 	devport.index = port->index;
+ 	dl_state = mlxdevm_to_devlink_state(state);
++#ifdef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
+ 	return mlx5_devlink_sf_port_fn_state_set(&devport, dl_state, extack);
++#else
++	return mlx5_devlink_sf_port_fn_state_set(devlink, &devport, dl_state,
++						 extack);
++#endif
+ }
+ 
+ int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
+@@ -177,8 +184,12 @@ int mlx5_devm_sf_port_fn_hw_addr_get(str
+ 	devport.devlink = devlink;
+ 	devport.index = port->index;
+ 
+-	return mlx5_devlink_port_function_hw_addr_get(&devport, hw_addr,
+-						      hw_addr_len, extack);
++#ifdef HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM
++	return mlx5_devlink_port_function_hw_addr_get(&devport, 
++#else
++	return mlx5_devlink_port_function_hw_addr_get(devlink, &devport,
++#endif
++						      hw_addr, hw_addr_len, extack);
+ }
+ 
+ int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
+@@ -206,7 +217,11 @@ int mlx5_devm_sf_port_fn_hw_addr_set(str
+ 	memset(&devport, 0, sizeof(devport));
+ 	devport.devlink = devlink;
+ 	devport.index = port->index;
++#ifdef HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM
+ 	return mlx5_devlink_port_function_hw_addr_set(&devport, hw_addr,
++#else
++	return mlx5_devlink_port_function_hw_addr_set(devlink, &devport, hw_addr,
++#endif
+ 						      hw_addr_len, extack);
+ }
+ 

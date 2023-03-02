@@ -1,14 +1,14 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
 
-Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
+Change-Id: I37fcae72782fe7bce1e0b71c81da8c2898095a94
 ---
  drivers/infiniband/core/cma_configfs.c | 135 +++++++++++++++++++++++--
  1 file changed, 126 insertions(+), 9 deletions(-)
 
 --- a/drivers/infiniband/core/cma_configfs.c
 +++ b/drivers/infiniband/core/cma_configfs.c
-@@ -38,6 +38,10 @@
+@@ -37,6 +37,10 @@
  #include "core_priv.h"
  #include "cma_priv.h"
  
@@ -19,7 +19,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  struct cma_device;
  
  struct cma_dev_group;
-@@ -55,6 +59,23 @@ struct cma_dev_group {
+@@ -54,6 +58,23 @@ struct cma_dev_group {
  	struct cma_dev_port_group	*ports;
  };
  
@@ -43,7 +43,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  static struct cma_dev_port_group *to_dev_port_group(struct config_item *item)
  {
  	struct config_group *group;
-@@ -71,6 +92,34 @@ static bool filter_by_name(struct ib_dev
+@@ -70,6 +91,34 @@ static bool filter_by_name(struct ib_dev
  	return !strcmp(dev_name(&ib_dev->dev), cookie);
  }
  
@@ -78,7 +78,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  static int cma_configfs_params_get(struct config_item *item,
  				   struct cma_device **pcma_dev,
  				   struct cma_dev_port_group **pgroup)
-@@ -187,12 +236,23 @@ static ssize_t default_roce_tos_store(st
+@@ -186,12 +235,23 @@ static ssize_t default_roce_tos_store(st
  CONFIGFS_ATTR(, default_roce_tos);
  
  static struct configfs_attribute *cma_configfs_attributes[] = {
@@ -105,7 +105,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	.ct_attrs	= cma_configfs_attributes,
  	.ct_owner	= THIS_MODULE
  };
-@@ -217,6 +277,14 @@ static int make_cma_ports(struct cma_dev
+@@ -216,6 +276,14 @@ static int make_cma_ports(struct cma_dev
  	if (!ports)
  		return -ENOMEM;
  
@@ -120,7 +120,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	for (i = 0; i < ports_num; i++) {
  		char port_str[10];
  
-@@ -226,10 +294,16 @@ static int make_cma_ports(struct cma_dev
+@@ -225,10 +293,16 @@ static int make_cma_ports(struct cma_dev
  		config_group_init_type_name(&ports[i].group,
  					    port_str,
  					    &cma_port_group_type);
@@ -138,7 +138,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	cma_dev_group->ports = ports;
  	return 0;
  }
-@@ -261,7 +335,7 @@ static struct configfs_item_operations c
+@@ -260,7 +334,7 @@ static struct configfs_item_operations c
  	.release = release_cma_ports_group
  };
  
@@ -147,7 +147,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	.ct_item_ops	= &cma_ports_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -270,7 +344,7 @@ static struct configfs_item_operations c
+@@ -269,7 +343,7 @@ static struct configfs_item_operations c
  	.release = release_cma_dev
  };
  
@@ -156,7 +156,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -293,6 +367,15 @@ static struct config_group *make_cma_dev
+@@ -292,6 +366,15 @@ static struct config_group *make_cma_dev
  		goto fail;
  	}
  
@@ -172,7 +172,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
  
  	config_group_init_type_name(&cma_dev_group->ports_group, "ports",
-@@ -300,16 +383,29 @@ static struct config_group *make_cma_dev
+@@ -299,16 +382,29 @@ static struct config_group *make_cma_dev
  
  	err = make_cma_ports(cma_dev_group, cma_dev);
  	if (err)
@@ -204,7 +204,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  fail:
  	if (cma_dev)
  		cma_dev_put(cma_dev);
-@@ -324,8 +420,29 @@ static void drop_cma_dev(struct config_g
+@@ -323,8 +419,29 @@ static void drop_cma_dev(struct config_g
  	struct cma_dev_group *cma_dev_group =
  		container_of(group, struct cma_dev_group, device_group);
  
@@ -234,7 +234,7 @@ Change-Id: Idb75744ab42c657a5df47d912dc4742334b5ddde
  	config_item_put(item);
  }
  
-@@ -334,7 +451,7 @@ static struct configfs_group_operations
+@@ -333,7 +450,7 @@ static struct configfs_group_operations
  	.drop_item	= drop_cma_dev,
  };
  

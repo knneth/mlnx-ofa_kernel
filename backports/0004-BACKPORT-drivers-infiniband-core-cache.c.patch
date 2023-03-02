@@ -1,14 +1,14 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
 
-Change-Id: I8f608b1a88ee9c8e551139ee6feb4a624a59527e
+Change-Id: I750c15c5fbd345ec33ffbf8b7a56266e306d0253
 ---
  drivers/infiniband/core/cache.c | 23 +++++++++++++++++++++--
  1 file changed, 21 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/cache.c
 +++ b/drivers/infiniband/core/cache.c
-@@ -1401,10 +1401,19 @@ struct net_device *rdma_read_gid_attr_nd
+@@ -1400,10 +1400,19 @@ struct net_device *rdma_read_gid_attr_nd
  }
  EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
  
@@ -29,7 +29,7 @@ Change-Id: I8f608b1a88ee9c8e551139ee6feb4a624a59527e
  
  	if (is_vlan_dev(lower_dev))
  		*vlan_id = vlan_dev_vlan_id(lower_dev);
-@@ -1414,6 +1423,7 @@ static int get_lower_dev_vlan(struct net
+@@ -1413,6 +1422,7 @@ static int get_lower_dev_vlan(struct net
  	 */
  	return 1;
  }
@@ -37,7 +37,7 @@ Change-Id: I8f608b1a88ee9c8e551139ee6feb4a624a59527e
  
  /**
   * rdma_read_gid_l2_fields - Read the vlan ID and source MAC address
-@@ -1430,9 +1440,11 @@ static int get_lower_dev_vlan(struct net
+@@ -1429,9 +1439,11 @@ static int get_lower_dev_vlan(struct net
  int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
  			    u16 *vlan_id, u8 *smac)
  {
@@ -49,7 +49,7 @@ Change-Id: I8f608b1a88ee9c8e551139ee6feb4a624a59527e
  	struct net_device *ndev;
  
  	rcu_read_lock();
-@@ -1448,12 +1460,19 @@ int rdma_read_gid_l2_fields(const struct
+@@ -1447,12 +1459,19 @@ int rdma_read_gid_l2_fields(const struct
  		if (is_vlan_dev(ndev)) {
  			*vlan_id = vlan_dev_vlan_id(ndev);
  		} else {

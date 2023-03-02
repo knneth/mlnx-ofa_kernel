@@ -3,7 +3,6 @@
 
 #include <linux/mlx5/vport.h>
 #include "lib/devcom.h"
-#include "lag/lag.h"
 
 static LIST_HEAD(devcom_list);
 
@@ -75,11 +74,7 @@ struct mlx5_devcom *mlx5_devcom_register_device(struct mlx5_core_dev *dev)
 
 	if (!mlx5_core_is_pf(dev))
 		return NULL;
-
 	if (MLX5_CAP_GEN(dev, num_lag_ports) != MLX5_DEVCOM_PORTS_SUPPORTED)
-		return NULL;
-
-	if (!mlx5_lag_is_supported(dev))
 		return NULL;
 
 	sguid0 = mlx5_query_nic_system_image_guid(dev);

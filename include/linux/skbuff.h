@@ -30,4 +30,11 @@ static inline void skb_frag_off_add(skb_frag_t *frag, int delta)
 	frag->page_offset += delta;
 }
 #endif
+
+#ifndef HAVE_SKB_FRAG_OFF_SET
+static inline void skb_frag_off_set(skb_frag_t *frag, unsigned int offset)
+{
+	frag->page_offset = offset;
+}
+#endif
 #endif /* _COMPAT_LINUX_SKBUFF_H */

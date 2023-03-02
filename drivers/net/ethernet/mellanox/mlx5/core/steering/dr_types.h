@@ -255,13 +255,6 @@ struct list_head *mlx5dr_ste_get_miss_list(struct mlx5dr_ste *ste);
 
 #define MLX5DR_MAX_VLANS 2
 
-struct mlx5dr_action_aso_flow_meter_info {
-	u32 obj_id;
-	u32 offset;
-	u8 dest_reg_id;
-	u8 init_color;
-};
-
 struct mlx5dr_ste_actions_attr {
 	u32	modify_index;
 	u16	modify_actions;
@@ -598,8 +591,9 @@ struct mlx5dr_match_spec {
 	 */
 	u32 tcp_dport:16;
 
-	u32 reserved_auto1:20;
+	u32 reserved_auto1:16;
 	u32 ipv4_ihl:4;
+	u32 reserved_auto2:4;
 	u32 ttl_hoplimit:8;
 
 	/* UDP source port.;tcp and udp sport/dport are mutually exclusive */

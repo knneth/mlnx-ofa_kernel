@@ -2,7 +2,6 @@
 // Copyright (c) 2019 Mellanox Technologies.
 
 #include <linux/mlx5/fs.h>
-#include <linux/mlx5/mlx5_ifc.h>
 #include "eswitch.h"
 #include "en_tc.h"
 #include "fs_core.h"
@@ -228,9 +227,8 @@ mlx5_eswitch_termtbl_required(struct mlx5_eswitch *esw,
 
 	/* push vlan on RX */
 	if (flow_act->action & MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH &&
-	    !(esw->dev->priv.steering->mode == MLX5_FLOW_STEERING_MODE_SMFS &&
-	      MLX5_CAP_GEN(esw->dev, steering_format_version) >=
-	      MLX5_STEERING_FORMAT_CONNECTX_6DX))
+	    !(mlx5_fs_get_capabilities(esw->dev, MLX5_FLOW_NAMESPACE_FDB) &
+	      MLX5_FLOW_STEERING_CAP_VLAN_PUSH_ON_RX))
 		return true;
 
 	/* hairpin */
@@ -313,6 +311,8 @@ revert_changes:
 
 	for (curr_dest = 0; curr_dest < num_vport_dests; curr_dest++) {
 		struct mlx5_termtbl_handle *tt = attr->dests[curr_dest].termtbl;
+
+		attr->dests[curr_dest].termtbl = NULL;
 
 		/* search for the destination associated with the
 		 * current term table

@@ -1,0 +1,293 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/odp.c
+
+Change-Id: I6c7723cd08e42ff36c9ceeda2294fa7fbb021fbc
+---
+ drivers/infiniband/hw/mlx5/odp.c | 120 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 120 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/odp.c
++++ b/drivers/infiniband/hw/mlx5/odp.c
+@@ -32,9 +32,16 @@
+ 
+ #include <rdma/ib_umem.h>
+ #include <rdma/ib_umem_odp.h>
++#if defined(HAVE_MMU_INTERVAL_NOTIFIER) && defined(HAVE_HMM_RANGE_FAULT_SUPPORT)
++#ifndef HAVE_MMPUT_ASYNC_EXPORTED
++#include <linux/sched/mm.h>
++#endif
++#endif
+ #include <linux/kernel.h>
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ #include <linux/dma-buf.h>
+ #include <linux/dma-resv.h>
++#endif
+ 
+ #include "mlx5_ib.h"
+ #include "cmd.h"
+@@ -224,27 +231,42 @@ static void destroy_unused_implicit_chil
+ 	queue_work(system_unbound_wq, &mr->odp_destroy.work);
+ }
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
+ 				     const struct mmu_notifier_range *range,
+ 				     unsigned long cur_seq)
++#else
++void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp, unsigned long start,
++			      unsigned long end)
++#endif
+ {
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	struct ib_umem_odp *umem_odp =
+ 		container_of(mni, struct ib_umem_odp, notifier);
++#endif
+ 	struct mlx5_ib_mr *mr;
+ 	const u64 umr_block_mask = (MLX5_UMR_MTT_ALIGNMENT /
+ 				    sizeof(struct mlx5_mtt)) - 1;
+ 	u64 idx = 0, blk_start_idx = 0;
+ 	u64 invalidations = 0;
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	unsigned long start;
+ 	unsigned long end;
++#endif
+ 	int in_block = 0;
+ 	u64 addr;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
++#ifdef HAVE_MMU_NOTIFIER_RANGE_BLOCKABLE
+ 	if (!mmu_notifier_range_blockable(range))
+ 		return false;
+ 
++#endif
++#endif /* HAVE_MMU_INTERVAL_NOTIFIER */
+ 	mutex_lock(&umem_odp->umem_mutex);
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	mmu_interval_set_seq(mni, cur_seq);
++#endif
+ 	/*
+ 	 * If npages is zero then umem_odp->private may not be setup yet. This
+ 	 * does not complete until after the first page is mapped for DMA.
+@@ -253,8 +275,13 @@ static bool mlx5_ib_invalidate_range(str
+ 		goto out;
+ 	mr = umem_odp->private;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	start = max_t(u64, ib_umem_start(umem_odp), range->start);
+ 	end = min_t(u64, ib_umem_end(umem_odp), range->end);
++#else
++	start = max_t(u64, ib_umem_start(umem_odp), start);
++	end = min_t(u64, ib_umem_end(umem_odp), end);
++#endif
+ 
+ 	/*
+ 	 * Iteration one - zap the HW's MTTs. The notifiers_count ensures that
+@@ -311,12 +338,16 @@ static bool mlx5_ib_invalidate_range(str
+ 		destroy_unused_implicit_child_mr(mr);
+ out:
+ 	mutex_unlock(&umem_odp->umem_mutex);
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	return true;
++#endif
+ }
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ const struct mmu_interval_notifier_ops mlx5_mn_ops = {
+ 	.invalidate = mlx5_ib_invalidate_range,
+ };
++#endif
+ 
+ static void internal_fill_odp_caps(struct mlx5_ib_dev *dev)
+ {
+@@ -415,7 +446,11 @@ static struct mlx5_ib_mr *implicit_get_c
+ 
+ 	odp = ib_umem_odp_alloc_child(to_ib_umem_odp(imr->umem),
+ 				      idx * MLX5_IMR_MTT_SIZE,
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 				      MLX5_IMR_MTT_SIZE, &mlx5_mn_ops);
++#else
++				      MLX5_IMR_MTT_SIZE);
++#endif
+ 	if (IS_ERR(odp))
+ 		return ERR_CAST(odp);
+ 
+@@ -480,6 +515,7 @@ out_mr:
+ }
+ 
+ struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
++					     struct ib_udata *udata,
+ 					     int access_flags)
+ {
+ 	struct mlx5_ib_dev *dev = to_mdev(pd->ibpd.device);
+@@ -490,7 +526,11 @@ struct mlx5_ib_mr *mlx5_ib_alloc_implici
+ 	if (!mlx5r_umr_can_load_pas(dev, MLX5_IMR_MTT_ENTRIES * PAGE_SIZE))
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem_odp = ib_umem_odp_alloc_implicit(&dev->ib_dev, access_flags);
++#else
++	umem_odp = ib_umem_odp_alloc_implicit(udata, access_flags);
++#endif
+ 	if (IS_ERR(umem_odp))
+ 		return ERR_CAST(umem_odp);
+ 
+@@ -555,11 +595,23 @@ static int pagefault_real_mr(struct mlx5
+ 			     u64 user_va, size_t bcnt, u32 *bytes_mapped,
+ 			     u32 flags)
+ {
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	int page_shift, ret, np;
++#else
++	int current_seq, page_shift, ret, np;
++#endif
+ 	bool downgrade = flags & MLX5_PF_FLAGS_DOWNGRADE;
++#if defined(HAVE_MMU_INTERVAL_NOTIFIER) && !defined(HAVE_HMM_RANGE_FAULT_SUPPORT)
++	unsigned long current_seq;
++#endif
+ 	u64 access_mask;
+ 	u64 start_idx;
++#if defined(HAVE_MMU_INTERVAL_NOTIFIER) && defined(HAVE_HMM_RANGE_FAULT_SUPPORT)
+ 	bool fault = !(flags & MLX5_PF_FLAGS_SNAPSHOT);
++#ifndef HAVE_MMPUT_ASYNC_EXPORTED
++	struct mm_struct *owning_mm = odp->umem.owning_mm;
++#endif
++#endif
+ 	u32 xlt_flags = MLX5_IB_UPD_XLT_ATOMIC;
+ 
+ 	if (flags & MLX5_PF_FLAGS_ENABLE)
+@@ -572,16 +624,61 @@ static int pagefault_real_mr(struct mlx5
+ 	if (odp->umem.writable && !downgrade)
+ 		access_mask |= ODP_WRITE_ALLOWED_BIT;
+ 
++#if defined(HAVE_MMU_INTERVAL_NOTIFIER) && defined(HAVE_HMM_RANGE_FAULT_SUPPORT)
++#ifndef HAVE_MMPUT_ASYNC_EXPORTED
++	if (!mmget_not_zero(owning_mm))
++		return -EINVAL;
++#endif
+ 	np = ib_umem_odp_map_dma_and_lock(odp, user_va, bcnt, access_mask, fault);
++	if (np < 0) {
++#ifndef HAVE_MMPUT_ASYNC_EXPORTED
++		mmput(owning_mm);
++#endif
++		return np;
++	}
++#else
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
++	current_seq = mmu_interval_read_begin(&odp->notifier);
++#else
++	current_seq = READ_ONCE(odp->notifiers_seq);
++	smp_rmb();
++#endif
++
++	np = ib_umem_odp_map_dma_pages(odp, user_va, bcnt, access_mask,
++				       current_seq);
+ 	if (np < 0)
+ 		return np;
++#endif
+ 
++#if defined(HAVE_MMU_INTERVAL_NOTIFIER) && defined(HAVE_HMM_RANGE_FAULT_SUPPORT)
+ 	/*
+ 	 * No need to check whether the MTTs really belong to this MR, since
+ 	 * ib_umem_odp_map_dma_and_lock already checks this.
+ 	 */
+ 	ret = mlx5r_umr_update_xlt(mr, start_idx, np, page_shift, xlt_flags);
+ 	mutex_unlock(&odp->umem_mutex);
++#ifndef HAVE_MMPUT_ASYNC_EXPORTED
++	mmput(owning_mm);
++#endif
++#else
++	mutex_lock(&odp->umem_mutex);
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
++	if (!mmu_interval_read_retry(&odp->notifier, current_seq)) {
++#else
++	if (!ib_umem_mmu_notifier_retry(odp, current_seq)) {
++#endif
++		/*
++		 * No need to check whether the MTTs really belong to
++		 * this MR, since ib_umem_odp_map_dma_pages already
++		 * checks this.
++		 */
++		ret = mlx5r_umr_update_xlt(mr, start_idx, np,
++					   page_shift, xlt_flags);
++	} else {
++		ret = -EAGAIN;
++	}
++	mutex_unlock(&odp->umem_mutex);
++#endif
+ 
+ 	if (ret < 0) {
+ 		if (ret != -EAGAIN)
+@@ -600,6 +697,20 @@ static int pagefault_real_mr(struct mlx5
+ 	return np << (page_shift - PAGE_SHIFT);
+ 
+ out:
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
++	if (ret == -EAGAIN) {
++		unsigned long timeout = msecs_to_jiffies(MMU_NOTIFIER_TIMEOUT);
++
++		if (!wait_for_completion_timeout(&odp->notifier_completion,
++						 timeout)) {
++			mlx5_ib_warn(
++				mr_to_mdev(mr),
++				"timeout waiting for mmu notifier. seq %d against %d. notifiers_count=%d\n",
++				current_seq, odp->notifiers_seq,
++				odp->notifiers_count);
++		}
++	}
++#endif
+ 	return ret;
+ }
+ 
+@@ -689,6 +800,7 @@ out:
+ 	return ret;
+ }
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ static int pagefault_dmabuf_mr(struct mlx5_ib_mr *mr, size_t bcnt,
+ 			       u32 *bytes_mapped, u32 flags)
+ {
+@@ -726,6 +838,7 @@ static int pagefault_dmabuf_mr(struct ml
+ 
+ 	return ib_umem_num_pages(mr->umem);
+ }
++#endif
+ 
+ /*
+  * Returns:
+@@ -744,8 +857,10 @@ static int pagefault_mr(struct mlx5_ib_m
+ 	if (unlikely(io_virt < mr->ibmr.iova))
+ 		return -EFAULT;
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	if (mr->umem->is_dmabuf)
+ 		return pagefault_dmabuf_mr(mr, bcnt, bytes_mapped, flags);
++#endif
+ 
+ 	if (!odp->is_implicit_odp) {
+ 		u64 user_va;
+@@ -773,6 +888,7 @@ int mlx5_ib_init_odp_mr(struct mlx5_ib_m
+ 	return ret >= 0 ? 0 : ret;
+ }
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ int mlx5_ib_init_dmabuf_mr(struct mlx5_ib_mr *mr)
+ {
+ 	int ret;
+@@ -782,6 +898,7 @@ int mlx5_ib_init_dmabuf_mr(struct mlx5_i
+ 
+ 	return ret >= 0 ? 0 : ret;
+ }
++#endif
+ 
+ struct pf_frame {
+ 	struct pf_frame *next;
+@@ -1613,6 +1730,9 @@ void mlx5_odp_init_mkey_cache_entry(stru
+ 
+ static const struct ib_device_ops mlx5_ib_dev_odp_ops = {
+ 	.advise_mr = mlx5_ib_advise_mr,
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
++	.invalidate_range = mlx5_ib_invalidate_range,
++#endif
+ };
+ 
+ int mlx5_ib_odp_init_one(struct mlx5_ib_dev *dev)

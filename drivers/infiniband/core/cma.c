@@ -17,7 +17,6 @@
 #include <linux/inetdevice.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/ratelimit.h>
 #include <net/route.h>
 
 #include <net/net_namespace.h>
@@ -175,7 +174,6 @@ static struct rb_root id_table = RB_ROOT;
 /* Serialize operations of id_table tree */
 static DEFINE_SPINLOCK(id_table_lock);
 static struct workqueue_struct *cma_wq;
-static struct workqueue_struct *cma_netevent_wq;
 static unsigned int cma_pernet_id;
 
 struct cma_pernet {
@@ -376,11 +374,6 @@ struct cma_work {
 	struct rdma_cm_event	event;
 };
 
-struct cma_netevent_work {
-	struct work_struct work;
-	struct rdma_id_private *id_priv;
-};
-
 union cma_ip_addr {
 	struct in6_addr ip6;
 	struct {
@@ -473,30 +466,32 @@ static int cma_igmp_send(struct net_device *ndev, union ib_gid *mgid, bool join)
 }
 
 static int compare_netdev_and_ip(int ifindex_a, struct sockaddr *sa,
-				 int ifindex_b, struct sockaddr *sb)
+				 struct id_table_entry *entry_b)
 {
+	struct rdma_id_private *id_priv = list_first_entry(
+		&entry_b->id_list, struct rdma_id_private, id_list_entry);
+	int ifindex_b = id_priv->id.route.addr.dev_addr.bound_dev_if;
+	struct sockaddr *sb = cma_dst_addr(id_priv);
+
 	if (ifindex_a != ifindex_b)
-		return (ifindex_a - ifindex_b);
+		return (ifindex_a > ifindex_b) ? 1 : -1;
 
 	if (sa->sa_family != sb->sa_family)
-		return (sa->sa_family - sb->sa_family);
+		return sa->sa_family - sb->sa_family;
 
 	if (sa->sa_family == AF_INET)
-		return (int)__be32_to_cpu(
-			       ((struct sockaddr_in *)sa)->sin_addr.s_addr) -
-		       (int)__be32_to_cpu(
-			       ((struct sockaddr_in *)sb)->sin_addr.s_addr);
+		return memcmp((char *)&((struct sockaddr_in *)sa)->sin_addr,
+			      (char *)&((struct sockaddr_in *)sb)->sin_addr,
+			      sizeof(((struct sockaddr_in *)sa)->sin_addr));
 
-	return memcmp((char *)&((struct sockaddr_in6 *)sa)->sin6_addr,
-		      (char *)&((struct sockaddr_in6 *)sb)->sin6_addr,
-		      sizeof(((struct sockaddr_in6 *)sa)->sin6_addr));
+	return ipv6_addr_cmp(&((struct sockaddr_in6 *)sa)->sin6_addr,
+			     &((struct sockaddr_in6 *)sb)->sin6_addr);
 }
 
 static int cma_add_id_to_tree(struct rdma_id_private *node_id_priv)
 {
-	struct rb_node **new = &id_table.rb_node, *parent = NULL;
+	struct rb_node **new, *parent = NULL;
 	struct id_table_entry *this, *node;
-	struct rdma_id_private *id_priv;
 	unsigned long flags;
 	int result;
 
@@ -505,15 +500,12 @@ static int cma_add_id_to_tree(struct rdma_id_private *node_id_priv)
 		return -ENOMEM;
 
 	spin_lock_irqsave(&id_table_lock, flags);
+	new = &id_table.rb_node;
 	while (*new) {
 		this = container_of(*new, struct id_table_entry, rb_node);
-		id_priv = list_first_entry(
-			&this->id_list, struct rdma_id_private, id_list_entry);
 		result = compare_netdev_and_ip(
 			node_id_priv->id.route.addr.dev_addr.bound_dev_if,
-			cma_dst_addr(node_id_priv),
-			id_priv->id.route.addr.dev_addr.bound_dev_if,
-			cma_dst_addr(id_priv));
+			cma_dst_addr(node_id_priv), this);
 
 		parent = *new;
 		if (result < 0)
@@ -542,21 +534,13 @@ unlock:
 static struct id_table_entry *
 node_from_ndev_ip(struct rb_root *root, int ifindex, struct sockaddr *sa)
 {
-
 	struct rb_node *node = root->rb_node;
-	struct rdma_id_private *node_id_priv;
 	struct id_table_entry *data;
 	int result;
 
-
 	while (node) {
 		data = container_of(node, struct id_table_entry, rb_node);
-		node_id_priv = list_first_entry(
-			&data->id_list, struct rdma_id_private, id_list_entry);
-		result = compare_netdev_and_ip(
-			ifindex, sa,
-			node_id_priv->id.route.addr.dev_addr.bound_dev_if,
-			cma_dst_addr(node_id_priv));
+		result = compare_netdev_and_ip(ifindex, sa, data);
 		if (result < 0)
 			node = node->rb_left;
 		else if (result > 0)
@@ -2952,7 +2936,7 @@ static int cma_query_ib_route(struct rdma_id_private *id_priv,
 
 	id_priv->query_id = ib_sa_path_rec_get(&sa_client, id_priv->id.device,
 					       id_priv->id.port_num, &path_rec,
-					       comp_mask, timeout_ms, 0,
+					       comp_mask, timeout_ms,
 					       GFP_KERNEL, cma_query_handler,
 					       work, &id_priv->query);
 
@@ -3825,7 +3809,7 @@ static int cma_alloc_any_port(enum rdma_ucm_port_space ps,
 
 	inet_get_local_port_range(net, &low, &high);
 	remaining = (high - low) + 1;
-	rover = prandom_u32() % remaining + low;
+	rover = prandom_u32_max(remaining) + low;
 retry:
 	if (last_used_port != rover) {
 		struct rdma_bind_list *bind_list;
@@ -5118,32 +5102,30 @@ out:
 
 static void cma_netevent_work_handler(struct work_struct *_work)
 {
-	struct cma_netevent_work *network =
-		container_of(_work, struct cma_netevent_work, work);
+	struct rdma_id_private *id_priv =
+		container_of(_work, struct rdma_id_private, id.net_work);
 	struct rdma_cm_event event = {};
 
-	mutex_lock(&network->id_priv->handler_mutex);
+	mutex_lock(&id_priv->handler_mutex);
 
-	if (READ_ONCE(network->id_priv->state) == RDMA_CM_DESTROYING ||
-	    READ_ONCE(network->id_priv->state) == RDMA_CM_DEVICE_REMOVAL)
+	if (READ_ONCE(id_priv->state) == RDMA_CM_DESTROYING ||
+	    READ_ONCE(id_priv->state) == RDMA_CM_DEVICE_REMOVAL)
 		goto out_unlock;
 
 	event.event = RDMA_CM_EVENT_UNREACHABLE;
 	event.status = -ETIMEDOUT;
 
-	if (cma_cm_event_handler(network->id_priv, &event)) {
-		__acquire(&network->id_priv->handler_mutex);
-		network->id_priv->cm_id.ib = NULL;
-		cma_id_put(network->id_priv);
-		destroy_id_handler_unlock(network->id_priv);
-		kfree(network);
+	if (cma_cm_event_handler(id_priv, &event)) {
+		__acquire(&id_priv->handler_mutex);
+		id_priv->cm_id.ib = NULL;
+		cma_id_put(id_priv);
+		destroy_id_handler_unlock(id_priv);
 		return;
 	}
 
 out_unlock:
-	mutex_unlock(&network->id_priv->handler_mutex);
-	cma_id_put(network->id_priv);
-	kfree(network);
+	mutex_unlock(&id_priv->handler_mutex);
+	cma_id_put(id_priv);
 }
 
 static int cma_netevent_callback(struct notifier_block *self,
@@ -5151,7 +5133,6 @@ static int cma_netevent_callback(struct notifier_block *self,
 {
 	struct id_table_entry *ips_node = NULL;
 	struct rdma_id_private *current_id;
-	struct cma_netevent_work *network;
 	struct neighbour *neigh = ctx;
 	unsigned long flags;
 
@@ -5183,14 +5164,9 @@ static int cma_netevent_callback(struct notifier_block *self,
 		if (!memcmp(current_id->id.route.addr.dev_addr.dst_dev_addr,
 			   neigh->ha, ETH_ALEN))
 			continue;
-		network = kzalloc(sizeof(*network), GFP_ATOMIC);
-		if (!network)
-			goto out;
-
-		INIT_WORK(&network->work, cma_netevent_work_handler);
-		network->id_priv = current_id;
+		INIT_WORK(&current_id->id.net_work, cma_netevent_work_handler);
 		cma_id_get(current_id);
-		queue_work(cma_netevent_wq, &network->work);
+		queue_work(cma_wq, &current_id->id.net_work);
 	}
 out:
 	spin_unlock_irqrestore(&id_table_lock, flags);
@@ -5421,12 +5397,6 @@ static int __init cma_init(void)
 	if (!cma_wq)
 		return -ENOMEM;
 
-	cma_netevent_wq = alloc_ordered_workqueue("rdma_cm_netevent", 0);
-	if (!cma_netevent_wq) {
-		ret = -ENOMEM;
-		goto err_netevent_wq;
-	}
-
 	ret = register_pernet_subsys(&cma_pernet_operations);
 	if (ret)
 		goto err_wq;
@@ -5453,8 +5423,6 @@ err:
 	ib_sa_unregister_client(&sa_client);
 	unregister_pernet_subsys(&cma_pernet_operations);
 err_wq:
-	destroy_workqueue(cma_netevent_wq);
-err_netevent_wq:
 	destroy_workqueue(cma_wq);
 	return ret;
 }
@@ -5467,7 +5435,6 @@ static void __exit cma_cleanup(void)
 	unregister_netdevice_notifier(&cma_nb);
 	ib_sa_unregister_client(&sa_client);
 	unregister_pernet_subsys(&cma_pernet_operations);
-	destroy_workqueue(cma_netevent_wq);
 	destroy_workqueue(cma_wq);
 }
 
