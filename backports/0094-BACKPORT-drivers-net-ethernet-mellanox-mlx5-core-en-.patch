@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 
 Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 53 ++++++++++++++++++-
- 1 file changed, 51 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 57 ++++++++++++++++++-
+ 1 file changed, 55 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
@@ -133,4 +133,16 @@ Change-Id: I8724cbabce535e831c07f3a808fd50bf03520e31
 +#endif
  	mlx5e_build_rq_param(mdev, params, NULL, q_counter, rq_params);
  }
+ 
+@@ -698,7 +747,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
+ 	if (err)
+ 		goto err_free;
+ 
++#ifdef HAVE_NETIF_NAPI_ADD_GET_3_PARAMS //forwardport
++	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll);
++#else
+ 	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll, 64);
++#endif
+ 
+ 	mlx5e_ptp_build_params(c, cparams, params);
  

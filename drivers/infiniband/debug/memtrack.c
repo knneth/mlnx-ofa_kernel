@@ -144,8 +144,7 @@
 #ifdef kvcalloc
 	#undef kvcalloc
 #endif
-/* if kernel version < 2.6.37, it's defined in compat as singlethread_workqueue */
-#if defined(alloc_ordered_workqueue) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
+#if defined(alloc_ordered_workqueue)
 	#undef alloc_ordered_workqueue
 #endif
 
@@ -238,9 +237,7 @@ static LIST_HEAD(targeted_modules_list);
 static DEFINE_MUTEX(ignored_func_mutex);
 static DEFINE_MUTEX(targeted_modules_mutex);
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 static struct kobject *memtrack_obj;
-#endif
 
 struct memtrack_meminfo_t {
 	unsigned long addr;
@@ -327,7 +324,6 @@ static inline const char *memtype_free_str(enum memtrack_memtype_t memtype)
 	}
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 int find_ignore_func_info(const char *func_name)
 {
 	struct memtrack_ignore_func_info_t *tmp_ignore_func_info_p;
@@ -546,8 +542,6 @@ static struct attribute *attrs[] = {
 static struct attribute_group attr_group = {
 	.attrs = attrs,
 };
-
-#endif
 
 /*
  *  overlap_a_b
@@ -1226,7 +1220,6 @@ int memtrack_inject_error(struct module *module_obj,
 	if (!strcmp(module_obj->name, "memtrack"))
 		return 0;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 	if (!list_empty(&targeted_modules_list) &&
 	    !find_targeted_module_info(module_obj->name)) {
 		return 0;
@@ -1234,9 +1227,13 @@ int memtrack_inject_error(struct module *module_obj,
 
 	if (find_ignore_func_info(caller_func_name))
 		return 0;
-#endif
+
 	if (inject_freq) {
-		if (!(random32() % inject_freq)) {
+#ifdef HAVE_GET_RANDOM_U32
+		if (!(get_random_u32() % inject_freq)) {
+#else
+		if (!(prandom_u32() % inject_freq)) {
+#endif
 			val = inject_error_record(module_obj->name,
 						  file_name, func_name,
 						  caller_func_name,
@@ -1300,7 +1297,6 @@ int init_module(void)
 		goto undo_cache_create;
 	}
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 	memtrack_obj = kobject_create_and_add("memtrack", kernel_kobj);
 	if (!memtrack_obj) {
 		printk(KERN_ERR "memtrack::%s: failed to create memtrack kobject\n", __func__);
@@ -1311,18 +1307,15 @@ int init_module(void)
 		printk(KERN_ERR "memtrack::%s: failed to create memtrack sysfs\n", __func__);
 		goto undo_kobject;
 	}
-#endif
 	printk(KERN_INFO "memtrack::%s done.\n", __func__);
 
 	return 0;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 undo_kobject:
 	kobject_put(memtrack_obj);
 
 undo_procfs_tree:
 	destroy_procfs_tree();
-#endif
 
 undo_cache_create:
 	for (j = 0; j < i; ++j) {
@@ -1330,12 +1323,7 @@ undo_cache_create:
 			vfree(tracked_objs_arr[j]);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
-	if (kmem_cache_destroy(meminfo_cache) != 0)
-		printk(KERN_ERR "Failed on kmem_cache_destroy!\n");
-#else
 	kmem_cache_destroy(meminfo_cache);
-#endif
 	return -1;
 }
 
@@ -1358,9 +1346,7 @@ void cleanup_module(void)
 
 	destroy_procfs_tree();
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16)
 	kobject_put(memtrack_obj);
-#endif
 
 	/* clean up any hash table left-overs */
 	for (memtype = 0; memtype < MEMTRACK_NUM_OF_MEMTYPES; memtype++) {
@@ -1418,11 +1404,6 @@ void cleanup_module(void)
 		kfree(targeted_module_p);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
-	if (kmem_cache_destroy(meminfo_cache) != 0)
-		printk(KERN_ERR "memtrack::cleanup_module: Failed on kmem_cache_destroy!\n");
-#else
 	kmem_cache_destroy(meminfo_cache);
-#endif
 	printk(KERN_INFO "memtrack::cleanup_module done.\n");
 }

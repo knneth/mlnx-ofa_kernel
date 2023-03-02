@@ -486,6 +486,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if prandom.h has get_random_u32])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/random.h>
+	],[
+		int a;
+		a = get_random_u32();
+
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GET_RANDOM_U32, 1,
+			  [get_random_u32 defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct net_device_ops has ndo_get_devlink_port])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -1913,6 +1928,36 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE___ETHTOOL_GET_LINK_KSETTINGS, 1,
 			  [__ethtool_get_link_ksettings is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if netif_napi_add get 3 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		netif_napi_add(NULL, NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETIF_NAPI_ADD_GET_3_PARAMS, 1,
+			  [netif_napi_add get 3 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if netdevice.h has netif_napi_add_weight])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		netif_napi_add_weight(NULL, NULL, NULL ,0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETIF_NAPI_ADD_WEIGHT, 1,
+			  [netdevice.h has netif_napi_add_weight])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -5134,6 +5179,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct genl_family has member resv_start_op])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/genetlink.h>
+	],[
+		struct genl_family x;
+
+		x.resv_start_op = 0;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GENL_FAMILY_RESV_START_OP, 1,
+			  [struct genl_family has member resv_start_op])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct genl_family has member policy])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/genetlink.h>
@@ -7263,6 +7325,27 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_PROC_OPS_STRUCT, 1,
 			  [struct proc_ops is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if function map_queues returns int])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		int foo(struct blk_mq_tag_set *x) {
+			return 0;
+		}
+
+		struct blk_mq_ops ops = {
+			.map_queues = foo,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT, 1,
+			  [function map_queues returns int])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -15792,6 +15875,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_FUNC_NETDEV_MACSEC_IS_OFFLOADED, 1,
 			      [net/macsec.c has function netdev_macsec_is_offloaded])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if file linux/blk-mq.h has enum rq_end_io_ret])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		enum rq_end_io_ret x;
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_END_IO_RET, 1,
+			[if file rq_end_io_ret exists])
 	],[
 		AC_MSG_RESULT(no)
 	])

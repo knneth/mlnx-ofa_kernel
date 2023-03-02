@@ -95,7 +95,7 @@ Change-Id: I4f8290773fff6c89b3b80655e052f86253332b8c
  	int err;
  
  	spin_lock_init(&qp->sq.lock);
-@@ -5826,9 +5842,18 @@ static void handle_drain_completion(stru
+@@ -5857,9 +5873,18 @@ static void handle_drain_completion(stru
  		if (triggered) {
  			/* Wait for any scheduled/running task to be ended */
  			switch (cq->poll_ctx) {

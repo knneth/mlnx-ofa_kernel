@@ -3585,11 +3585,9 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			 const struct ib_qp_attr *attr, bool alt)
 {
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah);
-	bool global_tc;
 	int err;
 	u8 ah_flags = rdma_ah_get_ah_flags(ah);
 	u8 sl = rdma_ah_get_sl(ah);
-	u8 tclass = grh->traffic_class;
 
 	if (attr_mask & IB_QP_PKEY_INDEX)
 		MLX5_SET(ads, path, pkey_index,
@@ -3608,16 +3606,13 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			return -EINVAL;
 		}
 
-		tclass_get_tclass(dev, &dev->tcd[port - 1], ah, port, &tclass,
-				  &global_tc);
 		memcpy(&qp->ah, ah, sizeof(qp->ah));
-		qp->tclass = tclass;
 
 		gid_type = ah->grh.sgid_attr->gid_type;
 		if (gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP) {
 			if (qp->type == MLX5_IB_QPT_DCI)
-				MLX5_SET(ads, path, f_dscp, global_tc);
-			MLX5_SET(ads, path, dscp, tclass >> 2);
+				MLX5_SET(ads, path, f_dscp, qp->global_tclass);
+			MLX5_SET(ads, path, dscp, qp->tclass >> 2);
 		}
 
 		MLX5_SET(ads, path, src_addr_index, grh->sgid_index);
@@ -4764,6 +4759,41 @@ static int validate_rd_atomic(struct mlx5_ib_dev *dev, struct ib_qp_attr *attr,
 	return true;
 }
 
+static void mlx5_ib_qp_set_tclass(struct mlx5_ib_dev *dev,
+				  struct mlx5_ib_qp *qp,
+				  struct ib_qp_attr *attr,
+				  int attr_mask)
+{
+	u8 port = attr_mask & IB_QP_PORT ? attr->port_num : qp->port;
+	struct mlx5_tc_data *tcd;
+	struct rdma_ah_attr *ah;
+	bool global_tc = false;
+	u8 ah_flags;
+	u8 tclass;
+
+	if (!(attr_mask & IB_QP_AV))
+		return;
+	if (port == 0 || port  > dev->num_ports)
+		return;
+
+	tcd = &dev->tcd[port - 1];
+	ah = &attr->ah_attr;
+	ah_flags = rdma_ah_get_ah_flags(ah);
+	if (!(ah_flags & IB_AH_GRH))
+		return;
+	mutex_lock(&tcd->lock);
+	mutex_lock(&qp->mutex);
+
+	tclass = rdma_ah_read_grh(ah)->traffic_class;
+	tclass_get_tclass_locked(dev, tcd, ah, port, &tclass, &global_tc);
+	qp->tclass = tclass;
+	qp->global_tclass = global_tc;
+
+	mutex_unlock(&qp->mutex);
+	mutex_unlock(&tcd->lock);
+
+}
+
 int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata)
 {
@@ -4813,6 +4843,15 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	if (qp_type == MLX5_IB_QPT_DCT)
 		return mlx5_ib_modify_dct(ibqp, attr, attr_mask, &ucmd, udata);
 
+	if ((attr_mask & IB_QP_PORT) &&
+	    (attr->port_num == 0 ||
+	     attr->port_num > dev->num_ports)) {
+		mlx5_ib_dbg(dev, "invalid port number %d. number of ports is %d\n",
+			    attr->port_num, dev->num_ports);
+		return err;
+	}
+
+	mlx5_ib_qp_set_tclass(dev, qp, attr, attr_mask);
 	mutex_lock(&qp->mutex);
 
 	cur_state = attr_mask & IB_QP_CUR_STATE ? attr->cur_qp_state : qp->state;
@@ -4834,14 +4873,6 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		   !modify_dci_qp_is_ok(cur_state, new_state, attr_mask)) {
 		mlx5_ib_dbg(dev, "invalid QP state transition from %d to %d, qp_type %d, attr_mask 0x%x\n",
 			    cur_state, new_state, qp_type, attr_mask);
-		goto out;
-	}
-
-	if ((attr_mask & IB_QP_PORT) &&
-	    (attr->port_num == 0 ||
-	     attr->port_num > dev->num_ports)) {
-		mlx5_ib_dbg(dev, "invalid port number %d. number of ports is %d\n",
-			    attr->port_num, dev->num_ports);
 		goto out;
 	}
 

@@ -540,6 +540,7 @@ struct mlx5_ib_qp {
 	enum ib_qp_type		type;
 	struct rdma_ah_attr  	ah;
 	u8                   	tclass;
+	bool			global_tclass;
 	/* A flag to indicate if there's a new counter is configured
 	 * but not take effective
 	 */

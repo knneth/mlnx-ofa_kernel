@@ -1918,6 +1918,7 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	if (err)
 		goto reps_err;
 
+	init_rwsem(&esw->offloads.neigh_update_lock);
 	mutex_init(&esw->offloads.encap_tbl_lock);
 	hash_init(esw->offloads.encap_tbl);
 	mutex_init(&esw->offloads.decap_tbl_lock);

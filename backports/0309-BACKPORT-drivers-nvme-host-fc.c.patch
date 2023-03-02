@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fc.c
 
 Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
 ---
- drivers/nvme/host/fc.c | 113 ++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 112 insertions(+), 1 deletion(-)
+ drivers/nvme/host/fc.c | 148 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 145 insertions(+), 3 deletions(-)
 
 --- a/drivers/nvme/host/fc.c
 +++ b/drivers/nvme/host/fc.c
@@ -238,17 +238,26 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  		io_dir = ((rq_data_dir(rq) == WRITE) ?
  					NVMEFC_FCP_WRITE : NVMEFC_FCP_READ);
  	} else {
-@@ -2846,6 +2949,7 @@ nvme_fc_complete_rq(struct request *rq)
+@@ -2846,7 +2949,12 @@ nvme_fc_complete_rq(struct request *rq)
  	nvme_fc_ctrl_put(ctrl);
  }
  
 +#if defined(HAVE_BLK_MQ_MAP_QUEUES) && defined(HAVE_BLK_MQ_TAG_SET_HAS_MAP)
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
  static int nvme_fc_map_queues(struct blk_mq_tag_set *set)
++#else
++static void nvme_fc_map_queues(struct blk_mq_tag_set *set)
++#endif
  {
  	struct nvme_fc_ctrl *ctrl = set->driver_data;
-@@ -2868,15 +2972,22 @@ static int nvme_fc_map_queues(struct blk
+ 	int i;
+@@ -2866,17 +2974,26 @@ static int nvme_fc_map_queues(struct blk
+ 		else
+ 			blk_mq_map_queues(map);
  	}
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
  	return 0;
++#endif
  }
 +#endif
  
@@ -269,7 +278,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  };
  
  static int
-@@ -2941,7 +3052,11 @@ nvme_fc_create_io_queues(struct nvme_fc_
+@@ -2941,7 +3058,11 @@ nvme_fc_create_io_queues(struct nvme_fc_
  out_delete_hw_queues:
  	nvme_fc_delete_hw_io_queues(ctrl);
  out_cleanup_blk_queue:
@@ -281,7 +290,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  out_free_tag_set:
  	blk_mq_free_tag_set(&ctrl->tag_set);
  	nvme_fc_free_io_queues(ctrl);
-@@ -3414,11 +3529,18 @@ nvme_fc_connect_ctrl_work(struct work_st
+@@ -3414,11 +3535,18 @@ nvme_fc_connect_ctrl_work(struct work_st
  			ctrl->cnum);
  }
  
@@ -301,7 +310,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  	.exit_request	= nvme_fc_exit_request,
  	.init_hctx	= nvme_fc_init_admin_hctx,
  	.timeout	= nvme_fc_timeout,
-@@ -3548,7 +3670,9 @@ nvme_fc_init_ctrl(struct device *dev, st
+@@ -3548,7 +3676,9 @@ nvme_fc_init_ctrl(struct device *dev, st
  	ctrl->admin_tag_set.driver_data = ctrl;
  	ctrl->admin_tag_set.nr_hw_queues = 1;
  	ctrl->admin_tag_set.timeout = NVME_ADMIN_TIMEOUT;
@@ -311,7 +320,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  
  	ret = blk_mq_alloc_tag_set(&ctrl->admin_tag_set);
  	if (ret)
-@@ -3631,10 +3755,17 @@ fail_ctrl:
+@@ -3631,10 +3761,17 @@ fail_ctrl:
  
  	return ERR_PTR(-EIO);
  
@@ -329,7 +338,7 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  out_free_admin_tag_set:
  	blk_mq_free_tag_set(&ctrl->admin_tag_set);
  out_free_queues:
-@@ -4050,3 +4181,8 @@ module_init(nvme_fc_init_module);
+@@ -4050,3 +4187,8 @@ module_init(nvme_fc_init_module);
  module_exit(nvme_fc_exit_module);
  
  MODULE_LICENSE("GPL v2");

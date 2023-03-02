@@ -2506,6 +2506,7 @@ set_encap_dests(struct mlx5e_priv *priv,
 	struct net_device *encap_dev = NULL;
 	struct mlx5e_rep_priv *rpriv;
 	struct mlx5e_priv *out_priv;
+	struct mlx5_eswitch *esw;
 	int out_index;
 	int err = 0;
 
@@ -2516,6 +2517,8 @@ set_encap_dests(struct mlx5e_priv *priv,
 	esw_attr = attr->esw_attr;
 	*vf_tun = false;
 
+	esw = priv->mdev->priv.eswitch;
+	down_read(&esw->offloads.neigh_update_lock);
 	for (out_index = 0; out_index < MLX5_MAX_FLOW_FWD_VPORTS; out_index++) {
 		struct net_device *out_dev;
 		int mirred_ifindex;
@@ -2554,6 +2557,7 @@ set_encap_dests(struct mlx5e_priv *priv,
 	}
 
 out:
+	up_read(&esw->offloads.neigh_update_lock);
 	return err;
 }
 

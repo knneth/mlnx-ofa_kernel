@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
 
 Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
 ---
- drivers/nvme/host/rdma.c | 254 +++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 254 insertions(+)
+ drivers/nvme/host/rdma.c | 286 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 286 insertions(+)
 
 --- a/drivers/nvme/host/rdma.c
 +++ b/drivers/nvme/host/rdma.c
@@ -583,7 +583,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  static void nvme_rdma_check_pi_status(struct nvme_rdma_request *req)
  {
-@@ -2239,20 +2472,33 @@ static void nvme_rdma_complete_rq(struct
+@@ -2239,20 +2472,37 @@ static void nvme_rdma_complete_rq(struct
  {
  	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
  	struct nvme_rdma_queue *queue = req->queue;
@@ -610,17 +610,24 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  }
  
 +#if defined(HAVE_BLK_MQ_MAP_QUEUES) && defined(HAVE_BLK_MQ_TAG_SET_HAS_MAP)
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
  static int nvme_rdma_map_queues(struct blk_mq_tag_set *set)
++#else
++static void nvme_rdma_map_queues(struct blk_mq_tag_set *set)
++#endif
  {
  	struct nvme_rdma_ctrl *ctrl = set->driver_data;
 +#if defined(HAVE_BLK_MQ_HCTX_TYPE) && defined(HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP)
  	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
  
  	if (opts->nr_write_queues && ctrl->io_queues[HCTX_TYPE_READ]) {
-@@ -2295,24 +2541,55 @@ static int nvme_rdma_map_queues(struct b
+@@ -2294,25 +2544,58 @@ static int nvme_rdma_map_queues(struct b
+ 		ctrl->io_queues[HCTX_TYPE_READ],
  		ctrl->io_queues[HCTX_TYPE_POLL]);
  
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
  	return 0;
++#endif
 +#else
 +	return blk_mq_rdma_map_queues(set, ctrl->device->dev, 0);
 +#endif
@@ -673,7 +680,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	.init_hctx	= nvme_rdma_init_admin_hctx,
  	.timeout	= nvme_rdma_timeout,
  };
-@@ -2579,3 +2856,6 @@ module_init(nvme_rdma_init_module);
+@@ -2579,3 +2862,6 @@ module_init(nvme_rdma_init_module);
  module_exit(nvme_rdma_cleanup_module);
  
  MODULE_LICENSE("GPL v2");

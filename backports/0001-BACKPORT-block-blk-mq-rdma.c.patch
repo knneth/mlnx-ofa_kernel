@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: block/blk-mq-rdma.c
 
 Change-Id: Ic7b3baaebf1cdf4ec438b81dd71cb01bd0e2dc4e
 ---
- block/blk-mq-rdma.c | 26 ++++++++++++++++++++++++++
- 1 file changed, 26 insertions(+)
+ block/blk-mq-rdma.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
 
 --- a/block/blk-mq-rdma.c
 +++ b/block/blk-mq-rdma.c
@@ -18,12 +18,12 @@ Change-Id: Ic7b3baaebf1cdf4ec438b81dd71cb01bd0e2dc4e
   * vector, we fallback to the naive mapping.
   */
 +#ifdef HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP
- int blk_mq_rdma_map_queues(struct blk_mq_queue_map *map,
+ void blk_mq_rdma_map_queues(struct blk_mq_queue_map *map,
  		struct ib_device *dev, int first_vec)
  {
-@@ -41,4 +43,28 @@ int blk_mq_rdma_map_queues(struct blk_mq
+@@ -41,4 +43,27 @@ void blk_mq_rdma_map_queues(struct blk_m
  fallback:
- 	return blk_mq_map_queues(map);
+ 	blk_mq_map_queues(map);
  }
 +#else
 +int blk_mq_rdma_map_queues(struct blk_mq_tag_set *set,
@@ -48,5 +48,4 @@ Change-Id: Ic7b3baaebf1cdf4ec438b81dd71cb01bd0e2dc4e
 +}
 +#endif
  EXPORT_SYMBOL_GPL(blk_mq_rdma_map_queues);
-+
 +#endif /* HAVE_BLK_MQ_TAG_SET_HAS_MAP */

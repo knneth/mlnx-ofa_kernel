@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/tcp.c
 
 Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
 ---
- drivers/nvme/host/tcp.c | 105 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 105 insertions(+)
+ drivers/nvme/host/tcp.c | 137 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 137 insertions(+)
 
 --- a/drivers/nvme/host/tcp.c
 +++ b/drivers/nvme/host/tcp.c
@@ -296,15 +296,21 @@ Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
  
  static blk_status_t nvme_tcp_queue_rq(struct blk_mq_hw_ctx *hctx,
  		const struct blk_mq_queue_data *bd)
-@@ -2431,6 +2534,7 @@ static blk_status_t nvme_tcp_queue_rq(st
+@@ -2429,8 +2532,13 @@ static blk_status_t nvme_tcp_queue_rq(st
+ 	return BLK_STS_OK;
+ }
  
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
  static int nvme_tcp_map_queues(struct blk_mq_tag_set *set)
++#else
++static void nvme_tcp_map_queues(struct blk_mq_tag_set *set)
++#endif
  {
 +#ifdef HAVE_BLK_MQ_HCTX_TYPE
  	struct nvme_tcp_ctrl *ctrl = set->driver_data;
  	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
  
-@@ -2470,11 +2574,23 @@ static int nvme_tcp_map_queues(struct bl
+@@ -2470,11 +2578,25 @@ static int nvme_tcp_map_queues(struct bl
  		ctrl->io_queues[HCTX_TYPE_DEFAULT],
  		ctrl->io_queues[HCTX_TYPE_READ],
  		ctrl->io_queues[HCTX_TYPE_POLL]);
@@ -312,7 +318,9 @@ Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
 +	blk_mq_map_queues(set);
 +#endif
  
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
  	return 0;
++#endif
  }
  
 +#ifdef HAVE_BLK_MQ_OPS_POLL
@@ -328,7 +336,7 @@ Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
  	struct sock *sk = queue->sock->sk;
-@@ -2483,23 +2599,32 @@ static int nvme_tcp_poll(struct blk_mq_h
+@@ -2483,23 +2605,32 @@ static int nvme_tcp_poll(struct blk_mq_h
  		return 0;
  
  	set_bit(NVME_TCP_Q_POLLING, &queue->flags);
@@ -361,7 +369,7 @@ Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
  };
  
  static const struct blk_mq_ops nvme_tcp_admin_mq_ops = {
-@@ -2592,6 +2717,7 @@ static struct nvme_ctrl *nvme_tcp_create
+@@ -2592,6 +2723,7 @@ static struct nvme_ctrl *nvme_tcp_create
  		}
  	}
  
@@ -369,7 +377,7 @@ Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
  	if (opts->mask & NVMF_OPT_HOST_IFACE) {
  		if (!__dev_get_by_name(&init_net, opts->host_iface)) {
  			pr_err("invalid interface passed: %s\n",
-@@ -2600,6 +2726,7 @@ static struct nvme_ctrl *nvme_tcp_create
+@@ -2600,6 +2732,7 @@ static struct nvme_ctrl *nvme_tcp_create
  			goto out_free_ctrl;
  		}
  	}
@@ -377,7 +385,7 @@ Change-Id: I947d2fac11ccc3e3b2fcfafaa47fe7e4c10c8a7d
  
  	if (!opts->duplicate_connect && nvme_tcp_existing_controller(opts)) {
  		ret = -EALREADY;
-@@ -2657,7 +2784,11 @@ static struct nvmf_transport_ops nvme_tc
+@@ -2657,7 +2790,11 @@ static struct nvmf_transport_ops nvme_tc
  			  NVMF_OPT_HOST_TRADDR | NVMF_OPT_CTRL_LOSS_TMO |
  			  NVMF_OPT_HDR_DIGEST | NVMF_OPT_DATA_DIGEST |
  			  NVMF_OPT_NR_WRITE_QUEUES | NVMF_OPT_NR_POLL_QUEUES |

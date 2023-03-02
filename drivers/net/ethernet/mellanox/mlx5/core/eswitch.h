@@ -326,6 +326,7 @@ struct mlx5_esw_offload {
 	struct mlx5_flow_handle *vport_rx_drop_rule;
 	struct list_head peer_flows;
 	struct mutex peer_mutex;
+	struct rw_semaphore neigh_update_lock;
 	struct mutex encap_tbl_lock; /* protects encap_tbl */
 	DECLARE_HASHTABLE(encap_tbl, 8);
 	struct mutex decap_tbl_lock; /* protects decap_tbl */

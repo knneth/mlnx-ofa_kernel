@@ -802,7 +802,7 @@ void mlx5_irq_rename(struct mlx5_core_dev *dev, struct mlx5_irq *irq,
 				"%s@pci:%s", default_name, pci_name(dev->pdev));
 	} else {
 		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
-				irq->index - MLX5_PF_IRQ_CTRL_NUM);
+				irq->index - MLX5_PF_IRQ_CTRL_NUM + 1);
 	}
 }
 

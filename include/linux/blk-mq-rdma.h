@@ -9,7 +9,7 @@ struct ib_device;
 
 #define blk_mq_rdma_map_queues LINUX_BACKPORT(blk_mq_rdma_map_queues)
 #ifdef HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP
-int blk_mq_rdma_map_queues(struct blk_mq_queue_map *map,
+void blk_mq_rdma_map_queues(struct blk_mq_queue_map *map,
 		struct ib_device *dev, int first_vec);
 #else
 int blk_mq_rdma_map_queues(struct blk_mq_tag_set *set,

@@ -31,7 +31,7 @@ Change-Id: I92aec53ed425a70f21f7dbe5035d7cc08653dd88
  };
  
  int init_ttl_sysfs(struct mlx5_ib_dev *dev)
-@@ -679,6 +686,10 @@ static struct attribute *tc_attrs[] = {
+@@ -668,6 +675,10 @@ static struct attribute *tc_attrs[] = {
  	NULL
  };
  
@@ -42,7 +42,7 @@ Change-Id: I92aec53ed425a70f21f7dbe5035d7cc08653dd88
  static ssize_t tc_attr_show(struct kobject *kobj,
  			    struct attribute *attr, char *buf)
  {
-@@ -710,7 +721,11 @@ static const struct sysfs_ops tc_sysfs_o
+@@ -699,7 +710,11 @@ static const struct sysfs_ops tc_sysfs_o
  
  static struct kobj_type tc_type = {
  	.sysfs_ops     = &tc_sysfs_ops,
@@ -55,7 +55,7 @@ Change-Id: I92aec53ed425a70f21f7dbe5035d7cc08653dd88
  };
  
  int init_tc_sysfs(struct mlx5_ib_dev *dev)
-@@ -1379,6 +1394,10 @@ static struct attribute *dc_attrs[] = {
+@@ -1368,6 +1383,10 @@ static struct attribute *dc_attrs[] = {
          NULL
  };
  
@@ -66,7 +66,7 @@ Change-Id: I92aec53ed425a70f21f7dbe5035d7cc08653dd88
  static ssize_t dc_attr_show(struct kobject *kobj,
                              struct attribute *attr, char *buf)
  {
-@@ -1410,7 +1429,11 @@ static const struct sysfs_ops dc_sysfs_o
+@@ -1399,7 +1418,11 @@ static const struct sysfs_ops dc_sysfs_o
  
  static struct kobj_type dc_type = {
          .sysfs_ops     = &dc_sysfs_ops,
