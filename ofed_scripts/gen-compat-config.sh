@@ -776,10 +776,6 @@ if [ "$tc_ct" != 1 ]; then
     set_config CONFIG_MLX5_TC_CT n
 fi
 
-if (look_exists "void auxiliary_bus_init(void)" drivers/base/base.h); then
-	set_config  CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT  y
-fi
-
 if (look_exists_reg "define.*GENMASK\(.*U32" include/linux/bitops.h); then
 	set_config  CONFIG_COMPAT_GENMASK_32_BIT  y
 fi

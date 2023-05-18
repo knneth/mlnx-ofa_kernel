@@ -551,7 +551,7 @@ bool slow_pci_heuristic(struct mlx5_core_dev *mdev)
 	u32 link_speed = 0;
 	u32 pci_bw = 0;
 
-	mlx5e_port_max_linkspeed(mdev, &link_speed);
+	mlx5_port_max_linkspeed(mdev, &link_speed);
 	pci_bw = pcie_bandwidth_available(mdev->pdev, NULL, NULL, NULL);
 	mlx5_core_dbg_once(mdev, "Max link speed = %d, PCI BW = %d\n",
 			   link_speed, pci_bw);
@@ -581,20 +581,24 @@ int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *pa
 {
 	enum mlx5e_mpwrq_umr_mode umr_mode = mlx5e_mpwrq_umr_mode(mdev, xsk);
 	u8 page_shift = mlx5e_mpwrq_page_shift(mdev, xsk);
-	bool unaligned = xsk ? xsk->unaligned : false;
 	u16 max_mtu_pkts;
 
-	if (!mlx5e_check_fragmented_striding_rq_cap(mdev, page_shift, umr_mode))
+	if (!mlx5e_check_fragmented_striding_rq_cap(mdev, page_shift, umr_mode)) {
+		mlx5_core_err(mdev, "Striding RQ for XSK can't be activated with page_shift %u and umr_mode %d\n",
+			      page_shift, umr_mode);
 		return -EOPNOTSUPP;
+	}
 
-	if (!mlx5e_rx_mpwqe_is_linear_skb(mdev, params, xsk))
+	if (!mlx5e_rx_mpwqe_is_linear_skb(mdev, params, xsk)) {
+		mlx5_core_err(mdev, "Striding RQ linear mode for XSK can't be activated with current params\n");
 		return -EINVAL;
+	}
 
 	/* Current RQ length is too big for the given frame size, the
 	 * needed number of WQEs exceeds the maximum.
 	 */
 	max_mtu_pkts = min_t(u8, MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE,
-			     mlx5e_mpwrq_max_log_rq_pkts(mdev, page_shift, unaligned));
+			     mlx5e_mpwrq_max_log_rq_pkts(mdev, page_shift, xsk->unaligned));
 	if (params->log_rq_mtu_frames > max_mtu_pkts) {
 		mlx5_core_err(mdev, "Current RQ length %d is too big for XSK with given frame size %u\n",
 			      1 << params->log_rq_mtu_frames, xsk->chunk_size);
@@ -864,8 +868,7 @@ static void mlx5e_build_rx_cq_param(struct mlx5_core_dev *mdev,
 static u8 rq_end_pad_mode(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
 {
 	bool lro_en = params->packet_merge.type == MLX5E_PACKET_MERGE_LRO;
-	bool ro = pcie_relaxed_ordering_enabled(mdev->pdev) &&
-		MLX5_CAP_GEN(mdev, relaxed_ordering_write);
+	bool ro = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
 
 	return ro && lro_en ?
 		MLX5_WQ_END_PAD_MODE_NONE : MLX5_WQ_END_PAD_MODE_ALIGN;

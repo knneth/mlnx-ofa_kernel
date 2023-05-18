@@ -333,7 +333,6 @@ endif
 
 	install -d $(INSTALL_MOD_PATH)/usr/sbin
 	install -m 0755 ofed_scripts/setup_mr_cache.sh $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/odp_stat.sh $(INSTALL_MOD_PATH)/usr/sbin
 	install -d $(INSTALL_MOD_PATH)/etc/
 
 

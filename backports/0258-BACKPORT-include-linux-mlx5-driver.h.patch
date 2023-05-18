@@ -27,7 +27,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  
  #define MLX5_ADEV_NAME "mlx5_core"
  
-@@ -456,9 +461,11 @@ struct mlx5_core_health {
+@@ -457,9 +462,11 @@ struct mlx5_core_health {
  	unsigned long			flags;
  	struct mlx5_fw_crdump		*crdump;
  	struct work_struct		fatal_report_work;
@@ -39,7 +39,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  	struct delayed_work		update_fw_log_ts_work;
  	/* failed recoveries in sequence*/
  	u32 failed_in_seq;
-@@ -539,6 +546,7 @@ struct mlx5_core_sriov {
+@@ -540,6 +547,7 @@ struct mlx5_core_sriov {
  	struct kobject		*groups_config;
  	struct kobject		node_guid_kobj;
  	struct mlx5_sriov_vf	*vfs;
@@ -47,7 +47,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  };
  
  struct mlx5_fc_pool {
-@@ -632,10 +640,12 @@ enum {
+@@ -633,10 +641,12 @@ enum {
  	 * creation/deletion on drivers rescan. Unset during device attach.
  	 */
  	MLX5_PRIV_FLAGS_DETACH = 1 << 2,
@@ -60,7 +60,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  };
  
  struct mlx5_adev {
-@@ -666,6 +676,9 @@ struct mlx5_priv {
+@@ -675,6 +685,9 @@ struct mlx5_priv {
  	/* IRQ table valid only for real pci devices PF or VF */
  	struct mlx5_irq_table   *irq_table;
  	struct mlx5_eq_table	*eq_table;
@@ -70,7 +70,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  
  	/* pages stuff */
  	struct mlx5_nb          pg_nb;
-@@ -874,9 +887,11 @@ struct mlx5_clock {
+@@ -881,9 +894,11 @@ struct mlx5_clock {
  	struct mlx5_nb             pps_nb;
  	seqlock_t                  lock;
  	struct hwtstamp_config     hwtstamp_config;
@@ -82,7 +82,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  	struct mlx5_timer          timer;
  };
  
-@@ -968,7 +983,9 @@ struct mlx5_core_dev {
+@@ -976,7 +991,9 @@ struct mlx5_core_dev {
  	enum mlx5_device_state	state;
  	/* sync interface state */
  	struct mutex		intf_state_mutex;
@@ -92,7 +92,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  	unsigned long		intf_state;
  	struct mlx5_priv	priv;
  	struct mlx5_profile	profile;
-@@ -1047,8 +1064,13 @@ struct mlx5_cmd_work_ent {
+@@ -1055,8 +1072,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -106,7 +106,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  	u16			op;
  	bool			polling;
  	/* Track the max comp handlers */
-@@ -1384,8 +1406,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
+@@ -1388,8 +1410,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
  int mlx5_dm_sw_icm_dealloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  			   u64 length, u16 uid, phys_addr_t addr, u32 obj_id);
  
@@ -117,7 +117,7 @@ Change-Id: Ic7e16217729aa42f6030311a3cf603a61388f837
  
  int mlx5_sriov_blocking_notifier_register(struct mlx5_core_dev *mdev,
  					  int vf_id,
-@@ -1503,9 +1527,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -1507,9 +1531,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
  
  static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
  {

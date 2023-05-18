@@ -43,6 +43,7 @@
 #include <net/ipv6_stubs.h>
 #include <net/bareudp.h>
 #include <net/bonding.h>
+#include "devlink.h"
 #include "en.h"
 #include "en/tc/post_act.h"
 #include "en_rep.h"
@@ -155,6 +156,7 @@ struct mlx5_fs_chains *mlx5e_nic_chains(struct mlx5e_tc_table *tc)
  * it's different than the ht->mutex here.
  */
 static struct lock_class_key tc_ht_lock_key;
+static struct lock_class_key tc_ht_wq_key;
 
 static void mlx5e_put_flow_tunnel_id(struct mlx5e_tc_flow *flow);
 static void free_flow_post_acts(struct mlx5e_tc_flow *flow);
@@ -1478,12 +1480,12 @@ static struct mlx5e_hairpin_entry *
 mlx5e_get_hairpin_entry(struct mlx5e_priv *priv, struct mlx5_core_dev *peer_mdev,
 			u16 match_prio)
 {
+	struct devlink *devlink = priv_to_devlink(priv->mdev);
 	struct mlx5e_tc_table *tc = priv->fs->tc;
+	union devlink_param_value val = {};
 	struct mlx5_hairpin_params params;
 	struct mlx5e_hairpin_entry *hpe;
 	struct mlx5e_hairpin *hp;
-	u64 link_speed64;
-	u32 link_speed;
 	u16 peer_id;
 
 	peer_id = MLX5_CAP_GEN(peer_mdev, vhca_id);
@@ -1507,30 +1509,33 @@ mlx5e_get_hairpin_entry(struct mlx5e_priv *priv, struct mlx5_core_dev *peer_mdev
 	refcount_set(&hpe->refcnt, 1);
 	init_completion(&hpe->res_ready);
 
-	/* set hairpin pair per each 50Gbs share of the link
-	 * unless we are in priority hairpin mode.
-	 */
-	if (!tc->num_prio_hp) {
-		params.log_data_size = 16;
-		params.log_data_size = min_t(u8, params.log_data_size,
-					     MLX5_CAP_GEN(priv->mdev, log_max_hairpin_wq_data_sz));
-		params.log_data_size = max_t(u8, params.log_data_size,
-					     MLX5_CAP_GEN(priv->mdev, log_min_hairpin_wq_data_sz));
+	if (devlink_param_driverinit_value_get(
+		devlink, MLX5_DEVLINK_PARAM_ID_HAIRPIN_QUEUE_SIZE, &val)) {
+		kfree(hpe);
+		hpe = ERR_PTR(-ENOMEM);
+		goto complete;
+	}
 
-		mlx5e_port_max_linkspeed(priv->mdev, &link_speed);
-		link_speed = max_t(u32, link_speed, 50000);
-		link_speed64 = link_speed;
-		do_div(link_speed64, 50000);
-		params.num_channels = link_speed64;
+	params.log_num_packets = ilog2(val.vu32);
+	if (!tc->num_prio_hp) {
+		params.log_data_size =
+			clamp_t(u32,
+				params.log_num_packets + MLX5_MPWRQ_MIN_LOG_STRIDE_SZ(priv->mdev),
+				MLX5_CAP_GEN(priv->mdev, log_min_hairpin_wq_data_sz),
+				MLX5_CAP_GEN(priv->mdev, log_max_hairpin_wq_data_sz));
+
+		if (devlink_param_driverinit_value_get(
+			devlink, MLX5_DEVLINK_PARAM_ID_HAIRPIN_NUM_QUEUES, &val)) {
+			kfree(hpe);
+			hpe = ERR_PTR(-ENOMEM);
+			goto complete;
+		}
+
+		params.num_channels = val.vu32;
 	} else { /* prio hp uses max buffer with 1 channel */
 		params.log_data_size = MLX5_CAP_GEN(priv->mdev, log_max_hairpin_wq_data_sz);
 		params.num_channels = 1;
 	}
- 
-	params.log_num_packets = params.log_data_size -
-				 MLX5_MPWRQ_MIN_LOG_STRIDE_SZ(priv->mdev);
-	params.log_num_packets = min_t(u8, params.log_num_packets,
-				       MLX5_CAP_GEN(priv->mdev, log_max_hairpin_num_packets));
 
 	params.q_counter = priv->q_counter;
 
@@ -2836,9 +2841,6 @@ static void mlx5e_tc_del_fdb_flow(struct mlx5e_priv *priv,
 
 	free_flow_post_acts(flow);
 
-	if (flow->attr->lag.count)
-		mlx5_lag_del_mpesw_rule(esw->dev);
-
 	kvfree(attr->esw_attr->rx_tun_attr);
 	kvfree(attr->parse_attr);
 	kfree(flow->attr);
@@ -3297,13 +3299,13 @@ static int parse_tunnel_attr(struct mlx5e_priv *priv,
 		err = mlx5e_tc_set_attr_rx_tun(flow, spec);
 		if (err)
 			return err;
-	} else if (tunnel && tunnel->tunnel_type == MLX5E_TC_TUNNEL_TYPE_VXLAN) {
+	} else if (tunnel) {
 		struct mlx5_flow_spec *tmp_spec;
 
 		tmp_spec = kvzalloc(sizeof(*tmp_spec), GFP_KERNEL);
 		if (!tmp_spec) {
-			NL_SET_ERR_MSG_MOD(extack, "Failed to allocate memory for vxlan tmp spec");
-			netdev_warn(priv->netdev, "Failed to allocate memory for vxlan tmp spec");
+			NL_SET_ERR_MSG_MOD(extack, "Failed to allocate memory for tunnel tmp spec");
+			netdev_warn(priv->netdev, "Failed to allocate memory for tunnel tmp spec");
 			return -ENOMEM;
 		}
 		memcpy(tmp_spec, spec, sizeof(*tmp_spec));
@@ -4365,7 +4367,6 @@ out_ok:
 
 static bool
 actions_match_supported_fdb(struct mlx5e_priv *priv,
-			    struct mlx5e_tc_flow_parse_attr *parse_attr,
 			    struct mlx5e_tc_flow *flow,
 			    struct netlink_ext_ack *extack)
 {
@@ -4444,7 +4445,7 @@ actions_match_supported(struct mlx5e_priv *priv,
 		return false;
 
 	if (mlx5e_is_eswitch_flow(flow) &&
-	    !actions_match_supported_fdb(priv, parse_attr, flow, extack))
+	    !actions_match_supported_fdb(priv, flow, extack))
 		return false;
 
 	return true;
@@ -4894,12 +4895,7 @@ static bool is_lag_dev(struct mlx5e_priv *priv,
 
 static bool is_multiport_eligible(struct mlx5e_priv *priv, struct net_device *out_dev)
 {
-	if (same_hw_reps(priv, out_dev) &&
-	    MLX5_CAP_PORT_SELECTION(priv->mdev, port_select_flow_table) &&
-	    MLX5_CAP_GEN(priv->mdev, create_lag_when_not_master_up))
-		return true;
-
-	return false;
+	return same_hw_reps(priv, out_dev) && mlx5_lag_is_mpesw(priv->mdev);
 }
 
 bool mlx5e_is_valid_eswitch_fwd_dev(struct mlx5e_priv *priv,
@@ -4950,6 +4946,7 @@ int mlx5e_set_fwd_to_int_port_actions(struct mlx5e_priv *priv,
 
 	esw_attr->dest_int_port = dest_int_port;
 	esw_attr->dests[out_index].flags |= MLX5_ESW_DEST_CHAIN_WITH_SRC_PORT_CHANGE;
+	esw_attr->split_count = out_index;
 
 	/* Forward to root fdb for matching against the new source vport */
 	attr->dest_chain = 0;
@@ -5069,6 +5066,9 @@ static bool is_peer_flow_needed(struct mlx5e_tc_flow *flow)
 	    (is_rep_ingress || act_is_encap))
 		return true;
 
+	if (mlx5_lag_is_mpesw(esw_attr->in_mdev))
+		return true;
+
 	return false;
 }
 
@@ -5177,7 +5177,6 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *priv,
 		     struct mlx5_core_dev *in_mdev)
 {
 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
-	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct netlink_ext_ack *extack = f->common.extack;
 	struct mlx5e_tc_flow_parse_attr *parse_attr;
 	struct mlx5e_tc_flow *flow;
@@ -5206,33 +5205,21 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *priv,
 	if (err)
 		goto err_free;
 
-	/* always set IP version for indirect table handling */
-	flow->attr->ip_version = mlx5e_tc_get_ip_version(&parse_attr->spec, true);
-
 	err = parse_tc_fdb_actions(priv, &rule->action, flow, extack);
 	if (err)
 		goto err_free;
-
-	if (flow->attr->lag.count) {
-		err = mlx5_lag_add_mpesw_rule(esw->dev);
-		if (err)
-			goto err_free;
-	}
 
 	err = mlx5e_tc_add_fdb_flow(priv, flow, extack);
 	complete_all(&flow->init_done);
 	if (err) {
 		if (!(err == -ENETUNREACH && mlx5_lag_is_multipath(in_mdev)))
-			goto err_lag;
+			goto err_free;
 
 		add_unready_flow(flow);
 	}
 
 	return flow;
 
-err_lag:
-	if (flow->attr->lag.count)
-		mlx5_lag_del_mpesw_rule(esw->dev);
 err_free:
 	mlx5e_flow_put(priv, flow);
 out:
@@ -5264,8 +5251,10 @@ static int mlx5e_tc_add_fdb_peer_flow(struct flow_cls_offload *f,
 	 * So packets redirected to uplink use the same mdev of the
 	 * original flow and packets redirected from uplink use the
 	 * peer mdev.
+	 * In multiport eswitch it's a special case that we need to
+	 * keep the original mdev.
 	 */
-	if (attr->in_rep->vport == MLX5_VPORT_UPLINK)
+	if (attr->in_rep->vport == MLX5_VPORT_UPLINK && !mlx5_lag_is_mpesw(priv->mdev))
 		in_mdev = peer_priv->mdev;
 	else
 		in_mdev = priv->mdev;
@@ -5874,6 +5863,7 @@ int mlx5e_tc_nic_init(struct mlx5e_priv *priv)
 		return err;
 
 	lockdep_set_class(&tc->ht.mutex, &tc_ht_lock_key);
+	lockdep_init_map(&tc->ht.run_work.lockdep_map, "tc_ht_wq_key", &tc_ht_wq_key, 0);
 
 	mapping_id = mlx5_query_nic_system_image_guid(dev);
 
@@ -5982,6 +5972,7 @@ int mlx5e_tc_ht_init(struct rhashtable *tc_ht)
 		return err;
 
 	lockdep_set_class(&tc_ht->mutex, &tc_ht_lock_key);
+	lockdep_init_map(&tc_ht->run_work.lockdep_map, "tc_ht_wq_key", &tc_ht_wq_key, 0);
 
 	return 0;
 }

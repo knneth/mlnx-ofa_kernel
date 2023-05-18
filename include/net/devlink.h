@@ -111,7 +111,7 @@ static inline struct net *devlink_net(const struct devlink *devlink)
 }
 #endif
 
-#ifndef HAVE_DEVLINK_DRIVERINIT_VAL
+#if !defined(HAVE_DEVLINK_DRIVERINIT_VAL) && !defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
 #define __DEVLINK_PARAM_MAX_STRING_VALUE 32
 enum devlink_param_type {
 	DEVLINK_PARAM_TYPE_U8,

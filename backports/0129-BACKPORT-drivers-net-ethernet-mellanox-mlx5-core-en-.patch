@@ -123,7 +123,7 @@ Change-Id: I4b5d1530056fbea713605466fa7da0c236c5cfd4
  
  int mlx5e_tc_tun_route_lookup(struct mlx5e_priv *priv,
  			      struct mlx5_flow_spec *spec,
-@@ -809,9 +841,13 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -807,9 +839,13 @@ int mlx5e_tc_tun_parse(struct net_device
  				       outer_headers);
  	void *headers_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,
  				       outer_headers);
@@ -138,7 +138,7 @@ Change-Id: I4b5d1530056fbea713605466fa7da0c236c5cfd4
  	if (!tunnel) {
  		netdev_warn(priv->netdev,
  			    "decapsulation offload is not supported for %s net device\n",
-@@ -825,6 +861,7 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -823,6 +859,7 @@ int mlx5e_tc_tun_parse(struct net_device
  	if (tunnel->parse_udp_ports) {
  		err = tunnel->parse_udp_ports(priv, spec, f,
  					      headers_c, headers_v);
@@ -146,7 +146,7 @@ Change-Id: I4b5d1530056fbea713605466fa7da0c236c5cfd4
  		if (err)
  			goto out;
  	}
-@@ -832,6 +869,7 @@ int mlx5e_tc_tun_parse(struct net_device
+@@ -830,6 +867,7 @@ int mlx5e_tc_tun_parse(struct net_device
  	if (tunnel->parse_tunnel) {
  		err = tunnel->parse_tunnel(priv, spec, f,
  					   headers_c, headers_v);
@@ -154,7 +154,7 @@ Change-Id: I4b5d1530056fbea713605466fa7da0c236c5cfd4
  		if (err)
  			goto out;
  	}
-@@ -945,16 +983,21 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -943,16 +981,21 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  				 struct flow_cls_offload *f,
  				 void *headers_c,
  				 void *headers_v)
@@ -176,7 +176,7 @@ Change-Id: I4b5d1530056fbea713605466fa7da0c236c5cfd4
  		netdev_warn(priv->netdev,
  			    "UDP tunnel decap filter must include enc_dst_port condition\n");
  		return -EOPNOTSUPP;
-@@ -964,8 +1007,10 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -962,8 +1005,10 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  
  	if (memchr_inv(&enc_ports.mask->dst, 0xff,
  		       sizeof(enc_ports.mask->dst))) {
@@ -187,7 +187,7 @@ Change-Id: I4b5d1530056fbea713605466fa7da0c236c5cfd4
  		netdev_warn(priv->netdev,
  			    "UDP tunnel decap filter must match enc_dst_port fully\n");
  		return -EOPNOTSUPP;
-@@ -993,3 +1038,5 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -991,3 +1036,5 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  
  	return 0;
  }

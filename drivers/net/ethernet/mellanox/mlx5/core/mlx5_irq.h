@@ -19,8 +19,6 @@ int mlx5_irq_table_get_sfs_vec(struct mlx5_irq_table *table);
 bool mlx5_irq_table_have_dedicated_sfs_irqs(struct mlx5_irq_table *table);
 struct mlx5_irq_table *mlx5_irq_table_get(struct mlx5_core_dev *dev);
 
-void mlx5_irq_rename(struct mlx5_core_dev *dev, struct mlx5_irq *irq,
-		     const char *name);
 int mlx5_set_msix_vec_count(struct mlx5_core_dev *dev, int devfn,
 			    int msix_vec_count);
 int mlx5_get_default_msix_vec_count(struct mlx5_core_dev *dev, int num_vfs);

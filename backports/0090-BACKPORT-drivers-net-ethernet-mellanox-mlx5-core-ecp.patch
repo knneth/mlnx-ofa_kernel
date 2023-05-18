@@ -8,7 +8,7 @@ Change-Id: Ide0acf91aaa357dc0d9da1969604c208282a18e1
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
-@@ -518,7 +518,9 @@ static struct attribute *smart_nic_attrs
+@@ -522,7 +522,9 @@ static struct attribute *smart_nic_attrs
  	NULL,
  };
  
@@ -18,7 +18,7 @@ Change-Id: Ide0acf91aaa357dc0d9da1969604c208282a18e1
  
  static const struct sysfs_ops smart_nic_sysfs_ops = {
  	.show   = smart_nic_attr_show,
-@@ -527,7 +529,11 @@ static const struct sysfs_ops smart_nic_
+@@ -531,7 +533,11 @@ static const struct sysfs_ops smart_nic_
  
  static struct kobj_type smart_nic_type = {
  	.sysfs_ops     = &smart_nic_sysfs_ops,
@@ -30,7 +30,7 @@ Change-Id: Ide0acf91aaa357dc0d9da1969604c208282a18e1
  };
  
  void mlx5_smartnic_sysfs_init(struct net_device *dev)
-@@ -672,11 +678,17 @@ static const struct sysfs_ops regex_sysf
+@@ -676,11 +682,17 @@ static const struct sysfs_ops regex_sysf
  	.store  = regex_attr_store
  };
  

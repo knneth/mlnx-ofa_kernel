@@ -261,7 +261,7 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 	if (ret)
 		goto out_free;
 
-	ret = mlx5_core_other_function_get_caps(parent_dev, hw_fn_id, query_ctx);
+	ret = mlx5_vport_get_other_func_general_cap(parent_dev, hw_fn_id, query_ctx);
 	if (ret)
 		goto out_free;
 
@@ -309,7 +309,8 @@ int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 	if (ret)
 		goto out_free;
 
-	ret = mlx5_core_other_function_get_caps(parent_dev, hw_fn_id, query_ctx);
+	ret = mlx5_vport_get_other_func_cap(parent_dev, hw_fn_id, query_ctx,
+					    MLX5_CAP_GENERAL);
 	if (ret)
 		goto out_free;
 
@@ -343,7 +344,8 @@ int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 		}
 		MLX5_SET(cmd_hca_cap, hca_caps, log_max_current_uc_list, cap_ilog2_val);
 	}
-	ret = mlx5_core_other_function_set_caps(parent_dev, hca_caps, hw_fn_id);
+	ret = mlx5_vport_set_other_func_cap(parent_dev, hca_caps, hw_fn_id,
+					    MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
 
 out_free:
 	kfree(query_ctx);

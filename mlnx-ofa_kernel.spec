@@ -71,8 +71,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 5.9}
-%{!?_release: %global _release OFED.5.9.0.5.5.1}
+%{!?_version: %global _version 23.04}
+%{!?_release: %global _release OFED.23.04.0.5.3.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -114,7 +114,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.9-0.5.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.04-0.5.3.tgz
 
 
 # build KMP rpms?
@@ -158,7 +158,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.9-0.5.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.04-0.5.3.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -189,7 +189,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-5.9-0.5.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.04-0.5.3.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -656,7 +656,6 @@ update-alternatives --remove \
 /lib/udev/sf-rep-netdev-rename
 /lib/udev/auxdev-sf-netdev-rename
 /usr/sbin/setup_mr_cache.sh
-/usr/sbin/odp_stat.sh
 %_datadir/mlnx_ofed/mlnx_bf_assign_ct_cores.sh
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %config(noreplace) /etc/modprobe.d/mlnx-bf.conf

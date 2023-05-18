@@ -103,7 +103,7 @@ Change-Id: Icb6644c95b46e12566c20f501223f122a490d9be
  }
  EXPORT_SYMBOL(ib_drain_rq);
  
-@@ -2997,6 +3022,27 @@ bool __rdma_block_iter_next(struct ib_bl
+@@ -3000,6 +3025,27 @@ bool __rdma_block_iter_next(struct ib_bl
  }
  EXPORT_SYMBOL(__rdma_block_iter_next);
  

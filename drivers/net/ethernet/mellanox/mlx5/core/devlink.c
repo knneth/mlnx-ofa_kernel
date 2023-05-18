@@ -7,6 +7,7 @@
 #include "fw_reset.h"
 #include "fs_core.h"
 #include "eswitch.h"
+#include "lag/lag.h"
 #include "mlx5_devm.h"
 #include "esw/qos.h"
 #include "sf/dev/dev.h"
@@ -110,7 +111,7 @@ static int mlx5_devlink_reload_fw_activate(struct devlink *devlink, struct netli
 	if (err)
 		return err;
 
-	mlx5_unload_one_devl_locked(dev);
+	mlx5_unload_one_devl_locked(dev, true);
 	err = mlx5_health_wait_pci_up(dev);
 	if (err)
 		NL_SET_ERR_MSG_MOD(extack, "FW activate aborted, PCI reads fail after reset");
@@ -168,7 +169,7 @@ static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
 
 	switch (action) {
 	case DEVLINK_RELOAD_ACTION_DRIVER_REINIT:
-		mlx5_unload_one_devl_locked(dev);
+		mlx5_unload_one_devl_locked(dev, false);
 		break;
 	case DEVLINK_RELOAD_ACTION_FW_ACTIVATE:
 		if (limit == DEVLINK_RELOAD_LIMIT_NO_RESET)
@@ -202,7 +203,7 @@ static int mlx5_devlink_reload_up(struct devlink *devlink, enum devlink_reload_a
 			break;
 		/* On fw_activate action, also driver is reloaded and reinit performed */
 		*actions_performed |= BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT);
-		ret = mlx5_load_one_devl_locked(dev, false);
+		ret = mlx5_load_one_devl_locked(dev, true);
 		break;
 	default:
 		/* Unsupported action should not get to this function */
@@ -599,6 +600,59 @@ static int mlx5_devlink_esw_pet_insert_validate(struct devlink *devlink, u32 id,
 
 	return 0;
 }
+
+static int mlx5_devlink_esw_multiport_set(struct devlink *devlink, u32 id,
+					  struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	if (!MLX5_ESWITCH_MANAGER(dev))
+		return -EOPNOTSUPP;
+
+	if (ctx->val.vbool)
+		return mlx5_lag_mpesw_enable(dev);
+
+	mlx5_lag_mpesw_disable(dev);
+	return 0;
+}
+
+static int mlx5_devlink_esw_multiport_get(struct devlink *devlink, u32 id,
+					  struct devlink_param_gset_ctx *ctx)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	if (!MLX5_ESWITCH_MANAGER(dev))
+		return -EOPNOTSUPP;
+
+	ctx->val.vbool = mlx5_lag_is_mpesw(dev);
+	return 0;
+}
+
+static int mlx5_devlink_esw_multiport_validate(struct devlink *devlink, u32 id,
+					       union devlink_param_value val,
+					       struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+
+	if (!MLX5_ESWITCH_MANAGER(dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch is unsupported");
+		return -EOPNOTSUPP;
+	}
+
+	if (mlx5e_esw_offloads_pet_enabled(dev->priv.eswitch)) {
+		NL_SET_ERR_MSG_MOD(extack, "Multiport E-Switch isn't supported while esw_pet_insert is enabled");
+		return -EOPNOTSUPP;
+	}
+
+	if (mlx5_eswitch_mode(dev) != MLX5_ESWITCH_OFFLOADS) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "E-Switch must be in switchdev mode");
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
 #endif
 
 static int mlx5_devlink_enable_remote_dev_reset_set(struct devlink *devlink, u32 id,
@@ -625,6 +679,60 @@ static int mlx5_devlink_eq_depth_validate(struct devlink *devlink, u32 id,
 {
 	return (val.vu32 >= 64 && val.vu32 <= 4096) ? 0 : -EINVAL;
 }
+
+static int
+mlx5_devlink_hairpin_num_queues_validate(struct devlink *devlink, u32 id,
+					 union devlink_param_value val,
+					 struct netlink_ext_ack *extack)
+{
+	return val.vu32 ? 0 : -EINVAL;
+}
+
+static int
+mlx5_devlink_hairpin_queue_size_validate(struct devlink *devlink, u32 id,
+					 union devlink_param_value val,
+					 struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+	u32 val32 = val.vu32;
+
+	if (!is_power_of_2(val32)) {
+		NL_SET_ERR_MSG_MOD(extack, "Value is not power of two");
+		return -EINVAL;
+	}
+
+	if (val32 > BIT(MLX5_CAP_GEN(dev, log_max_hairpin_num_packets))) {
+		NL_SET_ERR_MSG_MOD(extack, "Value exceeds maximum hairpin queue size");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static void mlx5_devlink_hairpin_params_init_values(struct devlink *devlink)
+{
+	struct mlx5_core_dev *dev = devlink_priv(devlink);
+	union devlink_param_value value;
+	u32 link_speed = 0;
+	u64 link_speed64;
+
+	/* set hairpin pair per each 50Gbs share of the link */
+	mlx5_port_max_linkspeed(dev, &link_speed);
+	link_speed = max_t(u32, link_speed, 50000);
+	link_speed64 = link_speed;
+	do_div(link_speed64, 50000);
+
+	value.vu32 = link_speed64;
+	devlink_param_driverinit_value_set(
+		devlink, MLX5_DEVLINK_PARAM_ID_HAIRPIN_NUM_QUEUES, value);
+
+	value.vu32 =
+		BIT(min_t(u32, 16 - MLX5_MPWRQ_MIN_LOG_STRIDE_SZ(dev),
+			  MLX5_CAP_GEN(dev, log_max_hairpin_num_packets)));
+	devlink_param_driverinit_value_set(
+		devlink, MLX5_DEVLINK_PARAM_ID_HAIRPIN_QUEUE_SIZE, value);
+}
+
 
 static int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
 						   struct devlink_param_gset_ctx *ctx)
@@ -682,6 +790,12 @@ static const struct devlink_param mlx5_devlink_params[] = {
 			     mlx5_devlink_esw_pet_insert_get,
 			     mlx5_devlink_esw_pet_insert_set,
 			     mlx5_devlink_esw_pet_insert_validate),
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_ESW_MULTIPORT,
+			     "esw_multiport", DEVLINK_PARAM_TYPE_BOOL,
+			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
+			     mlx5_devlink_esw_multiport_get,
+			     mlx5_devlink_esw_multiport_set,
+			     mlx5_devlink_esw_multiport_validate),
 #endif
 	DEVLINK_PARAM_GENERIC(ENABLE_REMOTE_DEV_RESET, BIT(DEVLINK_PARAM_CMODE_RUNTIME),
 			      mlx5_devlink_enable_remote_dev_reset_get,
@@ -707,13 +821,6 @@ static void mlx5_devlink_set_params_init_values(struct devlink *devlink)
 	devlink_param_driverinit_value_set(devlink,
 					   MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
 					   value);
-
-	if (MLX5_ESWITCH_MANAGER(dev)) {
-		value.vbool = false;
-		devlink_param_driverinit_value_set(devlink,
-						   MLX5_DEVLINK_PARAM_ID_ESW_PET_INSERT,
-						   value);
-	}
 #endif
 
 	value.vu32 = MLX5_COMP_EQ_SIZE;
@@ -727,11 +834,20 @@ static void mlx5_devlink_set_params_init_values(struct devlink *devlink)
 					   value);
 }
 
-static const struct devlink_param enable_eth_param =
+static const struct devlink_param mlx5_devlink_eth_params[] = {
 	DEVLINK_PARAM_GENERIC(ENABLE_ETH, BIT(DEVLINK_PARAM_CMODE_DRIVERINIT),
-			      NULL, NULL, NULL);
+			      NULL, NULL, NULL),
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_HAIRPIN_NUM_QUEUES,
+			     "hairpin_num_queues", DEVLINK_PARAM_TYPE_U32,
+			     BIT(DEVLINK_PARAM_CMODE_DRIVERINIT), NULL, NULL,
+			     mlx5_devlink_hairpin_num_queues_validate),
+	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_HAIRPIN_QUEUE_SIZE,
+			     "hairpin_queue_size", DEVLINK_PARAM_TYPE_U32,
+			     BIT(DEVLINK_PARAM_CMODE_DRIVERINIT), NULL, NULL,
+			     mlx5_devlink_hairpin_queue_size_validate),
+};
 
-static int mlx5_devlink_eth_param_register(struct devlink *devlink)
+static int mlx5_devlink_eth_params_register(struct devlink *devlink)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	union devlink_param_value value;
@@ -740,7 +856,8 @@ static int mlx5_devlink_eth_param_register(struct devlink *devlink)
 	if (!mlx5_eth_supported(dev))
 		return 0;
 
-	err = devlink_param_register(devlink, &enable_eth_param);
+	err = devlink_params_register(devlink, mlx5_devlink_eth_params,
+				      ARRAY_SIZE(mlx5_devlink_eth_params));
 	if (err)
 		return err;
 
@@ -748,17 +865,21 @@ static int mlx5_devlink_eth_param_register(struct devlink *devlink)
 	devlink_param_driverinit_value_set(devlink,
 					   DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
 					   value);
+
+	mlx5_devlink_hairpin_params_init_values(devlink);
+
 	return 0;
 }
 
-static void mlx5_devlink_eth_param_unregister(struct devlink *devlink)
+static void mlx5_devlink_eth_params_unregister(struct devlink *devlink)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
 	if (!mlx5_eth_supported(dev))
 		return;
 
-	devlink_param_unregister(devlink, &enable_eth_param);
+	devlink_params_unregister(devlink, mlx5_devlink_eth_params,
+				 ARRAY_SIZE(mlx5_devlink_eth_params));
 }
 
 static int mlx5_devlink_enable_rdma_validate(struct devlink *devlink, u32 id,
@@ -842,7 +963,7 @@ static int mlx5_devlink_auxdev_params_register(struct devlink *devlink)
 {
 	int err;
 
-	err = mlx5_devlink_eth_param_register(devlink);
+	err = mlx5_devlink_eth_params_register(devlink);
 	if (err)
 		return err;
 
@@ -858,7 +979,7 @@ static int mlx5_devlink_auxdev_params_register(struct devlink *devlink)
 vnet_err:
 	mlx5_devlink_rdma_param_unregister(devlink);
 rdma_err:
-	mlx5_devlink_eth_param_unregister(devlink);
+	mlx5_devlink_eth_params_unregister(devlink);
 	return err;
 }
 
@@ -866,7 +987,7 @@ static void mlx5_devlink_auxdev_params_unregister(struct devlink *devlink)
 {
 	mlx5_devlink_vnet_param_unregister(devlink);
 	mlx5_devlink_rdma_param_unregister(devlink);
-	mlx5_devlink_eth_param_unregister(devlink);
+	mlx5_devlink_eth_params_unregister(devlink);
 }
 
 static int mlx5_devlink_max_uc_list_validate(struct devlink *devlink, u32 id,

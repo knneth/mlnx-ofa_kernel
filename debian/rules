@@ -176,7 +176,6 @@ endif
 	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
 	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/odp_stat.sh			debian/$(putils)/usr/sbin
 	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh		debian/$(putils)/usr/share/mlnx_ofed
 
 override_dh_installinit:

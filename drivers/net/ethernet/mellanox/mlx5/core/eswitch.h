@@ -184,8 +184,8 @@ struct mlx5_vport_info {
 	__be16			vlan_proto;
 	u8                      spoofchk: 1;
 	u8                      trusted: 1;
+	u8                      roce_enabled: 1;
 	u8                      offloads_trusted: 1;
-	u8			roce: 1;
 	/* the admin approved vlan list */
 	DECLARE_BITMAP(vlan_trunk_8021q_bitmap, VLAN_N_VID);
 	u32			group;
@@ -838,7 +838,7 @@ struct mlx5_vport_tbl_attr {
 	u32 chain;
 	u16 prio;
 	u16 vport;
-	const struct esw_vport_tbl_namespace *vport_ns;
+	struct esw_vport_tbl_namespace *vport_ns;
 };
 
 struct mlx5_flow_table *
@@ -932,6 +932,12 @@ static inline int mlx5_eswitch_num_vfs(struct mlx5_eswitch *esw)
 		return esw->esw_funcs.num_vfs;
 
 	return 0;
+}
+
+static inline struct mlx5_flow_table *
+mlx5_eswitch_get_slow_fdb(struct mlx5_eswitch *esw)
+{
+	return esw->fdb_table.offloads.slow_fdb;
 }
 #else  /* CONFIG_MLX5_ESWITCH */
 /* eswitch API stubs */

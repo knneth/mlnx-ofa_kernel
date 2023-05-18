@@ -4,21 +4,20 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
 ---
- .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 27 ++++++++++++++++++-
- 1 file changed, 26 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 76 ++++++++++++++++---
+ 1 file changed, 67 insertions(+), 9 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-@@ -1,6 +1,8 @@
+@@ -1,6 +1,7 @@
  // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
  /* Copyright (c) 2018 Mellanox Technologies. */
  
 +#ifdef HAVE_TCF_TUNNEL_INFO
-+
+ #include <net/ip_tunnels.h>
  #include <net/vxlan.h>
  #include "lib/vxlan.h"
- #include "en/tc_tun.h"
-@@ -17,9 +19,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
+@@ -18,9 +19,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
  
  static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
  					      struct flow_cls_offload *f)
@@ -32,7 +31,7 @@ Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
  	struct flow_match_ports enc_ports;
  
  	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS))
-@@ -31,8 +36,10 @@ static int mlx5e_tc_tun_check_udp_dport_
+@@ -32,8 +36,10 @@ static int mlx5e_tc_tun_check_udp_dport_
  
  	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan,
  				    be16_to_cpu(enc_ports.key->dst))) {
@@ -43,7 +42,7 @@ Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
  		netdev_warn(priv->netdev,
  			    "UDP port %d is not registered as a VXLAN port\n",
  			    be16_to_cpu(enc_ports.key->dst));
-@@ -67,8 +74,10 @@ static int mlx5e_tc_tun_init_encap_attr_
+@@ -68,8 +74,10 @@ static int mlx5e_tc_tun_init_encap_attr_
  	e->tunnel = &vxlan_tunnel;
  
  	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
@@ -54,7 +53,107 @@ Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
  		netdev_warn(priv->netdev,
  			    "%d isn't an offloaded vxlan udp dport\n",
  			    dst_port);
-@@ -105,7 +114,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -80,6 +88,31 @@ static int mlx5e_tc_tun_init_encap_attr_
+ 	return 0;
+ }
+ 
++#ifndef HAVE_CHECK_VXLAN_BUILD_GBP_HDR
++static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, struct vxlan_metadata *md)
++{
++	struct vxlanhdr_gbp *gbp;
++
++	if (!md->gbp)
++		return;
++
++	gbp = (struct vxlanhdr_gbp *)vxh;
++	vxh->vx_flags |= VXLAN_HF_GBP;
++
++	if (md->gbp & VXLAN_GBP_DONT_LEARN)
++		gbp->dont_learn = 1;
++
++	if (md->gbp & VXLAN_GBP_POLICY_APPLIED)
++		gbp->policy_applied = 1;
++
++	gbp->policy_id = htons(md->gbp & VXLAN_GBP_ID_MASK);
++}
++#endif
++#ifndef HAVE_CHECK_VXLAN_GBP_MASK
++#define VXLAN_GBP_MASK (VXLAN_GBP_DONT_LEARN | VXLAN_GBP_POLICY_APPLIED | \
++			VXLAN_GBP_ID_MASK)
++#endif
++
+ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
+ 					    __u8 *ip_proto,
+ 					    struct mlx5e_encap_entry *e)
+@@ -101,10 +134,7 @@ static int mlx5e_gen_ip_tunnel_header_vx
+ 	vxh->vx_vni = vxlan_vni_field(tun_id);
+ 	if (tun_key->tun_flags & TUNNEL_VXLAN_OPT) {
+ 		md = ip_tunnel_info_opts((struct ip_tunnel_info *)e->tun_info);
+-		/* forwardport: the line below was commented out because the function will
+-		 * be available in next kernel release. And it would be restore in
+-		 * backports */
+-		/* vxlan_build_gbp_hdr(vxh, md); */
++		vxlan_build_gbp_hdr(vxh, md);
+ 	}
+ 
+ 	return 0;
+@@ -115,7 +145,9 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 					       struct flow_cls_offload *f)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_enc_opts enc_opts;
+ 	void *misc5_c, *misc5_v;
+ 	u32 *gbp, *gbp_mask;
+@@ -124,20 +156,27 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 
+ 	if (memchr_inv(&enc_opts.mask->data, 0, sizeof(enc_opts.mask->data)) &&
+ 	    !MLX5_CAP_ESW_FT_FIELD_SUPPORT_2(priv->mdev, tunnel_header_0_1)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++		/* forwardport */
+ 		NL_SET_ERR_MSG_MOD(extack, "Matching on VxLAN GBP is not supported");
++#endif
+ 		netdev_warn(priv->netdev, "Matching on VxLAN GBP is not supported\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (enc_opts.key->dst_opt_type != TUNNEL_VXLAN_OPT) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN option type: not GBP");
++#endif
+ 		netdev_warn(priv->netdev, "Wrong VxLAN option type: not GBP\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (enc_opts.key->len != sizeof(*gbp) ||
+ 	    enc_opts.mask->len != sizeof(*gbp_mask)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "VxLAN GBP option/mask len is not 32 bits");
++#endif
+ 		netdev_warn(priv->netdev, "VxLAN GBP option/mask len is not 32 bits\n");
+ 		return -EINVAL;
+ 	}
+@@ -146,10 +185,13 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 	gbp_mask = (u32 *)&enc_opts.mask->data[0];
+ 
+ 	if (*gbp_mask & ~VXLAN_GBP_MASK) {
+-		/* forwardport: the line below was commented out because the function will
+-		 * be available in next kernel release. And it would be restore in
+-		 * backports */
+-		/* NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask); */
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++#ifdef NL_SET_ERR_MSG_FMT_MOD
++		NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
++#else
++		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN GBP mask\n");
++#endif
++#endif
+ 		netdev_warn(priv->netdev, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
+ 		return -EINVAL;
+ 	}
+@@ -171,7 +213,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
  				    void *headers_v)
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -64,7 +163,7 @@ Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
  	struct flow_match_enc_keyid enc_keyid;
  	void *misc_c, *misc_v;
  
-@@ -124,8 +135,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -198,8 +242,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
  
  	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
  					ft_field_support.outer_vxlan_vni)) {
@@ -75,7 +174,7 @@ Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
  		netdev_warn(priv->netdev,
  			    "Matching on VXLAN VNI is not supported\n");
  		return -EOPNOTSUPP;
-@@ -145,6 +158,17 @@ static int mlx5e_tc_tun_get_remote_ifind
+@@ -225,6 +271,17 @@ static int mlx5e_tc_tun_get_remote_ifind
  {
  	const struct vxlan_dev *vxlan = netdev_priv(mirred_dev);
  	const struct vxlan_rdst *dst = &vxlan->default_dst;
@@ -93,8 +192,8 @@ Change-Id: Ide83162cda5e1c7db79de4a45983f0e6f1d0a3d1
  
  	return dst->remote_ifindex;
  }
-@@ -161,3 +185,4 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
- 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
+@@ -241,3 +298,4 @@ struct mlx5e_tc_tunnel vxlan_tunnel = {
+ 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_vxlan,
  	.get_remote_ifindex   = mlx5e_tc_tun_get_remote_ifindex,
  };
 +#endif /* HAVE_TCF_TUNNEL_INFO */

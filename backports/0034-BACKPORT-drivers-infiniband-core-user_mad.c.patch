@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/user_mad.c
 
 Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
 ---
- drivers/infiniband/core/user_mad.c | 57 ++++++++++++++++++++++++++++++++++----
- 1 file changed, 51 insertions(+), 6 deletions(-)
+ drivers/infiniband/core/user_mad.c | 61 +++++++++++++++++++++++++++---
+ 1 file changed, 55 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/user_mad.c
 +++ b/drivers/infiniband/core/user_mad.c
@@ -79,7 +79,16 @@ Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
  out:
  	mutex_unlock(&port->file_mutex);
  	return ret;
-@@ -1232,6 +1244,7 @@ static char *umad_devnode(struct device
+@@ -1227,11 +1239,16 @@ static struct attribute *umad_class_dev_
+ };
+ ATTRIBUTE_GROUPS(umad_class_dev);
+ 
++#ifdef HAVE_NET_NAMESPACE_GET_CONST_DEVICE
++static char *umad_devnode(const struct device *dev, umode_t *mode)
++#else
+ static char *umad_devnode(struct device *dev, umode_t *mode)
++#endif
+ {
  	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
  }
  
@@ -87,7 +96,7 @@ Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
  static ssize_t abi_version_show(struct class *class,
  				struct class_attribute *attr, char *buf)
  {
-@@ -1244,14 +1257,21 @@ static struct attribute *umad_class_attr
+@@ -1244,14 +1261,21 @@ static struct attribute *umad_class_attr
  	NULL,
  };
  ATTRIBUTE_GROUPS(umad_class);
@@ -109,7 +118,7 @@ Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
  static void ib_umad_release_port(struct device *device)
  {
  	struct ib_umad_port *port = dev_get_drvdata(device);
-@@ -1281,10 +1301,19 @@ static int ib_umad_init_port(struct ib_d
+@@ -1281,10 +1305,19 @@ static int ib_umad_init_port(struct ib_d
  	dev_t base_issm;
  	int ret;
  
@@ -129,7 +138,7 @@ Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
  	if (devnum >= IB_UMAD_NUM_FIXED_MINOR) {
  		base_umad = dynamic_umad_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
  		base_issm = dynamic_issm_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
-@@ -1327,7 +1356,11 @@ err_dev:
+@@ -1327,7 +1360,11 @@ err_dev:
  	cdev_device_del(&port->cdev, &port->dev);
  err_cdev:
  	put_device(&port->dev);
@@ -141,7 +150,7 @@ Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
  	return ret;
  }
  
-@@ -1359,8 +1392,11 @@ static void ib_umad_kill_port(struct ib_
+@@ -1359,8 +1396,11 @@ static void ib_umad_kill_port(struct ib_
  
  	mutex_unlock(&port->file_mutex);
  
@@ -154,7 +163,7 @@ Change-Id: Icec5ef3765af55158bd1ce9fa17eb8317b9296e5
  	/* balances device_initialize() */
  	put_device(&port->sm_dev);
  	put_device(&port->dev);
-@@ -1456,6 +1492,15 @@ static int __init ib_umad_init(void)
+@@ -1456,6 +1496,15 @@ static int __init ib_umad_init(void)
  		goto out_chrdev;
  	}
  

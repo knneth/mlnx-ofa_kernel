@@ -1766,10 +1766,6 @@ static bool dest_is_valid(struct mlx5_flow_destination *dest,
 		return true;
 
 	if (ignore_level) {
-		if (ft->type != FS_FT_FDB &&
-		    ft->type != FS_FT_NIC_RX)
-			return false;
-
 		if (dest->type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE &&
 		    ft->type != dest->ft->type)
 			return false;
@@ -3469,8 +3465,10 @@ static struct mlx5_flow_root_namespace
 	return find_root(&ns->node);
 }
 
+#define MLX5_MH_NUM_OF_ACTIONS 0xff
+#define MLX5_MH_FLAGS 0xffffff00
 struct mlx5_modify_hdr *mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
-						 u8 ns_type, u8 num_actions,
+						 u8 ns_type, u32 num_actions_and_flags,
 						 void *modify_actions)
 {
 	struct mlx5_flow_root_namespace *root;
@@ -3486,7 +3484,10 @@ struct mlx5_modify_hdr *mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
 		return ERR_PTR(-ENOMEM);
 
 	modify_hdr->ns_type = ns_type;
-	err = root->cmds->modify_header_alloc(root, ns_type, num_actions,
+	modify_hdr->flags = num_actions_and_flags & MLX5_MH_FLAGS;
+
+	err = root->cmds->modify_header_alloc(root, ns_type,
+					      num_actions_and_flags & MLX5_MH_NUM_OF_ACTIONS,
 					      modify_actions, modify_hdr);
 	if (err) {
 		kfree(modify_hdr);
@@ -3528,6 +3529,7 @@ struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
 
 	pkt_reformat->ns_type = ns_type;
 	pkt_reformat->reformat_type = params->type;
+	pkt_reformat->owner = params->owner;
 	err = root->cmds->packet_reformat_alloc(root, params, ns_type,
 						pkt_reformat);
 	if (err) {

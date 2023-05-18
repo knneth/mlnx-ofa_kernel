@@ -175,7 +175,7 @@ Change-Id: If6f006c07ce4f7663ece7b711dd88701fae56a24
  		netdev_warn(priv->netdev, "Matching on GENEVE OAM is not supported\n");
  		return -EOPNOTSUPP;
  	}
-@@ -373,3 +405,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
+@@ -351,3 +383,5 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
  	.parse_tunnel         = mlx5e_tc_tun_parse_geneve,
  	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_geneve,
  };

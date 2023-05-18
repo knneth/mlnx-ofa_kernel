@@ -326,11 +326,6 @@ if [ "X${SDP_LOAD}" == "Xyes" ]; then
     IPOIB_LOAD="yes"
 fi
 
-if [ "X${LOAD_EIPOIB}" == "Xyes" ]; then
-    POST_LOAD_MODULES="$POST_LOAD_MODULES eth_ipoib"
-    IPOIB_LOAD="yes"
-fi
-
 IPOIB=0
 if [ "X${IPOIB_LOAD}" == "Xyes" ]; then
     IPOIB=1
@@ -1148,34 +1143,6 @@ start()
         RC=$[ $RC + $my_rc ]
     fi
 
-    # Set MAC address of PF via ECPF
-    # SMARTNIC_PF_MAC_CONF="[<bdf1>-<MAC1>] [<bdf2>-<MAC2>] ..."
-    if [ "X${SMARTNIC_PF_MAC_CONF}" != "X" ]; then
-        for mac_conf in ${SMARTNIC_PF_MAC_CONF}
-        do
-            bdf=${mac_conf%%-*}
-            mac=${mac_conf##*-}
-            if [ ! -d /sys/bus/pci/devices/${bdf}/ ]; then
-                log_msg "No such device: ${bdf}."
-                log_msg "Check SMARTNIC_PF_MAC_CONF value in the $CONFIG"
-                continue
-            fi
-            for i in `/bin/ls -1 /sys/bus/pci/devices/${bdf}/net 2> /dev/null`
-            do
-                if [ -e /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac ]; then
-                    echo $mac > /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac
-                    my_rc=$?
-                    if [ $my_rc -eq 0 ]; then
-                        log_msg "PF MAC is set to $mac via ECPF $i"
-                    else
-                        log_msg "ERROR: Failed to set MAC $mac via ECPF $i"
-                    fi
-                    RC=$[ $RC + $my_rc ]
-                fi
-            done
-        done
-    fi
-
     # Load ESP Offload kernel modules for Innova IPsec
     if [ "X${ESP_OFFLOAD_LOAD}" == "Xyes" ]; then
         load_module_external esp4_offload
@@ -1255,6 +1222,34 @@ start()
                 fi
             fi
         fi
+    fi
+
+    # Set MAC address of PF via ECPF
+    # SMARTNIC_PF_MAC_CONF="[<bdf1>-<MAC1>] [<bdf2>-<MAC2>] ..."
+    if [ "X${SMARTNIC_PF_MAC_CONF}" != "X" ]; then
+        for mac_conf in ${SMARTNIC_PF_MAC_CONF}
+        do
+            bdf=${mac_conf%%-*}
+            mac=${mac_conf##*-}
+            if [ ! -d /sys/bus/pci/devices/${bdf}/ ]; then
+                log_msg "No such device: ${bdf}."
+                log_msg "Check SMARTNIC_PF_MAC_CONF value in the $CONFIG"
+                continue
+            fi
+            for i in `/bin/ls -1 /sys/bus/pci/devices/${bdf}/net 2> /dev/null`
+            do
+                if [ -e /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac ]; then
+                    echo $mac > /sys/bus/pci/devices/${bdf}/net/${i}/smart_nic/pf/mac
+                    my_rc=$?
+                    if [ $my_rc -eq 0 ]; then
+                        log_msg "PF MAC is set to $mac via ECPF $i"
+                    else
+                        log_msg "ERROR: Failed to set MAC $mac via ECPF $i"
+                    fi
+                    RC=$[ $RC + $my_rc ]
+                fi
+            done
+        done
     fi
 
     if [ $RC -eq 0 ]; then
@@ -1731,7 +1726,21 @@ stop()
                 unload compat
         fi
         if is_module mlx_compat; then
+            if [ ! -d /sys/module/mlx_compat/holders/nvme ]; then
                 unload mlx_compat
+            else
+                if [ $(cat /sys/module/nvme/refcnt) -eq 0 ]; then
+                    unload nvme
+                    unload mlx_compat
+                else
+                    echo_warning $"mlx_compat is used by NVME. Leaving it loaded."
+                    local loaded_srcver=$(/bin/cat /sys/module/mlx_compat/srcversion 2>/dev/null)
+                    local curr_srcver=$(/sbin/modinfo mlx_compat 2>/dev/null | grep srcversion | awk '{print $NF}')
+                    if [ "X$loaded_srcver" != "X$curr_srcver" ]; then
+                        echo_warning $"Detected driver update. To load the new driver version reboot is required."
+                    fi
+                fi
+            fi
         fi
 
         # Unload memtrack

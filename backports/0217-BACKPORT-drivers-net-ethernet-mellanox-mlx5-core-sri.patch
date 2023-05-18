@@ -46,7 +46,7 @@ Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
  
  		sriov->vfs_ctx[vf].enabled = 1;
  		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) {
-@@ -166,7 +173,9 @@ mlx5_device_disable_sriov(struct mlx5_co
+@@ -170,7 +177,9 @@ mlx5_device_disable_sriov(struct mlx5_co
  static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
  {
  	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
@@ -56,7 +56,7 @@ Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
  	int err;
  
  	if (num_vfs && pci_num_vf(dev->pdev)) {
-@@ -179,9 +188,13 @@ static int mlx5_sriov_enable(struct pci_
+@@ -183,9 +192,13 @@ static int mlx5_sriov_enable(struct pci_
  		return -EBUSY;
  	}
  
@@ -70,7 +70,7 @@ Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
  	if (err) {
  		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
  		return err;
-@@ -198,13 +211,19 @@ static int mlx5_sriov_enable(struct pci_
+@@ -202,13 +215,19 @@ static int mlx5_sriov_enable(struct pci_
  void mlx5_sriov_disable(struct pci_dev *pdev)
  {
  	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
@@ -90,7 +90,7 @@ Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
  }
  
  int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
-@@ -225,6 +244,7 @@ int mlx5_core_sriov_configure(struct pci
+@@ -229,6 +248,7 @@ int mlx5_core_sriov_configure(struct pci
  	return err ? err : num_vfs;
  }
  
@@ -98,7 +98,7 @@ Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
  int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
  {
  	struct pci_dev *pf = pci_physfn(vf);
-@@ -242,12 +262,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
+@@ -246,12 +266,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
  			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
  
  	sriov = &dev->priv.sriov;
@@ -125,7 +125,7 @@ Change-Id: Id514de7f950f20b623d795ce0c98ed37f4761d27
  
  int mlx5_sriov_attach(struct mlx5_core_dev *dev)
  {
-@@ -301,6 +335,7 @@ int mlx5_sriov_init(struct mlx5_core_dev
+@@ -305,6 +339,7 @@ int mlx5_sriov_init(struct mlx5_core_dev
  		return 0;
  
  	total_vfs = pci_sriov_get_totalvfs(pdev);

@@ -19,7 +19,7 @@ Change-Id: I016102d63df5b409526e801e23a6942ada3de3b8
  
  	/* tc tunneling encapsulation private data */
  	struct mlx5e_tc_tun_encap *encap;
-@@ -278,12 +282,30 @@ static inline bool mlx5e_eswitch_rep(con
+@@ -280,12 +284,30 @@ static inline bool mlx5e_eswitch_rep(con
  	       mlx5e_eswitch_uplink_rep(netdev);
  }
  

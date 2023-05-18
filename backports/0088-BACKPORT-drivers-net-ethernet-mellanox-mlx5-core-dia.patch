@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
 ---
- .../mellanox/mlx5/core/diag/fw_tracer.c       | 26 ++++++++++++++++---
- 1 file changed, 22 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/diag/fw_tracer.c       | 46 +++++++++++++++++--
+ 1 file changed, 41 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
-@@ -29,11 +29,13 @@
+@@ -29,10 +29,13 @@
   * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   * SOFTWARE.
   */
@@ -20,12 +20,12 @@ Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
  #include "fw_tracer_tracepoint.h"
 +#endif
 +#include "fw_tracer.h"
- 
++
 +#include "lib/eq.h"
+ 
  static int mlx5_query_mtrc_caps(struct mlx5_fw_tracer *tracer)
  {
- 	u32 *string_db_base_address_out = tracer->str_db.base_address_out;
-@@ -435,8 +437,9 @@ static struct tracer_string_format *mlx5
+@@ -442,8 +445,9 @@ static struct tracer_string_format *mlx5
  							     u8 event_id, u32 tmsn)
  {
  	struct tracer_string_format *message;
@@ -36,7 +36,7 @@ Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
  		if (message->event_id == event_id && message->tmsn == tmsn)
  			return message;
  
-@@ -520,10 +523,11 @@ static void mlx5_fw_tracer_clean_print_h
+@@ -527,10 +531,11 @@ static void mlx5_fw_tracer_clean_print_h
  {
  	struct tracer_string_format *str_frmt;
  	struct hlist_node *n;
@@ -49,7 +49,7 @@ Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
  			mlx5_tracer_clean_message(str_frmt);
  	}
  }
-@@ -548,7 +552,11 @@ static void mlx5_fw_tracer_save_trace(st
+@@ -555,7 +560,11 @@ static void mlx5_fw_tracer_save_trace(st
  	trace_data->timestamp = timestamp;
  	trace_data->lost = lost;
  	trace_data->event_id = event_id;
@@ -61,7 +61,7 @@ Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
  
  	tracer->st_arr.saved_traces_index =
  		(tracer->st_arr.saved_traces_index + 1) & (SAVED_TRACES_NUM - 1);
-@@ -571,8 +579,14 @@ void mlx5_tracer_print_trace(struct trac
+@@ -578,8 +587,14 @@ void mlx5_tracer_print_trace(struct trac
  		 str_frmt->params[5],
  		 str_frmt->params[6]);
  
@@ -76,7 +76,7 @@ Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
  
  	mlx5_fw_tracer_save_trace(dev->tracer, trace_timestamp,
  				  str_frmt->lost, str_frmt->event_id, tmp);
-@@ -827,6 +841,7 @@ static void mlx5_fw_tracer_ownership_cha
+@@ -834,6 +849,7 @@ static void mlx5_fw_tracer_ownership_cha
  	mlx5_fw_tracer_start(tracer);
  }
  
@@ -84,15 +84,62 @@ Change-Id: I19b85b41610c0885006a9d66c0f64d77cdf9ffe8
  static int mlx5_fw_tracer_set_core_dump_reg(struct mlx5_core_dev *dev,
  					    u32 *in, int size_in)
  {
-@@ -929,6 +944,7 @@ unlock:
+@@ -936,11 +952,17 @@ unlock:
  	mutex_unlock(&tracer->st_arr.lock);
  	return err;
  }
 +#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  
- /* Create software resources (Buffers, etc ..) */
- struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
-@@ -1150,4 +1166,6 @@ static int fw_tracer_event(struct notifi
+ static void mlx5_fw_tracer_update_db(struct work_struct *work)
+ {
+ 	struct mlx5_fw_tracer *tracer =
+-			container_of(work, struct mlx5_fw_tracer, update_db_work);
++#ifdef HAVE_CANCEL_WORK_EXPORTED
++			container_of(work,
++#else
++			container_of(to_delayed_work(work),
++#endif
++				     struct mlx5_fw_tracer, update_db_work);
+ 
+ 	mlx5_fw_tracer_reload(tracer);
+ }
+@@ -972,7 +994,11 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
+ 	INIT_WORK(&tracer->ownership_change_work, mlx5_fw_tracer_ownership_change);
+ 	INIT_WORK(&tracer->read_fw_strings_work, mlx5_tracer_read_strings_db);
+ 	INIT_WORK(&tracer->handle_traces_work, mlx5_fw_tracer_handle_traces);
++#ifdef HAVE_CANCEL_WORK_EXPORTED
+ 	INIT_WORK(&tracer->update_db_work, mlx5_fw_tracer_update_db);
++#else
++	INIT_DELAYED_WORK(&tracer->update_db_work, mlx5_fw_tracer_update_db);
++#endif
+ 	mutex_init(&tracer->state_lock);
+ 
+ 
+@@ -1082,7 +1108,11 @@ void mlx5_fw_tracer_cleanup(struct mlx5_
+ 	/* It is valid to get here from update_db_work. Hence, don't wait for
+ 	 * update_db_work to finished.
+ 	 */
++#ifdef HAVE_CANCEL_WORK_EXPORTED
+ 	cancel_work(&tracer->update_db_work);
++#else
++	cancel_delayed_work(&tracer->update_db_work);
++#endif
+ 
+ 	if (tracer->owner)
+ 		mlx5_fw_tracer_ownership_release(tracer);
+@@ -1181,7 +1211,11 @@ static int fw_tracer_event(struct notifi
+ 		queue_work(tracer->work_queue, &tracer->handle_traces_work);
+ 		break;
+ 	case MLX5_TRACER_SUBTYPE_STRINGS_DB_UPDATE:
++#ifdef HAVE_CANCEL_WORK_EXPORTED
+ 		queue_work(tracer->work_queue, &tracer->update_db_work);
++#else
++		queue_delayed_work(tracer->work_queue, &tracer->update_db_work, 0);
++#endif
+ 		break;
+ 	default:
+ 		mlx5_core_dbg(dev, "FWTracer: Event with unrecognized subtype: sub_type %d\n",
+@@ -1191,4 +1225,6 @@ static int fw_tracer_event(struct notifi
  	return NOTIFY_OK;
  }
  

@@ -188,6 +188,10 @@ get-modules()
 	modules="$modules \
 		net/mlxdevm/mlxdevm"
 
+	# Add it in case it is set in the config of the kernel we build
+	modules="$modules \
+		drivers/infiniband/hw/irdma/irdma"
+
 	echo $modules
 }
 

@@ -1,7 +1,7 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Shay Drory <shayd@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 
-Change-Id: If2dcc38a1ffb511221e75f4aced08485f1fd4a2e
+Change-Id: Ia5a7d53c42562a238484496956099857f3ec2c4a
 ---
  .../ethernet/mellanox/mlx5/core/mlx5_core.h   | 35 +++++--------------
  1 file changed, 8 insertions(+), 27 deletions(-)
@@ -39,7 +39,7 @@ Change-Id: If2dcc38a1ffb511221e75f4aced08485f1fd4a2e
  static inline struct device *mlx5_core_dma_dev(struct mlx5_core_dev *dev)
  {
  	return &dev->pdev->dev;
-@@ -331,8 +307,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
+@@ -329,8 +305,11 @@ void mlx5_dm_cleanup(struct mlx5_core_de
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
  
@@ -53,16 +53,16 @@ Change-Id: If2dcc38a1ffb511221e75f4aced08485f1fd4a2e
  int mlx5_fw_version_query(struct mlx5_core_dev *dev,
  			  u32 *running_ver, u32 *stored_ver);
  
-@@ -447,9 +426,11 @@ int mlx5_init_one(struct mlx5_core_dev *
+@@ -440,9 +419,11 @@ int mlx5_init_one(struct mlx5_core_dev *
  void mlx5_uninit_one(struct mlx5_core_dev *dev);
  void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
- void mlx5_unload_one(struct mlx5_core_dev *dev);
--void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev);
+ void mlx5_unload_one(struct mlx5_core_dev *dev, bool suspend);
+-void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev, bool suspend);
  int mlx5_load_one(struct mlx5_core_dev *dev, bool recovery);
 +#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
-+void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev);
++void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev, bool suspend);
  int mlx5_load_one_devl_locked(struct mlx5_core_dev *dev, bool recovery);
 +#endif
  
- int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out);
- 
+ int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap, u16 function_id,
+ 				  u16 opmod);

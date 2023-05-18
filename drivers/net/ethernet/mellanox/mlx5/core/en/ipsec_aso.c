@@ -13,8 +13,8 @@ enum {
 };
 
 struct ipsec_umr {
+	u8 __aligned(64) ctx[MLX5_ST_SZ_BYTES(ipsec_aso)];
 	dma_addr_t dma_addr;
-	u8 ctx[MLX5_ST_SZ_BYTES(ipsec_aso)];
 	u32 mkey;
 };
 

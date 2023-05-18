@@ -403,7 +403,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  
  static const struct counter_desc ch_stats_desc[] = {
  	{ MLX5E_DECLARE_CH_STAT(struct mlx5e_ch_stats, events) },
-@@ -2145,8 +2218,10 @@ static const struct counter_desc ptp_rq_
+@@ -2146,8 +2219,10 @@ static const struct counter_desc ptp_rq_
  	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, csum_unnecessary) },
  	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, csum_unnecessary_inner) },
  	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, csum_none) },
@@ -414,7 +414,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, lro_packets) },
  	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, lro_bytes) },
  	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, ecn_mark) },
-@@ -2206,10 +2281,14 @@ static const struct counter_desc qos_sq_
+@@ -2207,10 +2282,14 @@ static const struct counter_desc qos_sq_
  
  #define NUM_RQ_STATS			ARRAY_SIZE(rq_stats_desc)
  #define NUM_SQ_STATS			ARRAY_SIZE(sq_stats_desc)
@@ -431,7 +431,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  #define NUM_CH_STATS			ARRAY_SIZE(ch_stats_desc)
  #define NUM_PTP_SQ_STATS		ARRAY_SIZE(ptp_sq_stats_desc)
  #define NUM_PTP_CH_STATS		ARRAY_SIZE(ptp_ch_stats_desc)
-@@ -2348,16 +2427,23 @@ static MLX5E_DECLARE_STATS_GRP_OP_NUM_ST
+@@ -2349,16 +2428,23 @@ static MLX5E_DECLARE_STATS_GRP_OP_NUM_ST
  
  	return (NUM_RQ_STATS * max_nch) +
  	       (NUM_CH_STATS * max_nch) +
@@ -460,7 +460,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  	int max_nch = priv->stats_nch;
  	int i, j, tc;
  
-@@ -2370,12 +2456,17 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
+@@ -2371,12 +2457,17 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
  		for (j = 0; j < NUM_RQ_STATS; j++)
  			sprintf(data + (idx++) * ETH_GSTRING_LEN,
  				rq_stats_desc[j].format, i);
@@ -481,7 +481,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  	}
  
  	for (tc = 0; tc < priv->max_opened_tc; tc++)
-@@ -2386,12 +2477,16 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
+@@ -2387,12 +2478,16 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
  					i + tc * max_nch);
  
  	for (i = 0; i < max_nch; i++) {
@@ -498,7 +498,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  	}
  
  	return idx;
-@@ -2399,7 +2494,9 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
+@@ -2400,7 +2495,9 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
  
  static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(channels)
  {
@@ -508,7 +508,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  	int max_nch = priv->stats_nch;
  	int i, j, tc;
  
-@@ -2414,14 +2511,18 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
+@@ -2415,14 +2512,18 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
  			data[idx++] =
  				MLX5E_READ_CTR64_CPU(&priv->channel_stats[i]->rq,
  						     rq_stats_desc, j);
@@ -527,7 +527,7 @@ Change-Id: Ie02381f333983221fa06a7e0b4ec97b00ae5ef22
  	}
  
  	for (tc = 0; tc < priv->max_opened_tc; tc++)
-@@ -2432,14 +2533,18 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
+@@ -2433,14 +2534,18 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_S
  							     sq_stats_desc, j);
  
  	for (i = 0; i < max_nch; i++) {

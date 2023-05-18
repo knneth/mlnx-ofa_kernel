@@ -46,8 +46,12 @@ AC_DEFUN([LB_LINUX_RELEASE],
 [
 LINUXRELEASE=$(LB_LINUX_MAKE_OUTPUT([kernelrelease]))
 if test x$LINUXRELEASE = x ; then
-	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
+	# Workaround for some kernel 6.3 RCs:
+	LINUXRELEASE=`cat $LINUX_OBJ/include/config/kernel.release 2>/dev/null`
+	if test "$LINUXRELEASE" = ''; then
+		AC_MSG_RESULT([unknown])
+		AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
+	fi
 fi
 AC_MSG_RESULT([$LINUXRELEASE])
 AC_SUBST(LINUXRELEASE)

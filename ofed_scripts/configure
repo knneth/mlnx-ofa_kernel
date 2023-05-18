@@ -414,6 +414,15 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_XDP_SUPPORT
 	fi
 
+# Define HAVE_VFIO_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_VFIO_PRECOPY_INFO &&
+		[ "X${CONFIG_ENABLE_VFIO}" == "Xy" ]
+	then
+		set_complex_define_to_config_h HAVE_VFIO_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_VFIO_SUPPORT
+	fi
+
 # Define HAVE_XDP_FRAME from other flags
 	if check_compat_config_h_var HAVE_XDP_FRAME_IN_NET_XDP ||
 	   check_compat_config_h_var HAVE_XDP_FRAME_IN_UEK_KABI
@@ -519,6 +528,15 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
 	else
 		unset_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
+	fi
+
+# Define HAVE_BLK_TYPES_REQ_OP_DRV_OUT from other flags
+	if check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM ||
+	   check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
 	fi
 
 # Define HAVE_NO_REFCNT_BIAS to be set off default until refcnt_bias member
@@ -724,6 +742,7 @@ CONFIG_GPU_DIRECT_STORAGE=${CONFIG_GPU_DIRECT_STORAGE:-''}
 
 CONFIG_ENABLE_MLX5_FS_DEBUGFS=${CONFIG_ENABLE_MLX5_FS_DEBUGFS:-''}
 CONFIG_ENABLE_XDP="y"
+CONFIG_ENABLE_VFIO="y"
 CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished 
@@ -736,35 +755,35 @@ REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.12.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.8.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="3.10.0"
 ISERT_SUPPORTED_KVERSION="3.10.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
 
 SRP_SUPPORTED_KVERSION="3.10.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
 
 GDS_SUPPORTED_KVERSION="4.15.0"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.4"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.4"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.12.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.2"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.4"
 
 #ODP
 ODP_SUPPORTED_KVERSION="3.10.0"
@@ -1455,6 +1474,9 @@ main()
                         ;;
                         --without-xdp)
 			CONFIG_ENABLE_XDP=
+                        ;;
+                        --without-vfio)
+			CONFIG_ENABLE_VFIO=
                         ;;
                         --without-basecode-extras)
 			CONFIG_ENABLE_BASECODE_EXTRAS=

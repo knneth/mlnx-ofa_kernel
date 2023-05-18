@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma.c
 
 Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
 ---
- drivers/infiniband/core/cma.c | 93 +++++++++++++++++++++++++++++++++--
- 1 file changed, 89 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/cma.c | 97 +++++++++++++++++++++++++++++++++--
+ 1 file changed, 93 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/core/cma.c
 +++ b/drivers/infiniband/core/cma.c
@@ -265,7 +265,19 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  		struct sockaddr  *cur_daddr = cma_dst_addr(cur_id);
  		struct sockaddr  *cur_saddr = cma_src_addr(cur_id);
  		__be16 cur_dport = cma_port(cur_daddr);
-@@ -3853,11 +3916,12 @@ static int cma_check_port(struct rdma_bi
+@@ -3809,7 +3872,11 @@ static int cma_alloc_any_port(enum rdma_
+ 
+ 	inet_get_local_port_range(net, &low, &high);
+ 	remaining = (high - low) + 1;
++#ifdef HAVE_GET_RANDOM_U32_INCLUSIVE
++	rover = get_random_u32_inclusive(low, remaining + low - 1);
++#else
+ 	rover = prandom_u32_max(remaining) + low;
++#endif
+ retry:
+ 	if (last_used_port != rover) {
+ 		struct rdma_bind_list *bind_list;
+@@ -3853,11 +3920,12 @@ static int cma_check_port(struct rdma_bi
  {
  	struct rdma_id_private *cur_id;
  	struct sockaddr *addr, *cur_addr;
@@ -279,7 +291,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  		if (id_priv == cur_id)
  			continue;
  
-@@ -4261,7 +4325,9 @@ static int cma_resolve_ib_udp(struct rdm
+@@ -4261,7 +4329,9 @@ static int cma_resolve_ib_udp(struct rdm
  	req.timeout_ms = 1 << (CMA_CM_RESPONSE_TIMEOUT - 8);
  	req.max_cm_retries = CMA_MAX_CM_RETRIES;
  
@@ -289,7 +301,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  	ret = ib_send_cm_sidr_req(id_priv->cm_id.ib, &req);
  	if (ret) {
  		ib_destroy_cm_id(id_priv->cm_id.ib);
-@@ -4338,7 +4404,9 @@ static int cma_connect_ib(struct rdma_id
+@@ -4338,7 +4408,9 @@ static int cma_connect_ib(struct rdma_id
  	req.ece.vendor_id = id_priv->ece.vendor_id;
  	req.ece.attr_mod = id_priv->ece.attr_mod;
  
@@ -299,7 +311,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  	ret = ib_send_cm_req(id_priv->cm_id.ib, &req);
  out:
  	if (ret && !IS_ERR(id)) {
-@@ -4512,7 +4580,9 @@ static int cma_accept_ib(struct rdma_id_
+@@ -4512,7 +4584,9 @@ static int cma_accept_ib(struct rdma_id_
  	rep.ece.vendor_id = id_priv->ece.vendor_id;
  	rep.ece.attr_mod = id_priv->ece.attr_mod;
  
@@ -309,7 +321,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  	ret = ib_send_cm_rep(id_priv->cm_id.ib, &rep);
  out:
  	return ret;
-@@ -4566,7 +4636,9 @@ static int cma_send_sidr_rep(struct rdma
+@@ -4566,7 +4640,9 @@ static int cma_send_sidr_rep(struct rdma
  	rep.private_data = private_data;
  	rep.private_data_len = private_data_len;
  
@@ -319,7 +331,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  	return ib_send_cm_sidr_rep(id_priv->cm_id.ib, &rep);
  }
  
-@@ -4703,7 +4775,9 @@ int rdma_reject(struct rdma_cm_id *id, c
+@@ -4703,7 +4779,9 @@ int rdma_reject(struct rdma_cm_id *id, c
  			ret = cma_send_sidr_rep(id_priv, IB_SIDR_REJECT, 0,
  						private_data, private_data_len);
  		} else {
@@ -329,7 +341,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  			ret = ib_send_cm_rej(id_priv->cm_id.ib, reason, NULL, 0,
  					     private_data, private_data_len);
  		}
-@@ -4732,6 +4806,7 @@ int rdma_disconnect(struct rdma_cm_id *i
+@@ -4732,6 +4810,7 @@ int rdma_disconnect(struct rdma_cm_id *i
  		if (ret)
  			goto out;
  		/* Initiate or respond to a disconnect. */
@@ -337,7 +349,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  		trace_cm_disconnect(id_priv);
  		if (ib_send_cm_dreq(id_priv->cm_id.ib, NULL, 0)) {
  			if (!ib_send_cm_drep(id_priv->cm_id.ib, NULL, 0))
-@@ -4739,6 +4814,10 @@ int rdma_disconnect(struct rdma_cm_id *i
+@@ -4739,6 +4818,10 @@ int rdma_disconnect(struct rdma_cm_id *i
  		} else {
  			trace_cm_sent_dreq(id_priv);
  		}
@@ -348,7 +360,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  	} else if (rdma_cap_iw_cm(id->device, id->port_num)) {
  		ret = iw_cm_disconnect(id_priv->cm_id.iw, 0);
  	} else
-@@ -5207,7 +5286,9 @@ static void cma_send_device_removal_put(
+@@ -5207,7 +5290,9 @@ static void cma_send_device_removal_put(
  		 */
  		cma_id_put(id_priv);
  		mutex_unlock(&id_priv->handler_mutex);
@@ -358,7 +370,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  		_destroy_id(id_priv, state);
  		return;
  	}
-@@ -5313,7 +5394,9 @@ static int cma_add_one(struct ib_device
+@@ -5313,7 +5398,9 @@ static int cma_add_one(struct ib_device
  	}
  	mutex_unlock(&lock);
  
@@ -368,7 +380,7 @@ Change-Id: Ib0bea79af9cc95c566f24f8cd5e9a428027b411a
  	return 0;
  
  free_listen:
-@@ -5335,7 +5418,9 @@ static void cma_remove_one(struct ib_dev
+@@ -5335,7 +5422,9 @@ static void cma_remove_one(struct ib_dev
  {
  	struct cma_device *cma_dev = client_data;
  

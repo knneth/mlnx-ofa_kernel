@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 
 Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 57 ++++++++++++++++++-
- 1 file changed, 55 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 61 ++++++++++++++++++-
+ 1 file changed, 59 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
@@ -42,7 +42,19 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  		return;
  
  	mlx5e_skb_cb_hwtstamp_tx(skb, cq_stats);
-@@ -128,7 +142,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
+@@ -110,7 +124,11 @@ static void mlx5e_ptp_skb_fifo_ts_cqe_re
+ 		hwts.hwtstamp = mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp;
+ 		skb_tstamp_tx(skb, &hwts);
+ 		ptpsq->cq_stats->resync_cqe++;
++#ifdef HAVE_NAPI_CONSUME_SKB
+ 		napi_consume_skb(skb, budget);
++#else
++		dev_kfree_skb(skb);
++#endif
+ 		skb_cc = PTP_WQE_CTR2IDX(ptpsq->skb_fifo_cc);
+ 	}
+ }
+@@ -147,7 +165,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
  	ptpsq->cq_stats->cqe++;
  
  out:
@@ -54,7 +66,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  }
  
  static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int budget)
-@@ -171,6 +189,9 @@ static int mlx5e_ptp_napi_poll(struct na
+@@ -190,6 +212,9 @@ static int mlx5e_ptp_napi_poll(struct na
  	rcu_read_lock();
  
  	ch_stats->poll++;
@@ -64,7 +76,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  
  	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
  		for (i = 0; i < c->num_tc; i++) {
-@@ -192,8 +213,18 @@ static int mlx5e_ptp_napi_poll(struct na
+@@ -211,8 +236,18 @@ static int mlx5e_ptp_napi_poll(struct na
  		goto out;
  	}
  
@@ -83,7 +95,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  
  	ch_stats->arm++;
  
-@@ -406,6 +437,9 @@ static int mlx5e_ptp_open_tx_cqs(struct
+@@ -425,6 +460,9 @@ static int mlx5e_ptp_open_tx_cqs(struct
  	ccp.ch_stats = c->stats;
  	ccp.napi     = &c->napi;
  	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
@@ -93,7 +105,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  
  	cq_param = &cparams->txq_sq_param.cqp;
  
-@@ -463,7 +497,16 @@ static int mlx5e_init_ptp_rq(struct mlx5
+@@ -482,7 +520,16 @@ static int mlx5e_init_ptp_rq(struct mlx5
  	if (err)
  		return err;
  
@@ -111,7 +123,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  }
  
  static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
-@@ -477,7 +520,9 @@ static int mlx5e_ptp_open_rq(struct mlx5
+@@ -496,7 +543,9 @@ static int mlx5e_ptp_open_rq(struct mlx5
  	ccp.ch_stats = c->stats;
  	ccp.napi     = &c->napi;
  	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
@@ -122,7 +134,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  	err = mlx5e_init_ptp_rq(c, params, &c->rq);
  	if (err)
  		return err;
-@@ -521,7 +566,11 @@ static void mlx5e_ptp_build_rq_param(str
+@@ -540,7 +589,11 @@ static void mlx5e_ptp_build_rq_param(str
  
  	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
  	mlx5e_init_rq_type_params(mdev, params);
@@ -134,7 +146,7 @@ Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
  	mlx5e_build_rq_param(mdev, params, NULL, q_counter, rq_params);
  }
  
-@@ -703,7 +752,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
+@@ -722,7 +775,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
  	if (err)
  		goto err_free;
  

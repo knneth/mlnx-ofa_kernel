@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
 
 Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eq.c | 52 +++++++++++++++++++-
- 1 file changed, 50 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 60 +++++++++++++++++++-
+ 1 file changed, 58 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
@@ -64,7 +64,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -679,6 +693,7 @@ static void cleanup_async_eq(struct mlx5
+@@ -654,13 +668,18 @@ static void cleanup_async_eq(struct mlx5
  			      name, err);
  }
  
@@ -72,7 +72,18 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  static u16 async_eq_depth_devlink_param_get(struct mlx5_core_dev *dev)
  {
  	struct devlink *devlink = priv_to_devlink(dev);
-@@ -693,6 +708,8 @@ static u16 async_eq_depth_devlink_param_
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	err = devl_param_driverinit_value_get(devlink,
++#else
+ 	err = devlink_param_driverinit_value_get(devlink,
++#endif
+ 						 DEVLINK_PARAM_GENERIC_ID_EVENT_EQ_SIZE,
+ 						 &val);
+ 	if (!err)
+@@ -668,6 +687,8 @@ static u16 async_eq_depth_devlink_param_
  	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
  	return MLX5_NUM_ASYNC_EQE;
  }
@@ -81,7 +92,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  static int create_async_eqs(struct mlx5_core_dev *dev)
  {
  	struct mlx5_eq_table *table = dev->priv.eq_table;
-@@ -724,7 +741,11 @@ static int create_async_eqs(struct mlx5_
+@@ -699,7 +720,11 @@ static int create_async_eqs(struct mlx5_
  
  	param = (struct mlx5_eq_param) {
  		.irq = table->ctrl_irq,
@@ -93,7 +104,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  	};
  
  	if (mlx5_core_is_sf(dev) && dev->async_eq_depth)
-@@ -842,7 +863,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -817,7 +842,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -105,7 +116,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  
  	return eqe;
  }
-@@ -951,6 +976,7 @@ static void destroy_comp_eqs(struct mlx5
+@@ -926,13 +955,18 @@ static void destroy_comp_eqs(struct mlx5
  	comp_irqs_release(dev);
  }
  
@@ -113,7 +124,18 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  static u16 comp_eq_depth_devlink_param_get(struct mlx5_core_dev *dev)
  {
  	struct devlink *devlink = priv_to_devlink(dev);
-@@ -965,6 +991,7 @@ static u16 comp_eq_depth_devlink_param_g
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	err = devl_param_driverinit_value_get(devlink,
++#else
+ 	err = devlink_param_driverinit_value_get(devlink,
++#endif
+ 						 DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE,
+ 						 &val);
+ 	if (!err)
+@@ -940,6 +974,7 @@ static u16 comp_eq_depth_devlink_param_g
  	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
  	return MLX5_COMP_EQ_SIZE;
  }
@@ -121,7 +143,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  
  static int create_comp_eqs(struct mlx5_core_dev *dev)
  {
-@@ -979,7 +1006,11 @@ static int create_comp_eqs(struct mlx5_c
+@@ -954,7 +989,11 @@ static int create_comp_eqs(struct mlx5_c
  	if (ncomp_eqs < 0)
  		return ncomp_eqs;
  	INIT_LIST_HEAD(&table->comp_eqs_list);
@@ -133,7 +155,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  
  	/* if user specified completion eq depth, honor that */
  	if (mlx5_core_is_sf(dev) && dev->cmpl_eq_depth)
-@@ -997,7 +1028,12 @@ static int create_comp_eqs(struct mlx5_c
+@@ -972,7 +1011,12 @@ static int create_comp_eqs(struct mlx5_c
  		INIT_LIST_HEAD(&eq->tasklet_ctx.list);
  		INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
  		spin_lock_init(&eq->tasklet_ctx.lock);
@@ -146,7 +168,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  
  		eq->irq_nb.notifier_call = mlx5_eq_comp_int;
  		param = (struct mlx5_eq_param) {
-@@ -1132,8 +1168,13 @@ static int set_rmap(struct mlx5_core_dev
+@@ -1107,8 +1151,13 @@ static int set_rmap(struct mlx5_core_dev
  	}
  
  	for (vecidx = 0; vecidx < eq_table->num_comp_eqs; vecidx++) {
@@ -160,7 +182,7 @@ Change-Id: I8e3cbf7d309200cc2b88aa2bed81d5ad9dc797c3
  		if (err) {
  			mlx5_core_err(mdev, "irq_cpu_rmap_add failed. err %d",
  				      err);
-@@ -1149,6 +1190,13 @@ err_out:
+@@ -1124,6 +1173,13 @@ err_out:
  	return err;
  }
  

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
 ---
- .../mellanox/mlx5/core/esw/devlink_port.c     | 135 +++++++++++++++++-
- 1 file changed, 132 insertions(+), 3 deletions(-)
+ .../mellanox/mlx5/core/esw/devlink_port.c     | 143 +++++++++++++++++-
+ 1 file changed, 140 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
@@ -135,7 +135,7 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  	struct mlx5_core_dev *dev = esw->dev;
  	struct devlink_port *dl_port;
  	unsigned int dl_port_index;
-@@ -88,26 +145,46 @@ int mlx5_esw_offloads_devlink_port_regis
+@@ -88,26 +145,50 @@ int mlx5_esw_offloads_devlink_port_regis
  
  	devlink = priv_to_devlink(dev);
  	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
@@ -149,7 +149,11 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 +#ifdef HAVE_DEVL_PORT_REGISTER
++#ifdef HAVE_DEVL_RATE_LEAF_CREATE_GET_3_PARAMS
++	err = devl_rate_leaf_create(dl_port, vport, NULL);
++#else
  	err = devl_rate_leaf_create(dl_port, vport);
++#endif /* HAVE_DEVL_RATE_LEAF_CREATE_GET_3_PARAMS */ 
 +#else
 +	err = devlink_rate_leaf_create(dl_port, vport);
 +#endif
@@ -182,7 +186,7 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  	struct mlx5_vport *vport;
  
  	if (!mlx5_esw_devlink_port_supported(esw, vport_num))
-@@ -117,15 +194,26 @@ void mlx5_esw_offloads_devlink_port_unre
+@@ -117,15 +198,26 @@ void mlx5_esw_offloads_devlink_port_unre
  	if (IS_ERR(vport))
  		return;
  
@@ -211,7 +215,7 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  }
  
  struct devlink_port *mlx5_esw_offloads_devlink_port(struct mlx5_eswitch *esw, u16 vport_num)
-@@ -139,6 +227,7 @@ struct devlink_port *mlx5_esw_offloads_d
+@@ -139,6 +231,7 @@ struct devlink_port *mlx5_esw_offloads_d
  int _mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw, struct devlink_port *dl_port,
  				      u16 vport_num, u32 controller, u32 sfnum)
  {
@@ -219,7 +223,7 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  	struct mlx5_core_dev *dev = esw->dev;
  	struct netdev_phys_item_id ppid = {};
  	unsigned int dl_port_index;
-@@ -155,23 +244,47 @@ int _mlx5_esw_devlink_sf_port_register(s
+@@ -155,23 +248,51 @@ int _mlx5_esw_devlink_sf_port_register(s
  	mlx5_esw_get_port_parent_id(dev, &ppid);
  	memcpy(dl_port->attrs.switch_id.id, &ppid.id[0], ppid.id_len);
  	dl_port->attrs.switch_id.id_len = ppid.id_len;
@@ -240,7 +244,11 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 +#ifdef HAVE_DEVL_PORT_REGISTER
++#ifdef HAVE_DEVL_RATE_LEAF_CREATE_GET_3_PARAMS
++	err = devl_rate_leaf_create(dl_port, vport, NULL);
++#else
  	err = devl_rate_leaf_create(dl_port, vport);
++#endif /* HAVE_DEVL_RATE_LEAF_CREATE_GET_3_PARAMS */ 
 +#else
 +	err = devlink_rate_leaf_create(dl_port, vport);
 +#endif
@@ -267,7 +275,7 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  }
  
  int mlx5_esw_devlink_sf_port_register(struct mlx5_eswitch *esw,
-@@ -181,10 +294,12 @@ int mlx5_esw_devlink_sf_port_register(st
+@@ -181,10 +302,12 @@ int mlx5_esw_devlink_sf_port_register(st
  {
  	int err = 0;
  
@@ -280,7 +288,7 @@ Change-Id: Icafbed2a44e8f5cd4d689a189b0fd8957f1c438a
  
  #if IS_ENABLED(CONFIG_MLXDEVM)
  	err = mlx5_devm_sf_port_register(esw->dev, vport_num, controller, sfnum, dl_port);
-@@ -194,27 +309,41 @@ int mlx5_esw_devlink_sf_port_register(st
+@@ -194,27 +317,41 @@ int mlx5_esw_devlink_sf_port_register(st
  
  void _mlx5_esw_devlink_sf_port_unregister(struct mlx5_eswitch *esw, u16 vport_num)
  {

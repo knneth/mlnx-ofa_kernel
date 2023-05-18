@@ -126,7 +126,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	bool use_sgl;
  	int aborted;
  	int npages;		/* In the PRP list. 0 means small pool in use */
-+#ifndef HAVE_BIO_SPLIT_TO_LIMITS
++#ifndef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +	int nents;		/* Used in scatterlist */
 +#endif
  	dma_addr_t first_dma;
@@ -136,7 +136,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 +#else
 +	struct scatterlist meta_sg;
 +#endif
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	struct sg_table sgt;
 +#else
 +	struct scatterlist *sg;
@@ -306,7 +306,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static void **nvme_pci_iod_list(struct request *req)
  {
  	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	return (void **)(iod->sgt.sgl + blk_rq_nr_phys_segments(req));
 +#else
 + 	return (void **)(iod->sg + blk_rq_nr_phys_segments(req));
@@ -330,7 +330,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  #include "nvfs-dma.h"
  #endif
  
-+#ifndef HAVE_BIO_SPLIT_TO_LIMITS
++#ifndef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +static void nvme_unmap_sg(struct nvme_dev *dev, struct request *req)
 +{
 +	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
@@ -360,7 +360,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	}
 +#endif
  
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	WARN_ON_ONCE(!iod->sgt.nents);
 +
  #ifdef CONFIG_NVFS
@@ -381,7 +381,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		nvme_free_sgls(dev, req);
  	else
  		nvme_free_prps(dev, req);
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	mempool_free(iod->sgt.sgl, dev->iod_mempool);
 +#else
 +	mempool_free(iod->sg, dev->iod_mempool);
@@ -408,7 +408,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 +#else
 +	int length = nvme_map_len(req);
 +#endif
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	struct scatterlist *sg = iod->sgt.sgl;
 +#else
 +	struct scatterlist *sg = iod->sg;
@@ -420,7 +420,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		dma_len = sg_dma_len(sg);
  	}
  done:
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	cmnd->dptr.prp1 = cpu_to_le64(sg_dma_address(iod->sgt.sgl));
 +#else
 +	cmnd->dptr.prp1 = cpu_to_le64(sg_dma_address(iod->sg));
@@ -432,14 +432,14 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	return BLK_STS_RESOURCE;
  bad_sgl:
 +#ifdef HAVE_ONCE_H
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	WARN(DO_ONCE(nvme_print_sgl, iod->sgt.sgl, iod->sgt.nents),
 +#else
 +	WARN(DO_ONCE(nvme_print_sgl, iod->sg, iod->nents),
 +#endif
  			"Invalid SGL for payload:%d nents:%d\n",
 +#ifdef HAVE_BLK_RQ_NR_PAYLOAD_BYTES
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  			blk_rq_payload_bytes(req), iod->sgt.nents);
 +#else
 +			blk_rq_payload_bytes(req), iod->nents);
@@ -471,7 +471,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  }
  
  static blk_status_t nvme_pci_setup_sgls(struct nvme_dev *dev,
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  		struct request *req, struct nvme_rw_command *cmd)
 +#else
 +		struct request *req, struct nvme_rw_command *cmd, int entries)
@@ -480,7 +480,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
  	struct dma_pool *pool;
  	struct nvme_sgl_desc *sg_list;
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	struct scatterlist *sg = iod->sgt.sgl;
  	unsigned int entries = iod->sgt.nents;
 +#else
@@ -508,7 +508,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  {
  	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
  	blk_status_t ret = BLK_STS_RESOURCE;
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	int rc;
 +#else
 +	int nr_mapped;
@@ -529,7 +529,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	iod->dma_len = 0;
 +#endif
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  	iod->sgt.sgl = mempool_alloc(dev->iod_mempool, GFP_ATOMIC);
  	if (!iod->sgt.sgl)
  		return BLK_STS_RESOURCE;
@@ -568,7 +568,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
 +#endif
  	iod->use_sgl = nvme_pci_use_sgls(dev, req);
  	if (iod->use_sgl)
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  		ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw);
 +#else
 +		ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw, nr_mapped);
@@ -579,7 +579,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  		goto out_unmap_sg;
  	return BLK_STS_OK;
  
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
  out_unmap_sg:
  	dma_unmap_sgtable(dev->dev, &iod->sgt, rq_dma_dir(req), 0);
  out_free_sg:
@@ -622,7 +622,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	iod->aborted = 0;
  	iod->npages = -1;
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +
  	iod->sgt.nents = 0;
 +#else
@@ -1864,7 +1864,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2001),
  		.driver_data = NVME_QUIRK_SINGLE_VECTOR },
  	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2003) },
-@@ -3816,18 +4659,44 @@ static const struct pci_device_id nvme_i
+@@ -3817,18 +4660,44 @@ static const struct pci_device_id nvme_i
  };
  MODULE_DEVICE_TABLE(pci, nvme_id_table);
  
@@ -1909,7 +1909,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	.err_handler	= &nvme_err_handler,
  };
  
-@@ -3861,7 +4730,9 @@ static int __init nvme_init(void)
+@@ -3862,7 +4731,9 @@ static int __init nvme_init(void)
  	BUILD_BUG_ON(sizeof(struct nvme_create_cq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_create_sq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_delete_queue) != 64);
@@ -1919,7 +1919,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	return pci_register_driver(&nvme_driver);
  }
-@@ -3874,6 +4745,9 @@ static void __exit nvme_exit(void)
+@@ -3875,6 +4746,9 @@ static void __exit nvme_exit(void)
  
  MODULE_AUTHOR("Matthew Wilcox <willy@linux.intel.com>");
  MODULE_LICENSE("GPL");

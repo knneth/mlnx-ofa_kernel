@@ -321,14 +321,52 @@ static inline void iounmap(void *addr)
  * Removed __kvfree_rcu macro upstream v5.12
  * commit 5ea5d1ed572c ("rcu: Eliminate the __kvfree_rcu() macro")
  */
+
+#ifdef kfree_rcu_mightsleep
+/*
+ * Due to v6.3 changes
+ * commit 04a522b7da3dbc083f8ae0aa1a6184b959a8f81c
+ * rcu: Refactor kvfree_call_rcu() and high-level helpers
+ */
+#define __kvfree_rcu(ptr, rhf) \
+do {									\
+	typeof (ptr) ___p = (ptr);					\
+									\
+	if (___p) {									\
+		BUILD_BUG_ON(!__is_kvfree_rcu_offset(offsetof(typeof(*(ptr)), rhf)));	\
+		kvfree_call_rcu(&((___p)->rhf), (void *) (___p));			\
+	}										\
+} while (0)
+#else /* ifdef kfree_rcu_mightsleep */
 #define __kvfree_rcu(head, offset) \
        do { \
               BUILD_BUG_ON(!__is_kvfree_rcu_offset(offset)); \
               kvfree_call_rcu(head, (rcu_callback_t)(unsigned long)(offset)); \
        } while (0)
+#endif /* ifdef kfree_rcu_mightsleep */
 #endif /* !defined(__kvfree_rcu) && !defined(kfree_rcu) */
 
 #ifdef __kvfree_rcu
+
+#ifdef kfree_rcu_mightsleep
+#define kfree_rcu_2(ptr, rhf) ({						\
+	void *__memtrack_addr = (void *)ptr;					\
+										\
+	if (IS_VALID_ADDR(__memtrack_addr) &&					\
+	    !is_non_trackable_free_func(__func__)) {				\
+		memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
+	}									\
+	__kvfree_rcu(ptr, rhf);					\
+})
+
+#define __kvfree_rcu_1(ptr)                                   	\
+do {                                                            \
+        typeof(ptr) ___p = (ptr);                               \
+                                                                \
+        if (___p)                                               \
+		kvfree_call_rcu(NULL, (void *) (___p));         \
+} while (0)
+#else /* ifdef kfree_rcu_mightsleep */
 #define kfree_rcu_2(addr, rcu_head) ({								\
 	void *__memtrack_addr = (void *)addr;					\
 										\
@@ -346,7 +384,10 @@ do {                                                            \
         if (___p)                                               \
                 kvfree_call_rcu(NULL, (rcu_callback_t) (___p)); \
 } while (0)
+#endif /* ifdef kfree_rcu_mightsleep */
+
 #else
+
 #define kfree_rcu_2(addr, rcu_head) ({								\
 	void *__memtrack_addr = (void *)addr;					\
 										\
@@ -364,11 +405,13 @@ do {                                                            \
         if (___p)                                               \
                 kfree_call_rcu(NULL, (rcu_callback_t) (___p)); \
 } while (0)
+
 #endif /* __kvfree_rcu */
 
 /* commit 1835f475e351 ("rcu: Introduce single argument kvfree_rcu() interface") */
 #undef kvfree_rcu_arg_1
 #undef kvfree_rcu_arg_2
+
 
 #define kvfree_rcu_arg_1(ptr) ({ 						\
 	void *__memtrack_addr = (void *)ptr;					\
@@ -386,6 +429,7 @@ do {                                                            \
 
 #define KVFREE_GET_MACRO(_1, _2, NAME, ...) NAME
 #define kvfree_rcu_arg_2(ptr, rhf) kfree_rcu_2(ptr, rhf)
+
 #endif /* CONFIG_COMPAT_RCU */
 
 #define vmalloc(size) ({							\

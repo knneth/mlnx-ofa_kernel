@@ -838,6 +838,17 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 		};
 	}
 
+	/* Pad if needed, in case the value set to ucseg->xlt_octowords
+	 * in mlx5e_build_umr_wqe() needed alignment.
+	 */
+	if (rq->mpwqe.pages_per_wqe & (MLX5_UMR_MTT_NUM_ENTRIES_ALIGNMENT - 1)) {
+		int pad = ALIGN(rq->mpwqe.pages_per_wqe, MLX5_UMR_MTT_NUM_ENTRIES_ALIGNMENT) -
+			rq->mpwqe.pages_per_wqe;
+
+		memset(&umr_wqe->inline_mtts[rq->mpwqe.pages_per_wqe], 0,
+		       sizeof(*umr_wqe->inline_mtts) * pad);
+	}
+
 	bitmap_zero(wi->xdp_xmit_bitmap, rq->mpwqe.pages_per_wqe);
 	wi->consumed_strides = 0;
 
@@ -2062,10 +2073,9 @@ static void mlx5e_handle_rx_cqe_mpwrq_rep(struct mlx5e_rq *rq, struct mlx5_cqe64
 
 	cqe_bcnt = mpwrq_get_cqe_byte_cnt(cqe);
 
-	skb = INDIRECT_CALL_3(rq->mpwqe.skb_from_cqe_mpwrq,
+	skb = INDIRECT_CALL_2(rq->mpwqe.skb_from_cqe_mpwrq,
 			      mlx5e_skb_from_cqe_mpwrq_linear,
 			      mlx5e_skb_from_cqe_mpwrq_nonlinear,
-			      mlx5e_xsk_skb_from_cqe_mpwrq_linear,
 			      rq, wi, cqe_bcnt, head_offset, page_idx);
 	if (!skb)
 		goto mpwrq_cqe_out;
@@ -2429,9 +2439,10 @@ static void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cq
 
 	cqe_bcnt = mpwrq_get_cqe_byte_cnt(cqe);
 
-	skb = INDIRECT_CALL_2(rq->mpwqe.skb_from_cqe_mpwrq,
+	skb = INDIRECT_CALL_3(rq->mpwqe.skb_from_cqe_mpwrq,
 			      mlx5e_skb_from_cqe_mpwrq_linear,
 			      mlx5e_skb_from_cqe_mpwrq_nonlinear,
+			      mlx5e_xsk_skb_from_cqe_mpwrq_linear,
 			      rq, wi, cqe_bcnt, head_offset, page_idx);
 	if (!skb)
 		goto mpwrq_cqe_out;
@@ -2546,7 +2557,7 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 
 	priv = mlx5i_epriv(netdev);
 	tstamp = &priv->tstamp;
-	stats = rq->stats;
+	stats = &priv->channel_stats[rq->ix]->rq;
 
 	flags_rqpn = be32_to_cpu(cqe->flags_rqpn);
 	g = (flags_rqpn >> 28) & 3;

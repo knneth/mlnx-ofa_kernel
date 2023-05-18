@@ -17,4 +17,4 @@ Change-Id: I4e8a219eae2dffb585c0b85ade1730e66c894628
 +#endif
  #include "lag/lag.h"
  #include "eswitch.h"
- #include "lib/mlx5.h"
+ #include "esw/acl/ofld.h"

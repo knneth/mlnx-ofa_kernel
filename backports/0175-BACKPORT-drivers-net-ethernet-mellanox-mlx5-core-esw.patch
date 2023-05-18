@@ -8,7 +8,7 @@ Change-Id: Id8d805c0e6e0ec517a276ace4b1d01be0be4aaa0
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
-@@ -1113,7 +1113,7 @@ int mlx5_esw_devlink_rate_parent_set(str
+@@ -1101,7 +1101,7 @@ int mlx5_esw_devlink_rate_parent_set(str
  	return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, group, extack);
  }
  

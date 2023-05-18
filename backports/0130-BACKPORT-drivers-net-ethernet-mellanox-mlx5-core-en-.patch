@@ -39,10 +39,10 @@ Change-Id: Ibf231fdba0db2b440d71857ebfcd42fdbe31c868
  	int (*parse_tunnel)(struct mlx5e_priv *priv,
  			    struct mlx5_flow_spec *spec,
  			    struct flow_cls_offload *f,
-@@ -115,6 +119,7 @@ int mlx5e_tc_tun_parse_udp_ports(struct
- bool mlx5e_tc_tun_encap_info_equal_generic(struct mlx5e_encap_key *a,
- 					   struct mlx5e_encap_key *b);
- 
+@@ -118,6 +122,7 @@ bool mlx5e_tc_tun_encap_info_equal_gener
+ bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
+ 					   struct mlx5e_encap_key *b,
+ 					   __be16 tun_flags);
 +#endif /* HAVE_TCF_TUNNEL_INFO */
  #endif /* CONFIG_MLX5_ESWITCH */
  

@@ -9,6 +9,8 @@ obj-$(CONFIG_INFINIBAND_USER_ACCESS) += ib_uverbs.o $(user_access-y)
 obj-$(CONFIG_INFINIBAND_USER_ACCESS_UCM) += ib_ucm.o
 
 obj-$(CONFIG_INFINIBAND_CORE_DUMMY) += ib_sa.o ib_mad.o ib_addr.o
+obj-$(CONFIG_INFINIBAND_RDMAIP_NOTIFY) += rdmaip_notify.o
+obj-$(CONFIG_INFINIBAND_RESILIENT_RDMAIP) += resilient_rdmaip.o
 
 ib_sa-y :=			ib_sa_dummy.o
 ib_mad-y :=			ib_mad_dummy.o

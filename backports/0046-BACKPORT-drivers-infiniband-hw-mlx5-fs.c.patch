@@ -18,7 +18,7 @@ Change-Id: I1a8b672fa133e194eff7e64784a42d794ae4c495
  #include "mlx5_ib.h"
  #include "counters.h"
  #include "devx.h"
-@@ -723,7 +726,7 @@ static struct mlx5_ib_flow_prio *get_flo
+@@ -721,7 +724,7 @@ static struct mlx5_ib_flow_prio *get_flo
  	int max_table_size;
  	int num_entries;
  	int num_groups;
@@ -27,7 +27,7 @@ Change-Id: I1a8b672fa133e194eff7e64784a42d794ae4c495
  	u32 flags = 0;
  	int priority;
  
-@@ -1424,7 +1427,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+@@ -1422,7 +1425,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
  	struct mlx5_flow_namespace *ns = NULL;
  	struct mlx5_ib_flow_prio *prio = NULL;
  	int max_table_size = 0;
@@ -36,7 +36,7 @@ Change-Id: I1a8b672fa133e194eff7e64784a42d794ae4c495
  	u32 flags = 0;
  	int priority;
  
-@@ -1908,7 +1911,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+@@ -1906,7 +1909,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
  	struct mlx5_flow_context flow_context = {.flow_tag =
  		MLX5_FS_DEFAULT_FLOW_TAG};
  	u32 *offset_attr, offset = 0, counter_id = 0;

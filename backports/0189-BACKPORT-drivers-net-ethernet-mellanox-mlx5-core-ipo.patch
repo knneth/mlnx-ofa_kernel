@@ -9,7 +9,7 @@ Change-Id: I1f6e90ad2b022b5b9f236d1946e2fcff50b534d3
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
-@@ -114,8 +114,20 @@ struct mlx5i_tx_wqe {
+@@ -116,8 +116,20 @@ struct mlx5i_tx_wqe {
  	((struct mlx5i_tx_wqe *)mlx5e_fetch_wqe(&(sq)->wq, pi, sizeof(struct mlx5i_tx_wqe)))
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -29,5 +29,5 @@ Change-Id: I1f6e90ad2b022b5b9f236d1946e2fcff50b534d3
 +struct net_device_stats * mlx5i_get_stats(struct net_device *dev);
 +#endif
  
- #endif /* CONFIG_MLX5_CORE_IPOIB */
- #endif /* __MLX5E_IPOB_H__ */
+ /* Reference management for child to parent interfaces. */
+ struct net_device *mlx5i_parent_get(struct net_device *netdev);

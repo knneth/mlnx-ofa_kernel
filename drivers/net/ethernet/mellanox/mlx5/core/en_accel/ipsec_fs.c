@@ -584,6 +584,7 @@ static int tx_add_rule_full(struct mlx5e_priv *priv,
 	reformat_params.param_1 = 0;
 	reformat_params.size = 16;
 	reformat_params.data = reformatbf;
+	reformat_params.owner = FS_PACKET_REFORMAT_FW;
 	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, &reformat_params,
 							   MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(flow_act.pkt_reformat)) {

@@ -3,23 +3,27 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dev.c
 
 Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/dev.c | 128 +++++++++++++++++-
- 1 file changed, 123 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/dev.c | 140 +++++++++++++++++-
+ 1 file changed, 135 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dev.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dev.c
-@@ -112,8 +112,10 @@ bool mlx5_eth_supported(struct mlx5_core
+@@ -112,16 +112,26 @@ bool mlx5_eth_supported(struct mlx5_core
  	return true;
  }
  
 +#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
  static bool is_eth_enabled(struct mlx5_core_dev *dev)
  {
-+#ifdef HAVE_DEVLINK_PARAM_REGISTER
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) || defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
  	union devlink_param_value val;
  	int err;
  
-@@ -121,7 +123,11 @@ static bool is_eth_enabled(struct mlx5_c
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	err = devl_param_driverinit_value_get(priv_to_devlink(dev),
++#else
+ 	err = devlink_param_driverinit_value_get(priv_to_devlink(dev),
++#endif
  						 DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
  						 &val);
  	return err ? false : val.vbool;
@@ -31,18 +35,22 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  
  bool mlx5_vnet_supported(struct mlx5_core_dev *dev)
  {
-@@ -145,8 +151,10 @@ bool mlx5_vnet_supported(struct mlx5_cor
+@@ -145,16 +155,26 @@ bool mlx5_vnet_supported(struct mlx5_cor
  	return true;
  }
  
 +#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
  static bool is_vnet_enabled(struct mlx5_core_dev *dev)
  {
-+#ifdef HAVE_DEVLINK_PARAM_REGISTER
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) || defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
  	union devlink_param_value val;
  	int err;
  
-@@ -154,7 +162,11 @@ static bool is_vnet_enabled(struct mlx5_
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	err = devl_param_driverinit_value_get(priv_to_devlink(dev),
++#else
+ 	err = devlink_param_driverinit_value_get(priv_to_devlink(dev),
++#endif
  						 DEVLINK_PARAM_GENERIC_ID_ENABLE_VNET,
  						 &val);
  	return err ? false : val.vbool;
@@ -54,18 +62,22 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  
  static bool is_ib_rep_supported(struct mlx5_core_dev *dev)
  {
-@@ -219,8 +231,10 @@ bool mlx5_rdma_supported(struct mlx5_cor
+@@ -219,16 +239,26 @@ bool mlx5_rdma_supported(struct mlx5_cor
  	return true;
  }
  
 +#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
  static bool is_ib_enabled(struct mlx5_core_dev *dev)
  {
-+#ifdef HAVE_DEVLINK_PARAM_REGISTER
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) || defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
  	union devlink_param_value val;
  	int err;
  
-@@ -228,7 +242,11 @@ static bool is_ib_enabled(struct mlx5_co
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	err = devl_param_driverinit_value_get(priv_to_devlink(dev),
++#else
+ 	err = devlink_param_driverinit_value_get(priv_to_devlink(dev),
++#endif
  						 DEVLINK_PARAM_GENERIC_ID_ENABLE_RDMA,
  						 &val);
  	return err ? false : val.vbool;
@@ -77,7 +89,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  
  enum {
  	MLX5_INTERFACE_PROTOCOL_ETH,
-@@ -248,13 +266,22 @@ static const struct mlx5_adev_device {
+@@ -248,13 +278,22 @@ static const struct mlx5_adev_device {
  } mlx5_adev_devices[] = {
  	[MLX5_INTERFACE_PROTOCOL_VNET] = { .suffix = "vnet",
  					   .is_supported = &mlx5_vnet_supported,
@@ -103,7 +115,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  	[MLX5_INTERFACE_PROTOCOL_ETH_REP] = { .suffix = "eth-rep",
  					   .is_supported = &is_eth_rep_supported },
  	[MLX5_INTERFACE_PROTOCOL_IB_REP] = { .suffix = "rdma-rep",
-@@ -265,12 +292,20 @@ static const struct mlx5_adev_device {
+@@ -265,12 +304,20 @@ static const struct mlx5_adev_device {
  
  int mlx5_adev_idx_alloc(void)
  {
@@ -124,7 +136,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  }
  
  int mlx5_adev_init(struct mlx5_core_dev *dev)
-@@ -344,15 +379,27 @@ static void del_adev(struct auxiliary_de
+@@ -344,15 +391,27 @@ static void del_adev(struct auxiliary_de
  
  int mlx5_attach_device(struct mlx5_core_dev *dev)
  {
@@ -152,7 +164,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  	for (i = 0; i < ARRAY_SIZE(mlx5_adev_devices); i++) {
  		if (!priv->adev[i]) {
  			bool is_supported = false;
-@@ -400,22 +447,40 @@ int mlx5_attach_device(struct mlx5_core_
+@@ -400,22 +459,40 @@ int mlx5_attach_device(struct mlx5_core_
  			break;
  		}
  	}
@@ -167,7 +179,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  	return ret;
  }
  
- void mlx5_detach_device(struct mlx5_core_dev *dev)
+ void mlx5_detach_device(struct mlx5_core_dev *dev, bool suspend)
  {
 +#if defined(HAVE_DEVL_PORT_REGISTER) && \
 +	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
@@ -193,7 +205,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  	for (i = ARRAY_SIZE(mlx5_adev_devices) - 1; i >= 0; i--) {
  		if (!priv->adev[i])
  			continue;
-@@ -444,20 +509,41 @@ skip_suspend:
+@@ -444,20 +521,41 @@ skip_suspend:
  		del_adev(&priv->adev[i]->adev);
  		priv->adev[i] = NULL;
  	}
@@ -235,7 +247,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  	if (ret)
  		mlx5_unregister_device(dev);
  
-@@ -466,12 +552,25 @@ int mlx5_register_device(struct mlx5_cor
+@@ -466,12 +564,25 @@ int mlx5_register_device(struct mlx5_cor
  
  void mlx5_unregister_device(struct mlx5_core_dev *dev)
  {
@@ -261,7 +273,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  }
  
  static int add_drivers(struct mlx5_core_dev *dev)
-@@ -544,15 +643,20 @@ del_adev:
+@@ -544,15 +655,20 @@ del_adev:
  int mlx5_rescan_drivers_locked(struct mlx5_core_dev *dev)
  {
  	struct mlx5_priv *priv = &dev->priv;
@@ -282,7 +294,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  		goto out;
  
  	err = add_drivers(dev);
-@@ -560,6 +664,11 @@ int mlx5_rescan_drivers_locked(struct ml
+@@ -560,6 +676,11 @@ int mlx5_rescan_drivers_locked(struct ml
  out:
  	priv->flags &= ~MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW;
  	return err;
@@ -294,7 +306,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  }
  
  bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev)
-@@ -603,7 +712,11 @@ static void *pci_get_other_drvdata(struc
+@@ -603,7 +724,11 @@ static void *pci_get_other_drvdata(struc
  	return pci_get_drvdata(to_pci_dev(other));
  }
  
@@ -306,7 +318,7 @@ Change-Id: I97b5ef4298737a1a4e75e412fc3fd3792322a17a
  {
  	struct mlx5_core_dev *mdev, *this = (struct mlx5_core_dev *)data;
  
-@@ -620,8 +733,13 @@ static int next_phys_dev_lag(struct devi
+@@ -620,8 +745,13 @@ static int next_phys_dev_lag(struct devi
  	return _next_phys_dev(mdev, data);
  }
  

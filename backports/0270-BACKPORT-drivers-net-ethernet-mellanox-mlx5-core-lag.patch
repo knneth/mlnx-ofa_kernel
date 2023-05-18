@@ -19,4 +19,4 @@ Change-Id: Ibd766c23ee53b87f669abcd7a9a52ba155bc4ae6
 +#endif
  };
  
- enum mpesw_op {
+ /* LAG data of a ConnectX card.

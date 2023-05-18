@@ -61,12 +61,13 @@ struct mlx5_modify_hdr {
 		struct mlx5_fs_dr_action action;
 		u32 id;
 	};
+	enum mlx5_modify_header_flags flags;
 };
 
 struct mlx5_pkt_reformat {
 	enum mlx5_flow_namespace_type ns_type;
 	int reformat_type; /* from mlx5_ifc */
-	bool sw_owned;
+	enum fs_packet_reformat_owner owner;
 	union {
 		struct mlx5_fs_dr_action action;
 		u32 id;

@@ -42,7 +42,7 @@
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
 
-#define DRIVER_VERSION	"5.9-0.5.5"
+#define DRIVER_VERSION	"23.04-0.5.3"
 
 extern uint mlx5_core_debug_mask;
 
@@ -252,8 +252,6 @@ u32 mlx5_health_check_fatal_sensors(struct mlx5_core_dev *dev);
 int mlx5_health_wait_pci_up(struct mlx5_core_dev *dev);
 void mlx5_disable_device(struct mlx5_core_dev *dev);
 int mlx5_recover_device(struct mlx5_core_dev *dev);
-void mlx5_rename_comp_eq(struct mlx5_core_dev *dev, unsigned int eq_ix,
-			 char *name);
 int mlx5_sriov_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_cleanup(struct mlx5_core_dev *dev);
 int mlx5_sriov_attach(struct mlx5_core_dev *dev);
@@ -310,7 +308,7 @@ int mlx5_adev_init(struct mlx5_core_dev *dev);
 
 int mlx5_attach_device(struct mlx5_core_dev *dev);
 void mlx5_attach_device_by_protocol(struct mlx5_core_dev *dev, int protocol);
-void mlx5_detach_device(struct mlx5_core_dev *dev);
+void mlx5_detach_device(struct mlx5_core_dev *dev, bool suspend);
 int mlx5_register_device(struct mlx5_core_dev *dev);
 void mlx5_unregister_device(struct mlx5_core_dev *dev);
 struct mlx5_core_dev *mlx5_get_next_phys_dev_lag(struct mlx5_core_dev *dev);
@@ -371,11 +369,6 @@ void mlx5e_cleanup(void);
 static inline int mlx5e_init(void){ return 0; }
 static inline void mlx5e_cleanup(void){}
 #endif
-
-int mlx5_modify_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				   u16 function_id, bool value);
-int mlx5_get_other_hca_cap_roce(struct mlx5_core_dev *mdev,
-				u16 function_id, bool *value);
 
 static inline bool mlx5_sriov_is_enabled(struct mlx5_core_dev *dev)
 {
@@ -446,12 +439,15 @@ void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
 int mlx5_init_one(struct mlx5_core_dev *dev);
 void mlx5_uninit_one(struct mlx5_core_dev *dev);
 void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
-void mlx5_unload_one(struct mlx5_core_dev *dev);
-void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev);
+void mlx5_unload_one(struct mlx5_core_dev *dev, bool suspend);
+void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev, bool suspend);
 int mlx5_load_one(struct mlx5_core_dev *dev, bool recovery);
 int mlx5_load_one_devl_locked(struct mlx5_core_dev *dev, bool recovery);
 
-int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out);
+int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap, u16 function_id,
+				  u16 opmod);
+#define mlx5_vport_get_other_func_general_cap(dev, fid, out)		\
+	mlx5_vport_get_other_func_cap(dev, fid, out, MLX5_CAP_GENERAL)
 
 void mlx5_events_work_enqueue(struct mlx5_core_dev *dev, struct work_struct *work);
 static inline u32 mlx5_sriov_get_vf_total_msix(struct pci_dev *pdev)

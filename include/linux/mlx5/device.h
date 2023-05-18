@@ -210,6 +210,7 @@ enum {
 enum {
 	MLX5_PFAULT_SUBTYPE_WQE = 0,
 	MLX5_PFAULT_SUBTYPE_RDMA = 1,
+	MLX5_PFAULT_SUBTYPE_MEMORY = 2,
 };
 
 enum wqe_page_fault_type {
@@ -294,6 +295,7 @@ enum {
 #define MLX5_UMR_MTT_ALIGNMENT 0x40
 #define MLX5_UMR_MTT_MASK      (MLX5_UMR_MTT_ALIGNMENT - 1)
 #define MLX5_UMR_MTT_MIN_CHUNK_SIZE MLX5_UMR_MTT_ALIGNMENT
+#define MLX5_UMR_MTT_NUM_ENTRIES_ALIGNMENT (MLX5_UMR_MTT_ALIGNMENT / sizeof(struct mlx5_mtt))
 
 #define MLX5_USER_INDEX_LEN (MLX5_FLD_SZ_BYTES(qpc, user_index) * 8)
 
@@ -379,6 +381,7 @@ enum mlx5_driver_event {
 enum {
 	MLX5_TRACER_SUBTYPE_OWNERSHIP_CHANGE = 0x0,
 	MLX5_TRACER_SUBTYPE_TRACES_AVAILABLE = 0x1,
+	MLX5_TRACER_SUBTYPE_STRINGS_DB_UPDATE = 0x2,
 };
 
 enum {
@@ -655,9 +658,9 @@ struct mlx5_eqe_page_req {
 };
 
 struct mlx5_eqe_page_fault {
-	__be32 bytes_committed;
 	union {
 		struct {
+			__be32  bytes_committed;
 			u16     reserved1;
 			__be16  wqe_index;
 			u16	reserved2;
@@ -667,6 +670,7 @@ struct mlx5_eqe_page_fault {
 			__be32  pftype_wq;
 		} __packed wqe;
 		struct {
+			__be32  bytes_committed;
 			__be32  r_key;
 			u16	reserved1;
 			__be16  packet_length;
@@ -674,6 +678,15 @@ struct mlx5_eqe_page_fault {
 			__be64  rdma_va;
 			__be32  pftype_token;
 		} __packed rdma;
+		struct {
+			u8      flags;
+			u8      reserved1[5];
+			__be16  token47_32;
+			__be32  token31_0;
+			__be32  byte_count;
+			__be32  mkey;
+			__be64  va;
+		} __packed memory;
 	} __packed;
 } __packed;
 
@@ -1381,6 +1394,12 @@ enum mlx5_qcam_feature_groups {
 #define MLX5_CAP_ESW_INGRESS_ACL_MAX(mdev, cap) \
 	MLX5_CAP_ESW_FLOWTABLE_MAX(mdev, flow_table_properties_esw_acl_ingress.cap)
 
+#define MLX5_CAP_ESW_FT_FIELD_SUPPORT_2(mdev, cap) \
+	MLX5_CAP_ESW_FLOWTABLE(mdev, ft_field_support_2_esw_fdb.cap)
+
+#define MLX5_CAP_ESW_FT_FIELD_SUPPORT_2_MAX(mdev, cap) \
+	MLX5_CAP_ESW_FLOWTABLE_MAX(mdev, ft_field_support_2_esw_fdb.cap)
+
 #define MLX5_CAP_ESW(mdev, cap) \
 	MLX5_GET(e_switch_cap, \
 		 mdev->caps.hca[MLX5_CAP_ESWITCH]->cur, cap)
@@ -1417,6 +1436,14 @@ enum mlx5_qcam_feature_groups {
 
 #define MLX5_CAP_ODP(mdev, cap)\
 	MLX5_GET(odp_cap, mdev->caps.hca[MLX5_CAP_ODP]->cur, cap)
+
+#define MLX5_CAP_ODP_SCHEME(mdev, cap)                                \
+	(MLX5_GET(odp_cap, mdev->caps.hca[MLX5_CAP_ODP]->cur,         \
+		  mem_page_fault) ?                                   \
+		 MLX5_GET(odp_cap, mdev->caps.hca[MLX5_CAP_ODP]->cur, \
+			  memory_page_fault_scheme_cap.cap) :         \
+		 MLX5_GET(odp_cap, mdev->caps.hca[MLX5_CAP_ODP]->cur, \
+			  transport_page_fault_scheme_cap.cap))
 
 #define MLX5_CAP_ODP_MAX(mdev, cap)\
 	MLX5_GET(odp_cap, mdev->caps.hca[MLX5_CAP_ODP]->max, cap)

@@ -487,17 +487,6 @@ out:
 		*tclass = res_match->tclass;
 }
 
-void tclass_get_tclass(struct mlx5_ib_dev *dev,
-		       struct mlx5_tc_data *tcd,
-		       const struct rdma_ah_attr *ah,
-		       u8 port,
-		       u8 *tclass,
-		       bool *global_tc)
-{
-	mutex_lock(&tcd->lock);
-	tclass_get_tclass_locked(dev, tcd, ah, port, tclass, global_tc);
-	mutex_unlock(&tcd->lock);
-}
 struct tc_attribute {
 	struct attribute attr;
 	ssize_t (*show)(struct mlx5_tc_data *, struct tc_attribute *, char *buf);

@@ -571,7 +571,7 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 		MLX5_SET(flow_context, in_flow_context, action,
 			 fte->action.action);
 		if (fte->action.pkt_reformat) {
-			if (fte->action.pkt_reformat->sw_owned) {
+			if (fte->action.pkt_reformat->owner == FS_PACKET_REFORMAT_SW) {
 				switch (fte->action.pkt_reformat->reformat_type) {
 				case MLX5_REFORMAT_TYPE_L2_TO_VXLAN:
 				case MLX5_REFORMAT_TYPE_L2_TO_NVGRE:

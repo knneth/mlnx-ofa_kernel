@@ -12,13 +12,13 @@ Change-Id: I2de0a7fba3f427b1fa831ca8c7daf6bda145a914
  #ifndef MLX5_VFIO_CMD_H
  #define MLX5_VFIO_CMD_H
  
-+#ifdef HAVE_VFIO_LOG_OPS
++#ifdef HAVE_VFIO_SUPPORT
  #include <linux/kernel.h>
  #include <linux/vfio_pci_core.h>
  #include <linux/mlx5/driver.h>
-@@ -134,4 +135,5 @@ int mlx5vf_start_page_tracker(struct vfi
+@@ -222,4 +223,5 @@ int mlx5vf_start_page_tracker(struct vfi
  int mlx5vf_stop_page_tracker(struct vfio_device *vdev);
  int mlx5vf_tracker_read_and_clear(struct vfio_device *vdev, unsigned long iova,
  			unsigned long length, struct iova_bitmap *dirty);
-+#endif /* HAVE_VFIO_LOG_OPS */
++#endif /* HAVE_VFIO_SUPPORT */
  #endif /* MLX5_VFIO_CMD_H */

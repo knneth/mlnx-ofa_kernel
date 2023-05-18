@@ -32,7 +32,11 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"5.9"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"23.04"}
+
+echo 'is_conf_set() {'
+echo '	grep -q "^$1=[ym]" "$kernel_source_dir/.config" 2>/dev/null'
+echo '}'
 
 echo STRIP_MODS=\${STRIP_MODS:-"yes"}
 echo kernelver=\${kernelver:-\$\(uname -r\)}
@@ -51,13 +55,16 @@ do
 	if [ "$name" = 'mlxdevm' ]; then
 		echo "if [[ ! \$(VER \$kernelver) < \$(VER '4.15.0') ]]; then"
 	fi
+	if [ "$name" = 'irdma' ]; then
+		echo "if is_conf_set CONFIG_INFINIBAND_IRDMA; then"
+	fi
 	echo 'BUILT_MODULE_NAME[$i]='$name
 	echo 'BUILT_MODULE_LOCATION[$i]='${module%*/*}
 	echo 'DEST_MODULE_NAME[$i]='$name
 	echo 'DEST_MODULE_LOCATION[$i]='/kernel/${module%*/*}
 	echo 'STRIP[$i]="$STRIP_MODS"'
 	echo 'let i++'
-	case "$name" in auxiliary | mlxdevm)
+	case "$name" in auxiliary | mlxdevm | irdma)
 		echo "fi";;
 	esac
 done

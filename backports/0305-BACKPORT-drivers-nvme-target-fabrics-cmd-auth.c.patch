@@ -4,18 +4,21 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fabrics-cmd-auth.c
 Signed-off-by: Karam Ghanayem <kghanayem@nvidia.com>
 Change-Id: I9842f3ff94453a4257b6ad3ba796725c5e0a8dfb
 ---
- drivers/nvme/target/fabrics-cmd-auth.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/nvme/target/fabrics-cmd-auth.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
 --- a/drivers/nvme/target/fabrics-cmd-auth.c
 +++ b/drivers/nvme/target/fabrics-cmd-auth.c
-@@ -4,10 +4,15 @@
+@@ -4,10 +4,18 @@
   * Copyright (c) 2020 Hannes Reinecke, SUSE Software Solutions.
   * All rights reserved.
   */
 +
 +#ifdef HAVE_NVME_AUTH_H
 +
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
  #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
  #include <linux/blkdev.h>
  #include <linux/random.h>
@@ -25,7 +28,7 @@ Change-Id: I9842f3ff94453a4257b6ad3ba796725c5e0a8dfb
  #include <crypto/hash.h>
  #include <crypto/kpp.h>
  #include "nvmet.h"
-@@ -537,3 +542,5 @@ done:
+@@ -537,3 +545,5 @@ done:
  		nvmet_ctrl_fatal_error(ctrl);
  	}
  }

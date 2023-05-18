@@ -239,8 +239,19 @@ enum {
 #define MLX5_IB_NUM_SNIFFER_FTS		2
 #define MLX5_IB_NUM_EGRESS_FTS		1
 #define MLX5_IB_NUM_FDB_FTS		MLX5_BY_PASS_NUM_REGULAR_PRIOS
+
+struct mlx5_ib_anchor {
+	struct mlx5_flow_table *ft;
+	struct mlx5_flow_group *fg_goto_table;
+	struct mlx5_flow_group *fg_drop;
+	struct mlx5_flow_handle *rule_goto_table;
+	struct mlx5_flow_handle *rule_drop;
+	unsigned int rule_goto_table_ref;
+};
+
 struct mlx5_ib_flow_prio {
 	struct mlx5_flow_table		*flow_table;
+	struct mlx5_ib_anchor		anchor;
 	unsigned int			refcount;
 };
 
@@ -531,6 +542,7 @@ struct mlx5_ib_qp {
 	enum ib_qp_type		type;
 	struct rdma_ah_attr  	ah;
 	u8                   	tclass;
+	bool			global_tclass;
 	/* A flag to indicate if there's a new counter is configured
 	 * but not take effective
 	 */
@@ -623,6 +635,8 @@ enum mlx5_mkey_type {
 	MLX5_MKEY_MR = 1,
 	MLX5_MKEY_MW,
 	MLX5_MKEY_INDIRECT_DEVX,
+	MLX5_MKEY_NULL,
+	MLX5_MKEY_IMPLICIT_CHILD,
 };
 
 struct mlx5_ib_mkey {
@@ -693,6 +707,7 @@ struct mlx5_ib_mr {
 			} odp_destroy;
 			struct ib_odp_counters odp_stats;
 			bool is_odp_implicit;
+			struct mlx5_ib_mkey null_mmkey;
 		};
 	};
 };
@@ -899,6 +914,8 @@ enum mlx5_ib_dbg_cc_types {
 	MLX5_IB_DBG_CC_NP_CNP_DSCP,
 	MLX5_IB_DBG_CC_NP_CNP_PRIO_MODE,
 	MLX5_IB_DBG_CC_NP_CNP_PRIO,
+	MLX5_IB_DBG_CC_GENERAL_RTT_RESP_DSCP_VALID,
+	MLX5_IB_DBG_CC_GENERAL_RTT_RESP_DSCP,
 	MLX5_IB_DBG_CC_MAX,
 };
 

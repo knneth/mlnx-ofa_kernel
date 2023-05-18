@@ -8,7 +8,7 @@ Change-Id: I99155732a05b047bc5651189564b5d5081cad50e
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
-@@ -1026,7 +1026,11 @@ static void cmd_work_handler(struct work
+@@ -1024,7 +1024,11 @@ static void cmd_work_handler(struct work
  	lay->status_own = CMD_OWNER_HW;
  	set_signature(ent, !cmd->checksum_disabled);
  	dump_command(dev, ent, 1);
@@ -20,7 +20,7 @@ Change-Id: I99155732a05b047bc5651189564b5d5081cad50e
  	cmd_mode = cmd->mode;
  
  	if (ent->callback && schedule_delayed_work(&ent->cb_timeout_work, cb_timeout))
-@@ -1196,6 +1200,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
+@@ -1194,6 +1198,9 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	struct mlx5_cmd_stats *stats;
@@ -30,7 +30,7 @@ Change-Id: I99155732a05b047bc5651189564b5d5081cad50e
  	u8 status = 0;
  	int err = 0;
  	s64 ds;
-@@ -1238,7 +1245,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
+@@ -1236,7 +1243,14 @@ static int mlx5_cmd_invoke(struct mlx5_c
  	if (err == -ETIMEDOUT || err == -ECANCELED)
  		goto out_free;
  
@@ -45,7 +45,7 @@ Change-Id: I99155732a05b047bc5651189564b5d5081cad50e
  	op = MLX5_GET(mbox_in, in->first.data, opcode);
  	if (op < MLX5_CMD_OP_MAX) {
  		stats = &cmd->stats[op];
-@@ -1366,13 +1380,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
+@@ -1364,13 +1378,22 @@ static struct mlx5_cmd_mailbox *alloc_cm
  	if (!mailbox)
  		return ERR_PTR(-ENOMEM);
  
@@ -68,7 +68,7 @@ Change-Id: I99155732a05b047bc5651189564b5d5081cad50e
  	mailbox->next = NULL;
  
  	return mailbox;
-@@ -1662,6 +1685,9 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1660,6 +1683,9 @@ static void mlx5_cmd_comp_handler(struct
  	struct mlx5_cmd *cmd = &dev->cmd;
  	struct mlx5_cmd_work_ent *ent;
  	mlx5_cmd_cbk_t callback;

@@ -89,7 +89,7 @@ static struct mlx5_flow_table *esw_ipsec_table_create(struct mlx5_flow_namespace
 	/* reserve entry for the match all miss group and rule */
 	ft_attr.autogroup.num_reserved_entries = num_res;
 	ft_attr.autogroup.max_num_groups = max_num_groups;
-	ft_attr.flags = MLX5_FLOW_TABLE_TUNNEL_EN_REFORMAT;
+	ft_attr.flags = MLX5_FLOW_TABLE_TUNNEL_EN_REFORMAT | MLX5_FLOW_TABLE_FW_ONLY;
 	ft_attr.level = level;
 	ft_attr.max_fte = max_fte;
 	ft_attr.prio = prio;
@@ -286,7 +286,9 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 	MLX5_SET(set_action_in, action, data, 1);
 	MLX5_SET(set_action_in, action, offset, 31);
 	MLX5_SET(set_action_in, action, length, 1);
-	modify_hdr = mlx5_modify_header_alloc(mdev, MLX5_FLOW_NAMESPACE_FDB, 1, action);
+	modify_hdr = mlx5_modify_header_alloc(mdev, MLX5_FLOW_NAMESPACE_FDB,
+					      1 | MLX5_MODIFY_HEADER_FLAG_FW_CREATED,
+					      action);
 	if (IS_ERR(modify_hdr)) {
 		err = PTR_ERR(modify_hdr);
 		esw_warn(esw->dev, "fail to alloc ipsec decap set modify_header_id err=%d\n", err);
@@ -301,6 +303,7 @@ static int esw_offloads_ipsec_tables_rx_create(struct mlx5_flow_namespace *ns, s
 
 	memset(&reformat_params, 0, sizeof(reformat_params));
 	reformat_params.type = MLX5_REFORMAT_TYPE_DEL_ESP_TRANSPORT;
+	reformat_params.owner = FS_PACKET_REFORMAT_FW;
 	flow_act.pkt_reformat = mlx5_packet_reformat_alloc(mdev, &reformat_params,
 							   MLX5_FLOW_NAMESPACE_FDB);
 	if (IS_ERR(flow_act.pkt_reformat)) {

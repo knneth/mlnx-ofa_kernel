@@ -92,8 +92,8 @@ struct mlx5e_macsec_rx_sc {
 };
 
 struct mlx5e_macsec_umr {
+	u8 __aligned(64) ctx[MLX5_ST_SZ_BYTES(macsec_aso)];
 	dma_addr_t dma_addr;
-	u8 ctx[MLX5_ST_SZ_BYTES(macsec_aso)];
 	u32 mkey;
 };
 
@@ -416,7 +416,6 @@ static int mlx5e_macsec_init_sa(struct macsec_context *ctx,
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5_macsec_obj_attrs obj_attrs;
 	union mlx5e_macsec_rule *macsec_rule;
-	struct macsec_key *key;
 	int err;
 
 	obj_attrs.next_pn = sa->next_pn;
@@ -425,8 +424,6 @@ static int mlx5e_macsec_init_sa(struct macsec_context *ctx,
 	obj_attrs.encrypt = encrypt;
 	obj_attrs.aso_pdn = macsec->aso.pdn;
 	obj_attrs.epn_state = sa->epn_state;
-
-	key = (is_tx) ? &ctx->sa.tx_sa->key : &ctx->sa.rx_sa->key;
 
 	if (sa->epn_state.epn_enabled) {
 		obj_attrs.ssci = cpu_to_be32((__force u32)sa->ssci);
@@ -1554,6 +1551,7 @@ static int macsec_aso_query(struct mlx5_core_dev *mdev, struct mlx5e_macsec *mac
 	struct mlx5e_macsec_aso *aso;
 	struct mlx5_aso_wqe *aso_wqe;
 	struct mlx5_aso *maso;
+	unsigned long expires;
 	int err;
 
 	aso = &macsec->aso;
@@ -1567,7 +1565,13 @@ static int macsec_aso_query(struct mlx5_core_dev *mdev, struct mlx5e_macsec *mac
 	macsec_aso_build_wqe_ctrl_seg(aso, &aso_wqe->aso_ctrl, NULL);
 
 	mlx5_aso_post_wqe(maso, false, &aso_wqe->ctrl);
-	err = mlx5_aso_poll_cq(maso, false, 10);
+	expires = jiffies + msecs_to_jiffies(10);
+	do {
+		err = mlx5_aso_poll_cq(maso, false, 10);
+		if (err)
+			usleep_range(2, 10);
+	} while (err && time_is_after_jiffies(expires));
+
 	if (err)
 		goto err_out;
 

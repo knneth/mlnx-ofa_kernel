@@ -881,6 +881,33 @@ static void esw_vport_cleanup_acl(struct mlx5_eswitch *esw,
 		esw_vport_destroy_offloads_acl_tables(esw, vport);
 }
 
+static int mlx5_esw_vport_caps_get(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
+{
+	int query_out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
+	void *query_ctx;
+	void *hca_caps;
+	int err;
+
+	if (!MLX5_CAP_GEN(esw->dev, vhca_resource_manager))
+		return 0;
+
+	query_ctx = kzalloc(query_out_sz, GFP_KERNEL);
+	if (!query_ctx)
+		return -ENOMEM;
+
+	err = mlx5_vport_get_other_func_cap(esw->dev, vport->vport, query_ctx,
+					    MLX5_CAP_GENERAL);
+	if (err)
+		goto out_free;
+
+	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
+	vport->info.roce_enabled = MLX5_GET(cmd_hca_cap, hca_caps, roce);
+
+out_free:
+	kfree(query_ctx);
+	return err;
+}
+
 static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
 	enum esw_vst_mode vst_mode = esw_get_vst_mode(esw);
@@ -894,6 +921,10 @@ static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 
 	if (mlx5_esw_is_manager_vport(esw, vport_num))
 		return 0;
+
+	err = mlx5_esw_vport_caps_get(esw, vport);
+	if (err)
+		goto err_caps;
 
 	mlx5_modify_vport_admin_state(esw->dev,
 				      MLX5_VPORT_STATE_OP_MOD_ESW_VPORT,
@@ -915,6 +946,10 @@ static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 				       vport->info.qos, flags, vst_mode);
 
 	return 0;
+
+err_caps:
+	esw_vport_cleanup_acl(esw, vport);
+	return err;
 }
 
 static void esw_vport_query(struct mlx5_eswitch *esw,
@@ -1060,6 +1095,7 @@ void mlx5_esw_vport_disable(struct mlx5_eswitch *esw, u16 vport_num)
 	 */
 	esw_vport_change_handle_locked(vport);
 	vport->enabled_events = 0;
+	esw_apply_vport_rx_mode(esw, vport, false, false);
 	esw_vport_cleanup(esw, vport);
 	esw->enabled_vports--;
 
@@ -1878,35 +1914,43 @@ abort:
 int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
 						 struct mlx5_vport *vport, bool value)
 {
+	int query_out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
+	void *query_ctx;
+	void *hca_caps;
 	int err = 0;
 
-	if (!(MLX5_CAP_GEN(esw->dev, vhca_group_manager) &&
-	      MLX5_CAP_GEN(esw->dev, access_other_hca_roce)))
-		return -EOPNOTSUPP;
+	query_ctx = kzalloc(query_out_sz, GFP_KERNEL);
+	if (!query_ctx)
+		return -ENOMEM;
 
 	mutex_lock(&esw->state_lock);
 
-	if (vport->info.roce == value)
+	if (vport->info.roce_enabled == value)
 		goto out;
 
-	err = mlx5_modify_other_hca_cap_roce(esw->dev, vport->vport, value);
+	err = mlx5_vport_get_other_func_general_cap(esw->dev, vport->vport, query_ctx);
+	if (err)
+		goto out;
+
+	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
+	MLX5_SET(cmd_hca_cap, hca_caps, roce, value);
+
+	err = mlx5_vport_set_other_func_cap(esw->dev, hca_caps, vport->vport,
+					    MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
 	if (!err)
-		vport->info.roce = value;
+		vport->info.roce_enabled = value;
 
 out:
 	mutex_unlock(&esw->state_lock);
+	kfree(query_ctx);
 	return err;
 }
 
 int mlx5_eswitch_vport_get_other_hca_cap_roce(struct mlx5_eswitch *esw,
 					      struct mlx5_vport *vport, bool *value)
 {
-	if (!(MLX5_CAP_GEN(esw->dev, vhca_group_manager) &&
-	      MLX5_CAP_GEN(esw->dev, access_other_hca_roce)))
-		return -EOPNOTSUPP;
-
 	mutex_lock(&esw->state_lock);
-	*value = vport->info.roce;
+	*value = vport->info.roce_enabled;
 	mutex_unlock(&esw->state_lock);
 
 	return 0;

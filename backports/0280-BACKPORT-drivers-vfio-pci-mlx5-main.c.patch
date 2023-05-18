@@ -12,15 +12,15 @@ Change-Id: I9999d0e631f1d4391238e0e94845ef5ce42ef648
   * Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved
   */
  
-+#ifdef HAVE_VFIO_LOG_OPS
++#ifdef HAVE_VFIO_SUPPORT
  #include <linux/device.h>
  #include <linux/eventfd.h>
  #include <linux/file.h>
-@@ -688,6 +689,7 @@ static int __init mlx5vf_pci_init(void)
+@@ -1374,6 +1375,7 @@ static struct pci_driver mlx5vf_pci_driv
+ };
  
- module_init(mlx5vf_pci_init);
- module_exit(mlx5vf_pci_cleanup);
-+#endif /* HAVE_VFIO_LOG_OPS */
+ module_pci_driver(mlx5vf_pci_driver);
++#endif /* HAVE_VFIO_SUPPORT */
  
  MODULE_LICENSE("GPL");
  MODULE_AUTHOR("Max Gurtovoy <mgurtovoy@nvidia.com>");

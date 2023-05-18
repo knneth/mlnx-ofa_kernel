@@ -416,7 +416,7 @@ void mlx5e_enable_cvlan_filter(struct mlx5e_priv *priv)
 
 void mlx5e_disable_cvlan_filter(struct mlx5e_priv *priv)
 {
-	if (priv->fs->vlan->cvlan_filter_disabled)
+	if (!priv->fs->vlan || priv->fs->vlan->cvlan_filter_disabled)
 		return;
 
 	priv->fs->vlan->cvlan_filter_disabled = true;
@@ -750,6 +750,7 @@ static int mlx5e_create_promisc_table(struct mlx5e_flow_steering *fs)
 	ft->t = mlx5_create_auto_grouped_flow_table(fs->ns, &ft_attr);
 	if (IS_ERR(ft->t)) {
 		err = PTR_ERR(ft->t);
+		ft->t = NULL;
 		mlx5_core_err(fs->mdev, "fail to create promisc table err=%d\n", err);
 		return err;
 	}
@@ -777,7 +778,7 @@ static void mlx5e_del_promisc_rule(struct mlx5e_flow_steering *fs)
 
 static void mlx5e_destroy_promisc_table(struct mlx5e_flow_steering *fs)
 {
-	if (WARN(!fs->promisc.ft.t, "Trying to remove non-existing promiscuous table"))
+	if (!fs->promisc.ft.t)
 		return;
 	mlx5e_del_promisc_rule(fs);
 	mlx5_destroy_flow_table(fs->promisc.ft.t);

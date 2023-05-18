@@ -367,8 +367,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_SET_HCA_CAP:
 	case MLX5_CMD_OP_QUERY_ISSI:
 	case MLX5_CMD_OP_SET_ISSI:
-	case MLX5_CMD_OP_QUERY_OTHER_HCA_CAP:
-	case MLX5_CMD_OP_MODIFY_OTHER_HCA_CAP:
 	case MLX5_CMD_OP_CREATE_MKEY:
 	case MLX5_CMD_OP_QUERY_MKEY:
 	case MLX5_CMD_OP_QUERY_SPECIAL_CONTEXTS:
@@ -1685,6 +1683,8 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 							ent->idx);
 					cmd_ent_put(ent);
 				}
+				if ((vec & MLX5_TRIGGERED_CMD_COMP) && ent->ret == -ETIMEDOUT)
+					cmd_ent_put(ent);
 				if (comp_type != MLX5_CMD_COMP_TYPE_POLLING)
 					continue;
 			} else if (ent->polling && comp_type == MLX5_CMD_COMP_TYPE_EVENT) {

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/core.c
 
 Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
 ---
- drivers/nvme/host/core.c | 1138 ++++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 1102 insertions(+), 36 deletions(-)
+ drivers/nvme/host/core.c | 1146 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 1114 insertions(+), 32 deletions(-)
 
 --- a/drivers/nvme/host/core.c
 +++ b/drivers/nvme/host/core.c
@@ -1135,14 +1135,14 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	return info->is_readonly || test_bit(NVME_NS_FORCE_RO, &ns->flags);
  }
 +#endif
-+
-+static inline bool nvme_first_scan(struct gendisk *disk)
-+{
-+	/* nvme_alloc_ns() scans the disk prior to adding it */
+ 
+ static inline bool nvme_first_scan(struct gendisk *disk)
+ {
+ 	/* nvme_alloc_ns() scans the disk prior to adding it */
 +#ifdef HAVE_GENHD_FL_UP
 +	return !(disk->flags & GENHD_FL_UP);
 +#else
-+	return !disk_live(disk);
+ 	return !disk_live(disk);
 +#endif
 +}
 +
@@ -1268,11 +1268,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
 +				ns->features |= NVME_NS_METADATA_SUPPORTED;
 +		}
 +	}
- 
--static inline bool nvme_first_scan(struct gendisk *disk)
--{
--	/* nvme_alloc_ns() scans the disk prior to adding it */
--	return !disk_live(disk);
++
 +	nvme_set_chunk_sectors(ns, id);
 +	nvme_update_disk_info(disk, ns, id);
 +	set_bit(NVME_NS_READY, &ns->flags);
@@ -2009,7 +2005,25 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  out:
  	/*
  	 * Only remove the namespace if we got a fatal error back from the
-@@ -4841,7 +5808,9 @@ void nvme_uninit_ctrl(struct nvme_ctrl *
+@@ -4581,9 +5548,17 @@ void nvme_remove_namespaces(struct nvme_
+ }
+ EXPORT_SYMBOL_GPL(nvme_remove_namespaces);
+ 
++#ifdef HAVE_CLASS_DEV_UEVENT_CONST_DEV
++static int nvme_class_uevent(const struct device *dev, struct kobj_uevent_env *env)
++#else
+ static int nvme_class_uevent(struct device *dev, struct kobj_uevent_env *env)
++#endif
+ {
++#ifdef HAVE_CLASS_DEV_UEVENT_CONST_DEV
++	const struct nvme_ctrl *ctrl =
++#else
+ 	struct nvme_ctrl *ctrl =
++#endif
+ 		container_of(dev, struct nvme_ctrl, ctrl_device);
+ 	struct nvmf_ctrl_options *opts = ctrl->opts;
+ 	int ret;
+@@ -4841,7 +5816,9 @@ void nvme_uninit_ctrl(struct nvme_ctrl *
  {
  	nvme_hwmon_exit(ctrl);
  	nvme_fault_inject_fini(&ctrl->fault_inject);
@@ -2019,7 +2033,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	cdev_device_del(&ctrl->cdev, ctrl->device);
  	nvme_put_ctrl(ctrl);
  }
-@@ -4867,8 +5836,11 @@ static void nvme_free_ctrl(struct device
+@@ -4867,8 +5844,11 @@ static void nvme_free_ctrl(struct device
  	struct nvme_subsystem *subsys = ctrl->subsys;
  
  	if (!subsys || ctrl->instance != subsys->instance)
@@ -2032,7 +2046,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	nvme_free_cels(ctrl);
  	nvme_mpath_uninit(ctrl);
  	nvme_auth_stop(ctrl);
-@@ -4927,8 +5899,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
+@@ -4927,8 +5907,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
  		ret = -ENOMEM;
  		goto out;
  	}
@@ -2045,7 +2059,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	if (ret < 0)
  		goto out;
  	ctrl->instance = ret;
-@@ -4957,9 +5932,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
+@@ -4957,9 +5940,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
  	 * Initialize latency tolerance controls.  The sysfs files won't
  	 * be visible to userspace unless the device actually supports APST.
  	 */
@@ -2057,7 +2071,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  
  	nvme_fault_inject_init(&ctrl->fault_inject, dev_name(ctrl->device));
  	nvme_mpath_init_ctrl(ctrl);
-@@ -4970,7 +5947,11 @@ out_free_name:
+@@ -4970,7 +5955,11 @@ out_free_name:
  	nvme_put_ctrl(ctrl);
  	kfree_const(ctrl->device->kobj.name);
  out_release_instance:
@@ -2069,7 +2083,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  out:
  	if (ctrl->discard_page)
  		__free_page(ctrl->discard_page);
-@@ -4981,16 +5962,75 @@ EXPORT_SYMBOL_GPL(nvme_init_ctrl);
+@@ -4981,16 +5970,79 @@ EXPORT_SYMBOL_GPL(nvme_init_ctrl);
  static void nvme_start_ns_queue(struct nvme_ns *ns)
  {
  	if (test_and_clear_bit(NVME_NS_STOPPED, &ns->flags))
@@ -2107,7 +2121,11 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
 +#endif
 +#ifdef HAVE_BLK_MQ_WAIT_QUIESCE_DONE
 +	} else {
++#ifdef HAVE_BLK_MQ_WAIT_QUIESCE_DONE_TAGSET
++		blk_mq_wait_quiesce_done(ns->queue->tag_set);
++#else
  		blk_mq_wait_quiesce_done(ns->queue);
++#endif
 +	}
 +#else
 +	}
@@ -2147,7 +2165,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  
  /*
   * Prepare a queue for teardown.
-@@ -5005,10 +6045,19 @@ static void nvme_set_queue_dying(struct
+@@ -5005,10 +6057,19 @@ static void nvme_set_queue_dying(struct
  	if (test_and_set_bit(NVME_NS_DEAD, &ns->flags))
  		return;
  
@@ -2167,7 +2185,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  }
  
  /**
-@@ -5078,7 +6127,11 @@ void nvme_start_freeze(struct nvme_ctrl
+@@ -5078,7 +6139,11 @@ void nvme_start_freeze(struct nvme_ctrl
  
  	down_read(&ctrl->namespaces_rwsem);
  	list_for_each_entry(ns, &ctrl->namespaces, list)
@@ -2179,7 +2197,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  	up_read(&ctrl->namespaces_rwsem);
  }
  EXPORT_SYMBOL_GPL(nvme_start_freeze);
-@@ -5108,16 +6161,26 @@ EXPORT_SYMBOL_GPL(nvme_start_queues);
+@@ -5108,16 +6173,30 @@ EXPORT_SYMBOL_GPL(nvme_start_queues);
  void nvme_stop_admin_queue(struct nvme_ctrl *ctrl)
  {
  	if (!test_and_set_bit(NVME_CTRL_ADMIN_Q_STOPPED, &ctrl->flags))
@@ -2190,7 +2208,11 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
 +#endif
 +#ifdef HAVE_BLK_MQ_WAIT_QUIESCE_DONE
  	else
++#ifdef HAVE_BLK_MQ_WAIT_QUIESCE_DONE_TAGSET
++		blk_mq_wait_quiesce_done(ctrl->admin_q->tag_set);
++#else
  		blk_mq_wait_quiesce_done(ctrl->admin_q);
++#endif
 +#endif
  }
  EXPORT_SYMBOL_GPL(nvme_stop_admin_queue);
@@ -2206,7 +2228,7 @@ Change-Id: Ibfcc74945c146fd22236672047f42ed7d3154fce
  }
  EXPORT_SYMBOL_GPL(nvme_start_admin_queue);
  
-@@ -5291,6 +6354,9 @@ static void __exit nvme_core_exit(void)
+@@ -5291,6 +6370,9 @@ static void __exit nvme_core_exit(void)
  }
  
  MODULE_LICENSE("GPL");

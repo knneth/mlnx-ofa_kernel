@@ -881,7 +881,8 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 		props->max_mw = 1 << MLX5_CAP_GEN(mdev, log_max_mkey);
 		/* We support 'Gappy' memory registration too */
 #ifdef CONFIG_GPU_DIRECT_STORAGE
-		if (MLX5_CAP_GEN(mdev, ats) == MLX5_CAP_GEN(mdev, relaxed_ordering_read))
+		if (MLX5_CAP_GEN(mdev, ats) ==
+		    MLX5_CAP_GEN(mdev, relaxed_ordering_read_pci_enabled))
 			props->kernel_cap_flags |= IBK_SG_GAPS_REG;
 #else
 		props->kernel_cap_flags |= IBK_SG_GAPS_REG;
@@ -2698,13 +2699,13 @@ static void mlx5_ib_handle_event(struct work_struct *_work)
 	struct ib_event ibev;
 	bool fatal = false;
 
-	if (work->is_slave) 
+	if (work->is_slave) {
 		ibdev = mlx5_ib_get_ibdev_from_mpi(work->mpi);
-	else 
+		if (!ibdev)
+			goto out;
+	} else {
 		ibdev = work->dev;
-	
-	if (!ibdev)
-		goto out;
+	}
 
 	switch (work->event) {
 	case MLX5_DEV_EVENT_SYS_ERROR:
@@ -4579,8 +4580,12 @@ static int __init mlx5_ib_init(void)
 		create_singlethread_workqueue("mlx5_ib_sigerr_sqd_wq");
 	if (!mlx5_ib_sigerr_sqd_wq) {
 		ret = -ENOMEM;
-		goto rep_err;
+		goto err_destroy_ib_wq;
 	}
+
+	ret = mlx5_ib_qp_event_init();
+	if (ret)
+		goto qp_event_err;
 
 	mlx5_ib_odp_init();
 	ret = mlx5r_rep_init();
@@ -4599,6 +4604,10 @@ drv_err:
 mp_err:
 	mlx5r_rep_cleanup();
 rep_err:
+	mlx5_ib_qp_event_cleanup();
+qp_event_err:
+	destroy_workqueue(mlx5_ib_sigerr_sqd_wq);
+err_destroy_ib_wq:
 	destroy_workqueue(mlx5_ib_event_wq);
 err_free_xlt_page:
 	free_page((unsigned long)xlt_emergency_page);
@@ -4611,6 +4620,7 @@ static void __exit mlx5_ib_cleanup(void)
 	auxiliary_driver_unregister(&mlx5r_driver);
 	auxiliary_driver_unregister(&mlx5r_mp_driver);
 	mlx5r_rep_cleanup();
+	mlx5_ib_qp_event_cleanup();
 	destroy_workqueue(mlx5_ib_sigerr_sqd_wq);
 	destroy_workqueue(mlx5_ib_event_wq);
 	free_page((unsigned long)xlt_emergency_page);

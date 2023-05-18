@@ -82,19 +82,12 @@ struct mlx5_flow_attr {
 	struct mlx5_flow_table *dest_ft;
 	u8 inner_match_level;
 	u8 outer_match_level;
-	u8 ip_version;
 	u8 tun_ip_version;
 	int tunnel_id; /* mapped tunnel id */
 	u32 flags;
 	u32 exe_aso_type;
 	struct list_head list;
 	struct mlx5e_post_act_handle *post_act_handle;
-	struct {
-		/* Indicate whether the parsed flow should be counted for lag mode decision
-		 * making
-		 */
-		bool count;
-	} lag;
 	/* keep this union last */
 	union {
 		struct mlx5_esw_flow_attr esw_attr[0];
@@ -129,7 +122,6 @@ struct mlx5_rx_tun_attr {
 		__be32 v4;
 		struct in6_addr v6;
 	} dst_ip; /* Valid if decap_vport is not zero */
-	u32 vni;
 };
 
 #define MLX5E_TC_TABLE_CHAIN_TAG_BITS 16

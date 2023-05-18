@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Id840a2b381e420306fc25e17b429c2569fd78f9d
 ---
- .../ethernet/mellanox/mlx5/core/en/devlink.c  | 49 ++++++++++++++++++-
- 1 file changed, 47 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 56 ++++++++++++++++++-
+ 1 file changed, 53 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
@@ -79,7 +79,7 @@ Change-Id: Id840a2b381e420306fc25e17b429c2569fd78f9d
  	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
  		devl_lock(devlink);
  	ret = devl_port_register(devlink, dl_port, dl_port_index);
-@@ -49,6 +86,9 @@ int mlx5e_devlink_port_register(struct m
+@@ -49,18 +86,27 @@ int mlx5e_devlink_port_register(struct m
  		devl_unlock(devlink);
  
  	return ret;
@@ -88,8 +88,19 @@ Change-Id: Id840a2b381e420306fc25e17b429c2569fd78f9d
 +#endif
  }
  
++#ifndef HAVE_NETDEV_DEVLINK_PORT
  void mlx5e_devlink_port_type_eth_set(struct mlx5e_priv *priv)
-@@ -61,6 +101,7 @@ void mlx5e_devlink_port_type_eth_set(str
+ {
+ 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
+-
++#ifdef HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM
++	devlink_port_type_eth_set(dl_port);
++#else
+ 	devlink_port_type_eth_set(dl_port, priv->netdev);
++#endif
+ }
++#endif
+ 
  void mlx5e_devlink_port_unregister(struct mlx5e_priv *priv)
  {
  	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
@@ -97,7 +108,7 @@ Change-Id: Id840a2b381e420306fc25e17b429c2569fd78f9d
  	struct devlink *devlink = priv_to_devlink(priv->mdev);
  
  	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
-@@ -68,6 +109,9 @@ void mlx5e_devlink_port_unregister(struc
+@@ -68,6 +114,9 @@ void mlx5e_devlink_port_unregister(struc
  	devl_port_unregister(dl_port);
  	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
  		devl_unlock(devlink);
@@ -107,7 +118,7 @@ Change-Id: Id840a2b381e420306fc25e17b429c2569fd78f9d
  }
  
  struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
-@@ -79,3 +123,4 @@ struct devlink_port *mlx5e_get_devlink_p
+@@ -79,3 +128,4 @@ struct devlink_port *mlx5e_get_devlink_p
  
  	return mlx5e_devlink_get_dl_port(priv);
  }

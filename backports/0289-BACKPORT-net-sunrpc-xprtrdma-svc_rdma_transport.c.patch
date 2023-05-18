@@ -265,7 +265,7 @@ Change-Id: I1c8c8510d652e807c0025209cc9a9cbcbffdbf10
 +#ifdef HAVE_XPO_SECURE_PORT_NO_RETURN
  static void svc_rdma_secure_port(struct svc_rqst *rqstp)
  {
- 	__set_bit(RQ_SECURE, &rqstp->rq_flags);
+ 	set_bit(RQ_SECURE, &rqstp->rq_flags);
  }
 +#else
 +static int svc_rdma_secure_port(struct svc_rqst *rqstp)

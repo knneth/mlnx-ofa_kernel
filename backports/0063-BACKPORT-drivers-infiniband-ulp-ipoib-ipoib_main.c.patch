@@ -638,7 +638,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  }
  
  static void ipoib_build_priv(struct net_device *dev)
-@@ -2373,9 +2638,10 @@ int ipoib_intf_init(struct ib_device *hc
+@@ -2381,9 +2646,10 @@ int ipoib_intf_init(struct ib_device *hc
  	 * being set, so we force it to NULL here and handle manually until it
  	 * is safe to turn on.
  	 */
@@ -650,7 +650,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  	ipoib_build_priv(dev);
  
  	return 0;
-@@ -2413,7 +2679,7 @@ void ipoib_intf_free(struct net_device *
+@@ -2421,7 +2687,7 @@ void ipoib_intf_free(struct net_device *
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct rdma_netdev *rn = netdev_priv(dev);
@@ -659,7 +659,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  	dev->priv_destructor = priv->next_priv_destructor;
  	if (dev->priv_destructor)
  		dev->priv_destructor(dev);
-@@ -2423,7 +2689,7 @@ void ipoib_intf_free(struct net_device *
+@@ -2431,7 +2697,7 @@ void ipoib_intf_free(struct net_device *
  	 * attempt to call priv_destructor twice, prevent that from happening.
  	 */
  	dev->priv_destructor = NULL;
@@ -668,7 +668,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  	/* unregister/destroy is very complicated. Make bugs more obvious. */
  	rn->clnt_priv = NULL;
  
-@@ -2488,7 +2754,11 @@ static void set_base_guid(struct ipoib_d
+@@ -2496,7 +2762,11 @@ static void set_base_guid(struct ipoib_d
  	memcpy(&priv->local_gid.global.interface_id,
  	       &gid->global.interface_id,
  	       sizeof(gid->global.interface_id));
@@ -680,7 +680,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  	clear_bit(IPOIB_FLAG_DEV_ADDR_SET, &priv->flags);
  
  	netif_addr_unlock_bh(netdev);
-@@ -2526,7 +2796,7 @@ static int ipoib_set_mac(struct net_devi
+@@ -2534,7 +2804,7 @@ static int ipoib_set_mac(struct net_devi
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct sockaddr_storage *ss = addr;
@@ -689,7 +689,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  
  	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
  		return -EBUSY;
-@@ -2689,14 +2959,22 @@ static struct net_device *ipoib_add_port
+@@ -2697,14 +2967,22 @@ static struct net_device *ipoib_add_port
  		if (!rc && ops->priv_size < params.sizeof_priv)
  			ops->priv_size = params.sizeof_priv;
  	}
@@ -713,7 +713,7 @@ Change-Id: I5405e8f3cacce17a4d0ef513440292e8d860df75
  	if (ipoib_intercept_dev_id_attr(ndev))
  		goto sysfs_failed;
  	if (ipoib_cm_add_mode_attr(ndev))
-@@ -2767,11 +3045,42 @@ static void ipoib_remove_one(struct ib_d
+@@ -2775,11 +3053,42 @@ static void ipoib_remove_one(struct ib_d
  
  		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
  					 list)

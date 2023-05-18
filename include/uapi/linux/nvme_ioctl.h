@@ -101,4 +101,9 @@ struct nvme_passthru_cmd64 {
 #define NVME_IOCTL_IO64_CMD	_IOWR('N', 0x48, struct nvme_passthru_cmd64)
 #endif /* HAVE_UAPI_LINUX_NVME_PASSTHRU_CMD64 */
 
+#ifndef HAVE_UAPI_LINUX_NVME_NVME_URING_CMD_ADMIN
+#define NVME_URING_CMD_ADMIN	_IOWR('N', 0x82, struct nvme_uring_cmd)
+#define NVME_URING_CMD_ADMIN_VEC _IOWR('N', 0x83, struct nvme_uring_cmd)
+#endif
+
 #endif /* _COMPAT_UAPI_LINUX_NVME_IOCTL_H */

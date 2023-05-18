@@ -252,7 +252,7 @@ static int show_hca_node_guid(struct mlx5_core_dev *dev, u16 vf,
 			      __be64 *node_guid)
 {
 	struct mlx5_hca_vport_context *rep;
-	int err;
+	int err = 0;
 
 	rep = kzalloc(sizeof(*rep), GFP_KERNEL);
 	if (!rep)
@@ -263,8 +263,6 @@ static int show_hca_node_guid(struct mlx5_core_dev *dev, u16 vf,
 		goto free;
 
 	*node_guid = cpu_to_be64(rep->node_guid);
-
-	return 0;
 
 free:
 	kfree(rep);

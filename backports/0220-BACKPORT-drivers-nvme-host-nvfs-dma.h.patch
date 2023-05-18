@@ -12,7 +12,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                  struct request *req, struct nvme_rw_command *cmnd);
  
  static blk_status_t nvme_pci_setup_sgls(struct nvme_dev *dev,
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                  struct request *req, struct nvme_rw_command *cmnd);
 +#else
 +                 struct request *req, struct nvme_rw_command *cmnd, int entries);
@@ -25,7 +25,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
  
 -	if (!iod || !iod->sgt.nents)
 -		return false;
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +        if (!iod || !iod->sgt.nents)
 +                return false;
 +
@@ -48,7 +48,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
 -                count = nvfs_ops->nvfs_dma_unmap_sg(dev->dev, iod->sgt.sgl, iod->sgt.nents,
 -                                dma_dir);
 -
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +                count = nvfs_ops->nvfs_dma_unmap_sg(dev->dev, iod->sgt.sgl, iod->sgt.nents, dma_dir);
 +#else
 +                count = nvfs_ops->nvfs_dma_unmap_sg(dev->dev, iod->sg, iod->nents, dma_dir);
@@ -70,7 +70,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
 +#if defined(HAVE_BLKDEV_DMA_MAP_BVEC) && defined(HAVE_BLKDEV_REQ_BVEC)
                  iod->dma_len = 0;
 +#endif
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                  iod->sgt.sgl = mempool_alloc(dev->iod_mempool, GFP_ATOMIC);
                  if (!iod->sgt.sgl) {
 +#else
@@ -81,7 +81,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                          return BLK_STS_RESOURCE;
                  }
 -
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                 sg_init_table(iod->sgt.sgl, blk_rq_nr_phys_segments(req));
                 // associates bio pages to scatterlist
                 iod->sgt.orig_nents = nvfs_ops->nvfs_blk_rq_map_sg(q, req, iod->sgt.sgl);
@@ -99,7 +99,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                 }
                 *is_nvfs_io = true;
  
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                 if (unlikely((iod->sgt.orig_nents == NVFS_IO_ERR))) {
                         pr_err("%s: failed to map sg_nents=:%d\n", __func__, iod->sgt.nents);
                         mempool_free(iod->sgt.sgl, dev->iod_mempool);
@@ -113,7 +113,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                 }
  
                 nr_mapped = nvfs_ops->nvfs_dma_map_sg_attrs(dev->dev,
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                                 iod->sgt.sgl,
                                 iod->sgt.orig_nents,
                                 dma_dir,
@@ -127,7 +127,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
 +#endif
  
                 if (unlikely((nr_mapped == NVFS_IO_ERR))) {
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                         mempool_free(iod->sgt.sgl, dev->iod_mempool);
                         nvfs_put_ops();
                         pr_err("%s: failed to dma map sglist=:%d\n", __func__, iod->sgt.nents);
@@ -140,7 +140,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                 }
  
                 if (unlikely(nr_mapped == NVFS_CPU_REQ)) {
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
                         mempool_free(iod->sgt.sgl, dev->iod_mempool);
 +#else
 +                        mempool_free(iod->sg, dev->iod_mempool);
@@ -150,7 +150,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                 }
  
 -	       iod->sgt.nents = nr_mapped;
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +               iod->sgt.nents = nr_mapped;
 +# else
 +                iod->nents = nr_mapped;
@@ -158,7 +158,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                 iod->use_sgl = nvme_pci_use_sgls(dev, req);
                 if (iod->use_sgl) { // TBD: not tested on SGL mode supporting drive
 -                       ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw);
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +                        ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw);
 +#else
 +                        ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw, nr_mapped);
@@ -171,7 +171,7 @@ Change-Id: Id9e8f89b4daf48524898f4243582bbf0ee1d7157
                 if (ret != BLK_STS_OK) {
                         nvme_nvfs_unmap_data(dev, req);
 -		       mempool_free(iod->sgt.sgl, dev->iod_mempool);
-+#ifdef HAVE_BIO_SPLIT_TO_LIMITS
++#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED
 +                        mempool_free(iod->sgt.sgl, dev->iod_mempool);
 +#else
 +                        mempool_free(iod->sg, dev->iod_mempool);

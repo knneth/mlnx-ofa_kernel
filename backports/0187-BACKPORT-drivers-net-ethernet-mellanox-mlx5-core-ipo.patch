@@ -41,7 +41,7 @@ Change-Id: I7b74d5b24f785a935f3e4308de3fc8fb5e5f1963
  {
  	struct mlx5e_priv *priv = mlx5i_epriv(dev);
 -
-+#ifdef HAVE_STRUCT_KERNEL_ETHTOOL_RINGPARAM
++#if defined(HAVE_STRUCT_KERNEL_ETHTOOL_RINGPARAM) && defined(HAVE_GET_RINGPARAM_GET_4_PARAMS)
  	mlx5e_ethtool_get_ringparam(priv, param, kernel_param);
 +#else
 +	mlx5e_ethtool_get_ringparam(priv, param);
@@ -49,7 +49,7 @@ Change-Id: I7b74d5b24f785a935f3e4308de3fc8fb5e5f1963
  }
  
  static int mlx5i_set_channels(struct net_device *dev,
-@@ -103,23 +118,41 @@ static void mlx5i_get_channels(struct ne
+@@ -115,23 +130,41 @@ static void mlx5i_get_channels(struct ne
  }
  
  static int mlx5i_set_coalesce(struct net_device *netdev,
@@ -93,7 +93,7 @@ Change-Id: I7b74d5b24f785a935f3e4308de3fc8fb5e5f1963
  }
  
  static int mlx5i_get_ts_info(struct net_device *netdev,
-@@ -190,6 +223,7 @@ static int mlx5i_get_speed_settings(u16
+@@ -202,6 +235,7 @@ static u32 mlx5i_get_speed_settings(u16
  	return rate * width;
  }
  
@@ -101,7 +101,7 @@ Change-Id: I7b74d5b24f785a935f3e4308de3fc8fb5e5f1963
  static int mlx5i_get_link_ksettings(struct net_device *netdev,
  				    struct ethtool_link_ksettings *link_ksettings)
  {
-@@ -220,10 +254,62 @@ static int mlx5i_get_link_ksettings(stru
+@@ -229,10 +263,62 @@ static int mlx5i_get_link_ksettings(stru
  
  	return 0;
  }
@@ -164,7 +164,7 @@ Change-Id: I7b74d5b24f785a935f3e4308de3fc8fb5e5f1963
  }
  
  static int mlx5i_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
-@@ -256,9 +342,11 @@ static int mlx5i_get_rxnfc(struct net_de
+@@ -265,9 +351,11 @@ static int mlx5i_get_rxnfc(struct net_de
  }
  
  const struct ethtool_ops mlx5i_ethtool_ops = {
@@ -176,7 +176,7 @@ Change-Id: I7b74d5b24f785a935f3e4308de3fc8fb5e5f1963
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
  	.get_sset_count     = mlx5i_get_sset_count,
-@@ -273,12 +361,24 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -282,12 +370,24 @@ const struct ethtool_ops mlx5i_ethtool_o
  	.get_ts_info        = mlx5i_get_ts_info,
  	.get_rxnfc          = mlx5i_get_rxnfc,
  	.set_rxnfc          = mlx5i_set_rxnfc,

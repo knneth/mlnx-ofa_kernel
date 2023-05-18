@@ -17,7 +17,7 @@ Change-Id: I52b2c479740c15d88aec6c61f6ec1c46b83384d0
  #include <linux/mlx5/device.h>
  #include <linux/mlx5/driver.h>
  
-@@ -205,7 +207,9 @@ struct mlx5_wqe_ctrl_seg {
+@@ -209,7 +211,9 @@ struct mlx5_wqe_ctrl_seg {
  	__be32			opmod_idx_opcode;
  	__be32			qpn_ds;
  
@@ -27,7 +27,7 @@ Change-Id: I52b2c479740c15d88aec6c61f6ec1c46b83384d0
  
  	u8			signature;
  	u8			rsvd[2];
-@@ -217,7 +221,9 @@ struct mlx5_wqe_ctrl_seg {
+@@ -221,7 +225,9 @@ struct mlx5_wqe_ctrl_seg {
  		__be32		tis_tir_num;
  	};
  

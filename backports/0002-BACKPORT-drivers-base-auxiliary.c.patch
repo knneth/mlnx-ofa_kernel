@@ -3,23 +3,21 @@ Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
 
 Change-Id: Idf7fdaddeb9aa8af7d7c1cf7eddc9e21192322ba
 ---
- drivers/base/auxiliary.c | 66 ++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 63 insertions(+), 3 deletions(-)
+ drivers/base/auxiliary.c | 62 ++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 56 insertions(+), 6 deletions(-)
 
 --- a/drivers/base/auxiliary.c
 +++ b/drivers/base/auxiliary.c
-@@ -19,7 +19,10 @@
+@@ -19,7 +19,7 @@
  #include <linux/pm_runtime.h>
  #include <linux/string.h>
  #include <linux/auxiliary_bus.h>
+-#include "base.h"
 +#include <linux/acpi.h>
-+#ifdef CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT
- #include "base.h"
-+#endif
  
  /**
   * DOC: PURPOSE
-@@ -211,27 +214,55 @@ static int auxiliary_bus_probe(struct de
+@@ -211,27 +211,55 @@ static int auxiliary_bus_probe(struct de
  	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
  	int ret;
  
@@ -75,7 +73,7 @@ Change-Id: Idf7fdaddeb9aa8af7d7c1cf7eddc9e21192322ba
  }
  
  static void auxiliary_bus_shutdown(struct device *dev)
-@@ -353,9 +384,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
+@@ -353,9 +381,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
   * if it does.  If the callback returns non-zero, this function will
   * return to the caller and not iterate over any more devices.
   */
@@ -96,20 +94,16 @@ Change-Id: Idf7fdaddeb9aa8af7d7c1cf7eddc9e21192322ba
  {
  	struct device *dev;
  
-@@ -417,7 +456,28 @@ void auxiliary_driver_unregister(struct
+@@ -417,7 +453,21 @@ void auxiliary_driver_unregister(struct
  }
  EXPORT_SYMBOL_GPL(auxiliary_driver_unregister);
  
-+#ifdef CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT
- void __init auxiliary_bus_init(void)
- {
- 	WARN_ON(bus_register(&auxiliary_bus_type));
- }
-+#else
+-void __init auxiliary_bus_init(void)
 +static int __init auxiliary_bus_init(void)
-+{
+ {
+-	WARN_ON(bus_register(&auxiliary_bus_type));
 +	return bus_register(&auxiliary_bus_type);
-+}
+ }
 +
 +static void __exit auxiliary_bus_exit(void)
 +{
@@ -124,4 +118,3 @@ Change-Id: Idf7fdaddeb9aa8af7d7c1cf7eddc9e21192322ba
 +MODULE_INFO(supported, "external");
 +MODULE_AUTHOR("David Ertman <david.m.ertman@intel.com>");
 +MODULE_AUTHOR("Kiran Patil <kiran.patil@intel.com>");
-+#endif

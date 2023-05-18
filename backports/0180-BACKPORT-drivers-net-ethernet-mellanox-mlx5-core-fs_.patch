@@ -220,7 +220,7 @@ Change-Id: Ia18b1cdabf42e1b751f3ec4d11e72984a88c39b3
  		}
  	}
  	return handle;
-@@ -1805,16 +1866,26 @@ static int build_match_list(struct match
+@@ -1801,16 +1862,26 @@ static int build_match_list(struct match
  			    struct mlx5_flow_group *fg,
  			    bool ft_locked)
  {
@@ -249,7 +249,7 @@ Change-Id: Ia18b1cdabf42e1b751f3ec4d11e72984a88c39b3
  		struct match_list *curr_match;
  
  		if (fg && fg != g)
-@@ -3316,8 +3387,8 @@ void mlx5_fs_core_free(struct mlx5_core_
+@@ -3312,8 +3383,8 @@ void mlx5_fs_core_free(struct mlx5_core_
  int mlx5_fs_core_alloc(struct mlx5_core_dev *dev)
  {
  	struct mlx5_flow_steering *steering;

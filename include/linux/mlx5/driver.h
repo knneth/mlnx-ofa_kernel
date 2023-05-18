@@ -218,6 +218,7 @@ struct mlx5_rsc_debug {
 enum mlx5_dev_event {
 	MLX5_DEV_EVENT_SYS_ERROR = 128, /* 0 - 127 are FW events */
 	MLX5_DEV_EVENT_PORT_AFFINITY = 129,
+	MLX5_DEV_EVENT_MULTIPORT_ESW = 130,
 };
 
 enum mlx5_port_status {
@@ -661,6 +662,14 @@ enum {
 	MLX5E_CONG_PROTOCOL_NUM,
 };
 
+enum mlx5_func_type {
+	MLX5_PF,
+	MLX5_VF,
+	MLX5_SF,
+	MLX5_HOST_PF,
+	MLX5_FUNC_TYPE_NUM,
+};
+
 struct mlx5_ft_pool;
 struct mlx5_priv {
 	/* IRQ table valid only for real pci devices PF or VF */
@@ -671,12 +680,10 @@ struct mlx5_priv {
 	struct mlx5_nb          pg_nb;
 	struct workqueue_struct *pg_wq;
 	struct xarray           page_root_xa;
-	u32			fw_pages;
 	atomic_t		reg_pages;
 	struct list_head	free_list;
-	u32			vfs_pages;
-	u32			sfs_pages;
-	u32			host_pf_pages;
+	u32                     fw_pages;
+	u32			page_counters[MLX5_FUNC_TYPE_NUM];
 	u32			fw_pages_alloc_failed;
 	u32			give_pages_dropped;
 	u32			reclaim_pages_discard;
@@ -898,6 +905,7 @@ struct mlx5_hv_vhca;
 enum {
 	MLX5_PROF_MASK_QP_SIZE		= (u64)1 << 0,
 	MLX5_PROF_MASK_MR_CACHE		= (u64)1 << 1,
+	MLX5_PROF_MASK_ODPV2		= (u64)1 << 2,
 };
 
 enum {
@@ -1220,11 +1228,6 @@ int mlx5_core_query_special_contexts(struct mlx5_core_dev *dev);
 void mlx5_core_uplink_netdev_set(struct mlx5_core_dev *mdev, struct net_device *netdev);
 void mlx5_core_uplink_netdev_event_replay(struct mlx5_core_dev *mdev);
 int mlx5_core_get_caps(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type);
-int mlx5_core_other_function_get_caps(struct mlx5_core_dev *dev,
-				      u16 function_id, void *out);
-int mlx5_core_other_function_set_caps(struct mlx5_core_dev *dev,
-				      const void *hca_cap_on_behalf,
-				      u16 function_id);
 void mlx5_health_flush(struct mlx5_core_dev *dev);
 void mlx5_health_cleanup(struct mlx5_core_dev *dev);
 int mlx5_health_init(struct mlx5_core_dev *dev);
@@ -1367,6 +1370,7 @@ bool mlx5_lag_is_active(struct mlx5_core_dev *dev);
 bool mlx5_lag_mode_is_hash(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_master(struct mlx5_core_dev *dev);
 bool mlx5_lag_is_shared_fdb(struct mlx5_core_dev *dev);
+bool mlx5_lag_is_mpesw(struct mlx5_core_dev *dev);
 struct net_device *mlx5_lag_get_roce_netdev(struct mlx5_core_dev *dev);
 u8 mlx5_lag_get_slave_port(struct mlx5_core_dev *dev,
 			   struct net_device *slave);

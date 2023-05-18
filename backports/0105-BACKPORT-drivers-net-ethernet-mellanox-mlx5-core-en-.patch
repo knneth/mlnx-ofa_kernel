@@ -4,22 +4,23 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Id9251ee1971ea04025cb237d268ad00c19746d1b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 5 +++++
- 1 file changed, 5 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-@@ -10,6 +10,9 @@
+@@ -10,6 +10,10 @@
  #include <linux/notifier.h>
  #include <net/netevent.h>
  #include <net/arp.h>
 +#ifdef HAVE_BASECODE_EXTRAS
 +#include <net/addrconf.h>
++#include <net/ipv6_stubs.h>
 +#endif
  #include "neigh.h"
  #include "tc.h"
  #include "en_rep.h"
-@@ -150,7 +153,9 @@ static void mlx5e_rep_neigh_update(struc
+@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struc
  
  	neigh_connected = (nud_state & NUD_VALID) && !dead;
  

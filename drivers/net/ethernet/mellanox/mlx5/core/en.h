@@ -1022,6 +1022,7 @@ struct mlx5e_priv {
 	struct mlx5e_tls          *tls;
 #endif
 	struct dentry *dfs_root;
+	u8 *fds_num_tc;
 	struct mlx5e_delay_drop delay_drop;
 	struct devlink_health_reporter *tx_reporter;
 	struct devlink_health_reporter *rx_reporter;

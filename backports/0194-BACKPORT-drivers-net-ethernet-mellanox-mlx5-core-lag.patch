@@ -32,15 +32,15 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  static bool __mlx5_lag_is_multipath(struct mlx5_lag *ldev)
  {
  	return ldev->mode == MLX5_LAG_MODE_MULTIPATH;
-@@ -36,6 +44,7 @@ bool mlx5_lag_is_multipath(struct mlx5_c
+@@ -32,6 +40,7 @@ bool mlx5_lag_is_multipath(struct mlx5_c
  
- 	return res;
+ 	return ldev && __mlx5_lag_is_multipath(ldev);
  }
 +#endif
  
  /**
   * mlx5_lag_set_port_affinity
-@@ -47,6 +56,7 @@ bool mlx5_lag_is_multipath(struct mlx5_c
+@@ -43,6 +52,7 @@ bool mlx5_lag_is_multipath(struct mlx5_c
   *     2 - set affinity to port 2.
   *
   **/
@@ -48,7 +48,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  static void mlx5_lag_set_port_affinity(struct mlx5_lag *ldev,
  				       enum mlx5_lag_port_affinity port)
  {
-@@ -141,11 +151,23 @@ static void mlx5_lag_fib_route_event(str
+@@ -137,11 +147,23 @@ static void mlx5_lag_fib_route_event(str
  		return;
  
  	/* Handle add/replace event */
@@ -72,7 +72,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  			int i = mlx5_lag_dev_get_netdev_idx(ldev, nh_dev);
  
  			if (i < 0)
-@@ -163,12 +185,28 @@ static void mlx5_lag_fib_route_event(str
+@@ -159,12 +181,28 @@ static void mlx5_lag_fib_route_event(str
  		return;
  
  	/* Verify next hops are ports of the same hca */
@@ -101,7 +101,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  		mlx5_core_warn(ldev->pf[MLX5_LAG_P1].dev,
  			       "Multipath offload require two ports of the same HCA\n");
  		return;
-@@ -199,14 +237,22 @@ static void mlx5_lag_fib_nexthop_event(s
+@@ -195,14 +233,22 @@ static void mlx5_lag_fib_nexthop_event(s
  
  	/* nh added/removed */
  	if (event == FIB_EVENT_NH_DEL) {
@@ -124,7 +124,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  		mlx5_lag_set_port_affinity(ldev, MLX5_LAG_NORMAL_AFFINITY);
  	}
  }
-@@ -222,6 +268,10 @@ static void mlx5_lag_fib_update(struct w
+@@ -218,6 +264,10 @@ static void mlx5_lag_fib_update(struct w
  	rtnl_lock();
  	switch (fib_work->event) {
  	case FIB_EVENT_ENTRY_REPLACE:
@@ -135,7 +135,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  	case FIB_EVENT_ENTRY_DEL:
  		mlx5_lag_fib_route_event(ldev, fib_work->event,
  					 &fib_work->fen_info);
-@@ -268,8 +318,10 @@ static int mlx5_lag_fib_event(struct not
+@@ -264,8 +314,10 @@ static int mlx5_lag_fib_event(struct not
  	struct mlx5_fib_event_work *fib_work;
  	struct fib_entry_notifier_info *fen_info;
  	struct fib_nh_notifier_info *fnh_info;
@@ -147,7 +147,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  
  	if (info->family != AF_INET)
  		return NOTIFY_DONE;
-@@ -279,15 +331,22 @@ static int mlx5_lag_fib_event(struct not
+@@ -275,15 +327,22 @@ static int mlx5_lag_fib_event(struct not
  
  	switch (event) {
  	case FIB_EVENT_ENTRY_REPLACE:
@@ -170,7 +170,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  			return NOTIFY_DONE;
  		}
  		fib_work = mlx5_lag_init_fib_work(ldev, event);
-@@ -344,8 +403,13 @@ int mlx5_lag_mp_init(struct mlx5_lag *ld
+@@ -340,8 +399,13 @@ int mlx5_lag_mp_init(struct mlx5_lag *ld
  		return -ENOMEM;
  
  	mp->fib_nb.notifier_call = mlx5_lag_fib_event;
@@ -184,7 +184,7 @@ Change-Id: I9db45c49e5f146d74d77bc44b1d99a99dc49721d
  	if (err) {
  		destroy_workqueue(mp->wq);
  		mp->fib_nb.notifier_call = NULL;
-@@ -361,8 +425,14 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
+@@ -357,8 +421,14 @@ void mlx5_lag_mp_cleanup(struct mlx5_lag
  	if (!mp->fib_nb.notifier_call)
  		return;
  

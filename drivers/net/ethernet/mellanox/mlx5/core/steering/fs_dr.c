@@ -10,7 +10,7 @@
 
 static bool mlx5_dr_is_fw_table(u32 flags)
 {
-	if (flags & MLX5_FLOW_TABLE_TERMINATION)
+	if (flags & MLX5_FLOW_TABLE_TERMINATION || flags & MLX5_FLOW_TABLE_FW_ONLY)
 		return true;
 
 	return false;
@@ -319,7 +319,14 @@ static int mlx5_cmd_dr_create_fte(struct mlx5_flow_root_namespace *ns,
 	}
 
 	if (fte->action.action & MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT) {
-		bool is_decap = fte->action.pkt_reformat->reformat_type ==
+		bool is_decap;
+
+		if (fte->action.pkt_reformat->owner == FS_PACKET_REFORMAT_FW) {
+			err = -EINVAL;
+			mlx5_core_err(dev, "Trying to use FW reformat of SW rule\n");
+			goto free_actions;
+		}
+		is_decap = fte->action.pkt_reformat->reformat_type ==
 			MLX5_REFORMAT_TYPE_L3_TUNNEL_TO_L2;
 
 		if (is_decap)
@@ -605,6 +612,11 @@ static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns
 	struct mlx5dr_action *action;
 	int dr_reformat;
 
+	if (pkt_reformat->owner == FS_PACKET_REFORMAT_FW)
+		return mlx5_fs_cmd_get_fw_cmds()->packet_reformat_alloc(ns, params,
+									namespace,
+									pkt_reformat);
+
 	switch (params->type) {
 	case MLX5_REFORMAT_TYPE_L2_TO_VXLAN:
 	case MLX5_REFORMAT_TYPE_L2_TO_NVGRE:
@@ -640,7 +652,7 @@ static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns
 		return -EINVAL;
 	}
 
-	pkt_reformat->sw_owned = true;
+	pkt_reformat->owner = FS_PACKET_REFORMAT_SW;
 	pkt_reformat->action.dr_action = action;
 
 	return 0;
@@ -649,6 +661,10 @@ static int mlx5_cmd_dr_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns
 static void mlx5_cmd_dr_packet_reformat_dealloc(struct mlx5_flow_root_namespace *ns,
 						struct mlx5_pkt_reformat *pkt_reformat)
 {
+	if (pkt_reformat->owner == FS_PACKET_REFORMAT_FW)
+		return mlx5_fs_cmd_get_fw_cmds()->packet_reformat_dealloc(ns,
+									  pkt_reformat);
+
 	mlx5dr_action_destroy(pkt_reformat->action.dr_action);
 }
 
@@ -660,6 +676,10 @@ static int mlx5_cmd_dr_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 	struct mlx5dr_domain *dr_domain = ns->fs_dr_domain.dr_domain;
 	struct mlx5dr_action *action;
 	size_t actions_sz;
+
+	if (modify_hdr->flags & MLX5_MODIFY_HEADER_FLAG_FW_CREATED)
+		return mlx5_fs_cmd_get_fw_cmds()->modify_header_alloc(ns, namespace, num_actions,
+								      modify_actions, modify_hdr);
 
 	actions_sz = MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto) *
 		num_actions;
@@ -680,6 +700,9 @@ static int mlx5_cmd_dr_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 static void mlx5_cmd_dr_modify_header_dealloc(struct mlx5_flow_root_namespace *ns,
 					      struct mlx5_modify_hdr *modify_hdr)
 {
+	if (modify_hdr->flags & MLX5_MODIFY_HEADER_FLAG_FW_CREATED)
+		return mlx5_fs_cmd_get_fw_cmds()->modify_header_dealloc(ns, modify_hdr);
+
 	mlx5dr_action_destroy(modify_hdr->action.dr_action);
 }
 

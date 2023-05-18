@@ -1,14 +1,31 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Shay Drory <shayd@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 
-Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
+Change-Id: I953ed51f7397a9fe6ee1244d67c2b34d5c0d2cd3
 ---
- .../net/ethernet/mellanox/mlx5/core/eswitch.c | 72 ++++++++++++++++++-
- 1 file changed, 71 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 84 ++++++++++++++++++-
+ 1 file changed, 83 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
-@@ -965,7 +965,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
+@@ -903,6 +903,16 @@ static int mlx5_esw_vport_caps_get(struc
+ 	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
+ 	vport->info.roce_enabled = MLX5_GET(cmd_hca_cap, hca_caps, roce);
+ 
++#ifdef HAVE_DEVLINK_HAS_PORT_FN_ROCE_MIG // forward port
++	memset(query_ctx, 0, query_out_sz);
++	err = mlx5_vport_get_other_func_cap(esw->dev, vport->vport, query_ctx,
++					    MLX5_CAP_GENERAL_2);
++	if (err)
++		goto out_free;
++
++	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
++	vport->info.mig_enabled = MLX5_GET(cmd_hca_cap_2, hca_caps, migratable);
++#endif
+ out_free:
+ 	kfree(query_ctx);
+ 	return err;
+@@ -1000,7 +1010,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
  			  enum mlx5_eswitch_vport_event enabled_events)
  {
  	struct mlx5_vport *vport;
@@ -17,7 +34,19 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  
  	vport = mlx5_eswitch_get_vport(esw, vport_num);
  	if (IS_ERR(vport))
-@@ -1484,19 +1484,30 @@ abort:
+@@ -1351,7 +1361,11 @@ static void mlx5_eswitch_get_devlink_par
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	err = devl_param_driverinit_value_get(devlink,
++#else
+ 	err = devlink_param_driverinit_value_get(devlink,
++#endif
+ 						 MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
+ 						 &val);
+ 	if (!err) {
+@@ -1520,19 +1534,30 @@ abort:
   */
  int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs)
  {
@@ -48,7 +77,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	down_write(&esw->mode_lock);
  	if (!mlx5_esw_is_fdb_created(esw)) {
  		ret = mlx5_eswitch_enable_locked(esw, num_vfs);
-@@ -1510,6 +1521,10 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+@@ -1546,6 +1571,10 @@ int mlx5_eswitch_enable(struct mlx5_eswi
  			esw->esw_funcs.num_vfs = num_vfs;
  	}
  	up_write(&esw->mode_lock);
@@ -59,7 +88,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  
  	if (toggle_lag)
  		mlx5_lag_enable_change(esw->dev);
-@@ -1520,10 +1535,19 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+@@ -1556,10 +1585,19 @@ int mlx5_eswitch_enable(struct mlx5_eswi
  /* When disabling sriov, free driver level resources. */
  void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw, bool clear_vf)
  {
@@ -79,7 +108,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	down_write(&esw->mode_lock);
  	/* If driver is unloaded, this function is called twice by remove_one()
  	 * and mlx5_unload(). Prevent the second call.
-@@ -1542,9 +1566,17 @@ void mlx5_eswitch_disable_sriov(struct m
+@@ -1578,9 +1616,17 @@ void mlx5_eswitch_disable_sriov(struct m
  	 * because it depends on num_vfs.
  	 */
  	if (esw->mode == MLX5_ESWITCH_OFFLOADS) {
@@ -97,7 +126,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	}
  	/* Destroy legacy fdb when disabling sriov in legacy mode. */
  	if (esw->mode == MLX5_ESWITCH_LEGACY)
-@@ -1555,6 +1587,10 @@ void mlx5_eswitch_disable_sriov(struct m
+@@ -1591,6 +1637,10 @@ void mlx5_eswitch_disable_sriov(struct m
  
  unlock:
  	up_write(&esw->mode_lock);
@@ -108,7 +137,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  }
  
  /* Free resources for corresponding eswitch mode. It is called by devlink
-@@ -1562,12 +1598,16 @@ unlock:
+@@ -1598,7 +1648,9 @@ unlock:
   */
  void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw)
  {
@@ -116,16 +145,9 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	struct devlink *devlink = priv_to_devlink(esw->dev);
 +#endif
  
-+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  	if (esw->mode == MLX5_ESWITCH_OFFLOADS)
  #if IS_ENABLED(CONFIG_MLXDEVM)
- 		mlx5_devm_rate_nodes_destroy(esw->dev);
- #endif
-+#endif
- 
- 	/* Notify eswitch users that it is exiting from current mode.
- 	 * So that it can do necessary cleanup before the eswitch is disabled.
-@@ -1589,21 +1629,43 @@ void mlx5_eswitch_disable_locked(struct
+@@ -1625,21 +1677,43 @@ void mlx5_eswitch_disable_locked(struct
  		mlx5_esw_acls_ns_cleanup(esw);
  	}
  
@@ -169,7 +191,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	mlx5_lag_enable_change(esw->dev);
  }
  
-@@ -2285,9 +2347,13 @@ int mlx5_eswitch_get_vport_config(struct
+@@ -2329,9 +2403,13 @@ int mlx5_eswitch_get_vport_config(struct
  	ivi->linkstate = evport->info.link_state;
  	ivi->vlan = evport->info.vlan;
  	ivi->qos = evport->info.qos;
@@ -183,7 +205,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	if (evport->qos.enabled) {
  		ivi->min_tx_rate = evport->qos.min_rate;
  		ivi->max_tx_rate = evport->qos.max_rate;
-@@ -2349,7 +2415,9 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -2393,7 +2471,9 @@ int mlx5_eswitch_get_vport_stats(struct
  	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
  	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
  	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)] = {};
@@ -193,7 +215,7 @@ Change-Id: Id3f6c1e79252c6c0a51b5234a9997f9bdfb750ba
  	int err = 0;
  	u32 *out;
  
-@@ -2409,11 +2477,13 @@ int mlx5_eswitch_get_vport_stats(struct
+@@ -2453,11 +2533,13 @@ int mlx5_eswitch_get_vport_stats(struct
  	vf_stats->broadcast =
  		MLX5_GET_CTR(out, received_eth_broadcast.packets);
  

@@ -66,6 +66,12 @@ enum {
 	MLX5_FLOW_TABLE_TERMINATION = BIT(2),
 	MLX5_FLOW_TABLE_UNMANAGED = BIT(3),
 	MLX5_FLOW_TABLE_OTHER_VPORT = BIT(4),
+	MLX5_FLOW_TABLE_FW_ONLY = BIT(5),
+};
+
+/* bits[1-8] are reserved for number of actions, so we use bits[9-32] for flags values */
+enum mlx5_modify_header_flags {
+	MLX5_MODIFY_HEADER_FLAG_FW_CREATED = BIT(9),
 };
 
 #define LEFTOVERS_RULE_NUM	 2
@@ -301,7 +307,7 @@ int mlx5_fs_add_rx_underlay_qpn(struct mlx5_core_dev *dev, u32 underlay_qpn);
 int mlx5_fs_remove_rx_underlay_qpn(struct mlx5_core_dev *dev, u32 underlay_qpn);
 
 struct mlx5_modify_hdr *mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
-						 u8 ns_type, u8 num_actions,
+						 u8 ns_type, u32 num_actions_and_flags,
 						 void *modify_actions);
 void mlx5_modify_header_dealloc(struct mlx5_core_dev *dev,
 				struct mlx5_modify_hdr *modify_hdr);
@@ -313,12 +319,19 @@ void mlx5_destroy_match_definer(struct mlx5_core_dev *dev,
 				struct mlx5_flow_definer *definer);
 int mlx5_get_match_definer_id(struct mlx5_flow_definer *definer);
 
+enum fs_packet_reformat_owner {
+	FS_PACKET_REFORMAT_NONE,
+	FS_PACKET_REFORMAT_SW,
+	FS_PACKET_REFORMAT_FW,
+};
+
 struct mlx5_pkt_reformat_params {
 	int type;
 	u8 param_0;
 	u8 param_1;
 	size_t size;
 	void *data;
+	enum fs_packet_reformat_owner owner;
 };
 
 struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,

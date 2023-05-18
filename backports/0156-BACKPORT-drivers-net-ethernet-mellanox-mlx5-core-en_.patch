@@ -71,9 +71,9 @@ Change-Id: Iaf22630300f9025a8e61bb90759484d4897c2a85
  
  void mlx5e_create_debugfs(struct mlx5e_priv *priv)
  {
-@@ -147,7 +186,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
- 
+@@ -156,7 +195,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
  		rx_res_dbg->i = i;
+ 		rx_res_dbg->rx_res = priv->rx_res;
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
 +#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
  		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
@@ -83,9 +83,9 @@ Change-Id: Iaf22630300f9025a8e61bb90759484d4897c2a85
  	}
  
  	for (i = 0; i < priv->max_nch; i++) {
-@@ -155,7 +198,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
- 
+@@ -165,7 +208,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
  		rx_res_dbg->i = i;
+ 		rx_res_dbg->rx_res = priv->rx_res;
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
 +#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
  		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
@@ -95,7 +95,7 @@ Change-Id: Iaf22630300f9025a8e61bb90759484d4897c2a85
  	}
  
  	for (i = 0; i < priv->channels.num; i++)
-@@ -171,7 +218,11 @@ void mlx5e_debugs_free_recursive_private
+@@ -181,7 +228,11 @@ void mlx5e_debugs_free_recursive_private
  	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
  
@@ -107,7 +107,7 @@ Change-Id: Iaf22630300f9025a8e61bb90759484d4897c2a85
  		if (dent && dent->d_inode && dent->d_inode->i_private)
  			kvfree(dent->d_inode->i_private);
  	}
-@@ -179,7 +230,11 @@ void mlx5e_debugs_free_recursive_private
+@@ -189,7 +240,11 @@ void mlx5e_debugs_free_recursive_private
  	for (i = 0; i < priv->max_nch; i++) {
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
  

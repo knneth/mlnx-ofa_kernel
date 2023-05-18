@@ -12,12 +12,12 @@ Change-Id: I4bf20fe1bfa036b8de7771e0edfd03e154073f9f
   * Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved
   */
  
-+#ifdef HAVE_VFIO_LOG_OPS
++#ifdef HAVE_VFIO_SUPPORT
  #include "cmd.h"
  
  enum { CQ_OK = 0, CQ_EMPTY = -1, CQ_POLL_ERR = -2 };
-@@ -1413,3 +1414,4 @@ end:
+@@ -1668,3 +1669,4 @@ end:
  	mlx5vf_state_mutex_unlock(mvdev);
  	return err;
  }
-+#endif /* HAVE_VFIO_LOG_OPS */
++#endif /* HAVE_VFIO_SUPPORT */

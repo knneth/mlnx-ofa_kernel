@@ -7,7 +7,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
-@@ -34,16 +34,22 @@ struct mlx5_devlink_trap_event_ctx {
+@@ -37,16 +37,22 @@ struct mlx5_devlink_trap_event_ctx {
  	int err;
  };
  

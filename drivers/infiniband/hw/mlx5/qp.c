@@ -72,6 +72,15 @@ struct mlx5_modify_raw_qp_param {
 	u32 port;
 };
 
+struct mlx5_ib_qp_event_work {
+	struct work_struct work;
+	struct mlx5_core_qp *qp;
+	int error_type;
+	int type;
+};
+
+static struct workqueue_struct *mlx5_ib_qp_event_wq;
+
 struct mlx5_ib_sqd {
 	struct mlx5_ib_qp *qp;
 	struct work_struct work;
@@ -316,6 +325,109 @@ int mlx5_ib_read_wqe_srq(struct mlx5_ib_srq *srq, int wqe_index, void *buffer,
 	return mlx5_ib_read_user_wqe_srq(srq, wqe_index, buffer, buflen, bc);
 }
 
+static void mlx5_ib_qp_err_syndrome(struct ib_qp *ibqp)
+{
+	struct mlx5_ib_dev *dev = to_mdev(ibqp->device);
+	int outlen = MLX5_ST_SZ_BYTES(query_qp_out);
+	struct mlx5_ib_qp *qp = to_mqp(ibqp);
+	void *pas_ext_union, *err_syn;
+	u32 *outb;
+	int err;
+
+	if (!MLX5_CAP_GEN(dev->mdev, qpc_extension) ||
+	    !MLX5_CAP_GEN(dev->mdev, qp_error_syndrome))
+		return;
+
+	outb = kzalloc(outlen, GFP_KERNEL);
+	if (!outb)
+		return;
+
+	err = mlx5_core_qp_query(dev, &qp->trans_qp.base.mqp, outb, outlen,
+				 true);
+	if (err)
+		goto out;
+
+	pas_ext_union =
+		MLX5_ADDR_OF(query_qp_out, outb, qp_pas_or_qpc_ext_and_pas);
+	err_syn = MLX5_ADDR_OF(qpc_extension_and_pas_list_in, pas_ext_union,
+			       qpc_data_extension.error_syndrome);
+
+	pr_err("%s/%d: QP %d error: %s (0x%x 0x%x 0x%x)\n",
+	       ibqp->device->name, ibqp->port, ibqp->qp_num,
+	       ib_wc_status_msg(
+		       MLX5_GET(cqe_error_syndrome, err_syn, syndrome)),
+	       MLX5_GET(cqe_error_syndrome, err_syn, vendor_error_syndrome),
+	       MLX5_GET(cqe_error_syndrome, err_syn, hw_syndrome_type),
+	       MLX5_GET(cqe_error_syndrome, err_syn, hw_error_syndrome));
+out:
+	kfree(outb);
+}
+
+static void mlx5_ib_handle_qp_event(struct work_struct *_work)
+{
+	struct mlx5_ib_qp_event_work *qpe_work =
+		container_of(_work, struct mlx5_ib_qp_event_work, work);
+	struct ib_qp *ibqp = &to_mibqp(qpe_work->qp)->ibqp;
+	int error_type = qpe_work->error_type;
+	struct ib_event event = {};
+	int type = qpe_work->type;
+
+	event.device = ibqp->device;
+	event.element.qp = ibqp;
+	switch (type) {
+	case MLX5_EVENT_TYPE_PATH_MIG:
+		event.event = IB_EVENT_PATH_MIG;
+		break;
+	case MLX5_EVENT_TYPE_COMM_EST:
+		event.event = IB_EVENT_COMM_EST;
+		break;
+	case MLX5_EVENT_TYPE_SQ_DRAINED:
+		event.event = IB_EVENT_SQ_DRAINED;
+		break;
+	case MLX5_EVENT_TYPE_SRQ_LAST_WQE:
+		event.event = IB_EVENT_QP_LAST_WQE_REACHED;
+		break;
+	case MLX5_EVENT_TYPE_WQ_CATAS_ERROR:
+		event.event = IB_EVENT_QP_FATAL;
+		break;
+	case MLX5_EVENT_TYPE_PATH_MIG_FAILED:
+		event.event = IB_EVENT_PATH_MIG_ERR;
+		break;
+	case MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR:
+		event.event = IB_EVENT_QP_REQ_ERR;
+		break;
+	case MLX5_EVENT_TYPE_WQ_ACCESS_ERROR:
+		event.event = IB_EVENT_QP_ACCESS_ERR;
+		break;
+	case MLX5_EVENT_TYPE_XRQ_ERROR:
+		switch (error_type) {
+		case MLX5_XRQ_ERROR_TYPE_QP_ERROR:
+			event.event = IB_EXP_EVENT_XRQ_QP_ERR;
+			break;
+		default:
+			pr_warn("mlx5_ib: Unexpected event type %d error type %d on QP %06x\n",
+				type, error_type, qpe_work->qp->qpn);
+			return;
+		}
+		break;
+	default:
+		pr_warn("mlx5_ib: Unexpected event type %d on QP %06x\n",
+			qpe_work->type, qpe_work->qp->qpn);
+		goto out;
+	}
+
+	if ((event.event == IB_EVENT_QP_FATAL) ||
+	    (event.event == IB_EVENT_QP_ACCESS_ERR) ||
+	    (event.event == IB_EXP_EVENT_XRQ_QP_ERR))
+		mlx5_ib_qp_err_syndrome(ibqp);
+
+	ibqp->event_handler(&event, ibqp->qp_context);
+
+out:
+	mlx5_core_res_put(&qpe_work->qp->common);
+	kfree(qpe_work);
+}
+
 static int query_wqe_idx(struct mlx5_ib_qp *qp)
 {
 	struct mlx5_ib_dev *dev = to_mdev(qp->ibqp.device);
@@ -331,7 +443,7 @@ static int query_wqe_idx(struct mlx5_ib_qp *qp)
 		goto out;
 	}
 	ret = mlx5_core_qp_query(dev, &qp->trans_qp.base.mqp, outb,
-				 outlen);
+				 outlen, false);
 	if (ret)
 		goto out_free;
 
@@ -423,9 +535,9 @@ static void mlx5_ib_sigerr_sqd_event(struct mlx5_ib_qp *qp)
 static void mlx5_ib_qp_event(struct mlx5_core_qp *qp, int event_info)
 {
 	struct ib_qp *ibqp = &to_mibqp(qp)->ibqp;
-	struct ib_event event;
-	u8 type = event_info & 0xff;
+	struct mlx5_ib_qp_event_work *qpe_work;
 	u8 error_type = (event_info >> 8) & 0xff;
+	u8 type = event_info & 0xff;
 
 	if (type == MLX5_EVENT_TYPE_SQ_DRAINED &&
 	    to_mibqp(qp)->flags & IB_QP_CREATE_SIGNATURE_PIPELINE &&
@@ -439,52 +551,22 @@ static void mlx5_ib_qp_event(struct mlx5_core_qp *qp, int event_info)
 		to_mibqp(qp)->port = to_mibqp(qp)->trans_qp.alt_port;
 	}
 
-	if (ibqp->event_handler) {
-		event.device     = ibqp->device;
-		event.element.qp = ibqp;
-		switch (type) {
-		case MLX5_EVENT_TYPE_PATH_MIG:
-			event.event = IB_EVENT_PATH_MIG;
-			break;
-		case MLX5_EVENT_TYPE_COMM_EST:
-			event.event = IB_EVENT_COMM_EST;
-			break;
-		case MLX5_EVENT_TYPE_SQ_DRAINED:
-			event.event = IB_EVENT_SQ_DRAINED;
-			break;
-		case MLX5_EVENT_TYPE_SRQ_LAST_WQE:
-			event.event = IB_EVENT_QP_LAST_WQE_REACHED;
-			break;
-		case MLX5_EVENT_TYPE_WQ_CATAS_ERROR:
-			event.event = IB_EVENT_QP_FATAL;
-			break;
-		case MLX5_EVENT_TYPE_PATH_MIG_FAILED:
-			event.event = IB_EVENT_PATH_MIG_ERR;
-			break;
-		case MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR:
-			event.event = IB_EVENT_QP_REQ_ERR;
-			break;
-		case MLX5_EVENT_TYPE_WQ_ACCESS_ERROR:
-			event.event = IB_EVENT_QP_ACCESS_ERR;
-			break;
-		case MLX5_EVENT_TYPE_XRQ_ERROR:
-			switch (error_type) {
-			case MLX5_XRQ_ERROR_TYPE_QP_ERROR:
-				event.event = IB_EXP_EVENT_XRQ_QP_ERR;
-				break;
-			default:
-				pr_warn("mlx5_ib: Unexpected event type %d error type %d on QP %06x\n",
-					type, error_type, qp->qpn);
-				return;
-			}
-			break;
-		default:
-			pr_warn("mlx5_ib: Unexpected event type %d on QP %06x\n", type, qp->qpn);
-			return;
-		}
+	if (!ibqp->event_handler)
+		goto out_no_handler;
 
-		ibqp->event_handler(&event, ibqp->qp_context);
-	}
+	qpe_work = kzalloc(sizeof(*qpe_work), GFP_ATOMIC);
+	if (!qpe_work)
+		goto out_no_handler;
+
+	qpe_work->qp = qp;
+	qpe_work->type = type;
+	qpe_work->error_type = error_type;
+	INIT_WORK(&qpe_work->work, mlx5_ib_handle_qp_event);
+	queue_work(mlx5_ib_qp_event_wq, &qpe_work->work);
+	return;
+
+out_no_handler:
+	mlx5_core_res_put(&qp->common);
 }
 
 static int set_rq_size(struct mlx5_ib_dev *dev, struct ib_qp_cap *cap,
@@ -2593,6 +2675,11 @@ static int create_kernel_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	if (qp->flags & IB_QP_CREATE_IPOIB_UD_LSO)
 		MLX5_SET(qpc, qpc, ulp_stateless_offload_mode, 1);
 
+	if (qp->flags & IB_QP_CREATE_INTEGRITY_EN &&
+	    MLX5_CAP_GEN(mdev, go_back_n)) {
+		MLX5_SET(qpc, qpc, retry_mode, MLX5_QP_RM_GO_BACK_N);
+	}
+
 	err = mlx5_qpc_create_qp(dev, &base->mqp, in, inlen, out);
 	kvfree(in);
 	if (err)
@@ -3586,11 +3673,9 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			 const struct ib_qp_attr *attr, bool alt)
 {
 	const struct ib_global_route *grh = rdma_ah_read_grh(ah);
-	bool global_tc;
 	int err;
 	u8 ah_flags = rdma_ah_get_ah_flags(ah);
 	u8 sl = rdma_ah_get_sl(ah);
-	u8 tclass = grh->traffic_class;
 
 	if (attr_mask & IB_QP_PKEY_INDEX)
 		MLX5_SET(ads, path, pkey_index,
@@ -3609,16 +3694,13 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			return -EINVAL;
 		}
 
-		tclass_get_tclass(dev, &dev->tcd[port - 1], ah, port, &tclass,
-				  &global_tc);
 		memcpy(&qp->ah, ah, sizeof(qp->ah));
-		qp->tclass = tclass;
 
 		gid_type = ah->grh.sgid_attr->gid_type;
 		if (gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP) {
 			if (qp->type == MLX5_IB_QPT_DCI)
-				MLX5_SET(ads, path, f_dscp, global_tc);
-			MLX5_SET(ads, path, dscp, tclass >> 2);
+				MLX5_SET(ads, path, f_dscp, qp->global_tclass);
+			MLX5_SET(ads, path, dscp, qp->tclass >> 2);
 		}
 
 		MLX5_SET(ads, path, src_addr_index, grh->sgid_index);
@@ -4765,6 +4847,42 @@ static int validate_rd_atomic(struct mlx5_ib_dev *dev, struct ib_qp_attr *attr,
 	return true;
 }
 
+static void mlx5_ib_qp_set_tclass(struct mlx5_ib_dev *dev,
+				  struct mlx5_ib_qp *qp,
+				  struct ib_qp_attr *attr,
+				  int attr_mask)
+{
+	u8 port = attr_mask & IB_QP_PORT ? attr->port_num : qp->port;
+	struct mlx5_tc_data *tcd;
+	struct rdma_ah_attr *ah;
+	bool global_tc = false;
+	u8 ah_flags;
+	u8 tclass;
+
+	if (!(attr_mask & IB_QP_AV))
+		return;
+
+	if (port == 0 || port > dev->num_ports)
+		return;
+
+	tcd = &dev->tcd[port - 1];
+	ah = &attr->ah_attr;
+	ah_flags = rdma_ah_get_ah_flags(ah);
+	if (!(ah_flags & IB_AH_GRH))
+		return;
+	mutex_lock(&tcd->lock);
+	mutex_lock(&qp->mutex);
+
+	tclass = rdma_ah_read_grh(ah)->traffic_class;
+	tclass_get_tclass_locked(dev, tcd, ah, port, &tclass, &global_tc);
+	qp->tclass = tclass;
+	qp->global_tclass = global_tc;
+
+	mutex_unlock(&qp->mutex);
+	mutex_unlock(&tcd->lock);
+
+}
+
 int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata)
 {
@@ -4814,6 +4932,15 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	if (qp_type == MLX5_IB_QPT_DCT)
 		return mlx5_ib_modify_dct(ibqp, attr, attr_mask, &ucmd, udata);
 
+	if ((attr_mask & IB_QP_PORT) &&
+	    (attr->port_num == 0 ||
+	     attr->port_num > dev->num_ports)) {
+		mlx5_ib_dbg(dev, "invalid port number %d. number of ports is %d\n",
+			    attr->port_num, dev->num_ports);
+		return err;
+	}
+
+	mlx5_ib_qp_set_tclass(dev, qp, attr, attr_mask);
 	mutex_lock(&qp->mutex);
 
 	cur_state = attr_mask & IB_QP_CUR_STATE ? attr->cur_qp_state : qp->state;
@@ -4835,14 +4962,6 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		   !modify_dci_qp_is_ok(cur_state, new_state, attr_mask)) {
 		mlx5_ib_dbg(dev, "invalid QP state transition from %d to %d, qp_type %d, attr_mask 0x%x\n",
 			    cur_state, new_state, qp_type, attr_mask);
-		goto out;
-	}
-
-	if ((attr_mask & IB_QP_PORT) &&
-	    (attr->port_num == 0 ||
-	     attr->port_num > dev->num_ports)) {
-		mlx5_ib_dbg(dev, "invalid port number %d. number of ports is %d\n",
-			    attr->port_num, dev->num_ports);
 		goto out;
 	}
 
@@ -5056,7 +5175,8 @@ static int query_qp_attr(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	if (!outb)
 		return -ENOMEM;
 
-	err = mlx5_core_qp_query(dev, &qp->trans_qp.base.mqp, outb, outlen);
+	err = mlx5_core_qp_query(dev, &qp->trans_qp.base.mqp, outb, outlen,
+				 false);
 	if (err)
 		goto out;
 
@@ -5948,6 +6068,20 @@ int mlx5_ib_qp_set_counter(struct ib_qp *qp, struct rdma_counter *counter)
 out:
 	mutex_unlock(&mqp->mutex);
 	return err;
+}
+
+int mlx5_ib_qp_event_init(void)
+{
+	mlx5_ib_qp_event_wq = alloc_ordered_workqueue("mlx5_ib_qp_event_wq", 0);
+	if (!mlx5_ib_qp_event_wq)
+		return -ENOMEM;
+
+	return 0;
+}
+
+void mlx5_ib_qp_event_cleanup(void)
+{
+	destroy_workqueue(mlx5_ib_qp_event_wq);
 }
 
 void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr)

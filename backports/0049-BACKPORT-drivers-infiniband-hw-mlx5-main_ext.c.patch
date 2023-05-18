@@ -26,7 +26,7 @@ Change-Id: Ia2f6ec19da6664bd819228d1138704a6438ebb90
  };
  
  int init_ttl_sysfs(struct mlx5_ib_dev *dev)
-@@ -710,11 +716,17 @@ static const struct sysfs_ops tc_sysfs_o
+@@ -699,11 +705,17 @@ static const struct sysfs_ops tc_sysfs_o
  	.store = tc_attr_store
  };
  
@@ -45,7 +45,7 @@ Change-Id: Ia2f6ec19da6664bd819228d1138704a6438ebb90
  };
  
  int init_tc_sysfs(struct mlx5_ib_dev *dev)
-@@ -1412,11 +1424,17 @@ static const struct sysfs_ops dc_sysfs_o
+@@ -1401,11 +1413,17 @@ static const struct sysfs_ops dc_sysfs_o
  	.store = dc_attr_store
  };
  

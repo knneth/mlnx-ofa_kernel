@@ -130,8 +130,8 @@ Change-Id: I60ba960a477477dea23ce5a035b562047ecf6f9b
 +#endif
  }
  
- int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
-@@ -336,7 +399,9 @@ static int mlx5i_create_flow_steering(st
+ struct net_device *mlx5i_parent_get(struct net_device *netdev)
+@@ -374,7 +437,9 @@ static int mlx5i_create_flow_steering(st
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -141,7 +141,7 @@ Change-Id: I60ba960a477477dea23ce5a035b562047ecf6f9b
  	}
  
  	err = mlx5e_create_ttc_table(priv);
-@@ -494,13 +559,21 @@ int mlx5i_dev_init(struct net_device *de
+@@ -532,13 +597,21 @@ int mlx5i_dev_init(struct net_device *de
  {
  	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
  	struct mlx5i_priv    *ipriv  = priv->ppriv;
@@ -163,7 +163,7 @@ Change-Id: I60ba960a477477dea23ce5a035b562047ecf6f9b
  
  	/* Add QPN to net-device mapping to HT */
  	mlx5i_pkey_add_qpn(dev, ipriv->qpn);
-@@ -660,7 +733,13 @@ static int mlx5i_xmit(struct net_device
+@@ -698,7 +771,13 @@ static int mlx5i_xmit(struct net_device
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
  
@@ -177,7 +177,7 @@ Change-Id: I60ba960a477477dea23ce5a035b562047ecf6f9b
  
  	return NETDEV_TX_OK;
  }
-@@ -762,8 +841,10 @@ static int mlx5_rdma_setup_rn(struct ib_
+@@ -800,8 +879,10 @@ static int mlx5_rdma_setup_rn(struct ib_
  	rn->detach_mcast = mlx5i_detach_mcast;
  	rn->set_id = mlx5i_set_pkey_index;
  
@@ -188,7 +188,7 @@ Change-Id: I60ba960a477477dea23ce5a035b562047ecf6f9b
  
  	return 0;
  
-@@ -798,6 +879,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
+@@ -836,6 +917,9 @@ int mlx5_rdma_rn_get_params(struct mlx5_
  		.rxqs = nch,
  		.param = mdev,
  		.initialize_rdma_netdev = mlx5_rdma_setup_rn,

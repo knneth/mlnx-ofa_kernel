@@ -64,7 +64,7 @@ Change-Id: I977649de35a31e894fc1636e1759f2f8308dfc2f
  static int
  tc_act_police_offload(struct mlx5e_priv *priv,
  		      struct flow_offload_action *fl_act,
-@@ -146,12 +158,15 @@ tc_act_police_stats(struct mlx5e_priv *p
+@@ -145,12 +157,15 @@ tc_act_police_stats(struct mlx5e_priv *p
  	mlx5e_tc_meter_put(meter);
  	return 0;
  }

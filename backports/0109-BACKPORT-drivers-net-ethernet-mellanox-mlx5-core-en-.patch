@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I2c91aab24ed5dedeb96c37d7ddcec7bd4f84b9c0
 ---
- .../mellanox/mlx5/core/en/reporter_rx.c       | 92 +++++++++++++++----
- 1 file changed, 72 insertions(+), 20 deletions(-)
+ .../mellanox/mlx5/core/en/reporter_rx.c       | 99 +++++++++++++++----
+ 1 file changed, 79 insertions(+), 20 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
@@ -174,7 +174,7 @@ Change-Id: I2c91aab24ed5dedeb96c37d7ddcec7bd4f84b9c0
  static const struct devlink_health_reporter_ops mlx5_rx_reporter_ops = {
  	.name = "rx",
  	.recover = mlx5e_rx_reporter_recover,
-@@ -733,20 +760,39 @@ static const struct devlink_health_repor
+@@ -733,20 +760,42 @@ static const struct devlink_health_repor
  };
  
  #define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
@@ -193,17 +193,20 @@ Change-Id: I2c91aab24ed5dedeb96c37d7ddcec7bd4f84b9c0
 +#endif
  	struct devlink_health_reporter *reporter;
  
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	reporter = devl_port_health_reporter_create(dl_port, &mlx5_rx_reporter_ops,
++						       MLX5E_REPORTER_RX_GRACEFUL_PERIOD, priv);
++#elif defined(HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE)
  	reporter = devlink_port_health_reporter_create(dl_port, &mlx5_rx_reporter_ops,
  						       MLX5E_REPORTER_RX_GRACEFUL_PERIOD, priv);
-+#else
++#else /* HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET */
 +	reporter = devlink_health_reporter_create(devlink,
 +							&mlx5_rx_reporter_ops,
 +#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
 +							MLX5E_REPORTER_RX_GRACEFUL_PERIOD,
 +#endif
 +							true, priv);
-+#endif
++#endif /* HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET */
  	if (IS_ERR(reporter)) {
  		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %ld\n",
  			    PTR_ERR(reporter));
@@ -214,16 +217,20 @@ Change-Id: I2c91aab24ed5dedeb96c37d7ddcec7bd4f84b9c0
  }
  
  void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
-@@ -754,6 +800,12 @@ void mlx5e_reporter_rx_destroy(struct ml
+@@ -754,6 +803,16 @@ void mlx5e_reporter_rx_destroy(struct ml
  	if (!priv->rx_reporter)
  		return;
  
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
++
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	devl_health_reporter_destroy(priv->rx_reporter);
++#elif defined(HAVE_DEVLINK_PORT_HEALTH_REPORTER_DESTROY)
  	devlink_port_health_reporter_destroy(priv->rx_reporter);
 +#else
 +	devlink_health_reporter_destroy(priv->rx_reporter);
-+#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE  */
++#endif /* HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET  */
++
 +#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  	priv->rx_reporter = NULL;
  }

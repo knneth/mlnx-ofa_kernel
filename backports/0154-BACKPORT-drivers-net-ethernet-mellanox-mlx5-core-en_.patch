@@ -1,22 +1,26 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Avihai Horon <avihaih@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 
-Change-Id: I0977084c652bbc6512df518617ed29aab5d252fb
+Change-Id: I0c4ad8ef7d5a036d7d3ccd3eec4bb32d4384b138
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 5 +++++
+ 1 file changed, 5 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-@@ -38,7 +38,11 @@
- 
+@@ -39,10 +39,15 @@
  void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc)
  {
-+#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
- 	bool ro_pci_enable = pcie_relaxed_ordering_enabled(mdev->pdev);
-+#else
-+	bool ro_pci_enable = true;
-+#endif
  	bool ro_write = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
- 	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read);
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read) ||
+ 		       (MLX5_CAP_GEN(mdev, relaxed_ordering_read_pci_enabled) &&
+ 			(mlx5_core_is_vf(mdev) ||
+ 			 pcie_relaxed_ordering_enabled(mdev->pdev)));
++#else
++	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read) ||
++		       MLX5_CAP_GEN(mdev, relaxed_ordering_read_pci_enabled);
++#endif
  
+ 	MLX5_SET(mkc, mkc, relaxed_ordering_read, ro_read);
+ 	MLX5_SET(mkc, mkc, relaxed_ordering_write, ro_write);

@@ -37,9 +37,9 @@ Change-Id: I2b1a11fd2148239027d0589da338f30f99b198ce
  }
  
  static int
-@@ -479,7 +493,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
+@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
+ 	struct mlx5e_sample_attr *sample_attr;
  	struct mlx5_flow_attr *pre_attr;
- 	u32 tunnel_id = attr->tunnel_id;
  	struct mlx5_eswitch *esw;
 -	u32 default_tbl_id;
 +	u32 default_tbl_id = 0;

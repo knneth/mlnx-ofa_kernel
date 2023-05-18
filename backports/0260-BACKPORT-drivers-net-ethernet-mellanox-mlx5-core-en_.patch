@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ib0d412b73e8cdfcac5d63f3f89cfd4f574ddfd6b
 ---
- .../mellanox/mlx5/core/en_accel/ipsec.c       | 35 ++++++++++++++++---
- 1 file changed, 30 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ipsec.c       | 40 ++++++++++++++++---
+ 1 file changed, 35 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
@@ -60,8 +60,16 @@ Change-Id: Ib0d412b73e8cdfcac5d63f3f89cfd4f574ddfd6b
  	struct mlx5_core_dev *mdev;
  	struct mlx5_eswitch *esw;
  	struct mlx5e_priv *priv;
-@@ -524,7 +533,11 @@ static void _update_xfrm_state(struct wo
+@@ -521,10 +530,19 @@ static void _update_xfrm_state(struct wo
+ 	mlx5_accel_esp_modify_xfrm(sa_entry, &modify_work->attrs);
+ }
+ 
++#ifdef HAVE_XDO_XFRM_ADD_STATE_GET_EXTACK
++static int mlx5e_xfrm_add_state(struct xfrm_state *x,
++				struct netlink_ext_ack *extack)
++#else
  static int mlx5e_xfrm_add_state(struct xfrm_state *x)
++#endif
  {
  	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
 +#ifdef HAVE_NET_DEVICE_REAL_DEV
@@ -72,7 +80,7 @@ Change-Id: Ib0d412b73e8cdfcac5d63f3f89cfd4f574ddfd6b
  	struct mlx5e_priv *priv;
  	int err;
  
-@@ -559,7 +572,11 @@ static int mlx5e_xfrm_add_state(struct x
+@@ -559,7 +577,11 @@ static int mlx5e_xfrm_add_state(struct x
  	if (err)
  		goto err_hw_ctx;
  
@@ -84,7 +92,7 @@ Change-Id: Ib0d412b73e8cdfcac5d63f3f89cfd4f574ddfd6b
  		err = mlx5e_ipsec_sadb_rx_add(sa_entry);
  		if (err)
  			goto err_add_rule;
-@@ -592,7 +609,11 @@ static void mlx5e_xfrm_del_state(struct
+@@ -592,7 +614,11 @@ static void mlx5e_xfrm_del_state(struct
  	if (sa_entry->is_removed)
  		return;
  
@@ -96,7 +104,7 @@ Change-Id: Ib0d412b73e8cdfcac5d63f3f89cfd4f574ddfd6b
  		mlx5e_ipsec_sadb_rx_del(sa_entry);
  	else
  		mlx5e_ipsec_sadb_tx_del(sa_entry);
-@@ -729,6 +750,7 @@ static bool mlx5e_ipsec_offload_ok(struc
+@@ -729,6 +755,7 @@ static bool mlx5e_ipsec_offload_ok(struc
  	return true;
  }
  
@@ -104,7 +112,7 @@ Change-Id: Ib0d412b73e8cdfcac5d63f3f89cfd4f574ddfd6b
  static void mlx5e_xfrm_advance_esn_state(struct xfrm_state *x)
  {
  	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
-@@ -743,13 +765,16 @@ static void mlx5e_xfrm_advance_esn_state
+@@ -743,13 +770,16 @@ static void mlx5e_xfrm_advance_esn_state
  	mlx5e_ipsec_build_accel_xfrm_attrs(sa_entry, &modify_work->attrs);
  	queue_work(sa_entry->ipsec->wq, &modify_work->work);
  }

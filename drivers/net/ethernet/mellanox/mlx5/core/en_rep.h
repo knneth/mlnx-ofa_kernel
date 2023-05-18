@@ -100,6 +100,8 @@ struct mlx5_rep_uplink_priv {
 	struct mlx5e_tc_int_port_priv *int_port_priv;
 
 	struct mlx5e_flow_meters *flow_meters;
+
+	struct work_struct mpesw_work;
 };
 
 struct mlx5e_flow_meter_handle;

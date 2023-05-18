@@ -149,7 +149,8 @@ static int rsc_event_notifier(struct notifier_block *nb,
 	case MLX5_RES_SQ:
 		qp = (struct mlx5_core_qp *)common;
 		qp->event(qp, event_type);
-		break;
+		/* Need to put resource in event handler */
+		return NOTIFY_OK;
 	case MLX5_RES_DCT:
 		dct = (struct mlx5_core_dct *)common;
 		if (event_type == MLX5_EVENT_TYPE_DCT_DRAINED)
@@ -191,6 +192,9 @@ static void destroy_resource_common(struct mlx5_ib_dev *dev,
 {
 	struct mlx5_qp_table *table = &dev->qp_table;
 	unsigned long flags;
+
+	if (refcount_read(&qp->common.refcount) == 0)
+		return;
 
 	spin_lock_irqsave(&table->lock, flags);
 	radix_tree_delete(&table->tree,
@@ -311,8 +315,7 @@ int mlx5_core_destroy_qp(struct mlx5_ib_dev *dev, struct mlx5_core_qp *qp)
 	MLX5_SET(destroy_qp_in, in, opcode, MLX5_CMD_OP_DESTROY_QP);
 	MLX5_SET(destroy_qp_in, in, qpn, qp->qpn);
 	MLX5_SET(destroy_qp_in, in, uid, qp->uid);
-	mlx5_cmd_exec_in(dev->mdev, destroy_qp, in);
-	return 0;
+	return mlx5_cmd_exec_in(dev->mdev, destroy_qp, in);
 }
 
 int mlx5_core_set_delay_drop(struct mlx5_ib_dev *dev,
@@ -518,12 +521,14 @@ void mlx5_cleanup_qp_table(struct mlx5_ib_dev *dev)
 }
 
 int mlx5_core_qp_query(struct mlx5_ib_dev *dev, struct mlx5_core_qp *qp,
-		       u32 *out, int outlen)
+		       u32 *out, int outlen, bool qpc_ext)
 {
 	u32 in[MLX5_ST_SZ_DW(query_qp_in)] = {};
 
 	MLX5_SET(query_qp_in, in, opcode, MLX5_CMD_OP_QUERY_QP);
 	MLX5_SET(query_qp_in, in, qpn, qp->qpn);
+	MLX5_SET(query_qp_in, in, qpc_ext, qpc_ext);
+
 	return mlx5_cmd_exec(dev->mdev, in, sizeof(in), out, outlen);
 }
 
@@ -562,14 +567,14 @@ int mlx5_core_xrcd_dealloc(struct mlx5_ib_dev *dev, u32 xrcdn)
 	return mlx5_cmd_exec_in(dev->mdev, dealloc_xrcd, in);
 }
 
-static void destroy_rq_tracked(struct mlx5_ib_dev *dev, u32 rqn, u16 uid)
+static int destroy_rq_tracked(struct mlx5_ib_dev *dev, u32 rqn, u16 uid)
 {
 	u32 in[MLX5_ST_SZ_DW(destroy_rq_in)] = {};
 
 	MLX5_SET(destroy_rq_in, in, opcode, MLX5_CMD_OP_DESTROY_RQ);
 	MLX5_SET(destroy_rq_in, in, rqn, rqn);
 	MLX5_SET(destroy_rq_in, in, uid, uid);
-	mlx5_cmd_exec_in(dev->mdev, destroy_rq, in);
+	return mlx5_cmd_exec_in(dev->mdev, destroy_rq, in);
 }
 
 int mlx5_core_create_rq_tracked(struct mlx5_ib_dev *dev, u32 *in, int inlen,
@@ -600,8 +605,7 @@ int mlx5_core_destroy_rq_tracked(struct mlx5_ib_dev *dev,
 				 struct mlx5_core_qp *rq)
 {
 	destroy_resource_common(dev, rq);
-	destroy_rq_tracked(dev, rq->qpn, rq->uid);
-	return 0;
+	return destroy_rq_tracked(dev, rq->qpn, rq->uid);
 }
 
 static void destroy_sq_tracked(struct mlx5_ib_dev *dev, u32 sqn, u16 uid)

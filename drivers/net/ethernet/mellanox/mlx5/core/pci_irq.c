@@ -4,6 +4,7 @@
 #include <linux/interrupt.h>
 #include <linux/notifier.h>
 #include <linux/mlx5/driver.h>
+#include <linux/mlx5/vport.h>
 #include "mlx5_core.h"
 #include "mlx5_irq.h"
 #include "pci_irq.h"
@@ -11,8 +12,6 @@
 #ifdef CONFIG_RFS_ACCEL
 #include <linux/cpu_rmap.h>
 #endif
-
-#define MLX5_PF_IRQ_CTRL_NUM (1)
 
 #define MLX5_SFS_PER_CTRL_IRQ 64
 #define MLX5_IRQ_CTRL_SF_MAX 8
@@ -103,7 +102,7 @@ int mlx5_set_msix_vec_count(struct mlx5_core_dev *dev, int function_id,
 		goto out;
 	}
 
-	ret = mlx5_vport_get_other_func_cap(dev, function_id, query_cap);
+	ret = mlx5_vport_get_other_func_general_cap(dev, function_id, query_cap);
 	if (ret)
 		goto out;
 
@@ -783,21 +782,3 @@ struct mlx5_irq_table *mlx5_irq_table_get(struct mlx5_core_dev *dev)
 #endif
 	return dev->priv.irq_table;
 }
-
-void mlx5_irq_rename(struct mlx5_core_dev *dev, struct mlx5_irq *irq,
-		const char *name)
-{
-	char *dst_name = irq->name;
-
-	if (!name) {
-		char default_name[MLX5_MAX_IRQ_NAME];
-
-		irq_set_name(irq->pool, default_name, irq->index);
-		snprintf(dst_name, MLX5_MAX_IRQ_NAME,
-				"%s@pci:%s", default_name, pci_name(dev->pdev));
-	} else {
-		snprintf(dst_name, MLX5_MAX_IRQ_NAME, "%s-%d", name,
-				irq->index - MLX5_PF_IRQ_CTRL_NUM);
-	}
-}
-
