@@ -1677,24 +1677,35 @@ static bool check_conflicting_actions(const struct mlx5_flow_act *act1,
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_POP |
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH |
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_POP_2 |
-			     MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH_2))
+			     MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH_2)) {
+		pr_warn("FTEs actions mismatch %x ^ %x = %x\n",
+			action1, action2, xored_actions);
 		return true;
+	}
 
 	if (action1 & MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT &&
-	    act1->pkt_reformat != act2->pkt_reformat)
+	    act1->pkt_reformat != act2->pkt_reformat) {
+		pr_warn("ACTION_PACKET_REFORMAT conflict\n");
 		return true;
+	}
 
 	if (action1 & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR &&
-	    act1->modify_hdr != act2->modify_hdr)
+	    act1->modify_hdr != act2->modify_hdr) {
+		pr_warn("ACTION_MOD_HDR conflict\n");
 		return true;
+	}
 
 	if (action1 & MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH &&
-	    check_conflicting_actions_vlan(&act1->vlan[0], &act2->vlan[0]))
+	    check_conflicting_actions_vlan(&act1->vlan[0], &act2->vlan[0])) {
+		pr_warn("VLAN_PUSH conflict\n");
 		return true;
+	}
 
 	if (action1 & MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH_2 &&
-	    check_conflicting_actions_vlan(&act1->vlan[1], &act2->vlan[1]))
+	    check_conflicting_actions_vlan(&act1->vlan[1], &act2->vlan[1])) {
+		pr_warn("VLAN_PUSH_2 conflict\n");
 		return true;
+	}
 
 	return false;
 }

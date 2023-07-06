@@ -75,8 +75,8 @@ do {								\
 			    ##__VA_ARGS__)
 
 #define mlx5_core_warn(__dev, format, ...)			\
-	dev_warn((__dev)->device, "%s:%d:(pid %d): " format,	\
-		 __func__, __LINE__, current->pid,		\
+	dev_warn((__dev)->device, "%s:%d:(app %s pid %d): " format, \
+		 __func__, __LINE__, current ? current->comm : "<unknown>", current ? current->pid : -1, \
 		 ##__VA_ARGS__)
 
 #define mlx5_core_warn_once(__dev, format, ...)				\
