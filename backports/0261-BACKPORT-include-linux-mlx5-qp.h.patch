@@ -21,7 +21,7 @@ Change-Id: I52b2c479740c15d88aec6c61f6ec1c46b83384d0
  	__be32			opmod_idx_opcode;
  	__be32			qpn_ds;
  
-+#ifdef HAVE_STRUCT_GROUP
++#ifdef struct_group
  	struct_group(trailer,
 +#endif
  
@@ -31,7 +31,7 @@ Change-Id: I52b2c479740c15d88aec6c61f6ec1c46b83384d0
  		__be32		tis_tir_num;
  	};
  
-+#ifdef HAVE_STRUCT_GROUP
++#ifdef struct_group
  	); /* end of trailer group */
 +#endif
  };

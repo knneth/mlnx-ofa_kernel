@@ -131,7 +131,7 @@ Change-Id: If45238c76d9761ead52e5e88c1446aaa5010b961
 +#ifdef HAVE_VLAN_ETHHDR_HAS_ADDRS
  	memcpy(&vhdr->addrs, skb->data, cpy1_sz);
 +#else
-+	memcpy(vhdr, skb->data, cpy1_sz);
++	unsafe_memcpy(vhdr, skb->data, cpy1_sz, MLX5_UNSAFE_MEMCPY_DISCLAIMER);
 +#endif
  	vhdr->h_vlan_proto = skb->vlan_proto;
  	vhdr->h_vlan_TCI = cpu_to_be16(skb_vlan_tag_get(skb));

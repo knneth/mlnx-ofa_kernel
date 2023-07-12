@@ -3937,23 +3937,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if stddef.h has struct_group])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/stddef.h>
-	],[
-		struct_group(trailer,
-			     u8 x;
-		);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_GROUP, 1,
-			  [struct_group is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if pkt_cls.h has tcf_exts_to_list])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/pkt_cls.h>
@@ -12984,6 +12967,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if has vfio_pci_core_init_dev])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/vfio_pci_core.h>
+	],[
+		vfio_pci_core_init_dev(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_VFIO_PCI_CORE_INIT, 1,
+			  [vfio_pci_core_init_dev exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/vfio_pci_core.h exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/vfio_pci_core.h>
@@ -17102,6 +17100,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_UAPI_LINUX_NVME_NVME_URING_CMD_ADMIN, 1,
 			[uapi/linux/nvme_ioctl.h has NVME_URING_CMD_ADMIN])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if have linux/io_uring.h has io_uring_cmd_done with 4 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/io_uring.h>
+	],[
+		io_uring_cmd_done(NULL, 0, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_IO_URING_CMD_DONE_4_PARAMS, 1,
+				[linux/io_uring.h has io_uring_cmd_done with 4 params])
 	],[
 		AC_MSG_RESULT(no)
 	])

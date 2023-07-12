@@ -29,7 +29,7 @@ Change-Id: I04aa838eb115f7f1158769279fff815030e8705f
  	__le32			cdw2[2];
  	__le64			metadata;
  	union nvme_data_ptr	dptr;
-+#ifdef HAVE_STRUCT_GROUP
++#ifdef struct_group
  	struct_group(cdws,
 +#endif
  	__le32			cdw10;
@@ -38,7 +38,7 @@ Change-Id: I04aa838eb115f7f1158769279fff815030e8705f
  	__le32			cdw13;
  	__le32			cdw14;
  	__le32			cdw15;
-+#ifdef HAVE_STRUCT_GROUP
++#ifdef struct_group
  	);
 +#endif
  };

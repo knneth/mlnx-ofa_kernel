@@ -17,7 +17,7 @@ Change-Id: I1182eb5b528b083c383128a5ac2a0968a722d3e6
 +#else
  		__assign_disk_name(__entry->disk, req->q->disk);
 +#endif
-+#ifdef HAVE_STRUCT_GROUP
++#ifdef struct_group
  		memcpy(__entry->cdw10, &cmd->common.cdws,
  			sizeof(__entry->cdw10));
 +#endif

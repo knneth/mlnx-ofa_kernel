@@ -269,7 +269,7 @@ Change-Id: I47985beb2f752e46ea276083e45a636011546761
 +		u8 num_pkts = 1;
 +		u8 num_wqebbs;
 +#endif
-+#ifdef HAVE_STRUCT_GROUP
++#ifdef struct_group
  		memset(&cseg->trailer, 0, sizeof(cseg->trailer));
 +#else
 +		memset(&cseg->signature, 0, sizeof(*cseg) -

@@ -42,7 +42,7 @@
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
 
-#define DRIVER_VERSION	"23.04-0.5.3"
+#define DRIVER_VERSION	"23.04-1.1.3"
 
 extern uint mlx5_core_debug_mask;
 
