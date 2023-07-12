@@ -17,7 +17,7 @@ Change-Id: I481f8418cc773ac3b70ccb751a07183aeda43fa0
 +#endif
 +
  enum {
- 	MLX5_CYCLES_SHIFT	= 23
+ 	MLX5_CYCLES_SHIFT	= 31
  };
 @@ -121,25 +125,37 @@ static int mlx5_set_mtutc(struct mlx5_co
  }
