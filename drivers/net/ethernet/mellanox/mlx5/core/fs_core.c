@@ -1673,7 +1673,6 @@ static bool check_conflicting_actions(const struct mlx5_flow_act *act1,
 	if (xored_actions & (MLX5_FLOW_CONTEXT_ACTION_DROP  |
 			     MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT |
 			     MLX5_FLOW_CONTEXT_ACTION_DECAP |
-			     MLX5_FLOW_CONTEXT_ACTION_MOD_HDR  |
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_POP |
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH |
 			     MLX5_FLOW_CONTEXT_ACTION_VLAN_POP_2 |
@@ -1689,7 +1688,8 @@ static bool check_conflicting_actions(const struct mlx5_flow_act *act1,
 		return true;
 	}
 
-	if (action1 & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR &&
+	if ((action1 & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR) &&
+	    (action2 & MLX5_FLOW_CONTEXT_ACTION_MOD_HDR) &&
 	    act1->modify_hdr != act2->modify_hdr) {
 		pr_warn("ACTION_MOD_HDR conflict\n");
 		return true;
@@ -1720,7 +1720,8 @@ static int check_conflicting_ftes(struct fs_fte *fte,
 		return -EEXIST;
 	}
 
-	if ((flow_context->flags & FLOW_CONTEXT_HAS_TAG) &&
+	if ((fte->flow_context.flags & FLOW_CONTEXT_HAS_TAG) &&
+	    (flow_context->flags & FLOW_CONTEXT_HAS_TAG) &&
 	    fte->flow_context.flow_tag != flow_context->flow_tag) {
 		mlx5_core_warn(get_dev(&fte->node),
 			       "FTE flow tag %u already exists with different flow tag %u\n",
