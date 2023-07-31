@@ -1402,6 +1402,10 @@ static void destroy_flow_handle(struct fs_fte *fte,
 	kfree(handle);
 }
 
+static bool preserve_fte_dest_ordering = true;
+module_param(preserve_fte_dest_ordering, bool, 0644);
+MODULE_PARM_DESC(preserve_fte_dest_ordering, "preserve insertion order of FTE destinations");
+
 static struct mlx5_flow_handle *
 create_flow_handle(struct fs_fte *fte,
 		   struct mlx5_flow_destination *dest,
@@ -1438,20 +1442,28 @@ create_flow_handle(struct fs_fte *fte,
 		 * end of the list for forward to next prio rules.
 		 */
 		tree_init_node(&rule->node, NULL, del_sw_hw_rule);
-		if (!dest || dest[i].type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE) {
-			list_add_tail(&rule->node.list, &fte->node.children);
-		} else {
-			struct list_head *insert_at = &fte->node.children;
-			struct mlx5_flow_rule *sibling;
+		if (preserve_fte_dest_ordering) {
+			if (!dest || dest[i].type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE) {
+				list_add_tail(&rule->node.list, &fte->node.children);
+			} else {
+				struct list_head *insert_at = &fte->node.children;
+				struct mlx5_flow_rule *sibling;
 
-			// Find last non-FT entry
-			list_for_each_entry (sibling, &fte->node.children, node.list) {
-				if (sibling->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
-					break;
-				insert_at = &sibling->node.list;
+				// Find last non-FT entry
+				list_for_each_entry (sibling, &fte->node.children, node.list) {
+					if (sibling->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
+						break;
+					insert_at = &sibling->node.list;
+				}
+
+				list_add(&rule->node.list, insert_at);
 			}
-
-			list_add(&rule->node.list, insert_at);
+		} else {
+			if (dest &&
+				dest[i].type != MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
+				list_add(&rule->node.list, &fte->node.children);
+			else
+				list_add_tail(&rule->node.list, &fte->node.children);
 		}
 
 		if (dest) {
