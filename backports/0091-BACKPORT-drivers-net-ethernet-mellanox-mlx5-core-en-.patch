@@ -1,10 +1,10 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Avihai Horon <avihaih@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.c
 
-Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
+Change-Id: Ib7844117a626f0b92cb7d0513ea929df9b482450
 ---
- .../ethernet/mellanox/mlx5/core/en/params.c   | 61 ++++++++++++++++---
- 1 file changed, 53 insertions(+), 8 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/params.c   | 55 ++++++++++++++++---
+ 1 file changed, 48 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
@@ -111,20 +111,14 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  	};
  }
  
-@@ -537,11 +563,18 @@ void mlx5e_build_aso_cq_param(struct mlx
+@@ -537,10 +563,13 @@ void mlx5e_build_aso_cq_param(struct mlx
  
  static u8 rq_end_pad_mode(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
  {
 -	bool lro_en = params->packet_merge.type == MLX5E_PACKET_MERGE_LRO;
-+#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
- 	bool ro = pcie_relaxed_ordering_enabled(mdev->pdev) &&
- 		MLX5_CAP_GEN(mdev, relaxed_ordering_write);
--
+ 	bool ro = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
+ 
 -	return ro && lro_en ?
-+#else
-+	bool ro = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
-+#endif
-+
 +#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
 +	return ro && IS_HW_LRO(params)?
 +#else
@@ -133,7 +127,7 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  		MLX5_WQ_END_PAD_MODE_NONE : MLX5_WQ_END_PAD_MODE_ALIGN;
  }
  
-@@ -637,6 +670,8 @@ void mlx5e_build_tx_cq_param(struct mlx5
+@@ -636,6 +665,8 @@ void mlx5e_build_tx_cq_param(struct mlx5
  	void *cqc = param->cqc;
  
  	MLX5_SET(cqc, cqc, log_cq_size, params->log_sq_size);
@@ -142,7 +136,7 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  
  	mlx5e_build_common_cq_param(mdev, param);
  	param->cq_period_mode = params->tx_cq_moderation.cq_period_mode;
-@@ -772,8 +807,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -771,8 +802,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
  	 * doesn't affect its return value, as long as params->xdp_prog != NULL,
  	 * so we can just multiply by 2.
  	 */
@@ -153,7 +147,7 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  
  	if (params->packet_merge.type == MLX5E_PACKET_MERGE_SHAMPO)
  		wqebbs += mlx5e_shampo_icosq_sz(mdev, params, rqp);
-@@ -783,8 +820,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -782,8 +815,10 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
  
  static u8 mlx5e_build_async_icosq_log_wq_sz(struct mlx5_core_dev *mdev)
  {
@@ -164,7 +158,7 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  
  	return MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
  }
-@@ -812,14 +851,17 @@ static void mlx5e_build_async_icosq_para
+@@ -811,14 +846,17 @@ static void mlx5e_build_async_icosq_para
  
  	mlx5e_build_sq_param_common(mdev, param);
  	param->stop_room = mlx5e_stop_room_for_wqe(mdev, 1); /* for XSK NOP */
@@ -182,7 +176,7 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
  			     struct mlx5e_params *params,
  			     struct mlx5e_sq_param *param)
-@@ -832,6 +874,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
+@@ -831,6 +869,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
  	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
  	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
  }
@@ -190,7 +184,7 @@ Change-Id: Ifc5d6c4a8f87311d15cebbb6d9d5bd84dcc1a8c6
  
  int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
  			      struct mlx5e_params *params,
-@@ -849,7 +892,9 @@ int mlx5e_build_channel_param(struct mlx
+@@ -848,7 +887,9 @@ int mlx5e_build_channel_param(struct mlx
  	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
  
  	mlx5e_build_sq_param(mdev, params, &cparam->txq_sq);

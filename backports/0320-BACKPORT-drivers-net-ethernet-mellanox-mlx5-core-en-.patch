@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+@@ -6,6 +6,7 @@
+ 
+ #include "en_tc.h"
+ #include "en/tc/act/act.h"
++#include <uapi/linux/tc_act/tc_pedit.h>
+ 
+ #define MLX5E_TC_FLOW_BASE (MLX5E_TC_FLAG_LAST_EXPORTED_BIT + 1)
+ 

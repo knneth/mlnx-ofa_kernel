@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
 ---
- .../ethernet/mellanox/mlx5/core/en/devlink.c  | 61 ++++++++++++++++++-
- 1 file changed, 59 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 65 ++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
@@ -40,7 +40,7 @@ Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
  
  	if (mlx5_core_is_pf(priv->mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
-@@ -40,8 +47,48 @@ int mlx5e_devlink_port_register(struct m
+@@ -40,22 +47,75 @@ int mlx5e_devlink_port_register(struct m
  	dl_port = mlx5e_devlink_get_dl_port(priv);
  	memset(dl_port, 0, sizeof(*dl_port));
  	devlink_port_attrs_set(dl_port, &attrs);
@@ -89,7 +89,16 @@ Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
  }
  
  void mlx5e_devlink_port_type_eth_set(struct mlx5e_priv *priv)
-@@ -54,8 +101,17 @@ void mlx5e_devlink_port_type_eth_set(str
+ {
+ 	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
+ 
++#ifdef HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM
++	devlink_port_type_eth_set(dl_port);
++#else
+ 	devlink_port_type_eth_set(dl_port, priv->netdev);
++#endif
+ }
+ 
  void mlx5e_devlink_port_unregister(struct mlx5e_priv *priv)
  {
  	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
@@ -107,7 +116,7 @@ Change-Id: Ie5decc4c71e2dcc52b33296b2a6e29b1e42d1ede
  }
  
  struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
-@@ -67,3 +123,4 @@ struct devlink_port *mlx5e_get_devlink_p
+@@ -67,3 +127,4 @@ struct devlink_port *mlx5e_get_devlink_p
  
  	return mlx5e_devlink_get_dl_port(priv);
  }

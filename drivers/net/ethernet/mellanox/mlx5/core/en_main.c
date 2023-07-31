@@ -2437,20 +2437,19 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 			      struct xsk_buff_pool *xsk_pool,
 			      struct mlx5e_channel **cp)
 {
+	int cpu = cpumask_first(mlx5_comp_irq_get_affinity_mask(priv->mdev, ix));
 	struct net_device *netdev = priv->netdev;
 	struct mlx5e_xsk_param xsk;
 	const struct cpumask *aff;
 	struct mlx5e_channel *c;
 	unsigned int irq;
 	int err;
-	int cpu;
 
 	err = mlx5_vector2irqn(priv->mdev, ix, &irq);
 	if (err)
 		return err;
 
 	aff = irq_get_effective_affinity_mask(irq);
-	cpu = cpumask_first(aff);
 
 	err = mlx5e_channel_stats_alloc(priv, ix, cpu);
 	if (err)
@@ -2471,7 +2470,7 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	c->num_tc   = mlx5e_get_dcb_num_tc(params);
 	c->xdp      = !!params->xdp_prog;
 	c->stats    = &priv->channel_stats[ix]->ch;
-	c->aff_mask = irq_get_effective_affinity_mask(irq);
+	c->aff_mask = aff;
 	c->lag_port = mlx5e_enumerate_lag_port(priv->mdev, ix);
 
 	netif_napi_add(netdev, &c->napi, mlx5e_napi_poll, 64);

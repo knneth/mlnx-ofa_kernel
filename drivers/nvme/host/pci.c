@@ -3236,6 +3236,17 @@ unsigned nvme_find_ns_id_from_bdev(struct block_device *bdev)
 }
 EXPORT_SYMBOL_GPL(nvme_find_ns_id_from_bdev);
 
+unsigned nvme_find_noiob_from_bdev(struct block_device *bdev)
+{
+	struct nvme_ns *ns = disk_to_nvme_ns(bdev->bd_disk);
+
+	if (!ns)
+		return 0;
+
+	return ns->noiob;
+}
+EXPORT_SYMBOL_GPL(nvme_find_noiob_from_bdev);
+
 static int nvme_dev_map(struct nvme_dev *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev->dev);

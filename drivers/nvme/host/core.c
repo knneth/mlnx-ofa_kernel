@@ -1915,6 +1915,7 @@ static int nvme_update_ns_info(struct nvme_ns *ns, struct nvme_id_ns *id)
 
 	blk_mq_freeze_queue(ns->disk->queue);
 	ns->lba_shift = id->lbaf[lbaf].ds;
+	ns->noiob = le16_to_cpu(id->noiob);
 	nvme_set_queue_limits(ns->ctrl, ns->queue);
 
 	nvme_configure_metadata(ns, id);

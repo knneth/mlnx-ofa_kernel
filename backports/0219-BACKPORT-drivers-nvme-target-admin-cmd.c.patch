@@ -113,7 +113,7 @@ Change-Id: Ibe53a661b98013094406ad6e7b60809621049c58
  
  	/* XXX: don't report vwc if the underlying device is write through */
  	id->vwc = NVME_CTRL_VWC_PRESENT;
-@@ -720,6 +754,7 @@ static void nvmet_execute_identify(struc
+@@ -723,6 +757,7 @@ static void nvmet_execute_identify(struc
  		}
  		break;
  	case NVME_ID_CNS_CS_NS:
@@ -121,7 +121,7 @@ Change-Id: Ibe53a661b98013094406ad6e7b60809621049c58
  		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED)) {
  			switch (req->cmd->identify.csi) {
  			case NVME_CSI_ZNS:
-@@ -728,6 +763,7 @@ static void nvmet_execute_identify(struc
+@@ -731,6 +766,7 @@ static void nvmet_execute_identify(struc
  				break;
  			}
  		}
@@ -129,7 +129,7 @@ Change-Id: Ibe53a661b98013094406ad6e7b60809621049c58
  		break;
  	case NVME_ID_CNS_CTRL:
  		switch (req->cmd->identify.csi) {
-@@ -736,6 +772,7 @@ static void nvmet_execute_identify(struc
+@@ -739,6 +775,7 @@ static void nvmet_execute_identify(struc
  		}
  		break;
  	case NVME_ID_CNS_CS_CTRL:
@@ -137,7 +137,7 @@ Change-Id: Ibe53a661b98013094406ad6e7b60809621049c58
  		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED)) {
  			switch (req->cmd->identify.csi) {
  			case NVME_CSI_ZNS:
-@@ -744,6 +781,7 @@ static void nvmet_execute_identify(struc
+@@ -747,6 +784,7 @@ static void nvmet_execute_identify(struc
  				break;
  			}
  		}
@@ -145,7 +145,7 @@ Change-Id: Ibe53a661b98013094406ad6e7b60809621049c58
  		break;
  	case NVME_ID_CNS_NS_ACTIVE_LIST:
  		switch (req->cmd->identify.csi) {
-@@ -781,9 +819,11 @@ static u16 nvmet_write_protect_flush_syn
+@@ -784,9 +822,11 @@ static u16 nvmet_write_protect_flush_syn
  {
  	u16 status;
  

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I976687d21f7fe9e5c58b327dc844cd313c542c03
 ---
- .../mellanox/mlx5/core/en/reporter_tx.c       | 57 ++++++++++++++++---
- 1 file changed, 50 insertions(+), 7 deletions(-)
+ .../mellanox/mlx5/core/en/reporter_tx.c       | 66 ++++++++++++++++---
+ 1 file changed, 58 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
@@ -88,7 +88,7 @@ Change-Id: I976687d21f7fe9e5c58b327dc844cd313c542c03
  	snprintf(err_str, sizeof(err_str),
  		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
  		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,
-@@ -580,22 +595,43 @@ int mlx5e_reporter_tx_timeout(struct mlx
+@@ -580,22 +595,46 @@ int mlx5e_reporter_tx_timeout(struct mlx
  	return to_ctx.status;
  }
  
@@ -117,13 +117,17 @@ Change-Id: I976687d21f7fe9e5c58b327dc844cd313c542c03
 +	struct mlx5_core_dev *mdev = priv->mdev;
 +	struct devlink *devlink;
 +#endif
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	reporter = devl_port_health_reporter_create(dl_port, &mlx5_tx_reporter_ops,
++			MLX5_REPORTER_TX_GRACEFUL_PERIOD, priv);
++#elif defined(HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE)
  	reporter = devlink_port_health_reporter_create(dl_port, &mlx5_tx_reporter_ops,
- 						       MLX5_REPORTER_TX_GRACEFUL_PERIOD, priv);
-+#else
+-						       MLX5_REPORTER_TX_GRACEFUL_PERIOD, priv);
++			MLX5_REPORTER_TX_GRACEFUL_PERIOD, priv);
++#else /* HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET */
 +	devlink = priv_to_devlink(mdev);
 +	reporter =
-+		 devlink_health_reporter_create(devlink, &mlx5_tx_reporter_ops,
++		devlink_health_reporter_create(devlink, &mlx5_tx_reporter_ops,
 +#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
 +				MLX5_REPORTER_TX_GRACEFUL_PERIOD,
 +#endif
@@ -132,7 +136,7 @@ Change-Id: I976687d21f7fe9e5c58b327dc844cd313c542c03
  	if (IS_ERR(reporter)) {
  		netdev_warn(priv->netdev,
  			    "Failed to create tx reporter, err = %ld\n",
-@@ -603,6 +639,7 @@ void mlx5e_reporter_tx_create(struct mlx
+@@ -603,6 +642,7 @@ void mlx5e_reporter_tx_create(struct mlx
  		return;
  	}
  	priv->tx_reporter = reporter;
@@ -140,16 +144,20 @@ Change-Id: I976687d21f7fe9e5c58b327dc844cd313c542c03
  }
  
  void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
-@@ -610,6 +647,12 @@ void mlx5e_reporter_tx_destroy(struct ml
+@@ -610,6 +650,16 @@ void mlx5e_reporter_tx_destroy(struct ml
  	if (!priv->tx_reporter)
  		return;
  
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
++
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
++	devl_health_reporter_destroy(priv->tx_reporter);
++#elif defined(HAVE_DEVLINK_PORT_HEALTH_REPORTER_DESTROY)
  	devlink_port_health_reporter_destroy(priv->tx_reporter);
 +#else
 +	devlink_health_reporter_destroy(priv->tx_reporter);
-+#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE  */
++#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_DESTROY  */
++
 +#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  	priv->tx_reporter = NULL;
  }

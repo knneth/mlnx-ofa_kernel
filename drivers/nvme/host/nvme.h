@@ -463,6 +463,7 @@ struct nvme_ns {
 #ifdef CONFIG_BLK_DEV_ZONED
 	u64 zsze;
 #endif
+	u16 noiob;
 	unsigned long features;
 	unsigned long flags;
 #define NVME_NS_REMOVING	0

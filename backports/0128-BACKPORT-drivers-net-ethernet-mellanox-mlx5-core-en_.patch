@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
 ---
- .../mellanox/mlx5/core/en_accel/ipsec.c       | 65 ++++++++++++++++++-
- 1 file changed, 64 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/ipsec.c       | 70 ++++++++++++++++++-
+ 1 file changed, 69 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
@@ -125,8 +125,16 @@ Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
  
  	return 0;
  }
-@@ -589,7 +628,11 @@ static void mlx5e_xfrm_fs_del_rule(struc
+@@ -586,10 +625,19 @@ static void mlx5e_xfrm_fs_del_rule(struc
+ 				      &sa_entry->ipsec_rule);
+ }
+ 
++#ifdef HAVE_XDO_XFRM_ADD_STATE_GET_EXTACK
++static int mlx5e_xfrm_add_state(struct xfrm_state *x,
++		struct netlink_ext_ack *extack)
++#else
  static int mlx5e_xfrm_add_state(struct xfrm_state *x)
++#endif
  {
  	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
 +#ifdef HAVE_NET_DEVICE_REAL_DEV
@@ -137,7 +145,7 @@ Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
  	struct mlx5_accel_esp_xfrm_attrs attrs;
  	struct mlx5e_priv *priv;
  	unsigned int sa_handle;
-@@ -641,7 +684,11 @@ static int mlx5e_xfrm_add_state(struct x
+@@ -641,7 +689,11 @@ static int mlx5e_xfrm_add_state(struct x
  	if (err)
  		goto err_hw_ctx;
  
@@ -149,7 +157,7 @@ Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
  		err = mlx5e_ipsec_sadb_rx_add(sa_entry, sa_handle);
  		if (err)
  			goto err_add_rule;
-@@ -676,7 +723,11 @@ static void mlx5e_xfrm_del_state(struct
+@@ -676,7 +728,11 @@ static void mlx5e_xfrm_del_state(struct
  	if (!sa_entry || sa_entry->is_removed)
  		return;
  
@@ -161,7 +169,7 @@ Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
  		mlx5e_ipsec_sadb_rx_del(sa_entry);
  	else
  		mlx5e_ipsec_sadb_tx_del(sa_entry);
-@@ -812,6 +863,7 @@ struct mlx5e_ipsec_modify_state_work {
+@@ -812,6 +868,7 @@ struct mlx5e_ipsec_modify_state_work {
  	struct mlx5e_ipsec_sa_entry	*sa_entry;
  };
  
@@ -169,7 +177,7 @@ Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
  static void _update_xfrm_state(struct work_struct *work)
  {
  	int ret;
-@@ -851,13 +903,16 @@ static void mlx5e_xfrm_advance_esn_state
+@@ -851,13 +908,16 @@ static void mlx5e_xfrm_advance_esn_state
  	INIT_WORK(&modify_work->work, _update_xfrm_state);
  	WARN_ON(!queue_work(sa_entry->ipsec->wq, &modify_work->work));
  }
@@ -186,7 +194,7 @@ Change-Id: I0b3d2b27c18b214baa2c63650b331cd82395dacd
  };
  
  void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)
-@@ -964,14 +1019,22 @@ static void _mlx5e_ipsec_async_event(str
+@@ -964,14 +1024,22 @@ static void _mlx5e_ipsec_async_event(str
  		goto out_xs_state;
  
  	/* Life time event */

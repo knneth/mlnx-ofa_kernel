@@ -1021,7 +1021,8 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 		props->max_mw = 1 << MLX5_CAP_GEN(mdev, log_max_mkey);
 		/* We support 'Gappy' memory registration too */
 #ifdef CONFIG_GPU_DIRECT_STORAGE
-		if (MLX5_CAP_GEN(mdev, ats) == MLX5_CAP_GEN(mdev, relaxed_ordering_read))
+		if (MLX5_CAP_GEN(mdev, ats) ==
+		    MLX5_CAP_GEN(mdev, relaxed_ordering_read_pci_enabled))
 			props->device_cap_flags |= IB_DEVICE_SG_GAPS_REG;
 #else
 		props->device_cap_flags |= IB_DEVICE_SG_GAPS_REG;

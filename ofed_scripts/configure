@@ -485,6 +485,14 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
 	fi
 
+# Define HAVE_DEVICE_ADD_DISK_3_ARGS from other flags
+	if check_compat_config_h_var HAVE_DEVICE_ADD_DISK_3_ARGS_AND_RETURN ||
+	   check_compat_config_h_var HAVE_DEVICE_ADD_DISK_3_ARGS_NO_RETURN
+	then
+		set_complex_define_to_config_h HAVE_DEVICE_ADD_DISK_3_ARGS
+	else
+		unset_complex_define_to_config_h HAVE_DEVICE_ADD_DISK_3_ARGS
+	fi
 }
 
 check_kerver_rh()

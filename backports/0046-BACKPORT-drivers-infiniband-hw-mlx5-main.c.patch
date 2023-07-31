@@ -18,7 +18,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  struct mlx5_ib_event_work {
  	struct work_struct	work;
  	union {
-@@ -2204,6 +2207,12 @@ static void mlx5_ib_dealloc_ucontext(str
+@@ -2205,6 +2208,12 @@ static void mlx5_ib_dealloc_ucontext(str
  	struct mlx5_ib_dev *dev = to_mdev(ibcontext->device);
  	struct mlx5_bfreg_info *bfregi;
  
@@ -31,7 +31,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  	bfregi = &context->bfregi;
  	mlx5_ib_dealloc_transport_domain(dev, context->tdn, context->devx_uid);
  
-@@ -2258,9 +2267,11 @@ static int get_extended_index(unsigned l
+@@ -2259,9 +2268,11 @@ static int get_extended_index(unsigned l
  }
  
  
@@ -43,7 +43,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  
  static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
  {
-@@ -2504,6 +2515,7 @@ static int mlx5_ib_mmap(struct ib_uconte
+@@ -2505,6 +2516,7 @@ static int mlx5_ib_mmap(struct ib_uconte
  		if (!dev->wc_support)
  			return -EPERM;
  		fallthrough;
@@ -51,7 +51,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  	case MLX5_IB_MMAP_NC_PAGE:
  	case MLX5_IB_MMAP_REGULAR_PAGE:
  		return uar_mmap(dev, command, vma, context);
-@@ -3827,7 +3839,9 @@ static const struct uapi_definition mlx5
+@@ -3828,7 +3840,9 @@ static const struct uapi_definition mlx5
  static void mlx5_ib_stage_init_cleanup(struct mlx5_ib_dev *dev)
  {
  	mlx5_ib_cleanup_multiport_master(dev);
@@ -61,7 +61,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  	mutex_destroy(&dev->cap_mask_mutex);
  	WARN_ON(!xa_empty(&dev->sig_mrs));
  	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
-@@ -3931,7 +3945,9 @@ static const struct ib_device_ops mlx5_i
+@@ -3932,7 +3946,9 @@ static const struct ib_device_ops mlx5_i
  	.destroy_qp = mlx5_ib_destroy_qp,
  	.destroy_srq = mlx5_ib_destroy_srq,
  	.detach_mcast = mlx5_ib_mcg_detach,
@@ -71,7 +71,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  	.drain_rq = mlx5_ib_drain_rq,
  	.drain_sq = mlx5_ib_drain_sq,
  	.device_group = &mlx5_attr_group,
-@@ -3961,7 +3977,9 @@ static const struct ib_device_ops mlx5_i
+@@ -3962,7 +3978,9 @@ static const struct ib_device_ops mlx5_i
  	.query_srq = mlx5_ib_query_srq,
  	.query_ucontext = mlx5_ib_query_ucontext,
  	.reg_user_mr = mlx5_ib_reg_user_mr,
@@ -81,7 +81,7 @@ Change-Id: Ia4e7f7c6ba5e6c94797a77cb8d8228b195f8b5b3
  	.req_notify_cq = mlx5_ib_arm_cq,
  	.rereg_user_mr = mlx5_ib_rereg_user_mr,
  	.resize_cq = mlx5_ib_resize_cq,
-@@ -3992,9 +4010,11 @@ static const struct ib_device_ops mlx5_i
+@@ -3993,9 +4011,11 @@ static const struct ib_device_ops mlx5_i
  
  static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {
  	.get_vf_config = mlx5_ib_get_vf_config,

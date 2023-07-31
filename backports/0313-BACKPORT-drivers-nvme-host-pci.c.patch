@@ -1647,7 +1647,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	if (dev->ctrl.oacs & NVME_CTRL_OACS_DBBUF_SUPP) {
  		result = nvme_dbbuf_dma_alloc(dev);
-@@ -3304,6 +4052,13 @@ static void nvme_async_probe(void *data,
+@@ -3315,6 +4063,13 @@ static void nvme_async_probe(void *data,
  	nvme_put_ctrl(&dev->ctrl);
  }
  
@@ -1661,7 +1661,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  {
  	int node, result = -ENOMEM;
-@@ -3319,6 +4074,13 @@ static int nvme_probe(struct pci_dev *pd
+@@ -3330,6 +4085,13 @@ static int nvme_probe(struct pci_dev *pd
  	if (!dev)
  		return -ENOMEM;
  
@@ -1675,7 +1675,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	dev->nr_write_queues = write_queues;
  	dev->nr_poll_queues = poll_queues;
  	dev->nr_allocated_queues = nvme_max_io_queues(dev) + 1;
-@@ -3404,10 +4166,24 @@ static int nvme_probe(struct pci_dev *pd
+@@ -3415,10 +4177,24 @@ static int nvme_probe(struct pci_dev *pd
  	put_device(dev->dev);
   free:
  	kfree(dev->queues);
@@ -1700,7 +1700,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  static void nvme_reset_prepare(struct pci_dev *pdev)
  {
  	struct nvme_dev *dev = pci_get_drvdata(pdev);
-@@ -3428,6 +4204,7 @@ static void nvme_reset_done(struct pci_d
+@@ -3439,6 +4215,7 @@ static void nvme_reset_done(struct pci_d
  	if (!nvme_try_sched_reset(&dev->ctrl))
  		flush_work(&dev->ctrl.reset_work);
  }
@@ -1708,7 +1708,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  static void nvme_shutdown(struct pci_dev *pdev)
  {
-@@ -3473,6 +4250,7 @@ static void nvme_remove(struct pci_dev *
+@@ -3484,6 +4261,7 @@ static void nvme_remove(struct pci_dev *
  	nvme_uninit_ctrl(&dev->ctrl);
  }
  
@@ -1716,7 +1716,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  #ifdef CONFIG_PM_SLEEP
  static int nvme_get_power_state(struct nvme_ctrl *ctrl, u32 *ps)
  {
-@@ -3600,6 +4378,7 @@ static const struct dev_pm_ops nvme_dev_
+@@ -3611,6 +4389,7 @@ static const struct dev_pm_ops nvme_dev_
  	.restore	= nvme_simple_resume,
  };
  #endif /* CONFIG_PM_SLEEP */
@@ -1724,7 +1724,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  static pci_ers_result_t nvme_error_detected(struct pci_dev *pdev,
  						pci_channel_state_t state)
-@@ -3648,11 +4427,20 @@ static const struct pci_error_handlers n
+@@ -3659,11 +4438,20 @@ static const struct pci_error_handlers n
  	.error_detected	= nvme_error_detected,
  	.slot_reset	= nvme_slot_reset,
  	.resume		= nvme_error_resume,
@@ -1745,7 +1745,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_VDEVICE(INTEL, 0x0953),	/* Intel 750/P3500/P3600/P3700 */
  		.driver_data = NVME_QUIRK_STRIPE_SIZE |
  				NVME_QUIRK_DEALLOCATE_ZEROES, },
-@@ -3666,6 +4454,20 @@ static const struct pci_device_id nvme_i
+@@ -3677,6 +4465,20 @@ static const struct pci_device_id nvme_i
  	{ PCI_VDEVICE(INTEL, 0x0a55),	/* Dell Express Flash P4600 */
  		.driver_data = NVME_QUIRK_STRIPE_SIZE |
  				NVME_QUIRK_DEALLOCATE_ZEROES, },
@@ -1766,7 +1766,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_VDEVICE(INTEL, 0xf1a5),	/* Intel 600P/P3100 */
  		.driver_data = NVME_QUIRK_NO_DEEPEST_PS |
  				NVME_QUIRK_MEDIUM_PRIO_SQ |
-@@ -3677,8 +4479,10 @@ static const struct pci_device_id nvme_i
+@@ -3688,8 +4490,10 @@ static const struct pci_device_id nvme_i
  		.driver_data = NVME_QUIRK_IDENTIFY_CNS |
  				NVME_QUIRK_DISABLE_WRITE_ZEROES |
  				NVME_QUIRK_BOGUS_NID, },
@@ -1777,7 +1777,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_DEVICE(0x126f, 0x2263),	/* Silicon Motion unidentified */
  		.driver_data = NVME_QUIRK_NO_NS_DESC_LIST |
  				NVME_QUIRK_BOGUS_NID, },
-@@ -3740,6 +4544,7 @@ static const struct pci_device_id nvme_i
+@@ -3751,6 +4555,7 @@ static const struct pci_device_id nvme_i
  		.driver_data = NVME_QUIRK_BOGUS_NID, },
  	{ PCI_DEVICE(0x1e49, 0x0041),   /* ZHITAI TiPro7000 NVMe SSD */
  		.driver_data = NVME_QUIRK_NO_DEEPEST_PS, },
@@ -1785,7 +1785,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_DEVICE(PCI_VENDOR_ID_AMAZON, 0x0061),
  		.driver_data = NVME_QUIRK_DMA_ADDRESS_BITS_48, },
  	{ PCI_DEVICE(PCI_VENDOR_ID_AMAZON, 0x0065),
-@@ -3752,6 +4557,7 @@ static const struct pci_device_id nvme_i
+@@ -3763,6 +4568,7 @@ static const struct pci_device_id nvme_i
  		.driver_data = NVME_QUIRK_DMA_ADDRESS_BITS_48, },
  	{ PCI_DEVICE(PCI_VENDOR_ID_AMAZON, 0xcd02),
  		.driver_data = NVME_QUIRK_DMA_ADDRESS_BITS_48, },
@@ -1793,7 +1793,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2001),
  		.driver_data = NVME_QUIRK_SINGLE_VECTOR },
  	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2003) },
-@@ -3766,18 +4572,44 @@ static const struct pci_device_id nvme_i
+@@ -3777,18 +4583,44 @@ static const struct pci_device_id nvme_i
  };
  MODULE_DEVICE_TABLE(pci, nvme_id_table);
  
@@ -1838,7 +1838,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  	.err_handler	= &nvme_err_handler,
  };
  
-@@ -3811,7 +4643,9 @@ static int __init nvme_init(void)
+@@ -3822,7 +4654,9 @@ static int __init nvme_init(void)
  	BUILD_BUG_ON(sizeof(struct nvme_create_cq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_create_sq) != 64);
  	BUILD_BUG_ON(sizeof(struct nvme_delete_queue) != 64);
@@ -1848,7 +1848,7 @@ Change-Id: I126cff9b8793bd2de2ee0cce424f41fcebe7fb78
  
  	return pci_register_driver(&nvme_driver);
  }
-@@ -3824,6 +4658,9 @@ static void __exit nvme_exit(void)
+@@ -3835,6 +4669,9 @@ static void __exit nvme_exit(void)
  
  MODULE_AUTHOR("Matthew Wilcox <willy@linux.intel.com>");
  MODULE_LICENSE("GPL");

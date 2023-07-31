@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 
 Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
 ---
- net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 607 +++++++++++++++++++++++-
- 1 file changed, 606 insertions(+), 1 deletion(-)
+ net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 612 +++++++++++++++++++++++-
+ 1 file changed, 611 insertions(+), 1 deletion(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
@@ -918,7 +918,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_rq_dto_q);
  	if (ctxt)
  		list_del(&ctxt->rc_list);
-@@ -809,53 +1377,92 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -809,53 +1377,95 @@ int svc_rdma_recvfrom(struct svc_rqst *r
  		clear_bit(XPT_DATA, &xprt->xpt_flags);
  	spin_unlock(&rdma_xprt->sc_rq_dto_lock);
  
@@ -988,6 +988,9 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	rqstp->rq_xprt_ctxt = ctxt;
  	rqstp->rq_prot = IPPROTO_MAX;
  	svc_xprt_copy_addrs(rqstp, xprt);
++#ifndef HAVE_SVC_XPRT_XPO_SECURE_PORT
++	set_bit(RQ_SECURE, &rqstp->rq_flags);
++#endif
  	return rqstp->rq_arg.len;
  
 +#ifndef HAVE_SVC_RDMA_PCL

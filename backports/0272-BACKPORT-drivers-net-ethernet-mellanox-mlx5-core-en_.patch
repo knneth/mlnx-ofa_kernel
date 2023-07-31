@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
 
 Change-Id: I77671164640664e1f5efd0d4089304646e82b23e
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tc.c   | 481 +++++++++++++++++-
- 1 file changed, 469 insertions(+), 12 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_tc.c   | 487 +++++++++++++++++-
+ 1 file changed, 472 insertions(+), 15 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.c
@@ -620,24 +620,31 @@ Change-Id: I77671164640664e1f5efd0d4089304646e82b23e
  			netdev_warn(priv->netdev, "attempt to offload an unsupported field (cmd %d)\n", cmd);
  			print_hex_dump(KERN_WARNING, "mask: ", DUMP_PREFIX_ADDRESS,
  				       16, 1, cmd_masks, sizeof(zero_masks), true);
-@@ -4147,6 +4286,7 @@ static int alloc_tc_pedit_action(struct
+@@ -4141,10 +4280,11 @@ static int verify_offload_pedit_fields(s
+ }
+ 
+ static int alloc_tc_pedit_action(struct mlx5e_priv *priv, int namespace,
+-				 struct mlx5e_tc_flow_parse_attr *parse_attr,
+-				 u32 *action_flags,
+-				 struct netlink_ext_ack *extack)
++		struct mlx5e_tc_flow_parse_attr *parse_attr,
++		u32 *action_flags,
++		struct netlink_ext_ack *extack)
  {
++#if defined(HAVE_TCF_PEDIT_TCFP_KEYS_EX) || defined(HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX)
  	int err;
  
-+#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
  	err = offload_pedit_fields(priv, namespace, parse_attr, action_flags, extack);
- 	if (err)
- 		goto out_dealloc_parsed_actions;
-@@ -4155,6 +4295,9 @@ static int alloc_tc_pedit_action(struct
- 	if (err)
- 		goto out_dealloc_parsed_actions;
- 
-+#else /* HAVE_TCF_PEDIT_TCFP_KEYS_EX */
-+	return -EOPNOTSUPP;
-+#endif /* HAVE_TCF_PEDIT_TCFP_KEYS_EX */
- 	return 0;
- 
+@@ -4160,6 +4300,9 @@ static int alloc_tc_pedit_action(struct
  out_dealloc_parsed_actions:
+ 	mlx5e_mod_hdr_dealloc(&parse_attr->mod_hdr_acts);
+ 	return err;
++#else /* HAVE_TCF_PEDIT_TCFP_KEYS_EX || HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX */
++	return -EOPNOTSUPP;
++#endif /* HAVE_TCF_PEDIT_TCFP_KEYS_EX || HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX */
+ }
+ 
+ struct ip_ttl_word {
 @@ -4203,8 +4346,10 @@ is_action_keys_supported(const struct fl
  			*modify_tuple = true;
  

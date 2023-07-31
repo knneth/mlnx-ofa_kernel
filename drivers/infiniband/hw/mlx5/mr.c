@@ -80,12 +80,20 @@ static void set_mkc_access_pd_addr_fields(void *mkc, int acc, u64 start_addr,
 	MLX5_SET(mkc, mkc, lw, !!(acc & IB_ACCESS_LOCAL_WRITE));
 	MLX5_SET(mkc, mkc, lr, 1);
 
-	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
-		MLX5_SET(mkc, mkc, relaxed_ordering_write,
-			 !!(acc & IB_ACCESS_RELAXED_ORDERING));
-	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read))
-		MLX5_SET(mkc, mkc, relaxed_ordering_read,
-			 !!(acc & IB_ACCESS_RELAXED_ORDERING));
+	if (acc & IB_ACCESS_RELAXED_ORDERING) {
+		bool is_vf = mlx5_core_is_vf(dev->mdev);
+		bool ro_read = MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read);
+		bool ro_read_pci_en =
+			MLX5_CAP_GEN(dev->mdev,
+				     relaxed_ordering_read_pci_enabled);
+
+		if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
+			MLX5_SET(mkc, mkc, relaxed_ordering_write, 1);
+		if (ro_read ||
+		    (ro_read_pci_en &&
+		     (is_vf || pcie_relaxed_ordering_enabled(dev->mdev->pdev))))
+			MLX5_SET(mkc, mkc, relaxed_ordering_read, 1);
+	}
 
 	MLX5_SET(mkc, mkc, pd, to_mpd(pd)->pdn);
 	MLX5_SET(mkc, mkc, qpn, 0xffffff);

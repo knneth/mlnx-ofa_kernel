@@ -587,6 +587,9 @@ static void nvmet_execute_identify_ns(struct nvmet_req *req)
 
 	if (req->ns->readonly)
 		id->nsattr |= (1 << 0);
+
+	if (req->port->offload)
+		id->noiob = cpu_to_le16(nvme_find_noiob_from_bdev(req->ns->bdev));
 done:
 	if (!status)
 		status = nvmet_copy_to_sgl(req, 0, id, sizeof(*id));

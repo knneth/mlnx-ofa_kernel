@@ -5,6 +5,11 @@
 
 #include_next <linux/string.h>
 
+#ifndef unsafe_memcpy
+#define unsafe_memcpy(dst, src, bytes, justification)           \
+	                memcpy(dst, src, bytes)
+#endif
+
 #ifndef HAVE_STRNICMP
 #ifndef __HAVE_ARCH_STRNICMP
 #define strnicmp strncasecmp

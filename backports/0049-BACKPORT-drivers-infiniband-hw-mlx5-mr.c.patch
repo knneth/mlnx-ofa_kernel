@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
 
 Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
 ---
- drivers/infiniband/hw/mlx5/mr.c | 70 ++++++++++++++++++++++++++++-----
- 1 file changed, 61 insertions(+), 9 deletions(-)
+ drivers/infiniband/hw/mlx5/mr.c | 76 +++++++++++++++++++++++++++++----
+ 1 file changed, 67 insertions(+), 9 deletions(-)
 
 --- a/drivers/infiniband/hw/mlx5/mr.c
 +++ b/drivers/infiniband/hw/mlx5/mr.c
@@ -18,7 +18,31 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  #include <rdma/ib_umem.h>
  #include <rdma/ib_umem_odp.h>
  #include <rdma/ib_verbs.h>
-@@ -601,12 +603,19 @@ static void clean_keys(struct mlx5_ib_de
+@@ -81,7 +83,9 @@ static void set_mkc_access_pd_addr_field
+ 	MLX5_SET(mkc, mkc, lr, 1);
+ 
+ 	if (acc & IB_ACCESS_RELAXED_ORDERING) {
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 		bool is_vf = mlx5_core_is_vf(dev->mdev);
++#endif
+ 		bool ro_read = MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read);
+ 		bool ro_read_pci_en =
+ 			MLX5_CAP_GEN(dev->mdev,
+@@ -89,9 +93,13 @@ static void set_mkc_access_pd_addr_field
+ 
+ 		if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
+ 			MLX5_SET(mkc, mkc, relaxed_ordering_write, 1);
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 		if (ro_read ||
+ 		    (ro_read_pci_en &&
+ 		     (is_vf || pcie_relaxed_ordering_enabled(dev->mdev->pdev))))
++#else
++		if (ro_read || ro_read_pci_en)
++#endif
+ 			MLX5_SET(mkc, mkc, relaxed_ordering_read, 1);
+ 	}
+ 
+@@ -609,12 +617,19 @@ static void clean_keys(struct mlx5_ib_de
  		kfree(mr);
  	}
  }
@@ -41,7 +65,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  }
  
  int mlx5_mr_cache_init(struct mlx5_ib_dev *dev)
-@@ -624,7 +633,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
+@@ -632,7 +647,11 @@ int mlx5_mr_cache_init(struct mlx5_ib_de
  	}
  
  	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
@@ -53,7 +77,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  	for (i = 0; i < MAX_MR_CACHE_ENTRIES; i++) {
  		ent = &cache->ent[i];
  		INIT_LIST_HEAD(&ent->head);
-@@ -936,8 +949,9 @@ static void *mlx5_ib_alloc_xlt(size_t *n
+@@ -944,8 +963,9 @@ static void *mlx5_ib_alloc_xlt(size_t *n
  	size_t size;
  	void *res = NULL;
  
@@ -64,7 +88,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  	/*
  	 * MLX5_IB_UPD_XLT_ATOMIC doesn't signal an atomic context just that the
  	 * allocation can't trigger any kind of reclaim.
-@@ -1097,13 +1111,14 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
+@@ -1105,13 +1125,14 @@ int mlx5_ib_update_xlt(struct mlx5_ib_mr
  		return -ENOMEM;
  	pages_iter = sg.length / desc_size;
  	orig_sg_length = sg.length;
@@ -80,7 +104,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  
  	wr.page_shift = page_shift;
  
-@@ -1163,8 +1178,12 @@ int mlx5_ib_update_mr_pas(struct mlx5_ib
+@@ -1171,8 +1192,12 @@ int mlx5_ib_update_mr_pas(struct mlx5_ib
  	orig_sg_length = sg.length;
  
  	cur_mtt = mtt;
@@ -93,7 +117,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  			     BIT(mr->page_shift)) {
  		if (cur_mtt == (void *)mtt + sg.length) {
  			dma_sync_single_for_device(ddev, sg.addr, sg.length,
-@@ -1442,6 +1461,7 @@ static struct ib_mr *create_real_mr(stru
+@@ -1450,6 +1475,7 @@ static struct ib_mr *create_real_mr(stru
  	return &mr->ibmr;
  }
  
@@ -101,7 +125,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  					u64 iova, int access_flags,
  					struct ib_udata *udata)
-@@ -1463,7 +1483,7 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1471,7 +1497,7 @@ static struct ib_mr *create_user_odp_mr(
  		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
  			return ERR_PTR(-EINVAL);
  
@@ -110,7 +134,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  		if (IS_ERR(mr))
  			return ERR_CAST(mr);
  		return &mr->ibmr;
-@@ -1473,8 +1493,12 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1481,8 +1507,12 @@ static struct ib_mr *create_user_odp_mr(
  	if (!mlx5_ib_can_load_pas_with_umr(dev, length))
  		return ERR_PTR(-EINVAL);
  
@@ -123,7 +147,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  	if (IS_ERR(odp))
  		return ERR_CAST(odp);
  
-@@ -1499,6 +1523,7 @@ err_dereg_mr:
+@@ -1507,6 +1537,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -131,7 +155,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  
  struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
  				  u64 iova, int access_flags,
-@@ -1512,17 +1537,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1520,17 +1551,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  
  	mlx5_ib_dbg(dev, "start 0x%llx, iova 0x%llx, length 0x%llx, access_flags 0x%x\n",
  		    start, iova, length, access_flags);
@@ -158,7 +182,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
  {
  	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
-@@ -1538,10 +1571,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
+@@ -1546,10 +1585,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
  }
  
  static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
@@ -171,7 +195,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 offset,
  					 u64 length, u64 virt_addr,
  					 int fd, int access_flags,
-@@ -1597,6 +1631,7 @@ err_dereg_mr:
+@@ -1605,6 +1645,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -179,7 +203,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  
  /**
   * revoke_mr - Fence all DMA on the MR
-@@ -1809,8 +1844,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+@@ -1817,8 +1858,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
  	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
  		struct ib_umem *new_umem;
  		unsigned long page_size;
@@ -192,7 +216,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2912,10 +2950,17 @@ static struct attribute *order_default_a
+@@ -2920,10 +2964,17 @@ static struct attribute *order_default_a
  	&order_attr_size.attr,
  	NULL
  };
@@ -210,7 +234,7 @@ Change-Id: I2fb7d75fcbc1a34d2783042afe265b37b5f09fae
  };
  
  
-@@ -3044,10 +3089,17 @@ static struct attribute *cache_default_a
+@@ -3052,10 +3103,17 @@ static struct attribute *cache_default_a
  	&cache_attr_rel_timeout.attr,
  	NULL
  };

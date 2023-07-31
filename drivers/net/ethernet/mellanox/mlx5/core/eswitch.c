@@ -1941,6 +1941,9 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 		esw->offloads.encap = DEVLINK_ESWITCH_ENCAP_MODE_BASIC;
 	else
 		esw->offloads.encap = DEVLINK_ESWITCH_ENCAP_MODE_NONE;
+	if (MLX5_ESWITCH_MANAGER(dev) &&
+	    mlx5_esw_vport_match_metadata_supported(esw))
+		esw->flags |= MLX5_ESWITCH_VPORT_MATCH_METADATA;
 
 	BLOCKING_INIT_NOTIFIER_HEAD(&esw->n_head);
 
@@ -1959,6 +1962,7 @@ matchid_err:
 abort:
 	if (esw->work_queue)
 		destroy_workqueue(esw->work_queue);
+	dev->priv.eswitch = NULL;
 	kfree(esw);
 	return err;
 }

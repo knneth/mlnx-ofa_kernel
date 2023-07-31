@@ -146,6 +146,7 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		struct rx_res_debugfs *rx_res_dbg = kvzalloc(sizeof(*rx_res_dbg), GFP_KERNEL);
 
 		rx_res_dbg->i = i;
+		rx_res_dbg->rx_res = priv->rx_res;
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
 	}
@@ -154,6 +155,7 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		struct rx_res_debugfs *rx_res_dbg = kvzalloc(sizeof(*rx_res_dbg), GFP_KERNEL);
 
 		rx_res_dbg->i = i;
+		rx_res_dbg->rx_res = priv->rx_res;
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
 	}

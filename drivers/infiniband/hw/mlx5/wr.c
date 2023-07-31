@@ -419,8 +419,11 @@ static void set_reg_mkey_segment(struct mlx5_ib_dev *dev,
 		MLX5_SET(mkc, seg, relaxed_ordering_write,
 			 !!(umrwr->access_flags & IB_ACCESS_RELAXED_ORDERING));
 	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read_umr))
-		MLX5_SET(mkc, seg, relaxed_ordering_read,
-			 !!(umrwr->access_flags & IB_ACCESS_RELAXED_ORDERING));
+		if (umrwr->access_flags & IB_ACCESS_RELAXED_ORDERING &&
+		    (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read) ||
+		     mlx5_core_is_vf(dev->mdev) ||
+		     pcie_relaxed_ordering_enabled(dev->mdev->pdev)))
+			MLX5_SET(mkc, seg, relaxed_ordering_read, 1);
 
 	if (umrwr->pd)
 		MLX5_SET(mkc, seg, pd, to_mpd(umrwr->pd)->pdn);

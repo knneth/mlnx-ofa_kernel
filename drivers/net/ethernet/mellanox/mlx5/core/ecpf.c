@@ -180,6 +180,9 @@ static ssize_t max_tx_rate_store(struct kobject *kobj,
 	u32 min_tx_rate;
 	int err;
 
+	if (IS_ERR(evport))
+		return PTR_ERR(evport);
+
 	mutex_lock(&esw->state_lock);
 	min_tx_rate = evport->qos.min_rate;
 	mutex_unlock(&esw->state_lock);
@@ -217,6 +220,9 @@ static ssize_t min_tx_rate_store(struct kobject *kobj,
 	u32 max_tx_rate;
 	u32 min_tx_rate;
 	int err;
+
+	if (IS_ERR(evport))
+		return PTR_ERR(evport);
 
 	mutex_lock(&esw->state_lock);
 	max_tx_rate = evport->qos.max_rate;
@@ -420,6 +426,9 @@ static ssize_t config_show(struct kobject *kobj,
 	char *p = buf;
 	u8 port_state;
 
+	if (IS_ERR(evport))
+		return PTR_ERR(evport);
+
 	mutex_lock(&esw->state_lock);
 	ivi = &evport->info;
 	p += _sprintf(p, buf, "MAC        : %pM\n", ivi->mac);
@@ -529,7 +538,7 @@ void mlx5_smartnic_sysfs_init(struct net_device *dev)
 	int err;
 	int i;
 
-	if (!mlx5_core_is_ecpf(mdev))
+	if (!mlx5_core_is_ecpf(mdev) || !mlx5_esw_host_functions_enabled(mdev))
 		return;
 
 	esw = mdev->priv.eswitch;
@@ -584,7 +593,7 @@ void mlx5_smartnic_sysfs_cleanup(struct net_device *dev)
 	struct mlx5_eswitch *esw;
 	int i;
 
-	if (!mlx5_core_is_ecpf(mdev))
+	if (!mlx5_core_is_ecpf(mdev) || !mlx5_esw_host_functions_enabled(mdev))
 		return;
 
 	esw = mdev->priv.eswitch;
@@ -674,7 +683,7 @@ int mlx5_regex_sysfs_init(struct mlx5_core_dev *dev)
 	u16 num_vports;
 	int i, ret = 0;
 
-	if (!mlx5_core_is_ecpf(dev))
+	if (!mlx5_core_is_ecpf(dev) || !mlx5_esw_host_functions_enabled(dev))
 		return 0;
 
 	regex->kobj = kobject_create_and_add("regex", &device->kobj);
@@ -723,7 +732,7 @@ void mlx5_regex_sysfs_cleanup(struct mlx5_core_dev *dev)
 	struct mlx5_regex_vport *vport;
 	u16 num_vports, i;
 
-	if (!mlx5_core_is_ecpf(dev))
+	if (!mlx5_core_is_ecpf(dev) || !mlx5_esw_host_functions_enabled(dev))
 		return;
 
 	num_vports = mlx5_core_max_vfs(dev) + 1;

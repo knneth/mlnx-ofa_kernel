@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
 
 Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
 ---
- drivers/infiniband/core/uverbs_main.c | 68 +++++++++++++++++++++++++--
- 1 file changed, 64 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/uverbs_main.c | 72 +++++++++++++++++++++++++--
+ 1 file changed, 68 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
@@ -187,7 +187,19 @@ Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
  
  	if (device->ops.disassociate_ucontext) {
  		/* We disassociate HW resources and immediately return.
-@@ -1274,6 +1329,7 @@ static int __init ib_uverbs_init(void)
+@@ -1237,7 +1292,11 @@ static void ib_uverbs_remove_one(struct
+ 	put_device(&uverbs_dev->dev);
+ }
+ 
++#ifdef HAVE_DEVNODE_GET_CONST_DEVICE
++static char *uverbs_devnode(const struct device *dev, umode_t *mode)
++#else
+ static char *uverbs_devnode(struct device *dev, umode_t *mode)
++#endif
+ {
+ 	if (mode)
+ 		*mode = 0666;
+@@ -1274,6 +1333,7 @@ static int __init ib_uverbs_init(void)
  	uverbs_class->devnode = uverbs_devnode;
  
  	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
@@ -195,7 +207,7 @@ Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
  	if (ret) {
  		pr_err("user_verbs: couldn't create abi_version attribute\n");
  		goto out_class;
-@@ -1310,7 +1366,11 @@ static void __exit ib_uverbs_cleanup(voi
+@@ -1310,7 +1370,11 @@ static void __exit ib_uverbs_cleanup(voi
  				 IB_UVERBS_NUM_FIXED_MINOR);
  	unregister_chrdev_region(dynamic_uverbs_dev,
  				 IB_UVERBS_NUM_DYNAMIC_MINOR);

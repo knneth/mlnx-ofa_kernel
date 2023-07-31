@@ -1,5 +1,6 @@
 [Unit]
 Description=mlnx_interface_mgr - configure %I
+NoDefaultDependencies=no
 
 [Service]
 Type=simple
