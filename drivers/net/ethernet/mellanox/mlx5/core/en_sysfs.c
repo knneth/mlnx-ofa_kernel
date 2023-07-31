@@ -839,7 +839,7 @@ static ssize_t mlx5e_show_buffer_size(struct device *device,
 	len += sprintf(buf + len, "Port buffer size = %d\n", port_buffer.port_buffer_size);
 	len += sprintf(buf + len, "Spare buffer size = %d\n", port_buffer.spare_buffer_size);
 	len += sprintf(buf + len, "Buffer\tSize\txoff_threshold\txon_threshold\n");
-	for (i = 0; i < MLX5E_MAX_BUFFER; i++)
+	for (i = 0; i < MLX5E_MAX_NETWORK_BUFFER; i++)
 		len += sprintf(buf + len, "%d\t%d\t%d\t\t%d\n", i,
 			       port_buffer.buffer[i].size,
 			       port_buffer.buffer[i].xoff,
@@ -855,7 +855,7 @@ static ssize_t mlx5e_store_buffer_size(struct device *device,
 	struct net_device *dev = to_net_dev(device);
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5e_port_buffer port_buffer;
-	u32 buffer_size[MLX5E_MAX_BUFFER];
+	u32 buffer_size[MLX5E_MAX_NETWORK_BUFFER];
 	unsigned int temp;
 	char *options;
 	char *p;
@@ -864,21 +864,21 @@ static ssize_t mlx5e_store_buffer_size(struct device *device,
 	int err;
 
 	options = kstrdup(buf, GFP_KERNEL);
-	while ((p = strsep(&options, ",")) != NULL && i < MLX5E_MAX_BUFFER) {
+	while ((p = strsep(&options, ",")) != NULL && i < MLX5E_MAX_NETWORK_BUFFER) {
 		if (sscanf(p, "%u", &temp) != 1)
 			continue;
 		buffer_size[i] = temp;
 		i++;
 	}
 
-	if (i != MLX5E_MAX_BUFFER)
+	if (i != MLX5E_MAX_NETWORK_BUFFER)
 		return -EINVAL;
 
 	err = mlx5e_port_query_buffer(priv, &port_buffer);
 	if (err)
 		return err;
 
-	for (i = 0; i < MLX5E_MAX_BUFFER; i++) {
+	for (i = 0; i < MLX5E_MAX_NETWORK_BUFFER; i++) {
 		if (port_buffer.buffer[i].size != buffer_size[i]) {
 			changed = MLX5E_PORT_BUFFER_SIZE;
 			break;
@@ -1035,8 +1035,12 @@ static ssize_t name##_show(struct device *d,				\
 {									\
 	struct net_device *dev = to_net_dev(d);				\
 	struct mlx5e_priv *priv = netdev_priv(dev);			\
-	struct mlx5e_pport_stats *pstats = &priv->stats.pport;		\
+	struct mlx5e_pport_stats *pstats;				\
 									\
+	mutex_lock(&priv->state_lock);					\
+	mlx5e_stats_update(priv);					\
+	mutex_unlock(&priv->state_lock);				\
+	pstats = &priv->stats.pport;					\
 	return sprintf(buf, "%llu\n",					\
 			PPORT_802_3_GET(pstats, cnt));			\
 }									\
@@ -1226,7 +1230,7 @@ static struct kobj_type prio_hp_sysfs = {
 
 int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
 {
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	struct mlx5_prio_hp *prio_hp = tc->prio_hp;
 	int err;
 
@@ -1247,7 +1251,7 @@ static ssize_t prio_hp_num_store(struct device *device, struct device_attribute 
 				 const char *buf, size_t count)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	struct net_device *peer_dev;
 	char ifname[IFNAMSIZ];
 	int num_hp;
@@ -1295,7 +1299,7 @@ static ssize_t prio_hp_num_show(struct device *device, struct device_attribute *
 				char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
 	mutex_lock(&priv->state_lock);
@@ -1309,7 +1313,7 @@ static ssize_t hp_oob_cnt_mode_store(struct device *device, struct device_attrib
 				     const char *buf, size_t count)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	struct net_device *peer_dev;
 	char ifname[IFNAMSIZ];
 	char mode[5];
@@ -1357,7 +1361,7 @@ static ssize_t hp_oob_cnt_mode_show(struct device *device, struct device_attribu
 				    char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
 	mutex_lock(&priv->state_lock);
@@ -1391,7 +1395,7 @@ static ssize_t pp_burst_size_store(struct device *device, struct device_attribut
 				   const char *buf, size_t count)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	int burst_size;
 	int err;
 
@@ -1422,7 +1426,7 @@ static ssize_t pp_burst_size_show(struct device *device, struct device_attribute
 				  char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5e_tc_table *tc = priv->fs->tc;
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
 	mutex_lock(&priv->state_lock);

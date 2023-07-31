@@ -55,9 +55,15 @@ enum {
 	MLX5_VPORT_UPLINK		= 0xffff
 };
 
+int mlx5_get_max_alloc_icm_th(struct mlx5_core_dev *mdev, u16 vhca_id, u32 *max_alloc_icm_th);
+int mlx5_set_max_alloc_icm_th(struct mlx5_core_dev *mdev, u16 vhca_id, u32 max_alloc_icm_th);
+bool mlx5_vhca_icm_ctrl_supported(struct mlx5_core_dev *mdev);
 u8 mlx5_query_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport);
+u8 mlx5_query_vport_direction(struct mlx5_core_dev *mdev, u8 opmod, u16 vport);
 int mlx5_modify_vport_admin_state(struct mlx5_core_dev *mdev, u8 opmod,
 				  u16 vport, u8 other_vport, u8 state);
+int mlx5_modify_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport,
+			    u8 other_vport, u8 state, u8 direction);
 int mlx5_query_nic_vport_mac_address(struct mlx5_core_dev *mdev,
 				     u16 vport, bool other, u8 *addr);
 int mlx5_query_mac_address(struct mlx5_core_dev *mdev, u8 *addr);
@@ -135,6 +141,8 @@ int mlx5_nic_vport_affiliate_multiport(struct mlx5_core_dev *master_mdev,
 int mlx5_nic_vport_unaffiliate_multiport(struct mlx5_core_dev *port_mdev);
 
 u64 mlx5_query_nic_system_image_guid(struct mlx5_core_dev *mdev);
-int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out,
+int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 vport, void *out,
 				  u16 opmod);
+int mlx5_vport_get_other_func_cap_cur(struct mlx5_core_dev *dev, u16 vport, void *out,
+				      u16 opmod);
 #endif /* __MLX5_VPORT_H__ */

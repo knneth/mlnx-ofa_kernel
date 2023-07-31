@@ -196,7 +196,6 @@ mlx5_sf_dev_state_change_handler(struct notifier_block *nb, unsigned long event_
 	default:
 		break;
 	}
-
 	mutex_unlock(&table->table_lock);
 	return 0;
 }

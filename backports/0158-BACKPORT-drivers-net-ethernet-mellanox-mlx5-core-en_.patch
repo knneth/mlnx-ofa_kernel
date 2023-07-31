@@ -1,88 +1,113 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
 
-Change-Id: I6fd64179c6c806996545624eff5b75134a3f3c62
+Change-Id: Icb6e366120926e2b866ed57ff1676be86681d82b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_fs.c | 13 +++++++++++--
- 1 file changed, 11 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls.h        | 38 +++++++++++++++++--
+ 1 file changed, 34 insertions(+), 4 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
-@@ -81,8 +81,9 @@ static void mlx5e_add_l2_to_hash(struct
- 	struct mlx5e_l2_hash_node *hn;
- 	int ix = mlx5e_hash_l2(addr);
- 	int found = 0;
-+	COMPAT_HL_NODE
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+@@ -5,17 +5,28 @@
+ #define __MLX5E_KTLS_H__
  
--	hlist_for_each_entry(hn, &hash[ix], hlist)
-+	compat_hlist_for_each_entry(hn, &hash[ix], hlist)
- 		if (ether_addr_equal_64bits(hn->ai.addr, addr)) {
- 			found = 1;
- 			break;
-@@ -330,6 +331,7 @@ static int mlx5e_fs_add_any_vid_rules(st
- 	return mlx5e_add_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_ANY_STAG_VID, 0);
- }
+ #include <linux/debugfs.h>
++#ifdef HAVE_UAPI_LINUX_TLS_H
+ #include <linux/tls.h>
++#endif
++#ifdef HAVE_NET_TLS_H
+ #include <net/tls.h>
++#endif
+ #include "en.h"
  
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- static struct mlx5_flow_handle *
- mlx5e_add_trap_rule(struct mlx5_flow_table *ft, int trap_id, int tir_num)
+ #ifdef CONFIG_MLX5_EN_TLS
+ #include "lib/crypto.h"
+ 
++
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++int mlx5_ktls_create_key(struct mlx5_core_dev *mdev,
++			 struct tls_crypto_info *crypto_info, u32 *p_key_id);
++void mlx5_ktls_destroy_key(struct mlx5_core_dev *mdev, u32 key_id);
++#else
+ struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_pool,
+ 					     struct tls_crypto_info *crypto_info);
+ void mlx5_ktls_destroy_key(struct mlx5_crypto_dek_pool *dek_pool,
+ 			   struct mlx5_crypto_dek *dek);
++#endif
+ 
+ static inline bool mlx5e_is_ktls_device(struct mlx5_core_dev *mdev)
  {
-@@ -402,6 +404,7 @@ void mlx5e_remove_mac_trap(struct mlx5e_
- 		priv->fs->l2.trap_rule = NULL;
+@@ -40,24 +51,41 @@ static inline bool mlx5e_ktls_type_check
+ 		if (crypto_info->version == TLS_1_2_VERSION)
+ 			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_128);
+ 		break;
++#ifdef TLS_CIPHER_AES_GCM_256
+ 	case TLS_CIPHER_AES_GCM_256:
+ 		if (crypto_info->version == TLS_1_2_VERSION)
+ 			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_256);
+ 		break;
++#endif
  	}
+ 
+ 	return false;
  }
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
  
- void mlx5e_enable_cvlan_filter(struct mlx5e_priv *priv)
+ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
++#ifdef HAVE_KTLS_STRUCTS
+ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
++#else
++static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
++{
++}
++static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
++{
++	return 0;
++}
++#endif
+ int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
+ int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
+ struct mlx5e_ktls_resync_resp *
+ mlx5e_ktls_rx_resync_create_resp_list(void);
++#ifdef HAVE_KTLS_RX_SUPPORT
+ void mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list);
++#else
++static inline void
++mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list) {}
++#endif
+ 
+ static inline bool mlx5e_is_ktls_tx(struct mlx5_core_dev *mdev)
  {
-@@ -527,7 +530,9 @@ static void mlx5e_del_vlan_rules(struct
+@@ -85,7 +113,9 @@ struct mlx5e_tls {
+ 	struct mlx5e_tls_sw_stats sw_stats;
+ 	struct workqueue_struct *rx_wq;
+ 	struct mlx5e_tls_tx_pool *tx_pool;
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	struct mlx5_crypto_dek_pool *dek_pool;
++#endif
+ 	struct mlx5e_tls_debugfs debugfs;
+ };
  
- 	WARN_ON_ONCE(priv->fs->state_destroy);
+@@ -101,16 +131,16 @@ static inline void mlx5e_ktls_build_netd
+ {
+ }
  
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- 	mlx5e_remove_vlan_trap(priv);
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+-static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
++static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
+ {
+-	return 0;
+ }
  
- 	/* must be called after DESTROY bit is set and
- 	 * set_rx_mode is called and flushed
-@@ -538,7 +543,7 @@ static void mlx5e_del_vlan_rules(struct
+-static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
++static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
+ {
++	return 0;
+ }
  
- #define mlx5e_for_each_hash_node(hn, tmp, hash, i) \
- 	for (i = 0; i < MLX5E_L2_ADDR_HASH_SIZE; i++) \
--		hlist_for_each_entry_safe(hn, tmp, &hash[i], hlist)
-+		compat_hlist_for_each_entry_safe(hn, tmp, &hash[i], hlist)
- 
- static void mlx5e_execute_l2_action(struct mlx5e_flow_steering *fs,
- 				    struct mlx5e_l2_hash_node *hn)
-@@ -599,6 +604,7 @@ static void mlx5e_fill_addr_array(struct
- 	struct hlist_node *tmp;
- 	int i = 0;
- 	int hi;
-+	COMPAT_HL_NODE
- 
- 	addr_list = is_uc ? fs->l2.netdev_uc : fs->l2.netdev_mc;
- 
-@@ -629,6 +635,7 @@ static void mlx5e_vport_context_update_a
- 	int size;
- 	int err;
- 	int hi;
-+	COMPAT_HL_NODE
- 
- 	size = is_uc ? 0 : (fs->l2.broadcast_enabled ? 1 : 0);
- 	max_size = is_uc ?
-@@ -681,6 +688,7 @@ static void mlx5e_apply_netdev_addr(stru
- 	struct mlx5e_l2_hash_node *hn;
- 	struct hlist_node *tmp;
- 	int i;
-+	COMPAT_HL_NODE
- 
- 	mlx5e_for_each_hash_node(hn, tmp, fs->l2.netdev_uc, i)
- 		mlx5e_execute_l2_action(fs, hn);
-@@ -695,6 +703,7 @@ static void mlx5e_handle_netdev_addr(str
- 	struct mlx5e_l2_hash_node *hn;
- 	struct hlist_node *tmp;
- 	int i;
-+	COMPAT_HL_NODE
- 
- 	mlx5e_for_each_hash_node(hn, tmp, fs->l2.netdev_uc, i)
- 		hn->action = MLX5E_ACTION_DEL;
+-static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
++static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
+ {
+ 	return 0;
+ }

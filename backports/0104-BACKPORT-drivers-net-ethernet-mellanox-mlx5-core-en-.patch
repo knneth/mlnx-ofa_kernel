@@ -1,171 +1,72 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/bridge.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c
 
-Change-Id: I552686aefc234c17b0851b8950f2a167621b9114
+Change-Id: I6868e25b4335ed8c9f6bdc30a2700238c0bbe4a1
 ---
- .../mellanox/mlx5/core/en/rep/bridge.c        | 43 ++++++++++++++++++-
- 1 file changed, 42 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bridge.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bridge.c
-@@ -83,6 +83,7 @@ mlx5_esw_bridge_rep_vport_num_vhca_id_ge
- 	return dev;
- }
- 
-+#ifdef HAVE_SWITCHDEV_PORT_ATTR_SET
- static struct net_device *
- mlx5_esw_bridge_lower_rep_vport_num_vhca_id_get(struct net_device *dev, struct mlx5_eswitch *esw,
- 						u16 *vport_num, u16 *esw_owner_vhca_id)
-@@ -108,6 +109,7 @@ mlx5_esw_bridge_lower_rep_vport_num_vhca
- 
- 	return NULL;
- }
-+#endif
- 
- static bool mlx5_esw_bridge_is_local(struct net_device *dev, struct net_device *rep,
- 				     struct mlx5_eswitch *esw)
-@@ -221,7 +223,10 @@ mlx5_esw_bridge_port_obj_add(struct net_
- 	const struct switchdev_obj *obj = port_obj_info->obj;
- 	const struct switchdev_obj_port_vlan *vlan;
- 	u16 vport_num, esw_owner_vhca_id;
--	int err;
-+#ifndef HAVE_STRUCT_SWITCHDEV_OBJ_PORT_VLAN_VID
-+	u16 vid = 0;
-+#endif
-+	int err = 0;
- 
- 	if (!mlx5_esw_bridge_rep_vport_num_vhca_id_get(dev, br_offloads->esw, &vport_num,
- 						       &esw_owner_vhca_id))
-@@ -232,8 +237,15 @@ mlx5_esw_bridge_port_obj_add(struct net_
- 	switch (obj->id) {
- 	case SWITCHDEV_OBJ_ID_PORT_VLAN:
- 		vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
-+#ifdef HAVE_STRUCT_SWITCHDEV_OBJ_PORT_VLAN_VID
- 		err = mlx5_esw_bridge_port_vlan_add(vport_num, esw_owner_vhca_id, vlan->vid,
- 						    vlan->flags, br_offloads, extack);
-+#else
-+		for (vid = vlan->vid_begin; vid <= vlan->vid_end; ++vid) {
-+			err = mlx5_esw_bridge_port_vlan_add(vport_num, esw_owner_vhca_id, vid,
-+							    vlan->flags, br_offloads, extack);
-+		}
-+#endif
- 		break;
- 	default:
- 		return -EOPNOTSUPP;
-@@ -249,6 +261,9 @@ mlx5_esw_bridge_port_obj_del(struct net_
- 	const struct switchdev_obj *obj = port_obj_info->obj;
- 	const struct switchdev_obj_port_vlan *vlan;
- 	u16 vport_num, esw_owner_vhca_id;
-+#ifndef HAVE_STRUCT_SWITCHDEV_OBJ_PORT_VLAN_VID
-+	u16 vid = 0;
-+#endif
- 
- 	if (!mlx5_esw_bridge_rep_vport_num_vhca_id_get(dev, br_offloads->esw, &vport_num,
- 						       &esw_owner_vhca_id))
-@@ -259,7 +274,13 @@ mlx5_esw_bridge_port_obj_del(struct net_
- 	switch (obj->id) {
- 	case SWITCHDEV_OBJ_ID_PORT_VLAN:
- 		vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
-+#ifdef HAVE_STRUCT_SWITCHDEV_OBJ_PORT_VLAN_VID
- 		mlx5_esw_bridge_port_vlan_del(vport_num, esw_owner_vhca_id, vlan->vid, br_offloads);
-+#else
-+		for (vid = vlan->vid_begin; vid <= vlan->vid_end; ++vid) {
-+			mlx5_esw_bridge_port_vlan_del(vport_num, esw_owner_vhca_id, vid, br_offloads);
-+		}
-+#endif
- 		break;
- 	default:
- 		return -EOPNOTSUPP;
-@@ -267,6 +288,7 @@ mlx5_esw_bridge_port_obj_del(struct net_
- 	return 0;
- }
- 
-+#ifdef HAVE_SWITCHDEV_PORT_ATTR_SET
- static int
- mlx5_esw_bridge_port_obj_attr_set(struct net_device *dev,
- 				  struct switchdev_notifier_port_attr_info *port_attr_info,
-@@ -285,7 +307,11 @@ mlx5_esw_bridge_port_obj_attr_set(struct
- 
- 	switch (attr->id) {
- 	case SWITCHDEV_ATTR_ID_PORT_PRE_BRIDGE_FLAGS:
-+#ifdef HAVE_STRUCT_SWITCHDEV_BRPORT_FLAGS
- 		if (attr->u.brport_flags.mask & ~(BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD)) {
-+#else
-+		if (attr->u.brport_flags & ~(BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD)) {
-+#endif
- 			NL_SET_ERR_MSG_MOD(extack, "Flag is not supported");
- 			err = -EINVAL;
- 		}
-@@ -300,18 +326,21 @@ mlx5_esw_bridge_port_obj_attr_set(struct
- 		err = mlx5_esw_bridge_vlan_filtering_set(vport_num, esw_owner_vhca_id,
- 							 attr->u.vlan_filtering, br_offloads);
- 		break;
-+#ifdef HAVE_SWITCHDEV_ATTR_ID_BRIDGE_VLAN_PROTOCOL
- 	case SWITCHDEV_ATTR_ID_BRIDGE_VLAN_PROTOCOL:
- 		err = mlx5_esw_bridge_vlan_proto_set(vport_num,
- 						     esw_owner_vhca_id,
- 						     attr->u.vlan_protocol,
- 						     br_offloads);
- 		break;
-+#endif
- 	default:
- 		err = -EOPNOTSUPP;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/meter.c
+@@ -29,10 +29,12 @@ mlx5_rep_destroy_miss_meter(struct mlx5_
+ 		meter->meter_rule = NULL;
  	}
  
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	if (meter->meter_hndl) {
+ 		mlx5e_free_flow_meter(meter->meter_hndl);
+ 		meter->meter_hndl = NULL;
+ 	}
++#endif
+ }
+ 
+ static int mlx5_rep_create_miss_meter_rules(struct mlx5_core_dev *dev,
+@@ -128,7 +130,9 @@ mlx5_rep_set_miss_meter(struct mlx5_core
+ 			u16 vport, u64 rate, u64 burst)
+ {
+ 	struct rep_meter *meter = &rep_priv->rep_meter;
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	struct mlx5e_flow_meter_handle *meter_hndl;
++#endif
+ 	struct mlx5e_flow_meter_params params;
+ 	int err;
+ 
+@@ -140,19 +144,23 @@ mlx5_rep_set_miss_meter(struct mlx5_core
+ 		goto update;
+ 	}
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	if (!meter->meter_hndl) {
+ 		meter_hndl = mlx5e_alloc_flow_meter(dev);
+ 		if (IS_ERR(meter_hndl))
+ 			return PTR_ERR(meter_hndl);
+ 		meter->meter_hndl = meter_hndl;
+ 	}
++#endif
+ 
+ 	params.mode = MLX5_RATE_LIMIT_PPS;
+ 	params.rate = rate;
+ 	params.burst = burst;
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	err = mlx5e_tc_meter_modify(dev, meter->meter_hndl, &params);
+ 	if (err)
+ 		goto check_and_free_meter_aso;
++#endif
+ 
+ 	if (!meter->meter_rule) {
+ 		err = mlx5_rep_create_miss_meter_rules(dev, rep_priv, vport);
+@@ -166,11 +174,13 @@ update:
+ 
+ 	return 0;
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ check_and_free_meter_aso:
+ 	if (!meter->meter_rule) {
+ 		mlx5e_free_flow_meter(meter->meter_hndl);
+ 		meter->meter_hndl = NULL;
+ 	}
++#endif
  	return err;
  }
-+#endif
  
- static int mlx5_esw_bridge_event_blocking(struct notifier_block *nb,
- 					  unsigned long event, void *ptr)
-@@ -329,9 +358,11 @@ static int mlx5_esw_bridge_event_blockin
- 	case SWITCHDEV_PORT_OBJ_DEL:
- 		err = mlx5_esw_bridge_port_obj_del(dev, ptr, br_offloads);
- 		break;
-+#ifdef HAVE_SWITCHDEV_PORT_ATTR_SET
- 	case SWITCHDEV_PORT_ATTR_SET:
- 		err = mlx5_esw_bridge_port_obj_attr_set(dev, ptr, br_offloads);
- 		break;
-+#endif
- 	default:
- 		err = 0;
- 	}
-@@ -420,11 +451,13 @@ static int mlx5_esw_bridge_switchdev_eve
- 	u16 vport_num, esw_owner_vhca_id;
- 	struct net_device *upper, *rep;
- 
-+#ifdef HAVE_SWITCHDEV_PORT_ATTR_SET
- 	if (event == SWITCHDEV_PORT_ATTR_SET) {
- 		int err = mlx5_esw_bridge_port_obj_attr_set(dev, ptr, br_offloads);
- 
- 		return notifier_from_errno(err);
- 	}
-+#endif
- 
- 	upper = netdev_master_upper_dev_get_rcu(dev);
- 	if (!upper)
-@@ -524,7 +557,11 @@ void mlx5e_rep_bridge_init(struct mlx5e_
- 	}
- 
- 	br_offloads->netdev_nb.notifier_call = mlx5_esw_bridge_switchdev_port_event;
-+#ifdef HAVE_UNREGISTER_NETDEVICE_NOTIFIER_NET
- 	err = register_netdevice_notifier_net(&init_net, &br_offloads->netdev_nb);
-+#else
-+	err = register_netdevice_notifier(&br_offloads->netdev_nb);
-+#endif
- 	if (err) {
- 		esw_warn(mdev, "Failed to register bridge offloads netdevice notifier (err=%d)\n",
- 			 err);
-@@ -559,7 +596,11 @@ void mlx5e_rep_bridge_cleanup(struct mlx
- 		return;
- 
- 	cancel_delayed_work_sync(&br_offloads->update_work);
-+#ifdef HAVE_UNREGISTER_NETDEVICE_NOTIFIER_NET
- 	unregister_netdevice_notifier_net(&init_net, &br_offloads->netdev_nb);
-+#else
-+	unregister_netdevice_notifier(&br_offloads->netdev_nb);
-+#endif
- 	unregister_switchdev_blocking_notifier(&br_offloads->nb_blk);
- 	unregister_switchdev_notifier(&br_offloads->nb);
- 	destroy_workqueue(br_offloads->wq);

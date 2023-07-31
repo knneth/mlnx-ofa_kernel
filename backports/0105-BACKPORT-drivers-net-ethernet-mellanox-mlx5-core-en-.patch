@@ -2,7 +2,7 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 
-Change-Id: Id9251ee1971ea04025cb237d268ad00c19746d1b
+Change-Id: Ib23ac3d8b14e381550bfce30acf0b0c059376441
 ---
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
  1 file changed, 6 insertions(+)

@@ -1,0 +1,27 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
+
+Change-Id: I9c45a334a716ac2f66487ef5de9f6eb9c78ce84d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
+@@ -40,6 +40,7 @@ fill_static_params(struct mlx5_wqe_tls_s
+ 		EXTRACT_INFO_FIELDS;
+ 		break;
+ 	}
++#ifdef TLS_CIPHER_AES_GCM_256
+ 	case TLS_CIPHER_AES_GCM_256: {
+ 		struct tls12_crypto_info_aes_gcm_256 *info =
+ 			&crypto_info->crypto_info_256;
+@@ -47,6 +48,7 @@ fill_static_params(struct mlx5_wqe_tls_s
+ 		EXTRACT_INFO_FIELDS;
+ 		break;
+ 	}
++#endif
+ 	default:
+ 		WARN_ONCE(1, "Unsupported cipher type %u\n",
+ 			  crypto_info->crypto_info.cipher_type);

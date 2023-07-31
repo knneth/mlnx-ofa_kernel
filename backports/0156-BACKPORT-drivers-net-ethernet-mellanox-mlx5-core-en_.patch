@@ -1,121 +1,95 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
 
-Change-Id: Iaf22630300f9025a8e61bb90759484d4897c2a85
+Change-Id: I1007f33fb6d3b4ea3ce4fe0c51a5fbf90996d74f
 ---
- .../ethernet/mellanox/mlx5/core/en_debugfs.c  | 55 +++++++++++++++++++
- 1 file changed, 55 insertions(+)
+ .../mellanox/mlx5/core/en_accel/ipsec_rxtx.h  | 35 ++++++++++++++++---
+ 1 file changed, 30 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
-@@ -35,6 +35,9 @@
- #include "en.h"
- #include "en/rx_res.h"
- #include "en/rss.h"
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include "linux/namei.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+@@ -50,6 +50,9 @@ struct mlx5e_accel_tx_ipsec_state {
+ 	struct xfrm_state *x;
+ 	u32 tailen;
+ 	u32 plen;
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	u8 inner_ipproto;
 +#endif
+ };
  
- /* For non-default namespaces, add suffix in format "@<pci_id>" */
- /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
-@@ -79,6 +82,37 @@ static void mlx5e_create_channel_debugfs
- 			   &channel->rq.cq.mcq.cqn);
+ #ifdef CONFIG_MLX5_EN_IPSEC
+@@ -85,6 +88,9 @@ static inline bool mlx5e_ipsec_eseg_meta
  }
  
-+#ifndef HAVE_DEBUGFS_LOOKUP
-+struct dentry *mlx5e_debugfs_lookup(const char *name, struct dentry *parent)
-+{
-+	struct dentry *dentry;
-+
-+	if (IS_ERR(parent))
-+		return NULL;
-+
-+#ifdef HAVE_INODE_LOCK
-+	inode_lock(d_inode(parent));
-+#else
-+	mutex_lock(&(parent->d_inode)->i_mutex);
+ void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
 +#endif
-+	dentry = lookup_one_len(name, parent, strlen(name));
-+#ifdef HAVE_INODE_LOCK
-+	inode_unlock(d_inode(parent));
-+#else
-+	mutex_unlock(&(parent->d_inode)->i_mutex);
-+#endif
-+
-+	if (IS_ERR(dentry))
-+		return NULL;
-+	if (dentry->d_inode == NULL) {
-+		dput(dentry);
-+		return NULL;
-+	}
-+	return dentry;
-+}
-+#endif
-+
-+
- struct rx_res_debugfs {
- 	struct mlx5e_rx_res *rx_res;
- 	int i;
-@@ -100,8 +134,13 @@ static int get_tir_indir(void *data, u64
- 	return 0;
- }
+ 			       struct mlx5_wqe_eth_seg *eseg);
  
-+#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
- DEFINE_DEBUGFS_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
- DEFINE_DEBUGFS_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
-+#else
-+DEFINE_SIMPLE_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
-+DEFINE_SIMPLE_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
-+#endif
- 
- void mlx5e_create_debugfs(struct mlx5e_priv *priv)
+ static inline netdev_features_t
+@@ -92,6 +98,12 @@ mlx5e_ipsec_feature_check(struct sk_buff
  {
-@@ -156,7 +195,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
- 		rx_res_dbg->i = i;
- 		rx_res_dbg->rx_res = priv->rx_res;
- 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
-+#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
- 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
+ 	struct xfrm_offload *xo = xfrm_offload(skb);
+ 	struct sec_path *sp = skb_sec_path(skb);
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	u8 inner_ipproto = xo->inner_ipproto;
 +#else
-+		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
++	u8 inner_ipproto = 0;
 +#endif
- 	}
++
  
- 	for (i = 0; i < priv->max_nch; i++) {
-@@ -165,7 +208,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
- 		rx_res_dbg->i = i;
- 		rx_res_dbg->rx_res = priv->rx_res;
- 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
-+#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
- 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
+ 	if (sp && sp->len && xo) {
+ 		struct xfrm_state *x = sp->xvec[0];
+@@ -99,7 +111,7 @@ mlx5e_ipsec_feature_check(struct sk_buff
+ 		if (!x || !x->xso.offload_handle)
+ 			goto out_disable;
+ 
+-		if (xo->inner_ipproto) {
++		if (inner_ipproto) {
+ 			/* Cannot support tunnel packet over IPsec tunnel mode
+ 			 * because we cannot offload three IP header csum
+ 			 */
+@@ -107,8 +119,8 @@ mlx5e_ipsec_feature_check(struct sk_buff
+ 				goto out_disable;
+ 
+ 			/* Only support UDP or TCP L4 checksum */
+-			if (xo->inner_ipproto != IPPROTO_UDP &&
+-			    xo->inner_ipproto != IPPROTO_TCP)
++			if (inner_ipproto != IPPROTO_UDP &&
++			    inner_ipproto != IPPROTO_TCP)
+ 				goto out_disable;
+ 		}
+ 
+@@ -123,15 +135,28 @@ out_disable:
+ 
+ static inline bool
+ mlx5e_ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++					struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
+ 				  struct mlx5_wqe_eth_seg *eseg)
+ {
+-	u8 inner_ipproto;
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	struct xfrm_offload *xo;
++	u32 inner_ipproto;
 +#else
-+		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
++	u8 inner_ipproto = ipsec_st->inner_ipproto;
 +#endif
- 	}
  
- 	for (i = 0; i < priv->channels.num; i++)
-@@ -181,7 +228,11 @@ void mlx5e_debugs_free_recursive_private
- 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
- 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
+ 	if (!mlx5e_ipsec_eseg_meta(eseg))
+ 		return false;
  
-+#ifdef HAVE_DEBUGFS_LOOKUP
- 		dent = debugfs_lookup(name, priv->dfs_root);
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	xo = xfrm_offload(skb);
++	inner_ipproto = xo->inner_ipproto;
 +#else
-+		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++	inner_ipproto = ipsec_st->inner_ipproto;
 +#endif
- 		if (dent && dent->d_inode && dent->d_inode->i_private)
- 			kvfree(dent->d_inode->i_private);
- 	}
-@@ -189,7 +240,11 @@ void mlx5e_debugs_free_recursive_private
- 	for (i = 0; i < priv->max_nch; i++) {
- 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
- 
-+#ifdef HAVE_DEBUGFS_LOOKUP
- 		dent = debugfs_lookup(name, priv->dfs_root);
-+#else
-+		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
-+#endif
- 		if (dent && dent->d_inode && dent->d_inode->i_private)
- 			kvfree(dent->d_inode->i_private);
- 	}
+ 	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
+-	inner_ipproto = xfrm_offload(skb)->inner_ipproto;
+ 	if (inner_ipproto) {
+ 		eseg->cs_flags |= MLX5_ETH_WQE_L3_INNER_CSUM;
+ 		if (inner_ipproto == IPPROTO_TCP || inner_ipproto == IPPROTO_UDP)

@@ -1,159 +1,233 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
 
-Change-Id: I0a27fb33a95f2bbc65d16346e6b088ee3d54434f
+Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
 ---
- .../ethernet/mellanox/mlx5/core/en_dcbnl.c    | 60 +++++++++++++++++--
- 1 file changed, 55 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ipsec_rxtx.c  | 114 +++++++++++++++++-
+ 1 file changed, 110 insertions(+), 4 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
-@@ -61,6 +61,7 @@ enum {
- 				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
- 				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
+@@ -72,6 +72,9 @@ static int mlx5e_ipsec_remove_trailer(st
  
-+#ifdef CONFIG_MLX5_CORE_EN_DCB
- static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
- static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
- 
-@@ -903,6 +904,7 @@ static void mlx5e_dcbnl_setpfcstate(stru
- 	cee_cfg->pfc_enable = state;
- }
- 
-+#ifdef HAVE_DCBNL_GETBUFFER
- static int mlx5e_dcbnl_getbuffer(struct net_device *dev,
- 				 struct dcbnl_buffer *dcb_buffer)
+ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
+ 				struct mlx5_wqe_eth_seg *eseg, u8 mode,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++				struct mlx5e_accel_tx_ipsec_state *ipsec_st,
++#endif
+ 				struct xfrm_offload *xo)
  {
-@@ -986,8 +988,13 @@ static int mlx5e_dcbnl_setbuffer(struct
- 					      buffer_size, prio2buffer);
- 	return err;
- }
+ 	/* Tunnel Mode:
+@@ -86,7 +89,11 @@ static void mlx5e_ipsec_set_swp(struct s
+ 	 * SWP:      OutL3                   InL3  InL4
+ 	 * Pkt: MAC  IP     ESP  UDP  VXLAN  IP    L4
+ 	 */
+-
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	struct ethhdr *eth;
 +#endif
++	u8 inner_ipproto = 0;
++	struct xfrm_state *x;
+ 	/* Shared settings */
+ 	eseg->swp_outer_l3_offset = skb_network_offset(skb) / 2;
+ 	if (skb->protocol == htons(ETH_P_IPV6))
+@@ -94,11 +101,36 @@ static void mlx5e_ipsec_set_swp(struct s
  
-+#ifdef CONFIG_COMPAT_IS_DCBNL_OPS_CONST
- static const struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
+ 	/* Tunnel mode */
+ 	if (mode == XFRM_MODE_TUNNEL) {
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++		inner_ipproto = xo->inner_ipproto;
++#endif
++		/* Backport code to support kernels that don't have IPsec Tunnel mode Fix:
++		 * 45a98ef4922d net/xfrm: IPsec tunnel mode fix inner_ipproto setting in sec_path
++		 */
++		if (!inner_ipproto) {
++			x = xfrm_input_state(skb);
++			switch (x->props.family) {
++			case AF_INET:
++				inner_ipproto = ((struct iphdr *)(skb->data + skb_inner_network_offset(skb)))->protocol;
++				break;
++			case AF_INET6:
++				inner_ipproto = ((struct ipv6hdr *)(skb->data + skb_inner_network_offset(skb)))->nexthdr;
++				break;
++			default:
++				break;
++			}
++		}
++
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++		xo->inner_ipproto = inner_ipproto;
 +#else
-+struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
++		ipsec_st->inner_ipproto = inner_ipproto;
 +#endif
- 	.ieee_getets	= mlx5e_dcbnl_ieee_getets,
- 	.ieee_setets	= mlx5e_dcbnl_ieee_setets,
- 	.ieee_getmaxrate = mlx5e_dcbnl_ieee_getmaxrate,
-@@ -998,8 +1005,10 @@ static const struct dcbnl_rtnl_ops mlx5e
- 	.ieee_delapp    = mlx5e_dcbnl_ieee_delapp,
- 	.getdcbx	= mlx5e_dcbnl_getdcbx,
- 	.setdcbx	= mlx5e_dcbnl_setdcbx,
-+#ifdef HAVE_DCBNL_GETBUFFER
- 	.dcbnl_getbuffer = mlx5e_dcbnl_getbuffer,
- 	.dcbnl_setbuffer = mlx5e_dcbnl_setbuffer,
-+#endif
+ 		eseg->swp_inner_l3_offset = skb_inner_network_offset(skb) / 2;
+ 		if (xo->proto == IPPROTO_IPV6)
+ 			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L3_IPV6;
  
- /* CEE interfaces */
- 	.setall         = mlx5e_dcbnl_setall,
-@@ -1142,18 +1151,29 @@ static int mlx5e_update_trust_state_hw(s
+-		switch (xo->inner_ipproto) {
++		switch (inner_ipproto) {
+ 		case IPPROTO_UDP:
+ 			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 			fallthrough;
+@@ -116,7 +148,32 @@ static void mlx5e_ipsec_set_swp(struct s
+ 	if (mode != XFRM_MODE_TRANSPORT)
+ 		return;
  
- static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
- {
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
- 	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
+-	if (!xo->inner_ipproto) {
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++	inner_ipproto = xo->inner_ipproto;
 +#else
-+	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
-+#endif
++	if (skb->inner_protocol_type != ENCAP_TYPE_ETHER){
++		return;
++	}
++
++	if (skb->inner_protocol_type == ENCAP_TYPE_IPPROTO) {
++		inner_ipproto = skb->inner_ipproto;
++	} else {
++		eth = (struct ethhdr *)skb_inner_mac_header(skb);
++		switch (ntohs(eth->h_proto)) {
++		case ETH_P_IP:
++			inner_ipproto = ((struct iphdr *)(skb->data + skb_inner_network_offset(skb)))->protocol;;
++			break;
++		case ETH_P_IPV6:
++			inner_ipproto = ((struct ipv6hdr *)(skb->data + skb_inner_network_offset(skb)))->nexthdr;
++			break;
++		default:
++			break;
++		}
++	}
++	ipsec_st->inner_ipproto = inner_ipproto;
 +#endif
 +
- 	struct mlx5e_params new_params;
- 	bool reset = true;
- 	int err;
- 
- 	mutex_lock(&priv->state_lock);
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
- 	mqprio.mode = priv->channels.params.mqprio.mode;
- 	if (mqprio.mode != TC_MQPRIO_MODE_DCB) {
- 		netdev_err(priv->netdev, "Can't change trust state while in channel mode.\n");
- 		err = -EINVAL;
- 		goto unlock;
- 	}
-+#endif
-+#endif
- 
- 	new_params = priv->channels.params;
- 	mlx5e_params_calc_trust_tx_min_inline_mode(priv->mdev, &new_params,
-@@ -1166,22 +1186,41 @@ static int mlx5e_set_trust_state(struct
- 	err = mlx5e_safe_switch_params(priv, &new_params,
- 				       mlx5e_update_trust_state_hw,
- 				       &trust_state, reset);
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
- unlock:
-+#endif
-+#endif
- 	mutex_unlock(&priv->state_lock);
- 	if (err)
- 		return err;
- 
- 	/* In DSCP trust state, we need 8 send queues per channel */
--	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
--		mutex_lock(&priv->state_lock);
--		mlx5e_setup_tc_mqprio(priv, &mqprio);
--		mutex_unlock(&priv->state_lock);
--	} else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP) {
-+	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+       {
-+	       mutex_lock(&priv->state_lock);
-+	       mlx5e_setup_tc_mqprio(priv, &mqprio);
-+	       mutex_unlock(&priv->state_lock);
-+       }
-+#else
-+	mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);
-+#endif
-+	else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP)
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+	{
- 		mutex_lock(&priv->state_lock);
-+#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
- 		mqprio.qopt.num_tc = priv->pcp_tc_num;
-+#else
-+		mqprio.num_tc = priv->pcp_tc_num;
-+#endif
- 		mlx5e_setup_tc_mqprio(priv, &mqprio);
- 		mutex_unlock(&priv->state_lock);
- 	}
-+#else
-+	mlx5e_setup_tc(priv->netdev, priv->pcp_tc_num);
-+#endif
- 
- 	return 0;
++	if (!inner_ipproto) {
+ 		switch (xo->proto) {
+ 		case IPPROTO_UDP:
+ 			eseg->swp_flags |= MLX5_ETH_WQE_SWP_OUTER_L4_UDP;
+@@ -130,7 +187,7 @@ static void mlx5e_ipsec_set_swp(struct s
+ 		}
+ 	} else {
+ 		/* Tunnel(VXLAN TCP/UDP) over Transport Mode */
+-		switch (xo->inner_ipproto) {
++		switch (inner_ipproto) {
+ 		case IPPROTO_UDP:
+ 			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 			fallthrough;
+@@ -182,6 +239,26 @@ void mlx5e_ipsec_set_iv(struct sk_buff *
+ 	skb_store_bits(skb, iv_offset, &seqno, 8);
  }
-@@ -1203,7 +1242,13 @@ static int mlx5e_trust_initialize(struct
- 	struct mlx5_core_dev *mdev = priv->mdev;
- 	u8 trust_state;
- 	int err;
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
-+#ifdef HAVE_TC_MQPRIO_QOPT_OFFLOAD
- 	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
-+#else
-+	struct tc_mqprio_qopt mqprio = {.num_tc = MLX5E_MAX_NUM_TC};
-+#endif
-+#endif
- 	const bool take_rtnl = priv->netdev->reg_state == NETREG_REGISTERED;
  
- 	if (!MLX5_DSCP_SUPPORTED(mdev)) {
-@@ -1231,7 +1276,11 @@ static int mlx5e_trust_initialize(struct
- 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
- 		if (take_rtnl)
- 			rtnl_lock();
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
- 		mlx5e_setup_tc_mqprio(priv, &mqprio);
-+#else
-+		mlx5e_setup_tc(priv->netdev, MLX5E_MAX_NUM_TC);
++/* Copy from upstream net/ipv4/esp4.c */
++#ifndef HAVE_ESP_OUTPUT_FILL_TRAILER
++	static
++void esp_output_fill_trailer(u8 *tail, int tfclen, int plen, __u8 proto)
++{ 
++	/* Fill padding... */
++	if (tfclen) {
++		memset(tail, 0, tfclen);
++		tail += tfclen;
++	}
++	do {
++		int i;
++		for (i = 0; i < plen - 2; i++)
++			tail[i] = i + 1;
++	} while (0);
++	tail[plen - 2] = plen - 2;
++	tail[plen - 1] = proto;
++}
 +#endif
- 		if (take_rtnl)
- 			rtnl_unlock();
- 	}
-@@ -1284,3 +1333,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
- 
- 	mlx5e_ets_init(priv);
++
+ void mlx5e_ipsec_handle_tx_wqe(struct mlx5e_tx_wqe *wqe,
+ 			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
+ 			       struct mlx5_wqe_inline_seg *inlseg)
+@@ -215,17 +292,24 @@ static int mlx5e_ipsec_set_state(struct
  }
+ 
+ void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
++#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
++			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
 +#endif
+ 			       struct mlx5_wqe_eth_seg *eseg)
+ {
+ 	struct xfrm_offload *xo = xfrm_offload(skb);
+ 	struct xfrm_encap_tmpl  *encap;
+ 	struct xfrm_state *x;
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	struct sec_path *sp;
++#endif
+ 	u8 l3_proto;
+ 
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	sp = skb_sec_path(skb);
+ 	if (unlikely(sp->len != 1))
+ 		return;
++#endif
+ 
+ 	x = xfrm_input_state(skb);
+ 	if (unlikely(!x))
+@@ -236,7 +320,11 @@ void mlx5e_ipsec_tx_build_eseg(struct ml
+ 		      skb->protocol != htons(ETH_P_IPV6))))
+ 		return;
+ 
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
+ 	mlx5e_ipsec_set_swp(skb, eseg, x->props.mode, xo);
++#else
++	mlx5e_ipsec_set_swp(skb, eseg, x->props.mode, ipsec_st, xo);
++#endif
+ 
+ 	l3_proto = (x->props.family == AF_INET) ?
+ 		   ((struct iphdr *)skb_network_header(skb))->protocol :
+@@ -264,10 +352,16 @@ bool mlx5e_ipsec_handle_tx_skb(struct ne
+ 	struct xfrm_offload *xo = xfrm_offload(skb);
+ 	struct mlx5e_ipsec_sa_entry *sa_entry;
+ 	struct xfrm_state *x;
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	struct sec_path *sp;
++#endif
+ 
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	sp = skb_sec_path(skb);
+ 	if (unlikely(sp->len != 1)) {
++#else
++	if (unlikely(skb->sp->len != 1)) {
++#endif
+ 		atomic64_inc(&priv->ipsec->sw_stats.ipsec_tx_drop_bundle);
+ 		goto drop;
+ 	}
+@@ -316,15 +410,22 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+ 	struct mlx5e_ipsec *ipsec = priv->ipsec;
+ 	struct mlx5e_ipsec_sa_entry *sa_entry;
+ 	struct xfrm_offload *xo;
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	struct sec_path *sp;
++#endif
+ 	u32  sa_handle;
+ 
+ 	if (!ipsec)
+ 		return;
+ 
+ 	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	sp = secpath_set(skb);
+ 	if (unlikely(!sp)) {
++#else
++	skb->sp = secpath_dup(skb->sp);
++	if (unlikely(!skb->sp)) {
++#endif
+ 		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
+ 		return;
+ 	}
+@@ -339,8 +440,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+ 	xfrm_state_hold(sa_entry->x);
+ 	rcu_read_unlock();
+ 
++#ifdef HAVE_SECPATH_SET_RETURN_POINTER
+ 	sp->xvec[sp->len++] = sa_entry->x;
+ 	sp->olen++;
++#else
++	skb->sp->xvec[skb->sp->len++] = sa_entry->x;
++	skb->sp->olen++;
++#endif
+ 
+ 	xo = xfrm_offload(skb);
+ 	xo->flags = CRYPTO_DONE;

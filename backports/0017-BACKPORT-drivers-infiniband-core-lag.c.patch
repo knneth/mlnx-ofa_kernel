@@ -1,14 +1,14 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/lag.c
 
-Change-Id: I8d7878481a917d6589dbc91a6ebed2d8a47efa73
+Change-Id: I9c8ee0975f2a3a3b5bbda96adda4ae2967945a82
 ---
  drivers/infiniband/core/lag.c | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/lag.c
 +++ b/drivers/infiniband/core/lag.c
-@@ -91,9 +91,13 @@ static struct net_device *rdma_get_xmit_
+@@ -90,9 +90,13 @@ static struct net_device *rdma_get_xmit_
  		return ERR_PTR(-ENOMEM);
  
  	rcu_read_lock();
@@ -22,7 +22,7 @@ Change-Id: I8d7878481a917d6589dbc91a6ebed2d8a47efa73
  	if (slave)
  		dev_hold(slave);
  	rcu_read_unlock();
-@@ -130,7 +134,6 @@ struct net_device *rdma_lag_get_ah_roce_
+@@ -129,7 +133,6 @@ struct net_device *rdma_lag_get_ah_roce_
  
  	if (!netif_is_bond_master(master))
  		goto put;

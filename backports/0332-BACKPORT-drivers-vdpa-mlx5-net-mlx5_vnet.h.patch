@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vdpa/mlx5/net/mlx5_vnet.h
+
+Change-Id: I1124f6b5ed4760a3c896745665f7ef485191ad16
+---
+ drivers/vdpa/mlx5/net/mlx5_vnet.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/vdpa/mlx5/net/mlx5_vnet.h
++++ b/drivers/vdpa/mlx5/net/mlx5_vnet.h
+@@ -1,5 +1,6 @@
+ /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+ /* Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++#ifdef HAVE_VDPA_SUPPORT
+ 
+ #ifndef __MLX5_VNET_H__
+ #define __MLX5_VNET_H__
+@@ -92,3 +93,4 @@ static inline void mlx5_vdpa_remove_rx_c
+ 
+ 
+ #endif /* __MLX5_VNET_H__ */
++#endif /* HAVE_VDPA_SUPPORT */

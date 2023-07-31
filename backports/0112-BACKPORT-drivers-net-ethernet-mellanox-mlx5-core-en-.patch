@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
 
-Change-Id: Iba890ea8137ac20d9d663b25dfaeabde6abbde0b
+Change-Id: I4b7040bf2042b35c05c5860ec0269d7e238661ce
 ---
  drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c | 4 ++++
  1 file changed, 4 insertions(+)

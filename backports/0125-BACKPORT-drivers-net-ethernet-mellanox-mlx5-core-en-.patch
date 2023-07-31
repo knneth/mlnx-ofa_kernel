@@ -1,48 +1,92 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
 
-Change-Id: I2b1a11fd2148239027d0589da338f30f99b198ce
+Change-Id: I3f7616b411bba63e300d8674ca22359f201deef2
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en/tc/meter.c  | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+@@ -3,9 +3,15 @@
  
- void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
- {
-+#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
- 	u32 trunc_size = mapped_obj->sample.trunc_size;
- 	struct psample_group psample_group = {};
- 	struct psample_metadata md = {};
-@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
- 	skb_push(skb, skb->mac_len);
- 
- 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
-+#else
-+	u32 trunc_size = mapped_obj->sample.trunc_size;
-+	struct psample_group psample_group = {};
-+	int iif = skb->dev->ifindex;
-+	u32 size;
-+
-+	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
-+	psample_group.group_num = mapped_obj->sample.group_id;
-+	psample_group.net = &init_net;
-+	skb_push(skb, skb->mac_len);
-+
-+	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
+ #include <linux/math64.h>
+ #include "lib/aso.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
 +#endif
- }
+ #include "meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
  
- static int
-@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
- 	struct mlx5e_sample_attr *sample_attr;
- 	struct mlx5_flow_attr *pre_attr;
- 	struct mlx5_eswitch *esw;
--	u32 default_tbl_id;
-+	u32 default_tbl_id = 0;
- 	u32 obj_id;
+ #define MLX5_START_COLOR_SHIFT 28
+ #define MLX5_METER_MODE_SHIFT 24
+@@ -365,8 +371,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(dev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -410,9 +418,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
+ 		return ERR_PTR(-EOPNOTSUPP);
++#endif
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+ 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
+@@ -484,12 +494,16 @@ int
+ mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
+ 		      struct mlx5e_flow_meter_params *params)
+ {
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
++#endif
+ 	struct mlx5e_flow_meters *flow_meters;
  	int err;
  
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -505,8 +519,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
+ 	struct mlx5e_flow_meter_handle *meter;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -552,11 +568,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_act)) {
+ 		netdev_dbg(priv->netdev,
+ 			   "flow meter offload is not supported, post action is missing\n");
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 	}
++#endif
+ 
+ 	flow_meters = kzalloc(sizeof(*flow_meters), GFP_KERNEL);
+ 	if (!flow_meters)

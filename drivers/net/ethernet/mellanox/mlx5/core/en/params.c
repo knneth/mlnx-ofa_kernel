@@ -107,7 +107,7 @@ u8 mlx5e_mpwrq_log_wqe_sz(struct mlx5_core_dev *mdev, u8 page_shift,
 	/* Keep in sync with MLX5_MPWRQ_MAX_PAGES_PER_WQE. */
 	max_wqe_size = mlx5e_get_max_sq_aligned_wqebbs(mdev) * MLX5_SEND_WQE_BB;
 	max_pages_per_wqe = ALIGN_DOWN(max_wqe_size - sizeof(struct mlx5e_umr_wqe),
-				       MLX5_UMR_MTT_ALIGNMENT) / umr_entry_size;
+				       MLX5_UMR_FLEX_ALIGNMENT) / umr_entry_size;
 	max_log_mpwqe_size = ilog2(max_pages_per_wqe) + page_shift;
 
 	WARN_ON_ONCE(max_log_mpwqe_size < MLX5E_ORDER2_MAX_PACKET_MTU);
@@ -146,7 +146,7 @@ u16 mlx5e_mpwrq_umr_wqe_sz(struct mlx5_core_dev *mdev, u8 page_shift,
 	u16 umr_wqe_sz;
 
 	umr_wqe_sz = sizeof(struct mlx5e_umr_wqe) +
-		ALIGN(pages_per_wqe * umr_entry_size, MLX5_UMR_MTT_ALIGNMENT);
+		ALIGN(pages_per_wqe * umr_entry_size, MLX5_UMR_FLEX_ALIGNMENT);
 
 	WARN_ON_ONCE(DIV_ROUND_UP(umr_wqe_sz, MLX5_SEND_WQE_DS) > MLX5_WQE_CTRL_DS_MASK);
 
@@ -411,9 +411,14 @@ u8 mlx5e_mpwqe_get_log_num_strides(struct mlx5_core_dev *mdev,
 {
 	enum mlx5e_mpwrq_umr_mode umr_mode = mlx5e_mpwrq_umr_mode(mdev, xsk);
 	u8 page_shift = mlx5e_mpwrq_page_shift(mdev, xsk);
+	u8 log_wqe_size, log_stride_size;
 
-	return mlx5e_mpwrq_log_wqe_sz(mdev, page_shift, umr_mode) -
-		mlx5e_mpwqe_get_log_stride_size(mdev, params, xsk);
+	log_wqe_size = mlx5e_mpwrq_log_wqe_sz(mdev, page_shift, umr_mode);
+	log_stride_size = mlx5e_mpwqe_get_log_stride_size(mdev, params, xsk);
+	WARN(log_wqe_size < log_stride_size,
+	     "Log WQE size %u < log stride size %u (page shift %u, umr mode %d, xsk on? %d)\n",
+	     log_wqe_size, log_stride_size, page_shift, umr_mode, !!xsk);
+	return log_wqe_size - log_stride_size;
 }
 
 u8 mlx5e_mpwqe_get_min_wqe_bulk(unsigned int wq_sz)
@@ -606,7 +611,7 @@ int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *pa
 	}
 
 	return 0;
- }
+}
 
 void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
 			       struct mlx5e_params *params)
@@ -614,14 +619,6 @@ void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
 	params->log_rq_mtu_frames = is_kdump_kernel() ?
 		MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE :
 		MLX5E_PARAMS_DEFAULT_LOG_RQ_SIZE;
-
-	mlx5_core_info(mdev, "MLX5E: StrdRq(%d) RqSz(%ld) StrdSz(%ld) RxCqeCmprss(%d)\n",
-		       params->rq_wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ,
-		       params->rq_wq_type == MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ ?
-		       BIT(mlx5e_mpwqe_get_log_rq_size(mdev, params, NULL)) :
-		       BIT(params->log_rq_mtu_frames),
-		       BIT(mlx5e_mpwqe_get_log_stride_size(mdev, params, NULL)),
-		       MLX5E_GET_PFLAG(params, MLX5E_PFLAG_RX_CQE_COMPRESS));
 }
 
 void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
@@ -677,7 +674,8 @@ static int mlx5e_max_nonlinear_mtu(int first_frag_size, int frag_size, bool xdp)
 static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
 				     struct mlx5e_params *params,
 				     struct mlx5e_xsk_param *xsk,
-				     struct mlx5e_rq_frags_info *info)
+				     struct mlx5e_rq_frags_info *info,
+				     u32 *xdp_frag_size)
 {
 	u32 byte_count = MLX5E_SW2HW_MTU(params, params->sw_mtu);
 	int frag_size_max = DEFAULT_FRAG_SIZE;
@@ -787,6 +785,8 @@ out:
 
 	info->log_num_frags = order_base_2(info->num_frags);
 
+	*xdp_frag_size = info->num_frags > 1 && params->xdp_prog ? PAGE_SIZE : 0;
+
 	return 0;
 }
 
@@ -805,8 +805,8 @@ static u8 mlx5e_get_rqwq_log_stride(u8 wq_type, int ndsegs)
 	return order_base_2(sz);
 }
 
-void mlx5e_build_common_cq_param(struct mlx5_core_dev *mdev,
-				 struct mlx5e_cq_param *param)
+static void mlx5e_build_common_cq_param(struct mlx5_core_dev *mdev,
+					struct mlx5e_cq_param *param)
 {
 	void *cqc = param->cqc;
 
@@ -858,6 +858,10 @@ static void mlx5e_build_rx_cq_param(struct mlx5_core_dev *mdev,
 	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_RX_CQE_COMPRESS)) {
 		MLX5_SET(cqc, cqc, mini_cqe_res_format, hw_stridx ?
 			 MLX5_CQE_FORMAT_CSUM_STRIDX : MLX5_CQE_FORMAT_CSUM);
+		MLX5_SET(cqc, cqc, cqe_compression_layout,
+			 MLX5_CAP_GEN(mdev, enhanced_cqe_compression) ?
+			 MLX5_CQE_COMPRESS_LAYOUT_ENHANCED :
+			 MLX5_CQE_COMPRESS_LAYOUT_BASIC);
 		MLX5_SET(cqc, cqc, cqe_comp_en, 1);
 	}
 
@@ -927,7 +931,8 @@ int mlx5e_build_rq_param(struct mlx5_core_dev *mdev,
 	}
 	default: /* MLX5_WQ_TYPE_CYCLIC */
 		MLX5_SET(wq, wq, log_wq_sz, params->log_rq_mtu_frames);
-		err = mlx5e_build_rq_frags_info(mdev, params, xsk, &param->frags_info);
+		err = mlx5e_build_rq_frags_info(mdev, params, xsk, &param->frags_info,
+						&param->xdp_frag_size);
 		if (err)
 			return err;
 		ndsegs = param->frags_info.num_frags;
@@ -1131,12 +1136,12 @@ static u8 mlx5e_build_icosq_log_wq_sz(struct mlx5_core_dev *mdev,
 
 			/* XSK aligned mode. */
 			max_xsk_wqebbs = max(max_xsk_wqebbs,
-					     mlx5e_mpwrq_total_umr_wqebbs(mdev, params, &xsk));
+				mlx5e_mpwrq_total_umr_wqebbs(mdev, params, &xsk));
 
 			/* XSK unaligned mode, frame size is a power of two. */
 			xsk.unaligned = true;
 			max_xsk_wqebbs = max(max_xsk_wqebbs,
-					     mlx5e_mpwrq_total_umr_wqebbs(mdev, params, &xsk));
+				mlx5e_mpwrq_total_umr_wqebbs(mdev, params, &xsk));
 
 			/* XSK unaligned mode, frame size is not equal to stride size. */
 			xsk.chunk_size -= 1;
@@ -1148,8 +1153,6 @@ static u8 mlx5e_build_icosq_log_wq_sz(struct mlx5_core_dev *mdev,
 			max_xsk_wqebbs = max(max_xsk_wqebbs,
 				mlx5e_mpwrq_total_umr_wqebbs(mdev, params, &xsk));
 		}
-
-
 
 		wqebbs += max_xsk_wqebbs;
 	}

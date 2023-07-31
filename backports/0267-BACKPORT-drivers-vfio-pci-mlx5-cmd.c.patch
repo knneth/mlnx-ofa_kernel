@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/cmd.c
+
+Change-Id: I7b9ba3963a0dbc02672f2d435744c530f7b00ec5
+---
+ drivers/vfio/pci/mlx5/cmd.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/vfio/pci/mlx5/cmd.c
++++ b/drivers/vfio/pci/mlx5/cmd.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_VFIO_SUPPORT
+ #include "cmd.h"
+ 
+ enum { CQ_OK = 0, CQ_EMPTY = -1, CQ_POLL_ERR = -2 };
+@@ -1668,3 +1669,4 @@ end:
+ 	mlx5vf_state_mutex_unlock(mvdev);
+ 	return err;
+ }
++#endif /* HAVE_VFIO_SUPPORT */

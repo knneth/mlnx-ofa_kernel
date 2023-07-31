@@ -3,7 +3,13 @@
 
 #include "../../../compat/config.h"
 
-#ifdef CONFIG_COMPAT_TCF_PEDIT_MOD
+#ifndef CONFIG_COMPAT_TCF_PEDIT_MOD
+#if defined(HAVE_TCF_PEDIT_TCFP_KEYS_EX) || defined(HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX)
+#include_next <net/tc_act/tc_pedit.h>
+#endif
+
+#else /* CONFIG_COMPAT_TCF_PEDIT_MOD */
+
 #include <net/act_api.h>
 #include "uapi/linux/tc_act/tc_pedit.h"
 
@@ -33,13 +39,9 @@ struct tcf_pedit {
 #define to_pedit(a) ((struct tcf_pedit *)a)
 #endif
 
-#else /* CONFIG_COMPAT_TCF_PEDIT_MOD */
-#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
-#include_next <net/tc_act/tc_pedit.h>
-#endif
-#endif
+#endif /* CONFIG_COMPAT_TCF_PEDIT_MOD */
 
-#ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
+#if defined(HAVE_TCF_PEDIT_TCFP_KEYS_EX) || defined(HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX)
 
 #ifndef HAVE_TCF_PEDIT_NKEYS
 #include <linux/tc_act/tc_pedit.h>
@@ -91,6 +93,6 @@ static inline u32 tcf_pedit_offset(const struct tc_action *a, int index)
 
 #endif /* HAVE_TCF_PEDIT_NKEYS */
 
-#endif /* HAVE_TCF_PEDIT_TCFP_KEYS_EX */
+#endif /* HAVE_TCF_PEDIT_TCFP_KEYS_EX || HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX */
 
 #endif	/* _COMPAT_NET_TC_ACT_TC_PEDIT_H */

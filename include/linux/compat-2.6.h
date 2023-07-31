@@ -10,7 +10,6 @@
 #include <linux/kconfig.h>
 #include <linux/if.h>
 #include <linux/compat_autoconf.h>
-#include <linux/compat_fix.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/uidgid.h>
@@ -26,7 +25,7 @@
  * To the call to the initfn we added the symbol dependency on compat
  * to make sure that compat.ko gets loaded for any compat modules.
  */
-void backport_dependency_symbol(void);
+void mlx_backport_dependency_symbol(void);
 
 #ifndef __has_attribute
 # define __has_attribute(x) __GCC4_has_attribute_##x
@@ -53,7 +52,7 @@ void backport_dependency_symbol(void);
 #define module_init(initfn)                                             \
 	static int __init __init_backport(void)                         \
 	{                                                               \
-		backport_dependency_symbol();                           \
+		mlx_backport_dependency_symbol();                           \
 		return initfn();                                        \
 	}                                                               \
 	int init_module(void)  __copy(initfn)  __attribute__((alias("__init_backport")));

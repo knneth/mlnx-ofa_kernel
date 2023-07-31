@@ -13,6 +13,7 @@ enum dr_ste_v1_entry_format {
 	DR_STE_V1_TYPE_BWC_BYTE	= 0x0,
 	DR_STE_V1_TYPE_BWC_DW	= 0x1,
 	DR_STE_V1_TYPE_MATCH	= 0x2,
+	DR_STE_V1_TYPE_MATCH_RANGES = 0x7,
 };
 
 /* Lookup type is built from 2B: [ Definer mode 1B ][ Definer index 1B ] */
@@ -267,6 +268,16 @@ static void dr_ste_v1_set_entry_type(u8 *hw_ste_p, u8 entry_type)
 	MLX5_SET(ste_match_bwc_v1, hw_ste_p, entry_format, entry_type);
 }
 
+bool dr_ste_v1_is_miss_addr_set(u8 *hw_ste_p)
+{
+	u8 entry_type = MLX5_GET(ste_match_bwc_v1, hw_ste_p, entry_format);
+
+	/* unlike MATCH STE, for MATCH_RANGES STE both hit and miss addresses
+	 * are part of the action, so they both set as part of STE init
+	 */
+	return entry_type == DR_STE_V1_TYPE_MATCH_RANGES;
+}
+
 void dr_ste_v1_set_miss_addr(u8 *hw_ste_p, u64 miss_addr)
 {
 	u64 index = miss_addr >> 6;
@@ -487,24 +498,61 @@ static void dr_ste_v1_set_rx_decap(u8 *hw_ste_p, u8 *s_action)
 static void dr_ste_v1_set_accelerated_rewrite_actions(u8 *hw_ste_p,
 						      u8 *d_action,
 						      u16 num_of_actions,
-						      u32 re_write_index,
-						      u32 re_write_args,
+						      u32 rewrite_pattern,
+						      u32 rewrite_args,
 						      u8 *action_data)
 {
 	if (action_data) {
 		memcpy(d_action, action_data, DR_MODIFY_ACTION_SIZE);
 	} else {
-		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
+		MLX5_SET(ste_double_action_accelerated_modify_action_list_v1, d_action,
 			 action_id, DR_STE_V1_ACTION_ID_ACCELERATED_LIST);
-		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
-			 modify_actions_pattern_pointer, re_write_index);
-		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
+		MLX5_SET(ste_double_action_accelerated_modify_action_list_v1, d_action,
+			 modify_actions_pattern_pointer, rewrite_pattern);
+		MLX5_SET(ste_double_action_accelerated_modify_action_list_v1, d_action,
 			 number_of_modify_actions, num_of_actions);
-		MLX5_SET(ste_double_action_accelerated_modify_action_list, d_action,
-			 modify_actions_argument_pointer, re_write_args);
+		MLX5_SET(ste_double_action_accelerated_modify_action_list_v1, d_action,
+			 modify_actions_argument_pointer, rewrite_args);
 	}
 
 	dr_ste_v1_set_reparse(hw_ste_p);
+}
+
+static void dr_ste_v1_set_basic_rewrite_actions(u8 *hw_ste_p,
+						u8 *s_action,
+						u16 num_of_actions,
+						u32 rewrite_index)
+{
+	MLX5_SET(ste_single_action_modify_list_v1, s_action, action_id,
+		 DR_STE_V1_ACTION_ID_MODIFY_LIST);
+	MLX5_SET(ste_single_action_modify_list_v1, s_action, num_of_modify_actions,
+		 num_of_actions);
+	MLX5_SET(ste_single_action_modify_list_v1, s_action, modify_actions_ptr,
+		 rewrite_index);
+
+	dr_ste_v1_set_reparse(hw_ste_p);
+}
+
+static void dr_ste_v1_set_rewrite_actions(u8 *hw_ste_p,
+					  u8 *action,
+					  u16 num_of_actions,
+					  u32 rewrite_pattern,
+					  u32 rewrite_args,
+					  u8 *action_data)
+{
+	if (rewrite_pattern != MLX5DR_INVALID_PATTERN_INDEX)
+		return dr_ste_v1_set_accelerated_rewrite_actions(hw_ste_p,
+								 action,
+								 num_of_actions,
+								 rewrite_pattern,
+								 rewrite_args,
+								 action_data);
+
+	/* fall back to the code that doesn't support accelerated modify header */
+	return dr_ste_v1_set_basic_rewrite_actions(hw_ste_p,
+						   action,
+						   num_of_actions,
+						   rewrite_args);
 }
 
 static void dr_ste_v1_set_aso_flow_meter(u8 *d_action,
@@ -528,6 +576,27 @@ static void dr_ste_v1_set_aso_flow_meter(u8 *d_action,
 		 init_color);
 }
 
+static void dr_ste_v1_set_match_range_pkt_len(u8 *hw_ste_p, u32 definer_id,
+					      u32 min, u32 max)
+{
+	MLX5_SET(ste_match_ranges_v1, hw_ste_p, match_definer_ctx_idx, definer_id);
+
+	/* When the STE will be sent, its mask and tags will be swapped in
+	 * dr_ste_v1_prepare_for_postsend(). This, however, is match range STE
+	 * which doesn't have mask, and shouldn't have mask/tag swapped.
+	 * We're using the common utilities functions to send this STE, so need
+	 * to allow for this swapping - place the values in the corresponding
+	 * locations to allow flipping them when writing to ICM.
+	 *
+	 * min/max_value_2 corresponds to match_dw_0 in its definer.
+	 * To allow mask/tag swapping, writing the min/max_2 to min/max_0.
+	 *
+	 * Pkt len is 2 bytes that are stored in the higher section of the DW.
+	 */
+	MLX5_SET(ste_match_ranges_v1, hw_ste_p, min_value_0, min << 16);
+	MLX5_SET(ste_match_ranges_v1, hw_ste_p, max_value_0, max << 16);
+}
+
 static void dr_ste_v1_arr_init_next_match(u8 **last_ste,
 					  u32 *added_stes,
 					  u16 gvmi)
@@ -541,6 +610,14 @@ static void dr_ste_v1_arr_init_next_match(u8 **last_ste,
 
 	action = MLX5_ADDR_OF(ste_mask_and_match_v1, *last_ste, action);
 	memset(action, 0, MLX5_FLD_SZ_BYTES(ste_mask_and_match_v1, action));
+}
+
+static void dr_ste_v1_arr_init_next_match_range(u8 **last_ste,
+						u32 *added_stes,
+						u16 gvmi)
+{
+	dr_ste_v1_arr_init_next_match(last_ste, added_stes, gvmi);
+	dr_ste_v1_set_entry_type(*last_ste, DR_STE_V1_TYPE_MATCH_RANGES);
 }
 
 void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
@@ -572,9 +649,6 @@ void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 			allow_modify_hdr = false;
 	}
 
-	if (action_type_set[DR_ACTION_TYP_CTR])
-		dr_ste_v1_set_counter_id(last_ste, attr->ctr_id);
-
 	if (action_type_set[DR_ACTION_TYP_MODIFY_HDR]) {
 		if (!allow_modify_hdr || action_sz < DR_STE_ACTION_DOUBLE_SZ) {
 			dr_ste_v1_arr_init_next_match(&last_ste, added_stes,
@@ -583,11 +657,11 @@ void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 					      last_ste, action);
 			action_sz = DR_STE_ACTION_TRIPLE_SZ;
 		}
-		dr_ste_v1_set_accelerated_rewrite_actions(last_ste, action,
-							  attr->modify_actions,
-							  attr->modify_index,
-							  attr->args_index,
-							  attr->single_modify_action);
+		dr_ste_v1_set_rewrite_actions(last_ste, action,
+					      attr->modify_actions,
+					      attr->modify_pat_idx,
+					      attr->modify_index,
+					      attr->single_modify_action);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 		allow_encap = false;
@@ -680,6 +754,24 @@ void dr_ste_v1_set_actions_tx(struct mlx5dr_domain *dmn,
 		action += DR_STE_ACTION_DOUBLE_SZ;
 	}
 
+	if (action_type_set[DR_ACTION_TYP_RANGE]) {
+		/* match ranges requires a new STE of its own type */
+		dr_ste_v1_arr_init_next_match_range(&last_ste, added_stes, attr->gvmi);
+		dr_ste_v1_set_miss_addr(last_ste, attr->range.miss_icm_addr);
+
+		/* we do not support setting any action on the match ranges STE */
+		action_sz = 0;
+
+		dr_ste_v1_set_match_range_pkt_len(last_ste,
+						  attr->range.definer_id,
+						  attr->range.min,
+						  attr->range.max);
+	}
+
+	/* set counter ID on the last STE to adhere to DMFS behavior */
+	if (action_type_set[DR_ACTION_TYP_CTR])
+		dr_ste_v1_set_counter_id(last_ste, attr->ctr_id);
+
 	dr_ste_v1_set_hit_gvmi(last_ste, attr->hit_gvmi);
 	dr_ste_v1_set_hit_addr(last_ste, attr->final_icm_addr, 1);
 }
@@ -697,11 +789,11 @@ void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 	bool allow_ctr = true;
 
 	if (action_type_set[DR_ACTION_TYP_TNL_L3_TO_L2]) {
-		dr_ste_v1_set_accelerated_rewrite_actions(last_ste, action,
-							  attr->decap_actions,
-							  attr->decap_index,
-							  attr->decap_args_index,
-							  NULL);
+		dr_ste_v1_set_rewrite_actions(last_ste, action,
+					      attr->decap_actions,
+					      attr->decap_pat_idx,
+					      attr->decap_index,
+					      NULL);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 		allow_modify_hdr = false;
@@ -754,11 +846,11 @@ void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 			allow_modify_hdr = true;
 			allow_ctr = true;
 		}
-		dr_ste_v1_set_accelerated_rewrite_actions(last_ste, action,
-							  attr->modify_actions,
-							  attr->modify_index,
-							  attr->args_index,
-							  attr->single_modify_action);
+		dr_ste_v1_set_rewrite_actions(last_ste, action,
+					      attr->modify_actions,
+					      attr->modify_pat_idx,
+					      attr->modify_index,
+					      attr->single_modify_action);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
 	}
@@ -870,6 +962,20 @@ void dr_ste_v1_set_actions_rx(struct mlx5dr_domain *dmn,
 					     attr->aso_flow_meter.init_color);
 		action_sz -= DR_STE_ACTION_DOUBLE_SZ;
 		action += DR_STE_ACTION_DOUBLE_SZ;
+	}
+
+	if (action_type_set[DR_ACTION_TYP_RANGE]) {
+		/* match ranges requires a new STE of its own type */
+		dr_ste_v1_arr_init_next_match_range(&last_ste, added_stes, attr->gvmi);
+		dr_ste_v1_set_miss_addr(last_ste, attr->range.miss_icm_addr);
+
+		/* we do not support setting any action on the match ranges STE */
+		action_sz = 0;
+
+		dr_ste_v1_set_match_range_pkt_len(last_ste,
+						  attr->range.definer_id,
+						  attr->range.min,
+						  attr->range.max);
 	}
 
 	dr_ste_v1_set_hit_gvmi(last_ste, attr->hit_gvmi);
@@ -1873,20 +1979,22 @@ static int dr_ste_v1_build_src_gvmi_qpn_tag(struct mlx5dr_match_param *value,
 					    u8 *tag)
 {
 	struct mlx5dr_match_misc *misc = &value->misc;
+	int id = misc->source_eswitch_owner_vhca_id;
 	struct mlx5dr_cmd_vport_cap *vport_cap;
 	struct mlx5dr_domain *dmn = sb->dmn;
 	struct mlx5dr_domain *vport_dmn;
 	u8 *bit_mask = sb->bit_mask;
+	struct mlx5dr_domain *peer;
 
 	DR_STE_SET_TAG(src_gvmi_qp_v1, tag, source_qp, misc, source_sqn);
 
 	if (sb->vhca_id_valid) {
+		peer = xa_load(&dmn->peer_dmn_xa, id);
 		/* Find port GVMI based on the eswitch_owner_vhca_id */
-		if (misc->source_eswitch_owner_vhca_id == dmn->info.caps.gvmi)
+		if (id == dmn->info.caps.gvmi)
 			vport_dmn = dmn;
-		else if (dmn->peer_dmn && (misc->source_eswitch_owner_vhca_id ==
-					   dmn->peer_dmn->info.caps.gvmi))
-			vport_dmn = dmn->peer_dmn;
+		else if (peer && (id == peer->info.caps.gvmi))
+			vport_dmn = peer;
 		else
 			return -EINVAL;
 
@@ -2121,295 +2229,47 @@ dr_ste_v1_build_tnl_gtpu_flex_parser_1_init(struct mlx5dr_ste_build *sb,
 	sb->ste_build_tag_func = &dr_ste_v1_build_tnl_gtpu_flex_parser_1_tag;
 }
 
-/* Cache structure and functions */
-static bool dr_ste_v1_compare_modify_hdr(size_t cur_num_of_actions,
-					 __be64 cur_hw_actions[],
-					 size_t num_of_actions,
-					 __be64 hw_actions[])
+int dr_ste_v1_alloc_modify_hdr_ptrn_arg(struct mlx5dr_action *action)
 {
-	int i;
-
-	if (cur_num_of_actions != num_of_actions)
-		return false;
-
-	for (i = 0; i < num_of_actions; i++) {
-		u8 action_id =
-			MLX5_GET(ste_double_action_add, &hw_actions[i], action_id);
-
-		if (action_id == DR_STE_V1_ACTION_ID_COPY) {
-			if (hw_actions[i] != cur_hw_actions[i])
-				return false;
-		} else {
-			if ((__be32)hw_actions[i] !=
-			    (__be32)cur_hw_actions[i])
-				return false;
-		}
-	}
-
-	return true;
-}
-
-static bool dr_ste_v1_compare_reformat_hdr(size_t cur_num_of_actions,
-					   u8 cur_hw_action[],
-					   size_t num_of_actions,
-					   u8 hw_action[])
-{
-	/* The only check we have is according to the number
-	 * of actions, and this was already done prior this call.
-	 */
-	return true;
-}
-
-static bool dr_ste_v1_compare_pattern(enum mlx5dr_action_type cur_type,
-				      size_t cur_num_of_actions,
-				      u8 cur_hw_action[],
-				      enum mlx5dr_action_type type,
-				      size_t num_of_actions,
-				      u8 hw_action[])
-{
-	if ((cur_num_of_actions != num_of_actions) || (cur_type != type))
-		return false;
-
-	switch (type) {
-	case DR_ACTION_TYP_MODIFY_HDR:
-		return dr_ste_v1_compare_modify_hdr(cur_num_of_actions,
-						    (__be64 *)cur_hw_action,
-						    num_of_actions,
-						    (__be64 *)hw_action);
-	case DR_ACTION_TYP_TNL_L3_TO_L2:
-		return dr_ste_v1_compare_reformat_hdr(cur_num_of_actions,
-						      cur_hw_action,
-						      num_of_actions,
-						      hw_action);
-	default:
-		WARN(true, "Illegal action type - %d", type);
-		return false;
-	}
-}
-
-struct dr_cached_pattern {
-	enum mlx5dr_action_type type;
-	struct {
-		struct mlx5dr_icm_chunk *chunk;
-		u8 *data;
-		u16 num_of_actions;
-		u32 index;
-	} rewrite_data;
-	refcount_t refcount;
-	struct list_head list;
-};
-
-static struct dr_cached_pattern *
-dr_ste_v1_find_cached_pattern(struct mlx5dr_domain *dmn,
-			      struct mlx5dr_action *action)
-{
-	struct dr_cached_pattern *tmp_cached_action;
-	struct dr_cached_pattern *cached_action;
-
-	list_for_each_entry_safe(cached_action, tmp_cached_action,
-			&dmn->modify_hdr_list, list) {
-		if (dr_ste_v1_compare_pattern(cached_action->type,
-					cached_action->rewrite_data.num_of_actions,
-					cached_action->rewrite_data.data,
-					action->action_type,
-					action->rewrite->num_of_actions,
-					action->rewrite->data))
-			return cached_action;
-	}
-
-	return NULL;
-}
-
-static struct dr_cached_pattern *
-dr_ste_v1_get_cached_pattern(struct mlx5dr_domain *dmn,
-			     struct mlx5dr_action *action)
-{
-	struct dr_cached_pattern *cached_action;
-
-	cached_action = dr_ste_v1_find_cached_pattern(dmn, action);
-	if (cached_action) {
-		/* LRU: move it to be first in the list */
-		list_del(&cached_action->list);
-		list_add_tail(&cached_action->list, &dmn->modify_hdr_list);
-		refcount_inc(&cached_action->refcount);
-	}
-
-	return cached_action;
-}
-
-static void dr_ste_v1_put_cached_pattern(struct mlx5dr_domain *dmn,
-					 struct mlx5dr_action *action)
-{
-	struct dr_cached_pattern *cached_pattern;
-
-	cached_pattern = dr_ste_v1_find_cached_pattern(dmn, action);
-	if (!cached_pattern) {
-		WARN(true, "Cached pattern not found");
-		return;
-	}
-
-	if (!refcount_dec_and_test(&cached_pattern->refcount))
-		return;
-
-	list_del(&cached_pattern->list);
-
-	kfree(action->rewrite->data);
-	mlx5dr_icm_free_chunk(action->rewrite->chunk);
-
-	kfree(cached_pattern);
-}
-
-static int dr_ste_v1_add_pattern_to_cache(struct mlx5dr_domain *dmn,
-					  struct mlx5dr_action *action)
-{
-	struct dr_cached_pattern *cached_pattern;
-
-	cached_pattern = kzalloc(sizeof(*cached_pattern), GFP_KERNEL);
-	if (!cached_pattern)
-		return -ENOMEM;
-
-	cached_pattern->type = action->action_type;
-	cached_pattern->rewrite_data.chunk = action->rewrite->chunk;
-	cached_pattern->rewrite_data.index = action->rewrite->index;
-	cached_pattern->rewrite_data.num_of_actions =
-		action->rewrite->num_of_actions;
-	cached_pattern->rewrite_data.data = action->rewrite->data;
-
-	list_add_tail(&cached_pattern->list, &dmn->modify_hdr_list);
-
-	refcount_set(&cached_pattern->refcount, 1);
-
-	return 0;
-}
-
-static enum mlx5dr_arg_chunk_size
-dr_get_arg_size(struct mlx5dr_action *action)
-{
-	if (action->rewrite->num_of_actions <= 8)
-		return DR_ARG_CHUNK_SIZE_1;
-	if (action->rewrite->num_of_actions <= 16)
-		return DR_ARG_CHUNK_SIZE_2;
-	if (action->rewrite->num_of_actions <= 32)
-		return DR_ARG_CHUNK_SIZE_3;
-
-	return DR_ARG_CHUNK_SIZE_MAX;
-}
-
-static int dr_ste_v1_alloc_modify_hdr_arg(struct mlx5dr_domain *dmn,
-					  struct mlx5dr_action *action)
-{
+	struct mlx5dr_ptrn_mgr *ptrn_mgr;
 	int ret;
 
-	action->rewrite->arg = mlx5dr_arg_get_obj(dmn, dr_get_arg_size(action));
+	ptrn_mgr = action->rewrite->dmn->ptrn_mgr;
+	if (!ptrn_mgr)
+		return -EOPNOTSUPP;
+
+	action->rewrite->arg = mlx5dr_arg_get_obj(action->rewrite->dmn->arg_mgr,
+						  action->rewrite->num_of_actions,
+						  action->rewrite->data);
 	if (!action->rewrite->arg) {
-		mlx5dr_err(dmn, "Failed allocating args object for modify header\n");
-		return -ENOMEM;
+		mlx5dr_err(action->rewrite->dmn, "Failed allocating args for modify header\n");
+		return -EAGAIN;
 	}
 
-	/* write it into the hw */
-	ret = mlx5dr_send_postsend_args(dmn, action);
-	if (ret) {
-		mlx5dr_err(dmn, "Failed writing args object\n");
-		goto put_obj;
+	action->rewrite->ptrn =
+		mlx5dr_ptrn_cache_get_pattern(ptrn_mgr,
+					      action->rewrite->num_of_actions,
+					      action->rewrite->data);
+	if (!action->rewrite->ptrn) {
+		mlx5dr_err(action->rewrite->dmn, "Failed to get pattern\n");
+		ret = -EAGAIN;
+		goto put_arg;
 	}
 
 	return 0;
 
-put_obj:
-	mlx5dr_arg_put_obj(dmn, action->rewrite->arg);
-	return ret;
-}
-
-int dr_ste_v1_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
-				     u32 chunck_size)
-{
-	struct mlx5dr_domain *dmn = action->rewrite->dmn;
-	struct dr_cached_pattern *cached_pattern;
-	int ret;
-
-	if (!dmn->modify_header_ptrn_icm_pool)
-		return -ENOTSUPP;
-
-	ret = dr_ste_v1_alloc_modify_hdr_arg(dmn, action);
-	if (ret) {
-		mlx5dr_err(dmn, "Failed allocating args for modify header\n");
-		return -ENOMEM;
-	}
-
-	mutex_lock(&dmn->modify_hdr_mutex);
-
-	cached_pattern = dr_ste_v1_get_cached_pattern(dmn, action);
-	if (cached_pattern) {
-		/* no use the current one, use the cached */
-		kfree(action->rewrite->data);
-
-		action->rewrite->chunk = cached_pattern->rewrite_data.chunk;
-		action->rewrite->index = cached_pattern->rewrite_data.index;
-		action->rewrite->data = cached_pattern->rewrite_data.data;
-
-	} else {
-		u64 *hw_actions;
-		int i;
-
-		action->rewrite->chunk =
-			mlx5dr_icm_alloc_chunk(dmn->modify_header_ptrn_icm_pool,
-					       chunck_size);
-		if (!action->rewrite->chunk) {
-			ret = -ENOMEM;
-			goto put_arg;
-		}
-
-		hw_actions = (u64 *)action->rewrite->data;
-
-		/* Here we mask the pattern data to create a valid pattern
-		 * since we do an OR operation between the arg and pattern
-		 * This should be fixed in the future on to keep the data valid */
-		for (i = 0; i < action->rewrite->num_of_actions; i++) {
-			u8 action_id = MLX5_GET(ste_double_action_add, &hw_actions[i], action_id);
-
-			if (action_id == DR_STE_V1_ACTION_ID_SET ||
-			    action_id == DR_STE_V1_ACTION_ID_ADD ||
-			    action_id == DR_STE_V1_ACTION_ID_INSERT_INLINE)
-				MLX5_SET(ste_double_action_set, &hw_actions[i], inline_data, 0);
-		}
-
-		action->rewrite->index = (mlx5dr_icm_pool_get_chunk_icm_addr(action->rewrite->chunk) -
-			dmn->info.caps.hdr_modify_pattern_icm_addr) /
-			MLX5DR_ACTION_CACHE_LINE_SIZE;
-
-		ret = mlx5dr_send_postsend_action(dmn, action);
-		if (ret)
-			goto clean_chunk;
-
-		ret = dr_ste_v1_add_pattern_to_cache(dmn, action);
-		if (ret) {
-			mlx5dr_err(dmn, "Failed adding to cache\n");
-			goto clean_chunk;
-		}
-	}
-
-	mutex_unlock(&dmn->modify_hdr_mutex);
-
-	return 0;
-
-clean_chunk:
-	mlx5dr_icm_free_chunk(action->rewrite->chunk);
 put_arg:
-	mutex_unlock(&dmn->modify_hdr_mutex);
-	mlx5dr_arg_put_obj(action->rewrite->dmn, action->rewrite->arg);
-
+	mlx5dr_arg_put_obj(action->rewrite->dmn->arg_mgr,
+			   action->rewrite->arg);
 	return ret;
 }
 
-void dr_ste_v1_dealloc_modify_hdr_chunk(struct mlx5dr_action *action)
+void dr_ste_v1_free_modify_hdr_ptrn_arg(struct mlx5dr_action *action)
 {
-	struct mlx5dr_domain *dmn = action->rewrite->dmn;
-
-	mutex_lock(&dmn->modify_hdr_mutex);
-	dr_ste_v1_put_cached_pattern(action->rewrite->dmn, action);
-	mutex_unlock(&dmn->modify_hdr_mutex);
-
-	mlx5dr_arg_put_obj(action->rewrite->dmn, action->rewrite->arg);
+	mlx5dr_ptrn_cache_put_pattern(action->rewrite->dmn->ptrn_mgr,
+				      action->rewrite->ptrn);
+	mlx5dr_arg_put_obj(action->rewrite->dmn->arg_mgr,
+			   action->rewrite->arg);
 }
 
 static struct mlx5dr_ste_ctx ste_ctx_v1 = {
@@ -2449,6 +2309,7 @@ static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	.ste_init			= &dr_ste_v1_init,
 	.set_next_lu_type		= &dr_ste_v1_set_next_lu_type,
 	.get_next_lu_type		= &dr_ste_v1_get_next_lu_type,
+	.is_miss_addr_set		= &dr_ste_v1_is_miss_addr_set,
 	.set_miss_addr			= &dr_ste_v1_set_miss_addr,
 	.get_miss_addr			= &dr_ste_v1_get_miss_addr,
 	.set_hit_addr			= &dr_ste_v1_set_hit_addr,
@@ -2467,8 +2328,9 @@ static struct mlx5dr_ste_ctx ste_ctx_v1 = {
 	.set_action_add			= &dr_ste_v1_set_action_add,
 	.set_action_copy		= &dr_ste_v1_set_action_copy,
 	.set_action_decap_l3_list	= &dr_ste_v1_set_action_decap_l3_list,
-	.alloc_modify_hdr_chunk		= &dr_ste_v1_alloc_modify_hdr_chunk,
-	.dealloc_modify_hdr_chunk	= &dr_ste_v1_dealloc_modify_hdr_chunk,
+	.alloc_modify_hdr_chunk		= &dr_ste_v1_alloc_modify_hdr_ptrn_arg,
+	.dealloc_modify_hdr_chunk	= &dr_ste_v1_free_modify_hdr_ptrn_arg,
+
 	/* Send */
 	.prepare_for_postsend		= &dr_ste_v1_prepare_for_postsend,
 };

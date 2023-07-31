@@ -35,12 +35,10 @@ static char *steering_mode_to_str[] = {
 	[DEVLINK_ESWITCH_STEERING_MODE_SMFS] = "smfs",
 };
 
-#ifdef HAVE_XFRM_OFFLOAD_FULL
 static char *ipsec_to_str[] = {
 	[DEVLINK_ESWITCH_IPSEC_MODE_NONE] = "none",
 	[DEVLINK_ESWITCH_IPSEC_MODE_FULL] = "full",
 };
-#endif
 
 static char *vport_match_to_str[] = {
 	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_METADATA] = "metadata",
@@ -137,7 +135,6 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.compat_name = "steering_mode",
 	},
 /* only for kernel linux-5.4.0-1020.21.g8ebdd1f-bluefield*/
-#ifdef HAVE_XFRM_OFFLOAD_FULL
 	{
 		.read_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_get,
 		.write_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_set,
@@ -145,7 +142,7 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.map_size = ARRAY_SIZE(ipsec_to_str),
 		.compat_name = "ipsec_mode",
 	},
-#endif
+
 	{
 		.read_vport_match_mode = mlx5_devlink_eswitch_vport_match_mode_get,
 		.write_vport_match_mode = mlx5_devlink_eswitch_vport_match_mode_set,

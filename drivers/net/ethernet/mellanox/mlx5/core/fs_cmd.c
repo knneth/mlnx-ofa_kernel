@@ -32,6 +32,7 @@
 
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/device.h>
+#include <linux/mlx5/devcom.h>
 #include <linux/mlx5/mlx5_ifc.h>
 
 #include "fs_core.h"
@@ -139,7 +140,8 @@ static void mlx5_cmd_stub_modify_header_dealloc(struct mlx5_flow_root_namespace 
 }
 
 static int mlx5_cmd_stub_set_peer(struct mlx5_flow_root_namespace *ns,
-				  struct mlx5_flow_root_namespace *peer_ns)
+				  struct mlx5_flow_root_namespace *peer_ns,
+				  u16 peer_idx)
 {
 	return 0;
 }
@@ -220,8 +222,8 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 		return 0;
 
 	if (ft->type == FS_FT_FDB &&
-	    mlx5_lag_is_shared_fdb(dev) &&
-	    !mlx5_lag_is_master(dev))
+	    mlx5_esw_is_shared_fdb(dev) &&
+	    !mlx5_esw_is_shared_fdb_master(dev))
 		return 0;
 
 	MLX5_SET(set_flow_table_root_in, in, opcode,
@@ -241,18 +243,46 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 	err = mlx5_cmd_exec_in(dev, set_flow_table_root, in);
 	if (!err &&
 	    ft->type == FS_FT_FDB &&
-	    mlx5_lag_is_shared_fdb(dev) &&
-	    mlx5_lag_is_master(dev)) {
-		err = mlx5_cmd_set_slave_root_fdb(dev,
-						  mlx5_lag_get_peer_mdev(dev),
-						  !disconnect, (!disconnect) ?
-						  ft->id : 0);
-		if (err && !disconnect) {
-			MLX5_SET(set_flow_table_root_in, in, op_mod, 0);
-			MLX5_SET(set_flow_table_root_in, in, table_id,
-				 ns->root_ft->id);
-			mlx5_cmd_exec_in(dev, set_flow_table_root, in);
+	    mlx5_esw_is_shared_fdb(dev) &&
+	    mlx5_esw_is_shared_fdb_master(dev)) {
+		struct mlx5_core_dev *peer_dev;
+		int i;
+
+		if (MLX5_VPORT_MANAGER(dev)) {
+			mlx5_lag_for_each_peer_mdev(dev, peer_dev, i) {
+				err = mlx5_cmd_set_slave_root_fdb(dev, peer_dev, !disconnect,
+						(!disconnect) ? ft->id : 0);
+				if (err && !disconnect) {
+					MLX5_SET(set_flow_table_root_in, in, op_mod, 0);
+					MLX5_SET(set_flow_table_root_in, in, table_id,
+							ns->root_ft->id);
+					mlx5_cmd_exec_in(dev, set_flow_table_root, in);
+				}
+				if (err)
+					break;
+			}
+		} else {
+			struct mlx5_devcom_comp_dev *devcom, *pos;
+			struct mlx5_eswitch *peer_esw;
+
+			devcom = mlx5_esw_devcom_get(dev);
+
+			if (mlx5_devcom_comp_is_ready(devcom)) {
+				mlx5_devcom_for_each_peer_entry(devcom, peer_esw, pos) {
+					err = mlx5_cmd_set_slave_root_fdb(dev, peer_esw->dev, !disconnect,
+							(!disconnect) ? ft->id : 0);
+					if (err && !disconnect) {
+						MLX5_SET(set_flow_table_root_in, in, op_mod, 0);
+						MLX5_SET(set_flow_table_root_in, in, table_id,
+								ns->root_ft->id);
+						mlx5_cmd_exec_in(dev, set_flow_table_root, in);
+					}
+					if (err)
+						break;
+				}
+			}
 		}
+
 	}
 
 	return err;
@@ -272,8 +302,6 @@ static int mlx5_cmd_create_flow_table(struct mlx5_flow_root_namespace *ns,
 	unsigned int size;
 	int err;
 
-	if (ft_attr->max_fte != POOL_NEXT_SIZE)
-		size = roundup_pow_of_two(ft_attr->max_fte);
 	size = mlx5_ft_pool_get_avail_sz(dev, ft->type, ft_attr->max_fte);
 	if (!size)
 		return -ENOSPC;
@@ -412,11 +440,6 @@ static int mlx5_cmd_create_flow_group(struct mlx5_flow_root_namespace *ns,
 		 MLX5_CMD_OP_CREATE_FLOW_GROUP);
 	MLX5_SET(create_flow_group_in, in, table_type, ft->type);
 	MLX5_SET(create_flow_group_in, in, table_id, ft->id);
-	if (ft->vport) {
-		MLX5_SET(create_flow_group_in, in, vport_number, ft->vport);
-		MLX5_SET(create_flow_group_in, in, other_vport, 1);
-	}
-
 	MLX5_SET(create_flow_group_in, in, vport_number, ft->vport);
 	MLX5_SET(create_flow_group_in, in, other_vport,
 		 !!(ft->flags & MLX5_FLOW_TABLE_OTHER_VPORT));
@@ -967,7 +990,7 @@ static int mlx5_cmd_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 		max_actions = MLX5_CAP_ESW_INGRESS_ACL(dev, max_modify_header_actions);
 		table_type = FS_FT_ESW_INGRESS_ACL;
 		break;
-	case MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC:
+	case MLX5_FLOW_NAMESPACE_RDMA_TX_IPSEC:
 	case MLX5_FLOW_NAMESPACE_RDMA_TX:
 		max_actions = MLX5_CAP_FLOWTABLE_RDMA_TX(dev, max_modify_header_actions);
 		table_type = FS_FT_RDMA_TX;

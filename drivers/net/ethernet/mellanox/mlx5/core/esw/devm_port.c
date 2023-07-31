@@ -7,8 +7,7 @@
 #include "mlx5_esw_devm.h"
 
 int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
-			       u32 controller, u32 sfnum,
-			       struct devlink_port *dl_port)
+			       u32 controller, u32 sfnum, struct devlink_port *dl_port)
 {
 	struct mlx5_devm_device *devm_dev;
 	struct mlxdevm_port_attrs attrs;

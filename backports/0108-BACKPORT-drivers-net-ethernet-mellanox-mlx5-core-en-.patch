@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
-Change-Id: If490112f0f810e70eeef1ed983e34e709c914b9d
+Change-Id: I8baa2753f255d5351112311566f7831a788317cb
 ---
  .../ethernet/mellanox/mlx5/core/en/rep/tc.h   | 19 +++++++++++++++++++
  1 file changed, 19 insertions(+)

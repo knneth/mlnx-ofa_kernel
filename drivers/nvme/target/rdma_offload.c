@@ -363,18 +363,34 @@ static u16 nvmet_rdma_install_offload_queue(struct nvmet_sq *sq)
 
 static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 {
+	int ret;
+
 	lockdep_assert_held(&be_ctrl->xrq->be_mutex);
 	list_del_init(&be_ctrl->entry);
 	be_ctrl->xrq->nr_be_ctrls--;
 	ida_simple_remove(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
 	nvmet_offload_ctx_configfs_del(&be_ctrl->offload_ctx);
 
-	if (be_ctrl->ibns)
-		ib_detach_nvmf_ns(be_ctrl->ibns);
+	if (be_ctrl->ibns) {
+		ret = ib_detach_nvmf_ns(be_ctrl->ibns);
+		if (ret) {
+			/* Don't initialize a queue that the HW is using */
+			be_ctrl->restart = false;
+			pr_err("Failed to detach nvmf ns be_ctrl=%p ret = %d\n",
+			       be_ctrl, ret);
+		}
+	}
 	if (be_ctrl->ofl)
 		nvme_peer_flush_resource(be_ctrl->ofl, be_ctrl->restart);
-	if (be_ctrl->ibctrl)
-		ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
+	if (be_ctrl->ibctrl) {
+		ret = ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
+		if (ret) {
+			/* Don't initialize a queue that the HW is using */
+			be_ctrl->restart = false;
+			pr_err("Failed to destroy backend ctrl %p ret = %d\n",
+			       be_ctrl, ret);
+		}
+	}
 	if (be_ctrl->ofl)
 		nvme_peer_put_resource(be_ctrl->ofl, be_ctrl->restart);
 	kref_put(&be_ctrl->xrq->ref, nvmet_rdma_destroy_xrq);

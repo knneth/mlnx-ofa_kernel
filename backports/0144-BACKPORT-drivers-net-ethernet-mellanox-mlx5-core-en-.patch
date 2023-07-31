@@ -1,103 +1,53 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 
-Change-Id: Ie0eaf9017b4e3fbf8b95cd43ab180f4cfe2c50c9
+Change-Id: I9b4df1b8d54fd3294bc5378a93f2716b287998da
 ---
- .../mellanox/mlx5/core/en/xsk/setup.c         | 35 +++++++++++++++++--
- 1 file changed, 33 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
-@@ -1,10 +1,14 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2019 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+@@ -50,17 +50,29 @@ struct mlx5e_xdp_buff {
+ 	struct mlx5e_rq *rq;
+ };
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- #include "setup.h"
- #include "en/params.h"
- #include "en/txrx.h"
- #include "en/health.h"
-+#ifdef HAVE_XDP_SOCK_DRV_H
-+#include <net/xdp_sock_drv.h>
++#ifdef HAVE_XDP_SUPPORT
+ struct mlx5e_xsk_param;
+ int mlx5e_xdp_max_mtu(struct mlx5e_params *params, struct mlx5e_xsk_param *xsk);
+ bool mlx5e_xdp_handle(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
+ 		      struct bpf_prog *prog, struct mlx5e_xdp_buff *mlctx);
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xdp_handle_old(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
++		      struct bpf_prog *prog, struct xdp_buff *xdp);
++#endif
+ void mlx5e_xdp_mpwqe_complete(struct mlx5e_xdpsq *sq);
+ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq);
+ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
+ void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw);
+ void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq);
++#ifdef HAVE_NDO_XDP_XMIT
++#ifndef HAVE_NDO_XDP_FLUSH
+ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
+ 		   u32 flags);
++#else
++int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp);
++void mlx5e_xdp_flush(struct net_device *dev);
++#endif
 +#endif
  
- static int mlx5e_legacy_rq_validate_xsk(struct mlx5_core_dev *mdev,
- 					struct mlx5e_params *params,
-@@ -21,7 +25,11 @@ static int mlx5e_legacy_rq_validate_xsk(
- /* The limitation of 2048 can be altered, but shouldn't go beyond the minimal
-  * stride size of striding RQ.
+ extern const struct xdp_metadata_ops mlx5e_xdp_metadata_ops;
+ 
+@@ -110,7 +122,6 @@ static inline void mlx5e_xmit_xdp_doorbe
+ 		sq->doorbell_cseg = NULL;
+ 	}
+ }
+-
+ /* Enable inline WQEs to shift some load from a congested HCA (HW) to
+  * a less congested cpu (SW).
   */
-+#ifdef XDP_UMEM_MIN_CHUNK_SIZE
-+#define MLX5E_MIN_XSK_CHUNK_SIZE max(2048, XDP_UMEM_MIN_CHUNK_SIZE)
-+#else
- #define MLX5E_MIN_XSK_CHUNK_SIZE 2048
-+#endif
- 
- bool mlx5e_validate_xsk_param(struct mlx5e_params *params,
- 			      struct mlx5e_xsk_param *xsk,
-@@ -57,7 +65,11 @@ static void mlx5e_build_xsk_cparam(struc
- 
- static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
- 			     struct mlx5e_params *params,
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 			     struct xsk_buff_pool *pool,
-+#else
-+			     struct xdp_umem *umem,
-+#endif
- 			     struct mlx5e_xsk_param *xsk,
- 			     struct mlx5e_rq *rq)
- {
-@@ -77,7 +89,11 @@ static int mlx5e_init_xsk_rq(struct mlx5
- 	rq->mdev         = mdev;
- 	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
- 	rq->xdpsq        = &c->rq_xdpsq;
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	rq->xsk_pool     = pool;
-+#else
-+	rq->umem     	 = umem;
-+#endif
- 	rq->stats        = &c->priv->channel_stats[c->ix]->xskrq;
- 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
- 	rq_xdp_ix        = c->ix;
-@@ -85,11 +101,20 @@ static int mlx5e_init_xsk_rq(struct mlx5
- 	if (err)
- 		return err;
- 
-+#ifdef HAVE_XDP_RXQ_INFO_REG_4_PARAMS
- 	return  xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix, 0);
-+#else
-+	return  xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix);
-+#endif
+@@ -192,3 +203,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
+ 	return fifo->xi[(*fifo->cc)++ & fifo->mask];
  }
- 
- static int mlx5e_open_xsk_rq(struct mlx5e_channel *c, struct mlx5e_params *params,
--			     struct mlx5e_rq_param *rq_params, struct xsk_buff_pool *pool,
-+			     struct mlx5e_rq_param *rq_params,
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+			     struct xsk_buff_pool *pool,
-+#else
-+			     struct xdp_umem *pool,
+ #endif
 +#endif
- 			     struct mlx5e_create_cq_param *ccp, struct mlx5e_xsk_param *xsk)
- {
- 	int err;
-@@ -102,7 +127,12 @@ static int mlx5e_open_xsk_rq(struct mlx5
- }
- 
- int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
--		   struct mlx5e_xsk_param *xsk, struct xsk_buff_pool *pool,
-+		   struct mlx5e_xsk_param *xsk,
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+		   struct xsk_buff_pool *pool,
-+#else
-+		   struct xdp_umem *pool,
-+#endif
- 		   struct mlx5e_channel *c)
- {
- 	struct mlx5e_channel_param *cparam;
-@@ -193,3 +223,4 @@ void mlx5e_deactivate_xsk(struct mlx5e_c
- 
- 	/* TX queue is disabled on close. */
- }
-+#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

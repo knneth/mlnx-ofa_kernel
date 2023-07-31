@@ -8,7 +8,7 @@
 
 #include "en.h"
 #include "lib/aso.h"
-#include "lib/mlx5.h"
+#include "lib/crypto.h"
 #include "en_accel/macsec.h"
 #include "en_accel/macsec_fs.h"
 
@@ -78,17 +78,24 @@ struct mlx5e_macsec_sa {
 	struct rhash_head hash;
 	u32 fs_id;
 	union mlx5e_macsec_rule *macsec_rule;
+	struct rcu_head rcu_head;
 	struct mlx5e_macsec_epn_state epn_state;
 };
 
 struct mlx5e_macsec_rx_sc;
+struct mlx5e_macsec_rx_sc_xarray_element {
+	u32 fs_id;
+	struct mlx5e_macsec_rx_sc *rx_sc;
+};
+
 struct mlx5e_macsec_rx_sc {
 	bool active;
 	sci_t sci;
 	struct mlx5e_macsec_sa *rx_sa[MACSEC_NUM_AN];
 	struct list_head rx_sc_list_element;
+	struct mlx5e_macsec_rx_sc_xarray_element *sc_xarray_element;
 	struct metadata_dst *md_dst;
-	u32 fs_id;
+	struct rcu_head rcu_head;
 };
 
 struct mlx5e_macsec_umr {
@@ -200,7 +207,7 @@ static int mlx5e_macsec_aso_reg_mr(struct mlx5_core_dev *mdev, struct mlx5e_macs
 		return err;
 	}
 
-	dma_device = &mdev->pdev->dev;
+	dma_device = mlx5_core_dma_dev(mdev);
 	dma_addr = dma_map_single(dma_device, umr->ctx, sizeof(umr->ctx), DMA_BIDIRECTIONAL);
 	err = dma_mapping_error(dma_device, dma_addr);
 	if (err) {
@@ -402,6 +409,8 @@ static void mlx5e_macsec_add_roce_unhandled_rules(struct mlx5e_macsec_fs *macsec
 			mlx5e_macsec_fs_add_roce_rule_rx(macsec_fs, fs_id, current_gid->gid_idx,
 							 (struct sockaddr *)&current_gid->addr,
 							 macsec_rule);
+		list_del(&current_gid->roce_gid_list_entry);
+		kfree(current_gid);
 	}
 }
 
@@ -474,7 +483,7 @@ mlx5e_macsec_get_rx_sc_from_sc_list(const struct list_head *list, sci_t sci)
 {
 	struct mlx5e_macsec_rx_sc *iter;
 
-	list_for_each_entry(iter, list, rx_sc_list_element) {
+	list_for_each_entry_rcu(iter, list, rx_sc_list_element) {
 		if (iter->sci == sci)
 			return iter;
 	}
@@ -617,9 +626,6 @@ static int mlx5e_macsec_add_txsa(struct macsec_context *ctx)
 	struct mlx5e_macsec *macsec;
 	int err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	mutex_lock(&priv->macsec->lock);
 
 	macsec = priv->macsec;
@@ -694,9 +700,6 @@ static int mlx5e_macsec_upd_txsa(struct macsec_context *ctx)
 	struct net_device *netdev;
 	int err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	mutex_lock(&priv->macsec->lock);
 
 	macsec = priv->macsec;
@@ -756,9 +759,6 @@ static int mlx5e_macsec_del_txsa(struct macsec_context *ctx)
 	struct mlx5e_macsec *macsec;
 	int err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	mutex_lock(&priv->macsec->lock);
 	macsec = priv->macsec;
 	macsec_device = mlx5e_macsec_get_macsec_device_context(macsec, ctx->secy->netdev);
@@ -777,7 +777,7 @@ static int mlx5e_macsec_del_txsa(struct macsec_context *ctx)
 
 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true);
 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
-	kfree(tx_sa);
+	kfree_rcu(tx_sa);
 	macsec_device->tx_sa[assoc_num] = NULL;
 
 out:
@@ -802,6 +802,7 @@ static u32 mlx5e_macsec_get_sa_from_hashtable(struct rhashtable *sci_hash, sci_t
 
 static int mlx5e_macsec_add_rxsc(struct macsec_context *ctx)
 {
+	struct mlx5e_macsec_rx_sc_xarray_element *sc_xarray_element;
 	struct mlx5e_priv *priv = netdev_priv(ctx->netdev);
 	const struct macsec_rx_sc *ctx_rx_sc = ctx->rx_sc;
 	struct mlx5e_macsec_device *macsec_device;
@@ -809,9 +810,6 @@ static int mlx5e_macsec_add_rxsc(struct macsec_context *ctx)
 	struct list_head *rx_sc_list;
 	struct mlx5e_macsec *macsec;
 	int err = 0;
-
-	if (ctx->prepare)
-		return 0;
 
 	mutex_lock(&priv->macsec->lock);
 	macsec = priv->macsec;
@@ -837,13 +835,21 @@ static int mlx5e_macsec_add_rxsc(struct macsec_context *ctx)
 		goto out;
 	}
 
-	err = xa_alloc(&macsec->sc_xarray, &rx_sc->fs_id, rx_sc,
+	sc_xarray_element = kzalloc(sizeof(*sc_xarray_element), GFP_KERNEL);
+	if (!sc_xarray_element) {
+		err = -ENOMEM;
+		goto destroy_rx_sc;
+	}
+
+	sc_xarray_element->rx_sc = rx_sc;
+	err = xa_alloc(&macsec->sc_xarray, &sc_xarray_element->fs_id, sc_xarray_element,
 		       XA_LIMIT(1, MLX5_MACEC_RX_FS_ID_MAX), GFP_KERNEL);
 	if (err) {
 		if (err == -EBUSY)
 			netdev_err(ctx->netdev,
-				   "MACsec offload: unable to create entry for RX SC (2^16 - 1 Rx SCs already allocated)\n");
-		goto destroy_rx_sc;
+				   "MACsec offload: unable to create entry for RX SC (%d Rx SCs already allocated)\n",
+				   MLX5_MACEC_RX_FS_ID_MAX);
+		goto destroy_sc_xarray_elemenet;
 	}
 
 	rx_sc->md_dst = metadata_dst_alloc(0, METADATA_MACSEC, GFP_KERNEL);
@@ -854,14 +860,18 @@ static int mlx5e_macsec_add_rxsc(struct macsec_context *ctx)
 
 	rx_sc->sci = ctx_rx_sc->sci;
 	rx_sc->active = ctx_rx_sc->active;
-	list_add(&rx_sc->rx_sc_list_element, rx_sc_list);
+	list_add_rcu(&rx_sc->rx_sc_list_element, rx_sc_list);
+
+	rx_sc->sc_xarray_element = sc_xarray_element;
 	rx_sc->md_dst->u.macsec_info.sci = rx_sc->sci;
 	mutex_unlock(&macsec->lock);
 
 	return 0;
 
 erase_xa_alloc:
-	xa_erase(&macsec->sc_xarray, rx_sc->fs_id);
+	xa_erase(&macsec->sc_xarray, sc_xarray_element->fs_id);
+destroy_sc_xarray_elemenet:
+	kfree(sc_xarray_element);
 destroy_rx_sc:
 	kfree(rx_sc);
 
@@ -882,9 +892,6 @@ static int mlx5e_macsec_upd_rxsc(struct macsec_context *ctx)
 	struct list_head *list;
 	int i;
 	int err = 0;
-
-	if (ctx->prepare)
-		return 0;
 
 	mutex_lock(&priv->macsec->lock);
 
@@ -916,6 +923,7 @@ static int mlx5e_macsec_upd_rxsc(struct macsec_context *ctx)
 		if (err)
 			goto out;
 	}
+
 out:
 	mutex_unlock(&macsec->lock);
 
@@ -945,8 +953,9 @@ static void macsec_del_rxsc_ctx(struct mlx5e_macsec *macsec, struct mlx5e_macsec
 	 * once fs_id is erased then this rx_sc is hidden from datapath.
 	 */
 	list_del_rcu(&rx_sc->rx_sc_list_element);
-	xa_erase(&macsec->sc_xarray, rx_sc->fs_id);
+	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
 	metadata_dst_free(rx_sc->md_dst);
+	kfree(rx_sc->sc_xarray_element);
 	kfree_rcu(rx_sc);
 }
 
@@ -958,9 +967,6 @@ static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
 	struct mlx5e_macsec *macsec;
 	struct list_head *list;
 	int err = 0;
-
-	if (ctx->prepare)
-		return 0;
 
 	mutex_lock(&priv->macsec->lock);
 
@@ -1003,9 +1009,6 @@ static int mlx5e_macsec_add_rxsa(struct macsec_context *ctx)
 	struct list_head *list;
 	int err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	mutex_lock(&priv->macsec->lock);
 
 	macsec = priv->macsec;
@@ -1044,7 +1047,7 @@ static int mlx5e_macsec_add_rxsa(struct macsec_context *ctx)
 	rx_sa->next_pn = ctx_rx_sa->next_pn;
 	rx_sa->sci = sci;
 	rx_sa->assoc_num = assoc_num;
-	rx_sa->fs_id = rx_sc->fs_id;
+	rx_sa->fs_id = rx_sc->sc_xarray_element->fs_id;
 
 	if (ctx->secy->xpn)
 		update_macsec_epn(rx_sa, &ctx_rx_sa->key, &ctx_rx_sa->next_pn_halves,
@@ -1090,9 +1093,6 @@ static int mlx5e_macsec_upd_rxsa(struct macsec_context *ctx)
 	struct mlx5e_macsec *macsec;
 	struct list_head *list;
 	int err = 0;
-
-	if (ctx->prepare)
-		return 0;
 
 	mutex_lock(&priv->macsec->lock);
 
@@ -1150,9 +1150,6 @@ static int mlx5e_macsec_del_rxsa(struct macsec_context *ctx)
 	struct list_head *list;
 	int err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	mutex_lock(&priv->macsec->lock);
 
 	macsec = priv->macsec;
@@ -1202,9 +1199,6 @@ static int mlx5e_macsec_add_secy(struct macsec_context *ctx)
 	struct mlx5e_macsec *macsec;
 	int err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	if (!mlx5e_macsec_secy_features_validate(ctx))
 		return -EINVAL;
 
@@ -1222,31 +1216,24 @@ static int mlx5e_macsec_add_secy(struct macsec_context *ctx)
 		goto out;
 	}
 
-	if (!ctx->secy->tx_sc.encrypt) {
-		netdev_err(netdev, "MACsec offload: encrypt off isn't supported\n");
-		err = -EINVAL;
-		goto out;
-	}
-
 	macsec_device = kzalloc(sizeof(*macsec_device), GFP_KERNEL);
 	if (!macsec_device) {
 		err = -ENOMEM;
 		goto out;
 	}
 
-	macsec_device->dev_addr = kzalloc(dev->addr_len, GFP_KERNEL);
+	macsec_device->dev_addr = kmemdup(dev->dev_addr, dev->addr_len, GFP_KERNEL);
 	if (!macsec_device->dev_addr) {
 		kfree(macsec_device);
 		err = -ENOMEM;
 		goto out;
 	}
 
-	memcpy(macsec_device->dev_addr, dev->dev_addr, dev->addr_len);
 	macsec_device->netdev = dev;
 
-	INIT_LIST_HEAD(&macsec_device->macsec_rx_sc_list_head);
+	INIT_LIST_HEAD_RCU(&macsec_device->macsec_rx_sc_list_head);
 	INIT_LIST_HEAD(&macsec_device->unhandled_roce_gids);
-	list_add(&macsec_device->macsec_device_list_element, &macsec->macsec_device_list_head);
+	list_add_rcu(&macsec_device->macsec_device_list_element, &macsec->macsec_device_list_head);
 
 	++macsec->num_of_devices;
 out:
@@ -1313,9 +1300,6 @@ static int mlx5e_macsec_upd_secy(struct macsec_context *ctx)
 	struct mlx5e_macsec *macsec;
 	int i, err = 0;
 
-	if (ctx->prepare)
-		return 0;
-
 	if (!mlx5e_macsec_secy_features_validate(ctx))
 		return -EINVAL;
 
@@ -1325,12 +1309,6 @@ static int mlx5e_macsec_upd_secy(struct macsec_context *ctx)
 	macsec_device = mlx5e_macsec_get_macsec_device_context(macsec, ctx->secy->netdev);
 	if (!macsec_device) {
 		netdev_err(ctx->netdev, "MACsec offload: Failed to find device context\n");
-		err = -EINVAL;
-		goto out;
-	}
-
-	if (!tx_sc->encrypt) {
-		netdev_err(ctx->netdev, "MACsec offload: encrypt off isn't supported\n");
 		err = -EINVAL;
 		goto out;
 	}
@@ -1380,9 +1358,6 @@ static int mlx5e_macsec_del_secy(struct macsec_context *ctx)
 	int err = 0;
 	int i;
 
-	if (ctx->prepare)
-		return 0;
-
 	mutex_lock(&priv->macsec->lock);
 	macsec = priv->macsec;
 	macsec_device = mlx5e_macsec_get_macsec_device_context(macsec, ctx->secy->netdev);
@@ -1411,7 +1386,7 @@ static int mlx5e_macsec_del_secy(struct macsec_context *ctx)
 	kfree(macsec_device->dev_addr);
 	macsec_device->dev_addr = NULL;
 
-	list_del(&macsec_device->macsec_device_list_element);
+	list_del_rcu(&macsec_device->macsec_device_list_element);
 	--macsec->num_of_devices;
 	kfree(macsec_device);
 
@@ -1437,12 +1412,12 @@ static void macsec_aso_build_wqe_ctrl_seg(struct mlx5e_macsec_aso *macsec_aso,
 					  struct mlx5_wqe_aso_ctrl_seg *aso_ctrl,
 					  struct mlx5_aso_ctrl_param *param)
 {
+	struct mlx5e_macsec_umr *umr = macsec_aso->umr;
+
 	memset(aso_ctrl, 0, sizeof(*aso_ctrl));
-	if (macsec_aso->umr->dma_addr) {
-		aso_ctrl->va_l  = cpu_to_be32(macsec_aso->umr->dma_addr | ASO_CTRL_READ_EN);
-		aso_ctrl->va_h  = cpu_to_be32((u64)macsec_aso->umr->dma_addr >> 32);
-		aso_ctrl->l_key = cpu_to_be32(macsec_aso->umr->mkey);
-	}
+	aso_ctrl->va_l = cpu_to_be32(umr->dma_addr | ASO_CTRL_READ_EN);
+	aso_ctrl->va_h = cpu_to_be32((u64)umr->dma_addr >> 32);
+	aso_ctrl->l_key = cpu_to_be32(umr->mkey);
 
 	if (!param)
 		return;
@@ -1539,7 +1514,7 @@ static int macsec_aso_set_arm_event(struct mlx5_core_dev *mdev, struct mlx5e_mac
 			   MLX5_ACCESS_ASO_OPC_MOD_MACSEC);
 	macsec_aso_build_ctrl(aso, &aso_wqe->aso_ctrl, in);
 	mlx5_aso_post_wqe(maso, false, &aso_wqe->ctrl);
-	err = mlx5_aso_poll_cq(maso, false, 10);
+	err = mlx5_aso_poll_cq(maso, false);
 	mutex_unlock(&aso->aso_lock);
 
 	return err;
@@ -1567,7 +1542,7 @@ static int macsec_aso_query(struct mlx5_core_dev *mdev, struct mlx5e_macsec *mac
 	mlx5_aso_post_wqe(maso, false, &aso_wqe->ctrl);
 	expires = jiffies + msecs_to_jiffies(10);
 	do {
-		err = mlx5_aso_poll_cq(maso, false, 10);
+		err = mlx5_aso_poll_cq(maso, false);
 		if (err)
 			usleep_range(2, 10);
 	} while (err && time_is_after_jiffies(expires));
@@ -1896,6 +1871,7 @@ void mlx5e_macsec_offload_handle_rx_skb(struct net_device *netdev,
 					struct sk_buff *skb,
 					struct mlx5_cqe64 *cqe)
 {
+	struct mlx5e_macsec_rx_sc_xarray_element *sc_xarray_element;
 	u32 macsec_meta_data = be32_to_cpu(cqe->ft_metadata);
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5e_macsec_rx_sc *rx_sc;
@@ -1909,7 +1885,8 @@ void mlx5e_macsec_offload_handle_rx_skb(struct net_device *netdev,
 	fs_id = MLX5_MACSEC_RX_METADAT_HANDLE(macsec_meta_data);
 
 	rcu_read_lock();
-	rx_sc = xa_load(&macsec->sc_xarray, fs_id);
+	sc_xarray_element = xa_load(&macsec->sc_xarray, fs_id);
+	rx_sc = sc_xarray_element->rx_sc;
 	if (rx_sc) {
 		dst_hold(&rx_sc->md_dst->dst);
 		skb_dst_set(skb, &rx_sc->md_dst->dst);
@@ -1932,6 +1909,7 @@ EXPORT_SYMBOL_GPL(mlx5e_macsec_del_roce_rule);
 int mlx5e_macsec_add_roce_rule(struct net_device *ndev, const struct sockaddr *addr, u16 gid_idx)
 {
 	struct mlx5e_priv *priv = netdev_priv(macsec_get_real_dev(ndev));
+	bool tx_gid_handled = false, rx_gid_handled = false;
 	struct mlx5e_macsec *macsec = priv->macsec;
 	struct mlx5e_macsec_device *macsec_device;
 	struct mlx5e_macsec_sa *rx_sa, *tx_sa;
@@ -1958,6 +1936,7 @@ int mlx5e_macsec_add_roce_rule(struct net_device *ndev, const struct sockaddr *a
 			netdev_err(ndev, "MACsec offload: Failed to add roce TX rule\n");
 			goto out;
 		}
+		tx_gid_handled = true;
 	}
 
 	list = &macsec_device->macsec_rx_sc_list_head;
@@ -1973,9 +1952,11 @@ int mlx5e_macsec_add_roce_rule(struct net_device *ndev, const struct sockaddr *a
 				netdev_err(ndev, "MACsec offload: Failed to add roce RX rule\n");
 				goto out;
 			}
+			rx_gid_handled = true;
 		}
 	}
-	mlx5e_macsec_save_roce_gid(macsec_device, addr, gid_idx);
+	if (!tx_gid_handled || !rx_gid_handled)
+		mlx5e_macsec_save_roce_gid(macsec_device, addr, gid_idx);
 	mutex_unlock(&macsec->lock);
 
 	return 0;
@@ -2079,7 +2060,6 @@ void mlx5e_macsec_cleanup(struct mlx5e_priv *priv)
 	if (!macsec)
 		return;
 
-	priv->macsec = NULL;
 	mlx5_notifier_unregister(mdev, &macsec->nb);
 	mlx5e_macsec_fs_cleanup(macsec->macsec_fs);
 	destroy_workqueue(macsec->wq);

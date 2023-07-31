@@ -155,11 +155,25 @@ static ssize_t page_limit_show(struct kobject *kobj,
 	struct mlx5_eswitch *esw = tmp->esw;
 	struct mlx5_vport *evport;
 	u32 page_limit;
+	u16 vhca_id;
+	int err;
+
+	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
+		err = mlx5_esw_query_vport_vhca_id(esw, tmp->vport, &vhca_id);
+		if (err)
+			return err;
+
+		err = mlx5_get_max_alloc_icm_th(esw->dev, vhca_id, &page_limit);
+		if (err)
+			return err;
+		goto out;
+	}
 
 	evport = mlx5_eswitch_get_vport(esw, tmp->vport);
 	spin_lock(&evport->pg_counters_lock);
 	page_limit = evport->page_limit;
 	spin_unlock(&evport->pg_counters_lock);
+out:
 	return sprintf(buf, "limit: %u\n", page_limit);
 }
 
@@ -172,16 +186,33 @@ static ssize_t page_limit_store(struct kobject *kobj,
 		container_of(kobj, struct mlx5_rep_sysfs, paging_kobj);
 	struct mlx5_eswitch *esw = tmp->esw;
 	struct mlx5_vport *evport;
+	u16 vhca_id;
 	u32 limit;
 	int err;
 
-	evport = mlx5_eswitch_get_vport(esw, tmp->vport);
 	err = sscanf(buf, "%u", &limit);
 	if (err != 1)
 		return -EINVAL;
+
+	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
+		err = mlx5_esw_query_vport_vhca_id(esw, tmp->vport, &vhca_id);
+		if (err)
+			return err;
+
+		if (!limit)
+			limit = UINT_MAX;
+
+		err = mlx5_set_max_alloc_icm_th(esw->dev, vhca_id, limit);
+		if (err)
+			return err;
+		goto out;
+	}
+
+	evport = mlx5_eswitch_get_vport(esw, tmp->vport);
 	spin_lock(&evport->pg_counters_lock);
 	evport->page_limit = limit;
 	spin_unlock(&evport->pg_counters_lock);
+out:
 	return count;
 }
 

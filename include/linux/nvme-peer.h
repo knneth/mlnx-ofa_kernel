@@ -19,7 +19,6 @@
 #define _LINUX_NVME_PERR_H
 
 #include <linux/pci.h>
-#include <linux/blkdev.h>
 
 enum nvme_peer_resource_mask {
 	NVME_PEER_SQT_DBR		= 1 << 0,

@@ -3,7 +3,6 @@
 
 #include "../../compat/config.h"
 
-#ifndef CONFIG_COMPAT_IP_TUNNELS
 #include_next <net/dst_metadata.h>
 #ifdef CONFIG_NET_SCHED_NEW
 static inline struct metadata_dst *backport__ip_tun_set_dst(__be32 saddr,
@@ -59,44 +58,4 @@ static inline struct metadata_dst *backport__ipv6_tun_set_dst(const struct in6_a
 	return tun_dst;
 }
 #endif
-
-#else
-
-#include <linux/skbuff.h>
-#include <net/ip_tunnels.h>
-#include <net/dst.h>
-
-
-enum metadata_type {
-	METADATA_IP_TUNNEL,
-	METADATA_HW_PORT_MUX,
-};
-
-struct hw_port_info {
-	struct net_device *lower_dev;
-	u32 port_id;
-};
-
-struct metadata_dst {
-	struct dst_entry		dst;
-	enum metadata_type		type;
-	union {
-		struct ip_tunnel_info	tun_info;
-		struct hw_port_info	port_info;
-	} u;
-};
-
-static inline struct metadata_dst *skb_metadata_dst(struct sk_buff *skb)
-{
-    return NULL;
-}
-
-
-static inline struct ip_tunnel_info *skb_tunnel_info(struct sk_buff *skb)
-{
-    return NULL;
-}
-
-#endif
-
 #endif /* _COMPAT_NET_DST_METADATA_H */

@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/trace.c
 
-Change-Id: Ifb278d198864b953d4fe614946506be7cfa9e81e
+Change-Id: I439aac0c5a950bb7b27528dca2d95ebe39653751
 ---
  drivers/infiniband/core/trace.c | 2 ++
  1 file changed, 2 insertions(+)

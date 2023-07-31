@@ -1,57 +1,70 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 
-Change-Id: I95871be16a161634d4289377314d9112b519c7dc
+Change-Id: Ia0a8253b10f68f52237e577c0f5130336052e099
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.h  | 22 ++++++++++++++++---
- 1 file changed, 19 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/bond.c   | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-@@ -40,6 +40,9 @@ struct mlx5e_ptp {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+@@ -3,8 +3,12 @@
  
- 	/* data path - accessed per napi poll */
- 	struct mlx5e_ch_stats     *stats;
-+#ifndef HAVE_NAPI_STATE_MISSED
-+	unsigned long              flags;
+ #include <linux/netdevice.h>
+ #include <linux/list.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/bonding.h>
++#endif
++#ifdef HAVE_NET_LAG_H
+ #include <net/lag.h>
+-
++#endif
+ #include "mlx5_core.h"
+ #include "eswitch.h"
+ #include "esw/acl/ofld.h"
+@@ -193,9 +197,11 @@ static void mlx5e_rep_changelowerstate_e
+ 	struct mlx5e_rep_priv *rpriv;
+ 	struct net_device *lag_dev;
+ 	struct mlx5e_priv *priv;
++#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
+ 	struct list_head *iter;
+ 	struct net_device *dev;
+ 	u16 acl_vport_num;
++#endif
+ 	u16 fwd_vport_num;
+ 	int err;
+ 
+@@ -212,9 +218,12 @@ static void mlx5e_rep_changelowerstate_e
+ 	if (!lag_dev)
+ 		return;
+ 
++#ifdef HAVE_NET_LAG_PORT_DEV_TXABLE
+ 	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
+ 		   lag_dev->name, fwd_vport_num, net_lag_port_dev_txable(netdev));
 +#endif
  
- 	/* control */
- 	struct mlx5e_priv         *priv;
-@@ -50,14 +53,26 @@ struct mlx5e_ptp {
- 
- static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
- {
-+#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
- 	struct flow_keys fk;
++#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
+ 	/* Point everyone's egress acl to the vport of the active representor */
+ 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
+ 		priv = netdev_priv(dev);
+@@ -235,6 +244,7 @@ static void mlx5e_rep_changelowerstate_e
+ 					    acl_vport_num, err);
+ 		}
+ 	}
 +#endif
  
- 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
- 		return false;
+ 	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
+ 	 * rx_rule with new destination as active vport's root_ft
+@@ -315,6 +325,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
+ 	if (!mlx5_esw_acl_egress_fwd2vport_supported(priv->mdev->priv.eswitch))
+ 		goto out;
  
--	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
--		return false;
-+#ifdef HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS
-+        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
-+#elif defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
-+        if (!skb_flow_dissect_flow_keys(skb, &fk))
++#ifndef HAVE_NETDEV_FOR_EACH_LOWER_DEV
++	netdev_err(netdev, "VF representors bonding is NOT supported\n");
++	goto out;
 +#endif
-+#ifdef HAVE_PTP_CLASSIFY_RAW
-+                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
-+                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
-+#else
-+                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588));
-+#endif
- 
-+#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
- 	if (fk.basic.n_proto == htons(ETH_P_1588))
- 		return true;
- 
-@@ -67,6 +82,7 @@ static inline bool mlx5e_use_ptpsq(struc
- 
- 	return (fk.basic.ip_proto == IPPROTO_UDP &&
- 		fk.ports.dst == htons(PTP_EV_PORT));
-+#endif
- }
- 
- static inline bool mlx5e_ptpsq_fifo_has_room(struct mlx5e_txqsq *sq)
++
+ 	uplink_priv->bond = kvzalloc(sizeof(*uplink_priv->bond), GFP_KERNEL);
+ 	if (!uplink_priv->bond) {
+ 		ret = -ENOMEM;

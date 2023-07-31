@@ -1,33 +1,20 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h
 
-Change-Id: I28eeee710f5851603415febc7eb91f7125338d4a
+Change-Id: I6bfa801e4c2ba55d3730a51958b1df9d16d202a8
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c   | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
-@@ -1,12 +1,21 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h
+@@ -24,4 +24,8 @@ int
+ mlx5e_tc_act_stats_fill_stats(struct mlx5e_tc_act_stats_handle *handle,
+ 			      struct flow_offload_action *fl_act);
  
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #include "en/tc_priv.h"
-+#elif defined(CONFIG_MLX5_ESWITCH)
-+#include "en_tc.h"
-+#endif
- #include "post_meter.h"
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #include "en/tc/post_act.h"
-+#endif
- 
++void
++mlx5e_tc_act_stats_fill_stats_flow(struct mlx5e_tc_act_stats_handle *handle,
++				   struct mlx5e_tc_flow *flow);
 +
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #define MLX5_PACKET_COLOR_BITS MLX5_REG_MAPPING_MBITS(PACKET_COLOR_TO_REG)
- #define MLX5_PACKET_COLOR_MASK MLX5_REG_MAPPING_MASK(PACKET_COLOR_TO_REG)
-+#endif
- 
- struct mlx5e_post_meter_priv {
- 	struct mlx5_flow_table *ft;
+ #endif /* __MLX5_EN_ACT_STATS_H__ */

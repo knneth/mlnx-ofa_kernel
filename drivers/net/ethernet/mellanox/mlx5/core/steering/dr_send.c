@@ -148,7 +148,7 @@ struct mlx5dr_ste_send_info
 *mlx5dr_send_info_alloc(struct mlx5dr_domain *dmn,
 			enum mlx5dr_domain_nic_type nic_type)
 {
-	struct mlx5dr_send_info_pool_obj *pool_obj = NULL;
+	struct mlx5dr_send_info_pool_obj *pool_obj;
 	struct mlx5dr_send_info_pool *pool;
 	int ret;
 
@@ -386,12 +386,13 @@ dr_rdma_handle_flow_access_arg_segments(struct mlx5_wqe_ctrl_seg *wq_ctrl,
 	wq_arg_seg = (void *)(wq_flow_seg + 1);
 
 	memcpy(wq_arg_seg->argument_list,
-	       (void *)data_seg->addr,
+	       (void *)(uintptr_t)data_seg->addr,
 	       data_seg->length);
 
-	*size = sizeof(*wq_ctrl) / 16 +      /* WQE ctrl segment */
-		sizeof(*wq_flow_seg) / 16 +  /* WQE flow update ctrl seg - reserved */
-		sizeof(*wq_arg_seg) / 16;    /* WQE hdr modify arg seg - data */
+	*size = (sizeof(*wq_ctrl) +      /* WQE ctrl segment */
+		 sizeof(*wq_flow_seg) +  /* WQE flow update ctrl seg - reserved */
+		 sizeof(*wq_arg_seg)) /  /* WQE hdr modify arg seg - data */
+		MLX5_SEND_WQE_DS;
 }
 
 static void
@@ -416,9 +417,10 @@ dr_rdma_handle_icm_write_segments(struct mlx5_wqe_ctrl_seg *wq_ctrl,
 	wq_dseg->lkey = cpu_to_be32(data_seg->lkey);
 	wq_dseg->addr = cpu_to_be64(data_seg->addr);
 
-	*size = sizeof(*wq_ctrl) / 16 +  /* WQE ctrl segment */
-		sizeof(*wq_dseg) / 16 +  /* WQE data segment */
-		sizeof(*wq_raddr) / 16;  /* WQE remote addr segment */
+	*size = (sizeof(*wq_ctrl) +    /* WQE ctrl segment */
+		 sizeof(*wq_dseg) +    /* WQE data segment */
+		 sizeof(*wq_raddr)) /  /* WQE remote addr segment */
+		MLX5_SEND_WQE_DS;
 }
 
 static void dr_set_ctrl_seg(struct mlx5_wqe_ctrl_seg *wq_ctrl,
@@ -482,10 +484,8 @@ static void dr_rdma_segments(struct mlx5dr_qp *dr_qp, u64 remote_addr,
 static void dr_post_send(struct mlx5dr_qp *dr_qp, struct postsend_info *send_info)
 {
 	if (send_info->type == WRITE_ICM) {
-		/* false, because we delay the post_send_db till the coming READ */
 		dr_rdma_segments(dr_qp, send_info->remote_addr, send_info->rkey,
 				 &send_info->write, MLX5_OPCODE_RDMA_WRITE, false);
-		/* true, because we send WRITE + READ together */
 		dr_rdma_segments(dr_qp, send_info->remote_addr, send_info->rkey,
 				 &send_info->read, MLX5_OPCODE_RDMA_READ, true);
 	} else { /* GTA_ARG */
@@ -570,7 +570,7 @@ static void dr_fill_write_args_segs(struct mlx5dr_send_ring *send_ring,
 	send_ring->pending_wqe++;
 
 	if (send_ring->pending_wqe % send_ring->signal_th == 0)
-		send_info->write.send_flags = IB_SEND_SIGNALED;
+		send_info->write.send_flags |= IB_SEND_SIGNALED;
 	else
 		send_info->write.send_flags = 0;
 }
@@ -599,17 +599,16 @@ static void dr_fill_write_icm_segs(struct mlx5dr_domain *dmn,
 
 	if (send_ring->pending_wqe % send_ring->signal_th == 0)
 		send_info->write.send_flags |= IB_SEND_SIGNALED;
-	else
-		send_info->write.send_flags = 0;
 
 	send_ring->pending_wqe++;
 	send_info->read.length = send_info->write.length;
-	/* Read into the sync buffer */
+
+	/* Read into dedicated sync buffer */
 	send_info->read.addr = (uintptr_t)send_ring->sync_mr->dma_addr;
 	send_info->read.lkey = send_ring->sync_mr->mkey;
 
 	if (send_ring->pending_wqe % send_ring->signal_th == 0)
-		send_info->read.send_flags |= IB_SEND_SIGNALED;
+		send_info->read.send_flags = IB_SEND_SIGNALED;
 	else
 		send_info->read.send_flags = 0;
 }
@@ -838,7 +837,6 @@ int mlx5dr_send_postsend_action(struct mlx5dr_domain *dmn,
 				struct mlx5dr_action *action)
 {
 	struct postsend_info send_info = {};
-	int ret;
 
 	send_info.write.addr = (uintptr_t)action->rewrite->data;
 	send_info.write.length = action->rewrite->num_of_actions *
@@ -848,31 +846,48 @@ int mlx5dr_send_postsend_action(struct mlx5dr_domain *dmn,
 		mlx5dr_icm_pool_get_chunk_mr_addr(action->rewrite->chunk);
 	send_info.rkey = mlx5dr_icm_pool_get_chunk_rkey(action->rewrite->chunk);
 
-	ret = dr_postsend_icm_data(dmn, &send_info);
-
-	return ret;
+	return dr_postsend_icm_data(dmn, &send_info);
 }
 
-int mlx5dr_send_postsend_args(struct mlx5dr_domain *dmn,
-			      struct mlx5dr_action *action)
+int mlx5dr_send_postsend_pattern(struct mlx5dr_domain *dmn,
+				 struct mlx5dr_icm_chunk *chunk,
+				 u16 num_of_actions,
+				 u8 *data)
+{
+	struct postsend_info send_info = {};
+	int ret;
+
+	send_info.write.addr = (uintptr_t)data;
+	send_info.write.length = num_of_actions * DR_MODIFY_ACTION_SIZE;
+	send_info.remote_addr = mlx5dr_icm_pool_get_chunk_mr_addr(chunk);
+	send_info.rkey = mlx5dr_icm_pool_get_chunk_rkey(chunk);
+
+	ret = dr_postsend_icm_data(dmn, &send_info);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+int mlx5dr_send_postsend_args(struct mlx5dr_domain *dmn, u64 arg_id,
+			      u16 num_of_actions, u8 *actions_data)
 {
 	int data_len, iter = 0, cur_sent;
 	u64 addr;
 	int ret;
 
-	addr = (uintptr_t)action->rewrite->data;
-	data_len = action->rewrite->num_of_actions * DR_MODIFY_ACTION_SIZE;
+	addr = (uintptr_t)actions_data;
+	data_len = num_of_actions * DR_MODIFY_ACTION_SIZE;
 
 	do {
 		struct postsend_info send_info = {};
 
 		send_info.type = GTA_ARG;
 		send_info.write.addr = addr;
-		cur_sent = min_t(u32, data_len, MLX5DR_ACTION_CACHE_LINE_SIZE);
+		cur_sent = min_t(u32, data_len, DR_ACTION_CACHE_LINE_SIZE);
 		send_info.write.length = cur_sent;
 		send_info.write.lkey = 0;
-		send_info.remote_addr =
-			mlx5dr_arg_get_object_id(action->rewrite->arg) + iter;
+		send_info.remote_addr = arg_id + iter;
 
 		ret = dr_postsend_icm_data(dmn, &send_info);
 		if (ret)
@@ -1315,7 +1330,7 @@ void mlx5dr_send_ring_free(struct mlx5dr_domain *dmn,
 	dr_dereg_mr(dmn->mdev, send_ring->sync_mr);
 	dr_dereg_mr(dmn->mdev, send_ring->mr);
 	kfree(send_ring->buf);
-	kfree(dmn->send_ring->sync_buff);
+	kfree(send_ring->sync_buff);
 	kfree(send_ring);
 }
 

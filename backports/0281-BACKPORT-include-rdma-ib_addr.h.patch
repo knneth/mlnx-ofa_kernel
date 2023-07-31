@@ -1,0 +1,51 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_addr.h
+
+Change-Id: I77e3f094b6c6c9a0a2b60abcd3da22d9ff50e923
+---
+ include/rdma/ib_addr.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/include/rdma/ib_addr.h
++++ b/include/rdma/ib_addr.h
+@@ -7,6 +7,8 @@
+ #ifndef IB_ADDR_H
+ #define IB_ADDR_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/ethtool.h>
+ #include <linux/in.h>
+ #include <linux/in6.h>
+@@ -21,6 +23,7 @@
+ #include <rdma/ib_verbs.h>
+ #include <rdma/ib_pack.h>
+ #include <net/net_namespace.h>
++#include <linux/ethtool.h>
+ 
+ /**
+  * struct rdma_dev_addr - Contains resolved RDMA hardware addresses
+@@ -106,7 +109,11 @@ static inline int rdma_addr_gid_offset(s
+ 	return dev_addr->dev_type == ARPHRD_INFINIBAND ? 4 : 0;
+ }
+ 
++#ifdef HAVE_IS_VLAN_DEV_CONST
+ static inline u16 rdma_vlan_dev_vlan_id(const struct net_device *dev)
++#else
++static inline u16 rdma_vlan_dev_vlan_id(struct net_device *dev)
++#endif
+ {
+ 	return is_vlan_dev(dev) ? vlan_dev_vlan_id(dev) : 0xffff;
+ }
+@@ -239,7 +246,11 @@ static inline u16 rdma_get_vlan_id(union
+ 	return vid < 0x1000 ? vid : 0xffff;
+ }
+ 
++#ifdef HAVE_IS_VLAN_DEV_CONST
+ static inline struct net_device *rdma_vlan_dev_real_dev(const struct net_device *dev)
++#else
++static inline struct net_device *rdma_vlan_dev_real_dev(struct net_device *dev)
++#endif
+ {
+ 	return is_vlan_dev(dev) ? vlan_dev_real_dev(dev) : NULL;
+ }

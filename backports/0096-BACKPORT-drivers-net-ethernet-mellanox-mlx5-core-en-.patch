@@ -1,45 +1,21 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/health.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.h
 
-Change-Id: Ifcf28d91a9ac0eeb75963f88c9ff11421a91af1e
+Change-Id: Ie7b402743b6f43e038ba042d8effb740cfc19d86
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/health.h | 6 ++++++
- 1 file changed, 6 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 ++
+ 1 file changed, 2 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
-@@ -19,11 +19,13 @@ void mlx5e_reporter_tx_destroy(struct ml
- void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq);
- int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+@@ -84,8 +84,10 @@ void mlx5e_set_rx_cq_mode_params(struct
  
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- int mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
- int mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
- int mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
- int mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
- int mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
+ bool slow_pci_heuristic(struct mlx5_core_dev *mdev);
+ int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *params,
+ 			     struct mlx5e_xsk_param *xsk);
 +#endif
- 
- void mlx5e_reporter_rx_create(struct mlx5e_priv *priv);
- void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv);
-@@ -37,7 +39,9 @@ void mlx5e_reporter_icosq_resume_recover
- 
- struct mlx5e_err_ctx {
- 	int (*recover)(void *ctx);
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- 	int (*dump)(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg, void *ctx);
-+#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
- 	void *ctx;
- };
- 
-@@ -51,8 +55,10 @@ int mlx5e_health_report(struct mlx5e_pri
- void mlx5e_health_create_reporters(struct mlx5e_priv *priv);
- void mlx5e_health_destroy_reporters(struct mlx5e_priv *priv);
- void mlx5e_health_channels_update(struct mlx5e_priv *priv);
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key,
- 			       struct devlink_fmsg *fmsg);
- int mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
- 			    int queue_idx, char *lbl);
- #endif
-+#endif
+ void mlx5e_build_rq_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);

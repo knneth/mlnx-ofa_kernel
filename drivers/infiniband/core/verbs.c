@@ -536,6 +536,8 @@ static struct ib_ah *_rdma_create_ah(struct ib_pd *pd,
 	else
 		ret = device->ops.create_ah(ah, &init_attr, NULL);
 	if (ret) {
+		if (ah->sgid_attr)
+			rdma_put_gid_attr(ah->sgid_attr);
 		kfree(ah);
 		return ERR_PTR(ret);
 	}
@@ -1052,7 +1054,7 @@ struct ib_srq *ib_create_srq_user(struct ib_pd *pd,
 	ret = pd->device->ops.create_srq(srq, srq_init_attr, udata);
 	if (ret) {
 		rdma_restrack_put(&srq->res);
-		atomic_dec(&srq->pd->usecnt);
+		atomic_dec(&pd->usecnt);
 		if (srq->srq_type == IB_SRQT_XRC && srq->ext.xrc.xrcd)
 			atomic_dec(&srq->ext.xrc.xrcd->usecnt);
 		if (ib_srq_has_cq(srq->srq_type))
@@ -2916,14 +2918,13 @@ EXPORT_SYMBOL(ib_drain_qp);
 struct net_device *rdma_alloc_netdev(struct ib_device *device, u32 port_num,
 				     enum rdma_netdev_t type, const char *name,
 				     unsigned char name_assign_type,
-				     void (*setup)(struct net_device *),
-				     int force_fail)
+				     void (*setup)(struct net_device *))
 {
 	struct rdma_netdev_alloc_params params;
 	struct net_device *netdev;
 	int rc;
 
-	if (!device->ops.rdma_netdev_get_params || force_fail)
+	if (!device->ops.rdma_netdev_get_params)
 		return ERR_PTR(-EOPNOTSUPP);
 
 	rc = device->ops.rdma_netdev_get_params(device, port_num, type,
@@ -2944,13 +2945,12 @@ int rdma_init_netdev(struct ib_device *device, u32 port_num,
 		     enum rdma_netdev_t type, const char *name,
 		     unsigned char name_assign_type,
 		     void (*setup)(struct net_device *),
-		     struct net_device *netdev,
-		     int force_fail)
+		     struct net_device *netdev)
 {
 	struct rdma_netdev_alloc_params params;
 	int rc;
 
-	if (!device->ops.rdma_netdev_get_params || force_fail)
+	if (!device->ops.rdma_netdev_get_params)
 		return -EOPNOTSUPP;
 
 	rc = device->ops.rdma_netdev_get_params(device, port_num, type,

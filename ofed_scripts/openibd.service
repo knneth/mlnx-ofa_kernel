@@ -13,6 +13,7 @@ RemainAfterExit=yes
 ExecStart=/etc/init.d/openibd start bootid=%b
 ExecStop=/etc/init.d/openibd stop
 ExecReload=/etc/init.d/openibd restart bootid=%b
+ExecRestart=/etc/init.d/openibd restart bootid=%b
 
 [Install]
 WantedBy=sysinit.target

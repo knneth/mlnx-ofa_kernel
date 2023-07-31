@@ -253,25 +253,6 @@ struct netdev_phys_item_id {
 };
 #endif
 
-#if defined(CONFIG_COMPAT_CLS_FLOWER_MOD) && !defined(CONFIG_NET_SCHED_NEW) && !defined(CONFIG_COMPAT_KERNEL_4_14)
-enum {
-	TC_SETUP_MQPRIO,
-	TC_SETUP_CLSU32,
-	TC_SETUP_CLSFLOWER,
-};
-
-struct tc_cls_u32_offload;
-
-struct tc_to_netdev {
-	unsigned int type;
-	union {
-		u8 tc;
-		struct tc_cls_u32_offload *cls_u32;
-		struct tc_cls_flower_offload *cls_flower;
-	};
-};
-#endif
-
 #ifndef HAVE_NETDEV_NET_NOTIFIER
 struct netdev_net_notifier {
 	struct list_head list;

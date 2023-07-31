@@ -2,14 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 
-Change-Id: Idcb916c1f1fef40dad2b762f2697046df9eb5b5d
+Change-Id: I5040a0e23e85ae10fdeda2989aa3c5d39df69013
 ---
  .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 +++++++++++++-
  1 file changed, 13 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-@@ -247,11 +247,17 @@ static const struct sysfs_ops rep_sysfs_
+@@ -278,11 +278,17 @@ static const struct sysfs_ops rep_sysfs_
  	.store  = rep_attr_store
  };
  
@@ -27,7 +27,7 @@ Change-Id: Idcb916c1f1fef40dad2b762f2697046df9eb5b5d
  };
  
  static struct attribute *rep_paging_attrs[] = {
-@@ -259,12 +265,18 @@ static struct attribute *rep_paging_attr
+@@ -290,12 +296,18 @@ static struct attribute *rep_paging_attr
  	&attr_num_pages.attr,
  	NULL,
  };

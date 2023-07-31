@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
 
-Change-Id: Idba40cfe932199f192cc5ec6981be2aeadff5913
+Change-Id: I8bc8a9c71879c820ad9c4c238cebc3e1011bdd0f
 ---
  drivers/infiniband/core/mad.c | 132 ++++++++++++++++++++++++++++------
  1 file changed, 110 insertions(+), 22 deletions(-)

@@ -374,7 +374,7 @@ static void mlx5_ib_handle_qp_event(struct work_struct *_work)
 
 	event.device = ibqp->device;
 	event.element.qp = ibqp;
-	switch (type) {
+	switch (qpe_work->type) {
 	case MLX5_EVENT_TYPE_PATH_MIG:
 		event.event = IB_EVENT_PATH_MIG;
 		break;
@@ -406,7 +406,7 @@ static void mlx5_ib_handle_qp_event(struct work_struct *_work)
 			break;
 		default:
 			pr_warn("mlx5_ib: Unexpected event type %d error type %d on QP %06x\n",
-				type, error_type, qpe_work->qp->qpn);
+					type, error_type, qpe_work->qp->qpn);
 			return;
 		}
 		break;
@@ -417,8 +417,7 @@ static void mlx5_ib_handle_qp_event(struct work_struct *_work)
 	}
 
 	if ((event.event == IB_EVENT_QP_FATAL) ||
-	    (event.event == IB_EVENT_QP_ACCESS_ERR) ||
-	    (event.event == IB_EXP_EVENT_XRQ_QP_ERR))
+	    (event.event == IB_EVENT_QP_ACCESS_ERR))
 		mlx5_ib_qp_err_syndrome(ibqp);
 
 	ibqp->event_handler(&event, ibqp->qp_context);
@@ -536,8 +535,8 @@ static void mlx5_ib_qp_event(struct mlx5_core_qp *qp, int event_info)
 {
 	struct ib_qp *ibqp = &to_mibqp(qp)->ibqp;
 	struct mlx5_ib_qp_event_work *qpe_work;
-	u8 error_type = (event_info >> 8) & 0xff;
 	u8 type = event_info & 0xff;
+	u8 error_type = (event_info >> 8) & 0xff;
 
 	if (type == MLX5_EVENT_TYPE_SQ_DRAINED &&
 	    to_mibqp(qp)->flags & IB_QP_CREATE_SIGNATURE_PIPELINE &&
@@ -1387,6 +1386,9 @@ static int create_raw_packet_qp_tis(struct mlx5_ib_dev *dev,
 
 	MLX5_SET(create_tis_in, in, uid, to_mpd(pd)->uid);
 	MLX5_SET(tisc, tisc, transport_domain, tdn);
+	if (!mlx5_ib_lag_should_assign_affinity(dev) &&
+	    mlx5_lag_is_lacp_owner(dev->mdev))
+		MLX5_SET(tisc, tisc, strict_lag_tx_port_affinity, 1);
 	if (qp->flags & IB_QP_CREATE_SOURCE_QPN)
 		MLX5_SET(tisc, tisc, underlay_qpn, qp->underlay_qpn);
 
@@ -4694,7 +4696,7 @@ static int mlx5_ib_modify_dct(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 			return -EINVAL;
 
 		if (attr->port_num == 0 ||
-		    attr->port_num > MLX5_CAP_GEN(dev->mdev, num_ports)) {
+		    attr->port_num > dev->num_ports) {
 			mlx5_ib_dbg(dev, "invalid port number %d. number of ports is %d\n",
 				    attr->port_num, dev->num_ports);
 			return -EINVAL;
@@ -4803,16 +4805,6 @@ static bool mlx5_ib_modify_qp_allowed(struct mlx5_ib_dev *dev,
 	return false;
 }
 
-static int ignored_ts_check(enum ib_qp_type qp_type)
-{
-	if (qp_type == MLX5_IB_QPT_REG_UMR ||
-	    qp_type == MLX5_IB_QPT_SW_CNAK ||
-	    qp_type == MLX5_IB_QPT_DCI)
-		return 1;
-
-	return 0;
-}
-
 static int validate_rd_atomic(struct mlx5_ib_dev *dev, struct ib_qp_attr *attr,
 			      int attr_mask, enum ib_qp_type qp_type)
 {
@@ -4845,6 +4837,16 @@ static int validate_rd_atomic(struct mlx5_ib_dev *dev, struct ib_qp_attr *attr,
 		return false;
 	}
 	return true;
+}
+
+static int ignored_ts_check(enum ib_qp_type qp_type)
+{
+	if (qp_type == MLX5_IB_QPT_REG_UMR ||
+	    qp_type == MLX5_IB_QPT_SW_CNAK ||
+	    qp_type == MLX5_IB_QPT_DCI)
+		return 1;
+
+	return 0;
 }
 
 static void mlx5_ib_qp_set_tclass(struct mlx5_ib_dev *dev,
@@ -4991,6 +4993,14 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 out:
 	mutex_unlock(&qp->mutex);
 	return err;
+}
+
+void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr)
+{
+	memset(seg, 0, sizeof(*seg));
+	seg->stat_rate_sl = wr->sl & 0xf;
+	seg->dlid = cpu_to_be16(wr->dlid);
+	seg->flags = wr->icrc ? 8 : 0;
 }
 
 static inline enum ib_qp_state to_ib_qp_state(enum mlx5_qp_state mlx5_state)
@@ -6082,12 +6092,4 @@ int mlx5_ib_qp_event_init(void)
 void mlx5_ib_qp_event_cleanup(void)
 {
 	destroy_workqueue(mlx5_ib_qp_event_wq);
-}
-
-void mlx5_ib_set_mlx_seg(struct mlx5_mlx_seg *seg, struct mlx5_mlx_wr *wr)
-{
-	memset(seg, 0, sizeof(*seg));
-	seg->stat_rate_sl = wr->sl & 0xf;
-	seg->dlid = cpu_to_be16(wr->dlid);
-	seg->flags = wr->icrc ? 8 : 0;
 }

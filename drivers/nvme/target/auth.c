@@ -4,9 +4,6 @@
  * Copyright (c) 2020 Hannes Reinecke, SUSE Software Solutions.
  * All rights reserved.
  */
-#ifdef pr_fmt
-#undef pr_fmt
-#endif
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
 #include <linux/init.h>

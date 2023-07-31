@@ -102,25 +102,55 @@ static struct devlink *mlxdevm_to_devlink(struct mlxdevm *devm)
 	return priv_to_devlink(container_of(devm, struct mlx5_devm_device, device)->dev);
 }
 
+bool mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum)
+{
+	struct mlx5_devm_device *mdevm;
+	unsigned long index;
+	void *entry;
+
+	mdevm = mlx5_devm_device_get(dev);
+	if (!mdevm)
+		return false;
+
+	xa_for_each(&mdevm->devm_sfs, index, entry) {
+		if (xa_to_value(entry) == sfnum) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
 			  const struct mlxdevm_port_new_attrs *attrs,
 			  struct netlink_ext_ack *extack,
 			  unsigned int *new_port_index)
 {
 	struct devlink_port_new_attrs devl_attrs;
+	struct mlx5_devm_device *mdevm_dev;
 	struct devlink *devlink;
+	int ret;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
 	dm_new_attrs2devl_new_attrs(attrs, &devl_attrs);
-	return mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, new_port_index);
+	ret = mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, new_port_index);
+	if (ret)
+		return ret;
+
+	mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
+	return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
+			 xa_mk_value(attrs->sfnum), GFP_KERNEL);
 }
 
 int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 			  unsigned int port_index,
 			  struct netlink_ext_ack *extack)
 {
+	struct mlx5_devm_device *mdevm_dev;
 	struct devlink *devlink;
 
+	mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
+	xa_erase(&mdevm_dev->devm_sfs, port_index);
 	devlink = mlxdevm_to_devlink(devm_dev);
 	return mlx5_devlink_sf_port_del(devlink, port_index, extack);
 }
@@ -240,6 +270,9 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 	int query_out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
 	struct mlx5_core_dev *parent_dev;
 	struct mlx5_devm_port *mlx5_port;
+#ifdef CONFIG_MLX5_SF_SFC
+	struct mlx5_vport *vport;
+#endif
 	struct devlink *devlink;
 	unsigned int port_index;
 	void *query_ctx;
@@ -274,6 +307,25 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 
 	cap->max_uc_list = 1 << MLX5_GET(cmd_hca_cap, hca_caps, log_max_current_uc_list);
 	cap->uc_list_cap_valid = true;
+
+#ifdef CONFIG_MLX5_SF_SFC
+	vport = mlx5_eswitch_get_vport(parent_dev->priv.eswitch, hw_fn_id);
+	if (IS_ERR(vport)) {
+		ret = PTR_ERR(vport);
+		goto out_free;
+	}
+	if (!vport->info.local_esw_supported)
+		goto out_free;
+
+	ret = mlx5_vport_get_other_func_cap_cur(parent_dev, hw_fn_id, query_ctx,
+						MLX5_CAP_GENERAL_2);
+	if (ret)
+		goto out_free;
+
+	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
+	cap->eswitch = MLX5_GET(cmd_hca_cap_2, hca_caps, local_eswitch);
+	cap->eswitch_cap_valid = true;
+#endif
 
 out_free:
 	kfree(query_ctx);
@@ -346,7 +398,23 @@ int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 	}
 	ret = mlx5_vport_set_other_func_cap(parent_dev, hca_caps, hw_fn_id,
 					    MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
+	if (ret)
+		goto out_free;
 
+#ifdef CONFIG_MLX5_SF_SFC
+	ret = mlx5_vport_get_other_func_cap(parent_dev, hw_fn_id, query_ctx,
+					    MLX5_CAP_GENERAL_2);
+	if (ret)
+		goto out_free;
+	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
+	if (cap->eswitch_cap_valid)
+			MLX5_SET(cmd_hca_cap_2, hca_caps, local_eswitch, cap->eswitch);
+
+	ret = mlx5_vport_set_other_func_cap(parent_dev, hca_caps, hw_fn_id,
+					    MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE2);
+	if (ret)
+		goto out_free;
+#endif
 out_free:
 	kfree(query_ctx);
 	return ret;
@@ -826,6 +894,7 @@ int mlx5_devm_register(struct mlx5_core_dev *dev)
 	if (err)
 		goto params_reg_err;
 
+	xa_init(&mdevm_dev->devm_sfs);
 	return 0;
 
 params_reg_err:
@@ -846,6 +915,7 @@ void mlx5_devm_unregister(struct mlx5_core_dev *dev)
 	if (!mdevm)
 		return;
 
+	xa_destroy(&mdevm->devm_sfs);
 	if (mlx5_core_is_sf(dev))
 		mlxdevm_params_unregister(&mdevm->device, mlx5_devm_params,
 					  ARRAY_SIZE(mlx5_devm_params));

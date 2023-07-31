@@ -4,8 +4,36 @@
 #include "dr_types.h"
 
 #define DR_ICM_MODIFY_HDR_ALIGN_BASE 64
-#define DR_ICM_MODIFY_HDR_GRANULARITY_4K 12
-#define DR_ICM_POOL_HOT_MEMORY_FRACTION 4
+#define DR_ICM_POOL_STE_HOT_MEM_PERCENT 25
+#define DR_ICM_POOL_MODIFY_HDR_PTRN_HOT_MEM_PERCENT 50
+#define DR_ICM_POOL_MODIFY_ACTION_HOT_MEM_PERCENT 90
+
+struct mlx5dr_icm_hot_chunk {
+	struct mlx5dr_icm_buddy_mem *buddy_mem;
+	unsigned int seg;
+	enum mlx5dr_icm_chunk_size size;
+};
+
+struct mlx5dr_icm_pool {
+	enum mlx5dr_icm_type icm_type;
+	enum mlx5dr_icm_chunk_size max_log_chunk_sz;
+	struct mlx5dr_domain *dmn;
+	struct kmem_cache *chunks_kmem_cache;
+
+	/* memory management */
+	struct mutex mutex; /* protect the ICM pool and ICM buddy */
+	struct list_head buddy_mem_list;
+
+	/* Hardware may be accessing this memory but at some future,
+	 * undetermined time, it might cease to do so.
+	 * sync_ste command sets them free.
+	 */
+	struct mlx5dr_icm_hot_chunk *hot_chunks_arr;
+	u32 hot_chunks_num;
+	u64 hot_memory_size;
+	/* hot memory size threshold for triggering sync */
+	u64 th;
+};
 
 struct mlx5dr_icm_dm {
 	u32 obj_id;
@@ -260,6 +288,8 @@ static int dr_icm_buddy_create(struct mlx5dr_icm_pool *pool)
 	/* add it to the -start- of the list in order to search in it first */
 	list_add(&buddy->list_node, &pool->buddy_mem_list);
 
+	pool->dmn->num_buddies[pool->icm_type]++;
+
 	return 0;
 
 err_cleanup_buddy:
@@ -273,55 +303,44 @@ free_mr:
 
 static void dr_icm_buddy_destroy(struct mlx5dr_icm_buddy_mem *buddy)
 {
+	enum mlx5dr_icm_type icm_type = buddy->pool->icm_type;
+
 	dr_icm_pool_mr_destroy(buddy->icm_mr);
 
 	mlx5dr_buddy_cleanup(buddy);
 
-	if (buddy->pool->icm_type == DR_ICM_TYPE_STE)
+	if (icm_type == DR_ICM_TYPE_STE)
 		dr_icm_buddy_cleanup_ste_cache(buddy);
+
+	buddy->pool->dmn->num_buddies[icm_type]--;
 
 	kvfree(buddy);
 }
 
-static struct mlx5dr_icm_chunk *
-dr_icm_chunk_create(struct mlx5dr_icm_pool *pool,
-		    enum mlx5dr_icm_chunk_size chunk_size,
-		    struct mlx5dr_icm_buddy_mem *buddy_mem_pool,
-		    unsigned int seg)
+static void
+dr_icm_chunk_init(struct mlx5dr_icm_chunk *chunk,
+		  struct mlx5dr_icm_pool *pool,
+		  enum mlx5dr_icm_chunk_size chunk_size,
+		  struct mlx5dr_icm_buddy_mem *buddy_mem_pool,
+		  unsigned int seg)
 {
-	struct kmem_cache *chunks_cache = buddy_mem_pool->pool->chunks_kmem_cache;
-	struct mlx5dr_icm_chunk *chunk;
 	int offset;
-
-	chunk = kmem_cache_alloc(chunks_cache, GFP_KERNEL);
-	if (!chunk)
-		return NULL;
-
-	offset = mlx5dr_icm_pool_dm_type_to_entry_size(pool->icm_type) * seg;
 
 	chunk->seg = seg;
 	chunk->size = chunk_size;
 	chunk->buddy_mem = buddy_mem_pool;
 
-	if (pool->icm_type == DR_ICM_TYPE_STE)
+	if (pool->icm_type == DR_ICM_TYPE_STE) {
+		offset = mlx5dr_icm_pool_dm_type_to_entry_size(pool->icm_type) * seg;
 		dr_icm_chunk_ste_init(chunk, offset);
+	}
 
 	buddy_mem_pool->used_memory += mlx5dr_icm_pool_get_chunk_byte_size(chunk);
-
-	return chunk;
 }
 
 static bool dr_icm_pool_is_sync_required(struct mlx5dr_icm_pool *pool)
 {
-	int allow_hot_size;
-
-	/* sync when hot memory reaches half of the pool size */
-	allow_hot_size =
-		mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
-						   pool->icm_type) /
-		DR_ICM_POOL_HOT_MEMORY_FRACTION;
-
-	return pool->hot_memory_size > allow_hot_size;
+	return pool->hot_memory_size > pool->th;
 }
 
 static void dr_icm_pool_clear_hot_chunks_arr(struct mlx5dr_icm_pool *pool)
@@ -430,9 +449,11 @@ mlx5dr_icm_alloc_chunk(struct mlx5dr_icm_pool *pool,
 	if (ret)
 		goto out;
 
-	chunk = dr_icm_chunk_create(pool, chunk_size, buddy, seg);
+	chunk = kmem_cache_alloc(pool->chunks_kmem_cache, GFP_KERNEL);
 	if (!chunk)
 		goto out_err;
+
+	dr_icm_chunk_init(chunk, pool, chunk_size, buddy, seg);
 
 	goto out;
 
@@ -471,11 +492,22 @@ void mlx5dr_icm_free_chunk(struct mlx5dr_icm_chunk *chunk)
 	mutex_unlock(&pool->mutex);
 }
 
+struct mlx5dr_ste_htbl *mlx5dr_icm_pool_alloc_htbl(struct mlx5dr_icm_pool *pool)
+{
+	return kmem_cache_alloc(pool->dmn->htbls_kmem_cache, GFP_KERNEL);
+}
+
+void mlx5dr_icm_pool_free_htbl(struct mlx5dr_icm_pool *pool, struct mlx5dr_ste_htbl *htbl)
+{
+	kmem_cache_free(pool->dmn->htbls_kmem_cache, htbl);
+}
+
 struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 					       enum mlx5dr_icm_type icm_type)
 {
-	u32 num_of_chunks, entry_size, max_hot_size;
-	struct mlx5dr_icm_pool *pool = NULL;
+	u32 num_of_chunks, entry_size;
+	struct mlx5dr_icm_pool *pool;
+	u32 max_hot_size = 0;
 
 	pool = kvzalloc(sizeof(*pool), GFP_KERNEL);
 	if (!pool)
@@ -491,12 +523,21 @@ struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 	switch (icm_type) {
 	case DR_ICM_TYPE_STE:
 		pool->max_log_chunk_sz = dmn->info.max_log_sw_icm_sz;
+		max_hot_size = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
+								  pool->icm_type) *
+			       DR_ICM_POOL_STE_HOT_MEM_PERCENT / 100;
 		break;
 	case DR_ICM_TYPE_MODIFY_ACTION:
 		pool->max_log_chunk_sz = dmn->info.max_log_action_icm_sz;
+		max_hot_size = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
+								  pool->icm_type) *
+			       DR_ICM_POOL_MODIFY_ACTION_HOT_MEM_PERCENT / 100;
 		break;
 	case DR_ICM_TYPE_MODIFY_HDR_PTRN:
 		pool->max_log_chunk_sz = dmn->info.max_log_modify_hdr_pattern_icm_sz;
+		max_hot_size = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
+								  pool->icm_type) *
+			       DR_ICM_POOL_MODIFY_HDR_PTRN_HOT_MEM_PERCENT / 100;
 		break;
 	default:
 		WARN_ON(icm_type);
@@ -504,11 +545,8 @@ struct mlx5dr_icm_pool *mlx5dr_icm_pool_create(struct mlx5dr_domain *dmn,
 
 	entry_size = mlx5dr_icm_pool_dm_type_to_entry_size(pool->icm_type);
 
-	max_hot_size = mlx5dr_icm_pool_chunk_size_to_byte(pool->max_log_chunk_sz,
-							  pool->icm_type) /
-		       DR_ICM_POOL_HOT_MEMORY_FRACTION;
-
 	num_of_chunks = DIV_ROUND_UP(max_hot_size, entry_size) + 1;
+	pool->th = max_hot_size;
 
 	pool->hot_chunks_arr = kvcalloc(num_of_chunks,
 					sizeof(struct mlx5dr_icm_hot_chunk),
@@ -535,218 +573,4 @@ void mlx5dr_icm_pool_destroy(struct mlx5dr_icm_pool *pool)
 	kvfree(pool->hot_chunks_arr);
 	mutex_destroy(&pool->mutex);
 	kvfree(pool);
-}
-
-struct dr_arg_pool {
-	enum mlx5dr_arg_chunk_size log_chunk_size;
-	struct mlx5dr_domain *dmn;
-	struct list_head free_list;
-	struct mutex mutex; /* protect arg pool */
-};
-
-struct mlx5dr_arg_pool_mngr {
-	struct mlx5dr_domain *dmn;
-	struct dr_arg_pool *pools[DR_ARG_CHUNK_SIZE_MAX];
-};
-
-static int dr_arg_add_new_objects_to_pool(struct dr_arg_pool *pool)
-{
-	struct mlx5dr_arg_object *arg_obj, *tmp_arg;
-	struct list_head cur_list;
-	u16 object_range;
-	int num_of_objects;
-	u32 obj_id = 0;
-	int ret;
-	int i;
-
-	INIT_LIST_HEAD(&cur_list);
-
-	object_range = pool->dmn->info.caps.log_header_modify_argument_granularity;
-
-	object_range =
-		max_t(u32,
-		      pool->dmn->info.caps.log_header_modify_argument_granularity,
-		      DR_ICM_MODIFY_HDR_GRANULARITY_4K);
-	object_range =
-		min_t(u32,
-		      pool->dmn->info.caps.log_header_modify_argument_max_alloc,
-		      object_range);
-
-	if (pool->log_chunk_size > object_range) {
-		mlx5dr_err(pool->dmn,
-			   "Required chunk size (%d) is not supported\n",
-			   pool->log_chunk_size);
-		return -ENOMEM;
-	}
-
-	num_of_objects = (1 << (object_range - pool->log_chunk_size));
-	/* Only one general object per range */
-	ret = mlx5dr_cmd_create_modify_header_arg(pool->dmn->mdev,
-						  object_range,
-						  pool->dmn->pdn,
-						  &obj_id);
-	if (ret) {
-		mlx5dr_err(pool->dmn,
-			   "Failed allocating object with range: %d:\n",
-			   object_range);
-		return ret;
-	}
-
-	for (i = 0; i < num_of_objects; i++) {
-		arg_obj = kvzalloc(sizeof(*arg_obj), GFP_KERNEL);
-		if (!arg_obj)
-			goto clean_arg_obj;
-
-		arg_obj->log_chunk_size = pool->log_chunk_size;
-
-		list_add_tail(&arg_obj->list_node, &cur_list);
-
-		arg_obj->obj_id = obj_id;
-		arg_obj->obj_offset = i * (1 << pool->log_chunk_size);
-	}
-
-	list_splice_tail_init(&cur_list, &pool->free_list);
-	return 0;
-
-clean_arg_obj:
-	list_for_each_entry_safe(arg_obj, tmp_arg, &cur_list, list_node) {
-		list_del(&arg_obj->list_node);
-		kvfree(arg_obj);
-	}
-	mlx5dr_cmd_destroy_modify_header_arg(pool->dmn->mdev, obj_id);
-	return -ENOMEM;
-}
-
-static struct dr_arg_pool *dr_arg_pool_create(struct mlx5dr_domain *dmn,
-					      enum mlx5dr_arg_chunk_size chunk_size)
-{
-	struct dr_arg_pool *pool;
-
-	pool = kvzalloc(sizeof(*pool), GFP_KERNEL);
-	if (!pool)
-		return NULL;
-
-	pool->dmn = dmn;
-
-	INIT_LIST_HEAD(&pool->free_list);
-	mutex_init(&pool->mutex);
-
-	pool->log_chunk_size = chunk_size;
-	if (dr_arg_add_new_objects_to_pool(pool))
-		goto free_pool;
-
-	return pool;
-
-free_pool:
-	kvfree(pool);
-
-	return NULL;
-}
-
-static void dr_arg_pool_destroy(struct dr_arg_pool *pool)
-{
-	struct mlx5dr_arg_object *tmp_arg;
-	struct mlx5dr_arg_object *arg_obj;
-
-	list_for_each_entry_safe(arg_obj, tmp_arg, &pool->free_list, list_node) {
-		list_del(&arg_obj->list_node);
-		if (!arg_obj->obj_offset) /* the first in range */
-			mlx5dr_cmd_destroy_modify_header_arg(pool->dmn->mdev,
-							     arg_obj->obj_id);
-		kvfree(arg_obj);
-	}
-
-	mutex_destroy(&pool->mutex);
-	kvfree(pool);
-}
-
-static struct mlx5dr_arg_object *dr_arg_get_obj_from_pool(struct dr_arg_pool *pool)
-{
-	struct mlx5dr_arg_object *arg_obj = NULL;
-	int ret;
-
-	mutex_lock(&pool->mutex);
-	if (list_empty(&pool->free_list)) {
-		ret = dr_arg_add_new_objects_to_pool(pool);
-		if (ret)
-			goto out;
-	}
-
-	arg_obj = list_first_entry_or_null(&pool->free_list,
-					   struct mlx5dr_arg_object,
-					   list_node);
-	WARN(!arg_obj, "couldn't get dr arg obj from pool");
-
-	if (arg_obj)
-		list_del_init(&arg_obj->list_node);
-
-out:
-	mutex_unlock(&pool->mutex);
-	return arg_obj;
-}
-
-static void dr_arg_put_obj_in_pool(struct dr_arg_pool *pool,
-				   struct mlx5dr_arg_object *arg_obj)
-{
-	mutex_lock(&pool->mutex);
-	list_add(&arg_obj->list_node, &pool->free_list);
-	mutex_unlock(&pool->mutex);
-}
-
-void mlx5dr_arg_put_obj(struct mlx5dr_domain *dmn,
-			struct mlx5dr_arg_object *arg_obj)
-{
-	return dr_arg_put_obj_in_pool(
-			dmn->modify_header_arg_pool_mngr->pools[arg_obj->log_chunk_size],
-			arg_obj);
-}
-
-struct mlx5dr_arg_object *mlx5dr_arg_get_obj(struct mlx5dr_domain *dmn,
-					     enum mlx5dr_arg_chunk_size size)
-{
-	if (size >= DR_ARG_CHUNK_SIZE_MAX)
-		return NULL;
-
-	return dr_arg_get_obj_from_pool(dmn->modify_header_arg_pool_mngr->pools[size]);
-}
-
-uint32_t mlx5dr_arg_get_object_id(struct mlx5dr_arg_object *arg_obj)
-{
-	return (arg_obj->obj_id + arg_obj->obj_offset);
-}
-
-struct mlx5dr_arg_pool_mngr *mlx5dr_arg_pool_mngr_create(struct mlx5dr_domain *dmn)
-{
-	struct mlx5dr_arg_pool_mngr *pool_mngr;
-	int i;
-
-	pool_mngr = kvzalloc(sizeof(*pool_mngr), GFP_KERNEL);
-	if (!pool_mngr)
-		return NULL;
-
-	pool_mngr->dmn = dmn;
-
-	for (i = 0; i <= DR_ARG_CHUNK_SIZE_MAX - 1; i++) {
-		pool_mngr->pools[i] = dr_arg_pool_create(dmn, i);
-		if (!pool_mngr->pools[i])
-			goto clean_pools;
-	}
-
-	return pool_mngr;
-
-clean_pools:
-	for (i--; i >= 0; i--)
-		dr_arg_pool_destroy(pool_mngr->pools[i]);
-	kvfree(pool_mngr);
-	return NULL;
-}
-
-void mlx5dr_arg_pool_mngr_destroy(struct mlx5dr_arg_pool_mngr *pool_mngr)
-{
-	int i;
-
-	for (i = 0; i < DR_ARG_CHUNK_SIZE_MAX; i++)
-		dr_arg_pool_destroy(pool_mngr->pools[i]);
-
-	kvfree(pool_mngr);
 }

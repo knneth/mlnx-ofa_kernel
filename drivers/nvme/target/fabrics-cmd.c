@@ -278,7 +278,6 @@ static void nvmet_execute_admin_connect(struct nvmet_req *req)
 		ctrl->cntlid, ctrl->subsys->subsysnqn, ctrl->hostnqn,
 		ctrl->pi_support ? " T10-PI is enabled" : "",
 		nvmet_has_auth(ctrl) ? " with DH-HMAC-CHAP" : "");
-
 	req->cqe->result.u32 = cpu_to_le32(nvmet_connect_result(ctrl));
 out:
 	kfree(d);
@@ -347,10 +346,8 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 	if (status)
 		goto out_ctrl_put;
 
-
 	pr_debug("adding queue %d to ctrl %d.\n", qid, ctrl->cntlid);
 	req->cqe->result.u32 = cpu_to_le32(nvmet_connect_result(ctrl));
-
 out:
 	kfree(d);
 complete:

@@ -312,7 +312,7 @@ static int macsec_fs_tx_roce_create(struct mlx5e_macsec_fs *macsec_fs)
 		return 0;
 	}
 
-	ns = mlx5_get_flow_namespace(mdev, MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC);
+	ns = mlx5_get_flow_namespace(mdev, MLX5_FLOW_NAMESPACE_RDMA_TX_IPSEC);
 	if (!ns)
 		return -ENOMEM;
 
@@ -1237,7 +1237,7 @@ static int macsec_fs_rx_roce_create(struct mlx5e_macsec_fs *macsec_fs)
 		return 0;
 	}
 
-	ns = mlx5_get_flow_namespace(macsec_fs->mdev, MLX5_FLOW_NAMESPACE_RDMA_RX_MACSEC);
+	ns = mlx5_get_flow_namespace(macsec_fs->mdev, MLX5_FLOW_NAMESPACE_RDMA_RX_IPSEC);
 	if (!ns)
 		return -ENOMEM;
 
@@ -2004,7 +2004,7 @@ int mlx5e_macsec_fs_add_roce_rule_tx(struct mlx5e_macsec_fs *macsec_fs, u32 fs_i
 	MLX5_SET(set_action_in, action, offset, 0);
 	MLX5_SET(set_action_in, action, length, 32);
 
-	modify_hdr = mlx5_modify_header_alloc(macsec_fs->mdev, MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC,
+	modify_hdr = mlx5_modify_header_alloc(macsec_fs->mdev, MLX5_FLOW_NAMESPACE_RDMA_TX_IPSEC,
 					      1, action);
 	if (IS_ERR(modify_hdr)) {
 		err = PTR_ERR(modify_hdr);

@@ -1,27 +1,44 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 
-Change-Id: I4ad8b890cbee0f02173478ce9de420b104dd42bc
+Change-Id: Ie4b2e3a2cee51cba0c8ab391285db8798566d69e
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h | 2 ++
- 1 file changed, 2 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/selq.h | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/act.h
-@@ -51,6 +51,7 @@ struct mlx5e_tc_act {
- 				   const struct flow_action_entry *act,
- 				   struct mlx5_flow_attr *attr);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_EN_SELQ_H__
  
-+#ifdef HAVE_FLOW_OFFLOAD_ACTION
- 	int (*offload_action)(struct mlx5e_priv *priv,
- 			      struct flow_offload_action *fl_act,
- 			      struct flow_action_entry *act);
-@@ -60,6 +61,7 @@ struct mlx5e_tc_act {
+ #include <linux/kernel.h>
++#include <linux/netdevice.h>
  
- 	int (*stats_action)(struct mlx5e_priv *priv,
- 			    struct flow_offload_action *fl_act);
+ struct mlx5e_selq_params;
+ 
+@@ -47,7 +48,25 @@ static inline u16 mlx5e_txq_to_ch_ix_htb
+ 	return txq;
+ }
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
+ 
++#elif defined(HAVE_SELECT_QUEUE_FALLBACK_T)
++
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_FALLBACK_T
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
++#else
++		       void *accel_priv);
 +#endif
- };
- 
- struct mlx5e_tc_flow_action {
++#else /* HAVE_SELECT_QUEUE_FALLBACK_T */
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb);
++#endif
++
+ #endif /* __MLX5_EN_SELQ_H__ */

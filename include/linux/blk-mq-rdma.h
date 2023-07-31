@@ -3,7 +3,7 @@
 
 #include "../../compat/config.h"
 
-#ifdef HAVE_BLK_MQ_TAG_SET_HAS_MAP
+#if defined(HAVE_BLK_MQ_TAG_SET_HAS_MAP) && defined(HAVE_BLK_MQ_RDMA_H)
 struct blk_mq_tag_set;
 struct ib_device;
 

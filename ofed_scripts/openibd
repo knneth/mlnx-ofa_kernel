@@ -133,7 +133,6 @@ ACTION=$1
 shift
 ORIG_ACTION=$ACTION
 max_ports_num_in_hca=0
-load_module_RC=0
 FORCE=0
 XE="/opt/xensource/bin/xe"
 INTERFACE_RENAME="/etc/sysconfig/network-scripts/interface-rename.py"
@@ -269,6 +268,28 @@ count_ib_ports()
     return $cnt
 }
 
+check_mlnx_ofed_module() {
+	local modinfo_output
+	modinfo_output=`modinfo -Fdepends "$1" 2>/dev/null`
+	if [ $? = 0 ]; then
+		if echo "$modinfo_output" | grep -q mlx_compat; then
+			echo "yes"
+			return
+		fi
+	fi
+	echo "no"
+}
+
+# This involves running code. Don't do that unless running 'start'
+set_module_load_defaults() {
+	MLX5_LOAD=${MLX5_LOAD:-`check_mlnx_ofed_module mlx5_core`}
+	UMAD_LOAD=${UMAD_LOAD:-`check_mlnx_ofed_module ib_umad`}
+	UVERBS_LOAD=${UVERBS_LOAD:-`check_mlnx_ofed_module ib_uverbs`}
+	IPOIB_LOAD=${IPOIB_LOAD:-`check_mlnx_ofed_module ib_ipoib`}
+	RDMA_CM_LOAD=${RDMA_CM_LOAD:-`check_mlnx_ofed_module rdma_cm`}
+	RDMA_UCM_LOAD=${RDMA_UCM_LOAD:-`check_mlnx_ofed_module rdma_ucm`}
+}
+
 # Setting Environment variables
 if [ -f /etc/redhat-release ]; then
     DISTRIB="RedHat"
@@ -317,9 +338,9 @@ KPREFIX=`uname -r | cut -c -3 | tr -d '.' | tr -d '[:space:]'`
 # Setting OpenIB start parameters
 POST_LOAD_MODULES=""
 
+MODULES_LOADED_STATUS="1"
+
 RUN_SYSCTL=${RUN_SYSCTL:-"no"}
-UMAD_LOAD=${UMAD_LOAD:-"yes"}
-UVERBS_LOAD=${UVERBS_LOAD:-"yes"}
 
 if [ "X${SDP_LOAD}" == "Xyes" ]; then
     POST_LOAD_MODULES="$POST_LOAD_MODULES ib_sdp"
@@ -358,7 +379,7 @@ UNLOAD_MODULES="$UNLOAD_MODULES ib_qib"
 UNLOAD_MODULES="$UNLOAD_MODULES eth_ipoib ib_ipoib mlx4_vnic ib_madeye ib_rds hns_roce"
 UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target scsi_target ib_srp ib_iser ib_sdp"
 UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
-UNLOAD_MODULES="$UNLOAD_MODULES auxiliary mlxdevm mlx5_vdpa"
+UNLOAD_MODULES="$UNLOAD_MODULES auxiliary mlxdevm mlx5_vdpa mlx5_vfio_pci"
 UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw vfio_mdev"
 
 STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib mlx4_core mlx4_ib mlx4_en mlx4_vnic mlx5_core mlx5_ib ib_uverbs ib_umad ib_cm ib_core eth_ipoib mlxfw"
@@ -510,79 +531,25 @@ is_module()
 load_module()
 {
     local module=$1
+    local rc_lm=0
     filename=`modinfo $module 2>/dev/null | grep filename | awk '{print $NF}'`
 
-    if [ ! -n "$filename" ]; then
-        echo_failure "Module $module does not exist, skipping..."
-        log_msg "ERROR: Module $module does not exist, skipping..."
-        load_module_RC=2
-        return 0
-    fi
-
-    if [ -L $filename ]; then
-        filename=`readlink -f $filename`
-    fi
-
-    rpm_query_passed=0
-    rpm_name=`rpm -qf $filename --queryformat "[%{NAME}]" 2> /dev/null`
-    if [ $? -eq 0 ]; then
-        rpm_query_passed=1
+    ${modprobe} $module > /dev/null 2>&1
+    rc_lm=$?
+    if [ $rc_lm -eq 0 ]; then
+        ARE_MODULES_LOADED="yes"
+        MODULES_LOADED_STATUS="0"
     else
-        # W/A for when rpm query failed due to RPM DB issues
-        rpm_qres=$(rpm -qf $filename 2>&1)
-        if (echo "$rpm_qres" | grep -q "is not owned" 2>/dev/null) && !(echo "$rpm_qres" | grep -qEi "error:|unavailable|Bus error" 2>/dev/null); then
-            # Valid RPM DB, file is just not owned by any package
-            # require force flag to load it
-            rpm_query_passed=0
-        else
-            # Corrupted RPM DB, check if file coming from expected paths
-            case "$filename" in
-                */extra/* | */updates/* | */weak-updates/*)
-                rpm_query_passed=1
-                rpm_name=mlnx-ofa_kernel
-                ;;
-                *)
-                rpm_query_passed=0
-                ;;
-            esac
-        fi
+        echo_failure "Failed loading kernel module $module: "
+        log_msg "ERROR: Failed loading kernel module $module."
     fi
-    if [ $rpm_query_passed -eq 0 ] && [ $FORCE -eq 0 ]; then
-            echo_failure "Module $module does not belong to MLNX_OFED, skipping..."
-            log_msg "ERROR: Module $module does not belong to MLNX_OFED, skipping..."
-            load_module_RC=3
-    else
-        case "$rpm_name" in
-            *mlnx-ofa_kernel* | kernel-ib | *srp* | *iser* | *mlnx*)
-            ${modprobe} $module > /dev/null 2>&1
-            ;;
-            *)
-            if [ $FORCE -eq 0 ]; then
-                echo_failure "Module $module belong to $rpm_name which is not a part of MLNX_OFED, skipping..."
-                log_msg "ERROR: Module $module belong to $rpm_name which is not a part of MLNX_OFED, skipping..."
-                load_module_RC=3
-            else
-                ${modprobe} $module > /dev/null 2>&1
-            fi
-            ;;
-        esac
-    fi
+    return $rc_lm
 }
 
 # Load an arbitrary external module w/o OFED-related checks
 load_module_external()
 {
-    local module=$1
-    filename=`modinfo $module 2>/dev/null | grep filename | awk '{print $NF}'`
-
-    if [ ! -n "$filename" ]; then
-        echo_failure "Module $module does not exist, skipping..."
-        log_msg "ERROR: Module $module does not exist, skipping..."
-        load_module_RC=2
-        return 0
-    fi
-
-    ${modprobe} $module > /dev/null 2>&1
+    ${modprobe} $1 > /dev/null 2>&1
 }
 
 # Return module's refcnt
@@ -1018,12 +985,15 @@ convert_mod_param()
 start()
 {
     local RC=0
+    MODULES_LOADED_STATUS="1"
 
     if is_active_vf; then
         echo "There are active virtual functions. Cannot continue..."
         cleanup
         exit 1
     fi
+
+    set_module_load_defaults
 
     # W/A: inbox drivers are loaded at boot instead of new ones
     local loaded_modules=$(/sbin/lsmod 2>/dev/null | grep -E '^be2net|^cxgb|^mlx|^iw_nes|^iw_cxgb|^ib_qib|^ib_mthca|^ocrdma|^ib_ipoib|^ib_srp|^ib_iser|^ib_uverbs|^ib_addr|^ib_mad|^ib_sa|^iw_cm|^ib_core|^mlxfw|^ib_ucm|^ib_cm|^rdma_ucm|^ib_umad|^rdma_cm|^compat|^ib_netlink|^rdma_rxe' | awk '{print $1}')
@@ -1250,6 +1220,11 @@ start()
                 fi
             done
         done
+    fi
+
+    RC=$[ $RC + $MODULES_LOADED_STATUS ]
+    if [ "$MODULES_LOADED_STATUS" != "0" ]; then
+        echo_failure "No HCA kernel modules loaded: "
     fi
 
     if [ $RC -eq 0 ]; then
@@ -1913,10 +1888,6 @@ case $ACTION in
                 exit 1
                 ;;
 esac
-
-if [ $load_module_RC -ne 0 ] && [ $RC -eq 0 ]; then
-    RC=$load_module_RC
-fi
 
 cleanup
 exit $RC

@@ -1,60 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
 
-Change-Id: Ic556afe3f8360b265000865ccb73f7d16a16f995
+Change-Id: Id71d8496d27103772fc3582053c09f6d02356f66
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-@@ -6,6 +6,9 @@
- 
- #include "mod_hdr.h"
- #include "lib/fs_ttc.h"
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/rhashtable.h>
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
+ int
+ mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
+ 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
+ 		       struct netlink_ext_ack *extack);
++#else
++int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
++		       u16 *new_qid, struct netlink_ext_ack *extack);
 +#endif
- 
- struct mlx5_prio_hp {
- 	u32 rate;
-@@ -189,6 +192,7 @@ static inline int mlx5e_ethtool_get_rxnf
- #endif /* CONFIG_MLX5_EN_RXNFC */
- 
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- struct mlx5e_arfs_tables;
- 
- int mlx5e_arfs_create_tables(struct mlx5e_priv *priv);
-@@ -203,6 +207,7 @@ static inline void mlx5e_arfs_destroy_ta
- static inline int mlx5e_arfs_enable(struct mlx5e_priv *priv) { return -EOPNOTSUPP; }
- static inline int mlx5e_arfs_disable(struct mlx5e_priv *priv) {	return -EOPNOTSUPP; }
- #endif
-+#endif
- 
- #ifdef CONFIG_MLX5_EN_TLS
- struct mlx5e_accel_fs_tcp;
-@@ -228,8 +233,10 @@ struct mlx5e_flow_steering {
- 	struct mlx5_ttc_table           *ttc;
- 	struct mlx5_ttc_table           *inner_ttc;
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- 	struct mlx5e_arfs_tables       *arfs;
- #endif
-+#endif
- #ifdef CONFIG_MLX5_EN_TLS
- 	struct mlx5e_accel_fs_tcp      *accel_tcp;
- #endif
-@@ -257,10 +264,12 @@ struct mlx5e_flow_steering *mlx5e_fs_ini
- 					  bool state_destroy);
- void mlx5e_fs_cleanup(struct mlx5e_flow_steering *fs);
- 
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- int mlx5e_add_vlan_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
- void mlx5e_remove_vlan_trap(struct mlx5e_priv *priv);
- int mlx5e_add_mac_trap(struct mlx5e_priv *priv, int  trap_id, int tir_num);
- void mlx5e_remove_mac_trap(struct mlx5e_priv *priv);
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
- void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs, struct net_device *netdev);
- int mlx5e_fs_vlan_rx_add_vid(struct mlx5e_flow_steering *fs,
- 			     struct net_device *netdev,
+ int
+ mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
+ 			struct netlink_ext_ack *extack);

@@ -339,6 +339,7 @@ static int mlx5_ib_query_q_counters_vport(struct mlx5_ib_dev *dev,
 {
 	u32 out[MLX5_ST_SZ_DW(query_q_counter_out)] = {};
 	u32 in[MLX5_ST_SZ_DW(query_q_counter_in)] = {};
+	struct mlx5_core_dev *mdev;
 	__be32 val;
 	int ret, i;
 
@@ -346,12 +347,16 @@ static int mlx5_ib_query_q_counters_vport(struct mlx5_ib_dev *dev,
 	    dev->port[port_num].rep->vport == MLX5_VPORT_UPLINK)
 		return 0;
 
+	mdev = mlx5_eswitch_get_core_dev(dev->port[port_num].rep->esw);
+	if (!mdev)
+		return -EOPNOTSUPP;
+
 	MLX5_SET(query_q_counter_in, in, opcode, MLX5_CMD_OP_QUERY_Q_COUNTER);
 	MLX5_SET(query_q_counter_in, in, other_vport, 1);
 	MLX5_SET(query_q_counter_in, in, vport_number,
 		 dev->port[port_num].rep->vport);
 	MLX5_SET(query_q_counter_in, in, aggregate, 1);
-	ret = mlx5_cmd_exec_inout(dev->mdev, query_q_counter, in, out);
+	ret = mlx5_cmd_exec_inout(mdev, query_q_counter, in, out);
 	if (ret)
 		return ret;
 
@@ -585,43 +590,53 @@ static void mlx5_ib_fill_counters(struct mlx5_ib_dev *dev,
 	bool is_vport = is_mdev_switchdev_mode(dev->mdev) &&
 			port_num != MLX5_VPORT_PF;
 	const struct mlx5_ib_counter *names;
-	int j = 0, i;
+	int j = 0, i, size;
 
 	names = is_vport ? vport_basic_q_cnts : basic_q_cnts;
-	for (i = 0; i < ARRAY_SIZE(basic_q_cnts); i++, j++) {
+	size = is_vport ? ARRAY_SIZE(vport_basic_q_cnts) :
+			  ARRAY_SIZE(basic_q_cnts);
+	for (i = 0; i < size; i++, j++) {
 		descs[j].name = names[i].name;
-		offsets[j] = basic_q_cnts[i].offset;
+		offsets[j] = names[i].offset;
 	}
 
 	names = is_vport ? vport_out_of_seq_q_cnts : out_of_seq_q_cnts;
+	size = is_vport ? ARRAY_SIZE(vport_out_of_seq_q_cnts) :
+			  ARRAY_SIZE(out_of_seq_q_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, out_of_seq_cnt)) {
-		for (i = 0; i < ARRAY_SIZE(out_of_seq_q_cnts); i++, j++) {
+		for (i = 0; i < size; i++, j++) {
 			descs[j].name = names[i].name;
-			offsets[j] = out_of_seq_q_cnts[i].offset;
+			offsets[j] = names[i].offset;
 		}
 	}
 
 	names = is_vport ? vport_retrans_q_cnts : retrans_q_cnts;
+	size = is_vport ? ARRAY_SIZE(vport_retrans_q_cnts) :
+			  ARRAY_SIZE(retrans_q_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, retransmission_q_counters)) {
-		for (i = 0; i < ARRAY_SIZE(retrans_q_cnts); i++, j++) {
+		for (i = 0; i < size; i++, j++) {
 			descs[j].name = names[i].name;
-			offsets[j] = retrans_q_cnts[i].offset;
+			offsets[j] = names[i].offset;
 		}
 	}
 
 	names = is_vport ? vport_extended_err_cnts : extended_err_cnts;
+	size = is_vport ? ARRAY_SIZE(vport_extended_err_cnts) :
+			  ARRAY_SIZE(extended_err_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, enhanced_error_q_counters)) {
-		for (i = 0; i < ARRAY_SIZE(extended_err_cnts); i++, j++) {
+		for (i = 0; i < size; i++, j++) {
 			descs[j].name = names[i].name;
-			offsets[j] = extended_err_cnts[i].offset;
+			offsets[j] = names[i].offset;
 		}
 	}
 
 	names = is_vport ? vport_roce_accl_cnts : roce_accl_cnts;
+	size = is_vport ? ARRAY_SIZE(vport_roce_accl_cnts) :
+			  ARRAY_SIZE(roce_accl_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, roce_accl)) {
-		for (i = 0; i < ARRAY_SIZE(roce_accl_cnts); i++, j++) {
+		for (i = 0; i < size; i++, j++) {
 			descs[j].name = names[i].name;
-			offsets[j] = roce_accl_cnts[i].offset;
+			offsets[j] = names[i].offset;
 		}
 	}
 
@@ -671,25 +686,37 @@ static void mlx5_ib_fill_counters(struct mlx5_ib_dev *dev,
 static int __mlx5_ib_alloc_counters(struct mlx5_ib_dev *dev,
 				    struct mlx5_ib_counters *cnts, u32 port_num)
 {
-	u32 num_counters, num_op_counters = 0;
+	bool is_vport = is_mdev_switchdev_mode(dev->mdev) &&
+			port_num != MLX5_VPORT_PF;
+	u32 num_counters, num_op_counters = 0, size;
 
-	num_counters = ARRAY_SIZE(basic_q_cnts);
+	size = is_vport ? ARRAY_SIZE(vport_basic_q_cnts) :
+			  ARRAY_SIZE(basic_q_cnts);
+	num_counters = size;
 
+	size = is_vport ? ARRAY_SIZE(vport_out_of_seq_q_cnts) :
+			  ARRAY_SIZE(out_of_seq_q_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, out_of_seq_cnt))
-		num_counters += ARRAY_SIZE(out_of_seq_q_cnts);
+		num_counters += size;
 
+	size = is_vport ? ARRAY_SIZE(vport_retrans_q_cnts) :
+			  ARRAY_SIZE(retrans_q_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, retransmission_q_counters))
-		num_counters += ARRAY_SIZE(retrans_q_cnts);
+		num_counters += size;
 
+	size = is_vport ? ARRAY_SIZE(vport_extended_err_cnts) :
+			  ARRAY_SIZE(extended_err_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, enhanced_error_q_counters))
-		num_counters += ARRAY_SIZE(extended_err_cnts);
+		num_counters += size;
 
+	size = is_vport ? ARRAY_SIZE(vport_roce_accl_cnts) :
+			  ARRAY_SIZE(roce_accl_cnts);
 	if (MLX5_CAP_GEN(dev->mdev, roce_accl))
-		num_counters += ARRAY_SIZE(roce_accl_cnts);
+		num_counters += size;
 
 	cnts->num_q_counters = num_counters;
 
-	if (is_mdev_switchdev_mode(dev->mdev) && port_num != MLX5_VPORT_PF)
+	if (is_vport)
 		goto skip_non_qcounters;
 
 	if (MLX5_CAP_GEN(dev->mdev, cc_query_allowed)) {

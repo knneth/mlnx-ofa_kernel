@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
 
-Change-Id: Idf7fdaddeb9aa8af7d7c1cf7eddc9e21192322ba
+Change-Id: I6519eae8d4d79b6c8c21a19baa1d1765a332fb4f
 ---
- drivers/base/auxiliary.c | 62 ++++++++++++++++++++++++++++++++++++----
- 1 file changed, 56 insertions(+), 6 deletions(-)
+ drivers/base/auxiliary.c | 64 +++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 57 insertions(+), 7 deletions(-)
 
 --- a/drivers/base/auxiliary.c
 +++ b/drivers/base/auxiliary.c
@@ -17,6 +17,15 @@ Change-Id: Idf7fdaddeb9aa8af7d7c1cf7eddc9e21192322ba
  
  /**
   * DOC: PURPOSE
+@@ -189,7 +189,7 @@ static int auxiliary_match(struct device
+ 	return !!auxiliary_match_id(auxdrv->id_table, auxdev);
+ }
+ 
+-static int auxiliary_uevent(const struct device *dev, struct kobj_uevent_env *env)
++static int auxiliary_uevent(struct device *dev, struct kobj_uevent_env *env)
+ {
+ 	const char *name, *p;
+ 
 @@ -211,27 +211,55 @@ static int auxiliary_bus_probe(struct de
  	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
  	int ret;

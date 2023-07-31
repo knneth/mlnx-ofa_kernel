@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: block/blk-mq-rdma.c
 
-Change-Id: Icb6b8fd904be4c0833b43dda3d2870b3116b2ffb
+Change-Id: I0b5a48710a872181e3b4d6ce010fa1e308277547
 ---
  block/blk-mq-rdma.c | 25 +++++++++++++++++++++++++
  1 file changed, 25 insertions(+)
@@ -9,7 +9,7 @@ Change-Id: Icb6b8fd904be4c0833b43dda3d2870b3116b2ffb
 --- a/block/blk-mq-rdma.c
 +++ b/block/blk-mq-rdma.c
 @@ -1,3 +1,4 @@
-+#ifdef HAVE_BLK_MQ_TAG_SET_HAS_MAP
++#if defined(HAVE_BLK_MQ_TAG_SET_HAS_MAP) && defined(HAVE_BLK_MQ_RDMA_H)
  // SPDX-License-Identifier: GPL-2.0
  /*
   * Copyright (c) 2017 Sagi Grimberg.

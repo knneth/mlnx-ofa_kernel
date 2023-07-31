@@ -57,7 +57,7 @@ mlx5_eswitch_termtbl_cmp(struct mlx5_flow_act *flow_act1,
 		return memcmp(flow_act1->pkt_reformat, flow_act2->pkt_reformat,
 			      sizeof(*flow_act1->pkt_reformat));
 
-	return flow_act1->pkt_reformat || flow_act2->pkt_reformat;
+	return !(flow_act1->pkt_reformat == flow_act2->pkt_reformat);
 }
 
 static int

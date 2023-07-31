@@ -1,47 +1,85 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
 
-Change-Id: I8bd56102c4751817d8baff0cc70c4e0bab5c2ce4
+Change-Id: I23f3f6437791dd86d955b0834838a1e9de4bac79
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 10 +++++++++-
- 1 file changed, 9 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en/trap.c  | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
-@@ -32,6 +32,7 @@
- #ifndef __MLX5_EN_XDP_H__
- #define __MLX5_EN_XDP_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2020 Mellanox Technologies */
  
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
++
+ #include <net/page_pool.h>
+ #include "en/txrx.h"
+ #include "en/params.h"
+@@ -53,7 +55,11 @@ static void mlx5e_init_trap_rq(struct ml
+ 	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+ 	rq->stats        = &priv->trap_stats.rq;
+ 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
 +#ifdef HAVE_XDP_SUPPORT
- #include <linux/indirect_call_wrapper.h>
++#ifdef HAVE_XDP_RXQ_INFO
+ 	xdp_rxq_info_unused(&rq->xdp_rxq);
++#endif
++#endif
+ 	mlx5e_rq_set_trap_handlers(rq, params);
+ }
  
- #include "en.h"
-@@ -53,8 +54,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
- void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
- void mlx5e_set_xmit_fp(struct mlx5e_xdpsq *sq, bool is_mpw);
- void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq);
-+#ifdef HAVE_NDO_XDP_XMIT
-+#ifndef HAVE_NDO_XDP_FLUSH
- int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
- 		   u32 flags);
+@@ -133,7 +139,11 @@ static struct mlx5e_trap *mlx5e_open_tra
+ 	t->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey);
+ 	t->stats    = &priv->trap_stats.ch;
+ 
++#ifdef HAVE_NETIF_NAPI_ADD_GET_3_PARAMS
+ 	netif_napi_add(netdev, &t->napi, mlx5e_trap_napi_poll);
 +#else
-+int mlx5e_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp);
-+void mlx5e_xdp_flush(struct net_device *dev);
-+#endif
++	netif_napi_add(netdev, &t->napi, mlx5e_trap_napi_poll, 64);
 +#endif
  
- INDIRECT_CALLABLE_DECLARE(bool mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq,
- 							  struct mlx5e_xmit_data *xdptxd,
-@@ -102,7 +110,6 @@ static inline void mlx5e_xmit_xdp_doorbe
- 		sq->doorbell_cseg = NULL;
- 	}
- }
--
- /* Enable inline WQEs to shift some load from a congested HCA (HW) to
-  * a less congested cpu (SW).
-  */
-@@ -184,3 +191,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
- 	return fifo->xi[(*fifo->cc)++ & fifo->mask];
- }
- #endif
+ 	err = mlx5e_open_trap_rq(priv, t);
+ 	if (unlikely(err))
+@@ -220,11 +230,13 @@ static int mlx5e_handle_action_trap(stru
+ 		if (err)
+ 			goto err_out;
+ 		break;
++#ifdef HAVE_DEVLINK_TRAP_DMAC_FILTER
+ 	case DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER:
+ 		err = mlx5e_add_mac_trap(priv->fs, trap_id, mlx5e_trap_get_tirn(priv->en_trap));
+ 		if (err)
+ 			goto err_out;
+ 		break;
 +#endif
+ 	default:
+ 		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
+ 		err = -EINVAL;
+@@ -244,9 +256,11 @@ static int mlx5e_handle_action_drop(stru
+ 	case DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER:
+ 		mlx5e_remove_vlan_trap(priv->fs);
+ 		break;
++#ifdef HAVE_DEVLINK_TRAP_DMAC_FILTER
+ 	case DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER:
+ 		mlx5e_remove_mac_trap(priv->fs);
+ 		break;
++#endif
+ 	default:
+ 		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
+ 		return -EINVAL;
+@@ -300,7 +314,9 @@ static int mlx5e_apply_trap(struct mlx5e
+ 
+ static const int mlx5e_traps_arr[] = {
+ 	DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER,
++#ifdef HAVE_DEVLINK_TRAP_DMAC_FILTER
+ 	DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER,
++#endif
+ };
+ 
+ int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable)
+@@ -315,3 +331,5 @@ int mlx5e_apply_traps(struct mlx5e_priv
+ 	}
+ 	return 0;
+ }
++
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */

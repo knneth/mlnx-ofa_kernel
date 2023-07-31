@@ -38,6 +38,9 @@ static inline bool mlx5r_umr_can_load_pas(struct mlx5_ib_dev *dev,
 	    length >= MLX5_MAX_UMR_PAGES * PAGE_SIZE)
 		return false;
 
+	if (MLX5_CAP_GEN(dev->mdev, ats))
+		return false;
+
 	return true;
 }
 

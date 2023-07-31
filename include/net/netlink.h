@@ -17,22 +17,12 @@
 #endif
 
 #ifndef HAVE_NETLINK_EXTACK
-#define NETLINK_MAX_COOKIE_LEN  20
-struct netlink_ext_ack {
-	const char *_msg;
-	const struct nlattr *bad_attr;
-	u8 cookie[NETLINK_MAX_COOKIE_LEN];
-	u8 cookie_len;
-};
+struct netlink_ext_ack;
 
 #define UNUSED(x) (void)(x)
-#undef NL_SET_ERR_MSG
-#define NL_SET_ERR_MSG(extack, msg) { \
-	UNUSED(extack); \
-	pr_err("%s\n", msg); \
-}
 #undef NL_SET_ERR_MSG_MOD
-#define NL_SET_ERR_MSG_MOD(extack, msg) NL_SET_ERR_MSG(extack, KBUILD_MODNAME ": " msg)
+#define NL_SET_ERR_MSG_MOD(extack, msg) \
+	do { UNUSED(extack); pr_err("%s\n", msg); } while (0)
 #endif
 
 #endif	/* _COMPAT_NET_NETLINK_H */

@@ -1,153 +1,121 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
 
-Change-Id: I5599055cdb8cfb7eacc147dca94e71197df483ba
+Change-Id: I18805d0d938a1061bf51c96955399d8155c2ee76
 ---
- .../ethernet/mellanox/mlx5/core/en_stats.h    | 36 +++++++++++++++++--
- 1 file changed, 34 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_debugfs.c  | 55 +++++++++++++++++++
+ 1 file changed, 55 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
-@@ -33,6 +33,10 @@
- #ifndef __MLX5_EN_STATS_H__
- #define __MLX5_EN_STATS_H__
- 
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+@@ -35,6 +35,9 @@
+ #include "en.h"
+ #include "en/rx_res.h"
+ #include "en/rss.h"
 +#ifdef HAVE_BASECODE_EXTRAS
-+#include <uapi/linux/ethtool.h>
++#include "linux/namei.h"
++#endif
+ 
+ /* For non-default namespaces, add suffix in format "@<pci_id>" */
+ /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
+@@ -79,6 +82,37 @@ static void mlx5e_create_channel_debugfs
+ 			   &channel->rq.cq.mcq.cqn);
+ }
+ 
++#ifndef HAVE_DEBUGFS_LOOKUP
++struct dentry *mlx5e_debugfs_lookup(const char *name, struct dentry *parent)
++{
++	struct dentry *dentry;
++
++	if (IS_ERR(parent))
++		return NULL;
++
++#ifdef HAVE_INODE_LOCK
++	inode_lock(d_inode(parent));
++#else
++	mutex_lock(&(parent->d_inode)->i_mutex);
++#endif
++	dentry = lookup_one_len(name, parent, strlen(name));
++#ifdef HAVE_INODE_LOCK
++	inode_unlock(d_inode(parent));
++#else
++	mutex_unlock(&(parent->d_inode)->i_mutex);
 +#endif
 +
- #define MLX5E_READ_CTR64_CPU(ptr, dsc, i) \
- 	(*(u64 *)((char *)ptr + dsc[i].offset))
- #define MLX5E_READ_CTR64_BE(ptr, dsc, i) \
-@@ -114,9 +118,11 @@ void mlx5e_stats_update_ndo_stats(struct
++	if (IS_ERR(dentry))
++		return NULL;
++	if (dentry->d_inode == NULL) {
++		dput(dentry);
++		return NULL;
++	}
++	return dentry;
++}
++#endif
++
++
+ struct rx_res_debugfs {
+ 	struct mlx5e_rx_res *rx_res;
+ 	int i;
+@@ -100,8 +134,13 @@ static int get_tir_indir(void *data, u64
+ 	return 0;
+ }
  
- void mlx5e_stats_pause_get(struct mlx5e_priv *priv,
- 			   struct ethtool_pause_stats *pause_stats);
-+#ifdef HAVE_NDO_GET_FEC_STATS
- void mlx5e_stats_fec_get(struct mlx5e_priv *priv,
- 			 struct ethtool_fec_stats *fec_stats);
--
-+#endif
-+#ifdef HAVE_NDO_ETH_PHY_STATS
- void mlx5e_stats_eth_phy_get(struct mlx5e_priv *priv,
- 			     struct ethtool_eth_phy_stats *phy_stats);
- void mlx5e_stats_eth_mac_get(struct mlx5e_priv *priv,
-@@ -126,6 +132,7 @@ void mlx5e_stats_eth_ctrl_get(struct mlx
- void mlx5e_stats_rmon_get(struct mlx5e_priv *priv,
- 			  struct ethtool_rmon_stats *rmon,
- 			  const struct ethtool_rmon_hist_range **ranges);
-+#endif
- 
- /* Concrete NIC Stats */
- 
-@@ -158,15 +165,17 @@ struct mlx5e_sw_stats {
- 	u64 rx_csum_complete_tail;
- 	u64 rx_csum_complete_tail_slow;
- 	u64 rx_csum_unnecessary_inner;
-+#ifdef HAVE_XDP_SUPPORT
- 	u64 rx_xdp_drop;
- 	u64 rx_xdp_redirect;
- 	u64 rx_xdp_tx_xmit;
-+	u64 rx_xdp_tx_nops;
- 	u64 rx_xdp_tx_mpwqe;
- 	u64 rx_xdp_tx_inlnw;
--	u64 rx_xdp_tx_nops;
- 	u64 rx_xdp_tx_full;
- 	u64 rx_xdp_tx_err;
- 	u64 rx_xdp_tx_cqe;
-+#endif
- 	u64 tx_csum_none;
- 	u64 tx_csum_partial;
- 	u64 tx_csum_partial_inner;
-@@ -177,6 +186,12 @@ struct mlx5e_sw_stats {
- 	u64 tx_cqes;
- 	u64 tx_queue_wake;
- 	u64 tx_cqe_err;
-+#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
-+	u64 rx_sw_lro_aggregated;
-+	u64 rx_sw_lro_flushed;
-+	u64 rx_sw_lro_no_desc;
-+#endif
-+#ifdef HAVE_XDP_SUPPORT
- 	u64 tx_xdp_xmit;
- 	u64 tx_xdp_mpwqe;
- 	u64 tx_xdp_inlnw;
-@@ -184,6 +199,11 @@ struct mlx5e_sw_stats {
- 	u64 tx_xdp_full;
- 	u64 tx_xdp_err;
- 	u64 tx_xdp_cqes;
-+#endif
-+#ifdef HAVE_BASECODE_EXTRAS
-+	u64 tx_cqe_compress_blks;
-+	u64 tx_cqe_compress_pkts;
-+#endif
- 	u64 rx_wqe_err;
- 	u64 rx_mpwqe_filler_cqes;
- 	u64 rx_mpwqe_filler_strides;
-@@ -224,6 +244,7 @@ struct mlx5e_sw_stats {
- 	u64 rx_pp_recycle_released_ref;
- #endif
- #ifdef CONFIG_MLX5_EN_TLS
-+#ifdef HAVE_UAPI_LINUX_TLS_H
- 	u64 tx_tls_encrypted_packets;
- 	u64 tx_tls_encrypted_bytes;
- 	u64 tx_tls_ooo;
-@@ -244,6 +265,7 @@ struct mlx5e_sw_stats {
- 	u64 rx_tls_resync_res_retry;
- 	u64 rx_tls_resync_res_skip;
- 	u64 rx_tls_err;
-+#endif /* HAVE_UAPI_LINUX_TLS_H */
- #endif
- 
- 	u64 rx_xsk_packets;
-@@ -356,8 +378,10 @@ struct mlx5e_rq_stats {
- 	u64 mcast_packets;
- 	u64 ecn_mark;
- 	u64 removed_vlan_packets;
-+#ifdef HAVE_XDP_SUPPORT
- 	u64 xdp_drop;
- 	u64 xdp_redirect;
-+#endif
- 	u64 wqe_err;
- 	u64 mpwqe_filler_cqes;
- 	u64 mpwqe_filler_strides;
-@@ -392,6 +416,7 @@ struct mlx5e_rq_stats {
- 	u64 pp_recycle_released_ref;
- #endif
- #ifdef CONFIG_MLX5_EN_TLS
-+#ifdef HAVE_UAPI_LINUX_TLS_H
- 	u64 tls_decrypted_packets;
- 	u64 tls_decrypted_bytes;
- 	u64 tls_resync_req_pkt;
-@@ -402,6 +427,7 @@ struct mlx5e_rq_stats {
- 	u64 tls_resync_res_retry;
- 	u64 tls_resync_res_skip;
- 	u64 tls_err;
-+#endif /* HAVE_UAPI_LINUX_TLS_H */
- #endif
- };
- 
-@@ -438,10 +464,15 @@ struct mlx5e_sq_stats {
- 	u64 recover;
- 	/* dirtied @completion */
- 	u64 cqes ____cacheline_aligned_in_smp;
-+#ifdef HAVE_BASECODE_EXTRAS
-+	u64 cqe_compress_blks;
-+	u64 cqe_compress_pkts;
-+#endif
- 	u64 wake;
- 	u64 cqe_err;
- };
- 
-+#ifdef HAVE_XDP_SUPPORT
- struct mlx5e_xdpsq_stats {
- 	u64 xmit;
- 	u64 mpwqe;
-@@ -452,6 +483,7 @@ struct mlx5e_xdpsq_stats {
- 	/* dirtied @completion */
- 	u64 cqes ____cacheline_aligned_in_smp;
- };
++#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
+ DEFINE_DEBUGFS_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
+ DEFINE_DEBUGFS_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
++#else
++DEFINE_SIMPLE_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
++DEFINE_SIMPLE_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
 +#endif
  
- struct mlx5e_ch_stats {
- 	u64 events;
+ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
+ {
+@@ -156,7 +195,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
+ 		rx_res_dbg->i = i;
+ 		rx_res_dbg->rx_res = priv->rx_res;
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
++#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
+ 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
++#else
++		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
++#endif
+ 	}
+ 
+ 	for (i = 0; i < priv->max_nch; i++) {
+@@ -165,7 +208,11 @@ void mlx5e_create_debugfs(struct mlx5e_p
+ 		rx_res_dbg->i = i;
+ 		rx_res_dbg->rx_res = priv->rx_res;
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
++#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
+ 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
++#else
++		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
++#endif
+ 	}
+ 
+ 	for (i = 0; i < priv->channels.num; i++)
+@@ -181,7 +228,11 @@ void mlx5e_debugs_free_recursive_private
+ 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
+ 
++#ifdef HAVE_DEBUGFS_LOOKUP
+ 		dent = debugfs_lookup(name, priv->dfs_root);
++#else
++		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++#endif
+ 		if (dent && dent->d_inode && dent->d_inode->i_private)
+ 			kvfree(dent->d_inode->i_private);
+ 	}
+@@ -189,7 +240,11 @@ void mlx5e_debugs_free_recursive_private
+ 	for (i = 0; i < priv->max_nch; i++) {
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
+ 
++#ifdef HAVE_DEBUGFS_LOOKUP
+ 		dent = debugfs_lookup(name, priv->dfs_root);
++#else
++		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++#endif
+ 		if (dent && dent->d_inode && dent->d_inode->i_private)
+ 			kvfree(dent->d_inode->i_private);
+ 	}

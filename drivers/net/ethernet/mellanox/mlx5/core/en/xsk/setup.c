@@ -5,6 +5,7 @@
 #include "en/params.h"
 #include "en/txrx.h"
 #include "en/health.h"
+#include <net/xdp_sock_drv.h>
 
 static int mlx5e_legacy_rq_validate_xsk(struct mlx5_core_dev *mdev,
 					struct mlx5e_params *params,
@@ -21,7 +22,7 @@ static int mlx5e_legacy_rq_validate_xsk(struct mlx5_core_dev *mdev,
 /* The limitation of 2048 can be altered, but shouldn't go beyond the minimal
  * stride size of striding RQ.
  */
-#define MLX5E_MIN_XSK_CHUNK_SIZE 2048
+#define MLX5E_MIN_XSK_CHUNK_SIZE max(2048, XDP_UMEM_MIN_CHUNK_SIZE)
 
 bool mlx5e_validate_xsk_param(struct mlx5e_params *params,
 			      struct mlx5e_xsk_param *xsk,
@@ -85,7 +86,7 @@ static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
 	if (err)
 		return err;
 
-	return  xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix, 0);
+	return xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq_xdp_ix, c->napi.napi_id);
 }
 
 static int mlx5e_open_xsk_rq(struct mlx5e_channel *c, struct mlx5e_params *params,

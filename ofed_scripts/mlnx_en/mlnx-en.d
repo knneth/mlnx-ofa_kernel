@@ -186,18 +186,21 @@ log_msg()
     logger -i "mlnx-en.d: $@"
 }
 
-load_module()
-{
-    local module=$1
-    filename=`modinfo $module 2>/dev/null | grep filename | awk '{print $NF}'`
+check_mlnx_ofed_module() {
+	local modinfo_output
+	modinfo_output=`modinfo -Fdepends "$1" 2>/dev/null`
+	if [ $? = 0 ]; then
+		if echo "$modinfo_output" | grep -q mlx_compat; then
+			echo "yes"
+			return
+		fi
+	fi
+	echo "no"
+}
 
-    if [ ! -n "$filename" ]; then
-        echo_failure "Module $module does not exist!"
-        log_msg "ERROR: Module $module does not exist!"
-        return 1
-    fi
-
-    ${modprobe} $module > /dev/null 2>&1
+# This involves running code. Don't do that unless running 'start'
+set_module_load_defaults() {
+	MLX5_LOAD=${MLX5_LOAD:-`check_mlnx_ofed_module mlx5_core`}
 }
 
 get_sw_fw_info()
@@ -475,6 +478,8 @@ start()
 {
     local RC=0
 
+    set_module_load_defaults
+
     # W/A: inbox drivers are loaded at boot instead of new ones
     local mlxkos=$(/sbin/lsmod 2>/dev/null | grep '^mlx' | cut -d" " -f"1")
     if [ "X$mlxkos" != "X" ]; then
@@ -524,7 +529,7 @@ start()
     IFS="${OIFS}"
 
     if [ "X${MLX5_LOAD}" == "Xyes" ]; then
-        load_module mlx5_core
+        modprobe mlx5_core
         my_rc=$?
         if [ $my_rc -eq 0 ]; then
             xe_refresh_interfaces

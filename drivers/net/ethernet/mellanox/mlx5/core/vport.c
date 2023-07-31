@@ -36,16 +36,95 @@
 #include <linux/mlx5/vport.h>
 #include <linux/mlx5/eswitch.h>
 #include "mlx5_core.h"
+#include "eswitch.h"
 #include "sf/sf.h"
 
 /* Mutex to hold while enabling or disabling RoCE */
 static DEFINE_MUTEX(mlx5_roce_en_lock);
 
-u8 mlx5_query_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport)
+int mlx5_get_max_alloc_icm_th(struct mlx5_core_dev *mdev, u16 vhca_id, u32 *max_alloc_icm_th)
 {
-	u32 out[MLX5_ST_SZ_DW(query_vport_state_out)] = {};
-	u32 in[MLX5_ST_SZ_DW(query_vport_state_in)] = {};
+	u32 in[MLX5_ST_SZ_DW(vhca_icm_ctrl_reg)] = {};
+	u32 out[MLX5_ST_SZ_DW(vhca_icm_ctrl_reg)] = {};
 	int err;
+
+	MLX5_SET(vhca_icm_ctrl_reg, in, vhca_id_valid, 1);
+	MLX5_SET(vhca_icm_ctrl_reg, in, vhca_id, vhca_id);
+
+	err =  mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
+				    MLX5_REG_VHCA_ICM_CTRL, 0, 0);
+	if (err)
+		return err;
+
+	*max_alloc_icm_th = MLX5_GET(vhca_icm_ctrl_reg, out,max_alloc_icm_th);
+
+	return 0;
+}
+
+static int mlx5_get_total_icm(struct mlx5_core_dev *mdev, u32* total_icm)
+{
+	u32 in[MLX5_ST_SZ_DW(nic_cap_reg)] = {};
+	u32 out[MLX5_ST_SZ_DW(nic_cap_reg)] = {};
+	int err;
+
+	err =  mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
+				    MLX5_REG_NIC_CAP_REG, 0, 0);
+	if (err)
+		return err;
+
+	*total_icm = MLX5_GET(nic_cap_reg, out, total_icm);
+
+	return 0;
+}
+
+int mlx5_set_max_alloc_icm_th(struct mlx5_core_dev *mdev, u16 vhca_id, u32 max_alloc_icm_th)
+{
+	u32 in[MLX5_ST_SZ_DW(vhca_icm_ctrl_reg)] = {};
+	u32 out[MLX5_ST_SZ_DW(vhca_icm_ctrl_reg)] = {};
+	u32 total_icm;
+	int err;
+
+	err = mlx5_get_total_icm(mdev, &total_icm);
+	if (err)
+		return err;
+
+	if (max_alloc_icm_th > total_icm) {
+		mlx5_core_err(mdev, "Requested page limit %u is invalid, maximum limit %u\n",
+			      max_alloc_icm_th, total_icm);
+		return -EINVAL;
+	}
+
+	MLX5_SET(vhca_icm_ctrl_reg, in, vhca_id_valid, 1);
+	MLX5_SET(vhca_icm_ctrl_reg, in, vhca_id, vhca_id);
+	MLX5_SET(vhca_icm_ctrl_reg, in, max_alloc_icm_th_mask, 1);
+	MLX5_SET(vhca_icm_ctrl_reg, in, max_alloc_icm_th, max_alloc_icm_th);
+
+	return mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
+				    MLX5_REG_VHCA_ICM_CTRL, 0, 1);
+}
+
+bool mlx5_vhca_icm_ctrl_supported(struct mlx5_core_dev *mdev)
+{
+	u32 in[MLX5_ST_SZ_DW(nic_cap_reg)] = {};
+	u32 out[MLX5_ST_SZ_DW(nic_cap_reg)] = {};
+	int err;
+
+	if (MLX5_CAP_GEN(mdev, nic_cap_reg)) {
+		err = mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
+					   MLX5_REG_NIC_CAP_REG, 0, 0);
+		if (err)
+			return false;
+
+		return !!MLX5_GET(nic_cap_reg, out, vhca_icm_ctrl);
+	}
+
+	return false;
+}
+
+static int _mlx5_query_vport_state(struct mlx5_core_dev *mdev, u8 opmod,
+				   u16 vport, u32 *out)
+{
+	u32 in[MLX5_ST_SZ_DW(query_vport_state_in)] = {};
 
 	MLX5_SET(query_vport_state_in, in, opcode,
 		 MLX5_CMD_OP_QUERY_VPORT_STATE);
@@ -54,15 +133,34 @@ u8 mlx5_query_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport)
 	if (vport)
 		MLX5_SET(query_vport_state_in, in, other_vport, 1);
 
-	err = mlx5_cmd_exec_inout(mdev, query_vport_state, in, out);
+	return mlx5_cmd_exec_inout(mdev, query_vport_state, in, out);
+}
+
+u8 mlx5_query_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport)
+{
+	u32 out[MLX5_ST_SZ_DW(query_vport_state_out)] = {};
+	int err;
+
+	err = _mlx5_query_vport_state(mdev, opmod, vport, out);
 	if (err)
 		return 0;
 
 	return MLX5_GET(query_vport_state_out, out, state);
 }
 
-int mlx5_modify_vport_admin_state(struct mlx5_core_dev *mdev, u8 opmod,
-				  u16 vport, u8 other_vport, u8 state)
+u8 mlx5_query_vport_direction(struct mlx5_core_dev *mdev, u8 opmod, u16 vport)
+{
+	u32 out[MLX5_ST_SZ_DW(query_vport_state_out)] = {};
+	int err;
+
+	err = _mlx5_query_vport_state(mdev, opmod, vport, out);
+	if (err)
+		return 0;
+	return MLX5_GET(query_vport_state_out, out, direction);
+}
+
+int mlx5_modify_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport,
+			    u8 other_vport, u8 state, u8 direction)
 {
 	u32 in[MLX5_ST_SZ_DW(modify_vport_state_in)] = {};
 
@@ -71,9 +169,17 @@ int mlx5_modify_vport_admin_state(struct mlx5_core_dev *mdev, u8 opmod,
 	MLX5_SET(modify_vport_state_in, in, op_mod, opmod);
 	MLX5_SET(modify_vport_state_in, in, vport_number, vport);
 	MLX5_SET(modify_vport_state_in, in, other_vport, other_vport);
+	MLX5_SET(modify_vport_state_in, in, direction, direction);
 	MLX5_SET(modify_vport_state_in, in, admin_state, state);
 
 	return mlx5_cmd_exec_in(mdev, modify_vport_state, in);
+}
+
+int mlx5_modify_vport_admin_state(struct mlx5_core_dev *mdev, u8 opmod,
+				  u16 vport, u8 other_vport, u8 state)
+{
+	return mlx5_modify_vport_state(mdev, opmod, vport, other_vport, state,
+				       mlx5_query_vport_direction(mdev, opmod, vport));
 }
 
 static int mlx5_query_nic_vport_context(struct mlx5_core_dev *mdev, u16 vport,
@@ -288,7 +394,8 @@ int mlx5_query_nic_vport_mac_list(struct mlx5_core_dev *dev,
 		 MLX5_CMD_OP_QUERY_NIC_VPORT_CONTEXT);
 	MLX5_SET(query_nic_vport_context_in, in, allowed_list_type, list_type);
 	MLX5_SET(query_nic_vport_context_in, in, vport_number, vport);
-	MLX5_SET(query_nic_vport_context_in, in, other_vport, 1);
+	if (vport || mlx5_core_is_ecpf(dev))
+		MLX5_SET(query_nic_vport_context_in, in, other_vport, 1);
 
 	err = mlx5_cmd_exec(dev, in, sizeof(in), out, out_sz);
 	if (err)
@@ -1215,23 +1322,41 @@ u64 mlx5_query_nic_system_image_guid(struct mlx5_core_dev *mdev)
 }
 EXPORT_SYMBOL_GPL(mlx5_query_nic_system_image_guid);
 
-int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 function_id, void *out,
-				  u16 opmod)
+static int mlx5_vport_get_other_func_cap_type(struct mlx5_core_dev *dev, u16 vport,
+					      void *out, u16 opmod, enum mlx5_cap_mode type)
 {
+	bool ec_vf_func = mlx5_core_is_ec_vf_vport(dev, vport);
 	u8 in[MLX5_ST_SZ_BYTES(query_hca_cap_in)] = {};
 
-	opmod = (opmod << 1) | (HCA_CAP_OPMOD_GET_MAX & 0x01);
+	opmod = (opmod << 1) | type;
 	MLX5_SET(query_hca_cap_in, in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
 	MLX5_SET(query_hca_cap_in, in, op_mod, opmod);
-	MLX5_SET(query_hca_cap_in, in, function_id, function_id);
+	MLX5_SET(query_hca_cap_in, in, function_id, mlx5_vport_to_func_id(dev, vport, ec_vf_func));
 	MLX5_SET(query_hca_cap_in, in, other_function, true);
+	MLX5_SET(query_hca_cap_in, in, ec_vf_function, ec_vf_func);
 	return mlx5_cmd_exec_inout(dev, query_hca_cap, in, out);
+}
+
+int mlx5_vport_get_other_func_cap(struct mlx5_core_dev *dev, u16 vport, void *out,
+				  u16 opmod)
+{
+	return mlx5_vport_get_other_func_cap_type(dev, vport, out, opmod,
+						  HCA_CAP_OPMOD_GET_MAX);
 }
 EXPORT_SYMBOL_GPL(mlx5_vport_get_other_func_cap);
 
-int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap,
-				  u16 function_id, u16 opmod)
+int mlx5_vport_get_other_func_cap_cur(struct mlx5_core_dev *dev, u16 vport, void *out,
+				      u16 opmod)
 {
+	return mlx5_vport_get_other_func_cap_type(dev, vport, out, opmod,
+						  HCA_CAP_OPMOD_GET_CUR);
+}
+EXPORT_SYMBOL_GPL(mlx5_vport_get_other_func_cap_cur);
+
+int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap,
+				  u16 vport, u16 opmod)
+{
+	bool ec_vf_func = mlx5_core_is_ec_vf_vport(dev, vport);
 	int set_sz = MLX5_ST_SZ_BYTES(set_hca_cap_in);
 	void *set_hca_cap;
 	void *set_ctx;
@@ -1245,8 +1370,10 @@ int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap
 	MLX5_SET(set_hca_cap_in, set_ctx, op_mod, opmod << 1);
 	set_hca_cap = MLX5_ADDR_OF(set_hca_cap_in, set_ctx, capability);
 	memcpy(set_hca_cap, hca_cap, MLX5_ST_SZ_BYTES(cmd_hca_cap));
-	MLX5_SET(set_hca_cap_in, set_ctx, function_id, function_id);
+	MLX5_SET(set_hca_cap_in, set_ctx, function_id,
+		 mlx5_vport_to_func_id(dev, vport, ec_vf_func));
 	MLX5_SET(set_hca_cap_in, set_ctx, other_function, true);
+	MLX5_SET(set_hca_cap_in, set_ctx, ec_vf_function, ec_vf_func);
 	ret = mlx5_cmd_exec_in(dev, set_hca_cap, set_ctx);
 
 	kfree(set_ctx);

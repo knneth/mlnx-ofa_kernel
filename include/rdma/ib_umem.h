@@ -27,7 +27,6 @@ struct ib_umem {
 	u32 is_dmabuf : 1;
 	/* Placing at the end of the bitfield list is ABI preserving on LE */
 	u32 is_peer : 1;
-	struct work_struct	work;
 	struct sg_append_table sgt_append;
 };
 

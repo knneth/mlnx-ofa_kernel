@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
 
-Change-Id: I0365e129ff8c97aa2b36f1c2e1f016f99b049d06
+Change-Id: Id36b6fe6cfb0fe4ef228b31107400752ee369b9d
 ---
  drivers/infiniband/core/core_priv.h | 44 +++++++++++++++++++++++++++++
  1 file changed, 44 insertions(+)

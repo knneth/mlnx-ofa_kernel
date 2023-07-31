@@ -57,10 +57,10 @@ module_param(compat_version, charp, 0400);
 MODULE_PARM_DESC(compat_version,
 		 "Version of the kernel compat backport work");
 
-void backport_dependency_symbol(void)
+void mlx_backport_dependency_symbol(void)
 {
 }
-EXPORT_SYMBOL_GPL(backport_dependency_symbol);
+EXPORT_SYMBOL_GPL(mlx_backport_dependency_symbol);
 
 
 static int __init backport_init(void)

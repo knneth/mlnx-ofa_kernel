@@ -793,7 +793,6 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "SpoofCheck : %s\n", ivi->spoofchk ? "ON" : "OFF");
 	p += _sprintf(p, buf, "Trust      : %s\n", ivi->trusted ? "ON" : "OFF");
 	p += _sprintf(p, buf, "LinkState  : %s",   policy_str(ivi->link_state));
-
 	if (evport->qos.enabled) {
 		p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.min_rate);
 		p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.max_rate);
@@ -805,10 +804,10 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	} else {
 		p += _sprintf(p, buf, "MinTxRate  : 0\nMaxTxRate  : 0\nRateGroup  : 0\n");
 	}
-
 	p += _sprintf(p, buf, "VGT+       : %s\n",
 		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
 				      VLAN_N_VID) ? "ON" : "OFF");
+
 	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
 	mutex_unlock(&esw->state_lock);
 
@@ -989,12 +988,26 @@ static ssize_t page_limit_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa
 {
 	struct mlx5_eswitch *esw = g->dev->priv.eswitch;
 	struct mlx5_vport *evport;
+	u16 vhca_id;
 	u32 page_limit;
+	int err;
+
+	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
+		err = mlx5_esw_query_vport_vhca_id(esw, g->vf + 1, &vhca_id);
+		if (err)
+			return err;
+
+		err = mlx5_get_max_alloc_icm_th(g->dev, vhca_id, &page_limit);
+		if (err)
+			return err;
+		goto out;
+	    }
 
 	evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	spin_lock(&evport->pg_counters_lock);
 	page_limit = evport->page_limit;
 	spin_unlock(&evport->pg_counters_lock);
+out:
 	return sprintf(buf, "%u\n", page_limit);
 }
 
@@ -1003,16 +1016,33 @@ static ssize_t page_limit_store(struct mlx5_sriov_vf *g, struct vf_attributes *o
 {
 	struct mlx5_eswitch *esw = g->dev->priv.eswitch;
 	struct mlx5_vport *evport;
+	u16 vhca_id;
 	u32 limit;
 	int err;
 
-	evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	err = sscanf(buf, "%u", &limit);
 	if (err != 1)
 		return -EINVAL;
+
+	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
+		err = mlx5_esw_query_vport_vhca_id(esw, g->vf + 1, &vhca_id);
+		if (err)
+			return err;
+
+		if (!limit)
+			limit = UINT_MAX;
+
+		err = mlx5_set_max_alloc_icm_th(g->dev, vhca_id, limit);
+		if (err)
+			return err;
+		goto out;
+	    }
+
+	evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
 	spin_lock(&evport->pg_counters_lock);
 	evport->page_limit = limit;
 	spin_unlock(&evport->pg_counters_lock);
+out:
 	return count;
 }
 

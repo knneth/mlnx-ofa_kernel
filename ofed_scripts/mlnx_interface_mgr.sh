@@ -96,64 +96,6 @@ log_msg()
     logger -t 'mlnx_interface_mgr' -i "$@"
 }
 
-set_ipoib_cm()
-{
-    local i=$1
-    shift
-    local mtu=$1
-    shift
-    local is_up=""
-    local RC=0
-
-    if [ ! -e /sys/class/net/${i}/mode ]; then
-        log_msg "Failed to configure IPoIB connected mode for ${i}"
-        return 1
-    fi
-
-    mtu=${mtu:-$IPOIB_MTU}
-
-    #check what was the previous state of the interface
-    is_up=`/sbin/ip link show $i | grep -w UP`
-
-    /sbin/ip link set ${i} down
-    if [ $? -ne 0 ]; then
-        log_msg "set_ipoib_cm: Failed to bring down ${i} in order to change connection mode"
-        return 1
-    fi
-
-    if [ -w /sys/class/net/${i}/mode ]; then
-        echo connected > /sys/class/net/${i}/mode
-        if [ $? -eq 0 ]; then
-            log_msg "set_ipoib_cm: ${i} connection mode set to connected"
-        else
-            log_msg "set_ipoib_cm: Failed to change connection mode for ${i} to connected; this mode might not be supported by this device, please refer to the User Manual."
-            RC=1
-        fi
-    else
-        log_msg "set_ipoib_cm: cannot write to /sys/class/net/${i}/mode"
-        RC=1
-    fi
-
-    if [ $RC -eq 0 ] ; then
-        /sbin/ip link set ${i} mtu ${mtu}
-        if [ $? -ne 0 ]; then
-            log_msg "set_ipoib_cm: Failed to set mtu for ${i}"
-            RC=1
-        fi
-    fi
-
-    #if the intf was up returns it to
-    if [ -n "$is_up" ]; then
-        /sbin/ip link set ${i} up
-        if [ $? -ne 0 ]; then
-            log_msg "set_ipoib_cm: Failed to bring up ${i} after setting connection mode to connected"
-            RC=1
-        fi
-    fi
-
-    return $RC
-}
-
 set_RPS_cpu()
 {
     local i=$1
@@ -190,35 +132,6 @@ set_RPS_cpu()
     fi
 
     return 0
-}
-
-is_connected_mode_supported()
-{
-    local i=$1
-    shift
-    # Devices that support connected mode:
-    #  "4113", "Connect-IB"
-    #  "4114", "Connect-IBVF"
-    local hca_type=""
-    if [ -e /sys/class/net/${i}/device/infiniband ]; then
-        hca_type=$(cat /sys/class/net/${i}/device/infiniband/*/hca_type 2>/dev/null)
-    elif [ -e /sys/class/net/${i}/parent ]; then
-        # for Pkeys, check their parent
-        local parent=$(cat /sys/class/net/${i}/parent)
-        hca_type=$(cat /sys/class/net/${parent}/device/infiniband/*/hca_type 2>/dev/null)
-    fi
-    if (echo -e "${hca_type}" | grep -qE "4113|4114" 2>/dev/null); then
-        return 0
-    fi
-
-    # For other devices check the ipoib_enhanced module parameter value
-    if (grep -q "^0" /sys/module/ib_ipoib/parameters/ipoib_enhanced 2>/dev/null); then
-        # IPoIB enhanced is disabled, so we can use connected mode
-        return 0
-    fi
-
-    log_msg "INFO: ${i} does not support connected mode"
-    return 1
 }
 
 bring_up()
@@ -258,29 +171,8 @@ bring_up()
     fi
     if [ $is_ipoib_if -eq 1 ]; then
         if [ "X${SET_CONNECTED_MODE}" == "Xyes" ]; then
-            set_ipoib_cm ${i} ${MTU}
-            if [ $? -ne 0 ]; then
-                RC=1
-            fi
-        elif [ "X${SET_CONNECTED_MODE}" == "Xauto" ]; then
-            # handle mlx5 interfaces, assumption: mlx5 interface will be with CM mode.
-            local drvname=""
-            if [ -e /sys/class/net/${i}/device/driver/module ]; then
-                drvname=$(basename `readlink -f /sys/class/net/${i}/device/driver/module 2>/dev/null` 2>/dev/null)
-            elif [ -e /sys/class/net/${i}/parent ]; then
-                # for Pkeys, check their parent
-                local parent=$(cat /sys/class/net/${i}/parent)
-                drvname=$(basename `readlink -f /sys/class/net/${parent}/device/driver/module 2>/dev/null` 2>/dev/null)
-            fi
-            if [ "X${drvname}" == "Xmlx5_core" ]; then
-                if is_connected_mode_supported ${i} ; then
-                    set_ipoib_cm ${i} ${MTU}
-                    if [ $? -ne 0 ]; then
-                        RC=1
-                    fi
-                fi
-            fi
-        fi
+	    log_msg "INFO: MLNX_OFED 23.07 does not support connected mode"
+	fi
         # Spread the one and only RX queue to more CPUs using RPS.
         local num_rx_queue=$(ls -l /sys/class/net/${i}/queues/ 2>/dev/null | grep rx-  | wc -l | awk '{print $1}')
         if [ $num_rx_queue -eq 1 ]; then

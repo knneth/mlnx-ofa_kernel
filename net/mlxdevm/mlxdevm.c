@@ -38,6 +38,9 @@ static const struct nla_policy mlxdevm_function_nl_policy[MLXDEVM_PORT_FUNCTION_
 	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_ROCE] = { .type = NLA_U8 },
 	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_UC_LIST] = { .type = NLA_U32 },
 	[MLXDEVM_PORT_FN_ATTR_TRUST_STATE] = { .type = NLA_U8 },
+#ifdef CONFIG_MLX5_SF_SFC
+	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_ESWITCH] = { .type = NLA_U8 }
+#endif
 };
 
 static int mlxdevm_nl_dev_handle_fill(struct sk_buff *msg,
@@ -1286,6 +1289,12 @@ mlxdevm_port_fn_cap_fill(const struct mlxdevm_ops *ops,
 		if (nla_put_u32(msg, MLXDEVM_PORT_FN_ATTR_EXT_CAP_UC_LIST, cap.max_uc_list))
 			return -EMSGSIZE;
 	}
+#ifdef CONFIG_MLX5_SF_SFC
+	if (cap.eswitch_cap_valid) {
+		if (nla_put_u8(msg, MLXDEVM_PORT_FN_ATTR_EXT_CAP_ESWITCH, cap.eswitch))
+			return -EMSGSIZE;
+	}
+#endif
 
 	*msg_updated = true;
 	return 0;
@@ -2318,6 +2327,13 @@ mlxdevm_port_fn_cap_set(struct mlxdevm_port *port,
 		cap.max_uc_list = nla_get_u32(attr);
 		cap.uc_list_cap_valid = true;
 	}
+#ifdef CONFIG_MLX5_SF_SFC
+	attr = tb[MLXDEVM_PORT_FN_ATTR_EXT_CAP_ESWITCH];
+	if (attr) {
+		cap.eswitch = nla_get_u8(attr);
+		cap.eswitch_cap_valid = true;
+	}
+#endif
 	err = ops->port_fn_cap_set(port, &cap, extack);
 
 out:
@@ -2373,29 +2389,34 @@ static const struct genl_ops mlxdevm_nl_ops[] = {
 	{
 		.cmd = MLXDEVM_CMD_DEV_GET,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_dev_get_doit,
 		.dumpit = mlxdevm_nl_cmd_dev_get_dumpit,
 	},
 	{
 		.cmd = MLXDEVM_CMD_PORT_SET,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_port_set_doit,
 		.flags = GENL_ADMIN_PERM,
 	},
 	{
 		.cmd = MLXDEVM_CMD_PORT_GET,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_port_get_doit,
 		.dumpit = mlxdevm_nl_cmd_port_get_dumpit,
 		/* can be retrieved by unprivileged users */
 	},
 	{
 		.cmd = MLXDEVM_CMD_PORT_NEW,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_port_new_doit,
 		.flags = GENL_ADMIN_PERM,
 	},
 	{
 		.cmd = MLXDEVM_CMD_PORT_DEL,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_port_del_doit,
 		.flags = GENL_ADMIN_PERM,
 	},
@@ -2421,12 +2442,14 @@ static const struct genl_ops mlxdevm_nl_ops[] = {
 	{
 		.cmd = MLXDEVM_CMD_EXT_RATE_SET,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_rate_set_doit,
 		.flags = GENL_ADMIN_PERM,
 	},
 	{
 		.cmd = MLXDEVM_CMD_EXT_RATE_GET,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_rate_get_doit,
 		.dumpit = mlxdevm_nl_cmd_rate_get_dumpit,
 		/* can be retrieved by unprivileged users */
@@ -2434,12 +2457,14 @@ static const struct genl_ops mlxdevm_nl_ops[] = {
 	{
 		.cmd = MLXDEVM_CMD_EXT_RATE_NEW,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_rate_new_doit,
 		.flags = GENL_ADMIN_PERM,
 	},
 	{
 		.cmd = MLXDEVM_CMD_EXT_RATE_DEL,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.policy = mlxdevm_nl_policy,
 		.doit = mlxdevm_nl_cmd_rate_del_doit,
 		.flags = GENL_ADMIN_PERM,
 	},
@@ -2454,6 +2479,7 @@ static struct genl_family mlxdevm_nl_family __ro_after_init = {
 	.module = THIS_MODULE,
 	.ops = mlxdevm_nl_ops,
 	.n_ops = ARRAY_SIZE(mlxdevm_nl_ops),
+	.resv_start_op = MLXDEVM_CMD_MAX + 1,
 };
 
 static int __init mlxdevm_init(void)

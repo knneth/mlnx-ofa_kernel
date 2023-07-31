@@ -1,103 +1,81 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
 
-Change-Id: Id96896cbbe87fcbb713729cd3c0f794364e8ef92
+Change-Id: Ibd2b5eef70320ac5be64f4fbfa1e0e4f06fd3ea4
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/meter.c | 22 +++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ .../mellanox/mlx5/core/en/tc/act_stats.c      | 40 +++++++++++++++++++
+ 1 file changed, 40 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
-@@ -3,9 +3,15 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
+@@ -3,6 +3,7 @@
  
- #include <linux/math64.h>
- #include "lib/aso.h"
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #include "en/tc/post_act.h"
-+#endif
- #include "meter.h"
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include <linux/rhashtable.h>
+ #include <net/flow_offload.h>
++#include <net/act_api.h>
  #include "en/tc_priv.h"
-+#elif defined(CONFIG_MLX5_ESWITCH)
-+#include "en_tc.h"
+ #include "act_stats.h"
+ #include "en/fs.h"
+@@ -173,7 +174,13 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+ 	u64 pkts, bytes, lastused;
+ 	int err = 0;
+ 
++#if defined(HAVE_FLOW_ACTION_ENTRY_COOKIE) || defined(HAVE_FLOW_ACTION_ENTRY_ACT_COOKIE)
+ 	key.tc_act_cookie = fl_act->cookie;
++#elif defined(HAVE_FLOW_ACTION_ENTRY_ACT_POINTER)
++	key.tc_act_cookie = (unsigned long) ((void *) fl_act);
++#else
++	return -EOPNOTSUPP;
 +#endif
  
- #define MLX5_START_COLOR_SHIFT 28
- #define MLX5_METER_MODE_SHIFT 24
-@@ -23,6 +29,10 @@
- #define MLX5_MAX_CBS ((0x100ULL << 0x1F) - 1)
- #define MLX5_MAX_HW_CBS 0x7FFFFFFF
+ 	rcu_read_lock();
+ 	item = rhashtable_lookup(ht, &key, act_counters_ht_params);
+@@ -186,10 +193,30 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+ 	mlx5_fc_query_cached_raw(item->counter,
+ 				 &bytes, &pkts, &lastused);
  
-+#ifndef BITS_TO_BYTES
-+#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
-+#endif
++#if defined(HAVE_FLOW_OFFLOAD_ACTION)
+ 	flow_stats_update(&fl_act->stats,
+ 			  bytes - item->lastbytes,
+ 			  pkts - item->lastpackets,
+ 			  0, lastused, FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_TCF_ACTION_STATS_UPDATE_5_PARAMS)
++	tcf_action_stats_update((struct tc_action *) fl_act,
++			  bytes - item->lastbytes,
++			  pkts - item->lastpackets,
++			  lastused, true);
++#elif defined(HAVE_TCF_ACTION_STATS_UPDATE)
++	tcf_action_stats_update((struct tc_action *) fl_act,
++			  bytes - item->lastbytes,
++			  pkts - item->lastpackets,
++			  lastused);
++#else
++	{
++		struct tc_action *a = (struct tc_action *) fl_act;
 +
- struct mlx5e_flow_meter_aso_obj {
- 	struct list_head entry;
- 	int base_id;
-@@ -350,8 +360,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
- 	struct mlx5e_flow_meters *flow_meters;
- 	struct mlx5e_flow_meter_handle *meter;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(dev);
- 	if (!flow_meters)
-+#endif
- 		return ERR_PTR(-EOPNOTSUPP);
- 
- 	mutex_lock(&flow_meters->sync_lock);
-@@ -395,9 +407,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
- 	struct mlx5e_flow_meters *flow_meters;
- 	struct mlx5e_flow_meter_handle *meter;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(mdev);
- 	if (!flow_meters)
- 		return ERR_PTR(-EOPNOTSUPP);
++		tcf_action_update_stats(a, bytes - item->lastbytes, pkts - item->lastpackets,
++				        0, true);
++		a->tcfa_tm.lastuse = max_t(u64, a->tcfa_tm.lastuse, lastused);
++	}
 +#endif
  
- 	mutex_lock(&flow_meters->sync_lock);
- 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
-@@ -468,12 +482,16 @@ int
- mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
- 		      struct mlx5e_flow_meter_params *params)
- {
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
-+#endif
- 	struct mlx5e_flow_meters *flow_meters;
- 	int err;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(mdev);
- 	if (!flow_meters)
-+#endif
- 		return -EOPNOTSUPP;
- 
- 	mutex_lock(&flow_meters->sync_lock);
-@@ -489,8 +507,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
- 	struct mlx5e_flow_meter_handle *meter;
- 	int err;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(mdev);
- 	if (!flow_meters)
-+#endif
- 		return ERR_PTR(-EOPNOTSUPP);
- 
- 	mutex_lock(&flow_meters->sync_lock);
-@@ -536,11 +556,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
- 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
- 		return ERR_PTR(-EOPNOTSUPP);
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	if (IS_ERR_OR_NULL(post_act)) {
- 		netdev_dbg(priv->netdev,
- 			   "flow meter offload is not supported, post action is missing\n");
- 		return ERR_PTR(-EOPNOTSUPP);
- 	}
-+#endif
- 
- 	flow_meters = kzalloc(sizeof(*flow_meters), GFP_KERNEL);
- 	if (!flow_meters)
+ 	item->lastpackets = pkts;
+ 	item->lastbytes = bytes;
+@@ -200,3 +227,16 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+ err_out:
+ 	return err;
+ }
++
++void
++mlx5e_tc_act_stats_fill_stats_flow(struct mlx5e_tc_act_stats_handle *handle,
++				   struct mlx5e_tc_flow *flow)
++{
++	struct mlx5_flow_attr *attr;
++	int i;
++
++	list_for_each_entry(attr, &flow->attrs, list)
++		for (i = 0; i < attr->tc_act_cookies_count; i++)
++			mlx5e_tc_act_stats_fill_stats(handle,
++						      (struct flow_offload_action *) ((void *) attr->tc_act_cookies[i]));
++}

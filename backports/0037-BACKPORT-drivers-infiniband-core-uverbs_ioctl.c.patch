@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_ioctl.c
 
-Change-Id: Ib5c4266adf50a132ab1e9b663a102f67ffc1a243
+Change-Id: Ibceac9fab31b8a19e7a4f67e4bddd6d44c49a8b1
 ---
  drivers/infiniband/core/uverbs_ioctl.c | 11 ++++++++++-
  1 file changed, 10 insertions(+), 1 deletion(-)
@@ -20,7 +20,7 @@ Change-Id: Ib5c4266adf50a132ab1e9b663a102f67ffc1a243
  		memset(res, 0, size);
  	return res;
  }
-@@ -553,11 +557,16 @@ static int ib_uverbs_cmd_verbs(struct ib
+@@ -561,11 +565,16 @@ static int ib_uverbs_cmd_verbs(struct ib
  
  	if (unlikely(hdr->driver_id != uapi->driver_id))
  		return -EINVAL;

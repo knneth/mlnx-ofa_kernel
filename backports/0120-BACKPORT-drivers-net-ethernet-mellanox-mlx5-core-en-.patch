@@ -1,27 +1,29 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
 
-Change-Id: I494d8d284341ffae2e2267b010fb22071b8dad35
+Change-Id: Iaee6f68209b5da7c02714efbbb97873fad13668d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-@@ -12,6 +12,7 @@ tc_act_can_offload_sample(struct mlx5e_t
- 			  int act_index,
- 			  struct mlx5_flow_attr *attr)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
+@@ -19,6 +19,7 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+ 		   struct mlx5e_priv *priv,
+ 		   struct mlx5_flow_attr *attr)
  {
-+#ifdef CONFIG_COMPAT_KERNEL_CT
++#ifdef HAVE_FLOW_ACTION_PTYPE
  	struct netlink_ext_ack *extack = parse_state->extack;
- 	bool ct_nat;
  
-@@ -21,6 +22,7 @@ tc_act_can_offload_sample(struct mlx5e_t
- 		NL_SET_ERR_MSG_MOD(extack, "Sample action with CT NAT is not supported");
- 		return false;
- 	}
+ 	if (act->ptype != PACKET_HOST) {
+@@ -28,6 +29,9 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+ 
+ 	parse_state->ptype_host = true;
+ 	return 0;
++#else
++	return -EOPNOTSUPP;
 +#endif
- 
- 	return true;
  }
+ 
+ struct mlx5e_tc_act mlx5e_tc_act_ptype = {

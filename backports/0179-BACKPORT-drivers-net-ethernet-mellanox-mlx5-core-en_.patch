@@ -1,0 +1,111 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+
+Change-Id: Iee548c3280b0bd6654b830a6c613b84700ecc5aa
+---
+ .../net/ethernet/mellanox/mlx5/core/en_tc.h   | 60 +++++++++++++++++++
+ 1 file changed, 60 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+@@ -197,6 +197,8 @@ int mlx5e_delete_flower(struct net_devic
+ 
+ int mlx5e_stats_flower(struct net_device *dev, struct mlx5e_priv *priv,
+ 		       struct flow_cls_offload *f, unsigned long flags);
++
++struct flow_offload_action;
+ int mlx5e_tc_fill_action_stats(struct mlx5e_priv *priv,
+ 			       struct flow_offload_action *fl_act);
+ 
+@@ -302,6 +304,17 @@ void mlx5e_tc_set_ethertype(struct mlx5_
+ 			    struct flow_match_basic *match, bool outer,
+ 			    void *headers_c, void *headers_v);
+ 
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++int mlx5e_setup_tc_block(struct net_device *dev, struct tc_block_offload *f);
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++			      struct flow_cls_offload *cls_flower,
++			      unsigned long flags);
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
++#endif /* HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE || HAVE_NDO_SETUP_TC_RH_EXTENDED */
++
+ int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
+ void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
+ 
+@@ -343,6 +356,23 @@ static inline void mlx5e_tc_ht_cleanup(s
+ static inline int
+ mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+ { return -EOPNOTSUPP; }
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_block(struct net_device *dev,
++				       struct tc_block_offload *f)
++{
++	return -EOPNOTSUPP;
++}
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++					    struct flow_cls_offload *cls_flower,
++					    unsigned long flags)
++{
++	return -EOPNOTSUPP;
++}
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
++#endif /* HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE || HAVE_NDO_SETUP_TC_RH_EXTENDED */
+ 
+ #endif /* CONFIG_MLX5_CLS_ACT */
+ 
+@@ -368,6 +398,23 @@ static inline int  mlx5e_tc_num_filters(
+ static inline int
+ mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+ { return -EOPNOTSUPP; }
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_block(struct net_device *dev,
++				       struct tc_block_offload *f)
++{
++	return -EOPNOTSUPP;
++}
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++					    struct flow_cls_offload *cls_flower,
++					    unsigned long flags)
++{
++	return -EOPNOTSUPP;
++}
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
++#endif /* HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE || HAVE_NDO_SETUP_TC_RH_EXTENDED */
+ #endif
+ 
+ #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+@@ -389,12 +436,25 @@ static inline bool mlx5e_cqe_regb_chain(
+ 	return false;
+ }
+ 
++#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
+ bool mlx5e_tc_update_skb_nic(struct mlx5_cqe64 *cqe, struct sk_buff *skb);
+ bool mlx5e_tc_update_skb(struct mlx5_cqe64 *cqe, struct sk_buff *skb,
+ 			 struct mapping_ctx *mapping_ctx, u32 mapped_obj_id,
+ 			 struct mlx5_tc_ct_priv *ct_priv,
+ 			 u32 zone_restore_id, u32 tunnel_id,
+ 			 struct mlx5e_tc_update_priv *tc_priv);
++#else
++static inline bool
++mlx5e_tc_update_skb(struct mlx5_cqe64 *cqe, struct sk_buff *skb,
++		    struct mapping_ctx *mapping_ctx, u32 mapped_obj_id,
++		    struct mlx5_tc_ct_priv *ct_priv,
++		    u32 zone_restore_id, u32 tunnel_id,
++		    struct mlx5e_tc_update_priv *tc_priv)
++{ return true; }
++static inline bool
++mlx5e_tc_update_skb_nic(struct mlx5_cqe64 *cqe, struct sk_buff *skb)
++{ return true; }
++#endif /* defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED) */
+ int mlx5e_prio_hairpin_mode_enable(struct mlx5e_priv *priv, int num_hp,
+ 				   struct net_device *peer_dev);
+ int mlx5e_prio_hairpin_mode_disable(struct mlx5e_priv *priv);

@@ -10,8 +10,6 @@ enum mlx5_devlink_param_id {
 	MLX5_DEVLINK_PARAM_ID_BASE = DEVLINK_PARAM_GENERIC_ID_MAX,
 	MLX5_DEVLINK_PARAM_ID_FLOW_STEERING_MODE,
 	MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
-	/* Non upstream devlink params */
-	MLX5_DEVLINK_PARAM_ID_COMPAT_BASE = MLX5_DEVLINK_PARAM_ID_BASE + 0xFF,
 	MLX5_DEVLINK_PARAM_ID_CT_ACTION_ON_NAT_CONNS,
 	MLX5_DEVLINK_PARAM_ID_CT_MAX_OFFLOADED_CONNS,
 	MLX5_DEVLINK_PARAM_ID_ESW_PET_INSERT,
@@ -43,23 +41,24 @@ void mlx5_devlink_trap_report(struct mlx5_core_dev *dev, int trap_id, struct sk_
 int mlx5_devlink_trap_get_num_active(struct mlx5_core_dev *dev);
 int mlx5_devlink_traps_get_action(struct mlx5_core_dev *dev, int trap_id,
 				  enum devlink_trap_action *action);
+int mlx5_devlink_traps_register(struct devlink *devlink);
+void mlx5_devlink_traps_unregister(struct devlink *devlink);
 
 struct devlink *mlx5_devlink_alloc(struct device *dev);
 void mlx5_devlink_free(struct devlink *devlink);
-int mlx5_devlink_register(struct devlink *devlink);
-void mlx5_devlink_unregister(struct devlink *devlink);
-
+int mlx5_devlink_params_register(struct devlink *devlink);
+void mlx5_devlink_params_unregister(struct devlink *devlink);
 int
 mlx5_devlink_ct_action_on_nat_conns_set(struct devlink *devlink, u32 id,
 					struct devlink_param_gset_ctx *ctx);
 int
 mlx5_devlink_ct_action_on_nat_conns_get(struct devlink *devlink, u32 id,
 					struct devlink_param_gset_ctx *ctx);
+
 int
 mlx5_devlink_ct_labels_mapping_set(struct devlink *devlink, u32 id,
 				   struct devlink_param_gset_ctx *ctx);
 int
 mlx5_devlink_ct_labels_mapping_get(struct devlink *devlink, u32 id,
 				   struct devlink_param_gset_ctx *ctx);
-
 #endif /* __MLX5_DEVLINK_H__ */

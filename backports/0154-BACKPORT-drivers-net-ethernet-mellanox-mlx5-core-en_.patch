@@ -1,26 +1,498 @@
-From: Avihai Horon <avihaih@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 
-Change-Id: I0c4ad8ef7d5a036d7d3ccd3eec4bb32d4384b138
+Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 5 +++++
- 1 file changed, 5 insertions(+)
+ .../mellanox/mlx5/core/en_accel/ipsec.c       | 156 ++++++++++++++++--
+ 1 file changed, 140 insertions(+), 16 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-@@ -39,10 +39,15 @@
- void mlx5e_mkey_set_relaxed_ordering(struct mlx5_core_dev *mdev, void *mkc)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
+@@ -35,6 +35,7 @@
+ #include <crypto/aead.h>
+ #include <linux/inetdevice.h>
+ #include <linux/netdevice.h>
++#include <net/arp.h>
+ #include <net/netevent.h>
+ 
+ #include "en.h"
+@@ -50,10 +51,12 @@ static struct mlx5e_ipsec_sa_entry *to_i
+ 	return (struct mlx5e_ipsec_sa_entry *)x->xso.offload_handle;
+ }
+ 
++#ifdef HAVE_XDO_DEV_POLICY_ADD
+ static struct mlx5e_ipsec_pol_entry *to_ipsec_pol_entry(struct xfrm_policy *x)
  {
- 	bool ro_write = MLX5_CAP_GEN(mdev, relaxed_ordering_write);
-+#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
- 	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read) ||
- 		       (MLX5_CAP_GEN(mdev, relaxed_ordering_read_pci_enabled) &&
- 			(mlx5_core_is_vf(mdev) ||
- 			 pcie_relaxed_ordering_enabled(mdev->pdev)));
-+#else
-+	bool ro_read = MLX5_CAP_GEN(mdev, relaxed_ordering_read) ||
-+		       MLX5_CAP_GEN(mdev, relaxed_ordering_read_pci_enabled);
+ 	return (struct mlx5e_ipsec_pol_entry *)x->xdo.offload_handle;
+ }
 +#endif
  
- 	MLX5_SET(mkc, mkc, relaxed_ordering_read, ro_read);
- 	MLX5_SET(mkc, mkc, relaxed_ordering_write, ro_write);
+ static void mlx5e_ipsec_handle_tx_limit(struct work_struct *_work)
+ {
+@@ -82,6 +85,7 @@ static void mlx5e_ipsec_handle_tx_limit(
+ 
+ static bool mlx5e_ipsec_update_esn_state(struct mlx5e_ipsec_sa_entry *sa_entry)
+ {
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	struct xfrm_state *x = sa_entry->x;
+ 	u32 seq_bottom = 0;
+ 	u32 esn, esn_msb;
+@@ -131,6 +135,7 @@ static bool mlx5e_ipsec_update_esn_state
+ 		sa_entry->esn_state.overlap = 1;
+ 		return true;
+ 	}
++#endif
+ 
+ 	return false;
+ }
+@@ -263,7 +268,11 @@ static void mlx5e_ipsec_init_macs(struct
+ 	    attrs->type != XFRM_DEV_OFFLOAD_PACKET)
+ 		return;
+ 
++#if defined(HAVE_XFRM_STATE_REAL_DEV) || defined(HAVE_XFRM_DEV_REAL_DEV)
+ 	netdev = x->xso.real_dev;
++#else
++	netdev = x->xso.dev;
++#endif
+ 
+ 	mlx5_query_mac_address(mdev, addr);
+ 	switch (attrs->dir) {
+@@ -336,7 +345,14 @@ void mlx5e_ipsec_build_accel_xfrm_attrs(
+ 		attrs->replay_esn.overlap = sa_entry->esn_state.overlap;
+ 	}
+ 
++#ifdef HAVE_XFRM_DEV_DIR
+ 	attrs->dir = x->xso.dir;
++#else
++	if (x->xso.flags & XFRM_OFFLOAD_INBOUND)
++		attrs->dir = XFRM_DEV_OFFLOAD_IN;
++	else
++		attrs->dir = XFRM_DEV_OFFLOAD_OUT;
++#endif
+ 	/* spi */
+ 	attrs->spi = be32_to_cpu(x->id.spi);
+ 
+@@ -344,7 +360,11 @@ void mlx5e_ipsec_build_accel_xfrm_attrs(
+ 	memcpy(&attrs->saddr, x->props.saddr.a6, sizeof(attrs->saddr));
+ 	memcpy(&attrs->daddr, x->id.daddr.a6, sizeof(attrs->daddr));
+ 	attrs->family = x->props.family;
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	attrs->type = x->xso.type;
++#else
++	attrs->type = XFRM_DEV_OFFLOAD_CRYPTO;
++#endif
+ 	attrs->reqid = x->props.reqid;
+ 	attrs->upspec.dport = ntohs(x->sel.dport);
+ 	attrs->upspec.dport_mask = ntohs(x->sel.dport_mask);
+@@ -419,17 +439,20 @@ static int mlx5e_xfrm_validate_state(str
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_XFRM_DEV_DIR
+ 	if (x->sel.proto != IPPROTO_IP &&
+ 	    (x->sel.proto != IPPROTO_UDP || x->xso.dir != XFRM_DEV_OFFLOAD_OUT)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "Device does not support upper protocol other than UDP, and only Tx direction");
+ 		return -EINVAL;
+ 	}
++#endif
+ 
+ 	if (x->props.mode != XFRM_MODE_TRANSPORT && x->props.mode != XFRM_MODE_TUNNEL) {
+ 		NL_SET_ERR_MSG_MOD(extack, "Only transport and tunnel xfrm states may be offloaded");
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	switch (x->xso.type) {
+ 	case XFRM_DEV_OFFLOAD_CRYPTO:
+ 		if (!(mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_CRYPTO)) {
+@@ -491,6 +514,7 @@ static int mlx5e_xfrm_validate_state(str
+ 		NL_SET_ERR_MSG_MOD(extack, "Unsupported xfrm offload type");
+ 		return -EINVAL;
+ 	}
++#endif
+ 	return 0;
+ }
+ 
+@@ -510,9 +534,11 @@ static void mlx5e_ipsec_set_esn_ops(stru
+ {
+ 	struct xfrm_state *x = sa_entry->x;
+ 
++#if defined(HAVE_XFRM_DEV_DIR) && defined(HAVE_XFRM_DEV_TYPE)
+ 	if (x->xso.type != XFRM_DEV_OFFLOAD_CRYPTO ||
+ 	    x->xso.dir != XFRM_DEV_OFFLOAD_OUT)
+ 		return;
++#endif
+ 
+ 	if (x->props.flags & XFRM_STATE_ESN) {
+ 		sa_entry->set_iv_op = mlx5e_ipsec_set_iv_esn;
+@@ -522,6 +548,7 @@ static void mlx5e_ipsec_set_esn_ops(stru
+ 	sa_entry->set_iv_op = mlx5e_ipsec_set_iv;
+ }
+ 
++#if defined(HAVE_XFRM_DEV_TYPE) && defined(HAVE_XFRM_DEV_DIR)
+ static void mlx5e_ipsec_handle_netdev_event(struct work_struct *_work)
+ {
+ 	struct mlx5e_ipsec_work *work =
+@@ -545,9 +572,11 @@ static void mlx5e_ipsec_handle_netdev_ev
+ 	attrs->drop = false;
+ 	mlx5e_accel_ipsec_fs_modify(sa_entry);
+ }
++#endif
+ 
+ static int mlx5_ipsec_create_work(struct mlx5e_ipsec_sa_entry *sa_entry)
+ {
++#if defined(HAVE_XFRM_DEV_TYPE) && defined(HAVE_XFRM_DEV_DIR)
+ 	struct xfrm_state *x = sa_entry->x;
+ 	struct mlx5e_ipsec_work *work;
+ 	void *data = NULL;
+@@ -596,7 +625,35 @@ static int mlx5_ipsec_create_work(struct
+ 
+ free_work:
+ 	kfree(work);
+-	return -ENOMEM;
++
++	return 0;
++#else
++	struct xfrm_state *x = sa_entry->x;
++	struct mlx5e_ipsec_work *work;
++	void *data = NULL;
++
++	if (!(x->props.flags & XFRM_STATE_ESN))
++		return 0;
++
++	work = kzalloc(sizeof(*work), GFP_KERNEL);
++	if (!work)
++		return -ENOMEM;
++
++	data = kzalloc(sizeof(*sa_entry), GFP_KERNEL);
++	if (!data)
++		goto free_work;
++
++	INIT_WORK(&work->work, mlx5e_ipsec_modify_state);
++	work->data = data;
++	work->sa_entry = sa_entry;
++	sa_entry->work = work;
++	return 0;
++
++free_work:
++	kfree(work);
++
++	return 0;
++#endif
+ }
+ 
+ static int mlx5e_ipsec_create_dwork(struct mlx5e_ipsec_sa_entry *sa_entry)
+@@ -604,11 +661,15 @@ static int mlx5e_ipsec_create_dwork(stru
+ 	struct xfrm_state *x = sa_entry->x;
+ 	struct mlx5e_ipsec_dwork *dwork;
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	if (x->xso.type != XFRM_DEV_OFFLOAD_PACKET)
+ 		return 0;
++#endif
+ 
++#ifdef HAVE_XFRM_DEV_DIR
+ 	if (x->xso.dir != XFRM_DEV_OFFLOAD_OUT)
+ 		return 0;
++#endif
+ 
+ 	if (x->lft.soft_packet_limit == XFRM_INF &&
+ 	    x->lft.hard_packet_limit == XFRM_INF)
+@@ -624,24 +685,38 @@ static int mlx5e_ipsec_create_dwork(stru
+ 	return 0;
+ }
+ 
++#ifdef HAVE_XDO_XFRM_ADD_STATE_GET_EXTACK
+ static int mlx5e_xfrm_add_state(struct xfrm_state *x,
+ 				struct netlink_ext_ack *extack)
++#else
++static int mlx5e_xfrm_add_state(struct xfrm_state *x)
++#endif
+ {
+ 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
++#if defined(HAVE_XFRM_STATE_REAL_DEV) || defined(HAVE_XFRM_DEV_REAL_DEV)
+ 	struct net_device *netdev = x->xso.real_dev;
++#else
++	struct net_device *netdev = x->xso.dev;
++#endif
+ 	struct mlx5e_ipsec *ipsec;
+ 	struct mlx5e_priv *priv;
+ 	gfp_t gfp;
+ 	int err;
++#ifndef HAVE_XDO_XFRM_ADD_STATE_GET_EXTACK
++	struct netlink_ext_ack *extack;
++	extack = NULL;
++#endif
+ 
+ 	priv = netdev_priv(netdev);
+ 	if (!priv->ipsec)
+ 		return -EOPNOTSUPP;
+ 
+ 	ipsec = priv->ipsec;
+-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
+ 	gfp = (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ) ? GFP_ATOMIC : GFP_KERNEL;
+-	 */
++#else
++	gfp = GFP_ATOMIC;
++#endif
+ 	sa_entry = kzalloc(sizeof(*sa_entry), gfp);
+ 	if (!sa_entry)
+ 		return -ENOMEM;
+@@ -649,10 +724,10 @@ static int mlx5e_xfrm_add_state(struct x
+ 	sa_entry->x = x;
+ 	sa_entry->ipsec = ipsec;
+ 	/* Check if this SA is originated from acquire flow temporary SA */
+-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
+ 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
+ 		goto out;
+-	 */
++#endif
+ 
+ 	err = mlx5e_xfrm_validate_state(ipsec, x, extack);
+ 	if (err)
+@@ -681,6 +756,7 @@ static int mlx5e_xfrm_add_state(struct x
+ 	if (err)
+ 		goto err_hw_ctx;
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	if (x->props.mode == XFRM_MODE_TUNNEL &&
+ 	    x->xso.type == XFRM_DEV_OFFLOAD_PACKET &&
+ 	    !mlx5e_ipsec_fs_tunnel_enabled(sa_entry)) {
+@@ -688,6 +764,7 @@ static int mlx5e_xfrm_add_state(struct x
+ 		err = -EINVAL;
+ 		goto err_add_rule;
+ 	}
++#endif
+ 
+ 	/* We use *_bh() variant because xfrm_timer_handler(), which runs
+ 	 * in softirq context, can reach our state delete logic and we need
+@@ -704,12 +781,16 @@ static int mlx5e_xfrm_add_state(struct x
+ 		queue_delayed_work(ipsec->wq, &sa_entry->dwork->dwork,
+ 				   MLX5_IPSEC_RESCHED);
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	if (x->xso.type == XFRM_DEV_OFFLOAD_PACKET &&
+ 	    x->props.mode == XFRM_MODE_TUNNEL)
+ 		xa_set_mark(&ipsec->sadb, sa_entry->ipsec_obj_id,
+ 			    MLX5E_IPSEC_TUNNEL_SA);
++#endif
+ 
+-// out:
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
++out:
++#endif
+ 	x->xso.offload_handle = (unsigned long)sa_entry;
+ 	return 0;
+ 
+@@ -725,7 +806,12 @@ release_work:
+ 	kfree(sa_entry->work);
+ err_xfrm:
+ 	kfree(sa_entry);
++#ifdef HAVE_NL_SET_ERR_MSG_WEAK_MOD
+ 	NL_SET_ERR_MSG_WEAK_MOD(extack, "Device failed to offload this state");
++#else
++	if ((extack) && !(extack)->_msg)
++		NL_SET_ERR_MSG_MOD((extack), "Device failed to offload this state");
++#endif
+ 	return err;
+ }
+ 
+@@ -736,10 +822,10 @@ static void mlx5e_xfrm_del_state(struct
+ 	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
+ 	struct mlx5e_ipsec_sa_entry *old;
+ 
+-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
+ 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
+ 		return;
+-	 */
++#endif
+ 
+ 	old = xa_erase_bh(&ipsec->sadb, sa_entry->ipsec_obj_id);
+ 	WARN_ON(old != sa_entry);
+@@ -755,10 +841,10 @@ static void mlx5e_xfrm_free_state(struct
+ {
+ 	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
+ 
+-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
+ 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
+ 		goto sa_entry_free;
+-	 */
++#endif
+ 
+ 	if (sa_entry->work)
+ 		cancel_work_sync(&sa_entry->work->work);
+@@ -772,7 +858,9 @@ static void mlx5e_xfrm_free_state(struct
+ 	if (sa_entry->work)
+ 		kfree(sa_entry->work->data);
+ 	kfree(sa_entry->work);
+-// sa_entry_free:
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
++sa_entry_free:
++#endif
+ 	kfree(sa_entry);
+ }
+ 
+@@ -806,7 +894,11 @@ static int mlx5e_ipsec_netevent_event(st
+ 		}
+ 
+ 		x = sa_entry->x;
++#if defined(HAVE_XFRM_STATE_REAL_DEV) || defined(HAVE_XFRM_DEV_REAL_DEV)
+ 		netdev = x->xso.real_dev;
++#else
++		netdev = x->xso.dev;
++#endif
+ 		data = sa_entry->work->data;
+ 
+ 		neigh_ha_snapshot(data->addr, n, netdev);
+@@ -907,6 +999,7 @@ static bool mlx5e_ipsec_offload_ok(struc
+ 	return true;
+ }
+ 
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ static void mlx5e_xfrm_advance_esn_state(struct xfrm_state *x)
+ {
+ 	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
+@@ -923,7 +1016,9 @@ static void mlx5e_xfrm_advance_esn_state
+ 	mlx5e_ipsec_build_accel_xfrm_attrs(sa_entry, &sa_entry_shadow->attrs);
+ 	queue_work(sa_entry->ipsec->wq, &work->work);
+ }
++#endif
+ 
++#ifdef HAVE_XDO_DEV_STATE_UPDATE_CURLFT
+ static void mlx5e_xfrm_update_curlft(struct xfrm_state *x)
+ {
+ 	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
+@@ -933,16 +1028,18 @@ static void mlx5e_xfrm_update_curlft(str
+ 	lockdep_assert(lockdep_is_held(&x->lock) ||
+ 		       lockdep_is_held(&dev_net(x->xso.real_dev)->xfrm.xfrm_cfg_mutex));
+ 
+-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
++#ifdef XFRM_DEV_OFFLOAD_FLAG_ACQ
+ 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
+ 		return;
+-	 */
++#endif
+ 
+ 	mlx5_fc_query_cached(ipsec_rule->fc, &bytes, &packets, &lastuse);
+ 	x->curlft.packets += packets;
+ 	x->curlft.bytes += bytes;
+ }
++#endif
+ 
++#ifdef HAVE_XDO_DEV_POLICY_ADD
+ static int mlx5e_xfrm_validate_policy(struct mlx5_core_dev *mdev,
+ 				      struct xfrm_policy *x,
+ 				      struct netlink_ext_ack *extack)
+@@ -960,11 +1057,13 @@ static int mlx5e_xfrm_validate_policy(st
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_XFRM_DEV_DIR
+ 	if (x->xdo.dir != XFRM_DEV_OFFLOAD_IN &&
+ 	    x->xdo.dir != XFRM_DEV_OFFLOAD_OUT) {
+ 		NL_SET_ERR_MSG_MOD(extack, "Cannot offload forward policy");
+ 		return -EINVAL;
+ 	}
++#endif
+ 
+ 	if (!x->xfrm_vec[0].reqid && sel->proto == IPPROTO_IP &&
+ 	    addr6_all_zero(sel->saddr.a6) && addr6_all_zero(sel->daddr.a6)) {
+@@ -972,16 +1071,20 @@ static int mlx5e_xfrm_validate_policy(st
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	if (x->xdo.type != XFRM_DEV_OFFLOAD_PACKET) {
+ 		NL_SET_ERR_MSG_MOD(extack, "Unsupported xfrm offload type");
+ 		return -EINVAL;
+ 	}
++#endif
+ 
++#ifdef HAVE_XFRM_DEV_DIR
+ 	if (sel->proto != IPPROTO_IP &&
+ 	    (sel->proto != IPPROTO_UDP || x->xdo.dir != XFRM_DEV_OFFLOAD_OUT)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "Device does not support upper protocol other than UDP, and only Tx direction");
+ 		return -EINVAL;
+ 	}
++#endif
+ 
+ 	if (x->priority) {
+ 		if (!(mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_PRIO)) {
+@@ -997,7 +1100,9 @@ static int mlx5e_xfrm_validate_policy(st
+ 
+ 	return 0;
+ }
++#endif
+ 
++#ifdef HAVE_XDO_DEV_POLICY_ADD
+ static void
+ mlx5e_ipsec_build_accel_pol_attrs(struct mlx5e_ipsec_pol_entry *pol_entry,
+ 				  struct mlx5_accel_pol_xfrm_attrs *attrs)
+@@ -1022,14 +1127,24 @@ mlx5e_ipsec_build_accel_pol_attrs(struct
+ 	attrs->upspec.proto = sel->proto;
+ 	attrs->prio = x->priority;
+ }
++#endif
+ 
+-static int mlx5e_xfrm_add_policy(struct xfrm_policy *x,
+-				 struct netlink_ext_ack *extack)
++#ifdef HAVE_XDO_DEV_POLICY_ADD
++static int mlx5e_xfrm_add_policy(struct xfrm_policy *x
++#ifdef HAVE_XDO_DEV_POLICY_ADD_GET_EXTACK
++				 , struct netlink_ext_ack *extack)
++#else
++				)
++#endif
+ {
+ 	struct net_device *netdev = x->xdo.real_dev;
+ 	struct mlx5e_ipsec_pol_entry *pol_entry;
+ 	struct mlx5e_priv *priv;
+ 	int err;
++#ifndef HAVE_XDO_DEV_POLICY_ADD_GET_EXTACK
++	struct netlink_ext_ack *extack;
++	extack = NULL;
++#endif
+ 
+ 	priv = netdev_priv(netdev);
+ 	if (!priv->ipsec) {
+@@ -1075,13 +1190,16 @@ static void mlx5e_xfrm_free_policy(struc
+ 
+ 	kfree(pol_entry);
+ }
++#endif
+ 
+ static const struct xfrmdev_ops mlx5e_ipsec_xfrmdev_ops = {
+ 	.xdo_dev_state_add	= mlx5e_xfrm_add_state,
+ 	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
+ 	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
+ 	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ 	.xdo_dev_state_advance_esn = mlx5e_xfrm_advance_esn_state,
++#endif
+ };
+ 
+ static const struct xfrmdev_ops mlx5e_ipsec_packet_xfrmdev_ops = {
+@@ -1089,12 +1207,18 @@ static const struct xfrmdev_ops mlx5e_ip
+ 	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
+ 	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
+ 	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,
++#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
+ 	.xdo_dev_state_advance_esn = mlx5e_xfrm_advance_esn_state,
++#endif
+ 
++#ifdef HAVE_XDO_DEV_STATE_UPDATE_CURLFT
+ 	.xdo_dev_state_update_curlft = mlx5e_xfrm_update_curlft,
++#endif
++#ifdef HAVE_XDO_DEV_POLICY_ADD
+ 	.xdo_dev_policy_add = mlx5e_xfrm_add_policy,
+ 	.xdo_dev_policy_delete = mlx5e_xfrm_del_policy,
+ 	.xdo_dev_policy_free = mlx5e_xfrm_free_policy,
++#endif
+ };
+ 
+ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv)

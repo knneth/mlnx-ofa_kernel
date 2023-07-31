@@ -1,14 +1,14 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
-Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
+Change-Id: I5bbffc8669234e7a054e9cdd1c6b456688e1a256
 ---
  drivers/infiniband/core/umem_odp.c | 1080 ++++++++++++++++++++++++++++
  1 file changed, 1080 insertions(+)
 
 --- a/drivers/infiniband/core/umem_odp.c
 +++ b/drivers/infiniband/core/umem_odp.c
-@@ -40,7 +40,9 @@
+@@ -40,36 +40,512 @@
  #include <linux/vmalloc.h>
  #include <linux/hugetlb.h>
  #include <linux/interval_tree.h>
@@ -17,8 +17,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
 +#endif
  #include <linux/pagemap.h>
  
- #include <rdma/ib_verbs.h>
-@@ -49,29 +51,503 @@
+ #include <rdma/ib_umem_odp.h>
  
  #include "uverbs.h"
  
@@ -522,7 +521,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  		ndmas = (end - start) >> umem_odp->page_shift;
  		if (!ndmas)
  			return -EINVAL;
-@@ -104,6 +580,99 @@ out_pfn_list:
+@@ -102,6 +578,99 @@ out_pfn_list:
  	kvfree(umem_odp->pfn_list);
  	return ret;
  }
@@ -622,7 +621,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  
  /**
   * ib_umem_odp_alloc_implicit - Allocate a parent implicit ODP umem
-@@ -115,9 +684,18 @@ out_pfn_list:
+@@ -113,9 +682,18 @@ out_pfn_list:
   * @device: IB device to create UMEM
   * @access: ib_reg_mr access flags
   */
@@ -641,7 +640,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  	struct ib_umem *umem;
  	struct ib_umem_odp *umem_odp;
  	int ret;
-@@ -125,20 +703,44 @@ struct ib_umem_odp *ib_umem_odp_alloc_im
+@@ -123,20 +701,44 @@ struct ib_umem_odp *ib_umem_odp_alloc_im
  	if (access & IB_ACCESS_HUGETLB)
  		return ERR_PTR(-EINVAL);
  
@@ -686,7 +685,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  		kfree(umem_odp);
  		return ERR_PTR(ret);
  	}
-@@ -156,10 +758,15 @@ EXPORT_SYMBOL(ib_umem_odp_alloc_implicit
+@@ -154,10 +756,15 @@ EXPORT_SYMBOL(ib_umem_odp_alloc_implicit
   * @size: The length of the userspace VA
   * @ops: MMU interval ops, currently only @invalidate
   */
@@ -702,7 +701,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  {
  	/*
  	 * Caller must ensure that root cannot be freed during the call to
-@@ -176,12 +783,17 @@ ib_umem_odp_alloc_child(struct ib_umem_o
+@@ -174,12 +781,17 @@ ib_umem_odp_alloc_child(struct ib_umem_o
  	if (!odp_data)
  		return ERR_PTR(-ENOMEM);
  	umem = &odp_data->umem;
@@ -720,7 +719,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  	odp_data->notifier.ops = ops;
  
  	/*
-@@ -191,14 +803,27 @@ ib_umem_odp_alloc_child(struct ib_umem_o
+@@ -189,14 +801,27 @@ ib_umem_odp_alloc_child(struct ib_umem_o
  	if (!mmget_not_zero(umem->owning_mm)) {
  		ret = -EFAULT;
  		goto out_free;
@@ -748,7 +747,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  
  out_tgid:
  	put_pid(odp_data->tgid);
-@@ -206,6 +831,7 @@ out_tgid:
+@@ -204,6 +829,7 @@ out_tgid:
  out_free:
  	kfree(odp_data);
  	return ERR_PTR(ret);
@@ -756,7 +755,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  }
  EXPORT_SYMBOL(ib_umem_odp_alloc_child);
  
-@@ -222,41 +848,95 @@ EXPORT_SYMBOL(ib_umem_odp_alloc_child);
+@@ -220,41 +846,95 @@ EXPORT_SYMBOL(ib_umem_odp_alloc_child);
   * pinning, instead, stores the mm for future page fault handling in
   * conjunction with MMU notifiers.
   */
@@ -852,7 +851,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  	kfree(umem_odp);
  	return ERR_PTR(ret);
  }
-@@ -264,6 +944,10 @@ EXPORT_SYMBOL(ib_umem_odp_get);
+@@ -262,6 +942,10 @@ EXPORT_SYMBOL(ib_umem_odp_get);
  
  void ib_umem_odp_release(struct ib_umem_odp *umem_odp)
  {
@@ -863,7 +862,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  	/*
  	 * Ensure that no more pages are mapped in the umem.
  	 *
-@@ -275,11 +959,47 @@ void ib_umem_odp_release(struct ib_umem_
+@@ -273,11 +957,47 @@ void ib_umem_odp_release(struct ib_umem_
  		ib_umem_odp_unmap_dma_pages(umem_odp, ib_umem_start(umem_odp),
  					    ib_umem_end(umem_odp));
  		mutex_unlock(&umem_odp->umem_mutex);
@@ -911,7 +910,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  	kfree(umem_odp);
  }
  EXPORT_SYMBOL(ib_umem_odp_release);
-@@ -295,6 +1015,7 @@ EXPORT_SYMBOL(ib_umem_odp_release);
+@@ -293,6 +1013,7 @@ EXPORT_SYMBOL(ib_umem_odp_release);
   * The function returns -EFAULT if the DMA mapping operation fails.
   *
   */
@@ -919,7 +918,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  static int ib_umem_odp_map_dma_single_page(
  		struct ib_umem_odp *umem_odp,
  		unsigned int dma_index,
-@@ -372,7 +1093,11 @@ int ib_umem_odp_map_dma_and_lock(struct
+@@ -370,7 +1091,11 @@ int ib_umem_odp_map_dma_and_lock(struct
  	 * mmget_not_zero will fail in this case.
  	 */
  	owning_process = get_pid_task(umem_odp->tgid, PIDTYPE_PID);
@@ -931,7 +930,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  		ret = -EINVAL;
  		goto out_put_task;
  	}
-@@ -399,10 +1124,19 @@ retry:
+@@ -397,10 +1122,19 @@ retry:
  	mmap_read_lock(owning_mm);
  	ret = hmm_range_fault(&range);
  	mmap_read_unlock(owning_mm);
@@ -951,7 +950,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  	}
  
  	start_idx = (range.start - ib_umem_start(umem_odp)) >> page_shift;
-@@ -461,23 +1195,316 @@ retry:
+@@ -459,23 +1193,316 @@ retry:
  	else
  		mutex_unlock(&umem_odp->umem_mutex);
  
@@ -1268,7 +1267,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  
  	lockdep_assert_held(&umem_odp->umem_mutex);
  
-@@ -485,6 +1512,7 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -483,6 +1510,7 @@ void ib_umem_odp_unmap_dma_pages(struct
  	bound = min_t(u64, bound, ib_umem_end(umem_odp));
  	for (addr = virt; addr < bound; addr += BIT(umem_odp->page_shift)) {
  		idx = (addr - ib_umem_start(umem_odp)) >> umem_odp->page_shift;
@@ -1276,7 +1275,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  		dma = umem_odp->dma_list[idx];
  
  		/* The access flags guaranteed a valid DMA address in case was NULL */
-@@ -493,6 +1521,13 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -491,6 +1519,13 @@ void ib_umem_odp_unmap_dma_pages(struct
  			struct page *page = hmm_pfn_to_page(umem_odp->pfn_list[pfn_idx]);
  
  			dma_addr = dma & ODP_DMA_ADDR_MASK;
@@ -1290,7 +1289,7 @@ Change-Id: I2375aeb4d6b3a3ced7c601c2917d2e33bfd5095e
  			ib_dma_unmap_page(dev, dma_addr,
  					  BIT(umem_odp->page_shift),
  					  DMA_BIDIRECTIONAL);
-@@ -509,9 +1544,54 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -507,9 +1542,54 @@ void ib_umem_odp_unmap_dma_pages(struct
  				 */
  				set_page_dirty(head_page);
  			}

@@ -1,21 +1,21 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
 
-Change-Id: I1e3a83423457d0edab931dbbcc0650f70786c7e5
+Change-Id: I0be15367eba5db187cf418304590adb220c8d4e8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h | 3 +++
+ 1 file changed, 3 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
-@@ -83,8 +83,10 @@ void mlx5e_set_rx_cq_mode_params(struct
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
+@@ -32,6 +32,9 @@
+ #ifndef __MLX5_EN_PORT_BUFFER_H__
+ #define __MLX5_EN_PORT_BUFFER_H__
  
- bool slow_pci_heuristic(struct mlx5_core_dev *mdev);
- int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *params,
- 			     struct mlx5e_xsk_param *xsk);
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/dcbnl.h>
 +#endif
- void mlx5e_build_rq_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
- void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
- void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ #include "en.h"
+ #include "port.h"
+ 

@@ -192,6 +192,12 @@ get-modules()
 	modules="$modules \
 		drivers/infiniband/hw/irdma/irdma"
 
+	modules="$modules \
+		drivers/vfio/pci/mlx5/mlx5-vfio-pci"
+
+	modules="$modules \
+		drivers/vdpa/mlx5/mlx5_vdpa"
+
 	echo $modules
 }
 

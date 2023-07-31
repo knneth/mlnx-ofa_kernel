@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
+
+Change-Id: Ia2163e52132739a0a5c2dde5220c616aa9478331
+---
+ drivers/vfio/pci/mlx5/main.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/vfio/pci/mlx5/main.c
++++ b/drivers/vfio/pci/mlx5/main.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_VFIO_SUPPORT
+ #include <linux/device.h>
+ #include <linux/eventfd.h>
+ #include <linux/file.h>
+@@ -1374,6 +1375,7 @@ static struct pci_driver mlx5vf_pci_driv
+ };
+ 
+ module_pci_driver(mlx5vf_pci_driver);
++#endif /* HAVE_VFIO_SUPPORT */
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Max Gurtovoy <mgurtovoy@nvidia.com>");

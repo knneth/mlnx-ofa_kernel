@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
 
-Change-Id: Ibd8c9ff299fb2db3beb52e603a67bea7ec691a4c
+Change-Id: I2a4beff2bc79be40b424a82871302c3b28c4cb70
 ---
  drivers/infiniband/core/uverbs_cmd.c | 14 +++++++++++++-
  1 file changed, 13 insertions(+), 1 deletion(-)
@@ -43,7 +43,7 @@ Change-Id: Ibd8c9ff299fb2db3beb52e603a67bea7ec691a4c
  err:
  	mutex_unlock(&file->ucontext_lock);
  	up_read(&file->hw_destroy_rwsem);
-@@ -3360,7 +3368,11 @@ static int __uverbs_create_xsrq(struct u
+@@ -3365,7 +3373,11 @@ static int __uverbs_create_xsrq(struct u
  	struct ib_srq                   *srq;
  	struct ib_srq_init_attr          attr;
  	int ret;

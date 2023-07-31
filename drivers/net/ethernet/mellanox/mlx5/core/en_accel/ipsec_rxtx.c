@@ -37,7 +37,7 @@
 #include "ipsec.h"
 #include "ipsec_rxtx.h"
 #include "en.h"
-#include "../esw/ipsec.h"
+#include "esw/ipsec_fs.h"
 
 enum {
 	MLX5E_IPSEC_TX_SYNDROME_OFFLOAD = 0x8,
@@ -308,59 +308,38 @@ enum {
 	MLX5E_IPSEC_OFFLOAD_RX_SYNDROME_BAD_TRAILER,
 };
 
-static void
-handle_rx_skb_full(struct mlx5e_priv *priv,
-		   struct sk_buff *skb,
-		   struct mlx5_cqe64 *cqe)
+void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
+				       struct sk_buff *skb,
+				       u32 ipsec_meta_data)
 {
-	struct xfrm_state *xs;
-	struct sec_path *sp;
-	struct iphdr *v4_hdr;
-	u8 ip_ver;
-
-	v4_hdr = (struct iphdr *)(skb->data + ETH_HLEN);
-	ip_ver = v4_hdr->version;
-
-	if ((ip_ver != 4) && (ip_ver != 6))
-		return;
-
-	xs = mlx5e_ipsec_sadb_rx_lookup_state(priv->ipsec, skb, ip_ver);
-	if (!xs)
-		return;
-
-	sp = secpath_set(skb);
-	if (unlikely(!sp))
-		return;
-
-	sp->xvec[sp->len++] = xs;
-	return;
-}
-
-static void
-handle_rx_skb_inline(struct mlx5e_priv *priv,
-		     struct sk_buff *skb,
-		     struct mlx5_cqe64 *cqe)
-{
-	u32 ipsec_meta_data = be32_to_cpu(cqe->ft_metadata);
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5e_ipsec *ipsec = priv->ipsec;
+	struct mlx5e_ipsec_sa_entry *sa_entry;
 	struct xfrm_offload *xo;
-	struct xfrm_state *xs;
 	struct sec_path *sp;
 	u32  sa_handle;
+
+	if (!ipsec)
+		return;
 
 	sa_handle = MLX5_IPSEC_METADATA_HANDLE(ipsec_meta_data);
 	sp = secpath_set(skb);
 	if (unlikely(!sp)) {
-		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
+		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
 		return;
 	}
 
-	xs = mlx5e_ipsec_sadb_rx_lookup(priv->ipsec, sa_handle);
-	if (unlikely(!xs)) {
-		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_sadb_miss);
+	rcu_read_lock();
+	sa_entry = xa_load(&ipsec->sadb, sa_handle);
+	if (unlikely(!sa_entry)) {
+		rcu_read_unlock();
+		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sadb_miss);
 		return;
 	}
+	xfrm_state_hold(sa_entry->x);
+	rcu_read_unlock();
 
-	sp->xvec[sp->len++] = xs;
+	sp->xvec[sp->len++] = sa_entry->x;
 	sp->olen++;
 
 	xo = xfrm_offload(skb);
@@ -377,20 +356,8 @@ handle_rx_skb_inline(struct mlx5e_priv *priv,
 		xo->status = CRYPTO_INVALID_PACKET_SYNTAX;
 		break;
 	default:
-		atomic64_inc(&priv->ipsec->sw_stats.ipsec_rx_drop_syndrome);
+		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_syndrome);
 	}
-}
-
-void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
-				       struct sk_buff *skb,
-				       struct mlx5_cqe64 *cqe)
-{
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-
-	if (mlx5_is_ipsec_full_offload(priv))
-		handle_rx_skb_full(priv, skb, cqe);
-	else
-		handle_rx_skb_inline(priv, skb, cqe);
 }
 
 __wsum  mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe64 *cqe)
@@ -425,4 +392,25 @@ __wsum  mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe6
 	}
 
 	return csum;
+}
+
+int mlx5_esw_ipsec_rx_make_metadata(struct mlx5e_priv *priv, u32 id, u32 *metadata)
+{
+	struct mlx5e_ipsec *ipsec = priv->ipsec;
+	u32 ipsec_obj_id;
+	int err;
+
+	if (!ipsec || !ipsec->is_uplink_rep)
+		return -EINVAL;
+
+	err = mlx5_esw_ipsec_rx_ipsec_obj_id_search(priv, id, &ipsec_obj_id);
+	if (err) {
+		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sadb_miss);
+		return err;
+	}
+
+	*metadata = MLX5_IPSEC_METADATA_CREATE(ipsec_obj_id,
+					       MLX5E_IPSEC_OFFLOAD_RX_SYNDROME_DECRYPTED);
+
+	return 0;
 }

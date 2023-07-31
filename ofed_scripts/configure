@@ -172,7 +172,10 @@ Usage:  `basename $0` [options]
     --help - print out options
 
     --with-sf-cfg-drv    make CONFIG_MLX5_SF_CFG=y [no]
-    ----without-sf-cfg-drv    [yes]
+    --without-sf-cfg-drv    [yes]
+
+    --with-sf-sfc     make CONFIG_MLX5_SF_SFC=y [no]
+    --without-sf-sfc        [yes]
 
 EOF
 
@@ -265,6 +268,15 @@ unset_config_mk_kernel()
 	echo "Complex config: Unset $1 in ${AUTOCONF_H}"
 	echo "$1=" >> ${CWD}/${CONFIG}
 	echo "#undef $1" >> ${AUTOCONF_H}
+}
+
+check_config_comapt_tcf_pedit_mod()
+{
+	RHEL_MAJOR=$(grep ^RHEL_MAJOR ${KSRC_OBJ}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
+	RHEL_MINOR=$(grep ^RHEL_MINOR ${KSRC_OBJ}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
+	RHEL7_4_JD=$(echo ${KVERSION} | grep 3.10.0-693.21.3)
+
+	[[ ${RHEL_MAJOR} -eq "7" && ${RHEL_MINOR} -le "4" && ! $RHEL7_4_JD ]]
 }
 
 # We are resolving some features availability
@@ -531,7 +543,7 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
 	fi
 
-# Define HAVE_BLK_TYPES_REQ_OP_DRV_OUT from other flags
+# define HAVE_DEVLINK_PORT_TYPE_ETH_SET from other flags
 	if check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM ||
 	   check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM
 	then
@@ -540,11 +552,109 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
 	fi
 
+# Define HAVE_DEVLINK_PER_AUXDEV from other flags
+	if check_compat_config_h_var HAVE_NET_DEVICE_HAS_DEVLINK_PORT
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
+	fi
+
 # Define HAVE_NO_REFCNT_BIAS to be set off default until refcnt_bias member
 # of struct alloc_unit is removed.
 
 	unset_complex_define_to_config_h HAVE_NO_REFCNT_BIAS
 
+# define HAVE_TC_CLS_OFFLOAD_EXTACK from other flags
+	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
+	   check_compat_config_h_var HAVE_TC_CLS_OFFLOAD_EXTACK_FIX
+	then
+		set_complex_define_to_config_h HAVE_TC_CLS_OFFLOAD_EXTACK
+	else
+		unset_complex_define_to_config_h HAVE_TC_CLS_OFFLOAD_EXTACK
+	fi
+
+# define HAVE_TC_CLSFLOWER_STATS from other flags
+	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
+		check_compat_config_h_var HAVE_TC_CLSFLOWER_STATS_FIX
+	then
+		set_complex_define_to_config_h HAVE_TC_CLSFLOWER_STATS
+	else
+		unset_complex_define_to_config_h HAVE_TC_CLSFLOWER_STATS
+	fi
+
+# define HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD from other flags
+	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
+	   check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD_FIX
+	then
+		set_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
+	else
+		unset_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
+	fi
+
+# define HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON from other flags
+	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
+	   check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON_FIX
+	then
+		set_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
+	else
+		unset_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
+	fi
+
+# define HAVE_PRIO_CHAIN_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON &&
+	   check_compat_config_h_var HAVE_IS_TCF_GACT_GOTO_CHAIN &&
+	   check_compat_config_h_var HAVE_FLOWER_MULTI_MASK
+	then
+		set_complex_define_to_config_h HAVE_PRIO_CHAIN_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_PRIO_CHAIN_SUPPORT
+	fi
+
+# define HAVE_PRIO_CHAIN_SUPPORT from other flags
+	if check_compat_config_h_var HAVE___TC_INDR_BLOCK_CB_REGISTER ||
+	   check_compat_config_h_var HAVE___FLOW_INDR_BLOCK_CB_REGISTER ||
+	   check_compat_config_h_var HAVE_FLOW_BLOCK_CB
+	then
+		set_complex_define_to_config_h HAVE_TC_INDR_API
+	else
+		unset_complex_define_to_config_h HAVE_TC_INDR_API
+	fi
+
+# Define HAVE_DEVICE_ADD_DISK_3_ARGS from other flags
+       if check_compat_config_h_var HAVE_DEVICE_ADD_DISK_3_ARGS_AND_RETURN ||
+	       check_compat_config_h_var HAVE_DEVICE_ADD_DISK_3_ARGS_NO_RETURN
+       then
+	       set_complex_define_to_config_h HAVE_DEVICE_ADD_DISK_3_ARGS
+       else
+	       unset_complex_define_to_config_h HAVE_DEVICE_ADD_DISK_3_ARGS
+       fi
+
+# define HAVE_TCF_PEDIT_TCFP_KEYS_EX from other flags
+	if check_compat_config_h_var HAVE_TCF_PEDIT_TCFP_KEYS_EX_FIX ||
+	   check_config_comapt_tcf_pedit_mod
+	then
+		set_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
+	else
+		unset_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
+	fi
+
+# define HAVE_NIC_TEMPERATURE_SUPPORTED from other flags
+	if check_compat_config_h_var HAVE_HWMON_OPS_READ_STRING &&
+	   check_compat_config_h_var HAVE_HWMON_DEVICE_REGISTER_WITH_INFO
+	then
+		set_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
+	else
+		unset_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
+	fi
+
+# define HAVE_VDPA_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES
+	then
+		set_complex_define_to_config_h HAVE_VDPA_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_VDPA_SUPPORT
+	fi
 }
 
 check_kerver_rh_cls()
@@ -685,6 +795,7 @@ CONFIG_BACKPORT_LRO=${CONFIG_BACKPORT_LRO:-''}
 CONFIG_AUXILIARY_BUS=${CONFIG_AUXILIARY_BUS:-'m'}
 CONFIG_MLXDEVM=${CONFIG_MLXDEVM:-'m'}
 CONFIG_MLX5_SF_CFG=${CONFIG_MLX5_SF_CFG:-''}
+CONFIG_MLX5_SF_SFC=${CONFIG_MLX5_SF_SFC:-''}
 CONFIG_MLX5_EN_MACSEC=${CONFIG_MLX5_EN_MACSEC:-''}
 
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT:-''}
@@ -748,7 +859,7 @@ CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished 
 # block RHEL supports
-OFED_BASE_KVERSION="6.0"
+OFED_BASE_KVERSION="6.3"
 MIN_KVERSION="3.10"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
@@ -756,38 +867,41 @@ REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.12.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.8.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="3.10.0"
 ISERT_SUPPORTED_KVERSION="3.10.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 SRP_SUPPORTED_KVERSION="3.10.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 GDS_SUPPORTED_KVERSION="4.15.0"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.4"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.4"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.12.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.3"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.4"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.5"
 
 #ODP
 ODP_SUPPORTED_KVERSION="3.10.0"
+
+#IPSEC
+IPSEC_SUPPORTED_KVERSION="4.15.0"
 
 #mlxdevm
 MLXDEVM_SUPPORTED_KVERSION="4.15.0"
@@ -797,6 +911,20 @@ KVERSION=${KVERSION:-$(uname -r)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
 
 ignored_autofconf_vars=""
+
+# Run after compat/configure failed
+# Run from compat/
+check_autoconf_log() {
+	if [ ! -f config.log ]; then
+		# Something is wrong. Hopefully there's a better
+		# error message
+		return
+	fi
+	echo ""
+	echo "################ Snippet from $PWD/config.log:"
+	sed -n -e '1,/Cache variables/p' config.log | tail -n 50
+	echo "################ End snippet from compat/config.log"
+}
 
 main()
 {
@@ -957,7 +1085,6 @@ main()
                             CONFIG_INFINIBAND_IPOIB_DEBUG="y"
                             CONFIG_BACKPORT_LRO="m"
                             add_conf "# Load IPoIB" "IPOIB_LOAD=yes"
-                            add_conf "# Enable IPoIB Connected Mode" "SET_IPOIB_CM=auto"
                         ;;
                         --without-ipoib-mod)
                             CONFIG_INFINIBAND_IPOIB=
@@ -1491,8 +1618,11 @@ main()
                         --with-sf-cfg-drv)
                         CONFIG_MLX5_SF_CFG="y"
                         ;;
-                        --without-sf-cfg-drv)
-                        CONFIG_MLX5_SF_CFG=
+                        --with-sf-sfc)
+                        CONFIG_MLX5_SF_SFC="y"
+                        ;;
+                        --without-sf-sfc)
+                        CONFIG_MLX5_SF_SFC=
                         ;;
                     -h | --help)
                                 usage
@@ -1583,6 +1713,12 @@ fi
 if  check_kerver ${KVERSION} ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_MLX5_BRIDGE=
 	echo "Warning: CONFIG_MLX5_BRIDGE not support kernel version ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
+fi
+
+if ! check_kerver ${KVERSION} ${IPSEC_SUPPORTED_KVERSION}; then
+        CONFIG_MLX5_EN_IPSEC=
+	CONFIG_MLX5_IPSEC=
+	echo "Warning: CONFIG_MLX5_IPSEC requires kernel version ${IPSEC_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 fi
 
 if  check_kerver ${KVERSION} ${CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
@@ -2056,7 +2192,12 @@ EOFAUTOCONF
         /bin/cp -f Makefile.real Makefile
         /bin/cp -f Makefile.real Makefile.in
 
-        ex ./configure --with-linux-obj=$KSRC_OBJ --with-linux=$KSRC --with-njobs=$NJOBS
+        ./configure --with-linux-obj=$KSRC_OBJ --with-linux=$KSRC --with-njobs=$NJOBS
+        rc=$?
+        if [ $rc -ne 0 ]; then
+            check_autoconf_log
+            exit 42
+        fi
 
         cd -
 

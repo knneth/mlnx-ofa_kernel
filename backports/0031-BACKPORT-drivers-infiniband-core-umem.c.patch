@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
-Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
+Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
 ---
- drivers/infiniband/core/umem.c | 469 ++++++++++++++++++++++++++++++++-
- 1 file changed, 465 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/umem.c | 479 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 474 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
@@ -109,7 +109,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  /**
   * ib_umem_find_best_pgsz - Find best HW page size to use for this MR
   *
-@@ -83,10 +151,14 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -83,12 +151,16 @@ unsigned long ib_umem_find_best_pgsz(str
  				     unsigned long virt)
  {
  	struct scatterlist *sg;
@@ -120,11 +120,13 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  	dma_addr_t mask;
  	int i;
  
+ 	umem->iova = va = virt;
+ 
 +#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
  	if (umem->is_odp) {
  		unsigned int page_size = BIT(to_ib_umem_odp(umem)->page_shift);
  
-@@ -95,13 +167,17 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -97,13 +169,17 @@ unsigned long ib_umem_find_best_pgsz(str
  			return 0;
  		return page_size;
  	}
@@ -140,10 +142,10 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
 +#else
 +	pgsz_bitmap &= GENMASK_ULL(BITS_PER_LONG - 1, PAGE_SHIFT);
 +#endif
- 	umem->iova = va = virt;
  	/* The best result is the smallest page size that results in the minimum
  	 * number of required pages. Compute the largest page size that could
-@@ -113,7 +189,12 @@ unsigned long ib_umem_find_best_pgsz(str
+ 	 * work based on VA address bits that don't change.
+@@ -114,7 +190,12 @@ unsigned long ib_umem_find_best_pgsz(str
  	/* offset into first SGL */
  	pgoff = umem->address & ~PAGE_MASK;
  
@@ -156,7 +158,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  		/* Walk SGL and reduce max page size if VA/PA bits differ
  		 * for any address.
  		 */
-@@ -123,7 +204,11 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -124,7 +205,11 @@ unsigned long ib_umem_find_best_pgsz(str
  		 * the maximum possible page size as the low bits of the iova
  		 * must be zero when starting the next chunk.
  		 */
@@ -168,7 +170,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  			mask |= va;
  		pgoff = 0;
  	}
-@@ -132,12 +217,76 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -133,12 +218,76 @@ unsigned long ib_umem_find_best_pgsz(str
  	 * address differ, thus the length of trailing 0 is the largest page
  	 * size that can pass the VA through to the physical.
  	 */
@@ -245,7 +247,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  /**
   * __ib_umem_get - Pin and DMA map userspace memory.
   *
-@@ -147,20 +296,68 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -148,20 +297,72 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -277,7 +279,11 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
 +	struct scatterlist *sg = NULL;
 +#endif /*HAVE_SG_APPEND_TABLE*/
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
- 	unsigned int gup_flags = FOLL_WRITE;
++#ifdef HAVE_FOLL_LONGTERM
+ 	unsigned int gup_flags = FOLL_LONGTERM;
++#else
++	unsigned int gup_flags = FOLL_WRITE;
++#endif
 +#endif
 +#if defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && (!defined(HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED) && !defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS))
 +	unsigned long index;
@@ -314,7 +320,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -183,7 +380,15 @@ static struct ib_umem *__ib_umem_get(str
+@@ -184,7 +385,15 @@ static struct ib_umem *__ib_umem_get(str
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
@@ -330,7 +336,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  	umem->length     = size;
  	umem->address    = addr;
  	/*
-@@ -195,12 +400,24 @@ static struct ib_umem *__ib_umem_get(str
+@@ -196,12 +405,24 @@ static struct ib_umem *__ib_umem_get(str
  	umem->owning_mm = mm = current->mm;
  	mmgrab(mm);
  
@@ -356,7 +362,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -209,18 +426,54 @@ static struct ib_umem *__ib_umem_get(str
+@@ -210,18 +431,58 @@ static struct ib_umem *__ib_umem_get(str
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -400,8 +406,12 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
 +		goto vma;
 +#endif
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
- 	if (!umem->writable)
- 		gup_flags |= FOLL_FORCE;
+ 	if (umem->writable)
++#ifdef HAVE_FOLL_LONGTERM
+ 		gup_flags |= FOLL_WRITE;
++#else
++		gup_flags |= FOLL_FORCE;
++#endif /* HAVE_FOLL_LONGTERM */
 +#endif
 +#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
 +	sg = umem->sg_head.sgl;
@@ -411,7 +421,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  	while (npages) {
  		cond_resched();
  		pinned = pin_user_pages_fast(cur_base,
-@@ -261,8 +514,163 @@ static struct ib_umem *__ib_umem_get(str
+@@ -262,8 +523,163 @@ static struct ib_umem *__ib_umem_get(str
  	}
  	goto out;
  
@@ -575,7 +585,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  
  	/*
  	 * If the address belongs to peer memory client, then the first
-@@ -283,8 +691,22 @@ umem_release:
+@@ -284,8 +700,22 @@ umem_release:
  		goto out;
  	}
  vma:
@@ -598,7 +608,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  	free_page((unsigned long) page_list);
  umem_kfree:
  	if (ret) {
-@@ -294,19 +716,36 @@ umem_kfree:
+@@ -295,19 +725,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -635,7 +645,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -318,16 +757,34 @@ void ib_umem_release(struct ib_umem *ume
+@@ -319,16 +766,34 @@ void ib_umem_release(struct ib_umem *ume
  {
  	if (!umem)
  		return;
@@ -670,7 +680,7 @@ Change-Id: I11a87aaca9f00bc42b2ff2582d612a786652bf8e
  	mmdrop(umem->owning_mm);
  	kfree(umem);
  }
-@@ -355,8 +812,12 @@ int ib_umem_copy_from(void *dst, struct
+@@ -356,8 +821,12 @@ int ib_umem_copy_from(void *dst, struct
  		return -EINVAL;
  	}
  

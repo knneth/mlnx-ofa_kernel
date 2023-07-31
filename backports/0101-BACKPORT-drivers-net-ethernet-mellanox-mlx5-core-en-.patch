@@ -1,160 +1,39 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
 
-Change-Id: Ia37394c04ca4a6205a9f830624c4d12f4dc02566
+Change-Id: I5e4423517fdf338503a95e9f4aa040f360d676a8
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 61 ++++++++++++++++++-
- 1 file changed, 59 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/qos.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-@@ -39,10 +39,19 @@ static void mlx5e_skb_cb_hwtstamp_tx(str
- 				     struct mlx5e_ptp_cq_stats *cq_stats)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+@@ -371,6 +371,7 @@ void mlx5e_reset_qdisc(struct net_device
+ 	spin_unlock_bh(qdisc_lock(qdisc));
+ }
+ 
++#ifdef HAVE_ENUM_TC_HTB_COMMAND
+ int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_qopt)
  {
- 	struct skb_shared_hwtstamps hwts = {};
-+#ifndef HAVE_KTIME_UNION_TV64
- 	ktime_t diff;
+ 	struct mlx5e_htb *htb = priv->htb;
+@@ -412,7 +413,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 		return mlx5e_htb_leaf_to_inner(htb, htb_qopt->parent_classid, htb_qopt->classid,
+ 					       htb_qopt->rate, htb_qopt->ceil, htb_qopt->extack);
+ 	case TC_HTB_LEAF_DEL:
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID 
+ 		return mlx5e_htb_leaf_del(htb, &htb_qopt->classid, htb_qopt->extack);
 +#else
-+	s64 diff;
++		return mlx5e_htb_leaf_del(htb, htb_qopt->classid, &htb_qopt->moved_qid, &htb_qopt->qid,
++					  htb_qopt->extack);
 +#endif
- 
-+#ifndef HAVE_KTIME_UNION_TV64
- 	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp -
- 		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp);
-+#else
-+	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp.tv64 -
-+		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp.tv64);
-+#endif
- 
- 	/* Maximal allowed diff is 1 / 128 second */
- 	if (diff > (NSEC_PER_SEC >> 7)) {
-@@ -71,8 +80,13 @@ void mlx5e_skb_cb_hwtstamp_handler(struc
- 	/* If both CQEs arrive, check and report the port tstamp, and clear skb cb as
- 	 * skb soon to be released.
- 	 */
-+#ifndef HAVE_KTIME_UNION_TV64
- 	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp ||
- 	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp)
-+#else
-+	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp.tv64 ||
-+	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp.tv64)
-+#endif
- 		return;
- 
- 	mlx5e_skb_cb_hwtstamp_tx(skb, cq_stats);
-@@ -110,7 +124,11 @@ static void mlx5e_ptp_skb_fifo_ts_cqe_re
- 		hwts.hwtstamp = mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp;
- 		skb_tstamp_tx(skb, &hwts);
- 		ptpsq->cq_stats->resync_cqe++;
-+#ifdef HAVE_NAPI_CONSUME_SKB
- 		napi_consume_skb(skb, budget);
-+#else
-+		dev_kfree_skb(skb);
-+#endif
- 		skb_cc = PTP_WQE_CTR2IDX(ptpsq->skb_fifo_cc);
+ 	case TC_HTB_LEAF_DEL_LAST:
+ 	case TC_HTB_LEAF_DEL_LAST_FORCE:
+ 		return mlx5e_htb_leaf_del_last(htb, htb_qopt->classid,
+@@ -431,6 +437,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 		return -EOPNOTSUPP;
  	}
  }
-@@ -147,7 +165,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
- 	ptpsq->cq_stats->cqe++;
- 
- out:
-+#ifdef HAVE_NAPI_CONSUME_SKB
- 	napi_consume_skb(skb, budget);
-+#else
-+	dev_kfree_skb(skb);
-+#endif
- }
- 
- static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int budget)
-@@ -190,6 +212,9 @@ static int mlx5e_ptp_napi_poll(struct na
- 	rcu_read_lock();
- 
- 	ch_stats->poll++;
-+#ifndef HAVE_NAPI_STATE_MISSED
-+	clear_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags);
 +#endif
  
- 	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
- 		for (i = 0; i < c->num_tc; i++) {
-@@ -211,8 +236,18 @@ static int mlx5e_ptp_napi_poll(struct na
- 		goto out;
- 	}
- 
-+#ifdef HAVE_NAPI_STATE_MISSED
- 	if (unlikely(!napi_complete_done(napi, work_done)))
- 		goto out;
-+#else
-+	napi_complete_done(napi, work_done);
-+
-+	/* avoid losing completion event during/after polling cqs */
-+	if (test_bit(MLX5E_CHANNEL_NAPI_SCHED, &c->flags)) {
-+		napi_schedule(napi);
-+		goto out;
-+	}
-+#endif
- 
- 	ch_stats->arm++;
- 
-@@ -425,6 +460,9 @@ static int mlx5e_ptp_open_tx_cqs(struct
- 	ccp.ch_stats = c->stats;
- 	ccp.napi     = &c->napi;
- 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
-+#ifndef HAVE_NAPI_STATE_MISSED
-+	ccp.ch_flags = &c->flags;
-+#endif
- 
- 	cq_param = &cparams->txq_sq_param.cqp;
- 
-@@ -482,7 +520,16 @@ static int mlx5e_init_ptp_rq(struct mlx5
- 	if (err)
- 		return err;
- 
--	return xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
-+#ifdef HAVE_XDP_SUPPORT
-+#ifdef HAVE_XDP_RXQ_INFO
-+#ifdef HAVE_XDP_RXQ_INFO_REG_4_PARAMS
-+	err = xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
-+#else
-+	err = xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix);
-+#endif
-+#endif
-+#endif /* HAVE_XDP_SUPPORT */
-+	return err;
- }
- 
- static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
-@@ -496,7 +543,9 @@ static int mlx5e_ptp_open_rq(struct mlx5
- 	ccp.ch_stats = c->stats;
- 	ccp.napi     = &c->napi;
- 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
--
-+#ifndef HAVE_NAPI_STATE_MISSED
-+        ccp.ch_flags = &c->flags;
-+#endif
- 	err = mlx5e_init_ptp_rq(c, params, &c->rq);
- 	if (err)
- 		return err;
-@@ -540,7 +589,11 @@ static void mlx5e_ptp_build_rq_param(str
- 
- 	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
- 	mlx5e_init_rq_type_params(mdev, params);
-+#ifdef HAVE_NET_DEVICE_MIN_MAX_MTU
- 	params->sw_mtu = netdev->max_mtu;
-+#elif defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
-+	params->sw_mtu = netdev->extended->max_mtu;
-+#endif
- 	mlx5e_build_rq_param(mdev, params, NULL, q_counter, rq_params);
- }
- 
-@@ -722,7 +775,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
- 	if (err)
- 		goto err_free;
- 
-+#ifdef HAVE_NETIF_NAPI_ADD_GET_3_PARAMS //forwardport
-+	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll);
-+#else
- 	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll, 64);
-+#endif
- 
- 	mlx5e_ptp_build_params(c, cparams, params);
- 
+ struct mlx5e_mqprio_rl {
+ 	struct mlx5_core_dev *mdev;

@@ -101,6 +101,9 @@ struct mlx5_rep_uplink_priv {
 
 	struct mlx5e_flow_meters *flow_meters;
 
+	/* tc action stats */
+	struct mlx5e_tc_act_stats_handle *action_stats_handle;
+
 	struct work_struct mpesw_work;
 };
 
@@ -244,9 +247,14 @@ struct mlx5e_encap_entry {
 	struct rcu_head rcu;
 };
 
+struct mlx5e_rep_sq_peer {
+	struct mlx5_flow_handle *rule;
+	void *peer;
+};
+
 struct mlx5e_rep_sq {
 	struct mlx5_flow_handle	*send_to_vport_rule;
-	struct mlx5_flow_handle *send_to_vport_rule_peer;
+	struct xarray sq_peer;
 	u32 sqn;
 	struct list_head	 list;
 };

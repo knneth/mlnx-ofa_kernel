@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad_rmpp.c
 
-Change-Id: I19b46a7b410f5c7d430a2836cb017255d80f097c
+Change-Id: I83f2982b7de5afa7db42ef9942e1742ddc3ebd2f
 ---
  drivers/infiniband/core/mad_rmpp.c | 5 +++++
  1 file changed, 5 insertions(+)

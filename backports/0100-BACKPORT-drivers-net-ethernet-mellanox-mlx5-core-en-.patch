@@ -1,21 +1,57 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 
-Change-Id: I9415b703ac16d57676b8c7de87d9fa32332ee254
+Change-Id: Ia507d6a34814111d12e84ed0cc99dfc57e5273e7
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h | 3 +++
- 1 file changed, 3 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.h  | 22 ++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-@@ -32,6 +32,9 @@
- #ifndef __MLX5_EN_PORT_BUFFER_H__
- #define __MLX5_EN_PORT_BUFFER_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+@@ -40,6 +40,9 @@ struct mlx5e_ptp {
  
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/dcbnl.h>
+ 	/* data path - accessed per napi poll */
+ 	struct mlx5e_ch_stats     *stats;
++#ifndef HAVE_NAPI_STATE_MISSED
++	unsigned long              flags;
 +#endif
- #include "en.h"
- #include "port.h"
  
+ 	/* control */
+ 	struct mlx5e_priv         *priv;
+@@ -50,14 +53,26 @@ struct mlx5e_ptp {
+ 
+ static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
+ {
++#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
+ 	struct flow_keys fk;
++#endif
+ 
+ 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+ 		return false;
+ 
+-	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
+-		return false;
++#ifdef HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS
++        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
++#elif defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
++        if (!skb_flow_dissect_flow_keys(skb, &fk))
++#endif
++#ifdef HAVE_PTP_CLASSIFY_RAW
++                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
++                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
++#else
++                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588));
++#endif
+ 
++#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
+ 	if (fk.basic.n_proto == htons(ETH_P_1588))
+ 		return true;
+ 
+@@ -67,6 +82,7 @@ static inline bool mlx5e_use_ptpsq(struc
+ 
+ 	return (fk.basic.ip_proto == IPPROTO_UDP &&
+ 		fk.ports.dst == htons(PTP_EV_PORT));
++#endif
+ }
+ 
+ static inline bool mlx5e_ptpsq_fifo_has_room(struct mlx5e_txqsq *sq)

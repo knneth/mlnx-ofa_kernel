@@ -1,0 +1,29 @@
+From 473d4b8b345cb4babcc406f7ba53859e29eb722f Mon Sep 17 00:00:00 2001
+From: Vladimir Sokolovsky <vlad@nvidia.com>
+Date: Mon, 22 Mar 2021 12:56:12 -0500
+Subject: [PATCH] ofed_scripts/openibd.service: openibd should run before
+ NetworkManager.service
+
+Issue: 2587973
+Change-Id: I83f8f79044a7acb5e765166b5e3101ee77447e4b
+Signed-off-by: Vladimir Sokolovsky <vlad@nvidia.com>
+---
+ ofed_scripts/openibd.service | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ofed_scripts/openibd.service b/ofed_scripts/openibd.service
+index 5ac135245..fc7492c8f 100644
+--- a/ofed_scripts/openibd.service
++++ b/ofed_scripts/openibd.service
+@@ -2,7 +2,7 @@
+ Description=openibd - configure Mellanox devices
+ Documentation=file:/etc/infiniband/openib.conf
+ After=wickedd.service wickedd-nanny.service local-fs.target
+-Before=network.target network.service networking.service remote-fs-pre.target
++Before=network.target network.service networking.service remote-fs-pre.target NetworkManager.service
+ RefuseManualStop=false
+ DefaultDependencies=false
+ 
+-- 
+2.17.1
+

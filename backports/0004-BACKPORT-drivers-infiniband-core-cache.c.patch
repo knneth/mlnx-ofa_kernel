@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
 
-Change-Id: I750c15c5fbd345ec33ffbf8b7a56266e306d0253
+Change-Id: Ie608ad98340d28d745e47f7e84793bbac1d70789
 ---
  drivers/infiniband/core/cache.c | 23 +++++++++++++++++++++--
  1 file changed, 21 insertions(+), 2 deletions(-)
@@ -55,7 +55,7 @@ Change-Id: I750c15c5fbd345ec33ffbf8b7a56266e306d0253
  		} else {
 +#ifdef HAVE_NETDEV_WALK_ALL_LOWER_DEV_RCU
  			/* If the netdev is upper device and if it's lower
- 			 * device is vlan device, consider vlan id of the
+ 			 * device is vlan device, consider vlan id of
  			 * the lower vlan device for this gid entry.
  			 */
  			netdev_walk_all_lower_dev_rcu(attr->ndev,

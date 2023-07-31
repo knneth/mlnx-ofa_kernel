@@ -1,38 +1,48 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
 
-Change-Id: I0b217af7531a63123a2473f52763f2d282971fb6
+Change-Id: I7287f9c6b22e280bde559fa7ab138f4c7c0e3ebc
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-@@ -8,13 +8,18 @@
- #include <linux/mlx5/fs.h>
- #include <net/tc_act/tc_ct.h>
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
  
-+#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
- #include "en.h"
-+#endif
+ void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
+ {
++#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
+ 	u32 trunc_size = mapped_obj->sample.trunc_size;
+ 	struct psample_group psample_group = {};
+ 	struct psample_metadata md = {};
+@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
+ 	skb_push(skb, skb->mac_len);
  
- struct mlx5_flow_attr;
- struct mlx5e_tc_mod_hdr_acts;
- struct mlx5_rep_uplink_priv;
- struct mlx5e_tc_flow;
- struct mlx5e_priv;
-+#ifdef HAVE_BASECODE_EXTRAS
-+struct mlx5e_post_act;
-+#endif
- 
- struct mlx5_fs_chains;
- struct mlx5_tc_ct_priv;
-@@ -145,6 +150,8 @@ mlx5_tc_ct_set_ct_clear_regs(struct mlx5
- 
- #else /* CONFIG_MLX5_TC_CT */
- 
-+#include <net/flow_offload.h>
+ 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
++#else
++	u32 trunc_size = mapped_obj->sample.trunc_size;
++	struct psample_group psample_group = {};
++	int iif = skb->dev->ifindex;
++	u32 size;
 +
- static inline struct mlx5_tc_ct_priv *
- mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
- 		struct mod_hdr_tbl *mod_hdr,
++	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
++	psample_group.group_num = mapped_obj->sample.group_id;
++	psample_group.net = &init_net;
++	skb_push(skb, skb->mac_len);
++
++	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
++#endif
+ }
+ 
+ static int
+@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
+ 	struct mlx5e_sample_attr *sample_attr;
+ 	struct mlx5_flow_attr *pre_attr;
+ 	struct mlx5_eswitch *esw;
+-	u32 default_tbl_id;
++	u32 default_tbl_id = 0;
+ 	u32 obj_id;
+ 	int err;
+ 

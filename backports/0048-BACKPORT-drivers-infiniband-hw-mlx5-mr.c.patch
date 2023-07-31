@@ -1,0 +1,240 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
+
+Change-Id: I604069d778d55d11ef9384205358ee3618401da2
+---
+ drivers/infiniband/hw/mlx5/mr.c | 83 ++++++++++++++++++++++++++++-----
+ 1 file changed, 72 insertions(+), 11 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/mr.c
++++ b/drivers/infiniband/hw/mlx5/mr.c
+@@ -40,7 +40,9 @@
+ #include <linux/device.h>
+ #include <linux/sysfs.h>
+ #include <linux/dma-buf.h>
++#ifdef HAVE_DMA_RESV_H
+ #include <linux/dma-resv.h>
++#endif
+ #include <rdma/ib_umem_odp.h>
+ #include "dm.h"
+ #include "mlx5_ib.h"
+@@ -74,7 +76,9 @@ static void set_mkc_access_pd_addr_field
+ 	MLX5_SET(mkc, mkc, lr, 1);
+ 
+ 	if (acc & IB_ACCESS_RELAXED_ORDERING) {
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 		bool is_vf = mlx5_core_is_vf(dev->mdev);
++#endif
+ 		bool ro_read = MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read);
+ 		bool ro_read_pci_en =
+ 			MLX5_CAP_GEN(dev->mdev,
+@@ -83,9 +87,13 @@ static void set_mkc_access_pd_addr_field
+ 		if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write))
+ 			MLX5_SET(mkc, mkc, relaxed_ordering_write, 1);
+ 
++#ifdef HAVE_PCIE_RELAXED_ORDERING_ENABLED
+ 		if (ro_read ||
+ 		    (ro_read_pci_en &&
+ 		     (is_vf || pcie_relaxed_ordering_enabled(dev->mdev->pdev))))
++#else
++		if (ro_read || ro_read_pci_en)
++#endif
+ 			MLX5_SET(mkc, mkc, relaxed_ordering_read, 1);
+ 	}
+ 
+@@ -453,7 +461,11 @@ static ssize_t cur_show(struct cache_ord
+ 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
+ 	int err;
+ 
++#ifdef HAVE_DEBUGFS_CREATE_ULONG
+ 	err = snprintf(buf, 20, "%lu\n", ent->stored);
++#else
++	err = snprintf(buf, 20, "%llu\n", ent->stored);
++#endif
+ 	return err;
+ }
+ 
+@@ -528,7 +540,11 @@ static ssize_t size_show(struct cache_or
+ 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
+ 	int err;
+ 
++#ifdef HAVE_DEBUGFS_CREATE_ULONG
+ 	err = snprintf(buf, 20, "%ld\n", ent->stored + ent->in_use);
++#else
++	err = snprintf(buf, 20, "%llu\n", ent->stored + ent->in_use);
++#endif
+ 	return err;
+ }
+ 
+@@ -672,10 +688,17 @@ static struct attribute *order_default_a
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(order_default);
+-static const struct kobj_type order_type = {
+-	.sysfs_ops     = &order_sysfs_ops,
+-	.default_groups = order_default_groups
++#endif
++
++static struct kobj_type order_type = {
++        .sysfs_ops     = &order_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++        .default_groups = order_default_groups
++#else
++        .default_attrs = order_default_attrs
++#endif
+ };
+ 
+ static bool someone_releasing(struct mlx5_mkey_cache *cache)
+@@ -959,9 +982,17 @@ static void clean_keys(struct mlx5_ib_de
+ 	xa_unlock_irq(&ent->mkeys);
+ }
+ 
++#ifdef HAVE_TIMER_SETUP
+ static void delay_time_func(struct timer_list *t)
++#else
++static void delay_time_func(unsigned long ctx)
++#endif
+ {
+-	struct mlx5_ib_dev *dev = from_timer(dev, t, delay_timer);
++#ifdef HAVE_TIMER_SETUP
++        struct mlx5_ib_dev *dev = from_timer(dev, t, delay_timer);
++#else
++        struct mlx5_ib_dev *dev = (struct mlx5_ib_dev *)ctx;
++#endif
+ 
+ 	WRITE_ONCE(dev->fill_delay, 0);
+ }
+@@ -1068,7 +1099,11 @@ int mlx5_mkey_cache_init(struct mlx5_ib_
+ 	}
+ 
+ 	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
++#ifdef HAVE_TIMER_SETUP
+ 	timer_setup(&dev->delay_timer, delay_time_func, 0);
++#else
++        setup_timer(&dev->delay_timer, delay_time_func, (unsigned long)dev);
++#endif
+ 	mlx5_mkey_cache_sysfs_init(dev);
+ 	mutex_lock(&cache->rb_lock);
+ 	for (i = 0; i <= mkey_cache_max_order(dev); i++) {
+@@ -1527,6 +1562,7 @@ static struct ib_mr *create_real_mr(stru
+ 	return &mr->ibmr;
+ }
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
+ 					u64 iova, int access_flags,
+ 					struct ib_udata *udata)
+@@ -1548,7 +1584,7 @@ static struct ib_mr *create_user_odp_mr(
+ 		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
+ 			return ERR_PTR(-EINVAL);
+ 
+-		mr = mlx5_ib_alloc_implicit_mr(to_mpd(pd), access_flags);
++		mr = mlx5_ib_alloc_implicit_mr(to_mpd(pd), udata, access_flags);
+ 		if (IS_ERR(mr))
+ 			return ERR_CAST(mr);
+ 		return &mr->ibmr;
+@@ -1558,8 +1594,12 @@ static struct ib_mr *create_user_odp_mr(
+ 	if (!mlx5r_umr_can_load_pas(dev, length))
+ 		return ERR_PTR(-EINVAL);
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	odp = ib_umem_odp_get(&dev->ib_dev, start, length, access_flags,
+ 			      &mlx5_mn_ops);
++#else
++	odp = ib_umem_odp_get(udata, start, length, access_flags);
++#endif
+ 	if (IS_ERR(odp))
+ 		return ERR_CAST(odp);
+ 
+@@ -1584,6 +1624,7 @@ err_dereg_mr:
+ 	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
+ 	return ERR_PTR(err);
+ }
++#endif
+ 
+ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
+ 				  u64 iova, int access_flags,
+@@ -1597,17 +1638,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+ 
+ 	mlx5_ib_dbg(dev, "start 0x%llx, iova 0x%llx, length 0x%llx, access_flags 0x%x\n",
+ 		    start, iova, length, access_flags);
+-
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if ((access_flags & IB_ACCESS_ON_DEMAND) && (dev->profile != &raw_eth_profile))
+ 		return create_user_odp_mr(pd, start, length, iova, access_flags,
+ 					  udata);
++#endif
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem = ib_umem_get_peer(&dev->ib_dev, start, length, access_flags,
++#else
++	umem = ib_umem_get_peer(udata, start, length, access_flags,
++#endif
++
+ 				IB_PEER_MEM_INVAL_SUPP);
+ 	if (IS_ERR(umem))
+ 		return ERR_CAST(umem);
+ 	return create_real_mr(pd, umem, iova, access_flags);
+ }
+ 
++
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
+ {
+ 	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
+@@ -1623,10 +1672,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
+ }
+ 
+ static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
++#ifdef HAVE_DMA_BUF_ATTACH_OPS_ALLOW_PEER2PEER
+ 	.allow_peer2peer = 1,
++#endif
+ 	.move_notify = mlx5_ib_dmabuf_invalidate_cb,
+ };
+-
+ struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 offset,
+ 					 u64 length, u64 virt_addr,
+ 					 int fd, int access_flags,
+@@ -1682,6 +1732,7 @@ err_dereg_mr:
+ 	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
+ 	return ERR_PTR(err);
+ }
++#endif
+ 
+ /*
+  * True if the change in access flags can be done via UMR, only some access
+@@ -1845,8 +1896,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+ 	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
+ 		struct ib_umem *new_umem;
+ 		unsigned long page_size;
+-
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		new_umem = ib_umem_get_peer(&dev->ib_dev, start, length,
++#else
++		new_umem = ib_umem_get_peer(udata, start, length,
++#endif
+ 					    new_access_flags,
+ 					    IB_PEER_MEM_INVAL_SUPP);
+ 		if (IS_ERR(new_umem))
+@@ -2907,10 +2961,17 @@ static struct attribute *cache_default_a
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(cache_default);
+-static const struct kobj_type cache_type = {
+-	.sysfs_ops     = &cache_sysfs_ops,
+-	.default_groups = cache_default_groups
++#endif
++
++static struct kobj_type cache_type = {
++        .sysfs_ops     = &cache_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++        .default_groups = cache_default_groups
++#else
++        .default_attrs = cache_default_attrs
++#endif
+ };
+ 
+ static int mlx5_mkey_cache_sysfs_init(struct mlx5_ib_dev *dev)

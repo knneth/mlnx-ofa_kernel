@@ -80,6 +80,25 @@ static int mlx5e_tc_tun_init_encap_attr_vxlan(struct net_device *tunnel_dev,
 	return 0;
 }
 
+static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, struct vxlan_metadata *md)
+{
+        struct vxlanhdr_gbp *gbp;
+
+        if (!md->gbp)
+                return;
+
+        gbp = (struct vxlanhdr_gbp *)vxh;
+        vxh->vx_flags |= VXLAN_HF_GBP;
+
+        if (md->gbp & VXLAN_GBP_DONT_LEARN)
+                gbp->dont_learn = 1;
+
+        if (md->gbp & VXLAN_GBP_POLICY_APPLIED)
+                gbp->policy_applied = 1;
+
+        gbp->policy_id = htons(md->gbp & VXLAN_GBP_ID_MASK);
+}
+
 static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
 					    __u8 *ip_proto,
 					    struct mlx5e_encap_entry *e)
@@ -101,10 +120,7 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
 	vxh->vx_vni = vxlan_vni_field(tun_id);
 	if (tun_key->tun_flags & TUNNEL_VXLAN_OPT) {
 		md = ip_tunnel_info_opts((struct ip_tunnel_info *)e->tun_info);
-		/* forwardport: the line below was commented out because the function will
-		 * be available in next kernel release. And it would be restore in
-		 * backports */
-		/* vxlan_build_gbp_hdr(vxh, md); */
+		vxlan_build_gbp_hdr(vxh, md);
 	}
 
 	return 0;
@@ -146,10 +162,7 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
 	gbp_mask = (u32 *)&enc_opts.mask->data[0];
 
 	if (*gbp_mask & ~VXLAN_GBP_MASK) {
-		/* forwardport: the line below was commented out because the function will
-		 * be available in next kernel release. And it would be restore in
-		 * backports */
-		/* NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask); */
+		NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
 		netdev_warn(priv->netdev, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
 		return -EINVAL;
 	}

@@ -1,0 +1,30 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+
+Change-Id: I0e1d2339e926fa4466965bbbca8bb598f8d72c6f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_LAG_H__
+ 
+ #include <linux/debugfs.h>
++#include <linux/seq_file.h>
+ 
+ #define MLX5_LAG_MAX_HASH_BUCKETS 16
+ #include "mlx5_core.h"
+@@ -54,7 +55,11 @@ struct lag_tracker {
+ 	struct netdev_lag_lower_state_info  netdev_state[MLX5_MAX_PORTS];
+ 	unsigned int is_bonded:1;
+ 	unsigned int has_inactive:1;
++#ifdef HAVE_INFO_HASH_TYPE
+ 	enum netdev_lag_hash hash_type;
++#else
++	int    hash_type;
++#endif
+ };
+ 
+ /* LAG data of a ConnectX card.

@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
-Change-Id: I807959d637f7dcec214be1c728af363db890eddc
+Change-Id: Iccf06cbfd43be0eb0ac10e7b20bb07cd6a965cd3
 ---
  drivers/infiniband/core/addr.c | 107 ++++++++++++++++++++++++++++++---
  1 file changed, 97 insertions(+), 10 deletions(-)

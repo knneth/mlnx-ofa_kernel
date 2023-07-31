@@ -1647,21 +1647,23 @@ dr_ste_v0_build_src_gvmi_qpn_tag(struct mlx5dr_match_param *value,
 				 u8 *tag)
 {
 	struct mlx5dr_match_misc *misc = &value->misc;
+	int id = misc->source_eswitch_owner_vhca_id;
 	struct mlx5dr_cmd_vport_cap *vport_cap;
 	struct mlx5dr_domain *dmn = sb->dmn;
 	struct mlx5dr_domain *vport_dmn;
 	u8 *bit_mask = sb->bit_mask;
+	struct mlx5dr_domain *peer;
 	bool source_gvmi_set;
 
 	DR_STE_SET_TAG(src_gvmi_qp, tag, source_qp, misc, source_sqn);
 
 	if (sb->vhca_id_valid) {
+		peer = xa_load(&dmn->peer_dmn_xa, id);
 		/* Find port GVMI based on the eswitch_owner_vhca_id */
-		if (misc->source_eswitch_owner_vhca_id == dmn->info.caps.gvmi)
+		if (id == dmn->info.caps.gvmi)
 			vport_dmn = dmn;
-		else if (dmn->peer_dmn && (misc->source_eswitch_owner_vhca_id ==
-					   dmn->peer_dmn->info.caps.gvmi))
-			vport_dmn = dmn->peer_dmn;
+		else if (peer && (id == peer->info.caps.gvmi))
+			vport_dmn = peer;
 		else
 			return -EINVAL;
 
@@ -1900,39 +1902,6 @@ static void dr_ste_v0_build_tnl_header_0_1_init(struct mlx5dr_ste_build *sb,
 	sb->ste_build_tag_func = &dr_ste_v0_build_tnl_header_0_1_tag;
 }
 
-static int
-dr_ste_v0_alloc_modify_hdr_chunk(struct mlx5dr_action *action,
-		u32 chunck_size)
-{
-	int ret;
-
-	action->rewrite->chunk =
-		mlx5dr_icm_alloc_chunk(action->rewrite->dmn->action_icm_pool,
-				chunck_size);
-	if (!action->rewrite->chunk)
-		return -ENOMEM;
-
-	action->rewrite->index = (mlx5dr_icm_pool_get_chunk_icm_addr(action->rewrite->chunk) -
-				  action->rewrite->dmn->info.caps.hdr_modify_icm_addr) /
-				  MLX5DR_ACTION_CACHE_LINE_SIZE;
-
-	ret = mlx5dr_send_postsend_action(action->rewrite->dmn, action);
-	if (ret)
-		goto free_chunk;
-
-	return 0;
-
-free_chunk:
-	mlx5dr_icm_free_chunk(action->rewrite->chunk);
-	return -ENOMEM;
-}
-
-static void dr_ste_v0_dealloc_modify_hdr_chunk(struct mlx5dr_action *action)
-{
-	mlx5dr_icm_free_chunk(action->rewrite->chunk);
-		        kfree(action->rewrite->data);
-}
-
 static struct mlx5dr_ste_ctx ste_ctx_v0 = {
 	/* Builders */
 	.build_eth_l2_src_dst_init	= &dr_ste_v0_build_eth_l2_src_dst_init,
@@ -1985,8 +1954,6 @@ static struct mlx5dr_ste_ctx ste_ctx_v0 = {
 	.set_action_add			= &dr_ste_v0_set_action_add,
 	.set_action_copy		= &dr_ste_v0_set_action_copy,
 	.set_action_decap_l3_list	= &dr_ste_v0_set_action_decap_l3_list,
-	.alloc_modify_hdr_chunk		= &dr_ste_v0_alloc_modify_hdr_chunk,
-	.dealloc_modify_hdr_chunk	= &dr_ste_v0_dealloc_modify_hdr_chunk,
 };
 
 struct mlx5dr_ste_ctx *mlx5dr_ste_get_ctx_v0(void)

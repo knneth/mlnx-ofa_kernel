@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
 
-Change-Id: I37fcae72782fe7bce1e0b71c81da8c2898095a94
+Change-Id: I454b458b4bb0c0b612c395bb9be4c22718610b69
 ---
- drivers/infiniband/core/cma_configfs.c | 135 +++++++++++++++++++++++--
- 1 file changed, 126 insertions(+), 9 deletions(-)
+ drivers/infiniband/core/cma_configfs.c | 138 +++++++++++++++++++++++--
+ 1 file changed, 128 insertions(+), 10 deletions(-)
 
 --- a/drivers/infiniband/core/cma_configfs.c
 +++ b/drivers/infiniband/core/cma_configfs.c
@@ -156,10 +156,11 @@ Change-Id: I37fcae72782fe7bce1e0b71c81da8c2898095a94
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -292,6 +366,15 @@ static struct config_group *make_cma_dev
+@@ -292,23 +366,46 @@ static struct config_group *make_cma_dev
  		goto fail;
  	}
  
+-	strscpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
 +#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
 +	cma_dev_group->device_group.default_groups = kzalloc(sizeof(struct config_group *) * 2,
 +							     GFP_KERNEL);
@@ -169,10 +170,11 @@ Change-Id: I37fcae72782fe7bce1e0b71c81da8c2898095a94
 +	}
 +#endif
 +
- 	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
++
++	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
  
  	config_group_init_type_name(&cma_dev_group->ports_group, "ports",
-@@ -299,16 +382,29 @@ static struct config_group *make_cma_dev
+ 				    &cma_ports_group_type);
  
  	err = make_cma_ports(cma_dev_group, cma_dev);
  	if (err)
@@ -204,7 +206,7 @@ Change-Id: I37fcae72782fe7bce1e0b71c81da8c2898095a94
  fail:
  	if (cma_dev)
  		cma_dev_put(cma_dev);
-@@ -323,8 +419,29 @@ static void drop_cma_dev(struct config_g
+@@ -323,8 +420,29 @@ static void drop_cma_dev(struct config_g
  	struct cma_dev_group *cma_dev_group =
  		container_of(group, struct cma_dev_group, device_group);
  
@@ -234,7 +236,7 @@ Change-Id: I37fcae72782fe7bce1e0b71c81da8c2898095a94
  	config_item_put(item);
  }
  
-@@ -333,7 +450,7 @@ static struct configfs_group_operations
+@@ -333,7 +451,7 @@ static struct configfs_group_operations
  	.drop_item	= drop_cma_dev,
  };
  

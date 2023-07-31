@@ -1,0 +1,40 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
+
+Change-Id: I8837bff55a6e75cfd5de6af56de5d8980fbafcd7
+---
+ .../net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c  | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
+@@ -35,10 +35,12 @@ static char *steering_mode_to_str[] = {
+ 	[DEVLINK_ESWITCH_STEERING_MODE_SMFS] = "smfs",
+ };
+ 
++#ifdef HAVE_XFRM_OFFLOAD_PACKET
+ static char *ipsec_to_str[] = {
+ 	[DEVLINK_ESWITCH_IPSEC_MODE_NONE] = "none",
+ 	[DEVLINK_ESWITCH_IPSEC_MODE_FULL] = "full",
+ };
++#endif
+ 
+ static char *vport_match_to_str[] = {
+ 	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_METADATA] = "metadata",
+@@ -135,6 +137,7 @@ static struct devlink_compat_op devlink_
+ 		.compat_name = "steering_mode",
+ 	},
+ /* only for kernel linux-5.4.0-1020.21.g8ebdd1f-bluefield*/
++#ifdef HAVE_XFRM_OFFLOAD_PACKET
+ 	{
+ 		.read_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_get,
+ 		.write_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_set,
+@@ -142,6 +145,7 @@ static struct devlink_compat_op devlink_
+ 		.map_size = ARRAY_SIZE(ipsec_to_str),
+ 		.compat_name = "ipsec_mode",
+ 	},
++#endif
+ 
+ 	{
+ 		.read_vport_match_mode = mlx5_devlink_eswitch_vport_match_mode_get,

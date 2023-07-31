@@ -94,8 +94,7 @@ static blk_status_t nvme_nvfs_map_data(struct nvme_dev *dev, struct request *req
                }
 
 	       iod->sgt.nents = nr_mapped;
-               iod->use_sgl = nvme_pci_use_sgls(dev, req);
-               if (iod->use_sgl) { // TBD: not tested on SGL mode supporting drive
+               if (nvme_pci_use_sgls(dev, req, iod->sgt.nents)) { // TBD: not tested on SGL mode supporting drive
                        ret = nvme_pci_setup_sgls(dev, req, &cmnd->rw);
                } else {
                        // push dma address to hw registers

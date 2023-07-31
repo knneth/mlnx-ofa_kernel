@@ -14,6 +14,7 @@ struct mlx5_devm_device {
 	struct mlx5_core_dev *dev;
 	struct list_head list;
 	struct rw_semaphore port_list_rwsem;
+	struct xarray devm_sfs;
 };
 
 enum mlx5_devm_param_id {
@@ -26,6 +27,7 @@ void mlx5_devm_unregister(struct mlx5_core_dev *dev);
 void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev);
 int mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask);
 void mlx5_devm_params_publish(struct mlx5_core_dev *dev);
+bool mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum);
 
 #else
 static inline int mlx5_devm_register(struct mlx5_core_dev *dev)
@@ -46,5 +48,7 @@ mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask)
 static inline void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
 {
 }
+static inline bool
+mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum) { return false; }
 #endif
 #endif

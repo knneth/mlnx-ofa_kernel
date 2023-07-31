@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/sysfs.c
 
-Change-Id: I581e0182ece892b9106c676131a635402437ccc3
+Change-Id: I2bcf89f26800122f488b6f2f08f56a3aa9f4f559
 ---
  drivers/infiniband/core/sysfs.c | 29 +++++++++++++++--------------
  1 file changed, 15 insertions(+), 14 deletions(-)

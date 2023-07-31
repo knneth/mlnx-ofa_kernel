@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.h
+
+Change-Id: I2e7d8f67b76677d498458b8e2ef0a8a8fd84b564
+---
+ drivers/net/ethernet/mellanox/mlx5/core/devlink.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
+@@ -35,6 +35,7 @@ struct mlx5_devlink_trap_event_ctx {
+ 	int err;
+ };
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ struct mlx5_core_dev;
+ void mlx5_devlink_trap_report(struct mlx5_core_dev *dev, int trap_id, struct sk_buff *skb,
+ 			      struct devlink_port *dl_port);
+@@ -43,10 +44,15 @@ int mlx5_devlink_traps_get_action(struct
+ 				  enum devlink_trap_action *action);
+ int mlx5_devlink_traps_register(struct devlink *devlink);
+ void mlx5_devlink_traps_unregister(struct devlink *devlink);
++#endif
+ 
+ struct devlink *mlx5_devlink_alloc(struct device *dev);
+ void mlx5_devlink_free(struct devlink *devlink);
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ int mlx5_devlink_params_register(struct devlink *devlink);
++#else
++int mlx5_devlink_params_register(struct devlink *devlink, struct device *pdev);
++#endif
+ void mlx5_devlink_params_unregister(struct devlink *devlink);
+ int
+ mlx5_devlink_ct_action_on_nat_conns_set(struct devlink *devlink, u32 id,

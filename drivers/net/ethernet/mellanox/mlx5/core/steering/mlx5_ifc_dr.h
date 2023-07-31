@@ -532,36 +532,6 @@ struct mlx5_ifc_ste_src_gvmi_qp_bits {
 	u8         reserved_at_60[0x20];
 };
 
-struct mlx5_ifc_ste_double_action_set_bits {
-	u8         action_id[0x8];
-	u8         destination_dw_offset[0x8];
-	u8         reserved_at_10[0x2];
-	u8         destination_left_shifter[0x6];
-	u8         reserved_at_18[0x2];
-	u8         destination_length[0x6];
-
-	u8         inline_data[0x20];
-};
-
-struct mlx5_ifc_ste_double_action_accelerated_modify_action_list_bits {
-	u8         action_id[0x8];
-	u8         modify_actions_pattern_pointer[0x18];
-
-	u8         number_of_modify_actions[0x8];
-	u8         modify_actions_argument_pointer[0x18];
-};
-
-struct mlx5_ifc_ste_double_action_add_bits {
-	u8         action_id[0x8];
-	u8         destination_dw_offset[0x8];
-	u8         reserved_at_10[0x2];
-	u8         destination_left_shifter[0x6];
-	u8         reserved_at_18[0x2];
-	u8         destination_length[0x6];
-
-	u8         add_value[0x20];
-};
-
 struct mlx5_ifc_l2_hdr_bits {
 	u8         dmac_47_16[0x20];
 

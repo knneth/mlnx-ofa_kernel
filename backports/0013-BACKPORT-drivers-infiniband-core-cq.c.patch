@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cq.c
 
-Change-Id: I9facbb2bef097ddc57011e9b0505cdca1ffc0a9a
+Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
 ---
  drivers/infiniband/core/cq.c | 75 ++++++++++++++++++++++++++++++++++--
  1 file changed, 72 insertions(+), 3 deletions(-)

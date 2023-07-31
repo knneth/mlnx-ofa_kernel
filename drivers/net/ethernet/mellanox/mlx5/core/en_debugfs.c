@@ -105,13 +105,13 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
 
 void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 {
-	int i;
 	char ns_root_name[MLX5_MAX_DEBUGFS_ROOT_NAME_LEN];
+	struct net_device *dev = priv->netdev;
 	char name[MLX5_MAX_DEBUGFS_NAME_LEN];
+	struct net *net = dev_net(dev);
 	char *root_name;
 	u8 *num_tc;
-	struct net_device *dev = priv->netdev;
-	struct net *net = dev_net(dev);
+	int i;
 
 	num_tc = kvzalloc(sizeof(*priv->fds_num_tc), GFP_KERNEL);
 	if (!num_tc) {

@@ -134,10 +134,10 @@ static const char *eqe_type_str(u8 type)
 		return "MLX5_EVENT_TYPE_MONITOR_COUNTER";
 	case MLX5_EVENT_TYPE_DEVICE_TRACER:
 		return "MLX5_EVENT_TYPE_DEVICE_TRACER";
-	case MLX5_EVENT_TYPE_OBJECT_CHANGE:
-		return "MLX5_EVENT_TYPE_OBJECT_CHANGE";
 	case MLX5_EVENT_TYPE_XRQ_ERROR:
 		return "MLX5_EVENT_TYPE_XRQ_ERROR";
+	case MLX5_EVENT_TYPE_OBJECT_CHANGE:
+		return "MLX5_EVENT_TYPE_OBJECT_CHANGE";
 	default:
 		return "Unrecognized event";
 	}

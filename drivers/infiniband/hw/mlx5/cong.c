@@ -92,13 +92,13 @@ static const char * const mlx5_ib_dbg_cc_name[] = {
 static enum mlx5_ib_cong_node_type
 mlx5_ib_param_to_node(enum mlx5_ib_dbg_cc_types param_offset)
 {
-	if (param_offset >= MLX5_IB_DBG_CC_RP_CLAMP_TGT_RATE &&
-	    param_offset <= MLX5_IB_DBG_CC_RP_GD)
+	if (param_offset <= MLX5_IB_DBG_CC_RP_GD)
 		return MLX5_IB_RROCE_ECN_RP;
-	else if (param_offset <= MLX5_IB_DBG_CC_NP_CNP_PRIO)
+
+	if (param_offset <= MLX5_IB_DBG_CC_NP_CNP_PRIO)
 		return MLX5_IB_RROCE_ECN_NP;
-	else
-		return MLX5_IB_RROCE_GENERAL;
+
+	return MLX5_IB_RROCE_GENERAL;
 }
 
 static u32 mlx5_get_cc_param_val(void *field, int offset)
