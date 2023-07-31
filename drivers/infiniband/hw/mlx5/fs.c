@@ -1820,9 +1820,10 @@ static int get_dests(struct uverbs_attr_bundle *attrs,
 		return -EINVAL;
 
 	if (fs_matcher->ns_type == MLX5_FLOW_NAMESPACE_BYPASS) {
-		if (dest_devx && (dest_qp || *flags))
+		// Drop action is mutually exclusive with any other action except counter
+		if (dest_devx && (dest_qp || (*flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP)))
 			return -EINVAL;
-		else if (dest_qp && *flags)
+		else if (dest_qp && (*flags & MLX5_IB_ATTR_CREATE_FLOW_FLAGS_DROP))
 			return -EINVAL;
 	}
 
