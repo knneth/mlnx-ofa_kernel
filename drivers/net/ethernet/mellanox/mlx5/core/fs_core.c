@@ -1654,6 +1654,10 @@ free_rules:
 	return NULL;
 }
 
+static bool flow_dest_list_lifo_ordering;
+module_param(flow_dest_list_lifo_ordering, bool, 0644);
+MODULE_PARM_DESC(flow_dest_list_lifo_ordering, "reverse insertion order (Last-In-First-Out) for FTE destination list");
+
 static struct mlx5_flow_handle *
 create_flow_handle(struct fs_fte *fte,
 		   struct mlx5_flow_destination *dest,
@@ -1690,10 +1694,27 @@ create_flow_handle(struct fs_fte *fte,
 		 * end of the list for forward to next prio rules.
 		 */
 		tree_init_node(&rule->node, NULL, del_sw_hw_rule);
-		if (dest && !is_flow_table_dest_type(dest[i].type))
-			list_add(&rule->node.list, &fte->node.children);
-		else
+		if (flow_dest_list_lifo_ordering) {
+			if (dest && !is_flow_table_dest_type(dest[i].type))
+				list_add(&rule->node.list, &fte->node.children);
+			else
+				list_add_tail(&rule->node.list, &fte->node.children);
+		} else if (!dest || is_flow_table_dest_type(dest[i].type)) {
 			list_add_tail(&rule->node.list, &fte->node.children);
+		} else {
+			struct list_head *insert_at = &fte->node.children;
+			struct mlx5_flow_rule *sibling;
+
+			// Find last non-FT entry
+			list_for_each_entry (sibling, &fte->node.children, node.list) {
+				if (is_flow_table_dest_type(sibling->dest_attr.type))
+					break;
+				insert_at = &sibling->node.list;
+			}
+
+			list_add(&rule->node.list, insert_at);
+		}
+
 		if (dest) {
 			fte->act_dests.dests_size++;
 
