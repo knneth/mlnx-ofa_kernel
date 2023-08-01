@@ -39,7 +39,8 @@
 #include "clock.h"
 
 enum {
-	MLX5_CYCLES_SHIFT	= 31
+	MLX5_CYCLES_SHIFT_1GHZ	= 31,
+	MLX5_CYCLES_SHIFT	= 23,
 };
 
 enum {
@@ -906,7 +907,11 @@ static void mlx5_timecounter_init(struct mlx5_core_dev *mdev)
 
 	dev_freq = MLX5_CAP_GEN(mdev, device_frequency_khz);
 	timer->cycles.read = read_internal_timer;
-	timer->cycles.shift = MLX5_CYCLES_SHIFT;
+	// For 1GHz timecounter frequency:
+	if (dev_freq == USEC_PER_SEC)
+		timer->cycles.shift = MLX5_CYCLES_SHIFT_1GHZ;
+	else
+		timer->cycles.shift = MLX5_CYCLES_SHIFT;
 	timer->cycles.mult = clocksource_khz2mult(dev_freq,
 						  timer->cycles.shift);
 	timer->nominal_c_mult = timer->cycles.mult;
