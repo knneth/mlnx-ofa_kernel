@@ -935,7 +935,7 @@ static void mlx5_timecounter_init(struct mlx5_core_dev *mdev)
 	timer->cycles.mult = clocksource_khz2mult(dev_freq,
 						  timer->cycles.shift);
 	timer->nominal_c_mult = timer->cycles.mult;
-	timer->cycles.mask = CLOCKSOURCE_MASK(41);
+	timer->cycles.mask = CLOCKSOURCE_MASK(64 - timer->cycles.shift);
 
 	timecounter_init(&timer->tc, &timer->cycles,
 			 ktime_to_ns(ktime_get_real()));
