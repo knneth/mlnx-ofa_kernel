@@ -72,7 +72,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 5.9.1}
-%{!?_release: %global _release OFED.5.9.1.0.5.5.1.btech4}
+%{!?_release: %global _release OFED.5.9.1.0.5.5.1.btech5}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
