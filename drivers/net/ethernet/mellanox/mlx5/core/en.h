@@ -1031,6 +1031,7 @@ struct mlx5e_priv {
 	struct mlx5e_htb          *htb;
 	struct mlx5e_mqprio_rl    *mqprio_rl;
 	struct dentry             *dfs_root;
+	struct dentry             *netdev_dfs_root;
 	u8 *fds_num_tc;
 };
 

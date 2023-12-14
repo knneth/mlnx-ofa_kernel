@@ -2305,8 +2305,6 @@ static int devx_umem_reg_cmd_alloc(struct mlx5_ib_dev *dev,
 	if (mlx5_umem_needs_ats(dev, obj->umem, access))
 		MLX5_SET(umem, umem, ats, 1);
 
-	if (obj->umem->is_peer)
-		MLX5_SET(umem, umem, ats, MLX5_CAP_GEN(dev->mdev, ats));
 	mlx5_ib_populate_pas(obj->umem, page_size, mtt,
 			     (obj->umem->writable ? MLX5_IB_MTT_WRITE : 0) |
 				     MLX5_IB_MTT_READ);

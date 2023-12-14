@@ -27,7 +27,7 @@ Change-Id: I2b7b4e34b012ca68a7e8d8e3778813223ef8f2ad
  #define VALID_FEATURES_MASK                                                                        \
  	(BIT_ULL(VIRTIO_NET_F_CSUM) | BIT_ULL(VIRTIO_NET_F_GUEST_CSUM) |                                   \
  	 BIT_ULL(VIRTIO_NET_F_CTRL_GUEST_OFFLOADS) | BIT_ULL(VIRTIO_NET_F_MTU) | BIT_ULL(VIRTIO_NET_F_MAC) |   \
-@@ -2823,6 +2820,7 @@ static int mlx5_vdpa_set_map(struct vdpa
+@@ -2831,6 +2828,7 @@ static int mlx5_vdpa_set_map(struct vdpa
  	return err;
  }
  
@@ -35,7 +35,7 @@ Change-Id: I2b7b4e34b012ca68a7e8d8e3778813223ef8f2ad
  static struct device *mlx5_get_vq_dma_dev(struct vdpa_device *vdev, u16 idx)
  {
  	struct mlx5_vdpa_dev *mvdev = to_mvdev(vdev);
-@@ -2832,6 +2830,7 @@ static struct device *mlx5_get_vq_dma_de
+@@ -2840,6 +2838,7 @@ static struct device *mlx5_get_vq_dma_de
  
  	return mvdev->vdev.dma_dev;
  }
@@ -43,7 +43,7 @@ Change-Id: I2b7b4e34b012ca68a7e8d8e3778813223ef8f2ad
  
  static void mlx5_vdpa_free(struct vdpa_device *vdev)
  {
-@@ -3049,7 +3048,9 @@ static const struct vdpa_config_ops mlx5
+@@ -3057,7 +3056,9 @@ static const struct vdpa_config_ops mlx5
  	.get_generation = mlx5_vdpa_get_generation,
  	.set_map = mlx5_vdpa_set_map,
  	.set_group_asid = mlx5_set_group_asid,
@@ -53,7 +53,7 @@ Change-Id: I2b7b4e34b012ca68a7e8d8e3778813223ef8f2ad
  	.free = mlx5_vdpa_free,
  	.suspend = mlx5_vdpa_suspend,
  };
-@@ -3428,3 +3429,10 @@ static struct auxiliary_driver mlx5v_dri
+@@ -3436,3 +3437,10 @@ static struct auxiliary_driver mlx5v_dri
  };
  
  module_auxiliary_driver(mlx5v_driver);

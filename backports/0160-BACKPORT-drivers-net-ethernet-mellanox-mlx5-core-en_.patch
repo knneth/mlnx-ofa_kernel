@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I02fdae19994cecbf69983dbcf10d0a1d9329a3bf
 ---
- .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 66 ++++++++++++++++++-
- 1 file changed, 65 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 78 ++++++++++++++++++-
+ 1 file changed, 77 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
@@ -214,8 +214,60 @@ Change-Id: I02fdae19994cecbf69983dbcf10d0a1d9329a3bf
  		mlx5e_ktls_tx_post_param_wqes(sq, priv_tx, false, false);
  
  	seq = ntohl(tcp_hdr(skb)->seq);
-@@ -933,3 +996,4 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
+@@ -908,13 +971,16 @@ static void mlx5e_tls_tx_debugfs_init(st
+ 
+ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	struct mlx5_crypto_dek_pool *dek_pool;
++#endif
+ 	struct mlx5e_tls *tls = priv->tls;
+ 	int err;
+ 
+ 	if (!mlx5e_is_ktls_device(priv->mdev))
+ 		return 0;
+ 
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	/* DEK pool could be used by either or both of TX and RX. But we have to
+ 	 * put the creation here to avoid syndrome when doing devlink reload.
+ 	 */
+@@ -922,6 +988,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+ 	if (IS_ERR(dek_pool))
+ 		return PTR_ERR(dek_pool);
+ 	tls->dek_pool = dek_pool;
++#endif
+ 
+ 	if (!mlx5e_is_ktls_tx(priv->mdev))
+ 		return 0;
+@@ -937,14 +1004,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+ 	return 0;
+ 
+ err_tx_pool_init:
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	mlx5_crypto_dek_pool_destroy(dek_pool);
++#endif
+ 	return err;
+ }
+ 
+ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
+ {
+ 	if (!mlx5e_is_ktls_tx(priv->mdev))
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 		goto dek_pool_destroy;
++#else
++		return;
++#endif
+ 
+ 	debugfs_remove_recursive(priv->tls->debugfs.dfs_tx);
+ 	priv->tls->debugfs.dfs_tx = NULL;
+@@ -952,7 +1025,10 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
  	mlx5e_tls_tx_pool_cleanup(priv->tls->tx_pool);
  	priv->tls->tx_pool = NULL;
+ 
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ dek_pool_destroy:
+ 	if (mlx5e_is_ktls_device(priv->mdev))
+ 		mlx5_crypto_dek_pool_destroy(priv->tls->dek_pool);
++#endif
  }
 +#endif

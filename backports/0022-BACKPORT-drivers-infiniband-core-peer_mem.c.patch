@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/peer_mem.c
 
 Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
 ---
- drivers/infiniband/core/peer_mem.c | 67 ++++++++++++++++++++++++++++++
- 1 file changed, 67 insertions(+)
+ drivers/infiniband/core/peer_mem.c | 84 +++++++++++++++++++++++++++++-
+ 1 file changed, 82 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/peer_mem.c
 +++ b/drivers/infiniband/core/peer_mem.c
-@@ -6,6 +6,9 @@
+@@ -6,15 +6,21 @@
  #include <rdma/ib_verbs.h>
  #include <rdma/ib_umem.h>
  #include <linux/sched/mm.h>
@@ -18,7 +18,91 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  #include "ib_peer_mem.h"
  
  static DEFINE_MUTEX(peer_memory_mutex);
-@@ -331,21 +334,41 @@ static void ib_unmap_peer_client(struct
+ static LIST_HEAD(peer_memory_list);
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ static struct kobject *peers_kobj;
++#endif
+ #define PEER_NO_INVALIDATION_ID U32_MAX
+ 
+ static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context);
+ 
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ struct peer_mem_attribute {
+ 	struct attribute attr;
+ 	ssize_t (*show)(struct ib_peer_memory_client *ib_peer_client,
+@@ -133,7 +139,7 @@ static ssize_t peer_attr_show(struct kob
+ static const struct sysfs_ops peer_mem_sysfs_ops = {
+ 	.show = peer_attr_show,
+ };
+-
++#endif
+ static void ib_peer_memory_client_release(struct kobject *kobj)
+ {
+ 	struct ib_peer_memory_client *ib_peer_client =
+@@ -143,7 +149,9 @@ static void ib_peer_memory_client_releas
+ }
+ 
+ static struct kobj_type peer_mem_type = {
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ 	.sysfs_ops = &peer_mem_sysfs_ops,
++#endif
+ 	.release = ib_peer_memory_client_release,
+ };
+ 
+@@ -180,7 +188,10 @@ ib_register_peer_memory_client(const str
+ 			       invalidate_peer_memory *invalidate_callback)
+ {
+ 	struct ib_peer_memory_client *ib_peer_client;
++
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ 	int ret;
++#endif
+ 
+ 	if (ib_memory_peer_check_mandatory(peer_client))
+ 		return NULL;
+@@ -204,6 +215,7 @@ ib_register_peer_memory_client(const str
+ 	}
+ 
+ 	mutex_lock(&peer_memory_mutex);
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ 	if (!peers_kobj) {
+ 		/* Created under /sys/kernel/mm */
+ 		peers_kobj = kobject_create_and_add("memory_peers", mm_kobj);
+@@ -219,10 +231,11 @@ ib_register_peer_memory_client(const str
+ 				 &peer_mem_attr_group);
+ 	if (ret)
+ 		goto err_parent;
++#endif
+ 	list_add_tail(&ib_peer_client->core_peer_list, &peer_memory_list);
+ 	mutex_unlock(&peer_memory_mutex);
+ 	return ib_peer_client;
+-
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ err_parent:
+ 	if (list_empty(&peer_memory_list)) {
+ 		kobject_put(peers_kobj);
+@@ -232,6 +245,7 @@ err_unlock:
+ 	mutex_unlock(&peer_memory_mutex);
+ 	kobject_put(&ib_peer_client->kobj);
+ 	return NULL;
++#endif
+ }
+ EXPORT_SYMBOL(ib_register_peer_memory_client);
+ 
+@@ -241,10 +255,12 @@ void ib_unregister_peer_memory_client(vo
+ 
+ 	mutex_lock(&peer_memory_mutex);
+ 	list_del(&ib_peer_client->core_peer_list);
++#ifdef HAVE_MM_KOBJ_EXPORTED
+ 	if (list_empty(&peer_memory_list)) {
+ 		kobject_put(peers_kobj);
+ 		peers_kobj = NULL;
+ 	}
++#endif
+ 	mutex_unlock(&peer_memory_mutex);
+ 
+ 	/*
+@@ -331,21 +347,41 @@ static void ib_unmap_peer_client(struct
  		}
  
  		if (to_state == UMEM_PEER_UNMAPPED) {
@@ -60,7 +144,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  			     &ib_peer_client->stats.num_dereg_pages);
  		atomic64_add(umem->length,
  			     &ib_peer_client->stats.num_dereg_bytes);
-@@ -518,7 +541,11 @@ static void fix_peer_sgls(struct ib_umem
+@@ -518,7 +554,11 @@ static void fix_peer_sgls(struct ib_umem
  	struct scatterlist *sg;
  	int i;
  
@@ -72,7 +156,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  		if (i == 0) {
  			unsigned long offset;
  
-@@ -534,7 +561,11 @@ static void fix_peer_sgls(struct ib_umem
+@@ -534,7 +574,11 @@ static void fix_peer_sgls(struct ib_umem
  			sg->length -= offset;
  		}
  
@@ -84,7 +168,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  			unsigned long trim;
  
  			umem_p->last_sg = sg;
-@@ -573,7 +604,11 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -573,7 +617,11 @@ struct ib_umem *ib_peer_umem_get(struct
  
  	kref_init(&umem_p->kref);
  	umem_p->umem = *old_umem;
@@ -96,7 +180,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  	umem_p->umem.is_peer = 1;
  	umem_p->ib_peer_client = ib_peer_client;
  	umem_p->peer_client_context = peer_client_context;
-@@ -605,10 +640,23 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -605,10 +653,23 @@ struct ib_umem *ib_peer_umem_get(struct
  	if (ret)
  		goto err_xa;
  
@@ -120,7 +204,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  	if (ret)
  		goto err_pages;
  
-@@ -618,7 +666,11 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -618,7 +679,11 @@ struct ib_umem *ib_peer_umem_get(struct
  		fix_peer_sgls(umem_p, peer_page_size);
  
  	umem_p->mapped_state = UMEM_PEER_MAPPED;
@@ -132,7 +216,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
  	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
  
-@@ -639,7 +691,11 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -639,7 +704,11 @@ struct ib_umem *ib_peer_umem_get(struct
  	return &umem_p->umem;
  
  err_pages:
@@ -144,7 +228,7 @@ Change-Id: I4e5aa0df4374e0049ccae83c82a6fe46c33ffeab
  					    umem_p->peer_client_context);
  err_xa:
  	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
-@@ -672,7 +728,18 @@ void ib_peer_umem_release(struct ib_umem
+@@ -672,7 +741,18 @@ void ib_peer_umem_release(struct ib_umem
  	umem_p->ib_peer_client = NULL;
  
  	/* Must match ib_umem_release() */

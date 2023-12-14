@@ -2447,7 +2447,15 @@ static int mlx5_vdpa_set_driver_features(struct vdpa_device *vdev, u64 features)
 	else
 		ndev->rqt_size = 1;
 
-	ndev->cur_num_vqs = 2 * ndev->rqt_size;
+	/* Device must start with 1 queue pair, as per VIRTIO v1.2 spec, section
+	 * 5.1.6.5.5 "Device operation in multiqueue mode":
+	 *
+	 * Multiqueue is disabled by default.
+	 * The driver enables multiqueue by sending a command using class
+	 * VIRTIO_NET_CTRL_MQ. The command selects the mode of multiqueue
+	 * operation, as follows: ...
+	 */
+	ndev->cur_num_vqs = 2;
 
 	update_cvq_info(mvdev);
 	return err;
@@ -2564,7 +2572,7 @@ static int mlx5_vdpa_change_map(struct mlx5_vdpa_dev *mvdev,
 		goto err_mr;
 
 	teardown_driver(ndev);
-	mlx5_vdpa_destroy_mr(mvdev);
+	mlx5_vdpa_destroy_mr_asid(mvdev, asid);
 	err = mlx5_vdpa_create_mr(mvdev, iotlb, asid);
 	if (err)
 		goto err_mr;
@@ -2580,7 +2588,7 @@ static int mlx5_vdpa_change_map(struct mlx5_vdpa_dev *mvdev,
 	return 0;
 
 err_setup:
-	mlx5_vdpa_destroy_mr(mvdev);
+	mlx5_vdpa_destroy_mr_asid(mvdev, asid);
 err_mr:
 	return err;
 }

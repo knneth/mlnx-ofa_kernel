@@ -159,11 +159,6 @@ tc_act_parse_vlan(struct mlx5e_tc_act_parse_state *parse_state,
 	struct mlx5_esw_flow_attr *esw_attr = attr->esw_attr;
 	int err;
 
-	if (esw_attr->split_count != esw_attr->out_count) {
-		NL_SET_ERR_MSG_MOD(parse_state->extack, "Multiple output ports with different vlan action is not supported");
-		return -EOPNOTSUPP;
-	}
-
 	if (act->id == FLOW_ACTION_VLAN_PUSH &&
 	    (attr->action & MLX5_FLOW_CONTEXT_ACTION_VLAN_POP)) {
 		/* Replace vlan pop+push with vlan modify */
@@ -180,6 +175,7 @@ tc_act_parse_vlan(struct mlx5e_tc_act_parse_state *parse_state,
 		return err;
 
 	esw_attr->split_count = esw_attr->out_count;
+	parse_state->if_count = 0;
 
 	return 0;
 }

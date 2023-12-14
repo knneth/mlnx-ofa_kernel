@@ -5,7 +5,9 @@
 #include "eswitch.h"
 #include "en_accel/ipsec.h"
 #include "esw/ipsec_fs.h"
-#include "en_rep.h"
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+#include "en/tc_priv.h"
+#endif
 
 enum {
 	MLX5_ESW_IPSEC_RX_POL_FT_LEVEL,
@@ -200,7 +202,7 @@ int mlx5_esw_ipsec_rx_setup_modify_header(struct mlx5e_ipsec_sa_entry *sa_entry,
 	u32 mapped_id;
 	int err;
 
-	err = xa_alloc_bh(&ipsec->rx_ipv4->ipsec_obj_id_map, &mapped_id,
+	err = xa_alloc_bh(&ipsec->rx_esw->ipsec_obj_id_map, &mapped_id,
 			  xa_mk_value(sa_entry->ipsec_obj_id),
 			  XA_LIMIT(1, ESW_IPSEC_RX_MAPPED_ID_MASK), 0);
 	if (err)
@@ -231,7 +233,7 @@ int mlx5_esw_ipsec_rx_setup_modify_header(struct mlx5e_ipsec_sa_entry *sa_entry,
 	return 0;
 
 err_header_alloc:
-	xa_erase_bh(&ipsec->rx_ipv4->ipsec_obj_id_map, mapped_id);
+	xa_erase_bh(&ipsec->rx_esw->ipsec_obj_id_map, mapped_id);
 	return err;
 }
 
@@ -240,7 +242,7 @@ void mlx5_esw_ipsec_rx_id_mapping_remove(struct mlx5e_ipsec_sa_entry *sa_entry)
 	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
 
 	if (sa_entry->rx_mapped_id)
-		xa_erase_bh(&ipsec->rx_ipv4->ipsec_obj_id_map,
+		xa_erase_bh(&ipsec->rx_esw->ipsec_obj_id_map,
 			    sa_entry->rx_mapped_id);
 }
 
@@ -250,7 +252,7 @@ int mlx5_esw_ipsec_rx_ipsec_obj_id_search(struct mlx5e_priv *priv, u32 id,
 	struct mlx5e_ipsec *ipsec = priv->ipsec;
 	void *val;
 
-	val = xa_load(&ipsec->rx_ipv4->ipsec_obj_id_map, id);
+	val = xa_load(&ipsec->rx_esw->ipsec_obj_id_map, id);
 	if (!val)
 		return -ENOENT;
 
@@ -269,26 +271,55 @@ void mlx5_esw_ipsec_tx_create_attr_set(struct mlx5e_ipsec *ipsec,
 	attr->chains_ns = MLX5_FLOW_NAMESPACE_FDB;
 }
 
-static void esw_ipsec_refresh_uplink_channels(struct mlx5_eswitch *esw)
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+static int mlx5_esw_ipsec_modify_flow_dests(struct mlx5_eswitch *esw,
+					    struct mlx5e_tc_flow *flow)
 {
-	struct mlx5e_rep_priv *uplink_rpriv;
-	struct mlx5e_priv *priv;
+	struct mlx5_esw_flow_attr *esw_attr;
+	struct mlx5_flow_attr *attr;
+	int err;
 
-	uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
-	priv = netdev_priv(uplink_rpriv->netdev);
-	if (!priv->channels.num)
-		return;
+	attr = flow->attr;
+	esw_attr = attr->esw_attr;
+	if (esw_attr->out_count - esw_attr->split_count > 1)
+		return 0;
 
-	mlx5e_rep_deactivate_channels(priv);
-	mlx5e_rep_activate_channels(priv);
+	err = mlx5_eswitch_restore_ipsec_rule(esw, flow->rule[0], esw_attr,
+					      esw_attr->out_count - 1);
+
+	return err;
 }
+#endif
 
-void mlx5_esw_ipsec_tx_ft_policy_set(struct mlx5e_ipsec *ipsec,
-				     struct mlx5_flow_table *ft)
+void mlx5_esw_ipsec_restore_dest_uplink(struct mlx5_core_dev *mdev)
 {
-	struct mlx5_eswitch *esw = ipsec->mdev->priv.eswitch;
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+	struct mlx5_eswitch *esw = mdev->priv.eswitch;
+	struct mlx5_eswitch_rep *rep;
+	struct mlx5e_rep_priv *rpriv;
+	struct rhashtable_iter iter;
+	struct mlx5e_tc_flow *flow;
+	unsigned long i;
+	int err;
 
-	esw->offloads.ft_ipsec_tx_pol = ft;
-	if (ft)
-		esw_ipsec_refresh_uplink_channels(esw);
+	xa_for_each(&esw->offloads.vport_reps, i, rep) {
+		rpriv = rep->rep_data[REP_ETH].priv;
+		if (!rpriv || !rpriv->netdev)
+			continue;
+
+		rhashtable_walk_enter(&rpriv->tc_ht, &iter);
+		rhashtable_walk_start(&iter);
+		while ((flow = rhashtable_walk_next(&iter)) != NULL) {
+			if (IS_ERR(flow))
+				continue;
+
+			err = mlx5_esw_ipsec_modify_flow_dests(esw, flow);
+			if (err)
+				mlx5_core_warn_once(mdev,
+						    "Faided to modify flow dests for IPsec");
+		}
+		rhashtable_walk_stop(&iter);
+		rhashtable_walk_exit(&iter);
+	}
+#endif
 }

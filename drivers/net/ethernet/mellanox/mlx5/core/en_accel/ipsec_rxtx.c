@@ -59,7 +59,9 @@ static int mlx5e_ipsec_remove_trailer(struct sk_buff *skb, struct xfrm_state *x)
 
 	trailer_len = alen + plen + 2;
 
-	pskb_trim(skb, skb->len - trailer_len);
+	ret = pskb_trim(skb, skb->len - trailer_len);
+	if (unlikely(ret))
+		return ret;
 	if (skb->protocol == htons(ETH_P_IP)) {
 		ipv4hdr->tot_len = htons(ntohs(ipv4hdr->tot_len) - trailer_len);
 		ip_send_check(ipv4hdr);
@@ -360,6 +362,27 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
 	}
 }
 
+int mlx5_esw_ipsec_rx_make_metadata(struct mlx5e_priv *priv, u32 id, u32 *metadata)
+{
+	struct mlx5e_ipsec *ipsec = priv->ipsec;
+	u32 ipsec_obj_id;
+	int err;
+
+	if (!ipsec || !ipsec->is_uplink_rep)
+		return -EINVAL;
+
+	err = mlx5_esw_ipsec_rx_ipsec_obj_id_search(priv, id, &ipsec_obj_id);
+	if (err) {
+		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sadb_miss);
+		return err;
+	}
+
+	*metadata = MLX5_IPSEC_METADATA_CREATE(ipsec_obj_id,
+					       MLX5E_IPSEC_OFFLOAD_RX_SYNDROME_DECRYPTED);
+
+	return 0;
+}
+
 __wsum  mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe64 *cqe)
 {
 	unsigned int tr_len, alen;
@@ -392,25 +415,4 @@ __wsum  mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe6
 	}
 
 	return csum;
-}
-
-int mlx5_esw_ipsec_rx_make_metadata(struct mlx5e_priv *priv, u32 id, u32 *metadata)
-{
-	struct mlx5e_ipsec *ipsec = priv->ipsec;
-	u32 ipsec_obj_id;
-	int err;
-
-	if (!ipsec || !ipsec->is_uplink_rep)
-		return -EINVAL;
-
-	err = mlx5_esw_ipsec_rx_ipsec_obj_id_search(priv, id, &ipsec_obj_id);
-	if (err) {
-		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sadb_miss);
-		return err;
-	}
-
-	*metadata = MLX5_IPSEC_METADATA_CREATE(ipsec_obj_id,
-					       MLX5E_IPSEC_OFFLOAD_RX_SYNDROME_DECRYPTED);
-
-	return 0;
 }

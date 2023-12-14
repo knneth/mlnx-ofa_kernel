@@ -1,7 +1,7 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Moshe Shemesh <moshe@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 
-Change-Id: Ie2881b642371003276958a969fe903173269c669
+Change-Id: I60937b7a9cf50117afebc0a132d50352b8dd7b33
 ---
  drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 61 ++++++++++++++++++-
  1 file changed, 60 insertions(+), 1 deletion(-)
@@ -78,7 +78,7 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  	void *context;
  	int err;
  	int i;
-@@ -1710,7 +1736,11 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1712,7 +1738,11 @@ static void mlx5_cmd_comp_handler(struct
  				continue;
  			}
  
@@ -90,9 +90,9 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  				cmd_ent_put(ent); /* timeout work was canceled */
  
  			if (comp_type != MLX5_CMD_COMP_TYPE_FORCED || /* Real FW completion */
-@@ -1718,7 +1748,11 @@ static void mlx5_cmd_comp_handler(struct
- 			     !opcode_allowed(cmd, ent->op))
+@@ -1722,7 +1752,11 @@ static void mlx5_cmd_comp_handler(struct
  				cmd_ent_put(ent);
+ 			}
  
 +#ifdef HAVE_KTIME_GET_NS
  			ent->ts2 = ktime_get_ns();
@@ -102,7 +102,7 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
  			dump_command(dev, ent, 0);
  
-@@ -1736,7 +1770,14 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1740,7 +1774,14 @@ static void mlx5_cmd_comp_handler(struct
  			}
  
  			if (ent->callback) {
@@ -117,7 +117,7 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  				if (ent->op < MLX5_CMD_OP_MAX) {
  					stats = &cmd->stats[ent->op];
  					spin_lock_irqsave(&stats->lock, flags);
-@@ -2214,7 +2255,11 @@ static void create_msg_cache(struct mlx5
+@@ -2218,7 +2259,11 @@ static void create_msg_cache(struct mlx5
  
  static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
  {
@@ -130,7 +130,7 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
  		return -ENOMEM;
-@@ -2229,7 +2274,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2233,7 +2278,11 @@ static int alloc_cmd_page(struct mlx5_co
  
  	dma_free_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE, cmd->cmd_alloc_buf,
  			  cmd->alloc_dma);
@@ -142,7 +142,7 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  						2 * MLX5_ADAPTER_PAGE_SIZE - 1,
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
-@@ -2582,7 +2631,11 @@ static ssize_t real_miss_store(struct de
+@@ -2586,7 +2635,11 @@ static ssize_t real_miss_store(struct de
  	return count;
  }
  
@@ -154,7 +154,7 @@ Change-Id: Ie2881b642371003276958a969fe903173269c669
  	.show = cmd_cache_attr_show,
  	.store = cmd_cache_attr_store,
  };
-@@ -2611,11 +2664,17 @@ static struct attribute *cmd_cache_defau
+@@ -2615,11 +2668,17 @@ static struct attribute *cmd_cache_defau
  	NULL
  };
  

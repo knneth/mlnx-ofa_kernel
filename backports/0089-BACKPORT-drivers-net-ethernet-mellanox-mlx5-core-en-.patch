@@ -43,7 +43,7 @@ Change-Id: I528c9c8627f9d10953e363c1e5a1a8a3cf053fd8
  mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
  {
  	u64 parent_id;
-@@ -44,14 +57,33 @@ mlx5e_devlink_get_port_parent_id(struct
+@@ -39,14 +52,33 @@ mlx5e_devlink_get_port_parent_id(struct
  	memcpy(ppid->id, &parent_id, sizeof(parent_id));
  }
  
@@ -78,7 +78,7 @@ Change-Id: I528c9c8627f9d10953e363c1e5a1a8a3cf053fd8
  	if (mlx5_core_is_pf(mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
  		attrs.phys.port_number = mlx5_get_dev_index(mdev);
-@@ -75,13 +107,108 @@ int mlx5e_devlink_port_register(struct m
+@@ -62,13 +94,108 @@ int mlx5e_devlink_port_register(struct m
  		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
  	}
  

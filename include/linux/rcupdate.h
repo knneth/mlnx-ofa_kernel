@@ -23,14 +23,11 @@
 #else
 #define kvfree_call_rcu kfree_call_rcu
 #endif
-#define kfree_rcu(ptr, rhf...) kvfree_rcu(ptr, ## rhf)
+#define kfree_rcu(ptr, rhf) kvfree_rcu_arg_2(ptr, rhf)
+#define kvfree_rcu(ptr, rhf) kvfree_rcu_arg_2(ptr, rhf)
 
 #define __is_kvfree_rcu_offset(offset) ((offset) < 4096)
 
-#define kvfree_rcu(...) KVFREE_GET_MACRO(__VA_ARGS__,		\
-	kvfree_rcu_arg_2, kvfree_rcu_arg_1)(__VA_ARGS__)
-
-#define KVFREE_GET_MACRO(_1, _2, NAME, ...) NAME
 #define kvfree_rcu_arg_2(ptr, rhf)					\
 do {									\
 	typeof (ptr) ___p = (ptr);					\

@@ -417,7 +417,8 @@ static void mlx5_ib_handle_qp_event(struct work_struct *_work)
 	}
 
 	if ((event.event == IB_EVENT_QP_FATAL) ||
-	    (event.event == IB_EVENT_QP_ACCESS_ERR))
+	    (event.event == IB_EVENT_QP_ACCESS_ERR) ||
+	    (event.event == IB_EXP_EVENT_XRQ_QP_ERR))
 		mlx5_ib_qp_err_syndrome(ibqp);
 
 	ibqp->event_handler(&event, ibqp->qp_context);

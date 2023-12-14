@@ -283,9 +283,6 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 	int query_out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
 	struct mlx5_core_dev *parent_dev;
 	struct mlx5_devm_port *mlx5_port;
-#ifdef CONFIG_MLX5_SF_SFC
-	struct mlx5_vport *vport;
-#endif
 	struct devlink *devlink;
 	unsigned int port_index;
 	void *query_ctx;
@@ -320,26 +317,6 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 
 	cap->max_uc_list = 1 << MLX5_GET(cmd_hca_cap, hca_caps, log_max_current_uc_list);
 	cap->uc_list_cap_valid = true;
-
-#ifdef CONFIG_MLX5_SF_SFC
-	vport = mlx5_eswitch_get_vport(parent_dev->priv.eswitch, hw_fn_id);
-	if (IS_ERR(vport)) {
-		ret = PTR_ERR(vport);
-		goto out_free;
-	}
-
-	if (!MLX5_CAP_GEN_2(parent_dev, local_eswitch))
-		goto out_free;
-
-	ret = mlx5_vport_get_other_func_cap(parent_dev, hw_fn_id, query_ctx,
-					    MLX5_CAP_GENERAL_2);
-	if (ret)
-		goto out_free;
-
-	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
-	cap->eswitch = MLX5_GET(cmd_hca_cap_2, hca_caps, local_eswitch);
-	cap->eswitch_cap_valid = true;
-#endif
 
 out_free:
 	kfree(query_ctx);
@@ -412,23 +389,7 @@ int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 	}
 	ret = mlx5_vport_set_other_func_cap(parent_dev, hca_caps, hw_fn_id,
 					    MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
-	if (ret)
-		goto out_free;
 
-#ifdef CONFIG_MLX5_SF_SFC
-	ret = mlx5_vport_get_other_func_cap(parent_dev, hw_fn_id, query_ctx,
-					    MLX5_CAP_GENERAL_2);
-	if (ret)
-		goto out_free;
-	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
-	if (cap->eswitch_cap_valid)
-		MLX5_SET(cmd_hca_cap_2, hca_caps, local_eswitch, cap->eswitch);
-
-	ret = mlx5_vport_set_other_func_cap(parent_dev, hca_caps, hw_fn_id,
-					    MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE2);
-	if (ret)
-		goto out_free;
-#endif
 out_free:
 	kfree(query_ctx);
 	return ret;

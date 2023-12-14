@@ -1304,11 +1304,30 @@ int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 	return 0;
 }
 
+#ifdef CONFIG_MLX5_ESWITCH
+struct mlx5_group_kobj {
+	struct work_struct work;
+	struct kobject *group_kobj;
+};
+
+static void destroy_vf_group_work(struct work_struct *work)
+{
+	struct mlx5_group_kobj *obj = container_of(work, struct mlx5_group_kobj, work);
+
+	kobject_put(obj->group_kobj);
+	kfree(obj);
+}
+#endif
+
 void mlx5_destroy_vf_group_sysfs(struct mlx5_core_dev *dev,
 				 struct kobject *group_kobj)
 {
 #ifdef CONFIG_MLX5_ESWITCH
-	kobject_put(group_kobj);
+	struct mlx5_group_kobj *kobj = kzalloc(sizeof *kobj, GFP_ATOMIC);
+
+	INIT_WORK(&kobj->work, destroy_vf_group_work);
+	kobj->group_kobj = group_kobj;
+	queue_work(system_wq, &kobj->work);
 #endif
 }
 

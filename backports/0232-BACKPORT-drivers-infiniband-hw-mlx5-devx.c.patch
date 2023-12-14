@@ -42,7 +42,7 @@ Change-Id: I9c4e230d301148c9162fa59b5795d7d6e89b0f19
  		if (IS_ERR(obj->umem))
  			return PTR_ERR(obj->umem);
  	}
-@@ -2688,7 +2698,11 @@ static ssize_t devx_async_event_read(str
+@@ -2686,7 +2696,11 @@ static ssize_t devx_async_event_read(str
  {
  	struct devx_async_event_file *ev_file = filp->private_data;
  	struct devx_event_subscription *event_sub;

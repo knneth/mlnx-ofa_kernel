@@ -63,7 +63,7 @@ static int mlx5_rdma_enable_roce_steering(struct mlx5_core_dev *dev)
 	}
 
 	esw = dev->priv.eswitch;
-	mlx5_esw_set_flow_group_source_port(esw, flow_group_in, 0, true, false);
+	mlx5_esw_set_flow_group_source_port(esw, flow_group_in, 0);
 
 	fg = mlx5_create_flow_group(ft, flow_group_in);
 	if (IS_ERR(fg)) {
@@ -72,7 +72,7 @@ static int mlx5_rdma_enable_roce_steering(struct mlx5_core_dev *dev)
 		goto destroy_flow_table;
 	}
 
-	mlx5_esw_set_spec_source_port(esw, esw->manager_vport, true, false, 0, spec);
+	mlx5_esw_set_spec_source_port(esw, esw->manager_vport, spec);
 
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_ALLOW;
 	flow_rule = mlx5_add_flow_rules(ft, spec, &flow_act, NULL, 0);

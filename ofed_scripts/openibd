@@ -290,36 +290,12 @@ set_module_load_defaults() {
 	RDMA_UCM_LOAD=${RDMA_UCM_LOAD:-`check_mlnx_ofed_module rdma_ucm`}
 }
 
-# Setting Environment variables
-if [ -f /etc/redhat-release ]; then
-    DISTRIB="RedHat"
-    NETWORK_CONF_DIR="/etc/sysconfig/network-scripts"
-elif [ -f /etc/rocks-release ]; then
-    DISTRIB="Rocks"
-    NETWORK_CONF_DIR="/etc/sysconfig/network-scripts"
-elif [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ]; then
+DISTRIB=
+NETWORK_CONF_DIR="/etc/sysconfig/network-scripts"
+
+if grep -q suse /etc/os-release 2>/dev/null; then
     DISTRIB="SuSE"
     NETWORK_CONF_DIR="/etc/sysconfig/network"
-elif [ -f /etc/gentoo-release ]; then
-    DISTRIB="Gentoo"
-    # TBD
-    NETWORK_CONF_DIR=""
-else
-    DISTRIB=`ls /etc/*-release | head -n 1 | xargs -iXXX basename XXX -release 2> /dev/null`
-    if [ -d /etc/sysconfig/network-scripts ]; then
-        NETWORK_CONF_DIR="/etc/sysconfig/network-scripts"
-    elif [ -d /etc/sysconfig/network ]; then
-        NETWORK_CONF_DIR="/etc/sysconfig/network"
-    elif [ -d /etc/sysconfig/network ]; then
-        NETWORK_CONF_DIR="/etc/sysconfig/network"
-    elif [ -f /etc/network/interfaces ]; then
-        NETWORK_CONF_DIR="/etc/network"
-    else
-        echo_failure "You system is not supported for IPoIB configuration"
-        echo "Try to load driver manually using configuration files from $WD directory"
-        cleanup
-        exit 1
-    fi
 fi
 
 # set bootid files for all interfaces
@@ -1063,7 +1039,7 @@ start()
         done
     fi
 
-    if [ $DISTRIB = "SuSE" ]; then
+    if [ "$DISTRIB" = "SuSE" ]; then
         if [ -x /sbin/rpc.statd ]; then
             /sbin/rpc.statd
         fi
@@ -1838,11 +1814,6 @@ fi
 
 if [ "X${FORCE_MODE}" == "Xyes" ]; then
 	FORCE=1
-fi
-
-# Force loading modules on Gentoo
-if [ "X$DISTRIB" == "XGentoo" ]; then
-        FORCE=1
 fi
 
 case $ACTION in

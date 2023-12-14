@@ -25,7 +25,7 @@ Change-Id: I3f7616b411bba63e300d8674ca22359f201deef2
  
  #define MLX5_START_COLOR_SHIFT 28
  #define MLX5_METER_MODE_SHIFT 24
-@@ -365,8 +371,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+@@ -370,8 +376,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
  	struct mlx5e_flow_meters *flow_meters;
  	struct mlx5e_flow_meter_handle *meter;
  
@@ -36,7 +36,7 @@ Change-Id: I3f7616b411bba63e300d8674ca22359f201deef2
  		return ERR_PTR(-EOPNOTSUPP);
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -410,9 +418,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+@@ -415,9 +423,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
  	struct mlx5e_flow_meters *flow_meters;
  	struct mlx5e_flow_meter_handle *meter;
  
@@ -48,7 +48,7 @@ Change-Id: I3f7616b411bba63e300d8674ca22359f201deef2
  
  	mutex_lock(&flow_meters->sync_lock);
  	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
-@@ -484,12 +494,16 @@ int
+@@ -489,12 +499,16 @@ int
  mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
  		      struct mlx5e_flow_meter_params *params)
  {
@@ -65,7 +65,7 @@ Change-Id: I3f7616b411bba63e300d8674ca22359f201deef2
  		return -EOPNOTSUPP;
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -505,8 +519,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
+@@ -510,8 +524,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
  	struct mlx5e_flow_meter_handle *meter;
  	int err;
  
@@ -76,7 +76,7 @@ Change-Id: I3f7616b411bba63e300d8674ca22359f201deef2
  		return ERR_PTR(-EOPNOTSUPP);
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -552,11 +568,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+@@ -557,11 +573,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
  	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
  		return ERR_PTR(-EOPNOTSUPP);
  

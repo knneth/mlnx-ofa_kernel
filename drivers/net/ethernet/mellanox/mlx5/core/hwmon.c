@@ -35,7 +35,6 @@ struct mlx5_hwmon {
 	u32 *temp_channel_config;
 	const struct hwmon_channel_info *channel_info[CHANNELS_TYPE_NUM + 1];
 	struct hwmon_chip_info chip;
-	const char *name;
 	struct temp_channel_desc *temp_channel_desc;
 	u32 asic_platform_scount;
 	u32 module_scount;
@@ -282,11 +281,6 @@ static int mlx5_hwmon_get_sensors_count(struct mlx5_core_dev *mdev, u32 *asic_pl
 	return 0;
 }
 
-static void mlx5_hwmon_free_name(const char *name)
-{
-      kfree(name);
-}
-
 static void mlx5_hwmon_free(struct mlx5_hwmon *hwmon)
 {
 	if (!hwmon)
@@ -294,7 +288,6 @@ static void mlx5_hwmon_free(struct mlx5_hwmon *hwmon)
 
 	kfree(hwmon->temp_channel_config);
 	kfree(hwmon->temp_channel_desc);
-	mlx5_hwmon_free_name(hwmon->name);
 	kfree(hwmon);
 }
 
@@ -309,20 +302,14 @@ static struct mlx5_hwmon *mlx5_hwmon_alloc(struct mlx5_core_dev *mdev)
 	if (!hwmon)
 		return ERR_PTR(-ENOMEM);
 
-	hwmon->name = hwmon_sanitize_name(pci_name(mdev->pdev));
-	if (IS_ERR(hwmon->name)) {
-		err = PTR_ERR(hwmon->name);
-		goto err_free_hwmon;
-	}
-
 	err = mlx5_hwmon_get_sensors_count(mdev, &hwmon->asic_platform_scount);
 	if (err)
-		goto err_free_name;
+		goto err_free_hwmon;
 
 	/* check if module sensor has thermal mon cap. if yes, allocate channel desc for it */
 	err = mlx5_hwmon_is_module_mon_cap(mdev, &mon_cap);
 	if (err)
-		goto err_free_name;
+		goto err_free_hwmon;
 
 	hwmon->module_scount = mon_cap ? 1 : 0;
 	sensors_count = hwmon->asic_platform_scount + hwmon->module_scount;
@@ -330,7 +317,7 @@ static struct mlx5_hwmon *mlx5_hwmon_alloc(struct mlx5_core_dev *mdev)
 					   GFP_KERNEL);
 	if (!hwmon->temp_channel_desc) {
 		err = -ENOMEM;
-		goto err_free_name;
+		goto err_free_hwmon;
 	}
 
 	/* sensors configuration values array, must be 0-terminated hence, + 1 */
@@ -347,8 +334,6 @@ static struct mlx5_hwmon *mlx5_hwmon_alloc(struct mlx5_core_dev *mdev)
 
 err_free_temp_channel_desc:
 	kfree(hwmon->temp_channel_desc);
-err_free_name:
-	kfree(hwmon->name);
 err_free_hwmon:
 	kfree(hwmon);
 	return ERR_PTR(err);
@@ -403,7 +388,7 @@ int mlx5_hwmon_dev_register(struct mlx5_core_dev *mdev)
 	if (err)
 		goto err_free_hwmon;
 
-	hwmon->hwmon_dev = hwmon_device_register_with_info(dev, hwmon->name,
+	hwmon->hwmon_dev = hwmon_device_register_with_info(dev, "mlx5",
 							   hwmon,
 							   &hwmon->chip,
 							   NULL);

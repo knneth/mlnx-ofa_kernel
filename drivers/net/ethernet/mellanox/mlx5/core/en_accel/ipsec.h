@@ -172,6 +172,14 @@ struct mlx5e_ipsec_rx_create_attr {
 	enum mlx5_flow_namespace_type chains_ns;
 };
 
+struct mlx5e_ipsec_tx_create_attr {
+	int prio;
+	int pol_level;
+	int sa_level;
+	int cnt_level;
+	enum mlx5_flow_namespace_type chains_ns;
+};
+
 struct mlx5e_ipsec_ft {
 	struct mutex mutex; /* Protect changes to this struct */
 	struct mlx5_flow_table *pol;
@@ -205,14 +213,6 @@ struct mlx5e_ipsec_rx {
 	struct xarray ipsec_obj_id_map;
 };
 
-struct mlx5e_ipsec_tx_create_attr {
-	int prio;
-	int pol_level;
-	int sa_level;
-	int cnt_level;
-	enum mlx5_flow_namespace_type chains_ns;
-};
-
 struct mlx5e_ipsec {
 	struct mlx5_core_dev *mdev;
 	struct xarray sadb;
@@ -222,7 +222,9 @@ struct mlx5e_ipsec {
 	struct mlx5e_flow_steering *fs;
 	struct mlx5e_ipsec_rx *rx_ipv4;
 	struct mlx5e_ipsec_rx *rx_ipv6;
+	struct mlx5e_ipsec_rx *rx_esw;
 	struct mlx5e_ipsec_tx *tx;
+	struct mlx5e_ipsec_tx *tx_esw;
 	struct mlx5e_ipsec_aso *aso;
 	struct notifier_block nb;
 	struct notifier_block netevent_nb;

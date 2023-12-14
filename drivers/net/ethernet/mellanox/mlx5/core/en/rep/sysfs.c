@@ -323,11 +323,13 @@ void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)
 		return;
 	}
 
-	err = kobject_init_and_add(&tmp->paging_kobj, &rep_paging,
-				   &tmp->kobj, "paging_control");
-	if (err) {
-		kobject_put(&tmp->kobj);
-		tmp->esw = NULL;
+	if (mlx5_eswitch_is_vf_vport(esw, tmp->vport)) {
+		err = kobject_init_and_add(&tmp->paging_kobj, &rep_paging,
+					   &tmp->kobj, "paging_control");
+		if (err) {
+			kobject_put(&tmp->kobj);
+			tmp->esw = NULL;
+		}
 	}
 }
 
@@ -339,6 +341,9 @@ void mlx5_rep_sysfs_cleanup(struct mlx5e_rep_priv *rpriv)
 	if (!tmp->esw)
 		return;
 
-	kobject_put(&tmp->paging_kobj);
+	if (mlx5_eswitch_is_vf_vport(tmp->esw, tmp->vport)) {
+		kobject_put(&tmp->paging_kobj);
+	}
+
 	kobject_put(&tmp->kobj);
 }

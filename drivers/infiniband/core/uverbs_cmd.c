@@ -47,10 +47,6 @@
 #include "uverbs.h"
 #include "core_priv.h"
 
-static int rdma_enforce_qkey_check;
-module_param_named(enforce_qkey_check, rdma_enforce_qkey_check, int, 0444);
-MODULE_PARM_DESC(enforce_qkey_check, "Force QKEY MSB check for non-privileged user on UD QP creation, default is 0 (disabled)");
-
 /*
  * Copy a response to userspace. If the provided 'resp' is larger than the
  * user buffer it is silently truncated. If the user provided a larger buffer
@@ -1855,13 +1851,10 @@ static int modify_qp(struct uverbs_attr_bundle *attrs,
 	if (cmd->base.attr_mask & IB_QP_PATH_MIG_STATE)
 		attr->path_mig_state = cmd->base.path_mig_state;
 	if (cmd->base.attr_mask & IB_QP_QKEY) {
-		/* Workaround should be deprecated in the future
-		 * Now 0 by default */
-		if (rdma_enforce_qkey_check) {
-			if (cmd->base.qkey & IB_QP_SET_QKEY && !capable(CAP_NET_RAW)) {
-				ret = -EPERM;
-				goto release_qp;
-			}
+		if (cmd->base.qkey & IB_QP_SET_QKEY &&
+		    !ib_uverbs_get_privileged_qkey()) {
+			ret = -EPERM;
+			goto release_qp;
 		}
 		attr->qkey = cmd->base.qkey;
 	}

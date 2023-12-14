@@ -3,19 +3,23 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 
 Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
 ---
- .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 375 +++++++++++++++++-
- 1 file changed, 353 insertions(+), 22 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 379 +++++++++++++++++-
+ 1 file changed, 357 insertions(+), 22 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
-@@ -30,8 +30,18 @@
+@@ -30,8 +30,22 @@
   * SOFTWARE.
   */
  
 +#ifdef HAVE_XDP_SUPPORT
  #include <linux/bpf_trace.h>
-+#ifdef HAVE_NET_PAGE_POOL_H
++#ifdef HAVE_NET_PAGE_POOL_OLD_H
 +#include <net/page_pool.h>
++#endif
++#ifdef HAVE_NET_PAGE_POOL_TYPES_H
++#include <net/page_pool/types.h>
++#include <net/page_pool/helpers.h>
 +#endif
 +#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
 +#ifdef HAVE_XDP_SOCK_DRV_H
@@ -27,7 +31,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  #include "en/xdp.h"
  #include "en/params.h"
  #include <linux/bitfield.h>
-@@ -66,16 +76,23 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -66,16 +80,23 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
  	struct mlx5e_xdp_info xdpi;
  	struct xdp_frame *xdpf;
  	dma_addr_t dma_addr;
@@ -51,7 +55,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	if (xdp->rxq->mem.type == MEM_TYPE_XSK_BUFF_POOL) {
  		/* The xdp_buff was in the UMEM and was copied into a newly
  		 * allocated page. The UMEM page was returned via the ZCA, and
-@@ -109,6 +126,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -109,6 +130,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
  		mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, &xdpi);
  		return true;
  	}
@@ -59,7 +63,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  	/* Driver assumes that xdp_convert_buff_to_frame returns an xdp_frame
  	 * that points to the same memory region as the original xdp_buff. It
-@@ -119,9 +137,18 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -119,9 +141,18 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
  	xdpi.mode = MLX5E_XDP_XMIT_MODE_PAGE;
  	xdpi.page.rq = rq;
  
@@ -78,7 +82,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	if (unlikely(xdp_frame_has_frags(xdpf))) {
  		sinfo = xdp_get_shared_info_from_frame(xdpf);
  
-@@ -137,6 +164,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -137,6 +168,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
  						   DMA_BIDIRECTIONAL);
  		}
  	}
@@ -86,7 +90,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  	xdptxd.dma_addr = dma_addr;
  
-@@ -147,6 +175,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -147,6 +179,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
  	xdpi.page.au = *au;
  	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, &xdpi);
  
@@ -94,7 +98,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	if (unlikely(xdp_frame_has_frags(xdpf))) {
  		for (i = 0; i < sinfo->nr_frags; i++) {
  			skb_frag_t *frag = &sinfo->frags[i];
-@@ -155,10 +184,12 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -155,10 +188,12 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
  			mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, &xdpi);
  		}
  	}
@@ -107,7 +111,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  static int mlx5e_xdp_rx_timestamp(const struct xdp_md *ctx, u64 *timestamp)
  {
  	const struct mlx5e_xdp_buff *_ctx = (void *)ctx;
-@@ -244,6 +275,7 @@ const struct xdp_metadata_ops mlx5e_xdp_
+@@ -244,6 +279,7 @@ const struct xdp_metadata_ops mlx5e_xdp_
  	.xmo_rx_timestamp		= mlx5e_xdp_rx_timestamp,
  	.xmo_rx_hash			= mlx5e_xdp_rx_hash,
  };
@@ -115,7 +119,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  /* returns true if packet was consumed by xdp */
  bool mlx5e_xdp_handle(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
-@@ -252,10 +284,103 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -252,10 +288,103 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  	struct xdp_buff *xdp = &mxbuf->xdp;
  	struct page *page;
  	u32 act;
@@ -219,7 +223,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	switch (act) {
  	case XDP_PASS:
  		return false;
-@@ -264,8 +389,12 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -264,8 +393,12 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  			goto xdp_abort;
  		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
  		return true;
@@ -233,7 +237,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  			page_ref_sub(page, au->refcnt_bias);
  			au->refcnt_bias = 0;
  		}
-@@ -275,22 +404,36 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
+@@ -275,22 +408,36 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
  			goto xdp_abort;
  		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
  		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
@@ -270,7 +274,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  static u16 mlx5e_xdpsq_get_next_pi(struct mlx5e_xdpsq *sq, u16 size)
  {
-@@ -463,25 +606,40 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -463,25 +610,40 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  		     struct skb_shared_info *sinfo, int check_result)
  {
  	struct mlx5_wq_cyc       *wq   = &sq->wq;
@@ -311,7 +315,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	ds_cnt = MLX5E_TX_WQE_EMPTY_DS_COUNT + 1;
  	if (sq->min_inline_mode != MLX5_INLINE_MODE_NONE)
  		ds_cnt++;
-@@ -502,9 +660,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -502,9 +664,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  
  		check_result = mlx5e_xmit_xdp_frame_check_stop_room(sq, stop_room);
  	}
@@ -327,7 +331,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	pi = mlx5e_xdpsq_get_next_pi(sq, num_wqebbs);
  	wqe = mlx5_wq_cyc_get_wqe(wq, pi);
  	net_prefetchw(wqe);
-@@ -512,7 +676,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -512,7 +680,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  	cseg = &wqe->ctrl;
  	eseg = &wqe->eth;
  	dseg = wqe->data;
@@ -338,7 +342,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	inline_hdr_sz = 0;
  
  	/* copy the inline part if required */
-@@ -524,6 +690,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -524,6 +694,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  		dma_addr += MLX5E_XDP_MIN_INLINE;
  		inline_hdr_sz = MLX5E_XDP_MIN_INLINE;
  		dseg++;
@@ -348,7 +352,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  	}
  
  	if (test_bit(MLX5E_SQ_STATE_TX_XDP_CSUM, &sq->state))
-@@ -536,15 +705,25 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -536,15 +709,25 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  	cseg->opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | MLX5_OPCODE_SEND);
  
  	if (unlikely(test_bit(MLX5E_SQ_STATE_XDP_MULTIBUF, &sq->state))) {
@@ -376,7 +380,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  		for (i = 0; i < num_frags; i++) {
  			skb_frag_t *frag = &sinfo->frags[i];
  			dma_addr_t addr;
-@@ -557,9 +736,12 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -557,9 +740,12 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  			dseg->byte_count = cpu_to_be32(skb_frag_size(frag));
  			dseg->lkey = sq->mkey_be;
  		}
@@ -390,7 +394,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  		sq->db.wqe_info[pi] = (struct mlx5e_xdp_wqe_info) {
  			.num_wqebbs = num_wqebbs,
  			.num_pkts = num_pkts,
-@@ -580,9 +762,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -580,9 +766,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
  
  static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  				  struct mlx5e_xdp_wqe_info *wi,
@@ -408,7 +412,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  {
  	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
  	u16 i;
-@@ -595,16 +783,25 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -595,16 +787,25 @@ static void mlx5e_free_xdpsq_desc(struct
  			/* XDP_TX from the XSK RQ and XDP_REDIRECT */
  			dma_unmap_single(sq->pdev, xdpi.frame.dma_addr,
  					 xdpi.frame.xdpf->len, DMA_TO_DEVICE);
@@ -434,7 +438,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  		default:
  			WARN_ON_ONCE(true);
  		}
-@@ -613,14 +810,20 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -613,14 +814,20 @@ static void mlx5e_free_xdpsq_desc(struct
  
  bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  {
@@ -455,7 +459,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  	sq = container_of(cq, struct mlx5e_xdpsq, cq);
  
-@@ -653,7 +856,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -653,7 +860,15 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  			sqcc += wi->num_wqebbs;
  
@@ -472,7 +476,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  		} while (!last_wqe);
  
  		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -666,10 +877,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -666,10 +881,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  		}
  	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
  
@@ -491,7 +495,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  	sq->stats->cqes += i;
  
-@@ -684,12 +903,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -684,12 +907,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
  
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  {
@@ -510,7 +514,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  
  	while (sq->cc != sq->pc) {
  		struct mlx5e_xdp_wqe_info *wi;
-@@ -700,16 +925,57 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -700,16 +929,57 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
  
  		sq->cc += wi->num_wqebbs;
  
@@ -569,7 +573,7 @@ Change-Id: I4d909bb550c8a94cd257d2fd2bfb2930048e5ada
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  		   u32 flags)
  {
-@@ -771,25 +1037,90 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -771,25 +1041,90 @@ int mlx5e_xdp_xmit(struct net_device *de
  	return nxmit;
  }
  

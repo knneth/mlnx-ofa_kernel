@@ -27,7 +27,7 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  
  #define MLX5_ADEV_NAME "mlx5_core"
  
-@@ -460,9 +465,11 @@ struct mlx5_core_health {
+@@ -460,10 +465,12 @@ struct mlx5_core_health {
  	unsigned long			flags;
  	struct mlx5_fw_crdump		*crdump;
  	struct work_struct		fatal_report_work;
@@ -35,11 +35,12 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  	struct work_struct		report_work;
  	struct devlink_health_reporter *fw_reporter;
  	struct devlink_health_reporter *fw_fatal_reporter;
+ 	struct devlink_health_reporter *vnic_reporter;
 +#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  	struct delayed_work		update_fw_log_ts_work;
  	/* failed recoveries in sequence*/
  	u32 failed_in_seq;
-@@ -544,6 +551,7 @@ struct mlx5_core_sriov {
+@@ -545,6 +552,7 @@ struct mlx5_core_sriov {
  	struct kobject		*groups_config;
  	struct kobject		node_guid_kobj;
  	struct mlx5_sriov_vf	*vfs;
@@ -70,7 +71,7 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  
  	/* pages stuff */
  	struct mlx5_nb          pg_nb;
-@@ -826,6 +843,9 @@ struct mlx5e_resources {
+@@ -825,6 +842,9 @@ struct mlx5e_resources {
  		u32			   mkey;
  		struct mlx5_sq_bfreg       bfreg;
  	} hw_objs;
@@ -80,7 +81,7 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  	struct net_device *uplink_netdev;
  	struct mutex uplink_netdev_lock;
   	struct {
-@@ -883,9 +903,11 @@ struct mlx5_clock {
+@@ -882,9 +902,11 @@ struct mlx5_clock {
  	struct mlx5_nb             pps_nb;
  	seqlock_t                  lock;
  	struct hwtstamp_config     hwtstamp_config;
@@ -92,7 +93,7 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  	struct mlx5_timer          timer;
  };
  
-@@ -977,7 +999,9 @@ struct mlx5_core_dev {
+@@ -976,7 +998,9 @@ struct mlx5_core_dev {
  	enum mlx5_device_state	state;
  	/* sync interface state */
  	struct mutex		intf_state_mutex;
@@ -102,17 +103,17 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  	unsigned long		intf_state;
  	struct mlx5_priv	priv;
  	struct mlx5_profile	profile;
-@@ -1004,7 +1028,9 @@ struct mlx5_core_dev {
+@@ -1003,7 +1027,9 @@ struct mlx5_core_dev {
  	struct mlx5_diag_cnt    diag_cnt;
  	u32                      vsc_addr;
  	struct mlx5_hv_vhca	*hv_vhca;
 +#ifdef HAVE_NIC_TEMPERATURE_SUPPORTED
  	struct mlx5_hwmon	*hwmon;
 +#endif
- 	struct mlx5_local_lb local_lb;
- 	int max_cmpl_eq_count;
- 	int cmpl_eq_depth;
-@@ -1057,8 +1083,13 @@ struct mlx5_cmd_work_ent {
+ 	u64			num_block_tc;
+ 	u64			num_block_ipsec;
+ 	u64 num_ipsec_offloads;
+@@ -1060,8 +1086,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -126,7 +127,7 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  	u16			op;
  	bool			polling;
  	/* Track the max comp handlers */
-@@ -1391,8 +1422,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
+@@ -1394,8 +1425,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
  int mlx5_dm_sw_icm_dealloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  			   u64 length, u16 uid, phys_addr_t addr, u32 obj_id);
  
@@ -137,7 +138,7 @@ Change-Id: I956a2e75f65943667e4733eb405cac50f1fce583
  
  int mlx5_sriov_blocking_notifier_register(struct mlx5_core_dev *mdev,
  					  int vf_id,
-@@ -1522,9 +1555,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -1525,9 +1558,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
  
  static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
  {

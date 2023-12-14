@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/ioctl.c
 Change-Id: I903826da68809529a8f9b41d4e4ad8d06ede3db5
 Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
 ---
- drivers/nvme/host/ioctl.c | 292 +++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 278 insertions(+), 14 deletions(-)
+ drivers/nvme/host/ioctl.c | 311 +++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 296 insertions(+), 15 deletions(-)
 
 --- a/drivers/nvme/host/ioctl.c
 +++ b/drivers/nvme/host/ioctl.c
@@ -24,9 +24,9 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  
  static bool nvme_cmd_allowed(struct nvme_ns *ns, struct nvme_command *c,
 +#ifdef HAVE_BDEV_IS_PARTITION
- 		unsigned int flags, fmode_t mode)
+ 		unsigned int flags, bool open_for_write)
 +#else
-+		fmode_t mode)
++		bool open_for_write)
 +#endif
  {
  	u32 effects;
@@ -290,9 +290,6 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
 +#else
 +	ret = nvme_execute_rq(NULL, req, false);
 +#endif
- 	if (result)
- 		*result = le64_to_cpu(nvme_req(req)->result.u64);
--	if (meta)
 +#else
 +	nvme_execute_rq(req);
 +	if (nvme_req(req)->flags & NVME_REQ_CANCELLED)
@@ -300,6 +297,9 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
 +	else
 +		ret = nvme_req(req)->status;
 +#endif
+ 	if (result)
+ 		*result = le64_to_cpu(nvme_req(req)->result.u64);
+-	if (meta)
 +	if (meta) {
 +#ifdef HAVE_BLK_TYPES_REQ_OP_DRV_OUT
  		ret = nvme_finish_user_metadata(req, meta_buffer, meta,
@@ -348,9 +348,9 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	c.common.cdw15 = cpu_to_le32(cmd.cdw15);
  
 +#ifdef HAVE_BDEV_IS_PARTITION
- 	if (!nvme_cmd_allowed(ns, &c, 0, mode))
+ 	if (!nvme_cmd_allowed(ns, &c, 0, open_for_write))
 +#else
-+	if (!nvme_cmd_allowed(ns, &c, mode))
++	if (!nvme_cmd_allowed(ns, &c, open_for_write))
 +#endif
  		return -EACCES;
  
@@ -360,9 +360,9 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	c.common.cdw15 = cpu_to_le32(cmd.cdw15);
  
 +#ifdef HAVE_BDEV_IS_PARTITION
- 	if (!nvme_cmd_allowed(ns, &c, flags, mode))
+ 	if (!nvme_cmd_allowed(ns, &c, flags, open_for_write))
 +#else
-+	if (!nvme_cmd_allowed(ns, &c, mode))
++	if (!nvme_cmd_allowed(ns, &c, open_for_write))
 +#endif
  		return -EACCES;
  
@@ -524,9 +524,9 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	c.common.cdw15 = cpu_to_le32(READ_ONCE(cmd->cdw15));
  
 +#ifdef HAVE_BDEV_IS_PARTITION
- 	if (!nvme_cmd_allowed(ns, &c, 0, ioucmd->file->f_mode))
+ 	if (!nvme_cmd_allowed(ns, &c, 0, ioucmd->file->f_mode & FMODE_WRITE))
 +#else
-+	if (!nvme_cmd_allowed(ns, &c, ioucmd->file->f_mode))
++	if (!nvme_cmd_allowed(ns, &c, ioucmd->file->f_mode & FMODE_WRITE))
 +#endif
  		return -EACCES;
  
@@ -605,7 +605,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  
 @@ -657,7 +896,11 @@ static int nvme_ctrl_ioctl(struct nvme_c
  	case NVME_IOCTL_ADMIN64_CMD:
- 		return nvme_user_cmd64(ctrl, NULL, argp, 0, mode);
+ 		return nvme_user_cmd64(ctrl, NULL, argp, 0, open_for_write);
  	default:
 +#ifdef HAVE_LINUX_SED_OPAL_H
  		return sed_ioctl(ctrl->opal_dev, cmd, argp);
@@ -625,9 +625,26 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  		fallthrough;
 +#endif
  	case NVME_IOCTL_IO64_CMD:
- 		return nvme_user_cmd64(ns->ctrl, ns, argp, flags, mode);
- 	default:
-@@ -715,8 +960,10 @@ int nvme_ioctl(struct block_device *bdev
+ 		return nvme_user_cmd64(ns->ctrl, ns, argp, flags,
+ 				       open_for_write);
+@@ -709,16 +954,27 @@ static int nvme_ns_ioctl(struct nvme_ns
+ 	}
+ }
+ 
++#ifdef HAVE_GENDISK_OPEN_MODE
++int nvme_ioctl(struct block_device *bdev, blk_mode_t mode,
++		unsigned int cmd, unsigned long arg)
++#else
+ int nvme_ioctl(struct block_device *bdev, fmode_t mode,
+ 		unsigned int cmd, unsigned long arg)
++#endif
+ {
+ 	struct nvme_ns *ns = bdev->bd_disk->private_data;
++#ifdef HAVE_GENDISK_OPEN_MODE
++	bool open_for_write = mode & BLK_OPEN_WRITE;
++#else
+ 	bool open_for_write = mode & FMODE_WRITE;
++#endif
  	void __user *argp = (void __user *)arg;
  	unsigned int flags = 0;
  
@@ -637,15 +654,15 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
 +#endif
  
  	if (is_ctrl_ioctl(cmd))
- 		return nvme_ctrl_ioctl(ns->ctrl, cmd, argp, mode);
-@@ -734,9 +981,15 @@ long nvme_ns_chr_ioctl(struct file *file
- 	return nvme_ns_ioctl(ns, cmd, argp, 0, file->f_mode);
+ 		return nvme_ctrl_ioctl(ns->ctrl, cmd, argp, open_for_write);
+@@ -737,9 +993,14 @@ long nvme_ns_chr_ioctl(struct file *file
+ 	return nvme_ns_ioctl(ns, cmd, argp, 0, open_for_write);
  }
  
 +#ifdef HAVE_FILE_OPERATIONS_URING_CMD
  static int nvme_uring_cmd_checks(unsigned int issue_flags)
  {
- 
+-
 +#ifndef HAVE_FILE_OPERATIONS_URING_CMD_IOPOLL
 +	/* IOPOLL not supported yet */
 +	if (issue_flags & IO_URING_F_IOPOLL)
@@ -654,7 +671,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	/* NVMe passthrough requires big SQE/CQE support */
  	if ((issue_flags & (IO_URING_F_SQE128|IO_URING_F_CQE32)) !=
  	    (IO_URING_F_SQE128|IO_URING_F_CQE32))
-@@ -777,7 +1030,9 @@ int nvme_ns_chr_uring_cmd(struct io_urin
+@@ -780,7 +1041,9 @@ int nvme_ns_chr_uring_cmd(struct io_urin
  
  	return nvme_ns_uring_cmd(ns, ioucmd, issue_flags);
  }
@@ -664,7 +681,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  int nvme_ns_chr_uring_cmd_iopoll(struct io_uring_cmd *ioucmd,
  				 struct io_comp_batch *iob,
  				 unsigned int poll_flags)
-@@ -797,6 +1052,7 @@ int nvme_ns_chr_uring_cmd_iopoll(struct
+@@ -800,6 +1063,7 @@ int nvme_ns_chr_uring_cmd_iopoll(struct
  	rcu_read_unlock();
  	return ret;
  }
@@ -672,7 +689,26 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  #ifdef CONFIG_NVME_MULTIPATH
  static int nvme_ns_head_ctrl_ioctl(struct nvme_ns *ns, unsigned int cmd,
  		void __user *argp, struct nvme_ns_head *head, int srcu_idx,
-@@ -823,8 +1079,10 @@ int nvme_ns_head_ioctl(struct block_devi
+@@ -817,18 +1081,29 @@ static int nvme_ns_head_ctrl_ioctl(struc
+ 	return ret;
+ }
+ 
++#ifdef HAVE_GENDISK_OPEN_MODE
++int nvme_ns_head_ioctl(struct block_device *bdev, blk_mode_t mode,
++		unsigned int cmd, unsigned long arg)
++#else
+ int nvme_ns_head_ioctl(struct block_device *bdev, fmode_t mode,
+ 		unsigned int cmd, unsigned long arg)
++#endif
+ {
+ 	struct nvme_ns_head *head = bdev->bd_disk->private_data;
++#ifdef HAVE_GENDISK_OPEN_MODE
++	bool open_for_write = mode & BLK_OPEN_WRITE;
++#else
+ 	bool open_for_write = mode & FMODE_WRITE;
++#endif
+ 	void __user *argp = (void __user *)arg;
+ 	struct nvme_ns *ns;
  	int srcu_idx, ret = -EWOULDBLOCK;
  	unsigned int flags = 0;
  
@@ -683,7 +719,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  
  	srcu_idx = srcu_read_lock(&head->srcu);
  	ns = nvme_find_path(head);
-@@ -870,7 +1128,9 @@ out_unlock:
+@@ -875,7 +1150,9 @@ out_unlock:
  	srcu_read_unlock(&head->srcu, srcu_idx);
  	return ret;
  }
@@ -693,7 +729,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  int nvme_ns_head_chr_uring_cmd(struct io_uring_cmd *ioucmd,
  		unsigned int issue_flags)
  {
-@@ -886,6 +1146,7 @@ int nvme_ns_head_chr_uring_cmd(struct io
+@@ -891,6 +1168,7 @@ int nvme_ns_head_chr_uring_cmd(struct io
  	return ret;
  }
  
@@ -701,7 +737,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  int nvme_ns_head_chr_uring_cmd_iopoll(struct io_uring_cmd *ioucmd,
  				      struct io_comp_batch *iob,
  				      unsigned int poll_flags)
-@@ -910,16 +1171,18 @@ int nvme_ns_head_chr_uring_cmd_iopoll(st
+@@ -915,16 +1193,18 @@ int nvme_ns_head_chr_uring_cmd_iopoll(st
  	srcu_read_unlock(&head->srcu, srcu_idx);
  	return ret;
  }
@@ -721,11 +757,11 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  
  	ret = nvme_uring_cmd_checks(issue_flags);
  	if (ret)
-@@ -938,6 +1201,7 @@ int nvme_dev_uring_cmd(struct io_uring_c
+@@ -943,6 +1223,7 @@ int nvme_dev_uring_cmd(struct io_uring_c
  
  	return ret;
  }
-+#endif
++#endif /* HAVE_FILE_OPERATIONS_URING_CMD */
  
  static int nvme_dev_user_cmd(struct nvme_ctrl *ctrl, void __user *argp,
- 		fmode_t mode)
+ 		bool open_for_write)

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I90afad600e2eb80cc9899c396a5a2a7327bdd9f0
 ---
- .../mellanox/mlx5/core/en/reporter_tx.c       | 64 ++++++++++++++++---
- 1 file changed, 55 insertions(+), 9 deletions(-)
+ .../mellanox/mlx5/core/en/reporter_tx.c       | 65 ++++++++++++++++---
+ 1 file changed, 56 insertions(+), 9 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
@@ -88,7 +88,7 @@ Change-Id: I90afad600e2eb80cc9899c396a5a2a7327bdd9f0
  	snprintf(err_str, sizeof(err_str),
  		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
  		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,
-@@ -583,22 +598,44 @@ int mlx5e_reporter_tx_timeout(struct mlx
+@@ -583,22 +598,45 @@ int mlx5e_reporter_tx_timeout(struct mlx
  	return to_ctx.status;
  }
  
@@ -127,15 +127,16 @@ Change-Id: I90afad600e2eb80cc9899c396a5a2a7327bdd9f0
 +	devlink = priv_to_devlink(mdev);
 +	reporter =
 +		 devlink_health_reporter_create(devlink, &mlx5_tx_reporter_ops,
++						MLX5_REPORTER_TX_GRACEFUL_PERIOD,
 +#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
-+				MLX5_REPORTER_TX_GRACEFUL_PERIOD,
++						true,
 +#endif
-+				true, priv);
++						priv);
 +#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE */
  	if (IS_ERR(reporter)) {
  		netdev_warn(priv->netdev,
  			    "Failed to create tx reporter, err = %ld\n",
-@@ -606,6 +643,7 @@ void mlx5e_reporter_tx_create(struct mlx
+@@ -606,6 +644,7 @@ void mlx5e_reporter_tx_create(struct mlx
  		return;
  	}
  	priv->tx_reporter = reporter;
@@ -143,7 +144,7 @@ Change-Id: I90afad600e2eb80cc9899c396a5a2a7327bdd9f0
  }
  
  void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
-@@ -613,6 +651,14 @@ void mlx5e_reporter_tx_destroy(struct ml
+@@ -613,6 +652,14 @@ void mlx5e_reporter_tx_destroy(struct ml
  	if (!priv->tx_reporter)
  		return;
  

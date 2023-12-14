@@ -17,7 +17,7 @@ Change-Id: Ib79622faa8ff688718d2e5e654d4193542957795
  #ifndef __MLX5_VDPA_H__
  #define __MLX5_VDPA_H__
  
-@@ -135,3 +137,4 @@ void mlx5_vdpa_destroy_mr(struct mlx5_vd
+@@ -137,3 +139,4 @@ void mlx5_vdpa_destroy_mr_asid(struct ml
  		  current->pid, ##__VA_ARGS__)
  
  #endif /* __MLX5_VDPA_H__ */

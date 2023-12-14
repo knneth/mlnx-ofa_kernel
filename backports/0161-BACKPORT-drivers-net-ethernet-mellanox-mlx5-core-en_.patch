@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ib7b2c2c3d0008d553b49b06b095596d783eec3cd
 ---
- .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 51 +++++++++++++++++--
- 1 file changed, 48 insertions(+), 3 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 53 +++++++++++++++++--
+ 1 file changed, 50 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
@@ -64,7 +64,7 @@ Change-Id: Ib7b2c2c3d0008d553b49b06b095596d783eec3cd
  bool mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget);
  
  static inline bool
-@@ -48,6 +73,26 @@ mlx5e_ktls_rx_pending_resync_list(struct
+@@ -48,11 +73,33 @@ mlx5e_ktls_rx_pending_resync_list(struct
  {
  	return budget && test_bit(MLX5E_SQ_STATE_PENDING_TLS_RX_RESYNC, &c->async_icosq.state);
  }
@@ -89,5 +89,12 @@ Change-Id: Ib7b2c2c3d0008d553b49b06b095596d783eec3cd
 +}
 +#endif
  
++#ifndef HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED
  static inline bool mlx5e_ktls_skb_offloaded(struct sk_buff *skb)
  {
+ 	return skb->sk && tls_is_sk_tx_device_offloaded(skb->sk);
+ }
++#endif
+ 
+ static inline void
+ mlx5e_ktls_handle_tx_wqe(struct mlx5_wqe_ctrl_seg *cseg,

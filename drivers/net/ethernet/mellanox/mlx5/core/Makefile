@@ -16,7 +16,7 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		transobj.o vport.o sriov.o fs_cmd.o fs_core.o pci_irq.o \
 		fs_counters.o fs_ft_pool.o rl.o lag/debugfs.o lag/lag.o dev.o events.o wq.o lib/gid.o \
 		lib/devcom.o lib/pci_vsc.o lib/dm.o lib/fs_ttc.o diag/fs_tracepoint.o \
-		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o \
+		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o diag/reporter_vnic.o \
 		fw_reset.o qos.o lib/tout.o lib/aso.o mst_dump.o en_diag.o \
 		sriov_sysfs.o crdump.o diag/diag_cnt.o fw_exp.o \
 		eswitch_devlink_compat.o ecpf.o
@@ -69,15 +69,15 @@ mlx5_core-$(CONFIG_MLX5_TC_SAMPLE)   += en/tc/sample.o
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += eswitch.o eswitch_offloads.o eswitch_offloads_termtbl.o \
 				      ecpf.o rdma.o esw/legacy.o esw/pet_offloads.o \
 				      esw/debugfs.o esw/devlink_port.o esw/vporttbl.o esw/qos.o \
-				      esw/vf_meter.o
+				      esw/ipsec.o esw/vf_meter.o
 
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += esw/acl/helper.o \
 				      esw/acl/egress_lgcy.o esw/acl/egress_ofld.o \
 				      esw/acl/ingress_lgcy.o esw/acl/ingress_ofld.o
-
 ifneq ($(CONFIG_MLX5_EN_IPSEC),)
 	mlx5_core-$(CONFIG_MLX5_ESWITCH)   += esw/ipsec_fs.o
 endif
+
 
 mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o en/rep/bridge.o
 

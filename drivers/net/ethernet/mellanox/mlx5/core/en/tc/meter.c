@@ -204,7 +204,7 @@ mlx5e_flow_meter_create_aso_obj(struct mlx5e_flow_meters *flow_meters, int *obj_
 	u32 in[MLX5_ST_SZ_DW(create_flow_meter_aso_obj_in)] = {};
 	u32 out[MLX5_ST_SZ_DW(general_obj_out_cmd_hdr)];
 	struct mlx5_core_dev *mdev = flow_meters->mdev;
-	void *obj, *param;
+	void *obj, *param, *meter_param;
 	int err;
 
 	MLX5_SET(general_obj_in_cmd_hdr, in, opcode, MLX5_CMD_OP_CREATE_GENERAL_OBJECT);
@@ -216,6 +216,11 @@ mlx5e_flow_meter_create_aso_obj(struct mlx5e_flow_meters *flow_meters, int *obj_
 
 	obj = MLX5_ADDR_OF(create_flow_meter_aso_obj_in, in, flow_meter_aso_obj);
 	MLX5_SET(flow_meter_aso_obj, obj, meter_aso_access_pd, flow_meters->pdn);
+
+	meter_param = MLX5_ADDR_OF(flow_meter_aso_obj, obj, flow_meter_parameters);
+	MLX5_SET(flow_meter_parameters, meter_param, valid, 1);
+	meter_param += MLX5_ST_SZ_BYTES(flow_meter_parameters);
+	MLX5_SET(flow_meter_parameters, meter_param, valid, 1);
 
 	err = mlx5_cmd_exec(mdev, in, sizeof(in), out, sizeof(out));
 	if (!err) {

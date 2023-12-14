@@ -5,6 +5,7 @@
 #include "en.h"
 #include "ipsec.h"
 #include "lib/crypto.h"
+#include "fs_core.h"
 
 enum {
 	MLX5_IPSEC_ASO_REMOVE_FLOW_PKT_CNT_OFFSET,
@@ -37,7 +38,8 @@ u32 mlx5_ipsec_device_caps(struct mlx5_core_dev *mdev)
 	    MLX5_CAP_ETH(mdev, insert_trailer) && MLX5_CAP_ETH(mdev, swp))
 		caps |= MLX5_IPSEC_CAP_CRYPTO;
 
-	if (MLX5_CAP_IPSEC(mdev, ipsec_full_offload)) {
+	if (MLX5_CAP_IPSEC(mdev, ipsec_full_offload) &&
+	    mdev->priv.steering->mode == MLX5_FLOW_STEERING_MODE_DMFS) {
 		if (MLX5_CAP_FLOWTABLE_NIC_TX(mdev,
 					      reformat_add_esp_trasport) &&
 		    MLX5_CAP_FLOWTABLE_NIC_RX(mdev,
@@ -45,8 +47,8 @@ u32 mlx5_ipsec_device_caps(struct mlx5_core_dev *mdev)
 		    MLX5_CAP_FLOWTABLE_NIC_RX(mdev, decap))
 			caps |= MLX5_IPSEC_CAP_PACKET_OFFLOAD;
 
-		if (MLX5_CAP_FLOWTABLE_NIC_TX(mdev, ignore_flow_level) &&
-		    MLX5_CAP_FLOWTABLE_NIC_RX(mdev, ignore_flow_level) &&
+		if ((MLX5_CAP_FLOWTABLE_NIC_TX(mdev, ignore_flow_level) &&
+		     MLX5_CAP_FLOWTABLE_NIC_RX(mdev, ignore_flow_level)) ||
 		    MLX5_CAP_ESW_FLOWTABLE_FDB(mdev, ignore_flow_level))
 			caps |= MLX5_IPSEC_CAP_PRIO;
 
@@ -552,6 +554,7 @@ void mlx5e_ipsec_aso_cleanup(struct mlx5e_ipsec *ipsec)
 	dma_unmap_single(pdev, aso->dma_addr, sizeof(aso->ctx),
 			 DMA_BIDIRECTIONAL);
 	kfree(aso);
+	ipsec->aso = NULL;
 }
 
 static void mlx5e_ipsec_aso_copy(struct mlx5_wqe_aso_ctrl_seg *ctrl,

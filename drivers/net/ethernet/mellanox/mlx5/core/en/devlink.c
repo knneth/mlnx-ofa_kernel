@@ -35,11 +35,6 @@ mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_i
 	u64 parent_id;
 
 	parent_id = mlx5_query_nic_system_image_guid(dev);
-	/* Set a different but still unique switch id for non-PF vports.
-	 * Do this by increasing the value at the 24th reserved bit.
-	 */
-	if (!mlx5_core_is_pf(dev))
-		parent_id |= BIT(24);
 	ppid->id_len = sizeof(parent_id);
 	memcpy(ppid->id, &parent_id, sizeof(parent_id));
 }
@@ -63,15 +58,7 @@ int mlx5e_devlink_port_register(struct mlx5e_dev *mlx5e_dev,
 		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev,
 								     MLX5_VPORT_UPLINK);
 	} else {
-		if (MLX5_ESWITCH_MANAGER(mdev)) {
-			mlx5e_devlink_get_port_parent_id(mdev, &ppid);
-			memcpy(attrs.switch_id.id, ppid.id, ppid.id_len);
-			attrs.switch_id.id_len = ppid.id_len;
-			attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
-			attrs.phys.port_number = mdev->priv.sfnum;
-		} else {
-			attrs.flavour = DEVLINK_PORT_FLAVOUR_VIRTUAL;
-		}
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_VIRTUAL;
 		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
 	}
 

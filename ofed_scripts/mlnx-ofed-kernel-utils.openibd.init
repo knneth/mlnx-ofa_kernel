@@ -308,16 +308,6 @@ set_module_load_defaults() {
 	RDMA_UCM_LOAD=${RDMA_UCM_LOAD:-`check_mlnx_ofed_module rdma_ucm`}
 }
 
-# Setting Environment variables
-if [ -f /etc/debian_version ]; then
-    DISTRIB="Debian"
-else
-    echo_failure "You system is not supported for IPoIB configuration"
-    echo "Try to load driver manually using configuration files from $WD directory"
-    cleanup
-    exit 1
-fi
-
 # set bootid files for all interfaces
 if [ "X$RUNMODE" == "Xmanual" ]; then
     get_interface_conf_files
@@ -930,12 +920,6 @@ start()
                 setpci -s $ivyb_slot 0x85C.W=0xffff
             fi
         done
-    fi
-
-    if [ $DISTRIB = "SuSE" ]; then
-        if [ -x /sbin/rpc.statd ]; then
-            /sbin/rpc.statd
-        fi
     fi
 
     # Load Mellanox HCA driver

@@ -42,6 +42,7 @@
 #include "lib/pci_vsc.h"
 #include "lib/tout.h"
 #include "diag/fw_tracer.h"
+#include "diag/reporter_vnic.h"
 
 enum {
 	MAX_MISSES			= 3,
@@ -58,7 +59,8 @@ enum {
 	MLX5_HEALTH_SYNDR_EQ_ERR		= 0xd,
 	MLX5_HEALTH_SYNDR_EQ_INV		= 0xe,
 	MLX5_HEALTH_SYNDR_FFSER_ERR		= 0xf,
-	MLX5_HEALTH_SYNDR_HIGH_TEMP		= 0x10
+	MLX5_HEALTH_SYNDR_HIGH_TEMP		= 0x10,
+	MLX5_HEALTH_SYNDR_ICM_PCI_POISONED_ERR  = 0x12
 };
 
 enum {
@@ -392,6 +394,8 @@ static const char *hsynd_str(u8 synd)
 		return "FFSER error";
 	case MLX5_HEALTH_SYNDR_HIGH_TEMP:
 		return "High temperature";
+	case MLX5_HEALTH_SYNDR_ICM_PCI_POISONED_ERR:
+		return "ICM fetch PCI data poisoned error";
 	default:
 		return "unrecognized error";
 	}
@@ -922,6 +926,7 @@ void mlx5_health_cleanup(struct mlx5_core_dev *dev)
 
 	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
 	destroy_workqueue(health->wq);
+	mlx5_reporter_vnic_destroy(dev);
 	mlx5_fw_reporters_destroy(dev);
 }
 
@@ -936,6 +941,7 @@ int mlx5_health_init(struct mlx5_core_dev *dev)
 		mlx5_fw_reporters_create(dev);
 		devl_unlock(devlink);
 	}
+	mlx5_reporter_vnic_create(dev);
 
 	health = &dev->priv.health;
 	name = kmalloc(64, GFP_KERNEL);
@@ -955,6 +961,7 @@ int mlx5_health_init(struct mlx5_core_dev *dev)
 	return 0;
 
 out_err:
+	mlx5_reporter_vnic_destroy(dev);
 	mlx5_fw_reporters_destroy(dev);
 	return -ENOMEM;
 }

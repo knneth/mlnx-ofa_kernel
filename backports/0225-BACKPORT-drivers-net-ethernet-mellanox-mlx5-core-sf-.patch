@@ -9,7 +9,7 @@ Change-Id: I5978801d586a9c150f19530a6eaf7b94b6eb3259
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
-@@ -32,10 +32,12 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -31,10 +31,12 @@ static int mlx5_sf_dev_probe(struct auxi
  	mdev->priv.adev_idx = adev->id;
  	sf_dev->mdev = mdev;
  
@@ -22,7 +22,7 @@ Change-Id: I5978801d586a9c150f19530a6eaf7b94b6eb3259
  
  	err = mlx5_mdev_init(mdev, MLX5_DEFAULT_PROF);
  	if (err) {
-@@ -58,15 +60,22 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -57,15 +59,22 @@ static int mlx5_sf_dev_probe(struct auxi
  		goto remap_err;
  	}
  
@@ -46,7 +46,7 @@ Change-Id: I5978801d586a9c150f19530a6eaf7b94b6eb3259
  	return 0;
  
  init_one_err:
-@@ -85,10 +94,17 @@ static void mlx5_sf_dev_remove(struct au
+@@ -84,10 +93,17 @@ static void mlx5_sf_dev_remove(struct au
  
  	mlx5_drain_health_wq(sf_dev->mdev);
  	set_bit(MLX5_BREAK_FW_WAIT, &sf_dev->mdev->intf_state);

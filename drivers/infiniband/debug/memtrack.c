@@ -838,8 +838,6 @@ int is_non_trackable_free_func(const char *func_name)
 		"mlxdevm_rate_node_get_doit_locked",
 		"mlxdevm_cmd_rate_set_node",
 		"mlxdevm_cmd_rate_set_leaf",
-		/* hwmon functions */
-		"mlx5_hwmon_free_name",
 	};
 	size_t str_cmp_arr_size = sizeof(str_cmp_arr)/sizeof(char *);
 	int i;

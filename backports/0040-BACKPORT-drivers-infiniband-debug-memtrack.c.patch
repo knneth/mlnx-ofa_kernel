@@ -3,22 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/debug/memtrack.c
 
 Change-Id: I4cfa73bcf341fc52a131e770f63111339f122092
 ---
- drivers/infiniband/debug/memtrack.c | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ drivers/infiniband/debug/memtrack.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
 --- a/drivers/infiniband/debug/memtrack.c
 +++ b/drivers/infiniband/debug/memtrack.c
-@@ -839,7 +839,9 @@ int is_non_trackable_free_func(const cha
- 		"mlxdevm_cmd_rate_set_node",
- 		"mlxdevm_cmd_rate_set_leaf",
- 		/* hwmon functions */
-+#ifdef HAVE_HWMON_SANITIZE_NAME
- 		"mlx5_hwmon_free_name",
-+#endif
- 	};
- 	size_t str_cmp_arr_size = sizeof(str_cmp_arr)/sizeof(char *);
- 	int i;
-@@ -1120,9 +1122,15 @@ static ssize_t memtrack_read(struct file
+@@ -1118,9 +1118,15 @@ static ssize_t memtrack_read(struct file
  	}
  }
  
@@ -34,7 +24,7 @@ Change-Id: I4cfa73bcf341fc52a131e770f63111339f122092
  
  static const char *memtrack_proc_entry_name = "mt_memtrack";
  
-@@ -1141,7 +1149,11 @@ static int create_procfs_tree(void)
+@@ -1139,7 +1145,11 @@ static int create_procfs_tree(void)
  
  	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
  		if (bit_mask & track_mask) {
@@ -46,7 +36,7 @@ Change-Id: I4cfa73bcf341fc52a131e770f63111339f122092
  			if (!proc_ent) {
  				printk(KERN_INFO "Warning: Cannot create /proc/%s/%s\n",
  				       memtrack_proc_entry_name, rsc_names[i]);
-@@ -1231,7 +1243,11 @@ int memtrack_inject_error(struct module
+@@ -1229,7 +1239,11 @@ int memtrack_inject_error(struct module
  		return 0;
  
  	if (inject_freq) {

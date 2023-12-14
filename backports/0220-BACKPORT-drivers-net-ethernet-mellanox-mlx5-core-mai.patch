@@ -629,7 +629,7 @@ Change-Id: I638714ff4c04c4667206e3bd3d9fad956c685d17
 +
  	mlx5_enter_error_state(dev, false);
  	mlx5_error_sw_reset(dev);
- 	mlx5_unload_one(dev, true);
+ 	mlx5_unload_one(dev, false);
 @@ -2498,6 +2688,11 @@ static pci_ers_result_t mlx5_pci_slot_re
  	mlx5_core_info(dev, "%s Device state = %d pci_status: %d. Enter\n",
  		       __func__, dev->state, dev->pci_status);

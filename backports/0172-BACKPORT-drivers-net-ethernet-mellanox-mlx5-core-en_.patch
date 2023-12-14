@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 Change-Id: Ic882863bc1105d1d3e611d1f3004d95f6ae686c2
 ---
- .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 22 +++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 24 +++++++++++++++++++
+ 1 file changed, 24 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
@@ -19,7 +19,17 @@ Change-Id: Ic882863bc1105d1d3e611d1f3004d95f6ae686c2
  
  	/* tc tunneling encapsulation private data */
  	struct mlx5e_tc_tun_encap *encap;
-@@ -288,12 +292,30 @@ static inline bool mlx5e_eswitch_rep(con
+@@ -141,7 +145,9 @@ struct mlx5e_rep_priv {
+ 	struct mlx5_rep_sysfs rep_sysfs;
+ 	struct mlx5_flow_handle *send_to_vport_meta_rule;
+ 	struct rhashtable tc_ht;
++#if defined(HAVE_DEVLINK_HEALTH_REPORT_SUPPORT) && defined(HAVE_NETDEV_DEVLINK_PORT)
+ 	struct devlink_health_reporter *rep_vnic_reporter;
++#endif
+ };
+ 
+ static inline
+@@ -289,12 +295,30 @@ static inline bool mlx5e_eswitch_rep(con
  	       mlx5e_eswitch_uplink_rep(netdev);
  }
  

@@ -4,12 +4,12 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie928ccb18fb2d7055d035e0028aa056b0b066eef
 ---
- .../mellanox/mlx5/core/en_accel/en_accel.h       | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/en_accel.h    | 20 ++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-@@ -120,8 +120,10 @@ static inline bool mlx5e_accel_tx_begin(
+@@ -120,12 +120,18 @@ static inline bool mlx5e_accel_tx_begin(
  					struct sk_buff *skb,
  					struct mlx5e_accel_tx_state *state)
  {
@@ -20,7 +20,15 @@ Change-Id: Ie928ccb18fb2d7055d035e0028aa056b0b066eef
  
  #ifdef CONFIG_MLX5_EN_TLS
  	/* May send WQEs. */
-@@ -166,11 +168,19 @@ static inline unsigned int mlx5e_accel_t
++#ifdef HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED
++	if (tls_is_skb_tx_device_offloaded(skb))
++#else
+ 	if (mlx5e_ktls_skb_offloaded(skb))
++#endif
+ 		if (unlikely(!mlx5e_ktls_handle_tx_skb(dev, sq, skb,
+ 						       &state->tls)))
+ 			return false;
+@@ -166,11 +172,19 @@ static inline unsigned int mlx5e_accel_t
  
  static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
  				       struct sk_buff *skb,
@@ -41,7 +49,7 @@ Change-Id: Ie928ccb18fb2d7055d035e0028aa056b0b066eef
  #endif
  
  #ifdef CONFIG_MLX5_EN_MACSEC
-@@ -212,7 +222,11 @@ static inline void mlx5e_accel_cleanup_r
+@@ -212,7 +226,11 @@ static inline void mlx5e_accel_cleanup_r
  
  static inline int mlx5e_accel_init_tx(struct mlx5e_priv *priv)
  {

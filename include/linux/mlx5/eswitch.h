@@ -106,6 +106,8 @@ u32 mlx5_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 					      u16 vport_num);
 u32 mlx5_eswitch_get_vport_metadata_for_set(struct mlx5_eswitch *esw,
 					    u16 vport_num);
+u32 mlx5_eswitch_get_vport_prev_metadata_for_match(struct mlx5_eswitch *esw,
+						   u16 vport_num);
 
 /* Reg C1 usage:
  * Reg C1 = < Reserved(1) | ESW_TUN_ID(12) | ESW_TUN_OPTS(11) | ESW_ZONE_ID(8) >
@@ -151,9 +153,6 @@ u32 mlx5_eswitch_get_vport_metadata_for_set(struct mlx5_eswitch *esw,
 u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev);
 u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev);
 struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw);
-bool mlx5_esw_is_shared_fdb_master(struct mlx5_core_dev *dev);
-bool mlx5_esw_is_shared_fdb(struct mlx5_core_dev *dev);
-struct mlx5_devcom_comp_dev *mlx5_esw_devcom_get(struct mlx5_core_dev *dev);
 
 #else  /* CONFIG_MLX5_ESWITCH */
 
@@ -198,13 +197,6 @@ static inline u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev)
 }
 
 static inline struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw)
-{
-	return NULL;
-}
-
-static inline bool mlx5_esw_is_shared_fdb_master(struct mlx5_core_dev *dev) { return false; }
-static inline bool mlx5_esw_is_shared_fdb(struct mlx5_core_dev *dev) { return false; }
-static inline struct mlx5_devcom_comp_dev *mlx5_esw_devcom_get(struct mlx5_core_dev *dev)
 {
 	return NULL;
 }

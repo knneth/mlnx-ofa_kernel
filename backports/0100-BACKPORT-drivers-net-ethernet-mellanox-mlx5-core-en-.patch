@@ -8,7 +8,7 @@ Change-Id: Ia507d6a34814111d12e84ed0cc99dfc57e5273e7
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-@@ -40,6 +40,9 @@ struct mlx5e_ptp {
+@@ -41,6 +41,9 @@ struct mlx5e_ptp {
  
  	/* data path - accessed per napi poll */
  	struct mlx5e_ch_stats     *stats;
@@ -18,7 +18,7 @@ Change-Id: Ia507d6a34814111d12e84ed0cc99dfc57e5273e7
  
  	/* control */
  	struct mlx5e_priv         *priv;
-@@ -50,14 +53,26 @@ struct mlx5e_ptp {
+@@ -51,14 +54,26 @@ struct mlx5e_ptp {
  
  static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
  {
@@ -47,7 +47,7 @@ Change-Id: Ia507d6a34814111d12e84ed0cc99dfc57e5273e7
  	if (fk.basic.n_proto == htons(ETH_P_1588))
  		return true;
  
-@@ -67,6 +82,7 @@ static inline bool mlx5e_use_ptpsq(struc
+@@ -68,6 +83,7 @@ static inline bool mlx5e_use_ptpsq(struc
  
  	return (fk.basic.ip_proto == IPPROTO_UDP &&
  		fk.ports.dst == htons(PTP_EV_PORT));

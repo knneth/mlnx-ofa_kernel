@@ -70,9 +70,9 @@ Change-Id: I2b282b7aa9dfd602a37096db5c3ea51238178690
 +			_fib_dev = fib_info_nh(fi, i)->fib_nh_dev;
 +#else
 +#ifdef HAVE_FIB_NH_DEV
-+			_fib_dev = fi->fib_nh[0].fib_nh_dev;
++			_fib_dev = fi->fib_nh[i].fib_nh_dev;
 +#else
-+			_fib_dev = fi->fib_nh[0].nh_dev;
++			_fib_dev = fi->fib_nh[i].nh_dev;
 +#endif
 +#endif
 +			if (_fib_dev == current_dev) {
@@ -88,9 +88,9 @@ Change-Id: I2b282b7aa9dfd602a37096db5c3ea51238178690
 +		_fib_dev = fib_info_nh(fi, i)->fib_nh_dev;
 +#else
 +#ifdef HAVE_FIB_NH_DEV
-+		_fib_dev = fi->fib_nh[0].fib_nh_dev;
++		_fib_dev = fi->fib_nh[i].fib_nh_dev;
 +#else
-+		_fib_dev = fi->fib_nh[0].nh_dev;
++		_fib_dev = fi->fib_nh[i].nh_dev;
 +#endif
 +#endif
 +		ldev_idx = mlx5_lag_dev_get_netdev_idx(ldev, _fib_dev);

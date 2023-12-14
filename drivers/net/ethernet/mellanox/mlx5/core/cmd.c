@@ -1697,7 +1697,9 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 						      ent->idx);
 					cmd_ent_put(ent);
 				}
-				if ((vec & MLX5_TRIGGERED_CMD_COMP) && ent->ret == -ETIMEDOUT)
+				if ((vec & MLX5_TRIGGERED_CMD_COMP) &&
+				    ent->ret == -ETIMEDOUT &&
+				    test_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state))
 					cmd_ent_put(ent);
 				if (comp_type != MLX5_CMD_COMP_TYPE_POLLING)
 					continue;
@@ -1715,8 +1717,10 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 
 			if (comp_type != MLX5_CMD_COMP_TYPE_FORCED || /* Real FW completion */
 			     mlx5_cmd_is_down(dev) || /* No real FW completion is expected */
-			     !opcode_allowed(cmd, ent->op))
+			     !opcode_allowed(cmd, ent->op)) {
+				set_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state);
 				cmd_ent_put(ent);
+			}
 
 			ent->ts2 = ktime_get_ns();
 			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));

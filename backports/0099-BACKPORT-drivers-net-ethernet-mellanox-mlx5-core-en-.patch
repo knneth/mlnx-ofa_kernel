@@ -146,7 +146,7 @@ Change-Id: Ic7804792cf597b3f558e1a4ea604d7b7bb879959
  	mlx5e_build_rq_param(mdev, params, NULL, q_counter, rq_params);
  }
  
-@@ -728,7 +781,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
+@@ -731,7 +784,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
  	if (err)
  		goto err_free;
  

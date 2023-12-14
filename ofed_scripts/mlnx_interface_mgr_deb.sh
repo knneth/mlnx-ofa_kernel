@@ -81,7 +81,6 @@ if [[ "X$last_bootID_manual" != "X" && "X$last_bootID_manual" == "X$bootID" ]]; 
 fi
 
 . $CONFIG
-IPOIB_MTU=${IPOIB_MTU:-65520}
 
 # set configuration files
 conf_files=/etc/network/interfaces
@@ -165,8 +164,6 @@ bring_up()
     local i=$1
     shift
     local RC=0
-
-    MTU=`/usr/sbin/net-interfaces get-mtu ${i}`
 
     # relevant for IPoIB interfaces only
     local is_ipoib_if=0

@@ -52,7 +52,7 @@ static void mlx5e_create_channel_debugfs(struct mlx5e_priv *priv,
 	u8 num_tc = mlx5e_get_dcb_num_tc(&priv->channels.params);
 
 	snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "channel-%d", channel_num);
-	channel_root = debugfs_create_dir(name, priv->dfs_root);
+	channel_root = debugfs_create_dir(name, priv->netdev_dfs_root);
 	if (IS_ERR_OR_NULL(channel_root)) {
 		netdev_err(priv->netdev,
 			   "Failed to create channel debugfs for %s\n",
@@ -131,21 +131,21 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		root_name = ns_root_name;
 	}
 
-	priv->dfs_root = debugfs_create_dir(root_name, mlx5_debugfs_get_dev_root(priv->mdev));
-	if (IS_ERR_OR_NULL(priv->dfs_root)) {
+	priv->netdev_dfs_root = debugfs_create_dir(root_name, mlx5_debugfs_get_dev_root(priv->mdev));
+	if (IS_ERR_OR_NULL(priv->netdev_dfs_root)) {
 		netdev_err(priv->netdev, "Failed to init debugfs files for %s\n",
 			   root_name);
 		return;
 	}
 
-	debugfs_create_u8("num_tc", S_IRUSR, priv->dfs_root, num_tc);
+	debugfs_create_u8("num_tc", S_IRUSR, priv->netdev_dfs_root, num_tc);
 
 	for (i = 0; i < mlx5e_get_num_lag_ports(priv->mdev); i++) {
 		int tc;
 
 		for (tc = 0; tc < *num_tc; tc++) {
 			snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "tisn-%d_%d", i, tc);
-			debugfs_create_u32(name, S_IRUSR, priv->dfs_root,
+			debugfs_create_u32(name, S_IRUSR, priv->netdev_dfs_root,
 					&priv->tisn[i][tc]);
 		}
 	}
@@ -156,7 +156,7 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		rx_res_dbg->i = i;
 		rx_res_dbg->rx_res = priv->rx_res;
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
-		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
+		debugfs_create_file_unsafe(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_indir);
 	}
 
 	for (i = 0; i < priv->max_nch; i++) {
@@ -165,7 +165,7 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		rx_res_dbg->i = i;
 		rx_res_dbg->rx_res = priv->rx_res;
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
-		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
+		debugfs_create_file_unsafe(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_dir);
 	}
 
 	for (i = 0; i < priv->channels.num; i++)
@@ -181,7 +181,7 @@ void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
 
-		dent = debugfs_lookup(name, priv->dfs_root);
+		dent = debugfs_lookup(name, priv->netdev_dfs_root);
 		if (dent && dent->d_inode && dent->d_inode->i_private)
 			kvfree(dent->d_inode->i_private);
 	}
@@ -189,7 +189,7 @@ void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 	for (i = 0; i < priv->max_nch; i++) {
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
 
-		dent = debugfs_lookup(name, priv->dfs_root);
+		dent = debugfs_lookup(name, priv->netdev_dfs_root);
 		if (dent && dent->d_inode && dent->d_inode->i_private)
 			kvfree(dent->d_inode->i_private);
 	}
@@ -199,6 +199,6 @@ void mlx5e_destroy_debugfs(struct mlx5e_priv *priv)
 {
 	kvfree(priv->fds_num_tc);
 	mlx5e_debugs_free_recursive_private_data(priv);
-	debugfs_remove_recursive(priv->dfs_root);
-	priv->dfs_root = NULL;
+	debugfs_remove_recursive(priv->netdev_dfs_root);
+	priv->netdev_dfs_root = NULL;
 }

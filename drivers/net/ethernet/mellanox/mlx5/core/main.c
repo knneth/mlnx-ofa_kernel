@@ -1213,10 +1213,10 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 {
 	int err;
 
-	dev->priv.devc = mlx5_devcom_register_device(dev);
-	if (IS_ERR(dev->priv.devc))
-		mlx5_core_warn(dev, "failed to register devcom device %ld\n",
-			       PTR_ERR(dev->priv.devc));
+	dev->priv.devcom = mlx5_devcom_register_device(dev);
+	if (IS_ERR(dev->priv.devcom))
+		mlx5_core_err(dev, "failed to register with devcom (0x%p)\n",
+			      dev->priv.devcom);
 
 	err = mlx5_query_board_id(dev);
 	if (err) {
@@ -1373,7 +1373,7 @@ err_eq_cleanup:
 err_irq_cleanup:
 	mlx5_irq_table_cleanup(dev);
 err_devcom:
-	mlx5_devcom_unregister_device(dev->priv.devc);
+	mlx5_devcom_unregister_device(dev->priv.devcom);
 
 	return err;
 }
@@ -1405,7 +1405,7 @@ static void mlx5_cleanup_once(struct mlx5_core_dev *dev)
 	mlx5_events_cleanup(dev);
 	mlx5_eq_table_cleanup(dev);
 	mlx5_irq_table_cleanup(dev);
-	mlx5_devcom_unregister_device(dev->priv.devc);
+	mlx5_devcom_unregister_device(dev->priv.devcom);
 }
 
 static int mlx5_function_enable(struct mlx5_core_dev *dev, bool boot, u64 timeout)
@@ -2448,7 +2448,7 @@ static pci_ers_result_t mlx5_pci_err_detected(struct pci_dev *pdev,
 
 	mlx5_enter_error_state(dev, false);
 	mlx5_error_sw_reset(dev);
-	mlx5_unload_one(dev, true);
+	mlx5_unload_one(dev, false);
 	mlx5_drain_health_wq(dev);
 	mlx5_pci_disable_device(dev);
 

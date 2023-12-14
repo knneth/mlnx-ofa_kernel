@@ -8,7 +8,7 @@
 
 struct mlx5_vhca_state_event {
 	u16 function_id;
-	u32 sw_function_id;
+	u16 sw_function_id;
 	u8 new_vhca_state;
 };
 

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/tcp.c
 
 Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
 ---
- drivers/nvme/target/tcp.c | 59 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 55 insertions(+), 4 deletions(-)
+ drivers/nvme/target/tcp.c | 122 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 118 insertions(+), 4 deletions(-)
 
 --- a/drivers/nvme/target/tcp.c
 +++ b/drivers/nvme/target/tcp.c
@@ -48,7 +48,140 @@ Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
  }
  
  static void nvmet_tcp_fatal_error(struct nvmet_tcp_queue *queue)
-@@ -1470,7 +1481,9 @@ static void nvmet_tcp_data_ready(struct
+@@ -550,13 +561,25 @@ static void nvmet_tcp_execute_request(st
+ 
+ static int nvmet_try_send_data_pdu(struct nvmet_tcp_cmd *cmd)
+ {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
++	struct msghdr msg = {
++		.msg_flags = MSG_DONTWAIT | MSG_MORE | MSG_SPLICE_PAGES,
++	};
++	struct bio_vec bvec;
++#endif
+ 	u8 hdgst = nvmet_tcp_hdgst_len(cmd->queue);
+ 	int left = sizeof(*cmd->data_pdu) - cmd->offset + hdgst;
+ 	int ret;
+ 
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 	ret = kernel_sendpage(cmd->queue->sock, virt_to_page(cmd->data_pdu),
+ 			offset_in_page(cmd->data_pdu) + cmd->offset,
+ 			left, MSG_DONTWAIT | MSG_MORE | MSG_SENDPAGE_NOTLAST);
++#else
++	bvec_set_virt(&bvec, (void *)cmd->data_pdu + cmd->offset, left);
++	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
++	ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 	if (ret <= 0)
+ 		return ret;
+ 
+@@ -577,17 +600,35 @@ static int nvmet_try_send_data(struct nv
+ 	int ret;
+ 
+ 	while (cmd->cur_sg) {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
++		struct msghdr msg = {
++			.msg_flags = MSG_DONTWAIT | MSG_SPLICE_PAGES,
++		};
++		struct bio_vec bvec;
++#endif
+ 		struct page *page = sg_page(cmd->cur_sg);
+ 		u32 left = cmd->cur_sg->length - cmd->offset;
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 		int flags = MSG_DONTWAIT;
++#endif
+ 
+ 		if ((!last_in_batch && cmd->queue->send_list_len) ||
+ 		    cmd->wbytes_done + left < cmd->req.transfer_len ||
+ 		    queue->data_digest || !queue->nvme_sq.sqhd_disabled)
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 			flags |= MSG_MORE | MSG_SENDPAGE_NOTLAST;
++#else
++			msg.msg_flags |= MSG_MORE;
++#endif
+ 
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 		ret = kernel_sendpage(cmd->queue->sock, page, cmd->offset,
+ 					left, flags);
++#else
++		bvec_set_page(&bvec, page, left, cmd->offset);
++		iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
++		ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 		if (ret <= 0)
+ 			return ret;
+ 
+@@ -623,18 +664,34 @@ static int nvmet_try_send_data(struct nv
+ static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
+ 		bool last_in_batch)
+ {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
++	struct msghdr msg = { .msg_flags = MSG_DONTWAIT | MSG_SPLICE_PAGES, };
++	struct bio_vec bvec;
++#endif
+ 	u8 hdgst = nvmet_tcp_hdgst_len(cmd->queue);
+ 	int left = sizeof(*cmd->rsp_pdu) - cmd->offset + hdgst;
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 	int flags = MSG_DONTWAIT;
++#endif
+ 	int ret;
+ 
+ 	if (!last_in_batch && cmd->queue->send_list_len)
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 		flags |= MSG_MORE | MSG_SENDPAGE_NOTLAST;
+ 	else
+ 		flags |= MSG_EOR;
+ 
+ 	ret = kernel_sendpage(cmd->queue->sock, virt_to_page(cmd->rsp_pdu),
+ 		offset_in_page(cmd->rsp_pdu) + cmd->offset, left, flags);
++#else
++		msg.msg_flags |= MSG_MORE;
++	else
++		msg.msg_flags |= MSG_EOR;
++
++	bvec_set_virt(&bvec, (void *)cmd->rsp_pdu + cmd->offset, left);
++	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
++	ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 	if (ret <= 0)
+ 		return ret;
+ 	cmd->offset += ret;
+@@ -651,18 +708,35 @@ static int nvmet_try_send_response(struc
+ 
+ static int nvmet_try_send_r2t(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
+ {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
++	struct msghdr msg = { .msg_flags = MSG_DONTWAIT | MSG_SPLICE_PAGES, };
++	struct bio_vec bvec;
++#endif
+ 	u8 hdgst = nvmet_tcp_hdgst_len(cmd->queue);
+ 	int left = sizeof(*cmd->r2t_pdu) - cmd->offset + hdgst;
++
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 	int flags = MSG_DONTWAIT;
++#endif
+ 	int ret;
+ 
+ 	if (!last_in_batch && cmd->queue->send_list_len)
++#ifdef HAVE_PROTO_OPS_SENDPAGE
+ 		flags |= MSG_MORE | MSG_SENDPAGE_NOTLAST;
+ 	else
+ 		flags |= MSG_EOR;
+ 
+ 	ret = kernel_sendpage(cmd->queue->sock, virt_to_page(cmd->r2t_pdu),
+ 		offset_in_page(cmd->r2t_pdu) + cmd->offset, left, flags);
++#else
++		msg.msg_flags |= MSG_MORE;
++	else
++		msg.msg_flags |= MSG_EOR;
++
++	bvec_set_virt(&bvec, (void *)cmd->r2t_pdu + cmd->offset, left);
++	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
++	ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 	if (ret <= 0)
+ 		return ret;
+ 	cmd->offset += ret;
+@@ -1470,7 +1544,9 @@ static void nvmet_tcp_data_ready(struct
  {
  	struct nvmet_tcp_queue *queue;
  
@@ -58,7 +191,7 @@ Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
  
  	read_lock_bh(&sk->sk_callback_lock);
  	queue = sk->sk_user_data;
-@@ -1533,14 +1546,27 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1533,14 +1609,27 @@ static int nvmet_tcp_set_queue_sock(stru
  	struct socket *sock = queue->sock;
  	struct inet_sock *inet = inet_sk(sock->sk);
  	int ret;
@@ -86,7 +219,7 @@ Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
  	if (ret < 0)
  		return ret;
  
-@@ -1555,8 +1581,19 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1555,8 +1644,19 @@ static int nvmet_tcp_set_queue_sock(stru
  		sock_set_priority(sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -106,7 +239,7 @@ Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
  
  	ret = 0;
  	write_lock_bh(&sock->sk->sk_callback_lock);
-@@ -1669,8 +1706,9 @@ static void nvmet_tcp_listen_data_ready(
+@@ -1669,8 +1769,9 @@ static void nvmet_tcp_listen_data_ready(
  {
  	struct nvmet_tcp_port *port;
  
@@ -117,7 +250,7 @@ Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
  	read_lock_bh(&sk->sk_callback_lock);
  	port = sk->sk_user_data;
  	if (!port)
-@@ -1687,6 +1725,9 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -1687,6 +1788,9 @@ static int nvmet_tcp_add_port(struct nvm
  	struct nvmet_tcp_port *port;
  	__kernel_sa_family_t af;
  	int ret;
@@ -127,7 +260,7 @@ Change-Id: I76919c53f32485e22b1728756f79e3aa633259b2
  
  	port = kzalloc(sizeof(*port), GFP_KERNEL);
  	if (!port)
-@@ -1730,7 +1771,17 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -1730,7 +1834,17 @@ static int nvmet_tcp_add_port(struct nvm
  	port->data_ready = port->sock->sk->sk_data_ready;
  	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
  	sock_set_reuseaddr(port->sock->sk);

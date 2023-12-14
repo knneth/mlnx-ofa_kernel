@@ -32,7 +32,6 @@
 
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/device.h>
-#include <linux/mlx5/devcom.h>
 #include <linux/mlx5/mlx5_ifc.h>
 
 #include "fs_core.h"
@@ -222,8 +221,8 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 		return 0;
 
 	if (ft->type == FS_FT_FDB &&
-	    mlx5_esw_is_shared_fdb(dev) &&
-	    !mlx5_esw_is_shared_fdb_master(dev))
+	    mlx5_lag_is_shared_fdb(dev) &&
+	    !mlx5_lag_is_master(dev))
 		return 0;
 
 	MLX5_SET(set_flow_table_root_in, in, opcode,
@@ -243,44 +242,30 @@ static int mlx5_cmd_update_root_ft(struct mlx5_flow_root_namespace *ns,
 	err = mlx5_cmd_exec_in(dev, set_flow_table_root, in);
 	if (!err &&
 	    ft->type == FS_FT_FDB &&
-	    mlx5_esw_is_shared_fdb(dev) &&
-	    mlx5_esw_is_shared_fdb_master(dev)) {
+	    mlx5_lag_is_shared_fdb(dev) &&
+	    mlx5_lag_is_master(dev)) {
 		struct mlx5_core_dev *peer_dev;
-		int i;
+		int i, j;
 
-		if (MLX5_VPORT_MANAGER(dev)) {
-			mlx5_lag_for_each_peer_mdev(dev, peer_dev, i) {
-				err = mlx5_cmd_set_slave_root_fdb(dev, peer_dev, !disconnect,
-						(!disconnect) ? ft->id : 0);
-				if (err && !disconnect) {
-					MLX5_SET(set_flow_table_root_in, in, op_mod, 0);
-					MLX5_SET(set_flow_table_root_in, in, table_id,
-							ns->root_ft->id);
-					mlx5_cmd_exec_in(dev, set_flow_table_root, in);
-				}
-				if (err)
-					break;
-			}
-		} else {
-			struct mlx5_devcom_comp_dev *devcom, *pos;
-			struct mlx5_eswitch *peer_esw;
-
-			devcom = mlx5_esw_devcom_get(dev);
-
-			if (mlx5_devcom_comp_is_ready(devcom)) {
-				mlx5_devcom_for_each_peer_entry(devcom, peer_esw, pos) {
-					err = mlx5_cmd_set_slave_root_fdb(dev, peer_esw->dev, !disconnect,
-							(!disconnect) ? ft->id : 0);
-					if (err && !disconnect) {
-						MLX5_SET(set_flow_table_root_in, in, op_mod, 0);
-						MLX5_SET(set_flow_table_root_in, in, table_id,
-								ns->root_ft->id);
-						mlx5_cmd_exec_in(dev, set_flow_table_root, in);
-					}
-					if (err)
+		mlx5_lag_for_each_peer_mdev(dev, peer_dev, i) {
+			err = mlx5_cmd_set_slave_root_fdb(dev, peer_dev, !disconnect,
+							  (!disconnect) ? ft->id : 0);
+			if (err && !disconnect) {
+				mlx5_lag_for_each_peer_mdev(dev, peer_dev, j) {
+					if (j < i)
+						mlx5_cmd_set_slave_root_fdb(dev, peer_dev, 1,
+									    ns->root_ft->id);
+					else
 						break;
 				}
+
+				MLX5_SET(set_flow_table_root_in, in, op_mod, 0);
+				MLX5_SET(set_flow_table_root_in, in, table_id,
+					 ns->root_ft->id);
+				mlx5_cmd_exec_in(dev, set_flow_table_root, in);
 			}
+			if (err)
+				break;
 		}
 
 	}

@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/hwmon.c
 
 Change-Id: I7f46e0ab47230eeb73b742a92b3a32c0baa342bf
 ---
- .../net/ethernet/mellanox/mlx5/core/hwmon.c   | 61 ++++++++++++++++++-
- 1 file changed, 59 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/hwmon.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/hwmon.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/hwmon.c
-@@ -1,11 +1,17 @@
+@@ -1,6 +1,9 @@
  // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
  // Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved
  
@@ -18,15 +18,7 @@ Change-Id: I7f46e0ab47230eeb73b742a92b3a32c0baa342bf
  #include <linux/hwmon.h>
  #include <linux/bitmap.h>
  #include <linux/mlx5/device.h>
- #include <linux/mlx5/mlx5_ifc.h>
- #include <linux/mlx5/port.h>
-+#ifndef HAVE_HWMON_SANITIZE_NAME
-+#include <linux/pci.h>
-+#endif
- #include "mlx5_core.h"
- #include "hwmon.h"
- 
-@@ -143,14 +149,23 @@ static umode_t mlx5_hwmon_is_visible(con
+@@ -142,14 +145,23 @@ static umode_t mlx5_hwmon_is_visible(con
  }
  
  static int mlx5_hwmon_read_string(struct device *dev, enum hwmon_sensor_types type, u32 attr,
@@ -52,55 +44,7 @@ Change-Id: I7f46e0ab47230eeb73b742a92b3a32c0baa342bf
  	return 0;
  }
  
-@@ -298,6 +313,47 @@ static void mlx5_hwmon_free(struct mlx5_
- 	kfree(hwmon);
- }
- 
-+#ifndef HAVE_HWMON_SANITIZE_NAME
-+#ifndef HAVE_HWMON_IS_BAD_CHAR
-+static bool hwmon_is_bad_char(const char ch)
-+{
-+	switch (ch) {
-+	case '-':
-+	case '*':
-+	case ' ':
-+	case '\t':
-+	case '\n':
-+		return true;
-+	default:
-+		return false;
-+	}
-+}
-+#endif /*HAVE_HWMON_IS_BAD_CHAR */
-+
-+static char *__hwmon_sanitize_name(struct device *dev, const char *old_name)
-+{
-+        char *name, *p;
-+
-+        if (dev)
-+                name = devm_kstrdup(dev, old_name, GFP_KERNEL);
-+        else
-+                name = kstrdup(old_name, GFP_KERNEL);
-+        if (!name)
-+                return ERR_PTR(-ENOMEM);
-+
-+        for (p = name; *p; p++)
-+                if (hwmon_is_bad_char(*p))
-+                        *p = '_';
-+
-+        return name;
-+}
-+
-+char *hwmon_sanitize_name(const char *name)
-+{
-+	return __hwmon_sanitize_name(NULL, name);
-+}
-+#endif
-+
- static struct mlx5_hwmon *mlx5_hwmon_alloc(struct mlx5_core_dev *mdev)
- {
- 	struct mlx5_hwmon *hwmon;
-@@ -431,3 +487,4 @@ void mlx5_hwmon_dev_unregister(struct ml
+@@ -416,3 +428,4 @@ void mlx5_hwmon_dev_unregister(struct ml
  	mlx5_hwmon_free(hwmon);
  	mdev->hwmon = NULL;
  }

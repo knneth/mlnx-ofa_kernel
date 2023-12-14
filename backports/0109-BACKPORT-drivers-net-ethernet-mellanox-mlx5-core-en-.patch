@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie11692351ae6f9fb9b99af9368fe27f018b892f1
 ---
- .../mellanox/mlx5/core/en/reporter_rx.c       | 101 +++++++++++++-----
- 1 file changed, 77 insertions(+), 24 deletions(-)
+ .../mellanox/mlx5/core/en/reporter_rx.c       | 102 +++++++++++++-----
+ 1 file changed, 78 insertions(+), 24 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
@@ -174,7 +174,7 @@ Change-Id: Ie11692351ae6f9fb9b99af9368fe27f018b892f1
  static const struct devlink_health_reporter_ops mlx5_rx_reporter_ops = {
  	.name = "rx",
  	.recover = mlx5e_rx_reporter_recover,
-@@ -733,20 +760,40 @@ static const struct devlink_health_repor
+@@ -733,20 +760,41 @@ static const struct devlink_health_repor
  };
  
  #define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
@@ -204,10 +204,11 @@ Change-Id: Ie11692351ae6f9fb9b99af9368fe27f018b892f1
 +#else /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE */
 +	reporter = devlink_health_reporter_create(devlink,
 +							&mlx5_rx_reporter_ops,
-+#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
 +							MLX5E_REPORTER_RX_GRACEFUL_PERIOD,
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
++							true,
 +#endif
-+							true, priv);
++							priv);
 +#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE */
  	if (IS_ERR(reporter)) {
  		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %ld\n",
@@ -219,7 +220,7 @@ Change-Id: Ie11692351ae6f9fb9b99af9368fe27f018b892f1
  }
  
  void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
-@@ -754,6 +801,12 @@ void mlx5e_reporter_rx_destroy(struct ml
+@@ -754,6 +802,12 @@ void mlx5e_reporter_rx_destroy(struct ml
  	if (!priv->rx_reporter)
  		return;
  

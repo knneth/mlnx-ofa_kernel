@@ -9,7 +9,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
-@@ -72,6 +72,9 @@ static int mlx5e_ipsec_remove_trailer(st
+@@ -74,6 +74,9 @@ static int mlx5e_ipsec_remove_trailer(st
  
  static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
  				struct mlx5_wqe_eth_seg *eseg, u8 mode,
@@ -19,7 +19,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  				struct xfrm_offload *xo)
  {
  	/* Tunnel Mode:
-@@ -86,7 +89,11 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -88,7 +91,11 @@ static void mlx5e_ipsec_set_swp(struct s
  	 * SWP:      OutL3                   InL3  InL4
  	 * Pkt: MAC  IP     ESP  UDP  VXLAN  IP    L4
  	 */
@@ -32,7 +32,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  	/* Shared settings */
  	eseg->swp_outer_l3_offset = skb_network_offset(skb) / 2;
  	if (skb->protocol == htons(ETH_P_IPV6))
-@@ -94,11 +101,36 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -96,11 +103,36 @@ static void mlx5e_ipsec_set_swp(struct s
  
  	/* Tunnel mode */
  	if (mode == XFRM_MODE_TUNNEL) {
@@ -70,7 +70,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  		case IPPROTO_UDP:
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  			fallthrough;
-@@ -116,7 +148,32 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -118,7 +150,32 @@ static void mlx5e_ipsec_set_swp(struct s
  	if (mode != XFRM_MODE_TRANSPORT)
  		return;
  
@@ -104,7 +104,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  		switch (xo->proto) {
  		case IPPROTO_UDP:
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_OUTER_L4_UDP;
-@@ -130,7 +187,7 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -132,7 +189,7 @@ static void mlx5e_ipsec_set_swp(struct s
  		}
  	} else {
  		/* Tunnel(VXLAN TCP/UDP) over Transport Mode */
@@ -113,7 +113,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  		case IPPROTO_UDP:
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  			fallthrough;
-@@ -182,6 +239,26 @@ void mlx5e_ipsec_set_iv(struct sk_buff *
+@@ -184,6 +241,26 @@ void mlx5e_ipsec_set_iv(struct sk_buff *
  	skb_store_bits(skb, iv_offset, &seqno, 8);
  }
  
@@ -140,7 +140,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  void mlx5e_ipsec_handle_tx_wqe(struct mlx5e_tx_wqe *wqe,
  			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
  			       struct mlx5_wqe_inline_seg *inlseg)
-@@ -215,17 +292,24 @@ static int mlx5e_ipsec_set_state(struct
+@@ -217,17 +294,24 @@ static int mlx5e_ipsec_set_state(struct
  }
  
  void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
@@ -165,7 +165,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  
  	x = xfrm_input_state(skb);
  	if (unlikely(!x))
-@@ -236,7 +320,11 @@ void mlx5e_ipsec_tx_build_eseg(struct ml
+@@ -238,7 +322,11 @@ void mlx5e_ipsec_tx_build_eseg(struct ml
  		      skb->protocol != htons(ETH_P_IPV6))))
  		return;
  
@@ -177,7 +177,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  
  	l3_proto = (x->props.family == AF_INET) ?
  		   ((struct iphdr *)skb_network_header(skb))->protocol :
-@@ -264,10 +352,16 @@ bool mlx5e_ipsec_handle_tx_skb(struct ne
+@@ -266,10 +354,16 @@ bool mlx5e_ipsec_handle_tx_skb(struct ne
  	struct xfrm_offload *xo = xfrm_offload(skb);
  	struct mlx5e_ipsec_sa_entry *sa_entry;
  	struct xfrm_state *x;
@@ -194,7 +194,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  		atomic64_inc(&priv->ipsec->sw_stats.ipsec_tx_drop_bundle);
  		goto drop;
  	}
-@@ -316,15 +410,22 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -318,15 +412,22 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  	struct mlx5e_ipsec *ipsec = priv->ipsec;
  	struct mlx5e_ipsec_sa_entry *sa_entry;
  	struct xfrm_offload *xo;
@@ -217,7 +217,7 @@ Change-Id: I481a95d0fda7e91f3c68c980ae96bb10e01cf757
  		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
  		return;
  	}
-@@ -339,8 +440,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -341,8 +442,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
  	xfrm_state_hold(sa_entry->x);
  	rcu_read_unlock();
  

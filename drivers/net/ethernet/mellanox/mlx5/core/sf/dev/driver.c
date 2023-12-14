@@ -27,7 +27,6 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
 	mdev->bar_addr = sf_dev->bar_base_addr;
 	mdev->iseg_base = sf_dev->bar_base_addr;
 	mdev->coredev_type = MLX5_COREDEV_SF;
-	mdev->priv.sfnum = sf_dev->sfnum;
 	mdev->priv.parent_mdev = sf_dev->parent_mdev;
 	mdev->priv.adev_idx = adev->id;
 	sf_dev->mdev = mdev;

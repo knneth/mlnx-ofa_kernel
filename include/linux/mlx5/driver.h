@@ -463,6 +463,7 @@ struct mlx5_core_health {
 	struct work_struct		report_work;
 	struct devlink_health_reporter *fw_reporter;
 	struct devlink_health_reporter *fw_fatal_reporter;
+	struct devlink_health_reporter *vnic_reporter;
 	struct delayed_work		update_fw_log_ts_work;
 	/* failed recoveries in sequence*/
 	u32 failed_in_seq;
@@ -580,8 +581,7 @@ struct mlx5_events;
 struct mlx5_mpfs;
 struct mlx5_eswitch;
 struct mlx5_lag;
-struct mlx5_devcom_comp_dev;
-struct mlx5_devcom_dev;
+struct mlx5_devcom;
 struct mlx5_fw_reset;
 struct mlx5_eq_table;
 struct mlx5_irq_table;
@@ -718,7 +718,7 @@ struct mlx5_priv {
 	struct mlx5_core_sriov	sriov;
 	struct mlx5_lag		*lag;
 	u32			flags;
-	struct mlx5_devcom_dev	*devc;
+	struct mlx5_devcom	*devcom;
 	struct mlx5_fw_reset	*fw_reset;
 	struct mlx5_core_roce	roce;
 	struct mlx5_core_regex	regex;
@@ -728,7 +728,6 @@ struct mlx5_priv {
 
 	struct mlx5_bfreg_data		bfregs;
 	struct mlx5_uars_page	       *uar;
-	u16 sfnum;
 	bool sw_reset_lag;
 #ifdef CONFIG_MLX5_SF
 	struct mlx5_vhca_state_notifier *vhca_state_notifier;
@@ -1005,6 +1004,9 @@ struct mlx5_core_dev {
 	u32                      vsc_addr;
 	struct mlx5_hv_vhca	*hv_vhca;
 	struct mlx5_hwmon	*hwmon;
+	u64			num_block_tc;
+	u64			num_block_ipsec;
+	u64 num_ipsec_offloads;
 	struct mlx5_local_lb local_lb;
 	int max_cmpl_eq_count;
 	int cmpl_eq_depth;
@@ -1036,6 +1038,7 @@ typedef void (*mlx5_cmd_cbk_t)(int status, void *context);
 
 enum {
 	MLX5_CMD_ENT_STATE_PENDING_COMP,
+	MLX5_CMD_ENT_STATE_RREF_CLEARED,
 };
 
 struct mlx5_cmd_work_ent {

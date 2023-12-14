@@ -319,21 +319,28 @@ static int nvme_peer_init_resource(struct nvme_queue *nvmeq,
 	return ret;
 }
 
-void nvme_peer_flush_resource(struct nvme_peer_resource *resource, bool restart)
+int nvme_peer_flush_resource(struct nvme_peer_resource *resource, bool restart)
 {
-        struct nvme_queue *nvmeq = container_of(resource, struct nvme_queue,
-                                                resource);
+	struct nvme_queue *nvmeq = container_of(resource, struct nvme_queue,
+						resource);
+	int ret;
 
-        mutex_lock(&resource->lock);
-        resource->stop_master_peer = NULL;
-        resource->dd_data = NULL;
-        mutex_unlock(&resource->lock);
+	mutex_lock(&resource->lock);
+	resource->stop_master_peer = NULL;
+	resource->dd_data = NULL;
+	mutex_unlock(&resource->lock);
 
-        if (restart) {
-                nvme_suspend_queue(nvmeq->dev, nvmeq->qid);
-                adapter_delete_sq(nvmeq->dev, nvmeq->qid);
-                adapter_delete_cq(nvmeq->dev, nvmeq->qid);
-        }
+	if (restart) {
+		nvme_suspend_queue(nvmeq->dev, nvmeq->qid);
+		ret = adapter_delete_sq(nvmeq->dev, nvmeq->qid);
+		if (ret)
+			return ret;
+		adapter_delete_cq(nvmeq->dev, nvmeq->qid);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(nvme_peer_flush_resource);
 

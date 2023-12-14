@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 
 Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
 ---
- .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 63 +++++++++++++++++--
- 1 file changed, 59 insertions(+), 4 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 68 +++++++++++++++++--
+ 1 file changed, 64 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
@@ -19,7 +19,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  #define MLX5_SFS_PER_CTRL_IRQ 64
  #define MLX5_IRQ_CTRL_SF_MAX 8
  /* min num of vectors for SFs to be enabled */
-@@ -148,7 +152,11 @@ static void irq_release(struct mlx5_irq
+@@ -154,7 +158,11 @@ static void mlx5_system_free_irq(struct
  	 * before calling it. This is why there is asymmetry with set_rmap
  	 * which should be called after alloc_irq but before request_irq.
  	 */
@@ -28,10 +28,10 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
 +#else
 +	irq_set_affinity_hint(irq->irqn, NULL);
 +#endif
- 	free_cpumask_var(irq->mask);
  	free_irq(irq->irqn, &irq->nh);
- 	kfree(irq);
-@@ -224,6 +232,10 @@ static void irq_set_name(struct mlx5_irq
+ }
+ 
+@@ -238,6 +246,10 @@ static void irq_set_name(struct mlx5_irq
  struct mlx5_irq *mlx5_irq_alloc(struct mlx5_irq_pool *pool, int i,
  				const struct cpumask *affinity)
  {
@@ -42,7 +42,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	struct mlx5_core_dev *dev = pool->dev;
  	char name[MLX5_MAX_IRQ_NAME];
  	struct mlx5_irq *irq;
-@@ -232,7 +244,12 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -246,7 +258,12 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
  	irq = kzalloc(sizeof(*irq), GFP_KERNEL);
  	if (!irq)
  		return ERR_PTR(-ENOMEM);
@@ -55,7 +55,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	if (!mlx5_irq_pool_is_sf_pool(pool))
  		irq_set_name(pool, name, i);
  	else
-@@ -253,7 +270,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -267,7 +284,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
  	}
  	if (affinity) {
  		cpumask_copy(irq->mask, affinity);
@@ -67,7 +67,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	}
  	irq->pool = pool;
  	irq->refcount = 1;
-@@ -266,7 +287,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -280,7 +301,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
  	}
  	return irq;
  err_xa:
@@ -79,7 +79,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	free_cpumask_var(irq->mask);
  err_cpumask:
  	free_irq(irq->irqn, &irq->nh);
-@@ -478,7 +503,7 @@ int mlx5_irqs_request_vectors(struct mlx
+@@ -492,7 +517,7 @@ int mlx5_irqs_request_vectors(struct mlx
  			      struct mlx5_irq **irqs)
  {
  	cpumask_var_t req_mask;
@@ -88,7 +88,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	int i;
  
  	if (!zalloc_cpumask_var(&req_mask, GFP_KERNEL))
-@@ -564,10 +589,12 @@ int mlx5_irqs_request_mask(struct mlx5_c
+@@ -578,10 +603,12 @@ int mlx5_irqs_request_mask(struct mlx5_c
  			return i;
  		}
  		irqs[i] = irq;
@@ -101,7 +101,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	}
  	return i;
  }
-@@ -727,6 +754,10 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -760,6 +787,10 @@ int mlx5_irq_table_create(struct mlx5_co
  	int total_vec;
  	int pf_vec;
  	int err;
@@ -112,7 +112,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  
  	if (mlx5_core_is_sf(dev))
  		return 0;
-@@ -747,16 +778,34 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -780,16 +811,34 @@ int mlx5_irq_table_create(struct mlx5_co
  	if (mlx5_sf_max_functions(dev))
  		total_vec += MLX5_IRQ_CTRL_SF_MAX +
  			MLX5_COMP_EQS_PER_SF * mlx5_sf_max_functions(dev);
@@ -149,7 +149,7 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
  	return err;
  }
  
-@@ -771,7 +820,13 @@ void mlx5_irq_table_destroy(struct mlx5_
+@@ -804,7 +853,13 @@ void mlx5_irq_table_destroy(struct mlx5_
  	 * to here. Hence, making sure all the irqs are released.
  	 */
  	irq_pools_destroy(table);
@@ -161,6 +161,19 @@ Change-Id: I213eb465ab21ae56c89ec56dece125222808f5d1
 +        kfree(dev->priv.msix_arr);
 +#endif
 +
+ }
+ 
+ void mlx5_irq_table_free_irqs(struct mlx5_core_dev *dev)
+@@ -815,7 +870,12 @@ void mlx5_irq_table_free_irqs(struct mlx
+ 		return;
+ 
+ 	mlx5_irq_pools_free_irqs(table);
++#ifdef HAVE_PCI_IRQ_API
+ 	pci_free_irq_vectors(dev->pdev);
++#else
++        pci_disable_msix(dev->pdev);
++        kfree(dev->priv.msix_arr);
++#endif
  }
  
  bool mlx5_irq_table_have_dedicated_sfs_irqs(struct mlx5_irq_table *table)

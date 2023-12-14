@@ -48,6 +48,7 @@
 #include "devlink.h"
 #include "ecpf.h"
 #include "en/mod_hdr.h"
+#include "en_accel/ipsec.h"
 #include "mlx5_devm.h"
 #include "lag/lag.h"
 
@@ -111,15 +112,6 @@ mlx5_eswitch_get_vport(struct mlx5_eswitch *esw, u16 vport_num)
 		return ERR_PTR(-EINVAL);
 	}
 	return vport;
-}
-
-u8 mlx5_eswitch_get_vport_direction(struct mlx5_core_dev *dev, u16 vport_num)
-{
-	struct mlx5_vport *vport = mlx5_eswitch_get_vport(dev->priv.eswitch, vport_num);
-
-	if (IS_ERR(vport))
-		return 0;
-	return vport->info.direction;
 }
 
 static int arm_vport_context_events_cmd(struct mlx5_core_dev *dev, u16 vport,
@@ -280,7 +272,7 @@ esw_fdb_set_vport_rule(struct mlx5_eswitch *esw, u8 mac[ETH_ALEN], u16 vport)
 }
 
 static struct mlx5_flow_handle *
-esw_fdb_set_vport_allmulti_rule(struct mlx5_eswitch *esw, u16 vport)
+esw_fdb_set_vport_allmulti_rule(struct mlx5_eswitch *esw, u16 vport, bool rx)
 {
 	u8 mac_c[ETH_ALEN];
 	u8 mac_v[ETH_ALEN];
@@ -289,7 +281,10 @@ esw_fdb_set_vport_allmulti_rule(struct mlx5_eswitch *esw, u16 vport)
 	eth_zero_addr(mac_v);
 	mac_c[0] = 0x01;
 	mac_v[0] = 0x01;
-	return __esw_fdb_set_vport_rule(esw, vport, false, mac_c, mac_v);
+	if (rx)
+		return __esw_fdb_set_vport_rule(esw, vport, true, mac_c, mac_v);
+	else
+		return __esw_fdb_set_vport_rule(esw, vport, false, mac_c, mac_v);
 }
 
 static struct mlx5_flow_handle *
@@ -491,10 +486,8 @@ static int esw_del_mc_addr(struct mlx5_eswitch *esw, struct vport_addr *vaddr)
 	/* Remove this multicast mac from all the mc promiscuous vports */
 	update_allmulti_vports(esw, vaddr, esw_mc);
 
-	if (esw_mc->uplink_rule) {
+	if (esw_mc->uplink_rule)
 		mlx5_del_flow_rules(esw_mc->uplink_rule);
-		esw_mc->uplink_rule = NULL;
-	}
 
 	l2addr_hash_del(esw_mc);
 	return 0;
@@ -709,16 +702,20 @@ static void esw_apply_vport_rx_mode(struct mlx5_eswitch *esw,
 		goto promisc;
 
 	if (mc_promisc) {
+		vport->allmulti_rx_rule =
+			esw_fdb_set_vport_allmulti_rule(esw, vport->vport, 1);
 		vport->allmulti_rule =
-			esw_fdb_set_vport_allmulti_rule(esw, vport->vport);
+			esw_fdb_set_vport_allmulti_rule(esw, vport->vport, 0);
 		if (!allmulti_addr->uplink_rule)
 			allmulti_addr->uplink_rule =
 				esw_fdb_set_vport_allmulti_rule(esw,
-								MLX5_VPORT_UPLINK);
+								MLX5_VPORT_UPLINK, 0);
 		allmulti_addr->refcnt++;
 	} else if (vport->allmulti_rule) {
 		mlx5_del_flow_rules(vport->allmulti_rule);
 		vport->allmulti_rule = NULL;
+		mlx5_del_flow_rules(vport->allmulti_rx_rule);
+		vport->allmulti_rx_rule = NULL;
 
 		if (--allmulti_addr->refcnt > 0)
 			goto promisc;
@@ -745,8 +742,6 @@ promisc:
 static void esw_update_vport_rx_mode(struct mlx5_eswitch *esw,
 				     struct mlx5_vport *vport)
 {
-	struct esw_mc_addr *allmulti_addr = &esw->mc_promisc;
-	struct mlx5_core_dev *dev = vport->dev;
 	int promisc_all = 0;
 	int promisc_uc = 0;
 	int promisc_mc = 0;
@@ -757,30 +752,8 @@ static void esw_update_vport_rx_mode(struct mlx5_eswitch *esw,
 					   &promisc_uc,
 					   &promisc_mc,
 					   &promisc_all);
-	if (err) {
-		if (!pci_channel_offline(dev->pdev) &&
-		    dev->state != MLX5_DEVICE_STATE_INTERNAL_ERROR)
-			return;
-
-		/* EEH or PCI error. Delete promisc, multi and uplink multi rules */
-		if (vport->allmulti_rule) {
-			mlx5_del_flow_rules(vport->allmulti_rule);
-			vport->allmulti_rule = NULL;
-
-			allmulti_addr->refcnt --;
-			if (!allmulti_addr->refcnt && allmulti_addr->uplink_rule) {
-				mlx5_del_flow_rules(allmulti_addr->uplink_rule);
-				allmulti_addr->uplink_rule = NULL;
-			}
-		}
-
-		if (vport->promisc_rule) {
-			mlx5_del_flow_rules(vport->promisc_rule);
-			vport->promisc_rule = NULL;
-		}
-
+	if (err)
 		return;
-	}
 	esw_debug(esw->dev, "vport[%d] context update rx mode promisc_all=%d, all_multi=%d\n",
 		  vport->vport, promisc_all, promisc_mc);
 
@@ -929,9 +902,8 @@ static int mlx5_esw_vport_caps_get(struct mlx5_eswitch *esw, struct mlx5_vport *
 
 	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
 	vport->info.mig_enabled = MLX5_GET(cmd_hca_cap_2, hca_caps, migratable);
-#ifdef CONFIG_MLX5_SF_SFC
-	vport->info.local_esw_enabled = MLX5_GET(cmd_hca_cap_2, hca_caps, local_eswitch);
-#endif
+
+	err = mlx5_esw_ipsec_vf_offload_get(esw->dev, vport);
 out_free:
 	kfree(query_ctx);
 	return err;
@@ -944,25 +916,22 @@ static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 	int flags;
 	int err;
 
-	if (mlx5_esw_is_manager_vport(esw, vport_num))
-		return esw_vport_setup_acl(esw, vport);
-
-	err = mlx5_esw_vport_caps_get(esw, vport);
-	if (err)
-		return err;
-
-	if (vst_mode == ESW_VST_MODE_STEERING)
-		err = mlx5_modify_vport_state(esw->dev,
-					      MLX5_VPORT_STATE_OP_MOD_ESW_VPORT,
-					      vport_num, 1,
-					      vport->info.link_state,
-					      vport->info.direction);
-	if (err)
-		return err;
-
 	err = esw_vport_setup_acl(esw, vport);
 	if (err)
 		return err;
+
+	if (mlx5_esw_is_manager_vport(esw, vport_num))
+		return 0;
+
+	err = mlx5_esw_vport_caps_get(esw, vport);
+	if (err)
+		goto err_caps;
+
+	if (vst_mode == ESW_VST_MODE_STEERING)
+		mlx5_modify_vport_admin_state(esw->dev,
+					      MLX5_VPORT_STATE_OP_MOD_ESW_VPORT,
+					      vport_num, 1,
+					      vport->info.link_state);
 
 	/* Host PF has its own mac/guid. */
 	if (vport_num) {
@@ -979,6 +948,10 @@ static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 				       vport->info.qos, flags, vst_mode);
 
 	return 0;
+
+err_caps:
+	esw_vport_cleanup_acl(esw, vport);
+	return err;
 }
 
 static void esw_vport_query(struct mlx5_eswitch *esw,
@@ -1053,6 +1026,9 @@ int mlx5_esw_vport_enable(struct mlx5_eswitch *esw, u16 vport_num,
 	/* Sync with current vport context */
 	vport->enabled_events = enabled_events;
 	vport->enabled = true;
+	if (vport->vport != MLX5_VPORT_PF &&
+	    (vport->info.ipsec_crypto_enabled || vport->info.ipsec_packet_enabled))
+		esw->enabled_ipsec_vf_count++;
 
 	/* Esw manager is trusted by default. Host PF (vport 0) is trusted as well
 	 * in smartNIC as it's a vport group manager.
@@ -1117,6 +1093,10 @@ void mlx5_esw_vport_disable(struct mlx5_eswitch *esw, u16 vport_num)
 	if (!mlx5_esw_is_manager_vport(esw, vport->vport) &&
 	    MLX5_CAP_GEN(esw->dev, vhca_resource_manager))
 		mlx5_esw_vport_vhca_id_clear(esw, vport_num);
+
+	if (vport->vport != MLX5_VPORT_PF &&
+	    (vport->info.ipsec_crypto_enabled || vport->info.ipsec_packet_enabled))
+		esw->enabled_ipsec_vf_count--;
 
 	/* We don't assume VFs will cleanup after themselves.
 	 * Calling vport change handler while vport is disabled will cleanup
@@ -1194,11 +1174,8 @@ static int mlx5_esw_host_functions_enabled_query(struct mlx5_eswitch *esw)
 	return 0;
 }
 
-static void mlx5_eswitch_event_handlers_register(struct mlx5_eswitch *esw)
+static void mlx5_eswitch_event_handler_register(struct mlx5_eswitch *esw)
 {
-	MLX5_NB_INIT(&esw->nb, eswitch_vport_event, NIC_VPORT_CHANGE);
-	mlx5_eq_notifier_register(esw->dev, &esw->nb);
-
 	if (esw->mode == MLX5_ESWITCH_OFFLOADS && mlx5_eswitch_is_funcs_handler(esw->dev)) {
 		MLX5_NB_INIT(&esw->esw_funcs.nb, mlx5_esw_funcs_changed_handler,
 			     ESW_FUNCTIONS_CHANGED);
@@ -1206,12 +1183,10 @@ static void mlx5_eswitch_event_handlers_register(struct mlx5_eswitch *esw)
 	}
 }
 
-static void mlx5_eswitch_event_handlers_unregister(struct mlx5_eswitch *esw)
+static void mlx5_eswitch_event_handler_unregister(struct mlx5_eswitch *esw)
 {
 	if (esw->mode == MLX5_ESWITCH_OFFLOADS && mlx5_eswitch_is_funcs_handler(esw->dev))
 		mlx5_eq_notifier_unregister(esw->dev, &esw->esw_funcs.nb);
-
-	mlx5_eq_notifier_unregister(esw->dev, &esw->nb);
 
 	flush_workqueue(esw->work_queue);
 }
@@ -1572,6 +1547,9 @@ int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int num_vfs)
 			return -EOPNOTSUPP;
 	}
 
+	MLX5_NB_INIT(&esw->nb, eswitch_vport_event, NIC_VPORT_CHANGE);
+	mlx5_eq_notifier_register(esw->dev, &esw->nb);
+
 	if (esw->mode == MLX5_ESWITCH_LEGACY) {
 		err = esw_legacy_enable(esw);
 	} else {
@@ -1584,7 +1562,7 @@ int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int num_vfs)
 
 	esw->fdb_table.flags |= MLX5_ESW_FDB_CREATED;
 
-	mlx5_eswitch_event_handlers_register(esw);
+	mlx5_eswitch_event_handler_register(esw);
 
 	esw_info(esw->dev, "Enable: mode(%s), nvfs(%d), necvfs(%d), active vports(%d)\n",
 		 esw->mode == MLX5_ESWITCH_LEGACY ? "LEGACY" : "OFFLOADS",
@@ -1717,7 +1695,8 @@ void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw)
 	 */
 	mlx5_esw_mode_change_notify(esw, MLX5_ESWITCH_LEGACY);
 
-	mlx5_eswitch_event_handlers_unregister(esw);
+	mlx5_eq_notifier_unregister(esw->dev, &esw->nb);
+	mlx5_eswitch_event_handler_unregister(esw);
 
 	esw_info(esw->dev, "Disable: mode(%s), nvfs(%d), necvfs(%d), active vports(%d)\n",
 		 esw->mode == MLX5_ESWITCH_LEGACY ? "LEGACY" : "OFFLOADS",
@@ -1957,9 +1936,6 @@ static int mlx5_devlink_esw_multiport_set(struct devlink *devlink, u32 id,
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
 	if (!MLX5_ESWITCH_MANAGER(dev))
-		return -EOPNOTSUPP;
-
-	if (mlx5e_esw_offloads_pet_enabled(dev->priv.eswitch))
 		return -EOPNOTSUPP;
 
 	if (ctx->val.vbool)
@@ -2887,3 +2863,34 @@ struct mlx5_core_dev *mlx5_eswitch_get_core_dev(struct mlx5_eswitch *esw)
 	return mlx5_esw_allowed(esw) ? esw->dev : NULL;
 }
 EXPORT_SYMBOL(mlx5_eswitch_get_core_dev);
+
+bool mlx5_eswitch_block_ipsec(struct mlx5_core_dev *dev)
+{
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+
+	if (!mlx5_esw_allowed(esw))
+		return true;
+
+	mutex_lock(&esw->state_lock);
+	if (esw->enabled_ipsec_vf_count) {
+		mutex_unlock(&esw->state_lock);
+		return false;
+	}
+
+	dev->num_ipsec_offloads++;
+	mutex_unlock(&esw->state_lock);
+	return true;
+}
+
+void mlx5_eswitch_unblock_ipsec(struct mlx5_core_dev *dev)
+{
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+
+	if (!mlx5_esw_allowed(esw))
+		/* Failure means no eswitch => core dev is not a PF */
+		return;
+
+	mutex_lock(&esw->state_lock);
+	dev->num_ipsec_offloads--;
+	mutex_unlock(&esw->state_lock);
+}

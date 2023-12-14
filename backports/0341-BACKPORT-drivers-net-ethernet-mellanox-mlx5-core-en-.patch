@@ -1,0 +1,24 @@
+From: Roy Novich <royno@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
+
+Change-Id: Iaa509ef3c8b38f83219bbca5a24aabcdc8e44744
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
+@@ -250,10 +250,10 @@ mlx5_ct_fs_smfs_ct_validate_flow_rule(st
+ 	struct flow_match_basic basic;
+ 	struct flow_match_ports ports;
+ 	struct flow_match_tcp tcp;
++	u64 used_keys_u64 = flow_rule->match.dissector->used_keys;
+ 
+ 	if (!mlx5_tc_ct_valid_used_dissector_keys(flow_rule->match.dissector->used_keys)) {
+-		ct_dbg("rule uses unexpected dissectors (0x%016llx)",
+-		       flow_rule->match.dissector->used_keys);
++		ct_dbg("rule uses unexpected dissectors (0x%016llx)", used_keys_u64);
+ 		return false;
+ 	}
+ 

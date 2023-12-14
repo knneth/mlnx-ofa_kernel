@@ -76,9 +76,9 @@ Change-Id: I18805d0d938a1061bf51c96955399d8155c2ee76
  		rx_res_dbg->rx_res = priv->rx_res;
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
 +#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
- 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
+ 		debugfs_create_file_unsafe(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_indir);
 +#else
-+		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_indir);
++		debugfs_create_file(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_indir);
 +#endif
  	}
  
@@ -88,9 +88,9 @@ Change-Id: I18805d0d938a1061bf51c96955399d8155c2ee76
  		rx_res_dbg->rx_res = priv->rx_res;
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
 +#ifdef HAVE_DEBUGFS_CREATE_FILE_UNSAFE
- 		debugfs_create_file_unsafe(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
+ 		debugfs_create_file_unsafe(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_dir);
 +#else
-+		debugfs_create_file(name, 0400, priv->dfs_root, rx_res_dbg, &fops_dir);
++		debugfs_create_file(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_dir);
 +#endif
  	}
  
@@ -100,9 +100,9 @@ Change-Id: I18805d0d938a1061bf51c96955399d8155c2ee76
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
  
 +#ifdef HAVE_DEBUGFS_LOOKUP
- 		dent = debugfs_lookup(name, priv->dfs_root);
+ 		dent = debugfs_lookup(name, priv->netdev_dfs_root);
 +#else
-+		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++		dent = mlx5e_debugfs_lookup(name, priv->netdev_dfs_root);
 +#endif
  		if (dent && dent->d_inode && dent->d_inode->i_private)
  			kvfree(dent->d_inode->i_private);
@@ -112,9 +112,9 @@ Change-Id: I18805d0d938a1061bf51c96955399d8155c2ee76
  		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
  
 +#ifdef HAVE_DEBUGFS_LOOKUP
- 		dent = debugfs_lookup(name, priv->dfs_root);
+ 		dent = debugfs_lookup(name, priv->netdev_dfs_root);
 +#else
-+		dent = mlx5e_debugfs_lookup(name, priv->dfs_root);
++		dent = mlx5e_debugfs_lookup(name, priv->netdev_dfs_root);
 +#endif
  		if (dent && dent->d_inode && dent->d_inode->i_private)
  			kvfree(dent->d_inode->i_private);

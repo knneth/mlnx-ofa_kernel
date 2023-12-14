@@ -3,12 +3,22 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
 
 Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
 ---
- .../net/ethernet/mellanox/mlx5/core/health.c  | 183 ++++++++++++++++--
- 1 file changed, 172 insertions(+), 11 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/health.c  | 187 ++++++++++++++++--
+ 1 file changed, 176 insertions(+), 11 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/health.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/health.c
-@@ -79,6 +79,31 @@ enum {
+@@ -42,7 +42,9 @@
+ #include "lib/pci_vsc.h"
+ #include "lib/tout.h"
+ #include "diag/fw_tracer.h"
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ #include "diag/reporter_vnic.h"
++#endif
+ 
+ enum {
+ 	MAX_MISSES			= 3,
+@@ -81,6 +83,31 @@ enum {
  	MLX5_SEVERITY_VALID_MASK	= 0x8,
  };
  
@@ -40,7 +50,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  u8 mlx5_get_nic_state(struct mlx5_core_dev *dev)
  {
  	return (ioread32be(&dev->iseg->cmdq_addr_l_sz) >> 8) & 7;
-@@ -367,6 +392,31 @@ err_eio:
+@@ -369,6 +396,31 @@ err_eio:
  	return -EIO;
  }
  
@@ -72,7 +82,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  static const char *hsynd_str(u8 synd)
  {
  	switch (synd) {
-@@ -467,10 +517,14 @@ static void print_health_info(struct mlx
+@@ -471,10 +523,14 @@ static void print_health_info(struct mlx
  	mlx5_log(dev, severity, "raw fw_ver 0x%08x\n", ioread32be(&h->fw_ver));
  }
  
@@ -89,7 +99,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  {
  	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
  	struct mlx5_core_health *health = &dev->priv.health;
-@@ -582,8 +636,11 @@ mlx5_fw_reporter_heath_buffer_data_put(s
+@@ -586,8 +642,11 @@ mlx5_fw_reporter_heath_buffer_data_put(s
  
  static int
  mlx5_fw_reporter_dump(struct devlink_health_reporter *reporter,
@@ -103,7 +113,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  {
  	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
  	int err;
-@@ -637,22 +694,36 @@ static const struct devlink_health_repor
+@@ -641,22 +700,36 @@ static const struct devlink_health_repor
  
  static int
  mlx5_fw_fatal_reporter_recover(struct devlink_health_reporter *reporter,
@@ -144,7 +154,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  	int err;
  
  	if (!mlx5_core_is_pf(dev))
-@@ -676,7 +747,24 @@ mlx5_fw_fatal_reporter_dump(struct devli
+@@ -680,7 +753,24 @@ mlx5_fw_fatal_reporter_dump(struct devli
  			goto free_data;
  	}
  
@@ -169,7 +179,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  
  free_data:
  	kvfree(cr_data);
-@@ -689,13 +777,17 @@ static void mlx5_fw_fatal_reporter_err_w
+@@ -693,13 +783,17 @@ static void mlx5_fw_fatal_reporter_err_w
  	struct mlx5_fw_reporter_ctx fw_reporter_ctx;
  	struct mlx5_core_health *health;
  	struct mlx5_core_dev *dev;
@@ -187,7 +197,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  
  	mutex_lock(&dev->intf_state_mutex);
  	if (test_bit(MLX5_DROP_HEALTH_WORK, &health->flags)) {
-@@ -706,18 +798,24 @@ static void mlx5_fw_fatal_reporter_err_w
+@@ -710,18 +804,24 @@ static void mlx5_fw_fatal_reporter_err_w
  	mutex_unlock(&dev->intf_state_mutex);
  	enter_error_state(dev, false);
  	if (IS_ERR_OR_NULL(health->fw_fatal_reporter)) {
@@ -212,7 +222,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  	if (devlink_health_report(health->fw_fatal_reporter,
  				  "FW fatal error reported", &fw_reporter_ctx) == -ECANCELED) {
  		/* If recovery wasn't performed, due to grace period,
-@@ -757,17 +855,33 @@ void mlx5_fw_reporters_create(struct mlx
+@@ -761,17 +861,33 @@ void mlx5_fw_reporters_create(struct mlx
  	}
  
  	health->fw_reporter =
@@ -249,7 +259,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  	if (IS_ERR(health->fw_fatal_reporter))
  		mlx5_core_warn(dev, "Failed to create fw fatal reporter, err = %ld\n",
  			       PTR_ERR(health->fw_fatal_reporter));
-@@ -783,6 +897,7 @@ static void mlx5_fw_reporters_destroy(st
+@@ -787,6 +903,7 @@ static void mlx5_fw_reporters_destroy(st
  	if (!IS_ERR_OR_NULL(health->fw_fatal_reporter))
  		devlink_health_reporter_destroy(health->fw_fatal_reporter);
  }
@@ -257,7 +267,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  
  static unsigned long get_next_poll_jiffies(struct mlx5_core_dev *dev)
  {
-@@ -799,7 +914,9 @@ void mlx5_trigger_health_work(struct mlx
+@@ -803,7 +920,9 @@ void mlx5_trigger_health_work(struct mlx
  {
  	struct mlx5_core_health *health = &dev->priv.health;
  
@@ -267,7 +277,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  		queue_work(health->wq, &health->fatal_report_work);
  }
  
-@@ -828,13 +945,25 @@ static void mlx5_health_log_ts_update(st
+@@ -832,13 +951,25 @@ static void mlx5_health_log_ts_update(st
  			   msecs_to_jiffies(MLX5_MSEC_PER_HOUR));
  }
  
@@ -293,7 +303,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  	u32 count;
  
  	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
-@@ -861,13 +990,17 @@ static void poll_health(struct timer_lis
+@@ -865,13 +996,17 @@ static void poll_health(struct timer_lis
  	if (health->miss_counter == MAX_MISSES) {
  		mlx5_core_err(dev, "device's health compromised - reached miss count\n");
  		print_health_info(dev);
@@ -311,7 +321,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  
  out:
  	mod_timer(&health->timer, get_next_poll_jiffies(dev));
-@@ -878,7 +1011,13 @@ void mlx5_start_health_poll(struct mlx5_
+@@ -882,7 +1017,13 @@ void mlx5_start_health_poll(struct mlx5_
  	u64 poll_interval_ms =  mlx5_tout_ms(dev, HEALTH_POLL_INTERVAL);
  	struct mlx5_core_health *health = &dev->priv.health;
  
@@ -325,7 +335,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  	health->fatal_error = MLX5_SENSOR_NO_ERR;
  	clear_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
  	health->health = &dev->iseg->health;
-@@ -912,7 +1051,9 @@ void mlx5_drain_health_wq(struct mlx5_co
+@@ -916,7 +1057,9 @@ void mlx5_drain_health_wq(struct mlx5_co
  
  	set_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
  	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
@@ -335,11 +345,12 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  	cancel_work_sync(&health->fatal_report_work);
  }
  
-@@ -922,20 +1063,34 @@ void mlx5_health_cleanup(struct mlx5_cor
+@@ -926,22 +1069,38 @@ void mlx5_health_cleanup(struct mlx5_cor
  
  	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
  	destroy_workqueue(health->wq);
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	mlx5_reporter_vnic_destroy(dev);
  	mlx5_fw_reporters_destroy(dev);
 +#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  }
@@ -367,10 +378,13 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
 +#if defined(HAVE_DEVLINK_PARAM_REGISTER) || defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
  	}
 +#endif
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	mlx5_reporter_vnic_create(dev);
++#endif
  
  	health = &dev->priv.health;
  	name = kmalloc(64, GFP_KERNEL);
-@@ -948,13 +1103,19 @@ int mlx5_health_init(struct mlx5_core_de
+@@ -954,14 +1113,20 @@ int mlx5_health_init(struct mlx5_core_de
  	kfree(name);
  	if (!health->wq)
  		goto out_err;
@@ -386,6 +400,7 @@ Change-Id: Iac2606c756e2a116f70e705a9c8491af8351243b
  
  out_err:
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	mlx5_reporter_vnic_destroy(dev);
  	mlx5_fw_reporters_destroy(dev);
 +#endif
  	return -ENOMEM;

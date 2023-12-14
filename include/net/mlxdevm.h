@@ -30,10 +30,6 @@ struct mlxdevm_port_fn_cap {
 	u32 max_uc_list;
 	u8 roce_cap_valid:1;
 	u8 uc_list_cap_valid:1;
-#ifdef CONFIG_MLX5_SF_SFC
-	u8 eswitch:1;
-	u8 eswitch_cap_valid:1;
-#endif
 };
 
 struct mlxdevm_rate_group {

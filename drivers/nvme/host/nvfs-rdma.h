@@ -26,43 +26,43 @@ static bool nvme_rdma_nvfs_unmap_data(struct ib_device *ibdev,
 	return false;
 }
 
-static int nvme_rdma_nvfs_map_data(struct ib_device *ibdev, struct request *rq, bool *is_nvfs_io)
+static int nvme_rdma_nvfs_map_data(struct ib_device *ibdev, struct request *rq, bool *is_nvfs_io, int* count)
 {
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
 	enum dma_data_direction dma_dir = rq_dma_dir(rq);
-	int count, ret = 0;
+	int ret = 0;
 
 	*is_nvfs_io = false;
-	count = 0;
+	*count = 0;
 	if (!blk_integrity_rq(rq) && nvfs_get_ops()) {
 
 		// associates bio pages to scatterlist
-		count = nvfs_ops->nvfs_blk_rq_map_sg(rq->q, rq , req->data_sgl.sg_table.sgl);
-		if (!count) {
+		*count = nvfs_ops->nvfs_blk_rq_map_sg(rq->q, rq , req->data_sgl.sg_table.sgl);
+		if (!*count) {
 			nvfs_put_ops();
 			return 0; // fall to cpu path
 		}
 
 		*is_nvfs_io = true;
-		if (unlikely((count == NVFS_IO_ERR))) {
+		if (unlikely((*count == NVFS_IO_ERR))) {
 			nvfs_put_ops();
 			pr_err("%s: failed to map sg_nents=:%d\n", __func__, req->data_sgl.nents);
 			return -EIO;
 		}
-		req->data_sgl.nents = count;
+		req->data_sgl.nents = *count;
 
-		count = nvfs_ops->nvfs_dma_map_sg_attrs(ibdev->dma_device,
+		*count = nvfs_ops->nvfs_dma_map_sg_attrs(ibdev->dma_device,
 				req->data_sgl.sg_table.sgl,
 				req->data_sgl.nents,
 				dma_dir,
 				DMA_ATTR_NO_WARN);
 
-		if (unlikely((count == NVFS_IO_ERR))) {
+		if (unlikely((*count == NVFS_IO_ERR))) {
 			nvfs_put_ops();
 			return -EIO;
 		}
 
-		if (unlikely(count == NVFS_CPU_REQ)) {
+		if (unlikely(*count == NVFS_CPU_REQ)) {
 			nvfs_put_ops();
 			BUG();
 			return -EIO;

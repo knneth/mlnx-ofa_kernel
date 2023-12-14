@@ -17,7 +17,7 @@ Change-Id: I905a244ca550d28ff09ea75fd8fceb04cf7a7c14
  struct mlx5e_ipsec_hw_stats {
  	u64 ipsec_rx_pkts;
  	u64 ipsec_rx_bytes;
-@@ -285,8 +286,6 @@ struct mlx5e_ipsec_pol_entry {
+@@ -287,8 +288,6 @@ struct mlx5e_ipsec_pol_entry {
  	struct mlx5_accel_pol_xfrm_attrs attrs;
  };
  

@@ -380,8 +380,15 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 			       be_ctrl, ret);
 		}
 	}
-	if (be_ctrl->ofl)
-		nvme_peer_flush_resource(be_ctrl->ofl, be_ctrl->restart);
+	if (be_ctrl->ofl) {
+		ret = nvme_peer_flush_resource(be_ctrl->ofl, be_ctrl->restart);
+		if (ret) {
+			/* Don't initialize a queue that we failed to destroy */
+			be_ctrl->restart = false;
+			pr_err("Failed to flush peer resource be_ctrl=%p ret = %d\n",
+			       be_ctrl, ret);
+		}
+	}
 	if (be_ctrl->ibctrl) {
 		ret = ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
 		if (ret) {

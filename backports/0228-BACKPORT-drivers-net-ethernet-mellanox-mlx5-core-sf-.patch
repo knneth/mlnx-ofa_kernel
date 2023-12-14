@@ -3,17 +3,31 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
 
 Change-Id: Ic6376e87d71e8d327dc2a8ed72f6ba9d0fe6e2fe
 ---
- drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h | 14 ++++++++++++--
- 1 file changed, 12 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/sf/sf.h   | 25 +++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
-@@ -23,11 +23,21 @@ int mlx5_devlink_sf_port_new(struct devl
+@@ -20,14 +20,35 @@ void mlx5_sf_table_cleanup(struct mlx5_c
+ int mlx5_devlink_sf_port_new(struct devlink *devlink,
+ 			     const struct devlink_port_new_attrs *add_attr,
+ 			     struct netlink_ext_ack *extack,
++#ifdef HAVE_DEVLINK_PORT_OPS
++			     struct devlink_port **dl_port);
++#else
  			     unsigned int *new_port_index);
++#endif
++
++#ifdef HAVE_DEVLINK_PORT_OPS
++int mlx5_devlink_sf_port_del(struct devlink *devlink,
++			     struct devlink_port *dl_port,
++ 			     struct netlink_ext_ack *extack);
++#else
  int mlx5_devlink_sf_port_del(struct devlink *devlink, unsigned int port_index,
  			     struct netlink_ext_ack *extack);
 -int mlx5_devlink_sf_port_fn_state_get(struct devlink_port *dl_port,
-+#ifdef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
++#endif
++#if defined(HAVE_PORT_FUNCTION_STATE_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
 +int mlx5_devlink_sf_port_fn_state_get(
 +#else
 +int mlx5_devlink_sf_port_fn_state_get(struct devlink *devlink,
@@ -23,7 +37,7 @@ Change-Id: Ic6376e87d71e8d327dc2a8ed72f6ba9d0fe6e2fe
  				      enum devlink_port_fn_opstate *opstate,
  				      struct netlink_ext_ack *extack);
 -int mlx5_devlink_sf_port_fn_state_set(struct devlink_port *dl_port,
-+#ifdef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
++#if defined(HAVE_PORT_FUNCTION_STATE_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
 +int mlx5_devlink_sf_port_fn_state_set(
 +#else
 +int mlx5_devlink_sf_port_fn_state_set(struct devlink *devlink,

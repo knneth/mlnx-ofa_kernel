@@ -16,7 +16,7 @@ Change-Id: Iaab57703f4cec1ba2e0c1f24bb8dfb9f01e194c5
  #include <linux/vhost_types.h>
  #include <linux/vdpa.h>
  #include <linux/gcd.h>
-@@ -576,3 +577,4 @@ int mlx5_vdpa_handle_set_map(struct mlx5
+@@ -619,3 +620,4 @@ int mlx5_vdpa_handle_set_map(struct mlx5
  
  	return err;
  }

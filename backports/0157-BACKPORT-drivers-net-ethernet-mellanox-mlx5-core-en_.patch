@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Iefbe313b4f2c62d82c1f9c18daf243ee295ab26e
 ---
- .../mellanox/mlx5/core/en_accel/ktls.c        | 72 ++++++++++++++++++-
- 1 file changed, 69 insertions(+), 3 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls.c        | 65 ++++++++++++++++++-
+ 1 file changed, 62 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
@@ -165,40 +165,8 @@ Change-Id: Iefbe313b4f2c62d82c1f9c18daf243ee295ab26e
  
  static void mlx5e_tls_debugfs_init(struct mlx5e_tls *tls,
  				   struct dentry *dfs_root)
-@@ -188,7 +246,9 @@ static void mlx5e_tls_debugfs_init(struc
- 
- int mlx5e_ktls_init(struct mlx5e_priv *priv)
- {
-+#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
- 	struct mlx5_crypto_dek_pool *dek_pool;
-+#endif
- 	struct mlx5e_tls *tls;
- 
- 	if (!mlx5e_is_ktls_device(priv->mdev))
-@@ -199,12 +259,14 @@ int mlx5e_ktls_init(struct mlx5e_priv *p
- 		return -ENOMEM;
- 	tls->mdev = priv->mdev;
- 
-+#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
- 	dek_pool = mlx5_crypto_dek_pool_create(priv->mdev, MLX5_ACCEL_OBJ_TLS_KEY);
- 	if (IS_ERR(dek_pool)) {
- 		kfree(tls);
- 		return PTR_ERR(dek_pool);
- 	}
- 	tls->dek_pool = dek_pool;
-+#endif
- 	priv->tls = tls;
- 
- 	mlx5e_tls_debugfs_init(tls, priv->dfs_root);
-@@ -222,7 +284,11 @@ void mlx5e_ktls_cleanup(struct mlx5e_pri
- 	debugfs_remove_recursive(tls->debugfs.dfs);
- 	tls->debugfs.dfs = NULL;
- 
-+#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
- 	mlx5_crypto_dek_pool_destroy(tls->dek_pool);
-+#endif
+@@ -218,3 +276,4 @@ void mlx5e_ktls_cleanup(struct mlx5e_pri
  	kfree(priv->tls);
  	priv->tls = NULL;
  }
-+
 +#endif

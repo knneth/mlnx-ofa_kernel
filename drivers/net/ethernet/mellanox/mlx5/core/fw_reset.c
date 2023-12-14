@@ -319,6 +319,29 @@ static bool mlx5_is_rshim_pci_device(struct mlx5_core_dev *dev, u16 dev_id)
 	return false;
 }
 
+#if IS_ENABLED(CONFIG_HOTPLUG_PCI_PCIE)
+static int mlx5_check_hotplug_interrupt(struct mlx5_core_dev *dev)
+{
+	struct pci_dev *bridge = dev->pdev->bus->self;
+	u16 reg16;
+	int err;
+
+	if (!bridge)
+		return -EOPNOTSUPP;
+
+	err = pcie_capability_read_word(bridge, PCI_EXP_SLTCTL, &reg16);
+	if (err)
+		return err;
+
+	if ((reg16 & PCI_EXP_SLTCTL_HPIE) && (reg16 & PCI_EXP_SLTCTL_DLLSCE)) {
+		mlx5_core_warn(dev, "FW reset is not supported as HotPlug is enabled\n");
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
+#endif
+
 static int mlx5_check_dev_ids(struct mlx5_core_dev *dev, u16 dev_id)
 {
 	struct pci_bus *bridge_bus = dev->pdev->bus;
@@ -332,7 +355,7 @@ static int mlx5_check_dev_ids(struct mlx5_core_dev *dev, u16 dev_id)
 	list_for_each_entry(sdev, &bridge_bus->devices, bus_list) {
 		err = pci_read_config_word(sdev, PCI_DEVICE_ID, &sdev_id);
 		if (err)
-			return err;
+			return pcibios_err_to_errno(err);
 		if (sdev_id == dev_id)
 			continue;
 
@@ -354,6 +377,12 @@ static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev)
 		mlx5_core_warn(dev, "fast teardown is not supported by firmware\n");
 		return false;
 	}
+
+#if IS_ENABLED(CONFIG_HOTPLUG_PCI_PCIE)
+	err = mlx5_check_hotplug_interrupt(dev);
+	if (err)
+		return false;
+#endif
 
 	err = pci_read_config_word(dev->pdev, PCI_DEVICE_ID, &dev_id);
 	if (err)
@@ -590,7 +619,7 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 
 	err = pci_read_config_word(dev->pdev, PCI_DEVICE_ID, &dev_id);
 	if (err)
-		return err;
+		return pcibios_err_to_errno(err);
 
 	err = mlx5_check_dev_ids(dev, dev_id);
 	if (err)
@@ -608,23 +637,18 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 		pci_cfg_access_lock(sdev);
 	}
 	/* PCI link toggle */
-	err = pci_read_config_word(bridge, cap + PCI_EXP_LNKCTL, &reg16);
+	err = pcie_capability_set_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_LD);
 	if (err)
-		return err;
-	reg16 |= PCI_EXP_LNKCTL_LD;
-	err = pci_write_config_word(bridge, cap + PCI_EXP_LNKCTL, reg16);
-	if (err)
-		return err;
+		return pcibios_err_to_errno(err);
 	msleep(500);
-	reg16 &= ~PCI_EXP_LNKCTL_LD;
-	err = pci_write_config_word(bridge, cap + PCI_EXP_LNKCTL, reg16);
+	err = pcie_capability_clear_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_LD);
 	if (err)
 		return err;
 
 	/* Check link */
 	err = pci_read_config_dword(bridge, cap + PCI_EXP_LNKCAP, &reg32);
 	if (err)
-		return err;
+		return pcibios_err_to_errno(err);
 	if (!(reg32 & PCI_EXP_LNKCAP_DLLLARC)) {
 		mlx5_core_warn(dev, "No PCI link reporting capability (0x%08x)\n", reg32);
 		msleep(1000);
@@ -635,7 +659,7 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 	do {
 		err = pci_read_config_word(bridge, cap + PCI_EXP_LNKSTA, &reg16);
 		if (err)
-			return err;
+			return pcibios_err_to_errno(err);
 		if (reg16 & PCI_EXP_LNKSTA_DLLLA)
 			break;
 		msleep(20);
@@ -653,7 +677,7 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 	do {
 		err = pci_read_config_word(dev->pdev, PCI_DEVICE_ID, &reg16);
 		if (err)
-			return err;
+			return pcibios_err_to_errno(err);
 		if (reg16 == dev_id)
 			break;
 		msleep(20);

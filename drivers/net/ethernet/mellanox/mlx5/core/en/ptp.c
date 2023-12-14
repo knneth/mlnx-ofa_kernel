@@ -560,7 +560,10 @@ static void mlx5e_ptp_build_params(struct mlx5e_ptp *c,
 
 	/* SQ */
 	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
-		params->log_sq_size = orig->log_sq_size;
+		params->log_sq_size =
+			min(MLX5_CAP_GEN_2(c->mdev, ts_cqe_metadata_size2wqe_counter),
+					MLX5E_PTP_MAX_LOG_SQ_SIZE);
+		params->log_sq_size = min(params->log_sq_size, orig->log_sq_size);
 		mlx5e_ptp_build_sq_param(c->mdev, params, &cparams->txq_sq_param);
 	}
 	/* RQ */

@@ -3,12 +3,36 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_transport_srp.c
 
 Change-Id: Ic7133a88e25df71afd02b5e826a8c2c293f81dff
 ---
- drivers/scsi/scsi_transport_srp.c | 24 ++++++++++++++++++++++++
- 1 file changed, 24 insertions(+)
+ drivers/scsi/scsi_transport_srp.c | 32 +++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
 
 --- a/drivers/scsi/scsi_transport_srp.c
 +++ b/drivers/scsi/scsi_transport_srp.c
-@@ -569,12 +569,21 @@ int srp_reconnect_rport(struct srp_rport
+@@ -485,7 +485,11 @@ static void __srp_start_tl_fail_timers(s
+ 	    srp_rport_set_state(rport, SRP_RPORT_BLOCKED) == 0) {
+ 		pr_debug("%s new state: %d\n", dev_name(&shost->shost_gendev),
+ 			 rport->state);
++#ifdef HAVE_SCSI_BLOCK_TARGETS
++		scsi_block_targets(shost, &shost->shost_gendev);
++#else
+ 		scsi_target_block(&shost->shost_gendev);
++#endif
+ 		if (fast_io_fail_tmo >= 0)
+ 			queue_delayed_work(system_long_wq,
+ 					   &rport->fast_io_fail_work,
+@@ -553,7 +557,11 @@ int srp_reconnect_rport(struct srp_rport
+ 		 * later is ok though, scsi_internal_device_unblock_nowait()
+ 		 * treats SDEV_TRANSPORT_OFFLINE like SDEV_BLOCK.
+ 		 */
++#ifdef HAVE_SCSI_BLOCK_TARGETS
++		scsi_block_targets(shost, &shost->shost_gendev);
++#else
+ 		scsi_target_block(&shost->shost_gendev);
++#endif
+ 	res = rport->state != SRP_RPORT_LOST ? i->f->reconnect(rport) : -ENODEV;
+ 	pr_debug("%s (state %d): transport.reconnect() returned %d\n",
+ 		 dev_name(&shost->shost_gendev), rport->state, res);
+@@ -569,12 +577,21 @@ int srp_reconnect_rport(struct srp_rport
  		 * invoking scsi_target_unblock() won't change the state of
  		 * these devices into running so do that explicitly.
  		 */
@@ -30,7 +54,7 @@ Change-Id: Ic7133a88e25df71afd02b5e826a8c2c293f81dff
  	} else if (rport->state == SRP_RPORT_RUNNING) {
  		/*
  		 * srp_reconnect_rport() has been invoked with fast_io_fail
-@@ -605,7 +614,11 @@ EXPORT_SYMBOL(srp_reconnect_rport);
+@@ -605,7 +622,11 @@ EXPORT_SYMBOL(srp_reconnect_rport);
   * Note: This function is called from soft-IRQ context and with the request
   * queue lock held.
   */
@@ -42,7 +66,7 @@ Change-Id: Ic7133a88e25df71afd02b5e826a8c2c293f81dff
  {
  	struct scsi_device *sdev = scmd->device;
  	struct Scsi_Host *shost = sdev->host;
-@@ -616,7 +629,15 @@ enum scsi_timeout_action srp_timed_out(s
+@@ -616,7 +637,15 @@ enum scsi_timeout_action srp_timed_out(s
  	return rport && rport->fast_io_fail_tmo < 0 &&
  		rport->dev_loss_tmo < 0 &&
  		i->f->reset_timer_if_blocked && scsi_device_blocked(sdev) ?
@@ -58,7 +82,7 @@ Change-Id: Ic7133a88e25df71afd02b5e826a8c2c293f81dff
  }
  EXPORT_SYMBOL(srp_timed_out);
  
-@@ -900,6 +921,9 @@ static void __exit srp_transport_exit(vo
+@@ -900,6 +929,9 @@ static void __exit srp_transport_exit(vo
  MODULE_AUTHOR("FUJITA Tomonori");
  MODULE_DESCRIPTION("SRP Transport Attributes");
  MODULE_LICENSE("GPL");

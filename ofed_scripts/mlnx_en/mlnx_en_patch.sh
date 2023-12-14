@@ -470,6 +470,104 @@ check_complex_defines()
 	else
 		unset_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
 	fi
+
+# define HAVE_NIC_TEMPERATURE_SUPPORTED from other flags
+	if check_compat_config_h_var HAVE_HWMON_OPS_READ_STRING &&
+	   check_compat_config_h_var HAVE_HWMON_DEVICE_REGISTER_WITH_INFO
+	then
+		set_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
+	else
+		unset_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
+	fi
+
+# define HAVE_VDPA_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES
+	then
+		set_complex_define_to_config_h HAVE_VDPA_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_VDPA_SUPPORT
+	fi
+
+# define HAVE_DEVLINK_RESOURCE_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_DEVLINK_RESOURCE_REGISTER_8_PARAMS ||
+	   check_compat_config_h_var HAVE_DEVLINK_RESOURCE_REGISTER_6_PARAMS ||
+	   check_compat_config_h_var HAVE_DEVL_RESOURCE_REGISTER
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_RESOURCE_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_RESOURCE_SUPPORT
+	fi
+
+# define HAVE_NET_PAGE_POOL_H from other flags
+	if check_compat_config_h_var HAVE_NET_PAGE_POOL_OLD_H ||
+	   check_compat_config_h_var HAVE_NET_PAGE_POOL_TYPES_H
+	then
+		set_complex_define_to_config_h HAVE_NET_PAGE_POOL_H
+	else
+		unset_complex_define_to_config_h HAVE_NET_PAGE_POOL_H
+	fi
+
+# Define HAVE_SHAMPO_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_NET_PAGE_POOL_H
+	then
+		set_complex_define_to_config_h HAVE_SHAMPO_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_SHAMPO_SUPPORT
+	fi
+
+# define HAVE_PAGE_POOL_GET_DMA_ADDR from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_GET_DMA_ADDR_OLD ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_GET_DMA_ADDR_HELPER
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_GET_DMA_ADDR
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_GET_DMA_ADDR
+	fi
+
+# define HAVE_PAGE_POLL_NID_CHANGED from other flags
+	if check_compat_config_h_var HAVE_PAGE_POLL_NID_CHANGED_OLD ||
+	   check_compat_config_h_var HAVE_PAGE_POLL_NID_CHANGED_HELPERS
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POLL_NID_CHANGED
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POLL_NID_CHANGED
+	fi
+
+# define HAVE_XDP_SET_DATA_META_INVALID from other flags
+	if check_compat_config_h_var HAVE_XDP_SET_DATA_META_INVALID_XDP_H ||
+	   check_compat_config_h_var HAVE_XDP_SET_DATA_META_INVALID_FILTER_H
+	then
+		set_complex_define_to_config_h HAVE_XDP_SET_DATA_META_INVALID
+	else
+		unset_complex_define_to_config_h HAVE_XDP_SET_DATA_META_INVALID
+	fi
+
+# define HAVE_XDP_BUFF_DATA_HARD_START from other flags
+	if check_compat_config_h_var HAVE_XDP_BUFF_DATA_HARD_START_FILTER_H ||
+	   check_compat_config_h_var HAVE_XDP_BUFF_DATA_HARD_START_XDP_H
+	then
+		set_complex_define_to_config_h HAVE_XDP_BUFF_DATA_HARD_START
+	else
+		unset_complex_define_to_config_h HAVE_XDP_BUFF_DATA_HARD_START
+	fi
+
+# define HAVE_FILTER_H_HAVE_XDP_BUFF from other flags
+	if check_compat_config_h_var HAVE_XDP_BUFF_ON_FILTER ||
+	   check_compat_config_h_var HAVE_XDP_H_HAVE_XDP_BUFF
+	then
+		set_complex_define_to_config_h HAVE_FILTER_H_HAVE_XDP_BUFF
+	else
+		unset_complex_define_to_config_h HAVE_FILTER_H_HAVE_XDP_BUFF
+	fi
+
+# define HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS from other flags
+	if check_compat_config_h_var HAVE_MM_GUP_MUST_UNSHARE_GET_3_PARAMS ||
+	   check_compat_config_h_var HAVE_ASSERT_FAULT_LOCKED
+	then
+		set_complex_define_to_config_h HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+	else
+		unset_complex_define_to_config_h HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+	fi
 }
 
 check_kerver_rh_cls()

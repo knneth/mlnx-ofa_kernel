@@ -513,20 +513,6 @@ void mlx5e_page_release_dynamic(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au
 	}
 }
 
-static inline void mlx5e_page_release(struct mlx5e_rq *rq,
-				      struct mlx5e_alloc_unit *au,
-				      bool recycle)
-{
-	if (rq->xsk_pool)
-		/* The `recycle` parameter is ignored, and the page is always
-		 * put into the Reuse Ring, because there is no way to return
-		 * the page to the userspace when the interface goes down.
-		 */
-		xsk_buff_free(au->xsk);
-	else
-		mlx5e_page_release_dynamic(rq, au, recycle);
-}
-
 static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
 				    struct mlx5e_wqe_frag_info *frag)
 {
@@ -1884,7 +1870,7 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 	}
 
 	prog = rcu_dereference(rq->xdp_prog);
-	if (prog && mlx5e_xdp_handle(rq, wi->au, prog, &mxbuf)) {
+	if (prog && mlx5e_xdp_handle(rq, head_wi->au, prog, &mxbuf)) {
 		if (test_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)) {
 			int i;
 

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: If88266473d4f0d6a9b045343f78b5b6fdcf6bdd7
 ---
- .../mellanox/mlx5/core/en/tc/post_meter.c     | 42 +++++++++++++++++++
- 1 file changed, 42 insertions(+)
+ .../mellanox/mlx5/core/en/tc/post_meter.c     | 46 +++++++++++++++++++
+ 1 file changed, 46 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
@@ -107,3 +107,14 @@ Change-Id: If88266473d4f0d6a9b045343f78b5b6fdcf6bdd7
  }
  
  static void
+@@ -345,6 +387,10 @@ mlx5e_post_meter_mtu_create(struct mlx5e
+ 	struct mlx5_flow_handle *rule;
+ 	int err;
+ 
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
++	return -EOPNOTSUPP;
++#endif
++
+ 	post_meter->type = MLX5E_POST_METER_MTU;
+ 
+ 	err = mlx5e_post_meter_create_mtu_table(priv, ns_type, &mtu_tables->green_table);

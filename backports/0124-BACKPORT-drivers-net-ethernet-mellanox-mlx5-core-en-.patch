@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I99ee5232ab5400f64b286b6968c4f31c42c9b969
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc/int_port.c   | 10 +++++++++-
- 1 file changed, 9 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
@@ -22,16 +22,19 @@ Change-Id: I99ee5232ab5400f64b286b6968c4f31c42c9b969
  }
  
  u32 mlx5e_tc_int_port_get_metadata(struct mlx5e_tc_int_port *int_port)
-@@ -291,7 +295,7 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
+@@ -291,7 +295,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
  		mlx5_del_flow_rules(int_port->rx_rule);
  	mapping_remove(ctx, int_port->mapping);
  	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
--	kfree_rcu(int_port);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(int_port);
++#else
 +	kfree_rcu(int_port, rcu_head);
++#endif
  	priv->num_ports--;
  }
  
-@@ -493,12 +497,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
+@@ -493,12 +501,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
  
  	if (fwd_type == MLX5E_TC_INT_PORT_INGRESS) {
  		skb->pkt_type = PACKET_HOST;

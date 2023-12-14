@@ -58,12 +58,15 @@ static void esw_destroy_legacy_fdb_table(struct mlx5_eswitch *esw)
 		mlx5_destroy_flow_group(esw->fdb_table.legacy.promisc_grp);
 	if (esw->fdb_table.legacy.allmulti_grp)
 		mlx5_destroy_flow_group(esw->fdb_table.legacy.allmulti_grp);
+	if (esw->fdb_table.legacy.allmulti_rx_grp)
+		mlx5_destroy_flow_group(esw->fdb_table.legacy.allmulti_rx_grp);
 	if (esw->fdb_table.legacy.addr_grp)
 		mlx5_destroy_flow_group(esw->fdb_table.legacy.addr_grp);
 	mlx5_destroy_flow_table(esw->fdb_table.legacy.fdb);
 
 	esw->fdb_table.legacy.fdb = NULL;
 	esw->fdb_table.legacy.addr_grp = NULL;
+	esw->fdb_table.legacy.allmulti_rx_grp = NULL;
 	esw->fdb_table.legacy.allmulti_grp = NULL;
 	esw->fdb_table.legacy.promisc_grp = NULL;
 	atomic64_set(&esw->user_count, 0);
@@ -113,8 +116,8 @@ static int esw_create_legacy_fdb_table(struct mlx5_eswitch *esw)
 	match_criteria = MLX5_ADDR_OF(create_flow_group_in, flow_group_in, match_criteria);
 	dmac = MLX5_ADDR_OF(fte_match_param, match_criteria, outer_headers.dmac_47_16);
 	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, 0);
-	/* Preserve 2 entries for allmulti and promisc rules*/
-	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, table_size - 3);
+	/* Preserve 3 entries for allmulti and promisc rules*/
+	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, table_size - 4);
 	eth_broadcast_addr(dmac);
 	g = mlx5_create_flow_group(fdb, flow_group_in);
 	if (IS_ERR(g)) {
@@ -124,13 +127,28 @@ static int esw_create_legacy_fdb_table(struct mlx5_eswitch *esw)
 	}
 	esw->fdb_table.legacy.addr_grp = g;
 
+	/* Allmulti Rx group : forward mcast traffic received from uplink */
+	MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable,
+		 MLX5_MATCH_OUTER_HEADERS | MLX5_MATCH_MISC_PARAMETERS);
+	MLX5_SET_TO_ONES(fte_match_param, match_criteria, misc_parameters.source_port);
+	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, table_size - 3);
+	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, table_size - 3);
+	eth_zero_addr(dmac);
+	dmac[0] = 0x01;
+	g = mlx5_create_flow_group(fdb, flow_group_in);
+	if (IS_ERR(g)) {
+		err = PTR_ERR(g);
+		esw_warn(dev, "Failed to create allmulti rx group err(%d)\n", err);
+		goto out;
+	}
+	esw->fdb_table.legacy.allmulti_rx_grp = g;
+
 	/* Allmulti group : One rule that forwards any mcast traffic */
 	MLX5_SET(create_flow_group_in, flow_group_in, match_criteria_enable,
 		 MLX5_MATCH_OUTER_HEADERS);
+	MLX5_SET(fte_match_param, match_criteria, misc_parameters.source_port, 0);
 	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, table_size - 2);
 	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, table_size - 2);
-	eth_zero_addr(dmac);
-	dmac[0] = 0x01;
 	g = mlx5_create_flow_group(fdb, flow_group_in);
 	if (IS_ERR(g)) {
 		err = PTR_ERR(g);

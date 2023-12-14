@@ -10,6 +10,7 @@
 #include <linux/ptp_classify.h>
 
 #define MLX5E_PTP_CHANNEL_IX 0
+#define MLX5E_PTP_MAX_LOG_SQ_SIZE (8U)
 
 struct mlx5e_ptpsq {
 	struct mlx5e_txqsq       txqsq;
