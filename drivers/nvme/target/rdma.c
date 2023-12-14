@@ -1629,7 +1629,7 @@ static void nvmet_rdma_qp_event(struct ib_event *event, void *priv)
 	case IB_EXP_EVENT_XRQ_QP_ERR:
 		pr_err("queue %p received IB QP event: %s (%d)\n",
 		       queue, ib_event_msg(event->event), event->event);
-		schedule_work(&queue->disconnect_work);
+		queue_work(nvmet_wq, &queue->disconnect_work);
 		break;
 	case IB_EVENT_QP_LAST_WQE_REACHED:
 		pr_debug("received IB QP event: %s (%d)\n",
@@ -2155,7 +2155,7 @@ static int nvmet_rdma_add_one(struct ib_device *ib_device)
 		    (port->cm_id || port->prev_node_guid != ib_device->node_guid))
 			continue;
 
-		schedule_delayed_work(&port->repair_work, HZ);
+		queue_delayed_work(nvmet_wq, &port->repair_work, HZ);
 	}
 	mutex_unlock(&port_list_mutex);
 
@@ -2204,7 +2204,7 @@ static void nvmet_rdma_remove_one(struct ib_device *ib_device, void *client_data
 	mutex_unlock(&port_list_mutex);
 
 	if (found)
-		flush_scheduled_work();
+		flush_workqueue(nvmet_wq);
 }
 
 static struct ib_client nvmet_rdma_ib_client = {

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
 ---
- .../mellanox/mlx5/core/en_accel/ipsec.c       | 153 ++++++++++++++++--
- 1 file changed, 137 insertions(+), 16 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ipsec.c       | 154 ++++++++++++++++--
+ 1 file changed, 137 insertions(+), 17 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.c
@@ -38,7 +38,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	struct xfrm_state *x = sa_entry->x;
  	u32 seq_bottom = 0;
  	u32 esn, esn_msb;
-@@ -132,6 +136,7 @@ static bool mlx5e_ipsec_update_esn_state
+@@ -139,6 +143,7 @@ static bool mlx5e_ipsec_update_esn_state
  		sa_entry->esn_state.overlap = 1;
  		return true;
  	}
@@ -46,7 +46,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	return false;
  }
-@@ -264,7 +269,11 @@ static void mlx5e_ipsec_init_macs(struct
+@@ -271,7 +276,11 @@ static void mlx5e_ipsec_init_macs(struct
  	    attrs->type != XFRM_DEV_OFFLOAD_PACKET)
  		return;
  
@@ -58,22 +58,23 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	mlx5_query_mac_address(mdev, addr);
  	switch (attrs->dir) {
-@@ -337,7 +346,14 @@ void mlx5e_ipsec_build_accel_xfrm_attrs(
- 		attrs->replay_esn.overlap = sa_entry->esn_state.overlap;
- 	}
+@@ -336,8 +345,14 @@ void mlx5e_ipsec_build_accel_xfrm_attrs(
+ 	/* iv len */
+ 	aes_gcm->icv_len = x->aead->alg_icv_len;
  
 +#ifdef HAVE_XFRM_DEV_DIR
  	attrs->dir = x->xso.dir;
+-
 +#else
 +	if (x->xso.flags & XFRM_OFFLOAD_INBOUND)
 +		attrs->dir = XFRM_DEV_OFFLOAD_IN;
 +	else
 +		attrs->dir = XFRM_DEV_OFFLOAD_OUT;
 +#endif
- 	/* spi */
- 	attrs->spi = be32_to_cpu(x->id.spi);
- 
-@@ -345,7 +361,11 @@ void mlx5e_ipsec_build_accel_xfrm_attrs(
+ 	/* esn */
+ 	if (x->props.flags & XFRM_STATE_ESN) {
+ 		attrs->replay_esn.trigger = true;
+@@ -377,7 +392,11 @@ skip_replay_window:
  	memcpy(&attrs->saddr, x->props.saddr.a6, sizeof(attrs->saddr));
  	memcpy(&attrs->daddr, x->id.daddr.a6, sizeof(attrs->daddr));
  	attrs->family = x->props.family;
@@ -85,7 +86,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	attrs->reqid = x->props.reqid;
  	attrs->upspec.dport = ntohs(x->sel.dport);
  	attrs->upspec.dport_mask = ntohs(x->sel.dport_mask);
-@@ -429,6 +449,7 @@ static int mlx5e_xfrm_validate_state(str
+@@ -461,6 +480,7 @@ static int mlx5e_xfrm_validate_state(str
  		return -EINVAL;
  	}
  
@@ -93,7 +94,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	switch (x->xso.type) {
  	case XFRM_DEV_OFFLOAD_CRYPTO:
  		if (!(mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_CRYPTO)) {
-@@ -485,6 +506,7 @@ static int mlx5e_xfrm_validate_state(str
+@@ -518,6 +538,7 @@ static int mlx5e_xfrm_validate_state(str
  		NL_SET_ERR_MSG_MOD(extack, "Unsupported xfrm offload type");
  		return -EINVAL;
  	}
@@ -101,7 +102,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	return 0;
  }
  
-@@ -504,9 +526,11 @@ static void mlx5e_ipsec_set_esn_ops(stru
+@@ -537,9 +558,11 @@ static void mlx5e_ipsec_set_esn_ops(stru
  {
  	struct xfrm_state *x = sa_entry->x;
  
@@ -113,7 +114,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	if (x->props.flags & XFRM_STATE_ESN) {
  		sa_entry->set_iv_op = mlx5e_ipsec_set_iv_esn;
-@@ -516,6 +540,7 @@ static void mlx5e_ipsec_set_esn_ops(stru
+@@ -549,6 +572,7 @@ static void mlx5e_ipsec_set_esn_ops(stru
  	sa_entry->set_iv_op = mlx5e_ipsec_set_iv;
  }
  
@@ -121,7 +122,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  static void mlx5e_ipsec_handle_netdev_event(struct work_struct *_work)
  {
  	struct mlx5e_ipsec_work *work =
-@@ -539,9 +564,11 @@ static void mlx5e_ipsec_handle_netdev_ev
+@@ -572,9 +596,11 @@ static void mlx5e_ipsec_handle_netdev_ev
  	attrs->drop = false;
  	mlx5e_accel_ipsec_fs_modify(sa_entry);
  }
@@ -133,7 +134,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	struct xfrm_state *x = sa_entry->x;
  	struct mlx5e_ipsec_work *work;
  	void *data = NULL;
-@@ -590,7 +617,35 @@ static int mlx5_ipsec_create_work(struct
+@@ -623,7 +649,35 @@ static int mlx5_ipsec_create_work(struct
  
  free_work:
  	kfree(work);
@@ -170,7 +171,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  }
  
  static int mlx5e_ipsec_create_dwork(struct mlx5e_ipsec_sa_entry *sa_entry)
-@@ -598,11 +653,15 @@ static int mlx5e_ipsec_create_dwork(stru
+@@ -631,11 +685,15 @@ static int mlx5e_ipsec_create_dwork(stru
  	struct xfrm_state *x = sa_entry->x;
  	struct mlx5e_ipsec_dwork *dwork;
  
@@ -186,7 +187,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	if (x->lft.soft_packet_limit == XFRM_INF &&
  	    x->lft.hard_packet_limit == XFRM_INF)
-@@ -618,24 +677,38 @@ static int mlx5e_ipsec_create_dwork(stru
+@@ -651,24 +709,38 @@ static int mlx5e_ipsec_create_dwork(stru
  	return 0;
  }
  
@@ -227,7 +228,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	sa_entry = kzalloc(sizeof(*sa_entry), gfp);
  	if (!sa_entry)
  		return -ENOMEM;
-@@ -643,10 +716,10 @@ static int mlx5e_xfrm_add_state(struct x
+@@ -676,10 +748,10 @@ static int mlx5e_xfrm_add_state(struct x
  	sa_entry->x = x;
  	sa_entry->ipsec = ipsec;
  	/* Check if this SA is originated from acquire flow temporary SA */
@@ -240,7 +241,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	err = mlx5e_xfrm_validate_state(priv->mdev, x, extack);
  	if (err)
-@@ -680,6 +753,7 @@ static int mlx5e_xfrm_add_state(struct x
+@@ -713,6 +785,7 @@ static int mlx5e_xfrm_add_state(struct x
  	if (err)
  		goto err_hw_ctx;
  
@@ -248,7 +249,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	if (x->props.mode == XFRM_MODE_TUNNEL &&
  	    x->xso.type == XFRM_DEV_OFFLOAD_PACKET &&
  	    !mlx5e_ipsec_fs_tunnel_enabled(sa_entry)) {
-@@ -687,6 +761,7 @@ static int mlx5e_xfrm_add_state(struct x
+@@ -720,6 +793,7 @@ static int mlx5e_xfrm_add_state(struct x
  		err = -EINVAL;
  		goto err_add_rule;
  	}
@@ -256,7 +257,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	/* We use *_bh() variant because xfrm_timer_handler(), which runs
  	 * in softirq context, can reach our state delete logic and we need
-@@ -703,12 +778,16 @@ static int mlx5e_xfrm_add_state(struct x
+@@ -736,12 +810,16 @@ static int mlx5e_xfrm_add_state(struct x
  		queue_delayed_work(ipsec->wq, &sa_entry->dwork->dwork,
  				   MLX5_IPSEC_RESCHED);
  
@@ -274,7 +275,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	x->xso.offload_handle = (unsigned long)sa_entry;
  	return 0;
  
-@@ -726,7 +805,12 @@ unblock_ipsec:
+@@ -759,7 +837,12 @@ unblock_ipsec:
  	mlx5_eswitch_unblock_ipsec(priv->mdev);
  err_xfrm:
  	kfree(sa_entry);
@@ -287,7 +288,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	return err;
  }
  
-@@ -737,10 +821,10 @@ static void mlx5e_xfrm_del_state(struct
+@@ -770,10 +853,10 @@ static void mlx5e_xfrm_del_state(struct
  	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
  	struct mlx5e_ipsec_sa_entry *old;
  
@@ -300,7 +301,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	old = xa_erase_bh(&ipsec->sadb, sa_entry->ipsec_obj_id);
  	WARN_ON(old != sa_entry);
-@@ -757,10 +841,11 @@ static void mlx5e_xfrm_free_state(struct
+@@ -790,10 +873,11 @@ static void mlx5e_xfrm_free_state(struct
  	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
  	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
  
@@ -314,7 +315,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	if (sa_entry->work)
  		cancel_work_sync(&sa_entry->work->work);
-@@ -775,7 +860,9 @@ static void mlx5e_xfrm_free_state(struct
+@@ -808,7 +892,9 @@ static void mlx5e_xfrm_free_state(struct
  		kfree(sa_entry->work->data);
  	kfree(sa_entry->work);
  	mlx5_eswitch_unblock_ipsec(ipsec->mdev);
@@ -325,7 +326,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  	kfree(sa_entry);
  }
  
-@@ -809,7 +896,11 @@ static int mlx5e_ipsec_netevent_event(st
+@@ -842,7 +928,11 @@ static int mlx5e_ipsec_netevent_event(st
  		}
  
  		x = sa_entry->x;
@@ -337,7 +338,17 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  		data = sa_entry->work->data;
  
  		neigh_ha_snapshot(data->addr, n, netdev);
-@@ -912,6 +1003,7 @@ static bool mlx5e_ipsec_offload_ok(struc
+@@ -918,7 +1008,9 @@ void mlx5e_ipsec_cleanup(struct mlx5e_pr
+ 	if (!ipsec)
+ 		return;
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ 	xfrm_flush_gc();
++#endif
+ 
+ 	mlx5e_accel_ipsec_fs_cleanup(ipsec);
+ 	if (ipsec->netevent_nb.notifier_call) {
+@@ -947,6 +1039,7 @@ static bool mlx5e_ipsec_offload_ok(struc
  	return true;
  }
  
@@ -345,7 +356,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  static void mlx5e_xfrm_advance_esn_state(struct xfrm_state *x)
  {
  	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
-@@ -928,7 +1020,9 @@ static void mlx5e_xfrm_advance_esn_state
+@@ -963,7 +1056,9 @@ static void mlx5e_xfrm_advance_esn_state
  	mlx5e_ipsec_build_accel_xfrm_attrs(sa_entry, &sa_entry_shadow->attrs);
  	queue_work(sa_entry->ipsec->wq, &work->work);
  }
@@ -355,12 +366,12 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  static void mlx5e_xfrm_update_curlft(struct xfrm_state *x)
  {
  	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
-@@ -938,16 +1032,18 @@ static void mlx5e_xfrm_update_curlft(str
+@@ -973,16 +1068,18 @@ static void mlx5e_xfrm_update_curlft(str
  	lockdep_assert(lockdep_is_held(&x->lock) ||
  		       lockdep_is_held(&dev_net(x->xso.real_dev)->xfrm.xfrm_cfg_mutex));
  
 -	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
-+#ifdef XFRM_DEV_OFFLOAD_FLAG_ACQ
++#ifdef HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ
  	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
  		return;
 -	 */
@@ -376,7 +387,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  static int mlx5e_xfrm_validate_policy(struct mlx5_core_dev *mdev,
  				      struct xfrm_policy *x,
  				      struct netlink_ext_ack *extack)
-@@ -965,11 +1061,13 @@ static int mlx5e_xfrm_validate_policy(st
+@@ -1000,11 +1097,13 @@ static int mlx5e_xfrm_validate_policy(st
  		return -EINVAL;
  	}
  
@@ -390,7 +401,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	if (!x->xfrm_vec[0].reqid && sel->proto == IPPROTO_IP &&
  	    addr6_all_zero(sel->saddr.a6) && addr6_all_zero(sel->daddr.a6)) {
-@@ -977,10 +1075,12 @@ static int mlx5e_xfrm_validate_policy(st
+@@ -1012,10 +1111,12 @@ static int mlx5e_xfrm_validate_policy(st
  		return -EINVAL;
  	}
  
@@ -403,7 +414,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	if (x->selector.proto != IPPROTO_IP &&
  	    x->selector.proto != IPPROTO_UDP &&
-@@ -1003,7 +1103,9 @@ static int mlx5e_xfrm_validate_policy(st
+@@ -1044,7 +1145,9 @@ static int mlx5e_xfrm_validate_policy(st
  
  	return 0;
  }
@@ -413,7 +424,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  static void
  mlx5e_ipsec_build_accel_pol_attrs(struct mlx5e_ipsec_pol_entry *pol_entry,
  				  struct mlx5_accel_pol_xfrm_attrs *attrs)
-@@ -1028,14 +1130,24 @@ mlx5e_ipsec_build_accel_pol_attrs(struct
+@@ -1069,14 +1172,24 @@ mlx5e_ipsec_build_accel_pol_attrs(struct
  	attrs->upspec.proto = sel->proto;
  	attrs->prio = x->priority;
  }
@@ -440,7 +451,7 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  	priv = netdev_priv(netdev);
  	if (!priv->ipsec) {
-@@ -1089,13 +1201,16 @@ static void mlx5e_xfrm_free_policy(struc
+@@ -1130,18 +1243,25 @@ static void mlx5e_xfrm_free_policy(struc
  
  	kfree(pol_entry);
  }
@@ -448,16 +459,6 @@ Change-Id: Icb4f891822ce9c0ebe5328c9b3998d4039f154c5
  
  static const struct xfrmdev_ops mlx5e_ipsec_xfrmdev_ops = {
  	.xdo_dev_state_add	= mlx5e_xfrm_add_state,
- 	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
- 	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
- 	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,
-+#ifdef HAVE_XDO_DEV_STATE_ADVANCE_ESN
- 	.xdo_dev_state_advance_esn = mlx5e_xfrm_advance_esn_state,
-+#endif
- };
- 
- static const struct xfrmdev_ops mlx5e_ipsec_packet_xfrmdev_ops = {
-@@ -1103,12 +1218,18 @@ static const struct xfrmdev_ops mlx5e_ip
  	.xdo_dev_state_delete	= mlx5e_xfrm_del_state,
  	.xdo_dev_state_free	= mlx5e_xfrm_free_state,
  	.xdo_dev_offload_ok	= mlx5e_ipsec_offload_ok,

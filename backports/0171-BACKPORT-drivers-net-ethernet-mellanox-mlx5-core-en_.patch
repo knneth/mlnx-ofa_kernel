@@ -823,7 +823,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
  	void *ppriv = priv->ppriv;
  
  	mlx5_rep_destroy_miss_meter(dev, rpriv);
-@@ -1736,8 +2126,16 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1742,8 +2132,16 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  	}
  
  	mlx5e_rep_metadata_remove(priv, rep, false);

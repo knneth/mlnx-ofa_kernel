@@ -35,8 +35,8 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"iw_c2"
-#define DRV_VERSION	"23.10-0.5.5"
-#define DRV_RELDATE	"05 Nov 2023"
+#define DRV_VERSION	"23.10-1.1.9"
+#define DRV_RELDATE	"05 Dec 2023"
 
 MODULE_AUTHOR("Vladimir Sokolovsky");
 MODULE_DESCRIPTION("iw_c2 dummy kernel module");

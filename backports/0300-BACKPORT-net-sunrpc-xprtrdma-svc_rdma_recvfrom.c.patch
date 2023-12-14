@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 
 Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
 ---
- net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 633 +++++++++++++++++++++++-
- 1 file changed, 632 insertions(+), 1 deletion(-)
+ net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 643 +++++++++++++++++++++++-
+ 1 file changed, 637 insertions(+), 6 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
@@ -288,7 +288,7 @@ Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
 +	ctxt = svc_rdma_recv_ctxt_get(rdma);
 +	if (!ctxt)
 +		return -ENOMEM;
-+
+ 
 +	buflen = 0;
 +	ctxt->rc_cqe.done = svc_rdma_wc_receive;
 +	for (sge_no = 0; buflen < rdma->sc_max_req_size; sge_no++) {
@@ -296,7 +296,7 @@ Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
 +			pr_err("svcrdma: Too many sges (%d)\n", sge_no);
 +			goto err_put_ctxt;
 +		}
- 
++
 +		page = alloc_page(GFP_KERNEL);
 +		if (!page)
 +			goto err_put_ctxt;
@@ -912,7 +912,7 @@ Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
  
  /**
   * svc_rdma_recvfrom - Receive an RPC call
-@@ -795,12 +1370,26 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -795,12 +1370,34 @@ int svc_rdma_recvfrom(struct svc_rqst *r
  	struct svcxprt_rdma *rdma_xprt =
  		container_of(xprt, struct svcxprt_rdma, sc_xprt);
  	struct svc_rdma_recv_ctxt *ctxt;
@@ -921,6 +921,14 @@ Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
 +#endif
  	int ret;
  
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
++	/* Prevent svc_xprt_release from releasing pages in rq_pages
++	 * if we return 0 or an error.
++	 */
++	rqstp->rq_respages = rqstp->rq_pages;
++	rqstp->rq_next_page = rqstp->rq_respages;
++#endif
++
 +#ifdef HAVE_SVC_RDMA_RELEASE_RQST
  	rqstp->rq_xprt_ctxt = NULL;
 +#endif
@@ -939,7 +947,7 @@ Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
  	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_rq_dto_q);
  	if (ctxt)
  		list_del(&ctxt->rc_list);
-@@ -809,53 +1398,95 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -809,53 +1406,87 @@ int svc_rdma_recvfrom(struct svc_rqst *r
  		clear_bit(XPT_DATA, &xprt->xpt_flags);
  	spin_unlock(&rdma_xprt->sc_rq_dto_lock);
  
@@ -959,14 +967,11 @@ Change-Id: Ifaf6d4b832ffe32cf2492e3254b2d34ed3559982
 +#endif
  	svc_rdma_build_arg_xdr(rqstp, ctxt);
  
-+#ifdef HAVE_SVC_FILL_WRITE_VECTOR
- 	/* Prevent svc_xprt_release from releasing pages in rq_pages
- 	 * if we return 0 or an error.
- 	 */
- 	rqstp->rq_respages = rqstp->rq_pages;
- 	rqstp->rq_next_page = rqstp->rq_respages;
-+#endif
-+
+-	/* Prevent svc_xprt_release from releasing pages in rq_pages
+-	 * if we return 0 or an error.
+-	 */
+-	rqstp->rq_respages = rqstp->rq_pages;
+-	rqstp->rq_next_page = rqstp->rq_respages;
 +#ifndef HAVE_SVC_RDMA_PCL
 +	p = (__be32 *)rqstp->rq_arg.head[0].iov_base;
 +#endif

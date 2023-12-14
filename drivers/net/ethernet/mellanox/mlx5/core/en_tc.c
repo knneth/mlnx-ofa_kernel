@@ -5420,16 +5420,12 @@ mlx5e_add_fdb_flow(struct mlx5e_priv *priv,
 {
 	struct mlx5_devcom *devcom = priv->mdev->priv.devcom;
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+	struct mlx5_eswitch_rep *in_rep = rpriv->rep;
 	struct mlx5_core_dev *in_mdev = priv->mdev;
-	struct mlx5_eswitch_rep *in_rep;
 	struct mlx5_eswitch *peer_esw;
 	struct mlx5e_tc_flow *flow;
 	int err;
 	int i;
-
-	if (!rpriv)
-		return -EINVAL;
-	in_rep = rpriv->rep;
 
 	flow = __mlx5e_add_fdb_flow(priv, f, flow_flags, filter_dev, in_rep,
 				    in_mdev);

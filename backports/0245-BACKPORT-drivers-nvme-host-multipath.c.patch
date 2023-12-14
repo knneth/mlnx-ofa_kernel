@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/multipath.c
 
 Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
 ---
- drivers/nvme/host/multipath.c | 234 +++++++++++++++++++++++++++++++++-
- 1 file changed, 232 insertions(+), 2 deletions(-)
+ drivers/nvme/host/multipath.c | 236 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 234 insertions(+), 2 deletions(-)
 
 --- a/drivers/nvme/host/multipath.c
 +++ b/drivers/nvme/host/multipath.c
@@ -274,7 +274,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  	bool vwc = false;
  
  	mutex_init(&head->lock);
-@@ -522,17 +628,66 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+@@ -522,26 +628,77 @@ int nvme_mpath_alloc_disk(struct nvme_ct
  	if (!(ctrl->subsys->cmic & NVME_CTRL_CMIC_MULTI_CTRL) || !multipath)
  		return 0;
  
@@ -341,7 +341,18 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  	/*
  	 * This assumes all controllers that refer to a namespace either
  	 * support poll queues or not.  That is not a strict guarantee,
-@@ -553,12 +708,22 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+ 	 * but if the assumption is wrong the effect is only suboptimal
+ 	 * performance but not correctness problem.
+ 	 */
++#ifdef HAVE_BIO_BI_COOKIE
+ 	if (ctrl->tagset->nr_maps > HCTX_TYPE_POLL &&
+ 	    ctrl->tagset->map[HCTX_TYPE_POLL].nr_queues)
+ 		blk_queue_flag_set(QUEUE_FLAG_POLL, head->disk->queue);
++#endif
+ 
+ 	/* set to a default value of 512 until the disk is validated */
+ 	blk_queue_logical_block_size(head->disk->queue, 512);
+@@ -553,12 +710,22 @@ int nvme_mpath_alloc_disk(struct nvme_ct
  		vwc = true;
  	blk_queue_write_cache(head->disk->queue, vwc, vwc);
  	return 0;
@@ -364,7 +375,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  
  	if (!head->disk)
  		return;
-@@ -568,15 +733,30 @@ static void nvme_mpath_set_live(struct n
+@@ -568,15 +735,30 @@ static void nvme_mpath_set_live(struct n
  	 * paths simultaneously calling device_add_disk() on the same namespace
  	 * head.
  	 */
@@ -395,7 +406,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  
  	mutex_lock(&head->lock);
  	if (nvme_path_is_optimized(ns)) {
-@@ -612,7 +792,11 @@ static int nvme_parse_ana_log(struct nvm
+@@ -612,7 +794,11 @@ static int nvme_parse_ana_log(struct nvm
  			return -EINVAL;
  
  		nr_nsids = le32_to_cpu(desc->nnsids);
@@ -407,7 +418,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  
  		if (WARN_ON_ONCE(desc->grpid == 0))
  			return -EINVAL;
-@@ -757,9 +941,15 @@ void nvme_mpath_update(struct nvme_ctrl
+@@ -757,9 +943,15 @@ void nvme_mpath_update(struct nvme_ctrl
  	mutex_unlock(&ctrl->ana_lock);
  }
  
@@ -423,7 +434,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  
  	dev_info(ctrl->device, "ANATT timeout, resetting controller.\n");
  	nvme_reset_ctrl(ctrl);
-@@ -858,13 +1048,27 @@ void nvme_mpath_add_disk(struct nvme_ns
+@@ -858,13 +1050,27 @@ void nvme_mpath_add_disk(struct nvme_ns
  		ns->ana_state = NVME_ANA_OPTIMIZED;
  		nvme_mpath_set_live(ns);
  	}
@@ -452,7 +463,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  #endif
  }
  
-@@ -873,10 +1077,18 @@ void nvme_mpath_shutdown_disk(struct nvm
+@@ -873,10 +1079,18 @@ void nvme_mpath_shutdown_disk(struct nvm
  	if (!head->disk)
  		return;
  	kblockd_schedule_work(&head->requeue_work);
@@ -471,7 +482,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  }
  
  void nvme_mpath_remove_disk(struct nvme_ns_head *head)
-@@ -886,13 +1098,30 @@ void nvme_mpath_remove_disk(struct nvme_
+@@ -886,13 +1100,30 @@ void nvme_mpath_remove_disk(struct nvme_
  	/* make sure all pending bios are cleaned up */
  	kblockd_schedule_work(&head->requeue_work);
  	flush_work(&head->requeue_work);
@@ -502,7 +513,7 @@ Change-Id: I8ce65a5690d29c5c91d9f2cf9d75a44067ba6c13
  	INIT_WORK(&ctrl->ana_work, nvme_ana_work);
  }
  
-@@ -953,3 +1182,4 @@ void nvme_mpath_uninit(struct nvme_ctrl
+@@ -953,3 +1184,4 @@ void nvme_mpath_uninit(struct nvme_ctrl
  	ctrl->ana_log_buf = NULL;
  	ctrl->ana_log_size = 0;
  }

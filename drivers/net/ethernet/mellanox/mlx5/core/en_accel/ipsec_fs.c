@@ -1696,8 +1696,11 @@ static int mlx5e_ipsec_block_tc_offload(struct mlx5_core_dev *mdev)
 	struct mlx5_eswitch *esw = mdev->priv.eswitch;
 	int err = 0;
 
-	if (esw)
-		down_write(&esw->mode_lock);
+	if (esw) {
+		err = mlx5_esw_lock(esw);
+		if (err)
+			return err;
+	}
 
 	if (mdev->num_block_ipsec) {
 		err = -EBUSY;
@@ -1708,7 +1711,7 @@ static int mlx5e_ipsec_block_tc_offload(struct mlx5_core_dev *mdev)
 
 unlock:
 	if (esw)
-		up_write(&esw->mode_lock);
+		mlx5_esw_unlock(esw);
 
 	return err;
 }
@@ -1725,7 +1728,7 @@ static int mlx5e_ipsec_block_tc_offload(struct mlx5_core_dev *mdev)
 
 static void mlx5e_ipsec_unblock_tc_offload(struct mlx5_core_dev *mdev)
 {
-	mdev->num_block_tc++;
+	mdev->num_block_tc--;
 }
 
 int mlx5e_accel_ipsec_fs_add_rule(struct mlx5e_ipsec_sa_entry *sa_entry)

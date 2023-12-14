@@ -962,7 +962,8 @@ mlx5_eswitch_add_send_to_vport_rule(struct mlx5_eswitch *on_esw,
 	dest.vport.flags |= MLX5_FLOW_DEST_VPORT_VHCA_ID;
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST;
 
-	if (rep->vport == MLX5_VPORT_UPLINK && on_esw->offloads.ft_ipsec_tx_pol) {
+	if (rep->vport == MLX5_VPORT_UPLINK &&
+	    on_esw == from_esw && on_esw->offloads.ft_ipsec_tx_pol) {
 		dest.ft = on_esw->offloads.ft_ipsec_tx_pol;
 		flow_act.flags = FLOW_ACT_IGNORE_FLOW_LEVEL;
 		dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
@@ -2637,13 +2638,8 @@ static void __unload_reps_all_vport(struct mlx5_eswitch *esw, u8 rep_type)
 	struct mlx5_eswitch_rep *rep;
 	unsigned long i;
 
-	mlx5_esw_for_each_rep(esw, i, rep) {
-		if (rep->vport == MLX5_VPORT_UPLINK)
-	                       down_write(&esw->mode_lock);
+	mlx5_esw_for_each_rep(esw, i, rep)
 		__esw_offloads_unload_rep(esw, rep, rep_type);
-		if (rep->vport == MLX5_VPORT_UPLINK)
-	                       up_write(&esw->mode_lock);
-	}
 }
 
 int mlx5_esw_offloads_rep_load(struct mlx5_eswitch *esw, u16 vport_num)
@@ -3813,6 +3809,21 @@ void mlx5_eswitch_unblock_mode(struct mlx5_core_dev *dev)
 	up_write(&esw->mode_lock);
 }
 
+bool mlx5_eswitch_mode_is_blocked(struct mlx5_core_dev *dev)
+{
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	bool blocked;
+
+	if (!mlx5_esw_allowed(esw))
+		return false;
+
+	down_write(&esw->mode_lock);
+	blocked = esw->offloads.num_block_mode;
+	up_write(&esw->mode_lock);
+
+	return blocked;
+}
+
 int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 				  struct netlink_ext_ack *extack)
 {
@@ -3865,13 +3876,16 @@ int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 		goto unlock;
 	}
 
+	esw->eswitch_operation_in_progress = true;
+	up_write(&esw->mode_lock);
+
 	mlx5_eswitch_disable_locked(esw);
 	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV) {
 		if (mlx5_devlink_trap_get_num_active(esw->dev)) {
 			NL_SET_ERR_MSG_MOD(extack,
 					   "Can't change mode while devlink traps are active");
 			err = -EOPNOTSUPP;
-			goto unlock;
+			goto skip;
 		}
 		err = esw_offloads_start(esw, extack);
 	} else if (mode == DEVLINK_ESWITCH_MODE_LEGACY) {
@@ -3881,6 +3895,9 @@ int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 		err = -EINVAL;
 	}
 
+skip:
+	down_write(&esw->mode_lock);
+	esw->eswitch_operation_in_progress = false;
 unlock:
 	mlx5_esw_unlock(esw);
 enable_lag:
@@ -3891,18 +3908,12 @@ enable_lag:
 int mlx5_devlink_eswitch_mode_get(struct devlink *devlink, u16 *mode)
 {
 	struct mlx5_eswitch *esw;
-	int err;
 
 	esw = mlx5_devlink_eswitch_get(devlink);
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	if (!down_read_trylock(&esw->mode_lock))
-		return -EBUSY;
-
-	err = esw_mode_to_devlink(esw->mode, mode);
-	up_read(&esw->mode_lock);
-	return err;
+	return esw_mode_to_devlink(esw->mode, mode);
 }
 
 static int mlx5_esw_vports_inline_set(struct mlx5_eswitch *esw, u8 mlx5_mode,
@@ -3996,11 +4007,15 @@ int mlx5_devlink_eswitch_inline_mode_set(struct devlink *devlink, u8 mode,
 	if (err)
 		goto out;
 
-	err = mlx5_esw_vports_inline_set(esw, mlx5_mode, extack);
-	if (err)
-		goto out;
+	esw->eswitch_operation_in_progress = true;
+	up_write(&esw->mode_lock);
 
-	esw->offloads.inline_mode = mlx5_mode;
+	err = mlx5_esw_vports_inline_set(esw, mlx5_mode, extack);
+	if (!err)
+		esw->offloads.inline_mode = mlx5_mode;
+
+	down_write(&esw->mode_lock);
+	esw->eswitch_operation_in_progress = false;
 	up_write(&esw->mode_lock);
 	return 0;
 
@@ -4012,18 +4027,12 @@ out:
 int mlx5_devlink_eswitch_inline_mode_get(struct devlink *devlink, u8 *mode)
 {
 	struct mlx5_eswitch *esw;
-	int err;
 
 	esw = mlx5_devlink_eswitch_get(devlink);
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	if (!down_read_trylock(&esw->mode_lock))
-		return -EBUSY;
-
-	err = esw_inline_mode_to_devlink(esw->offloads.inline_mode, mode);
-	up_read(&esw->mode_lock);
-	return err;
+	return esw_inline_mode_to_devlink(esw->offloads.inline_mode, mode);
 }
 
 bool mlx5_eswitch_block_encap(struct mlx5_core_dev *dev)
@@ -4105,6 +4114,9 @@ int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
 		goto unlock;
 	}
 
+	esw->eswitch_operation_in_progress = true;
+	up_write(&esw->mode_lock);
+
 	esw_destroy_offloads_fdb_tables(esw);
 
 	esw->offloads.encap = encap;
@@ -4117,6 +4129,9 @@ int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
 		esw->offloads.encap = !encap;
 		(void)esw_create_offloads_fdb_tables(esw);
 	}
+
+	down_write(&esw->mode_lock);
+	esw->eswitch_operation_in_progress = false;
 
 unlock:
 	up_write(&esw->mode_lock);
@@ -4132,11 +4147,7 @@ int mlx5_devlink_eswitch_encap_mode_get(struct devlink *devlink,
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	if (!down_read_trylock(&esw->mode_lock))
-		return -EBUSY;
-
 	*encap = esw->offloads.encap;
-	up_read(&esw->mode_lock);
 	return 0;
 }
 

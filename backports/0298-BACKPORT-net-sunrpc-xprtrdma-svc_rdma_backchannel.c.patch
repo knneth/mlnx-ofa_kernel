@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_backchannel.c
 
 Change-Id: Iaf429fa20d2c96177953ebf95df10b3e931c871e
 ---
- net/sunrpc/xprtrdma/svc_rdma_backchannel.c | 67 +++++++++++++++++++++-
- 1 file changed, 66 insertions(+), 1 deletion(-)
+ net/sunrpc/xprtrdma/svc_rdma_backchannel.c | 75 +++++++++++++++++++---
+ 1 file changed, 67 insertions(+), 8 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
@@ -115,7 +115,22 @@ Change-Id: Iaf429fa20d2c96177953ebf95df10b3e931c871e
  	if (ret < 0)
  		return -EIO;
  
-@@ -186,8 +230,14 @@ drop_connection:
+@@ -93,13 +137,7 @@ static int svc_rdma_bc_sendto(struct svc
+ 	 */
+ 	get_page(virt_to_page(rqst->rq_buffer));
+ 	sctxt->sc_send_wr.opcode = IB_WR_SEND;
+-	ret = svc_rdma_send(rdma, sctxt);
+-	if (ret < 0)
+-		return ret;
+-
+-	ret = wait_for_completion_killable(&sctxt->sc_done);
+-	svc_rdma_send_ctxt_put(rdma, sctxt);
+-	return ret;
++	return svc_rdma_send(rdma, sctxt);
+ }
+ 
+ /* Server-side transport endpoint wants a whole page for its send
+@@ -186,8 +224,14 @@ drop_connection:
   *   %0 if the message was sent successfully
   *   %ENOTCONN if the message was not sent
   */
@@ -130,7 +145,7 @@ Change-Id: Iaf429fa20d2c96177953ebf95df10b3e931c871e
  	struct svc_xprt *sxprt = rqst->rq_xprt->bc_xprt;
  	struct svcxprt_rdma *rdma =
  		container_of(sxprt, struct svcxprt_rdma, sc_xprt);
-@@ -198,7 +248,11 @@ static int xprt_rdma_bc_send_request(str
+@@ -198,7 +242,11 @@ static int xprt_rdma_bc_send_request(str
  
  	ret = rpcrdma_bc_send_request(rdma, rqst);
  	if (ret == -ENOTCONN)
@@ -142,7 +157,7 @@ Change-Id: Iaf429fa20d2c96177953ebf95df10b3e931c871e
  	return ret;
  }
  
-@@ -216,16 +270,27 @@ xprt_rdma_bc_put(struct rpc_xprt *xprt)
+@@ -216,16 +264,27 @@ xprt_rdma_bc_put(struct rpc_xprt *xprt)
  	xprt_free(xprt);
  }
  

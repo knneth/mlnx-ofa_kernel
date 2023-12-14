@@ -1731,6 +1731,12 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	mlx5_rep_sysfs_cleanup(rpriv);
 
 	if (rep->vport == MLX5_VPORT_UPLINK) {
+		if (priv->mdev->priv.flags & MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV) {
+			rtnl_lock();
+			dev_close(netdev);
+			rtnl_unlock();
+		}
+
 		mlx5e_vport_uplink_rep_unload(rpriv);
 		goto free_ppriv;
 	}

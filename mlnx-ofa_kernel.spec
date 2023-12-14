@@ -72,7 +72,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 23.10}
-%{!?_release: %global _release OFED.23.10.0.5.5.1}
+%{!?_release: %global _release OFED.23.10.1.1.9.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -114,7 +114,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.10-0.5.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.10-1.1.9.tgz
 
 
 # build KMP rpms?
@@ -158,7 +158,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.10-0.5.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.10-1.1.9.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -189,7 +189,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.10-0.5.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-23.10-1.1.9.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -286,6 +286,7 @@ export INSTALL_MOD_DIR=%{install_mod_dir}
 export NAME=%{name}
 export VERSION=%{version}
 export PREFIX=%{_prefix}
+mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}
 for flavor in %flavors_to_build; do 
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
@@ -309,6 +310,7 @@ for flavor in %flavors_to_build; do
 		./ofed_scripts/create_Module.symvers.sh
 		cp ./Module.symvers %{_builddir}/src/$NAME/$flavor/Module.symvers
 	fi
+	cp -a %{_builddir}/src/$NAME/$flavor %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/$KVERSION
 	# Cleanup unnecessary kernel-generated module dependency files.
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
@@ -334,10 +336,8 @@ done
 
 # copy sources
 mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}
-mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}
 cp -a %{_builddir}/%{name}-%{version}/source %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}/source
 ln -s ofa_kernel-%{version}/source %{buildroot}/%{_prefix}/src/mlnx-ofa_kernel-%{version}
-cp -a %{_builddir}/src/%{name}/* %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}
 # Fix path of BACKPORT_INCLUDES
 sed -i -e "s@=-I.*backport_includes@=-I/usr/src/ofa_kernel-$VERSION/backport_includes@" %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}/configure.mk.kernel || true
 rm -rf %{_builddir}/src
@@ -686,7 +686,7 @@ update-alternatives --remove \
 
 %files -n %{devel_pname}
 %defattr(-,root,root,-)
-%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}
+%{_prefix}/src/ofa_kernel/%{_arch}/[0-9]*
 
 %files source
 %defattr(-,root,root,-)

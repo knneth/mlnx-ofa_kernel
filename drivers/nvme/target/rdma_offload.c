@@ -432,11 +432,11 @@ static void nvmet_rdma_backend_ctrl_event(struct ib_event *event, void *priv)
 	switch (event->event) {
 	case IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR:
 		be_ctrl->restart = false;
-		schedule_work(&be_ctrl->release_work);
+		queue_work(nvmet_wq, &be_ctrl->release_work);
 		break;
 	case IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR:
 		be_ctrl->restart = true;
-		schedule_work(&be_ctrl->release_work);
+		queue_work(nvmet_wq, &be_ctrl->release_work);
 		break;
 	default:
 		break;

@@ -14025,6 +14025,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if mm.h has release_pages])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mm.h>
+	],[
+		release_pages(NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RELEASE_PAGES_IN_MM_H, 1,
+			[mm.h has release_pages])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+
 	AC_MSG_CHECKING([if t10-pi.h has t10_pi_prepare])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/t10-pi.h>
@@ -18256,6 +18272,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_PROTO_OPS_SENDPAGE, 1,
 			  [net.h struct proto_ops has sendpage])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/aer.h has pci_enable_pcie_error_reporting])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/aer.h>
+	],[
+		pci_enable_pcie_error_reporting(NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING, 1,
+			[linux/aer.h has pci_enable_pcie_error_reporting])
 	],[
 		AC_MSG_RESULT(no)
 	])
