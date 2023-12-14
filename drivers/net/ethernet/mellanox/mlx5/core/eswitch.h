@@ -70,6 +70,11 @@ struct mlx5_mapped_obj {
 	};
 };
 
+static inline bool esw_is_local_esw_dev(struct mlx5_core_dev *dev)
+{
+	return !MLX5_VPORT_MANAGER(dev) && !mlx5_core_is_ecpf_esw_manager(dev);
+}
+
 #ifdef CONFIG_MLX5_ESWITCH
 
 #define ESW_OFFLOADS_DEFAULT_NUM_GROUPS 15
@@ -190,7 +195,7 @@ struct mlx5_vport_info {
 	u8                      offloads_trusted: 1;
 	u8                      roce_enabled: 1;
 	u8                      mig_enabled: 1;
-	u8                      local_esw_supported: 1;
+	u8                      local_esw_enabled: 1;
 	u32			group;
 	u8                      direction: 2;
 	/* the admin approved vlan list */
@@ -691,12 +696,6 @@ int mlx5_devlink_port_function_trust_set(struct devlink *devlink,
 					 struct devlink_port *port,
 					 bool trusted,
 					 struct netlink_ext_ack *extack);
-
-static inline bool esw_vst_mode_is_steering(struct mlx5_eswitch *esw)
-{
-	return (MLX5_CAP_ESW_EGRESS_ACL(esw->dev, pop_vlan) &&
-		MLX5_CAP_ESW_INGRESS_ACL(esw->dev, push_vlan));
-}
 
 int mlx5_esw_get_hca_trusted(struct mlx5_eswitch *esw,
 			     u16 vport_num,

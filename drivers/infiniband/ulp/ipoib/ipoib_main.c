@@ -59,11 +59,14 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 int ipoib_sendq_size __read_mostly = IPOIB_TX_RING_SIZE;
 int ipoib_recvq_size __read_mostly = IPOIB_RX_RING_SIZE;
+int ipoib_enhanced_enabled = 1;
 
 module_param_named(send_queue_size, ipoib_sendq_size, int, 0444);
 MODULE_PARM_DESC(send_queue_size, "Number of descriptors in send queue");
 module_param_named(recv_queue_size, ipoib_recvq_size, int, 0444);
 MODULE_PARM_DESC(recv_queue_size, "Number of descriptors in receive queue");
+module_param_named(ipoib_enhanced, ipoib_enhanced_enabled, int, 0444);
+MODULE_PARM_DESC(ipoib_enhanced, "Non-functional module parameter");
 
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
 int ipoib_debug_level;
@@ -2318,6 +2321,9 @@ int ipoib_intf_init(struct ib_device *hca, u32 port, const char *name,
 
 	priv->ca = hca;
 	priv->port = port;
+
+	if (ipoib_enhanced_enabled == 0)
+		ipoib_warn(priv, "Ignoring non-functional 'ipoib_enhanced' module parameter\n");
 
 	rc = rdma_init_netdev(hca, port, RDMA_NETDEV_IPOIB, name,
 			      NET_NAME_UNKNOWN, ipoib_setup_common, dev);

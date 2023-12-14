@@ -3,14 +3,14 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.h
 
 Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
 ---
- .../net/ethernet/mellanox/mlx5/core/eswitch.h | 79 ++++++++++++++-----
- 1 file changed, 61 insertions(+), 18 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/eswitch.h | 83 +++++++++++++++----
+ 1 file changed, 65 insertions(+), 18 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.h
-@@ -70,10 +70,11 @@ struct mlx5_mapped_obj {
- 	};
- };
+@@ -75,10 +75,11 @@ static inline bool esw_is_local_esw_dev(
+ 	return !MLX5_VPORT_MANAGER(dev) && !mlx5_core_is_ecpf_esw_manager(dev);
+ }
  
 -#ifdef CONFIG_MLX5_ESWITCH
 -
@@ -22,7 +22,18 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  #define MLX5_MAX_UC_PER_VPORT(dev) \
  	(1 << MLX5_CAP_GEN(dev, log_max_current_uc_list))
  
-@@ -629,11 +630,17 @@ struct mlx5_esw_flow_attr {
+@@ -480,6 +481,10 @@ int mlx5_esw_qos_modify_vport_rate(struc
+ int mlx5_eswitch_init(struct mlx5_core_dev *dev);
+ void mlx5_eswitch_cleanup(struct mlx5_eswitch *esw);
+ 
++#if defined(HAVE_DEVLINK_PARAM) && (defined(HAVE_DEVLINK_PARAMS_PUBLISHED) || defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS)) && !defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
++int mlx5_register_eswitch_params(struct mlx5_core_dev *dev);
++void mlx5_unregister_eswitch_params(struct mlx5_core_dev *dev);
++#endif
+ #define MLX5_ESWITCH_IGNORE_NUM_VFS (-1)
+ int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int num_vfs);
+ int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs);
+@@ -634,11 +639,17 @@ struct mlx5_esw_flow_attr {
  	struct mlx5_pkt_reformat *decap_pkt_reformat;
  };
  
@@ -44,7 +55,7 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  int mlx5_devlink_eswitch_inline_mode_get(struct devlink *devlink, u8 *mode);
  
  int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
-@@ -642,14 +649,35 @@ int mlx5_eswitch_vport_get_other_hca_cap
+@@ -647,14 +658,35 @@ int mlx5_eswitch_vport_get_other_hca_cap
  					      struct mlx5_vport *vport, bool *value);
  
  int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
@@ -84,7 +95,7 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  					   const u8 *hw_addr, int hw_addr_len,
  					   struct netlink_ext_ack *extack);
  int mlx5_devlink_port_fn_roce_get(struct devlink_port *port, bool *is_enabled,
-@@ -673,8 +701,11 @@ int mlx5_devlink_rate_node_del(struct de
+@@ -678,8 +710,11 @@ int mlx5_devlink_rate_node_del(struct de
  void *mlx5_eswitch_get_uplink_priv(struct mlx5_eswitch *esw, u8 rep_type);
  
  int mlx5_devlink_eswitch_ipsec_mode_set(struct devlink *devlink,
@@ -98,7 +109,7 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  int mlx5_devlink_eswitch_ipsec_mode_get(struct devlink *devlink,
  					enum devlink_eswitch_ipsec_mode *ipsec);
  
-@@ -952,6 +983,12 @@ struct mlx5_esw_event_info {
+@@ -951,6 +986,12 @@ struct mlx5_esw_event_info {
  
  int mlx5_esw_event_notifier_register(struct mlx5_eswitch *esw, struct notifier_block *n);
  void mlx5_esw_event_notifier_unregister(struct mlx5_eswitch *esw, struct notifier_block *n);
@@ -111,7 +122,7 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  bool mlx5e_esw_offloads_pet_enabled(const struct mlx5_eswitch *esw);
  int mlx5e_esw_offloads_pet_setup(struct mlx5_eswitch *esw, struct mlx5_flow_table *ft);
  void mlx5e_esw_offloads_pet_cleanup(struct mlx5_eswitch *esw);
-@@ -1029,12 +1066,6 @@ static inline const u32 *mlx5_esw_query_
+@@ -1028,12 +1069,6 @@ static inline const u32 *mlx5_esw_query_
  	return ERR_PTR(-EOPNOTSUPP);
  }
  
@@ -124,7 +135,7 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  static inline unsigned int
  mlx5_esw_vport_to_devlink_port_index(const struct mlx5_core_dev *dev,
  				     u16 vport_num)
-@@ -1061,6 +1092,11 @@ mlx5_eswitch_reload_reps(struct mlx5_esw
+@@ -1060,6 +1095,11 @@ mlx5_eswitch_reload_reps(struct mlx5_esw
  	return 0;
  }
  
@@ -136,7 +147,7 @@ Change-Id: I40696179362efac4dabde475a7f2a54a68de6a8e
  static inline bool mlx5_esw_host_functions_enabled(const struct mlx5_core_dev *dev)
  {
  	return true;
-@@ -1080,6 +1116,13 @@ static inline int mlx5_esw_try_lock(stru
+@@ -1079,6 +1119,13 @@ static inline int mlx5_esw_try_lock(stru
  }
  
  static inline void mlx5_esw_unlock(struct mlx5_eswitch *esw) {}

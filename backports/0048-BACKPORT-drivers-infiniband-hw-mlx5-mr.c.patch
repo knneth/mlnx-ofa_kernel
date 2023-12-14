@@ -42,7 +42,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  			MLX5_SET(mkc, mkc, relaxed_ordering_read, 1);
  	}
  
-@@ -453,7 +461,11 @@ static ssize_t cur_show(struct cache_ord
+@@ -454,7 +462,11 @@ static ssize_t cur_show(struct cache_ord
  	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
  	int err;
  
@@ -54,7 +54,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  	return err;
  }
  
-@@ -528,7 +540,11 @@ static ssize_t size_show(struct cache_or
+@@ -529,7 +541,11 @@ static ssize_t size_show(struct cache_or
  	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
  	int err;
  
@@ -66,7 +66,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  	return err;
  }
  
-@@ -672,10 +688,17 @@ static struct attribute *order_default_a
+@@ -673,10 +689,17 @@ static struct attribute *order_default_a
  	NULL
  };
  
@@ -87,7 +87,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  };
  
  static bool someone_releasing(struct mlx5_mkey_cache *cache)
-@@ -959,9 +982,17 @@ static void clean_keys(struct mlx5_ib_de
+@@ -960,9 +983,17 @@ static void clean_keys(struct mlx5_ib_de
  	xa_unlock_irq(&ent->mkeys);
  }
  
@@ -106,7 +106,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  
  	WRITE_ONCE(dev->fill_delay, 0);
  }
-@@ -1068,7 +1099,11 @@ int mlx5_mkey_cache_init(struct mlx5_ib_
+@@ -1069,7 +1100,11 @@ int mlx5_mkey_cache_init(struct mlx5_ib_
  	}
  
  	mlx5_cmd_init_async_ctx(dev->mdev, &dev->async_ctx);
@@ -118,7 +118,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  	mlx5_mkey_cache_sysfs_init(dev);
  	mutex_lock(&cache->rb_lock);
  	for (i = 0; i <= mkey_cache_max_order(dev); i++) {
-@@ -1527,6 +1562,7 @@ static struct ib_mr *create_real_mr(stru
+@@ -1528,6 +1563,7 @@ static struct ib_mr *create_real_mr(stru
  	return &mr->ibmr;
  }
  
@@ -126,7 +126,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  					u64 iova, int access_flags,
  					struct ib_udata *udata)
-@@ -1548,7 +1584,7 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1549,7 +1585,7 @@ static struct ib_mr *create_user_odp_mr(
  		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
  			return ERR_PTR(-EINVAL);
  
@@ -135,7 +135,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  		if (IS_ERR(mr))
  			return ERR_CAST(mr);
  		return &mr->ibmr;
-@@ -1558,8 +1594,12 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1559,8 +1595,12 @@ static struct ib_mr *create_user_odp_mr(
  	if (!mlx5r_umr_can_load_pas(dev, length))
  		return ERR_PTR(-EINVAL);
  
@@ -148,7 +148,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  	if (IS_ERR(odp))
  		return ERR_CAST(odp);
  
-@@ -1584,6 +1624,7 @@ err_dereg_mr:
+@@ -1585,6 +1625,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -156,7 +156,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  
  struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
  				  u64 iova, int access_flags,
-@@ -1597,17 +1638,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1598,17 +1639,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  
  	mlx5_ib_dbg(dev, "start 0x%llx, iova 0x%llx, length 0x%llx, access_flags 0x%x\n",
  		    start, iova, length, access_flags);
@@ -183,7 +183,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
  {
  	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
-@@ -1623,10 +1672,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
+@@ -1624,10 +1673,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
  }
  
  static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
@@ -196,7 +196,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 offset,
  					 u64 length, u64 virt_addr,
  					 int fd, int access_flags,
-@@ -1682,6 +1732,7 @@ err_dereg_mr:
+@@ -1683,6 +1733,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -204,7 +204,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  
  /*
   * True if the change in access flags can be done via UMR, only some access
-@@ -1845,8 +1896,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+@@ -1846,8 +1897,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
  	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
  		struct ib_umem *new_umem;
  		unsigned long page_size;
@@ -217,7 +217,7 @@ Change-Id: I604069d778d55d11ef9384205358ee3618401da2
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2907,10 +2961,17 @@ static struct attribute *cache_default_a
+@@ -2908,10 +2962,17 @@ static struct attribute *cache_default_a
  	NULL
  };
  

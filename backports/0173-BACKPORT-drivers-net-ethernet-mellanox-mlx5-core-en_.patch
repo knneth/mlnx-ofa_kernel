@@ -1379,7 +1379,7 @@ Change-Id: I96f06f3db19fecedaaad5be976d5b17d5c919930
 +				);
 +#else
 +		INDIRECT_CALL_2(rq->handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq,
-+				mlx5e_handle_rx_cqe, rq, &cqd->title
++				mlx5e_handle_rx_cqe, rq, cqe
 +#ifdef HAVE_BASECODE_EXTRAS
 +				, work_done < budget_rem - 1
 +#endif

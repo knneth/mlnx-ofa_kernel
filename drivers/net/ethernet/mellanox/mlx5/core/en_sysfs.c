@@ -814,6 +814,7 @@ static ssize_t mlx5e_store_prio2buffer(struct device *device,
 		}
 	}
 
+	priv->dcbx.manual_buffer = true;
 	err = mlx5e_port_manual_buffer_config(priv, changed, dev->mtu, NULL, NULL, prio2buffer);
 	if (err)
 		return err;
@@ -885,6 +886,7 @@ static ssize_t mlx5e_store_buffer_size(struct device *device,
 		}
 	}
 
+	priv->dcbx.manual_buffer = true;
 	err = mlx5e_port_manual_buffer_config(priv, changed, dev->mtu, NULL, buffer_size, NULL);
 	if (err)
 		return err;
@@ -1257,6 +1259,10 @@ static ssize_t prio_hp_num_store(struct device *device, struct device_attribute 
 	int num_hp;
 	int err;
 
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
+
 	err = sscanf(buf, "%d %15s", &num_hp, ifname);
 	if (err != 2)
 		return -EINVAL;
@@ -1302,6 +1308,10 @@ static ssize_t prio_hp_num_show(struct device *device, struct device_attribute *
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
+
 	mutex_lock(&priv->state_lock);
 	result = sprintf(buf, "%d\n", tc->num_prio_hp);
 	mutex_unlock(&priv->state_lock);
@@ -1318,6 +1328,10 @@ static ssize_t hp_oob_cnt_mode_store(struct device *device, struct device_attrib
 	char ifname[IFNAMSIZ];
 	char mode[5];
 	int err;
+
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
 
 	err = sscanf(buf, "%s %15s", mode, ifname);
 	if (err != 2)
@@ -1364,6 +1378,10 @@ static ssize_t hp_oob_cnt_mode_show(struct device *device, struct device_attribu
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
+
 	mutex_lock(&priv->state_lock);
 	result = sprintf(buf, "%s\n", tc->hp_oob ? "on" : "off");
 	mutex_unlock(&priv->state_lock);
@@ -1375,8 +1393,13 @@ static ssize_t hp_oob_cnt_show(struct device *device, struct device_attribute *a
 			       char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 	u64 oob_cnt;
+
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
 
 	mutex_lock(&priv->state_lock);
 	mlx5e_hairpin_oob_cnt_get(priv, &oob_cnt);
@@ -1398,6 +1421,10 @@ static ssize_t pp_burst_size_store(struct device *device, struct device_attribut
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	int burst_size;
 	int err;
+
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
 
 	if (!MLX5_CAP_QOS(priv->mdev, packet_pacing_burst_bound)) {
 		netdev_warn(priv->netdev, "Packet pacing burst size config is not supported by the device\n");
@@ -1428,6 +1455,10 @@ static ssize_t pp_burst_size_show(struct device *device, struct device_attribute
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
+
+	/* Some profiles don't support hp due to lack of tc support*/
+	 if (!tc)
+		 return -EOPNOTSUPP;
 
 	mutex_lock(&priv->state_lock);
 	result = sprintf(buf, "%d\n", tc->max_pp_burst_size);

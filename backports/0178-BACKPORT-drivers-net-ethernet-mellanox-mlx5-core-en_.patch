@@ -143,7 +143,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	params.q_counter = priv->q_counter;
  
  	hp = mlx5e_hairpin_create(priv, &params, peer_mdev);
-@@ -2980,7 +3037,7 @@ static bool flow_requires_tunnel_mapping
+@@ -2972,7 +3029,7 @@ static bool flow_requires_tunnel_mapping
  		return false;
  
  	flow_action_for_each(i, act, flow_action) {
@@ -152,7 +152,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		case FLOW_ACTION_GOTO:
  			return true;
  		case FLOW_ACTION_SAMPLE:
-@@ -3045,7 +3102,9 @@ static int mlx5e_get_flow_tunnel_id(stru
+@@ -3037,7 +3094,9 @@ static int mlx5e_get_flow_tunnel_id(stru
  				    struct net_device *filter_dev)
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -162,7 +162,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	struct mlx5e_tc_mod_hdr_acts *mod_hdr_acts;
  	struct flow_match_enc_opts enc_opts_match;
  	struct tunnel_match_enc_opts tun_enc_opts;
-@@ -3064,6 +3123,7 @@ static int mlx5e_get_flow_tunnel_id(stru
+@@ -3056,6 +3115,7 @@ static int mlx5e_get_flow_tunnel_id(stru
  	uplink_priv = &uplink_rpriv->uplink_priv;
  
  	memset(&tunnel_key, 0, sizeof(tunnel_key));
@@ -170,7 +170,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	COPY_DISSECTOR(rule, FLOW_DISSECTOR_KEY_ENC_CONTROL,
  		       &tunnel_key.enc_control);
  	if (tunnel_key.enc_control.addr_type == FLOW_DISSECTOR_KEY_IPV4_ADDRS)
-@@ -3077,6 +3137,7 @@ static int mlx5e_get_flow_tunnel_id(stru
+@@ -3069,6 +3129,7 @@ static int mlx5e_get_flow_tunnel_id(stru
  		       &tunnel_key.enc_tp);
  	COPY_DISSECTOR(rule, FLOW_DISSECTOR_KEY_ENC_KEYID,
  		       &tunnel_key.enc_key_id);
@@ -178,7 +178,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	tunnel_key.filter_ifindex = filter_dev->ifindex;
  
  	err = mapping_add(uplink_priv->tunnel_mapping, &tunnel_key, &tun_id);
-@@ -3232,7 +3293,9 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+@@ -3224,7 +3285,9 @@ static int mlx5e_tc_verify_tunnel_ecn(st
  {
  	u8 outer_ecn_mask = 0, outer_ecn_key = 0, inner_ecn_mask = 0, inner_ecn_key = 0;
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -188,7 +188,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	struct flow_match_ip match;
  
  	*match_inner_ecn = true;
-@@ -3307,6 +3370,7 @@ static int mlx5e_tc_verify_tunnel_ecn(st
+@@ -3299,6 +3362,7 @@ static int mlx5e_tc_verify_tunnel_ecn(st
  	return 0;
  }
  
@@ -196,7 +196,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  static int parse_tunnel_attr(struct mlx5e_priv *priv,
  			     struct mlx5e_tc_flow *flow,
  			     struct mlx5_flow_spec *spec,
-@@ -3317,7 +3381,9 @@ static int parse_tunnel_attr(struct mlx5
+@@ -3309,7 +3373,9 @@ static int parse_tunnel_attr(struct mlx5
  {
  	struct mlx5e_tc_tunnel *tunnel = mlx5e_get_tc_tun(filter_dev);
  	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
@@ -206,7 +206,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	bool needs_mapping, sets_mapping;
  	int err;
  
-@@ -3353,7 +3419,9 @@ static int parse_tunnel_attr(struct mlx5
+@@ -3345,7 +3411,9 @@ static int parse_tunnel_attr(struct mlx5
  		/* With mpls over udp we decapsulate using packet reformat
  		 * object
  		 */
@@ -216,7 +216,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  			flow->attr->action |= MLX5_FLOW_CONTEXT_ACTION_DECAP;
  		err = mlx5e_tc_set_attr_rx_tun(flow, spec);
  		if (err)
-@@ -3387,6 +3455,7 @@ static int parse_tunnel_attr(struct mlx5
+@@ -3379,6 +3447,7 @@ static int parse_tunnel_attr(struct mlx5
  
  	return mlx5e_get_flow_tunnel_id(priv, flow, f, filter_dev);
  }
@@ -224,7 +224,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  static void *get_match_inner_headers_criteria(struct mlx5_flow_spec *spec)
  {
-@@ -3430,7 +3499,9 @@ static int mlx5e_flower_parse_meta(struc
+@@ -3422,7 +3491,9 @@ static int mlx5e_flower_parse_meta(struc
  				   struct flow_cls_offload *f)
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -234,7 +234,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	struct net_device *ingress_dev;
  	struct flow_match_meta match;
  
-@@ -3471,9 +3542,10 @@ static bool skip_key_basic(struct net_de
+@@ -3463,9 +3534,10 @@ static bool skip_key_basic(struct net_de
  	 * label fields.  However, the actual ethertype is IP so we want to
  	 * avoid matching on this, otherwise we'll fail the match.
  	 */
@@ -246,7 +246,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	return false;
  }
  
-@@ -3484,7 +3556,9 @@ static int __parse_cls_flower(struct mlx
+@@ -3476,7 +3548,9 @@ static int __parse_cls_flower(struct mlx
  			      struct net_device *filter_dev,
  			      u8 *inner_match_level, u8 *outer_match_level)
  {
@@ -256,7 +256,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	void *headers_c = MLX5_ADDR_OF(fte_match_param, spec->match_criteria,
  				       outer_headers);
  	void *headers_v = MLX5_ADDR_OF(fte_match_param, spec->match_value,
-@@ -3519,17 +3593,21 @@ static int __parse_cls_flower(struct mlx
+@@ -3511,17 +3585,21 @@ static int __parse_cls_flower(struct mlx
  	      BIT(FLOW_DISSECTOR_KEY_IPV4_ADDRS) |
  	      BIT(FLOW_DISSECTOR_KEY_IPV6_ADDRS) |
  	      BIT(FLOW_DISSECTOR_KEY_PORTS) |
@@ -278,7 +278,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	      BIT(FLOW_DISSECTOR_KEY_MPLS))) {
  		NL_SET_ERR_MSG_MOD(extack, "Unsupported key");
  		netdev_dbg(priv->netdev, "Unsupported key used: 0x%x\n",
-@@ -3537,7 +3615,20 @@ static int __parse_cls_flower(struct mlx
+@@ -3529,7 +3607,20 @@ static int __parse_cls_flower(struct mlx
  		return -EOPNOTSUPP;
  	}
  
@@ -300,7 +300,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		bool match_inner = false;
  
  		err = parse_tunnel_attr(priv, flow, spec, f, filter_dev,
-@@ -3559,6 +3650,7 @@ static int __parse_cls_flower(struct mlx
+@@ -3551,6 +3642,7 @@ static int __parse_cls_flower(struct mlx
  		if (err)
  			return err;
  	}
@@ -308,7 +308,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  	err = mlx5e_flower_parse_meta(filter_dev, f);
  	if (err)
-@@ -3575,6 +3667,13 @@ static int __parse_cls_flower(struct mlx
+@@ -3567,6 +3659,13 @@ static int __parse_cls_flower(struct mlx
  
  		if (match.mask->n_proto)
  			*match_level = MLX5_MATCH_L2;
@@ -322,7 +322,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	}
  	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_VLAN) ||
  	    is_vlan_dev(filter_dev)) {
-@@ -3620,6 +3719,7 @@ static int __parse_cls_flower(struct mlx
+@@ -3612,6 +3711,7 @@ static int __parse_cls_flower(struct mlx
  
  			*match_level = MLX5_MATCH_L2;
  
@@ -330,7 +330,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  			if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CVLAN) &&
  			    match.mask->vlan_eth_type &&
  			    MLX5_CAP_FLOWTABLE_TYPE(priv->mdev,
-@@ -3630,6 +3730,7 @@ static int __parse_cls_flower(struct mlx
+@@ -3622,6 +3722,7 @@ static int __parse_cls_flower(struct mlx
  				spec->match_criteria_enable |=
  					MLX5_MATCH_MISC_PARAMETERS;
  			}
@@ -338,7 +338,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		}
  	} else if (*match_level != MLX5_MATCH_NONE) {
  		/* cvlan_tag enabled in match criteria and
-@@ -3875,6 +3976,7 @@ static int __parse_cls_flower(struct mlx
+@@ -3867,6 +3968,7 @@ static int __parse_cls_flower(struct mlx
  		if (match.mask->flags)
  			*match_level = MLX5_MATCH_L4;
  	}
@@ -346,7 +346,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ICMP)) {
  		struct flow_match_icmp match;
  
-@@ -3924,6 +4026,8 @@ static int __parse_cls_flower(struct mlx
+@@ -3916,6 +4018,8 @@ static int __parse_cls_flower(struct mlx
  			spec->match_criteria_enable |= MLX5_MATCH_MISC_PARAMETERS_3;
  		}
  	}
@@ -355,7 +355,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	/* Currently supported only for MPLS over UDP */
  	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_MPLS) &&
  	    !netif_is_bareudp(filter_dev)) {
-@@ -3933,6 +4037,7 @@ static int __parse_cls_flower(struct mlx
+@@ -3925,6 +4029,7 @@ static int __parse_cls_flower(struct mlx
  			   "Matching on MPLS is supported only for MPLS over UDP\n");
  		return -EOPNOTSUPP;
  	}
@@ -363,7 +363,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  	return 0;
  }
-@@ -3944,7 +4049,9 @@ static int parse_cls_flower(struct mlx5e
+@@ -3936,7 +4041,9 @@ static int parse_cls_flower(struct mlx5e
  			    struct net_device *filter_dev)
  {
  	u8 inner_match_level, outer_match_level, non_tunnel_match_level;
@@ -373,7 +373,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	struct mlx5_core_dev *dev = priv->mdev;
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
  	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-@@ -4008,6 +4115,7 @@ struct mlx5_fields {
+@@ -4000,6 +4107,7 @@ struct mlx5_fields {
  								 matchmaskx)); \
  })
  
@@ -381,7 +381,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  static bool cmp_val_mask(void *valp, void *maskp, void *matchvalp,
  			 void *matchmaskp, u8 bsize)
  {
-@@ -4239,12 +4347,14 @@ static int verify_offload_pedit_fields(s
+@@ -4231,12 +4339,14 @@ static int verify_offload_pedit_fields(s
  
  	return 0;
  }
@@ -396,7 +396,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	int err;
  
  	err = offload_pedit_fields(priv, namespace, parse_attr, action_flags, extack);
-@@ -4260,6 +4370,9 @@ static int alloc_tc_pedit_action(struct
+@@ -4252,6 +4362,9 @@ static int alloc_tc_pedit_action(struct
  out_dealloc_parsed_actions:
  	mlx5e_mod_hdr_dealloc(&parse_attr->mod_hdr_acts);
  	return err;
@@ -406,7 +406,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  }
  
  struct ip_ttl_word {
-@@ -4662,7 +4775,7 @@ alloc_branch_attr(struct mlx5e_tc_flow *
+@@ -4654,7 +4767,7 @@ alloc_branch_attr(struct mlx5e_tc_flow *
  
  	attr = *cond_attr;
  
@@ -415,7 +415,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	case FLOW_ACTION_DROP:
  		attr->action |= MLX5_FLOW_CONTEXT_ACTION_DROP;
  		break;
-@@ -4698,13 +4811,14 @@ dec_jump_count(struct flow_action_entry
+@@ -4690,13 +4803,14 @@ dec_jump_count(struct flow_action_entry
  	       struct mlx5_flow_attr *attr, struct mlx5e_priv *priv,
  	       struct mlx5e_tc_jump_state *jump_state)
  {
@@ -431,7 +431,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		return;
  
  	jump_state->last_id = act->id;
-@@ -4735,6 +4849,7 @@ dec_jump_count(struct flow_action_entry
+@@ -4727,6 +4841,7 @@ dec_jump_count(struct flow_action_entry
  		 */
  		attr->jumping_attr = jump_state->jumping_attr;
  	}
@@ -439,7 +439,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  }
  
  static int
-@@ -4857,9 +4972,21 @@ parse_tc_actions(struct mlx5e_tc_act_par
+@@ -4849,9 +4964,21 @@ parse_tc_actions(struct mlx5e_tc_act_par
  			prev_attr->action |= MLX5_FLOW_CONTEXT_ACTION_COUNT;
  			flow_flag_set(flow, USE_ACT_STATS);
  
@@ -463,7 +463,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		}
  	}
  
-@@ -4879,6 +5006,28 @@ out_free_post_acts:
+@@ -4871,6 +4998,28 @@ out_free_post_acts:
  	return err;
  }
  
@@ -492,7 +492,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  static int
  flow_action_supported(struct flow_action *flow_action,
  		      struct netlink_ext_ack *extack)
-@@ -4888,11 +5037,13 @@ flow_action_supported(struct flow_action
+@@ -4880,11 +5029,13 @@ flow_action_supported(struct flow_action
  		return -EINVAL;
  	}
  
@@ -506,7 +506,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  	return 0;
  }
-@@ -5112,14 +5263,48 @@ static const struct rhashtable_params tc
+@@ -5104,14 +5255,48 @@ static const struct rhashtable_params tc
  	.automatic_shrinking = true,
  };
  
@@ -555,7 +555,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		return &rpriv->tc_ht;
  	} else /* NIC offload */
  		return &tc->ht;
-@@ -5128,25 +5313,35 @@ static struct rhashtable *get_tc_ht(stru
+@@ -5120,25 +5305,35 @@ static struct rhashtable *get_tc_ht(stru
  static bool is_peer_flow_needed(struct mlx5e_tc_flow *flow)
  {
  	struct mlx5_esw_flow_attr *esw_attr = flow->attr->esw_attr;
@@ -592,7 +592,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  }
  
  struct mlx5_flow_attr *
-@@ -5246,8 +5441,16 @@ mlx5e_flow_attr_init(struct mlx5_flow_at
+@@ -5251,8 +5446,16 @@ mlx5e_flow_attr_init(struct mlx5_flow_at
  		     struct flow_cls_offload *f)
  {
  	attr->parse_attr = parse_attr;
@@ -609,7 +609,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  }
  
  static void
-@@ -5281,12 +5484,22 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *
+@@ -5286,12 +5489,22 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *
  		     struct mlx5_eswitch_rep *in_rep,
  		     struct mlx5_core_dev *in_mdev)
  {
@@ -633,7 +633,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	flow_flags |= BIT(MLX5E_TC_FLOW_FLAG_ESWITCH);
  	attr_size  = sizeof(struct mlx5_esw_flow_attr);
  	err = mlx5e_alloc_flow(priv, attr_size, f, flow_flags,
-@@ -5323,11 +5536,18 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *
+@@ -5328,11 +5541,18 @@ __mlx5e_add_fdb_flow(struct mlx5e_priv *
  		add_unready_flow(flow);
  	}
  
@@ -652,7 +652,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	return ERR_PTR(err);
  }
  
-@@ -5440,18 +5660,30 @@ mlx5e_add_nic_flow(struct mlx5e_priv *pr
+@@ -5445,18 +5665,30 @@ mlx5e_add_nic_flow(struct mlx5e_priv *pr
  		   struct net_device *filter_dev,
  		   struct mlx5e_tc_flow **__flow)
  {
@@ -687,7 +687,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  	flow_flags |= BIT(MLX5E_TC_FLOW_FLAG_NIC);
  	attr_size  = sizeof(struct mlx5_nic_flow_attr);
-@@ -5482,6 +5714,9 @@ mlx5e_add_nic_flow(struct mlx5e_priv *pr
+@@ -5487,6 +5719,9 @@ mlx5e_add_nic_flow(struct mlx5e_priv *pr
  		goto err_free;
  
  	flow_flag_set(flow, OFFLOADED);
@@ -697,7 +697,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	*__flow = flow;
  
  	return 0;
-@@ -5491,6 +5726,9 @@ err_free:
+@@ -5496,6 +5731,9 @@ err_free:
  	mlx5e_mod_hdr_dealloc(&parse_attr->mod_hdr_acts);
  	mlx5e_flow_put(priv, flow);
  out:
@@ -707,7 +707,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	return err;
  }
  
-@@ -5507,8 +5745,10 @@ mlx5e_tc_add_flow(struct mlx5e_priv *pri
+@@ -5512,8 +5750,10 @@ mlx5e_tc_add_flow(struct mlx5e_priv *pri
  
  	get_flags(flags, &flow_flags);
  
@@ -718,7 +718,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  	if (esw && esw->mode == MLX5_ESWITCH_OFFLOADS)
  		err = mlx5e_add_fdb_flow(priv, f, flow_flags,
-@@ -5533,12 +5773,19 @@ static bool is_flow_rule_duplicate_allow
+@@ -5538,12 +5778,19 @@ static bool is_flow_rule_duplicate_allow
  int mlx5e_configure_flower(struct net_device *dev, struct mlx5e_priv *priv,
  			   struct flow_cls_offload *f, unsigned long flags)
  {
@@ -739,7 +739,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	if (!mlx5_esw_hold(priv->mdev))
  		return -EBUSY;
  
-@@ -5553,6 +5800,11 @@ int mlx5e_configure_flower(struct net_de
+@@ -5558,6 +5805,11 @@ int mlx5e_configure_flower(struct net_de
  		if (is_flow_rule_duplicate_allowed(dev, rpriv) && flow->orig_dev != dev)
  			goto rcu_unlock;
  
@@ -751,7 +751,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		NL_SET_ERR_MSG_MOD(extack,
  				   "flow cookie already exists, ignoring");
  		netdev_warn_once(priv->netdev,
-@@ -5566,7 +5818,9 @@ rcu_unlock:
+@@ -5571,7 +5823,9 @@ rcu_unlock:
  	if (flow)
  		goto out;
  
@@ -761,7 +761,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	err = mlx5e_tc_add_flow(priv, f, flags, dev, &flow);
  	if (err)
  		goto out;
-@@ -5592,6 +5846,10 @@ out:
+@@ -5597,6 +5851,10 @@ out:
  	return err;
  }
  
@@ -772,7 +772,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  static bool same_flow_direction(struct mlx5e_tc_flow *flow, int flags)
  {
  	bool dir_ingress = !!(flags & MLX5_TC_FLAG(INGRESS));
-@@ -5625,7 +5883,9 @@ int mlx5e_delete_flower(struct net_devic
+@@ -5630,7 +5888,9 @@ int mlx5e_delete_flower(struct net_devic
  	rhashtable_remove_fast(tc_ht, &flow->node, tc_ht_params);
  	rcu_read_unlock();
  
@@ -783,7 +783,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	mlx5e_flow_put(priv, flow);
  
  	mlx5_esw_put(priv->mdev);
-@@ -5635,6 +5895,9 @@ errout:
+@@ -5640,6 +5900,9 @@ errout:
  	rcu_read_unlock();
  	return err;
  }
@@ -793,7 +793,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  int mlx5e_tc_fill_action_stats(struct mlx5e_priv *priv,
  			       struct flow_offload_action *fl_act)
-@@ -5649,11 +5912,21 @@ int mlx5e_stats_flower(struct net_device
+@@ -5654,11 +5917,21 @@ int mlx5e_stats_flower(struct net_device
  	struct rhashtable *tc_ht = get_tc_ht(priv, flags);
  	struct mlx5e_tc_flow *flow;
  	struct mlx5_fc *counter;
@@ -815,7 +815,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	rcu_read_lock();
  	flow = mlx5e_flow_get(rhashtable_lookup(tc_ht, &f->cookie,
  						tc_ht_params));
-@@ -5668,7 +5941,11 @@ int mlx5e_stats_flower(struct net_device
+@@ -5673,7 +5946,11 @@ int mlx5e_stats_flower(struct net_device
  
  	if (mlx5e_is_offloaded_flow(flow)) {
  		if (flow_flag_test(flow, USE_ACT_STATS)) {
@@ -827,7 +827,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		} else {
  			counter = mlx5e_tc_get_counter(flow);
  			if (!counter)
-@@ -5695,7 +5972,11 @@ int mlx5e_stats_flower(struct net_device
+@@ -5700,7 +5977,11 @@ int mlx5e_stats_flower(struct net_device
  			if (!flow_flag_test(peer_flow, OFFLOADED))
  				continue;
  			if (flow_flag_test(flow, USE_ACT_STATS)) {
@@ -839,7 +839,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  				break;
  			}
  
-@@ -5715,14 +5996,81 @@ no_peer_counter:
+@@ -5720,14 +6001,81 @@ no_peer_counter:
  	if (esw)
  		mlx5_devcom_for_each_peer_end(esw->devcom);
  out:
@@ -925,7 +925,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  static int apply_police_params(struct mlx5e_priv *priv, u64 rate,
  			       struct netlink_ext_ack *extack)
  {
-@@ -5764,6 +6112,7 @@ tc_matchall_police_validate(const struct
+@@ -5769,6 +6117,7 @@ tc_matchall_police_validate(const struct
  			    const struct flow_action_entry *act,
  			    struct netlink_ext_ack *extack)
  {
@@ -933,7 +933,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	if (act->police.notexceed.act_id != FLOW_ACTION_CONTINUE) {
  		NL_SET_ERR_MSG_MOD(extack,
  				   "Offload not supported when conform action is not continue");
-@@ -5790,6 +6139,7 @@ tc_matchall_police_validate(const struct
+@@ -5795,6 +6144,7 @@ tc_matchall_police_validate(const struct
  		return -EOPNOTSUPP;
  	}
  
@@ -941,7 +941,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	return 0;
  }
  
-@@ -5807,18 +6157,24 @@ static int scan_tc_matchall_fdb_actions(
+@@ -5812,18 +6162,24 @@ static int scan_tc_matchall_fdb_actions(
  		return -EINVAL;
  	}
  
@@ -967,7 +967,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		case FLOW_ACTION_POLICE:
  			err = tc_matchall_police_validate(flow_action, act, extack);
  			if (err)
-@@ -5843,13 +6199,33 @@ int mlx5e_tc_configure_matchall(struct m
+@@ -5848,13 +6204,33 @@ int mlx5e_tc_configure_matchall(struct m
  				struct tc_cls_matchall_offload *ma)
  {
  	struct netlink_ext_ack *extack = ma->common.extack;
@@ -1003,7 +1003,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  }
  
  int mlx5e_tc_delete_matchall(struct mlx5e_priv *priv,
-@@ -5872,9 +6248,19 @@ void mlx5e_tc_stats_matchall(struct mlx5
+@@ -5877,9 +6253,19 @@ void mlx5e_tc_stats_matchall(struct mlx5
  	dpkts = cur_stats.rx_packets - rpriv->prev_vf_vport_stats.rx_packets;
  	dbytes = cur_stats.rx_bytes - rpriv->prev_vf_vport_stats.rx_bytes;
  	rpriv->prev_vf_vport_stats = cur_stats;
@@ -1023,7 +1023,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  
  static void mlx5e_tc_hairpin_update_dead_peer(struct mlx5e_priv *priv,
  					      struct mlx5e_priv *peer_priv)
-@@ -6123,6 +6509,10 @@ int mlx5e_tc_ht_init(struct rhashtable *
+@@ -6128,6 +6514,10 @@ int mlx5e_tc_ht_init(struct rhashtable *
  void mlx5e_tc_ht_cleanup(struct rhashtable *tc_ht)
  {
  	rhashtable_free_and_destroy(tc_ht, _mlx5e_tc_del_flow, NULL);
@@ -1034,7 +1034,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  }
  
  int mlx5e_tc_esw_init(struct mlx5_rep_uplink_priv *uplink_priv)
-@@ -6187,7 +6577,11 @@ int mlx5e_tc_esw_init(struct mlx5_rep_up
+@@ -6192,7 +6582,11 @@ int mlx5e_tc_esw_init(struct mlx5_rep_up
  		goto err_action_counter;
  	}
  
@@ -1046,7 +1046,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	if (!err) {
  		memcpy(&key, &ppid.id, sizeof(key));
  		mlx5_esw_offloads_devcom_init(esw, key);
-@@ -6272,10 +6666,28 @@ void mlx5e_tc_reoffload_flows_work(struc
+@@ -6277,10 +6671,28 @@ void mlx5e_tc_reoffload_flows_work(struc
  	mutex_unlock(&rpriv->unready_flows_lock);
  }
  
@@ -1075,7 +1075,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	switch (cls_flower->command) {
  	case FLOW_CLS_REPLACE:
  		return mlx5e_configure_flower(priv->netdev, priv, cls_flower,
-@@ -6291,6 +6703,7 @@ static int mlx5e_setup_tc_cls_flower(str
+@@ -6296,6 +6708,7 @@ static int mlx5e_setup_tc_cls_flower(str
  	}
  }
  
@@ -1083,7 +1083,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  int mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data,
  			    void *cb_priv)
  {
-@@ -6300,6 +6713,11 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
+@@ -6305,6 +6718,11 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
  	if (!priv->netdev || !netif_device_present(priv->netdev))
  		return -EOPNOTSUPP;
  
@@ -1095,7 +1095,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  	if (mlx5e_is_uplink_rep(priv))
  		flags |= MLX5_TC_FLAG(ESW_OFFLOAD);
  	else
-@@ -6313,6 +6731,37 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
+@@ -6318,6 +6736,37 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
  	}
  }
  
@@ -1133,7 +1133,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  static bool mlx5e_tc_restore_tunnel(struct mlx5e_priv *priv, struct sk_buff *skb,
  				    struct mlx5e_tc_update_priv *tc_priv,
  				    u32 tunnel_id)
-@@ -6359,14 +6808,22 @@ static bool mlx5e_tc_restore_tunnel(stru
+@@ -6364,14 +6813,22 @@ static bool mlx5e_tc_restore_tunnel(stru
  	case FLOW_DISSECTOR_KEY_IPV4_ADDRS:
  		tun_dst = __ip_tun_set_dst(key.enc_ipv4.src, key.enc_ipv4.dst,
  					   key.enc_ip.tos, key.enc_ip.ttl,
@@ -1156,7 +1156,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  					     key32_to_tunnel_id(key.enc_key_id.keyid),
  					     enc_opts.key.len);
  		break;
-@@ -6431,8 +6888,10 @@ static bool mlx5e_tc_restore_skb_tc_meta
+@@ -6436,8 +6893,10 @@ static bool mlx5e_tc_restore_skb_tc_meta
  		}
  
  		if (act_miss_cookie) {
@@ -1167,7 +1167,7 @@ Change-Id: I304040eb4dfbffd0705103187690459972ea3886
  		} else {
  			tc_skb_ext->chain = chain;
  		}
-@@ -6542,6 +7001,7 @@ bool mlx5e_tc_update_skb_nic(struct mlx5
+@@ -6547,6 +7006,7 @@ bool mlx5e_tc_update_skb_nic(struct mlx5
  	return mlx5e_tc_update_skb(cqe, skb, mapping_ctx, mapped_obj_id, ct_priv, zone_restore_id,
  				   0, NULL);
  }

@@ -1346,7 +1346,8 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 	mlx5_notifier_register(mdev, &priv->events_nb);
 	mlx5e_dcbnl_initialize(priv);
 	mlx5e_dcbnl_init_app(priv);
-	mlx5e_rep_bridge_init(priv);
+	if (!esw_is_local_esw_dev(mdev))
+		mlx5e_rep_bridge_init(priv);
 
 	netdev->wanted_features |= NETIF_F_HW_TC;
 

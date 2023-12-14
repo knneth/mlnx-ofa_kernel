@@ -5,6 +5,7 @@ SWID=$2
 PORT=${1##*f}
 PORT_NAME=`echo ${1} | sed -e "s/c[[:digit:]]\+//"`
 IFINDEX=$3
+ECVF=0
 
 # need the PATH for BF ARM lspci to work
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -53,17 +54,23 @@ if [ $is_bf -eq 1 ]; then
                 echo "NAME=`get_mh_bf_rep_name $PORT_NAME $IFINDEX`"
                 exit 0
         fi
+	if [ $ID_MODEL_ID != "0x101e" ]; then
 
-        echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/;s/c[[:digit:]]\+//"`
-        exit 0
+		echo NAME=`echo ${1} | sed -e "s/\(pf[[:digit:]]\+\)$/\1hpf/;s/c[[:digit:]]\+//"`
+		exit 0
+	else
+		ECVF=1
+	fi
 fi
 
-# Ditch stdout, use stderr as new stdout:
-if udevadm test-builtin path_id "/sys$DEVPATH" 2>&1 1>/dev/null \
-	| grep -q 'Network interface NamePolicy= disabled'
-then
-	echo "NAME=$INTERFACE"
-	exit 0
+if [ $ECVF -ne 1]; then
+	# Ditch use stderr as new stdout:
+	if udevadm test-builtin path_id "/sys$DEVPATH" 2>&1 1>/dev/null \
+		| grep -q 'Network interface NamePolicy= disabled'
+	then
+		echo "NAME=$INTERFACE"
+		exit 0
+	fi
 fi
 
 # for pf and uplink rep fall to slot or path.

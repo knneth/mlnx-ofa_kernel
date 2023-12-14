@@ -91,7 +91,6 @@ ifeq ($(WITH_DKMS),1)
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/fs			debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)

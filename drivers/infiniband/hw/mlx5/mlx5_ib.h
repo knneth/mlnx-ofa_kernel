@@ -68,11 +68,16 @@ __mlx5_log_page_size_to_bitmap(unsigned int log_pgsz_bits,
 /*
  * For mkc users, instead of a page_offset the command has a start_iova which
  * specifies both the page_offset and the on-the-wire IOVA
+ *
+ * log_page_size field size is limited to 5 bits until we protect the usage of
+ * larger sizes with a capability bit and fully test it.
  */
 #define mlx5_umem_find_best_pgsz(umem, typ, log_pgsz_fld, pgsz_shift, iova)    \
 	ib_umem_find_best_pgsz(umem,                                           \
 			       __mlx5_log_page_size_to_bitmap(                 \
-				       __mlx5_bit_sz(typ, log_pgsz_fld),       \
+				       min_t(unsigned long,		       \
+					     __mlx5_bit_sz(typ, log_pgsz_fld), \
+					     5),			       \
 				       pgsz_shift),                            \
 			       iova)
 

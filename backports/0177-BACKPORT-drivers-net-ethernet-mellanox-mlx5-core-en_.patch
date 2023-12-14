@@ -51,7 +51,7 @@ Change-Id: I755483c23f03dd1af8852e233997f313454be6a7
  	rtnl_unlock();
  	return count;
  }
-@@ -933,10 +950,22 @@ static ssize_t mlx5e_store_force_local_l
+@@ -935,10 +952,22 @@ static ssize_t mlx5e_store_force_local_l
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -74,7 +74,7 @@ Change-Id: I755483c23f03dd1af8852e233997f313454be6a7
  
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
-@@ -1221,11 +1250,17 @@ static struct attribute *prio_hp_attrs[]
+@@ -1223,11 +1252,17 @@ static struct attribute *prio_hp_attrs[]
  	NULL
  };
  

@@ -11,6 +11,23 @@
 
 #ifdef HAVE_BITFIELD_H
 #include_next <linux/bitfield.h>
+
+
+#ifndef FIELD_PREP_CONST
+#define __BF_CHECK_POW2(n)  BUILD_BUG_ON_ZERO(((n) & ((n) - 1)) != 0)
+
+#define FIELD_PREP_CONST(_mask, _val)                                 \
+(                                                       \
+								/* mask must be non-zero */                      \
+								BUILD_BUG_ON_ZERO((_mask) == 0) +                \
+								/* check if value fits */                        \
+								BUILD_BUG_ON_ZERO(~((_mask) >> __bf_shf(_mask)) & (_val)) + \
+								/* check if mask is contiguous */                \
+								__BF_CHECK_POW2((_mask) + (1ULL << __bf_shf(_mask))) +  \
+								/* and create the value */                       \
+								(((typeof(_mask))(_val) << __bf_shf(_mask)) & (_mask))  \
+								)
+#endif /* FIELD_PREP_CONST */
 #else
 #include <linux/build_bug.h>
 #include <asm/byteorder.h>

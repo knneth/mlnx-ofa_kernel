@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/nvme.h
 Change-Id: I6f038fec61c611d67271318c89625a56df987bed
 Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
 ---
- drivers/nvme/host/nvme.h | 184 ++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 183 insertions(+), 1 deletion(-)
+ drivers/nvme/host/nvme.h | 187 ++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 186 insertions(+), 1 deletion(-)
 
 --- a/drivers/nvme/host/nvme.h
 +++ b/drivers/nvme/host/nvme.h
@@ -151,7 +151,13 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	u8 pi_type;
  	u8 guard_type;
  #ifdef CONFIG_BLK_DEV_ZONED
-@@ -501,6 +558,9 @@ struct nvme_ns {
+@@ -498,9 +555,15 @@ struct nvme_ns {
+ 	unsigned long features;
+ 	unsigned long flags;
+ #define NVME_NS_REMOVING	0
++#ifndef HAVE_BLK_MQ_WAIT_QUIESCE_DONE_TAGSET
++#define NVME_NS_DEAD		1
++#endif
  #define NVME_NS_ANA_PENDING	2
  #define NVME_NS_FORCE_RO	3
  #define NVME_NS_READY		4
@@ -161,7 +167,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  
  	struct cdev		cdev;
  	struct device		cdev_device;
-@@ -522,6 +582,9 @@ struct nvme_ctrl_ops {
+@@ -522,6 +585,9 @@ struct nvme_ctrl_ops {
  #define NVME_F_FABRICS			(1 << 0)
  #define NVME_F_METADATA_SUPPORTED	(1 << 1)
  #define NVME_F_BLOCKING			(1 << 2)
@@ -171,7 +177,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  
  	const struct attribute_group **dev_attr_groups;
  	int (*reg_read32)(struct nvme_ctrl *ctrl, u32 off, u32 *val);
-@@ -533,7 +596,9 @@ struct nvme_ctrl_ops {
+@@ -533,7 +599,9 @@ struct nvme_ctrl_ops {
  	void (*stop_ctrl)(struct nvme_ctrl *ctrl);
  	int (*get_address)(struct nvme_ctrl *ctrl, char *buf, int size);
  	void (*print_device_info)(struct nvme_ctrl *ctrl);
@@ -181,7 +187,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  };
  
  /*
-@@ -683,6 +748,20 @@ static inline bool nvme_is_path_error(u1
+@@ -683,6 +751,20 @@ static inline bool nvme_is_path_error(u1
  	return (status & 0x700) == 0x300;
  }
  
@@ -202,7 +208,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  /*
   * Fill in the status and result information from the CQE, and then figure out
   * if blk-mq will need to use IPI magic to complete the request, and if yes do
-@@ -702,9 +781,20 @@ static inline bool nvme_try_complete_req
+@@ -702,9 +784,20 @@ static inline bool nvme_try_complete_req
  	rq->result = result;
  	/* inject error when permitted by fault injection framework */
  	nvme_should_fail(req);
@@ -223,7 +229,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  }
  
  static inline void nvme_get_ctrl(struct nvme_ctrl *ctrl)
-@@ -726,6 +816,7 @@ static inline bool nvme_is_aen_req(u16 q
+@@ -726,6 +819,7 @@ static inline bool nvme_is_aen_req(u16 q
  void nvme_complete_rq(struct request *req);
  void nvme_complete_batch_req(struct request *req);
  
@@ -231,7 +237,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  static __always_inline void nvme_complete_batch(struct io_comp_batch *iob,
  						void (*fn)(struct request *rq))
  {
-@@ -737,9 +828,16 @@ static __always_inline void nvme_complet
+@@ -737,9 +831,16 @@ static __always_inline void nvme_complet
  	}
  	blk_mq_end_request_batch(iob);
  }
@@ -248,7 +254,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  void nvme_cancel_tagset(struct nvme_ctrl *ctrl);
  void nvme_cancel_admin_tagset(struct nvme_ctrl *ctrl);
  bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
-@@ -753,10 +851,18 @@ void nvme_start_ctrl(struct nvme_ctrl *c
+@@ -753,10 +854,18 @@ void nvme_start_ctrl(struct nvme_ctrl *c
  void nvme_stop_ctrl(struct nvme_ctrl *ctrl);
  int nvme_init_ctrl_finish(struct nvme_ctrl *ctrl, bool was_suspended);
  int nvme_alloc_admin_tag_set(struct nvme_ctrl *ctrl, struct blk_mq_tag_set *set,
@@ -267,7 +273,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  		unsigned int cmd_size);
  void nvme_remove_io_tag_set(struct nvme_ctrl *ctrl);
  
-@@ -777,13 +883,31 @@ void nvme_wait_freeze(struct nvme_ctrl *
+@@ -777,13 +886,31 @@ void nvme_wait_freeze(struct nvme_ctrl *
  int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl, long timeout);
  void nvme_start_freeze(struct nvme_ctrl *ctrl);
  
@@ -299,7 +305,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  void nvme_cleanup_cmd(struct request *req);
  blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req);
  blk_status_t nvme_fail_nonready_command(struct nvme_ctrl *ctrl,
-@@ -803,10 +927,17 @@ static inline bool nvme_check_ready(stru
+@@ -803,10 +930,17 @@ static inline bool nvme_check_ready(stru
  }
  int nvme_submit_sync_cmd(struct request_queue *q, struct nvme_command *cmd,
  		void *buf, unsigned bufflen);
@@ -317,7 +323,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  int nvme_set_features(struct nvme_ctrl *dev, unsigned int fid,
  		      unsigned int dword11, void *buffer, size_t buflen,
  		      u32 *result);
-@@ -835,18 +966,28 @@ long nvme_ns_head_chr_ioctl(struct file
+@@ -835,18 +969,28 @@ long nvme_ns_head_chr_ioctl(struct file
  		unsigned long arg);
  long nvme_dev_ioctl(struct file *file, unsigned int cmd,
  		unsigned long arg);
@@ -346,7 +352,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  extern const struct pr_ops nvme_pr_ops;
  extern const struct block_device_operations nvme_ns_head_ops;
  extern const struct attribute_group nvme_dev_attrs_group;
-@@ -876,15 +1017,27 @@ bool nvme_mpath_clear_current_path(struc
+@@ -876,15 +1020,27 @@ bool nvme_mpath_clear_current_path(struc
  void nvme_mpath_revalidate_paths(struct nvme_ns *ns);
  void nvme_mpath_clear_ctrl_paths(struct nvme_ctrl *ctrl);
  void nvme_mpath_shutdown_disk(struct nvme_ns_head *head);
@@ -374,7 +380,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  }
  
  extern bool multipath;
-@@ -928,7 +1081,12 @@ static inline void nvme_mpath_clear_ctrl
+@@ -928,7 +1084,12 @@ static inline void nvme_mpath_clear_ctrl
  static inline void nvme_mpath_shutdown_disk(struct nvme_ns_head *head)
  {
  }
@@ -387,7 +393,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  {
  }
  static inline void nvme_mpath_init_ctrl(struct nvme_ctrl *ctrl)
-@@ -937,9 +1095,11 @@ static inline void nvme_mpath_init_ctrl(
+@@ -937,9 +1098,11 @@ static inline void nvme_mpath_init_ctrl(
  static inline int nvme_mpath_init_identify(struct nvme_ctrl *ctrl,
  		struct nvme_id_ctrl *id)
  {
@@ -400,7 +406,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	return 0;
  }
  static inline void nvme_mpath_update(struct nvme_ctrl *ctrl)
-@@ -972,8 +1132,10 @@ static inline void nvme_mpath_end_reques
+@@ -972,8 +1135,10 @@ static inline void nvme_mpath_end_reques
  #endif /* CONFIG_NVME_MULTIPATH */
  
  int nvme_revalidate_zones(struct nvme_ns *ns);
@@ -411,7 +417,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  #ifdef CONFIG_BLK_DEV_ZONED
  int nvme_update_zone_info(struct nvme_ns *ns, unsigned lbaf);
  blk_status_t nvme_setup_zone_mgmt_send(struct nvme_ns *ns, struct request *req,
-@@ -1016,8 +1178,10 @@ static inline void nvme_hwmon_exit(struc
+@@ -1016,8 +1181,10 @@ static inline void nvme_hwmon_exit(struc
  
  static inline void nvme_start_request(struct request *rq)
  {
@@ -422,7 +428,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  	blk_mq_start_request(rq);
  }
  
-@@ -1062,7 +1226,15 @@ struct nvme_ns *disk_to_nvme_ns(struct g
+@@ -1062,7 +1229,15 @@ struct nvme_ns *disk_to_nvme_ns(struct g
  u32 nvme_command_effects(struct nvme_ctrl *ctrl, struct nvme_ns *ns,
  			 u8 opcode);
  u32 nvme_passthru_start(struct nvme_ctrl *ctrl, struct nvme_ns *ns, u8 opcode);
@@ -438,7 +444,7 @@ Signed-off-by: Dana Benbasat <dbenbasat@nvidia.com>
  void nvme_passthru_end(struct nvme_ctrl *ctrl, struct nvme_ns *ns, u32 effects,
  		       struct nvme_command *cmd, int status);
  struct nvme_ctrl *nvme_ctrl_from_file(struct file *file);
-@@ -1073,6 +1245,16 @@ static inline bool nvme_multi_css(struct
+@@ -1073,6 +1248,16 @@ static inline bool nvme_multi_css(struct
  {
  	return (ctrl->ctrl_config & NVME_CC_CSS_MASK) == NVME_CC_CSS_CSI;
  }

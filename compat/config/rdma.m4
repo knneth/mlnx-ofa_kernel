@@ -13621,6 +13621,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if mm.h or internal.h has gup_must_unshare get 3 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mm.h>
+		#include <linux/../../mm/internal.h>
+	],[
+		gup_must_unshare(NULL, 0, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS, 1,
+			[mm.h or internal.h has gup_must_unshare get 3 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if mm.h has is_pci_p2pdma_page])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/mm.h>
@@ -14273,38 +14289,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM, 1,
 			[sg_alloc_table_chained has nents_first_chunk parameter])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/blk-mq-rdma.h has blk_mq_rdma_map_queues with map])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-mq.h>
-		#include <linux/blk-mq-rdma.h>
-	],[
-		struct blk_mq_queue_map *map = NULL;
-
-		blk_mq_rdma_map_queues(map, NULL, 0);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP, 1,
-			  [linux/blk-mq-rdma.h has blk_mq_rdma_map_queues with map])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if blk-mq-rdma.h exists])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-mq.h>
-		#include <linux/blk-mq-rdma.h>
-	],[
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_MQ_RDMA_H, 1,
-			  [blk-mq-rdma.h is exists])
 	],[
 		AC_MSG_RESULT(no)
 	])

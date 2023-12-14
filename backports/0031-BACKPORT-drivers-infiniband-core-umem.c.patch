@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
 ---
- drivers/infiniband/core/umem.c | 479 ++++++++++++++++++++++++++++++++-
- 1 file changed, 474 insertions(+), 5 deletions(-)
+ drivers/infiniband/core/umem.c | 488 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 483 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
@@ -279,7 +279,7 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
 +	struct scatterlist *sg = NULL;
 +#endif /*HAVE_SG_APPEND_TABLE*/
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
-+#ifdef HAVE_FOLL_LONGTERM
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
  	unsigned int gup_flags = FOLL_LONGTERM;
 +#else
 +	unsigned int gup_flags = FOLL_WRITE;
@@ -362,7 +362,7 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -210,18 +431,58 @@ static struct ib_umem *__ib_umem_get(str
+@@ -210,31 +431,80 @@ static struct ib_umem *__ib_umem_get(str
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -406,14 +406,15 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
 +		goto vma;
 +#endif
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
  	if (umem->writable)
-+#ifdef HAVE_FOLL_LONGTERM
  		gup_flags |= FOLL_WRITE;
 +#else
++	if (!umem->writable)
 +		gup_flags |= FOLL_FORCE;
-+#endif /* HAVE_FOLL_LONGTERM */
++#endif /* HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS */
 +#endif
-+#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
++#if !defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
 +	sg = umem->sg_head.sgl;
 +#endif
  
@@ -421,7 +422,28 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
  	while (npages) {
  		cond_resched();
  		pinned = pin_user_pages_fast(cur_base,
-@@ -262,8 +523,163 @@ static struct ib_umem *__ib_umem_get(str
+ 					  min_t(unsigned long, npages,
+ 						PAGE_SIZE /
+ 						sizeof(struct page *)),
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+ 					  gup_flags, page_list);
++#else
++					  gup_flags | FOLL_LONGTERM, page_list);
++#endif
+ 		if (pinned < 0) {
+ 			ret = pinned;
+ 			pr_debug("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
+ 					min_t(unsigned long, npages,
+ 						PAGE_SIZE / sizeof(struct page *)),
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+ 					gup_flags);
++#else
++					gup_flags | FOLL_LONGTERM);
++#endif
+ 			goto umem_release;
+ 		}
+ 
+@@ -262,8 +532,163 @@ static struct ib_umem *__ib_umem_get(str
  	}
  	goto out;
  
@@ -585,7 +607,7 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
  
  	/*
  	 * If the address belongs to peer memory client, then the first
-@@ -284,8 +700,22 @@ umem_release:
+@@ -284,8 +709,22 @@ umem_release:
  		goto out;
  	}
  vma:
@@ -608,7 +630,7 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
  	free_page((unsigned long) page_list);
  umem_kfree:
  	if (ret) {
-@@ -295,19 +725,36 @@ umem_kfree:
+@@ -295,19 +734,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -645,7 +667,7 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -319,16 +766,34 @@ void ib_umem_release(struct ib_umem *ume
+@@ -319,16 +775,34 @@ void ib_umem_release(struct ib_umem *ume
  {
  	if (!umem)
  		return;
@@ -680,7 +702,7 @@ Change-Id: I5404c8cab4e7bbc69bc5ffaa8de03cef946e0309
  	mmdrop(umem->owning_mm);
  	kfree(umem);
  }
-@@ -356,8 +821,12 @@ int ib_umem_copy_from(void *dst, struct
+@@ -356,8 +830,12 @@ int ib_umem_copy_from(void *dst, struct
  		return -EINVAL;
  	}
  

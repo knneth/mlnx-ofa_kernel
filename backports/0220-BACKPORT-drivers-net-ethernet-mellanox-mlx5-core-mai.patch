@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/main.c
 
 Change-Id: I638714ff4c04c4667206e3bd3d9fad956c685d17
 ---
- .../net/ethernet/mellanox/mlx5/core/main.c    | 244 +++++++++++++++++-
- 1 file changed, 232 insertions(+), 12 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/main.c    | 246 +++++++++++++++++-
+ 1 file changed, 233 insertions(+), 13 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
@@ -178,11 +178,11 @@ Change-Id: I638714ff4c04c4667206e3bd3d9fad956c685d17
 +#if !defined(HAVE_DEVLINK_HAS_RELOAD) && !defined(HAVE_DEVLINK_HAS_RELOAD_UP_DOWN)
 +	if (mlx5_sf_dev_allocated(dev))
 +		return -EOPNOTSUPP;
-+
-+	if (!change)
-+		return count;
  
 -	return count;
++	if (!change)
++		return count;
++
 +	mlx5_unload_one(dev, false);
 +	ret = mlx5_load_one(dev, false);
 +#endif
@@ -190,6 +190,15 @@ Change-Id: I638714ff4c04c4667206e3bd3d9fad956c685d17
  }
  
  static DEVICE_ATTR(roce_enable, 0644, mlx5_roce_enable_show_enabled,
+@@ -1574,7 +1627,7 @@ static int mlx5_function_teardown(struct
+ 
+ static int mlx5_load(struct mlx5_core_dev *dev)
+ {
+-	int err;
++	int err = 0;
+ 
+ 	dev->priv.uar = mlx5_get_uars_page(dev);
+ 	if (IS_ERR(dev->priv.uar)) {
 @@ -1661,15 +1714,19 @@ static int mlx5_load(struct mlx5_core_de
  
  	mlx5_sf_dev_table_create(dev);

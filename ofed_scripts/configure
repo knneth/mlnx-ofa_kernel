@@ -640,13 +640,8 @@ check_complex_defines()
 	fi
 
 # define HAVE_NIC_TEMPERATURE_SUPPORTED from other flags
-	if check_compat_config_h_var HAVE_HWMON_OPS_READ_STRING &&
-	   check_compat_config_h_var HAVE_HWMON_DEVICE_REGISTER_WITH_INFO
-	then
-		set_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
-	else
-		unset_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
-	fi
+	# Feature blocked for July version.
+	unset_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
 
 # define HAVE_VDPA_SUPPORT from other flags
 	if check_compat_config_h_var HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES
@@ -823,6 +818,7 @@ CONFIG_NVME_FABRICS=${CONFIG_NVME_FABRICS:-''}
 CONFIG_NVME_FC=${CONFIG_NVME_FC:-''}
 CONFIG_NVME_RDMA=${CONFIG_NVME_RDMA:-''}
 CONFIG_NVME_TCP=${CONFIG_NVME_TCP:-''}
+CONFIG_NVME_COMMON=${CONFIG_NVME_COMMON:-''}
 CONFIG_NVME_MULTIPATH=${CONFIG_NVME_MULTIPATH:-''}
 CONFIG_NVME_HOST_DUMMY=${CONFIG_NVME_HOST_DUMMY:-''}
 CONFIG_NVME_TARGET=${CONFIG_NVME_TARGET:-''}
@@ -1472,6 +1468,7 @@ main()
                             CONFIG_NVME_FC="m"
                             CONFIG_NVME_RDMA="m"
                             CONFIG_NVME_TCP="m"
+                            CONFIG_NVME_COMMON="m"
                             CONFIG_NVME_MULTIPATH="y"
                             CONFIG_NVME_HOST_WITHOUT_FC=
                         ;;
@@ -1482,6 +1479,7 @@ main()
                             CONFIG_NVME_FC=
                             CONFIG_NVME_RDMA=
 			    CONFIG_NVME_TCP=
+			    CONFIG_NVME_COMMON=
                             CONFIG_NVME_MULTIPATH=
                             CONFIG_NVME_HOST_WITHOUT_FC=
                         ;;
@@ -1493,6 +1491,7 @@ main()
                             CONFIG_NVME_FC=
                             CONFIG_NVME_RDMA="m"
                             CONFIG_NVME_TCP="m"
+                            CONFIG_NVME_COMMON="m"
                             CONFIG_NVME_MULTIPATH="y"
                             CONFIG_NVME_TARGET=
                             CONFIG_NVME_TARGET_LOOP=
@@ -1509,6 +1508,7 @@ main()
                             CONFIG_NVME_FC=
                             CONFIG_NVME_RDMA=
 			    CONFIG_NVME_TCP=
+			    CONFIG_NVME_COMMON=
                             CONFIG_NVME_MULTIPATH=
                             CONFIG_NVME_TARGET=
                             CONFIG_NVME_TARGET_LOOP=
@@ -1524,6 +1524,7 @@ main()
                             CONFIG_NVME_TARGET_TCP="m"
                             CONFIG_NVME_TARGET_FC="m"
                             CONFIG_NVME_TARGET_FCLOOP="m"
+                            CONFIG_NVME_TARGET_COMMON="m"
                             CONFIG_NVME_HOST_WITHOUT_FC=
                         ;;
                         --without-nvmf_target-mod)
@@ -1750,6 +1751,7 @@ if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_FC=
 		CONFIG_NVME_RDMA=
 		CONFIG_NVME_TCP=
+		CONFIG_NVME_COMMON=
 		CONFIG_NVME_MULTIPATH=
 		CONFIG_NVME_HOST_WITHOUT_FC=
 		echo "Warning: NVMF HOST requires RHEL7.2 and above or kernel version ${NVMF_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
@@ -1773,6 +1775,7 @@ if  check_kerver ${KVERSION} ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_NVME_FC=
         CONFIG_NVME_RDMA=
         CONFIG_NVME_TCP=
+        CONFIG_NVME_COMMON=
         CONFIG_NVME_MULTIPATH=
         CONFIG_NVME_HOST_WITHOUT_FC=
         CONFIG_NVME_TARGET=
@@ -1900,6 +1903,14 @@ if [ "X${CONFIG_NVME_TCP}" == "Xm" ]; then
     fi
 fi
 
+# Enable nvme-common only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_COMMON}" == "Xm" ]; then
+    check_autofconf CONFIG_NVME_COMMON
+    if [ X${CONFIG_NVME_COMMON} == "X1" ]; then
+        CONFIG_NVME_COMMON=m
+    fi
+fi
+
 # Enable nvmet-tcp only when it is enabled in the kernel
 if [ "X${CONFIG_NVME_TARGET_TCP}" == "Xm" ]; then
     check_autofconf CONFIG_NVME_TARGET_TCP
@@ -1970,6 +1981,7 @@ if [ "X$BUILD_DUMMY_MODS" == "X1" ]; then
    CONFIG_NVME_FC=
    CONFIG_NVME_RDMA=
    CONFIG_NVME_TCP=
+   CONFIG_NVME_COMMON=
    CONFIG_NVME_MULTIPATH=
 
    # nvmf target

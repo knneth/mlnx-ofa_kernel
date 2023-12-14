@@ -181,7 +181,7 @@ static int modify_esw_vport_cvlan(struct mlx5_core_dev *dev, u16 vport,
 			 esw_vport_context.vport_cvlan_strip, 1);
 
 	if (set_flags & SET_VLAN_INSERT) {
-		if (MLX5_CAP_ESW(dev, vport_cvlan_insert_always)) {
+		if (vst_mode == ESW_VST_MODE_INSERT_ALWAYS) {
 			/* insert either if vlan exist in packet or not */
 			MLX5_SET(modify_esw_vport_context_in, in,
 				 esw_vport_context.vport_cvlan_insert,
@@ -918,6 +918,9 @@ static int mlx5_esw_vport_caps_get(struct mlx5_eswitch *esw, struct mlx5_vport *
 	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
 	vport->info.roce_enabled = MLX5_GET(cmd_hca_cap, hca_caps, roce);
 
+	if (!MLX5_CAP_GEN_MAX(esw->dev, hca_cap_2))
+		goto out_free;
+
 	memset(query_ctx, 0, query_out_sz);
 	err = mlx5_vport_get_other_func_cap(esw->dev, vport->vport, query_ctx,
 					    MLX5_CAP_GENERAL_2);
@@ -927,7 +930,7 @@ static int mlx5_esw_vport_caps_get(struct mlx5_eswitch *esw, struct mlx5_vport *
 	hca_caps = MLX5_ADDR_OF(query_hca_cap_out, query_ctx, capability);
 	vport->info.mig_enabled = MLX5_GET(cmd_hca_cap_2, hca_caps, migratable);
 #ifdef CONFIG_MLX5_SF_SFC
-	vport->info.local_esw_supported = MLX5_GET(cmd_hca_cap_2, hca_caps, local_eswitch);
+	vport->info.local_esw_enabled = MLX5_GET(cmd_hca_cap_2, hca_caps, local_eswitch);
 #endif
 out_free:
 	kfree(query_ctx);

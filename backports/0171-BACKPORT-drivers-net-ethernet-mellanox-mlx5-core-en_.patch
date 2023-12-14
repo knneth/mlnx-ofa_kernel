@@ -579,7 +579,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	mlx5e_set_dev_port_mtu(priv);
  
  	mlx5e_rep_tc_enable(priv);
-@@ -1353,7 +1660,12 @@ static void mlx5e_uplink_rep_enable(stru
+@@ -1354,7 +1661,12 @@ static void mlx5e_uplink_rep_enable(stru
  	rtnl_lock();
  	if (netif_running(netdev))
  		mlx5e_open(netdev);
@@ -592,7 +592,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	netif_device_attach(netdev);
  	rtnl_unlock();
  
-@@ -1367,6 +1679,12 @@ static void mlx5e_uplink_rep_disable(str
+@@ -1368,6 +1680,12 @@ static void mlx5e_uplink_rep_disable(str
  	rtnl_lock();
  	if (netif_running(priv->netdev))
  		mlx5e_close(priv->netdev);
@@ -605,7 +605,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	netif_device_detach(priv->netdev);
  	rtnl_unlock();
  
-@@ -1375,7 +1693,9 @@ static void mlx5e_uplink_rep_disable(str
+@@ -1376,7 +1694,9 @@ static void mlx5e_uplink_rep_disable(str
  	mlx5_notifier_unregister(mdev, &priv->events_nb);
  	mlx5e_rep_tc_disable(priv);
  	mlx5_lag_remove_netdev(mdev, priv->netdev);
@@ -615,7 +615,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  
  	mlx5e_ipsec_cleanup(priv);
  }
-@@ -1503,6 +1823,9 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1504,6 +1824,9 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
  {
  	struct mlx5e_priv *priv = netdev_priv(mlx5_uplink_netdev_get(dev));
  	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
@@ -625,7 +625,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	int err;
  
  	rpriv->netdev = priv->netdev;
-@@ -1515,6 +1838,18 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1516,6 +1839,18 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
  					  rpriv);
  	if (err)
  		goto err_metadata_insert;
@@ -644,7 +644,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  
  	mlx5_smartnic_sysfs_init(rpriv->netdev);
  	mlx5_rep_sysfs_init(rpriv);
-@@ -1532,6 +1867,9 @@ static void
+@@ -1533,6 +1868,9 @@ static void
  mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
  {
  	struct net_device *netdev = rpriv->netdev;
@@ -654,7 +654,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	struct mlx5_core_dev *dev;
  	struct mlx5e_priv *priv;
  
-@@ -1541,6 +1879,12 @@ mlx5e_vport_uplink_rep_unload(struct mlx
+@@ -1542,6 +1880,12 @@ mlx5e_vport_uplink_rep_unload(struct mlx
  	mlx5e_rep_metadata_remove(priv, rpriv->rep);
  	xa_destroy(&rpriv->vport_rep_map);
  
@@ -667,7 +667,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	mlx5_smartnic_sysfs_cleanup(netdev);
  	if (test_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state)) {
  		mlx5e_detach_netdev(priv);
-@@ -1556,7 +1900,9 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1557,7 +1901,9 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  {
  	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
  	const struct mlx5e_profile *profile;
@@ -677,7 +677,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	struct net_device *netdev;
  	struct mlx5e_priv *priv;
  	int err;
-@@ -1595,10 +1941,16 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1596,10 +1942,16 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  		goto err_cleanup_profile;
  	}
  
@@ -694,7 +694,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  
  	err = register_netdev(netdev);
  	if (err) {
-@@ -1610,9 +1962,21 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1611,9 +1963,21 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  
  	mlx5_rep_sysfs_init(rpriv);
  
@@ -716,7 +716,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  err_detach_netdev:
  	mlx5e_detach_netdev(netdev_priv(netdev));
  
-@@ -1657,6 +2021,9 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1658,6 +2022,9 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  	struct net_device *netdev = rpriv->netdev;
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct mlx5_core_dev *dev = priv->mdev;
@@ -726,7 +726,7 @@ Change-Id: Id6d65bd9ca07a40816f60669725f29b39c2ef6d7
  	void *ppriv = priv->ppriv;
  
  	mlx5_rep_destroy_miss_meter(dev, rpriv);
-@@ -1668,7 +2035,13 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1669,7 +2036,13 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  	}
  
  	mlx5e_rep_metadata_remove(priv, rep);

@@ -84,7 +84,7 @@ static struct mlx5_eswitch_rep *mlx5_eswitch_get_rep(struct mlx5_eswitch *esw,
 
 static bool esw_is_local_esw(struct mlx5_eswitch *esw)
 {
-	return !MLX5_VPORT_MANAGER(esw->dev) && !mlx5_core_is_ecpf_esw_manager(esw->dev);
+	return esw_is_local_esw_dev(esw->dev);
 }
 
 static void
@@ -113,7 +113,7 @@ mlx5_eswitch_set_rule_flow_source(struct mlx5_eswitch *esw,
 		mode = MLX5_VPORT_STATE_OP_MOD_ESW_VPORT;
 	}
 
-	direction = mlx5_query_vport_direction(esw->dev, mode, vport);
+	direction = mlx5_query_vport_direction(attr->in_rep->esw->dev, mode, vport);
 	spec->flow_context.flow_source = ((!direction && attr->in_rep->vport == MLX5_VPORT_UPLINK) ||
 					  direction == MLX5_VPORT_DIRECTION_HOST) ?
 					 MLX5_FLOW_CONTEXT_FLOW_SOURCE_UPLINK :
@@ -1484,7 +1484,6 @@ esw_chains_create(struct mlx5_eswitch *esw, struct mlx5_flow_table *miss_fdb)
 
 	esw_init_chains_offload_flags(esw, &attr.flags);
 	attr.ns = MLX5_FLOW_NAMESPACE_FDB;
-	attr.fs_base_prio = FDB_TC_OFFLOAD;
 	attr.max_grp_num = esw->params.large_group_num;
 	attr.default_ft = miss_fdb;
 	attr.mapping = esw->offloads.reg_c0_obj_pool;
@@ -3252,6 +3251,9 @@ void mlx5_esw_offloads_devcom_init(struct mlx5_eswitch *esw, u64 key)
 	if (!MLX5_CAP_ESW(esw->dev, merged_eswitch))
 		return;
 
+	if (!esw_is_local_esw(esw) && !mlx5_lag_is_supported(esw->dev))
+		return;
+
 	xa_init(&esw->paired);
 	esw->num_peers = 0;
 	esw->devcom = mlx5_devcom_register_component(esw->dev->priv.devc,
@@ -3897,8 +3899,12 @@ int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 {
 	u16 cur_mlx5_mode, mlx5_mode = 0;
 	struct mlx5_eswitch *esw;
-
 	int err = 0;
+
+	if (mlx5_dev_is_lightweight(devlink_priv(devlink))) {
+		NL_SET_ERR_MSG_MOD(extack, "Function doesn't fully probe.");
+		return -EOPNOTSUPP;
+	}
 
 	esw = mlx5_devlink_eswitch_get(devlink);
 	if (IS_ERR(esw))

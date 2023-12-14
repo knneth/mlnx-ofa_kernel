@@ -166,8 +166,6 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 	struct mlx5_fc *counter = NULL;
 	bool need_acl_table = true;
 	bool push_on_any_pkt;
-	bool vst_check_cvlan = false;
-	bool vst_push_cvlan = false;
 	/* The ingress acl table contains 4 groups
 	 * (2 active rules at the same time -
 	 *      1 allow rule from one of the first 3 groups.
@@ -236,26 +234,18 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 		goto out;
 	}
 
-	if ((vport->info.vlan || vport->info.qos)) {
-		if (vst_mode == ESW_VST_MODE_STEERING)
-			vst_push_cvlan = true;
-		else if (!MLX5_CAP_ESW(esw->dev, vport_cvlan_insert_always))
-			vst_check_cvlan = true;
-	}
-
-	push_on_any_pkt = ((vst_mode != ESW_VST_MODE_BASIC) && !vport->info.spoofchk &&
-			   !need_vlan_filter);
+	push_on_any_pkt = (vst_mode != ESW_VST_MODE_BASIC) &&
+			  !vport->info.spoofchk && !need_vlan_filter;
 	if (!push_on_any_pkt)
 		spec->match_criteria_enable = MLX5_MATCH_OUTER_HEADERS;
 
-
-	/* Create ingress allow rule */
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_ALLOW;
-	if (vst_push_cvlan) {
+	if (vst_mode == ESW_VST_MODE_STEERING &&
+	    (vport->info.vlan || vport->info.qos)) {
 		flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
 		flow_act.vlan[0].prio = vport->info.qos;
 		flow_act.vlan[0].vid = vport->info.vlan;
-		flow_act.vlan[0].ethtype = ETH_P_8021Q;
+		flow_act.vlan[0].ethtype = ntohs(vport->info.vlan_proto);
 	}
 
 	if (need_vlan_filter ||
@@ -273,9 +263,6 @@ int esw_acl_ingress_lgcy_setup(struct mlx5_eswitch *esw,
 				      outer_headers.smac_47_16);
 		ether_addr_copy(smac_v, vport->info.mac);
 	}
-
-	if (!vst_check_cvlan && !vport->info.spoofchk)
-		goto out;
 
 
 	/* Allow untagged */

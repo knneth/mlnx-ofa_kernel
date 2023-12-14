@@ -8,6 +8,7 @@
 #include "mlx5_ifc_vhca_event.h"
 #include "vhca_event.h"
 #include "ecpf.h"
+#include "mlx5_devm.h"
 #define CREATE_TRACE_POINTS
 #include "diag/sf_tracepoint.h"
 
@@ -516,6 +517,7 @@ static void mlx5_sf_table_disable(struct mlx5_sf_table *table)
 	wait_for_completion(&table->disable_complete);
 
 	mlx5_sf_deactivate_all(table);
+	mlx5_devm_sfs_clean(table->dev);
 }
 
 static int mlx5_sf_esw_event(struct notifier_block *nb, unsigned long event, void *data)

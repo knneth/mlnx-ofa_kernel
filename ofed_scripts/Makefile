@@ -42,6 +42,7 @@ obj-$(CONFIG_NVME_FABRICS)      += drivers/nvme/host/
 obj-$(CONFIG_NVME_FC)           += drivers/nvme/host/
 obj-$(CONFIG_NVME_RDMA)         += drivers/nvme/host/
 obj-$(CONFIG_NVME_TCP)          += drivers/nvme/host/
+obj-$(CONFIG_NVME_COMMON)       += drivers/nvme/common/
 obj-$(CONFIG_NVME_MULTIPATH)    += drivers/nvme/host/
 obj-$(CONFIG_NVME_HOST_DUMMY)   += drivers/nvme/host/
 obj-$(CONFIG_NVME_TARGET)       += drivers/nvme/target/

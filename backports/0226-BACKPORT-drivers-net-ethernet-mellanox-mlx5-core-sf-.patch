@@ -9,7 +9,7 @@ Change-Id: I2a0000738a0d83d23ab4ccddef98b5d8604f6d47
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
-@@ -166,8 +166,12 @@ static bool mlx5_sf_is_active(const stru
+@@ -167,8 +167,12 @@ static bool mlx5_sf_is_active(const stru
  {
  	return sf->hw_state == MLX5_VHCA_STATE_ACTIVE || sf->hw_state == MLX5_VHCA_STATE_IN_USE;
  }
@@ -24,7 +24,7 @@ Change-Id: I2a0000738a0d83d23ab4ccddef98b5d8604f6d47
  				      enum devlink_port_fn_state *state,
  				      enum devlink_port_fn_opstate *opstate,
  				      struct netlink_ext_ack *extack)
-@@ -253,7 +257,12 @@ out:
+@@ -254,7 +258,12 @@ out:
  	return err;
  }
  

@@ -9,7 +9,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bridge.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bridge.c
-@@ -83,6 +83,7 @@ mlx5_esw_bridge_rep_vport_num_vhca_id_ge
+@@ -87,6 +87,7 @@ mlx5_esw_bridge_rep_vport_num_vhca_id_ge
  	return dev;
  }
  
@@ -17,7 +17,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  static struct net_device *
  mlx5_esw_bridge_lower_rep_vport_num_vhca_id_get(struct net_device *dev, struct mlx5_eswitch *esw,
  						u16 *vport_num, u16 *esw_owner_vhca_id)
-@@ -108,6 +109,7 @@ mlx5_esw_bridge_lower_rep_vport_num_vhca
+@@ -112,6 +113,7 @@ mlx5_esw_bridge_lower_rep_vport_num_vhca
  
  	return NULL;
  }
@@ -25,7 +25,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  
  static bool mlx5_esw_bridge_is_local(struct net_device *dev, struct net_device *rep,
  				     struct mlx5_eswitch *esw)
-@@ -221,7 +223,10 @@ mlx5_esw_bridge_port_obj_add(struct net_
+@@ -225,7 +227,10 @@ mlx5_esw_bridge_port_obj_add(struct net_
  	const struct switchdev_obj *obj = port_obj_info->obj;
  	const struct switchdev_obj_port_vlan *vlan;
  	u16 vport_num, esw_owner_vhca_id;
@@ -37,7 +37,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  
  	if (!mlx5_esw_bridge_rep_vport_num_vhca_id_get(dev, br_offloads->esw, &vport_num,
  						       &esw_owner_vhca_id))
-@@ -232,8 +237,15 @@ mlx5_esw_bridge_port_obj_add(struct net_
+@@ -236,8 +241,15 @@ mlx5_esw_bridge_port_obj_add(struct net_
  	switch (obj->id) {
  	case SWITCHDEV_OBJ_ID_PORT_VLAN:
  		vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
@@ -53,7 +53,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  		break;
  	default:
  		return -EOPNOTSUPP;
-@@ -249,6 +261,9 @@ mlx5_esw_bridge_port_obj_del(struct net_
+@@ -253,6 +265,9 @@ mlx5_esw_bridge_port_obj_del(struct net_
  	const struct switchdev_obj *obj = port_obj_info->obj;
  	const struct switchdev_obj_port_vlan *vlan;
  	u16 vport_num, esw_owner_vhca_id;
@@ -63,7 +63,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  
  	if (!mlx5_esw_bridge_rep_vport_num_vhca_id_get(dev, br_offloads->esw, &vport_num,
  						       &esw_owner_vhca_id))
-@@ -259,7 +274,13 @@ mlx5_esw_bridge_port_obj_del(struct net_
+@@ -263,7 +278,13 @@ mlx5_esw_bridge_port_obj_del(struct net_
  	switch (obj->id) {
  	case SWITCHDEV_OBJ_ID_PORT_VLAN:
  		vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
@@ -77,7 +77,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  		break;
  	default:
  		return -EOPNOTSUPP;
-@@ -267,6 +288,7 @@ mlx5_esw_bridge_port_obj_del(struct net_
+@@ -271,6 +292,7 @@ mlx5_esw_bridge_port_obj_del(struct net_
  	return 0;
  }
  
@@ -85,7 +85,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  static int
  mlx5_esw_bridge_port_obj_attr_set(struct net_device *dev,
  				  struct switchdev_notifier_port_attr_info *port_attr_info,
-@@ -285,7 +307,11 @@ mlx5_esw_bridge_port_obj_attr_set(struct
+@@ -289,7 +311,11 @@ mlx5_esw_bridge_port_obj_attr_set(struct
  
  	switch (attr->id) {
  	case SWITCHDEV_ATTR_ID_PORT_PRE_BRIDGE_FLAGS:
@@ -97,7 +97,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  			NL_SET_ERR_MSG_MOD(extack, "Flag is not supported");
  			err = -EINVAL;
  		}
-@@ -300,18 +326,21 @@ mlx5_esw_bridge_port_obj_attr_set(struct
+@@ -304,18 +330,21 @@ mlx5_esw_bridge_port_obj_attr_set(struct
  		err = mlx5_esw_bridge_vlan_filtering_set(vport_num, esw_owner_vhca_id,
  							 attr->u.vlan_filtering, br_offloads);
  		break;
@@ -119,7 +119,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  
  static int mlx5_esw_bridge_event_blocking(struct notifier_block *nb,
  					  unsigned long event, void *ptr)
-@@ -329,9 +358,11 @@ static int mlx5_esw_bridge_event_blockin
+@@ -333,9 +362,11 @@ static int mlx5_esw_bridge_event_blockin
  	case SWITCHDEV_PORT_OBJ_DEL:
  		err = mlx5_esw_bridge_port_obj_del(dev, ptr, br_offloads);
  		break;
@@ -131,7 +131,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  	default:
  		err = 0;
  	}
-@@ -420,11 +451,13 @@ static int mlx5_esw_bridge_switchdev_eve
+@@ -424,11 +455,13 @@ static int mlx5_esw_bridge_switchdev_eve
  	u16 vport_num, esw_owner_vhca_id;
  	struct net_device *upper, *rep;
  
@@ -145,7 +145,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  
  	upper = netdev_master_upper_dev_get_rcu(dev);
  	if (!upper)
-@@ -524,7 +557,11 @@ void mlx5e_rep_bridge_init(struct mlx5e_
+@@ -528,7 +561,11 @@ void mlx5e_rep_bridge_init(struct mlx5e_
  	}
  
  	br_offloads->netdev_nb.notifier_call = mlx5_esw_bridge_switchdev_port_event;
@@ -157,7 +157,7 @@ Change-Id: Ibf7042fd3c2aca08f127ae64682ded4acd1068bc
  	if (err) {
  		esw_warn(mdev, "Failed to register bridge offloads netdevice notifier (err=%d)\n",
  			 err);
-@@ -559,7 +596,11 @@ void mlx5e_rep_bridge_cleanup(struct mlx
+@@ -563,7 +600,11 @@ void mlx5e_rep_bridge_cleanup(struct mlx
  		return;
  
  	cancel_delayed_work_sync(&br_offloads->update_work);

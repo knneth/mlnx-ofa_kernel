@@ -26,7 +26,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  
  static enum mlx5_traffic_types arfs_get_tt(enum arfs_type type)
  {
-@@ -408,6 +410,8 @@ static void arfs_may_expire_flow(struct
+@@ -418,6 +420,8 @@ static void arfs_may_expire_flow(struct
  	int i;
  	int j;
  
@@ -35,7 +35,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  	spin_lock_bh(&arfs->arfs_lock);
  	mlx5e_for_each_arfs_rule(arfs_rule, htmp, arfs->arfs_tables, i, j) {
  		if (!work_pending(&arfs_rule->arfs_work) &&
-@@ -421,7 +425,7 @@ static void arfs_may_expire_flow(struct
+@@ -431,7 +435,7 @@ static void arfs_may_expire_flow(struct
  		}
  	}
  	spin_unlock_bh(&arfs->arfs_lock);
@@ -44,7 +44,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  		if (arfs_rule->rule)
  			mlx5_del_flow_rules(arfs_rule->rule);
  		hlist_del(&arfs_rule->hlist);
-@@ -438,6 +442,8 @@ static void arfs_del_rules(struct mlx5e_
+@@ -448,6 +452,8 @@ static void arfs_del_rules(struct mlx5e_
  	int i;
  	int j;
  
@@ -53,7 +53,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  	spin_lock_bh(&arfs->arfs_lock);
  	mlx5e_for_each_arfs_rule(rule, htmp, arfs->arfs_tables, i, j) {
  		hlist_del_init(&rule->hlist);
-@@ -445,7 +451,7 @@ static void arfs_del_rules(struct mlx5e_
+@@ -455,7 +461,7 @@ static void arfs_del_rules(struct mlx5e_
  	}
  	spin_unlock_bh(&arfs->arfs_lock);
  
@@ -62,7 +62,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  		cancel_work_sync(&rule->arfs_work);
  		if (rule->rule)
  			mlx5_del_flow_rules(rule->rule);
-@@ -693,9 +699,10 @@ static struct arfs_rule *arfs_find_rule(
+@@ -703,9 +709,10 @@ static struct arfs_rule *arfs_find_rule(
  {
  	struct arfs_rule *arfs_rule;
  	struct hlist_head *head;
@@ -74,7 +74,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  		if (arfs_cmp(&arfs_rule->tuple, fk))
  			return arfs_rule;
  	}
-@@ -713,7 +720,11 @@ int mlx5e_rx_flow_steer(struct net_devic
+@@ -723,7 +730,11 @@ int mlx5e_rx_flow_steer(struct net_devic
  	struct flow_keys fk;
  
  	arfs =  mlx5e_fs_get_arfs(priv->fs);
@@ -87,7 +87,7 @@ Change-Id: If37e307c75390b5ab83d84301e2b1b331833afc6
  		return -EPROTONOSUPPORT;
  
  	if (fk.basic.n_proto != htons(ETH_P_IP) &&
-@@ -746,4 +757,4 @@ int mlx5e_rx_flow_steer(struct net_devic
+@@ -756,4 +767,4 @@ int mlx5e_rx_flow_steer(struct net_devic
  	spin_unlock_bh(&arfs->arfs_lock);
  	return arfs_rule->filter_id;
  }
