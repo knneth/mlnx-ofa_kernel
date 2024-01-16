@@ -285,8 +285,8 @@ static inline void mlx5r_umr_init_context(struct mlx5r_umr_context *context)
 	init_completion(&context->done);
 }
 
-static int mlx5r_umr_post_send_wait(struct mlx5_ib_dev *dev, u32 mkey,
-				   struct mlx5r_umr_wqe *wqe, bool with_data)
+int mlx5r_umr_post_send_wait(struct mlx5_ib_dev *dev, u32 mkey,
+			     struct mlx5r_umr_wqe *wqe, bool with_data)
 {
 	struct umr_common *umrc = &dev->umrc;
 	struct mlx5r_umr_context umr_context;
@@ -346,6 +346,7 @@ static int mlx5r_umr_post_send_wait(struct mlx5_ib_dev *dev, u32 mkey,
 	up(&umrc->sem);
 	return err;
 }
+EXPORT_SYMBOL(mlx5r_umr_post_send_wait);
 
 /**
  * mlx5r_umr_revoke_mr - Fence all DMA on the MR
