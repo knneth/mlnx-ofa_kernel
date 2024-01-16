@@ -349,6 +349,7 @@ struct mlx5_core_dev *mlx5_ib_get_native_port_mdev(struct mlx5_ib_dev *ibdev,
 
 	return mdev;
 }
+EXPORT_SYMBOL(mlx5_ib_get_native_port_mdev);
 
 void mlx5_ib_put_native_port_mdev(struct mlx5_ib_dev *ibdev, u32 port_num)
 {
@@ -373,6 +374,7 @@ void mlx5_ib_put_native_port_mdev(struct mlx5_ib_dev *ibdev, u32 port_num)
 out:
 	spin_unlock(&port->mp.mpi_lock);
 }
+EXPORT_SYMBOL(mlx5_ib_put_native_port_mdev);
 
 static int translate_eth_legacy_proto_oper(u32 eth_proto_oper,
 					   u16 *active_speed, u8 *active_width)
