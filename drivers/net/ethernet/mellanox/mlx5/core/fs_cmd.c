@@ -33,12 +33,18 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/device.h>
 #include <linux/mlx5/mlx5_ifc.h>
+#include <linux/idr.h>
 
 #include "fs_core.h"
 #include "fs_cmd.h"
 #include "fs_ft_pool.h"
 #include "mlx5_core.h"
 #include "eswitch.h"
+#include "steering/dr_types.h"
+
+static bool flow_dest_list_modify __read_mostly;
+module_param(flow_dest_list_modify, bool, 0644);
+MODULE_PARM_DESC(flow_dest_list_modify, "When set, restores upstream behavior for flow destination list changes");
 
 static int mlx5_cmd_stub_update_root_ft(struct mlx5_flow_root_namespace *ns,
 					struct mlx5_flow_table *ft,
@@ -757,24 +763,6 @@ static int mlx5_cmd_create_fte(struct mlx5_flow_root_namespace *ns,
 	return mlx5_cmd_set_fte(dev, 0, 0, ft, group_id, fte);
 }
 
-static int mlx5_cmd_update_fte(struct mlx5_flow_root_namespace *ns,
-			       struct mlx5_flow_table *ft,
-			       struct mlx5_flow_group *fg,
-			       int modify_mask,
-			       struct fs_fte *fte)
-{
-	int opmod;
-	struct mlx5_core_dev *dev = ns->dev;
-	int atomic_mod_cap = MLX5_CAP_FLOWTABLE(dev,
-						flow_table_properties_nic_receive.
-						flow_modify_en);
-	if (!atomic_mod_cap)
-		return -EOPNOTSUPP;
-	opmod = 1;
-
-	return	mlx5_cmd_set_fte(dev, opmod, modify_mask, ft, fg->id, fte);
-}
-
 static int mlx5_cmd_delete_fte(struct mlx5_flow_root_namespace *ns,
 			       struct mlx5_flow_table *ft,
 			       struct fs_fte *fte)
@@ -791,6 +779,61 @@ static int mlx5_cmd_delete_fte(struct mlx5_flow_root_namespace *ns,
 		 !!(ft->flags & MLX5_FLOW_TABLE_OTHER_VPORT));
 
 	return mlx5_cmd_exec_in(dev, delete_fte, in);
+}
+
+static int mlx5_cmd_replace_fte(struct mlx5_flow_root_namespace *ns,
+				struct mlx5_flow_table *ft,
+				struct mlx5_flow_group *fg,
+				struct fs_fte *fte)
+{
+	const int next_index = ida_alloc_max(&fg->fte_allocator, fg->max_ftes - 1,
+					     GFP_KERNEL);
+	struct mlx5_core_dev *dev = ns->dev;
+	const int index = fte->index;
+	int rv;
+
+	if (next_index < 0)
+		return next_index;
+
+	fte->index = next_index + fg->start_index;
+	rv = mlx5_cmd_set_fte(dev, 0, 0, ft, fg->id, fte);
+	fte->index = index;
+	if (rv < 0) {
+		ida_free(&fg->fte_allocator, next_index);
+		return rv;
+	}
+
+	if (mlx5_cmd_delete_fte(ns, ft, fte) < 0) {
+		mlx5_core_warn(dev,
+			       "failed deleting old flow index %d of flow group id %d (next index %d)\n",
+			       fte->index, fg->id, next_index + fg->start_index);
+	}
+
+	fte->index = next_index + fg->start_index;
+	ida_free(&fg->fte_allocator, index - fg->start_index);
+	return rv;
+}
+
+static int mlx5_cmd_update_fte(struct mlx5_flow_root_namespace *ns,
+			       struct mlx5_flow_table *ft,
+			       struct mlx5_flow_group *fg,
+			       int modify_mask,
+			       struct fs_fte *fte)
+{
+	const int modify_dest_list = BIT(MLX5_SET_FTE_MODIFY_ENABLE_MASK_DESTINATION_LIST);
+	int atomic_mod_cap = MLX5_CAP_FLOWTABLE(ns->dev,
+						flow_table_properties_nic_receive.
+						flow_modify_en);
+
+	if ((modify_mask & modify_dest_list) && !flow_dest_list_modify) {
+		if (mlx5_cmd_replace_fte(ns, ft, fg, fte) == 0)
+			return 0;
+	}
+
+	if (!atomic_mod_cap)
+		return -EOPNOTSUPP;
+
+	return mlx5_cmd_set_fte(ns->dev, 1, modify_mask, ft, fg->id, fte);
 }
 
 int mlx5_cmd_fc_bulk_alloc(struct mlx5_core_dev *dev,
