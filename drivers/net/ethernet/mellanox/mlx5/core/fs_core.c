@@ -1786,6 +1786,7 @@ static int check_conflicting_ftes(struct fs_fte *fte,
 	}
 
 	if ((flow_context->flags & FLOW_CONTEXT_HAS_TAG) &&
+	    (fte->flow_context.flags & FLOW_CONTEXT_HAS_TAG) &&
 	    fte->flow_context.flow_tag != flow_context->flow_tag) {
 		mlx5_core_warn(get_dev(&fte->node),
 			       "FTE flow tag %u already exists with different flow tag %u\n",
@@ -1804,6 +1805,8 @@ static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
 					    int dest_num,
 					    struct fs_fte *fte)
 {
+	const u32 old_flow_tag = fte->flow_context.flow_tag;
+	const u32 old_flags = fte->flow_context.flags;
 	struct mlx5_flow_handle *handle;
 	int old_action;
 	int i;
@@ -1815,9 +1818,17 @@ static struct mlx5_flow_handle *add_rule_fg(struct mlx5_flow_group *fg,
 
 	old_action = fte->action.action;
 	fte->action.action |= flow_act->action;
+
+	if (spec->flow_context.flags & FLOW_CONTEXT_HAS_TAG) {
+		fte->flow_context.flow_tag = spec->flow_context.flow_tag;
+		fte->flow_context.flags |= FLOW_CONTEXT_HAS_TAG;
+	}
+
 	handle = add_rule_fte(fte, fg, dest, dest_num,
 			      old_action != flow_act->action);
 	if (IS_ERR(handle)) {
+		fte->flow_context.flow_tag = old_flow_tag;
+		fte->flow_context.flags = old_flags;
 		fte->action.action = old_action;
 		return handle;
 	}
