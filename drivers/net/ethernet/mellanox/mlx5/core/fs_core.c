@@ -1829,11 +1829,10 @@ static int check_conflicting_ftes(struct fs_fte *fte,
 	if ((flow_context->flags & FLOW_CONTEXT_HAS_TAG) &&
 	    (fte->flow_context.flags & FLOW_CONTEXT_HAS_TAG) &&
 	    fte->flow_context.flow_tag != flow_context->flow_tag) {
-		mlx5_core_warn(get_dev(&fte->node),
-			       "FTE flow tag %u already exists with different flow tag %u\n",
+		mlx5_core_info(get_dev(&fte->node),
+			       "Replacing FTE flow tag %u with %u\n",
 			       fte->flow_context.flow_tag,
 			       flow_context->flow_tag);
-		return -EEXIST;
 	}
 
 	return 0;
