@@ -23,6 +23,7 @@ struct mlx5_esw_rate_group {
 	struct kobject kobj;
 	u32 group_id;
 	u32 num_vports;
+	struct completion free_group_comp;
 };
 
 int mlx5_esw_qos_set_vport_rate(struct mlx5_eswitch *esw, struct mlx5_vport *evport,

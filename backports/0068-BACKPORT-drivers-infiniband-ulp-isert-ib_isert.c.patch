@@ -186,9 +186,9 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  static void isert_wait_conn(struct iscsit_conn *conn)
  {
  	struct isert_conn *isert_conn = conn->context;
-@@ -2623,15 +2705,40 @@ static void isert_wait_conn(struct iscsi
- 	isert_wait4cmds(conn);
- 	isert_wait4logout(isert_conn);
+@@ -2625,15 +2707,40 @@ static void isert_wait_conn(struct iscsi
+ 
+ 	queue_work(isert_release_wq, &isert_conn->release_work);
  }
 +#endif
  
@@ -227,7 +227,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  static void isert_get_rx_pdu(struct iscsit_conn *conn)
  {
  	struct completion comp;
-@@ -2640,17 +2747,22 @@ static void isert_get_rx_pdu(struct iscs
+@@ -2642,17 +2749,22 @@ static void isert_get_rx_pdu(struct iscs
  
  	wait_for_completion_interruptible(&comp);
  }
@@ -250,7 +250,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  	.iscsit_free_conn	= isert_free_conn,
  	.iscsit_get_login_rx	= isert_get_login_rx,
  	.iscsit_put_login_tx	= isert_put_login_tx,
-@@ -2660,7 +2772,9 @@ static struct iscsit_transport iser_targ
+@@ -2662,7 +2774,9 @@ static struct iscsit_transport iser_targ
  	.iscsit_queue_data_in	= isert_put_datain,
  	.iscsit_queue_status	= isert_put_response,
  	.iscsit_aborted_task	= isert_aborted_task,
@@ -260,7 +260,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  	.iscsit_get_sup_prot_ops = isert_get_sup_prot_ops,
  };
  
-@@ -2712,6 +2826,9 @@ static void __exit isert_exit(void)
+@@ -2714,6 +2828,9 @@ static void __exit isert_exit(void)
  MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
  MODULE_AUTHOR("nab@Linux-iSCSI.org");
  MODULE_LICENSE("GPL");

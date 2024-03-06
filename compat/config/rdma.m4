@@ -2670,6 +2670,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if napi_reschedule exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		int ret;
+
+		ret = napi_reschedule(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NAPI_RESCHEDULE, 1,
+			  [napi_reschedule exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct netdev_xdp exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -13647,8 +13664,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_PAGE_POOL_RELEASE_PAGE, 1,
+		MLNX_AC_DEFINE(HAVE_PAGE_POOL_RELEASE_PAGE_IN_PAGE_POOL_H, 1,
 			  [net/page_pool.h has page_pool_release_page])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+
+	AC_MSG_CHECKING([if net/page_pool/types.h has page_pool_release_page])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/page_pool/types.h>
+	],[
+		page_pool_release_page(NULL, NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PAGE_POOL_RELEASE_PAGE_IN_TYPES_H, 1,
+			  [net/page_pool/types.h has page_pool_release_page])
 	],[
 		AC_MSG_RESULT(no)
 	])

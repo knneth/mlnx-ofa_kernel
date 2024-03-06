@@ -5609,6 +5609,9 @@ int mlx5e_configure_flower(struct net_device *dev, struct mlx5e_priv *priv,
 	struct mlx5e_tc_flow *flow;
 	int err = 0;
 
+	if (priv->mdev->priv.flags & MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV)
+		return -ENODEV;
+
 	if (!mlx5_esw_hold(priv->mdev))
 		return -EBUSY;
 

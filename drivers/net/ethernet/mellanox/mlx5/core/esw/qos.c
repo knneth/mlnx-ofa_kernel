@@ -493,6 +493,7 @@ __esw_qos_create_rate_group(struct mlx5_eswitch *esw, u32 group_id,
 		}
 	}
 	trace_mlx5_esw_group_qos_create(esw->dev, group, group->tsar_ix);
+	init_completion(&group->free_group_comp);
 
 	return group;
 
@@ -503,7 +504,7 @@ err_min_rate:
 						group->tsar_ix))
 		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy TSAR for group failed");
 	if (group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
-		mlx5_destroy_vf_group_sysfs(esw->dev, &group->kobj);
+		kobject_put(&group->kobj);
 err_sched_elem:
 	kfree(group);
 	return ERR_PTR(err);
@@ -541,7 +542,10 @@ static int __esw_qos_destroy_rate_group(struct mlx5_eswitch *esw,
 	int err;
 
 	if (group->group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
-		mlx5_destroy_vf_group_sysfs(esw->dev, &group->kobj);
+		mlx5_destroy_vf_group_sysfs(group);
+	else
+		complete_all(&group->free_group_comp);
+
 	list_del(&group->list);
 
 	divider = esw_qos_calculate_min_rate_divider(esw, NULL, true);
@@ -557,6 +561,7 @@ static int __esw_qos_destroy_rate_group(struct mlx5_eswitch *esw,
 
 	trace_mlx5_esw_group_qos_destroy(esw->dev, group, group->tsar_ix);
 
+	wait_for_completion(&group->free_group_comp);
 	kfree(group);
 
 	return err;
@@ -982,7 +987,9 @@ int mlx5_esw_qos_set_sysfs_group_max_rate(struct mlx5_eswitch *esw,
 	    !MLX5_CAP_QOS(esw->dev, esw_rate_limit))
 		return -EOPNOTSUPP;
 
-	mutex_lock(&esw->state_lock);
+	if (!mutex_trylock(&esw->state_lock))
+		return -EBUSY;
+
 	if (!esw_qos_find_sysfs_group(esw, group->group_id)) {
 		err = -EINVAL;
 		goto unlock;
@@ -1004,7 +1011,9 @@ int mlx5_esw_qos_set_sysfs_group_min_rate(struct mlx5_eswitch *esw,
 	    !MLX5_CAP_QOS(esw->dev, log_esw_max_sched_depth))
 		return -EOPNOTSUPP;
 
-	mutex_lock(&esw->state_lock);
+	if (!mutex_trylock(&esw->state_lock))
+		return -EBUSY;
+
 	if (!esw_qos_find_sysfs_group(esw, group->group_id)) {
 		err = -EINVAL;
 		goto unlock;

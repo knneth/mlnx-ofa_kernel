@@ -1,1 +1,1 @@
-mlnx_ofed/mlnx-ofa_kernel-4.0.git
+https://${SVC_OFED_BOT_USER}:${SVC_OFED_BOT_KEY}@git-nbu.nvidia.com/r/a/mlnx_ofed/mlnx-ofa_kernel-4.0.git

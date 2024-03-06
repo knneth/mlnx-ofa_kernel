@@ -640,7 +640,7 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 	err = pcie_capability_set_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_LD);
 	if (err)
 		return pcibios_err_to_errno(err);
-	msleep(500);
+	msleep(2500);
 	err = pcie_capability_clear_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_LD);
 	if (err)
 		return err;

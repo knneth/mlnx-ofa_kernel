@@ -475,6 +475,9 @@ int mlx5_devlink_rate_leaf_tx_max_set(struct devlink *devlink,
 		return -EPERM;
 
 	mutex_lock(&esw->state_lock);
+	if (!vport->qos.enabled && !tx_max)
+		goto unlock;
+
 	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
 	if (err)
 		goto unlock;
@@ -515,6 +518,9 @@ int mlx5_devlink_rate_leaf_tx_share_set(struct devlink *devlink,
 		return -EPERM;
 
 	mutex_lock(&esw->state_lock);
+	if (!vport->qos.enabled && !tx_share)
+		goto unlock;
+
 	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
 	if (err)
 		goto unlock;

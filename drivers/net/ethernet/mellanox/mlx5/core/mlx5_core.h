@@ -42,7 +42,7 @@
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
 
-#define DRIVER_VERSION	"23.10-1.1.9"
+#define DRIVER_VERSION	"23.10-2.1.3"
 
 extern uint mlx5_core_debug_mask;
 
@@ -205,6 +205,8 @@ struct mlx5_mcion_reg {
 
 #define MLX5_DEFAULT_PROF       2
 
+struct mlx5_esw_rate_group;
+
 static inline int mlx5_flexible_inlen(struct mlx5_core_dev *dev, size_t fixed,
 				      size_t item_size, size_t num_items,
 				      const char *func, int line)
@@ -266,8 +268,7 @@ int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 			       u32 group_id, struct kobject *group_kobj);
-void mlx5_destroy_vf_group_sysfs(struct mlx5_core_dev *dev,
-				 struct kobject *group_kobj);
+void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_rate_group *group);
 int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_create_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 				       void *context, u32 *element_id);

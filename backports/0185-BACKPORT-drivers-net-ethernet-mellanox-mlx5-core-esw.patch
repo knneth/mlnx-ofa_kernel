@@ -8,7 +8,7 @@ Change-Id: I82a8f278115b2451e5627889da0fd4b495c5bb29
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
-@@ -757,7 +757,11 @@ int mlx5_esw_qos_set_vport_rate(struct m
+@@ -762,7 +762,11 @@ int mlx5_esw_qos_set_vport_rate(struct m
  
  static u32 mlx5_esw_qos_lag_link_speed_get_locked(struct mlx5_core_dev *mdev)
  {
@@ -20,7 +20,7 @@ Change-Id: I82a8f278115b2451e5627889da0fd4b495c5bb29
  	struct net_device *slave, *master;
  	u32 speed = SPEED_UNKNOWN;
  
-@@ -771,9 +775,13 @@ static u32 mlx5_esw_qos_lag_link_speed_g
+@@ -776,9 +780,13 @@ static u32 mlx5_esw_qos_lag_link_speed_g
  		goto out;
  
  	master = netdev_master_upper_dev_get(slave);
@@ -35,7 +35,7 @@ Change-Id: I82a8f278115b2451e5627889da0fd4b495c5bb29
  out:
  	return speed;
  }
-@@ -1173,7 +1181,7 @@ int mlx5_esw_devlink_rate_parent_set(str
+@@ -1182,7 +1190,7 @@ int mlx5_esw_devlink_rate_parent_set(str
  	return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, group, extack);
  }
  

@@ -568,6 +568,15 @@ check_complex_defines()
 	else
 		unset_complex_define_to_config_h HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
 	fi
+
+# Define HAVE_PAGE_POOL_RELEASE_PAGE from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_PAGE_POOL_H ||
+		check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_TYPES_H
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_RELEASE_PAGE
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_RELEASE_PAGE
+	fi
 }
 
 check_kerver_rh_cls()

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+/* SPDX-License-Identifier: (GPL-2.0 WITH Linux-syscall-note) OR Linux-OpenIB */
 /* Copyright (c) 2021 Mellanox Technologies Ltd */
 
 #ifndef _COMPAT_UAPI_MLXDEVM_MLXDEVM_NETLINK_H

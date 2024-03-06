@@ -762,10 +762,11 @@ err:
 static void mlx5_ib_dealloc_counters(struct mlx5_ib_dev *dev)
 {
 	u32 in[MLX5_ST_SZ_DW(dealloc_q_counter_in)] = {};
-	int num_cnt_ports;
+	int num_cnt_ports = dev->num_ports;
 	int i, j;
 
-	num_cnt_ports = is_mdev_switchdev_mode(dev->mdev) ? 2 : dev->num_ports;
+	if (is_mdev_switchdev_mode(dev->mdev))
+		num_cnt_ports = min(2, num_cnt_ports);
 
 	MLX5_SET(dealloc_q_counter_in, in, opcode,
 		 MLX5_CMD_OP_DEALLOC_Q_COUNTER);
@@ -797,7 +798,7 @@ static int mlx5_ib_alloc_counters(struct mlx5_ib_dev *dev)
 {
 	u32 out[MLX5_ST_SZ_DW(alloc_q_counter_out)] = {};
 	u32 in[MLX5_ST_SZ_DW(alloc_q_counter_in)] = {};
-	int num_cnt_ports;
+	int num_cnt_ports = dev->num_ports;
 	int err = 0;
 	int i;
 	bool is_shared;
@@ -808,15 +809,11 @@ static int mlx5_ib_alloc_counters(struct mlx5_ib_dev *dev)
 	/*
 	 * In switchdev we need to allocate two ports, one that is used for
 	 * the device Q_counters and it is essentially the real Q_counters of
-	 * the device, while the other is used as a helper for all other vports
-	 * over the device, and is used to help the PF query other vports and
-	 * provides things such as counters number and names and such.
-	 *
-	 * There is no need to allocate however one for each vport, since they
-	 * can all share it since they all only need to read the same info.
-	 * And the actual Q_counter allocation is done for each VF/SF alone.
+	 * this device, while the other is used as a helper for PF to be able to
+	 * query all other vports.
 	 */
-	num_cnt_ports = is_mdev_switchdev_mode(dev->mdev) ? 2 : dev->num_ports;
+	if (is_mdev_switchdev_mode(dev->mdev))
+		num_cnt_ports = min(2, num_cnt_ports);
 
 	for (i = 0; i < num_cnt_ports; i++) {
 		err = __mlx5_ib_alloc_counters(dev, &dev->port[i].cnts, i);

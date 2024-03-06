@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ib.c
 
 Change-Id: I173d3e31b6e179ca53fd1a994acc2c603490b11d
 ---
- drivers/infiniband/ulp/ipoib/ipoib_ib.c | 41 ++++++++++++++++++++++---
- 1 file changed, 36 insertions(+), 5 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_ib.c | 61 ++++++++++++++++++++++---
+ 1 file changed, 54 insertions(+), 7 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ib.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ib.c
@@ -55,7 +55,7 @@ Change-Id: I173d3e31b6e179ca53fd1a994acc2c603490b11d
  						 DMA_TO_DEVICE);
  		if (unlikely(ib_dma_mapping_error(ca, mapping[i + off])))
  			goto partial_error;
-@@ -521,6 +529,10 @@ poll_more:
+@@ -521,11 +529,19 @@ poll_more:
  	}
  
  	if (done < budget) {
@@ -66,7 +66,54 @@ Change-Id: I173d3e31b6e179ca53fd1a994acc2c603490b11d
  		napi_complete(napi);
  		if (unlikely(ib_req_notify_cq(priv->recv_cq,
  					      IB_CQ_NEXT_COMP |
-@@ -640,7 +652,11 @@ int ipoib_send(struct net_device *dev, s
+ 					      IB_CQ_REPORT_MISSED_EVENTS)) &&
+-		    napi_reschedule(napi))
++#ifdef HAVE_NAPI_RESCHEDULE
++			napi_reschedule(napi))
++#else
++			napi_schedule(napi))
++#endif
+ 			goto poll_more;
+ 	}
+ 
+@@ -555,7 +571,11 @@ poll_more:
+ 		napi_complete(napi);
+ 		if (unlikely(ib_req_notify_cq(priv->send_cq, IB_CQ_NEXT_COMP |
+ 					      IB_CQ_REPORT_MISSED_EVENTS)) &&
+-		    napi_reschedule(napi))
++#ifdef HAVE_NAPI_RESCHEDULE
++			napi_reschedule(napi))
++#else
++			napi_schedule(napi))
++#endif
+ 			goto poll_more;
+ 	}
+ 	return n < 0 ? 0 : n;
+@@ -576,7 +596,11 @@ void ipoib_napi_schedule_work(struct wor
+ 	bool ret;
+ 
+ 	do {
++#ifdef HAVE_NAPI_RESCHEDULE
+ 		ret = napi_reschedule(&priv->send_napi);
++#else
++		ret = napi_schedule(&priv->send_napi);
++#endif
+ 		if (!ret)
+ 			msleep(3);
+ 	} while (!ret && netif_queue_stopped(priv->dev) &&
+@@ -588,7 +612,11 @@ void ipoib_ib_tx_completion(struct ib_cq
+ 	struct ipoib_dev_priv *priv = ctx_ptr;
+ 	bool ret;
+ 
++#ifdef HAVE_NAPI_RESCHEDULE
+ 	ret = napi_reschedule(&priv->send_napi);
++#else
++	ret = napi_schedule(&priv->send_napi);
++#endif
+ 	/*
+ 	 * if the queue is closed the driver must be able to schedule napi,
+ 	 * otherwise we can end with closed queue forever, because no new
+@@ -640,7 +668,11 @@ int ipoib_send(struct net_device *dev, s
  	unsigned int usable_sge = priv->max_send_sge - !!skb_headlen(skb);
  
  	if (skb_is_gso(skb)) {
@@ -78,7 +125,7 @@ Change-Id: I173d3e31b6e179ca53fd1a994acc2c603490b11d
  		phead = skb->data;
  		if (unlikely(!skb_pull(skb, hlen))) {
  			ipoib_warn(priv, "linear data too small\n");
-@@ -1141,11 +1157,17 @@ static bool ipoib_dev_addr_changed_valid
+@@ -1141,11 +1173,17 @@ static bool ipoib_dev_addr_changed_valid
  {
  	union ib_gid search_gid;
  	union ib_gid gid0;
@@ -96,7 +143,7 @@ Change-Id: I173d3e31b6e179ca53fd1a994acc2c603490b11d
  	if (rdma_query_gid(priv->ca, priv->port, 0, &gid0))
  		return false;
  
-@@ -1155,8 +1177,12 @@ static bool ipoib_dev_addr_changed_valid
+@@ -1155,8 +1193,12 @@ static bool ipoib_dev_addr_changed_valid
  	 * to do it later
  	 */
  	priv->local_gid.global.subnet_prefix = gid0.global.subnet_prefix;
@@ -109,7 +156,7 @@ Change-Id: I173d3e31b6e179ca53fd1a994acc2c603490b11d
  	search_gid.global.subnet_prefix = gid0.global.subnet_prefix;
  
  	search_gid.global.interface_id = priv->local_gid.global.interface_id;
-@@ -1218,8 +1244,13 @@ static bool ipoib_dev_addr_changed_valid
+@@ -1218,8 +1260,13 @@ static bool ipoib_dev_addr_changed_valid
  			if (!test_bit(IPOIB_FLAG_DEV_ADDR_CTRL, &priv->flags)) {
  				memcpy(&priv->local_gid, &gid0,
  				       sizeof(priv->local_gid));

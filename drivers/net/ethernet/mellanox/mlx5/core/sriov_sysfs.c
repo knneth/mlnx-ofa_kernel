@@ -833,7 +833,8 @@ static ssize_t config_group_show(struct mlx5_esw_rate_group *g,
 	    mlx5_core_is_pf(esw->dev))
 		return -EPERM;
 
-	mutex_lock(&esw->state_lock);
+	if (!mutex_trylock(&esw->state_lock))
+		return -EBUSY;
 	p += _sprintf(p, buf, "Num VFs    : %d\n", g->num_vports);
 	p += _sprintf(p, buf, "MaxRate    : %d\n", g->max_rate);
 	p += _sprintf(p, buf, "MinRate    : %d\n", g->min_rate);
@@ -1307,26 +1308,27 @@ int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 #ifdef CONFIG_MLX5_ESWITCH
 struct mlx5_group_kobj {
 	struct work_struct work;
-	struct kobject *group_kobj;
+	struct mlx5_esw_rate_group *group;
 };
 
 static void destroy_vf_group_work(struct work_struct *work)
 {
 	struct mlx5_group_kobj *obj = container_of(work, struct mlx5_group_kobj, work);
+	struct mlx5_esw_rate_group *group = obj->group;
 
-	kobject_put(obj->group_kobj);
+	kobject_put(&group->kobj);
+	complete_all(&group->free_group_comp);
 	kfree(obj);
 }
 #endif
 
-void mlx5_destroy_vf_group_sysfs(struct mlx5_core_dev *dev,
-				 struct kobject *group_kobj)
+void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_rate_group *group)
 {
 #ifdef CONFIG_MLX5_ESWITCH
 	struct mlx5_group_kobj *kobj = kzalloc(sizeof *kobj, GFP_ATOMIC);
 
 	INIT_WORK(&kobj->work, destroy_vf_group_work);
-	kobj->group_kobj = group_kobj;
+	kobj->group = group;
 	queue_work(system_wq, &kobj->work);
 #endif
 }
