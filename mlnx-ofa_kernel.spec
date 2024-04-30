@@ -72,7 +72,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 23.10}
-%{!?_release: %global _release OFED.23.10.2.1.3.1.btech1}
+%{!?_release: %global _release OFED.23.10.2.1.3.1.btech3}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -151,6 +151,16 @@ Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
 Obsoletes: mlnx-rdma-rxe
+Obsoletes: iser <= 5.0-OFED
+Obsoletes: isert <= 5.0-OFED
+Obsoletes: knem-modules < 1.1.4
+Obsoletes: kmod-knem < 1.1.4
+Obsoletes: srp <= 5.0-OFED
+Conflicts: iser <= 5.0-OFED
+Conflicts: isert <= 5.0-OFED
+Conflicts: knem-modules < 1.1.4
+Conflicts: kmod-knem < 1.1.4
+Conflicts: srp <= 5.0-OFED
 Version: %{_version}
 Release: %{_release}.kver.%{krelver}
 Summary: Infiniband Driver and ULPs kernel modules
@@ -452,6 +462,9 @@ if [ -e /etc/udev/rules.d/82-net-setup-link.rules ]; then
 fi
 # Delete potentially broken symlinks to avoid infinite loop in weak-modules
 find /lib/modules/*/{extra,weak-updates}/mlnx-ofa_kernel/ -type l -delete 2> /dev/null
+# Delete broken symlinks for other modules to avoid weak-modules errors
+find /lib/modules/*/{extra,weak-updates} -name *.ko -type l -exec test ! -e {} \; -delete
+
 #
 # Save modules for initramfs rebuild in %posttrans
 # Code adapted from https://github.com/dm-vdo/kvdo/blob/6.1.3/kvdo.spec
@@ -461,7 +474,12 @@ find /lib/modules/*/{extra,weak-updates}/mlnx-ofa_kernel/ -type l -delete 2> /de
 # $ find /lib/modules/3.10.0-1160.el7.x86_64/extra/mlnx-ofa_kernel/ -name *.ko -type f|sort
 # - /lib/modules/3.10.0-1160.el7.x86_64/extra/mlnx-ofa_kernel/compat/mlx_compat.ko (Dependencies: none)
 # - /lib/modules/3.10.0-1160.el7.x86_64/extra/mlnx-ofa_kernel/drivers/base/auxiliary.ko (Dependencies: mlx_compat)
-modules=( $(find /lib/modules/%{KVERSION}/extra/mlnx-ofa_kernel/ -name *.ko -type f | sort) )
+#
+# mlx5_core depends on a more recent mlxfw, but mlxfw gets sorted after mlx5_core
+unset modules
+declare -a modules
+modules+=( $(find /lib/modules/%{KVERSION}/extra/mlnx-ofa_kernel/ -name mlxfw.ko -type f) )
+modules+=( $(find /lib/modules/%{KVERSION}/extra/mlnx-ofa_kernel/ -name *.ko -type f | grep -v mlxfw.ko | sort) )
 printf '%s\n' "${modules[@]}" >> /var/lib/rpm-kmod-posttrans-weak-modules-add
 
 %pretrans -p <lua> -n %{non_kmp_pname}
