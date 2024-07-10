@@ -5398,6 +5398,10 @@ void mlx5e_build_nic_params(struct mlx5e_priv *priv, struct mlx5e_xsk *xsk, u16 
 	struct mlx5e_params *params = &priv->channels.params;
 	struct mlx5_core_dev *mdev = priv->mdev;
 
+	/* Port timestamps for transmitted PTP packets */
+	if (MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
+		MLX5E_SET_PFLAG(params, MLX5E_PFLAG_TX_PORT_TS, true);
+
 	params->sw_mtu = mtu;
 	params->hard_mtu = MLX5E_ETH_HARD_MTU;
 	params->num_channels = min_t(unsigned int, MLX5E_MAX_NUM_CHANNELS / 2,
