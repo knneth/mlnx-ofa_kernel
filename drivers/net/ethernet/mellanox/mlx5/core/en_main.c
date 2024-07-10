@@ -5218,6 +5218,9 @@ void mlx5e_build_nic_params(struct mlx5e_priv *priv, struct mlx5e_xsk *xsk, u16 
 		MLX5E_PARAMS_DEFAULT_LOG_SQ_SIZE;
 	MLX5E_SET_PFLAG(params, MLX5E_PFLAG_SKB_TX_MPWQE, mlx5e_tx_mpwqe_supported(mdev));
 
+	if (MLX5_CAP_GEN(mdev, ts_cqe_to_dest_cqn))
+		MLX5E_SET_PFLAG(params, MLX5E_PFLAG_TX_PORT_TS, true);
+
 	/* XDP SQ */
 	MLX5E_SET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE, mlx5e_tx_mpwqe_supported(mdev));
 
