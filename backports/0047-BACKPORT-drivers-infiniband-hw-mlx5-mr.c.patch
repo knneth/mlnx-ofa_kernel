@@ -17,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  #include <rdma/ib_umem_odp.h>
  #include "dm.h"
  #include "mlx5_ib.h"
-@@ -453,7 +455,6 @@ static ssize_t cur_show(struct cache_ord
+@@ -455,7 +457,6 @@ static ssize_t cur_show(struct cache_ord
  {
  	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
  	int err;
@@ -25,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	err = snprintf(buf, 20, "%lu\n", ent->stored);
  	return err;
  }
-@@ -528,7 +529,6 @@ static ssize_t size_show(struct cache_or
+@@ -530,7 +531,6 @@ static ssize_t size_show(struct cache_or
  {
  	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
  	int err;
@@ -33,7 +33,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	err = snprintf(buf, 20, "%ld\n", ent->stored + ent->in_use);
  	return err;
  }
-@@ -673,10 +673,17 @@ static struct attribute *order_default_a
+@@ -675,10 +675,17 @@ static struct attribute *order_default_a
  	NULL
  };
  
@@ -54,7 +54,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  };
  
  static bool someone_releasing(struct mlx5_mkey_cache *cache)
-@@ -963,8 +970,7 @@ static void clean_keys(struct mlx5_ib_de
+@@ -966,8 +973,7 @@ static void clean_keys(struct mlx5_ib_de
  
  static void delay_time_func(struct timer_list *t)
  {
@@ -64,7 +64,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	WRITE_ONCE(dev->fill_delay, 0);
  }
  
-@@ -1535,6 +1541,7 @@ static struct ib_mr *create_real_mr(stru
+@@ -1538,6 +1544,7 @@ static struct ib_mr *create_real_mr(stru
  	return &mr->ibmr;
  }
  
@@ -72,7 +72,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  					u64 iova, int access_flags,
  					struct ib_udata *udata)
-@@ -1556,7 +1563,7 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1559,7 +1566,7 @@ static struct ib_mr *create_user_odp_mr(
  		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
  			return ERR_PTR(-EINVAL);
  
@@ -81,7 +81,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  		if (IS_ERR(mr))
  			return ERR_CAST(mr);
  		return &mr->ibmr;
-@@ -1566,8 +1573,12 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1569,8 +1576,12 @@ static struct ib_mr *create_user_odp_mr(
  	if (!mlx5r_umr_can_load_pas(dev, length))
  		return ERR_PTR(-EINVAL);
  
@@ -94,7 +94,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	if (IS_ERR(odp))
  		return ERR_CAST(odp);
  
-@@ -1592,6 +1603,7 @@ err_dereg_mr:
+@@ -1595,6 +1606,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -102,7 +102,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  
  struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
  				  u64 iova, int access_flags,
-@@ -1605,17 +1617,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1608,17 +1620,25 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  
  	mlx5_ib_dbg(dev, "start 0x%llx, iova 0x%llx, length 0x%llx, access_flags 0x%x\n",
  		    start, iova, length, access_flags);
@@ -129,7 +129,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
  {
  	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
-@@ -1631,10 +1651,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
+@@ -1634,10 +1654,11 @@ static void mlx5_ib_dmabuf_invalidate_cb
  }
  
  static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
@@ -142,7 +142,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 offset,
  					 u64 length, u64 virt_addr,
  					 int fd, int access_flags,
-@@ -1690,6 +1711,7 @@ err_dereg_mr:
+@@ -1693,6 +1714,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -150,7 +150,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  
  /*
   * True if the change in access flags can be done via UMR, only some access
-@@ -1853,8 +1875,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+@@ -1856,8 +1878,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
  	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
  		struct ib_umem *new_umem;
  		unsigned long page_size;
@@ -163,7 +163,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2920,10 +2945,17 @@ static struct attribute *cache_default_a
+@@ -2941,10 +2966,17 @@ static struct attribute *cache_default_a
  	NULL
  };
  
