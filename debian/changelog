@@ -1,5 +1,12 @@
-mlnx-ofed-kernel (24.04-OFED.24.04.0.7.0.1) unstable; urgency=low
+mlnx-ofed-kernel (24.04-0.7.0.btech1) noble; urgency=medium
 
-  * Initial release (Closes: #125306)
+  * Rebase to OFED 24.04-0.7.0.0
+  * Enable TX port timestamps by default on supporting adapters
 
- -- Vladimir Sokolovsky <vlad@mellanox.com>  Mon, 31 Dec 2012 15:38:53 +0200
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Wed, 10 Jul 2024 13:58:27 +0200
+
+mlnx-ofed-kernel (24.04-0.6.6.btech1) noble; urgency=medium
+
+  * Initial release for Ubuntu 24.04
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Wed, 15 May 2024 18:00:00 +0200
