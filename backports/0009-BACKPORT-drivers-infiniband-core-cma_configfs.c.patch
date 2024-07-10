@@ -1,10 +1,9 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
 
-Change-Id: I454b458b4bb0c0b612c395bb9be4c22718610b69
 ---
- drivers/infiniband/core/cma_configfs.c | 138 +++++++++++++++++++++++--
- 1 file changed, 128 insertions(+), 10 deletions(-)
+ drivers/infiniband/core/cma_configfs.c | 77 +++++++++++++++++++++++---
+ 1 file changed, 68 insertions(+), 9 deletions(-)
 
 --- a/drivers/infiniband/core/cma_configfs.c
 +++ b/drivers/infiniband/core/cma_configfs.c
@@ -105,40 +104,15 @@ Change-Id: I454b458b4bb0c0b612c395bb9be4c22718610b69
  	.ct_attrs	= cma_configfs_attributes,
  	.ct_owner	= THIS_MODULE
  };
-@@ -216,6 +276,14 @@ static int make_cma_ports(struct cma_dev
- 	if (!ports)
- 		return -ENOMEM;
- 
-+#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
-+	cma_dev_group->ports_group.default_groups = kcalloc((ports_num + 1),
-+							    sizeof(struct config_group *),
-+							    GFP_KERNEL);
-+	if (!cma_dev_group->ports_group.default_groups)
-+		return -ENOMEM;
-+#endif
-+
- 	for (i = 0; i < ports_num; i++) {
- 		char port_str[10];
- 
-@@ -225,10 +293,16 @@ static int make_cma_ports(struct cma_dev
- 		config_group_init_type_name(&ports[i].group,
- 					    port_str,
+@@ -227,7 +287,6 @@ static int make_cma_ports(struct cma_dev
  					    &cma_port_group_type);
-+#ifdef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
  		configfs_add_default_group(&ports[i].group,
  				&cma_dev_group->ports_group);
 -
-+#else
-+		cma_dev_group->ports_group.default_groups[i] = &ports[i].group;
-+#endif
  	}
-+#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
-+	cma_dev_group->ports_group.default_groups[i] = NULL;
-+#endif
  	cma_dev_group->ports = ports;
  	return 0;
- }
-@@ -260,7 +334,7 @@ static struct configfs_item_operations c
+@@ -260,7 +319,7 @@ static struct configfs_item_operations c
  	.release = release_cma_ports_group
  };
  
@@ -147,7 +121,7 @@ Change-Id: I454b458b4bb0c0b612c395bb9be4c22718610b69
  	.ct_item_ops	= &cma_ports_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -269,7 +343,7 @@ static struct configfs_item_operations c
+@@ -269,7 +328,7 @@ static struct configfs_item_operations c
  	.release = release_cma_dev
  };
  
@@ -156,87 +130,18 @@ Change-Id: I454b458b4bb0c0b612c395bb9be4c22718610b69
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -292,23 +366,46 @@ static struct config_group *make_cma_dev
- 		goto fail;
- 	}
- 
--	strscpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
-+#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
-+	cma_dev_group->device_group.default_groups = kzalloc(sizeof(struct config_group *) * 2,
-+							     GFP_KERNEL);
-+	if (!cma_dev_group->device_group.default_groups) {
-+		err = -ENOMEM;
-+		goto fail;
-+	}
-+#endif
-+
-+
-+	strlcpy(cma_dev_group->name, name, sizeof(cma_dev_group->name));
- 
- 	config_group_init_type_name(&cma_dev_group->ports_group, "ports",
- 				    &cma_ports_group_type);
- 
- 	err = make_cma_ports(cma_dev_group, cma_dev);
- 	if (err)
-+#ifdef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
- 		goto fail;
-+#else
-+		goto fail_free;
-+#endif
+@@ -303,8 +362,8 @@ static struct config_group *make_cma_dev
  
  	config_group_init_type_name(&cma_dev_group->device_group, name,
  				    &cma_device_group_type);
 -	configfs_add_default_group(&cma_dev_group->ports_group,
 -			&cma_dev_group->device_group);
-+#ifdef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
 +       configfs_add_default_group(&cma_dev_group->ports_group,
 +       		&cma_dev_group->device_group);
-+#else
-+	cma_dev_group->device_group.default_groups[0] = &cma_dev_group->ports_group;
-+	cma_dev_group->device_group.default_groups[1] = NULL;
-+#endif
  
  	cma_dev_put(cma_dev);
  	return &cma_dev_group->device_group;
- 
-+#ifndef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
-+fail_free:
-+	kfree(cma_dev_group->device_group.default_groups);
-+#endif
- fail:
- 	if (cma_dev)
- 		cma_dev_put(cma_dev);
-@@ -323,8 +420,29 @@ static void drop_cma_dev(struct config_g
- 	struct cma_dev_group *cma_dev_group =
- 		container_of(group, struct cma_dev_group, device_group);
- 
-+#ifdef HAVE_CONFIGFS_DEFAULT_GROUPS_LIST
- 	configfs_remove_default_groups(&cma_dev_group->ports_group);
- 	configfs_remove_default_groups(&cma_dev_group->device_group);
-+#else
-+        struct config_item *temp_item;
-+        int i;
-+
-+        for (i = 0; cma_dev_group->ports_group.default_groups[i]; i++) {
-+                temp_item =
-+                        &cma_dev_group->ports_group.default_groups[i]->cg_item;
-+                cma_dev_group->ports_group.default_groups[i] = NULL;
-+                config_item_put(temp_item);
-+        }
-+        kfree(cma_dev_group->ports_group.default_groups);
-+
-+        for (i = 0; cma_dev_group->device_group.default_groups[i]; i++) {
-+                temp_item =
-+                        &cma_dev_group->device_group.default_groups[i]->cg_item;
-+                cma_dev_group->device_group.default_groups[i] = NULL;
-+                config_item_put(temp_item);
-+        }
-+        kfree(cma_dev_group->device_group.default_groups);
-+#endif
- 	config_item_put(item);
- }
- 
-@@ -333,7 +451,7 @@ static struct configfs_group_operations
+@@ -333,7 +392,7 @@ static struct configfs_group_operations
  	.drop_item	= drop_cma_dev,
  };
  

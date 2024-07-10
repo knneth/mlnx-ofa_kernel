@@ -1,7 +1,6 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_fs.c
 
-Change-Id: I9e70c49c3ec331e8b1aafb21c2e605de47e8c2e6
 ---
  drivers/infiniband/ulp/ipoib/ipoib_fs.c | 66 ++++++++++++++++++++++++-
  1 file changed, 65 insertions(+), 1 deletion(-)

@@ -32,6 +32,7 @@
 
 #include <linux/clocksource.h>
 #include <linux/highmem.h>
+#include <linux/log2.h>
 #include <linux/ptp_clock_kernel.h>
 #include <rdma/mlx5-abi.h>
 #include "lib/eq.h"
@@ -114,17 +115,23 @@ static u32 mlx5_ptp_shift_constant(u32 dev_freq_khz)
 		   ilog2((U32_MAX / NSEC_PER_MSEC) * dev_freq_khz));
 }
 
+static s32 mlx5_ptp_getmaxphase(struct ptp_clock_info *ptp)
+{
+	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
+	struct mlx5_core_dev *mdev;
+
+	mdev = container_of(clock, struct mlx5_core_dev, clock);
+
+	return MLX5_CAP_MCAM_FEATURE(mdev, mtutc_time_adjustment_extended_range) ?
+		       MLX5_MTUTC_OPERATION_ADJUST_TIME_EXTENDED_MAX :
+			     MLX5_MTUTC_OPERATION_ADJUST_TIME_MAX;
+}
+
 static bool mlx5_is_mtutc_time_adj_cap(struct mlx5_core_dev *mdev, s64 delta)
 {
-	s64 min = MLX5_MTUTC_OPERATION_ADJUST_TIME_MIN;
-	s64 max = MLX5_MTUTC_OPERATION_ADJUST_TIME_MAX;
+	s64 max = mlx5_ptp_getmaxphase(&mdev->clock.ptp_info);
 
-	if (MLX5_CAP_MCAM_FEATURE(mdev, mtutc_time_adjustment_extended_range)) {
-		min = MLX5_MTUTC_OPERATION_ADJUST_TIME_EXTENDED_MIN;
-		max = MLX5_MTUTC_OPERATION_ADJUST_TIME_EXTENDED_MAX;
-	}
-
-	if (delta < min || delta > max)
+	if (delta < -max || delta > max)
 		return false;
 
 	return true;
@@ -382,10 +389,7 @@ static int mlx5_ptp_adjphase(struct ptp_clock_info *ptp, s32 delta)
 
 	mdev = container_of(clock, struct mlx5_core_dev, clock);
 
-	if (!mlx5_is_mtutc_time_adj_cap(mdev, delta))
-		return -ERANGE;
-
-	return mlx5_ptp_adjtime(ptp, delta);
+	return mlx5_ptp_adjtime_real_time(mdev, delta);
 }
 
 static int mlx5_ptp_freq_adj_real_time(struct mlx5_core_dev *mdev, long scaled_ppm)
@@ -397,10 +401,12 @@ static int mlx5_ptp_freq_adj_real_time(struct mlx5_core_dev *mdev, long scaled_p
 
 	MLX5_SET(mtutc_reg, in, operation, MLX5_MTUTC_OPERATION_ADJUST_FREQ_UTC);
 
-	if (MLX5_CAP_MCAM_FEATURE(mdev, mtutc_freq_adj_units)) {
+	if (MLX5_CAP_MCAM_FEATURE(mdev, mtutc_freq_adj_units) &&
+	    scaled_ppm <= S32_MAX && scaled_ppm >= S32_MIN) {
+		/* HW scaled_ppm support on mlx5 devices only supports a 32-bit value */
 		MLX5_SET(mtutc_reg, in, freq_adj_units,
 			 MLX5_MTUTC_FREQ_ADJ_UNITS_SCALED_PPM);
-		MLX5_SET(mtutc_reg, in, freq_adjustment, scaled_ppm);
+		MLX5_SET(mtutc_reg, in, freq_adjustment, (s32)scaled_ppm);
 	} else {
 		MLX5_SET(mtutc_reg, in, freq_adj_units, MLX5_MTUTC_FREQ_ADJ_UNITS_PPB);
 		MLX5_SET(mtutc_reg, in, freq_adjustment, scaled_ppm_to_ppb(scaled_ppm));
@@ -760,6 +766,7 @@ static const struct ptp_clock_info mlx5_ptp_clock_info = {
 	.pps		= 0,
 	.adjfine	= mlx5_ptp_adjfine,
 	.adjphase	= mlx5_ptp_adjphase,
+	.getmaxphase    = mlx5_ptp_getmaxphase,
 	.adjtime	= mlx5_ptp_adjtime,
 	.gettimex64	= mlx5_ptp_gettimex,
 	.settime64	= mlx5_ptp_settime,

@@ -1,0 +1,181 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+
+Change-Id: I8ddd91966a143472d66cf3f12e0434526d3043dd
+---
+ .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 71 +++++++++++++++++--
+ 1 file changed, 66 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+@@ -18,9 +18,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
+ 
+ static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
+ 					      struct flow_cls_offload *f)
++
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+-	struct netlink_ext_ack *extack = f->common.extack;
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++       struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_ports enc_ports;
+ 
+ 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS))
+@@ -32,8 +35,10 @@ static int mlx5e_tc_tun_check_udp_dport_
+ 
+ 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan,
+ 				    be16_to_cpu(enc_ports.key->dst))) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matched UDP dst port is not registered as a VXLAN port");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "UDP port %d is not registered as a VXLAN port\n",
+ 			    be16_to_cpu(enc_ports.key->dst));
+@@ -68,8 +73,10 @@ static int mlx5e_tc_tun_init_encap_attr_
+ 	e->tunnel = &vxlan_tunnel;
+ 
+ 	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "vxlan udp dport was not registered with the HW");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "%d isn't an offloaded vxlan udp dport\n",
+ 			    dst_port);
+@@ -80,6 +87,31 @@ static int mlx5e_tc_tun_init_encap_attr_
+ 	return 0;
+ }
+ 
++#ifndef HAVE_CHECK_VXLAN_BUILD_GBP_HDR
++static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, struct vxlan_metadata *md)
++{
++	struct vxlanhdr_gbp *gbp;
++
++	if (!md->gbp)
++		return;
++
++	gbp = (struct vxlanhdr_gbp *)vxh;
++	vxh->vx_flags |= VXLAN_HF_GBP;
++
++	if (md->gbp & VXLAN_GBP_DONT_LEARN)
++		gbp->dont_learn = 1;
++
++	if (md->gbp & VXLAN_GBP_POLICY_APPLIED)
++		gbp->policy_applied = 1;
++
++	gbp->policy_id = htons(md->gbp & VXLAN_GBP_ID_MASK);
++}
++#endif
++#ifndef HAVE_CHECK_VXLAN_GBP_MASK
++#define VXLAN_GBP_MASK (VXLAN_GBP_DONT_LEARN | VXLAN_GBP_POLICY_APPLIED | \
++			VXLAN_GBP_ID_MASK)
++#endif
++
+ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
+ 					    __u8 *ip_proto,
+ 					    struct mlx5e_encap_entry *e)
+@@ -100,8 +132,8 @@ static int mlx5e_gen_ip_tunnel_header_vx
+ 	vxh->vx_flags = VXLAN_HF_VNI;
+ 	vxh->vx_vni = vxlan_vni_field(tun_id);
+ 	if (tun_key->tun_flags & TUNNEL_VXLAN_OPT) {
+-		md = ip_tunnel_info_opts(e->tun_info);
+-		vxlan_build_gbp_hdr(vxh, md);
++		md = ip_tunnel_info_opts((struct ip_tunnel_info *)e->tun_info);
++		vxlan_build_gbp_hdr(vxh, (struct vxlan_metadata *)md);
+ 	}
+ 
+ 	return 0;
+@@ -112,7 +144,9 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 					       struct flow_cls_offload *f)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_enc_opts enc_opts;
+ 	void *misc5_c, *misc5_v;
+ 	u32 *gbp, *gbp_mask;
+@@ -120,19 +154,25 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 	flow_rule_match_enc_opts(rule, &enc_opts);
+ 
+ 	if (memchr_inv(&enc_opts.mask->data, 0, sizeof(enc_opts.mask->data)) &&
+-	    !MLX5_CAP_ESW_FT_FIELD_SUPPORT_2(priv->mdev, tunnel_header_0_1)) {
++			!MLX5_CAP_ESW_FT_FIELD_SUPPORT_2(priv->mdev, tunnel_header_0_1)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Matching on VxLAN GBP is not supported");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (enc_opts.key->dst_opt_type != TUNNEL_VXLAN_OPT) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN option type: not GBP");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (enc_opts.key->len != sizeof(*gbp) ||
+-	    enc_opts.mask->len != sizeof(*gbp_mask)) {
++			enc_opts.mask->len != sizeof(*gbp_mask)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack, "VxLAN GBP option/mask len is not 32 bits");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -140,7 +180,13 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 	gbp_mask = (u32 *)&enc_opts.mask->data[0];
+ 
+ 	if (*gbp_mask & ~VXLAN_GBP_MASK) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
++#ifdef NL_SET_ERR_MSG_FMT_MOD
+ 		NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
++#else
++		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN GBP mask\n");
++#endif
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -161,7 +207,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+ 				    void *headers_v)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 	struct netlink_ext_ack *extack = f->common.extack;
++#endif
+ 	struct flow_match_enc_keyid enc_keyid;
+ 	void *misc_c, *misc_v;
+ 
+@@ -188,8 +236,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+ 
+ 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
+ 					ft_field_support.outer_vxlan_vni)) {
++#ifdef HAVE_TC_CLS_OFFLOAD_EXTACK
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matching on VXLAN VNI is not supported");
++#endif
+ 		netdev_warn(priv->netdev,
+ 			    "Matching on VXLAN VNI is not supported\n");
+ 		return -EOPNOTSUPP;
+@@ -215,6 +265,17 @@ static int mlx5e_tc_tun_get_remote_ifind
+ {
+ 	const struct vxlan_dev *vxlan = netdev_priv(mirred_dev);
+ 	const struct vxlan_rdst *dst = &vxlan->default_dst;
++#ifdef HAVE_BASECODE_EXTRAS
++	int i;
++
++	for (i = 0; i < 5; i++) {
++		if ((int) dst->remote_ifindex >= 0)
++			break;
++		msleep(1);
++	}
++	if ((int) dst->remote_ifindex < 0)
++		return 0;
++#endif
+ 
+ 	return dst->remote_ifindex;
+ }

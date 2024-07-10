@@ -1,40 +1,21 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
 
-Change-Id: Iac88ecd338d458d9e942be18a2e7fe5d707ba5a3
 ---
- drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 20 +++++++++++++++++---
- 1 file changed, 17 insertions(+), 3 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
-@@ -104,8 +104,9 @@ int __ipoib_vlan_add(struct ipoib_dev_pr
- 	 * We do not need to touch priv if register_netdevice fails, so just
+@@ -105,7 +105,6 @@ int __ipoib_vlan_add(struct ipoib_dev_pr
  	 * always use this flow.
  	 */
-+#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
  	ndev->priv_destructor = ipoib_intf_free;
 -
-+#endif
  	/*
  	 * Racing with unregister of the parent must be prevented by the
  	 * caller.
-@@ -159,8 +160,14 @@ sysfs_failed:
- 	return -ENOMEM;
- 
- out_early:
-+#ifdef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
- 	if (ndev->priv_destructor)
- 		ndev->priv_destructor(ndev);
-+#else
-+	rdma_uninit_netdev(priv->ca, priv->dev, priv->port,
-+		RDMA_NETDEV_IPOIB);
-+	ipoib_intf_free(ndev);
-+#endif
- 	return result;
- }
- 
-@@ -227,13 +234,15 @@ static void ipoib_vlan_delete_task(struc
+@@ -227,13 +226,15 @@ static void ipoib_vlan_delete_task(struc
  	struct ipoib_vlan_delete_work *pwork =
  		container_of(work, struct ipoib_vlan_delete_work, work);
  	struct net_device *dev = pwork->dev;
@@ -52,15 +33,3 @@ Change-Id: Iac88ecd338d458d9e942be18a2e7fe5d707ba5a3
  
  		ipoib_dbg(ppriv, "delete child vlan %s\n", dev->name);
  		unregister_netdevice(dev);
-@@ -241,6 +250,11 @@ static void ipoib_vlan_delete_task(struc
- 
- 	rtnl_unlock();
- 
-+#ifndef HAVE_NET_DEVICE_NEEDS_FREE_NETDEV
-+	rdma_uninit_netdev(priv->ca, priv->dev, priv->port,
-+		RDMA_NETDEV_IPOIB);
-+	ipoib_intf_free(priv->dev);
-+#endif
- 	kfree(pwork);
- }
- 

@@ -45,7 +45,7 @@ struct mlx5_crdump_iter {
 	u32 cur_data;
 };
 
-int mlx5_crdump_iter_next(struct mlx5_crdump_iter *iter)
+static int mlx5_crdump_iter_next(struct mlx5_crdump_iter *iter)
 {
 	int ret = -1;
 
@@ -64,7 +64,7 @@ unlock:
 	return ret;
 }
 
-struct mlx5_crdump_iter *mlx5_crdump_iter_init(struct mlx5_fw_crdump *dump)
+static struct mlx5_crdump_iter *mlx5_crdump_iter_init(struct mlx5_fw_crdump *dump)
 {
 	struct mlx5_crdump_iter *iter;
 
@@ -83,7 +83,7 @@ struct mlx5_crdump_iter *mlx5_crdump_iter_init(struct mlx5_fw_crdump *dump)
 	return iter;
 }
 
-void mlx5_crdump_iter_read(struct mlx5_crdump_iter *iter,
+static void mlx5_crdump_iter_read(struct mlx5_crdump_iter *iter,
 			   u32 *data, u32 *offset)
 {
 	*data = iter->cur_data;

@@ -1386,7 +1386,7 @@ static int mlx5_init_vfs_sysfs_init_meter(struct mlx5_sriov_vf *vf,
 	return 0;
 }
 
-int mlx5_create_vfs_sysfs_meters(struct mlx5_core_dev *dev, int num_vfs)
+static int mlx5_create_vfs_sysfs_meters(struct mlx5_core_dev *dev, int num_vfs)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
 	struct mlx5_sriov_vf_meters *meters;
@@ -1572,7 +1572,6 @@ void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs)
 #ifdef CONFIG_MLX5_ESWITCH
 	mlx5_destroy_vfs_sysfs_meters(dev, num_vfs);
 #endif
-
 	for (vf = 0; vf < num_vfs; vf++) {
 		tmp = &sriov->vfs[vf];
 		kobject_put(&tmp->kobj);

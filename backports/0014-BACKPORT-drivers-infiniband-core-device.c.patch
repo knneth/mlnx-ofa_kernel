@@ -1,10 +1,9 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
 
-Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
 ---
- drivers/infiniband/core/device.c | 147 ++++++++++++++++++++++++++++---
- 1 file changed, 133 insertions(+), 14 deletions(-)
+ drivers/infiniband/core/device.c | 122 +++++++++++++++++++++++++++----
+ 1 file changed, 107 insertions(+), 15 deletions(-)
 
 --- a/drivers/infiniband/core/device.c
 +++ b/drivers/infiniband/core/device.c
@@ -57,12 +56,10 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  static int rdma_dev_change_netns(struct ib_device *device, struct net *cur_net,
  				 struct net *net);
  
-@@ -422,7 +430,8 @@ int ib_device_rename(struct ib_device *i
- 		return ret;
+@@ -423,6 +431,7 @@ int ib_device_rename(struct ib_device *i
  	}
  
--	strscpy(ibdev->name, name, IB_DEVICE_NAME_MAX);
-+	strlcpy(ibdev->name, name, IB_DEVICE_NAME_MAX);
+ 	strscpy(ibdev->name, name, IB_DEVICE_NAME_MAX);
 +
  	ret = rename_compat_devs(ibdev);
  
@@ -161,72 +158,25 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  
  static void compatdev_release(struct device *dev)
  {
-@@ -1217,7 +1262,7 @@ static int assign_name(struct ib_device
- 		ret = -ENFILE;
- 		goto out;
- 	}
--	strscpy(device->name, dev_name(&device->dev), IB_DEVICE_NAME_MAX);
-+	strlcpy(device->name, dev_name(&device->dev), IB_DEVICE_NAME_MAX);
- 
- 	ret = xa_alloc_cyclic(&devices, &device->index, device, xa_limit_31b,
- 			&last_id, GFP_KERNEL);
-@@ -1372,6 +1417,7 @@ int ib_register_device(struct ib_device
- 	if (ret)
- 		return ret;
- 
-+#ifdef HAVE_DEVICE_DMA_OPS
- 	/*
- 	 * If the caller does not provide a DMA capable device then the IB core
- 	 * will set up ib_sge and scatterlist structures that stash the kernel
-@@ -1379,6 +1425,17 @@ int ib_register_device(struct ib_device
+@@ -1379,7 +1424,6 @@ int ib_register_device(struct ib_device
  	 */
  	WARN_ON(dma_device && !dma_device->dma_parms);
  	device->dma_device = dma_device;
-+#else /* HAVE_DEVICE_DMA_OPS */
-+	WARN_ON_ONCE(!device->dev.parent && !device->dma_device);
-+	WARN_ON_ONCE(device->dev.parent && device->dma_device
-+		     && device->dev.parent != device->dma_device);
-+	if (!device->dev.parent)
-+		device->dev.parent = device->dma_device;
-+	if (!device->dma_device)
-+		device->dma_device = device->dev.parent;
-+	/* Setup default max segment size for all IB devices */
-+	dma_set_max_seg_size(device->dma_device, SZ_2G);
-+#endif /* HAVE_DEVICE_DMA_OPS */
- 
+-
  	ret = setup_device(device);
  	if (ret)
-@@ -1397,7 +1454,9 @@ int ib_register_device(struct ib_device
+ 		return ret;
+@@ -1396,9 +1440,7 @@ int ib_register_device(struct ib_device
+ 	ret = ib_setup_device_attrs(device);
  	if (ret)
  		goto cache_cleanup;
- 
-+#ifdef HAVE_CGROUP_RDMA_H
+-
  	ib_device_register_rdmacg(device);
-+#endif
- 
+-
  	rdma_counter_init(device);
  
-@@ -1463,7 +1522,9 @@ dev_cleanup:
- 	device_del(&device->dev);
- cg_cleanup:
- 	dev_set_uevent_suppress(&device->dev, false);
-+#ifdef HAVE_CGROUP_RDMA_H
- 	ib_device_unregister_rdmacg(device);
-+#endif
- cache_cleanup:
- 	ib_cache_cleanup_one(device);
- 	return ret;
-@@ -1491,7 +1552,9 @@ static void __ib_unregister_device(struc
- 
- 	ib_free_port_attrs(&ib_dev->coredev);
- 	device_del(&ib_dev->dev);
-+#ifdef HAVE_CGROUP_RDMA_H
- 	ib_device_unregister_rdmacg(ib_dev);
-+#endif
- 	ib_cache_cleanup_one(ib_dev);
- 
  	/*
-@@ -1610,6 +1673,7 @@ static void ib_unregister_work(struct wo
+@@ -1610,6 +1652,7 @@ static void ib_unregister_work(struct wo
   * Drivers using this API must use ib_unregister_driver before module unload
   * to ensure that all scheduled unregistrations have completed.
   */
@@ -234,7 +184,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  void ib_unregister_device_queued(struct ib_device *ib_dev)
  {
  	WARN_ON(!refcount_read(&ib_dev->refcount));
-@@ -1619,6 +1683,7 @@ void ib_unregister_device_queued(struct
+@@ -1619,6 +1662,7 @@ void ib_unregister_device_queued(struct
  		put_device(&ib_dev->dev);
  }
  EXPORT_SYMBOL(ib_unregister_device_queued);
@@ -242,7 +192,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  
  /*
   * The caller must pass in a device that has the kref held and the refcount
-@@ -2171,16 +2236,26 @@ int ib_device_set_netdev(struct ib_devic
+@@ -2178,16 +2222,26 @@ int ib_device_set_netdev(struct ib_devic
  		return 0;
  	}
  
@@ -269,7 +219,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  
  	return 0;
  }
-@@ -2213,7 +2288,11 @@ static void free_netdevs(struct ib_devic
+@@ -2220,7 +2274,11 @@ static void free_netdevs(struct ib_devic
  			 * comparisons after the put
  			 */
  			rcu_assign_pointer(pdata->netdev, NULL);
@@ -281,7 +231,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  		}
  		spin_unlock_irqrestore(&pdata->netdev_lock, flags);
  	}
-@@ -2271,9 +2350,10 @@ struct ib_device *ib_device_get_by_netde
+@@ -2278,9 +2336,10 @@ struct ib_device *ib_device_get_by_netde
  {
  	struct ib_device *res = NULL;
  	struct ib_port_data *cur;
@@ -293,7 +243,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  				    (uintptr_t)ndev) {
  		if (rcu_access_pointer(cur->netdev) == ndev &&
  		    (driver_id == RDMA_DRIVER_UNKNOWN ||
-@@ -2686,6 +2766,9 @@ void ib_set_device_ops(struct ib_device
+@@ -2693,6 +2752,9 @@ void ib_set_device_ops(struct ib_device
  	SET_DEVICE_OP(dev_ops, get_vf_config);
  	SET_DEVICE_OP(dev_ops, get_vf_guid);
  	SET_DEVICE_OP(dev_ops, get_vf_stats);
@@ -303,7 +253,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  	SET_DEVICE_OP(dev_ops, iw_accept);
  	SET_DEVICE_OP(dev_ops, iw_add_ref);
  	SET_DEVICE_OP(dev_ops, iw_connect);
-@@ -2795,14 +2878,32 @@ static int __init ib_core_init(void)
+@@ -2802,14 +2864,26 @@ static int __init ib_core_init(void)
  		goto err;
  
  	ib_comp_wq = alloc_workqueue("ib-comp-wq",
@@ -314,9 +264,6 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
 +			WQ_HIGHPRI
 +			| WQ_MEM_RECLAIM
 +			| WQ_SYSFS
-+#if defined(HAVE_WQ_NON_REENTRANT)
-+			| WQ_NON_REENTRANT
-+#endif
 +			, 0);
  	if (!ib_comp_wq)
  		goto err_unbound;
@@ -332,14 +279,11 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
 +			| WQ_HIGHPRI
 +			| WQ_MEM_RECLAIM
 +			| WQ_SYSFS
-+#if defined(HAVE_WQ_NON_REENTRANT)
-+			| WQ_NON_REENTRANT
-+#endif
 +			, WQ_UNBOUND_MAX_ACTIVE);
  	if (!ib_comp_unbound_wq)
  		goto err_comp;
  
-@@ -2832,11 +2933,17 @@ static int __init ib_core_init(void)
+@@ -2839,11 +2913,17 @@ static int __init ib_core_init(void)
  		goto err_mad;
  	}
  
@@ -357,7 +301,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  
  	ret = register_pernet_device(&rdma_dev_net_ops);
  	if (ret) {
-@@ -2859,9 +2966,15 @@ err_parent:
+@@ -2866,9 +2946,15 @@ err_parent:
  	nldev_exit();
  	unregister_pernet_device(&rdma_dev_net_ops);
  err_compat:
@@ -373,7 +317,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  err_mad:
  	ib_mad_cleanup();
  err_addr:
-@@ -2885,7 +2998,11 @@ static void __exit ib_core_cleanup(void)
+@@ -2892,7 +2978,11 @@ static void __exit ib_core_cleanup(void)
  	rdma_nl_unregister(RDMA_NL_LS);
  	nldev_exit();
  	unregister_pernet_device(&rdma_dev_net_ops);
@@ -385,7 +329,7 @@ Change-Id: Ie8b30125f05f1dac2d0de3571f9d7d5940fe41d4
  	ib_sa_cleanup();
  	ib_mad_cleanup();
  	addr_cleanup();
-@@ -2895,7 +3012,9 @@ static void __exit ib_core_cleanup(void)
+@@ -2902,7 +2992,9 @@ static void __exit ib_core_cleanup(void)
  	destroy_workqueue(ib_comp_wq);
  	/* Make sure that any pending umem accounting work is done. */
  	destroy_workqueue(ib_wq);

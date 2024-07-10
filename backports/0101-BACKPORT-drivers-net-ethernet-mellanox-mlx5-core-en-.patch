@@ -1,39 +1,65 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.c
 
-Change-Id: I5e4423517fdf338503a95e9f4aa040f360d676a8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/qos.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/selq.c | 24 ++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
-@@ -371,6 +371,7 @@ void mlx5e_reset_qdisc(struct net_device
- 	spin_unlock_bh(qdisc_lock(qdisc));
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.c
+@@ -188,8 +188,18 @@ static int mlx5e_select_htb_queue(struct
+ 	return mlx5e_htb_get_txq_by_classid(priv->htb, classid);
  }
  
-+#ifdef HAVE_ENUM_TC_HTB_COMMAND
- int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_qopt)
- {
- 	struct mlx5e_htb *htb = priv->htb;
-@@ -412,7 +413,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
- 		return mlx5e_htb_leaf_to_inner(htb, htb_qopt->parent_classid, htb_qopt->classid,
- 					       htb_qopt->rate, htb_qopt->ceil, htb_qopt->extack);
- 	case TC_HTB_LEAF_DEL:
-+#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID 
- 		return mlx5e_htb_leaf_del(htb, &htb_qopt->classid, htb_qopt->extack);
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev)
 +#else
-+		return mlx5e_htb_leaf_del(htb, htb_qopt->classid, &htb_qopt->moved_qid, &htb_qopt->qid,
-+					  htb_qopt->extack);
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback)
 +#endif
- 	case TC_HTB_LEAF_DEL_LAST:
- 	case TC_HTB_LEAF_DEL_LAST_FORCE:
- 		return mlx5e_htb_leaf_del_last(htb, htb_qopt->classid,
-@@ -431,6 +437,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
- 		return -EOPNOTSUPP;
- 	}
- }
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 	struct mlx5e_selq_params *selq;
+@@ -207,7 +217,11 @@ u16 mlx5e_select_queue(struct net_device
+ 	if (likely(!selq->is_special_queues)) {
+ 		/* No special queues, netdev_pick_tx returns one of the regular ones. */
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ 		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb, NULL);
 +#endif
  
- struct mlx5e_mqprio_rl {
- 	struct mlx5_core_dev *mdev;
+ 		if (selq->num_tcs <= 1)
+ 			return txq_ix;
+@@ -232,7 +246,11 @@ u16 mlx5e_select_queue(struct net_device
+ 		if (unlikely(selq->is_ptp && mlx5e_use_ptpsq(skb)))
+ 			return selq->num_channels;
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ 		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb, NULL);
++#endif
+ 
+ 		/* Fix netdev_pick_tx() not to choose ptp_channel and HTB txqs.
+ 		 * If they are selected, switch to regular queues.
+@@ -247,7 +265,11 @@ u16 mlx5e_select_queue(struct net_device
+ 	if (mlx5e_use_ptpsq(skb))
+ 		return mlx5e_select_ptpsq(dev, skb, selq);
+ 
+-	txq_ix = netdev_pick_tx(dev, skb, NULL);
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb, NULL);
++#endif
+ 
+ 	/* Normalize any picked txq_ix to [0, num_channels). Queues in range
+ 	 * [0, num_regular_queues) will be mapped to the corresponding channel

@@ -1,21 +1,48 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 
-Change-Id: Ie7b402743b6f43e038ba042d8effb740cfc19d86
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 ++
- 1 file changed, 2 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
-@@ -84,8 +84,10 @@ void mlx5e_set_rx_cq_mode_params(struct
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+@@ -278,11 +278,17 @@ static const struct sysfs_ops rep_sysfs_
+ 	.store  = rep_attr_store
+ };
  
- bool slow_pci_heuristic(struct mlx5_core_dev *mdev);
- int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *params,
- 			     struct mlx5e_xsk_param *xsk);
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(rep);
 +#endif
- void mlx5e_build_rq_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
- void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
- void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ 
+ static struct kobj_type rep_type = {
+ 	.sysfs_ops     = &rep_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = rep_groups
++#else
++	.default_attrs = rep_attrs
++#endif
+ };
+ 
+ static struct attribute *rep_paging_attrs[] = {
+@@ -290,12 +296,18 @@ static struct attribute *rep_paging_attr
+ 	&attr_num_pages.attr,
+ 	NULL,
+ };
+-ATTRIBUTE_GROUPS(rep_paging);
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(rep_paging);
++#endif
+ 
+ static struct kobj_type rep_paging = {
+ 	.sysfs_ops     = &rep_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = rep_paging_groups
++#else
++	.default_attrs = rep_paging_attrs
++#endif
+ };
+ 
+ void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)

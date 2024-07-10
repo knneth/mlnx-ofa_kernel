@@ -94,13 +94,20 @@ struct mlx5_accel_esp_xfrm_attrs {
 	u8 dir : 2;
 	u8 type : 2;
 	u8 drop : 1;
+	u8 encap : 1;
 	u8 family;
 	struct mlx5_replay_esn replay_esn;
 	u32 authsize;
 	u32 reqid;
 	struct mlx5_ipsec_lft lft;
-	u8 smac[ETH_ALEN];
-	u8 dmac[ETH_ALEN];
+	union {
+		u8 smac[ETH_ALEN];
+		__be16 sport;
+	};
+	union {
+		u8 dmac[ETH_ALEN];
+		__be16 dport;
+	};
 };
 
 enum mlx5_ipsec_cap {
@@ -110,6 +117,7 @@ enum mlx5_ipsec_cap {
 	MLX5_IPSEC_CAP_ROCE             = 1 << 3,
 	MLX5_IPSEC_CAP_PRIO             = 1 << 4,
 	MLX5_IPSEC_CAP_TUNNEL           = 1 << 5,
+	MLX5_IPSEC_CAP_ESPINUDP         = 1 << 6,
 };
 
 struct mlx5e_priv;
@@ -128,7 +136,6 @@ struct mlx5e_ipsec_hw_stats {
 struct mlx5e_ipsec_sw_stats {
 	atomic64_t ipsec_rx_drop_sp_alloc;
 	atomic64_t ipsec_rx_drop_sadb_miss;
-	atomic64_t ipsec_rx_drop_syndrome;
 	atomic64_t ipsec_tx_drop_bundle;
 	atomic64_t ipsec_tx_drop_no_state;
 	atomic64_t ipsec_tx_drop_not_ip;
@@ -172,14 +179,6 @@ struct mlx5e_ipsec_rx_create_attr {
 	enum mlx5_flow_namespace_type chains_ns;
 };
 
-struct mlx5e_ipsec_tx_create_attr {
-	int prio;
-	int pol_level;
-	int sa_level;
-	int cnt_level;
-	enum mlx5_flow_namespace_type chains_ns;
-};
-
 struct mlx5e_ipsec_ft {
 	struct mutex mutex; /* Protect changes to this struct */
 	struct mlx5_flow_table *pol;
@@ -188,11 +187,19 @@ struct mlx5e_ipsec_ft {
 	u32 refcnt;
 };
 
+struct mlx5e_ipsec_drop {
+	struct mlx5_flow_handle *rule;
+	struct mlx5_fc *fc;
+};
+
 struct mlx5e_ipsec_rule {
 	struct mlx5_flow_handle *rule;
 	struct mlx5_modify_hdr *modify_hdr;
 	struct mlx5_pkt_reformat *pkt_reformat;
 	struct mlx5_fc *fc;
+	struct mlx5e_ipsec_drop replay;
+	struct mlx5e_ipsec_drop auth;
+	struct mlx5e_ipsec_drop trailer;
 };
 
 struct mlx5e_ipsec_miss {
@@ -200,17 +207,12 @@ struct mlx5e_ipsec_miss {
 	struct mlx5_flow_handle *rule;
 };
 
-struct mlx5e_ipsec_rx {
-	struct mlx5e_ipsec_ft ft;
-	struct mlx5e_ipsec_miss pol;
-	struct mlx5e_ipsec_miss sa;
-	struct mlx5e_ipsec_rule status;
-	struct mlx5e_ipsec_miss status_drop;
-	struct mlx5_fc *status_drop_cnt;
-	struct mlx5e_ipsec_fc *fc;
-	struct mlx5_fs_chains *chains;
-	u8 allow_tunnel_mode : 1;
-	struct xarray ipsec_obj_id_map;
+struct mlx5e_ipsec_tx_create_attr {
+	int prio;
+	int pol_level;
+	int sa_level;
+	int cnt_level;
+	enum mlx5_flow_namespace_type chains_ns;
 };
 
 struct mlx5e_ipsec {
@@ -230,6 +232,7 @@ struct mlx5e_ipsec {
 	struct notifier_block netevent_nb;
 	struct mlx5_ipsec_fs *roce;
 	u8 is_uplink_rep: 1;
+	struct xarray ipsec_obj_id_map;
 };
 
 struct mlx5e_ipsec_esn_state {

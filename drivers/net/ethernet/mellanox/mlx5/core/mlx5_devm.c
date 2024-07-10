@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+//
 /* Copyright (c) 2021 Mellanox Technologies Ltd. */
 
 #include <linux/log2.h>
@@ -11,8 +12,8 @@
 #include <uapi/mlxdevm/mlxdevm_netlink.h>
 #include "mlx5_devm.h"
 #include "mlx5_esw_devm.h"
-#include "mlx5_irq.h"
 #include "esw/qos.h"
+#include "mlx5_irq.h"
 
 static LIST_HEAD(dev_head);
 /* The mutex below protects the dev_head list */
@@ -141,18 +142,24 @@ int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
 {
 	struct devlink_port_new_attrs devl_attrs;
 	struct mlx5_devm_device *mdevm_dev;
+	struct devlink_port *devport;
 	struct devlink *devlink;
 	int ret;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
 	dm_new_attrs2devl_new_attrs(attrs, &devl_attrs);
-	ret = mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, new_port_index);
+
+	devl_lock(devlink);
+	ret = mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, &devport);
+	devl_unlock(devlink);
+	*new_port_index = devport->index;
+
 	if (ret)
 		return ret;
 
-	mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
-	return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
-			 xa_mk_value(attrs->sfnum), GFP_KERNEL);
+        mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
+        return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
+                         xa_mk_value(attrs->sfnum), GFP_KERNEL);
 }
 
 int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
@@ -161,11 +168,22 @@ int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 {
 	struct mlx5_devm_device *mdevm_dev;
 	struct devlink *devlink;
+	struct devlink_port devport;
+	int ret;
 
 	mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
 	xa_erase(&mdevm_dev->devm_sfs, port_index);
+
 	devlink = mlxdevm_to_devlink(devm_dev);
-	return mlx5_devlink_sf_port_del(devlink, port_index, extack);
+
+	memset(&devport, 0, sizeof(devport));
+	devport.devlink = devlink;
+	devport.index = port_index;
+
+	devl_lock(devlink);
+	ret = mlx5_devlink_sf_port_del(devlink, &devport, extack);
+	devl_unlock(devlink);
+	return ret;
 }
 
 int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
@@ -212,16 +230,8 @@ int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 				     u8 *hw_addr, int *hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
-	struct devlink_port devport;
-	struct devlink *devlink;
-
-	devlink = mlxdevm_to_devlink(port->devm);
-	memset(&devport, 0, sizeof(devport));
-	devport.devlink = devlink;
-	devport.index = port->index;
-
-	return mlx5_devlink_port_function_hw_addr_get(&devport, hw_addr,
-						      hw_addr_len, extack);
+	return mlx5_devlink_port_fn_hw_addr_get(port->dl_port, hw_addr,
+						hw_addr_len, extack);
 }
 
 int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
@@ -249,8 +259,8 @@ int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
 	memset(&devport, 0, sizeof(devport));
 	devport.devlink = devlink;
 	devport.index = port->index;
-	return mlx5_devlink_port_function_hw_addr_set(&devport, hw_addr,
-						      hw_addr_len, extack);
+	return mlx5_devlink_port_fn_hw_addr_set(&devport, hw_addr,
+						hw_addr_len, extack);
 }
 
 int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
@@ -474,6 +484,9 @@ int mlx5_devlink_rate_leaf_tx_max_set(struct devlink *devlink,
 	if (!mlx5_esw_allowed(esw))
 		return -EPERM;
 
+	if (!refcount_read(&esw->qos.refcnt) && !tx_max)
+		return 0;
+
 	mutex_lock(&esw->state_lock);
 	if (!vport->qos.enabled && !tx_max)
 		goto unlock;
@@ -516,6 +529,9 @@ int mlx5_devlink_rate_leaf_tx_share_set(struct devlink *devlink,
 
 	if (!mlx5_esw_allowed(esw))
 		return -EPERM;
+
+	if (!refcount_read(&esw->qos.refcnt) && !tx_share)
+		return 0;
 
 	mutex_lock(&esw->state_lock);
 	if (!vport->qos.enabled && !tx_share)
@@ -760,7 +776,7 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 	int max_eqs_sf;
 	int i;
 
-	if (!mlx5_irq_table_have_dedicated_sfs_irqs(mlx5_irq_table_get(dev))) {
+	if (!mlx5_have_dedicated_irqs(dev)) {
 		NL_SET_ERR_MSG_MOD(extack, "SF doesn’t have dedicated IRQs");
 		return -EOPNOTSUPP;
 	}
@@ -775,7 +791,6 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 			return -EINVAL;
 		}
 	}
-
 	max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
 			   mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev)));
 	if (i > max_eqs_sf) {
@@ -783,17 +798,20 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 		return -EINVAL;
 	}
 	return 0;
+
 }
 
 int mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask)
 {
-	struct mlx5_devm_device *mdevn_dev = mlx5_devm_device_get(dev);
+	struct mlx5_devm_device *mdevm = mlx5_devm_device_get(dev);
 	union mlxdevm_param_value val;
 	u16 *arr = val.vu16arr.data;
 	int err;
 	int i;
 
-	err = mlxdevm_param_driverinit_value_get(&mdevn_dev->device,
+	if (!mdevm)
+		return -ENODEV;
+	err = mlxdevm_param_driverinit_value_get(&mdevm->device,
 						 MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
 						 &val);
 	if (err)
@@ -806,6 +824,22 @@ err:
 	return err;
 }
 
+int mlx5_devm_affinity_get_weight(struct mlx5_core_dev *dev)
+{
+	struct mlx5_devm_device *mdevm = mlx5_devm_device_get(dev);
+	union mlxdevm_param_value val;
+	int err;
+
+	if (!mdevm)
+		return 0;
+	err = mlxdevm_param_driverinit_value_get(&mdevm->device,
+						 MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
+						 &val);
+	if (err)
+		return 0;
+	return val.vu16arr.array_len;
+}
+
 static const struct mlxdevm_param mlx5_devm_params[] = {
 	MLXDEVM_PARAM_DRIVER(MLX5_DEVM_PARAM_ID_CPU_AFFINITY, "cpu_affinity",
 			     MLXDEVM_PARAM_TYPE_ARRAY_U16,
@@ -813,39 +847,26 @@ static const struct mlxdevm_param mlx5_devm_params[] = {
 			     mlx5_devm_cpu_affinity_validate),
 };
 
+/* EQs are created only when rdma or net-dev is creating a CQ.
+ * Hence, the initial affinity shown to the user is empty (0)
+ */
 static void mlx5_devm_set_params_init_values(struct mlxdevm *devm)
 {
-	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
 	union mlxdevm_param_value value;
-	u16 *arr = value.vu16arr.data;
-	cpumask_var_t dev_mask;
-	int i = 0;
-	int cpu;
-
-	if (!zalloc_cpumask_var(&dev_mask, GFP_KERNEL))
-		        return;
-
-	mlx5_core_affinity_get(dev, dev_mask);
 
 	memset(value.vu16arr.data, 0, sizeof(value.vu16arr.data));
-	for_each_cpu(cpu, dev_mask) {
-		arr[i] = cpu;
-		i++;
-	}
-	value.vu16arr.array_len = i;
+	value.vu16arr.array_len = 0;
 	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_CPU_AFFINITY, value);
-	free_cpumask_var(dev_mask);
 }
 
 void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
 {
-	struct mlx5_devm_device *mdevm_dev = mlx5_devm_device_get(dev);
+	struct mlx5_devm_device *mdevm = mlx5_devm_device_get(dev);
 
-	if (!mlx5_core_is_sf(dev))
+	if (!mdevm || !mlx5_core_is_sf(dev))
 		return;
-
-	mlx5_devm_set_params_init_values(&mdevm_dev->device);
-	mlxdevm_params_publish(&mdevm_dev->device);
+	mlx5_devm_set_params_init_values(&mdevm->device);
+	mlxdevm_params_publish(&mdevm->device);
 }
 
 int mlx5_devm_register(struct mlx5_core_dev *dev)

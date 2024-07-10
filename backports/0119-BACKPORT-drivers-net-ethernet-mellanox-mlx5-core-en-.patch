@@ -1,40 +1,18 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
 
-Change-Id: I74fd98007efe38c9ca4f1d4e373771518dc0c400
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
+ 1 file changed, 1 insertion(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
-@@ -12,10 +12,12 @@ tc_act_can_offload_prio(struct mlx5e_tc_
- 			int act_index,
- 			struct mlx5_flow_attr *attr)
- {
-+#ifdef HAVE_FLOW_ACTION_PRIORITY
- 	if (act->priority > mlx5e_fs_get_tc(parse_state->flow->priv->fs)->num_prio_hp) {
- 		NL_SET_ERR_MSG_MOD(parse_state->extack, "Skb priority value is out of range");
- 		return false;
- 	}
-+#endif
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+@@ -6,6 +6,7 @@
  
- 	return true;
- }
-@@ -27,6 +29,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_pa
- 			 struct mlx5e_priv *priv,
- 			 struct mlx5_flow_attr *attr)
- {
-+#ifdef HAVE_FLOW_ACTION_PRIORITY
- 	int err;
+ #include "en_tc.h"
+ #include "en/tc/act/act.h"
++#include <uapi/linux/tc_act/tc_pedit.h>
  
- 	attr->nic_attr->user_prio = act->priority;
-@@ -37,6 +40,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_pa
- 		return err;
+ #define MLX5E_TC_FLOW_BASE (MLX5E_TC_FLAG_LAST_EXPORTED_BIT + 1)
  
- 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
-+#endif
- 
- 	return 0;
- }

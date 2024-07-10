@@ -48,12 +48,6 @@ enum tc_htb_command {
 };
 #endif
 
-#ifndef HAVE_TC_SETUP_TYPE
-enum tc_setup_type {
-	dummy,
-};
-#endif
-
 #ifndef HAVE___TC_INDR_BLOCK_CB_REGISTER
 typedef int tc_indr_block_bind_cb_t(struct net_device *dev, void *cb_priv,
                                     enum tc_setup_type type, void *type_data);
@@ -78,7 +72,7 @@ void __tc_indr_block_cb_unregister(struct net_device *dev,
 	list_for_each_entry(_a, &(_exts)->actions, list)
 #endif
 
-#if defined(CONFIG_NET_CLS_ACT) && defined(HAVE_TCF_EXTS_HAS_ARRAY_ACTIONS)
+#if defined(CONFIG_NET_CLS_ACT)
 #define tcf_exts_for_each_action(i, a, exts) \
 	for (i = 0; i < TCA_ACT_MAX_PRIO && ((a) = (exts)->actions[i]); i++)
 #elif defined tc_for_each_action

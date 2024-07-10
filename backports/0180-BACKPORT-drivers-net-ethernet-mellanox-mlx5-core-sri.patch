@@ -1,0 +1,126 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/sriov.c   | 36 ++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+@@ -72,7 +72,10 @@ static int sriov_restore_guids(struct ml
+ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
+ {
+ 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+-	int err, vf, num_msix_count;
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
++	int num_msix_count;
++#endif
++	int err, vf;
+ 	int vport_num;
+ 
+ 	err = mlx5_eswitch_enable(dev->priv.eswitch, num_vfs);
+@@ -92,7 +95,9 @@ static int mlx5_device_enable_sriov(stru
+ 		return err;
+ 	}
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ 	num_msix_count = mlx5_get_default_msix_vec_count(dev, num_vfs);
++#endif
+ 	for (vf = 0; vf < num_vfs; vf++) {
+ 		/* Notify the VF before its enablement to let it set
+ 		 * some stuff.
+@@ -105,6 +110,7 @@ static int mlx5_device_enable_sriov(stru
+ 			continue;
+ 		}
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ 		err = mlx5_set_msix_vec_count(dev, vf + 1, num_msix_count);
+ 		if (err) {
+ 			mlx5_core_warn(dev,
+@@ -112,6 +118,7 @@ static int mlx5_device_enable_sriov(stru
+ 				       vf, err);
+ 			continue;
+ 		}
++#endif
+ 
+ 		sriov->vfs_ctx[vf].enabled = 1;
+ 		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) {
+@@ -191,7 +198,9 @@ mlx5_device_disable_sriov(struct mlx5_co
+ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
+ {
+ 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	int err;
+ 
+ 	if (num_vfs && pci_num_vf(dev->pdev)) {
+@@ -204,9 +213,13 @@ static int mlx5_sriov_enable(struct pci_
+ 		return -EBUSY;
+ 	}
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_lock(devlink);
++#endif
+ 	err = mlx5_device_enable_sriov(dev, num_vfs);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_unlock(devlink);
++#endif
+ 	if (err) {
+ 		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
+ 		return err;
+@@ -223,13 +236,19 @@ static int mlx5_sriov_enable(struct pci_
+ void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change)
+ {
+ 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	int num_vfs = pci_num_vf(dev->pdev);
+ 
+ 	pci_disable_sriov(pdev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_lock(devlink);
++#endif
+ 	mlx5_device_disable_sriov(dev, num_vfs, true, num_vf_change);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_unlock(devlink);
++#endif
+ }
+ 
+ int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
+@@ -250,6 +269,7 @@ int mlx5_core_sriov_configure(struct pci
+ 	return err ? err : num_vfs;
+ }
+ 
++#ifdef HAVE_SRIOV_GET_SET_MSIX_VEC_COUNT
+ int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
+ {
+ 	struct pci_dev *pf = pci_physfn(vf);
+@@ -267,12 +287,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
+ 			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
+ 
+ 	sriov = &dev->priv.sriov;
++#ifdef HAVE_PCI_IOV_VF_ID
+ 	id = pci_iov_vf_id(vf);
+ 	if (id < 0 || !sriov->vfs_ctx[id].enabled)
++#else
++	/* Reversed translation of PCI VF function number to the internal
++	 * function_id, which exists in the name of virtfn symlink. */
++	for (id = 0; id < pci_num_vf(pf); id++) {
++		if (!sriov->vfs_ctx[id].enabled)
++			continue;
++
++		if (vf->devfn == pci_iov_virtfn_devfn(pf, id))
++			break;
++	}
++	if (id == pci_num_vf(pf) || !sriov->vfs_ctx[id].enabled)
++#endif
+ 		return -EINVAL;
+ 
+ 	return mlx5_set_msix_vec_count(dev, id + 1, msix_vec_count);
+ }
++#endif
+ 
+ int mlx5_sriov_attach(struct mlx5_core_dev *dev)
+ {

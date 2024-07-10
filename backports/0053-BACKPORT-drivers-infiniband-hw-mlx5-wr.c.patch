@@ -1,7 +1,6 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/wr.c
 
-Change-Id: I9e7a0bbaa9c861c0eaff8c9146a5244d1172a0bf
 ---
  drivers/infiniband/hw/mlx5/wr.c | 1 +
  1 file changed, 1 insertion(+)

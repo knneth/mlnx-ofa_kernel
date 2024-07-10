@@ -1,38 +1,30 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
 
-Change-Id: I38a7ec2b1c21ad98ce93a6efab3ad5aa2dceaaa8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-@@ -8,13 +8,18 @@
- #include <linux/mlx5/fs.h>
- #include <net/tc_act/tc_ct.h>
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
+@@ -4,12 +4,19 @@
+ #ifndef __MLX5_EN_XSK_TX_H__
+ #define __MLX5_EN_XSK_TX_H__
  
-+#ifndef CONFIG_COMPAT_CLS_FLOWER_MOD
- #include "en.h"
-+#endif
- 
- struct mlx5_flow_attr;
- struct mlx5e_tc_mod_hdr_acts;
- struct mlx5_rep_uplink_priv;
- struct mlx5e_tc_flow;
- struct mlx5e_priv;
-+#ifdef HAVE_BASECODE_EXTRAS
-+struct mlx5e_post_act;
-+#endif
- 
- struct mlx5_fs_chains;
- struct mlx5_tc_ct_priv;
-@@ -141,6 +146,8 @@ mlx5_tc_ct_lables_mapping_set(struct mlx
- 
- #else /* CONFIG_MLX5_TC_CT */
- 
-+#include <net/flow_offload.h>
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
 +
- static inline struct mlx5_tc_ct_priv *
- mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
- 		struct mod_hdr_tbl *mod_hdr,
+ #include "en.h"
+ 
+ /* TX data path */
+ 
+-int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags);
++int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid
++#ifdef HAVE_NDO_XSK_WAKEUP
++		    , u32 flags
++#endif
++		    );
+ 
+ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget);
+ 
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ #endif /* __MLX5_EN_XSK_TX_H__ */

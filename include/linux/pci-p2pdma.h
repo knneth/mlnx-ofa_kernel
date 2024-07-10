@@ -4,22 +4,11 @@
 #include "../../compat/config.h"
 
 #ifdef HAVE_PCI_P2PDMA_H
-
 #include_next <linux/pci-p2pdma.h>
-
 #else
 
 #include <linux/pci.h>
-
 struct scatterlist;
-
-#ifndef HAVE_PCI_BUS_ADDR_T
-#ifdef CONFIG_PCI_BUS_ADDR_T_64BIT
-typedef u64 pci_bus_addr_t;
-#else
-typedef u32 pci_bus_addr_t;
-#endif
-#endif
 
 static inline int pci_p2pdma_add_resource(struct pci_dev *pdev, int bar,
 		size_t size, u64 offset)

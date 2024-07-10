@@ -7,132 +7,11 @@
 #include <rdma/ib_umem.h>
 #include <linux/sched/mm.h>
 #include "ib_peer_mem.h"
-
 static DEFINE_MUTEX(peer_memory_mutex);
 static LIST_HEAD(peer_memory_list);
-static struct kobject *peers_kobj;
 #define PEER_NO_INVALIDATION_ID U32_MAX
 
 static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context);
-
-struct peer_mem_attribute {
-	struct attribute attr;
-	ssize_t (*show)(struct ib_peer_memory_client *ib_peer_client,
-			struct peer_mem_attribute *attr, char *buf);
-	ssize_t (*store)(struct ib_peer_memory_client *ib_peer_client,
-			 struct peer_mem_attribute *attr, const char *buf,
-			 size_t count);
-};
-#define PEER_ATTR_RO(_name)                                                    \
-	struct peer_mem_attribute peer_attr_ ## _name = __ATTR_RO(_name)
-
-static ssize_t version_show(struct ib_peer_memory_client *ib_peer_client,
-			    struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(buf, PAGE_SIZE, "%s\n",
-			 ib_peer_client->peer_mem->version);
-}
-static PEER_ATTR_RO(version);
-
-static ssize_t num_alloc_mrs_show(struct ib_peer_memory_client *ib_peer_client,
-				  struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(
-		buf, PAGE_SIZE, "%llu\n",
-		(u64)atomic64_read(&ib_peer_client->stats.num_alloc_mrs));
-}
-static PEER_ATTR_RO(num_alloc_mrs);
-
-static ssize_t
-num_dealloc_mrs_show(struct ib_peer_memory_client *ib_peer_client,
-		     struct peer_mem_attribute *attr, char *buf)
-
-{
-	return scnprintf(
-		buf, PAGE_SIZE, "%llu\n",
-		(u64)atomic64_read(&ib_peer_client->stats.num_dealloc_mrs));
-}
-static PEER_ATTR_RO(num_dealloc_mrs);
-
-static ssize_t num_reg_pages_show(struct ib_peer_memory_client *ib_peer_client,
-				  struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(
-		buf, PAGE_SIZE, "%llu\n",
-		(u64)atomic64_read(&ib_peer_client->stats.num_reg_pages));
-}
-static PEER_ATTR_RO(num_reg_pages);
-
-static ssize_t
-num_dereg_pages_show(struct ib_peer_memory_client *ib_peer_client,
-		     struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(
-		buf, PAGE_SIZE, "%llu\n",
-		(u64)atomic64_read(&ib_peer_client->stats.num_dereg_pages));
-}
-static PEER_ATTR_RO(num_dereg_pages);
-
-static ssize_t num_reg_bytes_show(struct ib_peer_memory_client *ib_peer_client,
-				  struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(
-		buf, PAGE_SIZE, "%llu\n",
-		(u64)atomic64_read(&ib_peer_client->stats.num_reg_bytes));
-}
-static PEER_ATTR_RO(num_reg_bytes);
-
-static ssize_t
-num_dereg_bytes_show(struct ib_peer_memory_client *ib_peer_client,
-		     struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(
-		buf, PAGE_SIZE, "%llu\n",
-		(u64)atomic64_read(&ib_peer_client->stats.num_dereg_bytes));
-}
-static PEER_ATTR_RO(num_dereg_bytes);
-
-static ssize_t
-num_free_callbacks_show(struct ib_peer_memory_client *ib_peer_client,
-			struct peer_mem_attribute *attr, char *buf)
-{
-	return scnprintf(buf, PAGE_SIZE, "%lu\n",
-			 ib_peer_client->stats.num_free_callbacks);
-}
-static PEER_ATTR_RO(num_free_callbacks);
-
-static struct attribute *peer_mem_attrs[] = {
-			&peer_attr_version.attr,
-			&peer_attr_num_alloc_mrs.attr,
-			&peer_attr_num_dealloc_mrs.attr,
-			&peer_attr_num_reg_pages.attr,
-			&peer_attr_num_dereg_pages.attr,
-			&peer_attr_num_reg_bytes.attr,
-			&peer_attr_num_dereg_bytes.attr,
-			&peer_attr_num_free_callbacks.attr,
-			NULL,
-};
-
-static const struct attribute_group peer_mem_attr_group = {
-	.attrs = peer_mem_attrs,
-};
-
-static ssize_t peer_attr_show(struct kobject *kobj, struct attribute *attr,
-			      char *buf)
-{
-	struct peer_mem_attribute *peer_attr =
-		container_of(attr, struct peer_mem_attribute, attr);
-
-	if (!peer_attr->show)
-		return -EIO;
-	return peer_attr->show(container_of(kobj, struct ib_peer_memory_client,
-					    kobj),
-			       peer_attr, buf);
-}
-
-static const struct sysfs_ops peer_mem_sysfs_ops = {
-	.show = peer_attr_show,
-};
 
 static void ib_peer_memory_client_release(struct kobject *kobj)
 {
@@ -143,7 +22,6 @@ static void ib_peer_memory_client_release(struct kobject *kobj)
 }
 
 static struct kobj_type peer_mem_type = {
-	.sysfs_ops = &peer_mem_sysfs_ops,
 	.release = ib_peer_memory_client_release,
 };
 
@@ -180,7 +58,6 @@ ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
 			       invalidate_peer_memory *invalidate_callback)
 {
 	struct ib_peer_memory_client *ib_peer_client;
-	int ret;
 
 	if (ib_memory_peer_check_mandatory(peer_client))
 		return NULL;
@@ -204,34 +81,9 @@ ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
 	}
 
 	mutex_lock(&peer_memory_mutex);
-	if (!peers_kobj) {
-		/* Created under /sys/kernel/mm */
-		peers_kobj = kobject_create_and_add("memory_peers", mm_kobj);
-		if (!peers_kobj)
-			goto err_unlock;
-	}
-
-	ret = kobject_add(&ib_peer_client->kobj, peers_kobj, peer_client->name);
-	if (ret)
-		goto err_parent;
-
-	ret = sysfs_create_group(&ib_peer_client->kobj,
-				 &peer_mem_attr_group);
-	if (ret)
-		goto err_parent;
 	list_add_tail(&ib_peer_client->core_peer_list, &peer_memory_list);
 	mutex_unlock(&peer_memory_mutex);
 	return ib_peer_client;
-
-err_parent:
-	if (list_empty(&peer_memory_list)) {
-		kobject_put(peers_kobj);
-		peers_kobj = NULL;
-	}
-err_unlock:
-	mutex_unlock(&peer_memory_mutex);
-	kobject_put(&ib_peer_client->kobj);
-	return NULL;
 }
 EXPORT_SYMBOL(ib_register_peer_memory_client);
 
@@ -241,10 +93,6 @@ void ib_unregister_peer_memory_client(void *reg_handle)
 
 	mutex_lock(&peer_memory_mutex);
 	list_del(&ib_peer_client->core_peer_list);
-	if (list_empty(&peer_memory_list)) {
-		kobject_put(peers_kobj);
-		peers_kobj = NULL;
-	}
 	mutex_unlock(&peer_memory_mutex);
 
 	/*

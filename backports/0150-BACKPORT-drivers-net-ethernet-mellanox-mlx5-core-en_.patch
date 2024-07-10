@@ -1,0 +1,79 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+
+---
+ .../net/ethernet/mellanox/mlx5/core/en_tc.h   | 42 ++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+@@ -197,6 +197,8 @@ int mlx5e_delete_flower(struct net_devic
+ 
+ int mlx5e_stats_flower(struct net_device *dev, struct mlx5e_priv *priv,
+ 		       struct flow_cls_offload *f, unsigned long flags);
++
++struct flow_offload_action;
+ int mlx5e_tc_fill_action_stats(struct mlx5e_priv *priv,
+ 			       struct flow_offload_action *fl_act);
+ 
+@@ -302,6 +304,15 @@ void mlx5e_tc_set_ethertype(struct mlx5_
+ 			    struct flow_match_basic *match, bool outer,
+ 			    void *headers_c, void *headers_v);
+ 
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++int mlx5e_setup_tc_block(struct net_device *dev, struct tc_block_offload *f);
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++			      struct flow_cls_offload *cls_flower,
++			      unsigned long flags);
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
++
+ int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
+ void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
+ 
+@@ -343,7 +354,21 @@ static inline void mlx5e_tc_ht_cleanup(s
+ static inline int
+ mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+ { return -EOPNOTSUPP; }
+-
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_block(struct net_device *dev,
++				       struct tc_block_offload *f)
++{
++	return -EOPNOTSUPP;
++}
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++					    struct flow_cls_offload *cls_flower,
++					    unsigned long flags)
++{
++	return -EOPNOTSUPP;
++}
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
+ #endif /* CONFIG_MLX5_CLS_ACT */
+ 
+ struct mlx5_flow_attr *mlx5_alloc_flow_attr(enum mlx5_flow_namespace_type type);
+@@ -368,6 +393,21 @@ static inline int  mlx5e_tc_num_filters(
+ static inline int
+ mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+ { return -EOPNOTSUPP; }
++#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_block(struct net_device *dev,
++				       struct tc_block_offload *f)
++{
++	return -EOPNOTSUPP;
++}
++#endif
++#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
++static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
++					    struct flow_cls_offload *cls_flower,
++					    unsigned long flags)
++{
++	return -EOPNOTSUPP;
++}
++#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
+ #endif
+ 
+ #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)

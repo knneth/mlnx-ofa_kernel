@@ -18,36 +18,5 @@
 #define TCA_ACT_GACT 5
 #endif
 
-#if (!defined(HAVE_IS_TCF_GACT_ACT) && !defined(HAVE_IS_TCF_GACT_ACT_OLD))
-static inline bool __is_tcf_gact_act(const struct tc_action *a, int act)
-{
-#ifdef CONFIG_NET_CLS_ACT
-	struct tcf_gact *gact;
-
-	if (a->ops && a->ops->type != TCA_ACT_GACT)
-		return false;
-#ifdef CONFIG_COMPAT_KERNEL3_10_0_327
-	gact = to_gact(a->priv);
-#else
-	gact = to_gact(a);
-#endif
-	if (gact->tcf_action == act)
-		return true;
-
-#endif
-	return false;
-}
-#endif
-
-#if !defined(HAVE_IS_TCF_GACT_OK)
-static inline bool is_tcf_gact_ok(const struct tc_action *a)
-{
-#ifdef HAVE_IS_TCF_GACT_ACT
-	return __is_tcf_gact_act(a, TC_ACT_OK, false);
-#else
-	return __is_tcf_gact_act(a, TC_ACT_OK);
-#endif
-}
-#endif /* HAVE_IS_TCF_GACT_OK */
 
 #endif	/* _COMPAT_NET_TC_ACT_TC_GACT_H */

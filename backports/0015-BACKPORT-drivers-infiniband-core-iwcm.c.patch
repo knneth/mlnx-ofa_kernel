@@ -1,7 +1,6 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
 
-Change-Id: If2f81e8993a5c76403bbe88e0e7b0f79c5c9ef9a
 ---
  drivers/infiniband/core/iwcm.c | 13 +++++++++++++
  1 file changed, 13 insertions(+)

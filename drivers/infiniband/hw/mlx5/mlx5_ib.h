@@ -27,6 +27,7 @@
 #include "srq.h"
 #include "mlx5_ib_nvmf.h"
 #include "mlx5_ib_ext.h"
+#include "qp.h"
 #include "macsec.h"
 
 #define MLX5_PAS_ALIGN 64
@@ -664,7 +665,6 @@ struct mlx5_ib_mkey {
 	/* User Mkey must hold either a rb_key or a cache_ent. */
 	struct mlx5r_cache_rb_key rb_key;
 	struct mlx5_cache_ent *cache_ent;
-	u8 cacheable : 1;
 };
 
 #define MLX5_IB_MTT_PRESENT (MLX5_IB_MTT_READ | MLX5_IB_MTT_WRITE)
@@ -827,7 +827,6 @@ struct mlx5_mkey_cache {
 	struct delayed_work	remove_ent_dwork;
 	int			rel_timeout;
 	int			rel_imm;
-	bool			tmp_clean;
 };
 
 struct mlx5_ib_port_resources {
@@ -901,7 +900,7 @@ struct mlx5_ib_port {
 	struct mlx5_ib_dbg_cc_params *dbg_cc_params;
 	struct mlx5_roce roce;
 	struct mlx5_eswitch_rep		*rep;
-#ifdef CONFIG_MLX5_EN_MACSEC
+#ifdef CONFIG_MLX5_MACSEC
 	struct mlx5_reserved_gids *reserved_gids;
 #endif
 };
@@ -1119,6 +1118,12 @@ struct mlx5_special_mkeys {
 	__be32 terminate_scatter_list_mkey;
 };
 
+struct mlx5_macsec {
+	struct mutex lock; /* Protects mlx5_macsec internal contexts */
+	struct list_head macsec_devices_list;
+	struct notifier_block blocking_events_nb;
+};
+
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
@@ -1190,6 +1195,10 @@ struct mlx5_ib_dev {
 	u16 pkey_table_len;
 	u8 lag_ports;
 	struct mlx5_special_mkeys mkeys;
+
+#ifdef CONFIG_MLX5_MACSEC
+	struct mlx5_macsec macsec;
+#endif
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)

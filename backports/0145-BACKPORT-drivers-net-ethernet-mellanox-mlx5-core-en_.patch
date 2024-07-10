@@ -1,0 +1,87 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+@@ -116,8 +116,9 @@ static void mlx5e_add_l2_to_hash(struct
+ 	struct mlx5e_l2_hash_node *hn;
+ 	int ix = mlx5e_hash_l2(addr);
+ 	int found = 0;
++	COMPAT_HL_NODE
+ 
+-	hlist_for_each_entry(hn, &hash[ix], hlist)
++	compat_hlist_for_each_entry(hn, &hash[ix], hlist)
+ 		if (ether_addr_equal_64bits(hn->ai.addr, addr)) {
+ 			found = 1;
+ 			break;
+@@ -364,6 +365,7 @@ static int mlx5e_fs_add_any_vid_rules(st
+ 	return mlx5e_add_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_ANY_STAG_VID, 0);
+ }
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ static struct mlx5_flow_handle *
+ mlx5e_add_trap_rule(struct mlx5_flow_table *ft, int trap_id, int tir_num)
+ {
+@@ -434,6 +436,7 @@ void mlx5e_remove_mac_trap(struct mlx5e_
+ 		fs->l2.trap_rule = NULL;
+ 	}
+ }
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ void mlx5e_enable_cvlan_filter(struct mlx5e_flow_steering *fs, bool promisc)
+ {
+@@ -559,7 +562,9 @@ static void mlx5e_del_vlan_rules(struct
+ 
+ 	WARN_ON_ONCE(fs->state_destroy);
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ 	mlx5e_remove_vlan_trap(fs);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ 	/* must be called after DESTROY bit is set and
+ 	 * set_rx_mode is called and flushed
+@@ -570,7 +575,7 @@ static void mlx5e_del_vlan_rules(struct
+ 
+ #define mlx5e_for_each_hash_node(hn, tmp, hash, i) \
+ 	for (i = 0; i < MLX5E_L2_ADDR_HASH_SIZE; i++) \
+-		hlist_for_each_entry_safe(hn, tmp, &hash[i], hlist)
++		compat_hlist_for_each_entry_safe(hn, tmp, &hash[i], hlist)
+ 
+ static void mlx5e_execute_l2_action(struct mlx5e_flow_steering *fs,
+ 				    struct mlx5e_l2_hash_node *hn)
+@@ -632,6 +637,7 @@ static void mlx5e_fill_addr_array(struct
+ 	struct hlist_node *tmp;
+ 	int i = 0;
+ 	int hi;
++	COMPAT_HL_NODE
+ 
+ 	addr_list = is_uc ? fs->l2.netdev_uc : fs->l2.netdev_mc;
+ 
+@@ -662,6 +668,7 @@ static void mlx5e_vport_context_update_a
+ 	int size;
+ 	int err;
+ 	int hi;
++	COMPAT_HL_NODE
+ 
+ 	size = is_uc ? 0 : (fs->l2.broadcast_enabled ? 1 : 0);
+ 	max_size = is_uc ?
+@@ -712,6 +719,7 @@ static void mlx5e_apply_netdev_addr(stru
+ 	struct mlx5e_l2_hash_node *hn;
+ 	struct hlist_node *tmp;
+ 	int i;
++	COMPAT_HL_NODE
+ 
+ 	mlx5e_for_each_hash_node(hn, tmp, fs->l2.netdev_uc, i)
+ 		mlx5e_execute_l2_action(fs, hn);
+@@ -726,6 +734,7 @@ static void mlx5e_handle_netdev_addr(str
+ 	struct mlx5e_l2_hash_node *hn;
+ 	struct hlist_node *tmp;
+ 	int i;
++	COMPAT_HL_NODE
+ 
+ 	mlx5e_for_each_hash_node(hn, tmp, fs->l2.netdev_uc, i)
+ 		hn->action = MLX5E_ACTION_DEL;

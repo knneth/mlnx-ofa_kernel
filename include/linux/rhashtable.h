@@ -902,7 +902,7 @@ static inline void bp_rhltable_destroy(struct bp_rhltable *hlt)
 /* Base bits plus 1 bit for nulls marker */
 #define RHT_HASH_RESERVED_SPACE	(RHT_BASE_BITS + 1)
 
-#if !defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) && defined(HAVE_RHLTABLE)
+#if defined(HAVE_RHLTABLE)
 #define RHT_ELASTICITY 16u
 #endif
 
@@ -995,13 +995,13 @@ struct rhashtable_params {
 	size_t			key_len;
 	size_t			key_offset;
 	size_t			head_offset;
-#if defined(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	unsigned int		insecure_max_entries;
 #endif
 	unsigned int		max_size;
 	unsigned int		min_size;
 	u32			nulls_base;
-#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	bool			insecure_elasticity;
 #endif
 	bool			automatic_shrinking;
@@ -1045,7 +1045,7 @@ struct rhashtable {
 	struct bucket_table __rcu	*tbl;
 	atomic_t			nelems;
 	unsigned int			key_len;
-#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	unsigned int			elasticity;
 #endif
 	struct rhashtable_params	p;
@@ -1215,7 +1215,7 @@ static inline bool rht_grow_above_100(const struct rhashtable *ht,
 static inline bool rht_grow_above_max(const struct rhashtable *ht,
 				      const struct bucket_table *tbl)
 {
-#if defined(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	return ht->p.insecure_max_entries &&
 	       atomic_read(&ht->nelems) >= ht->p.insecure_max_entries;
 #elif defined(HAVE_RHASHTABLE_MAX_ELEMS)
@@ -1615,7 +1615,7 @@ slow_path:
 		return rhashtable_insert_slow(ht, key, obj);
 	}
 
-#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	elasticity = ht->elasticity;
 #else
 	elasticity = RHT_ELASTICITY;
@@ -2145,32 +2145,6 @@ static inline void rhltable_destroy(struct rhltable *hlt)
 {
 	return rhltable_free_and_destroy(hlt, NULL, NULL);
 }
-
-#undef HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 #endif /* HAVE_RHLTABLE */
-
-#ifndef HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST
-/**
- * rhashtable_lookup_get_insert_fast - lookup and insert object into hash table
- * @ht:		hash table
- * @obj:	pointer to hash head inside object
- * @params:	hash table parameters
- *
- * Just like rhashtable_lookup_insert_fast(), but this function returns the
- * object if it exists, NULL if it did not and the insertion was successful,
- * and an ERR_PTR otherwise.
- */
-static inline void *rhashtable_lookup_get_insert_fast(
-	struct rhashtable *ht, struct rhash_head *obj,
-	const struct rhashtable_params params)
-{
-	const char *key = rht_obj(ht, obj);
-
-	BUG_ON(ht->p.obj_hashfn);
-
-	return __rhashtable_insert_fast(ht, key + ht->p.key_offset, obj, params,
-					false);
-}
-#endif
 
 #endif /* _COMPAT_LINUX_RHASHTABLE_H */

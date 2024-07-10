@@ -559,19 +559,19 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 
 void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 			    struct mlx5dr_domain *peer_dmn,
-			    u16 peer_idx)
+			    u16 peer_vhca_id)
 {
 	struct mlx5dr_domain *peer;
 
 	mlx5dr_domain_lock(dmn);
 
-	peer = xa_load(&dmn->peer_dmn_xa, peer_idx);
+	peer = xa_load(&dmn->peer_dmn_xa, peer_vhca_id);
 	if (peer)
 		refcount_dec(&peer->refcount);
 
-	WARN_ON(xa_err(xa_store(&dmn->peer_dmn_xa, peer_idx, peer_dmn, GFP_KERNEL)));
+	WARN_ON(xa_err(xa_store(&dmn->peer_dmn_xa, peer_vhca_id, peer_dmn, GFP_KERNEL)));
 
-	peer = xa_load(&dmn->peer_dmn_xa, peer_idx);
+	peer = xa_load(&dmn->peer_dmn_xa, peer_vhca_id);
 	if (peer)
 		refcount_inc(&peer->refcount);
 

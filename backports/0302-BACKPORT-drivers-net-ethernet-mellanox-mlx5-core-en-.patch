@@ -1,0 +1,87 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+
+Change-Id: If8b1a4ec069549616568b9c9322df5452305adc2
+---
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 27 ++++++++++++++++++-
+ 1 file changed, 26 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -34,6 +34,9 @@
+ 
+ #define MLX5E_RX_ERR_CQE(cqe) (get_cqe_opcode(cqe) != MLX5_CQE_RESP_SEND)
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++#define MLX5_XMIT_MORE_SKB_CB 0xa
++#endif
+ static inline
+ ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns func, struct mlx5_clock *clock, u64 cqe_ts)
+ {
+@@ -45,7 +48,7 @@ enum mlx5e_icosq_wqe_type {
+ 	MLX5E_ICOSQ_WQE_NOP,
+ 	MLX5E_ICOSQ_WQE_UMR_RX,
+ 	MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR,
+-#ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_KTLS_RX_SUPPORT
+ 	MLX5E_ICOSQ_WQE_UMR_TLS,
+ 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
+ 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
+@@ -65,12 +68,25 @@ int mlx5e_napi_poll(struct napi_struct *
+ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq);
+ 
+ /* RX */
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++void mlx5e_page_dma_unmap(struct mlx5e_rq *rq,
++#ifdef HAVE_PAGE_DMA_ADDR
++			  struct page *page);
++#else
++			  struct mlx5e_alloc_unit *au);
++#endif
++void mlx5e_page_release_dynamic(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au, bool recycle);
++#endif
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq));
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq));
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_skip(struct mlx5e_rq *rq));
+ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget);
+ void mlx5e_free_rx_descs(struct mlx5e_rq *rq);
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ void mlx5e_free_rx_missing_descs(struct mlx5e_rq *rq);
++#else
++void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
++#endif
+ 
+ static inline bool mlx5e_rx_hw_stamp(struct hwtstamp_config *config)
+ {
+@@ -262,7 +278,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+ {
+ 	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
++#else
++	wmb();
++#endif
+ 
+ 	*wq->db = cpu_to_be32(pc);
+ 
+@@ -455,6 +475,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+ 	case IPPROTO_UDP:
+ 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 		fallthrough;
++
+ 	case IPPROTO_TCP:
+ 		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
+ 		break;
+@@ -503,7 +524,11 @@ static inline bool mlx5e_icosq_can_post_
+ 
+ static inline struct mlx5e_mpw_info *mlx5e_get_mpw_info(struct mlx5e_rq *rq, int i)
+ {
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 	size_t isz = struct_size(rq->mpwqe.info, alloc_units.frag_pages, rq->mpwqe.pages_per_wqe);
++#else
++	size_t isz = struct_size(rq->mpwqe.info, alloc_units, rq->mpwqe.pages_per_wqe);
++#endif
+ 
+ 	return (struct mlx5e_mpw_info *)((char *)rq->mpwqe.info + array_size(i, isz));
+ }

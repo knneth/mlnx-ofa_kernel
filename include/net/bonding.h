@@ -68,11 +68,7 @@ static void mlx_lag_compat_changeupper_event(struct bonding *bond,
 	mlx_lag_compat_netdev_event_cb(NETDEV_CHANGEUPPER, &info);
 }
 
-#ifndef HAVE_SK_DATA_READY_2_PARAMS
 static void mlx_lag_compat_rtnl_data_ready(struct sock *sk)
-#else
-static void mlx_lag_compat_rtnl_data_ready(struct sock *sk, int bytes)
-#endif
 {
 	struct net_device *ndev;
 	struct ifinfomsg *ifm;
@@ -145,13 +141,8 @@ static int mlx_lag_compat_events_open(void (*cb)(unsigned long, void *))
 	};
 	int err;
 
-#if defined(HAVE_SOCK_CREATE_KERN_5_PARAMS)
 	err = sock_create_kern(&init_net, PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE,
 			       &mlx_lag_compat_rtnl_sock);
-#else
-	err = sock_create_kern(PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE,
-			       &mlx_lag_compat_rtnl_sock);
-#endif
 	if (err) {
 		pr_err("mlx: ERROR: Couldn't create netlink socket. LAG events will not be dispatched.\n");
 		mlx_lag_compat_rtnl_sock = NULL;

@@ -180,9 +180,6 @@ Usage:  `basename $0` [options]
     --with-sf-sfc     make CONFIG_MLX5_SF_SFC=y [no]
     --without-sf-sfc        [yes]
 
-    --with-bridge-offload     make CONFIG_MLX5_BRIDGE=y [no]
-    --without-bridge-offload        [yes]
-
 EOF
 
 #   Currently not supported options
@@ -258,6 +255,14 @@ set_complex_define_to_config_h()
 unset_complex_define_to_config_h()
 {
 	echo "/* #undef $1 */" >> $COMPAT_CONFIG_H
+}
+
+set_config_mk_kernel_module()
+{
+	echo "Complex config: Set $1 to m in ${CWD}/${CONFIG}"
+	echo "Complex config: Set $1 to 1 in ${AUTOCONF_H}"
+	echo "$1=m" >> ${CWD}/${CONFIG}
+	echo "#define $1 1" >> ${AUTOCONF_H}
 }
 
 set_config_mk_kernel()
@@ -407,18 +412,8 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_GET_USER_PAGES_GUP_FLAGS
 	fi
 
-# Define HAVE_MMGET_NOT_ZERO from other flags
-	if check_compat_config_h_var HAVE_SCHED_MM_MMGET_NOT_ZERO ||
-    	   check_compat_config_h_var HAVE_SCHED_MMGET_NOT_ZERO
-	then
-		set_complex_define_to_config_h HAVE_MMGET_NOT_ZERO
-	else
-		unset_complex_define_to_config_h HAVE_MMGET_NOT_ZERO
-	fi
-
 # Define HAVE_XDP_SUPPORT from other flags
-        if check_compat_config_h_var HAVE_XDP_REDIRECT &&
-	   [ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
+        if [ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_XDP_SUPPORT
 	else
@@ -426,22 +421,13 @@ check_complex_defines()
 	fi
 
 # Define HAVE_VFIO_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_VFIO_PRECOPY_INFO && 
+	if check_compat_config_h_var HAVE_VFIO_PRECOPY_INFO &&
 	   check_compat_config_h_var HAVE_VFIO_PCI_CORE_INIT &&
 	   [ "X${CONFIG_ENABLE_VFIO}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_VFIO_SUPPORT
 	else
 		unset_complex_define_to_config_h HAVE_VFIO_SUPPORT
-	fi
-
-# Define HAVE_XDP_FRAME from other flags
-	if check_compat_config_h_var HAVE_XDP_FRAME_IN_NET_XDP ||
-	   check_compat_config_h_var HAVE_XDP_FRAME_IN_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_XDP_FRAME
-	else
-		unset_complex_define_to_config_h HAVE_XDP_FRAME
 	fi
 
 # Define HAVE_XSK_ZERO_COPY_SUPPORT from other flags
@@ -454,24 +440,6 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_XSK_ZERO_COPY_SUPPORT
 	fi
 
-# Define HAVE_XDP_RXQ_INFO from other flags
-	if check_compat_config_h_var HAVE_XDP_RXQ_INFO_IN_NET_XDP ||
-	   check_compat_config_h_var HAVE_XDP_RXQ_INFO_IN_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_XDP_RXQ_INFO
-	else
-		unset_complex_define_to_config_h HAVE_XDP_RXQ_INFO
-	fi
-
-# Define HAVE_NET_XDP_H from other flags
-	if check_compat_config_h_var HAVE_NET_XDP_HEADER ||
-	   check_compat_config_h_var HAVE_NET_XDP_HEADER_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_NET_XDP_H
-	else
-		unset_complex_define_to_config_h HAVE_NET_XDP_H
-	fi
-
 # Define HAVE_XDP_CONVERT_TO_XDP_FRAME from other flags
 	if check_compat_config_h_var HAVE_XDP_CONVERT_TO_XDP_FRAME_IN_NET_XDP ||
 	   check_compat_config_h_var HAVE_XDP_CONVERT_TO_XDP_FRAME_IN_UEK_KABI
@@ -481,20 +449,10 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_XDP_CONVERT_TO_XDP_FRAME
 	fi
 
-# Define HAVE_XDP_RXQ_INFO_REG_MEM_MODEL from other flags
-	if check_compat_config_h_var HAVE_XDP_RXQ_INFO_REG_MEM_MODEL_IN_NET_XDP ||
-	   check_compat_config_h_var HAVE_XDP_RXQ_INFO_REG_MEM_MODEL_IN_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_XDP_RXQ_INFO_REG_MEM_MODEL
-	else
-		unset_complex_define_to_config_h HAVE_XDP_RXQ_INFO_REG_MEM_MODEL
-	fi
-
 #define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON from other flags
 	check_autofconf CONFIG_VXLAN
 	if [ "${CONFIG_VXLAN}" == "1" ]; then
-		if check_compat_config_h_var HAVE_NDO_ADD_VXLAN_PORT ||
-		   check_compat_config_h_var HAVE_NDO_UDP_TUNNEL_ADD ||
+		if check_compat_config_h_var HAVE_NDO_UDP_TUNNEL_ADD ||
 		   check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO
 		then
 			set_complex_define_to_config_h HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
@@ -512,15 +470,15 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_IS_PCI_P2PDMA_PAGE
 	fi
 
-# Define CONFIG_MLX5_EN_MACSEC based on kernel config and HAVE_
+# Define CONFIG_MLX5_MACSEC based on kernel config and HAVE_
 	check_autofconf CONFIG_MACSEC
 	if [ "${CONFIG_MACSEC}" == "1" ]; then
 	    if check_compat_config_h_var HAVE_STRUCT_MACSEC_INFO_METADATA; then
-			CONFIG_MLX5_EN_MACSEC="y"
-			set_config_mk_kernel CONFIG_MLX5_EN_MACSEC
+			CONFIG_MLX5_MACSEC="y"
+			set_config_mk_kernel CONFIG_MLX5_MACSEC
 		else
-			CONFIG_MLX5_EN_MACSEC=
-			unset_config_mk_kernel CONFIG_MLX5_EN_MACSEC
+			CONFIG_MLX5_MACSEC=
+			unset_config_mk_kernel CONFIG_MLX5_MACSEC
 	    fi
 	fi
 
@@ -533,13 +491,22 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
 	fi
 
-# Define HAVE_BLK_TYPES_REQ_OP_DRV_OUT from other flags
-	if check_compat_config_h_var HAVE_REQ_OPF_REQ_OP_DRV_OUT ||
-	   check_compat_config_h_var HAVE_REQ_OP_REQ_OP_DRV_OUT
+# Define HAVE_BLK_MQ_ALLOC_DISK from other flags
+	if check_compat_config_h_var HAVE_BLK_MQ_ALLOC_DISK_3_PARAMS ||
+	   check_compat_config_h_var HAVE_BLK_MQ_ALLOC_DISK_2_PARAMS
 	then
-		set_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
+		set_complex_define_to_config_h HAVE_BLK_MQ_ALLOC_DISK
 	else
-		unset_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
+		unset_complex_define_to_config_h HAVE_BLK_MQ_ALLOC_DISK
+	fi
+
+# Define HAVE_BLK_ALLOC_DISK from other flags
+	if check_compat_config_h_var HAVE_BLK_ALLOC_DISK_2_PARAMS ||
+	   check_compat_config_h_var HAVE_BLK_ALLOC_DISK_1_PARAM
+	then
+		set_complex_define_to_config_h HAVE_BLK_ALLOC_DISK
+	else
+		unset_complex_define_to_config_h HAVE_BLK_ALLOC_DISK
 	fi
 
 # define HAVE_DEVLINK_PORT_TYPE_ETH_SET from other flags
@@ -558,11 +525,6 @@ check_complex_defines()
 	else
 		unset_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
 	fi
-
-# Define HAVE_NO_REFCNT_BIAS to be set off default until refcnt_bias member
-# of struct alloc_unit is removed.
-
-	unset_complex_define_to_config_h HAVE_NO_REFCNT_BIAS
 
 # define HAVE_TC_CLS_OFFLOAD_EXTACK from other flags
 	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
@@ -601,9 +563,7 @@ check_complex_defines()
 	fi
 
 # define HAVE_PRIO_CHAIN_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON &&
-	   check_compat_config_h_var HAVE_IS_TCF_GACT_GOTO_CHAIN &&
-	   check_compat_config_h_var HAVE_FLOWER_MULTI_MASK
+	if check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
 	then
 		set_complex_define_to_config_h HAVE_PRIO_CHAIN_SUPPORT
 	else
@@ -638,31 +598,12 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
 	fi
 
-# define HAVE_NIC_TEMPERATURE_SUPPORTED from other flags
-	if check_compat_config_h_var HAVE_HWMON_OPS_READ_STRING &&
-	   check_compat_config_h_var HAVE_HWMON_DEVICE_REGISTER_WITH_INFO
-	then
-		set_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
-	else
-		unset_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
-	fi
-
 # define HAVE_VDPA_SUPPORT from other flags
 	if check_compat_config_h_var HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES
 	then
 		set_complex_define_to_config_h HAVE_VDPA_SUPPORT
 	else
 		unset_complex_define_to_config_h HAVE_VDPA_SUPPORT
-	fi
-
-# define HAVE_DEVLINK_RESOURCE_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_DEVLINK_RESOURCE_REGISTER_8_PARAMS ||
-	   check_compat_config_h_var HAVE_DEVLINK_RESOURCE_REGISTER_6_PARAMS ||
-	   check_compat_config_h_var HAVE_DEVL_RESOURCE_REGISTER
-	then
-		set_complex_define_to_config_h HAVE_DEVLINK_RESOURCE_SUPPORT
-	else
-		unset_complex_define_to_config_h HAVE_DEVLINK_RESOURCE_SUPPORT
 	fi
 
 # define HAVE_NET_PAGE_POOL_H from other flags
@@ -700,33 +641,6 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_PAGE_POLL_NID_CHANGED
 	fi
 
-# define HAVE_XDP_SET_DATA_META_INVALID from other flags
-	if check_compat_config_h_var HAVE_XDP_SET_DATA_META_INVALID_XDP_H ||
-	   check_compat_config_h_var HAVE_XDP_SET_DATA_META_INVALID_FILTER_H
-	then
-		set_complex_define_to_config_h HAVE_XDP_SET_DATA_META_INVALID
-	else
-		unset_complex_define_to_config_h HAVE_XDP_SET_DATA_META_INVALID
-	fi
-
-# define HAVE_XDP_BUFF_DATA_HARD_START from other flags
-	if check_compat_config_h_var HAVE_XDP_BUFF_DATA_HARD_START_FILTER_H ||
-	   check_compat_config_h_var HAVE_XDP_BUFF_DATA_HARD_START_XDP_H
-	then
-		set_complex_define_to_config_h HAVE_XDP_BUFF_DATA_HARD_START
-	else
-		unset_complex_define_to_config_h HAVE_XDP_BUFF_DATA_HARD_START
-	fi
-
-# define HAVE_FILTER_H_HAVE_XDP_BUFF from other flags
-	if check_compat_config_h_var HAVE_XDP_BUFF_ON_FILTER ||
-	   check_compat_config_h_var HAVE_XDP_H_HAVE_XDP_BUFF
-	then
-		set_complex_define_to_config_h HAVE_FILTER_H_HAVE_XDP_BUFF
-	else
-		unset_complex_define_to_config_h HAVE_FILTER_H_HAVE_XDP_BUFF
-	fi
-
 # define HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS from other flags
 	if check_compat_config_h_var HAVE_MM_GUP_MUST_UNSHARE_GET_3_PARAMS ||
 	   check_compat_config_h_var HAVE_ASSERT_FAULT_LOCKED
@@ -736,31 +650,84 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
 	fi
 
-# Define CONFIG_MLX5_EN_IPSEC based on kernel config and HAVE_
-	check_autofconf CONFIG_MLX5_EN_IPSEC
-	if [ "${CONFIG_MLX5_EN_IPSEC}" == "1" ]; then
-	    if check_compat_config_h_var HAVE_XFRM_DEV_OFFLOAD_FLAG_ACQ; then
-			CONFIG_MLX5_EN_IPSEC="y"
-			CONFIG_MLX5_IPSEC="y"
-			set_config_mk_kernel CONFIG_MLX5_EN_IPSEC
-			set_config_mk_kernel CONFIG_MLX5_IPSEC
-		else
-			CONFIG_MLX5_EN_IPSEC=
-			CONFIG_MLX5_IPSEC=
-			unset_config_mk_kernel CONFIG_MLX5_EN_IPSEC
-			unset_config_mk_kernel CONFIG_MLX5_IPSEC
-	    fi
+# define HAVE_PAGE_POOL_PARAM_HAS_NAPI from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_PARAMS_NAPI_TYPES_H ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_PARAMS_NAPI_OLD
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_PARAM_HAS_NAPI
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_PARAM_HAS_NAPI
+	fi
+
+# define HAVE_PAGE_POOL_DEFRAG_PAGE from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE_IN_PAGE_POOL_H ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE_IN_PAGE_POOL_TYPES_H ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_PUT_UNREFED_PAGE
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
 	fi
 
 # Define HAVE_PAGE_POOL_RELEASE_PAGE from other flags
 	if check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_PAGE_POOL_H ||
-		check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_TYPES_H
+	   check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_TYPES_H
 	then
 		set_complex_define_to_config_h HAVE_PAGE_POOL_RELEASE_PAGE
 	else
 		unset_complex_define_to_config_h HAVE_PAGE_POOL_RELEASE_PAGE
 	fi
 
+# Define HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32 from other flags
+	if check_compat_config_h_var HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32_RETURN_VOID ||
+	   check_compat_config_h_var HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32_RETURN_INT
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
+	fi
+
+# Define CONFIG_MLX5_VDPA_NET based on kernel config and HAVE_VDPA_SUPPORT
+	check_autofconf CONFIG_MLX5_VDPA_NET
+	if [ "${CONFIG_MLX5_VDPA_NET}" == "1" ]; then
+	    if check_compat_config_h_var HAVE_VDPA_SUPPORT; then
+			CONFIG_MLX5_VDPA_NET_DUMMY=
+			unset_config_mk_kernel CONFIG_MLX5_VDPA_NET_DUMMY
+		else
+			CONFIG_MLX5_VDPA_NET_DUMMY="m"
+			set_config_mk_kernel CONFIG_MLX5_VDPA_NET_DUMMY
+	    fi
+	fi
+
+# Define HAVE_LIGHT_SFS from other flags
+        if check_compat_config_h_var HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET &&
+           !(check_compat_config_h_var HAVE_DEVLINK_SET_FEATURES)
+        then
+                set_complex_define_to_config_h HAVE_LIGHT_SFS
+        else
+                unset_complex_define_to_config_h HAVE_LIGHT_SFS
+        fi
+
+# Define HAVE_DPLL_SUPPORT from other flags
+        if (check_compat_config_h_var HAVE_DPLL_NETDEV_PIN_SET || 
+	    check_compat_config_h_var HAVE_NETDEV_DPLL_PIN_SET) &&
+           check_compat_config_h_var HAVE_DPLL_STRUCTS
+        then
+                set_complex_define_to_config_h HAVE_DPLL_SUPPORT
+        else
+                unset_complex_define_to_config_h HAVE_DPLL_SUPPORT
+        fi
+# Define CONFIG_MLX5_DPLL based on kernel config and HAVE_DPLL_STRUCTS
+	check_autofconf CONFIG_DPLL
+	if [ "${CONFIG_DPLL}" == "1" ]; then
+	    if check_compat_config_h_var HAVE_DPLL_SUPPORT; then
+			CONFIG_MLX5_DPLL="m"
+			set_config_mk_kernel_module CONFIG_MLX5_DPLL
+		else
+			CONFIG_MLX5_DPLL=
+			unset_config_mk_kernel CONFIG_MLX5_DPLL
+	    fi
+	fi
 }
 
 check_kerver_rh_cls()
@@ -836,7 +803,7 @@ function check_autofconf {
 function add_conf {
     COMMENT=$1
     PARAM=${2%=*}
-    
+
     VALUE=${2#*=}
     OICONF=${PWD}/ofed_scripts/openib.conf.tmp
 
@@ -862,6 +829,7 @@ CONFIG_INFINIBAND_IPOIB=${CONFIG_INFINIBAND_IPOIB:-''}
 CONFIG_INFINIBAND_IPOIB_CM=${CONFIG_INFINIBAND_IPOIB_CM:-''}
 CONFIG_INFINIBAND_SRP=${CONFIG_INFINIBAND_SRP:-''}
 CONFIG_INFINIBAND_SRP_DUMMY=${CONFIG_INFINIBAND_SRP_DUMMY:-''}
+CONFIG_MLX5_VDPA_NET_DUMMY=${CONFIG_MLX5_VDPA_NET_DUMMY:-''}
 
 CONFIG_RDMA_RXE=${CONFIG_RDMA_RXE:-''}
 CONFIG_RDMA_RXE_DUMMY=${CONFIG_RDMA_RXE_DUMMY:-''}
@@ -902,7 +870,7 @@ CONFIG_AUXILIARY_BUS=${CONFIG_AUXILIARY_BUS:-'m'}
 CONFIG_MLXDEVM=${CONFIG_MLXDEVM:-'m'}
 CONFIG_MLX5_SF_CFG=${CONFIG_MLX5_SF_CFG:-''}
 CONFIG_MLX5_SF_SFC=${CONFIG_MLX5_SF_SFC:-''}
-CONFIG_MLX5_EN_MACSEC=${CONFIG_MLX5_EN_MACSEC:-''}
+CONFIG_MLX5_MACSEC=${CONFIG_MLX5_MACSEC:-''}
 
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT:-''}
 CONFIG_COMPAT_VERSION=${CONFIG_COMPAT_VERSION:-''}
@@ -929,6 +897,8 @@ CONFIG_NVME_FABRICS=${CONFIG_NVME_FABRICS:-''}
 CONFIG_NVME_FC=${CONFIG_NVME_FC:-''}
 CONFIG_NVME_RDMA=${CONFIG_NVME_RDMA:-''}
 CONFIG_NVME_TCP=${CONFIG_NVME_TCP:-''}
+CONFIG_NVME_APPLE=${CONFIG_NVME_APPLE:-''}
+CONFIG_NVME_AUTH=${CONFIG_NVME_AUTH:-''}
 CONFIG_NVME_COMMON=${CONFIG_NVME_COMMON:-''}
 CONFIG_NVME_MULTIPATH=${CONFIG_NVME_MULTIPATH:-''}
 CONFIG_NVME_HOST_DUMMY=${CONFIG_NVME_HOST_DUMMY:-''}
@@ -965,56 +935,55 @@ CONFIG_ENABLE_XDP="y"
 CONFIG_ENABLE_VFIO="y"
 CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
-# should be unset once backport finished 
+# should be unset once backport finished
 # block RHEL supports
-OFED_BASE_KVERSION="6.3"
-MIN_KVERSION="3.10"
+OFED_BASE_KVERSION="6.6"
+MIN_KVERSION="4.18"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
 REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
-NFSRDMA_SUPPORTED_KVERSION="4.12.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+NFSRDMA_SUPPORTED_KVERSION="4.18.0"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
 # nvmf
-NVMF_SUPPORTED_KVERSION="4.8.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+NVMF_SUPPORTED_KVERSION="4.18.0"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
 # iser/isert/srp/gds
-ISER_SUPPORTED_KVERSION="3.10.0"
-ISERT_SUPPORTED_KVERSION="3.10.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+ISER_SUPPORTED_KVERSION="4.18.0"
+ISERT_SUPPORTED_KVERSION="4.18.0"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
-SRP_SUPPORTED_KVERSION="3.10.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+SRP_SUPPORTED_KVERSION="4.18.0"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
-GDS_SUPPORTED_KVERSION="4.15.0"
+GDS_SUPPORTED_KVERSION="4.18.0"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
 # cls_act
-CLS_ACT_SUPPORTED_KVERSION="4.12.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+CLS_ACT_SUPPORTED_KVERSION="4.18.0"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.7"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
 
 #ODP
-ODP_SUPPORTED_KVERSION="3.10.0"
+ODP_SUPPORTED_KVERSION="4.18.0"
 
 #IPSEC
-IPSEC_SUPPORTED_KVERSION="4.15.0"
+IPSEC_SUPPORTED_KVERSION="4.18.0"
 
 #mlxdevm
-MLXDEVM_SUPPORTED_KVERSION="4.15.0"
+MLXDEVM_SUPPORTED_KVERSION="4.18.0"
 
-RETPOLINE_MINIMAL_VERSION="4.15.0"
 KVERSION=${KVERSION:-$(uname -r)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
 
@@ -1580,6 +1549,8 @@ main()
                             CONFIG_NVME_FC="m"
                             CONFIG_NVME_RDMA="m"
                             CONFIG_NVME_TCP="m"
+                            CONFIG_NVME_APPLE="m"
+                            CONFIG_NVME_AUTH="m"
                             CONFIG_NVME_COMMON="m"
                             CONFIG_NVME_MULTIPATH="y"
                             CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1591,6 +1562,8 @@ main()
                             CONFIG_NVME_FC=
                             CONFIG_NVME_RDMA=
 			    CONFIG_NVME_TCP=
+			    CONFIG_NVME_APPLE=
+			    CONFIG_NVME_AUTH=
 			    CONFIG_NVME_COMMON=
                             CONFIG_NVME_MULTIPATH=
                             CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1603,6 +1576,8 @@ main()
                             CONFIG_NVME_FC=
                             CONFIG_NVME_RDMA="m"
                             CONFIG_NVME_TCP="m"
+                            CONFIG_NVME_APPLE="m"
+                            CONFIG_NVME_AUTH="m"
                             CONFIG_NVME_COMMON="m"
                             CONFIG_NVME_MULTIPATH="y"
                             CONFIG_NVME_TARGET=
@@ -1620,6 +1595,8 @@ main()
                             CONFIG_NVME_FC=
                             CONFIG_NVME_RDMA=
 			    CONFIG_NVME_TCP=
+			    CONFIG_NVME_APPLE=
+			    CONFIG_NVME_AUTH=
 			    CONFIG_NVME_COMMON=
                             CONFIG_NVME_MULTIPATH=
                             CONFIG_NVME_TARGET=
@@ -1743,12 +1720,6 @@ main()
                         --without-sf-sfc)
                         CONFIG_MLX5_SF_SFC=
                         ;;
-                        --with-bridge-offload)
-                            CONFIG_MLX5_BRIDGE="y"
-                        ;;
-                        --without-bridge-offload)
-                            CONFIG_MLX5_BRIDGE=
-                        ;;
                     -h | --help)
                                 usage
                                 exit 0
@@ -1853,7 +1824,7 @@ if ! check_kerver ${KVERSION} ${NFSRDMA_SUPPORTED_KVERSION}; then
 	if (! check_kerver_rh_nfs_rdma ${KVERSION}) || support_only_base ${NFSRDMA_SUPPORTED_KVERSION}; then
 		CONFIG_SUNRPC_XPRT_RDMA=
 		echo "Warning: NFS-RMDA requires RHEL7.5 and above or kernel version ${NFSORDMA_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-	fi 
+	fi
 fi
 
 if  check_kerver ${KVERSION} ${NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
@@ -1869,6 +1840,8 @@ if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_FC=
 		CONFIG_NVME_RDMA=
 		CONFIG_NVME_TCP=
+		CONFIG_NVME_APPLE=
+		CONFIG_NVME_AUTH=
 		CONFIG_NVME_COMMON=
 		CONFIG_NVME_MULTIPATH=
 		CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1893,6 +1866,8 @@ if  check_kerver ${KVERSION} ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_NVME_FC=
         CONFIG_NVME_RDMA=
         CONFIG_NVME_TCP=
+        CONFIG_NVME_APPLE=
+        CONFIG_NVME_AUTH=
         CONFIG_NVME_COMMON=
         CONFIG_NVME_MULTIPATH=
         CONFIG_NVME_HOST_WITHOUT_FC=
@@ -2021,6 +1996,22 @@ if [ "X${CONFIG_NVME_TCP}" == "Xm" ]; then
     fi
 fi
 
+# Enable nvme-apple only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_APPLE}" == "Xm" ]; then
+    check_autofconf CONFIG_NVME_APPLE
+    if [ X${CONFIG_NVME_APPLE} == "X1" ]; then
+        CONFIG_NVME_APPLE=m
+    fi
+fi
+
+# Enable nvme-auth only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_AUTH}" == "Xm" ]; then
+    check_autofconf CONFIG_NVME_AUTH
+    if [ X${CONFIG_NVME_AUTH} == "X1" ]; then
+        CONFIG_NVME_AUTH=m
+    fi
+fi
+
 # Enable nvme-common only when it is enabled in the kernel
 if [ "X${CONFIG_NVME_COMMON}" == "Xm" ]; then
     check_autofconf CONFIG_NVME_COMMON
@@ -2099,6 +2090,7 @@ if [ "X$BUILD_DUMMY_MODS" == "X1" ]; then
    CONFIG_NVME_FC=
    CONFIG_NVME_RDMA=
    CONFIG_NVME_TCP=
+   CONFIG_NVME_APPLE=
    CONFIG_NVME_COMMON=
    CONFIG_NVME_MULTIPATH=
 
@@ -2202,20 +2194,6 @@ if [ "X${CONFIG_INFINIBAND_ISERT}" == "Xm" ]; then
     fi
 fi
 
-CFLAGS_RETPOLINE=''
-case "$ARCH" in i386 | x86_64)
-    # Any kernel >= 4.15 is not interesting: we need to "patch" some
-    # distribution kernels where the base version has no retpoline
-    # but the updates do.
-    if check_kerver ${RETPOLINE_MINIMAL_VERSION} ${KVERSION}; then
-        check_autofconf CONFIG_RETPOLINE
-        if [ "$CONFIG_RETPOLINE" != "1" ]; then
-            CFLAGS_RETPOLINE="-mindirect-branch=thunk-inline -mindirect-branch-register -DRETPOLINE_MLNX"
-        fi
-    fi
-    ;;
-esac
-
 #
 # END of disable/enable features/modules  ###########################
 #
@@ -2257,7 +2235,6 @@ prefix=${prefix}
 AUTOCONF_H=${AUTOCONF_H}
 
 WITH_MAKE_PARAMS=${WITH_MAKE_PARAMS}
-CFLAGS_RETPOLINE=${CFLAGS_RETPOLINE}
 
 EOFCONFIG
 

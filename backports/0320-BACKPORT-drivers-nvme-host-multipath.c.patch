@@ -1,0 +1,468 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/multipath.c
+
+Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
+---
+ drivers/nvme/host/multipath.c | 221 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 218 insertions(+), 3 deletions(-)
+
+--- a/drivers/nvme/host/multipath.c
++++ b/drivers/nvme/host/multipath.c
+@@ -101,11 +101,17 @@ void nvme_failover_req(struct request *r
+ 
+ 	spin_lock_irqsave(&ns->head->requeue_lock, flags);
+ 	for (bio = req->bio; bio; bio = bio->bi_next) {
++#ifdef HAVE_BIO_BI_DISK
++		bio->bi_disk = ns->head->disk;
++#else
+ 		bio_set_dev(bio, ns->head->disk->part0);
++#endif
++#ifdef HAVE_BIO_BI_COOKIE
+ 		if (bio->bi_opf & REQ_POLLED) {
+ 			bio->bi_opf &= ~REQ_POLLED;
+ 			bio->bi_cookie = BLK_QC_T_NONE;
+ 		}
++#endif
+ 		/*
+ 		 * The alternate request queue that we may end up submitting
+ 		 * the bio to may be frozen temporarily, in this case REQ_NOWAIT
+@@ -122,6 +128,7 @@ void nvme_failover_req(struct request *r
+ 	kblockd_schedule_work(&ns->head->requeue_work);
+ }
+ 
++#if defined HAVE_BDEV_START_IO_ACCT || defined HAVE_BDEV_START_IO_ACCT_3_PARAM
+ void nvme_mpath_start_request(struct request *rq)
+ {
+ 	struct nvme_ns *ns = rq->q->queuedata;
+@@ -131,8 +138,14 @@ void nvme_mpath_start_request(struct req
+ 		return;
+ 
+ 	nvme_req(rq)->flags |= NVME_MPATH_IO_STATS;
++#ifdef HAVE_BDEV_START_IO_ACCT_3_PARAM
+ 	nvme_req(rq)->start_time = bdev_start_io_acct(disk->part0, req_op(rq),
+ 						      jiffies);
++#else
++	nvme_req(rq)->start_time = bdev_start_io_acct(disk->part0,
++					blk_rq_bytes(rq) >> SECTOR_SHIFT,
++					req_op(rq), jiffies);
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nvme_mpath_start_request);
+ 
+@@ -142,10 +155,17 @@ void nvme_mpath_end_request(struct reque
+ 
+ 	if (!(nvme_req(rq)->flags & NVME_MPATH_IO_STATS))
+ 		return;
++
++#ifdef HAVE_BDEV_START_IO_ACCT_3_PARAM
+ 	bdev_end_io_acct(ns->head->disk->part0, req_op(rq),
+ 			 blk_rq_bytes(rq) >> SECTOR_SHIFT,
+ 			 nvme_req(rq)->start_time);
++#else
++	bdev_end_io_acct(ns->head->disk->part0, req_op(rq),
++		nvme_req(rq)->start_time);
++#endif
+ }
++#endif
+ 
+ void nvme_kick_requeue_lists(struct nvme_ctrl *ctrl)
+ {
+@@ -153,11 +173,16 @@ void nvme_kick_requeue_lists(struct nvme
+ 
+ 	down_read(&ctrl->namespaces_rwsem);
+ 	list_for_each_entry(ns, &ctrl->namespaces, list) {
++#ifdef HAVE_DISK_UEVENT
+ 		if (!ns->head->disk)
+ 			continue;
+ 		kblockd_schedule_work(&ns->head->requeue_work);
+ 		if (ctrl->state == NVME_CTRL_LIVE)
+ 			disk_uevent(ns->head->disk, KOBJ_CHANGE);
++#else
++	if (ns->head->disk)
++		kblockd_schedule_work(&ns->head->requeue_work);
++#endif
+ 	}
+ 	up_read(&ctrl->namespaces_rwsem);
+ }
+@@ -371,11 +396,27 @@ static bool nvme_available_path(struct n
+ 	return false;
+ }
+ 
++#ifdef HAVE_BLOCK_DEVICE_OPERATIONS_SUBMIT_BIO
++#ifdef HAVE_BIO_BI_COOKIE
+ static void nvme_ns_head_submit_bio(struct bio *bio)
++#else
++static blk_qc_t nvme_ns_head_submit_bio(struct bio *bio)
++#endif
++#else
++static blk_qc_t nvme_ns_head_make_request(struct request_queue *q,
++	struct bio *bio)
++#endif
+ {
++#ifdef HAVE_BIO_BI_DISK
++	struct nvme_ns_head *head = bio->bi_disk->private_data;
++#else
+ 	struct nvme_ns_head *head = bio->bi_bdev->bd_disk->private_data;
++#endif
+ 	struct device *dev = disk_to_dev(head->disk);
+ 	struct nvme_ns *ns;
++#ifndef HAVE_BIO_BI_COOKIE
++	blk_qc_t ret = BLK_QC_T_NONE;
++#endif
+ 	int srcu_idx;
+ 
+ 	/*
+@@ -383,18 +424,44 @@ static void nvme_ns_head_submit_bio(stru
+ 	 * different queue via blk_steal_bios(), so we need to use the bio_split
+ 	 * pool from the original queue to allocate the bvecs from.
+ 	 */
++#ifdef HAVE_BIO_SPLIT_TO_LIMITS
+ 	bio = bio_split_to_limits(bio);
+ 	if (!bio)
+ 		return;
++#else
++#ifdef HAVE_BLK_QUEUE_SPLIT_1_PARAM
++ 	blk_queue_split(&bio);
++#else
++	blk_queue_split(q, &bio);
++#endif
++#endif
+ 
+ 	srcu_idx = srcu_read_lock(&head->srcu);
+ 	ns = nvme_find_path(head);
+ 	if (likely(ns)) {
++#ifdef HAVE_BIO_BI_DISK
++		bio->bi_disk = ns->disk;
++#else
+ 		bio_set_dev(bio, ns->disk->part0);
++#endif
+ 		bio->bi_opf |= REQ_NVME_MPATH;
++#ifdef HAVE_TRACE_BLOCK_BIO_REMAP_4_PARAM
++		trace_block_bio_remap(bio->bi_disk->queue, bio,
++				      disk_devt(ns->head->disk),
++       			      bio->bi_iter.bi_sector);
++#else
+ 		trace_block_bio_remap(bio, disk_devt(ns->head->disk),
+-				      bio->bi_iter.bi_sector);
++ 				      bio->bi_iter.bi_sector);
++#endif
++#ifdef HAVE_SUBMIT_BIO_NOACCT
++#ifdef HAVE_BIO_BI_COOKIE
+ 		submit_bio_noacct(bio);
++#else
++		ret = submit_bio_noacct(bio);
++#endif
++#else
++		ret = direct_make_request(bio);
++#endif
+ 	} else if (nvme_available_path(head)) {
+ 		dev_warn_ratelimited(dev, "no usable path - requeuing I/O\n");
+ 
+@@ -408,16 +475,31 @@ static void nvme_ns_head_submit_bio(stru
+ 	}
+ 
+ 	srcu_read_unlock(&head->srcu, srcu_idx);
++#ifndef HAVE_BIO_BI_COOKIE
++	return ret;
++#endif
+ }
+ 
++#ifdef HAVE_GENDISK_OPEN_MODE
+ static int nvme_ns_head_open(struct gendisk *disk, blk_mode_t mode)
++#else
++static int nvme_ns_head_open(struct block_device *bdev, fmode_t mode)
++#endif
+ {
++#ifdef HAVE_GENDISK_OPEN_MODE
+ 	if (!nvme_tryget_ns_head(disk->private_data))
++#else
++	if (!nvme_tryget_ns_head(bdev->bd_disk->private_data))
++#endif
+ 		return -ENXIO;
+ 	return 0;
+ }
+ 
++#ifdef HAVE_GENDISK_OPEN_MODE
+ static void nvme_ns_head_release(struct gendisk *disk)
++#else
++static void nvme_ns_head_release(struct gendisk *disk, fmode_t mode)
++#endif
+ {
+ 	nvme_put_ns_head(disk->private_data);
+ }
+@@ -443,13 +525,19 @@ static int nvme_ns_head_report_zones(str
+ 
+ const struct block_device_operations nvme_ns_head_ops = {
+ 	.owner		= THIS_MODULE,
++#ifdef HAVE_BLOCK_DEVICE_OPERATIONS_SUBMIT_BIO
+ 	.submit_bio	= nvme_ns_head_submit_bio,
++#endif
+ 	.open		= nvme_ns_head_open,
+ 	.release	= nvme_ns_head_release,
+ 	.ioctl		= nvme_ns_head_ioctl,
++#ifdef HAVE_BLKDEV_COMPAT_PTR_IOCTL
+ 	.compat_ioctl	= blkdev_compat_ptr_ioctl,
++#endif
+ 	.getgeo		= nvme_getgeo,
++#ifdef HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES
+ 	.report_zones	= nvme_ns_head_report_zones,
++#endif
+ 	.pr_ops		= &nvme_pr_ops,
+ };
+ 
+@@ -477,10 +565,15 @@ static const struct file_operations nvme
+ 	.release	= nvme_ns_head_chr_release,
+ 	.unlocked_ioctl	= nvme_ns_head_chr_ioctl,
+ 	.compat_ioctl	= compat_ptr_ioctl,
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H)
+ 	.uring_cmd	= nvme_ns_head_chr_uring_cmd,
++#endif
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD_IOPOLL) && defined(HAVE_IO_URING_CMD_H)
+ 	.uring_cmd_iopoll = nvme_ns_chr_uring_cmd_iopoll,
++#endif
+ };
+ 
++#ifdef HAVE_DEVICE_ADD_DISK_3_ARGS
+ static int nvme_add_ns_head_cdev(struct nvme_ns_head *head)
+ {
+ 	int ret;
+@@ -494,6 +587,7 @@ static int nvme_add_ns_head_cdev(struct
+ 			    &nvme_ns_head_chr_fops, THIS_MODULE);
+ 	return ret;
+ }
++#endif
+ 
+ static void nvme_requeue_work(struct work_struct *work)
+ {
+@@ -509,12 +603,19 @@ static void nvme_requeue_work(struct wor
+ 		next = bio->bi_next;
+ 		bio->bi_next = NULL;
+ 
++#ifdef HAVE_SUBMIT_BIO_NOACCT
+ 		submit_bio_noacct(bio);
++#else
++		generic_make_request(bio);
++#endif
+ 	}
+ }
+ 
+ int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
+ {
++#ifndef HAVE_BLK_ALLOC_DISK
++	struct request_queue *q;
++#endif
+ 	bool vwc = false;
+ 
+ 	mutex_init(&head->lock);
+@@ -530,17 +631,70 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+ 	if (!(ctrl->subsys->cmic & NVME_CTRL_CMIC_MULTI_CTRL) || !multipath)
+ 		return 0;
+ 
++#ifdef HAVE_BLK_ALLOC_DISK
++#ifdef HAVE_BLK_ALLOC_DISK_2_PARAMS
++	head->disk = blk_alloc_disk(NULL, ctrl->numa_node);
++#else
+ 	head->disk = blk_alloc_disk(ctrl->numa_node);
++#endif
++#else
++#ifdef HAVE_BLOCK_DEVICE_OPERATIONS_SUBMIT_BIO
++	q = blk_alloc_queue(ctrl->numa_node);
++#else
++#ifdef HAVE_BLK_QUEUE_MAKE_REQUEST
++#ifdef HAVE_BLK_ALLOC_QUEUE_NODE_3_ARGS
++	q = blk_alloc_queue_node(GFP_KERNEL, NUMA_NO_NODE, NULL);
++#else
++#ifdef HAVE_BLK_ALLOC_QUEUE_RH
++	q = blk_alloc_queue_rh(nvme_ns_head_make_request, ctrl->numa_node);
++#else
++	q = blk_alloc_queue_node(GFP_KERNEL, ctrl->numa_node);
++#endif
++#endif
++#else
++	q = blk_alloc_queue(nvme_ns_head_make_request, ctrl->numa_node);
++#endif
++#endif /* HAVE_BLOCK_DEVICE_OPERATIONS_SUBMIT_BIO */
++	if (!q)
++		goto out;
++#if defined(HAVE_BLK_QUEUE_MAKE_REQUEST) && !defined(HAVE_BLK_ALLOC_QUEUE_RH)
++	blk_queue_make_request(q, nvme_ns_head_make_request);
++#endif
++	blk_queue_flag_set(QUEUE_FLAG_NONROT, q);
++	/* set to a default value for 512 until disk is validated */
++	blk_queue_logical_block_size(q, 512);
++	blk_set_stacking_limits(&q->limits);
++
++	/* we need to propagate up the VMC settings */
++	if (ctrl->vwc & NVME_CTRL_VWC_PRESENT)
++		vwc = true;
++	blk_queue_write_cache(q, vwc, vwc);
++
++	head->disk = alloc_disk(0);
++#endif /* HAVE_BLK_ALLOC_DISK */
+ 	if (!head->disk)
++#ifdef HAVE_BLK_ALLOC_DISK
+ 		return -ENOMEM;
++#else
++		goto out_cleanup_queue;
++#endif
+ 	head->disk->fops = &nvme_ns_head_ops;
+ 	head->disk->private_data = head;
++#ifndef HAVE_BLK_ALLOC_DISK
++	head->disk->queue = q;
++#endif
++#ifdef HAVE_GENHD_FL_EXT_DEVT
++	head->disk->flags = GENHD_FL_EXT_DEVT;
++#endif
+ 	sprintf(head->disk->disk_name, "nvme%dn%d",
+ 			ctrl->subsys->instance, head->instance);
+ 
++#ifdef HAVE_BLK_ALLOC_DISK
+ 	blk_queue_flag_set(QUEUE_FLAG_NONROT, head->disk->queue);
+ 	blk_queue_flag_set(QUEUE_FLAG_NOWAIT, head->disk->queue);
++#if defined HAVE_BDEV_START_IO_ACCT || defined HAVE_BDEV_START_IO_ACCT_3_PARAM
+ 	blk_queue_flag_set(QUEUE_FLAG_IO_STAT, head->disk->queue);
++#endif
+ 	/*
+ 	 * This assumes all controllers that refer to a namespace either
+ 	 * support poll queues or not.  That is not a strict guarantee,
+@@ -561,12 +715,22 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+ 		vwc = true;
+ 	blk_queue_write_cache(head->disk->queue, vwc, vwc);
+ 	return 0;
++#else
++	return 0;
++
++ out_cleanup_queue:
++	blk_cleanup_queue(q);
++ out:
++	return -ENOMEM;
++#endif
+ }
+ 
+ static void nvme_mpath_set_live(struct nvme_ns *ns)
+ {
+ 	struct nvme_ns_head *head = ns->head;
++#ifdef HAVE_DEVICE_ADD_DISK_RETURN
+ 	int rc;
++#endif
+ 
+ 	if (!head->disk)
+ 		return;
+@@ -576,15 +740,30 @@ static void nvme_mpath_set_live(struct n
+ 	 * paths simultaneously calling device_add_disk() on the same namespace
+ 	 * head.
+ 	 */
++#ifdef HAVE_DEVICE_ADD_DISK_3_ARGS
+ 	if (!test_and_set_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
++#ifdef HAVE_DEVICE_ADD_DISK_RETURN
+ 		rc = device_add_disk(&head->subsys->dev, head->disk,
+ 				     nvme_ns_id_attr_groups);
+ 		if (rc) {
+ 			clear_bit(NVME_NSHEAD_DISK_LIVE, &ns->flags);
+ 			return;
+ 		}
++#else
++		device_add_disk(&head->subsys->dev, head->disk,
++				nvme_ns_id_attr_groups);
++#endif
+ 		nvme_add_ns_head_cdev(head);
+ 	}
++#else
++	if (!test_and_set_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
++		device_add_disk(&head->subsys->dev, head->disk);
++		if (sysfs_create_group(&disk_to_dev(head->disk)->kobj,
++				&nvme_ns_id_attr_group))
++			dev_warn(&head->subsys->dev,
++				 "failed to create id group.\n");
++	}
++#endif
+ 
+ 	mutex_lock(&head->lock);
+ 	if (nvme_path_is_optimized(ns)) {
+@@ -620,7 +799,11 @@ static int nvme_parse_ana_log(struct nvm
+ 			return -EINVAL;
+ 
+ 		nr_nsids = le32_to_cpu(desc->nnsids);
++#ifdef flex_array_size
+ 		nsid_buf_size = flex_array_size(desc, nsids, nr_nsids);
++#else
++		nsid_buf_size = nr_nsids * sizeof(__le32);
++#endif
+ 
+ 		if (WARN_ON_ONCE(desc->grpid == 0))
+ 			return -EINVAL;
+@@ -768,7 +951,6 @@ void nvme_mpath_update(struct nvme_ctrl
+ static void nvme_anatt_timeout(struct timer_list *t)
+ {
+ 	struct nvme_ctrl *ctrl = from_timer(ctrl, t, anatt_timer);
+-
+ 	dev_info(ctrl->device, "ANATT timeout, resetting controller.\n");
+ 	nvme_reset_ctrl(ctrl);
+ }
+@@ -866,13 +1048,27 @@ void nvme_mpath_add_disk(struct nvme_ns
+ 		ns->ana_state = NVME_ANA_OPTIMIZED;
+ 		nvme_mpath_set_live(ns);
+ 	}
+-
++#ifdef HAVE_QUEUE_FLAG_STABLE_WRITES
+ 	if (blk_queue_stable_writes(ns->queue) && ns->head->disk)
+ 		blk_queue_flag_set(QUEUE_FLAG_STABLE_WRITES,
+ 				   ns->head->disk->queue);
++#else
++	if (bdi_cap_stable_pages_required(ns->queue->backing_dev_info)) {
++		struct gendisk *disk = ns->head->disk;
++
++		if (disk)
++			disk->queue->backing_dev_info->capabilities |=
++					 BDI_CAP_STABLE_WRITES;
++	}
++#endif
++
+ #ifdef CONFIG_BLK_DEV_ZONED
+ 	if (blk_queue_is_zoned(ns->queue) && ns->head->disk)
++#ifdef HAVE_GENDISK_CONV_ZONES_BITMAP
+ 		ns->head->disk->nr_zones = ns->disk->nr_zones;
++#else
++		ns->head->disk->queue->nr_zones = ns->queue->nr_zones;
++#endif
+ #endif
+ }
+ 
+@@ -881,10 +1077,18 @@ void nvme_mpath_shutdown_disk(struct nvm
+ 	if (!head->disk)
+ 		return;
+ 	kblockd_schedule_work(&head->requeue_work);
++#ifdef HAVE_DEVICE_ADD_DISK_3_ARGS
+ 	if (test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
+ 		nvme_cdev_del(&head->cdev, &head->cdev_device);
+ 		del_gendisk(head->disk);
+ 	}
++#else
++	if (test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
++		sysfs_remove_group(&disk_to_dev(head->disk)->kobj,
++				   &nvme_ns_id_attr_group);
++		del_gendisk(head->disk);
++	}
++#endif
+ }
+ 
+ void nvme_mpath_remove_disk(struct nvme_ns_head *head)
+@@ -894,7 +1098,18 @@ void nvme_mpath_remove_disk(struct nvme_
+ 	/* make sure all pending bios are cleaned up */
+ 	kblockd_schedule_work(&head->requeue_work);
+ 	flush_work(&head->requeue_work);
++#ifdef HAVE_BLK_ALLOC_DISK
++#ifdef HAVE_BLK_CLEANUP_DISK
++	blk_cleanup_disk(head->disk);
++#else
++	put_disk(head->disk);
++#endif
++#else
++	blk_cleanup_queue(head->disk->queue);
++	if (!test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags))
++		head->disk->queue = NULL;
+ 	put_disk(head->disk);
++#endif
+ }
+ 
+ void nvme_mpath_init_ctrl(struct nvme_ctrl *ctrl)

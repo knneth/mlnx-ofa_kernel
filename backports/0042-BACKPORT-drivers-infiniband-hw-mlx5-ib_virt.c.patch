@@ -1,0 +1,15 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/ib_virt.c
+
+---
+ drivers/infiniband/hw/mlx5/ib_virt.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/ib_virt.c
++++ b/drivers/infiniband/hw/mlx5/ib_virt.c
+@@ -222,3 +222,5 @@ int mlx5_ib_get_vf_guid(struct ib_device
+ 
+ 	return 0;
+ }
++
++

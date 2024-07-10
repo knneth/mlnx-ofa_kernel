@@ -1927,7 +1927,7 @@ char *nvme_fc_io_getuuid(struct nvmefc_fcp_req *req)
 	struct nvme_fc_fcp_op *op = fcp_req_to_fcp_op(req);
 	struct request *rq = op->rq;
 
-	if (!IS_ENABLED(CONFIG_BLK_CGROUP_FC_APPID) || !rq->bio)
+	if (!IS_ENABLED(CONFIG_BLK_CGROUP_FC_APPID) || !rq || !rq->bio)
 		return NULL;
 	return blkcg_get_fc_appid(rq->bio);
 }
@@ -2555,6 +2555,9 @@ nvme_fc_error_recovery(struct nvme_fc_ctrl *ctrl, char *errmsg)
 	if (ctrl->ctrl.state == NVME_CTRL_CONNECTING) {
 		__nvme_fc_abort_outstanding_ios(ctrl, true);
 		set_bit(ASSOC_FAILED, &ctrl->flags);
+		dev_warn(ctrl->ctrl.device,
+			"NVME-FC{%d}: transport error during (re)connect\n",
+			ctrl->cnum);
 		return;
 	}
 
@@ -2921,8 +2924,8 @@ nvme_fc_create_io_queues(struct nvme_fc_ctrl *ctrl)
 
 	ret = nvme_alloc_io_tag_set(&ctrl->ctrl, &ctrl->tag_set,
 			&nvme_fc_mq_ops, 1,
-			struct_size((struct nvme_fcp_op_w_sgl *)NULL, priv,
-				    ctrl->lport->ops->fcprqst_priv_sz));
+			struct_size_t(struct nvme_fcp_op_w_sgl, priv,
+				      ctrl->lport->ops->fcprqst_priv_sz));
 	if (ret)
 		return ret;
 
@@ -3114,7 +3117,9 @@ nvme_fc_create_association(struct nvme_fc_ctrl *ctrl)
 	 */
 
 	ret = nvme_enable_ctrl(&ctrl->ctrl);
-	if (ret || test_bit(ASSOC_FAILED, &ctrl->flags))
+	if (!ret && test_bit(ASSOC_FAILED, &ctrl->flags))
+		ret = -EIO;
+	if (ret)
 		goto out_disconnect_admin_queue;
 
 	ctrl->ctrl.max_segments = ctrl->lport->ops->max_sgl_segments;
@@ -3124,7 +3129,9 @@ nvme_fc_create_association(struct nvme_fc_ctrl *ctrl)
 	nvme_unquiesce_admin_queue(&ctrl->ctrl);
 
 	ret = nvme_init_ctrl_finish(&ctrl->ctrl, false);
-	if (ret || test_bit(ASSOC_FAILED, &ctrl->flags))
+	if (!ret && test_bit(ASSOC_FAILED, &ctrl->flags))
+		ret = -EIO;
+	if (ret)
 		goto out_disable_ctrl;
 
 	/* sanity checks */
@@ -3169,7 +3176,9 @@ nvme_fc_create_association(struct nvme_fc_ctrl *ctrl)
 		else
 			ret = nvme_fc_recreate_io_queues(ctrl);
 	}
-	if (ret || test_bit(ASSOC_FAILED, &ctrl->flags))
+	if (!ret && test_bit(ASSOC_FAILED, &ctrl->flags))
+		ret = -EIO;
+	if (ret)
 		goto out_term_aen_ops;
 
 	changed = nvme_change_ctrl_state(&ctrl->ctrl, NVME_CTRL_LIVE);
@@ -3186,6 +3195,9 @@ out_term_aen_ops:
 out_disable_ctrl:
 	nvme_disable_ctrl(&ctrl->ctrl, false);
 out_disconnect_admin_queue:
+	dev_warn(ctrl->ctrl.device,
+		"NVME-FC{%d}: create_assoc failed, assoc_id %llx ret %d\n",
+		ctrl->cnum, ctrl->association_id, ret);
 	/* send a Disconnect(association) LS to fc-nvme target */
 	nvme_fc_xmt_disconnect_assoc(ctrl);
 	spin_lock_irqsave(&ctrl->lock, flags);
@@ -3542,8 +3554,8 @@ nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
 
 	ret = nvme_alloc_admin_tag_set(&ctrl->ctrl, &ctrl->admin_tag_set,
 			&nvme_fc_admin_mq_ops,
-			struct_size((struct nvme_fcp_op_w_sgl *)NULL, priv,
-				    ctrl->lport->ops->fcprqst_priv_sz));
+			struct_size_t(struct nvme_fcp_op_w_sgl, priv,
+				      ctrl->lport->ops->fcprqst_priv_sz));
 	if (ret)
 		goto fail_ctrl;
 
@@ -3881,7 +3893,6 @@ static const struct attribute_group *nvme_fc_attr_groups[] = {
 static struct class fc_class = {
 	.name = "fc",
 	.dev_groups = nvme_fc_attr_groups,
-	.owner = THIS_MODULE,
 };
 
 static int __init nvme_fc_init_module(void)

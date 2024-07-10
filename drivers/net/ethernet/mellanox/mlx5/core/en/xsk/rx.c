@@ -22,6 +22,7 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	struct mlx5e_icosq *icosq = rq->icosq;
 	struct mlx5_wq_cyc *wq = &icosq->wq;
 	struct mlx5e_umr_wqe *umr_wqe;
+	struct xdp_buff **xsk_buffs;
 	int batch, i;
 	u32 offset; /* 17-bit value with MTT. */
 	u16 pi;
@@ -29,8 +30,10 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	if (unlikely(!xsk_buff_can_alloc(rq->xsk_pool, rq->mpwqe.pages_per_wqe)))
 		goto err;
 
+	xsk_buffs = (struct xdp_buff **)wi->alloc_units.xsk_buffs;
+
 	XSK_CHECK_PRIV_TYPE(struct mlx5e_xdp_buff);
-	batch = xsk_buff_alloc_batch(rq->xsk_pool, (struct xdp_buff **)wi->alloc_units,
+	batch = xsk_buff_alloc_batch(rq->xsk_pool, xsk_buffs,
 				     rq->mpwqe.pages_per_wqe);
 
 	/* If batch < pages_per_wqe, either:
@@ -40,8 +43,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	 * the first error, which will mean there are no more valid descriptors.
 	 */
 	for (; batch < rq->mpwqe.pages_per_wqe; batch++) {
-		wi->alloc_units[batch].xsk = xsk_buff_alloc(rq->xsk_pool);
-		if (unlikely(!wi->alloc_units[batch].xsk))
+		xsk_buffs[batch] = xsk_buff_alloc(rq->xsk_pool);
+		if (unlikely(!xsk_buffs[batch]))
 			goto err_reuse_batch;
 	}
 
@@ -51,8 +54,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 
 	if (likely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_ALIGNED)) {
 		for (i = 0; i < batch; i++) {
-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
-			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
+			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
+			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
 
 			umr_wqe->inline_mtts[i] = (struct mlx5_mtt) {
 				.ptag = cpu_to_be64(addr | MLX5_EN_WR),
@@ -61,8 +64,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 		}
 	} else if (unlikely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_UNALIGNED)) {
 		for (i = 0; i < batch; i++) {
-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
-			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
+			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
+			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
 
 			umr_wqe->inline_ksms[i] = (struct mlx5_ksm) {
 				.key = rq->mkey_be,
@@ -74,8 +77,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 		u32 mapping_size = 1 << (rq->mpwqe.page_shift - 2);
 
 		for (i = 0; i < batch; i++) {
-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
-			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
+			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
+			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
 
 			umr_wqe->inline_ksms[i << 2] = (struct mlx5_ksm) {
 				.key = rq->mkey_be,
@@ -101,8 +104,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 		__be32 frame_size = cpu_to_be32(rq->xsk_pool->chunk_size);
 
 		for (i = 0; i < batch; i++) {
-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
-			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
+			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
+			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
 
 			umr_wqe->inline_klms[i << 1] = (struct mlx5_klm) {
 				.key = rq->mkey_be,
@@ -118,7 +121,7 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 		}
 	}
 
-	bitmap_zero(wi->xdp_xmit_bitmap, rq->mpwqe.pages_per_wqe);
+	bitmap_zero(wi->skip_release_bitmap, rq->mpwqe.pages_per_wqe);
 	wi->consumed_strides = 0;
 
 	umr_wqe->ctrl.opmod_idx_opcode =
@@ -148,7 +151,7 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 
 err_reuse_batch:
 	while (--batch >= 0)
-		xsk_buff_free(wi->alloc_units[batch].xsk);
+		xsk_buff_free(xsk_buffs[batch]);
 
 err:
 	rq->stats->buff_alloc_err++;
@@ -162,11 +165,10 @@ int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
 	u32 contig, alloc;
 	int i;
 
-	/* mlx5e_init_frags_partition creates a 1:1 mapping between
-	 * rq->wqe.frags and rq->wqe.alloc_units, which allows us to
-	 * allocate XDP buffers straight into alloc_units.
+	/* Each rq->wqe.frags->xskp is 1:1 mapped to an element inside the
+	 * rq->wqe.alloc_units->xsk_buffs array allocated here.
 	 */
-	buffs = (struct xdp_buff **)rq->wqe.alloc_units;
+	buffs = rq->wqe.alloc_units->xsk_buffs;
 	contig = mlx5_wq_cyc_get_size(wq) - ix;
 	if (wqe_bulk <= contig) {
 		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, wqe_bulk);
@@ -186,8 +188,9 @@ int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
 		/* Assumes log_num_frags == 0. */
 		frag = &rq->wqe.frags[j];
 
-		addr = xsk_buff_xdp_get_frame_dma(frag->au->xsk);
+		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
 		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
+		frag->flags &= ~BIT(MLX5E_WQE_FRAG_SKIP_RELEASE);
 	}
 
 	return alloc;
@@ -208,12 +211,13 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
 		/* Assumes log_num_frags == 0. */
 		frag = &rq->wqe.frags[j];
 
-		frag->au->xsk = xsk_buff_alloc(rq->xsk_pool);
-		if (unlikely(!frag->au->xsk))
+		*frag->xskp = xsk_buff_alloc(rq->xsk_pool);
+		if (unlikely(!*frag->xskp))
 			return i;
 
-		addr = xsk_buff_xdp_get_frame_dma(frag->au->xsk);
+		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
 		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
+		frag->flags &= ~BIT(MLX5E_WQE_FRAG_SKIP_RELEASE);
 	}
 
 	return wqe_bulk;
@@ -248,7 +252,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
 						    u32 head_offset,
 						    u32 page_idx)
 {
-	struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units[page_idx].xsk);
+	struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units.xsk_buffs[page_idx]);
 	struct bpf_prog *prog;
 
 	/* Check packet size. Note LRO doesn't use linear SKB */
@@ -286,9 +290,9 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
 	 */
 
 	prog = rcu_dereference(rq->xdp_prog);
-	if (likely(prog && mlx5e_xdp_handle(rq, &wi->alloc_units[page_idx], prog, mxbuf))) {
+	if (likely(prog && mlx5e_xdp_handle(rq, prog, mxbuf))) {
 		if (likely(__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)))
-			__set_bit(page_idx, wi->xdp_xmit_bitmap); /* non-atomic */
+			__set_bit(page_idx, wi->skip_release_bitmap); /* non-atomic */
 		return NULL; /* page/packet was consumed by XDP */
 	}
 
@@ -303,7 +307,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
 					      struct mlx5_cqe64 *cqe,
 					      u32 cqe_bcnt)
 {
-	struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->au->xsk);
+	struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(*wi->xskp);
 	struct bpf_prog *prog;
 
 	/* wi->offset is not used in this function, because xdp->data and the
@@ -320,8 +324,11 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
 	net_prefetch(mxbuf->xdp.data);
 
 	prog = rcu_dereference(rq->xdp_prog);
-	if (likely(prog && mlx5e_xdp_handle(rq, wi->au, prog, mxbuf)))
+	if (likely(prog && mlx5e_xdp_handle(rq, prog, mxbuf))) {
+		if (likely(__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)))
+			wi->flags |= BIT(MLX5E_WQE_FRAG_SKIP_RELEASE);
 		return NULL; /* page/packet was consumed by XDP */
+	}
 
 	/* XDP_PASS: copy the data from the UMEM to a new SKB. The frame reuse
 	 * will be handled by mlx5e_free_rx_wqe.

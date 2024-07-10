@@ -1,0 +1,54 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
+
+---
+ drivers/infiniband/core/cache.c | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/cache.c
++++ b/drivers/infiniband/core/cache.c
+@@ -1401,9 +1401,17 @@ struct net_device *rdma_read_gid_attr_nd
+ EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
+ 
+ static int get_lower_dev_vlan(struct net_device *lower_dev,
+-			      struct netdev_nested_priv *priv)
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++				struct netdev_nested_priv *priv)
++#else
++				void *data)
++#endif
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	u16 *vlan_id = (u16 *)priv->data;
++#else
++	u16 *vlan_id = data;
++#endif
+ 
+ 	if (is_vlan_dev(lower_dev))
+ 		*vlan_id = vlan_dev_vlan_id(lower_dev);
+@@ -1429,9 +1437,11 @@ static int get_lower_dev_vlan(struct net
+ int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
+ 			    u16 *vlan_id, u8 *smac)
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct netdev_nested_priv priv = {
+ 		.data = (void *)vlan_id,
+ 	};
++#endif
+ 	struct net_device *ndev;
+ 
+ 	rcu_read_lock();
+@@ -1452,7 +1462,12 @@ int rdma_read_gid_l2_fields(const struct
+ 			 * the lower vlan device for this gid entry.
+ 			 */
+ 			netdev_walk_all_lower_dev_rcu(attr->ndev,
+-					get_lower_dev_vlan, &priv);
++					get_lower_dev_vlan, 
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++					&priv);
++#else
++					vlan_id);
++#endif
+ 		}
+ 	}
+ 	rcu_read_unlock();

@@ -1,7 +1,6 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/srq.c
 
-Change-Id: I6869a160cf7896ca6180eacc76ccb86e9ab1752b
 ---
  drivers/infiniband/hw/mlx5/srq.c | 10 +++++++++-
  1 file changed, 9 insertions(+), 1 deletion(-)

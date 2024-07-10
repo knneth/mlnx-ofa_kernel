@@ -12,18 +12,6 @@
 			SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 #endif
 
-#ifndef HAVE_SKB_PUT_ZERO
-#define skb_put_zero LINUX_BACKPORT(skb_put_zero)
-static inline void *skb_put_zero(struct sk_buff *skb, unsigned int len)
-{
-	void *tmp = skb_put(skb, len);
-
-	memset(tmp, 0, len);
-
-	return tmp;
-}
-#endif
-
 #ifndef HAVE_SKB_FRAG_OFF_ADD
 static inline void skb_frag_off_add(skb_frag_t *frag, int delta)
 {

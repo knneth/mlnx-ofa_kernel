@@ -1,48 +1,57 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
 
-Change-Id: I7287f9c6b22e280bde559fa7ab138f4c7c0e3ebc
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en/xsk/pool.h | 27 ++++++++++++++++++-
+ 1 file changed, 26 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
+@@ -4,8 +4,10 @@
+ #ifndef __MLX5_EN_XSK_POOL_H__
+ #define __MLX5_EN_XSK_POOL_H__
  
- void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "en.h"
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *params,
+ 						       struct mlx5e_xsk *xsk, u16 ix)
  {
-+#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
- 	u32 trunc_size = mapped_obj->sample.trunc_size;
- 	struct psample_group psample_group = {};
- 	struct psample_metadata md = {};
-@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
- 	skb_push(skb, skb->mac_len);
+@@ -17,11 +19,34 @@ static inline struct xsk_buff_pool *mlx5
  
- 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
-+#else
-+	u32 trunc_size = mapped_obj->sample.trunc_size;
-+	struct psample_group psample_group = {};
-+	int iif = skb->dev->ifindex;
-+	u32 size;
-+
-+	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
-+	psample_group.group_num = mapped_obj->sample.group_id;
-+	psample_group.net = &init_net;
-+	skb_push(skb, skb->mac_len);
-+
-+	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
-+#endif
+ 	return xsk->pools[ix];
  }
++#else
++static inline struct xdp_umem *mlx5e_xsk_get_pool(struct mlx5e_params *params,
++						       struct mlx5e_xsk *xsk, u16 ix)
++{
++	if (!xsk || !xsk->umems)
++		return NULL;
++
++	if (unlikely(ix >= params->num_channels))
++		return NULL;
++
++	return xsk->umems[ix];
++}
++#endif
  
- static int
-@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
- 	struct mlx5e_sample_attr *sample_attr;
- 	struct mlx5_flow_attr *pre_attr;
- 	struct mlx5_eswitch *esw;
--	u32 default_tbl_id;
-+	u32 default_tbl_id = 0;
- 	u32 obj_id;
- 	int err;
+ struct mlx5e_xsk_param;
+-void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
  
+ /* .ndo_bpf callback. */
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
+ int mlx5e_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool, u16 qid);
++#else
++void mlx5e_build_xsk_param(struct xdp_umem *umem, struct mlx5e_xsk_param *xsk);
++int mlx5e_xsk_setup_pool(struct net_device *dev, struct xdp_umem *pool, u16 qid);
++#endif
++
++#ifndef HAVE_XSK_BUFF_ALLOC
++int mlx5e_xsk_resize_reuseq(struct xdp_umem *umem, u32 nentries);
++#endif
+ 
++#endif
+ #endif /* __MLX5_EN_XSK_POOL_H__ */

@@ -67,19 +67,20 @@ mlx5_core-$(CONFIG_MLX5_TC_SAMPLE)   += en/tc/sample.o
 # Core extra
 #
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += eswitch.o eswitch_offloads.o eswitch_offloads_termtbl.o \
-				      ecpf.o rdma.o esw/legacy.o esw/pet_offloads.o \
-				      esw/debugfs.o esw/devlink_port.o esw/vporttbl.o esw/qos.o \
-				      esw/ipsec.o esw/vf_meter.o
+				      ecpf.o rdma.o esw/legacy.o \
+				      esw/devlink_port.o esw/vporttbl.o esw/qos.o esw/ipsec.o \
+				      esw/pet_offloads.o esw/vf_meter.o
 
 mlx5_core-$(CONFIG_MLX5_ESWITCH)   += esw/acl/helper.o \
 				      esw/acl/egress_lgcy.o esw/acl/egress_ofld.o \
 				      esw/acl/ingress_lgcy.o esw/acl/ingress_ofld.o
+
 ifneq ($(CONFIG_MLX5_EN_IPSEC),)
 	mlx5_core-$(CONFIG_MLX5_ESWITCH)   += esw/ipsec_fs.o
 endif
 
-
-mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o en/rep/bridge.o
+mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o esw/bridge_mcast.o esw/bridge_debugfs.o \
+				      en/rep/bridge.o
 
 mlx5_core-$(CONFIG_HWMON)          += hwmon.o
 mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o
@@ -98,7 +99,7 @@ mlx5_core-$(CONFIG_MLX5_CORE_IPOIB) += ipoib/ipoib.o ipoib/ethtool.o ipoib/ipoib
 #
 mlx5_core-$(CONFIG_MLX5_FPGA) += fpga/cmd.o fpga/core.o fpga/conn.o fpga/sdk.o
 
-mlx5_core-$(CONFIG_MLX5_EN_MACSEC) += en_accel/macsec.o en_accel/macsec_fs.o \
+mlx5_core-$(CONFIG_MLX5_MACSEC) += en_accel/macsec.o lib/macsec_fs.o \
 				      en_accel/macsec_stats.o
 
 mlx5_core-$(CONFIG_MLX5_EN_IPSEC) += en_accel/ipsec.o en_accel/ipsec_rxtx.o \
@@ -133,3 +134,6 @@ mlx5_core-$(CONFIG_MLX5_SF_MANAGER) += sf/cmd.o sf/hw_table.o sf/devlink.o
 ## SF cfg driver basic
 #
 mlx5_core-$(CONFIG_MLX5_SF_CFG) += sf/dev/cfg_driver.o
+
+obj-$(CONFIG_MLX5_DPLL) += mlx5_dpll.o
+mlx5_dpll-y :=	dpll.o

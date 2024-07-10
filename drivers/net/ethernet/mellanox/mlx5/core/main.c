@@ -47,9 +47,6 @@
 #include <linux/mlx5/mlx5_ifc.h>
 #include <linux/mlx5/vport.h>
 #include <linux/pm.h>
-#ifdef CONFIG_RFS_ACCEL
-#include <linux/cpu_rmap.h>
-#endif
 #include <net/devlink.h>
 #include "mlx5_core.h"
 #include "lib/eq.h"
@@ -83,7 +80,7 @@ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) core driver");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRIVER_VERSION);
-MODULE_INFO(basedon, "Korg 6.3-rc3");
+MODULE_INFO(basedon, "Korg 6.6-rc2");
 
 unsigned int mlx5_core_debug_mask;
 module_param_named(debug_mask, mlx5_core_debug_mask, uint, 0644);
@@ -91,7 +88,7 @@ MODULE_PARM_DESC(debug_mask, "debug mask: 1 = dump cmd data, 2 = dump cmd exec t
 
 static unsigned int prof_sel = MLX5_DEFAULT_PROF;
 module_param_named(prof_sel, prof_sel, uint, 0444);
-MODULE_PARM_DESC(prof_sel, "profile selector. Valid range 0 - 3");
+MODULE_PARM_DESC(prof_sel, "profile selector. Valid range 0 - 4");
 
 MODULE_ALIAS("auxiliary:mlx5_core.eth");
 MODULE_ALIAS("auxiliary:mlx5_core.eth-rep");
@@ -113,15 +110,19 @@ enum {
 static struct mlx5_profile profile[] = {
 	[0] = {
 		.mask           = 0,
+		.num_cmd_caches = MLX5_NUM_COMMAND_CACHES,
 	},
 	[1] = {
 		.mask		= MLX5_PROF_MASK_QP_SIZE,
 		.log_max_qp	= 12,
+		.num_cmd_caches = MLX5_NUM_COMMAND_CACHES,
+
 	},
 	[2] = {
 		.mask		= MLX5_PROF_MASK_QP_SIZE |
 				  MLX5_PROF_MASK_MR_CACHE,
 		.log_max_qp	= LOG_MAX_SUPPORTED_QPS,
+		.num_cmd_caches = MLX5_NUM_COMMAND_CACHES,
 		.mr_cache[0]	= {
 			.size	= 1500,
 			.limit	= 750
@@ -188,9 +189,15 @@ static struct mlx5_profile profile[] = {
 		},
 	},
 	[3] = {
+		.mask		= MLX5_PROF_MASK_QP_SIZE,
+		.log_max_qp	= LOG_MAX_SUPPORTED_QPS,
+		.num_cmd_caches = 0,
+	},
+	[4] = {
 		.mask		= MLX5_PROF_MASK_QP_SIZE  |
 				  MLX5_PROF_MASK_MR_CACHE ,
 		.log_max_qp	= 18,
+		.num_cmd_caches = MLX5_NUM_COMMAND_CACHES,
 		.mr_cache[0]	= {
 			.size	= 1500,
 			.limit	= 750
@@ -361,7 +368,7 @@ static int wait_fw_init(struct mlx5_core_dev *dev, u32 max_wait_mili,
 		if (!(fw_initializing >> 31))
 			break;
 		if (time_after(jiffies, end) ||
-		    test_and_clear_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state)) {
+		    test_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state)) {
 			err = -EBUSY;
 			break;
 		}
@@ -521,9 +528,8 @@ void mlx5_core_uplink_netdev_event_replay(struct mlx5_core_dev *dev)
 }
 EXPORT_SYMBOL(mlx5_core_uplink_netdev_event_replay);
 
-static int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev,
-				   enum mlx5_cap_type cap_type,
-				   enum mlx5_cap_mode cap_mode)
+int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type,
+			    enum mlx5_cap_mode cap_mode)
 {
 	u8 in[MLX5_ST_SZ_BYTES(query_hca_cap_in)];
 	int out_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
@@ -1185,7 +1191,6 @@ static int mlx5_pci_init(struct mlx5_core_dev *dev, struct pci_dev *pdev,
 	return 0;
 
 err_clr_master:
-	pci_clear_master(dev->pdev);
 	release_bar(dev->pdev);
 err_disable:
 	mlx5_pci_disable_device(dev);
@@ -1203,7 +1208,6 @@ static void mlx5_pci_close(struct mlx5_core_dev *dev)
 	 */
 	mlx5_drain_health_wq(dev);
 	iounmap(dev->iseg);
-	pci_clear_master(dev->pdev);
 	release_bar(dev->pdev);
 	mlx5_pci_disable_device(dev);
 	device_remove_file(&dev->pdev->dev, mlx5_roce_enable_dev_attrs);
@@ -1213,10 +1217,10 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 {
 	int err;
 
-	dev->priv.devcom = mlx5_devcom_register_device(dev);
-	if (IS_ERR(dev->priv.devcom))
-		mlx5_core_err(dev, "failed to register with devcom (0x%p)\n",
-			      dev->priv.devcom);
+	dev->priv.devc = mlx5_devcom_register_device(dev);
+	if (IS_ERR(dev->priv.devc))
+		mlx5_core_warn(dev, "failed to register devcom device %ld\n",
+			       PTR_ERR(dev->priv.devc));
 
 	err = mlx5_query_board_id(dev);
 	if (err) {
@@ -1373,7 +1377,7 @@ err_eq_cleanup:
 err_irq_cleanup:
 	mlx5_irq_table_cleanup(dev);
 err_devcom:
-	mlx5_devcom_unregister_device(dev->priv.devcom);
+	mlx5_devcom_unregister_device(dev->priv.devc);
 
 	return err;
 }
@@ -1405,7 +1409,7 @@ static void mlx5_cleanup_once(struct mlx5_core_dev *dev)
 	mlx5_events_cleanup(dev);
 	mlx5_eq_table_cleanup(dev);
 	mlx5_irq_table_cleanup(dev);
-	mlx5_devcom_unregister_device(dev->priv.devcom);
+	mlx5_devcom_unregister_device(dev->priv.devc);
 }
 
 static int mlx5_function_enable(struct mlx5_core_dev *dev, bool boot, u64 timeout)
@@ -1429,7 +1433,7 @@ static int mlx5_function_enable(struct mlx5_core_dev *dev, bool boot, u64 timeou
 		return err;
 	}
 
-	err = mlx5_cmd_init(dev);
+	err = mlx5_cmd_enable(dev);
 	if (err) {
 		mlx5_core_err(dev, "Failed initializing command interface, aborting\n");
 		return err;
@@ -1483,7 +1487,7 @@ stop_health_poll:
 	mlx5_stop_health_poll(dev, boot);
 err_cmd_cleanup:
 	mlx5_cmd_set_state(dev, MLX5_CMDIF_STATE_DOWN);
-	mlx5_cmd_cleanup(dev);
+	mlx5_cmd_disable(dev);
 
 	return err;
 }
@@ -1494,7 +1498,7 @@ static void mlx5_function_disable(struct mlx5_core_dev *dev, bool boot)
 	mlx5_core_disable_hca(dev, 0);
 	mlx5_stop_health_poll(dev, boot);
 	mlx5_cmd_set_state(dev, MLX5_CMDIF_STATE_DOWN);
-	mlx5_cmd_cleanup(dev);
+	mlx5_cmd_disable(dev);
 }
 
 static int mlx5_function_open(struct mlx5_core_dev *dev)
@@ -1756,8 +1760,7 @@ int mlx5_init_one_devl_locked(struct mlx5_core_dev *dev)
 		goto err_load;
 
 	/* the publishing of the params need to be done AFTER eq_table
-	 *          * is created.
-	 *                   */
+	 * is created. */
 	mlx5_devm_params_publish(dev);
 	set_bit(MLX5_INTERFACE_STATE_UP, &dev->intf_state);
 
@@ -1781,17 +1784,6 @@ function_teardown:
 err_function:
 	dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
 	mutex_unlock(&dev->intf_state_mutex);
-	return err;
-}
-
-int mlx5_init_one(struct mlx5_core_dev *dev)
-{
-	struct devlink *devlink = priv_to_devlink(dev);
-	int err;
-
-	devl_lock(devlink);
-	err = mlx5_init_one_devl_locked(dev);
-	devl_unlock(devlink);
 	return err;
 }
 
@@ -1847,6 +1839,17 @@ succeed:
 	mlx5_enter_error_state(dev, true);
 
 	return 0;
+}
+
+int mlx5_init_one(struct mlx5_core_dev *dev)
+{
+	struct devlink *devlink = priv_to_devlink(dev);
+	int err;
+
+	devl_lock(devlink);
+	err = mlx5_init_one_devl_locked(dev);
+	devl_unlock(devlink);
+	return err;
 }
 
 void mlx5_uninit_one(struct mlx5_core_dev *dev)
@@ -1985,21 +1988,24 @@ static int mlx5_query_hca_caps_light(struct mlx5_core_dev *dev)
 		return err;
 
 	if (MLX5_CAP_GEN(dev, eth_net_offloads)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_ETHERNET_OFFLOADS);
+		err = mlx5_core_get_caps_mode(dev, MLX5_CAP_ETHERNET_OFFLOADS,
+					      HCA_CAP_OPMOD_GET_CUR);
 		if (err)
 			return err;
 	}
 
 	if (MLX5_CAP_GEN(dev, nic_flow_table) ||
 	    MLX5_CAP_GEN(dev, ipoib_enhanced_offloads)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_FLOW_TABLE);
+		err = mlx5_core_get_caps_mode(dev, MLX5_CAP_FLOW_TABLE,
+					      HCA_CAP_OPMOD_GET_CUR);
 		if (err)
 			return err;
 	}
 
 	if (MLX5_CAP_GEN_64(dev, general_obj_types) &
 		MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_VDPA_EMULATION);
+		err = mlx5_core_get_caps_mode(dev, MLX5_CAP_VDPA_EMULATION,
+					      HCA_CAP_OPMOD_GET_CUR);
 		if (err)
 			return err;
 	}
@@ -2079,7 +2085,6 @@ static const int types[] = {
 	MLX5_CAP_FLOW_TABLE,
 	MLX5_CAP_ESWITCH_FLOW_TABLE,
 	MLX5_CAP_ESWITCH,
-	MLX5_CAP_VECTOR_CALC,
 	MLX5_CAP_QOS,
 	MLX5_CAP_DEBUG,
 	MLX5_CAP_NVMF,
@@ -2089,7 +2094,6 @@ static const int types[] = {
 	MLX5_CAP_VDPA_EMULATION,
 	MLX5_CAP_IPSEC,
 	MLX5_CAP_PORT_SELECTION,
-	MLX5_CAP_DEV_SHAMPO,
 	MLX5_CAP_MACSEC,
 	MLX5_CAP_ADV_VIRTUALIZATION,
 	MLX5_CAP_CRYPTO,
@@ -2163,6 +2167,12 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
 	debugfs_create_file("vhca_id", 0400, priv->dbg.dbg_root, dev, &vhca_id_fops);
 	INIT_LIST_HEAD(&priv->traps);
 
+	err = mlx5_cmd_init(dev);
+	if (err) {
+		mlx5_core_err(dev, "Failed initializing cmdif SW structs, aborting\n");
+		goto err_cmd_init;
+	}
+
 	err = mlx5_tout_init(dev);
 	if (err) {
 		mlx5_core_err(dev, "Failed initializing timeouts, aborting\n");
@@ -2208,6 +2218,8 @@ err_pagealloc_init:
 err_health_init:
 	mlx5_tout_cleanup(dev);
 err_timeout_init:
+	mlx5_cmd_cleanup(dev);
+err_cmd_init:
 	debugfs_remove(dev->priv.dbg.dbg_root);
 	mutex_destroy(&priv->pgdir_mutex);
 	mutex_destroy(&priv->alloc_mutex);
@@ -2230,6 +2242,7 @@ void mlx5_mdev_uninit(struct mlx5_core_dev *dev)
 	mlx5_pagealloc_cleanup(dev);
 	mlx5_health_cleanup(dev);
 	mlx5_tout_cleanup(dev);
+	mlx5_cmd_cleanup(dev);
 	debugfs_remove_recursive(dev->priv.dbg.dbg_root);
 	mutex_destroy(&priv->pgdir_mutex);
 	mutex_destroy(&priv->alloc_mutex);
@@ -2334,7 +2347,6 @@ static void remove_one(struct pci_dev *pdev)
 	 */
 	mlx5_drain_fw_reset(dev);
 	mlx5_drain_health_wq(dev);
-
 	devlink_unregister(devlink);
 	mlx5_sriov_disable(pdev, false);
 	mlx5_hwmon_dev_unregister(dev);

@@ -77,7 +77,9 @@ struct mlx5_pagefault {
 		struct {
 			u64	va;
 			u32	mkey;
-			u32	byte_count;
+			u32	fault_byte_count;
+			u32     prefetch_before_byte_count;
+			u32     prefetch_after_byte_count;
 			u8	flags;
 		} memory;
 	};
@@ -1489,8 +1491,12 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 static void mlx5_ib_mr_memory_pfault_handler(struct mlx5_ib_dev *dev,
 					     struct mlx5_pagefault *pfault)
 {
-	struct mlx5_ib_mkey *mmkey;
+	u64 prefetch_va = pfault->memory.va - pfault->memory.prefetch_before_byte_count;
+	size_t prefetch_size = pfault->memory.prefetch_before_byte_count +
+			       pfault->memory.fault_byte_count +
+			       pfault->memory.prefetch_after_byte_count;
 	struct mlx5_ib_mr *mr, *child_mr;
+	struct mlx5_ib_mkey *mmkey;
 	int ret = 0;
 
 	mmkey = find_odp_mkey(dev, pfault->memory.mkey);
@@ -1510,10 +1516,14 @@ static void mlx5_ib_mr_memory_pfault_handler(struct mlx5_ib_dev *dev,
 		break;
 	}
 
-	ret = pagefault_mr(mr, pfault->memory.va, pfault->memory.byte_count,
-			   NULL, 0, true);
-	if (ret < 0)
-		goto err;
+	/* If prefetch fails, handle only demanded page fault */
+	ret = pagefault_mr(mr, prefetch_va, prefetch_size, NULL, 0, true);
+	if (ret < 0) {
+		ret = pagefault_mr(mr, pfault->memory.va,
+				   pfault->memory.fault_byte_count, NULL, 0, true);
+		if (ret < 0)
+			goto err;
+	}
 
 	mlx5_update_odp_stats(mr, faults, ret);
 	mlx5r_deref_odp_mkey(mmkey);
@@ -1528,7 +1538,7 @@ static void mlx5_ib_mr_memory_pfault_handler(struct mlx5_ib_dev *dev,
 			"" :
 			"without resume cmd",
 		pfault->token, pfault->memory.mkey, pfault->memory.va,
-		pfault->memory.byte_count);
+		pfault->memory.fault_byte_count);
 
 	return;
 
@@ -1540,7 +1550,7 @@ err:
 		dev,
 		"PAGE FAULT error. token 0x%llx, mkey: 0x%x, va: 0x%llx, byte_count: 0x%x, err: %d\n",
 		pfault->token, pfault->memory.mkey, pfault->memory.va,
-		pfault->memory.byte_count, ret);
+		pfault->memory.fault_byte_count, ret);
 }
 
 static void mlx5_ib_pfault(struct mlx5_ib_dev *dev, struct mlx5_pagefault *pfault)
@@ -1652,18 +1662,37 @@ static void mlx5_ib_eq_pf_process(struct mlx5_ib_pf_eq *eq)
 				be32_to_cpu(pf_eqe->memory.token31_0) |
 				((u64)be16_to_cpu(pf_eqe->memory.token47_32)
 				 << 32);
-			pfault->memory.va = be64_to_cpu(pf_eqe->memory.va);
+			pfault->memory.va = be64_to_cpu(pf_eqe->memory.fault_va);
 			pfault->memory.mkey = be32_to_cpu(pf_eqe->memory.mkey);
-			pfault->memory.byte_count =
-				be32_to_cpu(pf_eqe->memory.byte_count);
+			/* This field was previously a 32 bit field of fault byte count and was
+			 * changed to num of page fault pages in 4k granularity, on the 24 MSB of
+			 * the previous field. This keeps backward compatability as can be seen in
+			 * the calculation below.
+			 */
+			pfault->memory.fault_byte_count = (be32_to_cpu(
+				pf_eqe->memory.demand_fault_pages) >> 12) *
+				MEMORY_SCHEME_PAGE_FAULT_GRANULARITY;
+			pfault->memory.prefetch_before_byte_count =
+				be16_to_cpu(
+					pf_eqe->memory.pre_demand_fault_pages) *
+				MEMORY_SCHEME_PAGE_FAULT_GRANULARITY;
+			pfault->memory.prefetch_after_byte_count =
+				be16_to_cpu(
+					pf_eqe->memory.post_demand_fault_pages) *
+				MEMORY_SCHEME_PAGE_FAULT_GRANULARITY;
 			pfault->memory.flags = pf_eqe->memory.flags;
-			mlx5_ib_dbg(eq->dev,
-				    "PAGE_FAULT: subtype: 0x%02x, type:0x%x, token: 0x%06llx, mkey: 0x%06x, byte_count: 0x%06x, va: 0x%016llx, flags: 0x%02x\n",
-				    eqe->sub_type, pfault->type, pfault->token,
-				    pfault->memory.mkey,
-				    pfault->memory.byte_count,
-				    pfault->memory.va,
-				    pfault->memory.flags);
+			mlx5_ib_dbg(
+				eq->dev,
+				"PAGE_FAULT: subtype: 0x%02x, token: 0x%06llx, mkey: 0x%06x, fault_byte_count: 0x%08x, va: 0x%016llx, flags: 0x%02x\n",
+				eqe->sub_type, pfault->token,
+				pfault->memory.mkey,
+				pfault->memory.fault_byte_count,
+				pfault->memory.va, pfault->memory.flags);
+			mlx5_ib_dbg(
+				eq->dev,
+				"PAGE_FAULT: prefetch size: before: 0x%08x, after 0x%08x\n",
+				pfault->memory.prefetch_before_byte_count,
+				pfault->memory.prefetch_after_byte_count);
 			break;
 
 		default:

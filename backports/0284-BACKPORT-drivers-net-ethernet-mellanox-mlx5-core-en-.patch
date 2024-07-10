@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+
+Change-Id: I6717fb123bb4a9763c84ad669e8826c6822e8e36
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+@@ -31,6 +31,7 @@
+  */
+ #include "port_buffer.h"
+ 
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
+ 			    struct mlx5e_port_buffer *port_buffer)
+ {
+@@ -588,3 +589,4 @@ int mlx5e_port_manual_buffer_config(stru
+ 
+ 	return err;
+ }
++#endif

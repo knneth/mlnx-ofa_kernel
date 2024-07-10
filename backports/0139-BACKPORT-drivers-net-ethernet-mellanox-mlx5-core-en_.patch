@@ -1,0 +1,272 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+
+---
+ .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 78 ++++++++++++++++++-
+ 1 file changed, 77 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+@@ -6,6 +6,7 @@
+ #include "en_accel/ktls_txrx.h"
+ #include "en_accel/ktls_utils.h"
+ 
++#ifdef HAVE_KTLS_STRUCTS
+ struct mlx5e_dump_wqe {
+ 	struct mlx5_wqe_ctrl_seg ctrl;
+ 	struct mlx5_wqe_data_seg data;
+@@ -14,6 +15,14 @@ struct mlx5e_dump_wqe {
+ #define MLX5E_KTLS_DUMP_WQEBBS \
+ 	(DIV_ROUND_UP(sizeof(struct mlx5e_dump_wqe), MLX5_SEND_WQE_BB))
+ 
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++enum mlx5e_ktls_tx_flag {
++	MLX5E_KTLS_TX_FLAG_CTX_POST_PENDING,
++	MLX5E_KTLS_TX_FLAG_KEY_ID_EXISTS,
++	MLX5E_KTLS_TX_NUM_FLAGS, /* Keep last */
++};
++#endif
++
+ static u8
+ mlx5e_ktls_dumps_num_wqes(struct mlx5e_params *params, unsigned int nfrags,
+ 			  unsigned int sync_len)
+@@ -91,14 +100,22 @@ struct mlx5e_ktls_offload_context_tx {
+ 	/* fast path */
+ 	u32 expected_seq;
+ 	u32 tisn;
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++	DECLARE_BITMAP(flags, MLX5E_KTLS_TX_NUM_FLAGS);
++#else
+ 	bool ctx_post_pending;
++#endif
+ 	/* control / resync */
+ 	struct list_head list_node; /* member of the pool */
+ 	union mlx5e_crypto_info crypto_info;
+ 	struct tls_offload_context_tx *tx_ctx;
+ 	struct mlx5_core_dev *mdev;
+ 	struct mlx5e_tls_sw_stats *sw_stats;
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	struct mlx5_crypto_dek *dek;
++#else
++	u32 key_id;
++#endif
+ 	u8 create_err : 1;
+ };
+ 
+@@ -226,6 +243,11 @@ err_out:
+ static void mlx5e_tls_priv_tx_cleanup(struct mlx5e_ktls_offload_context_tx *priv_tx,
+ 				      struct mlx5e_async_ctx *async)
+ {
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++	if (test_bit(MLX5E_KTLS_TX_FLAG_KEY_ID_EXISTS, priv_tx->flags))
++		mlx5_ktls_destroy_key(priv_tx->mdev, priv_tx->key_id);
++#endif
++
+ 	if (priv_tx->create_err) {
+ 		kfree(priv_tx);
+ 		return;
+@@ -457,7 +479,9 @@ int mlx5e_ktls_add_tx(struct net_device
+ 	struct mlx5e_ktls_offload_context_tx *priv_tx;
+ 	struct mlx5e_tls_tx_pool *pool;
+ 	struct tls_context *tls_ctx;
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	struct mlx5_crypto_dek *dek;
++#endif
+ 	struct mlx5e_priv *priv;
+ 	int err;
+ 
+@@ -469,15 +493,24 @@ int mlx5e_ktls_add_tx(struct net_device
+ 	if (IS_ERR(priv_tx))
+ 		return PTR_ERR(priv_tx);
+ 
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++	if (test_bit(MLX5E_KTLS_TX_FLAG_KEY_ID_EXISTS, priv_tx->flags)) {
++		mlx5_ktls_destroy_key(priv->mdev, priv_tx->key_id);
++		__clear_bit(MLX5E_KTLS_TX_FLAG_KEY_ID_EXISTS, priv_tx->flags);
++	}
++#endif
++
+ 	switch (crypto_info->cipher_type) {
+ 	case TLS_CIPHER_AES_GCM_128:
+ 		priv_tx->crypto_info.crypto_info_128 =
+ 			*(struct tls12_crypto_info_aes_gcm_128 *)crypto_info;
+ 		break;
++#ifdef TLS_CIPHER_AES_GCM_256
+ 	case TLS_CIPHER_AES_GCM_256:
+ 		priv_tx->crypto_info.crypto_info_256 =
+ 			*(struct tls12_crypto_info_aes_gcm_256 *)crypto_info;
+ 		break;
++#endif
+ 	default:
+ 		WARN_ONCE(1, "Unsupported cipher type %u\n",
+ 			  crypto_info->cipher_type);
+@@ -485,6 +518,7 @@ int mlx5e_ktls_add_tx(struct net_device
+ 		goto err_pool_push;
+ 	}
+ 
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	dek = mlx5_ktls_create_key(priv->tls->dek_pool, crypto_info);
+ 	if (IS_ERR(dek)) {
+ 		err = PTR_ERR(dek);
+@@ -492,12 +526,24 @@ int mlx5e_ktls_add_tx(struct net_device
+ 	}
+ 
+ 	priv_tx->dek = dek;
++#else
++	err = mlx5_ktls_create_key(pool->mdev, crypto_info, &priv_tx->key_id);
++	if (err)
++		goto err_pool_push;
++
++	__set_bit(MLX5E_KTLS_TX_FLAG_KEY_ID_EXISTS, priv_tx->flags);
++#endif
++
+ 	priv_tx->expected_seq = start_offload_tcp_sn;
+ 	priv_tx->tx_ctx = tls_offload_ctx_tx(tls_ctx);
+ 
+ 	mlx5e_set_ktls_tx_priv_ctx(tls_ctx, priv_tx);
+ 
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++	__set_bit(MLX5E_KTLS_TX_FLAG_CTX_POST_PENDING, priv_tx->flags);
++#else
+ 	priv_tx->ctx_post_pending = true;
++#endif
+ 	atomic64_inc(&priv_tx->sw_stats->tx_tls_ctx);
+ 
+ 	return 0;
+@@ -518,7 +564,9 @@ void mlx5e_ktls_del_tx(struct net_device
+ 	pool = priv->tls->tx_pool;
+ 
+ 	atomic64_inc(&priv_tx->sw_stats->tx_tls_del);
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	mlx5_ktls_destroy_key(priv->tls->dek_pool, priv_tx->dek);
++#endif
+ 	pool_push(pool, priv_tx);
+ }
+ 
+@@ -535,6 +583,7 @@ static void tx_fill_wi(struct mlx5e_txqs
+ 	};
+ }
+ 
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ static bool
+ mlx5e_ktls_tx_offload_test_and_clear_pending(struct mlx5e_ktls_offload_context_tx *priv_tx)
+ {
+@@ -544,7 +593,7 @@ mlx5e_ktls_tx_offload_test_and_clear_pen
+ 
+ 	return ret;
+ }
+-
++#endif
+ static void
+ post_static_params(struct mlx5e_txqsq *sq,
+ 		   struct mlx5e_ktls_offload_context_tx *priv_tx,
+@@ -558,7 +607,11 @@ post_static_params(struct mlx5e_txqsq *s
+ 	wqe = MLX5E_TLS_FETCH_SET_STATIC_PARAMS_WQE(sq, pi);
+ 	mlx5e_ktls_build_static_params(wqe, sq->pc, sq->sqn, &priv_tx->crypto_info,
+ 				       priv_tx->tisn,
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 				       mlx5_crypto_dek_get_id(priv_tx->dek),
++#else
++				       priv_tx->key_id,
++#endif
+ 				       0, fence, TLS_OFFLOAD_CTX_DIR_TX);
+ 	tx_fill_wi(sq, pi, num_wqebbs, 0, NULL);
+ 	sq->pc += num_wqebbs;
+@@ -691,6 +744,7 @@ tx_post_resync_params(struct mlx5e_txqsq
+ 		rec_seq_sz = sizeof(info->rec_seq);
+ 		break;
+ 	}
++#ifdef TLS_CIPHER_AES_GCM_256
+ 	case TLS_CIPHER_AES_GCM_256: {
+ 		struct tls12_crypto_info_aes_gcm_256 *info = &priv_tx->crypto_info.crypto_info_256;
+ 
+@@ -698,6 +752,7 @@ tx_post_resync_params(struct mlx5e_txqsq
+ 		rec_seq_sz = sizeof(info->rec_seq);
+ 		break;
+ 	}
++#endif
+ 	default:
+ 		WARN_ONCE(1, "Unsupported cipher type %u\n",
+ 			  priv_tx->crypto_info.crypto_info.cipher_type);
+@@ -837,7 +892,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+ 	int datalen;
+ 	u32 seq;
+ 
++#ifdef HAVE_SKB_TCP_ALL_HEADERS
+ 	datalen = skb->len - skb_tcp_all_headers(skb);
++#else
++	datalen = skb->len - (skb_transport_offset(skb) + tcp_hdrlen(skb));
++#endif
+ 	if (!datalen)
+ 		return true;
+ 
+@@ -854,7 +913,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+ 
+ 	priv_tx = mlx5e_get_ktls_tx_priv_ctx(tls_ctx);
+ 
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++	if (unlikely(__test_and_clear_bit(MLX5E_KTLS_TX_FLAG_CTX_POST_PENDING, priv_tx->flags)))
++#else
+ 	if (unlikely(mlx5e_ktls_tx_offload_test_and_clear_pending(priv_tx)))
++#endif
+ 		mlx5e_ktls_tx_post_param_wqes(sq, priv_tx, false, false);
+ 
+ 	seq = ntohl(tcp_hdr(skb)->seq);
+@@ -908,13 +971,16 @@ static void mlx5e_tls_tx_debugfs_init(st
+ 
+ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	struct mlx5_crypto_dek_pool *dek_pool;
++#endif
+ 	struct mlx5e_tls *tls = priv->tls;
+ 	int err;
+ 
+ 	if (!mlx5e_is_ktls_device(priv->mdev))
+ 		return 0;
+ 
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	/* DEK pool could be used by either or both of TX and RX. But we have to
+ 	 * put the creation here to avoid syndrome when doing devlink reload.
+ 	 */
+@@ -922,6 +988,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+ 	if (IS_ERR(dek_pool))
+ 		return PTR_ERR(dek_pool);
+ 	tls->dek_pool = dek_pool;
++#endif
+ 
+ 	if (!mlx5e_is_ktls_tx(priv->mdev))
+ 		return 0;
+@@ -937,14 +1004,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+ 	return 0;
+ 
+ err_tx_pool_init:
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	mlx5_crypto_dek_pool_destroy(dek_pool);
++#endif
+ 	return err;
+ }
+ 
+ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
+ {
+ 	if (!mlx5e_is_ktls_tx(priv->mdev))
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 		goto dek_pool_destroy;
++#else
++		return;
++#endif
+ 
+ 	debugfs_remove_recursive(priv->tls->debugfs.dfs_tx);
+ 	priv->tls->debugfs.dfs_tx = NULL;
+@@ -952,7 +1025,10 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
+ 	mlx5e_tls_tx_pool_cleanup(priv->tls->tx_pool);
+ 	priv->tls->tx_pool = NULL;
+ 
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ dek_pool_destroy:
+ 	if (mlx5e_is_ktls_device(priv->mdev))
+ 		mlx5_crypto_dek_pool_destroy(priv->tls->dek_pool);
++#endif
+ }
++#endif

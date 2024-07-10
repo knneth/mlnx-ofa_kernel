@@ -258,23 +258,6 @@ struct flow_rule {
 	struct flow_action	action;
 };
 
-#if !defined(HAVE_FLOW_DISSECTOR_USES_KEY) && !defined(CONFIG_COMPAT_FLOW_DISSECTOR)
-static bool dissector_uses_key(const struct flow_dissector *flow_dissector,
-			       enum flow_dissector_key_id key_id)
-{
-	return flow_dissector->used_keys & (1 << key_id);
-}
-
-#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
-static void *skb_flow_dissector_target(struct flow_dissector *flow_dissector,
-				       enum flow_dissector_key_id key_id,
-				       void *target_container)
-{
-	return ((char *) target_container) + flow_dissector->offset[key_id];
-}
-#endif
-#endif
-
 static inline bool flow_rule_match_key(const struct flow_rule *rule,
 				       enum flow_dissector_key_id key)
 {

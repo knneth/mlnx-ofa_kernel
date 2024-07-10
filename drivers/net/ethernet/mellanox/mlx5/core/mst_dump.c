@@ -7144,7 +7144,7 @@ static int mlx5_read4_block_old(struct mlx5_core_dev *dev,
 	return mlx5_block_op_pciconf_old(dev, offset, data, length);
 }
 
-int mlx5_get_vendor_cap_addr(struct mlx5_core_dev *dev)
+static int mlx5_get_vendor_cap_addr(struct mlx5_core_dev *dev)
 {
 	int vend_cap;
 	int ret;

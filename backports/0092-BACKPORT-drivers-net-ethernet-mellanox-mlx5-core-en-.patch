@@ -1,58 +1,59 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/health.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
 
-Change-Id: I04db2c83115a9da772a6c37678a8e54b970510fc
 ---
- .../ethernet/mellanox/mlx5/core/en/health.h   | 19 +++++++++++++++++++
- 1 file changed, 19 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/qos.c   | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
-@@ -19,11 +19,21 @@ void mlx5e_reporter_tx_destroy(struct ml
- void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq);
- int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+@@ -371,6 +371,7 @@ void mlx5e_reset_qdisc(struct net_device
+ 	spin_unlock_bh(qdisc_lock(qdisc));
+ }
  
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
-+void mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
-+void mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
-+void mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
-+void mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
-+void mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
-+#else /*HAVE_INT_DEVLINK_FMSG_U8_PAIR*/
- int mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
- int mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
- int mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
- int mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
- int mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
-+#endif /*HAVE_INT_DEVLINK_FMSG_U8_PAIR*/
++#ifdef HAVE_ENUM_TC_HTB_COMMAND
+ int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_qopt)
+ {
+ 	struct mlx5e_htb *htb = priv->htb;
+@@ -378,12 +379,17 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 
+ 	if (!htb && htb_qopt->command != TC_HTB_CREATE)
+ 		return -EINVAL;
+-
+-	if (htb_qopt->prio || htb_qopt->quantum) {
++#if defined(HAVE_TC_HTB_OPT_PRIO)
++if (htb_qopt->prio
++#if defined(HAVE_TC_HTB_OPT_QUANTUM)
++	|| htb_qopt->quantum
++#endif
++	) {
+ 		NL_SET_ERR_MSG_MOD(htb_qopt->extack,
+-				   "prio and quantum parameters are not supported by device with HTB offload enabled.");
++				"prio and quantum parameters are not supported by device with HTB offload enabled.");
+ 		return -EOPNOTSUPP;
+ 	}
 +#endif
  
- void mlx5e_reporter_rx_create(struct mlx5e_priv *priv);
- void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv);
-@@ -37,7 +47,9 @@ void mlx5e_reporter_icosq_resume_recover
- 
- struct mlx5e_err_ctx {
- 	int (*recover)(void *ctx);
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- 	int (*dump)(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg, void *ctx);
-+#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
- 	void *ctx;
- };
- 
-@@ -51,8 +63,15 @@ int mlx5e_health_report(struct mlx5e_pri
- void mlx5e_health_create_reporters(struct mlx5e_priv *priv);
- void mlx5e_health_destroy_reporters(struct mlx5e_priv *priv);
- void mlx5e_health_channels_update(struct mlx5e_priv *priv);
-+#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
- int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key,
- 			       struct devlink_fmsg *fmsg);
-+#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
-+void mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
-+		int queue_idx, char *lbl);
+ 	switch (htb_qopt->command) {
+ 	case TC_HTB_CREATE:
+@@ -418,7 +424,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 		return mlx5e_htb_leaf_to_inner(htb, htb_qopt->parent_classid, htb_qopt->classid,
+ 					       htb_qopt->rate, htb_qopt->ceil, htb_qopt->extack);
+ 	case TC_HTB_LEAF_DEL:
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID 
+ 		return mlx5e_htb_leaf_del(htb, &htb_qopt->classid, htb_qopt->extack);
 +#else
- int mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
- 			    int queue_idx, char *lbl);
- #endif
++		return mlx5e_htb_leaf_del(htb, htb_qopt->classid, &htb_qopt->moved_qid, &htb_qopt->qid,
++					  htb_qopt->extack);
 +#endif
+ 	case TC_HTB_LEAF_DEL_LAST:
+ 	case TC_HTB_LEAF_DEL_LAST_FORCE:
+ 		return mlx5e_htb_leaf_del_last(htb, htb_qopt->classid,
+@@ -437,6 +448,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+ 		return -EOPNOTSUPP;
+ 	}
+ }
 +#endif
+ 
+ struct mlx5e_mqprio_rl {
+ 	struct mlx5_core_dev *mdev;

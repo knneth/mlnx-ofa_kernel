@@ -1,0 +1,35 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+
+Change-Id: If2aa8e211fd52dec0fb9032e904acda3ac51d00c
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+@@ -658,7 +658,11 @@ static int mlx5e_macsec_del_txsa(struct
+ 
+ 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
+ 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(tx_sa);
++#else
++	kfree_rcu(tx_sa, rcu_head);
++#endif
+ 	macsec_device->tx_sa[assoc_num] = NULL;
+ 
+ out:
+@@ -826,7 +830,11 @@ static void macsec_del_rxsc_ctx(struct m
+ 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
+ 	metadata_dst_free(rx_sc->md_dst);
+ 	kfree(rx_sc->sc_xarray_element);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(rx_sc);
++#else
++	kfree_rcu(rx_sc, rcu_head);
++#endif
+ }
+ 
+ static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)

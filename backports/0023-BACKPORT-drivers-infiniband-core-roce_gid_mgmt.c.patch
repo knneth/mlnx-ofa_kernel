@@ -1,0 +1,258 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
+
+---
+ drivers/infiniband/core/roce_gid_mgmt.c | 125 ++++++++++++++++++------
+ 1 file changed, 93 insertions(+), 32 deletions(-)
+
+--- a/drivers/infiniband/core/roce_gid_mgmt.c
++++ b/drivers/infiniband/core/roce_gid_mgmt.c
+@@ -37,6 +37,9 @@
+ 
+ /* For in6_dev_get/in6_dev_put */
+ #include <net/addrconf.h>
++#ifdef MLX_USE_LAG_COMPAT
++#define MLX_IMPL_LAG_EVENTS
++#endif
+ #include <net/bonding.h>
+ 
+ #include <rdma/ib_cache.h>
+@@ -334,7 +337,9 @@ static void bond_delete_netdev_default_g
+ static void enum_netdev_ipv4_ips(struct ib_device *ib_dev,
+ 				 u32 port, struct net_device *ndev)
+ {
++#ifndef HAVE_FOR_IFA
+ 	const struct in_ifaddr *ifa;
++#endif
+ 	struct in_device *in_dev;
+ 	struct sin_list {
+ 		struct list_head	list;
+@@ -354,7 +359,11 @@ static void enum_netdev_ipv4_ips(struct
+ 		return;
+ 	}
+ 
++#ifndef HAVE_FOR_IFA
+ 	in_dev_for_each_ifa_rcu(ifa, in_dev) {
++#else
++	for_ifa(in_dev) {
++#endif
+ 		struct sin_list *entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
+ 
+ 		if (!entry)
+@@ -364,6 +373,9 @@ static void enum_netdev_ipv4_ips(struct
+ 		entry->ip.sin_addr.s_addr = ifa->ifa_address;
+ 		list_add_tail(&entry->list, &sin_list);
+ 	}
++#ifdef HAVE_FOR_IFA
++	endfor_ifa(in_dev);
++#endif
+ 
+ 	rcu_read_unlock();
+ 
+@@ -375,6 +387,7 @@ static void enum_netdev_ipv4_ips(struct
+ 	}
+ }
+ 
++#if IS_ENABLED(CONFIG_IPV6)
+ static void enum_netdev_ipv6_ips(struct ib_device *ib_dev,
+ 				 u32 port, struct net_device *ndev)
+ {
+@@ -420,13 +433,15 @@ static void enum_netdev_ipv6_ips(struct
+ 		kfree(sin6_iter);
+ 	}
+ }
++#endif
+ 
+ static void _add_netdev_ips(struct ib_device *ib_dev, u32 port,
+ 			    struct net_device *ndev)
+ {
+ 	enum_netdev_ipv4_ips(ib_dev, port, ndev);
+-	if (IS_ENABLED(CONFIG_IPV6))
+-		enum_netdev_ipv6_ips(ib_dev, port, ndev);
++#if IS_ENABLED(CONFIG_IPV6)
++	enum_netdev_ipv6_ips(ib_dev, port, ndev);
++#endif
+ }
+ 
+ static void add_netdev_ips(struct ib_device *ib_dev, u32 port,
+@@ -441,27 +456,6 @@ static void del_netdev_ips(struct ib_dev
+ 	ib_cache_gid_del_all_netdev_gids(ib_dev, port, cookie);
+ }
+ 
+-/**
+- * del_default_gids - Delete default GIDs of the event/cookie netdevice
+- * @ib_dev:	RDMA device pointer
+- * @port:	Port of the RDMA device whose GID table to consider
+- * @rdma_ndev:	Unused rdma netdevice
+- * @cookie:	Pointer to event netdevice
+- *
+- * del_default_gids() deletes the default GIDs of the event/cookie netdevice.
+- */
+-static void del_default_gids(struct ib_device *ib_dev, u32 port,
+-			     struct net_device *rdma_ndev, void *cookie)
+-{
+-	struct net_device *cookie_ndev = cookie;
+-	unsigned long gid_type_mask;
+-
+-	gid_type_mask = roce_gid_type_mask_support(ib_dev, port);
+-
+-	ib_cache_gid_set_default_gid(ib_dev, port, cookie_ndev, gid_type_mask,
+-				     IB_CACHE_GID_DEFAULT_MODE_DELETE);
+-}
+-
+ static void add_default_gids(struct ib_device *ib_dev, u32 port,
+ 			     struct net_device *rdma_ndev, void *cookie)
+ {
+@@ -539,10 +533,18 @@ struct upper_list {
+ };
+ 
+ static int netdev_upper_walk(struct net_device *upper,
+-			     struct netdev_nested_priv *priv)
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++				struct netdev_nested_priv *priv)
++#else	
++				void *data)
++#endif
+ {
+ 	struct upper_list *entry = kmalloc(sizeof(*entry), GFP_ATOMIC);
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct list_head *upper_list = (struct list_head *)priv->data;
++#else	
++	struct list_head *upper_list = data;
++#endif
+ 
+ 	if (!entry)
+ 		return 0;
+@@ -561,15 +563,31 @@ static void handle_netdev_upper(struct i
+ 						      struct net_device *ndev))
+ {
+ 	struct net_device *ndev = cookie;
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct netdev_nested_priv priv;
++#endif
+ 	struct upper_list *upper_iter;
+ 	struct upper_list *upper_temp;
+ 	LIST_HEAD(upper_list);
+ 
++#ifdef MLX_USE_LAG_COMPAT
++	rtnl_lock();
++#endif
++
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	priv.data = &upper_list;
++#endif
+ 	rcu_read_lock();
+-	netdev_walk_all_upper_dev_rcu(ndev, netdev_upper_walk, &priv);
++	netdev_walk_all_upper_dev_rcu(ndev, netdev_upper_walk, 
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++			&priv);
++#else
++			&upper_list);			
++#endif
+ 	rcu_read_unlock();
++#ifdef MLX_USE_LAG_COMPAT
++	rtnl_unlock();
++#endif
+ 
+ 	handle_netdev(ib_dev, port, ndev);
+ 	list_for_each_entry_safe(upper_iter, upper_temp, &upper_list,
+@@ -673,11 +691,32 @@ static const struct netdev_event_work_cm
+ 	.filter	= is_eth_port_of_netdev_filter
+ };
+ 
+-static const struct netdev_event_work_cmd add_cmd_upper_ips = {
+-	.cb	= add_netdev_upper_ips,
+-	.filter = is_eth_port_of_netdev_filter
++static const struct netdev_event_work_cmd bonding_default_add_cmd = {
++	.cb	= add_default_gids,
++	.filter	= is_upper_ndev_bond_master_filter
+ };
+ 
++/**
++ * del_default_gids - Delete default GIDs of the event/cookie netdevice
++ * @ib_dev:	RDMA device pointer
++ * @port:	Port of the RDMA device whose GID table to consider
++ * @rdma_ndev:	Unused rdma netdevice
++ * @cookie:	Pointer to event netdevice
++ *
++ * del_default_gids() deletes the default GIDs of the event/cookie netdevice.
++ */
++static void del_default_gids(struct ib_device *ib_dev, u32 port,
++			     struct net_device *rdma_ndev, void *cookie)
++{
++	struct net_device *cookie_ndev = cookie;
++	unsigned long gid_type_mask;
++
++	gid_type_mask = roce_gid_type_mask_support(ib_dev, port);
++
++	ib_cache_gid_set_default_gid(ib_dev, port, cookie_ndev, gid_type_mask,
++				     IB_CACHE_GID_DEFAULT_MODE_DELETE);
++}
++
+ static void
+ ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
+ 		  struct netdev_event_work_cmd *cmds)
+@@ -693,9 +732,9 @@ ndev_event_unlink(struct netdev_notifier
+ 	cmds[1] = add_cmd;
+ }
+ 
+-static const struct netdev_event_work_cmd bonding_default_add_cmd = {
+-	.cb	= add_default_gids,
+-	.filter	= is_upper_ndev_bond_master_filter
++static const struct netdev_event_work_cmd add_cmd_upper_ips = {
++	.cb	= add_netdev_upper_ips,
++	.filter = is_eth_port_of_netdev_filter
+ };
+ 
+ static void
+@@ -759,8 +798,17 @@ static int netdevice_event(struct notifi
+ 			};
+ 	static const struct netdev_event_work_cmd bonding_event_ips_del_cmd = {
+ 		.cb = del_netdev_upper_ips, .filter = upper_device_filter};
+-	struct net_device *ndev = netdev_notifier_info_to_dev(ptr);
+ 	struct netdev_event_work_cmd cmds[ROCE_NETDEV_CALLBACK_SZ] = { {NULL} };
++	struct net_device *ndev;
++
++#ifdef MLX_USE_LAG_COMPAT
++	if (event == NETDEV_CHANGEUPPER || event == NETDEV_CHANGELOWERSTATE)
++		ndev = netdev_notifier_info_to_dev_v2(ptr);
++	else
++		ndev = netdev_notifier_info_to_dev(ptr);
++#else
++	ndev = netdev_notifier_info_to_dev(ptr);
++#endif
+ 
+ 	if (ndev->type != ARPHRD_ETHER)
+ 		return NOTIFY_DONE;
+@@ -904,6 +952,13 @@ static struct notifier_block nb_inet6add
+ 	.notifier_call = inet6addr_event
+ };
+ 
++#ifdef MLX_USE_LAG_COMPAT
++static void roce_lag_compat_netdev_event(unsigned long event, void *ptr)
++{
++	nb_netdevice.notifier_call(&nb_netdevice, event, ptr);
++}
++#endif
++
+ int __init roce_gid_mgmt_init(void)
+ {
+ 	gid_cache_wq = alloc_ordered_workqueue("gid-cache-wq", 0);
+@@ -920,11 +975,17 @@ int __init roce_gid_mgmt_init(void)
+ 	 */
+ 	register_netdevice_notifier(&nb_netdevice);
+ 
++#ifdef MLX_USE_LAG_COMPAT
++	mlx_lag_compat_events_open(roce_lag_compat_netdev_event);
++#endif
+ 	return 0;
+ }
+ 
+ void __exit roce_gid_mgmt_cleanup(void)
+ {
++#ifdef MLX_USE_LAG_COMPAT
++	mlx_lag_compat_events_close();
++#endif
+ 	if (IS_ENABLED(CONFIG_IPV6))
+ 		unregister_inet6addr_notifier(&nb_inet6addr);
+ 	unregister_inetaddr_notifier(&nb_inetaddr);

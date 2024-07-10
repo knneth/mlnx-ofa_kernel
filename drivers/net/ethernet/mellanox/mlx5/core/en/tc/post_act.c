@@ -37,7 +37,7 @@ mlx5e_tc_post_act_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
 
 	if (!MLX5_CAP_FLOWTABLE_TYPE(priv->mdev, ignore_flow_level, table_type)) {
 		if (priv->mdev->coredev_type == MLX5_COREDEV_PF)
-			mlx5_core_warn(priv->mdev, "firmware level support is missing\n");
+			mlx5_core_dbg(priv->mdev, "firmware flow level support is missing\n");
 		err = -EOPNOTSUPP;
 		goto err_check;
 	}
@@ -118,10 +118,8 @@ mlx5e_tc_post_act_add(struct mlx5e_post_act *post_act, struct mlx5_flow_attr *po
 		return ERR_CAST(post_act);
 
 	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
-	if (!handle) {
-		kfree(handle);
+	if (!handle)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	post_attr->chain = 0;
 	post_attr->prio = 0;

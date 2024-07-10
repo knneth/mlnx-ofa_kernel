@@ -6,14 +6,6 @@
 
 #include_next <net/sock.h>
 
-#ifndef HAVE_SK_WAIT_DATA_3_PARAMS
-#define sk_wait_data(a,b,c) sk_wait_data(a,b)
-#endif
-
-#ifndef HAVE_SKWQ_HAS_SLEEPER
-#define skwq_has_sleeper wq_has_sleeper
-#endif
-
 #ifndef HAVE_SOCK_NO_LINGER
 static inline void sock_no_linger(struct sock *sk)
 {

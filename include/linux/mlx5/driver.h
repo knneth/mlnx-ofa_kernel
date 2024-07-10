@@ -134,8 +134,8 @@ enum {
 	MLX5_REG_PCAM		 = 0x507f,
 	MLX5_REG_NODE_DESC	 = 0x6001,
 	MLX5_REG_HOST_ENDIANNESS = 0x7004,
-	MLX5_REG_MTMP		 = 0x900A,
 	MLX5_REG_MTCAP		 = 0x9009,
+	MLX5_REG_MTMP		 = 0x900A,
 	MLX5_REG_MCIA		 = 0x9014,
 	MLX5_REG_MFRL		 = 0x9028,
 	MLX5_REG_MLCR		 = 0x902b,
@@ -155,6 +155,8 @@ enum {
 	MLX5_REG_MCC		 = 0x9062,
 	MLX5_REG_MCDA		 = 0x9063,
 	MLX5_REG_MCAM		 = 0x907f,
+	MLX5_REG_MSECQ		 = 0x9155,
+	MLX5_REG_MSEES		 = 0x9156,
 	MLX5_REG_MIRC		 = 0x9162,
 	MLX5_REG_SBCAM		 = 0xB01F,
 	MLX5_REG_RESOURCE_DUMP   = 0xC000,
@@ -306,18 +308,23 @@ struct mlx5_cmd_stats {
 struct mlx5_cmd {
 	struct mlx5_nb    nb;
 
+	/* members which needs to be queried or reinitialized each reload */
+	struct {
+		u16		cmdif_rev;
+		u8		log_sz;
+		u8		log_stride;
+		int		max_reg_cmds;
+		unsigned long	bitmask;
+		struct semaphore sem;
+		struct semaphore pages_sem;
+		struct semaphore throttle_sem;
+	} vars;
 	enum mlx5_cmdif_state	state;
 	void	       *cmd_alloc_buf;
 	dma_addr_t	alloc_dma;
 	int		alloc_size;
 	void	       *cmd_buf;
 	dma_addr_t	dma;
-	u16		cmdif_rev;
-	u8		log_sz;
-	u8		log_stride;
-	int		max_reg_cmds;
-	int		events;
-	u32 __iomem    *vector;
 
 	/* protect command queue allocations
 	 */
@@ -327,12 +334,8 @@ struct mlx5_cmd {
 	 */
 	spinlock_t	token_lock;
 	u8		token;
-	unsigned long	bitmask;
 	char		wq_name[MLX5_CMD_WQ_MAX_NAME];
 	struct workqueue_struct *wq;
-	struct semaphore sem;
-	struct semaphore pages_sem;
-	struct semaphore throttle_sem;
 	int	mode;
 	u16     allowed_opcode;
 	struct mlx5_cmd_work_ent *ent_arr[MLX5_MAX_COMMANDS];
@@ -342,7 +345,7 @@ struct mlx5_cmd {
 	struct kobject			*ko;
 	atomic_t			real_miss;
 	int checksum_disabled;
-	struct mlx5_cmd_stats stats[MLX5_CMD_OP_MAX];
+	struct xarray stats;
 };
 
 struct mlx5_cmd_mailbox {
@@ -403,7 +406,6 @@ enum mlx5_res_type {
 	MLX5_RES_SRQ	= 3,
 	MLX5_RES_XSRQ	= 4,
 	MLX5_RES_XRQ	= 5,
-	MLX5_RES_DCT	= MLX5_EVENT_QUEUE_TYPE_DCT,
 };
 
 struct mlx5_core_rsc_common {
@@ -469,15 +471,6 @@ struct mlx5_core_health {
 	u32 failed_in_seq;
 };
 
-struct mlx5_qp_table {
-	struct notifier_block   nb;
-
-	/* protect radix tree
-	 */
-	spinlock_t		lock;
-	struct radix_tree_root	tree;
-};
-
 enum {
 	MLX5_PF_NOTIFY_DISABLE_VF,
 	MLX5_PF_NOTIFY_ENABLE_VF,
@@ -540,11 +533,11 @@ struct mlx5_core_sriov {
 	struct mlx5_vf_context	*vfs_ctx;
 	int			num_vfs;
 	u16			max_vfs;
-	u16			max_ec_vfs;
 	struct kobject		*config;
 	struct kobject		*groups_config;
 	struct kobject		node_guid_kobj;
 	struct mlx5_sriov_vf	*vfs;
+	u16			max_ec_vfs;
 };
 
 struct mlx5_fc_pool {
@@ -581,7 +574,7 @@ struct mlx5_events;
 struct mlx5_mpfs;
 struct mlx5_eswitch;
 struct mlx5_lag;
-struct mlx5_devcom;
+struct mlx5_devcom_dev;
 struct mlx5_fw_reset;
 struct mlx5_eq_table;
 struct mlx5_irq_table;
@@ -709,6 +702,7 @@ struct mlx5_priv {
 	int			adev_idx;
 	int			sw_vhca_id;
 	struct mlx5_events      *events;
+	struct mlx5_vhca_events *vhca_events;
 	/* Used to save RoCE LAG state during recovery flow */
        	bool                    lag_enabled;
 
@@ -718,7 +712,7 @@ struct mlx5_priv {
 	struct mlx5_core_sriov	sriov;
 	struct mlx5_lag		*lag;
 	u32			flags;
-	struct mlx5_devcom	*devcom;
+	struct mlx5_devcom_dev	*devc;
 	struct mlx5_fw_reset	*fw_reset;
 	struct mlx5_core_roce	roce;
 	struct mlx5_core_regex	regex;
@@ -918,6 +912,7 @@ enum {
 struct mlx5_profile {
 	u64	mask;
 	u8	log_max_qp;
+	u8	num_cmd_caches;
 	struct {
 		int	size;
 		int	limit;
@@ -1003,16 +998,21 @@ struct mlx5_core_dev {
 	struct mlx5_diag_cnt    diag_cnt;
 	u32                      vsc_addr;
 	struct mlx5_hv_vhca	*hv_vhca;
-	struct mlx5_hwmon	*hwmon;
-	u64			num_block_tc;
-	u64			num_block_ipsec;
-	u64 num_ipsec_offloads;
 	struct mlx5_local_lb local_lb;
 	int max_cmpl_eq_count;
 	int cmpl_eq_depth;
 	int async_eq_depth;
 	u8 disable_en : 1;
 	u8 disable_fc : 1;
+	struct mlx5_hwmon	*hwmon;
+	u64			num_block_tc;
+	u64			num_block_ipsec;
+#ifdef CONFIG_MLX5_MACSEC
+	struct mlx5_macsec_fs *macsec_fs;
+	/* MACsec notifier chain to sync MACsec core and IB database */
+	struct blocking_notifier_head macsec_nh;
+#endif
+	u64 num_ipsec_offloads;
 };
 
 struct mlx5_db {
@@ -1228,7 +1228,6 @@ void mlx5_core_uplink_netdev_set(struct mlx5_core_dev *mdev, struct net_device *
 void mlx5_core_uplink_netdev_event_replay(struct mlx5_core_dev *mdev);
 
 int mlx5_core_query_special_contexts(struct mlx5_core_dev *dev);
-int mlx5_core_get_caps(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type);
 void mlx5_health_cleanup(struct mlx5_core_dev *dev);
 int mlx5_health_init(struct mlx5_core_dev *dev);
 void mlx5_start_health_poll(struct mlx5_core_dev *dev);
@@ -1265,7 +1264,7 @@ void mlx5_unregister_debugfs(void);
 
 void mlx5_fill_page_frag_array_perm(struct mlx5_frag_buf *buf, __be64 *pas, u8 perm);
 void mlx5_fill_page_frag_array(struct mlx5_frag_buf *frag_buf, __be64 *pas);
-int mlx5_vector2eqn(struct mlx5_core_dev *dev, int vector, int *eqn);
+int mlx5_comp_eqn_get(struct mlx5_core_dev *dev, u16 vecidx, int *eqn);
 int mlx5_core_attach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 int mlx5_core_detach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 
@@ -1317,9 +1316,8 @@ int mlx5_alloc_bfreg(struct mlx5_core_dev *mdev, struct mlx5_sq_bfreg *bfreg,
 		     bool map_wc, bool fast_path);
 void mlx5_free_bfreg(struct mlx5_core_dev *mdev, struct mlx5_sq_bfreg *bfreg);
 
-unsigned int mlx5_comp_vectors_count(struct mlx5_core_dev *dev);
-struct cpumask *
-mlx5_comp_irq_get_affinity_mask(struct mlx5_core_dev *dev, int vector);
+unsigned int mlx5_comp_vectors_max(struct mlx5_core_dev *dev);
+int mlx5_comp_vector_get_cpu(struct mlx5_core_dev *dev, int vector);
 unsigned int mlx5_core_reserved_gids_count(struct mlx5_core_dev *dev);
 int mlx5_core_roce_gid_set(struct mlx5_core_dev *dev, unsigned int index,
 			   u8 roce_version, u8 roce_l3_type, const u8 *gid,
@@ -1450,11 +1448,6 @@ static inline u16 mlx5_core_max_vfs(const struct mlx5_core_dev *dev)
 	return dev->priv.sriov.max_vfs;
 }
 
-static inline u16 mlx5_core_max_ec_vfs(const struct mlx5_core_dev *dev)
-{
-	return dev->priv.sriov.max_ec_vfs;
-}
-
 static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 {
 	/* LACP owner conditions:
@@ -1465,6 +1458,11 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 	return  MLX5_CAP_GEN(dev, vport_group_manager) &&
 		   (MLX5_CAP_GEN(dev, num_lag_ports) > 1) &&
 		    MLX5_CAP_GEN(dev, lag_master);
+}
+
+static inline u16 mlx5_core_max_ec_vfs(const struct mlx5_core_dev *dev)
+{
+	return dev->priv.sriov.max_ec_vfs;
 }
 
 static inline int mlx5_get_gid_table_len(u16 param)
@@ -1534,9 +1532,61 @@ static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
 	return mlx5_is_roce_on(dev);
 }
 
+#ifdef CONFIG_MLX5_MACSEC
+static inline bool mlx5e_is_macsec_device(const struct mlx5_core_dev *mdev)
+{
+	if (!(MLX5_CAP_GEN_64(mdev, general_obj_types) &
+	    MLX5_GENERAL_OBJ_TYPES_CAP_MACSEC_OFFLOAD))
+		return false;
+
+	if (!MLX5_CAP_GEN(mdev, log_max_dek))
+		return false;
+
+	if (!MLX5_CAP_MACSEC(mdev, log_max_macsec_offload))
+		return false;
+
+	if (!MLX5_CAP_FLOWTABLE_NIC_RX(mdev, macsec_decrypt) ||
+	    !MLX5_CAP_FLOWTABLE_NIC_RX(mdev, reformat_remove_macsec))
+		return false;
+
+	if (!MLX5_CAP_FLOWTABLE_NIC_TX(mdev, macsec_encrypt) ||
+	    !MLX5_CAP_FLOWTABLE_NIC_TX(mdev, reformat_add_macsec))
+		return false;
+
+	if (!MLX5_CAP_MACSEC(mdev, macsec_crypto_esp_aes_gcm_128_encrypt) &&
+	    !MLX5_CAP_MACSEC(mdev, macsec_crypto_esp_aes_gcm_256_encrypt))
+		return false;
+
+	if (!MLX5_CAP_MACSEC(mdev, macsec_crypto_esp_aes_gcm_128_decrypt) &&
+	    !MLX5_CAP_MACSEC(mdev, macsec_crypto_esp_aes_gcm_256_decrypt))
+		return false;
+
+	return true;
+}
+
+#define NIC_RDMA_BOTH_DIRS_CAPS (MLX5_FT_NIC_RX_2_NIC_RX_RDMA | MLX5_FT_NIC_TX_RDMA_2_NIC_TX)
+
+static inline bool mlx5_is_macsec_roce_supported(struct mlx5_core_dev *mdev)
+{
+	if (((MLX5_CAP_GEN_2(mdev, flow_table_type_2_type) &
+	     NIC_RDMA_BOTH_DIRS_CAPS) != NIC_RDMA_BOTH_DIRS_CAPS) ||
+	     !MLX5_CAP_FLOWTABLE_RDMA_TX(mdev, max_modify_header_actions) ||
+	     !mlx5e_is_macsec_device(mdev) || !mdev->macsec_fs)
+		return false;
+
+	return true;
+}
+#endif
+
 enum {
 	MLX5_OCTWORD = 16,
 };
+
+struct msi_map mlx5_msix_alloc(struct mlx5_core_dev *dev,
+			       irqreturn_t (*handler)(int, void *),
+			       const struct irq_affinity_desc *affdesc,
+			       const char *name);
+void mlx5_msix_free(struct mlx5_core_dev *dev, struct msi_map map);
 
 /* MLX5 Diagnostics */
 

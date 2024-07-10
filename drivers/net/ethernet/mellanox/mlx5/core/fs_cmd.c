@@ -140,7 +140,7 @@ static void mlx5_cmd_stub_modify_header_dealloc(struct mlx5_flow_root_namespace 
 
 static int mlx5_cmd_stub_set_peer(struct mlx5_flow_root_namespace *ns,
 				  struct mlx5_flow_root_namespace *peer_ns,
-				  u16 peer_idx)
+				  u16 peer_vhca_id)
 {
 	return 0;
 }
@@ -526,10 +526,11 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 	struct mlx5_flow_rule *dst;
 	void *in_flow_context, *vlan;
 	void *in_match_value;
+	int reformat_id = 0;
 	unsigned int inlen;
 	int dst_cnt_size;
+	u32 *in, action;
 	void *in_dests;
-	u32 *in;
 	int err;
 
 	if (mlx5_set_extended_dest(dev, fte, &extended_dest))
@@ -565,44 +566,44 @@ static int mlx5_cmd_set_fte(struct mlx5_core_dev *dev,
 		 fte->flow_context.flow_tag);
 	MLX5_SET(flow_context, in_flow_context, flow_source,
 		 fte->flow_context.flow_source);
+	MLX5_SET(flow_context, in_flow_context, uplink_hairpin_en,
+		 !!(fte->flow_context.flags & FLOW_CONTEXT_UPLINK_HAIRPIN_EN));
 
 	MLX5_SET(flow_context, in_flow_context, extended_destination,
 		 extended_dest);
-	if (extended_dest) {
-		u32 action;
 
-		action = fte->action.action &
-			~MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
-		MLX5_SET(flow_context, in_flow_context, action, action);
-	} else {
-		u32 id;
-		MLX5_SET(flow_context, in_flow_context, action,
-			 fte->action.action);
-		if (fte->action.pkt_reformat) {
-			if (fte->action.pkt_reformat->owner == FS_PACKET_REFORMAT_SW) {
-				switch (fte->action.pkt_reformat->reformat_type) {
-				case MLX5_REFORMAT_TYPE_L2_TO_VXLAN:
-				case MLX5_REFORMAT_TYPE_L2_TO_NVGRE:
-				case MLX5_REFORMAT_TYPE_L2_TO_L2_TUNNEL:
-				case MLX5_REFORMAT_TYPE_L2_TO_L3_TUNNEL:
-					id = mlx5_fs_dr_action_get_pkt_reformat_id(fte->action.pkt_reformat);
-					break;
-				default:
-					err = -ENOTSUPP;
-					goto err_out;
-				}
-			} else {
-				id = fte->action.pkt_reformat->id;
+	action = fte->action.action;
+	if (extended_dest)
+		action &= ~MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
+
+	MLX5_SET(flow_context, in_flow_context, action, action);
+
+	if (!extended_dest && fte->action.pkt_reformat) {
+		struct mlx5_pkt_reformat *pkt_reformat = fte->action.pkt_reformat;
+
+		if (pkt_reformat->owner == MLX5_FLOW_RESOURCE_OWNER_SW) {
+			reformat_id = mlx5_fs_dr_action_get_pkt_reformat_id(pkt_reformat);
+			if (reformat_id < 0) {
+				mlx5_core_err(dev,
+					      "Unsupported SW-owned pkt_reformat type (%d) in FW-owned table\n",
+					      pkt_reformat->reformat_type);
+				err = reformat_id;
+				goto err_out;
 			}
-			MLX5_SET(flow_context, in_flow_context,
-				 packet_reformat_id, id);
+		} else {
+			reformat_id = fte->action.pkt_reformat->id;
 		}
 	}
+
+	MLX5_SET(flow_context, in_flow_context, packet_reformat_id, (u32)reformat_id);
+
 	if (fte->action.modify_hdr) {
-		if (fte->action.modify_hdr->sw_owned) {
-			err = -ENOTSUPP;
+		if (fte->action.modify_hdr->owner == MLX5_FLOW_RESOURCE_OWNER_SW) {
+			mlx5_core_err(dev, "Can't use SW-owned modify_hdr in FW-owned table\n");
+			err = -EOPNOTSUPP;
 			goto err_out;
 		}
+
 		MLX5_SET(flow_context, in_flow_context, modify_header_id,
 			 fte->action.modify_hdr->id);
 	}
@@ -923,8 +924,9 @@ static int mlx5_cmd_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns,
 
 	pkt_reformat->id = MLX5_GET(alloc_packet_reformat_context_out,
 				    out, packet_reformat_id);
+	pkt_reformat->owner = MLX5_FLOW_RESOURCE_OWNER_FW;
+
 	kfree(in);
-	pkt_reformat->owner = FS_PACKET_REFORMAT_FW;
 	return err;
 }
 
@@ -976,7 +978,7 @@ static int mlx5_cmd_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 		max_actions = MLX5_CAP_ESW_INGRESS_ACL(dev, max_modify_header_actions);
 		table_type = FS_FT_ESW_INGRESS_ACL;
 		break;
-	case MLX5_FLOW_NAMESPACE_RDMA_TX_IPSEC:
+	case MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC:
 	case MLX5_FLOW_NAMESPACE_RDMA_TX:
 		max_actions = MLX5_CAP_FLOWTABLE_RDMA_TX(dev, max_modify_header_actions);
 		table_type = FS_FT_RDMA_TX;
@@ -1009,6 +1011,7 @@ static int mlx5_cmd_modify_header_alloc(struct mlx5_flow_root_namespace *ns,
 	err = mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));
 
 	modify_hdr->id = MLX5_GET(alloc_modify_header_context_out, out, modify_header_id);
+	modify_hdr->owner = MLX5_FLOW_RESOURCE_OWNER_FW;
 	kfree(in);
 	return err;
 }

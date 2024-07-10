@@ -19,8 +19,6 @@
 
 #define TCA_TUNNEL_KEY_ACT_SET	    1
 #define TCA_TUNNEL_KEY_ACT_RELEASE  2
-#define HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT  1
-#define HAVE_TCA_TUNNEL_KEY_ENC_TOS 1
 
 struct tc_tunnel_key {
 	tc_gen;

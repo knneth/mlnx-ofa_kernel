@@ -1,0 +1,129 @@
+From: Jack Morgenstein <jackm@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 33 +++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
+@@ -25,6 +25,13 @@
+ #define MLX5_EQ_SHARE_IRQ_MIN_COMP (1)
+ #define MLX5_EQ_SHARE_IRQ_MIN_CTRL (4)
+ 
++#ifndef HAVE_MSI_MAP_TMP
++struct msi_map {
++        int     index;
++        int     virq;
++};
++#endif
++
+ struct mlx5_irq {
+ 	struct atomic_notifier_head nh;
+ 	cpumask_var_t mask;
+@@ -160,7 +167,11 @@ static void mlx5_system_free_irq(struct
+ 	 * calling it. To satisfy this requirement, we call
+ 	 * irq_cpu_rmap_remove() to remove the notifier
+ 	 */
++#ifdef HAVE_IRQ_UPDATE_AFFINITY_HINT
+ 	irq_update_affinity_hint(irq->map.virq, NULL);
++#else
++	irq_set_affinity_hint(irq->map.virq, NULL);
++#endif
+ #ifdef CONFIG_RFS_ACCEL
+ 	rmap = mlx5_eq_table_get_rmap(pool->dev);
+ 	if (rmap)
+@@ -168,8 +179,10 @@ static void mlx5_system_free_irq(struct
+ #endif
+ 
+ 	free_irq(irq->map.virq, &irq->nh);
++#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
+ 	if (irq->map.index && pci_msix_can_alloc_dyn(pool->dev->pdev))
+ 		pci_msix_free_irq(pool->dev->pdev, irq->map);
++#endif
+ }
+ 
+ static void irq_release(struct mlx5_irq *irq)
+@@ -264,6 +277,7 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+ 		return ERR_PTR(-ENOMEM);
+ 	}
+ 
++#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
+ 	if (!i || !pci_msix_can_alloc_dyn(dev->pdev)) {
+ 		/* The vector at index 0 is always statically allocated. If
+ 		 * dynamic irq is not supported all vectors are statically
+@@ -279,6 +293,10 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+ 			goto err_alloc_irq;
+ 		}
+ 	}
++#else
++	irq->map.virq = pci_irq_vector(dev->pdev, i);
++	irq->map.index = i;
++#endif
+ 
+ 	if (i && rmap && *rmap) {
+ #ifdef CONFIG_RFS_ACCEL
+@@ -303,7 +321,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+ 
+ 	if (af_desc) {
+ 		cpumask_copy(irq->mask, &af_desc->mask);
++#ifdef HAVE_IRQ_UPDATE_AFFINITY_HINT
+ 		irq_set_affinity_and_hint(irq->map.virq, irq->mask);
++#else
++		irq_set_affinity_hint(irq->map.virq, irq->mask);
++#endif
+ 	}
+ 	irq->pool = pool;
+ 	irq->refcount = 1;
+@@ -317,7 +339,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+ 	return irq;
+ err_xa:
+ 	if (af_desc)
++#ifdef HAVE_IRQ_UPDATE_AFFINITY_HINT
+ 		irq_update_affinity_hint(irq->map.virq, NULL);
++#else
++		irq_set_affinity_hint(irq->map.virq, NULL);
++#endif
+ 	free_irq(irq->map.virq, &irq->nh);
+ err_req_irq:
+ #ifdef CONFIG_RFS_ACCEL
+@@ -327,9 +353,11 @@ err_req_irq:
+ 	}
+ err_irq_rmap:
+ #endif
++#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
+ 	if (i && pci_msix_can_alloc_dyn(dev->pdev))
+ 		pci_msix_free_irq(dev->pdev, irq->map);
+ err_alloc_irq:
++#endif
+ 	free_cpumask_var(irq->mask);
+ 	kfree(irq);
+ 	return ERR_PTR(err);
+@@ -505,6 +533,7 @@ struct mlx5_irq *mlx5_irq_request(struct
+ 	return irq;
+ }
+ 
++#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
+ /**
+  * mlx5_msix_alloc - allocate msix interrupt
+  * @dev: mlx5 device from which to request
+@@ -556,6 +585,7 @@ void mlx5_msix_free(struct mlx5_core_dev
+ 	pci_msix_free_irq(dev->pdev, map);
+ }
+ EXPORT_SYMBOL(mlx5_msix_free);
++#endif
+ 
+ /**
+  * mlx5_irq_release_vector - release one IRQ back to the system.
+@@ -795,7 +825,11 @@ int mlx5_irq_table_create(struct mlx5_co
+ 	total_vec = min_t(int, total_vec, pci_msix_vec_count(dev->pdev));
+ 	pcif_vec = min_t(int, pcif_vec, pci_msix_vec_count(dev->pdev));
+ 
++#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
+ 	req_vec = pci_msix_can_alloc_dyn(dev->pdev) ? 1 : total_vec;
++#else
++	req_vec = total_vec;
++#endif
+ 	n = pci_alloc_irq_vectors(dev->pdev, 1, req_vec, PCI_IRQ_MSIX);
+ 	if (n < 0)
+ 		return n;

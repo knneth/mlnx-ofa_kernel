@@ -264,9 +264,7 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
-#ifdef HAVE_NETLINK_EXT_ACK
 	static struct netlink_ext_ack ack = { ._msg = NULL };
-#endif
 	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
 	int ret = 0, i = 0, map_size;
@@ -344,10 +342,8 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 	else
 		ret = -EINVAL;
 
-#ifdef HAVE_NETLINK_EXT_ACK
 	if (ack._msg)
 		mlx5_core_warn(dev, "%s\n", ack._msg);
-#endif
 	if (ret < 0)
 		return ret;
 

@@ -1,42 +1,40 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
 
-Change-Id: I8baa2753f255d5351112311566f7831a788317cb
 ---
- .../ethernet/mellanox/mlx5/core/en/rep/tc.h   | 19 +++++++++++++++++++
- 1 file changed, 19 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-@@ -33,12 +33,31 @@ int mlx5e_rep_encap_entry_attach(struct
- void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
- 				  struct mlx5e_encap_entry *e);
- 
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
-+#if defined(HAVE_NDO_SETUP_TC_TAKES_TC_SETUP_TYPE) || defined(HAVE_NDO_SETUP_TC_RH_EXTENDED)
- int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
- 		       void *type_data);
-+#else
-+int mlx5e_rep_setup_tc(struct net_device *dev, u32 handle,
-+#ifdef HAVE_NDO_SETUP_TC_TAKES_CHAIN_INDEX
-+		       u32 chain_index, __be16 proto,
-+#else
-+		       __be16 proto,
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+@@ -68,6 +68,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
+ 		else
+ 			*action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
+ 		break;
++#ifdef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
+ 	case FLOW_ACTION_VLAN_POP_ETH:
+ 		parse_state->eth_pop = true;
+ 		break;
+@@ -78,6 +79,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
+ 		memcpy(attr->eth.h_dest, act->vlan_push_eth.dst, ETH_ALEN);
+ 		memcpy(attr->eth.h_source, act->vlan_push_eth.src, ETH_ALEN);
+ 		break;
 +#endif
-+		       struct tc_to_netdev *tc);
-+#endif
-+#endif
+ 	default:
+ 		NL_SET_ERR_MSG_MOD(extack, "Unexpected action id for VLAN");
+ 		return -EINVAL;
+@@ -127,10 +129,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
+ 	struct flow_action_entry vlan_act = {
+ 		.id = FLOW_ACTION_VLAN_POP,
+ 	};
+-	int nest_level, err = 0;
++	int nest_level = 1, err = 0;
  
- void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
- 			  struct sk_buff *skb);
- 
-+#ifdef HAVE_BASECODE_EXTRAS
-+void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
-+
-+int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
-+				void *cb_priv);
++#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
+ 	nest_level = attr->parse_attr->filter_dev->lower_level -
+ 						priv->netdev->lower_level;
 +#endif
-+
- #else /* CONFIG_MLX5_CLS_ACT */
- 
- struct mlx5e_rep_priv;
+ 	while (nest_level--) {
+ 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
+ 					   extack, NULL);

@@ -1,0 +1,290 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+
+Change-Id: Ib91026efd8ab0aa631423c56e078b2e71df61c78
+---
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 104 +++++++++++++++++-
+ 1 file changed, 102 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
+@@ -907,6 +907,7 @@ static int mlx5_esw_vport_caps_get(struc
+ 	if (!MLX5_CAP_GEN_MAX(esw->dev, hca_cap_2))
+ 		goto out_free;
+ 
++#if defined(HAVE_DEVLINK_HAS_PORT_FN_ROCE_MIG) || defined(HAVE_DEVLINK_PORT_OPS)
+ 	memset(query_ctx, 0, query_out_sz);
+ 	err = mlx5_vport_get_other_func_cap(esw->dev, vport->vport, query_ctx,
+ 					    MLX5_CAP_GENERAL_2);
+@@ -917,6 +918,7 @@ static int mlx5_esw_vport_caps_get(struc
+ 	vport->info.mig_enabled = MLX5_GET(cmd_hca_cap_2, hca_caps, migratable);
+ 
+ 	err = mlx5_esw_ipsec_vf_offload_get(esw->dev, vport);
++#endif /* defined(HAVE_DEVLINK_HAS_PORT_FN_ROCE_MIG) || defined(HAVE_DEVLINK_PORT_OPS) */
+ out_free:
+ 	kfree(query_ctx);
+ 	return err;
+@@ -1014,7 +1016,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
+ 			  enum mlx5_eswitch_vport_event enabled_events)
+ {
+ 	u16 vport_num = vport->vport;
+-	int ret;
++	int ret = 0;
+ 
+ 	mutex_lock(&esw->state_lock);
+ 	if (vport->enabled)
+@@ -1498,7 +1500,11 @@ static void mlx5_eswitch_get_devlink_par
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	err = devl_param_driverinit_value_get(devlink,
++#else
++	err = devlink_param_driverinit_value_get(devlink,
++#endif
+ 					      MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
+ 					      &val);
+ 	if (!err) {
+@@ -1611,7 +1617,9 @@ int mlx5_eswitch_enable_locked(struct ml
+ {
+ 	int err;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#endif
+ 
+ 	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ft_support)) {
+ 		esw_warn(esw->dev, "FDB is not supported, aborting ...\n");
+@@ -1673,19 +1681,30 @@ abort:
+  */
+ int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	bool toggle_lag;
+ 	int ret = 0;
+ 
+ 	if (!mlx5_esw_allowed(esw))
+ 		return 0;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#endif
+ 
+ 	toggle_lag = !mlx5_sriov_is_enabled(esw->dev) && !is_mdev_switchdev_mode(esw->dev);
+ 
+ 	if (toggle_lag)
+ 		mlx5_lag_disable_change(esw->dev);
+ 
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = priv_to_devlink(esw->dev);
++	devl_lock(devlink);
++#endif
+ 	if (!mlx5_esw_is_fdb_created(esw)) {
+ 		ret = mlx5_eswitch_enable_locked(esw, num_vfs);
+ 	} else {
+@@ -1708,6 +1727,10 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+ 		}
+ 	}
+ 
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ 	if (toggle_lag)
+ 		mlx5_lag_enable_change(esw->dev);
+ 
+@@ -1717,15 +1740,28 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+ /* When disabling sriov, free driver level resources. */
+ void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw, bool clear_vf)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	if (!mlx5_esw_allowed(esw))
+ 		return;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#elif defined(HAVE_DEVL_PORT_REGISTER)
++	devlink = priv_to_devlink(esw->dev);
++	devl_lock(devlink);
++#endif
+ 	/* If driver is unloaded, this function is called twice by remove_one()
+ 	 * and mlx5_unload(). Prevent the second call.
+ 	 */
+ 	if (!esw->esw_funcs.num_vfs && !esw->esw_funcs.num_ec_vfs && !clear_vf)
+-		return;
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	goto unlock;
++#else
++	return;
++#endif
+ 
+ 	esw_info(esw->dev, "Unload vfs: mode(%s), nvfs(%d), necvfs(%d), active vports(%d)\n",
+ 		 esw->mode == MLX5_ESWITCH_LEGACY ? "LEGACY" : "OFFLOADS",
+@@ -1742,9 +1778,17 @@ void mlx5_eswitch_disable_sriov(struct m
+ 	}
+ 
+ 	if (esw->mode == MLX5_ESWITCH_OFFLOADS) {
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 		struct devlink *devlink = priv_to_devlink(esw->dev);
++#endif
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 		devl_rate_nodes_destroy(devlink);
++#else
++ 		devlink_rate_nodes_destroy(devlink);
++#endif
++#endif
+ 	}
+ 	/* Destroy legacy fdb when disabling sriov in legacy mode. */
+ 	if (esw->mode == MLX5_ESWITCH_LEGACY)
+@@ -1756,6 +1800,10 @@ void mlx5_eswitch_disable_sriov(struct m
+ 		esw->esw_funcs.num_ec_vfs = 0;
+ 
+ 	atomic64_set(&esw->user_count, 0);
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++unlock:
++	devl_unlock(devlink);
++#endif
+ }
+ 
+ /* Free resources for corresponding eswitch mode. It is called by devlink
+@@ -1763,7 +1811,9 @@ void mlx5_eswitch_disable_sriov(struct m
+  */
+ void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw)
+ {
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	struct devlink *devlink = priv_to_devlink(esw->dev);
++#endif
+ 
+ #if IS_ENABLED(CONFIG_MLXDEVM)
+ 	if (esw->mode == MLX5_ESWITCH_OFFLOADS)
+@@ -1791,19 +1841,41 @@ void mlx5_eswitch_disable_locked(struct
+ 		mlx5_esw_acls_ns_cleanup(esw);
+ 	}
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 	if (esw->mode == MLX5_ESWITCH_OFFLOADS)
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 		devl_rate_nodes_destroy(devlink);
++#else
++ 		devlink_rate_nodes_destroy(devlink);
++#endif
++#endif
+ }
+ 
+ void mlx5_eswitch_disable(struct mlx5_eswitch *esw)
+ {
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
++
+ 	if (!mlx5_esw_allowed(esw))
+ 		return;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devl_assert_locked(priv_to_devlink(esw->dev));
++#endif
+ 	mlx5_lag_disable_change(esw->dev);
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = priv_to_devlink(esw->dev);
++	devl_lock(devlink);
++#endif
+ 	mlx5_eswitch_disable_locked(esw);
+ 	esw->mode = MLX5_ESWITCH_LEGACY;
++#if defined(HAVE_DEVL_PORT_REGISTER) && \
++	!defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devl_unlock(devlink);
++#endif
+ 	mlx5_lag_enable_change(esw->dev);
+ }
+ 
+@@ -1983,6 +2055,7 @@ bool mlx5_esw_host_functions_enabled(con
+ 	return !dev->priv.eswitch->esw_funcs.host_funcs_disabled;
+ }
+ 
++#if defined(HAVE_DEVLINK_PARAMS_PUBLISHED) || defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS)
+ static int mlx5_devlink_esw_multiport_set(struct devlink *devlink, u32 id,
+ 					  struct devlink_param_gset_ctx *ctx)
+ {
+@@ -2071,6 +2144,22 @@ static const struct devlink_param mlx5_e
+ 			     mlx5_devlink_esw_pet_insert_set,
+ 			     mlx5_devlink_esw_pet_insert_validate),
+ };
++#endif
++
++#if (defined(HAVE_DEVLINK_PARAMS_PUBLISHED) || defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS)) && !defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
++int mlx5_register_eswitch_params(struct mlx5_core_dev *dev)
++{
++
++	return  devlink_params_register(priv_to_devlink(dev), mlx5_eswitch_params,
++					ARRAY_SIZE(mlx5_eswitch_params));
++}
++
++void mlx5_unregister_eswitch_params(struct mlx5_core_dev *dev)
++{
++	devlink_params_unregister(priv_to_devlink(dev), mlx5_eswitch_params,
++				  ARRAY_SIZE(mlx5_eswitch_params));
++}
++#endif
+ 
+ static int mlx5_esw_ib_init(struct mlx5_core_dev *dev)
+ {
+@@ -2109,10 +2198,12 @@ int mlx5_eswitch_init(struct mlx5_core_d
+ 	esw->first_host_vport = mlx5_eswitch_first_host_vport_num(dev);
+ 	dev->priv.eswitch = esw;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	err = devl_params_register(priv_to_devlink(dev), mlx5_eswitch_params,
+ 				   ARRAY_SIZE(mlx5_eswitch_params));
+ 	if (err)
+ 		goto free_esw;
++#endif
+ 
+ 	esw->debugfs_root = debugfs_create_dir("esw", mlx5_debugfs_get_dev_root(dev));
+ 	esw->work_queue = create_singlethread_workqueue("mlx5_esw_wq");
+@@ -2172,9 +2263,11 @@ abort:
+ 	if (esw->work_queue)
+ 		destroy_workqueue(esw->work_queue);
+ 	debugfs_remove_recursive(esw->debugfs_root);
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	devl_params_unregister(priv_to_devlink(dev), mlx5_eswitch_params,
+ 			       ARRAY_SIZE(mlx5_eswitch_params));
+ free_esw:
++#endif /* HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET */
+ 	dev->priv.eswitch = NULL;
+ 	kfree(esw);
+ 	return err;
+@@ -2232,7 +2325,9 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+ 
+ 	esw_info(esw->dev, "cleanup\n");
+ 
++#ifdef HAVE_DEVL_REGISTER
+ 	esw->dev->priv.eswitch = NULL;
++#endif
+ 	destroy_workqueue(esw->work_queue);
+ 	WARN_ON(refcount_read(&esw->qos.refcnt));
+ 	mutex_destroy(&esw->state_lock);
+@@ -2245,8 +2340,13 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+ 	esw_offloads_cleanup(esw);
+ 	mlx5_esw_vports_cleanup(esw);
+ 	debugfs_remove_recursive(esw->debugfs_root);
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	devl_params_unregister(priv_to_devlink(esw->dev), mlx5_eswitch_params,
+ 			       ARRAY_SIZE(mlx5_eswitch_params));
++#endif
++#ifndef HAVE_DEVL_REGISTER
++	esw->dev->priv.eswitch = NULL;
++#endif
+ 	kfree(esw);
+ }
+ 

@@ -63,6 +63,17 @@ int
 mlx5_devlink_ct_action_on_nat_conns_get(struct devlink *devlink, u32 id,
 					struct devlink_param_gset_ctx *ctx);
 
+static inline bool mlx5_core_is_eth_enabled(struct mlx5_core_dev *dev)
+{
+	union devlink_param_value val;
+	int err;
+
+	err = devl_param_driverinit_value_get(priv_to_devlink(dev),
+					      DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
+					      &val);
+	return err ? false : val.vbool;
+}
+
 int
 mlx5_devlink_ct_labels_mapping_set(struct devlink *devlink, u32 id,
 				   struct devlink_param_gset_ctx *ctx);

@@ -1,0 +1,33 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_cmd.c
+
+---
+ drivers/infiniband/core/uverbs_cmd.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/uverbs_cmd.c
++++ b/drivers/infiniband/core/uverbs_cmd.c
+@@ -217,6 +217,10 @@ int ib_alloc_ucontext(struct uverbs_attr
+ 	ucontext = rdma_zalloc_drv_obj(ib_dev, ib_ucontext);
+ 	if (!ucontext)
+ 		return -ENOMEM;
++#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
++	mutex_init(&ucontext->per_mm_list_lock);
++	INIT_LIST_HEAD(&ucontext->per_mm_list);
++#endif
+ 
+ 	ucontext->device = ib_dev;
+ 	ucontext->ufile = ufile;
+@@ -3366,7 +3370,11 @@ static int __uverbs_create_xsrq(struct u
+ 	struct ib_srq                   *srq;
+ 	struct ib_srq_init_attr          attr;
+ 	int ret;
+-	struct ib_uobject *xrcd_uobj;
++#ifndef uninitialized_var
++	struct ib_uobject               *xrcd_uobj;
++#else
++	struct ib_uobject               *uninitialized_var(xrcd_uobj);
++#endif
+ 	struct ib_device *ib_dev;
+ 
+ 	obj = (struct ib_usrq_object *)uobj_alloc(UVERBS_OBJECT_SRQ, attrs,

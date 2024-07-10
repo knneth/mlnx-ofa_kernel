@@ -1,10 +1,9 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cq.c
 
-Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
 ---
- drivers/infiniband/core/cq.c | 75 ++++++++++++++++++++++++++++++++++--
- 1 file changed, 72 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/cq.c | 41 +++++++++++++++++++++++++++++++++---
+ 1 file changed, 38 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/cq.c
 +++ b/drivers/infiniband/core/cq.c
@@ -68,16 +67,15 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  		for (i = 0; i < n; i++) {
  			struct ib_wc *wc = &wcs[i];
  
-@@ -148,6 +161,8 @@ static void ib_cq_completion_direct(stru
+@@ -148,6 +161,7 @@ static void ib_cq_completion_direct(stru
  	WARN_ONCE(1, "got unsolicited completion for CQ 0x%p\n", cq);
  }
  
-+#if defined(HAVE_IRQ_POLL_H)
 +#if IS_ENABLED(CONFIG_IRQ_POLL)
  static int ib_poll_handler(struct irq_poll *iop, int budget)
  {
  	struct ib_cq *cq = container_of(iop, struct ib_cq, iop);
-@@ -158,7 +173,9 @@ static int ib_poll_handler(struct irq_po
+@@ -158,7 +172,9 @@ static int ib_poll_handler(struct irq_po
  	if (completed < budget) {
  		irq_poll_complete(&cq->iop);
  		if (ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0) {
@@ -87,7 +85,7 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  			irq_poll_sched(&cq->iop);
  		}
  	}
-@@ -171,9 +188,36 @@ static int ib_poll_handler(struct irq_po
+@@ -171,9 +187,12 @@ static int ib_poll_handler(struct irq_po
  
  static void ib_cq_completion_softirq(struct ib_cq *cq, void *private)
  {
@@ -97,34 +95,10 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  	irq_poll_sched(&cq->iop);
  }
 +#endif /*CONFIG_IRQ_POLL*/
-+#else /*HAVE_IRQ_POLL_H*/
-+static int ib_poll_handler(struct blk_iopoll *iop, int budget)
-+{
-+	struct ib_cq *cq = container_of(iop, struct ib_cq, iop);
-+	int completed;
-+
-+	completed = __ib_process_cq(cq, budget, cq->wc, IB_POLL_BATCH);
-+	if (completed < budget) {
-+		blk_iopoll_complete(&cq->iop);
-+		if (ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0) {
-+			if (!blk_iopoll_sched_prep(&cq->iop))
-+				blk_iopoll_sched(&cq->iop);
-+		}
-+	}
-+
-+	return completed;
-+}
-+
-+static void ib_cq_completion_softirq(struct ib_cq *cq, void *private)
-+{
-+	if (!blk_iopoll_sched_prep(&cq->iop))
-+		blk_iopoll_sched(&cq->iop);
-+}
-+#endif /*HAVE_IRQ_POLL_H*/
  
  static void ib_cq_poll_work(struct work_struct *work)
  {
-@@ -191,7 +235,9 @@ static void ib_cq_poll_work(struct work_
+@@ -191,7 +210,9 @@ static void ib_cq_poll_work(struct work_
  
  static void ib_cq_completion_workqueue(struct ib_cq *cq, void *private)
  {
@@ -134,21 +108,16 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  	queue_work(cq->comp_wq, &cq->work);
  }
  
-@@ -247,12 +293,21 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
+@@ -247,12 +268,16 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
  	case IB_POLL_DIRECT:
  		cq->comp_handler = ib_cq_completion_direct;
  		break;
-+#if IS_ENABLED(CONFIG_IRQ_POLL) || !defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL) 
  	case IB_POLL_SOFTIRQ:
  		cq->comp_handler = ib_cq_completion_softirq;
  
-+#if defined(HAVE_IRQ_POLL_H)
 +#if IS_ENABLED(CONFIG_IRQ_POLL)
  		irq_poll_init(&cq->iop, IB_POLL_BUDGET_IRQ, ib_poll_handler);
-+#endif
-+#else
-+		blk_iopoll_init(&cq->iop, IB_POLL_BUDGET_IRQ, ib_poll_handler);
-+		blk_iopoll_enable(&cq->iop);
 +#endif
  		ib_req_notify_cq(cq, IB_CQ_NEXT_COMP);
  		break;
@@ -156,7 +125,7 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  	case IB_POLL_WORKQUEUE:
  	case IB_POLL_UNBOUND_WORKQUEUE:
  		cq->comp_handler = ib_cq_completion_workqueue;
-@@ -267,7 +322,9 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
+@@ -267,7 +292,9 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
  	}
  
  	rdma_restrack_add(&cq->res);
@@ -167,7 +136,7 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  	return cq;
  
  out_destroy_cq:
-@@ -278,7 +335,9 @@ out_free_wc:
+@@ -278,7 +305,9 @@ out_free_wc:
  	kfree(cq->wc);
  out_free_cq:
  	kfree(cq);
@@ -177,25 +146,21 @@ Change-Id: I7561756e57b5cf97ec01d1d5f862fea415a6ebfe
  	return ERR_PTR(ret);
  }
  EXPORT_SYMBOL(__ib_alloc_cq);
-@@ -327,9 +386,17 @@ void ib_free_cq(struct ib_cq *cq)
+@@ -327,9 +356,13 @@ void ib_free_cq(struct ib_cq *cq)
  	switch (cq->poll_ctx) {
  	case IB_POLL_DIRECT:
  		break;
-+#if IS_ENABLED(CONFIG_IRQ_POLL) || !defined(HAVE_IRQ_POLL_H)
++#if IS_ENABLED(CONFIG_IRQ_POLL)
  	case IB_POLL_SOFTIRQ:
-+#if defined(HAVE_IRQ_POLL_H)
 +#if IS_ENABLED(CONFIG_IRQ_POLL)
  		irq_poll_disable(&cq->iop);
-+#endif
-+#else
-+		blk_iopoll_disable(&cq->iop);
 +#endif
  		break;
 +#endif
  	case IB_POLL_WORKQUEUE:
  	case IB_POLL_UNBOUND_WORKQUEUE:
  		cancel_work_sync(&cq->work);
-@@ -339,7 +406,9 @@ void ib_free_cq(struct ib_cq *cq)
+@@ -339,7 +372,9 @@ void ib_free_cq(struct ib_cq *cq)
  	}
  
  	rdma_dim_destroy(cq);

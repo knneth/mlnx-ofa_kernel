@@ -80,25 +80,6 @@ static int mlx5e_tc_tun_init_encap_attr_vxlan(struct net_device *tunnel_dev,
 	return 0;
 }
 
-static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, struct vxlan_metadata *md)
-{
-        struct vxlanhdr_gbp *gbp;
-
-        if (!md->gbp)
-                return;
-
-        gbp = (struct vxlanhdr_gbp *)vxh;
-        vxh->vx_flags |= VXLAN_HF_GBP;
-
-        if (md->gbp & VXLAN_GBP_DONT_LEARN)
-                gbp->dont_learn = 1;
-
-        if (md->gbp & VXLAN_GBP_POLICY_APPLIED)
-                gbp->policy_applied = 1;
-
-        gbp->policy_id = htons(md->gbp & VXLAN_GBP_ID_MASK);
-}
-
 static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
 					    __u8 *ip_proto,
 					    struct mlx5e_encap_entry *e)
@@ -106,7 +87,7 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
 	const struct ip_tunnel_key *tun_key = &e->tun_info->key;
 	__be32 tun_id = tunnel_id_to_key32(tun_key->tun_id);
 	struct udphdr *udp = (struct udphdr *)(buf);
-	struct vxlan_metadata *md;
+	const struct vxlan_metadata *md;
 	struct vxlanhdr *vxh;
 
 	if ((tun_key->tun_flags & TUNNEL_VXLAN_OPT) &&
@@ -119,7 +100,7 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
 	vxh->vx_flags = VXLAN_HF_VNI;
 	vxh->vx_vni = vxlan_vni_field(tun_id);
 	if (tun_key->tun_flags & TUNNEL_VXLAN_OPT) {
-		md = ip_tunnel_info_opts((struct ip_tunnel_info *)e->tun_info);
+		md = ip_tunnel_info_opts(e->tun_info);
 		vxlan_build_gbp_hdr(vxh, md);
 	}
 
@@ -141,20 +122,17 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
 	if (memchr_inv(&enc_opts.mask->data, 0, sizeof(enc_opts.mask->data)) &&
 	    !MLX5_CAP_ESW_FT_FIELD_SUPPORT_2(priv->mdev, tunnel_header_0_1)) {
 		NL_SET_ERR_MSG_MOD(extack, "Matching on VxLAN GBP is not supported");
-		netdev_warn(priv->netdev, "Matching on VxLAN GBP is not supported\n");
 		return -EOPNOTSUPP;
 	}
 
 	if (enc_opts.key->dst_opt_type != TUNNEL_VXLAN_OPT) {
 		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN option type: not GBP");
-		netdev_warn(priv->netdev, "Wrong VxLAN option type: not GBP\n");
 		return -EOPNOTSUPP;
 	}
 
 	if (enc_opts.key->len != sizeof(*gbp) ||
 	    enc_opts.mask->len != sizeof(*gbp_mask)) {
 		NL_SET_ERR_MSG_MOD(extack, "VxLAN GBP option/mask len is not 32 bits");
-		netdev_warn(priv->netdev, "VxLAN GBP option/mask len is not 32 bits\n");
 		return -EINVAL;
 	}
 
@@ -163,7 +141,6 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
 
 	if (*gbp_mask & ~VXLAN_GBP_MASK) {
 		NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
-		netdev_warn(priv->netdev, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
 		return -EINVAL;
 	}
 

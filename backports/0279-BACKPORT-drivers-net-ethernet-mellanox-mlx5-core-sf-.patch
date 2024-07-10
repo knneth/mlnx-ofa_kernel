@@ -1,0 +1,66 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+
+Change-Id: I7f2ddfbd8bc5b2056d163bcad7e79c4a950a2dd2
+---
+ .../mellanox/mlx5/core/sf/dev/driver.c         | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+@@ -31,10 +31,12 @@ static int mlx5_sf_dev_probe(struct auxi
+ 	mdev->priv.adev_idx = adev->id;
+ 	sf_dev->mdev = mdev;
+ 
++#if defined(HAVE_LIGHT_SFS)
+ 	/* Only local SFs do light probe */
+ 	if (MLX5_ESWITCH_MANAGER(sf_dev->parent_mdev) &&
+ 	    !mlx5_devm_is_devm_sf(sf_dev->parent_mdev, sf_dev->sfnum))
+ 		mlx5_dev_set_lightweight(mdev);
++#endif
+ 
+ 	err = mlx5_mdev_init(mdev, MLX5_SF_PROF);
+ 	if (err) {
+@@ -57,15 +59,22 @@ static int mlx5_sf_dev_probe(struct auxi
+ 		goto remap_err;
+ 	}
+ 
+-	if (MLX5_ESWITCH_MANAGER(sf_dev->parent_mdev))
++#if defined(HAVE_LIGHT_SFS)
++	if (mlx5_dev_is_lightweight(sf_dev->mdev))
+ 		err = mlx5_init_one_light(mdev);
+ 	else
++#endif
+ 		err = mlx5_init_one(mdev);
+ 	if (err) {
+ 		mlx5_core_warn(mdev, "mlx5_init_one err=%d\n", err);
+ 		goto init_one_err;
+ 	}
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ 	devlink_register(devlink);
++#endif
++#if defined(HAVE_DEVLINK_RELOAD_ENABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
++	devlink_reload_enable(devlink);
++#endif
+ 	return 0;
+ 
+ init_one_err:
+@@ -84,10 +93,17 @@ static void mlx5_sf_dev_remove(struct au
+ 
+ 	mlx5_drain_health_wq(sf_dev->mdev);
+ 	set_bit(MLX5_BREAK_FW_WAIT, &sf_dev->mdev->intf_state);
++#if defined(HAVE_DEVLINK_RELOAD_DISABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
++	devlink_reload_disable(devlink);
++#endif
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ 	devlink_unregister(devlink);
++#endif
++#if defined(HAVE_LIGHT_SFS)
+ 	if (mlx5_dev_is_lightweight(sf_dev->mdev))
+ 		mlx5_uninit_one_light(sf_dev->mdev);
+ 	else
++#endif
+ 		mlx5_uninit_one(sf_dev->mdev);
+ 	iounmap(sf_dev->mdev->iseg);
+ 	mlx5_mdev_uninit(sf_dev->mdev);

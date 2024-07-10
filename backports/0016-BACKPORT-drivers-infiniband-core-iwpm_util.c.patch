@@ -1,7 +1,6 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwpm_util.c
 
-Change-Id: I5d3f0d93a6126ec01381e8fbe89c245bb5538ac5
 ---
  drivers/infiniband/core/iwpm_util.c | 32 +++++++++++++++++++++--------
  1 file changed, 24 insertions(+), 8 deletions(-)

@@ -123,10 +123,6 @@ enum {
 };
 
 enum {
-	MLX5_QP_RM_GO_BACK_N			= 0x1,
-};
-
-enum {
 	MLX5_NON_ZERO_RQ	= 0x0,
 	MLX5_SRQ_RQ		= 0x1,
 	MLX5_CRQ_RQ		= 0x2,

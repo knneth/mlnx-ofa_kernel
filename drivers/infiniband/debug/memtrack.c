@@ -324,7 +324,7 @@ static inline const char *memtype_free_str(enum memtrack_memtype_t memtype)
 	}
 }
 
-int find_ignore_func_info(const char *func_name)
+static inline int find_ignore_func_info(const char *func_name)
 {
 	struct memtrack_ignore_func_info_t *tmp_ignore_func_info_p;
 
@@ -335,7 +335,7 @@ int find_ignore_func_info(const char *func_name)
 	return 0;
 }
 
-int find_targeted_module_info(char *module_name)
+static inline int find_targeted_module_info(char *module_name)
 {
 	struct memtrack_targeted_modules_info_t *tmp_targeted_module_info_p;
 	list_for_each_entry(tmp_targeted_module_info_p,
@@ -998,11 +998,7 @@ int memtrack_get_page_ref_count(unsigned long addr)
 		if (cur_mem_info_p->addr == addr) {
 			/* Found given address in the database - check ref-count */
 			struct page *page = (struct page *)(cur_mem_info_p->addr);
-#ifdef HAVE_MM_PAGE__COUNT
-			ref_conut = atomic_read(&page->_count);
-#else
 			ref_conut = atomic_read(&page->_refcount);
-#endif
 			memtrack_spin_unlock(&obj_desc_p->hash_lock, flags);
 			return ref_conut;
 		}
@@ -1176,7 +1172,7 @@ static void destroy_procfs_tree(void)
 	remove_proc_entry(memtrack_proc_entry_name, NULL);
 }
 
-int inject_error_record(char *module_name, char *file_name, char *func_name,
+static inline int inject_error_record(char *module_name, char *file_name, char *func_name,
 			const char *caller_func_name, unsigned long line_num)
 {
 	struct memtrack_injected_info_t *tmp_injected_info_p,

@@ -112,6 +112,10 @@ BuildRequires: %kernel_module_package_buildreqs
 %debug_package
 %endif
 
+%if 0%{?anolis} == 8
+%global __find_requires %{nil}
+%endif
+
 # set modules dir
 %if "%{_vendor}" == "redhat" || ("%{_vendor}" == "openEuler")
 %if 0%{?fedora}

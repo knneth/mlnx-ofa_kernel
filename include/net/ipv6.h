@@ -13,12 +13,4 @@
 int ip6_dst_hoplimit(struct dst_entry *dst);
 #endif
 
-#ifndef HAVE_IP6_MAKE_FLOWINFO
-#define IPV6_TCLASS_SHIFT	20
-static inline __be32 ip6_make_flowinfo(unsigned int tclass, __be32 flowlabel)
-{
-	return htonl(tclass << IPV6_TCLASS_SHIFT) | flowlabel;
-}
-#endif
-
 #endif /* _COMPAT_NET_IPV6_H */

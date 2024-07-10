@@ -7,7 +7,6 @@
 #include "fw_reset.h"
 #include "fs_core.h"
 #include "eswitch.h"
-#include "lag/lag.h"
 #include "mlx5_devm.h"
 #include "esw/qos.h"
 #include "sf/dev/dev.h"
@@ -176,6 +175,12 @@ static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
 		return -EOPNOTSUPP;
 	}
 
+	if (action == DEVLINK_RELOAD_ACTION_FW_ACTIVATE &&
+	    !dev->priv.fw_reset) {
+		NL_SET_ERR_MSG_MOD(extack, "FW activate is unsupported for this function");
+		return -EOPNOTSUPP;
+	}
+
 	if (mlx5_core_is_pf(dev) && pci_num_vf(pdev))
 		NL_SET_ERR_MSG_MOD(extack, "reload while VFs are present is unfavorable");
 
@@ -220,6 +225,9 @@ static int mlx5_devlink_reload_up(struct devlink *devlink, enum devlink_reload_a
 		/* On fw_activate action, also driver is reloaded and reinit performed */
 		*actions_performed |= BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT);
 		ret = mlx5_load_one_devl_locked(dev, true);
+		if (ret)
+			return ret;
+		ret = mlx5_fw_reset_verify_fw_complete(dev, extack);
 		break;
 	default:
 		/* Unsupported action should not get to this function */
@@ -328,8 +336,6 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
-	.port_function_hw_addr_get = mlx5_devlink_port_function_hw_addr_get,
-	.port_function_hw_addr_set = mlx5_devlink_port_function_hw_addr_set,
 	.rate_leaf_tx_share_set = mlx5_esw_devlink_rate_leaf_tx_share_set,
 	.rate_leaf_tx_max_set = mlx5_esw_devlink_rate_leaf_tx_max_set,
 	.rate_node_tx_share_set = mlx5_esw_devlink_rate_node_tx_share_set,
@@ -337,16 +343,9 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.rate_node_new = mlx5_esw_devlink_rate_node_new,
 	.rate_node_del = mlx5_esw_devlink_rate_node_del,
 	.rate_leaf_parent_set = mlx5_esw_devlink_rate_parent_set,
-	.port_fn_roce_get = mlx5_devlink_port_fn_roce_get,
-	.port_fn_roce_set = mlx5_devlink_port_fn_roce_set,
-	.port_fn_migratable_get = mlx5_devlink_port_fn_migratable_get,
-	.port_fn_migratable_set = mlx5_devlink_port_fn_migratable_set,
 #endif
 #ifdef CONFIG_MLX5_SF_MANAGER
 	.port_new = mlx5_devlink_sf_port_new,
-	.port_del = mlx5_devlink_sf_port_del,
-	.port_fn_state_get = mlx5_devlink_sf_port_fn_state_get,
-	.port_fn_state_set = mlx5_devlink_sf_port_fn_state_set,
 #endif
 	.flash_update = mlx5_devlink_flash_update,
 	.info_get = mlx5_devlink_info_get,
@@ -454,6 +453,7 @@ static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id
 
 	return 0;
 }
+
 #endif
 
 static int mlx5_devlink_eq_depth_validate(struct devlink *devlink, u32 id,
@@ -485,7 +485,9 @@ mlx5_devlink_hairpin_queue_size_validate(struct devlink *devlink, u32 id,
 	}
 
 	if (val32 > BIT(MLX5_CAP_GEN(dev, log_max_hairpin_num_packets))) {
-		NL_SET_ERR_MSG_MOD(extack, "Value exceeds maximum hairpin queue size");
+		NL_SET_ERR_MSG_FMT_MOD(
+			extack, "Maximum hairpin queue size is %lu",
+			BIT(MLX5_CAP_GEN(dev, log_max_hairpin_num_packets)));
 		return -EINVAL;
 	}
 
@@ -515,7 +517,6 @@ static void mlx5_devlink_hairpin_params_init_values(struct devlink *devlink)
 	devl_param_driverinit_value_set(
 		devlink, MLX5_DEVLINK_PARAM_ID_HAIRPIN_QUEUE_SIZE, value);
 }
-
 
 static int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
 						   struct devlink_param_gset_ctx *ctx)
@@ -863,6 +864,11 @@ void mlx5_devlink_traps_unregister(struct devlink *devlink)
 int mlx5_devlink_params_register(struct devlink *devlink)
 {
 	int err;
+
+	/* Here only the driver init params should be registered.
+	 * Runtime params should be registered by the code which
+	 * behaviour they configure.
+	 */
 
 	err = devl_params_register(devlink, mlx5_devlink_params,
 				   ARRAY_SIZE(mlx5_devlink_params));

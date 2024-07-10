@@ -121,6 +121,7 @@ int mlx5dr_cmd_query_device(struct mlx5_core_dev *mdev,
 	caps->sw_format_ver	= MLX5_CAP_GEN(mdev, steering_format_version);
 	caps->roce_caps.fl_rc_qp_when_roce_disabled =
 		MLX5_CAP_GEN(mdev, fl_rc_qp_when_roce_disabled);
+
 	if (MLX5_CAP_GEN(mdev, roce)) {
 		err = dr_cmd_query_nic_vport_roce_en(mdev, 0, &roce_en);
 		if (err)

@@ -1,0 +1,109 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
+
+Change-Id: I85cd420de992fcc092d624952dd3d4f4182cae0e
+---
+ drivers/nvme/host/fabrics.c | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+--- a/drivers/nvme/host/fabrics.c
++++ b/drivers/nvme/host/fabrics.c
+@@ -27,6 +27,7 @@ static struct nvmf_host *nvmf_default_ho
+ static struct nvmf_host *nvmf_host_alloc(const char *hostnqn, uuid_t *id)
+ {
+ 	struct nvmf_host *host;
++	ssize_t res;
+ 
+ 	host = kmalloc(sizeof(*host), GFP_KERNEL);
+ 	if (!host)
+@@ -34,8 +35,7 @@ static struct nvmf_host *nvmf_host_alloc
+ 
+ 	kref_init(&host->ref);
+ 	uuid_copy(&host->id, id);
+-	strscpy(host->nqn, hostnqn, NVMF_NQN_SIZE);
+-
++	res = strscpy(host->nqn, hostnqn, NVMF_NQN_SIZE);
+ 	return host;
+ }
+ 
+@@ -183,7 +183,6 @@ int nvmf_reg_read32(struct nvme_ctrl *ct
+ 
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0,
+ 			NVME_QID_ANY, 0, 0);
+-
+ 	if (ret >= 0)
+ 		*val = le64_to_cpu(res.u64);
+ 	if (unlikely(ret != 0))
+@@ -226,10 +225,8 @@ int nvmf_reg_read64(struct nvme_ctrl *ct
+ 	cmd.prop_get.fctype = nvme_fabrics_type_property_get;
+ 	cmd.prop_get.attrib = 1;
+ 	cmd.prop_get.offset = cpu_to_le32(off);
+-
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res, NULL, 0,
+ 			NVME_QID_ANY, 0, 0);
+-
+ 	if (ret >= 0)
+ 		*val = le64_to_cpu(res.u64);
+ 	if (unlikely(ret != 0))
+@@ -271,7 +268,6 @@ int nvmf_reg_write32(struct nvme_ctrl *c
+ 	cmd.prop_set.attrib = 0;
+ 	cmd.prop_set.offset = cpu_to_le32(off);
+ 	cmd.prop_set.value = cpu_to_le64(val);
+-
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, NULL, NULL, 0,
+ 			NVME_QID_ANY, 0, 0);
+ 	if (unlikely(ret))
+@@ -450,7 +446,6 @@ int nvmf_connect_admin_queue(struct nvme
+ 	data = nvmf_connect_data_prep(ctrl, 0xffff);
+ 	if (!data)
+ 		return -ENOMEM;
+-
+ 	ret = __nvme_submit_sync_cmd(ctrl->fabrics_q, &cmd, &res,
+ 			data, sizeof(*data), NVME_QID_ANY, 1,
+ 			BLK_MQ_REQ_RESERVED | BLK_MQ_REQ_NOWAIT);
+@@ -525,7 +520,6 @@ int nvmf_connect_io_queue(struct nvme_ct
+ 	data = nvmf_connect_data_prep(ctrl, ctrl->cntlid);
+ 	if (!data)
+ 		return -ENOMEM;
+-
+ 	ret = __nvme_submit_sync_cmd(ctrl->connect_q, &cmd, &res,
+ 			data, sizeof(*data), qid, 1,
+ 			BLK_MQ_REQ_RESERVED | BLK_MQ_REQ_NOWAIT);
+@@ -999,6 +993,7 @@ out:
+ 	return ret;
+ }
+ 
++#ifdef HAVE_BLK_MQ_HCTX_TYPE
+ void nvmf_set_io_queues(struct nvmf_ctrl_options *opts, u32 nr_io_queues,
+ 			u32 io_queues[HCTX_MAX_TYPES])
+ {
+@@ -1074,6 +1069,7 @@ void nvmf_map_queues(struct blk_mq_tag_s
+ 		io_queues[HCTX_TYPE_POLL]);
+ }
+ EXPORT_SYMBOL_GPL(nvmf_map_queues);
++#endif /* HAVE_BLK_MQ_HCTX_TYPE */
+ 
+ static int nvmf_check_required_opts(struct nvmf_ctrl_options *opts,
+ 		unsigned int required_opts)
+@@ -1372,7 +1368,11 @@ static int __init nvmf_init(void)
+ 	if (!nvmf_default_host)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_CLASS_CREATE_GET_1_PARAM
+ 	nvmf_class = class_create("nvme-fabrics");
++#else
++	nvmf_class = class_create(THIS_MODULE, "nvme-fabrics");
++#endif
+ 	if (IS_ERR(nvmf_class)) {
+ 		pr_err("couldn't register class nvme-fabrics\n");
+ 		ret = PTR_ERR(nvmf_class);
+@@ -1426,6 +1426,9 @@ static void __exit nvmf_exit(void)
+ }
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ module_init(nvmf_init);
+ module_exit(nvmf_exit);

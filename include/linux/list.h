@@ -9,7 +9,7 @@
 #ifndef HAVE_LIST_IS_FIRST
 static inline int list_is_first(const struct list_head *list, const struct list_head *head)
 {
-         return list->prev == head;
+	return list->prev == head;
 }
 #endif
 
@@ -20,6 +20,11 @@ static inline int list_is_first(const struct list_head *list, const struct list_
 	hlist_for_each_entry(pos, head, member)
 
 #define COMPAT_HL_NODE
+
+#ifndef list_entry_is_head
+#define list_entry_is_head(pos, head, member)				\
+		(&pos->member == (head))
+#endif
 
 #ifndef list_prev_entry
 #define list_prev_entry(pos, member) \

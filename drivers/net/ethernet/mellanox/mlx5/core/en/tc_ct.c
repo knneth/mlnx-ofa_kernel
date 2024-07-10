@@ -566,7 +566,7 @@ mlx5_tc_ct_entry_del_rule(struct mlx5_tc_ct_priv *ct_priv,
 	struct mlx5_ct_zone_rule *zone_rule = &entry->zone_rules[nat];
 	struct mlx5_flow_attr *attr = zone_rule->attr;
 
-	ct_dbg("Deleting ct entry 0x%p rule in zone %d", entry, entry->tuple.zone);
+	ct_dbg("Deleting ct entry rule in zone %d", entry->tuple.zone);
 
 	ct_priv->fs_ops->ct_rule_del(ct_priv->fs, zone_rule->rule);
 	mlx5_tc_ct_entry_destroy_mod_hdr(ct_priv, zone_rule->attr, zone_rule->mh);
@@ -1409,6 +1409,31 @@ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
 	return 0;
 }
 
+static bool
+mlx5_tc_ct_filter_legacy_non_nic_flows(struct mlx5_ct_ft *ft, struct flow_cls_offload1 *flow) {
+	struct flow_rule *rule = flow_cls_offload_flow_rule1(flow);
+	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+	struct flow_match_meta match;
+	struct net_device *dev;
+	bool same_dev = false;
+
+	if (!is_mdev_legacy_mode(ct_priv->dev) ||
+	    !flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_META))
+		return true;
+
+	flow_rule_match_meta(rule, &match);
+
+	if (!(match.key->ingress_ifindex & match.mask->ingress_ifindex))
+		return true;
+
+
+	dev = dev_get_by_index(&init_net, match.key->ingress_ifindex);
+	same_dev = ct_priv->netdev == dev;
+	dev_put(dev);
+
+	return same_dev;
+}
+
 static int
 mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
 			      void *cb_priv)
@@ -1421,6 +1446,9 @@ mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
 
 	switch (f->command) {
 	case FLOW_CLS_REPLACE:
+		if (!mlx5_tc_ct_filter_legacy_non_nic_flows(ft, f))
+			return -EOPNOTSUPP;
+
 		return mlx5_tc_ct_block_flow_offload_add(ft, f);
 	case FLOW_CLS_DESTROY:
 		return mlx5_tc_ct_block_flow_offload_del(ft, f);
@@ -2110,8 +2138,6 @@ mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *priv,
 		       struct mlx5_flow_attr *attr)
 {
 	if (!attr->ct_attr.offloaded) /* no ct action, return */
-		return;
-	if (!attr->ct_attr.ft) /* no ct action, return */
 		return;
 	if (!attr->ct_attr.nf_ft) /* means only ct clear action, and not ct_clear,ct() */
 		return;

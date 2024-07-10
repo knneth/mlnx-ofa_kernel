@@ -6,8 +6,4 @@
 
 #include_next <linux/firmware.h>
 
-#ifndef HAVE_REQUEST_FIRMWARE_DIRECT
-#define request_firmware_direct        request_firmware
-#endif
-
 #endif /* _COMPAT_LINUX_FIRMWARE_H */

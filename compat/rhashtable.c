@@ -1749,7 +1749,7 @@ static void *rhashtable_lookup_one(struct rhashtable *ht,
 	struct rhash_head *head;
 	int elasticity;
 
-#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	elasticity = ht->elasticity;
 #else
 	elasticity = RHT_ELASTICITY;
@@ -2185,7 +2185,7 @@ int rhashtable_init(struct rhashtable *ht,
 	}
 #endif
 
-#if defined(HAVE_RHASHTABLE_INSECURE_MAX_ENTRIES) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	if (params->insecure_max_entries)
 		ht->p.insecure_max_entries =
 			rounddown_pow_of_two(params->insecure_max_entries);
@@ -2214,7 +2214,7 @@ int rhashtable_init(struct rhashtable *ht,
 	 * length to vastly exceed 16 to have any real effect
 	 * on the system.
 	 */
-#if defined(HAVE_RHASHTABLE_INSECURE_ELASTICITY) || !defined(HAVE_RHLTABLE)
+#if !defined(HAVE_RHLTABLE)
 	if (!params->insecure_elasticity)
 		ht->elasticity = 16;
 #endif

@@ -64,10 +64,6 @@ KCFLAGS += -Wno-date-time
 export KCFLAGS
 endif
 
-# Pass CFLAGS_RETPOLINE to the kernel's build system. Even if it was
-# not defined: we test there if it is empty
-export CFLAGS_RETPOLINE
-
 ifneq ($(shell if (echo $(KVERSION) | grep -qE 'uek'); then \
 					echo "YES"; else echo ""; fi),)
 override WITH_MAKE_PARAMS += ctf-dir="$(CWD)/.ctf"
@@ -162,11 +158,13 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF)
 		CONFIG_MLX5_CLS_ACT=$(CONFIG_MLX5_CLS_ACT) \
 		CONFIG_MLX5_TC_CT=$(CONFIG_MLX5_TC_CT) \
 		CONFIG_MLX5_TC_SAMPLE=$(CONFIG_MLX5_TC_SAMPLE) \
+		CONFIG_MLX5_MACSEC=$(CONFIG_MLX5_MACSEC) \
 		CONFIG_MLX5_MPFS=$(CONFIG_MLX5_MPFS) \
 		CONFIG_MLXFW=$(CONFIG_MLXFW) \
 		CONFIG_MLX5_FPGA_TLS=$(CONFIG_MLX5_FPGA_TLS) \
 		CONFIG_MLX5_FPGA_IPSEC=$(CONFIG_MLX5_FPGA_IPSEC) \
 		CONFIG_MLX5_FPGA=$(CONFIG_MLX5_FPGA) \
+		CONFIG_MLX5_DPLL=$(CONFIG_MLX5_DPLL) \
 		CONFIG_DTRACE= \
 		CONFIG_CTF= \
 		LINUXINCLUDE='$(LINUXINCLUDE)' \

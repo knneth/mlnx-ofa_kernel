@@ -9,7 +9,7 @@
 #include "en/rep/tc.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
-#if defined(HAVE_SWITCHDEV_OPS) || defined(HAVE_SWITCHDEV_H_COMPAT)
+#if defined(HAVE_SWITCHDEV_OPS)
 int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
 {
 	int err = 0;
@@ -31,82 +31,10 @@ int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
 }
 #endif
 
-#ifdef HAVE_SWITCHDEV_H_COMPAT
-static inline int dev_isalive(const struct net_device *dev)
-{
-	return dev->reg_state <= NETREG_REGISTERED;
-}
-
-static ssize_t phys_port_name_show(struct device *dev,
-				   struct device_attribute *attr, char *buf)
-{
-	struct net_device *netdev = to_net_dev(dev);
-	ssize_t ret = -EINVAL;
-
-	if (!rtnl_trylock())
-		return restart_syscall();
-
-	if (dev_isalive(netdev)) {
-		char name[IFNAMSIZ];
-
-		ret = mlx5e_rep_get_phys_port_name(netdev, name, sizeof(name));
-		if (!ret)
-			ret = sprintf(buf, "%s\n", name);
-	}
-	rtnl_unlock();
-
-	return ret;
-}
-
-ssize_t phys_switch_id_show(struct device *dev,
-			    struct device_attribute *attr, char *buf)
-{
-	struct net_device *netdev = to_net_dev(dev);
-	ssize_t ret = -EINVAL;
-
-	if (!rtnl_trylock())
-		return restart_syscall();
-
-	if (dev_isalive(netdev)) {
-		struct switchdev_attr attr = {
-			.orig_dev = netdev,
-			.id = SWITCHDEV_ATTR_ID_PORT_PARENT_ID,
-			.flags = SWITCHDEV_F_NO_RECURSE,
-		};
-
-		ret = mlx5e_attr_get(netdev, &attr);
-		if (!ret)
-			ret = sprintf(buf, "%*phN\n", attr.u.ppid.id_len,
-				      attr.u.ppid.id);
-	}
-	rtnl_unlock();
-
-	return ret;
-}
-
-static DEVICE_ATTR(phys_port_name, S_IRUGO, phys_port_name_show, NULL);
-static DEVICE_ATTR(phys_switch_id, S_IRUGO, phys_switch_id_show, NULL);
-
-static struct attribute *rep_sysfs_attrs[] = {
-	&dev_attr_phys_port_name.attr,
-	&dev_attr_phys_switch_id.attr,
-	NULL,
-};
-
-static struct attribute_group rep_sysfs_attr_group = {
-	.attrs = rep_sysfs_attrs,
-};
-#endif /* HAVE_SWITCHDEV_H_COMPAT */
-
 void mlx5e_rep_set_sysfs_attr(struct net_device *netdev)
 {
 	if (!netdev)
 		return;
-
-#ifdef HAVE_SWITCHDEV_H_COMPAT
-	if (!netdev->sysfs_groups[0])
-		netdev->sysfs_groups[0] = &rep_sysfs_attr_group;
-#endif
 }
 
 int mlx5e_vport_rep_load_compat(struct mlx5e_priv *priv)

@@ -98,7 +98,6 @@ void mlx5e_rep_update_flows(struct mlx5e_priv *priv,
 
 	ASSERT_RTNL();
 
-	down_write(&esw->offloads.neigh_update_lock);
 	mutex_lock(&esw->offloads.encap_tbl_lock);
 	encap_connected = !!(e->flags & MLX5_ENCAP_ENTRY_VALID);
 	if (encap_connected == neigh_connected && ether_addr_equal(e->h_dest, ha))
@@ -126,7 +125,6 @@ void mlx5e_rep_update_flows(struct mlx5e_priv *priv,
 	}
 unlock:
 	mutex_unlock(&esw->offloads.encap_tbl_lock);
-	up_write(&esw->offloads.neigh_update_lock);
 	mlx5e_put_flow_list(priv, &flow_list);
 }
 

@@ -109,6 +109,7 @@ void tclass_get_tclass_locked(struct mlx5_ib_dev *dev,
 			      u8 port,
 			      u8 *tclass,
 			      bool *global_tc);
+
 /* DC_cnak feature */
 
 #define MLX5_DC_CONNECT_QP_DEPTH 8192

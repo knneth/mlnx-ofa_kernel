@@ -1,0 +1,538 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/health.c  | 259 +++++++++++++++++-
+ 1 file changed, 244 insertions(+), 15 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/health.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/health.c
+@@ -43,7 +43,9 @@
+ #include "lib/pci_vsc.h"
+ #include "lib/tout.h"
+ #include "diag/fw_tracer.h"
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ #include "diag/reporter_vnic.h"
++#endif
+ 
+ enum {
+ 	MAX_MISSES			= 3,
+@@ -355,6 +357,31 @@ err_eio:
+ 	return -EIO;
+ }
+ 
++#ifndef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++static void health_recover_work(struct work_struct *work)
++{
++	struct mlx5_core_health *health;
++	struct mlx5_core_dev *dev;
++	struct mlx5_priv *priv;
++
++	health = container_of(work, struct mlx5_core_health, fatal_report_work);
++	priv = container_of(health, struct mlx5_priv, health);
++	dev = container_of(priv, struct mlx5_core_dev, priv);
++
++	mutex_lock(&dev->intf_state_mutex);
++	if (test_bit(MLX5_DROP_HEALTH_WORK, &health->flags)) {
++		mlx5_core_err(dev, "health works are not permitted at this stage\n");
++		mutex_unlock(&dev->intf_state_mutex);
++		return;
++	}
++	mutex_unlock(&dev->intf_state_mutex);
++
++	enter_error_state(dev, false);
++	if (mlx5_health_try_recover(dev))
++		mlx5_core_err(dev, "Health recovery failed\n");
++}
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
++
+ static const char *hsynd_str(u8 synd)
+ {
+ 	switch (synd) {
+@@ -416,6 +443,30 @@ static int mlx5_health_get_severity(u8 r
+ 	       rfr_severity & MLX5_SEVERITY_MASK : LOGLEVEL_ERR;
+ }
+ 
++static void mlx5_printk(struct mlx5_core_dev *dev, int level, const char *format, ...)
++{
++	struct device *device = dev->device;
++	struct va_format vaf;
++	va_list args;
++
++	if (WARN_ONCE(level < LOGLEVEL_EMERG || level > LOGLEVEL_DEBUG,
++				"Level %d is out of range, set to default level\n", level))
++		level = LOGLEVEL_DEFAULT;
++
++	va_start(args, format);
++	vaf.fmt = format;
++	vaf.va = &args;
++
++	dev_printk_emit(level, device, "%s %s: %pV", dev_driver_string(device), dev_name(device),
++			&vaf);
++	va_end(args);
++}
++
++#define mlx5_log(__dev, level, format, ...)                     \
++	mlx5_printk(__dev, level, "%s:%d:(pid %d): " format,    \
++			__func__, __LINE__, current->pid,           \
++##__VA_ARGS__)
++
+ static void print_health_info(struct mlx5_core_dev *dev)
+ {
+ 	struct mlx5_core_health *health = &dev->priv.health;
+@@ -457,14 +508,29 @@ static void print_health_info(struct mlx
+ 	mlx5_log(dev, severity, "raw fw_ver 0x%08x\n", ioread32be(&h->fw_ver));
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static int
+ mlx5_fw_reporter_diagnose(struct devlink_health_reporter *reporter,
+-			  struct devlink_fmsg *fmsg,
+-			  struct netlink_ext_ack *extack)
++			  struct devlink_fmsg *fmsg
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++		          , struct netlink_ext_ack *extack
++#endif
++			 )
+ {
+ 	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
+ 	struct mlx5_core_health *health = &dev->priv.health;
+ 	struct health_buffer __iomem *h = health->health;
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	u8 synd = ioread8(&h->synd);
++
++	devlink_fmsg_u8_pair_put(fmsg, "Syndrome", synd);
++	if (!synd)
++		return 0;
++
++	devlink_fmsg_string_pair_put(fmsg, "Description", hsynd_str(synd));
++
++	return 0;
++#else
+ 	u8 synd;
+ 	int err;
+ 
+@@ -473,6 +539,7 @@ mlx5_fw_reporter_diagnose(struct devlink
+ 	if (err || !synd)
+ 		return err;
+ 	return devlink_fmsg_string_pair_put(fmsg, "Description", hsynd_str(synd));
++#endif
+ }
+ 
+ struct mlx5_fw_reporter_ctx {
+@@ -480,10 +547,18 @@ struct mlx5_fw_reporter_ctx {
+ 	int miss_counter;
+ };
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++static void
++#else
+ static int
++#endif
+ mlx5_fw_reporter_ctx_pairs_put(struct devlink_fmsg *fmsg,
+ 			       struct mlx5_fw_reporter_ctx *fw_reporter_ctx)
+ {
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_u8_pair_put(fmsg, "syndrome", fw_reporter_ctx->err_synd);
++	devlink_fmsg_u32_pair_put(fmsg, "fw_miss_counter", fw_reporter_ctx->miss_counter);
++#else
+ 	int err;
+ 
+ 	err = devlink_fmsg_u8_pair_put(fmsg, "syndrome",
+@@ -495,19 +570,41 @@ mlx5_fw_reporter_ctx_pairs_put(struct de
+ 	if (err)
+ 		return err;
+ 	return 0;
++#endif
+ }
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++static void
++#else
+ static int
++#endif
+ mlx5_fw_reporter_heath_buffer_data_put(struct mlx5_core_dev *dev,
+ 				       struct devlink_fmsg *fmsg)
+ {
+ 	struct mlx5_core_health *health = &dev->priv.health;
+ 	struct health_buffer __iomem *h = health->health;
+ 	u8 rfr_severity;
++#ifdef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 	int err;
++#endif
+ 	int i;
+-
+ 	if (!ioread8(&h->synd))
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++		return;
++	devlink_fmsg_pair_nest_start(fmsg, "health buffer");
++	devlink_fmsg_obj_nest_start(fmsg);
++	devlink_fmsg_arr_pair_nest_start(fmsg, "assert_var");
++	for (i = 0; i < ARRAY_SIZE(h->assert_var); i++)
++		devlink_fmsg_u32_put(fmsg, ioread32be(h->assert_var + i));
++	devlink_fmsg_arr_pair_nest_end(fmsg);
++	devlink_fmsg_u32_pair_put(fmsg, "assert_exit_ptr",
++			ioread32be(&h->assert_exit_ptr));
++	devlink_fmsg_u32_pair_put(fmsg, "assert_callra",
++			ioread32be(&h->assert_callra));
++	devlink_fmsg_u32_pair_put(fmsg, "time", ioread32be(&h->time));
++	devlink_fmsg_u32_pair_put(fmsg, "hw_id", ioread32be(&h->hw_id));
++
++#else
+ 		return 0;
+ 
+ 	err = devlink_fmsg_pair_nest_start(fmsg, "health buffer");
+@@ -542,7 +639,18 @@ mlx5_fw_reporter_heath_buffer_data_put(s
+ 	err = devlink_fmsg_u32_pair_put(fmsg, "hw_id", ioread32be(&h->hw_id));
+ 	if (err)
+ 		return err;
++#endif
+ 	rfr_severity = ioread8(&h->rfr_severity);
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_u8_pair_put(fmsg, "rfr", mlx5_health_get_rfr(rfr_severity));
++	devlink_fmsg_u8_pair_put(fmsg, "severity", mlx5_health_get_severity(rfr_severity));
++	devlink_fmsg_u8_pair_put(fmsg, "irisc_index", ioread8(&h->irisc_index));
++	devlink_fmsg_u8_pair_put(fmsg, "synd", ioread8(&h->synd));
++	devlink_fmsg_u32_pair_put(fmsg, "ext_synd", ioread16be(&h->ext_synd));
++	devlink_fmsg_u32_pair_put(fmsg, "raw_fw_ver", ioread32be(&h->fw_ver));
++	devlink_fmsg_obj_nest_end(fmsg);
++	devlink_fmsg_pair_nest_end(fmsg);
++#else
+ 	err = devlink_fmsg_u8_pair_put(fmsg, "rfr", mlx5_health_get_rfr(rfr_severity));
+ 	if (err)
+ 		return err;
+@@ -568,12 +676,16 @@ mlx5_fw_reporter_heath_buffer_data_put(s
+ 	if (err)
+ 		return err;
+ 	return devlink_fmsg_pair_nest_end(fmsg);
++#endif
+ }
+ 
+ static int
+ mlx5_fw_reporter_dump(struct devlink_health_reporter *reporter,
+-		      struct devlink_fmsg *fmsg, void *priv_ctx,
+-		      struct netlink_ext_ack *extack)
++		      struct devlink_fmsg *fmsg, void *priv_ctx
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++		      , struct netlink_ext_ack *extack
++#endif
++		     )
+ {
+ 	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
+ 	int err;
+@@ -584,15 +696,21 @@ mlx5_fw_reporter_dump(struct devlink_hea
+ 
+ 	if (priv_ctx) {
+ 		struct mlx5_fw_reporter_ctx *fw_reporter_ctx = priv_ctx;
+-
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++		mlx5_fw_reporter_ctx_pairs_put(fmsg, fw_reporter_ctx);
++#else
+ 		err = mlx5_fw_reporter_ctx_pairs_put(fmsg, fw_reporter_ctx);
+ 		if (err)
+ 			return err;
++#endif
+ 	}
+-
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	mlx5_fw_reporter_heath_buffer_data_put(dev, fmsg);
++#else
+ 	err = mlx5_fw_reporter_heath_buffer_data_put(dev, fmsg);
+ 	if (err)
+ 		return err;
++#endif
+ 	return mlx5_fw_tracer_get_saved_traces_objects(dev->tracer, fmsg);
+ }
+ 
+@@ -627,22 +745,36 @@ static const struct devlink_health_repor
+ 
+ static int
+ mlx5_fw_fatal_reporter_recover(struct devlink_health_reporter *reporter,
+-			       void *priv_ctx,
+-			       struct netlink_ext_ack *extack)
++			       void *priv_ctx
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++			       , struct netlink_ext_ack *extack
++#endif
++			       )
+ {
+ 	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
+ 
+ 	return mlx5_health_try_recover(dev);
+ }
+ 
++#ifndef HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
++#define MLX5_CR_DUMP_CHUNK_SIZE 256
++#endif
++
+ static int
+ mlx5_fw_fatal_reporter_dump(struct devlink_health_reporter *reporter,
+-			    struct devlink_fmsg *fmsg, void *priv_ctx,
+-			    struct netlink_ext_ack *extack)
++			    struct devlink_fmsg *fmsg, void *priv_ctx
++#ifdef HAVE_HEALTH_REPORTER_RECOVER_HAS_EXTACK
++			    , struct netlink_ext_ack *extack
++#endif
++			   )
+ {
+ 	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
+ 	u32 crdump_size = dev->priv.health.crdump_size;
+ 	u32 *cr_data;
++#ifndef HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
++	u32 data_size;
++	u32 offset;
++#endif
+ 	int err;
+ 
+ 	if (!mlx5_core_is_pf(dev))
+@@ -660,13 +792,49 @@ mlx5_fw_fatal_reporter_dump(struct devli
+ 
+ 	if (priv_ctx) {
+ 		struct mlx5_fw_reporter_ctx *fw_reporter_ctx = priv_ctx;
+-
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++		mlx5_fw_reporter_ctx_pairs_put(fmsg, fw_reporter_ctx);
++#else
+ 		err = mlx5_fw_reporter_ctx_pairs_put(fmsg, fw_reporter_ctx);
+ 		if (err)
+ 			goto free_data;
++#endif
+ 	}
+ 
++#ifdef HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_binary_pair_put(fmsg, "crdump_data", cr_data, crdump_size);
++#else
+ 	err = devlink_fmsg_binary_pair_put(fmsg, "crdump_data", cr_data, crdump_size);
++#endif
++#else
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_arr_pair_nest_start(fmsg, "crdump_data");
++#else
++	err = devlink_fmsg_arr_pair_nest_start(fmsg, "crdump_data");
++	if (err)
++		goto free_data;
++#endif
++	for (offset = 0; offset < crdump_size; offset += data_size) {
++		if (crdump_size - offset < MLX5_CR_DUMP_CHUNK_SIZE)
++			data_size = crdump_size - offset;
++		else
++			data_size = MLX5_CR_DUMP_CHUNK_SIZE;
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++		devlink_fmsg_binary_put(fmsg, (char *)cr_data + offset, data_size);
++#else
++		err = devlink_fmsg_binary_put(fmsg, (char *)cr_data + offset,
++					      data_size);
++		if (err)
++			goto free_data;
++#endif
++	}
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_arr_pair_nest_end(fmsg);
++#else
++	err = devlink_fmsg_arr_pair_nest_end(fmsg);
++#endif
++#endif /* HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32 */
+ 
+ free_data:
+ 	kvfree(cr_data);
+@@ -679,13 +847,17 @@ static void mlx5_fw_fatal_reporter_err_w
+ 	struct mlx5_fw_reporter_ctx fw_reporter_ctx;
+ 	struct mlx5_core_health *health;
+ 	struct mlx5_core_dev *dev;
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink;
++#endif
+ 	struct mlx5_priv *priv;
+ 
+ 	health = container_of(work, struct mlx5_core_health, fatal_report_work);
+ 	priv = container_of(health, struct mlx5_priv, health);
+ 	dev = container_of(priv, struct mlx5_core_dev, priv);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devlink = priv_to_devlink(dev);
++#endif
+ 
+ 	mutex_lock(&dev->intf_state_mutex);
+ 	if (test_bit(MLX5_DROP_HEALTH_WORK, &health->flags)) {
+@@ -696,18 +868,24 @@ static void mlx5_fw_fatal_reporter_err_w
+ 	mutex_unlock(&dev->intf_state_mutex);
+ 	enter_error_state(dev, false);
+ 	if (IS_ERR_OR_NULL(health->fw_fatal_reporter)) {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 		devl_lock(devlink);
++#endif
+ 		if (mlx5_health_try_recover(dev))
+ 			mlx5_core_err(dev, "health recovery failed\n");
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 		devl_unlock(devlink);
++#endif
+ 		return;
+ 	}
+ 	fw_reporter_ctx.err_synd = health->synd;
+ 	fw_reporter_ctx.miss_counter = health->miss_counter;
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_STATE_UPDATE
+ 	if (health->failed_in_seq &&
+ 	    health->failed_in_seq < MLX5_MAX_FAILED_RECOVERIES_IN_SEQUENCE)
+ 		devlink_health_reporter_state_update(health->fw_fatal_reporter,
+ 						     DEVLINK_HEALTH_REPORTER_STATE_HEALTHY);
++#endif
+ 	if (devlink_health_report(health->fw_fatal_reporter,
+ 				  "FW fatal error reported", &fw_reporter_ctx) == -ECANCELED) {
+ 		/* If recovery wasn't performed, due to grace period,
+@@ -747,17 +925,33 @@ void mlx5_fw_reporters_create(struct mlx
+ 	}
+ 
+ 	health->fw_reporter =
++#if defined(HAVE_DEVL_HEALTH_REPORTER_CREATE) && defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
+ 		devl_health_reporter_create(devlink, &mlx5_fw_reporter_ops,
+-					    0, dev);
++#else
++		devlink_health_reporter_create(devlink, &mlx5_fw_reporter_ops,
++#endif
++#ifndef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
++				0, dev);
++#else
++				0, false, dev);
++#endif
++
+ 	if (IS_ERR(health->fw_reporter))
+ 		mlx5_core_warn(dev, "Failed to create fw reporter, err = %ld\n",
+ 			       PTR_ERR(health->fw_reporter));
+ 
+ 	health->fw_fatal_reporter =
++#ifdef HAVE_DEVL_HEALTH_REPORTER_CREATE
+ 		devl_health_reporter_create(devlink,
++#else
++		devlink_health_reporter_create(devlink,
++#endif
+ 					    &mlx5_fw_fatal_reporter_ops,
+-					    grace_period,
+-					    dev);
++#ifndef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
++					       grace_period, dev);
++#else
++					       grace_period, true, dev);
++#endif
+ 	if (IS_ERR(health->fw_fatal_reporter))
+ 		mlx5_core_warn(dev, "Failed to create fw fatal reporter, err = %ld\n",
+ 			       PTR_ERR(health->fw_fatal_reporter));
+@@ -773,6 +967,7 @@ static void mlx5_fw_reporters_destroy(st
+ 	if (!IS_ERR_OR_NULL(health->fw_fatal_reporter))
+ 		devlink_health_reporter_destroy(health->fw_fatal_reporter);
+ }
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ static unsigned long get_next_poll_jiffies(struct mlx5_core_dev *dev)
+ {
+@@ -789,7 +984,9 @@ void mlx5_trigger_health_work(struct mlx
+ {
+ 	struct mlx5_core_health *health = &dev->priv.health;
+ 
++#if defined(HAVE_LIGHT_SFS)
+ 	if (!mlx5_dev_is_lightweight(dev))
++#endif
+ 		queue_work(health->wq, &health->fatal_report_work);
+ }
+ 
+@@ -822,9 +1019,13 @@ static void poll_health(struct timer_lis
+ {
+ 	struct mlx5_core_dev *dev = from_timer(dev, t, priv.health.timer);
+ 	struct mlx5_core_health *health = &dev->priv.health;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	struct health_buffer __iomem *h = health->health;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	u32 fatal_error;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	u8 prev_synd;
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	u32 count;
+ 
+ 	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
+@@ -851,13 +1052,17 @@ static void poll_health(struct timer_lis
+ 	if (health->miss_counter == MAX_MISSES) {
+ 		mlx5_core_err(dev, "device's health compromised - reached miss count\n");
+ 		print_health_info(dev);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 		queue_work(health->wq, &health->report_work);
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	}
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	prev_synd = health->synd;
+ 	health->synd = ioread8(&h->synd);
+ 	if (health->synd && health->synd != prev_synd)
+ 		queue_work(health->wq, &health->report_work);
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ out:
+ 	mod_timer(&health->timer, get_next_poll_jiffies(dev));
+@@ -902,7 +1107,9 @@ void mlx5_drain_health_wq(struct mlx5_co
+ 
+ 	set_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
+ 	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	cancel_work_sync(&health->report_work);
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	cancel_work_sync(&health->fatal_report_work);
+ }
+ 
+@@ -912,22 +1119,38 @@ void mlx5_health_cleanup(struct mlx5_cor
+ 
+ 	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
+ 	destroy_workqueue(health->wq);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	mlx5_reporter_vnic_destroy(dev);
+ 	mlx5_fw_reporters_destroy(dev);
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ }
+ 
+ int mlx5_health_init(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink = priv_to_devlink(dev);
++#endif
+ 	struct mlx5_core_health *health;
+ 	char *name;
+ 
++#if defined(HAVE_LIGHT_SFS)
+ 	if (!mlx5_dev_is_lightweight(dev)) {
++#endif
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 		devl_lock(devlink);
++#endif
+ 		mlx5_fw_reporters_create(dev);
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 		devl_unlock(devlink);
++#endif
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
++#if defined(HAVE_LIGHT_SFS)
+ 	}
++#endif
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	mlx5_reporter_vnic_create(dev);
++#endif
+ 
+ 	health = &dev->priv.health;
+ 	name = kmalloc(64, GFP_KERNEL);
+@@ -940,14 +1163,20 @@ int mlx5_health_init(struct mlx5_core_de
+ 	kfree(name);
+ 	if (!health->wq)
+ 		goto out_err;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	INIT_WORK(&health->fatal_report_work, mlx5_fw_fatal_reporter_err_work);
+ 	INIT_WORK(&health->report_work, mlx5_fw_reporter_err_work);
++#else
++	INIT_WORK(&health->fatal_report_work, health_recover_work);
++#endif
+ 	INIT_DELAYED_WORK(&health->update_fw_log_ts_work, mlx5_health_log_ts_update);
+ 
+ 	return 0;
+ 
+ out_err:
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	mlx5_reporter_vnic_destroy(dev);
+ 	mlx5_fw_reporters_destroy(dev);
++#endif
+ 	return -ENOMEM;
+ }

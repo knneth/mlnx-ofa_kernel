@@ -47,6 +47,7 @@ static struct mlx5e_tc_act *tc_acts_nic[NUM_FLOW_ACTIONS] = {
 #if IS_ENABLED(CONFIG_MLX5_TC_CT)
 	[FLOW_ACTION_CT] = &mlx5e_tc_act_ct,
 #endif
+	[FLOW_ACTION_PRIORITY] = &mlx5e_tc_act_prio,
 };
 
 /**

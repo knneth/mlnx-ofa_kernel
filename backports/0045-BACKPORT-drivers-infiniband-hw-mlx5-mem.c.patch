@@ -1,0 +1,31 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mem.c
+
+---
+ drivers/infiniband/hw/mlx5/mem.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/infiniband/hw/mlx5/mem.c
++++ b/drivers/infiniband/hw/mlx5/mem.c
+@@ -148,7 +148,9 @@ static int post_send_nop(struct mlx5_ib_
+ 	 */
+ 	wmb();
+ 	memcpy_toio_64(bf->bfreg->map + bf->offset, mmio_wqe);
++#ifdef io_stop_wc
+ 	io_stop_wc();
++#endif
+ 
+ 	bf->offset ^= bf->buf_size;
+ 
+@@ -216,7 +218,11 @@ int mlx5_ib_test_wc(struct mlx5_ib_dev *
+ 	if (!dev->mdev->roce.roce_en &&
+ 	    port_type_cap == MLX5_CAP_PORT_TYPE_ETH) {
+ 		if (mlx5_core_is_pf(dev->mdev))
++#ifdef arch_can_pci_mmap_wc
+ 			dev->wc_support = arch_can_pci_mmap_wc();
++#else
++			dev->wc_support = true;
++#endif
+ 		return 0;
+ 	}
+ 

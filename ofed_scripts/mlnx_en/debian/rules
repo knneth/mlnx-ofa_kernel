@@ -21,6 +21,12 @@ WITH_DKMS ?= 1
 WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
+ifeq ($(WITH_DKMS),1)
+# 1 for dkms >= 3 . 0 for dkms 2 (or no DKMS support at all)
+DKMS3 = $(shell dkms --version 2>/dev/null | grep  -c dkms-3)
+else
+DKMS3 = 0
+endif
 
 WITH_MLXDEVM = $(shell if echo $(MLNX_EN_KERNEL_MODS) | grep -qw mlxdevm; then echo 1; else echo 0; fi)
 
@@ -102,6 +108,11 @@ endif
 	with_mlx5=$(MLX5) with_mlxfw=$(MLXFW) \
 	  $(CURDIR)/ofed_scripts/generate_mlnx_en_dkms_conf.sh \
 	  > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+ifeq ($(DKMS3),1)
+	# Removed in DKMS 3. Should be removed from the script when we
+	# make it the default:
+	sed -i -e '/REMAKE_INITRD/d' debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+endif
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
@@ -141,6 +152,12 @@ override_dh_installinit:
 ifneq ($(WITH_DKMS),1)
 override_dh_gencontrol:
 	dh_gencontrol -- -v$(pversion)-$(prel).kver.$(kernelver1)
+ifeq ($(DKMS3),1)
+	# Currently this is a special case. At some point this should become
+	# debian/mlnx-ofed-kernel-dkms.triggers and delete it for older
+	# versions:
+	echo "activate-await update-initramfs" >debian/$(pdkms)/DEBIAN/triggers
+endif
 endif
 
 ifneq ($(MLNX_KO_NO_STRIP),1)

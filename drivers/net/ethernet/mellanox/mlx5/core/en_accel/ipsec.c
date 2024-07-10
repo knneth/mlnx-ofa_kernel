@@ -388,6 +388,12 @@ skip_replay_window:
 
 	mlx5e_ipsec_init_limits(sa_entry, attrs);
 	mlx5e_ipsec_init_macs(sa_entry, attrs);
+
+	if (x->encap) {
+		attrs->encap = true;
+		attrs->sport = x->encap->encap_sport;
+		attrs->dport = x->encap->encap_dport;
+	}
 }
 
 static int mlx5e_xfrm_validate_state(struct mlx5_core_dev *mdev,
@@ -421,8 +427,25 @@ static int mlx5e_xfrm_validate_state(struct mlx5_core_dev *mdev,
 		return -EINVAL;
 	}
 	if (x->encap) {
-		NL_SET_ERR_MSG_MOD(extack, "Encapsulated xfrm state may not be offloaded");
-		return -EINVAL;
+		if (!(mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_ESPINUDP)) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation is not supported");
+			return -EINVAL;
+		}
+
+		if (x->encap->encap_type != UDP_ENCAP_ESPINUDP) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation other than UDP is not supported");
+			return -EINVAL;
+		}
+
+		if (x->xso.type != XFRM_DEV_OFFLOAD_PACKET) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation is supported in packet offload mode only");
+			return -EINVAL;
+		}
+
+		if (x->props.mode != XFRM_MODE_TRANSPORT) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation is supported in transport mode only");
+			return -EINVAL;
+		}
 	}
 	if (!x->aead) {
 		NL_SET_ERR_MSG_MOD(extack, "Cannot offload xfrm states without aead");
@@ -666,9 +689,7 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x,
 		return -EOPNOTSUPP;
 
 	ipsec = priv->ipsec;
-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
 	gfp = (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ) ? GFP_ATOMIC : GFP_KERNEL;
-	 */
 	sa_entry = kzalloc(sizeof(*sa_entry), gfp);
 	if (!sa_entry)
 		return -ENOMEM;
@@ -676,10 +697,8 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x,
 	sa_entry->x = x;
 	sa_entry->ipsec = ipsec;
 	/* Check if this SA is originated from acquire flow temporary SA */
-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
 		goto out;
-	 */
 
 	err = mlx5e_xfrm_validate_state(priv->mdev, x, extack);
 	if (err)
@@ -741,7 +760,7 @@ static int mlx5e_xfrm_add_state(struct xfrm_state *x,
 		xa_set_mark(&ipsec->sadb, sa_entry->ipsec_obj_id,
 			    MLX5E_IPSEC_TUNNEL_SA);
 
-// out:
+out:
 	x->xso.offload_handle = (unsigned long)sa_entry;
 	return 0;
 
@@ -770,10 +789,8 @@ static void mlx5e_xfrm_del_state(struct xfrm_state *x)
 	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
 	struct mlx5e_ipsec_sa_entry *old;
 
-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
 		return;
-	 */
 
 	old = xa_erase_bh(&ipsec->sadb, sa_entry->ipsec_obj_id);
 	WARN_ON(old != sa_entry);
@@ -790,10 +807,8 @@ static void mlx5e_xfrm_free_state(struct xfrm_state *x)
 	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
 	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
 
-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
 		goto sa_entry_free;
-	 */
 
 	if (sa_entry->work)
 		cancel_work_sync(&sa_entry->work->work);
@@ -808,7 +823,7 @@ static void mlx5e_xfrm_free_state(struct xfrm_state *x)
 		kfree(sa_entry->work->data);
 	kfree(sa_entry->work);
 	mlx5_eswitch_unblock_ipsec(ipsec->mdev);
-// sa_entry_free:
+sa_entry_free:
 	kfree(sa_entry);
 }
 
@@ -968,19 +983,37 @@ static void mlx5e_xfrm_update_curlft(struct xfrm_state *x)
 {
 	struct mlx5e_ipsec_sa_entry *sa_entry = to_ipsec_sa_entry(x);
 	struct mlx5e_ipsec_rule *ipsec_rule = &sa_entry->ipsec_rule;
+	struct net *net = dev_net(x->xso.dev);
 	u64 packets, bytes, lastuse;
 
 	lockdep_assert(lockdep_is_held(&x->lock) ||
-		       lockdep_is_held(&dev_net(x->xso.real_dev)->xfrm.xfrm_cfg_mutex));
+		       lockdep_is_held(&dev_net(x->xso.real_dev)->xfrm.xfrm_cfg_mutex) ||
+		       lockdep_is_held(&dev_net(x->xso.real_dev)->xfrm.xfrm_state_lock));
 
-	/* cmi: XFRM_DEV_OFFLOAD_FLAG_ACQ is not defined in base kernel, will fix in backports
 	if (x->xso.flags & XFRM_DEV_OFFLOAD_FLAG_ACQ)
 		return;
-	 */
+
+	if (sa_entry->attrs.dir == XFRM_DEV_OFFLOAD_IN) {
+		mlx5_fc_query_cached(ipsec_rule->auth.fc, &bytes, &packets, &lastuse);
+		x->stats.integrity_failed += packets;
+		XFRM_ADD_STATS(net, LINUX_MIB_XFRMINSTATEPROTOERROR, packets);
+
+		mlx5_fc_query_cached(ipsec_rule->trailer.fc, &bytes, &packets, &lastuse);
+		XFRM_ADD_STATS(net, LINUX_MIB_XFRMINHDRERROR, packets);
+	}
+
+	if (x->xso.type != XFRM_DEV_OFFLOAD_PACKET)
+		return;
 
 	mlx5_fc_query_cached(ipsec_rule->fc, &bytes, &packets, &lastuse);
 	x->curlft.packets += packets;
 	x->curlft.bytes += bytes;
+
+	if (sa_entry->attrs.dir == XFRM_DEV_OFFLOAD_IN) {
+		mlx5_fc_query_cached(ipsec_rule->replay.fc, &bytes, &packets, &lastuse);
+		x->stats.replay += packets;
+		XFRM_ADD_STATS(net, LINUX_MIB_XFRMINSTATESEQERROR, packets);
+	}
 }
 
 static int mlx5e_xfrm_validate_policy(struct mlx5_core_dev *mdev,

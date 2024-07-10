@@ -729,6 +729,7 @@ void mlx5_esw_qos_vport_disable(struct mlx5_eswitch *esw, struct mlx5_vport *vpo
 	lockdep_assert_held(&esw->state_lock);
 	if (!vport->qos.enabled)
 		return;
+
 	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
 						  SCHEDULING_HIERARCHY_E_SWITCH,
 						  vport->qos.esw_tsar_ix);
@@ -866,23 +867,21 @@ int mlx5_esw_qos_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num, u32 
 	return err;
 }
 
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 #define MLX5_LINKSPEED_UNIT 125000 /* 1Mbps in Bps */
 
 /* Converts bytes per second value passed in a pointer into megabits per
  * second, rewriting last. If converted rate exceed link speed or is not a
  * fraction of Mbps - returns error.
  */
-static
-int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
-				 u64 *rate, struct netlink_ext_ack *extack)
+static int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
+					u64 *rate, struct netlink_ext_ack *extack)
 {
-	u32 link_speed_max, reminder;
+	u32 link_speed_max, remainder;
 	u64 value;
 	int err;
 
-	value = div_u64_rem(*rate, MLX5_LINKSPEED_UNIT, &reminder);
-	if (reminder) {
+	value = div_u64_rem(*rate, MLX5_LINKSPEED_UNIT, &remainder);
+	if (remainder) {
 		pr_err("%s rate value %lluBps not in link speed units of 1Mbps.\n",
 		       name, *rate);
 		NL_SET_ERR_MSG_MOD(extack, "TX rate value not in link speed units of 1Mbps");
@@ -900,7 +899,6 @@ int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
 	*rate = value;
 	return 0;
 }
-#endif
 
 static bool esw_qos_groups_are_supported(struct mlx5_core_dev *dev)
 {

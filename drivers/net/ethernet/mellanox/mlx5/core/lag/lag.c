@@ -759,6 +759,7 @@ bool mlx5_lag_check_prereq(struct mlx5_lag *ldev)
 	struct mlx5_core_dev *dev;
 	u8 mode;
 #endif
+	bool roce_support;
 	int i;
 
 	for (i = 0; i < ldev->ports; i++)
@@ -785,6 +786,12 @@ bool mlx5_lag_check_prereq(struct mlx5_lag *ldev)
 		if (mlx5_sriov_is_enabled(ldev->pf[i].dev))
 			return false;
 #endif
+	roce_support = mlx5_get_roce_state(ldev->pf[MLX5_LAG_P1].dev);
+	for (i = 1; i < ldev->ports; i++) {
+		if (mlx5_get_roce_state(ldev->pf[i].dev) != roce_support)
+			return false;
+	}
+
 	return true;
 }
 
@@ -876,7 +883,7 @@ static bool mlx5_shared_fdb_supported(struct mlx5_lag *ldev)
 	dev = ldev->pf[MLX5_LAG_P1].dev;
 	if (is_mdev_switchdev_mode(dev) &&
 	    mlx5_eswitch_vport_match_metadata_enabled(dev->priv.eswitch) &&
-	    mlx5_devcom_comp_is_ready(dev->priv.devcom, MLX5_DEVCOM_ESW_OFFLOADS) &&
+	    mlx5_esw_offloads_devcom_is_ready(dev->priv.eswitch) &&
 	    MLX5_CAP_ESW(dev, esw_shared_ingress_acl) &&
 	    mlx5_eswitch_get_npeers(dev->priv.eswitch) == MLX5_CAP_GEN(dev, num_lag_ports) - 1)
 		return true;
@@ -952,8 +959,10 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 		} else if (roce_lag) {
 			dev0->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
 			mlx5_rescan_drivers_locked(dev0);
-			for (i = 1; i < ldev->ports; i++)
-				mlx5_nic_vport_enable_roce(ldev->pf[i].dev);
+			for (i = 1; i < ldev->ports; i++) {
+				if (mlx5_get_roce_state(ldev->pf[i].dev))
+					mlx5_nic_vport_enable_roce(ldev->pf[i].dev);
+			}
 		} else if (shared_fdb) {
 			int i;
 
@@ -1322,16 +1331,6 @@ recheck:
 	mlx5_ldev_remove_mdev(ldev, dev);
 	mutex_unlock(&ldev->lock);
 	mlx5_ldev_put(ldev);
-}
-
-bool mlx5_lag_is_supported(struct mlx5_core_dev *dev)
-{
-	if (!MLX5_CAP_GEN(dev, vport_group_manager) ||
-	    !MLX5_CAP_GEN(dev, lag_master) ||
-	    MLX5_CAP_GEN(dev, num_lag_ports) < 2 ||
-	    MLX5_CAP_GEN(dev, num_lag_ports) > MLX5_MAX_PORTS)
-		return false;
-	return true;
 }
 
 void mlx5_lag_add_mdev(struct mlx5_core_dev *dev)

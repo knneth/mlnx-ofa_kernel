@@ -21,36 +21,11 @@
 #include <net/tc_act/tc_csum.h>
 #include <net/tc_act/tc_skbedit.h>
 #include <net/tc_act/tc_tunnel_key.h>
-#ifdef HAVE_NET_PSAMPLE_H
 #include <net/tc_act/tc_sample.h>
-#endif
 #ifdef HAVE_IS_TCF_POLICE
 #include <net/tc_act/tc_police.h>
 #endif
 #include <net/tc_act/tc_ct.h>
-
-
-#if !defined(HAVE_IS_TCF_TUNNEL) && defined(HAVE_TCF_TUNNEL_INFO)
-
-struct tcf_tunnel_key {
-	struct tcf_common	common;
-	int			tcft_action;
-	struct ip_tunnel_info	ti;
- };
-
-#define to_tunnel_key(pc) \
-        container_of(pc, struct tcf_tunnel_key, common)
-
-static void parse_tunnel(const struct tc_action *act,
-			 struct flow_action_entry *entry)
-{
-	struct tcf_tunnel_key *t;
-
-	t = to_tunnel_key(act->priv);
-
-	entry->tunnel = &t->ti;
-}
-#endif
 
 int tc_setup_flow_action(struct flow_action *flow_action,
 			 const struct tcf_exts *exts)
@@ -68,60 +43,19 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 		entry = &flow_action->entries[j];
 		if (is_tcf_gact_ok(act)) {
 			entry->id = FLOW_ACTION_ACCEPT;
-#ifdef HAVE_IS_TCF_GACT_SHOT
 		} else if (is_tcf_gact_shot(act)) {
 			entry->id = FLOW_ACTION_DROP;
-#endif
-#ifdef HAVE_IS_TCF_GACT_GOTO_CHAIN
 		} else if (is_tcf_gact_trap(act)) {
 			entry->id = FLOW_ACTION_TRAP;
 		} else if (is_tcf_gact_goto_chain(act)) {
 			entry->id = FLOW_ACTION_GOTO;
 			entry->chain_index = tcf_gact_goto_chain_index(act);
-#endif
 		} else if (is_tcf_mirred_egress_redirect(act)) {
 			entry->id = FLOW_ACTION_REDIRECT;
 			entry->dev = tcf_mirred_dev(act);
 		} else if (is_tcf_mirred_egress_mirror(act)) {
 			entry->id = FLOW_ACTION_MIRRED;
 			entry->dev = tcf_mirred_dev(act);
-#ifdef HAVE_IS_TCF_VLAN
-		} else if (is_tcf_vlan(act)) {
-			switch (tcf_vlan_action(act)) {
-			case TCA_VLAN_ACT_PUSH:
-				entry->id = FLOW_ACTION_VLAN_PUSH;
-				entry->vlan.vid = tcf_vlan_push_vid(act);
-				entry->vlan.proto = tcf_vlan_push_proto(act);
-				entry->vlan.prio = tcf_vlan_push_prio(act);
-				break;
-			case TCA_VLAN_ACT_POP:
-				entry->id = FLOW_ACTION_VLAN_POP;
-				break;
-#ifdef HAVE_TCA_VLAN_ACT_MODIFY
-			case TCA_VLAN_ACT_MODIFY:
-				entry->id = FLOW_ACTION_VLAN_MANGLE;
-				entry->vlan.vid = tcf_vlan_push_vid(act);
-				entry->vlan.proto = tcf_vlan_push_proto(act);
-				entry->vlan.prio = tcf_vlan_push_prio(act);
-				break;
-#endif /* HAVE_TCA_VLAN_ACT_MODIFY */
-			default:
-				goto err_out;
-			}
-#endif /* HAVE_IS_TCF_VLAN */
-#ifdef HAVE_IS_TCF_TUNNEL
-		} else if (is_tcf_tunnel_set(act)) {
-			entry->id = FLOW_ACTION_TUNNEL_ENCAP;
-			entry->tunnel = tcf_tunnel_info(act);
-		} else if (is_tcf_tunnel_release(act)) {
-			entry->id = FLOW_ACTION_TUNNEL_DECAP;
-#elif defined(HAVE_TCF_TUNNEL_INFO)
-		} else if (is_tcf_tunnel_set(act)) {
-			entry->id = FLOW_ACTION_TUNNEL_ENCAP;
-			parse_tunnel(act, entry);
-		} else if (is_tcf_tunnel_release(act)) {
-			entry->id = FLOW_ACTION_TUNNEL_DECAP;
-#endif
 #ifdef HAVE_TCF_PEDIT_TCFP_KEYS_EX
 		} else if (is_tcf_pedit(act)) {
 			int k;
@@ -146,11 +80,6 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 		} else if (is_tcf_csum(act)) {
 			entry->id = FLOW_ACTION_CSUM;
 			entry->csum_flags = tcf_csum_update_flags(act);
-#ifdef HAVE_IS_TCF_SKBEDIT_MARK
-		} else if (is_tcf_skbedit_mark(act)) {
-			entry->id = FLOW_ACTION_MARK;
-			entry->mark = tcf_skbedit_mark(act);
-#endif
 #ifdef HAVE_IS_TCF_POLICE
 		} else if (is_tcf_police(act)) {
 			entry->id = FLOW_ACTION_POLICE;
@@ -165,7 +94,6 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 			entry->ct.zone = tcf_ct_zone(act);
 			entry->ct.flow_table = tcf_ct_ft(act);
 #endif
-#ifdef HAVE_NET_PSAMPLE_H
 		} else if (is_tcf_sample(act)) {
 			entry->id = FLOW_ACTION_SAMPLE;
 			entry->sample.trunc_size = tcf_sample_trunc_size(act);
@@ -173,7 +101,31 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 			entry->sample.rate = tcf_sample_rate(act);
 			entry->sample.psample_group =
 				tcf_sample_psample_group(act);
-#endif
+		} else if (is_tcf_tunnel_set(act)) {
+			entry->id = FLOW_ACTION_TUNNEL_ENCAP;
+			entry->tunnel = tcf_tunnel_info(act);
+		} else if (is_tcf_tunnel_release(act)) {
+			entry->id = FLOW_ACTION_TUNNEL_DECAP;
+		} else if (is_tcf_vlan(act)) {
+			switch (tcf_vlan_action(act)) {
+			case TCA_VLAN_ACT_PUSH:
+				entry->id = FLOW_ACTION_VLAN_PUSH;
+				entry->vlan.vid = tcf_vlan_push_vid(act);
+				entry->vlan.proto = tcf_vlan_push_proto(act);
+				entry->vlan.prio = tcf_vlan_push_prio(act);
+				break;
+			case TCA_VLAN_ACT_POP:
+				entry->id = FLOW_ACTION_VLAN_POP;
+				break;
+			case TCA_VLAN_ACT_MODIFY:
+				entry->id = FLOW_ACTION_VLAN_MANGLE;
+				entry->vlan.vid = tcf_vlan_push_vid(act);
+				entry->vlan.proto = tcf_vlan_push_proto(act);
+				entry->vlan.prio = tcf_vlan_push_prio(act);
+				break;
+			default:
+				goto err_out;
+			}
 		} else {
 			goto err_out;
 		}

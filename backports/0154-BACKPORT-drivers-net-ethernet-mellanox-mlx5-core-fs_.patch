@@ -1,0 +1,357 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/fs_core.c | 135 ++++++++++++++++--
+ 1 file changed, 126 insertions(+), 9 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
+@@ -345,15 +345,27 @@ enum fs_i_lock_class {
+ };
+ 
+ static const struct rhashtable_params rhash_fte = {
+-	.key_len = sizeof_field(struct fs_fte, val),
++#ifndef FIELD_SIZEOF
++        .key_len = sizeof_field(struct fs_fte, val),
++#else
++        .key_len = FIELD_SIZEOF(struct fs_fte, val),
++#endif
+ 	.key_offset = offsetof(struct fs_fte, val),
+ 	.head_offset = offsetof(struct fs_fte, hash),
+ 	.automatic_shrinking = true,
+ 	.min_size = 1,
+ };
+ 
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++static const struct bp_rhashtable_params rhash_fg = {
++#else
+ static const struct rhashtable_params rhash_fg = {
+-	.key_len = sizeof_field(struct mlx5_flow_group, mask),
++#endif
++#ifndef FIELD_SIZEOF
++        .key_len = sizeof_field(struct mlx5_flow_group, mask),
++#else
++        .key_len = FIELD_SIZEOF(struct mlx5_flow_group, mask),
++#endif
+ 	.key_offset = offsetof(struct mlx5_flow_group, mask),
+ 	.head_offset = offsetof(struct mlx5_flow_group, hash),
+ 	.automatic_shrinking = true,
+@@ -579,7 +591,9 @@ static void del_hw_flow_table(struct fs_
+ 	fs_get_obj(ft, node);
+ 	dev = get_dev(&ft->node);
+ 	root = find_root(&ft->node);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_ft(ft);
++#endif
+ 
+ 	if (node->active) {
+ 		err = root->cmds->destroy_flow_table(root, ft);
+@@ -595,7 +609,11 @@ static void del_sw_flow_table(struct fs_
+ 
+ 	fs_get_obj(ft, node);
+ 
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	bp_rhltable_destroy(&ft->fgs_hash);
++#else
+ 	rhltable_destroy(&ft->fgs_hash);
++#endif
+ 	if (ft->node.parent) {
+ 		fs_get_obj(prio, ft->node.parent);
+ 		prio->num_ft--;
+@@ -631,7 +649,9 @@ static void del_sw_hw_rule(struct fs_nod
+ 
+ 	fs_get_obj(rule, node);
+ 	fs_get_obj(fte, rule->node.parent);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_rule(rule);
++#endif
+ 	if (is_fwd_next_action(rule->sw_action)) {
+ 		mutex_lock(&rule->dest_attr.ft->lock);
+ 		list_del(&rule->next_ft);
+@@ -682,7 +702,9 @@ static void del_hw_fte(struct fs_node *n
+ 	fs_get_obj(fg, fte->node.parent);
+ 	fs_get_obj(ft, fg->node.parent);
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_fte(fte);
++#endif
+ 	WARN_ON(fte->dests_size);
+ 	dev = get_dev(&ft->node);
+ 	root = find_root(&ft->node);
+@@ -710,7 +732,11 @@ static void del_sw_fte(struct fs_node *n
+ 				     &fte->hash,
+ 				     rhash_fte);
+ 	WARN_ON(err);
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&fg->fte_allocator, fte->index - fg->start_index);
++#else
++	ida_simple_remove(&fg->fte_allocator, fte->index - fg->start_index);
++#endif
+ 	kmem_cache_free(steering->ftes_cache, fte);
+ }
+ 
+@@ -724,7 +750,9 @@ static void del_hw_flow_group(struct fs_
+ 	fs_get_obj(fg, node);
+ 	fs_get_obj(ft, fg->node.parent);
+ 	dev = get_dev(&ft->node);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_del_fg(fg);
++#endif
+ 
+ 	root = find_root(&ft->node);
+ 	if (fg->node.active && root->cmds->destroy_flow_group(root, ft, fg))
+@@ -748,7 +776,11 @@ static void del_sw_flow_group(struct fs_
+ 	    fg->max_ftes == ft->autogroup.group_size &&
+ 	    fg->start_index < ft->autogroup.max_fte)
+ 		ft->autogroup.num_groups--;
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	err = bp_rhltable_remove(&ft->fgs_hash,
++#else
+ 	err = rhltable_remove(&ft->fgs_hash,
++#endif
+ 			      &fg->hash,
+ 			      rhash_fg);
+ 	WARN_ON(err);
+@@ -759,8 +791,11 @@ static int insert_fte(struct mlx5_flow_g
+ {
+ 	int index;
+ 	int ret;
+-
++#ifdef HAVE_IDA_ALLOC_MAX
+ 	index = ida_alloc_max(&fg->fte_allocator, fg->max_ftes - 1, GFP_KERNEL);
++#else
++	index = ida_simple_get(&fg->fte_allocator, 0, fg->max_ftes, GFP_KERNEL);
++#endif
+ 	if (index < 0)
+ 		return index;
+ 
+@@ -776,7 +811,11 @@ static int insert_fte(struct mlx5_flow_g
+ 	return 0;
+ 
+ err_ida_remove:
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&fg->fte_allocator, index);
++#else
++	ida_simple_remove(&fg->fte_allocator, index);
++#endif
+ 	return ret;
+ }
+ 
+@@ -855,7 +894,11 @@ static struct mlx5_flow_group *alloc_ins
+ 		return fg;
+ 
+ 	/* initialize refcnt, add to parent list */
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	ret = bp_rhltable_insert(&ft->fgs_hash,
++#else
+ 	ret = rhltable_insert(&ft->fgs_hash,
++#endif
+ 			      &fg->hash,
+ 			      rhash_fg);
+ 	if (ret) {
+@@ -884,7 +927,11 @@ static struct mlx5_flow_table *alloc_flo
+ 	if (!ft)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	ret = bp_rhltable_init(&ft->fgs_hash, &rhash_fg);
++#else
+ 	ret = rhltable_init(&ft->fgs_hash, &rhash_fg);
++#endif
+ 	if (ret) {
+ 		kfree(ft);
+ 		return ERR_PTR(ret);
+@@ -1313,12 +1360,18 @@ static struct mlx5_flow_table *__mlx5_cr
+ 	fs_prio->num_ft++;
+ 	up_write_ref_node(&fs_prio->node, false);
+ 	mutex_unlock(&root->chain_lock);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_add_ft(ft);
++#endif
+ 	return ft;
+ destroy_ft:
+ 	root->cmds->destroy_flow_table(root, ft);
+ free_ft:
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	bp_rhltable_destroy(&ft->fgs_hash);
++#else
+ 	rhltable_destroy(&ft->fgs_hash);
++#endif
+ 	kfree(ft);
+ unlock_root:
+ 	mutex_unlock(&root->chain_lock);
+@@ -1429,7 +1482,9 @@ struct mlx5_flow_group *mlx5_create_flow
+ 		tree_put_node(&fg->node, false);
+ 		return ERR_PTR(err);
+ 	}
+-	trace_mlx5_fs_add_fg(fg);
++#ifndef MLX_DISABLE_TRACEPOINTS
++       trace_mlx5_fs_add_fg(fg);
++#endif
+ 	fg->node.active = true;
+ 
+ 	return fg;
+@@ -1671,7 +1726,9 @@ static int create_auto_flow_group(struct
+ 	err = root->cmds->create_flow_group(root, ft, in, fg);
+ 	if (!err) {
+ 		fg->node.active = true;
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 		trace_mlx5_fs_add_fg(fg);
++#endif
+ 	}
+ 
+ 	kvfree(in);
+@@ -1830,13 +1887,17 @@ static struct mlx5_flow_handle *add_rule
+ 		fte->action.action = old_action;
+ 		return handle;
+ 	}
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fs_set_fte(fte, false);
++#endif
+ 
+ 	/* Link newly added rules into the tree. */
+ 	for (i = 0; i < handle->num_rules; i++) {
+ 		if (!handle->rule[i]->node.parent) {
+ 			tree_add_node(&handle->rule[i]->node, &fte->node);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 			trace_mlx5_fs_add_rule(handle->rule[i]);
++#endif
+ 		}
+ 	}
+ 	return handle;
+@@ -1898,15 +1959,25 @@ static int build_match_list(struct match
+ 			    struct mlx5_flow_group *fg,
+ 			    bool ft_locked)
+ {
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	struct bp_rhlist_head *tmp, *list;
++#else
+ 	struct rhlist_head *tmp, *list;
++#endif
+ 	struct mlx5_flow_group *g;
+ 
+ 	rcu_read_lock();
+ 	INIT_LIST_HEAD(&match_head->list);
+ 	/* Collect all fgs which has a matching match_criteria */
+-	list = rhltable_lookup(&ft->fgs_hash, spec, rhash_fg);
++#if !defined(HAVE_RHLTABLE) && defined(HAVE_NETNS_FRAGS_RHASHTABLE)
++	list = bp_rhltable_lookup(&ft->fgs_hash, spec, rhash_fg);
+ 	/* RCU is atomic, we can't execute FW commands here */
+-	rhl_for_each_entry_rcu(g, tmp, list, hash) {
++	bp_rhl_for_each_entry_rcu(g, tmp, list, hash) {
++#else
++       list = rhltable_lookup(&ft->fgs_hash, spec, rhash_fg);
++       /* RCU is atomic, we can't execute FW commands here */
++       rhl_for_each_entry_rcu(g, tmp, list, hash) {
++#endif
+ 		struct match_list *curr_match;
+ 
+ 		if (fg && fg != g)
+@@ -3330,6 +3401,7 @@ cleanup:
+ 	return err;
+ }
+ 
++#if defined(HAVE_DEVLINK_PARAMS_PUBLISHED) || defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS)
+ static int mlx5_fs_mode_validate(struct devlink *devlink, u32 id,
+ 				 union devlink_param_value val,
+ 				 struct netlink_ext_ack *extack)
+@@ -3401,6 +3473,7 @@ static const struct devlink_param mlx5_f
+ 			     mlx5_fs_mode_get, mlx5_fs_mode_set,
+ 			     mlx5_fs_mode_validate),
+ };
++#endif
+ 
+ void mlx5_fs_core_cleanup(struct mlx5_core_dev *dev)
+ {
+@@ -3415,8 +3488,13 @@ void mlx5_fs_core_cleanup(struct mlx5_co
+ 	cleanup_root_ns(steering->rdma_tx_root_ns);
+ 	cleanup_root_ns(steering->egress_root_ns);
+ 
++/* Similar considerations as detailed in the comment before
++ * devl_params_register in mlx5_fs_core_init
++ */
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	devl_params_unregister(priv_to_devlink(dev), mlx5_fs_params,
+ 			       ARRAY_SIZE(mlx5_fs_params));
++#endif
+ }
+ 
+ int mlx5_fs_core_init(struct mlx5_core_dev *dev)
+@@ -3424,11 +3502,22 @@ int mlx5_fs_core_init(struct mlx5_core_d
+ 	struct mlx5_flow_steering *steering = dev->priv.steering;
+ 	int err;
+ 
++/* Devlink param registration was moved here due to upstream change in
++ * v6.3 introduced by this commit:
++ * db492c1e5b1b net/mlx5: Move flow steering devlink param to flow steering code.
++ * This can be only on kernels >= v6.3 containing devlink changes in
++ * params registration:
++ * 3f716a620e13 devlink: put couple of WARN_ONs in devlink_param_driverinit_value_get()
++ * 075935f0ae0f devlink: protect devlink param list by instance lock
++ * The later also introduced devl_params_register as API - use it as
++ * a HAVE flag
++ */
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	err = devl_params_register(priv_to_devlink(dev), mlx5_fs_params,
+ 				   ARRAY_SIZE(mlx5_fs_params));
+ 	if (err)
+ 		return err;
+-
++#endif
+ 	if ((((MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_ETH) &&
+ 	      (MLX5_CAP_GEN(dev, nic_flow_table))) ||
+ 	     ((MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) &&
+@@ -3495,6 +3584,14 @@ void mlx5_fs_core_free(struct mlx5_core_
+ {
+ 	struct mlx5_flow_steering *steering = dev->priv.steering;
+ 
++/* Similar considerations as detailed in the comment before
++ * devlink_params_register in mlx5_fs_core_alloc
++ */
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) && !defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
++	devlink_params_unregister(priv_to_devlink(dev), mlx5_fs_params,
++				  ARRAY_SIZE(mlx5_fs_params));
++#endif
++
+ 	kmem_cache_destroy(steering->ftes_cache);
+ 	kmem_cache_destroy(steering->fgs_cache);
+ 	kfree(steering);
+@@ -3506,8 +3603,8 @@ void mlx5_fs_core_free(struct mlx5_core_
+ int mlx5_fs_core_alloc(struct mlx5_core_dev *dev)
+ {
+ 	struct mlx5_flow_steering *steering;
+-	char *ftes_cache_name;
+-	char *fgs_cache_name;
++	char *ftes_cache_name = NULL;
++	char *fgs_cache_name = NULL;
+ 	int err = 0;
+ 
+ 	err = mlx5_init_fc_stats(dev);
+@@ -3555,6 +3652,26 @@ int mlx5_fs_core_alloc(struct mlx5_core_
+ 
+ 	kfree(ftes_cache_name);
+ 	kfree(fgs_cache_name);
++
++/* Devlink param register was moved to mlx5_fs_core_init to comply
++ * with upstream changes introduced in v6.3 by:
++ * 3f716a620e13 devlink: put couple of WARN_ONs in devlink_param_driverinit_value_get()
++ * 075935f0ae0f devlink: protect devlink param list by instance lock
++ * The later also introduced devl_params_unregister as API.
++ * In order to support devlink params over older kernel version (<
++ * v6.3) registering the devlink params should move to an earlier stage
++ * as it was before (mlx5_init_one).
++ * Use HAVE_DEVLINK_PARAM_REGISTER to detrmine devlink params ARE
++ * supported and !HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET to detrmine
++ * kernel < v6.3
++ */
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) && !defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
++	err = devlink_params_register(priv_to_devlink(dev), mlx5_fs_params,
++				      ARRAY_SIZE(mlx5_fs_params));
++	if (err)
++		return err;
++#endif
++
+ 	return 0;
+ 
+ err:

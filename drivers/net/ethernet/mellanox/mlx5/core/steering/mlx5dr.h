@@ -49,7 +49,7 @@ int mlx5dr_domain_sync(struct mlx5dr_domain *domain, u32 flags);
 
 void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 			    struct mlx5dr_domain *peer_dmn,
-			    u16 peer_idx);
+			    u16 peer_vhca_id);
 
 struct mlx5dr_table *
 mlx5dr_table_create(struct mlx5dr_domain *domain, u32 level, u32 flags,
@@ -149,8 +149,9 @@ mlx5dr_action_create_dest_match_range(struct mlx5dr_domain *dmn,
 				      u32 min,
 				      u32 max);
 
-u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action);
 int mlx5dr_action_destroy(struct mlx5dr_action *action);
+
+u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action);
 
 int mlx5dr_definer_get(struct mlx5dr_domain *dmn, u16 format_id,
 		       u8 *dw_selectors, u8 *byte_selectors,

@@ -2078,6 +2078,7 @@ steering_anchor_create_fg_drop(struct mlx5_ib_flow_prio *ft_prio)
 
 	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, 1);
 	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, 1);
+
 	fg = mlx5_create_flow_group(ft_prio->anchor.ft, flow_group_in);
 	if (IS_ERR(fg)) {
 		err = PTR_ERR(fg);
@@ -2437,6 +2438,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_STEERING_ANCHOR_CREATE)(
 		err = PTR_ERR(ft_prio);
 		goto free_obj;
 	}
+
 	ft_prio->refcount++;
 
 	if (!ft_prio->anchor.rule_goto_table_ref) {

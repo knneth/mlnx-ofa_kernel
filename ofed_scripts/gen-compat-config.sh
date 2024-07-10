@@ -139,10 +139,6 @@ if (grep -qw __skb_tx_hash ${KLIB_BUILD}/include/linux/netdevice.h > /dev/null 2
 	set_config CONFIG_COMPAT_IS___SKB_TX_HASH y
 fi
 
-if (grep -Eq "mode_t.*attr_is_visible" ${KLIB_BUILD}/include/scsi/scsi_transport_iscsi.h > /dev/null 2>&1 || grep -Eq "mode_t.*attr_is_visible" ${KSRC}/include/scsi/scsi_transport_iscsi.h > /dev/null 2>&1); then
-	set_config CONFIG_COMPAT_ISER_ATTR_IS_VISIBLE y
-fi
-
 if (grep -qw iscsi_scsi_req ${KLIB_BUILD}/include/scsi/iscsi_proto.h > /dev/null 2>&1 || grep -qw iscsi_scsi_req ${KSRC}/include/scsi/iscsi_proto.h > /dev/null 2>&1); then
 	set_config CONFIG_COMPAT_IF_ISCSI_SCSI_REQ y
 fi
@@ -192,10 +188,6 @@ fi
 
 if (grep -qw ieee_getqcn ${KLIB_BUILD}/include/net/dcbnl.h > /dev/null 2>&1 || grep -qw ieee_getqcn ${KSRC}/include/net/dcbnl.h > /dev/null 2>&1); then
 	set_config CONFIG_COMPAT_IS_QCN y
-fi
-
-if (grep -qw reinit_completion ${KLIB_BUILD}/include/linux/completion.h > /dev/null 2>&1 || grep -qw reinit_completion ${KSRC}/include/linux/completion.h > /dev/null 2>&1); then
-	set_config CONFIG_COMPAT_IS_REINIT_COMPLETION y
 fi
 
 if (grep -qw "netdev_extended" ${KLIB_BUILD}/include/linux/netdevice.h > /dev/null 2>&1 || grep -qw "netdev_extended" ${KSRC}/include/linux/netdevice.h > /dev/null 2>&1); then
@@ -507,10 +499,6 @@ if (grep -q 'const void \*(\*namespace)(struct class \*class' ${KLIB_BUILD}/incl
 	set_config CONFIG_COMPAT_CLASS_ATTR_NAMESPACE y
 fi
 
-if (grep -q "spinlock_t\s*frwd_lock;" ${KLIB_BUILD}/include/scsi/libiscsi.h > /dev/null 2>&1 || grep -q "spinlock_t\s*frwd_lock;" ${KSRC}/include/scsi/libiscsi.h  > /dev/null 2>&1); then
-    set_config CONFIG_COMPAT_ISCSI_SESSION_FRWD_LOCK y
-fi
-
 if (grep -qw "compound_trans_head" ${KLIB_BUILD}/include/linux/huge_mm.h > /dev/null 2>&1 || grep -qw "compound_trans_head" ${KSRC}/include/linux/huge_mm.h  > /dev/null 2>&1); then
     set_config CONFIG_COMPAT_USE_COMPOUND_TRANS_HEAD y
 fi
@@ -614,10 +602,6 @@ fi
 
 if (grep -qw iscsit_priv_cmd ${KLIB_BUILD}/include/target/iscsi/iscsi_transport.h > /dev/null 2>&1 || grep -qw iscsit_aborted_task ${KSRC}/include/target/iscsi/iscsi_transport.h > /dev/null 2>&1); then
 	set_config CONFIG_COMPAT_ISCSIT_PRIV_CMD y
-fi
-
-if (grep -qw iscsi_change_queue_depth ${KLIB_BUILD}/include/scsi/libiscsi.h > /dev/null 2>&1 || grep -qw iscsi_change_queue_depth ${KSRC}/include/scsi/libiscsi.h > /dev/null 2>&1); then
-	set_config CONFIG_COMPAT_IS_ISCSI_CHANGE_QUEUE_DEPTH y
 fi
 
 if (grep -qw file_inode ${KLIB_BUILD}/include/linux/fs.h > /dev/null 2>&1 || grep -qw file_inode ${KSRC}/include/linux/fs.h > /dev/null 2>&1); then

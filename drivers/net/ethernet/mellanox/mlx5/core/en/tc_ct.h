@@ -129,7 +129,6 @@ mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *priv,
 bool
 mlx5e_tc_ct_restore_flow(struct mlx5_tc_ct_priv *ct_priv,
 			 struct sk_buff *skb, u8 zone_restore_id);
-
 u32
 mlx5_tc_ct_max_offloaded_conns_get(struct mlx5_core_dev *dev);
 void

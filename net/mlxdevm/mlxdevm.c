@@ -2462,6 +2462,7 @@ static struct genl_family mlxdevm_nl_family __ro_after_init = {
 	.netnsok = false,
 	.module = THIS_MODULE,
 	.ops = mlxdevm_nl_ops,
+	.parallel_ops = true,
 	.n_ops = ARRAY_SIZE(mlxdevm_nl_ops),
 	.resv_start_op = MLXDEVM_CMD_MAX + 1,
 };

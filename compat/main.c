@@ -2,10 +2,6 @@
 
 #include "config.h"
 
-#ifdef CONFIG_COMPAT_FLOW_DISSECTOR
-#include <net/flow_dissector.h>
-#endif
-
 #ifndef HAVE_XARRAY
 #include <linux/xarray.h>
 #endif
@@ -65,10 +61,6 @@ EXPORT_SYMBOL_GPL(mlx_backport_dependency_symbol);
 
 static int __init backport_init(void)
 {
-#ifdef CONFIG_COMPAT_FLOW_DISSECTOR
-	init_default_flow_dissectors();
-#endif
-
 	printk(KERN_INFO
 	       COMPAT_PROJECT " backport release: "
 	       COMPAT_VERSION

@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+
+Change-Id: I4c4a9fc5add2bc63327cdde8146220532911c9a2
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+@@ -71,12 +71,12 @@ struct mlx5e_ptp {
+ static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
+ {
+ 	struct flow_keys fk;
+-
+ 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+ 		return false;
+ 
+-	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
+-		return false;
++        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
++                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
++                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
+ 
+ 	if (fk.basic.n_proto == htons(ETH_P_1588))
+ 		return true;

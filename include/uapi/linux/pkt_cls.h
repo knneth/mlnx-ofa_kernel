@@ -19,17 +19,6 @@ enum {
 #endif
 #endif
 
-#ifndef HAVE_TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT
-enum {
-	TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT = (1 << 0),
-	TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST = (1 << 1),
-};
-#elif !defined(HAVE_TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST)
-enum {
-        TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST = (1 << 1),
-};
-#endif
-
 #ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
 enum {
 	TCA_FLOWER_KEY_PORT_SRC_MIN = __TCA_FLOWER_MAX,    /* be16 */

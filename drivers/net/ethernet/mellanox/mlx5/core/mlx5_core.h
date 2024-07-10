@@ -42,7 +42,7 @@
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
 
-#define DRIVER_VERSION	"23.10-3.2.2"
+#define DRIVER_VERSION	"24.04-0.6.6"
 
 extern uint mlx5_core_debug_mask;
 
@@ -204,6 +204,13 @@ struct mlx5_mcion_reg {
 } __packed;
 
 #define MLX5_DEFAULT_PROF       2
+#define MLX5_SF_PROF		3
+#ifdef CONFIG_MLX5_SF_CFG
+#define MLX5_NUM_FW_CMD_THREADS 8
+#else
+#define MLX5_NUM_FW_CMD_THREADS 1
+#endif
+#define MLX5_DEV_MAX_WQS	MLX5_NUM_FW_CMD_THREADS
 
 struct mlx5_esw_rate_group;
 
@@ -237,10 +244,16 @@ static inline int mlx5_flexible_inlen(struct mlx5_core_dev *dev, size_t fixed,
 #define MLX5_FLEXIBLE_INLEN(dev, fixed, item_size, num_items) \
 	mlx5_flexible_inlen(dev, fixed, item_size, num_items, __func__, __LINE__)
 
+int mlx5_core_get_caps(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type);
+int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type,
+			    enum mlx5_cap_mode cap_mode);
 int mlx5_query_hca_caps(struct mlx5_core_dev *dev);
 int mlx5_query_board_id(struct mlx5_core_dev *dev);
+int mlx5_query_module_num(struct mlx5_core_dev *dev, int *module_num);
 int mlx5_cmd_init(struct mlx5_core_dev *dev);
 void mlx5_cmd_cleanup(struct mlx5_core_dev *dev);
+int mlx5_cmd_enable(struct mlx5_core_dev *dev);
+void mlx5_cmd_disable(struct mlx5_core_dev *dev);
 void mlx5_cmd_set_state(struct mlx5_core_dev *dev,
 			enum mlx5_cmdif_state cmdif_state);
 int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, uint32_t *sw_owner_id);
@@ -261,7 +274,6 @@ void mlx5_sriov_detach(struct mlx5_core_dev *dev);
 int mlx5_core_sriov_configure(struct pci_dev *dev, int num_vfs);
 void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change);
 int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count);
-int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
@@ -269,6 +281,7 @@ void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 			       u32 group_id, struct kobject *group_kobj);
 void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_rate_group *group);
+int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_create_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 				       void *context, u32 *element_id);
@@ -431,7 +444,6 @@ void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
 int mlx5_init_one(struct mlx5_core_dev *dev);
 int mlx5_init_one_devl_locked(struct mlx5_core_dev *dev);
 void mlx5_uninit_one(struct mlx5_core_dev *dev);
-void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
 void mlx5_unload_one(struct mlx5_core_dev *dev, bool suspend);
 void mlx5_unload_one_devl_locked(struct mlx5_core_dev *dev, bool suspend);
 int mlx5_load_one(struct mlx5_core_dev *dev, bool recovery);
@@ -445,7 +457,6 @@ int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap
 #define mlx5_vport_get_other_func_general_cap(dev, vport, out)		\
 	mlx5_vport_get_other_func_cap(dev, vport, out, MLX5_CAP_GENERAL)
 
-void mlx5_events_work_enqueue(struct mlx5_core_dev *dev, struct work_struct *work);
 static inline u32 mlx5_sriov_get_vf_total_msix(struct pci_dev *pdev)
 {
 	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
@@ -457,8 +468,6 @@ bool mlx5_eth_supported(struct mlx5_core_dev *dev);
 bool mlx5_rdma_supported(struct mlx5_core_dev *dev);
 bool mlx5_vnet_supported(struct mlx5_core_dev *dev);
 bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev);
-
-void mlx5_core_affinity_get(struct mlx5_core_dev *dev, struct cpumask *dev_mask);
 
 static inline u16 mlx5_core_ec_vf_vport_base(const struct mlx5_core_dev *dev)
 {
@@ -481,8 +490,7 @@ static inline bool mlx5_core_is_ec_vf_vport(const struct mlx5_core_dev *dev, u16
 	return (vport_num >= base_vport && vport_num < max_vport);
 }
 
-static inline int mlx5_vport_to_func_id(const struct mlx5_core_dev *dev, u16 vport,
-					bool ec_vf_func)
+static inline int mlx5_vport_to_func_id(const struct mlx5_core_dev *dev, u16 vport, bool ec_vf_func)
 {
 	return ec_vf_func ? vport - mlx5_core_ec_vf_vport_base(dev) + 1
 			  : vport;

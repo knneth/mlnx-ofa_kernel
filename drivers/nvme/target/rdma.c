@@ -1577,7 +1577,7 @@ nvmet_rdma_alloc_queue(struct nvmet_rdma_device *ndev,
 		goto out_ida_remove;
 	}
 
-	if (ndev->srqs) {
+	if (ndev->srqs && queue->host_qid) {
 		queue->nsrq = ndev->srqs[queue->comp_vector % ndev->srq_count];
 	} else if(!queue->nsrq && !queue->offload) {
 		queue->cmds = nvmet_rdma_alloc_cmds(ndev,

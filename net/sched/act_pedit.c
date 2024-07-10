@@ -26,22 +26,8 @@
 
 #define PEDIT_TAB_MASK	15
 
-#ifdef HAVE_TCF_COMMON
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-static struct tcf_common *tcf_pedit_ht[PEDIT_TAB_MASK + 1];
-static u32 pedit_idx_gen;
-static DEFINE_RWLOCK(pedit_lock);
-
-static struct tcf_hashinfo pedit_hash_info = {
-	.htab	=	tcf_pedit_ht,
-	.hmask	=	PEDIT_TAB_MASK,
-	.lock	=	&pedit_lock,
-};
-#endif
-#else
 static int pedit_net_id;
 static struct tc_action_ops act_pedit_ops;
-#endif
 
 static const struct nla_policy pedit_policy[TCA_PEDIT_MAX + 1] = {
 	[TCA_PEDIT_PARMS]	= { .len = sizeof(struct tc_pedit) },
@@ -146,28 +132,16 @@ static int tcf_pedit_key_ex_dump(struct sk_buff *skb,
 	return 0;
 }
 
-#ifdef HAVE_TCF_COMMON
-static int tcf_pedit_init(struct net *net, struct nlattr *nla,
-			  struct nlattr *est, struct tc_action *a,
-			  int ovr, int bind)
-#else
 static int tcf_pedit_init(struct net *net, struct nlattr *nla,
 			  struct nlattr *est, struct tc_action **a,
 			  int ovr, int bind)
-#endif
 {
 	struct nlattr *tb[TCA_PEDIT_MAX + 1];
 	struct nlattr *pattr;
 	struct tc_pedit *parm;
 	int ret = 0, err;
 	struct tcf_pedit *p;
-#ifdef HAVE_TCF_COMMON
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-	struct tcf_common *pc;
-#endif
-#else
 	struct tc_action_net *tn = net_generic(net, pedit_net_id);
-#endif
 	struct tc_pedit_key *keys = NULL;
 	struct tcf_pedit_key_ex *keys_ex;
 	int ksize;
@@ -194,68 +168,6 @@ static int tcf_pedit_init(struct net *net, struct nlattr *nla,
 	if (IS_ERR(keys_ex))
 		return PTR_ERR(keys_ex);
 
-#ifdef HAVE_TCF_COMMON
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-	pc = tcf_hash_check(parm->index, a, bind, &pedit_hash_info);
-	if (!pc) {
-#else
-	if (!tcf_hash_check(parm->index, a, bind)) {
-#endif
-		if (!parm->nkeys)
-			return -EINVAL;
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-		pc = tcf_hash_create(parm->index, est, a, sizeof(*p), bind,
-				     &pedit_idx_gen, &pedit_hash_info);
-
-		if (IS_ERR(pc))
-			return PTR_ERR(pc);
-		p = pc_to_pedit(pc);
-#else
-		ret = tcf_hash_create(parm->index, est, a, sizeof(*p), bind,
-				      false);
-
-		if (ret)
-			return ret;
-		p = to_pedit(a);
-#endif
-		keys = kmalloc(ksize, GFP_KERNEL);
-		if (keys == NULL) {
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-			if (est)
-				gen_kill_estimator(&pc->tcfc_bstats,
-						   &pc->tcfc_rate_est);
-			kfree_rcu(pc, tcfc_rcu);
-#else
-			tcf_hash_cleanup(a, est);
-#endif
-			kfree(keys_ex);
-			return -ENOMEM;
-		}
-		ret = ACT_P_CREATED;
-	} else {
-		if (bind)
-			return 0;
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-		tcf_hash_release(pc, bind, &pedit_hash_info);
-#else
-		tcf_hash_release(a, bind);
-#endif
-		if (!ovr)
-			return -EEXIST;
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-		p = pc_to_pedit(pc);
-#else
-		p = to_pedit(a);
-#endif
-		if (p->tcfp_nkeys && p->tcfp_nkeys != parm->nkeys) {
-			keys = kmalloc(ksize, GFP_KERNEL);
-			if (!keys) {
-				kfree(keys_ex);
-				return -ENOMEM;
-			}
-		}
-	}
-#else
 	if (!tcf_hash_check(tn, parm->index, a, bind)) {
 		if (!parm->nkeys)
 			return -EINVAL;
@@ -286,7 +198,6 @@ static int tcf_pedit_init(struct net *net, struct nlattr *nla,
 			}
 		}
 	}
-#endif
 
 	spin_lock_bh(&p->tcf_lock);
 	p->tcfp_flags = parm->flags;
@@ -303,47 +214,10 @@ static int tcf_pedit_init(struct net *net, struct nlattr *nla,
 
 	spin_unlock_bh(&p->tcf_lock);
 	if (ret == ACT_P_CREATED)
-#ifdef HAVE_TCF_COMMON
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-		tcf_hash_insert(pc, &pedit_hash_info);
-#else
-		tcf_hash_insert(a);
-#endif
-#else
 		tcf_hash_insert(tn, *a);
-#endif
 	return ret;
 }
 
-#ifdef HAVE_TCF_COMMON
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-static int tcf_pedit_cleanup(struct tc_action *a, int bind)
-{
-	struct tcf_pedit *p = a->priv;
-
-	if (p) {
-		struct tc_pedit_key *keys = p->tcfp_keys;
-		struct tcf_pedit_key_ex *keys_ex = p->tcfp_keys_ex;
-		if (tcf_hash_release(&p->common, bind, &pedit_hash_info)) {
-			kfree(keys);
-			kfree(keys_ex);
-			return 1;
-		}
-	}
-	return 0;
-}
-#else
-static void tcf_pedit_cleanup(struct tc_action *a, int bind)
-{
-	struct tcf_pedit *p = a->priv;
-	struct tc_pedit_key *keys = p->tcfp_keys;
-	struct tcf_pedit_key_ex *keys_ex = p->tcfp_keys_ex;
-
-	kfree(keys);
-	kfree(keys_ex);
-}
-#endif
-#else
 static void tcf_pedit_cleanup(struct tc_action *a, int bind)
 {
 	struct tcf_pedit *p = to_pedit(a);
@@ -352,7 +226,6 @@ static void tcf_pedit_cleanup(struct tc_action *a, int bind)
 	kfree(keys);
 	kfree(keys_ex);
 }
-#endif
 
 static bool offset_valid(struct sk_buff *skb, int offset)
 {
@@ -403,9 +276,6 @@ static int tcf_pedit(struct sk_buff *skb, const struct tc_action *a,
 {
 	struct tcf_pedit *p = to_pedit(a);
 	int i;
-#if defined(HAVE_TCF_COMMON) && defined(HAVE_TCF_HASH_WITH_HASHINFO)
-	int munged = 0;
-#endif
 
 	if (skb_unclone(skb, GFP_ATOMIC))
 		return p->tcf_action;
@@ -488,15 +358,7 @@ static int tcf_pedit(struct sk_buff *skb, const struct tc_action *a,
 			*ptr = ((*ptr & tkey->mask) ^ val);
 			if (ptr == &_data)
 				skb_store_bits(skb, hoffset + offset, ptr, 4);
-#if defined(HAVE_TCF_COMMON) && defined(HAVE_TCF_HASH_WITH_HASHINFO)
-			munged++;
-#endif
 		}
-
-#if defined(HAVE_TCF_COMMON) && defined(HAVE_TCF_HASH_WITH_HASHINFO)
-		if (munged)
-			skb->tc_verd = SET_TC_MUNGED(skb->tc_verd);
-#endif
 		goto done;
 	} else
 		WARN(1, "pedit BUG: index %d\n", p->tcf_index);
@@ -560,28 +422,6 @@ nla_put_failure:
 	return -1;
 }
 
-#ifdef HAVE_TCF_COMMON
-static struct tc_action_ops act_pedit_ops = {
-	.kind		=	"pedit",
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-	.hinfo		=	&pedit_hash_info,
-#endif
-	.type		=	TCA_ACT_PEDIT,
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-	.capab		=	TCA_CAP_NONE,
-#endif
-	.owner		=	THIS_MODULE,
-	.act		=	tcf_pedit,
-	.dump		=	tcf_pedit_dump,
-	.cleanup	=	tcf_pedit_cleanup,
-	.lookup		=	tcf_hash_search,
-	.init		=	tcf_pedit_init,
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-	.walk		=	tcf_generic_walker
-#endif
-};
-
-#else
 static int tcf_pedit_walker(struct net *net, struct sk_buff *skb,
 			    struct netlink_callback *cb, int type,
 			    const struct tc_action_ops *ops)
@@ -631,27 +471,11 @@ static struct pernet_operations pedit_net_ops = {
 	.id   = &pedit_net_id,
 	.size = sizeof(struct tc_action_net),
 };
-#endif
 
 MODULE_AUTHOR("Jamal Hadi Salim(2002-4)");
 MODULE_DESCRIPTION("Generic Packet Editor actions");
 MODULE_LICENSE("GPL");
 
-#ifdef HAVE_TCF_COMMON
-static int __init pedit_init_module(void)
-{
-#ifdef HAVE_TCF_HASH_WITH_HASHINFO
-	return tcf_register_action(&act_pedit_ops);
-#else
-	return tcf_register_action(&act_pedit_ops, PEDIT_TAB_MASK);
-#endif
-}
-
-static void __exit pedit_cleanup_module(void)
-{
-	tcf_unregister_action(&act_pedit_ops);
-}
-#else
 static int __init pedit_init_module(void)
 {
 	return tcf_register_action(&act_pedit_ops, &pedit_net_ops);
@@ -661,7 +485,6 @@ static void __exit pedit_cleanup_module(void)
 {
 	tcf_unregister_action(&act_pedit_ops, &pedit_net_ops);
 }
-#endif
 
 module_init(pedit_init_module);
 module_exit(pedit_cleanup_module);

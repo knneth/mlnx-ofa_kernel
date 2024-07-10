@@ -1,57 +1,33 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
 
-Change-Id: Ia507d6a34814111d12e84ed0cc99dfc57e5273e7
 ---
- .../net/ethernet/mellanox/mlx5/core/en/ptp.h  | 22 ++++++++++++++++---
- 1 file changed, 19 insertions(+), 3 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-@@ -41,6 +41,9 @@ struct mlx5e_ptp {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
+@@ -534,9 +534,11 @@ void mlx5e_rx_res_channels_activate(stru
+ 	nch = mlx5e_channels_get_num(chs);
  
- 	/* data path - accessed per napi poll */
- 	struct mlx5e_ch_stats     *stats;
-+#ifndef HAVE_NAPI_STATE_MISSED
-+	unsigned long              flags;
+ 	for (ix = 0; ix < chs->num; ix++) {
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 		if (mlx5e_channels_is_xsk(chs, ix))
+ 			mlx5e_channels_get_xsk_rqn(chs, ix, &res->rss_rqns[ix]);
+ 		else
 +#endif
- 
- 	/* control */
- 	struct mlx5e_priv         *priv;
-@@ -51,14 +54,26 @@ struct mlx5e_ptp {
- 
- static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
+ 			mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix]);
+ 	}
+ 	res->rss_nch = chs->num;
+@@ -584,9 +586,11 @@ void mlx5e_rx_res_channels_deactivate(st
+ void mlx5e_rx_res_xsk_update(struct mlx5e_rx_res *res, struct mlx5e_channels *chs,
+ 			     unsigned int ix, bool xsk)
  {
-+#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
- 	struct flow_keys fk;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk)
+ 		mlx5e_channels_get_xsk_rqn(chs, ix, &res->rss_rqns[ix]);
+ 	else
 +#endif
+ 		mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix]);
  
- 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
- 		return false;
- 
--	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
--		return false;
-+#ifdef HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS
-+        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
-+#elif defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
-+        if (!skb_flow_dissect_flow_keys(skb, &fk))
-+#endif
-+#ifdef HAVE_PTP_CLASSIFY_RAW
-+                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
-+                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
-+#else
-+                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588));
-+#endif
- 
-+#if defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_3_PARAMS) || defined(HAVE_SKB_FLOW_DISSECT_FLOW_KEYS_HAS_2_PARAMS)
- 	if (fk.basic.n_proto == htons(ETH_P_1588))
- 		return true;
- 
-@@ -68,6 +83,7 @@ static inline bool mlx5e_use_ptpsq(struc
- 
- 	return (fk.basic.ip_proto == IPPROTO_UDP &&
- 		fk.ports.dst == htons(PTP_EV_PORT));
-+#endif
- }
- 
- static inline bool mlx5e_ptpsq_fifo_has_room(struct mlx5e_txqsq *sq)
+ 	mlx5e_rx_res_rss_enable(res);

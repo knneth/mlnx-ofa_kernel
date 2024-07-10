@@ -19,7 +19,6 @@ struct mlx5_ib_counter {
 #define INIT_Q_COUNTER(_name)		\
 	{ .name = #_name, .offset = MLX5_BYTE_OFF(query_q_counter_out, _name)}
 
-/* Make sure for every Q_counter added to also add its VPORT counterpart. */
 #define INIT_VPORT_Q_COUNTER(_name)		\
 	{ .name = "vport_" #_name, .offset =	\
 		MLX5_BYTE_OFF(query_q_counter_out, _name)}
@@ -28,6 +27,7 @@ static const struct mlx5_ib_counter basic_q_cnts[] = {
 	INIT_Q_COUNTER(rx_write_requests),
 	INIT_Q_COUNTER(rx_read_requests),
 	INIT_Q_COUNTER(rx_atomic_requests),
+	INIT_Q_COUNTER(rx_dct_connect),
 	INIT_Q_COUNTER(out_of_buffer),
 };
 
@@ -41,13 +41,13 @@ static const struct mlx5_ib_counter retrans_q_cnts[] = {
 	INIT_Q_COUNTER(packet_seq_err),
 	INIT_Q_COUNTER(implied_nak_seq_err),
 	INIT_Q_COUNTER(local_ack_timeout_err),
-	INIT_Q_COUNTER(rx_dct_connect),
 };
 
 static const struct mlx5_ib_counter vport_basic_q_cnts[] = {
 	INIT_VPORT_Q_COUNTER(rx_write_requests),
 	INIT_VPORT_Q_COUNTER(rx_read_requests),
 	INIT_VPORT_Q_COUNTER(rx_atomic_requests),
+	INIT_VPORT_Q_COUNTER(rx_dct_connect),
 	INIT_VPORT_Q_COUNTER(out_of_buffer),
 };
 
@@ -61,7 +61,6 @@ static const struct mlx5_ib_counter vport_retrans_q_cnts[] = {
 	INIT_VPORT_Q_COUNTER(packet_seq_err),
 	INIT_VPORT_Q_COUNTER(implied_nak_seq_err),
 	INIT_VPORT_Q_COUNTER(local_ack_timeout_err),
-	INIT_VPORT_Q_COUNTER(rx_dct_connect),
 };
 
 #define INIT_CONG_COUNTER(_name)		\
@@ -201,14 +200,8 @@ static int mlx5_ib_create_counters(struct ib_counters *counters,
 
 static bool vport_qcounters_supported(struct mlx5_ib_dev *dev)
 {
-	struct mlx5_core_dev *mdev = dev->mdev;
-
-	if (MLX5_CAP_GEN(mdev, q_counter_other_vport) &&
-	    MLX5_CAP_GEN(mdev, q_counter_aggregation))
-		return true;
-
-	mlx5_ib_dbg(dev, "Qcounters for representors in switchdev mode isn't supported\n");
-	return false;
+	return MLX5_CAP_GEN(dev->mdev, q_counter_other_vport) &&
+	       MLX5_CAP_GEN(dev->mdev, q_counter_aggregation);
 }
 
 static const struct mlx5_ib_counters *get_counters(struct mlx5_ib_dev *dev,

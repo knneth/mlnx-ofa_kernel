@@ -115,6 +115,30 @@ unset_complex_define_to_config_h()
 	echo "/* #undef $1 */" >> $COMPAT_CONFIG_H
 }
 
+set_config_mk_kernel_module()
+{
+	echo "Complex config: Set $1 to m in ${CWD}/${CONFIG}"
+	echo "Complex config: Set $1 to 1 in ${AUTOCONF_H}"
+	echo "$1=m" >> ${CWD}/${CONFIG}
+	echo "#define $1 1" >> ${AUTOCONF_H}
+}
+
+set_config_mk_kernel()
+{
+	echo "Complex config: Set $1 to y in ${CWD}/${CONFIG}"
+	echo "Complex config: Set $1 to 1 in ${AUTOCONF_H}"
+	echo "$1=y" >> ${CWD}/${CONFIG}
+	echo "#define $1 1" >> ${AUTOCONF_H}
+}
+
+unset_config_mk_kernel()
+{
+	echo "Complex config: Unset $1 in ${CWD}/${CONFIG}"
+	echo "Complex config: Unset $1 in ${AUTOCONF_H}"
+	echo "$1=" >> ${CWD}/${CONFIG}
+	echo "#undef $1" >> ${AUTOCONF_H}
+}
+
 check_config_comapt_tcf_pedit_mod()
 {
 	RHEL_MAJOR=$(grep ^RHEL_MAJOR ${KSRC_OBJ}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
@@ -233,7 +257,8 @@ check_complex_defines()
 	fi
 
 # Define HAVE_GET_USER_PAGES_GUP_FLAGS from other flags
-	if check_compat_config_h_var HAVE_GET_USER_PAGES_5_PARAMS ||
+	if check_compat_config_h_var HAVE_GET_USER_PAGES_4_PARAMS ||
+	   check_compat_config_h_var HAVE_GET_USER_PAGES_5_PARAMS ||
 	   check_compat_config_h_var HAVE_GET_USER_PAGES_7_PARAMS
 	then
 		set_complex_define_to_config_h HAVE_GET_USER_PAGES_GUP_FLAGS
@@ -241,26 +266,8 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_GET_USER_PAGES_GUP_FLAGS
 	fi
 
-# Define HAVE_MMGET_NOT_ZERO from other flags
-	if check_compat_config_h_var HAVE_SCHED_MM_MMGET_NOT_ZERO ||
-    	   check_compat_config_h_var HAVE_SCHED_MMGET_NOT_ZERO
-	then
-		set_complex_define_to_config_h HAVE_MMGET_NOT_ZERO
-	else
-		unset_complex_define_to_config_h HAVE_MMGET_NOT_ZERO
-	fi
-
-# Define HAVE_SHAMPO_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_NET_PAGE_POOL_H
-	then
-		set_complex_define_to_config_h HAVE_SHAMPO_SUPPORT
-	else
-		unset_complex_define_to_config_h HAVE_SHAMPO_SUPPORT
-	fi
-
 # Define HAVE_XDP_SUPPORT from other flags
-        if check_compat_config_h_var HAVE_XDP_REDIRECT &&
-	   [ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
+        if [ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_XDP_SUPPORT
 	else
@@ -277,15 +284,6 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_VFIO_SUPPORT
 	fi
 
-# Define HAVE_XDP_FRAME from other flags
-	if check_compat_config_h_var HAVE_XDP_FRAME_IN_NET_XDP ||
-	   check_compat_config_h_var HAVE_XDP_FRAME_IN_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_XDP_FRAME
-	else
-		unset_complex_define_to_config_h HAVE_XDP_FRAME
-	fi
-
 # Define HAVE_XSK_ZERO_COPY_SUPPORT from other flags
 	if (check_compat_config_h_var HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS ||
 		check_compat_config_h_var HAVE_XSK_BUFF_ALLOC) &&
@@ -294,24 +292,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_XSK_ZERO_COPY_SUPPORT
 	else
 		unset_complex_define_to_config_h HAVE_XSK_ZERO_COPY_SUPPORT
-	fi
-
-# Define HAVE_XDP_RXQ_INFO from other flags
-	if check_compat_config_h_var HAVE_XDP_RXQ_INFO_IN_NET_XDP ||
-	   check_compat_config_h_var HAVE_XDP_RXQ_INFO_IN_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_XDP_RXQ_INFO
-	else
-		unset_complex_define_to_config_h HAVE_XDP_RXQ_INFO
-	fi
-
-# Define HAVE_NET_XDP_H from other flags
-	if check_compat_config_h_var HAVE_NET_XDP_HEADER ||
-	   check_compat_config_h_var HAVE_NET_XDP_HEADER_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_NET_XDP_H
-	else
-		unset_complex_define_to_config_h HAVE_NET_XDP_H
 	fi
 
 # Define HAVE_XDP_CONVERT_TO_XDP_FRAME from other flags
@@ -323,20 +303,10 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_XDP_CONVERT_TO_XDP_FRAME
 	fi
 
-# Define HAVE_XDP_RXQ_INFO_REG_MEM_MODEL from other flags
-	if check_compat_config_h_var HAVE_XDP_RXQ_INFO_REG_MEM_MODEL_IN_NET_XDP ||
-	   check_compat_config_h_var HAVE_XDP_RXQ_INFO_REG_MEM_MODEL_IN_UEK_KABI
-	then
-		set_complex_define_to_config_h HAVE_XDP_RXQ_INFO_REG_MEM_MODEL
-	else
-		unset_complex_define_to_config_h HAVE_XDP_RXQ_INFO_REG_MEM_MODEL
-	fi
-
 #define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON from other flags
 	check_autofconf CONFIG_VXLAN
 	if [ "${CONFIG_VXLAN}" == "1" ]; then
-		if check_compat_config_h_var HAVE_NDO_ADD_VXLAN_PORT ||
-		   check_compat_config_h_var HAVE_NDO_UDP_TUNNEL_ADD ||
+		if check_compat_config_h_var HAVE_NDO_UDP_TUNNEL_ADD ||
 		   check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO
 		then
 			set_complex_define_to_config_h HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
@@ -354,15 +324,15 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_IS_PCI_P2PDMA_PAGE
 	fi
 
-# Define CONFIG_MLX5_EN_MACSEC based on kernel config and HAVE_
+# Define CONFIG_MLX5_MACSEC based on kernel config and HAVE_
 	check_autofconf CONFIG_MACSEC
 	if [ "${CONFIG_MACSEC}" == "1" ]; then
 	    if check_compat_config_h_var HAVE_STRUCT_MACSEC_INFO_METADATA; then
-			CONFIG_MLX5_EN_MACSEC="y"
-			set_config_mk_kernel CONFIG_MLX5_EN_MACSEC
+			CONFIG_MLX5_MACSEC="y"
+			set_config_mk_kernel CONFIG_MLX5_MACSEC
 		else
-			CONFIG_MLX5_EN_MACSEC=
-			unset_config_mk_kernel CONFIG_MLX5_EN_MACSEC
+			CONFIG_MLX5_MACSEC=
+			unset_config_mk_kernel CONFIG_MLX5_MACSEC
 	    fi
 	fi
 
@@ -373,15 +343,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
 	else
 		unset_complex_define_to_config_h HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
-	fi
-
-# Define HAVE_BLK_TYPES_REQ_OP_DRV_OUT from other flags
-	if check_compat_config_h_var HAVE_REQ_OPF_REQ_OP_DRV_OUT ||
-	   check_compat_config_h_var HAVE_REQ_OP_REQ_OP_DRV_OUT
-	then
-		set_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
-	else
-		unset_complex_define_to_config_h HAVE_BLK_TYPES_REQ_OP_DRV_OUT
 	fi
 
 # define HAVE_DEVLINK_PORT_TYPE_ETH_SET from other flags
@@ -400,11 +361,6 @@ check_complex_defines()
 	else
 		unset_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
 	fi
-
-# Define HAVE_NO_REFCNT_BIAS to be set off default until refcnt_bias member
-# of struct alloc_unit is removed.
-
-	unset_complex_define_to_config_h HAVE_NO_REFCNT_BIAS
 
 # define HAVE_TC_CLS_OFFLOAD_EXTACK from other flags
 	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
@@ -443,9 +399,7 @@ check_complex_defines()
 	fi
 
 # define HAVE_PRIO_CHAIN_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON &&
-	   check_compat_config_h_var HAVE_IS_TCF_GACT_GOTO_CHAIN &&
-	   check_compat_config_h_var HAVE_FLOWER_MULTI_MASK
+	if check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
 	then
 		set_complex_define_to_config_h HAVE_PRIO_CHAIN_SUPPORT
 	else
@@ -464,20 +418,11 @@ check_complex_defines()
 
 # define HAVE_TCF_PEDIT_TCFP_KEYS_EX from other flags
 	if check_compat_config_h_var HAVE_TCF_PEDIT_TCFP_KEYS_EX_FIX ||
-		check_config_comapt_tcf_pedit_mod
+	   check_config_comapt_tcf_pedit_mod
 	then
 		set_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
 	else
 		unset_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
-	fi
-
-# define HAVE_NIC_TEMPERATURE_SUPPORTED from other flags
-	if check_compat_config_h_var HAVE_HWMON_OPS_READ_STRING &&
-	   check_compat_config_h_var HAVE_HWMON_DEVICE_REGISTER_WITH_INFO
-	then
-		set_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
-	else
-		unset_complex_define_to_config_h HAVE_NIC_TEMPERATURE_SUPPORTED
 	fi
 
 # define HAVE_VDPA_SUPPORT from other flags
@@ -486,16 +431,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_VDPA_SUPPORT
 	else
 		unset_complex_define_to_config_h HAVE_VDPA_SUPPORT
-	fi
-
-# define HAVE_DEVLINK_RESOURCE_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_DEVLINK_RESOURCE_REGISTER_8_PARAMS ||
-	   check_compat_config_h_var HAVE_DEVLINK_RESOURCE_REGISTER_6_PARAMS ||
-	   check_compat_config_h_var HAVE_DEVL_RESOURCE_REGISTER
-	then
-		set_complex_define_to_config_h HAVE_DEVLINK_RESOURCE_SUPPORT
-	else
-		unset_complex_define_to_config_h HAVE_DEVLINK_RESOURCE_SUPPORT
 	fi
 
 # define HAVE_NET_PAGE_POOL_H from other flags
@@ -533,33 +468,6 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_PAGE_POLL_NID_CHANGED
 	fi
 
-# define HAVE_XDP_SET_DATA_META_INVALID from other flags
-	if check_compat_config_h_var HAVE_XDP_SET_DATA_META_INVALID_XDP_H ||
-	   check_compat_config_h_var HAVE_XDP_SET_DATA_META_INVALID_FILTER_H
-	then
-		set_complex_define_to_config_h HAVE_XDP_SET_DATA_META_INVALID
-	else
-		unset_complex_define_to_config_h HAVE_XDP_SET_DATA_META_INVALID
-	fi
-
-# define HAVE_XDP_BUFF_DATA_HARD_START from other flags
-	if check_compat_config_h_var HAVE_XDP_BUFF_DATA_HARD_START_FILTER_H ||
-	   check_compat_config_h_var HAVE_XDP_BUFF_DATA_HARD_START_XDP_H
-	then
-		set_complex_define_to_config_h HAVE_XDP_BUFF_DATA_HARD_START
-	else
-		unset_complex_define_to_config_h HAVE_XDP_BUFF_DATA_HARD_START
-	fi
-
-# define HAVE_FILTER_H_HAVE_XDP_BUFF from other flags
-	if check_compat_config_h_var HAVE_XDP_BUFF_ON_FILTER ||
-	   check_compat_config_h_var HAVE_XDP_H_HAVE_XDP_BUFF
-	then
-		set_complex_define_to_config_h HAVE_FILTER_H_HAVE_XDP_BUFF
-	else
-		unset_complex_define_to_config_h HAVE_FILTER_H_HAVE_XDP_BUFF
-	fi
-
 # define HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS from other flags
 	if check_compat_config_h_var HAVE_MM_GUP_MUST_UNSHARE_GET_3_PARAMS ||
 	   check_compat_config_h_var HAVE_ASSERT_FAULT_LOCKED
@@ -569,13 +477,61 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
 	fi
 
+# define HAVE_PAGE_POOL_PARAM_HAS_NAPI from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_PARAMS_NAPI_TYPES_H ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_PARAMS_NAPI_OLD
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_PARAM_HAS_NAPI
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_PARAM_HAS_NAPI
+	fi
+
+# define HAVE_PAGE_POOL_DEFRAG_PAGE from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE_IN_PAGE_POOL_H ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE_IN_PAGE_POOL_TYPES_H
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
+	fi
+
 # Define HAVE_PAGE_POOL_RELEASE_PAGE from other flags
 	if check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_PAGE_POOL_H ||
-		check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_TYPES_H
+	   check_compat_config_h_var HAVE_PAGE_POOL_RELEASE_PAGE_IN_TYPES_H
 	then
 		set_complex_define_to_config_h HAVE_PAGE_POOL_RELEASE_PAGE
 	else
 		unset_complex_define_to_config_h HAVE_PAGE_POOL_RELEASE_PAGE
+	fi
+
+# Define HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32 from other flags
+	if check_compat_config_h_var HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32_RETURN_VOID ||
+	   check_compat_config_h_var HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32_RETURN_INT
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_FMSG_BINARY_PAIR_PUT_ARG_U32
+	fi
+
+# Define HAVE_DPLL_SUPPORT from other flags
+        if (check_compat_config_h_var HAVE_DPLL_NETDEV_PIN_SET || 
+	    check_compat_config_h_var HAVE_NETDEV_DPLL_PIN_SET) &&
+           check_compat_config_h_var HAVE_DPLL_STRUCTS
+        then
+                set_complex_define_to_config_h HAVE_DPLL_SUPPORT
+        else
+                unset_complex_define_to_config_h HAVE_DPLL_SUPPORT
+        fi
+# Define CONFIG_MLX5_DPLL based on kernel config and HAVE_DPLL_STRUCTS
+	check_autofconf CONFIG_DPLL
+	if [ "${CONFIG_DPLL}" == "1" ]; then
+	    if check_compat_config_h_var HAVE_DPLL_SUPPORT; then
+			CONFIG_MLX5_DPLL="m"
+			set_config_mk_kernel_module CONFIG_MLX5_DPLL
+		else
+			CONFIG_MLX5_DPLL=
+			unset_config_mk_kernel CONFIG_MLX5_DPLL
+	    fi
 	fi
 }
 
@@ -709,7 +665,6 @@ CLS_ACT_SUPPORTED_KVERSION="4.12.0"
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
 
-RETPOLINE_MINIMAL_VERSION="4.15.0"
 MLXDEVM_SUPPORTED_KVERSION="4.15.0"
 
 #Set default values
@@ -848,20 +803,6 @@ case $ARCH in
 	;;
 esac
 
-CFLAGS_RETPOLINE=''
-case "$ARCH" in i386 | x86_64)
-	# Any kernel >= 4.15 is not interesting: we need to "patch" some
-	# distribution kernels where the base version has no retpoline
-	# but the updates do.
-	if check_kerver ${RETPOLINE_MINIMAL_VERSION} ${KVERSION}; then
-		check_autofconf CONFIG_RETPOLINE
-		if [ "$CONFIG_RETPOLINE" != "1" ]; then
-			CFLAGS_RETPOLINE="-mindirect-branch=thunk-inline -mindirect-branch-register -DRETPOLINE_MLNX"
-		fi
-	fi
-	;;
-esac
-
 if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
 	if (! check_kerver_rh ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVERSION}; then
 			CONFIG_MLX5_CLS_ACT=
@@ -947,8 +888,6 @@ CONFIG_COMPAT_VERSION=${CONFIG_COMPAT_VERSION}
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT}
 BACKPORT_INCLUDES=${BACKPORT_INCLUDES}
 ARCH=${ARCH}
-
-CFLAGS_RETPOLINE=${CFLAGS_RETPOLINE}
 
 MODULES_DIR:=/lib/modules/${KVERSION}/updates
 KSRC=${KSRC}

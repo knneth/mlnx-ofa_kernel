@@ -21,7 +21,7 @@ struct mlx5_vport_table {
 	struct mlx5_vport_key key;
 };
 
-static inline void
+static void
 esw_vport_tbl_init(struct mlx5_eswitch *esw, struct esw_vport_tbl_namespace *ns)
 {
 	if (esw->offloads.encap != DEVLINK_ESWITCH_ENCAP_MODE_NONE)

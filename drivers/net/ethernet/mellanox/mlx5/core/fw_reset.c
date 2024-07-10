@@ -35,6 +35,7 @@ struct mlx5_fw_reset {
 enum {
 	MLX5_FW_RST_STATE_IDLE = 0,
 	MLX5_FW_RST_STATE_TOGGLE_REQ = 4,
+	MLX5_FW_RST_STATE_DROP_MODE = 5,
 };
 
 enum {
@@ -128,17 +129,23 @@ static int mlx5_fw_reset_get_reset_state_err(struct mlx5_core_dev *dev,
 	if (mlx5_reg_mfrl_query(dev, NULL, NULL, &reset_state))
 		goto out;
 
+	if (!reset_state)
+		return 0;
+
 	switch (reset_state) {
 	case MLX5_MFRL_REG_RESET_STATE_IN_NEGOTIATION:
 	case MLX5_MFRL_REG_RESET_STATE_RESET_IN_PROGRESS:
-		NL_SET_ERR_MSG_MOD(extack, "Sync reset was already triggered");
+		NL_SET_ERR_MSG_MOD(extack, "Sync reset still in progress");
 		return -EBUSY;
-	case MLX5_MFRL_REG_RESET_STATE_TIMEOUT:
-		NL_SET_ERR_MSG_MOD(extack, "Sync reset got timeout");
+	case MLX5_MFRL_REG_RESET_STATE_NEG_TIMEOUT:
+		NL_SET_ERR_MSG_MOD(extack, "Sync reset negotiation timeout");
 		return -ETIMEDOUT;
 	case MLX5_MFRL_REG_RESET_STATE_NACK:
 		NL_SET_ERR_MSG_MOD(extack, "One of the hosts disabled reset");
 		return -EPERM;
+	case MLX5_MFRL_REG_RESET_STATE_UNLOAD_TIMEOUT:
+		NL_SET_ERR_MSG_MOD(extack, "Sync reset unload timeout");
+		return -ETIMEDOUT;
 	}
 
 out:
@@ -152,7 +159,7 @@ int mlx5_fw_reset_set_reset_sync(struct mlx5_core_dev *dev, u8 reset_type_sel,
 	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
 	u32 out[MLX5_ST_SZ_DW(mfrl_reg)] = {};
 	u32 in[MLX5_ST_SZ_DW(mfrl_reg)] = {};
-	int err;
+	int err, rst_res;
 
 	set_bit(MLX5_FW_RESET_FLAGS_PENDING_COMP, &fw_reset->reset_flags);
 
@@ -165,11 +172,32 @@ int mlx5_fw_reset_set_reset_sync(struct mlx5_core_dev *dev, u8 reset_type_sel,
 		return 0;
 
 	clear_bit(MLX5_FW_RESET_FLAGS_PENDING_COMP, &fw_reset->reset_flags);
-	if (err == -EREMOTEIO && MLX5_CAP_MCAM_FEATURE(dev, reset_state))
-		return mlx5_fw_reset_get_reset_state_err(dev, extack);
+	if (err == -EREMOTEIO && MLX5_CAP_MCAM_FEATURE(dev, reset_state)) {
+		rst_res = mlx5_fw_reset_get_reset_state_err(dev, extack);
+		return rst_res ? rst_res : err;
+	}
 
 	NL_SET_ERR_MSG_MOD(extack, "Sync reset command failed");
 	return mlx5_cmd_check(dev, err, in, out);
+}
+
+int mlx5_fw_reset_verify_fw_complete(struct mlx5_core_dev *dev,
+				     struct netlink_ext_ack *extack)
+{
+	u8 rst_state;
+	int err;
+
+	err = mlx5_fw_reset_get_reset_state_err(dev, extack);
+	if (err)
+		return err;
+
+	rst_state = mlx5_get_fw_rst_state(dev);
+	if (!rst_state)
+		return 0;
+
+	mlx5_core_err(dev, "Sync reset did not complete, state=%d\n", rst_state);
+	NL_SET_ERR_MSG_MOD(extack, "Sync reset did not complete successfully");
+	return rst_state;
 }
 
 int mlx5_fw_reset_set_live_patch(struct mlx5_core_dev *dev)
@@ -362,6 +390,7 @@ static int mlx5_check_dev_ids(struct mlx5_core_dev *dev, u16 dev_id)
 		if (mlx5_is_rshim_pci_device(dev, sdev_id))
 			continue;
 
+		/* Non mlx5 device present on bus, abort */
 		mlx5_core_warn(dev, "unrecognized dev_id (0x%x)\n", sdev_id);
 		return -EPERM;
 	}
@@ -620,7 +649,6 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 	err = pci_read_config_word(dev->pdev, PCI_DEVICE_ID, &dev_id);
 	if (err)
 		return pcibios_err_to_errno(err);
-
 	err = mlx5_check_dev_ids(dev, dev_id);
 	if (err)
 		return err;
@@ -640,17 +668,14 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 	err = pcie_capability_set_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_LD);
 	if (err)
 		return pcibios_err_to_errno(err);
-	msleep(2500);
+	msleep(500);
 	err = pcie_capability_clear_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_LD);
 	if (err)
-		return err;
+		return pcibios_err_to_errno(err);
 
 	/* Check link */
-	err = pci_read_config_dword(bridge, cap + PCI_EXP_LNKCAP, &reg32);
-	if (err)
-		return pcibios_err_to_errno(err);
-	if (!(reg32 & PCI_EXP_LNKCAP_DLLLARC)) {
-		mlx5_core_warn(dev, "No PCI link reporting capability (0x%08x)\n", reg32);
+	if (!bridge->link_active_reporting) {
+		mlx5_core_warn(dev, "No PCI link reporting capability\n");
 		msleep(1000);
 		goto restore;
 	}
@@ -685,6 +710,7 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 
 	if (reg16 == dev_id) {
 		mlx5_core_info(dev, "Firmware responds to PCI config cycles again\n");
+		msleep(200);
 	} else {
 		mlx5_core_err(dev, "Firmware is not responsive (0x%04x) after %llu ms\n",
 			      reg16, mlx5_tout_ms(dev, PCI_TOGGLE));
@@ -692,11 +718,39 @@ static int mlx5_pci_link_toggle_pf(struct mlx5_core_dev *dev)
 	}
 
 restore:
-	list_for_each_entry(sdev, &bridge_bus->devices, bus_list) {
-		pci_cfg_access_unlock(sdev);
-		pci_restore_state(sdev);
-	}
+	timeout = jiffies + msecs_to_jiffies(mlx5_tout_ms(dev, PCI_TOGGLE));
 
+	list_for_each_entry(sdev, &bridge_bus->devices, bus_list) {
+		u64 reg64, reg64_comp;
+		int retry_ctr = 0;
+
+		pci_cfg_access_unlock(sdev);
+		reg64_comp = ((u64)sdev->saved_config_space[5] << 32) |
+			      ((u64)sdev->saved_config_space[4] & 0xfff00000);
+		do {
+			msleep(10);
+			sdev->state_saved = true;
+			pci_restore_state(sdev);
+			err = pci_read_config_dword(sdev, 0x14, &reg32);
+			if (err)
+				return pcibios_err_to_errno(err);
+			reg64 = (u64)reg32 << 32;
+			err = pci_read_config_dword(sdev, 0x10, &reg32);
+			if (err)
+				return pcibios_err_to_errno(err);
+			reg64 |= (u64)reg32 & 0xfff00000;
+			retry_ctr++;
+		} while ((reg64_comp != reg64) && !time_after(jiffies, timeout));
+		if (1 != retry_ctr)
+			mlx5_core_warn(dev, "devfn=0x%.8x restore had to retry %d times\n",
+				       sdev->devfn, retry_ctr);
+		if (reg64_comp != reg64) {
+			mlx5_core_err(dev, "devfn=0x%.8x BAR not set after %llu ms\n",
+				      sdev->devfn, mlx5_tout_ms(dev, PCI_TOGGLE));
+			err = -ETIMEDOUT;
+			break;
+		}
+	}
 	return err;
 }
 
@@ -744,6 +798,7 @@ static void mlx5_sync_reset_unload_event(struct work_struct *work)
 	struct mlx5_fw_reset *fw_reset;
 	struct mlx5_core_dev *dev;
 	unsigned long timeout;
+	int poll_freq = 20;
 	bool reset_action;
 	u8 rst_state;
 	int err;
@@ -751,7 +806,6 @@ static void mlx5_sync_reset_unload_event(struct work_struct *work)
 	fw_reset = container_of(work, struct mlx5_fw_reset, reset_unload_work);
 	dev = fw_reset->dev;
 
-	cancel_delayed_work(&fw_reset->reset_timeout_work);
 	if (mlx5_sync_reset_clear_reset_requested(dev, false))
 		return;
 
@@ -780,7 +834,12 @@ static void mlx5_sync_reset_unload_event(struct work_struct *work)
 			reset_action = true;
 			break;
 		}
-		msleep(20);
+		if (rst_state == MLX5_FW_RST_STATE_DROP_MODE) {
+			mlx5_core_info(dev, "Sync Reset Drop mode ack\n");
+			mlx5_set_fw_rst_ack(dev);
+			poll_freq = 1000;
+		}
+		msleep(poll_freq);
 	} while (!time_after(jiffies, timeout));
 
 	if (!reset_action) {
@@ -903,18 +962,29 @@ void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
 
+	if (!fw_reset)
+		return;
+
 	MLX5_NB_INIT(&fw_reset->nb, fw_reset_event_notifier, GENERAL_EVENT);
 	mlx5_eq_notifier_register(dev, &fw_reset->nb);
 }
 
 void mlx5_fw_reset_events_stop(struct mlx5_core_dev *dev)
 {
-	mlx5_eq_notifier_unregister(dev, &dev->priv.fw_reset->nb);
+	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
+
+	if (!fw_reset)
+		return;
+
+	mlx5_eq_notifier_unregister(dev, &fw_reset->nb);
 }
 
 void mlx5_drain_fw_reset(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
+
+	if (!fw_reset)
+		return;
 
 	set_bit(MLX5_FW_RESET_FLAGS_DROP_NEW_REQUESTS, &fw_reset->reset_flags);
 	cancel_work_sync(&fw_reset->fw_live_patch_work);
@@ -934,9 +1004,13 @@ static const struct devlink_param mlx5_fw_reset_devlink_params[] = {
 
 int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
 {
-	struct mlx5_fw_reset *fw_reset = kzalloc(sizeof(*fw_reset), GFP_KERNEL);
+	struct mlx5_fw_reset *fw_reset;
 	int err;
 
+	if (!MLX5_CAP_MCAM_REG(dev, mfrl))
+		return 0;
+
+	fw_reset = kzalloc(sizeof(*fw_reset), GFP_KERNEL);
 	if (!fw_reset)
 		return -ENOMEM;
 	fw_reset->wq = create_singlethread_workqueue("mlx5_fw_reset_events");
@@ -972,6 +1046,9 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
 void mlx5_fw_reset_cleanup(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
+
+	if (!fw_reset)
+		return;
 
 	devl_params_unregister(priv_to_devlink(dev),
 			       mlx5_fw_reset_devlink_params,

@@ -1,49 +1,20 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/params.h
 
-Change-Id: Ia23b624c70bba29c7c30787e716f9f7dc3b2e30f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 ++
+ 1 file changed, 2 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
-@@ -6,6 +6,9 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+@@ -84,8 +84,10 @@ void mlx5e_set_rx_cq_mode_params(struct
  
- #include "mod_hdr.h"
- #include "lib/fs_ttc.h"
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/rhashtable.h>
+ bool slow_pci_heuristic(struct mlx5_core_dev *mdev);
+ int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *params,
+ 			     struct mlx5e_xsk_param *xsk);
 +#endif
- 
- struct mlx5_prio_hp {
- 	u32 rate;
-@@ -177,6 +180,7 @@ struct mlx5e_flow_steering;
- struct mlx5e_rx_res;
- 
- #ifdef CONFIG_MLX5_EN_ARFS
-+#ifndef HAVE_NET_FLOW_KEYS_H
- struct mlx5e_arfs_tables;
- 
- int mlx5e_arfs_create_tables(struct mlx5e_flow_steering *fs,
-@@ -196,6 +200,7 @@ static inline int mlx5e_arfs_enable(stru
- static inline int mlx5e_arfs_disable(struct mlx5e_flow_steering *fs)
- { return -EOPNOTSUPP; }
- #endif
-+#endif
- 
- #ifdef CONFIG_MLX5_EN_TLS
- struct mlx5e_accel_fs_tcp;
-@@ -260,10 +265,12 @@ void mlx5e_fs_set_state_destroy(struct m
- void mlx5e_fs_set_vlan_strip_disable(struct mlx5e_flow_steering *fs, bool vlan_strip_disable);
- 
- struct mlx5_core_dev *mlx5e_fs_get_mdev(struct mlx5e_flow_steering *fs);
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- int mlx5e_add_vlan_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
- void mlx5e_remove_vlan_trap(struct mlx5e_flow_steering *fs);
- int mlx5e_add_mac_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
- void mlx5e_remove_mac_trap(struct mlx5e_flow_steering *fs);
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
- void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs, struct net_device *netdev);
- int mlx5e_fs_vlan_rx_add_vid(struct mlx5e_flow_steering *fs,
- 			     struct net_device *netdev,
+ void mlx5e_build_rq_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+ void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev, struct mlx5e_params *params);

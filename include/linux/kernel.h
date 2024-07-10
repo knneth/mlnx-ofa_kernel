@@ -5,6 +5,10 @@
 
 #include_next <linux/kernel.h>
 
+#ifndef PTR_IF
+#define PTR_IF(cond, ptr)	((cond) ? (ptr) : NULL)
+#endif
+
 #ifndef ALIGN_DOWN
 #define ALIGN_DOWN(x, a)        __ALIGN_KERNEL((x) - ((a) - 1), (a))
 #endif

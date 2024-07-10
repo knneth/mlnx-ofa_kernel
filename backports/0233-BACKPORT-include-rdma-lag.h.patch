@@ -1,0 +1,17 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/lag.h
+
+---
+ include/rdma/lag.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/include/rdma/lag.h
++++ b/include/rdma/lag.h
+@@ -6,6 +6,7 @@
+ #ifndef _RDMA_LAG_H_
+ #define _RDMA_LAG_H_
+ 
++#include "../../compat/config.h"
+ #ifdef HAVE_NET_LAG_H
+ #include <net/lag.h>
+ #endif

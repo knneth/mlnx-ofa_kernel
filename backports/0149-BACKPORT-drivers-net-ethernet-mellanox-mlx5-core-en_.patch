@@ -1,0 +1,163 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+
+---
+ .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 87 ++++++++++++++++++-
+ 1 file changed, 84 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+@@ -32,6 +32,9 @@
+ 
+ #include <linux/device.h>
+ #include <linux/netdevice.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/dcbnl.h>
++#endif
+ #include "en.h"
+ #include "en_tc.h"
+ #include "eswitch.h"
+@@ -64,7 +67,7 @@ static ssize_t mlx5e_store_tc_num(struct
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+ 	struct net_device *netdev = priv->netdev;
+-	struct tc_mqprio_qopt_offload mqprio = { 0 };
++	struct tc_mqprio_qopt_offload mqprio = {{ 0 }};
+ 	int tc_num;
+ 	int err = 0;
+ 
+@@ -935,11 +938,9 @@ static ssize_t mlx5e_store_force_local_l
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+ 	bool disable;
+ 	int err;
+-
+ 	err = kstrtobool(buf, &disable);
+ 	if (err)
+ 		return -EINVAL;
+-
+ 	if (mdev->local_lb.user_force_disable != disable) {
+ 		mdev->local_lb.user_force_disable = disable;
+ 		mlx5_nic_vport_update_local_lb(mdev,
+@@ -953,6 +954,64 @@ static DEVICE_ATTR(force_local_lb_disabl
+ 		   mlx5e_show_force_local_lb,
+ 		   mlx5e_store_force_local_lb);
+ 
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++static ssize_t mlx5e_show_log_rx_page_cache_mult_limit(struct device *device,
++						       struct device_attribute *attr,
++						       char *buf)
++{
++	struct net_device *dev = to_net_dev(device);
++	struct mlx5e_priv *priv = netdev_priv(dev);
++	int len;
++
++	mutex_lock(&priv->state_lock);
++	len = sprintf(buf, "log rx page cache mult limit is %u\n",
++		      priv->channels.params.log_rx_page_cache_mult);
++	mutex_unlock(&priv->state_lock);
++
++	return len;
++}
++
++static ssize_t mlx5e_store_log_rx_page_cache_mult_limit(struct device *device,
++							struct device_attribute *attr,
++							const char *buf,
++							size_t count)
++{
++	struct net_device *dev = to_net_dev(device);
++	struct mlx5e_priv *priv = netdev_priv(dev);
++	int err, udata;
++
++	err = kstrtoint(buf, 0, &udata);
++	if (err)
++		return -EINVAL;
++
++	if (udata > MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT || udata < 0) {
++		netdev_err(priv->netdev, "log rx page cache mult limit cannot exceed above %d or below 0\n",
++			   MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT);
++		return -EINVAL;
++	}
++
++	mutex_lock(&priv->state_lock);
++	priv->channels.params.log_rx_page_cache_mult = (u8)udata;
++	mutex_unlock(&priv->state_lock);
++
++	return count;
++}
++
++static DEVICE_ATTR(log_mult_limit, S_IRUGO | S_IWUSR,
++		   mlx5e_show_log_rx_page_cache_mult_limit,
++		   mlx5e_store_log_rx_page_cache_mult_limit);
++
++static struct attribute *mlx5e_log_rx_page_cache_attrs[] = {
++	&dev_attr_log_mult_limit.attr,
++	NULL,
++};
++
++static struct attribute_group rx_page_cache_group = {
++	.name = "rx_page_cache",
++	.attrs = mlx5e_log_rx_page_cache_attrs,
++};
++#endif /*HAVE_PAGE_POOL_DEFRAG_PAGE*/
++
+ static struct attribute *mlx5e_settings_attrs[] = {
+ 	&dev_attr_hfunc.attr,
+ 	&dev_attr_pfc_stall_prevention.attr,
+@@ -1167,11 +1226,17 @@ static struct attribute *prio_hp_attrs[]
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(prio_hp);
++#endif
+ 
+ static struct kobj_type prio_hp_sysfs = {
+ 	.sysfs_ops     = &prio_hp_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = prio_hp_groups
++#else
++	.default_attrs = prio_hp_attrs
++#endif
+ };
+ 
+ int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
+@@ -1493,9 +1558,18 @@ int mlx5e_sysfs_create(struct net_device
+ 	if (err)
+ 		goto remove_debug_group;
+ 
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++	err = sysfs_create_group(&dev->dev.kobj, &rx_page_cache_group);
++	if (err)
++		goto remove_phy_stat_group;
++#endif
+ 	err = hp_sysfs_init(priv);
+ 	if (err)
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++		goto remove_rx_page_cache_group;
++#else
+ 		goto remove_phy_stat_group;
++#endif
+ 
+ 	mlx5_eswitch_compat_sysfs_init(dev);
+ 
+@@ -1513,6 +1587,10 @@ int mlx5e_sysfs_create(struct net_device
+ 
+ 	return 0;
+ 
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++remove_rx_page_cache_group:
++	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
++#endif
+ remove_phy_stat_group:
+ 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
+ remove_debug_group:
+@@ -1540,6 +1618,9 @@ void mlx5e_sysfs_remove(struct net_devic
+ 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
+ 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
+ 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
++#endif
+ 	hp_sysfs_cleanup(priv);
+ 
+ 	if (mlx5_core_is_vf(priv->mdev))

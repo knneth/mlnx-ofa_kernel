@@ -9,66 +9,8 @@ K_BUILD ?= /lib/modules/$(KVER)/build
 K_OBJ ?= $(K_BUILD)
 K_SRC ?= $(shell test -d /lib/modules/$(KVER)/source && echo /lib/modules/$(KVER)/source || echo $(K_BUILD))
 
-# This is an UGLY compat fix for UEK kernel
-UEK=$(shell uname -a | grep uek | grep 2.6.39)
-ifneq ($(UEK),)
-EXTRA_CFLAGS += -DCONFIG_COMPAT_ISER_ATTR_IS_VISIBLE
-endif
-
-CHECK_PROTECTION=$(shell grep -w check_protection ${K_SRC}/include/scsi/scsi_transport_iscsi.h)
-ifneq ($(CHECK_PROTECTION),)
-EXTRA_CFLAGS += -DCONFIG_COMPAT_ISCSI_CHECK_PROTECTION -DCONFIG_COMPAT_SIGNATURE
-endif
-
-ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
-INDIR_REG=$(shell grep -w ib_alloc_indir_reg_list $(OFA)/include/rdma/ib_verbs.h)
-else
-INDIR_REG=$(shell grep -w ib_alloc_indir_reg_list ${K_SRC}/include/rdma/ib_verbs.h)
-endif
-ifneq ($(INDIR_REG),)
-EXTRA_CFLAGS += -DHAVE_INDIR_REG
-endif
-
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 include $(OFA)/configure.mk.kernel
-else
-# This is an UGLY compat fix for inbox
-CQD=$(shell grep -w iscsi_change_queue_depth ${K_SRC}/include/scsi/libiscsi.h)
-ifneq ($(CQD),)
-EXTRA_CFLAGS += -DCONFIG_COMPAT_IS_ISCSI_CHANGE_QUEUE_DEPTH
-endif
-endif
-
-SCSI_TRANSFER_LENGTH=$(shell grep -w scsi_transfer_length ${K_SRC}/include/scsi/scsi_cmnd.h)
-ifneq ($(SCSI_TRANSFER_LENGTH),)
-EXTRA_CFLAGS += -DHAVE_SCSI_TRANSFER_LENGTH
-endif
-
-REINIT_COMPLETION=$(shell grep -w reinit_completion ${K_SRC}/include/linux/completion.h)
-ifneq ($(REINIT_COMPLETION),)
-EXTRA_CFLAGS += -DCONFIG_COMPAT_IS_REINIT_COMPLETION
-endif
-
-ifeq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
-SIGNATURE_API=$(shell grep -w IB_SIG_TYPE_T10_DIF ${K_SRC}/include/rdma/ib_verbs.h)
-ifneq ($(SIGNATURE_API),)
-EXTRA_CFLAGS += -DHAVE_IB_SIGNATURE
-endif
-
-NEW_SIGNATURE_API=$(shell grep -w IB_SIG_TYPE_NONE ${K_SRC}/include/rdma/ib_verbs.h)
-ifneq ($(NEW_SIGNATURE_API),)
-EXTRA_CFLAGS += -DHAVE_NEW_SIGNATURE_API
-endif
-else
-NEW_SIGNATURE_API=$(shell grep -w IB_SIG_TYPE_NONE $(OFA)/include/rdma/ib_verbs.h)
-ifneq ($(NEW_SIGNATURE_API),)
-EXTRA_CFLAGS += -DHAVE_NEW_SIGNATURE_API
-endif
-endif
-
-ISCSI_FRWD_LOCK=$(shell grep -w "spinlock_t\s*frwd_lock;" ${K_SRC}/include/scsi/libiscsi.h)
-ifneq ($(ISCSI_FRWD_LOCK),)
-EXTRA_CFLAGS += -DCONFIG_COMPAT_ISCSI_SESSION_FRWD_LOCK
 endif
 
 autoconf_h=$(shell /bin/ls -1 $(K_BUILD)/include/*/autoconf.h 2> /dev/null | head -1)

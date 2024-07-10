@@ -21,6 +21,13 @@ WITH_DKMS ?= 1
 WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
+ifeq ($(WITH_DKMS),1)
+# 1 for dkms >= 3 . 0 for dkms 2 (or no DKMS support at all)
+DKMS3 = $(shell dkms --version 2>/dev/null | grep  -c dkms-3)
+else
+DKMS3 = 0
+endif
+
 
 pname:=mlnx-ofed-kernel
 psource:=$(pname)-source
@@ -96,6 +103,11 @@ ifeq ($(WITH_DKMS),1)
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	$(CURDIR)/ofed_scripts/generate_dkms_conf.sh > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+ifeq ($(DKMS3),1)
+	# Removed in DKMS 3. Should be removed from the script when we
+	# make it the default:
+	sed -i -e '/REMAKE_INITRD/d' debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+endif
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/configure
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/makefile
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/Makefile
@@ -193,7 +205,14 @@ override_dh_installdeb:
 	echo "/etc/modprobe.d/mlnx.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/mlnx-bf.conf"      >>  debian/$(putils)/DEBIAN/conffiles
 	echo "/etc/modprobe.d/ib_ipoib.conf"  >>  debian/$(putils)/DEBIAN/conffiles
-ifneq ($(WITH_DKMS),1)
+ifeq ($(WITH_DKMS),1)
+ifeq ($(DKMS3),1)
+	# Currently this is a special case. At some point this should become
+	# debian/mlnx-ofed-kernel-dkms.triggers and delete it for older
+	# versions:
+	echo "activate-await update-initramfs" >debian/$(pdkms)/DEBIAN/triggers
+endif
+else
 	sed -i \
 		-e 's/@KVER@/$(kernelver)/' \
 		-e 's/@ARCH@/$(deb_arch)/' \

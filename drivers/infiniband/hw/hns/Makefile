@@ -5,15 +5,13 @@ endif
 hns-roce-y  := main.o
 
 ifdef CONFIG_INFINIBAND_HNS_HIP06
-ifneq ($(filter m, $(CONFIG_INFINIBAND_HNS_HIP06) $(CONFIG_INFINIBAND_HNS)),)
-obj-m += hns-roce-hw-v1.o
-endif
+obj-$(CONFIG_INFINIBAND_HNS) += hns-roce-hw-v1.o
+obj-$(CONFIG_INFINIBAND_HNS_HIP06) += hns-roce-hw-v1.o
 endif
 hns-roce-hw-v1-objs := hns_roce_hw_v1.o
 ifdef CONFIG_INFINIBAND_HNS_HIP08
-ifneq ($(filter m, $(CONFIG_INFINIBAND_HNS_HIP08) $(CONFIG_INFINIBAND_HNS)),)
-obj-m += hns-roce-hw-v2.o
-endif
+obj-$(CONFIG_INFINIBAND_HNS) += hns-roce-hw-v2.o
+obj-$(CONFIG_INFINIBAND_HNS_HIP08) += hns-roce-hw-v2.o
 endif
 hns-roce-hw-v2-objs := hns_roce_hw_v2.o
 

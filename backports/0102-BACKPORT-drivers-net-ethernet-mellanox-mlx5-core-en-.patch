@@ -1,70 +1,35 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 
-Change-Id: Ia0a8253b10f68f52237e577c0f5130336052e099
 ---
- .../ethernet/mellanox/mlx5/core/en/rep/bond.c   | 17 ++++++++++++++++-
- 1 file changed, 16 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/selq.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
-@@ -3,8 +3,12 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_EN_SELQ_H__
  
- #include <linux/netdevice.h>
- #include <linux/list.h>
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <net/bonding.h>
-+#endif
-+#ifdef HAVE_NET_LAG_H
- #include <net/lag.h>
--
-+#endif
- #include "mlx5_core.h"
- #include "eswitch.h"
- #include "esw/acl/ofld.h"
-@@ -193,9 +197,11 @@ static void mlx5e_rep_changelowerstate_e
- 	struct mlx5e_rep_priv *rpriv;
- 	struct net_device *lag_dev;
- 	struct mlx5e_priv *priv;
-+#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
- 	struct list_head *iter;
- 	struct net_device *dev;
- 	u16 acl_vport_num;
-+#endif
- 	u16 fwd_vport_num;
- 	int err;
+ #include <linux/kernel.h>
++#include <linux/netdevice.h>
  
-@@ -212,9 +218,12 @@ static void mlx5e_rep_changelowerstate_e
- 	if (!lag_dev)
- 		return;
+ struct mlx5e_selq_params;
  
-+#ifdef HAVE_NET_LAG_PORT_DEV_TXABLE
- 	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
- 		   lag_dev->name, fwd_vport_num, net_lag_port_dev_txable(netdev));
+@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb
+ 	return txq;
+ }
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
+ 
++#else
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
 +#endif
- 
-+#ifdef HAVE_NETDEV_FOR_EACH_LOWER_DEV
- 	/* Point everyone's egress acl to the vport of the active representor */
- 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
- 		priv = netdev_priv(dev);
-@@ -235,6 +244,7 @@ static void mlx5e_rep_changelowerstate_e
- 					    acl_vport_num, err);
- 		}
- 	}
-+#endif
- 
- 	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
- 	 * rx_rule with new destination as active vport's root_ft
-@@ -315,6 +325,11 @@ int mlx5e_rep_bond_init(struct mlx5e_rep
- 	if (!mlx5_esw_acl_egress_fwd2vport_supported(priv->mdev->priv.eswitch))
- 		goto out;
- 
-+#ifndef HAVE_NETDEV_FOR_EACH_LOWER_DEV
-+	netdev_err(netdev, "VF representors bonding is NOT supported\n");
-+	goto out;
-+#endif
-+
- 	uplink_priv->bond = kvzalloc(sizeof(*uplink_priv->bond), GFP_KERNEL);
- 	if (!uplink_priv->bond) {
- 		ret = -ENOMEM;
+ #endif /* __MLX5_EN_SELQ_H__ */

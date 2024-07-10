@@ -1,20 +1,34 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
 
-Change-Id: I53961803fbd067e4fea4c55e55a5586f7dc1773d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
-@@ -4,7 +4,7 @@
- #ifndef __MLX5_EN_TC_SAMPLE_H__
- #define __MLX5_EN_TC_SAMPLE_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+@@ -4,10 +4,18 @@
+ #ifndef __MLX5_EN_XSK_RX_H__
+ #define __MLX5_EN_XSK_RX_H__
  
--#include "eswitch.h"
-+#include "../../eswitch.h"
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "en.h"
  
- struct mlx5_flow_attr;
- struct mlx5e_tc_psample;
+ /* RX data path */
+ 
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count);
++void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
++			    struct mlx5e_alloc_unit *au);
++void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle);
++int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au);
++#endif
+ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix);
+ int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk);
+ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk);
+@@ -22,4 +30,5 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 					      struct mlx5_cqe64 *cqe,
+ 					      u32 cqe_bcnt);
+ 
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ #endif /* __MLX5_EN_XSK_RX_H__ */

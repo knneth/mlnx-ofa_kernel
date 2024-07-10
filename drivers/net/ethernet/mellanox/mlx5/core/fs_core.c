@@ -235,6 +235,7 @@ static struct init_tree_node egress_root_fs = {
 
 enum {
 	RDMA_RX_IPSEC_PRIO,
+	RDMA_RX_MACSEC_PRIO,
 	RDMA_RX_COUNTERS_PRIO,
 	RDMA_RX_BYPASS_PRIO,
 	RDMA_RX_KERNEL_PRIO,
@@ -248,9 +249,13 @@ enum {
 #define RDMA_RX_KERNEL_MIN_LEVEL (RDMA_RX_BYPASS_MIN_LEVEL + 1)
 #define RDMA_RX_COUNTERS_MIN_LEVEL (RDMA_RX_KERNEL_MIN_LEVEL + 2)
 
+#define RDMA_RX_MACSEC_NUM_PRIOS 1
+#define RDMA_RX_MACSEC_PRIO_NUM_LEVELS 2
+#define RDMA_RX_MACSEC_MIN_LEVEL  (RDMA_RX_COUNTERS_MIN_LEVEL + RDMA_RX_MACSEC_NUM_PRIOS)
+
 static struct init_tree_node rdma_rx_root_fs = {
 	.type = FS_TYPE_NAMESPACE,
-	.ar_size = 4,
+	.ar_size = 5,
 	.children = (struct init_tree_node[]) {
 		[RDMA_RX_IPSEC_PRIO] =
 		ADD_PRIO(0, RDMA_RX_IPSEC_MIN_LEVEL, 0,
@@ -258,6 +263,12 @@ static struct init_tree_node rdma_rx_root_fs = {
 			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				ADD_MULTIPLE_PRIO(RDMA_RX_IPSEC_NUM_PRIOS,
 						  RDMA_RX_IPSEC_NUM_LEVELS))),
+		[RDMA_RX_MACSEC_PRIO] =
+		ADD_PRIO(0, RDMA_RX_MACSEC_MIN_LEVEL, 0,
+			 FS_CHAINING_CAPS,
+			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
+				ADD_MULTIPLE_PRIO(RDMA_RX_MACSEC_NUM_PRIOS,
+						  RDMA_RX_MACSEC_PRIO_NUM_LEVELS))),
 		[RDMA_RX_COUNTERS_PRIO] =
 		ADD_PRIO(0, RDMA_RX_COUNTERS_MIN_LEVEL, 0,
 			 FS_CHAINING_CAPS,
@@ -281,6 +292,7 @@ static struct init_tree_node rdma_rx_root_fs = {
 enum {
 	RDMA_TX_COUNTERS_PRIO,
 	RDMA_TX_IPSEC_PRIO,
+	RDMA_TX_MACSEC_PRIO,
 	RDMA_TX_BYPASS_PRIO,
 };
 
@@ -291,9 +303,13 @@ enum {
 #define RDMA_TX_IPSEC_PRIO_NUM_LEVELS 1
 #define RDMA_TX_IPSEC_MIN_LEVEL  (RDMA_TX_COUNTERS_MIN_LEVEL + RDMA_TX_IPSEC_NUM_PRIOS)
 
+#define RDMA_TX_MACSEC_NUM_PRIOS 1
+#define RDMA_TX_MACESC_PRIO_NUM_LEVELS 1
+#define RDMA_TX_MACSEC_MIN_LEVEL  (RDMA_TX_COUNTERS_MIN_LEVEL + RDMA_TX_MACSEC_NUM_PRIOS)
+
 static struct init_tree_node rdma_tx_root_fs = {
 	.type = FS_TYPE_NAMESPACE,
-	.ar_size = 3,
+	.ar_size = 4,
 	.children = (struct init_tree_node[]) {
 		[RDMA_TX_COUNTERS_PRIO] =
 		ADD_PRIO(0, RDMA_TX_COUNTERS_MIN_LEVEL, 0,
@@ -307,7 +323,12 @@ static struct init_tree_node rdma_tx_root_fs = {
 			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
 				ADD_MULTIPLE_PRIO(RDMA_TX_IPSEC_NUM_PRIOS,
 						  RDMA_TX_IPSEC_PRIO_NUM_LEVELS))),
-
+		[RDMA_TX_MACSEC_PRIO] =
+		ADD_PRIO(0, RDMA_TX_MACSEC_MIN_LEVEL, 0,
+			 FS_CHAINING_CAPS,
+			 ADD_NS(MLX5_FLOW_TABLE_MISS_ACTION_DEF,
+				ADD_MULTIPLE_PRIO(RDMA_TX_MACSEC_NUM_PRIOS,
+						  RDMA_TX_MACESC_PRIO_NUM_LEVELS))),
 		[RDMA_TX_BYPASS_PRIO] =
 		ADD_PRIO(0, RDMA_TX_BYPASS_MIN_LEVEL, 0,
 			 FS_CHAINING_CAPS_RDMA_TX,
@@ -900,7 +921,6 @@ static struct mlx5_flow_table *find_closest_ft_recursive(struct fs_node  *root,
 
 	struct fs_node *iter = list_entry(start, struct fs_node, list);
 	struct mlx5_flow_table *ft = NULL;
-
 	if (!root && !ignore_chains_attr)
 		return NULL;
 
@@ -953,9 +973,9 @@ static struct mlx5_flow_table *find_closest_ft(struct fs_node *node, bool revers
 	while (!ft && parent) {
 		if (parent != prio_chains_parent)
 			ft = find_closest_ft_recursive(parent, &curr_node->list,
-						       reverse,
-						       parent->type !=
-						       FS_TYPE_PRIO_CHAINS);
+					reverse,
+					parent->type !=
+					FS_TYPE_PRIO_CHAINS);
 		curr_node = parent;
 		parent = curr_node->parent;
 	}
@@ -1662,7 +1682,7 @@ static bool mlx5_pkt_reformat_cmp(struct mlx5_pkt_reformat *p1,
 				  struct mlx5_pkt_reformat *p2)
 {
 	return p1->owner == p2->owner &&
-		(p1->owner == FS_PACKET_REFORMAT_FW ?
+		(p1->owner == MLX5_FLOW_RESOURCE_OWNER_FW ?
 		 p1->id == p2->id :
 		 mlx5_fs_dr_action_get_pkt_reformat_id(p1) ==
 		 mlx5_fs_dr_action_get_pkt_reformat_id(p2));
@@ -2494,6 +2514,14 @@ struct mlx5_flow_namespace *mlx5_get_flow_namespace(struct mlx5_core_dev *dev,
 		root_ns = steering->rdma_tx_root_ns;
 		prio = RDMA_TX_IPSEC_PRIO;
 		break;
+	case MLX5_FLOW_NAMESPACE_RDMA_RX_MACSEC:
+		root_ns = steering->rdma_rx_root_ns;
+		prio = RDMA_RX_MACSEC_PRIO;
+		break;
+	case MLX5_FLOW_NAMESPACE_RDMA_TX_MACSEC:
+		root_ns = steering->rdma_tx_root_ns;
+		prio = RDMA_TX_MACSEC_PRIO;
+		break;
 	default: /* Must be NIC RX */
 		WARN_ON(!is_nic_rx_ns(type));
 		root_ns = steering->root_ns;
@@ -3100,7 +3128,7 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 		goto out_err;
 	}
 
-	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_BR_OFFLOAD, 3);
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_BR_OFFLOAD, 4);
 	if (IS_ERR(maj_prio)) {
 		err = PTR_ERR(maj_prio);
 		goto out_err;
@@ -3631,10 +3659,8 @@ static struct mlx5_flow_root_namespace
 	return find_root(&ns->node);
 }
 
-#define MLX5_MH_NUM_OF_ACTIONS 0xff
-#define MLX5_MH_FLAGS 0xffffff00
 struct mlx5_modify_hdr *mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
-						 u8 ns_type, u32 num_actions_and_flags,
+						 u8 ns_type, u8 num_actions,
 						 void *modify_actions)
 {
 	struct mlx5_flow_root_namespace *root;
@@ -3650,10 +3676,7 @@ struct mlx5_modify_hdr *mlx5_modify_header_alloc(struct mlx5_core_dev *dev,
 		return ERR_PTR(-ENOMEM);
 
 	modify_hdr->ns_type = ns_type;
-	modify_hdr->flags = num_actions_and_flags & MLX5_MH_FLAGS;
-
-	err = root->cmds->modify_header_alloc(root, ns_type,
-					      num_actions_and_flags & MLX5_MH_NUM_OF_ACTIONS,
+	err = root->cmds->modify_header_alloc(root, ns_type, num_actions,
 					      modify_actions, modify_hdr);
 	if (err) {
 		kfree(modify_hdr);
@@ -3695,7 +3718,6 @@ struct mlx5_pkt_reformat *mlx5_packet_reformat_alloc(struct mlx5_core_dev *dev,
 
 	pkt_reformat->ns_type = ns_type;
 	pkt_reformat->reformat_type = params->type;
-	pkt_reformat->owner = params->owner;
 	err = root->cmds->packet_reformat_alloc(root, params, ns_type,
 						pkt_reformat);
 	if (err) {
@@ -3768,7 +3790,7 @@ void mlx5_destroy_match_definer(struct mlx5_core_dev *dev,
 
 int mlx5_flow_namespace_set_peer(struct mlx5_flow_root_namespace *ns,
 				 struct mlx5_flow_root_namespace *peer_ns,
-				 u16 peer_idx)
+				 u16 peer_vhca_id)
 {
 	if (peer_ns && ns->mode != peer_ns->mode) {
 		mlx5_core_err(ns->dev,
@@ -3776,7 +3798,7 @@ int mlx5_flow_namespace_set_peer(struct mlx5_flow_root_namespace *ns,
 		return -EINVAL;
 	}
 
-	return ns->cmds->set_peer(ns, peer_ns, peer_idx);
+	return ns->cmds->set_peer(ns, peer_ns, peer_vhca_id);
 }
 
 /* This function should be called only at init stage of the namespace.

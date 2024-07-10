@@ -13,7 +13,7 @@
 #define SOCK_ASYNC_WAITDATA SOCKWQ_ASYNC_WAITDATA
 #endif
 
-#if !defined(HAVE_SENDPAGE_OK) && defined(HAVE_PAGE_COUNT)
+#if !defined(HAVE_SENDPAGE_OK)
 #include <linux/page_ref.h>
 
 static inline bool sendpage_ok(struct page *page)

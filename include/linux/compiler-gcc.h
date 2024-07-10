@@ -15,12 +15,4 @@
 		     + __GNUC_PATCHLEVEL__)
 #endif
 
-#ifndef HAVE_LINUX_OVERFLOW_H
-
-#if GCC_VERSION >= 50100
-#define COMPILER_HAS_GENERIC_BUILTIN_OVERFLOW 1
-#endif
-
-#endif /* HAVE_LINUX_OVERFLOW_H */
-
 #endif /* _COMPAT_LINUX_COMPILER_GCC_H */

@@ -1,21 +1,31 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
-Change-Id: I0be15367eba5db187cf418304590adb220c8d4e8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-@@ -32,6 +32,9 @@
- #ifndef __MLX5_EN_PORT_BUFFER_H__
- #define __MLX5_EN_PORT_BUFFER_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
+ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
+ 				  struct mlx5e_encap_entry *e);
+ 
++#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
+ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		       void *type_data);
++#endif
+ 
+ void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
+ 			  struct sk_buff *skb);
  
 +#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/dcbnl.h>
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
++
++int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
++				void *cb_priv);
 +#endif
- #include "en.h"
- #include "port.h"
++
+ #else /* CONFIG_MLX5_CLS_ACT */
  
+ struct mlx5e_rep_priv;

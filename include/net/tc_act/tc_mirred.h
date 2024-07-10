@@ -7,22 +7,10 @@
 
 #include_next <net/tc_act/tc_mirred.h>
 
-#if !defined(HAVE_IS_TCF_MIRRED_EGRESS_REDIRECT) && defined(HAVE_IS_TCF_MIRRED_REDIRECT)
-#define is_tcf_mirred_egress_redirect is_tcf_mirred_redirect
-#endif
-#if !defined(HAVE_IS_TCF_MIRRED_EGRESS_MIRROR) && defined(HAVE_IS_TCF_MIRRED_MIRROR)
-#define is_tcf_mirred_egress_mirror is_tcf_mirred_mirror
-#endif
-
 #include <net/netlink.h>
 #include <linux/skbuff.h>
 
 #ifdef CONFIG_NET_CLS_ACT
-#if !defined(HAVE_TCF_MIRRED_IFINDEX) || \
-    (!defined(HAVE_IS_TCF_MIRRED_EGRESS_REDIRECT) && \
-     !defined(HAVE_IS_TCF_MIRRED_REDIRECT)) || \
-    (!defined(HAVE_IS_TCF_MIRRED_EGRESS_MIRROR) && \
-     !defined(HAVE_IS_TCF_MIRRED_MIRROR))
 static const struct nla_policy mirred_policy_compat[TCA_MIRRED_MAX + 1] = {
 	[TCA_MIRRED_PARMS]		= { .len = sizeof(struct tc_mirred) },
 };
@@ -72,36 +60,11 @@ freeskb:
 
 	return m;
 }
-#endif
 
-#if !defined(HAVE_IS_TCF_MIRRED_EGRESS_REDIRECT) && !defined(HAVE_IS_TCF_MIRRED_REDIRECT)
-static inline bool is_tcf_mirred_egress_redirect(const struct tc_action *a)
-{
-	return to_mirred_compat(a).eaction == TCA_EGRESS_REDIR;
-}
-#endif
-
-#if !defined(HAVE_IS_TCF_MIRRED_EGRESS_MIRROR) && !defined(HAVE_IS_TCF_MIRRED_MIRROR)
-static inline bool is_tcf_mirred_egress_mirror(const struct tc_action *a)
-{
-	return to_mirred_compat(a).eaction == TCA_EGRESS_MIRROR;
-}
-#endif
-
-#ifndef HAVE_TCF_MIRRED_IFINDEX
 static inline int tcf_mirred_ifindex(const struct tc_action *a)
 {
 	return to_mirred_compat(a).ifindex;
 }
-#endif
-
-#ifndef HAVE_TCF_MIRRED_DEV
-static inline struct net_device *tcf_mirred_dev(const struct tc_action *a)
-{
-	return __dev_get_by_index(current->nsproxy->net_ns,
-				  tcf_mirred_ifindex(a));
-}
-#endif
 
 #endif  /*  CONFIG_NET_CLS_ACT */
 #endif	/* _COMPAT_NET_TC_ACT_TC_MIRRED_H */

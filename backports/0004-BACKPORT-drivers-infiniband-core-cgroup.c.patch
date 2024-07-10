@@ -1,0 +1,14 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cgroup.c
+
+---
+ drivers/infiniband/core/cgroup.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/infiniband/core/cgroup.c
++++ b/drivers/infiniband/core/cgroup.c
+@@ -51,3 +51,4 @@ void ib_rdmacg_uncharge(struct ib_rdmacg
+ 			resource_index);
+ }
+ EXPORT_SYMBOL(ib_rdmacg_uncharge);
++

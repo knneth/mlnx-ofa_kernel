@@ -54,20 +54,24 @@ struct mlx5_flow_definer {
 	u32 id;
 };
 
+enum mlx5_flow_resource_owner {
+	MLX5_FLOW_RESOURCE_OWNER_FW,
+	MLX5_FLOW_RESOURCE_OWNER_SW,
+};
+
 struct mlx5_modify_hdr {
 	enum mlx5_flow_namespace_type ns_type;
-	bool sw_owned;
+	enum mlx5_flow_resource_owner owner;
 	union {
 		struct mlx5_fs_dr_action action;
 		u32 id;
 	};
-	enum mlx5_modify_header_flags flags;
 };
 
 struct mlx5_pkt_reformat {
 	enum mlx5_flow_namespace_type ns_type;
 	int reformat_type; /* from mlx5_ifc */
-	enum fs_packet_reformat_owner owner;
+	enum mlx5_flow_resource_owner owner;
 	union {
 		struct mlx5_fs_dr_action action;
 		u32 id;
@@ -299,7 +303,7 @@ const struct mlx5_flow_cmds *mlx5_fs_cmd_get_fw_cmds(void);
 
 int mlx5_flow_namespace_set_peer(struct mlx5_flow_root_namespace *ns,
 				 struct mlx5_flow_root_namespace *peer_ns,
-				 u16 peer_idx);
+				 u16 peer_vhca_id);
 
 int mlx5_flow_namespace_set_mode(struct mlx5_flow_namespace *ns,
 				 enum mlx5_flow_steering_mode mode);

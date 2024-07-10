@@ -1,0 +1,116 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/admin-cmd.c
+
+Change-Id: I7b3cdd888c9d6fac535841b30c5b172c783d6dd9
+---
+ drivers/nvme/target/admin-cmd.c | 35 +++++++++++++++++++++++++++++++--
+ 1 file changed, 33 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/target/admin-cmd.c
++++ b/drivers/nvme/target/admin-cmd.c
+@@ -9,7 +9,9 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/rculist.h>
++#ifdef HAVE_PART_STAT_H
+ #include <linux/part_stat.h>
++#endif
+ 
+ #include <generated/utsrelease.h>
+ #include <asm/unaligned.h>
+@@ -88,12 +90,21 @@ static u16 nvmet_get_smart_log_nsid(stru
+ 	if (!req->ns->bdev)
+ 		return NVME_SC_SUCCESS;
+ 
++#ifdef HAVE_REQUEST_BDEV
+ 	host_reads = part_stat_read(req->ns->bdev, ios[READ]);
+ 	data_units_read =
+ 		DIV_ROUND_UP(part_stat_read(req->ns->bdev, sectors[READ]), 1000);
+ 	host_writes = part_stat_read(req->ns->bdev, ios[WRITE]);
+ 	data_units_written =
+ 		DIV_ROUND_UP(part_stat_read(req->ns->bdev, sectors[WRITE]), 1000);
++#else
++	host_reads = part_stat_read(req->ns->bdev->bd_part, ios[READ]);
++	data_units_read = DIV_ROUND_UP(part_stat_read(req->ns->bdev->bd_part,
++		sectors[READ]), 1000);
++	host_writes = part_stat_read(req->ns->bdev->bd_part, ios[WRITE]);
++	data_units_written = DIV_ROUND_UP(part_stat_read(req->ns->bdev->bd_part,
++		sectors[WRITE]), 1000);
++#endif
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+ 	put_unaligned_le64(data_units_read, &slog->data_units_read[0]);
+@@ -117,12 +128,21 @@ static u16 nvmet_get_smart_log_all(struc
+ 		/* we don't have the right data for file backed ns */
+ 		if (!ns->bdev)
+ 			continue;
++#ifdef HAVE_REQUEST_BDEV
+ 		host_reads += part_stat_read(ns->bdev, ios[READ]);
+ 		data_units_read += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev, sectors[READ]), 1000);
+ 		host_writes += part_stat_read(ns->bdev, ios[WRITE]);
+ 		data_units_written += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev, sectors[WRITE]), 1000);
++#else
++		host_reads += part_stat_read(ns->bdev->bd_part, ios[READ]);
++		data_units_read += DIV_ROUND_UP(
++			part_stat_read(ns->bdev->bd_part, sectors[READ]), 1000);
++		host_writes += part_stat_read(ns->bdev->bd_part, ios[WRITE]);
++		data_units_written += DIV_ROUND_UP(
++			part_stat_read(ns->bdev->bd_part, sectors[WRITE]), 1000);
++#endif
+ 	}
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+@@ -272,7 +292,11 @@ static u32 nvmet_format_ana_group(struct
+ 	desc->chgcnt = cpu_to_le64(nvmet_ana_chgcnt);
+ 	desc->state = req->port->ana_state[grpid];
+ 	memset(desc->rsvd17, 0, sizeof(desc->rsvd17));
++#ifdef struct_size
+ 	return struct_size(desc, nsids, count);
++#else
++	return sizeof(struct nvme_ana_group_desc) + count * sizeof(__le32);
++#endif
+ }
+ 
+ static void nvmet_execute_get_log_page_ana(struct nvmet_req *req)
+@@ -391,7 +415,9 @@ static void nvmet_execute_identify_ctrl(
+ 	memcpy_and_pad(id->fr, sizeof(id->fr),
+ 		       subsys->firmware_rev, strlen(subsys->firmware_rev), ' ');
+ 
++#ifdef HAVE_PUT_UNALIGNED_LE24
+ 	put_unaligned_le24(subsys->ieee_oui, id->ieee);
++#endif
+ 
+ 	id->rab = 6;
+ 
+@@ -723,6 +749,7 @@ static void nvmet_execute_identify(struc
+ 		nvmet_execute_identify_desclist(req);
+ 		return;
+ 	case NVME_ID_CNS_CS_NS:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		switch (req->cmd->identify.csi) {
+ 		case NVME_CSI_NVM:
+ 			/* Not supported */
+@@ -734,18 +761,21 @@ static void nvmet_execute_identify(struc
+ 			}
+ 			break;
+ 		}
++#endif
+ 		break;
+ 	case NVME_ID_CNS_CS_CTRL:
+ 		switch (req->cmd->identify.csi) {
+ 		case NVME_CSI_NVM:
+ 			nvmet_execute_identify_ctrl_nvm(req);
+ 			return;
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		case NVME_CSI_ZNS:
+ 			if (IS_ENABLED(CONFIG_BLK_DEV_ZONED)) {
+ 				nvmet_execute_identify_ctrl_zns(req);
+ 				return;
+ 			}
+ 			break;
++#endif
+ 		}
+ 		break;
+ 	}
