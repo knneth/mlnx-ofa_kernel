@@ -687,6 +687,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if devlink_fmsg_u8_pair_put returns int])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/devlink.h>
+	],[
+		int err = devlink_fmsg_u8_pair_put(NULL, "test", 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_INT_DEVLINK_FMSG_U8_PAIR, 1,
+			  [devlink_fmsg_u8_pair_put returns int])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct devlink_port_ops had port_fn_ipsec_crypto_get])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/devlink.h>
@@ -1929,8 +1944,8 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 
 		err = devlink_health_report(r, NULL, NULL);
 
-		err = devlink_fmsg_arr_pair_nest_start(fmsg, "name");
-		err = devlink_fmsg_arr_pair_nest_end(fmsg);
+		devlink_fmsg_arr_pair_nest_start(fmsg, "name");
+		devlink_fmsg_arr_pair_nest_end(fmsg);
 
 		return 0;
 	],[
@@ -2379,6 +2394,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_KERNEL_RINGPARAM_TCP_DATA_SPLIT, 1,
 			  [ethtool.h kernel_ethtool_ringparam has tcp_data_split member])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if ethtool.h has struct ethtool_rxfh_param])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	],[
+                struct ethtool_rxfh_param x;
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_ETHTOOL_RXFH_PARAM, 1,
+			  [ethtool.h has struct ethtool_rxfh_param])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -4728,6 +4757,19 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	],[
 		AC_MSG_RESULT(no)
 	])
+
+       AC_MSG_CHECKING([if net/rps.h exists])
+       MLNX_BG_LB_LINUX_TRY_COMPILE([
+              #include <net/rps.h>
+       ],[
+              return 0;
+       ],[
+              AC_MSG_RESULT(yes)
+              MLNX_AC_DEFINE(HAVE_RPS_H, 1,
+                       [net/rps.h exists])
+       ],[
+              AC_MSG_RESULT(no)
+       ])
 
 	AC_MSG_CHECKING([if tc_gact.h has is_tcf_gact_goto_chain])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -7820,6 +7862,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/eventfd.h has eventfd_signal with 1 param])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/eventfd.h>
+	],[
+
+		eventfd_signal(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_EVENTFD_SIGNAL_GET_1_PARAM, 1,
+			  [linux/eventfd.h has eventfd_signal with 1 param])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if net/ipv6.h has struct hop_jumbo_hdr])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/ipv6.h>
@@ -8267,6 +8325,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_PROC_OPS_STRUCT, 1,
 			  [struct proc_ops is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if bdev_file_open_by_path exist])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		bdev_file_open_by_path(NULL, 0, NULL, NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BDEV_FILE_OPEN_BY_PATH, 1,
+			[bdev_file_open_by_path exist])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8958,6 +9030,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TARGET_STOP_SESSION, 1,
 			  [target_stop_session is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if target/target_core_fabric.h has target_stop_cmd_counter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <target/target_core_fabric.h>
+	],[
+		target_stop_cmd_counter(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TARGET_STOP_CMD_COUNTER, 1,
+			  [target_stop_cmd_counter is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -11390,23 +11477,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if blkdev.h has blk_rq_append_bio])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blkdev.h>
-	],[
-		struct bio **bio;
-
-		blk_rq_append_bio(NULL, bio);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_RQ_APPEND_BIO, 1,
-			[blk_rq_append_bio is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if device.h has device_remove_file_self])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/device.h>
@@ -13525,6 +13595,43 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
 			  [sturct vdpa_dev_set_config has device_features])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct vfio_device_ops has iommufd support])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/vfio.h>
+	],[
+		struct vfio_device_ops vfio_ops = {
+			.bind_iommufd = NULL,
+			.unbind_iommufd = NULL,
+			.attach_ioas = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SUPPORT_IOMMUFD_VFIO_PHYS_DEVICES, 1,
+			  [struct vfio_device_ops has iommufd support])
+
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct vfio_device_ops has detach_ioas])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/vfio.h>
+	],[
+		struct vfio_device_ops vfio_ops;
+
+		vfio_ops.detach_ioas = NULL;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DETACH_IOAS_NDO, 1,
+			  [struct vfio_device_ops has detach_ioas])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -16657,6 +16764,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct pci_driver has member driver_managed_dma])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		struct pci_driver core_driver = {
+			.driver_managed_dma = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_DRIVER_MANAGED_DMA, 1,
+			[struct pci_driver has member driver_managed_dma])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if configfs.h has configfs_register_group])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/configfs.h>
@@ -17506,19 +17630,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if linux/nvme-auth.h exists])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/nvme-auth.h>
-	],[
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NVME_AUTH_H, 1,
-			[nvme-auth.h is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if linux/t10-pi.h has ext_pi_ref_tag])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/t10-pi.h>
@@ -18318,6 +18429,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING, 1,
 			[linux/aer.h has pci_enable_pcie_error_reporting])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct sock has sk_use_task_frag])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/sock.h>
+	],[
+		struct sock sk = { .sk_use_task_frag = false };
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SK_USE_TASK_FRAG, 1,
+			  [struct sock has sk_use_task_frag])
 	],[
 		AC_MSG_RESULT(no)
 	])

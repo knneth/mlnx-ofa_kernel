@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en.h
 
 Change-Id: I04420771274caaeed39577fab4c3476dc26d42e8
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en.h | 293 ++++++++++++++++++-
- 1 file changed, 277 insertions(+), 16 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en.h | 299 ++++++++++++++++++-
+ 1 file changed, 283 insertions(+), 16 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en.h
@@ -618,7 +618,7 @@ Change-Id: I04420771274caaeed39577fab4c3476dc26d42e8
  int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
  				struct ethtool_ringparam *param);
  void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
-@@ -1262,19 +1481,36 @@ void mlx5e_ethtool_get_channels(struct m
+@@ -1262,19 +1481,42 @@ void mlx5e_ethtool_get_channels(struct m
  int mlx5e_ethtool_set_channels(struct mlx5e_priv *priv,
  			       struct ethtool_channels *ch);
  int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
@@ -649,16 +649,22 @@ Change-Id: I04420771274caaeed39577fab4c3476dc26d42e8
 +int mlx5e_get_settings(struct net_device *netdev, struct ethtool_cmd *cmd);
 +int mlx5e_set_settings(struct net_device *netdev, struct ethtool_cmd *cmd);
 +#endif
++#ifdef HAVE_STRUCT_ETHTOOL_RXFH_PARAM
++int mlx5e_get_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh);
++int mlx5e_set_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh,
++		   struct netlink_ext_ack *extack);
++#else
 +int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
 +                         u8 *hfunc);
 +
 +int mlx5e_set_rxfh(struct net_device *dev, const u32 *indir,
 +                  const u8 *key, const u8 hfunc);
++#endif
 +
  int mlx5e_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
  		    u32 *rule_locs);
  int mlx5e_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd);
-@@ -1284,6 +1520,12 @@ int mlx5e_ethtool_get_ts_info(struct mlx
+@@ -1284,6 +1526,12 @@ int mlx5e_ethtool_get_ts_info(struct mlx
  			      struct ethtool_ts_info *info);
  int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
  			       struct ethtool_flash *flash);
@@ -671,7 +677,7 @@ Change-Id: I04420771274caaeed39577fab4c3476dc26d42e8
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam);
  int mlx5e_ethtool_set_pauseparam(struct mlx5e_priv *priv,
-@@ -1312,7 +1554,11 @@ int mlx5e_netdev_change_profile(struct m
+@@ -1312,7 +1560,11 @@ int mlx5e_netdev_change_profile(struct m
  				const struct mlx5e_profile *new_profile, void *new_ppriv);
  void mlx5e_netdev_attach_nic_profile(struct mlx5e_priv *priv);
  void mlx5e_set_netdev_mtu_boundaries(struct mlx5e_priv *priv);
@@ -684,7 +690,7 @@ Change-Id: I04420771274caaeed39577fab4c3476dc26d42e8
  
  int mlx5e_get_dump_flag(struct net_device *netdev, struct ethtool_dump *dump);
  int mlx5e_get_dump_data(struct net_device *netdev, struct ethtool_dump *dump,
-@@ -1328,11 +1574,24 @@ static inline bool mlx5e_dropless_rq_sup
+@@ -1328,11 +1580,24 @@ static inline bool mlx5e_dropless_rq_sup
  void mlx5e_rx_dim_work(struct work_struct *work);
  void mlx5e_tx_dim_work(struct work_struct *work);
  
@@ -709,7 +715,7 @@ Change-Id: I04420771274caaeed39577fab4c3476dc26d42e8
  netdev_features_t mlx5e_features_check(struct sk_buff *skb,
  				       struct net_device *netdev,
  				       netdev_features_t features);
-@@ -1341,7 +1600,9 @@ int mlx5e_set_features(struct net_device
+@@ -1341,7 +1606,9 @@ int mlx5e_set_features(struct net_device
  int mlx5e_set_vf_mac(struct net_device *dev, int vf, u8 *mac);
  int mlx5e_set_vf_rate(struct net_device *dev, int vf, int min_tx_rate, int max_tx_rate);
  int mlx5e_get_vf_config(struct net_device *dev, int vf, struct ifla_vf_info *ivi);

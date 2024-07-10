@@ -203,7 +203,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  	}
  
  	kvfree(in);
-@@ -1800,12 +1857,16 @@ static struct mlx5_flow_handle *add_rule
+@@ -1810,13 +1867,17 @@ static struct mlx5_flow_handle *add_rule
  		fte->action.action = old_action;
  		return handle;
  	}
@@ -211,8 +211,9 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  	trace_mlx5_fs_set_fte(fte, false);
 +#endif
  
+ 	/* Link newly added rules into the tree. */
  	for (i = 0; i < handle->num_rules; i++) {
- 		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
+ 		if (!handle->rule[i]->node.parent) {
  			tree_add_node(&handle->rule[i]->node, &fte->node);
 +#ifndef MLX_DISABLE_TRACEPOINTS
  			trace_mlx5_fs_add_rule(handle->rule[i]);
@@ -220,7 +221,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  		}
  	}
  	return handle;
-@@ -1867,15 +1928,25 @@ static int build_match_list(struct match
+@@ -1878,15 +1939,25 @@ static int build_match_list(struct match
  			    struct mlx5_flow_group *fg,
  			    bool ft_locked)
  {
@@ -248,7 +249,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  		struct match_list *curr_match;
  
  		if (fg && fg != g)
-@@ -3291,6 +3362,7 @@ cleanup:
+@@ -3302,6 +3373,7 @@ cleanup:
  	return err;
  }
  
@@ -256,7 +257,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  static int mlx5_fs_mode_validate(struct devlink *devlink, u32 id,
  				 union devlink_param_value val,
  				 struct netlink_ext_ack *extack)
-@@ -3362,6 +3434,7 @@ static const struct devlink_param mlx5_f
+@@ -3373,6 +3445,7 @@ static const struct devlink_param mlx5_f
  			     mlx5_fs_mode_get, mlx5_fs_mode_set,
  			     mlx5_fs_mode_validate),
  };
@@ -264,7 +265,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  
  void mlx5_fs_core_cleanup(struct mlx5_core_dev *dev)
  {
-@@ -3376,8 +3449,13 @@ void mlx5_fs_core_cleanup(struct mlx5_co
+@@ -3387,8 +3460,13 @@ void mlx5_fs_core_cleanup(struct mlx5_co
  	cleanup_root_ns(steering->rdma_tx_root_ns);
  	cleanup_root_ns(steering->egress_root_ns);
  
@@ -278,7 +279,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  }
  
  int mlx5_fs_core_init(struct mlx5_core_dev *dev)
-@@ -3385,11 +3463,22 @@ int mlx5_fs_core_init(struct mlx5_core_d
+@@ -3396,11 +3474,22 @@ int mlx5_fs_core_init(struct mlx5_core_d
  	struct mlx5_flow_steering *steering = dev->priv.steering;
  	int err;
  
@@ -302,7 +303,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  	if ((((MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_ETH) &&
  	      (MLX5_CAP_GEN(dev, nic_flow_table))) ||
  	     ((MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) &&
-@@ -3456,6 +3545,14 @@ void mlx5_fs_core_free(struct mlx5_core_
+@@ -3467,6 +3556,14 @@ void mlx5_fs_core_free(struct mlx5_core_
  {
  	struct mlx5_flow_steering *steering = dev->priv.steering;
  
@@ -317,7 +318,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  	kmem_cache_destroy(steering->ftes_cache);
  	kmem_cache_destroy(steering->fgs_cache);
  	kfree(steering);
-@@ -3467,8 +3564,8 @@ void mlx5_fs_core_free(struct mlx5_core_
+@@ -3478,8 +3575,8 @@ void mlx5_fs_core_free(struct mlx5_core_
  int mlx5_fs_core_alloc(struct mlx5_core_dev *dev)
  {
  	struct mlx5_flow_steering *steering;
@@ -328,7 +329,7 @@ Change-Id: Ieec37b3f41f2741cff2a3b15cf61e4cf884c5888
  	int err = 0;
  
  	err = mlx5_init_fc_stats(dev);
-@@ -3516,6 +3613,26 @@ int mlx5_fs_core_alloc(struct mlx5_core_
+@@ -3527,6 +3624,26 @@ int mlx5_fs_core_alloc(struct mlx5_core_
  
  	kfree(ftes_cache_name);
  	kfree(fgs_cache_name);

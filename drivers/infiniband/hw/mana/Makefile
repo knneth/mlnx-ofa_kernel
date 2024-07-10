@@ -1,3 +1,3 @@
-obj-$(CONFIG_MANA_INFINIBAND) += mana.o
+obj-$(CONFIG_MANA_INFINIBAND) += mana_ib.o
 
-mana-objs := mana_dummy.o
+mana_ib-objs := mana_dummy.o

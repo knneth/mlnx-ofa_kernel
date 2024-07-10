@@ -3,13 +3,19 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 
 Change-Id: I9b4df1b8d54fd3294bc5378a93f2716b287998da
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 14 +++++++++++++-
- 1 file changed, 13 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
-@@ -50,17 +50,29 @@ struct mlx5e_xdp_buff {
+@@ -46,21 +46,35 @@
+ 
+ struct mlx5e_xdp_buff {
+ 	struct xdp_buff xdp;
++#ifdef HAVE_XDP_METADATA_OPS
+ 	struct mlx5_cqe64 *cqe;
  	struct mlx5e_rq *rq;
++#endif
  };
  
 +#ifdef HAVE_XDP_SUPPORT
@@ -38,7 +44,7 @@ Change-Id: I9b4df1b8d54fd3294bc5378a93f2716b287998da
  
  extern const struct xdp_metadata_ops mlx5e_xdp_metadata_ops;
  
-@@ -110,7 +122,6 @@ static inline void mlx5e_xmit_xdp_doorbe
+@@ -110,7 +124,6 @@ static inline void mlx5e_xmit_xdp_doorbe
  		sq->doorbell_cseg = NULL;
  	}
  }
@@ -46,7 +52,7 @@ Change-Id: I9b4df1b8d54fd3294bc5378a93f2716b287998da
  /* Enable inline WQEs to shift some load from a congested HCA (HW) to
   * a less congested cpu (SW).
   */
-@@ -192,3 +203,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
+@@ -192,3 +205,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
  	return fifo->xi[(*fifo->cc)++ & fifo->mask];
  }
  #endif

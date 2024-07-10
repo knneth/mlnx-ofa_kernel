@@ -13,7 +13,7 @@ Change-Id: I6a0f0695be9cc1d6cd349c946e6d663e86ca28c9
   * All rights reserved.
   */
 +
-+#ifdef HAVE_NVME_AUTH_H
++#ifdef false
 +
 +#ifdef pr_fmt
 +#undef pr_fmt

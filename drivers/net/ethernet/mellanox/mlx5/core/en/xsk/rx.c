@@ -29,7 +29,17 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	if (unlikely(!xsk_buff_can_alloc(rq->xsk_pool, rq->mpwqe.pages_per_wqe)))
 		goto err;
 
-	for (batch = 0; batch < rq->mpwqe.pages_per_wqe; batch++) {
+	XSK_CHECK_PRIV_TYPE(struct mlx5e_xdp_buff);
+	batch = xsk_buff_alloc_batch(rq->xsk_pool, (struct xdp_buff **)wi->alloc_units,
+				     rq->mpwqe.pages_per_wqe);
+
+	/* If batch < pages_per_wqe, either:
+	 * 1. Some (or all) descriptors were invalid.
+	 * 2. dma_need_sync is true, and it fell back to allocating one frame.
+	 * In either case, try to continue allocating frames one by one, until
+	 * the first error, which will mean there are no more valid descriptors.
+	 */
+	for (; batch < rq->mpwqe.pages_per_wqe; batch++) {
 		wi->alloc_units[batch].xsk = xsk_buff_alloc(rq->xsk_pool);
 		if (unlikely(!wi->alloc_units[batch].xsk))
 			goto err_reuse_batch;
@@ -143,6 +153,44 @@ err_reuse_batch:
 err:
 	rq->stats->buff_alloc_err++;
 	return -ENOMEM;
+}
+
+int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
+{
+	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+	struct xdp_buff **buffs;
+	u32 contig, alloc;
+	int i;
+
+	/* mlx5e_init_frags_partition creates a 1:1 mapping between
+	 * rq->wqe.frags and rq->wqe.alloc_units, which allows us to
+	 * allocate XDP buffers straight into alloc_units.
+	 */
+	buffs = (struct xdp_buff **)rq->wqe.alloc_units;
+	contig = mlx5_wq_cyc_get_size(wq) - ix;
+	if (wqe_bulk <= contig) {
+		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, wqe_bulk);
+	} else {
+		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, contig);
+		if (likely(alloc == contig))
+			alloc += xsk_buff_alloc_batch(rq->xsk_pool, buffs, wqe_bulk - contig);
+	}
+
+	for (i = 0; i < alloc; i++) {
+		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
+		struct mlx5e_wqe_frag_info *frag;
+		struct mlx5e_rx_wqe_cyc *wqe;
+		dma_addr_t addr;
+
+		wqe = mlx5_wq_cyc_get_wqe(wq, j);
+		/* Assumes log_num_frags == 0. */
+		frag = &rq->wqe.frags[j];
+
+		addr = xsk_buff_xdp_get_frame_dma(frag->au->xsk);
+		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
+	}
+
+	return alloc;
 }
 
 int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)

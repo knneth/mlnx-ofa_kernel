@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
 
 Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
 ---
- drivers/infiniband/ulp/isert/ib_isert.c | 123 +++++++++++++++++++++++-
- 1 file changed, 120 insertions(+), 3 deletions(-)
+ drivers/infiniband/ulp/isert/ib_isert.c | 128 +++++++++++++++++++++++-
+ 1 file changed, 125 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/ulp/isert/ib_isert.c
 +++ b/drivers/infiniband/ulp/isert/ib_isert.c
@@ -166,19 +166,25 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  }
  
  static int
-@@ -2568,7 +2645,11 @@ isert_wait4cmds(struct iscsit_conn *conn
+@@ -2568,8 +2645,17 @@ isert_wait4cmds(struct iscsit_conn *conn
  	isert_info("iscsit_conn %p\n", conn);
  
  	if (conn->sess) {
++#ifdef HAVE_TARGET_STOP_CMD_COUNTER
++		target_stop_cmd_counter(conn->cmd_cnt);
++		target_wait_for_cmds(conn->cmd_cnt);
++#else
 +#ifdef HAVE_TARGET_STOP_SESSION
  		target_stop_session(conn->sess->se_sess);
 +#else
 +		target_sess_cmd_list_set_waiting(conn->sess->se_sess);
 +#endif
  		target_wait_for_sess_cmds(conn->sess->se_sess);
++#endif
  	}
  }
-@@ -2608,6 +2689,7 @@ isert_put_unsol_pending_cmds(struct iscs
+ 
+@@ -2608,6 +2694,7 @@ isert_put_unsol_pending_cmds(struct iscs
  	}
  }
  
@@ -186,7 +192,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  static void isert_wait_conn(struct iscsit_conn *conn)
  {
  	struct isert_conn *isert_conn = conn->context;
-@@ -2625,15 +2707,40 @@ static void isert_wait_conn(struct iscsi
+@@ -2625,15 +2712,40 @@ static void isert_wait_conn(struct iscsi
  
  	queue_work(isert_release_wq, &isert_conn->release_work);
  }
@@ -227,7 +233,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  static void isert_get_rx_pdu(struct iscsit_conn *conn)
  {
  	struct completion comp;
-@@ -2642,17 +2749,22 @@ static void isert_get_rx_pdu(struct iscs
+@@ -2642,17 +2754,22 @@ static void isert_get_rx_pdu(struct iscs
  
  	wait_for_completion_interruptible(&comp);
  }
@@ -250,7 +256,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  	.iscsit_free_conn	= isert_free_conn,
  	.iscsit_get_login_rx	= isert_get_login_rx,
  	.iscsit_put_login_tx	= isert_put_login_tx,
-@@ -2662,7 +2774,9 @@ static struct iscsit_transport iser_targ
+@@ -2662,7 +2779,9 @@ static struct iscsit_transport iser_targ
  	.iscsit_queue_data_in	= isert_put_datain,
  	.iscsit_queue_status	= isert_put_response,
  	.iscsit_aborted_task	= isert_aborted_task,
@@ -260,7 +266,7 @@ Change-Id: If446d7a13e1c648784082fda97335cd8c58f2bc0
  	.iscsit_get_sup_prot_ops = isert_get_sup_prot_ops,
  };
  
-@@ -2714,6 +2828,9 @@ static void __exit isert_exit(void)
+@@ -2714,6 +2833,9 @@ static void __exit isert_exit(void)
  MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
  MODULE_AUTHOR("nab@Linux-iSCSI.org");
  MODULE_LICENSE("GPL");

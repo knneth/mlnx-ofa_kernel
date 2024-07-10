@@ -3,26 +3,34 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/health.h
 
 Change-Id: I04db2c83115a9da772a6c37678a8e54b970510fc
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/health.h | 6 ++++++
- 1 file changed, 6 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/health.h   | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
-@@ -19,11 +19,13 @@ void mlx5e_reporter_tx_destroy(struct ml
+@@ -19,11 +19,21 @@ void mlx5e_reporter_tx_destroy(struct ml
  void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq);
  int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq);
  
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++void mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
++void mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
++void mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
++void mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
++void mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
++#else /*HAVE_INT_DEVLINK_FMSG_U8_PAIR*/
  int mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
  int mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
  int mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
  int mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
  int mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
++#endif /*HAVE_INT_DEVLINK_FMSG_U8_PAIR*/
 +#endif
  
  void mlx5e_reporter_rx_create(struct mlx5e_priv *priv);
  void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv);
-@@ -37,7 +39,9 @@ void mlx5e_reporter_icosq_resume_recover
+@@ -37,7 +47,9 @@ void mlx5e_reporter_icosq_resume_recover
  
  struct mlx5e_err_ctx {
  	int (*recover)(void *ctx);
@@ -32,14 +40,19 @@ Change-Id: I04db2c83115a9da772a6c37678a8e54b970510fc
  	void *ctx;
  };
  
-@@ -51,8 +55,10 @@ int mlx5e_health_report(struct mlx5e_pri
+@@ -51,8 +63,15 @@ int mlx5e_health_report(struct mlx5e_pri
  void mlx5e_health_create_reporters(struct mlx5e_priv *priv);
  void mlx5e_health_destroy_reporters(struct mlx5e_priv *priv);
  void mlx5e_health_channels_update(struct mlx5e_priv *priv);
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
  int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key,
  			       struct devlink_fmsg *fmsg);
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++void mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
++		int queue_idx, char *lbl);
++#else
  int mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
  			    int queue_idx, char *lbl);
  #endif
++#endif
 +#endif

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I528c9c8627f9d10953e363c1e5a1a8a3cf053fd8
 ---
- .../ethernet/mellanox/mlx5/core/en/devlink.c  | 131 +++++++++++++++++-
- 1 file changed, 129 insertions(+), 2 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 133 +++++++++++++++++-
+ 1 file changed, 131 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
@@ -78,7 +78,7 @@ Change-Id: I528c9c8627f9d10953e363c1e5a1a8a3cf053fd8
  	if (mlx5_core_is_pf(mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
  		attrs.phys.port_number = mlx5_get_dev_index(mdev);
-@@ -62,13 +94,108 @@ int mlx5e_devlink_port_register(struct m
+@@ -62,13 +94,110 @@ int mlx5e_devlink_port_register(struct m
  		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
  	}
  
@@ -175,6 +175,7 @@ Change-Id: I528c9c8627f9d10953e363c1e5a1a8a3cf053fd8
 +#endif /* HAVE_DEVLINK_PER_AUXDEV */
 +}
 +
++#ifndef HAVE_NET_DEVICE_HAS_DEVLINK_PORT
 +#ifdef HAVE_NDO_GET_DEVLINK_PORT
 +struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
 +{
@@ -185,5 +186,6 @@ Change-Id: I528c9c8627f9d10953e363c1e5a1a8a3cf053fd8
 +
 +	return mlx5e_devlink_get_dl_port(priv);
  }
-+#endif
++#endif /* HAVE_NDO_GET_DEVLINK_PORT */
++#endif /* HAVE_NET_DEVICE_HAS_DEVLINK_PORT */
 +#endif  /* HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT */

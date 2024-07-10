@@ -219,7 +219,7 @@ Change-Id: I6a316e5ba4d24d45b90ff6f5f2e6d209c5cd1a46
  
 +#ifdef CONFIG_MLX5_ESWITCH
  			for (i = 0; i < ldev->ports; i++) {
- 				err = mlx5_eswitch_reload_reps(ldev->pf[i].dev->priv.eswitch);
+ 				err = mlx5_eswitch_reload_ib_reps(ldev->pf[i].dev->priv.eswitch);
  				if (err)
 @@ -976,6 +1094,7 @@ static void mlx5_do_bond(struct mlx5_lag
  				mlx5_core_err(dev0, "Failed to enable lag\n");

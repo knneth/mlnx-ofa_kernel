@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
 
 Change-Id: Ia2163e52132739a0a5c2dde5220c616aa9478331
 ---
- drivers/vfio/pci/mlx5/main.c | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/vfio/pci/mlx5/main.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
 --- a/drivers/vfio/pci/mlx5/main.c
 +++ b/drivers/vfio/pci/mlx5/main.c
@@ -16,11 +16,34 @@ Change-Id: Ia2163e52132739a0a5c2dde5220c616aa9478331
  #include <linux/device.h>
  #include <linux/eventfd.h>
  #include <linux/file.h>
-@@ -1374,6 +1375,7 @@ static struct pci_driver mlx5vf_pci_driv
+@@ -1317,9 +1318,14 @@ static const struct vfio_device_ops mlx5
+ 	.mmap = vfio_pci_core_mmap,
+ 	.request = vfio_pci_core_request,
+ 	.match = vfio_pci_core_match,
++#ifdef HAVE_SUPPORT_IOMMUFD_VFIO_PHYS_DEVICES
+ 	.bind_iommufd = vfio_iommufd_physical_bind,
+ 	.unbind_iommufd = vfio_iommufd_physical_unbind,
+ 	.attach_ioas = vfio_iommufd_physical_attach_ioas,
++#endif
++#ifdef HAVE_DETACH_IOAS_NDO
++	.detach_ioas = vfio_iommufd_physical_detach_ioas,
++#endif
+ };
+ 
+ static int mlx5vf_pci_probe(struct pci_dev *pdev,
+@@ -1370,11 +1376,15 @@ static struct pci_driver mlx5vf_pci_driv
+ 	.probe = mlx5vf_pci_probe,
+ 	.remove = mlx5vf_pci_remove,
+ 	.err_handler = &mlx5vf_err_handlers,
++#ifdef HAVE_PCI_DRIVER_MANAGED_DMA
+ 	.driver_managed_dma = true,
++#endif
  };
  
  module_pci_driver(mlx5vf_pci_driver);
 +#endif /* HAVE_VFIO_SUPPORT */
  
++MODULE_IMPORT_NS(IOMMUFD);
  MODULE_LICENSE("GPL");
  MODULE_AUTHOR("Max Gurtovoy <mgurtovoy@nvidia.com>");
+ MODULE_AUTHOR("Yishai Hadas <yishaih@nvidia.com>");

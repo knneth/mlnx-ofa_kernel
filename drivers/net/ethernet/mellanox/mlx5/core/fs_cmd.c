@@ -924,6 +924,7 @@ static int mlx5_cmd_packet_reformat_alloc(struct mlx5_flow_root_namespace *ns,
 	pkt_reformat->id = MLX5_GET(alloc_packet_reformat_context_out,
 				    out, packet_reformat_id);
 	kfree(in);
+	pkt_reformat->owner = FS_PACKET_REFORMAT_FW;
 	return err;
 }
 

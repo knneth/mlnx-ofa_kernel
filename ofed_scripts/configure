@@ -180,6 +180,9 @@ Usage:  `basename $0` [options]
     --with-sf-sfc     make CONFIG_MLX5_SF_SFC=y [no]
     --without-sf-sfc        [yes]
 
+    --with-bridge-offload     make CONFIG_MLX5_BRIDGE=y [no]
+    --without-bridge-offload        [yes]
+
 EOF
 
 #   Currently not supported options
@@ -1739,6 +1742,12 @@ main()
                         ;;
                         --without-sf-sfc)
                         CONFIG_MLX5_SF_SFC=
+                        ;;
+                        --with-bridge-offload)
+                            CONFIG_MLX5_BRIDGE="y"
+                        ;;
+                        --without-bridge-offload)
+                            CONFIG_MLX5_BRIDGE=
                         ;;
                     -h | --help)
                                 usage

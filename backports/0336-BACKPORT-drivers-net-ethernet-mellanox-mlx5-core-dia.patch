@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I7f9d3f59b38d525a26701472b20de7f2df32c133
 ---
- .../mellanox/mlx5/core/diag/reporter_vnic.c   | 20 +++++++++++++++----
- 1 file changed, 16 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/diag/reporter_vnic.c   | 81 +++++++++++++++++--
+ 1 file changed, 76 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
@@ -22,7 +22,120 @@ Change-Id: I7f9d3f59b38d525a26701472b20de7f2df32c133
  #define VNIC_ENV_GET64(vnic_env_stats, c) \
  	MLX5_GET64(query_vnic_env_out, (vnic_env_stats)->query_vnic_env_out, \
  		 vport_env.c)
-@@ -116,17 +118,22 @@ int mlx5_reporter_vnic_diagnose_counters
+@@ -13,18 +15,31 @@ struct mlx5_vnic_diag_stats {
+ 	__be64 query_vnic_env_out[MLX5_ST_SZ_QW(query_vnic_env_out)];
+ };
+ 
+-int mlx5_reporter_vnic_diagnose_counters(struct mlx5_core_dev *dev,
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++void
++#else
++int
++#endif
++mlx5_reporter_vnic_diagnose_counters(struct mlx5_core_dev *dev,
+ 					 struct devlink_fmsg *fmsg,
+ 					 u16 vport_num, bool other_vport)
+ {
+ 	u32 in[MLX5_ST_SZ_DW(query_vnic_env_in)] = {};
+ 	struct mlx5_vnic_diag_stats vnic;
++#ifdef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 	int err;
++#endif
+ 
+ 	MLX5_SET(query_vnic_env_in, in, opcode, MLX5_CMD_OP_QUERY_VNIC_ENV);
+ 	MLX5_SET(query_vnic_env_in, in, vport_number, vport_num);
+ 	MLX5_SET(query_vnic_env_in, in, other_vport, !!other_vport);
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	mlx5_cmd_exec_inout(dev, query_vnic_env, in, &vnic.query_vnic_env_out);
++
++	devlink_fmsg_pair_nest_start(fmsg, "vNIC env counters");
++	devlink_fmsg_obj_nest_start(fmsg);
++#else
+ 	err = mlx5_cmd_exec_inout(dev, query_vnic_env, in, &vnic.query_vnic_env_out);
+ 	if (err)
+ 		return err;
+@@ -36,8 +51,15 @@ int mlx5_reporter_vnic_diagnose_counters
+ 	err = devlink_fmsg_obj_nest_start(fmsg);
+ 	if (err)
+ 		return err;
++#endif
+ 
+ 	if (MLX5_CAP_GEN(dev, vnic_env_queue_counters)) {
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_u32_pair_put(fmsg, "total_error_queues",
++			VNIC_ENV_GET(&vnic, total_error_queues));
++	devlink_fmsg_u32_pair_put(fmsg, "send_queue_priority_update_flow",
++			VNIC_ENV_GET(&vnic, send_queue_priority_update_flow));
++#else
+ 		err = devlink_fmsg_u32_pair_put(fmsg, "total_error_queues",
+ 						VNIC_ENV_GET(&vnic, total_error_queues));
+ 		if (err)
+@@ -48,9 +70,16 @@ int mlx5_reporter_vnic_diagnose_counters
+ 							     send_queue_priority_update_flow));
+ 		if (err)
+ 			return err;
++#endif
+ 	}
+ 
+ 	if (MLX5_CAP_GEN(dev, eq_overrun_count)) {
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++		devlink_fmsg_u32_pair_put(fmsg, "comp_eq_overrun",
++				VNIC_ENV_GET(&vnic, comp_eq_overrun));
++		devlink_fmsg_u32_pair_put(fmsg, "async_eq_overrun",
++				VNIC_ENV_GET(&vnic, async_eq_overrun));
++#else
+ 		err = devlink_fmsg_u32_pair_put(fmsg, "comp_eq_overrun",
+ 						VNIC_ENV_GET(&vnic, comp_eq_overrun));
+ 		if (err)
+@@ -60,8 +89,29 @@ int mlx5_reporter_vnic_diagnose_counters
+ 						VNIC_ENV_GET(&vnic, async_eq_overrun));
+ 		if (err)
+ 			return err;
++#endif
+ 	}
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	if (MLX5_CAP_GEN(dev, vnic_env_cq_overrun))
++		devlink_fmsg_u32_pair_put(fmsg, "cq_overrun",
++				VNIC_ENV_GET(&vnic, cq_overrun));
++	if (MLX5_CAP_GEN(dev, invalid_command_count))
++		devlink_fmsg_u32_pair_put(fmsg, "invalid_command",
++				VNIC_ENV_GET(&vnic, invalid_command));
++	if (MLX5_CAP_GEN(dev, quota_exceeded_count))
++		devlink_fmsg_u32_pair_put(fmsg, "quota_exceeded_command",
++				VNIC_ENV_GET(&vnic, quota_exceeded_command));
++	if (MLX5_CAP_GEN(dev, nic_receive_steering_discard))
++		devlink_fmsg_u64_pair_put(fmsg, "nic_receive_steering_discard",
++				VNIC_ENV_GET64(&vnic, nic_receive_steering_discard));
++	if (MLX5_CAP_GEN(dev, vnic_env_cnt_steering_fail)) {
++		devlink_fmsg_u64_pair_put(fmsg, "generated_pkt_steering_fail",
++				VNIC_ENV_GET64(&vnic, generated_pkt_steering_fail));
++		devlink_fmsg_u64_pair_put(fmsg, "handled_pkt_steering_fail",
++				VNIC_ENV_GET64(&vnic, handled_pkt_steering_fail));
++	}
++#else
+ 	if (MLX5_CAP_GEN(dev, vnic_env_cq_overrun)) {
+ 		err = devlink_fmsg_u32_pair_put(fmsg, "cq_overrun",
+ 						VNIC_ENV_GET(&vnic, cq_overrun));
+@@ -103,7 +153,12 @@ int mlx5_reporter_vnic_diagnose_counters
+ 		if (err)
+ 			return err;
+ 	}
++#endif
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	devlink_fmsg_obj_nest_end(fmsg);
++	devlink_fmsg_pair_nest_end(fmsg);
++#else
+ 	err = devlink_fmsg_obj_nest_end(fmsg);
+ 	if (err)
+ 		return err;
+@@ -113,20 +168,31 @@ int mlx5_reporter_vnic_diagnose_counters
+ 		return err;
+ 
+ 	return 0;
++#endif
  }
  
  static int mlx5_reporter_vnic_diagnose(struct devlink_health_reporter *reporter,
@@ -36,7 +149,12 @@ Change-Id: I7f9d3f59b38d525a26701472b20de7f2df32c133
  {
  	struct mlx5_core_dev *dev = devlink_health_reporter_priv(reporter);
  
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	mlx5_reporter_vnic_diagnose_counters(dev, fmsg, 0, false);
++	return 0;
++#else
  	return mlx5_reporter_vnic_diagnose_counters(dev, fmsg, 0, false);
++#endif
  }
 -
 +#endif /* HAVE_HEALTH_REPORTER_DIAGNOSE */
@@ -48,7 +166,7 @@ Change-Id: I7f9d3f59b38d525a26701472b20de7f2df32c133
  };
  
  void mlx5_reporter_vnic_create(struct mlx5_core_dev *dev)
-@@ -137,7 +144,11 @@ void mlx5_reporter_vnic_create(struct ml
+@@ -137,7 +203,11 @@ void mlx5_reporter_vnic_create(struct ml
  	health->vnic_reporter =
  		devlink_health_reporter_create(devlink,
  					       &mlx5_reporter_vnic_ops,
@@ -61,7 +179,7 @@ Change-Id: I7f9d3f59b38d525a26701472b20de7f2df32c133
  	if (IS_ERR(health->vnic_reporter))
  		mlx5_core_warn(dev,
  			       "Failed to create vnic reporter, err = %ld\n",
-@@ -151,3 +162,4 @@ void mlx5_reporter_vnic_destroy(struct m
+@@ -151,3 +221,4 @@ void mlx5_reporter_vnic_destroy(struct m
  	if (!IS_ERR_OR_NULL(health->vnic_reporter))
  		devlink_health_reporter_destroy(health->vnic_reporter);
  }
