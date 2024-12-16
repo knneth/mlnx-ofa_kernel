@@ -544,6 +544,7 @@ struct mlx5_ib_qp {
 	struct mlx5_bf	        bf;
 	u8			has_rq:1;
 	u8			is_rss:1;
+	u8			is_ooo_rq:1;
 	u32			rq_type;
 
 	/* only for user space QPs. For kernel
@@ -701,6 +702,8 @@ struct mlx5_ib_mr {
 	struct mlx5_ib_mkey mmkey;
 
 	struct ib_umem *umem;
+	/* The mr is data direct related */
+	u8 data_direct :1;
 
 	struct {
 
@@ -740,6 +743,10 @@ struct mlx5_ib_mr {
 			struct ib_odp_counters odp_stats;
 			bool is_odp_implicit;
 			struct mlx5_ib_mkey null_mmkey;
+			/* The affilated data direct crossed mr */
+			struct mlx5_ib_mr *dd_crossed_mr;
+			struct list_head dd_node;
+			u8 revoked :1;
 		};
 	};
 };
@@ -864,6 +871,11 @@ struct mlx5_ib_port_resources {
 	struct work_struct pkey_change_work;
 };
 
+struct mlx5_data_direct_resources {
+	u32 pdn;
+	u32 mkey;
+};
+
 struct mlx5_ib_resources {
 	struct ib_cq	*c0;
 	struct mutex cq_lock;
@@ -914,8 +926,6 @@ struct mlx5_roce {
 	/* Protect mlx5_ib_get_netdev from invoking dev_hold() with a NULL
 	 * netdev pointer
 	 */
-	rwlock_t		netdev_lock;
-	struct net_device	*netdev;
 	struct notifier_block	nb;
 	struct netdev_net_notifier nn;
 	struct notifier_block	mdev_nb;
@@ -1159,7 +1169,11 @@ struct mlx5_macsec {
 struct mlx5_ib_dev {
 	struct ib_device		ib_dev;
 	struct mlx5_core_dev		*mdev;
+	struct mlx5_data_direct_dev	*data_direct_dev;
+	/* protect accessing data_direct_dev */
+	struct mutex			data_direct_lock;
 	struct notifier_block		mdev_events;
+	struct notifier_block           lag_events;
 	int				num_ports;
 	/* serialize update of capability mask
 	 */
@@ -1190,6 +1204,7 @@ struct mlx5_ib_dev {
 	/* protect resources needed as part of reset flow */
 	spinlock_t		reset_flow_resource_lock;
 	struct list_head	qp_list;
+	struct list_head data_direct_mr_list;
 	struct mlx5_dc_tracer   dctr;
 	u32                     num_dc_cnak_qps;
 	u32                     max_dc_cnak_qps;
@@ -1225,10 +1240,15 @@ struct mlx5_ib_dev {
 	u16 pkey_table_len;
 	u8 lag_ports;
 	struct mlx5_special_mkeys mkeys;
+	struct mlx5_data_direct_resources ddr;
 
 #ifdef CONFIG_MLX5_MACSEC
 	struct mlx5_macsec macsec;
 #endif
+
+	u8 num_plane;
+	struct mlx5_ib_dev *smi_dev;
+	const char *sub_dev_name;
 };
 
 static inline struct mlx5_ib_cq *to_mibcq(struct mlx5_core_cq *mcq)
@@ -1368,7 +1388,7 @@ int mlx5_ib_read_wqe_rq(struct mlx5_ib_qp *qp, int wqe_index, void *buffer,
 int mlx5_ib_read_wqe_srq(struct mlx5_ib_srq *srq, int wqe_index, void *buffer,
 			 size_t buflen, size_t *bc);
 int mlx5_ib_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
-		      struct ib_udata *udata);
+		      struct uverbs_attr_bundle *attrs);
 int mlx5_ib_destroy_cq(struct ib_cq *cq, struct ib_udata *udata);
 int mlx5_ib_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc);
 int mlx5_ib_arm_cq(struct ib_cq *ibcq, enum ib_cq_notify_flags flags);
@@ -1381,7 +1401,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 start,
 					 u64 length, u64 virt_addr,
 					 int fd, int access_flags,
-					 struct ib_udata *udata);
+					 struct uverbs_attr_bundle *attrs);
 int mlx5_ib_advise_mr(struct ib_pd *pd,
 		      enum ib_uverbs_advise_mr_advice advice,
 		      u32 flags,
@@ -1461,6 +1481,10 @@ int mlx5_ib_destroy_rwq_ind_table(struct ib_rwq_ind_table *wq_ind_table);
 struct ib_mr *mlx5_ib_reg_dm_mr(struct ib_pd *pd, struct ib_dm *dm,
 				struct ib_dm_mr_attr *attr,
 				struct uverbs_attr_bundle *attrs);
+void mlx5_ib_data_direct_bind(struct mlx5_ib_dev *ibdev,
+			      struct mlx5_data_direct_dev *dev);
+void mlx5_ib_data_direct_unbind(struct mlx5_ib_dev *ibdev);
+void mlx5_ib_revoke_data_direct_mrs(struct mlx5_ib_dev *dev);
 
 #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
 int mlx5_ib_odp_init_one(struct mlx5_ib_dev *ibdev);
@@ -1568,6 +1592,7 @@ extern const struct uapi_definition mlx5_ib_devx_defs[];
 extern const struct uapi_definition mlx5_ib_flow_defs[];
 extern const struct uapi_definition mlx5_ib_qos_defs[];
 extern const struct uapi_definition mlx5_ib_std_types_defs[];
+extern const struct uapi_definition mlx5_ib_create_cq_defs[];
 
 static inline int is_qp1(enum ib_qp_type qp_type)
 {
@@ -1736,4 +1761,10 @@ static inline bool mlx5_umem_needs_ats(struct mlx5_ib_dev *dev,
 int set_roce_addr(struct mlx5_ib_dev *dev, u32 port_num,
 		  unsigned int index, const union ib_gid *gid,
 		  const struct ib_gid_attr *attr);
+
+static inline u32 smi_to_native_portnum(struct mlx5_ib_dev *dev, u32 port)
+{
+	return (port - 1) / dev->num_ports + 1;
+}
+
 #endif /* MLX5_IB_H */

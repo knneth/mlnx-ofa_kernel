@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Alaa Hleihel <alaa@mellanox.com>
 Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, make
-Standards-Version: 3.9.2
+Standards-Version: 4.2.0
 Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux_sw_drivers
 
 Package: mlnx-en-utils

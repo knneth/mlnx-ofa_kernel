@@ -1,13 +1,13 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
+Subject: [PATCH] BACKPORT: drivers/base/auxiliary_main.c
 
 Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
 ---
- drivers/base/auxiliary.c | 57 ++++++++++++++++++++++++++++++++++------
- 1 file changed, 49 insertions(+), 8 deletions(-)
+ drivers/base/auxiliary_main.c | 60 ++++++++++++++++++++++++++++++++++------
+ 1 file changed, 52 insertions(+), 8 deletions(-)
 
---- a/drivers/base/auxiliary.c
-+++ b/drivers/base/auxiliary.c
+--- a/drivers/base/auxiliary_main.c
++++ b/drivers/base/auxiliary_main.c
 @@ -19,7 +19,7 @@
  #include <linux/pm_runtime.h>
  #include <linux/string.h>
@@ -26,7 +26,7 @@ Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
  {
  	const char *name, *p;
  
-@@ -212,6 +212,14 @@ static int auxiliary_bus_probe(struct de
+@@ -217,6 +217,14 @@ static int auxiliary_bus_probe(struct de
  	int ret;
  
  	ret = dev_pm_domain_attach(dev, true);
@@ -41,7 +41,7 @@ Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
  	if (ret) {
  		dev_warn(dev, "Failed to attach to PM Domain : %d\n", ret);
  		return ret;
-@@ -220,11 +228,14 @@ static int auxiliary_bus_probe(struct de
+@@ -226,11 +234,14 @@ static int auxiliary_bus_probe(struct de
  	ret = auxdrv->probe(auxdev, auxiliary_match_id(auxdrv->id_table, auxdev));
  	if (ret)
  		dev_pm_domain_detach(dev, true);
@@ -57,7 +57,7 @@ Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
  {
  	struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
  	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
-@@ -232,6 +243,10 @@ static void auxiliary_bus_remove(struct
+@@ -238,6 +249,10 @@ static void auxiliary_bus_remove(struct
  	if (auxdrv->remove)
  		auxdrv->remove(auxdev);
  	dev_pm_domain_detach(dev, true);
@@ -68,7 +68,7 @@ Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
  }
  
  static void auxiliary_bus_shutdown(struct device *dev)
-@@ -248,7 +263,11 @@ static void auxiliary_bus_shutdown(struc
+@@ -254,7 +269,11 @@ static void auxiliary_bus_shutdown(struc
  		auxdrv->shutdown(auxdev);
  }
  
@@ -80,7 +80,17 @@ Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
  	.name = "auxiliary",
  	.probe = auxiliary_bus_probe,
  	.remove = auxiliary_bus_remove,
-@@ -353,9 +372,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
+@@ -297,6 +316,9 @@ int auxiliary_device_init(struct auxilia
+ 
+ 	dev->bus = &auxiliary_bus_type;
+ 	device_initialize(&auxdev->dev);
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++	mutex_init(&auxdev->sysfs.lock);
++#endif
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(auxiliary_device_init);
+@@ -359,9 +381,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
   * if it does.  If the callback returns non-zero, this function will
   * return to the caller and not iterate over any more devices.
   */
@@ -101,7 +111,7 @@ Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
  {
  	struct device *dev;
  
-@@ -417,7 +444,21 @@ void auxiliary_driver_unregister(struct
+@@ -423,7 +453,21 @@ void auxiliary_driver_unregister(struct
  }
  EXPORT_SYMBOL_GPL(auxiliary_driver_unregister);
  

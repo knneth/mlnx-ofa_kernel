@@ -4,12 +4,26 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I592a6a482a7af71e69aa91e41cc4736b021dd746
 ---
- drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h | 4 ++++
+ 1 file changed, 4 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
-@@ -27,11 +27,13 @@ struct mlx5_sf_dev {
+@@ -16,11 +16,13 @@
+  */
+ struct mlx5_sf_dev {
+ 	struct auxiliary_device adev;
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS) && !defined(CONFIG_AUXILIARY_BUS)
+ 	struct {
+ 		struct xarray irqs;
+ 		struct mutex lock; /* Synchronize irq sysfs creation */
+ 		bool irq_dir_exists;
+ 	} sysfs;
++#endif
+ 	struct mlx5_core_dev *parent_mdev;
+ 	struct mlx5_core_dev *mdev;
+ 	phys_addr_t bar_base_addr;
+@@ -36,11 +38,13 @@ struct mlx5_sf_dev {
  #endif
  };
  

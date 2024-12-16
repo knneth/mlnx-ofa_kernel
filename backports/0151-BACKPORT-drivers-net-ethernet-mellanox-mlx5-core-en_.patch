@@ -333,7 +333,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  
  	mlx5e_dma_push(sq, txd.dma_addr, txd.len, MLX5E_DMA_MAP_SINGLE);
  	mlx5e_skb_fifo_push(&sq->db.skb_fifo, skb);
-@@ -670,7 +827,12 @@ static void mlx5e_txwqe_build_eseg(struc
+@@ -669,7 +826,12 @@ static void mlx5e_txwqe_build_eseg(struc
  				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
  				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
  {
@@ -347,7 +347,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
  	if (unlikely(sq->ptpsq))
  		mlx5e_cqe_ts_id_eseg(sq->ptpsq, skb, eseg);
-@@ -716,7 +878,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -715,7 +877,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  			struct mlx5_wqe_eth_seg eseg = {};
  
  			mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg, attr.ihs);
@@ -361,7 +361,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  			return NETDEV_TX_OK;
  		}
  
-@@ -731,7 +899,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -730,7 +898,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
  	mlx5e_accel_tx_finish(sq, wqe, &accel,
  			      (struct mlx5_wqe_inline_seg *)(wqe->data + wqe_attr.ds_cnt_inl));
  	mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs);
@@ -375,7 +375,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  
  	return NETDEV_TX_OK;
  }
-@@ -829,6 +1003,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -828,6 +1002,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  		bool last_wqe;
  		u16 ci;
  
@@ -387,7 +387,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  		mlx5_cqwq_pop(&cq->wq);
  
  		wqe_counter = be16_to_cpu(cqe->wqe_counter);
-@@ -849,7 +1028,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -848,7 +1027,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
  				nbytes += wi->num_bytes;
  				continue;
  			}
@@ -395,7 +395,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  			if (unlikely(mlx5e_ktls_tx_try_handle_resync_dump_comp(sq, wi,
  									       &dma_fifo_cc)))
  				continue;
-@@ -977,7 +1155,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -976,7 +1154,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -407,7 +407,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -999,7 +1181,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -998,7 +1180,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -417,7 +417,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1015,6 +1199,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1014,6 +1198,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  	eseg->mss = attr.mss;
  
  	if (attr.ihs) {
@@ -425,7 +425,7 @@ Change-Id: I77b8f72051f9f447f61f8dbf59eada4e7c819db8
  		if (unlikely(attr.hopbyhop)) {
  			struct ipv6hdr *h6;
  
-@@ -1038,16 +1223,27 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1037,16 +1222,27 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
  				      attr.ihs,
  				      MLX5_UNSAFE_MEMCPY_DISCLAIMER);
  		}

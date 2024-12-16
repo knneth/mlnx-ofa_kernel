@@ -5222,18 +5222,6 @@ const struct net_device_ops mlx5e_netdev_ops = {
 #endif
 };
 
-u32 mlx5e_choose_lro_timeout(struct mlx5_core_dev *mdev, u32 wanted_timeout)
-{
-	int i;
-
-	/* The supported periods are organized in ascending order */
-	for (i = 0; i < MLX5E_LRO_TIMEOUT_ARR_SIZE - 1; i++)
-		if (MLX5_CAP_ETH(mdev, lro_timer_supported_periods[i]) >= wanted_timeout)
-			break;
-
-	return MLX5_CAP_ETH(mdev, lro_timer_supported_periods[i]);
-}
-
 static void mlx5e_init_delay_drop(struct mlx5e_priv *priv,
 				  struct mlx5e_params *params)
 {
@@ -6440,7 +6428,9 @@ static void _mlx5e_remove(struct auxiliary_device *adev)
 	mlx5e_sysfs_remove(priv->netdev);
 	unregister_netdev(priv->netdev);
 	_mlx5e_suspend(adev, false);
-	priv->profile->cleanup(priv);
+	/* Avoid cleanup if profile rollback failed. */
+	if (priv->profile)
+		priv->profile->cleanup(priv);
 	mlx5e_destroy_netdev(priv);
 	mlx5e_devlink_port_unregister(mlx5e_dev);
 	mlx5e_destroy_devlink(mlx5e_dev);

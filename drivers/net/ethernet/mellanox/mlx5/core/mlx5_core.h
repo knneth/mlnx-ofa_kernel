@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"24.07-0.6.1"
+#define DRIVER_VERSION	"24.10-0.7.0"
 
 extern uint mlx5_core_debug_mask;
 
@@ -229,7 +229,7 @@ struct mlx5_mcion_reg {
 #endif
 #define MLX5_DEV_MAX_WQS	MLX5_NUM_FW_CMD_THREADS
 
-struct mlx5_esw_rate_group;
+struct mlx5_esw_sched_node;
 
 static inline int mlx5_flexible_inlen(struct mlx5_core_dev *dev, size_t fixed,
 				      size_t item_size, size_t num_items,
@@ -297,9 +297,11 @@ int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 			       u32 group_id, struct kobject *group_kobj);
-void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_rate_group *group);
+void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_sched_node *group);
 int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id);
+bool mlx5_qos_element_type_supported(struct mlx5_core_dev *dev, int type, u8 hierarchy);
+bool mlx5_qos_tsar_type_supported(struct mlx5_core_dev *dev, int type, u8 hierarchy);
 int mlx5_create_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 				       void *context, u32 *element_id);
 int mlx5_modify_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
@@ -442,6 +444,12 @@ void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state);
 static inline bool mlx5_core_is_sf(const struct mlx5_core_dev *dev)
 {
 	return dev->coredev_type == MLX5_COREDEV_SF;
+}
+
+static inline struct auxiliary_device *
+mlx5_sf_coredev_to_adev(struct mlx5_core_dev *mdev)
+{
+	return container_of(mdev->device, struct auxiliary_device, dev);
 }
 
 int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);

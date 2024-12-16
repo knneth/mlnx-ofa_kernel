@@ -53,7 +53,7 @@ Change-Id: I2f994fbf569b3ed183664461ea714d89c733a576
  };
  
  struct mlx5_adev {
-@@ -825,6 +838,9 @@ struct mlx5e_resources {
+@@ -826,6 +839,9 @@ struct mlx5e_resources {
  		u32                        tisn[MLX5_MAX_PORTS][MLX5_MAX_NUM_TC];
  		bool			   tisn_valid;
  	} hw_objs;
@@ -63,7 +63,7 @@ Change-Id: I2f994fbf569b3ed183664461ea714d89c733a576
  	struct net_device *uplink_netdev;
  	struct mutex uplink_netdev_lock;
   	struct {
-@@ -882,9 +898,11 @@ struct mlx5_clock {
+@@ -883,9 +899,11 @@ struct mlx5_clock {
  	struct mlx5_nb             pps_nb;
  	seqlock_t                  lock;
  	struct hwtstamp_config     hwtstamp_config;
@@ -75,7 +75,7 @@ Change-Id: I2f994fbf569b3ed183664461ea714d89c733a576
  	struct mlx5_timer          timer;
  };
  
-@@ -983,7 +1001,9 @@ struct mlx5_core_dev {
+@@ -984,7 +1002,9 @@ struct mlx5_core_dev {
  	enum mlx5_device_state	state;
  	/* sync interface state */
  	struct mutex		intf_state_mutex;
@@ -85,7 +85,7 @@ Change-Id: I2f994fbf569b3ed183664461ea714d89c733a576
  	unsigned long		intf_state;
  	struct mlx5_priv	priv;
  	struct mlx5_profile	profile;
-@@ -1404,8 +1424,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
+@@ -1405,8 +1425,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
  int mlx5_dm_sw_icm_dealloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  			   u64 length, u16 uid, phys_addr_t addr, u32 obj_id);
  
@@ -96,7 +96,7 @@ Change-Id: I2f994fbf569b3ed183664461ea714d89c733a576
  
  int mlx5_sriov_blocking_notifier_register(struct mlx5_core_dev *mdev,
  					  int vf_id,
-@@ -1529,9 +1551,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -1530,9 +1552,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
  
  static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
  {

@@ -432,6 +432,18 @@ err_fsm_lock:
 }
 EXPORT_SYMBOL(mlxfw_firmware_flash);
 
+static int __init mlxfw_module_init(void)
+{
+	return 0;
+}
+
+static void __exit mlxfw_module_exit(void)
+{
+}
+
+module_init(mlxfw_module_init);
+module_exit(mlxfw_module_exit);
+
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Yotam Gigi <yotamg@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox firmware flash lib");

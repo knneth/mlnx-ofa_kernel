@@ -17,7 +17,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
 +#endif
  
  #include <generated/utsrelease.h>
- #include <asm/unaligned.h>
+ #include <linux/unaligned.h>
 @@ -88,12 +90,21 @@ static u16 nvmet_get_smart_log_nsid(stru
  	if (!req->ns->bdev)
  		return NVME_SC_SUCCESS;

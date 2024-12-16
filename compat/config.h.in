@@ -24,6 +24,9 @@
 /* __auto_type exists */
 #undef HAVE_AUTO_TYPE
 
+/* auxiliary device IRQs sysfs exists */
+#undef HAVE_AUX_DEV_IRQS_SYSFS
+
 /* linux/blkdev.h has bdev_discard_granularity */
 #undef HAVE_BDEV_DISCARD_GRANULARITY
 
@@ -84,8 +87,11 @@
 /* bio.h bio_init has 5 parameters */
 #undef HAVE_BIO_INIT_5_PARAMS
 
+/* include/linux/bio-integrity.h exists */
+#undef HAVE_BIO_INTEGRITY_H
+
 /* bio.h has bio_integrity_map_user */
-#undef HAVE_BIO_INTEGRITY_MAP_USER
+#undef HAVE_BIO_INTEGRITY_MAP_USER_BIO_H
 
 /* if bio.h has bio_max_segs */
 #undef HAVE_BIO_MAX_SEGS
@@ -168,10 +174,13 @@
 /* linux/blk-mq.h has struct blk_holder_ops */
 #undef HAVE_BLK_HOLDER_OPS
 
+/* BLK_INTEGRITY_CSUM_CRC64 is defined */
+#undef HAVE_BLK_INTEGRITY_CSUM_CRC64
+
 /* BLK_INTEGRITY_DEVICE_CAPABLE is defined */
 #undef HAVE_BLK_INTEGRITY_DEVICE_CAPABLE
 
-/* linux/blk-integrity.h exists */
+/* include/linux/blk-integrity.h exists */
 #undef HAVE_BLK_INTEGRITY_H
 
 /* struct blk_integrity has pi_offset */
@@ -288,6 +297,12 @@
 /* if blk-mq.h has blk_rq_bio_prep */
 #undef HAVE_BLK_RQ_BIO_PREP
 
+/* blk_rq_integrity_map_user exists */
+#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER
+
+/* blk_rq_map_integrity_sg get 2 params */
+#undef HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS
+
 /* blk_rq_map_user_iv is defined */
 #undef HAVE_BLK_RQ_MAP_USER_IO
 
@@ -380,6 +395,9 @@
 
 /* kernel supports v6.10-rc1: convert __be16 tunnel flags to bitmaps */
 #undef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+
+/* kernel supports v6.11 'core tracks custom RSS contexts set' */
+#undef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
 
 /* struct ctl_table have "child" field */
 #undef HAVE_CTL_TABLE_CHILD
@@ -782,6 +800,9 @@
 
 /* FC_APPID_LEN is defined */
 #undef HAVE_FC_APPID_LEN
+
+/* fd_file is defined */
+#undef HAVE_FD_FILE
 
 /* function fib6_info_nh_dev exists */
 #undef HAVE_FIB6_INFO_NH_DEV
@@ -1189,11 +1210,17 @@
 /* linux/device/bus.h exists */
 #undef HAVE_LINUX_DEVICE_BUS_H
 
+/* linux/iommu-dma.h exists */
+#undef HAVE_LINUX_IOMMU_DMA_H
+
 /* uapi/linux/mei_uuid.h is exists */
 #undef HAVE_LINUX_MEI_UUID_H
 
 /* linux/sed-opal.h exists */
 #undef HAVE_LINUX_SED_OPAL_H
+
+/* linux/unaligned.h exists */
+#undef HAVE_LINUX_UNALIGNED_H
 
 /* list_is_first is defined */
 #undef HAVE_LIST_IS_FIRST
@@ -1315,14 +1342,14 @@
 /* function netdev_get_xmit_slave exists */
 #undef HAVE_NETDEV_GET_XMIT_SLAVE
 
-/* linux/netdevice.h has netdev_hold */
-#undef HAVE_NETDEV_HOLD
-
 /* netdev_lag_hash has NETDEV_LAG_HASH_VLAN_SRCMAC */
 #undef HAVE_NETDEV_LAG_HASH_VLAN_SRCMAC
 
 /* netdevice.h has struct netdev_nested_priv */
 #undef HAVE_NETDEV_NESTED_PRIV_STRUCT
+
+/* struct net_device has netns_local as member */
+#undef HAVE_NETDEV_NETNS_LOCAL
 
 /* struct netdev_net_notifier is defined */
 #undef HAVE_NETDEV_NET_NOTIFIER
@@ -1330,8 +1357,8 @@
 /* netdev_port_same_parent_id is defined */
 #undef HAVE_NETDEV_PORT_SAME_PARENT_ID
 
-/* netdev_put is defined */
-#undef HAVE_NETDEV_PUT
+/* linux/netdevice.h has netdev_hold */
+#undef HAVE_NETDEV_PUT_AND_HOLD
 
 /* netdev_xmit_more is defined */
 #undef HAVE_NETDEV_XMIT_MORE
@@ -1534,6 +1561,12 @@
 /* PCI_VENDOR_ID_REDHAT is defined */
 #undef HAVE_PCI_VENDOR_ID_REDHAT
 
+/* pci_dev has pci_vpd_alloc */
+#undef HAVE_PCI_VPD_ALLOC
+
+/* pci_dev has pci_vpd_find_tag get 4 params */
+#undef HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM
+
 /* linux/proc_fs.h has pde_data */
 #undef HAVE_PDE_DATA
 
@@ -1551,6 +1584,9 @@
 
 /* port_function_state_get has 4 params */
 #undef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
+
+/* proc_handler has const parameter */
+#undef HAVE_PROC_HANDLER_CONST_PARAM
 
 /* struct proc_ops is defined */
 #undef HAVE_PROC_OPS_STRUCT
@@ -1683,6 +1719,9 @@
 
 /* if file rq_end_io_ret exists */
 #undef HAVE_RQ_END_IO_RET
+
+/* rq_integrity_vec returns struct bio_vec */
+#undef HAVE_RQ_INTEGRITY_RETURN_BIO_VEC
 
 /* rt_gw_family is defined */
 #undef HAVE_RT_GW_FAMILY
@@ -1841,6 +1880,9 @@
 /* ethtool.h has struct kernel_ethtool_ringparam */
 #undef HAVE_STRUCT_KERNEL_ETHTOOL_RINGPARAM
 
+/* ethtool.h has struct kernel_ethtool_ts_info */
+#undef HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO
+
 /* struct rtnl_link_ops has netns_refund */
 #undef HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND
 
@@ -1861,9 +1903,6 @@
 
 /* struct switchdev_obj_port_vlan has vid */
 #undef HAVE_STRUCT_SWITCHDEV_OBJ_PORT_VLAN_VID
-
-/* struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined */
-#undef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
 
 /* submit_bio_noacct exist */
 #undef HAVE_SUBMIT_BIO_NOACCT
@@ -2116,18 +2155,6 @@
 
 /* flow_cls_offload has use_act_stats */
 #undef HAVE_USE_ACT_STATS
-
-/* struct vdpa_config_ops has get_backend_features */
-#undef HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES
-
-/* struct vdpa_config_ops has get_backend_features */
-#undef HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV
-
-/* struct vdpa_config_ops has resume */
-#undef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
-
-/* sturct vdpa_dev_set_config has device_features */
-#undef HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES
 
 /* has vfio_combine_iova_ranges exists */
 #undef HAVE_VFIO_COMBINE_IOVA_RANGES

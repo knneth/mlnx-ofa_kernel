@@ -77,7 +77,7 @@ Change-Id: Icf55b1bfe3288dfc193d7b3bad30176421031546
  	if (IS_ERR(sq->ubuffer.umem))
  		return PTR_ERR(sq->ubuffer.umem);
  	page_size = mlx5_umem_find_best_quantized_pgoff(
-@@ -2233,10 +2257,10 @@ static int create_dci(struct mlx5_ib_dev
+@@ -2237,10 +2261,10 @@ static int create_dci(struct mlx5_ib_dev
  	struct mlx5_ib_cq *recv_cq;
  	unsigned long flags;
  	struct mlx5_ib_qp_base *base;
@@ -90,7 +90,7 @@ Change-Id: Icf55b1bfe3288dfc193d7b3bad30176421031546
  	int err;
  
  	spin_lock_init(&qp->sq.lock);
-@@ -2394,10 +2418,10 @@ static int create_user_qp(struct mlx5_ib
+@@ -2398,10 +2422,10 @@ static int create_user_qp(struct mlx5_ib
  	struct mlx5_ib_cq *recv_cq;
  	unsigned long flags;
  	struct mlx5_ib_qp_base *base;
@@ -103,7 +103,7 @@ Change-Id: Icf55b1bfe3288dfc193d7b3bad30176421031546
  	int err;
  
  	spin_lock_init(&qp->sq.lock);
-@@ -5975,9 +5999,13 @@ static void handle_drain_completion(stru
+@@ -6021,9 +6045,13 @@ static void handle_drain_completion(stru
  		if (triggered) {
  			/* Wait for any scheduled/running task to be ended */
  			switch (cq->poll_ctx) {

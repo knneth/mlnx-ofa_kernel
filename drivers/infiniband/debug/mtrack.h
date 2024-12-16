@@ -17,6 +17,7 @@
 #include <asm/uaccess.h>	/* For copy from/to user */
 #include <linux/export.h>
 #include <linux/module.h>
+#include <linux/pci.h>		/* for pci_vpd_alloc */
 
 #define MEMTRACK_ERROR_INJECTION_MESSAGE(module, file, line, call_func, func) ({ \
 	printk(KERN_ERR "%s::%s::%s failure injected at %s:%d\n", module->name, call_func, func, file, line);\
@@ -112,6 +113,13 @@ static inline void *mlx5_mtrack_kmalloc(size_t size, gfp_t flags)
 	return kmalloc(size, flags);
 }
 
+#ifdef HAVE_PCI_VPD_ALLOC
+static inline void *mlx5_mtrack_pci_vpd_alloc(struct pci_dev *pci_dev, unsigned int *size_ptr)
+{
+	return pci_vpd_alloc(pci_dev, size_ptr);
+}
+#endif
+
 static inline void *mlx5_mtrack_kmalloc_node(size_t size, gfp_t flags, int node)
 {
 	return kmalloc_node(size, flags, node);
@@ -145,6 +153,11 @@ static inline void *mlx5_mtrack_kmalloc_array(size_t n, size_t size, gfp_t flags
 static inline void *mlx5_mtrack_kmemdup(const void *src, size_t len, gfp_t gfp)
 {
 	return kmemdup(src, len, gfp);
+}
+
+static inline void *mlx5_mtrack_kmemdup_nul(const char *src, size_t len, gfp_t gfp)
+{
+	return kmemdup_nul(src, len, gfp);
 }
 
 static inline void *mlx5_mtrack_kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
@@ -306,6 +319,26 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 	__memtrack_addr;							\
 })
 
+#ifdef HAVE_PCI_VPD_ALLOC
+#undef pci_vpd_alloc
+#define pci_vpd_alloc(pci_dev, size_ptr) ({					\
+	void *__memtrack_addr = NULL;						\
+	unsigned int __memtrack_size;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "pci_vpd_alloc", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "pci_vpd_alloc"); \
+	else {								\
+		__memtrack_addr = mlx5_mtrack_pci_vpd_alloc(pci_dev, &__memtrack_size);		\
+		if (size_ptr != NULL) 						\
+			*size_ptr = __memtrack_size;				\
+	} 									\
+	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), __memtrack_size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
+	}									\
+	__memtrack_addr;							\
+})
+#endif
+
 #undef kmalloc_node
 #define kmalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
@@ -410,6 +443,20 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmemdup");\
 	else									\
 		__memtrack_addr = mlx5_mtrack_kmemdup(src, sz, flgs);		\
+	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+	}									\
+	__memtrack_addr;							\
+})
+
+#undef kmemdup_nul
+#define kmemdup_nul(src, sz, flgs) ({						\
+	void *__memtrack_addr = NULL;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmemdup_nul", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmemdup_nul");\
+	else									\
+		__memtrack_addr = mlx5_mtrack_kmemdup_nul(src, sz, flgs);	\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\

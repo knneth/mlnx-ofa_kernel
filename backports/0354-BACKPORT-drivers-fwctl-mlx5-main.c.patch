@@ -16,7 +16,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  
  struct mlx5_ifc_mbox_in_hdr_bits {
  	u8 opcode[0x10];
-@@ -222,7 +223,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
+@@ -224,7 +225,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
  		container_of(uctx->fwctl, struct mlx5ctl_dev, fwctl);
  	struct mlx5ctl_uctx *mfd =
  		container_of(uctx, struct mlx5ctl_uctx, uctx);
@@ -28,7 +28,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  	void *rpc_out;
  	int ret;
  
-@@ -272,7 +277,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
+@@ -274,7 +279,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
  		return ERR_PTR(ret);
  	if (rpc_out == rpc_in)
  		return rpc_in;
@@ -40,7 +40,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  }
  
  static const struct fwctl_ops mlx5ctl_ops = {
-@@ -302,7 +311,13 @@ static int mlx5ctl_probe(struct auxiliar
+@@ -304,7 +313,13 @@ static int mlx5ctl_probe(struct auxiliar
  	ret = fwctl_register(&mcdev->fwctl);
  	if (ret)
  		return ret;
@@ -54,7 +54,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  	return 0;
  }
  
-@@ -328,7 +343,9 @@ static struct auxiliary_driver mlx5ctl_d
+@@ -330,7 +345,9 @@ static struct auxiliary_driver mlx5ctl_d
  
  module_auxiliary_driver(mlx5ctl_driver);
  

@@ -104,7 +104,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  static void add_default_gids(struct ib_device *ib_dev, u32 port,
  			     struct net_device *rdma_ndev, void *cookie)
  {
-@@ -539,10 +533,18 @@ struct upper_list {
+@@ -560,10 +554,18 @@ struct upper_list {
  };
  
  static int netdev_upper_walk(struct net_device *upper,
@@ -124,7 +124,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  
  	if (!entry)
  		return 0;
-@@ -561,15 +563,31 @@ static void handle_netdev_upper(struct i
+@@ -582,15 +584,31 @@ static void handle_netdev_upper(struct i
  						      struct net_device *ndev))
  {
  	struct net_device *ndev = cookie;
@@ -157,7 +157,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  
  	handle_netdev(ib_dev, port, ndev);
  	list_for_each_entry_safe(upper_iter, upper_temp, &upper_list,
-@@ -673,11 +691,32 @@ static const struct netdev_event_work_cm
+@@ -695,11 +713,32 @@ static const struct netdev_event_work_cm
  	.filter	= is_eth_port_of_netdev_filter
  };
  
@@ -193,7 +193,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  static void
  ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
  		  struct netdev_event_work_cmd *cmds)
-@@ -693,9 +732,9 @@ ndev_event_unlink(struct netdev_notifier
+@@ -715,9 +754,9 @@ ndev_event_unlink(struct netdev_notifier
  	cmds[1] = add_cmd;
  }
  
@@ -206,7 +206,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  };
  
  static void
-@@ -759,8 +798,17 @@ static int netdevice_event(struct notifi
+@@ -781,8 +820,17 @@ static int netdevice_event(struct notifi
  			};
  	static const struct netdev_event_work_cmd bonding_event_ips_del_cmd = {
  		.cb = del_netdev_upper_ips, .filter = upper_device_filter};
@@ -225,7 +225,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  
  	if (ndev->type != ARPHRD_ETHER)
  		return NOTIFY_DONE;
-@@ -904,6 +952,13 @@ static struct notifier_block nb_inet6add
+@@ -926,6 +974,13 @@ static struct notifier_block nb_inet6add
  	.notifier_call = inet6addr_event
  };
  
@@ -239,7 +239,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  int __init roce_gid_mgmt_init(void)
  {
  	gid_cache_wq = alloc_ordered_workqueue("gid-cache-wq", 0);
-@@ -920,11 +975,17 @@ int __init roce_gid_mgmt_init(void)
+@@ -942,11 +997,17 @@ int __init roce_gid_mgmt_init(void)
  	 */
  	register_netdevice_notifier(&nb_netdevice);
  

@@ -134,7 +134,7 @@ struct page_pool;
 #else
 #define MLX5E_DEFAULT_LRO_TIMEOUT                       32
 #endif
-#define MLX5E_LRO_TIMEOUT_ARR_SIZE                      4
+#define MLX5E_DEFAULT_SHAMPO_TIMEOUT			1024
 
 #define MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_USEC      0x10
 #define MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_USEC_FROM_CQE 0x3
@@ -169,6 +169,8 @@ struct page_pool;
 
 #define MLX5E_MAX_KLM_PER_WQE(mdev) \
 	MLX5E_KLM_ENTRIES_PER_WQE(MLX5_SEND_WQE_BB * mlx5e_get_max_sq_aligned_wqebbs(mdev))
+
+#define MLX5E_LRO_TIMEOUT_ARR_SIZE 4
 
 #define mlx5e_state_dereference(priv, p) \
 	rcu_dereference_protected((p), lockdep_is_held(&(priv)->state_lock))
@@ -662,7 +664,7 @@ struct mlx5e_shampo_hd {
 	struct mlx5e_dma_info *info;
 	struct mlx5e_frag_page *pages;
 	u16 curr_page_index;
-	u16 hd_per_wq;
+	u32 hd_per_wq;
 	u16 hd_per_wqe;
 	unsigned long *bitmap;
 	u16 pi;

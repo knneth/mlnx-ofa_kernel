@@ -660,9 +660,11 @@ static int handle_hca_cap_odp(struct mlx5_core_dev *dev, void *set_ctx)
 	memcpy(set_hca_cap, dev->caps.hca[MLX5_CAP_ODP]->cur,
 	       MLX5_ST_SZ_BYTES(odp_cap));
 
-	mem_page_fault = MLX5_CAP_ODP_MAX(dev, mem_page_fault) &&
-			 (prof->mask & MLX5_PROF_MASK_ODPV2);
-	if (mem_page_fault) {
+        mem_page_fault =
+            MLX5_CAP_ODP_MAX(dev, mem_page_fault) &&
+            ((prof->mask & MLX5_PROF_MASK_ODPV2) ||
+             MLX5_CAP_ODP_MAX(dev, memory_page_fault_scheme_cap.page_prefetch));
+        if (mem_page_fault) {
 		do_set = true;
 		MLX5_SET(odp_cap, set_hca_cap, mem_page_fault, mem_page_fault);
 		goto set;
@@ -832,6 +834,12 @@ static int handle_hca_cap(struct mlx5_core_dev *dev, void *set_ctx)
 	if (MLX5_CAP_GEN_MAX(dev, pci_sync_for_fw_update_with_driver_unload))
 		MLX5_SET(cmd_hca_cap, set_hca_cap,
 			 pci_sync_for_fw_update_with_driver_unload, 1);
+	if (MLX5_CAP_GEN_MAX(dev, pcie_reset_using_hotreset_method))
+		MLX5_SET(cmd_hca_cap, set_hca_cap,
+			 pcie_reset_using_hotreset_method, 1);
+	if (MLX5_CAP_GEN_MAX(dev, pci_sync_for_fw_update_sync2_using_tool_reset))
+		MLX5_SET(cmd_hca_cap, set_hca_cap,
+			 pci_sync_for_fw_update_sync2_using_tool_reset, 1);
 
 	if (MLX5_CAP_GEN_MAX(dev, num_vhca_ports))
 		MLX5_SET(cmd_hca_cap,
@@ -2563,6 +2571,7 @@ static const struct pci_device_id mlx5_core_pci_table[] = {
 	{ PCI_VDEVICE(MELLANOX, 0x101f) },			/* ConnectX-6 LX */
 	{ PCI_VDEVICE(MELLANOX, 0x1021) },			/* ConnectX-7 */
 	{ PCI_VDEVICE(MELLANOX, 0x1023) },			/* ConnectX-8 */
+	{ PCI_VDEVICE(MELLANOX, 0x1025) },			/* ConnectX-9 */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d2) },			/* BlueField integrated ConnectX-5 network controller */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d3), MLX5_PCI_DEV_IS_VF},	/* BlueField integrated ConnectX-5 network controller VF */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d6) },			/* BlueField-2 integrated ConnectX-6 Dx network controller */

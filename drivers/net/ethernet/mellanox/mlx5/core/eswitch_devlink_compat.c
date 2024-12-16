@@ -100,10 +100,22 @@ struct devlink_compat_op {
 	char *compat_name;
 };
 
+static int mlx5_devlink_eswitch_mode_set_compat(struct devlink *devlink, u16 mode,
+						struct netlink_ext_ack *extack)
+{
+int ret;
+devl_lock(devlink);
+
+ret = mlx5_devlink_eswitch_mode_set(devlink, mode, extack);
+devl_unlock(devlink);
+
+return ret;
+}
+
 static struct devlink_compat_op devlink_compat_ops[] =  {
 	{
 		.read_u16 = mlx5_devlink_eswitch_mode_get,
-		.write_u16 = mlx5_devlink_eswitch_mode_set,
+		.write_u16 = mlx5_devlink_eswitch_mode_set_compat,
 		.map = mode_to_str,
 		.map_size = ARRAY_SIZE(mode_to_str),
 		.compat_name = "mode",

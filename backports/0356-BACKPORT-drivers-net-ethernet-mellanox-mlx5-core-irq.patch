@@ -1,0 +1,39 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c
+
+Change-Id: If2ba7e08701d218757b0ba0a6666fd55c4ea9aa4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c
+@@ -188,8 +188,13 @@ out:
+ unlock:
+ 	mutex_unlock(&pool->lock);
+ 	if (mlx5_irq_pool_is_sf_pool(pool)) {
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++		ret = auxiliary_device_sysfs_irq_add(mlx5_sf_coredev_to_adev(dev),
++						     mlx5_irq_get_irq(least_loaded_irq));
++#else
+ 		ret = mlx5_compat_sf_auxiliary_device_sysfs_irq_add(mlx5_sf_coredev_to_adev(dev),
+ 							    mlx5_irq_get_irq(least_loaded_irq));
++#endif
+ 		if (ret) {
+ 			mlx5_core_err(dev, "Failed to create sysfs entry for irq %d, ret = %d\n",
+ 				      mlx5_irq_get_irq(least_loaded_irq), ret);
+@@ -209,8 +214,13 @@ void mlx5_irq_affinity_irq_release(struc
+ 	synchronize_irq(pci_irq_vector(pool->dev->pdev,
+ 				       mlx5_irq_get_index(irq)));
+ 	if (mlx5_irq_pool_is_sf_pool(pool))
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++		auxiliary_device_sysfs_irq_remove(mlx5_sf_coredev_to_adev(dev),
++						  mlx5_irq_get_irq(irq));
++#else
+ 		mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(mlx5_sf_coredev_to_adev(dev),
+ 								 mlx5_irq_get_irq(irq));
++#endif
+ 	if (mlx5_irq_put(irq))
+ 		if (pool->irqs_per_cpu)
+ 			cpu_put(pool, cpu);

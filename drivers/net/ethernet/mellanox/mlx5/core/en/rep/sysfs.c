@@ -177,6 +177,7 @@ out:
 	return sprintf(buf, "limit: %u\n", page_limit);
 }
 
+#define PAGE_LIMIT_UNLIMITED UINT_MAX
 static ssize_t page_limit_store(struct kobject *kobj,
 				struct kobj_attribute *attr,
 				const char *buf,
@@ -200,7 +201,7 @@ static ssize_t page_limit_store(struct kobject *kobj,
 			return err;
 
 		if (!limit)
-			limit = UINT_MAX;
+			limit = PAGE_LIMIT_UNLIMITED;
 
 		err = mlx5_set_max_alloc_icm_th(esw->dev, vhca_id, limit);
 		if (err)

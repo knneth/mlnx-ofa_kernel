@@ -17,7 +17,7 @@
 	(op_is_write(req_op(rq)) ? DMA_TO_DEVICE : DMA_FROM_DEVICE)
 #endif
 
-#ifndef HAVE_QUEUE_FLAG_PCI_P2PDMA
+#ifndef blk_queue_pci_p2pdma
 static inline unsigned int blk_queue_pci_p2pdma(struct request_queue *q)
 {
 	return 0;

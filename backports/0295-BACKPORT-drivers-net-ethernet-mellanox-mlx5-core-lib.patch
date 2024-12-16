@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
 
 Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
 ---
- .../ethernet/mellanox/mlx5/core/lib/clock.c   | 193 ++++++++++++++++--
- 1 file changed, 179 insertions(+), 14 deletions(-)
+ .../ethernet/mellanox/mlx5/core/lib/clock.c   | 200 ++++++++++++++++--
+ 1 file changed, 184 insertions(+), 16 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
@@ -153,14 +153,14 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
 +		*ts = mlx5_ptp_gettimex_real_time(mdev, NULL);
 +		goto out;
 +	}
-+
+ 
 +	write_seqlock_irqsave(&clock->lock, flags);
 +	cycles = mlx5_read_time(mdev, NULL, false);
 +	ns = timecounter_read(&timer->tc);
 +	write_sequnlock_irqrestore(&clock->lock, flags);
 +
 +	*ts = ns_to_timespec64(ns);
- 
++
 +out:
 +	return 0;
 +}
@@ -192,7 +192,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	if (MLX5_CAP_MCAM_FEATURE(mdev, mtutc_freq_adj_units) &&
  	    scaled_ppm <= S32_MAX && scaled_ppm >= S32_MIN) {
  		/* HW scaled_ppm support on mlx5 devices only supports a 32-bit value */
-@@ -408,10 +460,52 @@ static int mlx5_ptp_freq_adj_real_time(s
+@@ -408,10 +460,54 @@ static int mlx5_ptp_freq_adj_real_time(s
  		MLX5_SET(mtutc_reg, in, freq_adj_units, MLX5_MTUTC_FREQ_ADJ_UNITS_PPB);
  		MLX5_SET(mtutc_reg, in, freq_adjustment, scaled_ppm_to_ppb(scaled_ppm));
  	}
@@ -214,12 +214,14 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
 +	int neg_adj = 0;
 +	u32 diff;
 +	u64 adj;
-+	int err;
 +
 +	mdev = container_of(clock, struct mlx5_core_dev, clock);
-+	err = mlx5_ptp_freq_adj_real_time(mdev, delta);
-+	if (err)
-+		return err;
++	if (mlx5_modify_mtutc_allowed(mdev)) {
++		int err = mlx5_ptp_freq_adj_real_time(mdev, delta);
++
++		if (err)
++			return err;
++	}
 +
 +	if (delta < 0) {
 +		neg_adj = 1;
@@ -245,7 +247,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  static int mlx5_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
  {
  	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
-@@ -439,6 +533,33 @@ static int mlx5_ptp_adjfine(struct ptp_c
+@@ -439,6 +535,33 @@ static int mlx5_ptp_adjfine(struct ptp_c
  
  	return 0;
  }
@@ -279,7 +281,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  
  static int mlx5_extts_configure(struct ptp_clock_info *ptp,
  				struct ptp_clock_request *rq,
-@@ -474,7 +595,12 @@ static int mlx5_extts_configure(struct p
+@@ -474,7 +597,12 @@ static int mlx5_extts_configure(struct p
  	if (rq->extts.index >= clock->ptp_info.n_pins)
  		return -EINVAL;
  
@@ -292,7 +294,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	if (pin < 0)
  		return -EBUSY;
  
-@@ -542,13 +668,12 @@ static u64 perout_conf_real_time(s64 sec
+@@ -542,13 +670,12 @@ static u64 perout_conf_real_time(s64 sec
  static int perout_conf_1pps(struct mlx5_core_dev *mdev, struct ptp_clock_request *rq,
  			    u64 *time_stamp, bool real_time)
  {
@@ -307,7 +309,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	if ((ns >> 1) != 500000000LL)
  		return -EINVAL;
  
-@@ -565,20 +690,24 @@ static int mlx5_perout_conf_out_pulse_du
+@@ -565,20 +692,24 @@ static int mlx5_perout_conf_out_pulse_du
  {
  	struct mlx5_pps *pps_info = &mdev->clock.pps_info;
  	u32 out_pulse_duration;
@@ -333,19 +335,33 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  
  	if (out_pulse_duration < pps_info->min_out_pulse_duration_ns ||
  	    out_pulse_duration > MLX5_MAX_PULSE_DURATION) {
-@@ -622,7 +751,11 @@ static int perout_conf_npps_real_time(st
- static bool mlx5_perout_verify_flags(struct mlx5_core_dev *mdev, unsigned int flags)
- {
- 	return ((!mlx5_npps_real_time_supported(mdev) && flags) ||
-+#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
- 		(mlx5_npps_real_time_supported(mdev) && flags & ~PTP_PEROUT_DUTY_CYCLE));
-+#else
-+		(mlx5_npps_real_time_supported(mdev) && flags));
-+#endif
+@@ -619,11 +750,12 @@ static int perout_conf_npps_real_time(st
+ 	return 0;
  }
  
++#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
+ static bool mlx5_perout_verify_flags(struct mlx5_core_dev *mdev, unsigned int flags)
+ {
+-	return ((!mlx5_npps_real_time_supported(mdev) && flags) ||
+-		(mlx5_npps_real_time_supported(mdev) && flags & ~PTP_PEROUT_DUTY_CYCLE));
++	return ((!mlx5_npps_real_time_supported(mdev) && flags) || (mlx5_npps_real_time_supported(mdev) && flags & ~PTP_PEROUT_DUTY_CYCLE));
+ }
++#endif
+ 
  static int mlx5_perout_configure(struct ptp_clock_info *ptp,
-@@ -655,7 +788,12 @@ static int mlx5_perout_configure(struct
+ 				 struct ptp_clock_request *rq,
+@@ -648,14 +780,23 @@ static int mlx5_perout_configure(struct
+ 		return -EOPNOTSUPP;
+ 
+ 	/* Reject requests with unsupported flags */
++#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
+ 	if (mlx5_perout_verify_flags(mdev, rq->perout.flags))
++#else
++	if (rq->perout.flags)
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	if (rq->perout.index >= clock->ptp_info.n_pins)
  		return -EINVAL;
  
  	field_select = MLX5_MTPPS_FS_ENABLE;
@@ -358,7 +374,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	if (pin < 0)
  		return -EBUSY;
  
-@@ -763,12 +901,26 @@ static const struct ptp_clock_info mlx5_
+@@ -763,12 +904,26 @@ static const struct ptp_clock_info mlx5_
  	.n_per_out	= 0,
  	.n_pins		= 0,
  	.pps		= 0,
@@ -385,7 +401,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	.enable		= NULL,
  	.verify		= NULL,
  };
-@@ -873,10 +1025,14 @@ static void ts_next_sec(struct timespec6
+@@ -873,10 +1028,14 @@ static void ts_next_sec(struct timespec6
  static u64 perout_conf_next_event_timer(struct mlx5_core_dev *mdev,
  					struct mlx5_clock *clock)
  {
@@ -401,7 +417,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	ts_next_sec(&ts);
  	target_ns = timespec64_to_ns(&ts);
  
-@@ -893,7 +1049,6 @@ static int mlx5_pps_event(struct notifie
+@@ -893,7 +1052,6 @@ static int mlx5_pps_event(struct notifie
  	struct mlx5_core_dev *mdev;
  	unsigned long flags;
  	u64 ns;
@@ -409,7 +425,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	mdev = container_of(clock, struct mlx5_core_dev, clock);
  
  	switch (clock->ptp_info.pin_config[pin].func) {
-@@ -928,6 +1083,7 @@ static int mlx5_pps_event(struct notifie
+@@ -928,6 +1086,7 @@ static int mlx5_pps_event(struct notifie
  
  	return NOTIFY_OK;
  }
@@ -417,7 +433,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  
  static void mlx5_timecounter_init(struct mlx5_core_dev *mdev)
  {
-@@ -965,7 +1121,6 @@ static void mlx5_init_overflow_period(st
+@@ -965,7 +1124,6 @@ static void mlx5_init_overflow_period(st
  	 */
  	overflow_cycles = div64_u64(~0ULL >> 1, timer->cycles.mult);
  	overflow_cycles = min(overflow_cycles, div_u64(timer->cycles.mask, 3));
@@ -425,7 +441,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	ns = cyclecounter_cyc2ns(&timer->cycles, overflow_cycles,
  				 frac, &frac);
  	do_div(ns, NSEC_PER_SEC / HZ);
-@@ -1067,8 +1222,11 @@ void mlx5_init_clock(struct mlx5_core_de
+@@ -1067,8 +1225,11 @@ void mlx5_init_clock(struct mlx5_core_de
  	}
  
  	seqlock_init(&clock->lock);
@@ -437,7 +453,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	/* Initialize the device clock */
  	mlx5_init_timer_clock(mdev);
  
-@@ -1082,9 +1240,11 @@ void mlx5_init_clock(struct mlx5_core_de
+@@ -1082,9 +1243,11 @@ void mlx5_init_clock(struct mlx5_core_de
  			       PTR_ERR(clock->ptp));
  		clock->ptp = NULL;
  	}
@@ -450,7 +466,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  }
  
  void mlx5_cleanup_clock(struct mlx5_core_dev *mdev)
-@@ -1095,12 +1255,15 @@ void mlx5_cleanup_clock(struct mlx5_core
+@@ -1095,12 +1258,15 @@ void mlx5_cleanup_clock(struct mlx5_core
  		return;
  
  	mlx5_eq_notifier_unregister(mdev, &clock->pps_nb);
@@ -467,7 +483,7 @@ Change-Id: Ie8085815bfdd054de0649ceb9790b36a5beb9ca5
  	cancel_delayed_work_sync(&clock->timer.overflow_work);
  
  	if (mdev->clock_info) {
-@@ -1108,5 +1271,7 @@ void mlx5_cleanup_clock(struct mlx5_core
+@@ -1108,5 +1274,7 @@ void mlx5_cleanup_clock(struct mlx5_core
  		mdev->clock_info = NULL;
  	}
  

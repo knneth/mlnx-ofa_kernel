@@ -11,13 +11,219 @@
 /* Minimum supported BW share value by the HW is 1 Mbit/sec */
 #define MLX5_MIN_BW_SHARE 1
 
-#define MLX5_RATE_TO_BW_SHARE(rate, divider, limit) \
-	min_t(u32, max_t(u32, DIV_ROUND_UP(rate, divider), MLX5_MIN_BW_SHARE), limit)
-
-static int esw_qos_tsar_config(struct mlx5_core_dev *dev, u32 *sched_ctx,
-			       u32 tsar_ix, u32 max_rate, u32 bw_share)
+static struct mlx5_qos_domain *esw_qos_domain_alloc(bool shared)
 {
+	struct mlx5_qos_domain *qos_domain;
+
+	qos_domain = kzalloc(sizeof(*qos_domain), GFP_KERNEL);
+	if (!qos_domain)
+		return NULL;
+
+	mutex_init(&qos_domain->lock);
+	INIT_LIST_HEAD(&qos_domain->nodes);
+	qos_domain->shared = shared;
+	if (shared)
+		refcount_set(&qos_domain->refcnt, 1);
+
+	return qos_domain;
+}
+
+static void esw_qos_devcom_lock(struct mlx5_devcom_comp_dev *devcom, bool shared)
+{
+	if (shared)
+		mlx5_devcom_comp_lock(devcom);
+}
+
+static void esw_qos_devcom_unlock(struct mlx5_devcom_comp_dev *devcom, bool shared)
+{
+	if (shared)
+		mlx5_devcom_comp_unlock(devcom);
+}
+
+static int esw_qos_domain_init(struct mlx5_eswitch *esw, bool shared)
+{
+	struct mlx5_devcom_comp_dev *devcom = esw->dev->priv.hca_devcom_comp;
+
+	if (shared && IS_ERR_OR_NULL(devcom)) {
+		esw_info(esw->dev, "Cross-esw QoS cannot be initialized because devcom is unavailable.");
+		shared = false;
+	}
+
+	esw_qos_devcom_lock(devcom, shared);
+	if (shared) {
+		struct mlx5_devcom_comp_dev *pos;
+		struct mlx5_core_dev *peer_dev;
+
+		mlx5_devcom_for_each_peer_entry(devcom, peer_dev, pos) {
+			struct mlx5_eswitch *peer_esw = peer_dev->priv.eswitch;
+
+			if (peer_esw->qos.domain && peer_esw->qos.domain->shared) {
+				esw->qos.domain = peer_esw->qos.domain;
+				refcount_inc(&esw->qos.domain->refcnt);
+				goto unlock;
+			}
+		}
+	}
+
+	/* If no shared domain found, this esw will create one.
+	 * Doing it with the devcom comp lock held prevents races with other
+	 * eswitches doing concurrent init.
+	 */
+	esw->qos.domain = esw_qos_domain_alloc(shared);
+unlock:
+	esw_qos_devcom_unlock(devcom, shared);
+	return esw->qos.domain ? 0 : -ENOMEM;
+}
+
+static void esw_qos_domain_release(struct mlx5_eswitch *esw)
+{
+	struct mlx5_devcom_comp_dev *devcom = esw->dev->priv.hca_devcom_comp;
+	struct mlx5_qos_domain *domain = esw->qos.domain;
+	bool shared = domain->shared;
+
+	/* Shared domains are released with the devcom comp lock held to
+	 * prevent races with other eswitches doing concurrent init.
+	 */
+	esw_qos_devcom_lock(devcom, shared);
+	if (!shared || refcount_dec_and_test(&domain->refcnt))
+		kfree(domain);
+	esw->qos.domain = NULL;
+	esw_qos_devcom_unlock(devcom, shared);
+}
+
+static const char * const sched_node_type_str[] = {
+	[SCHED_NODE_TYPE_VPORTS_TSAR] = "vports TSAR",
+	[SCHED_NODE_TYPE_VPORT] = "vport",
+	[SCHED_NODE_TYPE_VPORT_TC] = "vport TC",
+	[SCHED_NODE_TYPE_VPORTS_TC_TSAR] = "vports TC TSAR",
+	[SCHED_NODE_TYPE_TC_ARBITER_TSAR] = "TC Arbiter TSAR",
+	[SCHED_NODE_TYPE_VPORTS_AND_TC_ARBITERS_TSAR] = "vports and TC Arbiters TSAR"
+};
+
+static void
+esw_qos_node_set_parent(struct mlx5_esw_sched_node *node, struct mlx5_esw_sched_node *parent)
+{
+	list_del_init(&node->entry);
+	node->parent = parent;
+	list_add_tail(&node->entry, &parent->children);
+	node->esw = parent->esw;
+}
+
+static bool esw_sched_node_has_tc_arbiter(struct mlx5_esw_sched_node *node)
+{
+	struct mlx5_esw_sched_node *child;
+
+	list_for_each_entry(child, &node->children, entry) {
+		if (child->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+			return true;
+	}
+
+	return false;
+}
+
+u32 mlx5_esw_qos_vport_get_sched_elem_ix(const struct mlx5_vport *vport)
+{
+	if (!vport->qos.sched_node)
+		return 0;
+
+	return vport->qos.sched_node->ix;
+}
+
+struct mlx5_esw_sched_node *
+mlx5_esw_qos_vport_get_parent(const struct mlx5_vport *vport)
+{
+	if (!vport->qos.sched_node)
+		return NULL;
+	if (!vport->qos.tc.arbiter_node)
+		return vport->qos.sched_node->parent;
+	return vport->qos.tc.arbiter_node->parent ?: vport->qos.tc.arbiter_node;
+}
+
+static int esw_qos_num_tcs(struct mlx5_core_dev *dev)
+{
+	int num_tcs = mlx5_max_tc(dev) + 1;
+
+	return num_tcs < IEEE_8021QAZ_MAX_TCS ? 0 : IEEE_8021QAZ_MAX_TCS;
+}
+
+static int esw_qos_rate_limit_config(struct mlx5_core_dev *dev, u32 rl_elem_ix, u32 max_rate)
+{
+	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
+	u32 bitmask;
+
+	MLX5_SET(scheduling_context, sched_ctx, max_average_bw, max_rate);
+	bitmask = MODIFY_SCHEDULING_ELEMENT_IN_MODIFY_BITMASK_MAX_AVERAGE_BW;
+
+	return mlx5_modify_scheduling_element_cmd(dev,
+						  SCHEDULING_HIERARCHY_E_SWITCH,
+						  sched_ctx,
+						  rl_elem_ix,
+						  bitmask);
+}
+
+static int esw_qos_create_rate_limit_element(struct mlx5_core_dev *dev, u32 *rl_elem_ix,
+					     u32 max_rate)
+{
+	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
+	int err = 0;
+
+	if (!mlx5_qos_element_type_supported(dev,
+					     SCHEDULING_CONTEXT_ELEMENT_TYPE_RATE_LIMIT,
+					     SCHEDULING_HIERARCHY_E_SWITCH))
+		return -EOPNOTSUPP;
+
+	MLX5_SET(scheduling_context, sched_ctx, max_average_bw, max_rate);
+	MLX5_SET(scheduling_context, sched_ctx, element_type,
+		 SCHEDULING_CONTEXT_ELEMENT_TYPE_RATE_LIMIT);
+	err = mlx5_create_scheduling_element_cmd(dev,
+						 SCHEDULING_HIERARCHY_E_SWITCH,
+						 sched_ctx,
+						 rl_elem_ix);
+	if (err)
+		esw_warn(dev, "create rate limit element failed (err=%d)\n", err);
+
+	return err;
+}
+
+static void esw_qos_sched_elem_config_warn(struct mlx5_esw_sched_node *node, int err)
+{
+	switch (node->type) {
+	case SCHED_NODE_TYPE_VPORTS_TC_TSAR:
+		esw_warn(node->esw->dev,
+			 "E-Switch modify %s scheduling element failed (tc=%d,err=%d)\n",
+			 sched_node_type_str[node->type], node->tc, err);
+		return;
+	case SCHED_NODE_TYPE_VPORT_TC:
+		esw_warn(node->esw->dev,
+			 "E-Switch modify %s scheduling element failed (vport=%d,tc=%d,err=%d)\n",
+			 sched_node_type_str[node->type], node->vport->vport, node->tc, err);
+		return;
+	case SCHED_NODE_TYPE_VPORT:
+		esw_warn(node->esw->dev,
+			 "E-Switch modify %s scheduling element failed (vport=%d,err=%d)\n",
+			 sched_node_type_str[node->type], node->vport->vport, err);
+		return;
+	case SCHED_NODE_TYPE_VPORTS_AND_TC_ARBITERS_TSAR:
+	case SCHED_NODE_TYPE_TC_ARBITER_TSAR:
+	case SCHED_NODE_TYPE_VPORTS_TSAR:
+		esw_warn(node->esw->dev,
+			 "E-Switch modify %s scheduling element failed (err=%d)\n",
+			 sched_node_type_str[node->type], err);
+		return;
+	default:
+		esw_warn(node->esw->dev,
+			 "E-Switch modify scheduling element failed (err=%d)\n", err);
+		return;
+	}
+}
+
+static int esw_qos_sched_elem_config(struct mlx5_esw_sched_node *node, u32 max_rate, u32 bw_share,
+				     struct netlink_ext_ack *extack)
+{
+	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
+	struct mlx5_core_dev *dev = node->esw->dev;
 	u32 bitmask = 0;
+	int err;
 
 	if (!MLX5_CAP_GEN(dev, qos) || !MLX5_CAP_QOS(dev, esw_scheduling))
 		return -EOPNOTSUPP;
@@ -27,27 +233,22 @@ static int esw_qos_tsar_config(struct mlx5_core_dev *dev, u32 *sched_ctx,
 	bitmask |= MODIFY_SCHEDULING_ELEMENT_IN_MODIFY_BITMASK_MAX_AVERAGE_BW;
 	bitmask |= MODIFY_SCHEDULING_ELEMENT_IN_MODIFY_BITMASK_BW_SHARE;
 
-	return mlx5_modify_scheduling_element_cmd(dev,
-						  SCHEDULING_HIERARCHY_E_SWITCH,
-						  sched_ctx,
-						  tsar_ix,
-						  bitmask);
-}
+	err = mlx5_modify_scheduling_element_cmd(dev,
+						 SCHEDULING_HIERARCHY_E_SWITCH,
+						 sched_ctx,
+						 node->ix,
+						 bitmask);
+	if (err) {
+		esw_qos_sched_elem_config_warn(node, err);
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch modify scheduling element failed");
 
-static int esw_qos_group_config(struct mlx5_eswitch *esw, struct mlx5_esw_rate_group *group,
-				u32 max_rate, u32 bw_share, struct netlink_ext_ack *extack)
-{
-	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
-	struct mlx5_core_dev *dev = esw->dev;
-	int err;
+		return err;
+	}
 
-	err = esw_qos_tsar_config(dev, sched_ctx,
-				  group->tsar_ix,
-				  max_rate, bw_share);
-	if (err)
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch modify group TSAR element failed");
-
-	trace_mlx5_esw_group_qos_config(dev, group, group->tsar_ix, bw_share, max_rate);
+	if (node->type == SCHED_NODE_TYPE_VPORTS_TSAR)
+		trace_mlx5_esw_node_qos_config(dev, node, node->ix, bw_share, max_rate);
+	else if (node->type == SCHED_NODE_TYPE_VPORT)
+		trace_mlx5_esw_vport_qos_config(dev, node->vport, bw_share, max_rate);
 
 	return err;
 }
@@ -75,132 +276,90 @@ mlx5_esw_get_esw_and_vport(struct devlink *devlink, struct devlink_port *port,
 	return 0;
 }
 
-static int esw_qos_vport_config(struct mlx5_eswitch *esw,
-				struct mlx5_vport *vport,
-				u32 max_rate, u32 bw_share,
-				struct netlink_ext_ack *extack)
-{
-	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
-	struct mlx5_core_dev *dev = esw->dev;
-	int err;
-
-	if (!vport->qos.enabled)
-		return -EIO;
-
-	err = esw_qos_tsar_config(dev, sched_ctx, vport->qos.esw_tsar_ix,
-				  max_rate, bw_share);
-	if (err) {
-		esw_warn(esw->dev,
-			 "E-Switch modify TSAR vport element failed (vport=%d,err=%d)\n",
-			 vport->vport, err);
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch modify TSAR vport element failed");
-		return err;
-	}
-
-	trace_mlx5_esw_vport_qos_config(vport, bw_share, max_rate);
-
-	return 0;
-}
-
 static u32 esw_qos_calculate_min_rate_divider(struct mlx5_eswitch *esw,
-					      struct mlx5_esw_rate_group *group,
-					      bool group_level)
+					      struct mlx5_esw_sched_node *parent)
 {
+	struct list_head *nodes = parent ? &parent->children : &esw->qos.domain->nodes;
 	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
-	struct mlx5_vport *evport;
+	struct mlx5_esw_sched_node *node;
 	u32 max_guarantee = 0;
-	unsigned long i;
 
-	if (group_level) {
-		struct mlx5_esw_rate_group *group;
-
-		list_for_each_entry(group, &esw->qos.groups, list) {
-			if (group->min_rate < max_guarantee)
-				continue;
-			max_guarantee = group->min_rate;
-		}
-	} else {
-		mlx5_esw_for_each_vport(esw, i, evport) {
-			if (!evport->enabled || !evport->qos.enabled ||
-			    evport->qos.group != group || evport->qos.min_rate < max_guarantee)
-				continue;
-			max_guarantee = evport->qos.min_rate;
-		}
+	/* Find max min_rate across all nodes.
+	 * This will correspond to fw_max_bw_share in the final bw_share calculation.
+	 */
+	list_for_each_entry(node, nodes, entry) {
+		if (node->esw == esw && node->ix != esw->qos.root_tsar_ix &&
+		    node->min_rate > max_guarantee)
+			max_guarantee = node->min_rate;
 	}
 
 	if (max_guarantee)
 		return max_t(u32, max_guarantee / fw_max_bw_share, 1);
 
-	/* If vports min rate divider is 0 but their group has bw_share configured, then
-	 * need to set bw_share for vports to minimal value.
+	/* If nodes max min_rate divider is 0 but their parent has bw_share
+	 * configured, then set bw_share for nodes to minimal value.
 	 */
-	if (!group_level && !max_guarantee && group && group->bw_share)
+
+	if (parent && parent->bw_share)
 		return 1;
+
+	/* If the node nodes has min_rate configured, a divider of 0 sets all
+	 * nodes' bw_share to 0, effectively disabling min guarantees.
+	 */
 	return 0;
 }
 
 static u32 esw_qos_calc_bw_share(u32 min_rate, u32 divider, u32 fw_max)
 {
-	if (divider)
-		return MLX5_RATE_TO_BW_SHARE(min_rate, divider, fw_max);
-
-	return 0;
+	if (!divider)
+		return 0;
+	return min_t(u32, max_t(u32, DIV_ROUND_UP(min_rate, divider), MLX5_MIN_BW_SHARE), fw_max);
 }
 
-static int esw_qos_normalize_vports_min_rate(struct mlx5_eswitch *esw,
-					     struct mlx5_esw_rate_group *group,
-					     struct netlink_ext_ack *extack)
+static int esw_qos_update_sched_node_bw_share(struct mlx5_esw_sched_node *node,
+					      u32 divider,
+					      struct netlink_ext_ack *extack)
 {
-	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
-	u32 divider = esw_qos_calculate_min_rate_divider(esw, group, false);
-	struct mlx5_vport *evport;
-	unsigned long i;
+	u32 fw_max_bw_share = MLX5_CAP_QOS(node->esw->dev, max_tsar_bw_share);
 	u32 bw_share;
 	int err;
 
-	mlx5_esw_for_each_vport(esw, i, evport) {
-		if (!evport->enabled || !evport->qos.enabled || evport->qos.group != group)
-			continue;
-		bw_share = esw_qos_calc_bw_share(evport->qos.min_rate, divider, fw_max_bw_share);
+	bw_share = esw_qos_calc_bw_share(node->min_rate, divider, fw_max_bw_share);
 
-		if (bw_share == evport->qos.bw_share)
-			continue;
+	if (bw_share == node->bw_share)
+		return 0;
 
-		err = esw_qos_vport_config(esw, evport, evport->qos.max_rate, bw_share, extack);
-		if (err)
-			return err;
+	err = esw_qos_sched_elem_config(node, node->max_rate, bw_share, extack);
+	if (err)
+		return err;
 
-		evport->qos.bw_share = bw_share;
-	}
+	node->bw_share = bw_share;
 
-	return 0;
+	return err;
 }
 
-static int esw_qos_normalize_groups_min_rate(struct mlx5_eswitch *esw, u32 divider,
-					     struct netlink_ext_ack *extack)
+static int esw_qos_normalize_min_rate(struct mlx5_eswitch *esw,
+				      struct mlx5_esw_sched_node *parent,
+				      struct netlink_ext_ack *extack)
 {
-	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
-	struct mlx5_esw_rate_group *group;
-	u32 bw_share;
-	int err;
+	struct list_head *nodes = parent ? &parent->children : &esw->qos.domain->nodes;
+	u32 divider = esw_qos_calculate_min_rate_divider(esw, parent);
+	struct mlx5_esw_sched_node *node;
 
-	list_for_each_entry(group, &esw->qos.groups, list) {
-		bw_share = esw_qos_calc_bw_share(group->min_rate, divider, fw_max_bw_share);
+	list_for_each_entry(node, nodes, entry) {
+		int err;
 
-		if (bw_share == group->bw_share)
+		if (node->esw != esw || node->ix == esw->qos.root_tsar_ix)
 			continue;
 
-		err = esw_qos_group_config(esw, group, group->max_rate, bw_share, extack);
+		err = esw_qos_update_sched_node_bw_share(node, divider, extack);
 		if (err)
 			return err;
 
-		group->bw_share = bw_share;
+		if (list_empty(&node->children) || node->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+			continue;
 
-		/* All the group's vports need to be set with default bw_share
-		 * to enable them with QOS
-		 */
-		err = esw_qos_normalize_vports_min_rate(esw, group, extack);
-
+		err = esw_qos_normalize_min_rate(node->esw, node, extack);
 		if (err)
 			return err;
 	}
@@ -208,120 +367,112 @@ static int esw_qos_normalize_groups_min_rate(struct mlx5_eswitch *esw, u32 divid
 	return 0;
 }
 
-int esw_qos_set_vport_min_rate(struct mlx5_eswitch *esw, struct mlx5_vport *evport,
+int esw_qos_set_vport_min_rate(struct mlx5_vport *vport,
 			       u32 min_rate, struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
 	u32 fw_max_bw_share, previous_min_rate;
 	bool min_rate_supported;
 	int err;
 
-	lockdep_assert_held(&esw->state_lock);
-	fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
-	min_rate_supported = MLX5_CAP_QOS(esw->dev, esw_bw_share) &&
+	esw_assert_qos_lock_held(vport_node->esw);
+	fw_max_bw_share = MLX5_CAP_QOS(vport->dev, max_tsar_bw_share);
+	min_rate_supported = MLX5_CAP_QOS(vport->dev, esw_bw_share) &&
 				fw_max_bw_share >= MLX5_MIN_BW_SHARE;
 	if (min_rate && !min_rate_supported)
 		return -EOPNOTSUPP;
-	if (min_rate == evport->qos.min_rate)
+	if (min_rate == vport_node->min_rate)
 		return 0;
-	if (!evport->enabled) {
-		return -EPERM;
-	}
 
-	previous_min_rate = evport->qos.min_rate;
-	evport->qos.min_rate = min_rate;
-	err = esw_qos_normalize_vports_min_rate(esw, evport->qos.group, extack);
+	previous_min_rate = vport_node->min_rate;
+	vport_node->min_rate = min_rate;
+	err = esw_qos_normalize_min_rate(vport_node->parent->esw, vport_node->parent, extack);
 	if (err)
-		evport->qos.min_rate = previous_min_rate;
+		vport_node->min_rate = previous_min_rate;
 
 	return err;
 }
 
-int esw_qos_set_vport_max_rate(struct mlx5_eswitch *esw, struct mlx5_vport *evport,
+int esw_qos_set_vport_max_rate(struct mlx5_vport *vport,
 			       u32 max_rate, struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
 	u32 act_max_rate = max_rate;
 	bool max_rate_supported;
 	int err;
 
-	lockdep_assert_held(&esw->state_lock);
-	max_rate_supported = MLX5_CAP_QOS(esw->dev, esw_rate_limit);
+	esw_assert_qos_lock_held(vport_node->esw);
+	max_rate_supported = MLX5_CAP_QOS(vport->dev, esw_rate_limit);
 
 	if (max_rate && !max_rate_supported)
 		return -EOPNOTSUPP;
-	if (max_rate == evport->qos.max_rate)
+	if (max_rate == vport_node->max_rate)
 		return 0;
 
-	/* If parent group has rate limit need to set to group
-	 * value when new max rate is 0.
-	 */
-	if (evport->qos.group && !max_rate)
-		act_max_rate = evport->qos.group->max_rate;
+	/* Use parent node limit if new max rate is 0. */
+	if (!max_rate)
+		act_max_rate = vport_node->parent->max_rate;
 
-	err = esw_qos_vport_config(esw, evport, act_max_rate, evport->qos.bw_share, extack);
-
+	err = esw_qos_sched_elem_config(vport_node, act_max_rate, vport_node->bw_share, extack);
 	if (!err)
-		evport->qos.max_rate = max_rate;
+		vport_node->max_rate = max_rate;
 
 	return err;
 }
 
-int esw_qos_set_group_min_rate(struct mlx5_eswitch *esw, struct mlx5_esw_rate_group *group,
-			       u32 min_rate, struct netlink_ext_ack *extack)
+int esw_qos_set_node_min_rate(struct mlx5_esw_sched_node *node,
+			      u32 min_rate, struct netlink_ext_ack *extack)
 {
-	u32 fw_max_bw_share = MLX5_CAP_QOS(esw->dev, max_tsar_bw_share);
-	struct mlx5_core_dev *dev = esw->dev;
-	u32 previous_min_rate, divider;
+	struct mlx5_eswitch *esw = node->esw;
+	u32 previous_min_rate;
 	int err;
 
-	if (!(MLX5_CAP_QOS(dev, esw_bw_share) && fw_max_bw_share >= MLX5_MIN_BW_SHARE))
+	if (!MLX5_CAP_QOS(esw->dev, esw_bw_share) ||
+	    MLX5_CAP_QOS(esw->dev, max_tsar_bw_share) < MLX5_MIN_BW_SHARE)
 		return -EOPNOTSUPP;
 
-	if (min_rate == group->min_rate)
+	if (min_rate == node->min_rate)
 		return 0;
 
-	previous_min_rate = group->min_rate;
-	group->min_rate = min_rate;
-	divider = esw_qos_calculate_min_rate_divider(esw, group, true);
-	err = esw_qos_normalize_groups_min_rate(esw, divider, extack);
+	previous_min_rate = node->min_rate;
+	node->min_rate = min_rate;
+	err = esw_qos_normalize_min_rate(esw, NULL, extack);
 	if (err) {
-		group->min_rate = previous_min_rate;
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch group min rate setting failed");
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch node min rate setting failed");
 
 		/* Attempt restoring previous configuration */
-		divider = esw_qos_calculate_min_rate_divider(esw, group, true);
-		if (esw_qos_normalize_groups_min_rate(esw, divider, extack))
+		node->min_rate = previous_min_rate;
+		if (esw_qos_normalize_min_rate(esw, NULL, extack))
 			NL_SET_ERR_MSG_MOD(extack, "E-Switch BW share restore failed");
 	}
 
 	return err;
 }
 
-int esw_qos_set_group_max_rate(struct mlx5_eswitch *esw,
-			       struct mlx5_esw_rate_group *group,
-			       u32 max_rate, struct netlink_ext_ack *extack)
+int esw_qos_set_node_max_rate(struct mlx5_esw_sched_node *node,
+			      u32 max_rate, struct netlink_ext_ack *extack)
 {
-	struct mlx5_vport *vport;
-	unsigned long i;
+	struct mlx5_esw_sched_node *vport_node;
 	int err;
 
-	if (group->max_rate == max_rate)
+	if (node->max_rate == max_rate)
 		return 0;
 
-	err = esw_qos_group_config(esw, group, max_rate, group->bw_share, extack);
+	err = esw_qos_sched_elem_config(node, max_rate, node->bw_share, extack);
 	if (err)
 		return err;
 
-	group->max_rate = max_rate;
+	node->max_rate = max_rate;
 
-	/* Any unlimited vports in the group should be set
-	 * with the value of the group.
-	 */
-	mlx5_esw_for_each_vport(esw, i, vport) {
-		if (!vport->enabled || !vport->qos.enabled ||
-		    vport->qos.group != group || vport->qos.max_rate)
+	if (node->type != SCHED_NODE_TYPE_VPORTS_TSAR)
+		return err;
+
+	/* Any unlimited vports in the node should be set with the value of the node. */
+	list_for_each_entry(vport_node, &node->children, entry) {
+		if (vport_node->max_rate)
 			continue;
 
-		err = esw_qos_vport_config(esw, vport, max_rate, vport->qos.bw_share, extack);
+		err = esw_qos_sched_elem_config(vport_node, max_rate, vport_node->bw_share, extack);
 		if (err)
 			NL_SET_ERR_MSG_MOD(extack,
 					   "E-Switch vport implicit rate limit setting failed");
@@ -330,32 +481,69 @@ int esw_qos_set_group_max_rate(struct mlx5_eswitch *esw,
 	return err;
 }
 
-static int esw_qos_vport_create_sched_element(struct mlx5_eswitch *esw,
-					      struct mlx5_vport *vport,
-					      u32 max_rate, u32 bw_share)
+static int esw_qos_create_node_sched_elem(struct mlx5_core_dev *dev, u32 parent_element_id,
+					  u32 max_rate, u32 bw_share, u32 *tsar_ix)
+{
+	u32 tsar_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
+	void *attr;
+
+	if (!mlx5_qos_element_type_supported(dev,
+					     SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR,
+					     SCHEDULING_HIERARCHY_E_SWITCH) ||
+	    !mlx5_qos_tsar_type_supported(dev,
+					  TSAR_ELEMENT_TSAR_TYPE_DWRR,
+					  SCHEDULING_HIERARCHY_E_SWITCH))
+		return -EOPNOTSUPP;
+
+	MLX5_SET(scheduling_context, tsar_ctx, element_type,
+		 SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR);
+	MLX5_SET(scheduling_context, tsar_ctx, parent_element_id, parent_element_id);
+	attr = MLX5_ADDR_OF(scheduling_context, tsar_ctx, element_attributes);
+	MLX5_SET(tsar_element, attr, tsar_type, TSAR_ELEMENT_TSAR_TYPE_DWRR);
+	MLX5_SET(scheduling_context, tsar_ctx, max_average_bw, max_rate);
+	MLX5_SET(scheduling_context, tsar_ctx, bw_share, bw_share);
+
+	return mlx5_create_scheduling_element_cmd(dev,
+						  SCHEDULING_HIERARCHY_E_SWITCH,
+						  tsar_ctx,
+						  tsar_ix);
+}
+
+static int
+esw_qos_vport_create_sched_element(struct mlx5_vport *vport, struct mlx5_esw_sched_node *parent,
+				   u32 max_rate, u32 bw_share, u32 *sched_elem_ix)
 {
 	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
-	struct mlx5_esw_rate_group *group = vport->qos.group;
-	struct mlx5_core_dev *dev = esw->dev;
-	u32 parent_tsar_ix;
-	void *vport_elem;
+	struct mlx5_core_dev *dev = parent->esw->dev;
+	void *attr;
 	int err;
 
-	parent_tsar_ix = group ? group->tsar_ix : esw->qos.root_tsar_ix;
+	if (!mlx5_qos_element_type_supported(dev,
+					     SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT,
+					     SCHEDULING_HIERARCHY_E_SWITCH))
+		return -EOPNOTSUPP;
+
 	MLX5_SET(scheduling_context, sched_ctx, element_type,
 		 SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT);
-	vport_elem = MLX5_ADDR_OF(scheduling_context, sched_ctx, element_attributes);
-	MLX5_SET(vport_element, vport_elem, vport_number, vport->vport);
-	MLX5_SET(scheduling_context, sched_ctx, parent_element_id, parent_tsar_ix);
+	attr = MLX5_ADDR_OF(scheduling_context, sched_ctx, element_attributes);
+	MLX5_SET(vport_element, attr, vport_number, vport->vport);
+	if (vport->dev != dev) {
+		/* The port is assigned to a node on another eswitch. */
+		MLX5_SET(vport_element, attr, eswitch_owner_vhca_id_valid, true);
+		MLX5_SET(vport_element, attr, eswitch_owner_vhca_id,
+			 MLX5_CAP_GEN(vport->dev, vhca_id));
+	}
+	MLX5_SET(scheduling_context, sched_ctx, parent_element_id, parent->ix);
 	MLX5_SET(scheduling_context, sched_ctx, max_average_bw, max_rate);
 	MLX5_SET(scheduling_context, sched_ctx, bw_share, bw_share);
 
 	err = mlx5_create_scheduling_element_cmd(dev,
 						 SCHEDULING_HIERARCHY_E_SWITCH,
 						 sched_ctx,
-						 &vport->qos.esw_tsar_ix);
+						 sched_elem_ix);
 	if (err) {
-		esw_warn(esw->dev, "E-Switch create TSAR vport element failed (vport=%d,err=%d)\n",
+		esw_warn(dev,
+			 "E-Switch create vport scheduling element failed (vport=%d,err=%d)\n",
 			 vport->vport, err);
 		return err;
 	}
@@ -363,163 +551,425 @@ static int esw_qos_vport_create_sched_element(struct mlx5_eswitch *esw,
 	return 0;
 }
 
+static int
+esw_qos_destroy_vports_tc_nodes(struct mlx5_esw_sched_node *tc_arbiter_node, bool force,
+				struct netlink_ext_ack *extack);
+
 static void esw_qos_destroy_sysfs_rate_group(struct mlx5_eswitch *esw,
 					     struct mlx5_vport *vport,
-					     struct mlx5_esw_rate_group *group)
+					     struct mlx5_esw_sched_node *group)
 {
 	if (!group)
 		return;
-	if (group == esw->qos.group0)
+	if (group == esw->qos.node0)
 		return;
 
 	if (vport->vport != MLX5_VPORT_PF)
 		group->num_vports--;
 	if (group->group_id && !group->num_vports &&
-	    !mlx5_esw_is_sf_vport(esw, vport->vport))
-		esw_qos_destroy_rate_group(esw, group, NULL);
+	    !mlx5_esw_is_sf_vport(esw, vport->vport)) {
+		if (group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+			esw_qos_destroy_vports_tc_nodes(group, true, NULL);
+		esw_qos_destroy_node(group, NULL);
+	    }
 }
 
-static int esw_qos_update_group_scheduling_element(struct mlx5_eswitch *esw,
-						   struct mlx5_vport *vport,
-						   struct mlx5_esw_rate_group *curr_group,
-						   struct mlx5_esw_rate_group *new_group,
-						   struct netlink_ext_ack *extack)
+static int
+esw_qos_vport_tc_create_sched_element(struct mlx5_vport *vport, struct mlx5_esw_sched_node *parent,
+				      u32 max_rate, u32 bw_share, u32 rate_limit_elem_ix,
+				      u32 *sched_elem_ix)
 {
+	u32 sched_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
+	struct mlx5_core_dev *dev = parent->esw->dev;
+	void *attr;
+	int err;
+
+	if (!mlx5_qos_element_type_supported(dev,
+					     SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT_TC,
+					     SCHEDULING_HIERARCHY_E_SWITCH))
+		return -EOPNOTSUPP;
+
+	MLX5_SET(scheduling_context, sched_ctx, element_type,
+		 SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT_TC);
+	attr = MLX5_ADDR_OF(scheduling_context, sched_ctx, element_attributes);
+	MLX5_SET(vport_tc_element, attr, vport_number, vport->vport);
+	if (vport->dev != dev) {
+		/* The port is assigned to a node on another eswitch. */
+		MLX5_SET(vport_element, attr, eswitch_owner_vhca_id_valid, true);
+		MLX5_SET(vport_element, attr, eswitch_owner_vhca_id,
+			 MLX5_CAP_GEN(vport->dev, vhca_id));
+	}
+
+	MLX5_SET(vport_tc_element, attr, traffic_class, parent->tc);
+	MLX5_SET(scheduling_context, sched_ctx, max_bw_obj_id, rate_limit_elem_ix);
+	MLX5_SET(scheduling_context, sched_ctx, parent_element_id, parent->ix);
+	err = mlx5_create_scheduling_element_cmd(dev,
+						 SCHEDULING_HIERARCHY_E_SWITCH,
+						 sched_ctx,
+						 sched_elem_ix);
+	if (err)
+		esw_warn(dev, "Create Vport TC element failed (vport=%d,tc=%d,err=%d)\n",
+			 vport->vport, parent->tc, err);
+
+	return err;
+}
+
+static int esw_qos_update_node_scheduling_element(struct mlx5_vport *vport,
+						  struct mlx5_esw_sched_node *curr_node,
+						  struct mlx5_esw_sched_node *new_node,
+						  struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
 	u32 max_rate;
 	int err;
 
-	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
+	err = mlx5_destroy_scheduling_element_cmd(curr_node->esw->dev,
 						  SCHEDULING_HIERARCHY_E_SWITCH,
-						  vport->qos.esw_tsar_ix);
+						  vport_node->ix);
 	if (err) {
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy TSAR vport element failed");
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy vport scheduling element failed");
 		return err;
 	}
 
-	vport->qos.group = new_group;
-	max_rate = vport->qos.max_rate ? vport->qos.max_rate : new_group->max_rate;
-
-	/* If vport is unlimited, we set the group's value.
-	 * Therefore, if the group is limited it will apply to
-	 * the vport as well and if not, vport will remain unlimited.
-	 */
-	err = esw_qos_vport_create_sched_element(esw, vport, max_rate, vport->qos.bw_share);
+	/* Use new node max rate if vport max rate is unlimited. */
+	max_rate = vport_node->max_rate ? vport_node->max_rate : new_node->max_rate;
+	err = esw_qos_vport_create_sched_element(vport, new_node, max_rate,
+						 vport_node->bw_share,
+						 &vport_node->ix);
 	if (err) {
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch vport group set failed.");
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch vport node set failed.");
 		goto err_sched;
 	}
+
+	esw_qos_node_set_parent(vport->qos.sched_node, new_node);
 
 	return 0;
 
 err_sched:
-	vport->qos.group = curr_group;
-	max_rate = vport->qos.max_rate ? vport->qos.max_rate : curr_group->max_rate;
-	if (esw_qos_vport_create_sched_element(esw, vport, max_rate, vport->qos.bw_share))
-		esw_warn(esw->dev, "E-Switch vport group restore failed (vport=%d)\n",
+	max_rate = vport_node->max_rate ? vport_node->max_rate : curr_node->max_rate;
+	if (esw_qos_vport_create_sched_element(vport, curr_node, max_rate,
+					       vport_node->bw_share,
+					       &vport_node->ix))
+		esw_warn(curr_node->esw->dev, "E-Switch vport node restore failed (vport=%d)\n",
 			 vport->vport);
 
 	return err;
 }
 
-static int esw_qos_vport_update_group(struct mlx5_eswitch *esw,
-				      struct mlx5_vport *vport,
-				      struct mlx5_esw_rate_group *group,
-				      struct netlink_ext_ack *extack)
+int esw_qos_vport_update_node(struct mlx5_vport *vport, struct mlx5_esw_sched_node *node,
+			      struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *new_group, *curr_group;
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	struct mlx5_esw_sched_node *new_node, *curr_node;
 	int err;
 
-	if (!vport->enabled)
-		return -EINVAL;
-
-	curr_group = vport->qos.group;
-	new_group = group ?: esw->qos.group0;
-	if (curr_group == new_group)
+	esw_assert_qos_lock_held(esw);
+	curr_node = vport_node->parent;
+	new_node = node ?: esw->qos.node0;
+	if (curr_node == new_node)
 		return 0;
 
-	err = esw_qos_update_group_scheduling_element(esw, vport, curr_group, new_group, extack);
+	err = esw_qos_update_node_scheduling_element(vport, curr_node, new_node, extack);
 	if (err)
 		return err;
 
-	/* Recalculate bw share weights of old and new groups */
-	if (vport->qos.bw_share || new_group->bw_share) {
-		esw_qos_normalize_vports_min_rate(esw, curr_group, extack);
-		esw_qos_normalize_vports_min_rate(esw, new_group, extack);
+	/* Recalculate bw share weights of old and new nodes */
+	if (vport_node->bw_share || new_node->bw_share) {
+		esw_qos_normalize_min_rate(curr_node->esw, curr_node, extack);
+		esw_qos_normalize_min_rate(new_node->esw, new_node, extack);
 	}
 
 	return 0;
 }
 
-static struct mlx5_esw_rate_group *
-__esw_qos_create_rate_group(struct mlx5_eswitch *esw, u32 group_id,
-			    struct netlink_ext_ack *extack)
+static struct mlx5_esw_sched_node *
+__esw_qos_alloc_node(struct mlx5_eswitch *esw, u32 tsar_ix, enum sched_node_type type,
+		     struct mlx5_esw_sched_node *parent)
+{
+	struct list_head *parent_children;
+	struct mlx5_esw_sched_node *node;
+
+	node = kzalloc(sizeof(*node), GFP_KERNEL);
+	if (!node)
+		return NULL;
+
+	node->esw = esw;
+	node->ix = tsar_ix;
+	node->type = type;
+	node->parent = parent;
+	INIT_LIST_HEAD(&node->children);
+	parent_children = parent ? &parent->children : &esw->qos.domain->nodes;
+	list_add_tail(&node->entry, parent_children);
+
+	return node;
+}
+
+static void __esw_qos_free_node(struct mlx5_esw_sched_node *node)
+{
+	list_del(&node->entry);
+	kfree(node);
+}
+
+static struct mlx5_esw_sched_node *
+esw_qos_create_vports_tc_node(struct mlx5_esw_sched_node *parent,
+			      u8 tc, struct netlink_ext_ack *extack)
 {
 	u32 tsar_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
-	struct mlx5_esw_rate_group *group;
-	u32 divider;
-	int err;
+	struct mlx5_core_dev *dev = parent->esw->dev;
+	struct mlx5_esw_sched_node *vports_tc_node;
+	int tsar_ix, err;
+	void *attr;
 
-	group = kzalloc(sizeof(*group), GFP_KERNEL);
-	if (!group)
-		return ERR_PTR(-ENOMEM);
+	if (!mlx5_qos_element_type_supported(dev,
+					     SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR,
+					     SCHEDULING_HIERARCHY_E_SWITCH) ||
+	    !mlx5_qos_tsar_type_supported(dev,
+					  TSAR_ELEMENT_TSAR_TYPE_DWRR,
+					  SCHEDULING_HIERARCHY_E_SWITCH))
+		return ERR_PTR(-EOPNOTSUPP);
 
-	group->group_id = group_id;
-	MLX5_SET(scheduling_context, tsar_ctx, parent_element_id,
-		 esw->qos.root_tsar_ix);
-	err = mlx5_create_scheduling_element_cmd(esw->dev,
+	attr = MLX5_ADDR_OF(scheduling_context, tsar_ctx, element_attributes);
+	MLX5_SET(tsar_element, attr, tsar_type, TSAR_ELEMENT_TSAR_TYPE_DWRR);
+	MLX5_SET(tsar_element, attr, traffic_class, tc);
+	MLX5_SET(scheduling_context, tsar_ctx, parent_element_id, parent->ix);
+	MLX5_SET(scheduling_context, tsar_ctx, element_type, SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR);
+
+	err = mlx5_create_scheduling_element_cmd(dev,
 						 SCHEDULING_HIERARCHY_E_SWITCH,
 						 tsar_ctx,
-						 &group->tsar_ix);
+						 &tsar_ix);
 	if (err) {
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch create TSAR for group failed");
-		goto err_sched_elem;
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch create scheduling element failed");
+		return ERR_PTR(err);
 	}
 
-	if (group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP) {
-		group->dev = esw->dev;
-		err = mlx5_create_vf_group_sysfs(esw->dev, group_id, &group->kobj);
-		if (err)
-			goto err_sched_elem;
+	vports_tc_node = __esw_qos_alloc_node(parent->esw, tsar_ix,
+					      SCHED_NODE_TYPE_VPORTS_TC_TSAR, parent);
+	if (IS_ERR(vports_tc_node)) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch alloc node failed");
+		err = PTR_ERR(vports_tc_node);
+		goto err_alloc_node;
 	}
 
-	list_add_tail(&group->list, &esw->qos.groups);
+	vports_tc_node->tc = tc;
 
-	divider = esw_qos_calculate_min_rate_divider(esw, group, true);
-	if (divider) {
-		err = esw_qos_normalize_groups_min_rate(esw, divider, extack);
+	return vports_tc_node;
+
+err_alloc_node:
+	mlx5_destroy_scheduling_element_cmd(dev, SCHEDULING_HIERARCHY_E_SWITCH, tsar_ix);
+
+	return ERR_PTR(err);
+}
+
+static struct mlx5_esw_sched_node *
+esw_qos_lookup_vports_tc_node(struct mlx5_esw_sched_node *tc_arbiter_node, u8 tc)
+{
+	struct mlx5_esw_sched_node *vports_tc_node;
+
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		if (vports_tc_node->tc == tc)
+			return vports_tc_node;
+	}
+
+	return NULL;
+}
+
+static int esw_qos_destroy_vports_tc_node(struct mlx5_esw_sched_node *vports_tc_node, bool force)
+{
+	int err;
+
+	err = mlx5_destroy_scheduling_element_cmd(vports_tc_node->esw->dev,
+						  SCHEDULING_HIERARCHY_E_SWITCH,
+						  vports_tc_node->ix);
+	if (err) {
+		esw_warn(vports_tc_node->esw->dev,
+			 "Failed to destroy vports TC node (tc=%d)\n", vports_tc_node->tc);
+		if (!force)
+			return err;
+	}
+
+	__esw_qos_free_node(vports_tc_node);
+
+	return err;
+}
+
+
+static int
+esw_qos_destroy_vports_tc_nodes(struct mlx5_esw_sched_node *tc_arbiter_node, bool force,
+				struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vports_tc_node, *tmp;
+	struct mlx5_eswitch *esw = tc_arbiter_node->esw;
+	int num_tcs = esw_qos_num_tcs(esw->dev);
+	int err, ret = 0, i;
+
+	list_for_each_entry_safe(vports_tc_node, tmp, &tc_arbiter_node->children, entry) {
+		err = esw_qos_destroy_vports_tc_node(vports_tc_node, force);
 		if (err) {
-			NL_SET_ERR_MSG_MOD(extack, "E-Switch groups normalization failed");
-			goto err_min_rate;
+			NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy Vports TC node failed");
+			ret = err;
+			if (!force)
+				goto err_restore;
 		}
 	}
-	trace_mlx5_esw_group_qos_create(esw->dev, group, group->tsar_ix);
-	init_completion(&group->free_group_comp);
 
-	return group;
+	return ret;
+
+err_restore:
+	/* Restore previously destroyed vports TC nodes if an error occurs. */
+	for (i = 0; i < num_tcs; i++) {
+		if (esw_qos_lookup_vports_tc_node(tc_arbiter_node, i))
+			continue;
+
+		vports_tc_node = esw_qos_create_vports_tc_node(tc_arbiter_node, i, extack);
+		if (IS_ERR(vports_tc_node))
+			esw_warn(esw->dev, "Restore vports TC node failed (tc=%d)\n", i);
+	}
+
+	return ret;
+}
+
+static int esw_qos_create_vports_tc_nodes(struct mlx5_esw_sched_node *tc_arbiter_node,
+					  struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw = tc_arbiter_node->esw;
+	struct mlx5_esw_sched_node *vports_tc_node;
+	int num_tcs = esw_qos_num_tcs(esw->dev);
+	int err, i;
+
+	for (i = 0; i < num_tcs; i++) {
+		vports_tc_node = esw_qos_create_vports_tc_node(tc_arbiter_node, i, extack);
+		if (IS_ERR(vports_tc_node)) {
+			err = PTR_ERR(vports_tc_node);
+			esw_warn(esw->dev,
+				 "Failed to create vports TC node (tc=%d, err=%d)\n", i, err);
+			goto err_tc_node_create;
+		}
+	}
+
+	return 0;
+
+err_tc_node_create:
+	esw_qos_destroy_vports_tc_nodes(tc_arbiter_node, true, NULL);
+	return err;
+}
+
+static int esw_qos_normalize_vports_tcs(struct mlx5_esw_sched_node *tc_arbiter_node, bool force,
+					struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vports_tc_node;
+	int err, ret = 0;
+
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		err = esw_qos_normalize_min_rate(vports_tc_node->esw, vports_tc_node, extack);
+		if (err) {
+			ret = err;
+			if (!force)
+				return ret;
+		}
+	}
+
+	return ret;
+}
+
+static int
+esw_qos_create_tc_arbiter_sched_elem(struct mlx5_core_dev *dev, u32 parent_tsar_ix, u32 max_rate,
+				     u32 bw_share, u32 *tsar_ix, struct netlink_ext_ack *extack)
+{
+	u32 tsar_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
+	void *attr;
+	int err;
+
+	if (!mlx5_qos_tsar_type_supported(dev,
+					  TSAR_ELEMENT_TSAR_TYPE_TC_ARB,
+					  SCHEDULING_HIERARCHY_E_SWITCH)) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "E-Switch TC Arbiter scheduling element is not supported");
+
+		return -EOPNOTSUPP;
+	}
+
+	attr = MLX5_ADDR_OF(scheduling_context, tsar_ctx, element_attributes);
+	MLX5_SET(tsar_element, attr, tsar_type, TSAR_ELEMENT_TSAR_TYPE_TC_ARB);
+	MLX5_SET(scheduling_context, tsar_ctx, parent_element_id, parent_tsar_ix);
+	MLX5_SET(scheduling_context, tsar_ctx, element_type, SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR);
+	MLX5_SET(scheduling_context, tsar_ctx, max_average_bw, max_rate);
+	MLX5_SET(scheduling_context, tsar_ctx, bw_share, bw_share);
+	err = mlx5_create_scheduling_element_cmd(dev,
+						 SCHEDULING_HIERARCHY_E_SWITCH,
+						 tsar_ctx,
+						 tsar_ix);
+	if (err)
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch create TC Arbiter TSAR for node failed");
+
+	return err;
+}
+
+static struct mlx5_esw_sched_node *
+__esw_qos_create_vports_sched_node(struct mlx5_eswitch *esw, u32 group_id,
+				   struct mlx5_esw_sched_node *parent,
+				   struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *node;
+	u32 tsar_ix;
+	int err;
+
+	err = esw_qos_create_node_sched_elem(esw->dev, esw->qos.root_tsar_ix, 0, 0, &tsar_ix);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch create TSAR for node failed");
+		return ERR_PTR(err);
+	}
+
+	node = __esw_qos_alloc_node(esw, tsar_ix, SCHED_NODE_TYPE_VPORTS_TSAR, parent);
+	if (!node) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch alloc node failed");
+		err = -ENOMEM;
+		goto err_alloc_node;
+	}
+
+	node->group_id = group_id;
+	node->dev = esw->dev;
+	if (group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP) {
+		err = mlx5_create_vf_group_sysfs(esw->dev, group_id, &node->kobj);
+		if (err)
+			goto err_group_sysfs;
+	}
+
+	err = esw_qos_normalize_min_rate(esw, NULL, extack);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch nodes normalization failed");
+		goto err_min_rate;
+	}
+	trace_mlx5_esw_node_qos_create(esw->dev, node, node->tsar_ix);
+	init_completion(&node->free_group_comp);
+
+	return node;
 
 err_min_rate:
-	list_del(&group->list);
+        if (group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
+                kobject_put(&node->kobj);
+err_group_sysfs:
+	__esw_qos_free_node(node);
+err_alloc_node:
 	if (mlx5_destroy_scheduling_element_cmd(esw->dev,
 						SCHEDULING_HIERARCHY_E_SWITCH,
-						group->tsar_ix))
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy TSAR for group failed");
-	if (group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
-		kobject_put(&group->kobj);
-err_sched_elem:
-	kfree(group);
+						tsar_ix))
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy TSAR for node failed");
 	return ERR_PTR(err);
 }
 
 static int esw_qos_get(struct mlx5_eswitch *esw, struct netlink_ext_ack *extack);
 static void esw_qos_put(struct mlx5_eswitch *esw);
 
-struct mlx5_esw_rate_group *
-esw_qos_create_rate_group(struct mlx5_eswitch *esw, u32 group_id,
-			  struct netlink_ext_ack *extack)
+struct mlx5_esw_sched_node *
+esw_qos_create_vports_sched_node(struct mlx5_eswitch *esw, u32 group_id,
+				 struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *node;
 	int err;
 
+	esw_assert_qos_lock_held(esw);
 	if (!MLX5_CAP_QOS(esw->dev, log_esw_max_sched_depth))
 		return ERR_PTR(-EOPNOTSUPP);
 
@@ -527,120 +977,89 @@ esw_qos_create_rate_group(struct mlx5_eswitch *esw, u32 group_id,
 	if (err)
 		return ERR_PTR(err);
 
-	group = __esw_qos_create_rate_group(esw, group_id, extack);
-	if (IS_ERR(group))
+	node = __esw_qos_create_vports_sched_node(esw, group_id, NULL, extack);
+	if (IS_ERR(node))
 		esw_qos_put(esw);
 
-	return group;
+	return node;
 }
 
-static int __esw_qos_destroy_rate_group(struct mlx5_eswitch *esw,
-					struct mlx5_esw_rate_group *group,
-					struct netlink_ext_ack *extack)
+static int __esw_qos_destroy_node(struct mlx5_esw_sched_node *node,
+				  struct netlink_ext_ack *extack)
 {
-	u32 divider;
+	struct mlx5_eswitch *esw = node->esw;
 	int err;
 
-	if (group->group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
-		mlx5_destroy_vf_group_sysfs(group);
+	if (node->group_id != MLX5_ESW_QOS_NON_SYSFS_GROUP)
+		mlx5_destroy_vf_group_sysfs(node);
 	else
-		complete_all(&group->free_group_comp);
+		complete_all(&node->free_group_comp);
 
-	list_del(&group->list);
-
-	divider = esw_qos_calculate_min_rate_divider(esw, NULL, true);
-	err = esw_qos_normalize_groups_min_rate(esw, divider, extack);
-	if (err)
-		NL_SET_ERR_MSG_MOD(extack, "E-Switch groups' normalization failed");
+	trace_mlx5_esw_node_qos_destroy(esw->dev, node, node->ix);
 
 	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
 						  SCHEDULING_HIERARCHY_E_SWITCH,
-						  group->tsar_ix);
+						  node->ix);
 	if (err)
 		NL_SET_ERR_MSG_MOD(extack, "E-Switch destroy TSAR_ID failed");
 
-	trace_mlx5_esw_group_qos_destroy(esw->dev, group, group->tsar_ix);
+	wait_for_completion(&node->free_group_comp);
+	__esw_qos_free_node(node);
 
-	wait_for_completion(&group->free_group_comp);
-	kfree(group);
+	err = esw_qos_normalize_min_rate(esw, NULL, extack);
+	if (err)
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch nodes normalization failed");
+
 
 	return err;
 }
 
-int esw_qos_destroy_rate_group(struct mlx5_eswitch *esw,
-			       struct mlx5_esw_rate_group *group,
-			       struct netlink_ext_ack *extack)
+int esw_qos_destroy_node(struct mlx5_esw_sched_node *node,
+			 struct netlink_ext_ack *extack)
 {
+	struct mlx5_eswitch *esw = node->esw;
 	int err;
 
-	err = __esw_qos_destroy_rate_group(esw, group, extack);
+	err = __esw_qos_destroy_node(node, extack);
 	esw_qos_put(esw);
 
 	return err;
 }
 
-static bool esw_qos_element_type_supported(struct mlx5_core_dev *dev, int type)
-{
-	switch (type) {
-	case SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR:
-		return MLX5_CAP_QOS(dev, esw_element_type) &
-		       ELEMENT_TYPE_CAP_MASK_TASR;
-	case SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT:
-		return MLX5_CAP_QOS(dev, esw_element_type) &
-		       ELEMENT_TYPE_CAP_MASK_VPORT;
-	case SCHEDULING_CONTEXT_ELEMENT_TYPE_VPORT_TC:
-		return MLX5_CAP_QOS(dev, esw_element_type) &
-		       ELEMENT_TYPE_CAP_MASK_VPORT_TC;
-	case SCHEDULING_CONTEXT_ELEMENT_TYPE_PARA_VPORT_TC:
-		return MLX5_CAP_QOS(dev, esw_element_type) &
-		       ELEMENT_TYPE_CAP_MASK_PARA_VPORT_TC;
-	}
-	return false;
-}
-
 static int esw_qos_create(struct mlx5_eswitch *esw, struct netlink_ext_ack *extack)
 {
-	u32 tsar_ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
 	struct mlx5_core_dev *dev = esw->dev;
-	__be32 *attr;
 	int err;
 
 	if (!MLX5_CAP_GEN(dev, qos) || !MLX5_CAP_QOS(dev, esw_scheduling))
 		return -EOPNOTSUPP;
 
-	if (!esw_qos_element_type_supported(dev, SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR))
-		return -EOPNOTSUPP;
-
-	MLX5_SET(scheduling_context, tsar_ctx, element_type,
-		 SCHEDULING_CONTEXT_ELEMENT_TYPE_TSAR);
-
-	attr = MLX5_ADDR_OF(scheduling_context, tsar_ctx, element_attributes);
-	*attr = cpu_to_be32(TSAR_ELEMENT_TSAR_TYPE_DWRR << 16);
-
-	err = mlx5_create_scheduling_element_cmd(dev,
-						 SCHEDULING_HIERARCHY_E_SWITCH,
-						 tsar_ctx,
-						 &esw->qos.root_tsar_ix);
+	err = esw_qos_create_node_sched_elem(esw->dev, 0, 0, 0, &esw->qos.root_tsar_ix);
 	if (err) {
 		esw_warn(dev, "E-Switch create root TSAR failed (%d)\n", err);
 		return err;
 	}
 
-	INIT_LIST_HEAD(&esw->qos.groups);
 	if (MLX5_CAP_QOS(dev, log_esw_max_sched_depth)) {
-		esw->qos.group0 = __esw_qos_create_rate_group(esw, 0, extack);
-		if (IS_ERR(esw->qos.group0)) {
-			esw_warn(dev, "E-Switch create rate group 0 failed (%ld)\n",
-				 PTR_ERR(esw->qos.group0));
-			err = PTR_ERR(esw->qos.group0);
-			goto err_group0;
-		}
+		esw->qos.node0 = __esw_qos_create_vports_sched_node(esw, 0, NULL, extack);
+	} else {
+		/* The eswitch doesn't support scheduling nodes.
+		 * Create a software-only node0 using the root TSAR to attach vport QoS to.
+		 */
+		if (!__esw_qos_alloc_node(esw, esw->qos.root_tsar_ix,
+					  SCHED_NODE_TYPE_VPORTS_TSAR, NULL))
+			esw->qos.node0 = ERR_PTR(-ENOMEM);
+	}
+	if (IS_ERR(esw->qos.node0)) {
+		err = PTR_ERR(esw->qos.node0);
+		esw_warn(dev, "E-Switch create rate node 0 failed (%d)\n", err);
+		goto err_node0;
 	}
 	refcount_set(&esw->qos.refcnt, 1);
 
 	return 0;
 
-err_group0:
+err_node0:
 	if (mlx5_destroy_scheduling_element_cmd(esw->dev, SCHEDULING_HIERARCHY_E_SWITCH,
 						esw->qos.root_tsar_ix))
 		esw_warn(esw->dev, "E-Switch destroy root TSAR failed.\n");
@@ -650,18 +1069,15 @@ err_group0:
 
 static void esw_qos_destroy(struct mlx5_eswitch *esw)
 {
-	struct mlx5_esw_rate_group *group, *tmp;
 	int err;
 
-	/* destroy all sysfs groups and group0 */
-	list_for_each_entry_safe(group, tmp, &esw->qos.groups, list) {
-		if (group->group_id == MLX5_ESW_QOS_NON_SYSFS_GROUP)
-			continue;
-		__esw_qos_destroy_rate_group(esw, group, NULL);
-	}
-	esw->qos.group0 = NULL;
+	if (esw->qos.node0->tsar_ix != esw->qos.root_tsar_ix)
+		__esw_qos_destroy_node(esw->qos.node0, NULL);
+	else
+		__esw_qos_free_node(esw->qos.node0);
+	esw->qos.node0 = NULL;
 
-	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
+ 	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
 						  SCHEDULING_HIERARCHY_E_SWITCH,
 						  esw->qos.root_tsar_ix);
 	if (err)
@@ -672,8 +1088,7 @@ static int esw_qos_get(struct mlx5_eswitch *esw, struct netlink_ext_ack *extack)
 {
 	int err = 0;
 
-	lockdep_assert_held(&esw->state_lock);
-
+	esw_assert_qos_lock_held(esw);
 	if (!refcount_inc_not_zero(&esw->qos.refcnt)) {
 		/* esw_qos_create() set refcount to 1 only on success.
 		 * No need to decrement on failure.
@@ -686,79 +1101,1029 @@ static int esw_qos_get(struct mlx5_eswitch *esw, struct netlink_ext_ack *extack)
 
 static void esw_qos_put(struct mlx5_eswitch *esw)
 {
-	lockdep_assert_held(&esw->state_lock);
+	esw_assert_qos_lock_held(esw);
 	if (refcount_dec_and_test(&esw->qos.refcnt))
 		esw_qos_destroy(esw);
 }
 
-int esw_qos_vport_enable(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-			 u32 max_rate, u32 bw_share, struct netlink_ext_ack *extack)
+static int
+esw_qos_tc_arbiter_scheduling_teardown(struct mlx5_esw_sched_node *tc_arbiter_node, bool force,
+				       struct netlink_ext_ack *extack)
+{
+	int err, ret = 0;
+
+	/* Clean up all Vports TC nodes within the TC arbiter node. */
+	err = esw_qos_destroy_vports_tc_nodes(tc_arbiter_node, force, extack);
+	if (err) {
+		ret = err;
+		if (!force)
+			return err;
+	}
+
+	/* Destroy the scheduling element for the TC arbiter node itself. */
+	err = mlx5_destroy_scheduling_element_cmd(tc_arbiter_node->esw->dev,
+						  SCHEDULING_HIERARCHY_E_SWITCH,
+						  tc_arbiter_node->ix);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to destroy TC arbiter scheduling element.");
+		ret = err;
+		if (!force) {
+			/* If the destruction of the TC arbiter scheduling element fails,
+			 * attempt to restore the TC nodes.
+			 */
+			if (esw_qos_create_vports_tc_nodes(tc_arbiter_node, extack))
+				esw_warn(tc_arbiter_node->esw->dev,
+					 "TC Arbiter node restore failed\n");
+		}
+	}
+
+	return ret;
+}
+
+static int
+esw_qos_tc_arbiter_scheduling_setup(struct mlx5_esw_sched_node *tc_arbiter_node,
+				    struct mlx5_esw_sched_node *parent,
+				    struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw = tc_arbiter_node->esw;
+	struct mlx5_core_dev *dev = esw->dev;
+	int parent_tsar_ix;
+	int err;
+
+	if (!MLX5_CAP_QOS(dev, log_esw_max_sched_depth)) {
+		NL_SET_ERR_MSG_MOD(extack, "Setting up TC Arbiter for a node is not supported.");
+		return -EOPNOTSUPP;
+	}
+
+	parent_tsar_ix = parent ? parent->ix : esw->qos.root_tsar_ix;
+	/* Create a scheduling element for the TC arbiter under the parent TSAR. */
+	err = esw_qos_create_tc_arbiter_sched_elem(dev,
+						   parent_tsar_ix,
+						   tc_arbiter_node->max_rate,
+						   tc_arbiter_node->bw_share,
+						   &tc_arbiter_node->ix,
+						   extack);
+	if (err)
+		return err;
+	/* Initialize the vports TC nodes within created TC arbiter TSAR. */
+	err = esw_qos_create_vports_tc_nodes(tc_arbiter_node, extack);
+	if (err) {
+		/* If initialization fails, clean up the scheduling element
+		 * for the TC arbiter node.
+		 */
+		mlx5_destroy_scheduling_element_cmd(dev,
+						    SCHEDULING_HIERARCHY_E_SWITCH,
+						    tc_arbiter_node->ix);
+	}
+
+	return err;
+}
+
+static struct mlx5_esw_sched_node *
+esw_qos_create_tc_arbiter_node(struct mlx5_vport *vport, struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
+	struct mlx5_esw_sched_node *parent, *tc_arbiter_node;
+	int err;
+
+	/* Allocate TC arbiter node. */
+	parent = vport_node->parent;
+	tc_arbiter_node = __esw_qos_alloc_node(vport_node->parent->esw, 0,
+					       SCHED_NODE_TYPE_TC_ARBITER_TSAR,
+					       parent);
+	if (IS_ERR(tc_arbiter_node)) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch alloc node failed");
+		return tc_arbiter_node;
+	}
+
+	/* Set up scheduling for the TC arbiter node. */
+	tc_arbiter_node->max_rate = vport_node->max_rate;
+	tc_arbiter_node->min_rate = vport_node->min_rate;
+	tc_arbiter_node->bw_share = vport_node->bw_share;
+	err = esw_qos_tc_arbiter_scheduling_setup(tc_arbiter_node, vport_node->parent,
+						  extack);
+	if (err) {
+		list_del(&tc_arbiter_node->entry);
+		goto err_out;
+	}
+
+	return tc_arbiter_node;
+
+err_out:
+	kfree(tc_arbiter_node);
+	return ERR_PTR(err);
+}
+
+static int
+esw_qos_destroy_vport_tc(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
+{
+	struct mlx5_core_dev *dev = node->parent->esw->dev;
+	int err;
+
+	err = mlx5_destroy_scheduling_element_cmd(dev,
+						  SCHEDULING_HIERARCHY_E_SWITCH,
+						  node->ix);
+	if (err) {
+		esw_warn(dev,
+			 "Failed to destroy vport TC scheduling element (vport=%d,tc=%d,err=%d)\n",
+			  node->vport->vport, node->tc, err);
+		NL_SET_ERR_MSG_MOD(extack, "Failed to destroy vport TC scheduling element");
+	}
+
+	return err;
+}
+
+static int
+esw_qos_init_vport_tc(struct mlx5_vport *vport, struct mlx5_esw_sched_node *parent,
+		      struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *node;
+	u8 tc = parent->tc;
+	u32 sched_elem_ix;
+	int err;
+
+	err = esw_qos_vport_tc_create_sched_element(vport, parent, 0, 0,
+						    vport->qos.tc.esw_rate_limit_elem_ix,
+						    &sched_elem_ix);
+	if (err)
+		return err;
+
+	node = __esw_qos_alloc_node(parent->esw, sched_elem_ix, SCHED_NODE_TYPE_VPORT_TC, parent);
+	if (!node) {
+		err = -ENOMEM;
+		goto err_alloc;
+	}
+
+	node->max_rate = vport->qos.sched_node->max_rate;
+	node->min_rate = vport->qos.sched_node->min_rate;
+	node->tc = tc;
+	node->vport = vport;
+	vport->qos.tc.sched_nodes[tc] = node;
+
+	return 0;
+
+err_alloc:
+	if (mlx5_destroy_scheduling_element_cmd(parent->esw->dev,
+						SCHEDULING_HIERARCHY_E_SWITCH,
+						sched_elem_ix))
+		esw_warn(parent->esw->dev,
+			 "Failed to destroy vport TC scheduling element (vport=%d,tc=%d)\n",
+			 vport->vport, tc);
+
+	return err;
+}
+
+static int
+esw_qos_cleanup_vport_tcs(struct mlx5_vport *vport, bool force, struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *tc_arbiter_node = vport->qos.tc.arbiter_node;
+	struct mlx5_core_dev *dev = tc_arbiter_node->esw->dev;
+	int num_tcs = esw_qos_num_tcs(vport->dev);
+	int err, ret = 0, i;
+
+	for (i = 0; i < num_tcs ; i++) {
+		err = esw_qos_destroy_vport_tc(vport->qos.tc.sched_nodes[i], extack);
+		if (err) {
+			ret = err;
+			if (!force)
+				goto err_out;
+		}
+	}
+
+	err = mlx5_destroy_scheduling_element_cmd(dev,
+						  SCHEDULING_HIERARCHY_E_SWITCH,
+						  vport->qos.tc.esw_rate_limit_elem_ix);
+	if (err) {
+		esw_warn(dev,
+			 "Failed to destroy vport rate limit element (vport=%d,err=%d)\n",
+			 vport->vport, err);
+		NL_SET_ERR_MSG_MOD(extack, "Failed to destroy vport rate limit element");
+		ret = err;
+		if (!force)
+			goto err_out;
+	}
+
+	for (i = 0; i < num_tcs; i++)
+		__esw_qos_free_node(vport->qos.tc.sched_nodes[i]);
+
+	esw_qos_normalize_vports_tcs(tc_arbiter_node, force, extack);
+
+	kfree(vport->qos.tc.sched_nodes);
+	memset(&vport->qos.tc, 0, sizeof(vport->qos.tc));
+
+	return ret;
+
+err_out:
+	for (--i; i >= 0; i--) {
+		struct mlx5_esw_sched_node *parent, *node;
+		u32 bw_share;
+
+		node = vport->qos.tc.sched_nodes[i];
+		parent = node->parent;
+		bw_share = node->bw_share;
+		if (esw_qos_vport_tc_create_sched_element(vport, parent, 0, bw_share,
+							  vport->qos.tc.esw_rate_limit_elem_ix,
+							  &node->ix)) {
+			esw_warn(parent->esw->dev,
+				 "vport tc restore failed (vport=%d)(tc=%d)\n", vport->vport, i);
+			continue;
+		}
+	}
+
+	return err;
+}
+
+static int esw_qos_init_vport_tcs(struct mlx5_vport *vport,
+				  struct mlx5_esw_sched_node *tc_arbiter_node,
+				  struct netlink_ext_ack *extack)
+{
+	int num_tcs = esw_qos_num_tcs(vport->dev);
+	int err, i;
+
+	vport->qos.tc.sched_nodes = kcalloc(num_tcs, sizeof(struct mlx5_esw_sched_node *),
+					    GFP_KERNEL);
+	if (!vport->qos.tc.sched_nodes)
+		return -ENOMEM;
+
+	err = esw_qos_create_rate_limit_element(tc_arbiter_node->esw->dev,
+						&vport->qos.tc.esw_rate_limit_elem_ix,
+						vport->qos.sched_node->max_rate);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to create vport rate limit element.");
+		goto err_create_rate_limit;
+	}
+
+	for (i = 0; i < num_tcs; i++) {
+		struct mlx5_esw_sched_node *vports_tc_node;
+
+		vports_tc_node = esw_qos_lookup_vports_tc_node(tc_arbiter_node, i);
+		if (!vports_tc_node) {
+			NL_SET_ERR_MSG_MOD(extack, "Failed to get vports TC node.");
+			goto err_init_vport_tc;
+		}
+		err = esw_qos_init_vport_tc(vport, vports_tc_node, extack);
+		if (err)
+			goto err_init_vport_tc;
+	}
+
+	esw_qos_normalize_vports_tcs(tc_arbiter_node, false, extack);
+	vport->qos.tc.arbiter_node = tc_arbiter_node;
+
+	return 0;
+
+err_init_vport_tc:
+	for (--i; i >= 0; i--) {
+		esw_qos_destroy_vport_tc(vport->qos.tc.sched_nodes[i], NULL);
+		__esw_qos_free_node(vport->qos.tc.sched_nodes[i]);
+	}
+
+	esw_qos_normalize_vports_tcs(tc_arbiter_node, true, NULL);
+
+	if (mlx5_destroy_scheduling_element_cmd(tc_arbiter_node->esw->dev,
+						SCHEDULING_HIERARCHY_E_SWITCH,
+						vport->qos.tc.esw_rate_limit_elem_ix))
+		esw_warn(tc_arbiter_node->esw->dev,
+			 "Failed to destroy vport rate limit element (vport=%d)\n",
+			 vport->vport);
+
+err_create_rate_limit:
+	kfree(vport->qos.tc.sched_nodes);
+	memset(&vport->qos.tc, 0, sizeof(vport->qos.tc));
+
+	return err;
+}
+
+static int esw_qos_vport_tc_prepare(struct mlx5_vport *vport, struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vport_node, *parent;
+	int err;
+
+	esw_assert_qos_lock_held(vport->dev->priv.eswitch);
+	vport_node = vport->qos.sched_node;
+	if (!vport_node)
+		return 0;
+
+	parent = vport_node->parent;
+	err = mlx5_destroy_scheduling_element_cmd(parent->esw->dev, SCHEDULING_HIERARCHY_E_SWITCH,
+						  vport_node->ix);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "E-Switch destroying vport scheduling element for cleaning up the vport QoS failed.");
+		return err;
+	}
+
+	/* Clear the bandwidth share for the vport node, preserving the
+	 * min_rate and max_rate as they are shared with the TC QoS
+	 * configuration.
+	 */
+	vport_node->bw_share = 0;
+
+	list_del_init(&vport_node->entry);
+	esw_qos_normalize_min_rate(parent->esw, parent, extack);
+
+	return 0;
+}
+
+static int esw_qos_vport_qos_restore(struct mlx5_vport *vport, struct mlx5_esw_sched_node *parent,
+				     struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vport_node;
+	int err;
+
+	esw_assert_qos_lock_held(vport->dev->priv.eswitch);
+	vport_node = vport->qos.sched_node;
+	if (!vport_node)
+		return 0;
+
+	/* Validate that the parent node is a tsar for vports nodes,
+	 * else we cannot restore the vport QoS.
+	 */
+	if (parent->type != SCHED_NODE_TYPE_VPORTS_TSAR &&
+	    parent->type != SCHED_NODE_TYPE_VPORTS_AND_TC_ARBITERS_TSAR) {
+		err = -EIO;
+		NL_SET_ERR_MSG_MOD(extack,
+				   "E-Switch cannot restore vport QoS to non vports parent node.");
+		return err;
+	}
+
+	err = esw_qos_vport_create_sched_element(vport, parent, vport_node->max_rate, 0,
+						 &vport_node->ix);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "E-Switch creating vport scheduling element for restoring the vport QoS failed.");
+		return err;
+	}
+
+	esw_qos_node_set_parent(vport_node, parent);
+	esw_qos_normalize_min_rate(parent->esw, parent, extack);
+
+	return 0;
+}
+
+int esw_qos_vport_tc_disable(struct mlx5_vport *vport,
+			     struct mlx5_esw_sched_node *node,
+			     struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	struct mlx5_esw_sched_node *tc_arbiter_node;
+	int err;
+
+	esw_assert_qos_lock_held(esw);
+
+	/* Save current state if we need to restore. */
+	tc_arbiter_node = vport->qos.tc.arbiter_node;
+	if (!tc_arbiter_node)
+		return 0;
+
+	/* Cleanup vport TC level QoS configurations. */
+	err = esw_qos_cleanup_vport_tcs(vport, false, extack);
+	if (err)
+		return err;
+
+	node = node ?: esw->qos.node0;
+	/* Restore the vport level QoS.*/
+	err = esw_qos_vport_qos_restore(vport, node, extack);
+	if (err) {
+		if (esw_qos_init_vport_tcs(vport, tc_arbiter_node, extack))
+			esw_warn(esw->dev, "vport tc restore failed (vport=%d)\n", vport->vport);
+	}
+
+	return err;
+}
+
+
+static int esw_qos_vport_tc_enable(struct mlx5_vport *vport,
+				   struct mlx5_esw_sched_node *tc_arbiter_node,
+				   struct netlink_ext_ack *extack)
 {
 	int err;
 
-	lockdep_assert_held(&esw->state_lock);
-	if (vport->qos.enabled)
+	esw_assert_qos_lock_held(vport->dev->priv.eswitch);
+
+	if (!MLX5_CAP_QOS(tc_arbiter_node->esw->dev, log_esw_max_rate_limit))
+		return -EOPNOTSUPP;
+
+	if (vport->qos.tc.arbiter_node)
+		return 0;
+
+	/* Cleanup the regular QoS configurations. */
+	err = esw_qos_vport_tc_prepare(vport, extack);
+	if (err)
+		return err;
+
+	/* Initialize the vport TC level QoS. */
+	err = esw_qos_init_vport_tcs(vport, tc_arbiter_node, extack);
+	if (err) {
+		if (esw_qos_vport_qos_restore(vport, vport->qos.sched_node->parent, extack))
+			esw_warn(vport->dev,
+				 "vport restore QoS settings failed (vport=%d)\n", vport->vport);
+	}
+
+	return err;
+}
+
+
+static void
+esw_qos_restore_vports_in_tc_arbiter_node(struct mlx5_esw_sched_node *tc_arbiter_node,
+					  struct mlx5_esw_sched_node *node,
+					  struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vports_tc_node;
+
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		struct mlx5_esw_sched_node *child, *tmp;
+
+		list_for_each_entry_safe(child, tmp, &vports_tc_node->children, entry) {
+			if (esw_qos_cleanup_vport_tcs(child->vport, true, extack))
+				continue;
+
+			/* Try restoring the vport level QoS only if we
+			 * were able to destroy all the vport tc level QoS.
+			 */
+			if (esw_qos_vport_qos_restore(child->vport, node, extack))
+				esw_warn(child->vport->dev,
+					 "vport restore failed (vport=%d)\n", child->vport->vport);
+		}
+	}
+}
+
+static int
+esw_qos_disable_tc_qos_for_vports(struct mlx5_esw_sched_node *tc_arbiter_node,
+				  struct mlx5_esw_sched_node *node,
+				  struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vports_tc_node, *child, *tmp;
+	struct mlx5_vport *vport;
+	int err = 0;
+
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		list_for_each_entry_safe(child, tmp, &vports_tc_node->children, entry) {
+			vport = child->vport;
+			/* Disable TC QoS for the current vport and assign it to the node. */
+			err = esw_qos_vport_tc_disable(vport, node, extack);
+			if (err)
+				goto err_out;
+		}
+	}
+
+	return err;
+
+err_out:
+	/* On error, enable TC QoS for the previously disabled vports. */
+	list_for_each_entry_safe(child, tmp, &node->children, entry) {
+		vport = child->vport;
+		/* Re-enable TC QoS and reassign the vport to the TC arbiter node */
+		if (esw_qos_vport_tc_enable(vport, tc_arbiter_node, extack))
+			esw_warn(vport->dev, "Failed to restore vport tc QoS %d\n", vport->vport);
+	}
+
+	return err;
+}
+
+static int
+esw_qos_tc_arbiter_node_disable_tc_qos(struct mlx5_esw_sched_node *tc_arbiter_node,
+				       struct mlx5_esw_sched_node *node,
+				       struct netlink_ext_ack *extack)
+{
+	u32 parent_tsar_ix;
+	int err;
+
+	parent_tsar_ix = node->parent ? node->parent->ix :
+			 node->esw->qos.root_tsar_ix;
+
+	/* Create scheduling element for the node. */
+	err = esw_qos_create_node_sched_elem(node->esw->dev, parent_tsar_ix, node->max_rate,
+					     node->bw_share, &node->ix);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Failed to create scheduling element for vports node when disabliing vports TC QoS");
+		return err;
+	}
+
+	/* Disable TC QoS for vports in the arbiter node. */
+	err = esw_qos_disable_tc_qos_for_vports(tc_arbiter_node, node, extack);
+	if (err) {
+		/* If disabling fails, destroy the scheduling element created earlier. */
+		mlx5_destroy_scheduling_element_cmd(node->esw->dev, SCHEDULING_HIERARCHY_E_SWITCH,
+						    node->ix);
+		esw_warn(node->esw->dev, "vports node destroy scheduling element failed.\n");
+	}
+
+	return err;
+}
+
+static int
+esw_qos_tc_qos_enable_for_vports_in_node(struct mlx5_esw_sched_node *node,
+					 struct mlx5_esw_sched_node *tc_arbiter_node,
+					 struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vport_node, *tmp;
+	int err;
+
+	/* Enable TC QoS for each vport in the node. */
+	list_for_each_entry_safe(vport_node, tmp, &node->children, entry) {
+		err = esw_qos_vport_tc_enable(vport_node->vport, tc_arbiter_node, extack);
+		if  (err)
+			goto err_out;
+	}
+
+	/* Destroy the current vports node TSAR. */
+	err = mlx5_destroy_scheduling_element_cmd(node->esw->dev, SCHEDULING_HIERARCHY_E_SWITCH,
+						  node->ix);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Destroy current vports node TSAR failed when enabling vports TC QoS");
+		goto err_out;
+	}
+
+	return err;
+
+err_out:
+	/* Restore vports in TC arbiter node if an error occurs. */
+	esw_qos_restore_vports_in_tc_arbiter_node(tc_arbiter_node, node, extack);
+
+	return err;
+}
+
+static struct mlx5_esw_sched_node *
+esw_qos_copy_tc_arbiter_node(struct mlx5_esw_sched_node *curr_node)
+{
+	struct mlx5_esw_sched_node *vports_tc_node, *tmp;
+	struct mlx5_esw_sched_node *new_node;
+
+	new_node = __esw_qos_alloc_node(curr_node->esw, curr_node->ix, curr_node->type, NULL);
+	if (!IS_ERR(new_node)) {
+		list_for_each_entry_safe(vports_tc_node, tmp, &curr_node->children, entry) {
+			esw_qos_node_set_parent(vports_tc_node, new_node);
+		}
+	}
+
+	return new_node;
+}
+
+static void esw_qos_restore_vports_to_node(struct mlx5_esw_sched_node *curr_node,
+					   struct mlx5_esw_sched_node *new_node)
+{
+	struct mlx5_esw_sched_node *vport_node, *tmp;
+
+	list_for_each_entry_safe(vport_node, tmp, &curr_node->children, entry) {
+		esw_qos_node_set_parent(vport_node, new_node);
+	}
+
+	list_del_init(&curr_node->entry);
+	kfree(curr_node);
+}
+
+static struct mlx5_esw_sched_node *
+esw_qos_copy_vports_node(struct mlx5_esw_sched_node *curr_node)
+{
+	struct mlx5_esw_sched_node *new_node, *vport_node, *tmp;
+
+	new_node = __esw_qos_alloc_node(curr_node->esw, curr_node->ix, curr_node->type, NULL);
+	if (!IS_ERR(new_node)) {
+		list_for_each_entry_safe(vport_node, tmp, &curr_node->children, entry) {
+			esw_qos_node_set_parent(vport_node, new_node);
+		}
+	}
+
+	return new_node;
+}
+
+static int esw_qos_node_disable_tc_arbitration(struct mlx5_esw_sched_node *node,
+					       struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *curr_node, *vport_node, *tmp;
+	int err;
+
+	if (node->type != SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+		return 0;
+
+	/* Allocate a new rate node to hold the current state, which will allow
+	 * for restoring the vports back to this node after disabling TC arbitration.
+	 */
+	curr_node = esw_qos_copy_tc_arbiter_node(node);
+	if (IS_ERR(curr_node)) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed setting up vports node");
+
+		return PTR_ERR(curr_node);
+	}
+
+	node->type = SCHED_NODE_TYPE_VPORTS_TSAR;
+	/* Disable TC QoS for all vports, and assign them back to the node. */
+	err = esw_qos_tc_arbiter_node_disable_tc_qos(curr_node, node, extack);
+	if (err)
+		goto err_disable_vports_tc;
+
+	/* Clean up the TC arbiter node after disabling TC QoS for vports. */
+	err = esw_qos_tc_arbiter_scheduling_teardown(curr_node, false, extack);
+	if (err)
+		goto err_tc_arbiter_node_cleanup;
+
+	list_del_init(&curr_node->entry);
+	kfree(curr_node);
+
+	return err;
+
+err_tc_arbiter_node_cleanup:
+	/* Attempt to restore vports to the original node if cleanup fails. */
+	list_for_each_entry_safe(vport_node, tmp, &node->children, entry) {
+		if (esw_qos_vport_tc_enable(vport_node->vport, curr_node, extack))
+			esw_warn(vport_node->vport->dev, "TC Arbiter node restore failed\n");
+	}
+
+ err_disable_vports_tc:
+	/* Restore original node type if disabling TC QoS failed. */
+	node->type = curr_node->type;
+	node->ix = curr_node->ix;
+	list_del_init(&curr_node->entry);
+	kfree(curr_node);
+
+	return err;
+}
+
+static int esw_qos_node_enable_tc_arbitration(struct mlx5_esw_sched_node *node,
+					      struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *curr_node;
+	int err;
+
+	if (node->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+		return 0;
+
+	/* Check if any vport within the node has TC QoS already enabled.
+	 * TC QoS cannot be enabled for the entire node if any member vport
+	 * already has individual TC QoS enabled.
+	 */
+	if (node->type == SCHED_NODE_TYPE_VPORTS_AND_TC_ARBITERS_TSAR) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Cannot enable node TC QoS: assigned vport has TC QoS enabled");
+
+		return -EOPNOTSUPP;
+	}
+
+	/* Allocate a new node that will store the information of the current node.
+	 * This will be used later to restore the node if necessary.
+	 */
+	curr_node = esw_qos_copy_vports_node(node);
+	if (IS_ERR(curr_node)) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed setting up node TC QoS");
+
+		return PTR_ERR(curr_node);
+	}
+
+	/* Initialize the TC arbiter node for QoS management.
+	 * This step prepares the node for handling Traffic Class arbitration.
+	 */
+	node->type = SCHED_NODE_TYPE_TC_ARBITER_TSAR;
+	err = esw_qos_tc_arbiter_scheduling_setup(node, node->parent, extack);
+	if (err)
+		goto err_tc_arbiter_init;
+
+	/* Enable TC QoS for each vport within the current node. */
+	err = esw_qos_tc_qos_enable_for_vports_in_node(curr_node, node, extack);
+	if (err)
+		goto err_node_enable_vports_tc;
+
+	list_del_init(&curr_node->entry);
+	kfree(curr_node);
+
+	return err;
+
+err_node_enable_vports_tc:
+	/* Teardown the TC arbiter node if enabling TC for vports failed. */
+	esw_qos_tc_arbiter_scheduling_teardown(node, true, NULL);
+
+err_tc_arbiter_init:
+	/* Restore the original node. */
+	node->type = curr_node->type;
+	node->ix = curr_node->ix;
+	esw_qos_restore_vports_to_node(curr_node, node);
+
+	return err;
+}
+
+bool esw_qos_tc_arbitration_enabled_on_vport(struct mlx5_vport *vport)
+{
+	struct mlx5_esw_sched_node *parent;
+
+	if (!vport->qos.tc.arbiter_node)
+		return false;
+
+	parent = vport->qos.tc.arbiter_node->parent;
+	if (!parent)
+		return false;
+
+	return (parent->type == SCHED_NODE_TYPE_VPORTS_AND_TC_ARBITERS_TSAR);
+}
+
+static int esw_qos_destroy_tc_arbiter_node(struct mlx5_vport *vport, bool force,
+					   struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *parent, *tc_arbiter_node;
+	int err, ret = 0;
+
+	tc_arbiter_node = vport->qos.tc.arbiter_node;
+	parent = tc_arbiter_node->parent;
+	list_del(&tc_arbiter_node->entry);
+	err = esw_qos_vport_tc_disable(vport, parent, extack);
+	if (err) {
+		ret = err;
+		if (!force) {
+			list_add_tail(&tc_arbiter_node->entry, &parent->children);
+			return ret;
+		}
+	}
+
+	err = esw_qos_tc_arbiter_scheduling_teardown(tc_arbiter_node, false, extack);
+	if (err) {
+		ret = err;
+		if (!force) {
+			esw_qos_vport_tc_enable(vport, tc_arbiter_node, extack);
+			return ret;
+		}
+	}
+
+	kfree(tc_arbiter_node);
+	if (!esw_sched_node_has_tc_arbiter(parent))
+		parent->type = SCHED_NODE_TYPE_VPORTS_TSAR;
+
+	return ret;
+}
+
+static int esw_qos_vport_disable_tc_arbitration(struct mlx5_vport *vport,
+						struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+
+	esw_assert_qos_lock_held(esw);
+
+	if (!vport->qos.tc.arbiter_node)
+		return 0;
+
+	return esw_qos_destroy_tc_arbiter_node(vport, false, extack);
+}
+
+static int esw_qos_vport_enable_tc_arbitration(struct mlx5_vport *vport,
+					       struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	struct mlx5_esw_sched_node *tc_arbiter_node;
+	int err;
+
+	esw_assert_qos_lock_held(esw);
+	/* Check if TC arbitration is already enabled on this vport,
+	 * or if it's part of a node with TC arbitration enabled.
+	 */
+	if (vport->qos.tc.arbiter_node) {
+		if (!esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Cannot enable TC arbitration on vport assigned to a node with TC arbitration enabled");
+			return -EOPNOTSUPP;
+		}
+
+		return 0;
+	}
+
+	if (MLX5_CAP_QOS(esw->dev, log_esw_max_sched_depth) < 2) {
+		NL_SET_ERR_MSG_MOD(extack, "Setting up TC Arbiter for a vport is not supported.");
+		return -EOPNOTSUPP;
+	}
+
+	tc_arbiter_node = esw_qos_create_tc_arbiter_node(vport, extack);
+	if (IS_ERR(tc_arbiter_node))
+		return PTR_ERR(tc_arbiter_node);
+
+	vport_node->parent->type = SCHED_NODE_TYPE_VPORTS_AND_TC_ARBITERS_TSAR;
+
+	err =  esw_qos_vport_tc_enable(vport, tc_arbiter_node, extack);
+	if (err) {
+		esw_qos_destroy_tc_arbiter_node(vport, true, NULL);
+	}
+
+	return err;
+}
+
+int esw_qos_vport_enable(struct mlx5_vport *vport, u32 max_rate, u32 bw_share,
+			 struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	u32 sched_elem_ix;
+	int err;
+
+	esw_assert_qos_lock_held(esw);
+	if (vport->qos.sched_node)
 		return 0;
 
 	err = esw_qos_get(esw, extack);
 	if (err)
 		return err;
 
-	vport->qos.group = esw->qos.group0;
-
-	err = esw_qos_vport_create_sched_element(esw, vport, max_rate, bw_share);
+	err = esw_qos_vport_create_sched_element(vport, esw->qos.node0, max_rate, bw_share,
+						 &sched_elem_ix);
 	if (err)
 		goto err_out;
 
-	vport->qos.enabled = true;
-	trace_mlx5_esw_vport_qos_create(vport, bw_share, max_rate);
+	vport->qos.sched_node = __esw_qos_alloc_node(esw, sched_elem_ix, SCHED_NODE_TYPE_VPORT,
+						     esw->qos.node0);
+	if (!vport->qos.sched_node) {
+		err = -ENOMEM;
+		goto err_alloc;
+	}
+
+	vport->qos.sched_node->vport = vport;
+	esw->qos.node0->num_vports++;
+
+	trace_mlx5_esw_vport_qos_create(vport->dev, vport, bw_share, max_rate);
 
 	return 0;
 
+err_alloc:
+	if (mlx5_destroy_scheduling_element_cmd(esw->dev,
+						SCHEDULING_HIERARCHY_E_SWITCH, sched_elem_ix))
+		esw_warn(esw->dev, "E-Switch destroy vport scheduling element failed.\n");
 err_out:
 	esw_qos_put(esw);
 
 	return err;
 }
 
-void mlx5_esw_qos_vport_disable(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
+void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport)
 {
-	struct mlx5_esw_rate_group *group = vport->qos.group;
+	struct mlx5_esw_sched_node *vport_node, *tc_arbiter_node;
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	struct mlx5_core_dev *dev;
 	int err;
 
 	lockdep_assert_held(&esw->state_lock);
-	if (!vport->qos.enabled)
-		return;
+	esw_qos_lock(esw);
+	vport_node = vport->qos.sched_node;
+	if (!vport_node)
+		goto unlock;
+	WARN(vport_node->parent != esw->qos.node0,
+	     "Disabling QoS on port before detaching it from node");
 
-	err = mlx5_destroy_scheduling_element_cmd(esw->dev,
-						  SCHEDULING_HIERARCHY_E_SWITCH,
-						  vport->qos.esw_tsar_ix);
-	if (err)
-		esw_warn(esw->dev, "E-Switch destroy TSAR vport element failed (vport=%d,err=%d)\n",
-			 vport->vport, err);
-	esw_qos_destroy_sysfs_rate_group(esw, vport, group);
+	tc_arbiter_node = vport->qos.tc.arbiter_node;
+	dev = tc_arbiter_node ? tc_arbiter_node->esw->dev : vport_node->esw->dev;
+	trace_mlx5_esw_vport_qos_destroy(dev, vport);
 
+	if (tc_arbiter_node) {
+		struct mlx5_esw_sched_node *parent = tc_arbiter_node->parent;
+
+		esw_qos_cleanup_vport_tcs(vport, true, NULL);
+		/* Destroy the TC arbiter if the tc arbitration is on the
+		 * vport.
+		 */
+		if (parent) {
+			esw_qos_tc_arbiter_scheduling_teardown(tc_arbiter_node, true,
+							       NULL);
+			kfree(tc_arbiter_node);
+			if (!esw_sched_node_has_tc_arbiter(parent))
+				parent->type = SCHED_NODE_TYPE_VPORTS_TSAR;
+		} else {
+			esw_qos_destroy_sysfs_rate_group(esw, vport, tc_arbiter_node);
+		}
+	} else {
+		err = mlx5_destroy_scheduling_element_cmd(dev,
+							  SCHEDULING_HIERARCHY_E_SWITCH,
+							  vport_node->ix);
+		if (err)
+			esw_warn(dev,
+				 "E-Switch destroy vport scheduling element failed (vport=%d,err=%d)\n",
+				 vport->vport, err);
+		esw_qos_destroy_sysfs_rate_group(esw, vport, vport_node->parent);
+	}
+
+	__esw_qos_free_node(vport_node);
 	memset(&vport->qos, 0, sizeof(vport->qos));
-	trace_mlx5_esw_vport_qos_destroy(vport);
 
 	esw_qos_put(esw);
+unlock:
+	esw_qos_unlock(esw);
 }
 
-int mlx5_esw_qos_set_vport_rate(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-				u32 max_rate, u32 min_rate)
+static int esw_qos_set_vport_tc_min_rate(struct mlx5_vport *vport,
+					 u64 tx_share, struct netlink_ext_ack *extack)
 {
+	int num_tcs = esw_qos_num_tcs(vport->dev);
+	struct mlx5_esw_sched_node *tc_arbiter_node;
+	u32 *tcs_min_rate;
+	int err = 0, i;
+
+	esw_assert_qos_lock_held(vport->dev->priv.eswitch);
+
+	/* Allocate memory for storing the current min rate for rollback in case of failure. */
+	tcs_min_rate = kcalloc(num_tcs, sizeof(u32), GFP_KERNEL);
+	if (!tcs_min_rate) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to setup TX share for vport");
+		return -ENOMEM;
+	}
+
+	/* Iterate over each traffic class (TC) and update the min rate. */
+	for (i = 0; i < num_tcs; i++) {
+		tcs_min_rate[i] = vport->qos.tc.sched_nodes[i]->min_rate;
+		vport->qos.tc.sched_nodes[i]->min_rate = tx_share;
+	}
+
+	tc_arbiter_node = vport->qos.tc.arbiter_node;
+	err = esw_qos_normalize_vports_tcs(tc_arbiter_node, false, extack);
+	if (err)
+		goto err_out;
+
+	kfree(tcs_min_rate);
+
+	return 0;
+
+err_out:
+	for (i = 0; i < num_tcs; i++)
+		vport->qos.tc.sched_nodes[i]->min_rate = tcs_min_rate[i];
+
+	if (esw_qos_normalize_vports_tcs(tc_arbiter_node, true, extack))
+		esw_warn(vport->dev, "Failed to restore TC arbiter");
+
+	kfree(tcs_min_rate);
+	return err;
+}
+
+static int mlx5_esw_qos_set_vport_tc_min_rate(struct mlx5_eswitch *esw,
+					      struct mlx5_vport *vport, u64 tx_share,
+					      struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *tc_arbiter_node, *parent_node;
+	u32 act_min_rate;
 	int err;
 
-	lockdep_assert_held(&esw->state_lock);
-	err = esw_qos_vport_enable(esw, vport, 0, 0, NULL);
-	if (err)
-		return err;
+	/* If the tc arbitration is not on the vport, update the vports tc. */
+	if (!esw_qos_tc_arbitration_enabled_on_vport(vport))
+		return esw_qos_set_vport_tc_min_rate(vport, tx_share, extack);
 
-	err = esw_qos_set_vport_min_rate(esw, vport, min_rate, NULL);
-	if (!err)
-		err = esw_qos_set_vport_max_rate(esw, vport, max_rate, NULL);
+	tc_arbiter_node = vport->qos.tc.arbiter_node;
+	parent_node = tc_arbiter_node->parent;
+	act_min_rate =  tc_arbiter_node->min_rate;
+	if (act_min_rate == tx_share)
+		return 0;
+
+	tc_arbiter_node->min_rate = tx_share;
+	err = esw_qos_normalize_min_rate(parent_node->esw, parent_node, extack);
+	if (err)
+		tc_arbiter_node->min_rate = act_min_rate;
 
 	return err;
+}
+
+int mlx5_esw_qos_set_vport_rate(struct mlx5_vport *vport, u32 max_rate, u32 min_rate)
+{
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	int err;
+
+	esw_qos_lock(esw);
+
+	if (vport->qos.tc.arbiter_node) {
+		err = mlx5_esw_qos_set_vport_tc_min_rate(esw, vport, min_rate, NULL);
+		if (err)
+			goto unlock;
+
+		vport->qos.sched_node->min_rate = min_rate;
+		if (vport->qos.sched_node->max_rate != max_rate) {
+			err = esw_qos_rate_limit_config(vport->dev,
+							vport->qos.tc.esw_rate_limit_elem_ix,
+							max_rate);
+			if (!err)
+				vport->qos.sched_node->max_rate = max_rate;
+		}
+
+		goto unlock;
+	}
+
+	err = esw_qos_vport_enable(vport, 0, 0, NULL);
+	if (err)
+		goto unlock;
+
+	err = esw_qos_set_vport_min_rate(vport, min_rate, NULL);
+	if (!err)
+		err = esw_qos_set_vport_max_rate(vport, max_rate, NULL);
+unlock:
+	esw_qos_unlock(esw);
+	return err;
+}
+
+bool mlx5_esw_qos_get_vport_rate(struct mlx5_vport *vport, u32 *max_rate, u32 *min_rate)
+{
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	bool enabled;
+
+	/* Opportunistic check to avoid locking below if unnecessary. */
+	if (!vport->qos.sched_node)
+		return false;
+
+	esw_qos_lock(esw);
+	enabled = !!vport->qos.sched_node;
+	if (enabled) {
+		*max_rate = vport->qos.sched_node->max_rate;
+		*min_rate = vport->qos.sched_node->min_rate;
+	}
+	esw_qos_unlock(esw);
+	return enabled;
 }
 
 static u32 mlx5_esw_qos_lag_link_speed_get_locked(struct mlx5_core_dev *mdev)
@@ -848,21 +2213,22 @@ int mlx5_esw_qos_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num, u32 
 			return err;
 	}
 
-	mutex_lock(&esw->state_lock);
-	if (!vport->qos.enabled) {
+	esw_qos_lock(esw);
+	if (!vport->qos.sched_node) {
 		/* Eswitch QoS wasn't enabled yet. Enable it and vport QoS. */
-		err = esw_qos_vport_enable(esw, vport, rate_mbps, vport->qos.bw_share, NULL);
+		err = esw_qos_vport_enable(vport, rate_mbps, 0, NULL);
 	} else {
-		MLX5_SET(scheduling_context, ctx, max_average_bw, rate_mbps);
+		struct mlx5_core_dev *dev = vport->qos.sched_node->parent->esw->dev;
 
+		MLX5_SET(scheduling_context, ctx, max_average_bw, rate_mbps);
 		bitmask = MODIFY_SCHEDULING_ELEMENT_IN_MODIFY_BITMASK_MAX_AVERAGE_BW;
-		err = mlx5_modify_scheduling_element_cmd(esw->dev,
+		err = mlx5_modify_scheduling_element_cmd(dev,
 							 SCHEDULING_HIERARCHY_E_SWITCH,
 							 ctx,
-							 vport->qos.esw_tsar_ix,
+							 vport->qos.sched_node->ix,
 							 bitmask);
 	}
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 
 	return err;
 }
@@ -907,12 +2273,15 @@ static bool esw_qos_groups_are_supported(struct mlx5_core_dev *dev)
 	       MLX5_CAP_QOS(dev, esw_scheduling);
 }
 
-static struct mlx5_esw_rate_group *
+static struct mlx5_esw_sched_node *
 esw_qos_find_sysfs_group(struct mlx5_eswitch *esw, u32 group_id)
 {
-	struct mlx5_esw_rate_group *tmp;
+	struct mlx5_esw_sched_node *tmp;
 
-	list_for_each_entry(tmp, &esw->qos.groups, list) {
+	esw_assert_qos_lock_held(esw);
+	list_for_each_entry(tmp, &esw->qos.domain->nodes, entry) {
+		if (tmp->esw != esw)
+			continue;
 		if (tmp->group_id == MLX5_ESW_QOS_NON_SYSFS_GROUP)
 			continue;
 		if (tmp->group_id == group_id)
@@ -922,61 +2291,89 @@ esw_qos_find_sysfs_group(struct mlx5_eswitch *esw, u32 group_id)
 	return NULL;
 }
 
-int mlx5_esw_qos_vport_update_sysfs_group(struct mlx5_eswitch *esw, int vport_num, u32 group_id)
+int mlx5_esw_qos_vport_update_sysfs_group(struct mlx5_eswitch *group_esw, u32 group_id,
+					  struct mlx5_vport *vport)
 {
-	struct mlx5_vport *vport = mlx5_eswitch_get_vport(esw, vport_num);
-	struct mlx5_esw_rate_group *curr_group, *new_group;
+	struct mlx5_esw_sched_node *tc_arbiter_node = vport->qos.tc.arbiter_node;
+	struct mlx5_eswitch *vport_esw = vport->dev->priv.eswitch;
+	struct mlx5_esw_sched_node *curr_group, *new_group;
 	int err = 0;
 
-	if (IS_ERR(vport))
-		return PTR_ERR(vport);
-
-	if (!esw_qos_groups_are_supported(esw->dev))
+	if (!esw_qos_groups_are_supported(group_esw->dev))
 		return -EOPNOTSUPP;
 
-	mutex_lock(&esw->state_lock);
-	err = esw_qos_vport_enable(esw, vport, 0, 0, NULL);
+	esw_qos_lock(group_esw);
+
+	err = esw_qos_vport_enable(vport, 0, 0, NULL);
 	if (err)
 		goto out;
 
-	curr_group = vport->qos.group;
-	if (curr_group && curr_group->group_id == group_id)
+	curr_group = mlx5_esw_qos_vport_get_parent(vport);
+	if (curr_group->esw == group_esw && curr_group->group_id == group_id)
 		goto out;
 
-	new_group = esw_qos_find_sysfs_group(esw, group_id);
-	if (!new_group) {
-		new_group = esw_qos_create_rate_group(esw, group_id, NULL);
-		if (IS_ERR(new_group)) {
-			err = PTR_ERR(new_group);
-			esw_warn(esw->dev, "E-Switch couldn't create new sysfs group %d (%d)\n",
-				 group_id, err);
-			goto out;
+	if (group_id) {
+		new_group = esw_qos_find_sysfs_group(group_esw, group_id);
+		if (!new_group) {
+			new_group = esw_qos_create_vports_sched_node(group_esw, group_id, NULL);
+			if (IS_ERR(new_group)) {
+				err = PTR_ERR(new_group);
+				esw_warn(group_esw->dev,
+					 "E-Switch couldn't create new sysfs group %d (%d)\n",
+					 group_id, err);
+				esw_qos_unlock(group_esw);
+				return err;
+			}
 		}
+	} else {
+		new_group = vport_esw->qos.node0;
 	}
 
-	err = esw_qos_update_group_scheduling_element(esw, vport, curr_group, new_group, NULL);
-	if (err)
-		goto err_update;
+	if (new_group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
+		if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+			esw_warn(vport_esw->dev, "TC arbitration already enabled for vport");
+				err = -EOPNOTSUPP;
+				esw_qos_unlock(group_esw);
+				return err;
+			}
+		err = esw_qos_vport_tc_update_node(vport, new_group, NULL);
+		goto update_out;
+	}
 
-	if (curr_group != esw->qos.group0)
-		curr_group->num_vports--;
-	if (curr_group != esw->qos.group0 && !curr_group->num_vports)
-		esw_qos_destroy_rate_group(esw, curr_group, NULL);
+	if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+		err = mlx5_esw_qos_vport_tc_update_tc_arbitration_node(vport, new_group, NULL);
+		goto update_out;
+	}
 
-	if (new_group != esw->qos.group0)
-		new_group->num_vports++;
-	goto out;
+	if (tc_arbiter_node)
+		err = esw_qos_vport_tc_disable(vport, new_group, NULL);
+	else
+		err = esw_qos_update_node_scheduling_element(vport, curr_group, new_group, NULL);
+update_out:
+	if (err) {
+		curr_group = new_group;
+		goto curr_group_cleanup;
+	}
 
-err_update:
-	if (new_group != esw->qos.group0 && !new_group->num_vports)
-		esw_qos_destroy_rate_group(esw, new_group, NULL);
+	new_group->num_vports++;
+	curr_group->num_vports--;
+
+curr_group_cleanup:
+	if (curr_group->group_id != 0 && !curr_group->num_vports) {
+		if (curr_group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
+			esw_qos_destroy_vports_tc_nodes(curr_group, true, NULL);
+		}
+
+		esw_qos_destroy_node(curr_group, NULL);
+	}
+
 out:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(group_esw);
 	return err;
 }
 
 int mlx5_esw_qos_set_sysfs_group_max_rate(struct mlx5_eswitch *esw,
-					  struct mlx5_esw_rate_group *group,
+					  struct mlx5_esw_sched_node *group,
 					  u32 max_rate)
 {
 	int err;
@@ -985,7 +2382,7 @@ int mlx5_esw_qos_set_sysfs_group_max_rate(struct mlx5_eswitch *esw,
 	    !MLX5_CAP_QOS(esw->dev, esw_rate_limit))
 		return -EOPNOTSUPP;
 
-	if (!mutex_trylock(&esw->state_lock))
+	if (!mutex_trylock(&esw->qos.domain->lock))
 		return -EBUSY;
 
 	if (!esw_qos_find_sysfs_group(esw, group->group_id)) {
@@ -993,14 +2390,14 @@ int mlx5_esw_qos_set_sysfs_group_max_rate(struct mlx5_eswitch *esw,
 		goto unlock;
 	}
 
-	err = esw_qos_set_group_max_rate(esw, group, max_rate, NULL);
+	err = esw_qos_set_node_max_rate(group, max_rate, NULL);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	mutex_unlock(&esw->qos.domain->lock);
 	return err;
 }
 
 int mlx5_esw_qos_set_sysfs_group_min_rate(struct mlx5_eswitch *esw,
-					  struct mlx5_esw_rate_group *group,
+					  struct mlx5_esw_sched_node *group,
 					  u32 min_rate)
 {
 	int err = 0;
@@ -1009,7 +2406,7 @@ int mlx5_esw_qos_set_sysfs_group_min_rate(struct mlx5_eswitch *esw,
 	    !MLX5_CAP_QOS(esw->dev, log_esw_max_sched_depth))
 		return -EOPNOTSUPP;
 
-	if (!mutex_trylock(&esw->state_lock))
+	if (!mutex_trylock(&esw->qos.domain->lock))
 		return -EBUSY;
 
 	if (!esw_qos_find_sysfs_group(esw, group->group_id)) {
@@ -1017,17 +2414,35 @@ int mlx5_esw_qos_set_sysfs_group_min_rate(struct mlx5_eswitch *esw,
 		goto unlock;
 	}
 
-	err = esw_qos_set_group_min_rate(esw, group, min_rate, NULL);
+	err = esw_qos_set_node_min_rate(group, min_rate, NULL);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	mutex_unlock(&esw->qos.domain->lock);
 
 	return err;
 }
 
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+int mlx5_esw_qos_init(struct mlx5_eswitch *esw)
+{
+	bool use_shared_domain = esw->mode == MLX5_ESWITCH_OFFLOADS &&
+		MLX5_CAP_QOS(esw->dev, esw_cross_esw_sched);
+
+	if (esw->qos.domain) {
+		if (esw->qos.domain->shared == use_shared_domain)
+			return 0;  /* Nothing to change. */
+		esw_qos_domain_release(esw);
+	}
+
+	return esw_qos_domain_init(esw, use_shared_domain);
+}
+
+void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw)
+{
+	if (esw->qos.domain)
+		esw_qos_domain_release(esw);
+}
 
 /* Eswitch devlink rate API */
-
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack)
 {
@@ -1043,14 +2458,21 @@ int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void
 	if (err)
 		return err;
 
-	mutex_lock(&esw->state_lock);
-	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
+	esw_qos_lock(esw);
+	if (vport->qos.tc.arbiter_node) {
+		err = mlx5_esw_qos_set_vport_tc_min_rate(esw, vport, tx_share, extack);
+		if (!err)
+			vport->qos.sched_node->min_rate = tx_share;
+		goto unlock;
+	}
+
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
 	if (err)
 		goto unlock;
 
-	err = esw_qos_set_vport_min_rate(esw, vport, tx_share, extack);
+	err = esw_qos_set_vport_min_rate(vport, tx_share, extack);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
@@ -1069,57 +2491,242 @@ int mlx5_esw_devlink_rate_leaf_tx_max_set(struct devlink_rate *rate_leaf, void *
 	if (err)
 		return err;
 
-	mutex_lock(&esw->state_lock);
-	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
+	esw_qos_lock(esw);
+
+	if (vport->qos.tc.arbiter_node) {
+		if (vport->qos.sched_node->max_rate != tx_max) {
+			err = esw_qos_rate_limit_config(vport->dev,
+							vport->qos.tc.esw_rate_limit_elem_ix,
+							tx_max);
+			if (!err)
+				vport->qos.sched_node->max_rate = tx_max;
+		}
+		goto unlock;
+	}
+
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
 	if (err)
 		goto unlock;
 
-	err = esw_qos_set_vport_max_rate(esw, vport, tx_max, extack);
+	err = esw_qos_set_vport_max_rate(vport, tx_max, extack);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
+	return err;
+}
+#endif
+
+static int
+mlx5_esw_qos_update_tc_arbiter_node(struct mlx5_esw_sched_node *tc_arbiter_node, u32 *new_tc_bw,
+				    struct netlink_ext_ack *extack)
+{
+	int num_tcs = esw_qos_num_tcs(tc_arbiter_node->esw->dev);
+	struct mlx5_esw_sched_node *vports_tc_node;
+	u32 *orig_tc_bw;
+	int err = 0;
+	u8 tc;
+
+	orig_tc_bw = kcalloc(num_tcs, sizeof(u32), GFP_KERNEL);
+	if (!orig_tc_bw)
+		return -ENOMEM;
+
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		u32 bw_share;
+
+		tc = vports_tc_node->tc;
+		orig_tc_bw[tc] = vports_tc_node->bw_share;
+		if (orig_tc_bw[tc] == new_tc_bw[tc] && new_tc_bw[tc])
+			continue;
+
+		bw_share = new_tc_bw[tc] ?: MLX5_MIN_BW_SHARE;
+		err = esw_qos_sched_elem_config(vports_tc_node, 0, bw_share, extack);
+		if (err)
+			goto err_update_vports_tc_node;
+
+		vports_tc_node->bw_share = bw_share;
+	}
+
+	kfree(orig_tc_bw);
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		tc = vports_tc_node->tc;
+		vports_tc_node->user_bw_share = new_tc_bw[tc];
+	}
+
+	return err;
+
+err_update_vports_tc_node:
+	list_for_each_entry(vports_tc_node, &tc_arbiter_node->children, entry) {
+		tc = vports_tc_node->tc;
+		if (orig_tc_bw[tc] == vports_tc_node->bw_share)
+			continue;
+
+		if (esw_qos_sched_elem_config(vports_tc_node, 0, orig_tc_bw[tc], extack)) {
+			esw_warn(tc_arbiter_node->esw->dev, "E-Switch Restore Traffic Class node failed\n");
+			break;
+		}
+
+		vports_tc_node->bw_share = orig_tc_bw[tc];
+	}
+
+	kfree(orig_tc_bw);
+
 	return err;
 }
 
+static int rate_leaf_tc_bw_set(void *priv, u32 *tc_bw, struct netlink_ext_ack *extack)
+{
+	struct mlx5_vport *vport = priv;
+	struct mlx5_eswitch *esw;
+	bool disable = true;
+	int num_tcs, err, i;
+
+	esw = vport->dev->priv.eswitch;
+	if (!mlx5_esw_allowed(esw))
+		return -EPERM;
+
+	num_tcs = esw_qos_num_tcs(esw->dev);
+	if (!num_tcs) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch traffic classes number is not supported");
+		return -EOPNOTSUPP;
+	}
+
+	for (i = 0; i < num_tcs; i++) {
+		if (tc_bw[i]) {
+			disable = false;
+			break;
+		}
+	}
+
+	esw_qos_lock(esw);
+
+	if (disable) {
+		err = esw_qos_vport_disable_tc_arbitration(vport, extack);
+		goto unlock;
+	}
+
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
+	if (err)
+		goto unlock;
+
+	err = esw_qos_vport_enable_tc_arbitration(vport, extack);
+	if (err)
+		goto unlock;
+
+	err = mlx5_esw_qos_update_tc_arbiter_node(vport->qos.tc.arbiter_node, tc_bw, extack);
+unlock:
+	esw_qos_unlock(esw);
+
+	return err;
+}
+
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+int mlx5_esw_devlink_rate_leaf_tc_bw_set(struct devlink_rate *rate_leaf, void *priv,
+					 u32 *tc_bw, struct netlink_ext_ack *extack)
+{
+	return rate_leaf_tc_bw_set(priv, tc_bw, extack);
+}
+#endif
+
+int mlx5_esw_sysfs_rate_leaf_tc_bw_set(void *priv, u32 *tc_bw, struct netlink_ext_ack *extack)
+{
+	return rate_leaf_tc_bw_set(priv, tc_bw, extack);
+}
+
+static int rate_node_tc_bw_set(void *priv, u32 *tc_bw, struct netlink_ext_ack *extack)
+{
+	struct mlx5_esw_sched_node *node = priv;
+	struct mlx5_eswitch *esw = node->esw;
+	bool disable = true;
+	int num_tcs, err, i;
+
+	num_tcs = esw_qos_num_tcs(esw->dev);
+	if (!num_tcs) {
+		NL_SET_ERR_MSG_MOD(extack, "E-Switch traffic classes number is not supported");
+		return -EOPNOTSUPP;
+	}
+
+	for (i = 0; i < num_tcs; i++) {
+		if (tc_bw[i]) {
+			disable = false;
+			break;
+		}
+	}
+
+	esw_qos_lock(esw);
+
+	if (disable) {
+		err = esw_qos_node_disable_tc_arbitration(node, extack);
+		goto out;
+	}
+
+	err = esw_qos_node_enable_tc_arbitration(node, extack);
+	if (err)
+		goto out;
+
+	err = mlx5_esw_qos_update_tc_arbiter_node(node, tc_bw, extack);
+	if (err) {
+		if (esw_qos_node_disable_tc_arbitration(node, extack))
+			NL_SET_ERR_MSG_MOD(extack, "E-Switch restore TC BW for node failed");
+	}
+
+out:
+	esw_qos_unlock(esw);
+
+	return err;
+}
+
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node, void *priv,
+					 u32 *tc_bw, struct netlink_ext_ack *extack)
+{
+	return rate_node_tc_bw_set(priv, tc_bw, extack);
+}
+#endif
+
+int mlx5_esw_sysfs_rate_node_tc_bw_set(void *priv, u32 *tc_bw,
+				       struct netlink_ext_ack *extack)
+{
+	return rate_node_tc_bw_set(priv, tc_bw, extack);
+}
+
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack)
 {
-	struct mlx5_core_dev *dev = devlink_priv(rate_node->devlink);
-	struct mlx5_eswitch *esw = dev->priv.eswitch;
-	struct mlx5_esw_rate_group *group = priv;
+	struct mlx5_esw_sched_node *node = priv;
+	struct mlx5_eswitch *esw = node->esw;
 	int err;
 
-	err = esw_qos_devlink_rate_to_mbps(dev, "tx_share", &tx_share, extack);
+	err = esw_qos_devlink_rate_to_mbps(esw->dev, "tx_share", &tx_share, extack);
 	if (err)
 		return err;
 
-	mutex_lock(&esw->state_lock);
-	err = esw_qos_set_group_min_rate(esw, group, tx_share, extack);
-	mutex_unlock(&esw->state_lock);
+	esw_qos_lock(esw);
+	err = esw_qos_set_node_min_rate(node, tx_share, extack);
+	esw_qos_unlock(esw);
 	return err;
 }
 
 int mlx5_esw_devlink_rate_node_tx_max_set(struct devlink_rate *rate_node, void *priv,
 					  u64 tx_max, struct netlink_ext_ack *extack)
 {
-	struct mlx5_core_dev *dev = devlink_priv(rate_node->devlink);
-	struct mlx5_eswitch *esw = dev->priv.eswitch;
-	struct mlx5_esw_rate_group *group = priv;
+	struct mlx5_esw_sched_node *node = priv;
+	struct mlx5_eswitch *esw = node->esw;
 	int err;
 
-	err = esw_qos_devlink_rate_to_mbps(dev, "tx_max", &tx_max, extack);
+	err = esw_qos_devlink_rate_to_mbps(esw->dev, "tx_max", &tx_max, extack);
 	if (err)
 		return err;
 
-	mutex_lock(&esw->state_lock);
-	err = esw_qos_set_group_max_rate(esw, group, tx_max, extack);
-	mutex_unlock(&esw->state_lock);
+	esw_qos_lock(esw);
+	err = esw_qos_set_node_max_rate(node, tx_max, extack);
+	esw_qos_unlock(esw);
 	return err;
 }
 
 int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
 				   struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *node;
 	struct mlx5_eswitch *esw;
 	int err = 0;
 
@@ -1127,7 +2734,7 @@ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	mutex_lock(&esw->state_lock);
+	esw_qos_lock(esw);
 	if (esw->mode != MLX5_ESWITCH_OFFLOADS) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Rate node creation supported only in switchdev mode");
@@ -1135,69 +2742,247 @@ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
 		goto unlock;
 	}
 
-	group = esw_qos_create_rate_group(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
-	if (IS_ERR(group)) {
-		err = PTR_ERR(group);
+	node = esw_qos_create_vports_sched_node(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
+	if (IS_ERR(node)) {
+		err = PTR_ERR(node);
 		goto unlock;
 	}
 
-	*priv = group;
+	*priv = node;
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
 int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
 				   struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group = priv;
-	struct mlx5_eswitch *esw;
-	int err;
+	struct mlx5_esw_sched_node *node = priv;
+	struct mlx5_eswitch *esw = node->esw;
+	int err, ret = 0;
 
-	esw = mlx5_devlink_eswitch_get(rate_node->devlink);
-	if (IS_ERR(esw))
-		return PTR_ERR(esw);
+	esw_qos_lock(esw);
+	if (node->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
+		err = esw_qos_destroy_vports_tc_nodes(node, true, NULL);
+		if (err)
+			ret = err;
+	}
 
-	mutex_lock(&esw->state_lock);
-	err = esw_qos_destroy_rate_group(esw, group, extack);
-	mutex_unlock(&esw->state_lock);
-	return err;
+	err = __esw_qos_destroy_node(node, extack);
+	if (err)
+		ret = err;
+	esw_qos_put(esw);
+
+	esw_qos_unlock(esw);
+	return ret;
+}
+#endif
+
+int esw_qos_vport_tc_update_node(struct mlx5_vport *vport,
+				 struct mlx5_esw_sched_node *new_tc_arbiter_node,
+				 struct netlink_ext_ack *extack)
+{
+	/* If TC QoS is already enabled, disable it and re-enable with the new node. */
+	if (vport->qos.tc.arbiter_node) {
+		struct mlx5_esw_sched_node *curr_tc_arbiter_node;
+		int err;
+
+		curr_tc_arbiter_node = vport->qos.tc.arbiter_node;
+		err = esw_qos_cleanup_vport_tcs(vport, false, extack);
+		if (err)
+			return err;
+
+		err = esw_qos_init_vport_tcs(vport, new_tc_arbiter_node, extack);
+		if (err) {
+			if (esw_qos_init_vport_tcs(vport, curr_tc_arbiter_node, extack))
+				esw_warn(curr_tc_arbiter_node->esw->dev,
+					 "Restore vport tc failed.\n");
+		}
+
+		return err;
+	}
+
+	/* If TC QoS is not enabled, handle full TC QoS enablement. */
+	return esw_qos_vport_tc_enable(vport, new_tc_arbiter_node, extack);
 }
 
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 int mlx5_esw_devlink_rate_parent_set(struct devlink_rate *devlink_rate,
 				     struct devlink_rate *parent,
 				     void *priv, void *parent_priv,
 				     struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *node;
 	struct mlx5_vport *vport = priv;
 
 	if (!parent)
-		return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch,
-						       vport, NULL, extack);
+		return mlx5_esw_qos_vport_update_node(vport, NULL, extack);
 
-	group = parent_priv;
-	return mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, group, extack);
+	node = parent_priv;
+	return mlx5_esw_qos_vport_update_node(vport, node, extack);
 }
-
 #endif
 
-int mlx5_esw_qos_vport_update_group(struct mlx5_eswitch *esw,
-				    struct mlx5_vport *vport,
-				    struct mlx5_esw_rate_group *group,
-				    struct netlink_ext_ack *extack)
+int mlx5_esw_qos_vport_tc_update_tc_arbitration_node(struct mlx5_vport *vport,
+						     struct mlx5_esw_sched_node *node,
+						     struct netlink_ext_ack *extack)
 {
-	int err = 0;
+	struct mlx5_esw_sched_node *vport_node = vport->qos.sched_node;
+	struct mlx5_esw_sched_node *parent;
+	int err;
 
-	mutex_lock(&esw->state_lock);
-	if (!vport->qos.enabled && !group)
-		goto unlock;
+	err = esw_qos_vport_disable_tc_arbitration(vport, extack);
+	if (err)
+		return err;
 
-	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
-	if (!err)
-		err = esw_qos_vport_update_group(esw, vport, group, extack);
-unlock:
-	mutex_unlock(&esw->state_lock);
+	parent = vport_node->parent;
+	err = esw_qos_vport_update_node(vport, node, extack);
+	if (err) {
+		if (esw_qos_vport_enable_tc_arbitration(vport, extack))
+			goto err_restore;
+		return err;
+	}
+
+	err = esw_qos_vport_enable_tc_arbitration(vport, extack);
+	if (err) {
+		vport_node->parent = parent;
+		if (esw_qos_vport_enable_tc_arbitration(vport, extack))
+			goto err_restore;
+	}
+
+	return err;
+
+err_restore:
+	esw_warn(vport_node->parent->esw->dev, "Restore vport tc failed.\n");
 	return err;
 }
 
+static bool mlx5_esw_validate_cross_esw_scheduling(struct mlx5_eswitch *esw,
+						   struct mlx5_esw_sched_node *node,
+						   struct netlink_ext_ack *extack)
+{
+	if (!node || esw == node->esw)
+		return 0;
+
+	if (!MLX5_CAP_QOS(esw->dev, esw_cross_esw_sched)) {
+		NL_SET_ERR_MSG_MOD(extack, "Cross E-Switch scheduling is not supported");
+		return -EOPNOTSUPP;
+	}
+	if (esw->qos.domain != node->esw->qos.domain) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Cannot add vport to a node belonging to a different qos domain");
+		return -EOPNOTSUPP;
+	}
+	if (!mlx5_lag_is_active(esw->dev)) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Cross E-Switch scheduling requires LAG to be activated");
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
+
+int mlx5_esw_qos_vport_update_node(struct mlx5_vport *vport,
+				   struct mlx5_esw_sched_node *node,
+				   struct netlink_ext_ack *extack)
+{
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+	int err;
+
+	err = mlx5_esw_validate_cross_esw_scheduling(esw, node, extack);
+	if (err)
+		return err;
+
+	esw_qos_lock(esw);
+	if (!vport->qos.sched_node && !node)
+		goto unlock;
+
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
+	if (err)
+		goto unlock;
+
+	if (node) {
+		if (node->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
+			if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+				NL_SET_ERR_MSG_MOD(extack,
+						   "TC arbitration already enabled for vport");
+				err = -EOPNOTSUPP;
+				goto unlock;
+			}
+
+			err = esw_qos_vport_tc_update_node(vport, node, extack);
+			goto unlock;
+		}
+	}
+
+	if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+		err = mlx5_esw_qos_vport_tc_update_tc_arbitration_node(vport, node, extack);
+		goto unlock;
+	}
+
+	if (vport->qos.tc.arbiter_node)
+		err = esw_qos_vport_tc_disable(vport, node, extack);
+	else
+		err = esw_qos_vport_update_node(vport, node, extack);
+unlock:
+	esw_qos_unlock(esw);
+	return err;
+}
+
+/* If the qos group has vf from other esw, we can't delete the group
+ * because it still has child. So move all vfs in qos group to it's
+ * own esw. And delete the empty groups.
+ */
+void
+mlx5_esw_qos_pre_cleanup(struct mlx5_core_dev *dev, int num_vfs)
+{
+	struct mlx5_esw_sched_node *group, *tmp1, *tmp2, *node0, *vport_group;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *vport;
+	int err;
+
+	if (!is_mdev_switchdev_mode(dev) || !num_vfs)
+		return;
+
+	esw_qos_lock(esw);
+	list_for_each_entry_safe(group, tmp1, &esw->qos.domain->nodes, entry) {
+		if (group->group_id == MLX5_ESW_QOS_NON_SYSFS_GROUP)
+			continue;
+		if (!group->group_id)
+			continue;
+		if (group->type != SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+			continue;
+
+		esw_qos_node_disable_tc_arbitration(group, NULL);
+	}
+
+	list_for_each_entry_safe(group, tmp1, &esw->qos.domain->nodes, entry) {
+		if (group->group_id == MLX5_ESW_QOS_NON_SYSFS_GROUP)
+			continue;
+		if (!group->group_id)
+			continue;
+
+		if (group->type != SCHED_NODE_TYPE_VPORTS_TSAR)
+			continue;
+
+		list_for_each_entry_safe(vport_group, tmp2, &group->children, entry) {
+			vport = vport_group->vport;
+			if (vport->dev != dev && group->esw->dev != dev)
+				continue;
+
+			node0 = vport->dev->priv.eswitch->qos.node0;
+			err = esw_qos_update_node_scheduling_element(vport, group, node0, NULL);
+			if (err)
+				esw_warn(vport->dev,
+					 "failed to move vport %d to node0\n", vport->vport);
+			group->num_vports--;
+			node0->num_vports++;
+		}
+		if (!group->num_vports) {
+			esw = group->esw;
+			__esw_qos_destroy_node(group, NULL);
+			esw_qos_put(esw);
+		}
+	}
+	esw_qos_unlock(esw);
+}

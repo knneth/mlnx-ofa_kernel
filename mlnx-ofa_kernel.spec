@@ -47,8 +47,14 @@
 # MarinerOS 1.0 sets -fPIE in the hardening cflags
 # (in the gcc specs file).
 # This seems to break only this package and not other kernel packages.
-%if "%{_vendor}" == "mariner"
+%if "%{_vendor}" == "mariner" || "%{_vendor}" == "azl" || (0%{?rhel} >= 10)
 %global _hardened_cflags %{nil}
+%endif
+
+# WA: Centos Stream 10 kernel doesn't support PIC mode, so we removed the following flags
+%if (0%{?rhel} >= 10)
+%global _hardening_gcc_ldflags %{nil}
+%global _gcc_lto_cflags %{nil}
 %endif
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
@@ -71,8 +77,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 24.07}
-%{!?_release: %global _release OFED.24.07.0.6.1.1}
+%{!?_version: %global _version 24.10}
+%{!?_release: %global _release OFED.24.10.0.7.0.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -114,7 +120,7 @@ BuildRequires: /usr/bin/perl
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.07-0.6.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-0.7.0.tgz
 
 
 # build KMP rpms?
@@ -158,7 +164,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.07-0.6.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-0.7.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -189,7 +195,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.07-0.6.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-0.7.0.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -262,7 +268,11 @@ mv "$@" source/
 mkdir obj
 
 %build
-export EXTRA_CFLAGS='-DVERSION=\"%version\"'
+EXTRA_CFLAGS='-DVERSION=\"%version\"'
+%if (0%{?rhel} >= 10)
+EXTRA_CFLAGS+=' -fno-exceptions'
+%endif
+export EXTRA_CFLAGS
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export CONF_OPTIONS="%{configure_options}"
 for flavor in %flavors_to_build; do

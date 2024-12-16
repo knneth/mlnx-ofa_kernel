@@ -277,7 +277,7 @@ Change-Id: I5259b3483b41af5f3e625b0a08a198bd68edcbeb
  
  	mlx5e_build_common_cq_param(mdev, param);
  	param->cq_period_mode = params->tx_cq_moderation.cq_period_mode;
-@@ -1188,6 +1268,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -1200,6 +1280,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
  	/* UMR WQEs for the regular RQ. */
  	wqebbs = mlx5e_mpwrq_total_umr_wqebbs(mdev, params, NULL);
  
@@ -285,7 +285,7 @@ Change-Id: I5259b3483b41af5f3e625b0a08a198bd68edcbeb
  	/* If XDP program is attached, XSK may be turned on at any time without
  	 * restarting the channel. ICOSQ must be big enough to fit UMR WQEs of
  	 * both regular RQ and XSK RQ.
-@@ -1232,7 +1313,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -1244,7 +1325,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
  
  		wqebbs += max_xsk_wqebbs;
  	}
@@ -294,7 +294,7 @@ Change-Id: I5259b3483b41af5f3e625b0a08a198bd68edcbeb
  	if (params->packet_merge.type == MLX5E_PACKET_MERGE_SHAMPO)
  		wqebbs += mlx5e_shampo_icosq_sz(mdev, params, rqp);
  
-@@ -1255,7 +1336,6 @@ static u8 mlx5e_build_async_icosq_log_wq
+@@ -1267,7 +1348,6 @@ static u8 mlx5e_build_async_icosq_log_wq
  {
  	if (mlx5e_is_ktls_rx(mdev))
  		return MLX5E_PARAMS_DEFAULT_LOG_SQ_SIZE;
@@ -302,7 +302,7 @@ Change-Id: I5259b3483b41af5f3e625b0a08a198bd68edcbeb
  	return MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
  }
  
-@@ -1290,6 +1370,7 @@ static void mlx5e_build_async_icosq_para
+@@ -1302,6 +1382,7 @@ static void mlx5e_build_async_icosq_para
  	mlx5e_build_ico_cq_param(mdev, log_wq_size, &param->cqp);
  }
  
@@ -310,7 +310,7 @@ Change-Id: I5259b3483b41af5f3e625b0a08a198bd68edcbeb
  void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
  			     struct mlx5e_params *params,
  			     struct mlx5e_xsk_param *xsk,
-@@ -1304,6 +1385,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
+@@ -1316,6 +1397,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
  	param->is_xdp_mb = !mlx5e_rx_is_linear_skb(mdev, params, xsk);
  	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
  }
@@ -318,7 +318,7 @@ Change-Id: I5259b3483b41af5f3e625b0a08a198bd68edcbeb
  
  int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
  			      struct mlx5e_params *params,
-@@ -1320,7 +1402,9 @@ int mlx5e_build_channel_param(struct mlx
+@@ -1332,7 +1414,9 @@ int mlx5e_build_channel_param(struct mlx
  	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
  
  	mlx5e_build_sq_param(mdev, params, &cparam->txq_sq);

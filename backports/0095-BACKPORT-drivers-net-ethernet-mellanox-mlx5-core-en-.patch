@@ -9,7 +9,7 @@ Change-Id: I157f8be4cd9fb811781f1745f43459c5cc486af3
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-@@ -278,11 +278,17 @@ static const struct sysfs_ops rep_sysfs_
+@@ -279,11 +279,17 @@ static const struct sysfs_ops rep_sysfs_
  	.store  = rep_attr_store
  };
  
@@ -27,7 +27,7 @@ Change-Id: I157f8be4cd9fb811781f1745f43459c5cc486af3
  };
  
  static struct attribute *rep_paging_attrs[] = {
-@@ -290,12 +296,18 @@ static struct attribute *rep_paging_attr
+@@ -291,12 +297,18 @@ static struct attribute *rep_paging_attr
  	&attr_num_pages.attr,
  	NULL,
  };

@@ -8,7 +8,7 @@ Change-Id: Ia13c46f007115a1fb395f67ef9f02b55b0a71de2
 
 --- a/drivers/infiniband/hw/mlx5/Makefile
 +++ b/drivers/infiniband/hw/mlx5/Makefile
-@@ -28,8 +28,11 @@ mlx5_ib-y := ah.o \
+@@ -29,8 +29,11 @@ mlx5_ib-y := ah.o \
  
  mlx5_ib-$(CONFIG_INFINIBAND_ON_DEMAND_PAGING) += odp.o
  mlx5_ib-$(CONFIG_MLX5_ESWITCH) += ib_rep.o

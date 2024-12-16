@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
 
 Change-Id: I3921e10c82bf646d64821f93f0e1102a3120f8f2
 ---
- include/linux/auxiliary_bus.h | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ include/linux/auxiliary_bus.h | 46 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
 
 --- a/include/linux/auxiliary_bus.h
 +++ b/include/linux/auxiliary_bus.h
-@@ -8,6 +8,8 @@
+@@ -8,8 +8,11 @@
  #ifndef _AUXILIARY_BUS_H_
  #define _AUXILIARY_BUS_H_
  
@@ -16,8 +16,75 @@ Change-Id: I3921e10c82bf646d64821f93f0e1102a3120f8f2
 +
  #include <linux/device.h>
  #include <linux/mod_devicetable.h>
++#include <linux/xarray.h>
  
-@@ -244,8 +246,22 @@ void auxiliary_driver_unregister(struct
+ /**
+  * DOC: DEVICE_LIFESPAN
+@@ -58,6 +61,11 @@
+  *       in
+  * @name: Match name found by the auxiliary device driver,
+  * @id: unique identitier if multiple devices of the same name are exported,
++ * #if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++ * @irqs: irqs xarray contains irq indices which are used by the device,
++ * @lock: Synchronize irq sysfs creation,
++ * @irq_dir_exists: whether "irqs" directory exists,
++ * #endif
+  *
+  * An auxiliary_device represents a part of its parent device's functionality.
+  * It is given a name that, combined with the registering drivers
+@@ -139,6 +147,11 @@ struct auxiliary_device {
+ 	struct device dev;
+ 	const char *name;
+ 	u32 id;
++	struct {
++		struct xarray irqs;
++		struct mutex lock; /* Synchronize irq sysfs creation */
++		bool irq_dir_exists;
++	} sysfs;
+ };
+ 
+ /**
+@@ -213,10 +226,25 @@ int __auxiliary_device_add(struct auxili
+ #define auxiliary_device_add(auxdev) __auxiliary_device_add(auxdev, KBUILD_MODNAME)
+ 
+ #ifdef CONFIG_SYSFS
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
++void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq);
++#else
+ int mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
+ void mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
+ 				       int irq);
++#endif
+ #else /* CONFIG_SYSFS */
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++static inline int
++auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
++{
++	return 0;
++}
++
++static inline void
++auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
++#else
+ static inline int
+ mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
+ {
+@@ -226,9 +254,13 @@ mlx5_compat_sf_auxiliary_device_sysfs_ir
+ static inline void
+ mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
+ #endif
++#endif /* CONFIG_SYSFS */
+ 
+ static inline void auxiliary_device_uninit(struct auxiliary_device *auxdev)
+ {
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
++	mutex_destroy(&auxdev->sysfs.lock);
++#endif
+ 	put_device(&auxdev->dev);
+ }
+ 
+@@ -259,8 +291,22 @@ void auxiliary_driver_unregister(struct
  #define module_auxiliary_driver(__auxiliary_driver) \
  	module_driver(__auxiliary_driver, auxiliary_driver_register, auxiliary_driver_unregister)
  

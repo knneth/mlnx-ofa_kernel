@@ -76,6 +76,7 @@ static int mlx5_get_total_icm(struct mlx5_core_dev *mdev, u32* total_icm)
 	return 0;
 }
 
+#define PAGE_LIMIT_UNLIMITED UINT_MAX
 int mlx5_set_max_alloc_icm_th(struct mlx5_core_dev *mdev, u16 vhca_id, u32 max_alloc_icm_th)
 {
 	u32 in[MLX5_ST_SZ_DW(vhca_icm_ctrl_reg)] = {};
@@ -87,7 +88,8 @@ int mlx5_set_max_alloc_icm_th(struct mlx5_core_dev *mdev, u16 vhca_id, u32 max_a
 	if (err)
 		return err;
 
-	if (max_alloc_icm_th > total_icm) {
+	if (max_alloc_icm_th > total_icm &&
+	    max_alloc_icm_th != PAGE_LIMIT_UNLIMITED) {
 		mlx5_core_err(mdev, "Requested page limit %u is invalid, maximum limit %u\n",
 			      max_alloc_icm_th, total_icm);
 		return -EINVAL;
@@ -867,6 +869,7 @@ int mlx5_query_hca_vport_context(struct mlx5_core_dev *dev,
 	rep->grh_required = MLX5_GET_PR(hca_vport_context, ctx, grh_required);
 	rep->sys_image_guid = MLX5_GET64_PR(hca_vport_context, ctx,
 					    system_image_guid);
+	rep->num_plane = MLX5_GET_PR(hca_vport_context, ctx, num_port_plane);
 
 ex:
 	kvfree(out);

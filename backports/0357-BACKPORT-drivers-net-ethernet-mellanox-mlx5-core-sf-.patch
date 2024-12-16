@@ -1,0 +1,36 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+
+Change-Id: If8c0dd6babd68e1b5bd3cc4ce1dcece9d3e48cdf
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+@@ -83,7 +83,9 @@ static void mlx5_sf_dev_remove_aux(struc
+ 	trace_mlx5_sf_dev_del(dev, sf_dev, id);
+ 
+ 	auxiliary_device_delete(&sf_dev->adev);
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS) && !defined(CONFIG_AUXILIARY_BUS)
+ 	mutex_destroy(&sf_dev->sysfs.lock);
++#endif
+ 	auxiliary_device_uninit(&sf_dev->adev);
+ }
+ 
+@@ -128,10 +130,14 @@ static void mlx5_sf_dev_add(struct mlx5_
+ 		goto add_err;
+ 	}
+ 
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS) && !defined(CONFIG_AUXILIARY_BUS)
+ 	mutex_init(&sf_dev->sysfs.lock);
++#endif
+ 	err = auxiliary_device_add(&sf_dev->adev);
+ 	if (err) {
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS) && !defined(CONFIG_AUXILIARY_BUS)
+ 		mutex_destroy(&sf_dev->sysfs.lock);
++#endif
+ 		auxiliary_device_uninit(&sf_dev->adev);
+ 		goto add_err;
+ 	}

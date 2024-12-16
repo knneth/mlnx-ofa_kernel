@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I9da222c3aa56c9de370a7a20bdd85a4140be7dc7
 ---
- .../mellanox/mlx5/core/ipoib/ethtool.c        | 100 +++++++++++++++++-
- 1 file changed, 95 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/ipoib/ethtool.c        | 104 +++++++++++++++++-
+ 1 file changed, 99 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
@@ -58,7 +58,7 @@ Change-Id: I9da222c3aa56c9de370a7a20bdd85a4140be7dc7
  }
  
  static int mlx5i_set_channels(struct net_device *dev,
-@@ -116,23 +131,41 @@ static void mlx5i_get_channels(struct ne
+@@ -116,27 +131,49 @@ static void mlx5i_get_channels(struct ne
  }
  
  static int mlx5i_set_coalesce(struct net_device *netdev,
@@ -102,7 +102,15 @@ Change-Id: I9da222c3aa56c9de370a7a20bdd85a4140be7dc7
  }
  
  static int mlx5i_get_ts_info(struct net_device *netdev,
-@@ -233,6 +266,53 @@ static int mlx5i_get_link_ksettings(stru
++#ifdef HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO
++			     struct kernel_ethtool_ts_info *info)
++#else
+ 			     struct ethtool_ts_info *info)
++#endif
+ {
+ 	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
+ 
+@@ -233,6 +270,53 @@ static int mlx5i_get_link_ksettings(stru
  	return 0;
  }
  
@@ -115,7 +123,7 @@ Change-Id: I9da222c3aa56c9de370a7a20bdd85a4140be7dc7
 +	u32 out[MLX5_ST_SZ_DW(ptys_reg)] = {0};
 +	int ret;
 +
-+	ret = mlx5_query_port_ptys(mdev, out, sizeof(out), MLX5_PTYS_IB, 1);
++	ret = mlx5_query_port_ptys(mdev, out, sizeof(out), MLX5_PTYS_IB, 1, 0);
 +	if (ret)
 +		return ret;
 +
@@ -156,7 +164,7 @@ Change-Id: I9da222c3aa56c9de370a7a20bdd85a4140be7dc7
  static u32 mlx5i_flow_type_mask(u32 flow_type)
  {
  	return flow_type & ~(FLOW_EXT | FLOW_MAC_EXT | FLOW_RSS);
-@@ -268,9 +348,11 @@ static int mlx5i_get_rxnfc(struct net_de
+@@ -268,9 +352,11 @@ static int mlx5i_get_rxnfc(struct net_de
  }
  
  const struct ethtool_ops mlx5i_ethtool_ops = {
@@ -168,7 +176,7 @@ Change-Id: I9da222c3aa56c9de370a7a20bdd85a4140be7dc7
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
  	.get_sset_count     = mlx5i_get_sset_count,
-@@ -286,11 +368,19 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -286,11 +372,19 @@ const struct ethtool_ops mlx5i_ethtool_o
  	.get_rxnfc          = mlx5i_get_rxnfc,
  	.set_rxnfc          = mlx5i_set_rxnfc,
  	.get_link_ksettings = mlx5i_get_link_ksettings,

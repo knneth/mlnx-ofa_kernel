@@ -24,6 +24,11 @@ static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink
 	return ret == NOTIFY_OK ? event_ctx.err : 0;
 }
 
+static void mlx5_sf_dev_sysfs_probe(struct mlx5_sf_dev *sf_dev)
+{
+	sf_dev->sysfs.irq_dir_exists = false;
+}
+
 static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxiliary_device_id *id)
 {
 	struct mlx5_sf_dev *sf_dev = container_of(adev, struct mlx5_sf_dev, adev);
@@ -31,6 +36,7 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
 	struct devlink *devlink;
 	int err;
 
+	mlx5_sf_dev_sysfs_probe(sf_dev);
 	devlink = mlx5_devlink_alloc(&adev->dev);
 	if (!devlink)
 		return -ENOMEM;
@@ -124,6 +130,7 @@ static void mlx5_sf_dev_shutdown(struct auxiliary_device *adev)
 	struct mlx5_core_dev *mdev = sf_dev->mdev;
 
 	set_bit(MLX5_BREAK_FW_WAIT, &mdev->intf_state);
+	mlx5_drain_health_wq(mdev);
 	mlx5_unload_one(mdev, false);
 }
 

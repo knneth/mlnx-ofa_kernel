@@ -159,6 +159,8 @@ static bool mlx5ctl_validate_rpc(const void *in, enum fwctl_rpc_scope scope)
 	case MLX5_CMD_OP_QUERY_HCA_CAP:
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_CONTEXT:
 	case MLX5_CMD_OP_QUERY_ROCE_ADDRESS:
+	case MLX5_CMD_OPCODE_QUERY_VUID:
+	case MLX5_CMD_OP_SET_HCA_CAP:
 		return scope <= FWCTL_RPC_CONFIGURATION;
 
 	case MLX5_CMD_OP_QUERY_CONG_PARAMS:

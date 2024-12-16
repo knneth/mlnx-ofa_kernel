@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 
 Change-Id: I18a276c7c5a260337c6236a192e826a45cd4f0fb
 ---
- .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 310 +++++++++++++++++-
- 1 file changed, 301 insertions(+), 9 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 300 +++++++++++++++++-
+ 1 file changed, 293 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
@@ -398,6 +398,7 @@ Change-Id: I18a276c7c5a260337c6236a192e826a45cd4f0fb
 -			    enum tc_setup_type type, void *type_data,
 -			    void *data,
 -			    void (*cleanup)(struct flow_block_cb *block_cb))
+-{
 +#else
 +int mlx5e_rep_indr_setup_cb(struct net_device *netdev, void *cb_priv,
 +#endif
@@ -407,7 +408,7 @@ Change-Id: I18a276c7c5a260337c6236a192e826a45cd4f0fb
 +			    void (*cleanup)(struct flow_block_cb *block_cb)
 +#endif
 +			    )
- {
++{
 +#ifndef HAVE_FLOW_INDR_BLOCK_BIND_CB_T_7_PARAMS
 +	struct Qdisc *sch = NULL;
 +#endif
@@ -535,23 +536,3 @@ Change-Id: I18a276c7c5a260337c6236a192e826a45cd4f0fb
  
  void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
  			  struct sk_buff *skb)
-@@ -754,11 +1040,17 @@ forward:
- 	else
- 		napi_gro_receive(rq->cq.napi, skb);
- 
--	dev_put(tc_priv.fwd_dev);
-+#ifndef HAVE_NETDEV_PUT
-+	if (tc_priv.fwd_dev)
-+#endif
-+		dev_put(tc_priv.fwd_dev);
- 
- 	return;
- 
- free_skb:
--	dev_put(tc_priv.fwd_dev);
-+#ifndef HAVE_NETDEV_PUT
-+	if (tc_priv.fwd_dev)
-+#endif
-+		dev_put(tc_priv.fwd_dev);
- 	dev_kfree_skb_any(skb);
- }

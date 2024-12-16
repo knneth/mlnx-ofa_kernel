@@ -1,0 +1,109 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/base/auxiliary_sysfs.c
+
+Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
+---
+ drivers/base/auxiliary_sysfs.c | 40 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+--- a/drivers/base/auxiliary_sysfs.c
++++ b/drivers/base/auxiliary_sysfs.c
+@@ -26,16 +26,33 @@ static int auxiliary_irq_dir_prepare(str
+ {
+ 	int ret = 0;
+ 
++#ifdef	HAVE_CLEANUP_H
+ 	guard(mutex)(&auxdev->sysfs.lock);
++#else
++	mutex_lock(&auxdev->sysfs.lock);
++#endif
+ 	if (auxdev->sysfs.irq_dir_exists)
++	{
++#ifndef	HAVE_CLEANUP_H
++		mutex_unlock(&auxdev->sysfs.lock);
++#endif
+ 		return 0;
++	}
+ 
+ 	ret = devm_device_add_group(&auxdev->dev, &auxiliary_irqs_group);
+ 	if (ret)
++	{
++#ifndef	HAVE_CLEANUP_H
++		mutex_unlock(&auxdev->sysfs.lock);
++#endif
+ 		return ret;
++	}
+ 
+ 	auxdev->sysfs.irq_dir_exists = true;
+ 	xa_init(&auxdev->sysfs.irqs);
++#ifndef	HAVE_CLEANUP_H
++	mutex_unlock(&auxdev->sysfs.lock);
++#endif
+ 	return 0;
+ }
+ 
+@@ -55,7 +72,11 @@ static int auxiliary_irq_dir_prepare(str
+  */
+ int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
+ {
++#ifdef HAVE_CLEANUP_H
+ 	struct auxiliary_irq_info *info __free(kfree) = NULL;
++#else
++	struct auxiliary_irq_info *info = NULL;
++#endif
+ 	struct device *dev = &auxdev->dev;
+ 	int ret;
+ 
+@@ -72,7 +93,12 @@ int auxiliary_device_sysfs_irq_add(struc
+ 
+ 	ret = xa_insert(&auxdev->sysfs.irqs, irq, info, GFP_KERNEL);
+ 	if (ret)
++	{
++#ifndef HAVE_CLEANUP_H
++		kfree(info);
++#endif
+ 		return ret;
++	}
+ 
+ 	info->sysfs_attr.attr.name = info->name;
+ 	ret = sysfs_add_file_to_group(&dev->kobj, &info->sysfs_attr.attr,
+@@ -80,11 +106,18 @@ int auxiliary_device_sysfs_irq_add(struc
+ 	if (ret)
+ 		goto sysfs_add_err;
+ 
++#ifdef HAVE_CLEANUP_H
+ 	xa_store(&auxdev->sysfs.irqs, irq, no_free_ptr(info), GFP_KERNEL);
++#else
++	xa_store(&auxdev->sysfs.irqs, irq, info, GFP_KERNEL);
++#endif
+ 	return 0;
+ 
+ sysfs_add_err:
+ 	xa_erase(&auxdev->sysfs.irqs, irq);
++#ifndef HAVE_CLEANUP_H
++	kfree(info);
++#endif
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(auxiliary_device_sysfs_irq_add);
+@@ -99,7 +132,11 @@ EXPORT_SYMBOL_GPL(auxiliary_device_sysfs
+  */
+ void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq)
+ {
++#ifdef HAVE_CLEANUP_H
+ 	struct auxiliary_irq_info *info __free(kfree) = xa_load(&auxdev->sysfs.irqs, irq);
++#else
++	struct auxiliary_irq_info *info = xa_load(&auxdev->sysfs.irqs, irq);
++#endif
+ 	struct device *dev = &auxdev->dev;
+ 
+ 	if (!info) {
+@@ -109,5 +146,8 @@ void auxiliary_device_sysfs_irq_remove(s
+ 	sysfs_remove_file_from_group(&dev->kobj, &info->sysfs_attr.attr,
+ 				     auxiliary_irqs_group.name);
+ 	xa_erase(&auxdev->sysfs.irqs, irq);
++#ifndef HAVE_CLEANUP_H
++	kfree(info);
++#endif
+ }
+ EXPORT_SYMBOL_GPL(auxiliary_device_sysfs_irq_remove);

@@ -237,11 +237,11 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  		unsigned long arg);
  long nvme_dev_ioctl(struct file *file, unsigned int cmd,
  		unsigned long arg);
-+#if defined(HAVE_FILE_OPERATIONS_URING_CMD_IOPOLL) && defined(HAVE_IO_URING_CMD_H)
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD_IOPOLL) && defined(HAVE_IO_URING_CMD_H) && defined(HAVE_BIO_INTEGRITY_MAP_USER)
  int nvme_ns_chr_uring_cmd_iopoll(struct io_uring_cmd *ioucmd,
  		struct io_comp_batch *iob, unsigned int poll_flags);
 +#endif
-+#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H)
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H) && defined(HAVE_BIO_INTEGRITY_MAP_USER)
  int nvme_ns_chr_uring_cmd(struct io_uring_cmd *ioucmd,
  		unsigned int issue_flags);
  int nvme_ns_head_chr_uring_cmd(struct io_uring_cmd *ioucmd,
@@ -250,7 +250,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  int nvme_identify_ns(struct nvme_ctrl *ctrl, unsigned nsid,
  		struct nvme_id_ns **id);
  int nvme_getgeo(struct block_device *bdev, struct hd_geometry *geo);
-+#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H)
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H) && defined(HAVE_BIO_INTEGRITY_MAP_USER)
  int nvme_dev_uring_cmd(struct io_uring_cmd *ioucmd, unsigned int issue_flags);
 +#endif
  

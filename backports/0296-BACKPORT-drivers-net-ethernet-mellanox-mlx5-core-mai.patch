@@ -8,7 +8,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
-@@ -710,13 +710,18 @@ set:
+@@ -712,13 +712,18 @@ set:
  	return err;
  }
  
@@ -27,7 +27,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  					      DEVLINK_PARAM_GENERIC_ID_MAX_MACS,
  					      &val);
  	if (!err)
-@@ -724,14 +729,20 @@ static int max_uc_list_get_devlink_param
+@@ -726,14 +731,20 @@ static int max_uc_list_get_devlink_param
  	mlx5_core_dbg(dev, "Failed to get param. err = %d\n", err);
  	return err;
  }
@@ -48,7 +48,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  					      DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE,
  					      &val);
  
-@@ -740,6 +751,9 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -742,6 +753,9 @@ bool mlx5_is_roce_on(struct mlx5_core_de
  
  	mlx5_core_dbg(dev, "Failed to get param. err = %d\n", err);
  	return MLX5_CAP_GEN(dev, roce);
@@ -58,7 +58,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  }
  EXPORT_SYMBOL(mlx5_is_roce_on);
  
-@@ -772,7 +786,9 @@ static int handle_hca_cap(struct mlx5_co
+@@ -774,7 +788,9 @@ static int handle_hca_cap(struct mlx5_co
  {
  	struct mlx5_profile *prof = &dev->profile;
  	void *set_hca_cap;
@@ -68,7 +68,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	int err;
  
  	err = mlx5_core_get_caps(dev, MLX5_CAP_GENERAL);
-@@ -847,19 +863,24 @@ static int handle_hca_cap(struct mlx5_co
+@@ -855,19 +871,24 @@ static int handle_hca_cap(struct mlx5_co
  
  	mlx5_vhca_state_cap_handle(dev, set_hca_cap);
  
@@ -94,7 +94,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	return set_caps(dev, set_ctx, MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
  }
  
-@@ -879,8 +900,12 @@ static int handle_hca_cap(struct mlx5_co
+@@ -887,8 +908,12 @@ static int handle_hca_cap(struct mlx5_co
   */
  static bool is_roce_fw_disabled(struct mlx5_core_dev *dev)
  {
@@ -107,7 +107,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  }
  
  static int handle_hca_cap_roce(struct mlx5_core_dev *dev, void *set_ctx)
-@@ -1100,6 +1125,9 @@ static ssize_t mlx5_roce_enable_show_ena
+@@ -1108,6 +1133,9 @@ static ssize_t mlx5_roce_enable_show_ena
  	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
  	int ret;
  
@@ -117,7 +117,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	mutex_lock(&dev->roce.state_lock);
  	ret = dev->roce.enabled;
  	mutex_unlock(&dev->roce.state_lock);
-@@ -1113,11 +1141,15 @@ static ssize_t mlx5_roce_enable_set_enab
+@@ -1121,11 +1149,15 @@ static ssize_t mlx5_roce_enable_set_enab
  {
  	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
  	struct mlx5_core_dev *dev = pci_get_drvdata(pdev);
@@ -135,7 +135,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	ret = kstrtobool(buf, &val);
  	if (ret)
  		return -EINVAL;
-@@ -1125,15 +1157,26 @@ static ssize_t mlx5_roce_enable_set_enab
+@@ -1133,15 +1165,26 @@ static ssize_t mlx5_roce_enable_set_enab
  	if (val && !MLX5_CAP_GEN(dev, roce))
  		return -EOPNOTSUPP;
  
@@ -167,7 +167,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  }
  
  static DEVICE_ATTR(roce_enable, 0644, mlx5_roce_enable_show_enabled,
-@@ -1598,7 +1641,7 @@ static int mlx5_function_teardown(struct
+@@ -1606,7 +1649,7 @@ static int mlx5_function_teardown(struct
  
  static int mlx5_load(struct mlx5_core_dev *dev)
  {
@@ -176,7 +176,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  
  	dev->priv.uar = mlx5_get_uars_page(dev);
  	if (IS_ERR(dev->priv.uar)) {
-@@ -1685,15 +1728,19 @@ static int mlx5_load(struct mlx5_core_de
+@@ -1693,15 +1736,19 @@ static int mlx5_load(struct mlx5_core_de
  
  	mlx5_sf_dev_table_create(dev);
  
@@ -196,7 +196,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  err_sriov:
  	mlx5_lag_remove_mdev(dev);
  	unregister_pcie_dev_attr_group(dev->pdev);
-@@ -1725,7 +1772,9 @@ err_irq_table:
+@@ -1733,7 +1780,9 @@ err_irq_table:
  static void mlx5_unload(struct mlx5_core_dev *dev)
  {
  	mlx5_eswitch_disable(dev->priv.eswitch);
@@ -206,7 +206,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	mlx5_sf_dev_table_destroy(dev);
  	mlx5_sriov_detach(dev);
  	mlx5_lag_remove_mdev(dev);
-@@ -1747,9 +1796,15 @@ static void mlx5_unload(struct mlx5_core
+@@ -1755,9 +1804,15 @@ static void mlx5_unload(struct mlx5_core
  	mlx5_put_uars_page(dev, dev->priv.uar);
  }
  
@@ -222,7 +222,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	int err = 0;
  
  	mutex_lock(&dev->intf_state_mutex);
-@@ -1769,12 +1824,23 @@ int mlx5_init_one_devl_locked(struct mlx
+@@ -1777,12 +1832,23 @@ int mlx5_init_one_devl_locked(struct mlx
  	/* In case of light_probe, mlx5_devlink is already registered.
  	 * Hence, don't register devlink again.
  	 */
@@ -246,7 +246,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	err = mlx5_load(dev);
  	if (err)
  		goto err_load;
-@@ -1803,7 +1869,9 @@ err_register:
+@@ -1811,7 +1877,9 @@ err_register:
  	clear_bit(MLX5_INTERFACE_STATE_UP, &dev->intf_state);
  	mlx5_unload(dev);
  err_load:
@@ -256,7 +256,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  		mlx5_devlink_params_unregister(priv_to_devlink(dev));
  err_devlink_params_reg:
  	mlx5_cleanup_once(dev);
-@@ -1868,25 +1936,33 @@ succeed:
+@@ -1876,25 +1944,33 @@ succeed:
  	return 0;
  }
  
@@ -290,7 +290,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  
  	mlx5_hwmon_dev_unregister(dev);
  	mlx5_crdump_disable(dev);
-@@ -1912,16 +1988,26 @@ void mlx5_uninit_one(struct mlx5_core_de
+@@ -1920,16 +1996,26 @@ void mlx5_uninit_one(struct mlx5_core_de
  	mlx5_function_teardown(dev, true);
  out:
  	mutex_unlock(&dev->intf_state_mutex);
@@ -317,7 +317,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	mutex_lock(&dev->intf_state_mutex);
  	if (test_bit(MLX5_INTERFACE_STATE_UP, &dev->intf_state)) {
  		mlx5_core_warn(dev, "interface is up, NOP\n");
-@@ -1969,6 +2055,7 @@ out:
+@@ -1977,6 +2063,7 @@ out:
  	return err;
  }
  
@@ -325,7 +325,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  int mlx5_load_one(struct mlx5_core_dev *dev, bool recovery)
  {
  	struct devlink *devlink = priv_to_devlink(dev);
-@@ -1979,10 +2066,17 @@ int mlx5_load_one(struct mlx5_core_dev *
+@@ -1987,10 +2074,17 @@ int mlx5_load_one(struct mlx5_core_dev *
  	devl_unlock(devlink);
  	return ret;
  }
@@ -343,7 +343,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	mutex_lock(&dev->intf_state_mutex);
  
  	mlx5_detach_device(dev, suspend);
-@@ -2000,6 +2094,7 @@ out:
+@@ -2008,6 +2102,7 @@ out:
  	mutex_unlock(&dev->intf_state_mutex);
  }
  
@@ -351,7 +351,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  void mlx5_unload_one(struct mlx5_core_dev *dev, bool suspend)
  {
  	struct devlink *devlink = priv_to_devlink(dev);
-@@ -2008,7 +2103,9 @@ void mlx5_unload_one(struct mlx5_core_de
+@@ -2016,7 +2111,9 @@ void mlx5_unload_one(struct mlx5_core_de
  	mlx5_unload_one_devl_locked(dev, suspend);
  	devl_unlock(devlink);
  }
@@ -361,7 +361,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  /* In case of light probe, we don't need a full query of hca_caps, but only the bellow caps.
   * A full query of hca_caps will be done when the device will reload.
   */
-@@ -2048,11 +2145,17 @@ static int mlx5_query_hca_caps_light(str
+@@ -2056,11 +2153,17 @@ static int mlx5_query_hca_caps_light(str
  
  int mlx5_init_one_light(struct mlx5_core_dev *dev)
  {
@@ -379,7 +379,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	dev->state = MLX5_DEVICE_STATE_UP;
  	err = mlx5_function_enable(dev, true, mlx5_tout_ms(dev, FW_PRE_INIT_TIMEOUT));
  	if (err) {
-@@ -2066,32 +2169,48 @@ int mlx5_init_one_light(struct mlx5_core
+@@ -2074,32 +2177,48 @@ int mlx5_init_one_light(struct mlx5_core
  		goto query_hca_caps_err;
  	}
  
@@ -428,7 +428,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	if (dev->state != MLX5_DEVICE_STATE_UP)
  		return;
  	mlx5_function_disable(dev, true);
-@@ -2109,6 +2228,7 @@ void mlx5_unload_one_light(struct mlx5_c
+@@ -2117,6 +2236,7 @@ void mlx5_unload_one_light(struct mlx5_c
  	mlx5_function_disable(dev, false);
  	dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
  }
@@ -436,7 +436,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  
  static const int types[] = {
  	MLX5_CAP_GENERAL,
-@@ -2184,9 +2304,13 @@ int mlx5_mdev_init(struct mlx5_core_dev
+@@ -2192,9 +2312,13 @@ int mlx5_mdev_init(struct mlx5_core_dev
  	int err;
  
  	memcpy(&dev->profile, &profile[profile_idx], sizeof(dev->profile));
@@ -450,7 +450,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	mutex_init(&dev->mlx5e_res.uplink_netdev_lock);
  	mutex_init(&dev->wc_state_lock);
  
-@@ -2238,7 +2362,11 @@ int mlx5_mdev_init(struct mlx5_core_dev
+@@ -2246,7 +2370,11 @@ int mlx5_mdev_init(struct mlx5_core_dev
  	 * Those values are supplied to FW as part of the init HCA command to
  	 * be used by both driver and FW when it's applicable.
  	 */
@@ -462,7 +462,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  					       MAX_SW_VHCA_ID,
  					       GFP_KERNEL);
  	if (dev->priv.sw_vhca_id < 0)
-@@ -2264,7 +2392,9 @@ err_cmd_init:
+@@ -2272,7 +2400,9 @@ err_cmd_init:
  	mutex_destroy(&priv->bfregs.wc_head.lock);
  	mutex_destroy(&priv->bfregs.reg_head.lock);
  	mutex_destroy(&dev->intf_state_mutex);
@@ -472,7 +472,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	return err;
  }
  
-@@ -2273,7 +2403,11 @@ void mlx5_mdev_uninit(struct mlx5_core_d
+@@ -2281,7 +2411,11 @@ void mlx5_mdev_uninit(struct mlx5_core_d
  	struct mlx5_priv *priv = &dev->priv;
  
  	if (priv->sw_vhca_id > 0)
@@ -484,7 +484,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  
  	mlx5_hca_caps_free(dev);
  	mlx5_adev_cleanup(dev);
-@@ -2289,13 +2423,18 @@ void mlx5_mdev_uninit(struct mlx5_core_d
+@@ -2297,13 +2431,18 @@ void mlx5_mdev_uninit(struct mlx5_core_d
  	mutex_destroy(&dev->wc_state_lock);
  	mutex_destroy(&dev->mlx5e_res.uplink_netdev_lock);
  	mutex_destroy(&dev->intf_state_mutex);
@@ -504,7 +504,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	int err;
  
  	devlink = mlx5_devlink_alloc(&pdev->dev);
-@@ -2305,10 +2444,13 @@ static int probe_one(struct pci_dev *pde
+@@ -2313,10 +2452,13 @@ static int probe_one(struct pci_dev *pde
  	}
  
  	err = device_create_file(&pdev->dev, mlx5_roce_enable_dev_attrs);
@@ -519,7 +519,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	dev->device = &pdev->dev;
  	dev->pdev = pdev;
  
-@@ -2347,6 +2489,13 @@ static int probe_one(struct pci_dev *pde
+@@ -2355,6 +2497,13 @@ static int probe_one(struct pci_dev *pde
  	}
  
  	pci_save_state(pdev);
@@ -533,7 +533,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	return 0;
  
  err_init_one:
-@@ -2367,12 +2516,23 @@ remove_roce_file:
+@@ -2375,12 +2524,23 @@ remove_roce_file:
  
  static void remove_one(struct pci_dev *pdev)
  {
@@ -559,7 +559,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  	mlx5_sriov_disable(pdev, false);
  	mlx5_uninit_one(dev);
  	mlx5_crdump_cleanup(dev);
-@@ -2493,9 +2653,11 @@ static void mlx5_pci_resume(struct pci_d
+@@ -2501,9 +2661,11 @@ static void mlx5_pci_resume(struct pci_d
  	dev->priv.sw_reset_lag = dev->priv.lag_enabled;
  	err = mlx5_load_one(dev, false);
  
@@ -571,7 +571,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  
  	mlx5_pci_trace(dev, "Done, err = %d, device %s\n", err,
  		       !err ? "recovered" : "Failed");
-@@ -2576,7 +2738,11 @@ MODULE_DEVICE_TABLE(pci, mlx5_core_pci_t
+@@ -2585,7 +2747,11 @@ MODULE_DEVICE_TABLE(pci, mlx5_core_pci_t
  void mlx5_disable_device(struct mlx5_core_dev *dev)
  {
  	mlx5_error_sw_reset(dev);
@@ -583,7 +583,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  }
  
  int mlx5_recover_device(struct mlx5_core_dev *dev)
-@@ -2587,7 +2753,11 @@ int mlx5_recover_device(struct mlx5_core
+@@ -2596,7 +2762,11 @@ int mlx5_recover_device(struct mlx5_core
  			return -EIO;
  	}
  
@@ -595,7 +595,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  }
  
  static struct pci_driver mlx5_core_driver = {
-@@ -2600,10 +2770,13 @@ static struct pci_driver mlx5_core_drive
+@@ -2609,10 +2779,13 @@ static struct pci_driver mlx5_core_drive
  	.shutdown	= shutdown,
  	.err_handler	= &mlx5_err_handler,
  	.sriov_configure   = mlx5_core_sriov_configure,
@@ -609,7 +609,7 @@ Change-Id: Ibae8f03f97d0852c717605c9097e4c02928b3544
  /**
   * mlx5_vf_get_core_dev - Get the mlx5 core device from a given VF PCI device if
   *                     mlx5_core is its driver.
-@@ -2645,6 +2818,7 @@ void mlx5_vf_put_core_dev(struct mlx5_co
+@@ -2654,6 +2827,7 @@ void mlx5_vf_put_core_dev(struct mlx5_co
  	mutex_unlock(&mdev->intf_state_mutex);
  }
  EXPORT_SYMBOL(mlx5_vf_put_core_dev);

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I7dc5c95ebd0bd5adaa4ac9551b5a034ca3be9b38
 ---
- .../mellanox/mlx5/core/eswitch_devlink_compat.c     | 13 +++++++++++++
- 1 file changed, 13 insertions(+)
+ .../mlx5/core/eswitch_devlink_compat.c        | 33 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
@@ -22,7 +22,7 @@ Change-Id: I7dc5c95ebd0bd5adaa4ac9551b5a034ca3be9b38
  
  static char *vport_match_to_str[] = {
  	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_METADATA] = "metadata",
-@@ -93,7 +95,12 @@ struct devlink_compat_op {
+@@ -93,29 +95,48 @@ struct devlink_compat_op {
  	int (*read_param_bool)(struct devlink *devlink, u32 id,
  			       struct devlink_param_gset_ctx *ctx);
  	int (*write_param_bool)(struct devlink *devlink, u32 id,
@@ -35,7 +35,46 @@ Change-Id: I7dc5c95ebd0bd5adaa4ac9551b5a034ca3be9b38
  
  	char **map;
  	int map_size;
-@@ -135,6 +142,7 @@ static struct devlink_compat_op devlink_
+ 	char *compat_name;
+ };
+ 
+-static int mlx5_devlink_eswitch_mode_set_compat(struct devlink *devlink, u16 mode,
+-						struct netlink_ext_ack *extack)
++#if defined(HAVE_DEVL_PORT_REGISTER) && defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++static int mlx5_devlink_eswitch_mode_set_compat(struct devlink *devlink, u16 mode
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++
++						, struct netlink_ext_ack *extack
++#endif
++)
+ {
+ int ret;
+ devl_lock(devlink);
+ 
+-ret = mlx5_devlink_eswitch_mode_set(devlink, mode, extack);
++ret = mlx5_devlink_eswitch_mode_set(devlink, mode
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++				    , extack
++#endif
++);
+ devl_unlock(devlink);
+ 
+ return ret;
+ }
++#endif
+ 
+ static struct devlink_compat_op devlink_compat_ops[] =  {
+ 	{
+ 		.read_u16 = mlx5_devlink_eswitch_mode_get,
++#if defined(HAVE_DEVL_PORT_REGISTER) && defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
+ 		.write_u16 = mlx5_devlink_eswitch_mode_set_compat,
++#else
++		.write_u16 = mlx5_devlink_eswitch_mode_set,
++#endif
+ 		.map = mode_to_str,
+ 		.map_size = ARRAY_SIZE(mode_to_str),
+ 		.compat_name = "mode",
+@@ -147,6 +168,7 @@ static struct devlink_compat_op devlink_
  		.compat_name = "steering_mode",
  	},
  /* only for kernel linux-5.4.0-1020.21.g8ebdd1f-bluefield*/
@@ -43,7 +82,7 @@ Change-Id: I7dc5c95ebd0bd5adaa4ac9551b5a034ca3be9b38
  	{
  		.read_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_get,
  		.write_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_set,
-@@ -142,6 +150,7 @@ static struct devlink_compat_op devlink_
+@@ -154,6 +176,7 @@ static struct devlink_compat_op devlink_
  		.map_size = ARRAY_SIZE(ipsec_to_str),
  		.compat_name = "ipsec_mode",
  	},
@@ -51,7 +90,7 @@ Change-Id: I7dc5c95ebd0bd5adaa4ac9551b5a034ca3be9b38
  
  	{
  		.read_vport_match_mode = mlx5_devlink_eswitch_vport_match_mode_get,
-@@ -330,7 +339,11 @@ static ssize_t esw_compat_write(struct k
+@@ -342,7 +365,11 @@ static ssize_t esw_compat_write(struct k
  		struct devlink_param_gset_ctx ctx;
  
  		ctx.val.vbool = set;

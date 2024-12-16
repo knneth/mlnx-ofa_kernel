@@ -162,4 +162,26 @@ static inline bool __netdev_tx_sent_queue(struct netdev_queue *dev_queue,
 }
 #endif /* HAVE___NETDEV_TX_SENT_QUEUE */
 
+#if !defined(HAVE_NETDEV_PUT_AND_HOLD)
+
+static inline void mlx5_compat_dev_hold(struct net_device *netdev)
+{
+	if (netdev)
+		dev_hold(netdev);
+}
+
+static inline void mlx5_compat_dev_put(struct net_device *netdev)
+{
+	if (netdev)
+		dev_put(netdev);
+}
+
+#undef dev_hold
+#define dev_hold(net_device_ptr) mlx5_compat_dev_hold(net_device_ptr)
+
+#undef dev_put
+#define dev_put(net_device_ptr) mlx5_compat_dev_put(net_device_ptr)
+
+#endif /* HAVE_NETDEV_PUT_AND_HOLD */
+
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

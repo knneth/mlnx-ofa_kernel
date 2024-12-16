@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 
 Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
 ---
- .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 34 +++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 38 +++++++++++++++++++
+ 1 file changed, 38 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
@@ -100,7 +100,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  	free_cpumask_var(irq->mask);
  	kfree(irq);
  	return ERR_PTR(err);
-@@ -508,6 +536,7 @@ struct mlx5_irq *mlx5_irq_request(struct
+@@ -514,6 +542,7 @@ struct mlx5_irq *mlx5_irq_request(struct
  	return irq;
  }
  
@@ -108,7 +108,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  /**
   * mlx5_msix_alloc - allocate msix interrupt
   * @dev: mlx5 device from which to request
-@@ -559,6 +588,7 @@ void mlx5_msix_free(struct mlx5_core_dev
+@@ -565,6 +594,7 @@ void mlx5_msix_free(struct mlx5_core_dev
  	pci_msix_free_irq(dev->pdev, map);
  }
  EXPORT_SYMBOL(mlx5_msix_free);
@@ -116,9 +116,9 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  
  /**
   * mlx5_irq_release_vector - release one IRQ back to the system.
-@@ -795,7 +825,11 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -814,13 +844,21 @@ int mlx5_irq_table_create(struct mlx5_co
+ 		total_vec += MLX5_MAX_MSIX_PER_SF * mlx5_sf_max_functions(dev);
  	total_vec = min_t(int, total_vec, pci_msix_vec_count(dev->pdev));
- 	pcif_vec = min_t(int, pcif_vec, pci_msix_vec_count(dev->pdev));
  
 +#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
  	req_vec = pci_msix_can_alloc_dyn(dev->pdev) ? 1 : total_vec;
@@ -128,3 +128,13 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  	n = pci_alloc_irq_vectors(dev->pdev, 1, req_vec, PCI_IRQ_MSIX);
  	if (n < 0)
  		return n;
+ 
+ 	/* Further limit vectors of the pools based on platform for non dynamic case */
++#ifdef HAVE_PCI_MSIX_CAN_ALLOC_DYN
+ 	dynamic_vec = pci_msix_can_alloc_dyn(dev->pdev);
++#else
++	dynamic_vec = false;
++#endif
+ 	if (!dynamic_vec) {
+ 		pcif_vec = min_t(int, n, pcif_vec);
+ 		total_vec = min_t(int, n, total_vec);

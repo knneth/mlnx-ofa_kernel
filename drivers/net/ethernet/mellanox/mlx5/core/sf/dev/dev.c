@@ -83,6 +83,7 @@ static void mlx5_sf_dev_remove_aux(struct mlx5_core_dev *dev,
 	trace_mlx5_sf_dev_del(dev, sf_dev, id);
 
 	auxiliary_device_delete(&sf_dev->adev);
+	mutex_destroy(&sf_dev->sysfs.lock);
 	auxiliary_device_uninit(&sf_dev->adev);
 }
 
@@ -127,8 +128,10 @@ static void mlx5_sf_dev_add(struct mlx5_core_dev *dev, u16 sf_index, u16 fn_id, 
 		goto add_err;
 	}
 
+	mutex_init(&sf_dev->sysfs.lock);
 	err = auxiliary_device_add(&sf_dev->adev);
 	if (err) {
+		mutex_destroy(&sf_dev->sysfs.lock);
 		auxiliary_device_uninit(&sf_dev->adev);
 		goto add_err;
 	}

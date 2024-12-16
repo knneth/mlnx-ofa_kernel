@@ -151,6 +151,12 @@
 #if defined(alloc_ordered_workqueue)
 	#undef alloc_ordered_workqueue
 #endif
+#if defined(pci_vpd_alloc)
+	#undef pci_vpd_alloc
+#endif
+#if defined(kmemdup_nul)
+	#undef kmemdup_nul
+#endif
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -758,6 +764,9 @@ int is_non_trackable_alloc_func(const char *func_name)
 		/* functions containing these strings consider non trackable */
 		"skb",
 		"fwctl_devnode",
+#ifdef HAVE_CLEANUP_H
+		"auxiliary_device_sysfs_irq_add",
+#endif
 	};
 	static const char * const str_str_excep_arr[] = {
 		/* functions which are exception to the str_str_arr table */
@@ -1289,7 +1298,6 @@ undo_cache_create:
 	return -1;
 }
 
-
 void cleanup_module(void)
 {
 	enum memtrack_memtype_t memtype;
@@ -1369,3 +1377,4 @@ void cleanup_module(void)
 	kmem_cache_destroy(meminfo_cache);
 	printk(KERN_INFO "memtrack::cleanup_module done.\n");
 }
+

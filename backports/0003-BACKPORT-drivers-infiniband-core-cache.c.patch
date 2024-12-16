@@ -8,7 +8,7 @@ Change-Id: I4e65e7918ac803deb927c8ad96743aab7049b5c6
 
 --- a/drivers/infiniband/core/cache.c
 +++ b/drivers/infiniband/core/cache.c
-@@ -1401,9 +1401,17 @@ struct net_device *rdma_read_gid_attr_nd
+@@ -1397,9 +1397,17 @@ struct net_device *rdma_read_gid_attr_nd
  EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
  
  static int get_lower_dev_vlan(struct net_device *lower_dev,
@@ -27,7 +27,7 @@ Change-Id: I4e65e7918ac803deb927c8ad96743aab7049b5c6
  
  	if (is_vlan_dev(lower_dev))
  		*vlan_id = vlan_dev_vlan_id(lower_dev);
-@@ -1429,9 +1437,11 @@ static int get_lower_dev_vlan(struct net
+@@ -1425,9 +1433,11 @@ static int get_lower_dev_vlan(struct net
  int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
  			    u16 *vlan_id, u8 *smac)
  {
@@ -39,7 +39,7 @@ Change-Id: I4e65e7918ac803deb927c8ad96743aab7049b5c6
  	struct net_device *ndev;
  
  	rcu_read_lock();
-@@ -1452,7 +1462,12 @@ int rdma_read_gid_l2_fields(const struct
+@@ -1448,7 +1458,12 @@ int rdma_read_gid_l2_fields(const struct
  			 * the lower vlan device for this gid entry.
  			 */
  			netdev_walk_all_lower_dev_rcu(attr->ndev,

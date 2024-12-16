@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
 
 Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
 ---
- drivers/infiniband/core/ucma.c | 24 +++++++++++++++++++++---
- 1 file changed, 21 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/ucma.c | 38 +++++++++++++++++++++++++++++++---
+ 1 file changed, 35 insertions(+), 3 deletions(-)
 
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
@@ -47,7 +47,33 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -1733,7 +1742,6 @@ static ssize_t ucma_write(struct file *f
+@@ -1624,13 +1633,25 @@ static ssize_t ucma_migrate_id(struct uc
+ 
+ 	/* Get current fd to protect against it being closed */
+ 	f = fdget(cmd.fd);
++#if defined (HAVE_FD_FILE)
++	if (!fd_file(f))
++#else
+ 	if (!f.file)
++#endif
+ 		return -ENOENT;
++#if defined (HAVE_FD_FILE)
++	if (fd_file(f)->f_op != &ucma_fops) {
++#else
+ 	if (f.file->f_op != &ucma_fops) {
++#endif
+ 		ret = -EINVAL;
+ 		goto file_put;
+ 	}
++#if defined (HAVE_FD_FILE)
++	cur_file = fd_file(f)->private_data;
++#else
+ 	cur_file = f.file->private_data;
++#endif
+ 
+ 	/* Validate current fd and prevent destruction of id. */
+ 	ctx = ucma_get_ctx(cur_file, cmd.id);
+@@ -1733,7 +1754,6 @@ static ssize_t ucma_write(struct file *f
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
  	hdr.cmd = array_index_nospec(hdr.cmd, ARRAY_SIZE(ucma_cmd_table));
@@ -55,7 +81,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1784,7 +1792,11 @@ static int ucma_open(struct inode *inode
+@@ -1784,7 +1804,11 @@ static int ucma_open(struct inode *inode
  	filp->private_data = file;
  	file->filp = filp;
  
@@ -67,7 +93,17 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  }
  
  static int ucma_close(struct inode *inode, struct file *filp)
-@@ -1862,12 +1874,14 @@ static int __init ucma_init(void)
+@@ -1817,7 +1841,9 @@ static const struct file_operations ucma
+ 	.release = ucma_close,
+ 	.write	 = ucma_write,
+ 	.poll    = ucma_poll,
++#ifdef no_llseek
+ 	.llseek	 = no_llseek,
++#endif
+ };
+ 
+ static struct miscdevice ucma_misc = {
+@@ -1862,12 +1888,14 @@ static int __init ucma_init(void)
  		goto err1;
  	}
  
@@ -82,7 +118,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  
  	ret = ib_register_client(&rdma_cma_client);
  	if (ret)
-@@ -1876,8 +1890,10 @@ static int __init ucma_init(void)
+@@ -1876,8 +1904,10 @@ static int __init ucma_init(void)
  	return 0;
  err3:
  	unregister_net_sysctl_table(ucma_ctl_table_hdr);
@@ -93,7 +129,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  err1:
  	misc_deregister(&ucma_misc);
  	return ret;
-@@ -1886,7 +1902,9 @@ err1:
+@@ -1886,7 +1916,9 @@ err1:
  static void __exit ucma_cleanup(void)
  {
  	ib_unregister_client(&rdma_cma_client);

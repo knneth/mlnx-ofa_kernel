@@ -12,7 +12,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  	return 1;
  }
  
-+#ifndef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if !defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) && !defined(HAVE_LINUX_IOMMU_DMA_H)
 +static void rdma_rw_unmap_sg(struct ib_device *dev, struct scatterlist *sg,
 +			     u32 sg_cnt, enum dma_data_direction dir)
 +{
@@ -74,7 +74,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  	int ret;
  
 +#ifdef HAVE_DMA_MAP_SGTABLE
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  	ret = ib_dma_map_sgtable_attrs(dev, &sgt, dir, 0);
 +#else
 +	ret = rdma_rw_map_sgtable(dev, &sgt, dir);
@@ -96,7 +96,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  
  out_unmap_sg:
 +#ifdef HAVE_DMA_MAP_SGTABLE
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  	ib_dma_unmap_sgtable_attrs(dev, &sgt, dir, 0);
 +#else
 +	rdma_rw_unmap_sg(dev, sgt.sgl, sgt.orig_nents, dir);
@@ -128,7 +128,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  	}
  
 +#ifdef HAVE_DMA_MAP_SGTABLE
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  	ret = ib_dma_map_sgtable_attrs(dev, &sgt, dir, 0);
 +#else
 +	ret = rdma_rw_map_sgtable(dev, &sgt, dir);
@@ -144,7 +144,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  
  	if (prot_sg_cnt) {
 +#ifdef HAVE_DMA_MAP_SGTABLE
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  		ret = ib_dma_map_sgtable_attrs(dev, &prot_sgt, dir, 0);
 +#else
 +		ret = rdma_rw_map_sgtable(dev, &prot_sgt, dir);
@@ -190,7 +190,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  out_unmap_prot_sg:
 +#ifdef HAVE_DMA_MAP_SGTABLE
  	if (prot_sgt.nents)
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  		ib_dma_unmap_sgtable_attrs(dev, &prot_sgt, dir, 0);
 +#else
 + 		rdma_rw_unmap_sg(dev, prot_sgt.sgl, prot_sgt.orig_nents, dir);
@@ -201,7 +201,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
 +#endif
  out_unmap_sg:
 +#ifdef HAVE_DMA_MAP_SGTABLE
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  	ib_dma_unmap_sgtable_attrs(dev, &sgt, dir, 0);
 +#else
 +	rdma_rw_unmap_sg(dev, sgt.sgl, sgt.orig_nents, dir);
@@ -216,7 +216,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  		break;
  	}
  
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  	ib_dma_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
 +#else
 +	rdma_rw_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
@@ -228,7 +228,7 @@ Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
  	kfree(ctx->reg);
  
  	if (prot_sg_cnt)
-+#ifdef HAVE_DMA_F_PCI_P2PDMA_SUPPORTED
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
  		ib_dma_unmap_sg(qp->pd->device, prot_sg, prot_sg_cnt, dir);
  	ib_dma_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
 +#else

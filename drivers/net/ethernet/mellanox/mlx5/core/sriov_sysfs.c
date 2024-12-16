@@ -44,6 +44,12 @@
 #endif
 #include "esw/legacy.h"
 
+struct group_sysfs_opts {
+	char *bus_name;
+	char *dev_name;
+	char *group_id;
+};
+
 struct vf_attributes {
 	struct attribute attr;
 	ssize_t (*show)(struct mlx5_sriov_vf *, struct vf_attributes *,
@@ -108,9 +114,9 @@ static ssize_t vf_paging_attr_store(struct kobject *kobj,
 
 struct vf_group_attributes {
 	struct attribute attr;
-	ssize_t (*show)(struct mlx5_esw_rate_group *, struct vf_group_attributes *,
+	ssize_t (*show)(struct mlx5_esw_sched_node *, struct vf_group_attributes *,
 			char *buf);
-	ssize_t (*store)(struct mlx5_esw_rate_group *, struct vf_group_attributes *,
+	ssize_t (*store)(struct mlx5_esw_sched_node *, struct vf_group_attributes *,
 			 const char *buf, size_t count);
 };
 
@@ -119,7 +125,7 @@ static ssize_t vf_group_attr_show(struct kobject *kobj,
 {
 	struct vf_group_attributes *ga =
 		container_of(attr, struct vf_group_attributes, attr);
-	struct mlx5_esw_rate_group *g = container_of(kobj, struct mlx5_esw_rate_group, kobj);
+	struct mlx5_esw_sched_node *g = container_of(kobj, struct mlx5_esw_sched_node, kobj);
 
 	if (!ga->show)
 		return -EIO;
@@ -133,7 +139,7 @@ static ssize_t vf_group_attr_store(struct kobject *kobj,
 {
 	struct vf_group_attributes *ga =
 		container_of(attr, struct vf_group_attributes, attr);
-	struct mlx5_esw_rate_group *g = container_of(kobj, struct mlx5_esw_rate_group, kobj);
+	struct mlx5_esw_sched_node *g = container_of(kobj, struct mlx5_esw_sched_node, kobj);
 
 	if (!ga->store)
 		return -EIO;
@@ -141,7 +147,80 @@ static ssize_t vf_group_attr_store(struct kobject *kobj,
 	return ga->store(g, ga, buf, size);
 }
 
-static ssize_t max_tx_rate_group_show(struct mlx5_esw_rate_group *g,
+static ssize_t tc_bw_group_show(struct mlx5_esw_sched_node *g,
+				struct vf_group_attributes *oa,
+				char *buf)
+{
+	struct mlx5_esw_sched_node *vports_tc_node;
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {};
+
+	list_for_each_entry(vports_tc_node, &g->children, entry)
+		tc_bw[vports_tc_node->tc] = vports_tc_node->user_bw_share;
+
+	return sprintf(buf, "TC_BW 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d 7:%d \n",
+		       tc_bw[0], tc_bw[1], tc_bw[2], tc_bw[3],
+		       tc_bw[4], tc_bw[5], tc_bw[6], tc_bw[7]);
+}
+
+static int atoi(const char *s)
+{
+	unsigned int ret = 0;
+	unsigned int d;
+
+	while (1) {
+		d = (*s++) - '0';
+		if (d > 9)
+			break;
+		ret *= 10;
+		ret += d;
+	}
+	return ret;
+}
+
+static int get_validate_tc_bw(const char *buf, u32*tc_bw)
+{
+	char tc_bw_str[MLX5_MAX_NUM_TC][7] = {};
+	int i, err, sum = 0;
+	char *p;
+
+	err = sscanf(buf, "%s %s %s %s %s %s %s %s",
+		     tc_bw_str[0], tc_bw_str[1], tc_bw_str[2], tc_bw_str[3],
+		     tc_bw_str[4], tc_bw_str[5], tc_bw_str[6], tc_bw_str[7]);
+
+	if (err != MLX5_MAX_NUM_TC)
+		return -EINVAL;
+
+	for (i = 0; i < MLX5_MAX_NUM_TC; i++) {
+		p = strchr(tc_bw_str[i], ':');
+		if (!p)
+			return -EINVAL;
+
+		tc_bw[i] = atoi(++p);
+		sum += tc_bw[i];
+	}
+	if (sum && sum != 100)
+		return -EINVAL;
+
+	return 0;
+}
+
+static ssize_t tc_bw_group_store(struct mlx5_esw_sched_node *g,
+				 struct vf_group_attributes *oa,
+				 const char *buf, size_t count)
+{
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {};
+	int err;
+
+	err = get_validate_tc_bw(buf, tc_bw);
+	if (err)
+		return err;
+
+	err = mlx5_esw_sysfs_rate_node_tc_bw_set(g, tc_bw, NULL);
+
+	return err ? err : count;
+}
+
+static ssize_t max_tx_rate_group_show(struct mlx5_esw_sched_node *g,
 				      struct vf_group_attributes *oa,
 				      char *buf)
 {
@@ -149,7 +228,7 @@ static ssize_t max_tx_rate_group_show(struct mlx5_esw_rate_group *g,
 		       "usage: write <Rate (Mbit/s)> to set VF group max rate\n");
 }
 
-static ssize_t max_tx_rate_group_store(struct mlx5_esw_rate_group *g,
+static ssize_t max_tx_rate_group_store(struct mlx5_esw_sched_node *g,
 				       struct vf_group_attributes *oa,
 				       const char *buf, size_t count)
 {
@@ -159,7 +238,7 @@ static ssize_t max_tx_rate_group_store(struct mlx5_esw_rate_group *g,
 	int err;
 
 	err = sscanf(buf, "%u", &max_rate);
-	if (err != 1)
+	if (err != 1 || (max_rate && max_rate < g->min_rate))
 		return -EINVAL;
 
 	err = mlx5_esw_qos_set_sysfs_group_max_rate(esw, g, max_rate);
@@ -167,7 +246,7 @@ static ssize_t max_tx_rate_group_store(struct mlx5_esw_rate_group *g,
 	return err ? err : count;
 }
 
-static ssize_t min_tx_rate_group_show(struct mlx5_esw_rate_group *g,
+static ssize_t min_tx_rate_group_show(struct mlx5_esw_sched_node *g,
 				      struct vf_group_attributes *oa,
 				      char *buf)
 {
@@ -175,7 +254,7 @@ static ssize_t min_tx_rate_group_show(struct mlx5_esw_rate_group *g,
 		       "usage: write <Rate (Mbit/s)> to set VF group min rate\n");
 }
 
-static ssize_t min_tx_rate_group_store(struct mlx5_esw_rate_group *g,
+static ssize_t min_tx_rate_group_store(struct mlx5_esw_sched_node *g,
 				       struct vf_group_attributes *oa,
 				       const char *buf, size_t count)
 {
@@ -185,7 +264,7 @@ static ssize_t min_tx_rate_group_store(struct mlx5_esw_rate_group *g,
 	int err;
 
 	err = sscanf(buf, "%u", &min_rate);
-	if (err != 1)
+	if (err != 1 || (g->max_rate && min_rate > g->max_rate))
 		return -EINVAL;
 
 	err = mlx5_esw_qos_set_sysfs_group_min_rate(esw, g, min_rate);
@@ -634,13 +713,14 @@ static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
+	u32 min_tx_rate = 0;
 	u32 max_tx_rate;
-	u32 min_tx_rate;
 	int err;
 
-	mutex_lock(&esw->state_lock);
-	min_tx_rate = evport->qos.min_rate;
-	mutex_unlock(&esw->state_lock);
+	esw_qos_lock(esw);
+	if (evport->qos.sched_node)
+		min_tx_rate = evport->qos.sched_node->min_rate;
+	esw_qos_unlock(esw);
 
 	err = sscanf(buf, "%u", &max_tx_rate);
 	if (err != 1)
@@ -660,25 +740,196 @@ static ssize_t group_show(struct mlx5_sriov_vf *g,
 		       MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID);
 }
 
+static unsigned int get_str_char_count(char *str, int match)
+{
+	unsigned int count = 0;
+	const char *pos = str;
+
+	while ((pos = strchr(pos, match))) {
+		count++;
+		pos++;
+	}
+	return count;
+}
+
+static int ident_str_validate(char *str, unsigned int expected)
+{
+	if (!str)
+		return -ENOENT;
+
+	if (get_str_char_count(str, '/') != expected) {
+		pr_info("Wrong identification string format.\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int str_split_by_char(char *str, char **before, char **after, int match)
+{
+	char *slash;
+
+	slash = strrchr(str, match);
+	if (!slash)
+		return -EINVAL;
+	*slash = '\0';
+	*before = str;
+	*after = slash + 1;
+	return 0;
+}
+
+static int parse_name(char *str, char **bus_name, char **dev_name, char **group_id)
+{
+	char *handlestr;
+	int err;
+
+	err = str_split_by_char(str, &handlestr, group_id, '/');
+	if (err)
+		return err;
+
+	return str_split_by_char(handlestr, bus_name, dev_name, '/');
+}
+
+static int parse_long_group_id(char *str, char **bus_name, char **dev_name, char **group_id)
+{
+	int err;
+
+	err = ident_str_validate(str, 2);
+	if (err) {
+		pr_err("Expected \"bus_name/dev_name/group_id\" identification.\n");
+		return err;
+	}
+
+	err = parse_name(str, bus_name, dev_name, group_id);
+	if (err) {
+		pr_err("Node identification \"%s\" is invalid\n", str);
+		return err;
+	}
+
+	if (!**group_id) {
+		err = -EINVAL;
+		pr_err("group id can't be empty.\n");
+	}
+
+        return err;
+}
+
+
+static struct group_sysfs_opts *get_long_group_id(struct group_sysfs_opts *opts,
+						  u32 *group_id,
+						  const char *buf)
+{
+	int err;
+
+	/* If the input is only a number, use local esw to create group. */
+	if (strspn(buf, "0123456789") == strlen(buf) - 1) {
+		err = sscanf(buf, "%u", group_id);
+		if (err != 1) {
+			pr_err("failed to get group id\n");
+			return ERR_PTR(-EINVAL);
+		}
+		return NULL;
+	}
+
+	err = parse_long_group_id((char *)buf, &opts->bus_name, &opts->dev_name,
+				  &opts->group_id);
+	if (err != 0) {
+		pr_err("failed to parse pci/dev/group_id\n");
+		return ERR_PTR(-EINVAL);
+	}
+	err = sscanf(opts->group_id, "%u", group_id);
+	if (err != 1) {
+		pr_err("failed to get long group id\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	return opts;
+}
+
+static bool esw_equal(const struct mlx5_eswitch *esw, const struct group_sysfs_opts *opts)
+{
+	return !strcmp(esw->dev->device->bus->name, opts->bus_name) &&
+	       !strcmp(dev_name(esw->dev->device), opts->dev_name);
+}
+
 static ssize_t group_store(struct mlx5_sriov_vf *g,
 			   struct vf_attributes *oa,
 			   const char *buf, size_t count)
 {
 	struct mlx5_core_dev *dev = g->dev;
-	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_eswitch *esw = dev->priv.eswitch, *peer_esw;
+	struct mlx5_devcom_comp_dev *devcom = esw->devcom, *pos;
+	struct group_sysfs_opts opts, *opts_p;
+	struct mlx5_vport *vport;
+	bool found = false;
 	u32 group_id;
 	int err;
 
-	err = sscanf(buf, "%u", &group_id);
-	if (err != 1)
+	opts_p = get_long_group_id(&opts, &group_id, buf);
+	if (IS_ERR(opts_p))
+		return PTR_ERR(opts_p);
+
+	if (group_id > MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID) {
+		pr_err("group id should be smaller than %d\n",
+		       MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID + 1);
 		return -EINVAL;
+	}
 
-	if (group_id > MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID)
-		return -EINVAL;
+	/* If the input is pci/dev/group_id, eg. "pci/0000:08:00.0/1",
+	 * but the device is local, no need to use devcom to find peer esw.
+	 */
+	if (opts_p && esw_equal(esw, opts_p))
+		opts_p = NULL;
 
-	err = mlx5_esw_qos_vport_update_sysfs_group(esw, g->vf + 1, group_id);
+	/* Currently, we support to add a vf to a group of other esw, pass a
+	 * vf number is not enough, get the vport.
+	 */
+	vport = mlx5_eswitch_get_vport(esw, g->vf + 1);
+	if (IS_ERR(vport))
+		return PTR_ERR(vport);
 
-	return err ? err : count;
+	/* vport and group are in the same esw. */
+	if (!opts_p) {
+		err = mlx5_esw_qos_vport_update_sysfs_group(esw, group_id, vport);
+		return err ? err : count;
+	}
+
+	if (!MLX5_CAP_QOS(esw->dev, esw_cross_esw_sched)) {
+		pr_err("Cross E-Switch scheduling is not supported\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!mlx5_lag_is_active(esw->dev)) {
+		pr_err("Cross E-Switch scheduling is only supported when LAG is active\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!mlx5_devcom_for_each_peer_begin(devcom)) {
+		pr_err("devcom is not ready\n");
+		return -ENODEV;
+	}
+
+	mlx5_devcom_for_each_peer_entry(devcom, peer_esw, pos) {
+		if (!esw_equal(peer_esw, opts_p))
+			continue;
+
+		err = mlx5_esw_qos_vport_update_sysfs_group(peer_esw, group_id, vport);
+		if (err)
+			esw_warn(peer_esw->dev,
+				 "failed to add vport %d to peer esw, err: %d\n",
+				 vport->vport, err);
+		found = true;
+		break;
+	}
+
+	mlx5_devcom_for_each_peer_end(devcom);
+
+	if (!found) {
+		pr_err("pci dev %s not found\n", opts_p->dev_name);
+		return -ENODEV;
+	}
+
+	return count;
 }
 
 static ssize_t min_tx_rate_show(struct mlx5_sriov_vf *g,
@@ -696,13 +947,14 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
+	u32 max_tx_rate = 0;
 	u32 min_tx_rate;
-	u32 max_tx_rate;
 	int err;
 
-	mutex_lock(&esw->state_lock);
-	max_tx_rate = evport->qos.max_rate;
-	mutex_unlock(&esw->state_lock);
+	esw_qos_lock(esw);
+	if (evport->qos.sched_node)
+		max_tx_rate = evport->qos.sched_node->max_rate;
+	esw_qos_unlock(esw);
 
 	err = sscanf(buf, "%u", &min_tx_rate);
 	if (err != 1)
@@ -710,6 +962,49 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 
 	err = mlx5_eswitch_set_vport_rate(dev->priv.eswitch, g->vf + 1,
 					  max_tx_rate, min_tx_rate);
+	return err ? err : count;
+}
+
+static ssize_t tc_bw_show(struct mlx5_sriov_vf *g,
+			  struct vf_attributes *oa,
+			  char *buf)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
+	struct mlx5_esw_sched_node *vports_tc_node;
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {};
+
+	if (!evport->qos.tc.arbiter_node)
+		return sprintf(buf, "TC BW is not yet configured\n");
+
+	if (!evport->qos.tc.arbiter_node->parent)
+		return sprintf(buf, "TC BW is set on parent group\n");
+
+	list_for_each_entry(vports_tc_node, &evport->qos.tc.arbiter_node->children, entry)
+		tc_bw[vports_tc_node->tc] = vports_tc_node->user_bw_share;
+
+	return sprintf(buf, "TC BW 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d 7:%d \n",
+		       tc_bw[0], tc_bw[1], tc_bw[2], tc_bw[3],
+		       tc_bw[4], tc_bw[5], tc_bw[6], tc_bw[7]);
+}
+
+static ssize_t tc_bw_store(struct mlx5_sriov_vf *g,
+			   struct vf_attributes *oa,
+			   const char *buf, size_t count)
+{
+	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {};
+	int err;
+
+	err = get_validate_tc_bw(buf, tc_bw);
+	if (err)
+		return err;
+
+	err =  mlx5_esw_sysfs_rate_leaf_tc_bw_set(evport, tc_bw, NULL);
+
 	return err ? err : count;
 }
 #define _sprintf(p, buf, format, arg...)				\
@@ -773,6 +1068,7 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	struct mlx5_vport *evport = mlx5_eswitch_get_vport(esw, g->vf + 1);
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {0};
 	struct mlx5_vport_info *ivi;
 	char *p = buf;
 
@@ -793,12 +1089,13 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "SpoofCheck : %s\n", ivi->spoofchk ? "ON" : "OFF");
 	p += _sprintf(p, buf, "Trust      : %s\n", ivi->trusted ? "ON" : "OFF");
 	p += _sprintf(p, buf, "LinkState  : %s",   policy_str(ivi->link_state));
-	if (evport->qos.enabled) {
-		p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.min_rate);
-		p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.max_rate);
-		if (evport->qos.group)
-			p += _sprintf(p, buf, "RateGroup  : %d\n",
-				      evport->qos.group->group_id);
+	if (evport->qos.sched_node) {
+		struct mlx5_esw_sched_node *parent = mlx5_esw_qos_vport_get_parent(evport);
+
+		p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.sched_node->min_rate);
+		p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.sched_node->max_rate);
+		if (parent)
+			p += _sprintf(p, buf, "RateGroup  : %d\n", parent->group_id);
 		else
 			p += _sprintf(p, buf, "RateGroup  : 0\n");
 	} else {
@@ -809,6 +1106,17 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 				      VLAN_N_VID) ? "ON" : "OFF");
 
 	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
+
+	if (evport->qos.tc.arbiter_node && evport->qos.tc.arbiter_node->parent) {
+		struct mlx5_esw_sched_node *vports_tc_node;
+
+		list_for_each_entry(vports_tc_node, &evport->qos.tc.arbiter_node->children, entry)
+			tc_bw[vports_tc_node->tc] = vports_tc_node->user_bw_share;
+		p += _sprintf(p, buf, "TC BW      : 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d 7:%d\n",
+			       tc_bw[0], tc_bw[1], tc_bw[2], tc_bw[3],
+			       tc_bw[4], tc_bw[5], tc_bw[6], tc_bw[7]);
+	}
+
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -821,30 +1129,48 @@ static ssize_t config_store(struct mlx5_sriov_vf *g,
 	return -ENOTSUPP;
 }
 
-static ssize_t config_group_show(struct mlx5_esw_rate_group *g,
+static ssize_t config_group_show(struct mlx5_esw_sched_node *g,
 				 struct vf_group_attributes *oa,
 				 char *buf)
 {
+	struct mlx5_esw_sched_node *tc_node;
 	struct mlx5_core_dev *dev = g->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {0};
 	char *p = buf;
 
 	if (!esw && MLX5_CAP_GEN(esw->dev, vport_group_manager) &&
 	    mlx5_core_is_pf(esw->dev))
 		return -EPERM;
 
-	if (!mutex_trylock(&esw->state_lock))
+	if (!mutex_trylock(&esw->qos.domain->lock))
 		return -EBUSY;
+
+	list_for_each_entry(tc_node, &g->children, entry)
+		tc_bw[tc_node->tc] = tc_node->bw_share;
+
 	p += _sprintf(p, buf, "Num VFs    : %d\n", g->num_vports);
 	p += _sprintf(p, buf, "MaxRate    : %d\n", g->max_rate);
 	p += _sprintf(p, buf, "MinRate    : %d\n", g->min_rate);
 	p += _sprintf(p, buf, "BWShare(Indirect cfg)    : %d\n", g->bw_share);
-	mutex_unlock(&esw->state_lock);
+
+	if (g->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
+		struct mlx5_esw_sched_node *vports_tc_node;
+
+                list_for_each_entry(vports_tc_node, &g->children, entry)
+			tc_bw[vports_tc_node->tc] = vports_tc_node->user_bw_share;
+	}
+
+	p += _sprintf(p, buf, "TC BW      : 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d 7:%d\n",
+		      tc_bw[0], tc_bw[1], tc_bw[2], tc_bw[3],
+		      tc_bw[4], tc_bw[5], tc_bw[6], tc_bw[7]);
+
+	mutex_unlock(&esw->qos.domain->lock);
 
 	return (ssize_t)(p - buf);
 }
 
-static ssize_t config_group_store(struct mlx5_esw_rate_group *g,
+static ssize_t config_group_store(struct mlx5_esw_sched_node *g,
 				  struct vf_group_attributes *oa,
 				  const char *buf, size_t count)
 {
@@ -1012,6 +1338,7 @@ out:
 	return sprintf(buf, "%u\n", page_limit);
 }
 
+#define PAGE_LIMIT_UNLIMITED UINT_MAX
 static ssize_t page_limit_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 				const char *buf, size_t count)
 {
@@ -1031,7 +1358,7 @@ static ssize_t page_limit_store(struct mlx5_sriov_vf *g, struct vf_attributes *o
 			return err;
 
 		if (!limit)
-			limit = UINT_MAX;
+			limit = PAGE_LIMIT_UNLIMITED;
 
 		err = mlx5_set_max_alloc_icm_th(g->dev, vhca_id, limit);
 		if (err)
@@ -1133,6 +1460,7 @@ VF_ATTR(page_limit);
 VF_ATTR(num_pages);
 VF_ATTR(max_tx_rate);
 VF_ATTR(min_tx_rate);
+VF_ATTR(tc_bw);
 VF_ATTR(config);
 VF_ATTR(trunk);
 VF_ATTR(stats);
@@ -1140,6 +1468,7 @@ VF_ATTR(group);
 VF_RATE_GROUP_ATTR(min_tx_rate);
 VF_RATE_GROUP_ATTR(max_tx_rate);
 VF_RATE_GROUP_ATTR(config);
+VF_RATE_GROUP_ATTR(tc_bw);
 
 static struct attribute *vf_eth_attrs[] = {
 	&vf_attr_node.attr,
@@ -1150,6 +1479,7 @@ static struct attribute *vf_eth_attrs[] = {
 	&vf_attr_trust.attr,
 	&vf_attr_max_tx_rate.attr,
 	&vf_attr_min_tx_rate.attr,
+	&vf_attr_tc_bw.attr,
 	&vf_attr_config.attr,
 	&vf_attr_trunk.attr,
 	&vf_attr_stats.attr,
@@ -1161,6 +1491,7 @@ static struct attribute *vf_group_attrs[] = {
 	&vf_group_attr_max_tx_rate.attr,
 	&vf_group_attr_min_tx_rate.attr,
 	&vf_group_attr_config.attr,
+	&vf_group_attr_tc_bw.attr,
 	NULL
 };
 
@@ -1308,13 +1639,13 @@ int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
 #ifdef CONFIG_MLX5_ESWITCH
 struct mlx5_group_kobj {
 	struct work_struct work;
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *group;
 };
 
 static void destroy_vf_group_work(struct work_struct *work)
 {
 	struct mlx5_group_kobj *obj = container_of(work, struct mlx5_group_kobj, work);
-	struct mlx5_esw_rate_group *group = obj->group;
+	struct mlx5_esw_sched_node *group = obj->group;
 
 	kobject_put(&group->kobj);
 	complete_all(&group->free_group_comp);
@@ -1322,7 +1653,7 @@ static void destroy_vf_group_work(struct work_struct *work)
 }
 #endif
 
-void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_rate_group *group)
+void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_sched_node *group)
 {
 #ifdef CONFIG_MLX5_ESWITCH
 	struct mlx5_group_kobj *kobj = kzalloc(sizeof *kobj, GFP_ATOMIC);

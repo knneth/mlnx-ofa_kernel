@@ -36,6 +36,7 @@
 #include "mlx5_core.h"
 #include "mlx5_irq.h"
 #include "eswitch.h"
+#include "esw/qos.h"
 
 static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf, u16 func_id)
 {

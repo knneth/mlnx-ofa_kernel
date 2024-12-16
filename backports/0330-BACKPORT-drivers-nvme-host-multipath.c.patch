@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/multipath.c
 
 Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
 ---
- drivers/nvme/host/multipath.c | 235 +++++++++++++++++++++++++++++++++-
- 1 file changed, 231 insertions(+), 4 deletions(-)
+ drivers/nvme/host/multipath.c | 246 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 242 insertions(+), 4 deletions(-)
 
 --- a/drivers/nvme/host/multipath.c
 +++ b/drivers/nvme/host/multipath.c
@@ -213,10 +213,10 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  	.release	= nvme_ns_head_chr_release,
  	.unlocked_ioctl	= nvme_ns_head_chr_ioctl,
  	.compat_ioctl	= compat_ptr_ioctl,
-+#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H)
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD) && defined(HAVE_IO_URING_CMD_H) && defined(HAVE_BIO_INTEGRITY_MAP_USER)
  	.uring_cmd	= nvme_ns_head_chr_uring_cmd,
 +#endif
-+#if defined(HAVE_FILE_OPERATIONS_URING_CMD_IOPOLL) && defined(HAVE_IO_URING_CMD_H)
++#if defined(HAVE_FILE_OPERATIONS_URING_CMD_IOPOLL) && defined(HAVE_IO_URING_CMD_H) && defined(HAVE_BIO_INTEGRITY_MAP_USER)
  	.uring_cmd_iopoll = nvme_ns_chr_uring_cmd_iopoll,
 +#endif
  };
@@ -233,7 +233,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  
  static void nvme_requeue_work(struct work_struct *work)
  {
-@@ -514,13 +608,22 @@ static void nvme_requeue_work(struct wor
+@@ -514,14 +608,25 @@ static void nvme_requeue_work(struct wor
  		next = bio->bi_next;
  		bio->bi_next = NULL;
  
@@ -253,18 +253,25 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
 +#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
  	struct queue_limits lim;
 +#endif
++#ifndef HAVE_BLK_INTEGRITY_CSUM_CRC64
  	bool vwc = false;
++#endif
  
  	mutex_init(&head->lock);
-@@ -536,6 +639,7 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+ 	bio_list_init(&head->requeue_list);
+@@ -536,22 +641,84 @@ int nvme_mpath_alloc_disk(struct nvme_ct
  	if (!(ctrl->subsys->cmic & NVME_CTRL_CMIC_MULTI_CTRL) || !multipath)
  		return 0;
  
 +#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
  	blk_set_stacking_limits(&lim);
  	lim.dma_alignment = 3;
++#ifdef HAVE_BLK_INTEGRITY_CSUM_CRC64
++	lim.features |= BLK_FEAT_IO_STAT | BLK_FEAT_NOWAIT | BLK_FEAT_POLL;
++#endif
  	if (head->ids.csi != NVME_CSI_ZNS)
-@@ -544,14 +648,71 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+ 		lim.max_zone_append_sectors = 0;
+ 
  	head->disk = blk_alloc_disk(&lim, ctrl->numa_node);
  	if (IS_ERR(head->disk))
  		return PTR_ERR(head->disk);
@@ -329,17 +336,20 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  			ctrl->subsys->instance, head->instance);
 -
 +#ifdef HAVE_BLK_ALLOC_DISK
++#ifndef HAVE_BLK_INTEGRITY_CSUM_CRC64
  	blk_queue_flag_set(QUEUE_FLAG_NONROT, head->disk->queue);
  	blk_queue_flag_set(QUEUE_FLAG_NOWAIT, head->disk->queue);
-+#  if defined HAVE_BDEV_START_IO_ACCT || defined HAVE_BDEV_START_IO_ACCT_3_PARAM
++#if defined HAVE_BDEV_START_IO_ACCT || defined HAVE_BDEV_START_IO_ACCT_3_PARAM
  	blk_queue_flag_set(QUEUE_FLAG_IO_STAT, head->disk->queue);
-+#  endif
++#endif
  	/*
  	 * This assumes all controllers that refer to a namespace either
  	 * support poll queues or not.  That is not a strict guarantee,
-@@ -562,17 +723,33 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+@@ -561,18 +728,37 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+ 	if (ctrl->tagset->nr_maps > HCTX_TYPE_POLL &&
  	    ctrl->tagset->map[HCTX_TYPE_POLL].nr_queues)
  		blk_queue_flag_set(QUEUE_FLAG_POLL, head->disk->queue);
++#endif
  
 +#  ifndef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
 +	/* set to a default value of 512 until the disk is validated */
@@ -347,13 +357,15 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
 +	blk_set_stacking_limits(&head->disk->queue->limits);
 +	blk_queue_dma_alignment(head->disk->queue, 3);
 +#  endif
++#ifndef HAVE_BLK_INTEGRITY_CSUM_CRC64
  	/* we need to propagate up the VMC settings */
  	if (ctrl->vwc & NVME_CTRL_VWC_PRESENT)
  		vwc = true;
  	blk_queue_write_cache(head->disk->queue, vwc, vwc);
- 	return 0;
-+#else
++#endif
 +	return 0;
++#else
+ 	return 0;
 +
 + out_cleanup_queue:
 +	blk_cleanup_queue(q);
@@ -371,7 +383,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  
  	if (!head->disk)
  		return;
-@@ -582,16 +759,30 @@ static void nvme_mpath_set_live(struct n
+@@ -582,16 +768,30 @@ static void nvme_mpath_set_live(struct n
  	 * paths simultaneously calling device_add_disk() on the same namespace
  	 * head.
  	 */
@@ -403,7 +415,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  	mutex_lock(&head->lock);
  	if (nvme_path_is_optimized(ns)) {
  		int node, srcu_idx;
-@@ -626,7 +817,11 @@ static int nvme_parse_ana_log(struct nvm
+@@ -626,7 +826,11 @@ static int nvme_parse_ana_log(struct nvm
  			return -EINVAL;
  
  		nr_nsids = le32_to_cpu(desc->nnsids);
@@ -415,7 +427,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  
  		if (WARN_ON_ONCE(desc->grpid == 0))
  			return -EINVAL;
-@@ -775,7 +970,6 @@ void nvme_mpath_update(struct nvme_ctrl
+@@ -775,7 +979,6 @@ void nvme_mpath_update(struct nvme_ctrl
  static void nvme_anatt_timeout(struct timer_list *t)
  {
  	struct nvme_ctrl *ctrl = from_timer(ctrl, t, anatt_timer);
@@ -423,11 +435,12 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  	dev_info(ctrl->device, "ANATT timeout, resetting controller.\n");
  	nvme_reset_ctrl(ctrl);
  }
-@@ -873,13 +1067,27 @@ void nvme_mpath_add_disk(struct nvme_ns
+@@ -873,13 +1076,29 @@ void nvme_mpath_add_disk(struct nvme_ns
  		ns->ana_state = NVME_ANA_OPTIMIZED;
  		nvme_mpath_set_live(ns);
  	}
 -
++#ifndef HAVE_BLK_INTEGRITY_CSUM_CRC64
 +#ifdef HAVE_QUEUE_FLAG_STABLE_WRITES
  	if (blk_queue_stable_writes(ns->queue) && ns->head->disk)
  		blk_queue_flag_set(QUEUE_FLAG_STABLE_WRITES,
@@ -441,6 +454,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
 +					 BDI_CAP_STABLE_WRITES;
 +	}
 +#endif
++#endif
 +
  #ifdef CONFIG_BLK_DEV_ZONED
  	if (blk_queue_is_zoned(ns->queue) && ns->head->disk)
@@ -452,7 +466,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  #endif
  }
  
-@@ -888,10 +1096,18 @@ void nvme_mpath_shutdown_disk(struct nvm
+@@ -888,10 +1107,18 @@ void nvme_mpath_shutdown_disk(struct nvm
  	if (!head->disk)
  		return;
  	kblockd_schedule_work(&head->requeue_work);
@@ -471,7 +485,7 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
  }
  
  void nvme_mpath_remove_disk(struct nvme_ns_head *head)
-@@ -901,7 +1117,18 @@ void nvme_mpath_remove_disk(struct nvme_
+@@ -901,7 +1128,18 @@ void nvme_mpath_remove_disk(struct nvme_
  	/* make sure all pending bios are cleaned up */
  	kblockd_schedule_work(&head->requeue_work);
  	flush_work(&head->requeue_work);
@@ -479,13 +493,13 @@ Change-Id: Ie037745678dfc0535e75838627678ce0b0ca6ec3
 +#ifdef HAVE_BLK_CLEANUP_DISK
 +	blk_cleanup_disk(head->disk);
 +#else
- 	put_disk(head->disk);
++	put_disk(head->disk);
 +#endif
 +#else
 +	blk_cleanup_queue(head->disk->queue);
 +	if (!test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags))
 +		head->disk->queue = NULL;
-+	put_disk(head->disk);
+ 	put_disk(head->disk);
 +#endif
  }
  

@@ -205,6 +205,11 @@ static const struct dev_pm_ops auxiliary_dev_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(pm_generic_suspend, pm_generic_resume)
 };
 
+static void auxiliary_bus_sysfs_probe(struct auxiliary_device *auxdev)
+{
+	auxdev->sysfs.irq_dir_exists = false;
+}
+
 static int auxiliary_bus_probe(struct device *dev)
 {
 	struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
@@ -217,6 +222,7 @@ static int auxiliary_bus_probe(struct device *dev)
 		return ret;
 	}
 
+	auxiliary_bus_sysfs_probe(auxdev);
 	ret = auxdrv->probe(auxdev, auxiliary_match_id(auxdrv->id_table, auxdev));
 	if (ret)
 		dev_pm_domain_detach(dev, true);

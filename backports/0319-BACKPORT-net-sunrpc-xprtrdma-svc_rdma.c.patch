@@ -4,15 +4,20 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma.c
 Change-Id: Ib08f3d405ce2fcf23dd9260c4f4b5c2723f54f84
 Signed-off-by: Tom Wu <tomwu@nvidia.com>
 ---
- net/sunrpc/xprtrdma/svc_rdma.c | 41 +++++++++++++++++++++++++++++++++-
- 1 file changed, 40 insertions(+), 1 deletion(-)
+ net/sunrpc/xprtrdma/svc_rdma.c | 45 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 44 insertions(+), 1 deletion(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma.c
-@@ -75,7 +75,11 @@ enum {
+@@ -74,8 +74,16 @@ enum {
+ 	SVCRDMA_COUNTER_BUFSIZ	= sizeof(unsigned long long),
  };
  
++#ifdef HAVE_PROC_HANDLER_CONST_PARAM
++static int svcrdma_counter_handler(const struct ctl_table *table, int write,
++#else
  static int svcrdma_counter_handler(struct ctl_table *table, int write,
++#endif
 +#ifdef HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS
  				   void *buffer, size_t *lenp, loff_t *ppos)
 +#else
@@ -21,7 +26,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  {
  	struct percpu_counter *stat = (struct percpu_counter *)table->data;
  	char tmp[SVCRDMA_COUNTER_BUFSIZ + 1];
-@@ -98,8 +102,13 @@ static int svcrdma_counter_handler(struc
+@@ -98,8 +106,13 @@ static int svcrdma_counter_handler(struc
  	len -= *ppos;
  	if (len > *lenp)
  		len = *lenp;
@@ -35,7 +40,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	*lenp = len;
  	*ppos += len;
  
-@@ -212,6 +221,26 @@ static struct ctl_table svcrdma_parm_tab
+@@ -212,6 +225,26 @@ static struct ctl_table svcrdma_parm_tab
  	{ },
  };
  
@@ -62,7 +67,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  static void svc_rdma_proc_cleanup(void)
  {
  	if (!svcrdma_table_header)
-@@ -245,8 +274,12 @@ static int svc_rdma_proc_init(void)
+@@ -245,8 +278,12 @@ static int svc_rdma_proc_init(void)
  	if (rc)
  		goto out_err;
  
@@ -76,7 +81,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return 0;
  
  out_err:
-@@ -260,6 +293,9 @@ struct workqueue_struct *svcrdma_wq;
+@@ -260,6 +297,9 @@ struct workqueue_struct *svcrdma_wq;
  
  void svc_rdma_cleanup(void)
  {
@@ -86,7 +91,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	svc_unreg_xprt_class(&svc_rdma_class);
  	svc_rdma_proc_cleanup();
  	if (svcrdma_wq) {
-@@ -289,6 +325,9 @@ int svc_rdma_init(void)
+@@ -289,6 +329,9 @@ int svc_rdma_init(void)
  
  	svcrdma_wq = wq;
  	svc_reg_xprt_class(&svc_rdma_class);

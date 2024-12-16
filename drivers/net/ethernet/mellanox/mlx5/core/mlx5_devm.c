@@ -402,15 +402,16 @@ out_free:
 	return ret;
 }
 
-static struct mlx5_esw_rate_group *
+static struct mlx5_esw_sched_node *
 esw_qos_find_devm_group(struct mlx5_eswitch *esw, const char *group)
 {
-	struct mlx5_esw_rate_group *tmp;
+	struct mlx5_esw_sched_node *tmp;
 
 	if (!refcount_read(&esw->qos.refcnt))
 		return NULL;
 
-	list_for_each_entry(tmp, &esw->qos.groups, list) {
+	esw_assert_qos_lock_held(esw);
+	list_for_each_entry(tmp, &esw->qos.domain->nodes, entry) {
 		if (tmp->devm.name && !strcmp(tmp->devm.name, group))
 			return tmp;
 	}
@@ -432,20 +433,23 @@ int mlx5_devlink_rate_leaf_get(struct devlink *devlink,
 	if (err)
 		return err;
 
-	mutex_lock(&esw->state_lock);
+	esw_qos_lock(esw);
 	if (!vport->enabled) {
 		NL_SET_ERR_MSG_MOD(extack, "Eswitch vport is disabled");
 		err = -EOPNOTSUPP;
 		goto out;
 	}
 
-	*tx_max = vport->qos.max_rate;
-	*tx_share = vport->qos.min_rate;
-	if (vport->qos.group)
-		*group = vport->qos.group->devm.name;
+	if (vport->qos.sched_node) {
+		*tx_max = vport->qos.sched_node->max_rate;
+		*tx_share = vport->qos.sched_node->min_rate;
+
+		if (vport->qos.sched_node->parent)
+			*group = vport->qos.sched_node->parent->devm.name;
+	}
 
 out:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
@@ -484,17 +488,17 @@ int mlx5_devlink_rate_leaf_tx_max_set(struct devlink *devlink,
 	if (!refcount_read(&esw->qos.refcnt) && !tx_max)
 		return 0;
 
-	mutex_lock(&esw->state_lock);
-	if (!vport->qos.enabled && !tx_max)
+	esw_qos_lock(esw);
+	if (!vport->qos.sched_node && !tx_max)
 		goto unlock;
 
-	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
 	if (err)
 		goto unlock;
 
-	err = esw_qos_set_vport_max_rate(esw, vport, tx_max, extack);
+	err = esw_qos_set_vport_max_rate(vport, tx_max, extack);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
@@ -530,17 +534,17 @@ int mlx5_devlink_rate_leaf_tx_share_set(struct devlink *devlink,
 	if (!refcount_read(&esw->qos.refcnt) && !tx_share)
 		return 0;
 
-	mutex_lock(&esw->state_lock);
-	if (!vport->qos.enabled && !tx_share)
+	esw_qos_lock(esw);
+	if (!vport->qos.sched_node && !tx_share)
 		goto unlock;
 
-	err = esw_qos_vport_enable(esw, vport, 0, 0, extack);
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
 	if (err)
 		goto unlock;
 
-	err = esw_qos_set_vport_min_rate(esw, vport, tx_share, extack);
+	err = esw_qos_set_vport_min_rate(vport, tx_share, extack);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
@@ -562,7 +566,7 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 				     const char *group_name,
 				     struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *curr_group, *new_group;
+	struct mlx5_esw_sched_node *curr_group, *new_group;
 	struct mlx5_eswitch *esw;
 	struct mlx5_vport *vport;
 	int err;
@@ -571,25 +575,65 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 	if (err)
 		return err;
 
-	curr_group = vport->qos.group;
+	esw_qos_lock(esw);
+	if (!vport->qos.sched_node && !strlen(group_name))
+		goto unlock;
+
+	err = esw_qos_vport_enable(vport, 0, 0, extack);
+	if (err)
+		goto unlock;
+
+	curr_group = mlx5_esw_qos_vport_get_parent(vport);
+	/* remove SF from group */
 	if (!strlen(group_name)) {
-		err = mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch,
-						      vport, NULL, extack);
-		if (!err && curr_group && curr_group->devm.name)
-			curr_group->num_vports--;
-		return err;
+		new_group = esw->qos.node0;
+
+		if (esw_qos_tc_arbitration_enabled_on_vport(vport))
+			err = mlx5_esw_qos_vport_tc_update_tc_arbitration_node(vport, NULL, extack);
+		else if (vport->qos.tc.arbiter_node)
+			err = esw_qos_vport_tc_disable(vport, NULL, extack);
+		else
+			err = esw_qos_vport_update_node(vport, NULL, extack);
+		if (err) {
+			NL_SET_ERR_MSG_MOD(extack, "Failed to remove SF from group");
+			goto unlock;
+		}
+		goto out;
 	}
 
 	new_group = esw_qos_find_devm_group(esw, group_name);
-	if (!new_group)
-		return -EINVAL;
-
-	err = mlx5_esw_qos_vport_update_group(vport->dev->priv.eswitch, vport, new_group, extack);
-	if (!err) {
-		new_group->num_vports++;
-		if (curr_group && curr_group->devm.name)
-			curr_group->num_vports--;
+	if (!new_group) {
+		NL_SET_ERR_MSG_MOD(extack, "Group doesn't exist, can't add SF to it");
+		err = -EINVAL;
+		goto unlock;
 	}
+
+	if (new_group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
+		if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "TC arbitration already enabled for vport");
+			err = -EOPNOTSUPP;
+			goto unlock;
+		}
+
+		err = esw_qos_vport_tc_update_node(vport, new_group, extack);
+		goto check_err;
+	}
+
+	err = esw_qos_vport_update_node(vport, new_group, extack);
+check_err:
+	if (!err) {
+		goto out;
+	} else {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to add SF to group");
+		goto unlock;
+	}
+
+out:
+	new_group->num_vports++;
+	curr_group->num_vports--;
+unlock:
+	esw_qos_unlock(esw);
 	return err;
 }
 
@@ -608,7 +652,7 @@ static int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
 static int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group_name,
 				     u64 tx_share, struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *group;
 	struct mlx5_core_dev *dev;
 	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
@@ -618,25 +662,25 @@ static int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char
 	dev = devlink_priv(devlink);
 	esw = dev->priv.eswitch;
 
-	mutex_lock(&esw->state_lock);
+	esw_qos_lock(esw);
 	group = esw_qos_find_devm_group(esw, group_name);
 	if (!group) {
 		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
 		err = -ENODEV;
 		goto unlock;
 	}
-	err = esw_qos_set_group_min_rate(esw, group, tx_share, extack);
+	err = esw_qos_set_node_min_rate(group, tx_share, extack);
 	if (!err)
 		group->devm.tx_share = tx_share;
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
 static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group_name,
 				   u64 tx_max, struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *group;
 	struct mlx5_core_dev *dev;
 	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
@@ -646,25 +690,25 @@ static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *
 	dev = devlink_priv(devlink);
 	esw = dev->priv.eswitch;
 
-	mutex_lock(&esw->state_lock);
+	esw_qos_lock(esw);
 	group = esw_qos_find_devm_group(esw, group_name);
 	if (!group) {
 		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
 		err = -ENODEV;
 		goto unlock;
 	}
-	err = esw_qos_set_group_max_rate(esw, group, tx_max, extack);
+	err = esw_qos_set_node_max_rate(group, tx_max, extack);
 	if (!err)
 		group->devm.tx_max = tx_max;
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
 static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,
 			    struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *group;
 	struct devlink *devlink;
 	struct mlx5_eswitch *esw;
 	int err = 0;
@@ -675,7 +719,7 @@ static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_n
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	mutex_lock(&esw->state_lock);
+	esw_qos_lock(esw);
 	if (esw->mode != MLX5_ESWITCH_OFFLOADS) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Rate node creation supported only in switchdev mode");
@@ -690,7 +734,7 @@ static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_n
 		goto unlock;
 	}
 
-	group = esw_qos_create_rate_group(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
+	group = esw_qos_create_vports_sched_node(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
 	if (IS_ERR(group)) {
 		err = PTR_ERR(group);
 		goto unlock;
@@ -701,14 +745,14 @@ static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_n
 					  &group->devm);
 
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 
 static int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
 			    struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_rate_group *group;
+	struct mlx5_esw_sched_node *group;
 	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
 	int err;
@@ -719,7 +763,7 @@ static int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_n
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	mutex_lock(&esw->state_lock);
+	esw_qos_lock(esw);
 
 	group = esw_qos_find_devm_group(esw, group_name);
 	if (!group) {
@@ -735,9 +779,9 @@ static int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_n
 	mlxdevm_rate_group_unregister(devm_dev,
 				      &group->devm);
 	kfree(group->devm.name);
-	err = esw_qos_destroy_rate_group(esw, group, extack);
+	err = esw_qos_destroy_node(group, extack);
 unlock:
-	mutex_unlock(&esw->state_lock);
+	esw_qos_unlock(esw);
 	return err;
 }
 

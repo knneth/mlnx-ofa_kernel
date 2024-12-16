@@ -6,6 +6,10 @@
 
 subdir-ccflags-y += -I$(src)
 
+ifeq ($(CONFIG_IS_AZURELINUX), y)
+EXTRA_CFLAGS += -fno-exceptions
+endif
+
 obj-$(CONFIG_MLX5_CORE) += mlx5_core.o
 
 #
@@ -19,7 +23,7 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o diag/reporter_vnic.o \
 		fw_reset.o qos.o lib/tout.o lib/aso.o mst_dump.o en_diag.o \
 		sriov_sysfs.o crdump.o diag/diag_cnt.o fw_exp.o \
-		eswitch_devlink_compat.o ecpf.o wc.o
+		eswitch_devlink_compat.o ecpf.o wc.o auxiliary_sysfs_compat.o
 
 #
 # Netdev basic

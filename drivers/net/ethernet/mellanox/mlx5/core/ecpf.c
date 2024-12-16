@@ -6,6 +6,7 @@
 #include "mlx5_core.h"
 #include "eswitch.h"
 #include "en.h"
+#include "esw/qos.h"
 
 bool mlx5_read_embedded_cpu(struct mlx5_core_dev *dev)
 {
@@ -210,7 +211,7 @@ static ssize_t max_tx_rate_store(struct kobject *kobj,
 		return PTR_ERR(evport);
 
 	mutex_lock(&esw->state_lock);
-	min_tx_rate = evport->qos.min_rate;
+	min_tx_rate = evport->qos.sched_node->min_rate;
 	mutex_unlock(&esw->state_lock);
 
 	err = kstrtou32(buf, 0, &max_tx_rate);
@@ -251,7 +252,7 @@ static ssize_t min_tx_rate_store(struct kobject *kobj,
 		return PTR_ERR(evport);
 
 	mutex_lock(&esw->state_lock);
-	max_tx_rate = evport->qos.max_rate;
+	max_tx_rate = evport->qos.sched_node->max_rate;
 	mutex_unlock(&esw->state_lock);
 
 	err = kstrtou32(buf, 0, &min_tx_rate);
@@ -467,8 +468,8 @@ static ssize_t config_show(struct kobject *kobj,
 	mutex_lock(&esw->state_lock);
 	ivi = &evport->info;
 	p += _sprintf(p, buf, "MAC        : %pM\n", ivi->mac);
-	p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.max_rate);
-	p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.min_rate);
+	p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.sched_node->max_rate);
+	p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.sched_node->min_rate);
 	port_state = mlx5_query_vport_admin_state(esw->dev, opmod,
 						  tmp->vport, other_vport);
 	p += _sprintf(p, buf, "State      : %s\n", policy_str(port_state));

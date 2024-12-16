@@ -3,7 +3,7 @@ Section: kernel
 Priority: optional
 Maintainer: Mellanox Technologies <support@mellanox.com>
 Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, make
-Standards-Version: 1.0
+Standards-Version: 4.2.0
 Homepage: http://www.mellanox.com
 
 Package: mlnx-nvme-modules

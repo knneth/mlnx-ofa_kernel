@@ -1353,9 +1353,9 @@ AC_SUBST(LINUX_OBJ)
 # -------- check for .config --------
 AC_ARG_WITH([linux-config],
 	[AC_HELP_STRING([--with-linux-config=path],
-			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
+			[set path to Linux .conf (default=$LINUX_OBJ/include/config/auto.conf)])],
 	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
-	[LINUX_CONFIG=$LINUX_OBJ/.config])
+	[LINUX_CONFIG=$LINUX_OBJ/include/config/auto.conf])
 AC_SUBST(LINUX_CONFIG)
 
 LB_CHECK_FILE([/boot/kernel.h],
@@ -2306,15 +2306,16 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if linux/netdevice.h has netdev_hold])
+	AC_MSG_CHECKING([if linux/netdevice.h has netdev_hold and netdev_put])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	],[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	],[
 		AC_MSG_RESULT(no)
@@ -2358,20 +2359,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DEV_XDP_PROG_ID, 1,
 			[dev_xdp_prog_id is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/netdevice.h has netdev_put])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-	#include <linux/netdevice.h>
-	],[
-		netdev_put(NULL,NULL);
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -4239,6 +4226,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if ethtool.h has struct kernel_ethtool_ts_info])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	],[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct ethtool_ops has supported_coalesce_params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -4411,6 +4413,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_NAPI_RESCHEDULE, 1,
 			  [napi_reschedule exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct net_device has netns_local as member])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -4705,6 +4724,36 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_ADJUST_BY_SCALED_PPM, 1,
 			  [adjfine is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci_dev has pci_vpd_find_tag get 4 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci_dev has pci_vpd_alloc])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -5926,6 +5975,31 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if kernel supports v6.11 'core tracks custom RSS contexts set'])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct ethtool_ops has get/set_settings])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -6943,6 +7017,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	AC_MSG_RESULT(yes)
 	MLNX_AC_DEFINE(HAVE_DEFINE_SEQ_ATTRIBUTE, 1,
 		[DEFINE_SEQ_ATTRIBUTE is defined])
+	],[
+	AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if fd_file is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/file.h>
+	],[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	],[
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
 	],[
 	AC_MSG_RESULT(no)
 	])
@@ -8756,6 +8846,33 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/iommu-dma.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/unaligned.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/unaligned.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/device/bus.h exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/device/bus.h>
@@ -8786,6 +8903,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BUS_TYPE_REMOVE_RETURN_VOID, 1,
 			[bus_type remove function return void])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if auxiliary device IRQs sysfs exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	],[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -9662,91 +9796,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if struct vdpa_config_ops has get_vq_dma_dev])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct vdpa_config_ops has resume])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct vdpa_config_ops has get_vq_dma_dev])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct vdpa_config_ops has .get_vq_desc_group and .compat_reset])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if vdpa_dev_set_config has device_features])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if struct vfio_device_ops has iommufd support])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/vfio.h>
@@ -9927,7 +9976,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		#include <net/page_pool/helpers.h>
 	],[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	],[
@@ -11554,6 +11602,24 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if proc_handler have const parameter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sysctl.h>
+	],[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/blkdev.h has bio_integrity_bytes])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
@@ -12344,19 +12410,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BLK_MQ_OPS_POLL_2_ARG, 1,
 			  [struct blk_mq_ops has poll 2 args])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/blk-integrity.h exists])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-integrity.h>
-	],[
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -13823,7 +13876,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	],[
 		AC_MSG_RESULT(no)
@@ -14185,6 +14238,92 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_RQF_MQ_INFLIGHT, 1,
 			[RQF_MQ_INFLIGHT is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blkdev.h has BLK_INTEGRITY_CSUM_CRC64])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/blk-integrity.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if has blk_rq_integrity_map_user])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blk_rq_map_integrity_sg get 2 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/bio-integrity.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bio-integrity.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if rq_integrity_vec returns struct bio_vec])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
 	],[
 		AC_MSG_RESULT(no)
 	])

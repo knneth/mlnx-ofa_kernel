@@ -101,8 +101,8 @@ default:
 ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 # compile with ofed driver
 	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
-		CONFIG_FWCTL=$(CONFIG_FWCTL) \
-		CONFIG_FWCTL_MLX5=$(CONFIG_FWCTL_MLX5) \
+		CONFIG_FWCTL=m \
+		CONFIG_FWCTL_MLX5=m \
 		CONFIG_DTRACE= \
 		CONFIG_CTF= \
 		LINUXINCLUDE='$(LINUXINCLUDE)' \

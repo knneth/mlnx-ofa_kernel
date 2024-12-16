@@ -51,6 +51,7 @@ obj-$(CONFIG_RDMA_RXE_DUMMY)	+= drivers/infiniband/sw/rxe/
 obj-$(CONFIG_SMC)		+= net/smc/
 obj-$(CONFIG_SMC_DIAG)		+= net/smc/
 obj-$(CONFIG_AUXILIARY_BUS)     += drivers/base/
+obj-$(CONFIG_FWCTL)     	+= drivers/fwctl/
 obj-$(CONFIG_CIFS_SMB_DIRECT)		+= fs/cifs/
 obj-$(CONFIG_MLX5_VDPA_NET)	+= drivers/vdpa/mlx5/
 obj-$(CONFIG_MLX5_VFIO_PCI) += drivers/vfio/pci/mlx5/

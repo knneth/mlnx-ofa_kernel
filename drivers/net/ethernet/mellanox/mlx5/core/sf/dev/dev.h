@@ -10,8 +10,17 @@
 
 #define MLX5_SF_DEV_ID_NAME "sf"
 
+/* syfs is needed here to support
+ * ("driver core: auxiliary bus: show auxiliary device IRQs")
+ * on v5.11..v6.10 kernels
+ */
 struct mlx5_sf_dev {
 	struct auxiliary_device adev;
+	struct {
+		struct xarray irqs;
+		struct mutex lock; /* Synchronize irq sysfs creation */
+		bool irq_dir_exists;
+	} sysfs;
 	struct mlx5_core_dev *parent_mdev;
 	struct mlx5_core_dev *mdev;
 	phys_addr_t bar_base_addr;

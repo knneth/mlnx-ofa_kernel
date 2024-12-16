@@ -27,7 +27,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  	int tc_num;
  	int err = 0;
  
-@@ -935,11 +938,9 @@ static ssize_t mlx5e_store_force_local_l
+@@ -944,11 +947,9 @@ static ssize_t mlx5e_store_force_local_l
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -39,7 +39,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
  		mlx5_nic_vport_update_local_lb(mdev,
-@@ -953,6 +954,64 @@ static DEVICE_ATTR(force_local_lb_disabl
+@@ -962,6 +963,64 @@ static DEVICE_ATTR(force_local_lb_disabl
  		   mlx5e_show_force_local_lb,
  		   mlx5e_store_force_local_lb);
  
@@ -104,7 +104,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  static struct attribute *mlx5e_settings_attrs[] = {
  	&dev_attr_hfunc.attr,
  	&dev_attr_pfc_stall_prevention.attr,
-@@ -1167,11 +1226,17 @@ static struct attribute *prio_hp_attrs[]
+@@ -1176,11 +1235,17 @@ static struct attribute *prio_hp_attrs[]
  	NULL
  };
  
@@ -122,7 +122,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  };
  
  int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
-@@ -1493,9 +1558,18 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1502,9 +1567,18 @@ int mlx5e_sysfs_create(struct net_device
  	if (err)
  		goto remove_debug_group;
  
@@ -141,7 +141,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  
  	mlx5_eswitch_compat_sysfs_init(dev);
  
-@@ -1513,6 +1587,10 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1522,6 +1596,10 @@ int mlx5e_sysfs_create(struct net_device
  
  	return 0;
  
@@ -152,7 +152,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  remove_phy_stat_group:
  	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
  remove_debug_group:
-@@ -1540,6 +1618,9 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1549,6 +1627,9 @@ void mlx5e_sysfs_remove(struct net_devic
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  	sysfs_remove_group(&dev->dev.kobj, &settings_group);
  	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);

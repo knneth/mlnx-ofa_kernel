@@ -189,7 +189,7 @@ rate_err:
 	return err;
 }
 
-void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
+void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_vport *vport)
 {
 	struct mlx5_devlink_port *dl_port;
 
@@ -197,8 +197,8 @@ void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_eswitch *esw, struct 
 		return;
 	dl_port = vport->dl_port;
 
-	if (!test_bit(MLX5_BREAK_FW_WAIT, &esw->dev->intf_state))
-		mlx5_esw_qos_vport_update_group(esw, vport, NULL, NULL);
+	if (!test_bit(MLX5_BREAK_FW_WAIT, &vport->dev->intf_state))
+		mlx5_esw_qos_vport_update_node(vport, NULL, NULL);
 	devl_rate_leaf_destroy(&dl_port->dl_port);
 
 	devl_port_unregister(&dl_port->dl_port);

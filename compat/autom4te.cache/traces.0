@@ -758,7 +758,7 @@ m4_if([$1], [v7],
 AC_SUBST([am__tar])
 AC_SUBST([am__untar])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
 AC_CACHE_CHECK([for $1], lb_File,
 [if test -r "$1"; then
     AS_VAR_SET(lb_File, yes)
@@ -768,17 +768,17 @@ fi])
 AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:21: -1- AC_DEFUN([SET_XEN_INCLUDES], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:21: -1- AC_DEFUN([SET_XEN_INCLUDES], [
 XEN_INCLUDES=
 LB_LINUX_CONFIG([XEN],[XEN_INCLUDES="-I$LINUX/arch/x86/include/mach-xen"],[])
 LB_LINUX_CONFIG_VALUE([XEN_INTERFACE_VERSION],[XEN_INCLUDES="$XEN_INCLUDES -D__XEN_INTERFACE_VERSION__=$res"],[XEN_INCLUDES="$XEN_INCLUDES -D__XEN_INTERFACE_VERSION__=$res"])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:33: -1- AC_DEFUN([LB_LINUX_VERSION], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:33: -1- AC_DEFUN([LB_LINUX_VERSION], [
 KMODEXT=".ko"
 AC_SUBST(KMODEXT)
 
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:45: -1- AC_DEFUN([LB_LINUX_RELEASE], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:45: -1- AC_DEFUN([LB_LINUX_RELEASE], [
 LINUXRELEASE=$(LB_LINUX_MAKE_OUTPUT([kernelrelease]))
 if test x$LINUXRELEASE = x ; then
 	# Workaround for some kernel 6.3 RCs:
@@ -832,7 +832,7 @@ LB_LINUX_TRY_COMPILE([
 LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
 
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:102: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:102: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
 	new_configure_args=
 	eval "set x $ac_configure_args"
 	shift
@@ -851,14 +851,14 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	done
 	ac_configure_args=$new_configure_args
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:123: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:123: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
 	[$3]=$(readlink -f $with_$2)
 	LB_ARG_REPLACE_PATH([$1], $[$3])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:130: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:130: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
 	__LB_ARG_CANON_PATH([$1], m4_translit([$1], [-.], [__]), [$2])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
 for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux; do
 	if readlink -q -e $DEFAULT_LINUX; then
 		break
@@ -901,9 +901,9 @@ AC_SUBST(LINUX_OBJ)
 # -------- check for .config --------
 AC_ARG_WITH([linux-config],
 	[AC_HELP_STRING([--with-linux-config=path],
-			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
+			[set path to Linux .conf (default=$LINUX_OBJ/include/config/auto.conf)])],
 	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
-	[LINUX_CONFIG=$LINUX_OBJ/.config])
+	[LINUX_CONFIG=$LINUX_OBJ/include/config/auto.conf])
 AC_SUBST(LINUX_CONFIG)
 
 LB_CHECK_FILE([/boot/kernel.h],
@@ -973,7 +973,7 @@ LB_LINUX_TRY_COMPILE([],[],[
 
 LB_LINUX_RELEASE
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:260: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:260: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
 	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
 		SYMVERFILE=Modules.symvers
 	else
@@ -982,7 +982,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	AC_MSG_RESULT($SYMVERFILE)
 	AC_SUBST(SYMVERFILE)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:276: -1- AC_DEFUN([LB_LINUX_CROSS], [AC_MSG_CHECKING([for cross compilation])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:276: -1- AC_DEFUN([LB_LINUX_CROSS], [AC_MSG_CHECKING([for cross compilation])
 CROSS_VARS=
 case $target_vendor in
 	# The K1OM architecture is an extension of the x86 architecture.
@@ -1007,11 +1007,11 @@ case $target_vendor in
 esac
 AC_SUBST(CROSS_VARS)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:329: -1- AC_DEFUN([LB_LINUX_MAKE_OUTPUT], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:329: -1- AC_DEFUN([LB_LINUX_MAKE_OUTPUT], [
 MAKE=${MAKE:-make}
 $MAKE -s M=$PWD -C $LINUX_OBJ $1
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:340: -1- AC_DEFUN([LB_LINUX_COMPILE_IFELSE], [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:340: -1- AC_DEFUN([LB_LINUX_COMPILE_IFELSE], [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 MAKE=${MAKE:-make}
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko build/output.log
 AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
@@ -1020,7 +1020,7 @@ AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:
 m4_ifvaln([$5],[$5])dnl])
 rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.ko m4_ifval([$1], [build/conftest.c conftest.c])[]dnl
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:356: -1- AC_DEFUN([LB_LINUX_ARCH], [AC_MSG_CHECKING([Linux kernel architecture])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:356: -1- AC_DEFUN([LB_LINUX_ARCH], [AC_MSG_CHECKING([Linux kernel architecture])
           AS_IF([rm -f $PWD/build/arch
                  make -s --no-print-directory echoarch -f $PWD/build/Makefile \
                      MLNX_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $CROSS_VARS  \
@@ -1028,12 +1028,12 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
                 [AC_MSG_RESULT([$LINUX_ARCH])],
                 [AC_MSG_ERROR([Could not determine the kernel architecture.])])
           rm -f build/arch])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:371: -1- AC_DEFUN([LB_LINUX_TRY_COMPILE], [LB_LINUX_COMPILE_IFELSE(
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:371: -1- AC_DEFUN([LB_LINUX_TRY_COMPILE], [LB_LINUX_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 	[modules],
 	[test -s build/conftest.o],
 	[$3], [$4])])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:383: -1- AC_DEFUN([LB_LINUX_CONFIG], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:383: -1- AC_DEFUN([LB_LINUX_CONFIG], [
 	AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
 	LB_LINUX_TRY_COMPILE([
 		#include <generated/autoconf.h>
@@ -1049,7 +1049,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		$3
 	])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:405: -1- AC_DEFUN([LB_LINUX_CONFIG_IM], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:405: -1- AC_DEFUN([LB_LINUX_CONFIG_IM], [
 	AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
 	LB_LINUX_TRY_COMPILE([
 		#include <generated/autoconf.h>
@@ -1065,12 +1065,12 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		$3
 	])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:427: -1- AC_DEFUN([LB_LINUX_TRY_MAKE], [LB_LINUX_COMPILE_IFELSE(
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:427: -1- AC_DEFUN([LB_LINUX_TRY_MAKE], [LB_LINUX_COMPILE_IFELSE(
 		[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 		[$3], [$4], [$5], [$6]
 	)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:437: -1- AC_DEFUN([LB_CONFIG_COMPAT_RDMA], [AC_MSG_CHECKING([whether to use Compat RDMA])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:437: -1- AC_DEFUN([LB_CONFIG_COMPAT_RDMA], [AC_MSG_CHECKING([whether to use Compat RDMA])
 # set default
 AC_ARG_WITH([o2ib],
 	AC_HELP_STRING([--with-o2ib=path],
@@ -1115,7 +1115,7 @@ else
 	fi
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:490: -1- AC_DEFUN([LB_CONFIG_OFED_BACKPORTS], [AC_MSG_CHECKING([whether to use any OFED backport headers])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:490: -1- AC_DEFUN([LB_CONFIG_OFED_BACKPORTS], [AC_MSG_CHECKING([whether to use any OFED backport headers])
 if test $ENABLEO2IB -eq 0; then
 	AC_MSG_RESULT([no])
 else
@@ -1145,7 +1145,7 @@ else
 	fi
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:525: -1- AC_DEFUN([LC_MODULE_LOADING], [AC_MSG_CHECKING([if kernel module loading is possible])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:525: -1- AC_DEFUN([LC_MODULE_LOADING], [AC_MSG_CHECKING([if kernel module loading is possible])
 LB_LINUX_TRY_MAKE([
 	#include <linux/kmod.h>
 ],[
@@ -1169,7 +1169,7 @@ LB_LINUX_TRY_MAKE([
 	AC_MSG_WARN([])
 ])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:556: -1- AC_DEFUN([LB_PROG_LINUX], [LB_LINUX_PATH
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:556: -1- AC_DEFUN([LB_PROG_LINUX], [LB_LINUX_PATH
 LB_LINUX_ARCH
 LB_LINUX_SYMVERFILE
 
@@ -1194,7 +1194,7 @@ LB_CONFIG_COMPAT_RDMA
 # the LN_PROG_LINUX checks are done
 LB_CONFIG_OFED_BACKPORTS
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:593: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:593: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX_OBJ/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
@@ -1219,7 +1219,7 @@ else
 	$3
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:640: -1- AC_DEFUN([LB_USES_DPKG], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:640: -1- AC_DEFUN([LB_USES_DPKG], [
 AC_MSG_CHECKING([if this distro uses dpkg])
 case `lsb_release -i -s 2>/dev/null` in
         Ubuntu | Debian)
@@ -1232,7 +1232,7 @@ case `lsb_release -i -s 2>/dev/null` in
                 ;;
 esac
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:660: -1- AC_DEFUN([LB_PROG_CC], [AC_PROG_RANLIB
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:660: -1- AC_DEFUN([LB_PROG_CC], [AC_PROG_RANLIB
 AC_CHECK_TOOL(LD, ld, [no])
 AC_CHECK_TOOL(OBJDUMP, objdump, [no])
 AC_CHECK_TOOL(STRIP, strip, [no])
@@ -1251,7 +1251,7 @@ if test $target_cpu == "powerpc64"; then
 	CC="$CC -m64"
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:683: -1- AC_DEFUN([LB_CONDITIONALS], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:683: -1- AC_DEFUN([LB_CONDITIONALS], [
 AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
 
 AC_OUTPUT
@@ -1266,7 +1266,7 @@ EXTRA_KCFLAGS: $EXTRA_KCFLAGS
 Type 'make' to build kernel modules.
 _ACEOF
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:703: -1- AC_DEFUN([SET_BUILD_ARCH], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:703: -1- AC_DEFUN([SET_BUILD_ARCH], [
 AC_MSG_CHECKING([for build ARCH])
 SRCARCH=${ARCH:-$(uname -m)}
 SRCARCH=$(echo $SRCARCH | sed -e s/i.86/x86/ \
@@ -1285,7 +1285,7 @@ fi
 
 AC_MSG_RESULT([ARCH=$ARCH, SRCARCH=$SRCARCH])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:729: -1- AC_DEFUN([LB_LINUX_CONFIG_VALUE], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:729: -1- AC_DEFUN([LB_LINUX_CONFIG_VALUE], [
 	AC_MSG_CHECKING([get value of CONFIG_$1])
 	if (grep -q "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null); then
 		res=$(grep "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null | cut -d' ' -f'3')
@@ -1296,7 +1296,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		$3
 	fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:9: -1- AC_DEFUN([MLNX_PARALLEL_INIT_ONCE], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:9: -1- AC_DEFUN([MLNX_PARALLEL_INIT_ONCE], [
 if [[ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]]; then
 	MAX_JOBS=${NJOBS:-1}
 	RAN_MLNX_PARALLEL_INIT_ONCE=1
@@ -1306,11 +1306,11 @@ if [[ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]]; then
 	declare -i RUNNING_JOBS=0
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:71: -1- AC_DEFUN([MLNX_AC_LANG_SOURCE], [_AC_LANG_DISPATCH([$0], _AC_LANG, $@)])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:78: -1- AC_DEFUN([MLNX_AC_LANG_CONFTEST], [cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:71: -1- AC_DEFUN([MLNX_AC_LANG_SOURCE], [_AC_LANG_DISPATCH([$0], _AC_LANG, $@)])
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:78: -1- AC_DEFUN([MLNX_AC_LANG_CONFTEST], [cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
 $1
 _ACEOF])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:97: -1- AC_DEFUN([MLNX_LB_LINUX_COMPILE_IFELSE], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:97: -1- AC_DEFUN([MLNX_LB_LINUX_COMPILE_IFELSE], [
 {
 MAKE=${MAKE:-make}
 tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
@@ -1323,12 +1323,12 @@ m4_ifvaln([$5],[$5])dnl])
 /bin/rm -rf $tmpbuild
 }
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:117: -1- AC_DEFUN([MLNX_LB_LINUX_TRY_COMPILE], [MLNX_LB_LINUX_COMPILE_IFELSE(
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:117: -1- AC_DEFUN([MLNX_LB_LINUX_TRY_COMPILE], [MLNX_LB_LINUX_COMPILE_IFELSE(
 	[MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 	[modules],
 	[test -s $tmpbuild/conftest.o],
 	[$3], [$4])])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:129: -1- AC_DEFUN([MLNX_BG_LB_LINUX_TRY_COMPILE], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:129: -1- AC_DEFUN([MLNX_BG_LB_LINUX_TRY_COMPILE], [
 # init stuff
 MLNX_PARALLEL_INIT_ONCE
 
@@ -1352,7 +1352,7 @@ MLNX_LB_LINUX_TRY_COMPILE([$1], [$2], [$3], [$4])
 }&
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:4: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:4: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
 	AC_MSG_CHECKING([if dpll_pin_ops.lock_status_get has status_error])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/dpll.h>
@@ -1589,15 +1589,16 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if linux/netdevice.h has netdev_hold])
+	AC_MSG_CHECKING([if linux/netdevice.h has netdev_hold and netdev_put])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	],[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	],[
 		AC_MSG_RESULT(no)
@@ -1641,20 +1642,6 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DEV_XDP_PROG_ID, 1,
 			[dev_xdp_prog_id is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/netdevice.h has netdev_put])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-	#include <linux/netdevice.h>
-	],[
-		netdev_put(NULL,NULL);
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -3522,6 +3509,21 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if ethtool.h has struct kernel_ethtool_ts_info])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	],[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct ethtool_ops has supported_coalesce_params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -3694,6 +3696,23 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_NAPI_RESCHEDULE, 1,
 			  [napi_reschedule exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct net_device has netns_local as member])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -3988,6 +4007,36 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_ADJUST_BY_SCALED_PPM, 1,
 			  [adjfine is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci_dev has pci_vpd_find_tag get 4 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if pci_dev has pci_vpd_alloc])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	],[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -5209,6 +5258,31 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if kernel supports v6.11 'core tracks custom RSS contexts set'])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct ethtool_ops has get/set_settings])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -6226,6 +6300,22 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	AC_MSG_RESULT(yes)
 	MLNX_AC_DEFINE(HAVE_DEFINE_SEQ_ATTRIBUTE, 1,
 		[DEFINE_SEQ_ATTRIBUTE is defined])
+	],[
+	AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if fd_file is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/file.h>
+	],[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	],[
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
 	],[
 	AC_MSG_RESULT(no)
 	])
@@ -8039,6 +8129,33 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/iommu-dma.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/unaligned.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/unaligned.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/device/bus.h exists])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/device/bus.h>
@@ -8069,6 +8186,23 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BUS_TYPE_REMOVE_RETURN_VOID, 1,
 			[bus_type remove function return void])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if auxiliary device IRQs sysfs exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	],[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -8945,91 +9079,6 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if struct vdpa_config_ops has get_vq_dma_dev])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct vdpa_config_ops has resume])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct vdpa_config_ops has get_vq_dma_dev])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if struct vdpa_config_ops has .get_vq_desc_group and .compat_reset])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if vdpa_dev_set_config has device_features])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	],[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if struct vfio_device_ops has iommufd support])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/vfio.h>
@@ -9210,7 +9259,6 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		#include <net/page_pool/helpers.h>
 	],[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	],[
@@ -10837,6 +10885,24 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if proc_handler have const parameter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sysctl.h>
+	],[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/blkdev.h has bio_integrity_bytes])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
@@ -11627,19 +11693,6 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BLK_MQ_OPS_POLL_2_ARG, 1,
 			  [struct blk_mq_ops has poll 2 args])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
-	AC_MSG_CHECKING([if linux/blk-integrity.h exists])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-integrity.h>
-	],[
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -13106,7 +13159,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	],[
 		AC_MSG_RESULT(no)
@@ -13471,8 +13524,94 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	],[
 		AC_MSG_RESULT(no)
 	])
+
+	AC_MSG_CHECKING([if blkdev.h has BLK_INTEGRITY_CSUM_CRC64])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/blk-integrity.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if has blk_rq_integrity_map_user])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blk_rq_map_integrity_sg get 2 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/bio-integrity.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bio-integrity.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if rq_integrity_vec returns struct bio_vec])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
+	],[
+		AC_MSG_RESULT(no)
+	])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12130: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12269: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
 #
 #	Wait for remaining build tests running in background
 #
@@ -13489,7 +13628,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 	AC_SUBST(EXTRA_KCFLAGS)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12148: -1- AC_DEFUN([MLNX_PROG_LINUX], [
+m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: -1- AC_DEFUN([MLNX_PROG_LINUX], [
 
 LB_LINUX_PATH
 LB_LINUX_SYMVERFILE
@@ -13726,8 +13865,8 @@ m4trace:configure.ac:33: -1- MLNX_PROG_LINUX
 m4trace:configure.ac:33: -1- LB_LINUX_PATH
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12148: MLNX_PROG_LINUX is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([linux], [LINUX])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([linux], [linux], [LINUX])
@@ -13736,8 +13875,8 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX$])
 m4trace:configure.ac:33: -1- LB_CHECK_FILE([$LINUX], [], [AC_MSG_ERROR([Kernel source $LINUX could not be found.])])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12148: MLNX_PROG_LINUX is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([linux-obj], [LINUX_OBJ])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([linux-obj], [linux_obj], [LINUX_OBJ])
@@ -13746,8 +13885,8 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX_OBJ$])
 m4trace:configure.ac:33: -1- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 ../../lib/autoconf/general.m4:1492: AC_ARG_WITH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12148: MLNX_PROG_LINUX is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([linux-config], [linux_config], [LINUX_CONFIG])
@@ -13758,8 +13897,8 @@ m4trace:configure.ac:33: -1- LB_CHECK_FILE([/boot/kernel.h], [KERNEL_SOURCE_HEAD
 m4trace:configure.ac:33: -1- LB_CHECK_FILE([/var/adm/running-kernel.h], [KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12148: MLNX_PROG_LINUX is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([kernel-source-header], [KERNEL_SOURCE_HEADER])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([kernel-source-header], [kernel_source_header], [KERNEL_SOURCE_HEADER])
@@ -13830,9 +13969,9 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^modulefsdir$])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^modulenetdir$])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:45: LB_LINUX_RELEASE is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_19290_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12148: MLNX_PROG_LINUX is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:45: LB_LINUX_RELEASE is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_27289_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^RELEASE$])
 m4trace:configure.ac:33: -1- LB_LINUX_TRY_COMPILE([
@@ -15525,10 +15664,11 @@ m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	], [
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	], [
 		AC_MSG_RESULT(no)
@@ -15538,10 +15678,11 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	], [
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	], [
 		AC_MSG_RESULT(no)
@@ -15550,10 +15691,11 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([
 	#include <linux/netdevice.h>
 	]], [[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	]])])], [modules], [test -s $tmpbuild/conftest.o], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	], [
 		AC_MSG_RESULT(no)
@@ -15562,23 +15704,26 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG
 	#include <linux/netdevice.h>
 	]], [[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	]])])])
 m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 	#include <linux/netdevice.h>
 	]], [[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_HOLD$])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_PUT_AND_HOLD$])
 m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	], [
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	], [
 		AC_MSG_RESULT(no)
@@ -15587,10 +15732,11 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([
 	#include <linux/netdevice.h>
 	]], [[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	]])])], [modules], [test -s $tmpbuild/conftest.o], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_HOLD, 1,
+		MLNX_AC_DEFINE(HAVE_NETDEV_PUT_AND_HOLD, 1,
 			[linux/netdevice.h has netdev_hold])
 	], [
 		AC_MSG_RESULT(no)
@@ -15599,15 +15745,17 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG
 	#include <linux/netdevice.h>
 	]], [[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	]])])])
 m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 	#include <linux/netdevice.h>
 	]], [[
 		netdev_hold(NULL,NULL, 0);
+		netdev_put(NULL,NULL);
 		return 0;
 	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_HOLD$])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_PUT_AND_HOLD$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	], [
@@ -15869,93 +16017,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_DEV_XDP_PROG_ID$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-	#include <linux/netdevice.h>
-	], [
-		netdev_put(NULL,NULL);
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-	#include <linux/netdevice.h>
-	], [
-		netdev_put(NULL,NULL);
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-	#include <linux/netdevice.h>
-	]], [[
-		netdev_put(NULL,NULL);
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-	#include <linux/netdevice.h>
-	]], [[
-		netdev_put(NULL,NULL);
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-	#include <linux/netdevice.h>
-	]], [[
-		netdev_put(NULL,NULL);
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_PUT$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-	#include <linux/netdevice.h>
-	], [
-		netdev_put(NULL,NULL);
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-	#include <linux/netdevice.h>
-	]], [[
-		netdev_put(NULL,NULL);
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NETDEV_PUT, 1,
-			[netdev_put is defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-	#include <linux/netdevice.h>
-	]], [[
-		netdev_put(NULL,NULL);
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-	#include <linux/netdevice.h>
-	]], [[
-		netdev_put(NULL,NULL);
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_PUT$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
 	], [
@@ -28280,6 +28341,102 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_KERNEL_ETHTOOL_RINGP
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
 	], [
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	], [
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+	]], [[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+	]], [[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+	]], [[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	], [
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+	]], [[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO, 1,
+			  [ethtool.h has struct kernel_ethtool_ts_info])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+	]], [[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+	]], [[
+                struct kernel_ethtool_ts_info x;
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_KERNEL_ETHTOOL_TS_INFO$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	], [
 		const struct ethtool_ops en_ethtool_ops = {
 			.supported_coalesce_params = 0,
 		};
@@ -29432,6 +29589,120 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NAPI_RESCHEDULE$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	], [
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	], [
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/netdevice.h>
+	]], [[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/netdevice.h>
+	]], [[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/netdevice.h>
+	]], [[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_NETNS_LOCAL$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	], [
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/netdevice.h>
+	]], [[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_NETNS_LOCAL, 1,
+			  [struct net_device has netns_local as member])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/netdevice.h>
+	]], [[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/netdevice.h>
+	]], [[
+		struct net_device netdev = {
+			.netns_local = 0,
+		};
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_NETDEV_NETNS_LOCAL$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
 	], [
@@ -31367,6 +31638,198 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_ADJUST_BY_SCALED_PPM$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	], [
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	], [
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	], [
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM, 1,
+			  [pci_dev has pci_vpd_find_tag get 4 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_find_tag(NULL , 0, 0, 0);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PCI_VPD_FIND_TAG_GET_4_PARAM$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	], [
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	], [
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PCI_VPD_ALLOC$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/pci.h>
+	], [
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_VPD_ALLOC, 1,
+			  [pci_dev has pci_vpd_alloc])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/pci.h>
+	]], [[
+		pci_vpd_alloc(NULL ,NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PCI_VPD_ALLOC$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
 	], [
@@ -39332,6 +39795,192 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_GET_RXFH_CONTEXT$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	], [
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	], [
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	]], [[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	]], [[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	]], [[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	], [
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	]], [[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS, 1,
+			  [kernel supports v6.11 'core tracks custom RSS contexts set'])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	]], [[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/ethtool.h>
+		#include <linux/mutex.h>
+	]], [[
+		const struct ethtool_ops en_ethtool_ops = {
+			.modify_rxfh_context = NULL,
+			.create_rxfh_context = NULL,
+			.remove_rxfh_context = NULL,
+		};
+
+		DEFINE_MUTEX(_mutex);
+		struct ethtool_netdev_state ens = {
+			.rss_lock = _mutex,
+		};
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
 	], [
@@ -45636,6 +46285,111 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		#endif
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_DEFINE_SEQ_ATTRIBUTE$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/file.h>
+	], [
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	], [
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
+	], [
+	AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/file.h>
+	], [
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	], [
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
+	], [
+	AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/file.h>
+	]], [[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
+	], [
+	AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/file.h>
+	]], [[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/file.h>
+	]], [[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_FD_FILE$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/file.h>
+	], [
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	], [
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
+	], [
+	AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/file.h>
+	]], [[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+	AC_MSG_RESULT(yes)
+	MLNX_AC_DEFINE(HAVE_FD_FILE, 1,
+		[fd_file is defined])
+	], [
+	AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/file.h>
+	]], [[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/file.h>
+	]], [[
+		struct fd file_des = EMPTY_FD;
+		struct file *f = fd_file(file_des);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_FD_FILE$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <scsi/scsi_cmnd.h>
 	], [
@@ -57308,6 +58062,171 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_TC_ACTION_OPS_HAS_ID$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_LINUX_IOMMU_DMA_H$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_IOMMU_DMA_H, 1,
+			[linux/iommu-dma.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/iommu.h>
+		#include <linux/iommu-dma.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_LINUX_IOMMU_DMA_H$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/unaligned.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/unaligned.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/unaligned.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/unaligned.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/unaligned.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_LINUX_UNALIGNED_H$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/unaligned.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/unaligned.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_LINUX_UNALIGNED_H, 1,
+			[linux/unaligned.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/unaligned.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/unaligned.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_LINUX_UNALIGNED_H$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/device/bus.h>
 	], [
 		return 0;
@@ -57535,6 +58454,120 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BUS_TYPE_REMOVE_RETURN_VOID$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	], [
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	], [
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	]], [[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	]], [[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	]], [[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_AUX_DEV_IRQS_SYSFS$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	], [
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	]], [[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_AUX_DEV_IRQS_SYSFS, 1,
+			[auxiliary device IRQs sysfs exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	]], [[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/auxiliary_bus.h>
+		#include <linux/xarray.h>
+	]], [[
+		struct auxiliary_device ad;
+		xa_init(&ad.sysfs.irqs);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_AUX_DEV_IRQS_SYSFS$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
 	], [
@@ -63180,576 +64213,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_XDP_CONVERT_TO_XDP_FRAME_IN_UEK_KABI$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_backend_features = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_CONFIG_OPS_HAS_RESUME$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_HAS_RESUME, 1,
-			  [struct vdpa_config_ops has resume])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.resume = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_CONFIG_OPS_HAS_RESUME$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV, 1,
-			  [struct vdpa_config_ops has get_backend_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_dma_dev = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP, 1,
-			  [struct vdpa_config_ops has .get_vq_desc_group and .compat_reset defined])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_config_ops vdpa_ops = {
-			.get_vq_desc_group = NULL,
-			.compat_reset = NULL,
-		};
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/vdpa.h>
-	], [
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES, 1,
-			  [sturct vdpa_dev_set_config has device_features])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/vdpa.h>
-	]], [[
-		struct vdpa_dev_set_config x;
-		x.device_features = 0;
-
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_VDPA_SET_CONFIG_HAS_DEVICE_FEATURES$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/vfio.h>
 	], [
 		struct vfio_device_ops vfio_ops = {
@@ -64895,7 +65358,6 @@ m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/page_pool/helpers.h>
 	], [
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	], [
@@ -64910,7 +65372,6 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 		#include <net/page_pool/helpers.h>
 	], [
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	], [
@@ -64924,7 +65385,6 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([
 		#include <net/page_pool/helpers.h>
 	]], [[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	]])])], [modules], [test -s $tmpbuild/conftest.o], [
@@ -64938,7 +65398,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG
 		#include <net/page_pool/helpers.h>
 	]], [[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	]])])])
@@ -64946,7 +65405,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		#include <net/page_pool/helpers.h>
 	]], [[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	]])])
@@ -64955,7 +65413,6 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 		#include <net/page_pool/helpers.h>
 	], [
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	], [
@@ -64969,7 +65426,6 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([
 		#include <net/page_pool/helpers.h>
 	]], [[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	]])])], [modules], [test -s $tmpbuild/conftest.o], [
@@ -64983,7 +65439,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG
 		#include <net/page_pool/helpers.h>
 	]], [[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	]])])])
@@ -64991,7 +65446,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		#include <net/page_pool/helpers.h>
 	]], [[
 		page_pool_get_dma_addr(NULL);
-		page_pool_set_dma_addr(NULL, 0);
 
 		return 0;
 	]])])
@@ -75345,6 +75799,129 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_REMOVE_SENTINEL_FROM_CTL_TABLE$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sysctl.h>
+	], [
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/sysctl.h>
+	], [
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/sysctl.h>
+	]], [[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/sysctl.h>
+	]], [[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/sysctl.h>
+	]], [[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PROC_HANDLER_CONST_PARAM$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/sysctl.h>
+	], [
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/sysctl.h>
+	]], [[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PROC_HANDLER_CONST_PARAM, 1,
+			  [proc_handler has const parameter])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/sysctl.h>
+	]], [[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/sysctl.h>
+	]], [[
+		struct ctl_table dummy_table;
+		const struct ctl_table *ctl = &dummy_table;
+
+		dummy_table.proc_handler(ctl, 0, NULL, NULL, NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PROC_HANDLER_CONST_PARAM$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
 	], [
 		bio_integrity_bytes(NULL, 0);
@@ -80462,84 +81039,6 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_OPS_POLL_2_ARG$])
-m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-integrity.h>
-	], [
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-integrity.h>
-	], [
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/blk-integrity.h>
-	]], [[
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/blk-integrity.h>
-	]], [[
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/blk-integrity.h>
-	]], [[
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_H$])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-integrity.h>
-	], [
-		return 0;
-	], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/blk-integrity.h>
-	]], [[
-		return 0;
-	]])])], [modules], [test -s $tmpbuild/conftest.o], [
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
-			[linux/blk-integrity.h exists])
-	], [
-		AC_MSG_RESULT(no)
-	])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/blk-integrity.h>
-	]], [[
-		return 0;
-	]])])])
-m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
-		#include <linux/blk-integrity.h>
-	]], [[
-		return 0;
-	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_H$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blk_types.h>
 	], [
@@ -89909,7 +90408,7 @@ m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		return 0;
 	], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	], [
 		AC_MSG_RESULT(no)
@@ -89923,7 +90422,7 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 		return 0;
 	], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	], [
 		AC_MSG_RESULT(no)
@@ -89936,7 +90435,7 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([
 		return 0;
 	]])])], [modules], [test -s $tmpbuild/conftest.o], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	], [
 		AC_MSG_RESULT(no)
@@ -89955,7 +90454,7 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 
 		return 0;
 	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INTEGRITY_MAP_USER$])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INTEGRITY_MAP_USER_BIO_H$])
 m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 		#include <linux/bio.h>
 	], [
@@ -89964,7 +90463,7 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
 		return 0;
 	], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	], [
 		AC_MSG_RESULT(no)
@@ -89977,7 +90476,7 @@ m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([
 		return 0;
 	]])])], [modules], [test -s $tmpbuild/conftest.o], [
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER, 1,
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_MAP_USER_BIO_H, 1,
 			  [bio.h has bio_integrity_map_user])
 	], [
 		AC_MSG_RESULT(no)
@@ -89996,7 +90495,7 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 
 		return 0;
 	]])])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INTEGRITY_MAP_USER$])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INTEGRITY_MAP_USER_BIO_H$])
 m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/pci.h>
 	], [
@@ -92301,6 +92800,546 @@ m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
 		return 0;
 	]])])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_RQF_MQ_INFLIGHT$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	], [
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	], [
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blkdev.h>
+	]], [[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blkdev.h>
+	]], [[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blkdev.h>
+	]], [[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_CSUM_CRC64$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	], [
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blkdev.h>
+	]], [[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_CSUM_CRC64, 1,
+			[BLK_INTEGRITY_CSUM_CRC64 is defined])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blkdev.h>
+	]], [[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blkdev.h>
+	]], [[
+		enum blk_integrity_checksum bic = BLK_INTEGRITY_CSUM_CRC64;
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_CSUM_CRC64$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_H$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_INTEGRITY_H, 1,
+			[include/linux/blk-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_H$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
+			[blk_rq_integrity_map_user exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0, 0);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS, 1,
+			[blk_rq_map_integrity_sg get 2 params])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		int ret = blk_rq_map_integrity_sg(NULL, NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bio-integrity.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/bio-integrity.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/bio-integrity.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/bio-integrity.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/bio-integrity.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INTEGRITY_H$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/bio-integrity.h>
+	], [
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/bio-integrity.h>
+	]], [[
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_INTEGRITY_H, 1,
+			[include/linux/bio-integrity.h exists])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/bio-integrity.h>
+	]], [[
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/bio-integrity.h>
+	]], [[
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INTEGRITY_H$])
+m4trace:configure.ac:33: -1- MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_PARALLEL_INIT_ONCE
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_RQ_INTEGRITY_RETURN_BIO_VEC$])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	], [
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_LB_LINUX_COMPILE_IFELSE([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	]])])], [modules], [test -s $tmpbuild/conftest.o], [
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
+			[rq_integrity_vec returns struct bio_vec])
+	], [
+		AC_MSG_RESULT(no)
+	])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_CONFTEST([MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	]])])])
+m4trace:configure.ac:33: -1- MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[
+		#include <linux/blk-integrity.h>
+	]], [[
+		struct bio_vec bvec = rq_integrity_vec(NULL);
+
+		return 0;
+	]])])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_RQ_INTEGRITY_RETURN_BIO_VEC$])
 m4trace:configure.ac:33: -1- COMPAT_CONFIG_HEADERS
 m4trace:configure.ac:33: -1- m4_pattern_allow([^EXTRA_KCFLAGS$])
 m4trace:configure.ac:34: -1- LB_CONDITIONALS

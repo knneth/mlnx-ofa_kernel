@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
 
 Change-Id: Idc805d3ca88e2c9c06b4bd6152100caad85551cb
 ---
- drivers/infiniband/core/netlink.c | 16 +++++++++-------
- 1 file changed, 9 insertions(+), 7 deletions(-)
+ drivers/infiniband/core/netlink.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
 
 --- a/drivers/infiniband/core/netlink.c
 +++ b/drivers/infiniband/core/netlink.c
@@ -35,21 +35,3 @@ Change-Id: Idc805d3ca88e2c9c06b4bd6152100caad85551cb
  done:
  	up_read(&rdma_nl_types[index].sem);
  	return err;
-@@ -312,12 +314,12 @@ void rdma_nl_exit(void)
- int rdma_nl_net_init(struct rdma_dev_net *rnet)
- {
- 	struct net *net = read_pnet(&rnet->net);
--	struct netlink_kernel_cfg cfg = {
--		.input	= rdma_nl_rcv,
--	};
--	struct sock *nls;
-+       struct netlink_kernel_cfg cfg = {
-+       	.input	= rdma_nl_rcv,
-+       };
-+       struct sock *nls;
- 
--	nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
-+       nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
- 	if (!nls)
- 		return -ENOMEM;
- 

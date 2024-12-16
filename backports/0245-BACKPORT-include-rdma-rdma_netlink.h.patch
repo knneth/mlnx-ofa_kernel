@@ -17,7 +17,7 @@ Change-Id: I7843ecff0481474669a6a2900942de5976d01e24
  #include <linux/netlink.h>
  #include <uapi/rdma/rdma_netlink.h>
  
-@@ -13,8 +15,8 @@ enum {
+@@ -15,8 +17,8 @@ enum {
  };
  
  struct rdma_nl_cbs {

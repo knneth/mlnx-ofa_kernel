@@ -171,7 +171,7 @@ endif
 	echo 'echo prefix=/usr'						>> debian/$(putils)/etc/infiniband/info
 	echo 'echo Kernel=`uname -r`'					>> debian/$(putils)/etc/infiniband/info
 	echo 'echo'							>> debian/$(putils)/etc/infiniband/info
-	echo 'echo "Configure options: `/usr/src/$(pname)-$(pversion)/ofed_scripts/dkms_ofed $(kernelver) $(kernel_source_dir) get-config`"'	>> debian/$(putils)/etc/infiniband/info
+	echo 'echo Configure options: --all'				>> debian/$(putils)/etc/infiniband/info
 	echo 'echo'							>> debian/$(putils)/etc/infiniband/info
 	chmod 755 debian/$(putils)/etc/infiniband/info
 

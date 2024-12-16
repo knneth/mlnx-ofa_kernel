@@ -112,8 +112,8 @@ if [[ $link == $base && "$0" != "/etc/rc.d/init.d/openibd" && $systemd_auto -eq 
 else
     RUNMODE=auto
     log_msg "running in auto mode"
-    echo "$start_time" 2>/dev/null > /var/run/mlx_os_booting
 fi
+echo "$start_time" 2>/dev/null > /var/run/mlx_os_booting
 
 # Allow unsupported modules, if disallowed by current configuration
 modprobe=/sbin/modprobe
@@ -1479,7 +1479,7 @@ stop()
             fi
 
             # Check if applications which use infiniband are running
-            for serv in ibacm srp_daemon
+            for serv in ibacm srp_daemon ibacm.socket
             do
                     if systemctl is-active --quiet $serv 2>/dev/null; then
                             systemctl stop $serv

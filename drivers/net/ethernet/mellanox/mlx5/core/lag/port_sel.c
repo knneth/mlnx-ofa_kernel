@@ -364,12 +364,16 @@ static void mlx5_lag_destroy_definers(struct mlx5_lag *ldev)
 	int tt;
 
 	for_each_set_bit(tt, port_sel->tt_map, MLX5_NUM_TT) {
-		if (port_sel->outer.definers[tt])
+		if (port_sel->outer.definers[tt]) {
 			mlx5_lag_destroy_definer(ldev,
 						 port_sel->outer.definers[tt]);
-		if (port_sel->inner.definers[tt])
+			port_sel->outer.definers[tt] = NULL;
+		}
+		if (port_sel->inner.definers[tt]) {
 			mlx5_lag_destroy_definer(ldev,
 						 port_sel->inner.definers[tt]);
+			port_sel->inner.definers[tt] = NULL;
+		}
 	}
 }
 
@@ -440,6 +444,16 @@ static void set_tt_map(struct mlx5_lag_port_sel *port_sel,
 		set_bit(MLX5_TT_ANY, port_sel->tt_map);
 		break;
 	}
+}
+
+static void clear_tt_map(struct mlx5_lag_port_sel *port_sel)
+{
+	int tt;
+
+	for_each_set_bit(tt, port_sel->tt_map, MLX5_NUM_TT)
+		clear_bit(tt, port_sel->tt_map);
+
+	port_sel->tunnel = false;
 }
 
 #define SET_IGNORE_DESTS_BITS(tt_map, dests)				\
@@ -530,7 +544,7 @@ int mlx5_lag_port_sel_create(struct mlx5_lag *ldev,
 	set_tt_map(port_sel, hash_type);
 	err = mlx5_lag_create_definers(ldev, hash_type, ports);
 	if (err)
-		return err;
+		goto tt_map;
 
 	if (port_sel->tunnel) {
 		err = mlx5_lag_create_inner_ttc_table(ldev);
@@ -549,6 +563,8 @@ destroy_inner:
 		mlx5_destroy_ttc_table(port_sel->inner.ttc);
 destroy_definers:
 	mlx5_lag_destroy_definers(ldev);
+tt_map:
+	clear_tt_map(port_sel);
 	return err;
 }
 

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
 
 Change-Id: I412120629afa3d5ec817bb2b16652c864d2c35e9
 ---
- drivers/vfio/pci/mlx5/main.c | 8 ++++++++
- 1 file changed, 8 insertions(+)
+ drivers/vfio/pci/mlx5/main.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 --- a/drivers/vfio/pci/mlx5/main.c
 +++ b/drivers/vfio/pci/mlx5/main.c
@@ -16,7 +16,27 @@ Change-Id: I412120629afa3d5ec817bb2b16652c864d2c35e9
  #include <linux/device.h>
  #include <linux/eventfd.h>
  #include <linux/file.h>
-@@ -1390,10 +1391,14 @@ static const struct vfio_device_ops mlx5
+@@ -587,7 +588,9 @@ static const struct file_operations mlx5
+ 	.unlocked_ioctl = mlx5vf_precopy_ioctl,
+ 	.compat_ioctl = compat_ptr_ioctl,
+ 	.release = mlx5vf_release_file,
++#ifdef no_llseek
+ 	.llseek = no_llseek,
++#endif
+ };
+ 
+ static int mlx5vf_pci_save_device_inc_data(struct mlx5vf_pci_core_device *mvdev)
+@@ -1000,7 +1003,9 @@ static const struct file_operations mlx5
+ 	.owner = THIS_MODULE,
+ 	.write = mlx5vf_resume_write,
+ 	.release = mlx5vf_release_file,
++#ifdef no_llseek
+ 	.llseek = no_llseek,
++#endif
+ };
+ 
+ static struct mlx5_vf_migration_file *
+@@ -1390,10 +1395,14 @@ static const struct vfio_device_ops mlx5
  	.mmap = vfio_pci_core_mmap,
  	.request = vfio_pci_core_request,
  	.match = vfio_pci_core_match,
@@ -31,7 +51,7 @@ Change-Id: I412120629afa3d5ec817bb2b16652c864d2c35e9
  };
  
  static int mlx5vf_pci_probe(struct pci_dev *pdev,
-@@ -1444,10 +1449,13 @@ static struct pci_driver mlx5vf_pci_driv
+@@ -1444,10 +1453,13 @@ static struct pci_driver mlx5vf_pci_driv
  	.probe = mlx5vf_pci_probe,
  	.remove = mlx5vf_pci_remove,
  	.err_handler = &mlx5vf_err_handlers,

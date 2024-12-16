@@ -39,7 +39,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  	int i;
  
  	dma_resv_assert_held(umem_dmabuf->attach->dmabuf->resv);
-@@ -59,8 +67,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
+@@ -62,8 +70,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
  		cur += sg_dma_len(sg);
  	}
  
@@ -54,7 +54,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  	umem_dmabuf->sgt = sgt;
  
  wait_fence:
-@@ -69,14 +83,30 @@ wait_fence:
+@@ -72,14 +86,30 @@ wait_fence:
  	 * may be not up-to-date. Wait for the exporter to finish
  	 * the migration.
  	 */
@@ -85,7 +85,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  }
  EXPORT_SYMBOL(ib_umem_dmabuf_map_pages);
  
-@@ -180,7 +210,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
+@@ -194,7 +224,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
  }
  
  static struct dma_buf_attach_ops ib_umem_dmabuf_attach_pinned_ops = {
@@ -95,7 +95,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  	.move_notify = ib_umem_dmabuf_unsupported_move_notify,
  };
  
-@@ -233,3 +265,4 @@ void ib_umem_dmabuf_release(struct ib_um
+@@ -273,3 +305,4 @@ void ib_umem_dmabuf_release(struct ib_um
  	dma_buf_put(dmabuf);
  	kfree(umem_dmabuf);
  }

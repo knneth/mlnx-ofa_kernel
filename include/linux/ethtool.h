@@ -153,7 +153,7 @@ struct ethtool_fecparam {
 #define ETHTOOL_LINK_MODE_FEC_BASER_BIT 51
 #endif
 
-#ifndef SPEED_200000
+#if !defined(SPEED_200000) || !defined(ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT)
 #define SPEED_200000            200000
 #define ETHTOOL_LINK_MODE_50000baseKR_Full_BIT 52
 #define ETHTOOL_LINK_MODE_50000baseSR_Full_BIT 53
@@ -200,9 +200,23 @@ struct ethtool_fecparam {
 #define ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT          89
 #endif
 
+#ifndef SPEED_400000
+#define SPEED_400000 400000
+#endif
+
 #ifndef ETHTOOL_LINK_MODE_100baseFX_Half_BIT
 #define ETHTOOL_LINK_MODE_100baseFX_Half_BIT 90
 #define ETHTOOL_LINK_MODE_100baseFX_Full_BIT 91
+#endif
+
+#ifndef SPEED_800000
+#define SPEED_800000 800000
+#define ETHTOOL_LINK_MODE_800000baseCR8_Full_BIT          93
+#define ETHTOOL_LINK_MODE_800000baseKR8_Full_BIT          94
+#define ETHTOOL_LINK_MODE_800000baseDR8_Full_BIT          95
+#define ETHTOOL_LINK_MODE_800000baseDR8_2_Full_BIT        96
+#define ETHTOOL_LINK_MODE_800000baseSR8_Full_BIT          97
+#define ETHTOOL_LINK_MODE_800000baseVR8_Full_BIT          98
 #endif
 
 #define SUPPORTED_100000baseCR4_Full 0

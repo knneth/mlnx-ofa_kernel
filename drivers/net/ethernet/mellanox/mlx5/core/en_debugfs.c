@@ -201,7 +201,7 @@ static void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 	u8 num_tc;
 	int i;
 
-	num_tc = mlx5e_get_dcb_num_tc(&priv->channels.params);
+	num_tc = priv->fds_num_tc ? *priv->fds_num_tc : mlx5e_get_dcb_num_tc(&priv->channels.params);
 	for (i = 0; i < mlx5e_get_num_lag_ports(priv->mdev); i++) {
 		int tc;
 
@@ -236,8 +236,8 @@ static void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 
 void mlx5e_destroy_debugfs(struct mlx5e_priv *priv)
 {
-	kvfree(priv->fds_num_tc);
 	mlx5e_debugs_free_recursive_private_data(priv);
 	debugfs_remove_recursive(priv->netdev_dfs_root);
+	kvfree(priv->fds_num_tc);
 	priv->netdev_dfs_root = NULL;
 }

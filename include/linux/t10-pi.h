@@ -21,7 +21,7 @@
  */
 
 #ifndef HAVE_T10_PI_PREPARE
-#ifdef CONFIG_BLK_DEV_INTEGRITY
+#if defined(CONFIG_BLK_DEV_INTEGRITY) && !defined(HAVE_EXT_PI_REF_TAG)
 static inline void t10_pi_prepare(struct request *rq, u8 protection_type)
 {
 	const int tuple_sz = sizeof(struct t10_pi_tuple);

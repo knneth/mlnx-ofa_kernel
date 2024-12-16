@@ -8,7 +8,7 @@ Change-Id: Icba87cb7c993603fcea9dd9df52b7f35b96af0e5
 
 --- a/drivers/infiniband/debug/memtrack.c
 +++ b/drivers/infiniband/debug/memtrack.c
-@@ -1084,9 +1084,15 @@ static ssize_t memtrack_read(struct file
+@@ -1093,9 +1093,15 @@ static ssize_t memtrack_read(struct file
  	}
  }
  
@@ -24,7 +24,7 @@ Change-Id: Icba87cb7c993603fcea9dd9df52b7f35b96af0e5
  
  static const char *memtrack_proc_entry_name = "mt_memtrack";
  
-@@ -1105,7 +1111,11 @@ static int create_procfs_tree(void)
+@@ -1114,7 +1120,11 @@ static int create_procfs_tree(void)
  
  	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
  		if (bit_mask & track_mask) {

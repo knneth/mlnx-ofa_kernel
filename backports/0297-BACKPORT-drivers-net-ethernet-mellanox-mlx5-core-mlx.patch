@@ -10,7 +10,7 @@ Change-Id: I6f3406defefae7023d53acefdeb84d89fd4f0bac
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 @@ -45,6 +45,10 @@
  
- #define DRIVER_VERSION	"24.07-0.6.1"
+ #define DRIVER_VERSION	"24.10-0.7.0"
  
 +#ifndef BITS_TO_BYTES
 +#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
@@ -50,7 +50,7 @@ Change-Id: I6f3406defefae7023d53acefdeb84d89fd4f0bac
  static inline struct device *mlx5_core_dma_dev(struct mlx5_core_dev *dev)
  {
  	return &dev->pdev->dev;
-@@ -343,7 +323,9 @@ void mlx5_detach_device(struct mlx5_core
+@@ -345,7 +325,9 @@ void mlx5_detach_device(struct mlx5_core
  void mlx5_attach_device_by_protocol(struct mlx5_core_dev *dev, int protocol);
  int mlx5_register_device(struct mlx5_core_dev *dev);
  void mlx5_unregister_device(struct mlx5_core_dev *dev);
@@ -60,7 +60,7 @@ Change-Id: I6f3406defefae7023d53acefdeb84d89fd4f0bac
  bool mlx5_dev_is_lightweight(struct mlx5_core_dev *dev);
  
  void mlx5_fw_reporters_create(struct mlx5_core_dev *dev);
-@@ -360,8 +342,8 @@ void mlx5_dm_cleanup(struct mlx5_core_de
+@@ -362,8 +344,8 @@ void mlx5_dm_cleanup(struct mlx5_core_de
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
  
@@ -71,7 +71,7 @@ Change-Id: I6f3406defefae7023d53acefdeb84d89fd4f0bac
  int mlx5_fw_version_query(struct mlx5_core_dev *dev,
  			  u32 *running_ver, u32 *stored_ver);
  
-@@ -447,15 +429,19 @@ static inline bool mlx5_core_is_sf(const
+@@ -455,15 +437,19 @@ mlx5_sf_coredev_to_adev(struct mlx5_core
  int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
  void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
  int mlx5_init_one(struct mlx5_core_dev *dev);

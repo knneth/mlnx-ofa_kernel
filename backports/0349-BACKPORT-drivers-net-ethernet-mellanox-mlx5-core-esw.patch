@@ -9,9 +9,9 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
-@@ -17,7 +17,11 @@ TRACE_EVENT(mlx5_esw_vport_qos_destroy,
+@@ -18,7 +18,11 @@ TRACE_EVENT(mlx5_esw_vport_qos_destroy,
  			     __field(unsigned short, vport_id)
- 			     __field(unsigned int,   tsar_ix)
+ 			     __field(unsigned int,   sched_elem_ix)
  			     ),
 +#ifndef HAVE_ASSIGN_STR_1_PARAM
  	    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
@@ -19,11 +19,11 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
 +	    TP_fast_assign(__assign_str(devname);
 +#endif
  		    __entry->vport_id = vport->vport;
- 		    __entry->tsar_ix = vport->qos.esw_tsar_ix;
+ 		    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
  	    ),
-@@ -36,7 +40,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_vport_qos_t
+@@ -38,7 +42,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_vport_qos_t
  				     __field(unsigned int, max_rate)
- 				     __field(void *, group)
+ 				     __field(void *, parent)
  				     ),
 +#ifndef HAVE_ASSIGN_STR_1_PARAM
  		    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
@@ -31,10 +31,10 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
 +		    TP_fast_assign(__assign_str(devname);
 +#endif
  			    __entry->vport_id = vport->vport;
- 			    __entry->tsar_ix = vport->qos.esw_tsar_ix;
+ 			    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
  			    __entry->bw_share = bw_share;
-@@ -68,7 +76,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_group_qos_t
- 				     __field(const void *, group)
+@@ -72,7 +80,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_node_qos_te
+ 				     __field(const void *, node)
  				     __field(unsigned int, tsar_ix)
  				     ),
 +#ifndef HAVE_ASSIGN_STR_1_PARAM
@@ -42,10 +42,10 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
 +#else
 +		    TP_fast_assign(__assign_str(devname);
 +#endif
- 			    __entry->group = group;
+ 			    __entry->node = node;
  			    __entry->tsar_ix = tsar_ix;
  		    ),
-@@ -102,7 +114,11 @@ TRACE_EVENT(mlx5_esw_group_qos_config,
+@@ -106,7 +118,11 @@ TRACE_EVENT(mlx5_esw_node_qos_config,
  			     __field(unsigned int, bw_share)
  			     __field(unsigned int, max_rate)
  			     ),
@@ -54,6 +54,6 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
 +#else
 +	    TP_fast_assign(__assign_str(devname);
 +#endif
- 		    __entry->group = group;
+ 		    __entry->node = node;
  		    __entry->tsar_ix = tsar_ix;
  		    __entry->bw_share = bw_share;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
 
 Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
 ---
- drivers/nvme/host/rdma.c | 104 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 99 insertions(+), 5 deletions(-)
+ drivers/nvme/host/rdma.c | 114 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 109 insertions(+), 5 deletions(-)
 
 --- a/drivers/nvme/host/rdma.c
 +++ b/drivers/nvme/host/rdma.c
@@ -20,7 +20,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  #include <linux/mutex.h>
  #include <linux/scatterlist.h>
  #include <linux/nvme.h>
- #include <asm/unaligned.h>
+ #include <linux/unaligned.h>
 +#include <linux/refcount.h>
  
  #include <rdma/ib_verbs.h>
@@ -39,7 +39,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  static const struct blk_mq_ops nvme_rdma_mq_ops;
  static const struct blk_mq_ops nvme_rdma_admin_mq_ops;
  
-+#if !defined HAVE_PUT_UNALIGNED_LE24 && !defined HAVE_PUT_UNALIGNED_LE24_ASM_GENERIC
++#if !defined HAVE_PUT_UNALIGNED_LE24 && !defined HAVE_PUT_UNALIGNED_LE24_ASM_GENERIC && !defined(HAVE_LINUX_UNALIGNED_H)
 +static inline void put_unaligned_le24(u32 val, u8 *p)
 +{
 +	*p++ = val;
@@ -169,13 +169,17 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	if (ret)
  		return -ENOMEM;
  
-@@ -1549,10 +1594,16 @@ static int nvme_rdma_dma_map_req(struct
+@@ -1549,17 +1594,33 @@ static int nvme_rdma_dma_map_req(struct
  	if (blk_integrity_rq(rq)) {
  		req->metadata_sgl->sg_table.sgl =
  			(struct scatterlist *)(req->metadata_sgl + 1);
 +#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
  		ret = sg_alloc_table_chained(&req->metadata_sgl->sg_table,
++#ifdef HAVE_BLK_RQ_INTEGRITY_MAP_USER
++				rq->nr_integrity_segments,
++#else
  				blk_rq_count_integrity_sg(rq->q, rq->bio),
++#endif
  				req->metadata_sgl->sg_table.sgl,
  				NVME_INLINE_METADATA_SG_CNT);
 +#else
@@ -186,7 +190,20 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  		if (unlikely(ret)) {
  			ret = -ENOMEM;
  			goto out_unmap_sg;
-@@ -1573,13 +1624,21 @@ static int nvme_rdma_dma_map_req(struct
+ 		}
+ 
++#ifdef HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS
++		req->metadata_sgl->nents = blk_rq_map_integrity_sg(rq,
++				req->metadata_sgl->sg_table.sgl);
++#else
+ 		req->metadata_sgl->nents = blk_rq_map_integrity_sg(rq->q,
+ 				rq->bio, req->metadata_sgl->sg_table.sgl);
++#endif
++
+ 		*pi_count = ib_dma_map_sg(ibdev,
+ 					  req->metadata_sgl->sg_table.sgl,
+ 					  req->metadata_sgl->nents,
+@@ -1573,13 +1634,21 @@ static int nvme_rdma_dma_map_req(struct
  	return 0;
  
  out_free_pi_table:
@@ -208,7 +225,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	return ret;
  }
  
-@@ -1590,7 +1649,7 @@ static int nvme_rdma_map_data(struct nvm
+@@ -1590,7 +1659,7 @@ static int nvme_rdma_map_data(struct nvm
  	struct nvme_rdma_device *dev = queue->device;
  	struct ib_device *ibdev = dev->dev;
  	int pi_count = 0;
@@ -217,7 +234,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  	req->num_sge = 1;
  	refcount_set(&req->ref, 2); /* send and recv completions */
-@@ -2028,7 +2087,12 @@ static void nvme_rdma_complete_timed_out
+@@ -2028,7 +2097,12 @@ static void nvme_rdma_complete_timed_out
  	nvmf_complete_timed_out_request(rq);
  }
  
@@ -231,7 +248,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  {
  	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
  	struct nvme_rdma_queue *queue = req->queue;
-@@ -2148,11 +2212,23 @@ unmap_qe:
+@@ -2148,11 +2222,23 @@ unmap_qe:
  	return ret;
  }
  
@@ -255,7 +272,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  }
  
  static void nvme_rdma_check_pi_status(struct nvme_rdma_request *req)
-@@ -2201,12 +2277,25 @@ static void nvme_rdma_complete_rq(struct
+@@ -2201,12 +2287,25 @@ static void nvme_rdma_complete_rq(struct
  	nvme_complete_rq(rq);
  }
  
@@ -281,7 +298,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  
  static const struct blk_mq_ops nvme_rdma_mq_ops = {
  	.queue_rq	= nvme_rdma_queue_rq,
-@@ -2215,7 +2304,9 @@ static const struct blk_mq_ops nvme_rdma
+@@ -2215,7 +2314,9 @@ static const struct blk_mq_ops nvme_rdma
  	.exit_request	= nvme_rdma_exit_request,
  	.init_hctx	= nvme_rdma_init_hctx,
  	.timeout	= nvme_rdma_timeout,
@@ -291,7 +308,7 @@ Change-Id: I2d26aedcdc44d668f4dd931ab7d7511c4bad6e7d
  	.poll		= nvme_rdma_poll,
  };
  
-@@ -2488,3 +2579,6 @@ module_exit(nvme_rdma_cleanup_module);
+@@ -2488,3 +2589,6 @@ module_exit(nvme_rdma_cleanup_module);
  
  MODULE_DESCRIPTION("NVMe host RDMA transport driver");
  MODULE_LICENSE("GPL v2");

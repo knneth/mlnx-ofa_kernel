@@ -17,7 +17,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  #include <linux/slab.h>
 +#endif
  #include <linux/spinlock.h>
- #include <asm/unaligned.h>
+ #include <linux/unaligned.h>
  #include <rdma/ib_verbs.h>
 @@ -104,7 +106,9 @@
  #include <linux/sunrpc/svc_rdma.h>

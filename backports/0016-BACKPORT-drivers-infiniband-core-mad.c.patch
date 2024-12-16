@@ -367,7 +367,7 @@ Change-Id: I51136e6809fae4248f3539115f22abad6effdeb3
  			ret = ib_post_send(qp_info->qp, &mad_send_wr->send_wr.wr,
  					   NULL);
  			if (!ret)
-@@ -4059,10 +4116,14 @@ static ssize_t sa_cc_attr_show(struct ko
+@@ -4062,10 +4119,14 @@ static ssize_t sa_cc_attr_show(struct ko
  	return sa->show(cc_obj, buf);
  }
  
@@ -385,7 +385,7 @@ Change-Id: I51136e6809fae4248f3539115f22abad6effdeb3
  
  #define SA_CC_ATTR(_name) struct sa_cc_attribute sa_cc_attr_##_name = \
  	__ATTR(_name, 0644, _name##_show, _name##_store)
-@@ -4080,11 +4141,17 @@ static struct attribute *sa_cc_default_a
+@@ -4083,11 +4144,17 @@ static struct attribute *sa_cc_default_a
  	NULL
  };
  

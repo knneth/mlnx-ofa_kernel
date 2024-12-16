@@ -329,6 +329,12 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
+	if (ethtool_hfunc == MLX5E_HFUNC_XOR) {
+		unsigned int ch_count = priv->channels.params.num_channels;
+
+		if (ch_count > mlx5e_rqt_max_num_channels_allowed_for_xor8())
+			goto unlock;
+	}
 	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
 					&ethtool_hfunc);
 	mutex_unlock(&priv->state_lock);
@@ -339,6 +345,9 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 
 	return count;
 
+unlock:
+	mutex_unlock(&priv->state_lock);
+	rtnl_unlock();
 bad_input:
 	netdev_err(netdev, "Bad Input\n");
 	return -EINVAL;

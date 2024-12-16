@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/user_mad.c
 
 Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
 ---
- drivers/infiniband/core/user_mad.c | 50 ++++++++++++++++++++++++++----
- 1 file changed, 44 insertions(+), 6 deletions(-)
+ drivers/infiniband/core/user_mad.c | 53 +++++++++++++++++++++++++++---
+ 1 file changed, 48 insertions(+), 5 deletions(-)
 
 --- a/drivers/infiniband/core/user_mad.c
 +++ b/drivers/infiniband/core/user_mad.c
@@ -79,7 +79,27 @@ Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
  out:
  	mutex_unlock(&port->file_mutex);
  	return ret;
-@@ -1244,13 +1256,22 @@ static struct attribute *umad_class_dev_
+@@ -1088,7 +1100,9 @@ static const struct file_operations umad
+ #endif
+ 	.open		= ib_umad_open,
+ 	.release	= ib_umad_close,
++#ifdef no_llseek
+ 	.llseek		= no_llseek,
++#endif
+ };
+ 
+ static int ib_umad_sm_open(struct inode *inode, struct file *filp)
+@@ -1156,7 +1170,9 @@ static const struct file_operations umad
+ 	.owner	 = THIS_MODULE,
+ 	.open	 = ib_umad_sm_open,
+ 	.release = ib_umad_sm_close,
++#ifdef no_llseek
+ 	.llseek	 = no_llseek,
++#endif
+ };
+ 
+ static struct ib_umad_port *get_port(struct ib_device *ibdev,
+@@ -1244,13 +1260,22 @@ static struct attribute *umad_class_dev_
  };
  ATTRIBUTE_GROUPS(umad_class_dev);
  
@@ -102,7 +122,7 @@ Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
  {
  	return sysfs_emit(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
  }
-@@ -1269,6 +1290,7 @@ static struct class umad_class = {
+@@ -1269,6 +1294,7 @@ static struct class umad_class = {
  	.dev_groups	= umad_class_dev_groups,
  };
  
@@ -110,7 +130,7 @@ Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
  static void ib_umad_release_port(struct device *device)
  {
  	struct ib_umad_port *port = dev_get_drvdata(device);
-@@ -1298,10 +1320,19 @@ static int ib_umad_init_port(struct ib_d
+@@ -1298,10 +1324,19 @@ static int ib_umad_init_port(struct ib_d
  	dev_t base_issm;
  	int ret;
  
@@ -130,7 +150,7 @@ Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
  	if (devnum >= IB_UMAD_NUM_FIXED_MINOR) {
  		base_umad = dynamic_umad_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
  		base_issm = dynamic_issm_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
-@@ -1344,7 +1375,11 @@ err_dev:
+@@ -1346,7 +1381,11 @@ err_dev:
  	cdev_device_del(&port->cdev, &port->dev);
  err_cdev:
  	put_device(&port->dev);
@@ -142,7 +162,7 @@ Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
  	return ret;
  }
  
-@@ -1376,8 +1411,11 @@ static void ib_umad_kill_port(struct ib_
+@@ -1382,7 +1421,11 @@ static void ib_umad_kill_port(struct ib_
  
  	mutex_unlock(&port->file_mutex);
  
@@ -150,8 +170,7 @@ Change-Id: Icd44fa47dcab8e144fd808fd1ffe5da8519ace03
 +	clear_bit(port->dev_num, dev_map);
 +#else
  	ida_free(&umad_ida, port->dev_num);
--
 +#endif
+ 
  	/* balances device_initialize() */
- 	put_device(&port->sm_dev);
- 	put_device(&port->dev);
+ 	if (has_smi)

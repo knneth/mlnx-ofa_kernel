@@ -181,9 +181,9 @@ AC_SUBST(LINUX_OBJ)
 # -------- check for .config --------
 AC_ARG_WITH([linux-config],
 	[AC_HELP_STRING([--with-linux-config=path],
-			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
+			[set path to Linux .conf (default=$LINUX_OBJ/include/config/auto.conf)])],
 	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
-	[LINUX_CONFIG=$LINUX_OBJ/.config])
+	[LINUX_CONFIG=$LINUX_OBJ/include/config/auto.conf])
 AC_SUBST(LINUX_CONFIG)
 
 LB_CHECK_FILE([/boot/kernel.h],

@@ -8,7 +8,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
-@@ -72,7 +72,10 @@ static int sriov_restore_guids(struct ml
+@@ -73,7 +73,10 @@ static int sriov_restore_guids(struct ml
  static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
  {
  	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
@@ -20,7 +20,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  	int vport_num;
  
  	err = mlx5_eswitch_enable(dev->priv.eswitch, num_vfs);
-@@ -92,7 +95,9 @@ static int mlx5_device_enable_sriov(stru
+@@ -93,7 +96,9 @@ static int mlx5_device_enable_sriov(stru
  		return err;
  	}
  
@@ -30,7 +30,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  	for (vf = 0; vf < num_vfs; vf++) {
  		/* Notify the VF before its enablement to let it set
  		 * some stuff.
-@@ -105,6 +110,7 @@ static int mlx5_device_enable_sriov(stru
+@@ -106,6 +111,7 @@ static int mlx5_device_enable_sriov(stru
  			continue;
  		}
  
@@ -38,7 +38,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  		err = mlx5_set_msix_vec_count(dev, vf + 1, num_msix_count);
  		if (err) {
  			mlx5_core_warn(dev,
-@@ -112,6 +118,7 @@ static int mlx5_device_enable_sriov(stru
+@@ -113,6 +119,7 @@ static int mlx5_device_enable_sriov(stru
  				       vf, err);
  			continue;
  		}
@@ -46,7 +46,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  
  		sriov->vfs_ctx[vf].enabled = 1;
  		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) {
-@@ -191,7 +198,9 @@ mlx5_device_disable_sriov(struct mlx5_co
+@@ -192,7 +199,9 @@ mlx5_device_disable_sriov(struct mlx5_co
  static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
  {
  	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
@@ -56,7 +56,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  	int err;
  
  	if (num_vfs && pci_num_vf(dev->pdev)) {
-@@ -204,9 +213,13 @@ static int mlx5_sriov_enable(struct pci_
+@@ -205,9 +214,13 @@ static int mlx5_sriov_enable(struct pci_
  		return -EBUSY;
  	}
  
@@ -70,7 +70,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  	if (err) {
  		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
  		return err;
-@@ -223,13 +236,19 @@ static int mlx5_sriov_enable(struct pci_
+@@ -224,13 +237,19 @@ static int mlx5_sriov_enable(struct pci_
  void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change)
  {
  	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
@@ -90,7 +90,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  }
  
  int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
-@@ -250,6 +269,7 @@ int mlx5_core_sriov_configure(struct pci
+@@ -251,6 +270,7 @@ int mlx5_core_sriov_configure(struct pci
  	return err ? err : num_vfs;
  }
  
@@ -98,7 +98,7 @@ Change-Id: Iabdad23fb6ed7a6af33253aa05190ad27a937017
  int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
  {
  	struct pci_dev *pf = pci_physfn(vf);
-@@ -267,12 +287,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
+@@ -268,12 +288,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
  			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
  
  	sriov = &dev->priv.sriov;

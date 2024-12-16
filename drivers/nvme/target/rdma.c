@@ -20,7 +20,7 @@
 #include <linux/string.h>
 #include <linux/wait.h>
 #include <linux/inet.h>
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/rdma_cm.h>
