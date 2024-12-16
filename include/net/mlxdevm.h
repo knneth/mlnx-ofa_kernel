@@ -37,6 +37,8 @@ struct mlxdevm_rate_group {
 	char *name;
 	u64 tx_max;
 	u64 tx_share;
+
+	u32 tc_bw[IEEE_8021QAZ_MAX_TCS];
 };
 
 /**
@@ -75,6 +77,8 @@ struct mlxdevm_port {
 	enum mlxdevm_port_type type;
 	struct mlxdevm_port_attrs attrs;
 	void *type_dev;
+
+	u32 tc_bw[IEEE_8021QAZ_MAX_TCS];
 };
 
 struct mlxdevm_ops {
@@ -338,6 +342,29 @@ struct mlxdevm_ops {
 	 */
 	int (*rate_node_del)(struct mlxdevm *dev, const char *group,
 			     struct netlink_ext_ack *extack);
+
+	/**
+	 * rate_leaf_tc_bw_set() - Leaf traffic classes bandwidth management
+	 * @dev: mlxdevm instance
+	 * @tc_bw: traffic classes bandwidth
+	 * @extack: extack for reporting error message
+	 *
+	 * Return: 0 on success, error value otherwise.
+	 */
+	int (*rate_leaf_tc_bw_set)(struct mlxdevm_port *port, u32 *tc_bw,
+				   struct netlink_ext_ack *extack);
+
+	/**
+	 * rate_node_tc_bw_set() - Node traffic classes bandwidth management
+	 * @dev: mlxdevm instance
+	 * @group_name: rate group name
+	 * @tc_bw: traffic classes bandwidth
+	 * @extack: extack for reporting error message
+	 *
+	 * Return: 0 on success, error value otherwise.
+	 */
+	int (*rate_node_tc_bw_set)(struct mlxdevm *port, const char *group_name,
+				   u32 *tc_bw, struct netlink_ext_ack *extack);
 };
 
 struct mlxdevm {

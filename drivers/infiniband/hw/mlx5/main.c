@@ -2859,18 +2859,7 @@ static int mlx5_ib_event_slave_port(struct notifier_block *nb,
 
 static int mlx5_ib_get_plane_num(struct mlx5_core_dev *mdev, u8 *num_plane)
 {
-	struct mlx5_hca_vport_context vport_ctx;
-	int err;
-
 	*num_plane = 0;
-	if (!MLX5_CAP_GEN(mdev, ib_virt))
-		return 0;
-
-	err = mlx5_query_hca_vport_context(mdev, 0, 1, 0, &vport_ctx);
-	if (err)
-		return err;
-
-	*num_plane = vport_ctx.num_plane;
 	return 0;
 }
 

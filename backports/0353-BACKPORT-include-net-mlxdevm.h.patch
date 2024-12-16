@@ -1,0 +1,20 @@
+From: Aya Levin <ayal@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/mlxdevm.h
+
+Change-Id: I135386c4acaaeed490014a34ff281f8d3e8da256
+---
+ include/net/mlxdevm.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/include/net/mlxdevm.h
++++ b/include/net/mlxdevm.h
+@@ -9,6 +9,9 @@
+ #include <uapi/mlxdevm/mlxdevm_netlink.h>
+ #include <linux/rwsem.h>
+ #include <net/devlink.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/dcbnl.h>
++#endif
+ 
+ struct mlxdevm;
+ 

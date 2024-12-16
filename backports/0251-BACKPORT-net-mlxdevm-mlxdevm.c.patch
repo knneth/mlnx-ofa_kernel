@@ -8,7 +8,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
 
 --- a/net/mlxdevm/mlxdevm.c
 +++ b/net/mlxdevm/mlxdevm.c
-@@ -1476,7 +1476,11 @@ static int mlxdevm_nl_cmd_port_get_dumpi
+@@ -1480,7 +1480,11 @@ static int mlxdevm_nl_cmd_port_get_dumpi
  						   NETLINK_CB(cb->skb).portid,
  						   cb->nlh->nlmsg_seq,
  						   NLM_F_MULTI,
@@ -20,7 +20,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  			if (err) {
  				up_read(&dev->port_list_rwsem);
  				goto out;
-@@ -1776,7 +1780,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
+@@ -1825,7 +1829,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
  						   NETLINK_CB(cb->skb).portid,
  						   cb->nlh->nlmsg_seq,
  						   NLM_F_MULTI,
@@ -32,7 +32,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  			if (err) {
  				up_read(&dev->rate_group_rwsem);
  				goto out;
-@@ -1798,7 +1806,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
+@@ -1847,7 +1855,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
  						   NETLINK_CB(cb->skb).portid,
  						   cb->nlh->nlmsg_seq,
  						   NLM_F_MULTI,
@@ -44,7 +44,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  			if (err) {
  				up_read(&dev->port_list_rwsem);
  				goto out;
-@@ -2427,83 +2439,121 @@ static const struct nla_policy mlxdevm_n
+@@ -2534,83 +2546,121 @@ static const struct nla_policy mlxdevm_n
  static const struct genl_ops mlxdevm_nl_ops[] = {
  	{
  		.cmd = MLXDEVM_CMD_DEV_GET,
@@ -166,7 +166,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  		.doit = mlxdevm_nl_cmd_rate_del_doit,
  		.flags = GENL_ADMIN_PERM,
  	},
-@@ -2513,13 +2563,17 @@ static struct genl_family mlxdevm_nl_fam
+@@ -2620,13 +2670,17 @@ static struct genl_family mlxdevm_nl_fam
  	.name = MLXDEVM_GENL_NAME,
  	.version = MLXDEVM_GENL_VERSION,
  	.maxattr = MLXDEVM_ATTR_MAX,

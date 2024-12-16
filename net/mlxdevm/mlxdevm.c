@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/errno.h>
+#include <linux/mlx5/driver.h>
 #include <linux/netdevice.h>
 #include <linux/rtnetlink.h>
 #include <net/genetlink.h>
@@ -137,7 +138,11 @@ void mlxdevm_rate_nodes_destroy(struct mlxdevm *dev)
 {
 	const struct mlxdevm_ops *ops = dev->ops;
 	struct mlxdevm_rate_group *cur, *tmp;
+	u32 tc_bw[MLX5_MAX_NUM_TC] = {};
 	struct mlxdevm_port *port;
+
+	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list)
+		ops->rate_node_tc_bw_set(dev, cur->name, tc_bw, NULL);
 
 	list_for_each_entry(port, &dev->port_list, list) {
 		ops->rate_leaf_group_set(port, "", NULL);
@@ -145,9 +150,8 @@ void mlxdevm_rate_nodes_destroy(struct mlxdevm *dev)
 		ops->rate_leaf_tx_share_set(port, 0, NULL);
 	}
 
-	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list) {
+	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list)
 		ops->rate_node_del(dev, cur->name, NULL);
-	}
 }
 EXPORT_SYMBOL_GPL(mlxdevm_rate_nodes_destroy);
 
@@ -1493,14 +1497,30 @@ out:
 }
 
 static int mlxdevm_nl_rate_fill_common(struct sk_buff *msg, enum mlxdevm_rate_type rate_type,
-				       u64 tx_max, u64 tx_share)
+				       u64 tx_max, u64 tx_share, u32 *tc_bw)
 {
+	struct nlattr *nla_tc_bw;
+	int i;
+
 	if (nla_put_u16(msg, MLXDEVM_ATTR_EXT_RATE_TYPE, rate_type))
 		return -EMSGSIZE;
 	if (nla_put_u64_64bit(msg, MLXDEVM_ATTR_EXT_RATE_TX_MAX, tx_max, MLXDEVM_ATTR_EXT_PAD))
 		return -EMSGSIZE;
 	if (nla_put_u64_64bit(msg, MLXDEVM_ATTR_EXT_RATE_TX_SHARE, tx_share, MLXDEVM_ATTR_EXT_PAD))
 		return -EMSGSIZE;
+
+	nla_tc_bw = nla_nest_start(msg, MLXDEVM_ATTR_RATE_TC_BW);
+	if (!nla_tc_bw)
+		return -EMSGSIZE;
+
+	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+		if (nla_put_u32(msg, i + MLXDEVM_ATTR_RATE_TC_0_BW, tc_bw[i])) {
+			nla_nest_cancel(msg, nla_tc_bw);
+			return -EMSGSIZE;
+		}
+	}
+	nla_nest_end(msg, nla_tc_bw);
+
 	return 0;
 }
 
@@ -1542,7 +1562,8 @@ static int mlxdevm_nl_leaf_fill(struct sk_buff *msg,
 			goto nla_put_failure;
 	}
 
-	if (mlxdevm_nl_rate_fill_common(msg, MLXDEVM_RATE_EXT_TYPE_LEAF, tx_max, tx_share))
+	if (mlxdevm_nl_rate_fill_common(msg, MLXDEVM_RATE_EXT_TYPE_LEAF, tx_max, tx_share,
+					port->tc_bw))
 		goto nla_put_failure;
 
 	genlmsg_end(msg, hdr);
@@ -1572,7 +1593,7 @@ static int mlxdevm_nl_node_fill(struct sk_buff *msg, struct mlxdevm *dev,
 		goto nla_put_failure;
 
 	if (mlxdevm_nl_rate_fill_common(msg, MLXDEVM_RATE_EXT_TYPE_NODE,
-					group->tx_max, group->tx_share))
+					group->tx_max, group->tx_share, group->tc_bw))
 		goto nla_put_failure;
 
 	genlmsg_end(msg, hdr);
@@ -1607,6 +1628,20 @@ static int mlxdevm_port_fn_leaf_tx_max(struct mlxdevm_port *port,
 		return -EOPNOTSUPP;
 	}
 	return ops->rate_leaf_tx_max_set(port, tx_max, extack);
+}
+
+static int mlxdevm_port_fn_leaf_tc_bw(struct mlxdevm_port *port, u32 *tc_bw,
+				      struct netlink_ext_ack *extack)
+{
+	const struct mlxdevm_ops *ops = port->devm->ops;
+
+	if (!ops || !ops->rate_leaf_tc_bw_set) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Function does not support leaf tc bw setting");
+		return -EOPNOTSUPP;
+	}
+
+	return ops->rate_leaf_tc_bw_set(port, tc_bw, extack);
 }
 
 static int mlxdevm_port_fn_leaf_group(struct mlxdevm_port *port,
@@ -1646,6 +1681,20 @@ static int mlxdevm_port_fn_node_tx_max(struct mlxdevm *dev, const char *group,
 		return -EOPNOTSUPP;
 	}
 	return ops->rate_node_tx_max_set(dev, group, tx_max, extack);
+}
+
+static int mlxdevm_port_fn_node_tc_bw(struct mlxdevm *dev, const char *group_name,
+				      u32 *tc_bw, struct netlink_ext_ack *extack)
+{
+	const struct mlxdevm_ops *ops = dev->ops;
+
+	if (!ops || !ops->rate_leaf_tc_bw_set) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Function does not support node tc bw setting");
+		return -EOPNOTSUPP;
+	}
+
+	return ops->rate_node_tc_bw_set(dev, group_name, tc_bw, extack);
 }
 
 static int mlxdevm_rate_node_get_doit_locked(struct mlxdevm *dev, struct genl_info *info,
@@ -1816,11 +1865,22 @@ out:
 	return msg->len;
 }
 
+const struct nla_policy mlxdevm_rate_tc_bw_nl_policy[MLXDEVM_ATTR_RATE_TC_BW_MAX + 1] = {
+	[MLXDEVM_ATTR_RATE_TC_0_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_1_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_2_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_3_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_4_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_5_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_6_BW] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_RATE_TC_7_BW] = { .type = NLA_U32, },
+};
+
 static int mlxdevm_cmd_rate_set_leaf(struct genl_info *info, struct mlxdevm *dev)
 {
 	struct netlink_ext_ack *extack = info->extack;
+	u32 tc_bw[IEEE_8021QAZ_MAX_TCS];
 	struct mlxdevm_port *port;
-	const char *group = NULL;
 	int err = 0;
 	u64 rate;
 
@@ -1845,7 +1905,36 @@ static int mlxdevm_cmd_rate_set_leaf(struct genl_info *info, struct mlxdevm *dev
 			goto out;
 	}
 
+	if (info->attrs[MLXDEVM_ATTR_RATE_TC_BW]) {
+		struct nlattr *nla_tc_bw = info->attrs[MLXDEVM_ATTR_RATE_TC_BW];
+		struct nlattr *tb[MLXDEVM_ATTR_RATE_TC_BW_MAX + 1];
+		int i;
+
+		err = nla_parse_nested(tb, MLXDEVM_ATTR_RATE_TC_BW_MAX, nla_tc_bw,
+				       mlxdevm_rate_tc_bw_nl_policy, info->extack);
+		if (err)
+			goto out;
+
+		for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+			int j = i + MLXDEVM_ATTR_RATE_TC_0_BW;
+
+			if (tb[j]) {
+				tc_bw[i] = nla_get_u32(tb[j]);
+			} else {
+				tc_bw[i] = 0;
+			}
+		}
+
+		err = mlxdevm_port_fn_leaf_tc_bw(port, tc_bw, info->extack);
+		if (err)
+			goto out;
+
+		memcpy(port->tc_bw, tc_bw, sizeof(tc_bw));
+	}
+
 	if (info->attrs[MLXDEVM_ATTR_EXT_RATE_PARENT_NODE_NAME]) {
+		const char *group = NULL;
+
 		group = nla_strdup(info->attrs[MLXDEVM_ATTR_EXT_RATE_PARENT_NODE_NAME], GFP_KERNEL);
 		if (!group) {
 			err = -ENOMEM;
@@ -1853,14 +1942,9 @@ static int mlxdevm_cmd_rate_set_leaf(struct genl_info *info, struct mlxdevm *dev
 		}
 
 		err = mlxdevm_port_fn_leaf_group(port, group, extack);
-		if (err)
-			goto leaf_group_err;
+		kfree(group);
 	}
 
-	goto out;
-
-leaf_group_err:
-	kfree(group);
 out:
 	up_write(&dev->port_list_rwsem);
 	return err;
@@ -1890,6 +1974,29 @@ static int mlxdevm_cmd_rate_set_node(struct genl_info *info, struct mlxdevm *dev
 	if (info->attrs[MLXDEVM_ATTR_EXT_RATE_TX_MAX]) {
 		rate = nla_get_u64(info->attrs[MLXDEVM_ATTR_EXT_RATE_TX_MAX]);
 		err = mlxdevm_port_fn_node_tx_max(dev, group, rate, extack);
+	}
+
+	if (info->attrs[MLXDEVM_ATTR_RATE_TC_BW]) {
+		struct nlattr *nla_tc_bw = info->attrs[MLXDEVM_ATTR_RATE_TC_BW];
+		struct nlattr *tb[MLXDEVM_ATTR_RATE_TC_BW_MAX + 1];
+		u32 tc_bw[IEEE_8021QAZ_MAX_TCS];
+		int i;
+
+		err = nla_parse_nested(tb, MLXDEVM_ATTR_RATE_TC_BW_MAX, nla_tc_bw,
+				       mlxdevm_rate_tc_bw_nl_policy, info->extack);
+		if (err)
+			goto out;
+
+		for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+			int j = i + MLXDEVM_ATTR_RATE_TC_0_BW;
+
+			if (tb[j])
+				tc_bw[i] = nla_get_u32(tb[j]);
+			else
+				tc_bw[i] = 0;
+		}
+
+		err = mlxdevm_port_fn_node_tc_bw(dev, group, tc_bw, info->extack);
 	}
 
 out:
